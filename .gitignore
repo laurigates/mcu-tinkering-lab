@@ -1,1 +1,41 @@
 .aider*
+# Build artifacts
+build/
+target/
+*.o
+*.a
+*.so
+*.elf
+*.bin
+*.hex
+*.uf2
+
+# IDE specific files
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# PlatformIO
+.pio/
+.pioenvs/
+.piolibdeps/
+
+# Arduino IDE
+*.ino.cpp
+
+# ESP-IDF
+sdkconfig
+sdkconfig.old
+
+# STM32CubeIDE
+Debug/
+Release/
+*.launch
+
+# OS specific
+.DS_Store
+Thumbs.db
