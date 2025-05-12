@@ -1,0 +1,44 @@
+# ESP32-CAM (AI-THINKER model defaults)
+CONFIG_CAMERA_ENABLED=y
+CONFIG_ESP32_CAMERA_SUPPORT=y
+CONFIG_CAMERA_MODEL_AI_THINKER=y
+
+# Default pins for AI-THINKER ESP32-CAM
+# Verify these match your board.
+CONFIG_CAMERA_PIN_PWDN=32
+CONFIG_CAMERA_PIN_RESET=-1 # -1 if not connected
+CONFIG_CAMERA_PIN_XCLK=0
+CONFIG_CAMERA_PIN_SIOD=26
+CONFIG_CAMERA_PIN_SIOC=27
+
+CONFIG_CAMERA_PIN_D7=35
+CONFIG_CAMERA_PIN_D6=34
+CONFIG_CAMERA_PIN_D5=39
+CONFIG_CAMERA_PIN_D4=36
+CONFIG_CAMERA_PIN_D3=21
+CONFIG_CAMERA_PIN_D2=19
+CONFIG_CAMERA_PIN_D1=18
+CONFIG_CAMERA_PIN_D0=5
+
+CONFIG_CAMERA_PIN_VSYNC=25
+CONFIG_CAMERA_PIN_HREF=23
+CONFIG_CAMERA_PIN_PCLK=22
+
+# Default camera settings
+CONFIG_CAMERA_PIXEL_FORMAT_JPEG=y
+CONFIG_CAMERA_FRAME_SIZE_UXGA=y # UXGA (1600x1200) is large, consider smaller for faster transfer
+                                # e.g., CONFIG_CAMERA_FRAME_SIZE_SVGA=y (800x600) or VGA (640x480)
+
+# Enable Wi-Fi
+CONFIG_ESP_WIFI_ENABLED=y
+
+# Enable TCP/IP Adapter
+CONFIG_LWIP_ENET_SUPPORT=y
+
+# Increase HTTP buffer size if needed for sending/receiving data
+CONFIG_ESP_HTTP_CLIENT_ENABLE_HTTPS=y # If your server uses HTTPS
+# CONFIG_HTTP_MAX_POST_LEN=2048 # Default is 1024, increase if sending larger headers/small bodies
+# CONFIG_HTTP_MAX_RECV_LEN=2048 # Default is 512, increase if receiving larger responses
+
+# For I2S Audio - these are general settings, specific driver config will be in code
+CONFIG_USE_I2S_AUDIO=y # A conceptual flag, actual I2S config is via driver/i2s.h
