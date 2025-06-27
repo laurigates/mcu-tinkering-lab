@@ -31,6 +31,13 @@ target/
 sdkconfig
 sdkconfig.old
 
+# Credentials and sensitive files
+**/credentials.h
+credentials.h
+*.credentials
+*.keys
+*.secrets
+
 # STM32CubeIDE
 Debug/
 Release/
