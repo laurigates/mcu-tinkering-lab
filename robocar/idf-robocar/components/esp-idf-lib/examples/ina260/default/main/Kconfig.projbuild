@@ -1,0 +1,13 @@
+menu "Example configuration"
+    config EXAMPLE_I2C_ADDR
+        hex "I2C address of INA260"
+        default 0x40
+        help
+            I2C address of INA260. The address starts from `0x40`, which is
+            the default (`A0` and `A1` are grounded), and ends at `0x4f` (16
+            possible addresses). See "8.5.3.1 Serial Bus Address" in the
+            datasheet. ina260.h provides a uitility macro for the address
+            (INA260_ADDR()).
+
+    rsource "../../../../devtools/Kconfig.i2c"
+endmenu

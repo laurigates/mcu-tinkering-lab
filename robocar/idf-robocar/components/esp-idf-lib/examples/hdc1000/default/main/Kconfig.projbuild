@@ -1,0 +1,11 @@
+menu "Example configuration"
+
+    config EXAMPLE_I2C_ADDR
+        hex "I2C address of HDC1000"
+        default 0x40
+        help
+            I2C address of HDC1000. The default is `HDC1000_I2C_ADDRESS_0`, or
+            0x40. See available options in hdc1000.h.
+
+    rsource "../../../../devtools/Kconfig.i2c"
+endmenu

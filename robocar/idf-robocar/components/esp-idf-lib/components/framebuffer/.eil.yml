@@ -1,0 +1,24 @@
+---
+name: framebuffer
+description: RGB framebuffer component
+version: 0.0.1
+groups:
+  - common
+code_owners: UncleRus
+depends:
+  - log
+  - color
+thread_safe: N/A
+targets:
+  - esp32
+  - esp32s2
+  - esp32c3
+  - esp32s3
+  - esp32c6
+  - esp32h2
+  - esp32p4
+  - esp32c5
+license: MIT
+copyrights:
+  - name: UncleRus
+    year: 2021

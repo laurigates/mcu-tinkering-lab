@@ -1,0 +1,32 @@
+menu "Example configuration"
+    choice EXAMPLE_STS3X_DEMO
+        prompt "Demo mode"
+        default EXAMPLE_STS3X_DEMO_HL
+        help
+            Choose how to masure values from the sensor. See the main.c for
+            details.
+
+        config EXAMPLE_STS3X_DEMO_HL
+            bool "High level"
+            help
+                In this example it uses the high level function
+                sts3x_measure() to perform one measurement in each cycle.
+
+        config EXAMPLE_STS3X_DEMO_LL
+            bool "Low level"
+            help
+                In this example it starts the measurement, waits for the
+                results and fetches the results using separate functions
+
+    endchoice
+
+    config EXAMPLE_STS3X_ADDR
+        hex "I2C address of STS3x"
+        default 0x44
+        help
+            I2C address of STS3x, either 0x44 or 0x45. When ADDR pin is
+            grounded, choose 0x44. When ADDR pin is pulled up to VDD, choose
+            0x45.
+
+    rsource "../../../../devtools/Kconfig.i2c"
+endmenu

@@ -1,0 +1,6 @@
+[submodule "idf-robocar/components/esp-idf-lib"]
+	path = idf-robocar/components/esp-idf-lib
+	url = https://github.com/UncleRus/esp-idf-lib.git
+[submodule "idf-robocar/components/ssd1306"]
+	path = idf-robocar/components/ssd1306
+	url = https://github.com/nopnop2002/esp-idf-ssd1306.git

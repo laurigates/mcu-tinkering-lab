@@ -1,0 +1,9 @@
+menu "Example configuration"
+    config EXAMPLE_DEV_COUNT
+        int "Number of ADS111x"
+        default 2
+        help
+            Number of ADS111x devices on the bus.
+
+    rsource "../../../../devtools/Kconfig.i2c"
+endmenu

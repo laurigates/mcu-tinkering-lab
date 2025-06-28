@@ -1,0 +1,11 @@
+menu "Example configuration"
+    config EXAMPLE_I2C_ADDR
+        hex "I2C address of mcp9808"
+        default 0x18
+        help
+            MCP9808 has three address pins. The address starts from `0x18`
+            (all pins are grouned), which is the default, and ends at  `0x1F`.
+            See mcp9808.h for all possible values.
+
+    rsource "../../../../devtools/Kconfig.i2c"
+endmenu

@@ -1,0 +1,13 @@
+menu "Example configuration"
+    config EXAMPLE_I2C_ADDRESS
+        hex "I2C address"
+        default 0x77
+        help
+            I2C address of DPS310. When SDO is pulled low, 0x76. When pulled high, 0x77.
+    config EXAMPLE_REAL_ALTITUDE
+        int "Real altitude of the device in meter"
+        default 16
+        help
+            Change this to the altitude of the device.
+    rsource "../../../../devtools/Kconfig.i2c"
+endmenu

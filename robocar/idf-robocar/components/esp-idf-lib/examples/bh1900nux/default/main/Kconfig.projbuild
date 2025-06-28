@@ -1,0 +1,20 @@
+menu "Example configuration"
+
+    config EXAMPLE_I2C_ADDR
+        hex "I2C address of BH1900NUX"
+        default 0x48
+        help
+            I2C address of BH1900NUX. The default is `BH1900NUX_I2C_ADDR_BASE`, or
+            0x48. See available options in datasheet.
+
+    choice EXAMPLE_MEASURING_MODE
+        prompt "Select measuring mode"
+        default EXAMPLE_MEASURING_MODE_TRIGGER
+        config EXAMPLE_MEASURING_MODE_TRIGGER
+            bool "Trigger measurements"
+        config EXAMPLE_MEASURING_MODE_CONTINUOUS
+            bool "Continuous  measurements"
+    endchoice
+
+    rsource "../../../../devtools/Kconfig.i2c"
+endmenu

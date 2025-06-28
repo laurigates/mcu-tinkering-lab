@@ -1,0 +1,9 @@
+menu "Example configuration"
+    config EXAMPLE_I2C_FREQUENCY_HZ
+        int "I2C bus frequency"
+        default 400000
+        help
+            I2C bus frequency.
+
+    rsource "../../../../devtools/Kconfig.i2c"
+endmenu

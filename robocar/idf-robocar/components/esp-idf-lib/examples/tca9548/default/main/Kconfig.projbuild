@@ -1,0 +1,7 @@
+menu "Example configuration"
+    config EXAMPLE_SWITCH_ADDR
+        hex "I2C address of TCA9548"
+        default 0x70
+
+    rsource "../../../../devtools/Kconfig.i2c"
+endmenu

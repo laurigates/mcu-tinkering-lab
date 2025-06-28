@@ -1,0 +1,10 @@
+menu "Example configuration"
+    config EXAMPLE_PWM_FREQ_HZ
+        int "Frequency of PWM outputs"
+        default 1500
+        help
+            Frequency of PWM outputs. The maximum PWM frequency is 1526 Hz,
+            and the minimum PWM frequency is 24 Hz. See "7.3.5 PWM frequency
+            PRE_SCALE" in the datasheet.
+    rsource "../../../../devtools/Kconfig.i2c"
+endmenu

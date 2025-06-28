@@ -1,0 +1,19 @@
+menu "Example configuration"
+    choice EXAMPLE_CHIP_TYPE
+        prompt "Select chip type"
+        default EXAMPLE_CHIP_TYPE_SI70xx
+        help
+            Select chip type.
+
+        config EXAMPLE_CHIP_TYPE_SI70xx
+            bool "SI70xx"
+            help
+                Choose this when the chip is one of SI70xx family.
+        config EXAMPLE_CHIP_TYPE_SHT2x_HTU21D
+            bool "SHT2x or HTU21D"
+            help
+                Choose this when the chip is either SHT2x or HTU21D.
+    endchoice
+
+    rsource "../../../../devtools/Kconfig.i2c"
+endmenu

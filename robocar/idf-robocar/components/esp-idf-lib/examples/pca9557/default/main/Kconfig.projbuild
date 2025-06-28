@@ -1,0 +1,18 @@
+menu "Example configuration"
+    config EXAMPLE_I2C_ADDR
+        hex "I2C address of the device"
+        default 0x18
+        help
+            I2C address of the device.
+
+            PCA9557 has three address pins (`A0`, `A1` and `A2`). The address
+            starts from `0x18` (all address pins are grounded), which is the
+            default. See "8.3.2.1 Device Address" in the datasheet.
+
+            PCA9537 has a fixed I2C address (`0x49`).
+
+            TCA9534 has three address pins (`A0`, `A1` and `A2`). The address
+            starts from `0x20` (all address pins are grounded)
+
+    rsource "../../../../devtools/Kconfig.i2c"
+endmenu

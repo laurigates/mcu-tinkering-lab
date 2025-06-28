@@ -1,0 +1,26 @@
+menu "Example configuration"
+    choice EXAMPLE_SHT4X_DEMO
+        prompt "Demo mode"
+        default EXAMPLE_SHT4X_DEMO_HL
+        help
+            Choose how to masure values from the sensor. See the main.c for
+            details.
+
+        config EXAMPLE_SHT4X_DEMO_HL
+            bool "High level"
+            help
+                User task that triggers a measurement every 5 seconds.
+                In this example it uses the high level function *sht4x_measure*
+                to perform one measurement in each cycle.
+
+        config EXAMPLE_SHT4X_DEMO_LL
+            bool "Low level"
+            help
+                User task that triggers a measurement every 5 seconds.  In this
+                example it starts the measurement, waits for the results and
+                fetches the results using separate functions
+
+    endchoice
+
+    rsource "../../../../devtools/Kconfig.i2c"
+endmenu

@@ -1,0 +1,12 @@
+menu "Example configuration"
+    config EXAMPLE_I2C_ADDR
+        hex "I2C address of MCP4725"
+        default 0x60
+        help
+            I2C address of MCP4725. The device has three address pins (`A0`,
+            `A1`, and `A2`). The addrss start from `0x60`, which is the
+            default, and ends at `0x65`.  See "7.2 Device Addressing" in the
+            datasheet. See `mcp4725.h` for all possible values.
+
+    rsource "../../../../devtools/Kconfig.i2c"
+endmenu

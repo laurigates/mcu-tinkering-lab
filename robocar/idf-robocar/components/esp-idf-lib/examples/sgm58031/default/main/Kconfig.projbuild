@@ -1,0 +1,9 @@
+menu "Example configuration"
+    config EXAMPLE_DEV_COUNT
+        int "Number of SGM58031"
+        default 2
+        help
+            Number of SGM58031 devices on the bus.
+
+    rsource "../../../../devtools/Kconfig.i2c"
+endmenu

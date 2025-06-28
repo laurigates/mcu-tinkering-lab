@@ -1,0 +1,19 @@
+menu "Example configuration"
+    choice EXAMPLE_I2C_ADDRESS
+        prompt "Select I2C address"
+        default EXAMPLE_I2C_ADDRESS_LO
+        help
+            Select I2C address
+
+        config EXAMPLE_I2C_ADDRESS_HIGH
+            bool "MS5611_ADDR_CSB_HIGH"
+            help
+                Choose this when CSB pin is high.
+        config EXAMPLE_I2C_ADDRESS_LOW
+            bool "MS5611_ADDR_CSB_LOW"
+            help
+                Choose this when CSB pin is low.
+    endchoice
+
+    rsource "../../../../devtools/Kconfig.i2c"
+endmenu

@@ -1,0 +1,29 @@
+menu "ESP32-CAM Robocar Configuration"
+
+    choice AI_BACKEND
+        prompt "AI Backend Selection"
+        default AI_BACKEND_OLLAMA
+        help
+            Select which AI backend to use for image analysis.
+
+        config AI_BACKEND_CLAUDE
+            bool "Claude API"
+            help
+                Use Claude API for image analysis. Requires API key and internet connection.
+
+        config AI_BACKEND_OLLAMA
+            bool "Ollama"
+            help
+                Use local or remote Ollama server for image analysis.
+                Supports service discovery via mDNS.
+    endchoice
+
+    config CONFIG_AI_BACKEND_CLAUDE
+        bool
+        default y if AI_BACKEND_CLAUDE
+
+    config CONFIG_AI_BACKEND_OLLAMA
+        bool
+        default y if AI_BACKEND_OLLAMA
+
+endmenu

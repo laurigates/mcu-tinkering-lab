@@ -1,0 +1,15 @@
+menu "Example configuration"
+    choice EXAMPLE_I2C_ADDRESS
+        prompt "Select I2C address"
+        default EXAMPLE_I2C_ADDRESS_0
+        help
+            Select I2C address.
+
+        config EXAMPLE_I2C_ADDRESS_0
+            bool "BME680_I2C_ADDR_0 (0x76)"
+        config EXAMPLE_I2C_ADDRESS_1
+            bool "BME680_I2C_ADDR_1 (0x77)"
+    endchoice
+
+    rsource "../../../../devtools/Kconfig.i2c"
+endmenu

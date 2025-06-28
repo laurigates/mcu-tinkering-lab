@@ -1,0 +1,9 @@
+menu "Example configuration"
+    config EXAMPLE_I2C_PCF8574_ADDRESS
+        hex "I2C address of PCF8574"
+        default 0x27
+        help
+        I2C address of PCF8574.
+
+    rsource "../../../../devtools/Kconfig.i2c"
+endmenu

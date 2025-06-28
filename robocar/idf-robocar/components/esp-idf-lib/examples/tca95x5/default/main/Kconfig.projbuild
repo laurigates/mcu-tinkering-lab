@@ -1,0 +1,21 @@
+menu "Example configuration"
+
+	config EXAMPLE_I2C_ADDR
+		hex "I2C address of TCA9555"
+		default 0x20
+		help
+			I2C address of TCA9555. The default is `TCA95X5_I2C_ADDR_BASE`, or
+			0x20. See available options in datasheet.
+
+    config EXAMPLE_INT_GPIO
+        int "INT GPIO Number"
+        default 14 if IDF_TARGET_ESP8266
+        default 7 if IDF_TARGET_ESP32C2 || IDF_TARGET_ESP32C3 || IDF_TARGET_ESP32C5 || IDF_TARGET_ESP32C6 || IDF_TARGET_ESP32C61
+        default 5 if IDF_TARGET_ESP32H2
+        default 5 if IDF_TARGET_ESP32P4
+        default 5 if IDF_TARGET_ESP32 || IDF_TARGET_ESP32S2 || IDF_TARGET_ESP32S3
+        help
+            GPIO number connected to INT pin.
+
+    rsource "../../../../devtools/Kconfig.i2c"
+endmenu

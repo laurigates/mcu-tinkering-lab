@@ -1,0 +1,29 @@
+menu "Example configuration"
+    choice EXAMPLE_QMP6988_DEMO
+        prompt "Demo mode"
+        default EXAMPLE_QMP6988_DEMO_NORMAL
+        help
+            Choose how to masure values from the sensor. See the main.c for
+            details.
+
+        config EXAMPLE_QMP6988_DEMO_FORCED
+            bool "Forced mode"
+            help
+                In this example the qmp6988 makes a single measurement before entering
+                sleep mode again.
+
+        config EXAMPLE_QMP6988_DEMO_NORMAL
+            bool "Normal mode"
+            help
+                In this example the qmp6988 makes continuous measurements.
+
+    endchoice
+
+    config EXAMPLE_QMP6988_ADDR
+        hex "I2C address of QMP6988"
+        default 0x70
+        help
+            I2C address of QMP6988, default 0x70.
+
+    rsource "../../../../devtools/Kconfig.i2c"
+endmenu

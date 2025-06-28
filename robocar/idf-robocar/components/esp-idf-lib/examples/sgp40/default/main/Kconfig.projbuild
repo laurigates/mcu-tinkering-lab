@@ -1,0 +1,11 @@
+menu "Example configuration"
+    config EXAMPLE_SHT3X_ADDR
+        hex "I2C address of SHT3x"
+        default 0x44
+        help
+            I2C address of SHT3x, either 0x44 or 0x45. When ADDR pin is
+            grounded, choose 0x44. When ADDR pin is pulled up to VDD, choose
+            0x45.
+
+    rsource "../../../../devtools/Kconfig.i2c"
+endmenu

@@ -1,0 +1,27 @@
+menu "Example configuration"
+    config EXAMPLE_SHUNT_RESISTOR_MILLI_OHM
+        int "Shunt resistor value in milliohms"
+        default 100
+
+    config EXAMPLE_I2C_ADDR
+        hex "I2C address of INA3221"
+        default 0x40
+        help
+            I2C address of INA3221. The default is `INA3221_I2C_ADDR_GND`, or
+            0x40. See available options in ina3221.h.
+
+    choice EXAMPLE_MEASURING_MODE
+        prompt "Select measuring mode"
+        default EXAMPLE_MEASURING_MODE_TRIGGER
+        config EXAMPLE_MEASURING_MODE_TRIGGER
+            bool "Trigger measurements"
+            help
+                Measuring mode to use. See 8.3.1 Basic ADC Functions in the datasheet.
+        config EXAMPLE_MEASURING_MODE_CONTINUOUS
+            bool "Continuous  measurements"
+            help
+                Measuring mode to use. See 8.3.1 Basic ADC Functions in the datasheet.
+    endchoice
+
+    rsource "../../../../devtools/Kconfig.i2c"
+endmenu

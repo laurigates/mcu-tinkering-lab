@@ -1,0 +1,12 @@
+menu "Example configuration"
+    config EXAMPLE_I2C_ADDR
+        hex "I2C address of mcp342x"
+        default 0x68
+        help
+            mcp342x devices have two address pins (`Adr0` and `Adr1`). The I2C
+            address starts from `0x68`, which is the default, and ends at `0x6f`.
+            See "5.3.2 DEVICE ADDRESS BITS (A2, A1, A0) AND ADDRESS SELECTION PINS
+            (MCP3423 AND MCP3424 )" in the datasheet.
+
+    rsource "../../../../devtools/Kconfig.i2c"
+endmenu
