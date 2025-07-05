@@ -51,6 +51,11 @@ int current_state = STATE_STOPPED;
 unsigned long last_command_time = 0;
 const unsigned long COMMAND_TIMEOUT = 1000; // 1 second timeout in ms
 
+// Action tracking for display
+char last_action[32] = "STARTUP";
+char last_command_source[16] = "INIT";
+unsigned long action_counter = 0;
+
 // Buffer for serial communication
 #define MAX_COMMAND_LENGTH 32
 char command_buffer[MAX_COMMAND_LENGTH];
@@ -81,6 +86,8 @@ void oled_show_command(const char* cmd);
 void oled_show_state(const char* state);
 void oled_draw_text(int x, int y, const char* text, bool clear_line);
 void oled_show_claude_message(int line, const char* message);
+void oled_show_action_debug(void);
+void track_action(const char* action, const char* source);
 
 // Initialize console for serial communication
 void init_console(void) {
@@ -321,7 +328,11 @@ void move_forward(int speed) {
     
     current_state = STATE_FORWARD;
     update_leds();
-    update_oled_status();
+    
+    char action_text[32];
+    snprintf(action_text, sizeof(action_text), "FWD SPD:%d", speed);
+    track_action(action_text, "MOTOR");
+    
     ESP_LOGI(TAG, "Moving forward at speed %d", speed);
 }
 
@@ -339,7 +350,11 @@ void move_backward(int speed) {
     
     current_state = STATE_BACKWARD;
     update_leds();
-    update_oled_status();
+    
+    char action_text[32];
+    snprintf(action_text, sizeof(action_text), "BACK SPD:%d", speed);
+    track_action(action_text, "MOTOR");
+    
     ESP_LOGI(TAG, "Moving backward at speed %d", speed);
 }
 
@@ -357,7 +372,11 @@ void turn_left(int speed) {
     
     current_state = STATE_LEFT;
     update_leds();
-    update_oled_status();
+    
+    char action_text[32];
+    snprintf(action_text, sizeof(action_text), "LEFT SPD:%d", speed);
+    track_action(action_text, "MOTOR");
+    
     ESP_LOGI(TAG, "Turning left at speed %d", speed);
 }
 
@@ -375,7 +394,11 @@ void turn_right(int speed) {
     
     current_state = STATE_RIGHT;
     update_leds();
-    update_oled_status();
+    
+    char action_text[32];
+    snprintf(action_text, sizeof(action_text), "RIGHT SPD:%d", speed);
+    track_action(action_text, "MOTOR");
+    
     ESP_LOGI(TAG, "Turning right at speed %d", speed);
 }
 
@@ -393,7 +416,11 @@ void rotate_cw(int speed) {
     
     current_state = STATE_ROTATE_CW;
     update_leds();
-    update_oled_status();
+    
+    char action_text[32];
+    snprintf(action_text, sizeof(action_text), "ROT_CW SPD:%d", speed);
+    track_action(action_text, "MOTOR");
+    
     ESP_LOGI(TAG, "Rotating clockwise at speed %d", speed);
 }
 
@@ -411,7 +438,11 @@ void rotate_ccw(int speed) {
     
     current_state = STATE_ROTATE_CCW;
     update_leds();
-    update_oled_status();
+    
+    char action_text[32];
+    snprintf(action_text, sizeof(action_text), "ROT_CCW SPD:%d", speed);
+    track_action(action_text, "MOTOR");
+    
     ESP_LOGI(TAG, "Rotating counter-clockwise at speed %d", speed);
 }
 
@@ -429,7 +460,7 @@ void stop_motors(void) {
     
     // Update LEDs and display to reflect stopped state
     update_leds();
-    update_oled_status();
+    track_action("STOP", "MOTOR");
 }
 
 // Get current time in milliseconds
@@ -525,11 +556,19 @@ void set_servo_angle(int channel, int angle) {
 void set_pan_angle(int angle) {
     current_pan_angle = angle;
     set_servo_angle(SERVO_PAN_CHANNEL, angle);
+    
+    char action_text[32];
+    snprintf(action_text, sizeof(action_text), "PAN:%d", angle);
+    track_action(action_text, "SERVO");
 }
 
 void set_tilt_angle(int angle) {
     current_tilt_angle = angle;
     set_servo_angle(SERVO_TILT_CHANNEL, angle);
+    
+    char action_text[32];
+    snprintf(action_text, sizeof(action_text), "TILT:%d", angle);
+    track_action(action_text, "SERVO");
 }
 
 // Simple 8x8 bitmap font for basic characters (A-Z, 0-9, space, colon)
@@ -601,20 +640,22 @@ void oled_draw_text(int x, int y, const char* text, bool clear_line) {
     for (int i = 0; text[i] && char_x < OLED_WIDTH - 8; i++) {
         const uint8_t* bitmap = get_char_bitmap(text[i]);
         
-        // Draw character bitmap - properly handle column-based font data
-        for (int col = 0; col < 8; col++) {
-            if (char_x + col < OLED_WIDTH) {
-                uint8_t font_column = bitmap[col];
+        // Draw character bitmap - font data is row-based, 8 bytes per character
+        for (int row = 0; row < 8; row++) {
+            if (y + row < OLED_HEIGHT) {
+                uint8_t font_row = bitmap[row];
                 
-                // Extract each bit from the column and place it in the correct row
-                for (int row = 0; row < 8; row++) {
+                // Extract each bit from the row and place it in the correct column
+                for (int col = 0; col < 8; col++) {
+                    int pixel_x = char_x + col;
                     int pixel_y = y + row;
-                    if (pixel_y < OLED_HEIGHT) {
-                        int byte_index = (pixel_y / 8) * OLED_WIDTH + (char_x + col);
+                    
+                    if (pixel_x < OLED_WIDTH && pixel_y < OLED_HEIGHT) {
+                        int byte_index = (pixel_y / 8) * OLED_WIDTH + pixel_x;
                         int bit_offset = pixel_y % 8;
                         
                         if (byte_index < sizeof(display_buffer)) {
-                            if (font_column & (1 << row)) {
+                            if (font_row & (1 << (7 - col))) {
                                 display_buffer[byte_index] |= (1 << bit_offset);
                             } else {
                                 display_buffer[byte_index] &= ~(1 << bit_offset);
@@ -637,8 +678,13 @@ void oled_show_startup(void) {
     
     oled_draw_text(0, 0, "ROBOCAR ESP-IDF", true);
     oled_draw_text(0, 8, "INITIALIZING...", true);
-    oled_draw_text(0, 24, "COMMANDS READY", true);
-    oled_draw_text(0, 32, "TYPE HELP", true);
+    oled_draw_text(0, 16, "STARTING DEBUG", true);
+    oled_draw_text(0, 24, "DISPLAY MODE", true);
+    oled_draw_text(0, 32, "READY FOR CMDS", true);
+    
+    // Switch to debug display after a short delay
+    vTaskDelay(2000 / portTICK_PERIOD_MS);
+    track_action("SYSTEM_READY", "INIT");
 }
 
 void oled_show_command(const char* cmd) {
@@ -680,6 +726,70 @@ void update_oled_status(void) {
     // Show servo positions
     snprintf(status_text, sizeof(status_text), "PAN:%d TILT:%d", current_pan_angle, current_tilt_angle);
     oled_draw_text(0, 40, status_text, true);
+}
+
+void oled_show_action_debug(void) {
+    if (!oled_initialized) return;
+    
+    // Line 0: System status with action counter
+    char line_text[17]; // 16 chars + null terminator for display width
+    snprintf(line_text, sizeof(line_text), "ROBO #%lu", action_counter);
+    oled_draw_text(0, 0, line_text, true);
+    
+    // Line 1: Current state with command source (truncated to fit)
+    const char* state_name;
+    switch (current_state) {
+        case STATE_STOPPED: state_name = "STOP"; break;
+        case STATE_FORWARD: state_name = "FWD"; break;
+        case STATE_BACKWARD: state_name = "BACK"; break;
+        case STATE_LEFT: state_name = "LEFT"; break;
+        case STATE_RIGHT: state_name = "RGHT"; break;
+        case STATE_ROTATE_CW: state_name = "CW"; break;
+        case STATE_ROTATE_CCW: state_name = "CCW"; break;
+        default: state_name = "UNK"; break;
+    }
+    // Truncate command source to 4 chars to fit in 16 char display
+    char short_source[5];
+    strncpy(short_source, last_command_source, 4);
+    short_source[4] = '\0';
+    snprintf(line_text, sizeof(line_text), "%s [%s]", state_name, short_source);
+    oled_draw_text(0, 8, line_text, true);
+    
+    // Line 2: Last action taken (truncated to fit)
+    char short_action[12];
+    strncpy(short_action, last_action, 11);
+    short_action[11] = '\0';
+    snprintf(line_text, sizeof(line_text), "ACT:%s", short_action);
+    oled_draw_text(0, 16, line_text, true);
+    
+    // Line 3: Servo positions
+    snprintf(line_text, sizeof(line_text), "PAN:%d TLT:%d", current_pan_angle, current_tilt_angle);
+    oled_draw_text(0, 24, line_text, true);
+    
+    // Line 4: Time since last command
+    unsigned long time_since_cmd = millis() - last_command_time;
+    if (time_since_cmd < 10000) { // Show if less than 10 seconds
+        snprintf(line_text, sizeof(line_text), "CMD:%lums ago", time_since_cmd);
+    } else {
+        snprintf(line_text, sizeof(line_text), "CMD:>10s ago");
+    }
+    oled_draw_text(0, 32, line_text, true);
+    
+    // Line 5-7: Reserved for dynamic messages or status
+    // These can be used by oled_show_claude_message or other functions
+}
+
+void track_action(const char* action, const char* source) {
+    action_counter++;
+    strncpy(last_action, action, sizeof(last_action) - 1);
+    last_action[sizeof(last_action) - 1] = '\0';
+    strncpy(last_command_source, source, sizeof(last_command_source) - 1);
+    last_command_source[sizeof(last_command_source) - 1] = '\0';
+    
+    // Update display with new action
+    oled_show_action_debug();
+    
+    ESP_LOGI(TAG, "Action #%lu: %s from %s", action_counter, action, source);
 }
 
 void oled_show_claude_message(int line, const char* message) {
@@ -725,10 +835,12 @@ void play_sound(int frequency, int duration_ms) {
 
 // Sound effect functions
 void sound_beep(void) {
+    track_action("BEEP", "SOUND");
     play_sound(1000, 200); // 1kHz for 200ms
 }
 
 void sound_melody(void) {
+    track_action("MELODY", "SOUND");
     // Simple melody: C, E, G, C
     play_sound(262, 200);  // C4
     vTaskDelay(50 / portTICK_PERIOD_MS);
@@ -740,6 +852,7 @@ void sound_melody(void) {
 }
 
 void sound_alert(void) {
+    track_action("ALERT", "SOUND");
     // Alert sound: alternating high-low
     for (int i = 0; i < 5; i++) {
         play_sound(1500, 100);
@@ -779,11 +892,13 @@ void print_help_commands(void) {
 void process_command(const char* command) {
     ESP_LOGI(TAG, "Command received: %s", command);
     
-    // Show command on OLED
-    oled_show_command(command);
-    
     // Update command timestamp and reset timeout
     last_command_time = millis();
+    
+    // Track serial command reception
+    char action_text[32];
+    snprintf(action_text, sizeof(action_text), "SERIAL:%s", command);
+    track_action(action_text, "UART");
     
     // Process movement commands
     if (strcmp(command, CMD_FORWARD) == 0) {
@@ -918,6 +1033,11 @@ void command_task(void *pvParameters) {
 // I2C command processing functions
 void process_i2c_movement_command(movement_command_t movement, uint8_t speed) {
     ESP_LOGI(TAG, "Processing I2C movement command: %d, speed: %d", movement, speed);
+    
+    // Track I2C command reception
+    char action_text[32];
+    snprintf(action_text, sizeof(action_text), "I2C_CMD:%d", movement);
+    track_action(action_text, "I2C");
     
     switch (movement) {
         case MOVE_FORWARD:

@@ -39,6 +39,19 @@ help:
 	@echo "  make develop-main    - Build, flash, and monitor main controller"
 	@echo "  make develop-cam     - Build, flash, and monitor camera module"
 	@echo ""
+	@echo "$(GREEN)AI Backend Commands:$(NC)"
+	@echo "  make ollama-start    - Start Ollama server (host binding)"
+	@echo "  make ollama-advertise - Advertise Ollama via mDNS"
+	@echo "  make ollama-setup    - Start and advertise Ollama service"
+	@echo "  make ollama-stop     - Stop Ollama server and mDNS"
+	@echo ""
+	@echo "$(GREEN)Simulation Commands:$(NC)"
+	@echo "  make sim-start       - Start ESP32 robot car simulation"
+	@echo "  make sim-headless    - Start simulation without visualization"
+	@echo "  make sim-demo        - Run demo movement simulation"
+	@echo "  make sim-connect     - Connect simulation to ESP32 hardware"
+	@echo "  make sim-test        - Run simulation test suite"
+	@echo ""
 	@echo "$(GREEN)Utility Commands:$(NC)"
 	@echo "  make clean-main      - Clean main controller build"
 	@echo "  make clean-cam       - Clean camera build"
@@ -81,10 +94,12 @@ flash-cam: check-idf
 
 monitor-main: check-idf
 	@echo "$(BLUE)Monitoring main controller...$(NC)"
+	@echo "$(YELLOW)Press Ctrl+] to exit monitor$(NC)"
 	@cd idf-robocar && $(MAKE) monitor PORT=$(MAIN_PORT)
 
 monitor-cam: check-idf
 	@echo "$(BLUE)Monitoring camera module...$(NC)"
+	@echo "$(YELLOW)Press Ctrl+] to exit monitor$(NC)"
 	@cd esp32-cam-idf && $(MAKE) monitor PORT=$(CAM_PORT)
 
 clean-main: check-idf
@@ -99,9 +114,40 @@ credentials:
 	@echo "$(BLUE)Setting up camera credentials...$(NC)"
 	@cd esp32-cam-idf && $(MAKE) credentials
 
-develop-main: flash-main monitor-main
+develop-main: build-main
+	@echo "$(BLUE)Starting development workflow for main controller...$(NC)"
+	@echo "$(YELLOW)This will flash and monitor. Press Ctrl+] to exit monitor.$(NC)"
+	@cd idf-robocar && $(MAKE) flash-monitor PORT=$(MAIN_PORT)
 
-develop-cam: flash-cam monitor-cam
+develop-cam: build-cam
+	@echo "$(BLUE)Starting development workflow for camera module...$(NC)"
+	@echo "$(YELLOW)Make sure GPIO0 is connected to GND for programming$(NC)"
+	@echo "$(YELLOW)This will flash and monitor. Press Ctrl+] to exit monitor.$(NC)"
+	@cd esp32-cam-idf && $(MAKE) flash-monitor PORT=$(CAM_PORT)
+
+# === AI Backend Targets ===
+
+ollama-start:
+	@echo "$(BLUE)Starting Ollama server...$(NC)"
+	@echo "$(YELLOW)Starting Ollama with host binding for network access$(NC)"
+	OLLAMA_HOST=0.0.0.0 ollama serve &
+	@echo "$(GREEN)Ollama server started on 0.0.0.0:11434$(NC)"
+
+ollama-advertise:
+	@echo "$(BLUE)Advertising Ollama service via mDNS...$(NC)"
+	@echo "$(YELLOW)Publishing mDNS service for automatic discovery$(NC)"
+	dns-sd -R "Ollama AI" _ollama._tcp . 11434 path=/api/generate &
+	@echo "$(GREEN)Ollama service advertised via mDNS$(NC)"
+
+ollama-setup: ollama-start ollama-advertise
+	@echo "$(GREEN)Ollama backend fully configured and ready$(NC)"
+	@echo "$(CYAN)ESP32-CAM will auto-discover the Ollama service$(NC)"
+
+ollama-stop:
+	@echo "$(BLUE)Stopping Ollama services...$(NC)"
+	@pkill -f "ollama serve" || true
+	@pkill -f "dns-sd.*Ollama" || true
+	@echo "$(GREEN)Ollama services stopped$(NC)"
 
 # === Utility Targets ===
 
@@ -127,7 +173,77 @@ info:
 	@echo "  - Real-time image processing and scene analysis"
 	@echo "  - Motor control with RGB LEDs and servo-mounted camera"
 	@echo "  - OLED display for system status and diagnostics"
+	@echo "  - Python simulation with Swift 3D visualization"
+
+# === Simulation Targets ===
+
+check-sim:
+	@if [ ! -d "simulation" ]; then \
+		echo "$(RED)Error: Simulation directory not found$(NC)"; \
+		echo "$(YELLOW)The simulation environment needs to be set up first$(NC)"; \
+		exit 1; \
+	fi
+	@if [ ! -f "simulation/Makefile" ]; then \
+		echo "$(RED)Error: Simulation Makefile not found$(NC)"; \
+		echo "$(YELLOW)Run the setup process to create simulation environment$(NC)"; \
+		exit 1; \
+	fi
+
+sim-start: check-sim
+	@echo "$(BLUE)Starting ESP32 Robot Car Simulation...$(NC)"
+	@echo "$(YELLOW)Launching with Swift 3D visualization$(NC)"
+	@cd simulation && $(MAKE) run
+
+sim-headless: check-sim
+	@echo "$(BLUE)Starting headless simulation...$(NC)"
+	@echo "$(YELLOW)Running without visualization for performance$(NC)"
+	@cd simulation && $(MAKE) run-headless
+
+sim-demo: check-sim
+	@echo "$(BLUE)Starting demo simulation...$(NC)"
+	@echo "$(YELLOW)Running autonomous movement patterns$(NC)"
+	@cd simulation && $(MAKE) run-demo
+
+sim-connect: check-sim
+	@if [ -z "$(SERIAL_PORT)" ]; then \
+		echo "$(RED)Error: SERIAL_PORT not specified$(NC)"; \
+		echo "$(YELLOW)Usage: make sim-connect SERIAL_PORT=/dev/ttyUSB0$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(BLUE)Connecting simulation to ESP32 hardware...$(NC)"
+	@echo "$(YELLOW)Serial port: $(SERIAL_PORT)$(NC)"
+	@cd simulation && $(MAKE) run-serial SERIAL_PORT=$(SERIAL_PORT)
+
+sim-test: check-sim
+	@echo "$(BLUE)Running simulation test suite...$(NC)"
+	@cd simulation && $(MAKE) test
+
+sim-install:
+	@echo "$(BLUE)Installing simulation dependencies...$(NC)"
+	@if [ ! -d "simulation" ]; then \
+		echo "$(YELLOW)Simulation directory not found - please ensure simulation is set up$(NC)"; \
+		exit 1; \
+	fi
+	@cd simulation && $(MAKE) install
+
+sim-status:
+	@echo "$(BLUE)Checking simulation status...$(NC)"
+	@if [ ! -d "simulation" ]; then \
+		echo "$(RED)Simulation not available$(NC)"; \
+		exit 1; \
+	fi
+	@cd simulation && $(MAKE) status
+
+sim-info:
+	@echo "$(BLUE)Simulation system information...$(NC)"
+	@if [ ! -d "simulation" ]; then \
+		echo "$(RED)Simulation not available$(NC)"; \
+		echo "$(YELLOW)Please set up the simulation environment first$(NC)"; \
+	else \
+		cd simulation && $(MAKE) info; \
+	fi
 
 .PHONY: help check-idf build-main build-cam build-all flash-main flash-cam
 .PHONY: monitor-main monitor-cam clean-main clean-cam clean-all credentials
-.PHONY: develop-main develop-cam info
+.PHONY: develop-main develop-cam ollama-start ollama-advertise ollama-setup ollama-stop info
+.PHONY: check-sim sim-start sim-headless sim-demo sim-connect sim-test sim-install sim-status sim-info

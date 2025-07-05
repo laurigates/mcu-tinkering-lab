@@ -20,6 +20,7 @@
 #define CAMERA_JPEG_QUALITY     15              // Lower = higher quality
 
 // Status LED Configuration
+#define STATUS_LED_ENABLED      0       // Set to 0 to disable, 1 to enable
 #define STATUS_LED_ON_TIME_MS   100
 #define STATUS_LED_OFF_TIME_MS  900
 
