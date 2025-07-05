@@ -63,6 +63,12 @@ make monitor            # Monitor serial output
 
 **Monitor Exit:** `Ctrl+]` to exit ESP-IDF monitor (or `Ctrl+T Ctrl+X` if Ctrl+] unavailable)
 
+**Important Note:** If monitor seems unresponsive, try:
+1. `Ctrl+]` (primary exit method for ESP-IDF monitor)
+2. `Ctrl+T Ctrl+X` (alternative if bracket key unavailable)
+3. `Ctrl+C` followed by `Ctrl+]` if process is stuck
+4. In terminal: `Ctrl+Z` to suspend, then `kill %1` to terminate
+
 **Shell Compatibility:** Makefiles auto-detect Fish vs Bash/Zsh and handle ESP-IDF environment setup appropriately.
 
 ## Hardware Configuration
@@ -233,6 +239,41 @@ This provides up-to-date official documentation for:
 - Command timeout automatically stops motors if no commands received
 - Motors stop on serial communication loss
 - All movement commands include automatic timeout
+
+### OLED Debugging Display
+
+The main controller features a comprehensive real-time debugging display on the integrated SSD1306 OLED (128x64 pixels). This provides immediate visual feedback for development and troubleshooting.
+
+**Display Layout (8 lines, 16 characters each):**
+```
+Line 0: ROBO #[counter]      - System status with action counter
+Line 1: [STATE] [SOURCE]     - Current state and command source  
+Line 2: ACT:[action]         - Last action taken with parameters
+Line 3: PAN:[angle] TLT:[angle] - Real-time servo positions
+Line 4: CMD:[time]ms ago     - Time elapsed since last command
+Line 5-7: [Available]        - Reserved for Claude messages/alerts
+```
+
+**Real-time Action Tracking:**
+- **Action Counter**: Total actions performed (`ROBO #123`)
+- **Movement States**: FWD, BACK, LEFT, RGHT, CW, CCW, STOP
+- **Command Sources**: 
+  - `[UART]` - Serial console commands
+  - `[I2C]` - ESP32-CAM AI commands
+  - `[MOTOR]` - Internal motor operations
+  - `[SERVO]` - Servo movements
+  - `[SOUND]` - Audio feedback
+- **Action Details**: Speed values, angles, command types
+- **Timing**: Command frequency and response analysis
+
+**Debug Benefits:**
+- Immediate visual feedback for all robot operations
+- Command source identification for multi-input debugging
+- Action history tracking with parameters
+- Real-time state verification
+- Performance monitoring via timing displays
+
+**Implementation:** The display automatically switches from startup messages to debug mode after initialization, providing continuous operational visibility.
 
 ### Key Source Files
 

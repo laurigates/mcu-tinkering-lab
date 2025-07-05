@@ -391,6 +391,7 @@ static void status_led_task(void *pvParameters) {
 }
 
 static void init_status_led(void) {
+#if STATUS_LED_ENABLED
     gpio_config_t io_conf = {
         .pin_bit_mask = (1ULL << CAM_LED_PIN),
         .mode = GPIO_MODE_OUTPUT,
@@ -401,10 +402,15 @@ static void init_status_led(void) {
     gpio_config(&io_conf);
     set_status_led(false);
     ESP_LOGI(TAG, "Status LED initialized on GPIO %d", CAM_LED_PIN);
+#else
+    ESP_LOGI(TAG, "Status LED disabled in configuration");
+#endif
 }
 
 static void set_status_led(bool on) {
+#if STATUS_LED_ENABLED
     gpio_set_level(CAM_LED_PIN, on ? 1 : 0);
+#endif
 }
 
 static void send_startup_commands(void) {
