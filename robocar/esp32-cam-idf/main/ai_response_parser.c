@@ -106,8 +106,42 @@ bool parse_ai_response(const char* response_text, ai_command_t* command) {
     cJSON_Delete(root);
 
     if (!json_obj) {
-        ESP_LOGE(TAG, "Failed to parse extracted JSON");
-        return false;
+        ESP_LOGE(TAG, "Failed to parse extracted JSON: %s", cJSON_GetErrorPtr() ? cJSON_GetErrorPtr() : "Unknown error");
+        
+        // Try to extract simple keywords from text as fallback
+        ESP_LOGW(TAG, "Attempting fallback keyword extraction");
+        if (strstr(content_text, "forward") || strstr(content_text, "move forward")) {
+            strcpy(command->movement_command, "F");
+            command->has_movement = true;
+            ESP_LOGI(TAG, "Fallback: detected 'forward' command");
+            return true;
+        } else if (strstr(content_text, "backward") || strstr(content_text, "move backward")) {
+            strcpy(command->movement_command, "B");
+            command->has_movement = true;
+            ESP_LOGI(TAG, "Fallback: detected 'backward' command");
+            return true;
+        } else if (strstr(content_text, "left") || strstr(content_text, "turn left")) {
+            strcpy(command->movement_command, "L");
+            command->has_movement = true;
+            ESP_LOGI(TAG, "Fallback: detected 'left' command");
+            return true;
+        } else if (strstr(content_text, "right") || strstr(content_text, "turn right")) {
+            strcpy(command->movement_command, "R");
+            command->has_movement = true;
+            ESP_LOGI(TAG, "Fallback: detected 'right' command");
+            return true;
+        } else if (strstr(content_text, "stop") || strstr(content_text, "halt")) {
+            strcpy(command->movement_command, "S");
+            command->has_movement = true;
+            ESP_LOGI(TAG, "Fallback: detected 'stop' command");
+            return true;
+        }
+        
+        // Default fallback: stop command for safety
+        strcpy(command->movement_command, "S");
+        command->has_movement = true;
+        ESP_LOGW(TAG, "Fallback: using default 'stop' command for safety");
+        return true;
     }
 
     bool success = false;
@@ -193,6 +227,15 @@ bool parse_ai_response(const char* response_text, ai_command_t* command) {
         command->display_line = 6; // Default to line 6 for Claude messages
     }
 
+    // Cleanup JSON object
     cJSON_Delete(json_obj);
+    
+    // Log parsing results
+    if (success) {
+        ESP_LOGI(TAG, "Successfully parsed AI response");
+    } else {
+        ESP_LOGW(TAG, "AI response parsed but no valid commands found");
+    }
+    
     return success;
 }

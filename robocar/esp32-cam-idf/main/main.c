@@ -20,6 +20,7 @@
 #include "i2c_master.h"
 #include "ai_response_parser.h"
 #include "camera_pins.h"
+#include "credentials_loader.h"
 
 static const char *TAG = "esp32-cam-robocar";
 
@@ -77,9 +78,20 @@ void app_main(void) {
         return;
     }
 
-    // Connect to WiFi
-    ESP_LOGI(TAG, "Connecting to WiFi: %s", WIFI_SSID);
-    if (wifi_connect(WIFI_SSID, WIFI_PASSWORD) == ESP_OK) {
+    // Load and validate credentials
+    ESP_LOGI(TAG, "Loading credentials...");
+    if (!are_credentials_available()) {
+        ESP_LOGE(TAG, "Failed to load or validate credentials");
+        i2c_send_sound_command(SOUND_ALERT); // Send alert sound
+        return;
+    }
+
+    // Connect to WiFi using loaded credentials
+    const char* wifi_ssid = get_wifi_ssid();
+    const char* wifi_password = get_wifi_password();
+    
+    ESP_LOGI(TAG, "Connecting to WiFi: %s", wifi_ssid);
+    if (wifi_connect(wifi_ssid, wifi_password) == ESP_OK) {
         g_wifi_connected = true;
         ESP_LOGI(TAG, "WiFi connected successfully");
         i2c_send_sound_command(SOUND_MELODY); // Send melody for success
@@ -117,17 +129,26 @@ void app_main(void) {
             ai_config_t ai_config;
 #if defined(CONFIG_AI_BACKEND_CLAUDE)
             ESP_LOGI(TAG, "Configuring Claude backend...");
-            ai_config.api_key = CLAUDE_API_KEY;
-            ai_config.api_url = CLAUDE_API_URL;
-            ai_config.model = CLAUDE_MODEL;
+            const char* claude_api_key = get_claude_api_key();
+            if (!claude_api_key || strlen(claude_api_key) == 0) {
+                ESP_LOGE(TAG, "Claude API key not available - cannot initialize Claude backend");
+                g_ai_backend = NULL;
+            } else {
+                ai_config.api_key = claude_api_key;
+                ai_config.api_url = "https://api.anthropic.com/v1/messages";
+                ai_config.model = "claude-3-haiku-20240307";
+            }
 #elif defined(CONFIG_AI_BACKEND_OLLAMA)
             ESP_LOGI(TAG, "Configuring Ollama backend...");
             ai_config.api_key = NULL; // Ollama doesn't require a key
             ai_config.api_url = OLLAMA_API_URL;
             ai_config.model = OLLAMA_MODEL;
 #endif
-            ESP_LOGI(TAG, "Calling backend initialization...");
-            esp_err_t init_result = g_ai_backend->init(&ai_config);
+            
+            // Only initialize if we have a valid backend
+            if (g_ai_backend) {
+                ESP_LOGI(TAG, "Calling backend initialization...");
+                esp_err_t init_result = g_ai_backend->init(&ai_config);
             if (init_result != ESP_OK) {
                 ESP_LOGE(TAG, "AI backend initialization FAILED with error: %s", esp_err_to_name(init_result));
 #if defined(CONFIG_AI_BACKEND_OLLAMA)
@@ -150,6 +171,7 @@ void app_main(void) {
             } else {
                 ESP_LOGI(TAG, "AI backend initialized successfully!");
                 ESP_LOGI(TAG, "System ready for AI-powered image analysis");
+                }
             }
         } else {
             ESP_LOGE(TAG, "CRITICAL: ai_backend_get_current() returned NULL!");

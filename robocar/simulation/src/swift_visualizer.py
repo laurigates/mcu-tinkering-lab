@@ -9,6 +9,7 @@ import numpy as np
 import time
 import asyncio
 import threading
+import queue
 from typing import Dict, List, Optional, Tuple
 import yaml
 from pathlib import Path
@@ -34,7 +35,8 @@ class RobotVisualizer:
     
     def __init__(self, config_path: str, robot: DifferentialDriveRobot):
         if not HAS_SWIFT:
-            raise ImportError("Swift and Robotics Toolbox required for visualization")
+            print("Warning: Swift and Robotics Toolbox not available")
+            print("3D visualization will be disabled")
         
         self.config = self._load_config(config_path)
         self.robot = robot
@@ -48,6 +50,11 @@ class RobotVisualizer:
         self.wheel_meshes = []
         self.camera_mesh = None
         self.trail_points = []
+        
+        # Thread-safe communication
+        self._update_queue = queue.Queue()
+        self._running = False
+        self._thread = None
         self.obstacles = []
         
         # Visualization parameters
@@ -69,11 +76,10 @@ class RobotVisualizer:
             return yaml.safe_load(f)
     
     def _init_swift_env(self):
-        """Initialize Swift environment - disabled due to asyncio conflicts"""
-        # Temporarily disable Swift due to websockets/asyncio compatibility issues
-        print("Note: Swift 3D visualization temporarily disabled due to asyncio compatibility issues")
-        print("Running simulation in headless mode with text output")
-        self.env = None
+        """Initialize Swift environment with proper thread isolation"""
+        # We'll initialize Swift in the dedicated thread to avoid asyncio conflicts
+        self.env = None  # Will be created in _visualization_thread
+        print("Swift 3D visualization will be initialized in dedicated thread")
     
     def _create_environment(self):
         """Create the simulation environment"""
@@ -229,9 +235,25 @@ class RobotVisualizer:
         self.env.cam.set_pose(SE3(2, 2, 3) * SE3.Rz(-np.pi/4) * SE3.Rx(-np.pi/6))
     
     def update_robot_visualization(self):
-        """Update robot visualization based on current state"""
+        """Update robot visualization based on current state - thread safe"""
         state = self.robot.get_state()
         
+        # Send update command to visualization thread
+        update_data = {
+            'type': 'robot_update',
+            'state': state
+        }
+        try:
+            self._update_queue.put_nowait(update_data)
+        except queue.Full:
+            # Drop update if queue is full to prevent blocking
+            pass
+    
+    def _process_robot_update(self, state):
+        """Process robot visualization update in Swift thread"""
+        if not self.env:
+            return
+            
         # Update robot position and orientation
         robot_transform = SE3(state.x, state.y, 0.05) * SE3.Rz(state.theta)
         
@@ -274,6 +296,9 @@ class RobotVisualizer:
         
         # Update sensor visualization
         self._update_sensor_visualization(state)
+        
+        # Step the simulation
+        self.env.step(0.033)  # ~30 FPS
     
     def _update_trail(self, x: float, y: float):
         """Update robot trail visualization"""
@@ -345,12 +370,85 @@ class RobotVisualizer:
     
     def start_update_loop(self):
         """Start the visualization update loop"""
-        self.running = True
-        self.update_thread = threading.Thread(target=self._update_loop, daemon=True)
-        self.update_thread.start()
+        self._running = True
+        self._thread = threading.Thread(target=self._visualization_thread, daemon=True)
+        self._thread.start()
+    
+    def _visualization_thread(self):
+        """Main visualization thread - handles Swift environment isolated from asyncio"""
+        if not HAS_SWIFT:
+            print("Swift not available, visualization thread exiting")
+            return
+            
+        try:
+            # Create and set event loop for this thread
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            print("Initializing Swift environment in dedicated thread...")
+            
+            # Suppress websocket error warnings that are internal to Swift
+            import warnings
+            import logging
+            
+            # Filter out websocket-related warnings
+            warnings.filterwarnings("ignore", message=".*websockets.*")
+            logging.getLogger("websockets").setLevel(logging.ERROR)
+            
+            # Initialize Swift environment with a unique port to avoid conflicts
+            import random
+            port = random.randint(8000, 9000)
+            
+            print(f"Note: Swift may show websocket threading warnings - these can be safely ignored")
+            self.env = Swift()
+            self.env.launch(realtime=True, headless=False, port=port)
+            print(f"✓ Swift 3D visualization running on port {port}")
+            print(f"✓ Open browser to http://localhost:{port} to view 3D visualization")
+            
+            # Create robot visualization elements
+            self._create_environment()
+            self._create_robot_model()
+            
+            # Run the visualization loop (websocket errors can be ignored)
+            last_robot_update = time.time()
+            update_interval = 1.0 / 30.0  # 30 FPS
+            
+            print("Starting Swift visualization loop...")
+            
+            while self._running:
+                current_time = time.time()
+                
+                # Process updates from queue
+                try:
+                    while True:
+                        update_data = self._update_queue.get_nowait()
+                        if update_data['type'] == 'robot_update':
+                            self._process_robot_update(update_data['state'])
+                        elif update_data['type'] == 'pose_update':
+                            self._process_robot_update(update_data['state'])
+                        # Add more update types as needed
+                except queue.Empty:
+                    pass
+                
+                # Regular robot state updates
+                if current_time - last_robot_update > update_interval:
+                    # Update with current robot state
+                    state = self.robot.get_state()
+                    self._process_robot_update(state)
+                    last_robot_update = current_time
+                
+                time.sleep(0.01)  # 100Hz check rate
+            
+            print("Swift visualization loop stopping")
+            
+        except Exception as e:
+            print(f"Swift initialization failed: {e}")
+            print("Running simulation without 3D visualization")
+            self.env = None
+            return
     
     def _update_loop(self):
-        """Main update loop for visualization"""
+        """Legacy update loop - now just calls update_robot_visualization"""
         while self.running:
             current_time = time.time()
             
@@ -362,11 +460,29 @@ class RobotVisualizer:
     
     def stop(self):
         """Stop the visualization"""
-        self.running = False
-        if self.update_thread:
-            self.update_thread.join()
+        print("Stopping Swift visualization...")
+        self._running = False
+        self.running = False  # Legacy compatibility
+        
+        # Stop the event loop in the visualization thread
+        if hasattr(self, '_thread') and self._thread and self._thread.is_alive():
+            # Send a signal to stop the event loop
+            try:
+                loop = asyncio.get_running_loop()
+                if loop:
+                    loop.call_soon_threadsafe(loop.stop)
+            except:
+                pass
+            self._thread.join(timeout=2.0)  # Wait up to 2 seconds
+        
+        if hasattr(self, 'update_thread') and self.update_thread:
+            self.update_thread.join(timeout=1.0)
+            
         if self.env:
-            self.env.close()
+            try:
+                self.env.close()
+            except Exception as e:
+                print(f"Warning: Error closing Swift environment: {e}")
     
     def screenshot(self, filename: str):
         """Take a screenshot of the visualization"""

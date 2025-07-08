@@ -54,7 +54,8 @@ class DCMotor:
         self.resistance = config['resistance']  # Ohms
         self.inductance = config['inductance']  # H
         self.back_emf_constant = config['back_emf_constant']  # V⋅s/rad
-        self.torque_constant = config['back_emf_constant']  # N⋅m/A (same as back EMF)
+        # Torque constant derived from stall specifications for consistency
+        self.torque_constant = config['stall_torque'] / config['stall_current']  # N⋅m/A
         self.max_rpm = config['max_rpm']
         self.stall_torque = config['stall_torque']  # N⋅m
         self.no_load_current = config['no_load_current']  # A
@@ -65,10 +66,10 @@ class DCMotor:
         self.angular_velocity = 0.0  # rad/s
         self.torque = 0.0  # N⋅m
         
-        # Friction parameters
-        self.friction_static = 0.1  # N⋅m
-        self.friction_kinetic = 0.05  # N⋅m
-        self.friction_viscous = 0.001  # N⋅m⋅s/rad
+        # Friction parameters (realistic for small DC motor)
+        self.friction_static = 0.001  # N⋅m (reduced for small motor)
+        self.friction_kinetic = 0.0005  # N⋅m (reduced for small motor)
+        self.friction_viscous = 0.0001  # N⋅m⋅s/rad (reduced for small motor)
         
     def update(self, voltage: float, load_torque: float, dt: float) -> Tuple[float, float]:
         """
@@ -98,11 +99,14 @@ class DCMotor:
         motor_torque = self.torque_constant * self.current
         
         # Friction torque
-        if abs(self.angular_velocity) > 0.1:  # Moving
+        if abs(self.angular_velocity) > 0.01:  # Moving (reduced threshold)
             friction_torque = np.sign(self.angular_velocity) * self.friction_kinetic
-        else:  # Static or near-static
-            friction_torque = np.clip(motor_torque - load_torque, 
-                                    -self.friction_static, self.friction_static)
+        else:  # Static friction - only applies if motor torque exceeds static friction
+            static_threshold = abs(motor_torque - load_torque)
+            if static_threshold > self.friction_static:
+                friction_torque = np.sign(motor_torque - load_torque) * self.friction_static
+            else:
+                friction_torque = motor_torque - load_torque  # Static friction prevents motion
         
         # Viscous friction
         viscous_torque = self.friction_viscous * self.angular_velocity
@@ -110,12 +114,11 @@ class DCMotor:
         # Net torque
         net_torque = motor_torque - load_torque - friction_torque - viscous_torque
         
-        # Angular acceleration (assuming motor inertia is negligible compared to load)
-        # In practice, you'd include motor inertia: J * dw/dt = net_torque
-        if abs(net_torque) > 0.001:  # Avoid division by zero
-            # Simplified: assume small motor inertia
-            angular_acceleration = net_torque / 0.001  # kg⋅m²
-            self.angular_velocity += angular_acceleration * dt
+        # Angular acceleration with proper motor inertia
+        # J * dw/dt = net_torque, where J is motor rotor inertia
+        motor_inertia = 0.001  # kg⋅m² - realistic value for small DC motor rotor
+        angular_acceleration = net_torque / motor_inertia
+        self.angular_velocity += angular_acceleration * dt
         
         # Limit to maximum RPM
         max_angular_velocity = self.max_rpm * 2 * np.pi / 60  # rad/s

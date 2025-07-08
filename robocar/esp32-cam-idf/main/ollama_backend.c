@@ -34,12 +34,23 @@ static esp_err_t http_event_handler(esp_http_client_event_t *evt) {
             break;
         case HTTP_EVENT_ON_DATA:
             ESP_LOGD(TAG, "HTTP_EVENT_ON_DATA, len=%d", evt->data_len);
-            if (s_response_buffer && s_response_len + evt->data_len < MAX_RESPONSE_SIZE - 1) {
-                memcpy(s_response_buffer + s_response_len, evt->data, evt->data_len);
-                s_response_len += evt->data_len;
-                s_response_buffer[s_response_len] = '\0';
-            } else {
-                ESP_LOGW(TAG, "Response buffer overflow");
+            if (s_response_buffer && evt->data && evt->data_len > 0) {
+                // Ensure we don't overflow the buffer (MAX_RESPONSE_SIZE total, -1 for null terminator)
+                size_t available_space = MAX_RESPONSE_SIZE - 1 - s_response_len;
+                size_t bytes_to_copy = (evt->data_len <= available_space) ? evt->data_len : available_space;
+                
+                if (bytes_to_copy > 0) {
+                    memcpy(s_response_buffer + s_response_len, evt->data, bytes_to_copy);
+                    s_response_len += bytes_to_copy;
+                    s_response_buffer[s_response_len] = '\0';
+                    
+                    if (bytes_to_copy < evt->data_len) {
+                        ESP_LOGW(TAG, "HTTP response truncated: received %d bytes, only %zu bytes available", 
+                                evt->data_len, available_space);
+                    }
+                } else {
+                    ESP_LOGW(TAG, "HTTP response buffer full, discarding %d bytes", evt->data_len);
+                }
             }
             break;
         case HTTP_EVENT_ON_FINISH:
