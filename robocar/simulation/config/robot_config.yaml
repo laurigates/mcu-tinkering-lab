@@ -28,7 +28,7 @@ robot:
       no_load_current: 0.1  # A
       stall_current: 2.0  # A
       resistance: 3.0  # Ohms
-      inductance: 0.001  # H
+      inductance: 0.01  # H (realistic for small DC motor)
       back_emf_constant: 0.01  # V⋅s/rad
       
     right:
@@ -41,7 +41,7 @@ robot:
       no_load_current: 0.1  # A
       stall_current: 2.0  # A
       resistance: 3.0  # Ohms
-      inductance: 0.001  # H
+      inductance: 0.01  # H (realistic for small DC motor)
       back_emf_constant: 0.01  # V⋅s/rad
 
   # Servo configuration (Camera mount)

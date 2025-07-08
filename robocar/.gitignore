@@ -1,3 +1,9 @@
 build
 cam/credentials.h
+esp32-cam-idf/main/credentials.h
 .aider*
+# Python build artifacts
+simulation/src/__pycache__/
+*.pyc
+*.pyo
+*.pyd

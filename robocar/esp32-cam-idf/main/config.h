@@ -6,8 +6,9 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-// WiFi Configuration - Include credentials from credentials.h
-#include "credentials.h"
+// WiFi Configuration - Use secure credential loader
+// Note: Credentials are loaded dynamically via credentials_loader module
+// This supports both environment variables and credentials.h fallback
 
 // Timing Configuration
 #define CAPTURE_INTERVAL_MS     5000    // Capture image every 5 seconds
