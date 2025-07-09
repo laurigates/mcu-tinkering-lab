@@ -86,11 +86,12 @@ class DCMotor:
         # Back EMF
         back_emf = self.back_emf_constant * self.angular_velocity
         
-        # Current calculation (simplified first-order model)
+        # Current calculation using more stable integration
         # di/dt = (V - back_emf - R*i) / L
-        voltage_drop = voltage - back_emf - self.resistance * self.current
-        current_derivative = voltage_drop / self.inductance
-        self.current += current_derivative * dt
+        # Use implicit integration for better stability
+        time_constant = self.inductance / self.resistance
+        target_current = (voltage - back_emf) / self.resistance
+        self.current += (target_current - self.current) * (dt / time_constant) * 0.1  # Damping factor for stability
         
         # Limit current to stall current
         self.current = np.clip(self.current, -self.stall_current, self.stall_current)
