@@ -80,6 +80,7 @@ class RobotVisualizer:
         # We'll initialize Swift in the dedicated thread to avoid asyncio conflicts
         self.env = None  # Will be created in _visualization_thread
         print("Swift 3D visualization will be initialized in dedicated thread")
+        print("Note: Swift library may show asyncio threading warnings that can be ignored")
     
     def _create_environment(self):
         """Create the simulation environment"""
@@ -391,8 +392,9 @@ class RobotVisualizer:
             import warnings
             import logging
             
-            # Filter out websocket-related warnings
+            # Filter out websocket-related warnings and RuntimeError about no running event loop
             warnings.filterwarnings("ignore", message=".*websockets.*")
+            warnings.filterwarnings("ignore", message=".*no running event loop.*")
             logging.getLogger("websockets").setLevel(logging.ERROR)
             
             # Initialize Swift environment with a unique port to avoid conflicts
@@ -400,16 +402,33 @@ class RobotVisualizer:
             port = random.randint(8000, 9000)
             
             print(f"Note: Swift may show websocket threading warnings - these can be safely ignored")
-            self.env = Swift()
-            self.env.launch(realtime=True, headless=False, port=port)
-            print(f"✓ Swift 3D visualization running on port {port}")
-            print(f"✓ Open browser to http://localhost:{port} to view 3D visualization")
             
-            # Create robot visualization elements
-            self._create_environment()
-            self._create_robot_model()
+            # Initialize Swift with better error handling for asyncio issues
+            try:
+                import contextlib
+                import io
+                
+                # Temporarily redirect stderr to suppress Swift internal asyncio warnings
+                with contextlib.redirect_stderr(io.StringIO()):
+                    self.env = Swift()
+                    # Launch Swift - this may create internal threads that trigger asyncio warnings
+                    self.env.launch(realtime=True, headless=False, port=port)
+                    
+                print(f"✓ Swift 3D visualization running on port {port}")
+                print(f"✓ Open browser to http://localhost:{port} to view 3D visualization")
+                
+                # Create robot visualization elements
+                self._create_environment()
+                self._create_robot_model()
+                
+            except Exception as e:
+                print(f"Swift initialization failed: {e}")
+                print("Note: This may be due to Swift library internal threading issues")
+                print("Running simulation without 3D visualization")
+                self.env = None
+                return
             
-            # Run the visualization loop (websocket errors can be ignored)
+            # Run the visualization loop
             last_robot_update = time.time()
             update_interval = 1.0 / 30.0  # 30 FPS
             
@@ -446,6 +465,13 @@ class RobotVisualizer:
             print("Running simulation without 3D visualization")
             self.env = None
             return
+        finally:
+            # Clean up the event loop
+            try:
+                if loop and not loop.is_closed():
+                    loop.close()
+            except:
+                pass
     
     def _update_loop(self):
         """Legacy update loop - now just calls update_robot_visualization"""
@@ -464,15 +490,8 @@ class RobotVisualizer:
         self._running = False
         self.running = False  # Legacy compatibility
         
-        # Stop the event loop in the visualization thread
+        # Stop the visualization thread
         if hasattr(self, '_thread') and self._thread and self._thread.is_alive():
-            # Send a signal to stop the event loop
-            try:
-                loop = asyncio.get_running_loop()
-                if loop:
-                    loop.call_soon_threadsafe(loop.stop)
-            except:
-                pass
             self._thread.join(timeout=2.0)  # Wait up to 2 seconds
         
         if hasattr(self, 'update_thread') and self.update_thread:
