@@ -260,6 +260,17 @@ Examples:
             print("- Send motor commands via WebSocket JSON:")
             print('  {"type": "motor_command", "payload": {"left_pwm": 100, "right_pwm": 100}}')
         
+        # Print visualization guidance
+        if not args.no_viz and HAS_SWIFT:
+            print("\n3D Visualization Access:")
+            print("- Currently running in headless mode (no visual window)")
+            print("- To enable visual mode: Edit swift_visualizer.py line 432:")
+            print("  Change: self.env.launch(realtime=True, headless=True)")
+            print("  To:     self.env.launch(realtime=True, headless=False)")
+            print("- Or try: python3 main.py --visual (if implemented)")
+            print("- Browser mode: Change to self.env.launch(browser='default')")
+            print("  Then access at http://localhost:8080")
+        
         # Start simulation
         asyncio.run(sim_manager.start())
         
