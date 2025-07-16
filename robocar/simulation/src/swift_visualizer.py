@@ -502,7 +502,6 @@ if __name__ == "__main__":
             # Suppress websocket error warnings that are internal to Swift
             import logging
             import warnings
-
             # Filter out websocket-related warnings and RuntimeError about no running event loop
             warnings.filterwarnings("ignore", message=".*websockets.*")
             warnings.filterwarnings("ignore", message=".*no running event loop.*")
