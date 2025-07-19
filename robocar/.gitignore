@@ -2,6 +2,12 @@ build
 cam/credentials.h
 esp32-cam-idf/main/credentials.h
 .aider*
+
+# ESP-IDF build artifacts
+*/build/
+sdkconfig.old
+.vscode/
+
 # Python build artifacts
 simulation/src/__pycache__/
 *.pyc

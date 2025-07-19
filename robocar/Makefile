@@ -40,10 +40,10 @@ help:
 	@echo "  make develop-cam     - Build, flash, and monitor camera module"
 	@echo ""
 	@echo "$(GREEN)AI Backend Commands:$(NC)"
-	@echo "  make ollama-start    - Start Ollama server (host binding)"
-	@echo "  make ollama-advertise - Advertise Ollama via mDNS"
-	@echo "  make ollama-setup    - Start and advertise Ollama service"
-	@echo "  make ollama-stop     - Stop Ollama server and mDNS"
+	@echo "  make ollama-start    - Start Ollama server with automatic mDNS advertising"
+	@echo "  make ollama-advertise - Advertise Ollama via mDNS (standalone)"
+	@echo "  make ollama-setup    - Start and advertise Ollama service (legacy)"
+	@echo "  make ollama-stop     - Stop Ollama server and mDNS services"
 	@echo ""
 	@echo "$(GREEN)Simulation Commands:$(NC)"
 	@echo "  make sim-start       - Start ESP32 robot car simulation"
@@ -128,18 +128,40 @@ develop-cam: build-cam
 # === AI Backend Targets ===
 
 ollama-start:
-	@echo "$(BLUE)Starting Ollama server...$(NC)"
+	@echo "$(BLUE)Starting Ollama server with automatic service discovery...$(NC)"
 	@echo "$(YELLOW)Starting Ollama with host binding for network access$(NC)"
 	OLLAMA_HOST=0.0.0.0 ollama serve &
 	@echo "$(GREEN)Ollama server started on 0.0.0.0:11434$(NC)"
+	@echo "$(BLUE)Advertising Ollama service via mDNS...$(NC)"
+	@if command -v dns-sd >/dev/null 2>&1; then \
+		echo "$(YELLOW)Using dns-sd (macOS)$(NC)"; \
+		dns-sd -R "Ollama AI" _ollama._tcp . 11434 path=/api/generate & \
+	elif command -v avahi-publish-service >/dev/null 2>&1; then \
+		echo "$(YELLOW)Using avahi-publish-service (Linux)$(NC)"; \
+		avahi-publish-service "Ollama AI" _ollama._tcp 11434 path=/api/generate & \
+	else \
+		echo "$(YELLOW)Warning: No mDNS service found (dns-sd or avahi-publish-service)$(NC)"; \
+		echo "$(YELLOW)Service discovery will not be available$(NC)"; \
+	fi
+	@echo "$(GREEN)Ollama backend fully configured and ready$(NC)"
 
 ollama-advertise:
 	@echo "$(BLUE)Advertising Ollama service via mDNS...$(NC)"
 	@echo "$(YELLOW)Publishing mDNS service for automatic discovery$(NC)"
-	dns-sd -R "Ollama AI" _ollama._tcp . 11434 path=/api/generate &
+	@if command -v dns-sd >/dev/null 2>&1; then \
+		echo "$(YELLOW)Using dns-sd (macOS)$(NC)"; \
+		dns-sd -R "Ollama AI" _ollama._tcp . 11434 path=/api/generate & \
+	elif command -v avahi-publish-service >/dev/null 2>&1; then \
+		echo "$(YELLOW)Using avahi-publish-service (Linux)$(NC)"; \
+		avahi-publish-service "Ollama AI" _ollama._tcp 11434 path=/api/generate & \
+	else \
+		echo "$(YELLOW)Warning: No mDNS service found (dns-sd or avahi-publish-service)$(NC)"; \
+		echo "$(YELLOW)Service discovery will not be available$(NC)"; \
+		exit 1; \
+	fi
 	@echo "$(GREEN)Ollama service advertised via mDNS$(NC)"
 
-ollama-setup: ollama-start ollama-advertise
+ollama-setup: ollama-start
 	@echo "$(GREEN)Ollama backend fully configured and ready$(NC)"
 	@echo "$(CYAN)ESP32-CAM will auto-discover the Ollama service$(NC)"
 
@@ -147,6 +169,7 @@ ollama-stop:
 	@echo "$(BLUE)Stopping Ollama services...$(NC)"
 	@pkill -f "ollama serve" || true
 	@pkill -f "dns-sd.*Ollama" || true
+	@pkill -f "avahi-publish-service.*Ollama" || true
 	@echo "$(GREEN)Ollama services stopped$(NC)"
 
 # === Utility Targets ===

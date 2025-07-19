@@ -31,7 +31,9 @@
 
 // AI Backend Configuration
 // #define CONFIG_AI_BACKEND_CLAUDE
+#ifndef CONFIG_AI_BACKEND_OLLAMA
 #define CONFIG_AI_BACKEND_OLLAMA
+#endif
 
 // Claude Configuration
 // #define CLAUDE_API_URL "https://api.anthropic.com/v1/messages"
