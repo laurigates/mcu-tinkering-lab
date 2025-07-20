@@ -14,6 +14,7 @@
 #include "driver/gpio.h"
 
 #include "config.h"
+#include "credentials_validator.h"  // Must be first to validate credentials at compile time
 #include "camera.h"
 #include "wifi_manager.h"
 #include "ai_backend.h"
@@ -43,6 +44,9 @@ static void send_startup_commands(void);
 void app_main(void) {
     ESP_LOGI(TAG, "ESP32-CAM AI Vision System Starting...");
     ESP_LOGI(TAG, "Build timestamp: %s %s", __DATE__, __TIME__);
+
+    // Validate credentials early - fail fast if misconfigured
+    validate_credentials_at_runtime();
 
     // Initialize NVS (required for WiFi)
     esp_err_t ret = nvs_flash_init();

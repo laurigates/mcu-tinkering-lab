@@ -7,6 +7,7 @@
 #include "esp_log.h"
 #include <string.h>
 #include <stdlib.h>
+#include "credentials.h"
 
 static const char *TAG = "credentials_loader";
 
@@ -40,47 +41,23 @@ static bool load_from_env(const char* env_var, char* dest, size_t max_len) {
  * @return true if loaded successfully, false otherwise
  */
 static bool load_from_file(credentials_t* creds) {
-    // Check if credentials.h exists and contains valid data
-    #ifdef WIFI_SSID
-    if (strlen(WIFI_SSID) > 0 && strcmp(WIFI_SSID, "YOUR_WIFI_SSID_HERE") != 0) {
-        strncpy(creds->wifi_ssid, WIFI_SSID, MAX_SSID_LENGTH - 1);
-        creds->wifi_ssid[MAX_SSID_LENGTH - 1] = '\0';
-        ESP_LOGI(TAG, "Loaded WiFi SSID from credentials.h");
-    } else {
-        ESP_LOGW(TAG, "WiFi SSID not configured in credentials.h");
-        return false;
-    }
-    #else
-    ESP_LOGW(TAG, "WIFI_SSID not defined in credentials.h");
-    return false;
-    #endif
+    // Note: Credentials validation is now done at startup via credentials_validator.h
+    // This function assumes credentials are already validated and loads them
+    
+    strncpy(creds->wifi_ssid, WIFI_SSID, MAX_SSID_LENGTH - 1);
+    creds->wifi_ssid[MAX_SSID_LENGTH - 1] = '\0';
+    ESP_LOGI(TAG, "Loaded WiFi SSID from credentials.h");
 
-    #ifdef WIFI_PASSWORD
-    if (strlen(WIFI_PASSWORD) > 0 && strcmp(WIFI_PASSWORD, "YOUR_WIFI_PASSWORD_HERE") != 0) {
-        strncpy(creds->wifi_password, WIFI_PASSWORD, MAX_PASSWORD_LENGTH - 1);
-        creds->wifi_password[MAX_PASSWORD_LENGTH - 1] = '\0';
-        ESP_LOGI(TAG, "Loaded WiFi password from credentials.h");
-    } else {
-        ESP_LOGW(TAG, "WiFi password not configured in credentials.h");
-        return false;
-    }
-    #else
-    ESP_LOGW(TAG, "WIFI_PASSWORD not defined in credentials.h");
-    return false;
-    #endif
+    strncpy(creds->wifi_password, WIFI_PASSWORD, MAX_PASSWORD_LENGTH - 1);
+    creds->wifi_password[MAX_PASSWORD_LENGTH - 1] = '\0';
+    ESP_LOGI(TAG, "Loaded WiFi password from credentials.h");
 
     #ifdef CLAUDE_API_KEY
-    if (strlen(CLAUDE_API_KEY) > 0 && strcmp(CLAUDE_API_KEY, "sk-ant-api03-YOUR_ACTUAL_API_KEY_HERE") != 0) {
-        strncpy(creds->claude_api_key, CLAUDE_API_KEY, MAX_API_KEY_LENGTH - 1);
-        creds->claude_api_key[MAX_API_KEY_LENGTH - 1] = '\0';
-        ESP_LOGI(TAG, "Loaded Claude API key from credentials.h");
-    } else {
-        ESP_LOGW(TAG, "Claude API key not configured in credentials.h");
-        // API key is optional for Ollama backend
-    }
+    strncpy(creds->claude_api_key, CLAUDE_API_KEY, MAX_API_KEY_LENGTH - 1);
+    creds->claude_api_key[MAX_API_KEY_LENGTH - 1] = '\0';
+    ESP_LOGI(TAG, "Loaded Claude API key from credentials.h");
     #else
-    ESP_LOGW(TAG, "CLAUDE_API_KEY not defined in credentials.h");
-    // API key is optional for Ollama backend
+    ESP_LOGI(TAG, "Claude API key not configured - only required for Claude backend");
     #endif
 
     return true;
@@ -117,8 +94,6 @@ bool load_credentials(credentials_t* creds) {
     ESP_LOGI(TAG, "Environment variables not available, trying credentials.h file...");
 
     // Fallback to credentials.h file
-    #include "credentials.h"
-    
     if (load_from_file(creds)) {
         ESP_LOGI(TAG, "Successfully loaded credentials from credentials.h");
         creds->credentials_loaded = true;
