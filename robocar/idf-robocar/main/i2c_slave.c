@@ -50,8 +50,8 @@ esp_err_t i2c_slave_init(void) {
         .mode = I2C_MODE_SLAVE,
         .sda_io_num = I2C_COMM_SDA_IO,
         .scl_io_num = I2C_COMM_SCL_IO,
-        .sda_pullup_en = GPIO_PULLUP_ENABLE,
-        .scl_pullup_en = GPIO_PULLUP_ENABLE,
+        .sda_pullup_en = GPIO_PULLUP_ENABLE,   // Pins 26/27 support internal pull-ups
+        .scl_pullup_en = GPIO_PULLUP_ENABLE,   // Internal pull-ups enabled
         .slave.addr_10bit_en = 0,
         .slave.slave_addr = I2C_SLAVE_ADDRESS,
         .slave.maximum_speed = I2C_MASTER_FREQ_HZ,
