@@ -10,9 +10,9 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-// I2C Configuration for inter-board communication
-#define I2C_COMM_SCL_IO             35    // SCL pin for ESP32-CAM communication 
-#define I2C_COMM_SDA_IO             33    // SDA pin for ESP32-CAM communication
+// I2C Configuration for inter-board communication  
+#define I2C_COMM_SCL_IO             26    // SCL pin for ESP32-CAM communication (bidirectional)
+#define I2C_COMM_SDA_IO             27    // SDA pin for ESP32-CAM communication (bidirectional)
 #define I2C_MASTER_NUM              I2C_NUM_1  // Use I2C_NUM_1 to avoid conflict with PCA9685
 #define I2C_MASTER_FREQ_HZ          100000  // 100kHz
 #define I2C_MASTER_TX_BUF_DISABLE   0

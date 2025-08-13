@@ -14,16 +14,17 @@
 #define RIGHT_IN1_PIN 2           // Direction control 1 for right motor
 #define RIGHT_IN2_PIN 4           // Direction control 2 for right motor
 #define STBY_PIN 25               // Standby pin for motor driver
-#define LEFT_IN1_PIN 15           // Direction control 1 for left motor
-#define LEFT_IN2_PIN 12           // Direction control 2 for left motor
+#define LEFT_IN1_PIN 0            // Direction control 1 for left motor (moved from 15 due to OLED conflict)
+#define LEFT_IN2_PIN 12           // Direction control 2 for left motor  
 #define LEFT_PWMB_PIN 13          // PWM for left motor
-#define PIEZO_PIN 32              // Piezo buzzer
+#define PIEZO_PIN 32              // Piezo buzzer (using 32, avoiding LoRa may not be critical)
 
 // I2C Pins for PCA9685 (shared bus)
 #define I2C_SDA_PIN 21
 #define I2C_SCL_PIN 22
 
 // SSD1306 OLED Display Pins (Heltec WiFi LoRa 32 V1 integrated display)
+// Note: Heltec integrated OLED uses fixed pins: SDA=4, SCL=15, RST=16
 #define OLED_SDA_PIN 4
 #define OLED_SCL_PIN 15
 #define OLED_RST_PIN 16
