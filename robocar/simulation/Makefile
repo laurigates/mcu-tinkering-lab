@@ -20,10 +20,15 @@ help:
 	@echo "  check-deps   Check if dependencies are installed"
 	@echo ""
 	@echo "Simulation:"
-	@echo "  run          Run simulation with visualization"
+	@echo "  run          Run simulation (headless by default)"
+	@echo "  run-visual   Run simulation with GUI window"
+	@echo "  run-browser  Run simulation with browser interface"
 	@echo "  run-headless Run simulation without visualization"
-	@echo "  run-demo     Run demo movement pattern"
-	@echo "  run-serial   Run with ESP32 serial connection"
+	@echo "  run-demo     Run demo movement pattern (headless)"
+	@echo "  demo-visual  Run visual demo with GUI window"
+	@echo "  demo-browser Run demo with browser interface"
+	@echo "  run-serial   Run with ESP32 serial connection (headless)"
+	@echo "  serial-visual Run with ESP32 + GUI visualization"
 	@echo ""
 	@echo "Testing:"
 	@echo "  test         Run all tests"
@@ -40,6 +45,11 @@ help:
 	@echo "Hardware:"
 	@echo "  validate     Validate simulation against hardware"
 	@echo "  benchmark    Run performance benchmarks"
+	@echo ""
+	@echo "Quick Start:"
+	@echo "  make demo-visual           # Visual demo with GUI window"
+	@echo "  make demo-browser          # Demo in web browser"
+	@echo "  make serial-visual SERIAL_PORT=/dev/ttyUSB0  # ESP32 + visualization"
 
 # Setup targets
 .PHONY: install
@@ -64,18 +74,42 @@ check-deps:
 # Simulation targets
 .PHONY: run
 run: check-deps
-	@echo "Starting ESP32 Robot Car Simulation..."
-	cd $(SRC_DIR) && $(PYTHON) main.py
+	@echo "Starting ESP32 Robot Car Simulation (headless)..."
+	cd $(SRC_DIR) && $(PYTHON) main.py --headless
+
+.PHONY: run-visual
+run-visual: check-deps
+	@echo "Starting ESP32 Robot Car Simulation with GUI window..."
+	cd $(SRC_DIR) && $(PYTHON) main.py --visual
+
+.PHONY: run-browser
+run-browser: check-deps
+	@echo "Starting ESP32 Robot Car Simulation with browser interface..."
+	@echo "Access visualization at: http://localhost:52000"
+	cd $(SRC_DIR) && $(PYTHON) main.py --browser
 
 .PHONY: run-headless
 run-headless: check-deps
 	@echo "Starting simulation in headless mode..."
-	cd $(SRC_DIR) && $(PYTHON) main.py --no-viz
+	cd $(SRC_DIR) && $(PYTHON) main.py --headless
 
 .PHONY: run-demo
 run-demo: check-deps
-	@echo "Starting demo simulation..."
-	cd $(SRC_DIR) && $(PYTHON) main.py --demo-only
+	@echo "Starting demo simulation (headless)..."
+	cd $(SRC_DIR) && $(PYTHON) main.py --demo-only --headless
+
+.PHONY: demo-visual
+demo-visual: check-deps
+	@echo "Starting visual demo with GUI window..."
+	@echo "Watch the robot move in the 3D visualization window!"
+	cd $(SRC_DIR) && $(PYTHON) main.py --demo-only --visual
+
+.PHONY: demo-browser
+demo-browser: check-deps
+	@echo "Starting demo with browser interface..."
+	@echo "Access visualization at: http://localhost:52000"
+	@echo "Watch the robot move in your web browser!"
+	cd $(SRC_DIR) && $(PYTHON) main.py --demo-only --browser
 
 .PHONY: run-serial
 run-serial: check-deps
@@ -85,7 +119,19 @@ run-serial: check-deps
 		exit 1; \
 	fi
 	@echo "Starting simulation with serial connection to $(SERIAL_PORT)..."
-	cd $(SRC_DIR) && $(PYTHON) main.py --serial $(SERIAL_PORT)
+	cd $(SRC_DIR) && $(PYTHON) main.py --serial $(SERIAL_PORT) --headless
+
+.PHONY: serial-visual
+serial-visual: check-deps
+	@if [ -z "$(SERIAL_PORT)" ]; then \
+		echo "Error: SERIAL_PORT not specified"; \
+		echo "Usage: make serial-visual SERIAL_PORT=/dev/ttyUSB0"; \
+		exit 1; \
+	fi
+	@echo "Starting simulation with ESP32 serial connection and GUI visualization..."
+	@echo "Serial port: $(SERIAL_PORT)"
+	@echo "Watch the robot move in the 3D window based on ESP32 commands!"
+	cd $(SRC_DIR) && $(PYTHON) main.py --serial $(SERIAL_PORT) --visual
 
 # Testing targets
 .PHONY: test

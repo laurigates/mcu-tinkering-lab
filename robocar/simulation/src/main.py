@@ -26,11 +26,13 @@ class SimulationManager:
     """Manages the complete simulation environment"""
     
     def __init__(self, config_path: str, enable_visualizer: bool = True, 
-                 enable_bridge: bool = True, serial_port: str = None):
+                 enable_bridge: bool = True, serial_port: str = None, 
+                 viz_mode: str = 'headless'):
         self.config_path = config_path
         self.enable_visualizer = enable_visualizer
         self.enable_bridge = enable_bridge
         self.serial_port = serial_port
+        self.viz_mode = viz_mode
         
         # Components
         self.robot = DifferentialDriveRobot(config_path)
@@ -63,8 +65,8 @@ class SimulationManager:
         # Initialize Swift visualizer
         if self.enable_visualizer:
             if HAS_SWIFT:
-                self.swift_sim = SwiftSimulation(self.config_path)
-                print("✓ Swift visualizer initialized")
+                self.swift_sim = SwiftSimulation(self.config_path, viz_mode=self.viz_mode)
+                print(f"✓ Swift visualizer initialized (mode: {self.viz_mode})")
             else:
                 print("⚠ Swift visualizer not available - continuing without visualization")
                 self.enable_visualizer = False
@@ -178,17 +180,29 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Run with visualization and communication bridge
+  # Run with default headless mode
   python main.py
   
-  # Run with serial connection to ESP32
-  python main.py --serial /dev/ttyUSB0
+  # Run with GUI window visualization
+  python main.py --visual
   
-  # Run without visualization (headless)
-  python main.py --no-viz
+  # Run with browser-based visualization  
+  python main.py --browser
+  
+  # Run with specific visualization mode
+  python main.py --viz-mode visual
+  
+  # Run with serial connection to ESP32
+  python main.py --serial /dev/ttyUSB0 --visual
+  
+  # Run completely headless (no visualization)
+  python main.py --headless
+  
+  # Use environment variable for visualization mode
+  SWIFT_VIZ_MODE=browser python main.py
   
   # Run with custom configuration
-  python main.py --config ../config/custom_config.yaml
+  python main.py --config ../config/custom_config.yaml --visual
         """
     )
     
@@ -210,6 +224,24 @@ Examples:
     )
     
     parser.add_argument(
+        '--visual', '--gui',
+        action='store_true',
+        help='Run with visual window (GUI mode)'
+    )
+    
+    parser.add_argument(
+        '--browser',
+        action='store_true',
+        help='Run with browser-based visualization'
+    )
+    
+    parser.add_argument(
+        '--viz-mode',
+        choices=['headless', 'visual', 'browser'],
+        help='Visualization mode: headless (no window), visual (GUI window), or browser (web-based)'
+    )
+    
+    parser.add_argument(
         '--no-bridge',
         action='store_true',
         help='Run without communication bridge'
@@ -223,6 +255,25 @@ Examples:
     
     args = parser.parse_args()
     
+    # Determine visualization mode from args and environment
+    viz_mode = 'headless'  # Default
+    
+    # Check environment variable first
+    import os
+    env_viz_mode = os.getenv('SWIFT_VIZ_MODE', '').lower()
+    if env_viz_mode in ['headless', 'visual', 'browser']:
+        viz_mode = env_viz_mode
+    
+    # Command line arguments override environment
+    if args.viz_mode:
+        viz_mode = args.viz_mode
+    elif args.visual:
+        viz_mode = 'visual'
+    elif args.browser:
+        viz_mode = 'browser'
+    elif args.no_viz:
+        viz_mode = 'headless'
+    
     # Validate configuration file
     config_path = Path(args.config)
     if not config_path.exists():
@@ -234,7 +285,7 @@ Examples:
     print("ESP32 Robot Car Simulation with Swift Visualizer")
     print("=" * 60)
     print(f"Configuration: {config_path}")
-    print(f"Visualization: {'Enabled' if not args.no_viz else 'Disabled'}")
+    print(f"Visualization: {viz_mode.title()} Mode" if viz_mode != 'headless' else "Disabled")
     print(f"Communication: {'Enabled' if not args.no_bridge else 'Disabled'}")
     if args.serial:
         print(f"Serial Port: {args.serial}")
@@ -243,9 +294,10 @@ Examples:
     # Create simulation manager
     sim_manager = SimulationManager(
         config_path=str(config_path),
-        enable_visualizer=not args.no_viz,
+        enable_visualizer=viz_mode != 'headless',
         enable_bridge=not args.no_bridge and not args.demo_only,
-        serial_port=args.serial
+        serial_port=args.serial,
+        viz_mode=viz_mode
     )
     
     try:
@@ -261,15 +313,21 @@ Examples:
             print('  {"type": "motor_command", "payload": {"left_pwm": 100, "right_pwm": 100}}')
         
         # Print visualization guidance
-        if not args.no_viz and HAS_SWIFT:
-            print("\n3D Visualization Access:")
-            print("- Currently running in headless mode (no visual window)")
-            print("- To enable visual mode: Edit swift_visualizer.py line 432:")
-            print("  Change: self.env.launch(realtime=True, headless=True)")
-            print("  To:     self.env.launch(realtime=True, headless=False)")
-            print("- Or try: python3 main.py --visual (if implemented)")
-            print("- Browser mode: Change to self.env.launch(browser='default')")
-            print("  Then access at http://localhost:8080")
+        if viz_mode != 'headless' and HAS_SWIFT:
+            print(f"\n3D Visualization ({viz_mode.title()} Mode):")
+            if viz_mode == 'visual':
+                print("- Running with GUI window visualization")
+                print("- A window should open showing the 3D robot simulation")
+            elif viz_mode == 'browser':
+                print("- Running with browser-based visualization") 
+                print("- Access the visualization at: http://localhost:52000")
+                print("- The browser should open automatically")
+            print("\nVisualization Mode Options:")
+            print("- --headless or --no-viz: No visualization")
+            print("- --visual or --gui: GUI window visualization")
+            print("- --browser: Browser-based visualization")
+            print("- --viz-mode [headless|visual|browser]: Explicit mode selection")
+            print("- Environment variable: SWIFT_VIZ_MODE=[headless|visual|browser]")
         
         # Start simulation
         asyncio.run(sim_manager.start())
