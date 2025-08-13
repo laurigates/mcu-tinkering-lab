@@ -45,10 +45,21 @@ help:
 	@echo "  make ollama-setup    - Start and advertise Ollama service (legacy)"
 	@echo "  make ollama-stop     - Stop Ollama server and mDNS services"
 	@echo ""
+	@echo "$(GREEN)MQTT Broker Commands:$(NC)"
+	@echo "  make mosquitto-start - Start Mosquitto MQTT broker with mDNS advertising"
+	@echo "  make mosquitto-advertise - Advertise MQTT service via mDNS (standalone)"
+	@echo "  make mosquitto-stop  - Stop MQTT broker and mDNS services"
+	@echo ""
+	@echo "$(GREEN)Development Stack Commands:$(NC)"
+	@echo "  make dev-stack-start - Start complete development stack (Ollama + MQTT + Message Monitor)"
+	@echo "  make dev-stack-stop  - Stop complete development stack"
+	@echo ""
 	@echo "$(GREEN)Simulation Commands:$(NC)"
 	@echo "  make sim-start       - Start ESP32 robot car simulation"
 	@echo "  make sim-headless    - Start simulation without visualization"
 	@echo "  make sim-demo        - Run demo movement simulation"
+	@echo "  make demo-visual     - Run visual demo with GUI window"
+	@echo "  make demo-browser    - Run demo with browser interface"
 	@echo "  make sim-connect     - Connect simulation to ESP32 hardware"
 	@echo "  make sim-test        - Run simulation test suite"
 	@echo ""
@@ -172,6 +183,93 @@ ollama-stop:
 	@pkill -f "avahi-publish-service.*Ollama" || true
 	@echo "$(GREEN)Ollama services stopped$(NC)"
 
+# === MQTT Broker Targets ===
+
+mosquitto-start:
+	@echo "$(BLUE)Starting Mosquitto MQTT broker with automatic service discovery...$(NC)"
+	@echo "$(YELLOW)Starting Mosquitto with network binding for ESP32 access$(NC)"
+	mosquitto -p 1883 -v &
+	@echo "$(GREEN)Mosquitto MQTT broker started on port 1883$(NC)"
+	@echo "$(BLUE)Advertising MQTT service via mDNS...$(NC)"
+	@if command -v dns-sd >/dev/null 2>&1; then \
+		echo "$(YELLOW)Using dns-sd (macOS)$(NC)"; \
+		dns-sd -R "MQTT Broker" _mqtt._tcp . 1883 & \
+	elif command -v avahi-publish-service >/dev/null 2>&1; then \
+		echo "$(YELLOW)Using avahi-publish-service (Linux)$(NC)"; \
+		avahi-publish-service "MQTT Broker" _mqtt._tcp 1883 & \
+	else \
+		echo "$(YELLOW)Warning: No mDNS service found (dns-sd or avahi-publish-service)$(NC)"; \
+		echo "$(YELLOW)Service discovery will not be available$(NC)"; \
+	fi
+	@echo "$(GREEN)MQTT broker fully configured and ready$(NC)"
+
+mosquitto-advertise:
+	@echo "$(BLUE)Advertising MQTT service via mDNS...$(NC)"
+	@echo "$(YELLOW)Publishing mDNS service for automatic discovery$(NC)"
+	@if command -v dns-sd >/dev/null 2>&1; then \
+		echo "$(YELLOW)Using dns-sd (macOS)$(NC)"; \
+		dns-sd -R "MQTT Broker" _mqtt._tcp . 1883 & \
+	elif command -v avahi-publish-service >/dev/null 2>&1; then \
+		echo "$(YELLOW)Using avahi-publish-service (Linux)$(NC)"; \
+		avahi-publish-service "MQTT Broker" _mqtt._tcp 1883 & \
+	else \
+		echo "$(YELLOW)Warning: No mDNS service found (dns-sd or avahi-publish-service)$(NC)"; \
+		echo "$(YELLOW)Service discovery will not be available$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(GREEN)MQTT service advertised via mDNS$(NC)"
+
+mosquitto-stop:
+	@echo "$(BLUE)Stopping MQTT services...$(NC)"
+	@pkill -f "mosquitto" || true
+	@pkill -f "dns-sd.*MQTT" || true
+	@pkill -f "avahi-publish-service.*MQTT" || true
+	@echo "$(GREEN)MQTT services stopped$(NC)"
+
+# === Development Stack Targets ===
+
+dev-stack-start:
+	@echo "$(BLUE)Starting complete development stack (Ollama + MQTT + Message Monitor)...$(NC)"
+	@echo "$(YELLOW)Starting Ollama AI backend...$(NC)"
+	OLLAMA_HOST=0.0.0.0 ollama serve 2>&1 | sed 's/^/\x1b[0;36m[OLLAMA]\x1b[0m /' &
+	@sleep 2
+	@echo "$(GREEN)Ollama server started on 0.0.0.0:11434$(NC)"
+	@echo "$(YELLOW)Starting Mosquitto MQTT broker...$(NC)"
+	mosquitto -p 1883 -v 2>&1 | sed 's/^/\x1b[1;33m[MQTT-BROKER]\x1b[0m /' &
+	@sleep 2
+	@echo "$(GREEN)Mosquitto MQTT broker started on port 1883$(NC)"
+	@echo "$(YELLOW)Starting MQTT message monitor...$(NC)"
+	mosquitto_sub -h localhost -t "robocar/esp32cam/#" -v 2>&1 | sed 's/^/\x1b[0;32m[MQTT-MSG]\x1b[0m /' &
+	@sleep 1
+	@echo "$(GREEN)MQTT message monitor started$(NC)"
+	@echo "$(BLUE)Advertising services via mDNS...$(NC)"
+	@if command -v dns-sd >/dev/null 2>&1; then \
+		echo "$(YELLOW)Using dns-sd (macOS)$(NC)"; \
+		dns-sd -R "Ollama AI" _ollama._tcp . 11434 path=/api/generate 2>&1 | sed 's/^/\x1b[0;34m[MDNS-OLLAMA]\x1b[0m /' & \
+		dns-sd -R "MQTT Broker" _mqtt._tcp . 1883 2>&1 | sed 's/^/\x1b[0;34m[MDNS-MQTT]\x1b[0m /' & \
+	elif command -v avahi-publish-service >/dev/null 2>&1; then \
+		echo "$(YELLOW)Using avahi-publish-service (Linux)$(NC)"; \
+		avahi-publish-service "Ollama AI" _ollama._tcp 11434 path=/api/generate 2>&1 | sed 's/^/\x1b[0;34m[MDNS-OLLAMA]\x1b[0m /' & \
+		avahi-publish-service "MQTT Broker" _mqtt._tcp 1883 2>&1 | sed 's/^/\x1b[0;34m[MDNS-MQTT]\x1b[0m /' & \
+	else \
+		echo "$(YELLOW)Warning: No mDNS service found (dns-sd or avahi-publish-service)$(NC)"; \
+		echo "$(YELLOW)Service discovery will not be available$(NC)"; \
+	fi
+	@echo "$(GREEN)Complete development stack ready!$(NC)"
+	@echo "$(CYAN)ESP32-CAM will auto-discover both Ollama AI and MQTT services$(NC)"
+	@echo "$(CYAN)MQTT messages from ESP32-CAM will appear with [MQTT-MSG] prefix$(NC)"
+
+dev-stack-stop:
+	@echo "$(BLUE)Stopping complete development stack...$(NC)"
+	@pkill -f "ollama serve" || true
+	@pkill -f "mosquitto.*-p 1883" || true
+	@pkill -f "mosquitto_sub.*robocar/esp32cam" || true
+	@pkill -f "dns-sd.*Ollama" || true
+	@pkill -f "dns-sd.*MQTT" || true
+	@pkill -f "avahi-publish-service.*Ollama" || true
+	@pkill -f "avahi-publish-service.*MQTT" || true
+	@echo "$(GREEN)Development stack stopped (Ollama + MQTT + Message Monitor)$(NC)"
+
 # === Utility Targets ===
 
 info:
@@ -241,6 +339,16 @@ sim-test: check-sim
 	@echo "$(BLUE)Running simulation test suite...$(NC)"
 	@cd simulation && $(MAKE) test
 
+demo-visual: check-sim
+	@echo "$(BLUE)Starting visual demo with GUI window...$(NC)"
+	@echo "$(YELLOW)Watch the robot move in the 3D visualization window!$(NC)"
+	@cd simulation && $(MAKE) demo-visual
+
+demo-browser: check-sim
+	@echo "$(BLUE)Starting demo with browser interface...$(NC)"
+	@echo "$(YELLOW)Access visualization at: http://localhost:52000$(NC)"
+	@cd simulation && $(MAKE) demo-browser
+
 sim-install:
 	@echo "$(BLUE)Installing simulation dependencies...$(NC)"
 	@if [ ! -d "simulation" ]; then \
@@ -269,4 +377,5 @@ sim-info:
 .PHONY: help check-idf build-main build-cam build-all flash-main flash-cam
 .PHONY: monitor-main monitor-cam clean-main clean-cam clean-all credentials
 .PHONY: develop-main develop-cam ollama-start ollama-advertise ollama-setup ollama-stop info
-.PHONY: check-sim sim-start sim-headless sim-demo sim-connect sim-test sim-install sim-status sim-info
+.PHONY: mosquitto-start mosquitto-advertise mosquitto-stop dev-stack-start dev-stack-stop
+.PHONY: check-sim sim-start sim-headless sim-demo sim-connect sim-test sim-install sim-status sim-info demo-visual demo-browser
