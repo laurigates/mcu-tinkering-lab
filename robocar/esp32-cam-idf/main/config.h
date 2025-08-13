@@ -50,4 +50,19 @@
 #define OLLAMA_DISCOVERY_TIMEOUT_MS    5000                         // DNS query timeout
 #define OLLAMA_USE_MDNS                1                            // Enable mDNS for local discovery
 
+// MQTT Remote Logging Configuration
+#define MQTT_LOGGING_ENABLED           1                            // Enable MQTT logging
+#define MQTT_BROKER_URI               "mqtt://192.168.0.100:1883"  // MQTT broker URI
+#define MQTT_CLIENT_ID                "esp32cam_robocar"           // MQTT client ID
+#define MQTT_LOG_TOPIC_BASE           "robocar/esp32cam/logs"      // Base topic for logs
+#define MQTT_STATUS_TOPIC             "robocar/esp32cam/status"    // Status topic
+#define MQTT_COMMAND_TOPIC            "robocar/esp32cam/commands"  // Command topic
+#define MQTT_USERNAME                 NULL                         // MQTT username (NULL if not required)
+#define MQTT_PASSWORD                 NULL                         // MQTT password (NULL if not required)
+#define MQTT_LOG_BUFFER_SIZE          2048                         // Log buffer size in bytes
+#define MQTT_KEEPALIVE_INTERVAL       60                           // MQTT keepalive interval in seconds
+#define MQTT_QOS_LEVEL                1                            // QoS level (0, 1, or 2)
+#define MQTT_MIN_LOG_LEVEL            ESP_LOG_INFO                 // Minimum log level for MQTT
+#define MQTT_RETAIN_STATUS            true                         // Retain status messages
+
 #endif // CONFIG_H

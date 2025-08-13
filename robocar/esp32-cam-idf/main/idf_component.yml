@@ -5,5 +5,6 @@ dependencies:
     version: '>=6.0.0'
   # ESP32 Camera component (latest compatible with ESP-IDF 6.0)
   espressif/esp32-camera: '^2.0.0'
-  # mDNS component (latest compatible with ESP-IDF 6.0) 
+  # mDNS component (latest compatible with ESP-IDF 6.0)
   espressif/mdns: '^1.8.0'
+  # Note: MQTT is built-in to ESP-IDF 6.0, no external dependency needed
