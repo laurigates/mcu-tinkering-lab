@@ -10,11 +10,18 @@
 // Note: Credentials are loaded dynamically via credentials_loader module
 // This supports both environment variables and credentials.h fallback
 
-// Timing Configuration
+// ========================================
+// System Timing Configuration
+// ========================================
 #define CAPTURE_INTERVAL_MS     5000    // Capture image every 5 seconds
 #define WIFI_RETRY_INTERVAL_MS  10000   // Retry WiFi connection every 10 seconds
 #define COMMAND_TIMEOUT_MS      1000    // Timeout for movement commands
 #define MAX_RETRY_COUNT         3       // Maximum retries for API calls
+#define SYSTEM_STABILIZATION_DELAY_MS   1000    // System startup stabilization delay
+#define TASK_DELAY_SHORT_MS     100     // Short task delay
+#define STATUS_LED_BLINK_SLOW_ON_MS     200     // Status LED slow blink on time
+#define STATUS_LED_BLINK_SLOW_OFF_MS    1800    // Status LED slow blink off time
+#define STATUS_LED_BLINK_FAST_MS        100     // Status LED fast blink interval
 
 // Camera Configuration
 #define CAMERA_FRAME_SIZE       FRAMESIZE_QVGA  // 320x240 for faster processing
