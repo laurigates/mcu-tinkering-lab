@@ -15,49 +15,26 @@
 #include "esp_lcd_panel_ssd1306.h"
 #include "esp_lcd_panel_io.h"
 #include "esp_lcd_panel_ops.h"
-#include "pin_config_idf.h"
+#include "system_config.h"
 #include "i2c_slave.h"
 #include "i2c_protocol.h"
+#include "wifi_manager.h"
 
 static const char *TAG = "idf-robocar";
 
-// Command definitions (matching Arduino version)
-#define CMD_FORWARD    "F"
-#define CMD_BACKWARD   "B"
-#define CMD_LEFT       "L"
-#define CMD_RIGHT      "R"
-#define CMD_STOP       "S"
-#define CMD_ROTATE_CW  "C"
-#define CMD_ROTATE_CCW "W"
-#define CMD_SOUND_BEEP "SB"
-#define CMD_SOUND_MELODY "SM"
-#define CMD_SOUND_ALERT "SA"
-#define CMD_SERVO_PAN  "PAN"
-#define CMD_SERVO_TILT "TILT"
-#define CMD_DISPLAY    "DISP"
-#define CMD_HELP       "HELP"
+// Command and state definitions now centralized in system_config.h
 
-// State definitions
-#define STATE_STOPPED 0
-#define STATE_FORWARD 1
-#define STATE_BACKWARD 2
-#define STATE_LEFT 3
-#define STATE_RIGHT 4
-#define STATE_ROTATE_CW 5
-#define STATE_ROTATE_CCW 6
-
-// Global variables
-int current_state = STATE_STOPPED;
+// Global variables (using centralized configuration)
+system_state_t current_state = STATE_STOPPED;
 unsigned long last_command_time = 0;
-const unsigned long COMMAND_TIMEOUT = 1000; // 1 second timeout in ms
+const unsigned long COMMAND_TIMEOUT = SYSTEM_COMMAND_TIMEOUT_MS;
 
 // Action tracking for display
-char last_action[32] = "STARTUP";
-char last_command_source[16] = "INIT";
+char last_action[ACTION_STRING_LENGTH] = "STARTUP";
+char last_command_source[COMMAND_SOURCE_LENGTH] = "INIT";
 unsigned long action_counter = 0;
 
 // Buffer for serial communication
-#define MAX_COMMAND_LENGTH 32
 char command_buffer[MAX_COMMAND_LENGTH];
 int buffer_pos = 0;
 
@@ -1107,12 +1084,69 @@ void process_i2c_display_command(uint8_t line, const char* message) {
     oled_show_claude_message(line, message);
 }
 
+// Forward declarations for main controller init functions
+static esp_err_t init_communication_interfaces(void);
+static esp_err_t init_hardware_controllers(void);
+static esp_err_t init_display_and_feedback(void);
+static esp_err_t init_inter_board_communication(void);
+static void finalize_system_startup(void);
+
 void app_main(void) {
     ESP_LOGI(TAG, "RoboCar ESP-IDF starting up");
     
+    // Phase 1: Communication interfaces (console, WiFi)
+    if (init_communication_interfaces() != ESP_OK) {
+        ESP_LOGE(TAG, "Communication initialization failed");
+        return;
+    }
+
+    // Phase 2: Hardware controllers (GPIO, PWM, I2C, PCA9685)
+    if (init_hardware_controllers() != ESP_OK) {
+        ESP_LOGE(TAG, "Hardware initialization failed");
+        return;
+    }
+
+    // Phase 3: Display and feedback systems
+    if (init_display_and_feedback() != ESP_OK) {
+        ESP_LOGE(TAG, "Display initialization failed");
+        return;
+    }
+
+    // Phase 4: Inter-board communication (I2C slave)
+    if (init_inter_board_communication() != ESP_OK) {
+        ESP_LOGE(TAG, "Inter-board communication initialization failed");
+        return;
+    }
+
+    // Phase 5: System ready
+    finalize_system_startup();
+
+    ESP_LOGI(TAG, "Command processing task started. Ready for commands!");
+}
+
+static esp_err_t init_communication_interfaces(void) {
     // Initialize console first for proper serial communication
     init_console();
     
+    // Initialize WiFi (requires NVS)
+    ESP_LOGI(TAG, "Initializing WiFi...");
+    if (wifi_manager_init() == ESP_OK) {
+        ESP_LOGI(TAG, "WiFi initialized successfully");
+        
+        // Start connection (will attempt to connect with saved credentials)
+        if (wifi_manager_connect("", "") == ESP_OK) {
+            ESP_LOGI(TAG, "Attempting to connect with saved credentials...");
+        } else {
+            ESP_LOGW(TAG, "No saved credentials found, WiFi ready for configuration");
+        }
+        return ESP_OK;
+    } else {
+        ESP_LOGE(TAG, "Failed to initialize WiFi");
+        return ESP_FAIL;
+    }
+}
+
+static esp_err_t init_hardware_controllers(void) {
     ESP_LOGI(TAG, "Pin configuration:");
     ESP_LOGI(TAG, "  RIGHT_PWMA: %d, RIGHT_IN1: %d, RIGHT_IN2: %d", 
              RIGHT_PWMA_PIN, RIGHT_IN1_PIN, RIGHT_IN2_PIN);
@@ -1127,20 +1161,34 @@ void app_main(void) {
     // Initialize I2C and PCA9685
     if (init_i2c() == ESP_OK) {
         init_pca9685();
+        return ESP_OK;
+    } else {
+        ESP_LOGE(TAG, "I2C initialization failed");
+        return ESP_FAIL;
     }
-    
+}
+
+static esp_err_t init_display_and_feedback(void) {
     // Initialize OLED display
     init_oled();
     
-    // Initialize I2C slave for communication with ESP32-CAM
+    // Display is not critical for operation, so always return OK
+    return ESP_OK;
+}
+
+static esp_err_t init_inter_board_communication(void) {
     ESP_LOGI(TAG, "Initializing I2C slave for ESP32-CAM communication...");
     if (i2c_slave_init() == ESP_OK) {
         i2c_slave_start_task();
         ESP_LOGI(TAG, "I2C slave initialized and task started");
+        return ESP_OK;
     } else {
         ESP_LOGE(TAG, "Failed to initialize I2C slave");
+        return ESP_FAIL;
     }
-    
+}
+
+static void finalize_system_startup(void) {
     ESP_LOGI(TAG, "Hardware initialized");
     
     // Small delay to let system stabilize
@@ -1155,6 +1203,4 @@ void app_main(void) {
     
     // Create command processing task
     xTaskCreate(command_task, "command_task", 4096, NULL, 5, NULL);
-    
-    ESP_LOGI(TAG, "Command processing task started. Ready for commands!");
 }
