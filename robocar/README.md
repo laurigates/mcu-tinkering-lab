@@ -1,6 +1,6 @@
 # ESP32 AI-Powered Robot Car
 
-An ESP-IDF-powered autonomous robot car with AI vision capabilities, featuring dual ESP32 controllers, motor control, LED indicators, servo-controlled camera, and AI-powered navigation using Claude API.
+An ESP-IDF-powered autonomous robot car with AI vision capabilities and comprehensive MQTT logging, featuring dual ESP32 controllers, motor control, LED indicators, servo-controlled camera, AI-powered navigation, and real-time telemetry.
 
 ## Architecture
 
@@ -15,8 +15,9 @@ The system consists of two ESP32 boards working together:
 
 2. **AI Vision System** - ESP32-CAM (AI Thinker)
    - Image capture and processing
-   - Claude AI API integration for scene analysis
-   - WiFi connectivity for cloud AI services
+   - Pluggable AI backend (Claude API or Ollama)
+   - WiFi connectivity for cloud/local AI services
+   - MQTT logging with real-time telemetry
    - Command generation based on visual input
    - Serial communication with main controller
 
@@ -143,7 +144,9 @@ To select and configure the AI backend, edit `esp32-cam-idf/main/config.h`:
 
 ### Prerequisites
 - ESP-IDF v5.4+ installed at `~/repos/esp-idf`
-- Claude API key from Anthropic
+- Claude API key from Anthropic (if using Claude backend)
+- Ollama installed (if using local AI backend)
+- Mosquitto MQTT broker (for logging - auto-started by development stack)
 - WiFi network credentials
 - USB-to-serial adapter for ESP32-CAM programming
 
@@ -163,44 +166,64 @@ To select and configure the AI backend, edit `esp32-cam-idf/main/config.h`:
    # Edit credentials.h with your WiFi SSID and password. API keys are also stored here. See the "Pluggable AI Backend" section for more details.
    ```
 
-3. **Build and Flash Main Controller**
+3. **Start Development Stack**
    ```bash
-   make idf-build-main
-   make idf-flash-main
+   make dev-stack-start     # Start Ollama AI + MQTT broker with service discovery
    ```
 
-4. **Build and Flash ESP32-CAM**
+4. **Build and Flash Main Controller**
+   ```bash
+   make build-main
+   make flash-main
+   ```
+
+5. **Build and Flash ESP32-CAM**
    ```bash
    # Connect GPIO0 to GND for programming mode
-   make idf-build-cam
-   make idf-flash-cam
+   make build-cam
+   make flash-cam
    # Disconnect GPIO0 and reset
    ```
 
-5. **Monitor Operation**
+6. **Monitor Operation**
    ```bash
-   make idf-monitor-main    # Monitor main controller
-   make idf-monitor-cam     # Monitor camera module
+   make monitor-main        # Monitor main controller
+   make monitor-cam         # Monitor camera module
+   # MQTT logs available at: mqtt://192.168.0.100:1883/robocar/logs
    ```
 
 ## Development Commands
 
+### Complete Development Stack
+```bash
+make dev-stack-start     # Start Ollama AI + MQTT broker with service discovery
+make dev-stack-stop      # Stop complete development stack
+```
+
+### Individual Services
+```bash
+make ollama-start        # Start Ollama AI backend
+make mosquitto-start     # Start MQTT broker
+make ollama-stop         # Stop Ollama services
+make mosquitto-stop      # Stop MQTT services
+```
+
 ### ESP-IDF Framework (Primary)
 ```bash
-make idf-build-main      # Build main controller
-make idf-build-cam       # Build camera module
-make idf-flash-main      # Flash main controller
-make idf-flash-cam       # Flash camera module
-make idf-monitor-main    # Monitor main controller
-make idf-monitor-cam     # Monitor camera module
-make idf-clean-main      # Clean main build
-make idf-clean-cam       # Clean camera build
+make build-main          # Build main controller
+make build-cam           # Build camera module
+make flash-main          # Flash main controller
+make flash-cam           # Flash camera module
+make monitor-main        # Monitor main controller
+make monitor-cam         # Monitor camera module
+make clean-main          # Clean main build
+make clean-cam           # Clean camera build
 ```
 
 ### Development Shortcuts
 ```bash
-make develop-idf-main    # Flash and monitor main controller
-make develop-idf-cam     # Flash and monitor camera module
+make develop-main        # Build, flash, and monitor main controller
+make develop-cam         # Build, flash, and monitor camera module
 ```
 
 ### System Information
@@ -221,8 +244,9 @@ make help                # Show all available commands
 
 ### ESP32-CAM Tasks
 - **Image Capture**: Periodic camera snapshots
-- **AI Processing**: Claude API integration for scene analysis
-- **WiFi Management**: Network connectivity and status
+- **AI Processing**: Pluggable backend (Claude API or Ollama) for scene analysis
+- **MQTT Logging**: Real-time telemetry and system status reporting
+- **WiFi Management**: Network connectivity and service discovery
 - **Command Generation**: Translates AI analysis to movement commands
 - **Serial Communication**: Sends commands to main controller
 
@@ -262,6 +286,32 @@ The ESP32-CAM integrates with a configurable AI vision backend for intelligent n
 - **ESP32-CAM**: Requires GPIO0 to GND during programming
 - **Serial Adapter**: FTDI or similar for ESP32-CAM programming
 
+## MQTT Logging System
+
+The ESP32-CAM includes comprehensive MQTT logging for real-time telemetry and debugging:
+
+### Features
+- **JSON-formatted messages** with timestamps, log levels, and system metrics
+- **Offline buffering** when MQTT broker unavailable
+- **Service discovery** via mDNS for automatic broker detection
+- **Configurable log levels** and topic structure
+- **System metrics** including heap memory and WiFi signal strength
+
+### Default Configuration
+- **Broker URI**: `mqtt://192.168.0.100:1883`
+- **Log Topic**: `robocar/logs`
+- **Status Topic**: `robocar/status`
+- **Service Type**: `_mqtt._tcp` (mDNS)
+
+### Viewing Logs
+```bash
+# Start MQTT broker and subscribe to logs
+make mosquitto-start
+mosquitto_sub -h 192.168.0.100 -t "robocar/logs" -v
+
+# Or use any MQTT client to connect to the broker
+```
+
 ## Troubleshooting
 
 ### Common Issues
@@ -270,12 +320,15 @@ The ESP32-CAM integrates with a configurable AI vision backend for intelligent n
 - **WiFi connection problems**: Verify credentials in credentials.h
 - **Motor not moving**: Check power supply and TB6612FNG connections
 - **OLED not displaying**: Verify I2C connections and address (0x3C)
+- **MQTT not connecting**: Check broker is running with `make mosquitto-start`
+- **Service discovery fails**: Verify mDNS is working on your network
 
 ### Debug Commands
 ```bash
-make idf-monitor-main    # Check main controller logs
-make idf-monitor-cam     # Check camera module logs
-make idf-clean-cam && make idf-build-cam  # Clean rebuild camera
+make monitor-main        # Check main controller logs
+make monitor-cam         # Check camera module logs
+make clean-cam && make build-cam  # Clean rebuild camera
+make dev-stack-start     # Start complete development environment
 ```
 
 ## Future Enhancements
