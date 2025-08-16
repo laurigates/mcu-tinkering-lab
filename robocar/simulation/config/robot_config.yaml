@@ -102,8 +102,8 @@ simulation:
   camera:
     enabled: true
     resolution: [640, 480]
-    fov_degrees: 70.0
-    fps: 30
+    fov_degrees: 60.0  # Match robot.sensors.camera.field_of_view
+    fps: 20           # Match robot.sensors.camera.fps
     noise_level: 0.02
     compression_quality: 85
   

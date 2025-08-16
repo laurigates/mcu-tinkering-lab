@@ -38,17 +38,28 @@ class CameraSimulation:
     def __init__(self, config_path: str):
         self.config = self._load_config(config_path)
         
-        # Extract only the parameters that CameraConfig expects
+        # Extract camera parameters from both robot and simulation configs
+        robot_camera_config = self.config['robot']['sensors']['camera']
         camera_sim_config = self.config['simulation'].get('camera', {})
         camera_params = {}
         
-        # Map config parameters to CameraConfig fields
-        if 'resolution' in camera_sim_config:
+        # Use robot camera config as primary source, simulation config as override
+        if 'resolution' in robot_camera_config:
+            camera_params['resolution'] = tuple(robot_camera_config['resolution'])
+        if 'resolution' in camera_sim_config:  # Simulation override
             camera_params['resolution'] = tuple(camera_sim_config['resolution'])
-        if 'fov_degrees' in camera_sim_config:
+            
+        if 'field_of_view' in robot_camera_config:
+            camera_params['fov_degrees'] = robot_camera_config['field_of_view']
+        if 'fov_degrees' in camera_sim_config:  # Simulation override
             camera_params['fov_degrees'] = camera_sim_config['fov_degrees']
-        if 'fps' in camera_sim_config:
+            
+        if 'fps' in robot_camera_config:
+            camera_params['fps'] = robot_camera_config['fps']
+        if 'fps' in camera_sim_config:  # Simulation override
             camera_params['fps'] = camera_sim_config['fps']
+            
+        # Simulation-specific parameters
         if 'noise_level' in camera_sim_config:
             camera_params['noise_level'] = camera_sim_config['noise_level']
         if 'compression_quality' in camera_sim_config:

@@ -53,7 +53,10 @@ class RobotVisualizer:
         # Control variables
         self._running = False
         self._thread = None
-        self.update_rate = 30  # Hz
+        
+        # Use configured update rate, with fallback
+        simulation_timestep = self.config['simulation'].get('timestep', 0.01)
+        self.update_rate = 1.0 / simulation_timestep  # Convert timestep to Hz
         self.trail_length = 100  # Trail visualization length
         
         # Initialize Swift environment directly
