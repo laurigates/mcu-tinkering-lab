@@ -160,6 +160,7 @@ simulation:
     
 # AI Backend Configuration
 ai_backend:
+  enabled: true
   type: "claude"  # or "ollama"
   api_key: "${CLAUDE_API_KEY}"
   model: "claude-3-sonnet-20240229"
