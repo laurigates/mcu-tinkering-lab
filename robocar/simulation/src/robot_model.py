@@ -311,6 +311,24 @@ class DifferentialDriveRobot:
         self.motor_left = DCMotor(robot_config['motors']['left'])
         self.motor_right = DCMotor(robot_config['motors']['right'])
         
+        # Initialize motor controllers with PID if configured
+        self.use_motor_controllers = self.config['simulation'].get('motor_control', {}).get('enabled', False)
+        self.motor_left_controller = None
+        self.motor_right_controller = None
+        
+        if self.use_motor_controllers:
+            from motor_controller import MotorController
+            control_config = self.config['simulation']['motor_control']
+            
+            self.motor_left_controller = MotorController(
+                robot_config['motors']['left'], 
+                control_config
+            )
+            self.motor_right_controller = MotorController(
+                robot_config['motors']['right'], 
+                control_config
+            )
+        
         # Simulation parameters
         self.dt = self.config['simulation']['timestep']
         
@@ -332,6 +350,16 @@ class DifferentialDriveRobot:
                 'main', self.mass, robot_config['dimensions']
             )
         
+        # Initialize camera simulation if configured
+        self.camera_simulation = None
+        self.use_camera_simulation = self.config['simulation'].get('camera', {}).get('enabled', False)
+        
+        if self.use_camera_simulation:
+            from camera_simulation import CameraSimulation
+            self.camera_simulation = CameraSimulation(config_path)
+            # Start camera simulation after robot initialization
+            self.camera_simulation.start_capture(lambda: self.state)
+        
     def _load_config(self, config_path: str) -> Dict:
         """Load configuration from YAML file"""
         with open(config_path, 'r') as f:
@@ -345,8 +373,56 @@ class DifferentialDriveRobot:
     
     def set_motor_commands(self, left_pwm: int, right_pwm: int):
         """Set motor PWM commands"""
+        if self.use_motor_controllers:
+            # Set PWM commands to controllers (they handle the control internally)
+            self.motor_left_controller.set_pwm_command(left_pwm)
+            self.motor_right_controller.set_pwm_command(right_pwm)
+        
         self.state.motor_left_pwm = np.clip(left_pwm, -255, 255)
         self.state.motor_right_pwm = np.clip(right_pwm, -255, 255)
+    
+    def set_velocity_commands(self, left_velocity: float, right_velocity: float):
+        """Set motor velocity commands in rad/s (PID mode)"""
+        if self.use_motor_controllers:
+            self.motor_left_controller.set_velocity_setpoint(left_velocity)
+            self.motor_right_controller.set_velocity_setpoint(right_velocity)
+        else:
+            # Convert velocity to approximate PWM for non-PID mode
+            # This is a rough approximation
+            max_velocity = self.motor_left.max_rpm * 2 * np.pi / 60  # rad/s
+            left_pwm = (left_velocity / max_velocity) * 255
+            right_pwm = (right_velocity / max_velocity) * 255
+            self.set_motor_commands(left_pwm, right_pwm)
+    
+    def set_position_commands(self, left_position: float, right_position: float):
+        """Set motor position commands in degrees (PID mode)"""
+        if self.use_motor_controllers:
+            self.motor_left_controller.set_position_setpoint(left_position)
+            self.motor_right_controller.set_position_setpoint(right_position)
+        else:
+            # Position control not available without PID controllers
+            print("Warning: Position control requires PID controllers to be enabled")
+    
+    def get_encoder_positions(self) -> Tuple[float, float]:
+        """Get encoder positions in degrees"""
+        if self.use_motor_controllers:
+            left_pos = self.motor_left_controller.get_encoder_position()
+            right_pos = self.motor_right_controller.get_encoder_position()
+            return left_pos, right_pos
+        else:
+            # Estimate from motor angular velocity integration
+            # This is less accurate than actual encoders
+            return 0.0, 0.0  # Not available without controllers
+    
+    def get_encoder_velocities(self) -> Tuple[float, float]:
+        """Get encoder velocities in rad/s"""
+        if self.use_motor_controllers:
+            left_vel = self.motor_left_controller.get_encoder_velocity()
+            right_vel = self.motor_right_controller.get_encoder_velocity()
+            return left_vel, right_vel
+        else:
+            # Use actual motor velocities
+            return self.motor_left.angular_velocity, self.motor_right.angular_velocity
     
     def update_kinematics(self, dt: float):
         """Update robot kinematics based on wheel velocities"""
@@ -391,10 +467,28 @@ class DifferentialDriveRobot:
             self.state.theta = np.arctan2(np.sin(self.state.theta), np.cos(self.state.theta))
     
     def update_motors(self, dt: float):
-        """Update motor dynamics"""
-        # Convert PWM to voltage
-        voltage_left = self.pwm_to_voltage(self.state.motor_left_pwm)
-        voltage_right = self.pwm_to_voltage(self.state.motor_right_pwm)
+        """Update motor dynamics with optional PID control"""
+        if self.use_motor_controllers:
+            # Use PID controllers
+            # Get current motor angular velocities
+            omega_left = self.motor_left.angular_velocity
+            omega_right = self.motor_right.angular_velocity
+            
+            # Update controllers (they handle PWM commands internally)
+            controlled_pwm_left = self.motor_left_controller.update(omega_left, dt)
+            controlled_pwm_right = self.motor_right_controller.update(omega_right, dt)
+            
+            # Convert controlled PWM to voltage
+            voltage_left = self.pwm_to_voltage(controlled_pwm_left)
+            voltage_right = self.pwm_to_voltage(controlled_pwm_right)
+            
+            # Update motor states for feedback to next controller update
+            self.state.motor_left_pwm = controlled_pwm_left
+            self.state.motor_right_pwm = controlled_pwm_right
+        else:
+            # Direct PWM control (original behavior)
+            voltage_left = self.pwm_to_voltage(self.state.motor_left_pwm)
+            voltage_right = self.pwm_to_voltage(self.state.motor_right_pwm)
         
         # Calculate load torque (simplified - resistance from ground friction)
         # In reality, this would depend on terrain, robot weight, etc.
@@ -479,6 +573,12 @@ class DifferentialDriveRobot:
         # Update sensors
         environment = self.config['simulation']['environment']
         self.update_sensors(environment)
+        
+        # Update camera frame if camera simulation is enabled
+        if self.use_camera_simulation and self.camera_simulation:
+            latest_frame = self.camera_simulation.get_latest_frame()
+            if latest_frame is not None:
+                self.state.camera_frame = latest_frame
     
     def get_state(self) -> RobotState:
         """Get current robot state"""

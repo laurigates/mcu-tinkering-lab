@@ -98,6 +98,48 @@ simulation:
   physics_engine: "pymunk"
   visualization: "swift"
   
+  # Camera simulation configuration
+  camera:
+    enabled: true
+    resolution: [640, 480]
+    fov_degrees: 70.0
+    fps: 30
+    noise_level: 0.02
+    compression_quality: 85
+  
+  # Motor control configuration
+  motor_control:
+    enabled: true
+    mode: "velocity"  # "open_loop", "velocity", "position"
+    
+    # Velocity PID parameters
+    velocity_pid:
+      kp: 15.0
+      ki: 5.0
+      kd: 0.5
+      output_limit: 255.0
+      integral_limit: 50.0
+      derivative_filter: 0.1
+    
+    # Position PID parameters (for position mode)
+    position_pid:
+      kp: 1.5
+      ki: 0.0
+      kd: 0.05
+      output_limit: 50.0  # Output is velocity command
+      integral_limit: 50.0
+      derivative_filter: 0.2
+    
+    # Encoder simulation parameters
+    encoder:
+      pulses_per_revolution: 600
+      noise_std: 0.1
+      velocity_filter: 0.8
+      max_velocity_change: 500.0
+    
+    # Feedforward gain (PWM per rad/s)
+    velocity_feedforward: 25.0
+  
   # Environment
   environment:
     type: "indoor"
