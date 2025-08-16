@@ -11,6 +11,7 @@ from dataclasses import dataclass
 import time
 import yaml
 from pathlib import Path
+import pymunk
 
 
 @dataclass
@@ -131,6 +132,165 @@ class DCMotor:
         return self.angular_velocity, self.torque
 
 
+class PhysicsEngine:
+    """Physics engine wrapper for pymunk"""
+    
+    def __init__(self, config: Dict):
+        self.space = pymunk.Space()
+        self.space.gravity = (0, -9.81)  # Gravity in m/s²
+        
+        # Environment setup
+        self.environment_config = config['simulation']['environment']
+        self.robots = {}
+        self.obstacles = []
+        
+        # Create environment boundaries and obstacles
+        self._setup_environment()
+    
+    def _setup_environment(self):
+        """Set up environment boundaries and obstacles"""
+        env_size = self.environment_config['size']
+        width, height = env_size[0], env_size[1]
+        
+        # Create boundaries
+        walls = [
+            pymunk.Segment(self.space.static_body, (0, 0), (width, 0), 0.1),  # Bottom
+            pymunk.Segment(self.space.static_body, (0, 0), (0, height), 0.1),  # Left
+            pymunk.Segment(self.space.static_body, (width, 0), (width, height), 0.1),  # Right
+            pymunk.Segment(self.space.static_body, (0, height), (width, height), 0.1)  # Top
+        ]
+        
+        for wall in walls:
+            wall.friction = 0.7
+            wall.collision_type = 1  # Wall collision type
+            self.space.add(wall)
+        
+        # Add obstacles
+        for obstacle in self.environment_config.get('obstacles', []):
+            self._create_obstacle(obstacle)
+    
+    def _create_obstacle(self, obstacle_config: Dict):
+        """Create a physics obstacle from configuration"""
+        if obstacle_config['type'] == 'box':
+            pos = obstacle_config['position']
+            size = obstacle_config['size']
+            
+            # Create box body
+            mass = 1000  # Static obstacle (high mass)
+            moment = pymunk.moment_for_box(mass, size)
+            body = pymunk.Body(mass, moment, body_type=pymunk.Body.STATIC)
+            body.position = pos
+            
+            # Create box shape
+            shape = pymunk.Poly.create_box(body, size)
+            shape.friction = 0.7
+            shape.collision_type = 2  # Obstacle collision type
+            
+            self.space.add(body, shape)
+            self.obstacles.append({'body': body, 'shape': shape, 'config': obstacle_config})
+            
+        elif obstacle_config['type'] == 'cylinder':
+            pos = obstacle_config['position']
+            radius = obstacle_config['radius']
+            
+            # Create cylinder body
+            mass = 1000  # Static obstacle
+            moment = pymunk.moment_for_circle(mass, 0, radius)
+            body = pymunk.Body(mass, moment, body_type=pymunk.Body.STATIC)
+            body.position = pos
+            
+            # Create circle shape
+            shape = pymunk.Circle(body, radius)
+            shape.friction = 0.7
+            shape.collision_type = 2  # Obstacle collision type
+            
+            self.space.add(body, shape)
+            self.obstacles.append({'body': body, 'shape': shape, 'config': obstacle_config})
+    
+    def add_robot(self, robot_id: str, mass: float, dimensions: Dict, position: Tuple[float, float] = (0.5, 0.5)):
+        """Add a robot to the physics simulation"""
+        # Robot dimensions
+        length = dimensions['length']
+        width = dimensions['width']
+        
+        # Create robot body
+        moment = pymunk.moment_for_box(mass, (length, width))
+        body = pymunk.Body(mass, moment)
+        body.position = position
+        
+        # Create robot shape (rectangle)
+        shape = pymunk.Poly.create_box(body, (length, width))
+        shape.friction = 0.3
+        shape.collision_type = 3  # Robot collision type
+        
+        self.space.add(body, shape)
+        self.robots[robot_id] = {
+            'body': body,
+            'shape': shape,
+            'mass': mass,
+            'dimensions': dimensions
+        }
+        
+        return body, shape
+    
+    def update_robot_forces(self, robot_id: str, force_left: float, force_right: float, track_width: float):
+        """Apply differential drive forces to robot"""
+        if robot_id not in self.robots:
+            return
+            
+        robot = self.robots[robot_id]
+        body = robot['body']
+        
+        # Convert wheel forces to body force and torque
+        # Force is applied at wheel contact points
+        total_force = force_left + force_right
+        torque = (force_right - force_left) * track_width / 2
+        
+        # Apply force in robot's forward direction
+        angle = body.angle
+        force_vector = (total_force * np.cos(angle), total_force * np.sin(angle))
+        
+        body.force = force_vector
+        body.torque = torque
+    
+    def get_robot_state(self, robot_id: str) -> Dict:
+        """Get robot physics state"""
+        if robot_id not in self.robots:
+            return {}
+            
+        robot = self.robots[robot_id]
+        body = robot['body']
+        
+        return {
+            'position': (body.position.x, body.position.y),
+            'angle': body.angle,
+            'velocity': (body.velocity.x, body.velocity.y),
+            'angular_velocity': body.angular_velocity
+        }
+    
+    def raycast_sensor(self, start_pos: Tuple[float, float], direction: float, max_range: float) -> float:
+        """Perform raycast for ultrasonic sensor simulation"""
+        end_pos = (
+            start_pos[0] + max_range * np.cos(direction),
+            start_pos[1] + max_range * np.sin(direction)
+        )
+        
+        # Perform segment query (raycast)
+        query_info = self.space.segment_query_first(start_pos, end_pos, 0, pymunk.ShapeFilter())
+        
+        if query_info.shape:
+            # Calculate distance to hit point
+            hit_point = query_info.point
+            distance = np.sqrt((hit_point.x - start_pos[0])**2 + (hit_point.y - start_pos[1])**2)
+            return max(0.02, distance)  # Minimum 2cm
+        
+        return max_range  # No collision detected
+    
+    def step(self, dt: float):
+        """Step the physics simulation"""
+        self.space.step(dt)
+
+
 class DifferentialDriveRobot:
     """Differential drive robot model with realistic motor dynamics"""
     
@@ -160,6 +320,18 @@ class DifferentialDriveRobot:
         # Initialize random number generator for sensor noise
         self.rng = np.random.RandomState(42)
         
+        # Initialize physics engine if configured
+        self.physics_engine = None
+        self.robot_body = None
+        self.robot_shape = None
+        self.use_physics = self.config['simulation'].get('physics_engine') == 'pymunk'
+        
+        if self.use_physics:
+            self.physics_engine = PhysicsEngine(self.config)
+            self.robot_body, self.robot_shape = self.physics_engine.add_robot(
+                'main', self.mass, robot_config['dimensions']
+            )
+        
     def _load_config(self, config_path: str) -> Dict:
         """Load configuration from YAML file"""
         with open(config_path, 'r') as f:
@@ -178,21 +350,45 @@ class DifferentialDriveRobot:
     
     def update_kinematics(self, dt: float):
         """Update robot kinematics based on wheel velocities"""
-        # Convert motor angular velocities to wheel linear velocities
-        v_left = self.motor_left.angular_velocity * self.wheel_radius
-        v_right = self.motor_right.angular_velocity * self.wheel_radius
-        
-        # Differential drive kinematics
-        self.state.v = (v_left + v_right) / 2.0  # Linear velocity
-        self.state.omega = (v_right - v_left) / self.track_width  # Angular velocity
-        
-        # Update pose using discrete integration
-        self.state.x += self.state.v * np.cos(self.state.theta) * dt
-        self.state.y += self.state.v * np.sin(self.state.theta) * dt
-        self.state.theta += self.state.omega * dt
-        
-        # Normalize theta to [-pi, pi]
-        self.state.theta = np.arctan2(np.sin(self.state.theta), np.cos(self.state.theta))
+        if self.use_physics and self.physics_engine:
+            # Use physics engine for realistic dynamics
+            
+            # Convert motor torques to wheel forces
+            # Force = Torque / wheel_radius
+            force_left = self.motor_left.torque / self.wheel_radius
+            force_right = self.motor_right.torque / self.wheel_radius
+            
+            # Update physics simulation
+            self.physics_engine.update_robot_forces('main', force_left, force_right, self.track_width)
+            self.physics_engine.step(dt)
+            
+            # Get updated state from physics engine
+            physics_state = self.physics_engine.get_robot_state('main')
+            if physics_state:
+                self.state.x = physics_state['position'][0]
+                self.state.y = physics_state['position'][1]
+                self.state.theta = physics_state['angle']
+                
+                # Calculate velocities from physics
+                self.state.v = np.sqrt(physics_state['velocity'][0]**2 + physics_state['velocity'][1]**2)
+                self.state.omega = physics_state['angular_velocity']
+        else:
+            # Original kinematic model (fallback)
+            # Convert motor angular velocities to wheel linear velocities
+            v_left = self.motor_left.angular_velocity * self.wheel_radius
+            v_right = self.motor_right.angular_velocity * self.wheel_radius
+            
+            # Differential drive kinematics
+            self.state.v = (v_left + v_right) / 2.0  # Linear velocity
+            self.state.omega = (v_right - v_left) / self.track_width  # Angular velocity
+            
+            # Update pose using discrete integration
+            self.state.x += self.state.v * np.cos(self.state.theta) * dt
+            self.state.y += self.state.v * np.sin(self.state.theta) * dt
+            self.state.theta += self.state.omega * dt
+            
+            # Normalize theta to [-pi, pi]
+            self.state.theta = np.arctan2(np.sin(self.state.theta), np.cos(self.state.theta))
     
     def update_motors(self, dt: float):
         """Update motor dynamics"""
@@ -237,29 +433,37 @@ class DifferentialDriveRobot:
     
     def _simulate_ultrasonic(self, environment: Dict) -> float:
         """Simulate ultrasonic sensor reading"""
-        # Simplified ray casting for ultrasonic sensor
-        # In practice, this would use the physics engine for collision detection
-        
-        # Sensor position and orientation
-        sensor_x = self.state.x + 0.08 * np.cos(self.state.theta)  # 8cm forward
+        # Sensor position and orientation (8cm forward from robot center)
+        sensor_x = self.state.x + 0.08 * np.cos(self.state.theta)
         sensor_y = self.state.y + 0.08 * np.sin(self.state.theta)
         sensor_angle = self.state.theta
         
-        min_distance = 4.0  # Max range
+        max_range = 4.0  # Max sensor range
         
-        # Check distance to obstacles
-        if 'obstacles' in environment:
-            for obstacle in environment['obstacles']:
-                if obstacle['type'] == 'box':
-                    # Simple box collision (simplified)
-                    obs_x, obs_y = obstacle['position']
-                    distance = np.sqrt((sensor_x - obs_x)**2 + (sensor_y - obs_y)**2)
-                    if distance < min_distance:
-                        min_distance = distance
+        if self.use_physics and self.physics_engine:
+            # Use physics engine for accurate raycast
+            distance = self.physics_engine.raycast_sensor(
+                (sensor_x, sensor_y), sensor_angle, max_range
+            )
+        else:
+            # Fallback to simplified collision detection
+            min_distance = max_range
+            
+            # Check distance to obstacles
+            if 'obstacles' in environment:
+                for obstacle in environment['obstacles']:
+                    if obstacle['type'] == 'box':
+                        # Simple box collision (simplified)
+                        obs_x, obs_y = obstacle['position']
+                        distance = np.sqrt((sensor_x - obs_x)**2 + (sensor_y - obs_y)**2)
+                        if distance < min_distance:
+                            min_distance = distance
+            
+            distance = min_distance
         
         # Add noise
         noise = self.rng.normal(0, 0.01)  # 1cm noise
-        return max(0.02, min_distance + noise)  # Minimum 2cm range
+        return max(0.02, distance + noise)  # Minimum 2cm range
     
     def update(self, dt: Optional[float] = None):
         """Update complete robot state"""
@@ -298,6 +502,13 @@ class DifferentialDriveRobot:
         # Reset motors
         self.motor_left = DCMotor(self.config['robot']['motors']['left'])
         self.motor_right = DCMotor(self.config['robot']['motors']['right'])
+        
+        # Reset physics engine state if enabled
+        if self.use_physics and self.robot_body:
+            self.robot_body.position = (x, y)
+            self.robot_body.angle = theta
+            self.robot_body.velocity = (0, 0)
+            self.robot_body.angular_velocity = 0
 
 
 if __name__ == "__main__":

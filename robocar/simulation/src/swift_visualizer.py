@@ -5,11 +5,9 @@ This module provides 3D visualization using the Swift simulator backend
 with the Robotics Toolbox for Python.
 """
 
-import asyncio
-import queue
 import threading
 import time
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import numpy as np
 import yaml
@@ -18,7 +16,6 @@ try:
     import roboticstoolbox as rtb
     import swift
     import trimesh
-    from roboticstoolbox import DHRobot, RevoluteDH
     from spatialmath import SE3
     from swift import Swift
     HAS_SWIFT = True
@@ -27,66 +24,80 @@ except ImportError:
     print("Warning: Swift and Robotics Toolbox not available. Install with:")
     print("pip install robotics-toolbox-python swift-sim")
 
-import os
-import subprocess
-import sys
-
 from robot_model import DifferentialDriveRobot, RobotState
 
 
 class RobotVisualizer:
-    """3D visualization of the robot car using Swift"""
+    """Simplified 3D visualization of the robot car using Swift"""
     
     def __init__(self, config_path: str, robot: DifferentialDriveRobot, viz_mode: str = 'headless'):
         if not HAS_SWIFT:
             print("Warning: Swift and Robotics Toolbox not available")
             print("3D visualization will be disabled")
+            self.enabled = False
+            return
         
+        self.enabled = True
         self.config = self._load_config(config_path)
         self.robot = robot
         self.viz_mode = viz_mode
         
-        # Swift environment - run in separate thread to avoid asyncio conflicts
+        # Swift environment - simplified initialization
         self.env = None
-        self._init_swift_env()
-        
-        # Robot visual elements
         self.robot_mesh = None
         self.wheel_meshes = []
         self.camera_mesh = None
         self.trail_points = []
-        
-        # Thread-safe communication
-        self._update_queue = queue.Queue()
-        self._running = False
-        self._thread = None
         self.obstacles = []
         
-        # Visualization parameters
-        self.trail_length = 100
+        # Control variables
+        self._running = False
+        self._thread = None
         self.update_rate = 30  # Hz
-        self.last_update = 0
+        self.trail_length = 100  # Trail visualization length
         
-        # Initialize visualization
-        self._create_environment()
-        self._create_robot_model()
+        # Initialize Swift environment directly
+        self._init_swift_environment()
         
-        # Threading
-        self.running = False
-        self.update_thread = None
-        self._swift_process = None
+        if self.env:
+            self._create_environment()
+            self._create_robot_model()
         
     def _load_config(self, config_path: str) -> Dict:
         """Load configuration from YAML file"""
         with open(config_path, 'r') as f:
             return yaml.safe_load(f)
     
-    def _init_swift_env(self):
-        """Initialize Swift environment with proper thread isolation"""
-        # We'll initialize Swift in the dedicated thread to avoid asyncio conflicts
-        self.env = None  # Will be created in _visualization_thread
-        print("Swift 3D visualization will be initialized in dedicated thread")
-        print("Note: Swift library may show asyncio threading warnings that can be ignored")
+    def _init_swift_environment(self):
+        """Initialize Swift environment directly (simplified)"""
+        try:
+            print(f"Initializing Swift in {self.viz_mode} mode...")
+            self.env = Swift()
+            
+            if self.viz_mode == 'browser':
+                print("Launching browser mode...")
+                self.env.launch(realtime=True, headless=False, browser='default')
+                print("✓ Browser mode active at http://localhost:52000")
+            elif self.viz_mode == 'visual':
+                print("Launching visual mode...")
+                self.env.launch(realtime=True, headless=False)
+                print("✓ Visual mode active")
+            else:  # headless
+                print("Launching headless mode...")
+                self.env.launch(realtime=True, headless=True)
+                print("✓ Headless mode active")
+                
+        except Exception as e:
+            print(f"Swift initialization failed: {e}")
+            print("Attempting headless fallback...")
+            try:
+                self.env = Swift()
+                self.env.launch(realtime=True, headless=True)
+                print("✓ Headless fallback successful")
+            except Exception as e2:
+                print(f"Headless fallback failed: {e2}")
+                self.env = None
+                self.enabled = False
     
     def _create_environment(self):
         """Create the simulation environment"""
@@ -246,22 +257,15 @@ class RobotVisualizer:
             print("Note: Camera control not available in headless mode")
     
     def update_robot_visualization(self):
-        """Update robot visualization based on current state - thread safe"""
+        """Update robot visualization based on current state - simplified"""
+        if not self.enabled or not self.env:
+            return
+            
         state = self.robot.get_state()
-        
-        # Send update command to visualization thread
-        update_data = {
-            'type': 'robot_update',
-            'state': state
-        }
-        try:
-            self._update_queue.put_nowait(update_data)
-        except queue.Full:
-            # Drop update if queue is full to prevent blocking
-            pass
+        self._update_robot_state(state)
     
-    def _process_robot_update(self, state):
-        """Process robot visualization update in Swift thread"""
+    def _update_robot_state(self, state: RobotState):
+        """Update robot visualization with new state"""
         if not self.env:
             return
             
@@ -309,7 +313,11 @@ class RobotVisualizer:
         self._update_sensor_visualization(state)
         
         # Step the simulation
-        self.env.step(0.033)  # ~30 FPS
+        try:
+            self.env.step(0.033)  # ~30 FPS
+        except Exception as e:
+            # Ignore Swift step errors in simplified mode
+            pass
     
     def _update_trail(self, x: float, y: float):
         """Update robot trail visualization"""
@@ -379,16 +387,34 @@ class RobotVisualizer:
         pass
     
     def start_update_loop(self):
-        """Start the visualization update loop"""
+        """Start the visualization update loop - simplified"""
+        if not self.enabled:
+            return
+            
         self._running = True
         
-        # Try subprocess approach for Swift to avoid asyncio conflicts
-        if self.viz_mode in ['visual', 'browser']:
-            self._start_swift_subprocess()
-        else:
-            # For headless mode, use threading approach
-            self._thread = threading.Thread(target=self._visualization_thread, daemon=True)
-            self._thread.start()
+        # Start a simple update thread
+        self._thread = threading.Thread(target=self._simple_update_loop, daemon=True)
+        self._thread.start()
+        print("✓ Visualization update loop started")
+    
+    def _simple_update_loop(self):
+        """Simple update loop for visualization"""
+        last_update = time.time()
+        update_interval = 1.0 / self.update_rate
+        
+        while self._running:
+            current_time = time.time()
+            
+            if current_time - last_update > update_interval:
+                try:
+                    self.update_robot_visualization()
+                    last_update = current_time
+                except Exception as e:
+                    # Ignore visualization errors to keep simulation running
+                    pass
+            
+            time.sleep(0.01)  # Small sleep to prevent busy waiting
     
     def _create_simple_robot_visualization(self):
         """Create a simple robot visualization for testing"""
@@ -415,296 +441,25 @@ class RobotVisualizer:
         
         print("✓ Simple robot visualization created")
     
-    def _start_swift_subprocess(self):
-        """Start Swift in a separate process to avoid asyncio conflicts"""
-        if not HAS_SWIFT:
-            print("Swift not available, skipping subprocess")
-            return
-        
-        try:
-            import subprocess
-            import sys
-            
-            print(f"Starting Swift {self.viz_mode} mode in subprocess...")
-            
-            # Create a simple Swift script
-            swift_script = f'''
-import asyncio
-import sys
-import time
-import warnings
-from pathlib import Path
-
-try:
-    import roboticstoolbox as rtb
-    import swift
-    import trimesh
-    from spatialmath import SE3
-    from swift import Swift
-except ImportError as e:
-    print(f"Import error: {{e}}")
-    sys.exit(1)
-
-# Suppress warnings
-warnings.filterwarnings("ignore", message=".*websockets.*")
-warnings.filterwarnings("ignore", message=".*no running event loop.*")
-
-async def run_swift():
-    print("Creating Swift instance...")
-    env = Swift()
-    
-    if "{self.viz_mode}" == "browser":
-        print("Launching browser mode...")
-        env.launch(realtime=True, headless=False, browser='default')
-        print("✓ Browser mode active at http://localhost:52000")
-    elif "{self.viz_mode}" == "visual":
-        print("Launching visual mode...")
-        env.launch(realtime=True, headless=False)
-        print("✓ Visual mode active - GUI window should appear")
-    
-    # Add simple test objects
-    test_box = trimesh.primitives.Box(extents=[0.15, 0.10, 0.05])
-    test_box.visual.face_colors = [100, 150, 200, 255]
-    env.add(test_box)
-    
-    # Add direction indicator
-    arrow = trimesh.primitives.Cylinder(
-        radius=0.01, height=0.08,
-        transform=SE3(0.06, 0, 0.03).A
-    )
-    arrow.visual.face_colors = [255, 0, 0, 255]
-    env.add(arrow)
-    
-    print("✓ Robot visualization created")
-    
-    # Keep running
-    try:
-        while True:
-            # Simple animation - rotate the box
-            angle = time.time() * 0.5
-            transform = SE3.Rz(angle) * SE3(0, 0, 0.025)
-            test_box.apply_transform(
-                test_box.transform @ transform.A @ SE3.Rz(-angle/2).A
-            )
-            env.step(0.1)
-            await asyncio.sleep(0.1)
-    except KeyboardInterrupt:
-        print("Swift subprocess terminated")
-
-if __name__ == "__main__":
-    asyncio.run(run_swift())
-'''
-            
-            # Write the script to a temporary file
-            script_path = "swift_subprocess.py"
-            with open(script_path, 'w') as f:
-                f.write(swift_script)
-            
-            # Start the subprocess
-            self._swift_process = subprocess.Popen([
-                sys.executable, script_path
-            ], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            
-            print(f"✓ Swift {self.viz_mode} subprocess started (PID: {self._swift_process.pid})")
-            
-            # Give it a moment to start up
-            time.sleep(2.0)
-            
-            # Check if process is still running
-            if self._swift_process.poll() is None:
-                print(f"✓ Swift {self.viz_mode} mode is running successfully")
-                if self.viz_mode == 'browser':
-                    print("✓ Access visualization at: http://localhost:52000")
-                elif self.viz_mode == 'visual':
-                    print("✓ GUI window should be visible")
-            else:
-                print("✗ Swift subprocess exited early")
-                stdout, stderr = self._swift_process.communicate()
-                if stderr:
-                    print(f"Swift subprocess error: {stderr}")
-            
-        except Exception as e:
-            print(f"Failed to start Swift subprocess: {e}")
-            self._swift_process = None
-    
-    def _visualization_thread(self):
-        """Main visualization thread - handles Swift environment with proper asyncio setup"""
-        if not HAS_SWIFT:
-            print("Swift not available, visualization thread exiting")
-            return
-        
-        print("Initializing Swift environment in dedicated thread...")
-        
-        try:
-            import asyncio
-            import logging
-            import warnings
-            import sys
-            
-            # Suppress Swift internal warnings and asyncio debug info
-            warnings.filterwarnings("ignore", message=".*websockets.*")
-            warnings.filterwarnings("ignore", message=".*no running event loop.*")
-            warnings.filterwarnings("ignore", message=".*coroutine.*")
-            logging.getLogger("websockets").setLevel(logging.ERROR)
-            logging.getLogger("asyncio").setLevel(logging.WARNING)
-            
-            # CRITICAL: Create new event loop for this thread BEFORE any Swift operations
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            
-            # Set the event loop policy to prevent conflicts
-            if sys.platform.startswith('win'):
-                asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
-            
-            def sync_swift_init():
-                """Synchronous Swift initialization within the event loop thread"""
-                try:
-                    print(f"Creating Swift instance in {self.viz_mode} mode...")
-                    self.env = Swift()
-                    
-                    # Launch Swift based on visualization mode
-                    if self.viz_mode == 'browser':
-                        print("Launching Swift browser mode...")
-                        self.env.launch(realtime=True, headless=False, browser='default')
-                        print("✓ Swift browser mode launched")
-                        print("✓ Access visualization at: http://localhost:52000")
-                        
-                    elif self.viz_mode == 'visual':
-                        print("Launching Swift visual mode...")
-                        self.env.launch(realtime=True, headless=False)
-                        print("✓ Swift visual mode launched")
-                        print("✓ GUI window should appear")
-                        
-                    else:  # headless
-                        print("Launching Swift headless mode...")
-                        self.env.launch(realtime=True, headless=True)
-                        print("✓ Swift headless mode launched")
-                    
-                    # Create robot visualization elements
-                    self._create_environment()
-                    self._create_robot_model()
-                    print("✓ Robot model and environment created")
-                    return True
-                    
-                except Exception as e:
-                    print(f"Swift launch failed: {e}")
-                    # Try headless fallback
-                    try:
-                        print("Attempting headless fallback...")
-                        self.env = Swift()
-                        self.env.launch(realtime=True, headless=True)
-                        self._create_environment()
-                        self._create_robot_model()
-                        print("✓ Swift headless fallback successful")
-                        return True
-                    except Exception as e2:
-                        print(f"Headless fallback failed: {e2}")
-                        self.env = None
-                        return False
-            
-            # Initialize Swift synchronously within the event loop thread
-            if not sync_swift_init():
-                return
-            
-            async def visualization_loop():
-                """Main visualization update loop"""
-                print("Starting visualization update loop...")
-                last_update = time.time()
-                update_interval = 1.0 / 30.0  # 30 FPS
-                
-                while self._running:
-                    current_time = time.time()
-                    
-                    # Process queued updates
-                    try:
-                        while True:
-                            update_data = self._update_queue.get_nowait()
-                            if update_data['type'] == 'robot_update':
-                                self._process_robot_update(update_data['state'])
-                    except queue.Empty:
-                        pass
-                    
-                    # Regular robot state updates
-                    if current_time - last_update > update_interval:
-                        if self.robot:
-                            state = self.robot.get_state()
-                            self._process_robot_update(state)
-                        last_update = current_time
-                    
-                    await asyncio.sleep(0.01)
-                
-                print("Swift visualization loop ended")
-            
-            # Run the visualization loop in the event loop
-            loop.run_until_complete(visualization_loop())
-            
-        except Exception as e:
-            print(f"Visualization thread error: {e}")
-            import traceback
-            traceback.print_exc()
-            self.env = None
-        finally:
-            # Clean up event loop
-            try:
-                if 'loop' in locals() and not loop.is_closed():
-                    loop.close()
-            except:
-                pass
-    
-    def _update_loop(self):
-        """Legacy update loop - now just calls update_robot_visualization"""
-        while self.running:
-            current_time = time.time()
-            
-            if current_time - self.last_update > (1.0 / self.update_rate):
-                self.update_robot_visualization()
-                self.last_update = current_time
-            
-            time.sleep(0.001)  # Small sleep to prevent busy waiting
-    
     def stop(self):
-        """Stop the visualization"""
-        print("Stopping Swift visualization...")
+        """Stop the visualization - simplified"""
+        print("Stopping visualization...")
         self._running = False
-        self.running = False  # Legacy compatibility
         
-        # Stop the visualization thread
-        if hasattr(self, '_thread') and self._thread and self._thread.is_alive():
-            self._thread.join(timeout=2.0)  # Wait up to 2 seconds
-        
-        if hasattr(self, 'update_thread') and self.update_thread:
-            self.update_thread.join(timeout=1.0)
+        # Stop the update thread
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=2.0)
             
-        # Clean up subprocess if running
-        if hasattr(self, '_swift_process') and self._swift_process:
-            try:
-                self._swift_process.terminate()
-                self._swift_process.wait(timeout=3.0)
-                print("Swift subprocess terminated")
-            except:
-                try:
-                    self._swift_process.kill()
-                    print("Swift subprocess killed")
-                except:
-                    pass
-            
+        # Clean up Swift environment
         if self.env:
             try:
-                # Swift in headless mode may not have all attributes
                 if hasattr(self.env, 'close'):
                     self.env.close()
-                elif hasattr(self.env, 'server') and hasattr(self.env.server, 'close'):
-                    self.env.server.close()
-                # For headless mode or other Swift configurations, just clean up reference
                 self.env = None
-            except AttributeError as e:
-                if "'Swift' object has no attribute 'server'" in str(e):
-                    # Expected in headless mode - suppress this specific error
-                    pass
-                else:
-                    print(f"Note: Swift environment cleanup: {e}")
+                print("✓ Swift environment cleaned up")
             except Exception as e:
-                print(f"Note: Swift environment cleanup: {e}")
+                print(f"Note: Swift cleanup: {e}")
+                self.env = None
     
     def screenshot(self, filename: str):
         """Take a screenshot of the visualization"""
@@ -718,7 +473,7 @@ if __name__ == "__main__":
 
 
 class SwiftSimulation:
-    """Complete Swift-based simulation environment"""
+    """Simplified Swift-based simulation environment"""
     
     def __init__(self, config_path: str, viz_mode: str = 'headless'):
         self.config_path = config_path
@@ -727,16 +482,16 @@ class SwiftSimulation:
         self.visualizer = RobotVisualizer(config_path, self.robot, viz_mode=viz_mode)
         
         # Simulation control
-        self.running = False
         self.paused = False
         self.simulation_speed = 1.0
         
     def run_simulation(self, duration: float = 10.0):
         """Run the simulation for a specified duration"""
-        print(f"Starting Swift simulation for {duration} seconds...")
+        print(f"Starting simulation for {duration} seconds...")
         
-        # Start visualization update loop
-        self.visualizer.start_update_loop()
+        # Start visualization if enabled
+        if self.visualizer.enabled:
+            self.visualizer.start_update_loop()
         
         start_time = time.time()
         last_update = start_time
@@ -752,13 +507,14 @@ class SwiftSimulation:
                     
                     last_update = current_time
                 
-                time.sleep(0.001)  # Small sleep
+                time.sleep(0.01)  # 100Hz simulation rate
                 
         except KeyboardInterrupt:
             print("\nSimulation interrupted by user")
         
         finally:
-            self.visualizer.stop()
+            if self.visualizer.enabled:
+                self.visualizer.stop()
             print("Simulation complete")
     
     def set_motor_commands(self, left_pwm: int, right_pwm: int):
@@ -780,27 +536,24 @@ class SwiftSimulation:
     def reset(self, x: float = 0.0, y: float = 0.0, theta: float = 0.0):
         """Reset simulation to initial state"""
         self.robot.reset(x, y, theta)
-        self.visualizer.trail_points.clear()
+        if self.visualizer.enabled:
+            self.visualizer.trail_points.clear()
 
 
 def main():
-    """Main function for testing Swift visualization"""
-    if not HAS_SWIFT:
-        print("Swift and Robotics Toolbox not available. Please install:")
-        print("pip install robotics-toolbox-python swift-sim")
-        return
-    
+    """Main function for testing simplified Swift visualization"""
     config_path = "../config/robot_config.yaml"
     
     try:
         # Create simulation
-        sim = SwiftSimulation(config_path)
+        print("Creating simulation...")
+        sim = SwiftSimulation(config_path, viz_mode='headless')
         
         # Set some motor commands to make the robot move
         sim.set_motor_commands(100, 80)  # Slight turn
         
         # Run simulation
-        sim.run_simulation(duration=30.0)
+        sim.run_simulation(duration=10.0)
         
     except Exception as e:
         print(f"Error running simulation: {e}")
@@ -809,6 +562,6 @@ def main():
 
 
 if __name__ == "__main__":
-    print("ESP32 Robot Car Swift Visualization")
-    print("=" * 40)
+    print("ESP32 Robot Car Swift Visualization (Simplified)")
+    print("=" * 50)
     main()
