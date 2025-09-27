@@ -59,7 +59,6 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
 static void ip_event_handler(void* arg, esp_event_base_t event_base,
                              int32_t event_id, void* event_data);
 static void reconnect_timer_callback(void* arg);
-static esp_err_t wifi_init_sta(void);
 static void update_connection_info(void);
 static void notify_state_change(wifi_state_t new_state);
 static uint32_t calculate_backoff_delay(uint32_t retry_count);
@@ -251,9 +250,27 @@ esp_err_t wifi_manager_connect(const char* ssid, const char* password) {
             return ESP_ERR_NOT_FOUND;
         }
     } else {
+        // Validate SSID and password lengths
+        if (strlen(ssid) > WIFI_SSID_MAX_LEN) {
+            ESP_LOGE(TAG, "SSID too long (max %d characters)", WIFI_SSID_MAX_LEN);
+            xSemaphoreGive(g_wifi_context.mutex);
+            return ESP_ERR_INVALID_ARG;
+        }
+        if (password && strlen(password) > WIFI_PASSWORD_MAX_LEN) {
+            ESP_LOGE(TAG, "Password too long (max %d characters)", WIFI_PASSWORD_MAX_LEN);
+            xSemaphoreGive(g_wifi_context.mutex);
+            return ESP_ERR_INVALID_ARG;
+        }
+
         // Store provided credentials
         strncpy(g_wifi_context.current_credentials.ssid, ssid, WIFI_SSID_MAX_LEN);
-        strncpy(g_wifi_context.current_credentials.password, password, WIFI_PASSWORD_MAX_LEN);
+        g_wifi_context.current_credentials.ssid[WIFI_SSID_MAX_LEN] = '\0';
+        if (password) {
+            strncpy(g_wifi_context.current_credentials.password, password, WIFI_PASSWORD_MAX_LEN);
+            g_wifi_context.current_credentials.password[WIFI_PASSWORD_MAX_LEN] = '\0';
+        } else {
+            g_wifi_context.current_credentials.password[0] = '\0';
+        }
     }
 
     ESP_LOGI(TAG, "Connecting to SSID: %s", g_wifi_context.current_credentials.ssid);
@@ -337,6 +354,16 @@ esp_err_t wifi_manager_get_info(wifi_info_t* info) {
  */
 esp_err_t wifi_manager_save_credentials(const wifi_credentials_t* credentials) {
     if (!credentials) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    // Validate SSID and password lengths
+    if (strlen(credentials->ssid) == 0 || strlen(credentials->ssid) > WIFI_SSID_MAX_LEN) {
+        ESP_LOGE(TAG, "Invalid SSID length (must be 1-%d characters)", WIFI_SSID_MAX_LEN);
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (strlen(credentials->password) > WIFI_PASSWORD_MAX_LEN) {
+        ESP_LOGE(TAG, "Password too long (max %d characters)", WIFI_PASSWORD_MAX_LEN);
         return ESP_ERR_INVALID_ARG;
     }
 
@@ -632,7 +659,11 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
 
             if (g_wifi_context.auto_reconnect && g_wifi_context.retry_count < WIFI_MAXIMUM_RETRY) {
                 g_wifi_context.retry_count++;
+
+                xSemaphoreTake(g_wifi_context.mutex, portMAX_DELAY);
                 g_wifi_context.info.state = WIFI_STATE_RECONNECTING;
+                xSemaphoreGive(g_wifi_context.mutex);
+
                 notify_state_change(WIFI_STATE_RECONNECTING);
 
                 uint32_t delay = calculate_backoff_delay(g_wifi_context.retry_count);
@@ -642,7 +673,10 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
                 esp_timer_stop(g_wifi_context.reconnect_timer);
                 esp_timer_start_once(g_wifi_context.reconnect_timer, delay * 1000);
             } else {
+                xSemaphoreTake(g_wifi_context.mutex, portMAX_DELAY);
                 g_wifi_context.info.state = WIFI_STATE_CONNECTION_FAILED;
+                xSemaphoreGive(g_wifi_context.mutex);
+
                 notify_state_change(WIFI_STATE_CONNECTION_FAILED);
                 xEventGroupSetBits(g_wifi_context.event_group, WIFI_FAIL_BIT);
             }
@@ -670,7 +704,8 @@ static void ip_event_handler(void* arg, esp_event_base_t event_base,
 
         xSemaphoreTake(g_wifi_context.mutex, portMAX_DELAY);
 
-        sprintf(g_wifi_context.info.ip_address, IPSTR, IP2STR(&event->ip_info.ip));
+        snprintf(g_wifi_context.info.ip_address, sizeof(g_wifi_context.info.ip_address),
+                 IPSTR, IP2STR(&event->ip_info.ip));
         g_wifi_context.info.is_connected = true;
         g_wifi_context.info.state = WIFI_STATE_CONNECTED;
         g_wifi_context.retry_count = 0;
