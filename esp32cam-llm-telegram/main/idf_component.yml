@@ -1,0 +1,5 @@
+dependencies:
+  espressif/esp32-camera: "^2.0.0"
+  espressif/json: "^1.0.0"
+  idf:
+    version: ">=5.0"
