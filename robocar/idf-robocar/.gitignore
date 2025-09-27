@@ -1,0 +1,26 @@
+# ESP-IDF build artifacts
+build/
+sdkconfig
+sdkconfig.old
+
+# WiFi credentials (security)
+wifi_config.h
+*_credentials.h
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Python
+__pycache__/
+*.pyc
+.env
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
