@@ -86,55 +86,55 @@ check-idf:
 
 build-main: check-idf
 	@echo "$(BLUE)Building main controller (ESP-IDF)...$(NC)"
-	@cd idf-robocar && $(MAKE) build
+	@cd ../robocar-main && $(MAKE) build
 
 build-cam: check-idf
 	@echo "$(BLUE)Building camera module (ESP-IDF)...$(NC)"
-	@cd esp32-cam-idf && $(MAKE) build
+	@cd ../robocar-camera && $(MAKE) build
 
 build-all: build-main build-cam
 
 flash-main: check-idf
 	@echo "$(BLUE)Flashing main controller (ESP-IDF)...$(NC)"
-	@cd idf-robocar && $(MAKE) flash PORT=$(MAIN_PORT)
+	@cd ../robocar-main && $(MAKE) flash PORT=$(MAIN_PORT)
 
 flash-cam: check-idf
 	@echo "$(BLUE)Flashing camera module (ESP-IDF)...$(NC)"
 	@echo "$(YELLOW)Make sure GPIO0 is connected to GND for programming$(NC)"
-	@cd esp32-cam-idf && $(MAKE) flash PORT=$(CAM_PORT)
+	@cd ../robocar-camera && $(MAKE) flash PORT=$(CAM_PORT)
 
 monitor-main: check-idf
 	@echo "$(BLUE)Monitoring main controller...$(NC)"
 	@echo "$(YELLOW)Press Ctrl+] to exit monitor$(NC)"
-	@cd idf-robocar && $(MAKE) monitor PORT=$(MAIN_PORT)
+	@cd ../robocar-main && $(MAKE) monitor PORT=$(MAIN_PORT)
 
 monitor-cam: check-idf
 	@echo "$(BLUE)Monitoring camera module...$(NC)"
 	@echo "$(YELLOW)Press Ctrl+] to exit monitor$(NC)"
-	@cd esp32-cam-idf && $(MAKE) monitor PORT=$(CAM_PORT)
+	@cd ../robocar-camera && $(MAKE) monitor PORT=$(CAM_PORT)
 
 clean-main: check-idf
-	@cd idf-robocar && $(MAKE) clean
+	@cd ../robocar-main && $(MAKE) clean
 
 clean-cam: check-idf
-	@cd esp32-cam-idf && $(MAKE) clean
+	@cd ../robocar-camera && $(MAKE) clean
 
 clean-all: clean-main clean-cam
 
 credentials:
 	@echo "$(BLUE)Setting up camera credentials...$(NC)"
-	@cd esp32-cam-idf && $(MAKE) credentials
+	@cd ../robocar-camera && $(MAKE) credentials
 
 develop-main: build-main
 	@echo "$(BLUE)Starting development workflow for main controller...$(NC)"
 	@echo "$(YELLOW)This will flash and monitor. Press Ctrl+] to exit monitor.$(NC)"
-	@cd idf-robocar && $(MAKE) flash-monitor PORT=$(MAIN_PORT)
+	@cd ../robocar-main && $(MAKE) flash-monitor PORT=$(MAIN_PORT)
 
 develop-cam: build-cam
 	@echo "$(BLUE)Starting development workflow for camera module...$(NC)"
 	@echo "$(YELLOW)Make sure GPIO0 is connected to GND for programming$(NC)"
 	@echo "$(YELLOW)This will flash and monitor. Press Ctrl+] to exit monitor.$(NC)"
-	@cd esp32-cam-idf && $(MAKE) flash-monitor PORT=$(CAM_PORT)
+	@cd ../robocar-camera && $(MAKE) flash-monitor PORT=$(CAM_PORT)
 
 # === AI Backend Targets ===
 
@@ -285,8 +285,9 @@ info:
 	@echo "  ESP-IDF Status:  $(shell [ -d '$(IDF_PATH)' ] && echo 'Available' || echo 'Not found')"
 	@echo ""
 	@echo "$(GREEN)Project Structure:$(NC)"
-	@echo "  idf-robocar/     - Main controller with motor/LED/servo control"
-	@echo "  esp32-cam-idf/   - AI vision system with Claude API integration"
+	@echo "  robocar-main/    - Main controller with motor/LED/servo control"
+	@echo "  robocar-camera/  - AI vision system with Claude API integration"
+	@echo "  robocar-simulation/ - Python physics simulation with visualization"
 	@echo ""
 	@echo "$(GREEN)Features:$(NC)"
 	@echo "  - AI-powered autonomous navigation using Claude API"
@@ -299,12 +300,12 @@ info:
 # === Simulation Targets ===
 
 check-sim:
-	@if [ ! -d "simulation" ]; then \
+	@if [ ! -d "../robocar-simulation" ]; then \
 		echo "$(RED)Error: Simulation directory not found$(NC)"; \
 		echo "$(YELLOW)The simulation environment needs to be set up first$(NC)"; \
 		exit 1; \
 	fi
-	@if [ ! -f "simulation/Makefile" ]; then \
+	@if [ ! -f "../robocar-simulation/Makefile" ]; then \
 		echo "$(RED)Error: Simulation Makefile not found$(NC)"; \
 		echo "$(YELLOW)Run the setup process to create simulation environment$(NC)"; \
 		exit 1; \
@@ -313,17 +314,17 @@ check-sim:
 sim-start: check-sim
 	@echo "$(BLUE)Starting ESP32 Robot Car Simulation...$(NC)"
 	@echo "$(YELLOW)Launching with Swift 3D visualization$(NC)"
-	@cd simulation && $(MAKE) run
+	@cd ../robocar-simulation && $(MAKE) run
 
 sim-headless: check-sim
 	@echo "$(BLUE)Starting headless simulation...$(NC)"
 	@echo "$(YELLOW)Running without visualization for performance$(NC)"
-	@cd simulation && $(MAKE) run-headless
+	@cd ../robocar-simulation && $(MAKE) run-headless
 
 sim-demo: check-sim
 	@echo "$(BLUE)Starting demo simulation...$(NC)"
 	@echo "$(YELLOW)Running autonomous movement patterns$(NC)"
-	@cd simulation && $(MAKE) run-demo
+	@cd ../robocar-simulation && $(MAKE) run-demo
 
 sim-connect: check-sim
 	@if [ -z "$(SERIAL_PORT)" ]; then \
@@ -333,45 +334,45 @@ sim-connect: check-sim
 	fi
 	@echo "$(BLUE)Connecting simulation to ESP32 hardware...$(NC)"
 	@echo "$(YELLOW)Serial port: $(SERIAL_PORT)$(NC)"
-	@cd simulation && $(MAKE) run-serial SERIAL_PORT=$(SERIAL_PORT)
+	@cd ../robocar-simulation && $(MAKE) run-serial SERIAL_PORT=$(SERIAL_PORT)
 
 sim-test: check-sim
 	@echo "$(BLUE)Running simulation test suite...$(NC)"
-	@cd simulation && $(MAKE) test
+	@cd ../robocar-simulation && $(MAKE) test
 
 demo-visual: check-sim
 	@echo "$(BLUE)Starting visual demo with GUI window...$(NC)"
 	@echo "$(YELLOW)Watch the robot move in the 3D visualization window!$(NC)"
-	@cd simulation && $(MAKE) demo-visual
+	@cd ../robocar-simulation && $(MAKE) demo-visual
 
 demo-browser: check-sim
 	@echo "$(BLUE)Starting demo with browser interface...$(NC)"
 	@echo "$(YELLOW)Access visualization at: http://localhost:52000$(NC)"
-	@cd simulation && $(MAKE) demo-browser
+	@cd ../robocar-simulation && $(MAKE) demo-browser
 
 sim-install:
 	@echo "$(BLUE)Installing simulation dependencies...$(NC)"
-	@if [ ! -d "simulation" ]; then \
+	@if [ ! -d "../robocar-simulation" ]; then \
 		echo "$(YELLOW)Simulation directory not found - please ensure simulation is set up$(NC)"; \
 		exit 1; \
 	fi
-	@cd simulation && $(MAKE) install
+	@cd ../robocar-simulation && $(MAKE) install
 
 sim-status:
 	@echo "$(BLUE)Checking simulation status...$(NC)"
-	@if [ ! -d "simulation" ]; then \
+	@if [ ! -d "../robocar-simulation" ]; then \
 		echo "$(RED)Simulation not available$(NC)"; \
 		exit 1; \
 	fi
-	@cd simulation && $(MAKE) status
+	@cd ../robocar-simulation && $(MAKE) status
 
 sim-info:
 	@echo "$(BLUE)Simulation system information...$(NC)"
-	@if [ ! -d "simulation" ]; then \
+	@if [ ! -d "../robocar-simulation" ]; then \
 		echo "$(RED)Simulation not available$(NC)"; \
 		echo "$(YELLOW)Please set up the simulation environment first$(NC)"; \
 	else \
-		cd simulation && $(MAKE) info; \
+		cd ../robocar-simulation && $(MAKE) info; \
 	fi
 
 .PHONY: help check-idf build-main build-cam build-all flash-main flash-cam
