@@ -1,0 +1,6 @@
+# Name,   Type, SubType, Offset,  Size, Flags
+# Note: Firmware partition size is reduced to make room for NVS and other partitions
+nvs,      data, nvs,     0x9000,  0x5000,
+otadata,  data, ota,     0xe000,  0x2000,
+factory,  app,  factory, 0x10000, 1792K,
+storage,  data, spiffs,  0x1D0000, 128K,

@@ -91,7 +91,16 @@ class ESP32CommunicationBridge:
             MessageType.LED: self._handle_led_command,
             MessageType.STOP: self._handle_stop_command,
             MessageType.STATUS: self._handle_status_request,
+            MessageType.AI_COMMAND: self._handle_ai_command,
         }
+        
+        # Initialize AI command processor if configured
+        self.ai_processor = None
+        self.use_ai_processing = self.config.get('ai_backend', {}).get('enabled', False)
+        
+        if self.use_ai_processing:
+            from ai_command_processor import AICommandProcessor
+            self.ai_processor = AICommandProcessor(config_path)
         
         # State
         self.running = False
@@ -326,6 +335,71 @@ class ESP32CommunicationBridge:
             status_data = struct.pack('fff', state.x, state.y, state.theta)
             response = I2CMessage(MessageType.STATUS, status_data)
             self.serial_connection.write(response.to_bytes())
+    
+    async def _handle_ai_command(self, message: I2CMessage):
+        """Handle AI command from ESP32"""
+        if not self.use_ai_processing or not self.ai_processor:
+            print("AI processing not enabled")
+            return
+        
+        try:
+            # Decode AI command text
+            command_text = message.data.decode('utf-8').strip()
+            print(f"AI command received: {command_text}")
+            
+            # Get current robot context
+            state = self.robot.get_state()
+            encoder_pos = self.robot.get_encoder_positions()
+            
+            from ai_command_processor import RobotContext
+            context = RobotContext(
+                position=(state.x, state.y, state.theta),
+                velocity=(state.v, state.omega),
+                sensor_data={
+                    'ultrasonic_distance': state.ultrasonic_distance,
+                    'imu_accel': state.imu_accel.tolist(),
+                    'imu_gyro': state.imu_gyro.tolist(),
+                },
+                camera_frame=state.camera_frame,
+                encoder_positions=encoder_pos,
+                last_commands=[cmd.action for cmd in self.ai_processor.command_history[-3:]]
+            )
+            
+            # Process AI command
+            ai_command = await self.ai_processor.process_command(command_text, context)
+            
+            # Execute command on robot
+            from ai_command_processor import execute_ai_command
+            success = execute_ai_command(ai_command, self.robot)
+            
+            # Add to history
+            self.ai_processor.add_to_history(ai_command)
+            
+            # Send response back to ESP32
+            if self.serial_connection:
+                response_data = {
+                    'success': success,
+                    'action': ai_command.action,
+                    'confidence': ai_command.confidence,
+                    'reasoning': ai_command.reasoning[:100]  # Truncate for transmission
+                }
+                response_json = json.dumps(response_data)
+                response_bytes = response_json.encode('utf-8')[:254]  # Limit message size
+                
+                response_msg = I2CMessage(MessageType.AI_COMMAND, response_bytes)
+                self.serial_connection.write(response_msg.to_bytes())
+            
+            print(f"AI command executed: {ai_command.action} (confidence: {ai_command.confidence:.2f})")
+            
+        except Exception as e:
+            print(f"AI command processing failed: {e}")
+            
+            # Send error response
+            if self.serial_connection:
+                error_data = json.dumps({'success': False, 'error': str(e)})
+                error_bytes = error_data.encode('utf-8')[:254]
+                error_msg = I2CMessage(MessageType.AI_COMMAND, error_bytes)
+                self.serial_connection.write(error_msg.to_bytes())
     
     def send_sensor_data_to_esp32(self):
         """Send sensor data to ESP32"""

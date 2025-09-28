@@ -2,6 +2,44 @@
 
 A comprehensive simulation environment for the ESP32-based robot car using Robotics Toolbox for Python with Swift visualizer. This simulation provides accurate physics modeling, real-time visualization, and seamless communication with the actual ESP32 hardware.
 
+## Python Version Requirements
+
+**Important:** This simulation requires Python 3.11 due to Swift-sim compatibility issues.
+
+- ✅ **Python 3.11**: Fully supported and configured
+- ⚠️ **Python 3.12/3.13**: Swift-sim has asyncio compatibility issues with visual/browser modes
+- ❌ **Python 3.9/3.10**: Not tested, may have package conflicts
+
+The project is now configured to use `uv` for package management with Python 3.11. If you don't have Python 3.11 installed:
+
+```bash
+# macOS with Homebrew
+brew install python@3.11
+
+# Install uv package manager
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Setup simulation environment
+cd simulation
+python setup_uv.py
+```
+
+### Migrating from requirements.txt
+If you're upgrading from a previous pip-based setup:
+
+```bash
+# Run the migration script (handles cleanup and setup)
+python migrate_to_uv.py
+```
+
+### Swift-sim Compatibility Notes
+
+Swift-sim (v1.1.0) has known asyncio compatibility issues with Python 3.13+. The simulation includes automatic fallback logic:
+
+- **Visual/Browser modes**: Will timeout and fallback to headless mode
+- **Headless mode**: Works reliably across all Python versions
+- **Demo modes**: All work correctly with proper timeout and exit handling
+
 ## Features
 
 ### High-Fidelity Robot Simulation
@@ -9,6 +47,7 @@ A comprehensive simulation environment for the ESP32-based robot car using Robot
 - **DC Motor Dynamics**: Electrical and mechanical motor modeling with realistic parameters
 - **Sensor Simulation**: IMU, ultrasonic, and camera sensor modeling with noise characteristics
 - **Physics Integration**: Real-time physics simulation with configurable timestep
+- **ESP32 Feature Simulation**: Complete WiFi manager and OTA functionality matching ESP-IDF behavior
 
 ### 3D Visualization
 - **Swift Backend**: Professional-grade 3D visualization using Swift simulator
@@ -27,63 +66,102 @@ A comprehensive simulation environment for the ESP32-based robot car using Robot
 - **Protocol Compatibility**: Matches exact I2C message format used in hardware
 - **Timing Accuracy**: Microsecond-precision timing for real-time control
 
+### ESP32 Feature Simulation
+- **WiFi Manager**: Complete WiFi connection simulation with state management, network scanning, and auto-reconnection
+- **OTA Updates**: Full OTA simulation with dual-partition system, firmware download, and verification
+- **Partition Management**: ESP32 partition table simulation (factory, ota_0, ota_1) with boot management
+- **ESP-IDF Compliance**: Based on actual ESP-IDF host application capabilities and APIs
+
 ## Installation
 
 ### Prerequisites
+**Python 3.11+ and uv package manager required**
 ```bash
-# Python 3.8+ required
+# Check Python version (3.11+ required)
 python --version
 
-# Install core dependencies
-pip install -r requirements.txt
+# Install uv package manager (if not already installed)
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-### Swift Visualizer Setup
+### Quick Setup with uv
 ```bash
-# Install Robotics Toolbox and Swift
-pip install robotics-toolbox-python swift-sim
+# Navigate to simulation directory
+cd robocar/simulation
 
-# Additional visualization dependencies
-pip install trimesh open3d pyvista
+# One-command setup: creates virtual environment and installs all dependencies
+python setup_uv.py
+
+# Alternative manual setup
+uv venv --python 3.11
+uv sync --extra dev
 ```
 
-### Optional Dependencies
+### Manual Installation (if needed)
 ```bash
-# For advanced physics simulation
-pip install pymunk
+# Create virtual environment with Python 3.11
+uv venv --python 3.11
 
-# For camera simulation
-pip install opencv-python
+# Install core dependencies from pyproject.toml
+uv sync
 
-# For communication protocols
-pip install websockets asyncio-mqtt pyserial
+# Install development dependencies (testing, linting, type checking)
+uv sync --extra dev
+
+# Install GPU acceleration (optional, for enhanced Genesis performance)
+uv sync --extra gpu
 ```
 
 ## Quick Start
 
 ### 1. Basic Simulation
 ```bash
-cd robocar/simulation/src
-python main.py
+cd robocar/simulation
+
+# Run with uv (recommended)
+uv run python src/main.py
+
+# Or activate virtual environment first
+source .venv/bin/activate
+python src/main.py
 ```
 
 ### 2. With ESP32 Hardware
 ```bash
 # Connect ESP32 via USB serial
-python main.py --serial /dev/ttyUSB0
+uv run python src/main.py --serial /dev/ttyUSB0
 
 # On Windows
-python main.py --serial COM3
+uv run python src/main.py --serial COM3
 ```
 
 ### 3. Headless Mode (No Visualization)
 ```bash
-python main.py --no-viz
+uv run python src/main.py --no-viz
 ```
 
 ### 4. Demo Mode
 ```bash
-python main.py --demo-only
+uv run python src/main.py --demo-only
+```
+
+### 5. Development Commands
+```bash
+# Run tests
+uv run pytest
+
+# Run linting and formatting
+uv run ruff check .
+uv run ruff format .
+
+# Type checking
+uv run mypy .
+
+# Install new dependencies
+uv add <package-name>
+
+# Install development dependencies
+uv add --dev <package-name>
 ```
 
 ## Configuration
@@ -215,20 +293,34 @@ await bridge.start(serial_port="/dev/ttyUSB0")
 
 ### Run Test Suite
 ```bash
-cd simulation/tests
-python -m pytest test_robot_model.py -v
+cd robocar/simulation
+
+# Run all tests with uv
+uv run pytest -v
+
+# Run specific test file
+uv run pytest tests/test_robot_model.py -v
+
+# Run with coverage
+uv run pytest --cov=src --cov-report=html
 ```
 
 ### Validation Tests
 ```bash
 # Test motor dynamics
-python -m pytest test_robot_model.py::TestDCMotor -v
+uv run pytest tests/test_robot_model.py::TestDCMotor -v
 
 # Test kinematics accuracy
-python -m pytest test_robot_model.py::TestDifferentialDriveRobot -v
+uv run pytest tests/test_robot_model.py::TestDifferentialDriveRobot -v
 
 # Test simulation stability
-python -m pytest test_robot_model.py::TestSimulationAccuracy -v
+uv run pytest tests/test_robot_model.py::TestSimulationAccuracy -v
+
+# Run integration tests
+uv run pytest -m integration
+
+# Skip slow tests
+uv run pytest -m "not slow"
 ```
 
 ### Hardware Validation
@@ -236,10 +328,25 @@ Compare simulation results with real hardware:
 
 ```bash
 # Run simulation with data logging
-python main.py --serial /dev/ttyUSB0 --log validation_data.json
+uv run python src/main.py --serial /dev/ttyUSB0 --log validation_data.json
 
 # Analyze accuracy
-python validate_simulation.py validation_data.json
+uv run python validate_simulation.py validation_data.json
+```
+
+### Code Quality
+```bash
+# Lint code
+uv run ruff check .
+
+# Format code
+uv run ruff format .
+
+# Type checking
+uv run mypy .
+
+# Run all quality checks
+uv run ruff check . && uv run ruff format . && uv run mypy . && uv run pytest
 ```
 
 ## Accuracy and Performance
@@ -267,13 +374,16 @@ Comparison with real ESP32 robot car:
 
 ### Common Issues
 
-**Swift not starting**:
+**Genesis not starting**:
 ```bash
-# Check dependencies
-pip install robotics-toolbox-python swift-sim
+# Check dependencies installation
+uv sync
 
-# Verify OpenGL support
-python -c "import swift; print('Swift available')"
+# Verify Genesis availability
+uv run python -c "import genesis; print('Genesis available')"
+
+# Check PyTorch installation
+uv run python -c "import torch; print(f'PyTorch {torch.__version__} available')"
 ```
 
 **Serial connection failed**:
@@ -339,15 +449,24 @@ class MessageType(Enum):
 Add simulation targets to main Makefile:
 
 ```makefile
-# Simulation targets
+# Simulation targets with uv
 sim-start:
-	cd simulation/src && python main.py
+	cd simulation && uv run python src/main.py
 
 sim-test:
-	cd simulation/tests && python -m pytest -v
+	cd simulation && uv run pytest -v
 
 sim-validate:
-	cd simulation/src && python main.py --serial $(SERIAL_PORT)
+	cd simulation && uv run python src/main.py --serial $(SERIAL_PORT)
+
+sim-setup:
+	cd simulation && python setup_uv.py
+
+sim-lint:
+	cd simulation && uv run ruff check . && uv run ruff format .
+
+sim-type-check:
+	cd simulation && uv run mypy .
 ```
 
 ## Contributing

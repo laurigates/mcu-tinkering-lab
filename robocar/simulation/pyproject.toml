@@ -1,0 +1,207 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[project]
+name = "esp32-robot-simulation"
+version = "1.0.0"
+description = "ESP32 Robot Car Simulation with Genesis Physics Framework"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "ESP32 Robot Team", email = "robot@example.com"}
+]
+maintainers = [
+    {name = "ESP32 Robot Team", email = "robot@example.com"}
+]
+keywords = ["esp32", "robotics", "simulation", "genesis", "physics"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Topic :: System :: Hardware",
+]
+requires-python = ">=3.11"
+dependencies = [
+    # Core simulation framework - fallback to matplotlib for visualization
+    "spatialmath-python>=1.1.0",
+    # "genesis-world>=0.2.0",  # Disabled due to Python 3.11 compatibility issues
+    # Scientific computing
+    "numpy>=1.21.0",
+    "scipy>=1.7.0",
+    "matplotlib>=3.5.0",
+    "pandas>=1.3.0",
+    # Computer vision and image processing
+    "opencv-python>=4.5.0",
+    "Pillow>=8.3.0",
+    # Communication protocols
+    "websockets>=10.0",
+    "asyncio-mqtt>=0.11.0",
+    "pyserial>=3.5",
+    # 3D graphics and visualization
+    "trimesh>=3.15.0",
+    # Physics simulation
+    "pymunk>=6.2.0",
+    # Configuration and utilities
+    "pyyaml>=6.0",
+    "toml>=0.10.2",
+    "click>=8.0.0",
+    # PyTorch (required by Genesis) - disabled for now
+    # "torch>=2.0.0",
+    "crc8>=0.2.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    # Testing framework
+    "pytest>=6.2.0",
+    "pytest-asyncio>=0.18.0",
+    "pytest-cov>=4.0.0",
+    
+    # Code quality
+    "ruff>=0.1.0",
+    "mypy>=1.5.0",
+    "types-PyYAML",
+    "types-toml",
+    
+    # Documentation
+    "sphinx>=7.0.0",
+    "sphinx-rtd-theme>=1.3.0",
+]
+gpu = [
+    # GPU-accelerated PyTorch for enhanced Genesis performance
+    "torch[cuda]>=2.0.0",
+]
+visualization = [
+    # Additional visualization dependencies (optional)
+    # Note: open3d and pyvista may have compatibility issues with newer Python versions
+]
+
+[project.urls]
+Homepage = "https://github.com/esp32-robot/simulation"
+Documentation = "https://esp32-robot-simulation.readthedocs.io/"
+Repository = "https://github.com/esp32-robot/simulation.git"
+"Bug Tracker" = "https://github.com/esp32-robot/simulation/issues"
+
+[project.scripts]
+esp32-sim = "main:main"
+esp32-robot-sim = "main:main"
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=6.2.0",
+    "pytest-asyncio>=0.18.0", 
+    "pytest-cov>=4.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.5.0",
+    "types-PyYAML",
+    "types-toml",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+extend-exclude = ["migrations", "tests/fixtures"]
+
+[tool.ruff.lint]
+# Enable pycodestyle errors/warnings, pyflakes, isort, and other useful rules
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
+    "C4", # flake8-comprehensions
+    "UP", # pyupgrade
+]
+ignore = [
+    "E501",  # line too long, handled by formatter
+    "B008",  # do not perform function calls in argument defaults
+    "W191",  # indentation contains tabs
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+"tests/**/*" = ["S101", "ARG", "FBT"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["robot_model", "communication_bridge", "genesis_visualizer"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+[[tool.mypy.overrides]]
+module = [
+    "genesis.*",
+    "spatialmath.*",
+    "pymunk.*",
+    "cv2.*",
+    "websockets.*",
+    "serial.*",
+    "trimesh.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -q --strict-markers --strict-config"
+testpaths = ["tests", "../tests"]
+filterwarnings = [
+    "error",
+    "ignore::UserWarning",
+    "ignore::DeprecationWarning",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "hardware: marks tests requiring hardware",
+]
+
+[tool.coverage.run]
+source = ["src"]
+omit = [
+    "*/tests/*",
+    "*/test_*.py",
+    "*/__init__.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]

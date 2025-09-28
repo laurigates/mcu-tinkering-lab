@@ -19,7 +19,7 @@ sys.path.append(str(Path(__file__).parent))
 
 from robot_model import DifferentialDriveRobot
 from communication_bridge import ESP32CommunicationBridge
-from swift_visualizer import SwiftSimulation, HAS_SWIFT
+from genesis_visualizer import GenesisSimulation, SwiftSimulation, HAS_GENESIS
 
 
 class SimulationManager:
@@ -62,14 +62,36 @@ class SimulationManager:
             self.bridge = ESP32CommunicationBridge(self.config_path, self.robot)
             print("✓ Communication bridge initialized")
         
-        # Initialize Swift visualizer
+        # Initialize Genesis visualizer  
         if self.enable_visualizer:
-            if HAS_SWIFT:
-                self.swift_sim = SwiftSimulation(self.config_path, viz_mode=self.viz_mode)
-                print(f"✓ Swift visualizer initialized (mode: {self.viz_mode})")
+            if HAS_GENESIS:
+                import threading
+                import time
+                
+                # Initialize Genesis simulation - much simpler than Swift
+                try:
+                    self.swift_sim = GenesisSimulation(self.config_path, viz_mode=self.viz_mode)
+                    print(f"✓ Genesis visualizer initialized (mode: {self.viz_mode})")
+                except Exception as e:
+                    print(f"⚠ Genesis visualizer failed to initialize: {e}")
+                    print("⚠ Falling back to headless mode")
+                    try:
+                        self.swift_sim = GenesisSimulation(self.config_path, viz_mode='headless')
+                        print("✓ Genesis visualizer initialized (headless fallback)")
+                    except Exception as e2:
+                        print(f"⚠ Headless fallback also failed: {e2}")
+                        print("⚠ Continuing without visualization")
+                        self.enable_visualizer = False
             else:
-                print("⚠ Swift visualizer not available - continuing without visualization")
-                self.enable_visualizer = False
+                # Genesis not available, but we can still use matplotlib fallback
+                print("ℹ Using matplotlib fallback for visualization")
+                try:
+                    self.swift_sim = GenesisSimulation(self.config_path, viz_mode=self.viz_mode)
+                    print(f"✓ Matplotlib visualizer initialized (mode: {self.viz_mode})")
+                except Exception as e:
+                    print(f"⚠ Matplotlib fallback failed: {e}")
+                    print("⚠ Continuing without visualization")
+                    self.enable_visualizer = False
         
         print("Initialization complete!")
     
@@ -88,15 +110,30 @@ class SimulationManager:
             tasks.append(bridge_task)
             print("✓ Communication bridge started")
         
-        # Start Swift visualization
+        # Start Genesis visualization - handle GUI on main thread
         if self.swift_sim:
-            # Run Swift simulation in separate thread since it's not async
-            swift_thread = threading.Thread(
-                target=self._run_swift_simulation,
-                daemon=True
-            )
-            swift_thread.start()
-            print("✓ Swift visualization started")
+            # Check if using matplotlib fallback
+            if hasattr(self.swift_sim, 'visualizer') and hasattr(self.swift_sim.visualizer, 'using_fallback') and self.swift_sim.visualizer.using_fallback:
+                # For matplotlib, start visualization on main thread
+                if self.swift_sim.visualizer.fallback_viz.enabled:
+                    print("Starting matplotlib visualization on main thread...")
+                    self.swift_sim.visualizer.fallback_viz.start_update_loop()
+                    print("✓ Matplotlib visualization started on main thread")
+                # Run simulation logic in background thread
+                simulation_thread = threading.Thread(
+                    target=self._run_background_simulation,
+                    daemon=True
+                )
+                simulation_thread.start()
+                print("✓ Background simulation started")
+            else:
+                # For Genesis, run in separate thread since it's not async
+                genesis_thread = threading.Thread(
+                    target=self._run_genesis_simulation,
+                    daemon=True
+                )
+                genesis_thread.start()
+                print("✓ Genesis visualization started")
         
         # Start demo movement if no bridge
         if not self.bridge:
@@ -104,15 +141,40 @@ class SimulationManager:
             tasks.append(demo_task)
             print("✓ Demo movement started")
         
-        # Wait for all tasks
-        if tasks:
-            try:
-                await asyncio.gather(*tasks)
-            except asyncio.CancelledError:
-                pass
+        # Handle different execution modes
+        if self.swift_sim and hasattr(self.swift_sim, 'visualizer') and hasattr(self.swift_sim.visualizer, 'using_fallback') and self.swift_sim.visualizer.using_fallback:
+            # For matplotlib mode, keep main thread alive for GUI
+            if self.swift_sim.visualizer.fallback_viz.enabled:
+                print("Matplotlib GUI mode: keeping main thread active...")
+                try:
+                    # Keep the main thread alive for matplotlib GUI
+                    while self.running:
+                        import matplotlib.pyplot as plt
+                        plt.pause(0.1)  # Process GUI events
+                        if tasks:
+                            # Check if any tasks are done
+                            done = [task for task in tasks if task.done()]
+                            if done:
+                                break
+                except KeyboardInterrupt:
+                    print("\nInterrupted by user")
+            else:
+                # Headless matplotlib mode, run async tasks
+                if tasks:
+                    try:
+                        await asyncio.gather(*tasks)
+                    except asyncio.CancelledError:
+                        pass
+        else:
+            # Genesis mode or no visualization, run async tasks
+            if tasks:
+                try:
+                    await asyncio.gather(*tasks)
+                except asyncio.CancelledError:
+                    pass
     
-    def _run_swift_simulation(self):
-        """Run Swift simulation in separate thread"""
+    def _run_genesis_simulation(self):
+        """Run Genesis simulation in separate thread"""
         try:
             # Set some default commands for demo
             if not self.bridge:
@@ -121,7 +183,35 @@ class SimulationManager:
             # Run for extended duration
             self.swift_sim.run_simulation(duration=300.0)  # 5 minutes
         except Exception as e:
-            print(f"Swift simulation error: {e}")
+            print(f"Genesis simulation error: {e}")
+    
+    def _run_background_simulation(self):
+        """Run simulation logic in background thread (for matplotlib GUI mode)"""
+        try:
+            print("Starting background simulation logic...")
+            
+            # Set some default commands for demo
+            if not self.bridge:
+                self.robot.set_motor_commands(100, 80)  # Slight turn
+            
+            # Simple update loop for robot state
+            start_time = time.time()
+            last_update = start_time
+            duration = 300.0  # 5 minutes
+            
+            while self.running and (time.time() - start_time) < duration:
+                current_time = time.time()
+                dt = current_time - last_update
+                
+                # Update robot simulation
+                if dt > 0.01:  # 100Hz max update rate
+                    self.robot.update(dt)
+                    last_update = current_time
+                
+                time.sleep(0.01)  # Small sleep to prevent busy waiting
+                
+        except Exception as e:
+            print(f"Background simulation error: {e}")
     
     async def _demo_movement(self):
         """Demo movement pattern when no ESP32 is connected"""
@@ -136,9 +226,19 @@ class SimulationManager:
             (0, 0, 1.0),       # Stop
         ]
         
-        while self.running:
+        # For demo mode, run for a limited time (30 seconds total)
+        import time
+        demo_start_time = time.time()
+        demo_duration = 30.0  # Run demo for 30 seconds
+        
+        cycle_count = 0
+        max_cycles = 3  # Run the pattern a few times
+        
+        while self.running and (time.time() - demo_start_time) < demo_duration and cycle_count < max_cycles:
+            print(f"Demo cycle {cycle_count + 1}/{max_cycles}")
+            
             for left_pwm, right_pwm, duration in movement_patterns:
-                if not self.running:
+                if not self.running or (time.time() - demo_start_time) >= demo_duration:
                     break
                 
                 print(f"Setting motors: left={left_pwm}, right={right_pwm}")
@@ -146,8 +246,14 @@ class SimulationManager:
                 
                 await asyncio.sleep(duration)
             
-            # Add some randomness
-            await asyncio.sleep(1.0)
+            cycle_count += 1
+            if cycle_count < max_cycles and self.running:
+                await asyncio.sleep(1.0)  # Brief pause between cycles
+        
+        # Stop the robot and end demo
+        print("Demo complete! Stopping motors...")
+        self.robot.set_motor_commands(0, 0)
+        self.stop()  # Stop the simulation
     
     def stop(self):
         """Stop all simulation components"""
@@ -158,7 +264,11 @@ class SimulationManager:
             self.bridge.stop()
         
         if self.swift_sim:
-            self.swift_sim.visualizer.stop()
+            try:
+                if hasattr(self.swift_sim, 'visualizer') and self.swift_sim.visualizer:
+                    self.swift_sim.visualizer.stop()
+            except Exception as e:
+                print(f"Note: Error stopping visualizer: {e}")
         
         print("Simulation stopped")
     
@@ -176,7 +286,7 @@ class SimulationManager:
 def main():
     """Main function"""
     parser = argparse.ArgumentParser(
-        description="ESP32 Robot Car Simulation with Swift Visualizer",
+        description="ESP32 Robot Car Simulation with Genesis Visualizer",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -220,7 +330,7 @@ Examples:
     parser.add_argument(
         '--no-viz', '--headless',
         action='store_true',
-        help='Run without Swift visualization'
+        help='Run without Genesis visualization'
     )
     
     parser.add_argument(
@@ -260,7 +370,7 @@ Examples:
     
     # Check environment variable first
     import os
-    env_viz_mode = os.getenv('SWIFT_VIZ_MODE', '').lower()
+    env_viz_mode = os.getenv('GENESIS_VIZ_MODE', '').lower()
     if env_viz_mode in ['headless', 'visual', 'browser']:
         viz_mode = env_viz_mode
     
@@ -282,7 +392,7 @@ Examples:
     
     # Print banner
     print("=" * 60)
-    print("ESP32 Robot Car Simulation with Swift Visualizer")
+    print("ESP32 Robot Car Simulation with Genesis Framework")
     print("=" * 60)
     print(f"Configuration: {config_path}")
     print(f"Visualization: {viz_mode.title()} Mode" if viz_mode != 'headless' else "Disabled")
@@ -313,7 +423,7 @@ Examples:
             print('  {"type": "motor_command", "payload": {"left_pwm": 100, "right_pwm": 100}}')
         
         # Print visualization guidance
-        if viz_mode != 'headless' and HAS_SWIFT:
+        if viz_mode != 'headless' and HAS_GENESIS:
             print(f"\n3D Visualization ({viz_mode.title()} Mode):")
             if viz_mode == 'visual':
                 print("- Running with GUI window visualization")
@@ -327,7 +437,7 @@ Examples:
             print("- --visual or --gui: GUI window visualization")
             print("- --browser: Browser-based visualization")
             print("- --viz-mode [headless|visual|browser]: Explicit mode selection")
-            print("- Environment variable: SWIFT_VIZ_MODE=[headless|visual|browser]")
+            print("- Environment variable: GENESIS_VIZ_MODE=[headless|visual|browser]")
         
         # Start simulation
         asyncio.run(sim_manager.start())

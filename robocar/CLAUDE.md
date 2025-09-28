@@ -53,4 +53,8 @@ This project implements a **Clean Architecture** approach with strict separation
 - **AI Vision System**: Camera, AI processing, MQTT logging (ESP32-CAM)
 - **Development Stack**: Ollama AI backend + Mosquitto MQTT broker with mDNS
 - **Communication**: Serial inter-board + MQTT telemetry + AI API integration
+- **Simulation Environment**: Python 3.11-based physics simulation with Swift visualizer
+
+### Simulation Python Requirements
+**Important**: The simulation environment requires Python 3.11 due to Swift-sim compatibility issues. The simulation Makefile is configured to use `python3.11` automatically and includes smart fallback logic for visualization modes.
 

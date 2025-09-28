@@ -1,0 +1,24 @@
+idf_component_register(
+    SRCS
+        "main.c"
+        "telegram_bot.c"
+        "camera_handler.c"
+        "llm_client.c"
+        "motor_controller.c"
+        "vision_interpreter.c"
+        "config_manager.c"
+    INCLUDE_DIRS
+        "."
+    REQUIRES
+        esp_http_client
+        esp_https_server
+        esp_camera
+        nvs_flash
+        esp_wifi
+        json
+        mbedtls
+        esp_timer
+        driver
+    EMBED_FILES
+        "../data/prompts.txt"
+)
