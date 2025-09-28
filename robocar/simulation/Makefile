@@ -1,8 +1,9 @@
 # ESP32 Robot Car Simulation Makefile
 
-# Configuration
-PYTHON := python3
-PIP := pip3
+# Configuration - Use Python 3.11 for Swift-sim compatibility
+# Swift-sim has asyncio issues with Python 3.13+
+PYTHON := python3.11
+PIP := pip3.11
 SRC_DIR := src
 TEST_DIR := tests
 CONFIG_DIR := config

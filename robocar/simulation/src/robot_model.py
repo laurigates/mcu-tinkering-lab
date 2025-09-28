@@ -13,6 +13,12 @@ import yaml
 from pathlib import Path
 import pymunk
 
+from error_handling import (
+    get_error_handler, resilient_operation, ErrorSeverity, ErrorEvent
+)
+from wifi_simulation import WiFiManagerSimulation
+from ota_simulation import OTASimulation
+
 
 @dataclass
 class RobotState:
@@ -296,6 +302,11 @@ class DifferentialDriveRobot:
     
     def __init__(self, config_path: str):
         """Initialize robot model from configuration file"""
+        # Initialize error handling
+        self.error_handler = get_error_handler()
+        self.error_handler.register_component("robot_model")
+        self._register_recovery_strategies()
+        
         self.config = self._load_config(config_path)
         self.state = RobotState()
         
@@ -360,6 +371,77 @@ class DifferentialDriveRobot:
             # Start camera simulation after robot initialization
             self.camera_simulation.start_capture(lambda: self.state)
         
+        # Initialize WiFi simulation
+        self.wifi_simulation = None
+        self.use_wifi_simulation = self.config['simulation'].get('wifi', {}).get('enabled', True)
+        
+        if self.use_wifi_simulation:
+            self.wifi_simulation = WiFiManagerSimulation(config_path)
+            self.wifi_simulation.init()
+            print("Robot: WiFi simulation initialized")
+        
+        # Initialize OTA simulation
+        self.ota_simulation = None
+        self.use_ota_simulation = self.config['simulation'].get('ota', {}).get('enabled', True)
+        
+        if self.use_ota_simulation:
+            self.ota_simulation = OTASimulation(config_path)
+            if self.wifi_simulation:
+                self.ota_simulation.set_wifi_manager(self.wifi_simulation)
+            print("Robot: OTA simulation initialized")
+        
+    def _register_recovery_strategies(self):
+        """Register recovery strategies for robot model errors"""
+        def motor_recovery(error: ErrorEvent) -> bool:
+            """Recovery strategy for motor-related errors"""
+            try:
+                # Reset motor states to safe defaults
+                self.state.motor_left_pwm = 0.0
+                self.state.motor_right_pwm = 0.0
+                
+                # Reset motor internal states if they exist
+                if hasattr(self, 'motor_left'):
+                    self.motor_left.current = 0.0
+                    self.motor_left.angular_velocity = 0.0
+                    self.motor_left.torque = 0.0
+                
+                if hasattr(self, 'motor_right'):
+                    self.motor_right.current = 0.0
+                    self.motor_right.angular_velocity = 0.0
+                    self.motor_right.torque = 0.0
+                
+                return True
+            except Exception:
+                return False
+        
+        def physics_recovery(error: ErrorEvent) -> bool:
+            """Recovery strategy for physics engine errors"""
+            try:
+                # Fall back to simplified kinematics if physics fails
+                if hasattr(self, 'use_physics'):
+                    self.use_physics = False
+                    self.physics_engine = None
+                return True
+            except Exception:
+                return False
+        
+        def sensor_recovery(error: ErrorEvent) -> bool:
+            """Recovery strategy for sensor-related errors"""
+            try:
+                # Reset sensor readings to safe defaults
+                self.state.ultrasonic_distance = 2.0  # 2m default
+                self.state.imu_accel = np.array([0.0, 0.0, -9.81])
+                self.state.imu_gyro = np.zeros(3)
+                return True
+            except Exception:
+                return False
+        
+        # Register strategies (will be called after error_handler is initialized)
+        if hasattr(self, 'error_handler'):
+            self.error_handler.register_recovery_strategy("robot_model", motor_recovery)
+            self.error_handler.register_recovery_strategy("robot_model", physics_recovery)
+            self.error_handler.register_recovery_strategy("robot_model", sensor_recovery)
+
     def _load_config(self, config_path: str) -> Dict:
         """Load configuration from YAML file"""
         with open(config_path, 'r') as f:
@@ -373,13 +455,21 @@ class DifferentialDriveRobot:
     
     def set_motor_commands(self, left_pwm: int, right_pwm: int):
         """Set motor PWM commands"""
-        if self.use_motor_controllers:
-            # Set PWM commands to controllers (they handle the control internally)
-            self.motor_left_controller.set_pwm_command(left_pwm)
-            self.motor_right_controller.set_pwm_command(right_pwm)
-        
-        self.state.motor_left_pwm = np.clip(left_pwm, -255, 255)
-        self.state.motor_right_pwm = np.clip(right_pwm, -255, 255)
+        try:
+            if self.use_motor_controllers:
+                # Set PWM commands to controllers (they handle the control internally)
+                self.motor_left_controller.set_pwm_command(left_pwm)
+                self.motor_right_controller.set_pwm_command(right_pwm)
+            
+            self.state.motor_left_pwm = np.clip(left_pwm, -255, 255)
+            self.state.motor_right_pwm = np.clip(right_pwm, -255, 255)
+            self.error_handler.report_component_success("robot_model")
+        except Exception as e:
+            self.error_handler.handle_error(
+                "robot_model", "motor_command_failed", 
+                f"Failed to set motor commands: {str(e)}", 
+                e, ErrorSeverity.MEDIUM
+            )
     
     def set_velocity_commands(self, left_velocity: float, right_velocity: float):
         """Set motor velocity commands in rad/s (PID mode)"""
@@ -561,24 +651,38 @@ class DifferentialDriveRobot:
     
     def update(self, dt: Optional[float] = None):
         """Update complete robot state"""
-        if dt is None:
-            dt = self.dt
-        
-        # Update motor dynamics
-        self.update_motors(dt)
-        
-        # Update kinematics
-        self.update_kinematics(dt)
-        
-        # Update sensors
-        environment = self.config['simulation']['environment']
-        self.update_sensors(environment)
-        
-        # Update camera frame if camera simulation is enabled
-        if self.use_camera_simulation and self.camera_simulation:
-            latest_frame = self.camera_simulation.get_latest_frame()
-            if latest_frame is not None:
-                self.state.camera_frame = latest_frame
+        try:
+            if dt is None:
+                dt = self.dt
+            
+            # Update motor dynamics
+            self.update_motors(dt)
+            
+            # Update kinematics
+            self.update_kinematics(dt)
+            
+            # Update sensors
+            environment = self.config['simulation']['environment']
+            self.update_sensors(environment)
+            
+            # Update camera frame if camera simulation is enabled
+            if self.use_camera_simulation and self.camera_simulation:
+                latest_frame = self.camera_simulation.get_latest_frame()
+                if latest_frame is not None:
+                    self.state.camera_frame = latest_frame
+            
+            self.error_handler.report_component_success("robot_model")
+            
+        except Exception as e:
+            handled = self.error_handler.handle_error(
+                "robot_model", "update_failed", 
+                f"Robot update failed: {str(e)}", 
+                e, ErrorSeverity.HIGH
+            )
+            if not handled:
+                # Emergency stop if update fails critically
+                self.state.motor_left_pwm = 0.0
+                self.state.motor_right_pwm = 0.0
     
     def get_state(self) -> RobotState:
         """Get current robot state"""

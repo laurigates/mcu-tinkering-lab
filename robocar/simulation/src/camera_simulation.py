@@ -17,6 +17,9 @@ from dataclasses import dataclass
 from spatialmath import SE3
 
 from robot_model import RobotState
+from error_handling import (
+    get_error_handler, ErrorSeverity
+)
 
 
 @dataclass
@@ -36,6 +39,11 @@ class CameraSimulation:
     """
     
     def __init__(self, config_path: str):
+        # Initialize error handling
+        self.error_handler = get_error_handler()
+        self.error_handler.register_component("camera_simulation")
+        self._register_recovery_strategies()
+        
         self.config = self._load_config(config_path)
         
         # Extract camera parameters from both robot and simulation configs
@@ -82,6 +90,47 @@ class CameraSimulation:
         self.capture_thread: Optional[threading.Thread] = None
         self.last_frame_time = 0
         
+    def _register_recovery_strategies(self):
+        """Register recovery strategies for camera simulation errors"""
+        def camera_recovery(error) -> bool:
+            """Recovery strategy for camera-related errors"""
+            try:
+                # Stop and restart camera capture
+                if hasattr(self, 'is_running') and self.is_running:
+                    self.stop_capture()
+                    time.sleep(0.1)  # Brief pause
+                    # Camera will be restarted by next frame request
+                
+                # Reset current frame to a default black frame
+                if hasattr(self, 'camera_config'):
+                    width, height = self.camera_config.resolution
+                    default_frame = np.zeros((height, width, 3), dtype=np.uint8)
+                    with self.frame_lock if hasattr(self, 'frame_lock') else threading.Lock():
+                        self.current_frame = default_frame
+                
+                return True
+            except Exception:
+                return False
+        
+        def rendering_recovery(error) -> bool:
+            """Recovery strategy for rendering errors"""
+            try:
+                # Fallback to simpler rendering
+                if hasattr(self, 'camera_config'):
+                    width, height = self.camera_config.resolution
+                    # Create a simple gradient frame as fallback
+                    fallback_frame = np.ones((height, width, 3), dtype=np.uint8) * 128
+                    with self.frame_lock if hasattr(self, 'frame_lock') else threading.Lock():
+                        self.current_frame = fallback_frame
+                return True
+            except Exception:
+                return False
+        
+        # Register strategies
+        if hasattr(self, 'error_handler'):
+            self.error_handler.register_recovery_strategy("camera_simulation", camera_recovery)
+            self.error_handler.register_recovery_strategy("camera_simulation", rendering_recovery)
+
     def _load_config(self, config_path: str) -> Dict[str, Any]:
         """Load configuration from YAML file"""
         config_file = Path(config_path)

@@ -107,6 +107,25 @@ simulation:
     noise_level: 0.02
     compression_quality: 85
   
+  # WiFi simulation configuration
+  wifi:
+    enabled: true
+    auto_connect: true
+    default_ssid: "ESP32-RoboCar"
+    default_password: "robocar123"
+    connection_stability_threshold: 30.0  # seconds for OTA readiness
+    max_retry_attempts: 3
+    retry_delay_ms: 5000
+    power_save_mode: true
+  
+  # OTA simulation configuration  
+  ota:
+    enabled: true
+    simulate_download_speed: 50000  # bytes/s (50KB/s)
+    verification_delay: 1.0  # seconds
+    failure_probability: 0.05  # 5% chance of verification failure
+    partition_size: 1572864  # 1.5MB (0x180000)
+  
   # Motor control configuration
   motor_control:
     enabled: true
