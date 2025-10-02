@@ -16,7 +16,10 @@ MAGENTA = \033[0;35m
 NC = \033[0m # No Color
 
 # Project directories
-ROBOCAR_DIR = robocar
+ROBOCAR_DOCS_DIR = packages/esp32-projects/robocar-docs
+ROBOCAR_MAIN_DIR = packages/esp32-projects/robocar-main
+ROBOCAR_CAMERA_DIR = packages/esp32-projects/robocar-camera
+ROBOCAR_SIMULATION_DIR = packages/esp32-projects/robocar-simulation
 ESP32_PACKAGES_DIR = packages/esp32-projects
 ARDUINO_PACKAGES_DIR = packages/arduino-projects
 STM32_PACKAGES_DIR = packages/stm32-projects
@@ -24,7 +27,7 @@ STM32_PACKAGES_DIR = packages/stm32-projects
 # ESP32 package projects
 ESP32_WEBSERVER_DIR = $(ESP32_PACKAGES_DIR)/esp32-cam-webserver
 ESP32_AUDIO_DIR = $(ESP32_PACKAGES_DIR)/esp32-cam-i2s-audio
-ESP32_LLM_TELEGRAM_DIR = esp32cam-llm-telegram
+ESP32_LLM_TELEGRAM_DIR = $(ESP32_PACKAGES_DIR)/esp32cam-llm-telegram
 
 # Default target shows comprehensive help
 .DEFAULT_GOAL := help
@@ -69,7 +72,7 @@ help:
 	@echo "$(YELLOW)Configuration:$(NC)"
 	@echo "  Default Serial Port: $(DEFAULT_PORT)"
 	@echo "  ESP-IDF Path:        $(IDF_PATH)"
-	@echo "  Robocar Directory:   $(ROBOCAR_DIR)"
+	@echo "  Robocar Projects:    $(ESP32_PACKAGES_DIR)/robocar-*"
 	@echo ""
 	@echo "$(YELLOW)Environment Variables:$(NC)"
 	@echo "  PORT=<device>         - Override default serial port"
@@ -97,10 +100,10 @@ check-environment:
 	fi
 	@echo ""
 	@echo "$(GREEN)Project Structure:$(NC)"
-	@if [ -d "$(ROBOCAR_DIR)" ]; then \
-		echo "  ✓ Robocar project found"; \
+	@if [ -d "$(ROBOCAR_MAIN_DIR)" ] && [ -d "$(ROBOCAR_CAMERA_DIR)" ]; then \
+		echo "  ✓ Robocar projects found"; \
 	else \
-		echo "  ✗ Robocar project missing"; \
+		echo "  ✗ Robocar projects missing"; \
 	fi
 	@if [ -d "$(ESP32_PACKAGES_DIR)" ]; then \
 		echo "  ✓ ESP32 packages directory found"; \
@@ -120,65 +123,65 @@ check-idf:
 robocar-help:
 	@echo "$(CYAN)AI-Powered Robot Car - Build Commands$(NC)"
 	@echo ""
-	@cd $(ROBOCAR_DIR) && $(MAKE) help
+	@cd $(ROBOCAR_DOCS_DIR) && $(MAKE) help
 
 robocar-build-all: check-idf
 	@echo "$(BLUE)Building AI-powered robot car (all controllers)...$(NC)"
-	@cd $(ROBOCAR_DIR) && $(MAKE) build-all
+	@cd $(ROBOCAR_DOCS_DIR) && $(MAKE) build-all
 
 robocar-build-main: check-idf
 	@echo "$(BLUE)Building robot car main controller...$(NC)"
-	@cd $(ROBOCAR_DIR) && $(MAKE) build-main
+	@cd $(ROBOCAR_DOCS_DIR) && $(MAKE) build-main
 
 robocar-build-cam: check-idf
 	@echo "$(BLUE)Building robot car camera module...$(NC)"
-	@cd $(ROBOCAR_DIR) && $(MAKE) build-cam
+	@cd $(ROBOCAR_DOCS_DIR) && $(MAKE) build-cam
 
 robocar-flash-all: check-idf
 	@echo "$(BLUE)Flashing AI-powered robot car (both controllers)...$(NC)"
 	@echo "$(YELLOW)Make sure GPIO0 is connected to GND for ESP32-CAM programming$(NC)"
-	@cd $(ROBOCAR_DIR) && $(MAKE) flash-main PORT=$(PORT)
+	@cd $(ROBOCAR_DOCS_DIR) && $(MAKE) flash-main PORT=$(PORT)
 	@echo "$(YELLOW)Now connect GPIO0 to GND on ESP32-CAM and press Enter...$(NC)"
 	@read -p ""
-	@cd $(ROBOCAR_DIR) && $(MAKE) flash-cam PORT=$(PORT)
+	@cd $(ROBOCAR_DOCS_DIR) && $(MAKE) flash-cam PORT=$(PORT)
 
 robocar-flash-main: check-idf
 	@echo "$(BLUE)Flashing robot car main controller...$(NC)"
-	@cd $(ROBOCAR_DIR) && $(MAKE) flash-main PORT=$(PORT)
+	@cd $(ROBOCAR_DOCS_DIR) && $(MAKE) flash-main PORT=$(PORT)
 
 robocar-flash-cam: check-idf
 	@echo "$(BLUE)Flashing robot car camera module...$(NC)"
 	@echo "$(YELLOW)Make sure GPIO0 is connected to GND for programming$(NC)"
-	@cd $(ROBOCAR_DIR) && $(MAKE) flash-cam PORT=$(PORT)
+	@cd $(ROBOCAR_DOCS_DIR) && $(MAKE) flash-cam PORT=$(PORT)
 
 robocar-develop-main: check-idf
 	@echo "$(BLUE)Development workflow: main controller$(NC)"
-	@cd $(ROBOCAR_DIR) && $(MAKE) develop-main PORT=$(PORT)
+	@cd $(ROBOCAR_DOCS_DIR) && $(MAKE) develop-main PORT=$(PORT)
 
 robocar-develop-cam: check-idf
 	@echo "$(BLUE)Development workflow: camera module$(NC)"
 	@echo "$(YELLOW)Make sure GPIO0 is connected to GND for programming$(NC)"
-	@cd $(ROBOCAR_DIR) && $(MAKE) develop-cam PORT=$(PORT)
+	@cd $(ROBOCAR_DOCS_DIR) && $(MAKE) develop-cam PORT=$(PORT)
 
 robocar-monitor-main: check-idf
 	@echo "$(BLUE)Monitoring robot car main controller...$(NC)"
-	@cd $(ROBOCAR_DIR) && $(MAKE) monitor-main PORT=$(PORT)
+	@cd $(ROBOCAR_DOCS_DIR) && $(MAKE) monitor-main PORT=$(PORT)
 
 robocar-monitor-cam: check-idf
 	@echo "$(BLUE)Monitoring robot car camera module...$(NC)"
-	@cd $(ROBOCAR_DIR) && $(MAKE) monitor-cam PORT=$(PORT)
+	@cd $(ROBOCAR_DOCS_DIR) && $(MAKE) monitor-cam PORT=$(PORT)
 
 robocar-credentials:
 	@echo "$(BLUE)Setting up robot car credentials...$(NC)"
-	@cd $(ROBOCAR_DIR) && $(MAKE) credentials
+	@cd $(ROBOCAR_DOCS_DIR) && $(MAKE) credentials
 
 robocar-clean:
 	@echo "$(BLUE)Cleaning robot car builds...$(NC)"
-	@cd $(ROBOCAR_DIR) && $(MAKE) clean-all
+	@cd $(ROBOCAR_DOCS_DIR) && $(MAKE) clean-all
 
 robocar-info:
 	@echo "$(BLUE)Robot car system information...$(NC)"
-	@cd $(ROBOCAR_DIR) && $(MAKE) info
+	@cd $(ROBOCAR_DOCS_DIR) && $(MAKE) info
 
 # === ESP32 Package Projects ===
 
@@ -369,10 +372,11 @@ list-projects:
 	@echo "$(CYAN)MCU Tinkering Lab - Project Inventory$(NC)"
 	@echo ""
 	@echo "$(GREEN)🤖 AI-Powered Robot Car (Primary):$(NC)"
-	@if [ -d "$(ROBOCAR_DIR)" ]; then \
+	@if [ -d "$(ROBOCAR_MAIN_DIR)" ] && [ -d "$(ROBOCAR_CAMERA_DIR)" ]; then \
 		echo "  ✓ Dual ESP32 autonomous robot with AI vision"; \
 		echo "    └── Main Controller: Heltec WiFi LoRa 32 V1"; \
 		echo "    └── Vision System: ESP32-CAM with Claude/Ollama AI"; \
+		echo "    └── Simulation: Python 3.11 physics simulation"; \
 	else \
 		echo "  ✗ Not found"; \
 	fi
@@ -411,7 +415,9 @@ info: check-environment
 	@echo ""
 	@echo "$(GREEN)Repository Structure:$(NC)"
 	@echo "  📁 Root Directory:     $(shell pwd)"
-	@echo "  📁 Robocar Project:    $(ROBOCAR_DIR)/"
+	@echo "  📁 Robocar Main:       $(ROBOCAR_MAIN_DIR)/"
+	@echo "  📁 Robocar Camera:     $(ROBOCAR_CAMERA_DIR)/"
+	@echo "  📁 Robocar Sim:        $(ROBOCAR_SIMULATION_DIR)/"
 	@echo "  📁 ESP32 Packages:     $(ESP32_PACKAGES_DIR)/"
 	@echo "  📁 Arduino Packages:   $(ARDUINO_PACKAGES_DIR)/"
 	@echo "  📁 STM32 Packages:     $(STM32_PACKAGES_DIR)/"
