@@ -1,9 +1,16 @@
-# ESP32 Partition Table for OTA
+# ESP32 Partition Table for OTA (4MB Flash)
 # Name,   Type, SubType, Offset,  Size,     Flags
+# Flash Layout:
+#   nvs:      24KB  (Non-Volatile Storage)
+#   otadata:  8KB   (OTA selection data)
+#   phy_init: 4KB   (PHY init data)
+#   ota_0:    1.8MB (OTA app partition 0)
+#   ota_1:    1.8MB (OTA app partition 1)
+#   spiffs:   336KB (File storage for AI models)
+# Total: 4MB (0x400000 bytes)
 nvs,      data, nvs,     0x9000,  0x6000,
-phy_init, data, phy,     0xf000,  0x1000,
-factory,  app,  factory, 0x10000, 0x180000,
-ota_0,    app,  ota_0,   0x190000,0x180000,
-ota_1,    app,  ota_1,   0x310000,0x180000,
-ota_data, data, ota,     0x490000,0x2000,
-storage,  data, spiffs,  0x492000,0x16E000,
+otadata,  data, ota,     0xF000,  0x2000,
+phy_init, data, phy,     0x11000, 0x1000,
+ota_0,    app,  ota_0,   0x12000, 0x1CD000,
+ota_1,    app,  ota_1,   0x1DF000,0x1CD000,
+spiffs,   data, spiffs,  0x3AC000,0x54000,
