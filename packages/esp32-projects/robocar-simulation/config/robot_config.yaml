@@ -1,0 +1,191 @@
+# Robot Configuration for ESP-IDF Simulation
+robot:
+  name: "ESP32-RoboCar"
+  description: "Dual ESP32 AI-powered autonomous robot car"
+  
+  # Physical dimensions (in meters)
+  dimensions:
+    length: 0.20  # 20cm chassis
+    width: 0.15   # 15cm width
+    height: 0.10  # 10cm height
+    wheelbase: 0.14  # Distance between front and rear wheels
+    track_width: 0.12  # Distance between left and right wheels
+    wheel_radius: 0.035  # 3.5cm radius wheels
+    
+  # Mass properties
+  mass: 0.8  # kg (including battery)
+  inertia: 0.01  # kg⋅m² (moment of inertia)
+  
+  # Motor specifications (TB6612FNG with DC motors)
+  motors:
+    left:
+      pin_config:
+        pwm: 23
+        in1: 2
+        in2: 4
+      max_rpm: 200
+      stall_torque: 0.5  # N⋅m
+      no_load_current: 0.1  # A
+      stall_current: 2.0  # A
+      resistance: 3.0  # Ohms
+      inductance: 0.01  # H (realistic for small DC motor)
+      back_emf_constant: 0.01  # V⋅s/rad
+      
+    right:
+      pin_config:
+        pwm: 13
+        in1: 15
+        in2: 12
+      max_rpm: 200
+      stall_torque: 0.5  # N⋅m
+      no_load_current: 0.1  # A
+      stall_current: 2.0  # A
+      resistance: 3.0  # Ohms
+      inductance: 0.01  # H (realistic for small DC motor)
+      back_emf_constant: 0.01  # V⋅s/rad
+
+  # Servo configuration (Camera mount)
+  servos:
+    camera_pan:
+      pin: 25
+      min_angle: -90
+      max_angle: 90
+      center_angle: 0
+      
+  # Sensor configuration
+  sensors:
+    camera:
+      type: "OV2640"
+      resolution: [640, 480]
+      fps: 20
+      field_of_view: 60  # degrees
+      position: [0.08, 0, 0.06]  # x, y, z relative to robot center
+      
+    imu:
+      type: "MPU6050"
+      update_rate: 100  # Hz
+      noise:
+        accelerometer: 0.01  # m/s²
+        gyroscope: 0.001  # rad/s
+        
+    ultrasonic:
+      type: "HC-SR04"
+      max_range: 4.0  # meters
+      min_range: 0.02  # meters
+      beam_angle: 15  # degrees
+      update_rate: 10  # Hz
+      
+  # Communication configuration
+  communication:
+    i2c:
+      address_main: 0x42
+      address_cam: 0x43
+      frequency: 100000  # Hz
+      pins:
+        sda: 15
+        scl: 14
+        
+    wifi:
+      ssid: "ESP32-RoboCar"
+      password: "robocar123"
+      
+    uart:
+      baudrate: 115200
+      
+# Simulation settings
+simulation:
+  timestep: 0.01  # seconds (100Hz)
+  physics_engine: "pymunk"
+  visualization: "swift"
+  
+  # Camera simulation configuration
+  camera:
+    enabled: true
+    resolution: [640, 480]
+    fov_degrees: 60.0  # Match robot.sensors.camera.field_of_view
+    fps: 20           # Match robot.sensors.camera.fps
+    noise_level: 0.02
+    compression_quality: 85
+  
+  # WiFi simulation configuration
+  wifi:
+    enabled: true
+    auto_connect: true
+    default_ssid: "ESP32-RoboCar"
+    default_password: "robocar123"
+    connection_stability_threshold: 30.0  # seconds for OTA readiness
+    max_retry_attempts: 3
+    retry_delay_ms: 5000
+    power_save_mode: true
+  
+  # OTA simulation configuration  
+  ota:
+    enabled: true
+    simulate_download_speed: 50000  # bytes/s (50KB/s)
+    verification_delay: 1.0  # seconds
+    failure_probability: 0.05  # 5% chance of verification failure
+    partition_size: 1572864  # 1.5MB (0x180000)
+  
+  # Motor control configuration
+  motor_control:
+    enabled: true
+    mode: "velocity"  # "open_loop", "velocity", "position"
+    
+    # Velocity PID parameters
+    velocity_pid:
+      kp: 15.0
+      ki: 5.0
+      kd: 0.5
+      output_limit: 255.0
+      integral_limit: 50.0
+      derivative_filter: 0.1
+    
+    # Position PID parameters (for position mode)
+    position_pid:
+      kp: 1.5
+      ki: 0.0
+      kd: 0.05
+      output_limit: 50.0  # Output is velocity command
+      integral_limit: 50.0
+      derivative_filter: 0.2
+    
+    # Encoder simulation parameters
+    encoder:
+      pulses_per_revolution: 600
+      noise_std: 0.1
+      velocity_filter: 0.8
+      max_velocity_change: 500.0
+    
+    # Feedforward gain (PWM per rad/s)
+    velocity_feedforward: 25.0
+  
+  # Environment
+  environment:
+    type: "indoor"
+    size: [5.0, 5.0]  # meters
+    obstacles:
+      - type: "box"
+        position: [2.0, 2.0]
+        size: [0.5, 0.5]
+      - type: "cylinder"
+        position: [3.0, 1.0]
+        radius: 0.3
+        
+  # Communication bridge
+  bridge:
+    type: "websocket"
+    host: "localhost"
+    port: 8765
+    
+# AI Backend Configuration
+ai_backend:
+  enabled: true
+  type: "claude"  # or "ollama"
+  api_key: "${CLAUDE_API_KEY}"
+  model: "claude-3-sonnet-20240229"
+  
+  # Ollama configuration
+  ollama:
+    host: "localhost"
+    port: 11434
+    model: "llava"

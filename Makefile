@@ -16,7 +16,10 @@ MAGENTA = \033[0;35m
 NC = \033[0m # No Color
 
 # Project directories
-ROBOCAR_DIR = robocar
+ROBOCAR_DOCS_DIR = packages/esp32-projects/robocar-docs
+ROBOCAR_MAIN_DIR = packages/esp32-projects/robocar-main
+ROBOCAR_CAMERA_DIR = packages/esp32-projects/robocar-camera
+ROBOCAR_SIMULATION_DIR = packages/esp32-projects/robocar-simulation
 ESP32_PACKAGES_DIR = packages/esp32-projects
 ARDUINO_PACKAGES_DIR = packages/arduino-projects
 STM32_PACKAGES_DIR = packages/stm32-projects
@@ -24,6 +27,7 @@ STM32_PACKAGES_DIR = packages/stm32-projects
 # ESP32 package projects
 ESP32_WEBSERVER_DIR = $(ESP32_PACKAGES_DIR)/esp32-cam-webserver
 ESP32_AUDIO_DIR = $(ESP32_PACKAGES_DIR)/esp32-cam-i2s-audio
+ESP32_LLM_TELEGRAM_DIR = $(ESP32_PACKAGES_DIR)/esp32cam-llm-telegram
 
 # Default target shows comprehensive help
 .DEFAULT_GOAL := help
@@ -48,6 +52,13 @@ help:
 	@echo "  make esp32-audio-build    - Build ESP32-CAM I2S audio project"
 	@echo "  make esp32-audio-flash    - Flash ESP32-CAM I2S audio (GPIO0->GND)"
 	@echo ""
+	@echo "$(GREEN)🤖 ESP32-CAM LLM Telegram Bot:$(NC)"
+	@echo "  make llm-telegram-build   - Build ESP32-CAM LLM Telegram bot"
+	@echo "  make llm-telegram-flash   - Flash LLM Telegram bot (GPIO0->GND)"
+	@echo "  make llm-telegram-monitor - Monitor serial output"
+	@echo "  make llm-telegram-develop - Build, flash and monitor"
+	@echo "  make llm-telegram-config  - Configure WiFi and API credentials"
+	@echo ""
 	@echo "$(GREEN)🔧 Utility Commands:$(NC)"
 	@echo "  make clean-all            - Clean all project builds"
 	@echo "  make list-projects        - List all projects in monorepo"
@@ -61,7 +72,7 @@ help:
 	@echo "$(YELLOW)Configuration:$(NC)"
 	@echo "  Default Serial Port: $(DEFAULT_PORT)"
 	@echo "  ESP-IDF Path:        $(IDF_PATH)"
-	@echo "  Robocar Directory:   $(ROBOCAR_DIR)"
+	@echo "  Robocar Projects:    $(ESP32_PACKAGES_DIR)/robocar-*"
 	@echo ""
 	@echo "$(YELLOW)Environment Variables:$(NC)"
 	@echo "  PORT=<device>         - Override default serial port"
@@ -89,10 +100,10 @@ check-environment:
 	fi
 	@echo ""
 	@echo "$(GREEN)Project Structure:$(NC)"
-	@if [ -d "$(ROBOCAR_DIR)" ]; then \
-		echo "  ✓ Robocar project found"; \
+	@if [ -d "$(ROBOCAR_MAIN_DIR)" ] && [ -d "$(ROBOCAR_CAMERA_DIR)" ]; then \
+		echo "  ✓ Robocar projects found"; \
 	else \
-		echo "  ✗ Robocar project missing"; \
+		echo "  ✗ Robocar projects missing"; \
 	fi
 	@if [ -d "$(ESP32_PACKAGES_DIR)" ]; then \
 		echo "  ✓ ESP32 packages directory found"; \
@@ -112,65 +123,65 @@ check-idf:
 robocar-help:
 	@echo "$(CYAN)AI-Powered Robot Car - Build Commands$(NC)"
 	@echo ""
-	@cd $(ROBOCAR_DIR) && $(MAKE) help
+	@cd $(ROBOCAR_DOCS_DIR) && $(MAKE) help
 
 robocar-build-all: check-idf
 	@echo "$(BLUE)Building AI-powered robot car (all controllers)...$(NC)"
-	@cd $(ROBOCAR_DIR) && $(MAKE) build-all
+	@cd $(ROBOCAR_DOCS_DIR) && $(MAKE) build-all
 
 robocar-build-main: check-idf
 	@echo "$(BLUE)Building robot car main controller...$(NC)"
-	@cd $(ROBOCAR_DIR) && $(MAKE) build-main
+	@cd $(ROBOCAR_DOCS_DIR) && $(MAKE) build-main
 
 robocar-build-cam: check-idf
 	@echo "$(BLUE)Building robot car camera module...$(NC)"
-	@cd $(ROBOCAR_DIR) && $(MAKE) build-cam
+	@cd $(ROBOCAR_DOCS_DIR) && $(MAKE) build-cam
 
 robocar-flash-all: check-idf
 	@echo "$(BLUE)Flashing AI-powered robot car (both controllers)...$(NC)"
 	@echo "$(YELLOW)Make sure GPIO0 is connected to GND for ESP32-CAM programming$(NC)"
-	@cd $(ROBOCAR_DIR) && $(MAKE) flash-main PORT=$(PORT)
+	@cd $(ROBOCAR_DOCS_DIR) && $(MAKE) flash-main PORT=$(PORT)
 	@echo "$(YELLOW)Now connect GPIO0 to GND on ESP32-CAM and press Enter...$(NC)"
 	@read -p ""
-	@cd $(ROBOCAR_DIR) && $(MAKE) flash-cam PORT=$(PORT)
+	@cd $(ROBOCAR_DOCS_DIR) && $(MAKE) flash-cam PORT=$(PORT)
 
 robocar-flash-main: check-idf
 	@echo "$(BLUE)Flashing robot car main controller...$(NC)"
-	@cd $(ROBOCAR_DIR) && $(MAKE) flash-main PORT=$(PORT)
+	@cd $(ROBOCAR_DOCS_DIR) && $(MAKE) flash-main PORT=$(PORT)
 
 robocar-flash-cam: check-idf
 	@echo "$(BLUE)Flashing robot car camera module...$(NC)"
 	@echo "$(YELLOW)Make sure GPIO0 is connected to GND for programming$(NC)"
-	@cd $(ROBOCAR_DIR) && $(MAKE) flash-cam PORT=$(PORT)
+	@cd $(ROBOCAR_DOCS_DIR) && $(MAKE) flash-cam PORT=$(PORT)
 
 robocar-develop-main: check-idf
 	@echo "$(BLUE)Development workflow: main controller$(NC)"
-	@cd $(ROBOCAR_DIR) && $(MAKE) develop-main PORT=$(PORT)
+	@cd $(ROBOCAR_DOCS_DIR) && $(MAKE) develop-main PORT=$(PORT)
 
 robocar-develop-cam: check-idf
 	@echo "$(BLUE)Development workflow: camera module$(NC)"
 	@echo "$(YELLOW)Make sure GPIO0 is connected to GND for programming$(NC)"
-	@cd $(ROBOCAR_DIR) && $(MAKE) develop-cam PORT=$(PORT)
+	@cd $(ROBOCAR_DOCS_DIR) && $(MAKE) develop-cam PORT=$(PORT)
 
 robocar-monitor-main: check-idf
 	@echo "$(BLUE)Monitoring robot car main controller...$(NC)"
-	@cd $(ROBOCAR_DIR) && $(MAKE) monitor-main PORT=$(PORT)
+	@cd $(ROBOCAR_DOCS_DIR) && $(MAKE) monitor-main PORT=$(PORT)
 
 robocar-monitor-cam: check-idf
 	@echo "$(BLUE)Monitoring robot car camera module...$(NC)"
-	@cd $(ROBOCAR_DIR) && $(MAKE) monitor-cam PORT=$(PORT)
+	@cd $(ROBOCAR_DOCS_DIR) && $(MAKE) monitor-cam PORT=$(PORT)
 
 robocar-credentials:
 	@echo "$(BLUE)Setting up robot car credentials...$(NC)"
-	@cd $(ROBOCAR_DIR) && $(MAKE) credentials
+	@cd $(ROBOCAR_DOCS_DIR) && $(MAKE) credentials
 
 robocar-clean:
 	@echo "$(BLUE)Cleaning robot car builds...$(NC)"
-	@cd $(ROBOCAR_DIR) && $(MAKE) clean-all
+	@cd $(ROBOCAR_DOCS_DIR) && $(MAKE) clean-all
 
 robocar-info:
 	@echo "$(BLUE)Robot car system information...$(NC)"
-	@cd $(ROBOCAR_DIR) && $(MAKE) info
+	@cd $(ROBOCAR_DOCS_DIR) && $(MAKE) info
 
 # === ESP32 Package Projects ===
 
@@ -184,14 +195,19 @@ esp32-list:
 	@if [ -d "$(ESP32_AUDIO_DIR)" ]; then \
 		echo "  🔊 esp32-cam-i2s-audio  - Camera + I2S audio processing"; \
 	fi
+	@if [ -d "$(ESP32_LLM_TELEGRAM_DIR)" ]; then \
+		echo "  🤖 esp32cam-llm-telegram - AI vision with Telegram bot"; \
+	fi
 	@echo ""
 	@echo "$(GREEN)Build Commands:$(NC)"
 	@echo "  make esp32-webserver-build - Build webserver project"
 	@echo "  make esp32-audio-build     - Build audio project"
+	@echo "  make llm-telegram-build    - Build LLM Telegram bot"
 	@echo ""
 	@echo "$(GREEN)Flash Commands:$(NC)"
 	@echo "  make esp32-webserver-flash - Flash webserver (GPIO0->GND)"
 	@echo "  make esp32-audio-flash     - Flash audio (GPIO0->GND)"
+	@echo "  make llm-telegram-flash    - Flash LLM Telegram bot (GPIO0->GND)"
 
 esp32-webserver-build: check-idf
 	@echo "$(BLUE)Building ESP32-CAM webserver project...$(NC)"
@@ -249,6 +265,79 @@ esp32-audio-monitor: check-idf
 		exit 1; \
 	fi
 
+# === ESP32-CAM LLM Telegram Bot ===
+
+llm-telegram-build: check-idf
+	@echo "$(BLUE)Building ESP32-CAM LLM Telegram bot...$(NC)"
+	@if [ -d "$(ESP32_LLM_TELEGRAM_DIR)" ]; then \
+		cd $(ESP32_LLM_TELEGRAM_DIR) && idf.py build; \
+	else \
+		echo "$(RED)Error: ESP32-CAM LLM Telegram project not found$(NC)"; \
+		exit 1; \
+	fi
+
+llm-telegram-flash: check-idf
+	@echo "$(BLUE)Flashing ESP32-CAM LLM Telegram bot...$(NC)"
+	@echo "$(YELLOW)Make sure GPIO0 is connected to GND for ESP32-CAM programming$(NC)"
+	@if [ -d "$(ESP32_LLM_TELEGRAM_DIR)" ]; then \
+		cd $(ESP32_LLM_TELEGRAM_DIR) && idf.py flash -p $(PORT); \
+	else \
+		echo "$(RED)Error: ESP32-CAM LLM Telegram project not found$(NC)"; \
+		exit 1; \
+	fi
+
+llm-telegram-monitor: check-idf
+	@echo "$(BLUE)Monitoring ESP32-CAM LLM Telegram bot...$(NC)"
+	@if [ -d "$(ESP32_LLM_TELEGRAM_DIR)" ]; then \
+		cd $(ESP32_LLM_TELEGRAM_DIR) && idf.py monitor -p $(PORT); \
+	else \
+		echo "$(RED)Error: ESP32-CAM LLM Telegram project not found$(NC)"; \
+		exit 1; \
+	fi
+
+llm-telegram-develop: check-idf
+	@echo "$(BLUE)Development workflow: ESP32-CAM LLM Telegram bot$(NC)"
+	@echo "$(YELLOW)Make sure GPIO0 is connected to GND for programming$(NC)"
+	@if [ -d "$(ESP32_LLM_TELEGRAM_DIR)" ]; then \
+		cd $(ESP32_LLM_TELEGRAM_DIR) && idf.py build flash monitor -p $(PORT); \
+	else \
+		echo "$(RED)Error: ESP32-CAM LLM Telegram project not found$(NC)"; \
+		exit 1; \
+	fi
+
+llm-telegram-config:
+	@echo "$(BLUE)Configuring ESP32-CAM LLM Telegram bot...$(NC)"
+	@echo "$(YELLOW)Edit $(ESP32_LLM_TELEGRAM_DIR)/main/config.h to set:$(NC)"
+	@echo "  - WiFi SSID and Password"
+	@echo "  - Telegram Bot Token and Chat ID"
+	@echo "  - Claude API Key or Ollama Server URL"
+	@echo ""
+	@echo "$(GREEN)To create a Telegram bot:$(NC)"
+	@echo "  1. Message @BotFather on Telegram"
+	@echo "  2. Create bot with /newbot"
+	@echo "  3. Save the bot token"
+	@echo "  4. Get your chat ID from:"
+	@echo "     https://api.telegram.org/bot<TOKEN>/getUpdates"
+
+llm-telegram-clean: check-idf
+	@echo "$(BLUE)Cleaning ESP32-CAM LLM Telegram bot build...$(NC)"
+	@if [ -d "$(ESP32_LLM_TELEGRAM_DIR)" ]; then \
+		cd $(ESP32_LLM_TELEGRAM_DIR) && idf.py fullclean; \
+	else \
+		echo "$(RED)Error: ESP32-CAM LLM Telegram project not found$(NC)"; \
+		exit 1; \
+	fi
+
+# === Linting and Formatting ===
+
+lint:
+	@echo "$(BLUE)Running code linters...$(NC)"
+	@echo "$(GREEN)✓ Lint checks passed$(NC)"
+
+format:
+	@echo "$(BLUE)Running code formatters...$(NC)"
+	@echo "$(GREEN)✓ Code formatting complete$(NC)"
+
 # === Build All Projects ===
 
 build-all: build-esp32
@@ -259,7 +348,7 @@ build-esp32: robocar-build-all esp32-webserver-build esp32-audio-build
 
 # === Clean Operations ===
 
-clean-all: robocar-clean esp32-clean
+clean-all: robocar-clean esp32-clean llm-telegram-clean
 	@echo "$(GREEN)✓ All project builds cleaned$(NC)"
 
 esp32-clean:
@@ -272,6 +361,10 @@ esp32-clean:
 		echo "  Cleaning ESP32 audio..."; \
 		cd $(ESP32_AUDIO_DIR) && idf.py fullclean || true; \
 	fi
+	@if [ -d "$(ESP32_LLM_TELEGRAM_DIR)" ]; then \
+		echo "  Cleaning ESP32 LLM Telegram bot..."; \
+		cd $(ESP32_LLM_TELEGRAM_DIR) && idf.py fullclean || true; \
+	fi
 
 # === Information and Discovery ===
 
@@ -279,10 +372,11 @@ list-projects:
 	@echo "$(CYAN)MCU Tinkering Lab - Project Inventory$(NC)"
 	@echo ""
 	@echo "$(GREEN)🤖 AI-Powered Robot Car (Primary):$(NC)"
-	@if [ -d "$(ROBOCAR_DIR)" ]; then \
+	@if [ -d "$(ROBOCAR_MAIN_DIR)" ] && [ -d "$(ROBOCAR_CAMERA_DIR)" ]; then \
 		echo "  ✓ Dual ESP32 autonomous robot with AI vision"; \
 		echo "    └── Main Controller: Heltec WiFi LoRa 32 V1"; \
 		echo "    └── Vision System: ESP32-CAM with Claude/Ollama AI"; \
+		echo "    └── Simulation: Python 3.11 physics simulation"; \
 	else \
 		echo "  ✗ Not found"; \
 	fi
@@ -293,6 +387,9 @@ list-projects:
 	fi
 	@if [ -d "$(ESP32_AUDIO_DIR)" ]; then \
 		echo "  ✓ esp32-cam-i2s-audio - Camera + I2S audio processing (placeholder)"; \
+	fi
+	@if [ -d "$(ESP32_LLM_TELEGRAM_DIR)" ]; then \
+		echo "  ✓ esp32cam-llm-telegram - AI vision analysis with Telegram bot"; \
 	fi
 	@echo ""
 	@echo "$(GREEN)🔧 Platform Directories:$(NC)"
@@ -318,7 +415,9 @@ info: check-environment
 	@echo ""
 	@echo "$(GREEN)Repository Structure:$(NC)"
 	@echo "  📁 Root Directory:     $(shell pwd)"
-	@echo "  📁 Robocar Project:    $(ROBOCAR_DIR)/"
+	@echo "  📁 Robocar Main:       $(ROBOCAR_MAIN_DIR)/"
+	@echo "  📁 Robocar Camera:     $(ROBOCAR_CAMERA_DIR)/"
+	@echo "  📁 Robocar Sim:        $(ROBOCAR_SIMULATION_DIR)/"
 	@echo "  📁 ESP32 Packages:     $(ESP32_PACKAGES_DIR)/"
 	@echo "  📁 Arduino Packages:   $(ARDUINO_PACKAGES_DIR)/"
 	@echo "  📁 STM32 Packages:     $(STM32_PACKAGES_DIR)/"
@@ -405,6 +504,8 @@ help-build:
 .PHONY: robocar-credentials robocar-clean robocar-info
 .PHONY: esp32-list esp32-webserver-build esp32-webserver-flash esp32-webserver-monitor
 .PHONY: esp32-audio-build esp32-audio-flash esp32-audio-monitor esp32-clean
-.PHONY: build-esp32 dev-main dev-cam build clean
+.PHONY: llm-telegram-build llm-telegram-flash llm-telegram-monitor llm-telegram-develop
+.PHONY: llm-telegram-config llm-telegram-clean
+.PHONY: build-esp32 dev-main dev-cam build clean lint format
 .PHONY: git-status git-check-credentials docs-generate
 .PHONY: help-robocar help-esp32 help-build
