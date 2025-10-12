@@ -32,7 +32,13 @@ typedef enum {
     CMD_TYPE_SERVO    = 0x03,
     CMD_TYPE_DISPLAY  = 0x04,
     CMD_TYPE_STATUS   = 0x05,
-    CMD_TYPE_PING     = 0x06
+    CMD_TYPE_PING     = 0x06,
+    // OTA Commands
+    CMD_TYPE_ENTER_MAINTENANCE_MODE = 0x50,
+    CMD_TYPE_BEGIN_OTA              = 0x51,
+    CMD_TYPE_GET_OTA_STATUS         = 0x52,
+    CMD_TYPE_GET_VERSION            = 0x53,
+    CMD_TYPE_REBOOT                 = 0x54
 } i2c_command_type_t;
 
 // Movement Commands
@@ -60,19 +66,21 @@ typedef enum {
 } servo_command_t;
 
 // I2C Command Packet Structure
-#define I2C_MAX_DATA_LEN 28
+#define I2C_MAX_DATA_LEN 26  // Reduced to make room for sequence number
 typedef struct __attribute__((packed)) {
     uint8_t command_type;           // Command type from i2c_command_type_t
-    uint8_t data_length;            // Length of data array (0-28)
+    uint8_t sequence_number;        // Sequence number for tracking commands
+    uint8_t data_length;            // Length of data array (0-26)
     uint8_t data[I2C_MAX_DATA_LEN]; // Command-specific data
     uint8_t checksum;               // Simple XOR checksum
 } i2c_command_packet_t;
 
 // Response packet from slave
 typedef struct __attribute__((packed)) {
-    uint8_t status;     // 0x00 = OK, 0x01 = ERROR, 0x02 = BUSY
+    uint8_t status;          // 0x00 = OK, 0x01 = ERROR, 0x02 = BUSY, 0x03 = INVALID_SEQ
+    uint8_t sequence_number; // Echo back the sequence number from request
     uint8_t data_length;
-    uint8_t data[14];   // Response data
+    uint8_t data[13];        // Response data (reduced by 1 for sequence number)
     uint8_t checksum;
 } i2c_response_packet_t;
 
@@ -108,13 +116,51 @@ typedef struct __attribute__((packed)) {
     uint8_t battery_level;      // Battery level 0-100
 } status_data_t;
 
+// OTA Status
+typedef enum {
+    OTA_STATUS_IDLE = 0x00,
+    OTA_STATUS_IN_PROGRESS = 0x01,
+    OTA_STATUS_SUCCESS = 0x02,
+    OTA_STATUS_FAILED = 0x03,
+    OTA_STATUS_MAINTENANCE_MODE = 0x04
+} ota_status_t;
+
+// OTA Begin command data
+#define OTA_URL_MAX_LEN 20
+#define OTA_HASH_LEN 4  // First 4 bytes of SHA256 hash for verification
+typedef struct __attribute__((packed)) {
+    char url[OTA_URL_MAX_LEN];  // OTA firmware URL (truncated if needed)
+    uint8_t hash[OTA_HASH_LEN]; // Hash prefix for verification
+    uint8_t url_length;         // Actual URL length (may be > OTA_URL_MAX_LEN)
+} ota_begin_data_t;
+
+// OTA Status response data
+typedef struct __attribute__((packed)) {
+    uint8_t status;             // ota_status_t
+    uint8_t progress;           // Progress percentage 0-100
+    uint8_t error_code;         // Error code if status is FAILED
+} ota_status_response_t;
+
+// Version response data
+#define VERSION_STRING_LEN 12
+typedef struct __attribute__((packed)) {
+    char version[VERSION_STRING_LEN];  // Version string (e.g., "1.0.0")
+} version_response_t;
+
 // Protocol helper functions
 uint8_t calculate_checksum(const uint8_t* data, size_t length);
 bool verify_checksum(const uint8_t* data, size_t length, uint8_t checksum);
-void prepare_movement_command(i2c_command_packet_t* packet, movement_command_t movement, uint8_t speed);
-void prepare_sound_command(i2c_command_packet_t* packet, sound_command_t sound);
-void prepare_servo_command(i2c_command_packet_t* packet, servo_command_t servo, uint8_t angle);
-void prepare_display_command(i2c_command_packet_t* packet, uint8_t line, const char* message);
-void prepare_ping_command(i2c_command_packet_t* packet);
+void prepare_movement_command(i2c_command_packet_t* packet, movement_command_t movement, uint8_t speed, uint8_t seq_num);
+void prepare_sound_command(i2c_command_packet_t* packet, sound_command_t sound, uint8_t seq_num);
+void prepare_servo_command(i2c_command_packet_t* packet, servo_command_t servo, uint8_t angle, uint8_t seq_num);
+void prepare_display_command(i2c_command_packet_t* packet, uint8_t line, const char* message, uint8_t seq_num);
+void prepare_ping_command(i2c_command_packet_t* packet, uint8_t seq_num);
+
+// OTA command helpers
+void prepare_enter_maintenance_command(i2c_command_packet_t* packet, uint8_t seq_num);
+void prepare_begin_ota_command(i2c_command_packet_t* packet, const char* url, const uint8_t* hash, uint8_t seq_num);
+void prepare_get_ota_status_command(i2c_command_packet_t* packet, uint8_t seq_num);
+void prepare_get_version_command(i2c_command_packet_t* packet, uint8_t seq_num);
+void prepare_reboot_command(i2c_command_packet_t* packet, uint8_t seq_num);
 
 #endif // I2C_PROTOCOL_H

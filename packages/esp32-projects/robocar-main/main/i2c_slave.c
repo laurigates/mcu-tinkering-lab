@@ -19,6 +19,10 @@ static bool task_running = false;
 static TaskHandle_t i2c_task_handle = NULL;
 static SemaphoreHandle_t status_mutex = NULL;
 static status_data_t current_status = {0};
+static uint8_t last_sequence_number = 0;
+static ota_status_t current_ota_status = OTA_STATUS_IDLE;
+static uint8_t ota_progress = 0;
+static uint8_t ota_error_code = 0;
 
 // External function declarations (implemented in main.c)
 extern void process_i2c_movement_command(movement_command_t movement, uint8_t speed);
@@ -29,7 +33,8 @@ extern void process_i2c_display_command(uint8_t line, const char* message);
 // Internal functions
 static void i2c_slave_task(void *pvParameters);
 static void process_i2c_command(const i2c_command_packet_t* command, i2c_response_packet_t* response);
-static void prepare_response(i2c_response_packet_t* response, uint8_t status, const uint8_t* data, uint8_t data_len);
+static void prepare_response(i2c_response_packet_t* response, uint8_t status, uint8_t seq_num, const uint8_t* data, uint8_t data_len);
+static void handle_ota_commands(const i2c_command_packet_t* command, i2c_response_packet_t* response);
 
 esp_err_t i2c_slave_init(void) {
     if (i2c_initialized) {
@@ -179,9 +184,9 @@ static void i2c_slave_task(void *pvParameters) {
                     }
                 } else {
                     ESP_LOGE(TAG, "Command checksum verification failed");
-                    
+
                     // Send error response
-                    prepare_response(response, 0x01, NULL, 0); // 0x01 = ERROR
+                    prepare_response(response, 0x01, 0, NULL, 0); // 0x01 = ERROR
                     i2c_slave_write_buffer(I2C_SLAVE_NUM, tx_buffer, sizeof(i2c_response_packet_t), pdMS_TO_TICKS(100));
                 }
             } else {
@@ -197,85 +202,176 @@ static void i2c_slave_task(void *pvParameters) {
 }
 
 static void process_i2c_command(const i2c_command_packet_t* command, i2c_response_packet_t* response) {
-    ESP_LOGD(TAG, "Processing command type: 0x%02X", command->command_type);
-    
+    ESP_LOGD(TAG, "Processing command type: 0x%02X, seq: %d", command->command_type, command->sequence_number);
+
+    // Check for OTA commands first
+    if (command->command_type >= CMD_TYPE_ENTER_MAINTENANCE_MODE &&
+        command->command_type <= CMD_TYPE_REBOOT) {
+        handle_ota_commands(command, response);
+        last_sequence_number = command->sequence_number;
+        return;
+    }
+
     switch (command->command_type) {
         case CMD_TYPE_MOVEMENT: {
             if (command->data_length == sizeof(movement_data_t)) {
                 movement_data_t* move_data = (movement_data_t*)command->data;
                 process_i2c_movement_command(move_data->movement, move_data->speed);
-                prepare_response(response, 0x00, NULL, 0); // 0x00 = OK
+                prepare_response(response, 0x00, command->sequence_number, NULL, 0); // 0x00 = OK
             } else {
-                prepare_response(response, 0x01, NULL, 0); // 0x01 = ERROR
+                prepare_response(response, 0x01, command->sequence_number, NULL, 0); // 0x01 = ERROR
             }
             break;
         }
-        
+
         case CMD_TYPE_SOUND: {
             if (command->data_length == sizeof(sound_data_t)) {
                 sound_data_t* sound_data = (sound_data_t*)command->data;
                 process_i2c_sound_command(sound_data->sound_type);
-                prepare_response(response, 0x00, NULL, 0);
+                prepare_response(response, 0x00, command->sequence_number, NULL, 0);
             } else {
-                prepare_response(response, 0x01, NULL, 0);
+                prepare_response(response, 0x01, command->sequence_number, NULL, 0);
             }
             break;
         }
-        
+
         case CMD_TYPE_SERVO: {
             if (command->data_length == sizeof(servo_data_t)) {
                 servo_data_t* servo_data = (servo_data_t*)command->data;
                 process_i2c_servo_command(servo_data->servo_type, servo_data->angle);
-                prepare_response(response, 0x00, NULL, 0);
+                prepare_response(response, 0x00, command->sequence_number, NULL, 0);
             } else {
-                prepare_response(response, 0x01, NULL, 0);
+                prepare_response(response, 0x01, command->sequence_number, NULL, 0);
             }
             break;
         }
-        
+
         case CMD_TYPE_DISPLAY: {
             if (command->data_length == sizeof(display_data_t)) {
                 display_data_t* display_data = (display_data_t*)command->data;
                 process_i2c_display_command(display_data->line, display_data->message);
-                prepare_response(response, 0x00, NULL, 0);
+                prepare_response(response, 0x00, command->sequence_number, NULL, 0);
             } else {
-                prepare_response(response, 0x01, NULL, 0);
+                prepare_response(response, 0x01, command->sequence_number, NULL, 0);
             }
             break;
         }
-        
+
         case CMD_TYPE_STATUS: {
             status_data_t status;
             i2c_slave_get_status(&status);
-            prepare_response(response, 0x00, (uint8_t*)&status, sizeof(status_data_t));
+            prepare_response(response, 0x00, command->sequence_number, (uint8_t*)&status, sizeof(status_data_t));
             break;
         }
-        
+
         case CMD_TYPE_PING: {
-            prepare_response(response, 0x00, NULL, 0);
+            prepare_response(response, 0x00, command->sequence_number, NULL, 0);
             ESP_LOGD(TAG, "Ping received and acknowledged");
             break;
         }
-        
+
         default: {
             ESP_LOGW(TAG, "Unknown command type: 0x%02X", command->command_type);
-            prepare_response(response, 0x01, NULL, 0);
+            prepare_response(response, 0x01, command->sequence_number, NULL, 0);
             break;
         }
     }
+
+    last_sequence_number = command->sequence_number;
 }
 
-static void prepare_response(i2c_response_packet_t* response, uint8_t status, const uint8_t* data, uint8_t data_len) {
+static void prepare_response(i2c_response_packet_t* response, uint8_t status, uint8_t seq_num, const uint8_t* data, uint8_t data_len) {
     if (!response) return;
-    
+
     response->status = status;
+    response->sequence_number = seq_num;
     response->data_length = (data_len > sizeof(response->data)) ? sizeof(response->data) : data_len;
-    
+
     if (data && response->data_length > 0) {
         memcpy(response->data, data, response->data_length);
     } else {
         memset(response->data, 0, sizeof(response->data));
     }
-    
+
     response->checksum = calculate_checksum((uint8_t*)response, sizeof(i2c_response_packet_t) - 1);
+}
+
+// Handle OTA commands
+static void handle_ota_commands(const i2c_command_packet_t* command, i2c_response_packet_t* response) {
+    switch (command->command_type) {
+        case CMD_TYPE_ENTER_MAINTENANCE_MODE: {
+            ESP_LOGI(TAG, "Entering maintenance mode");
+            current_ota_status = OTA_STATUS_MAINTENANCE_MODE;
+            ota_progress = 0;
+            ota_error_code = 0;
+            prepare_response(response, 0x00, command->sequence_number, NULL, 0);
+            break;
+        }
+
+        case CMD_TYPE_BEGIN_OTA: {
+            if (command->data_length == sizeof(ota_begin_data_t)) {
+                ota_begin_data_t* ota_data = (ota_begin_data_t*)command->data;
+                ESP_LOGI(TAG, "Beginning OTA update from URL: %.20s", ota_data->url);
+                ESP_LOGI(TAG, "Hash: %02X%02X%02X%02X",
+                         ota_data->hash[0], ota_data->hash[1],
+                         ota_data->hash[2], ota_data->hash[3]);
+
+                // Set OTA status to in progress
+                current_ota_status = OTA_STATUS_IN_PROGRESS;
+                ota_progress = 0;
+                ota_error_code = 0;
+
+                // TODO: Implement actual OTA logic
+                // For now, just acknowledge the command
+                prepare_response(response, 0x00, command->sequence_number, NULL, 0);
+            } else {
+                ESP_LOGE(TAG, "Invalid OTA begin data length");
+                prepare_response(response, 0x01, command->sequence_number, NULL, 0);
+            }
+            break;
+        }
+
+        case CMD_TYPE_GET_OTA_STATUS: {
+            ota_status_response_t ota_status;
+            ota_status.status = current_ota_status;
+            ota_status.progress = ota_progress;
+            ota_status.error_code = ota_error_code;
+
+            ESP_LOGD(TAG, "OTA Status: %d, Progress: %d%%, Error: %d",
+                     ota_status.status, ota_status.progress, ota_status.error_code);
+
+            prepare_response(response, 0x00, command->sequence_number,
+                           (uint8_t*)&ota_status, sizeof(ota_status_response_t));
+            break;
+        }
+
+        case CMD_TYPE_GET_VERSION: {
+            version_response_t version;
+            // TODO: Get actual version from project
+            strncpy(version.version, "1.0.0", VERSION_STRING_LEN);
+            version.version[VERSION_STRING_LEN - 1] = '\0';
+
+            ESP_LOGI(TAG, "Firmware version requested: %s", version.version);
+
+            prepare_response(response, 0x00, command->sequence_number,
+                           (uint8_t*)&version, sizeof(version_response_t));
+            break;
+        }
+
+        case CMD_TYPE_REBOOT: {
+            ESP_LOGW(TAG, "Reboot command received - rebooting in 1 second");
+            prepare_response(response, 0x00, command->sequence_number, NULL, 0);
+
+            // TODO: Implement actual reboot logic
+            // For now, just log the command
+            // esp_restart(); would be called after sending response
+            break;
+        }
+
+        default: {
+            ESP_LOGW(TAG, "Unknown OTA command: 0x%02X", command->command_type);
+            prepare_response(response, 0x01, command->sequence_number, NULL, 0);
+            break;
+        }
+    }
 }

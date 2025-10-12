@@ -75,4 +75,39 @@ esp_err_t i2c_ping_slave(void);
  */
 esp_err_t i2c_get_status(status_data_t* status);
 
+/**
+ * @brief Send command to enter maintenance mode
+ * @return ESP_OK on success, error code otherwise
+ */
+esp_err_t i2c_send_enter_maintenance_mode(void);
+
+/**
+ * @brief Send command to begin OTA update
+ * @param url OTA firmware URL
+ * @param hash Hash prefix for verification (can be NULL)
+ * @return ESP_OK on success, error code otherwise
+ */
+esp_err_t i2c_send_begin_ota(const char* url, const uint8_t* hash);
+
+/**
+ * @brief Get OTA status from slave device
+ * @param ota_status OTA status structure to fill
+ * @return ESP_OK on success, error code otherwise
+ */
+esp_err_t i2c_get_ota_status(ota_status_response_t* ota_status);
+
+/**
+ * @brief Get firmware version from slave device
+ * @param version Buffer to store version string
+ * @param version_len Size of version buffer
+ * @return ESP_OK on success, error code otherwise
+ */
+esp_err_t i2c_get_version(char* version, size_t version_len);
+
+/**
+ * @brief Send reboot command to slave device
+ * @return ESP_OK on success, error code otherwise
+ */
+esp_err_t i2c_send_reboot(void);
+
 #endif // I2C_MASTER_H
