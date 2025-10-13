@@ -1,0 +1,51 @@
+{
+  "packages": {
+    "packages/esp32-projects/robocar-main": {
+      "release-type": "simple",
+      "component": "robocar-main",
+      "package-name": "robocar-main",
+      "changelog-path": "CHANGELOG.md",
+      "include-component-in-tag": false,
+      "bump-minor-pre-major": true,
+      "bump-patch-for-minor-pre-major": true
+    },
+    "packages/esp32-projects/robocar-camera": {
+      "release-type": "simple",
+      "component": "robocar-camera",
+      "package-name": "robocar-camera",
+      "changelog-path": "CHANGELOG.md",
+      "include-component-in-tag": false,
+      "bump-minor-pre-major": true,
+      "bump-patch-for-minor-pre-major": true
+    }
+  },
+  "release-type": "simple",
+  "bump-minor-pre-major": true,
+  "bump-patch-for-minor-pre-major": true,
+  "pull-request-title-pattern": "chore: release ${version}",
+  "changelog-sections": [
+    {
+      "type": "feat",
+      "section": "Features"
+    },
+    {
+      "type": "fix",
+      "section": "Bug Fixes"
+    },
+    {
+      "type": "perf",
+      "section": "Performance Improvements"
+    },
+    {
+      "type": "docs",
+      "section": "Documentation"
+    },
+    {
+      "type": "chore",
+      "section": "Miscellaneous",
+      "hidden": false
+    }
+  ],
+  "group-pull-request-title-pattern": "chore: release ${version}",
+  "separate-pull-requests": false
+}
