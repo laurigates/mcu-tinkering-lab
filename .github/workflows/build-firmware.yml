@@ -1,0 +1,101 @@
+name: Build and Release Firmware
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag to build for'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-firmware:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          ref: ${{ github.event.release.tag_name || inputs.release_tag }}
+
+      - name: Setup ESP-IDF
+        uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: v5.4
+          target: esp32
+
+      - name: Build robocar-main firmware
+        working-directory: packages/esp32-projects/robocar-main
+        run: |
+          idf.py build
+          cp build/idf-robocar.bin ../../../robocar-main.bin
+
+      - name: Build robocar-camera firmware
+        working-directory: packages/esp32-projects/robocar-camera
+        run: |
+          idf.py build
+          cp build/esp32-cam-robocar.bin ../../../robocar-camera.bin
+
+      - name: Generate SHA256 hashes
+        id: hashes
+        run: |
+          MAIN_SHA256=$(sha256sum robocar-main.bin | cut -d' ' -f1)
+          CAMERA_SHA256=$(sha256sum robocar-camera.bin | cut -d' ' -f1)
+          echo "main_sha256=$MAIN_SHA256" >> $GITHUB_OUTPUT
+          echo "camera_sha256=$CAMERA_SHA256" >> $GITHUB_OUTPUT
+
+          MAIN_SIZE=$(stat -c%s robocar-main.bin)
+          CAMERA_SIZE=$(stat -c%s robocar-camera.bin)
+          echo "main_size=$MAIN_SIZE" >> $GITHUB_OUTPUT
+          echo "camera_size=$CAMERA_SIZE" >> $GITHUB_OUTPUT
+
+      - name: Get version from tag
+        id: version
+        run: |
+          TAG="${{ github.event.release.tag_name || inputs.release_tag }}"
+          VERSION="${TAG#v}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create firmware manifest
+        run: |
+          cat > manifest.json <<'EOF'
+          {
+            "version": "${{ steps.version.outputs.version }}",
+            "release_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "main_controller": {
+              "url": "https://github.com/${{ github.repository }}/releases/download/${{ github.event.release.tag_name || inputs.release_tag }}/robocar-main.bin",
+              "sha256": "${{ steps.hashes.outputs.main_sha256 }}",
+              "size": ${{ steps.hashes.outputs.main_size }}
+            },
+            "esp32_cam": {
+              "url": "https://github.com/${{ github.repository }}/releases/download/${{ github.event.release.tag_name || inputs.release_tag }}/robocar-camera.bin",
+              "sha256": "${{ steps.hashes.outputs.camera_sha256 }}",
+              "size": ${{ steps.hashes.outputs.camera_size }}
+            }
+          }
+          EOF
+
+      - name: Upload firmware to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.release.tag_name || inputs.release_tag }}
+          files: |
+            robocar-main.bin
+            robocar-camera.bin
+            manifest.json
+
+      - name: Generate build summary
+        run: |
+          echo "## Firmware Build Complete ✅" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Release: \`${{ github.event.release.tag_name || inputs.release_tag }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Component | Size | SHA256 |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| robocar-main | ${{ steps.hashes.outputs.main_size }} bytes | \`${{ steps.hashes.outputs.main_sha256 }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| robocar-camera | ${{ steps.hashes.outputs.camera_size }} bytes | \`${{ steps.hashes.outputs.camera_sha256 }}\` |" >> $GITHUB_STEP_SUMMARY
