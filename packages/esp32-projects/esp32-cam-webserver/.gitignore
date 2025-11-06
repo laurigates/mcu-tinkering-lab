@@ -1,0 +1,11 @@
+# ESP-IDF build artifacts
+build/
+sdkconfig
+sdkconfig.old
+*.pyc
+
+# Managed components (like node_modules)
+managed_components/
+
+# Dependencies are tracked via dependencies.lock
+# Run `idf.py reconfigure` to download them
