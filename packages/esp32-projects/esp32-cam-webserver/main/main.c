@@ -7,6 +7,7 @@
 #include "esp_wifi.h"
 #include "esp_event.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "nvs_flash.h"
 #include "lwip/err.h"
 #include "lwip/sys.h"
@@ -74,8 +75,8 @@ static camera_config_t camera_config = {
     .ledc_channel = LEDC_CHANNEL_0,
 
     .pixel_format = PIXFORMAT_JPEG,
-    .frame_size = FRAMESIZE_VGA, // 640x480
-    .jpeg_quality = 12, // 0-63, lower means higher quality
+    .frame_size = FRAMESIZE_SVGA, // 800x600 - lower power than VGA initially
+    .jpeg_quality = 15, // 0-63, lower means higher quality (15 balances quality and power)
     .fb_count = 2,
     .grab_mode = CAMERA_GRAB_WHEN_EMPTY
 };
@@ -208,7 +209,7 @@ static esp_err_t stream_handler(httpd_req_t *req)
 {
     camera_fb_t *fb = NULL;
     esp_err_t res = ESP_OK;
-    char *part_buf[128];
+    char part_buf[128];
     static int64_t last_frame = 0;
     
     // Set content type for multipart/x-mixed-replace
@@ -230,7 +231,7 @@ static esp_err_t stream_handler(httpd_req_t *req)
         frame_time /= 1000; // Convert to ms
         
         // Format HTTP response with frame data
-        size_t hlen = snprintf((char *)part_buf, 64, "\r\n--123456789000000000000987654321\r\nContent-Type: image/jpeg\r\nContent-Length: %u\r\n\r\n", fb->len);
+        size_t hlen = snprintf((char *)part_buf, sizeof(part_buf), "\r\n--123456789000000000000987654321\r\nContent-Type: image/jpeg\r\nContent-Length: %u\r\n\r\n", fb->len);
         
         // Send header
         if (httpd_resp_send_chunk(req, (const char *)part_buf, hlen) != ESP_OK) {
@@ -308,7 +309,12 @@ void app_main(void)
     // Initialize the camera
     ESP_ERROR_CHECK(init_camera());
     ESP_LOGI(TAG, "Camera initialized successfully");
-    
+
+    // Allow power supply to stabilize before WiFi initialization
+    // This prevents brownout by avoiding simultaneous high-current draw
+    ESP_LOGI(TAG, "Waiting for power stabilization...");
+    vTaskDelay(pdMS_TO_TICKS(1000)); // 1 second delay
+
     // Initialize and connect to WiFi
     wifi_init_sta();
     
