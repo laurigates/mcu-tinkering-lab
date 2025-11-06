@@ -6,6 +6,17 @@ IDF_PATH ?= $(HOME)/repos/esp-idf
 PORT ?= /dev/cu.usbserial-0001
 DEFAULT_PORT := $(PORT)
 
+# Detect shell and set appropriate ESP-IDF environment
+SHELL_NAME := $(shell basename $$SHELL)
+
+ifeq ($(SHELL_NAME),fish)
+    # For Fish shell, source the fish-specific export script
+    IDF_ENV_CMD = source $(IDF_PATH)/export.fish
+else
+    # For bash/zsh, use the standard ESP-IDF export script
+    IDF_ENV_CMD = . $(IDF_PATH)/export.sh
+endif
+
 # Colors for output
 RED = \033[0;31m
 GREEN = \033[0;32m
@@ -212,7 +223,7 @@ esp32-list:
 esp32-webserver-build: check-idf
 	@echo "$(BLUE)Building ESP32-CAM webserver project...$(NC)"
 	@if [ -d "$(ESP32_WEBSERVER_DIR)" ]; then \
-		cd $(ESP32_WEBSERVER_DIR) && idf.py build; \
+		cd $(ESP32_WEBSERVER_DIR) && $(IDF_ENV_CMD) && idf.py build; \
 	else \
 		echo "$(RED)Error: ESP32 webserver project not found$(NC)"; \
 		exit 1; \
@@ -222,7 +233,7 @@ esp32-webserver-flash: check-idf
 	@echo "$(BLUE)Flashing ESP32-CAM webserver project...$(NC)"
 	@echo "$(YELLOW)Make sure GPIO0 is connected to GND for ESP32-CAM programming$(NC)"
 	@if [ -d "$(ESP32_WEBSERVER_DIR)" ]; then \
-		cd $(ESP32_WEBSERVER_DIR) && idf.py flash -p $(PORT); \
+		cd $(ESP32_WEBSERVER_DIR) && $(IDF_ENV_CMD) && idf.py flash -p $(PORT); \
 	else \
 		echo "$(RED)Error: ESP32 webserver project not found$(NC)"; \
 		exit 1; \
@@ -231,7 +242,7 @@ esp32-webserver-flash: check-idf
 esp32-webserver-monitor: check-idf
 	@echo "$(BLUE)Monitoring ESP32-CAM webserver...$(NC)"
 	@if [ -d "$(ESP32_WEBSERVER_DIR)" ]; then \
-		cd $(ESP32_WEBSERVER_DIR) && idf.py monitor -p $(PORT); \
+		cd $(ESP32_WEBSERVER_DIR) && $(IDF_ENV_CMD) && idf.py monitor -p $(PORT); \
 	else \
 		echo "$(RED)Error: ESP32 webserver project not found$(NC)"; \
 		exit 1; \
@@ -240,7 +251,7 @@ esp32-webserver-monitor: check-idf
 esp32-audio-build: check-idf
 	@echo "$(BLUE)Building ESP32-CAM I2S audio project...$(NC)"
 	@if [ -d "$(ESP32_AUDIO_DIR)" ]; then \
-		cd $(ESP32_AUDIO_DIR) && idf.py build; \
+		cd $(ESP32_AUDIO_DIR) && $(IDF_ENV_CMD) && idf.py build; \
 	else \
 		echo "$(RED)Error: ESP32 audio project not found$(NC)"; \
 		exit 1; \
@@ -250,7 +261,7 @@ esp32-audio-flash: check-idf
 	@echo "$(BLUE)Flashing ESP32-CAM I2S audio project...$(NC)"
 	@echo "$(YELLOW)Make sure GPIO0 is connected to GND for ESP32-CAM programming$(NC)"
 	@if [ -d "$(ESP32_AUDIO_DIR)" ]; then \
-		cd $(ESP32_AUDIO_DIR) && idf.py flash -p $(PORT); \
+		cd $(ESP32_AUDIO_DIR) && $(IDF_ENV_CMD) && idf.py flash -p $(PORT); \
 	else \
 		echo "$(RED)Error: ESP32 audio project not found$(NC)"; \
 		exit 1; \
@@ -259,7 +270,7 @@ esp32-audio-flash: check-idf
 esp32-audio-monitor: check-idf
 	@echo "$(BLUE)Monitoring ESP32-CAM I2S audio...$(NC)"
 	@if [ -d "$(ESP32_AUDIO_DIR)" ]; then \
-		cd $(ESP32_AUDIO_DIR) && idf.py monitor -p $(PORT); \
+		cd $(ESP32_AUDIO_DIR) && $(IDF_ENV_CMD) && idf.py monitor -p $(PORT); \
 	else \
 		echo "$(RED)Error: ESP32 audio project not found$(NC)"; \
 		exit 1; \
@@ -270,7 +281,7 @@ esp32-audio-monitor: check-idf
 llm-telegram-build: check-idf
 	@echo "$(BLUE)Building ESP32-CAM LLM Telegram bot...$(NC)"
 	@if [ -d "$(ESP32_LLM_TELEGRAM_DIR)" ]; then \
-		cd $(ESP32_LLM_TELEGRAM_DIR) && idf.py build; \
+		cd $(ESP32_LLM_TELEGRAM_DIR) && $(IDF_ENV_CMD) && idf.py build; \
 	else \
 		echo "$(RED)Error: ESP32-CAM LLM Telegram project not found$(NC)"; \
 		exit 1; \
@@ -280,7 +291,7 @@ llm-telegram-flash: check-idf
 	@echo "$(BLUE)Flashing ESP32-CAM LLM Telegram bot...$(NC)"
 	@echo "$(YELLOW)Make sure GPIO0 is connected to GND for ESP32-CAM programming$(NC)"
 	@if [ -d "$(ESP32_LLM_TELEGRAM_DIR)" ]; then \
-		cd $(ESP32_LLM_TELEGRAM_DIR) && idf.py flash -p $(PORT); \
+		cd $(ESP32_LLM_TELEGRAM_DIR) && $(IDF_ENV_CMD) && idf.py flash -p $(PORT); \
 	else \
 		echo "$(RED)Error: ESP32-CAM LLM Telegram project not found$(NC)"; \
 		exit 1; \
@@ -289,7 +300,7 @@ llm-telegram-flash: check-idf
 llm-telegram-monitor: check-idf
 	@echo "$(BLUE)Monitoring ESP32-CAM LLM Telegram bot...$(NC)"
 	@if [ -d "$(ESP32_LLM_TELEGRAM_DIR)" ]; then \
-		cd $(ESP32_LLM_TELEGRAM_DIR) && idf.py monitor -p $(PORT); \
+		cd $(ESP32_LLM_TELEGRAM_DIR) && $(IDF_ENV_CMD) && idf.py monitor -p $(PORT); \
 	else \
 		echo "$(RED)Error: ESP32-CAM LLM Telegram project not found$(NC)"; \
 		exit 1; \
@@ -299,7 +310,7 @@ llm-telegram-develop: check-idf
 	@echo "$(BLUE)Development workflow: ESP32-CAM LLM Telegram bot$(NC)"
 	@echo "$(YELLOW)Make sure GPIO0 is connected to GND for programming$(NC)"
 	@if [ -d "$(ESP32_LLM_TELEGRAM_DIR)" ]; then \
-		cd $(ESP32_LLM_TELEGRAM_DIR) && idf.py build flash monitor -p $(PORT); \
+		cd $(ESP32_LLM_TELEGRAM_DIR) && $(IDF_ENV_CMD) && idf.py build flash monitor -p $(PORT); \
 	else \
 		echo "$(RED)Error: ESP32-CAM LLM Telegram project not found$(NC)"; \
 		exit 1; \
@@ -322,7 +333,7 @@ llm-telegram-config:
 llm-telegram-clean: check-idf
 	@echo "$(BLUE)Cleaning ESP32-CAM LLM Telegram bot build...$(NC)"
 	@if [ -d "$(ESP32_LLM_TELEGRAM_DIR)" ]; then \
-		cd $(ESP32_LLM_TELEGRAM_DIR) && idf.py fullclean; \
+		cd $(ESP32_LLM_TELEGRAM_DIR) && $(IDF_ENV_CMD) && idf.py fullclean; \
 	else \
 		echo "$(RED)Error: ESP32-CAM LLM Telegram project not found$(NC)"; \
 		exit 1; \
@@ -355,15 +366,15 @@ esp32-clean:
 	@echo "$(BLUE)Cleaning ESP32 package projects...$(NC)"
 	@if [ -d "$(ESP32_WEBSERVER_DIR)" ]; then \
 		echo "  Cleaning ESP32 webserver..."; \
-		cd $(ESP32_WEBSERVER_DIR) && idf.py fullclean || true; \
+		cd $(ESP32_WEBSERVER_DIR) && $(IDF_ENV_CMD) && idf.py fullclean || true; \
 	fi
 	@if [ -d "$(ESP32_AUDIO_DIR)" ]; then \
 		echo "  Cleaning ESP32 audio..."; \
-		cd $(ESP32_AUDIO_DIR) && idf.py fullclean || true; \
+		cd $(ESP32_AUDIO_DIR) && $(IDF_ENV_CMD) && idf.py fullclean || true; \
 	fi
 	@if [ -d "$(ESP32_LLM_TELEGRAM_DIR)" ]; then \
 		echo "  Cleaning ESP32 LLM Telegram bot..."; \
-		cd $(ESP32_LLM_TELEGRAM_DIR) && idf.py fullclean || true; \
+		cd $(ESP32_LLM_TELEGRAM_DIR) && $(IDF_ENV_CMD) && idf.py fullclean || true; \
 	fi
 
 # === Information and Discovery ===
