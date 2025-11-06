@@ -1,0 +1,265 @@
+# Home Assistant Automation Examples
+# Copy these to your Home Assistant configuration
+
+# ============================================
+# Method 1: Direct Tag to Media Mapping
+# ============================================
+
+automation:
+  # Play audiobook when RFID tag is scanned
+  - id: audiobook_tag_scanned
+    alias: "Audiobook - Play on Tag Scan"
+    description: "Play specific audiobook based on scanned RFID tag"
+    trigger:
+      - platform: event
+        event_type: tag_scanned
+        event_data:
+          # Get your device_id from: Settings → Devices → Audiobook Player
+          device_id: "YOUR_DEVICE_ID_HERE"
+    action:
+      - choose:
+          # Example 1: Harry Potter
+          - conditions:
+              - condition: template
+                value_template: "{{ trigger.event.data.tag_id == '74-10-37-94' }}"
+            sequence:
+              - service: media_player.play_media
+                target:
+                  entity_id: media_player.living_room_speaker
+                data:
+                  media_content_id: "spotify:playlist:your_spotify_playlist_id"
+                  media_content_type: playlist
+
+          # Example 2: The Gruffalo
+          - conditions:
+              - condition: template
+                value_template: "{{ trigger.event.data.tag_id == 'AA-BB-CC-DD' }}"
+            sequence:
+              - service: media_player.play_media
+                target:
+                  entity_id: media_player.living_room_speaker
+                data:
+                  media_content_id: "media-source://media_source/local/audiobooks/gruffalo.mp3"
+                  media_content_type: music
+
+          # Example 3: Room on the Broom
+          - conditions:
+              - condition: template
+                value_template: "{{ trigger.event.data.tag_id == 'EE-FF-00-11' }}"
+            sequence:
+              - service: media_player.play_media
+                target:
+                  entity_id: media_player.bedroom_speaker
+                data:
+                  media_content_id: "/media/audiobooks/room_on_the_broom/"
+                  media_content_type: music
+
+  # Play button pressed
+  - id: audiobook_play_button
+    alias: "Audiobook - Play Button Pressed"
+    description: "Resume playback when green button pressed"
+    trigger:
+      - platform: event
+        event_type: esphome.audiobook_control
+        event_data:
+          action: play
+    action:
+      - service: media_player.media_play
+        target:
+          entity_id: media_player.living_room_speaker
+
+  # Pause button pressed
+  - id: audiobook_pause_button
+    alias: "Audiobook - Pause Button Pressed"
+    description: "Pause playback when red button pressed"
+    trigger:
+      - platform: event
+        event_type: esphome.audiobook_control
+        event_data:
+          action: pause
+    action:
+      - service: media_player.media_pause
+        target:
+          entity_id: media_player.living_room_speaker
+
+# ============================================
+# Method 2: Using Input Select Helper
+# ============================================
+
+# Create this helper in Home Assistant UI:
+# Settings → Devices & Services → Helpers → Add Helper → Dropdown
+
+input_select:
+  current_audiobook:
+    name: "Current Audiobook"
+    options:
+      - "None"
+      - "Harry Potter and the Philosopher's Stone"
+      - "The Gruffalo"
+      - "Room on the Broom"
+      - "We're Going on a Bear Hunt"
+      - "The Very Hungry Caterpillar"
+    initial: "None"
+    icon: mdi:book-play
+
+automation:
+  # Map RFID tags to input_select
+  - id: audiobook_tag_to_helper
+    alias: "Audiobook - Map Tag to Selection"
+    description: "Update current audiobook based on scanned tag"
+    trigger:
+      - platform: event
+        event_type: tag_scanned
+        event_data:
+          device_id: "YOUR_DEVICE_ID_HERE"
+    action:
+      - choose:
+          - conditions: "{{ trigger.event.data.tag_id == '74-10-37-94' }}"
+            sequence:
+              - service: input_select.select_option
+                target:
+                  entity_id: input_select.current_audiobook
+                data:
+                  option: "Harry Potter and the Philosopher's Stone"
+
+          - conditions: "{{ trigger.event.data.tag_id == 'AA-BB-CC-DD' }}"
+            sequence:
+              - service: input_select.select_option
+                target:
+                  entity_id: input_select.current_audiobook
+                data:
+                  option: "The Gruffalo"
+
+  # Play the selected audiobook
+  - id: audiobook_play_selected
+    alias: "Audiobook - Play Selected Book"
+    description: "Play media based on selected audiobook"
+    trigger:
+      - platform: state
+        entity_id: input_select.current_audiobook
+    condition:
+      - condition: template
+        value_template: "{{ trigger.to_state.state != 'None' }}"
+    action:
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: input_select.current_audiobook
+                state: "Harry Potter and the Philosopher's Stone"
+            sequence:
+              - service: media_player.play_media
+                target:
+                  entity_id: media_player.living_room_speaker
+                data:
+                  media_content_id: "spotify:playlist:your_playlist_id"
+                  media_content_type: playlist
+
+          - conditions:
+              - condition: state
+                entity_id: input_select.current_audiobook
+                state: "The Gruffalo"
+            sequence:
+              - service: media_player.play_media
+                target:
+                  entity_id: media_player.living_room_speaker
+                data:
+                  media_content_id: "/media/audiobooks/gruffalo.mp3"
+                  media_content_type: music
+
+# ============================================
+# Method 3: Advanced with Resume Feature
+# ============================================
+
+input_text:
+  audiobook_bookmark:
+    name: "Audiobook Bookmark"
+    initial: ""
+    max: 255
+
+script:
+  audiobook_save_position:
+    alias: "Save Audiobook Position"
+    sequence:
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.audiobook_bookmark
+        data:
+          value: >
+            {{ state_attr('media_player.living_room_speaker', 'media_position') | default(0) }}
+
+  audiobook_resume:
+    alias: "Resume Audiobook"
+    sequence:
+      - service: media_player.media_seek
+        target:
+          entity_id: media_player.living_room_speaker
+        data:
+          seek_position: "{{ states('input_text.audiobook_bookmark') | float }}"
+
+automation:
+  # Save position when paused
+  - id: audiobook_save_on_pause
+    alias: "Audiobook - Save Position on Pause"
+    trigger:
+      - platform: event
+        event_type: esphome.audiobook_control
+        event_data:
+          action: pause
+    action:
+      - service: script.audiobook_save_position
+
+  # Resume from saved position
+  - id: audiobook_resume_on_play
+    alias: "Audiobook - Resume from Bookmark"
+    trigger:
+      - platform: event
+        event_type: esphome.audiobook_control
+        event_data:
+          action: play
+    condition:
+      - condition: template
+        value_template: "{{ states('input_text.audiobook_bookmark') != '' }}"
+    action:
+      - service: media_player.media_play
+        target:
+          entity_id: media_player.living_room_speaker
+      - delay: "00:00:01"
+      - service: script.audiobook_resume
+
+# ============================================
+# Optional: Visual Feedback in Lovelace
+# ============================================
+
+# Add this card to your dashboard:
+# type: entities
+# title: Audiobook Player
+# entities:
+#   - entity: input_select.current_audiobook
+#     name: Now Playing
+#   - entity: media_player.living_room_speaker
+#   - type: buttons
+#     entities:
+#       - entity: script.audiobook_save_position
+#         name: Save Position
+#       - entity: script.audiobook_resume
+#         name: Resume
+
+# ============================================
+# Media Player Options
+# ============================================
+
+# Spotify:
+#   media_content_id: "spotify:playlist:37i9dQZF1DXcBWIGoYBM5M"
+#   media_content_type: playlist
+
+# Local file:
+#   media_content_id: "/media/audiobooks/story.mp3"
+#   media_content_type: music
+
+# YouTube Music:
+#   media_content_id: "https://music.youtube.com/watch?v=..."
+#   media_content_type: music
+
+# Plex:
+#   media_content_id: "plex://library/section/1/item/123"
+#   media_content_type: music

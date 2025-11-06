@@ -1,0 +1,15 @@
+# ESPHome secrets
+secrets.yaml
+
+# ESPHome build files
+.esphome/
+*.bin
+*.elf
+*.map
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
