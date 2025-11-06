@@ -1,0 +1,45 @@
+# MCU Tinkering Lab - Python Simulation Environment
+# For robocar-simulation physics simulation
+
+FROM python:3.11-slim
+
+LABEL maintainer="MCU Tinkering Lab"
+LABEL description="Python simulation environment for robot physics"
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    make \
+    # Graphics and visualization dependencies
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \
+    # X11 for GUI
+    libx11-6 \
+    libxcb1 \
+    # OpenCV dependencies
+    libopencv-dev \
+    python3-opencv \
+    && rm -rf /var/lib/apt/lists/*
+
+# Upgrade pip and install uv (fast Python package manager)
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir uv
+
+# Set working directory
+WORKDIR /workspace
+
+# Copy simulation requirements
+COPY packages/esp32-projects/robocar-simulation/pyproject.toml /tmp/
+COPY packages/esp32-projects/robocar-simulation/requirements.txt /tmp/ 2>/dev/null || true
+
+# Install Python dependencies using uv (much faster than pip)
+RUN cd /tmp && \
+    uv pip install --system -r pyproject.toml || \
+    pip install --no-cache-dir -r requirements.txt
+
+# Default command
+CMD ["/bin/bash"]

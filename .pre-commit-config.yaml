@@ -1,0 +1,85 @@
+# Pre-commit hooks for MCU Tinkering Lab
+# See https://pre-commit.com for more information
+
+repos:
+  # General file checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: '\.patch$'
+      - id: end-of-file-fixer
+        exclude: '\.bin$|\.hex$|\.elf$'
+      - id: check-yaml
+        args: ['--unsafe']  # Allow custom YAML tags
+      - id: check-added-large-files
+        args: ['--maxkb=500']
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: mixed-line-ending
+        args: ['--fix=lf']
+      - id: detect-private-key
+        exclude: 'test_fixtures/'
+
+  # C/C++ formatting with clang-format
+  - repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: v17.0.6
+    hooks:
+      - id: clang-format
+        files: \.(c|h|cpp|hpp)$
+        args: ['-i', '--style=file']
+        exclude: 'managed_components/|components/esp-idf-lib/'
+
+  # Python linting and formatting
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.1.9
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+        files: \.py$
+      - id: ruff-format
+        files: \.py$
+
+  # Python type checking
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.8.0
+    hooks:
+      - id: mypy
+        files: \.py$
+        exclude: 'tests/|test_.*\.py$'
+        additional_dependencies:
+          - types-PyYAML
+          - types-toml
+
+  # Check for credential files
+  - repo: local
+    hooks:
+      - id: check-credentials
+        name: Check for credential files
+        entry: bash -c 'if git diff --cached --name-only | grep -qE "(credentials\.h|wifi_config\.h|\.key$|\.secret$|\.token$)"; then echo "ERROR: Attempted to commit credential files!"; exit 1; fi'
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: check-build-artifacts
+        name: Check for build artifacts
+        entry: bash -c 'if git diff --cached --name-only | grep -qE "(\.o$|\.a$|\.elf$|\.bin$|\.hex$|sdkconfig$)"; then echo "ERROR: Attempted to commit build artifacts!"; exit 1; fi'
+        language: system
+        pass_filenames: false
+        always_run: true
+
+# Configuration
+default_language_version:
+  python: python3.11
+
+ci:
+  autofix_commit_msg: |
+    [pre-commit.ci] auto fixes from pre-commit.com hooks
+
+    for more information, see https://pre-commit.ci
+  autofix_prs: true
+  autoupdate_branch: ''
+  autoupdate_commit_msg: '[pre-commit.ci] pre-commit autoupdate'
+  autoupdate_schedule: weekly
+  skip: []
+  submodules: false

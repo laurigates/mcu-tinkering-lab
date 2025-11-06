@@ -1,0 +1,157 @@
+name: ESP32 Build Pipeline
+
+on:
+  push:
+    branches: [main, develop, 'claude/**']
+    paths:
+      - 'packages/esp32-projects/**'
+      - '.github/workflows/esp32-build.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'packages/esp32-projects/**'
+      - '.github/workflows/esp32-build.yml'
+  workflow_dispatch:
+
+env:
+  IDF_VERSION: 'v5.4'
+
+jobs:
+  build-matrix:
+    name: Build ${{ matrix.project }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        project:
+          - robocar-main
+          - robocar-camera
+          - esp32cam-llm-telegram
+          - esp32-cam-webserver
+        include:
+          - project: robocar-main
+            target: esp32
+            description: "Main Controller (Heltec WiFi LoRa 32)"
+          - project: robocar-camera
+            target: esp32
+            description: "Camera Module (ESP32-CAM)"
+          - project: esp32cam-llm-telegram
+            target: esp32
+            description: "LLM Telegram Bot (ESP32-CAM)"
+          - project: esp32-cam-webserver
+            target: esp32
+            description: "Webserver (ESP32-CAM)"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup ESP-IDF
+        uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: ${{ env.IDF_VERSION }}
+          target: ${{ matrix.target }}
+
+      - name: Build ${{ matrix.project }}
+        working-directory: packages/esp32-projects/${{ matrix.project }}
+        run: |
+          echo "Building ${{ matrix.description }}"
+          idf.py build
+
+      - name: Generate size analysis
+        working-directory: packages/esp32-projects/${{ matrix.project }}
+        run: |
+          echo "# Build Size Analysis for ${{ matrix.project }}" > size-report.txt
+          echo "" >> size-report.txt
+          echo "## Component Size Summary" >> size-report.txt
+          idf.py size >> size-report.txt 2>&1 || true
+          echo "" >> size-report.txt
+          echo "## Detailed Component Sizes" >> size-report.txt
+          idf.py size-components >> size-report.txt 2>&1 || true
+
+      - name: Archive firmware binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.project }}-firmware-${{ github.sha }}
+          path: |
+            packages/esp32-projects/${{ matrix.project }}/build/*.bin
+            packages/esp32-projects/${{ matrix.project }}/build/*.elf
+            packages/esp32-projects/${{ matrix.project }}/build/*.map
+            packages/esp32-projects/${{ matrix.project }}/build/bootloader/*.bin
+            packages/esp32-projects/${{ matrix.project }}/build/partition_table/*.bin
+          retention-days: 30
+
+      - name: Archive size analysis
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.project }}-size-report-${{ github.sha }}
+          path: packages/esp32-projects/${{ matrix.project }}/size-report.txt
+          retention-days: 30
+
+      - name: Check binary size limits
+        working-directory: packages/esp32-projects/${{ matrix.project }}
+        run: |
+          # Extract app binary size
+          APP_SIZE=$(stat -c%s "build/${{ matrix.project }}.bin" 2>/dev/null || stat -f%z "build/${{ matrix.project }}.bin" 2>/dev/null || echo "0")
+
+          # Set warning threshold (1.5 MB for OTA projects)
+          WARNING_THRESHOLD=1572864  # 1.5 MB
+          CRITICAL_THRESHOLD=1835008  # 1.75 MB
+
+          echo "Application binary size: $APP_SIZE bytes ($(($APP_SIZE / 1024)) KB)"
+
+          if [ $APP_SIZE -gt $CRITICAL_THRESHOLD ]; then
+            echo "::error::Binary size ($APP_SIZE bytes) exceeds critical threshold ($CRITICAL_THRESHOLD bytes)!"
+            echo "This may not fit in OTA partitions. Consider optimizing code or disabling features."
+            exit 1
+          elif [ $APP_SIZE -gt $WARNING_THRESHOLD ]; then
+            echo "::warning::Binary size ($APP_SIZE bytes) exceeds warning threshold ($WARNING_THRESHOLD bytes)."
+            echo "Consider optimizing code to leave headroom for OTA updates."
+          else
+            echo "::notice::Binary size is within acceptable limits."
+          fi
+
+  build-simulation:
+    name: Build Python Simulation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install UV
+        run: pip install uv
+
+      - name: Install dependencies
+        working-directory: packages/esp32-projects/robocar-simulation
+        run: uv sync
+
+      - name: Check imports
+        working-directory: packages/esp32-projects/robocar-simulation
+        run: |
+          uv run python -c "import sys; print(f'Python {sys.version}')"
+          uv run python -c "import numpy; print(f'NumPy {numpy.__version__}')"
+          uv run python -c "import pymunk; print(f'Pymunk {pymunk.version}')"
+
+  build-summary:
+    name: Build Summary
+    needs: [build-matrix, build-simulation]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Check build status
+        run: |
+          if [ "${{ needs.build-matrix.result }}" != "success" ]; then
+            echo "::error::ESP32 build matrix failed!"
+            exit 1
+          fi
+          if [ "${{ needs.build-simulation.result }}" != "success" ]; then
+            echo "::warning::Simulation build failed, but continuing..."
+          fi
+          echo "::notice::All ESP32 projects built successfully!"

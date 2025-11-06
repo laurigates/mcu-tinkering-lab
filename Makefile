@@ -65,6 +65,12 @@ help:
 	@echo "  make check-environment    - Verify development environment"
 	@echo "  make info                 - Show comprehensive system information"
 	@echo ""
+	@echo "$(GREEN)🧪 Code Quality:$(NC)"
+	@echo "  make lint                 - Run all linters (C/C++ and Python)"
+	@echo "  make format               - Format all code (C/C++ and Python)"
+	@echo "  make format-check         - Check code formatting without modifying"
+	@echo "  make install-dev-tools    - Install development tools and pre-commit hooks"
+	@echo ""
 	@echo "$(GREEN)🏗️  Build All Projects:$(NC)"
 	@echo "  make build-all            - Build all projects in the monorepo"
 	@echo "  make build-esp32          - Build all ESP32 projects"
@@ -330,13 +336,123 @@ llm-telegram-clean: check-idf
 
 # === Linting and Formatting ===
 
-lint:
-	@echo "$(BLUE)Running code linters...$(NC)"
-	@echo "$(GREEN)✓ Lint checks passed$(NC)"
+lint: lint-c lint-python
+	@echo "$(GREEN)✓ All lint checks passed$(NC)"
 
-format:
-	@echo "$(BLUE)Running code formatters...$(NC)"
-	@echo "$(GREEN)✓ Code formatting complete$(NC)"
+lint-c:
+	@echo "$(BLUE)Linting C/C++ code with cppcheck...$(NC)"
+	@command -v cppcheck >/dev/null 2>&1 || { \
+		echo "$(RED)Error: cppcheck not found. Install with: sudo apt-get install cppcheck$(NC)"; \
+		exit 1; \
+	}
+	@find packages/esp32-projects -type f \( -name "*.c" -o -name "*.h" -o -name "*.cpp" -o -name "*.hpp" \) \
+		! -path "*/managed_components/*" \
+		! -path "*/components/esp-idf-lib/*" \
+		! -path "*/build/*" \
+		-print0 | \
+		xargs -0 cppcheck \
+			--enable=warning,style,performance,portability \
+			--suppress=missingIncludeSystem \
+			--suppress=unmatchedSuppression \
+			--inline-suppr \
+			--error-exitcode=1 \
+			--template=gcc \
+			2>&1 | tee cppcheck-report.txt || { \
+		echo "$(RED)✗ Cppcheck found issues (see cppcheck-report.txt)$(NC)"; \
+		exit 1; \
+	}
+	@echo "$(GREEN)✓ C/C++ lint checks passed$(NC)"
+
+lint-python:
+	@echo "$(BLUE)Linting Python code with ruff...$(NC)"
+	@command -v ruff >/dev/null 2>&1 || { \
+		echo "$(YELLOW)Warning: ruff not found. Install with: pip install ruff$(NC)"; \
+		exit 0; \
+	}
+	@cd $(ROBOCAR_SIMULATION_DIR) && ruff check . || { \
+		echo "$(RED)✗ Ruff found issues$(NC)"; \
+		exit 1; \
+	}
+	@echo "$(GREEN)✓ Python lint checks passed$(NC)"
+
+format: format-c format-python
+	@echo "$(GREEN)✓ All code formatting complete$(NC)"
+
+format-c:
+	@echo "$(BLUE)Formatting C/C++ code with clang-format...$(NC)"
+	@command -v clang-format >/dev/null 2>&1 || { \
+		echo "$(RED)Error: clang-format not found. Install with: sudo apt-get install clang-format$(NC)"; \
+		exit 1; \
+	}
+	@find packages/esp32-projects -type f \( -name "*.c" -o -name "*.h" -o -name "*.cpp" -o -name "*.hpp" \) \
+		! -path "*/managed_components/*" \
+		! -path "*/components/esp-idf-lib/*" \
+		! -path "*/build/*" \
+		-print0 | \
+		xargs -0 clang-format -i --style=file
+	@echo "$(GREEN)✓ C/C++ code formatted$(NC)"
+
+format-python:
+	@echo "$(BLUE)Formatting Python code with ruff...$(NC)"
+	@command -v ruff >/dev/null 2>&1 || { \
+		echo "$(YELLOW)Warning: ruff not found. Install with: pip install ruff$(NC)"; \
+		exit 0; \
+	}
+	@cd $(ROBOCAR_SIMULATION_DIR) && ruff format .
+	@echo "$(GREEN)✓ Python code formatted$(NC)"
+
+format-check: format-check-c format-check-python
+	@echo "$(GREEN)✓ All format checks passed$(NC)"
+
+format-check-c:
+	@echo "$(BLUE)Checking C/C++ code formatting...$(NC)"
+	@command -v clang-format >/dev/null 2>&1 || { \
+		echo "$(RED)Error: clang-format not found$(NC)"; \
+		exit 1; \
+	}
+	@find packages/esp32-projects -type f \( -name "*.c" -o -name "*.h" -o -name "*.cpp" -o -name "*.hpp" \) \
+		! -path "*/managed_components/*" \
+		! -path "*/components/esp-idf-lib/*" \
+		! -path "*/build/*" \
+		-print0 | \
+		xargs -0 clang-format --dry-run --Werror --style=file || { \
+		echo "$(RED)✗ Code formatting issues found. Run 'make format-c' to fix.$(NC)"; \
+		exit 1; \
+	}
+	@echo "$(GREEN)✓ C/C++ formatting check passed$(NC)"
+
+format-check-python:
+	@echo "$(BLUE)Checking Python code formatting...$(NC)"
+	@command -v ruff >/dev/null 2>&1 || { \
+		echo "$(YELLOW)Warning: ruff not found$(NC)"; \
+		exit 0; \
+	}
+	@cd $(ROBOCAR_SIMULATION_DIR) && ruff format --check . || { \
+		echo "$(RED)✗ Python formatting issues found. Run 'make format-python' to fix.$(NC)"; \
+		exit 1; \
+	}
+	@echo "$(GREEN)✓ Python formatting check passed$(NC)"
+
+# Install development tools
+install-dev-tools:
+	@echo "$(BLUE)Installing development tools...$(NC)"
+	@echo "$(CYAN)Installing Python tools...$(NC)"
+	pip install --upgrade pip pre-commit ruff mypy pytest pytest-cov uv
+	@echo "$(CYAN)Installing pre-commit hooks...$(NC)"
+	pre-commit install
+	@echo "$(CYAN)Checking system tools...$(NC)"
+	@command -v clang-format >/dev/null 2>&1 || { \
+		echo "$(YELLOW)clang-format not found. Install with:$(NC)"; \
+		echo "  Ubuntu/Debian: sudo apt-get install clang-format"; \
+		echo "  macOS: brew install clang-format"; \
+	}
+	@command -v cppcheck >/dev/null 2>&1 || { \
+		echo "$(YELLOW)cppcheck not found. Install with:$(NC)"; \
+		echo "  Ubuntu/Debian: sudo apt-get install cppcheck"; \
+		echo "  macOS: brew install cppcheck"; \
+	}
+	@echo "$(GREEN)✓ Development tools installation complete$(NC)"
+	@echo "$(YELLOW)Note: You may need to install clang-format and cppcheck manually$(NC)"
 
 # === Build All Projects ===
 
@@ -467,6 +583,54 @@ docs-generate:
 	@echo "$(YELLOW)Documentation generation not yet implemented$(NC)"
 	@echo "Future: Auto-generate docs from code comments and README files"
 
+# === Docker Development Environment ===
+
+docker-build:
+	@echo "$(BLUE)Building Docker development images...$(NC)"
+	@command -v docker >/dev/null 2>&1 || { \
+		echo "$(RED)Error: Docker not found. Please install Docker first.$(NC)"; \
+		exit 1; \
+	}
+	docker-compose build
+
+docker-dev:
+	@echo "$(BLUE)Starting Docker development environment...$(NC)"
+	@command -v docker >/dev/null 2>&1 || { \
+		echo "$(RED)Error: Docker not found. Please install Docker first.$(NC)"; \
+		exit 1; \
+	}
+	@echo "$(CYAN)Starting interactive shell in ESP-IDF container...$(NC)"
+	docker-compose run --rm esp-idf
+
+docker-run:
+	@echo "$(BLUE)Running command in Docker: $(CMD)$(NC)"
+	@command -v docker >/dev/null 2>&1 || { \
+		echo "$(RED)Error: Docker not found. Please install Docker first.$(NC)"; \
+		exit 1; \
+	}
+	docker-compose run --rm esp-idf bash -c "$(CMD)"
+
+docker-shell:
+	@echo "$(BLUE)Starting Docker shell...$(NC)"
+	docker-compose run --rm esp-idf /bin/bash
+
+docker-up:
+	@echo "$(BLUE)Starting Docker services in background...$(NC)"
+	docker-compose up -d
+
+docker-down:
+	@echo "$(BLUE)Stopping Docker services...$(NC)"
+	docker-compose down
+
+docker-clean:
+	@echo "$(BLUE)Cleaning Docker containers and volumes...$(NC)"
+	docker-compose down -v
+	@echo "$(YELLOW)Note: Docker images are preserved. Use 'docker image prune' to remove them.$(NC)"
+
+docker-logs:
+	@echo "$(BLUE)Showing Docker service logs...$(NC)"
+	docker-compose logs -f
+
 # === Help for specific subsystems ===
 
 help-robocar: robocar-help
@@ -506,6 +670,9 @@ help-build:
 .PHONY: esp32-audio-build esp32-audio-flash esp32-audio-monitor esp32-clean
 .PHONY: llm-telegram-build llm-telegram-flash llm-telegram-monitor llm-telegram-develop
 .PHONY: llm-telegram-config llm-telegram-clean
-.PHONY: build-esp32 dev-main dev-cam build clean lint format
+.PHONY: build-esp32 dev-main dev-cam build clean
+.PHONY: lint lint-c lint-python format format-c format-python
+.PHONY: format-check format-check-c format-check-python install-dev-tools
+.PHONY: docker-build docker-dev docker-run docker-shell docker-up docker-down docker-clean docker-logs
 .PHONY: git-status git-check-credentials docs-generate
 .PHONY: help-robocar help-esp32 help-build

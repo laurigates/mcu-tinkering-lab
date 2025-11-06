@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  # ESP-IDF development environment
+  esp-idf:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mcu-tinkering-lab/esp-idf:v5.4
+    container_name: mcu-tinkering-lab-esp-idf
+    volumes:
+      # Mount the entire workspace
+      - .:/workspace
+      # Cache ESP-IDF tools and build artifacts
+      - esp-idf-tools:/opt/esp
+      - build-cache:/workspace/build
+    # Uncomment to access USB devices (adjust device paths as needed)
+    # devices:
+    #   - /dev/ttyUSB0:/dev/ttyUSB0
+    #   - /dev/ttyUSB1:/dev/ttyUSB1
+    # privileged: true  # Required for USB device access
+    environment:
+      - IDF_PATH=/opt/esp/idf
+      - IDF_TOOLS_PATH=/opt/esp
+      # Preserve user permissions
+      - USER_UID=${USER_UID:-1000}
+      - USER_GID=${USER_GID:-1000}
+    working_dir: /workspace
+    stdin_open: true
+    tty: true
+    network_mode: host  # For mDNS and network testing
+
+  # Python simulation environment
+  simulation:
+    build:
+      context: .
+      dockerfile: Dockerfile.simulation
+    image: mcu-tinkering-lab/simulation:latest
+    container_name: mcu-tinkering-lab-simulation
+    volumes:
+      - ./packages/esp32-projects/robocar-simulation:/workspace
+    ports:
+      - "8080:8080"  # Web interface
+      - "1883:1883"  # MQTT
+    environment:
+      # For GUI support (X11 forwarding)
+      - DISPLAY=${DISPLAY:-:0}
+      - QT_X11_NO_MITSHM=1
+    volumes:
+      # X11 socket for GUI applications
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+    working_dir: /workspace
+    stdin_open: true
+    tty: true
+    network_mode: host
+
+volumes:
+  # Persistent volumes for caching
+  esp-idf-tools:
+    name: mcu-tinkering-lab-esp-idf-tools
+  build-cache:
+    name: mcu-tinkering-lab-build-cache

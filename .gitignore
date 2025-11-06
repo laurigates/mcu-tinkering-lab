@@ -49,3 +49,15 @@ Thumbs.db
 
 __pycache__/
 .cache/
+
+# Development tools
+cppcheck-report.txt
+.pytest_cache/
+htmlcov/
+coverage.xml
+.coverage
+*.log
+
+# Docker volumes (if accidentally created locally)
+.env
+.env.local
