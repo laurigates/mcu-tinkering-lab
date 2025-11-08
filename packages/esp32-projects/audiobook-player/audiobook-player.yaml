@@ -1,7 +1,8 @@
 esphome:
   name: audiobook-player
   friendly_name: "Audiobook Player"
-  platform: ESP8266
+
+esp8266:
   board: d1_mini
 
 # Enable logging
@@ -41,17 +42,38 @@ rc522_spi:
   # When a tag is detected, send it to Home Assistant
   on_tag:
     then:
+      - text_sensor.template.publish:
+          id: last_rfid_tag
+          state: !lambda 'return x;'
       - homeassistant.tag_scanned: !lambda 'return x;'
+      - homeassistant.event:
+          event: esphome.audiobook_triggered
+          data:
+            device_id: audiobook-player
+            tag_id: !lambda 'return x;'
       - logger.log:
           format: "Tag scanned: %s"
           args: ['x.c_str()']
+      - output.turn_on: status_led_output
+      - delay: 300ms
+      - output.turn_off: status_led_output
 
   # When tag is removed
   on_tag_removed:
     then:
+      - text_sensor.template.publish:
+          id: last_rfid_tag
+          state: ""
       - logger.log:
           format: "Tag removed: %s"
           args: ['x.c_str()']
+
+# Text sensor to store the last scanned RFID tag
+text_sensor:
+  - platform: template
+    name: "Last RFID Tag"
+    id: last_rfid_tag
+    icon: "mdi:card-account-details"
 
 # Binary sensors for buttons
 binary_sensor:
@@ -95,8 +117,10 @@ binary_sensor:
             data:
               action: pause
 
-# Status LED (optional - uses built-in LED)
-status_led:
-  pin:
-    number: D4  # GPIO2 - Built-in LED
-    inverted: true
+# Output for built-in LED to indicate RFID tag reads
+output:
+  - platform: gpio
+    pin:
+      number: D4  # GPIO2 - Built-in LED
+      inverted: true
+    id: status_led_output
