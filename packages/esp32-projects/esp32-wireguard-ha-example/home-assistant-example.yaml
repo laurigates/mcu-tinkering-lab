@@ -1,0 +1,327 @@
+# Home Assistant Configuration Examples
+# These examples show how to use the ESP32 WireGuard device in Home Assistant
+
+# ============================================================================
+# Automations
+# ============================================================================
+
+automation:
+  # Monitor WireGuard connection status
+  - id: esp32_wireguard_connected
+    alias: "ESP32 WireGuard - Connection Established"
+    description: "Notify when ESP32 successfully connects via WireGuard"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.esp32_wireguard_ha_wireguard_status
+        to: 'on'
+    action:
+      - service: notify.notify
+        data:
+          title: "ESP32 Connected"
+          message: "ESP32 WireGuard HA device is now online via VPN"
+
+  # Alert on WireGuard disconnection
+  - id: esp32_wireguard_disconnected
+    alias: "ESP32 WireGuard - Connection Lost"
+    description: "Alert when ESP32 loses WireGuard connection"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.esp32_wireguard_ha_wireguard_status
+        to: 'off'
+        for:
+          minutes: 5
+    action:
+      - service: notify.notify
+        data:
+          title: "ESP32 Disconnected"
+          message: "ESP32 WireGuard HA device lost VPN connection for 5 minutes"
+          data:
+            priority: high
+
+  # Monitor WiFi signal strength
+  - id: esp32_weak_wifi_signal
+    alias: "ESP32 WireGuard - Weak WiFi Signal"
+    description: "Alert when WiFi signal becomes weak"
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.esp32_wireguard_ha_wifi_signal
+        below: -80
+        for:
+          minutes: 10
+    action:
+      - service: notify.notify
+        data:
+          title: "Weak WiFi Signal"
+          message: >
+            ESP32 WiFi signal is weak: {{ states('sensor.esp32_wireguard_ha_wifi_signal') }} dBm.
+            Consider improving WiFi coverage.
+
+  # Daily uptime report
+  - id: esp32_daily_status
+    alias: "ESP32 WireGuard - Daily Status Report"
+    description: "Send daily status report"
+    trigger:
+      - platform: time
+        at: "08:00:00"
+    condition:
+      - condition: state
+        entity_id: binary_sensor.esp32_wireguard_ha_device_status
+        state: 'on'
+    action:
+      - service: notify.notify
+        data:
+          title: "ESP32 Daily Status"
+          message: >
+            ESP32 Status Report:
+            Uptime: {{ states('sensor.esp32_wireguard_ha_uptime') | int // 3600 }} hours
+            WiFi Signal: {{ states('sensor.esp32_wireguard_ha_wifi_signal') }} dBm
+            WireGuard: {{ states('binary_sensor.esp32_wireguard_ha_wireguard_status') }}
+            IP Address: {{ states('sensor.esp32_wireguard_ha_device_ip') }}
+            VPN Address: {{ states('sensor.esp32_wireguard_ha_wg_address') }}
+
+  # Example: Use sensor data for automation (if you add a temperature sensor)
+  - id: esp32_temperature_alert
+    alias: "ESP32 - High Temperature Alert"
+    description: "Alert when temperature exceeds threshold"
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.esp32_wireguard_ha_temperature
+        above: 30
+    action:
+      - service: notify.notify
+        data:
+          title: "High Temperature"
+          message: "Temperature is {{ states('sensor.esp32_wireguard_ha_temperature') }}°C"
+
+  # Example: Toggle relay based on time
+  - id: esp32_relay_schedule
+    alias: "ESP32 - Scheduled Relay Control"
+    description: "Turn relay on/off based on schedule"
+    trigger:
+      - platform: time
+        at: "07:00:00"
+        id: morning
+      - platform: time
+        at: "22:00:00"
+        id: evening
+    action:
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: morning
+            sequence:
+              - service: switch.turn_on
+                target:
+                  entity_id: switch.esp32_wireguard_ha_relay_1
+          - conditions:
+              - condition: trigger
+                id: evening
+            sequence:
+              - service: switch.turn_off
+                target:
+                  entity_id: switch.esp32_wireguard_ha_relay_1
+
+# ============================================================================
+# Scripts
+# ============================================================================
+
+script:
+  # Restart ESP32 remotely
+  esp32_wireguard_restart:
+    alias: "ESP32 - Restart Device"
+    sequence:
+      - service: button.press
+        target:
+          entity_id: button.esp32_wireguard_ha_restart
+
+  # Check ESP32 connection health
+  esp32_wireguard_health_check:
+    alias: "ESP32 - Health Check"
+    sequence:
+      - service: notify.notify
+        data:
+          title: "ESP32 Health Check"
+          message: >
+            Device Status: {{ states('binary_sensor.esp32_wireguard_ha_device_status') }}
+            WireGuard: {{ states('binary_sensor.esp32_wireguard_ha_wireguard_status') }}
+            WiFi Signal: {{ states('sensor.esp32_wireguard_ha_wifi_signal') }} dBm
+            Uptime: {{ (states('sensor.esp32_wireguard_ha_uptime') | int / 86400) | round(1) }} days
+            Last Handshake: {{ states('sensor.esp32_wireguard_ha_wg_latest_handshake') }}
+
+# ============================================================================
+# Template Sensors
+# ============================================================================
+
+sensor:
+  # Convert uptime to human-readable format
+  - platform: template
+    sensors:
+      esp32_wireguard_uptime_formatted:
+        friendly_name: "ESP32 Uptime (Formatted)"
+        value_template: >
+          {% set uptime = states('sensor.esp32_wireguard_ha_uptime') | int %}
+          {% set days = (uptime / 86400) | int %}
+          {% set hours = ((uptime % 86400) / 3600) | int %}
+          {% set minutes = ((uptime % 3600) / 60) | int %}
+          {{ days }}d {{ hours }}h {{ minutes }}m
+
+  # WiFi signal quality percentage
+  - platform: template
+    sensors:
+      esp32_wifi_quality:
+        friendly_name: "ESP32 WiFi Quality"
+        unit_of_measurement: "%"
+        value_template: >
+          {% set rssi = states('sensor.esp32_wireguard_ha_wifi_signal') | int %}
+          {% if rssi >= -50 %}
+            100
+          {% elif rssi <= -100 %}
+            0
+          {% else %}
+            {{ ((rssi + 100) * 2) | int }}
+          {% endif %}
+        icon_template: >
+          {% set rssi = states('sensor.esp32_wireguard_ha_wifi_signal') | int %}
+          {% if rssi >= -50 %}
+            mdi:wifi-strength-4
+          {% elif rssi >= -60 %}
+            mdi:wifi-strength-3
+          {% elif rssi >= -70 %}
+            mdi:wifi-strength-2
+          {% else %}
+            mdi:wifi-strength-1
+          {% endif %}
+
+  # Time since last WireGuard handshake
+  - platform: template
+    sensors:
+      esp32_handshake_age:
+        friendly_name: "ESP32 WireGuard Handshake Age"
+        value_template: >
+          {% set handshake = states('sensor.esp32_wireguard_ha_wg_latest_handshake') %}
+          {% if handshake not in ['unknown', 'unavailable', ''] %}
+            {{ relative_time(strptime(handshake, '%Y-%m-%d %H:%M:%S')) }}
+          {% else %}
+            Unknown
+          {% endif %}
+
+# ============================================================================
+# Binary Sensors
+# ============================================================================
+
+binary_sensor:
+  # Connection health indicator
+  - platform: template
+    sensors:
+      esp32_wireguard_healthy:
+        friendly_name: "ESP32 Connection Healthy"
+        device_class: connectivity
+        value_template: >
+          {{ is_state('binary_sensor.esp32_wireguard_ha_wireguard_status', 'on') and
+             is_state('binary_sensor.esp32_wireguard_ha_device_status', 'on') and
+             states('sensor.esp32_wireguard_ha_wifi_signal') | int > -80 }}
+
+# ============================================================================
+# Lovelace Dashboard Card Examples
+# ============================================================================
+
+# Add this to your Lovelace dashboard configuration:
+
+# - type: entities
+#   title: ESP32 WireGuard Status
+#   entities:
+#     - entity: binary_sensor.esp32_wireguard_ha_device_status
+#       name: Device Online
+#     - entity: binary_sensor.esp32_wireguard_ha_wireguard_status
+#       name: VPN Connected
+#     - entity: sensor.esp32_wireguard_ha_wifi_signal
+#       name: WiFi Signal
+#     - entity: sensor.esp32_wifi_quality
+#       name: WiFi Quality
+#     - entity: sensor.esp32_wireguard_uptime_formatted
+#       name: Uptime
+#     - entity: sensor.esp32_wireguard_ha_device_ip
+#       name: Local IP
+#     - entity: sensor.esp32_wireguard_ha_wg_address
+#       name: VPN IP
+#     - entity: sensor.esp32_handshake_age
+#       name: Last Handshake
+#     - entity: button.esp32_wireguard_ha_restart
+#       name: Restart
+
+# Gauge card for WiFi signal
+# - type: gauge
+#   entity: sensor.esp32_wifi_quality
+#   name: WiFi Quality
+#   min: 0
+#   max: 100
+#   severity:
+#     green: 70
+#     yellow: 40
+#     red: 0
+
+# Status indicator card
+# - type: glance
+#   title: ESP32 Quick Status
+#   entities:
+#     - entity: binary_sensor.esp32_wireguard_healthy
+#       name: Healthy
+#     - entity: binary_sensor.esp32_wireguard_ha_wireguard_status
+#       name: VPN
+#     - entity: binary_sensor.esp32_wireguard_ha_device_status
+#       name: Online
+
+# ============================================================================
+# Advanced: Node-RED Flow Example
+# ============================================================================
+
+# If using Node-RED, here's a flow to monitor the ESP32:
+#
+# [State Change Node] -> [Switch Node] -> [Notification Node]
+#    (WireGuard Status)    (on/off)         (Alert)
+#
+# 1. Add "events: state" node for binary_sensor.esp32_wireguard_ha_wireguard_status
+# 2. Add "switch" node to check if state is 'off'
+# 3. Add "call service" node to send notification
+# 4. Add delay node to prevent spam
+
+# ============================================================================
+# Integration with Other Systems
+# ============================================================================
+
+# Example: Trigger webhook on status change
+# automation:
+#   - id: esp32_webhook_trigger
+#     alias: "ESP32 - Webhook Notification"
+#     trigger:
+#       - platform: state
+#         entity_id: binary_sensor.esp32_wireguard_ha_wireguard_status
+#     action:
+#       - service: rest_command.esp32_webhook
+#         data:
+#           status: "{{ states('binary_sensor.esp32_wireguard_ha_wireguard_status') }}"
+
+# rest_command:
+#   esp32_webhook:
+#     url: "https://example.com/webhook"
+#     method: POST
+#     payload: '{"device": "esp32-wireguard", "status": "{{ status }}"}'
+#     content_type: 'application/json'
+
+# ============================================================================
+# Alerting via Multiple Channels
+# ============================================================================
+
+# Group notification services
+# notify:
+#   - name: all_devices
+#     platform: group
+#     services:
+#       - service: mobile_app
+#       - service: telegram
+#       - service: email
+
+# Then use in automations:
+# - service: notify.all_devices
+#   data:
+#     message: "ESP32 status changed"
