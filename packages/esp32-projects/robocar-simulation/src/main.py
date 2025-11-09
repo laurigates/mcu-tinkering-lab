@@ -316,9 +316,12 @@ Examples:
         """
     )
     
+    # Default config path relative to this script's location
+    default_config = Path(__file__).parent.parent / 'config' / 'robot_config.yaml'
+
     parser.add_argument(
         '--config', '-c',
-        default='../config/robot_config.yaml',
+        default=str(default_config),
         help='Configuration file path'
     )
     
