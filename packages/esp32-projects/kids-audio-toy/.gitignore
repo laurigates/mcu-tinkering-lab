@@ -1,0 +1,21 @@
+# ESP-IDF specific build artifacts and configuration
+/build/
+/sdkconfig
+/sdkconfig.old
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Python cache
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
