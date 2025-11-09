@@ -1,0 +1,194 @@
+name: Test Suite
+
+on:
+  push:
+    branches: [main, develop, 'claude/**']
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+jobs:
+  code-quality:
+    name: Code Quality Checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install pre-commit
+        run: pip install pre-commit
+
+      - name: Cache pre-commit environments
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+
+      - name: Run pre-commit hooks
+        run: pre-commit run --all-files --show-diff-on-failure
+
+  test-python-simulation:
+    name: Python Simulation Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install UV
+        run: pip install uv
+
+      - name: Install dependencies
+        working-directory: packages/esp32-projects/robocar-simulation
+        run: uv sync --extra dev
+
+      - name: Run tests with coverage
+        working-directory: packages/esp32-projects/robocar-simulation
+        run: |
+          uv run pytest tests/ \
+            --cov=src \
+            --cov-report=xml \
+            --cov-report=term \
+            --cov-report=html \
+            -v || true
+
+      - name: Archive coverage reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-reports-${{ github.sha }}
+          path: |
+            packages/esp32-projects/robocar-simulation/coverage.xml
+            packages/esp32-projects/robocar-simulation/htmlcov/
+          retention-days: 30
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          file: packages/esp32-projects/robocar-simulation/coverage.xml
+          flags: simulation
+          name: robocar-simulation
+        continue-on-error: true
+
+  # Placeholder for future ESP32 host-based tests
+  test-esp32-host:
+    name: ESP32 Host-Based Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup ESP-IDF
+        uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: v5.4
+          target: esp32
+
+      - name: Check for test directories
+        id: check-tests
+        run: |
+          if find packages/esp32-projects -type d -name "test" | grep -q .; then
+            echo "tests_exist=true" >> $GITHUB_OUTPUT
+          else
+            echo "tests_exist=false" >> $GITHUB_OUTPUT
+            echo "::notice::No ESP32 test directories found yet. Skipping host tests."
+          fi
+
+      - name: Run host-based tests
+        if: steps.check-tests.outputs.tests_exist == 'true'
+        run: |
+          echo "Running ESP32 host-based tests..."
+          # TODO: Add host test execution when test directories are created
+          # Example: cd packages/esp32-projects/robocar-main/test && idf.py build
+          echo "::notice::Host-based test framework ready. Add tests to enable."
+
+  lint-c:
+    name: C/C++ Linting
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install cppcheck
+        run: sudo apt-get update && sudo apt-get install -y cppcheck
+
+      - name: Run cppcheck
+        run: |
+          find packages/esp32-projects \
+            -type f \( -name "*.c" -o -name "*.h" -o -name "*.cpp" -o -name "*.hpp" \) \
+            ! -path "*/managed_components/*" \
+            ! -path "*/components/esp-idf-lib/*" \
+            ! -path "*/build/*" \
+            -print0 | \
+          xargs -0 cppcheck \
+            --enable=warning,style,performance,portability \
+            --suppress=missingIncludeSystem \
+            --suppress=unmatchedSuppression \
+            --inline-suppr \
+            --error-exitcode=0 \
+            --template=gcc \
+            2>&1 | tee cppcheck-report.txt
+
+      - name: Upload cppcheck report
+        uses: actions/upload-artifact@v4
+        with:
+          name: cppcheck-report-${{ github.sha }}
+          path: cppcheck-report.txt
+          retention-days: 30
+
+  format-check:
+    name: Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install clang-format
+        run: sudo apt-get update && sudo apt-get install -y clang-format
+
+      - name: Check C/C++ formatting
+        run: |
+          find packages/esp32-projects \
+            -type f \( -name "*.c" -o -name "*.h" -o -name "*.cpp" -o -name "*.hpp" \) \
+            ! -path "*/managed_components/*" \
+            ! -path "*/components/esp-idf-lib/*" \
+            ! -path "*/build/*" \
+            -print0 | \
+          xargs -0 clang-format --dry-run --Werror --style=file || {
+            echo "::error::Code formatting issues found. Run 'make format-c' to fix."
+            exit 1
+          }
+
+  test-summary:
+    name: Test Summary
+    needs: [code-quality, test-python-simulation, test-esp32-host, lint-c, format-check]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Check test results
+        run: |
+          echo "## Test Results Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Code Quality: ${{ needs.code-quality.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Python Simulation Tests: ${{ needs.test-python-simulation.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- ESP32 Host Tests: ${{ needs.test-esp32-host.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- C/C++ Linting: ${{ needs.lint-c.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Format Check: ${{ needs.format-check.result }}" >> $GITHUB_STEP_SUMMARY
+
+          # Fail if critical checks failed
+          if [ "${{ needs.code-quality.result }}" != "success" ] || \
+             [ "${{ needs.format-check.result }}" != "success" ]; then
+            echo "::error::Critical quality checks failed!"
+            exit 1
+          fi
+
+          echo "::notice::All test checks completed!"
