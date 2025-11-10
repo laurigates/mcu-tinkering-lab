@@ -20,7 +20,7 @@ pyserial>=3.5
 
 # 3D graphics and visualization
 trimesh>=3.15.0
-genesis-world>=0.2.0
+# genesis-world>=0.2.0  # Disabled due to Python 3.11 compatibility issues
 # swift-sim>=1.0.0  # Replaced with Genesis
 # open3d>=0.15.0  # Not compatible with Python 3.13 yet
 # pyvista>=0.38.0  # Reduced for compatibility

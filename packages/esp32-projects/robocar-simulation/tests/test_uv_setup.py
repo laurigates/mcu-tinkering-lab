@@ -4,6 +4,7 @@ Test file to verify uv setup and basic imports work correctly.
 """
 import pytest
 import sys
+import asyncio
 from pathlib import Path
 
 # Add src directory to path for imports
