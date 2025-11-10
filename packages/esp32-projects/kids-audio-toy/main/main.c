@@ -136,6 +136,10 @@ static void init_led(void)
  */
 static float map_adc_to_range(uint32_t adc_value, float min_val, float max_val)
 {
+    // Clamp ADC value to valid range to prevent out-of-bounds results
+    if (adc_value > 4095) {
+        adc_value = 4095;
+    }
     return min_val + (max_val - min_val) * (adc_value / 4095.0);
 }
 
@@ -244,12 +248,10 @@ void app_main(void)
     init_pwm();
     init_led();
 
-    ESP_LOGI(TAG, "Hardware initialized. Starting audio generation...");
-
-    // Create audio task
-    xTaskCreate(audio_task, "audio_task", 4096, NULL, 5, NULL);
+    ESP_LOGI(TAG, "Hardware initialized.");
 
     // Startup sequence - play a little tune!
+    // (Play this BEFORE starting the audio task to avoid race condition)
     ESP_LOGI(TAG, "Playing startup sequence...");
     for (int i = 0; i < 3; i++) {
         ledc_set_freq(LEDC_MODE, LEDC_TIMER, 440 + (i * 110));
@@ -263,5 +265,10 @@ void app_main(void)
         vTaskDelay(pdMS_TO_TICKS(100));
     }
 
-    ESP_LOGI(TAG, "Ready! Turn the knobs and have fun!");
+    ESP_LOGI(TAG, "Ready! Starting audio generation...");
+
+    // Create audio task (after startup sequence to avoid race condition)
+    xTaskCreate(audio_task, "audio_task", 4096, NULL, 5, NULL);
+
+    ESP_LOGI(TAG, "Turn the knobs and have fun!");
 }
