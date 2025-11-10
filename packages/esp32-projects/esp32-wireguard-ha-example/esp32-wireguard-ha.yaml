@@ -1,0 +1,165 @@
+esphome:
+  name: esp32-wireguard-ha
+  friendly_name: "ESP32 WireGuard HA Example"
+  platform: ESP32
+  board: esp32dev
+
+# Enable logging
+logger:
+  level: DEBUG
+
+# Enable Home Assistant API with encryption
+api:
+  encryption:
+    key: !secret api_encryption_key
+  # Reboot if API connection is lost for too long
+  reboot_timeout: 15min
+
+# Enable OTA updates
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+# WiFi configuration
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "ESP32-WireGuard-HA"
+    password: !secret fallback_password
+
+  # Use manual IP (optional but recommended for WireGuard)
+  manual_ip:
+    static_ip: !secret device_ip
+    gateway: !secret gateway_ip
+    subnet: !secret subnet_mask
+    dns1: !secret dns1
+    dns2: !secret dns2
+
+captive_portal:
+
+# Time synchronization using SNTP (required for WireGuard)
+# IMPORTANT: Do not use 'homeassistant' time platform if HA is accessed via WireGuard
+time:
+  - platform: sntp
+    id: sntp_time
+    timezone: "UTC"
+    servers:
+      - 0.pool.ntp.org
+      - 1.pool.ntp.org
+      - 2.pool.ntp.org
+
+# WireGuard VPN Configuration
+wireguard:
+  # Local IP address for this device on the VPN
+  address: !secret wg_address
+
+  # This device's private key (generate with: wg genkey)
+  private_key: !secret wg_private_key
+
+  # WireGuard server configuration
+  peer_endpoint: !secret wg_peer_endpoint
+  peer_public_key: !secret wg_peer_public_key
+  peer_port: !secret wg_peer_port
+
+  # Optional: Pre-shared key for additional security
+  # peer_preshared_key: !secret wg_peer_preshared_key
+
+  # Networks allowed through the VPN tunnel (CIDR notation)
+  # This example routes Home Assistant traffic through VPN
+  peer_allowed_ips:
+    - !secret wg_allowed_ips
+
+  # Keepalive for NAT traversal (25 seconds recommended)
+  peer_persistent_keepalive: 25s
+
+  # Netmask for the VPN network
+  netmask: 255.255.255.0
+
+# Binary sensors to monitor WireGuard status
+binary_sensor:
+  # Status of WireGuard connection
+  - platform: wireguard
+    name: "WireGuard Status"
+    id: wg_status
+
+  # Built-in status LED indicator
+  - platform: status
+    name: "Device Status"
+    id: device_status
+
+# Sensors for monitoring
+sensor:
+  # WiFi signal strength
+  - platform: wifi_signal
+    name: "WiFi Signal"
+    update_interval: 60s
+
+  # Device uptime
+  - platform: uptime
+    name: "Uptime"
+    update_interval: 60s
+
+  # WireGuard latest handshake timestamp
+  - platform: wireguard
+    name: "WG Latest Handshake"
+    id: wg_handshake
+
+# Text sensors
+text_sensor:
+  # WireGuard VPN address
+  - platform: wireguard
+    name: "WG Address"
+    id: wg_address_sensor
+
+  # Device IP address
+  - platform: wifi_info
+    ip_address:
+      name: "Device IP"
+
+  # ESPHome version
+  - platform: version
+    name: "ESPHome Version"
+
+# Example: Temperature sensor (BME280 via I2C)
+# Uncomment and configure if you have sensors connected
+# i2c:
+#   sda: GPIO21
+#   scl: GPIO22
+#   scan: true
+
+# sensor:
+#   - platform: bme280
+#     temperature:
+#       name: "Temperature"
+#       oversampling: 16x
+#     pressure:
+#       name: "Pressure"
+#     humidity:
+#       name: "Humidity"
+#     address: 0x76
+#     update_interval: 60s
+
+# Example: Control a relay or LED
+# switch:
+#   - platform: gpio
+#     pin: GPIO2
+#     name: "Relay 1"
+#     id: relay1
+#     restore_mode: RESTORE_DEFAULT_OFF
+
+# Example: Physical button input
+# binary_sensor:
+#   - platform: gpio
+#     pin:
+#       number: GPIO0
+#       mode:
+#         input: true
+#         pullup: true
+#       inverted: true
+#     name: "Button"
+#     on_press:
+#       then:
+#         - switch.toggle: relay1
