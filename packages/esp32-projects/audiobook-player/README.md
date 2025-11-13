@@ -4,39 +4,40 @@ An RFID-based audiobook player that integrates with Home Assistant. Scan picture
 
 ## Hardware
 
-- **Lolin D1 Mini** (ESP8266)
+- **WEMOS WiFi & Bluetooth Battery ESP32** (with 18650 battery holder)
 - **RC522 RFID Reader Module**
 - **Green button** (Play)
 - **Red button** (Pause)
 - **RFID tags** attached to picture cards
+- **Optional:** 18650 battery for portable operation (~17 hours runtime)
 
 ## Wiring
 
 ### RC522 RFID Reader (SPI)
 
-| RC522 Pin | D1 Mini Pin | GPIO |
-|-----------|-------------|------|
-| SDA (CS)  | D8          | GPIO15 |
-| SCK       | D5          | GPIO14 |
-| MOSI      | D7          | GPIO13 |
-| MISO      | D6          | GPIO12 |
-| IRQ       | *not used*  | -    |
-| GND       | GND         | -    |
-| RST       | RST         | -    |
-| 3.3V      | 3.3V        | -    |
+| RC522 Pin | ESP32 Pin | GPIO |
+|-----------|-----------|------|
+| SDA (CS)  | GPIO5     | GPIO5  |
+| SCK       | GPIO18    | GPIO18 |
+| MOSI      | GPIO23    | GPIO23 |
+| MISO      | GPIO19    | GPIO19 |
+| IRQ       | *not used* | -    |
+| GND       | GND       | -    |
+| RST       | RST       | -    |
+| 3.3V      | 3.3V      | -    |
 
 ### Buttons
 
-| Button | D1 Mini Pin | GPIO | Notes |
-|--------|-------------|------|-------|
-| Green (Play)  | D1   | GPIO5  | Connect to GND when pressed |
-| Red (Pause)   | D2   | GPIO4  | Connect to GND when pressed |
+| Button | ESP32 Pin | GPIO | Notes |
+|--------|-----------|------|-------|
+| Green (Play)  | GPIO32 | GPIO32 | Connect to GND when pressed |
+| Red (Pause)   | GPIO33 | GPIO33 | Connect to GND when pressed |
 
 **Note:** Buttons use internal pull-up resistors, so connect one side to the GPIO pin and the other to GND.
 
 ### Status LED
 
-The built-in LED (D4/GPIO2) is used as a status indicator.
+The built-in LED (GPIO16) is used as a status indicator.
 
 ## Setup
 
@@ -219,12 +220,13 @@ automation:
 1. **Attach RFID tags to picture cards** - Use stickers or tape
 2. **Scan all tags** and record their UIDs
 3. **Create Home Assistant automations** mapping tags to audiobooks
-4. **Design an enclosure** to hold the D1 Mini, RC522, and buttons
+4. **Design an enclosure** to hold the ESP32, RC522, and buttons
 5. **Add more features**:
    - Volume control buttons
    - Next/Previous track buttons
    - Sleep timer
    - LED indicators for different states
+   - Battery level monitoring (using ESP32's built-in ADC)
 
 ## Media Player Options
 
