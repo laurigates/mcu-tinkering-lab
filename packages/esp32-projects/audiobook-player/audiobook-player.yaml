@@ -2,8 +2,10 @@ esphome:
   name: audiobook-player
   friendly_name: "Audiobook Player"
 
-esp8266:
-  board: d1_mini
+esp32:
+  board: wemosbat
+  framework:
+    type: arduino
 
 # Enable logging
 logger:
@@ -30,13 +32,13 @@ captive_portal:
 
 # SPI bus configuration for RC522
 spi:
-  clk_pin: D5   # GPIO14
-  miso_pin: D6  # GPIO12
-  mosi_pin: D7  # GPIO13
+  clk_pin: GPIO18   # SCK - ESP32 VSPI default
+  miso_pin: GPIO19  # MISO - ESP32 VSPI default
+  mosi_pin: GPIO23  # MOSI - ESP32 VSPI default
 
 # RC522 RFID reader configuration
 rc522_spi:
-  cs_pin: D8    # GPIO15
+  cs_pin: GPIO5     # CS/SDA - ESP32 VSPI default
   update_interval: 500ms
 
   # When a tag is detected, send it to Home Assistant
@@ -80,7 +82,7 @@ binary_sensor:
   # Green button - Play
   - platform: gpio
     pin:
-      number: D1  # GPIO5
+      number: GPIO32  # Available GPIO pin
       mode:
         input: true
         pullup: true
@@ -100,7 +102,7 @@ binary_sensor:
   # Red button - Pause
   - platform: gpio
     pin:
-      number: D2  # GPIO4
+      number: GPIO33  # Available GPIO pin
       mode:
         input: true
         pullup: true
@@ -121,6 +123,6 @@ binary_sensor:
 output:
   - platform: gpio
     pin:
-      number: D4  # GPIO2 - Built-in LED
+      number: GPIO16  # Built-in LED on WEMOS Battery ESP32
       inverted: true
     id: status_led_output

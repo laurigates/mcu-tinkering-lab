@@ -3,10 +3,10 @@
 ## Overview
 
 ```
-                    ┌─────────────────┐
-                    │  Lolin D1 Mini  │
-                    │    (ESP8266)    │
-                    └─────────────────┘
+                    ┌─────────────────────────────┐
+                    │  WEMOS Battery ESP32        │
+                    │  (WiFi & Bluetooth)         │
+                    └─────────────────────────────┘
                            │
         ┌──────────────────┼──────────────────┐
         │                  │                  │
@@ -22,12 +22,12 @@
 The RC522 uses SPI communication protocol:
 
 ```
-RC522               D1 Mini
+RC522               WEMOS ESP32
 ┌─────────┐        ┌─────────┐
-│ SDA(CS) ├────────┤ D8      │ GPIO15
-│ SCK     ├────────┤ D5      │ GPIO14
-│ MOSI    ├────────┤ D7      │ GPIO13
-│ MISO    ├────────┤ D6      │ GPIO12
+│ SDA(CS) ├────────┤ GPIO5   │ SPI CS
+│ SCK     ├────────┤ GPIO18  │ SPI Clock
+│ MOSI    ├────────┤ GPIO23  │ SPI MOSI
+│ MISO    ├────────┤ GPIO19  │ SPI MISO
 │ IRQ     │        │         │ Not connected
 │ GND     ├────────┤ GND     │
 │ RST     ├────────┤ RST     │ (or 3.3V for normal operation)
@@ -44,81 +44,88 @@ Both buttons use the same wiring pattern with internal pull-up resistors:
 ### Green Button (Play)
 
 ```
-     D1 Mini
-    ┌────────┐
-    │  D1    ├──────┬─── One side of button
-    │ (GPIO5)│      │
-    │        │    ┌─┴─┐
-    │        │    │   │  Green Button
-    │        │    └─┬─┘
-    │  GND   ├──────┴─── Other side of button
-    └────────┘
+     WEMOS ESP32
+    ┌────────────┐
+    │  GPIO32    ├──────┬─── One side of button
+    │            │      │
+    │            │    ┌─┴─┐
+    │            │    │   │  Green Button
+    │            │    └─┬─┘
+    │  GND       ├──────┴─── Other side of button
+    └────────────┘
 ```
 
 ### Red Button (Pause)
 
 ```
-     D1 Mini
-    ┌────────┐
-    │  D2    ├──────┬─── One side of button
-    │ (GPIO4)│      │
-    │        │    ┌─┴─┐
-    │        │    │   │  Red Button
-    │        │    └─┬─┘
-    │  GND   ├──────┴─── Other side of button
-    └────────┘
+     WEMOS ESP32
+    ┌────────────┐
+    │  GPIO33    ├──────┬─── One side of button
+    │            │      │
+    │            │    ┌─┴─┐
+    │            │    │   │  Red Button
+    │            │    └─┬─┘
+    │  GND       ├──────┴─── Other side of button
+    └────────────┘
 ```
 
 **Note:** When the button is pressed, it connects the GPIO pin to GND. The internal pull-up resistor keeps the pin HIGH when the button is not pressed.
 
 ## Complete Pin Summary
 
-| Component | Component Pin | D1 Mini Pin | GPIO | Notes |
-|-----------|--------------|-------------|------|-------|
-| **RC522** | SDA (CS)     | D8          | GPIO15 | SPI Chip Select |
-| **RC522** | SCK          | D5          | GPIO14 | SPI Clock |
-| **RC522** | MOSI         | D7          | GPIO13 | SPI Data Out |
-| **RC522** | MISO         | D6          | GPIO12 | SPI Data In |
-| **RC522** | IRQ          | -           | -      | Not used |
-| **RC522** | GND          | GND         | -      | Ground |
-| **RC522** | RST          | RST or 3.3V | -      | Reset |
-| **RC522** | 3.3V         | 3.3V        | -      | **3.3V only!** |
-| **Green Button** | One side | D1      | GPIO5  | Play button |
+| Component | Component Pin | ESP32 Pin | GPIO | Notes |
+|-----------|--------------|-----------|------|-------|
+| **RC522** | SDA (CS)     | GPIO5     | GPIO5  | SPI Chip Select |
+| **RC522** | SCK          | GPIO18    | GPIO18 | SPI Clock |
+| **RC522** | MOSI         | GPIO23    | GPIO23 | SPI Data Out |
+| **RC522** | MISO         | GPIO19    | GPIO19 | SPI Data In |
+| **RC522** | IRQ          | -         | -      | Not used |
+| **RC522** | GND          | GND       | -      | Ground |
+| **RC522** | RST          | RST or 3.3V | -    | Reset |
+| **RC522** | 3.3V         | 3.3V      | -      | **3.3V only!** |
+| **Green Button** | One side | GPIO32  | GPIO32 | Play button |
 | **Green Button** | Other side | GND   | -      | Ground |
-| **Red Button** | One side   | D2      | GPIO4  | Pause button |
+| **Red Button** | One side   | GPIO33  | GPIO33 | Pause button |
 | **Red Button** | Other side | GND     | -      | Ground |
-| **Status LED** | Built-in   | D4      | GPIO2  | On-board LED |
+| **Status LED** | Built-in   | GPIO16  | GPIO16 | On-board LED |
 
 ## Power Considerations
 
-- The D1 Mini can be powered via:
+- The WEMOS Battery ESP32 can be powered via:
   - **USB** (5V) - Easiest for development
+  - **18650 Battery** - Built-in battery holder on back (3000mAh = ~17 hours runtime)
   - **5V pin** - External 5V power supply
   - **3.3V pin** - External 3.3V regulated supply
 
+- Built-in battery management:
+  - 0.5A charging current
+  - 1A output current
+  - Over-charge protection
+  - Over-discharge protection
+
 - Current requirements:
-  - D1 Mini idle: ~80mA
-  - D1 Mini WiFi active: ~170mA
+  - ESP32 idle: ~80mA
+  - ESP32 WiFi/BLE active: ~240mA
   - RC522 idle: ~13mA
   - RC522 reading: ~26mA
-  - **Total peak**: ~200mA
+  - **Total peak**: ~270mA
 
-A standard USB power supply (500mA+) is sufficient.
+A standard USB power supply (500mA+) is sufficient for development. For portable use, a 3000mAh 18650 battery provides approximately 17 hours of operation.
 
 ## Optional: External LED Indicator
 
 If you want an external status LED instead of the built-in one:
 
 ```
-     D1 Mini
-    ┌────────┐
-    │  D4    ├────┬── Anode (+) of LED
-    │ (GPIO2)│    │
-    │        │  ┌─┴─┐
-    │        │  │LED│ (+ resistor in series)
-    │        │  └─┬─┘
-    │  GND   ├────┴── Cathode (-) of LED
-    └────────┘
+     WEMOS ESP32
+    ┌────────────┐
+    │  GPIO16    ├────┬── Anode (+) of LED
+    │            │    │
+    │            │  ┌─┴─┐
+    │            │  │LED│ (+ resistor in series)
+    │            │  └─┬─┘
+    │  GND       ├────┴── Cathode (-) of LED
+    └────────────┘
 
 Resistor: 220Ω - 330Ω (for standard 3.3V LED)
 ```
@@ -132,10 +139,10 @@ Resistor: 220Ω - 330Ω (for standard 3.3V LED)
 │  │  Button  │      │    Button    │   │
 │  └──────────┘      └──────────────┘   │
 │                                        │
-│              ┌──────────┐              │
-│              │  D1 Mini │              │
-│              │          │              │
-│              └──────────┘              │
+│          ┌────────────────────┐        │
+│          │   WEMOS ESP32      │        │
+│          │   (Battery)        │        │
+│          └────────────────────┘        │
 │                                        │
 │         ┌──────────────────┐           │
 │         │   RC522 Module   │           │
@@ -145,15 +152,15 @@ Resistor: 220Ω - 330Ω (for standard 3.3V LED)
 │         [Place RFID card here]         │
 └────────────────────────────────────────┘
 
-Power via USB cable connected to D1 Mini
+Power via USB cable or 18650 battery in rear holder
 ```
 
 ## Testing Checklist
 
 1. ✓ RC522 powered with 3.3V (NOT 5V)
-2. ✓ All SPI connections secure (D5, D6, D7, D8)
+2. ✓ All SPI connections secure (GPIO18, GPIO19, GPIO23, GPIO5)
 3. ✓ Both buttons connect to GND when pressed
-4. ✓ D1 Mini powered via USB
+4. ✓ WEMOS ESP32 powered via USB or 18650 battery
 5. ✓ Upload firmware and check logs
 6. ✓ Test RFID reading by scanning a tag
 7. ✓ Test buttons by pressing and checking logs
