@@ -37,11 +37,16 @@ Perfect for 4-year-olds and up!
 ### Required Components
 - ESP32 development board (any variant with ADC pins)
 - 3× 10kΩ linear potentiometers (for pitch, duration, interval)
-- 1× Piezo speaker or small 8Ω speaker
+- 1× Piezo speaker (recommended) or small 8Ω speaker
 - 1× LED (any color)
 - 1× 220Ω resistor (for LED)
 - Breadboard and jumper wires
 - USB power supply (5V)
+
+**⚠️ Speaker Warning**: If using an 8Ω speaker instead of a piezo, you MUST add an external amplifier
+(e.g., PAM8403 module). Direct connection draws ~412mA at 3.3V, which exceeds the ESP32 GPIO's
+40mA maximum current rating and can damage the board. Piezo speakers are recommended as they
+work safely with direct GPIO connection.
 
 ### Optional Components (for 555 Features)
 - 1-2× NE555 timer ICs

@@ -77,8 +77,17 @@ static void init_adc(void)
     adc1_config_channel_atten(TIMER_555_MOD_CHANNEL, ADC_ATTEN_DB_11);
 
     // Characterize ADC for more accurate readings
-    esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_DB_11, ADC_WIDTH_BIT_12,
-                             1100, &adc_chars);
+    esp_adc_cal_value_t cal_type = esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_DB_11,
+                                                              ADC_WIDTH_BIT_12, 1100, &adc_chars);
+
+    // Log calibration type for debugging
+    if (cal_type == ESP_ADC_CAL_VAL_EFUSE_TP) {
+        ESP_LOGI(TAG, "ADC calibrated using Two Point values from eFuse");
+    } else if (cal_type == ESP_ADC_CAL_VAL_EFUSE_VREF) {
+        ESP_LOGI(TAG, "ADC calibrated using eFuse Vref");
+    } else {
+        ESP_LOGW(TAG, "ADC calibrated using default Vref (less accurate)");
+    }
 
     ESP_LOGI(TAG, "ADC initialized");
 }
@@ -96,7 +105,11 @@ static void init_pwm(void)
         .freq_hz          = 1000,  // Initial frequency (will be updated)
         .clk_cfg          = LEDC_AUTO_CLK
     };
-    ledc_timer_config(&ledc_timer);
+    esp_err_t ret = ledc_timer_config(&ledc_timer);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to configure LEDC timer: %s", esp_err_to_name(ret));
+        return;
+    }
 
     // Configure channel
     ledc_channel_config_t ledc_channel = {
@@ -108,7 +121,11 @@ static void init_pwm(void)
         .duty           = 0,  // Start silent
         .hpoint         = 0
     };
-    ledc_channel_config(&ledc_channel);
+    ret = ledc_channel_config(&ledc_channel);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to configure LEDC channel: %s", esp_err_to_name(ret));
+        return;
+    }
 
     ESP_LOGI(TAG, "PWM initialized on GPIO %d", PIEZO_PIN);
 }
@@ -125,7 +142,11 @@ static void init_led(void)
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
         .intr_type = GPIO_INTR_DISABLE,
     };
-    gpio_config(&io_conf);
+    esp_err_t ret = gpio_config(&io_conf);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to configure LED GPIO: %s", esp_err_to_name(ret));
+        return;
+    }
     gpio_set_level(LED_PIN, 0);
 
     ESP_LOGI(TAG, "LED initialized on GPIO %d", LED_PIN);
@@ -177,6 +198,10 @@ static void read_modulation(void)
     // Apply smoothing to reduce jitter (exponential moving average)
     modulation_value = (MOD_SMOOTHING * modulation_value) +
                        ((1.0 - MOD_SMOOTHING) * raw_mod);
+
+    // Clamp smoothed value to prevent drift/overflow
+    if (modulation_value < -MOD_DEPTH_MAX) modulation_value = -MOD_DEPTH_MAX;
+    if (modulation_value > MOD_DEPTH_MAX) modulation_value = MOD_DEPTH_MAX;
 }
 
 /**

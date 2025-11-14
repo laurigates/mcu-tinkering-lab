@@ -110,7 +110,8 @@ Add a 555 timer to create pitch modulation effects (vibrato, warble).
 - 1× 100nF capacitor (C1)
 - 1× 10µF capacitor (C2)
 - 2× 10kΩ resistors (R1, R2)
-- 1× 1kΩ resistor (R3 - voltage divider)
+- 1× 10kΩ resistor (R_RESET - for reset pin)
+- 1× 1.5kΩ resistor (R3 - voltage divider)
 - 1× 2kΩ resistor (R4 - voltage divider)
 
 ### 555 Timer Circuit (Astable Mode)
@@ -129,16 +130,16 @@ Add a 555 timer to create pitch modulation effects (vibrato, warble).
                       │       │    │
            ┌──────────┤7 VCC  8├───┘
            │          │         │
-           │     ┌────┤3  OUT  4├────┐ RESET (tied high)
+           │     ┌────┤3  OUT  4├────┬─── RESET (tie to VCC via 10kΩ)
            │     │    │         │    │
-           │     │    │555      │    │
-           │   ┌─┴──┐ │         │    │
-           │   │ C1 │ │2  TRIG 1├────┤ (GND)
-           │   │100n│ │         │    │
-           │   └─┬──┘ │6 THRESH │    │
-           │     │    └────┬────┘    │
-           │     │         │         │
-        POT4 ───┴─────────┴─────────┘
+           │     │    │555      │   ┌┴┐
+           │   ┌─┴──┐ │         │   │ │ R_RESET (10kΩ, noise immunity)
+           │   │ C1 │ │2  TRIG 1├─┐ │ │
+           │   │100n│ │         │ │ └┬┘
+           │   └─┬──┘ │6 THRESH │ │  │
+           │     │    └────┬────┘ │ VCC
+           │     │         │      │
+        POT4 ───┴─────────┴──────┴───┘
       (Freq)    │
        ┌──┐     │
     ───┤  ├─────┤
@@ -171,7 +172,7 @@ Add a 555 timer to create pitch modulation effects (vibrato, warble).
               │
               │
              ┌┴┐
-        R3   │ │ 1kΩ
+        R3   │ │ 1.5kΩ
              │ │
              └┬┘
               ├────────► ESP32 GPIO33 (ADC1_CH5)
@@ -182,8 +183,11 @@ Add a 555 timer to create pitch modulation effects (vibrato, warble).
               │
              GND
 
-    Output voltage = 5V × (2kΩ / (1kΩ + 2kΩ)) = 3.33V ✓
+    Output voltage = 5V × (2kΩ / (1.5kΩ + 2kΩ)) = 2.86V ✓
 ```
+
+**Note**: Using 1.5kΩ + 2kΩ provides a safer margin (2.86V) compared to the absolute 3.3V maximum.
+If you don't have a 1.5kΩ resistor, you can use 1kΩ + 2.2kΩ for 3.125V.
 
 ### 555 Frequency Calculation
 
@@ -315,6 +319,17 @@ If turning clockwise decreases the value instead of increasing:
 - If using magnetic speaker, try 100Ω-470Ω resistor in series
 - For louder output, use a small amplifier (PAM8403 module)
 - Check PWM duty cycle is 50% (not 0% or 100%)
+
+### Problem: Using 8Ω Speaker
+
+**⚠️ IMPORTANT**: ESP32 GPIO pins are rated for 40mA maximum current. An 8Ω speaker at 3.3V
+would draw ~412mA, which **will damage your ESP32**!
+
+**Solutions**:
+- **Recommended**: Use a piezo speaker instead (works directly with GPIO)
+- **If you must use 8Ω speaker**: Add an external amplifier module (PAM8403, LM386, etc.)
+- Connect ESP32 PWM → Amplifier input → Amplifier output → 8Ω speaker
+- Never connect an 8Ω speaker directly to GPIO pins!
 
 ### Problem: 555 won't oscillate
 
