@@ -38,7 +38,7 @@ spi:
 
 # RC522 RFID reader configuration
 rc522_spi:
-  cs_pin: GPIO5     # CS/SDA - ESP32 VSPI default
+  cs_pin: GPIO17    # CS/SDA - Changed from GPIO5 (strapping pin)
   update_interval: 500ms
 
   # When a tag is detected, send it to Home Assistant

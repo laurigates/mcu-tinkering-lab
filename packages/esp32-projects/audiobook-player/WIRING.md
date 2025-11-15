@@ -24,7 +24,7 @@ The RC522 uses SPI communication protocol:
 ```
 RC522               WEMOS ESP32
 ┌─────────┐        ┌─────────┐
-│ SDA(CS) ├────────┤ GPIO5   │ SPI CS
+│ SDA(CS) ├────────┤ GPIO17  │ SPI CS
 │ SCK     ├────────┤ GPIO18  │ SPI Clock
 │ MOSI    ├────────┤ GPIO23  │ SPI MOSI
 │ MISO    ├────────┤ GPIO19  │ SPI MISO
@@ -75,7 +75,7 @@ Both buttons use the same wiring pattern with internal pull-up resistors:
 
 | Component | Component Pin | ESP32 Pin | GPIO | Notes |
 |-----------|--------------|-----------|------|-------|
-| **RC522** | SDA (CS)     | GPIO5     | GPIO5  | SPI Chip Select |
+| **RC522** | SDA (CS)     | GPIO17    | GPIO17 | SPI Chip Select (changed from GPIO5 to avoid strapping pin) |
 | **RC522** | SCK          | GPIO18    | GPIO18 | SPI Clock |
 | **RC522** | MOSI         | GPIO23    | GPIO23 | SPI Data Out |
 | **RC522** | MISO         | GPIO19    | GPIO19 | SPI Data In |
@@ -158,7 +158,7 @@ Power via USB cable or 18650 battery in rear holder
 ## Testing Checklist
 
 1. ✓ RC522 powered with 3.3V (NOT 5V)
-2. ✓ All SPI connections secure (GPIO18, GPIO19, GPIO23, GPIO5)
+2. ✓ All SPI connections secure (GPIO18, GPIO19, GPIO23, GPIO17)
 3. ✓ Both buttons connect to GND when pressed
 4. ✓ WEMOS ESP32 powered via USB or 18650 battery
 5. ✓ Upload firmware and check logs
