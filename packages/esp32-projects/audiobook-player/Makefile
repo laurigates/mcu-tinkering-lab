@@ -50,8 +50,19 @@ upload:
 		echo "Error: $(SECRETS_FILE) not found. Run 'make config' first."; \
 		exit 1; \
 	fi
-	@echo "Compiling and uploading via USB..."
-	esphome run $(CONFIG_FILE)
+	@echo "Detecting USB serial port..."
+	@PORT=$$(ls /dev/cu.* 2>/dev/null | grep -E "(usbserial|SLAB|wchusbserial)" | head -1); \
+	if [ -z "$$PORT" ]; then \
+		echo "Error: No ESP32 device found on USB."; \
+		echo "Please connect your ESP32 via USB cable."; \
+		echo ""; \
+		echo "Available ports:"; \
+		ls /dev/cu.* 2>/dev/null | grep -v -E "(Bluetooth|debug|Suunto)" || echo "  None found"; \
+		exit 1; \
+	fi; \
+	echo "Found device at $$PORT"; \
+	echo "Compiling and uploading via USB..."; \
+	esphome run $(CONFIG_FILE) --device $$PORT
 
 wireless:
 	@echo "Uploading via WiFi (OTA)..."
@@ -108,7 +119,7 @@ pins:
 	@echo "Pin Assignment Reference:"
 	@echo ""
 	@echo "RC522 RFID Reader (SPI):"
-	@echo "  SDA (CS) → GPIO5"
+	@echo "  SDA (CS) → GPIO17"
 	@echo "  SCK      → GPIO18"
 	@echo "  MOSI     → GPIO23"
 	@echo "  MISO     → GPIO19"
