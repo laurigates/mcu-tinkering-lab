@@ -146,6 +146,7 @@ The vibration motor provides tactile feedback when a tag is scanned:
 
 **Alternative:** Use a motor driver module (L9110, DRV8833) for simpler wiring.
 
+
 ## Complete Pin Summary
 
 | Component | Component Pin | ESP32 Pin | GPIO | Notes |
