@@ -23,7 +23,14 @@ echo ""
 
 # Check ESP-IDF installation
 if [ -d "$IDF_PATH" ]; then
-    VERSION=$(cd "$IDF_PATH" && git describe --tags 2>/dev/null || echo "unknown")
+    # Try git describe first, then fall back to version file
+    if [ -d "$IDF_PATH/.git" ]; then
+        VERSION=$(cd "$IDF_PATH" && git describe --tags 2>/dev/null || echo "unknown")
+    elif [ -f "$IDF_PATH/version.txt" ]; then
+        VERSION=$(cat "$IDF_PATH/version.txt")
+    else
+        VERSION="installed (version unknown)"
+    fi
     echo "ESP-IDF: $VERSION"
     echo "Path: $IDF_PATH"
 else

@@ -8,6 +8,10 @@ DEFAULT_PORT := $(PORT)
 IDF_VERSION ?= v5.3.2
 IDF_TARGETS ?= esp32,esp32s3,esp32c3
 
+# Use Espressif's download mirror for faster toolchain downloads
+# Set to empty string to use GitHub directly
+IDF_GITHUB_ASSETS ?= dl.espressif.com/github_assets
+
 # Detect shell and set appropriate ESP-IDF environment
 SHELL_NAME := $(shell basename $$SHELL)
 
@@ -158,13 +162,20 @@ setup-idf:
 		echo "$(YELLOW)To reinstall, remove $(IDF_PATH) first$(NC)"; \
 	else \
 		echo "$(BLUE)Installing ESP-IDF $(IDF_VERSION)...$(NC)"; \
-		mkdir -p $$(dirname $(IDF_PATH)); \
+		mkdir -p $$(dirname $(IDF_PATH)) || { echo "$(RED)Failed to create directory$(NC)"; exit 1; }; \
 		echo "$(CYAN)Cloning repository (this may take a while)...$(NC)"; \
-		git clone --recursive -b $(IDF_VERSION) https://github.com/espressif/esp-idf.git $(IDF_PATH); \
+		git clone --recursive -b $(IDF_VERSION) https://github.com/espressif/esp-idf.git $(IDF_PATH) || { \
+			echo "$(RED)Failed to clone ESP-IDF repository$(NC)"; \
+			echo "$(YELLOW)Check your internet connection and try again$(NC)"; \
+			exit 1; \
+		}; \
 		echo "$(CYAN)Installing toolchain for targets: $(IDF_TARGETS)...$(NC)"; \
 		cd $(IDF_PATH) && \
-			export IDF_GITHUB_ASSETS="dl.espressif.com/github_assets" && \
-			./install.sh $(IDF_TARGETS); \
+			export IDF_GITHUB_ASSETS="$(IDF_GITHUB_ASSETS)" && \
+			./install.sh $(IDF_TARGETS) || { \
+				echo "$(RED)Failed to install ESP-IDF toolchain$(NC)"; \
+				exit 1; \
+			}; \
 		echo ""; \
 		echo "$(GREEN)✓ ESP-IDF $(IDF_VERSION) installed successfully!$(NC)"; \
 		echo ""; \
@@ -532,7 +543,8 @@ format-check-python:
 install-dev-tools:
 	@echo "$(BLUE)Installing development tools...$(NC)"
 	@echo "$(CYAN)Installing Python tools...$(NC)"
-	pip install --upgrade pip pre-commit ruff mypy pytest pytest-cov uv
+	pip install --upgrade pip
+	pip install pre-commit==3.8.0 ruff==0.6.9 mypy==1.11.2 pytest==8.3.3 pytest-cov==5.0.0 uv==0.4.18
 	@echo "$(CYAN)Installing pre-commit hooks...$(NC)"
 	pre-commit install
 	@echo "$(CYAN)Checking system tools...$(NC)"

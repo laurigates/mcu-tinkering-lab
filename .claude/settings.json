@@ -8,7 +8,7 @@
       "Bash(git:*)",
       "Bash(ls:*)",
       "Bash(cat:*)",
-      "Bash(python*:*)"
+      "Bash(python3:*)"
     ]
   },
   "hooks": {
@@ -18,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/home/user/mcu-tinkering-lab/.claude/hooks/session-start-idf-env.sh",
+            "command": "./.claude/hooks/session-start-idf-env.sh",
             "timeout": 10
           }
         ]

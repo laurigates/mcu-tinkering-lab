@@ -14,6 +14,6 @@ Start serial monitor for the specified project: $ARGUMENTS
 - `audio` - Monitor ESP32-CAM audio: `make esp32-audio-monitor PORT=$2`
 - `telegram` - Monitor LLM Telegram bot: `make llm-telegram-monitor PORT=$2`
 
-Default port: /dev/cu.usbserial-0001
+Default port: /dev/cu.usbserial-0001 (macOS) or /dev/ttyUSB0 (Linux)
 
 Note: Press Ctrl+] to exit the monitor.
