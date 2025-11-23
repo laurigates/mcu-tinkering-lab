@@ -5,7 +5,7 @@ esphome:
 esp32:
   board: wemosbat
   framework:
-    type: arduino
+    type: esp-idf
 
 # Enable logging
 logger:
@@ -18,6 +18,9 @@ api:
 ota:
   - platform: esphome
     password: !secret ota_password
+    on_begin:
+      then:
+        - deep_sleep.prevent: deep_sleep_control
 
 wifi:
   ssid: !secret wifi_ssid
@@ -29,6 +32,13 @@ wifi:
     password: !secret fallback_password
 
 captive_portal:
+
+# Deep sleep configuration for power management
+deep_sleep:
+  id: deep_sleep_control
+  run_duration: 2min        # Stay awake for 2 minutes after wake
+  wakeup_pin: GPIO27        # Tilt switch wakes device
+  wakeup_pin_mode: INVERT_WAKEUP  # Wake when tilt switch closes (connects to GND)
 
 # SPI bus configuration for RC522
 spi:
