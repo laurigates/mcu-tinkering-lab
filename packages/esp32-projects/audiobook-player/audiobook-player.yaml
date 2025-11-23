@@ -1,6 +1,10 @@
 esphome:
   name: audiobook-player
   friendly_name: "Audiobook Player"
+  on_boot:
+    priority: -100  # Run after everything is initialized
+    then:
+      - script.execute: play_boot_sequence
 
 esp32:
   board: wemosbat
@@ -25,6 +29,9 @@ ota:
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
+  on_connect:
+    then:
+      - script.execute: play_ready_sequence
 
   # Enable fallback hotspot (captive portal) in case wifi connection fails
   ap:
@@ -66,9 +73,7 @@ rc522_spi:
       - logger.log:
           format: "Tag scanned: %s"
           args: ['x.c_str()']
-      - output.turn_on: status_led_output
-      - delay: 300ms
-      - output.turn_off: status_led_output
+      - script.execute: play_tag_success
 
   # When tag is removed
   on_tag_removed:
@@ -129,10 +134,107 @@ binary_sensor:
             data:
               action: pause
 
-# Output for built-in LED to indicate RFID tag reads
+# Outputs for feedback indicators
 output:
+  # Status LED (built-in)
   - platform: gpio
     pin:
       number: GPIO16  # Built-in LED on WEMOS Battery ESP32
       inverted: true
     id: status_led_output
+
+  # Piezo buzzer (PWM for tones)
+  - platform: ledc
+    pin: GPIO25
+    id: buzzer_output
+
+  # Vibration motor
+  - platform: gpio
+    pin: GPIO26
+    id: vibration_output
+
+# RTTTL buzzer for playing melodies
+rtttl:
+  output: buzzer_output
+  id: buzzer_rtttl
+
+# Scripts for feedback sequences
+script:
+  # Boot sequence - gentle ascending arpeggio
+  - id: play_boot_sequence
+    then:
+      - light.turn_on:
+          id: status_led
+          effect: "Fast Blink"
+      - rtttl.play: "boot:d=16,o=5,b=120:c,d,e,g"
+      - delay: 1s
+
+  # Ready sequence - device is connected and ready
+  - id: play_ready_sequence
+    then:
+      - light.turn_on:
+          id: status_led
+          effect: "Slow Pulse"
+      - rtttl.play: "ready:d=8,o=5,b=140:c,e,g"
+
+  # Tag scanned successfully
+  - id: play_tag_success
+    then:
+      # Play success chime
+      - rtttl.play: "success:d=8,o=5,b=180:g,8c6"
+      # Flash LED
+      - light.turn_on:
+          id: status_led
+          brightness: 100%
+          effect: "None"
+      # Vibrate
+      - output.turn_on: vibration_output
+      - delay: 200ms
+      - output.turn_off: vibration_output
+      - delay: 100ms
+      # Return to ready state
+      - light.turn_on:
+          id: status_led
+          effect: "Slow Pulse"
+
+  # Error feedback
+  - id: play_error_sequence
+    then:
+      - rtttl.play: "error:d=8,o=5,b=140:e,c"
+      - light.turn_on:
+          id: status_led
+          effect: "Fast Blink"
+      # Triple vibration pulse
+      - output.turn_on: vibration_output
+      - delay: 100ms
+      - output.turn_off: vibration_output
+      - delay: 100ms
+      - output.turn_on: vibration_output
+      - delay: 100ms
+      - output.turn_off: vibration_output
+      - delay: 100ms
+      - output.turn_on: vibration_output
+      - delay: 100ms
+      - output.turn_off: vibration_output
+
+# Status LED as a light component with effects
+light:
+  - platform: binary
+    name: "Status LED"
+    id: status_led
+    output: status_led_output
+    effects:
+      - strobe:
+          name: "Fast Blink"
+          colors:
+            - state: true
+              duration: 100ms
+            - state: false
+              duration: 100ms
+      - strobe:
+          name: "Slow Pulse"
+          colors:
+            - state: true
+              duration: 500ms
+            - state: false
+              duration: 500ms
