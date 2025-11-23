@@ -5,6 +5,12 @@
 IDF_PATH ?= $(HOME)/repos/esp-idf
 PORT ?= /dev/cu.usbserial-0001
 DEFAULT_PORT := $(PORT)
+IDF_VERSION ?= v5.3.2
+IDF_TARGETS ?= esp32,esp32s3,esp32c3
+
+# Use Espressif's download mirror for faster toolchain downloads
+# Set to empty string to use GitHub directly
+IDF_GITHUB_ASSETS ?= dl.espressif.com/github_assets
 
 # Detect shell and set appropriate ESP-IDF environment
 SHELL_NAME := $(shell basename $$SHELL)
@@ -70,6 +76,12 @@ help:
 	@echo "  make llm-telegram-develop - Build, flash and monitor"
 	@echo "  make llm-telegram-config  - Configure WiFi and API credentials"
 	@echo ""
+	@echo "$(GREEN)⚙️  Setup & Installation:$(NC)"
+	@echo "  make setup-idf            - Install ESP-IDF $(IDF_VERSION) automatically"
+	@echo "  make update-idf           - Update ESP-IDF to configured version"
+	@echo "  make setup-all            - Full dev environment (IDF + tools)"
+	@echo "  make check-idf-version    - Show installed ESP-IDF version"
+	@echo ""
 	@echo "$(GREEN)🔧 Utility Commands:$(NC)"
 	@echo "  make clean-all            - Clean all project builds"
 	@echo "  make list-projects        - List all projects in monorepo"
@@ -132,7 +144,90 @@ check-idf:
 	@if [ ! -d "$(IDF_PATH)" ]; then \
 		echo "$(RED)Error: ESP-IDF not found at $(IDF_PATH)$(NC)"; \
 		echo "$(YELLOW)Please install ESP-IDF or set IDF_PATH variable$(NC)"; \
+		echo "$(YELLOW)Run 'make setup-idf' to install automatically$(NC)"; \
 		exit 1; \
+	fi
+
+# === ESP-IDF Setup and Installation ===
+
+setup-idf:
+	@echo "$(CYAN)ESP-IDF Setup$(NC)"
+	@echo "Version: $(IDF_VERSION)"
+	@echo "Install Path: $(IDF_PATH)"
+	@echo "Targets: $(IDF_TARGETS)"
+	@echo ""
+	@if [ -d "$(IDF_PATH)" ]; then \
+		echo "$(GREEN)ESP-IDF already installed at $(IDF_PATH)$(NC)"; \
+		echo "$(YELLOW)To update, run: make update-idf$(NC)"; \
+		echo "$(YELLOW)To reinstall, remove $(IDF_PATH) first$(NC)"; \
+	else \
+		echo "$(BLUE)Installing ESP-IDF $(IDF_VERSION)...$(NC)"; \
+		mkdir -p $$(dirname $(IDF_PATH)) || { echo "$(RED)Failed to create directory$(NC)"; exit 1; }; \
+		echo "$(CYAN)Cloning repository (this may take a while)...$(NC)"; \
+		git clone --recursive -b $(IDF_VERSION) https://github.com/espressif/esp-idf.git $(IDF_PATH) || { \
+			echo "$(RED)Failed to clone ESP-IDF repository$(NC)"; \
+			echo "$(YELLOW)Check your internet connection and try again$(NC)"; \
+			exit 1; \
+		}; \
+		echo "$(CYAN)Installing toolchain for targets: $(IDF_TARGETS)...$(NC)"; \
+		cd $(IDF_PATH) && \
+			export IDF_GITHUB_ASSETS="$(IDF_GITHUB_ASSETS)" && \
+			./install.sh $(IDF_TARGETS) || { \
+				echo "$(RED)Failed to install ESP-IDF toolchain$(NC)"; \
+				exit 1; \
+			}; \
+		echo ""; \
+		echo "$(GREEN)✓ ESP-IDF $(IDF_VERSION) installed successfully!$(NC)"; \
+		echo ""; \
+		echo "$(YELLOW)To use ESP-IDF in your shell, add this alias to your shell profile:$(NC)"; \
+		echo "  alias get_idf='. $(IDF_PATH)/export.sh'"; \
+		echo ""; \
+		echo "$(YELLOW)Then run 'get_idf' before using idf.py commands$(NC)"; \
+		echo "$(YELLOW)Or use 'make' commands which handle this automatically$(NC)"; \
+	fi
+
+update-idf:
+	@echo "$(CYAN)Updating ESP-IDF to $(IDF_VERSION)$(NC)"
+	@if [ ! -d "$(IDF_PATH)" ]; then \
+		echo "$(RED)ESP-IDF not found at $(IDF_PATH)$(NC)"; \
+		echo "$(YELLOW)Run 'make setup-idf' to install first$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(BLUE)Fetching updates...$(NC)"
+	@cd $(IDF_PATH) && git fetch --all --tags
+	@CURRENT=$$(cd $(IDF_PATH) && git describe --tags 2>/dev/null || echo "unknown"); \
+	if [ "$$CURRENT" = "$(IDF_VERSION)" ]; then \
+		echo "$(GREEN)Already at version $(IDF_VERSION)$(NC)"; \
+	else \
+		echo "$(BLUE)Switching from $$CURRENT to $(IDF_VERSION)...$(NC)"; \
+		cd $(IDF_PATH) && git checkout $(IDF_VERSION) && git submodule update --init --recursive; \
+		echo "$(CYAN)Reinstalling toolchain...$(NC)"; \
+		cd $(IDF_PATH) && \
+			export IDF_GITHUB_ASSETS="dl.espressif.com/github_assets" && \
+			./install.sh $(IDF_TARGETS); \
+		echo "$(GREEN)✓ Updated to ESP-IDF $(IDF_VERSION)$(NC)"; \
+	fi
+
+setup-all: setup-idf install-dev-tools
+	@echo ""
+	@echo "$(GREEN)✓ Full development environment setup complete!$(NC)"
+	@echo ""
+	@echo "$(CYAN)Next steps:$(NC)"
+	@echo "  1. Add ESP-IDF alias to your shell profile:"
+	@echo "     alias get_idf='. $(IDF_PATH)/export.sh'"
+	@echo "  2. Run 'make check-environment' to verify setup"
+	@echo "  3. Run 'make list-projects' to see available projects"
+	@echo "  4. Run 'make robocar-build-all' to build the robocar"
+
+check-idf-version:
+	@if [ -d "$(IDF_PATH)" ]; then \
+		VERSION=$$(cd $(IDF_PATH) && git describe --tags 2>/dev/null || echo "unknown"); \
+		echo "$(GREEN)ESP-IDF Version: $$VERSION$(NC)"; \
+		echo "$(GREEN)Install Path: $(IDF_PATH)$(NC)"; \
+		echo "$(GREEN)Configured Targets: $(IDF_TARGETS)$(NC)"; \
+	else \
+		echo "$(RED)ESP-IDF not installed at $(IDF_PATH)$(NC)"; \
+		echo "$(YELLOW)Run 'make setup-idf' to install$(NC)"; \
 	fi
 
 # === AI-Powered Robot Car Commands ===
@@ -448,7 +543,8 @@ format-check-python:
 install-dev-tools:
 	@echo "$(BLUE)Installing development tools...$(NC)"
 	@echo "$(CYAN)Installing Python tools...$(NC)"
-	pip install --upgrade pip pre-commit ruff mypy pytest pytest-cov uv
+	pip install --upgrade pip
+	pip install pre-commit==3.8.0 ruff==0.6.9 mypy==1.11.2 pytest==8.3.3 pytest-cov==5.0.0 uv==0.4.18
 	@echo "$(CYAN)Installing pre-commit hooks...$(NC)"
 	pre-commit install
 	@echo "$(CYAN)Checking system tools...$(NC)"
@@ -673,6 +769,7 @@ help-build:
 
 # Declare phony targets
 .PHONY: help check-environment check-idf list-projects info clean-all build-all
+.PHONY: setup-idf update-idf setup-all check-idf-version
 .PHONY: robocar-help robocar-build-all robocar-build-main robocar-build-cam
 .PHONY: robocar-flash-all robocar-flash-main robocar-flash-cam
 .PHONY: robocar-develop-main robocar-develop-cam robocar-monitor-main robocar-monitor-cam
