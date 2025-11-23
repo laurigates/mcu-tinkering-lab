@@ -98,6 +98,54 @@ The tilt switch (SW-200D or similar ball tilt switch) wakes the device from deep
 - **SW-520D** - Alternative model
 - Any normally-open tilt switch with similar specifications
 
+## Piezo Buzzer (Audio Feedback)
+
+The piezo buzzer provides pleasant musical tones for state indication:
+
+```
+     WEMOS ESP32
+    ┌────────────┐
+    │  GPIO25    ├──────────── + Buzzer
+    │            │
+    │  GND       ├──────────── - Buzzer
+    └────────────┘
+```
+
+**Buzzer Types:**
+- **Passive piezo buzzer** (recommended) - Allows playing different tones/melodies
+- Active buzzers only produce one fixed frequency (not recommended)
+- Typical voltage: 3.3V or 5V
+
+**Tones played:**
+- Boot: Gentle ascending arpeggio (C-D-E-G)
+- Ready: Major chord chime (C-E-G)
+- Tag scanned: Soft ascending fifth (G-C6)
+- Error: Descending third (E-C)
+
+## Vibration Motor (Haptic Feedback)
+
+The vibration motor provides tactile feedback when a tag is scanned:
+
+```
+     WEMOS ESP32                    Motor Circuit
+    ┌────────────┐                 ┌─────────────┐
+    │  GPIO26    ├──── 1kΩ ────────┤ Base        │
+    │            │                 │   NPN       │
+    │            │      3.3V ──────┤ Motor+ ─────┤ Collector
+    │            │                 │             │
+    │  GND       ├─────────────────┤ Motor- ─────┤ Emitter
+    └────────────┘                 └─────────────┘
+```
+
+**Components needed:**
+- Coin vibration motor (3V, ~100mA)
+- NPN transistor (2N2222, BC547, or similar)
+- 1kΩ resistor (base current limiter)
+
+**Why transistor?** The motor draws ~100mA, too much for GPIO pins (max 12mA). The transistor acts as a switch controlled by the GPIO.
+
+**Alternative:** Use a motor driver module (L9110, DRV8833) for simpler wiring.
+
 ## Complete Pin Summary
 
 | Component | Component Pin | ESP32 Pin | GPIO | Notes |
@@ -116,6 +164,11 @@ The tilt switch (SW-200D or similar ball tilt switch) wakes the device from deep
 | **Red Button** | Other side | GND     | -      | Ground |
 | **Tilt Switch** | One side   | GPIO27  | GPIO27 | Wake from deep sleep (RTC-capable GPIO) |
 | **Tilt Switch** | Other side | GND     | -      | Ground |
+| **Buzzer** | +          | GPIO25  | GPIO25 | Passive piezo buzzer for tones |
+| **Buzzer** | -          | GND     | -      | Ground |
+| **Vibration Motor** | Control | GPIO26 | GPIO26 | Via NPN transistor (2N2222) |
+| **Vibration Motor** | Power   | 3.3V    | -      | Motor positive |
+| **Vibration Motor** | Ground  | GND     | -      | Via transistor emitter |
 | **Status LED** | Built-in   | GPIO16  | GPIO16 | On-board LED |
 
 ## Power Considerations
@@ -201,9 +254,13 @@ Power via USB cable or 18650 battery in rear holder
 2. ✓ All SPI connections secure (GPIO18, GPIO19, GPIO23, GPIO17)
 3. ✓ Both buttons connect to GND when pressed
 4. ✓ Tilt switch wired to GPIO27 and GND
-5. ✓ WEMOS ESP32 powered via USB or 18650 battery
-6. ✓ Upload firmware and check logs
-7. ✓ Test RFID reading by scanning a tag
-8. ✓ Test buttons by pressing and checking logs
-9. ✓ Test tilt switch by tilting device (should wake from sleep)
-10. ✓ Verify deep sleep after 2 minutes of inactivity
+5. ✓ Buzzer wired to GPIO25 and GND
+6. ✓ Vibration motor wired via transistor to GPIO26
+7. ✓ WEMOS ESP32 powered via USB or 18650 battery
+8. ✓ Upload firmware and check logs
+9. ✓ Test boot sequence (LED blinks fast, hears ascending tones)
+10. ✓ Test ready state (LED pulses slowly, hears ready chime)
+11. ✓ Test RFID reading (hears success tone, feels vibration)
+12. ✓ Test buttons by pressing and checking logs
+13. ✓ Test tilt switch by tilting device (should wake from sleep)
+14. ✓ Verify deep sleep after 2 minutes of inactivity
