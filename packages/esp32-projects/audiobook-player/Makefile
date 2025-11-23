@@ -130,4 +130,8 @@ pins:
 	@echo "  Green (Play)  → GPIO32 + GND"
 	@echo "  Red (Pause)   → GPIO33 + GND"
 	@echo ""
+	@echo "Tilt Switch (Power Management):"
+	@echo "  Tilt Switch   → GPIO27 + GND"
+	@echo "  Wake device from deep sleep when tilted"
+	@echo ""
 	@echo "Status LED: GPIO16 - Built-in"

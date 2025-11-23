@@ -8,8 +8,11 @@ An RFID-based audiobook player that integrates with Home Assistant. Scan picture
 - **RC522 RFID Reader Module**
 - **Green button** (Play)
 - **Red button** (Pause)
+- **Tilt switch** (SW-200D or similar) - for wake from deep sleep
 - **RFID tags** attached to picture cards
-- **Optional:** 18650 battery for portable operation (~17 hours runtime)
+- **Optional:** 18650 battery for portable operation
+  - Always-on: ~17 hours runtime
+  - With deep sleep: ~29 days runtime
 
 ## Wiring
 
@@ -17,14 +20,16 @@ An RFID-based audiobook player that integrates with Home Assistant. Scan picture
 
 | RC522 Pin | ESP32 Pin | GPIO |
 |-----------|-----------|------|
-| SDA (CS)  | GPIO5     | GPIO5  |
+| SDA (CS)  | GPIO17    | GPIO17 |
 | SCK       | GPIO18    | GPIO18 |
 | MOSI      | GPIO23    | GPIO23 |
 | MISO      | GPIO19    | GPIO19 |
 | IRQ       | *not used* | -    |
 | GND       | GND       | -    |
-| RST       | RST       | -    |
+| RST       | RST or 3.3V | -    |
 | 3.3V      | 3.3V      | -    |
+
+**Note:** GPIO17 is used instead of GPIO5 to avoid boot issues with strapping pins.
 
 ### Buttons
 
@@ -34,6 +39,17 @@ An RFID-based audiobook player that integrates with Home Assistant. Scan picture
 | Red (Pause)   | GPIO33 | GPIO33 | Connect to GND when pressed |
 
 **Note:** Buttons use internal pull-up resistors, so connect one side to the GPIO pin and the other to GND.
+
+### Tilt Switch (Power Management)
+
+| Component | ESP32 Pin | GPIO | Notes |
+|-----------|-----------|------|-------|
+| Tilt Switch | GPIO27 | GPIO27 | Wakes device from deep sleep when tilted |
+
+**How it works:**
+- Device lying flat → Deep sleep (~10µA)
+- Pick up/tilt device → Wakes up and connects to WiFi (~3-5 seconds)
+- After 2 minutes idle → Returns to deep sleep automatically
 
 ### Status LED
 

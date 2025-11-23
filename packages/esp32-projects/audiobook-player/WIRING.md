@@ -8,13 +8,13 @@
                     │  (WiFi & Bluetooth)         │
                     └─────────────────────────────┘
                            │
-        ┌──────────────────┼──────────────────┐
-        │                  │                  │
-   ┌────▼─────┐      ┌────▼─────┐      ┌────▼─────┐
-   │ RC522    │      │  Green   │      │   Red    │
-   │  RFID    │      │  Button  │      │  Button  │
-   │  Reader  │      │  (Play)  │      │ (Pause)  │
-   └──────────┘      └──────────┘      └──────────┘
+        ┌──────────────────┼──────────────────┬──────────────┐
+        │                  │                  │              │
+   ┌────▼─────┐      ┌────▼─────┐      ┌────▼─────┐   ┌────▼─────┐
+   │ RC522    │      │  Green   │      │   Red    │   │  Tilt    │
+   │  RFID    │      │  Button  │      │  Button  │   │  Switch  │
+   │  Reader  │      │  (Play)  │      │ (Pause)  │   │  (Wake)  │
+   └──────────┘      └──────────┘      └──────────┘   └──────────┘
 ```
 
 ## RC522 RFID Reader
@@ -71,6 +71,33 @@ Both buttons use the same wiring pattern with internal pull-up resistors:
 
 **Note:** When the button is pressed, it connects the GPIO pin to GND. The internal pull-up resistor keeps the pin HIGH when the button is not pressed.
 
+## Tilt Switch (Power Management)
+
+The tilt switch (SW-200D or similar ball tilt switch) wakes the device from deep sleep:
+
+```
+     WEMOS ESP32
+    ┌────────────┐
+    │  GPIO27    ├──────┬─── One side of tilt switch
+    │            │      │
+    │            │    ┌─┴─┐
+    │            │    │ ○ │  Ball Tilt Switch
+    │            │    └─┬─┘
+    │  GND       ├──────┴─── Other side of tilt switch
+    └────────────┘
+```
+
+**How it works:**
+- Device lying flat: Tilt switch OPEN → Deep sleep (~10µA power draw)
+- Device picked up/tilted: Tilt switch CLOSES → Wakes from deep sleep
+- After 2 minutes awake: Automatically enters deep sleep to save battery
+- Battery life: ~29 days in sleep vs ~17 hours always-on
+
+**Tilt Switch Types:**
+- **SW-200D** - Basic ball tilt switch (most common)
+- **SW-520D** - Alternative model
+- Any normally-open tilt switch with similar specifications
+
 ## Complete Pin Summary
 
 | Component | Component Pin | ESP32 Pin | GPIO | Notes |
@@ -87,15 +114,28 @@ Both buttons use the same wiring pattern with internal pull-up resistors:
 | **Green Button** | Other side | GND   | -      | Ground |
 | **Red Button** | One side   | GPIO33  | GPIO33 | Pause button |
 | **Red Button** | Other side | GND     | -      | Ground |
+| **Tilt Switch** | One side   | GPIO27  | GPIO27 | Wake from deep sleep (RTC-capable GPIO) |
+| **Tilt Switch** | Other side | GND     | -      | Ground |
 | **Status LED** | Built-in   | GPIO16  | GPIO16 | On-board LED |
 
 ## Power Considerations
 
 - The WEMOS Battery ESP32 can be powered via:
   - **USB** (5V) - Easiest for development
-  - **18650 Battery** - Built-in battery holder on back (3000mAh = ~17 hours runtime)
+  - **18650 Battery** - Built-in battery holder on back
+    - Always-on runtime: ~17 hours (80mA average)
+    - With deep sleep: ~29 days (mostly in 10µA sleep mode)
   - **5V pin** - External 5V power supply
   - **3.3V pin** - External 3.3V regulated supply
+
+### Deep Sleep Power Management
+
+The tilt switch enables automatic power management:
+- **Awake mode:** Device boots, connects to WiFi, ready for RFID scans (~80mA)
+- **Deep sleep:** Ultra-low power mode after 2 minutes of inactivity (~10µA)
+- **Wake-up:** Tilt/shake device to wake from sleep (3-5 seconds to reconnect WiFi)
+
+**Important:** During deep sleep, the device will appear "unavailable" in Home Assistant. This is normal and expected behavior.
 
 - Built-in battery management:
   - 0.5A charging current
@@ -160,7 +200,10 @@ Power via USB cable or 18650 battery in rear holder
 1. ✓ RC522 powered with 3.3V (NOT 5V)
 2. ✓ All SPI connections secure (GPIO18, GPIO19, GPIO23, GPIO17)
 3. ✓ Both buttons connect to GND when pressed
-4. ✓ WEMOS ESP32 powered via USB or 18650 battery
-5. ✓ Upload firmware and check logs
-6. ✓ Test RFID reading by scanning a tag
-7. ✓ Test buttons by pressing and checking logs
+4. ✓ Tilt switch wired to GPIO27 and GND
+5. ✓ WEMOS ESP32 powered via USB or 18650 battery
+6. ✓ Upload firmware and check logs
+7. ✓ Test RFID reading by scanning a tag
+8. ✓ Test buttons by pressing and checking logs
+9. ✓ Test tilt switch by tilting device (should wake from sleep)
+10. ✓ Verify deep sleep after 2 minutes of inactivity
