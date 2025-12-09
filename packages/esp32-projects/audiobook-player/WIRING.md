@@ -4,8 +4,8 @@
 
 ```
                     ┌─────────────────────────────┐
-                    │  WEMOS Battery ESP32        │
-                    │  (WiFi & Bluetooth)         │
+                    │  ESP32 WiFi & Bluetooth     │
+                    │  Battery Board (18650)      │
                     └─────────────────────────────┘
                            │
         ┌──────────────────┼──────────────────┬──────────────┐
@@ -22,7 +22,7 @@
 The RC522 uses SPI communication protocol:
 
 ```
-RC522               WEMOS ESP32
+RC522               ESP32 Battery Board
 ┌─────────┐        ┌─────────┐
 │ SDA(CS) ├────────┤ GPIO17  │ SPI CS
 │ SCK     ├────────┤ GPIO18  │ SPI Clock
@@ -44,7 +44,7 @@ Both buttons use the same wiring pattern with internal pull-up resistors:
 ### Green Button (Play)
 
 ```
-     WEMOS ESP32
+     ESP32 Battery Board
     ┌────────────┐
     │  GPIO32    ├──────┬─── One side of button
     │            │      │
@@ -58,7 +58,7 @@ Both buttons use the same wiring pattern with internal pull-up resistors:
 ### Red Button (Pause)
 
 ```
-     WEMOS ESP32
+     ESP32 Battery Board
     ┌────────────┐
     │  GPIO33    ├──────┬─── One side of button
     │            │      │
@@ -76,7 +76,7 @@ Both buttons use the same wiring pattern with internal pull-up resistors:
 The tilt switch (SW-200D or similar ball tilt switch) wakes the device from deep sleep:
 
 ```
-     WEMOS ESP32
+     ESP32 Battery Board
     ┌────────────┐
     │  GPIO27    ├──────┬─── One side of tilt switch
     │            │      │
@@ -103,7 +103,7 @@ The tilt switch (SW-200D or similar ball tilt switch) wakes the device from deep
 The piezo buzzer provides pleasant musical tones for state indication:
 
 ```
-     WEMOS ESP32
+     ESP32 Battery Board
     ┌────────────┐
     │  GPIO25    ├──────────── + Buzzer
     │            │
@@ -127,7 +127,7 @@ The piezo buzzer provides pleasant musical tones for state indication:
 The vibration motor provides tactile feedback when a tag is scanned:
 
 ```
-     WEMOS ESP32                    Motor Circuit
+     ESP32 Battery Board            Motor Circuit
     ┌────────────┐                 ┌─────────────┐
     │  GPIO26    ├──── 1kΩ ────────┤ Base        │
     │            │                 │   NPN       │
@@ -145,6 +145,7 @@ The vibration motor provides tactile feedback when a tag is scanned:
 **Why transistor?** The motor draws ~100mA, too much for GPIO pins (max 12mA). The transistor acts as a switch controlled by the GPIO.
 
 **Alternative:** Use a motor driver module (L9110, DRV8833) for simpler wiring.
+
 
 ## Complete Pin Summary
 
@@ -173,7 +174,7 @@ The vibration motor provides tactile feedback when a tag is scanned:
 
 ## Power Considerations
 
-- The WEMOS Battery ESP32 can be powered via:
+- The ESP32 WiFi & Bluetooth Battery Board can be powered via:
   - **USB** (5V) - Easiest for development
   - **18650 Battery** - Built-in battery holder on back
     - Always-on runtime: ~17 hours (80mA average)
@@ -210,7 +211,7 @@ A standard USB power supply (500mA+) is sufficient for development. For portable
 If you want an external status LED instead of the built-in one:
 
 ```
-     WEMOS ESP32
+     ESP32 Battery Board
     ┌────────────┐
     │  GPIO16    ├────┬── Anode (+) of LED
     │            │    │
@@ -233,7 +234,7 @@ Resistor: 220Ω - 330Ω (for standard 3.3V LED)
 │  └──────────┘      └──────────────┘   │
 │                                        │
 │          ┌────────────────────┐        │
-│          │   WEMOS ESP32      │        │
+│          │  ESP32 Battery     │        │
 │          │   (Battery)        │        │
 │          └────────────────────┘        │
 │                                        │
@@ -256,7 +257,7 @@ Power via USB cable or 18650 battery in rear holder
 4. ✓ Tilt switch wired to GPIO27 and GND
 5. ✓ Buzzer wired to GPIO25 and GND
 6. ✓ Vibration motor wired via transistor to GPIO26
-7. ✓ WEMOS ESP32 powered via USB or 18650 battery
+7. ✓ ESP32 Battery Board powered via USB or 18650 battery
 8. ✓ Upload firmware and check logs
 9. ✓ Test boot sequence (LED blinks fast, hears ascending tones)
 10. ✓ Test ready state (LED pulses slowly, hears ready chime)
