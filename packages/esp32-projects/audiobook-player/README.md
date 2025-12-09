@@ -4,7 +4,7 @@ An RFID-based audiobook player that integrates with Home Assistant. Scan picture
 
 ## Hardware
 
-- **WEMOS WiFi & Bluetooth Battery ESP32** (with 18650 battery holder)
+- **ESP32 WiFi & Bluetooth Battery Board** (with 18650 battery holder, ESPHome board: `wemosbat`)
 - **RC522 RFID Reader Module**
 - **Green button** (Play)
 - **Red button** (Pause)

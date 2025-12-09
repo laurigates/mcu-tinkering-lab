@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ESPHome-based RFID audiobook player for kids. Scan picture cards with RFID tags to trigger Home Assistant automations that play audiobooks. Physical play/pause buttons provide tactile control.
 
-**Hardware:** WEMOS Battery ESP32, RC522 RFID reader (SPI), two buttons (GPIO32/GPIO33), tilt switch (GPIO27) for deep sleep wake
+**Hardware:** ESP32 WiFi & Bluetooth Battery Board (18650), RC522 RFID reader (SPI), two buttons (GPIO32/GPIO33), tilt switch (GPIO27) for deep sleep wake
 
 **Integration:** Device sends events to Home Assistant via ESPHome API. Home Assistant automations map RFID tag UIDs to media playback actions.
 
@@ -67,7 +67,7 @@ esphome logs audiobook-player.yaml
 
 ### Power Considerations
 
-- WEMOS Battery ESP32 has integrated 18650 battery holder
+- ESP32 WiFi & Bluetooth Battery Board has integrated 18650 battery holder
 - Built-in charging circuit when powered via USB
 - Status LED on GPIO16 (inverted logic)
 
