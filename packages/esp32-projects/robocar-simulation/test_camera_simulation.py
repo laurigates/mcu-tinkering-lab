@@ -6,17 +6,17 @@ This test verifies that the camera simulation is working correctly with
 the robot model and generating synthetic camera feeds.
 """
 
-import sys
 import os
+import sys
 import time
-import cv2
+
 import numpy as np
 
 # Add src directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
-from robot_model import DifferentialDriveRobot
 from camera_simulation import CameraSimulation
+from robot_model import DifferentialDriveRobot
 
 
 def test_camera_basic_functionality():
@@ -49,7 +49,7 @@ def test_camera_basic_functionality():
         print("  ✅ Basic frame generation works")
 
         # Test JPEG compression
-        compressed = camera.get_compressed_frame()
+        camera.get_compressed_frame()
         # compressed will be None since no frame capture is running
         print("  ✅ JPEG compression functionality exists")
 
@@ -76,7 +76,7 @@ def test_camera_integration():
         print("  ✅ Camera simulation initialized with robot")
 
         # Update robot a few times to allow camera to capture frames
-        for i in range(5):
+        for _i in range(5):
             robot.set_motor_commands(30, 25)  # Slight movement
             robot.update()
             time.sleep(0.1)  # Allow time for camera capture
@@ -94,7 +94,7 @@ def test_camera_integration():
                 # Clean up test file
                 try:
                     os.remove(filename)
-                except:
+                except Exception:
                     pass
         else:
             print("  ⚠️  Camera frame not yet available (may need more time)")

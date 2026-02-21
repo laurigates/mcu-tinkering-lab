@@ -5,10 +5,9 @@ Migration script to help transition from pip/requirements.txt to uv/pyproject.to
 This script helps existing users migrate their environment to use uv.
 """
 
+import shutil
 import subprocess
 import sys
-import os
-import shutil
 from pathlib import Path
 
 
@@ -56,15 +55,15 @@ def main():
 
     # Check if uv is installed
     try:
-        result = run_command(["uv", "--version"])
-        print(f"✓ uv is installed")
+        run_command(["uv", "--version"])
+        print("✓ uv is installed")
     except (subprocess.CalledProcessError, FileNotFoundError):
         print("❌ uv is not installed. Installing uv...")
         try:
             # Try to install uv
             run_command(["curl", "-LsSf", "https://astral.sh/uv/install.sh"])
             run_command(["sh"])
-        except:
+        except Exception:
             print("Failed to install uv automatically. Please install manually:")
             print("curl -LsSf https://astral.sh/uv/install.sh | sh")
             sys.exit(1)

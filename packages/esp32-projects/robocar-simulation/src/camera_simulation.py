@@ -6,30 +6,31 @@ generating synthetic camera feeds with OpenCV that match what the physical
 camera would see in the simulated environment.
 """
 
+import threading
+import time
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
 import cv2
 import numpy as np
-import time
-import threading
-from typing import Optional, Tuple, Dict, Any
-from pathlib import Path
 import yaml
-from dataclasses import dataclass
 from spatialmath import SE3
 
-CAPTURE_LOOP_SLEEP = 0.001  # seconds between capture loop iterations
-
+from error_handling import get_error_handler
 from robot_model import RobotState
-from error_handling import get_error_handler, ErrorSeverity
+
+CAPTURE_LOOP_SLEEP = 0.001  # seconds between capture loop iterations
 
 
 @dataclass
 class CameraConfig:
     """Camera configuration parameters"""
 
-    resolution: Tuple[int, int] = (640, 480)
+    resolution: tuple[int, int] = (640, 480)
     fov_degrees: float = 70.0
     fps: int = 30
-    depth_range: Tuple[float, float] = (0.1, 10.0)  # min, max depth in meters
+    depth_range: tuple[float, float] = (0.1, 10.0)  # min, max depth in meters
     noise_level: float = 0.02  # Gaussian noise standard deviation
     compression_quality: int = 85  # JPEG quality for ESP32-CAM simulation
 
@@ -77,7 +78,7 @@ class CameraSimulation:
         self.camera_config = CameraConfig(**camera_params)
 
         # Camera state
-        self.current_frame: Optional[np.ndarray] = None
+        self.current_frame: np.ndarray | None = None
         self.is_running = False
         self.frame_lock = threading.Lock()
 
@@ -88,7 +89,7 @@ class CameraSimulation:
         self._setup_environment()
 
         # Threading
-        self.capture_thread: Optional[threading.Thread] = None
+        self.capture_thread: threading.Thread | None = None
         self.last_frame_time = 0
 
     def _register_recovery_strategies(self):
@@ -133,13 +134,13 @@ class CameraSimulation:
             self.error_handler.register_recovery_strategy("camera_simulation", camera_recovery)
             self.error_handler.register_recovery_strategy("camera_simulation", rendering_recovery)
 
-    def _load_config(self, config_path: str) -> Dict[str, Any]:
+    def _load_config(self, config_path: str) -> dict[str, Any]:
         """Load configuration from YAML file"""
         config_file = Path(config_path)
         if not config_file.exists():
             config_file = Path(__file__).parent.parent / "config" / "robot_config.yaml"
 
-        with open(config_file, "r") as f:
+        with open(config_file) as f:
             return yaml.safe_load(f)
 
     def _setup_camera_intrinsics(self):
@@ -165,7 +166,7 @@ class CameraSimulation:
         # Floor pattern for visual reference
         self.floor_pattern = self._create_floor_pattern()
 
-    def _create_environment_objects(self) -> Dict[str, Any]:
+    def _create_environment_objects(self) -> dict[str, Any]:
         """Create 3D environment objects for rendering"""
         objects = {}
 
@@ -335,7 +336,7 @@ class CameraSimulation:
     def _render_box(
         self,
         img: np.ndarray,
-        box: Dict,
+        box: dict,
         cam_pos: np.ndarray,
         cam_forward: np.ndarray,
         cam_up: np.ndarray,
@@ -344,7 +345,7 @@ class CameraSimulation:
     ):
         """Render a box object"""
         box_pos = np.array(box["position"])
-        box_size = np.array(box["size"])
+        np.array(box["size"])
         color = box["color"]
 
         # Simple box rendering - just check if objects are in view
@@ -372,7 +373,7 @@ class CameraSimulation:
     def _render_cylinder(
         self,
         img: np.ndarray,
-        cylinder: Dict,
+        cylinder: dict,
         cam_pos: np.ndarray,
         cam_forward: np.ndarray,
         cam_up: np.ndarray,
@@ -429,7 +430,7 @@ class CameraSimulation:
         cam_up: np.ndarray,
         width: int,
         height: int,
-    ) -> Optional[Tuple[int, int]]:
+    ) -> tuple[int, int] | None:
         """Project world coordinates to screen coordinates"""
         # Vector from camera to object
         obj_vec = world_pos - cam_pos
@@ -520,6 +521,7 @@ class CameraSimulation:
             self.capture_thread.join(timeout=5.0)
             if self.capture_thread.is_alive():
                 import logging
+
                 logging.getLogger(__name__).warning("Camera capture thread did not stop in time")
         print("Camera simulation stopped")
 
@@ -548,12 +550,12 @@ class CameraSimulation:
             # Sleep for a short time to prevent excessive CPU usage
             time.sleep(CAPTURE_LOOP_SLEEP)
 
-    def get_latest_frame(self) -> Optional[np.ndarray]:
+    def get_latest_frame(self) -> np.ndarray | None:
         """Get the latest camera frame"""
         with self.frame_lock:
             return self.current_frame.copy() if self.current_frame is not None else None
 
-    def get_compressed_frame(self) -> Optional[bytes]:
+    def get_compressed_frame(self) -> bytes | None:
         """Get JPEG-compressed frame (simulating ESP32-CAM output)"""
         frame = self.get_latest_frame()
         if frame is not None:

@@ -3,6 +3,7 @@
 #include <ctype.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/semphr.h"
 #include "driver/gpio.h"
 #include "driver/ledc.h"
 #include "driver/uart.h"
@@ -37,6 +38,12 @@ unsigned long action_counter = 0;
 // Buffer for serial communication
 char command_buffer[MAX_COMMAND_LENGTH];
 int buffer_pos = 0;
+
+// Mutex protecting all global state above
+static SemaphoreHandle_t g_state_mutex = NULL;
+
+// Safe string copy macro: copies src into dst[size], always null-terminates
+#define SAFE_STRCPY(dst, src, size) do { strncpy((dst), (src), (size) - 1); (dst)[(size) - 1] = '\0'; } while (0)
 
 // PCA9685 and I2C variables
 i2c_dev_t pca9685_dev;
@@ -228,23 +235,23 @@ void init_oled(void) {
 void init_gpio(void) {
     // Configure motor control pins as outputs
     gpio_config_t io_conf = {
-        .pin_bit_mask = (1ULL << RIGHT_IN1_PIN) | (1ULL << RIGHT_IN2_PIN) | 
-                         (1ULL << LEFT_IN1_PIN) | (1ULL << LEFT_IN2_PIN) | 
+        .pin_bit_mask = (1ULL << RIGHT_IN1_PIN) | (1ULL << RIGHT_IN2_PIN) |
+                         (1ULL << LEFT_IN1_PIN) | (1ULL << LEFT_IN2_PIN) |
                          (1ULL << STBY_PIN) | (1ULL << PIEZO_PIN),
         .mode = GPIO_MODE_OUTPUT,
         .pull_up_en = GPIO_PULLUP_DISABLE,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
         .intr_type = GPIO_INTR_DISABLE
     };
-    gpio_config(&io_conf);
-    
+    ESP_ERROR_CHECK(gpio_config(&io_conf));
+
     // Set initial pin states
-    gpio_set_level(RIGHT_IN1_PIN, 0);
-    gpio_set_level(RIGHT_IN2_PIN, 0);
-    gpio_set_level(LEFT_IN1_PIN, 0);
-    gpio_set_level(LEFT_IN2_PIN, 0);
-    gpio_set_level(STBY_PIN, 1);  // Enable motor driver
-    gpio_set_level(PIEZO_PIN, 0); // Piezo off initially
+    ESP_ERROR_CHECK(gpio_set_level(RIGHT_IN1_PIN, 0));
+    ESP_ERROR_CHECK(gpio_set_level(RIGHT_IN2_PIN, 0));
+    ESP_ERROR_CHECK(gpio_set_level(LEFT_IN1_PIN, 0));
+    ESP_ERROR_CHECK(gpio_set_level(LEFT_IN2_PIN, 0));
+    ESP_ERROR_CHECK(gpio_set_level(STBY_PIN, 1));  // Enable motor driver
+    ESP_ERROR_CHECK(gpio_set_level(PIEZO_PIN, 0)); // Piezo off initially
 }
 
 // Initialize PWM for motor control
@@ -302,8 +309,11 @@ void move_forward(int speed) {
     
     set_motor_speed(PWM_RIGHT_CHANNEL, speed);
     set_motor_speed(PWM_LEFT_CHANNEL, speed);
-    
-    current_state = STATE_FORWARD;
+
+    if (g_state_mutex && xSemaphoreTake(g_state_mutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) == pdTRUE) {
+        current_state = STATE_FORWARD;
+        xSemaphoreGive(g_state_mutex);
+    }
     update_leds();
     
     char action_text[32];
@@ -324,8 +334,11 @@ void move_backward(int speed) {
     
     set_motor_speed(PWM_RIGHT_CHANNEL, speed);
     set_motor_speed(PWM_LEFT_CHANNEL, speed);
-    
-    current_state = STATE_BACKWARD;
+
+    if (g_state_mutex && xSemaphoreTake(g_state_mutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) == pdTRUE) {
+        current_state = STATE_BACKWARD;
+        xSemaphoreGive(g_state_mutex);
+    }
     update_leds();
     
     char action_text[32];
@@ -346,8 +359,11 @@ void turn_left(int speed) {
     
     set_motor_speed(PWM_RIGHT_CHANNEL, speed);
     set_motor_speed(PWM_LEFT_CHANNEL, speed/2);
-    
-    current_state = STATE_LEFT;
+
+    if (g_state_mutex && xSemaphoreTake(g_state_mutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) == pdTRUE) {
+        current_state = STATE_LEFT;
+        xSemaphoreGive(g_state_mutex);
+    }
     update_leds();
     
     char action_text[32];
@@ -368,8 +384,11 @@ void turn_right(int speed) {
     
     set_motor_speed(PWM_RIGHT_CHANNEL, speed/2);
     set_motor_speed(PWM_LEFT_CHANNEL, speed);
-    
-    current_state = STATE_RIGHT;
+
+    if (g_state_mutex && xSemaphoreTake(g_state_mutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) == pdTRUE) {
+        current_state = STATE_RIGHT;
+        xSemaphoreGive(g_state_mutex);
+    }
     update_leds();
     
     char action_text[32];
@@ -390,8 +409,11 @@ void rotate_cw(int speed) {
     
     set_motor_speed(PWM_RIGHT_CHANNEL, speed);
     set_motor_speed(PWM_LEFT_CHANNEL, speed);
-    
-    current_state = STATE_ROTATE_CW;
+
+    if (g_state_mutex && xSemaphoreTake(g_state_mutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) == pdTRUE) {
+        current_state = STATE_ROTATE_CW;
+        xSemaphoreGive(g_state_mutex);
+    }
     update_leds();
     
     char action_text[32];
@@ -412,8 +434,11 @@ void rotate_ccw(int speed) {
     
     set_motor_speed(PWM_RIGHT_CHANNEL, speed);
     set_motor_speed(PWM_LEFT_CHANNEL, speed);
-    
-    current_state = STATE_ROTATE_CCW;
+
+    if (g_state_mutex && xSemaphoreTake(g_state_mutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) == pdTRUE) {
+        current_state = STATE_ROTATE_CCW;
+        xSemaphoreGive(g_state_mutex);
+    }
     update_leds();
     
     char action_text[32];
@@ -431,8 +456,11 @@ void stop_motors(void) {
     
     set_motor_speed(PWM_RIGHT_CHANNEL, 0);
     set_motor_speed(PWM_LEFT_CHANNEL, 0);
-    
-    current_state = STATE_STOPPED;
+
+    if (g_state_mutex && xSemaphoreTake(g_state_mutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) == pdTRUE) {
+        current_state = STATE_STOPPED;
+        xSemaphoreGive(g_state_mutex);
+    }
     ESP_LOGI(TAG, "Motors stopped");
     
     // Update LEDs and display to reflect stopped state
@@ -531,7 +559,10 @@ void set_servo_angle(int channel, int angle) {
 }
 
 void set_pan_angle(int angle) {
-    current_pan_angle = angle;
+    if (g_state_mutex && xSemaphoreTake(g_state_mutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) == pdTRUE) {
+        current_pan_angle = angle;
+        xSemaphoreGive(g_state_mutex);
+    }
     set_servo_angle(SERVO_PAN_CHANNEL, angle);
     
     char action_text[32];
@@ -540,7 +571,10 @@ void set_pan_angle(int angle) {
 }
 
 void set_tilt_angle(int angle) {
-    current_tilt_angle = angle;
+    if (g_state_mutex && xSemaphoreTake(g_state_mutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) == pdTRUE) {
+        current_tilt_angle = angle;
+        xSemaphoreGive(g_state_mutex);
+    }
     set_servo_angle(SERVO_TILT_CHANNEL, angle);
     
     char action_text[32];
@@ -700,8 +734,17 @@ void update_oled_status(void) {
     snprintf(status_text, sizeof(status_text), "STATE: %s", state_name);
     oled_draw_text(0, 16, status_text, true);
     
-    // Show servo positions
-    snprintf(status_text, sizeof(status_text), "PAN:%d TILT:%d", current_pan_angle, current_tilt_angle);
+    // Show servo positions (protected read)
+    int pan, tilt;
+    if (g_state_mutex && xSemaphoreTake(g_state_mutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) == pdTRUE) {
+        pan = current_pan_angle;
+        tilt = current_tilt_angle;
+        xSemaphoreGive(g_state_mutex);
+    } else {
+        pan = current_pan_angle;
+        tilt = current_tilt_angle;
+    }
+    snprintf(status_text, sizeof(status_text), "PAN:%d TILT:%d", pan, tilt);
     oled_draw_text(0, 40, status_text, true);
 }
 
@@ -727,20 +770,27 @@ void oled_show_action_debug(void) {
     }
     // Truncate command source to 4 chars to fit in 16 char display
     char short_source[5];
-    strncpy(short_source, last_command_source, 4);
-    short_source[4] = '\0';
+    SAFE_STRCPY(short_source, last_command_source, sizeof(short_source));
     snprintf(line_text, sizeof(line_text), "%s [%s]", state_name, short_source);
     oled_draw_text(0, 8, line_text, true);
-    
+
     // Line 2: Last action taken (truncated to fit)
     char short_action[12];
-    strncpy(short_action, last_action, 11);
-    short_action[11] = '\0';
+    SAFE_STRCPY(short_action, last_action, sizeof(short_action));
     snprintf(line_text, sizeof(line_text), "ACT:%s", short_action);
     oled_draw_text(0, 16, line_text, true);
     
-    // Line 3: Servo positions
-    snprintf(line_text, sizeof(line_text), "PAN:%d TLT:%d", current_pan_angle, current_tilt_angle);
+    // Line 3: Servo positions (protected read)
+    int pan_disp, tilt_disp;
+    if (g_state_mutex && xSemaphoreTake(g_state_mutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) == pdTRUE) {
+        pan_disp = current_pan_angle;
+        tilt_disp = current_tilt_angle;
+        xSemaphoreGive(g_state_mutex);
+    } else {
+        pan_disp = current_pan_angle;
+        tilt_disp = current_tilt_angle;
+    }
+    snprintf(line_text, sizeof(line_text), "PAN:%d TLT:%d", pan_disp, tilt_disp);
     oled_draw_text(0, 24, line_text, true);
     
     // Line 4: Time since last command
@@ -757,16 +807,19 @@ void oled_show_action_debug(void) {
 }
 
 void track_action(const char* action, const char* source) {
-    action_counter++;
-    strncpy(last_action, action, sizeof(last_action) - 1);
-    last_action[sizeof(last_action) - 1] = '\0';
-    strncpy(last_command_source, source, sizeof(last_command_source) - 1);
-    last_command_source[sizeof(last_command_source) - 1] = '\0';
-    
-    // Update display with new action
+    if (g_state_mutex && xSemaphoreTake(g_state_mutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) == pdTRUE) {
+        action_counter++;
+        SAFE_STRCPY(last_action, action, sizeof(last_action));
+        SAFE_STRCPY(last_command_source, source, sizeof(last_command_source));
+        xSemaphoreGive(g_state_mutex);
+    } else {
+        ESP_LOGE(TAG, "track_action: failed to acquire state mutex");
+    }
+
+    // Update display with new action (read-only access to last_action/last_command_source is safe after mutex release)
     oled_show_action_debug();
-    
-    ESP_LOGI(TAG, "Action #%lu: %s from %s", action_counter, action, source);
+
+    ESP_LOGI(TAG, "Action: %s from %s", action, source);
 }
 
 void oled_show_claude_message(int line, const char* message) {
@@ -805,6 +858,7 @@ void play_sound(int frequency, int duration_ms) {
         esp_rom_delay_us(half_period_us);
         gpio_set_level(PIEZO_PIN, 0);
         esp_rom_delay_us(half_period_us);
+        vTaskDelay(pdMS_TO_TICKS(1)); // yield to prevent task starvation
     }
     
     gpio_set_level(PIEZO_PIN, 0); // Ensure piezo is off
@@ -869,8 +923,11 @@ void print_help_commands(void) {
 void process_command(const char* command) {
     ESP_LOGI(TAG, "Command received: %s", command);
     
-    // Update command timestamp and reset timeout
-    last_command_time = millis();
+    // Update command timestamp and reset timeout (protected)
+    if (g_state_mutex && xSemaphoreTake(g_state_mutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) == pdTRUE) {
+        last_command_time = millis();
+        xSemaphoreGive(g_state_mutex);
+    }
     
     // Track serial command reception
     char action_text[32];
@@ -930,13 +987,15 @@ void process_command(const char* command) {
     }
     // Process display commands
     else if (strncmp(command, CMD_DISPLAY, strlen(CMD_DISPLAY)) == 0) {
-        // Format: DISP:line:message
-        char* line_str = strchr(command, ':');
+        // Format: DISP:line:message — work on a local copy to avoid modifying input buffer
+        char disp_buf[MAX_COMMAND_LENGTH];
+        SAFE_STRCPY(disp_buf, command, sizeof(disp_buf));
+        char* line_str = strchr(disp_buf, ':');
         if (line_str != NULL) {
             line_str++; // Skip first colon
             char* message_str = strchr(line_str, ':');
             if (message_str != NULL) {
-                *message_str = '\0'; // Null terminate line number
+                *message_str = '\0'; // Null terminate line number string in local copy
                 message_str++; // Move to message
                 int line = atoi(line_str);
                 oled_show_claude_message(line, message_str);
@@ -956,54 +1015,70 @@ void process_command(const char* command) {
 // Serial command processing task
 void command_task(void *pvParameters) {
     ESP_LOGI(TAG, "Starting command processing task");
-    
+
     // Initialize command timestamp
-    last_command_time = millis();
-    
+    if (g_state_mutex && xSemaphoreTake(g_state_mutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) == pdTRUE) {
+        last_command_time = millis();
+        xSemaphoreGive(g_state_mutex);
+    }
+
     while (1) {
-        // Check for command timeout
-        if (current_state != STATE_STOPPED && (millis() - last_command_time) > COMMAND_TIMEOUT) {
+        // Check for command timeout (protected read of shared state)
+        bool timed_out = false;
+        if (g_state_mutex && xSemaphoreTake(g_state_mutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) == pdTRUE) {
+            timed_out = (current_state != STATE_STOPPED) &&
+                        ((millis() - last_command_time) > COMMAND_TIMEOUT);
+            xSemaphoreGive(g_state_mutex);
+        }
+        if (timed_out) {
             ESP_LOGW(TAG, "Command timeout - stopping motors");
             stop_motors();
         }
-        
-        // Read from UART (USB serial)
+
+        // Read from UART (USB serial) — 100ms timeout reduces busy-waiting
         uint8_t data[1];
-        int len = uart_read_bytes(UART_NUM_0, data, 1, 20 / portTICK_PERIOD_MS);
-        
+        int len = uart_read_bytes(UART_NUM_0, data, 1, pdMS_TO_TICKS(100));
+
         if (len > 0) {
             char c = (char)data[0];
-            
+
             // Echo the character back for user feedback
             printf("%c", c);
             fflush(stdout);
-            
+
             if (c == '\n' || c == '\r') {
                 if (buffer_pos > 0) {
                     command_buffer[buffer_pos] = '\0';
-                    
+
                     // Convert to uppercase for consistency
                     for (int i = 0; i < buffer_pos; i++) {
                         command_buffer[i] = toupper(command_buffer[i]);
                     }
-                    
+
                     printf("\n"); // Add newline for clean output
-                    
+
                     // Process the command
                     process_command(command_buffer);
-                    
-                    // Reset buffer
-                    buffer_pos = 0;
+
+                    // Reset buffer (protected)
+                    if (g_state_mutex && xSemaphoreTake(g_state_mutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) == pdTRUE) {
+                        buffer_pos = 0;
+                        xSemaphoreGive(g_state_mutex);
+                    }
+                }
+            } else if (c >= 32 && c <= 126) {
+                // Only accept printable characters — protect buffer_pos increment
+                if (g_state_mutex && xSemaphoreTake(g_state_mutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) == pdTRUE) {
+                    if (buffer_pos < MAX_COMMAND_LENGTH - 1) {
+                        command_buffer[buffer_pos++] = c;
+                    }
+                    xSemaphoreGive(g_state_mutex);
                 }
             }
-            else if (c >= 32 && c <= 126 && buffer_pos < MAX_COMMAND_LENGTH - 1) {
-                // Only accept printable characters
-                command_buffer[buffer_pos++] = c;
-            }
         }
-        
+
         // Small delay to prevent busy waiting
-        vTaskDelay(10 / portTICK_PERIOD_MS);
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
 
@@ -1190,17 +1265,24 @@ static esp_err_t init_inter_board_communication(void) {
 
 static void finalize_system_startup(void) {
     ESP_LOGI(TAG, "Hardware initialized");
-    
+
+    // Initialize state mutex before creating tasks
+    g_state_mutex = xSemaphoreCreateMutex();
+    if (g_state_mutex == NULL) {
+        ESP_LOGE(TAG, "Failed to create state mutex — aborting");
+        return;
+    }
+
     // Small delay to let system stabilize
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-    
+    vTaskDelay(pdMS_TO_TICKS(SYSTEM_STABILIZATION_DELAY_MS));
+
     // Boot beep to indicate ready
     ESP_LOGI(TAG, "Playing boot beep...");
     sound_beep();
-    
+
     ESP_LOGI(TAG, "RoboCar Serial Control initialized!");
     print_help_commands();
-    
-    // Create command processing task
-    xTaskCreate(command_task, "command_task", 4096, NULL, 5, NULL);
+
+    // Create command processing task with adequate stack for UART + string + I2C ops
+    xTaskCreate(command_task, "command_task", COMMAND_TASK_STACK_SIZE, NULL, 5, NULL);
 }

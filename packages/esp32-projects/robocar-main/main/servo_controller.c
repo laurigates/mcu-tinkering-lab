@@ -103,7 +103,7 @@ static esp_err_t servo_set_pwm(uint8_t channel, uint16_t pulse_us) {
 /**
  * @brief Smooth motion task
  */
-static void servo_motion_task(void *pvParameters) {
+static void servo_motion_task(void *pvParameters __attribute__((unused))) {
     // This would implement smooth servo movements and sweeps
     // For simplicity, this is a placeholder
     while (servo_state.motion_active) {
@@ -144,16 +144,21 @@ esp_err_t servo_set_angle(servo_id_t servo_id, int16_t angle) {
     if (!servo_state.initialized) {
         return ESP_ERR_INVALID_STATE;
     }
-    
+
+    if (servo_id != SERVO_PAN && servo_id != SERVO_TILT) {
+        ESP_LOGE(TAG, "Invalid servo_id: %d", servo_id);
+        return ESP_ERR_INVALID_ARG;
+    }
+
     if (!servo_is_angle_valid(servo_id, angle)) {
         ESP_LOGW(TAG, "Invalid angle %d for servo %d", angle, servo_id);
         return ESP_ERR_INVALID_ARG;
     }
-    
+
     uint8_t channel;
     bool *enabled;
     int16_t *current_angle;
-    
+
     if (servo_id == SERVO_PAN) {
         channel = SERVO_PAN_CHANNEL;
         enabled = &servo_state.pan_enabled;
@@ -190,8 +195,10 @@ esp_err_t servo_set_tilt(int16_t angle) {
 
 esp_err_t servo_set_position(int16_t pan_angle, int16_t tilt_angle) {
     esp_err_t ret = servo_set_pan(pan_angle);
-    ret |= servo_set_tilt(tilt_angle);
-    return ret;
+    if (ret != ESP_OK) {
+        return ret;
+    }
+    return servo_set_tilt(tilt_angle);
 }
 
 esp_err_t servo_center(servo_id_t servo_id) {
@@ -201,8 +208,10 @@ esp_err_t servo_center(servo_id_t servo_id) {
 
 esp_err_t servo_center_all(void) {
     esp_err_t ret = servo_center(SERVO_PAN);
-    ret |= servo_center(SERVO_TILT);
-    return ret;
+    if (ret != ESP_OK) {
+        return ret;
+    }
+    return servo_center(SERVO_TILT);
 }
 
 esp_err_t servo_get_angle(servo_id_t servo_id, int16_t *angle) {
@@ -264,8 +273,10 @@ esp_err_t servo_disable(servo_id_t servo_id) {
 
 esp_err_t servo_disable_all(void) {
     esp_err_t ret = servo_disable(SERVO_PAN);
-    ret |= servo_disable(SERVO_TILT);
-    return ret;
+    if (ret != ESP_OK) {
+        return ret;
+    }
+    return servo_disable(SERVO_TILT);
 }
 
 esp_err_t servo_enable(servo_id_t servo_id) {
@@ -284,8 +295,10 @@ esp_err_t servo_enable(servo_id_t servo_id) {
 
 esp_err_t servo_enable_all(void) {
     esp_err_t ret = servo_enable(SERVO_PAN);
-    ret |= servo_enable(SERVO_TILT);
-    return ret;
+    if (ret != ESP_OK) {
+        return ret;
+    }
+    return servo_enable(SERVO_TILT);
 }
 
 bool servo_is_initialized(void) {

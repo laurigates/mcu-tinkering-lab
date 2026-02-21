@@ -16,11 +16,20 @@
 #define SYSTEM_COMMAND_TIMEOUT_MS       1000    // Command timeout in milliseconds
 #define SYSTEM_STABILIZATION_DELAY_MS   1000    // System stabilization delay
 #define SYSTEM_TASK_DELAY_MS            100     // Default task delay
+#define COMMAND_TIMEOUT_MS              SYSTEM_COMMAND_TIMEOUT_MS
+#define MUTEX_TIMEOUT_MS                5000    // Mutex/semaphore acquisition timeout
+
+// Task stack sizes
+#define COMMAND_TASK_STACK_SIZE         8192    // Stack for command_task (UART + string + I2C ops)
 
 // Command buffer configuration
 #define MAX_COMMAND_LENGTH              32      // Maximum command string length
 #define ACTION_STRING_LENGTH            32      // Action description length
 #define COMMAND_SOURCE_LENGTH           16      // Command source description length
+
+// Hardware value limits
+#define COLOR_VALUE_MAX                 255     // Maximum 8-bit color/PWM value
+#define PCA9685_PWM_MAX                 4095    // Maximum 12-bit PCA9685 PWM value
 
 // State definitions (centralized from scattered defines)
 typedef enum {

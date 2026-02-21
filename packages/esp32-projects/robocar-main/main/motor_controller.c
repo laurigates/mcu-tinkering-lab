@@ -24,8 +24,12 @@ static struct {
  * @brief Set motor speed using LEDC PWM
  */
 static esp_err_t set_motor_speed(ledc_channel_t channel, uint8_t speed) {
-    uint32_t duty = (speed * ((1 << PWM_RESOLUTION) - 1)) / 255;
-    return ledc_set_duty(PWM_MODE, channel, duty) || ledc_update_duty(PWM_MODE, channel);
+    uint32_t duty = (speed * ((1 << PWM_RESOLUTION) - 1)) / COLOR_VALUE_MAX;
+    esp_err_t ret = ledc_set_duty(PWM_MODE, channel, duty);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+    return ledc_update_duty(PWM_MODE, channel);
 }
 
 esp_err_t motor_controller_init(void) {
@@ -105,7 +109,15 @@ esp_err_t motor_move_forward(uint8_t speed) {
 
     // Set motor speeds
     esp_err_t ret = set_motor_speed(PWM_RIGHT_CHANNEL, speed);
-    ret |= set_motor_speed(PWM_LEFT_CHANNEL, speed);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to set right motor speed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+    ret = set_motor_speed(PWM_LEFT_CHANNEL, speed);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to set left motor speed: %s", esp_err_to_name(ret));
+        return ret;
+    }
 
     // Update state
     motor_state.left_speed = speed;
@@ -114,7 +126,7 @@ esp_err_t motor_move_forward(uint8_t speed) {
     motor_state.right_direction = 1;
 
     ESP_LOGD(TAG, "Moving forward at speed %d", speed);
-    return ret;
+    return ESP_OK;
 }
 
 esp_err_t motor_move_backward(uint8_t speed) {
@@ -130,7 +142,15 @@ esp_err_t motor_move_backward(uint8_t speed) {
 
     // Set motor speeds
     esp_err_t ret = set_motor_speed(PWM_RIGHT_CHANNEL, speed);
-    ret |= set_motor_speed(PWM_LEFT_CHANNEL, speed);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to set right motor speed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+    ret = set_motor_speed(PWM_LEFT_CHANNEL, speed);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to set left motor speed: %s", esp_err_to_name(ret));
+        return ret;
+    }
 
     // Update state
     motor_state.left_speed = speed;
@@ -139,7 +159,7 @@ esp_err_t motor_move_backward(uint8_t speed) {
     motor_state.right_direction = 0;
 
     ESP_LOGD(TAG, "Moving backward at speed %d", speed);
-    return ret;
+    return ESP_OK;
 }
 
 esp_err_t motor_turn_left(uint8_t speed) {
@@ -155,7 +175,15 @@ esp_err_t motor_turn_left(uint8_t speed) {
 
     // Right motor full speed, left motor half speed
     esp_err_t ret = set_motor_speed(PWM_RIGHT_CHANNEL, speed);
-    ret |= set_motor_speed(PWM_LEFT_CHANNEL, speed / 2);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to set right motor speed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+    ret = set_motor_speed(PWM_LEFT_CHANNEL, speed / 2);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to set left motor speed: %s", esp_err_to_name(ret));
+        return ret;
+    }
 
     // Update state
     motor_state.left_speed = speed / 2;
@@ -164,7 +192,7 @@ esp_err_t motor_turn_left(uint8_t speed) {
     motor_state.right_direction = 1;
 
     ESP_LOGD(TAG, "Turning left at speed %d", speed);
-    return ret;
+    return ESP_OK;
 }
 
 esp_err_t motor_turn_right(uint8_t speed) {
@@ -180,7 +208,15 @@ esp_err_t motor_turn_right(uint8_t speed) {
 
     // Left motor full speed, right motor half speed
     esp_err_t ret = set_motor_speed(PWM_RIGHT_CHANNEL, speed / 2);
-    ret |= set_motor_speed(PWM_LEFT_CHANNEL, speed);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to set right motor speed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+    ret = set_motor_speed(PWM_LEFT_CHANNEL, speed);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to set left motor speed: %s", esp_err_to_name(ret));
+        return ret;
+    }
 
     // Update state
     motor_state.left_speed = speed;
@@ -189,7 +225,7 @@ esp_err_t motor_turn_right(uint8_t speed) {
     motor_state.right_direction = 1;
 
     ESP_LOGD(TAG, "Turning right at speed %d", speed);
-    return ret;
+    return ESP_OK;
 }
 
 esp_err_t motor_rotate_cw(uint8_t speed) {
@@ -205,7 +241,15 @@ esp_err_t motor_rotate_cw(uint8_t speed) {
 
     // Set motor speeds
     esp_err_t ret = set_motor_speed(PWM_RIGHT_CHANNEL, speed);
-    ret |= set_motor_speed(PWM_LEFT_CHANNEL, speed);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to set right motor speed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+    ret = set_motor_speed(PWM_LEFT_CHANNEL, speed);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to set left motor speed: %s", esp_err_to_name(ret));
+        return ret;
+    }
 
     // Update state
     motor_state.left_speed = speed;
@@ -214,7 +258,7 @@ esp_err_t motor_rotate_cw(uint8_t speed) {
     motor_state.right_direction = 0;
 
     ESP_LOGD(TAG, "Rotating clockwise at speed %d", speed);
-    return ret;
+    return ESP_OK;
 }
 
 esp_err_t motor_rotate_ccw(uint8_t speed) {
@@ -230,7 +274,15 @@ esp_err_t motor_rotate_ccw(uint8_t speed) {
 
     // Set motor speeds
     esp_err_t ret = set_motor_speed(PWM_RIGHT_CHANNEL, speed);
-    ret |= set_motor_speed(PWM_LEFT_CHANNEL, speed);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to set right motor speed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+    ret = set_motor_speed(PWM_LEFT_CHANNEL, speed);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to set left motor speed: %s", esp_err_to_name(ret));
+        return ret;
+    }
 
     // Update state
     motor_state.left_speed = speed;
@@ -239,7 +291,7 @@ esp_err_t motor_rotate_ccw(uint8_t speed) {
     motor_state.right_direction = 1;
 
     ESP_LOGD(TAG, "Rotating counter-clockwise at speed %d", speed);
-    return ret;
+    return ESP_OK;
 }
 
 esp_err_t motor_stop(void) {
@@ -255,7 +307,15 @@ esp_err_t motor_stop(void) {
 
     // Set PWM to 0
     esp_err_t ret = set_motor_speed(PWM_RIGHT_CHANNEL, 0);
-    ret |= set_motor_speed(PWM_LEFT_CHANNEL, 0);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to stop right motor: %s", esp_err_to_name(ret));
+        return ret;
+    }
+    ret = set_motor_speed(PWM_LEFT_CHANNEL, 0);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to stop left motor: %s", esp_err_to_name(ret));
+        return ret;
+    }
 
     // Update state
     motor_state.left_speed = 0;
@@ -264,7 +324,7 @@ esp_err_t motor_stop(void) {
     motor_state.right_direction = 0;
 
     ESP_LOGD(TAG, "Motors stopped");
-    return ret;
+    return ESP_OK;
 }
 
 esp_err_t motor_set_individual(uint8_t left_speed, uint8_t right_speed,
@@ -293,7 +353,15 @@ esp_err_t motor_set_individual(uint8_t left_speed, uint8_t right_speed,
 
     // Set motor speeds
     esp_err_t ret = set_motor_speed(PWM_RIGHT_CHANNEL, right_speed);
-    ret |= set_motor_speed(PWM_LEFT_CHANNEL, left_speed);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to set right motor speed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+    ret = set_motor_speed(PWM_LEFT_CHANNEL, left_speed);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to set left motor speed: %s", esp_err_to_name(ret));
+        return ret;
+    }
 
     // Update state
     motor_state.left_speed = left_speed;

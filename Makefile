@@ -455,6 +455,8 @@ lint-c:
 		! -path "*/managed_components/*" \
 		! -path "*/components/esp-idf-lib/*" \
 		! -path "*/build/*" \
+		! -path "*/.venv/*" \
+		! -path "*/.esphome/*" \
 		-print0 | \
 		xargs -0 cppcheck \
 			--enable=warning,style,performance,portability \
@@ -471,41 +473,42 @@ lint-c:
 
 lint-python:
 	@echo "$(BLUE)Linting Python code with ruff...$(NC)"
-	@command -v ruff >/dev/null 2>&1 || { \
+	@if ! command -v ruff >/dev/null 2>&1; then \
 		echo "$(YELLOW)Warning: ruff not found. Install with: pip install ruff$(NC)"; \
-		exit 0; \
-	}
-	@cd $(ROBOCAR_SIMULATION_DIR) && ruff check . || { \
-		echo "$(RED)✗ Ruff found issues$(NC)"; \
-		exit 1; \
-	}
-	@echo "$(GREEN)✓ Python lint checks passed$(NC)"
+	else \
+		cd $(ROBOCAR_SIMULATION_DIR) && ruff check . || { \
+			echo "$(RED)✗ Ruff found issues$(NC)"; \
+			exit 1; \
+		} && echo "$(GREEN)✓ Python lint checks passed$(NC)"; \
+	fi
 
 format: format-c format-python
 	@echo "$(GREEN)✓ All code formatting complete$(NC)"
 
 format-c:
 	@echo "$(BLUE)Formatting C/C++ code with clang-format...$(NC)"
-	@command -v clang-format >/dev/null 2>&1 || { \
-		echo "$(RED)Error: clang-format not found. Install with: sudo apt-get install clang-format$(NC)"; \
-		exit 1; \
-	}
-	@find packages/esp32-projects -type f \( -name "*.c" -o -name "*.h" -o -name "*.cpp" -o -name "*.hpp" \) \
-		! -path "*/managed_components/*" \
-		! -path "*/components/esp-idf-lib/*" \
-		! -path "*/build/*" \
-		-print0 | \
-		xargs -0 clang-format -i --style=file
-	@echo "$(GREEN)✓ C/C++ code formatted$(NC)"
+	@if ! command -v clang-format >/dev/null 2>&1; then \
+		echo "$(YELLOW)Warning: clang-format not found. Install with: brew install clang-format$(NC)"; \
+	else \
+		find packages/esp32-projects -type f \( -name "*.c" -o -name "*.h" -o -name "*.cpp" -o -name "*.hpp" \) \
+			! -path "*/managed_components/*" \
+			! -path "*/components/esp-idf-lib/*" \
+			! -path "*/build/*" \
+			! -path "*/.venv/*" \
+			! -path "*/.esphome/*" \
+			-print0 | \
+			xargs -0 clang-format -i --style=file && \
+		echo "$(GREEN)✓ C/C++ code formatted$(NC)"; \
+	fi
 
 format-python:
 	@echo "$(BLUE)Formatting Python code with ruff...$(NC)"
-	@command -v ruff >/dev/null 2>&1 || { \
+	@if ! command -v ruff >/dev/null 2>&1; then \
 		echo "$(YELLOW)Warning: ruff not found. Install with: pip install ruff$(NC)"; \
-		exit 0; \
-	}
-	@cd $(ROBOCAR_SIMULATION_DIR) && ruff format .
-	@echo "$(GREEN)✓ Python code formatted$(NC)"
+	else \
+		cd $(ROBOCAR_SIMULATION_DIR) && ruff format . && \
+		echo "$(GREEN)✓ Python code formatted$(NC)"; \
+	fi
 
 format-check: format-check-c format-check-python
 	@echo "$(GREEN)✓ All format checks passed$(NC)"

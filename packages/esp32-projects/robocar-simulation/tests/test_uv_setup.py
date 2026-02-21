@@ -3,10 +3,11 @@
 Test file to verify uv setup and basic imports work correctly.
 """
 
-import pytest
-import sys
 import asyncio
+import sys
 from pathlib import Path
+
+import pytest
 
 # Add src directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
@@ -19,10 +20,8 @@ def test_python_version():
 
 def test_basic_imports():
     """Test that core Python libraries can be imported"""
+
     import numpy as np
-    import yaml
-    import asyncio
-    import json
 
     assert np.__version__
     print(f"✓ NumPy {np.__version__}")
@@ -55,9 +54,9 @@ def test_simulation_imports():
 def test_genesis_import():
     """Test that Genesis framework can be imported"""
     try:
-        import genesis
+        import genesis  # noqa: F401
 
-        print(f"✓ Genesis available")
+        print("✓ Genesis available")
     except ImportError:
         pytest.skip("Genesis not available - this is expected if not installed yet")
 
@@ -79,7 +78,7 @@ def test_torch_import():
 def test_robot_model_import():
     """Test that our robot model can be imported"""
     try:
-        from robot_model import DifferentialDriveRobot
+        from robot_model import DifferentialDriveRobot  # noqa: F401
 
         print("✓ Robot model imports successfully")
     except ImportError as e:

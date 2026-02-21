@@ -7,23 +7,22 @@ WebSocket, MQTT, and UART.
 """
 
 import asyncio
-import logging
-import websockets
 import json
-import serial
-import time
-import threading
-from typing import Dict, List, Optional, Callable, Any, Set
-from dataclasses import dataclass, asdict
-from enum import Enum
+import logging
 import struct
+import threading
+import time
+from dataclasses import dataclass
+from enum import Enum
+
 import crc8
+import serial
+import websockets
 import yaml
-from pathlib import Path
+
+from robot_model import DifferentialDriveRobot
 
 logger = logging.getLogger(__name__)
-
-from robot_model import RobotState, DifferentialDriveRobot
 
 
 class MessageType(Enum):
@@ -86,7 +85,7 @@ class ESP32CommunicationBridge:
         # Communication channels
         self.websocket_server = None
         self.serial_connection = None
-        self.clients: Set = set()
+        self.clients: set = set()
         self._clients_lock = threading.Lock()
 
         # Message handlers
@@ -119,9 +118,9 @@ class ESP32CommunicationBridge:
         self.update_thread = None
         self.lock = threading.Lock()
 
-    def _load_config(self, config_path: str) -> Dict:
+    def _load_config(self, config_path: str) -> dict:
         """Load configuration from YAML file"""
-        with open(config_path, "r") as f:
+        with open(config_path) as f:
             return yaml.safe_load(f)
 
     async def start_websocket_server(self):
@@ -446,7 +445,7 @@ class ESP32CommunicationBridge:
             # Sleep for simulation timestep
             await asyncio.sleep(self.robot.dt)
 
-    async def start(self, serial_port: Optional[str] = None):
+    async def start(self, serial_port: str | None = None):
         """Start the communication bridge"""
         self.running = True
 
