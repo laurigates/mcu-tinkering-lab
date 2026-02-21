@@ -101,10 +101,11 @@ class MatplotlibVisualizer:
                 if self.direction_line:
                     self.direction_line.remove()
 
-                dx = 0.3 * np.cos(state.theta)
-                dy = 0.3 * np.sin(state.theta)
+                direction_x = 0.3 * np.cos(state.theta)
+                direction_y = 0.3 * np.sin(state.theta)
                 self.direction_line = self.ax.arrow(
-                    state.x, state.y, dx, dy, head_width=0.1, head_length=0.1, fc="red", ec="red"
+                    state.x, state.y, direction_x, direction_y,
+                    head_width=0.1, head_length=0.1, fc="red", ec="red"
                 )
 
                 # Add trail point
@@ -172,6 +173,8 @@ class MatplotlibVisualizer:
 class RobotVisualizer:
     """3D visualization of the robot car using Genesis simulation framework"""
 
+    DEFAULT_FPS = 60
+
     def __init__(self, config_path: str, robot: DifferentialDriveRobot, viz_mode: str = "headless"):
         self.using_fallback = False
 
@@ -230,7 +233,7 @@ class RobotVisualizer:
                 viewer_options=gs.options.ViewerOptions(
                     camera_pos=(2.0, 2.0, 2.0),
                     camera_lookat=(0.0, 0.0, 0.0),
-                    max_FPS=60 if self.viz_mode != "headless" else None,
+                    max_FPS=RobotVisualizer.DEFAULT_FPS if self.viz_mode != "headless" else None,
                 ),
             )
 
@@ -460,8 +463,8 @@ class RobotVisualizer:
         try:
             self.scene.step()
         except Exception as e:
-            # Ignore Genesis step errors
-            pass
+            import logging
+            logging.getLogger(__name__).debug("Genesis scene step error: %s", e)
 
     def _update_trail(self, x: float, y: float):
         """Update robot trail visualization"""

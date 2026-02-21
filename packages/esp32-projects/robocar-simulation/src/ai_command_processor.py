@@ -7,6 +7,7 @@ supporting both Claude and Ollama backends for natural language robot control.
 
 import asyncio
 import json
+import logging
 import time
 import base64
 import httpx
@@ -19,8 +20,11 @@ import yaml
 from pathlib import Path
 import os
 import re
+import traceback
 
 from robot_model import RobotState
+
+logger = logging.getLogger(__name__)
 
 
 class AIBackendType(Enum):
@@ -184,7 +188,12 @@ GUIDELINES:
                 raise ValueError(f"Unsupported AI backend: {self.backend_type}")
 
         except Exception as e:
-            print(f"AI processing failed: {e}")
+            logger.error(
+                "AI processing failed for backend %s: %s\n%s",
+                self.backend_type,
+                e,
+                traceback.format_exc(),
+            )
             # Return safe default command
             return AICommand(
                 action="stop",
@@ -316,7 +325,10 @@ Recent commands: {", ".join(context.last_commands[-3:]) if context.last_commands
             reasoning = command_data.get("reasoning", "No reasoning provided")
 
             # Validate confidence is in range
-            confidence = max(0.0, min(1.0, float(confidence)))
+            try:
+                confidence = max(0.0, min(1.0, float(confidence)))
+            except (TypeError, ValueError):
+                confidence = 0.5
 
             return AICommand(
                 action=action,
@@ -326,9 +338,13 @@ Recent commands: {", ".join(context.last_commands[-3:]) if context.last_commands
                 timestamp=time.time(),
             )
 
-        except Exception as e:
-            print(f"Failed to parse AI response: {e}")
-            print(f"Response was: {response}")
+        except (json.JSONDecodeError, ValueError, KeyError) as e:
+            logger.error(
+                "Failed to parse AI response: %s\nResponse was: %s\n%s",
+                e,
+                response,
+                traceback.format_exc(),
+            )
 
             return AICommand(
                 action="stop",

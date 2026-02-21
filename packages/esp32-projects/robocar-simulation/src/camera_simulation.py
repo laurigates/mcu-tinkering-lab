@@ -16,6 +16,8 @@ import yaml
 from dataclasses import dataclass
 from spatialmath import SE3
 
+CAPTURE_LOOP_SLEEP = 0.001  # seconds between capture loop iterations
+
 from robot_model import RobotState
 from error_handling import get_error_handler, ErrorSeverity
 
@@ -109,7 +111,7 @@ class CameraSimulation:
                         self.current_frame = default_frame
 
                 return True
-            except Exception:
+            except (AttributeError, RuntimeError, cv2.error):
                 return False
 
         def rendering_recovery(error) -> bool:
@@ -123,7 +125,7 @@ class CameraSimulation:
                     with self.frame_lock if hasattr(self, "frame_lock") else threading.Lock():
                         self.current_frame = fallback_frame
                 return True
-            except Exception:
+            except (AttributeError, RuntimeError, cv2.error):
                 return False
 
         # Register strategies
@@ -306,11 +308,11 @@ class CameraSimulation:
                         fx, fy = floor_point[0], floor_point[1]
                         if abs(fx) < 5 and abs(fy) < 5:  # Within room bounds
                             # Convert to pattern coordinates
-                            px = int((fx + 2.5) * 12) % 64
-                            py = int((fy + 2.5) * 12) % 64
+                            pattern_x = int((fx + 2.5) * 12) % 64
+                            pattern_y = int((fy + 2.5) * 12) % 64
 
-                            if 0 <= px < 64 and 0 <= py < 64:
-                                color = self.floor_pattern[py, px]
+                            if 0 <= pattern_x < 64 and 0 <= pattern_y < 64:
+                                color = self.floor_pattern[pattern_y, pattern_x]
                                 img[y, x] = color
 
     def _render_objects(
@@ -515,7 +517,10 @@ class CameraSimulation:
         """Stop camera capture"""
         self.is_running = False
         if self.capture_thread:
-            self.capture_thread.join()
+            self.capture_thread.join(timeout=5.0)
+            if self.capture_thread.is_alive():
+                import logging
+                logging.getLogger(__name__).warning("Camera capture thread did not stop in time")
         print("Camera simulation stopped")
 
     def _capture_loop(self, robot_state_callback):
@@ -541,7 +546,7 @@ class CameraSimulation:
                     self.last_frame_time = current_time
 
             # Sleep for a short time to prevent excessive CPU usage
-            time.sleep(0.001)
+            time.sleep(CAPTURE_LOOP_SLEEP)
 
     def get_latest_frame(self) -> Optional[np.ndarray]:
         """Get the latest camera frame"""

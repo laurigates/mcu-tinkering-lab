@@ -124,6 +124,7 @@ class OTASimulation:
         self.error_handler.register_component("ota_simulation")
         self._register_recovery_strategies()
 
+        self._status_lock = threading.Lock()
         self.config = self._load_config(config_path)
 
         # Load partition table (matching ESP32 partition structure)
@@ -392,10 +393,11 @@ class OTASimulation:
                 hasher.update(chunk_data)
                 bytes_downloaded += chunk_bytes
 
-                # Update progress
+                # Update progress (lock protects shared status fields)
                 progress = int((bytes_downloaded / total_bytes) * 100)
-                self.current_status.bytes_downloaded = bytes_downloaded
-                self.current_status.progress_percent = progress
+                with self._status_lock:
+                    self.current_status.bytes_downloaded = bytes_downloaded
+                    self.current_status.progress_percent = progress
 
                 # Periodic progress updates
                 if progress % 10 == 0 and progress > 0:

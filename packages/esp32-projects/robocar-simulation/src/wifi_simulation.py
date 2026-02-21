@@ -56,6 +56,8 @@ class WiFiManagerSimulation:
     Simulates ESP32 WiFi manager functionality for robot simulation
     """
 
+    GOOD_RSSI_THRESHOLD = -70  # dBm threshold for good signal quality
+
     def __init__(self, config_path: str):
         # Initialize error handling
         self.error_handler = get_error_handler()
@@ -63,6 +65,9 @@ class WiFiManagerSimulation:
         self._register_recovery_strategies()
 
         self.config = self._load_config(config_path)
+
+        # Thread safety
+        self._lock = threading.RLock()
 
         # WiFi state
         self.state = WiFiState.DISCONNECTED
@@ -84,6 +89,9 @@ class WiFiManagerSimulation:
         # OTA status
         self.ota_ready = False
         self.connection_stability_threshold = 30.0  # seconds
+
+        # Auto-reconnect tracking (initialized here to avoid lazy hasattr pattern)
+        self._last_retry_time: float = time.time()
 
         # Initialize with some simulated networks
         self._initialize_available_networks()
@@ -204,16 +212,17 @@ class WiFiManagerSimulation:
 
             network = self._find_network_by_ssid(self._connecting_ssid)
             if network:
-                self.current_connection = WiFiConnectionInfo(
-                    ssid=network.ssid,
-                    ip_address=ip_address,
-                    rssi=network.rssi + random.randint(-5, 5),  # Add some variation
-                    channel=network.channel,
-                    connection_time=time.time(),
-                )
+                with self._lock:
+                    self.current_connection = WiFiConnectionInfo(
+                        ssid=network.ssid,
+                        ip_address=ip_address,
+                        rssi=network.rssi + random.randint(-5, 5),  # Add some variation
+                        channel=network.channel,
+                        connection_time=time.time(),
+                    )
 
-                self.state = WiFiState.CONNECTED
-                self.retry_attempts = 0
+                    self.state = WiFiState.CONNECTED
+                    self.retry_attempts = 0
                 print(f"WiFi simulation: Connected to {network.ssid} ({ip_address})")
 
         except Exception as e:
@@ -228,8 +237,9 @@ class WiFiManagerSimulation:
 
     def _connection_failed(self):
         """Handle connection failure"""
-        self.state = WiFiState.ERROR
-        self.retry_attempts += 1
+        with self._lock:
+            self.state = WiFiState.ERROR
+            self.retry_attempts += 1
         print(f"WiFi simulation: Connection failed (attempt {self.retry_attempts})")
 
         # Reset for potential retry
@@ -250,7 +260,7 @@ class WiFiManagerSimulation:
         if self.current_connection and self.state == WiFiState.CONNECTED:
             # Check connection stability
             connection_duration = time.time() - self.current_connection.connection_time
-            signal_quality = self.current_connection.rssi > -70  # Good signal threshold
+            signal_quality = self.current_connection.rssi > self.GOOD_RSSI_THRESHOLD
 
             self.ota_ready = (
                 connection_duration > self.connection_stability_threshold and signal_quality
@@ -265,10 +275,6 @@ class WiFiManagerSimulation:
             and self.state in [WiFiState.DISCONNECTED, WiFiState.ERROR]
             and self.retry_attempts < self.max_retry_attempts
         ):
-            # Wait before retry
-            if not hasattr(self, "_last_retry_time"):
-                self._last_retry_time = time.time()
-
             if time.time() - self._last_retry_time > (self.retry_delay_ms / 1000.0):
                 # Attempt reconnection to last known network
                 if hasattr(self, "_last_ssid") and hasattr(self, "_last_password"):
@@ -453,7 +459,12 @@ class WiFiManagerSimulation:
         try:
             self.simulation_running = False
             if hasattr(self, "simulation_thread"):
-                self.simulation_thread.join(timeout=2.0)
+                self.simulation_thread.join(timeout=5.0)
+                if self.simulation_thread.is_alive():
+                    import logging as _logging
+                    _logging.getLogger(__name__).warning(
+                        "WiFi simulation thread did not stop in time"
+                    )
 
             self.disconnect()
             print("WiFi simulation: Stopped")

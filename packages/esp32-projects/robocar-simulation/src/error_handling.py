@@ -447,13 +447,16 @@ def async_resilient_operation(
 
 # Global error handler instance
 _global_error_handler: Optional[SimulationErrorHandler] = None
+_global_error_handler_lock = threading.Lock()
 
 
 def get_error_handler() -> SimulationErrorHandler:
-    """Get or create global error handler"""
+    """Get or create global error handler (thread-safe)"""
     global _global_error_handler
     if _global_error_handler is None:
-        _global_error_handler = SimulationErrorHandler("simulation_errors.log")
+        with _global_error_handler_lock:
+            if _global_error_handler is None:
+                _global_error_handler = SimulationErrorHandler("simulation_errors.log")
     return _global_error_handler
 
 

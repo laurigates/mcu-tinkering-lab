@@ -96,8 +96,10 @@ class PIDController:
         )
         integral = self.config.ki * self.integral
 
+        MIN_DT = 1e-6  # Minimum time step to avoid division by zero
+
         # Derivative term with filtering
-        if dt > 0:
+        if dt > MIN_DT:
             raw_derivative = (error - self.previous_error) / dt
             # Low-pass filter for derivative
             filtered_derivative = (

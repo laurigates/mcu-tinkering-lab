@@ -7,7 +7,7 @@ differential drive kinematics, motor dynamics, and sensor simulation.
 
 import numpy as np
 from typing import Tuple, Dict, List, Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import time
 import yaml
 from pathlib import Path
@@ -16,6 +16,9 @@ import pymunk
 from error_handling import get_error_handler, resilient_operation, ErrorSeverity, ErrorEvent
 from wifi_simulation import WiFiManagerSimulation
 from ota_simulation import OTASimulation
+
+
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -40,21 +43,20 @@ class RobotState:
     # Sensor readings
     camera_frame: Optional[np.ndarray] = None
     ultrasonic_distance: float = 0.0  # meters
-    imu_accel: np.ndarray = None  # [ax, ay, az] m/s²
-    imu_gyro: np.ndarray = None  # [gx, gy, gz] rad/s
+    imu_accel: np.ndarray = field(default_factory=lambda: np.zeros(3))  # [ax, ay, az] m/s²
+    imu_gyro: np.ndarray = field(default_factory=lambda: np.zeros(3))  # [gx, gy, gz] rad/s
 
     # Servo positions
     camera_pan_angle: float = 0.0  # degrees
 
-    def __post_init__(self):
-        if self.imu_accel is None:
-            self.imu_accel = np.zeros(3)
-        if self.imu_gyro is None:
-            self.imu_gyro = np.zeros(3)
-
 
 class DCMotor:
     """DC Motor model with electrical and mechanical dynamics"""
+
+    # Friction parameters (realistic for small DC motor)
+    FRICTION_STATIC = 0.001   # N⋅m static friction threshold
+    FRICTION_KINETIC = 0.0005  # N⋅m kinetic friction torque
+    FRICTION_VISCOUS = 0.0001  # N⋅m⋅s/rad viscous damping coefficient
 
     def __init__(self, config: Dict):
         self.resistance = config["resistance"]  # Ohms
@@ -72,10 +74,15 @@ class DCMotor:
         self.angular_velocity = 0.0  # rad/s
         self.torque = 0.0  # N⋅m
 
-        # Friction parameters (realistic for small DC motor)
-        self.friction_static = 0.001  # N⋅m (reduced for small motor)
-        self.friction_kinetic = 0.0005  # N⋅m (reduced for small motor)
-        self.friction_viscous = 0.0001  # N⋅m⋅s/rad (reduced for small motor)
+    def _calculate_friction_torque(self, motor_torque: float, load_torque: float) -> float:
+        """Calculate friction torque based on current motion state"""
+        if abs(self.angular_velocity) > 0.01:  # Moving
+            return np.sign(self.angular_velocity) * self.FRICTION_KINETIC
+        # Static friction - only applies if motor torque exceeds static friction
+        static_threshold = abs(motor_torque - load_torque)
+        if static_threshold > self.FRICTION_STATIC:
+            return np.sign(motor_torque - load_torque) * self.FRICTION_STATIC
+        return motor_torque - load_torque  # Static friction prevents motion
 
     def update(self, voltage: float, load_torque: float, dt: float) -> Tuple[float, float]:
         """
@@ -107,18 +114,10 @@ class DCMotor:
         # Motor torque
         motor_torque = self.torque_constant * self.current
 
-        # Friction torque
-        if abs(self.angular_velocity) > 0.01:  # Moving (reduced threshold)
-            friction_torque = np.sign(self.angular_velocity) * self.friction_kinetic
-        else:  # Static friction - only applies if motor torque exceeds static friction
-            static_threshold = abs(motor_torque - load_torque)
-            if static_threshold > self.friction_static:
-                friction_torque = np.sign(motor_torque - load_torque) * self.friction_static
-            else:
-                friction_torque = motor_torque - load_torque  # Static friction prevents motion
+        friction_torque = self._calculate_friction_torque(motor_torque, load_torque)
 
         # Viscous friction
-        viscous_torque = self.friction_viscous * self.angular_velocity
+        viscous_torque = self.FRICTION_VISCOUS * self.angular_velocity
 
         # Net torque
         net_torque = motor_torque - load_torque - friction_torque - viscous_torque

@@ -8,7 +8,9 @@ Robotics Toolbox for Python with Swift visualizer.
 
 import asyncio
 import argparse
+import os
 import sys
+import matplotlib.pyplot as plt
 from pathlib import Path
 import signal
 import time
@@ -70,9 +72,6 @@ class SimulationManager:
         # Initialize Genesis visualizer
         if self.enable_visualizer:
             if HAS_GENESIS:
-                import threading
-                import time
-
                 # Initialize Genesis simulation - much simpler than Swift
                 try:
                     self.swift_sim = GenesisSimulation(self.config_path, viz_mode=self.viz_mode)
@@ -100,7 +99,7 @@ class SimulationManager:
 
         print("Initialization complete!")
 
-    async def start(self):
+    async def start(self) -> None:
         """Start the simulation"""
         print("\nStarting simulation components...")
         self.running = True
@@ -127,16 +126,24 @@ class SimulationManager:
                     self.swift_sim.visualizer.fallback_viz.start_update_loop()
                     print("✓ Matplotlib visualization started on main thread")
                 # Run simulation logic in background thread
-                simulation_thread = threading.Thread(
-                    target=self._run_background_simulation, daemon=True
-                )
-                simulation_thread.start()
-                print("✓ Background simulation started")
+                try:
+                    simulation_thread = threading.Thread(
+                        target=self._run_background_simulation, daemon=True
+                    )
+                    simulation_thread.start()
+                    print("✓ Background simulation started")
+                except RuntimeError as e:
+                    print(f"⚠ Failed to start background simulation thread: {e}")
             else:
                 # For Genesis, run in separate thread since it's not async
-                genesis_thread = threading.Thread(target=self._run_genesis_simulation, daemon=True)
-                genesis_thread.start()
-                print("✓ Genesis visualization started")
+                try:
+                    genesis_thread = threading.Thread(
+                        target=self._run_genesis_simulation, daemon=True
+                    )
+                    genesis_thread.start()
+                    print("✓ Genesis visualization started")
+                except RuntimeError as e:
+                    print(f"⚠ Failed to start Genesis thread: {e}")
 
         # Start demo movement if no bridge
         if not self.bridge:
@@ -157,8 +164,6 @@ class SimulationManager:
                 try:
                     # Keep the main thread alive for matplotlib GUI
                     while self.running:
-                        import matplotlib.pyplot as plt
-
                         plt.pause(0.1)  # Process GUI events
                         if tasks:
                             # Check if any tasks are done
@@ -222,7 +227,7 @@ class SimulationManager:
         except Exception as e:
             print(f"Background simulation error: {e}")
 
-    async def _demo_movement(self):
+    async def _demo_movement(self) -> None:
         """Demo movement pattern when no ESP32 is connected"""
         print("Running demo movement pattern...")
 
@@ -236,8 +241,6 @@ class SimulationManager:
         ]
 
         # For demo mode, run for a limited time (30 seconds total)
-        import time
-
         demo_start_time = time.time()
         demo_duration = 30.0  # Run demo for 30 seconds
 
@@ -371,8 +374,6 @@ Examples:
     viz_mode = "headless"  # Default
 
     # Check environment variable first
-    import os
-
     env_viz_mode = os.getenv("GENESIS_VIZ_MODE", "").lower()
     if env_viz_mode in ["headless", "visual", "browser"]:
         viz_mode = env_viz_mode
