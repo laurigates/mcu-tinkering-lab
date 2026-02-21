@@ -81,10 +81,9 @@ static esp_err_t test_ollama_connectivity(const char* base_url) {
     size_t suffix_len = strlen(api_generate_suffix);
     
     if (base_len > suffix_len && strcmp(base_url + base_len - suffix_len, api_generate_suffix) == 0) {
-        // Remove /api/generate and add /api/tags
-        strncpy(tags_url, base_url, base_len - suffix_len);
-        tags_url[base_len - suffix_len] = '\0';
-        strcat(tags_url, "/api/tags");
+        // Remove /api/generate suffix and append /api/tags
+        size_t base_only_len = base_len - suffix_len;
+        snprintf(tags_url, sizeof(tags_url), "%.*s/api/tags", (int)base_only_len, base_url);
     } else {
         // Assume base_url is just the server, add /api/tags
         snprintf(tags_url, sizeof(tags_url), "%s/api/tags", base_url);

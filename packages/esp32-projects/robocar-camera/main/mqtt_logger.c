@@ -4,6 +4,7 @@
  */
 
 #include "mqtt_logger.h"
+#include "config.h"
 #include "mqtt_client.h"
 #include "esp_log.h"
 #include "esp_system.h"
@@ -251,7 +252,7 @@ esp_err_t mqtt_logger_publish_status(const char* status_json) {
                                         s_context.config.retain_status);
     
     if (msg_id < 0) {
-        xSemaphoreTake(s_context.mutex, portMAX_DELAY);
+        xSemaphoreTake(s_context.mutex, pdMS_TO_TICKS(SEMAPHORE_TIMEOUT_MS));
         s_context.stats.messages_failed++;
         xSemaphoreGive(s_context.mutex);
         return ESP_FAIL;
@@ -269,7 +270,7 @@ esp_err_t mqtt_logger_get_stats(mqtt_logger_stats_t* stats) {
         return ESP_ERR_INVALID_STATE;
     }
 
-    xSemaphoreTake(s_context.mutex, portMAX_DELAY);
+    xSemaphoreTake(s_context.mutex, pdMS_TO_TICKS(SEMAPHORE_TIMEOUT_MS));
     memcpy(stats, &s_context.stats, sizeof(mqtt_logger_stats_t));
     stats->messages_buffered = uxQueueMessagesWaiting(s_context.log_queue);
     stats->is_connected = s_context.connected;
@@ -283,7 +284,7 @@ esp_err_t mqtt_logger_set_level(esp_log_level_t level) {
         return ESP_ERR_INVALID_STATE;
     }
 
-    xSemaphoreTake(s_context.mutex, portMAX_DELAY);
+    xSemaphoreTake(s_context.mutex, pdMS_TO_TICKS(SEMAPHORE_TIMEOUT_MS));
     s_context.config.min_level = level;
     xSemaphoreGive(s_context.mutex);
 
@@ -338,7 +339,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
                 get_timestamp_ms());
         mqtt_logger_publish_status(status_msg);
         
-        xSemaphoreTake(s_context.mutex, portMAX_DELAY);
+        xSemaphoreTake(s_context.mutex, pdMS_TO_TICKS(SEMAPHORE_TIMEOUT_MS));
         s_context.stats.reconnect_count++;
         xSemaphoreGive(s_context.mutex);
         break;
@@ -357,7 +358,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
         break;
 
     case MQTT_EVENT_PUBLISHED:
-        xSemaphoreTake(s_context.mutex, portMAX_DELAY);
+        xSemaphoreTake(s_context.mutex, pdMS_TO_TICKS(SEMAPHORE_TIMEOUT_MS));
         s_context.stats.messages_sent++;
         s_context.stats.last_message_time = get_timestamp_ms();
         xSemaphoreGive(s_context.mutex);
@@ -373,7 +374,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
 
     case MQTT_EVENT_ERROR:
         ESP_LOGE(TAG, "MQTT error occurred");
-        xSemaphoreTake(s_context.mutex, portMAX_DELAY);
+        xSemaphoreTake(s_context.mutex, pdMS_TO_TICKS(SEMAPHORE_TIMEOUT_MS));
         s_context.stats.messages_failed++;
         xSemaphoreGive(s_context.mutex);
         break;

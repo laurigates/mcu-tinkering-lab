@@ -185,22 +185,28 @@ bool parse_ai_response(const char* response_text, ai_command_t* command) {
     // Parse pan angle
     cJSON *pan = cJSON_GetObjectItem(json_obj, "pan");
     if (pan && cJSON_IsNumber(pan)) {
-        int pan_val = cJSON_GetNumberValue(pan);
+        int pan_val = (int)cJSON_GetNumberValue(pan);
         if (pan_val >= 0 && pan_val <= 180) {
             command->pan_angle = pan_val;
             command->has_pan = true;
             ESP_LOGI(TAG, "Pan angle: %d", pan_val);
+        } else {
+            ESP_LOGW(TAG, "Pan angle %d out of range [0,180], using default 90", pan_val);
+            command->pan_angle = 90;
         }
     }
 
     // Parse tilt angle
     cJSON *tilt = cJSON_GetObjectItem(json_obj, "tilt");
     if (tilt && cJSON_IsNumber(tilt)) {
-        int tilt_val = cJSON_GetNumberValue(tilt);
+        int tilt_val = (int)cJSON_GetNumberValue(tilt);
         if (tilt_val >= 0 && tilt_val <= 180) {
             command->tilt_angle = tilt_val;
             command->has_tilt = true;
             ESP_LOGI(TAG, "Tilt angle: %d", tilt_val);
+        } else {
+            ESP_LOGW(TAG, "Tilt angle %d out of range [0,180], using default 90", tilt_val);
+            command->tilt_angle = 90;
         }
     }
 

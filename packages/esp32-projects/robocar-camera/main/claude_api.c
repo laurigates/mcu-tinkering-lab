@@ -1,11 +1,17 @@
 /**
  * @file claude_backend.c
  * @brief Claude backend for the AI interface
+ *
+ * NOTE: s_response_buffer and s_response_len are accessed only from the single
+ * HTTP event handler callback, which is invoked synchronously during
+ * esp_http_client_perform(). This single-threaded assumption must hold; do not
+ * call claude_analyze_image() from multiple tasks concurrently.
  */
 
 #include "claude_backend.h"
 #include "ai_backend.h"
 #include "base64.h"
+#include "config.h"
 #include "esp_log.h"
 #include "esp_http_client.h"
 #include "cJSON.h"
@@ -34,17 +40,16 @@ static esp_err_t http_event_handler(esp_http_client_event_t *evt) {
         case HTTP_EVENT_ON_DATA:
             ESP_LOGD(TAG, "HTTP_EVENT_ON_DATA, len=%d", evt->data_len);
             if (s_response_buffer && evt->data && evt->data_len > 0) {
-                // Ensure we don't overflow the buffer (4096 bytes total, -1 for null terminator)
-                size_t available_space = 4095 - s_response_len;
+                size_t available_space = (CLAUDE_RESPONSE_BUFFER_SIZE - 1) - s_response_len;
                 size_t bytes_to_copy = (evt->data_len <= available_space) ? evt->data_len : available_space;
-                
+
                 if (bytes_to_copy > 0) {
                     memcpy(s_response_buffer + s_response_len, evt->data, bytes_to_copy);
                     s_response_len += bytes_to_copy;
                     s_response_buffer[s_response_len] = '\0';
-                    
-                    if (bytes_to_copy < evt->data_len) {
-                        ESP_LOGW(TAG, "HTTP response truncated: received %d bytes, only %zu bytes available", 
+
+                    if (bytes_to_copy < (size_t)evt->data_len) {
+                        ESP_LOGW(TAG, "HTTP response truncated: received %d bytes, only %zu bytes available",
                                 evt->data_len, available_space);
                     }
                 } else {
@@ -72,7 +77,7 @@ static esp_err_t claude_init(const ai_config_t* config) {
     }
     s_config = config;
 
-    s_response_buffer = malloc(4096);
+    s_response_buffer = malloc(CLAUDE_RESPONSE_BUFFER_SIZE);
     if (!s_response_buffer) {
         ESP_LOGE(TAG, "Failed to allocate response buffer");
         return ESP_ERR_NO_MEM;
@@ -99,12 +104,12 @@ static esp_err_t claude_analyze_image(const uint8_t* image_data, size_t image_si
     // Create JSON request
     cJSON *json = cJSON_CreateObject();
     cJSON *model = cJSON_CreateString(s_config->model);
-    cJSON *max_tokens = cJSON_CreateNumber(512);
+    cJSON *max_tokens = cJSON_CreateNumber(CLAUDE_MAX_TOKENS);
     cJSON *messages = cJSON_CreateArray();
     cJSON *message = cJSON_CreateObject();
     cJSON *role = cJSON_CreateString("user");
     cJSON *content = cJSON_CreateArray();
-    
+
     // Add text content
     cJSON *text_content = cJSON_CreateObject();
     cJSON *text_type = cJSON_CreateString("text");
@@ -123,7 +128,7 @@ static esp_err_t claude_analyze_image(const uint8_t* image_data, size_t image_si
     cJSON_AddItemToObject(text_content, "type", text_type);
     cJSON_AddItemToObject(text_content, "text", text_value);
     cJSON_AddItemToArray(content, text_content);
-    
+
     // Add image content
     cJSON *image_content = cJSON_CreateObject();
     cJSON *image_type = cJSON_CreateString("image");
@@ -131,22 +136,22 @@ static esp_err_t claude_analyze_image(const uint8_t* image_data, size_t image_si
     cJSON *source_type = cJSON_CreateString("base64");
     cJSON *media_type = cJSON_CreateString("image/jpeg");
     cJSON *data = cJSON_CreateString(base64_image);
-    
+
     cJSON_AddItemToObject(source, "type", source_type);
     cJSON_AddItemToObject(source, "media_type", media_type);
     cJSON_AddItemToObject(source, "data", data);
     cJSON_AddItemToObject(image_content, "type", image_type);
     cJSON_AddItemToObject(image_content, "source", source);
     cJSON_AddItemToArray(content, image_content);
-    
+
     cJSON_AddItemToObject(message, "role", role);
     cJSON_AddItemToObject(message, "content", content);
     cJSON_AddItemToArray(messages, message);
-    
+
     cJSON_AddItemToObject(json, "model", model);
     cJSON_AddItemToObject(json, "max_tokens", max_tokens);
     cJSON_AddItemToObject(json, "messages", messages);
-    
+
     char *json_string = cJSON_Print(json);
     if (!json_string) {
         ESP_LOGE(TAG, "Failed to create JSON request");
@@ -188,7 +193,7 @@ static esp_err_t claude_analyze_image(const uint8_t* image_data, size_t image_si
     // Send request
     esp_http_client_set_post_field(client, json_string, strlen(json_string));
     esp_err_t err = esp_http_client_perform(client);
-    
+
     int status_code = esp_http_client_get_status_code(client);
     ESP_LOGI(TAG, "HTTP Status: %d, Response length: %zu", status_code, s_response_len);
 
@@ -198,19 +203,36 @@ static esp_err_t claude_analyze_image(const uint8_t* image_data, size_t image_si
             cJSON* content_array = cJSON_GetObjectItem(root, "content");
             if (cJSON_IsArray(content_array) && cJSON_GetArraySize(content_array) > 0) {
                 cJSON* first_item = cJSON_GetArrayItem(content_array, 0);
-                cJSON* text_item = cJSON_GetObjectItem(first_item, "text");
-                if (cJSON_IsString(text_item)) {
-                    const char* response_str = cJSON_GetStringValue(text_item);
-                    size_t len = strlen(response_str);
-                    response->response_text = malloc(len + 1);
-                    if (response->response_text) {
-                        strcpy(response->response_text, response_str);
-                        response->response_length = len;
-                        ESP_LOGI(TAG, "Successfully parsed Claude response");
+                if (first_item) {
+                    cJSON* text_item = cJSON_GetObjectItem(first_item, "text");
+                    if (cJSON_IsString(text_item)) {
+                        const char* response_str = cJSON_GetStringValue(text_item);
+                        if (response_str) {
+                            size_t len = strlen(response_str);
+                            response->response_text = malloc(len + 1);
+                            if (response->response_text) {
+                                memcpy(response->response_text, response_str, len + 1);
+                                response->response_length = len;
+                                ESP_LOGI(TAG, "Successfully parsed Claude response");
+                            } else {
+                                ESP_LOGE(TAG, "Failed to allocate memory for response text");
+                                err = ESP_ERR_NO_MEM;
+                            }
+                        } else {
+                            ESP_LOGE(TAG, "Null string value in Claude response text field");
+                            err = ESP_FAIL;
+                        }
                     } else {
-                        err = ESP_ERR_NO_MEM;
+                        ESP_LOGE(TAG, "No text field in Claude response content item");
+                        err = ESP_FAIL;
                     }
+                } else {
+                    ESP_LOGE(TAG, "Could not get first item from Claude response content array");
+                    err = ESP_FAIL;
                 }
+            } else {
+                ESP_LOGE(TAG, "No content array in Claude response");
+                err = ESP_FAIL;
             }
             cJSON_Delete(root);
         } else {
