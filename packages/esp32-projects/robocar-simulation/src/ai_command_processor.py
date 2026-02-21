@@ -25,8 +25,6 @@ import yaml
 
 logger = logging.getLogger(__name__)
 
-logger = logging.getLogger(__name__)
-
 
 class AIBackendType(Enum):
     """Supported AI backend types"""
