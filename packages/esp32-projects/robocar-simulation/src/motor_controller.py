@@ -5,11 +5,11 @@ This module implements a realistic motor control system with PID control
 and encoder feedback simulation, matching the ESP32 motor control architecture.
 """
 
-import numpy as np
 import time
-from typing import Dict, Tuple, Optional
 from dataclasses import dataclass
 from enum import Enum
+
+import numpy as np
 
 
 class ControlMode(Enum):
@@ -57,7 +57,7 @@ class PIDController:
         # Reset flag for initialization
         self.initialized = False
 
-    def update(self, setpoint: float, measured_value: float, dt: Optional[float] = None) -> float:
+    def update(self, setpoint: float, measured_value: float, dt: float | None = None) -> float:
         """
         Update PID controller
 
@@ -226,7 +226,7 @@ class MotorController:
     PID controllers and encoder feedback loops.
     """
 
-    def __init__(self, motor_config: Dict, control_config: Dict):
+    def __init__(self, motor_config: dict, control_config: dict):
         self.motor_config = motor_config
 
         # Control mode

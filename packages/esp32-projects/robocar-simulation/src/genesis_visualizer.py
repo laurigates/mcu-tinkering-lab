@@ -4,12 +4,10 @@ Genesis Visualizer for ESP32 Robot Car Simulation
 This module provides 3D visualization using the Genesis simulation framework.
 """
 
+import os
+import queue
 import threading
 import time
-from typing import Dict, List, Optional
-import queue
-import sys
-import os
 
 import numpy as np
 import yaml
@@ -34,8 +32,8 @@ else:
     # Use default GUI backend but ensure main thread usage
     pass
 
-import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 
 from robot_model import DifferentialDriveRobot, RobotState
@@ -104,8 +102,14 @@ class MatplotlibVisualizer:
                 direction_x = 0.3 * np.cos(state.theta)
                 direction_y = 0.3 * np.sin(state.theta)
                 self.direction_line = self.ax.arrow(
-                    state.x, state.y, direction_x, direction_y,
-                    head_width=0.1, head_length=0.1, fc="red", ec="red"
+                    state.x,
+                    state.y,
+                    direction_x,
+                    direction_y,
+                    head_width=0.1,
+                    head_length=0.1,
+                    fc="red",
+                    ec="red",
                 )
 
                 # Add trail point
@@ -115,7 +119,7 @@ class MatplotlibVisualizer:
 
                 # Draw trail
                 if len(self.trail_points) > 1:
-                    trail_x, trail_y = zip(*self.trail_points)
+                    trail_x, trail_y = zip(*self.trail_points, strict=False)
                     if hasattr(self, "trail_line"):
                         self.trail_line.remove()
                     (self.trail_line,) = self.ax.plot(
@@ -123,7 +127,7 @@ class MatplotlibVisualizer:
                     )
 
                 return [self.robot_patch]
-            except Exception as e:
+            except Exception:
                 # Silently handle animation errors to prevent crash
                 return []
 
@@ -214,9 +218,9 @@ class RobotVisualizer:
             self._create_environment()
             self._create_robot_model()
 
-    def _load_config(self, config_path: str) -> Dict:
+    def _load_config(self, config_path: str) -> dict:
         """Load configuration from YAML file"""
-        with open(config_path, "r") as f:
+        with open(config_path) as f:
             return yaml.safe_load(f)
 
     def _init_genesis_environment(self):
@@ -259,7 +263,7 @@ class RobotVisualizer:
 
         # Create ground plane
         ground_size = self.config["simulation"]["environment"]["size"]
-        ground = self.scene.add_entity(
+        self.scene.add_entity(
             gs.morphs.Box(size=(ground_size[0], ground_size[1], 0.01), pos=(0, 0, -0.005)),
             material=gs.materials.Rigid(color=(0.8, 0.8, 0.8)),
         )
@@ -272,7 +276,7 @@ class RobotVisualizer:
         # Build the scene
         self.scene.build()
 
-    def _create_obstacle(self, obstacle: Dict, index: int):
+    def _create_obstacle(self, obstacle: dict, index: int):
         """Create obstacle in the environment"""
         pos = obstacle["position"]
 
@@ -301,7 +305,7 @@ class RobotVisualizer:
             return
 
         # X-axis (red)
-        x_axis = self.scene.add_entity(
+        self.scene.add_entity(
             gs.morphs.Cylinder(
                 radius=0.01,
                 height=0.5,
@@ -312,7 +316,7 @@ class RobotVisualizer:
         )
 
         # Y-axis (green)
-        y_axis = self.scene.add_entity(
+        self.scene.add_entity(
             gs.morphs.Cylinder(
                 radius=0.01,
                 height=0.5,
@@ -323,7 +327,7 @@ class RobotVisualizer:
         )
 
         # Z-axis (blue)
-        z_axis = self.scene.add_entity(
+        self.scene.add_entity(
             gs.morphs.Cylinder(radius=0.01, height=0.5, pos=(0, 0, 0.25)),
             material=gs.materials.Rigid(color=(0.0, 0.0, 1.0)),
         )
@@ -354,7 +358,7 @@ class RobotVisualizer:
             [length / 4, width / 2, wheel_radius / 2],  # Right front
         ]
 
-        for i, pos in enumerate(wheel_positions):
+        for _i, pos in enumerate(wheel_positions):
             wheel = self.scene.add_entity(
                 gs.morphs.Cylinder(
                     radius=wheel_radius,
@@ -377,7 +381,7 @@ class RobotVisualizer:
         )
 
         # Ultrasonic sensor
-        ultrasonic = self.scene.add_entity(
+        self.scene.add_entity(
             gs.morphs.Cylinder(radius=0.01, height=0.02, pos=(length / 2, 0, height / 2)),
             material=gs.materials.Rigid(color=(0.0, 1.0, 1.0)),  # Cyan
         )
@@ -422,7 +426,9 @@ class RobotVisualizer:
             [0.05, 0.075, 0.0175],  # Right front
         ]
 
-        for i, (wheel, local_pos) in enumerate(zip(self.wheel_entities, wheel_local_positions)):
+        for _i, (wheel, local_pos) in enumerate(
+            zip(self.wheel_entities, wheel_local_positions, strict=False)
+        ):
             # Transform local wheel position to world coordinates
             cos_theta = np.cos(state.theta)
             sin_theta = np.sin(state.theta)
@@ -464,6 +470,7 @@ class RobotVisualizer:
             self.scene.step()
         except Exception as e:
             import logging
+
             logging.getLogger(__name__).debug("Genesis scene step error: %s", e)
 
     def _update_trail(self, x: float, y: float):
@@ -497,11 +504,13 @@ class RobotVisualizer:
                 material=gs.materials.Rigid(color=(1.0, 0.0, 1.0)),  # Magenta
             )
 
-    def add_trajectory_point(self, x: float, y: float, color: List[float] = [1.0, 1.0, 1.0]):
+    def add_trajectory_point(self, x: float, y: float, color: list[float] = None):
         """Add a trajectory point marker"""
+        if color is None:
+            color = [1.0, 1.0, 1.0]
         if not self.scene:
             return
-        marker = self.scene.add_entity(
+        self.scene.add_entity(
             gs.morphs.Sphere(radius=0.01, pos=(x, y, 0.02)),
             material=gs.materials.Rigid(color=color),
         )
@@ -510,7 +519,7 @@ class RobotVisualizer:
         """Add a waypoint marker"""
         if not self.scene:
             return
-        waypoint = self.scene.add_entity(
+        self.scene.add_entity(
             gs.morphs.Cylinder(radius=0.05, height=0.2, pos=(x, y, z)),
             material=gs.materials.Rigid(color=(1.0, 1.0, 0.0, 0.5)),  # Semi-transparent yellow
         )
@@ -549,7 +558,7 @@ class RobotVisualizer:
                 try:
                     self.update_robot_visualization()
                     last_update = current_time
-                except Exception as e:
+                except Exception:
                     # Ignore visualization errors to keep simulation running
                     pass
 

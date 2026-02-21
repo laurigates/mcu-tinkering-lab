@@ -6,23 +6,22 @@ supporting both Claude and Ollama backends for natural language robot control.
 """
 
 import asyncio
+import base64
 import json
 import logging
-import time
-import base64
-import httpx
-import cv2
-import numpy as np
-from typing import Dict, List, Optional, Tuple, Any, Union
-from dataclasses import dataclass, asdict
-from enum import Enum
-import yaml
-from pathlib import Path
 import os
 import re
+import time
 import traceback
+from dataclasses import dataclass
+from enum import Enum
+from pathlib import Path
+from typing import Any
 
-from robot_model import RobotState
+import cv2
+import httpx
+import numpy as np
+import yaml
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +38,7 @@ class AICommand:
     """Structured AI command output"""
 
     action: str  # move, turn, stop, pan_camera, etc.
-    parameters: Dict[str, Any]  # Action-specific parameters
+    parameters: dict[str, Any]  # Action-specific parameters
     confidence: float  # AI confidence in command (0-1)
     reasoning: str  # AI explanation of decision
     timestamp: float  # When command was generated
@@ -49,12 +48,12 @@ class AICommand:
 class RobotContext:
     """Robot context for AI processing"""
 
-    position: Tuple[float, float, float]  # x, y, theta
-    velocity: Tuple[float, float]  # linear, angular
-    sensor_data: Dict[str, Any]  # Ultrasonic, IMU, etc.
-    camera_frame: Optional[np.ndarray]  # Current camera image
-    encoder_positions: Tuple[float, float]  # Left, right encoder positions
-    last_commands: List[str]  # Recent command history
+    position: tuple[float, float, float]  # x, y, theta
+    velocity: tuple[float, float]  # linear, angular
+    sensor_data: dict[str, Any]  # Ultrasonic, IMU, etc.
+    camera_frame: np.ndarray | None  # Current camera image
+    encoder_positions: tuple[float, float]  # Left, right encoder positions
+    last_commands: list[str]  # Recent command history
 
 
 class AICommandProcessor:
@@ -82,19 +81,19 @@ class AICommandProcessor:
         self.http_client = httpx.AsyncClient(timeout=30.0)
 
         # Command history
-        self.command_history: List[AICommand] = []
+        self.command_history: list[AICommand] = []
         self.max_history = 10
 
         # System prompt for AI
         self.system_prompt = self._create_system_prompt()
 
-    def _load_config(self, config_path: str) -> Dict[str, Any]:
+    def _load_config(self, config_path: str) -> dict[str, Any]:
         """Load configuration from YAML file"""
         config_file = Path(config_path)
         if not config_file.exists():
             config_file = Path(__file__).parent.parent / "config" / "robot_config.yaml"
 
-        with open(config_file, "r") as f:
+        with open(config_file) as f:
             return yaml.safe_load(f)
 
     def _create_system_prompt(self) -> str:
@@ -121,7 +120,7 @@ AVAILABLE ACTIONS:
 4. "forward" - Move forward
    Parameters: {"distance_meters": float, "speed": float}
 
-5. "backward" - Move backward  
+5. "backward" - Move backward
    Parameters: {"distance_meters": float, "speed": float}
 
 6. "stop" - Stop all movement
@@ -221,7 +220,7 @@ GUIDELINES:
         if robot_context.camera_frame is not None:
             image_base64 = self._encode_image_base64(robot_context.camera_frame)
             if image_base64:
-                messages[-1]["content"] += f"\n\nCurrent camera view is attached as image."
+                messages[-1]["content"] += "\n\nCurrent camera view is attached as image."
                 # Note: Claude API image handling would need proper implementation
 
         # Make API call
@@ -360,7 +359,7 @@ Recent commands: {", ".join(context.last_commands[-3:]) if context.last_commands
         if len(self.command_history) > self.max_history:
             self.command_history.pop(0)
 
-    def get_command_history(self) -> List[AICommand]:
+    def get_command_history(self) -> list[AICommand]:
         """Get command history"""
         return self.command_history.copy()
 
@@ -402,14 +401,14 @@ def execute_ai_command(command: AICommand, robot) -> bool:
             robot.state.camera_pan_angle = np.clip(angle, -90, 90)
 
         elif action == "forward":
-            distance = params.get("distance_meters", 1.0)
+            params.get("distance_meters", 1.0)
             speed = params.get("speed", 0.5)
             # Convert to approximate PWM for fixed duration
             pwm = int(speed * 100)
             robot.set_motor_commands(pwm, pwm)
 
         elif action == "backward":
-            distance = params.get("distance_meters", 1.0)
+            params.get("distance_meters", 1.0)
             speed = params.get("speed", 0.5)
             pwm = int(speed * 100)
             robot.set_motor_commands(-pwm, -pwm)

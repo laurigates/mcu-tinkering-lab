@@ -6,22 +6,23 @@ This is the main entry point for the ESP32 robot car simulation using
 Robotics Toolbox for Python with Swift visualizer.
 """
 
-import asyncio
 import argparse
+import asyncio
 import os
-import sys
-import matplotlib.pyplot as plt
-from pathlib import Path
 import signal
-import time
+import sys
 import threading
+import time
+from pathlib import Path
+
+import matplotlib.pyplot as plt
 
 # Add src directory to path
 sys.path.append(str(Path(__file__).parent))
 
-from robot_model import DifferentialDriveRobot
 from communication_bridge import ESP32CommunicationBridge
-from genesis_visualizer import GenesisSimulation, SwiftSimulation, HAS_GENESIS
+from genesis_visualizer import HAS_GENESIS, GenesisSimulation
+from robot_model import DifferentialDriveRobot
 
 
 class SimulationManager:
@@ -292,7 +293,7 @@ class SimulationManager:
     def print_status(self):
         """Print current simulation status"""
         state = self.robot.get_state()
-        print(f"\nRobot Status:")
+        print("\nRobot Status:")
         print(f"Position: ({state.x:.3f}, {state.y:.3f}) m")
         print(f"Orientation: {state.theta:.3f} rad ({state.theta * 180 / 3.14159:.1f}°)")
         print(f"Velocity: {state.v:.3f} m/s, {state.omega:.3f} rad/s")
@@ -309,25 +310,25 @@ def main():
 Examples:
   # Run with default headless mode
   python main.py
-  
+
   # Run with GUI window visualization
   python main.py --visual
-  
-  # Run with browser-based visualization  
+
+  # Run with browser-based visualization
   python main.py --browser
-  
+
   # Run with specific visualization mode
   python main.py --viz-mode visual
-  
+
   # Run with serial connection to ESP32
   python main.py --serial /dev/ttyUSB0 --visual
-  
+
   # Run completely headless (no visualization)
   python main.py --headless
-  
+
   # Use environment variable for visualization mode
   SWIFT_VIZ_MODE=browser python main.py
-  
+
   # Run with custom configuration
   python main.py --config ../config/custom_config.yaml --visual
         """,

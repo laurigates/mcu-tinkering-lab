@@ -11,18 +11,17 @@ This module simulates the ESP32 OTA functionality including:
 Based on ESP-IDF OTA system and partition table structure.
 """
 
-import time
-import threading
 import hashlib
 import random
-import json
-from typing import Dict, List, Optional, Tuple, Union
+import threading
+import time
+from dataclasses import asdict, dataclass
 from enum import Enum
-from dataclasses import dataclass, asdict
 from pathlib import Path
+
 import yaml
 
-from error_handling import get_error_handler, ErrorSeverity
+from error_handling import ErrorSeverity, get_error_handler
 
 
 class OTAState(Enum):
@@ -77,7 +76,7 @@ class FirmwareInfo:
     checksum: str
     description: str = ""
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         """Convert to dictionary for serialization"""
         return asdict(self)
 
@@ -91,9 +90,9 @@ class OTAStatus:
     bytes_downloaded: int
     total_bytes: int
     error_message: str = ""
-    firmware_info: Optional[FirmwareInfo] = None
+    firmware_info: FirmwareInfo | None = None
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         """Convert to dictionary for serialization"""
         result = {
             "state": self.state.value,
@@ -140,7 +139,7 @@ class OTASimulation:
         self.ota_data = self._load_ota_data()
 
         # Download simulation
-        self.download_thread: Optional[threading.Thread] = None
+        self.download_thread: threading.Thread | None = None
         self.abort_download = False
 
         # Firmware versions (simulated)
@@ -193,16 +192,16 @@ class OTASimulation:
             self.error_handler.register_recovery_strategy("ota_simulation", ota_recovery)
             self.error_handler.register_recovery_strategy("ota_simulation", partition_recovery)
 
-    def _load_config(self, config_path: str) -> Dict:
+    def _load_config(self, config_path: str) -> dict:
         """Load configuration from YAML file"""
         config_file = Path(config_path)
         if not config_file.exists():
             config_file = Path(__file__).parent.parent / "config" / "robot_config.yaml"
 
-        with open(config_file, "r") as f:
+        with open(config_file) as f:
             return yaml.safe_load(f)
 
-    def _load_partition_table(self) -> Dict[str, PartitionInfo]:
+    def _load_partition_table(self) -> dict[str, PartitionInfo]:
         """Load ESP32 partition table (matching actual ESP32 layout)"""
         # Based on the actual partitions.csv from the ESP32 project
         partitions = {
@@ -217,7 +216,7 @@ class OTASimulation:
 
         return partitions
 
-    def _load_ota_data(self) -> Dict:
+    def _load_ota_data(self) -> dict:
         """Load OTA data partition information"""
         # Simulate OTA data partition content
         # In real ESP32, this tracks which partition is active
@@ -227,7 +226,7 @@ class OTASimulation:
             "ota_1": {"valid": False, "seq": 0},
         }
 
-    def _initialize_firmware_versions(self) -> Dict[str, FirmwareInfo]:
+    def _initialize_firmware_versions(self) -> dict[str, FirmwareInfo]:
         """Initialize simulated firmware versions"""
         versions = {}
 
@@ -257,7 +256,7 @@ class OTASimulation:
         try:
             # In real ESP32, this would write to flash
             # Here we just update our internal state
-            print(f"OTA simulation: Updated OTA data partition")
+            print("OTA simulation: Updated OTA data partition")
             self.error_handler.report_component_success("ota_simulation")
         except Exception as e:
             self.error_handler.handle_error(
@@ -300,7 +299,7 @@ class OTASimulation:
             )
             return False
 
-    def _get_next_ota_partition(self) -> Optional[str]:
+    def _get_next_ota_partition(self) -> str | None:
         """Get the next OTA partition to use"""
         # Determine which OTA partition to use based on current boot partition
         if self.boot_partition == "factory" or self.boot_partition == "ota_1":
@@ -458,11 +457,11 @@ class OTASimulation:
 
             self._save_ota_data()
 
-            print(f"OTA simulation: Update successful!")
+            print("OTA simulation: Update successful!")
             print(f"  Partition: {self.ota_partition}")
             print(f"  Version: {firmware_info.version}")
             print(f"  Checksum: {firmware_info.checksum}")
-            print(f"  Ready to boot from new partition on next restart")
+            print("  Ready to boot from new partition on next restart")
 
             self.error_handler.report_component_success("ota_simulation")
 
@@ -530,7 +529,7 @@ class OTASimulation:
         """Get current OTA status"""
         return self.current_status
 
-    def get_status_dict(self) -> Dict:
+    def get_status_dict(self) -> dict:
         """Get current OTA status as dictionary"""
         return self.current_status.to_dict()
 
@@ -552,7 +551,7 @@ class OTASimulation:
             print(
                 f"OTA simulation: Boot partition changed from {old_partition} to {partition_name}"
             )
-            print(f"  Will take effect on next restart")
+            print("  Will take effect on next restart")
 
             self.error_handler.report_component_success("ota_simulation")
             return True
@@ -571,7 +570,7 @@ class OTASimulation:
         """Get current boot partition"""
         return self.boot_partition
 
-    def get_partition_info(self) -> Dict[str, Dict]:
+    def get_partition_info(self) -> dict[str, dict]:
         """Get partition table information"""
         result = {}
         for name, partition in self.partitions.items():
@@ -584,7 +583,7 @@ class OTASimulation:
             }
         return result
 
-    def get_firmware_versions(self) -> Dict[str, Dict]:
+    def get_firmware_versions(self) -> dict[str, dict]:
         """Get firmware version information for all partitions"""
         result = {}
         for partition, firmware in self.firmware_versions.items():
@@ -615,7 +614,7 @@ class OTASimulation:
             )
             return False
 
-    def get_system_info(self) -> Dict:
+    def get_system_info(self) -> dict:
         """Get comprehensive OTA system information"""
         return {
             "current_state": self.current_state.value,
@@ -677,7 +676,7 @@ def main():
 
             # Show updated system info
             info = ota.get_system_info()
-            print(f"\nUpdated firmware versions:")
+            print("\nUpdated firmware versions:")
             for partition, firmware in info["firmware_versions"].items():
                 print(f"  {partition}: {firmware['version']} ({firmware['build_date']})")
 

@@ -6,19 +6,19 @@ This test verifies that the AI command processing system is working correctly
 with both Claude and Ollama backends, and can handle natural language commands.
 """
 
-import sys
-import os
-import time
 import asyncio
-import json
+import os
+import sys
+import time
+
 import numpy as np
 
 # Add src directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
-from robot_model import DifferentialDriveRobot
 from ai_command_processor import AICommandProcessor, RobotContext, execute_ai_command
 from communication_bridge import ESP32CommunicationBridge
+from robot_model import DifferentialDriveRobot
 
 
 def test_ai_processor_initialization():
@@ -74,14 +74,14 @@ def test_command_parsing():
         # Test JSON embedded in text
         text_response = """
         I'll help you move the robot forward. Here's my command:
-        
+
         {
           "action": "forward",
           "parameters": {"distance_meters": 1.0, "speed": 0.5},
           "confidence": 0.8,
           "reasoning": "Moving forward 1 meter at moderate speed"
         }
-        
+
         This should move the robot safely forward.
         """
 

@@ -7,8 +7,9 @@ import sys
 
 sys.path.append("src")
 
-from robot_model import DifferentialDriveRobot
 import numpy as np
+
+from robot_model import DifferentialDriveRobot
 
 
 def analyze_motor_dynamics():
@@ -53,8 +54,8 @@ def analyze_motor_dynamics():
     print(f"Static friction: {motor.friction_static:.6f} N⋅m")
     print(f"Kinetic friction: {motor.friction_kinetic:.6f} N⋅m")
     print(f"Viscous friction: {motor.friction_viscous:.6f} N⋅m⋅s/rad")
-    print(f"Motor rotor inertia: 0.001 kg⋅m²")
-    print(f"Load torque: 0.01 N⋅m")
+    print("Motor rotor inertia: 0.001 kg⋅m²")
+    print("Load torque: 0.01 N⋅m")
     print(f"Max angular velocity: {motor.max_rpm * 2 * np.pi / 60:.2f} rad/s")
 
     # Calculate voltage and power

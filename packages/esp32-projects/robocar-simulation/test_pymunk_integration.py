@@ -5,12 +5,13 @@ Test script for pymunk physics integration
 
 import sys
 from pathlib import Path
+
 import numpy as np
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
-from robot_model import DifferentialDriveRobot, PhysicsEngine
+from robot_model import DifferentialDriveRobot
 
 
 def test_physics_engine_initialization():
@@ -21,12 +22,12 @@ def test_physics_engine_initialization():
 
     try:
         robot = DifferentialDriveRobot(config_path)
-        print(f"✓ Robot initialized successfully")
+        print("✓ Robot initialized successfully")
         print(f"✓ Using physics engine: {robot.use_physics}")
 
         if robot.use_physics:
             print(f"✓ Physics engine created with {len(robot.physics_engine.obstacles)} obstacles")
-            print(f"✓ Robot body added to physics simulation")
+            print("✓ Robot body added to physics simulation")
 
         return True
 
@@ -50,7 +51,7 @@ def test_basic_movement():
 
     # Run simulation for 1 second
     steps = int(1.0 / robot.dt)
-    for i in range(steps):
+    for _i in range(steps):
         robot.update()
 
     final_x = robot.state.x

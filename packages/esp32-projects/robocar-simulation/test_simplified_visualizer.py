@@ -4,8 +4,8 @@ Test script for simplified Swift visualizer
 """
 
 import sys
-from pathlib import Path
 import time
+from pathlib import Path
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
@@ -64,6 +64,7 @@ def test_visualization_disabled():
 
     try:
         from swift_visualizer import RobotVisualizer
+
         from robot_model import DifferentialDriveRobot
 
         config_path = "config/robot_config.yaml"
@@ -74,7 +75,7 @@ def test_visualization_disabled():
 
         # Test update calls (should not crash)
         print("Testing visualization updates...")
-        for i in range(5):
+        for _i in range(5):
             robot.set_motor_commands(50, 50)
             robot.update()
             visualizer.update_robot_visualization()

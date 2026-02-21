@@ -9,16 +9,16 @@ This module simulates the ESP32 WiFi manager functionality including:
 - RSSI and connection quality simulation
 """
 
-import time
-import threading
 import random
-from typing import Dict, List, Optional, Tuple
-from enum import Enum
+import threading
+import time
 from dataclasses import dataclass
-import yaml
+from enum import Enum
 from pathlib import Path
 
-from error_handling import get_error_handler, ErrorSeverity
+import yaml
+
+from error_handling import ErrorSeverity, get_error_handler
 
 
 class WiFiState(Enum):
@@ -71,15 +71,15 @@ class WiFiManagerSimulation:
 
         # WiFi state
         self.state = WiFiState.DISCONNECTED
-        self.current_connection: Optional[WiFiConnectionInfo] = None
+        self.current_connection: WiFiConnectionInfo | None = None
         self.auto_reconnect = True
         self.retry_attempts = 0
         self.max_retry_attempts = 3
         self.retry_delay_ms = 5000
 
         # Network simulation
-        self.available_networks: List[WiFiNetwork] = []
-        self.connection_thread: Optional[threading.Thread] = None
+        self.available_networks: list[WiFiNetwork] = []
+        self.connection_thread: threading.Thread | None = None
         self.simulation_running = False
 
         # Power management
@@ -130,13 +130,13 @@ class WiFiManagerSimulation:
             self.error_handler.register_recovery_strategy("wifi_simulation", wifi_recovery)
             self.error_handler.register_recovery_strategy("wifi_simulation", connection_recovery)
 
-    def _load_config(self, config_path: str) -> Dict:
+    def _load_config(self, config_path: str) -> dict:
         """Load configuration from YAML file"""
         config_file = Path(config_path)
         if not config_file.exists():
             config_file = Path(__file__).parent.parent / "config" / "robot_config.yaml"
 
-        with open(config_file, "r") as f:
+        with open(config_file) as f:
             return yaml.safe_load(f)
 
     def _initialize_available_networks(self):
@@ -283,7 +283,7 @@ class WiFiManagerSimulation:
 
                 self._last_retry_time = time.time()
 
-    def _find_network_by_ssid(self, ssid: str) -> Optional[WiFiNetwork]:
+    def _find_network_by_ssid(self, ssid: str) -> WiFiNetwork | None:
         """Find network by SSID"""
         for network in self.available_networks:
             if network.ssid == ssid:
@@ -374,7 +374,7 @@ class WiFiManagerSimulation:
         """Get current WiFi connection state"""
         return self.state
 
-    def get_connection_info(self) -> Optional[Tuple[str, int]]:
+    def get_connection_info(self) -> tuple[str, int] | None:
         """Get WiFi connection status information"""
         if self.current_connection and self.state == WiFiState.CONNECTED:
             return (self.current_connection.ip_address, self.current_connection.rssi)
@@ -406,7 +406,7 @@ class WiFiManagerSimulation:
         """Check if WiFi is ready for OTA operations"""
         return self.ota_ready
 
-    def scan_networks(self) -> List[Dict]:
+    def scan_networks(self) -> list[dict]:
         """Scan for available WiFi networks"""
         try:
             # Simulate network scan
@@ -439,7 +439,7 @@ class WiFiManagerSimulation:
             )
             return []
 
-    def get_status_info(self) -> Dict:
+    def get_status_info(self) -> dict:
         """Get comprehensive WiFi status information"""
         return {
             "state": self.state.value,
@@ -462,6 +462,7 @@ class WiFiManagerSimulation:
                 self.simulation_thread.join(timeout=5.0)
                 if self.simulation_thread.is_alive():
                     import logging as _logging
+
                     _logging.getLogger(__name__).warning(
                         "WiFi simulation thread did not stop in time"
                     )
@@ -504,7 +505,7 @@ def main():
         print("\nConnecting to ESP32-RoboCar...")
         if wifi.connect("ESP32-RoboCar", "robocar123"):
             # Wait for connection
-            for i in range(15):
+            for _i in range(15):
                 status = wifi.get_status_info()
                 print(f"Status: {status['state']}")
 
@@ -519,7 +520,7 @@ def main():
 
         # Keep running for a while to test stability
         print("\nMonitoring connection...")
-        for i in range(10):
+        for _i in range(10):
             status = wifi.get_status_info()
             if status["connected"]:
                 info = wifi.get_connection_info()
