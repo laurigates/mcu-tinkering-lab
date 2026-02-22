@@ -51,19 +51,28 @@ repos:
           - types-PyYAML
           - types-toml
 
+  # Secret scanning
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.0
+    hooks:
+      - id: gitleaks
+        stages: [commit]
+
   # Check for credential files
   - repo: local
     hooks:
       - id: check-credentials
         name: Check for credential files
-        entry: bash -c 'if git diff --cached --name-only | grep -qE "(credentials\.h|wifi_config\.h|\.key$|\.secret$|\.token$)"; then echo "ERROR - Attempted to commit credential files!"; exit 1; fi'
+        entry: >-
+          bash -c 'if git diff --cached --name-only | grep -qE "(credentials\.h|wifi_config\.h|\.key$|\.secret$|\.token$)"; then echo "ERROR - Attempted to commit credential files!"; exit 1; fi'
         language: system
         pass_filenames: false
         always_run: true
 
       - id: check-build-artifacts
         name: Check for build artifacts
-        entry: bash -c 'if git diff --cached --name-only | grep -qE "(\.o$|\.a$|\.elf$|\.bin$|\.hex$|sdkconfig$)"; then echo "ERROR: Attempted to commit build artifacts!"; exit 1; fi'
+        entry: >-
+          bash -c 'if git diff --cached --name-only | grep -qE "(\.o$|\.a$|\.elf$|\.bin$|\.hex$|sdkconfig$)"; then echo "ERROR: Attempted to commit build artifacts!"; exit 1; fi'
         language: system
         pass_filenames: false
         always_run: true

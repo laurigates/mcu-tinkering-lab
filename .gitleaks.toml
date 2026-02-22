@@ -1,0 +1,14 @@
+# Gitleaks configuration for mcu-tinkering-lab
+# Suppresses false positives while maintaining security scanning
+
+[[allowlists]]
+description = "ESPHome secrets example template - contains dummy values only"
+paths = [
+    "(?i)packages/esp32-projects/.*/secrets\\.yaml$"
+]
+
+[[allowlists]]
+description = "Build artifacts - sodium cipher source contains test vectors"
+paths = [
+    "(?i).*\\.piolibdeps/.*sodium.*cipher.*\\.c$"
+]
