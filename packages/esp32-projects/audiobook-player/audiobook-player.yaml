@@ -7,7 +7,7 @@ esphome:
       - script.execute: play_boot_sequence
 
 esp32:
-  board: wemosbat
+  board: ttgo-lora32-v2
   framework:
     type: esp-idf
 
@@ -48,14 +48,20 @@ deep_sleep:
   wakeup_pin_mode: INVERT_WAKEUP  # Wake when tilt switch closes (connects to GND)
 
 # SPI bus configuration for RC522
+# NOTE: Cannot use VSPI (GPIO18/19/23) - conflicts with onboard LoRa SX1276 chip
+# Using alternative pins to avoid strapping pin conflicts
 spi:
-  clk_pin: GPIO18   # SCK - ESP32 VSPI default
-  miso_pin: GPIO19  # MISO - ESP32 VSPI default
-  mosi_pin: GPIO23  # MOSI - ESP32 VSPI default
+  id: rc522_spi_bus
+  clk_pin: GPIO14   # Available on pin header
+  miso_pin: GPIO35  # Input-only pin, safe for MISO, not a strapping pin
+  mosi_pin: GPIO13  # Available on pin header
+  interface: hardware
 
 # RC522 RFID reader configuration
 rc522_spi:
-  cs_pin: GPIO17    # CS/SDA - Changed from GPIO5 (strapping pin)
+  spi_id: rc522_spi_bus
+  cs_pin: GPIO15    # HSPI CS - strapping pin but generally OK
+  # No reset_pin - RC522 uses power-on reset (avoids strapping pin conflicts)
   update_interval: 500ms
 
   # When a tag is detected, send it to Home Assistant
@@ -136,16 +142,16 @@ binary_sensor:
 
 # Outputs for feedback indicators
 output:
-  # Status LED (built-in)
+  # Status LED (built-in blue LED on TTGO LoRa32)
   - platform: gpio
     pin:
-      number: GPIO16  # Built-in LED on WEMOS Battery ESP32
+      number: GPIO25  # Built-in blue LED on TTGO LoRa32 V2
       inverted: true
     id: status_led_output
 
   # Piezo buzzer (PWM for tones)
   - platform: ledc
-    pin: GPIO25
+    pin: GPIO4  # Changed from GPIO25 (now used for status LED)
     id: buzzer_output
 
   # Vibration motor
@@ -160,50 +166,70 @@ rtttl:
 
 # Scripts for feedback sequences
 script:
+  # Fast blink loop (100ms on/off) - runs until stopped
+  - id: led_fast_blink
+    mode: restart
+    then:
+      - while:
+          condition:
+            lambda: 'return true;'
+          then:
+            - output.turn_on: status_led_output
+            - delay: 100ms
+            - output.turn_off: status_led_output
+            - delay: 100ms
+
+  # Slow pulse loop (500ms on/off) - runs until stopped
+  - id: led_slow_pulse
+    mode: restart
+    then:
+      - while:
+          condition:
+            lambda: 'return true;'
+          then:
+            - output.turn_on: status_led_output
+            - delay: 500ms
+            - output.turn_off: status_led_output
+            - delay: 500ms
+
   # Boot sequence - gentle ascending arpeggio
   - id: play_boot_sequence
     then:
-      - light.turn_on:
-          id: status_led
-          effect: "Fast Blink"
+      - script.execute: led_fast_blink
       - rtttl.play: "boot:d=16,o=5,b=120:c,d,e,g"
       - delay: 1s
 
   # Ready sequence - device is connected and ready
   - id: play_ready_sequence
     then:
-      - light.turn_on:
-          id: status_led
-          effect: "Slow Pulse"
+      - script.stop: led_fast_blink
+      - script.execute: led_slow_pulse
       - rtttl.play: "ready:d=8,o=5,b=140:c,e,g"
 
   # Tag scanned successfully
   - id: play_tag_success
     then:
+      # Stop any running LED pattern
+      - script.stop: led_fast_blink
+      - script.stop: led_slow_pulse
       # Play success chime
       - rtttl.play: "success:d=8,o=5,b=180:g,8c6"
-      # Flash LED
-      - light.turn_on:
-          id: status_led
-          brightness: 100%
-          effect: "None"
+      # Flash LED solid
+      - output.turn_on: status_led_output
       # Vibrate
       - output.turn_on: vibration_output
       - delay: 200ms
       - output.turn_off: vibration_output
       - delay: 100ms
       # Return to ready state
-      - light.turn_on:
-          id: status_led
-          effect: "Slow Pulse"
+      - script.execute: led_slow_pulse
 
   # Error feedback
   - id: play_error_sequence
     then:
+      - script.stop: led_slow_pulse
+      - script.execute: led_fast_blink
       - rtttl.play: "error:d=8,o=5,b=140:e,c"
-      - light.turn_on:
-          id: status_led
-          effect: "Fast Blink"
       # Triple vibration pulse
       - output.turn_on: vibration_output
       - delay: 100ms
@@ -217,24 +243,9 @@ script:
       - delay: 100ms
       - output.turn_off: vibration_output
 
-# Status LED as a light component with effects
+# Status LED as a simple light component (no effects to avoid brightness warnings)
 light:
   - platform: binary
     name: "Status LED"
     id: status_led
     output: status_led_output
-    effects:
-      - strobe:
-          name: "Fast Blink"
-          colors:
-            - state: true
-              duration: 100ms
-            - state: false
-              duration: 100ms
-      - strobe:
-          name: "Slow Pulse"
-          colors:
-            - state: true
-              duration: 500ms
-            - state: false
-              duration: 500ms
