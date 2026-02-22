@@ -5,16 +5,15 @@ This module provides comprehensive error handling, resilience, and graceful
 degradation capabilities for the robot simulation system.
 """
 
+import functools
 import logging
+import threading
 import time
 import traceback
-import functools
-import asyncio
-from typing import Optional, Callable, Any, Dict, List, Union
+from collections.abc import Callable
+from dataclasses import asdict, dataclass
 from enum import Enum
-from dataclasses import dataclass, asdict
-import threading
-from pathlib import Path
+from typing import Any
 
 
 class ErrorSeverity(Enum):
@@ -45,7 +44,7 @@ class ErrorEvent:
     error_type: str
     severity: ErrorSeverity
     message: str
-    exception: Optional[str] = None
+    exception: str | None = None
     recovery_attempted: bool = False
     recovery_successful: bool = False
 
@@ -56,10 +55,10 @@ class ComponentHealth:
 
     name: str
     status: ComponentStatus
-    last_error: Optional[ErrorEvent] = None
+    last_error: ErrorEvent | None = None
     error_count: int = 0
-    last_success: Optional[float] = None
-    uptime_start: Optional[float] = None
+    last_success: float | None = None
+    uptime_start: float | None = None
 
 
 class SimulationErrorHandler:
@@ -67,22 +66,22 @@ class SimulationErrorHandler:
     Central error handling and resilience system for robot simulation
     """
 
-    def __init__(self, log_file: Optional[str] = None):
+    def __init__(self, log_file: str | None = None):
         # Setup logging
         self.logger = self._setup_logging(log_file)
 
         # Error tracking
-        self.error_history: List[ErrorEvent] = []
-        self.component_health: Dict[str, ComponentHealth] = {}
+        self.error_history: list[ErrorEvent] = []
+        self.component_health: dict[str, ComponentHealth] = {}
         self.max_error_history = 1000
 
         # Recovery strategies
-        self.recovery_strategies: Dict[str, List[Callable]] = {}
-        self.recovery_attempts: Dict[str, int] = {}
+        self.recovery_strategies: dict[str, list[Callable]] = {}
+        self.recovery_attempts: dict[str, int] = {}
         self.max_recovery_attempts = 3
 
         # Circuit breaker pattern
-        self.circuit_breakers: Dict[str, Dict] = {}
+        self.circuit_breakers: dict[str, dict] = {}
 
         # System status
         self.system_operational = True
@@ -94,7 +93,7 @@ class SimulationErrorHandler:
 
         self.logger.info("Error handling system initialized")
 
-    def _setup_logging(self, log_file: Optional[str]) -> logging.Logger:
+    def _setup_logging(self, log_file: str | None) -> logging.Logger:
         """Setup logging configuration"""
         logger = logging.getLogger("simulation_errors")
         logger.setLevel(logging.DEBUG)
@@ -153,7 +152,7 @@ class SimulationErrorHandler:
         component: str,
         error_type: str,
         message: str,
-        exception: Optional[Exception] = None,
+        exception: Exception | None = None,
         severity: ErrorSeverity = ErrorSeverity.MEDIUM,
     ) -> bool:
         """
@@ -329,7 +328,7 @@ class SimulationErrorHandler:
         if breaker["failure_count"] >= threshold:
             self.logger.warning(f"Circuit breaker tripped for {component}")
 
-    def get_system_status(self) -> Dict[str, Any]:
+    def get_system_status(self) -> dict[str, Any]:
         """Get overall system status"""
         with self.lock:
             return {
@@ -345,7 +344,7 @@ class SimulationErrorHandler:
                 ),  # Last 5 minutes
             }
 
-    def get_component_health(self, component: str) -> Optional[ComponentHealth]:
+    def get_component_health(self, component: str) -> ComponentHealth | None:
         """Get health status of specific component"""
         return self.component_health.get(component)
 
@@ -446,18 +445,21 @@ def async_resilient_operation(
 
 
 # Global error handler instance
-_global_error_handler: Optional[SimulationErrorHandler] = None
+_global_error_handler: SimulationErrorHandler | None = None
+_global_error_handler_lock = threading.Lock()
 
 
 def get_error_handler() -> SimulationErrorHandler:
-    """Get or create global error handler"""
+    """Get or create global error handler (thread-safe)"""
     global _global_error_handler
     if _global_error_handler is None:
-        _global_error_handler = SimulationErrorHandler("simulation_errors.log")
+        with _global_error_handler_lock:
+            if _global_error_handler is None:
+                _global_error_handler = SimulationErrorHandler("simulation_errors.log")
     return _global_error_handler
 
 
-def initialize_error_handling(log_file: Optional[str] = None) -> SimulationErrorHandler:
+def initialize_error_handling(log_file: str | None = None) -> SimulationErrorHandler:
     """Initialize global error handling system"""
     global _global_error_handler
     _global_error_handler = SimulationErrorHandler(log_file)

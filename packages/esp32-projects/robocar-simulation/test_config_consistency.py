@@ -7,18 +7,19 @@ the simulation system and that there are no inconsistencies between different
 parts of the configuration.
 """
 
-import sys
 import os
+import sys
+
 import yaml
-import numpy as np
 
 # Add src directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
-from robot_model import DifferentialDriveRobot
-from camera_simulation import CameraSimulation
 from swift_visualizer import RobotVisualizer
+
 from ai_command_processor import AICommandProcessor
+from camera_simulation import CameraSimulation
+from robot_model import DifferentialDriveRobot
 
 
 def test_config_loading():
@@ -28,7 +29,7 @@ def test_config_loading():
     try:
         config_path = "config/robot_config.yaml"
 
-        with open(config_path, "r") as f:
+        with open(config_path) as f:
             config = yaml.safe_load(f)
 
         # Check major sections exist
@@ -277,7 +278,7 @@ def test_pid_control_config_consistency(config):
         assert left_controller is not None, "Left motor controller should exist"
         assert right_controller is not None, "Right motor controller should exist"
 
-        print(f"  ✅ PID controllers initialized with configured parameters")
+        print("  ✅ PID controllers initialized with configured parameters")
         print(
             f"  📊 Velocity PID gains: Kp={pid_config['kp']}, Ki={pid_config['ki']}, Kd={pid_config['kd']}"
         )

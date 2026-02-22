@@ -9,12 +9,10 @@ issues before integrating with the main simulation.
 import asyncio
 import sys
 import time
-import threading
-from pathlib import Path
 
 try:
-    import roboticstoolbox as rtb
-    import swift
+    import roboticstoolbox as rtb  # noqa: F401
+    import swift  # noqa: F401
     import trimesh
     from spatialmath import SE3
     from swift import Swift
@@ -156,7 +154,7 @@ def test_headless_mode():
 
             # Run for 5 seconds
             print("Running for 5 seconds...")
-            for i in range(50):  # 5 seconds at 10 Hz
+            for _i in range(50):  # 5 seconds at 10 Hz
                 env.step(0.1)
                 await asyncio.sleep(0.1)
 

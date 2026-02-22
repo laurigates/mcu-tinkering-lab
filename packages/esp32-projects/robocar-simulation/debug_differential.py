@@ -7,8 +7,9 @@ import sys
 
 sys.path.append("src")
 
-from robot_model import DifferentialDriveRobot
 import numpy as np
+
+from robot_model import DifferentialDriveRobot
 
 
 def analyze_differential_drive():
@@ -24,13 +25,9 @@ def analyze_differential_drive():
     print("=" * 80)
     print("Left PWM: 50, Right PWM: 100")
     print(
-        "Left Voltage: {:.2f}V, Right Voltage: {:.2f}V".format(
-            robot.pwm_to_voltage(50), robot.pwm_to_voltage(100)
-        )
+        f"Left Voltage: {robot.pwm_to_voltage(50):.2f}V, Right Voltage: {robot.pwm_to_voltage(100):.2f}V"
     )
-    print(
-        "Track width: {:.3f}m, Wheel radius: {:.3f}m".format(robot.track_width, robot.wheel_radius)
-    )
+    print(f"Track width: {robot.track_width:.3f}m, Wheel radius: {robot.wheel_radius:.3f}m")
     print()
 
     print("Step | L_RPM | R_RPM | L_ωmotor | R_ωmotor | L_vwheel | R_vwheel | v_robot | ω_robot")
@@ -71,7 +68,7 @@ def analyze_differential_drive():
             print(f"  Actual robot angular velocity: {omega_robot:.6f} rad/s")
             print()
 
-    print(f"\nMotor configuration:")
+    print("\nMotor configuration:")
     print(f"  Max RPM: {robot.motor_left.max_rpm}")
     print(f"  Max angular velocity: {robot.motor_left.max_rpm * 2 * np.pi / 60:.3f} rad/s")
 

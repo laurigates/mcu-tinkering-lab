@@ -3,15 +3,16 @@
 Test suite for ESP32 Robot Car simulation
 """
 
-import pytest
-import numpy as np
 import sys
 from pathlib import Path
+
+import numpy as np
+import pytest
 
 # Add src directory to path
 sys.path.append(str(Path(__file__).parent.parent / "src"))
 
-from robot_model import DifferentialDriveRobot, DCMotor, RobotState
+from robot_model import DCMotor, DifferentialDriveRobot, RobotState
 
 
 class TestDCMotor:
@@ -317,7 +318,7 @@ class TestSimulationAccuracy:
 
         # Run simulation and check energy behavior
         energies = []
-        for i in range(100):
+        for _i in range(100):
             robot.update()
 
             # Calculate kinetic energy

@@ -10,6 +10,11 @@ on:
     #   - "src/**/*.js"
     #   - "src/**/*.jsx"
 
+# Cancel in-progress reviews when new commits are pushed
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   claude-review:
     # Optional: Filter by PR author
@@ -21,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: read
+      pull-requests: write
       issues: read
       id-token: write
     

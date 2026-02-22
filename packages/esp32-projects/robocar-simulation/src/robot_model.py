@@ -5,17 +5,15 @@ This module implements the robot model for the ESP32-based robot car with
 differential drive kinematics, motor dynamics, and sensor simulation.
 """
 
-import numpy as np
-from typing import Tuple, Dict, List, Optional
-from dataclasses import dataclass
-import time
-import yaml
-from pathlib import Path
-import pymunk
+from dataclasses import dataclass, field
 
-from error_handling import get_error_handler, resilient_operation, ErrorSeverity, ErrorEvent
-from wifi_simulation import WiFiManagerSimulation
+import numpy as np
+import pymunk
+import yaml
+
+from error_handling import ErrorEvent, ErrorSeverity, get_error_handler
 from ota_simulation import OTASimulation
+from wifi_simulation import WiFiManagerSimulation
 
 
 @dataclass
@@ -38,25 +36,24 @@ class RobotState:
     motor_right_rpm: float = 0.0  # RPM
 
     # Sensor readings
-    camera_frame: Optional[np.ndarray] = None
+    camera_frame: np.ndarray | None = None
     ultrasonic_distance: float = 0.0  # meters
-    imu_accel: np.ndarray = None  # [ax, ay, az] m/s²
-    imu_gyro: np.ndarray = None  # [gx, gy, gz] rad/s
+    imu_accel: np.ndarray = field(default_factory=lambda: np.zeros(3))  # [ax, ay, az] m/s²
+    imu_gyro: np.ndarray = field(default_factory=lambda: np.zeros(3))  # [gx, gy, gz] rad/s
 
     # Servo positions
     camera_pan_angle: float = 0.0  # degrees
-
-    def __post_init__(self):
-        if self.imu_accel is None:
-            self.imu_accel = np.zeros(3)
-        if self.imu_gyro is None:
-            self.imu_gyro = np.zeros(3)
 
 
 class DCMotor:
     """DC Motor model with electrical and mechanical dynamics"""
 
-    def __init__(self, config: Dict):
+    # Friction parameters (realistic for small DC motor)
+    FRICTION_STATIC = 0.001  # N⋅m static friction threshold
+    FRICTION_KINETIC = 0.0005  # N⋅m kinetic friction torque
+    FRICTION_VISCOUS = 0.0001  # N⋅m⋅s/rad viscous damping coefficient
+
+    def __init__(self, config: dict):
         self.resistance = config["resistance"]  # Ohms
         self.inductance = config["inductance"]  # H
         self.back_emf_constant = config["back_emf_constant"]  # V⋅s/rad
@@ -72,12 +69,17 @@ class DCMotor:
         self.angular_velocity = 0.0  # rad/s
         self.torque = 0.0  # N⋅m
 
-        # Friction parameters (realistic for small DC motor)
-        self.friction_static = 0.001  # N⋅m (reduced for small motor)
-        self.friction_kinetic = 0.0005  # N⋅m (reduced for small motor)
-        self.friction_viscous = 0.0001  # N⋅m⋅s/rad (reduced for small motor)
+    def _calculate_friction_torque(self, motor_torque: float, load_torque: float) -> float:
+        """Calculate friction torque based on current motion state"""
+        if abs(self.angular_velocity) > 0.01:  # Moving
+            return np.sign(self.angular_velocity) * self.FRICTION_KINETIC
+        # Static friction - only applies if motor torque exceeds static friction
+        static_threshold = abs(motor_torque - load_torque)
+        if static_threshold > self.FRICTION_STATIC:
+            return np.sign(motor_torque - load_torque) * self.FRICTION_STATIC
+        return motor_torque - load_torque  # Static friction prevents motion
 
-    def update(self, voltage: float, load_torque: float, dt: float) -> Tuple[float, float]:
+    def update(self, voltage: float, load_torque: float, dt: float) -> tuple[float, float]:
         """
         Update motor state based on applied voltage and load torque
 
@@ -107,18 +109,10 @@ class DCMotor:
         # Motor torque
         motor_torque = self.torque_constant * self.current
 
-        # Friction torque
-        if abs(self.angular_velocity) > 0.01:  # Moving (reduced threshold)
-            friction_torque = np.sign(self.angular_velocity) * self.friction_kinetic
-        else:  # Static friction - only applies if motor torque exceeds static friction
-            static_threshold = abs(motor_torque - load_torque)
-            if static_threshold > self.friction_static:
-                friction_torque = np.sign(motor_torque - load_torque) * self.friction_static
-            else:
-                friction_torque = motor_torque - load_torque  # Static friction prevents motion
+        friction_torque = self._calculate_friction_torque(motor_torque, load_torque)
 
         # Viscous friction
-        viscous_torque = self.friction_viscous * self.angular_velocity
+        viscous_torque = self.FRICTION_VISCOUS * self.angular_velocity
 
         # Net torque
         net_torque = motor_torque - load_torque - friction_torque - viscous_torque
@@ -143,7 +137,7 @@ class DCMotor:
 class PhysicsEngine:
     """Physics engine wrapper for pymunk"""
 
-    def __init__(self, config: Dict):
+    def __init__(self, config: dict):
         self.space = pymunk.Space()
         self.space.gravity = (0, -9.81)  # Gravity in m/s²
 
@@ -177,7 +171,7 @@ class PhysicsEngine:
         for obstacle in self.environment_config.get("obstacles", []):
             self._create_obstacle(obstacle)
 
-    def _create_obstacle(self, obstacle_config: Dict):
+    def _create_obstacle(self, obstacle_config: dict):
         """Create a physics obstacle from configuration"""
         if obstacle_config["type"] == "box":
             pos = obstacle_config["position"]
@@ -219,8 +213,8 @@ class PhysicsEngine:
         self,
         robot_id: str,
         mass: float,
-        dimensions: Dict,
-        position: Tuple[float, float] = (0.5, 0.5),
+        dimensions: dict,
+        position: tuple[float, float] = (0.5, 0.5),
     ):
         """Add a robot to the physics simulation"""
         # Robot dimensions
@@ -269,7 +263,7 @@ class PhysicsEngine:
         body.force = force_vector
         body.torque = torque
 
-    def get_robot_state(self, robot_id: str) -> Dict:
+    def get_robot_state(self, robot_id: str) -> dict:
         """Get robot physics state"""
         if robot_id not in self.robots:
             return {}
@@ -285,7 +279,7 @@ class PhysicsEngine:
         }
 
     def raycast_sensor(
-        self, start_pos: Tuple[float, float], direction: float, max_range: float
+        self, start_pos: tuple[float, float], direction: float, max_range: float
     ) -> float:
         """Perform raycast for ultrasonic sensor simulation"""
         end_pos = (
@@ -461,9 +455,9 @@ class DifferentialDriveRobot:
             self.error_handler.register_recovery_strategy("robot_model", physics_recovery)
             self.error_handler.register_recovery_strategy("robot_model", sensor_recovery)
 
-    def _load_config(self, config_path: str) -> Dict:
+    def _load_config(self, config_path: str) -> dict:
         """Load configuration from YAML file"""
-        with open(config_path, "r") as f:
+        with open(config_path) as f:
             return yaml.safe_load(f)
 
     def pwm_to_voltage(self, pwm: int) -> float:
@@ -514,7 +508,7 @@ class DifferentialDriveRobot:
             # Position control not available without PID controllers
             print("Warning: Position control requires PID controllers to be enabled")
 
-    def get_encoder_positions(self) -> Tuple[float, float]:
+    def get_encoder_positions(self) -> tuple[float, float]:
         """Get encoder positions in degrees"""
         if self.use_motor_controllers:
             left_pos = self.motor_left_controller.get_encoder_position()
@@ -525,7 +519,7 @@ class DifferentialDriveRobot:
             # This is less accurate than actual encoders
             return 0.0, 0.0  # Not available without controllers
 
-    def get_encoder_velocities(self) -> Tuple[float, float]:
+    def get_encoder_velocities(self) -> tuple[float, float]:
         """Get encoder velocities in rad/s"""
         if self.use_motor_controllers:
             left_vel = self.motor_left_controller.get_encoder_velocity()
@@ -617,7 +611,7 @@ class DifferentialDriveRobot:
         self.state.motor_left_rpm = omega_left * 60 / (2 * np.pi)
         self.state.motor_right_rpm = omega_right * 60 / (2 * np.pi)
 
-    def update_sensors(self, environment: Optional[Dict] = None):
+    def update_sensors(self, environment: dict | None = None):
         """Update sensor readings with noise"""
         # IMU simulation
         # Accelerometer: measure linear acceleration + gravity
@@ -640,7 +634,7 @@ class DifferentialDriveRobot:
         else:
             self.state.ultrasonic_distance = 2.0  # Default 2m
 
-    def _simulate_ultrasonic(self, environment: Dict) -> float:
+    def _simulate_ultrasonic(self, environment: dict) -> float:
         """Simulate ultrasonic sensor reading"""
         # Sensor position and orientation (8cm forward from robot center)
         sensor_x = self.state.x + 0.08 * np.cos(self.state.theta)
@@ -674,7 +668,7 @@ class DifferentialDriveRobot:
         noise = self.rng.normal(0, 0.01)  # 1cm noise
         return max(0.02, distance + noise)  # Minimum 2cm range
 
-    def update(self, dt: Optional[float] = None):
+    def update(self, dt: float | None = None):
         """Update complete robot state"""
         try:
             if dt is None:
@@ -715,11 +709,11 @@ class DifferentialDriveRobot:
         """Get current robot state"""
         return self.state
 
-    def get_pose(self) -> Tuple[float, float, float]:
+    def get_pose(self) -> tuple[float, float, float]:
         """Get robot pose (x, y, theta)"""
         return self.state.x, self.state.y, self.state.theta
 
-    def get_velocity(self) -> Tuple[float, float]:
+    def get_velocity(self) -> tuple[float, float]:
         """Get robot velocity (linear, angular)"""
         return self.state.v, self.state.omega
 

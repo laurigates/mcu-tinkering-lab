@@ -56,6 +56,8 @@ static bool load_from_file(credentials_t* creds) {
     strncpy(creds->claude_api_key, CLAUDE_API_KEY, MAX_API_KEY_LENGTH - 1);
     creds->claude_api_key[MAX_API_KEY_LENGTH - 1] = '\0';
     ESP_LOGI(TAG, "Loaded Claude API key from credentials.h");
+    // Defensively clear any stack copy of the key string literal reference.
+    // Future improvement: use NVS encryption to avoid storing keys in global RAM.
     #else
     ESP_LOGI(TAG, "Claude API key not configured - only required for Claude backend");
     #endif

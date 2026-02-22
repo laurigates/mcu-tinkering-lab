@@ -7,20 +7,22 @@ WebSocket, MQTT, and UART.
 """
 
 import asyncio
-import websockets
 import json
-import serial
-import time
-import threading
-from typing import Dict, List, Optional, Callable, Any
-from dataclasses import dataclass, asdict
-from enum import Enum
+import logging
 import struct
-import crc8
-import yaml
-from pathlib import Path
+import threading
+import time
+from dataclasses import dataclass
+from enum import Enum
 
-from robot_model import RobotState, DifferentialDriveRobot
+import crc8
+import serial
+import websockets
+import yaml
+
+from robot_model import DifferentialDriveRobot
+
+logger = logging.getLogger(__name__)
 
 
 class MessageType(Enum):
@@ -83,9 +85,11 @@ class ESP32CommunicationBridge:
         # Communication channels
         self.websocket_server = None
         self.serial_connection = None
-        self.clients = set()
+        self.clients: set = set()
+        self._clients_lock = threading.Lock()
 
         # Message handlers
+        self._handlers_lock = threading.Lock()
         self.message_handlers = {
             MessageType.MOVE: self._handle_move_command,
             MessageType.SERVO: self._handle_servo_command,
@@ -114,9 +118,9 @@ class ESP32CommunicationBridge:
         self.update_thread = None
         self.lock = threading.Lock()
 
-    def _load_config(self, config_path: str) -> Dict:
+    def _load_config(self, config_path: str) -> dict:
         """Load configuration from YAML file"""
-        with open(config_path, "r") as f:
+        with open(config_path) as f:
             return yaml.safe_load(f)
 
     async def start_websocket_server(self):
@@ -146,33 +150,33 @@ class ESP32CommunicationBridge:
         )
         print(f"WebSocket server started on ws://{host}:{port}")
 
-    async def _handle_websocket_message(self, websocket, message: str):
+    async def _handle_websocket_message(self, websocket, message: str) -> None:
         """Handle incoming WebSocket messages"""
         try:
             data = json.loads(message)
-            msg_type = data.get("type")
-            payload = data.get("payload", {})
+            message_type = data.get("type")
+            message_payload = data.get("payload", {})
 
-            if msg_type == "motor_command":
-                left_pwm = payload.get("left_pwm", 0)
-                right_pwm = payload.get("right_pwm", 0)
+            if message_type == "motor_command":
+                left_pwm = message_payload.get("left_pwm", 0)
+                right_pwm = message_payload.get("right_pwm", 0)
                 self.robot.set_motor_commands(left_pwm, right_pwm)
 
-            elif msg_type == "servo_command":
-                angle = payload.get("angle", 0)
+            elif message_type == "servo_command":
+                angle = message_payload.get("angle", 0)
                 self.robot.state.camera_pan_angle = angle
 
-            elif msg_type == "get_state":
+            elif message_type == "get_state":
                 await self._send_robot_state(websocket)
 
-            elif msg_type == "reset":
-                x = payload.get("x", 0.0)
-                y = payload.get("y", 0.0)
-                theta = payload.get("theta", 0.0)
+            elif message_type == "reset":
+                x = message_payload.get("x", 0.0)
+                y = message_payload.get("y", 0.0)
+                theta = message_payload.get("theta", 0.0)
                 self.robot.reset(x, y, theta)
 
             else:
-                print(f"Unknown message type: {msg_type}")
+                print(f"Unknown message type: {message_type}")
 
         except json.JSONDecodeError:
             print(f"Invalid JSON message: {message}")
@@ -228,21 +232,32 @@ class ESP32CommunicationBridge:
 
         except serial.SerialException as e:
             print(f"Failed to open serial port {port}: {e}")
+            self.serial_connection = None
 
     def _serial_read_loop(self):
         """Serial communication reading loop"""
-        while self.running and self.serial_connection:
-            try:
-                if self.serial_connection.in_waiting > 0:
-                    data = self.serial_connection.read(self.serial_connection.in_waiting)
-                    self._process_serial_data(data)
+        try:
+            while self.running and self.serial_connection:
+                try:
+                    if self.serial_connection.in_waiting > 0:
+                        data = self.serial_connection.read(self.serial_connection.in_waiting)
+                        self._process_serial_data(data)
 
-            except serial.SerialException as e:
-                print(f"Serial read error: {e}")
-                break
-            except Exception as e:
-                print(f"Unexpected error in serial loop: {e}")
-                break
+                except serial.SerialException as e:
+                    print(f"Serial read error: {e}")
+                    logger.error("Serial component failure: %s", e)
+                    break
+                except Exception as e:
+                    print(f"Unexpected error in serial loop: {e}")
+                    logger.error("Unexpected serial loop error: %s", e)
+                    break
+        finally:
+            if self.serial_connection:
+                try:
+                    self.serial_connection.close()
+                except Exception:
+                    pass
+                self.serial_connection = None
 
     def _process_serial_data(self, data: bytes):
         """Process incoming serial data"""
@@ -254,7 +269,7 @@ class ESP32CommunicationBridge:
                     json_data = json.loads(text)
                     print(f"ESP32 Debug: {json_data}")
                     return
-            except:
+            except (UnicodeDecodeError, json.JSONDecodeError):
                 pass
 
             # Try to decode as I2C message
@@ -324,60 +339,65 @@ class ESP32CommunicationBridge:
             response = I2CMessage(MessageType.STATUS, status_data)
             self.serial_connection.write(response.to_bytes())
 
-    async def _handle_ai_command(self, message: I2CMessage):
+    def _build_robot_context(self):
+        """Build current robot context for AI processing"""
+        from ai_command_processor import RobotContext
+
+        state = self.robot.get_state()
+        encoder_pos = self.robot.get_encoder_positions()
+        return RobotContext(
+            position=(state.x, state.y, state.theta),
+            velocity=(state.v, state.omega),
+            sensor_data={
+                "ultrasonic_distance": state.ultrasonic_distance,
+                "imu_accel": state.imu_accel.tolist(),
+                "imu_gyro": state.imu_gyro.tolist(),
+            },
+            camera_frame=state.camera_frame,
+            encoder_positions=encoder_pos,
+            last_commands=[cmd.action for cmd in self.ai_processor.command_history[-3:]],
+        )
+
+    def _send_ai_response(self, success: bool, ai_command) -> None:
+        """Send AI command response back to ESP32 via serial"""
+        if not self.serial_connection:
+            return
+        response_data = {
+            "success": success,
+            "action": ai_command.action,
+            "confidence": ai_command.confidence,
+            "reasoning": ai_command.reasoning[:100],
+        }
+        response_bytes = json.dumps(response_data).encode("utf-8")[:254]
+        response_msg = I2CMessage(MessageType.AI_COMMAND, response_bytes)
+        self.serial_connection.write(response_msg.to_bytes())
+
+    def _send_ai_error(self, error: Exception) -> None:
+        """Send AI error response back to ESP32 via serial"""
+        if not self.serial_connection:
+            return
+        error_bytes = json.dumps({"success": False, "error": str(error)}).encode("utf-8")[:254]
+        error_msg = I2CMessage(MessageType.AI_COMMAND, error_bytes)
+        self.serial_connection.write(error_msg.to_bytes())
+
+    async def _handle_ai_command(self, message: I2CMessage) -> None:
         """Handle AI command from ESP32"""
         if not self.use_ai_processing or not self.ai_processor:
             print("AI processing not enabled")
             return
 
         try:
-            # Decode AI command text
             command_text = message.data.decode("utf-8").strip()
             print(f"AI command received: {command_text}")
 
-            # Get current robot context
-            state = self.robot.get_state()
-            encoder_pos = self.robot.get_encoder_positions()
-
-            from ai_command_processor import RobotContext
-
-            context = RobotContext(
-                position=(state.x, state.y, state.theta),
-                velocity=(state.v, state.omega),
-                sensor_data={
-                    "ultrasonic_distance": state.ultrasonic_distance,
-                    "imu_accel": state.imu_accel.tolist(),
-                    "imu_gyro": state.imu_gyro.tolist(),
-                },
-                camera_frame=state.camera_frame,
-                encoder_positions=encoder_pos,
-                last_commands=[cmd.action for cmd in self.ai_processor.command_history[-3:]],
-            )
-
-            # Process AI command
+            context = self._build_robot_context()
             ai_command = await self.ai_processor.process_command(command_text, context)
 
-            # Execute command on robot
             from ai_command_processor import execute_ai_command
 
             success = execute_ai_command(ai_command, self.robot)
-
-            # Add to history
             self.ai_processor.add_to_history(ai_command)
-
-            # Send response back to ESP32
-            if self.serial_connection:
-                response_data = {
-                    "success": success,
-                    "action": ai_command.action,
-                    "confidence": ai_command.confidence,
-                    "reasoning": ai_command.reasoning[:100],  # Truncate for transmission
-                }
-                response_json = json.dumps(response_data)
-                response_bytes = response_json.encode("utf-8")[:254]  # Limit message size
-
-                response_msg = I2CMessage(MessageType.AI_COMMAND, response_bytes)
-                self.serial_connection.write(response_msg.to_bytes())
+            self._send_ai_response(success, ai_command)
 
             print(
                 f"AI command executed: {ai_command.action} (confidence: {ai_command.confidence:.2f})"
@@ -385,13 +405,7 @@ class ESP32CommunicationBridge:
 
         except Exception as e:
             print(f"AI command processing failed: {e}")
-
-            # Send error response
-            if self.serial_connection:
-                error_data = json.dumps({"success": False, "error": str(e)})
-                error_bytes = error_data.encode("utf-8")[:254]
-                error_msg = I2CMessage(MessageType.AI_COMMAND, error_bytes)
-                self.serial_connection.write(error_msg.to_bytes())
+            self._send_ai_error(e)
 
     def send_sensor_data_to_esp32(self):
         """Send sensor data to ESP32"""
@@ -431,7 +445,7 @@ class ESP32CommunicationBridge:
             # Sleep for simulation timestep
             await asyncio.sleep(self.robot.dt)
 
-    async def start(self, serial_port: Optional[str] = None):
+    async def start(self, serial_port: str | None = None):
         """Start the communication bridge"""
         self.running = True
 

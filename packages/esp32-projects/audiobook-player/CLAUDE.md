@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ESPHome-based RFID audiobook player for kids. Scan picture cards with RFID tags to trigger Home Assistant automations that play audiobooks. Physical play/pause buttons provide tactile control.
 
-**Hardware:** ESP32 WiFi & Bluetooth Battery Board (18650), RC522 RFID reader (SPI), two buttons (GPIO32/GPIO33), tilt switch (GPIO27) for deep sleep wake
+**Hardware:** TTGO LoRa32 V2.0 ESP32 (with OLED & LoRa), RC522 RFID reader (SPI), two buttons (GPIO32/GPIO33), tilt switch (GPIO27) for deep sleep wake, piezo buzzer (GPIO4), vibration motor (GPIO26)
 
 **Integration:** Device sends events to Home Assistant via ESPHome API. Home Assistant automations map RFID tag UIDs to media playback actions.
 
@@ -52,24 +52,32 @@ esphome logs audiobook-player.yaml
 
 ### GPIO Pin Constraints
 
-**GPIO17 for RC522 CS pin:** Originally used GPIO5, but GPIO5 is a strapping pin that affects ESP32 boot behavior. Changed to GPIO17 to avoid boot failures caused by external pull-up/down resistors on the RC522 module.
+**TTGO LoRa32 V2.0 Reserved Pins (LoRa & OLED):**
+- LoRa SX1276: GPIO5 (SCK), GPIO18 (CS), GPIO19 (MISO), GPIO26 (DIO0), GPIO27 (MOSI)
+- OLED SSD1306: GPIO21 (SDA), GPIO22 (SCL)
+- Built-in blue LED: GPIO25
 
-**Strapping pins to avoid:** GPIO0, GPIO2, GPIO5, GPIO12, GPIO15 (can cause boot issues if externally pulled high/low)
+**⚠️ CRITICAL:** The onboard LoRa chip shares the VSPI bus. Even though LoRa is not used, **GPIO5/18/19/27 cause SPI bus contention** if used for other SPI devices. Use HSPI (GPIO12-15) for RC522.
 
-**Safe GPIOs for this board:** GPIO4, GPIO13, GPIO14, GPIO16-GPIO19, GPIO21-GPIO23, GPIO25-GPIO27, GPIO32-GPIO33
+**Strapping pins:** GPIO0, GPIO2, GPIO5, GPIO12, GPIO15 (can cause boot issues if externally pulled). GPIO12/15 are OK for RC522 if not pulled at boot.
+
+**Safe GPIOs for peripherals:** GPIO4, GPIO13, GPIO14, GPIO25, GPIO32-GPIO33
 
 ### RC522 RFID Module
 
 - **3.3V ONLY** - Do not connect to 5V or module will be damaged
-- Uses hardware SPI: CLK=GPIO18, MISO=GPIO19, MOSI=GPIO23, CS=GPIO17
-- RST pin can be tied to 3.3V or left floating (internal pull-up)
+- **Must use HSPI bus** - VSPI pins conflict with onboard LoRa SX1276 chip
+- Uses HSPI: CLK=GPIO14, MISO=GPIO35, MOSI=GPIO13, CS=GPIO15 (no RST needed)
+- **Do NOT use GPIO12 for MISO** - strapping pin prevents flashing when high
+- GPIO35 is input-only, perfect for MISO
 - Update interval: 500ms (configurable in YAML)
 
 ### Power Considerations
 
-- ESP32 WiFi & Bluetooth Battery Board has integrated 18650 battery holder
-- Built-in charging circuit when powered via USB
-- Status LED on GPIO16 (inverted logic)
+- TTGO LoRa32 V2.0 has JST connector for LiPo battery
+- Built-in TP4054 charging circuit when powered via USB-C
+- Status LED on GPIO25 (built-in blue LED, inverted logic)
+- Onboard 0.96" OLED display (currently unused, available for future enhancements)
 
 ### Deep Sleep Power Management
 

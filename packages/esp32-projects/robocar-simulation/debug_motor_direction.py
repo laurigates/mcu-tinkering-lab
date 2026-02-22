@@ -7,8 +7,8 @@ import sys
 
 sys.path.append("src")
 
+
 from robot_model import DifferentialDriveRobot
-import numpy as np
 
 
 def analyze_motor_direction():
@@ -23,7 +23,7 @@ def analyze_motor_direction():
     print("Motor Direction Analysis")
     print("=" * 50)
     print("PWM: 100, 100 (should be forward)")
-    print("Voltage per motor: {:.2f}V".format(robot.pwm_to_voltage(100)))
+    print(f"Voltage per motor: {robot.pwm_to_voltage(100):.2f}V")
     print()
 
     print("Step | Voltage | BackEMF | Current | Torque | RPM | Angular_Vel")
@@ -51,7 +51,7 @@ def analyze_motor_direction():
             print(
                 f"  Current derivative: {(voltage - back_emf - motor.resistance * motor.current) / motor.inductance:.6f}A/s"
             )
-            print(f"  Load torque: 0.01 N⋅m")
+            print("  Load torque: 0.01 N⋅m")
             print(f"  Torque constant: {motor.torque_constant:.6f} N⋅m/A")
             print()
 

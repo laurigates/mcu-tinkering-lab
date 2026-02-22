@@ -2,11 +2,10 @@ import asyncio
 import sys
 import time
 import warnings
-from pathlib import Path
 
 try:
-    import roboticstoolbox as rtb
-    import swift
+    import roboticstoolbox as rtb  # noqa: F401
+    import swift  # noqa: F401
     import trimesh
     from spatialmath import SE3
     from swift import Swift

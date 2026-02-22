@@ -4,7 +4,20 @@
  */
 
 #include "i2c_protocol.h"
+#include "esp_log.h"
 #include <string.h>
+
+// Verify that data structs fit within the packet data field at compile time
+_Static_assert(sizeof(movement_data_t) <= I2C_MAX_DATA_LEN,
+    "movement_data_t exceeds I2C_MAX_DATA_LEN");
+_Static_assert(sizeof(sound_data_t) <= I2C_MAX_DATA_LEN,
+    "sound_data_t exceeds I2C_MAX_DATA_LEN");
+_Static_assert(sizeof(servo_data_t) <= I2C_MAX_DATA_LEN,
+    "servo_data_t exceeds I2C_MAX_DATA_LEN");
+_Static_assert(sizeof(display_data_t) <= I2C_MAX_DATA_LEN,
+    "display_data_t exceeds I2C_MAX_DATA_LEN");
+_Static_assert(sizeof(ota_begin_data_t) <= I2C_MAX_DATA_LEN,
+    "ota_begin_data_t exceeds I2C_MAX_DATA_LEN");
 
 uint8_t calculate_checksum(const uint8_t* data, size_t length) {
     uint8_t checksum = 0;
@@ -111,6 +124,11 @@ void prepare_begin_ota_command(i2c_command_packet_t* packet, const char* url, co
 
     // Copy URL (truncate if necessary)
     size_t url_len = strlen(url);
+    if (url_len > 255) {
+        /* url_length field is uint8_t; values above 255 would silently truncate */
+        ESP_LOGE("i2c_protocol", "OTA URL length %zu exceeds uint8_t max (255), clamping", url_len);
+        url_len = 255;
+    }
     ota_data->url_length = (uint8_t)url_len;
     strncpy(ota_data->url, url, OTA_URL_MAX_LEN);
     if (url_len < OTA_URL_MAX_LEN) {

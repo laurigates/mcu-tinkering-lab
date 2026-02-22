@@ -7,9 +7,8 @@ import sys
 
 sys.path.append("src")
 
+
 from robot_model import DifferentialDriveRobot
-import numpy as np
-import matplotlib.pyplot as plt
 
 
 def analyze_energy_conservation():
@@ -81,11 +80,11 @@ def analyze_energy_conservation():
     print(f"Equilibrium reached: {equilibrium_reached}")
 
     # Print motor friction analysis
-    print(f"\nMotor friction analysis:")
+    print("\nMotor friction analysis:")
     print(f"Static friction: {robot.motor_left.friction_static:.6f} N⋅m")
     print(f"Kinetic friction: {robot.motor_left.friction_kinetic:.6f} N⋅m")
     print(f"Viscous friction: {robot.motor_left.friction_viscous:.6f} N⋅m⋅s/rad")
-    print(f"Load torque: 0.01 N⋅m")
+    print("Load torque: 0.01 N⋅m")
     print(f"Motor torque constant: {robot.motor_left.torque_constant:.6f} N⋅m/A")
 
     return (

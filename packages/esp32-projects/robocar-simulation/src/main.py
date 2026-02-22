@@ -6,20 +6,23 @@ This is the main entry point for the ESP32 robot car simulation using
 Robotics Toolbox for Python with Swift visualizer.
 """
 
-import asyncio
 import argparse
-import sys
-from pathlib import Path
+import asyncio
+import os
 import signal
-import time
+import sys
 import threading
+import time
+from pathlib import Path
+
+import matplotlib.pyplot as plt
 
 # Add src directory to path
 sys.path.append(str(Path(__file__).parent))
 
-from robot_model import DifferentialDriveRobot
 from communication_bridge import ESP32CommunicationBridge
-from genesis_visualizer import GenesisSimulation, SwiftSimulation, HAS_GENESIS
+from genesis_visualizer import HAS_GENESIS, GenesisSimulation
+from robot_model import DifferentialDriveRobot
 
 
 class SimulationManager:
@@ -70,9 +73,6 @@ class SimulationManager:
         # Initialize Genesis visualizer
         if self.enable_visualizer:
             if HAS_GENESIS:
-                import threading
-                import time
-
                 # Initialize Genesis simulation - much simpler than Swift
                 try:
                     self.swift_sim = GenesisSimulation(self.config_path, viz_mode=self.viz_mode)
@@ -100,7 +100,7 @@ class SimulationManager:
 
         print("Initialization complete!")
 
-    async def start(self):
+    async def start(self) -> None:
         """Start the simulation"""
         print("\nStarting simulation components...")
         self.running = True
@@ -127,16 +127,24 @@ class SimulationManager:
                     self.swift_sim.visualizer.fallback_viz.start_update_loop()
                     print("✓ Matplotlib visualization started on main thread")
                 # Run simulation logic in background thread
-                simulation_thread = threading.Thread(
-                    target=self._run_background_simulation, daemon=True
-                )
-                simulation_thread.start()
-                print("✓ Background simulation started")
+                try:
+                    simulation_thread = threading.Thread(
+                        target=self._run_background_simulation, daemon=True
+                    )
+                    simulation_thread.start()
+                    print("✓ Background simulation started")
+                except RuntimeError as e:
+                    print(f"⚠ Failed to start background simulation thread: {e}")
             else:
                 # For Genesis, run in separate thread since it's not async
-                genesis_thread = threading.Thread(target=self._run_genesis_simulation, daemon=True)
-                genesis_thread.start()
-                print("✓ Genesis visualization started")
+                try:
+                    genesis_thread = threading.Thread(
+                        target=self._run_genesis_simulation, daemon=True
+                    )
+                    genesis_thread.start()
+                    print("✓ Genesis visualization started")
+                except RuntimeError as e:
+                    print(f"⚠ Failed to start Genesis thread: {e}")
 
         # Start demo movement if no bridge
         if not self.bridge:
@@ -157,8 +165,6 @@ class SimulationManager:
                 try:
                     # Keep the main thread alive for matplotlib GUI
                     while self.running:
-                        import matplotlib.pyplot as plt
-
                         plt.pause(0.1)  # Process GUI events
                         if tasks:
                             # Check if any tasks are done
@@ -222,7 +228,7 @@ class SimulationManager:
         except Exception as e:
             print(f"Background simulation error: {e}")
 
-    async def _demo_movement(self):
+    async def _demo_movement(self) -> None:
         """Demo movement pattern when no ESP32 is connected"""
         print("Running demo movement pattern...")
 
@@ -236,8 +242,6 @@ class SimulationManager:
         ]
 
         # For demo mode, run for a limited time (30 seconds total)
-        import time
-
         demo_start_time = time.time()
         demo_duration = 30.0  # Run demo for 30 seconds
 
@@ -289,7 +293,7 @@ class SimulationManager:
     def print_status(self):
         """Print current simulation status"""
         state = self.robot.get_state()
-        print(f"\nRobot Status:")
+        print("\nRobot Status:")
         print(f"Position: ({state.x:.3f}, {state.y:.3f}) m")
         print(f"Orientation: {state.theta:.3f} rad ({state.theta * 180 / 3.14159:.1f}°)")
         print(f"Velocity: {state.v:.3f} m/s, {state.omega:.3f} rad/s")
@@ -306,25 +310,25 @@ def main():
 Examples:
   # Run with default headless mode
   python main.py
-  
+
   # Run with GUI window visualization
   python main.py --visual
-  
-  # Run with browser-based visualization  
+
+  # Run with browser-based visualization
   python main.py --browser
-  
+
   # Run with specific visualization mode
   python main.py --viz-mode visual
-  
+
   # Run with serial connection to ESP32
   python main.py --serial /dev/ttyUSB0 --visual
-  
+
   # Run completely headless (no visualization)
   python main.py --headless
-  
+
   # Use environment variable for visualization mode
   SWIFT_VIZ_MODE=browser python main.py
-  
+
   # Run with custom configuration
   python main.py --config ../config/custom_config.yaml --visual
         """,
@@ -371,8 +375,6 @@ Examples:
     viz_mode = "headless"  # Default
 
     # Check environment variable first
-    import os
-
     env_viz_mode = os.getenv("GENESIS_VIZ_MODE", "").lower()
     if env_viz_mode in ["headless", "visual", "browser"]:
         viz_mode = env_viz_mode

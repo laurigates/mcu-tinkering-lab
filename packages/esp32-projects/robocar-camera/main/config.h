@@ -36,6 +36,20 @@
 #define ENABLE_VERBOSE_LOGGING  1
 #define ENABLE_SERIAL_ECHO      1
 
+// ========================================
+// Buffer and Stack Sizes
+// ========================================
+#define CLAUDE_RESPONSE_BUFFER_SIZE     4096    // Response buffer for Claude API
+#define CLAUDE_MAX_TOKENS               512     // Maximum tokens in Claude response
+#define CAPTURE_TASK_STACK_SIZE         16384   // Stack size for capture/analyze task
+#define MOVEMENT_CMD_MAX_LEN            16      // Max length for movement command string
+#define SOUND_CMD_MAX_LEN               64      // Max length for sound command string
+
+// ========================================
+// Semaphore Timeouts
+// ========================================
+#define SEMAPHORE_TIMEOUT_MS            5000    // Timeout for semaphore acquisition
+
 // AI Backend Configuration
 // #define CONFIG_AI_BACKEND_CLAUDE
 #ifndef CONFIG_AI_BACKEND_OLLAMA

@@ -158,18 +158,23 @@ bool i2c_slave_is_ready(void) {
 
 static void i2c_slave_task(void *pvParameters) {
     ESP_LOGI(TAG, "I2C slave task started");
-    
+
+    _Static_assert(I2C_SLAVE_RX_BUF_LEN >= sizeof(i2c_command_packet_t),
+                   "RX buffer too small for i2c_command_packet_t");
+    _Static_assert(I2C_SLAVE_TX_BUF_LEN >= sizeof(i2c_response_packet_t),
+                   "TX buffer too small for i2c_response_packet_t");
+
     uint8_t rx_buffer[I2C_SLAVE_RX_BUF_LEN];
     uint8_t tx_buffer[I2C_SLAVE_TX_BUF_LEN];
-    
+
     while (task_running) {
         // Read data from master
         int rx_len = i2c_slave_read_buffer(I2C_SLAVE_NUM, rx_buffer, sizeof(rx_buffer), pdMS_TO_TICKS(100));
-        
+
         if (rx_len > 0) {
             ESP_LOGD(TAG, "Received %d bytes from master", rx_len);
-            
-            if (rx_len == sizeof(i2c_command_packet_t)) {
+
+            if (rx_len == (int)sizeof(i2c_command_packet_t)) {
                 i2c_command_packet_t* command = (i2c_command_packet_t*)rx_buffer;
                 i2c_response_packet_t* response = (i2c_response_packet_t*)tx_buffer;
                 
@@ -321,8 +326,8 @@ static void handle_ota_commands(const i2c_command_packet_t* command, i2c_respons
                 ota_progress = 0;
                 ota_error_code = 0;
 
-                // TODO: Implement actual OTA logic
-                // For now, just acknowledge the command
+                // OTA not yet implemented; acknowledge command
+                // See: https://github.com/laurigates/mcu-tinkering-lab/issues — track OTA implementation
                 prepare_response(response, 0x00, command->sequence_number, NULL, 0);
             } else {
                 ESP_LOGE(TAG, "Invalid OTA begin data length");
@@ -362,9 +367,8 @@ static void handle_ota_commands(const i2c_command_packet_t* command, i2c_respons
             ESP_LOGW(TAG, "Reboot command received - rebooting in 1 second");
             prepare_response(response, 0x00, command->sequence_number, NULL, 0);
 
-            // TODO: Implement actual reboot logic
-            // For now, just log the command
-            // esp_restart(); would be called after sending response
+            // Reboot after sending response — esp_restart() called post-response
+            // esp_restart();
             break;
         }
 

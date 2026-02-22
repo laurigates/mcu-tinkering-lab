@@ -6,17 +6,17 @@ This test verifies that the PID motor controllers are working correctly
 with encoder feedback and can maintain velocity and position setpoints.
 """
 
-import sys
 import os
+import sys
 import time
+
 import numpy as np
-import matplotlib.pyplot as plt
 
 # Add src directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
+from motor_controller import MotorController
 from robot_model import DifferentialDriveRobot
-from motor_controller import MotorController, PIDConfig, EncoderConfig
 
 
 def test_motor_controller_standalone():
@@ -60,7 +60,7 @@ def test_motor_controller_standalone():
         motor_time_constant = 0.1
 
         # Run for 2 seconds
-        for i in range(200):
+        for _i in range(200):
             pwm_output = controller.update(actual_velocity, dt)
 
             # Simple first-order motor model
@@ -79,7 +79,7 @@ def test_motor_controller_standalone():
         # Test position control
         controller.set_position_setpoint(180.0)  # 180 degrees
 
-        for i in range(300):  # 3 seconds
+        for _i in range(300):  # 3 seconds
             pwm_output = controller.update(actual_velocity, dt)
             target_from_pwm = pwm_output / 255.0 * 10.0
             actual_velocity += (target_from_pwm - actual_velocity) * dt / motor_time_constant
@@ -120,7 +120,7 @@ def test_robot_pid_integration():
         robot.set_velocity_commands(left_velocity, right_velocity)
 
         # Run simulation for a while
-        for i in range(200):  # 2 seconds
+        for _i in range(200):  # 2 seconds
             robot.update()
             time.sleep(0.001)  # Small delay to prevent overwhelming
 
@@ -167,7 +167,7 @@ def test_position_control():
         robot.set_position_commands(target_left, target_right)
 
         # Run simulation
-        for i in range(500):  # 5 seconds
+        for _i in range(500):  # 5 seconds
             robot.update()
             time.sleep(0.001)
 
@@ -217,7 +217,7 @@ def test_encoder_simulation():
         times = []
 
         start_time = time.time()
-        for i in range(300):
+        for _i in range(300):
             robot.update()
 
             left_pos, right_pos = robot.get_encoder_positions()
@@ -268,7 +268,7 @@ def test_control_mode_switching():
         # Start with PWM control
         robot.set_motor_commands(100, 100)
 
-        for i in range(50):
+        for _i in range(50):
             robot.update()
 
         pwm_positions = robot.get_encoder_positions()
@@ -277,7 +277,7 @@ def test_control_mode_switching():
         # Switch to velocity control
         robot.set_velocity_commands(1.0, 1.0)
 
-        for i in range(100):
+        for _i in range(100):
             robot.update()
 
         vel_positions = robot.get_encoder_positions()
@@ -287,7 +287,7 @@ def test_control_mode_switching():
         # Switch to position control
         robot.set_position_commands(180.0, 180.0)
 
-        for i in range(200):
+        for _i in range(200):
             robot.update()
 
         final_positions = robot.get_encoder_positions()

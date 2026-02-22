@@ -96,6 +96,7 @@ esp_err_t wifi_manager_init(void) {
     if (g_wifi_context.event_group == NULL) {
         ESP_LOGE(TAG, "Failed to create event group");
         vSemaphoreDelete(g_wifi_context.mutex);
+        g_wifi_context.mutex = NULL;
         return ESP_ERR_NO_MEM;
     }
 
@@ -234,7 +235,12 @@ esp_err_t wifi_manager_connect(const char* ssid, const char* password) {
         return ESP_ERR_INVALID_STATE;
     }
 
-    xSemaphoreTake(g_wifi_context.mutex, portMAX_DELAY);
+    esp_err_t connect_ret = ESP_OK;
+
+    if (xSemaphoreTake(g_wifi_context.mutex, pdMS_TO_TICKS(5000)) != pdTRUE) {
+        ESP_LOGE(TAG, "wifi_manager_connect: failed to acquire mutex");
+        return ESP_ERR_TIMEOUT;
+    }
 
     // If empty credentials, try to load from NVS
     if (ssid == NULL || strlen(ssid) == 0) {
@@ -246,20 +252,20 @@ esp_err_t wifi_manager_connect(const char* ssid, const char* password) {
             memcpy(&g_wifi_context.current_credentials, &stored_creds, sizeof(wifi_credentials_t));
         } else {
             ESP_LOGW(TAG, "No stored credentials found");
-            xSemaphoreGive(g_wifi_context.mutex);
-            return ESP_ERR_NOT_FOUND;
+            connect_ret = ESP_ERR_NOT_FOUND;
+            goto connect_cleanup;
         }
     } else {
         // Validate SSID and password lengths
         if (strlen(ssid) > WIFI_SSID_MAX_LEN) {
             ESP_LOGE(TAG, "SSID too long (max %d characters)", WIFI_SSID_MAX_LEN);
-            xSemaphoreGive(g_wifi_context.mutex);
-            return ESP_ERR_INVALID_ARG;
+            connect_ret = ESP_ERR_INVALID_ARG;
+            goto connect_cleanup;
         }
         if (password && strlen(password) > WIFI_PASSWORD_MAX_LEN) {
             ESP_LOGE(TAG, "Password too long (max %d characters)", WIFI_PASSWORD_MAX_LEN);
-            xSemaphoreGive(g_wifi_context.mutex);
-            return ESP_ERR_INVALID_ARG;
+            connect_ret = ESP_ERR_INVALID_ARG;
+            goto connect_cleanup;
         }
 
         // Store provided credentials
@@ -276,19 +282,21 @@ esp_err_t wifi_manager_connect(const char* ssid, const char* password) {
     ESP_LOGI(TAG, "Connecting to SSID: %s", g_wifi_context.current_credentials.ssid);
 
     // Configure WiFi
-    wifi_config_t wifi_config = {0};
-    strncpy((char*)wifi_config.sta.ssid, g_wifi_context.current_credentials.ssid,
-            sizeof(wifi_config.sta.ssid) - 1);
-    strncpy((char*)wifi_config.sta.password, g_wifi_context.current_credentials.password,
-            sizeof(wifi_config.sta.password) - 1);
+    {
+        wifi_config_t wifi_config = {0};
+        strncpy((char*)wifi_config.sta.ssid, g_wifi_context.current_credentials.ssid,
+                sizeof(wifi_config.sta.ssid) - 1);
+        strncpy((char*)wifi_config.sta.password, g_wifi_context.current_credentials.password,
+                sizeof(wifi_config.sta.password) - 1);
 
-    // Security settings
-    wifi_config.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
-    wifi_config.sta.pmf_cfg.capable = true;
-    wifi_config.sta.pmf_cfg.required = false;
+        // Security settings
+        wifi_config.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
+        wifi_config.sta.pmf_cfg.capable = true;
+        wifi_config.sta.pmf_cfg.required = false;
 
-    // Set configuration
-    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
+        // Set configuration
+        ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
+    }
 
     // Reset retry counter
     g_wifi_context.retry_count = 0;
@@ -299,7 +307,12 @@ esp_err_t wifi_manager_connect(const char* ssid, const char* password) {
     g_wifi_context.info.state = WIFI_STATE_CONNECTING;
     notify_state_change(WIFI_STATE_CONNECTING);
 
+connect_cleanup:
     xSemaphoreGive(g_wifi_context.mutex);
+
+    if (connect_ret != ESP_OK) {
+        return connect_ret;
+    }
 
     // Start connection
     return esp_wifi_connect();
@@ -342,7 +355,7 @@ esp_err_t wifi_manager_get_info(wifi_info_t* info) {
         return ESP_ERR_INVALID_ARG;
     }
 
-    xSemaphoreTake(g_wifi_context.mutex, portMAX_DELAY);
+    xSemaphoreTake(g_wifi_context.mutex, pdMS_TO_TICKS(5000));
     memcpy(info, &g_wifi_context.info, sizeof(wifi_info_t));
     xSemaphoreGive(g_wifi_context.mutex);
 
@@ -510,7 +523,7 @@ esp_err_t wifi_manager_set_power_mode(wifi_power_mode_t mode) {
  * Register event callback
  */
 esp_err_t wifi_manager_register_callback(wifi_event_callback_t callback, void* user_data) {
-    xSemaphoreTake(g_wifi_context.mutex, portMAX_DELAY);
+    xSemaphoreTake(g_wifi_context.mutex, pdMS_TO_TICKS(5000));
     g_wifi_context.user_callback = callback;
     g_wifi_context.user_callback_data = user_data;
     xSemaphoreGive(g_wifi_context.mutex);
@@ -660,7 +673,7 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
             if (g_wifi_context.auto_reconnect && g_wifi_context.retry_count < WIFI_MAXIMUM_RETRY) {
                 g_wifi_context.retry_count++;
 
-                xSemaphoreTake(g_wifi_context.mutex, portMAX_DELAY);
+                xSemaphoreTake(g_wifi_context.mutex, pdMS_TO_TICKS(5000));
                 g_wifi_context.info.state = WIFI_STATE_RECONNECTING;
                 xSemaphoreGive(g_wifi_context.mutex);
 
@@ -673,7 +686,7 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
                 esp_timer_stop(g_wifi_context.reconnect_timer);
                 esp_timer_start_once(g_wifi_context.reconnect_timer, delay * 1000);
             } else {
-                xSemaphoreTake(g_wifi_context.mutex, portMAX_DELAY);
+                xSemaphoreTake(g_wifi_context.mutex, pdMS_TO_TICKS(5000));
                 g_wifi_context.info.state = WIFI_STATE_CONNECTION_FAILED;
                 xSemaphoreGive(g_wifi_context.mutex);
 
@@ -702,7 +715,7 @@ static void ip_event_handler(void* arg, esp_event_base_t event_base,
     if (event_id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t* event = (ip_event_got_ip_t*)event_data;
 
-        xSemaphoreTake(g_wifi_context.mutex, portMAX_DELAY);
+        xSemaphoreTake(g_wifi_context.mutex, pdMS_TO_TICKS(5000));
 
         snprintf(g_wifi_context.info.ip_address, sizeof(g_wifi_context.info.ip_address),
                  IPSTR, IP2STR(&event->ip_info.ip));
@@ -744,7 +757,7 @@ static uint32_t calculate_backoff_delay(uint32_t retry_count) {
 static void update_connection_info(void) {
     wifi_ap_record_t ap_info;
     if (esp_wifi_sta_get_ap_info(&ap_info) == ESP_OK) {
-        xSemaphoreTake(g_wifi_context.mutex, portMAX_DELAY);
+        xSemaphoreTake(g_wifi_context.mutex, pdMS_TO_TICKS(5000));
 
         memcpy(g_wifi_context.info.ssid, ap_info.ssid, sizeof(g_wifi_context.info.ssid));
         g_wifi_context.info.rssi = ap_info.rssi;

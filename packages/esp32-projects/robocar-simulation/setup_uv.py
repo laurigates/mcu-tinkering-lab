@@ -5,7 +5,6 @@ Setup script to initialize uv environment for ESP32 Robot Simulation
 
 import subprocess
 import sys
-import os
 from pathlib import Path
 
 
