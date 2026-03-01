@@ -125,10 +125,11 @@ class TestDifferentialDriveRobot:
 
     @pytest.fixture
     def robot(self):
-        """Create robot for testing"""
-        # Create temporary config
-        config_path = Path(__file__).parent.parent / "config" / "robot_config.yaml"
-        return DifferentialDriveRobot(str(config_path))
+        """Create robot for testing using test config (no background threads)."""
+        config_path = Path(__file__).parent.parent / "config" / "robot_config_test.yaml"
+        robot = DifferentialDriveRobot(str(config_path))
+        yield robot
+        robot.reset()
 
     def test_robot_initialization(self, robot):
         """Test robot initialization"""
@@ -269,9 +270,11 @@ class TestSimulationAccuracy:
 
     @pytest.fixture
     def robot(self):
-        """Create robot for testing"""
-        config_path = Path(__file__).parent.parent / "config" / "robot_config.yaml"
-        return DifferentialDriveRobot(str(config_path))
+        """Create robot for testing using test config (no background threads)."""
+        config_path = Path(__file__).parent.parent / "config" / "robot_config_test.yaml"
+        robot = DifferentialDriveRobot(str(config_path))
+        yield robot
+        robot.reset()
 
     def test_circular_motion_accuracy(self, robot):
         """Test accuracy of circular motion"""
