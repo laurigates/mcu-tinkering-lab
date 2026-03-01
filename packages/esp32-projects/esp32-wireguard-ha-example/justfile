@@ -1,0 +1,147 @@
+# ESP32 WireGuard Home Assistant Example — ESPHome project
+# Run `just --list` to see available recipes
+
+device_name := "esp32-wireguard-ha"
+config_file := device_name + ".yaml"
+secrets_file := "secrets.yaml"
+secrets_example := "secrets.yaml.example"
+
+default:
+    @just --list
+
+# Install ESPHome
+[group: "setup"]
+install:
+    pip install --upgrade esphome
+
+# Create secrets.yaml from template
+[group: "setup"]
+config:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ ! -f {{secrets_file}} ]; then
+        cp {{secrets_example}} {{secrets_file}}
+        echo ""
+        echo "IMPORTANT: Edit {{secrets_file}} with your configuration:"
+        echo "  1. WiFi credentials"
+        echo "  2. WireGuard keys and server details"
+        echo "  3. API encryption key"
+    else
+        echo "{{secrets_file}} already exists"
+    fi
+
+# Generate a WireGuard key pair
+[group: "setup"]
+wg-keys:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if ! command -v wg >/dev/null 2>&1; then
+        echo "Error: wireguard-tools not installed"
+        echo "Install with: brew install wireguard-tools"
+        exit 1
+    fi
+    private_key=$(wg genkey)
+    public_key=$(echo "$private_key" | wg pubkey)
+    echo "Private key (add to secrets.yaml):"
+    echo "  $private_key"
+    echo ""
+    echo "Public key (share with WireGuard server admin):"
+    echo "  $public_key"
+
+# Initial setup: install, configure, and show next steps
+[group: "setup"]
+init: install config
+    @echo ""
+    @echo "Initialization complete!"
+    @echo "Next steps:"
+    @echo "  1. Run 'just wg-keys' to generate WireGuard keys"
+    @echo "  2. Edit {{secrets_file}} with all required values"
+    @echo "  3. Configure your WireGuard server with this device's public key"
+    @echo "  4. Run 'just upload' to flash the device via USB"
+
+# Validate ESPHome configuration
+[group: "build"]
+validate:
+    esphome config {{config_file}}
+
+# Compile firmware
+[group: "build"]
+compile:
+    esphome compile {{config_file}}
+
+# Compile and upload via USB
+[group: "flash"]
+upload:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ ! -f {{secrets_file}} ]; then
+        echo "Error: {{secrets_file}} not found — run 'just config' first"
+        exit 1
+    fi
+    esphome run {{config_file}}
+
+# Upload via WiFi OTA
+[group: "flash"]
+wireless:
+    esphome run {{config_file}} --device {{device_name}}.local
+
+# First USB flash
+[group: "flash"]
+first-flash: config upload
+    @echo ""
+    @echo "First flash complete! Future updates: just wireless"
+
+# View device logs in real-time
+[group: "monitor"]
+logs:
+    esphome logs {{config_file}}
+
+# Alias for logs
+[group: "monitor"]
+monitor: logs
+
+# Open ESPHome dashboard (access at http://localhost:6052)
+[group: "monitor"]
+dashboard:
+    esphome dashboard .
+
+# Clean build files
+[confirm("Remove .esphome/ build directory?")]
+[group: "build"]
+clean:
+    rm -rf .esphome/ *.bin *.elf *.map
+
+# Show project status
+[group: "info"]
+status:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Device: {{device_name}}"
+    echo "Config: {{config_file}}"
+    if [ -f {{secrets_file}} ]; then
+        echo "Status: Configured"
+    else
+        echo "Status: Not configured — run 'just config'"
+    fi
+
+# Show project information
+[group: "info"]
+info:
+    @echo "ESP32 WireGuard HA Example"
+    @echo ""
+    @echo "Demonstrates:"
+    @echo "  WireGuard VPN connection from ESP32"
+    @echo "  Home Assistant integration via native API"
+    @echo "  Remote device access over VPN"
+    @echo "  Secure encrypted communication"
+    @echo ""
+    @echo "Requirements:"
+    @echo "  ESP32 development board"
+    @echo "  WireGuard VPN server"
+    @echo "  Home Assistant instance"
+    @echo "  WiFi network"
+    @echo ""
+    @echo "See README.md for detailed setup instructions"
+
+# Quick dev cycle: upload then watch logs
+dev: upload logs

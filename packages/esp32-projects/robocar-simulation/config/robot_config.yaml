@@ -100,7 +100,7 @@ simulation:
   
   # Camera simulation configuration
   camera:
-    enabled: true
+    enabled: false
     resolution: [640, 480]
     fov_degrees: 60.0  # Match robot.sensors.camera.field_of_view
     fps: 20           # Match robot.sensors.camera.fps
@@ -109,7 +109,7 @@ simulation:
   
   # WiFi simulation configuration
   wifi:
-    enabled: true
+    enabled: false
     auto_connect: true
     default_ssid: "ESP32-RoboCar"
     default_password: "robocar123"
@@ -118,9 +118,9 @@ simulation:
     retry_delay_ms: 5000
     power_save_mode: true
   
-  # OTA simulation configuration  
+  # OTA simulation configuration
   ota:
-    enabled: true
+    enabled: false
     simulate_download_speed: 50000  # bytes/s (50KB/s)
     verification_delay: 1.0  # seconds
     failure_probability: 0.05  # 5% chance of verification failure

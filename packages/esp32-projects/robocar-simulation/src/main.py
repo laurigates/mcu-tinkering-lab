@@ -15,8 +15,6 @@ import threading
 import time
 from pathlib import Path
 
-import matplotlib.pyplot as plt
-
 # Add src directory to path
 sys.path.append(str(Path(__file__).parent))
 
@@ -161,6 +159,8 @@ class SimulationManager:
         ):
             # For matplotlib mode, keep main thread alive for GUI
             if self.swift_sim.visualizer.fallback_viz.enabled:
+                import matplotlib.pyplot as plt
+
                 print("Matplotlib GUI mode: keeping main thread active...")
                 try:
                     # Keep the main thread alive for matplotlib GUI
@@ -303,6 +303,7 @@ class SimulationManager:
 
 def main():
     """Main function"""
+    sys.stdout.reconfigure(line_buffering=True)
     parser = argparse.ArgumentParser(
         description="ESP32 Robot Car Simulation with Genesis Visualizer",
         formatter_class=argparse.RawDescriptionHelpFormatter,

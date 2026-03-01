@@ -1,0 +1,102 @@
+# ESP32-CAM AI Vision System
+# Run `just --list` to see available recipes
+
+idf_path := env("IDF_PATH", home_directory() + "/repos/esp-idf")
+port := env("PORT", "/dev/cu.usbserial-0001")
+
+default:
+    @just --list
+
+[private]
+check-idf:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ ! -d "{{idf_path}}" ]; then
+        echo "Error: ESP-IDF not found at {{idf_path}}"
+        echo "Install ESP-IDF or set IDF_PATH variable"
+        exit 1
+    fi
+
+# Create credentials file from template
+[group: "setup"]
+credentials:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ ! -f main/credentials.h ]; then
+        cp main/credentials.h.example main/credentials.h
+        echo "Created main/credentials.h — edit it with your WiFi and API credentials"
+    else
+        echo "Credentials file exists"
+    fi
+
+# Build the firmware
+[group: "build"]
+build: check-idf credentials
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source {{idf_path}}/export.sh
+    idf.py build
+
+# Clean build files
+[group: "build"]
+clean: check-idf
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source {{idf_path}}/export.sh
+    idf.py clean
+
+# Full clean (removes build directory)
+[group: "build"]
+fullclean: check-idf
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source {{idf_path}}/export.sh
+    idf.py fullclean
+
+# Open configuration menu
+[group: "build"]
+menuconfig: check-idf
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source {{idf_path}}/export.sh
+    idf.py menuconfig
+
+# Flash firmware to ESP32-CAM (GPIO0 must be connected to GND)
+[group: "flash"]
+flash: check-idf
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Make sure GPIO0 is connected to GND for programming mode"
+    source {{idf_path}}/export.sh
+    idf.py -p {{port}} flash
+
+# Flash and immediately start monitoring (GPIO0 must be connected to GND)
+[group: "flash"]
+flash-monitor: check-idf
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Make sure GPIO0 is connected to GND for programming mode"
+    source {{idf_path}}/export.sh
+    idf.py -p {{port}} flash monitor
+
+# Monitor serial output (Ctrl+] to exit)
+[group: "monitor"]
+monitor: check-idf
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source {{idf_path}}/export.sh
+    idf.py -p {{port}} monitor
+
+# Show project information and programming instructions
+[group: "info"]
+info:
+    @echo "ESP32-CAM AI Vision System"
+    @echo "ESP-IDF Path: {{idf_path}}"
+    @echo "Serial Port:  {{port}}"
+    @echo ""
+    @echo "Programming ESP32-CAM:"
+    @echo "  1. Connect GPIO0 to GND"
+    @echo "  2. Power on or reset the board"
+    @echo "  3. Run: just flash or just flash-monitor"
+    @echo "  4. Disconnect GPIO0 from GND after flashing"
+    @echo "  5. Reset the board to run the new firmware"
