@@ -1,4 +1,4 @@
 {
-  "packages/esp32-projects/robocar-main": "0.1.0",
-  "packages/esp32-projects/robocar-camera": "0.1.0"
+  "packages/esp32-projects/robocar-main": "0.1.1",
+  "packages/esp32-projects/robocar-camera": "0.1.1"
 }
