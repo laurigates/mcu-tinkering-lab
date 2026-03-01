@@ -1,0 +1,132 @@
+# Audiobook Player — ESPHome project
+# Run `just --list` to see available recipes
+
+device_name := "audiobook-player"
+config_file := device_name + ".yaml"
+secrets_file := "secrets.yaml"
+secrets_example := "secrets.yaml.example"
+
+default:
+    @just --list
+
+# Install ESPHome
+[group: "setup"]
+install:
+    pip install --upgrade esphome
+
+# Create secrets.yaml from template
+[group: "setup"]
+config:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ ! -f {{secrets_file}} ]; then
+        cp {{secrets_example}} {{secrets_file}}
+        echo "Created {{secrets_file}} — edit it with your WiFi credentials"
+    else
+        echo "{{secrets_file}} already exists"
+    fi
+
+# Initial setup: install ESPHome and create config
+[group: "setup"]
+init: install config
+    @echo ""
+    @echo "Initialization complete!"
+    @echo "Next steps:"
+    @echo "  1. Edit {{secrets_file}} with your WiFi credentials"
+    @echo "  2. Run 'just upload' to flash the device via USB"
+    @echo "  3. Run 'just logs' to view device logs"
+
+# Validate ESPHome configuration
+[group: "build"]
+validate:
+    esphome config {{config_file}}
+
+# Compile firmware
+[group: "build"]
+compile:
+    esphome compile {{config_file}}
+
+# Compile and upload via USB (auto-detects serial port)
+[group: "flash"]
+upload:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ ! -f {{secrets_file}} ]; then
+        echo "Error: {{secrets_file}} not found — run 'just config' first"
+        exit 1
+    fi
+    PORT=$(ls /dev/cu.* 2>/dev/null | grep -E "(usbserial|SLAB|wchusbserial)" | head -1)
+    if [ -z "$PORT" ]; then
+        echo "Error: No ESP32 device found on USB"
+        echo "Available ports:"
+        ls /dev/cu.* 2>/dev/null | grep -v -E "(Bluetooth|debug|Suunto)" || echo "  None found"
+        exit 1
+    fi
+    echo "Found device at $PORT"
+    esphome run {{config_file}} --device "$PORT"
+
+# Upload via WiFi OTA
+[group: "flash"]
+wireless:
+    esphome run {{config_file}} --device {{device_name}}.local
+
+# First USB flash (run before wireless updates are possible)
+[group: "flash"]
+first-flash: config upload
+    @echo ""
+    @echo "First flash complete! Future updates: just wireless"
+
+# View device logs in real-time
+[group: "monitor"]
+logs:
+    esphome logs {{config_file}}
+
+# Alias for logs
+[group: "monitor"]
+monitor: logs
+
+# Open ESPHome dashboard (access at http://localhost:6052)
+[group: "monitor"]
+dashboard:
+    esphome dashboard .
+
+# Clean build files
+[confirm("Remove .esphome/ build directory?")]
+[group: "build"]
+clean:
+    rm -rf .esphome/ *.bin *.elf *.map
+
+# Show project status
+[group: "info"]
+status:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Device: {{device_name}}"
+    echo "Config: {{config_file}}"
+    if [ -f {{secrets_file}} ]; then
+        echo "Status: Configured"
+    else
+        echo "Status: Not configured — run 'just config'"
+    fi
+
+# Display pin assignment reference
+[group: "info"]
+pins:
+    @echo "RC522 RFID Reader (HSPI — avoids LoRa conflict):"
+    @echo "  SDA (CS) → GPIO15"
+    @echo "  SCK      → GPIO14"
+    @echo "  MOSI     → GPIO13"
+    @echo "  MISO     → GPIO12"
+    @echo "  RST      → GPIO2"
+    @echo ""
+    @echo "Buttons:"
+    @echo "  Green (Play)  → GPIO32 + GND"
+    @echo "  Red (Pause)   → GPIO33 + GND"
+    @echo ""
+    @echo "Tilt Switch:  GPIO27 + GND (wakes from deep sleep)"
+    @echo "Buzzer:       GPIO4 + GND (passive piezo)"
+    @echo "Vibration:    GPIO26 (via transistor)"
+    @echo "Status LED:   GPIO25 (built-in blue LED)"
+
+# Quick dev cycle: upload then watch logs
+dev: upload logs

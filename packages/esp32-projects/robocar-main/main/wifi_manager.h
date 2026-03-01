@@ -9,18 +9,18 @@
 #ifndef WIFI_MANAGER_H
 #define WIFI_MANAGER_H
 
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include "esp_err.h"
 #include "esp_wifi_types.h"
 
 // WiFi configuration constants
-#define WIFI_MAXIMUM_RETRY         10                  // Maximum number of connection attempts
-#define WIFI_RETRY_BASE_DELAY_MS   1000               // Initial retry delay (exponential backoff)
-#define WIFI_MAX_RETRY_DELAY_MS    30000              // Maximum retry delay
-#define WIFI_SSID_MAX_LEN          32                 // Maximum SSID length
-#define WIFI_PASSWORD_MAX_LEN      64                 // Maximum password length
-#define WIFI_HOSTNAME              "RoboCar-Controller" // Device hostname
+#define WIFI_MAXIMUM_RETRY 10               // Maximum number of connection attempts
+#define WIFI_RETRY_BASE_DELAY_MS 1000       // Initial retry delay (exponential backoff)
+#define WIFI_MAX_RETRY_DELAY_MS 30000       // Maximum retry delay
+#define WIFI_SSID_MAX_LEN 32                // Maximum SSID length
+#define WIFI_PASSWORD_MAX_LEN 64            // Maximum password length
+#define WIFI_HOSTNAME "RoboCar-Controller"  // Device hostname
 
 // WiFi power management modes for robotics
 typedef enum {
@@ -60,7 +60,7 @@ typedef struct {
 } wifi_credentials_t;
 
 // WiFi event callback type
-typedef void (*wifi_event_callback_t)(wifi_state_t state, void* data);
+typedef void (*wifi_event_callback_t)(wifi_state_t state, void *data);
 
 /**
  * @brief Initialize WiFi manager
@@ -91,7 +91,7 @@ esp_err_t wifi_manager_deinit(void);
  * @param password Network password (empty string to use stored)
  * @return ESP_OK on successful connection start, error code otherwise
  */
-esp_err_t wifi_manager_connect(const char* ssid, const char* password);
+esp_err_t wifi_manager_connect(const char *ssid, const char *password);
 
 /**
  * @brief Disconnect from current WiFi network
@@ -113,7 +113,7 @@ bool wifi_manager_is_connected(void);
  * @param info Pointer to structure to fill with connection info
  * @return ESP_OK on success, ESP_ERR_INVALID_ARG if info is NULL
  */
-esp_err_t wifi_manager_get_info(wifi_info_t* info);
+esp_err_t wifi_manager_get_info(wifi_info_t *info);
 
 /**
  * @brief Save WiFi credentials to NVS
@@ -123,7 +123,7 @@ esp_err_t wifi_manager_get_info(wifi_info_t* info);
  * @param credentials Pointer to credentials structure
  * @return ESP_OK on success, error code otherwise
  */
-esp_err_t wifi_manager_save_credentials(const wifi_credentials_t* credentials);
+esp_err_t wifi_manager_save_credentials(const wifi_credentials_t *credentials);
 
 /**
  * @brief Load WiFi credentials from NVS
@@ -131,7 +131,7 @@ esp_err_t wifi_manager_save_credentials(const wifi_credentials_t* credentials);
  * @param credentials Pointer to structure to fill with loaded credentials
  * @return ESP_OK on success, ESP_ERR_NVS_NOT_FOUND if no stored credentials
  */
-esp_err_t wifi_manager_load_credentials(wifi_credentials_t* credentials);
+esp_err_t wifi_manager_load_credentials(wifi_credentials_t *credentials);
 
 /**
  * @brief Clear stored WiFi credentials
@@ -158,7 +158,7 @@ esp_err_t wifi_manager_set_power_mode(wifi_power_mode_t mode);
  * @param user_data User data to pass to callback
  * @return ESP_OK on success, error code otherwise
  */
-esp_err_t wifi_manager_register_callback(wifi_event_callback_t callback, void* user_data);
+esp_err_t wifi_manager_register_callback(wifi_event_callback_t callback, void *user_data);
 
 /**
  * @brief Start WiFi scan for available networks
@@ -175,9 +175,8 @@ esp_err_t wifi_manager_start_scan(void);
  * @param actual_count Pointer to store actual number of APs found
  * @return ESP_OK on success, error code otherwise
  */
-esp_err_t wifi_manager_get_scan_results(wifi_ap_record_t* ap_records,
-                                        uint16_t max_records,
-                                        uint16_t* actual_count);
+esp_err_t wifi_manager_get_scan_results(wifi_ap_record_t *ap_records, uint16_t max_records,
+                                        uint16_t *actual_count);
 
 /**
  * @brief Enable automatic reconnection
@@ -211,7 +210,7 @@ esp_err_t wifi_manager_force_reconnect(void);
  * @param mac Buffer to store MAC address (6 bytes)
  * @return ESP_OK on success, error code otherwise
  */
-esp_err_t wifi_manager_get_mac_address(uint8_t* mac);
+esp_err_t wifi_manager_get_mac_address(uint8_t *mac);
 
 /**
  * @brief Get current WiFi state
@@ -226,6 +225,6 @@ wifi_state_t wifi_manager_get_state(void);
  * @param state WiFi state
  * @return String representation of state
  */
-const char* wifi_manager_state_to_string(wifi_state_t state);
+const char *wifi_manager_state_to_string(wifi_state_t state);
 
-#endif // WIFI_MANAGER_H
+#endif  // WIFI_MANAGER_H

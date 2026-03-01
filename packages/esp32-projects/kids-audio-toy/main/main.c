@@ -12,46 +12,46 @@
  * - Visual LED feedback
  */
 
-#include <stdio.h>
 #include <math.h>
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "driver/gpio.h"
+#include <stdio.h>
 #include "driver/adc.h"
+#include "driver/gpio.h"
 #include "driver/ledc.h"
 #include "esp_adc_cal.h"
 #include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 static const char *TAG = "AUDIO_TOY";
 
 // Pin Definitions
-#define PIEZO_PIN           GPIO_NUM_25   // PWM output for piezo speaker
-#define LED_PIN             GPIO_NUM_2    // Visual feedback LED
+#define PIEZO_PIN GPIO_NUM_25  // PWM output for piezo speaker
+#define LED_PIN GPIO_NUM_2     // Visual feedback LED
 
 // ADC channels for potentiometers and 555 inputs
-#define POT_PITCH_CHANNEL   ADC1_CHANNEL_6  // GPIO34 - Controls pitch (frequency)
-#define POT_DURATION_CHANNEL ADC1_CHANNEL_7  // GPIO35 - Controls beep duration
-#define POT_INTERVAL_CHANNEL ADC1_CHANNEL_4  // GPIO32 - Controls interval between beeps
-#define TIMER_555_MOD_CHANNEL ADC1_CHANNEL_5 // GPIO33 - 555 timer modulation input
+#define POT_PITCH_CHANNEL ADC1_CHANNEL_6      // GPIO34 - Controls pitch (frequency)
+#define POT_DURATION_CHANNEL ADC1_CHANNEL_7   // GPIO35 - Controls beep duration
+#define POT_INTERVAL_CHANNEL ADC1_CHANNEL_4   // GPIO32 - Controls interval between beeps
+#define TIMER_555_MOD_CHANNEL ADC1_CHANNEL_5  // GPIO33 - 555 timer modulation input
 
 // PWM (LEDC) Configuration
-#define LEDC_TIMER          LEDC_TIMER_0
-#define LEDC_MODE           LEDC_LOW_SPEED_MODE
-#define LEDC_CHANNEL        LEDC_CHANNEL_0
-#define LEDC_DUTY_RES       LEDC_TIMER_8_BIT  // 8-bit resolution (0-255)
-#define LEDC_DUTY           128  // 50% duty cycle for square wave
+#define LEDC_TIMER LEDC_TIMER_0
+#define LEDC_MODE LEDC_LOW_SPEED_MODE
+#define LEDC_CHANNEL LEDC_CHANNEL_0
+#define LEDC_DUTY_RES LEDC_TIMER_8_BIT  // 8-bit resolution (0-255)
+#define LEDC_DUTY 128                   // 50% duty cycle for square wave
 
 // Audio Parameters
-#define MIN_FREQ_HZ         100   // Lowest frequency (Hz)
-#define MAX_FREQ_HZ         2000  // Highest frequency (Hz)
-#define MIN_DURATION_MS     50    // Shortest beep (ms)
-#define MAX_DURATION_MS     1000  // Longest beep (ms)
-#define MIN_INTERVAL_MS     100   // Shortest pause (ms)
-#define MAX_INTERVAL_MS     2000  // Longest pause (ms)
+#define MIN_FREQ_HZ 100       // Lowest frequency (Hz)
+#define MAX_FREQ_HZ 2000      // Highest frequency (Hz)
+#define MIN_DURATION_MS 50    // Shortest beep (ms)
+#define MAX_DURATION_MS 1000  // Longest beep (ms)
+#define MIN_INTERVAL_MS 100   // Shortest pause (ms)
+#define MAX_INTERVAL_MS 2000  // Longest pause (ms)
 
 // Modulation Parameters
-#define MOD_DEPTH_MAX       200   // Maximum frequency deviation (Hz)
-#define MOD_SMOOTHING       0.8   // Smoothing factor for modulation (0.0-1.0)
+#define MOD_DEPTH_MAX 200  // Maximum frequency deviation (Hz)
+#define MOD_SMOOTHING 0.8  // Smoothing factor for modulation (0.0-1.0)
 
 // Global variables for audio parameters
 static float current_pitch_hz = 440.0;
@@ -77,8 +77,8 @@ static void init_adc(void)
     adc1_config_channel_atten(TIMER_555_MOD_CHANNEL, ADC_ATTEN_DB_11);
 
     // Characterize ADC for more accurate readings
-    esp_adc_cal_value_t cal_type = esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_DB_11,
-                                                              ADC_WIDTH_BIT_12, 1100, &adc_chars);
+    esp_adc_cal_value_t cal_type =
+        esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_DB_11, ADC_WIDTH_BIT_12, 1100, &adc_chars);
 
     // Log calibration type for debugging
     if (cal_type == ESP_ADC_CAL_VAL_EFUSE_TP) {
@@ -98,13 +98,11 @@ static void init_adc(void)
 static void init_pwm(void)
 {
     // Configure timer
-    ledc_timer_config_t ledc_timer = {
-        .speed_mode       = LEDC_MODE,
-        .timer_num        = LEDC_TIMER,
-        .duty_resolution  = LEDC_DUTY_RES,
-        .freq_hz          = 1000,  // Initial frequency (will be updated)
-        .clk_cfg          = LEDC_AUTO_CLK
-    };
+    ledc_timer_config_t ledc_timer = {.speed_mode = LEDC_MODE,
+                                      .timer_num = LEDC_TIMER,
+                                      .duty_resolution = LEDC_DUTY_RES,
+                                      .freq_hz = 1000,  // Initial frequency (will be updated)
+                                      .clk_cfg = LEDC_AUTO_CLK};
     esp_err_t ret = ledc_timer_config(&ledc_timer);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to configure LEDC timer: %s", esp_err_to_name(ret));
@@ -112,15 +110,13 @@ static void init_pwm(void)
     }
 
     // Configure channel
-    ledc_channel_config_t ledc_channel = {
-        .speed_mode     = LEDC_MODE,
-        .channel        = LEDC_CHANNEL,
-        .timer_sel      = LEDC_TIMER,
-        .intr_type      = LEDC_INTR_DISABLE,
-        .gpio_num       = PIEZO_PIN,
-        .duty           = 0,  // Start silent
-        .hpoint         = 0
-    };
+    ledc_channel_config_t ledc_channel = {.speed_mode = LEDC_MODE,
+                                          .channel = LEDC_CHANNEL,
+                                          .timer_sel = LEDC_TIMER,
+                                          .intr_type = LEDC_INTR_DISABLE,
+                                          .gpio_num = PIEZO_PIN,
+                                          .duty = 0,  // Start silent
+                                          .hpoint = 0};
     ret = ledc_channel_config(&ledc_channel);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to configure LEDC channel: %s", esp_err_to_name(ret));
@@ -176,12 +172,10 @@ static void read_controls(void)
 
     // Map to parameter ranges
     current_pitch_hz = map_adc_to_range(pitch_adc, MIN_FREQ_HZ, MAX_FREQ_HZ);
-    current_duration_ms = (uint32_t)map_adc_to_range(duration_adc,
-                                                      MIN_DURATION_MS,
-                                                      MAX_DURATION_MS);
-    current_interval_ms = (uint32_t)map_adc_to_range(interval_adc,
-                                                      MIN_INTERVAL_MS,
-                                                      MAX_INTERVAL_MS);
+    current_duration_ms =
+        (uint32_t)map_adc_to_range(duration_adc, MIN_DURATION_MS, MAX_DURATION_MS);
+    current_interval_ms =
+        (uint32_t)map_adc_to_range(interval_adc, MIN_INTERVAL_MS, MAX_INTERVAL_MS);
 }
 
 /**
@@ -196,12 +190,13 @@ static void read_modulation(void)
     float raw_mod = map_adc_to_range(mod_adc, -MOD_DEPTH_MAX, MOD_DEPTH_MAX);
 
     // Apply smoothing to reduce jitter (exponential moving average)
-    modulation_value = (MOD_SMOOTHING * modulation_value) +
-                       ((1.0 - MOD_SMOOTHING) * raw_mod);
+    modulation_value = (MOD_SMOOTHING * modulation_value) + ((1.0 - MOD_SMOOTHING) * raw_mod);
 
     // Clamp smoothed value to prevent drift/overflow
-    if (modulation_value < -MOD_DEPTH_MAX) modulation_value = -MOD_DEPTH_MAX;
-    if (modulation_value > MOD_DEPTH_MAX) modulation_value = MOD_DEPTH_MAX;
+    if (modulation_value < -MOD_DEPTH_MAX)
+        modulation_value = -MOD_DEPTH_MAX;
+    if (modulation_value > MOD_DEPTH_MAX)
+        modulation_value = MOD_DEPTH_MAX;
 }
 
 /**
@@ -213,8 +208,10 @@ static void play_tone(uint32_t duration_ms)
     float modulated_freq = current_pitch_hz + modulation_value;
 
     // Clamp to valid range
-    if (modulated_freq < MIN_FREQ_HZ) modulated_freq = MIN_FREQ_HZ;
-    if (modulated_freq > MAX_FREQ_HZ) modulated_freq = MAX_FREQ_HZ;
+    if (modulated_freq < MIN_FREQ_HZ)
+        modulated_freq = MIN_FREQ_HZ;
+    if (modulated_freq > MAX_FREQ_HZ)
+        modulated_freq = MAX_FREQ_HZ;
 
     // Set PWM frequency
     ledc_set_freq(LEDC_MODE, LEDC_TIMER, (uint32_t)modulated_freq);
@@ -226,8 +223,8 @@ static void play_tone(uint32_t duration_ms)
     // Turn on LED for visual feedback
     gpio_set_level(LED_PIN, 1);
 
-    ESP_LOGI(TAG, "Tone: %.1f Hz (base: %.1f Hz, mod: %.1f Hz) for %lu ms",
-             modulated_freq, current_pitch_hz, modulation_value, duration_ms);
+    ESP_LOGI(TAG, "Tone: %.1f Hz (base: %.1f Hz, mod: %.1f Hz) for %lu ms", modulated_freq,
+             current_pitch_hz, modulation_value, duration_ms);
 
     // Wait for duration
     vTaskDelay(pdMS_TO_TICKS(duration_ms));

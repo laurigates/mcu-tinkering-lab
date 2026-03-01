@@ -4,28 +4,28 @@
  */
 
 #include "mqtt_logger.h"
+#include <stdarg.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/time.h>
+#include "cJSON.h"
 #include "config.h"
-#include "mqtt_client.h"
 #include "esp_log.h"
 #include "esp_system.h"
 #include "esp_wifi.h"
-#include "cJSON.h"
 #include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 #include "freertos/queue.h"
 #include "freertos/semphr.h"
-#include <string.h>
-#include <stdio.h>
-#include <stdarg.h>
-#include <sys/time.h>
+#include "freertos/task.h"
+#include "mqtt_client.h"
 
 static const char *TAG = "mqtt_logger";
 
 // Internal structures
 typedef struct {
-    char* message;
+    char *message;
     esp_log_level_t level;
-    char* tag;
+    char *tag;
     int64_t timestamp;
 } log_buffer_entry_t;
 
@@ -43,15 +43,17 @@ typedef struct {
 static mqtt_logger_context_t s_context = {0};
 
 // Forward declarations
-static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data);
+static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id,
+                               void *event_data);
 static void log_processing_task(void *pvParameters);
-static esp_err_t send_log_message(const mqtt_log_message_t* log_msg);
+static esp_err_t send_log_message(const mqtt_log_message_t *log_msg);
 static int64_t get_timestamp_ms(void);
-static char* create_log_json(const mqtt_log_message_t* log_msg);
-static void cleanup_log_entry(log_buffer_entry_t* entry);
-static esp_err_t queue_log_message(esp_log_level_t level, const char* tag, const char* message);
+static char *create_log_json(const mqtt_log_message_t *log_msg);
+static void cleanup_log_entry(log_buffer_entry_t *entry);
+static esp_err_t queue_log_message(esp_log_level_t level, const char *tag, const char *message);
 
-esp_err_t mqtt_logger_init(const mqtt_logger_config_t* config) {
+esp_err_t mqtt_logger_init(const mqtt_logger_config_t *config)
+{
     if (!config) {
         ESP_LOGE(TAG, "Invalid configuration");
         return ESP_ERR_INVALID_ARG;
@@ -64,14 +66,14 @@ esp_err_t mqtt_logger_init(const mqtt_logger_config_t* config) {
 
     // Copy configuration
     memcpy(&s_context.config, config, sizeof(mqtt_logger_config_t));
-    
+
     // Allocate strings
     s_context.config.broker_uri = strdup(config->broker_uri);
     s_context.config.client_id = strdup(config->client_id);
     s_context.config.log_topic = strdup(config->log_topic);
     s_context.config.status_topic = strdup(config->status_topic);
     s_context.config.command_topic = strdup(config->command_topic);
-    
+
     if (config->username) {
         s_context.config.username = strdup(config->username);
     }
@@ -87,7 +89,8 @@ esp_err_t mqtt_logger_init(const mqtt_logger_config_t* config) {
     }
 
     // Create log queue
-    s_context.log_queue = xQueueCreate(config->buffer_size / sizeof(log_buffer_entry_t), sizeof(log_buffer_entry_t));
+    s_context.log_queue =
+        xQueueCreate(config->buffer_size / sizeof(log_buffer_entry_t), sizeof(log_buffer_entry_t));
     if (!s_context.log_queue) {
         ESP_LOGE(TAG, "Failed to create log queue");
         vSemaphoreDelete(s_context.mutex);
@@ -132,7 +135,8 @@ esp_err_t mqtt_logger_init(const mqtt_logger_config_t* config) {
     }
 
     // Create log processing task
-    BaseType_t task_ret = xTaskCreate(log_processing_task, "mqtt_log_task", 4096, NULL, 5, &s_context.log_task_handle);
+    BaseType_t task_ret = xTaskCreate(log_processing_task, "mqtt_log_task", 4096, NULL, 5,
+                                      &s_context.log_task_handle);
     if (task_ret != pdPASS) {
         ESP_LOGE(TAG, "Failed to create log processing task");
         esp_mqtt_client_stop(s_context.client);
@@ -144,7 +148,7 @@ esp_err_t mqtt_logger_init(const mqtt_logger_config_t* config) {
 
     // Initialize stats
     memset(&s_context.stats, 0, sizeof(mqtt_logger_stats_t));
-    
+
     s_context.initialized = true;
     s_context.connected = false;
 
@@ -156,7 +160,8 @@ esp_err_t mqtt_logger_init(const mqtt_logger_config_t* config) {
     return ESP_OK;
 }
 
-esp_err_t mqtt_logger_deinit(void) {
+esp_err_t mqtt_logger_deinit(void)
+{
     if (!s_context.initialized) {
         return ESP_OK;
     }
@@ -191,13 +196,15 @@ esp_err_t mqtt_logger_deinit(void) {
     }
 
     // Free configuration strings
-    free((void*)s_context.config.broker_uri);
-    free((void*)s_context.config.client_id);
-    free((void*)s_context.config.log_topic);
-    free((void*)s_context.config.status_topic);
-    free((void*)s_context.config.command_topic);
-    if (s_context.config.username) free((void*)s_context.config.username);
-    if (s_context.config.password) free((void*)s_context.config.password);
+    free((void *)s_context.config.broker_uri);
+    free((void *)s_context.config.client_id);
+    free((void *)s_context.config.log_topic);
+    free((void *)s_context.config.status_topic);
+    free((void *)s_context.config.command_topic);
+    if (s_context.config.username)
+        free((void *)s_context.config.username);
+    if (s_context.config.password)
+        free((void *)s_context.config.password);
 
     memset(&s_context, 0, sizeof(s_context));
 
@@ -205,17 +212,18 @@ esp_err_t mqtt_logger_deinit(void) {
     return ESP_OK;
 }
 
-esp_err_t mqtt_logger_log(esp_log_level_t level, const char* tag, const char* format, va_list args) {
+esp_err_t mqtt_logger_log(esp_log_level_t level, const char *tag, const char *format, va_list args)
+{
     if (!s_context.initialized) {
         return ESP_ERR_INVALID_STATE;
     }
 
     if (level > s_context.config.min_level) {
-        return ESP_OK; // Skip logging if below minimum level
+        return ESP_OK;  // Skip logging if below minimum level
     }
 
     // Format message
-    char* message = NULL;
+    char *message = NULL;
     int len = vasprintf(&message, format, args);
     if (len < 0 || !message) {
         return ESP_ERR_NO_MEM;
@@ -223,11 +231,12 @@ esp_err_t mqtt_logger_log(esp_log_level_t level, const char* tag, const char* fo
 
     esp_err_t ret = queue_log_message(level, tag, message);
     free(message);
-    
+
     return ret;
 }
 
-esp_err_t mqtt_logger_logf(esp_log_level_t level, const char* tag, const char* format, ...) {
+esp_err_t mqtt_logger_logf(esp_log_level_t level, const char *tag, const char *format, ...)
+{
     va_list args;
     va_start(args, format);
     esp_err_t ret = mqtt_logger_log(level, tag, format, args);
@@ -235,7 +244,8 @@ esp_err_t mqtt_logger_logf(esp_log_level_t level, const char* tag, const char* f
     return ret;
 }
 
-esp_err_t mqtt_logger_publish_status(const char* status_json) {
+esp_err_t mqtt_logger_publish_status(const char *status_json)
+{
     if (!s_context.initialized || !s_context.connected) {
         return ESP_ERR_INVALID_STATE;
     }
@@ -244,13 +254,10 @@ esp_err_t mqtt_logger_publish_status(const char* status_json) {
         return ESP_ERR_INVALID_ARG;
     }
 
-    int msg_id = esp_mqtt_client_publish(s_context.client, 
-                                        s_context.config.status_topic,
-                                        status_json, 
-                                        strlen(status_json), 
-                                        s_context.config.qos_level, 
-                                        s_context.config.retain_status);
-    
+    int msg_id = esp_mqtt_client_publish(
+        s_context.client, s_context.config.status_topic, status_json, strlen(status_json),
+        s_context.config.qos_level, s_context.config.retain_status);
+
     if (msg_id < 0) {
         xSemaphoreTake(s_context.mutex, pdMS_TO_TICKS(SEMAPHORE_TIMEOUT_MS));
         s_context.stats.messages_failed++;
@@ -261,7 +268,8 @@ esp_err_t mqtt_logger_publish_status(const char* status_json) {
     return ESP_OK;
 }
 
-esp_err_t mqtt_logger_get_stats(mqtt_logger_stats_t* stats) {
+esp_err_t mqtt_logger_get_stats(mqtt_logger_stats_t *stats)
+{
     if (!stats) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -279,7 +287,8 @@ esp_err_t mqtt_logger_get_stats(mqtt_logger_stats_t* stats) {
     return ESP_OK;
 }
 
-esp_err_t mqtt_logger_set_level(esp_log_level_t level) {
+esp_err_t mqtt_logger_set_level(esp_log_level_t level)
+{
     if (!s_context.initialized) {
         return ESP_ERR_INVALID_STATE;
     }
@@ -292,11 +301,13 @@ esp_err_t mqtt_logger_set_level(esp_log_level_t level) {
     return ESP_OK;
 }
 
-bool mqtt_logger_is_connected(void) {
+bool mqtt_logger_is_connected(void)
+{
     return s_context.initialized && s_context.connected;
 }
 
-esp_err_t mqtt_logger_reconnect(void) {
+esp_err_t mqtt_logger_reconnect(void)
+{
     if (!s_context.initialized || !s_context.client) {
         return ESP_ERR_INVALID_STATE;
     }
@@ -304,7 +315,8 @@ esp_err_t mqtt_logger_reconnect(void) {
     return esp_mqtt_client_reconnect(s_context.client);
 }
 
-esp_err_t mqtt_logger_flush(void) {
+esp_err_t mqtt_logger_flush(void)
+{
     if (!s_context.initialized) {
         return ESP_ERR_INVALID_STATE;
     }
@@ -319,76 +331,78 @@ esp_err_t mqtt_logger_flush(void) {
 
 // Private functions
 
-static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data) {
+static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id,
+                               void *event_data)
+{
     esp_mqtt_event_handle_t event = event_data;
-    
+
     switch ((esp_mqtt_event_id_t)event_id) {
-    case MQTT_EVENT_CONNECTED:
-        ESP_LOGI(TAG, "MQTT connected");
-        s_context.connected = true;
-        
-        // Subscribe to command topic
-        if (s_context.config.command_topic) {
-            esp_mqtt_client_subscribe(s_context.client, s_context.config.command_topic, 1);
-        }
-        
-        // Publish online status
-        char status_msg[128];
-        snprintf(status_msg, sizeof(status_msg), 
-                "{\"status\":\"online\",\"timestamp\":%lld}", 
-                get_timestamp_ms());
-        mqtt_logger_publish_status(status_msg);
-        
-        xSemaphoreTake(s_context.mutex, pdMS_TO_TICKS(SEMAPHORE_TIMEOUT_MS));
-        s_context.stats.reconnect_count++;
-        xSemaphoreGive(s_context.mutex);
-        break;
+        case MQTT_EVENT_CONNECTED:
+            ESP_LOGI(TAG, "MQTT connected");
+            s_context.connected = true;
 
-    case MQTT_EVENT_DISCONNECTED:
-        ESP_LOGW(TAG, "MQTT disconnected");
-        s_context.connected = false;
-        break;
+            // Subscribe to command topic
+            if (s_context.config.command_topic) {
+                esp_mqtt_client_subscribe(s_context.client, s_context.config.command_topic, 1);
+            }
 
-    case MQTT_EVENT_SUBSCRIBED:
-        ESP_LOGI(TAG, "MQTT subscribed, msg_id=%d", event->msg_id);
-        break;
+            // Publish online status
+            char status_msg[128];
+            snprintf(status_msg, sizeof(status_msg), "{\"status\":\"online\",\"timestamp\":%lld}",
+                     get_timestamp_ms());
+            mqtt_logger_publish_status(status_msg);
 
-    case MQTT_EVENT_UNSUBSCRIBED:
-        ESP_LOGI(TAG, "MQTT unsubscribed, msg_id=%d", event->msg_id);
-        break;
+            xSemaphoreTake(s_context.mutex, pdMS_TO_TICKS(SEMAPHORE_TIMEOUT_MS));
+            s_context.stats.reconnect_count++;
+            xSemaphoreGive(s_context.mutex);
+            break;
 
-    case MQTT_EVENT_PUBLISHED:
-        xSemaphoreTake(s_context.mutex, pdMS_TO_TICKS(SEMAPHORE_TIMEOUT_MS));
-        s_context.stats.messages_sent++;
-        s_context.stats.last_message_time = get_timestamp_ms();
-        xSemaphoreGive(s_context.mutex);
-        break;
+        case MQTT_EVENT_DISCONNECTED:
+            ESP_LOGW(TAG, "MQTT disconnected");
+            s_context.connected = false;
+            break;
 
-    case MQTT_EVENT_DATA:
-        // Handle remote commands
-        if (strncmp(event->topic, s_context.config.command_topic, event->topic_len) == 0) {
-            ESP_LOGI(TAG, "Received command: %.*s", event->data_len, event->data);
-            // TODO: Implement command processing
-        }
-        break;
+        case MQTT_EVENT_SUBSCRIBED:
+            ESP_LOGI(TAG, "MQTT subscribed, msg_id=%d", event->msg_id);
+            break;
 
-    case MQTT_EVENT_ERROR:
-        ESP_LOGE(TAG, "MQTT error occurred");
-        xSemaphoreTake(s_context.mutex, pdMS_TO_TICKS(SEMAPHORE_TIMEOUT_MS));
-        s_context.stats.messages_failed++;
-        xSemaphoreGive(s_context.mutex);
-        break;
+        case MQTT_EVENT_UNSUBSCRIBED:
+            ESP_LOGI(TAG, "MQTT unsubscribed, msg_id=%d", event->msg_id);
+            break;
 
-    default:
-        break;
+        case MQTT_EVENT_PUBLISHED:
+            xSemaphoreTake(s_context.mutex, pdMS_TO_TICKS(SEMAPHORE_TIMEOUT_MS));
+            s_context.stats.messages_sent++;
+            s_context.stats.last_message_time = get_timestamp_ms();
+            xSemaphoreGive(s_context.mutex);
+            break;
+
+        case MQTT_EVENT_DATA:
+            // Handle remote commands
+            if (strncmp(event->topic, s_context.config.command_topic, event->topic_len) == 0) {
+                ESP_LOGI(TAG, "Received command: %.*s", event->data_len, event->data);
+                // TODO: Implement command processing
+            }
+            break;
+
+        case MQTT_EVENT_ERROR:
+            ESP_LOGE(TAG, "MQTT error occurred");
+            xSemaphoreTake(s_context.mutex, pdMS_TO_TICKS(SEMAPHORE_TIMEOUT_MS));
+            s_context.stats.messages_failed++;
+            xSemaphoreGive(s_context.mutex);
+            break;
+
+        default:
+            break;
     }
 }
 
-static void log_processing_task(void *pvParameters) {
+static void log_processing_task(void *pvParameters)
+{
     log_buffer_entry_t entry;
-    
+
     ESP_LOGI(TAG, "Log processing task started");
-    
+
     while (1) {
         // Wait for log messages or notification
         if (xQueueReceive(s_context.log_queue, &entry, pdMS_TO_TICKS(1000)) == pdTRUE) {
@@ -401,7 +415,7 @@ static void log_processing_task(void *pvParameters) {
                     .message = entry.message,
                     .component = "esp32cam",
                     .heap_free = esp_get_free_heap_size(),
-                    .wifi_rssi = 0 // TODO: Get actual RSSI
+                    .wifi_rssi = 0  // TODO: Get actual RSSI
                 };
 
                 // Get WiFi RSSI if available
@@ -428,7 +442,7 @@ static void log_processing_task(void *pvParameters) {
                 }
             }
         }
-        
+
         // Check for task notifications (flush request)
         if (ulTaskNotifyTake(pdFALSE, 0)) {
             ESP_LOGD(TAG, "Flush requested");
@@ -436,36 +450,48 @@ static void log_processing_task(void *pvParameters) {
     }
 }
 
-static esp_err_t send_log_message(const mqtt_log_message_t* log_msg) {
+static esp_err_t send_log_message(const mqtt_log_message_t *log_msg)
+{
     if (!s_context.connected) {
         return ESP_ERR_INVALID_STATE;
     }
 
-    char* json_str = create_log_json(log_msg);
+    char *json_str = create_log_json(log_msg);
     if (!json_str) {
         return ESP_ERR_NO_MEM;
     }
 
     // Create topic with log level
     char topic[256];
-    const char* level_str = "info";
+    const char *level_str = "info";
     switch (log_msg->level) {
-        case ESP_LOG_ERROR: level_str = "error"; break;
-        case ESP_LOG_WARN: level_str = "warn"; break;
-        case ESP_LOG_INFO: level_str = "info"; break;
-        case ESP_LOG_DEBUG: level_str = "debug"; break;
-        case ESP_LOG_VERBOSE: level_str = "verbose"; break;
+        case ESP_LOG_ERROR:
+            level_str = "error";
+            break;
+        case ESP_LOG_WARN:
+            level_str = "warn";
+            break;
+        case ESP_LOG_INFO:
+            level_str = "info";
+            break;
+        case ESP_LOG_DEBUG:
+            level_str = "debug";
+            break;
+        case ESP_LOG_VERBOSE:
+            level_str = "verbose";
+            break;
         default:
             free(json_str);
             return ESP_OK;
     }
-    
+
     snprintf(topic, sizeof(topic), "%s/%s", s_context.config.log_topic, level_str);
 
-    int msg_id = esp_mqtt_client_publish(s_context.client, topic, json_str, strlen(json_str), s_context.config.qos_level, false);
-    
+    int msg_id = esp_mqtt_client_publish(s_context.client, topic, json_str, strlen(json_str),
+                                         s_context.config.qos_level, false);
+
     free(json_str);
-    
+
     if (msg_id < 0) {
         return ESP_FAIL;
     }
@@ -473,13 +499,15 @@ static esp_err_t send_log_message(const mqtt_log_message_t* log_msg) {
     return ESP_OK;
 }
 
-static int64_t get_timestamp_ms(void) {
+static int64_t get_timestamp_ms(void)
+{
     struct timeval tv;
     gettimeofday(&tv, NULL);
     return (int64_t)tv.tv_sec * 1000 + tv.tv_usec / 1000;
 }
 
-static char* create_log_json(const mqtt_log_message_t* log_msg) {
+static char *create_log_json(const mqtt_log_message_t *log_msg)
+{
     cJSON *json = cJSON_CreateObject();
     if (!json) {
         return NULL;
@@ -493,13 +521,14 @@ static char* create_log_json(const mqtt_log_message_t* log_msg) {
     cJSON_AddNumberToObject(json, "heap_free", log_msg->heap_free);
     cJSON_AddNumberToObject(json, "wifi_rssi", log_msg->wifi_rssi);
 
-    char* json_str = cJSON_Print(json);
+    char *json_str = cJSON_Print(json);
     cJSON_Delete(json);
 
     return json_str;
 }
 
-static void cleanup_log_entry(log_buffer_entry_t* entry) {
+static void cleanup_log_entry(log_buffer_entry_t *entry)
+{
     if (entry->message) {
         free(entry->message);
         entry->message = NULL;
@@ -510,17 +539,16 @@ static void cleanup_log_entry(log_buffer_entry_t* entry) {
     }
 }
 
-static esp_err_t queue_log_message(esp_log_level_t level, const char* tag, const char* message) {
+static esp_err_t queue_log_message(esp_log_level_t level, const char *tag, const char *message)
+{
     if (!s_context.initialized) {
         return ESP_ERR_INVALID_STATE;
     }
 
-    log_buffer_entry_t entry = {
-        .message = strdup(message),
-        .tag = strdup(tag),
-        .level = level,
-        .timestamp = get_timestamp_ms()
-    };
+    log_buffer_entry_t entry = {.message = strdup(message),
+                                .tag = strdup(tag),
+                                .level = level,
+                                .timestamp = get_timestamp_ms()};
 
     if (!entry.message || !entry.tag) {
         cleanup_log_entry(&entry);

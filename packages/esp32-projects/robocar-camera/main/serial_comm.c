@@ -4,11 +4,11 @@
  */
 
 #include "serial_comm.h"
-#include "camera_pins.h"
-#include "esp_log.h"
-#include "driver/uart.h"
-#include "driver/gpio.h"
 #include <string.h>
+#include "camera_pins.h"
+#include "driver/gpio.h"
+#include "driver/uart.h"
+#include "esp_log.h"
 
 static const char *TAG = "serial_comm";
 
@@ -16,7 +16,8 @@ static const char *TAG = "serial_comm";
 #define UART_BAUD_RATE 115200
 #define UART_BUF_SIZE 1024
 
-esp_err_t serial_init(void) {
+esp_err_t serial_init(void)
+{
     ESP_LOGI(TAG, "Initializing serial communication");
 
     const uart_config_t uart_config = {
@@ -31,14 +32,16 @@ esp_err_t serial_init(void) {
     // Install UART driver
     ESP_ERROR_CHECK(uart_driver_install(UART_PORT, UART_BUF_SIZE, UART_BUF_SIZE, 0, NULL, 0));
     ESP_ERROR_CHECK(uart_param_config(UART_PORT, &uart_config));
-    ESP_ERROR_CHECK(uart_set_pin(UART_PORT, UART_TX_PIN, UART_RX_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
+    ESP_ERROR_CHECK(
+        uart_set_pin(UART_PORT, UART_TX_PIN, UART_RX_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
 
-    ESP_LOGI(TAG, "Serial communication initialized on UART%d (TX:%d, RX:%d, %d baud)", 
-             UART_PORT, UART_TX_PIN, UART_RX_PIN, UART_BAUD_RATE);
+    ESP_LOGI(TAG, "Serial communication initialized on UART%d (TX:%d, RX:%d, %d baud)", UART_PORT,
+             UART_TX_PIN, UART_RX_PIN, UART_BAUD_RATE);
     return ESP_OK;
 }
 
-esp_err_t serial_send_command(const char* command) {
+esp_err_t serial_send_command(const char *command)
+{
     if (!command) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -57,14 +60,15 @@ esp_err_t serial_send_command(const char* command) {
     return ESP_OK;
 }
 
-int serial_read_response(char* buffer, size_t buffer_size, int timeout_ms) {
+int serial_read_response(char *buffer, size_t buffer_size, int timeout_ms)
+{
     if (!buffer || buffer_size == 0) {
         return -1;
     }
 
-    int bytes_read = uart_read_bytes(UART_PORT, (uint8_t*)buffer, buffer_size - 1, 
-                                   timeout_ms / portTICK_PERIOD_MS);
-    
+    int bytes_read = uart_read_bytes(UART_PORT, (uint8_t *)buffer, buffer_size - 1,
+                                     timeout_ms / portTICK_PERIOD_MS);
+
     if (bytes_read > 0) {
         buffer[bytes_read] = '\0';
         ESP_LOGD(TAG, "Received response: %.*s", bytes_read, buffer);
@@ -73,7 +77,8 @@ int serial_read_response(char* buffer, size_t buffer_size, int timeout_ms) {
     return bytes_read;
 }
 
-esp_err_t serial_send_display_message(int line, const char* message) {
+esp_err_t serial_send_display_message(int line, const char *message)
+{
     if (!message || line < 0 || line > 7) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -81,12 +86,13 @@ esp_err_t serial_send_display_message(int line, const char* message) {
     // Format: DISP:line:message
     char command[128];
     snprintf(command, sizeof(command), "DISP:%d:%s", line, message);
-    
+
     ESP_LOGI(TAG, "Sending display message to line %d: %s", line, message);
     return serial_send_command(command);
 }
 
-void serial_deinit(void) {
+void serial_deinit(void)
+{
     ESP_LOGI(TAG, "Deinitializing serial communication");
     uart_driver_delete(UART_PORT);
 }

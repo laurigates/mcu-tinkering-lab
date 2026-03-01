@@ -57,4 +57,3 @@ This project implements a **Clean Architecture** approach with strict separation
 
 ### Simulation Python Requirements
 **Important**: The simulation environment requires Python 3.11 due to Swift-sim compatibility issues. The simulation Makefile is configured to use `python3.11` automatically and includes smart fallback logic for visualization modes.
-

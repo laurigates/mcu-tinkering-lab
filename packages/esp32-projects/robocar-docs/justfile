@@ -1,0 +1,324 @@
+# ESP32 AI-Powered Robot Car — build orchestration and dev services
+# Run `just --list` to see available recipes
+
+idf_path := env("IDF_PATH", home_directory() + "/repos/esp-idf")
+main_port := env("PORT", "/dev/cu.usbserial-0001")
+cam_port := env("CAM_PORT", main_port)
+
+robocar_main_dir := justfile_directory() + "/../robocar-main"
+robocar_camera_dir := justfile_directory() + "/../robocar-camera"
+robocar_sim_dir := justfile_directory() + "/../robocar-simulation"
+
+default:
+    @just --list
+
+[private]
+check-idf:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ ! -d "{{idf_path}}" ]; then
+        echo "Error: ESP-IDF not found at {{idf_path}}"
+        echo "Install ESP-IDF or set IDF_PATH variable"
+        exit 1
+    fi
+
+# Build main controller (Heltec WiFi LoRa 32)
+[group: "build"]
+build-main: check-idf
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source {{idf_path}}/export.sh
+    cd {{robocar_main_dir}}
+    idf.py build
+
+# Build camera module (ESP32-CAM)
+[group: "build"]
+build-cam: check-idf
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ ! -f {{robocar_camera_dir}}/main/credentials.h ]; then
+        cp {{robocar_camera_dir}}/main/credentials.h.example {{robocar_camera_dir}}/main/credentials.h
+        echo "Created credentials.h — edit it before flashing"
+    fi
+    source {{idf_path}}/export.sh
+    cd {{robocar_camera_dir}}
+    idf.py build
+
+# Build both main controller and camera module
+[group: "build"]
+build-all: build-main build-cam
+
+# Flash main controller
+[group: "flash"]
+flash-main: check-idf
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source {{idf_path}}/export.sh
+    cd {{robocar_main_dir}}
+    idf.py -p {{main_port}} flash
+
+# Flash camera module (GPIO0 must be connected to GND)
+[group: "flash"]
+flash-cam: check-idf
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Make sure GPIO0 is connected to GND for programming"
+    source {{idf_path}}/export.sh
+    cd {{robocar_camera_dir}}
+    idf.py -p {{cam_port}} flash
+
+# Monitor main controller serial output (Ctrl+] to exit)
+[group: "monitor"]
+monitor-main: check-idf
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source {{idf_path}}/export.sh
+    cd {{robocar_main_dir}}
+    idf.py -p {{main_port}} monitor
+
+# Monitor camera module serial output (Ctrl+] to exit)
+[group: "monitor"]
+monitor-cam: check-idf
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source {{idf_path}}/export.sh
+    cd {{robocar_camera_dir}}
+    idf.py -p {{cam_port}} monitor
+
+# Build, flash, and monitor main controller
+[group: "develop"]
+develop-main: build-main
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source {{idf_path}}/export.sh
+    cd {{robocar_main_dir}}
+    idf.py -p {{main_port}} flash monitor
+
+# Build, flash, and monitor camera module (GPIO0 must be connected to GND)
+[group: "develop"]
+develop-cam: build-cam
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Make sure GPIO0 is connected to GND for programming"
+    source {{idf_path}}/export.sh
+    cd {{robocar_camera_dir}}
+    idf.py -p {{cam_port}} flash monitor
+
+# Create camera credentials file from template
+[group: "setup"]
+credentials:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ ! -f {{robocar_camera_dir}}/main/credentials.h ]; then
+        cp {{robocar_camera_dir}}/main/credentials.h.example {{robocar_camera_dir}}/main/credentials.h
+        echo "Created credentials.h — edit it with your WiFi and API credentials"
+    else
+        echo "Credentials file exists"
+    fi
+
+# Clean main controller build
+[group: "clean"]
+clean-main: check-idf
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source {{idf_path}}/export.sh
+    cd {{robocar_main_dir}}
+    idf.py fullclean
+
+# Clean camera module build
+[group: "clean"]
+clean-cam: check-idf
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source {{idf_path}}/export.sh
+    cd {{robocar_camera_dir}}
+    idf.py fullclean
+
+# Clean all builds
+[confirm("Clean all robocar build directories?")]
+[group: "clean"]
+clean-all: clean-main clean-cam
+
+# Start Ollama server with automatic mDNS service advertisement
+[group: "ai-backend"]
+ollama-start:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    OLLAMA_HOST=0.0.0.0 ollama serve &
+    echo "Ollama server started on 0.0.0.0:11434"
+    if command -v dns-sd >/dev/null 2>&1; then
+        dns-sd -R "Ollama AI" _ollama._tcp . 11434 path=/api/generate &
+        echo "mDNS advertisement started (dns-sd)"
+    elif command -v avahi-publish-service >/dev/null 2>&1; then
+        avahi-publish-service "Ollama AI" _ollama._tcp 11434 path=/api/generate &
+        echo "mDNS advertisement started (avahi)"
+    else
+        echo "Warning: No mDNS tool found (dns-sd or avahi-publish-service)"
+    fi
+
+# Advertise Ollama via mDNS (standalone — Ollama must already be running)
+[group: "ai-backend"]
+ollama-advertise:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if command -v dns-sd >/dev/null 2>&1; then
+        dns-sd -R "Ollama AI" _ollama._tcp . 11434 path=/api/generate &
+    elif command -v avahi-publish-service >/dev/null 2>&1; then
+        avahi-publish-service "Ollama AI" _ollama._tcp 11434 path=/api/generate &
+    else
+        echo "Error: No mDNS tool found (dns-sd or avahi-publish-service)"
+        exit 1
+    fi
+    echo "Ollama service advertised via mDNS"
+
+# Stop Ollama server and mDNS advertisements
+[group: "ai-backend"]
+ollama-stop:
+    pkill -f "ollama serve" || true
+    pkill -f "dns-sd.*Ollama" || true
+    pkill -f "avahi-publish-service.*Ollama" || true
+    @echo "Ollama services stopped"
+
+# Start Mosquitto MQTT broker with mDNS service advertisement
+[group: "mqtt"]
+mosquitto-start:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mosquitto -p 1883 -v &
+    echo "Mosquitto MQTT broker started on port 1883"
+    if command -v dns-sd >/dev/null 2>&1; then
+        dns-sd -R "MQTT Broker" _mqtt._tcp . 1883 &
+        echo "mDNS advertisement started (dns-sd)"
+    elif command -v avahi-publish-service >/dev/null 2>&1; then
+        avahi-publish-service "MQTT Broker" _mqtt._tcp 1883 &
+        echo "mDNS advertisement started (avahi)"
+    else
+        echo "Warning: No mDNS tool found (dns-sd or avahi-publish-service)"
+    fi
+
+# Advertise MQTT via mDNS (standalone — broker must already be running)
+[group: "mqtt"]
+mosquitto-advertise:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if command -v dns-sd >/dev/null 2>&1; then
+        dns-sd -R "MQTT Broker" _mqtt._tcp . 1883 &
+    elif command -v avahi-publish-service >/dev/null 2>&1; then
+        avahi-publish-service "MQTT Broker" _mqtt._tcp 1883 &
+    else
+        echo "Error: No mDNS tool found (dns-sd or avahi-publish-service)"
+        exit 1
+    fi
+    echo "MQTT service advertised via mDNS"
+
+# Stop Mosquitto broker and mDNS advertisements
+[group: "mqtt"]
+mosquitto-stop:
+    pkill -f "mosquitto" || true
+    pkill -f "dns-sd.*MQTT" || true
+    pkill -f "avahi-publish-service.*MQTT" || true
+    @echo "MQTT services stopped"
+
+# Start complete development stack: Ollama + MQTT broker + message monitor
+[group: "dev-stack"]
+dev-stack-start:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    OLLAMA_HOST=0.0.0.0 ollama serve 2>&1 | sed 's/^/[OLLAMA] /' &
+    sleep 2
+    echo "Ollama started on 0.0.0.0:11434"
+    mosquitto -p 1883 -v 2>&1 | sed 's/^/[MQTT-BROKER] /' &
+    sleep 2
+    echo "Mosquitto started on port 1883"
+    mosquitto_sub -h localhost -t "robocar/esp32cam/#" -v 2>&1 | sed 's/^/[MQTT-MSG] /' &
+    sleep 1
+    echo "MQTT message monitor started"
+    if command -v dns-sd >/dev/null 2>&1; then
+        dns-sd -R "Ollama AI" _ollama._tcp . 11434 path=/api/generate 2>&1 | sed 's/^/[MDNS-OLLAMA] /' &
+        dns-sd -R "MQTT Broker" _mqtt._tcp . 1883 2>&1 | sed 's/^/[MDNS-MQTT] /' &
+    elif command -v avahi-publish-service >/dev/null 2>&1; then
+        avahi-publish-service "Ollama AI" _ollama._tcp 11434 path=/api/generate &
+        avahi-publish-service "MQTT Broker" _mqtt._tcp 1883 &
+    else
+        echo "Warning: No mDNS tool found — service discovery unavailable"
+    fi
+    echo "Development stack ready. MQTT messages appear with [MQTT-MSG] prefix."
+
+# Stop complete development stack
+[group: "dev-stack"]
+dev-stack-stop:
+    pkill -f "ollama serve" || true
+    pkill -f "mosquitto.*-p 1883" || true
+    pkill -f "mosquitto_sub.*robocar/esp32cam" || true
+    pkill -f "dns-sd.*Ollama" || true
+    pkill -f "dns-sd.*MQTT" || true
+    pkill -f "avahi-publish-service.*Ollama" || true
+    pkill -f "avahi-publish-service.*MQTT" || true
+    @echo "Development stack stopped"
+
+# Start simulation with Swift 3D visualization
+[group: "simulation"]
+sim-start:
+    just --justfile {{robocar_sim_dir}}/justfile run-visual
+
+# Start headless simulation
+[group: "simulation"]
+sim-headless:
+    just --justfile {{robocar_sim_dir}}/justfile run-headless
+
+# Run demo movement pattern (headless)
+[group: "simulation"]
+sim-demo:
+    just --justfile {{robocar_sim_dir}}/justfile run-demo
+
+# Run visual demo with GUI window
+[group: "simulation"]
+demo-visual:
+    just --justfile {{robocar_sim_dir}}/justfile demo-visual
+
+# Run demo with browser interface (http://localhost:52000)
+[group: "simulation"]
+demo-browser:
+    just --justfile {{robocar_sim_dir}}/justfile demo-browser
+
+# Connect simulation to ESP32 hardware
+[group: "simulation"]
+sim-connect serial_port:
+    just --justfile {{robocar_sim_dir}}/justfile run-serial {{serial_port}}
+
+# Run simulation test suite
+[group: "simulation"]
+sim-test:
+    just --justfile {{robocar_sim_dir}}/justfile test
+
+# Install simulation dependencies
+[group: "simulation"]
+sim-install:
+    just --justfile {{robocar_sim_dir}}/justfile install
+
+# Check simulation component status
+[group: "simulation"]
+sim-status:
+    just --justfile {{robocar_sim_dir}}/justfile status
+
+# Show simulation information
+[group: "simulation"]
+sim-info:
+    just --justfile {{robocar_sim_dir}}/justfile info
+
+# Show system configuration
+[group: "info"]
+info:
+    @echo "ESP32 AI-Powered Robot Car"
+    @echo ""
+    @echo "Hardware Configuration:"
+    @echo "  Main Controller: Heltec WiFi LoRa 32 V1 (ESP32-S3)"
+    @echo "  Camera Module:   ESP32-CAM (AI Thinker) with OV2640"
+    @echo "  Main Port:       {{main_port}}"
+    @echo "  Camera Port:     {{cam_port}}"
+    @echo "  ESP-IDF Path:    {{idf_path}}"
+    @echo ""
+    @echo "Project Structure:"
+    @echo "  robocar-main/      — Main controller (motor/LED/servo)"
+    @echo "  robocar-camera/    — AI vision system"
+    @echo "  robocar-simulation/ — Python physics simulation"

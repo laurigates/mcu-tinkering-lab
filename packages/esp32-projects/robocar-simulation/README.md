@@ -177,9 +177,9 @@ robot:
     width: 0.15       # Robot width (m)
     wheelbase: 0.14   # Wheelbase (m)
     wheel_radius: 0.035  # Wheel radius (m)
-  
+
   mass: 0.8           # Total mass (kg)
-  
+
   motors:
     left:
       max_rpm: 200
@@ -194,7 +194,7 @@ simulation:
   timestep: 0.01      # 100Hz simulation
   physics_engine: "pymunk"
   visualization: "swift"
-  
+
   environment:
     size: [5.0, 5.0]  # 5x5 meter environment
     obstacles:
@@ -220,7 +220,7 @@ Connect to the simulation via WebSocket at `ws://localhost:8765`:
 
 // Servo control
 {
-  "type": "servo_command", 
+  "type": "servo_command",
   "payload": {
     "angle": 45        // degrees
   }

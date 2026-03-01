@@ -26,4 +26,3 @@ This is an embedded systems monorepo containing projects for various microcontro
 ## Build System and Commands
 
 Run `make` to see the available commands.
-

@@ -6,8 +6,8 @@
 #ifndef DISPLAY_MANAGER_H
 #define DISPLAY_MANAGER_H
 
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include "esp_err.h"
 
 #define DISPLAY_MAX_LINE_LENGTH 16
@@ -57,8 +57,8 @@ esp_err_t display_show_startup(void);
  * @param last_command_time Timestamp of last command
  * @return ESP_OK on success
  */
-esp_err_t display_update_status(display_robot_state_t state, int pan_angle, 
-                               int tilt_angle, unsigned long last_command_time);
+esp_err_t display_update_status(display_robot_state_t state, int pan_angle, int tilt_angle,
+                                unsigned long last_command_time);
 
 /**
  * @brief Show action debug information
@@ -69,10 +69,8 @@ esp_err_t display_update_status(display_robot_state_t state, int pan_angle,
  * @param last_command_time Timestamp of last command
  * @return ESP_OK on success
  */
-esp_err_t display_show_action_debug(const display_action_t *action,
-                                   display_robot_state_t state,
-                                   int pan_angle, int tilt_angle,
-                                   unsigned long last_command_time);
+esp_err_t display_show_action_debug(const display_action_t *action, display_robot_state_t state,
+                                    int pan_angle, int tilt_angle, unsigned long last_command_time);
 
 /**
  * @brief Show message on specific line
@@ -108,4 +106,4 @@ esp_err_t display_clear(void);
  */
 bool display_is_initialized(void);
 
-#endif // DISPLAY_MANAGER_H
+#endif  // DISPLAY_MANAGER_H

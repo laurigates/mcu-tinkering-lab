@@ -48,25 +48,25 @@ typedef struct {
     system_state_t system_state;
     wifi_state_t wifi_state;
     ai_state_t ai_state;
-    
+
     // Operational flags
     bool hardware_initialized;
     bool mqtt_connected;
     bool camera_available;
-    
+
     // Statistics
     uint32_t capture_count;
     uint32_t ai_analysis_count;
     uint32_t ai_success_count;
     uint32_t ai_error_count;
     uint32_t i2c_command_count;
-    
+
     // Last operation results
     uint32_t last_capture_time;
     uint32_t last_ai_analysis_time;
     char last_movement_command[16];
     char last_sound_command[64];
-    
+
     // Thread safety
     SemaphoreHandle_t state_mutex;
 } system_state_manager_t;
@@ -145,40 +145,40 @@ void system_state_increment_i2c_command(void);
  * @brief Update last movement command (thread-safe)
  * @param command Movement command string
  */
-void system_state_update_last_movement(const char* command);
+void system_state_update_last_movement(const char *command);
 
 /**
  * @brief Update last sound command (thread-safe)
  * @param command Sound command string
  */
-void system_state_update_last_sound(const char* command);
+void system_state_update_last_sound(const char *command);
 
 /**
  * @brief Get system statistics (thread-safe)
  * @param stats Pointer to structure to fill with statistics
  */
-void system_state_get_statistics(system_state_manager_t* stats);
+void system_state_get_statistics(system_state_manager_t *stats);
 
 /**
  * @brief Get human-readable system state string
  * @param state System state enum value
  * @return String representation of state
  */
-const char* system_state_to_string(system_state_t state);
+const char *system_state_to_string(system_state_t state);
 
 /**
  * @brief Get human-readable WiFi state string
  * @param state WiFi state enum value
  * @return String representation of state
  */
-const char* wifi_state_to_string(wifi_state_t state);
+const char *wifi_state_to_string(wifi_state_t state);
 
 /**
  * @brief Get human-readable AI state string
  * @param state AI state enum value
  * @return String representation of state
  */
-const char* ai_state_to_string(ai_state_t state);
+const char *ai_state_to_string(ai_state_t state);
 
 /**
  * @brief Check if system is fully operational
@@ -191,4 +191,4 @@ bool system_state_is_operational(void);
  */
 void system_state_cleanup(void);
 
-#endif // SYSTEM_STATE_H
+#endif  // SYSTEM_STATE_H

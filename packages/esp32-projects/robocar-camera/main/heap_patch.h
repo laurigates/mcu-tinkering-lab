@@ -1,7 +1,7 @@
 /**
  * @file heap_patch.h
  * @brief Temporary patch for ESP-IDF 6.0 TLSF heap compatibility
- * 
+ *
  * This header provides a workaround for the missing tlsf_find_containing_block
  * function until ESP-IDF submodules are properly updated.
  */
@@ -27,4 +27,4 @@ extern "C" {
 }
 #endif
 
-#endif // HEAP_PATCH_H
+#endif  // HEAP_PATCH_H

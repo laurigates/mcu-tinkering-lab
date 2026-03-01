@@ -7,20 +7,20 @@
  */
 
 #include "wifi_manager.h"
-#include <string.h>
 #include <math.h>
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "freertos/event_groups.h"
-#include "freertos/semphr.h"
-#include "esp_system.h"
-#include "esp_wifi.h"
+#include <string.h>
 #include "esp_event.h"
 #include "esp_log.h"
+#include "esp_system.h"
 #include "esp_timer.h"
-#include "nvs_flash.h"
+#include "esp_wifi.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/event_groups.h"
+#include "freertos/semphr.h"
+#include "freertos/task.h"
 #include "lwip/err.h"
 #include "lwip/sys.h"
+#include "nvs_flash.h"
 
 // Module configuration
 #define TAG "WiFi_Manager"
@@ -41,7 +41,7 @@ typedef struct {
     wifi_info_t info;
     wifi_credentials_t current_credentials;
     wifi_event_callback_t user_callback;
-    void* user_callback_data;
+    void *user_callback_data;
     bool initialized;
     bool auto_reconnect;
     uint32_t retry_count;
@@ -54,11 +54,11 @@ typedef struct {
 static wifi_manager_context_t g_wifi_context = {0};
 
 // Forward declarations
-static void wifi_event_handler(void* arg, esp_event_base_t event_base,
-                               int32_t event_id, void* event_data);
-static void ip_event_handler(void* arg, esp_event_base_t event_base,
-                             int32_t event_id, void* event_data);
-static void reconnect_timer_callback(void* arg);
+static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id,
+                               void *event_data);
+static void ip_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id,
+                             void *event_data);
+static void reconnect_timer_callback(void *arg);
 static void update_connection_info(void);
 static void notify_state_change(wifi_state_t new_state);
 static uint32_t calculate_backoff_delay(uint32_t retry_count);
@@ -66,7 +66,8 @@ static uint32_t calculate_backoff_delay(uint32_t retry_count);
 /**
  * Initialize WiFi manager
  */
-esp_err_t wifi_manager_init(void) {
+esp_err_t wifi_manager_init(void)
+{
     esp_err_t ret;
 
     if (g_wifi_context.initialized) {
@@ -111,7 +112,7 @@ esp_err_t wifi_manager_init(void) {
     }
 
     // Create default WiFi station
-    esp_netif_t* sta_netif = esp_netif_create_default_wifi_sta();
+    esp_netif_t *sta_netif = esp_netif_create_default_wifi_sta();
     if (sta_netif == NULL) {
         ESP_LOGE(TAG, "Failed to create default WiFi STA");
         ret = ESP_FAIL;
@@ -127,31 +128,23 @@ esp_err_t wifi_manager_init(void) {
     }
 
     // Register event handlers
-    ret = esp_event_handler_instance_register(WIFI_EVENT,
-                                              ESP_EVENT_ANY_ID,
-                                              &wifi_event_handler,
-                                              NULL,
-                                              NULL);
+    ret = esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler,
+                                              NULL, NULL);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to register WiFi event handler");
         goto cleanup;
     }
 
-    ret = esp_event_handler_instance_register(IP_EVENT,
-                                              IP_EVENT_STA_GOT_IP,
-                                              &ip_event_handler,
-                                              NULL,
-                                              NULL);
+    ret = esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &ip_event_handler,
+                                              NULL, NULL);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to register IP event handler");
         goto cleanup;
     }
 
     // Create reconnection timer
-    const esp_timer_create_args_t timer_args = {
-        .callback = &reconnect_timer_callback,
-        .name = "wifi_reconnect"
-    };
+    const esp_timer_create_args_t timer_args = {.callback = &reconnect_timer_callback,
+                                                .name = "wifi_reconnect"};
     ret = esp_timer_create(&timer_args, &g_wifi_context.reconnect_timer);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to create reconnect timer");
@@ -191,7 +184,8 @@ cleanup:
 /**
  * Deinitialize WiFi manager
  */
-esp_err_t wifi_manager_deinit(void) {
+esp_err_t wifi_manager_deinit(void)
+{
     if (!g_wifi_context.initialized) {
         return ESP_ERR_INVALID_STATE;
     }
@@ -230,7 +224,8 @@ esp_err_t wifi_manager_deinit(void) {
 /**
  * Connect to WiFi network
  */
-esp_err_t wifi_manager_connect(const char* ssid, const char* password) {
+esp_err_t wifi_manager_connect(const char *ssid, const char *password)
+{
     if (!g_wifi_context.initialized) {
         return ESP_ERR_INVALID_STATE;
     }
@@ -284,9 +279,9 @@ esp_err_t wifi_manager_connect(const char* ssid, const char* password) {
     // Configure WiFi
     {
         wifi_config_t wifi_config = {0};
-        strncpy((char*)wifi_config.sta.ssid, g_wifi_context.current_credentials.ssid,
+        strncpy((char *)wifi_config.sta.ssid, g_wifi_context.current_credentials.ssid,
                 sizeof(wifi_config.sta.ssid) - 1);
-        strncpy((char*)wifi_config.sta.password, g_wifi_context.current_credentials.password,
+        strncpy((char *)wifi_config.sta.password, g_wifi_context.current_credentials.password,
                 sizeof(wifi_config.sta.password) - 1);
 
         // Security settings
@@ -321,7 +316,8 @@ connect_cleanup:
 /**
  * Disconnect from WiFi
  */
-esp_err_t wifi_manager_disconnect(void) {
+esp_err_t wifi_manager_disconnect(void)
+{
     if (!g_wifi_context.initialized) {
         return ESP_ERR_INVALID_STATE;
     }
@@ -343,14 +339,16 @@ esp_err_t wifi_manager_disconnect(void) {
 /**
  * Check if connected
  */
-bool wifi_manager_is_connected(void) {
+bool wifi_manager_is_connected(void)
+{
     return g_wifi_context.info.is_connected;
 }
 
 /**
  * Get connection info
  */
-esp_err_t wifi_manager_get_info(wifi_info_t* info) {
+esp_err_t wifi_manager_get_info(wifi_info_t *info)
+{
     if (!info) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -365,7 +363,8 @@ esp_err_t wifi_manager_get_info(wifi_info_t* info) {
 /**
  * Save credentials to NVS
  */
-esp_err_t wifi_manager_save_credentials(const wifi_credentials_t* credentials) {
+esp_err_t wifi_manager_save_credentials(const wifi_credentials_t *credentials)
+{
     if (!credentials) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -418,7 +417,8 @@ esp_err_t wifi_manager_save_credentials(const wifi_credentials_t* credentials) {
 /**
  * Load credentials from NVS
  */
-esp_err_t wifi_manager_load_credentials(wifi_credentials_t* credentials) {
+esp_err_t wifi_manager_load_credentials(wifi_credentials_t *credentials)
+{
     if (!credentials) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -457,7 +457,8 @@ esp_err_t wifi_manager_load_credentials(wifi_credentials_t* credentials) {
 /**
  * Clear stored credentials
  */
-esp_err_t wifi_manager_clear_credentials(void) {
+esp_err_t wifi_manager_clear_credentials(void)
+{
     nvs_handle_t nvs_handle;
     esp_err_t ret = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &nvs_handle);
     if (ret != ESP_OK) {
@@ -488,7 +489,8 @@ esp_err_t wifi_manager_clear_credentials(void) {
 /**
  * Set WiFi power mode
  */
-esp_err_t wifi_manager_set_power_mode(wifi_power_mode_t mode) {
+esp_err_t wifi_manager_set_power_mode(wifi_power_mode_t mode)
+{
     wifi_ps_type_t ps_type;
 
     switch (mode) {
@@ -522,7 +524,8 @@ esp_err_t wifi_manager_set_power_mode(wifi_power_mode_t mode) {
 /**
  * Register event callback
  */
-esp_err_t wifi_manager_register_callback(wifi_event_callback_t callback, void* user_data) {
+esp_err_t wifi_manager_register_callback(wifi_event_callback_t callback, void *user_data)
+{
     xSemaphoreTake(g_wifi_context.mutex, pdMS_TO_TICKS(5000));
     g_wifi_context.user_callback = callback;
     g_wifi_context.user_callback_data = user_data;
@@ -535,22 +538,21 @@ esp_err_t wifi_manager_register_callback(wifi_event_callback_t callback, void* u
 /**
  * Start WiFi scan
  */
-esp_err_t wifi_manager_start_scan(void) {
+esp_err_t wifi_manager_start_scan(void)
+{
     if (!g_wifi_context.initialized) {
         return ESP_ERR_INVALID_STATE;
     }
 
     ESP_LOGI(TAG, "Starting WiFi scan");
 
-    wifi_scan_config_t scan_config = {
-        .ssid = NULL,
-        .bssid = NULL,
-        .channel = 0,
-        .show_hidden = true,
-        .scan_type = WIFI_SCAN_TYPE_ACTIVE,
-        .scan_time.active.min = 100,
-        .scan_time.active.max = 300
-    };
+    wifi_scan_config_t scan_config = {.ssid = NULL,
+                                      .bssid = NULL,
+                                      .channel = 0,
+                                      .show_hidden = true,
+                                      .scan_type = WIFI_SCAN_TYPE_ACTIVE,
+                                      .scan_time.active.min = 100,
+                                      .scan_time.active.max = 300};
 
     return esp_wifi_scan_start(&scan_config, false);
 }
@@ -558,9 +560,9 @@ esp_err_t wifi_manager_start_scan(void) {
 /**
  * Get scan results
  */
-esp_err_t wifi_manager_get_scan_results(wifi_ap_record_t* ap_records,
-                                        uint16_t max_records,
-                                        uint16_t* actual_count) {
+esp_err_t wifi_manager_get_scan_results(wifi_ap_record_t *ap_records, uint16_t max_records,
+                                        uint16_t *actual_count)
+{
     if (!ap_records || !actual_count) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -578,7 +580,8 @@ esp_err_t wifi_manager_get_scan_results(wifi_ap_record_t* ap_records,
 /**
  * Set auto-reconnect
  */
-esp_err_t wifi_manager_set_auto_reconnect(bool enable) {
+esp_err_t wifi_manager_set_auto_reconnect(bool enable)
+{
     g_wifi_context.auto_reconnect = enable;
     ESP_LOGI(TAG, "Auto-reconnect %s", enable ? "enabled" : "disabled");
     return ESP_OK;
@@ -587,14 +590,16 @@ esp_err_t wifi_manager_set_auto_reconnect(bool enable) {
 /**
  * Get auto-reconnect status
  */
-bool wifi_manager_get_auto_reconnect(void) {
+bool wifi_manager_get_auto_reconnect(void)
+{
     return g_wifi_context.auto_reconnect;
 }
 
 /**
  * Force reconnect
  */
-esp_err_t wifi_manager_force_reconnect(void) {
+esp_err_t wifi_manager_force_reconnect(void)
+{
     if (!g_wifi_context.initialized) {
         return ESP_ERR_INVALID_STATE;
     }
@@ -611,7 +616,8 @@ esp_err_t wifi_manager_force_reconnect(void) {
 /**
  * Get MAC address
  */
-esp_err_t wifi_manager_get_mac_address(uint8_t* mac) {
+esp_err_t wifi_manager_get_mac_address(uint8_t *mac)
+{
     if (!mac) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -622,14 +628,16 @@ esp_err_t wifi_manager_get_mac_address(uint8_t* mac) {
 /**
  * Get current state
  */
-wifi_state_t wifi_manager_get_state(void) {
+wifi_state_t wifi_manager_get_state(void)
+{
     return g_wifi_context.info.state;
 }
 
 /**
  * Convert state to string
  */
-const char* wifi_manager_state_to_string(wifi_state_t state) {
+const char *wifi_manager_state_to_string(wifi_state_t state)
+{
     switch (state) {
         case WIFI_STATE_DISCONNECTED:
             return "DISCONNECTED";
@@ -649,8 +657,9 @@ const char* wifi_manager_state_to_string(wifi_state_t state) {
 /**
  * WiFi event handler
  */
-static void wifi_event_handler(void* arg, esp_event_base_t event_base,
-                               int32_t event_id, void* event_data) {
+static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id,
+                               void *event_data)
+{
     switch (event_id) {
         case WIFI_EVENT_STA_START:
             ESP_LOGI(TAG, "WiFi started");
@@ -664,7 +673,7 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
             break;
 
         case WIFI_EVENT_STA_DISCONNECTED: {
-            wifi_event_sta_disconnected_t* event = (wifi_event_sta_disconnected_t*)event_data;
+            wifi_event_sta_disconnected_t *event = (wifi_event_sta_disconnected_t *)event_data;
             ESP_LOGW(TAG, "Disconnected from AP, reason: %d", event->reason);
 
             g_wifi_context.info.is_connected = false;
@@ -680,8 +689,8 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
                 notify_state_change(WIFI_STATE_RECONNECTING);
 
                 uint32_t delay = calculate_backoff_delay(g_wifi_context.retry_count);
-                ESP_LOGI(TAG, "Reconnection attempt %d/%d in %d ms",
-                        g_wifi_context.retry_count, WIFI_MAXIMUM_RETRY, delay);
+                ESP_LOGI(TAG, "Reconnection attempt %d/%d in %d ms", g_wifi_context.retry_count,
+                         WIFI_MAXIMUM_RETRY, delay);
 
                 esp_timer_stop(g_wifi_context.reconnect_timer);
                 esp_timer_start_once(g_wifi_context.reconnect_timer, delay * 1000);
@@ -710,15 +719,16 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
 /**
  * IP event handler
  */
-static void ip_event_handler(void* arg, esp_event_base_t event_base,
-                             int32_t event_id, void* event_data) {
+static void ip_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id,
+                             void *event_data)
+{
     if (event_id == IP_EVENT_STA_GOT_IP) {
-        ip_event_got_ip_t* event = (ip_event_got_ip_t*)event_data;
+        ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
 
         xSemaphoreTake(g_wifi_context.mutex, pdMS_TO_TICKS(5000));
 
-        snprintf(g_wifi_context.info.ip_address, sizeof(g_wifi_context.info.ip_address),
-                 IPSTR, IP2STR(&event->ip_info.ip));
+        snprintf(g_wifi_context.info.ip_address, sizeof(g_wifi_context.info.ip_address), IPSTR,
+                 IP2STR(&event->ip_info.ip));
         g_wifi_context.info.is_connected = true;
         g_wifi_context.info.state = WIFI_STATE_CONNECTED;
         g_wifi_context.retry_count = 0;
@@ -735,7 +745,8 @@ static void ip_event_handler(void* arg, esp_event_base_t event_base,
 /**
  * Reconnection timer callback
  */
-static void reconnect_timer_callback(void* arg) {
+static void reconnect_timer_callback(void *arg)
+{
     ESP_LOGI(TAG, "Reconnection timer triggered");
     esp_wifi_connect();
 }
@@ -743,7 +754,8 @@ static void reconnect_timer_callback(void* arg) {
 /**
  * Calculate exponential backoff delay
  */
-static uint32_t calculate_backoff_delay(uint32_t retry_count) {
+static uint32_t calculate_backoff_delay(uint32_t retry_count)
+{
     uint32_t delay = WIFI_RETRY_BASE_DELAY_MS * (1 << (retry_count - 1));
     if (delay > WIFI_MAX_RETRY_DELAY_MS) {
         delay = WIFI_MAX_RETRY_DELAY_MS;
@@ -754,7 +766,8 @@ static uint32_t calculate_backoff_delay(uint32_t retry_count) {
 /**
  * Update connection information
  */
-static void update_connection_info(void) {
+static void update_connection_info(void)
+{
     wifi_ap_record_t ap_info;
     if (esp_wifi_sta_get_ap_info(&ap_info) == ESP_OK) {
         xSemaphoreTake(g_wifi_context.mutex, pdMS_TO_TICKS(5000));
@@ -770,7 +783,8 @@ static void update_connection_info(void) {
 /**
  * Notify state change
  */
-static void notify_state_change(wifi_state_t new_state) {
+static void notify_state_change(wifi_state_t new_state)
+{
     if (g_wifi_context.user_callback) {
         g_wifi_context.user_callback(new_state, g_wifi_context.user_callback_data);
     }

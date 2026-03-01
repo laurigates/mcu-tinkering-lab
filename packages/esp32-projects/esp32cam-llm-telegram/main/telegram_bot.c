@@ -1,17 +1,18 @@
 #include "telegram_bot.h"
-#include "config.h"
-#include "esp_log.h"
-#include "esp_http_client.h"
-#include "cJSON.h"
-#include <string.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <string.h>
+#include "cJSON.h"
+#include "config.h"
+#include "esp_http_client.h"
+#include "esp_log.h"
 
-static const char* TAG = "TELEGRAM_BOT";
+static const char *TAG = "TELEGRAM_BOT";
 
 // Helper function to perform HTTP request
-static esp_err_t telegram_http_request(const char* url, const char* post_data,
-                                       char* response_buffer, size_t buffer_size) {
+static esp_err_t telegram_http_request(const char *url, const char *post_data,
+                                       char *response_buffer, size_t buffer_size)
+{
     esp_err_t err = ESP_OK;
 
     esp_http_client_config_t config = {
@@ -46,7 +47,8 @@ static esp_err_t telegram_http_request(const char* url, const char* post_data,
 }
 
 // Initialize Telegram bot
-esp_err_t telegram_bot_init(telegram_bot_t* bot, const char* token, int64_t chat_id) {
+esp_err_t telegram_bot_init(telegram_bot_t *bot, const char *token, int64_t chat_id)
+{
     if (!bot || !token) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -65,9 +67,9 @@ esp_err_t telegram_bot_init(telegram_bot_t* bot, const char* token, int64_t chat
 
     esp_err_t err = telegram_http_request(url, NULL, response, sizeof(response));
     if (err == ESP_OK) {
-        cJSON* root = cJSON_Parse(response);
+        cJSON *root = cJSON_Parse(response);
         if (root) {
-            cJSON* ok = cJSON_GetObjectItem(root, "ok");
+            cJSON *ok = cJSON_GetObjectItem(root, "ok");
             if (ok && cJSON_IsBool(ok) && cJSON_IsTrue(ok)) {
                 bot->is_connected = true;
                 ESP_LOGI(TAG, "Successfully connected to Telegram bot");
@@ -80,7 +82,8 @@ esp_err_t telegram_bot_init(telegram_bot_t* bot, const char* token, int64_t chat
 }
 
 // Send text message
-esp_err_t telegram_send_text(telegram_bot_t* bot, const char* text) {
+esp_err_t telegram_send_text(telegram_bot_t *bot, const char *text)
+{
     if (!bot || !text || !bot->is_connected) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -89,12 +92,12 @@ esp_err_t telegram_send_text(telegram_bot_t* bot, const char* text) {
     snprintf(url, sizeof(url), "%s%s/sendMessage", TELEGRAM_API_URL, bot->bot_token);
 
     // Create JSON payload
-    cJSON* root = cJSON_CreateObject();
+    cJSON *root = cJSON_CreateObject();
     cJSON_AddNumberToObject(root, "chat_id", bot->chat_id);
     cJSON_AddStringToObject(root, "text", text);
     cJSON_AddStringToObject(root, "parse_mode", "Markdown");
 
-    char* json_str = cJSON_PrintUnformatted(root);
+    char *json_str = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
 
     char response[1024];
@@ -112,8 +115,9 @@ esp_err_t telegram_send_text(telegram_bot_t* bot, const char* text) {
 }
 
 // Send photo with caption
-esp_err_t telegram_send_photo(telegram_bot_t* bot, const uint8_t* photo_data,
-                              size_t photo_size, const char* caption) {
+esp_err_t telegram_send_photo(telegram_bot_t *bot, const uint8_t *photo_data, size_t photo_size,
+                              const char *caption)
+{
     if (!bot || !photo_data || photo_size == 0 || !bot->is_connected) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -136,7 +140,7 @@ esp_err_t telegram_send_photo(telegram_bot_t* bot, const uint8_t* photo_data,
     }
 
     // Build multipart form data
-    const char* boundary = "----WebKitFormBoundary7MA4YWxkTrZu0gW";
+    const char *boundary = "----WebKitFormBoundary7MA4YWxkTrZu0gW";
     char header[512];
     snprintf(header, sizeof(header),
              "------%s\r\n"
@@ -167,7 +171,7 @@ esp_err_t telegram_send_photo(telegram_bot_t* bot, const uint8_t* photo_data,
 
     esp_http_client_open(client, total_len);
     esp_http_client_write(client, header, strlen(header));
-    esp_http_client_write(client, (char*)photo_data, photo_size);
+    esp_http_client_write(client, (char *)photo_data, photo_size);
     esp_http_client_write(client, footer, strlen(footer));
 
     char response[1024];
@@ -187,7 +191,8 @@ esp_err_t telegram_send_photo(telegram_bot_t* bot, const uint8_t* photo_data,
 }
 
 // Send formatted status message
-esp_err_t telegram_send_status(telegram_bot_t* bot, const char* format, ...) {
+esp_err_t telegram_send_status(telegram_bot_t *bot, const char *format, ...)
+{
     char buffer[TELEGRAM_MAX_MESSAGE_LENGTH];
     va_list args;
     va_start(args, format);
@@ -198,16 +203,17 @@ esp_err_t telegram_send_status(telegram_bot_t* bot, const char* format, ...) {
 }
 
 // Poll for updates
-esp_err_t telegram_poll_updates(telegram_bot_t* bot, telegram_message_t* msg) {
+esp_err_t telegram_poll_updates(telegram_bot_t *bot, telegram_message_t *msg)
+{
     if (!bot || !msg || !bot->is_connected) {
         return ESP_ERR_INVALID_ARG;
     }
 
     char url[512];
-    snprintf(url, sizeof(url), "%s%s/getUpdates?offset=%d&timeout=10",
-             TELEGRAM_API_URL, bot->bot_token, bot->last_update_id + 1);
+    snprintf(url, sizeof(url), "%s%s/getUpdates?offset=%d&timeout=10", TELEGRAM_API_URL,
+             bot->bot_token, bot->last_update_id + 1);
 
-    char* response = malloc(HTTP_BUFFER_SIZE);
+    char *response = malloc(HTTP_BUFFER_SIZE);
     if (!response) {
         return ESP_ERR_NO_MEM;
     }
@@ -215,29 +221,29 @@ esp_err_t telegram_poll_updates(telegram_bot_t* bot, telegram_message_t* msg) {
     esp_err_t err = telegram_http_request(url, NULL, response, HTTP_BUFFER_SIZE);
 
     if (err == ESP_OK) {
-        cJSON* root = cJSON_Parse(response);
+        cJSON *root = cJSON_Parse(response);
         if (root) {
-            cJSON* ok = cJSON_GetObjectItem(root, "ok");
-            cJSON* result = cJSON_GetObjectItem(root, "result");
+            cJSON *ok = cJSON_GetObjectItem(root, "ok");
+            cJSON *result = cJSON_GetObjectItem(root, "result");
 
             if (ok && cJSON_IsTrue(ok) && result && cJSON_IsArray(result)) {
-                cJSON* update = cJSON_GetArrayItem(result, 0);
+                cJSON *update = cJSON_GetArrayItem(result, 0);
                 if (update) {
-                    cJSON* update_id = cJSON_GetObjectItem(update, "update_id");
-                    cJSON* message = cJSON_GetObjectItem(update, "message");
+                    cJSON *update_id = cJSON_GetObjectItem(update, "update_id");
+                    cJSON *message = cJSON_GetObjectItem(update, "message");
 
                     if (update_id && message) {
                         bot->last_update_id = update_id->valueint;
 
-                        cJSON* text = cJSON_GetObjectItem(message, "text");
-                        cJSON* chat = cJSON_GetObjectItem(message, "chat");
-                        cJSON* message_id = cJSON_GetObjectItem(message, "message_id");
+                        cJSON *text = cJSON_GetObjectItem(message, "text");
+                        cJSON *chat = cJSON_GetObjectItem(message, "chat");
+                        cJSON *message_id = cJSON_GetObjectItem(message, "message_id");
 
                         if (text && chat) {
                             msg->text = strdup(text->valuestring);
                             msg->type = TELEGRAM_MSG_TEXT;
 
-                            cJSON* chat_id = cJSON_GetObjectItem(chat, "id");
+                            cJSON *chat_id = cJSON_GetObjectItem(chat, "id");
                             if (chat_id) {
                                 msg->chat_id = chat_id->valueint;
                             }
@@ -265,12 +271,13 @@ esp_err_t telegram_poll_updates(telegram_bot_t* bot, telegram_message_t* msg) {
 }
 
 // Parse incoming command
-bool telegram_parse_command(const char* text, char* command, char* args) {
+bool telegram_parse_command(const char *text, char *command, char *args)
+{
     if (!text || text[0] != '/') {
         return false;
     }
 
-    const char* space = strchr(text, ' ');
+    const char *space = strchr(text, ' ');
     if (space) {
         // Command with arguments
         size_t cmd_len = space - text - 1;  // Exclude '/'
@@ -287,7 +294,8 @@ bool telegram_parse_command(const char* text, char* command, char* args) {
 }
 
 // Free message resources
-void telegram_free_message(telegram_message_t* msg) {
+void telegram_free_message(telegram_message_t *msg)
+{
     if (msg) {
         if (msg->text) {
             free(msg->text);
@@ -305,7 +313,8 @@ void telegram_free_message(telegram_message_t* msg) {
 }
 
 // Cleanup bot resources
-void telegram_bot_cleanup(telegram_bot_t* bot) {
+void telegram_bot_cleanup(telegram_bot_t *bot)
+{
     if (bot) {
         if (bot->bot_token) {
             free(bot->bot_token);

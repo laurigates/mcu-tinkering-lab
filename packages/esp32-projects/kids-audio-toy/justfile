@@ -1,0 +1,109 @@
+# ESP32 Kids Audio Toy
+# Run `just --list` to see available recipes
+
+idf_path := env("IDF_PATH", home_directory() + "/repos/esp-idf")
+port := env("PORT", "/dev/ttyUSB0")
+baud_rate := env("BAUD_RATE", "115200")
+
+default:
+    @just --list
+
+[private]
+check-idf:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ ! -d "{{idf_path}}" ]; then
+        echo "Error: ESP-IDF not found at {{idf_path}}"
+        echo "Install ESP-IDF or set IDF_PATH variable"
+        exit 1
+    fi
+
+# Build the firmware
+[group: "build"]
+build: check-idf
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source {{idf_path}}/export.sh
+    idf.py build
+
+# Clean build files
+[group: "build"]
+clean: check-idf
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source {{idf_path}}/export.sh
+    idf.py clean
+
+# Full clean (removes build directory)
+[group: "build"]
+fullclean: check-idf
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source {{idf_path}}/export.sh
+    idf.py fullclean
+
+# Open configuration menu
+[group: "build"]
+menuconfig: check-idf
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source {{idf_path}}/export.sh
+    idf.py menuconfig
+
+# Flash firmware to ESP32
+[group: "flash"]
+flash: check-idf
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source {{idf_path}}/export.sh
+    idf.py -p {{port}} flash
+
+# Flash and immediately start monitoring
+[group: "flash"]
+flash-monitor: check-idf
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source {{idf_path}}/export.sh
+    idf.py -p {{port}} flash monitor
+
+# Monitor serial output (Ctrl+] to exit)
+[group: "monitor"]
+monitor: check-idf
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source {{idf_path}}/export.sh
+    idf.py -p {{port}} monitor
+
+# Show project information and hardware setup
+[group: "info"]
+info:
+    @echo "ESP32 Kids Audio Toy"
+    @echo "ESP-IDF Path: {{idf_path}}"
+    @echo "Serial Port:  {{port}}"
+    @echo "Baud Rate:    {{baud_rate}}"
+    @echo ""
+    @echo "Features:"
+    @echo "  3 potentiometers control pitch, duration, interval"
+    @echo "  555 timer integration for modulation effects"
+    @echo "  Dual-voice mode (ESP32 + 555 harmony)"
+    @echo "  LED visual feedback"
+    @echo ""
+    @echo "Quick Start:"
+    @echo "  1. Connect potentiometers to GPIO34, GPIO35, GPIO32"
+    @echo "  2. Connect piezo speaker to GPIO25"
+    @echo "  3. Connect LED to GPIO2 (with 220Ω resistor)"
+    @echo "  4. Run: just build && just flash-monitor"
+    @echo ""
+    @echo "See WIRING.md for detailed connection diagrams"
+
+# Show pin assignment reference
+[group: "info"]
+pins:
+    @echo "Potentiometers:"
+    @echo "  Pitch      → GPIO34"
+    @echo "  Duration   → GPIO35"
+    @echo "  Interval   → GPIO32"
+    @echo ""
+    @echo "Output:"
+    @echo "  Piezo speaker → GPIO25"
+    @echo "  LED           → GPIO2 (via 220Ω resistor)"
