@@ -48,28 +48,17 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Setup ESP-IDF
+      - name: Build ${{ matrix.project }}
         uses: espressif/esp-idf-ci-action@v1
         with:
           esp_idf_version: ${{ env.IDF_VERSION }}
           target: ${{ matrix.target }}
-
-      - name: Build ${{ matrix.project }}
-        working-directory: packages/esp32-projects/${{ matrix.project }}
-        run: |
-          echo "Building ${{ matrix.description }}"
-          idf.py build
-
-      - name: Generate size analysis
-        working-directory: packages/esp32-projects/${{ matrix.project }}
-        run: |
-          echo "# Build Size Analysis for ${{ matrix.project }}" > size-report.txt
-          echo "" >> size-report.txt
-          echo "## Component Size Summary" >> size-report.txt
-          idf.py size >> size-report.txt 2>&1 || true
-          echo "" >> size-report.txt
-          echo "## Detailed Component Sizes" >> size-report.txt
-          idf.py size-components >> size-report.txt 2>&1 || true
+          command: >-
+            cd packages/esp32-projects/${{ matrix.project }} &&
+            idf.py build &&
+            echo "# Build Size Analysis for ${{ matrix.project }}" > size-report.txt &&
+            idf.py size >> size-report.txt 2>&1;
+            idf.py size-components >> size-report.txt 2>&1; true
 
       - name: Archive firmware binaries
         uses: actions/upload-artifact@v4

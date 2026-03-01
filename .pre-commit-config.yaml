@@ -1,6 +1,9 @@
 # Pre-commit hooks for MCU Tinkering Lab
 # See https://pre-commit.com for more information
 
+# Exclude third-party component directories from all hooks
+exclude: 'components/esp-idf-lib/|managed_components/'
+
 repos:
   # General file checks
   - repo: https://github.com/pre-commit/pre-commit-hooks
