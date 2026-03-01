@@ -5,26 +5,26 @@
 
 #include <stdio.h>
 #include <string.h>
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "freertos/timers.h"
-#include "freertos/semphr.h"
+#include "driver/gpio.h"
 #include "esp_log.h"
 #include "esp_system.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
+#include "freertos/task.h"
+#include "freertos/timers.h"
 #include "nvs_flash.h"
-#include "driver/gpio.h"
 
-#include "config.h"
-#include "unified_logger.h"
-#include "system_state.h"
-#include "credentials_validator.h"  // Must be first to validate credentials at compile time
-#include "camera.h"
-#include "wifi_manager.h"
 #include "ai_backend.h"
-#include "i2c_master.h"
 #include "ai_response_parser.h"
+#include "camera.h"
 #include "camera_pins.h"
+#include "config.h"
 #include "credentials_loader.h"
+#include "credentials_validator.h"  // Must be first to validate credentials at compile time
+#include "i2c_master.h"
+#include "system_state.h"
+#include "unified_logger.h"
+#include "wifi_manager.h"
 #if MQTT_LOGGING_ENABLED
 #include "mqtt_logger.h"
 #endif
@@ -32,21 +32,22 @@
 static const char *TAG = "esp32-cam-robocar";
 
 // Macro for safe bounded string copy with explicit null termination
-#define SAFE_STRCPY(dst, src, size) \
-    do { \
-        strncpy((dst), (src), (size) - 1); \
-        (dst)[(size) - 1] = '\0'; \
+#define SAFE_STRCPY(dst, src, size)      \
+    do {                                 \
+        strncpy((dst), (src), (size)-1); \
+        (dst)[(size)-1] = '\0';          \
     } while (0)
 
 // Global state (now managed by centralized state manager)
 static TimerHandle_t capture_timer = NULL;
 static TimerHandle_t status_led_timer = NULL;
-static const ai_backend_t* g_ai_backend = NULL;
+static const ai_backend_t *g_ai_backend = NULL;
 static SemaphoreHandle_t g_ai_backend_mutex = NULL;
 
 // Thread-safe accessor for g_ai_backend
-static const ai_backend_t* get_ai_backend(void) {
-    const ai_backend_t* backend = NULL;
+static const ai_backend_t *get_ai_backend(void)
+{
+    const ai_backend_t *backend = NULL;
     if (g_ai_backend_mutex) {
         if (xSemaphoreTake(g_ai_backend_mutex, pdMS_TO_TICKS(SEMAPHORE_TIMEOUT_MS)) == pdTRUE) {
             backend = g_ai_backend;
@@ -58,7 +59,8 @@ static const ai_backend_t* get_ai_backend(void) {
     return backend;
 }
 
-static void set_ai_backend(const ai_backend_t* backend) {
+static void set_ai_backend(const ai_backend_t *backend)
+{
     if (g_ai_backend_mutex) {
         if (xSemaphoreTake(g_ai_backend_mutex, pdMS_TO_TICKS(SEMAPHORE_TIMEOUT_MS)) == pdTRUE) {
             g_ai_backend = backend;
@@ -68,7 +70,6 @@ static void set_ai_backend(const ai_backend_t* backend) {
         }
     }
 }
-
 
 // Forward declarations
 static void capture_and_analyze_task(void *pvParameters);
@@ -87,7 +88,8 @@ static esp_err_t init_mqtt_logging(void);
 static esp_err_t init_ai_backend(void);
 static void create_and_start_tasks(void);
 
-void app_main(void) {
+void app_main(void)
+{
     LOGI_DUAL(TAG, "ESP32-CAM AI Vision System Starting...");
     LOGI_DUAL(TAG, "Build timestamp: %s %s", __DATE__, __TIME__);
 
@@ -121,7 +123,7 @@ void app_main(void) {
     }
 
     system_state_set(SYSTEM_STATE_HARDWARE_READY);
-    system_state_update_flags(true, false, true); // Hardware ready, camera available
+    system_state_update_flags(true, false, true);  // Hardware ready, camera available
 
     // Phase 3: Network connectivity (WiFi, credentials)
     system_state_set(SYSTEM_STATE_NETWORK_CONNECTING);
@@ -151,7 +153,8 @@ void app_main(void) {
     send_startup_commands();
 
     // Update final system state
-    if (system_state_get_wifi() == WIFI_STATE_CONNECTED && system_state_get_ai() == AI_STATE_READY) {
+    if (system_state_get_wifi() == WIFI_STATE_CONNECTED &&
+        system_state_get_ai() == AI_STATE_READY) {
         system_state_set(SYSTEM_STATE_FULLY_OPERATIONAL);
     } else if (system_state_get_wifi() == WIFI_STATE_CONNECTED) {
         system_state_set(SYSTEM_STATE_NETWORK_CONNECTED);
@@ -168,7 +171,8 @@ void app_main(void) {
     ESP_LOGI(TAG, "Main loop started");
 }
 
-static esp_err_t init_system_basics(void) {
+static esp_err_t init_system_basics(void)
+{
     // Validate credentials early - fail fast if misconfigured
     validate_credentials_at_runtime();
 
@@ -186,7 +190,8 @@ static esp_err_t init_system_basics(void) {
     return ESP_OK;
 }
 
-static esp_err_t init_hardware_components(void) {
+static esp_err_t init_hardware_components(void)
+{
     // Initialize I2C communication first
     LOGI_DUAL(TAG, "Initializing I2C master...");
     if (i2c_master_init() != ESP_OK) {
@@ -205,7 +210,8 @@ static esp_err_t init_hardware_components(void) {
     return ESP_OK;
 }
 
-static esp_err_t init_wifi_and_credentials(void) {
+static esp_err_t init_wifi_and_credentials(void)
+{
     // Initialize WiFi
     LOGI_DUAL(TAG, "Initializing WiFi...");
     system_state_set_wifi(WIFI_STATE_CONNECTING);
@@ -227,8 +233,8 @@ static esp_err_t init_wifi_and_credentials(void) {
     }
 
     // Connect to WiFi using loaded credentials
-    const char* wifi_ssid = get_wifi_ssid();
-    const char* wifi_password = get_wifi_password();
+    const char *wifi_ssid = get_wifi_ssid();
+    const char *wifi_password = get_wifi_password();
 
     LOGI_DUAL(TAG, "Connecting to WiFi: %s", wifi_ssid);
     if (wifi_connect(wifi_ssid, wifi_password) == ESP_OK) {
@@ -244,7 +250,8 @@ static esp_err_t init_wifi_and_credentials(void) {
     }
 }
 
-static esp_err_t init_mqtt_logging(void) {
+static esp_err_t init_mqtt_logging(void)
+{
 #if MQTT_LOGGING_ENABLED
     if (system_state_get_wifi() != WIFI_STATE_CONNECTED) {
         ESP_LOGW(TAG, "WiFi not connected, skipping MQTT logger initialization");
@@ -252,20 +259,18 @@ static esp_err_t init_mqtt_logging(void) {
     }
 
     ESP_LOGI(TAG, "Initializing MQTT remote logging...");
-    mqtt_logger_config_t mqtt_config = {
-        .broker_uri = MQTT_BROKER_URI,
-        .client_id = MQTT_CLIENT_ID,
-        .username = MQTT_USERNAME,
-        .password = MQTT_PASSWORD,
-        .log_topic = MQTT_LOG_TOPIC_BASE,
-        .status_topic = MQTT_STATUS_TOPIC,
-        .command_topic = MQTT_COMMAND_TOPIC,
-        .buffer_size = MQTT_LOG_BUFFER_SIZE,
-        .keepalive_interval = MQTT_KEEPALIVE_INTERVAL,
-        .qos_level = MQTT_QOS_LEVEL,
-        .min_level = MQTT_MIN_LOG_LEVEL,
-        .retain_status = MQTT_RETAIN_STATUS
-    };
+    mqtt_logger_config_t mqtt_config = {.broker_uri = MQTT_BROKER_URI,
+                                        .client_id = MQTT_CLIENT_ID,
+                                        .username = MQTT_USERNAME,
+                                        .password = MQTT_PASSWORD,
+                                        .log_topic = MQTT_LOG_TOPIC_BASE,
+                                        .status_topic = MQTT_STATUS_TOPIC,
+                                        .command_topic = MQTT_COMMAND_TOPIC,
+                                        .buffer_size = MQTT_LOG_BUFFER_SIZE,
+                                        .keepalive_interval = MQTT_KEEPALIVE_INTERVAL,
+                                        .qos_level = MQTT_QOS_LEVEL,
+                                        .min_level = MQTT_MIN_LOG_LEVEL,
+                                        .retain_status = MQTT_RETAIN_STATUS};
 
     esp_err_t mqtt_ret = mqtt_logger_init(&mqtt_config);
     if (mqtt_ret == ESP_OK) {
@@ -279,11 +284,12 @@ static esp_err_t init_mqtt_logging(void) {
         return ESP_FAIL;
     }
 #else
-    return ESP_OK; // MQTT disabled, consider it successful
+    return ESP_OK;  // MQTT disabled, consider it successful
 #endif
 }
 
-static esp_err_t init_ai_backend(void) {
+static esp_err_t init_ai_backend(void)
+{
     if (system_state_get_wifi() != WIFI_STATE_CONNECTED) {
         ESP_LOGW(TAG, "WiFi connection failed - skipping AI backend initialization");
         ESP_LOGW(TAG, "WiFi troubleshooting:");
@@ -310,11 +316,12 @@ static esp_err_t init_ai_backend(void) {
     ESP_LOGI(TAG, "Service discovery disabled, using static URL only");
 #endif
 #else
-    ESP_LOGE(TAG, "ERROR: No AI backend defined in config.h! Check CONFIG_AI_BACKEND_CLAUDE or CONFIG_AI_BACKEND_OLLAMA");
+    ESP_LOGE(TAG, "ERROR: No AI backend defined in config.h! Check CONFIG_AI_BACKEND_CLAUDE or "
+                  "CONFIG_AI_BACKEND_OLLAMA");
     return ESP_FAIL;
 #endif
 
-    const ai_backend_t* backend = ai_backend_get_current();
+    const ai_backend_t *backend = ai_backend_get_current();
     if (!backend) {
         ESP_LOGE(TAG, "CRITICAL: ai_backend_get_current() returned NULL!");
         ESP_LOGE(TAG, "This indicates a compilation/configuration problem:");
@@ -334,7 +341,7 @@ static esp_err_t init_ai_backend(void) {
 
 #if defined(CONFIG_AI_BACKEND_CLAUDE)
     ESP_LOGI(TAG, "Configuring Claude backend...");
-    const char* claude_api_key = get_claude_api_key();
+    const char *claude_api_key = get_claude_api_key();
     if (!claude_api_key || strlen(claude_api_key) == 0) {
         ESP_LOGE(TAG, "Claude API key not available - cannot initialize Claude backend");
         return ESP_FAIL;
@@ -344,7 +351,7 @@ static esp_err_t init_ai_backend(void) {
     ai_config.model = "claude-3-haiku-20240307";
 #elif defined(CONFIG_AI_BACKEND_OLLAMA)
     ESP_LOGI(TAG, "Configuring Ollama backend...");
-    ai_config.api_key = NULL; // Ollama doesn't require a key
+    ai_config.api_key = NULL;  // Ollama doesn't require a key
     ai_config.api_url = OLLAMA_API_URL;
     ai_config.model = OLLAMA_MODEL;
 #endif
@@ -352,7 +359,8 @@ static esp_err_t init_ai_backend(void) {
     ESP_LOGI(TAG, "Calling backend initialization...");
     esp_err_t init_result = backend->init(&ai_config);
     if (init_result != ESP_OK) {
-        ESP_LOGE(TAG, "AI backend initialization FAILED with error: %s", esp_err_to_name(init_result));
+        ESP_LOGE(TAG, "AI backend initialization FAILED with error: %s",
+                 esp_err_to_name(init_result));
 #if defined(CONFIG_AI_BACKEND_OLLAMA)
         ESP_LOGE(TAG, "Ollama troubleshooting:");
         ESP_LOGE(TAG, "  1. Check if Ollama is running on configured host");
@@ -378,19 +386,16 @@ static esp_err_t init_ai_backend(void) {
     return ESP_OK;
 }
 
-static void create_and_start_tasks(void) {
+static void create_and_start_tasks(void)
+{
     // Create timers
-    capture_timer = xTimerCreate("capture_timer",
-                                pdMS_TO_TICKS(CAPTURE_INTERVAL_MS),
-                                pdTRUE, // Auto-reload
-                                NULL,
-                                capture_timer_callback);
+    capture_timer = xTimerCreate("capture_timer", pdMS_TO_TICKS(CAPTURE_INTERVAL_MS),
+                                 pdTRUE,  // Auto-reload
+                                 NULL, capture_timer_callback);
 
-    status_led_timer = xTimerCreate("status_led_timer",
-                                   pdMS_TO_TICKS(STATUS_LED_ON_TIME_MS),
-                                   pdFALSE, // One-shot
-                                   NULL,
-                                   status_led_timer_callback);
+    status_led_timer = xTimerCreate("status_led_timer", pdMS_TO_TICKS(STATUS_LED_ON_TIME_MS),
+                                    pdFALSE,  // One-shot
+                                    NULL, status_led_timer_callback);
 
     // Create tasks - use named constant for capture task stack size
     xTaskCreate(capture_and_analyze_task, "capture_task", CAPTURE_TASK_STACK_SIZE, NULL, 5, NULL);
@@ -407,7 +412,8 @@ static void create_and_start_tasks(void) {
     }
 }
 
-static void capture_timer_callback(TimerHandle_t xTimer) {
+static void capture_timer_callback(TimerHandle_t xTimer)
+{
     // Signal capture task to run
     static TaskHandle_t capture_task_handle = NULL;
     if (capture_task_handle) {
@@ -415,19 +421,22 @@ static void capture_timer_callback(TimerHandle_t xTimer) {
     }
 }
 
-static void status_led_timer_callback(TimerHandle_t xTimer) {
+static void status_led_timer_callback(TimerHandle_t xTimer)
+{
     set_status_led(false);
 }
 
 // Forward declarations for capture task helpers
-static camera_fb_t* capture_image_with_status(void);
+static camera_fb_t *capture_image_with_status(void);
 static void handle_ai_backend_unavailable(camera_fb_t *fb);
-static ai_response_t* get_ai_response(camera_fb_t *fb);
-static void process_ai_commands(const ai_command_t *command, char *last_movement_command, char *last_sound_command);
+static ai_response_t *get_ai_response(camera_fb_t *fb);
+static void process_ai_commands(const ai_command_t *command, char *last_movement_command,
+                                char *last_sound_command);
 static movement_command_t parse_movement_command(const char *cmd_str);
 static sound_command_t parse_sound_command(const char *cmd_str);
 
-static void capture_and_analyze_task(void *pvParameters) {
+static void capture_and_analyze_task(void *pvParameters)
+{
     LOGI_DUAL(TAG, "Capture and analyze task started");
 
     static char last_movement_command[MOVEMENT_CMD_MAX_LEN] = "S";
@@ -437,7 +446,8 @@ static void capture_and_analyze_task(void *pvParameters) {
         // Wait for timer notification or run every 5 seconds
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(CAPTURE_INTERVAL_MS));
 
-        if (!system_state_is_operational() && system_state_get_current() < SYSTEM_STATE_HARDWARE_READY) {
+        if (!system_state_is_operational() &&
+            system_state_get_current() < SYSTEM_STATE_HARDWARE_READY) {
             continue;
         }
 
@@ -486,7 +496,8 @@ static void capture_and_analyze_task(void *pvParameters) {
     }
 }
 
-static camera_fb_t* capture_image_with_status(void) {
+static camera_fb_t *capture_image_with_status(void)
+{
     set_status_led(true);
     xTimerReset(status_led_timer, 0);
 
@@ -498,11 +509,12 @@ static camera_fb_t* capture_image_with_status(void) {
     }
 
     LOGI_DUAL(TAG, "Image captured: %zu bytes", fb->len);
-    system_state_increment_capture_count(); // Update statistics
+    system_state_increment_capture_count();  // Update statistics
     return fb;
 }
 
-static void handle_ai_backend_unavailable(camera_fb_t *fb) {
+static void handle_ai_backend_unavailable(camera_fb_t *fb)
+{
     LOGW_DUAL(TAG, "AI backend not available, skipping analysis");
     LOGW_DUAL(TAG, "Diagnostic: WiFi state: %s", wifi_state_to_string(system_state_get_wifi()));
 
@@ -512,7 +524,9 @@ static void handle_ai_backend_unavailable(camera_fb_t *fb) {
 #if defined(CONFIG_AI_BACKEND_CLAUDE)
         LOGW_DUAL(TAG, "Diagnostic: Claude backend configured - check API key and endpoint");
 #elif defined(CONFIG_AI_BACKEND_OLLAMA)
-        LOGW_DUAL(TAG, "Diagnostic: Ollama backend configured - check service discovery and fallback URL");
+        LOGW_DUAL(
+            TAG,
+            "Diagnostic: Ollama backend configured - check service discovery and fallback URL");
         LOGW_DUAL(TAG, "Diagnostic: Ollama model: %s", OLLAMA_MODEL);
 #else
         LOGW_DUAL(TAG, "Diagnostic: No AI backend defined in config.h!");
@@ -529,12 +543,13 @@ static void handle_ai_backend_unavailable(camera_fb_t *fb) {
     LOGI_DUAL(TAG, "Camera working in standalone mode - image capture successful");
 }
 
-static ai_response_t* get_ai_response(camera_fb_t *fb) {
+static ai_response_t *get_ai_response(camera_fb_t *fb)
+{
     ai_response_t *response = malloc(sizeof(ai_response_t));
     if (!response) {
         LOGE_DUAL(TAG, "Failed to allocate response structure");
         camera_return_fb(fb);
-        system_state_increment_ai_analysis(false); // Track failed analysis
+        system_state_increment_ai_analysis(false);  // Track failed analysis
         return NULL;
     }
 
@@ -561,29 +576,31 @@ static ai_response_t* get_ai_response(camera_fb_t *fb) {
         LOGE_DUAL(TAG, "AI API call failed");
         i2c_send_sound_command(SOUND_ALERT);
         free(response);
-        system_state_increment_ai_analysis(false); // Track failed analysis
+        system_state_increment_ai_analysis(false);  // Track failed analysis
         return NULL;
     }
 
     if (!response->response_text) {
         LOGE_DUAL(TAG, "Empty response from AI API");
         free(response);
-        system_state_increment_ai_analysis(false); // Track failed analysis
+        system_state_increment_ai_analysis(false);  // Track failed analysis
         return NULL;
     }
 
     LOGI_DUAL(TAG, "Received AI response (%zu bytes)", response->response_length);
     LOGD_DUAL(TAG, "Response: %.200s", response->response_text);
-    system_state_increment_ai_analysis(true); // Track successful analysis
+    system_state_increment_ai_analysis(true);  // Track successful analysis
     return response;
 }
 
-static void process_ai_commands(const ai_command_t *command, char *last_movement_command, char *last_sound_command) {
+static void process_ai_commands(const ai_command_t *command, char *last_movement_command,
+                                char *last_sound_command)
+{
     // Send movement command (only if different from last)
     if (command->has_movement && strcmp(command->movement_command, last_movement_command) != 0) {
         movement_command_t move_cmd = parse_movement_command(command->movement_command);
         LOGI_DUAL(TAG, "Sending I2C movement command: %s", command->movement_command);
-        i2c_send_movement_command(move_cmd, 255); // Full speed
+        i2c_send_movement_command(move_cmd, 255);  // Full speed
         SAFE_STRCPY(last_movement_command, command->movement_command, MOVEMENT_CMD_MAX_LEN);
         system_state_update_last_movement(command->movement_command);
         system_state_increment_i2c_command();
@@ -614,30 +631,45 @@ static void process_ai_commands(const ai_command_t *command, char *last_movement
 
     // Send display message
     if (command->has_display) {
-        LOGI_DUAL(TAG, "Sending I2C display message to line %d: %s", command->display_line, command->display_message);
+        LOGI_DUAL(TAG, "Sending I2C display message to line %d: %s", command->display_line,
+                  command->display_message);
         i2c_send_display_command(command->display_line, command->display_message);
         system_state_increment_i2c_command();
     }
 }
 
-static movement_command_t parse_movement_command(const char *cmd_str) {
-    if (strcmp(cmd_str, "F") == 0) return MOVE_FORWARD;
-    else if (strcmp(cmd_str, "B") == 0) return MOVE_BACKWARD;
-    else if (strcmp(cmd_str, "L") == 0) return MOVE_LEFT;
-    else if (strcmp(cmd_str, "R") == 0) return MOVE_RIGHT;
-    else if (strcmp(cmd_str, "C") == 0) return MOVE_ROTATE_CW;
-    else if (strcmp(cmd_str, "W") == 0) return MOVE_ROTATE_CCW;
-    else return MOVE_STOP;
+static movement_command_t parse_movement_command(const char *cmd_str)
+{
+    if (strcmp(cmd_str, "F") == 0)
+        return MOVE_FORWARD;
+    else if (strcmp(cmd_str, "B") == 0)
+        return MOVE_BACKWARD;
+    else if (strcmp(cmd_str, "L") == 0)
+        return MOVE_LEFT;
+    else if (strcmp(cmd_str, "R") == 0)
+        return MOVE_RIGHT;
+    else if (strcmp(cmd_str, "C") == 0)
+        return MOVE_ROTATE_CW;
+    else if (strcmp(cmd_str, "W") == 0)
+        return MOVE_ROTATE_CCW;
+    else
+        return MOVE_STOP;
 }
 
-static sound_command_t parse_sound_command(const char *cmd_str) {
-    if (strcmp(cmd_str, "SB") == 0) return SOUND_BEEP;
-    else if (strcmp(cmd_str, "SM") == 0) return SOUND_MELODY;
-    else if (strcmp(cmd_str, "SA") == 0) return SOUND_ALERT;
-    else return SOUND_BEEP;
+static sound_command_t parse_sound_command(const char *cmd_str)
+{
+    if (strcmp(cmd_str, "SB") == 0)
+        return SOUND_BEEP;
+    else if (strcmp(cmd_str, "SM") == 0)
+        return SOUND_MELODY;
+    else if (strcmp(cmd_str, "SA") == 0)
+        return SOUND_ALERT;
+    else
+        return SOUND_BEEP;
 }
 
-static void status_led_task(void *pvParameters) {
+static void status_led_task(void *pvParameters)
+{
     ESP_LOGI(TAG, "Status LED task started");
 
     while (1) {
@@ -650,7 +682,8 @@ static void status_led_task(void *pvParameters) {
             vTaskDelay(pdMS_TO_TICKS(STATUS_LED_BLINK_SLOW_ON_MS));
             set_status_led(false);
             vTaskDelay(pdMS_TO_TICKS(STATUS_LED_BLINK_SLOW_OFF_MS));
-        } else if (current_state >= SYSTEM_STATE_HARDWARE_READY && wifi_state != WIFI_STATE_CONNECTED) {
+        } else if (current_state >= SYSTEM_STATE_HARDWARE_READY &&
+                   wifi_state != WIFI_STATE_CONNECTED) {
             // Fast blink when hardware ready but WiFi disconnected
             set_status_led(true);
             vTaskDelay(pdMS_TO_TICKS(STATUS_LED_BLINK_FAST_MS));
@@ -664,7 +697,8 @@ static void status_led_task(void *pvParameters) {
     }
 }
 
-static void init_status_led(void) {
+static void init_status_led(void)
+{
 #if STATUS_LED_ENABLED
     gpio_config_t io_conf = {
         .pin_bit_mask = (1ULL << CAM_LED_PIN),
@@ -681,13 +715,15 @@ static void init_status_led(void) {
 #endif
 }
 
-static void set_status_led(bool on) {
+static void set_status_led(bool on)
+{
 #if STATUS_LED_ENABLED
     gpio_set_level(CAM_LED_PIN, on ? 1 : 0);
 #endif
 }
 
-static void send_startup_commands(void) {
+static void send_startup_commands(void)
+{
     ESP_LOGI(TAG, "Sending startup commands to main controller");
 
     // Test communication with ping
@@ -714,11 +750,11 @@ static void send_startup_commands(void) {
     // Send startup display messages
     i2c_send_display_command(7, "CAM READY");
     vTaskDelay(pdMS_TO_TICKS(100));
-    #if defined(CONFIG_AI_BACKEND_CLAUDE)
+#if defined(CONFIG_AI_BACKEND_CLAUDE)
     i2c_send_display_command(6, "CLAUDE AI ON");
-    #elif defined(CONFIG_AI_BACKEND_OLLAMA)
+#elif defined(CONFIG_AI_BACKEND_OLLAMA)
     i2c_send_display_command(6, "OLLAMA AI ON");
-    #endif
+#endif
 
     ESP_LOGI(TAG, "Startup commands sent");
 }

@@ -24,7 +24,7 @@ size_t base64_encode_length(size_t input_length);
  * @param output_length Pointer to store actual output length
  * @return 0 on success, -1 on error
  */
-int base64_encode(const uint8_t* input, size_t input_length, char* output, size_t* output_length);
+int base64_encode(const uint8_t *input, size_t input_length, char *output, size_t *output_length);
 
 /**
  * @brief Encode data to base64 with memory allocation
@@ -32,6 +32,6 @@ int base64_encode(const uint8_t* input, size_t input_length, char* output, size_
  * @param input_length Length of input data
  * @return Allocated base64 string (caller must free), NULL on error
  */
-char* base64_encode_alloc(const uint8_t* input, size_t input_length);
+char *base64_encode_alloc(const uint8_t *input, size_t input_length);
 
-#endif // BASE64_H
+#endif  // BASE64_H

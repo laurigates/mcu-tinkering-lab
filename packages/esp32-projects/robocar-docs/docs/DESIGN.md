@@ -42,18 +42,18 @@ Implementation detail:
 void playSound(int frequency, int duration) {
   unsigned long period = 1000000 / frequency; // Period in microseconds
   unsigned long startTime = millis();
-  
+
   isSoundPlaying = true;
   soundStartTime = startTime;
   soundDuration = duration;
-  
+
   while (millis() - startTime < duration) {
     digitalWrite(BUZZER_PIN, HIGH);
     delayMicroseconds(period / 2);
     digitalWrite(BUZZER_PIN, LOW);
     delayMicroseconds(period / 2);
   }
-  
+
   digitalWrite(BUZZER_PIN, LOW);
 }
 ```

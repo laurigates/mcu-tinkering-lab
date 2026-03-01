@@ -2,7 +2,7 @@
 robot:
   name: "ESP32-RoboCar"
   description: "Dual ESP32 AI-powered autonomous robot car"
-  
+
   # Physical dimensions (in meters)
   dimensions:
     length: 0.20  # 20cm chassis
@@ -11,11 +11,11 @@ robot:
     wheelbase: 0.14  # Distance between front and rear wheels
     track_width: 0.12  # Distance between left and right wheels
     wheel_radius: 0.035  # 3.5cm radius wheels
-    
+
   # Mass properties
   mass: 0.8  # kg (including battery)
   inertia: 0.01  # kg⋅m² (moment of inertia)
-  
+
   # Motor specifications (TB6612FNG with DC motors)
   motors:
     left:
@@ -30,7 +30,7 @@ robot:
       resistance: 3.0  # Ohms
       inductance: 0.01  # H (realistic for small DC motor)
       back_emf_constant: 0.01  # V⋅s/rad
-      
+
     right:
       pin_config:
         pwm: 13
@@ -51,7 +51,7 @@ robot:
       min_angle: -90
       max_angle: 90
       center_angle: 0
-      
+
   # Sensor configuration
   sensors:
     camera:
@@ -60,21 +60,21 @@ robot:
       fps: 20
       field_of_view: 60  # degrees
       position: [0.08, 0, 0.06]  # x, y, z relative to robot center
-      
+
     imu:
       type: "MPU6050"
       update_rate: 100  # Hz
       noise:
         accelerometer: 0.01  # m/s²
         gyroscope: 0.001  # rad/s
-        
+
     ultrasonic:
       type: "HC-SR04"
       max_range: 4.0  # meters
       min_range: 0.02  # meters
       beam_angle: 15  # degrees
       update_rate: 10  # Hz
-      
+
   # Communication configuration
   communication:
     i2c:
@@ -84,20 +84,20 @@ robot:
       pins:
         sda: 15
         scl: 14
-        
+
     wifi:
       ssid: "ESP32-RoboCar"
       password: "robocar123"
-      
+
     uart:
       baudrate: 115200
-      
+
 # Simulation settings
 simulation:
   timestep: 0.01  # seconds (100Hz)
   physics_engine: "pymunk"
   visualization: "swift"
-  
+
   # Camera simulation configuration
   camera:
     enabled: false
@@ -106,7 +106,7 @@ simulation:
     fps: 20           # Match robot.sensors.camera.fps
     noise_level: 0.02
     compression_quality: 85
-  
+
   # WiFi simulation configuration
   wifi:
     enabled: false
@@ -117,7 +117,7 @@ simulation:
     max_retry_attempts: 3
     retry_delay_ms: 5000
     power_save_mode: true
-  
+
   # OTA simulation configuration
   ota:
     enabled: false
@@ -125,12 +125,12 @@ simulation:
     verification_delay: 1.0  # seconds
     failure_probability: 0.05  # 5% chance of verification failure
     partition_size: 1572864  # 1.5MB (0x180000)
-  
+
   # Motor control configuration
   motor_control:
     enabled: true
     mode: "velocity"  # "open_loop", "velocity", "position"
-    
+
     # Velocity PID parameters
     velocity_pid:
       kp: 15.0
@@ -139,7 +139,7 @@ simulation:
       output_limit: 255.0
       integral_limit: 50.0
       derivative_filter: 0.1
-    
+
     # Position PID parameters (for position mode)
     position_pid:
       kp: 1.5
@@ -148,17 +148,17 @@ simulation:
       output_limit: 50.0  # Output is velocity command
       integral_limit: 50.0
       derivative_filter: 0.2
-    
+
     # Encoder simulation parameters
     encoder:
       pulses_per_revolution: 600
       noise_std: 0.1
       velocity_filter: 0.8
       max_velocity_change: 500.0
-    
+
     # Feedforward gain (PWM per rad/s)
     velocity_feedforward: 25.0
-  
+
   # Environment
   environment:
     type: "indoor"
@@ -170,20 +170,20 @@ simulation:
       - type: "cylinder"
         position: [3.0, 1.0]
         radius: 0.3
-        
+
   # Communication bridge
   bridge:
     type: "websocket"
     host: "localhost"
     port: 8765
-    
+
 # AI Backend Configuration
 ai_backend:
   enabled: true
   type: "claude"  # or "ollama"
   api_key: "${CLAUDE_API_KEY}"
   model: "claude-3-sonnet-20240229"
-  
+
   # Ollama configuration
   ollama:
     host: "localhost"

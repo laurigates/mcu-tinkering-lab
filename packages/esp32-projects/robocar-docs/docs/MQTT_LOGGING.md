@@ -172,7 +172,7 @@ The ESP32-CAM automatically discovers the MQTT broker through mDNS queries, allo
 esp_err_t mqtt_logger_init(const mqtt_logger_config_t* config);
 
 // Send formatted log message
-esp_err_t mqtt_logger_logf(esp_log_level_t level, const char* tag, 
+esp_err_t mqtt_logger_logf(esp_log_level_t level, const char* tag,
                           const char* format, ...);
 
 // Publish device status

@@ -98,7 +98,7 @@ Commands sent to main controller via UART2 (115200 baud):
 
 **Movement Commands:**
 - `F` - Forward
-- `B` - Backward  
+- `B` - Backward
 - `L` - Left
 - `R` - Right
 - `C` - Rotate clockwise

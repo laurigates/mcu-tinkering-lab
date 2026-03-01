@@ -52,7 +52,7 @@ The system consists of two ESP32 boards working together:
 ```c
 // Motor Control (TB6612FNG)
 #define MOTOR_RIGHT_PWM_PIN    35
-#define MOTOR_RIGHT_IN1_PIN    39  
+#define MOTOR_RIGHT_IN1_PIN    39
 #define MOTOR_RIGHT_IN2_PIN    34
 #define MOTOR_LEFT_PWM_PIN     12
 #define MOTOR_LEFT_IN1_PIN     38
@@ -132,7 +132,7 @@ To select and configure the AI backend, edit `esp32-cam-idf/main/config.h`:
 1.  **Choose your backend**: Comment out the backend you don't want to use and make sure the one you want is active.
     ```h
     // In esp32-cam-idf/main/config.h
-    
+
     #define CONFIG_AI_BACKEND_CLAUDE
     // #define CONFIG_AI_BACKEND_OLLAMA
     ```

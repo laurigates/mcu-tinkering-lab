@@ -28,13 +28,13 @@ typedef struct {
  * @param command Output command structure
  * @return true on success, false on error
  */
-bool parse_ai_response(const char* response_text, ai_command_t* command);
+bool parse_ai_response(const char *response_text, ai_command_t *command);
 
 /**
  * @brief Convert movement recommendation to command string
  * @param recommendation AI movement recommendation
  * @return Command string (static buffer)
  */
-const char* movement_to_command(const char* recommendation);
+const char *movement_to_command(const char *recommendation);
 
-#endif // AI_RESPONSE_PARSER_H
+#endif  // AI_RESPONSE_PARSER_H
