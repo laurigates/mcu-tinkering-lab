@@ -80,13 +80,13 @@ wifi_manager.init()
 success = wifi_manager.connect("MyNetwork", "password123")
 if success:
     print("Connected successfully")
-    
+
 # Get connection info
 connection_info = wifi_manager.get_connection_info()
 if connection_info:
     ssid, rssi = connection_info
     print(f"Connected to {ssid} with RSSI {rssi} dBm")
-    
+
 # Scan for networks
 networks = wifi_manager.scan_networks()
 for network in networks:
@@ -201,15 +201,15 @@ firmware_url = "https://example.com/firmware.bin"
 success = ota_manager.start_update(firmware_url, version="1.2.0")
 if success:
     print("OTA update started")
-    
+
     # Monitor progress
     while True:
         status = ota_manager.get_status()
         print(f"OTA State: {status.state.value}, Progress: {status.progress}%")
-        
+
         if status.state in [OTAState.SUCCESS, OTAState.FAILED, OTAState.ABORTED]:
             break
-        
+
         time.sleep(1)
 ```
 
@@ -286,16 +286,16 @@ class RobotModel:
         # Initialize WiFi simulation
         self.wifi_simulation = None
         self.use_wifi_simulation = self.config['simulation'].get('wifi', {}).get('enabled', True)
-        
+
         if self.use_wifi_simulation:
             self.wifi_simulation = WiFiManagerSimulation(config_path)
             self.wifi_simulation.init()
             print("Robot: WiFi simulation initialized")
-        
+
         # Initialize OTA simulation
         self.ota_simulation = None
         self.use_ota_simulation = self.config['simulation'].get('ota', {}).get('enabled', True)
-        
+
         if self.use_ota_simulation:
             self.ota_simulation = OTASimulation(config_path)
             if self.wifi_simulation:
@@ -311,8 +311,8 @@ The robot model provides access to WiFi and OTA functionality through its interf
 # Access WiFi manager
 if robot.wifi_simulation:
     wifi_state = robot.wifi_simulation.get_state()
-    
-# Access OTA manager  
+
+# Access OTA manager
 if robot.ota_simulation:
     ota_status = robot.ota_simulation.get_status()
 ```
@@ -418,7 +418,7 @@ def test_wifi_simulation():
     assert wifi.connect("TestSSID", "password") == True
     assert wifi.get_state() == WiFiState.CONNECTED
 
-# Test OTA functionality  
+# Test OTA functionality
 def test_ota_simulation():
     ota = OTASimulation("config/robot_config.yaml")
     assert ota.start_update("http://example.com/firmware.bin") == True
@@ -434,14 +434,14 @@ Test the complete integration:
 def test_full_integration():
     # Initialize robot with all features
     robot = RobotModel("config/robot_config.yaml")
-    
+
     # Test WiFi connectivity
     assert robot.wifi_simulation.connect("TestNetwork", "password")
-    
+
     # Test OTA readiness
     time.sleep(35)  # Wait for stability threshold
     assert robot.ota_simulation.is_ota_ready()
-    
+
     # Test OTA update
     assert robot.ota_simulation.start_update("http://example.com/fw.bin")
 ```

@@ -6,17 +6,14 @@
 #ifndef SERVO_CONTROLLER_H
 #define SERVO_CONTROLLER_H
 
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include "esp_err.h"
 
 /**
  * @brief Servo identifier
  */
-typedef enum {
-    SERVO_PAN = 0,
-    SERVO_TILT = 1
-} servo_id_t;
+typedef enum { SERVO_PAN = 0, SERVO_TILT = 1 } servo_id_t;
 
 /**
  * @brief Servo position structure
@@ -29,13 +26,13 @@ typedef struct {
 /**
  * @brief Servo configuration limits
  */
-#define SERVO_PAN_MIN_ANGLE   -90
-#define SERVO_PAN_MAX_ANGLE   90
-#define SERVO_PAN_CENTER      0
+#define SERVO_PAN_MIN_ANGLE -90
+#define SERVO_PAN_MAX_ANGLE 90
+#define SERVO_PAN_CENTER 0
 
-#define SERVO_TILT_MIN_ANGLE  -45
-#define SERVO_TILT_MAX_ANGLE  45
-#define SERVO_TILT_CENTER     0
+#define SERVO_TILT_MIN_ANGLE -45
+#define SERVO_TILT_MAX_ANGLE 45
+#define SERVO_TILT_CENTER 0
 
 /**
  * @brief Initialize servo controller
@@ -149,8 +146,8 @@ bool servo_is_angle_valid(servo_id_t servo_id, int16_t angle);
  * @param delay_ms Delay between steps in milliseconds
  * @return ESP_OK on success
  */
-esp_err_t servo_move_smooth(servo_id_t servo_id, int16_t target_angle, 
-                           uint8_t step_size, uint32_t delay_ms);
+esp_err_t servo_move_smooth(servo_id_t servo_id, int16_t target_angle, uint8_t step_size,
+                            uint32_t delay_ms);
 
 /**
  * @brief Perform servo sweep motion
@@ -163,7 +160,7 @@ esp_err_t servo_move_smooth(servo_id_t servo_id, int16_t target_angle,
  * @return ESP_OK on success
  */
 esp_err_t servo_sweep(servo_id_t servo_id, int16_t start_angle, int16_t end_angle,
-                     uint8_t step_size, uint32_t delay_ms, uint32_t cycles);
+                      uint8_t step_size, uint32_t delay_ms, uint32_t cycles);
 
 /**
  * @brief Stop any ongoing servo motion
@@ -171,4 +168,4 @@ esp_err_t servo_sweep(servo_id_t servo_id, int16_t start_angle, int16_t end_angl
  */
 esp_err_t servo_stop_motion(void);
 
-#endif // SERVO_CONTROLLER_H
+#endif  // SERVO_CONTROLLER_H

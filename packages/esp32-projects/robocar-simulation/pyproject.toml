@@ -67,13 +67,13 @@ dev = [
     "pytest>=6.2.0",
     "pytest-asyncio>=0.18.0",
     "pytest-cov>=4.0.0",
-    
+
     # Code quality
     "ruff>=0.1.0",
     "mypy>=1.5.0",
     "types-PyYAML",
     "types-toml",
-    
+
     # Documentation
     "sphinx>=7.0.0",
     "sphinx-rtd-theme>=1.3.0",
@@ -122,6 +122,12 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
 "tests/**/*" = ["S101", "ARG", "FBT"]
+# E402: module-level import not at top of file — unavoidable in scripts
+# that must manipulate sys.path before importing local modules
+"debug_*.py" = ["E402"]
+"test_*.py" = ["E402"]
+"tests/*.py" = ["E402"]
+"src/main.py" = ["E402"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["robot_model", "communication_bridge", "genesis_visualizer"]

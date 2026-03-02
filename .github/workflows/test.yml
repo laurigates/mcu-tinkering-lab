@@ -87,12 +87,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup ESP-IDF
-        uses: espressif/esp-idf-ci-action@v1
-        with:
-          esp_idf_version: v5.4
-          target: esp32
-
       - name: Check for test directories
         id: check-tests
         run: |
@@ -102,6 +96,14 @@ jobs:
             echo "tests_exist=false" >> $GITHUB_OUTPUT
             echo "::notice::No ESP32 test directories found yet. Skipping host tests."
           fi
+
+      - name: Setup ESP-IDF
+        if: steps.check-tests.outputs.tests_exist == 'true'
+        uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: v5.4
+          target: esp32
+          command: echo "ESP-IDF environment ready for host tests"
 
       - name: Run host-based tests
         if: steps.check-tests.outputs.tests_exist == 'true'

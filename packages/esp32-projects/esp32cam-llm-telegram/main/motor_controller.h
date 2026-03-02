@@ -1,8 +1,8 @@
 #ifndef MOTOR_CONTROLLER_H
 #define MOTOR_CONTROLLER_H
 
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include "esp_err.h"
 
 // Motor commands
@@ -44,15 +44,15 @@ esp_err_t motor_set_speeds(int left_speed, int right_speed);
 motor_status_t motor_get_status(void);
 
 // Get human-readable command name
-const char* motor_get_command_name(motor_command_t command);
+const char *motor_get_command_name(motor_command_t command);
 
 // Simulate movement and update position
 esp_err_t motor_simulate_movement(uint32_t delta_time_ms);
 
 // Get telemetry string for reporting
-char* motor_get_telemetry_string(void);
+char *motor_get_telemetry_string(void);
 
 // Cleanup motor controller
 void motor_controller_cleanup(void);
 
-#endif // MOTOR_CONTROLLER_H
+#endif  // MOTOR_CONTROLLER_H

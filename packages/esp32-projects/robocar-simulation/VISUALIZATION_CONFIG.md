@@ -11,7 +11,7 @@ The ESP32 Robot Car Simulation now supports configurable 3D visualization modes 
 
 ### 2. Visual Mode (GUI Window)
 - **Description**: Opens a GUI window with 3D visualization
-- **Usage**: `python main.py --visual` or `python main.py --viz-mode visual`  
+- **Usage**: `python main.py --visual` or `python main.py --viz-mode visual`
 - **Best for**: Local development, interactive debugging
 
 ### 3. Browser Mode (Web Interface)
@@ -25,7 +25,7 @@ The ESP32 Robot Car Simulation now supports configurable 3D visualization modes 
 ```bash
 # Explicit mode selection
 python main.py --viz-mode headless
-python main.py --viz-mode visual  
+python main.py --viz-mode visual
 python main.py --viz-mode browser
 
 # Shorthand flags
@@ -50,7 +50,7 @@ SWIFT_VIZ_MODE=browser python main.py
 
 ### Priority Order
 1. Command line `--viz-mode` argument (highest priority)
-2. Command line shorthand flags (`--visual`, `--browser`, `--headless`)  
+2. Command line shorthand flags (`--visual`, `--browser`, `--headless`)
 3. `SWIFT_VIZ_MODE` environment variable
 4. Default: `headless` mode
 
@@ -96,7 +96,7 @@ python main.py --visual  # No code changes needed
 - **Display errors**: Ensure X11 forwarding (SSH) or local display access
 - **Performance issues**: Use headless mode: `--headless`
 
-### Browser Mode Issues  
+### Browser Mode Issues
 - **Port conflicts**: Check if localhost:52000 is available
 - **Browser not opening**: Manually navigate to http://localhost:52000
 - **Connection errors**: Try visual mode instead: `--visual`

@@ -11,7 +11,7 @@
 
 // WiFi Configuration
 // Replace with your WiFi network credentials
-#define WIFI_SSID     "your-wifi-ssid"
+#define WIFI_SSID "your-wifi-ssid"
 #define WIFI_PASSWORD "your-wifi-password"
 
 // Optional: Override default settings
@@ -25,12 +25,12 @@
 // 1 = Balanced (balanced power/performance) - Good compromise
 // 2 = Min Modem (minimum modem power saving)
 // 3 = Max Modem (maximum modem power saving)
-#define WIFI_DEFAULT_POWER_MODE    0
+#define WIFI_DEFAULT_POWER_MODE 0
 
 // Auto-reconnect configuration
-#define WIFI_AUTO_RECONNECT_ENABLED  true
+#define WIFI_AUTO_RECONNECT_ENABLED true
 
 // Connection monitoring interval (ms)
-#define WIFI_MONITOR_INTERVAL_MS     10000
+#define WIFI_MONITOR_INTERVAL_MS 10000
 
-#endif // WIFI_CONFIG_H
+#endif  // WIFI_CONFIG_H
