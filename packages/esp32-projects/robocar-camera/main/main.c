@@ -32,10 +32,10 @@
 static const char *TAG = "esp32-cam-robocar";
 
 // Macro for safe bounded string copy with explicit null termination
-#define SAFE_STRCPY(dst, src, size)      \
-    do {                                 \
+#define SAFE_STRCPY(dst, src, size) \
+    do { \
         strncpy((dst), (src), (size)-1); \
-        (dst)[(size)-1] = '\0';          \
+        (dst)[(size)-1] = '\0'; \
     } while (0)
 
 // Global state (now managed by centralized state manager)

@@ -10,7 +10,6 @@ from dataclasses import dataclass, field
 import numpy as np
 import pymunk
 import yaml
-
 from error_handling import ErrorEvent, ErrorSeverity, get_error_handler
 from ota_simulation import OTASimulation
 from wifi_simulation import WiFiManagerSimulation

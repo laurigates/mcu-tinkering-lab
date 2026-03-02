@@ -43,10 +43,10 @@ int buffer_pos = 0;
 static SemaphoreHandle_t g_state_mutex = NULL;
 
 // Safe string copy macro: copies src into dst[size], always null-terminates
-#define SAFE_STRCPY(dst, src, size)      \
-    do {                                 \
+#define SAFE_STRCPY(dst, src, size) \
+    do { \
         strncpy((dst), (src), (size)-1); \
-        (dst)[(size)-1] = '\0';          \
+        (dst)[(size)-1] = '\0'; \
     } while (0)
 
 // PCA9685 and I2C variables
