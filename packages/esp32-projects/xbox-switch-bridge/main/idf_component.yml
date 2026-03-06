@@ -1,0 +1,7 @@
+dependencies:
+  bluepad32:
+    version: ">=4.1"
+    git: https://github.com/ricardoquesada/bluepad32.git
+    path: src/components/bluepad32
+  esp_tinyusb:
+    version: ">=1.4.0"
