@@ -10,7 +10,7 @@
  * The bridge loop runs at ~125 Hz (8ms interval), matching the USB poll
  * rate expected by the Nintendo Switch.
  *
- * Hardware: ESP32-S3 DevKit (any variant with USB-OTG pins exposed)
+ * Hardware: Waveshare ESP32-S3-Zero (or any ESP32-S3 with native USB)
  * Connection: USB-C from ESP32-S3 -> Nintendo Switch dock USB port
  */
 

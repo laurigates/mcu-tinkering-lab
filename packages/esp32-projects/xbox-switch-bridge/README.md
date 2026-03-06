@@ -17,11 +17,13 @@ An ESP32-S3 firmware that bridges an **Xbox Series wireless controller** (connec
 
 ## Hardware Required
 
-- **ESP32-S3 DevKit** (any variant with USB-OTG pins)
-- **Xbox Series wireless controller** (the one with BLE support - has the Share button)
-- **USB-C cable** from ESP32-S3 to Switch dock
+- **Waveshare ESP32-S3-Zero** (recommended — tiny, native USB, 4MB flash, 2MB PSRAM)
+- **Xbox Series wireless controller** (the one with BLE support — has the Share button)
+- **USB-C to USB-A cable/adapter** from ESP32-S3-Zero to Switch dock
 
-> **Note:** Standard ESP32 (WROOM/WROVER) will NOT work - it lacks native USB support. You need the S3 or S2.
+Any ESP32-S3 board with native USB-OTG will work. See [WIRING.md](WIRING.md) for other supported boards.
+
+> **Note:** Standard ESP32 (WROOM/WROVER) will NOT work — it lacks native USB support. You need the S3 or S2.
 
 ## Button Mapping
 
@@ -54,12 +56,12 @@ cd packages/esp32-projects/xbox-switch-bridge
 idf.py set-target esp32s3
 idf.py build
 
-# Flash (adjust PORT as needed)
-idf.py -p /dev/ttyUSB0 flash monitor
+# Flash (ESP32-S3-Zero uses /dev/ttyACM0, hold BOOT+RESET first)
+idf.py -p /dev/ttyACM0 flash monitor
 
 # Or use the Makefile
 make build
-make flash-monitor PORT=/dev/ttyUSB0
+make flash-monitor PORT=/dev/ttyACM0
 ```
 
 ## Usage
