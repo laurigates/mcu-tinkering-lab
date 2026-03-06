@@ -1,6 +1,6 @@
 /**
  * @file main.c
- * @brief Xbox Controller → Nintendo Switch Bridge (ESP32-S3)
+ * @brief Xbox Controller -> Nintendo Switch Bridge (ESP32-S3)
  *
  * This firmware turns an ESP32-S3 into a protocol bridge:
  *   1. Connects to an Xbox Series controller via Bluetooth LE (Bluepad32)
@@ -11,7 +11,7 @@
  * rate expected by the Nintendo Switch.
  *
  * Hardware: ESP32-S3 DevKit (any variant with USB-OTG pins exposed)
- * Connection: USB-C from ESP32-S3 → Nintendo Switch dock USB port
+ * Connection: USB-C from ESP32-S3 -> Nintendo Switch dock USB port
  */
 
 #include <stdio.h>
@@ -28,19 +28,14 @@
 
 static const char *TAG = "xbox_switch_bridge";
 
-/* Bridge loop interval: 8ms ≈ 125 Hz USB poll rate */
+/* Bridge loop interval: 8ms = 125 Hz USB poll rate */
 #define BRIDGE_LOOP_INTERVAL_MS 8
-
-/* Status LED blink patterns (ms) */
-#define BLINK_SCANNING 500
-#define BLINK_CONNECTED 100
-#define BLINK_BRIDGING 0  /* Solid on */
 
 typedef enum {
     BRIDGE_STATE_INIT,
-    BRIDGE_STATE_SCANNING,    /* Waiting for Xbox controller */
-    BRIDGE_STATE_CONNECTED,   /* Xbox connected, waiting for Switch */
-    BRIDGE_STATE_BRIDGING,    /* Both sides active, forwarding inputs */
+    BRIDGE_STATE_SCANNING,  /* Waiting for Xbox controller */
+    BRIDGE_STATE_CONNECTED, /* Xbox connected, waiting for Switch */
+    BRIDGE_STATE_BRIDGING,  /* Both sides active, forwarding inputs */
 } bridge_state_t;
 
 static volatile bridge_state_t s_state = BRIDGE_STATE_INIT;
@@ -48,7 +43,8 @@ static volatile bridge_state_t s_state = BRIDGE_STATE_INIT;
 /**
  * @brief Callback when Xbox controller connects/disconnects.
  */
-static void on_controller_connection(bool connected) {
+static void on_controller_connection(bool connected)
+{
     if (connected) {
         ESP_LOGI(TAG, "*** Xbox controller CONNECTED ***");
         s_state = BRIDGE_STATE_CONNECTED;
@@ -61,10 +57,10 @@ static void on_controller_connection(bool connected) {
 /**
  * @brief Initialize NVS (required by Bluepad32/BT stack).
  */
-static esp_err_t init_nvs(void) {
+static esp_err_t init_nvs(void)
+{
     esp_err_t ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES ||
-        ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         ESP_ERROR_CHECK(nvs_flash_erase());
         ret = nvs_flash_init();
     }
@@ -74,9 +70,11 @@ static esp_err_t init_nvs(void) {
 /**
  * @brief Main bridge task.
  *
- * Runs the translation loop: read Xbox → map → send to Switch.
+ * Runs the translation loop: read Xbox -> map -> send to Switch.
+ * Runs on core 1 while Bluepad32/BTstack runs on core 0.
  */
-static void bridge_task(void *arg) {
+static void bridge_task(void *arg)
+{
     (void)arg;
 
     xbox_gamepad_state_t xbox_state;
@@ -84,11 +82,9 @@ static void bridge_task(void *arg) {
     TickType_t last_wake = xTaskGetTickCount();
     uint32_t report_count = 0;
 
-    ESP_LOGI(TAG, "Bridge task started");
+    ESP_LOGI(TAG, "Bridge task started on core %d", xPortGetCoreID());
 
     while (1) {
-        bp32_host_process();
-
         switch (s_state) {
             case BRIDGE_STATE_SCANNING:
                 /* Just wait for Bluepad32 to find a controller */
@@ -130,8 +126,9 @@ static void bridge_task(void *arg) {
     }
 }
 
-void app_main(void) {
-    ESP_LOGI(TAG, "=== Xbox → Switch Controller Bridge ===");
+void app_main(void)
+{
+    ESP_LOGI(TAG, "=== Xbox -> Switch Controller Bridge ===");
     ESP_LOGI(TAG, "Firmware built: %s %s", __DATE__, __TIME__);
 
     /* Initialize NVS (required for BT) */
@@ -149,6 +146,10 @@ void app_main(void) {
     ESP_LOGI(TAG, "  2. Put it in pairing mode (hold Pair button)");
     ESP_LOGI(TAG, "  3. Connect ESP32-S3 USB to Switch dock");
 
-    /* Start the bridge task on core 1 (core 0 is used by Bluepad32/BT) */
+    /* Start the bridge task on core 1 (core 0 is used by BTstack/BT) */
     xTaskCreatePinnedToCore(bridge_task, "bridge", 4096, NULL, 5, NULL, 1);
+
+    /* Start BTstack event loop on core 0 (app_main task).
+     * This call does NOT return - BTstack takes over this task. */
+    bp32_host_start();
 }
