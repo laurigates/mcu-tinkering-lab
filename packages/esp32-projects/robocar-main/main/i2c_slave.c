@@ -4,8 +4,11 @@
  */
 
 #include "i2c_slave.h"
+#include "ota_handler.h"
 #include "driver/i2c.h"
 #include "esp_log.h"
+#include "esp_system.h"
+#include "esp_app_desc.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
@@ -316,19 +319,19 @@ static void handle_ota_commands(const i2c_command_packet_t* command, i2c_respons
         case CMD_TYPE_BEGIN_OTA: {
             if (command->data_length == sizeof(ota_begin_data_t)) {
                 ota_begin_data_t* ota_data = (ota_begin_data_t*)command->data;
-                ESP_LOGI(TAG, "Beginning OTA update from URL: %.20s", ota_data->url);
+                ESP_LOGI(TAG, "Beginning OTA update with tag: %.20s", ota_data->url);
                 ESP_LOGI(TAG, "Hash: %02X%02X%02X%02X",
                          ota_data->hash[0], ota_data->hash[1],
                          ota_data->hash[2], ota_data->hash[3]);
 
-                // Set OTA status to in progress
-                current_ota_status = OTA_STATUS_IN_PROGRESS;
-                ota_progress = 0;
-                ota_error_code = 0;
-
-                // OTA not yet implemented; acknowledge command
-                // See: https://github.com/laurigates/mcu-tinkering-lab/issues — track OTA implementation
-                prepare_response(response, 0x00, command->sequence_number, NULL, 0);
+                // Start OTA update via ota_handler (runs in separate task)
+                esp_err_t ret = ota_handler_begin_update(ota_data->url, ota_data->hash);
+                if (ret == ESP_OK) {
+                    prepare_response(response, 0x00, command->sequence_number, NULL, 0);
+                } else {
+                    ESP_LOGE(TAG, "Failed to start OTA update: %s", esp_err_to_name(ret));
+                    prepare_response(response, 0x01, command->sequence_number, NULL, 0);
+                }
             } else {
                 ESP_LOGE(TAG, "Invalid OTA begin data length");
                 prepare_response(response, 0x01, command->sequence_number, NULL, 0);
@@ -337,23 +340,23 @@ static void handle_ota_commands(const i2c_command_packet_t* command, i2c_respons
         }
 
         case CMD_TYPE_GET_OTA_STATUS: {
-            ota_status_response_t ota_status;
-            ota_status.status = current_ota_status;
-            ota_status.progress = ota_progress;
-            ota_status.error_code = ota_error_code;
+            ota_status_response_t ota_resp;
+            ota_resp.status = ota_handler_get_status();
+            ota_resp.progress = ota_handler_get_progress();
+            ota_resp.error_code = ota_handler_get_error_code();
 
             ESP_LOGD(TAG, "OTA Status: %d, Progress: %d%%, Error: %d",
-                     ota_status.status, ota_status.progress, ota_status.error_code);
+                     ota_resp.status, ota_resp.progress, ota_resp.error_code);
 
             prepare_response(response, 0x00, command->sequence_number,
-                           (uint8_t*)&ota_status, sizeof(ota_status_response_t));
+                           (uint8_t*)&ota_resp, sizeof(ota_status_response_t));
             break;
         }
 
         case CMD_TYPE_GET_VERSION: {
             version_response_t version;
-            // TODO: Get actual version from project
-            strncpy(version.version, "1.0.0", VERSION_STRING_LEN);
+            const esp_app_desc_t* app_desc = esp_app_get_description();
+            strncpy(version.version, app_desc->version, VERSION_STRING_LEN);
             version.version[VERSION_STRING_LEN - 1] = '\0';
 
             ESP_LOGI(TAG, "Firmware version requested: %s", version.version);
@@ -364,11 +367,12 @@ static void handle_ota_commands(const i2c_command_packet_t* command, i2c_respons
         }
 
         case CMD_TYPE_REBOOT: {
-            ESP_LOGW(TAG, "Reboot command received - rebooting in 1 second");
+            ESP_LOGW(TAG, "Reboot command received — rebooting in 1 second");
             prepare_response(response, 0x00, command->sequence_number, NULL, 0);
 
-            // Reboot after sending response — esp_restart() called post-response
-            // esp_restart();
+            // Delay to allow I2C response to be sent, then reboot
+            vTaskDelay(pdMS_TO_TICKS(1000));
+            esp_restart();
             break;
         }
 

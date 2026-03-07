@@ -60,25 +60,66 @@ jobs:
           TAG="${{ github.event.release.tag_name || inputs.release_tag }}"
           VERSION="${TAG#v}"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
 
       - name: Create firmware manifest
         run: |
-          cat > manifest.json <<'EOF'
-          {
-            "version": "${{ steps.version.outputs.version }}",
-            "release_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-            "main_controller": {
-              "url": "https://github.com/${{ github.repository }}/releases/download/${{ github.event.release.tag_name || inputs.release_tag }}/robocar-main.bin",
-              "sha256": "${{ steps.hashes.outputs.main_sha256 }}",
-              "size": ${{ steps.hashes.outputs.main_size }}
-            },
-            "esp32_cam": {
-              "url": "https://github.com/${{ github.repository }}/releases/download/${{ github.event.release.tag_name || inputs.release_tag }}/robocar-camera.bin",
-              "sha256": "${{ steps.hashes.outputs.camera_sha256 }}",
-              "size": ${{ steps.hashes.outputs.camera_size }}
-            }
-          }
-          EOF
+          TAG="${{ steps.version.outputs.tag }}"
+          DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          REPO="${{ github.repository }}"
+          jq -n \
+            --arg version "${{ steps.version.outputs.version }}" \
+            --arg date "$DATE" \
+            --arg main_url "https://github.com/${REPO}/releases/download/${TAG}/robocar-main.bin" \
+            --arg main_sha "${{ steps.hashes.outputs.main_sha256 }}" \
+            --argjson main_size ${{ steps.hashes.outputs.main_size }} \
+            --arg cam_url "https://github.com/${REPO}/releases/download/${TAG}/robocar-camera.bin" \
+            --arg cam_sha "${{ steps.hashes.outputs.camera_sha256 }}" \
+            --argjson cam_size ${{ steps.hashes.outputs.camera_size }} \
+            '{
+              version: $version,
+              release_date: $date,
+              main_controller: {
+                url: $main_url,
+                sha256: $main_sha,
+                size: $main_size,
+                min_version: "0.0.0"
+              },
+              esp32_cam: {
+                url: $cam_url,
+                sha256: $cam_sha,
+                size: $cam_size,
+                min_version: "0.0.0"
+              }
+            }' > manifest.json
+
+      - name: Check binary sizes
+        run: |
+          MAIN_SIZE=${{ steps.hashes.outputs.main_size }}
+          CAMERA_SIZE=${{ steps.hashes.outputs.camera_size }}
+          OTA_PARTITION_SIZE=1887436  # 1.8MB in bytes
+
+          # Warning threshold: 83% of partition (1.5MB)
+          WARN_THRESHOLD=1572864
+          # Critical threshold: 97% of partition (1.75MB)
+          CRITICAL_THRESHOLD=1835008
+
+          for COMPONENT in "robocar-main:$MAIN_SIZE" "robocar-camera:$CAMERA_SIZE"; do
+            NAME="${COMPONENT%%:*}"
+            SIZE="${COMPONENT##*:}"
+            PCT=$((SIZE * 100 / OTA_PARTITION_SIZE))
+
+            if [ "$SIZE" -gt "$OTA_PARTITION_SIZE" ]; then
+              echo "::error::${NAME} binary ($SIZE bytes) exceeds OTA partition ($OTA_PARTITION_SIZE bytes)!"
+              exit 1
+            elif [ "$SIZE" -gt "$CRITICAL_THRESHOLD" ]; then
+              echo "::warning::${NAME} binary is ${PCT}% of OTA partition — critically close to limit!"
+            elif [ "$SIZE" -gt "$WARN_THRESHOLD" ]; then
+              echo "::warning::${NAME} binary is ${PCT}% of OTA partition — approaching limit"
+            else
+              echo "${NAME} binary is ${PCT}% of OTA partition — OK"
+            fi
+          done
 
       - name: Upload firmware to release
         uses: softprops/action-gh-release@v2
@@ -89,13 +130,35 @@ jobs:
             robocar-camera.bin
             manifest.json
 
+      - name: Notify devices via MQTT
+        if: github.event_name == 'release'
+        continue-on-error: true
+        run: |
+          # Only attempt MQTT notification if broker secrets are configured
+          if [ -n "${{ secrets.MQTT_BROKER_HOST }}" ]; then
+            sudo apt-get install -y -qq mosquitto-clients 2>/dev/null
+            mosquitto_pub \
+              -h "${{ secrets.MQTT_BROKER_HOST }}" \
+              -p "${{ secrets.MQTT_BROKER_PORT || 1883 }}" \
+              -t "robocar/ota/notify" \
+              -m "{\"version\":\"${{ steps.version.outputs.version }}\",\"tag\":\"${{ steps.version.outputs.tag }}\",\"manifest_url\":\"https://github.com/${{ github.repository }}/releases/latest/download/manifest.json\"}" \
+              || echo "MQTT notification failed — devices will pick up update via polling"
+          else
+            echo "MQTT broker not configured — devices will pick up update via periodic polling"
+          fi
+
       - name: Generate build summary
         run: |
-          echo "## Firmware Build Complete ✅" >> $GITHUB_STEP_SUMMARY
+          echo "## Firmware Build Complete" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Release: \`${{ github.event.release.tag_name || inputs.release_tag }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "### Release: \`${{ steps.version.outputs.tag }}\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Component | Size | SHA256 |" >> $GITHUB_STEP_SUMMARY
           echo "|-----------|------|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| robocar-main | ${{ steps.hashes.outputs.main_size }} bytes | \`${{ steps.hashes.outputs.main_sha256 }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| robocar-camera | ${{ steps.hashes.outputs.camera_size }} bytes | \`${{ steps.hashes.outputs.camera_sha256 }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### OTA Update" >> $GITHUB_STEP_SUMMARY
+          echo "Devices will automatically download and install this firmware via:" >> $GITHUB_STEP_SUMMARY
+          echo "- **MQTT push** notification (immediate, if broker is configured)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Periodic polling** every 6 hours from GitHub Releases" >> $GITHUB_STEP_SUMMARY
