@@ -215,6 +215,21 @@ robocar-clean:
 robocar-info:
     just robocar::info
 
+# Trigger OTA update check via MQTT
+[group: "robocar"]
+robocar-ota-notify version="latest" broker="localhost":
+    just robocar::ota-notify {{version}} {{broker}}
+
+# Monitor OTA update status via MQTT
+[group: "robocar"]
+robocar-ota-status broker="localhost":
+    just robocar::ota-status {{broker}}
+
+# Show firmware versions from latest GitHub release
+[group: "robocar"]
+robocar-ota-versions:
+    just robocar::ota-versions
+
 # Shortcuts
 dev-main: robocar-develop-main
 dev-cam: robocar-develop-cam
