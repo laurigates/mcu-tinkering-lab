@@ -5,11 +5,11 @@ on:
     workflows: ["Test Suite", "ESP32 Build Pipeline"]
     types: [completed]
 
-  # Manual trigger for testing — provide the PR number
+  # Manual trigger — provide a PR number or "all" for every open PR with failures
   workflow_dispatch:
     inputs:
       pr_number:
-        description: "PR number to analyze (uses latest failed run)"
+        description: 'PR number to analyze, or "all" for every open PR with failures'
         required: true
         type: string
 
@@ -18,15 +18,53 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Fan-out job: when "all" is specified, find every open PR with a failed run
+  # and re-dispatch this workflow once per PR
+  fan-out:
+    name: Dispatch auto-fix for all failing PRs
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && inputs.pr_number == 'all'
+    permissions:
+      actions: write
+    steps:
+      - name: Find PRs with failed runs and dispatch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          DISPATCHED=0
+          # Get all open PR numbers and branches
+          gh pr list --state open --json number,headRefName \
+            --jq '.[] | "\(.number) \(.headRefName)"' | \
+          while read -r PR_NUM BRANCH; do
+            # Check if there's a failed run on this branch
+            FAILED_RUN=$(gh run list \
+              --branch "${BRANCH}" \
+              --status failure \
+              --json databaseId \
+              -q '.[0].databaseId' \
+              --limit 1)
+
+            if [ -n "${FAILED_RUN}" ]; then
+              echo "Dispatching auto-fix for PR #${PR_NUM} (branch: ${BRANCH}, run: ${FAILED_RUN})"
+              gh workflow run auto-fix.yml -f pr_number="${PR_NUM}"
+              DISPATCHED=$((DISPATCHED + 1))
+            else
+              echo "Skipping PR #${PR_NUM} (branch: ${BRANCH}) — no failed runs"
+            fi
+          done
+
+          echo "Dispatched ${DISPATCHED} auto-fix run(s)"
+
   auto-fix:
     name: Analyze and fix CI failure
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
-    # Only run on failures, skip if triggered by auto-fix commits (loop prevention)
+    # Run for single PR dispatch or workflow_run failures; skip "all" (handled by fan-out)
     if: >
-      (github.event_name == 'workflow_dispatch') ||
+      (github.event_name == 'workflow_dispatch' && inputs.pr_number != 'all') ||
       (
+        github.event_name == 'workflow_run' &&
         github.event.workflow_run.conclusion == 'failure' &&
         !startsWith(github.event.workflow_run.head_commit.message, 'fix(auto):')
       )
