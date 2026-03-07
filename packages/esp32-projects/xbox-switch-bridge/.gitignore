@@ -1,0 +1,19 @@
+# ESP-IDF build artifacts
+build/
+sdkconfig
+sdkconfig.old
+
+# Managed components (downloaded by IDF component manager)
+managed_components/
+dependencies.lock
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS/Windows
+.DS_Store
+Thumbs.db
