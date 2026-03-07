@@ -23,8 +23,8 @@ extern "C" {
 #define SW_BTN_X (1 << 1)
 #define SW_BTN_B (1 << 2)
 #define SW_BTN_A (1 << 3)
-#define SW_BTN_RSR (1 << 4)  /* Right SR (not used on Pro Con) */
-#define SW_BTN_RSL (1 << 5)  /* Right SL (not used on Pro Con) */
+#define SW_BTN_RSR (1 << 4) /* Right SR (not used on Pro Con) */
+#define SW_BTN_RSL (1 << 5) /* Right SL (not used on Pro Con) */
 #define SW_BTN_R (1 << 6)
 #define SW_BTN_ZR (1 << 7)
 
@@ -42,8 +42,8 @@ extern "C" {
 #define SW_BTN_DPAD_UP (1 << 1)
 #define SW_BTN_DPAD_RIGHT (1 << 2)
 #define SW_BTN_DPAD_LEFT (1 << 3)
-#define SW_BTN_LSR (1 << 4)  /* Left SR (not used on Pro Con) */
-#define SW_BTN_LSL (1 << 5)  /* Left SL (not used on Pro Con) */
+#define SW_BTN_LSR (1 << 4) /* Left SR (not used on Pro Con) */
+#define SW_BTN_LSL (1 << 5) /* Left SL (not used on Pro Con) */
 #define SW_BTN_L (1 << 6)
 #define SW_BTN_ZL (1 << 7)
 

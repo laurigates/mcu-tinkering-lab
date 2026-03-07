@@ -27,8 +27,7 @@ extern "C" {
  * @param xbox  Input: raw Xbox controller state from Bluepad32.
  * @param sw    Output: mapped Switch Pro Controller input.
  */
-void button_mapper_convert(const xbox_gamepad_state_t *xbox,
-                           switch_pro_input_t *sw);
+void button_mapper_convert(const xbox_gamepad_state_t *xbox, switch_pro_input_t *sw);
 
 #ifdef __cplusplus
 }

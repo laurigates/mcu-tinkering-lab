@@ -37,27 +37,33 @@
  * Bluepad32: -511 to 512 (signed, center at 0)
  * Switch:    0 to 4095 (unsigned, center at 2048)
  */
-static uint16_t remap_axis(int16_t bp_val) {
+static uint16_t remap_axis(int16_t bp_val)
+{
     /* Clamp to expected range */
-    if (bp_val < -512) bp_val = -512;
-    if (bp_val > 511) bp_val = 511;
+    if (bp_val < -512)
+        bp_val = -512;
+    if (bp_val > 511)
+        bp_val = 511;
 
     /* Map -512..511 → 0..4095 */
     int32_t mapped = ((int32_t)bp_val + 512) * 4095 / 1023;
-    if (mapped < 0) mapped = 0;
-    if (mapped > 4095) mapped = 4095;
+    if (mapped < 0)
+        mapped = 0;
+    if (mapped > 4095)
+        mapped = 4095;
     return (uint16_t)mapped;
 }
 
 /**
  * @brief Remap an axis with inverted Y for Switch (up = higher value).
  */
-static uint16_t remap_axis_inverted(int16_t bp_val) {
+static uint16_t remap_axis_inverted(int16_t bp_val)
+{
     return remap_axis(-bp_val);
 }
 
-void button_mapper_convert(const xbox_gamepad_state_t *xbox,
-                           switch_pro_input_t *sw) {
+void button_mapper_convert(const xbox_gamepad_state_t *xbox, switch_pro_input_t *sw)
+{
     /* Clear output */
     sw->buttons_right = 0;
     sw->buttons_shared = 0;
