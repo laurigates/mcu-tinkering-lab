@@ -20,6 +20,9 @@
 #include "i2c_slave.h"
 #include "i2c_protocol.h"
 #include "wifi_manager.h"
+#if OTA_ENABLED
+#include "ota_handler.h"
+#endif
 
 static const char *TAG = "idf-robocar";
 
@@ -1272,6 +1275,15 @@ static void finalize_system_startup(void) {
         ESP_LOGE(TAG, "Failed to create state mutex — aborting");
         return;
     }
+
+    // Initialize OTA handler (rollback protection timer)
+#if OTA_ENABLED
+    if (ota_handler_init() == ESP_OK) {
+        ESP_LOGI(TAG, "OTA handler initialized");
+    } else {
+        ESP_LOGW(TAG, "OTA handler initialization failed");
+    }
+#endif
 
     // Small delay to let system stabilize
     vTaskDelay(pdMS_TO_TICKS(SYSTEM_STABILIZATION_DELAY_MS));

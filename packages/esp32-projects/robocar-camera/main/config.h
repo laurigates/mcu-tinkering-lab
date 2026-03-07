@@ -86,4 +86,21 @@
 #define MQTT_MIN_LOG_LEVEL            ESP_LOG_INFO                 // Minimum log level for MQTT
 #define MQTT_RETAIN_STATUS            true                         // Retain status messages
 
+// ========================================
+// OTA Configuration
+// ========================================
+#define OTA_ENABLED                    1
+#define OTA_GITHUB_HOST                "github.com"
+#define OTA_GITHUB_ORG                 CONFIG_OTA_GITHUB_ORG
+#define OTA_GITHUB_REPO                CONFIG_OTA_GITHUB_REPO
+#define OTA_FIRMWARE_FILENAME_MATCH    "robocar-camera"
+#define OTA_CHECK_INTERVAL_MIN         360                          // 6 hours
+#define OTA_MQTT_NOTIFY_TOPIC          "robocar/ota/notify"
+#define OTA_MQTT_STATUS_TOPIC          "robocar/ota/status"
+#define OTA_STABILITY_TIMEOUT_MS       60000                        // 60s before marking valid
+#define OTA_TASK_STACK_SIZE            8192
+#define OTA_TASK_PRIORITY              5
+#define OTA_HTTP_TIMEOUT_MS            30000
+#define OTA_MAX_RETRY_COUNT            3
+
 #endif // CONFIG_H

@@ -28,6 +28,9 @@
 #if MQTT_LOGGING_ENABLED
 #include "mqtt_logger.h"
 #endif
+#if OTA_ENABLED
+#include "ota_manager.h"
+#endif
 
 static const char *TAG = "esp32-cam-robocar";
 
@@ -137,6 +140,18 @@ void app_main(void) {
     // Phase 4: Network services (MQTT logging)
     bool mqtt_ready = (init_mqtt_logging() == ESP_OK);
     system_state_update_flags(true, mqtt_ready, true);
+
+    // Phase 4b: OTA update manager (requires WiFi, optionally MQTT)
+#if OTA_ENABLED
+    if (system_state_get_wifi() == WIFI_STATE_CONNECTED) {
+        if (ota_manager_init() == ESP_OK) {
+            ESP_LOGI(TAG, "OTA manager initialized (version: %s)",
+                     ota_manager_get_version());
+        } else {
+            ESP_LOGW(TAG, "OTA manager initialization failed — updates disabled");
+        }
+    }
+#endif
 
     // Phase 5: AI backend
     system_state_set_ai(AI_STATE_INITIALIZING);
