@@ -108,6 +108,10 @@ ota_status_t ota_handler_get_status(void) {
     return s_ota_status;
 }
 
+uint8_t ota_handler_get_error_code(void) {
+    return s_ota_error_code;
+}
+
 esp_err_t ota_handler_confirm_valid(void) {
     if (s_firmware_valid_confirmed) {
         return ESP_OK;
@@ -195,6 +199,7 @@ static void ota_update_task(void *pvParameters) {
     int image_size = esp_https_ota_get_image_size(ota_handle);
     ESP_LOGI(TAG, "Firmware image size: %d bytes", image_size);
 
+    uint8_t last_logged_progress = 0;
     while (true) {
         ret = esp_https_ota_perform(ota_handle);
         if (ret != ESP_ERR_HTTPS_OTA_IN_PROGRESS) {
@@ -207,9 +212,11 @@ static void ota_update_task(void *pvParameters) {
             s_ota_progress = 10 + (uint8_t)((bytes_read * 85L) / image_size);
         }
 
-        if (s_ota_progress % 10 == 0) {
+        if (s_ota_progress / 10 != last_logged_progress / 10 &&
+            s_ota_progress % 10 == 0) {
             ESP_LOGI(TAG, "OTA progress: %d%% (%d/%d bytes)",
                      s_ota_progress, bytes_read, image_size);
+            last_logged_progress = s_ota_progress;
         }
     }
 

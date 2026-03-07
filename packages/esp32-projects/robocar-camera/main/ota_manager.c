@@ -149,7 +149,12 @@ static void ghota_event_handler(void *arg, esp_event_base_t event_base,
                                 "{\"status\":\"downloading\"}", 1, false);
 #endif
             // esp_ghota handles the download and flash automatically
-            ghota_start_update(s_ghota_client);
+            esp_err_t update_ret = ghota_start_update(s_ghota_client);
+            if (update_ret != ESP_OK) {
+                ESP_LOGE(TAG, "ghota_start_update failed: %s",
+                         esp_err_to_name(update_ret));
+                s_ota_in_progress = false;
+            }
             break;
         }
 

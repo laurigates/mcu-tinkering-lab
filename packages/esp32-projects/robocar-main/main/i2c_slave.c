@@ -343,7 +343,7 @@ static void handle_ota_commands(const i2c_command_packet_t* command, i2c_respons
             ota_status_response_t ota_resp;
             ota_resp.status = ota_handler_get_status();
             ota_resp.progress = ota_handler_get_progress();
-            ota_resp.error_code = ota_error_code;
+            ota_resp.error_code = ota_handler_get_error_code();
 
             ESP_LOGD(TAG, "OTA Status: %d, Progress: %d%%, Error: %d",
                      ota_resp.status, ota_resp.progress, ota_resp.error_code);

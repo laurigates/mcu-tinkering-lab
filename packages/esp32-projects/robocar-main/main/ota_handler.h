@@ -51,6 +51,13 @@ uint8_t ota_handler_get_progress(void);
 ota_status_t ota_handler_get_status(void);
 
 /**
+ * @brief Get last OTA error code
+ *
+ * @return Error code from the most recent OTA attempt, 0 if no error
+ */
+uint8_t ota_handler_get_error_code(void);
+
+/**
  * @brief Mark current firmware as valid after stable boot
  *
  * Cancels automatic rollback to previous firmware version.
