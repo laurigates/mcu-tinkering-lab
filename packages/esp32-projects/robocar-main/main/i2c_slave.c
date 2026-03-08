@@ -11,6 +11,7 @@
 #include "esp_app_desc.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/timers.h"
 #include "freertos/semphr.h"
 #include <string.h>
 
@@ -23,9 +24,6 @@ static TaskHandle_t i2c_task_handle = NULL;
 static SemaphoreHandle_t status_mutex = NULL;
 static status_data_t current_status = {0};
 static uint8_t last_sequence_number = 0;
-static ota_status_t current_ota_status = OTA_STATUS_IDLE;
-static uint8_t ota_progress = 0;
-static uint8_t ota_error_code = 0;
 
 // External function declarations (implemented in main.c)
 extern void process_i2c_movement_command(movement_command_t movement, uint8_t speed);
@@ -304,14 +302,17 @@ static void prepare_response(i2c_response_packet_t* response, uint8_t status, ui
     response->checksum = calculate_checksum((uint8_t*)response, sizeof(i2c_response_packet_t) - 1);
 }
 
+static void reboot_timer_callback(TimerHandle_t xTimer) {
+    ESP_LOGW(TAG, "Rebooting now...");
+    xTimerDelete(xTimer, 0);
+    esp_restart();
+}
+
 // Handle OTA commands
 static void handle_ota_commands(const i2c_command_packet_t* command, i2c_response_packet_t* response) {
     switch (command->command_type) {
         case CMD_TYPE_ENTER_MAINTENANCE_MODE: {
             ESP_LOGI(TAG, "Entering maintenance mode");
-            current_ota_status = OTA_STATUS_MAINTENANCE_MODE;
-            ota_progress = 0;
-            ota_error_code = 0;
             prepare_response(response, 0x00, command->sequence_number, NULL, 0);
             break;
         }
@@ -370,9 +371,16 @@ static void handle_ota_commands(const i2c_command_packet_t* command, i2c_respons
             ESP_LOGW(TAG, "Reboot command received — rebooting in 1 second");
             prepare_response(response, 0x00, command->sequence_number, NULL, 0);
 
-            // Delay to allow I2C response to be sent, then reboot
-            vTaskDelay(pdMS_TO_TICKS(1000));
-            esp_restart();
+            // Schedule reboot via timer so I2C task can send the ACK first
+            TimerHandle_t reboot_timer = xTimerCreate(
+                "reboot", pdMS_TO_TICKS(1000), pdFALSE, NULL,
+                reboot_timer_callback);
+            if (reboot_timer) {
+                xTimerStart(reboot_timer, 0);
+            } else {
+                ESP_LOGE(TAG, "Failed to create reboot timer, rebooting now");
+                esp_restart();
+            }
             break;
         }
 

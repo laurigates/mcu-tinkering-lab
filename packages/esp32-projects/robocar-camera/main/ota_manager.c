@@ -30,6 +30,7 @@ static const char *TAG = "OTA_Manager";
 static ghota_client_handle_t *s_ghota_client = NULL;
 static bool s_ota_in_progress = false;
 static bool s_firmware_valid_confirmed = false;
+static TimerHandle_t s_stability_timer = NULL;
 
 // Forward declarations
 static void ghota_event_handler(void *arg, esp_event_base_t event_base,
@@ -87,12 +88,19 @@ esp_err_t ota_manager_init(void) {
     ESP_LOGI(TAG, "Subscribed to MQTT OTA topic: %s", OTA_MQTT_NOTIFY_TOPIC);
 #endif
 
+    // Clean up previous stability timer if re-initializing
+    if (s_stability_timer) {
+        xTimerStop(s_stability_timer, 0);
+        xTimerDelete(s_stability_timer, pdMS_TO_TICKS(100));
+        s_stability_timer = NULL;
+    }
+
     // Start rollback protection stability timer
-    TimerHandle_t stability_timer = xTimerCreate(
+    s_stability_timer = xTimerCreate(
         "ota_stability", pdMS_TO_TICKS(OTA_STABILITY_TIMEOUT_MS), pdFALSE,
         NULL, ota_stability_timer_callback);
-    if (stability_timer) {
-        xTimerStart(stability_timer, 0);
+    if (s_stability_timer) {
+        xTimerStart(s_stability_timer, 0);
         ESP_LOGI(TAG, "Rollback stability timer started (%d ms)",
                  OTA_STABILITY_TIMEOUT_MS);
     }
