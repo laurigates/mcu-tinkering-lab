@@ -42,6 +42,7 @@ class SimulationManager:
 
         # Components
         self.robot = DifferentialDriveRobot(config_path)
+        self.robot.enable_subsystems_from_config()
         self.bridge = None
         self.visualizer = None
         self.swift_sim = None

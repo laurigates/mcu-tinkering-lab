@@ -125,8 +125,12 @@ class TestDifferentialDriveRobot:
 
     @pytest.fixture
     def robot(self):
-        """Create robot for testing using test config (no background threads)."""
-        config_path = Path(__file__).parent.parent / "config" / "robot_config_test.yaml"
+        """Create robot for testing using the default config.
+
+        Subsystems (WiFi, OTA, camera) are NOT started because
+        DifferentialDriveRobot no longer activates them in __init__.
+        """
+        config_path = Path(__file__).parent.parent / "config" / "robot_config.yaml"
         robot = DifferentialDriveRobot(str(config_path))
         yield robot
         robot.reset()
@@ -270,8 +274,12 @@ class TestSimulationAccuracy:
 
     @pytest.fixture
     def robot(self):
-        """Create robot for testing using test config (no background threads)."""
-        config_path = Path(__file__).parent.parent / "config" / "robot_config_test.yaml"
+        """Create robot for testing using the default config.
+
+        Subsystems (WiFi, OTA, camera) are NOT started because
+        DifferentialDriveRobot no longer activates them in __init__.
+        """
+        config_path = Path(__file__).parent.parent / "config" / "robot_config.yaml"
         robot = DifferentialDriveRobot(str(config_path))
         yield robot
         robot.reset()
