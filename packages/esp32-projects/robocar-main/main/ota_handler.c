@@ -285,14 +285,52 @@ static void ota_update_task(void *pvParameters) {
         goto cleanup;
     }
 
+    // Verify hash prefix if provided (non-zero)
+    bool hash_provided = false;
+    for (int i = 0; i < OTA_HASH_LEN; i++) {
+        if (params->hash[i] != 0) {
+            hash_provided = true;
+            break;
+        }
+    }
+
+    if (hash_provided) {
+        const esp_partition_t *update_partition =
+            esp_ota_get_next_update_partition(NULL);
+        if (update_partition) {
+            esp_app_desc_t new_app_desc;
+            ret = esp_ota_get_partition_description(update_partition,
+                                                    &new_app_desc);
+            if (ret == ESP_OK) {
+                if (memcmp(params->hash, new_app_desc.app_elf_sha256,
+                           OTA_HASH_LEN) != 0) {
+                    ESP_LOGE(TAG, "Hash verification FAILED");
+                    ESP_LOGE(TAG, "Expected: %02X%02X%02X%02X, Got: %02X%02X%02X%02X",
+                             params->hash[0], params->hash[1],
+                             params->hash[2], params->hash[3],
+                             new_app_desc.app_elf_sha256[0],
+                             new_app_desc.app_elf_sha256[1],
+                             new_app_desc.app_elf_sha256[2],
+                             new_app_desc.app_elf_sha256[3]);
+                    ota_set_state(OTA_STATUS_FAILED, 0, 6);  // Hash mismatch
+                    esp_ota_mark_app_invalid_rollback_and_reboot();
+                    goto cleanup;
+                }
+                ESP_LOGI(TAG, "Hash verification passed");
+            } else {
+                ESP_LOGW(TAG, "Could not read partition description for hash check");
+            }
+        }
+    }
+
     ota_set_state(OTA_STATUS_SUCCESS, 100, 0);
     ESP_LOGI(TAG, "OTA update completed successfully!");
     ESP_LOGI(TAG, "Device will reboot when reboot command is received via I2C");
 
 cleanup:
-    if (s_ota_status == OTA_STATUS_FAILED) {
+    if (ota_handler_get_status() == OTA_STATUS_FAILED) {
         ESP_LOGE(TAG, "OTA update failed with error code: %d",
-                 s_ota_error_code);
+                 ota_handler_get_error_code());
     }
     free(params);
     vTaskDelete(NULL);

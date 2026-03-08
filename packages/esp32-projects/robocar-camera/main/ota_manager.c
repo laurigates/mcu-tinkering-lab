@@ -13,6 +13,7 @@
 #include "freertos/task.h"
 #include "freertos/timers.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "esp_app_desc.h"
 #include "esp_ota_ops.h"
 #include "esp_event.h"
@@ -276,7 +277,17 @@ static void mqtt_ota_notify_handler(const char *topic, const char *data,
     ESP_LOGI(TAG, "MQTT OTA notification received on topic: %s", topic);
     ESP_LOGI(TAG, "Notification data: %.*s", data_len, data);
 
-    // Trigger immediate update check via esp_ghota
+    // Rate limit: at most one check per 60 seconds
+    static int64_t s_last_ota_check_time = 0;
+    int64_t now = esp_timer_get_time();
+    if (s_last_ota_check_time > 0 &&
+        (now - s_last_ota_check_time) < 60 * 1000000LL) {
+        ESP_LOGW(TAG, "MQTT OTA trigger rate-limited, skipping");
+        return;
+    }
+    s_last_ota_check_time = now;
+
+    // Trigger update check via esp_ghota
     esp_err_t ret = ota_manager_check_update();
     if (ret != ESP_OK) {
         ESP_LOGW(TAG, "Failed to trigger update check: %s",

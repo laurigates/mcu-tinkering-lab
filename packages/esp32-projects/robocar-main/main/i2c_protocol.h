@@ -125,12 +125,12 @@ typedef enum {
 } ota_status_t;
 
 // OTA Begin command data
-#define OTA_URL_MAX_LEN 20
+#define OTA_TAG_MAX_LEN 20
 #define OTA_HASH_LEN 4  // First 4 bytes of SHA256 hash for verification
 typedef struct __attribute__((packed)) {
-    char url[OTA_URL_MAX_LEN];  // OTA firmware URL (truncated if needed)
+    char tag[OTA_TAG_MAX_LEN];  // OTA release tag (e.g., "v0.2.0")
     uint8_t hash[OTA_HASH_LEN]; // Hash prefix for verification
-    uint8_t url_length;         // Actual URL length (may be > OTA_URL_MAX_LEN)
+    uint8_t tag_length;         // Actual tag length (may be > OTA_TAG_MAX_LEN)
 } ota_begin_data_t;
 
 // OTA Status response data
@@ -157,7 +157,7 @@ void prepare_ping_command(i2c_command_packet_t* packet, uint8_t seq_num);
 
 // OTA command helpers
 void prepare_enter_maintenance_command(i2c_command_packet_t* packet, uint8_t seq_num);
-void prepare_begin_ota_command(i2c_command_packet_t* packet, const char* url, const uint8_t* hash, uint8_t seq_num);
+void prepare_begin_ota_command(i2c_command_packet_t* packet, const char* tag, const uint8_t* hash, uint8_t seq_num);
 void prepare_get_ota_status_command(i2c_command_packet_t* packet, uint8_t seq_num);
 void prepare_get_version_command(i2c_command_packet_t* packet, uint8_t seq_num);
 void prepare_reboot_command(i2c_command_packet_t* packet, uint8_t seq_num);

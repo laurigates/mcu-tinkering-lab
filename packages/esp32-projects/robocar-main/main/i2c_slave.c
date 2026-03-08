@@ -320,13 +320,13 @@ static void handle_ota_commands(const i2c_command_packet_t* command, i2c_respons
         case CMD_TYPE_BEGIN_OTA: {
             if (command->data_length == sizeof(ota_begin_data_t)) {
                 ota_begin_data_t* ota_data = (ota_begin_data_t*)command->data;
-                ESP_LOGI(TAG, "Beginning OTA update with tag: %.20s", ota_data->url);
+                ESP_LOGI(TAG, "Beginning OTA update with tag: %.20s", ota_data->tag);
                 ESP_LOGI(TAG, "Hash: %02X%02X%02X%02X",
                          ota_data->hash[0], ota_data->hash[1],
                          ota_data->hash[2], ota_data->hash[3]);
 
                 // Start OTA update via ota_handler (runs in separate task)
-                esp_err_t ret = ota_handler_begin_update(ota_data->url, ota_data->hash);
+                esp_err_t ret = ota_handler_begin_update(ota_data->tag, ota_data->hash);
                 if (ret == ESP_OK) {
                     prepare_response(response, 0x00, command->sequence_number, NULL, 0);
                 } else {

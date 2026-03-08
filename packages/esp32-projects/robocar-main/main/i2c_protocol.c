@@ -100,8 +100,8 @@ void prepare_enter_maintenance_command(i2c_command_packet_t* packet, uint8_t seq
     packet->checksum = calculate_checksum((uint8_t*)packet, sizeof(i2c_command_packet_t) - 1);
 }
 
-void prepare_begin_ota_command(i2c_command_packet_t* packet, const char* url, const uint8_t* hash, uint8_t seq_num) {
-    if (!packet || !url) return;
+void prepare_begin_ota_command(i2c_command_packet_t* packet, const char* tag, const uint8_t* hash, uint8_t seq_num) {
+    if (!packet || !tag) return;
 
     ota_begin_data_t* ota_data = (ota_begin_data_t*)packet->data;
 
@@ -109,12 +109,12 @@ void prepare_begin_ota_command(i2c_command_packet_t* packet, const char* url, co
     packet->sequence_number = seq_num;
     packet->data_length = sizeof(ota_begin_data_t);
 
-    // Copy URL (truncate if necessary)
-    size_t url_len = strlen(url);
-    ota_data->url_length = (uint8_t)url_len;
-    strncpy(ota_data->url, url, OTA_URL_MAX_LEN);
-    if (url_len < OTA_URL_MAX_LEN) {
-        ota_data->url[url_len] = '\0';
+    // Copy tag (truncate if necessary)
+    size_t tag_len = strlen(tag);
+    ota_data->tag_length = (uint8_t)tag_len;
+    strncpy(ota_data->tag, tag, OTA_TAG_MAX_LEN);
+    if (tag_len < OTA_TAG_MAX_LEN) {
+        ota_data->tag[tag_len] = '\0';
     }
 
     // Copy hash if provided
