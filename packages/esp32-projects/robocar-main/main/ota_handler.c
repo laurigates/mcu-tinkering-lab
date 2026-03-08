@@ -14,6 +14,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/timers.h"
+#include "freertos/semphr.h"
 #include "esp_log.h"
 #include "esp_app_desc.h"
 #include "esp_ota_ops.h"
@@ -24,11 +25,30 @@
 
 static const char *TAG = "OTA_Handler";
 
-// OTA state
+// OTA state (protected by s_ota_mutex)
 static ota_status_t s_ota_status = OTA_STATUS_IDLE;
 static uint8_t s_ota_progress = 0;
 static uint8_t s_ota_error_code = 0;
+static SemaphoreHandle_t s_ota_mutex = NULL;
 static bool s_firmware_valid_confirmed = false;
+static TimerHandle_t s_stability_timer = NULL;
+
+static inline void ota_set_state(ota_status_t status, uint8_t progress,
+                                 uint8_t error) {
+    if (s_ota_mutex && xSemaphoreTake(s_ota_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+        s_ota_status = status;
+        s_ota_progress = progress;
+        s_ota_error_code = error;
+        xSemaphoreGive(s_ota_mutex);
+    }
+}
+
+static inline void ota_set_progress(uint8_t progress) {
+    if (s_ota_mutex && xSemaphoreTake(s_ota_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+        s_ota_progress = progress;
+        xSemaphoreGive(s_ota_mutex);
+    }
+}
 
 // OTA task parameters
 typedef struct {
@@ -43,15 +63,30 @@ static void ota_stability_timer_callback(TimerHandle_t xTimer);
 esp_err_t ota_handler_init(void) {
     ESP_LOGI(TAG, "Initializing OTA handler");
 
+    if (!s_ota_mutex) {
+        s_ota_mutex = xSemaphoreCreateMutex();
+        if (!s_ota_mutex) {
+            ESP_LOGE(TAG, "Failed to create OTA mutex");
+            return ESP_ERR_NO_MEM;
+        }
+    }
+
     const esp_app_desc_t *app_desc = esp_app_get_description();
     ESP_LOGI(TAG, "Current firmware version: %s", app_desc->version);
 
+    // Clean up previous stability timer if re-initializing
+    if (s_stability_timer) {
+        xTimerStop(s_stability_timer, 0);
+        xTimerDelete(s_stability_timer, pdMS_TO_TICKS(100));
+        s_stability_timer = NULL;
+    }
+
     // Start rollback protection stability timer
-    TimerHandle_t stability_timer = xTimerCreate(
+    s_stability_timer = xTimerCreate(
         "ota_stability", pdMS_TO_TICKS(OTA_STABILITY_TIMEOUT_MS), pdFALSE,
         NULL, ota_stability_timer_callback);
-    if (stability_timer) {
-        xTimerStart(stability_timer, 0);
+    if (s_stability_timer) {
+        xTimerStart(s_stability_timer, 0);
         ESP_LOGI(TAG, "Rollback stability timer started (%d ms)",
                  OTA_STABILITY_TIMEOUT_MS);
     }
@@ -81,9 +116,7 @@ esp_err_t ota_handler_begin_update(const char *tag, const uint8_t *hash) {
         memset(params->hash, 0, OTA_HASH_LEN);
     }
 
-    s_ota_status = OTA_STATUS_IN_PROGRESS;
-    s_ota_progress = 0;
-    s_ota_error_code = 0;
+    ota_set_state(OTA_STATUS_IN_PROGRESS, 0, 0);
 
     // Run OTA in a separate task to avoid blocking I2C
     BaseType_t result = xTaskCreate(ota_update_task, "ota_update",
@@ -92,8 +125,7 @@ esp_err_t ota_handler_begin_update(const char *tag, const uint8_t *hash) {
     if (result != pdPASS) {
         ESP_LOGE(TAG, "Failed to create OTA update task");
         free(params);
-        s_ota_status = OTA_STATUS_FAILED;
-        s_ota_error_code = 1;
+        ota_set_state(OTA_STATUS_FAILED, 0, 1);
         return ESP_FAIL;
     }
 
@@ -101,15 +133,30 @@ esp_err_t ota_handler_begin_update(const char *tag, const uint8_t *hash) {
 }
 
 uint8_t ota_handler_get_progress(void) {
-    return s_ota_progress;
+    uint8_t val = 0;
+    if (s_ota_mutex && xSemaphoreTake(s_ota_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+        val = s_ota_progress;
+        xSemaphoreGive(s_ota_mutex);
+    }
+    return val;
 }
 
 ota_status_t ota_handler_get_status(void) {
-    return s_ota_status;
+    ota_status_t val = OTA_STATUS_IDLE;
+    if (s_ota_mutex && xSemaphoreTake(s_ota_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+        val = s_ota_status;
+        xSemaphoreGive(s_ota_mutex);
+    }
+    return val;
 }
 
 uint8_t ota_handler_get_error_code(void) {
-    return s_ota_error_code;
+    uint8_t val = 0;
+    if (s_ota_mutex && xSemaphoreTake(s_ota_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+        val = s_ota_error_code;
+        xSemaphoreGive(s_ota_mutex);
+    }
+    return val;
 }
 
 esp_err_t ota_handler_confirm_valid(void) {
@@ -143,8 +190,7 @@ static void ota_update_task(void *pvParameters) {
         if (ret != ESP_OK) {
             ESP_LOGE(TAG, "Failed to start WiFi connection: %s",
                      esp_err_to_name(ret));
-            s_ota_status = OTA_STATUS_FAILED;
-            s_ota_error_code = 2;  // WiFi connection error
+            ota_set_state(OTA_STATUS_FAILED, 0, 2);  // WiFi connection error
             goto cleanup;
         }
 
@@ -157,14 +203,13 @@ static void ota_update_task(void *pvParameters) {
 
         if (!wifi_manager_is_connected()) {
             ESP_LOGE(TAG, "WiFi connection timeout — aborting OTA");
-            s_ota_status = OTA_STATUS_FAILED;
-            s_ota_error_code = 2;
+            ota_set_state(OTA_STATUS_FAILED, 0, 2);
             goto cleanup;
         }
     }
 
     ESP_LOGI(TAG, "WiFi connected — proceeding with OTA download");
-    s_ota_progress = 5;
+    ota_set_progress(5);
 
     // Step 2: Construct download URL from release tag
     char url[256];
@@ -172,7 +217,7 @@ static void ota_update_task(void *pvParameters) {
              OTA_GITHUB_ORG, OTA_GITHUB_REPO, params->tag);
 
     ESP_LOGI(TAG, "Download URL: %s", url);
-    s_ota_progress = 10;
+    ota_set_progress(10);
 
     // Step 3: Perform OTA update via esp_https_ota
     esp_http_client_config_t http_config = {
@@ -190,8 +235,7 @@ static void ota_update_task(void *pvParameters) {
     esp_err_t ret = esp_https_ota_begin(&ota_config, &ota_handle);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "esp_https_ota_begin failed: %s", esp_err_to_name(ret));
-        s_ota_status = OTA_STATUS_FAILED;
-        s_ota_error_code = 3;  // OTA begin error
+        ota_set_state(OTA_STATUS_FAILED, 0, 3);  // OTA begin error
         goto cleanup;
     }
 
@@ -209,22 +253,27 @@ static void ota_update_task(void *pvParameters) {
         // Update progress based on bytes read
         int bytes_read = esp_https_ota_get_image_len_read(ota_handle);
         if (image_size > 0) {
-            s_ota_progress = 10 + (uint8_t)((bytes_read * 85L) / image_size);
+            uint8_t pct = 10 + (uint8_t)((bytes_read * 85L) / image_size);
+            ota_set_progress(pct);
         }
 
-        if (s_ota_progress / 10 != last_logged_progress / 10 &&
-            s_ota_progress % 10 == 0) {
+        uint8_t cur_progress = ota_handler_get_progress();
+        if (cur_progress / 10 != last_logged_progress / 10 &&
+            cur_progress % 10 == 0) {
             ESP_LOGI(TAG, "OTA progress: %d%% (%d/%d bytes)",
-                     s_ota_progress, bytes_read, image_size);
-            last_logged_progress = s_ota_progress;
+                     cur_progress, bytes_read, image_size);
+            last_logged_progress = cur_progress;
         }
     }
 
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "esp_https_ota_perform failed: %s", esp_err_to_name(ret));
-        esp_https_ota_abort(ota_handle);
-        s_ota_status = OTA_STATUS_FAILED;
-        s_ota_error_code = 4;  // Download/flash error
+        esp_err_t abort_ret = esp_https_ota_abort(ota_handle);
+        if (abort_ret != ESP_OK) {
+            ESP_LOGW(TAG, "esp_https_ota_abort failed: %s",
+                     esp_err_to_name(abort_ret));
+        }
+        ota_set_state(OTA_STATUS_FAILED, 0, 4);  // Download/flash error
         goto cleanup;
     }
 
@@ -232,20 +281,56 @@ static void ota_update_task(void *pvParameters) {
     ret = esp_https_ota_finish(ota_handle);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "esp_https_ota_finish failed: %s", esp_err_to_name(ret));
-        s_ota_status = OTA_STATUS_FAILED;
-        s_ota_error_code = 5;  // Finalization error
+        ota_set_state(OTA_STATUS_FAILED, 0, 5);  // Finalization error
         goto cleanup;
     }
 
-    s_ota_progress = 100;
-    s_ota_status = OTA_STATUS_SUCCESS;
+    // Verify hash prefix if provided (non-zero)
+    bool hash_provided = false;
+    for (int i = 0; i < OTA_HASH_LEN; i++) {
+        if (params->hash[i] != 0) {
+            hash_provided = true;
+            break;
+        }
+    }
+
+    if (hash_provided) {
+        const esp_partition_t *update_partition =
+            esp_ota_get_next_update_partition(NULL);
+        if (update_partition) {
+            esp_app_desc_t new_app_desc;
+            ret = esp_ota_get_partition_description(update_partition,
+                                                    &new_app_desc);
+            if (ret == ESP_OK) {
+                if (memcmp(params->hash, new_app_desc.app_elf_sha256,
+                           OTA_HASH_LEN) != 0) {
+                    ESP_LOGE(TAG, "Hash verification FAILED");
+                    ESP_LOGE(TAG, "Expected: %02X%02X%02X%02X, Got: %02X%02X%02X%02X",
+                             params->hash[0], params->hash[1],
+                             params->hash[2], params->hash[3],
+                             new_app_desc.app_elf_sha256[0],
+                             new_app_desc.app_elf_sha256[1],
+                             new_app_desc.app_elf_sha256[2],
+                             new_app_desc.app_elf_sha256[3]);
+                    ota_set_state(OTA_STATUS_FAILED, 0, 6);  // Hash mismatch
+                    esp_ota_mark_app_invalid_rollback_and_reboot();
+                    goto cleanup;
+                }
+                ESP_LOGI(TAG, "Hash verification passed");
+            } else {
+                ESP_LOGW(TAG, "Could not read partition description for hash check");
+            }
+        }
+    }
+
+    ota_set_state(OTA_STATUS_SUCCESS, 100, 0);
     ESP_LOGI(TAG, "OTA update completed successfully!");
     ESP_LOGI(TAG, "Device will reboot when reboot command is received via I2C");
 
 cleanup:
-    if (s_ota_status == OTA_STATUS_FAILED) {
+    if (ota_handler_get_status() == OTA_STATUS_FAILED) {
         ESP_LOGE(TAG, "OTA update failed with error code: %d",
-                 s_ota_error_code);
+                 ota_handler_get_error_code());
     }
     free(params);
     vTaskDelete(NULL);
