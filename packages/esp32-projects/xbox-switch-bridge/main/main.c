@@ -127,6 +127,7 @@ static void bridge_task(void *arg)
                 break;
         }
 
+        status_led_update();
         vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(BRIDGE_LOOP_INTERVAL_MS));
     }
 }
