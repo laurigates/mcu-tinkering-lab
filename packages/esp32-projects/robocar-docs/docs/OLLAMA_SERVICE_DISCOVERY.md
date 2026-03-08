@@ -35,7 +35,7 @@ macOS includes `dns-sd` by default, making this the simplest approach:
    ```bash
    # Run in foreground (for testing)
    dns-sd -R "Ollama AI" _ollama._tcp . 11434 path=/api/generate
-   
+
    # Run in background (for permanent use)
    dns-sd -R "Ollama AI" _ollama._tcp . 11434 path=/api/generate &
    ```
@@ -44,16 +44,16 @@ macOS includes `dns-sd` by default, making this the simplest approach:
    ```bash
    # Browse for Ollama services
    dns-sd -B _ollama._tcp
-   
+
    # Look up the specific service details
    dns-sd -L "Ollama AI" _ollama._tcp .
-   
+
    # Test hostname resolution
    ping ollama.local
    ```
 
 3. **Make it persistent** (auto-start on boot):
-   
+
    Create a LaunchAgent:
    ```bash
    cat > ~/Library/LaunchAgents/com.ollama.mdns.plist << 'EOF'
@@ -80,7 +80,7 @@ macOS includes `dns-sd` by default, making this the simplest approach:
    </dict>
    </plist>
    EOF
-   
+
    # Load and start the service
    launchctl load ~/Library/LaunchAgents/com.ollama.mdns.plist
    launchctl start com.ollama.mdns
@@ -95,12 +95,12 @@ Most Linux distributions include Avahi for mDNS services:
    # Ubuntu/Debian
    sudo apt-get update
    sudo apt-get install avahi-utils avahi-daemon
-   
+
    # CentOS/RHEL/Fedora
    sudo yum install avahi-tools avahi
    # or on newer versions:
    sudo dnf install avahi-tools avahi
-   
+
    # Arch Linux
    sudo pacman -S avahi
    ```
@@ -110,7 +110,7 @@ Most Linux distributions include Avahi for mDNS services:
    # Enable and start the avahi daemon
    sudo systemctl enable avahi-daemon
    sudo systemctl start avahi-daemon
-   
+
    # Check if it's running
    sudo systemctl status avahi-daemon
    ```
@@ -119,7 +119,7 @@ Most Linux distributions include Avahi for mDNS services:
    ```bash
    # Run in foreground (for testing)
    avahi-publish-service "Ollama AI" _ollama._tcp 11434 path=/api/generate
-   
+
    # Run in background (for permanent use)
    avahi-publish-service "Ollama AI" _ollama._tcp 11434 path=/api/generate &
    ```
@@ -128,16 +128,16 @@ Most Linux distributions include Avahi for mDNS services:
    ```bash
    # Browse for all Ollama services
    avahi-browse -r _ollama._tcp -t
-   
+
    # Browse for all services (to see if yours appears)
    avahi-browse -a -t | grep ollama
-   
+
    # Test hostname resolution
    ping ollama.local
    ```
 
 5. **Make it persistent** with systemd:
-   
+
    Create a systemd service:
    ```bash
    sudo tee /etc/systemd/system/ollama-mdns.service << 'EOF'
@@ -145,7 +145,7 @@ Most Linux distributions include Avahi for mDNS services:
    Description=Ollama mDNS Service Advertisement
    After=network.target avahi-daemon.service
    Requires=avahi-daemon.service
-   
+
    [Service]
    Type=simple
    ExecStart=/usr/bin/avahi-publish-service "Ollama AI" _ollama._tcp 11434 path=/api/generate
@@ -153,16 +153,16 @@ Most Linux distributions include Avahi for mDNS services:
    RestartSec=5
    User=nobody
    Group=nogroup
-   
+
    [Install]
    WantedBy=multi-user.target
    EOF
-   
+
    # Enable and start the service
    sudo systemctl daemon-reload
    sudo systemctl enable ollama-mdns.service
    sudo systemctl start ollama-mdns.service
-   
+
    # Check status
    sudo systemctl status ollama-mdns.service
    ```

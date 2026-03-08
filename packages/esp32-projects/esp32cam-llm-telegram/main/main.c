@@ -1,23 +1,23 @@
 #include <stdio.h>
 #include <string.h>
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "freertos/event_groups.h"
-#include "esp_system.h"
-#include "esp_wifi.h"
 #include "esp_event.h"
 #include "esp_log.h"
+#include "esp_system.h"
+#include "esp_wifi.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/event_groups.h"
+#include "freertos/task.h"
 #include "nvs_flash.h"
 
+#include "camera_handler.h"
 #include "config.h"
 #include "config_manager.h"
-#include "camera_handler.h"
-#include "telegram_bot.h"
 #include "llm_client.h"
 #include "motor_controller.h"
+#include "telegram_bot.h"
 #include "vision_interpreter.h"
 
-static const char* TAG = "MAIN";
+static const char *TAG = "MAIN";
 
 // Event group for WiFi connection
 static EventGroupHandle_t wifi_event_group;
@@ -34,8 +34,9 @@ static TaskHandle_t camera_task_handle = NULL;
 static TaskHandle_t telegram_task_handle = NULL;
 
 // WiFi event handler
-static void wifi_event_handler(void* arg, esp_event_base_t event_base,
-                              int32_t event_id, void* event_data) {
+static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id,
+                               void *event_data)
+{
     if (event_base == WIFI_EVENT) {
         switch (event_id) {
             case WIFI_EVENT_STA_START:
@@ -50,14 +51,15 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
                 break;
         }
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
-        ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
+        ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
         ESP_LOGI(TAG, "Got IP: " IPSTR, IP2STR(&event->ip_info.ip));
         xEventGroupSetBits(wifi_event_group, WIFI_CONNECTED_BIT);
     }
 }
 
 // Initialize WiFi
-static esp_err_t wifi_init(void) {
+static esp_err_t wifi_init(void)
+{
     ESP_LOGI(TAG, "Initializing WiFi");
 
     wifi_event_group = xEventGroupCreate();
@@ -69,23 +71,21 @@ static esp_err_t wifi_init(void) {
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
-    ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID,
-                                               &wifi_event_handler, NULL));
-    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP,
-                                               &wifi_event_handler, NULL));
+    ESP_ERROR_CHECK(
+        esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL));
+    ESP_ERROR_CHECK(
+        esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, NULL));
 
     wifi_config_t wifi_config = {
-        .sta = {
-            .threshold.authmode = WIFI_AUTH_WPA2_PSK,
-            .pmf_cfg = {
-                .capable = true,
-                .required = false
+        .sta =
+            {
+                .threshold.authmode = WIFI_AUTH_WPA2_PSK,
+                .pmf_cfg = {.capable = true, .required = false},
             },
-        },
     };
 
-    strcpy((char*)wifi_config.sta.ssid, app_config.wifi_ssid);
-    strcpy((char*)wifi_config.sta.password, app_config.wifi_password);
+    strcpy((char *)wifi_config.sta.ssid, app_config.wifi_ssid);
+    strcpy((char *)wifi_config.sta.password, app_config.wifi_password);
 
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_config));
@@ -94,10 +94,8 @@ static esp_err_t wifi_init(void) {
     ESP_LOGI(TAG, "WiFi initialization finished. Waiting for connection...");
 
     // Wait for connection
-    EventBits_t bits = xEventGroupWaitBits(wifi_event_group,
-                                          WIFI_CONNECTED_BIT,
-                                          pdFALSE, pdFALSE,
-                                          portMAX_DELAY);
+    EventBits_t bits =
+        xEventGroupWaitBits(wifi_event_group, WIFI_CONNECTED_BIT, pdFALSE, pdFALSE, portMAX_DELAY);
 
     if (bits & WIFI_CONNECTED_BIT) {
         ESP_LOGI(TAG, "Connected to WiFi SSID: %s", app_config.wifi_ssid);
@@ -109,7 +107,8 @@ static esp_err_t wifi_init(void) {
 }
 
 // Camera capture callback
-static void camera_capture_callback(const uint8_t* data, size_t size, void* user_data) {
+static void camera_capture_callback(const uint8_t *data, size_t size, void *user_data)
+{
     ESP_LOGI(TAG, "Camera captured image: %d bytes", size);
 
     // Analyze image with vision interpreter
@@ -118,13 +117,12 @@ static void camera_capture_callback(const uint8_t* data, size_t size, void* user
 
     if (err == ESP_OK) {
         // Format and send Telegram message
-        char* message = vision_format_telegram_message(&vision_result);
+        char *message = vision_format_telegram_message(&vision_result);
         telegram_send_text(&telegram_bot, message);
 
         // Send the actual image
         char caption[256];
-        snprintf(caption, sizeof(caption),
-                 "Action: %s | Confidence: %s",
+        snprintf(caption, sizeof(caption), "Action: %s | Confidence: %s",
                  motor_get_command_name(vision_result.suggested_action),
                  vision_result.confidence_level);
         telegram_send_photo(&telegram_bot, data, size, caption);
@@ -138,7 +136,7 @@ static void camera_capture_callback(const uint8_t* data, size_t size, void* user
         motor_execute_command(cmd, speed, duration);
 
         // Send motor telemetry
-        char* telemetry = motor_get_telemetry_string();
+        char *telemetry = motor_get_telemetry_string();
         telegram_send_text(&telegram_bot, telemetry);
 
         // Simulate movement
@@ -153,24 +151,23 @@ static void camera_capture_callback(const uint8_t* data, size_t size, void* user
 }
 
 // Process Telegram command
-static void process_telegram_command(const char* command, const char* args) {
+static void process_telegram_command(const char *command, const char *args)
+{
     ESP_LOGI(TAG, "Processing command: %s %s", command, args);
 
     if (strcmp(command, "start") == 0) {
-        telegram_send_text(&telegram_bot,
-                          "🤖 *ESP32-CAM LLM Robot Controller*\n\n"
-                          "Commands:\n"
-                          "/capture - Take a photo and analyze\n"
-                          "/forward - Move forward\n"
-                          "/backward - Move backward\n"
-                          "/left - Turn left\n"
-                          "/right - Turn right\n"
-                          "/stop - Stop movement\n"
-                          "/status - Get system status\n"
-                          "/auto [on/off] - Toggle auto capture");
-    }
-    else if (strcmp(command, "capture") == 0) {
-        uint8_t* buffer = NULL;
+        telegram_send_text(&telegram_bot, "🤖 *ESP32-CAM LLM Robot Controller*\n\n"
+                                          "Commands:\n"
+                                          "/capture - Take a photo and analyze\n"
+                                          "/forward - Move forward\n"
+                                          "/backward - Move backward\n"
+                                          "/left - Turn left\n"
+                                          "/right - Turn right\n"
+                                          "/stop - Stop movement\n"
+                                          "/status - Get system status\n"
+                                          "/auto [on/off] - Toggle auto capture");
+    } else if (strcmp(command, "capture") == 0) {
+        uint8_t *buffer = NULL;
         size_t size = 0;
         if (camera_capture_jpeg(&buffer, &size) == ESP_OK) {
             camera_capture_callback(buffer, size, NULL);
@@ -178,28 +175,22 @@ static void process_telegram_command(const char* command, const char* args) {
         } else {
             telegram_send_text(&telegram_bot, "❌ Failed to capture image");
         }
-    }
-    else if (strcmp(command, "forward") == 0) {
+    } else if (strcmp(command, "forward") == 0) {
         motor_execute_command(MOTOR_CMD_FORWARD, MOTOR_DEFAULT_SPEED, 2000);
         telegram_send_text(&telegram_bot, "✅ Moving forward");
-    }
-    else if (strcmp(command, "backward") == 0) {
+    } else if (strcmp(command, "backward") == 0) {
         motor_execute_command(MOTOR_CMD_BACKWARD, MOTOR_DEFAULT_SPEED, 2000);
         telegram_send_text(&telegram_bot, "✅ Moving backward");
-    }
-    else if (strcmp(command, "left") == 0) {
+    } else if (strcmp(command, "left") == 0) {
         motor_execute_command(MOTOR_CMD_LEFT, MOTOR_DEFAULT_SPEED, 1000);
         telegram_send_text(&telegram_bot, "✅ Turning left");
-    }
-    else if (strcmp(command, "right") == 0) {
+    } else if (strcmp(command, "right") == 0) {
         motor_execute_command(MOTOR_CMD_RIGHT, MOTOR_DEFAULT_SPEED, 1000);
         telegram_send_text(&telegram_bot, "✅ Turning right");
-    }
-    else if (strcmp(command, "stop") == 0) {
+    } else if (strcmp(command, "stop") == 0) {
         motor_stop();
         telegram_send_text(&telegram_bot, "✅ Stopped");
-    }
-    else if (strcmp(command, "status") == 0) {
+    } else if (strcmp(command, "status") == 0) {
         camera_status_t cam_status = camera_get_status();
         motor_status_t motor_status = motor_get_status();
         vision_interpreter_t vision_status = vision_get_status();
@@ -215,24 +206,18 @@ static void process_telegram_command(const char* command, const char* args) {
                  "Heading: %.1f°\n\n"
                  "👁 Vision: %d/%d analyses\n"
                  "Backend: %s",
-                 cam_status.is_capturing ? "Active" : "Idle",
-                 cam_status.capture_count,
-                 cam_status.error_count,
-                 motor_status.is_running ? "Running" : "Stopped",
-                 motor_status.distance_traveled_mm,
-                 motor_status.heading_degrees,
-                 vision_status.successful_analyses,
-                 vision_status.analysis_count,
+                 cam_status.is_capturing ? "Active" : "Idle", cam_status.capture_count,
+                 cam_status.error_count, motor_status.is_running ? "Running" : "Stopped",
+                 motor_status.distance_traveled_mm, motor_status.heading_degrees,
+                 vision_status.successful_analyses, vision_status.analysis_count,
                  app_config.llm_backend_type ? "Claude" : "Ollama");
 
         telegram_send_text(&telegram_bot, status_msg);
-    }
-    else if (strcmp(command, "auto") == 0) {
+    } else if (strcmp(command, "auto") == 0) {
         if (strcmp(args, "on") == 0) {
             app_config.auto_capture_enabled = true;
             if (!cam_status.is_capturing) {
-                camera_start_capture(app_config.capture_interval_ms,
-                                   camera_capture_callback, NULL);
+                camera_start_capture(app_config.capture_interval_ms, camera_capture_callback, NULL);
             }
             telegram_send_text(&telegram_bot, "✅ Auto capture enabled");
         } else if (strcmp(args, "off") == 0) {
@@ -240,18 +225,18 @@ static void process_telegram_command(const char* command, const char* args) {
             camera_stop_capture();
             telegram_send_text(&telegram_bot, "✅ Auto capture disabled");
         } else {
-            telegram_send_text(&telegram_bot,
-                             app_config.auto_capture_enabled ?
-                             "Auto capture is ON" : "Auto capture is OFF");
+            telegram_send_text(&telegram_bot, app_config.auto_capture_enabled
+                                                  ? "Auto capture is ON"
+                                                  : "Auto capture is OFF");
         }
-    }
-    else {
+    } else {
         telegram_send_text(&telegram_bot, "❓ Unknown command. Try /start for help");
     }
 }
 
 // Telegram polling task
-static void telegram_polling_task(void* pvParameters) {
+static void telegram_polling_task(void *pvParameters)
+{
     telegram_message_t msg = {0};
 
     while (1) {
@@ -273,10 +258,11 @@ static void telegram_polling_task(void* pvParameters) {
 }
 
 // Main camera task
-static void camera_task(void* pvParameters) {
+static void camera_task(void *pvParameters)
+{
     while (1) {
         if (app_config.auto_capture_enabled) {
-            uint8_t* buffer = NULL;
+            uint8_t *buffer = NULL;
             size_t size = 0;
 
             if (camera_capture_jpeg(&buffer, &size) == ESP_OK) {
@@ -290,7 +276,8 @@ static void camera_task(void* pvParameters) {
 }
 
 // Main application
-void app_main(void) {
+void app_main(void)
+{
     ESP_LOGI(TAG, "ESP32-CAM LLM Telegram Bot Starting...");
 
     // Initialize configuration manager
@@ -321,37 +308,34 @@ void app_main(void) {
     ESP_ERROR_CHECK(vision_interpreter_init());
 
     // Initialize LLM client
-    llm_config_t llm_config = {
-        .backend_type = app_config.llm_backend_type,
-        .api_key = app_config.claude_api_key,
-        .server_url = app_config.ollama_server_url,
-        .model = app_config.llm_model,
-        .timeout_ms = 30000
-    };
+    llm_config_t llm_config = {.backend_type = app_config.llm_backend_type,
+                               .api_key = app_config.claude_api_key,
+                               .server_url = app_config.ollama_server_url,
+                               .model = app_config.llm_model,
+                               .timeout_ms = 30000};
     ESP_ERROR_CHECK(llm_client_init(&llm_config));
 
     // Initialize Telegram bot
-    ESP_ERROR_CHECK(telegram_bot_init(&telegram_bot,
-                                      app_config.telegram_bot_token,
+    ESP_ERROR_CHECK(telegram_bot_init(&telegram_bot, app_config.telegram_bot_token,
                                       app_config.telegram_chat_id));
 
     // Send startup message
     telegram_send_status(&telegram_bot,
-                        "🚀 ESP32-CAM LLM Robot started!\n"
-                        "Backend: %s\n"
-                        "Auto capture: %s",
-                        app_config.llm_backend_type ? "Claude" : "Ollama",
-                        app_config.auto_capture_enabled ? "ON" : "OFF");
+                         "🚀 ESP32-CAM LLM Robot started!\n"
+                         "Backend: %s\n"
+                         "Auto capture: %s",
+                         app_config.llm_backend_type ? "Claude" : "Ollama",
+                         app_config.auto_capture_enabled ? "ON" : "OFF");
 
     // Create tasks
     if (app_config.telegram_commands_enabled) {
-        xTaskCreate(telegram_polling_task, "telegram_poll", TASK_STACK_SIZE,
-                   NULL, TELEGRAM_TASK_PRIORITY, &telegram_task_handle);
+        xTaskCreate(telegram_polling_task, "telegram_poll", TASK_STACK_SIZE, NULL,
+                    TELEGRAM_TASK_PRIORITY, &telegram_task_handle);
     }
 
     if (app_config.auto_capture_enabled) {
-        xTaskCreate(camera_task, "camera", TASK_STACK_SIZE,
-                   NULL, CAMERA_TASK_PRIORITY, &camera_task_handle);
+        xTaskCreate(camera_task, "camera", TASK_STACK_SIZE, NULL, CAMERA_TASK_PRIORITY,
+                    &camera_task_handle);
     }
 
     ESP_LOGI(TAG, "System ready!");

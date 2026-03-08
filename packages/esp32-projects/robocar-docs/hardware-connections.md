@@ -9,16 +9,16 @@ graph TB
         CAMERA[OV2640 Camera]
         CAM_GPIO14[GPIO14 SCL]
         CAM_GPIO15[GPIO15 SDA]
-        
+
         CAM --- CAMERA
         CAM --- CAM_GPIO14
         CAM --- CAM_GPIO15
     end
-    
+
     subgraph "Heltec WiFi LoRa 32 V1"
         MAIN[Heltec ESP32<br/>Main Controller]
         OLED[SSD1306 OLED<br/>128x64]
-        
+
         MAIN_GPIO33[GPIO33 SDA]
         MAIN_GPIO35[GPIO35 SCL]
         MAIN_GPIO4[GPIO4 SDA]
@@ -26,7 +26,7 @@ graph TB
         MAIN_GPIO16[GPIO16 RST]
         MAIN_GPIO21[GPIO21 SDA]
         MAIN_GPIO22[GPIO22 SCL]
-        
+
         MAIN --- MAIN_GPIO33
         MAIN --- MAIN_GPIO35
         MAIN --- MAIN_GPIO4
@@ -34,12 +34,12 @@ graph TB
         MAIN --- MAIN_GPIO16
         MAIN --- MAIN_GPIO21
         MAIN --- MAIN_GPIO22
-        
+
         MAIN_GPIO4 --- OLED
         MAIN_GPIO15 --- OLED
         MAIN_GPIO16 --- OLED
     end
-    
+
     subgraph "PCA9685 PWM Driver"
         PCA[PCA9685<br/>16-Channel PWM<br/>Address: 0x40]
         RGB1[RGB LED 1]
@@ -48,7 +48,7 @@ graph TB
         RGB4[RGB LED 4]
         SERVO_PAN[Pan Servo<br/>Camera Mount]
         SERVO_TILT[Tilt Servo<br/>Camera Mount]
-        
+
         PCA --- RGB1
         PCA --- RGB2
         PCA --- RGB3
@@ -56,35 +56,35 @@ graph TB
         PCA --- SERVO_PAN
         PCA --- SERVO_TILT
     end
-    
+
     subgraph "Motor Driver TB6612FNG"
         TB6612[TB6612FNG<br/>Dual H-Bridge]
         MOTOR_L[Left Motor]
         MOTOR_R[Right Motor]
-        
+
         TB6612 --- MOTOR_L
         TB6612 --- MOTOR_R
     end
-    
+
     subgraph "Audio"
         PIEZO[Piezo Buzzer]
     end
-    
+
     subgraph "Power"
         BATTERY[7.4V LiPo Battery]
         POWER_SWITCH[Power Switch]
-        
+
         BATTERY --- POWER_SWITCH
     end
-    
+
     %% Inter-board I2C Communication
     CAM_GPIO14 -.->|SCL| MAIN_GPIO35
     CAM_GPIO15 -.->|SDA| MAIN_GPIO33
-    
+
     %% PCA9685 I2C Bus
     MAIN_GPIO21 -.->|SDA| PCA
     MAIN_GPIO22 -.->|SCL| PCA
-    
+
     %% Motor Control PWM
     MAIN -.->|GPIO23 PWMA| TB6612
     MAIN -.->|GPIO2 AIN1| TB6612
@@ -93,22 +93,22 @@ graph TB
     MAIN -.->|GPIO15 BIN2| TB6612
     MAIN -.->|GPIO12 PWMB| TB6612
     MAIN -.->|GPIO25 STBY| TB6612
-    
+
     %% Piezo Control
     MAIN -.->|GPIO26 PWM| PIEZO
-    
+
     %% Power Distribution
     POWER_SWITCH -.->|7.4V| MAIN
     POWER_SWITCH -.->|7.4V| CAM
     POWER_SWITCH -.->|5V Reg| TB6612
     POWER_SWITCH -.->|5V Reg| PCA
-    
+
     classDef esp32cam fill:#ff9999
     classDef heltec fill:#99ccff
     classDef i2c fill:#99ff99
     classDef motor fill:#ffcc99
     classDef power fill:#ffff99
-    
+
     class CAM,CAMERA esp32cam
     class MAIN,OLED heltec
     class PCA,RGB1,RGB2,RGB3,RGB4,SERVO_PAN,SERVO_TILT i2c
@@ -221,7 +221,7 @@ sequenceDiagram
     participant Motors as TB6612FNG<br/>Motor Driver
     participant LEDs as PCA9685<br/>LED/Servo Driver
     participant Display as SSD1306<br/>OLED Display
-    
+
     AI->>AI: Capture Image
     AI->>AI: Analyze with Claude/Ollama
     AI->>Main: Send I2C Command<br/>(Movement/Sound/Servo)
@@ -240,21 +240,21 @@ graph TD
     SW[Power Switch]
     REG1[3.3V Regulator]
     REG2[5V Regulator]
-    
+
     BATT --> SW
     SW --> REG1
     SW --> REG2
     SW -->|7.4V Direct| MOTORS[Motor Driver]
-    
+
     REG1 -->|3.3V| ESP32CAM[ESP32-CAM]
     REG1 -->|3.3V| ESP32MAIN[Heltec ESP32]
     REG2 -->|5V| PCA9685[PCA9685 PWM]
     REG2 -->|5V| SERVOS[Servo Motors]
-    
+
     classDef power fill:#ffff99
     classDef reg fill:#ffcc99
     classDef device fill:#99ccff
-    
+
     class BATT,SW power
     class REG1,REG2 reg
     class ESP32CAM,ESP32MAIN,PCA9685,MOTORS,SERVOS device

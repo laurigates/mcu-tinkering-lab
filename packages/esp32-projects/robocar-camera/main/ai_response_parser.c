@@ -4,28 +4,38 @@
  */
 
 #include "ai_response_parser.h"
-#include "esp_log.h"
-#include "cJSON.h"
-#include <string.h>
 #include <stdio.h>
+#include <string.h>
+#include "cJSON.h"
+#include "esp_log.h"
 
 static const char *TAG = "ai_parser";
 
-const char* movement_to_command(const char* recommendation) {
-    if (!recommendation) return "S";
-    
-    if (strcmp(recommendation, "forward") == 0) return "F";
-    if (strcmp(recommendation, "backward") == 0) return "B";
-    if (strcmp(recommendation, "left") == 0) return "L";
-    if (strcmp(recommendation, "right") == 0) return "R";
-    if (strcmp(recommendation, "rotate_cw") == 0) return "C";
-    if (strcmp(recommendation, "rotate_ccw") == 0) return "W";
-    if (strcmp(recommendation, "stop") == 0) return "S";
-    
-    return "S"; // Default to stop
+const char *movement_to_command(const char *recommendation)
+{
+    if (!recommendation)
+        return "S";
+
+    if (strcmp(recommendation, "forward") == 0)
+        return "F";
+    if (strcmp(recommendation, "backward") == 0)
+        return "B";
+    if (strcmp(recommendation, "left") == 0)
+        return "L";
+    if (strcmp(recommendation, "right") == 0)
+        return "R";
+    if (strcmp(recommendation, "rotate_cw") == 0)
+        return "C";
+    if (strcmp(recommendation, "rotate_ccw") == 0)
+        return "W";
+    if (strcmp(recommendation, "stop") == 0)
+        return "S";
+
+    return "S";  // Default to stop
 }
 
-bool parse_ai_response(const char* response_text, ai_command_t* command) {
+bool parse_ai_response(const char *response_text, ai_command_t *command)
+{
     if (!response_text || !command) {
         return false;
     }
@@ -79,7 +89,7 @@ bool parse_ai_response(const char* response_text, ai_command_t* command) {
     // Find JSON object within the content
     const char *json_start = strchr(content_text, '{');
     const char *json_end = strrchr(content_text, '}');
-    
+
     if (!json_start || !json_end || json_end <= json_start) {
         ESP_LOGE(TAG, "No JSON object found in content");
         cJSON_Delete(root);
@@ -94,7 +104,7 @@ bool parse_ai_response(const char* response_text, ai_command_t* command) {
         cJSON_Delete(root);
         return false;
     }
-    
+
     strncpy(json_str, json_start, json_len);
     json_str[json_len] = '\0';
 
@@ -106,8 +116,9 @@ bool parse_ai_response(const char* response_text, ai_command_t* command) {
     cJSON_Delete(root);
 
     if (!json_obj) {
-        ESP_LOGE(TAG, "Failed to parse extracted JSON: %s", cJSON_GetErrorPtr() ? cJSON_GetErrorPtr() : "Unknown error");
-        
+        ESP_LOGE(TAG, "Failed to parse extracted JSON: %s",
+                 cJSON_GetErrorPtr() ? cJSON_GetErrorPtr() : "Unknown error");
+
         // Try to extract simple keywords from text as fallback
         ESP_LOGW(TAG, "Attempting fallback keyword extraction");
         if (strstr(content_text, "forward") || strstr(content_text, "move forward")) {
@@ -136,7 +147,7 @@ bool parse_ai_response(const char* response_text, ai_command_t* command) {
             ESP_LOGI(TAG, "Fallback: detected 'stop' command");
             return true;
         }
-        
+
         // Default fallback: stop command for safety
         strcpy(command->movement_command, "S");
         command->has_movement = true;
@@ -161,7 +172,7 @@ bool parse_ai_response(const char* response_text, ai_command_t* command) {
     cJSON *sound = cJSON_GetObjectItem(json_obj, "sound");
     if (sound && cJSON_IsString(sound)) {
         const char *sound_str = cJSON_GetStringValue(sound);
-        
+
         if (strcmp(sound_str, "beep") == 0) {
             strcpy(command->sound_command, "SB");
         } else if (strcmp(sound_str, "melody") == 0) {
@@ -175,7 +186,7 @@ bool parse_ai_response(const char* response_text, ai_command_t* command) {
         } else if (strncmp(sound_str, "rtttl:", 6) == 0) {
             snprintf(command->sound_command, sizeof(command->sound_command), "RT%s", sound_str + 5);
         }
-        
+
         command->has_sound = (strlen(command->sound_command) > 0);
         if (command->has_sound) {
             ESP_LOGI(TAG, "Sound: %s -> %s", sound_str, command->sound_command);
@@ -227,21 +238,21 @@ bool parse_ai_response(const char* response_text, ai_command_t* command) {
         if (line_val >= 0 && line_val <= 7) {
             command->display_line = line_val;
         } else {
-            command->display_line = 6; // Default line
+            command->display_line = 6;  // Default line
         }
     } else {
-        command->display_line = 6; // Default to line 6 for Claude messages
+        command->display_line = 6;  // Default to line 6 for Claude messages
     }
 
     // Cleanup JSON object
     cJSON_Delete(json_obj);
-    
+
     // Log parsing results
     if (success) {
         ESP_LOGI(TAG, "Successfully parsed AI response");
     } else {
         ESP_LOGW(TAG, "AI response parsed but no valid commands found");
     }
-    
+
     return success;
 }

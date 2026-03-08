@@ -4,14 +4,14 @@
  */
 
 #include "display_manager.h"
-#include "pin_config_idf.h"
-#include "esp_log.h"
-#include "esp_lcd_panel_io.h"
-#include "esp_lcd_panel_vendor.h"
-#include "esp_lcd_panel_ops.h"
-#include "driver/i2c.h"
-#include <string.h>
 #include <stdio.h>
+#include <string.h>
+#include "driver/i2c.h"
+#include "esp_lcd_panel_io.h"
+#include "esp_lcd_panel_ops.h"
+#include "esp_lcd_panel_vendor.h"
+#include "esp_log.h"
+#include "pin_config_idf.h"
 
 static const char *TAG = "display_manager";
 
@@ -24,28 +24,25 @@ static struct {
 } display_state = {0};
 
 // State name lookup table
-static const char* state_names[] = {
-    [DISPLAY_STATE_STOPPED] = "STOP",
-    [DISPLAY_STATE_FORWARD] = "FWD",
-    [DISPLAY_STATE_BACKWARD] = "BACK",
-    [DISPLAY_STATE_LEFT] = "LEFT",
-    [DISPLAY_STATE_RIGHT] = "RGHT",
-    [DISPLAY_STATE_ROTATE_CW] = "CW",
-    [DISPLAY_STATE_ROTATE_CCW] = "CCW",
-    [DISPLAY_STATE_UNKNOWN] = "UNK"
-};
+static const char *state_names[] = {
+    [DISPLAY_STATE_STOPPED] = "STOP",   [DISPLAY_STATE_FORWARD] = "FWD",
+    [DISPLAY_STATE_BACKWARD] = "BACK",  [DISPLAY_STATE_LEFT] = "LEFT",
+    [DISPLAY_STATE_RIGHT] = "RGHT",     [DISPLAY_STATE_ROTATE_CW] = "CW",
+    [DISPLAY_STATE_ROTATE_CCW] = "CCW", [DISPLAY_STATE_UNKNOWN] = "UNK"};
 
 /**
  * @brief Get current time in milliseconds
  */
-static unsigned long get_millis(void) {
+static unsigned long get_millis(void)
+{
     return esp_timer_get_time() / 1000;
 }
 
 /**
  * @brief Draw text at specified position
  */
-static esp_err_t draw_text(int x, int y, const char *text, bool clear_line) {
+static esp_err_t draw_text(int x, int y, const char *text, bool clear_line)
+{
     if (!display_state.initialized || !text) {
         return ESP_ERR_INVALID_STATE;
     }
@@ -53,14 +50,15 @@ static esp_err_t draw_text(int x, int y, const char *text, bool clear_line) {
     // For SSD1306, we would implement pixel-level text rendering here
     // This is a simplified implementation focusing on the API structure
     ESP_LOGD(TAG, "Drawing text at (%d,%d): %s", x, y, text);
-    
+
     // In a real implementation, this would render text to the display buffer
     // and call esp_lcd_panel_draw_bitmap() to update the display
-    
+
     return ESP_OK;
 }
 
-esp_err_t display_manager_init(void) {
+esp_err_t display_manager_init(void)
+{
     if (display_state.initialized) {
         ESP_LOGW(TAG, "Display manager already initialized");
         return ESP_OK;
@@ -93,16 +91,16 @@ esp_err_t display_manager_init(void) {
         .lcd_cmd_bits = 8,
         .lcd_param_bits = 8,
     };
-    ESP_ERROR_CHECK(esp_lcd_new_panel_io_i2c((esp_lcd_i2c_bus_handle_t)I2C_NUM_1, 
-                                            &io_config, &display_state.io_handle));
+    ESP_ERROR_CHECK(esp_lcd_new_panel_io_i2c((esp_lcd_i2c_bus_handle_t)I2C_NUM_1, &io_config,
+                                             &display_state.io_handle));
 
     // Configure SSD1306 panel
     esp_lcd_panel_dev_config_t panel_config = {
         .reset_gpio_num = OLED_RST_PIN,
         .bits_per_pixel = 1,
     };
-    ESP_ERROR_CHECK(esp_lcd_new_panel_ssd1306(display_state.io_handle, 
-                                              &panel_config, &display_state.panel));
+    ESP_ERROR_CHECK(
+        esp_lcd_new_panel_ssd1306(display_state.io_handle, &panel_config, &display_state.panel));
 
     // Reset and initialize panel
     ESP_ERROR_CHECK(esp_lcd_panel_reset(display_state.panel));
@@ -117,17 +115,18 @@ esp_err_t display_manager_init(void) {
 
     display_state.initialized = true;
     ESP_LOGI(TAG, "Display manager initialized successfully");
-    
+
     return display_show_startup();
 }
 
-esp_err_t display_show_startup(void) {
+esp_err_t display_show_startup(void)
+{
     if (!display_state.initialized) {
         return ESP_ERR_INVALID_STATE;
     }
 
     ESP_ERROR_CHECK(display_clear());
-    
+
     ESP_ERROR_CHECK(draw_text(0, 0, "ROBOCAR v1.0", false));
     ESP_ERROR_CHECK(draw_text(0, 16, "Initializing...", false));
     ESP_ERROR_CHECK(draw_text(0, 32, "Motor: OK", false));
@@ -137,8 +136,9 @@ esp_err_t display_show_startup(void) {
     return ESP_OK;
 }
 
-esp_err_t display_update_status(display_robot_state_t state, int pan_angle, 
-                               int tilt_angle, unsigned long last_command_time) {
+esp_err_t display_update_status(display_robot_state_t state, int pan_angle, int tilt_angle,
+                                unsigned long last_command_time)
+{
     if (!display_state.initialized) {
         return ESP_ERR_INVALID_STATE;
     }
@@ -146,8 +146,8 @@ esp_err_t display_update_status(display_robot_state_t state, int pan_angle,
     char line_text[DISPLAY_MAX_LINE_LENGTH + 1];
 
     // Show current state
-    const char* state_name = (state < sizeof(state_names)/sizeof(state_names[0])) 
-                            ? state_names[state] : "UNK";
+    const char *state_name =
+        (state < sizeof(state_names) / sizeof(state_names[0])) ? state_names[state] : "UNK";
     snprintf(line_text, sizeof(line_text), "STATE: %s", state_name);
     ESP_ERROR_CHECK(draw_text(0, 16, line_text, true));
 
@@ -158,10 +158,9 @@ esp_err_t display_update_status(display_robot_state_t state, int pan_angle,
     return ESP_OK;
 }
 
-esp_err_t display_show_action_debug(const display_action_t *action,
-                                   display_robot_state_t state,
-                                   int pan_angle, int tilt_angle,
-                                   unsigned long last_command_time) {
+esp_err_t display_show_action_debug(const display_action_t *action, display_robot_state_t state,
+                                    int pan_angle, int tilt_angle, unsigned long last_command_time)
+{
     if (!display_state.initialized || !action) {
         return ESP_ERR_INVALID_STATE;
     }
@@ -173,8 +172,8 @@ esp_err_t display_show_action_debug(const display_action_t *action,
     ESP_ERROR_CHECK(draw_text(0, 0, line_text, true));
 
     // Line 1: Current state with command source (truncated to fit)
-    const char* state_name = (state < sizeof(state_names)/sizeof(state_names[0])) 
-                            ? state_names[state] : "UNK";
+    const char *state_name =
+        (state < sizeof(state_names) / sizeof(state_names[0])) ? state_names[state] : "UNK";
     char short_source[5];
     strncpy(short_source, action->source, 4);
     short_source[4] = '\0';
@@ -204,7 +203,8 @@ esp_err_t display_show_action_debug(const display_action_t *action,
     return ESP_OK;
 }
 
-esp_err_t display_show_message(int line, const char *message) {
+esp_err_t display_show_message(int line, const char *message)
+{
     if (!display_state.initialized || !message) {
         return ESP_ERR_INVALID_STATE;
     }
@@ -229,33 +229,35 @@ esp_err_t display_show_message(int line, const char *message) {
     return ESP_OK;
 }
 
-esp_err_t display_track_action(const char *action, const char *source) {
+esp_err_t display_track_action(const char *action, const char *source)
+{
     if (!action || !source) {
         return ESP_ERR_INVALID_ARG;
     }
 
     display_state.current_action.counter++;
-    strncpy(display_state.current_action.action, action, 
+    strncpy(display_state.current_action.action, action,
             sizeof(display_state.current_action.action) - 1);
     display_state.current_action.action[sizeof(display_state.current_action.action) - 1] = '\0';
-    
-    strncpy(display_state.current_action.source, source, 
+
+    strncpy(display_state.current_action.source, source,
             sizeof(display_state.current_action.source) - 1);
     display_state.current_action.source[sizeof(display_state.current_action.source) - 1] = '\0';
-    
+
     display_state.current_action.timestamp = get_millis();
 
-    ESP_LOGI(TAG, "Action #%lu: %s from %s", 
-             display_state.current_action.counter, action, source);
+    ESP_LOGI(TAG, "Action #%lu: %s from %s", display_state.current_action.counter, action, source);
 
     return ESP_OK;
 }
 
-unsigned long display_get_action_counter(void) {
+unsigned long display_get_action_counter(void)
+{
     return display_state.current_action.counter;
 }
 
-esp_err_t display_clear(void) {
+esp_err_t display_clear(void)
+{
     if (!display_state.initialized) {
         return ESP_ERR_INVALID_STATE;
     }
@@ -263,10 +265,11 @@ esp_err_t display_clear(void) {
     // Clear display buffer and update display
     // In a real implementation, this would clear the entire display buffer
     ESP_LOGD(TAG, "Display cleared");
-    
+
     return ESP_OK;
 }
 
-bool display_is_initialized(void) {
+bool display_is_initialized(void)
+{
     return display_state.initialized;
 }

@@ -71,8 +71,8 @@ esp_err_t motor_stop(void);
  * @param right_direction 1 for forward, 0 for backward
  * @return ESP_OK on success
  */
-esp_err_t motor_set_individual(uint8_t left_speed, uint8_t right_speed, 
-                              uint8_t left_direction, uint8_t right_direction);
+esp_err_t motor_set_individual(uint8_t left_speed, uint8_t right_speed, uint8_t left_direction,
+                               uint8_t right_direction);
 
 /**
  * @brief Get current motor state
@@ -82,7 +82,7 @@ esp_err_t motor_set_individual(uint8_t left_speed, uint8_t right_speed,
  * @param right_direction Pointer to store right motor direction
  * @return ESP_OK on success
  */
-esp_err_t motor_get_state(uint8_t *left_speed, uint8_t *right_speed,
-                         uint8_t *left_direction, uint8_t *right_direction);
+esp_err_t motor_get_state(uint8_t *left_speed, uint8_t *right_speed, uint8_t *left_direction,
+                          uint8_t *right_direction);
 
-#endif // MOTOR_CONTROLLER_H
+#endif  // MOTOR_CONTROLLER_H

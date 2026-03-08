@@ -1,8 +1,8 @@
 #ifndef CONFIG_MANAGER_H
 #define CONFIG_MANAGER_H
 
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include "esp_err.h"
 
 // Configuration structure
@@ -35,26 +35,26 @@ typedef struct {
 esp_err_t config_manager_init(void);
 
 // Load configuration from NVS
-esp_err_t config_load(app_config_t* config);
+esp_err_t config_load(app_config_t *config);
 
 // Save configuration to NVS
-esp_err_t config_save(const app_config_t* config);
+esp_err_t config_save(const app_config_t *config);
 
 // Reset configuration to defaults
-esp_err_t config_reset_defaults(app_config_t* config);
+esp_err_t config_reset_defaults(app_config_t *config);
 
 // Update single configuration value
-esp_err_t config_set_string(const char* key, const char* value);
-esp_err_t config_set_int(const char* key, int value);
+esp_err_t config_set_string(const char *key, const char *value);
+esp_err_t config_set_int(const char *key, int value);
 
 // Get single configuration value
-esp_err_t config_get_string(const char* key, char* value, size_t max_len);
-esp_err_t config_get_int(const char* key, int* value);
+esp_err_t config_get_string(const char *key, char *value, size_t max_len);
+esp_err_t config_get_int(const char *key, int *value);
 
 // Validate configuration
-bool config_validate(const app_config_t* config);
+bool config_validate(const app_config_t *config);
 
 // Print configuration (for debugging)
-void config_print(const app_config_t* config);
+void config_print(const app_config_t *config);
 
-#endif // CONFIG_MANAGER_H
+#endif  // CONFIG_MANAGER_H

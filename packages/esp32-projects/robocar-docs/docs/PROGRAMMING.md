@@ -5,7 +5,7 @@ This document provides instructions for compiling and uploading code to the Robo
 ## Hardware Requirements
 
 - ESP32 Development Board (Main Controller)
-- ESP32-CAM Module 
+- ESP32-CAM Module
 - USB-to-Serial adapter for the ESP32-CAM (since it doesn't have a USB port)
 - Micro USB cable for the main ESP32
 - Jumper wires

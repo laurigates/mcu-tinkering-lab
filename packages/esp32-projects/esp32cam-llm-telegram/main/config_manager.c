@@ -1,19 +1,20 @@
 #include "config_manager.h"
+#include <stdio.h>
+#include <string.h>
 #include "config.h"
 #include "esp_log.h"
-#include "nvs_flash.h"
 #include "nvs.h"
-#include <string.h>
-#include <stdio.h>
+#include "nvs_flash.h"
 
-static const char* TAG = "CONFIG_MANAGER";
-static const char* NVS_NAMESPACE = "esp32cam_llm";
+static const char *TAG = "CONFIG_MANAGER";
+static const char *NVS_NAMESPACE = "esp32cam_llm";
 
 static nvs_handle_t nvs_handle = 0;
 static bool is_initialized = false;
 
 // Initialize configuration manager
-esp_err_t config_manager_init(void) {
+esp_err_t config_manager_init(void)
+{
     if (is_initialized) {
         return ESP_OK;
     }
@@ -39,7 +40,8 @@ esp_err_t config_manager_init(void) {
 }
 
 // Load configuration from NVS
-esp_err_t config_load(app_config_t* config) {
+esp_err_t config_load(app_config_t *config)
+{
     if (!is_initialized || !config) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -128,7 +130,8 @@ esp_err_t config_load(app_config_t* config) {
 }
 
 // Save configuration to NVS
-esp_err_t config_save(const app_config_t* config) {
+esp_err_t config_save(const app_config_t *config)
+{
     if (!is_initialized || !config) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -139,51 +142,65 @@ esp_err_t config_save(const app_config_t* config) {
 
     // Save WiFi settings
     err = nvs_set_str(nvs_handle, "wifi_ssid", config->wifi_ssid);
-    if (err != ESP_OK) goto save_error;
+    if (err != ESP_OK)
+        goto save_error;
 
     err = nvs_set_str(nvs_handle, "wifi_pass", config->wifi_password);
-    if (err != ESP_OK) goto save_error;
+    if (err != ESP_OK)
+        goto save_error;
 
     // Save Telegram settings
     err = nvs_set_str(nvs_handle, "tg_token", config->telegram_bot_token);
-    if (err != ESP_OK) goto save_error;
+    if (err != ESP_OK)
+        goto save_error;
 
     err = nvs_set_i64(nvs_handle, "tg_chat_id", config->telegram_chat_id);
-    if (err != ESP_OK) goto save_error;
+    if (err != ESP_OK)
+        goto save_error;
 
     // Save LLM settings
     err = nvs_set_i32(nvs_handle, "llm_backend", config->llm_backend_type);
-    if (err != ESP_OK) goto save_error;
+    if (err != ESP_OK)
+        goto save_error;
 
     err = nvs_set_str(nvs_handle, "claude_key", config->claude_api_key);
-    if (err != ESP_OK) goto save_error;
+    if (err != ESP_OK)
+        goto save_error;
 
     err = nvs_set_str(nvs_handle, "ollama_url", config->ollama_server_url);
-    if (err != ESP_OK) goto save_error;
+    if (err != ESP_OK)
+        goto save_error;
 
     err = nvs_set_str(nvs_handle, "llm_model", config->llm_model);
-    if (err != ESP_OK) goto save_error;
+    if (err != ESP_OK)
+        goto save_error;
 
     // Save camera settings
     err = nvs_set_i32(nvs_handle, "cam_quality", config->camera_quality);
-    if (err != ESP_OK) goto save_error;
+    if (err != ESP_OK)
+        goto save_error;
 
     err = nvs_set_i32(nvs_handle, "cam_interval", config->capture_interval_ms);
-    if (err != ESP_OK) goto save_error;
+    if (err != ESP_OK)
+        goto save_error;
 
     // Save system settings
     err = nvs_set_u8(nvs_handle, "auto_capture", config->auto_capture_enabled ? 1 : 0);
-    if (err != ESP_OK) goto save_error;
+    if (err != ESP_OK)
+        goto save_error;
 
     err = nvs_set_u8(nvs_handle, "tg_commands", config->telegram_commands_enabled ? 1 : 0);
-    if (err != ESP_OK) goto save_error;
+    if (err != ESP_OK)
+        goto save_error;
 
     err = nvs_set_i32(nvs_handle, "log_level", config->log_level);
-    if (err != ESP_OK) goto save_error;
+    if (err != ESP_OK)
+        goto save_error;
 
     // Commit changes
     err = nvs_commit(nvs_handle);
-    if (err != ESP_OK) goto save_error;
+    if (err != ESP_OK)
+        goto save_error;
 
     ESP_LOGI(TAG, "Configuration saved successfully");
     return ESP_OK;
@@ -194,7 +211,8 @@ save_error:
 }
 
 // Reset configuration to defaults
-esp_err_t config_reset_defaults(app_config_t* config) {
+esp_err_t config_reset_defaults(app_config_t *config)
+{
     if (!config) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -219,7 +237,8 @@ esp_err_t config_reset_defaults(app_config_t* config) {
 }
 
 // Update single string configuration value
-esp_err_t config_set_string(const char* key, const char* value) {
+esp_err_t config_set_string(const char *key, const char *value)
+{
     if (!is_initialized || !key || !value) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -232,7 +251,8 @@ esp_err_t config_set_string(const char* key, const char* value) {
 }
 
 // Update single int configuration value
-esp_err_t config_set_int(const char* key, int value) {
+esp_err_t config_set_int(const char *key, int value)
+{
     if (!is_initialized || !key) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -245,7 +265,8 @@ esp_err_t config_set_int(const char* key, int value) {
 }
 
 // Get single string configuration value
-esp_err_t config_get_string(const char* key, char* value, size_t max_len) {
+esp_err_t config_get_string(const char *key, char *value, size_t max_len)
+{
     if (!is_initialized || !key || !value) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -254,7 +275,8 @@ esp_err_t config_get_string(const char* key, char* value, size_t max_len) {
 }
 
 // Get single int configuration value
-esp_err_t config_get_int(const char* key, int* value) {
+esp_err_t config_get_int(const char *key, int *value)
+{
     if (!is_initialized || !key || !value) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -263,7 +285,8 @@ esp_err_t config_get_int(const char* key, int* value) {
 }
 
 // Validate configuration
-bool config_validate(const app_config_t* config) {
+bool config_validate(const app_config_t *config)
+{
     if (!config) {
         return false;
     }
@@ -305,7 +328,8 @@ bool config_validate(const app_config_t* config) {
 }
 
 // Print configuration (for debugging)
-void config_print(const app_config_t* config) {
+void config_print(const app_config_t *config)
+{
     if (!config) {
         return;
     }
@@ -314,7 +338,9 @@ void config_print(const app_config_t* config) {
     ESP_LOGI(TAG, "WiFi SSID: %s", config->wifi_ssid);
     ESP_LOGI(TAG, "Telegram Bot Token: %s...%s",
              config->telegram_bot_token[0] != 0 ? "***" : "NOT SET",
-             config->telegram_bot_token[0] != 0 ? config->telegram_bot_token + strlen(config->telegram_bot_token) - 4 : "");
+             config->telegram_bot_token[0] != 0
+                 ? config->telegram_bot_token + strlen(config->telegram_bot_token) - 4
+                 : "");
     ESP_LOGI(TAG, "Telegram Chat ID: %lld", config->telegram_chat_id);
     ESP_LOGI(TAG, "LLM Backend: %s", config->llm_backend_type ? "Claude" : "Ollama");
     if (config->llm_backend_type) {
@@ -326,6 +352,7 @@ void config_print(const app_config_t* config) {
     ESP_LOGI(TAG, "Camera Quality: %d", config->camera_quality);
     ESP_LOGI(TAG, "Capture Interval: %d ms", config->capture_interval_ms);
     ESP_LOGI(TAG, "Auto Capture: %s", config->auto_capture_enabled ? "Enabled" : "Disabled");
-    ESP_LOGI(TAG, "Telegram Commands: %s", config->telegram_commands_enabled ? "Enabled" : "Disabled");
+    ESP_LOGI(TAG, "Telegram Commands: %s",
+             config->telegram_commands_enabled ? "Enabled" : "Disabled");
     ESP_LOGI(TAG, "===================");
 }

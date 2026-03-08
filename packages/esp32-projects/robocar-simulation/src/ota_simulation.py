@@ -20,7 +20,6 @@ from enum import Enum
 from pathlib import Path
 
 import yaml
-
 from error_handling import ErrorSeverity, get_error_handler
 
 
