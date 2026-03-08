@@ -32,9 +32,9 @@ classifiers = [
 ]
 requires-python = ">=3.11"
 dependencies = [
-    # Core simulation framework - fallback to matplotlib for visualization
+    # Core simulation framework with 3D visualization
     "spatialmath-python>=1.1.0",
-    # "genesis-world>=0.2.0",  # Disabled due to Python 3.11 compatibility issues
+    "genesis-world>=0.2.0",
     # Scientific computing
     "numpy>=1.21.0",
     "scipy>=1.7.0",
@@ -56,8 +56,8 @@ dependencies = [
     "pyyaml>=6.0",
     "toml>=0.10.2",
     "click>=8.0.0",
-    # PyTorch (required by Genesis) - disabled for now
-    # "torch>=2.0.0",
+    # PyTorch (required by Genesis)
+    "torch>=2.0.0",
     "crc8>=0.2.1",
 ]
 

@@ -41,17 +41,17 @@ python main.py --browser --config custom_config.yaml
 ### Environment Variable
 ```bash
 # Set visualization mode via environment
-export SWIFT_VIZ_MODE=visual
+export GENESIS_VIZ_MODE=visual
 python main.py
 
 # Or inline
-SWIFT_VIZ_MODE=browser python main.py
+GENESIS_VIZ_MODE=browser python main.py
 ```
 
 ### Priority Order
 1. Command line `--viz-mode` argument (highest priority)
 2. Command line shorthand flags (`--visual`, `--browser`, `--headless`)  
-3. `SWIFT_VIZ_MODE` environment variable
+3. `GENESIS_VIZ_MODE` environment variable
 4. Default: `headless` mode
 
 ## Examples
@@ -67,7 +67,7 @@ python main.py --visual
 python main.py --browser
 
 # Environment variable control
-SWIFT_VIZ_MODE=visual python main.py
+GENESIS_VIZ_MODE=visual python main.py
 
 # Combined with ESP32 connection
 python main.py --visual --serial /dev/ttyUSB0

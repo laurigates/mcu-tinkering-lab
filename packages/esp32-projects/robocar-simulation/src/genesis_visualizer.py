@@ -232,13 +232,15 @@ class RobotVisualizer:
             gs.init(backend=gs.cpu if self.viz_mode == "headless" else gs.gpu)
 
             # Create scene
+            viewer_kwargs: dict = {
+                "camera_pos": (2.0, 2.0, 2.0),
+                "camera_lookat": (0.0, 0.0, 0.0),
+            }
+            if self.viz_mode != "headless":
+                viewer_kwargs["max_FPS"] = RobotVisualizer.DEFAULT_FPS
             self.scene = gs.Scene(
                 show_viewer=(self.viz_mode in ["visual", "browser"]),
-                viewer_options=gs.options.ViewerOptions(
-                    camera_pos=(2.0, 2.0, 2.0),
-                    camera_lookat=(0.0, 0.0, 0.0),
-                    max_FPS=RobotVisualizer.DEFAULT_FPS if self.viz_mode != "headless" else None,
-                ),
+                viewer_options=gs.options.ViewerOptions(**viewer_kwargs),
             )
 
             print(f"✓ Genesis {self.viz_mode} mode initialized successfully")
@@ -265,7 +267,7 @@ class RobotVisualizer:
         ground_size = self.config["simulation"]["environment"]["size"]
         self.scene.add_entity(
             gs.morphs.Box(size=(ground_size[0], ground_size[1], 0.01), pos=(0, 0, -0.005)),
-            material=gs.materials.Rigid(color=(0.8, 0.8, 0.8)),
+            surface=gs.surfaces.Default(color=(0.8, 0.8, 0.8, 1.0)),
         )
 
         # Add obstacles
@@ -284,14 +286,14 @@ class RobotVisualizer:
             size = obstacle["size"]
             obstacle_entity = self.scene.add_entity(
                 gs.morphs.Box(size=(size[0], size[1], 0.2), pos=(pos[0], pos[1], 0.1)),
-                material=gs.materials.Rigid(color=(1.0, 0.4, 0.4)),  # Red
+                surface=gs.surfaces.Default(color=(1.0, 0.4, 0.4, 1.0)),  # Red
             )
 
         elif obstacle["type"] == "cylinder":
             radius = obstacle["radius"]
             obstacle_entity = self.scene.add_entity(
                 gs.morphs.Cylinder(radius=radius, height=0.2, pos=(pos[0], pos[1], 0.1)),
-                material=gs.materials.Rigid(color=(0.4, 0.4, 1.0)),  # Blue
+                surface=gs.surfaces.Default(color=(0.4, 0.4, 1.0, 1.0)),  # Blue
             )
 
         else:
@@ -312,7 +314,7 @@ class RobotVisualizer:
                 pos=(0.25, 0, 0.01),
                 quat=gs.quat_from_euler([0, np.pi / 2, 0]),
             ),
-            material=gs.materials.Rigid(color=(1.0, 0.0, 0.0)),
+            surface=gs.surfaces.Default(color=(1.0, 0.0, 0.0, 1.0)),
         )
 
         # Y-axis (green)
@@ -323,13 +325,13 @@ class RobotVisualizer:
                 pos=(0, 0.25, 0.01),
                 quat=gs.quat_from_euler([-np.pi / 2, 0, 0]),
             ),
-            material=gs.materials.Rigid(color=(0.0, 1.0, 0.0)),
+            surface=gs.surfaces.Default(color=(0.0, 1.0, 0.0, 1.0)),
         )
 
         # Z-axis (blue)
         self.scene.add_entity(
             gs.morphs.Cylinder(radius=0.01, height=0.5, pos=(0, 0, 0.25)),
-            material=gs.materials.Rigid(color=(0.0, 0.0, 1.0)),
+            surface=gs.surfaces.Default(color=(0.0, 0.0, 1.0, 1.0)),
         )
 
     def _create_robot_model(self):
@@ -347,7 +349,7 @@ class RobotVisualizer:
         # Main chassis
         self.robot_entity = self.scene.add_entity(
             gs.morphs.Box(size=(length, width, height), pos=(0, 0, height / 2)),
-            material=gs.materials.Rigid(color=(0.4, 0.6, 0.8)),  # Blue-gray
+            surface=gs.surfaces.Default(color=(0.4, 0.6, 0.8, 1.0)),  # Blue-gray
         )
 
         # Wheels
@@ -366,7 +368,7 @@ class RobotVisualizer:
                     pos=pos,
                     quat=gs.quat_from_euler([np.pi / 2, 0, 0]),
                 ),
-                material=gs.materials.Rigid(color=(0.2, 0.2, 0.2)),  # Dark gray
+                surface=gs.surfaces.Default(color=(0.2, 0.2, 0.2, 1.0)),  # Dark gray
             )
             self.wheel_entities.append(wheel)
 
@@ -377,13 +379,13 @@ class RobotVisualizer:
                 size=(0.03, 0.03, 0.02),
                 pos=(camera_pos[0], camera_pos[1], camera_pos[2] + height / 2),
             ),
-            material=gs.materials.Rigid(color=(1.0, 1.0, 0.0)),  # Yellow
+            surface=gs.surfaces.Default(color=(1.0, 1.0, 0.0, 1.0)),  # Yellow
         )
 
         # Ultrasonic sensor
         self.scene.add_entity(
             gs.morphs.Cylinder(radius=0.01, height=0.02, pos=(length / 2, 0, height / 2)),
-            material=gs.materials.Rigid(color=(0.0, 1.0, 1.0)),  # Cyan
+            surface=gs.surfaces.Default(color=(0.0, 1.0, 1.0, 1.0)),  # Cyan
         )
 
     def _set_camera_view(self):
@@ -501,7 +503,7 @@ class RobotVisualizer:
         else:
             self.ultrasonic_marker = self.scene.add_entity(
                 gs.morphs.Sphere(radius=0.02, pos=(ray_end_x, ray_end_y, 0.05)),
-                material=gs.materials.Rigid(color=(1.0, 0.0, 1.0)),  # Magenta
+                surface=gs.surfaces.Default(color=(1.0, 0.0, 1.0, 1.0)),  # Magenta
             )
 
     def add_trajectory_point(self, x: float, y: float, color: list[float] = None):
@@ -512,7 +514,7 @@ class RobotVisualizer:
             return
         self.scene.add_entity(
             gs.morphs.Sphere(radius=0.01, pos=(x, y, 0.02)),
-            material=gs.materials.Rigid(color=color),
+            surface=gs.surfaces.Default(color=(*color, 1.0) if len(color) == 3 else color),
         )
 
     def add_waypoint(self, x: float, y: float, z: float = 0.1):
@@ -521,7 +523,7 @@ class RobotVisualizer:
             return
         self.scene.add_entity(
             gs.morphs.Cylinder(radius=0.05, height=0.2, pos=(x, y, z)),
-            material=gs.materials.Rigid(color=(1.0, 1.0, 0.0, 0.5)),  # Semi-transparent yellow
+            surface=gs.surfaces.Default(color=(1.0, 1.0, 0.0, 0.5)),  # Semi-transparent yellow
         )
 
     def clear_markers(self):
