@@ -44,7 +44,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           submodules: recursive
 
@@ -55,13 +55,16 @@ jobs:
           target: ${{ matrix.target }}
           command: >-
             cd packages/esp32-projects/${{ matrix.project }} &&
+            echo "Building ${{ matrix.description }}" &&
             idf.py build &&
             echo "# Build Size Analysis for ${{ matrix.project }}" > size-report.txt &&
-            idf.py size >> size-report.txt 2>&1;
-            idf.py size-components >> size-report.txt 2>&1; true
+            echo "## Component Size Summary" >> size-report.txt &&
+            (idf.py size >> size-report.txt 2>&1 || true) &&
+            echo "## Detailed Component Sizes" >> size-report.txt &&
+            (idf.py size-components >> size-report.txt 2>&1 || true)
 
       - name: Archive firmware binaries
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.project }}-firmware-${{ github.sha }}
           path: |
@@ -73,7 +76,7 @@ jobs:
           retention-days: 30
 
       - name: Archive size analysis
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.project }}-size-report-${{ github.sha }}
           path: packages/esp32-projects/${{ matrix.project }}/size-report.txt
@@ -107,10 +110,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
 

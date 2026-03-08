@@ -151,4 +151,16 @@ typedef struct {
 #define DEBUG_SHOW_PIN_CONFIG true
 #define DEBUG_ACTION_COUNTER true
 
+// ========================================
+// OTA Configuration
+// ========================================
+#define OTA_ENABLED             1
+#define OTA_GITHUB_ORG          "laurigates"
+#define OTA_GITHUB_REPO         "mcu-tinkering-lab"
+#define OTA_STABILITY_TIMEOUT_MS 60000  // 60s before marking firmware valid
+#define OTA_HTTP_TIMEOUT_MS     30000   // 30s HTTP timeout
+#define OTA_TASK_STACK_SIZE     8192
+#define OTA_TASK_PRIORITY       5
+#define OTA_TAG_MAX_LEN         20      // Max release tag length
+
 #endif  // SYSTEM_CONFIG_H
