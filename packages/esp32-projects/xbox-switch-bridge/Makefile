@@ -1,9 +1,12 @@
 # Xbox-Switch Bridge - Project Makefile
-# Wraps idf.py commands for convenience
+# Prefer justfile: `just --list` or `just xbox::build`
 
 PROJECT_NAME := xbox-switch-bridge
-PORT ?= /dev/ttyUSB0
+PORT ?= /dev/cu.usbserial-0001
 BAUD ?= 460800
+CONTAINER_CMD ?= docker
+PROJECT_DIR := packages/esp32-projects/xbox-switch-bridge
+COMPOSE_FILE := ../../../docker-compose.yml
 
 # Colors
 BLUE := \033[1;34m
@@ -11,45 +14,45 @@ GREEN := \033[1;32m
 YELLOW := \033[1;33m
 NC := \033[0m
 
-# ESP-IDF environment detection
-IDF_PATH ?= $(HOME)/esp/esp-idf
-IDF_ENV_CMD := . $(IDF_PATH)/export.sh 2>/dev/null
+.PHONY: build flash monitor flash-monitor clean menuconfig info help
 
-.PHONY: build flash monitor flash-monitor clean fullclean menuconfig info help
-
-build: ## Build firmware
-	@echo "$(BLUE)Building $(PROJECT_NAME)...$(NC)"
-	@$(IDF_ENV_CMD) && idf.py set-target esp32s3 && idf.py build
+build: ## Build firmware (containerized)
+	@echo "$(BLUE)Building $(PROJECT_NAME) (containerized)...$(NC)"
+	@$(CONTAINER_CMD) compose -f $(COMPOSE_FILE) run --rm \
+		-w /workspace/$(PROJECT_DIR) \
+		esp-idf \
+		bash -c "idf.py set-target esp32s3 && idf.py build"
 	@echo "$(GREEN)Build complete!$(NC)"
 
-flash: ## Flash firmware to device
-	@echo "$(BLUE)Flashing $(PROJECT_NAME) to $(PORT)...$(NC)"
-	@$(IDF_ENV_CMD) && idf.py -p $(PORT) -b $(BAUD) flash
+flash: ## Flash firmware to device (native)
+	esptool.py -p $(PORT) -b $(BAUD) \
+		--before default_reset --after hard_reset \
+		write_flash @build/flash_args
 
-monitor: ## Start serial monitor
-	@echo "$(BLUE)Starting monitor on $(PORT)...$(NC)"
-	@$(IDF_ENV_CMD) && idf.py -p $(PORT) monitor
+monitor: ## Start serial monitor (native)
+	python3 -m esp_idf_monitor -p $(PORT) build/$(PROJECT_NAME).elf
 
-flash-monitor: ## Flash and start monitor
-	@$(IDF_ENV_CMD) && idf.py -p $(PORT) -b $(BAUD) flash monitor
+flash-monitor: flash monitor ## Flash and start monitor
 
-clean: ## Clean build artifacts
-	@$(IDF_ENV_CMD) && idf.py fullclean
+clean: ## Clean build artifacts (containerized)
+	@$(CONTAINER_CMD) compose -f $(COMPOSE_FILE) run --rm \
+		-w /workspace/$(PROJECT_DIR) \
+		esp-idf \
+		idf.py fullclean
 	@echo "$(GREEN)Clean complete$(NC)"
 
-fullclean: ## Full clean including sdkconfig
-	@$(IDF_ENV_CMD) && idf.py fullclean
-	@rm -f sdkconfig sdkconfig.old
-	@echo "$(GREEN)Full clean complete$(NC)"
-
-menuconfig: ## Open configuration menu
-	@$(IDF_ENV_CMD) && idf.py menuconfig
+menuconfig: ## Open configuration menu (containerized)
+	@$(CONTAINER_CMD) compose -f $(COMPOSE_FILE) run --rm \
+		-w /workspace/$(PROJECT_DIR) \
+		esp-idf \
+		idf.py menuconfig
 
 info: ## Show project info
 	@echo "$(BLUE)Project: $(PROJECT_NAME)$(NC)"
-	@echo "  Target: ESP32-S3"
-	@echo "  Port: $(PORT)"
-	@echo "  Baud: $(BAUD)"
+	@echo "  Target:    ESP32-S3"
+	@echo "  Port:      $(PORT)"
+	@echo "  Baud:      $(BAUD)"
+	@echo "  Container: $(CONTAINER_CMD)"
 	@echo ""
 	@echo "  USB VID: 0x057E (Nintendo)"
 	@echo "  USB PID: 0x2009 (Pro Controller)"

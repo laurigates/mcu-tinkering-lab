@@ -1,0 +1,155 @@
+# Xbox-Switch Bridge — ESP32-S3 Bluetooth-to-USB Controller Bridge
+# Run `just --list` or `just xbox::help` to see available recipes
+
+set positional-arguments
+
+project_dir := "packages/esp32-projects/xbox-switch-bridge"
+port := env("PORT", "/dev/cu.usbserial-0001")
+baud := env("BAUD", "460800")
+target := "esp32s3"
+
+# Container engine (docker or podman)
+container_cmd := env("CONTAINER_CMD", "docker")
+
+# Bluepad32 dependency
+bp32_version := "release_v3.10.3"
+bp32_repo := "https://github.com/ricardoquesada/bluepad32.git"
+
+default:
+    @just --list
+
+##########
+# Setup
+##########
+
+# Clone external dependencies and prepare btstack component
+[group: "setup"]
+fetch-deps:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    BP32_DIR="external/bluepad32"
+    BTSTACK_ROOT="$BP32_DIR/external/btstack"
+    BTSTACK_COMP="$BTSTACK_ROOT/port/esp32/components/btstack"
+
+    if [ ! -d "$BP32_DIR/src" ]; then
+        echo "Cloning bluepad32 {{bp32_version}}..."
+        git clone --depth 1 --branch {{bp32_version}} {{bp32_repo}} "$BP32_DIR"
+        cd "$BP32_DIR" && git submodule update --init --depth 1 external/btstack
+        cd -
+    fi
+
+    # BTstack component needs source dirs copied into component directory
+    # (btstack's CMakeLists uses relative paths from the component dir)
+    if [ ! -d "$BTSTACK_COMP/src" ]; then
+        echo "Preparing btstack component..."
+        DIRS=(
+            "src"
+            "3rd-party/bluedroid"
+            "3rd-party/hxcmod-player"
+            "3rd-party/lwip/dhcp-server"
+            "3rd-party/lc3-google"
+            "3rd-party/md5"
+            "3rd-party/micro-ecc"
+            "3rd-party/yxml"
+            "platform/freertos"
+            "platform/lwip"
+        )
+        for dir in "${DIRS[@]}"; do
+            mkdir -p "$BTSTACK_COMP/$(dirname "$dir")"
+            cp -r "$BTSTACK_ROOT/$dir" "$BTSTACK_COMP/$dir"
+        done
+        # platform/embedded needs only specific files
+        mkdir -p "$BTSTACK_COMP/platform/embedded"
+        for f in hal_time_ms.h hal_uart_dma.h hci_dump_embedded_stdout.h hci_dump_embedded_stdout.c; do
+            cp "$BTSTACK_ROOT/platform/embedded/$f" "$BTSTACK_COMP/platform/embedded/"
+        done
+        echo "btstack component prepared"
+    fi
+    echo "Dependencies ready"
+
+# Remove external dependencies
+[confirm("Remove external dependencies and rebuild from scratch?")]
+[group: "setup"]
+clean-deps:
+    rm -rf external/
+
+##########
+# Build (containerized)
+##########
+
+# Build firmware in Docker container
+[group: "build"]
+build: fetch-deps
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Building xbox-switch-bridge (containerized)..."
+    {{container_cmd}} compose -f ../../../docker-compose.yml run --rm \
+        -w /workspace/{{project_dir}} \
+        esp-idf \
+        bash -c "idf.py set-target {{target}} && idf.py build"
+    echo "Build complete!"
+
+# Clean build artifacts via container
+[group: "build"]
+clean:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    {{container_cmd}} compose -f ../../../docker-compose.yml run --rm \
+        -w /workspace/{{project_dir}} \
+        esp-idf \
+        idf.py fullclean
+    echo "Clean complete"
+
+# Open menuconfig via container
+[group: "build"]
+menuconfig:
+    {{container_cmd}} compose -f ../../../docker-compose.yml run --rm \
+        -w /workspace/{{project_dir}} \
+        esp-idf \
+        idf.py menuconfig
+
+# Interactive shell in ESP-IDF container (project directory)
+[group: "build"]
+shell:
+    {{container_cmd}} compose -f ../../../docker-compose.yml run --rm \
+        -w /workspace/{{project_dir}} \
+        esp-idf \
+        /bin/bash
+
+##########
+# Flash & Monitor (native — USB passthrough on macOS is unreliable)
+##########
+
+# Flash firmware to device
+[group: "device"]
+flash:
+    esptool.py -p {{port}} -b {{baud}} \
+        --before default_reset --after hard_reset \
+        write_flash @build/flash_args
+
+# Start serial monitor
+[group: "device"]
+monitor:
+    python3 -m esp_idf_monitor -p {{port}} build/xbox-switch-bridge.elf
+
+# Flash and monitor
+[group: "device"]
+flash-monitor: flash monitor
+
+##########
+# Info
+##########
+
+# Show project information
+[group: "info"]
+info:
+    @echo "Project: xbox-switch-bridge"
+    @echo "  Target:    ESP32-S3"
+    @echo "  Port:      {{port}}"
+    @echo "  Baud:      {{baud}}"
+    @echo "  Container: {{container_cmd}}"
+    @echo ""
+    @echo "  USB VID: 0x057E (Nintendo)"
+    @echo "  USB PID: 0x2009 (Pro Controller)"
+    @echo ""
+    @echo "  Bluepad32: {{bp32_version}}"

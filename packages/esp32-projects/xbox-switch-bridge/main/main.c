@@ -28,6 +28,7 @@
 
 static const char *TAG = "xbox_switch_bridge";
 
+
 /* Bridge loop interval: 8ms = 125 Hz USB poll rate */
 #define BRIDGE_LOOP_INTERVAL_MS 8
 

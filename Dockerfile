@@ -28,9 +28,8 @@ RUN apt-get update && apt-get install -y \
     gdb-multiarch \
     && rm -rf /var/lib/apt/lists/*
 
-# Upgrade pip and install Python development tools
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir \
+# Install Python development tools (base image is externally-managed)
+RUN pip install --no-cache-dir --break-system-packages \
     pre-commit \
     pytest \
     pytest-cov \
