@@ -24,6 +24,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "nvs_flash.h"
+#include "status_led.h"
 #include "switch_pro_usb.h"
 
 static const char *TAG = "xbox_switch_bridge";
@@ -49,9 +50,11 @@ static void on_controller_connection(bool connected)
     if (connected) {
         ESP_LOGI(TAG, "*** Xbox controller CONNECTED ***");
         s_state = BRIDGE_STATE_CONNECTED;
+        status_led_set_mode(STATUS_LED_CONNECTED);
     } else {
         ESP_LOGW(TAG, "*** Xbox controller DISCONNECTED ***");
         s_state = BRIDGE_STATE_SCANNING;
+        status_led_set_mode(STATUS_LED_SCANNING);
     }
 }
 
@@ -96,6 +99,7 @@ static void bridge_task(void *arg)
                 if (switch_pro_usb_is_ready()) {
                     ESP_LOGI(TAG, "*** BRIDGE ACTIVE ***");
                     s_state = BRIDGE_STATE_BRIDGING;
+                    status_led_set_mode(STATUS_LED_BRIDGING);
                 }
                 /* Fall through to send neutral state */
                 /* fallthrough */
@@ -132,6 +136,9 @@ void app_main(void)
     ESP_LOGI(TAG, "=== Xbox -> Switch Controller Bridge ===");
     ESP_LOGI(TAG, "Firmware built: %s %s", __DATE__, __TIME__);
 
+    /* Initialize status LED */
+    ESP_ERROR_CHECK(status_led_init());
+
     /* Initialize NVS (required for BT) */
     ESP_ERROR_CHECK(init_nvs());
 
@@ -141,6 +148,7 @@ void app_main(void)
     /* Initialize Bluepad32 (BLE gamepad host) */
     ESP_ERROR_CHECK(bp32_host_init(on_controller_connection));
     s_state = BRIDGE_STATE_SCANNING;
+    status_led_set_mode(STATUS_LED_SCANNING);
 
     ESP_LOGI(TAG, "Waiting for Xbox controller...");
     ESP_LOGI(TAG, "  1. Turn on your Xbox controller (hold Xbox button)");

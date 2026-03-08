@@ -4,7 +4,7 @@
 set positional-arguments
 
 project_dir := "packages/esp32-projects/xbox-switch-bridge"
-port := env("PORT", "/dev/cu.usbserial-0001")
+port := env("PORT", "/dev/cu.usbmodem101")
 baud := env("BAUD", "460800")
 target := "esp32s3"
 
@@ -120,14 +120,17 @@ shell:
 # Flash & Monitor (native — USB passthrough on macOS is unreliable)
 ##########
 
-# Flash firmware to device
+# Flash firmware to device (put board in download mode first: hold BOOT, press RST, release BOOT)
 [group: "device"]
 flash:
-    esptool.py -p {{port}} -b {{baud}} \
-        --before default_reset --after hard_reset \
-        write_flash @build/flash_args
+    esptool --chip esp32s3 -p {{port}} -b {{baud}} \
+        --before default-reset --after hard-reset \
+        write-flash --flash-mode dio --flash-size 4MB --flash-freq 80m \
+        0x0 build/bootloader/bootloader.bin \
+        0x8000 build/partition_table/partition-table.bin \
+        0x10000 build/xbox-switch-bridge.bin
 
-# Start serial monitor
+# Start serial monitor (requires USB-UART adapter on GPIO43/TX, GPIO44/RX — see WIRING.md)
 [group: "device"]
 monitor:
     python3 -m esp_idf_monitor -p {{port}} build/xbox-switch-bridge.elf

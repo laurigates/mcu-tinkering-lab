@@ -24,6 +24,26 @@ ESP32-S3 DevKit                          Nintendo Switch
     (Bluetooth LE)
 ```
 
+## Waveshare ESP32-S3-Zero Pinout
+
+| Pin    | Function              | Notes                                |
+|--------|-----------------------|--------------------------------------|
+| GPIO21 | WS2812 RGB LED        | On-board status LED                  |
+| GPIO43 | UART TX (debug)       | Connect to USB-UART adapter RX       |
+| GPIO44 | UART RX (debug)       | Connect to USB-UART adapter TX       |
+| GPIO19 | USB D- (native USB)   | Built-in USB-C connector             |
+| GPIO20 | USB D+ (native USB)   | Built-in USB-C connector             |
+| BOOT   | Boot button           | Hold during reset to enter DFU mode  |
+| RST    | Reset button          | Resets the MCU                       |
+
+### Status LED (GPIO21 — WS2812 RGB)
+
+| State    | Color  | Pattern      | Meaning                              |
+|----------|--------|--------------|--------------------------------------|
+| SCANNING | Blue   | Slow blink   | Waiting for Xbox controller to pair  |
+| CONNECTED| Yellow | Solid        | Xbox paired, waiting for Switch USB  |
+| BRIDGING | Green  | Solid        | Active — forwarding inputs to Switch |
+
 ## Important Notes
 
 ### USB Port Selection

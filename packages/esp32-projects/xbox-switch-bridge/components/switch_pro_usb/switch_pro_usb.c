@@ -480,6 +480,11 @@ esp_err_t switch_pro_usb_init(void)
     };
 
     const tinyusb_config_t tusb_cfg = {
+        .task = {
+            .size = 4096,
+            .priority = 5,
+            .xCoreID = 0,
+        },
         .descriptor = {
             .device = &device_desc,
             .string = string_desc,
