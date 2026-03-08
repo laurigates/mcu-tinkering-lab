@@ -117,7 +117,7 @@ simulation:
     max_retry_attempts: 3
     retry_delay_ms: 5000
     power_save_mode: true
-  
+
   # OTA simulation configuration
   ota:
     enabled: false

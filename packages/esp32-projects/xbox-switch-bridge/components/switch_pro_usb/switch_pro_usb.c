@@ -480,16 +480,18 @@ esp_err_t switch_pro_usb_init(void)
     };
 
     const tinyusb_config_t tusb_cfg = {
-        .task = {
-            .size = 4096,
-            .priority = 5,
-            .xCoreID = 1, /* Core 0 reserved for BTstack; USB HID runs on core 1 */
-        },
-        .descriptor = {
-            .device = &device_desc,
-            .string = string_desc,
-            .string_count = 4,
-        },
+        .task =
+            {
+                .size = 4096,
+                .priority = 5,
+                .xCoreID = 1, /* Core 0 reserved for BTstack; USB HID runs on core 1 */
+            },
+        .descriptor =
+            {
+                .device = &device_desc,
+                .string = string_desc,
+                .string_count = 4,
+            },
     };
 
     esp_err_t ret = tinyusb_driver_install(&tusb_cfg);

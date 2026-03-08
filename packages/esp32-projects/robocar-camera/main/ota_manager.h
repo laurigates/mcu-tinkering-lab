@@ -56,4 +56,4 @@ const char *ota_manager_get_version(void);
  */
 esp_err_t ota_manager_confirm_valid(void);
 
-#endif // OTA_MANAGER_H
+#endif  // OTA_MANAGER_H

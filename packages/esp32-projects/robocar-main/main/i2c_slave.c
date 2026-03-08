@@ -5,15 +5,15 @@
 
 #include "i2c_slave.h"
 #include <string.h>
-#include "ota_handler.h"
 #include "driver/i2c.h"
+#include "esp_app_desc.h"
 #include "esp_log.h"
 #include "esp_system.h"
-#include "esp_app_desc.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "freertos/timers.h"
+#include "ota_handler.h"
 
 static const char *TAG = "i2c_slave";
 
@@ -327,7 +327,8 @@ static void prepare_response(i2c_response_packet_t *response, uint8_t status, ui
     response->checksum = calculate_checksum((uint8_t *)response, sizeof(i2c_response_packet_t) - 1);
 }
 
-static void reboot_timer_callback(TimerHandle_t xTimer) {
+static void reboot_timer_callback(TimerHandle_t xTimer)
+{
     ESP_LOGW(TAG, "Rebooting now...");
     xTimerDelete(xTimer, 0);
     esp_restart();
@@ -382,7 +383,7 @@ static void handle_ota_commands(const i2c_command_packet_t *command,
 
         case CMD_TYPE_GET_VERSION: {
             version_response_t version;
-            const esp_app_desc_t* app_desc = esp_app_get_description();
+            const esp_app_desc_t *app_desc = esp_app_get_description();
             strncpy(version.version, app_desc->version, VERSION_STRING_LEN);
             version.version[VERSION_STRING_LEN - 1] = '\0';
 
@@ -398,9 +399,8 @@ static void handle_ota_commands(const i2c_command_packet_t *command,
             prepare_response(response, 0x00, command->sequence_number, NULL, 0);
 
             // Schedule reboot via timer so I2C task can send the ACK first
-            TimerHandle_t reboot_timer = xTimerCreate(
-                "reboot", pdMS_TO_TICKS(1000), pdFALSE, NULL,
-                reboot_timer_callback);
+            TimerHandle_t reboot_timer =
+                xTimerCreate("reboot", pdMS_TO_TICKS(1000), pdFALSE, NULL, reboot_timer_callback);
             if (reboot_timer) {
                 xTimerStart(reboot_timer, 0);
             } else {
