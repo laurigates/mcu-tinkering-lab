@@ -10,7 +10,12 @@ on:
   pull_request_review:
     types: [submitted]
 
-permissions: {}
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  id-token: write
+  actions: read
 
 # Prevent concurrent Claude runs on the same issue/PR
 concurrency:
