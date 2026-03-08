@@ -3,7 +3,7 @@
 ESP32 Robot Car Simulation - Main Entry Point
 
 This is the main entry point for the ESP32 robot car simulation using
-Robotics Toolbox for Python with Swift visualizer.
+the Genesis physics framework for 3D visualization.
 """
 
 import argparse
@@ -328,7 +328,7 @@ Examples:
   python main.py --headless
 
   # Use environment variable for visualization mode
-  SWIFT_VIZ_MODE=browser python main.py
+  GENESIS_VIZ_MODE=browser python main.py
 
   # Run with custom configuration
   python main.py --config ../config/custom_config.yaml --visual

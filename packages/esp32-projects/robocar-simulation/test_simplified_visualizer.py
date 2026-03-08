@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test script for simplified Swift visualizer
+Test script for Genesis visualizer
 """
 
 import sys
@@ -16,7 +16,7 @@ def test_simplified_architecture():
     print("Testing Simplified Swift Visualizer...")
 
     try:
-        from swift_visualizer import SwiftSimulation
+        from genesis_visualizer import SwiftSimulation
 
         config_path = "config/robot_config.yaml"
 
@@ -63,7 +63,7 @@ def test_visualization_disabled():
     print("\nTesting with visualization disabled...")
 
     try:
-        from swift_visualizer import RobotVisualizer
+        from genesis_visualizer import RobotVisualizer
 
         from robot_model import DifferentialDriveRobot
 
@@ -93,7 +93,7 @@ def test_threading_simplification():
     print("\nTesting threading simplification...")
 
     try:
-        from swift_visualizer import SwiftSimulation
+        from genesis_visualizer import SwiftSimulation
 
         config_path = "config/robot_config.yaml"
         sim = SwiftSimulation(config_path, viz_mode="headless")
