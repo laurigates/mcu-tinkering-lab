@@ -1,0 +1,15 @@
+menu "OTA Update Configuration"
+
+    config OTA_GITHUB_ORG
+        string "GitHub organization or username"
+        default "laurigates"
+        help
+            The GitHub organization or username that owns the repository.
+
+    config OTA_GITHUB_REPO
+        string "GitHub repository name"
+        default "mcu-tinkering-lab"
+        help
+            The GitHub repository name where firmware releases are published.
+
+endmenu
