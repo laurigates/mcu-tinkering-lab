@@ -25,7 +25,7 @@ build: ## Build firmware (containerized)
 	@echo "$(GREEN)Build complete!$(NC)"
 
 flash: ## Flash firmware to device (native)
-	esptool.py -p $(PORT) -b $(BAUD) \
+	esptool -p $(PORT) -b $(BAUD) \
 		--before default_reset --after hard_reset \
 		write_flash @build/flash_args
 

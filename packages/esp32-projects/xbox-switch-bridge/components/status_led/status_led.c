@@ -4,6 +4,8 @@
  */
 #include "status_led.h"
 
+#include <stdatomic.h>
+
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -17,7 +19,7 @@ static const char *TAG = "status_led";
 #define BLINK_PERIOD_MS 500
 
 static led_strip_handle_t s_strip;
-static volatile status_led_mode_t s_mode = STATUS_LED_OFF;
+static _Atomic status_led_mode_t s_mode = STATUS_LED_OFF;
 
 static void set_color(uint8_t r, uint8_t g, uint8_t b)
 {
@@ -30,35 +32,51 @@ static void led_task(void *arg)
     (void)arg;
     bool blink_on = false;
     TickType_t last_toggle = xTaskGetTickCount();
+    status_led_mode_t last_mode = (status_led_mode_t)-1;
 
     while (1) {
-        switch (s_mode) {
-            case STATUS_LED_SCANNING:
+        status_led_mode_t mode = atomic_load(&s_mode);
+        bool mode_changed = (mode != last_mode);
+
+        switch (mode) {
+            case STATUS_LED_SCANNING: {
+                bool toggled = false;
                 if ((xTaskGetTickCount() - last_toggle) >= pdMS_TO_TICKS(BLINK_PERIOD_MS)) {
                     blink_on = !blink_on;
                     last_toggle = xTaskGetTickCount();
+                    toggled = true;
                 }
-                if (blink_on) {
-                    set_color(0, 0, LED_BRIGHTNESS); /* Blue */
-                } else {
-                    set_color(0, 0, 0);
+                if (mode_changed || toggled) {
+                    if (blink_on) {
+                        set_color(0, 0, LED_BRIGHTNESS); /* Blue */
+                    } else {
+                        set_color(0, 0, 0);
+                    }
                 }
                 break;
+            }
 
             case STATUS_LED_CONNECTED:
-                set_color(LED_BRIGHTNESS, LED_BRIGHTNESS / 2, 0); /* Yellow-orange */
+                if (mode_changed) {
+                    set_color(LED_BRIGHTNESS, LED_BRIGHTNESS / 2, 0); /* Yellow-orange */
+                }
                 break;
 
             case STATUS_LED_BRIDGING:
-                set_color(0, LED_BRIGHTNESS, 0); /* Green */
+                if (mode_changed) {
+                    set_color(0, LED_BRIGHTNESS, 0); /* Green */
+                }
                 break;
 
             case STATUS_LED_OFF:
             default:
-                set_color(0, 0, 0);
+                if (mode_changed) {
+                    set_color(0, 0, 0);
+                }
                 break;
         }
 
+        last_mode = mode;
         vTaskDelay(pdMS_TO_TICKS(50));
     }
 }
@@ -94,5 +112,5 @@ esp_err_t status_led_init(void)
 
 void status_led_set_mode(status_led_mode_t mode)
 {
-    s_mode = mode;
+    atomic_store(&s_mode, mode);
 }

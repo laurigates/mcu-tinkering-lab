@@ -483,7 +483,7 @@ esp_err_t switch_pro_usb_init(void)
         .task = {
             .size = 4096,
             .priority = 5,
-            .xCoreID = 0,
+            .xCoreID = 1, /* Core 0 reserved for BTstack; USB HID runs on core 1 */
         },
         .descriptor = {
             .device = &device_desc,

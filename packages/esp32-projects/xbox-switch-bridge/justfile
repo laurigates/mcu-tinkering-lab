@@ -34,8 +34,7 @@ fetch-deps:
     if [ ! -d "$BP32_DIR/src" ]; then
         echo "Cloning bluepad32 {{bp32_version}}..."
         git clone --depth 1 --branch {{bp32_version}} {{bp32_repo}} "$BP32_DIR"
-        cd "$BP32_DIR" && git submodule update --init --depth 1 external/btstack
-        cd -
+        (cd "$BP32_DIR" && git submodule update --init --depth 1 external/btstack)
     fi
 
     # BTstack component needs source dirs copied into component directory
