@@ -153,8 +153,8 @@ typedef struct {
 // OTA Configuration
 // ========================================
 #define OTA_ENABLED                    1
-#define OTA_GITHUB_ORG                 "laurigates"
-#define OTA_GITHUB_REPO                "mcu-tinkering-lab"
+#define OTA_GITHUB_ORG                 CONFIG_OTA_GITHUB_ORG
+#define OTA_GITHUB_REPO                CONFIG_OTA_GITHUB_REPO
 #define OTA_STABILITY_TIMEOUT_MS       60000   // 60s before marking firmware valid
 #define OTA_HTTP_TIMEOUT_MS            30000   // 30s HTTP timeout
 #define OTA_TASK_STACK_SIZE            8192

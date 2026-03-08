@@ -14,8 +14,6 @@ name: Build ESPHome Firmware
 #             md5_url: https://github.com/<owner>/<repo>/releases/latest/download/<device>-firmware.md5
 
 on:
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       device:
