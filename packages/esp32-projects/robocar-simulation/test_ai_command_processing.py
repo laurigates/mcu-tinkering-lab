@@ -311,9 +311,9 @@ def test_integration_with_communication_bridge():
         # Test AI command handler exists
         from communication_bridge import MessageType
 
-        assert (
-            MessageType.AI_COMMAND in bridge.message_handlers
-        ), "AI command handler should be registered"
+        assert MessageType.AI_COMMAND in bridge.message_handlers, (
+            "AI command handler should be registered"
+        )
 
         print("  ✅ AI command handler registered")
 
