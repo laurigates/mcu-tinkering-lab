@@ -16,7 +16,6 @@ permissions:
   issues: write
   id-token: write
   actions: read
-  workflows: write
 
 # Prevent concurrent Claude runs on the same issue/PR
 concurrency:
