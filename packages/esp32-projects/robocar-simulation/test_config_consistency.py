@@ -15,10 +15,10 @@ import yaml
 # Add src directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
-from ai_command_processor import AICommandProcessor
-from camera_simulation import CameraSimulation
 from swift_visualizer import RobotVisualizer
 
+from ai_command_processor import AICommandProcessor
+from camera_simulation import CameraSimulation
 from robot_model import DifferentialDriveRobot
 
 
