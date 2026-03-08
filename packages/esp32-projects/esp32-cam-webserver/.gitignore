@@ -9,3 +9,6 @@ managed_components/
 
 # Dependencies are tracked via dependencies.lock
 # Run `idf.py reconfigure` to download them
+
+# Credentials (never commit)
+main/credentials.h

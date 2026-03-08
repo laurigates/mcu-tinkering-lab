@@ -1,0 +1,64 @@
+name: Build ESPHome Firmware
+
+# Template workflow for building ESPHome firmware and uploading to GitHub Releases.
+# To use: add ESPHome YAML configs under packages/esphome/ and update the matrix below.
+#
+# Devices can then auto-update using the http_request OTA platform:
+#   ota:
+#     - platform: http_request
+#   interval:
+#     - interval: 6h
+#       then:
+#         - ota.http_request.flash:
+#             url: https://github.com/<owner>/<repo>/releases/latest/download/<device>-firmware.ota.bin
+#             md5_url: https://github.com/<owner>/<repo>/releases/latest/download/<device>-firmware.md5
+
+on:
+  workflow_dispatch:
+    inputs:
+      device:
+        description: 'Device YAML path (e.g., packages/esphome/my-device.yaml)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    # Uncomment and populate the matrix when ESPHome projects are added
+    # strategy:
+    #   matrix:
+    #     device:
+    #       - name: my-esphome-device
+    #         yaml: packages/esphome/my-device.yaml
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      # Uncomment when ESPHome projects exist
+      # - name: Build ESPHome firmware
+      #   uses: esphome/build-action@v4
+      #   id: build
+      #   with:
+      #     yaml-file: ${{ matrix.device.yaml || inputs.device }}
+      #
+      # - name: Generate MD5 checksum
+      #   run: |
+      #     FIRMWARE_DIR="${{ steps.build.outputs.name }}"
+      #     md5sum "${FIRMWARE_DIR}/firmware.ota.bin" | cut -d' ' -f1 > "${FIRMWARE_DIR}/firmware.md5"
+      #
+      # - name: Upload firmware to release
+      #   if: github.event_name == 'release'
+      #   uses: softprops/action-gh-release@v2
+      #   with:
+      #     tag_name: ${{ github.event.release.tag_name }}
+      #     files: |
+      #       ${{ steps.build.outputs.name }}/firmware.ota.bin
+      #       ${{ steps.build.outputs.name }}/firmware.md5
+
+      - name: Placeholder
+        run: |
+          echo "ESPHome build workflow template — no devices configured yet."
+          echo "Add ESPHome YAML configs and uncomment the build steps above."

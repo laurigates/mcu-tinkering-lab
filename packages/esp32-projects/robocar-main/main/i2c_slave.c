@@ -4,12 +4,16 @@
  */
 
 #include "i2c_slave.h"
-#include "driver/i2c.h"
-#include "esp_log.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "freertos/semphr.h"
 #include <string.h>
+#include "driver/i2c.h"
+#include "esp_app_desc.h"
+#include "esp_log.h"
+#include "esp_system.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
+#include "freertos/task.h"
+#include "freertos/timers.h"
+#include "ota_handler.h"
 
 static const char *TAG = "i2c_slave";
 
@@ -20,23 +24,24 @@ static TaskHandle_t i2c_task_handle = NULL;
 static SemaphoreHandle_t status_mutex = NULL;
 static status_data_t current_status = {0};
 static uint8_t last_sequence_number = 0;
-static ota_status_t current_ota_status = OTA_STATUS_IDLE;
-static uint8_t ota_progress = 0;
-static uint8_t ota_error_code = 0;
 
 // External function declarations (implemented in main.c)
 extern void process_i2c_movement_command(movement_command_t movement, uint8_t speed);
 extern void process_i2c_sound_command(sound_command_t sound);
 extern void process_i2c_servo_command(servo_command_t servo, uint8_t angle);
-extern void process_i2c_display_command(uint8_t line, const char* message);
+extern void process_i2c_display_command(uint8_t line, const char *message);
 
 // Internal functions
 static void i2c_slave_task(void *pvParameters);
-static void process_i2c_command(const i2c_command_packet_t* command, i2c_response_packet_t* response);
-static void prepare_response(i2c_response_packet_t* response, uint8_t status, uint8_t seq_num, const uint8_t* data, uint8_t data_len);
-static void handle_ota_commands(const i2c_command_packet_t* command, i2c_response_packet_t* response);
+static void process_i2c_command(const i2c_command_packet_t *command,
+                                i2c_response_packet_t *response);
+static void prepare_response(i2c_response_packet_t *response, uint8_t status, uint8_t seq_num,
+                             const uint8_t *data, uint8_t data_len);
+static void handle_ota_commands(const i2c_command_packet_t *command,
+                                i2c_response_packet_t *response);
 
-esp_err_t i2c_slave_init(void) {
+esp_err_t i2c_slave_init(void)
+{
     if (i2c_initialized) {
         ESP_LOGW(TAG, "I2C slave already initialized");
         return ESP_OK;
@@ -55,8 +60,8 @@ esp_err_t i2c_slave_init(void) {
         .mode = I2C_MODE_SLAVE,
         .sda_io_num = I2C_COMM_SDA_IO,
         .scl_io_num = I2C_COMM_SCL_IO,
-        .sda_pullup_en = GPIO_PULLUP_ENABLE,   // Pins 26/27 support internal pull-ups
-        .scl_pullup_en = GPIO_PULLUP_ENABLE,   // Internal pull-ups enabled
+        .sda_pullup_en = GPIO_PULLUP_ENABLE,  // Pins 26/27 support internal pull-ups
+        .scl_pullup_en = GPIO_PULLUP_ENABLE,  // Internal pull-ups enabled
         .slave.addr_10bit_en = 0,
         .slave.slave_addr = I2C_SLAVE_ADDRESS,
         .slave.maximum_speed = I2C_MASTER_FREQ_HZ,
@@ -69,9 +74,8 @@ esp_err_t i2c_slave_init(void) {
         return err;
     }
 
-    err = i2c_driver_install(I2C_SLAVE_NUM, conf.mode, 
-                            I2C_SLAVE_RX_BUF_LEN, 
-                            I2C_SLAVE_TX_BUF_LEN, 0);
+    err =
+        i2c_driver_install(I2C_SLAVE_NUM, conf.mode, I2C_SLAVE_RX_BUF_LEN, I2C_SLAVE_TX_BUF_LEN, 0);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to install I2C driver: %s", esp_err_to_name(err));
         vSemaphoreDelete(status_mutex);
@@ -80,31 +84,33 @@ esp_err_t i2c_slave_init(void) {
 
     // Initialize status data
     memset(&current_status, 0, sizeof(current_status));
-    current_status.wifi_connected = 1; // Assume connected for now
+    current_status.wifi_connected = 1;  // Assume connected for now
 
     i2c_initialized = true;
-    ESP_LOGI(TAG, "I2C slave initialized successfully (Address: 0x%02X, SDA:%d, SCL:%d)", 
+    ESP_LOGI(TAG, "I2C slave initialized successfully (Address: 0x%02X, SDA:%d, SCL:%d)",
              I2C_SLAVE_ADDRESS, I2C_COMM_SDA_IO, I2C_COMM_SCL_IO);
 
     return ESP_OK;
 }
 
-void i2c_slave_deinit(void) {
+void i2c_slave_deinit(void)
+{
     if (i2c_initialized) {
         i2c_slave_stop_task();
         i2c_driver_delete(I2C_SLAVE_NUM);
-        
+
         if (status_mutex) {
             vSemaphoreDelete(status_mutex);
             status_mutex = NULL;
         }
-        
+
         i2c_initialized = false;
         ESP_LOGI(TAG, "I2C slave deinitialized");
     }
 }
 
-void i2c_slave_start_task(void) {
+void i2c_slave_start_task(void)
+{
     if (!i2c_initialized) {
         ESP_LOGE(TAG, "I2C slave not initialized");
         return;
@@ -125,7 +131,8 @@ void i2c_slave_start_task(void) {
     ESP_LOGI(TAG, "I2C slave task started");
 }
 
-void i2c_slave_stop_task(void) {
+void i2c_slave_stop_task(void)
+{
     if (task_running && i2c_task_handle) {
         task_running = false;
         vTaskDelete(i2c_task_handle);
@@ -134,8 +141,10 @@ void i2c_slave_stop_task(void) {
     }
 }
 
-void i2c_slave_set_status(const status_data_t* status) {
-    if (!status || !status_mutex) return;
+void i2c_slave_set_status(const status_data_t *status)
+{
+    if (!status || !status_mutex)
+        return;
 
     if (xSemaphoreTake(status_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
         memcpy(&current_status, status, sizeof(status_data_t));
@@ -143,8 +152,10 @@ void i2c_slave_set_status(const status_data_t* status) {
     }
 }
 
-void i2c_slave_get_status(status_data_t* status) {
-    if (!status || !status_mutex) return;
+void i2c_slave_get_status(status_data_t *status)
+{
+    if (!status || !status_mutex)
+        return;
 
     if (xSemaphoreTake(status_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
         memcpy(status, &current_status, sizeof(status_data_t));
@@ -152,11 +163,13 @@ void i2c_slave_get_status(status_data_t* status) {
     }
 }
 
-bool i2c_slave_is_ready(void) {
+bool i2c_slave_is_ready(void)
+{
     return i2c_initialized && task_running;
 }
 
-static void i2c_slave_task(void *pvParameters) {
+static void i2c_slave_task(void *pvParameters)
+{
     ESP_LOGI(TAG, "I2C slave task started");
 
     _Static_assert(I2C_SLAVE_RX_BUF_LEN >= sizeof(i2c_command_packet_t),
@@ -169,21 +182,25 @@ static void i2c_slave_task(void *pvParameters) {
 
     while (task_running) {
         // Read data from master
-        int rx_len = i2c_slave_read_buffer(I2C_SLAVE_NUM, rx_buffer, sizeof(rx_buffer), pdMS_TO_TICKS(100));
+        int rx_len =
+            i2c_slave_read_buffer(I2C_SLAVE_NUM, rx_buffer, sizeof(rx_buffer), pdMS_TO_TICKS(100));
 
         if (rx_len > 0) {
             ESP_LOGD(TAG, "Received %d bytes from master", rx_len);
 
             if (rx_len == (int)sizeof(i2c_command_packet_t)) {
-                i2c_command_packet_t* command = (i2c_command_packet_t*)rx_buffer;
-                i2c_response_packet_t* response = (i2c_response_packet_t*)tx_buffer;
-                
+                i2c_command_packet_t *command = (i2c_command_packet_t *)rx_buffer;
+                i2c_response_packet_t *response = (i2c_response_packet_t *)tx_buffer;
+
                 // Verify checksum
-                if (verify_checksum((uint8_t*)command, sizeof(i2c_command_packet_t) - 1, command->checksum)) {
+                if (verify_checksum((uint8_t *)command, sizeof(i2c_command_packet_t) - 1,
+                                    command->checksum)) {
                     process_i2c_command(command, response);
-                    
+
                     // Send response
-                    int tx_len = i2c_slave_write_buffer(I2C_SLAVE_NUM, tx_buffer, sizeof(i2c_response_packet_t), pdMS_TO_TICKS(100));
+                    int tx_len =
+                        i2c_slave_write_buffer(I2C_SLAVE_NUM, tx_buffer,
+                                               sizeof(i2c_response_packet_t), pdMS_TO_TICKS(100));
                     if (tx_len != sizeof(i2c_response_packet_t)) {
                         ESP_LOGW(TAG, "Failed to send complete response");
                     }
@@ -191,23 +208,27 @@ static void i2c_slave_task(void *pvParameters) {
                     ESP_LOGE(TAG, "Command checksum verification failed");
 
                     // Send error response
-                    prepare_response(response, 0x01, 0, NULL, 0); // 0x01 = ERROR
-                    i2c_slave_write_buffer(I2C_SLAVE_NUM, tx_buffer, sizeof(i2c_response_packet_t), pdMS_TO_TICKS(100));
+                    prepare_response(response, 0x01, 0, NULL, 0);  // 0x01 = ERROR
+                    i2c_slave_write_buffer(I2C_SLAVE_NUM, tx_buffer, sizeof(i2c_response_packet_t),
+                                           pdMS_TO_TICKS(100));
                 }
             } else {
                 ESP_LOGW(TAG, "Invalid command packet size: %d", rx_len);
             }
         }
-        
-        vTaskDelay(pdMS_TO_TICKS(10)); // Small delay to prevent tight loop
+
+        vTaskDelay(pdMS_TO_TICKS(10));  // Small delay to prevent tight loop
     }
-    
+
     ESP_LOGI(TAG, "I2C slave task ended");
     vTaskDelete(NULL);
 }
 
-static void process_i2c_command(const i2c_command_packet_t* command, i2c_response_packet_t* response) {
-    ESP_LOGD(TAG, "Processing command type: 0x%02X, seq: %d", command->command_type, command->sequence_number);
+static void process_i2c_command(const i2c_command_packet_t *command,
+                                i2c_response_packet_t *response)
+{
+    ESP_LOGD(TAG, "Processing command type: 0x%02X, seq: %d", command->command_type,
+             command->sequence_number);
 
     // Check for OTA commands first
     if (command->command_type >= CMD_TYPE_ENTER_MAINTENANCE_MODE &&
@@ -220,18 +241,19 @@ static void process_i2c_command(const i2c_command_packet_t* command, i2c_respons
     switch (command->command_type) {
         case CMD_TYPE_MOVEMENT: {
             if (command->data_length == sizeof(movement_data_t)) {
-                movement_data_t* move_data = (movement_data_t*)command->data;
+                movement_data_t *move_data = (movement_data_t *)command->data;
                 process_i2c_movement_command(move_data->movement, move_data->speed);
-                prepare_response(response, 0x00, command->sequence_number, NULL, 0); // 0x00 = OK
+                prepare_response(response, 0x00, command->sequence_number, NULL, 0);  // 0x00 = OK
             } else {
-                prepare_response(response, 0x01, command->sequence_number, NULL, 0); // 0x01 = ERROR
+                prepare_response(response, 0x01, command->sequence_number, NULL,
+                                 0);  // 0x01 = ERROR
             }
             break;
         }
 
         case CMD_TYPE_SOUND: {
             if (command->data_length == sizeof(sound_data_t)) {
-                sound_data_t* sound_data = (sound_data_t*)command->data;
+                sound_data_t *sound_data = (sound_data_t *)command->data;
                 process_i2c_sound_command(sound_data->sound_type);
                 prepare_response(response, 0x00, command->sequence_number, NULL, 0);
             } else {
@@ -242,7 +264,7 @@ static void process_i2c_command(const i2c_command_packet_t* command, i2c_respons
 
         case CMD_TYPE_SERVO: {
             if (command->data_length == sizeof(servo_data_t)) {
-                servo_data_t* servo_data = (servo_data_t*)command->data;
+                servo_data_t *servo_data = (servo_data_t *)command->data;
                 process_i2c_servo_command(servo_data->servo_type, servo_data->angle);
                 prepare_response(response, 0x00, command->sequence_number, NULL, 0);
             } else {
@@ -253,7 +275,7 @@ static void process_i2c_command(const i2c_command_packet_t* command, i2c_respons
 
         case CMD_TYPE_DISPLAY: {
             if (command->data_length == sizeof(display_data_t)) {
-                display_data_t* display_data = (display_data_t*)command->data;
+                display_data_t *display_data = (display_data_t *)command->data;
                 process_i2c_display_command(display_data->line, display_data->message);
                 prepare_response(response, 0x00, command->sequence_number, NULL, 0);
             } else {
@@ -265,7 +287,8 @@ static void process_i2c_command(const i2c_command_packet_t* command, i2c_respons
         case CMD_TYPE_STATUS: {
             status_data_t status;
             i2c_slave_get_status(&status);
-            prepare_response(response, 0x00, command->sequence_number, (uint8_t*)&status, sizeof(status_data_t));
+            prepare_response(response, 0x00, command->sequence_number, (uint8_t *)&status,
+                             sizeof(status_data_t));
             break;
         }
 
@@ -285,8 +308,11 @@ static void process_i2c_command(const i2c_command_packet_t* command, i2c_respons
     last_sequence_number = command->sequence_number;
 }
 
-static void prepare_response(i2c_response_packet_t* response, uint8_t status, uint8_t seq_num, const uint8_t* data, uint8_t data_len) {
-    if (!response) return;
+static void prepare_response(i2c_response_packet_t *response, uint8_t status, uint8_t seq_num,
+                             const uint8_t *data, uint8_t data_len)
+{
+    if (!response)
+        return;
 
     response->status = status;
     response->sequence_number = seq_num;
@@ -298,37 +324,42 @@ static void prepare_response(i2c_response_packet_t* response, uint8_t status, ui
         memset(response->data, 0, sizeof(response->data));
     }
 
-    response->checksum = calculate_checksum((uint8_t*)response, sizeof(i2c_response_packet_t) - 1);
+    response->checksum = calculate_checksum((uint8_t *)response, sizeof(i2c_response_packet_t) - 1);
+}
+
+static void reboot_timer_callback(TimerHandle_t xTimer)
+{
+    ESP_LOGW(TAG, "Rebooting now...");
+    xTimerDelete(xTimer, 0);
+    esp_restart();
 }
 
 // Handle OTA commands
-static void handle_ota_commands(const i2c_command_packet_t* command, i2c_response_packet_t* response) {
+static void handle_ota_commands(const i2c_command_packet_t *command,
+                                i2c_response_packet_t *response)
+{
     switch (command->command_type) {
         case CMD_TYPE_ENTER_MAINTENANCE_MODE: {
             ESP_LOGI(TAG, "Entering maintenance mode");
-            current_ota_status = OTA_STATUS_MAINTENANCE_MODE;
-            ota_progress = 0;
-            ota_error_code = 0;
             prepare_response(response, 0x00, command->sequence_number, NULL, 0);
             break;
         }
 
         case CMD_TYPE_BEGIN_OTA: {
             if (command->data_length == sizeof(ota_begin_data_t)) {
-                ota_begin_data_t* ota_data = (ota_begin_data_t*)command->data;
-                ESP_LOGI(TAG, "Beginning OTA update from URL: %.20s", ota_data->url);
-                ESP_LOGI(TAG, "Hash: %02X%02X%02X%02X",
-                         ota_data->hash[0], ota_data->hash[1],
+                ota_begin_data_t *ota_data = (ota_begin_data_t *)command->data;
+                ESP_LOGI(TAG, "Beginning OTA update with tag: %.20s", ota_data->tag);
+                ESP_LOGI(TAG, "Hash: %02X%02X%02X%02X", ota_data->hash[0], ota_data->hash[1],
                          ota_data->hash[2], ota_data->hash[3]);
 
-                // Set OTA status to in progress
-                current_ota_status = OTA_STATUS_IN_PROGRESS;
-                ota_progress = 0;
-                ota_error_code = 0;
-
-                // OTA not yet implemented; acknowledge command
-                // See: https://github.com/laurigates/mcu-tinkering-lab/issues — track OTA implementation
-                prepare_response(response, 0x00, command->sequence_number, NULL, 0);
+                // Start OTA update via ota_handler (runs in separate task)
+                esp_err_t ret = ota_handler_begin_update(ota_data->tag, ota_data->hash);
+                if (ret == ESP_OK) {
+                    prepare_response(response, 0x00, command->sequence_number, NULL, 0);
+                } else {
+                    ESP_LOGE(TAG, "Failed to start OTA update: %s", esp_err_to_name(ret));
+                    prepare_response(response, 0x01, command->sequence_number, NULL, 0);
+                }
             } else {
                 ESP_LOGE(TAG, "Invalid OTA begin data length");
                 prepare_response(response, 0x01, command->sequence_number, NULL, 0);
@@ -337,38 +368,45 @@ static void handle_ota_commands(const i2c_command_packet_t* command, i2c_respons
         }
 
         case CMD_TYPE_GET_OTA_STATUS: {
-            ota_status_response_t ota_status;
-            ota_status.status = current_ota_status;
-            ota_status.progress = ota_progress;
-            ota_status.error_code = ota_error_code;
+            ota_status_response_t ota_resp;
+            ota_resp.status = ota_handler_get_status();
+            ota_resp.progress = ota_handler_get_progress();
+            ota_resp.error_code = ota_handler_get_error_code();
 
-            ESP_LOGD(TAG, "OTA Status: %d, Progress: %d%%, Error: %d",
-                     ota_status.status, ota_status.progress, ota_status.error_code);
+            ESP_LOGD(TAG, "OTA Status: %d, Progress: %d%%, Error: %d", ota_resp.status,
+                     ota_resp.progress, ota_resp.error_code);
 
-            prepare_response(response, 0x00, command->sequence_number,
-                           (uint8_t*)&ota_status, sizeof(ota_status_response_t));
+            prepare_response(response, 0x00, command->sequence_number, (uint8_t *)&ota_resp,
+                             sizeof(ota_status_response_t));
             break;
         }
 
         case CMD_TYPE_GET_VERSION: {
             version_response_t version;
-            // TODO: Get actual version from project
-            strncpy(version.version, "1.0.0", VERSION_STRING_LEN);
+            const esp_app_desc_t *app_desc = esp_app_get_description();
+            strncpy(version.version, app_desc->version, VERSION_STRING_LEN);
             version.version[VERSION_STRING_LEN - 1] = '\0';
 
             ESP_LOGI(TAG, "Firmware version requested: %s", version.version);
 
-            prepare_response(response, 0x00, command->sequence_number,
-                           (uint8_t*)&version, sizeof(version_response_t));
+            prepare_response(response, 0x00, command->sequence_number, (uint8_t *)&version,
+                             sizeof(version_response_t));
             break;
         }
 
         case CMD_TYPE_REBOOT: {
-            ESP_LOGW(TAG, "Reboot command received - rebooting in 1 second");
+            ESP_LOGW(TAG, "Reboot command received — rebooting in 1 second");
             prepare_response(response, 0x00, command->sequence_number, NULL, 0);
 
-            // Reboot after sending response — esp_restart() called post-response
-            // esp_restart();
+            // Schedule reboot via timer so I2C task can send the ACK first
+            TimerHandle_t reboot_timer =
+                xTimerCreate("reboot", pdMS_TO_TICKS(1000), pdFALSE, NULL, reboot_timer_callback);
+            if (reboot_timer) {
+                xTimerStart(reboot_timer, 0);
+            } else {
+                ESP_LOGE(TAG, "Failed to create reboot timer, rebooting now");
+                esp_restart();
+            }
             break;
         }
 

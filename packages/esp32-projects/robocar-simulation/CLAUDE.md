@@ -31,7 +31,7 @@ just type-check      # Mypy
 | `robot_model.py` | `DifferentialDriveRobot`, `DCMotor`, `PhysicsEngine` (Pymunk) |
 | `motor_controller.py` | PID control, encoder simulation, velocity filtering |
 | `communication_bridge.py` | WebSocket/Serial/I2C protocol server |
-| `genesis_visualizer.py` | Matplotlib 2D fallback (Genesis 3D disabled — Python 3.11 incompatibility) |
+| `genesis_visualizer.py` | Genesis 3D visualization (with Matplotlib 2D fallback when genesis-world is unavailable) |
 | `camera_simulation.py` | Synthetic camera feed (OpenCV) |
 | `wifi_simulation.py` | WiFi state machine |
 | `ota_simulation.py` | OTA update flow, partition management |
@@ -105,7 +105,7 @@ uv run pytest tests/test_robot_model.py  # Specific file
 
 ## Development Notes
 
-- **Genesis 3D** is disabled due to Python 3.11 incompatibility. Matplotlib 2D is the active visualizer.
+- **Genesis 3D** is enabled (`genesis-world>=0.2.0` supports Python 3.11). Matplotlib 2D is used as a fallback when genesis-world is not installed.
 - Debug scripts at the repo root (`debug_motor_dynamics.py`, `debug_differential.py`, etc.) are standalone analysis tools, not part of the main simulation.
 - The `migrate_to_uv.py` and `setup_uv.py` scripts are one-time migration artifacts — they can be ignored.
 - Hardware validation accuracy: straight line 98.5%, circular motion 96.8%, motor response within 3%.

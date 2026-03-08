@@ -7,6 +7,6 @@
  * @brief Get the AI backend interface for the Ollama API.
  * @return A pointer to the AI backend interface for Ollama.
  */
-const ai_backend_t* ollama_backend_get(void);
+const ai_backend_t *ollama_backend_get(void);
 
-#endif // OLLAMA_BACKEND_H
+#endif  // OLLAMA_BACKEND_H

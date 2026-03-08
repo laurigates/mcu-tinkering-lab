@@ -8,6 +8,7 @@ mod sim 'packages/esp32-projects/robocar-simulation'
 mod audiobook 'packages/esp32-projects/audiobook-player'
 mod wireguard 'packages/esp32-projects/esp32-wireguard-ha-example'
 mod kids-audio 'packages/esp32-projects/kids-audio-toy'
+mod xbox 'packages/esp32-projects/xbox-switch-bridge'
 
 idf_path := env("IDF_PATH", home_directory() + "/repos/esp-idf")
 idf_version := "v5.3.2"
@@ -214,6 +215,21 @@ robocar-clean:
 [group: "robocar"]
 robocar-info:
     just robocar::info
+
+# Trigger OTA update check via MQTT
+[group: "robocar"]
+robocar-ota-notify version="latest" broker="localhost":
+    just robocar::ota-notify {{version}} {{broker}}
+
+# Monitor OTA update status via MQTT
+[group: "robocar"]
+robocar-ota-status broker="localhost":
+    just robocar::ota-status {{broker}}
+
+# Show firmware versions from latest GitHub release
+[group: "robocar"]
+robocar-ota-versions:
+    just robocar::ota-versions
 
 # Shortcuts
 dev-main: robocar-develop-main

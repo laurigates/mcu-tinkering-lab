@@ -66,4 +66,4 @@ uint8_t ota_handler_get_error_code(void);
  */
 esp_err_t ota_handler_confirm_valid(void);
 
-#endif // OTA_HANDLER_H
+#endif  // OTA_HANDLER_H
