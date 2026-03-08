@@ -308,12 +308,19 @@ class DifferentialDriveRobot:
     """Differential drive robot model with realistic motor dynamics"""
 
     def __init__(self, config_path: str):
-        """Initialize robot model from configuration file"""
+        """Initialize robot model from configuration file.
+
+        Subsystems (WiFi, OTA, camera) are NOT started here. Call
+        ``enable_wifi()``, ``enable_ota()``, and ``enable_camera()``
+        explicitly, or use :meth:`enable_subsystems_from_config` to
+        activate them based on the configuration file.
+        """
         # Initialize error handling
         self.error_handler = get_error_handler()
         self.error_handler.register_component("robot_model")
         self._register_recovery_strategies()
 
+        self.config_path = config_path
         self.config = self._load_config(config_path)
         self.state = RobotState()
 
@@ -369,37 +376,10 @@ class DifferentialDriveRobot:
                 "main", self.mass, robot_config["dimensions"]
             )
 
-        # Initialize camera simulation if configured
+        # Subsystem placeholders — activated via enable_camera() / enable_wifi() / enable_ota()
         self.camera_simulation = None
-        self.use_camera_simulation = (
-            self.config["simulation"].get("camera", {}).get("enabled", False)
-        )
-
-        if self.use_camera_simulation:
-            from camera_simulation import CameraSimulation
-
-            self.camera_simulation = CameraSimulation(config_path)
-            # Start camera simulation after robot initialization
-            self.camera_simulation.start_capture(lambda: self.state)
-
-        # Initialize WiFi simulation
         self.wifi_simulation = None
-        self.use_wifi_simulation = self.config["simulation"].get("wifi", {}).get("enabled", True)
-
-        if self.use_wifi_simulation:
-            self.wifi_simulation = WiFiManagerSimulation(config_path)
-            self.wifi_simulation.init()
-            print("Robot: WiFi simulation initialized")
-
-        # Initialize OTA simulation
         self.ota_simulation = None
-        self.use_ota_simulation = self.config["simulation"].get("ota", {}).get("enabled", True)
-
-        if self.use_ota_simulation:
-            self.ota_simulation = OTASimulation(config_path)
-            if self.wifi_simulation:
-                self.ota_simulation.set_wifi_manager(self.wifi_simulation)
-            print("Robot: OTA simulation initialized")
 
     def _register_recovery_strategies(self):
         """Register recovery strategies for robot model errors"""
@@ -458,6 +438,66 @@ class DifferentialDriveRobot:
         """Load configuration from YAML file"""
         with open(config_path) as f:
             return yaml.safe_load(f)
+
+    # ------------------------------------------------------------------
+    # Opt-in subsystem activation
+    # ------------------------------------------------------------------
+
+    def enable_camera(self) -> None:
+        """Start the camera simulation subsystem.
+
+        Safe to call multiple times — subsequent calls are no-ops.
+        """
+        if self.camera_simulation is not None:
+            return
+        from camera_simulation import CameraSimulation
+
+        self.camera_simulation = CameraSimulation(self.config_path)
+        self.camera_simulation.start_capture(lambda: self.state)
+        print("Robot: camera simulation initialized")
+
+    def enable_wifi(self) -> None:
+        """Start the WiFi simulation subsystem.
+
+        Safe to call multiple times — subsequent calls are no-ops.
+        """
+        if self.wifi_simulation is not None:
+            return
+        self.wifi_simulation = WiFiManagerSimulation(self.config_path)
+        self.wifi_simulation.init()
+        print("Robot: WiFi simulation initialized")
+
+    def enable_ota(self) -> None:
+        """Start the OTA simulation subsystem.
+
+        Automatically calls :meth:`enable_wifi` if WiFi has not been
+        started yet, because OTA depends on a WiFi connection.
+        Safe to call multiple times — subsequent calls are no-ops.
+        """
+        if self.ota_simulation is not None:
+            return
+        if self.wifi_simulation is None:
+            self.enable_wifi()
+        self.ota_simulation = OTASimulation(self.config_path)
+        self.ota_simulation.set_wifi_manager(self.wifi_simulation)
+        print("Robot: OTA simulation initialized")
+
+    def enable_subsystems_from_config(self) -> None:
+        """Activate subsystems according to the ``simulation`` section of the config.
+
+        Reads the ``enabled`` flag for ``camera``, ``wifi``, and ``ota``
+        and calls the corresponding ``enable_*`` method for each one that
+        is set to ``true``.  This is a convenience helper for callers such
+        as :class:`~main.SimulationManager` that want to honour the config
+        without manually inspecting it.
+        """
+        sim_cfg = self.config.get("simulation", {})
+        if sim_cfg.get("camera", {}).get("enabled", False):
+            self.enable_camera()
+        if sim_cfg.get("wifi", {}).get("enabled", False):
+            self.enable_wifi()
+        if sim_cfg.get("ota", {}).get("enabled", False):
+            self.enable_ota()
 
     def pwm_to_voltage(self, pwm: int) -> float:
         """Convert PWM value to voltage (assuming 3.3V logic, 7.4V motor supply)"""
@@ -684,7 +724,7 @@ class DifferentialDriveRobot:
             self.update_sensors(environment)
 
             # Update camera frame if camera simulation is enabled
-            if self.use_camera_simulation and self.camera_simulation:
+            if self.camera_simulation is not None:
                 latest_frame = self.camera_simulation.get_latest_frame()
                 if latest_frame is not None:
                     self.state.camera_frame = latest_frame

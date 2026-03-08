@@ -68,12 +68,12 @@ def test_camera_integration():
     print("🔍 Testing camera integration with robot...")
 
     try:
-        # Create robot with camera enabled
+        # Create robot and explicitly enable the camera subsystem
         config_path = "config/robot_config.yaml"
         robot = DifferentialDriveRobot(config_path)
+        robot.enable_camera()
 
         # Check if camera simulation was initialized
-        assert robot.use_camera_simulation, "Camera simulation should be enabled"
         assert robot.camera_simulation is not None, "Camera simulation should be initialized"
 
         print("  ✅ Camera simulation initialized with robot")
