@@ -4,9 +4,9 @@
  */
 
 #include "i2c_master.h"
+#include <string.h>
 #include "driver/i2c_master.h"
 #include "esp_log.h"
-#include <string.h>
 
 static const char *TAG = "i2c_master";
 static bool i2c_initialized = false;
@@ -18,7 +18,8 @@ static uint8_t current_sequence_number = 0;
 #define I2C_MAX_RETRIES 3
 #define I2C_RETRY_DELAY_MS 100
 
-esp_err_t i2c_master_init(void) {
+esp_err_t i2c_master_init(void)
+{
     if (i2c_initialized) {
         ESP_LOGW(TAG, "I2C master already initialized");
         return ESP_OK;
@@ -58,13 +59,14 @@ esp_err_t i2c_master_init(void) {
     }
 
     i2c_initialized = true;
-    ESP_LOGI(TAG, "I2C master initialized successfully (SDA:%d, SCL:%d, %dHz)", 
-             I2C_COMM_SDA_IO, I2C_COMM_SCL_IO, I2C_MASTER_FREQ_HZ);
+    ESP_LOGI(TAG, "I2C master initialized successfully (SDA:%d, SCL:%d, %dHz)", I2C_COMM_SDA_IO,
+             I2C_COMM_SCL_IO, I2C_MASTER_FREQ_HZ);
 
     return ESP_OK;
 }
 
-void i2c_master_deinit(void) {
+void i2c_master_deinit(void)
+{
     if (i2c_initialized) {
         if (i2c_dev_handle) {
             i2c_master_bus_rm_device(i2c_dev_handle);
@@ -79,9 +81,9 @@ void i2c_master_deinit(void) {
     }
 }
 
-esp_err_t i2c_master_send_command(const i2c_command_packet_t* command,
-                                 i2c_response_packet_t* response,
-                                 uint32_t timeout_ms) {
+esp_err_t i2c_master_send_command(const i2c_command_packet_t *command,
+                                  i2c_response_packet_t *response, uint32_t timeout_ms)
+{
     if (!i2c_initialized || !i2c_dev_handle) {
         ESP_LOGE(TAG, "I2C master not initialized");
         return ESP_ERR_INVALID_STATE;
@@ -93,7 +95,7 @@ esp_err_t i2c_master_send_command(const i2c_command_packet_t* command,
     }
 
     // Verify command checksum
-    if (!verify_checksum((uint8_t*)command, sizeof(i2c_command_packet_t) - 1, command->checksum)) {
+    if (!verify_checksum((uint8_t *)command, sizeof(i2c_command_packet_t) - 1, command->checksum)) {
         ESP_LOGE(TAG, "Command checksum verification failed");
         return ESP_ERR_INVALID_CRC;
     }
@@ -104,10 +106,11 @@ esp_err_t i2c_master_send_command(const i2c_command_packet_t* command,
     // Retry loop
     while (retries < I2C_MAX_RETRIES) {
         // Send command using new I2C driver API
-        err = i2c_master_transmit(i2c_dev_handle, (uint8_t*)command, sizeof(i2c_command_packet_t), timeout_ms);
+        err = i2c_master_transmit(i2c_dev_handle, (uint8_t *)command, sizeof(i2c_command_packet_t),
+                                  timeout_ms);
         if (err != ESP_OK) {
-            ESP_LOGW(TAG, "I2C transmit failed (attempt %d/%d): %s",
-                     retries + 1, I2C_MAX_RETRIES, esp_err_to_name(err));
+            ESP_LOGW(TAG, "I2C transmit failed (attempt %d/%d): %s", retries + 1, I2C_MAX_RETRIES,
+                     esp_err_to_name(err));
             retries++;
             if (retries < I2C_MAX_RETRIES) {
                 vTaskDelay(pdMS_TO_TICKS(I2C_RETRY_DELAY_MS));
@@ -118,10 +121,11 @@ esp_err_t i2c_master_send_command(const i2c_command_packet_t* command,
 
         // Read response if requested
         if (response) {
-            err = i2c_master_receive(i2c_dev_handle, (uint8_t*)response, sizeof(i2c_response_packet_t), timeout_ms);
+            err = i2c_master_receive(i2c_dev_handle, (uint8_t *)response,
+                                     sizeof(i2c_response_packet_t), timeout_ms);
             if (err != ESP_OK) {
-                ESP_LOGW(TAG, "I2C receive failed (attempt %d/%d): %s",
-                         retries + 1, I2C_MAX_RETRIES, esp_err_to_name(err));
+                ESP_LOGW(TAG, "I2C receive failed (attempt %d/%d): %s", retries + 1,
+                         I2C_MAX_RETRIES, esp_err_to_name(err));
                 retries++;
                 if (retries < I2C_MAX_RETRIES) {
                     vTaskDelay(pdMS_TO_TICKS(I2C_RETRY_DELAY_MS));
@@ -131,9 +135,10 @@ esp_err_t i2c_master_send_command(const i2c_command_packet_t* command,
             }
 
             // Verify response checksum
-            if (!verify_checksum((uint8_t*)response, sizeof(i2c_response_packet_t) - 1, response->checksum)) {
-                ESP_LOGW(TAG, "Response checksum verification failed (attempt %d/%d)",
-                         retries + 1, I2C_MAX_RETRIES);
+            if (!verify_checksum((uint8_t *)response, sizeof(i2c_response_packet_t) - 1,
+                                 response->checksum)) {
+                ESP_LOGW(TAG, "Response checksum verification failed (attempt %d/%d)", retries + 1,
+                         I2C_MAX_RETRIES);
                 retries++;
                 if (retries < I2C_MAX_RETRIES) {
                     vTaskDelay(pdMS_TO_TICKS(I2C_RETRY_DELAY_MS));
@@ -154,8 +159,8 @@ esp_err_t i2c_master_send_command(const i2c_command_packet_t* command,
                 return ESP_ERR_INVALID_RESPONSE;
             }
 
-            ESP_LOGD(TAG, "Command sent successfully, status: 0x%02X, seq: %d",
-                     response->status, response->sequence_number);
+            ESP_LOGD(TAG, "Command sent successfully, status: 0x%02X, seq: %d", response->status,
+                     response->sequence_number);
         } else {
             ESP_LOGD(TAG, "Command sent successfully (no response)");
         }
@@ -167,11 +172,13 @@ esp_err_t i2c_master_send_command(const i2c_command_packet_t* command,
 }
 
 // Helper to get next sequence number
-static uint8_t get_next_sequence_number(void) {
+static uint8_t get_next_sequence_number(void)
+{
     return ++current_sequence_number;
 }
 
-esp_err_t i2c_send_movement_command(movement_command_t movement, uint8_t speed) {
+esp_err_t i2c_send_movement_command(movement_command_t movement, uint8_t speed)
+{
     i2c_command_packet_t command;
     uint8_t seq = get_next_sequence_number();
     prepare_movement_command(&command, movement, speed, seq);
@@ -180,7 +187,8 @@ esp_err_t i2c_send_movement_command(movement_command_t movement, uint8_t speed) 
     return i2c_master_send_command(&command, NULL, I2C_MASTER_TIMEOUT_MS);
 }
 
-esp_err_t i2c_send_sound_command(sound_command_t sound) {
+esp_err_t i2c_send_sound_command(sound_command_t sound)
+{
     i2c_command_packet_t command;
     uint8_t seq = get_next_sequence_number();
     prepare_sound_command(&command, sound, seq);
@@ -189,7 +197,8 @@ esp_err_t i2c_send_sound_command(sound_command_t sound) {
     return i2c_master_send_command(&command, NULL, I2C_MASTER_TIMEOUT_MS);
 }
 
-esp_err_t i2c_send_servo_command(servo_command_t servo, uint8_t angle) {
+esp_err_t i2c_send_servo_command(servo_command_t servo, uint8_t angle)
+{
     i2c_command_packet_t command;
     uint8_t seq = get_next_sequence_number();
     prepare_servo_command(&command, servo, angle, seq);
@@ -198,7 +207,8 @@ esp_err_t i2c_send_servo_command(servo_command_t servo, uint8_t angle) {
     return i2c_master_send_command(&command, NULL, I2C_MASTER_TIMEOUT_MS);
 }
 
-esp_err_t i2c_send_display_command(uint8_t line, const char* message) {
+esp_err_t i2c_send_display_command(uint8_t line, const char *message)
+{
     if (!message) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -211,7 +221,8 @@ esp_err_t i2c_send_display_command(uint8_t line, const char* message) {
     return i2c_master_send_command(&command, NULL, I2C_MASTER_TIMEOUT_MS);
 }
 
-esp_err_t i2c_ping_slave(void) {
+esp_err_t i2c_ping_slave(void)
+{
     i2c_command_packet_t command;
     i2c_response_packet_t response;
     uint8_t seq = get_next_sequence_number();
@@ -230,7 +241,8 @@ esp_err_t i2c_ping_slave(void) {
     return err;
 }
 
-esp_err_t i2c_get_status(status_data_t* status) {
+esp_err_t i2c_get_status(status_data_t *status)
+{
     if (!status) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -242,7 +254,7 @@ esp_err_t i2c_get_status(status_data_t* status) {
     command.command_type = CMD_TYPE_STATUS;
     command.sequence_number = seq;
     command.data_length = 0;
-    command.checksum = calculate_checksum((uint8_t*)&command, sizeof(i2c_command_packet_t) - 1);
+    command.checksum = calculate_checksum((uint8_t *)&command, sizeof(i2c_command_packet_t) - 1);
 
     esp_err_t err = i2c_master_send_command(&command, &response, I2C_MASTER_TIMEOUT_MS);
 
@@ -260,7 +272,8 @@ esp_err_t i2c_get_status(status_data_t* status) {
 }
 
 // OTA command functions
-esp_err_t i2c_send_enter_maintenance_mode(void) {
+esp_err_t i2c_send_enter_maintenance_mode(void)
+{
     i2c_command_packet_t command;
     i2c_response_packet_t response;
     uint8_t seq = get_next_sequence_number();
@@ -279,7 +292,8 @@ esp_err_t i2c_send_enter_maintenance_mode(void) {
     return err;
 }
 
-esp_err_t i2c_send_begin_ota(const char* url, const uint8_t* hash) {
+esp_err_t i2c_send_begin_ota(const char *url, const uint8_t *hash)
+{
     if (!url) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -302,7 +316,8 @@ esp_err_t i2c_send_begin_ota(const char* url, const uint8_t* hash) {
     return err;
 }
 
-esp_err_t i2c_get_ota_status(ota_status_response_t* ota_status) {
+esp_err_t i2c_get_ota_status(ota_status_response_t *ota_status)
+{
     if (!ota_status) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -319,8 +334,8 @@ esp_err_t i2c_get_ota_status(ota_status_response_t* ota_status) {
     if (err == ESP_OK && response.status == 0x00) {
         if (response.data_length == sizeof(ota_status_response_t)) {
             memcpy(ota_status, response.data, sizeof(ota_status_response_t));
-            ESP_LOGD(TAG, "OTA status: %d, progress: %d%%, error: %d",
-                     ota_status->status, ota_status->progress, ota_status->error_code);
+            ESP_LOGD(TAG, "OTA status: %d, progress: %d%%, error: %d", ota_status->status,
+                     ota_status->progress, ota_status->error_code);
         } else {
             ESP_LOGE(TAG, "Invalid OTA status data length: %d", response.data_length);
             err = ESP_ERR_INVALID_SIZE;
@@ -330,7 +345,8 @@ esp_err_t i2c_get_ota_status(ota_status_response_t* ota_status) {
     return err;
 }
 
-esp_err_t i2c_get_version(char* version, size_t version_len) {
+esp_err_t i2c_get_version(char *version, size_t version_len)
+{
     if (!version || version_len == 0) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -346,7 +362,7 @@ esp_err_t i2c_get_version(char* version, size_t version_len) {
 
     if (err == ESP_OK && response.status == 0x00) {
         if (response.data_length == sizeof(version_response_t)) {
-            version_response_t* ver = (version_response_t*)response.data;
+            version_response_t *ver = (version_response_t *)response.data;
             strncpy(version, ver->version, version_len);
             version[version_len - 1] = '\0';
             ESP_LOGI(TAG, "Firmware version: %s", version);
@@ -359,7 +375,8 @@ esp_err_t i2c_get_version(char* version, size_t version_len) {
     return err;
 }
 
-esp_err_t i2c_send_reboot(void) {
+esp_err_t i2c_send_reboot(void)
+{
     i2c_command_packet_t command;
     i2c_response_packet_t response;
     uint8_t seq = get_next_sequence_number();

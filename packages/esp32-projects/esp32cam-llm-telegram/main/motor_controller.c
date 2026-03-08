@@ -1,57 +1,48 @@
 #include "motor_controller.h"
+#include <math.h>
+#include <stdio.h>
+#include <string.h>
 #include "config.h"
-#include "esp_log.h"
 #include "driver/ledc.h"
+#include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include <string.h>
-#include <stdio.h>
-#include <math.h>
 
-static const char* TAG = "MOTOR_CONTROLLER";
+static const char *TAG = "MOTOR_CONTROLLER";
 
 // Motor state
-static motor_status_t motor_status = {
-    .current_command = MOTOR_CMD_STOP,
-    .left_speed = 0,
-    .right_speed = 0,
-    .command_duration_ms = 0,
-    .total_runtime_ms = 0,
-    .distance_traveled_mm = 0,
-    .heading_degrees = 0.0,
-    .is_running = false
-};
+static motor_status_t motor_status = {.current_command = MOTOR_CMD_STOP,
+                                      .left_speed = 0,
+                                      .right_speed = 0,
+                                      .command_duration_ms = 0,
+                                      .total_runtime_ms = 0,
+                                      .distance_traveled_mm = 0,
+                                      .heading_degrees = 0.0,
+                                      .is_running = false};
 
 static bool is_initialized = false;
 static TickType_t last_update_tick = 0;
 
 // Command names
-static const char* command_names[] = {
-    "STOP",
-    "FORWARD",
-    "BACKWARD",
-    "LEFT",
-    "RIGHT",
-    "ROTATE_LEFT",
-    "ROTATE_RIGHT"
-};
+static const char *command_names[] = {"STOP",  "FORWARD",     "BACKWARD",    "LEFT",
+                                      "RIGHT", "ROTATE_LEFT", "ROTATE_RIGHT"};
 
 // Initialize PWM channel
-static esp_err_t init_pwm_channel(ledc_channel_t channel, int gpio, ledc_timer_t timer) {
-    ledc_channel_config_t channel_config = {
-        .speed_mode = LEDC_LOW_SPEED_MODE,
-        .channel = channel,
-        .timer_sel = timer,
-        .intr_type = LEDC_INTR_DISABLE,
-        .gpio_num = gpio,
-        .duty = 0,
-        .hpoint = 0
-    };
+static esp_err_t init_pwm_channel(ledc_channel_t channel, int gpio, ledc_timer_t timer)
+{
+    ledc_channel_config_t channel_config = {.speed_mode = LEDC_LOW_SPEED_MODE,
+                                            .channel = channel,
+                                            .timer_sel = timer,
+                                            .intr_type = LEDC_INTR_DISABLE,
+                                            .gpio_num = gpio,
+                                            .duty = 0,
+                                            .hpoint = 0};
     return ledc_channel_config(&channel_config);
 }
 
 // Initialize motor controller
-esp_err_t motor_controller_init(void) {
+esp_err_t motor_controller_init(void)
+{
     if (is_initialized) {
         ESP_LOGW(TAG, "Motor controller already initialized");
         return ESP_OK;
@@ -60,13 +51,11 @@ esp_err_t motor_controller_init(void) {
     ESP_LOGI(TAG, "Initializing motor controller (mock mode)");
 
     // Configure PWM timer
-    ledc_timer_config_t timer_config = {
-        .speed_mode = LEDC_LOW_SPEED_MODE,
-        .timer_num = LEDC_TIMER_0,
-        .duty_resolution = LEDC_TIMER_8_BIT,
-        .freq_hz = MOTOR_PWM_FREQUENCY,
-        .clk_cfg = LEDC_AUTO_CLK
-    };
+    ledc_timer_config_t timer_config = {.speed_mode = LEDC_LOW_SPEED_MODE,
+                                        .timer_num = LEDC_TIMER_0,
+                                        .duty_resolution = LEDC_TIMER_8_BIT,
+                                        .freq_hz = MOTOR_PWM_FREQUENCY,
+                                        .clk_cfg = LEDC_AUTO_CLK};
 
     esp_err_t err = ledc_timer_config(&timer_config);
     if (err != ESP_OK) {
@@ -89,7 +78,8 @@ esp_err_t motor_controller_init(void) {
 
 // Set PWM duty cycle
 static void set_motor_pwm(ledc_channel_t forward_channel, ledc_channel_t backward_channel,
-                          int speed) {
+                          int speed)
+{
     if (speed > 0) {
         // Forward
         ledc_set_duty(LEDC_LOW_SPEED_MODE, forward_channel, speed);
@@ -109,7 +99,8 @@ static void set_motor_pwm(ledc_channel_t forward_channel, ledc_channel_t backwar
 }
 
 // Execute motor command
-esp_err_t motor_execute_command(motor_command_t command, int speed, uint32_t duration_ms) {
+esp_err_t motor_execute_command(motor_command_t command, int speed, uint32_t duration_ms)
+{
     if (!is_initialized) {
         ESP_LOGE(TAG, "Motor controller not initialized");
         return ESP_ERR_INVALID_STATE;
@@ -175,12 +166,14 @@ esp_err_t motor_execute_command(motor_command_t command, int speed, uint32_t dur
 }
 
 // Stop all motors
-esp_err_t motor_stop(void) {
+esp_err_t motor_stop(void)
+{
     return motor_execute_command(MOTOR_CMD_STOP, 0, 0);
 }
 
 // Set motor speeds directly
-esp_err_t motor_set_speeds(int left_speed, int right_speed) {
+esp_err_t motor_set_speeds(int left_speed, int right_speed)
+{
     if (!is_initialized) {
         return ESP_ERR_INVALID_STATE;
     }
@@ -213,12 +206,14 @@ esp_err_t motor_set_speeds(int left_speed, int right_speed) {
 }
 
 // Get current motor status
-motor_status_t motor_get_status(void) {
+motor_status_t motor_get_status(void)
+{
     return motor_status;
 }
 
 // Get human-readable command name
-const char* motor_get_command_name(motor_command_t command) {
+const char *motor_get_command_name(motor_command_t command)
+{
     if (command < 0 || command >= sizeof(command_names) / sizeof(command_names[0])) {
         return "UNKNOWN";
     }
@@ -226,7 +221,8 @@ const char* motor_get_command_name(motor_command_t command) {
 }
 
 // Simulate movement and update position
-esp_err_t motor_simulate_movement(uint32_t delta_time_ms) {
+esp_err_t motor_simulate_movement(uint32_t delta_time_ms)
+{
     if (!motor_status.is_running) {
         return ESP_OK;
     }
@@ -236,7 +232,8 @@ esp_err_t motor_simulate_movement(uint32_t delta_time_ms) {
 
     // Calculate simulated distance based on speed
     // Assume max speed (255) = 300mm/s
-    float speed_factor = ((abs(motor_status.left_speed) + abs(motor_status.right_speed)) / 2.0) / 255.0;
+    float speed_factor =
+        ((abs(motor_status.left_speed) + abs(motor_status.right_speed)) / 2.0) / 255.0;
     float distance_delta = speed_factor * 300.0 * (delta_time_ms / 1000.0);
 
     if (motor_status.current_command == MOTOR_CMD_FORWARD) {
@@ -249,11 +246,13 @@ esp_err_t motor_simulate_movement(uint32_t delta_time_ms) {
     // Assume max rotation speed = 90 degrees/second
     if (motor_status.current_command == MOTOR_CMD_ROTATE_LEFT ||
         motor_status.current_command == MOTOR_CMD_LEFT) {
-        float rotation_speed = (motor_status.current_command == MOTOR_CMD_ROTATE_LEFT) ? 90.0 : 45.0;
+        float rotation_speed =
+            (motor_status.current_command == MOTOR_CMD_ROTATE_LEFT) ? 90.0 : 45.0;
         motor_status.heading_degrees -= rotation_speed * (delta_time_ms / 1000.0);
     } else if (motor_status.current_command == MOTOR_CMD_ROTATE_RIGHT ||
                motor_status.current_command == MOTOR_CMD_RIGHT) {
-        float rotation_speed = (motor_status.current_command == MOTOR_CMD_ROTATE_RIGHT) ? 90.0 : 45.0;
+        float rotation_speed =
+            (motor_status.current_command == MOTOR_CMD_ROTATE_RIGHT) ? 90.0 : 45.0;
         motor_status.heading_degrees += rotation_speed * (delta_time_ms / 1000.0);
     }
 
@@ -269,7 +268,8 @@ esp_err_t motor_simulate_movement(uint32_t delta_time_ms) {
 }
 
 // Get telemetry string for reporting
-char* motor_get_telemetry_string(void) {
+char *motor_get_telemetry_string(void)
+{
     static char telemetry[256];
 
     snprintf(telemetry, sizeof(telemetry),
@@ -281,19 +281,17 @@ char* motor_get_telemetry_string(void) {
              "Heading: %.1f°\n"
              "Runtime: %lu ms\n"
              "Status: %s",
-             motor_get_command_name(motor_status.current_command),
-             motor_status.left_speed,
-             motor_status.right_speed,
-             motor_status.distance_traveled_mm,
-             motor_status.heading_degrees,
-             motor_status.total_runtime_ms,
+             motor_get_command_name(motor_status.current_command), motor_status.left_speed,
+             motor_status.right_speed, motor_status.distance_traveled_mm,
+             motor_status.heading_degrees, motor_status.total_runtime_ms,
              motor_status.is_running ? "Running" : "Stopped");
 
     return telemetry;
 }
 
 // Cleanup motor controller
-void motor_controller_cleanup(void) {
+void motor_controller_cleanup(void)
+{
     if (!is_initialized) {
         return;
     }

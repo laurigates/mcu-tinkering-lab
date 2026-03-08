@@ -27,9 +27,8 @@ void i2c_master_deinit(void);
  * @param timeout_ms Timeout in milliseconds
  * @return ESP_OK on success, error code otherwise
  */
-esp_err_t i2c_master_send_command(const i2c_command_packet_t* command, 
-                                 i2c_response_packet_t* response, 
-                                 uint32_t timeout_ms);
+esp_err_t i2c_master_send_command(const i2c_command_packet_t *command,
+                                  i2c_response_packet_t *response, uint32_t timeout_ms);
 
 /**
  * @brief Send movement command
@@ -60,7 +59,7 @@ esp_err_t i2c_send_servo_command(servo_command_t servo, uint8_t angle);
  * @param message Message text
  * @return ESP_OK on success, error code otherwise
  */
-esp_err_t i2c_send_display_command(uint8_t line, const char* message);
+esp_err_t i2c_send_display_command(uint8_t line, const char *message);
 
 /**
  * @brief Ping the slave device
@@ -73,7 +72,7 @@ esp_err_t i2c_ping_slave(void);
  * @param status Status data structure to fill
  * @return ESP_OK on success, error code otherwise
  */
-esp_err_t i2c_get_status(status_data_t* status);
+esp_err_t i2c_get_status(status_data_t *status);
 
 /**
  * @brief Send command to enter maintenance mode
@@ -87,14 +86,14 @@ esp_err_t i2c_send_enter_maintenance_mode(void);
  * @param hash Hash prefix for verification (can be NULL)
  * @return ESP_OK on success, error code otherwise
  */
-esp_err_t i2c_send_begin_ota(const char* url, const uint8_t* hash);
+esp_err_t i2c_send_begin_ota(const char *url, const uint8_t *hash);
 
 /**
  * @brief Get OTA status from slave device
  * @param ota_status OTA status structure to fill
  * @return ESP_OK on success, error code otherwise
  */
-esp_err_t i2c_get_ota_status(ota_status_response_t* ota_status);
+esp_err_t i2c_get_ota_status(ota_status_response_t *ota_status);
 
 /**
  * @brief Get firmware version from slave device
@@ -102,7 +101,7 @@ esp_err_t i2c_get_ota_status(ota_status_response_t* ota_status);
  * @param version_len Size of version buffer
  * @return ESP_OK on success, error code otherwise
  */
-esp_err_t i2c_get_version(char* version, size_t version_len);
+esp_err_t i2c_get_version(char *version, size_t version_len);
 
 /**
  * @brief Send reboot command to slave device
@@ -110,4 +109,4 @@ esp_err_t i2c_get_version(char* version, size_t version_len);
  */
 esp_err_t i2c_send_reboot(void);
 
-#endif // I2C_MASTER_H
+#endif  // I2C_MASTER_H

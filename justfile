@@ -8,6 +8,7 @@ mod sim 'packages/esp32-projects/robocar-simulation'
 mod audiobook 'packages/esp32-projects/audiobook-player'
 mod wireguard 'packages/esp32-projects/esp32-wireguard-ha-example'
 mod kids-audio 'packages/esp32-projects/kids-audio-toy'
+mod xbox 'packages/esp32-projects/xbox-switch-bridge'
 
 idf_path := env("IDF_PATH", home_directory() + "/repos/esp-idf")
 idf_version := "v5.3.2"

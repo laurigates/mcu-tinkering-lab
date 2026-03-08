@@ -34,13 +34,13 @@ void i2c_slave_stop_task(void);
  * @brief Set current status data for responses
  * @param status Status data to set
  */
-void i2c_slave_set_status(const status_data_t* status);
+void i2c_slave_set_status(const status_data_t *status);
 
 /**
  * @brief Get current status data
  * @param status Buffer to fill with current status
  */
-void i2c_slave_get_status(status_data_t* status);
+void i2c_slave_get_status(status_data_t *status);
 
 /**
  * @brief Check if I2C slave is ready
@@ -48,4 +48,4 @@ void i2c_slave_get_status(status_data_t* status);
  */
 bool i2c_slave_is_ready(void);
 
-#endif // I2C_SLAVE_H
+#endif  // I2C_SLAVE_H

@@ -13,10 +13,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
@@ -24,7 +24,7 @@ jobs:
         run: pip install pre-commit
 
       - name: Cache pre-commit environments
-        uses: actions/cache@v5
+        uses: actions/cache@v4
         with:
           path: ~/.cache/pre-commit
           key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
@@ -37,10 +37,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
@@ -62,7 +62,7 @@ jobs:
             -v || true
 
       - name: Archive coverage reports
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: coverage-reports-${{ github.sha }}
           path: |
@@ -71,7 +71,7 @@ jobs:
           retention-days: 30
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v4
         if: always()
         with:
           file: packages/esp32-projects/robocar-simulation/coverage.xml
@@ -85,13 +85,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
-
-      - name: Setup ESP-IDF
-        uses: espressif/esp-idf-ci-action@v1
-        with:
-          esp_idf_version: v5.4
-          target: esp32
+        uses: actions/checkout@v4
 
       - name: Check for test directories
         id: check-tests
@@ -102,6 +96,14 @@ jobs:
             echo "tests_exist=false" >> $GITHUB_OUTPUT
             echo "::notice::No ESP32 test directories found yet. Skipping host tests."
           fi
+
+      - name: Setup ESP-IDF
+        if: steps.check-tests.outputs.tests_exist == 'true'
+        uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: v5.4
+          target: esp32
+          command: echo "ESP-IDF environment ready for host tests"
 
       - name: Run host-based tests
         if: steps.check-tests.outputs.tests_exist == 'true'
@@ -116,7 +118,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Install cppcheck
         run: sudo apt-get update && sudo apt-get install -y cppcheck
@@ -139,7 +141,7 @@ jobs:
             2>&1 | tee cppcheck-report.txt
 
       - name: Upload cppcheck report
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: cppcheck-report-${{ github.sha }}
           path: cppcheck-report.txt
@@ -150,7 +152,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Install clang-format
         run: sudo apt-get update && sudo apt-get install -y clang-format

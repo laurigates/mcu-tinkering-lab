@@ -6,18 +6,14 @@
 #ifndef LED_CONTROLLER_H
 #define LED_CONTROLLER_H
 
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include "esp_err.h"
 
 /**
  * @brief LED position identifier
  */
-typedef enum {
-    LED_LEFT = 0,
-    LED_RIGHT = 1,
-    LED_BOTH = 2
-} led_position_t;
+typedef enum { LED_LEFT = 0, LED_RIGHT = 1, LED_BOTH = 2 } led_position_t;
 
 /**
  * @brief RGB color structure
@@ -121,8 +117,8 @@ esp_err_t led_get_color(led_position_t position, rgb_color_t *color);
  * @param blink_count Number of blinks (0 = infinite)
  * @return ESP_OK on success
  */
-esp_err_t led_blink(led_position_t position, const rgb_color_t *color,
-                   uint32_t on_time_ms, uint32_t off_time_ms, uint32_t blink_count);
+esp_err_t led_blink(led_position_t position, const rgb_color_t *color, uint32_t on_time_ms,
+                    uint32_t off_time_ms, uint32_t blink_count);
 
 /**
  * @brief Stop any ongoing blink operation
@@ -136,4 +132,4 @@ esp_err_t led_stop_blink(void);
  */
 bool led_is_initialized(void);
 
-#endif // LED_CONTROLLER_H
+#endif  // LED_CONTROLLER_H

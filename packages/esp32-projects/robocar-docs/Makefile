@@ -291,7 +291,7 @@ info:
 	@echo ""
 	@echo "$(GREEN)Features:$(NC)"
 	@echo "  - AI-powered autonomous navigation using Claude API"
-	@echo "  - Dual ESP32 architecture with serial inter-board communication"  
+	@echo "  - Dual ESP32 architecture with serial inter-board communication"
 	@echo "  - Real-time image processing and scene analysis"
 	@echo "  - Motor control with RGB LEDs and servo-mounted camera"
 	@echo "  - OLED display for system status and diagnostics"

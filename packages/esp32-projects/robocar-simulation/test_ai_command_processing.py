@@ -17,6 +17,7 @@ import numpy as np
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 from ai_command_processor import AICommandProcessor, RobotContext, execute_ai_command
+
 from communication_bridge import ESP32CommunicationBridge
 from robot_model import DifferentialDriveRobot
 
@@ -310,9 +311,9 @@ def test_integration_with_communication_bridge():
         # Test AI command handler exists
         from communication_bridge import MessageType
 
-        assert MessageType.AI_COMMAND in bridge.message_handlers, (
-            "AI command handler should be registered"
-        )
+        assert (
+            MessageType.AI_COMMAND in bridge.message_handlers
+        ), "AI command handler should be registered"
 
         print("  ✅ AI command handler registered")
 
