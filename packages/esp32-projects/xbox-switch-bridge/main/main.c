@@ -29,6 +29,7 @@
 
 static const char *TAG = "xbox_switch_bridge";
 
+
 /* Bridge loop interval: 8ms = 125 Hz USB poll rate */
 #define BRIDGE_LOOP_INTERVAL_MS 8
 
@@ -126,6 +127,7 @@ static void bridge_task(void *arg)
                 break;
         }
 
+        status_led_update();
         vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(BRIDGE_LOOP_INTERVAL_MS));
     }
 }
@@ -141,8 +143,15 @@ void app_main(void)
     /* Initialize NVS (required for BT) */
     ESP_ERROR_CHECK(init_nvs());
 
-    /* Initialize USB HID (Switch Pro Controller emulation) */
-    ESP_ERROR_CHECK(switch_pro_usb_init());
+    /* Initialize USB HID (Switch Pro Controller emulation).
+     * TinyUSB may fail when not connected to a Switch dock (e.g. on a
+     * computer USB port). Log the error and continue — BLE scanning still
+     * works, and USB will be retried on next reboot with a dock. */
+    esp_err_t usb_ret = switch_pro_usb_init();
+    if (usb_ret != ESP_OK) {
+        ESP_LOGW(TAG, "USB init failed (%s) — not connected to Switch dock?",
+                 esp_err_to_name(usb_ret));
+    }
 
     /* Initialize Bluepad32 (BLE gamepad host) */
     ESP_ERROR_CHECK(bp32_host_init(on_controller_connection));

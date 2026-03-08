@@ -19,7 +19,7 @@ typedef enum {
 } status_led_mode_t;
 
 /**
- * @brief Initialize the WS2812 LED and start the background update task.
+ * @brief Initialize the WS2812 LED (RMT, non-DMA).
  */
 esp_err_t status_led_init(void);
 
@@ -27,3 +27,8 @@ esp_err_t status_led_init(void);
  * @brief Set the LED mode. Thread-safe.
  */
 void status_led_set_mode(status_led_mode_t mode);
+
+/**
+ * @brief Update LED output. Call from an existing periodic loop (~50+ Hz).
+ */
+void status_led_update(void);
