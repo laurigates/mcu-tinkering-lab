@@ -16,6 +16,7 @@ import numpy as np
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 from camera_simulation import CameraSimulation
+
 from robot_model import DifferentialDriveRobot
 
 
@@ -41,9 +42,11 @@ def test_camera_basic_functionality():
         frame = camera._render_synthetic_view(robot_state)
 
         assert frame is not None, "Frame should not be None"
-        assert frame.shape == (480, 640, 3), (
-            f"Frame shape should be (480, 640, 3), got {frame.shape}"
-        )
+        assert frame.shape == (
+            480,
+            640,
+            3,
+        ), f"Frame shape should be (480, 640, 3), got {frame.shape}"
         assert frame.dtype == np.uint8, f"Frame dtype should be uint8, got {frame.dtype}"
 
         print("  ✅ Basic frame generation works")

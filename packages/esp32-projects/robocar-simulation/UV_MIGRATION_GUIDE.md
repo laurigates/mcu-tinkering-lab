@@ -26,7 +26,7 @@ This document describes the migration from pip/requirements.txt to uv/pyproject.
 - **Parallel downloads** and installations
 - **Smart caching** reduces repeated downloads
 
-### 🛡️ Reliability  
+### 🛡️ Reliability
 - **Lock file** ensures reproducible installations
 - **Conflict resolution** prevents dependency issues
 - **Virtual environment isolation** built-in
@@ -81,7 +81,7 @@ uv run pytest --cov=src
 # Add new dependency
 uv add requests
 
-# Add development dependency  
+# Add development dependency
 uv add --dev black
 
 # Update dependencies

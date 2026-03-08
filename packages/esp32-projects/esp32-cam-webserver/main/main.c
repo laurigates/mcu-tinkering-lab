@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <string.h>
+#include "credentials.h"
 #include "esp_camera.h"
 #include "esp_event.h"
 #include "esp_http_server.h"
@@ -35,9 +36,6 @@ static const char *TAG = "esp32-cam-webserver";
 #define CAM_PIN_HREF 23
 #define CAM_PIN_PCLK 22
 
-// WiFi credentials - change these to match your network
-#define WIFI_SSID "ESP32-CAM-AP"
-#define WIFI_PASS "esp32cam123"
 #define WIFI_MAXIMUM_RETRY 5
 
 // FreeRTOS event group to signal when we are connected

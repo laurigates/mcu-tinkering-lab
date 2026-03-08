@@ -24,8 +24,8 @@
 // Camera Configuration
 #define CAMERA_MODEL_AI_THINKER 1
 #define CAMERA_FRAME_SIZE FRAMESIZE_QVGA  // 320x240
-#define CAMERA_JPEG_QUALITY 10  // 0-63 (lower = higher quality)
-#define CAMERA_CAPTURE_INTERVAL_MS 5000  // Capture every 5 seconds
+#define CAMERA_JPEG_QUALITY 10            // 0-63 (lower = higher quality)
+#define CAMERA_CAPTURE_INTERVAL_MS 5000   // Capture every 5 seconds
 
 // Motor Control Configuration (Mock for testing)
 #define MOTOR_LEFT_FORWARD_PIN 12
@@ -50,11 +50,12 @@
 #define JSON_BUFFER_SIZE 4096
 
 // Vision Analysis Prompts
-#define VISION_PROMPT_PREFIX "You are an autonomous robot car with camera vision. Analyze this image and provide:\n" \
-                             "1. Description of what you see\n" \
-                             "2. Any obstacles or interesting objects\n" \
-                             "3. Suggested movement (forward/backward/left/right/stop)\n" \
-                             "4. Confidence level (low/medium/high)\n" \
-                             "Be concise, max 100 words."
+#define VISION_PROMPT_PREFIX                                                                \
+    "You are an autonomous robot car with camera vision. Analyze this image and provide:\n" \
+    "1. Description of what you see\n"                                                      \
+    "2. Any obstacles or interesting objects\n"                                             \
+    "3. Suggested movement (forward/backward/left/right/stop)\n"                            \
+    "4. Confidence level (low/medium/high)\n"                                               \
+    "Be concise, max 100 words."
 
-#endif // CONFIG_H
+#endif  // CONFIG_H

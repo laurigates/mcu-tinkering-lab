@@ -11,6 +11,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "esp_err.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -53,10 +55,9 @@ typedef struct {
 typedef void (*bp32_connection_cb_t)(bool connected);
 
 /**
- * @brief Initialize Bluepad32 as a BLE host.
+ * @brief Register connection callback and initialize state.
  *
- * Configures BTstack and registers the Bluepad32 custom platform.
- * Must be followed by bp32_host_start() to begin the event loop.
+ * Must be called before bp32_host_start().
  *
  * @param conn_cb Optional callback for connection state changes.
  * @return ESP_OK on success.
@@ -64,21 +65,13 @@ typedef void (*bp32_connection_cb_t)(bool connected);
 esp_err_t bp32_host_init(bp32_connection_cb_t conn_cb);
 
 /**
- * @brief Start the BTstack event loop.
+ * @brief Start Bluepad32 and the BTstack event loop.
  *
  * This call does NOT return. It must be called from the task that will
  * run the Bluetooth stack (typically app_main). Create any other tasks
  * before calling this function.
  */
 void bp32_host_start(void);
-
-/**
- * @brief Process Bluepad32 events (no-op in v4.x).
- *
- * In Bluepad32 v4.x, the event loop runs via btstack_run_loop_execute(),
- * so no explicit polling is needed. Kept for API compatibility.
- */
-void bp32_host_process(void);
 
 /**
  * @brief Get the current gamepad state.

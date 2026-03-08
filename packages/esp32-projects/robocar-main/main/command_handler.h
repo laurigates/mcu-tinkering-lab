@@ -6,8 +6,8 @@
 #ifndef COMMAND_HANDLER_H
 #define COMMAND_HANDLER_H
 
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include "esp_err.h"
 
 /**
@@ -52,12 +52,7 @@ typedef enum {
 /**
  * @brief Servo command subtypes
  */
-typedef enum {
-    SERVO_PAN = 0,
-    SERVO_TILT,
-    SERVO_CENTER,
-    SERVO_POSITION
-} servo_command_t;
+typedef enum { SERVO_PAN = 0, SERVO_TILT, SERVO_CENTER, SERVO_POSITION } servo_command_t;
 
 /**
  * @brief LED command subtypes
@@ -79,10 +74,10 @@ typedef enum {
  * @brief Command parameter structure
  */
 typedef struct {
-    uint8_t param1;    // Speed, angle, color component, etc.
-    uint8_t param2;    // Second parameter for RGB, position, etc.
-    uint8_t param3;    // Third parameter for RGB, timing, etc.
-    uint16_t param4;   // Extended parameter for timing, etc.
+    uint8_t param1;   // Speed, angle, color component, etc.
+    uint8_t param2;   // Second parameter for RGB, position, etc.
+    uint8_t param3;   // Third parameter for RGB, timing, etc.
+    uint16_t param4;  // Extended parameter for timing, etc.
 } command_params_t;
 
 /**
@@ -90,10 +85,10 @@ typedef struct {
  */
 typedef struct {
     command_type_t type;
-    uint8_t subtype;           // Cast to appropriate enum based on type
+    uint8_t subtype;  // Cast to appropriate enum based on type
     command_params_t params;
-    char source[16];           // Command source identifier
-    uint32_t timestamp;        // Command timestamp
+    char source[16];     // Command source identifier
+    uint32_t timestamp;  // Command timestamp
 } robot_command_t;
 
 /**
@@ -109,7 +104,7 @@ typedef struct {
     command_type_t type;
     uint8_t subtype;
     command_handler_func_t handler;
-    uint8_t min_params;        // Minimum required parameters
+    uint8_t min_params;  // Minimum required parameters
     const char *description;
 } command_entry_t;
 
@@ -147,7 +142,7 @@ esp_err_t command_execute_string(const char *cmd_string, const char *source);
  * @param name Command name
  * @return Pointer to command entry or NULL if not found
  */
-const command_entry_t* command_get_info(const char *name);
+const command_entry_t *command_get_info(const char *name);
 
 /**
  * @brief List all available commands
@@ -169,7 +164,7 @@ bool command_validate(const robot_command_t *cmd);
  * @param type Command type
  * @return String representation of command type
  */
-const char* command_type_to_string(command_type_t type);
+const char *command_type_to_string(command_type_t type);
 
 /**
  * @brief Create movement command
@@ -188,7 +183,8 @@ robot_command_t command_create_move(move_command_t move_type, uint8_t speed, con
  * @param source Command source
  * @return Initialized command structure
  */
-robot_command_t command_create_servo(servo_command_t servo_type, uint8_t param1, uint8_t param2, const char *source);
+robot_command_t command_create_servo(servo_command_t servo_type, uint8_t param1, uint8_t param2,
+                                     const char *source);
 
 /**
  * @brief Create LED command
@@ -199,7 +195,8 @@ robot_command_t command_create_servo(servo_command_t servo_type, uint8_t param1,
  * @param source Command source
  * @return Initialized command structure
  */
-robot_command_t command_create_led(led_command_t led_type, uint8_t param1, uint8_t param2, uint8_t param3, const char *source);
+robot_command_t command_create_led(led_command_t led_type, uint8_t param1, uint8_t param2,
+                                   uint8_t param3, const char *source);
 
 /**
  * @brief Create sound command
@@ -209,6 +206,7 @@ robot_command_t command_create_led(led_command_t led_type, uint8_t param1, uint8
  * @param source Command source
  * @return Initialized command structure
  */
-robot_command_t command_create_sound(sound_command_t sound_type, uint16_t duration, uint16_t frequency, const char *source);
+robot_command_t command_create_sound(sound_command_t sound_type, uint16_t duration,
+                                     uint16_t frequency, const char *source);
 
-#endif // COMMAND_HANDLER_H
+#endif  // COMMAND_HANDLER_H

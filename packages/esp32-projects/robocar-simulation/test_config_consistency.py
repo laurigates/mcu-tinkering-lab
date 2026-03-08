@@ -15,10 +15,10 @@ import yaml
 # Add src directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
-from swift_visualizer import RobotVisualizer
-
 from ai_command_processor import AICommandProcessor
 from camera_simulation import CameraSimulation
+from swift_visualizer import RobotVisualizer
+
 from robot_model import DifferentialDriveRobot
 
 
@@ -45,9 +45,9 @@ def test_config_loading():
         # Check simulation subsections
         sim_subsections = ["camera", "motor_control", "environment"]
         for subsection in sim_subsections:
-            assert subsection in config["simulation"], (
-                f"Missing simulation subsection: {subsection}"
-            )
+            assert (
+                subsection in config["simulation"]
+            ), f"Missing simulation subsection: {subsection}"
 
         print("  ✅ All required configuration sections present")
 
@@ -73,18 +73,18 @@ def test_camera_config_consistency(config):
         expected_fov = robot_camera.get("field_of_view", sim_camera.get("fov_degrees", 70.0))
         actual_fov = camera_sim.camera_config.fov_degrees
 
-        assert abs(actual_fov - expected_fov) < 0.1, (
-            f"FOV mismatch: expected {expected_fov}, got {actual_fov}"
-        )
+        assert (
+            abs(actual_fov - expected_fov) < 0.1
+        ), f"FOV mismatch: expected {expected_fov}, got {actual_fov}"
         print(f"  ✅ Camera FOV consistent: {actual_fov}°")
 
         # Check FPS consistency
         expected_fps = robot_camera.get("fps", sim_camera.get("fps", 30))
         actual_fps = camera_sim.camera_config.fps
 
-        assert actual_fps == expected_fps, (
-            f"FPS mismatch: expected {expected_fps}, got {actual_fps}"
-        )
+        assert (
+            actual_fps == expected_fps
+        ), f"FPS mismatch: expected {expected_fps}, got {actual_fps}"
         print(f"  ✅ Camera FPS consistent: {actual_fps}")
 
         # Check resolution consistency
@@ -93,9 +93,9 @@ def test_camera_config_consistency(config):
         )
         actual_resolution = camera_sim.camera_config.resolution
 
-        assert actual_resolution == expected_resolution, (
-            f"Resolution mismatch: expected {expected_resolution}, got {actual_resolution}"
-        )
+        assert (
+            actual_resolution == expected_resolution
+        ), f"Resolution mismatch: expected {expected_resolution}, got {actual_resolution}"
         print(f"  ✅ Camera resolution consistent: {actual_resolution}")
 
         return True
@@ -117,30 +117,30 @@ def test_motor_config_consistency(config):
         right_motor_config = config["robot"]["motors"]["right"]
 
         # Test max RPM
-        assert robot.motor_left.max_rpm == left_motor_config["max_rpm"], (
-            "Left motor max RPM mismatch"
-        )
-        assert robot.motor_right.max_rpm == right_motor_config["max_rpm"], (
-            "Right motor max RPM mismatch"
-        )
+        assert (
+            robot.motor_left.max_rpm == left_motor_config["max_rpm"]
+        ), "Left motor max RPM mismatch"
+        assert (
+            robot.motor_right.max_rpm == right_motor_config["max_rpm"]
+        ), "Right motor max RPM mismatch"
         print(f"  ✅ Motor max RPM consistent: {robot.motor_left.max_rpm}")
 
         # Test motor electrical parameters
-        assert abs(robot.motor_left.resistance - left_motor_config["resistance"]) < 0.1, (
-            "Left motor resistance mismatch"
-        )
-        assert abs(robot.motor_right.resistance - right_motor_config["resistance"]) < 0.1, (
-            "Right motor resistance mismatch"
-        )
+        assert (
+            abs(robot.motor_left.resistance - left_motor_config["resistance"]) < 0.1
+        ), "Left motor resistance mismatch"
+        assert (
+            abs(robot.motor_right.resistance - right_motor_config["resistance"]) < 0.1
+        ), "Right motor resistance mismatch"
         print(f"  ✅ Motor resistance consistent: {robot.motor_left.resistance}Ω")
 
         # Test stall torque
-        assert abs(robot.motor_left.stall_torque - left_motor_config["stall_torque"]) < 0.01, (
-            "Left motor stall torque mismatch"
-        )
-        assert abs(robot.motor_right.stall_torque - right_motor_config["stall_torque"]) < 0.01, (
-            "Right motor stall torque mismatch"
-        )
+        assert (
+            abs(robot.motor_left.stall_torque - left_motor_config["stall_torque"]) < 0.01
+        ), "Left motor stall torque mismatch"
+        assert (
+            abs(robot.motor_right.stall_torque - right_motor_config["stall_torque"]) < 0.01
+        ), "Right motor stall torque mismatch"
         print(f"  ✅ Motor stall torque consistent: {robot.motor_left.stall_torque}N⋅m")
 
         return True

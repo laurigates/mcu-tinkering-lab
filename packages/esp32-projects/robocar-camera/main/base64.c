@@ -7,14 +7,16 @@
 #include <stdlib.h>
 #include <string.h>
 
-static const char base64_chars[] = 
+static const char base64_chars[] =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-size_t base64_encode_length(size_t input_length) {
-    return ((input_length + 2) / 3) * 4 + 1; // +1 for null terminator
+size_t base64_encode_length(size_t input_length)
+{
+    return ((input_length + 2) / 3) * 4 + 1;  // +1 for null terminator
 }
 
-int base64_encode(const uint8_t* input, size_t input_length, char* output, size_t* output_length) {
+int base64_encode(const uint8_t *input, size_t input_length, char *output, size_t *output_length)
+{
     if (!input || !output || !output_length) {
         return -1;
     }
@@ -46,10 +48,10 @@ int base64_encode(const uint8_t* input, size_t input_length, char* output, size_
 
     // Handle padding
     if (input_length % 3 == 1) {
-        output[j-2] = '=';
-        output[j-1] = '=';
+        output[j - 2] = '=';
+        output[j - 1] = '=';
     } else if (input_length % 3 == 2) {
-        output[j-1] = '=';
+        output[j - 1] = '=';
     }
 
     output[j] = '\0';
@@ -57,13 +59,14 @@ int base64_encode(const uint8_t* input, size_t input_length, char* output, size_
     return 0;
 }
 
-char* base64_encode_alloc(const uint8_t* input, size_t input_length) {
+char *base64_encode_alloc(const uint8_t *input, size_t input_length)
+{
     if (!input) {
         return NULL;
     }
 
     size_t output_length = base64_encode_length(input_length);
-    char* output = malloc(output_length);
+    char *output = malloc(output_length);
     if (!output) {
         return NULL;
     }

@@ -5,12 +5,13 @@
 
 #include "camera.h"
 #include "camera_pins.h"
-#include "esp_log.h"
 #include "esp_camera.h"
+#include "esp_log.h"
 
 static const char *TAG = "camera";
 
-esp_err_t camera_init(void) {
+esp_err_t camera_init(void)
+{
     ESP_LOGI(TAG, "Initializing ESP32-CAM");
 
     camera_config_t config = {
@@ -37,8 +38,8 @@ esp_err_t camera_init(void) {
         .ledc_channel = LEDC_CHANNEL_0,
 
         .pixel_format = PIXFORMAT_JPEG,
-        .frame_size = FRAMESIZE_QVGA,    // 320x240 for faster processing
-        .jpeg_quality = 15,              // Lower number = higher quality
+        .frame_size = FRAMESIZE_QVGA,  // 320x240 for faster processing
+        .jpeg_quality = 15,            // Lower number = higher quality
         .fb_count = 1,
         .fb_location = CAMERA_FB_IN_PSRAM,
         .grab_mode = CAMERA_GRAB_WHEN_EMPTY,
@@ -68,37 +69,40 @@ esp_err_t camera_init(void) {
     sensor_t *s = esp_camera_sensor_get();
     if (s != NULL) {
         // Adjust settings for outdoor robotics
-        s->set_brightness(s, 0);     // -2 to 2
-        s->set_contrast(s, 0);       // -2 to 2
-        s->set_saturation(s, 0);     // -2 to 2
-        s->set_special_effect(s, 0); // 0 to 6 (0-No Effect, 1-Negative, 2-Grayscale, 3-Red Tint, 4-Green Tint, 5-Blue Tint, 6-Sepia)
-        s->set_whitebal(s, 1);       // 0 = disable , 1 = enable
-        s->set_awb_gain(s, 1);       // 0 = disable , 1 = enable
-        s->set_wb_mode(s, 0);        // 0 to 4 - if awb_gain enabled (0 - Auto, 1 - Sunny, 2 - Cloudy, 3 - Office, 4 - Home)
-        s->set_exposure_ctrl(s, 1);  // 0 = disable , 1 = enable
-        s->set_aec2(s, 0);           // 0 = disable , 1 = enable
-        s->set_ae_level(s, 0);       // -2 to 2
-        s->set_aec_value(s, 300);    // 0 to 1200
-        s->set_gain_ctrl(s, 1);      // 0 = disable , 1 = enable
-        s->set_agc_gain(s, 0);       // 0 to 30
+        s->set_brightness(s, 0);      // -2 to 2
+        s->set_contrast(s, 0);        // -2 to 2
+        s->set_saturation(s, 0);      // -2 to 2
+        s->set_special_effect(s, 0);  // 0 to 6 (0-No Effect, 1-Negative, 2-Grayscale, 3-Red Tint,
+                                      // 4-Green Tint, 5-Blue Tint, 6-Sepia)
+        s->set_whitebal(s, 1);        // 0 = disable , 1 = enable
+        s->set_awb_gain(s, 1);        // 0 = disable , 1 = enable
+        s->set_wb_mode(s, 0);  // 0 to 4 - if awb_gain enabled (0 - Auto, 1 - Sunny, 2 - Cloudy, 3 -
+                               // Office, 4 - Home)
+        s->set_exposure_ctrl(s, 1);               // 0 = disable , 1 = enable
+        s->set_aec2(s, 0);                        // 0 = disable , 1 = enable
+        s->set_ae_level(s, 0);                    // -2 to 2
+        s->set_aec_value(s, 300);                 // 0 to 1200
+        s->set_gain_ctrl(s, 1);                   // 0 = disable , 1 = enable
+        s->set_agc_gain(s, 0);                    // 0 to 30
         s->set_gainceiling(s, (gainceiling_t)0);  // 0 to 6
-        s->set_bpc(s, 0);            // 0 = disable , 1 = enable
-        s->set_wpc(s, 1);            // 0 = disable , 1 = enable
-        s->set_raw_gma(s, 1);        // 0 = disable , 1 = enable
-        s->set_lenc(s, 1);           // 0 = disable , 1 = enable
-        s->set_hmirror(s, 0);        // 0 = disable , 1 = enable
-        s->set_vflip(s, 0);          // 0 = disable , 1 = enable
-        s->set_dcw(s, 1);            // 0 = disable , 1 = enable
-        s->set_colorbar(s, 0);       // 0 = disable , 1 = enable
+        s->set_bpc(s, 0);                         // 0 = disable , 1 = enable
+        s->set_wpc(s, 1);                         // 0 = disable , 1 = enable
+        s->set_raw_gma(s, 1);                     // 0 = disable , 1 = enable
+        s->set_lenc(s, 1);                        // 0 = disable , 1 = enable
+        s->set_hmirror(s, 0);                     // 0 = disable , 1 = enable
+        s->set_vflip(s, 0);                       // 0 = disable , 1 = enable
+        s->set_dcw(s, 1);                         // 0 = disable , 1 = enable
+        s->set_colorbar(s, 0);                    // 0 = disable , 1 = enable
     }
 
     ESP_LOGI(TAG, "Camera initialized successfully");
     return ESP_OK;
 }
 
-camera_fb_t* camera_capture(void) {
+camera_fb_t *camera_capture(void)
+{
     ESP_LOGI(TAG, "Capturing image...");
-    
+
     camera_fb_t *fb = esp_camera_fb_get();
     if (!fb) {
         ESP_LOGE(TAG, "Camera capture failed");
@@ -109,13 +113,15 @@ camera_fb_t* camera_capture(void) {
     return fb;
 }
 
-void camera_return_fb(camera_fb_t* fb) {
+void camera_return_fb(camera_fb_t *fb)
+{
     if (fb) {
         esp_camera_fb_return(fb);
     }
 }
 
-void camera_deinit(void) {
+void camera_deinit(void)
+{
     esp_camera_deinit();
     ESP_LOGI(TAG, "Camera deinitialized");
 }

@@ -401,6 +401,15 @@ static void handle_subcommand(const uint8_t *data, uint16_t len)
 /*--- TinyUSB Callbacks ---*/
 
 /**
+ * @brief TinyUSB HID report descriptor callback.
+ */
+uint8_t const *tud_hid_descriptor_report_cb(uint8_t instance)
+{
+    (void)instance;
+    return s_hid_report_descriptor;
+}
+
+/**
  * @brief TinyUSB HID GET_REPORT callback.
  */
 uint16_t tud_hid_get_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_t report_type,
@@ -446,33 +455,41 @@ esp_err_t switch_pro_usb_init(void)
 {
     ESP_LOGI(TAG, "Initializing Switch Pro Controller USB HID");
 
+    static const tusb_desc_device_t device_desc = {
+        .bLength = sizeof(tusb_desc_device_t),
+        .bDescriptorType = TUSB_DESC_DEVICE,
+        .bcdUSB = 0x0200,
+        .bDeviceClass = 0x00,
+        .bDeviceSubClass = 0x00,
+        .bDeviceProtocol = 0x00,
+        .bMaxPacketSize0 = CFG_TUD_ENDPOINT0_SIZE,
+        .idVendor = SWITCH_PRO_VID,
+        .idProduct = SWITCH_PRO_PID,
+        .bcdDevice = 0x0200,
+        .iManufacturer = 0x01,
+        .iProduct = 0x02,
+        .iSerialNumber = 0x03,
+        .bNumConfigurations = 0x01,
+    };
+
+    static const char *string_desc[] = {
+        "\x09\x04",           /* 0: Language (English) */
+        "Nintendo Co., Ltd.", /* 1: Manufacturer */
+        "Pro Controller",     /* 2: Product */
+        "000000000001",       /* 3: Serial */
+    };
+
     const tinyusb_config_t tusb_cfg = {
-        .device_descriptor =
-            &(const tusb_desc_device_t){
-                .bLength = sizeof(tusb_desc_device_t),
-                .bDescriptorType = TUSB_DESC_DEVICE,
-                .bcdUSB = 0x0200,
-                .bDeviceClass = 0x00,
-                .bDeviceSubClass = 0x00,
-                .bDeviceProtocol = 0x00,
-                .bMaxPacketSize0 = CFG_TUD_ENDPOINT0_SIZE,
-                .idVendor = SWITCH_PRO_VID,
-                .idProduct = SWITCH_PRO_PID,
-                .bcdDevice = 0x0200,
-                .iManufacturer = 0x01,
-                .iProduct = 0x02,
-                .iSerialNumber = 0x03,
-                .bNumConfigurations = 0x01,
-            },
-        .string_descriptor =
-            (const char *[]){
-                "\x09\x04",           /* 0: Language (English) */
-                "Nintendo Co., Ltd.", /* 1: Manufacturer */
-                "Pro Controller",     /* 2: Product */
-                "000000000001",       /* 3: Serial */
-            },
-        .string_descriptor_count = 4,
-        .external_phy = false,
+        .task = {
+            .size = 4096,
+            .priority = 5,
+            .xCoreID = 1, /* Core 0 reserved for BTstack; USB HID runs on core 1 */
+        },
+        .descriptor = {
+            .device = &device_desc,
+            .string = string_desc,
+            .string_count = 4,
+        },
     };
 
     esp_err_t ret = tinyusb_driver_install(&tusb_cfg);

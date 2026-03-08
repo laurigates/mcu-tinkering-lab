@@ -21,7 +21,7 @@ esp_err_t wifi_init(void);
  * @param password WiFi password
  * @return ESP_OK on success, error code otherwise
  */
-esp_err_t wifi_connect(const char* ssid, const char* password);
+esp_err_t wifi_connect(const char *ssid, const char *password);
 
 /**
  * @brief Check if WiFi is connected
@@ -39,4 +39,4 @@ void wifi_disconnect(void);
  */
 void wifi_manager_deinit(void);
 
-#endif // WIFI_MANAGER_H
+#endif  // WIFI_MANAGER_H
