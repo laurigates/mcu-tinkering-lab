@@ -1,6 +1,17 @@
+---
+description: Research and report on new microcontroller board releases from ESP32, STM32, and other manufacturers
+allowed-tools: WebFetch, WebSearch
+argument-hint: "[platform|use-case|timeframe]"
+---
+
 # Research New Microcontroller Boards
 
 Research the latest microcontroller board announcements and generate concise, technical reports.
+
+If $ARGUMENTS is provided, use it to filter results:
+- Platform name (e.g. "esp32", "stm32") — restrict to that family
+- Use-case (e.g. "robotics", "home automation") — adjust relevance weighting
+- Timeframe (e.g. "last month", "last year") — override the default 3-6 month window
 
 ## Focus Areas
 - ESP32 family (priority)
@@ -29,27 +40,28 @@ The user's projects focus on:
 
 ### Quality Outlets
 1. **CNX Software** (priority): https://www.cnx-software.com/
-2. **Hackaday**: https://hackaday.com/
-3. **Hackster.io**: https://www.hackster.io/
-4. **All About Circuits**: https://www.allaboutcircuits.com/
+2. **Tom's Hardware**: https://www.tomshardware.com/
+3. **Hackaday**: https://hackaday.com/
+4. **Hackster.io**: https://www.hackster.io/ (note: often republishes Hackaday content — deduplicate)
+5. **All About Circuits**: https://www.allaboutcircuits.com/
 
 ## Instructions
 
-1. **Search for recent announcements** (last 3-6 months):
+1. **Search for recent announcements** (last 3-6 months, or as specified in $ARGUMENTS):
    - Check manufacturer newsrooms and blogs
    - Check CNX Software and quality outlets
    - Focus on boards in mass production or near-term availability
 
 2. **Filter for relevance**:
    - Prioritize boards suitable for home automation, robotics, or kid-friendly gadgets
-   - Skip pure development boards without practical maker appeal
+   - Skip pure development boards without practical maker appeal (e.g. industrial eval kits, $100+ devkits)
    - Skip boards with unclear availability or pricing
 
-3. **Generate reports** using this template for 3-5 most interesting boards:
+3. **Generate reports** using this template for 3-5 most interesting boards (at least 1, up to 5):
 
 ```markdown
 ## [Board Name]
-**Manufacturer:** | **Release/Status:** | **Price:**
+**Manufacturer:** [name] | **Release/Status:** [GA/crowdfunding/pre-order/in-stock] | **Price:** [price] | **Toolchain:** [Arduino/IDF/Zephyr/HAL maturity]
 
 ### Quick Verdict
 [1-2 sentences: Why is this interesting for home automation/kid gadgets/robotics?]
