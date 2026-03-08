@@ -322,3 +322,39 @@ info:
     @echo "  robocar-main/      — Main controller (motor/LED/servo)"
     @echo "  robocar-camera/    — AI vision system"
     @echo "  robocar-simulation/ — Python physics simulation"
+
+# Trigger OTA update check via MQTT notification
+[group: "ota"]
+ota-notify version="latest" broker="localhost":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    command -v mosquitto_pub >/dev/null 2>&1 || { echo "Error: mosquitto_pub not found — install mosquitto-clients"; exit 1; }
+    if [ "{{version}}" = "latest" ]; then
+        echo "Sending OTA notification to check for latest release..."
+        mosquitto_pub -h "{{broker}}" -t "robocar/ota/notify" \
+            -m '{"version":"latest","check":"true"}'
+    else
+        echo "Sending OTA notification for version {{version}}..."
+        mosquitto_pub -h "{{broker}}" -t "robocar/ota/notify" \
+            -m "{\"version\":\"{{version}}\",\"tag\":\"v{{version}}\"}"
+    fi
+    echo "OTA notification sent to robocar/ota/notify"
+
+# Monitor OTA update status via MQTT
+[group: "ota"]
+ota-status broker="localhost":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    command -v mosquitto_sub >/dev/null 2>&1 || { echo "Error: mosquitto_sub not found — install mosquitto-clients"; exit 1; }
+    echo "Listening for OTA status updates (Ctrl+C to stop)..."
+    mosquitto_sub -h "{{broker}}" -t "robocar/ota/status" -t "robocar/ota/notify" -v
+
+# Show current firmware versions from latest GitHub release
+[group: "ota"]
+ota-versions:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    command -v gh >/dev/null 2>&1 || { echo "Error: gh CLI not found — install GitHub CLI"; exit 1; }
+    echo "Latest release:"
+    gh release view --json tagName,publishedAt,assets \
+        --jq '"  Tag:  " + .tagName + "\n  Date: " + .publishedAt + "\n  Assets:\n" + ([.assets[] | "    " + .name + " (" + (.size | tostring) + " bytes)"] | join("\n"))'
