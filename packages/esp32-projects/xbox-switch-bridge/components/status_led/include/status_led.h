@@ -19,7 +19,7 @@ typedef enum {
 } status_led_mode_t;
 
 /**
- * @brief Initialize the WS2812 LED (RMT + DMA).
+ * @brief Initialize the WS2812 LED (RMT, non-DMA).
  */
 esp_err_t status_led_init(void);
 

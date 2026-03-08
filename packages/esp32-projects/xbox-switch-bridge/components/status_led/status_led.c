@@ -1,9 +1,9 @@
 /**
  * @file status_led.c
- * @brief WS2812 status LED driver using RMT-based led_strip with DMA.
+ * @brief WS2812 status LED driver using RMT-based led_strip.
  *
  * No background task — call status_led_update() from an existing loop.
- * DMA mode prevents BT ISR preemption of RMT timing.
+ * DMA is disabled to avoid conflicts with TinyUSB on ESP32-S3.
  */
 #include "status_led.h"
 
@@ -52,7 +52,7 @@ esp_err_t status_led_init(void)
     led_strip_clear(s_strip);
     led_strip_refresh(s_strip);
 
-    ESP_LOGI(TAG, "Status LED initialized on GPIO%d (DMA mode)", LED_GPIO);
+    ESP_LOGI(TAG, "Status LED initialized on GPIO%d", LED_GPIO);
     return ESP_OK;
 }
 
