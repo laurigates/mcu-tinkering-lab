@@ -1,8 +1,8 @@
 #include <stdio.h>
+#include "esp_spi_flash.h"
+#include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "esp_system.h"
-#include "esp_spi_flash.h"
 // Future includes for Wi-Fi, HTTP, Camera, I2S will go here
 
 void app_main(void)
@@ -30,6 +30,6 @@ void app_main(void)
         // 3. Receive audio data from server via HTTP
         // 4. Play audio data via I2S
         printf("Main loop running... waiting for tasks.\n");
-        vTaskDelay(pdMS_TO_TICKS(10000)); // Delay for 10 seconds
+        vTaskDelay(pdMS_TO_TICKS(10000));  // Delay for 10 seconds
     }
 }
