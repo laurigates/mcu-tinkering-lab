@@ -10,6 +10,8 @@ on:
   pull_request_review:
     types: [submitted]
 
+permissions: {}
+
 # Prevent concurrent Claude runs on the same issue/PR
 concurrency:
   group: claude-${{ github.event.issue.number || github.event.pull_request.number }}

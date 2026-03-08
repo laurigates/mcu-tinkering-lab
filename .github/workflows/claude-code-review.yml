@@ -10,6 +10,8 @@ on:
     #   - "src/**/*.js"
     #   - "src/**/*.jsx"
 
+permissions: {}
+
 # Cancel in-progress reviews when new commits are pushed
 concurrency:
   group: claude-review-${{ github.event.pull_request.number }}
