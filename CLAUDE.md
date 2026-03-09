@@ -15,15 +15,14 @@ mcu-tinkering-lab/
 │       ├── robocar-main/           # Main controller (Heltec WiFi LoRa 32 V1)
 │       ├── robocar-camera/         # Vision system (ESP32-CAM + Claude/Ollama AI)
 │       ├── robocar-simulation/     # Python 3.11 physics simulation (Pymunk)
-│       ├── robocar-docs/           # Documentation and coordination Makefile
+│       ├── robocar-docs/           # Documentation and coordination justfile
 │       ├── esp32cam-llm-telegram/  # Telegram bot with LLM vision
 │       ├── esp32-cam-webserver/    # Live video streaming server
 │       └── esp32-cam-i2s-audio/    # Camera + audio processing
 ├── .github/workflows/              # CI/CD (6 workflows)
 ├── tools/scaffold/                 # Project scaffolding scripts
 ├── docs/blueprint/                 # Architecture docs (PRDs, ADRs)
-├── Makefile                        # Build coordination (60+ targets)
-└── justfile                        # Modern alternative to Makefile
+└── justfile                        # Build coordination (60+ targets)
 ```
 
 ## Tech Stack
@@ -31,7 +30,7 @@ mcu-tinkering-lab/
 | Layer | Technology |
 |-------|-----------|
 | Firmware | C/C++ with ESP-IDF v5.4+ |
-| Build system | CMake (via ESP-IDF), Make, justfile |
+| Build system | CMake (via ESP-IDF), justfile |
 | Simulation | Python 3.11, Pymunk, NumPy |
 | Python package manager | uv |
 | C/C++ formatter | clang-format (Google style, 4-space indent) |
@@ -50,39 +49,39 @@ mcu-tinkering-lab/
 
 ```bash
 # Show all available commands
-make help                    # or: just --list
+just --list
 
 # Build all projects (requires ESP-IDF)
-make build-all               # or: just build-all
+just build-all
 
 # Build specific robocar components
-make robocar-build-main      # Main controller only
-make robocar-build-cam       # Camera module only
-make robocar-build-all       # Both controllers
+just robocar-build-main      # Main controller only
+just robocar-build-cam       # Camera module only
+just robocar-build-all       # Both controllers
 
 # Development workflows (build + flash + monitor)
-make robocar-develop-main    # Main controller
-make robocar-develop-cam     # Camera module
+just robocar-develop-main    # Main controller
+just robocar-develop-cam     # Camera module
 
 # Flash (PORT=/dev/cu.usbserial-0001 by default)
-make robocar-flash-main PORT=/dev/ttyUSB0
-make robocar-flash-cam PORT=/dev/ttyUSB1
+PORT=/dev/ttyUSB0 just robocar-flash-main
+PORT=/dev/ttyUSB1 just robocar-flash-cam
 ```
 
 ### Code Quality
 
 ```bash
 # Lint all code
-make lint                    # Runs lint-c + lint-python
+just lint                    # Runs lint-c + lint-python
 
 # Format all code
-make format                  # Runs format-c + format-python
+just format                  # Runs format-c + format-python
 
 # Check formatting (CI-safe, no modifications)
-make format-check
+just format-check
 
 # Install dev tools + pre-commit hooks
-make install-dev-tools
+just install-dev-tools
 
 # Run pre-commit hooks manually
 pre-commit run --all-files
@@ -99,9 +98,8 @@ uv run pytest tests/ --cov   # Run tests with coverage
 ### Docker
 
 ```bash
-make docker-build            # Build development images
-make docker-dev              # Interactive ESP-IDF shell
-make docker-run CMD="make build-all"  # Run in container
+just docker-build            # Build development images
+just docker-dev              # Interactive ESP-IDF shell
 ```
 
 ## Project Conventions
@@ -163,4 +161,4 @@ GPIO14/15 are used for UART to avoid PSRAM conflicts. The ESP32-CAM has very lim
 - `.pre-commit-config.yaml` — Pre-commit hook definitions
 - `.gitleaks.toml` — Secret scanning allowlist
 - `tools/scaffold/new-esp32-project.sh` — New project scaffolding
-- `packages/esp32-projects/robocar-docs/` — Robocar coordination Makefile and docs
+- `packages/esp32-projects/robocar-docs/` — Robocar coordination justfile and docs
