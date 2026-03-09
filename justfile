@@ -9,6 +9,7 @@ mod audiobook 'packages/esp32-projects/audiobook-player'
 mod wireguard 'packages/esp32-projects/esp32-wireguard-ha-example'
 mod kids-audio 'packages/esp32-projects/kids-audio-toy'
 mod xbox 'packages/esp32-projects/xbox-switch-bridge'
+mod troubleshooter 'packages/esp32-projects/it-troubleshooter'
 
 idf_path := env("IDF_PATH", home_directory() + "/repos/esp-idf")
 idf_version := "v5.3.2"

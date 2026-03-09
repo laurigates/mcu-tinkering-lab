@@ -1,0 +1,69 @@
+# IT Troubleshooter — ESP32-S3-Zero
+# Run `just --list` for available recipes
+
+set positional-arguments
+
+project_dir := justfile_directory()
+compose_file := project_dir / "../../../docker-compose.yml"
+port := env("PORT", "/dev/cu.usbmodem101")
+
+##########
+# Default
+##########
+
+default:
+    @just --list
+
+##########
+# Build
+##########
+
+# Build firmware in Docker container
+[group: "build"]
+build:
+    docker compose -f {{compose_file}} run --rm \
+        -w /workspace/packages/esp32-projects/it-troubleshooter \
+        esp-idf \
+        bash -c "idf.py set-target esp32s3 && idf.py build"
+
+# Clean build artifacts
+[group: "build"]
+[confirm("Remove build/, sdkconfig, and managed_components?")]
+clean:
+    rm -rf build sdkconfig sdkconfig.old managed_components
+
+##########
+# Flash
+##########
+
+# Flash firmware to device
+[group: "flash"]
+flash:
+    esptool.py -p {{port}} -b 460800 \
+        --before default_reset --after hard_reset \
+        write_flash @build/flash_args
+
+# Build and flash
+[group: "flash"]
+deploy: build flash
+
+##########
+# Monitor
+##########
+
+# Monitor serial output (USB-UART adapter on GPIO43/44)
+[group: "monitor"]
+monitor:
+    minicom -D {{port}} -b 115200
+
+##########
+# Config
+##########
+
+# Run menuconfig in Docker
+[group: "config"]
+menuconfig:
+    docker compose -f {{compose_file}} run --rm \
+        -w /workspace/packages/esp32-projects/it-troubleshooter \
+        esp-idf \
+        idf.py menuconfig

@@ -28,6 +28,7 @@ jobs:
           - robocar-camera
           - esp32cam-llm-telegram
           - esp32-cam-webserver
+          - it-troubleshooter
         include:
           - project: robocar-main
             target: esp32
@@ -41,6 +42,9 @@ jobs:
           - project: esp32-cam-webserver
             target: esp32
             description: "Webserver (ESP32-CAM)"
+          - project: it-troubleshooter
+            target: esp32s3
+            description: "IT Troubleshooter (ESP32-S3-Zero)"
 
     steps:
       - name: Checkout repository
