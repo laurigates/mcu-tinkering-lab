@@ -395,7 +395,7 @@ class ESP32CommunicationBridge:
 
             from ai_command_processor import execute_ai_command
 
-            success = execute_ai_command(ai_command, self.robot)
+            success = await execute_ai_command(ai_command, self.robot)
             self.ai_processor.add_to_history(ai_command)
             self._send_ai_response(success, ai_command)
 

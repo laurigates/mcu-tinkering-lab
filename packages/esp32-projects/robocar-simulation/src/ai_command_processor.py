@@ -368,7 +368,7 @@ Recent commands: {", ".join(context.last_commands[-3:]) if context.last_commands
         await self.http_client.aclose()
 
 
-def execute_ai_command(command: AICommand, robot) -> bool:
+async def execute_ai_command(command: AICommand, robot) -> bool:
     """
     Execute AI command on robot
 
@@ -401,17 +401,24 @@ def execute_ai_command(command: AICommand, robot) -> bool:
             robot.state.camera_pan_angle = np.clip(angle, -90, 90)
 
         elif action == "forward":
-            params.get("distance_meters", 1.0)
+            distance = params.get("distance_meters", 1.0)
             speed = params.get("speed", 0.5)
-            # Convert to approximate PWM for fixed duration
             pwm = int(speed * 100)
             robot.set_motor_commands(pwm, pwm)
+            max_speed_ms = robot.motor_left.max_rpm * 2 * np.pi / 60 * robot.wheel_radius
+            duration = distance / (speed * max_speed_ms)
+            await asyncio.sleep(duration)
+            robot.set_motor_commands(0, 0)
 
         elif action == "backward":
-            params.get("distance_meters", 1.0)
+            distance = params.get("distance_meters", 1.0)
             speed = params.get("speed", 0.5)
             pwm = int(speed * 100)
             robot.set_motor_commands(-pwm, -pwm)
+            max_speed_ms = robot.motor_left.max_rpm * 2 * np.pi / 60 * robot.wheel_radius
+            duration = distance / (speed * max_speed_ms)
+            await asyncio.sleep(duration)
+            robot.set_motor_commands(0, 0)
 
         elif action == "turn":
             angle = params.get("angle_degrees", 90.0)
@@ -481,7 +488,7 @@ async def main():
             print(f"Reasoning: {ai_command.reasoning}")
 
             # Execute command
-            success = execute_ai_command(ai_command, robot)
+            success = await execute_ai_command(ai_command, robot)
             print(f"Execution: {'✅' if success else '❌'}")
 
             processor.add_to_history(ai_command)
