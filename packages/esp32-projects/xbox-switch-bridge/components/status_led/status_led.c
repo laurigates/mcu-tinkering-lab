@@ -9,6 +9,8 @@
 
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "led_strip.h"
 
 static const char *TAG = "status_led";
@@ -16,7 +18,8 @@ static const char *TAG = "status_led";
 #define LED_GPIO 21
 #define LED_COUNT 1
 #define LED_BRIGHTNESS 32
-#define BLINK_PERIOD_US (500 * 1000)
+#define BLINK_SLOW_US (500 * 1000) /* 500ms per phase (1 Hz) */
+#define BLINK_FAST_US (200 * 1000) /* 200ms per phase (2.5 Hz) */
 
 static led_strip_handle_t s_strip;
 static volatile status_led_mode_t s_mode = STATUS_LED_OFF;
@@ -27,6 +30,18 @@ static void set_color(uint8_t r, uint8_t g, uint8_t b)
 {
     led_strip_set_pixel(s_strip, 0, r, g, b);
     led_strip_refresh(s_strip);
+}
+
+/**
+ * @brief Update blink state and return whether the LED should be "on".
+ */
+static bool update_blink(int64_t now, int64_t period_us)
+{
+    if ((now - s_last_toggle_us) >= period_us) {
+        s_blink_on = !s_blink_on;
+        s_last_toggle_us = now;
+    }
+    return s_blink_on;
 }
 
 esp_err_t status_led_init(void)
@@ -61,28 +76,47 @@ void status_led_set_mode(status_led_mode_t mode)
     s_mode = mode;
 }
 
+void status_led_flash(uint8_t r, uint8_t g, uint8_t b, uint32_t duration_ms)
+{
+    set_color(r, g, b);
+    vTaskDelay(pdMS_TO_TICKS(duration_ms));
+    set_color(0, 0, 0);
+}
+
 void status_led_update(void)
 {
     int64_t now = esp_timer_get_time();
 
     switch (s_mode) {
-        case STATUS_LED_SCANNING:
-            if ((now - s_last_toggle_us) >= BLINK_PERIOD_US) {
-                s_blink_on = !s_blink_on;
-                s_last_toggle_us = now;
-            }
-            if (s_blink_on) {
+        case STATUS_LED_SCANNING: /* Blue blink (slow) */
+            if (update_blink(now, BLINK_SLOW_US)) {
                 set_color(0, 0, LED_BRIGHTNESS);
             } else {
                 set_color(0, 0, 0);
             }
             break;
 
-        case STATUS_LED_CONNECTED:
-            set_color(LED_BRIGHTNESS, LED_BRIGHTNESS / 2, 0);
+        case STATUS_LED_USB_ERROR: /* Red solid */
+            set_color(LED_BRIGHTNESS, 0, 0);
             break;
 
-        case STATUS_LED_BRIDGING:
+        case STATUS_LED_CONNECTED_NO_USB: /* Purple blink (slow) */
+            if (update_blink(now, BLINK_SLOW_US)) {
+                set_color(LED_BRIGHTNESS, 0, LED_BRIGHTNESS);
+            } else {
+                set_color(0, 0, 0);
+            }
+            break;
+
+        case STATUS_LED_CONNECTED_USB: /* Yellow blink (fast) */
+            if (update_blink(now, BLINK_FAST_US)) {
+                set_color(LED_BRIGHTNESS, LED_BRIGHTNESS / 2, 0);
+            } else {
+                set_color(0, 0, 0);
+            }
+            break;
+
+        case STATUS_LED_BRIDGING: /* Green solid */
             set_color(0, LED_BRIGHTNESS, 0);
             break;
 

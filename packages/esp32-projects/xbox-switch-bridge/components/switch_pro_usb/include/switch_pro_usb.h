@@ -87,6 +87,13 @@ esp_err_t switch_pro_usb_init(void);
 bool switch_pro_usb_send_report(const switch_pro_input_t *input);
 
 /**
+ * @brief Check if the USB device is mounted (enumerated by the host).
+ *
+ * @return true if the Switch (or any USB host) has enumerated the device.
+ */
+bool switch_pro_usb_is_mounted(void);
+
+/**
  * @brief Check if the Switch has completed the USB handshake.
  *
  * @return true if the handshake is complete and the Switch is accepting

@@ -23,9 +23,18 @@
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "log_udp.h"
 #include "nvs_flash.h"
+#include "sdkconfig.h"
 #include "status_led.h"
+#if CONFIG_TINYUSB_ENABLED
 #include "switch_pro_usb.h"
+#endif
+
+/* credentials.h is still used for future STA-mode WiFi features */
+#if __has_include("credentials.h")
+#include "credentials.h"
+#endif
 
 static const char *TAG = "xbox_switch_bridge";
 
@@ -41,6 +50,9 @@ typedef enum {
 } bridge_state_t;
 
 static volatile bridge_state_t s_state = BRIDGE_STATE_INIT;
+#if CONFIG_TINYUSB_ENABLED
+static bool s_usb_init_ok = false;
+#endif
 
 /**
  * @brief Callback when Xbox controller connects/disconnects.
@@ -50,7 +62,7 @@ static void on_controller_connection(bool connected)
     if (connected) {
         ESP_LOGI(TAG, "*** Xbox controller CONNECTED ***");
         s_state = BRIDGE_STATE_CONNECTED;
-        status_led_set_mode(STATUS_LED_CONNECTED);
+        /* LED substate depends on USB status — bridge_task will update it */
     } else {
         ESP_LOGW(TAG, "*** Xbox controller DISCONNECTED ***");
         s_state = BRIDGE_STATE_SCANNING;
@@ -82,7 +94,9 @@ static void bridge_task(void *arg)
     (void)arg;
 
     xbox_gamepad_state_t xbox_state;
-    switch_pro_input_t switch_input;
+    switch_pro_input_t switch_input = {
+        .lx = 2048, .ly = 2048, .rx = 2048, .ry = 2048,
+    };
     TickType_t last_wake = xTaskGetTickCount();
     uint32_t report_count = 0;
 
@@ -95,14 +109,26 @@ static void bridge_task(void *arg)
                 break;
 
             case BRIDGE_STATE_CONNECTED:
-                /* Xbox connected, check if Switch is ready too */
-                if (switch_pro_usb_is_ready()) {
+#if CONFIG_TINYUSB_ENABLED
+                /* Xbox connected — update LED to reflect USB progress */
+                if (!s_usb_init_ok) {
+                    status_led_set_mode(STATUS_LED_USB_ERROR);
+                } else if (!switch_pro_usb_is_mounted()) {
+                    status_led_set_mode(STATUS_LED_CONNECTED_NO_USB);
+                } else if (!switch_pro_usb_is_ready()) {
+                    status_led_set_mode(STATUS_LED_CONNECTED_USB);
+                } else {
                     ESP_LOGI(TAG, "*** BRIDGE ACTIVE ***");
                     s_state = BRIDGE_STATE_BRIDGING;
                     status_led_set_mode(STATUS_LED_BRIDGING);
                 }
-                /* Fall through to send neutral state */
-                /* fallthrough */
+                /* Don't send 0x30 reports until handshake completes.
+                 * Real Pro Controllers only start 0x30 after FORCE_USB. */
+#else
+                ESP_LOGI(TAG, "Xbox connected (USB disabled in debug build)");
+                status_led_set_mode(STATUS_LED_CONNECTED_NO_USB);
+#endif
+                break;
 
             case BRIDGE_STATE_BRIDGING:
                 if (bp32_host_get_state(&xbox_state)) {
@@ -115,7 +141,9 @@ static void bridge_task(void *arg)
                     switch_input.rx = 2048;
                     switch_input.ry = 2048;
                 }
+#if CONFIG_TINYUSB_ENABLED
                 switch_pro_usb_send_report(&switch_input);
+#endif
                 report_count++;
 
                 if (report_count % 1000 == 0) {
@@ -140,18 +168,28 @@ void app_main(void)
     /* Initialize status LED */
     ESP_ERROR_CHECK(status_led_init());
 
-    /* Initialize NVS (required for BT) */
+    /* Initialize NVS (required for BT and WiFi) */
     ESP_ERROR_CHECK(init_nvs());
 
+    /* Start WiFi AP for UDP log broadcasting.
+     * Connect to "xbox-bridge-log" network, then: socat UDP-RECV:4444 STDOUT */
+    log_udp_init(4444);
+
+#if CONFIG_TINYUSB_ENABLED
     /* Initialize USB HID (Switch Pro Controller emulation).
      * TinyUSB may fail when not connected to a Switch dock (e.g. on a
      * computer USB port). Log the error and continue — BLE scanning still
      * works, and USB will be retried on next reboot with a dock. */
     esp_err_t usb_ret = switch_pro_usb_init();
-    if (usb_ret != ESP_OK) {
-        ESP_LOGW(TAG, "USB init failed (%s) — not connected to Switch dock?",
+    if (usb_ret == ESP_OK) {
+        s_usb_init_ok = true;
+    } else {
+        ESP_LOGW(TAG, "USB init failed (%s) — not connected to Switch?",
                  esp_err_to_name(usb_ret));
     }
+#else
+    ESP_LOGW(TAG, "TinyUSB disabled (debug build) — USB logging active");
+#endif
 
     /* Initialize Bluepad32 (BLE gamepad host) */
     ESP_ERROR_CHECK(bp32_host_init(on_controller_connection));

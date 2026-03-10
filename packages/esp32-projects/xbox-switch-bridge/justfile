@@ -4,7 +4,8 @@
 set positional-arguments
 
 project_dir := "packages/esp32-projects/xbox-switch-bridge"
-port := env("PORT", "/dev/cu.usbmodem101")
+# Auto-detect ESP32-S3 USB-Serial-JTAG by Espressif VID (0x303a=12346); override with PORT env var
+port := env("PORT", `ioreg -r -c IOUSBHostDevice -l 2>/dev/null | grep -A 30 '"idVendor" = 12346' | grep IODialinDevice | head -1 | sed 's/.*"\(\/dev\/[^"]*\)".*/\1/' | sed 's/tty\./cu./' || true`)
 baud := env("BAUD", "460800")
 target := "esp32s3"
 
@@ -88,6 +89,18 @@ build: fetch-deps
         bash -c "idf.py set-target {{target}} && idf.py build"
     echo "Build complete!"
 
+# Build debug firmware (USB-Serial-JTAG stays alive for log output, TinyUSB disabled)
+[group: "build"]
+build-debug: fetch-deps
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Building xbox-switch-bridge DEBUG (USB logging enabled, TinyUSB disabled)..."
+    {{container_cmd}} compose -f ../../../docker-compose.yml run --rm \
+        -w /workspace/{{project_dir}} \
+        esp-idf \
+        bash -c 'SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.debug" idf.py set-target {{target}} && idf.py build'
+    echo "Debug build complete — flash with: just flash"
+
 # Clean build artifacts via container
 [group: "build"]
 clean:
@@ -119,9 +132,34 @@ shell:
 # Flash & Monitor (native — USB passthrough on macOS is unreliable)
 ##########
 
+# Auto-detect ESP32-S3 port or show error
+[group: "device"]
+detect-port:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -z "{{port}}" ]; then
+        echo "ERROR: No ESP32-S3 USB-Serial-JTAG device found"
+        echo "  - Is the board plugged in?"
+        echo "  - Try: ioreg -p IOUSB -l | grep -B 5 -A 10 'USB JTAG'"
+        echo "  - Or set PORT manually: PORT=/dev/cu.usbmodem101 just flash"
+        exit 1
+    fi
+    echo "Detected port: {{port}}"
+
+# Require a valid port for device recipes
+[private]
+require-port:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -z "{{port}}" ]; then
+        echo "ERROR: No ESP32-S3 USB-Serial-JTAG device found" >&2
+        echo "  Is the board plugged in? Override with: PORT=/dev/cu.usbmodem101 just flash" >&2
+        exit 1
+    fi
+
 # Flash firmware to device (put board in download mode first: hold BOOT, press RST, release BOOT)
 [group: "device"]
-flash:
+flash: require-port
     esptool --chip esp32s3 -p {{port}} -b {{baud}} \
         --before default-reset --after hard-reset \
         write-flash --flash-mode dio --flash-size 4MB --flash-freq 80m \
@@ -131,7 +169,7 @@ flash:
 
 # Start serial monitor (requires USB-UART adapter on GPIO43/TX, GPIO44/RX — see WIRING.md)
 [group: "device"]
-monitor:
+monitor: require-port
     python3 -m esp_idf_monitor -p {{port}} build/xbox-switch-bridge.elf
 
 # Flash and monitor
@@ -142,12 +180,22 @@ flash-monitor: flash monitor
 # Info
 ##########
 
+# Listen for UDP log broadcast from the device
+# 1. Connect Mac to "xbox-bridge-log" WiFi (open, no password)
+# 2. Run this recipe
+[group: "device"]
+log-listen port="4444":
+    @echo "Listening for UDP logs on port {{port}} — Ctrl-C to stop"
+    @echo "Connect to WiFi: xbox-bridge-log (open, no password)"
+    @echo ""
+    socat UDP-RECV:{{port}} STDOUT
+
 # Show project information
 [group: "info"]
 info:
     @echo "Project: xbox-switch-bridge"
     @echo "  Target:    ESP32-S3"
-    @echo "  Port:      {{port}}"
+    @echo "  Port:      {{if port == "" { "(not detected — board not connected?)" } else { port } }}"
     @echo "  Baud:      {{baud}}"
     @echo "  Container: {{container_cmd}}"
     @echo ""
