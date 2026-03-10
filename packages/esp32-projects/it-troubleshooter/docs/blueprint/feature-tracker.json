@@ -1,12 +1,13 @@
 {
   "version": "1.0.0",
   "updated_at": "2026-03-10T00:00:00.000Z",
+  "current_phase": "phase-2",
   "source_document": null,
   "phases": {
     "phase-1": {
       "name": "USB Composite PoC",
       "description": "HID keyboard + CDC-ACM serial proof of concept",
-      "status": "in_progress",
+      "status": "complete",
       "requirements": {
         "FR1": {
           "id": "FR1",
@@ -48,27 +49,82 @@
     "phase-2": {
       "name": "WiFi + Command Execution",
       "description": "Connect to hotspot and execute diagnostic commands",
-      "status": "planned",
-      "requirements": {}
+      "status": "in_progress",
+      "requirements": {
+        "FR2.1": {
+          "id": "FR2.1",
+          "title": "WiFi Hotspot Connection",
+          "description": "Connect to pre-configured WiFi hotspot on device boot",
+          "status": "in_progress",
+          "implemented_in": ["components/wifi_manager/wifi_manager.c"]
+        },
+        "FR2.2": {
+          "id": "FR2.2",
+          "title": "CDC Serial Operator Input",
+          "description": "Accept operator command input via CDC serial port",
+          "status": "in_progress",
+          "implemented_in": ["main/main.c"]
+        },
+        "FR2.3": {
+          "id": "FR2.3",
+          "title": "HID Command Injection",
+          "description": "Inject commands received over CDC into target via HID keyboard",
+          "status": "in_progress",
+          "implemented_in": ["main/main.c"]
+        },
+        "FR2.4": {
+          "id": "FR2.4",
+          "title": "NVS State Machine",
+          "description": "NVS-persisted state machine for multi-step workflows across power cycles",
+          "status": "not_started",
+          "implemented_in": []
+        },
+        "FR2.5": {
+          "id": "FR2.5",
+          "title": "WiFi LED Feedback",
+          "description": "Visual LED feedback during WiFi connection and command execution phases",
+          "status": "in_progress",
+          "implemented_in": ["main/main.c"]
+        }
+      }
     },
     "phase-3": {
       "name": "Claude API Integration",
       "description": "AI-driven troubleshooting via Claude API",
-      "status": "planned",
+      "status": "not_started",
       "requirements": {}
     },
     "phase-4": {
       "name": "CDC-NCM USB Ethernet",
       "description": "Replace CDC-ACM with CDC-NCM for USB Ethernet networking",
-      "status": "planned",
+      "status": "not_started",
       "requirements": {}
     }
   },
-  "summary": {
-    "total": 5,
-    "completed": 5,
-    "in_progress": 0,
-    "planned": 0,
-    "blocked": 0
+  "statistics": {
+    "total_features": 10,
+    "complete": 5,
+    "in_progress": 4,
+    "not_started": 1,
+    "blocked": 0,
+    "completion_percentage": 50
+  },
+  "tasks": {
+    "in_progress": [
+      {"id": "FR2.1", "description": "WiFi Hotspot Connection", "source": "PRP-wifi-connectivity", "added": "2026-03-10"},
+      {"id": "FR2.2", "description": "CDC Serial Operator Input", "source": "PRP-wifi-connectivity", "added": "2026-03-10"},
+      {"id": "FR2.3", "description": "HID Command Injection", "source": "PRP-wifi-connectivity", "added": "2026-03-10"},
+      {"id": "FR2.5", "description": "WiFi LED Feedback", "source": "PRP-wifi-connectivity", "added": "2026-03-10"}
+    ],
+    "pending": [
+      {"id": "FR2.4", "description": "NVS State Machine", "source": "PRP-wifi-connectivity", "added": "2026-03-10"}
+    ],
+    "completed": [
+      {"id": "FR1", "description": "USB HID Boot Keyboard", "completed": "2026-03-10"},
+      {"id": "FR2", "description": "USB CDC-ACM Serial", "completed": "2026-03-10"},
+      {"id": "FR3", "description": "ASCII String Injection", "completed": "2026-03-10"},
+      {"id": "FR4", "description": "CDC Echo Demo", "completed": "2026-03-10"},
+      {"id": "FR5", "description": "Visual Status LED", "completed": "2026-03-10"}
+    ]
   }
 }

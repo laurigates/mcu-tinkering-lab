@@ -1,0 +1,3 @@
+## IDF Component Manager manifest for wifi_manager
+dependencies:
+  idf: ">=5.4"

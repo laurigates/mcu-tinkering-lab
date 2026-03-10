@@ -1,43 +1,57 @@
 /**
  * @file main.c
- * @brief IT Troubleshooter — Phase 1 entry point.
+ * @brief IT Troubleshooter — Phase 2 entry point.
  *
- * Initializes USB composite device (HID keyboard + CDC serial) and demonstrates
- * keyboard typing and CDC echo functionality.
+ * Phase 2 adds WiFi connectivity (mobile hotspot) and replaces the CDC echo
+ * demo with a command-passthrough loop: bytes received on CDC serial are
+ * typed into the target via HID keyboard injection.
+ *
+ * Flow:
+ *   1. NVS init
+ *   2. Status LED init (BOOT mode)
+ *   3. USB composite init (HID keyboard + CDC serial)
+ *   4. Wait for USB mount (30s timeout)
+ *   5. WiFi init → connect to hotspot
+ *   6. Wait for WiFi connected (30s timeout)
+ *   7. Spawn command-passthrough task on core 1
  */
 
 #include <string.h>
 
+#include "credentials.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "nvs_flash.h"
 #include "status_led.h"
 #include "usb_composite.h"
+#include "wifi_manager.h"
 
 static const char *TAG = "it-troubleshooter";
 
-#define CDC_BUF_SIZE 256
+#define CDC_BUF_SIZE         256
 #define USB_MOUNT_TIMEOUT_MS 30000
+#define WIFI_CONNECT_TIMEOUT_MS 30000
 
 /**
- * CDC echo task: reads data from CDC serial and echoes it back.
- * Runs on core 1 to avoid contending with USB stack on core 0.
+ * Command passthrough task: reads bytes from CDC serial and injects them as
+ * HID keystrokes into the target computer. Runs on core 1.
  */
-static void cdc_echo_task(void *arg)
+static void command_passthrough_task(void *arg)
 {
     (void)arg;
     uint8_t buf[CDC_BUF_SIZE];
 
-    ESP_LOGI(TAG, "CDC echo task started");
+    ESP_LOGI(TAG, "Command passthrough task started");
+    status_led_set_mode(STATUS_LED_DIAGNOSTIC);
 
     while (1) {
-        int n = usb_cdc_read(buf, sizeof(buf));
+        int n = usb_cdc_read(buf, sizeof(buf) - 1);
         if (n > 0) {
-            usb_cdc_write(buf, n);
-            ESP_LOGI(TAG, "CDC echo: %d bytes", n);
+            buf[n] = '\0';
+            ESP_LOGI(TAG, "Injecting %d bytes via HID", n);
+            usb_keyboard_type_string((const char *)buf);
         }
-        /* Update status LED from this loop */
         status_led_update();
         vTaskDelay(pdMS_TO_TICKS(10));
     }
@@ -45,7 +59,7 @@ static void cdc_echo_task(void *arg)
 
 void app_main(void)
 {
-    /* 1. Init NVS (required before any NVS reads in later phases) */
+    /* 1. Init NVS */
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         ESP_ERROR_CHECK(nvs_flash_erase());
@@ -62,15 +76,15 @@ void app_main(void)
     ESP_ERROR_CHECK(usb_composite_init());
     ESP_LOGI(TAG, "Waiting for USB mount...");
 
-    /* 4. Wait for USB mount (with timeout) */
-    int mount_wait_ms = 0;
-    while (!usb_composite_is_mounted() && mount_wait_ms < USB_MOUNT_TIMEOUT_MS) {
+    /* 4. Wait for USB mount */
+    int wait_ms = 0;
+    while (!usb_composite_is_mounted() && wait_ms < USB_MOUNT_TIMEOUT_MS) {
         status_led_update();
         vTaskDelay(pdMS_TO_TICKS(10));
-        mount_wait_ms += 10;
+        wait_ms += 10;
     }
     if (!usb_composite_is_mounted()) {
-        ESP_LOGW(TAG, "USB mount timeout after %d ms — no host connected?", USB_MOUNT_TIMEOUT_MS);
+        ESP_LOGW(TAG, "USB mount timeout after %d ms", USB_MOUNT_TIMEOUT_MS);
         status_led_set_mode(STATUS_LED_ERROR);
         status_led_update();
         return;
@@ -79,11 +93,33 @@ void app_main(void)
     status_led_update();
     ESP_LOGI(TAG, "USB mounted");
 
-    /* 5. Phase 1 demo: type greeting after 3 second delay */
-    vTaskDelay(pdMS_TO_TICKS(3000));
-    ESP_LOGI(TAG, "Typing demo string...");
-    usb_keyboard_type_string("Hello from IT Troubleshooter!\n");
+    /* 5. Init WiFi — connect to hotspot */
+    status_led_set_mode(STATUS_LED_WIFI_CONNECTING);
+    status_led_update();
 
-    /* 6. Start CDC echo task on core 1 */
-    xTaskCreatePinnedToCore(cdc_echo_task, "cdc_echo", 4096, NULL, 3, NULL, 1);
+    ret = wifi_manager_init(WIFI_SSID, WIFI_PASS);
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "WiFi init failed (%s) — continuing without WiFi", esp_err_to_name(ret));
+        status_led_set_mode(STATUS_LED_ERROR);
+        status_led_update();
+        return;
+    }
+
+    /* 6. Wait for WiFi connected */
+    wait_ms = 0;
+    while (!wifi_manager_is_connected() && wait_ms < WIFI_CONNECT_TIMEOUT_MS) {
+        status_led_update();
+        vTaskDelay(pdMS_TO_TICKS(10));
+        wait_ms += 10;
+    }
+    if (!wifi_manager_is_connected()) {
+        ESP_LOGW(TAG, "WiFi connect timeout after %d ms", WIFI_CONNECT_TIMEOUT_MS);
+        status_led_set_mode(STATUS_LED_ERROR);
+        status_led_update();
+        return;
+    }
+    ESP_LOGI(TAG, "WiFi connected");
+
+    /* 7. Start command passthrough task on core 1 */
+    xTaskCreatePinnedToCore(command_passthrough_task, "cmd_passthrough", 4096, NULL, 3, NULL, 1);
 }
