@@ -1,0 +1,3 @@
+## IDF Component Manager manifest for state_machine
+dependencies:
+  idf: ">=5.4"

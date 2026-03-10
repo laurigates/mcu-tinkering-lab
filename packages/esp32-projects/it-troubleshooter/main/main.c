@@ -23,6 +23,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "nvs_flash.h"
+#include "state_machine.h"
 #include "status_led.h"
 #include "usb_composite.h"
 #include "wifi_manager.h"
@@ -67,6 +68,15 @@ void app_main(void)
     }
     ESP_LOGI(TAG, "NVS initialized");
 
+    /* 1a. Load persisted workflow state */
+    ret = sm_init();
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "State machine init failed (%s) — continuing with defaults",
+                 esp_err_to_name(ret));
+    }
+    ESP_LOGI(TAG, "Workflow state: phase=%u step=%u", (unsigned)sm_get_phase(),
+             (unsigned)sm_get_step());
+
     /* 2. Init status LED */
     ESP_ERROR_CHECK(status_led_init());
     status_led_set_mode(STATUS_LED_BOOT);
@@ -92,6 +102,7 @@ void app_main(void)
     status_led_set_mode(STATUS_LED_USB_READY);
     status_led_update();
     ESP_LOGI(TAG, "USB mounted");
+    sm_set_phase(SM_PHASE_USB_ONLY);
 
     /* 5. Init WiFi — connect to hotspot */
     status_led_set_mode(STATUS_LED_WIFI_CONNECTING);
@@ -119,7 +130,9 @@ void app_main(void)
         return;
     }
     ESP_LOGI(TAG, "WiFi connected");
+    sm_set_phase(SM_PHASE_WIFI_CONNECTED);
 
     /* 7. Start command passthrough task on core 1 */
+    sm_set_phase(SM_PHASE_CMD_RUNNING);
     xTaskCreatePinnedToCore(command_passthrough_task, "cmd_passthrough", 4096, NULL, 3, NULL, 1);
 }
