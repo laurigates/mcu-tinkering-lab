@@ -18,6 +18,7 @@
 #include <string.h>
 
 #include "class/hid/hid_device.h"
+#include "device/usbd.h"
 #include "esp_log.h"
 #include "tinyusb.h"
 
@@ -159,6 +160,24 @@ static const uint8_t s_hid_report_descriptor[] = {
     0x95, 0x3F, /*   Report Count (63) */
     0x91, 0x83, /*   Output (Constant, Variable, Volatile) */
     0xC0,       /* End Collection */
+};
+
+/**
+ * USB Configuration Descriptor for HID with IN + OUT endpoints.
+ *
+ * esp_tinyusb only provides default config descriptors for CDC/MSC/NCM,
+ * so HID devices must supply their own.
+ */
+#define CONFIG_TOTAL_LEN (TUD_CONFIG_DESC_LEN + TUD_HID_INOUT_DESC_LEN)
+
+static const uint8_t s_config_descriptor[] = {
+    /* Configuration descriptor */
+    TUD_CONFIG_DESCRIPTOR(1, 1, 0, CONFIG_TOTAL_LEN,
+                          TUSB_DESC_CONFIG_ATT_REMOTE_WAKEUP, 500),
+    /* HID interface with IN (0x81) and OUT (0x02) interrupt endpoints */
+    TUD_HID_INOUT_DESCRIPTOR(0, 0, HID_ITF_PROTOCOL_NONE,
+                             sizeof(s_hid_report_descriptor),
+                             0x02, 0x81, 64, 8),
 };
 
 /**
@@ -424,6 +443,12 @@ uint16_t tud_hid_get_report_cb(uint8_t instance, uint8_t report_id, hid_report_t
 
 /**
  * @brief TinyUSB HID SET_REPORT callback - handles incoming commands.
+ *
+ * Called from two paths with different conventions:
+ *   - Control pipe (SET_REPORT): report_id is extracted from wValue,
+ *     buffer starts AFTER the report ID byte.
+ *   - Interrupt OUT endpoint: report_id is always 0, buffer contains
+ *     the full packet INCLUDING the report ID as the first byte.
  */
 void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_t report_type,
                            uint8_t const *buffer, uint16_t bufsize)
@@ -431,14 +456,23 @@ void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_
     (void)instance;
     (void)report_type;
 
-    ESP_LOGD(TAG, "SET_REPORT id=0x%02X len=%d", report_id, bufsize);
-
-    /* Reconstruct the full packet with report ID prepended */
     uint8_t full_pkt[64];
-    full_pkt[0] = report_id;
-    uint16_t copy_len = (bufsize < 63) ? bufsize : 63;
-    memcpy(&full_pkt[1], buffer, copy_len);
-    uint16_t total_len = copy_len + 1;
+    uint16_t total_len;
+
+    if (report_id == 0 && bufsize > 0) {
+        /* Interrupt OUT: report ID is first byte of buffer */
+        report_id = buffer[0];
+        total_len = (bufsize < 64) ? bufsize : 64;
+        memcpy(full_pkt, buffer, total_len);
+    } else {
+        /* Control pipe: report ID already extracted, prepend it */
+        full_pkt[0] = report_id;
+        uint16_t copy_len = (bufsize < 63) ? bufsize : 63;
+        memcpy(&full_pkt[1], buffer, copy_len);
+        total_len = copy_len + 1;
+    }
+
+    ESP_LOGD(TAG, "SET_REPORT id=0x%02X len=%d", report_id, (int)total_len);
 
     if (report_id == REPORT_ID_USB_CMD) {
         handle_usb_cmd(full_pkt, total_len);
@@ -489,6 +523,7 @@ esp_err_t switch_pro_usb_init(void)
         .descriptor =
             {
                 .device = &device_desc,
+                .full_speed_config = s_config_descriptor,
                 .string = string_desc,
                 .string_count = 4,
             },
@@ -543,6 +578,11 @@ bool switch_pro_usb_send_report(const switch_pro_input_t *input)
     report[10] = (input->ry >> 4) & 0xFF;
 
     return tud_hid_report(REPORT_ID_INPUT, report, sizeof(report));
+}
+
+bool switch_pro_usb_is_mounted(void)
+{
+    return tud_mounted();
 }
 
 bool switch_pro_usb_is_ready(void)

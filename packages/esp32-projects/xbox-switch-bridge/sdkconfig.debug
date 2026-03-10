@@ -1,0 +1,15 @@
+# Debug overlay — keeps USB-Serial-JTAG alive for log output.
+# Disables TinyUSB so USB PHY stays with JTAG.
+# Usage: just build-debug
+
+# Re-enable USB-Serial-JTAG hardware (overrides sdkconfig.defaults)
+CONFIG_USJ_ENABLE_USB_SERIAL_JTAG=y
+
+# Mirror log output to USB-Serial-JTAG as secondary console
+# (primary stays UART so Bluepad32's uni_console.c compiles)
+CONFIG_ESP_CONSOLE_SECONDARY_USB_SERIAL_JTAG=y
+CONFIG_ESP_CONSOLE_SECONDARY_NONE=n
+
+# Disable TinyUSB (can't coexist with USB-Serial-JTAG on same PHY)
+CONFIG_TINYUSB_ENABLED=n
+CONFIG_TINYUSB_HID_ENABLED=n
