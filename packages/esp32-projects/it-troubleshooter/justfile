@@ -1,11 +1,13 @@
-# IT Troubleshooter — ESP32-S3-Zero
+# IT Troubleshooter — ESP32-S3-Zero USB composite device
 # Run `just --list` for available recipes
 
 set positional-arguments
 
 project_dir := justfile_directory()
 compose_file := project_dir / "../../../docker-compose.yml"
-port := env("PORT", "/dev/cu.usbmodem101")
+# Auto-detect ESP32-S3 USB-Serial-JTAG by Espressif VID (0x303a=12346); override with PORT env var
+port := env("PORT", `ioreg -r -c IOUSBHostDevice -l 2>/dev/null | grep -A 30 '"idVendor" = 12346' | grep IODialinDevice | head -1 | sed 's/.*"\(\/dev\/[^"]*\)".*/\1/' | sed 's/tty\./cu./' || true`)
+baud := env("BAUD", "460800")
 
 ##########
 # Default
@@ -33,18 +35,43 @@ clean:
     rm -rf build sdkconfig sdkconfig.old managed_components
 
 ##########
-# Flash
+# Device (flash & monitor — native, USB passthrough on macOS is unreliable)
 ##########
 
+# Auto-detect ESP32-S3 port or show error
+[group: "device"]
+detect-port:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -z "{{port}}" ]; then
+        echo "ERROR: No ESP32-S3 USB-Serial-JTAG device found"
+        echo "  - Is the board plugged in?"
+        echo "  - Try: ioreg -p IOUSB -l | grep -B 5 -A 10 'USB JTAG'"
+        echo "  - Or set PORT manually: PORT=/dev/cu.usbmodem101 just flash"
+        exit 1
+    fi
+    echo "Detected port: {{port}}"
+
+# Require a valid port for device recipes
+[private]
+require-port:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -z "{{port}}" ]; then
+        echo "ERROR: No ESP32-S3 USB-Serial-JTAG device found" >&2
+        echo "  Is the board plugged in? Override with: PORT=/dev/cu.usbmodem101 just flash" >&2
+        exit 1
+    fi
+
 # Flash firmware to device
-[group: "flash"]
-flash:
-    esptool.py -p {{port}} -b 460800 \
-        --before default_reset --after hard_reset \
-        write_flash @build/flash_args
+[group: "device"]
+flash: require-port
+    cd {{project_dir}}/build && esptool --chip esp32s3 -p {{port}} -b {{baud}} \
+        --before default-reset --after hard-reset \
+        write-flash @flash_args
 
 # Build and flash
-[group: "flash"]
+[group: "device"]
 deploy: build flash
 
 ##########
@@ -67,3 +94,15 @@ menuconfig:
         -w /workspace/packages/esp32-projects/it-troubleshooter \
         esp-idf \
         idf.py menuconfig
+
+##########
+# Info
+##########
+
+# Show project information
+[group: "info"]
+info:
+    @echo "Project: it-troubleshooter"
+    @echo "  Target: ESP32-S3"
+    @echo "  Port:   {{if port == "" { "(not detected — board not connected?)" } else { port } }}"
+    @echo "  Baud:   {{baud}}"
