@@ -185,10 +185,12 @@ flash-monitor: flash monitor
 # 2. Run this recipe
 [group: "device"]
 log-listen port="4444":
-    @echo "Listening for UDP logs on port {{port}} — Ctrl-C to stop"
-    @echo "Connect to WiFi: xbox-bridge-log (open, no password)"
-    @echo ""
-    socat UDP-RECV:{{port}} STDOUT
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Listening for UDP logs on port {{port}} — Ctrl-C to stop"
+    echo "Connect to WiFi: xbox-bridge-log (open, no password)"
+    echo ""
+    exec socat -u UDP-RECV:{{port}} -
 
 # Show project information
 [group: "info"]
