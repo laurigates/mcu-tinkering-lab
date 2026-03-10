@@ -1,0 +1,74 @@
+{
+  "version": "1.0.0",
+  "updated_at": "2026-03-10T00:00:00.000Z",
+  "source_document": null,
+  "phases": {
+    "phase-1": {
+      "name": "USB Composite PoC",
+      "description": "HID keyboard + CDC-ACM serial proof of concept",
+      "status": "in_progress",
+      "requirements": {
+        "FR1": {
+          "id": "FR1",
+          "title": "USB HID Boot Keyboard",
+          "description": "Emulate a USB HID boot protocol keyboard recognized by BIOS and OS",
+          "status": "completed",
+          "implemented_in": ["components/usb_composite/usb_composite.c"]
+        },
+        "FR2": {
+          "id": "FR2",
+          "title": "USB CDC-ACM Serial",
+          "description": "Expose a CDC-ACM serial port for bidirectional communication with host",
+          "status": "completed",
+          "implemented_in": ["components/usb_composite/usb_composite.c"]
+        },
+        "FR3": {
+          "id": "FR3",
+          "title": "ASCII String Injection",
+          "description": "Type arbitrary ASCII strings via HID keyboard with correct US QWERTY keycodes",
+          "status": "completed",
+          "implemented_in": ["components/usb_composite/usb_composite.c"]
+        },
+        "FR4": {
+          "id": "FR4",
+          "title": "CDC Echo Demo",
+          "description": "Echo received CDC data back to host as basic bidirectional verification",
+          "status": "completed",
+          "implemented_in": ["main/main.c"]
+        },
+        "FR5": {
+          "id": "FR5",
+          "title": "Visual Status LED",
+          "description": "WS2812 RGB LED indicating device state (boot, USB ready, BIOS mode, error, etc.)",
+          "status": "completed",
+          "implemented_in": ["components/status_led/status_led.c"]
+        }
+      }
+    },
+    "phase-2": {
+      "name": "WiFi + Command Execution",
+      "description": "Connect to hotspot and execute diagnostic commands",
+      "status": "planned",
+      "requirements": {}
+    },
+    "phase-3": {
+      "name": "Claude API Integration",
+      "description": "AI-driven troubleshooting via Claude API",
+      "status": "planned",
+      "requirements": {}
+    },
+    "phase-4": {
+      "name": "CDC-NCM USB Ethernet",
+      "description": "Replace CDC-ACM with CDC-NCM for USB Ethernet networking",
+      "status": "planned",
+      "requirements": {}
+    }
+  },
+  "summary": {
+    "total": 5,
+    "completed": 5,
+    "in_progress": 0,
+    "planned": 0,
+    "blocked": 0
+  }
+}

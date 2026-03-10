@@ -1,0 +1,154 @@
+{
+  "format_version": "3.2.0",
+  "created_at": "2026-03-10T00:00:00.000Z",
+  "updated_at": "2026-03-10T12:00:00.000Z",
+  "created_by": {
+    "blueprint_plugin": "3.24.0"
+  },
+  "project": {
+    "name": "it-troubleshooter",
+    "detected_stack": ["c", "esp-idf", "esp32s3", "tinyusb", "freertos"]
+  },
+  "structure": {
+    "has_prds": true,
+    "has_adrs": true,
+    "has_prps": true,
+    "has_work_orders": true,
+    "has_ai_docs": false,
+    "has_modular_rules": true,
+    "has_feature_tracker": true,
+    "has_document_detection": true,
+    "claude_md_mode": "both"
+  },
+  "feature_tracker": {
+    "file": "feature-tracker.json",
+    "source_document": null,
+    "sync_targets": []
+  },
+  "generated": {
+    "rules": {
+      "code-style.md": {
+        "generated_at": "2026-03-10T12:00:00.000Z",
+        "source": "git-derive-rules",
+        "confidence": "very-high"
+      },
+      "error-handling.md": {
+        "generated_at": "2026-03-10T12:00:00.000Z",
+        "source": "git-derive-rules",
+        "confidence": "high"
+      },
+      "security-practices.md": {
+        "generated_at": "2026-03-10T12:00:00.000Z",
+        "source": "git-derive-rules",
+        "confidence": "very-high"
+      },
+      "dependencies.md": {
+        "generated_at": "2026-03-10T12:00:00.000Z",
+        "source": "git-derive-rules",
+        "confidence": "high"
+      }
+    },
+    "commands": {}
+  },
+  "custom_overrides": {
+    "skills": [],
+    "commands": []
+  },
+  "task_registry": {
+    "derive-prd": {
+      "enabled": true,
+      "auto_run": false,
+      "last_completed_at": null,
+      "last_result": null,
+      "schedule": "on-demand",
+      "stats": {},
+      "context": {}
+    },
+    "derive-plans": {
+      "enabled": true,
+      "auto_run": false,
+      "last_completed_at": "2026-03-10T12:00:00.000Z",
+      "last_result": "success",
+      "schedule": "weekly",
+      "stats": {
+        "runs_total": 1,
+        "items_processed": 89,
+        "items_created": 12
+      },
+      "context": {
+        "commits_analyzed_up_to": "e1c2a7f",
+        "commits_analyzed_count": 89
+      }
+    },
+    "derive-rules": {
+      "enabled": true,
+      "auto_run": false,
+      "last_completed_at": "2026-03-10T12:00:00.000Z",
+      "last_result": "success",
+      "schedule": "weekly",
+      "stats": {
+        "runs_total": 1,
+        "items_processed": 89,
+        "items_created": 4
+      },
+      "context": {
+        "commits_analyzed_up_to": "e1c2a7f",
+        "commits_analyzed_count": 89
+      }
+    },
+    "generate-rules": {
+      "enabled": true,
+      "auto_run": false,
+      "last_completed_at": null,
+      "last_result": null,
+      "schedule": "on-change",
+      "stats": {},
+      "context": {}
+    },
+    "adr-validate": {
+      "enabled": true,
+      "auto_run": false,
+      "last_completed_at": null,
+      "last_result": null,
+      "schedule": "weekly",
+      "stats": {},
+      "context": {}
+    },
+    "feature-tracker-sync": {
+      "enabled": true,
+      "auto_run": false,
+      "last_completed_at": null,
+      "last_result": null,
+      "schedule": "daily",
+      "stats": {},
+      "context": {}
+    },
+    "sync-ids": {
+      "enabled": true,
+      "auto_run": false,
+      "last_completed_at": null,
+      "last_result": null,
+      "schedule": "on-change",
+      "stats": {},
+      "context": {}
+    },
+    "claude-md": {
+      "enabled": true,
+      "auto_run": false,
+      "last_completed_at": null,
+      "last_result": null,
+      "schedule": "on-change",
+      "stats": {},
+      "context": {}
+    },
+    "curate-docs": {
+      "enabled": false,
+      "auto_run": false,
+      "last_completed_at": null,
+      "last_result": null,
+      "schedule": "on-demand",
+      "stats": {},
+      "context": {}
+    }
+  }
+}
