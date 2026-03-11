@@ -26,7 +26,8 @@
 typedef enum {
     SM_PHASE_USB_ONLY = 1,       /**< USB mounted, no WiFi. */
     SM_PHASE_WIFI_CONNECTED = 2, /**< WiFi hotspot connected. */
-    SM_PHASE_CMD_RUNNING = 3,    /**< Command passthrough active. */
+    SM_PHASE_CMD_RUNNING = 3,    /**< Command passthrough active (Phase 2). */
+    SM_PHASE_AI_RUNNING = 4,     /**< Claude API diagnostic loop active (Phase 3). */
 } sm_phase_t;
 
 /**

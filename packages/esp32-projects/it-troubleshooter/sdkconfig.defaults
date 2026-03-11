@@ -38,3 +38,10 @@ CONFIG_ESP_WIFI_SOFTAP_SUPPORT=n
 
 # --- Power Management --- disabled for lowest latency
 CONFIG_PM_ENABLE=n
+
+# --- TLS (required for HTTPS to Claude API) ---
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=y
+CONFIG_ESP_TLS_INSECURE=n
+
+# --- HTTP client ---
+CONFIG_ESP_HTTP_CLIENT_ENABLE_HTTPS=y

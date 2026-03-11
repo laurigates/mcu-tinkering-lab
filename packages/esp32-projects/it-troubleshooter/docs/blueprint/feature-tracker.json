@@ -91,8 +91,37 @@
     "phase-3": {
       "name": "Claude API Integration",
       "description": "AI-driven troubleshooting via Claude API",
-      "status": "not_started",
-      "requirements": {}
+      "status": "complete",
+      "requirements": {
+        "FR3.1": {
+          "id": "FR3.1",
+          "title": "CDC Output Capture",
+          "description": "Receive operator-pasted command output via CDC serial (Phase 3a relay approach)",
+          "status": "completed",
+          "implemented_in": ["main/main.c"]
+        },
+        "FR3.2": {
+          "id": "FR3.2",
+          "title": "Claude API Integration",
+          "description": "Forward captured output to Claude API for analysis via HTTPS POST",
+          "status": "completed",
+          "implemented_in": ["components/claude_client/claude_client.c"]
+        },
+        "FR3.3": {
+          "id": "FR3.3",
+          "title": "HID Command Execution",
+          "description": "Execute Claude-suggested commands via HID keyboard injection",
+          "status": "completed",
+          "implemented_in": ["main/main.c"]
+        },
+        "FR3.4": {
+          "id": "FR3.4",
+          "title": "Configurable API Key and Model",
+          "description": "API key and model ID configurable via credentials.h",
+          "status": "completed",
+          "implemented_in": ["main/credentials.h.example", "components/claude_client/claude_client.c"]
+        }
+      }
     },
     "phase-4": {
       "name": "CDC-NCM USB Ethernet",
@@ -102,8 +131,8 @@
     }
   },
   "statistics": {
-    "total_features": 10,
-    "complete": 10,
+    "total_features": 14,
+    "complete": 14,
     "in_progress": 0,
     "not_started": 0,
     "blocked": 0,
@@ -122,7 +151,11 @@
       {"id": "FR2.2", "description": "CDC Serial Operator Input", "completed": "2026-03-10"},
       {"id": "FR2.3", "description": "HID Command Injection", "completed": "2026-03-10"},
       {"id": "FR2.4", "description": "NVS State Machine", "completed": "2026-03-10"},
-      {"id": "FR2.5", "description": "WiFi LED Feedback", "completed": "2026-03-10"}
+      {"id": "FR2.5", "description": "WiFi LED Feedback", "completed": "2026-03-10"},
+      {"id": "FR3.1", "description": "CDC Output Capture", "completed": "2026-03-11"},
+      {"id": "FR3.2", "description": "Claude API Integration", "completed": "2026-03-11"},
+      {"id": "FR3.3", "description": "HID Command Execution", "completed": "2026-03-11"},
+      {"id": "FR3.4", "description": "Configurable API Key and Model", "completed": "2026-03-11"}
     ]
   }
 }
