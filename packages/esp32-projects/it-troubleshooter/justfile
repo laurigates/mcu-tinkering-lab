@@ -17,6 +17,22 @@ default:
     @just --list
 
 ##########
+# Setup
+##########
+
+# Create credentials.h from example template (required before first build)
+[group: "setup"]
+setup:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -f main/credentials.h ]; then
+        echo "main/credentials.h already exists — no changes made"
+    else
+        cp main/credentials.h.example main/credentials.h
+        echo "Created main/credentials.h — edit with your WiFi SSID, password, and API key"
+    fi
+
+##########
 # Build
 ##########
 
