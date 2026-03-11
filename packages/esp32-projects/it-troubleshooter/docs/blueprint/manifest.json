@@ -7,7 +7,13 @@
   },
   "project": {
     "name": "it-troubleshooter",
-    "detected_stack": ["c", "esp-idf", "esp32s3", "tinyusb", "freertos"]
+    "detected_stack": [
+      "c",
+      "esp-idf",
+      "esp32s3",
+      "tinyusb",
+      "freertos"
+    ]
   },
   "structure": {
     "has_prds": true,
@@ -117,10 +123,13 @@
     "feature-tracker-sync": {
       "enabled": true,
       "auto_run": false,
-      "last_completed_at": null,
-      "last_result": null,
+      "last_completed_at": "2026-03-10T00:00:00.000Z",
+      "last_result": "success",
       "schedule": "daily",
-      "stats": {},
+      "stats": {
+        "runs_total": 2,
+        "items_processed": 10
+      },
       "context": {}
     },
     "sync-ids": {
@@ -135,10 +144,12 @@
     "claude-md": {
       "enabled": true,
       "auto_run": false,
-      "last_completed_at": null,
-      "last_result": null,
+      "last_completed_at": "2026-03-11T10:17:00Z",
+      "last_result": "success",
       "schedule": "on-change",
-      "stats": {},
+      "stats": {
+        "runs_total": 1
+      },
       "context": {}
     },
     "curate-docs": {

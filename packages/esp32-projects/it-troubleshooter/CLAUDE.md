@@ -6,8 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **IT Troubleshooter** is a phased ESP32-S3 firmware project that emulates a USB composite device (HID keyboard + CDC serial). The goal is network troubleshooting automation via USB command injection and bidirectional communication.
 
-**Current phase:** Phase 1 PoC — HID keyboard + CDC-ACM serial.
-**Planned:** WiFi connectivity, Claude API integration, CDC-NCM (USB Ethernet).
+**Current phase:** Phase 3 — Claude API integration.
+**Completed:** Phase 1 (HID + CDC-ACM), Phase 2 (WiFi + NVS state machine + command passthrough).
+**Planned:** Claude API integration (Phase 3), CDC-NCM USB Ethernet (Phase 4).
 
 **Target hardware:** Waveshare ESP32-S3-Zero (ESP32-S3, 4MB flash, 2MB PSRAM, WS2812 RGB on GPIO21).
 
@@ -40,25 +41,24 @@ cp main/credentials.h.example main/credentials.h
 2. `status_led_init()` → set BOOT mode
 3. `usb_composite_init()` → TinyUSB HID keyboard + CDC
 4. Poll `usb_composite_is_mounted()` (30s timeout)
-5. Type demo string via HID keyboard
-6. Spawn CDC echo task on core 1
+5. `wifi_manager_init()` + `wifi_manager_connect()` (if credentials present)
+6. `state_machine_init()` → restore persisted NVS state
+7. Spawn CDC echo / command passthrough task on core 1
 
-**Core assignment:** Core 0 — USB stack (TinyUSB interrupts). Core 1 — application tasks (CDC echo, future work).
+**Core assignment:** Core 0 — USB stack (TinyUSB interrupts). Core 1 — application tasks (CDC, WiFi work, future Claude API).
 
-### Component: `usb_composite`
+### Components
 
-TinyUSB composite device with two functional interfaces:
+| Component | Purpose |
+|-----------|---------|
+| `usb_composite` | TinyUSB HID Boot Keyboard (EP 0x81) + CDC-ACM (EPs 0x82/0x03/0x83) |
+| `status_led` | WS2812 RMT driver — caller-driven via `status_led_update()` at ≥50Hz |
+| `wifi_manager` | WiFi connection with exponential backoff retry via `esp_timer` (not blocking) |
+| `state_machine` | NVS-persisted multi-step workflow state; survives power cycles |
 
-- **HID Boot Keyboard** (interface 0, endpoint 0x81): 8-byte boot protocol report, BIOS-compatible
-- **CDC-ACM** (interfaces 1–2, endpoints 0x82/0x03/0x83): standard serial over USB
+**`usb_composite` key API:** `usb_keyboard_type_string()`, `usb_keyboard_press_with_modifier()`, `usb_cdc_write()`, `usb_cdc_read()`. ASCII → HID keycode mapping covers full US QWERTY including shifted chars. Timing: 20ms key hold, 10ms between chars.
 
-Key API: `usb_keyboard_type_string()`, `usb_keyboard_press_with_modifier()`, `usb_cdc_write()`, `usb_cdc_read()`.
-
-ASCII → HID keycode mapping covers full US QWERTY including shifted characters. Timing: 20ms key hold, 10ms between chars.
-
-### Component: `status_led`
-
-WS2812 RMT driver (no background task — caller must invoke `status_led_update()` periodically at ≥50Hz).
+**`status_led` modes:**
 
 | Mode | Color/Pattern | Meaning |
 |------|--------------|---------|
@@ -85,3 +85,17 @@ WS2812 RMT driver (no background task — caller must invoke `status_led_update(
 - `espressif/esp_tinyusb` ^1.0.0 — USB device stack
 - `espressif/led_strip` ≥2.0.0 — WS2812 RMT driver
 - ESP-IDF core: `nvs_flash`, `driver`, `esp_timer`, `freertos`
+
+## Detailed Rules
+
+See `.claude/rules/` for domain-specific guidelines:
+
+- `code-style.md` — C formatting (Google/4-space/100-char), naming conventions
+- `development.md` — Build workflow, LSP false positives, commit conventions
+- `dependencies.md` — IDF component manager, REQUIRES vs PRIV_REQUIRES
+- `error-handling.md` — Graceful degradation, timeout polling, event handler constraints
+- `security-practices.md` — Credential files, secret scanning, GitHub Actions permissions
+- `testing.md` — Build verification, hardware testing, integration checklist
+- `document-management.md` — PRD/ADR/PRP locations and lifecycle
+
+See `docs/prds/it-troubleshooter.md` for full feature requirements and phase roadmap.

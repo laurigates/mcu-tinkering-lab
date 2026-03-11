@@ -79,6 +79,35 @@ if (!tud_hid_ready()) {
 }
 ```
 
+## No Blocking in ESP Event Handlers
+
+WiFi, IP, and system event callbacks run inside the ESP WiFi/event task. Calling
+`vTaskDelay()` or any blocking FreeRTOS primitive from within these callbacks blocks
+the entire event task, starves the WiFi stack, and triggers watchdog timeouts.
+
+Use `esp_timer_start_once()` for delayed retry logic — it returns immediately:
+
+```c
+/* BAD — blocks the WiFi event task */
+static void wifi_event_handler(...) {
+    vTaskDelay(pdMS_TO_TICKS(delay_s * 1000));  /* starves event task */
+    esp_wifi_connect();
+}
+
+/* GOOD — schedules reconnect without blocking */
+static void retry_timer_cb(void *arg) {
+    esp_wifi_connect();
+}
+
+static void wifi_event_handler(...) {
+    /* fire-and-forget; callback runs in esp_timer task, not the WiFi event task */
+    esp_timer_start_once(s_retry_timer, (int64_t)delay_s * 1000000);
+}
+```
+
+Create `s_retry_timer` in component init, delete it in deinit. Declare
+`esp_timer` in `PRIV_REQUIRES` — it is not pulled in transitively.
+
 ## FreeRTOS Timer Handles
 
 Always store timer handles in static variables. Clean up on re-initialization to prevent orphaned timers.

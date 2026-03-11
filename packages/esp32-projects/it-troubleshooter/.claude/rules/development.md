@@ -6,6 +6,13 @@
 - Flash and monitor run natively on the host (macOS USB passthrough is unreliable in containers)
 - Use `just` recipes as the primary interface; run `just --list` to see all available recipes
 
+### LSP Diagnostics Are False Positives on macOS
+
+The host Clang/clangd LSP does not resolve ESP-IDF headers. All "file not found",
+"unknown type name", and "undeclared identifier" diagnostics in `.c` and `.h` files
+are false positives — ignore them entirely. Only `just build` (Docker, real compiler)
+output matters for correctness.
+
 ## Commit Conventions
 
 Use conventional commits: `feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `test:`, `ci:`, `build:`
