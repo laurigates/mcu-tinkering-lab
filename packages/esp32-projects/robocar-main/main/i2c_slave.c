@@ -6,6 +6,7 @@
 #include "i2c_slave.h"
 #include <string.h>
 #include "driver/i2c.h"
+#include "i2c_config.h"
 #include "esp_app_desc.h"
 #include "esp_log.h"
 #include "esp_system.h"

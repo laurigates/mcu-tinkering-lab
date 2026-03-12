@@ -12,5 +12,7 @@ else()
     set(PROJECT_VER "0.1.0")
 endif()
 
+set(EXTRA_COMPONENT_DIRS "${CMAKE_CURRENT_LIST_DIR}/../../shared-libs")
+
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(esp32-cam-robocar)
