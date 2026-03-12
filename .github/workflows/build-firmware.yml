@@ -54,6 +54,25 @@ jobs:
           echo "main_size=$MAIN_SIZE" >> $GITHUB_OUTPUT
           echo "camera_size=$CAMERA_SIZE" >> $GITHUB_OUTPUT
 
+      - name: Check binary sizes against OTA partition limit
+        run: |
+          OTA_LIMIT=1887436  # 1.8MB OTA partition
+          MAIN_SIZE=${{ steps.hashes.outputs.main_size }}
+          CAMERA_SIZE=${{ steps.hashes.outputs.camera_size }}
+
+          if [ $MAIN_SIZE -gt $OTA_LIMIT ]; then
+            echo "ERROR: robocar-main binary ($MAIN_SIZE bytes) exceeds OTA partition limit ($OTA_LIMIT bytes)"
+            exit 1
+          fi
+
+          if [ $CAMERA_SIZE -gt $OTA_LIMIT ]; then
+            echo "ERROR: robocar-camera binary ($CAMERA_SIZE bytes) exceeds OTA partition limit ($OTA_LIMIT bytes)"
+            exit 1
+          fi
+
+          echo "✓ robocar-main: $MAIN_SIZE bytes"
+          echo "✓ robocar-camera: $CAMERA_SIZE bytes"
+
       - name: Get version from tag
         id: version
         run: |
@@ -88,6 +107,21 @@ jobs:
             robocar-main.bin
             robocar-camera.bin
             manifest.json
+
+      - name: Notify robots of new firmware via MQTT
+        if: github.event_name == 'release' && vars.MQTT_ENABLED == 'true'
+        continue-on-error: true
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq mosquitto-clients
+
+          BROKER_PORT="${{ secrets.MQTT_BROKER_PORT }}"
+          mosquitto_pub \
+            -h "${{ secrets.MQTT_BROKER_HOST }}" \
+            -p "${BROKER_PORT:-1883}" \
+            -t "robocar/ota/notify" \
+            -m "${{ github.event.release.tag_name }}" \
+            -q 1
 
       - name: Generate build summary
         run: |
