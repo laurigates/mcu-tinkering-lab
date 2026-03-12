@@ -4,6 +4,7 @@ cmake_minimum_required(VERSION 3.5)
 
 # Add esp-idf-lib to component directories
 set(EXTRA_COMPONENT_DIRS "components/esp-idf-lib/components")
+list(APPEND EXTRA_COMPONENT_DIRS "${CMAKE_CURRENT_LIST_DIR}/../../shared-libs")
 
 # Set partition table for OTA support
 set(CONFIG_PARTITION_TABLE_CUSTOM ON)
