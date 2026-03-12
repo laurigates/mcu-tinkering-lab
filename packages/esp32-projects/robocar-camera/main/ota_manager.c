@@ -18,6 +18,7 @@
 #include "esp_ota_ops.h"
 #include "esp_event.h"
 #include "esp_ghota.h"
+#include "semver.h"
 #include "config.h"
 #include "i2c_master.h"
 #include "i2c_protocol.h"
@@ -236,36 +237,126 @@ static void ota_stability_timer_callback(TimerHandle_t xTimer) {
                 OTA_TASK_PRIORITY, NULL);
 }
 
+// Polling constants for main controller OTA orchestration
+#define OTA_VERSION_POLL_INTERVAL_MS 1000
+#define OTA_VERSION_POLL_MAX_ATTEMPTS 30
+#define OTA_MAINTENANCE_SETTLE_MS 2000
+#define OTA_STATUS_POLL_INTERVAL_MS 5000
+#define OTA_STATUS_TIMEOUT_MS (5 * 60 * 1000)
+
 static void orchestrate_main_controller_update(void *pvParameters) {
     ESP_LOGI(TAG, "Checking if main controller needs OTA update...");
 
-    // Query main controller version via I2C
-    i2c_command_packet_t cmd;
-    static uint8_t seq = 0;
-    prepare_get_version_command(&cmd, seq++);
-
-    i2c_response_packet_t response;
-    esp_err_t ret = i2c_master_send_command(&cmd, &response);
+    // Step 1: Get main controller version via I2C helper
+    char mc_version_str[VERSION_STRING_LEN];
+    esp_err_t ret = i2c_get_version(mc_version_str, sizeof(mc_version_str));
     if (ret != ESP_OK) {
         ESP_LOGW(TAG, "Failed to query main controller version: %s",
                  esp_err_to_name(ret));
         goto done;
     }
+    ESP_LOGI(TAG, "Main controller firmware version: %s", mc_version_str);
 
-    if (response.status != 0x00 ||
-        response.data_length < sizeof(version_response_t)) {
-        ESP_LOGW(TAG, "Invalid version response from main controller");
+    // Step 2: Parse main controller version as semver
+    semver_t mc_version = {};
+    if (semver_parse(mc_version_str, &mc_version) != 0) {
+        ESP_LOGW(TAG, "Failed to parse main controller version: %s",
+                 mc_version_str);
         goto done;
     }
 
-    version_response_t *version = (version_response_t *)response.data;
-    ESP_LOGI(TAG, "Main controller firmware version: %s", version->version);
+    // Step 3: Get latest release version from esp_ghota
+    semver_t *latest = ghota_get_latest_version(s_ghota_client);
+    if (!latest || (!latest->major && !latest->minor && !latest->patch)) {
+        ESP_LOGI(TAG, "No cached release info — triggering GitHub check...");
+        ghota_check(s_ghota_client);
 
-    // TODO: Compare main controller version against latest release
-    // For now, log the version. Full orchestration (entering maintenance mode,
-    // sending OTA URL via I2C, polling status) will be implemented when
-    // the main controller's ota_handler is wired up to actually perform
-    // the download.
+        for (int i = 0; i < OTA_VERSION_POLL_MAX_ATTEMPTS; i++) {
+            vTaskDelay(pdMS_TO_TICKS(OTA_VERSION_POLL_INTERVAL_MS));
+            latest = ghota_get_latest_version(s_ghota_client);
+            if (latest && (latest->major || latest->minor || latest->patch)) {
+                break;
+            }
+        }
+    }
+
+    if (!latest || (!latest->major && !latest->minor && !latest->patch)) {
+        ESP_LOGW(TAG, "Could not determine latest release version");
+        semver_free(&mc_version);
+        goto done;
+    }
+
+    char latest_str[32];
+    semver_render(latest, latest_str);
+    ESP_LOGI(TAG, "Latest release version: %s", latest_str);
+
+    // Step 4: Compare — skip if main controller is already up to date
+    if (!semver_gt(*latest, mc_version)) {
+        ESP_LOGI(TAG, "Main controller is up to date (v%s)", mc_version_str);
+        semver_free(&mc_version);
+        goto done;
+    }
+
+    ESP_LOGI(TAG, "Main controller needs update: v%s -> v%s",
+             mc_version_str, latest_str);
+
+    // Step 5: Enter maintenance mode (stops motors on main controller)
+    ret = i2c_send_enter_maintenance_mode();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to enter maintenance mode: %s",
+                 esp_err_to_name(ret));
+        semver_free(&mc_version);
+        goto done;
+    }
+    vTaskDelay(pdMS_TO_TICKS(OTA_MAINTENANCE_SETTLE_MS));
+
+    // Step 6: Send OTA begin with release tag (e.g., "v0.2.0")
+    char release_tag[OTA_TAG_MAX_LEN];
+    snprintf(release_tag, sizeof(release_tag), "v%s", latest_str);
+
+    ret = i2c_send_begin_ota(release_tag, NULL);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to start main controller OTA: %s",
+                 esp_err_to_name(ret));
+        semver_free(&mc_version);
+        goto done;
+    }
+
+    // Step 7: Poll OTA status until success, failure, or timeout
+    const int max_polls = OTA_STATUS_TIMEOUT_MS / OTA_STATUS_POLL_INTERVAL_MS;
+    for (int i = 0; i < max_polls; i++) {
+        vTaskDelay(pdMS_TO_TICKS(OTA_STATUS_POLL_INTERVAL_MS));
+
+        ota_status_response_t ota_status;
+        ret = i2c_get_ota_status(&ota_status);
+        if (ret != ESP_OK) {
+            ESP_LOGW(TAG, "Failed to poll OTA status (%d/%d)", i + 1,
+                     max_polls);
+            continue;
+        }
+
+        ESP_LOGI(TAG, "OTA progress: %d%% (status: %d)", ota_status.progress,
+                 ota_status.status);
+
+        if (ota_status.status == OTA_STATUS_SUCCESS) {
+            ESP_LOGI(TAG,
+                     "Main controller OTA successful — sending reboot");
+            i2c_send_reboot();
+            semver_free(&mc_version);
+            goto done;
+        }
+
+        if (ota_status.status == OTA_STATUS_FAILED) {
+            ESP_LOGE(TAG, "Main controller OTA failed (error: %d)",
+                     ota_status.error_code);
+            semver_free(&mc_version);
+            goto done;
+        }
+    }
+
+    ESP_LOGE(TAG, "Main controller OTA timed out after %d seconds",
+             OTA_STATUS_TIMEOUT_MS / 1000);
+    semver_free(&mc_version);
 
 done:
     vTaskDelete(NULL);

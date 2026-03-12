@@ -13,11 +13,14 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "freertos/timers.h"
+#include "display_manager.h"
+#include "motor_controller.h"
 #include "ota_handler.h"
 
 static const char *TAG = "i2c_slave";
 
 // Global state
+static bool s_maintenance_mode = false;
 static bool i2c_initialized = false;
 static bool task_running = false;
 static TaskHandle_t i2c_task_handle = NULL;
@@ -240,6 +243,11 @@ static void process_i2c_command(const i2c_command_packet_t *command,
 
     switch (command->command_type) {
         case CMD_TYPE_MOVEMENT: {
+            if (s_maintenance_mode) {
+                ESP_LOGW(TAG, "Movement rejected — maintenance mode active");
+                prepare_response(response, 0x02, command->sequence_number, NULL, 0);  // 0x02 = BUSY
+                break;
+            }
             if (command->data_length == sizeof(movement_data_t)) {
                 movement_data_t *move_data = (movement_data_t *)command->data;
                 process_i2c_movement_command(move_data->movement, move_data->speed);
@@ -340,7 +348,12 @@ static void handle_ota_commands(const i2c_command_packet_t *command,
 {
     switch (command->command_type) {
         case CMD_TYPE_ENTER_MAINTENANCE_MODE: {
-            ESP_LOGI(TAG, "Entering maintenance mode");
+            ESP_LOGI(TAG, "Entering maintenance mode — stopping motors");
+            motor_stop();
+            s_maintenance_mode = true;
+            display_clear();
+            display_show_message(0, "OTA UPDATE");
+            display_show_message(1, "Do not power off");
             prepare_response(response, 0x00, command->sequence_number, NULL, 0);
             break;
         }
@@ -396,6 +409,7 @@ static void handle_ota_commands(const i2c_command_packet_t *command,
 
         case CMD_TYPE_REBOOT: {
             ESP_LOGW(TAG, "Reboot command received — rebooting in 1 second");
+            s_maintenance_mode = false;
             prepare_response(response, 0x00, command->sequence_number, NULL, 0);
 
             // Schedule reboot via timer so I2C task can send the ACK first
