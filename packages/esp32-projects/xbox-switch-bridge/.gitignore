@@ -17,6 +17,9 @@ external/
 *.swo
 *~
 
+# Credentials (belt-and-suspenders — also covered by repo root .gitignore)
+credentials.h
+
 # macOS/Windows
 .DS_Store
 Thumbs.db

@@ -1,0 +1,16 @@
+# Debug overlay — TinyUSB active + verbose logging over WiFi UDP.
+# USB PHY goes to TinyUSB (USB-Serial-JTAG unavailable).
+# Monitor via: just log-listen
+# Usage: just build-debug-usb
+
+# TinyUSB stays enabled (same as release)
+CONFIG_TINYUSB_HID_COUNT=1
+
+# USB-Serial-JTAG disabled (TinyUSB owns the PHY)
+CONFIG_USJ_ENABLE_USB_SERIAL_JTAG=n
+CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
+
+# Verbose logging — see handshake packets, SPI reads, sub-commands
+CONFIG_LOG_DEFAULT_LEVEL_DEBUG=y
+CONFIG_LOG_DEFAULT_LEVEL=4
+CONFIG_LOG_MAXIMUM_LEVEL=4

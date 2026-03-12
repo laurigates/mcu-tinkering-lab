@@ -21,13 +21,22 @@ Declare dependencies in `idf_component.yml` using exact or semver-compatible ran
 ```yaml
 # Good — semver constraint
 dependencies:
-  espressif/esp_tinyusb: "^1.0.0"
+  espressif/esp_tinyusb: "^2.0.0"  # v2.x required for NCM support; v1.x lacks tinyusb_net_init()
   espressif/led_strip: ">=2.0.0"
 ```
 
 - `managed_components/` is gitignored — downloaded by IDF at build time
 - Do not vendor managed components into the repository
 - `EXTRA_COMPONENT_DIRS "components"` in root `CMakeLists.txt` for local components
+
+### esp_tinyusb API Version Notes
+
+The `tinyusb_config_t` struct changed significantly between v1.x and v2.x:
+
+- **v1.x**: Flat struct with `device_descriptor`, `string_descriptor`, `configuration_descriptor` fields
+- **v2.x**: Nested `.descriptor` sub-struct; adds `tinyusb_net_init()` for CDC-NCM support
+
+Do not mix v1.x field names with a v2.x component — it will compile but silently ignore the descriptor.
 
 ## REQUIRES vs PRIV_REQUIRES
 

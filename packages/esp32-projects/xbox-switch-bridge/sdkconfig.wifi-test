@@ -1,0 +1,18 @@
+# WiFi-only test overlay — disables BLE to isolate SoftAP visibility.
+# If the AP is visible with this build, the problem is BLE coexistence.
+# Usage: just build-wifi-test
+
+# Disable Bluetooth entirely
+CONFIG_BT_ENABLED=n
+CONFIG_BT_NIMBLE_ENABLED=n
+CONFIG_BT_CONTROLLER_ENABLED=n
+
+# Disable TinyUSB (keep USB-Serial-JTAG for monitoring)
+CONFIG_TINYUSB_ENABLED=n
+CONFIG_TINYUSB_HID_COUNT=0
+CONFIG_USJ_ENABLE_USB_SERIAL_JTAG=y
+CONFIG_ESP_CONSOLE_SECONDARY_USB_SERIAL_JTAG=y
+CONFIG_ESP_CONSOLE_SECONDARY_NONE=n
+
+# Disable coexistence (not needed without BT)
+CONFIG_ESP_COEX_SW_COEXIST_ENABLE=n

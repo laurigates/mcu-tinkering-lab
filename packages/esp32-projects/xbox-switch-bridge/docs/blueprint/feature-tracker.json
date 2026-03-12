@@ -1,0 +1,133 @@
+{
+  "version": "1.0.0",
+  "updated_at": "2026-03-12T00:00:00.000Z",
+  "current_phase": "v1-complete",
+  "source_document": null,
+  "phases": {
+    "v1": {
+      "name": "Xbox-Switch Bridge v1.0",
+      "description": "Complete BLE-to-USB controller bridge with diagnostics",
+      "status": "complete",
+      "requirements": {
+        "FR1": {
+          "id": "FR1",
+          "title": "BLE Gamepad Host",
+          "description": "Scan/connect to Xbox Series controllers via Bluepad32 v3.x custom platform",
+          "status": "completed",
+          "implemented_in": ["components/bluepad32_host/bluepad32_host.c"]
+        },
+        "FR2": {
+          "id": "FR2",
+          "title": "Button Mapping",
+          "description": "Xbox A/B/X/Y position-based swap to Switch B/A/Y/X layout",
+          "status": "completed",
+          "implemented_in": ["components/button_mapper/button_mapper.c"]
+        },
+        "FR3": {
+          "id": "FR3",
+          "title": "Analog Stick Remapping",
+          "description": "Bluepad32 signed range (-511..512) to Switch 12-bit unsigned (0-4095) with Y-inversion",
+          "status": "completed",
+          "implemented_in": ["components/button_mapper/button_mapper.c"]
+        },
+        "FR4": {
+          "id": "FR4",
+          "title": "Trigger Handling",
+          "description": "Digital button mapping + analog threshold (>128) for ZL/ZR",
+          "status": "completed",
+          "implemented_in": ["components/button_mapper/button_mapper.c"]
+        },
+        "FR5": {
+          "id": "FR5",
+          "title": "USB Pro Controller Emulation",
+          "description": "TinyUSB HID with Nintendo VID 0x057E / PID 0x2009",
+          "status": "completed",
+          "implemented_in": ["components/switch_pro_usb/switch_pro_usb.c"]
+        },
+        "FR6": {
+          "id": "FR6",
+          "title": "Switch USB Handshake Protocol",
+          "description": "0x80 commands (STATUS/HANDSHAKE/HIGH_SPEED/FORCE_USB) + 0x01 sub-commands",
+          "status": "completed",
+          "implemented_in": ["components/switch_pro_usb/switch_pro_usb.c"]
+        },
+        "FR7": {
+          "id": "FR7",
+          "title": "Status LED",
+          "description": "5 WS2812 states: SCANNING, USB_ERROR, CONNECTED_NO_USB, CONNECTED_USB, BRIDGING",
+          "status": "completed",
+          "implemented_in": ["components/status_led/status_led.c"]
+        },
+        "FR8": {
+          "id": "FR8",
+          "title": "WiFi UDP Log Broadcasting",
+          "description": "SoftAP 'xbox-bridge-log' with UDP broadcast on port 4444",
+          "status": "completed",
+          "implemented_in": ["components/log_udp/log_udp.c"]
+        },
+        "FR9": {
+          "id": "FR9",
+          "title": "Build Variants",
+          "description": "4 sdkconfig overlays: production, debug-UART, debug-USB, wifi-test",
+          "status": "completed",
+          "implemented_in": ["sdkconfig.defaults", "sdkconfig.debug", "sdkconfig.debug-usb", "sdkconfig.wifi-test"]
+        }
+      }
+    },
+    "future": {
+      "name": "Future Enhancements",
+      "description": "Planned features for future development",
+      "status": "planning",
+      "requirements": {
+        "FR10": {
+          "id": "FR10",
+          "title": "Rumble Output",
+          "description": "HID output report handler for vibration feedback from Switch to Xbox controller",
+          "status": "not_started",
+          "implemented_in": []
+        },
+        "FR11": {
+          "id": "FR11",
+          "title": "Runtime Button Remapping",
+          "description": "Configurable button mapping via credentials.h or NVS",
+          "status": "not_started",
+          "implemented_in": []
+        },
+        "FR12": {
+          "id": "FR12",
+          "title": "Multi-Controller Support",
+          "description": "Connect and bridge multiple Xbox controllers simultaneously",
+          "status": "not_started",
+          "implemented_in": []
+        }
+      }
+    }
+  },
+  "statistics": {
+    "total_features": 12,
+    "complete": 9,
+    "in_progress": 0,
+    "not_started": 3,
+    "blocked": 0,
+    "completion_percentage": 75
+  },
+  "tasks": {
+    "in_progress": [],
+    "pending": [
+      {"id": "FR10", "description": "Rumble Output", "added": "2026-03-12"},
+      {"id": "FR11", "description": "Runtime Button Remapping", "added": "2026-03-12"},
+      {"id": "FR12", "description": "Multi-Controller Support", "added": "2026-03-12"}
+    ],
+    "completed": [
+      {"id": "FR1", "description": "BLE Gamepad Host", "completed": "2026-03-12"},
+      {"id": "FR2", "description": "Button Mapping", "completed": "2026-03-12"},
+      {"id": "FR3", "description": "Analog Stick Remapping", "completed": "2026-03-12"},
+      {"id": "FR4", "description": "Trigger Handling", "completed": "2026-03-12"},
+      {"id": "FR5", "description": "USB Pro Controller Emulation", "completed": "2026-03-12"},
+      {"id": "FR6", "description": "Switch USB Handshake Protocol", "completed": "2026-03-12"},
+      {"id": "FR7", "description": "Status LED", "completed": "2026-03-12"},
+      {"id": "FR8", "description": "WiFi UDP Log Broadcasting", "completed": "2026-03-12"},
+      {"id": "FR9", "description": "Build Variants", "completed": "2026-03-12"}
+    ]
+  }
+}

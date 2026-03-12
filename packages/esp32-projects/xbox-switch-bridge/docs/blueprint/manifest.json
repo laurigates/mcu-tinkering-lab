@@ -1,0 +1,138 @@
+{
+  "format_version": "3.2.0",
+  "created_at": "2026-03-12T00:00:00.000Z",
+  "updated_at": "2026-03-12T00:00:00.000Z",
+  "created_by": {
+    "blueprint_plugin": "3.24.0"
+  },
+  "project": {
+    "name": "xbox-switch-bridge",
+    "detected_stack": [
+      "c",
+      "esp-idf",
+      "esp32s3",
+      "tinyusb",
+      "bluepad32",
+      "freertos"
+    ]
+  },
+  "structure": {
+    "has_prds": true,
+    "has_adrs": true,
+    "has_prps": true,
+    "has_work_orders": false,
+    "has_ai_docs": false,
+    "has_modular_rules": false,
+    "has_feature_tracker": true,
+    "has_document_detection": true,
+    "claude_md_mode": "both"
+  },
+  "feature_tracker": {
+    "file": "feature-tracker.json",
+    "source_document": null,
+    "sync_targets": []
+  },
+  "generated": {
+    "rules": {},
+    "commands": {}
+  },
+  "custom_overrides": {
+    "skills": [],
+    "commands": []
+  },
+  "task_registry": {
+    "derive-prd": {
+      "enabled": true,
+      "auto_run": false,
+      "last_completed_at": null,
+      "last_result": null,
+      "schedule": "on-demand",
+      "stats": {},
+      "context": {}
+    },
+    "derive-plans": {
+      "enabled": true,
+      "auto_run": false,
+      "last_completed_at": "2026-03-12T00:00:00.000Z",
+      "last_result": "success",
+      "schedule": "weekly",
+      "stats": {
+        "runs_total": 1,
+        "items_processed": 7,
+        "items_created": 15
+      },
+      "context": {
+        "commits_analyzed_up_to": "a6566e4",
+        "commits_analyzed_count": 7
+      }
+    },
+    "derive-rules": {
+      "enabled": true,
+      "auto_run": false,
+      "last_completed_at": null,
+      "last_result": null,
+      "schedule": "weekly",
+      "stats": {},
+      "context": {}
+    },
+    "generate-rules": {
+      "enabled": true,
+      "auto_run": false,
+      "last_completed_at": null,
+      "last_result": null,
+      "schedule": "on-change",
+      "stats": {},
+      "context": {}
+    },
+    "adr-validate": {
+      "enabled": true,
+      "auto_run": false,
+      "last_completed_at": null,
+      "last_result": null,
+      "schedule": "weekly",
+      "stats": {},
+      "context": {}
+    },
+    "feature-tracker-sync": {
+      "enabled": true,
+      "auto_run": false,
+      "last_completed_at": "2026-03-12T00:00:00.000Z",
+      "last_result": "success",
+      "schedule": "daily",
+      "stats": {
+        "runs_total": 1,
+        "items_processed": 12
+      },
+      "context": {}
+    },
+    "sync-ids": {
+      "enabled": true,
+      "auto_run": false,
+      "last_completed_at": null,
+      "last_result": null,
+      "schedule": "on-change",
+      "stats": {},
+      "context": {}
+    },
+    "claude-md": {
+      "enabled": true,
+      "auto_run": false,
+      "last_completed_at": "2026-03-12T00:00:00.000Z",
+      "last_result": "success",
+      "schedule": "on-change",
+      "stats": {
+        "runs_total": 1
+      },
+      "context": {}
+    },
+    "curate-docs": {
+      "enabled": false,
+      "auto_run": false,
+      "last_completed_at": null,
+      "last_result": null,
+      "schedule": "on-demand",
+      "stats": {},
+      "context": {}
+    }
+  }
+}

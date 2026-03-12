@@ -17,8 +17,12 @@
 #include <stdio.h>
 #include <string.h>
 
+#if CONFIG_BT_ENABLED
 #include "bluepad32_host.h"
 #include "button_mapper.h"
+#endif
+#include "driver/usb_serial_jtag.h"
+#include "driver/usb_serial_jtag_vfs.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
@@ -54,6 +58,7 @@ static volatile bridge_state_t s_state = BRIDGE_STATE_INIT;
 static bool s_usb_init_ok = false;
 #endif
 
+#if CONFIG_BT_ENABLED
 /**
  * @brief Callback when Xbox controller connects/disconnects.
  */
@@ -69,6 +74,7 @@ static void on_controller_connection(bool connected)
         status_led_set_mode(STATUS_LED_SCANNING);
     }
 }
+#endif
 
 /**
  * @brief Initialize NVS (required by Bluepad32/BT stack).
@@ -83,6 +89,7 @@ static esp_err_t init_nvs(void)
     return ret;
 }
 
+#if CONFIG_BT_ENABLED
 /**
  * @brief Main bridge task.
  *
@@ -101,6 +108,9 @@ static void bridge_task(void *arg)
     uint32_t report_count = 0;
 
     ESP_LOGI(TAG, "Bridge task started on core %d", xPortGetCoreID());
+
+    /* Log stack high-water mark after first few iterations to catch sizing issues early */
+    uint32_t hwm_check_at = 100; /* report count threshold for next HWM log */
 
     while (1) {
         switch (s_state) {
@@ -125,8 +135,14 @@ static void bridge_task(void *arg)
                 /* Don't send 0x30 reports until handshake completes.
                  * Real Pro Controllers only start 0x30 after FORCE_USB. */
 #else
-                ESP_LOGI(TAG, "Xbox connected (USB disabled in debug build)");
-                status_led_set_mode(STATUS_LED_CONNECTED_NO_USB);
+                {
+                    static bool logged_once = false;
+                    if (!logged_once) {
+                        ESP_LOGI(TAG, "Xbox connected (USB disabled in debug build)");
+                        logged_once = true;
+                    }
+                    status_led_set_mode(STATUS_LED_CONNECTED_NO_USB);
+                }
 #endif
                 break;
 
@@ -155,13 +171,34 @@ static void bridge_task(void *arg)
                 break;
         }
 
+        /* Periodic stack high-water mark check (exponential backoff) */
+        if (report_count == hwm_check_at) {
+            ESP_LOGI(TAG, "Stack HWM — bridge: %u bytes free",
+                     (unsigned)uxTaskGetStackHighWaterMark(NULL) * sizeof(StackType_t));
+            hwm_check_at *= 10; /* 100 → 1000 → 10000 → ... */
+        }
+
         status_led_update();
         vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(BRIDGE_LOOP_INTERVAL_MS));
     }
 }
+#endif /* CONFIG_BT_ENABLED */
 
 void app_main(void)
 {
+#if CONFIG_USJ_ENABLE_USB_SERIAL_JTAG && !CONFIG_TINYUSB_ENABLED
+    /* Route ESP_LOG output to USB-Serial-JTAG so `just monitor` works.
+     * Primary console is UART0 (for bluepad32 compatibility), but the
+     * ESP32-S3-Zero only exposes USB-Serial-JTAG via its USB-C port.
+     * Install the driver, then tell VFS to use it for stdout/stderr. */
+    usb_serial_jtag_driver_config_t usj_cfg = {
+        .tx_buffer_size = 4096,
+        .rx_buffer_size = 256,
+    };
+    usb_serial_jtag_driver_install(&usj_cfg);
+    usb_serial_jtag_vfs_use_driver();
+#endif
+
     ESP_LOGI(TAG, "=== Xbox -> Switch Controller Bridge ===");
     ESP_LOGI(TAG, "Firmware built: %s %s", __DATE__, __TIME__);
 
@@ -191,6 +228,7 @@ void app_main(void)
     ESP_LOGW(TAG, "TinyUSB disabled (debug build) — USB logging active");
 #endif
 
+#if CONFIG_BT_ENABLED
     /* Initialize Bluepad32 (BLE gamepad host) */
     ESP_ERROR_CHECK(bp32_host_init(on_controller_connection));
     s_state = BRIDGE_STATE_SCANNING;
@@ -204,7 +242,24 @@ void app_main(void)
     /* Start the bridge task on core 1 (core 0 is used by BTstack/BT) */
     xTaskCreatePinnedToCore(bridge_task, "bridge", 4096, NULL, 5, NULL, 1);
 
+    /* Log stack high-water mark after all init is done */
+    ESP_LOGI(TAG, "Stack HWM — main: %u bytes free",
+             (unsigned)uxTaskGetStackHighWaterMark(NULL) * sizeof(StackType_t));
+
     /* Start BTstack event loop on core 0 (app_main task).
      * This call does NOT return - BTstack takes over this task. */
     bp32_host_start();
+#else
+    /* WiFi-only test mode — no BLE, just verify SoftAP is visible */
+    ESP_LOGW(TAG, "BLE DISABLED — WiFi-only test mode");
+    ESP_LOGI(TAG, "Connect to 'xbox-bridge-log' WiFi to verify AP visibility");
+    ESP_LOGI(TAG, "Stack HWM — main: %u bytes free",
+             (unsigned)uxTaskGetStackHighWaterMark(NULL) * sizeof(StackType_t));
+    status_led_set_mode(STATUS_LED_CONNECTED_NO_USB);
+    /* Keep main task alive */
+    while (1) {
+        status_led_update();
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+#endif
 }

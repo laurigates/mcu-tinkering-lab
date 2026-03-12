@@ -23,6 +23,35 @@ default:
 # Setup
 ##########
 
+# Check if generated sdkconfig is stale (older than any sdkconfig.defaults/overlay)
+[private]
+check-sdkconfig:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    [ -f sdkconfig ] || exit 0  # No sdkconfig yet — fresh build, nothing to check
+    stale=()
+    for src in sdkconfig.defaults sdkconfig.debug sdkconfig.debug-usb sdkconfig.wifi-test; do
+        [ -f "$src" ] || continue
+        if [ "$src" -nt sdkconfig ]; then
+            stale+=("$src")
+        fi
+    done
+    if [ ${#stale[@]} -gt 0 ]; then
+        echo "WARNING: sdkconfig is stale — newer than generated config:" >&2
+        printf "  %s\n" "${stale[@]}" >&2
+        echo "" >&2
+        echo "Run 'rm sdkconfig && just clean' before building, or values" >&2
+        echo "from sdkconfig.defaults won't take effect." >&2
+        echo "" >&2
+        read -r -p "Delete sdkconfig and continue? [y/N] " answer
+        if [[ "$answer" =~ ^[Yy] ]]; then
+            rm -f sdkconfig
+            echo "Deleted sdkconfig — will regenerate from defaults on next build"
+        else
+            echo "Continuing with stale sdkconfig (some settings may be outdated)" >&2
+        fi
+    fi
+
 # Clone external dependencies and prepare btstack component
 [group: "setup"]
 fetch-deps:
@@ -79,7 +108,7 @@ clean-deps:
 
 # Build firmware in Docker container
 [group: "build"]
-build: fetch-deps
+build: check-sdkconfig fetch-deps
     #!/usr/bin/env bash
     set -euo pipefail
     echo "Building xbox-switch-bridge (containerized)..."
@@ -91,7 +120,7 @@ build: fetch-deps
 
 # Build debug firmware (USB-Serial-JTAG stays alive for log output, TinyUSB disabled)
 [group: "build"]
-build-debug: fetch-deps
+build-debug: check-sdkconfig fetch-deps
     #!/usr/bin/env bash
     set -euo pipefail
     echo "Building xbox-switch-bridge DEBUG (USB logging enabled, TinyUSB disabled)..."
@@ -100,6 +129,34 @@ build-debug: fetch-deps
         esp-idf \
         bash -c 'SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.debug" idf.py set-target {{target}} && idf.py build'
     echo "Debug build complete — flash with: just flash"
+
+# Build debug firmware with TinyUSB active (for Switch handshake debugging)
+# Logs only via WiFi UDP — connect to "xbox-bridge-log", then: just log-listen
+[group: "build"]
+build-debug-usb: check-sdkconfig fetch-deps
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Building xbox-switch-bridge DEBUG-USB (TinyUSB ON, verbose logging over WiFi)..."
+    {{container_cmd}} compose -f ../../../docker-compose.yml run --rm \
+        -w /workspace/{{project_dir}} \
+        esp-idf \
+        bash -c 'SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.debug-usb" idf.py set-target {{target}} && idf.py build'
+    echo "Debug-USB build complete — flash with: just flash"
+    echo "Monitor via: just log-listen (connect to xbox-bridge-log WiFi first)"
+
+# Build WiFi-only test firmware (no BLE — isolates SoftAP visibility)
+# If AP is visible with this build, the problem is BLE coexistence
+[group: "build"]
+build-wifi-test: check-sdkconfig fetch-deps
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Building xbox-switch-bridge WIFI-TEST (no BLE, USB-Serial-JTAG active)..."
+    {{container_cmd}} compose -f ../../../docker-compose.yml run --rm \
+        -w /workspace/{{project_dir}} \
+        esp-idf \
+        bash -c 'SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.wifi-test" idf.py set-target {{target}} && idf.py build'
+    echo "WiFi-test build complete — flash with: just flash"
+    echo "Then check if 'xbox-bridge-log' WiFi network is visible"
 
 # Clean build artifacts via container
 [group: "build"]
@@ -167,10 +224,14 @@ flash: require-port
         0x8000 build/partition_table/partition-table.bin \
         0x10000 build/xbox-switch-bridge.bin
 
-# Start serial monitor (requires USB-UART adapter on GPIO43/TX, GPIO44/RX — see WIRING.md)
+# Start serial monitor (reads serial output, Ctrl-C to stop)
 [group: "device"]
 monitor: require-port
-    python3 -m esp_idf_monitor -p {{port}} build/xbox-switch-bridge.elf
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Monitoring {{port}} at 115200 baud — Ctrl-C to stop"
+    stty -f {{port}} 115200 raw -echo 2>/dev/null || true
+    cat {{port}}
 
 # Flash and monitor
 [group: "device"]
@@ -191,6 +252,45 @@ log-listen port="4444":
     echo "Connect to WiFi: xbox-bridge-log (open, no password)"
     echo ""
     exec socat -u UDP-RECV:{{port}} -
+
+# Scan for nearby WiFi networks (check if xbox-bridge-log AP is visible)
+[group: "device"]
+wifi-scan:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Scanning for WiFi networks..."
+    echo ""
+    # CoreWLAN targeted scan (works on macOS Sequoia+ where airport was removed)
+    python3 tools/wifi-scan.py 2>/dev/null || {
+        # Fallback: try connecting (networksetup reports if SSID exists)
+        if /usr/sbin/networksetup -setairportnetwork en0 "xbox-bridge-log" 2>&1 | grep -q "Could not find"; then
+            echo "xbox-bridge-log: NOT FOUND"
+        else
+            echo "xbox-bridge-log: FOUND (connected!)"
+        fi
+    }
+    echo ""
+    echo "Current connection:"
+    /usr/sbin/networksetup -getairportnetwork en0 2>/dev/null || echo "  (unknown)"
+
+# Try to connect to the ESP32-S3 log AP
+[group: "device"]
+wifi-connect:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Connecting to xbox-bridge-log..."
+    if /usr/sbin/networksetup -setairportnetwork en0 "xbox-bridge-log" 2>&1 | grep -q "Could not find"; then
+        echo "FAILED: Network not found"
+        echo ""
+        echo "Troubleshooting:"
+        echo "  - Is the ESP32-S3 powered on and running?"
+        echo "  - Check LED: cyan flash = AP ready"
+        echo "  - BLE + SoftAP coexistence is unstable on ESP32-S3"
+        echo "  - Try: just build-wifi-test (disables BLE to isolate)"
+        exit 1
+    fi
+    echo "Connected! IP: $(ipconfig getifaddr en0 2>/dev/null || echo 'pending...')"
+    echo "Run: just log-listen"
 
 # Show project information
 [group: "info"]
