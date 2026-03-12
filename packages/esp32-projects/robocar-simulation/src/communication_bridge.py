@@ -37,6 +37,12 @@ class MessageType(Enum):
     STOP = 0x07
     SENSOR_DATA = 0x08
     AI_COMMAND = 0x09
+    # OTA Commands (matching firmware i2c_protocol.h)
+    ENTER_MAINTENANCE_MODE = 0x50
+    BEGIN_OTA = 0x51
+    GET_OTA_STATUS = 0x52
+    GET_VERSION = 0x53
+    REBOOT = 0x54
 
 
 @dataclass
