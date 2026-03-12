@@ -14,6 +14,7 @@ This directory contains Architecture Decision Records (ADRs) for the IT Troubles
 | [0006](0006-external-uart-debug.md) | External USB-UART Adapter for Debug Monitoring | Accepted | 2026-03-09 |
 | [0007](0007-core-assignment-strategy.md) | Core Assignment Strategy | Accepted | 2026-03-09 |
 | [0008](0008-phased-delivery.md) | Phased Delivery Approach | Accepted | 2026-03-09 |
+| [0009](0009-ncm-hid-composite-descriptor.md) | NCM + HID Composite Descriptor Architecture | Proposed | 2026-03-11 |
 
 ## Creating New ADRs
 

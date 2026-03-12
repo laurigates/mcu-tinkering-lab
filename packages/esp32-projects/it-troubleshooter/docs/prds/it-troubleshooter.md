@@ -1,7 +1,7 @@
 # IT Troubleshooter — Product Requirements Document
 
-**Status**: Phase 1 Complete / Phase 2 Planned
-**Last Updated**: 2026-03-10
+**Status**: Phases 1–3 Complete / Phase 4 Planning
+**Last Updated**: 2026-03-11
 **Confidence**: 8/10 (derived from git history and source code analysis)
 
 ## Overview
@@ -49,40 +49,43 @@ The device uses a phased delivery approach, starting with a simple USB composite
 
 **Hardware**: Waveshare ESP32-S3-Zero (4MB flash, 2MB PSRAM, GPIO21 WS2812)
 
-### Phase 2 — WiFi + Command Execution (Planned)
+### Phase 2 — WiFi + Command Execution (Complete)
 
 **Goal**: Connect to a mobile hotspot and execute diagnostic commands on target hosts via SSH.
 
 | FR Code | Requirement | Status |
 |---------|-------------|--------|
-| FR2.1 | Connect to pre-configured WiFi hotspot on device boot | Planned |
-| FR2.2 | Accept SSH or command input via CDC serial from operator | Planned |
-| FR2.3 | Inject commands into target via HID keyboard | Planned |
-| FR2.4 | NVS-persisted state machine for multi-step workflows across power cycles | Planned |
-| FR2.5 | Visual LED feedback during WiFi connection and command execution phases | Planned |
+| FR2.1 | Connect to pre-configured WiFi hotspot on device boot | Completed |
+| FR2.2 | Accept operator command input via CDC serial port | Completed |
+| FR2.3 | Inject commands received over CDC into target via HID keyboard | Completed |
+| FR2.4 | NVS-persisted state machine for multi-step workflows across power cycles | Completed |
+| FR2.5 | Visual LED feedback during WiFi connection and command execution phases | Completed |
 
-### Phase 3 — Claude API Integration (Planned)
+### Phase 3 — Claude API Integration (Complete)
 
 **Goal**: AI-driven troubleshooting; Claude analyzes output and decides next actions.
 
 | FR Code | Requirement | Status |
 |---------|-------------|--------|
-| FR3.1 | Capture command output via CDC serial or USB HID | Planned |
-| FR3.2 | Forward output to Claude API for analysis | Planned |
-| FR3.3 | Execute Claude-suggested commands via HID injection | Planned |
-| FR3.4 | Configurable API key and model via `credentials.h` | Planned |
+| FR3.1 | Receive operator-pasted command output via CDC serial | Completed |
+| FR3.2 | Forward captured output to Claude API for analysis via HTTPS POST | Completed |
+| FR3.3 | Execute Claude-suggested commands via HID keyboard injection | Completed |
+| FR3.4 | Configurable API key and model via `credentials.h` | Completed |
 
-### Phase 4 — CDC-NCM USB Ethernet (Planned)
+### Phase 4 — CDC-NCM USB Ethernet (Planning)
 
 **Goal**: Replace CDC-ACM with CDC-NCM for full TCP/IP over USB — enabling HTTP, SSH, and DHCP without HID injection.
 
+See [ADR-0009](../adrs/0009-ncm-hid-composite-descriptor.md) for architecture decisions.
+See [PRP](../prps/cdc-ncm-usb-ethernet.md) for detailed implementation plan.
+
 | FR Code | Requirement | Status |
 |---------|-------------|--------|
-| FR4.1 | CDC-NCM USB Ethernet interface visible to host OS as network adapter | Planned |
-| FR4.2 | DHCP server assigning IP to host | Planned |
-| FR4.3 | WiFi-to-USB bridge routing host traffic through device's WiFi connection | Planned |
-| FR4.4 | HTTP server hosting self-bootstrapping agent script | Planned |
-| FR4.5 | Retain HID keyboard interface for BIOS-level access | Planned |
+| FR4.1 | CDC-NCM USB Ethernet interface visible to host OS as network adapter | Not Started |
+| FR4.2 | DHCP server assigning IP to host (192.168.7.0/24) | Not Started |
+| FR4.3 | WiFi-to-USB bridge routing host traffic through device's WiFi connection | Not Started |
+| FR4.4 | HTTP server hosting self-bootstrapping agent script | Not Started |
+| FR4.5 | Retain HID keyboard interface for BIOS-level access | Not Started |
 
 ## Non-Functional Requirements
 
@@ -106,3 +109,4 @@ See ADRs for rationale behind key decisions:
 - [ADR-0006: External UART for Debug Monitoring](../adrs/0006-external-uart-debug.md)
 - [ADR-0007: Core Assignment Strategy](../adrs/0007-core-assignment-strategy.md)
 - [ADR-0008: Phased Delivery Approach](../adrs/0008-phased-delivery.md)
+- [ADR-0009: NCM + HID Composite Descriptor Architecture](../adrs/0009-ncm-hid-composite-descriptor.md)
