@@ -1,0 +1,11 @@
+menu "Xbox-Switch Bridge"
+
+    config TINYUSB_ENABLED
+        bool "Enable TinyUSB (Switch Pro Controller emulation)"
+        default y
+        help
+            Enable USB HID device mode via TinyUSB to emulate a Switch Pro
+            Controller. Disable for wifi-test builds where USB-Serial-JTAG
+            is needed for monitoring.
+
+endmenu

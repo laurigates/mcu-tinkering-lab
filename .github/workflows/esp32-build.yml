@@ -45,12 +45,43 @@ jobs:
           - project: it-troubleshooter
             target: esp32s3
             description: "IT Troubleshooter (ESP32-S3-Zero)"
+          - project: xbox-switch-bridge
+            target: esp32s3
+            description: "Xbox-Switch Bridge (ESP32-S3-Zero)"
+            fetch_deps: true
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           submodules: recursive
+
+      - name: Fetch external dependencies
+        if: matrix.fetch_deps
+        working-directory: packages/esp32-projects/${{ matrix.project }}
+        run: |
+          BP32_DIR="external/bluepad32"
+          BTSTACK_ROOT="$BP32_DIR/external/btstack"
+          BTSTACK_COMP="$BTSTACK_ROOT/port/esp32/components/btstack"
+
+          echo "Cloning bluepad32 release_v3.10.3..."
+          git clone --depth 1 --branch release_v3.10.3 \
+            https://github.com/ricardoquesada/bluepad32.git "$BP32_DIR"
+          cd "$BP32_DIR" && git submodule update --init --depth 1 external/btstack && cd -
+
+          echo "Preparing btstack component..."
+          for dir in src 3rd-party/bluedroid 3rd-party/hxcmod-player \
+                     3rd-party/lwip/dhcp-server 3rd-party/lc3-google \
+                     3rd-party/md5 3rd-party/micro-ecc 3rd-party/yxml \
+                     platform/freertos platform/lwip; do
+            mkdir -p "$BTSTACK_COMP/$(dirname "$dir")"
+            cp -r "$BTSTACK_ROOT/$dir" "$BTSTACK_COMP/$dir"
+          done
+          mkdir -p "$BTSTACK_COMP/platform/embedded"
+          for f in hal_time_ms.h hal_uart_dma.h hci_dump_embedded_stdout.h hci_dump_embedded_stdout.c; do
+            cp "$BTSTACK_ROOT/platform/embedded/$f" "$BTSTACK_COMP/platform/embedded/"
+          done
+          echo "Dependencies ready"
 
       - name: Build ${{ matrix.project }}
         uses: espressif/esp-idf-ci-action@v1

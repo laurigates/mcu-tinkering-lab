@@ -126,21 +126,63 @@
     "phase-4": {
       "name": "CDC-NCM USB Ethernet",
       "description": "Replace CDC-ACM with CDC-NCM for USB Ethernet networking",
-      "status": "not_started",
-      "requirements": {}
+      "status": "planning",
+      "requirements": {
+        "FR4.1": {
+          "id": "FR4.1",
+          "title": "CDC-NCM USB Ethernet Interface",
+          "description": "CDC-NCM USB Ethernet interface visible to host OS as network adapter",
+          "status": "not_started",
+          "implemented_in": []
+        },
+        "FR4.2": {
+          "id": "FR4.2",
+          "title": "DHCP Server",
+          "description": "DHCP server assigning IP to host (192.168.7.0/24)",
+          "status": "not_started",
+          "implemented_in": []
+        },
+        "FR4.3": {
+          "id": "FR4.3",
+          "title": "WiFi-to-USB Bridge",
+          "description": "WiFi-to-USB bridge routing host traffic through device WiFi connection",
+          "status": "not_started",
+          "implemented_in": []
+        },
+        "FR4.4": {
+          "id": "FR4.4",
+          "title": "HTTP Bootstrap Server",
+          "description": "HTTP server hosting self-bootstrapping agent script at 192.168.7.1:80",
+          "status": "not_started",
+          "implemented_in": []
+        },
+        "FR4.5": {
+          "id": "FR4.5",
+          "title": "HID Keyboard Retention",
+          "description": "Retain HID keyboard interface alongside NCM for BIOS-level access",
+          "status": "not_started",
+          "implemented_in": []
+        }
+      }
     }
   },
   "statistics": {
-    "total_features": 14,
+    "total_features": 19,
     "complete": 14,
     "in_progress": 0,
-    "not_started": 0,
+    "not_started": 5,
     "blocked": 0,
-    "completion_percentage": 100
+    "completion_percentage": 73
   },
   "tasks": {
     "in_progress": [],
-    "pending": [],
+    "pending": [
+      {"id": "FR4.1", "description": "CDC-NCM USB Ethernet Interface", "added": "2026-03-11"},
+      {"id": "FR4.2", "description": "DHCP Server", "added": "2026-03-11"},
+      {"id": "FR4.3", "description": "WiFi-to-USB Bridge", "added": "2026-03-11"},
+      {"id": "FR4.4", "description": "HTTP Bootstrap Server", "added": "2026-03-11"},
+      {"id": "FR4.5", "description": "HID Keyboard Retention", "added": "2026-03-11"}
+    ],
     "completed": [
       {"id": "FR1", "description": "USB HID Boot Keyboard", "completed": "2026-03-10"},
       {"id": "FR2", "description": "USB CDC-ACM Serial", "completed": "2026-03-10"},

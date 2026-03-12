@@ -11,7 +11,6 @@ CONFIG_BT_ENABLED=y
 CONFIG_BT_BLUEDROID_ENABLED=n
 CONFIG_BT_NIMBLE_ENABLED=y
 CONFIG_BT_CONTROLLER_ENABLED=y
-CONFIG_BTDM_CTRL_MODE_BLE_ONLY=y
 
 # Bluepad32 requires classic BT for some controllers, but Xbox Series
 # uses BLE. Enable both for maximum compatibility.
@@ -24,14 +23,13 @@ CONFIG_BT_NIMBLE_ROLE_OBSERVER=y
 # Disable USB-Serial-JTAG so TinyUSB can claim the PHY exclusively.
 CONFIG_USJ_ENABLE_USB_SERIAL_JTAG=n
 CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
-CONFIG_TINYUSB_ENABLED=y
-CONFIG_TINYUSB_HID_ENABLED=y
 CONFIG_TINYUSB_HID_COUNT=1
 CONFIG_TINYUSB_DESC_USE_ESPRESSIF_VID=n
 CONFIG_TINYUSB_DESC_USE_DEFAULT_PID=n
 
 # --- FreeRTOS ---
 CONFIG_FREERTOS_HZ=1000
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
 
 # --- Flash & PSRAM (Waveshare ESP32-S3-Zero: 4MB flash, 2MB PSRAM) ---
 CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
@@ -49,11 +47,18 @@ CONFIG_COMPILER_DISABLE_GCC13_WARNINGS=y
 
 # --- WiFi (for UDP log forwarding during development) ---
 # ESP32-S3 supports concurrent WiFi + BT via software coexistence.
+# NOTE: BLE + SoftAP is "C1: unstable" per Espressif coexistence matrix.
+# Pin WiFi to core 1 (BT on core 0) to reduce contention.
 CONFIG_ESP_WIFI_ENABLED=y
-CONFIG_ESP_WIFI_ENABLE_WPA3_SAE=y
-CONFIG_ESP_WIFI_ENABLE_SAE_PK=y
-CONFIG_WPA_11KV_SUPPORT=y
 CONFIG_ESP_COEX_SW_COEXIST_ENABLE=y
+CONFIG_ESP_WIFI_TASK_PINNED_TO_CORE_1=y
+CONFIG_ESP_WIFI_TASK_PINNED_TO_CORE_0=n
+
+# Disable unneeded WiFi features to reduce memory pressure
+# (open AP doesn't need WPA3, 802.11k/v, or enterprise support)
+CONFIG_ESP_WIFI_ENABLE_WPA3_SAE=n
+CONFIG_ESP_WIFI_ENABLE_SAE_PK=n
+CONFIG_ESP_WIFI_11KV_SUPPORT=n
 
 # --- Logging ---
 CONFIG_LOG_DEFAULT_LEVEL_INFO=y

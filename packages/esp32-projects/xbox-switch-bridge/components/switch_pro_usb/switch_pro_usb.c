@@ -50,6 +50,8 @@ static const uint8_t fake_mac[6] = {0x00, 0x00, 0x5E, 0x00, 0x53, 0x01};
 
 /* Handshake state */
 static volatile bool s_handshake_complete = false;
+/* Accessed from core 1 only: bridge_task (send_report) and TinyUSB task (set_report_cb).
+ * Both are pinned to core 1, so no cross-core synchronization needed. */
 static uint8_t s_timer_counter = 0;
 
 /**
@@ -220,8 +222,8 @@ static void handle_spi_read(const uint8_t *data, uint16_t len, uint8_t *reply)
 
     /* Fill in known calibration addresses with defaults */
     uint8_t *spi_data = &reply[19];
-    if (read_len > 48)
-        read_len = 48; /* Safety clamp */
+    if (read_len > 44)
+        read_len = 44; /* reply buffer is 63 bytes; spi_data starts at offset 19 */
 
     switch (addr) {
         case 0x6020: /* Factory left stick calibration (9 bytes) */
@@ -410,7 +412,7 @@ static void handle_subcommand(const uint8_t *data, uint16_t len)
             break;
 
         default:
-            ESP_LOGD(TAG, "Unhandled subcommand 0x%02X", subcmd_id);
+            ESP_LOGI(TAG, "Unhandled subcommand 0x%02X", subcmd_id);
             break;
     }
 
@@ -418,6 +420,39 @@ static void handle_subcommand(const uint8_t *data, uint16_t len)
 }
 
 /*--- TinyUSB Callbacks ---*/
+
+/**
+ * @brief Called when USB device is mounted (enumerated by host).
+ */
+void tud_mount_cb(void)
+{
+    ESP_LOGI(TAG, "USB MOUNTED — Switch has enumerated the device");
+}
+
+/**
+ * @brief Called when USB device is unmounted.
+ */
+void tud_umount_cb(void)
+{
+    ESP_LOGW(TAG, "USB UNMOUNTED");
+    s_handshake_complete = false;
+}
+
+/**
+ * @brief Called when USB bus is suspended.
+ */
+void tud_suspend_cb(bool remote_wakeup_en)
+{
+    ESP_LOGW(TAG, "USB SUSPENDED (remote_wakeup=%d)", remote_wakeup_en);
+}
+
+/**
+ * @brief Called when USB bus is resumed.
+ */
+void tud_resume_cb(void)
+{
+    ESP_LOGI(TAG, "USB RESUMED");
+}
 
 /**
  * @brief TinyUSB HID report descriptor callback.
@@ -436,7 +471,7 @@ uint16_t tud_hid_get_report_cb(uint8_t instance, uint8_t report_id, hid_report_t
 {
     (void)instance;
     (void)report_type;
-    ESP_LOGD(TAG, "GET_REPORT id=0x%02X len=%d", report_id, reqlen);
+    ESP_LOGI(TAG, "GET_REPORT id=0x%02X len=%d", report_id, reqlen);
     memset(buffer, 0, reqlen);
     return reqlen;
 }
@@ -472,7 +507,8 @@ void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_
         total_len = copy_len + 1;
     }
 
-    ESP_LOGD(TAG, "SET_REPORT id=0x%02X len=%d", report_id, (int)total_len);
+    ESP_LOGI(TAG, "SET_REPORT id=0x%02X len=%d", report_id, (int)total_len);
+    ESP_LOG_BUFFER_HEX_LEVEL(TAG, full_pkt, total_len, ESP_LOG_DEBUG);
 
     if (report_id == REPORT_ID_USB_CMD) {
         handle_usb_cmd(full_pkt, total_len);
