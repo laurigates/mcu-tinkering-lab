@@ -21,8 +21,6 @@
 #include "bluepad32_host.h"
 #include "button_mapper.h"
 #endif
-#include "driver/usb_serial_jtag.h"
-#include "driver/usb_serial_jtag_vfs.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
@@ -41,7 +39,6 @@
 #endif
 
 static const char *TAG = "xbox_switch_bridge";
-
 
 /* Bridge loop interval: 8ms = 125 Hz USB poll rate */
 #define BRIDGE_LOOP_INTERVAL_MS 8
@@ -102,7 +99,10 @@ static void bridge_task(void *arg)
 
     xbox_gamepad_state_t xbox_state;
     switch_pro_input_t switch_input = {
-        .lx = 2048, .ly = 2048, .rx = 2048, .ry = 2048,
+        .lx = 2048,
+        .ly = 2048,
+        .rx = 2048,
+        .ry = 2048,
     };
     TickType_t last_wake = xTaskGetTickCount();
     uint32_t report_count = 0;
@@ -135,14 +135,14 @@ static void bridge_task(void *arg)
                 /* Don't send 0x30 reports until handshake completes.
                  * Real Pro Controllers only start 0x30 after FORCE_USB. */
 #else
-                {
-                    static bool logged_once = false;
-                    if (!logged_once) {
-                        ESP_LOGI(TAG, "Xbox connected (USB disabled in debug build)");
-                        logged_once = true;
-                    }
-                    status_led_set_mode(STATUS_LED_CONNECTED_NO_USB);
+            {
+                static bool logged_once = false;
+                if (!logged_once) {
+                    ESP_LOGI(TAG, "Xbox connected (USB disabled in debug build)");
+                    logged_once = true;
                 }
+                status_led_set_mode(STATUS_LED_CONNECTED_NO_USB);
+            }
 #endif
                 break;
 
@@ -186,18 +186,8 @@ static void bridge_task(void *arg)
 
 void app_main(void)
 {
-#if CONFIG_USJ_ENABLE_USB_SERIAL_JTAG && !CONFIG_TINYUSB_ENABLED
-    /* Route ESP_LOG output to USB-Serial-JTAG so `just monitor` works.
-     * Primary console is UART0 (for bluepad32 compatibility), but the
-     * ESP32-S3-Zero only exposes USB-Serial-JTAG via its USB-C port.
-     * Install the driver, then tell VFS to use it for stdout/stderr. */
-    usb_serial_jtag_driver_config_t usj_cfg = {
-        .tx_buffer_size = 4096,
-        .rx_buffer_size = 256,
-    };
-    usb_serial_jtag_driver_install(&usj_cfg);
-    usb_serial_jtag_vfs_use_driver();
-#endif
+    /* USB-Serial-JTAG logging is handled by CONFIG_ESP_CONSOLE_SECONDARY_USB_SERIAL_JTAG
+     * in the sdkconfig overlay (debug/wifi-test builds). No manual driver init needed. */
 
     ESP_LOGI(TAG, "=== Xbox -> Switch Controller Bridge ===");
     ESP_LOGI(TAG, "Firmware built: %s %s", __DATE__, __TIME__);
@@ -221,8 +211,7 @@ void app_main(void)
     if (usb_ret == ESP_OK) {
         s_usb_init_ok = true;
     } else {
-        ESP_LOGW(TAG, "USB init failed (%s) — not connected to Switch?",
-                 esp_err_to_name(usb_ret));
+        ESP_LOGW(TAG, "USB init failed (%s) — not connected to Switch?", esp_err_to_name(usb_ret));
     }
 #else
     ESP_LOGW(TAG, "TinyUSB disabled (debug build) — USB logging active");
@@ -240,7 +229,7 @@ void app_main(void)
     ESP_LOGI(TAG, "  3. Connect ESP32-S3 USB to Switch dock");
 
     /* Start the bridge task on core 1 (core 0 is used by BTstack/BT) */
-    xTaskCreatePinnedToCore(bridge_task, "bridge", 4096, NULL, 5, NULL, 1);
+    xTaskCreatePinnedToCore(bridge_task, "bridge", 6144, NULL, 5, NULL, 1);
 
     /* Log stack high-water mark after all init is done */
     ESP_LOGI(TAG, "Stack HWM — main: %u bytes free",

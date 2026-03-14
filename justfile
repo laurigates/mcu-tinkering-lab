@@ -10,6 +10,10 @@ mod wireguard 'packages/esp32-projects/esp32-wireguard-ha-example'
 mod kids-audio 'packages/esp32-projects/kids-audio-toy'
 mod xbox 'packages/esp32-projects/xbox-switch-bridge'
 mod troubleshooter 'packages/esp32-projects/it-troubleshooter'
+mod wifitest 'packages/esp32-projects/esp32-wifitest'
+
+# Auto-detect ESP32-S3 USB-Serial-JTAG by Espressif VID; override with S3_PORT env var
+s3_port := env("S3_PORT", `tools/detect-esp32s3-port.sh --quiet 2>/dev/null || true`)
 
 idf_path := env("IDF_PATH", home_directory() + "/repos/esp-idf")
 idf_version := "v5.3.2"
@@ -235,6 +239,67 @@ robocar-ota-versions:
 # Shortcuts
 dev-main: robocar-develop-main
 dev-cam: robocar-develop-cam
+
+##########
+# ESP32-S3 Device (shared across S3 projects)
+##########
+
+# List all connected MCU and USB-serial devices
+[group: "device"]
+list-devices:
+    python3 tools/list-usb-devices.py
+
+# Auto-detect ESP32-S3 USB-Serial-JTAG port
+[group: "device"]
+detect-s3-port:
+    tools/detect-esp32s3-port.sh
+
+# Reset ESP32-S3 board via USB-Serial-JTAG CDC control signals
+[group: "device"]
+reset-s3 port=s3_port:
+    tools/esp32s3-reset.sh "{{port}}"
+
+# Serial monitor for ESP32-S3 via USB-Serial-JTAG (Ctrl-C to stop)
+[group: "device"]
+monitor-s3 port=s3_port:
+    tools/esp32s3-monitor.sh "{{port}}"
+
+# Scan for nearby WiFi networks (optional SSID for targeted scan)
+[group: "device"]
+wifi-scan ssid="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Scanning for WiFi networks..."
+    echo ""
+    if [ -n "{{ssid}}" ]; then
+        python3 tools/wifi-scan.py "{{ssid}}"
+    else
+        python3 tools/wifi-scan.py
+    fi
+    echo ""
+    echo "Current connection:"
+    /usr/sbin/networksetup -getairportnetwork en0 2>/dev/null || echo "  (unknown)"
+
+# Connect to a WiFi network
+[group: "device"]
+wifi-connect ssid password:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Connecting to {{ssid}}..."
+    if /usr/sbin/networksetup -setairportnetwork en0 "{{ssid}}" "{{password}}" 2>&1 | grep -q "Could not find"; then
+        echo "FAILED: Network '{{ssid}}' not found"
+        exit 1
+    fi
+    echo "Connected! IP: $(ipconfig getifaddr en0 2>/dev/null || echo 'pending...')"
+
+# Listen for UDP log broadcast from an ESP32 device
+[group: "device"]
+log-listen udp_port="4444":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Listening for UDP logs on port {{udp_port}} — Ctrl-C to stop"
+    echo ""
+    exec socat -u UDP-RECV:{{udp_port}} -
 
 # Run all linters (C/C++ and Python)
 [group: "quality"]

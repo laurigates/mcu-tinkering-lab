@@ -7,7 +7,7 @@ exclude: 'components/esp-idf-lib/|managed_components/'
 repos:
   # General file checks
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.5.0
+    rev: v6.0.0
     hooks:
       - id: trailing-whitespace
         exclude: '\.patch$'
@@ -26,7 +26,7 @@ repos:
 
   # C/C++ formatting with clang-format
   - repo: https://github.com/pre-commit/mirrors-clang-format
-    rev: v17.0.6
+    rev: v22.1.1
     hooks:
       - id: clang-format
         files: \.(c|h|cpp|hpp)$
@@ -35,7 +35,7 @@ repos:
 
   # Python linting and formatting
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.1.9
+    rev: v0.15.6
     hooks:
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix]
@@ -45,7 +45,7 @@ repos:
 
   # Python type checking
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.8.0
+    rev: v1.19.1
     hooks:
       - id: mypy
         files: \.py$
@@ -56,10 +56,10 @@ repos:
 
   # Secret scanning
   - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.30.0
+    rev: v8.30.1
     hooks:
       - id: gitleaks
-        stages: [commit]
+        stages: [pre-commit]
 
   # Check for credential files
   - repo: local

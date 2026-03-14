@@ -50,6 +50,10 @@ static const uint8_t fake_mac[6] = {0x00, 0x00, 0x5E, 0x00, 0x53, 0x01};
 
 /* Handshake state */
 static volatile bool s_handshake_complete = false;
+/* Setup phase: Switch sends subcmds (device info, SPI reads, set mode, player lights)
+ * after the 0x80 handshake. Don't send 0x30 input reports until setup is done —
+ * they steal the HID IN endpoint from 0x21 sub-command replies. */
+static volatile bool s_setup_complete = false;
 /* Accessed from core 1 only: bridge_task (send_report) and TinyUSB task (set_report_cb).
  * Both are pinned to core 1, so no cross-core synchronization needed. */
 static uint8_t s_timer_counter = 0;
@@ -64,104 +68,216 @@ static uint8_t s_timer_counter = 0;
  * Source: https://gist.github.com/spacemeowx2/22171913a36721501e42f14f1fd81633
  */
 static const uint8_t s_hid_report_descriptor[] = {
-    0x05, 0x01, /* Usage Page (Generic Desktop) */
-    0x15, 0x00, /* Logical Minimum (0) */
-    0x09, 0x04, /* Usage (Joystick) */
-    0xA1, 0x01, /* Collection (Application) */
+    0x05,
+    0x01, /* Usage Page (Generic Desktop) */
+    0x15,
+    0x00, /* Logical Minimum (0) */
+    0x09,
+    0x04, /* Usage (Joystick) */
+    0xA1,
+    0x01, /* Collection (Application) */
     /* Report 0x30: Standard input */
-    0x85, 0x30,                   /*   Report ID (0x30) */
-    0x05, 0x01,                   /*   Usage Page (Generic Desktop) */
-    0x05, 0x09,                   /*   Usage Page (Button) */
-    0x19, 0x01,                   /*   Usage Minimum (1) */
-    0x29, 0x0A,                   /*   Usage Maximum (10) */
-    0x15, 0x00,                   /*   Logical Minimum (0) */
-    0x25, 0x01,                   /*   Logical Maximum (1) */
-    0x75, 0x01,                   /*   Report Size (1) */
-    0x95, 0x0A,                   /*   Report Count (10) */
-    0x55, 0x00,                   /*   Unit Exponent (0) */
-    0x65, 0x00,                   /*   Unit (None) */
-    0x81, 0x02,                   /*   Input (Data, Variable, Absolute) */
-    0x05, 0x09,                   /*   Usage Page (Button) */
-    0x19, 0x0B,                   /*   Usage Minimum (11) */
-    0x29, 0x0E,                   /*   Usage Maximum (14) */
-    0x15, 0x00,                   /*   Logical Minimum (0) */
-    0x25, 0x01,                   /*   Logical Maximum (1) */
-    0x75, 0x01,                   /*   Report Size (1) */
-    0x95, 0x04,                   /*   Report Count (4) */
-    0x81, 0x02,                   /*   Input (Data, Variable, Absolute) */
-    0x75, 0x01,                   /*   Report Size (1) */
-    0x95, 0x02,                   /*   Report Count (2) */
-    0x81, 0x03,                   /*   Input (Constant) - padding */
-    0x0B, 0x01, 0x00, 0x01, 0x00, /*   Usage (Generic Desktop:Pointer) */
-    0xA1, 0x00,                   /*   Collection (Physical) */
-    0x0B, 0x30, 0x00, 0x01, 0x00, /*     Usage (X) */
-    0x0B, 0x31, 0x00, 0x01, 0x00, /*     Usage (Y) */
-    0x0B, 0x32, 0x00, 0x01, 0x00, /*     Usage (Z) */
-    0x0B, 0x35, 0x00, 0x01, 0x00, /*     Usage (Rz) */
-    0x15, 0x00,                   /*     Logical Minimum (0) */
-    0x27, 0xFF, 0xFF, 0x00, 0x00, /*     Logical Maximum (65535) */
-    0x75, 0x10,                   /*     Report Size (16) */
-    0x95, 0x04,                   /*     Report Count (4) */
-    0x81, 0x02,                   /*     Input (Data, Variable, Absolute) */
-    0xC0,                         /*   End Collection (Physical) */
-    0x0B, 0x39, 0x00, 0x01, 0x00, /*   Usage (Hat Switch) */
-    0x15, 0x00,                   /*   Logical Minimum (0) */
-    0x25, 0x07,                   /*   Logical Maximum (7) */
-    0x35, 0x00,                   /*   Physical Minimum (0) */
-    0x46, 0x3B, 0x01,             /*   Physical Maximum (315) */
-    0x65, 0x14,                   /*   Unit (Degrees) */
-    0x75, 0x04,                   /*   Report Size (4) */
-    0x95, 0x01,                   /*   Report Count (1) */
-    0x81, 0x02,                   /*   Input (Data, Variable, Absolute) */
-    0x05, 0x09,                   /*   Usage Page (Button) */
-    0x19, 0x0F,                   /*   Usage Minimum (15) */
-    0x29, 0x12,                   /*   Usage Maximum (18) */
-    0x15, 0x00,                   /*   Logical Minimum (0) */
-    0x25, 0x01,                   /*   Logical Maximum (1) */
-    0x75, 0x01,                   /*   Report Size (1) */
-    0x95, 0x04,                   /*   Report Count (4) */
-    0x81, 0x02,                   /*   Input (Data, Variable, Absolute) */
-    0x75, 0x08,                   /*   Report Size (8) */
-    0x95, 0x34,                   /*   Report Count (52) */
-    0x81, 0x03,                   /*   Input (Constant) - padding */
+    0x85,
+    0x30, /*   Report ID (0x30) */
+    0x05,
+    0x01, /*   Usage Page (Generic Desktop) */
+    0x05,
+    0x09, /*   Usage Page (Button) */
+    0x19,
+    0x01, /*   Usage Minimum (1) */
+    0x29,
+    0x0A, /*   Usage Maximum (10) */
+    0x15,
+    0x00, /*   Logical Minimum (0) */
+    0x25,
+    0x01, /*   Logical Maximum (1) */
+    0x75,
+    0x01, /*   Report Size (1) */
+    0x95,
+    0x0A, /*   Report Count (10) */
+    0x55,
+    0x00, /*   Unit Exponent (0) */
+    0x65,
+    0x00, /*   Unit (None) */
+    0x81,
+    0x02, /*   Input (Data, Variable, Absolute) */
+    0x05,
+    0x09, /*   Usage Page (Button) */
+    0x19,
+    0x0B, /*   Usage Minimum (11) */
+    0x29,
+    0x0E, /*   Usage Maximum (14) */
+    0x15,
+    0x00, /*   Logical Minimum (0) */
+    0x25,
+    0x01, /*   Logical Maximum (1) */
+    0x75,
+    0x01, /*   Report Size (1) */
+    0x95,
+    0x04, /*   Report Count (4) */
+    0x81,
+    0x02, /*   Input (Data, Variable, Absolute) */
+    0x75,
+    0x01, /*   Report Size (1) */
+    0x95,
+    0x02, /*   Report Count (2) */
+    0x81,
+    0x03, /*   Input (Constant) - padding */
+    0x0B,
+    0x01,
+    0x00,
+    0x01,
+    0x00, /*   Usage (Generic Desktop:Pointer) */
+    0xA1,
+    0x00, /*   Collection (Physical) */
+    0x0B,
+    0x30,
+    0x00,
+    0x01,
+    0x00, /*     Usage (X) */
+    0x0B,
+    0x31,
+    0x00,
+    0x01,
+    0x00, /*     Usage (Y) */
+    0x0B,
+    0x32,
+    0x00,
+    0x01,
+    0x00, /*     Usage (Z) */
+    0x0B,
+    0x35,
+    0x00,
+    0x01,
+    0x00, /*     Usage (Rz) */
+    0x15,
+    0x00, /*     Logical Minimum (0) */
+    0x27,
+    0xFF,
+    0xFF,
+    0x00,
+    0x00, /*     Logical Maximum (65535) */
+    0x75,
+    0x10, /*     Report Size (16) */
+    0x95,
+    0x04, /*     Report Count (4) */
+    0x81,
+    0x02, /*     Input (Data, Variable, Absolute) */
+    0xC0, /*   End Collection (Physical) */
+    0x0B,
+    0x39,
+    0x00,
+    0x01,
+    0x00, /*   Usage (Hat Switch) */
+    0x15,
+    0x00, /*   Logical Minimum (0) */
+    0x25,
+    0x07, /*   Logical Maximum (7) */
+    0x35,
+    0x00, /*   Physical Minimum (0) */
+    0x46,
+    0x3B,
+    0x01, /*   Physical Maximum (315) */
+    0x65,
+    0x14, /*   Unit (Degrees) */
+    0x75,
+    0x04, /*   Report Size (4) */
+    0x95,
+    0x01, /*   Report Count (1) */
+    0x81,
+    0x02, /*   Input (Data, Variable, Absolute) */
+    0x05,
+    0x09, /*   Usage Page (Button) */
+    0x19,
+    0x0F, /*   Usage Minimum (15) */
+    0x29,
+    0x12, /*   Usage Maximum (18) */
+    0x15,
+    0x00, /*   Logical Minimum (0) */
+    0x25,
+    0x01, /*   Logical Maximum (1) */
+    0x75,
+    0x01, /*   Report Size (1) */
+    0x95,
+    0x04, /*   Report Count (4) */
+    0x81,
+    0x02, /*   Input (Data, Variable, Absolute) */
+    0x75,
+    0x08, /*   Report Size (8) */
+    0x95,
+    0x34, /*   Report Count (52) */
+    0x81,
+    0x03, /*   Input (Constant) - padding */
     /* Report 0x21: Sub-command reply (input) */
-    0x06, 0x00, 0xFF, /*   Usage Page (Vendor Defined) */
-    0x85, 0x21,       /*   Report ID (0x21) */
-    0x09, 0x01,       /*   Usage (Vendor 1) */
-    0x75, 0x08,       /*   Report Size (8) */
-    0x95, 0x3F,       /*   Report Count (63) */
-    0x81, 0x03,       /*   Input (Constant) */
+    0x06,
+    0x00,
+    0xFF, /*   Usage Page (Vendor Defined) */
+    0x85,
+    0x21, /*   Report ID (0x21) */
+    0x09,
+    0x01, /*   Usage (Vendor 1) */
+    0x75,
+    0x08, /*   Report Size (8) */
+    0x95,
+    0x3F, /*   Report Count (63) */
+    0x81,
+    0x03, /*   Input (Constant) */
     /* Report 0x81: USB command reply (input) */
-    0x85, 0x81, /*   Report ID (0x81) */
-    0x09, 0x02, /*   Usage (Vendor 2) */
-    0x75, 0x08, /*   Report Size (8) */
-    0x95, 0x3F, /*   Report Count (63) */
-    0x81, 0x03, /*   Input (Constant) */
+    0x85,
+    0x81, /*   Report ID (0x81) */
+    0x09,
+    0x02, /*   Usage (Vendor 2) */
+    0x75,
+    0x08, /*   Report Size (8) */
+    0x95,
+    0x3F, /*   Report Count (63) */
+    0x81,
+    0x03, /*   Input (Constant) */
     /* Report 0x01: Sub-command (output) */
-    0x85, 0x01, /*   Report ID (0x01) */
-    0x09, 0x03, /*   Usage (Vendor 3) */
-    0x75, 0x08, /*   Report Size (8) */
-    0x95, 0x3F, /*   Report Count (63) */
-    0x91, 0x83, /*   Output (Constant, Variable, Volatile) */
+    0x85,
+    0x01, /*   Report ID (0x01) */
+    0x09,
+    0x03, /*   Usage (Vendor 3) */
+    0x75,
+    0x08, /*   Report Size (8) */
+    0x95,
+    0x3F, /*   Report Count (63) */
+    0x91,
+    0x83, /*   Output (Constant, Variable, Volatile) */
     /* Report 0x10: Rumble only (output) */
-    0x85, 0x10, /*   Report ID (0x10) */
-    0x09, 0x04, /*   Usage (Vendor 4) */
-    0x75, 0x08, /*   Report Size (8) */
-    0x95, 0x3F, /*   Report Count (63) */
-    0x91, 0x83, /*   Output (Constant, Variable, Volatile) */
+    0x85,
+    0x10, /*   Report ID (0x10) */
+    0x09,
+    0x04, /*   Usage (Vendor 4) */
+    0x75,
+    0x08, /*   Report Size (8) */
+    0x95,
+    0x3F, /*   Report Count (63) */
+    0x91,
+    0x83, /*   Output (Constant, Variable, Volatile) */
     /* Report 0x80: USB command (output) */
-    0x85, 0x80, /*   Report ID (0x80) */
-    0x09, 0x05, /*   Usage (Vendor 5) */
-    0x75, 0x08, /*   Report Size (8) */
-    0x95, 0x3F, /*   Report Count (63) */
-    0x91, 0x83, /*   Output (Constant, Variable, Volatile) */
+    0x85,
+    0x80, /*   Report ID (0x80) */
+    0x09,
+    0x05, /*   Usage (Vendor 5) */
+    0x75,
+    0x08, /*   Report Size (8) */
+    0x95,
+    0x3F, /*   Report Count (63) */
+    0x91,
+    0x83, /*   Output (Constant, Variable, Volatile) */
     /* Report 0x82: (output - unused but present in real descriptor) */
-    0x85, 0x82, /*   Report ID (0x82) */
-    0x09, 0x06, /*   Usage (Vendor 6) */
-    0x75, 0x08, /*   Report Size (8) */
-    0x95, 0x3F, /*   Report Count (63) */
-    0x91, 0x83, /*   Output (Constant, Variable, Volatile) */
-    0xC0,       /* End Collection */
+    0x85,
+    0x82, /*   Report ID (0x82) */
+    0x09,
+    0x06, /*   Usage (Vendor 6) */
+    0x75,
+    0x08, /*   Report Size (8) */
+    0x95,
+    0x3F, /*   Report Count (63) */
+    0x91,
+    0x83, /*   Output (Constant, Variable, Volatile) */
+    0xC0, /* End Collection */
 };
 
 /**
@@ -174,12 +290,10 @@ static const uint8_t s_hid_report_descriptor[] = {
 
 static const uint8_t s_config_descriptor[] = {
     /* Configuration descriptor */
-    TUD_CONFIG_DESCRIPTOR(1, 1, 0, CONFIG_TOTAL_LEN,
-                          TUSB_DESC_CONFIG_ATT_REMOTE_WAKEUP, 500),
+    TUD_CONFIG_DESCRIPTOR(1, 1, 0, CONFIG_TOTAL_LEN, TUSB_DESC_CONFIG_ATT_REMOTE_WAKEUP, 500),
     /* HID interface with IN (0x81) and OUT (0x02) interrupt endpoints */
-    TUD_HID_INOUT_DESCRIPTOR(0, 0, HID_ITF_PROTOCOL_NONE,
-                             sizeof(s_hid_report_descriptor),
-                             0x02, 0x81, 64, 8),
+    TUD_HID_INOUT_DESCRIPTOR(0, 0, HID_ITF_PROTOCOL_NONE, sizeof(s_hid_report_descriptor), 0x02,
+                             0x81, 64, 8),
 };
 
 /**
@@ -332,6 +446,12 @@ static void handle_usb_cmd(const uint8_t *data, uint16_t len)
             s_handshake_complete = true;
             break;
 
+        case USB_CMD_DISABLE_USB:
+            /* Switch sends 0x05 early in enumeration. No response expected —
+             * sending one stalls the handshake. Just log and continue. */
+            ESP_LOGI(TAG, "USB CMD: Disable USB timeout (no reply)");
+            break;
+
         default:
             ESP_LOGW(TAG, "USB CMD: Unknown subcmd 0x%02X", subcmd);
             break;
@@ -393,8 +513,12 @@ static void handle_subcommand(const uint8_t *data, uint16_t len)
             handle_spi_read(data, len, reply);
             break;
 
-        case 0x30: /* Set player lights */
+        case 0x30: /* Set player lights — last setup command */
             ESP_LOGI(TAG, "Player lights: 0x%02X", data[11]);
+            if (!s_setup_complete) {
+                s_setup_complete = true;
+                ESP_LOGI(TAG, "Setup complete — starting 0x30 input reports");
+            }
             break;
 
         case 0x38: /* Set HOME light */
@@ -420,39 +544,8 @@ static void handle_subcommand(const uint8_t *data, uint16_t len)
 }
 
 /*--- TinyUSB Callbacks ---*/
-
-/**
- * @brief Called when USB device is mounted (enumerated by host).
- */
-void tud_mount_cb(void)
-{
-    ESP_LOGI(TAG, "USB MOUNTED — Switch has enumerated the device");
-}
-
-/**
- * @brief Called when USB device is unmounted.
- */
-void tud_umount_cb(void)
-{
-    ESP_LOGW(TAG, "USB UNMOUNTED");
-    s_handshake_complete = false;
-}
-
-/**
- * @brief Called when USB bus is suspended.
- */
-void tud_suspend_cb(bool remote_wakeup_en)
-{
-    ESP_LOGW(TAG, "USB SUSPENDED (remote_wakeup=%d)", remote_wakeup_en);
-}
-
-/**
- * @brief Called when USB bus is resumed.
- */
-void tud_resume_cb(void)
-{
-    ESP_LOGI(TAG, "USB RESUMED");
-}
+// Note: tud_mount_cb and tud_umount_cb are provided by esp_tinyusb with
+// strong symbols — do not redefine them here.
 
 /**
  * @brief TinyUSB HID report descriptor callback.
@@ -577,8 +670,11 @@ esp_err_t switch_pro_usb_init(void)
 
 bool switch_pro_usb_send_report(const switch_pro_input_t *input)
 {
-    if (!tud_mounted())
+    if (!tud_mounted() || !s_handshake_complete)
         return false;
+
+    if (!tud_hid_ready())
+        return false; /* IN endpoint busy (likely sending 0x21 reply) — skip this cycle */
 
     /*
      * Standard input report (0x30), 63 bytes after report ID:

@@ -16,17 +16,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Builds run in Docker (`espressif/idf:v5.4`); flash/monitor run natively (USB passthrough on macOS is unreliable).
 
 ```bash
-just fetch-deps   # Clone bluepad32 + btstack (one-time setup)
-just build        # Production build (containerized)
-just build-debug  # TinyUSB disabled, USB-Serial-JTAG logging active
+just fetch-deps       # Clone bluepad32 + btstack (one-time setup)
+just build            # Production build (containerized)
+just build-debug-jtag # TinyUSB disabled, USB-Serial-JTAG logging active
+just build-debug-uart # TinyUSB ON, UART logging via CP2102 (GPIO43/44)
 just build-debug-usb  # TinyUSB ON, verbose logging over WiFi UDP
 just build-wifi-test  # No BLE, isolates SoftAP visibility
-just flash        # Flash to device (auto-detects ESP32-S3 port)
-just monitor      # Serial monitor via USB-Serial-JTAG (debug builds only)
-just log-listen   # Listen for UDP log broadcast (connect to xbox-bridge-log WiFi first)
-just menuconfig   # Interactive sdkconfig in Docker
-just clean        # Remove build artifacts
-just info         # Show project and port info
+just flash            # Flash to device (auto-detects ESP32-S3 port)
+just monitor          # Serial monitor via USB-Serial-JTAG (debug-jtag builds only)
+just uart-monitor     # Serial monitor via CP2102 USB-UART adapter
+just log-listen       # Listen for UDP log broadcast (connect to xbox-bridge-log WiFi first)
+just menuconfig       # Interactive sdkconfig in Docker
+just clean            # Remove build artifacts
+just info             # Show project and port info
 ```
 
 Override USB port: `just flash PORT=/dev/cu.usbmodem101`
@@ -97,12 +99,13 @@ INIT → SCANNING → CONNECTED → BRIDGING
 
 ## Build Variants
 
-| Variant | Command | TinyUSB | BLE | USB-JTAG | WiFi |
-|---------|---------|---------|-----|----------|------|
-| Production | `just build` | ON | ON | OFF | ON |
-| Debug-UART | `just build-debug` | OFF | ON | ON | ON |
-| Debug-USB | `just build-debug-usb` | ON | ON | OFF | ON (verbose) |
-| WiFi-Test | `just build-wifi-test` | OFF | OFF | ON | ON |
+| Variant | Command | TinyUSB | BLE | USB-JTAG | Logging | WiFi |
+|---------|---------|---------|-----|----------|---------|------|
+| Production | `just build` | ON | ON | OFF | WiFi UDP | ON |
+| Debug-JTAG | `just build-debug-jtag` | OFF | ON | ON | USB-Serial-JTAG | ON |
+| Debug-UART | `just build-debug-uart` | ON | ON | OFF | UART GPIO43/44 (CP2102) | ON |
+| Debug-USB | `just build-debug-usb` | ON | ON | OFF | WiFi UDP (verbose) | ON |
+| WiFi-Test | `just build-wifi-test` | OFF | OFF | ON | USB-Serial-JTAG | ON |
 
 ## Dependencies
 

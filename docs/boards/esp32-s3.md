@@ -90,6 +90,26 @@ GPIO26–32 are connected to the in-package flash on WROOM modules. **Do not use
 
 The USB OTG peripheral uses GPIO19 (D-) and GPIO20 (D+). When USB OTG is active (e.g., TinyUSB for HID), the USB-Serial-JTAG debug interface is unavailable — use a separate UART adapter for logging. This constraint is documented in detail in [ADR-005](../blueprint/adrs/ADR-005-it-troubleshooter-hardware.md).
 
+### USB-Serial-JTAG Reset Behavior
+
+The ESP32-S3's USB-Serial-JTAG has unreliable reset behavior compared to traditional USB-UART bridges (CP2102, CH340):
+
+- **`esptool --after hard-reset`** does not reliably trigger a chip reset over USB-Serial-JTAG. After flashing, the board may continue running old firmware until manually reset.
+- **Unplugging/replugging USB does NOT reset the SoC.** Board power regulation holds charge, and USB-Serial-JTAG reconnection does not trigger a chip reset.
+- **`cat` on macOS does not reliably read USB-Serial-JTAG CDC devices.** Use pyserial instead for serial monitoring.
+
+**Reliable reset method:** Send DTR/RTS control signals via pyserial:
+
+```python
+import serial, time
+s = serial.Serial('/dev/cu.usbmodemXXXX', 115200)
+s.dtr = False; s.rts = True; time.sleep(0.1)
+s.rts = False; s.dtr = True; time.sleep(0.1)
+s.dtr = False; s.close()
+```
+
+All ESP32-S3 project justfiles in this repo include `just reset` and `just monitor` recipes using this method. The monitor recipe automatically resets the board on connect so boot messages are captured.
+
 ## AI/ML Capabilities
 
 The ESP32-S3's vector instructions accelerate 8-bit and 16-bit integer math used in quantized neural networks. Practical on-device inference use cases:

@@ -1,0 +1,39 @@
+# Ruff configuration for MCU Tinkering Lab
+# https://docs.astral.sh/ruff/configuration/
+
+target-version = "py311"
+
+# Apply to all Python files in the repo
+include = ["*.py"]
+
+# Exclude third-party and generated directories
+exclude = [
+    "managed_components/",
+    "components/esp-idf-lib/",
+    "build/",
+    ".venv/",
+    "__pycache__/",
+    ".esphome/",
+]
+
+[lint]
+# Enable core rule sets
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "SIM", # flake8-simplify
+    "RUF", # ruff-specific rules
+]
+
+# Allow autofix for all enabled rules
+fixable = ["ALL"]
+
+[format]
+# Match existing style
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"

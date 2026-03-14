@@ -54,6 +54,19 @@ CONFIG_ESP_COEX_SW_COEXIST_ENABLE=y
 CONFIG_ESP_WIFI_TASK_PINNED_TO_CORE_1=y
 CONFIG_ESP_WIFI_TASK_PINNED_TO_CORE_0=n
 
+# ESP32-S3 SoftAP workarounds:
+# - AMPDU causes AP invisibility on S3 (espressif/esp-idf#13508, ESP-FAQ)
+# - WiFi NVS causes client connect/disconnect loops on S3 (espressif/esp-idf#8008)
+CONFIG_ESP_WIFI_AMPDU_RX_ENABLED=n
+CONFIG_ESP_WIFI_AMPDU_TX_ENABLED=n
+CONFIG_ESP_WIFI_NVS_ENABLED=n
+
+# Reduce static WiFi buffer counts to reclaim internal DRAM.
+# With PSRAM enabled, WiFi TX/RX buffers are forced into internal RAM
+# (not PSRAM), competing with BTstack + TinyUSB (espressif/esp-idf#6467).
+CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=6
+CONFIG_ESP_WIFI_STATIC_TX_BUFFER_NUM=8
+
 # Disable unneeded WiFi features to reduce memory pressure
 # (open AP doesn't need WPA3, 802.11k/v, or enterprise support)
 CONFIG_ESP_WIFI_ENABLE_WPA3_SAE=n
