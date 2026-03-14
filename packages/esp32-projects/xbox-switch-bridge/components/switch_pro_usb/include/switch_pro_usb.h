@@ -101,6 +101,28 @@ bool switch_pro_usb_is_mounted(void);
  */
 bool switch_pro_usb_is_ready(void);
 
+/**
+ * @brief Rumble state extracted from Switch HD rumble output reports.
+ *
+ * Values are 0-255, derived from the HD rumble amplitude encoding.
+ * Left motor = low-frequency actuator (strong), right = high-frequency (weak).
+ */
+typedef struct {
+    uint8_t strong; /**< Left motor amplitude (0-255) */
+    uint8_t weak;   /**< Right motor amplitude (0-255) */
+} switch_pro_rumble_t;
+
+/**
+ * @brief Get the current rumble state from Switch output reports.
+ *
+ * Returns the most recently received HD rumble amplitudes, converted
+ * to simple strong/weak motor values. Poll this at the bridge loop rate.
+ *
+ * @param rumble Output: current rumble amplitudes.
+ * @return true if rumble data has changed since the last call.
+ */
+bool switch_pro_usb_get_rumble(switch_pro_rumble_t *rumble);
+
 #ifdef __cplusplus
 }
 #endif

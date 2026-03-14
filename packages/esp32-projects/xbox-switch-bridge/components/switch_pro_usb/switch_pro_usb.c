@@ -58,6 +58,10 @@ static volatile bool s_setup_complete = false;
  * Both are pinned to core 1, so no cross-core synchronization needed. */
 static uint8_t s_timer_counter = 0;
 
+/* Rumble state: written by TinyUSB callback, read by bridge_task (both core 1). */
+static switch_pro_rumble_t s_rumble = {0};
+static volatile bool s_rumble_changed = false;
+
 /**
  * HID Report Descriptor matching the real Switch Pro Controller.
  *
@@ -295,6 +299,63 @@ static const uint8_t s_config_descriptor[] = {
     TUD_HID_INOUT_DESCRIPTOR(0, 0, HID_ITF_PROTOCOL_NONE, sizeof(s_hid_report_descriptor), 0x02,
                              0x81, 64, 8),
 };
+
+/**
+ * @brief Extract amplitude from a 4-byte HD rumble motor block.
+ *
+ * HD rumble encodes high-frequency (HF) and low-frequency (LF) components,
+ * each with its own amplitude. We extract both and return the larger one
+ * as a 0-255 value suitable for simple dual-motor rumble.
+ *
+ * Encoding (per dekuNukem reverse engineering):
+ *   Byte 0: HF[7:0]
+ *   Byte 1: HF[8] | (HFA[6:0] << 1)
+ *   Byte 2: LF[6:0] | (LFA[8] << 7)
+ *   Byte 3: LFA[7:0]
+ *
+ * Neutral pattern: 0x00 0x01 0x40 0x40
+ */
+static uint8_t hd_rumble_amplitude(const uint8_t motor[4])
+{
+    /* Neutral check — fast path for no vibration */
+    if (motor[0] == 0x00 && motor[1] == 0x01 && motor[2] == 0x40 && motor[3] == 0x40)
+        return 0;
+
+    /* HFA: 7-bit value (0-127), encoded in byte[1] bits [7:1] */
+    uint8_t hfa = (motor[1] >> 1) & 0x7F;
+
+    /* LFA: 9-bit value (0-511), encoded in byte[3] + byte[2] bit 7 */
+    uint16_t lfa = motor[3] | (((uint16_t)motor[2] & 0x80) << 1);
+
+    /* Scale both to 0-255 and return the larger */
+    uint8_t hfa_scaled = (hfa > 127) ? 255 : hfa * 2;
+    uint8_t lfa_scaled = (lfa > 255) ? 255 : (uint8_t)lfa;
+
+    return (hfa_scaled > lfa_scaled) ? hfa_scaled : lfa_scaled;
+}
+
+/**
+ * @brief Parse rumble data from a Switch output report.
+ *
+ * Both 0x01 (sub-command) and 0x10 (rumble-only) reports carry 8 bytes
+ * of HD rumble data at bytes 2-9 (after report ID and timer byte):
+ *   Bytes 2-5: Left motor (low-frequency actuator → strong motor)
+ *   Bytes 6-9: Right motor (high-frequency actuator → weak motor)
+ */
+static void parse_rumble(const uint8_t *data, uint16_t len)
+{
+    if (len < 10)
+        return;
+
+    uint8_t strong = hd_rumble_amplitude(&data[2]);
+    uint8_t weak = hd_rumble_amplitude(&data[6]);
+
+    if (strong != s_rumble.strong || weak != s_rumble.weak) {
+        s_rumble.strong = strong;
+        s_rumble.weak = weak;
+        s_rumble_changed = true;
+    }
+}
 
 /**
  * @brief Fill neutral stick data into a report buffer at the given offset.
@@ -685,8 +746,11 @@ void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_
 
     if (report_id == REPORT_ID_USB_CMD) {
         handle_usb_cmd(full_pkt, total_len);
-    } else if (report_id == REPORT_ID_SUBCMD || report_id == REPORT_ID_RUMBLE) {
+    } else if (report_id == REPORT_ID_SUBCMD) {
+        parse_rumble(full_pkt, total_len);
         handle_subcommand(full_pkt, total_len);
+    } else if (report_id == REPORT_ID_RUMBLE) {
+        parse_rumble(full_pkt, total_len);
     } else {
         ESP_LOGW(TAG, "Unknown report_id 0x%02X", report_id);
     }
@@ -800,4 +864,15 @@ bool switch_pro_usb_is_mounted(void)
 bool switch_pro_usb_is_ready(void)
 {
     return s_handshake_complete && s_setup_complete && tud_mounted();
+}
+
+bool switch_pro_usb_get_rumble(switch_pro_rumble_t *rumble)
+{
+    if (!s_rumble_changed)
+        return false;
+
+    rumble->strong = s_rumble.strong;
+    rumble->weak = s_rumble.weak;
+    s_rumble_changed = false;
+    return true;
 }
