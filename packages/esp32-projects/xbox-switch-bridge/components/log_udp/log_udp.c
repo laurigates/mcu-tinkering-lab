@@ -25,7 +25,8 @@
 static const char *TAG = "log_udp";
 
 #define LOG_AP_SSID     "xbox-bridge-log"
-#define LOG_AP_CHANNEL  1
+#define LOG_AP_PASS     "xboxbridge"
+#define LOG_AP_CHANNEL  6
 #define LOG_AP_MAX_CONN 2
 #define LOG_BUF_SIZE    256
 
@@ -101,17 +102,29 @@ esp_err_t log_udp_init(uint16_t port)
         .ap = {
             .ssid = LOG_AP_SSID,
             .ssid_len = sizeof(LOG_AP_SSID) - 1,
+            .password = LOG_AP_PASS,
             .channel = LOG_AP_CHANNEL,
-            .authmode = WIFI_AUTH_OPEN,
+            .authmode = WIFI_AUTH_WPA2_PSK,
             .max_connection = LOG_AP_MAX_CONN,
         },
     };
 
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_cfg));
+
+    // Set country code for proper regional TX power
+    wifi_country_t country = {
+        .cc = "FI", .schan = 1, .nchan = 13, .policy = WIFI_COUNTRY_POLICY_MANUAL};
+    ESP_ERROR_CHECK(esp_wifi_set_country(&country));
+
     ESP_ERROR_CHECK(esp_wifi_start());
 
-    ESP_LOGI(TAG, "AP started: SSID=\"%s\" (open, no password)", LOG_AP_SSID);
+    // Force HT20 bandwidth and max TX power for reliable AP visibility
+    ESP_ERROR_CHECK(esp_wifi_set_bandwidth(WIFI_IF_AP, WIFI_BW_HT20));
+    ESP_ERROR_CHECK(esp_wifi_set_max_tx_power(78));  // 19.5 dBm
+
+    ESP_LOGI(TAG, "AP started: SSID=\"%s\" ch=%d bw=HT20 country=FI", LOG_AP_SSID,
+             LOG_AP_CHANNEL);
 
     /* Open UDP socket for broadcast */
     s_sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
