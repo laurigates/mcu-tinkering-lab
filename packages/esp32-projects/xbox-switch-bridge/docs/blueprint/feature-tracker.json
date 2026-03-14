@@ -83,8 +83,8 @@
           "id": "FR10",
           "title": "Rumble Output",
           "description": "HID output report handler for vibration feedback from Switch to Xbox controller",
-          "status": "not_started",
-          "implemented_in": []
+          "status": "completed",
+          "implemented_in": ["components/switch_pro_usb/switch_pro_usb.c", "components/bluepad32_host/bluepad32_host.c", "main/main.c"]
         },
         "FR11": {
           "id": "FR11",
@@ -105,16 +105,15 @@
   },
   "statistics": {
     "total_features": 12,
-    "complete": 9,
+    "complete": 10,
     "in_progress": 0,
-    "not_started": 3,
+    "not_started": 2,
     "blocked": 0,
-    "completion_percentage": 75
+    "completion_percentage": 83
   },
   "tasks": {
     "in_progress": [],
     "pending": [
-      {"id": "FR10", "description": "Rumble Output", "added": "2026-03-12"},
       {"id": "FR11", "description": "Runtime Button Remapping", "added": "2026-03-12"},
       {"id": "FR12", "description": "Multi-Controller Support", "added": "2026-03-12"}
     ],
@@ -127,7 +126,8 @@
       {"id": "FR6", "description": "Switch USB Handshake Protocol", "completed": "2026-03-12"},
       {"id": "FR7", "description": "Status LED", "completed": "2026-03-12"},
       {"id": "FR8", "description": "WiFi UDP Log Broadcasting", "completed": "2026-03-12"},
-      {"id": "FR9", "description": "Build Variants", "completed": "2026-03-12"}
+      {"id": "FR9", "description": "Build Variants", "completed": "2026-03-12"},
+      {"id": "FR10", "description": "Rumble Output", "completed": "2026-03-14"}
     ]
   }
 }

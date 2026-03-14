@@ -1,6 +1,6 @@
 # PRP: Rumble Output Support
 
-**Status**: Draft
+**Status**: Implemented
 **Feature**: FR10
 **Date**: 2026-03-12
 
