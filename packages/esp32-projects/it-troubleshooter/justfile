@@ -5,6 +5,7 @@ set positional-arguments
 
 project_dir := justfile_directory()
 compose_file := project_dir / "../../../docker-compose.yml"
+tools_dir := justfile_directory() / "../../.." / "tools"
 # Auto-detect ESP32-S3 USB-Serial-JTAG by Espressif VID (0x303a=12346); override with PORT env var
 port := env("PORT", `ioreg -r -c IOUSBHostDevice -l 2>/dev/null | grep -A 30 '"idVendor" = 12346' | grep IODialinDevice | head -1 | sed 's/.*"\(\/dev\/[^"]*\)".*/\1/' | sed 's/tty\./cu./' || true`)
 baud := env("BAUD", "460800")
@@ -57,16 +58,7 @@ clean:
 # Auto-detect ESP32-S3 port or show error
 [group: "device"]
 detect-port:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ -z "{{port}}" ]; then
-        echo "ERROR: No ESP32-S3 USB-Serial-JTAG device found"
-        echo "  - Is the board plugged in?"
-        echo "  - Try: ioreg -p IOUSB -l | grep -B 5 -A 10 'USB JTAG'"
-        echo "  - Or set PORT manually: PORT=/dev/cu.usbmodem101 just flash"
-        exit 1
-    fi
-    echo "Detected port: {{port}}"
+    "{{tools_dir}}/detect-esp32s3-port.sh"
 
 # Require a valid port for device recipes
 [private]
@@ -91,13 +83,18 @@ flash: require-port
 deploy: build flash
 
 ##########
-# Monitor
+# Monitor & Reset
 ##########
 
-# Monitor serial output (USB-UART adapter on GPIO43/44)
-[group: "monitor"]
-monitor:
-    minicom -D {{port}} -b 115200
+# Reset board via USB-Serial-JTAG CDC control signals
+[group: "device"]
+reset: require-port
+    "{{tools_dir}}/esp32s3-reset.sh" "{{port}}"
+
+# Serial monitor with reset (Ctrl-C to stop)
+[group: "device"]
+monitor: require-port
+    "{{tools_dir}}/esp32s3-monitor.sh" "{{port}}"
 
 ##########
 # Config

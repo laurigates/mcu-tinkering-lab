@@ -1,0 +1,20 @@
+# Debug overlay — TinyUSB active + logging via UART (GPIO43 TX / GPIO44 RX).
+# Monitor with CP2102 USB-UART adapter: just uart-monitor
+# USB PHY goes to TinyUSB (USB-Serial-JTAG unavailable).
+# Usage: just build-debug-uart
+
+# TinyUSB stays enabled (same as production)
+CONFIG_TINYUSB_HID_COUNT=1
+
+# USB-Serial-JTAG disabled (TinyUSB owns the PHY)
+CONFIG_USJ_ENABLE_USB_SERIAL_JTAG=n
+CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
+
+# Console on UART0 (GPIO43/44) — this is the IDF default,
+# but set explicitly to document intent
+CONFIG_ESP_CONSOLE_UART_DEFAULT=y
+
+# Verbose logging — see handshake packets, button mappings, USB reports
+CONFIG_LOG_DEFAULT_LEVEL_DEBUG=y
+CONFIG_LOG_DEFAULT_LEVEL=4
+CONFIG_LOG_MAXIMUM_LEVEL=4

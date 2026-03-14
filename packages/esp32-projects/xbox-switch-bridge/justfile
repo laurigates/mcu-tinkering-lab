@@ -4,6 +4,7 @@
 set positional-arguments
 
 project_dir := "packages/esp32-projects/xbox-switch-bridge"
+tools_dir := justfile_directory() / "../../.." / "tools"
 # Auto-detect ESP32-S3 USB-Serial-JTAG by Espressif VID (0x303a=12346); override with PORT env var
 port := env("PORT", `ioreg -r -c IOUSBHostDevice -l 2>/dev/null | grep -A 30 '"idVendor" = 12346' | grep IODialinDevice | head -1 | sed 's/.*"\(\/dev\/[^"]*\)".*/\1/' | sed 's/tty\./cu./' || true`)
 baud := env("BAUD", "460800")
@@ -30,7 +31,7 @@ check-sdkconfig:
     set -euo pipefail
     [ -f sdkconfig ] || exit 0  # No sdkconfig yet — fresh build, nothing to check
     stale=()
-    for src in sdkconfig.defaults sdkconfig.debug sdkconfig.debug-usb sdkconfig.wifi-test; do
+    for src in sdkconfig.defaults sdkconfig.debug-jtag sdkconfig.debug-uart sdkconfig.debug-usb sdkconfig.wifi-test; do
         [ -f "$src" ] || continue
         if [ "$src" -nt sdkconfig ]; then
             stale+=("$src")
@@ -108,55 +109,58 @@ clean-deps:
 
 # Build firmware in Docker container
 [group: "build"]
-build: check-sdkconfig fetch-deps
-    #!/usr/bin/env bash
-    set -euo pipefail
-    echo "Building xbox-switch-bridge (containerized)..."
-    {{container_cmd}} compose -f ../../../docker-compose.yml run --rm \
-        -w /workspace/{{project_dir}} \
-        esp-idf \
-        bash -c "idf.py set-target {{target}} && idf.py build"
-    echo "Build complete!"
+build: check-sdkconfig fetch-deps (_idf-build "")
 
 # Build debug firmware (USB-Serial-JTAG stays alive for log output, TinyUSB disabled)
 [group: "build"]
-build-debug: check-sdkconfig fetch-deps
-    #!/usr/bin/env bash
-    set -euo pipefail
-    echo "Building xbox-switch-bridge DEBUG (USB logging enabled, TinyUSB disabled)..."
-    {{container_cmd}} compose -f ../../../docker-compose.yml run --rm \
-        -w /workspace/{{project_dir}} \
-        esp-idf \
-        bash -c 'SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.debug" idf.py set-target {{target}} && idf.py build'
-    echo "Debug build complete — flash with: just flash"
+build-debug-jtag: check-sdkconfig fetch-deps (_idf-build "sdkconfig.debug-jtag")
+    @echo "Flash with: just flash"
+
+# Build debug firmware with TinyUSB active + UART logging via CP2102 (GPIO43/44)
+# Monitor with: just uart-monitor
+[group: "build"]
+build-debug-uart: check-sdkconfig fetch-deps (_idf-build "sdkconfig.debug-uart")
+    @echo "Monitor via: just uart-monitor (CP2102 on GPIO43/44)"
 
 # Build debug firmware with TinyUSB active (for Switch handshake debugging)
 # Logs only via WiFi UDP — connect to "xbox-bridge-log", then: just log-listen
 [group: "build"]
-build-debug-usb: check-sdkconfig fetch-deps
-    #!/usr/bin/env bash
-    set -euo pipefail
-    echo "Building xbox-switch-bridge DEBUG-USB (TinyUSB ON, verbose logging over WiFi)..."
-    {{container_cmd}} compose -f ../../../docker-compose.yml run --rm \
-        -w /workspace/{{project_dir}} \
-        esp-idf \
-        bash -c 'SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.debug-usb" idf.py set-target {{target}} && idf.py build'
-    echo "Debug-USB build complete — flash with: just flash"
-    echo "Monitor via: just log-listen (connect to xbox-bridge-log WiFi first)"
+build-debug-usb: check-sdkconfig fetch-deps (_idf-build "sdkconfig.debug-usb")
+    @echo "Monitor via: just log-listen (connect to xbox-bridge-log WiFi first)"
 
 # Build WiFi-only test firmware (no BLE — isolates SoftAP visibility)
 # If AP is visible with this build, the problem is BLE coexistence
 [group: "build"]
-build-wifi-test: check-sdkconfig fetch-deps
+build-wifi-test: check-sdkconfig fetch-deps (_idf-build "sdkconfig.wifi-test")
+    @echo "Then check if 'xbox-bridge-log' WiFi network is visible"
+
+# Shared build helper — overlay is empty string for production build
+[private]
+_idf-build overlay:
     #!/usr/bin/env bash
     set -euo pipefail
-    echo "Building xbox-switch-bridge WIFI-TEST (no BLE, USB-Serial-JTAG active)..."
+    overlay="{{overlay}}"
+    if [ -n "$overlay" ]; then
+        sdk_env="SDKCONFIG_DEFAULTS=\"sdkconfig.defaults;$overlay\""
+        label="${overlay#sdkconfig.}"
+    else
+        sdk_env=""
+        label="production"
+    fi
+    echo "Building [$label]..."
     {{container_cmd}} compose -f ../../../docker-compose.yml run --rm \
         -w /workspace/{{project_dir}} \
         esp-idf \
-        bash -c 'SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.wifi-test" idf.py set-target {{target}} && idf.py build'
-    echo "WiFi-test build complete — flash with: just flash"
-    echo "Then check if 'xbox-bridge-log' WiFi network is visible"
+        bash -c "${sdk_env:+$sdk_env }idf.py set-target {{target}} && idf.py build" 2>&1 \
+        | grep -E "warning:|error:|ninja: build stopped|binary size|Build complete" \
+        || true
+    # Verify binary was produced
+    if [ ! -f build/xbox-switch-bridge.bin ]; then
+        echo "FAILED — rerun with verbose output:" >&2
+        echo "  {{container_cmd}} compose -f ../../../docker-compose.yml run --rm -w /workspace/{{project_dir}} esp-idf bash -c 'idf.py build'" >&2
+        exit 1
+    fi
+    echo "Build OK [$label]"
 
 # Clean build artifacts via container
 [group: "build"]
@@ -192,16 +196,7 @@ shell:
 # Auto-detect ESP32-S3 port or show error
 [group: "device"]
 detect-port:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ -z "{{port}}" ]; then
-        echo "ERROR: No ESP32-S3 USB-Serial-JTAG device found"
-        echo "  - Is the board plugged in?"
-        echo "  - Try: ioreg -p IOUSB -l | grep -B 5 -A 10 'USB JTAG'"
-        echo "  - Or set PORT manually: PORT=/dev/cu.usbmodem101 just flash"
-        exit 1
-    fi
-    echo "Detected port: {{port}}"
+    "{{tools_dir}}/detect-esp32s3-port.sh"
 
 # Require a valid port for device recipes
 [private]
@@ -214,24 +209,28 @@ require-port:
         exit 1
     fi
 
-# Flash firmware to device (put board in download mode first: hold BOOT, press RST, release BOOT)
+# Flash firmware to device
 [group: "device"]
 flash: require-port
-    esptool --chip esp32s3 -p {{port}} -b {{baud}} \
+    #!/usr/bin/env bash
+    set -euo pipefail
+    esptool -s --chip esp32s3 -p {{port}} -b {{baud}} \
         --before default-reset --after hard-reset \
         write-flash --flash-mode dio --flash-size 4MB --flash-freq 80m \
         0x0 build/bootloader/bootloader.bin \
         0x8000 build/partition_table/partition-table.bin \
         0x10000 build/xbox-switch-bridge.bin
+    echo "Flashed OK"
 
-# Start serial monitor (reads serial output, Ctrl-C to stop)
+# Reset board via USB-Serial-JTAG CDC control signals
+[group: "device"]
+reset: require-port
+    "{{tools_dir}}/esp32s3-reset.sh" "{{port}}"
+
+# Serial monitor with reset (Ctrl-C to stop)
 [group: "device"]
 monitor: require-port
-    #!/usr/bin/env bash
-    set -euo pipefail
-    echo "Monitoring {{port}} at 115200 baud — Ctrl-C to stop"
-    stty -f {{port}} 115200 raw -echo 2>/dev/null || true
-    cat {{port}}
+    "{{tools_dir}}/esp32s3-monitor.sh" "{{port}}"
 
 # Flash and monitor
 [group: "device"]
@@ -242,26 +241,25 @@ flash-monitor: flash monitor
 ##########
 
 # Listen for UDP log broadcast from the device
-# 1. Connect Mac to "xbox-bridge-log" WiFi (open, no password)
+# 1. Connect Mac to "xbox-bridge-log" WiFi (password: xboxbridge)
 # 2. Run this recipe
 [group: "device"]
 log-listen port="4444":
     #!/usr/bin/env bash
     set -euo pipefail
     echo "Listening for UDP logs on port {{port}} — Ctrl-C to stop"
-    echo "Connect to WiFi: xbox-bridge-log (open, no password)"
+    echo "Connect to WiFi: xbox-bridge-log (password: xboxbridge)"
     echo ""
     exec socat -u UDP-RECV:{{port}} -
 
-# Scan for nearby WiFi networks (check if xbox-bridge-log AP is visible)
+# Scan for xbox-bridge-log WiFi AP
 [group: "device"]
 wifi-scan:
     #!/usr/bin/env bash
     set -euo pipefail
     echo "Scanning for WiFi networks..."
     echo ""
-    # CoreWLAN targeted scan (works on macOS Sequoia+ where airport was removed)
-    python3 tools/wifi-scan.py 2>/dev/null || {
+    python3 "{{tools_dir}}/wifi-scan.py" "xbox-bridge-log" 2>/dev/null || {
         # Fallback: try connecting (networksetup reports if SSID exists)
         if /usr/sbin/networksetup -setairportnetwork en0 "xbox-bridge-log" 2>&1 | grep -q "Could not find"; then
             echo "xbox-bridge-log: NOT FOUND"
@@ -279,7 +277,7 @@ wifi-connect:
     #!/usr/bin/env bash
     set -euo pipefail
     echo "Connecting to xbox-bridge-log..."
-    if /usr/sbin/networksetup -setairportnetwork en0 "xbox-bridge-log" 2>&1 | grep -q "Could not find"; then
+    if /usr/sbin/networksetup -setairportnetwork en0 "xbox-bridge-log" "xboxbridge" 2>&1 | grep -q "Could not find"; then
         echo "FAILED: Network not found"
         echo ""
         echo "Troubleshooting:"
@@ -291,6 +289,35 @@ wifi-connect:
     fi
     echo "Connected! IP: $(ipconfig getifaddr en0 2>/dev/null || echo 'pending...')"
     echo "Run: just log-listen"
+
+# Auto-detect CP2102 USB-UART adapter; override with UART_PORT env var
+uart_port := env("UART_PORT", `ls /dev/cu.usbserial-* 2>/dev/null | head -1 || true`)
+uart_baud := env("UART_BAUD", "115200")
+
+# Monitor UART via CP2102 USB-UART adapter (Ctrl-C to stop)
+[group: "device"]
+uart-monitor:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -z "{{uart_port}}" ]; then
+        echo "ERROR: No CP2102 USB-UART device found" >&2
+        echo "  Is the adapter plugged in? Override with: UART_PORT=/dev/cu.usbserial-0001 just uart-monitor" >&2
+        exit 1
+    fi
+    echo "Monitoring {{uart_port}} @ {{uart_baud}} baud — Ctrl-C to stop"
+    exec uvx --from pyserial python3 -c "
+    import serial, sys, signal
+    signal.signal(signal.SIGINT, lambda *a: sys.exit(0))
+    s = serial.Serial('{{uart_port}}', {{uart_baud}}, timeout=1)
+    try:
+        while True:
+            data = s.read(4096)
+            if data:
+                sys.stdout.buffer.write(data)
+                sys.stdout.buffer.flush()
+    except serial.SerialException:
+        print('\nDevice disconnected', file=sys.stderr)
+    "
 
 # Show project information
 [group: "info"]
