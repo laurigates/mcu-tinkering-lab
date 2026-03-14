@@ -340,39 +340,72 @@ static void handle_spi_read(const uint8_t *data, uint16_t len, uint8_t *reply)
         read_len = 44; /* reply buffer is 63 bytes; spi_data starts at offset 19 */
 
     switch (addr) {
-        case 0x6020: /* Factory left stick calibration (9 bytes) */
+        case 0x6012: /* Device type (1 byte) */
+            if (read_len >= 1) {
+                spi_data[0] = 0x03; /* Pro Controller */
+            }
+            break;
+
+        case 0x6020: /* 6-axis IMU factory calibration (24 bytes) */
+            if (read_len >= 24) {
+                /* Accel origin XYZ (int16LE), Accel sensitivity XYZ,
+                 * Gyro origin XYZ, Gyro sensitivity XYZ.
+                 * Use sensible defaults: zero origin, standard sensitivity. */
+                memset(spi_data, 0, 12);  /* Zero origins */
+                /* Accel sensitivity: ~4096 counts/g (standard ±8G range) */
+                spi_data[6] = 0x00;
+                spi_data[7] = 0x40;
+                spi_data[8] = 0x00;
+                spi_data[9] = 0x40;
+                spi_data[10] = 0x00;
+                spi_data[11] = 0x40;
+                /* Gyro sensitivity: ~13371 counts/dps (standard ±2000 dps) */
+                spi_data[18] = 0x3B;
+                spi_data[19] = 0x34;
+                spi_data[20] = 0x3B;
+                spi_data[21] = 0x34;
+                spi_data[22] = 0x3B;
+                spi_data[23] = 0x34;
+            }
+            break;
+
+        case 0x603D: /* Factory LEFT stick calibration (9 bytes) */
             if (read_len >= 9) {
-                /* Max above center, center, min below center */
-                /* Each triplet: X_high|X_low, Y_high|Y_low packed 12-bit */
+                /* 6x 12-bit values packed in 3-byte pairs:
+                 * max-above-center-X, max-above-center-Y,
+                 * center-X, center-Y,
+                 * min-below-center-X, min-below-center-Y.
+                 * Center=0x800, range=0x600 above and below. */
                 spi_data[0] = 0x00;
-                spi_data[1] = 0x07;
-                spi_data[2] = 0x70;
+                spi_data[1] = 0x06;
+                spi_data[2] = 0x60;
                 spi_data[3] = 0x00;
                 spi_data[4] = 0x08;
                 spi_data[5] = 0x80;
                 spi_data[6] = 0x00;
-                spi_data[7] = 0x07;
-                spi_data[8] = 0x70;
+                spi_data[7] = 0x06;
+                spi_data[8] = 0x60;
             }
             break;
 
-        case 0x603D: /* Factory right stick calibration (9 bytes) */
+        case 0x6046: /* Factory RIGHT stick calibration (9 bytes) */
             if (read_len >= 9) {
+                /* Same format as left stick */
                 spi_data[0] = 0x00;
                 spi_data[1] = 0x08;
                 spi_data[2] = 0x80;
                 spi_data[3] = 0x00;
-                spi_data[4] = 0x07;
-                spi_data[5] = 0x70;
+                spi_data[4] = 0x06;
+                spi_data[5] = 0x60;
                 spi_data[6] = 0x00;
-                spi_data[7] = 0x07;
-                spi_data[8] = 0x70;
+                spi_data[7] = 0x06;
+                spi_data[8] = 0x60;
             }
             break;
 
         case 0x6050: /* Body + button color (6 bytes) */
             if (read_len >= 6) {
-                /* Pro Controller default: dark gray body, dark buttons */
+                /* Pro Controller default: dark gray body, white buttons */
                 spi_data[0] = 0x32;
                 spi_data[1] = 0x32;
                 spi_data[2] = 0x32;
@@ -382,22 +415,63 @@ static void handle_spi_read(const uint8_t *data, uint16_t len, uint8_t *reply)
             }
             break;
 
-        case 0x8010: /* User stick calibration */
-            /* Magic byte 0xB2 at offset 0 indicates valid user cal.
-             * Return 0xFF (no user cal) so the Switch uses factory cal. */
-            if (read_len >= 1) {
-                spi_data[0] = 0xFF;
+        case 0x6056: /* Left/right grip colors (6 bytes) */
+            if (read_len >= 6) {
+                /* Default grip: same dark gray as body */
+                spi_data[0] = 0x32;
+                spi_data[1] = 0x32;
+                spi_data[2] = 0x32;
+                spi_data[3] = 0x32;
+                spi_data[4] = 0x32;
+                spi_data[5] = 0x32;
             }
             break;
 
-        case 0x8026: /* User right stick calibration */
-            if (read_len >= 1) {
+        case 0x6080: /* 6-axis horizontal offsets (6 bytes) */
+            /* 3x int16LE, all zeros for level calibration */
+            break;
+
+        case 0x6086: /* Stick device parameters (24 bytes) */
+            if (read_len >= 24) {
+                /* Dead zone and range parameters for sticks.
+                 * Use standard Pro Controller defaults. */
+                /* Left stick params */
+                spi_data[0] = 0x0F;  /* Dead zone: 15% */
+                spi_data[1] = 0x30;  /* Range ratio */
+                /* Right stick params (offset 12) */
+                spi_data[12] = 0x0F;
+                spi_data[13] = 0x30;
+            }
+            break;
+
+        case 0x8010: /* User left stick calibration */
+            /* Magic 0xB2 0xA1 at offset 0-1 indicates valid user cal.
+             * Return 0xFF (no user cal) so the Switch uses factory cal. */
+            if (read_len >= 2) {
                 spi_data[0] = 0xFF;
+                spi_data[1] = 0xFF;
+            }
+            break;
+
+        case 0x801B: /* User right stick calibration */
+            /* Same magic byte check as left stick */
+            if (read_len >= 2) {
+                spi_data[0] = 0xFF;
+                spi_data[1] = 0xFF;
+            }
+            break;
+
+        case 0x8026: /* User 6-axis calibration */
+            /* No user IMU cal — return 0xFF to use factory defaults */
+            if (read_len >= 2) {
+                spi_data[0] = 0xFF;
+                spi_data[1] = 0xFF;
             }
             break;
 
         default:
             /* Return all zeros for unknown addresses */
+            ESP_LOGD(TAG, "SPI read: unhandled addr=0x%04lX", (unsigned long)addr);
             break;
     }
 }
@@ -483,8 +557,14 @@ static void handle_subcommand(const uint8_t *data, uint16_t len)
     /* Bytes 5-10: Stick data (neutral center) */
     fill_neutral_sticks(reply, 5);
     reply[11] = 0x00;      /* Vibrator input report */
-    reply[12] = 0x80;      /* Sub-command ACK: 0x80 = success */
     reply[13] = subcmd_id; /* Echo back the sub-command ID */
+
+    /* ACK byte (reply[12]):
+     *   0x80 = simple ACK (no data follows)
+     *   0x90 = ACK with data (SPI read, device info, etc.)
+     * MSB=1 means ACK, MSB=0 means NACK. Lower bits encode data type. */
+    bool has_data = (subcmd_id == 0x02 || subcmd_id == 0x10);
+    reply[12] = has_data ? 0x90 : 0x80;
 
     /* Some sub-commands need specific data in the reply */
     switch (subcmd_id) {
@@ -670,7 +750,7 @@ esp_err_t switch_pro_usb_init(void)
 
 bool switch_pro_usb_send_report(const switch_pro_input_t *input)
 {
-    if (!tud_mounted() || !s_handshake_complete)
+    if (!tud_mounted() || !s_handshake_complete || !s_setup_complete)
         return false;
 
     if (!tud_hid_ready())
@@ -719,5 +799,5 @@ bool switch_pro_usb_is_mounted(void)
 
 bool switch_pro_usb_is_ready(void)
 {
-    return s_handshake_complete && tud_mounted();
+    return s_handshake_complete && s_setup_complete && tud_mounted();
 }
