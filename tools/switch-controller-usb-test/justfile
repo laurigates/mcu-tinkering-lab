@@ -1,0 +1,32 @@
+# Switch Pro Controller USB Protocol Tester
+# Run `just --list` to see available recipes
+
+# Interactive protocol probe REPL
+[group: "probe"]
+probe:
+    cd {{justfile_directory()}} && uv run python switch_probe.py
+
+# Scan for HID devices
+[group: "probe"]
+scan:
+    cd {{justfile_directory()}} && uv run python switch_probe.py --scan
+
+# Auto handshake + dump all device info
+[group: "probe"]
+auto:
+    cd {{justfile_directory()}} && uv run python switch_probe.py --auto
+
+# Record a protocol session to file
+[group: "probe"]
+record file="session.jsonl":
+    cd {{justfile_directory()}} && uv run python switch_probe.py --record {{file}}
+
+# Replay a recorded session
+[group: "probe"]
+replay file="session.jsonl":
+    cd {{justfile_directory()}} && uv run python switch_probe.py --replay {{file}}
+
+# Install dependencies
+[group: "setup"]
+setup:
+    cd {{justfile_directory()}} && uv sync

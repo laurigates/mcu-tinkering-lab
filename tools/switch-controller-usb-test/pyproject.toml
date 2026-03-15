@@ -1,0 +1,11 @@
+[project]
+name = "switch-controller-usb-test"
+version = "0.1.0"
+description = "Interactive USB protocol tester for Nintendo Switch Pro Controller"
+requires-python = ">=3.11"
+dependencies = [
+    "hidapi>=0.14.0",
+]
+
+[project.scripts]
+switch-probe = "switch_probe:main"
