@@ -340,7 +340,38 @@ static void handle_spi_read(const uint8_t *data, uint16_t len, uint8_t *reply)
         read_len = 44; /* reply buffer is 63 bytes; spi_data starts at offset 19 */
 
     switch (addr) {
-        case 0x6020: /* Factory left stick calibration (9 bytes) */
+        case 0x6012: /* Device type (1 byte) */
+            if (read_len >= 1) {
+                spi_data[0] = 0x03; /* Pro Controller */
+            }
+            break;
+
+        case 0x6020: /* Factory IMU calibration (24 bytes) */
+            if (read_len >= 24) {
+                /* Accelerometer origin (6 bytes: X, Y, Z as int16 LE) — zeros = level */
+                memset(&spi_data[0], 0x00, 6);
+                /* Accelerometer sensitivity (6 bytes: X, Y, Z as int16 LE)
+                 * 0x4000 = 16384 = 1g at ±8g range (default) */
+                spi_data[6] = 0x00;
+                spi_data[7] = 0x40;
+                spi_data[8] = 0x00;
+                spi_data[9] = 0x40;
+                spi_data[10] = 0x00;
+                spi_data[11] = 0x40;
+                /* Gyroscope origin (6 bytes) — zeros = no drift */
+                memset(&spi_data[12], 0x00, 6);
+                /* Gyroscope sensitivity (6 bytes: X, Y, Z as int16 LE)
+                 * 0x343B = 13371 ≈ sensitivity coefficient for ±2000 dps */
+                spi_data[18] = 0x3B;
+                spi_data[19] = 0x34;
+                spi_data[20] = 0x3B;
+                spi_data[21] = 0x34;
+                spi_data[22] = 0x3B;
+                spi_data[23] = 0x34;
+            }
+            break;
+
+        case 0x603D: /* Factory left stick calibration (9 bytes) */
             if (read_len >= 9) {
                 /* Max above center, center, min below center */
                 /* Each triplet: X_high|X_low, Y_high|Y_low packed 12-bit */
@@ -356,7 +387,7 @@ static void handle_spi_read(const uint8_t *data, uint16_t len, uint8_t *reply)
             }
             break;
 
-        case 0x603D: /* Factory right stick calibration (9 bytes) */
+        case 0x6046: /* Factory right stick calibration (9 bytes) */
             if (read_len >= 9) {
                 spi_data[0] = 0x00;
                 spi_data[1] = 0x08;
@@ -382,7 +413,7 @@ static void handle_spi_read(const uint8_t *data, uint16_t len, uint8_t *reply)
             }
             break;
 
-        case 0x8010: /* User stick calibration */
+        case 0x8010: /* User left stick calibration */
             /* Magic byte 0xB2 at offset 0 indicates valid user cal.
              * Return 0xFF (no user cal) so the Switch uses factory cal. */
             if (read_len >= 1) {
@@ -390,7 +421,14 @@ static void handle_spi_read(const uint8_t *data, uint16_t len, uint8_t *reply)
             }
             break;
 
-        case 0x8026: /* User right stick calibration */
+        case 0x801B: /* User right stick calibration */
+            /* Same magic byte convention as left stick */
+            if (read_len >= 1) {
+                spi_data[0] = 0xFF;
+            }
+            break;
+
+        case 0x8026: /* User IMU calibration */
             if (read_len >= 1) {
                 spi_data[0] = 0xFF;
             }
@@ -509,7 +547,8 @@ static void handle_subcommand(const uint8_t *data, uint16_t len)
         case 0x08: /* Set shipment low power state */
             break;
 
-        case 0x10: /* SPI flash read */
+        case 0x10:            /* SPI flash read */
+            reply[12] = 0x90; /* SPI read ACK uses 0x90, not generic 0x80 */
             handle_spi_read(data, len, reply);
             break;
 
@@ -537,6 +576,7 @@ static void handle_subcommand(const uint8_t *data, uint16_t len)
 
         default:
             ESP_LOGI(TAG, "Unhandled subcommand 0x%02X", subcmd_id);
+            reply[14] = 0x03; /* NACK: unknown subcommand */
             break;
     }
 
@@ -670,7 +710,7 @@ esp_err_t switch_pro_usb_init(void)
 
 bool switch_pro_usb_send_report(const switch_pro_input_t *input)
 {
-    if (!tud_mounted() || !s_handshake_complete)
+    if (!tud_mounted() || !s_handshake_complete || !s_setup_complete)
         return false;
 
     if (!tud_hid_ready())
@@ -719,5 +759,5 @@ bool switch_pro_usb_is_mounted(void)
 
 bool switch_pro_usb_is_ready(void)
 {
-    return s_handshake_complete && tud_mounted();
+    return s_handshake_complete && s_setup_complete && tud_mounted();
 }
