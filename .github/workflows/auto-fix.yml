@@ -88,7 +88,7 @@ jobs:
           echo "ref=${BRANCH}" >> "$GITHUB_OUTPUT"
 
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ steps.pr-branch.outputs.ref || github.event.workflow_run.head_branch || github.ref }}
           fetch-depth: 0
