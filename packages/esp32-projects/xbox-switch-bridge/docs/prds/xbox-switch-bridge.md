@@ -47,7 +47,7 @@ Xbox Series Controller  --BLE-->  ESP32-S3-Zero  --USB HID-->  Nintendo Switch D
 |---------|-------------|--------|-------|
 | FR10 | Rumble Output — HID output report handler for vibration feedback | Not Started | HID descriptor already includes 0x10 rumble report; handler stub exists |
 | FR11 | Runtime Button Remapping — configurable mapping via credentials.h or NVS | Not Started | Currently hardcoded in `button_mapper.c` |
-| FR12 | Multi-Controller Support — connect and bridge multiple Xbox controllers | Not Started | Bluepad32 supports multiple controllers architecturally |
+| FR12 | Multi-Controller Support — connect and bridge multiple Xbox controllers | In Progress | Profile abstraction in `components/controller_profile/`; see [ADR-0009](../adrs/0009-modular-controller-profiles.md) |
 
 ## Non-Functional Requirements
 

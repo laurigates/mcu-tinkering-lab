@@ -30,6 +30,10 @@ Protocol implementation:
 - **SPI flash read emulation** — the Switch reads calibration data and colors from "SPI flash" via sub-commands. The firmware returns sensible defaults (factory calibration centers, default colors).
 - **No rumble output yet** — the HID descriptor includes the 0x10 rumble report but no handler processes it (see FR10).
 
+## Superseded By
+
+[ADR-0009](0009-modular-controller-profiles.md) introduces a modular profile abstraction that decouples controller identity from the protocol implementation. The Pro Controller remains the default profile, but the hardcoded type bytes are being replaced with profile-driven values to support FR12 multi-controller and experimental controller type combinations.
+
 ## Alternatives Considered
 
 - **Generic HID Gamepad**: The Switch doesn't accept generic gamepads on USB without specific handshake. Rejected.

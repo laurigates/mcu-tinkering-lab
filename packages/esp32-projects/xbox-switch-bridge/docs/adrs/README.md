@@ -14,3 +14,4 @@ This directory contains Architecture Decision Records (ADRs) for the xbox-switch
 | [0006](0006-sdkconfig-build-variants.md) | Four sdkconfig Build Variants | Accepted |
 | [0007](0007-wifi-udp-log-broadcasting.md) | WiFi UDP Log Broadcasting | Accepted |
 | [0008](0008-caller-driven-status-led.md) | Caller-Driven Status LED (No Background Task) | Accepted |
+| [0009](0009-modular-controller-profiles.md) | Modular Controller Profile Abstraction | Accepted |
