@@ -31,12 +31,7 @@ static const char *TAG = "bluepad32_host";
 static xbox_gamepad_state_t s_gamepad_state;
 static bp32_connection_cb_t s_conn_cb = NULL;
 
-/* Rumble state: written by bridge_task (core 1), read by BTstack callback (core 0).
- * Uses btstack_run_loop_execute_on_main_thread for safe cross-core scheduling. */
 static uni_hid_device_t *s_connected_device = NULL;
-static uint8_t s_rumble_weak = 0;
-static uint8_t s_rumble_strong = 0;
-static btstack_context_callback_registration_t s_rumble_callback;
 
 /*--- Bluepad32 Platform Callbacks ---*/
 
@@ -158,39 +153,4 @@ bool bp32_host_get_state(xbox_gamepad_state_t *state)
         return false;
     memcpy(state, &s_gamepad_state, sizeof(xbox_gamepad_state_t));
     return true;
-}
-
-/**
- * @brief BTstack main-thread callback to send rumble to the connected device.
- *
- * Runs on core 0 in the BTstack event loop context, which is required
- * for calling Bluepad32's play_dual_rumble.
- */
-static void rumble_btstack_callback(void *context)
-{
-    (void)context;
-
-    uni_hid_device_t *d = s_connected_device;
-    if (d == NULL)
-        return;
-    if (!uni_bt_conn_is_connected(&d->conn))
-        return;
-    if (d->report_parser.play_dual_rumble == NULL)
-        return;
-
-    /* Duration 100ms — refreshed by continuous reports from the Switch.
-     * If the game stops sending rumble, motors stop after 100ms. */
-    d->report_parser.play_dual_rumble(d, 0, 100, s_rumble_weak, s_rumble_strong);
-}
-
-void bp32_host_set_rumble(uint8_t weak, uint8_t strong)
-{
-    s_rumble_weak = weak;
-    s_rumble_strong = strong;
-
-    /* Schedule the rumble call on the BTstack main thread (core 0).
-     * btstack_run_loop_execute_on_main_thread is safe to call from any thread. */
-    s_rumble_callback.callback = &rumble_btstack_callback;
-    s_rumble_callback.context = NULL;
-    btstack_run_loop_execute_on_main_thread(&s_rumble_callback);
 }

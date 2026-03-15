@@ -81,17 +81,6 @@ void bp32_host_start(void);
  */
 bool bp32_host_get_state(xbox_gamepad_state_t *state);
 
-/**
- * @brief Send rumble/vibration to the connected Xbox controller.
- *
- * Schedules a play_dual_rumble call on the BTstack main thread (core 0).
- * Safe to call from any thread. Values are 0-255 intensity.
- *
- * @param weak Weak motor (high-frequency) intensity (0-255).
- * @param strong Strong motor (low-frequency) intensity (0-255).
- */
-void bp32_host_set_rumble(uint8_t weak, uint8_t strong);
-
 #ifdef __cplusplus
 }
 #endif
