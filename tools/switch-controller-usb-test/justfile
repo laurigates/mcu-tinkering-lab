@@ -1,0 +1,70 @@
+# Switch Pro Controller USB Protocol Testing Tools
+# Run `just --list` to see available recipes
+
+# --- Probe (talk to a real Pro Controller) ---
+
+# Interactive protocol probe REPL
+[group: "probe"]
+probe:
+    cd {{justfile_directory()}} && uv run python switch_probe.py
+
+# Scan for HID devices
+[group: "probe"]
+scan:
+    cd {{justfile_directory()}} && uv run python switch_probe.py --scan
+
+# Auto handshake + dump all device info
+[group: "probe"]
+auto:
+    cd {{justfile_directory()}} && uv run python switch_probe.py --auto
+
+# Record a protocol session to file
+[group: "probe"]
+record file="session.jsonl":
+    cd {{justfile_directory()}} && uv run python switch_probe.py --record {{file}}
+
+# Replay a recorded session
+[group: "probe"]
+replay file="session.jsonl":
+    cd {{justfile_directory()}} && uv run python switch_probe.py --replay {{file}}
+
+# --- Gadget (PC emulates Pro Controller via USB OTG) ---
+
+# Start USB gadget emulator (requires root + USB OTG hardware)
+[group: "gadget"]
+gadget:
+    cd {{justfile_directory()}} && sudo uv run python switch_gadget.py
+
+# Auto-setup gadget and wait for Switch
+[group: "gadget"]
+gadget-auto:
+    cd {{justfile_directory()}} && sudo uv run python switch_gadget.py --auto
+
+# List available USB Device Controllers
+[group: "gadget"]
+gadget-list-udc:
+    cd {{justfile_directory()}} && sudo uv run python switch_gadget.py --list-udc
+
+# --- Proxy (ESP32-S3 handles USB, PC handles protocol via UART) ---
+
+# Start proxy client (auto-detects serial port)
+[group: "proxy"]
+proxy port="":
+    cd {{justfile_directory()}} && uv run python switch_proxy.py {{ if port != "" { "--port " + port } else { "" } }}
+
+# Auto-connect proxy and wait for handshake
+[group: "proxy"]
+proxy-auto port="":
+    cd {{justfile_directory()}} && uv run python switch_proxy.py --auto {{ if port != "" { "--port " + port } else { "" } }}
+
+# List available serial ports
+[group: "proxy"]
+proxy-list-ports:
+    cd {{justfile_directory()}} && uv run python switch_proxy.py --list-ports
+
+# --- Setup ---
+
+# Install dependencies
+[group: "setup"]
+setup:
+    cd {{justfile_directory()}} && uv sync
