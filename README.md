@@ -17,13 +17,13 @@ git clone https://github.com/laurigates/mcu-tinkering-lab.git
 cd mcu-tinkering-lab
 
 # Build Docker images
-make docker-build
+just docker-build
 
 # Start interactive development shell
-make docker-dev
+just docker-dev
 
 # Inside container: build all projects
-make build-all
+just build-all
 ```
 
 ### Option 2: Native Setup
@@ -31,7 +31,7 @@ make build-all
 **Prerequisites:**
 - ESP-IDF v5.4+ (for ESP32 projects)
 - Python 3.11+ (for simulation)
-- Git, Make, CMake
+- Git, [just](https://github.com/casey/just), CMake
 
 ```bash
 # Install ESP-IDF
@@ -49,10 +49,10 @@ git clone https://github.com/laurigates/mcu-tinkering-lab.git
 cd mcu-tinkering-lab
 
 # Install development tools
-make install-dev-tools
+just install-dev-tools
 
 # Build all projects
-make build-all
+just build-all
 ```
 
 ## 📁 Repository Structure
@@ -64,7 +64,7 @@ mcu-tinkering-lab/
 │   │   ├── robocar-main/           # 🤖 AI robot car controller (Heltec WiFi LoRa 32)
 │   │   ├── robocar-camera/         # 📹 ESP32-CAM vision with Claude/Ollama AI
 │   │   ├── robocar-simulation/     # 🎮 Python 3.11 physics simulation
-│   │   ├── robocar-docs/           # 📚 Documentation and coordination Makefile
+│   │   ├── robocar-docs/           # 📚 Documentation and coordination justfile
 │   │   ├── esp32cam-llm-telegram/  # 💬 Telegram bot with LLM vision
 │   │   ├── esp32-cam-webserver/    # 🌐 Live video streaming server
 │   │   └── esp32-cam-i2s-audio/    # 🔊 Camera + audio processing
@@ -74,7 +74,7 @@ mcu-tinkering-lab/
 ├── .github/workflows/              # 🔄 CI/CD pipelines
 ├── tools/                          # 🛠️ Build scripts and utilities
 ├── docs/                           # 📖 Documentation
-└── Makefile                        # 🎯 Root build coordination (60+ targets)
+└── justfile                        # 🎯 Root build coordination (60+ targets)
 ```
 
 ## 🎯 Featured Projects
@@ -90,65 +90,65 @@ Dual ESP32 autonomous robot with AI vision and physics simulation.
 **Quick Start:**
 ```bash
 # Build both controllers
-make robocar-build-all
+just robocar-build-all
 
 # Flash main controller
-make robocar-flash-main PORT=/dev/ttyUSB0
+just robocar-flash-main PORT=/dev/ttyUSB0
 
 # Flash camera (connect GPIO0 to GND first)
-make robocar-flash-cam PORT=/dev/ttyUSB1
+just robocar-flash-cam PORT=/dev/ttyUSB1
 
 # Start development workflow (build + flash + monitor)
-make robocar-develop-main
+just robocar-develop-main
 ```
 
 ### ESP32-CAM LLM Telegram Bot
 Vision-enabled Telegram bot with Claude or Ollama AI integration.
 
 ```bash
-make llm-telegram-build
-make llm-telegram-flash PORT=/dev/ttyUSB0
-make llm-telegram-monitor
+just llm-telegram-build
+just llm-telegram-flash PORT=/dev/ttyUSB0
+just llm-telegram-monitor
 ```
 
 ## 🏗️ Build System
 
-The unified Makefile provides **60+ targets** for all projects:
+The justfile provides **60+ targets** for all projects:
 
 ```bash
 # Show all available commands
-make help
+just --list
 
 # Build commands
-make build-all              # Build all projects
-make build-esp32            # Build all ESP32 projects
-make robocar-build-all      # Build robocar main + camera
+just build-all              # Build all projects
+just build-esp32            # Build all ESP32 projects
+just robocar-build-all      # Build robocar main + camera
 
 # Development workflows (build + flash + monitor)
-make robocar-develop-main   # Main controller
-make robocar-develop-cam    # Camera module
+just robocar-develop-main   # Main controller
+just robocar-develop-cam    # Camera module
 
 # Code quality
-make lint                   # Run all linters
-make format                 # Format all code
-make format-check           # Check formatting without modifying
+just lint                   # Run all linters
+just format                 # Format all code
+just format-check           # Check formatting without modifying
 
 # Docker
-make docker-build           # Build development images
-make docker-dev             # Interactive development shell
-make docker-run CMD="make build-all"  # Run command in container
+just docker-build           # Build development images
+just docker-dev             # Interactive development shell
+just docker-run CMD="just build-all"  # Run command in container
 
 # Utilities
-make list-projects          # Show all projects
-make check-environment      # Verify development setup
-make clean-all              # Clean all builds
+just list-projects          # Show all projects
+just check-environment      # Verify development setup
+just clean-all              # Clean all builds
 ```
 
 ## 🧪 Testing
 
 ```bash
 # Run all tests
-make test-all                  # (Coming soon)
+just test-all                  # (Coming soon)
 
 # Python simulation tests
 cd packages/esp32-projects/robocar-simulation
@@ -156,10 +156,10 @@ uv sync
 uv run pytest tests/ --cov
 
 # ESP32 host-based tests (planned)
-make test-host-all
+just test-host-all
 
 # Hardware-in-loop tests (planned)
-make test-hil-all
+just test-hil-all
 ```
 
 ## 🐳 Docker Development
@@ -173,20 +173,20 @@ make test-hil-all
 **Commands:**
 ```bash
 # Build images
-make docker-build
+just docker-build
 
 # Interactive shell
-make docker-dev
+just docker-dev
 
 # Run specific commands
-make docker-run CMD="make build-all"
-make docker-run CMD="make robocar-build-main"
+just docker-run CMD="just build-all"
+just docker-run CMD="just robocar-build-main"
 
 # Manage containers
-make docker-up              # Start services in background
-make docker-down            # Stop services
-make docker-logs            # View logs
-make docker-clean           # Remove containers and volumes
+just docker-up              # Start services in background
+just docker-down            # Stop services
+just docker-logs            # View logs
+just docker-clean           # Remove containers and volumes
 ```
 
 **USB Device Access (for flashing):**
@@ -216,7 +216,7 @@ Automatically run code quality checks before each commit:
 
 ```bash
 # Install hooks
-make install-dev-tools
+just install-dev-tools
 
 # Or manually
 pip install pre-commit
@@ -267,7 +267,7 @@ cd packages/esp32-projects/my-new-project
 sed -i 's/esp32-cam-webserver/my-new-project/g' CMakeLists.txt
 
 # Build
-make esp32-my-new-project-build
+just esp32-my-new-project-build
 ```
 
 **Automated scaffolding tool coming soon!**
@@ -285,8 +285,8 @@ make esp32-my-new-project-build
 We welcome contributions! Please follow these guidelines:
 
 1. **Code Style:**
-   - C/C++: Run `make format-c` before committing
-   - Python: Run `make format-python` before committing
+   - C/C++: Run `just format-c` before committing
+   - Python: Run `just format-python` before committing
    - All: Pre-commit hooks will enforce standards
 
 2. **Testing:**
@@ -320,7 +320,7 @@ sudo usermod -a -G dialout $USER
 # Log out and back in
 
 # Or use sudo
-sudo make robocar-flash-main
+sudo just robocar-flash-main
 ```
 
 ### Docker USB Device Not Found
@@ -329,10 +329,10 @@ Ensure `privileged: true` is set in `docker-compose.yml` and devices are mapped 
 ### Build Fails with "No Space Left"
 ```bash
 # Clean all builds
-make clean-all
+just clean-all
 
 # In Docker, clean volumes
-make docker-clean
+just docker-clean
 ```
 
 ## 📈 Project Status
