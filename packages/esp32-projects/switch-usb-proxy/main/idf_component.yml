@@ -1,0 +1,3 @@
+dependencies:
+  esp_tinyusb:
+    version: ">=1.4.0"
