@@ -1,6 +1,8 @@
 .aider*
 # Build artifacts
 build/
+# Host test binaries (produced by make test in test/ directories)
+test_runner
 target/
 *.o
 *.a
