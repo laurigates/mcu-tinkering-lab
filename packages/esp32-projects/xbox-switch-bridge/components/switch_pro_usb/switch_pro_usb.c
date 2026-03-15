@@ -58,10 +58,6 @@ static volatile bool s_setup_complete = false;
  * Both are pinned to core 1, so no cross-core synchronization needed. */
 static uint8_t s_timer_counter = 0;
 
-/* Rumble state: written by TinyUSB callback, read by bridge_task (both core 1). */
-static switch_pro_rumble_t s_rumble = {0};
-static volatile bool s_rumble_changed = false;
-
 /**
  * HID Report Descriptor matching the real Switch Pro Controller.
  *
@@ -301,63 +297,6 @@ static const uint8_t s_config_descriptor[] = {
 };
 
 /**
- * @brief Extract amplitude from a 4-byte HD rumble motor block.
- *
- * HD rumble encodes high-frequency (HF) and low-frequency (LF) components,
- * each with its own amplitude. We extract both and return the larger one
- * as a 0-255 value suitable for simple dual-motor rumble.
- *
- * Encoding (per dekuNukem reverse engineering):
- *   Byte 0: HF[7:0]
- *   Byte 1: HF[8] | (HFA[6:0] << 1)
- *   Byte 2: LF[6:0] | (LFA[8] << 7)
- *   Byte 3: LFA[7:0]
- *
- * Neutral pattern: 0x00 0x01 0x40 0x40
- */
-static uint8_t hd_rumble_amplitude(const uint8_t motor[4])
-{
-    /* Neutral check — fast path for no vibration */
-    if (motor[0] == 0x00 && motor[1] == 0x01 && motor[2] == 0x40 && motor[3] == 0x40)
-        return 0;
-
-    /* HFA: 7-bit value (0-127), encoded in byte[1] bits [7:1] */
-    uint8_t hfa = (motor[1] >> 1) & 0x7F;
-
-    /* LFA: 9-bit value (0-511), encoded in byte[3] + byte[2] bit 7 */
-    uint16_t lfa = motor[3] | (((uint16_t)motor[2] & 0x80) << 1);
-
-    /* Scale both to 0-255 and return the larger */
-    uint8_t hfa_scaled = (hfa > 127) ? 255 : hfa * 2;
-    uint8_t lfa_scaled = (lfa > 255) ? 255 : (uint8_t)lfa;
-
-    return (hfa_scaled > lfa_scaled) ? hfa_scaled : lfa_scaled;
-}
-
-/**
- * @brief Parse rumble data from a Switch output report.
- *
- * Both 0x01 (sub-command) and 0x10 (rumble-only) reports carry 8 bytes
- * of HD rumble data at bytes 2-9 (after report ID and timer byte):
- *   Bytes 2-5: Left motor (low-frequency actuator → strong motor)
- *   Bytes 6-9: Right motor (high-frequency actuator → weak motor)
- */
-static void parse_rumble(const uint8_t *data, uint16_t len)
-{
-    if (len < 10)
-        return;
-
-    uint8_t strong = hd_rumble_amplitude(&data[2]);
-    uint8_t weak = hd_rumble_amplitude(&data[6]);
-
-    if (strong != s_rumble.strong || weak != s_rumble.weak) {
-        s_rumble.strong = strong;
-        s_rumble.weak = weak;
-        s_rumble_changed = true;
-    }
-}
-
-/**
  * @brief Fill neutral stick data into a report buffer at the given offset.
  *
  * Center = 0x800 (2048), packed as 12-bit values.
@@ -407,20 +346,22 @@ static void handle_spi_read(const uint8_t *data, uint16_t len, uint8_t *reply)
             }
             break;
 
-        case 0x6020: /* 6-axis IMU factory calibration (24 bytes) */
+        case 0x6020: /* Factory IMU calibration (24 bytes) */
             if (read_len >= 24) {
-                /* Accel origin XYZ (int16LE), Accel sensitivity XYZ,
-                 * Gyro origin XYZ, Gyro sensitivity XYZ.
-                 * Use sensible defaults: zero origin, standard sensitivity. */
-                memset(spi_data, 0, 12);  /* Zero origins */
-                /* Accel sensitivity: ~4096 counts/g (standard ±8G range) */
+                /* Accelerometer origin (6 bytes: X, Y, Z as int16 LE) — zeros = level */
+                memset(&spi_data[0], 0x00, 6);
+                /* Accelerometer sensitivity (6 bytes: X, Y, Z as int16 LE)
+                 * 0x4000 = 16384 = 1g at ±8g range (default) */
                 spi_data[6] = 0x00;
                 spi_data[7] = 0x40;
                 spi_data[8] = 0x00;
                 spi_data[9] = 0x40;
                 spi_data[10] = 0x00;
                 spi_data[11] = 0x40;
-                /* Gyro sensitivity: ~13371 counts/dps (standard ±2000 dps) */
+                /* Gyroscope origin (6 bytes) — zeros = no drift */
+                memset(&spi_data[12], 0x00, 6);
+                /* Gyroscope sensitivity (6 bytes: X, Y, Z as int16 LE)
+                 * 0x343B = 13371 ≈ sensitivity coefficient for ±2000 dps */
                 spi_data[18] = 0x3B;
                 spi_data[19] = 0x34;
                 spi_data[20] = 0x3B;
@@ -430,43 +371,39 @@ static void handle_spi_read(const uint8_t *data, uint16_t len, uint8_t *reply)
             }
             break;
 
-        case 0x603D: /* Factory LEFT stick calibration (9 bytes) */
+        case 0x603D: /* Factory left stick calibration (9 bytes) */
             if (read_len >= 9) {
-                /* 6x 12-bit values packed in 3-byte pairs:
-                 * max-above-center-X, max-above-center-Y,
-                 * center-X, center-Y,
-                 * min-below-center-X, min-below-center-Y.
-                 * Center=0x800, range=0x600 above and below. */
+                /* Max above center, center, min below center */
+                /* Each triplet: X_high|X_low, Y_high|Y_low packed 12-bit */
                 spi_data[0] = 0x00;
-                spi_data[1] = 0x06;
-                spi_data[2] = 0x60;
+                spi_data[1] = 0x07;
+                spi_data[2] = 0x70;
                 spi_data[3] = 0x00;
                 spi_data[4] = 0x08;
                 spi_data[5] = 0x80;
                 spi_data[6] = 0x00;
-                spi_data[7] = 0x06;
-                spi_data[8] = 0x60;
+                spi_data[7] = 0x07;
+                spi_data[8] = 0x70;
             }
             break;
 
-        case 0x6046: /* Factory RIGHT stick calibration (9 bytes) */
+        case 0x6046: /* Factory right stick calibration (9 bytes) */
             if (read_len >= 9) {
-                /* Same format as left stick */
                 spi_data[0] = 0x00;
                 spi_data[1] = 0x08;
                 spi_data[2] = 0x80;
                 spi_data[3] = 0x00;
-                spi_data[4] = 0x06;
-                spi_data[5] = 0x60;
+                spi_data[4] = 0x07;
+                spi_data[5] = 0x70;
                 spi_data[6] = 0x00;
-                spi_data[7] = 0x06;
-                spi_data[8] = 0x60;
+                spi_data[7] = 0x07;
+                spi_data[8] = 0x70;
             }
             break;
 
         case 0x6050: /* Body + button color (6 bytes) */
             if (read_len >= 6) {
-                /* Pro Controller default: dark gray body, white buttons */
+                /* Pro Controller default: dark gray body, dark buttons */
                 spi_data[0] = 0x32;
                 spi_data[1] = 0x32;
                 spi_data[2] = 0x32;
@@ -476,63 +413,29 @@ static void handle_spi_read(const uint8_t *data, uint16_t len, uint8_t *reply)
             }
             break;
 
-        case 0x6056: /* Left/right grip colors (6 bytes) */
-            if (read_len >= 6) {
-                /* Default grip: same dark gray as body */
-                spi_data[0] = 0x32;
-                spi_data[1] = 0x32;
-                spi_data[2] = 0x32;
-                spi_data[3] = 0x32;
-                spi_data[4] = 0x32;
-                spi_data[5] = 0x32;
-            }
-            break;
-
-        case 0x6080: /* 6-axis horizontal offsets (6 bytes) */
-            /* 3x int16LE, all zeros for level calibration */
-            break;
-
-        case 0x6086: /* Stick device parameters (24 bytes) */
-            if (read_len >= 24) {
-                /* Dead zone and range parameters for sticks.
-                 * Use standard Pro Controller defaults. */
-                /* Left stick params */
-                spi_data[0] = 0x0F;  /* Dead zone: 15% */
-                spi_data[1] = 0x30;  /* Range ratio */
-                /* Right stick params (offset 12) */
-                spi_data[12] = 0x0F;
-                spi_data[13] = 0x30;
-            }
-            break;
-
         case 0x8010: /* User left stick calibration */
-            /* Magic 0xB2 0xA1 at offset 0-1 indicates valid user cal.
+            /* Magic byte 0xB2 at offset 0 indicates valid user cal.
              * Return 0xFF (no user cal) so the Switch uses factory cal. */
-            if (read_len >= 2) {
+            if (read_len >= 1) {
                 spi_data[0] = 0xFF;
-                spi_data[1] = 0xFF;
             }
             break;
 
         case 0x801B: /* User right stick calibration */
-            /* Same magic byte check as left stick */
-            if (read_len >= 2) {
+            /* Same magic byte convention as left stick */
+            if (read_len >= 1) {
                 spi_data[0] = 0xFF;
-                spi_data[1] = 0xFF;
             }
             break;
 
-        case 0x8026: /* User 6-axis calibration */
-            /* No user IMU cal — return 0xFF to use factory defaults */
-            if (read_len >= 2) {
+        case 0x8026: /* User IMU calibration */
+            if (read_len >= 1) {
                 spi_data[0] = 0xFF;
-                spi_data[1] = 0xFF;
             }
             break;
 
         default:
             /* Return all zeros for unknown addresses */
-            ESP_LOGD(TAG, "SPI read: unhandled addr=0x%04lX", (unsigned long)addr);
             break;
     }
 }
@@ -618,14 +521,8 @@ static void handle_subcommand(const uint8_t *data, uint16_t len)
     /* Bytes 5-10: Stick data (neutral center) */
     fill_neutral_sticks(reply, 5);
     reply[11] = 0x00;      /* Vibrator input report */
+    reply[12] = 0x80;      /* Sub-command ACK: 0x80 = success */
     reply[13] = subcmd_id; /* Echo back the sub-command ID */
-
-    /* ACK byte (reply[12]):
-     *   0x80 = simple ACK (no data follows)
-     *   0x90 = ACK with data (SPI read, device info, etc.)
-     * MSB=1 means ACK, MSB=0 means NACK. Lower bits encode data type. */
-    bool has_data = (subcmd_id == 0x02 || subcmd_id == 0x10);
-    reply[12] = has_data ? 0x90 : 0x80;
 
     /* Some sub-commands need specific data in the reply */
     switch (subcmd_id) {
@@ -650,7 +547,8 @@ static void handle_subcommand(const uint8_t *data, uint16_t len)
         case 0x08: /* Set shipment low power state */
             break;
 
-        case 0x10: /* SPI flash read */
+        case 0x10:            /* SPI flash read */
+            reply[12] = 0x90; /* SPI read ACK uses 0x90, not generic 0x80 */
             handle_spi_read(data, len, reply);
             break;
 
@@ -678,6 +576,7 @@ static void handle_subcommand(const uint8_t *data, uint16_t len)
 
         default:
             ESP_LOGI(TAG, "Unhandled subcommand 0x%02X", subcmd_id);
+            reply[14] = 0x03; /* NACK: unknown subcommand */
             break;
     }
 
@@ -746,11 +645,8 @@ void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_
 
     if (report_id == REPORT_ID_USB_CMD) {
         handle_usb_cmd(full_pkt, total_len);
-    } else if (report_id == REPORT_ID_SUBCMD) {
-        parse_rumble(full_pkt, total_len);
+    } else if (report_id == REPORT_ID_SUBCMD || report_id == REPORT_ID_RUMBLE) {
         handle_subcommand(full_pkt, total_len);
-    } else if (report_id == REPORT_ID_RUMBLE) {
-        parse_rumble(full_pkt, total_len);
     } else {
         ESP_LOGW(TAG, "Unknown report_id 0x%02X", report_id);
     }
@@ -864,15 +760,4 @@ bool switch_pro_usb_is_mounted(void)
 bool switch_pro_usb_is_ready(void)
 {
     return s_handshake_complete && s_setup_complete && tud_mounted();
-}
-
-bool switch_pro_usb_get_rumble(switch_pro_rumble_t *rumble)
-{
-    if (!s_rumble_changed)
-        return false;
-
-    rumble->strong = s_rumble.strong;
-    rumble->weak = s_rumble.weak;
-    s_rumble_changed = false;
-    return true;
 }

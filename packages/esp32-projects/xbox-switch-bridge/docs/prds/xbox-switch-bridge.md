@@ -39,7 +39,7 @@ Xbox Series Controller  --BLE-->  ESP32-S3-Zero  --USB HID-->  Nintendo Switch D
 | FR6 | Switch USB Handshake Protocol — 0x80 commands (STATUS/HANDSHAKE/HIGH_SPEED/FORCE_USB) + 0x01 sub-commands (device info, SPI reads, LED config) | Completed | `components/switch_pro_usb/` |
 | FR7 | Status LED — 5 WS2812 states: SCANNING (blue blink), USB_ERROR (red solid), CONNECTED_NO_USB (purple blink), CONNECTED_USB (yellow blink), BRIDGING (green solid) | Completed | `components/status_led/` |
 | FR8 | WiFi UDP Log Broadcasting — SoftAP "xbox-bridge-log" (open), UDP broadcast on port 4444 | Completed | `components/log_udp/` |
-| FR9 | Build Variants — 4 sdkconfig overlays: production, debug-UART, debug-USB, wifi-test | Completed | `sdkconfig.defaults`, `sdkconfig.debug`, `sdkconfig.debug-usb`, `sdkconfig.wifi-test` |
+| FR9 | Build Variants — 5 sdkconfig overlays: production, debug-JTAG, debug-UART, debug-USB, wifi-test | Completed | `sdkconfig.defaults`, `sdkconfig.debug-jtag`, `sdkconfig.debug-uart`, `sdkconfig.debug-usb`, `sdkconfig.wifi-test` |
 
 ## Features — Planned
 

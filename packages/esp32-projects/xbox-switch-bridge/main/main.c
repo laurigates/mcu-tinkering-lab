@@ -159,14 +159,6 @@ static void bridge_task(void *arg)
                 }
 #if CONFIG_TINYUSB_ENABLED
                 switch_pro_usb_send_report(&switch_input);
-
-                /* Forward rumble from Switch → Xbox controller */
-                {
-                    switch_pro_rumble_t rumble;
-                    if (switch_pro_usb_get_rumble(&rumble)) {
-                        bp32_host_set_rumble(rumble.weak, rumble.strong);
-                    }
-                }
 #endif
                 report_count++;
 
