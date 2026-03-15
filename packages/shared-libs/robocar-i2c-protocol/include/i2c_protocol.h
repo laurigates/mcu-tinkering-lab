@@ -82,7 +82,7 @@ typedef struct __attribute__((packed)) {
 // Display command data
 typedef struct __attribute__((packed)) {
     uint8_t line;      // Display line 0-7
-    char message[27];  // Message text (null-terminated)
+    char message[25];  // Message text (null-terminated, max 24 chars)
 } display_data_t;
 
 // Status response data
