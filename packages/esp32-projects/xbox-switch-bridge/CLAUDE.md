@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Xbox-Switch Bridge** is an ESP32-S3 firmware that bridges Xbox Series wireless controllers (BLE) to Nintendo Switch consoles (USB), emulating a wired Pro Controller.
 
 **Current status**: Feature complete (v1.0) — all 9 core features implemented.
-**Planned**: Rumble output (FR10), runtime button remapping (FR11), multi-controller support (FR12).
+**Planned**: Rumble output (FR10), runtime button remapping (FR11), multi-controller support (FR12 — profile abstraction done, integration pending).
 
 **Target hardware:** Waveshare ESP32-S3-Zero (ESP32-S3, 4MB flash, 2MB PSRAM, WS2812 RGB on GPIO21).
 
@@ -65,6 +65,7 @@ cp main/credentials.h.example main/credentials.h
 | `button_mapper` | Xbox → Switch input mapping (face button swap, stick remapping, triggers) |
 | `switch_pro_usb` | TinyUSB HID (VID 0x057E / PID 0x2009), 0x80 handshake, 0x30 input reports |
 | `status_led` | WS2812 RMT driver — caller-driven via `status_led_update()` at 125 Hz |
+| `controller_profile` | Swappable controller identity profiles (type, caps, colors, MAC) for FR12 multi-controller |
 | `log_udp` | WiFi SoftAP "xbox-bridge-log" + UDP broadcast log sink on port 4444 |
 
 ### Bridge State Machine
