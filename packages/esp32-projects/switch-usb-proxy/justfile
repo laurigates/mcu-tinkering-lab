@@ -1,0 +1,159 @@
+# Switch USB Proxy — thin USB HID ↔ UART bridge for protocol development
+# Run `just --list` to see available recipes
+
+set positional-arguments
+
+project_dir := "packages/esp32-projects/switch-usb-proxy"
+tools_dir := justfile_directory() / "../../.." / "tools"
+# Auto-detect ESP32-S3 USB-Serial-JTAG by Espressif VID (0x303a=12346); override with PORT env var
+port := env("PORT", `ioreg -r -c IOUSBHostDevice -l 2>/dev/null | grep -A 30 '"idVendor" = 12346' | grep IODialinDevice | head -1 | sed 's/.*"\(\/dev\/[^"]*\)".*/\1/' | sed 's/tty\./cu./' || true`)
+baud := env("BAUD", "460800")
+target := "esp32s3"
+
+# Container engine (docker or podman)
+container_cmd := env("CONTAINER_CMD", "docker")
+
+# Auto-detect CP2102 USB-UART adapter; override with UART_PORT env var
+uart_port := env("UART_PORT", `ls /dev/cu.usbserial-* 2>/dev/null | head -1 || true`)
+uart_baud := env("UART_BAUD", "921600")
+
+default:
+    @just --list
+
+##########
+# Build (containerized)
+##########
+
+# Build firmware in Docker container
+[group: "build"]
+build:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Building switch-usb-proxy..."
+    {{container_cmd}} compose -f ../../../docker-compose.yml run --rm \
+        -w /workspace/{{project_dir}} \
+        esp-idf \
+        bash -c "idf.py set-target {{target}} && idf.py build" 2>&1 \
+        | grep -E "warning:|error:|ninja: build stopped|binary size|Build complete" \
+        || true
+    if [ ! -f build/switch-usb-proxy.bin ]; then
+        echo "FAILED — rerun with verbose output:" >&2
+        echo "  {{container_cmd}} compose -f ../../../docker-compose.yml run --rm -w /workspace/{{project_dir}} esp-idf bash -c 'idf.py build'" >&2
+        exit 1
+    fi
+    echo "Build OK"
+
+# Clean build artifacts via container
+[group: "build"]
+clean:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    {{container_cmd}} compose -f ../../../docker-compose.yml run --rm \
+        -w /workspace/{{project_dir}} \
+        esp-idf \
+        idf.py fullclean
+    echo "Clean complete"
+
+# Interactive shell in ESP-IDF container
+[group: "build"]
+shell:
+    {{container_cmd}} compose -f ../../../docker-compose.yml run --rm \
+        -w /workspace/{{project_dir}} \
+        esp-idf \
+        /bin/bash
+
+##########
+# Flash & Monitor (native)
+##########
+
+# Require a valid port for device recipes
+[private]
+require-port:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -z "{{port}}" ]; then
+        echo "ERROR: No ESP32-S3 USB-Serial-JTAG device found" >&2
+        echo "  Is the board plugged in? Override with: PORT=/dev/cu.usbmodem1101 just flash" >&2
+        exit 1
+    fi
+
+# Flash firmware to device
+[group: "device"]
+flash: require-port
+    #!/usr/bin/env bash
+    set -euo pipefail
+    esptool -s --chip esp32s3 -p {{port}} -b {{baud}} \
+        --before default-reset --after hard-reset \
+        write-flash --flash-mode dio --flash-size 4MB --flash-freq 80m \
+        0x0 build/bootloader/bootloader.bin \
+        0x8000 build/partition_table/partition-table.bin \
+        0x10000 build/switch-usb-proxy.bin
+    echo "Flashed OK"
+
+# Reset board via USB-Serial-JTAG CDC control signals
+[group: "device"]
+reset: require-port
+    "{{tools_dir}}/esp32s3-reset.sh" "{{port}}"
+
+# Serial monitor via USB-Serial-JTAG (before TinyUSB takes over the PHY)
+[group: "device"]
+monitor: require-port
+    "{{tools_dir}}/esp32s3-monitor.sh" "{{port}}"
+
+# Flash and monitor
+[group: "device"]
+flash-monitor: flash monitor
+
+##########
+# UART Adapter (for monitoring after TinyUSB owns the PHY)
+##########
+
+# Require a valid UART port
+[private]
+require-uart-port:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -z "{{uart_port}}" ]; then
+        echo "ERROR: No CP2102 USB-UART device found" >&2
+        echo "  Is the adapter plugged in? Override with: UART_PORT=/dev/cu.usbserial-0001 just uart-monitor" >&2
+        exit 1
+    fi
+
+# Monitor UART via CP2102 USB-UART adapter (Ctrl-C to stop)
+[group: "device"]
+uart-monitor: require-uart-port
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Monitoring {{uart_port}} @ {{uart_baud}} baud — Ctrl-C to stop"
+    exec uvx --from pyserial python3 -c "
+    import serial, sys, signal
+    signal.signal(signal.SIGINT, lambda *a: sys.exit(0))
+    s = serial.Serial('{{uart_port}}', {{uart_baud}}, timeout=1)
+    try:
+        while True:
+            data = s.read(4096)
+            if data:
+                sys.stdout.buffer.write(data)
+                sys.stdout.buffer.flush()
+    except serial.SerialException:
+        print('\nDevice disconnected', file=sys.stderr)
+    "
+
+##########
+# Info
+##########
+
+# Show project information
+[group: "info"]
+info:
+    @echo "Project: switch-usb-proxy"
+    @echo "  Target:       ESP32-S3"
+    @echo "  Port (JTAG):  {{if port == "" { "(not detected)" } else { port } }}"
+    @echo "  Port (UART):  {{if uart_port == "" { "(not detected)" } else { uart_port } }}"
+    @echo "  UART baud:    {{uart_baud}}"
+    @echo "  Container:    {{container_cmd}}"
+    @echo ""
+    @echo "  USB VID: 0x057E (Nintendo)"
+    @echo "  USB PID: 0x2009 (Pro Controller)"
+    @echo ""
+    @echo "  PC-side tool: tools/switch-controller-usb-test/switch_proxy.py"
