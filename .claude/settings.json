@@ -20,6 +20,11 @@
             "type": "command",
             "command": "./.claude/hooks/session-start-idf-env.sh",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/scripts/install_pkgs.sh\"",
+            "timeout": 120
           }
         ]
       }
