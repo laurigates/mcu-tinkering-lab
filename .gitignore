@@ -32,6 +32,7 @@ target/
 # ESP-IDF
 sdkconfig
 sdkconfig.old
+managed_components/
 
 # Credentials and sensitive files
 **/credentials.h
