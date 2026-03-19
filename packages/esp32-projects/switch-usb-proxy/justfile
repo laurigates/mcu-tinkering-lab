@@ -105,7 +105,7 @@ monitor: require-port
 flash-monitor: flash monitor
 
 ##########
-# UART Adapter (for monitoring after TinyUSB owns the PHY)
+# UART Adapter (flash + monitor without cable swapping)
 ##########
 
 # Require a valid UART port
@@ -115,9 +115,28 @@ require-uart-port:
     set -euo pipefail
     if [ -z "{{uart_port}}" ]; then
         echo "ERROR: No CP2102 USB-UART device found" >&2
-        echo "  Is the adapter plugged in? Override with: UART_PORT=/dev/cu.usbserial-0001 just uart-monitor" >&2
+        echo "  Is the adapter plugged in? Override with: UART_PORT=/dev/cu.usbserial-0001 just uart-flash" >&2
         exit 1
     fi
+
+# Flash firmware via UART adapter (no cable swapping needed)
+# If RTS/DTR aren't wired to EN/GPIO0: hold BOOT, tap RST, release BOOT, then run this
+[group: "device"]
+uart-flash: require-uart-port
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Flashing via UART adapter on {{uart_port}}..."
+    esptool -s --chip esp32s3 -p {{uart_port}} -b {{baud}} \
+        --before default-reset --after hard-reset \
+        write-flash --flash-mode dio --flash-size 4MB --flash-freq 80m \
+        0x0 build/bootloader/bootloader.bin \
+        0x8000 build/partition_table/partition-table.bin \
+        0x10000 build/switch-usb-proxy.bin
+    echo "Flashed OK via UART"
+
+# Flash via UART and start monitoring
+[group: "device"]
+uart-flash-monitor: uart-flash uart-monitor
 
 # Monitor UART via CP2102 USB-UART adapter (Ctrl-C to stop)
 [group: "device"]
