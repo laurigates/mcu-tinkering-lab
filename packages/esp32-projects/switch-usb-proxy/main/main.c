@@ -513,7 +513,11 @@ static void input_report_task(void *arg)
     while (1) {
         /* Priority 1: retry a previously failed reply send */
         if (have_pending_reply && tud_hid_ready()) {
-            pending_reply.data[0] = s_timer_counter++;
+            /* Only stamp timer for 0x21 reports — 0x81 replies use data[0]
+             * as the sub-command echo byte and must not be overwritten. */
+            if (pending_reply.report_id == REPORT_ID_SUBCMD_REPLY) {
+                pending_reply.data[0] = s_timer_counter++;
+            }
             bool ok = tud_hid_report(pending_reply.report_id, pending_reply.data,
                                      pending_reply.len);
             if (ok) {
@@ -535,7 +539,9 @@ static void input_report_task(void *arg)
                 vTaskDelay(1);
                 continue;
             }
-            pending_reply.data[0] = s_timer_counter++;
+            if (pending_reply.report_id == REPORT_ID_SUBCMD_REPLY) {
+                pending_reply.data[0] = s_timer_counter++;
+            }
             bool ok = tud_hid_report(pending_reply.report_id, pending_reply.data,
                                      pending_reply.len);
             if (ok) {
@@ -548,7 +554,10 @@ static void input_report_task(void *arg)
             continue;
         }
 
-        /* Priority 3: wait for handshake before sending 0x30 reports */
+        /* Priority 3: wait for handshake before sending 0x30 reports.
+         * The Switch needs continuous 0x30 keepalive reports to proceed
+         * with setup (SPI reads, IMU, player lights). The reply queue
+         * priority above ensures 0x21 replies are sent first. */
         if (!tud_mounted() || !s_handshake_complete) {
             vTaskDelay(pdMS_TO_TICKS(1));
             continue;
