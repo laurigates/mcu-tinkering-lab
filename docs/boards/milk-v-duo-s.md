@@ -120,7 +120,7 @@ The SG2000's most interesting feature is its multi-core heterogeneous architectu
 └─────────────────────────────────────────────┘
 ```
 
-You choose at build time whether Linux runs on the RISC-V or ARM core. The secondary RISC-V core always runs FreeRTOS and can handle real-time tasks like sensor polling, PWM generation, or protocol bit-banging — similar in concept to the ESP32's dual-core architecture but with a full Linux system on the main core.
+You choose at boot time whether Linux runs on the RISC-V or ARM core — a physical switch on the board selects the architecture. The main A53 and main C906 are **mutually exclusive** (they cannot run simultaneously). The secondary C906 @ 700 MHz always runs FreeRTOS concurrently and can handle real-time tasks like sensor polling, PWM generation, or protocol bit-banging — similar in concept to the ESP32's dual-core architecture but with a full Linux system on the main core.
 
 ### Inter-core Communication
 

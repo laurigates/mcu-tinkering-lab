@@ -9,7 +9,7 @@ Budget Linux SBC with a quad-core Allwinner H618 processor, Wi-Fi 5, and Bluetoo
 - **Dual-band Wi-Fi 5** — 802.11ac on 2.4 and 5 GHz. Significantly better wireless than the Pi Zero 2 W's 2.4 GHz-only Wi-Fi 4.
 - **Faster CPU clock** — Cortex-A53 at 1.5 GHz vs Pi Zero 2 W's 1.0 GHz. Same architecture, 50% higher clock speed.
 - **H.265 hardware decode** — 4K@60 H.265 and 4K@30 H.264 decode in hardware via the Allwinner VPU.
-- **~$20–30 USD** — Depending on RAM configuration. Good value for the specs.
+- **~$13–23 USD** — Starting at ~$13 for 1 GB, ~$23 for 4 GB. Excellent value for the specs.
 
 ### When to pick something else
 
@@ -158,7 +158,7 @@ pip install tflite-runtime
 | GPU | Mali-G31 | VideoCore IV | Mali-G52 |
 | Camera | None (USB only) | CSI-2 | CSI-2 |
 | USB ports | USB-C + USB-A | Micro-USB (OTG) | USB-C |
-| Price | ~$20–30 | ~$15 | ~$16–50 |
+| Price | ~$13–23 | ~$15 | ~$16–50 |
 | Availability | Good | Inconsistent | Good |
 | Community | Good | Excellent | Growing |
 

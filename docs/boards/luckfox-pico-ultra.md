@@ -4,12 +4,13 @@ Tiny Linux-capable board built around the Rockchip RV1106 — a single Cortex-A7
 
 ## Why Luckfox Pico Ultra
 
-- **0.5 TOPS NPU** — Dedicated neural network accelerator handles MobileNet, YOLOv5-nano, and similar models. Not as fast as the RK3566's 0.8 TOPS but impressive for the size and price.
+- **Up to 1 TOPS NPU** — The RV1106G3 (Ultra) has a 1 TOPS INT8 neural network accelerator; the RV1106G2 (Ultra B) has 0.5 TOPS. Handles MobileNet, YOLOv5-nano, and similar models well.
 - **Hardware ISP** — Built-in image signal processor with 3A (auto-exposure, auto-white-balance, auto-focus) support. Camera frames go directly to the ISP pipeline without CPU involvement.
 - **Tiny form factor** — Similar dimensions to a Raspberry Pi Pico. Fits inside cameras, drones, and other space-constrained enclosures.
-- **~$10–15 USD** — One of the cheapest NPU-equipped Linux boards available.
+- **~$18–30 USD** — ~$18–20 for the base Ultra, ~$26–30 for the Ultra W with Wi-Fi. Still affordable for a vision-focused NPU board.
 - **Runs Linux** — Full Buildroot or Ubuntu-based Linux. Access to Python, OpenCV, and RKNN inference runtime.
-- **Ethernet** — 100 Mbps Ethernet (on Ultra model) for reliable wired connectivity.
+- **Ethernet + PoE** — 100 Mbps Ethernet with 802.3af PoE support via header. Power and data over a single cable — ideal for camera deployments.
+- **Audio** — Onboard microphone and speaker header, unusual for a board this small.
 
 ### When to pick something else
 
@@ -26,19 +27,20 @@ Tiny Linux-capable board built around the Rockchip RV1106 — a single Cortex-A7
 
 | Feature | Details |
 |---------|---------|
-| SoC | Rockchip RV1106 |
+| SoC | Rockchip RV1106G3 (Ultra) / RV1106G2 (Ultra B) |
 | CPU | Single Cortex-A7 @ 1.2 GHz (32-bit ARMv7) |
-| NPU | 0.5 TOPS (INT8) |
+| NPU | 1 TOPS INT8 (RV1106G3 Ultra) / 0.5 TOPS INT8 (RV1106G2 Ultra B) |
 | ISP | Hardware ISP, up to 5 MP input, 3A support |
 | RAM | 256 MB DDR3 (integrated in SoC package) |
-| Storage | microSD + SPI NOR flash (16 MB) + optional SPI NAND |
-| Ethernet | 100 Mbps (Ultra model) |
-| Wi-Fi | None (use USB dongle or external module) |
+| Storage | 8 GB eMMC onboard + microSD |
+| Ethernet | 100 Mbps (with PoE support via header, 802.3af) |
+| Wi-Fi | Ultra W variant: Wi-Fi 6 (802.11ax, 2.4 GHz) + BT 5.2; base Ultra: none |
 | USB | 1× USB 2.0 (Type-C, OTG) |
-| GPIO | ~26 pins (UART, SPI, I2C, PWM, ADC) |
+| GPIO | 2× 26-pin headers (52 pins total: UART, SPI, I2C, PWM, ADC) |
+| Audio | Onboard microphone + speaker header (MX1.25, 8-ohm/1W) |
 | CSI | MIPI CSI-2 (2-lane) |
 | Video codec | H.264/H.265 encode (up to 2304×1296 @ 30fps) |
-| Dimensions | ~55 x 21 mm |
+| Dimensions | 50 x 50 mm |
 | Operating temp | -20°C to 85°C (industrial grade) |
 
 ## Pinout
@@ -128,9 +130,9 @@ Tight for complex Linux workloads. The board runs best with:
 - A focused single-purpose application
 - Avoid running Python if possible — use C/C++ for the main application loop
 
-### No Wi-Fi
+### Wi-Fi Only on Ultra W Variant
 
-The Ultra model has Ethernet but no Wi-Fi. If you need wireless connectivity, you'll need a USB Wi-Fi dongle (which uses the only USB port) or an external Wi-Fi module on SPI/UART. This is a significant limitation for robotics applications.
+The base Ultra has Ethernet but no Wi-Fi. The Ultra W variant adds Wi-Fi 6 + BT 5.2 but costs more (~$26–30). If you need wireless on the base model, you'll need a USB Wi-Fi dongle.
 
 ### 32-bit ARM Only
 
@@ -162,12 +164,14 @@ scp app root@<board-ip>:/root/
 
 | Feature | Pico | Pico Plus | Pico Pro | Pico Ultra |
 |---------|------|-----------|----------|------------|
-| SoC | RV1103 | RV1103 | RV1106 | RV1106 |
-| NPU | 0.5 TOPS | 0.5 TOPS | 0.5 TOPS | 0.5 TOPS |
+| SoC | RV1103 | RV1103 | RV1106 | RV1106G3 |
+| NPU | 0.5 TOPS | 0.5 TOPS | 0.5 TOPS | **1 TOPS** |
 | RAM | 64 MB | 128 MB | 256 MB | 256 MB |
-| Ethernet | No | No | No | **100 Mbps** |
-| Flash | SPI NOR | SPI NAND | SPI NAND | SPI NAND + NOR |
-| Price | ~$6 | ~$8 | ~$10 | ~$15 |
+| Ethernet | No | No | No | **100 Mbps + PoE** |
+| Storage | SPI NOR | SPI NAND | SPI NAND | **8 GB eMMC** |
+| Wi-Fi | No | No | No | **Wi-Fi 6 (W variant)** |
+| Audio | No | No | No | **Mic + speaker** |
+| Price | ~$6 | ~$8 | ~$10 | ~$18–30 |
 
 ## Use Cases
 

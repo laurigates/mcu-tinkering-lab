@@ -178,7 +178,7 @@ ML inference is CPU-only — no NPU, no GPU compute. Expect ~2–3 FPS for Mobil
 | NPU | None | 0.8 TOPS | None |
 | GPU | VideoCore IV | Mali-G52 | Mali-G31 |
 | Camera | CSI-2 | MIPI CSI-2 | None |
-| Price | ~$15 | ~$16–50 | ~$20–30 |
+| Price | ~$15 | ~$16–50 | ~$13–23 |
 | Community | Excellent | Growing | Good |
 | Availability | Inconsistent | Good | Good |
 
