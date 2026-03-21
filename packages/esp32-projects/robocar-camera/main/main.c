@@ -330,9 +330,12 @@ static esp_err_t init_ai_backend(void)
 #else
     ESP_LOGI(TAG, "Service discovery disabled, using static URL only");
 #endif
+#elif defined(CONFIG_AI_BACKEND_GEMINI)
+    ESP_LOGI(TAG, "Configuration: Gemini Robotics-ER backend selected");
+    ESP_LOGI(TAG, "Gemini model: %s", GEMINI_MODEL);
 #else
-    ESP_LOGE(TAG, "ERROR: No AI backend defined in config.h! Check CONFIG_AI_BACKEND_CLAUDE or "
-                  "CONFIG_AI_BACKEND_OLLAMA");
+    ESP_LOGE(TAG, "ERROR: No AI backend defined in config.h! Check CONFIG_AI_BACKEND_CLAUDE, "
+                  "CONFIG_AI_BACKEND_OLLAMA, or CONFIG_AI_BACKEND_GEMINI");
     return ESP_FAIL;
 #endif
 
@@ -344,9 +347,12 @@ static esp_err_t init_ai_backend(void)
         ESP_LOGE(TAG, "  - Claude backend should be available but isn't compiled in");
 #elif defined(CONFIG_AI_BACKEND_OLLAMA)
         ESP_LOGE(TAG, "  - Ollama backend should be available but isn't compiled in");
+#elif defined(CONFIG_AI_BACKEND_GEMINI)
+        ESP_LOGE(TAG, "  - Gemini backend should be available but isn't compiled in");
 #else
         ESP_LOGE(TAG, "  - No backend is defined in config.h");
-        ESP_LOGE(TAG, "  - Add #define CONFIG_AI_BACKEND_OLLAMA or CONFIG_AI_BACKEND_CLAUDE");
+        ESP_LOGE(TAG, "  - Add CONFIG_AI_BACKEND_OLLAMA, CONFIG_AI_BACKEND_CLAUDE, or "
+                      "CONFIG_AI_BACKEND_GEMINI");
 #endif
         return ESP_FAIL;
     }
@@ -369,6 +375,19 @@ static esp_err_t init_ai_backend(void)
     ai_config.api_key = NULL;  // Ollama doesn't require a key
     ai_config.api_url = OLLAMA_API_URL;
     ai_config.model = OLLAMA_MODEL;
+#elif defined(CONFIG_AI_BACKEND_GEMINI)
+    ESP_LOGI(TAG, "Configuring Gemini Robotics-ER backend...");
+    const char *gemini_api_key = get_gemini_api_key();
+    if (!gemini_api_key || strlen(gemini_api_key) == 0) {
+        ESP_LOGE(TAG, "Gemini API key not available - cannot initialize Gemini backend");
+        return ESP_FAIL;
+    }
+    ai_config.api_key = gemini_api_key;
+    // Build model-specific base URL: .../v1beta/models/{model}
+    static char gemini_url[256];
+    snprintf(gemini_url, sizeof(gemini_url), "%s/%s", GEMINI_API_URL, GEMINI_MODEL);
+    ai_config.api_url = gemini_url;
+    ai_config.model = GEMINI_MODEL;
 #endif
 
     ESP_LOGI(TAG, "Calling backend initialization...");
@@ -390,6 +409,11 @@ static esp_err_t init_ai_backend(void)
         ESP_LOGE(TAG, "  1. Check API key is valid");
         ESP_LOGE(TAG, "  2. Verify internet connectivity");
         ESP_LOGE(TAG, "  3. Test /v1/messages endpoint");
+#elif defined(CONFIG_AI_BACKEND_GEMINI)
+        ESP_LOGE(TAG, "Gemini troubleshooting:");
+        ESP_LOGE(TAG, "  1. Check Gemini API key from Google AI Studio");
+        ESP_LOGE(TAG, "  2. Verify internet connectivity");
+        ESP_LOGE(TAG, "  3. Check model availability: %s", GEMINI_MODEL);
 #endif
         i2c_send_sound_command(SOUND_ALERT);
         return ESP_FAIL;

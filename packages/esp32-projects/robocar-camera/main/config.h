@@ -64,6 +64,10 @@
 #define OLLAMA_API_URL "http://192.168.0.115:11434/api/generate"
 #define OLLAMA_MODEL "gemma3:4b"
 
+// Gemini Robotics-ER Configuration
+#define GEMINI_API_URL "https://generativelanguage.googleapis.com/v1beta/models"
+#define GEMINI_MODEL "gemini-robotics-er-1.5-preview"
+
 // Ollama Service Discovery Configuration
 #define OLLAMA_USE_SERVICE_DISCOVERY 1                    // Enable SRV record discovery
 #define OLLAMA_SRV_RECORD "_ollama._tcp.local"            // SRV record for mDNS discovery
