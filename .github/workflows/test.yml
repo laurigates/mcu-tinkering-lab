@@ -3,13 +3,67 @@ name: Test Suite
 on:
   push:
     branches: [main, develop, 'claude/**']
+    paths:
+      - 'packages/**'
+      - '.github/workflows/test.yml'
+      - '.pre-commit-config.yaml'
+      - '.clang-format'
+      - '.gitleaks.toml'
+      - 'tools/**'
+      - 'docker-compose.yml'
+      - 'Dockerfile'
   pull_request:
     branches: [main, develop]
+    paths:
+      - 'packages/**'
+      - '.github/workflows/test.yml'
+      - '.pre-commit-config.yaml'
+      - '.clang-format'
+      - '.gitleaks.toml'
+      - 'tools/**'
+      - 'docker-compose.yml'
+      - 'Dockerfile'
   workflow_dispatch:
 
 jobs:
+  detect-changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      python: ${{ steps.filter.outputs.python }}
+      c-code: ${{ steps.filter.outputs.c-code }}
+      any-code: ${{ steps.filter.outputs.any-code }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        if: github.event_name != 'workflow_dispatch'
+        with:
+          filters: |
+            python:
+              - 'packages/esp32-projects/robocar-simulation/**'
+            c-code:
+              - 'packages/esp32-projects/**/main/**'
+              - 'packages/esp32-projects/**/components/**'
+              - 'packages/esp32-projects/**/*.c'
+              - 'packages/esp32-projects/**/*.h'
+              - 'packages/esp32-projects/**/*.cpp'
+              - 'packages/esp32-projects/**/*.hpp'
+              - '.clang-format'
+            any-code:
+              - 'packages/**'
+              - '.pre-commit-config.yaml'
+              - '.clang-format'
+              - '.gitleaks.toml'
+              - 'tools/**'
+
   code-quality:
     name: Code Quality Checks
+    needs: [detect-changes]
+    if: >
+      needs.detect-changes.outputs.any-code == 'true' ||
+      github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -34,6 +88,10 @@ jobs:
 
   test-python-simulation:
     name: Python Simulation Tests
+    needs: [detect-changes]
+    if: >
+      needs.detect-changes.outputs.python == 'true' ||
+      github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -74,7 +132,7 @@ jobs:
         uses: codecov/codecov-action@v5
         if: always()
         with:
-          file: packages/esp32-projects/robocar-simulation/coverage.xml
+          files: packages/esp32-projects/robocar-simulation/coverage.xml
           flags: simulation
           name: robocar-simulation
         continue-on-error: true
@@ -82,6 +140,10 @@ jobs:
   # Placeholder for future ESP32 host-based tests
   test-esp32-host:
     name: ESP32 Host-Based Tests
+    needs: [detect-changes]
+    if: >
+      needs.detect-changes.outputs.c-code == 'true' ||
+      github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -115,6 +177,10 @@ jobs:
 
   lint-c:
     name: C/C++ Linting
+    needs: [detect-changes]
+    if: >
+      needs.detect-changes.outputs.c-code == 'true' ||
+      github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -149,6 +215,10 @@ jobs:
 
   format-check:
     name: Format Check
+    needs: [detect-changes]
+    if: >
+      needs.detect-changes.outputs.c-code == 'true' ||
+      github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -172,7 +242,7 @@ jobs:
 
   test-summary:
     name: Test Summary
-    needs: [code-quality, test-python-simulation, test-esp32-host, lint-c, format-check]
+    needs: [detect-changes, code-quality, test-python-simulation, test-esp32-host, lint-c, format-check]
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -186,11 +256,14 @@ jobs:
           echo "- C/C++ Linting: ${{ needs.lint-c.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Format Check: ${{ needs.format-check.result }}" >> $GITHUB_STEP_SUMMARY
 
-          # Fail if critical checks failed
-          if [ "${{ needs.code-quality.result }}" != "success" ] || \
-             [ "${{ needs.format-check.result }}" != "success" ]; then
-            echo "::error::Critical quality checks failed!"
-            exit 1
-          fi
+          # Fail only on actual failures, not skips
+          for result in \
+            "${{ needs.code-quality.result }}" \
+            "${{ needs.format-check.result }}"; do
+            if [ "$result" = "failure" ]; then
+              echo "::error::Critical quality checks failed!"
+              exit 1
+            fi
+          done
 
           echo "::notice::All test checks completed!"

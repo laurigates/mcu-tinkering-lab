@@ -17,38 +17,102 @@ env:
   IDF_VERSION: 'v5.4'
 
 jobs:
+  detect-changes:
+    name: Detect Changed Projects
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      has-firmware-changes: ${{ steps.set-matrix.outputs.has-firmware-changes }}
+      simulation-changed: ${{ steps.filter.outputs.simulation || 'true' }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        if: github.event_name != 'workflow_dispatch'
+        with:
+          filters: |
+            robocar-main:
+              - 'packages/esp32-projects/robocar-main/**'
+            robocar-camera:
+              - 'packages/esp32-projects/robocar-camera/**'
+            esp32cam-llm-telegram:
+              - 'packages/esp32-projects/esp32cam-llm-telegram/**'
+            esp32-cam-webserver:
+              - 'packages/esp32-projects/esp32-cam-webserver/**'
+            it-troubleshooter:
+              - 'packages/esp32-projects/it-troubleshooter/**'
+            xbox-switch-bridge:
+              - 'packages/esp32-projects/xbox-switch-bridge/**'
+            simulation:
+              - 'packages/esp32-projects/robocar-simulation/**'
+            workflow:
+              - '.github/workflows/esp32-build.yml'
+
+      - name: Build dynamic matrix
+        id: set-matrix
+        run: |
+          ALL_PROJECTS='{"include":[
+            {"project":"robocar-main","target":"esp32","description":"Main Controller (Heltec WiFi LoRa 32)"},
+            {"project":"robocar-camera","target":"esp32","description":"Camera Module (ESP32-CAM)"},
+            {"project":"esp32cam-llm-telegram","target":"esp32","description":"LLM Telegram Bot (ESP32-CAM)"},
+            {"project":"esp32-cam-webserver","target":"esp32","description":"Webserver (ESP32-CAM)"},
+            {"project":"it-troubleshooter","target":"esp32s3","description":"IT Troubleshooter (ESP32-S3-Zero)"},
+            {"project":"xbox-switch-bridge","target":"esp32s3","description":"Xbox-Switch Bridge (ESP32-S3-Zero)","fetch_deps":true}
+          ]}'
+
+          # Build everything on manual dispatch or workflow file changes
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || \
+             [ "${{ steps.filter.outputs.workflow }}" = "true" ]; then
+            echo "matrix=$(echo "$ALL_PROJECTS" | jq -c .)" >> "$GITHUB_OUTPUT"
+            echo "has-firmware-changes=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Build matrix from changed projects only
+          INCLUDES="[]"
+
+          add_project() {
+            local proj="$1" target="$2" desc="$3" deps="${4:-}"
+            if [ -n "$deps" ]; then
+              INCLUDES=$(echo "$INCLUDES" | jq -c --arg p "$proj" --arg t "$target" --arg d "$desc" \
+                '. + [{"project":$p,"target":$t,"description":$d,"fetch_deps":true}]')
+            else
+              INCLUDES=$(echo "$INCLUDES" | jq -c --arg p "$proj" --arg t "$target" --arg d "$desc" \
+                '. + [{"project":$p,"target":$t,"description":$d}]')
+            fi
+          }
+
+          [ "${{ steps.filter.outputs.robocar-main }}" = "true" ] && \
+            add_project "robocar-main" "esp32" "Main Controller (Heltec WiFi LoRa 32)"
+          [ "${{ steps.filter.outputs.robocar-camera }}" = "true" ] && \
+            add_project "robocar-camera" "esp32" "Camera Module (ESP32-CAM)"
+          [ "${{ steps.filter.outputs.esp32cam-llm-telegram }}" = "true" ] && \
+            add_project "esp32cam-llm-telegram" "esp32" "LLM Telegram Bot (ESP32-CAM)"
+          [ "${{ steps.filter.outputs.esp32-cam-webserver }}" = "true" ] && \
+            add_project "esp32-cam-webserver" "esp32" "Webserver (ESP32-CAM)"
+          [ "${{ steps.filter.outputs.it-troubleshooter }}" = "true" ] && \
+            add_project "it-troubleshooter" "esp32s3" "IT Troubleshooter (ESP32-S3-Zero)"
+          [ "${{ steps.filter.outputs.xbox-switch-bridge }}" = "true" ] && \
+            add_project "xbox-switch-bridge" "esp32s3" "Xbox-Switch Bridge (ESP32-S3-Zero)" "true"
+
+          COUNT=$(echo "$INCLUDES" | jq 'length')
+          if [ "$COUNT" -gt 0 ]; then
+            echo "matrix=$(echo "{\"include\":$INCLUDES}" | jq -c .)" >> "$GITHUB_OUTPUT"
+            echo "has-firmware-changes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has-firmware-changes=false" >> "$GITHUB_OUTPUT"
+            echo 'matrix={"include":[]}' >> "$GITHUB_OUTPUT"
+          fi
+
   build-matrix:
     name: Build ${{ matrix.project }}
+    needs: [detect-changes]
+    if: needs.detect-changes.outputs.has-firmware-changes == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix:
-        project:
-          - robocar-main
-          - robocar-camera
-          - esp32cam-llm-telegram
-          - esp32-cam-webserver
-          - it-troubleshooter
-        include:
-          - project: robocar-main
-            target: esp32
-            description: "Main Controller (Heltec WiFi LoRa 32)"
-          - project: robocar-camera
-            target: esp32
-            description: "Camera Module (ESP32-CAM)"
-          - project: esp32cam-llm-telegram
-            target: esp32
-            description: "LLM Telegram Bot (ESP32-CAM)"
-          - project: esp32-cam-webserver
-            target: esp32
-            description: "Webserver (ESP32-CAM)"
-          - project: it-troubleshooter
-            target: esp32s3
-            description: "IT Troubleshooter (ESP32-S3-Zero)"
-          - project: xbox-switch-bridge
-            target: esp32s3
-            description: "Xbox-Switch Bridge (ESP32-S3-Zero)"
-            fetch_deps: true
+      matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
 
     steps:
       - name: Checkout repository
@@ -139,6 +203,10 @@ jobs:
 
   build-simulation:
     name: Build Python Simulation
+    needs: [detect-changes]
+    if: >
+      needs.detect-changes.outputs.simulation-changed == 'true' ||
+      github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -165,17 +233,17 @@ jobs:
 
   build-summary:
     name: Build Summary
-    needs: [build-matrix, build-simulation]
+    needs: [detect-changes, build-matrix, build-simulation]
     runs-on: ubuntu-latest
     if: always()
     steps:
       - name: Check build status
         run: |
-          if [ "${{ needs.build-matrix.result }}" != "success" ]; then
+          if [ "${{ needs.build-matrix.result }}" = "failure" ]; then
             echo "::error::ESP32 build matrix failed!"
             exit 1
           fi
-          if [ "${{ needs.build-simulation.result }}" != "success" ]; then
+          if [ "${{ needs.build-simulation.result }}" = "failure" ]; then
             echo "::warning::Simulation build failed, but continuing..."
           fi
-          echo "::notice::All ESP32 projects built successfully!"
+          echo "::notice::Build pipeline completed!"
