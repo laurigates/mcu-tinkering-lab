@@ -1,6 +1,8 @@
 # ESP-IDF Robocar Main Controller (Heltec WiFi LoRa 32)
 # Run `just --list` to see available recipes
 
+set positional-arguments
+
 idf_path := env("IDF_PATH", home_directory() + "/repos/esp-idf")
 port := env("PORT", "/dev/cu.usbserial-0001")
 
@@ -16,6 +18,10 @@ check-idf:
         echo "Install ESP-IDF or set IDF_PATH variable"
         exit 1
     fi
+
+##########
+# Build
+##########
 
 # Build the firmware
 [group: "build"]
@@ -34,6 +40,7 @@ clean: check-idf
     idf.py clean
 
 # Full clean (removes build directory)
+[confirm("Remove build directory and generated sdkconfig?")]
 [group: "build"]
 fullclean: check-idf
     #!/usr/bin/env bash
@@ -49,8 +56,12 @@ menuconfig: check-idf
     source {{idf_path}}/export.sh
     idf.py menuconfig
 
+##########
+# Device
+##########
+
 # Flash firmware to ESP32
-[group: "flash"]
+[group: "device"]
 flash: check-idf
     #!/usr/bin/env bash
     set -euo pipefail
@@ -58,7 +69,7 @@ flash: check-idf
     idf.py -p {{port}} flash
 
 # Flash and immediately start monitoring
-[group: "flash"]
+[group: "device"]
 flash-monitor: check-idf
     #!/usr/bin/env bash
     set -euo pipefail
@@ -66,12 +77,16 @@ flash-monitor: check-idf
     idf.py -p {{port}} flash monitor
 
 # Monitor serial output (Ctrl+] to exit)
-[group: "monitor"]
+[group: "device"]
 monitor: check-idf
     #!/usr/bin/env bash
     set -euo pipefail
     source {{idf_path}}/export.sh
     idf.py -p {{port}} monitor
+
+##########
+# Info
+##########
 
 # Show project information
 [group: "info"]
