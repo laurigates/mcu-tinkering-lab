@@ -1,10 +1,11 @@
-# ESP32-CAM AI Vision System
-# Run `just --list` to see available recipes
+# ESP32-CAM Live Video Streaming Web Server
+# Run `just` or `just --list` to see available recipes
 
 set positional-arguments
 
 idf_path := env("IDF_PATH", home_directory() + "/repos/esp-idf")
 port := env("PORT", "/dev/cu.usbserial-0001")
+project_name := "esp32-cam-webserver"
 
 default:
     @just --list
@@ -30,7 +31,7 @@ credentials:
     set -euo pipefail
     if [ ! -f main/credentials.h ]; then
         cp main/credentials.h.example main/credentials.h
-        echo "Created main/credentials.h — edit it with your WiFi and API credentials"
+        echo "Created main/credentials.h — edit it with your WiFi credentials"
     else
         echo "Credentials file exists"
     fi
@@ -55,14 +56,15 @@ clean: check-idf
     source {{idf_path}}/export.sh
     idf.py clean
 
-# Full clean (removes build directory)
-[confirm("Remove build directory and generated sdkconfig?")]
+# Full clean (removes build directory and generated sdkconfig)
 [group: "build"]
+[confirm("This will remove the build directory and sdkconfig. Continue?")]
 fullclean: check-idf
     #!/usr/bin/env bash
     set -euo pipefail
     source {{idf_path}}/export.sh
     idf.py fullclean
+    rm -f sdkconfig
 
 # Open configuration menu
 [group: "build"]
@@ -73,7 +75,26 @@ menuconfig: check-idf
     idf.py menuconfig
 
 ##########
-# Device
+# Code Quality
+##########
+
+# Run cppcheck on source files
+[group: "quality"]
+lint:
+    cppcheck --enable=warning,style,performance --suppress=missingIncludeSystem main/
+
+# Format source files with clang-format
+[group: "quality"]
+format:
+    clang-format -i main/*.c main/*.h 2>/dev/null || true
+
+# Check formatting without modifying files
+[group: "quality"]
+format-check:
+    clang-format --dry-run --Werror main/*.c main/*.h 2>/dev/null || true
+
+##########
+# Flash & Monitor
 ##########
 
 # Flash firmware to ESP32-CAM (GPIO0 must be connected to GND)
@@ -85,15 +106,6 @@ flash: check-idf
     source {{idf_path}}/export.sh
     idf.py -p {{port}} flash
 
-# Flash and immediately start monitoring (GPIO0 must be connected to GND)
-[group: "device"]
-flash-monitor: check-idf
-    #!/usr/bin/env bash
-    set -euo pipefail
-    echo "Make sure GPIO0 is connected to GND for programming mode"
-    source {{idf_path}}/export.sh
-    idf.py -p {{port}} flash monitor
-
 # Monitor serial output (Ctrl+] to exit)
 [group: "device"]
 monitor: check-idf
@@ -102,6 +114,19 @@ monitor: check-idf
     source {{idf_path}}/export.sh
     idf.py -p {{port}} monitor
 
+# Flash and immediately start monitoring
+[group: "device"]
+flash-monitor: check-idf
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Make sure GPIO0 is connected to GND for programming mode"
+    source {{idf_path}}/export.sh
+    idf.py -p {{port}} flash monitor
+
+# Build, flash, and monitor (full development cycle)
+[group: "device"]
+develop: build flash-monitor
+
 ##########
 # Info
 ##########
@@ -109,7 +134,7 @@ monitor: check-idf
 # Show project information and programming instructions
 [group: "info"]
 info:
-    @echo "ESP32-CAM AI Vision System"
+    @echo "{{project_name}} — Live Video Streaming Web Server"
     @echo "ESP-IDF Path: {{idf_path}}"
     @echo "Serial Port:  {{port}}"
     @echo ""

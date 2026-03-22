@@ -10,6 +10,9 @@ mod wireguard 'packages/esp32-projects/esp32-wireguard-ha-example'
 mod kids-audio 'packages/esp32-projects/kids-audio-toy'
 mod xbox 'packages/esp32-projects/xbox-switch-bridge'
 mod troubleshooter 'packages/esp32-projects/it-troubleshooter'
+mod webserver 'packages/esp32-projects/esp32-cam-webserver'
+mod i2s-audio 'packages/esp32-projects/esp32-cam-i2s-audio'
+mod telegram 'packages/esp32-projects/esp32cam-llm-telegram'
 mod wifitest 'packages/esp32-projects/esp32-wifitest'
 mod switch-proxy 'packages/esp32-projects/switch-usb-proxy'
 mod switch-probe 'tools/switch-controller-usb-test'
@@ -397,10 +400,10 @@ format-check-python:
     cd {{robocar_sim_dir}} && ruff format --check .
     echo "Python formatting check passed"
 
-# Build all projects
+# Build robocar projects (use `just <module>::build` for other projects)
 [group: "build"]
 build-all: robocar-build-all
-    @echo "All projects built"
+    @echo "Robocar projects built. Other projects: just <module>::build"
 
 # Clean all project builds
 [confirm("Clean all build directories?")]
@@ -426,14 +429,19 @@ list-projects:
     fi
     echo ""
     echo "ESP32 Package Projects:"
-    [ -d "{{esp32_webserver_dir}}" ]    && echo "  esp32-cam-webserver    — Live video streaming web server"    || true
-    [ -d "{{esp32_audio_dir}}" ]        && echo "  esp32-cam-i2s-audio    — Camera + I2S audio processing"      || true
-    [ -d "{{esp32_llm_telegram_dir}}" ] && echo "  esp32cam-llm-telegram  — AI vision with Telegram bot"        || true
+    [ -d "{{esp32_webserver_dir}}" ]    && echo "  esp32-cam-webserver         — Live video streaming web server"         || true
+    [ -d "{{esp32_audio_dir}}" ]        && echo "  esp32-cam-i2s-audio         — Camera + I2S audio processing"           || true
+    [ -d "{{esp32_llm_telegram_dir}}" ] && echo "  esp32cam-llm-telegram       — AI vision with Telegram bot"             || true
+    [ -d "packages/esp32-projects/xbox-switch-bridge" ]          && echo "  xbox-switch-bridge          — Xbox BLE to Switch USB bridge"           || true
+    [ -d "packages/esp32-projects/it-troubleshooter" ]           && echo "  it-troubleshooter           — IT troubleshooting assistant"            || true
+    [ -d "packages/esp32-projects/switch-usb-proxy" ]            && echo "  switch-usb-proxy            — Switch USB protocol proxy"               || true
+    [ -d "packages/esp32-projects/esp32-wifitest" ]              && echo "  esp32-wifitest              — WiFi AP test firmware"                   || true
+    [ -d "packages/esp32-projects/kids-audio-toy" ]              && echo "  kids-audio-toy              — Potentiometer-controlled audio toy"      || true
+    [ -d "packages/esp32-projects/audiobook-player" ]            && echo "  audiobook-player            — ESPHome audiobook player"                || true
+    [ -d "packages/esp32-projects/esp32-wireguard-ha-example" ]  && echo "  esp32-wireguard-ha-example  — WireGuard + Home Assistant (ESPHome)"    || true
     echo ""
-    echo "Platform Directories:"
-    [ -d "packages/arduino-projects" ] && echo "  Arduino projects" || echo "  Arduino projects (empty)"
-    [ -d "packages/stm32-projects" ]   && echo "  STM32 projects"   || echo "  STM32 projects (empty)"
-    [ -d "packages/shared-libs" ]      && echo "  Shared libraries" || echo "  Shared libraries (empty)"
+    echo "Use 'just <module>::build' to build individual projects."
+    echo "Module names: just --list --list-submodules"
 
 # Show system information
 [group: "info"]
@@ -459,7 +467,7 @@ docker-build:
     #!/usr/bin/env bash
     set -euo pipefail
     command -v docker >/dev/null 2>&1 || { echo "Error: Docker not found"; exit 1; }
-    docker-compose build
+    docker compose build
 
 # Start interactive shell in ESP-IDF Docker container
 [group: "docker"]
@@ -467,28 +475,28 @@ docker-dev:
     #!/usr/bin/env bash
     set -euo pipefail
     command -v docker >/dev/null 2>&1 || { echo "Error: Docker not found"; exit 1; }
-    docker-compose run --rm esp-idf
+    docker compose run --rm esp-idf
 
 # Start Docker services in background
 [group: "docker"]
 docker-up:
-    docker-compose up -d
+    docker compose up -d
 
 # Stop Docker services
 [group: "docker"]
 docker-down:
-    docker-compose down
+    docker compose down
 
 # Clean Docker containers and volumes (images preserved)
 [group: "docker"]
 docker-clean:
-    docker-compose down -v
+    docker compose down -v
     @echo "Containers and volumes removed. Images preserved."
 
 # Show Docker service logs
 [group: "docker"]
 docker-logs:
-    docker-compose logs -f
+    docker compose logs -f
 
 # Check for credential files in the git staging area
 [group: "git"]

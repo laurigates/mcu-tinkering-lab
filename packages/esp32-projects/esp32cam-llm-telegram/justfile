@@ -1,10 +1,11 @@
-# ESP32-CAM AI Vision System
-# Run `just --list` to see available recipes
+# ESP32-CAM LLM Telegram Bot — AI vision with Telegram integration
+# Run `just` or `just --list` to see available recipes
 
 set positional-arguments
 
 idf_path := env("IDF_PATH", home_directory() + "/repos/esp-idf")
 port := env("PORT", "/dev/cu.usbserial-0001")
+project_name := "esp32cam-llm-telegram"
 
 default:
     @just --list
@@ -20,28 +21,12 @@ check-idf:
     fi
 
 ##########
-# Setup
-##########
-
-# Create credentials file from template
-[group: "setup"]
-credentials:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ ! -f main/credentials.h ]; then
-        cp main/credentials.h.example main/credentials.h
-        echo "Created main/credentials.h — edit it with your WiFi and API credentials"
-    else
-        echo "Credentials file exists"
-    fi
-
-##########
 # Build
 ##########
 
 # Build the firmware
 [group: "build"]
-build: check-idf credentials
+build: check-idf
     #!/usr/bin/env bash
     set -euo pipefail
     source {{idf_path}}/export.sh
@@ -55,7 +40,7 @@ clean: check-idf
     source {{idf_path}}/export.sh
     idf.py clean
 
-# Full clean (removes build directory)
+# Full clean (removes build directory and generated sdkconfig)
 [confirm("Remove build directory and generated sdkconfig?")]
 [group: "build"]
 fullclean: check-idf
@@ -63,6 +48,7 @@ fullclean: check-idf
     set -euo pipefail
     source {{idf_path}}/export.sh
     idf.py fullclean
+    rm -f sdkconfig
 
 # Open configuration menu
 [group: "build"]
@@ -71,6 +57,22 @@ menuconfig: check-idf
     set -euo pipefail
     source {{idf_path}}/export.sh
     idf.py menuconfig
+
+# Show binary size analysis
+[group: "build"]
+size: check-idf
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source {{idf_path}}/export.sh
+    idf.py size
+
+# Show per-component size breakdown
+[group: "build"]
+size-components: check-idf
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source {{idf_path}}/export.sh
+    idf.py size-components
 
 ##########
 # Device
@@ -85,15 +87,6 @@ flash: check-idf
     source {{idf_path}}/export.sh
     idf.py -p {{port}} flash
 
-# Flash and immediately start monitoring (GPIO0 must be connected to GND)
-[group: "device"]
-flash-monitor: check-idf
-    #!/usr/bin/env bash
-    set -euo pipefail
-    echo "Make sure GPIO0 is connected to GND for programming mode"
-    source {{idf_path}}/export.sh
-    idf.py -p {{port}} flash monitor
-
 # Monitor serial output (Ctrl+] to exit)
 [group: "device"]
 monitor: check-idf
@@ -102,16 +95,40 @@ monitor: check-idf
     source {{idf_path}}/export.sh
     idf.py -p {{port}} monitor
 
+# Flash and immediately start monitoring
+[group: "device"]
+flash-monitor: check-idf
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Make sure GPIO0 is connected to GND for programming mode"
+    source {{idf_path}}/export.sh
+    idf.py -p {{port}} flash monitor
+
+# Build, flash, and monitor (full development cycle)
+[group: "device"]
+develop: build flash-monitor
+
 ##########
 # Info
 ##########
 
-# Show project information and programming instructions
+# Show project information
 [group: "info"]
 info:
-    @echo "ESP32-CAM AI Vision System"
+    @echo "{{project_name}} — AI Vision with Telegram Integration"
     @echo "ESP-IDF Path: {{idf_path}}"
     @echo "Serial Port:  {{port}}"
+    @echo ""
+    @echo "Features:"
+    @echo "  Camera capture with OV2640"
+    @echo "  LLM-powered image analysis"
+    @echo "  Telegram bot interface"
+    @echo "  Motor control via vision commands"
+    @echo ""
+    @echo "Note: Credentials are in main/config.h (placeholder values)."
+    @echo "  Edit config.h with your WiFi, Telegram, and LLM API credentials."
+    @echo "  Uses custom partition table (partitions.csv)."
+    @echo "  data/prompts.txt is embedded into the binary at build time."
     @echo ""
     @echo "Programming ESP32-CAM:"
     @echo "  1. Connect GPIO0 to GND"

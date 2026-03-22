@@ -1,11 +1,10 @@
-# ESP32 Kids Audio Toy
-# Run `just --list` to see available recipes
+# ESP32-CAM I2S Audio Processing
+# Run `just` or `just --list` to see available recipes
 
 set positional-arguments
 
 idf_path := env("IDF_PATH", home_directory() + "/repos/esp-idf")
-port := env("PORT", "/dev/ttyUSB0")
-baud_rate := env("BAUD_RATE", "115200")
+port := env("PORT", "/dev/cu.usbserial-0001")
 
 default:
     @just --list
@@ -40,7 +39,7 @@ clean: check-idf
     source {{idf_path}}/export.sh
     idf.py clean
 
-# Full clean (removes build directory)
+# Full clean (removes build directory and generated sdkconfig)
 [confirm("Remove build directory and generated sdkconfig?")]
 [group: "build"]
 fullclean: check-idf
@@ -48,6 +47,7 @@ fullclean: check-idf
     set -euo pipefail
     source {{idf_path}}/export.sh
     idf.py fullclean
+    rm -f sdkconfig
 
 # Open configuration menu
 [group: "build"]
@@ -61,21 +61,14 @@ menuconfig: check-idf
 # Device
 ##########
 
-# Flash firmware to ESP32
+# Flash firmware to ESP32-CAM (GPIO0 must be connected to GND)
 [group: "device"]
 flash: check-idf
     #!/usr/bin/env bash
     set -euo pipefail
+    echo "Make sure GPIO0 is connected to GND for programming mode"
     source {{idf_path}}/export.sh
     idf.py -p {{port}} flash
-
-# Flash and immediately start monitoring
-[group: "device"]
-flash-monitor: check-idf
-    #!/usr/bin/env bash
-    set -euo pipefail
-    source {{idf_path}}/export.sh
-    idf.py -p {{port}} flash monitor
 
 # Monitor serial output (Ctrl+] to exit)
 [group: "device"]
@@ -85,40 +78,33 @@ monitor: check-idf
     source {{idf_path}}/export.sh
     idf.py -p {{port}} monitor
 
+# Flash and immediately start monitoring
+[group: "device"]
+flash-monitor: check-idf
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Make sure GPIO0 is connected to GND for programming mode"
+    source {{idf_path}}/export.sh
+    idf.py -p {{port}} flash monitor
+
+# Build, flash, and monitor (full development cycle)
+[group: "device"]
+develop: build flash-monitor
+
 ##########
 # Info
 ##########
 
-# Show project information and hardware setup
+# Show project information
 [group: "info"]
 info:
-    @echo "ESP32 Kids Audio Toy"
+    @echo "ESP32-CAM I2S Audio Processing"
     @echo "ESP-IDF Path: {{idf_path}}"
     @echo "Serial Port:  {{port}}"
-    @echo "Baud Rate:    {{baud_rate}}"
     @echo ""
-    @echo "Features:"
-    @echo "  3 potentiometers control pitch, duration, interval"
-    @echo "  555 timer integration for modulation effects"
-    @echo "  Dual-voice mode (ESP32 + 555 harmony)"
-    @echo "  LED visual feedback"
-    @echo ""
-    @echo "Quick Start:"
-    @echo "  1. Connect potentiometers to GPIO34, GPIO35, GPIO32"
-    @echo "  2. Connect piezo speaker to GPIO25"
-    @echo "  3. Connect LED to GPIO2 (with 220 ohm resistor)"
-    @echo "  4. Run: just build && just flash-monitor"
-    @echo ""
-    @echo "See WIRING.md for detailed connection diagrams"
-
-# Show pin assignment reference
-[group: "info"]
-pins:
-    @echo "Potentiometers:"
-    @echo "  Pitch      -> GPIO34"
-    @echo "  Duration   -> GPIO35"
-    @echo "  Interval   -> GPIO32"
-    @echo ""
-    @echo "Output:"
-    @echo "  Piezo speaker -> GPIO25"
-    @echo "  LED           -> GPIO2 (via 220 ohm resistor)"
+    @echo "Programming ESP32-CAM:"
+    @echo "  1. Connect GPIO0 to GND"
+    @echo "  2. Power on or reset the board"
+    @echo "  3. Run: just flash or just flash-monitor"
+    @echo "  4. Disconnect GPIO0 from GND after flashing"
+    @echo "  5. Reset the board to run the new firmware"
