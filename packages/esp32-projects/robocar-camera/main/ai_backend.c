@@ -11,6 +11,8 @@
 #include "claude_backend.h"
 #elif defined(CONFIG_AI_BACKEND_OLLAMA)
 #include "ollama_backend.h"
+#elif defined(CONFIG_AI_BACKEND_GEMINI)
+#include "gemini_backend.h"
 #endif
 
 const ai_backend_t *ai_backend_get_current(void)
@@ -19,6 +21,8 @@ const ai_backend_t *ai_backend_get_current(void)
     return claude_backend_get();
 #elif defined(CONFIG_AI_BACKEND_OLLAMA)
     return ollama_backend_get();
+#elif defined(CONFIG_AI_BACKEND_GEMINI)
+    return gemini_backend_get();
 #else
     // Default or error case
     return NULL;

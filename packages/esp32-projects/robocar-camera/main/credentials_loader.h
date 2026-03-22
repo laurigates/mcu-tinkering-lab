@@ -25,6 +25,7 @@ typedef struct {
     char wifi_ssid[MAX_SSID_LENGTH];
     char wifi_password[MAX_PASSWORD_LENGTH];
     char claude_api_key[MAX_API_KEY_LENGTH];
+    char gemini_api_key[MAX_API_KEY_LENGTH];
     bool credentials_loaded;
 } credentials_t;
 
@@ -68,6 +69,13 @@ const char *get_wifi_password(void);
  * @return Pointer to Claude API key string
  */
 const char *get_claude_api_key(void);
+
+/**
+ * @brief Get Gemini API key
+ *
+ * @return Pointer to Gemini API key string
+ */
+const char *get_gemini_api_key(void);
 
 /**
  * @brief Check if credentials are available

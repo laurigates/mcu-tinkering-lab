@@ -16,6 +16,13 @@ menu "ESP32-CAM Robocar Configuration"
             help
                 Use local or remote Ollama server for image analysis.
                 Supports service discovery via mDNS.
+
+        config AI_BACKEND_GEMINI
+            bool "Gemini Robotics-ER"
+            help
+                Use Google Gemini Robotics-ER 1.5 for image analysis.
+                Optimized for spatial reasoning and robotics task planning.
+                Requires Gemini API key from Google AI Studio.
     endchoice
 
     config CONFIG_AI_BACKEND_CLAUDE
@@ -25,6 +32,10 @@ menu "ESP32-CAM Robocar Configuration"
     config CONFIG_AI_BACKEND_OLLAMA
         bool
         default y if AI_BACKEND_OLLAMA
+
+    config CONFIG_AI_BACKEND_GEMINI
+        bool
+        default y if AI_BACKEND_GEMINI
 
 endmenu
 

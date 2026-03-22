@@ -58,10 +58,16 @@ static bool load_from_file(credentials_t *creds)
     strncpy(creds->claude_api_key, CLAUDE_API_KEY, MAX_API_KEY_LENGTH - 1);
     creds->claude_api_key[MAX_API_KEY_LENGTH - 1] = '\0';
     ESP_LOGI(TAG, "Loaded Claude API key from credentials.h");
-// Defensively clear any stack copy of the key string literal reference.
-// Future improvement: use NVS encryption to avoid storing keys in global RAM.
 #else
     ESP_LOGI(TAG, "Claude API key not configured - only required for Claude backend");
+#endif
+
+#ifdef GEMINI_API_KEY
+    strncpy(creds->gemini_api_key, GEMINI_API_KEY, MAX_API_KEY_LENGTH - 1);
+    creds->gemini_api_key[MAX_API_KEY_LENGTH - 1] = '\0';
+    ESP_LOGI(TAG, "Loaded Gemini API key from credentials.h");
+#else
+    ESP_LOGI(TAG, "Gemini API key not configured - only required for Gemini backend");
 #endif
 
     return true;
@@ -87,8 +93,9 @@ bool load_credentials(credentials_t *creds)
     if (!load_from_env("WIFI_PASSWORD", creds->wifi_password, MAX_PASSWORD_LENGTH)) {
         env_loaded = false;
     }
-    // Claude API key is optional (for Ollama backend)
+    // API keys are optional — only needed for their respective backends
     load_from_env("CLAUDE_API_KEY", creds->claude_api_key, MAX_API_KEY_LENGTH);
+    load_from_env("GEMINI_API_KEY", creds->gemini_api_key, MAX_API_KEY_LENGTH);
 
     if (env_loaded) {
         ESP_LOGI(TAG, "Successfully loaded credentials from environment variables");
@@ -141,6 +148,14 @@ bool validate_credentials(const credentials_t *creds)
     }
 #endif
 
+// Gemini API key validation (optional - only required for Gemini backend)
+#ifdef CONFIG_AI_BACKEND_GEMINI
+    if (strlen(creds->gemini_api_key) == 0) {
+        ESP_LOGE(TAG, "Gemini API key is required for Gemini backend but not provided");
+        return false;
+    }
+#endif
+
     ESP_LOGI(TAG, "Credentials validation successful");
     return true;
 }
@@ -184,4 +199,13 @@ const char *get_claude_api_key(void)
         return NULL;
     }
     return g_credentials.claude_api_key;
+}
+
+const char *get_gemini_api_key(void)
+{
+    if (!are_credentials_available()) {
+        ESP_LOGE(TAG, "Credentials not available");
+        return NULL;
+    }
+    return g_credentials.gemini_api_key;
 }
