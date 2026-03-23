@@ -12,24 +12,25 @@ ESPHome-based RFID audiobook player for kids. Scan picture cards with RFID tags 
 
 ## Build and Development Commands
 
-### Using Makefile (Recommended)
+### Using justfile (Recommended)
 
 ```bash
 # Initial setup
-make install          # Install ESPHome
-make config          # Create secrets.yaml from template
+just install          # Install ESPHome
+just config           # Create secrets.yaml from template
 
 # Development workflow
-make compile         # Compile firmware only
-make upload          # Compile and upload via USB (auto-detects serial port)
-make wireless        # Upload via WiFi OTA after initial USB flash
-make logs            # View device logs in real-time
+just compile          # Compile firmware only
+just upload           # Compile and upload via USB (auto-detects serial port)
+just wireless         # Upload via WiFi OTA after initial USB flash
+just logs             # View device logs (auto-detects USB, falls back to OTA)
+just logs-wireless    # View device logs via WiFi OTA
 
 # Utilities
-make validate        # Validate YAML configuration
-make clean           # Remove build artifacts
-make status          # Show project status
-make pins            # Display pin assignment reference
+just validate         # Validate YAML configuration
+just clean            # Remove build artifacts
+just status           # Show project status
+just pins             # Display pin assignment reference
 ```
 
 ### Direct ESPHome Commands
@@ -124,8 +125,8 @@ Home Assistant automations listen for these events and control media players.
 
 ### Reading RFID Tag UIDs
 
-1. Upload firmware: `make upload`
-2. Monitor logs: `make logs`
+1. Upload firmware: `just upload`
+2. Monitor logs: `just logs`
 3. Scan RFID tags near the RC522 module
 4. Copy tag UIDs from logs (format: `XX-XX-XX-XX`)
 5. Use UIDs in Home Assistant automations
@@ -135,13 +136,13 @@ Home Assistant automations listen for these events and control media players.
 When changing GPIO pins:
 1. Update `audiobook-player.yaml` configuration
 2. Update `WIRING.md` documentation (diagrams and pin tables)
-3. Update `Makefile` pins target reference
+3. Update justfile `pins` recipe reference
 4. Verify pin is not a strapping pin (GPIO0, GPIO2, GPIO5, GPIO12, GPIO15)
 
 ### Troubleshooting Upload Issues
 
 **"Error resolving IP address"**: Device not on WiFi yet or mDNS not working
-- Solution: Use `make upload` (auto-detects USB port) or specify port manually
+- Solution: Use `just upload` (auto-detects USB port) or specify port manually
 
 **"No ESP32 device found on USB"**: Serial port not detected
 - Check USB cable is data-capable (not charge-only)
@@ -153,8 +154,8 @@ When changing GPIO pins:
 
 ### Testing Without Home Assistant
 
-1. Upload firmware: `make upload`
-2. Watch logs: `make logs`
+1. Upload firmware: `just upload`
+2. Watch logs: `just logs`
 3. Scan RFID tags - should see "Tag scanned: XX-XX-XX-XX" messages
 4. Press buttons - should see event logs even without HA connected
 5. Status LED should blink on tag detection

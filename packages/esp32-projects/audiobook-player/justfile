@@ -76,10 +76,24 @@ first-flash: config upload
     @echo ""
     @echo "First flash complete! Future updates: just wireless"
 
-# View device logs in real-time
+# View device logs via USB (auto-detects serial port)
 [group: "monitor"]
 logs:
-    esphome logs {{config_file}}
+    #!/usr/bin/env bash
+    set -euo pipefail
+    PORT=$(ls /dev/cu.* 2>/dev/null | grep -E "(usbserial|SLAB|wchusbserial)" | head -1)
+    if [ -z "$PORT" ]; then
+        echo "No USB device found, trying OTA..."
+        esphome logs {{config_file}} --device {{device_name}}.local
+    else
+        echo "Monitoring $PORT"
+        esphome logs {{config_file}} --device "$PORT"
+    fi
+
+# View device logs via WiFi OTA
+[group: "monitor"]
+logs-wireless:
+    esphome logs {{config_file}} --device {{device_name}}.local
 
 # Alias for logs
 [group: "monitor"]
