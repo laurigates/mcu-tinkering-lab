@@ -24,6 +24,8 @@ ota:
     password: !secret ota_password
     on_begin:
       then:
+        - script.stop: sleep_countdown
+        - script.stop: extend_wake
         - deep_sleep.prevent: deep_sleep_control
 
 wifi:
@@ -41,9 +43,12 @@ wifi:
 captive_portal:
 
 # Deep sleep configuration for power management
+# No run_duration — sleep is controlled by activity-based scripts:
+#   - On wake: 15-second probe period to detect RFID/button activity
+#   - On activity: extends wake to 2 minutes from last interaction
+#   - No activity: sleeps after 15 seconds (saves battery on spurious tilt wakes)
 deep_sleep:
   id: deep_sleep_control
-  run_duration: 2min        # Stay awake for 2 minutes after wake
   wakeup_pin: GPIO27        # Tilt switch wakes device
   wakeup_pin_mode: INVERT_WAKEUP  # Wake when tilt switch closes (connects to GND)
 
@@ -67,6 +72,7 @@ rc522_spi:
   # When a tag is detected, send it to Home Assistant
   on_tag:
     then:
+      - script.execute: extend_wake
       - text_sensor.template.publish:
           id: last_rfid_tag
           state: !lambda 'return x;'
@@ -115,6 +121,7 @@ binary_sensor:
       - delayed_off: 50ms
     on_press:
       then:
+        - script.execute: extend_wake
         - homeassistant.event:
             event: esphome.audiobook_control
             data:
@@ -135,6 +142,7 @@ binary_sensor:
       - delayed_off: 50ms
     on_press:
       then:
+        - script.execute: extend_wake
         - homeassistant.event:
             event: esphome.audiobook_control
             data:
@@ -166,6 +174,24 @@ rtttl:
 
 # Scripts for feedback sequences
 script:
+  # Short probe period after wake — if no RFID/button activity, go back to sleep
+  - id: sleep_countdown
+    mode: restart
+    then:
+      - delay: 15s
+      - logger.log: "No activity detected, going to sleep"
+      - deep_sleep.enter: deep_sleep_control
+
+  # Activity detected — cancel probe, stay awake for 2 minutes from last interaction
+  - id: extend_wake
+    mode: restart
+    then:
+      - script.stop: sleep_countdown
+      - logger.log: "Activity detected, staying awake for 2 minutes"
+      - delay: 2min
+      - logger.log: "Inactivity timeout, going to sleep"
+      - deep_sleep.enter: deep_sleep_control
+
   # Fast blink loop (100ms on/off) - runs until stopped
   - id: led_fast_blink
     mode: restart
@@ -192,9 +218,10 @@ script:
             - output.turn_off: status_led_output
             - delay: 500ms
 
-  # Boot sequence - gentle ascending arpeggio
+  # Boot sequence - gentle ascending arpeggio, starts sleep countdown
   - id: play_boot_sequence
     then:
+      - script.execute: sleep_countdown
       - script.execute: led_fast_blink
       - rtttl.play: "boot:d=16,o=5,b=120:c,d,e,g"
       - delay: 1s
