@@ -11,8 +11,8 @@
  */
 #pragma once
 
-#include "esp_err.h"
 #include <stddef.h>
+#include "esp_err.h"
 
 /**
  * @brief Initialize the Claude API client with credentials.

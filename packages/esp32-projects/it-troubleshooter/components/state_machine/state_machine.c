@@ -13,7 +13,7 @@ static const char *TAG = "state_machine";
 
 #define NVS_NAMESPACE "it-ts"
 #define NVS_KEY_PHASE "phase"
-#define NVS_KEY_STEP  "step"
+#define NVS_KEY_STEP "step"
 
 static sm_phase_t s_phase = SM_PHASE_USB_ONLY;
 static uint8_t s_step = 0;
@@ -115,8 +115,7 @@ esp_err_t sm_set_step(uint8_t step)
     if (step == s_step) {
         return ESP_OK;
     }
-    ESP_LOGI(TAG, "Step %u → %u (phase=%u)", (unsigned)s_step, (unsigned)step,
-             (unsigned)s_phase);
+    ESP_LOGI(TAG, "Step %u → %u (phase=%u)", (unsigned)s_step, (unsigned)step, (unsigned)s_phase);
     s_step = step;
     return persist();
 }

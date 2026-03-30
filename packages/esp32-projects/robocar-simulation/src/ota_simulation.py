@@ -20,6 +20,7 @@ from enum import Enum
 from pathlib import Path
 
 import yaml
+
 from error_handling import ErrorSeverity, get_error_handler
 
 
@@ -93,7 +94,7 @@ class OTAStatus:
 
     def to_dict(self) -> dict:
         """Convert to dictionary for serialization"""
-        result = {
+        result: dict[str, object] = {
             "state": self.state.value,
             "progress_percent": self.progress_percent,
             "bytes_downloaded": self.bytes_downloaded,
@@ -308,7 +309,7 @@ class OTASimulation:
         else:
             return "ota_0"  # Default fallback
 
-    def start_update(self, firmware_url: str, version: str = None) -> bool:
+    def start_update(self, firmware_url: str, version: str | None = None) -> bool:
         """Start OTA update process"""
         try:
             if not self.is_ota_ready():

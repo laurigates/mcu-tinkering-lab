@@ -5,8 +5,8 @@
 
 #include "i2c_slave.h"
 #include <string.h>
+#include "display_manager.h"
 #include "driver/i2c.h"
-#include "i2c_config.h"
 #include "esp_app_desc.h"
 #include "esp_log.h"
 #include "esp_system.h"
@@ -14,7 +14,7 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "freertos/timers.h"
-#include "display_manager.h"
+#include "i2c_config.h"
 #include "motor_controller.h"
 #include "ota_handler.h"
 

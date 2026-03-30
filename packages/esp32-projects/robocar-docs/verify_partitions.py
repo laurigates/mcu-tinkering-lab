@@ -36,17 +36,23 @@ print("-" * 60)
 total_size = 0
 for name, (offset, size) in partitions.items():
     end = offset + size
+    size_kb = bytes_to_kb(size)
     print(
-        f"{name:10s} | Offset: 0x{offset:06X} | Size: 0x{size:06X} ({bytes_to_kb(size):7.1f} KB) | End: 0x{end:06X}"
+        f"{name:10s} | Offset: 0x{offset:06X} | Size: 0x{size:06X}"
+        f" ({size_kb:7.1f} KB) | End: 0x{end:06X}"
     )
     total_size += size
 
 print("-" * 60)
+total_mb = bytes_to_mb(total_size)
+flash_mb = bytes_to_mb(FLASH_SIZE_4MB)
 print(
-    f"{'TOTAL':10s} |                    | Size: 0x{total_size:06X} ({bytes_to_mb(total_size):7.2f} MB)"
+    f"{'TOTAL':10s} |                    | Size: 0x{total_size:06X}"
+    f" ({total_mb:7.2f} MB)"
 )
 print(
-    f"{'FLASH':10s} |                    | Size: 0x{FLASH_SIZE_4MB:06X} ({bytes_to_mb(FLASH_SIZE_4MB):7.2f} MB)"
+    f"{'FLASH':10s} |                    | Size: 0x{FLASH_SIZE_4MB:06X}"
+    f" ({flash_mb:7.2f} MB)"
 )
 print("-" * 60)
 
@@ -62,12 +68,14 @@ for name, (offset, size) in partitions.items():
         gap = offset - prev_end
         if gap > 0:
             print(
-                f"WARNING: Gap of 0x{gap:X} bytes ({gap} bytes) between {prev_name} and {name}"
+                f"WARNING: Gap of 0x{gap:X} bytes ({gap} bytes)"
+                f" between {prev_name} and {name}"
             )
             is_continuous = False
         elif gap < 0:
             print(
-                f"ERROR: Overlap of 0x{-gap:X} bytes ({-gap} bytes) between {prev_name} and {name}"
+                f"ERROR: Overlap of 0x{-gap:X} bytes ({-gap} bytes)"
+                f" between {prev_name} and {name}"
             )
             is_continuous = False
         else:
@@ -96,8 +104,10 @@ if last_end <= FLASH_SIZE_4MB:
     )
 else:
     overflow = last_end - FLASH_SIZE_4MB
+    overflow_kb = bytes_to_kb(overflow)
     print(
-        f"✗ ERROR: Partition table exceeds 4MB flash by 0x{overflow:06X} ({bytes_to_kb(overflow):.1f} KB)"
+        f"✗ ERROR: Partition table exceeds 4MB flash"
+        f" by 0x{overflow:06X} ({overflow_kb:.1f} KB)"
     )
 
 # Verify 4KB alignment (ESP32 flash sector size)

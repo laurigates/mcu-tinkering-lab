@@ -66,47 +66,80 @@ static const char *s_string_desc[] = {
 
 /* HID boot keyboard report descriptor */
 static const uint8_t s_hid_report_desc[] = {
-    0x05, 0x01, /* Usage Page (Generic Desktop) */
-    0x09, 0x06, /* Usage (Keyboard) */
-    0xA1, 0x01, /* Collection (Application) */
+    0x05,
+    0x01, /* Usage Page (Generic Desktop) */
+    0x09,
+    0x06, /* Usage (Keyboard) */
+    0xA1,
+    0x01, /* Collection (Application) */
 
     /* Modifier keys (8 bits) */
-    0x05, 0x07, /*   Usage Page (Key Codes) */
-    0x19, 0xE0, /*   Usage Minimum (Left Control) */
-    0x29, 0xE7, /*   Usage Maximum (Right GUI) */
-    0x15, 0x00, /*   Logical Minimum (0) */
-    0x25, 0x01, /*   Logical Maximum (1) */
-    0x75, 0x01, /*   Report Size (1) */
-    0x95, 0x08, /*   Report Count (8) */
-    0x81, 0x02, /*   Input (Data, Variable, Absolute) */
+    0x05,
+    0x07, /*   Usage Page (Key Codes) */
+    0x19,
+    0xE0, /*   Usage Minimum (Left Control) */
+    0x29,
+    0xE7, /*   Usage Maximum (Right GUI) */
+    0x15,
+    0x00, /*   Logical Minimum (0) */
+    0x25,
+    0x01, /*   Logical Maximum (1) */
+    0x75,
+    0x01, /*   Report Size (1) */
+    0x95,
+    0x08, /*   Report Count (8) */
+    0x81,
+    0x02, /*   Input (Data, Variable, Absolute) */
 
     /* Reserved byte */
-    0x95, 0x01, /*   Report Count (1) */
-    0x75, 0x08, /*   Report Size (8) */
-    0x81, 0x01, /*   Input (Constant) */
+    0x95,
+    0x01, /*   Report Count (1) */
+    0x75,
+    0x08, /*   Report Size (8) */
+    0x81,
+    0x01, /*   Input (Constant) */
 
     /* LED output (5 bits: Num/Caps/Scroll/Compose/Kana) */
-    0x95, 0x05, /*   Report Count (5) */
-    0x75, 0x01, /*   Report Size (1) */
-    0x05, 0x08, /*   Usage Page (LEDs) */
-    0x19, 0x01, /*   Usage Minimum (Num Lock) */
-    0x29, 0x05, /*   Usage Maximum (Kana) */
-    0x91, 0x02, /*   Output (Data, Variable, Absolute) */
+    0x95,
+    0x05, /*   Report Count (5) */
+    0x75,
+    0x01, /*   Report Size (1) */
+    0x05,
+    0x08, /*   Usage Page (LEDs) */
+    0x19,
+    0x01, /*   Usage Minimum (Num Lock) */
+    0x29,
+    0x05, /*   Usage Maximum (Kana) */
+    0x91,
+    0x02, /*   Output (Data, Variable, Absolute) */
 
     /* LED padding (3 bits) */
-    0x95, 0x01, /*   Report Count (1) */
-    0x75, 0x03, /*   Report Size (3) */
-    0x91, 0x01, /*   Output (Constant) */
+    0x95,
+    0x01, /*   Report Count (1) */
+    0x75,
+    0x03, /*   Report Size (3) */
+    0x91,
+    0x01, /*   Output (Constant) */
 
     /* Key codes (6 bytes) */
-    0x95, 0x06, /*   Report Count (6) */
-    0x75, 0x08, /*   Report Size (8) */
-    0x15, 0x00, /*   Logical Minimum (0) */
-    0x26, 0xFF, 0x00, /* Logical Maximum (255) */
-    0x05, 0x07, /*   Usage Page (Key Codes) */
-    0x19, 0x00, /*   Usage Minimum (0) */
-    0x2A, 0xFF, 0x00, /* Usage Maximum (255) */
-    0x81, 0x00, /*   Input (Data, Array) */
+    0x95,
+    0x06, /*   Report Count (6) */
+    0x75,
+    0x08, /*   Report Size (8) */
+    0x15,
+    0x00, /*   Logical Minimum (0) */
+    0x26,
+    0xFF,
+    0x00, /* Logical Maximum (255) */
+    0x05,
+    0x07, /*   Usage Page (Key Codes) */
+    0x19,
+    0x00, /*   Usage Minimum (0) */
+    0x2A,
+    0xFF,
+    0x00, /* Usage Maximum (255) */
+    0x81,
+    0x00, /*   Input (Data, Array) */
 
     0xC0, /* End Collection */
 };
@@ -136,16 +169,15 @@ static const uint8_t s_hid_report_desc[] = {
 
 static const uint8_t s_config_desc[] = {
     /* Configuration descriptor */
-    TUD_CONFIG_DESCRIPTOR(1, ITF_NUM_TOTAL, 0, CONFIG_TOTAL_LEN,
-                          TUSB_DESC_CONFIG_ATT_REMOTE_WAKEUP, 100),
+    TUD_CONFIG_DESCRIPTOR(1, ITF_NUM_TOTAL, 0, CONFIG_TOTAL_LEN, TUSB_DESC_CONFIG_ATT_REMOTE_WAKEUP,
+                          100),
 
     /* HID Keyboard: boot protocol, subclass 1, protocol 1 (keyboard) */
-    TUD_HID_DESCRIPTOR(ITF_NUM_HID, 0, HID_ITF_PROTOCOL_KEYBOARD,
-                        sizeof(s_hid_report_desc), EPNUM_HID, 8, 10),
+    TUD_HID_DESCRIPTOR(ITF_NUM_HID, 0, HID_ITF_PROTOCOL_KEYBOARD, sizeof(s_hid_report_desc),
+                       EPNUM_HID, 8, 10),
 
     /* CDC-ACM: communication + data interfaces */
-    TUD_CDC_DESCRIPTOR(ITF_NUM_CDC, 4, EPNUM_CDC_NOTIF, 8,
-                       EPNUM_CDC_OUT, EPNUM_CDC_IN, 64),
+    TUD_CDC_DESCRIPTOR(ITF_NUM_CDC, 4, EPNUM_CDC_NOTIF, 8, EPNUM_CDC_OUT, EPNUM_CDC_IN, 64),
 };
 
 /* ─── TinyUSB Callbacks ────────────────────────────────────────────────────── */
@@ -156,9 +188,8 @@ uint8_t const *tud_hid_descriptor_report_cb(uint8_t instance)
     return s_hid_report_desc;
 }
 
-void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id,
-                            hid_report_type_t report_type,
-                            uint8_t const *buffer, uint16_t bufsize)
+void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_t report_type,
+                           uint8_t const *buffer, uint16_t bufsize)
 {
     (void)instance;
     (void)report_id;
@@ -168,9 +199,8 @@ void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id,
     /* Accept LED state reports from host, but no action needed */
 }
 
-uint16_t tud_hid_get_report_cb(uint8_t instance, uint8_t report_id,
-                                hid_report_type_t report_type,
-                                uint8_t *buffer, uint16_t reqlen)
+uint16_t tud_hid_get_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_t report_type,
+                               uint8_t *buffer, uint16_t reqlen)
 {
     (void)instance;
     (void)report_id;
@@ -240,14 +270,16 @@ esp_err_t usb_keyboard_press_with_modifier(uint8_t modifier, uint8_t keycode)
 
     /* Key down */
     esp_err_t ret = usb_keyboard_send_report(modifier, keycodes);
-    if (ret != ESP_OK) return ret;
+    if (ret != ESP_OK)
+        return ret;
 
     vTaskDelay(pdMS_TO_TICKS(KEY_PRESS_MS));
 
     /* Key up (empty report) */
     uint8_t empty[6] = {0};
     ret = usb_keyboard_send_report(0, empty);
-    if (ret != ESP_OK) return ret;
+    if (ret != ESP_OK)
+        return ret;
 
     vTaskDelay(pdMS_TO_TICKS(KEY_RELEASE_MS));
     return ESP_OK;
@@ -281,43 +313,134 @@ static bool ascii_to_hid(char c, uint8_t *keycode, uint8_t *modifier)
 
     /* Special characters */
     switch (c) {
-        case '\n': *keycode = 0x28; return true; /* Enter */
-        case '\t': *keycode = 0x2B; return true; /* Tab */
-        case ' ':  *keycode = 0x2C; return true; /* Space */
-        case '-':  *keycode = 0x2D; return true;
-        case '=':  *keycode = 0x2E; return true;
-        case '[':  *keycode = 0x2F; return true;
-        case ']':  *keycode = 0x30; return true;
-        case '\\': *keycode = 0x31; return true;
-        case ';':  *keycode = 0x33; return true;
-        case '\'': *keycode = 0x34; return true;
-        case '`':  *keycode = 0x35; return true;
-        case ',':  *keycode = 0x36; return true;
-        case '.':  *keycode = 0x37; return true;
-        case '/':  *keycode = 0x38; return true;
+        case '\n':
+            *keycode = 0x28;
+            return true; /* Enter */
+        case '\t':
+            *keycode = 0x2B;
+            return true; /* Tab */
+        case ' ':
+            *keycode = 0x2C;
+            return true; /* Space */
+        case '-':
+            *keycode = 0x2D;
+            return true;
+        case '=':
+            *keycode = 0x2E;
+            return true;
+        case '[':
+            *keycode = 0x2F;
+            return true;
+        case ']':
+            *keycode = 0x30;
+            return true;
+        case '\\':
+            *keycode = 0x31;
+            return true;
+        case ';':
+            *keycode = 0x33;
+            return true;
+        case '\'':
+            *keycode = 0x34;
+            return true;
+        case '`':
+            *keycode = 0x35;
+            return true;
+        case ',':
+            *keycode = 0x36;
+            return true;
+        case '.':
+            *keycode = 0x37;
+            return true;
+        case '/':
+            *keycode = 0x38;
+            return true;
 
         /* Shifted characters */
-        case '!':  *keycode = 0x1E; *modifier = HID_MOD_LEFT_SHIFT; return true;
-        case '@':  *keycode = 0x1F; *modifier = HID_MOD_LEFT_SHIFT; return true;
-        case '#':  *keycode = 0x20; *modifier = HID_MOD_LEFT_SHIFT; return true;
-        case '$':  *keycode = 0x21; *modifier = HID_MOD_LEFT_SHIFT; return true;
-        case '%':  *keycode = 0x22; *modifier = HID_MOD_LEFT_SHIFT; return true;
-        case '^':  *keycode = 0x23; *modifier = HID_MOD_LEFT_SHIFT; return true;
-        case '&':  *keycode = 0x24; *modifier = HID_MOD_LEFT_SHIFT; return true;
-        case '*':  *keycode = 0x25; *modifier = HID_MOD_LEFT_SHIFT; return true;
-        case '(':  *keycode = 0x26; *modifier = HID_MOD_LEFT_SHIFT; return true;
-        case ')':  *keycode = 0x27; *modifier = HID_MOD_LEFT_SHIFT; return true;
-        case '_':  *keycode = 0x2D; *modifier = HID_MOD_LEFT_SHIFT; return true;
-        case '+':  *keycode = 0x2E; *modifier = HID_MOD_LEFT_SHIFT; return true;
-        case '{':  *keycode = 0x2F; *modifier = HID_MOD_LEFT_SHIFT; return true;
-        case '}':  *keycode = 0x30; *modifier = HID_MOD_LEFT_SHIFT; return true;
-        case '|':  *keycode = 0x31; *modifier = HID_MOD_LEFT_SHIFT; return true;
-        case ':':  *keycode = 0x33; *modifier = HID_MOD_LEFT_SHIFT; return true;
-        case '"':  *keycode = 0x34; *modifier = HID_MOD_LEFT_SHIFT; return true;
-        case '~':  *keycode = 0x35; *modifier = HID_MOD_LEFT_SHIFT; return true;
-        case '<':  *keycode = 0x36; *modifier = HID_MOD_LEFT_SHIFT; return true;
-        case '>':  *keycode = 0x37; *modifier = HID_MOD_LEFT_SHIFT; return true;
-        case '?':  *keycode = 0x38; *modifier = HID_MOD_LEFT_SHIFT; return true;
+        case '!':
+            *keycode = 0x1E;
+            *modifier = HID_MOD_LEFT_SHIFT;
+            return true;
+        case '@':
+            *keycode = 0x1F;
+            *modifier = HID_MOD_LEFT_SHIFT;
+            return true;
+        case '#':
+            *keycode = 0x20;
+            *modifier = HID_MOD_LEFT_SHIFT;
+            return true;
+        case '$':
+            *keycode = 0x21;
+            *modifier = HID_MOD_LEFT_SHIFT;
+            return true;
+        case '%':
+            *keycode = 0x22;
+            *modifier = HID_MOD_LEFT_SHIFT;
+            return true;
+        case '^':
+            *keycode = 0x23;
+            *modifier = HID_MOD_LEFT_SHIFT;
+            return true;
+        case '&':
+            *keycode = 0x24;
+            *modifier = HID_MOD_LEFT_SHIFT;
+            return true;
+        case '*':
+            *keycode = 0x25;
+            *modifier = HID_MOD_LEFT_SHIFT;
+            return true;
+        case '(':
+            *keycode = 0x26;
+            *modifier = HID_MOD_LEFT_SHIFT;
+            return true;
+        case ')':
+            *keycode = 0x27;
+            *modifier = HID_MOD_LEFT_SHIFT;
+            return true;
+        case '_':
+            *keycode = 0x2D;
+            *modifier = HID_MOD_LEFT_SHIFT;
+            return true;
+        case '+':
+            *keycode = 0x2E;
+            *modifier = HID_MOD_LEFT_SHIFT;
+            return true;
+        case '{':
+            *keycode = 0x2F;
+            *modifier = HID_MOD_LEFT_SHIFT;
+            return true;
+        case '}':
+            *keycode = 0x30;
+            *modifier = HID_MOD_LEFT_SHIFT;
+            return true;
+        case '|':
+            *keycode = 0x31;
+            *modifier = HID_MOD_LEFT_SHIFT;
+            return true;
+        case ':':
+            *keycode = 0x33;
+            *modifier = HID_MOD_LEFT_SHIFT;
+            return true;
+        case '"':
+            *keycode = 0x34;
+            *modifier = HID_MOD_LEFT_SHIFT;
+            return true;
+        case '~':
+            *keycode = 0x35;
+            *modifier = HID_MOD_LEFT_SHIFT;
+            return true;
+        case '<':
+            *keycode = 0x36;
+            *modifier = HID_MOD_LEFT_SHIFT;
+            return true;
+        case '>':
+            *keycode = 0x37;
+            *modifier = HID_MOD_LEFT_SHIFT;
+            return true;
+        case '?':
+            *keycode = 0x38;
+            *modifier = HID_MOD_LEFT_SHIFT;
+            return true;
 
         default:
             return false;
@@ -326,13 +449,15 @@ static bool ascii_to_hid(char c, uint8_t *keycode, uint8_t *modifier)
 
 esp_err_t usb_keyboard_type_string(const char *str)
 {
-    if (!str) return ESP_ERR_INVALID_ARG;
+    if (!str)
+        return ESP_ERR_INVALID_ARG;
 
     for (const char *p = str; *p; p++) {
         uint8_t keycode, modifier;
         if (ascii_to_hid(*p, &keycode, &modifier)) {
             esp_err_t ret = usb_keyboard_press_with_modifier(modifier, keycode);
-            if (ret != ESP_OK) return ret;
+            if (ret != ESP_OK)
+                return ret;
             vTaskDelay(pdMS_TO_TICKS(CHAR_DELAY_MS));
         } else {
             ESP_LOGW(TAG, "Unmapped char: 0x%02x '%c'", *p, *p);

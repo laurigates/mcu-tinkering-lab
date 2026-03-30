@@ -8,15 +8,20 @@ include = ["*.py"]
 
 # Exclude third-party and generated directories
 exclude = [
-    "managed_components/",
-    "components/esp-idf-lib/",
-    "build/",
+    "**/managed_components/",
+    "**/components/esp-idf-lib/",
+    "**/build/",
     ".venv/",
     "__pycache__/",
     ".esphome/",
 ]
 
 [lint]
+# Simulation subproject uses line-length = 100 in its own pyproject.toml;
+# when ruff runs from repo root, this override keeps them in sync.
+[lint.per-file-ignores]
+"packages/esp32-projects/robocar-simulation/**" = ["E501"]
+
 # Enable core rule sets
 select = [
     "E",   # pycodestyle errors

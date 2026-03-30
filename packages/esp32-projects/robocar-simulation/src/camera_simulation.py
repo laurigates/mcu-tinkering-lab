@@ -15,9 +15,9 @@ from typing import Any
 import cv2
 import numpy as np
 import yaml
-from error_handling import get_error_handler
 from spatialmath import SE3
 
+from error_handling import get_error_handler
 from robot_model import RobotState
 
 CAPTURE_LOOP_SLEEP = 0.001  # seconds between capture loop iterations

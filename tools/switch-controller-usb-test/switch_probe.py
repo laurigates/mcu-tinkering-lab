@@ -14,13 +14,13 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import readline  # noqa: F401 — enables arrow-key history in input()
 import struct
 import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TextIO
 
 try:
     import hid
@@ -126,7 +126,7 @@ class ProbeSession:
     packet_counter: int = 0
     handshake_done: bool = False
     recording: bool = False
-    record_file: object = None
+    record_file: TextIO | None = None
     record_path: str = ""
     tx_count: int = 0
     rx_count: int = 0
@@ -219,10 +219,14 @@ def decode_subcmd_reply(data: bytes) -> dict:
     if subcmd_id == 0x02 and len(reply_data) >= 12:
         result["firmware"] = f"{reply_data[0]}.{reply_data[1]}"
         device_types = {0x01: "Joy-Con L", 0x02: "Joy-Con R", 0x03: "Pro Controller"}
-        result["device_type"] = device_types.get(reply_data[2], f"0x{reply_data[2]:02X}")
+        result["device_type"] = device_types.get(
+            reply_data[2], f"0x{reply_data[2]:02X}"
+        )
         result["mac"] = ":".join(f"{b:02X}" for b in reply_data[4:10])
         color_sources = {0x01: "firmware defaults", 0x02: "SPI colors"}
-        result["color_source"] = color_sources.get(reply_data[11], f"0x{reply_data[11]:02X}")
+        result["color_source"] = color_sources.get(
+            reply_data[11], f"0x{reply_data[11]:02X}"
+        )
 
     elif subcmd_id == 0x10 and len(reply_data) >= 5:
         addr = struct.unpack_from("<I", bytes(reply_data[:4]))[0]
@@ -355,10 +359,7 @@ def cmd_scan():
         product = d.get("product_string", "") or ""
         mfg = d.get("manufacturer_string", "") or ""
         path = d.get("path", b"").decode("utf-8", errors="replace")
-        print(
-            f"  VID:PID = 0x{vid:04X}:0x{pid:04X}  "
-            f"{mfg} {product}{marker}"
-        )
+        print(f"  VID:PID = 0x{vid:04X}:0x{pid:04X}  {mfg} {product}{marker}")
         print(f"    Path: {path}")
         print(f"    Interface: {d.get('interface_number', -1)}")
         print()
@@ -409,9 +410,7 @@ def cmd_handshake(session: ProbeSession):
         if len(resp) >= 10:
             ctype = resp[3] if len(resp) > 3 else 0
             mac = resp[4:10] if len(resp) >= 10 else b""
-            print(
-                f"  Controller type: {controller_type.get(ctype, f'0x{ctype:02X}')}"
-            )
+            print(f"  Controller type: {controller_type.get(ctype, f'0x{ctype:02X}')}")
             print(f"  MAC: {':'.join(f'{b:02X}' for b in mac)}")
     time.sleep(0.1)
 
@@ -521,9 +520,15 @@ def cmd_poll(session: ProbeSession, duration: float = 5.0):
                 f"Bat:{decoded.get('battery', 0)}"
             )
         elif report_id == REPORT_SIMPLE_INPUT:
-            print(f"  [{count:4d}] 0x3F simple input: {' '.join(f'{b:02X}' for b in data[1:])}")
+            print(
+                f"  [{count:4d}] 0x3F simple input: "
+                f"{' '.join(f'{b:02X}' for b in data[1:])}"
+            )
         else:
-            print(f"  [{count:4d}] Report 0x{report_id:02X}: {' '.join(f'{b:02X}' for b in data[1:12])}")
+            print(
+                f"  [{count:4d}] Report 0x{report_id:02X}: "
+                f"{' '.join(f'{b:02X}' for b in data[1:12])}"
+            )
     print(f"\n  Total: {count} reports in {duration}s ({count / duration:.1f}/s)")
 
 
@@ -563,7 +568,7 @@ def cmd_record_start(session: ProbeSession, filename: str):
         print(f"  Already recording to {session.record_path}")
         return
     session.record_path = filename
-    session.record_file = open(filename, "a")
+    session.record_file = open(filename, "a")  # noqa: SIM115
     session.recording = True
     print(f"  Recording to {filename}")
 
