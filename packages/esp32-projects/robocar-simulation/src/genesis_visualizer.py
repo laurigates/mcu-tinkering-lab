@@ -48,7 +48,7 @@ class MatplotlibVisualizer:
         self.viz_mode = viz_mode
         self.enabled = viz_mode in ["visual", "browser"]
         self.is_main_thread = threading.current_thread() is threading.main_thread()
-        self.update_queue = queue.Queue()
+        self.update_queue: queue.Queue[object] = queue.Queue()
         self._running = False
 
         # Check if we can safely use GUI
@@ -70,7 +70,7 @@ class MatplotlibVisualizer:
                 # Robot representation
                 self.robot_patch = patches.Circle((0, 0), 0.2, color="blue", alpha=0.7)
                 self.direction_line = None
-                self.trail_points = []
+                self.trail_points: list[tuple[float, float]] = []
 
                 self.ax.add_patch(self.robot_patch)
                 print("✓ Matplotlib visualizer initialized on main thread")
@@ -197,10 +197,10 @@ class RobotVisualizer:
         # Genesis environment
         self.scene = None
         self.robot_entity = None
-        self.wheel_entities = []
+        self.wheel_entities: list[object] = []
         self.camera_entity = None
-        self.trail_points = []
-        self.obstacles = []
+        self.trail_points: list[list[float]] = []
+        self.obstacles: list[object] = []
 
         # Control variables
         self._running = False
@@ -280,6 +280,8 @@ class RobotVisualizer:
 
     def _create_obstacle(self, obstacle: dict, index: int):
         """Create obstacle in the environment"""
+        if not self.scene:
+            return
         pos = obstacle["position"]
 
         if obstacle["type"] == "box":
@@ -506,7 +508,7 @@ class RobotVisualizer:
                 surface=gs.surfaces.Default(color=(1.0, 0.0, 1.0, 1.0)),  # Magenta
             )
 
-    def add_trajectory_point(self, x: float, y: float, color: list[float] = None):
+    def add_trajectory_point(self, x: float, y: float, color: list[float] | None = None):
         """Add a trajectory point marker"""
         if color is None:
             color = [1.0, 1.0, 1.0]

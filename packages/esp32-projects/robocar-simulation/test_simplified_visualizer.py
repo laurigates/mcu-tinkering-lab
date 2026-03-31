@@ -64,7 +64,6 @@ def test_visualization_disabled():
 
     try:
         from genesis_visualizer import RobotVisualizer
-
         from robot_model import DifferentialDriveRobot
 
         config_path = "config/robot_config.yaml"

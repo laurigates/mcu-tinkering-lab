@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import pymunk
 import yaml
+
 from error_handling import ErrorEvent, ErrorSeverity, get_error_handler
 from ota_simulation import OTASimulation
 from wifi_simulation import WiFiManagerSimulation
@@ -142,8 +143,8 @@ class PhysicsEngine:
 
         # Environment setup
         self.environment_config = config["simulation"]["environment"]
-        self.robots = {}
-        self.obstacles = []
+        self.robots: dict[str, dict] = {}
+        self.obstacles: list[dict] = []
 
         # Create environment boundaries and obstacles
         self._setup_environment()
@@ -340,12 +341,12 @@ class DifferentialDriveRobot:
         self.use_motor_controllers = (
             self.config["simulation"].get("motor_control", {}).get("enabled", False)
         )
-        self.motor_left_controller = None
-        self.motor_right_controller = None
+        from motor_controller import MotorController
+
+        self.motor_left_controller: MotorController | None = None
+        self.motor_right_controller: MotorController | None = None
 
         if self.use_motor_controllers:
-            from motor_controller import MotorController
-
             control_config = self.config["simulation"]["motor_control"]
 
             self.motor_left_controller = MotorController(
@@ -377,9 +378,11 @@ class DifferentialDriveRobot:
             )
 
         # Subsystem placeholders — activated via enable_camera() / enable_wifi() / enable_ota()
-        self.camera_simulation = None
-        self.wifi_simulation = None
-        self.ota_simulation = None
+        from camera_simulation import CameraSimulation
+
+        self.camera_simulation: CameraSimulation | None = None
+        self.wifi_simulation: WiFiManagerSimulation | None = None
+        self.ota_simulation: OTASimulation | None = None
 
     def _register_recovery_strategies(self):
         """Register recovery strategies for robot model errors"""
@@ -499,7 +502,7 @@ class DifferentialDriveRobot:
         if sim_cfg.get("ota", {}).get("enabled", False):
             self.enable_ota()
 
-    def pwm_to_voltage(self, pwm: int) -> float:
+    def pwm_to_voltage(self, pwm: float | int) -> float:
         """Convert PWM value to voltage (assuming 3.3V logic, 7.4V motor supply)"""
         # PWM range: -255 to 255
         # Motor supply voltage: 7.4V
@@ -510,6 +513,8 @@ class DifferentialDriveRobot:
         try:
             if self.use_motor_controllers:
                 # Set PWM commands to controllers (they handle the control internally)
+                assert self.motor_left_controller is not None
+                assert self.motor_right_controller is not None
                 self.motor_left_controller.set_pwm_command(left_pwm)
                 self.motor_right_controller.set_pwm_command(right_pwm)
 
@@ -528,6 +533,8 @@ class DifferentialDriveRobot:
     def set_velocity_commands(self, left_velocity: float, right_velocity: float):
         """Set motor velocity commands in rad/s (PID mode)"""
         if self.use_motor_controllers:
+            assert self.motor_left_controller is not None
+            assert self.motor_right_controller is not None
             self.motor_left_controller.set_velocity_setpoint(left_velocity)
             self.motor_right_controller.set_velocity_setpoint(right_velocity)
         else:
@@ -541,6 +548,8 @@ class DifferentialDriveRobot:
     def set_position_commands(self, left_position: float, right_position: float):
         """Set motor position commands in degrees (PID mode)"""
         if self.use_motor_controllers:
+            assert self.motor_left_controller is not None
+            assert self.motor_right_controller is not None
             self.motor_left_controller.set_position_setpoint(left_position)
             self.motor_right_controller.set_position_setpoint(right_position)
         else:
@@ -550,6 +559,8 @@ class DifferentialDriveRobot:
     def get_encoder_positions(self) -> tuple[float, float]:
         """Get encoder positions in degrees"""
         if self.use_motor_controllers:
+            assert self.motor_left_controller is not None
+            assert self.motor_right_controller is not None
             left_pos = self.motor_left_controller.get_encoder_position()
             right_pos = self.motor_right_controller.get_encoder_position()
             return left_pos, right_pos
@@ -561,6 +572,8 @@ class DifferentialDriveRobot:
     def get_encoder_velocities(self) -> tuple[float, float]:
         """Get encoder velocities in rad/s"""
         if self.use_motor_controllers:
+            assert self.motor_left_controller is not None
+            assert self.motor_right_controller is not None
             left_vel = self.motor_left_controller.get_encoder_velocity()
             right_vel = self.motor_right_controller.get_encoder_velocity()
             return left_vel, right_vel
@@ -621,6 +634,9 @@ class DifferentialDriveRobot:
             # Get current motor angular velocities
             omega_left = self.motor_left.angular_velocity
             omega_right = self.motor_right.angular_velocity
+
+            assert self.motor_left_controller is not None
+            assert self.motor_right_controller is not None
 
             # Update controllers (they handle PWM commands internally)
             controlled_pwm_left = self.motor_left_controller.update(omega_left, dt)

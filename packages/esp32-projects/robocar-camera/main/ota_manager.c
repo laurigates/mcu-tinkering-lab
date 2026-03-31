@@ -9,19 +9,19 @@
 
 #include "ota_manager.h"
 #include <string.h>
+#include "config.h"
+#include "esp_app_desc.h"
+#include "esp_event.h"
+#include "esp_ghota.h"
+#include "esp_log.h"
+#include "esp_ota_ops.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/timers.h"
-#include "esp_log.h"
-#include "esp_timer.h"
-#include "esp_app_desc.h"
-#include "esp_ota_ops.h"
-#include "esp_event.h"
-#include "esp_ghota.h"
-#include "semver.h"
-#include "config.h"
 #include "i2c_master.h"
 #include "i2c_protocol.h"
+#include "semver.h"
 #if MQTT_LOGGING_ENABLED
 #include "mqtt_logger.h"
 #endif
@@ -35,17 +35,17 @@ static bool s_firmware_valid_confirmed = false;
 static TimerHandle_t s_stability_timer = NULL;
 
 // Forward declarations
-static void ghota_event_handler(void *arg, esp_event_base_t event_base,
-                                int32_t event_id, void *event_data);
+static void ghota_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id,
+                                void *event_data);
 static void ota_stability_timer_callback(TimerHandle_t xTimer);
 static void orchestrate_main_controller_update(void *pvParameters);
 
 #if MQTT_LOGGING_ENABLED
-static void mqtt_ota_notify_handler(const char *topic, const char *data,
-                                    int data_len);
+static void mqtt_ota_notify_handler(const char *topic, const char *data, int data_len);
 #endif
 
-esp_err_t ota_manager_init(void) {
+esp_err_t ota_manager_init(void)
+{
     ESP_LOGI(TAG, "Initializing OTA manager");
     ESP_LOGI(TAG, "Current firmware version: %s", ota_manager_get_version());
 
@@ -65,24 +65,21 @@ esp_err_t ota_manager_init(void) {
     }
 
     // Register event handler for ghota events
-    esp_err_t ret = esp_event_handler_register(GHOTA_EVENTS, ESP_EVENT_ANY_ID,
-                                               &ghota_event_handler, NULL);
+    esp_err_t ret =
+        esp_event_handler_register(GHOTA_EVENTS, ESP_EVENT_ANY_ID, &ghota_event_handler, NULL);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to register ghota event handler: %s",
-                 esp_err_to_name(ret));
+        ESP_LOGE(TAG, "Failed to register ghota event handler: %s", esp_err_to_name(ret));
         return ret;
     }
 
     // Start periodic update timer
     ret = ghota_start_update_timer(s_ghota_client);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to start ghota update timer: %s",
-                 esp_err_to_name(ret));
+        ESP_LOGE(TAG, "Failed to start ghota update timer: %s", esp_err_to_name(ret));
         return ret;
     }
 
-    ESP_LOGI(TAG, "OTA update timer started (interval: %d min)",
-             OTA_CHECK_INTERVAL_MIN);
+    ESP_LOGI(TAG, "OTA update timer started (interval: %d min)", OTA_CHECK_INTERVAL_MIN);
 
 #if MQTT_LOGGING_ENABLED
     // Subscribe to MQTT OTA notification topic
@@ -98,20 +95,19 @@ esp_err_t ota_manager_init(void) {
     }
 
     // Start rollback protection stability timer
-    s_stability_timer = xTimerCreate(
-        "ota_stability", pdMS_TO_TICKS(OTA_STABILITY_TIMEOUT_MS), pdFALSE,
-        NULL, ota_stability_timer_callback);
+    s_stability_timer = xTimerCreate("ota_stability", pdMS_TO_TICKS(OTA_STABILITY_TIMEOUT_MS),
+                                     pdFALSE, NULL, ota_stability_timer_callback);
     if (s_stability_timer) {
         xTimerStart(s_stability_timer, 0);
-        ESP_LOGI(TAG, "Rollback stability timer started (%d ms)",
-                 OTA_STABILITY_TIMEOUT_MS);
+        ESP_LOGI(TAG, "Rollback stability timer started (%d ms)", OTA_STABILITY_TIMEOUT_MS);
     }
 
     ESP_LOGI(TAG, "OTA manager initialized successfully");
     return ESP_OK;
 }
 
-esp_err_t ota_manager_check_update(void) {
+esp_err_t ota_manager_check_update(void)
+{
     if (!s_ghota_client) {
         ESP_LOGE(TAG, "OTA manager not initialized");
         return ESP_ERR_INVALID_STATE;
@@ -126,12 +122,14 @@ esp_err_t ota_manager_check_update(void) {
     return ghota_check(s_ghota_client);
 }
 
-const char *ota_manager_get_version(void) {
+const char *ota_manager_get_version(void)
+{
     const esp_app_desc_t *app_desc = esp_app_get_description();
     return app_desc->version;
 }
 
-esp_err_t ota_manager_confirm_valid(void) {
+esp_err_t ota_manager_confirm_valid(void)
+{
     if (s_firmware_valid_confirmed) {
         return ESP_OK;
     }
@@ -147,22 +145,21 @@ esp_err_t ota_manager_confirm_valid(void) {
     return ret;
 }
 
-static void ghota_event_handler(void *arg, esp_event_base_t event_base,
-                                int32_t event_id, void *event_data) {
+static void ghota_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id,
+                                void *event_data)
+{
     switch (event_id) {
         case GHOTA_EVENT_UPDATE_AVAILABLE: {
             ESP_LOGI(TAG, "Update available! Starting firmware download...");
             s_ota_in_progress = true;
 
 #if MQTT_LOGGING_ENABLED
-            mqtt_logger_publish(OTA_MQTT_STATUS_TOPIC,
-                                "{\"status\":\"downloading\"}", 1, false);
+            mqtt_logger_publish(OTA_MQTT_STATUS_TOPIC, "{\"status\":\"downloading\"}", 1, false);
 #endif
             // esp_ghota handles the download and flash automatically
             esp_err_t update_ret = ghota_start_update(s_ghota_client);
             if (update_ret != ESP_OK) {
-                ESP_LOGE(TAG, "ghota_start_update failed: %s",
-                         esp_err_to_name(update_ret));
+                ESP_LOGE(TAG, "ghota_start_update failed: %s", esp_err_to_name(update_ret));
                 s_ota_in_progress = false;
             }
             break;
@@ -197,8 +194,7 @@ static void ghota_event_handler(void *arg, esp_event_base_t event_base,
             s_ota_in_progress = false;
 
 #if MQTT_LOGGING_ENABLED
-            mqtt_logger_publish(OTA_MQTT_STATUS_TOPIC,
-                                "{\"status\":\"rebooting\"}", 1, false);
+            mqtt_logger_publish(OTA_MQTT_STATUS_TOPIC, "{\"status\":\"rebooting\"}", 1, false);
 #endif
 
             // Brief delay to allow MQTT message to send
@@ -211,8 +207,7 @@ static void ghota_event_handler(void *arg, esp_event_base_t event_base,
             s_ota_in_progress = false;
 
 #if MQTT_LOGGING_ENABLED
-            mqtt_logger_publish(OTA_MQTT_STATUS_TOPIC,
-                                "{\"status\":\"failed\"}", 1, false);
+            mqtt_logger_publish(OTA_MQTT_STATUS_TOPIC, "{\"status\":\"failed\"}", 1, false);
 #endif
             break;
 
@@ -226,14 +221,14 @@ static void ghota_event_handler(void *arg, esp_event_base_t event_base,
     }
 }
 
-static void ota_stability_timer_callback(TimerHandle_t xTimer) {
+static void ota_stability_timer_callback(TimerHandle_t xTimer)
+{
     ESP_LOGI(TAG, "Stability timeout reached — confirming firmware validity");
     ota_manager_confirm_valid();
 
     // After confirming self-update, check if main controller needs updating
     // This runs as a separate task to avoid blocking the timer callback
-    xTaskCreate(orchestrate_main_controller_update,
-                "ota_main_ctrl", OTA_TASK_STACK_SIZE, NULL,
+    xTaskCreate(orchestrate_main_controller_update, "ota_main_ctrl", OTA_TASK_STACK_SIZE, NULL,
                 OTA_TASK_PRIORITY, NULL);
 }
 
@@ -244,15 +239,15 @@ static void ota_stability_timer_callback(TimerHandle_t xTimer) {
 #define OTA_STATUS_POLL_INTERVAL_MS 5000
 #define OTA_STATUS_TIMEOUT_MS (5 * 60 * 1000)
 
-static void orchestrate_main_controller_update(void *pvParameters) {
+static void orchestrate_main_controller_update(void *pvParameters)
+{
     ESP_LOGI(TAG, "Checking if main controller needs OTA update...");
 
     // Step 1: Get main controller version via I2C helper
     char mc_version_str[VERSION_STRING_LEN];
     esp_err_t ret = i2c_get_version(mc_version_str, sizeof(mc_version_str));
     if (ret != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to query main controller version: %s",
-                 esp_err_to_name(ret));
+        ESP_LOGW(TAG, "Failed to query main controller version: %s", esp_err_to_name(ret));
         goto done;
     }
     ESP_LOGI(TAG, "Main controller firmware version: %s", mc_version_str);
@@ -260,8 +255,7 @@ static void orchestrate_main_controller_update(void *pvParameters) {
     // Step 2: Parse main controller version as semver
     semver_t mc_version = {};
     if (semver_parse(mc_version_str, &mc_version) != 0) {
-        ESP_LOGW(TAG, "Failed to parse main controller version: %s",
-                 mc_version_str);
+        ESP_LOGW(TAG, "Failed to parse main controller version: %s", mc_version_str);
         goto done;
     }
 
@@ -297,14 +291,12 @@ static void orchestrate_main_controller_update(void *pvParameters) {
         goto done;
     }
 
-    ESP_LOGI(TAG, "Main controller needs update: v%s -> v%s",
-             mc_version_str, latest_str);
+    ESP_LOGI(TAG, "Main controller needs update: v%s -> v%s", mc_version_str, latest_str);
 
     // Step 5: Enter maintenance mode (stops motors on main controller)
     ret = i2c_send_enter_maintenance_mode();
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to enter maintenance mode: %s",
-                 esp_err_to_name(ret));
+        ESP_LOGE(TAG, "Failed to enter maintenance mode: %s", esp_err_to_name(ret));
         semver_free(&mc_version);
         goto done;
     }
@@ -316,8 +308,7 @@ static void orchestrate_main_controller_update(void *pvParameters) {
 
     ret = i2c_send_begin_ota(release_tag, NULL);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to start main controller OTA: %s",
-                 esp_err_to_name(ret));
+        ESP_LOGE(TAG, "Failed to start main controller OTA: %s", esp_err_to_name(ret));
         semver_free(&mc_version);
         goto done;
     }
@@ -330,32 +321,27 @@ static void orchestrate_main_controller_update(void *pvParameters) {
         ota_status_response_t ota_status;
         ret = i2c_get_ota_status(&ota_status);
         if (ret != ESP_OK) {
-            ESP_LOGW(TAG, "Failed to poll OTA status (%d/%d)", i + 1,
-                     max_polls);
+            ESP_LOGW(TAG, "Failed to poll OTA status (%d/%d)", i + 1, max_polls);
             continue;
         }
 
-        ESP_LOGI(TAG, "OTA progress: %d%% (status: %d)", ota_status.progress,
-                 ota_status.status);
+        ESP_LOGI(TAG, "OTA progress: %d%% (status: %d)", ota_status.progress, ota_status.status);
 
         if (ota_status.status == OTA_STATUS_SUCCESS) {
-            ESP_LOGI(TAG,
-                     "Main controller OTA successful — sending reboot");
+            ESP_LOGI(TAG, "Main controller OTA successful — sending reboot");
             i2c_send_reboot();
             semver_free(&mc_version);
             goto done;
         }
 
         if (ota_status.status == OTA_STATUS_FAILED) {
-            ESP_LOGE(TAG, "Main controller OTA failed (error: %d)",
-                     ota_status.error_code);
+            ESP_LOGE(TAG, "Main controller OTA failed (error: %d)", ota_status.error_code);
             semver_free(&mc_version);
             goto done;
         }
     }
 
-    ESP_LOGE(TAG, "Main controller OTA timed out after %d seconds",
-             OTA_STATUS_TIMEOUT_MS / 1000);
+    ESP_LOGE(TAG, "Main controller OTA timed out after %d seconds", OTA_STATUS_TIMEOUT_MS / 1000);
     semver_free(&mc_version);
 
 done:
@@ -363,16 +349,15 @@ done:
 }
 
 #if MQTT_LOGGING_ENABLED
-static void mqtt_ota_notify_handler(const char *topic, const char *data,
-                                    int data_len) {
+static void mqtt_ota_notify_handler(const char *topic, const char *data, int data_len)
+{
     ESP_LOGI(TAG, "MQTT OTA notification received on topic: %s", topic);
     ESP_LOGI(TAG, "Notification data: %.*s", data_len, data);
 
     // Rate limit: at most one check per 60 seconds
     static int64_t s_last_ota_check_time = 0;
     int64_t now = esp_timer_get_time();
-    if (s_last_ota_check_time > 0 &&
-        (now - s_last_ota_check_time) < 60 * 1000000LL) {
+    if (s_last_ota_check_time > 0 && (now - s_last_ota_check_time) < 60 * 1000000LL) {
         ESP_LOGW(TAG, "MQTT OTA trigger rate-limited, skipping");
         return;
     }
@@ -381,8 +366,7 @@ static void mqtt_ota_notify_handler(const char *topic, const char *data,
     // Trigger update check via esp_ghota
     esp_err_t ret = ota_manager_check_update();
     if (ret != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to trigger update check: %s",
-                 esp_err_to_name(ret));
+        ESP_LOGW(TAG, "Failed to trigger update check: %s", esp_err_to_name(ret));
     }
 }
 #endif

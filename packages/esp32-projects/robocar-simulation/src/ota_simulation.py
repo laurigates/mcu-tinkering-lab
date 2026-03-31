@@ -20,6 +20,7 @@ from enum import Enum
 from pathlib import Path
 
 import yaml
+
 from error_handling import ErrorSeverity, get_error_handler
 
 
@@ -93,7 +94,7 @@ class OTAStatus:
 
     def to_dict(self) -> dict:
         """Convert to dictionary for serialization"""
-        result = {
+        result: dict[str, object] = {
             "state": self.state.value,
             "progress_percent": self.progress_percent,
             "bytes_downloaded": self.bytes_downloaded,
@@ -134,7 +135,7 @@ class OTASimulation:
 
         # Partition management
         self.boot_partition = "factory"  # Currently running partition
-        self.ota_partition = None  # Next OTA partition to use
+        self.ota_partition: str | None = None  # Next OTA partition to use
         self.ota_data = self._load_ota_data()
 
         # Download simulation
@@ -308,7 +309,7 @@ class OTASimulation:
         else:
             return "ota_0"  # Default fallback
 
-    def start_update(self, firmware_url: str, version: str = None) -> bool:
+    def start_update(self, firmware_url: str, version: str | None = None) -> bool:
         """Start OTA update process"""
         try:
             if not self.is_ota_ready():
@@ -443,6 +444,9 @@ class OTASimulation:
             print("OTA simulation: Firmware verification successful")
 
             # Update OTA data partition
+            assert self.ota_partition is not None, (
+                "ota_partition must be set before download success"
+            )
             self.ota_data["seq"] += 1
             self.ota_data[self.ota_partition] = {"valid": True, "seq": self.ota_data["seq"]}
 

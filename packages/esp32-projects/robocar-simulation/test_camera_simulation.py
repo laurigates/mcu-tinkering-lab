@@ -16,7 +16,6 @@ import numpy as np
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 from camera_simulation import CameraSimulation
-
 from robot_model import DifferentialDriveRobot
 
 

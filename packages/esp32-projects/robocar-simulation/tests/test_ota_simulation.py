@@ -67,9 +67,7 @@ class TestOTAStatus:
         assert status.bytes_downloaded == 500000
 
     def test_failed_status_with_error(self):
-        status = OTAStatus(
-            OTAState.FAILED, 30, 300000, 1000000, error_message="Download timeout"
-        )
+        status = OTAStatus(OTAState.FAILED, 30, 300000, 1000000, error_message="Download timeout")
         assert status.error_message == "Download timeout"
 
     def test_to_dict_with_firmware(self):

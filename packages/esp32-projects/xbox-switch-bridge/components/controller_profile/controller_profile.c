@@ -73,8 +73,8 @@ const controller_profile_t PROFILE_JOYCON_LEFT_FULL = {
     .fw_major = 0x04,
     .fw_minor = 0x33,
     .caps = CAPS_ALL,
-    .body_color = {0x00, 0xA0, 0xFF},       /* Bright blue */
-    .button_color = {0xFF, 0xFF, 0xFF},     /* White */
+    .body_color = {0x00, 0xA0, 0xFF},   /* Bright blue */
+    .button_color = {0xFF, 0xFF, 0xFF}, /* White */
     .left_grip_color = {0x00, 0xA0, 0xFF},
     .right_grip_color = {0x00, 0xA0, 0xFF},
 };
@@ -87,8 +87,8 @@ const controller_profile_t PROFILE_JOYCON_RIGHT_FULL = {
     .fw_major = 0x04,
     .fw_minor = 0x33,
     .caps = CAPS_ALL,
-    .body_color = {0xFF, 0x50, 0x00},       /* Bright red-orange */
-    .button_color = {0xFF, 0xFF, 0xFF},     /* White */
+    .body_color = {0xFF, 0x50, 0x00},   /* Bright red-orange */
+    .button_color = {0xFF, 0xFF, 0xFF}, /* White */
     .left_grip_color = {0xFF, 0x50, 0x00},
     .right_grip_color = {0xFF, 0x50, 0x00},
 };

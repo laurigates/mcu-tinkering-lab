@@ -26,7 +26,7 @@ import sys
 import threading
 import time
 from dataclasses import dataclass, field
-from pathlib import Path
+from typing import TextIO
 
 try:
     import serial
@@ -53,21 +53,49 @@ REPORT_USB_CMD = 0x80
 FAKE_MAC = bytes([0x00, 0x00, 0x5E, 0x00, 0x53, 0x01])
 
 SUBCMD_NAMES = {
-    0x02: "Request device info", 0x03: "Set input report mode",
-    0x04: "Trigger buttons elapsed time", 0x08: "Set shipment low power state",
-    0x10: "SPI flash read", 0x30: "Set player lights", 0x38: "Set HOME light",
-    0x40: "Enable IMU", 0x41: "Set IMU sensitivity", 0x48: "Enable vibration",
+    0x02: "Request device info",
+    0x03: "Set input report mode",
+    0x04: "Trigger buttons elapsed time",
+    0x08: "Set shipment low power state",
+    0x10: "SPI flash read",
+    0x30: "Set player lights",
+    0x38: "Set HOME light",
+    0x40: "Enable IMU",
+    0x41: "Set IMU sensitivity",
+    0x48: "Enable vibration",
 }
 
 # SPI flash emulation
 SPI_FLASH: dict[int, bytes] = {
     0x6012: bytes([0x03]),
-    0x6020: bytes([
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x40, 0x00, 0x40, 0x00, 0x40,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x3B, 0x34, 0x3B, 0x34, 0x3B, 0x34,
-    ]),
+    0x6020: bytes(
+        [
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x40,
+            0x00,
+            0x40,
+            0x00,
+            0x40,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x3B,
+            0x34,
+            0x3B,
+            0x34,
+            0x3B,
+            0x34,
+        ]
+    ),
     0x603D: bytes([0x00, 0x07, 0x70, 0x00, 0x08, 0x80, 0x00, 0x07, 0x70]),
     0x6046: bytes([0x00, 0x08, 0x80, 0x00, 0x07, 0x70, 0x00, 0x07, 0x70]),
     0x6050: bytes([0x32, 0x32, 0x32, 0xFF, 0xFF, 0xFF]),
@@ -81,10 +109,18 @@ SPI_FLASH: dict[int, bytes] = {
 }
 
 SPI_LABELS = {
-    0x6012: "device type", 0x6020: "IMU cal", 0x603D: "L-stick cal",
-    0x6046: "R-stick cal", 0x6050: "body color", 0x6056: "L-grip",
-    0x6059: "R-grip", 0x6000: "serial", 0x8010: "user L-stick",
-    0x801B: "user R-stick", 0x8026: "user IMU", 0x5000: "shipment",
+    0x6012: "device type",
+    0x6020: "IMU cal",
+    0x603D: "L-stick cal",
+    0x6046: "R-stick cal",
+    0x6050: "body color",
+    0x6056: "L-grip",
+    0x6059: "R-grip",
+    0x6000: "serial",
+    0x8010: "user L-stick",
+    0x801B: "user R-stick",
+    0x8026: "user IMU",
+    0x5000: "shipment",
 }
 
 
@@ -108,7 +144,7 @@ class ProxyState:
     tx_count: int = 0
     rx_count: int = 0
     recording: bool = False
-    record_file: object = None
+    record_file: TextIO | None = None
     record_path: str = ""
     reader_thread: threading.Thread | None = None
     input_thread: threading.Thread | None = None
@@ -221,8 +257,9 @@ def pack_sticks(lx: int, ly: int, rx: int, ry: int) -> bytes:
     return bytes(buf)
 
 
-def build_subcmd_reply(state: ProxyState, subcmd_id: int, ack: int = 0x80,
-                       reply_data: bytes = b"") -> bytes:
+def build_subcmd_reply(
+    state: ProxyState, subcmd_id: int, ack: int = 0x80, reply_data: bytes = b""
+) -> bytes:
     """Build a full 0x21 report (report_id + 63 bytes)."""
     report = bytearray(64)
     report[0] = REPORT_SUBCMD_REPLY
@@ -235,7 +272,7 @@ def build_subcmd_reply(state: ProxyState, subcmd_id: int, ack: int = 0x80,
     report[13] = ack
     report[14] = subcmd_id
     copy_len = min(len(reply_data), 49)
-    report[15:15 + copy_len] = reply_data[:copy_len]
+    report[15 : 15 + copy_len] = reply_data[:copy_len]
     return bytes(report)
 
 
@@ -245,7 +282,7 @@ def build_usb_reply(subcmd: int, data: bytes = b"") -> bytes:
     report[0] = REPORT_USB_REPLY
     report[1] = subcmd
     copy_len = min(len(data), 62)
-    report[2:2 + copy_len] = data[:copy_len]
+    report[2 : 2 + copy_len] = data[:copy_len]
     return bytes(report)
 
 
@@ -275,7 +312,7 @@ def spi_read(addr: int, read_len: int) -> bytes:
     for base_addr, stored in SPI_FLASH.items():
         if base_addr <= addr < base_addr + len(stored):
             offset = addr - base_addr
-            data = stored[offset:offset + read_len]
+            data = stored[offset : offset + read_len]
             if len(data) < read_len:
                 data += bytes(read_len - len(data))
             return data
@@ -350,11 +387,17 @@ def handle_switch_report(state: ProxyState, report: bytes):
             addr = struct.unpack_from("<I", report, 11)[0]
             read_len = report[15]
             spi_data = spi_read(addr, read_len)
-            reply_data = struct.pack("<I", addr) + bytes([read_len]) + spi_data
-            reply = build_subcmd_reply(state, subcmd_id, ack=0x90, reply_data=reply_data)
+            reply_data = bytearray(
+                struct.pack("<I", addr) + bytes([read_len]) + spi_data
+            )
+            reply = build_subcmd_reply(
+                state, subcmd_id, ack=0x90, reply_data=reply_data
+            )
             send_frame(state, DIR_FROM_PC, reply)
             label = SPI_LABELS.get(addr, f"0x{addr:04X}")
-            print(f"  >> SPI 0x{addr:04X} ({label}) [{read_len}B]: {hex_line(spi_data)}")
+            print(
+                f"  >> SPI 0x{addr:04X} ({label}) [{read_len}B]: {hex_line(spi_data)}"
+            )
 
         elif subcmd_id == 0x30:  # Player lights
             light_mask = report[11] if len(report) > 11 else 0
@@ -363,7 +406,9 @@ def handle_switch_report(state: ProxyState, report: bytes):
             if not state.setup_done:
                 state.setup_done = True
                 print(f"  >> Player lights: 0x{light_mask:02X} — SETUP COMPLETE!")
-                print("     Controller is now live. Input reports will be sent at 125 Hz.")
+                print(
+                    "     Controller is now live. Input reports will be sent at 125 Hz."
+                )
             else:
                 print(f"  >> Player lights: 0x{light_mask:02X}")
 
@@ -383,7 +428,7 @@ def handle_switch_report(state: ProxyState, report: bytes):
             reply = build_subcmd_reply(state, subcmd_id)
             send_frame(state, DIR_FROM_PC, reply)
             if len(report) > 11:
-                args_hex = hex_line(report[11:min(len(report), 20)])
+                args_hex = hex_line(report[11 : min(len(report), 20)])
                 print(f"  >> ACK (args: {args_hex})")
             else:
                 print("  >> ACK")
@@ -432,15 +477,26 @@ def input_report_loop(state: ProxyState):
 # --- REPL ---
 
 BUTTON_MAP = {
-    "a": ("right", 0x08), "b": ("right", 0x04), "x": ("right", 0x02), "y": ("right", 0x01),
-    "r": ("right", 0x40), "zr": ("right", 0x80),
-    "l": ("left", 0x40), "zl": ("left", 0x80),
-    "up": ("left", 0x02), "down": ("left", 0x01),
-    "left": ("left", 0x08), "right": ("left", 0x04),
-    "plus": ("shared", 0x02), "+": ("shared", 0x02),
-    "minus": ("shared", 0x01), "-": ("shared", 0x01),
-    "home": ("shared", 0x10), "capture": ("shared", 0x20),
-    "ls": ("shared", 0x08), "rs": ("shared", 0x04),
+    "a": ("right", 0x08),
+    "b": ("right", 0x04),
+    "x": ("right", 0x02),
+    "y": ("right", 0x01),
+    "r": ("right", 0x40),
+    "zr": ("right", 0x80),
+    "l": ("left", 0x40),
+    "zl": ("left", 0x80),
+    "up": ("left", 0x02),
+    "down": ("left", 0x01),
+    "left": ("left", 0x08),
+    "right": ("left", 0x04),
+    "plus": ("shared", 0x02),
+    "+": ("shared", 0x02),
+    "minus": ("shared", 0x01),
+    "-": ("shared", 0x01),
+    "home": ("shared", 0x10),
+    "capture": ("shared", 0x20),
+    "ls": ("shared", 0x08),
+    "rs": ("shared", 0x04),
 }
 
 
@@ -504,7 +560,9 @@ Switch Pro Controller USB Proxy — Commands:
     wait                    Wait for setup to complete
 
   Input (sent at 125 Hz after setup):
-    press <button>          Press button (a/b/x/y/l/r/zl/zr/up/down/left/right/+/-/home/capture/ls/rs)
+    press <button>          Press button
+                            (a/b/x/y/l/r/zl/zr/up/down/left/right
+                             /+/-/home/capture/ls/rs)
     release <button>        Release button
     tap <button> [secs]     Press and release (default 0.1s)
     release-all             Release all buttons + center sticks
@@ -537,8 +595,10 @@ def detect_port() -> str:
     for p in ports:
         desc = (p.description or "").lower()
         hwid = (p.hwid or "").lower()
-        if any(chip in desc or chip in hwid for chip in
-               ["cp210", "ch340", "ft232", "pl2303", "uart", "serial"]):
+        if any(
+            chip in desc or chip in hwid
+            for chip in ["cp210", "ch340", "ft232", "pl2303", "uart", "serial"]
+        ):
             return p.device
     # Fall back to first port
     if ports:
@@ -555,7 +615,9 @@ def repl(state: ProxyState, initial_port: str = ""):
         try:
             state.port = serial.Serial(initial_port, 921600, timeout=0.1)
             state.running = True
-            state.reader_thread = threading.Thread(target=reader_loop, args=(state,), daemon=True)
+            state.reader_thread = threading.Thread(
+                target=reader_loop, args=(state,), daemon=True
+            )
             state.reader_thread.start()
             state.input_thread = threading.Thread(
                 target=input_report_loop, args=(state,), daemon=True
@@ -703,7 +765,7 @@ def repl(state: ProxyState, initial_port: str = ""):
                     print("  Usage: record <filename>")
                     continue
                 state.record_path = parts[1]
-                state.record_file = open(parts[1], "a")
+                state.record_file = open(parts[1], "a")  # noqa: SIM115
                 state.recording = True
                 print(f"  Recording to {parts[1]}")
             elif cmd == "stop":
@@ -713,14 +775,17 @@ def repl(state: ProxyState, initial_port: str = ""):
                     state.recording = False
                     print(f"  Stopped recording ({state.record_path})")
             elif cmd == "status":
-                print(f"  Port:      {state.port.port if state.port else 'not connected'}")
+                connected = state.port.port if state.port else "not connected"
+                print(f"  Port:      {connected}")
                 print(f"  Handshake: {state.handshake_done}")
                 print(f"  Setup:     {state.setup_done}")
                 print(f"  Auto:      {state.auto_respond}")
                 print(f"  TX: {state.tx_count}  RX: {state.rx_count}")
-                print(f"  Buttons:   R=0x{state.buttons_right:02X}"
-                      f" S=0x{state.buttons_shared:02X}"
-                      f" L=0x{state.buttons_left:02X}")
+                print(
+                    f"  Buttons:   R=0x{state.buttons_right:02X}"
+                    f" S=0x{state.buttons_shared:02X}"
+                    f" L=0x{state.buttons_left:02X}"
+                )
                 print(f"  Sticks:    L({state.lx},{state.ly}) R({state.rx},{state.ry})")
             else:
                 print(f"  Unknown command: {cmd}. Type 'help' for commands.")
@@ -733,10 +798,15 @@ def main():
     parser = argparse.ArgumentParser(
         description="Nintendo Switch Pro Controller protocol handler via USB proxy"
     )
-    parser.add_argument("--port", default="", help="Serial port (auto-detected if omitted)")
-    parser.add_argument("--baud", type=int, default=921600, help="Baud rate (default: 921600)")
-    parser.add_argument("--auto", action="store_true",
-                        help="Auto setup and wait for handshake")
+    parser.add_argument(
+        "--port", default="", help="Serial port (auto-detected if omitted)"
+    )
+    parser.add_argument(
+        "--baud", type=int, default=921600, help="Baud rate (default: 921600)"
+    )
+    parser.add_argument(
+        "--auto", action="store_true", help="Auto setup and wait for handshake"
+    )
     parser.add_argument("--record", metavar="FILE", help="Record traffic to file")
     parser.add_argument("--list-ports", action="store_true", help="List serial ports")
     args = parser.parse_args()
@@ -749,7 +819,7 @@ def main():
 
     if args.record:
         state.record_path = args.record
-        state.record_file = open(args.record, "a")
+        state.record_file = open(args.record, "a")  # noqa: SIM115
         state.recording = True
 
     port = args.port or detect_port()
@@ -760,7 +830,9 @@ def main():
             sys.exit(1)
         state.port = serial.Serial(port, args.baud, timeout=0.1)
         state.running = True
-        state.reader_thread = threading.Thread(target=reader_loop, args=(state,), daemon=True)
+        state.reader_thread = threading.Thread(
+            target=reader_loop, args=(state,), daemon=True
+        )
         state.reader_thread.start()
         state.input_thread = threading.Thread(
             target=input_report_loop, args=(state,), daemon=True

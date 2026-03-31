@@ -81,29 +81,29 @@ typedef enum {
 
 /* Convenience: all capabilities a real Pro Controller has */
 #define CAPS_PRO_CONTROLLER                                                                   \
-    (CAP_LEFT_STICK | CAP_RIGHT_STICK | CAP_DPAD | CAP_FACE_BUTTONS_LEFT | CAP_SHOULDER_L |  \
-     CAP_SHOULDER_R | CAP_TRIGGER_ZL | CAP_TRIGGER_ZR | CAP_MINUS | CAP_PLUS | CAP_HOME |    \
+    (CAP_LEFT_STICK | CAP_RIGHT_STICK | CAP_DPAD | CAP_FACE_BUTTONS_LEFT | CAP_SHOULDER_L |   \
+     CAP_SHOULDER_R | CAP_TRIGGER_ZL | CAP_TRIGGER_ZR | CAP_MINUS | CAP_PLUS | CAP_HOME |     \
      CAP_CAPTURE | CAP_LSTICK_CLICK | CAP_RSTICK_CLICK | CAP_IMU | CAP_NFC | CAP_HOME_LIGHT | \
      CAP_RUMBLE)
 
 /* Real Joy-Con L capabilities */
-#define CAPS_JOYCON_L                                                                      \
+#define CAPS_JOYCON_L                                                                        \
     (CAP_LEFT_STICK | CAP_DPAD | CAP_SHOULDER_L | CAP_TRIGGER_ZL | CAP_MINUS | CAP_CAPTURE | \
      CAP_LSTICK_CLICK | CAP_SL_SR | CAP_IMU | CAP_RUMBLE)
 
 /* Real Joy-Con R capabilities */
 #define CAPS_JOYCON_R                                                                        \
-    (CAP_RIGHT_STICK | CAP_FACE_BUTTONS_LEFT | CAP_SHOULDER_R | CAP_TRIGGER_ZR | CAP_PLUS | \
-     CAP_HOME | CAP_RSTICK_CLICK | CAP_SL_SR | CAP_IMU | CAP_NFC | CAP_IR |                \
-     CAP_HOME_LIGHT | CAP_RUMBLE)
+    (CAP_RIGHT_STICK | CAP_FACE_BUTTONS_LEFT | CAP_SHOULDER_R | CAP_TRIGGER_ZR | CAP_PLUS |  \
+     CAP_HOME | CAP_RSTICK_CLICK | CAP_SL_SR | CAP_IMU | CAP_NFC | CAP_IR | CAP_HOME_LIGHT | \
+     CAP_RUMBLE)
 
 /* Optimistic: Joy-Con type byte but with ALL input capabilities.
  * "Happy little surprises" — the Switch might just accept it. */
-#define CAPS_ALL                                                                              \
-    (CAP_LEFT_STICK | CAP_RIGHT_STICK | CAP_DPAD | CAP_FACE_BUTTONS_LEFT | CAP_SHOULDER_L |  \
-     CAP_SHOULDER_R | CAP_TRIGGER_ZL | CAP_TRIGGER_ZR | CAP_MINUS | CAP_PLUS | CAP_HOME |    \
-     CAP_CAPTURE | CAP_LSTICK_CLICK | CAP_RSTICK_CLICK | CAP_SL_SR | CAP_IMU | CAP_NFC |    \
-     CAP_IR | CAP_HOME_LIGHT | CAP_RUMBLE)
+#define CAPS_ALL                                                                                  \
+    (CAP_LEFT_STICK | CAP_RIGHT_STICK | CAP_DPAD | CAP_FACE_BUTTONS_LEFT | CAP_SHOULDER_L |       \
+     CAP_SHOULDER_R | CAP_TRIGGER_ZL | CAP_TRIGGER_ZR | CAP_MINUS | CAP_PLUS | CAP_HOME |         \
+     CAP_CAPTURE | CAP_LSTICK_CLICK | CAP_RSTICK_CLICK | CAP_SL_SR | CAP_IMU | CAP_NFC | CAP_IR | \
+     CAP_HOME_LIGHT | CAP_RUMBLE)
 
 /* ── RGB color (body/button/grip) ── */
 
@@ -117,10 +117,10 @@ typedef struct {
     const char *name; /**< Human-readable label for logging */
 
     /* Identity */
-    controller_type_t type;     /**< Type byte for SPI 0x6012 + sub-cmd 0x02 */
+    controller_type_t type;      /**< Type byte for SPI 0x6012 + sub-cmd 0x02 */
     connection_info_t conn_info; /**< Byte 1 of 0x30/0x21 reports */
-    uint8_t mac[6];             /**< Unique MAC per interface */
-    uint8_t fw_major;           /**< Firmware version (sub-cmd 0x02) */
+    uint8_t mac[6];              /**< Unique MAC per interface */
+    uint8_t fw_major;            /**< Firmware version (sub-cmd 0x02) */
     uint8_t fw_minor;
 
     /* Capabilities */
@@ -167,7 +167,7 @@ typedef struct {
     uint16_t usb_pid;           /**< USB Product ID */
     const char *product_string; /**< USB product string descriptor */
 
-    uint8_t interface_count;                                  /**< Number of HID interfaces (1-4) */
+    uint8_t interface_count; /**< Number of HID interfaces (1-4) */
     const controller_profile_t *interfaces[COMPOSITE_MAX_INTERFACES]; /**< Profile per interface */
 } composite_config_t;
 

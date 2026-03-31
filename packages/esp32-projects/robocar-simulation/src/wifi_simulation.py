@@ -17,6 +17,7 @@ from enum import Enum
 from pathlib import Path
 
 import yaml
+
 from error_handling import ErrorSeverity, get_error_handler
 
 
@@ -345,7 +346,7 @@ class WiFiManagerSimulation:
     def disconnect(self) -> bool:
         """Disconnect from WiFi network"""
         try:
-            if self.state == WiFiState.CONNECTED:
+            if self.state == WiFiState.CONNECTED and self.current_connection:
                 print(f"WiFi simulation: Disconnecting from {self.current_connection.ssid}")
 
             self.state = WiFiState.DISCONNECTED
