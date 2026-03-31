@@ -12,6 +12,7 @@
  * tasks concurrently.
  */
 
+#include "gemini_backend.h"
 #include <stdlib.h>
 #include <string.h>
 #include "ai_backend.h"
@@ -20,7 +21,6 @@
 #include "config.h"
 #include "esp_http_client.h"
 #include "esp_log.h"
-#include "gemini_backend.h"
 
 static const char *TAG = "gemini_backend";
 static const ai_config_t *s_config = NULL;
@@ -109,8 +109,8 @@ static esp_err_t gemini_init(const ai_config_t *config)
 static char *build_gemini_url(void)
 {
     // api_url already contains the base + model path, just append ?key=
-    size_t url_len = strlen(s_config->api_url) + strlen(":generateContent?key=") +
-                     strlen(s_config->api_key) + 1;
+    size_t url_len =
+        strlen(s_config->api_url) + strlen(":generateContent?key=") + strlen(s_config->api_key) + 1;
     char *url = malloc(url_len);
     if (!url) {
         return NULL;

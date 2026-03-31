@@ -36,7 +36,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: dorny/paths-filter@v3
+      - uses: dorny/paths-filter@v4
         id: filter
         if: github.event_name != 'workflow_dispatch'
         with:
@@ -129,7 +129,7 @@ jobs:
           retention-days: 30
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         if: always()
         with:
           files: packages/esp32-projects/robocar-simulation/coverage.xml
@@ -195,12 +195,15 @@ jobs:
             -type f \( -name "*.c" -o -name "*.h" -o -name "*.cpp" -o -name "*.hpp" \) \
             ! -path "*/managed_components/*" \
             ! -path "*/components/esp-idf-lib/*" \
+            ! -path "*/external/*" \
             ! -path "*/build/*" \
+            ! -path "*/.esphome/*" \
             -print0 | \
           xargs -0 cppcheck \
             --enable=warning,style,performance,portability \
             --suppress=missingIncludeSystem \
             --suppress=unmatchedSuppression \
+            --suppress=unusedStructMember \
             --inline-suppr \
             --error-exitcode=0 \
             --template=gcc \
@@ -233,7 +236,9 @@ jobs:
             -type f \( -name "*.c" -o -name "*.h" -o -name "*.cpp" -o -name "*.hpp" \) \
             ! -path "*/managed_components/*" \
             ! -path "*/components/esp-idf-lib/*" \
+            ! -path "*/external/*" \
             ! -path "*/build/*" \
+            ! -path "*/.esphome/*" \
             -print0 | \
           xargs -0 clang-format --dry-run --Werror --style=file || {
             echo "::error::Code formatting issues found. Run 'make format-c' to fix."

@@ -31,7 +31,7 @@ class SimulationManager:
         config_path: str,
         enable_visualizer: bool = True,
         enable_bridge: bool = True,
-        serial_port: str = None,
+        serial_port: str | None = None,
         viz_mode: str = "headless",
     ):
         self.config_path = config_path

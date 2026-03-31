@@ -22,6 +22,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import readline  # noqa: F401 — enables arrow-key history in input()
@@ -31,6 +32,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TextIO
 
 # --- Constants ---
 
@@ -49,43 +51,220 @@ REPORT_RUMBLE = 0x10
 REPORT_USB_CMD = 0x80
 
 # HID report descriptor (must match the real Pro Controller)
-HID_REPORT_DESCRIPTOR = bytes([
-    0x05, 0x01, 0x15, 0x00, 0x09, 0x04, 0xA1, 0x01,
-    # Report 0x30: Standard input
-    0x85, 0x30, 0x05, 0x01, 0x05, 0x09, 0x19, 0x01,
-    0x29, 0x0A, 0x15, 0x00, 0x25, 0x01, 0x75, 0x01,
-    0x95, 0x0A, 0x55, 0x00, 0x65, 0x00, 0x81, 0x02,
-    0x05, 0x09, 0x19, 0x0B, 0x29, 0x0E, 0x15, 0x00,
-    0x25, 0x01, 0x75, 0x01, 0x95, 0x04, 0x81, 0x02,
-    0x75, 0x01, 0x95, 0x02, 0x81, 0x03,
-    0x0B, 0x01, 0x00, 0x01, 0x00, 0xA1, 0x00,
-    0x0B, 0x30, 0x00, 0x01, 0x00,
-    0x0B, 0x31, 0x00, 0x01, 0x00,
-    0x0B, 0x32, 0x00, 0x01, 0x00,
-    0x0B, 0x35, 0x00, 0x01, 0x00,
-    0x15, 0x00, 0x27, 0xFF, 0xFF, 0x00, 0x00,
-    0x75, 0x10, 0x95, 0x04, 0x81, 0x02, 0xC0,
-    0x0B, 0x39, 0x00, 0x01, 0x00, 0x15, 0x00, 0x25, 0x07,
-    0x35, 0x00, 0x46, 0x3B, 0x01, 0x65, 0x14, 0x75, 0x04,
-    0x95, 0x01, 0x81, 0x02,
-    0x05, 0x09, 0x19, 0x0F, 0x29, 0x12, 0x15, 0x00,
-    0x25, 0x01, 0x75, 0x01, 0x95, 0x04, 0x81, 0x02,
-    0x75, 0x08, 0x95, 0x34, 0x81, 0x03,
-    # Report 0x21: Sub-command reply (input)
-    0x06, 0x00, 0xFF, 0x85, 0x21, 0x09, 0x01,
-    0x75, 0x08, 0x95, 0x3F, 0x81, 0x03,
-    # Report 0x81: USB command reply (input)
-    0x85, 0x81, 0x09, 0x02, 0x75, 0x08, 0x95, 0x3F, 0x81, 0x03,
-    # Report 0x01: Sub-command (output)
-    0x85, 0x01, 0x09, 0x03, 0x75, 0x08, 0x95, 0x3F, 0x91, 0x83,
-    # Report 0x10: Rumble only (output)
-    0x85, 0x10, 0x09, 0x04, 0x75, 0x08, 0x95, 0x3F, 0x91, 0x83,
-    # Report 0x80: USB command (output)
-    0x85, 0x80, 0x09, 0x05, 0x75, 0x08, 0x95, 0x3F, 0x91, 0x83,
-    # Report 0x82: (output - unused)
-    0x85, 0x82, 0x09, 0x06, 0x75, 0x08, 0x95, 0x3F, 0x91, 0x83,
-    0xC0,
-])
+HID_REPORT_DESCRIPTOR = bytes(
+    [
+        0x05,
+        0x01,
+        0x15,
+        0x00,
+        0x09,
+        0x04,
+        0xA1,
+        0x01,
+        # Report 0x30: Standard input
+        0x85,
+        0x30,
+        0x05,
+        0x01,
+        0x05,
+        0x09,
+        0x19,
+        0x01,
+        0x29,
+        0x0A,
+        0x15,
+        0x00,
+        0x25,
+        0x01,
+        0x75,
+        0x01,
+        0x95,
+        0x0A,
+        0x55,
+        0x00,
+        0x65,
+        0x00,
+        0x81,
+        0x02,
+        0x05,
+        0x09,
+        0x19,
+        0x0B,
+        0x29,
+        0x0E,
+        0x15,
+        0x00,
+        0x25,
+        0x01,
+        0x75,
+        0x01,
+        0x95,
+        0x04,
+        0x81,
+        0x02,
+        0x75,
+        0x01,
+        0x95,
+        0x02,
+        0x81,
+        0x03,
+        0x0B,
+        0x01,
+        0x00,
+        0x01,
+        0x00,
+        0xA1,
+        0x00,
+        0x0B,
+        0x30,
+        0x00,
+        0x01,
+        0x00,
+        0x0B,
+        0x31,
+        0x00,
+        0x01,
+        0x00,
+        0x0B,
+        0x32,
+        0x00,
+        0x01,
+        0x00,
+        0x0B,
+        0x35,
+        0x00,
+        0x01,
+        0x00,
+        0x15,
+        0x00,
+        0x27,
+        0xFF,
+        0xFF,
+        0x00,
+        0x00,
+        0x75,
+        0x10,
+        0x95,
+        0x04,
+        0x81,
+        0x02,
+        0xC0,
+        0x0B,
+        0x39,
+        0x00,
+        0x01,
+        0x00,
+        0x15,
+        0x00,
+        0x25,
+        0x07,
+        0x35,
+        0x00,
+        0x46,
+        0x3B,
+        0x01,
+        0x65,
+        0x14,
+        0x75,
+        0x04,
+        0x95,
+        0x01,
+        0x81,
+        0x02,
+        0x05,
+        0x09,
+        0x19,
+        0x0F,
+        0x29,
+        0x12,
+        0x15,
+        0x00,
+        0x25,
+        0x01,
+        0x75,
+        0x01,
+        0x95,
+        0x04,
+        0x81,
+        0x02,
+        0x75,
+        0x08,
+        0x95,
+        0x34,
+        0x81,
+        0x03,
+        # Report 0x21: Sub-command reply (input)
+        0x06,
+        0x00,
+        0xFF,
+        0x85,
+        0x21,
+        0x09,
+        0x01,
+        0x75,
+        0x08,
+        0x95,
+        0x3F,
+        0x81,
+        0x03,
+        # Report 0x81: USB command reply (input)
+        0x85,
+        0x81,
+        0x09,
+        0x02,
+        0x75,
+        0x08,
+        0x95,
+        0x3F,
+        0x81,
+        0x03,
+        # Report 0x01: Sub-command (output)
+        0x85,
+        0x01,
+        0x09,
+        0x03,
+        0x75,
+        0x08,
+        0x95,
+        0x3F,
+        0x91,
+        0x83,
+        # Report 0x10: Rumble only (output)
+        0x85,
+        0x10,
+        0x09,
+        0x04,
+        0x75,
+        0x08,
+        0x95,
+        0x3F,
+        0x91,
+        0x83,
+        # Report 0x80: USB command (output)
+        0x85,
+        0x80,
+        0x09,
+        0x05,
+        0x75,
+        0x08,
+        0x95,
+        0x3F,
+        0x91,
+        0x83,
+        # Report 0x82: (output - unused)
+        0x85,
+        0x82,
+        0x09,
+        0x06,
+        0x75,
+        0x08,
+        0x95,
+        0x3F,
+        0x91,
+        0x83,
+        0xC0,
+    ]
+)
 
 CONFIGFS_BASE = "/sys/kernel/config/usb_gadget"
 GADGET_NAME = "switch_pro"
@@ -95,27 +274,73 @@ FAKE_MAC = bytes([0x00, 0x00, 0x5E, 0x00, 0x53, 0x01])
 
 # Button bitmasks (for display)
 BUTTONS_RIGHT = {0x01: "Y", 0x02: "X", 0x04: "B", 0x08: "A", 0x40: "R", 0x80: "ZR"}
-BUTTONS_SHARED = {0x01: "-", 0x02: "+", 0x04: "RS", 0x08: "LS", 0x10: "Home", 0x20: "Cap"}
-BUTTONS_LEFT = {0x01: "Down", 0x02: "Up", 0x04: "Right", 0x08: "Left", 0x40: "L", 0x80: "ZL"}
+BUTTONS_SHARED = {
+    0x01: "-",
+    0x02: "+",
+    0x04: "RS",
+    0x08: "LS",
+    0x10: "Home",
+    0x20: "Cap",
+}
+BUTTONS_LEFT = {
+    0x01: "Down",
+    0x02: "Up",
+    0x04: "Right",
+    0x08: "Left",
+    0x40: "L",
+    0x80: "ZL",
+}
 
 SUBCMD_NAMES = {
-    0x02: "Request device info", 0x03: "Set input report mode",
-    0x04: "Trigger buttons elapsed time", 0x08: "Set shipment low power state",
-    0x10: "SPI flash read", 0x30: "Set player lights", 0x38: "Set HOME light",
-    0x40: "Enable IMU", 0x41: "Set IMU sensitivity", 0x48: "Enable vibration",
+    0x02: "Request device info",
+    0x03: "Set input report mode",
+    0x04: "Trigger buttons elapsed time",
+    0x08: "Set shipment low power state",
+    0x10: "SPI flash read",
+    0x30: "Set player lights",
+    0x38: "Set HOME light",
+    0x40: "Enable IMU",
+    0x41: "Set IMU sensitivity",
+    0x48: "Enable vibration",
 }
 
 # SPI flash emulation data
 SPI_FLASH: dict[int, bytes] = {
     0x6012: bytes([0x03]),  # Device type: Pro Controller
-    0x6020: bytes([  # Factory IMU calibration (24 bytes)
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  # Accel origin
-        0x00, 0x40, 0x00, 0x40, 0x00, 0x40,  # Accel sensitivity
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  # Gyro origin
-        0x3B, 0x34, 0x3B, 0x34, 0x3B, 0x34,  # Gyro sensitivity
-    ]),
-    0x603D: bytes([0x00, 0x07, 0x70, 0x00, 0x08, 0x80, 0x00, 0x07, 0x70]),  # Left stick cal
-    0x6046: bytes([0x00, 0x08, 0x80, 0x00, 0x07, 0x70, 0x00, 0x07, 0x70]),  # Right stick cal
+    0x6020: bytes(
+        [  # Factory IMU calibration (24 bytes)
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,  # Accel origin
+            0x00,
+            0x40,
+            0x00,
+            0x40,
+            0x00,
+            0x40,  # Accel sensitivity
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,  # Gyro origin
+            0x3B,
+            0x34,
+            0x3B,
+            0x34,
+            0x3B,
+            0x34,  # Gyro sensitivity
+        ]
+    ),
+    0x603D: bytes(
+        [0x00, 0x07, 0x70, 0x00, 0x08, 0x80, 0x00, 0x07, 0x70]
+    ),  # Left stick cal
+    0x6046: bytes(
+        [0x00, 0x08, 0x80, 0x00, 0x07, 0x70, 0x00, 0x07, 0x70]
+    ),  # Right stick cal
     0x6050: bytes([0x32, 0x32, 0x32, 0xFF, 0xFF, 0xFF]),  # Body + button color
     0x6056: bytes([0x32, 0x32, 0x32]),  # Left grip
     0x6059: bytes([0x32, 0x32, 0x32]),  # Right grip
@@ -149,7 +374,7 @@ class GadgetState:
     tx_count: int = 0
     rx_count: int = 0
     recording: bool = False
-    record_file: object = None
+    record_file: TextIO | None = None
     record_path: str = ""
     input_thread: threading.Thread | None = None
     errors: list[str] = field(default_factory=list)
@@ -158,7 +383,7 @@ class GadgetState:
 def hex_dump(data: bytes, prefix: str = "") -> str:
     lines = []
     for i in range(0, len(data), 16):
-        chunk = data[i:i + 16]
+        chunk = data[i : i + 16]
         hex_part = " ".join(f"{b:02X}" for b in chunk)
         ascii_part = "".join(chr(b) if 32 <= b < 127 else "." for b in chunk)
         lines.append(f"{prefix}{i:04X}: {hex_part:<48} |{ascii_part}|")
@@ -205,7 +430,9 @@ def list_udcs():
         return
     print("  Available UDCs:")
     for u in udcs:
-        state = (u / "state").read_text().strip() if (u / "state").exists() else "unknown"
+        state = (
+            (u / "state").read_text().strip() if (u / "state").exists() else "unknown"
+        )
         print(f"    {u.name}  (state: {state})")
 
 
@@ -306,10 +533,8 @@ def setup_gadget(state: GadgetState, udc: str = "") -> bool:
 def teardown_gadget(state: GadgetState):
     """Remove the USB gadget from configfs."""
     if state.hidg_fd is not None:
-        try:
+        with contextlib.suppress(OSError):
             os.close(state.hidg_fd)
-        except OSError:
-            pass
         state.hidg_fd = None
 
     gadget_path = Path(CONFIGFS_BASE) / GADGET_NAME
@@ -380,6 +605,7 @@ def read_output_report(state: GadgetState, timeout: float = 0.5) -> bytes | None
     if state.hidg_fd is None:
         return None
     import select
+
     readable, _, _ = select.select([state.hidg_fd], [], [], timeout)
     if not readable:
         return None
@@ -409,8 +635,9 @@ def pack_sticks(lx: int, ly: int, rx: int, ry: int) -> bytes:
     return bytes(buf)
 
 
-def build_subcmd_reply(state: GadgetState, subcmd_id: int, ack: int = 0x80,
-                       reply_data: bytes = b"") -> bytes:
+def build_subcmd_reply(
+    state: GadgetState, subcmd_id: int, ack: int = 0x80, reply_data: bytes = b""
+) -> bytes:
     """Build a 0x21 sub-command reply (63 bytes after report ID)."""
     reply = bytearray(63)
     reply[0] = state.timer & 0xFF
@@ -424,7 +651,7 @@ def build_subcmd_reply(state: GadgetState, subcmd_id: int, ack: int = 0x80,
     reply[13] = subcmd_id
     # Copy reply data (max 49 bytes = 63 - 14)
     copy_len = min(len(reply_data), 49)
-    reply[14:14 + copy_len] = reply_data[:copy_len]
+    reply[14 : 14 + copy_len] = reply_data[:copy_len]
     return bytes(reply)
 
 
@@ -442,7 +669,7 @@ def handle_spi_read(addr: int, read_len: int) -> bytes:
     for base_addr, stored in SPI_FLASH.items():
         if base_addr <= addr < base_addr + len(stored):
             offset = addr - base_addr
-            data = stored[offset:offset + read_len]
+            data = stored[offset : offset + read_len]
             if len(data) < read_len:
                 data += bytes(read_len - len(data))
             return data
@@ -537,27 +764,37 @@ def handle_subcmd(state: GadgetState, data: bytes):
         read_len = data[15]
         spi_data = handle_spi_read(addr, read_len)
         # Reply: addr(4) + len(1) + data
-        reply_data = struct.pack("<I", addr) + bytes([read_len]) + spi_data
+        reply_data = bytearray(struct.pack("<I", addr) + bytes([read_len]) + spi_data)
         reply = build_subcmd_reply(state, subcmd_id, ack=0x90, reply_data=reply_data)
         send_report(state, REPORT_SUBCMD_REPLY, reply)
         addr_label = ""
         for base, stored in SPI_FLASH.items():
             if base <= addr < base + len(stored) or base == addr:
-                for known_addr, known_data in SPI_FLASH.items():
+                for known_addr, _known_data in SPI_FLASH.items():
                     if known_addr == addr:
                         # Find label from well-known addresses
                         labels = {
-                            0x6012: "device type", 0x6020: "IMU cal", 0x603D: "L-stick cal",
-                            0x6046: "R-stick cal", 0x6050: "body color", 0x6056: "L-grip",
-                            0x6059: "R-grip", 0x6000: "serial", 0x8010: "user L-stick",
-                            0x801B: "user R-stick", 0x8026: "user IMU", 0x5000: "shipment",
+                            0x6012: "device type",
+                            0x6020: "IMU cal",
+                            0x603D: "L-stick cal",
+                            0x6046: "R-stick cal",
+                            0x6050: "body color",
+                            0x6056: "L-grip",
+                            0x6059: "R-grip",
+                            0x6000: "serial",
+                            0x8010: "user L-stick",
+                            0x801B: "user R-stick",
+                            0x8026: "user IMU",
+                            0x5000: "shipment",
                         }
                         addr_label = labels.get(addr, "")
                         break
                 break
         label = f" ({addr_label})" if addr_label else ""
-        print(f"  >> SPI read 0x{addr:04X}{label} [{read_len}B]: "
-              f"{' '.join(f'{b:02X}' for b in spi_data)}")
+        print(
+            f"  >> SPI read 0x{addr:04X}{label} [{read_len}B]: "
+            f"{' '.join(f'{b:02X}' for b in spi_data)}"
+        )
 
     elif subcmd_id == 0x30:  # Set player lights
         light_mask = data[11] if len(data) > 11 else 0
@@ -586,7 +823,7 @@ def handle_subcmd(state: GadgetState, data: bytes):
         reply = build_subcmd_reply(state, subcmd_id)
         send_report(state, REPORT_SUBCMD_REPLY, reply)
         if len(data) > 11:
-            args_hex = " ".join(f"{b:02X}" for b in data[11:min(len(data), 20)])
+            args_hex = " ".join(f"{b:02X}" for b in data[11 : min(len(data), 20)])
             print(f"  >> ACK (args: {args_hex})")
         else:
             print("  >> ACK")
@@ -633,8 +870,10 @@ def cmd_status(state: GadgetState):
     print(f"  Handshake: {state.handshake_done}")
     print(f"  Setup:     {state.setup_done}")
     print(f"  TX: {state.tx_count}  RX: {state.rx_count}")
-    print(f"  Buttons:   R=0x{state.buttons_right:02X} S=0x{state.buttons_shared:02X}"
-          f" L=0x{state.buttons_left:02X}")
+    print(
+        f"  Buttons:   R=0x{state.buttons_right:02X} S=0x{state.buttons_shared:02X}"
+        f" L=0x{state.buttons_left:02X}"
+    )
     print(f"  Sticks:    L({state.lx},{state.ly}) R({state.rx},{state.ry})")
     print(f"  Recording: {state.recording}")
 
@@ -642,15 +881,26 @@ def cmd_status(state: GadgetState):
 def cmd_press(state: GadgetState, button_name: str):
     """Press a button by name."""
     button_map = {
-        "a": ("right", 0x08), "b": ("right", 0x04), "x": ("right", 0x02), "y": ("right", 0x01),
-        "r": ("right", 0x40), "zr": ("right", 0x80),
-        "l": ("left", 0x40), "zl": ("left", 0x80),
-        "up": ("left", 0x02), "down": ("left", 0x01),
-        "left": ("left", 0x08), "right": ("left", 0x04),
-        "plus": ("shared", 0x02), "+": ("shared", 0x02),
-        "minus": ("shared", 0x01), "-": ("shared", 0x01),
-        "home": ("shared", 0x10), "capture": ("shared", 0x20),
-        "ls": ("shared", 0x08), "rs": ("shared", 0x04),
+        "a": ("right", 0x08),
+        "b": ("right", 0x04),
+        "x": ("right", 0x02),
+        "y": ("right", 0x01),
+        "r": ("right", 0x40),
+        "zr": ("right", 0x80),
+        "l": ("left", 0x40),
+        "zl": ("left", 0x80),
+        "up": ("left", 0x02),
+        "down": ("left", 0x01),
+        "left": ("left", 0x08),
+        "right": ("left", 0x04),
+        "plus": ("shared", 0x02),
+        "+": ("shared", 0x02),
+        "minus": ("shared", 0x01),
+        "-": ("shared", 0x01),
+        "home": ("shared", 0x10),
+        "capture": ("shared", 0x20),
+        "ls": ("shared", 0x08),
+        "rs": ("shared", 0x04),
     }
     name = button_name.lower()
     if name not in button_map:
@@ -669,15 +919,26 @@ def cmd_press(state: GadgetState, button_name: str):
 def cmd_release(state: GadgetState, button_name: str):
     """Release a button by name."""
     button_map = {
-        "a": ("right", 0x08), "b": ("right", 0x04), "x": ("right", 0x02), "y": ("right", 0x01),
-        "r": ("right", 0x40), "zr": ("right", 0x80),
-        "l": ("left", 0x40), "zl": ("left", 0x80),
-        "up": ("left", 0x02), "down": ("left", 0x01),
-        "left": ("left", 0x08), "right": ("left", 0x04),
-        "plus": ("shared", 0x02), "+": ("shared", 0x02),
-        "minus": ("shared", 0x01), "-": ("shared", 0x01),
-        "home": ("shared", 0x10), "capture": ("shared", 0x20),
-        "ls": ("shared", 0x08), "rs": ("shared", 0x04),
+        "a": ("right", 0x08),
+        "b": ("right", 0x04),
+        "x": ("right", 0x02),
+        "y": ("right", 0x01),
+        "r": ("right", 0x40),
+        "zr": ("right", 0x80),
+        "l": ("left", 0x40),
+        "zl": ("left", 0x80),
+        "up": ("left", 0x02),
+        "down": ("left", 0x01),
+        "left": ("left", 0x08),
+        "right": ("left", 0x04),
+        "plus": ("shared", 0x02),
+        "+": ("shared", 0x02),
+        "minus": ("shared", 0x01),
+        "-": ("shared", 0x01),
+        "home": ("shared", 0x10),
+        "capture": ("shared", 0x20),
+        "ls": ("shared", 0x08),
+        "rs": ("shared", 0x04),
     }
     name = button_name.lower()
     if name not in button_map:
@@ -860,7 +1121,7 @@ def repl(state: GadgetState):
                     print("  Usage: record <filename>")
                     continue
                 state.record_path = parts[1]
-                state.record_file = open(parts[1], "a")
+                state.record_file = open(parts[1], "a")  # noqa: SIM115
                 state.recording = True
                 print(f"  Recording to {parts[1]}")
             elif cmd == "stop":
@@ -880,10 +1141,13 @@ def main():
     parser = argparse.ArgumentParser(
         description="Nintendo Switch Pro Controller emulator via Linux USB Gadget"
     )
-    parser.add_argument("--list-udc", action="store_true", help="List USB Device Controllers")
+    parser.add_argument(
+        "--list-udc", action="store_true", help="List USB Device Controllers"
+    )
     parser.add_argument("--udc", default="", help="UDC name (auto-detected if omitted)")
-    parser.add_argument("--auto", action="store_true",
-                        help="Auto setup and wait for Switch handshake")
+    parser.add_argument(
+        "--auto", action="store_true", help="Auto setup and wait for Switch handshake"
+    )
     parser.add_argument("--record", metavar="FILE", help="Record traffic to file")
     args = parser.parse_args()
 
@@ -895,7 +1159,7 @@ def main():
 
     if args.record:
         state.record_path = args.record
-        state.record_file = open(args.record, "a")
+        state.record_file = open(args.record, "a")  # noqa: SIM115
         state.recording = True
 
     if args.auto:

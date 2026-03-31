@@ -13,8 +13,8 @@
  */
 #pragma once
 
-#include "esp_err.h"
 #include <stdint.h>
+#include "esp_err.h"
 
 /**
  * @brief Start WiFi AP and broadcast logs over UDP.

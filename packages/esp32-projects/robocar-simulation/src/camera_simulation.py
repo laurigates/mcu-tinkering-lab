@@ -15,9 +15,9 @@ from typing import Any
 import cv2
 import numpy as np
 import yaml
-from error_handling import get_error_handler
 from spatialmath import SE3
 
+from error_handling import get_error_handler
 from robot_model import RobotState
 
 CAPTURE_LOOP_SLEEP = 0.001  # seconds between capture loop iterations
@@ -51,7 +51,7 @@ class CameraSimulation:
         # Extract camera parameters from both robot and simulation configs
         robot_camera_config = self.config["robot"]["sensors"]["camera"]
         camera_sim_config = self.config["simulation"].get("camera", {})
-        camera_params = {}
+        camera_params: dict[str, Any] = {}
 
         # Use robot camera config as primary source, simulation config as override
         if "resolution" in robot_camera_config:
@@ -202,7 +202,7 @@ class CameraSimulation:
         ]
 
         # Obstacles
-        objects["obstacles"] = [
+        obstacles: list[dict[str, Any]] = [
             {
                 "type": "box",
                 "position": [1.0, 1.0, 0.25],
@@ -223,6 +223,7 @@ class CameraSimulation:
                 "color": [100, 200, 100],
             },  # Green box
         ]
+        objects["obstacles"] = obstacles
 
         return objects
 

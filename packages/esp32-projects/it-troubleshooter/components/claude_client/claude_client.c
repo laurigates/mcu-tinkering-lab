@@ -16,17 +16,17 @@
 #include "esp_http_client.h"
 #include "esp_log.h"
 
-#define CLAUDE_API_URL    "https://api.anthropic.com/v1/messages"
+#define CLAUDE_API_URL "https://api.anthropic.com/v1/messages"
 #define ANTHROPIC_VERSION "2023-06-01"
-#define MAX_OUTPUT_LEN    1024
-#define RESPONSE_BUF_LEN  4096
-#define MAX_TOKENS        256
+#define MAX_OUTPUT_LEN 1024
+#define RESPONSE_BUF_LEN 4096
+#define MAX_TOKENS 256
 #define REQUEST_TIMEOUT_MS 30000
 
 static const char *TAG = "claude_client";
 
 static const char *s_api_key = NULL;
-static const char *s_model   = NULL;
+static const char *s_model = NULL;
 
 static const char *SYSTEM_PROMPT =
     "You are a network troubleshooting assistant running on an embedded USB device. "
@@ -37,23 +37,23 @@ static const char *SYSTEM_PROMPT =
 
 typedef struct {
     char buf[RESPONSE_BUF_LEN];
-    int  offset;
+    int offset;
 } response_ctx_t;
 
 static esp_err_t http_event_handler(esp_http_client_event_t *evt)
 {
     response_ctx_t *ctx = (response_ctx_t *)evt->user_data;
     switch (evt->event_id) {
-    case HTTP_EVENT_ON_DATA:
-        if (ctx->offset + evt->data_len < RESPONSE_BUF_LEN - 1) {
-            memcpy(ctx->buf + ctx->offset, evt->data, evt->data_len);
-            ctx->offset += evt->data_len;
-        } else {
-            ESP_LOGW(TAG, "Response buffer overflow — truncating at %d bytes", ctx->offset);
-        }
-        break;
-    default:
-        break;
+        case HTTP_EVENT_ON_DATA:
+            if (ctx->offset + evt->data_len < RESPONSE_BUF_LEN - 1) {
+                memcpy(ctx->buf + ctx->offset, evt->data, evt->data_len);
+                ctx->offset += evt->data_len;
+            } else {
+                ESP_LOGW(TAG, "Response buffer overflow — truncating at %d bytes", ctx->offset);
+            }
+            break;
+        default:
+            break;
     }
     return ESP_OK;
 }
@@ -64,7 +64,7 @@ esp_err_t claude_client_init(const char *api_key, const char *model)
         return ESP_ERR_INVALID_ARG;
     }
     s_api_key = api_key;
-    s_model   = model;
+    s_model = model;
     ESP_LOGI(TAG, "Initialized (model=%s)", model);
     return ESP_OK;
 }
@@ -72,7 +72,7 @@ esp_err_t claude_client_init(const char *api_key, const char *model)
 void claude_client_deinit(void)
 {
     s_api_key = NULL;
-    s_model   = NULL;
+    s_model = NULL;
 }
 
 esp_err_t claude_client_analyze(const char *output, char *next_cmd, size_t next_cmd_len)
@@ -104,7 +104,7 @@ esp_err_t claude_client_analyze(const char *output, char *next_cmd, size_t next_
     cJSON_AddStringToObject(root, "system", SYSTEM_PROMPT);
 
     cJSON *messages = cJSON_CreateArray();
-    cJSON *msg      = cJSON_CreateObject();
+    cJSON *msg = cJSON_CreateObject();
     cJSON_AddStringToObject(msg, "role", "user");
     cJSON_AddStringToObject(msg, "content", truncated_output);
     cJSON_AddItemToArray(messages, msg);
@@ -121,12 +121,12 @@ esp_err_t claude_client_analyze(const char *output, char *next_cmd, size_t next_
     memset(ctx.buf, 0, sizeof(ctx.buf));
 
     esp_http_client_config_t config = {
-        .url               = CLAUDE_API_URL,
-        .method            = HTTP_METHOD_POST,
+        .url = CLAUDE_API_URL,
+        .method = HTTP_METHOD_POST,
         .crt_bundle_attach = esp_crt_bundle_attach,
-        .event_handler     = http_event_handler,
-        .user_data         = &ctx,
-        .timeout_ms        = REQUEST_TIMEOUT_MS,
+        .event_handler = http_event_handler,
+        .user_data = &ctx,
+        .timeout_ms = REQUEST_TIMEOUT_MS,
     };
 
     esp_http_client_handle_t client = esp_http_client_init(&config);
@@ -140,8 +140,8 @@ esp_err_t claude_client_analyze(const char *output, char *next_cmd, size_t next_
     esp_http_client_set_header(client, "content-type", "application/json");
     esp_http_client_set_post_field(client, request_body, (int)strlen(request_body));
 
-    esp_err_t err    = esp_http_client_perform(client);
-    int       status = esp_http_client_get_status_code(client);
+    esp_err_t err = esp_http_client_perform(client);
+    int status = esp_http_client_get_status_code(client);
     esp_http_client_cleanup(client);
     cJSON_free(request_body);
 
@@ -161,8 +161,8 @@ esp_err_t claude_client_analyze(const char *output, char *next_cmd, size_t next_
         return ESP_FAIL;
     }
 
-    esp_err_t ret     = ESP_FAIL;
-    cJSON    *content = cJSON_GetObjectItem(response, "content");
+    esp_err_t ret = ESP_FAIL;
+    cJSON *content = cJSON_GetObjectItem(response, "content");
     if (cJSON_IsArray(content) && cJSON_GetArraySize(content) > 0) {
         cJSON *item = cJSON_GetArrayItem(content, 0);
         cJSON *text = cJSON_GetObjectItem(item, "text");

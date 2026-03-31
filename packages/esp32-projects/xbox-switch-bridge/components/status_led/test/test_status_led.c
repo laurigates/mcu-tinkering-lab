@@ -8,21 +8,21 @@
  * Build and run: make test
  */
 
-#include "unity_compat.h"
 #include "status_led.h"
+#include "unity_compat.h"
 
 /* Mock state from mocks.c */
 extern uint8_t mock_led_r;
 extern uint8_t mock_led_g;
 extern uint8_t mock_led_b;
-extern int     mock_set_pixel_calls;
-extern int     mock_refresh_calls;
+extern int mock_set_pixel_calls;
+extern int mock_refresh_calls;
 extern int64_t mock_timer_us;
 
 /* Must match the constants in status_led.c */
-#define LED_BRIGHTNESS  32
-#define BLINK_SLOW_US   (500 * 1000)
-#define BLINK_FAST_US   (200 * 1000)
+#define LED_BRIGHTNESS 32
+#define BLINK_SLOW_US (500 * 1000)
+#define BLINK_FAST_US (200 * 1000)
 
 /* ---------------------------------------------------------------------- */
 /* Helpers                                                                 */
@@ -30,12 +30,12 @@ extern int64_t mock_timer_us;
 
 static void reset_mocks(void)
 {
-    mock_led_r           = 0;
-    mock_led_g           = 0;
-    mock_led_b           = 0;
+    mock_led_r = 0;
+    mock_led_g = 0;
+    mock_led_b = 0;
     mock_set_pixel_calls = 0;
-    mock_refresh_calls   = 0;
-    mock_timer_us        = 0;
+    mock_refresh_calls = 0;
+    mock_timer_us = 0;
 }
 
 /**

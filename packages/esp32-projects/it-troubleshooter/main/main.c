@@ -33,9 +33,9 @@
 
 static const char *TAG = "it-troubleshooter";
 
-#define CDC_BUF_SIZE            256
-#define NEXT_CMD_BUF_SIZE       256
-#define USB_MOUNT_TIMEOUT_MS    30000
+#define CDC_BUF_SIZE 256
+#define NEXT_CMD_BUF_SIZE 256
+#define USB_MOUNT_TIMEOUT_MS 30000
 #define WIFI_CONNECT_TIMEOUT_MS 30000
 
 /**
@@ -49,7 +49,7 @@ static void diagnostic_loop_task(void *arg)
 {
     (void)arg;
     uint8_t buf[CDC_BUF_SIZE];
-    char    next_cmd[NEXT_CMD_BUF_SIZE];
+    char next_cmd[NEXT_CMD_BUF_SIZE];
 
     ESP_LOGI(TAG, "Diagnostic loop task started — paste command output to CDC");
     status_led_set_mode(STATUS_LED_DIAGNOSTIC);

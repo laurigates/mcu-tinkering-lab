@@ -147,8 +147,7 @@ void app_main(void)
 #if OTA_ENABLED
     if (system_state_get_wifi() == WIFI_STATE_CONNECTED) {
         if (ota_manager_init() == ESP_OK) {
-            ESP_LOGI(TAG, "OTA manager initialized (version: %s)",
-                     ota_manager_get_version());
+            ESP_LOGI(TAG, "OTA manager initialized (version: %s)", ota_manager_get_version());
         } else {
             ESP_LOGW(TAG, "OTA manager initialization failed — updates disabled");
         }

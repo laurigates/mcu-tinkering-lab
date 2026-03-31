@@ -52,7 +52,7 @@ class PIDController:
         self.previous_error = 0.0
         self.integral = 0.0
         self.previous_derivative = 0.0
-        self.previous_time = None
+        self.previous_time: float | None = None
 
         # Reset flag for initialization
         self.initialized = False

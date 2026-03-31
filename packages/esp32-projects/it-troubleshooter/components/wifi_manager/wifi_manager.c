@@ -18,8 +18,8 @@
 static const char *TAG = "wifi_manager";
 
 #define WIFI_CONNECTED_BIT BIT0
-#define WIFI_FAIL_BIT      BIT1
-#define WIFI_MAX_RETRIES   10
+#define WIFI_FAIL_BIT BIT1
+#define WIFI_MAX_RETRIES 10
 
 static EventGroupHandle_t s_wifi_event_group = NULL;
 static int s_retry_count = 0;
@@ -43,8 +43,8 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
         if (s_retry_count < WIFI_MAX_RETRIES) {
             /* Exponential backoff: 1s, 2s, 4s … capped at 16s — use timer, not vTaskDelay */
             int delay_s = 1 << (s_retry_count < 4 ? s_retry_count : 4);
-            ESP_LOGW(TAG, "Disconnected — retry %d/%d in %ds", s_retry_count + 1,
-                     WIFI_MAX_RETRIES, delay_s);
+            ESP_LOGW(TAG, "Disconnected — retry %d/%d in %ds", s_retry_count + 1, WIFI_MAX_RETRIES,
+                     delay_s);
             s_retry_count++;
             if (s_retry_timer != NULL) {
                 esp_timer_start_once(s_retry_timer, (int64_t)delay_s * 1000000);
