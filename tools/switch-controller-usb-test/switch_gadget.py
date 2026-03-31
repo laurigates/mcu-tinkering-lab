@@ -764,7 +764,7 @@ def handle_subcmd(state: GadgetState, data: bytes):
         read_len = data[15]
         spi_data = handle_spi_read(addr, read_len)
         # Reply: addr(4) + len(1) + data
-        reply_data = struct.pack("<I", addr) + bytes([read_len]) + spi_data
+        reply_data = bytearray(struct.pack("<I", addr) + bytes([read_len]) + spi_data)
         reply = build_subcmd_reply(state, subcmd_id, ack=0x90, reply_data=reply_data)
         send_report(state, REPORT_SUBCMD_REPLY, reply)
         addr_label = ""

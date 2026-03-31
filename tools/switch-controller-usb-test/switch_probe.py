@@ -578,7 +578,8 @@ def cmd_record_stop(session: ProbeSession):
     if not session.recording:
         print("  Not recording")
         return
-    session.record_file.close()
+    if session.record_file is not None:
+        session.record_file.close()
     session.record_file = None
     session.recording = False
     print(f"  Stopped recording ({session.record_path})")

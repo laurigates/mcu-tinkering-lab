@@ -135,7 +135,7 @@ class OTASimulation:
 
         # Partition management
         self.boot_partition = "factory"  # Currently running partition
-        self.ota_partition = None  # Next OTA partition to use
+        self.ota_partition: str | None = None  # Next OTA partition to use
         self.ota_data = self._load_ota_data()
 
         # Download simulation
@@ -444,6 +444,9 @@ class OTASimulation:
             print("OTA simulation: Firmware verification successful")
 
             # Update OTA data partition
+            assert self.ota_partition is not None, (
+                "ota_partition must be set before download success"
+            )
             self.ota_data["seq"] += 1
             self.ota_data[self.ota_partition] = {"valid": True, "seq": self.ota_data["seq"]}
 

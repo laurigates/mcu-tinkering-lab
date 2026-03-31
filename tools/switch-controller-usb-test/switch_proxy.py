@@ -387,7 +387,9 @@ def handle_switch_report(state: ProxyState, report: bytes):
             addr = struct.unpack_from("<I", report, 11)[0]
             read_len = report[15]
             spi_data = spi_read(addr, read_len)
-            reply_data = struct.pack("<I", addr) + bytes([read_len]) + spi_data
+            reply_data = bytearray(
+                struct.pack("<I", addr) + bytes([read_len]) + spi_data
+            )
             reply = build_subcmd_reply(
                 state, subcmd_id, ack=0x90, reply_data=reply_data
             )
