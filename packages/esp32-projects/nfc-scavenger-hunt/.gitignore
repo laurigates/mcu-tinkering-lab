@@ -1,0 +1,14 @@
+# ESP-IDF build artifacts
+/build/
+/sdkconfig
+/sdkconfig.old
+
+# Managed components
+/managed_components/
+
+# Credentials (never commit)
+main/secrets.h
+
+# IDE
+.vscode/
+.idea/
