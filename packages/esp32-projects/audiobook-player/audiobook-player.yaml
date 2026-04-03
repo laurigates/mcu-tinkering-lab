@@ -85,6 +85,29 @@ rc522_spi:
       - logger.log:
           format: "Tag scanned: %s"
           args: ['x.c_str()']
+      # Play a unique tone derived from tag UID bytes (pentatonic scale)
+      - rtttl.play: !lambda |-
+          static const char *penta[] = {
+            "c5","d5","e5","g5","a5","c6","d6","e6","g6","a6"
+          };
+          std::string melody = "tag:d=16,o=5,b=180:";
+          std::string uid = x;
+          int n = 0;
+          size_t pos = 0;
+          while (pos < uid.size() && n < 4) {
+            if (uid[pos] == '-') { pos++; continue; }
+            if (pos + 1 < uid.size()) {
+              char hex[3] = {uid[pos], uid[pos + 1], 0};
+              uint8_t val = (uint8_t)strtoul(hex, nullptr, 16);
+              if (n > 0) melody += ",";
+              melody += penta[val % 10];
+              n++;
+              pos += 2;
+            } else {
+              pos++;
+            }
+          }
+          return melody;
       - script.execute: play_tag_success
 
   # When tag is removed
@@ -122,6 +145,7 @@ binary_sensor:
     on_press:
       then:
         - script.execute: extend_wake
+        - rtttl.play: "play:d=16,o=6,b=200:c,e"
         - homeassistant.event:
             event: esphome.audiobook_control
             data:
@@ -143,6 +167,7 @@ binary_sensor:
     on_press:
       then:
         - script.execute: extend_wake
+        - rtttl.play: "pause:d=16,o=6,b=200:e,c"
         - homeassistant.event:
             event: esphome.audiobook_control
             data:
@@ -233,14 +258,12 @@ script:
       - script.execute: led_slow_pulse
       - rtttl.play: "ready:d=8,o=5,b=140:c,e,g"
 
-  # Tag scanned successfully
+  # Tag scanned successfully - visual/haptic feedback (tone played by on_tag handler)
   - id: play_tag_success
     then:
       # Stop any running LED pattern
       - script.stop: led_fast_blink
       - script.stop: led_slow_pulse
-      # Play success chime
-      - rtttl.play: "success:d=8,o=5,b=180:g,8c6"
       # Flash LED solid
       - output.turn_on: status_led_output
       # Vibrate
