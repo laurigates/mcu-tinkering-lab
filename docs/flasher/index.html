@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>RoboCar Web Flasher</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Flash RoboCar firmware directly from your browser using USB">
+  <script
+    type="module"
+    src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"
+  ></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: #1a1a2e;
+      background: #f5f5f7;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem;
+    }
+    h1 { font-size: 1.8rem; margin-bottom: 0.5rem; }
+    .subtitle { color: #555; margin-bottom: 2rem; }
+    .cards {
+      display: flex;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+      justify-content: center;
+      max-width: 800px;
+      width: 100%;
+    }
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 1.5rem;
+      flex: 1 1 320px;
+      max-width: 380px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .card h2 { font-size: 1.2rem; }
+    .card .board { color: #666; font-size: 0.9rem; }
+    .card ul {
+      font-size: 0.85rem;
+      color: #444;
+      padding-left: 1.2rem;
+    }
+    .card ul li { margin-bottom: 0.25rem; }
+    esp-web-install-button {
+      margin-top: auto;
+      align-self: center;
+    }
+    esp-web-install-button button {
+      background: #2563eb;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 0.75rem 1.5rem;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    esp-web-install-button button:hover { background: #1d4ed8; }
+    .notice {
+      max-width: 800px;
+      width: 100%;
+      margin-top: 2rem;
+      padding: 1rem 1.25rem;
+      background: #fffbeb;
+      border: 1px solid #f59e0b;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      color: #92400e;
+    }
+    .notice summary { cursor: pointer; font-weight: 600; }
+    .notice ul { padding-left: 1.2rem; margin-top: 0.5rem; }
+    .notice li { margin-bottom: 0.35rem; }
+    .browser-warning {
+      display: none;
+      max-width: 800px;
+      width: 100%;
+      margin-bottom: 1rem;
+      padding: 1rem;
+      background: #fef2f2;
+      border: 1px solid #ef4444;
+      border-radius: 8px;
+      color: #991b1b;
+      font-size: 0.9rem;
+    }
+    footer {
+      margin-top: 2rem;
+      font-size: 0.8rem;
+      color: #888;
+    }
+    footer a { color: #2563eb; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <h1>RoboCar Web Flasher</h1>
+  <p class="subtitle">Flash firmware directly from your browser via USB</p>
+
+  <div class="browser-warning" id="browser-warning">
+    Your browser does not support Web Serial API. Please use
+    <strong>Google Chrome</strong> or <strong>Microsoft Edge</strong>
+    (version 89 or later) on desktop, or Chrome 117+ on Android with USB OTG.
+  </div>
+
+  <div class="cards">
+    <div class="card">
+      <h2>Main Controller</h2>
+      <p class="board">Heltec WiFi LoRa 32 V1</p>
+      <ul>
+        <li>Motor control (L298N)</li>
+        <li>PCA9685 LED/servo driver</li>
+        <li>OLED display, buzzer</li>
+        <li>WiFi OTA support</li>
+      </ul>
+      <esp-web-install-button manifest="firmware/robocar-main/manifest.json">
+        <button slot="activate">Flash Main Controller</button>
+      </esp-web-install-button>
+    </div>
+
+    <div class="card">
+      <h2>Camera Module</h2>
+      <p class="board">ESP32-CAM (AI Thinker)</p>
+      <ul>
+        <li>OV2640 camera + AI vision</li>
+        <li>Claude / Ollama / Gemini backends</li>
+        <li>MQTT telemetry</li>
+        <li>WiFi OTA support</li>
+      </ul>
+      <esp-web-install-button manifest="firmware/robocar-camera/manifest.json">
+        <button slot="activate">Flash Camera Module</button>
+      </esp-web-install-button>
+    </div>
+  </div>
+
+  <details class="notice">
+    <summary>Setup instructions</summary>
+    <ul>
+      <li><strong>Chrome or Edge required</strong> (Web Serial API). Firefox/Safari are not supported.</li>
+      <li><strong>Android:</strong> Use Chrome 117+ with a USB-C OTG adapter. Grant USB permission when prompted.</li>
+      <li><strong>ESP32-CAM:</strong> Most boards lack onboard USB. Connect an FTDI/CP2102 adapter.
+        Hold <strong>GPIO0</strong> while pressing <strong>RESET</strong> to enter flash mode.
+        Release GPIO0 after flashing begins.</li>
+      <li><strong>Heltec board:</strong> Connect via the onboard micro-USB port. No special boot mode needed.</li>
+      <li><strong>After flashing:</strong> WiFi credentials are not included in pre-built firmware.
+        Use the serial console (Logs &amp; Console button in ESP Web Tools) or
+        Improv WiFi (when available) to configure your network.</li>
+    </ul>
+  </details>
+
+  <footer>
+    <a href="https://github.com/laurigates/mcu-tinkering-lab">laurigates/mcu-tinkering-lab</a>
+    &middot; Powered by <a href="https://esphome.github.io/esp-web-tools/">ESP Web Tools</a>
+  </footer>
+
+  <script>
+    if (!("serial" in navigator)) {
+      document.getElementById("browser-warning").style.display = "block";
+    }
+  </script>
+</body>
+</html>

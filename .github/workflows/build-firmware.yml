@@ -12,6 +12,8 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 jobs:
   build-firmware:
@@ -34,12 +36,18 @@ jobs:
         run: |
           idf.py build
           cp build/idf-robocar.bin ../../../robocar-main.bin
+          cp build/bootloader/bootloader.bin ../../../robocar-main-bootloader.bin
+          cp build/partition_table/partition-table.bin ../../../robocar-main-partition-table.bin
+          cp build/ota_data_initial.bin ../../../robocar-main-ota_data_initial.bin 2>/dev/null || true
 
       - name: Build robocar-camera firmware
         working-directory: packages/esp32-projects/robocar-camera
         run: |
           idf.py build
           cp build/esp32-cam-robocar.bin ../../../robocar-camera.bin
+          cp build/bootloader/bootloader.bin ../../../robocar-camera-bootloader.bin
+          cp build/partition_table/partition-table.bin ../../../robocar-camera-partition-table.bin
+          cp build/ota_data_initial.bin ../../../robocar-camera-ota_data_initial.bin 2>/dev/null || true
 
       - name: Generate SHA256 hashes
         id: hashes
@@ -80,9 +88,9 @@ jobs:
           VERSION="${TAG#v}"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Create firmware manifest
+      - name: Create OTA manifest
         run: |
-          cat > manifest.json <<'EOF'
+          cat > manifest.json <<EOF
           {
             "version": "${{ steps.version.outputs.version }}",
             "release_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
@@ -99,6 +107,69 @@ jobs:
           }
           EOF
 
+      - name: Generate ESP Web Tools manifests
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+
+          # robocar-main manifest
+          # Offsets: bootloader=0x1000, partition-table=0x8000, otadata=0xF000, app=0x12000
+          MAIN_PARTS='[{"path":"bootloader.bin","offset":4096},{"path":"partition-table.bin","offset":32768}'
+          if [ -f robocar-main-ota_data_initial.bin ]; then
+            MAIN_PARTS="${MAIN_PARTS},{\"path\":\"ota_data_initial.bin\",\"offset\":61440}"
+          fi
+          MAIN_PARTS="${MAIN_PARTS},{\"path\":\"robocar-main.bin\",\"offset\":73728}]"
+
+          cat > esp-web-manifest-main.json <<EOF
+          {
+            "name": "RoboCar Main Controller",
+            "version": "${VERSION}",
+            "builds": [{
+              "chipFamily": "ESP32",
+              "parts": ${MAIN_PARTS}
+            }]
+          }
+          EOF
+
+          # robocar-camera manifest
+          CAM_PARTS='[{"path":"bootloader.bin","offset":4096},{"path":"partition-table.bin","offset":32768}'
+          if [ -f robocar-camera-ota_data_initial.bin ]; then
+            CAM_PARTS="${CAM_PARTS},{\"path\":\"ota_data_initial.bin\",\"offset\":61440}"
+          fi
+          CAM_PARTS="${CAM_PARTS},{\"path\":\"robocar-camera.bin\",\"offset\":73728}]"
+
+          cat > esp-web-manifest-camera.json <<EOF
+          {
+            "name": "RoboCar Camera",
+            "version": "${VERSION}",
+            "builds": [{
+              "chipFamily": "ESP32",
+              "parts": ${CAM_PARTS}
+            }]
+          }
+          EOF
+
+      - name: Assemble web flasher firmware directory
+        run: |
+          mkdir -p firmware/robocar-main firmware/robocar-camera
+
+          cp esp-web-manifest-main.json firmware/robocar-main/manifest.json
+          cp robocar-main.bin firmware/robocar-main/
+          cp robocar-main-bootloader.bin firmware/robocar-main/bootloader.bin
+          cp robocar-main-partition-table.bin firmware/robocar-main/partition-table.bin
+          cp robocar-main-ota_data_initial.bin firmware/robocar-main/ota_data_initial.bin 2>/dev/null || true
+
+          cp esp-web-manifest-camera.json firmware/robocar-camera/manifest.json
+          cp robocar-camera.bin firmware/robocar-camera/
+          cp robocar-camera-bootloader.bin firmware/robocar-camera/bootloader.bin
+          cp robocar-camera-partition-table.bin firmware/robocar-camera/partition-table.bin
+          cp robocar-camera-ota_data_initial.bin firmware/robocar-camera/ota_data_initial.bin 2>/dev/null || true
+
+      - name: Upload firmware artifact for Pages deployment
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware
+          path: firmware/
+
       - name: Upload firmware to release
         uses: softprops/action-gh-release@v2
         with:
@@ -107,6 +178,10 @@ jobs:
             robocar-main.bin
             robocar-camera.bin
             manifest.json
+            robocar-main-bootloader.bin
+            robocar-main-partition-table.bin
+            robocar-camera-bootloader.bin
+            robocar-camera-partition-table.bin
 
       - name: Notify robots of new firmware via MQTT
         if: github.event_name == 'release' && vars.MQTT_ENABLED == 'true'
@@ -133,3 +208,32 @@ jobs:
           echo "|-----------|------|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| robocar-main | ${{ steps.hashes.outputs.main_size }} bytes | \`${{ steps.hashes.outputs.main_sha256 }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| robocar-camera | ${{ steps.hashes.outputs.camera_size }} bytes | \`${{ steps.hashes.outputs.camera_sha256 }}\` |" >> $GITHUB_STEP_SUMMARY
+
+  deploy-web-flasher:
+    needs: build-firmware
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          sparse-checkout: docs/flasher
+
+      - name: Download firmware artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: firmware
+          path: _site/firmware
+
+      - name: Assemble Pages site
+        run: |
+          cp docs/flasher/* _site/
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
