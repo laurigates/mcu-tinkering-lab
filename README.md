@@ -9,6 +9,17 @@
 
 Get up and running in **under 5 minutes** using Docker, or 30 minutes with native setup.
 
+### Option 0: Web Flasher (No Toolchain Required)
+
+Flash pre-built firmware directly from your browser — no ESP-IDF, no Docker, no setup.
+
+1. Connect your ESP32 board via USB
+2. Open the [Web Flasher](https://laurigates.github.io/mcu-tinkering-lab/) in Chrome or Edge
+3. Select your board and click **Flash**
+
+> Requires Chrome/Edge 89+ (Web Serial API). Android supported with USB OTG.
+> See [Web Flasher docs](packages/esp32-projects/robocar-docs/docs/WEB_FLASHER.md) for details.
+
 ### Option 1: Docker (Recommended)
 
 ```bash
@@ -276,6 +287,7 @@ just esp32-my-new-project-build
 
 - [Architecture Overview](packages/esp32-projects/robocar-docs/README.md) - System design and communication protocols
 - [Hardware Connections](packages/esp32-projects/robocar-docs/hardware-connections.md) - Pin mappings and wiring
+- [Web Flasher Guide](packages/esp32-projects/robocar-docs/docs/WEB_FLASHER.md) - Browser-based firmware flashing
 - [WiFi Setup](packages/esp32-projects/robocar-main/WIFI_SETUP.md) - Network configuration
 - [OTA Updates](packages/esp32-projects/robocar-docs/PARTITION_UPDATE_NOTES.md) - Over-the-air firmware updates
 - [Simulation Guide](packages/esp32-projects/robocar-simulation/README.md) - Physics simulation setup
@@ -346,6 +358,7 @@ just docker-clean
 
 ## 🔗 Links
 
+- **Web Flasher:** https://laurigates.github.io/mcu-tinkering-lab/
 - **Repository:** https://github.com/laurigates/mcu-tinkering-lab
 - **Issues:** https://github.com/laurigates/mcu-tinkering-lab/issues
 - **Discussions:** https://github.com/laurigates/mcu-tinkering-lab/discussions
