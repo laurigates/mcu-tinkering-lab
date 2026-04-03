@@ -433,10 +433,22 @@ Brief description of changes
    ```
 
 4. **Add to CI pipeline:**
-   Edit `.github/workflows/esp32-build.yml` to include your project.
+   Edit `.github/workflows/esp32-build.yml` to include your project in the build matrix.
 
-5. **Update root Makefile:**
+5. **Update root justfile:**
    Add build/flash targets for your project.
+
+6. **Enable web flasher (optional):**
+   To include your project in the [Web Flasher](https://laurigates.github.io/mcu-tinkering-lab/),
+   add a `flasher.json` file to your project root (see [#152](https://github.com/laurigates/mcu-tinkering-lab/issues/152) for the planned convention):
+   ```json
+   {
+     "name": "My New Project",
+     "description": "Brief description of the project",
+     "chipFamily": "ESP32",
+     "board": "ESP32-DevKitC"
+   }
+   ```
 
 ## Documentation Guidelines
 
