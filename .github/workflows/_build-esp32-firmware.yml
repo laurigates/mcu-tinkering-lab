@@ -1,0 +1,157 @@
+name: Reusable ESP-IDF Firmware Build
+
+on:
+  workflow_call:
+    inputs:
+      project:
+        description: 'Project directory name under packages/esp32-projects/'
+        required: true
+        type: string
+      target:
+        description: 'ESP-IDF target (esp32, esp32s3, etc.)'
+        required: true
+        type: string
+      binary_name:
+        description: 'Name of the output .bin file in build/'
+        required: true
+        type: string
+      fetch_bluepad32:
+        description: 'Whether to clone bluepad32 dependencies'
+        required: false
+        default: false
+        type: boolean
+      mqtt_ota_notify:
+        description: 'Whether to send MQTT OTA notification'
+        required: false
+        default: false
+        type: boolean
+      release_tag:
+        description: 'Release tag to build for'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  IDF_VERSION: 'v5.4'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          ref: ${{ inputs.release_tag }}
+
+      - name: Fetch bluepad32 dependencies
+        if: inputs.fetch_bluepad32
+        working-directory: packages/esp32-projects/${{ inputs.project }}
+        run: |
+          BP32_DIR="external/bluepad32"
+          BTSTACK_ROOT="$BP32_DIR/external/btstack"
+          BTSTACK_COMP="$BTSTACK_ROOT/port/esp32/components/btstack"
+
+          echo "Cloning bluepad32 release_v3.10.3..."
+          git clone --depth 1 --branch release_v3.10.3 \
+            https://github.com/ricardoquesada/bluepad32.git "$BP32_DIR"
+          cd "$BP32_DIR" && git submodule update --init --depth 1 external/btstack && cd -
+
+          echo "Preparing btstack component..."
+          for dir in src 3rd-party/bluedroid 3rd-party/hxcmod-player \
+                     3rd-party/lwip/dhcp-server 3rd-party/lc3-google \
+                     3rd-party/md5 3rd-party/micro-ecc 3rd-party/yxml \
+                     platform/freertos platform/lwip; do
+            mkdir -p "$BTSTACK_COMP/$(dirname "$dir")"
+            cp -r "$BTSTACK_ROOT/$dir" "$BTSTACK_COMP/$dir"
+          done
+          mkdir -p "$BTSTACK_COMP/platform/embedded"
+          for f in hal_time_ms.h hal_uart_dma.h hci_dump_embedded_stdout.h hci_dump_embedded_stdout.c; do
+            cp "$BTSTACK_ROOT/platform/embedded/$f" "$BTSTACK_COMP/platform/embedded/"
+          done
+          echo "Dependencies ready"
+
+      - name: Build firmware
+        uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: ${{ env.IDF_VERSION }}
+          target: ${{ inputs.target }}
+          command: cd packages/esp32-projects/${{ inputs.project }} && idf.py build
+
+      - name: Generate SHA256 hash and check size
+        id: hashes
+        working-directory: packages/esp32-projects/${{ inputs.project }}
+        run: |
+          BIN_PATH="build/${{ inputs.binary_name }}"
+          SHA256=$(sha256sum "$BIN_PATH" | cut -d' ' -f1)
+          SIZE=$(stat -c%s "$BIN_PATH")
+          echo "sha256=$SHA256" >> $GITHUB_OUTPUT
+          echo "size=$SIZE" >> $GITHUB_OUTPUT
+
+          # Check against OTA partition limit (1.8MB)
+          OTA_LIMIT=1887436
+          if [ "$SIZE" -gt "$OTA_LIMIT" ]; then
+            echo "::error::Binary ($SIZE bytes) exceeds OTA partition limit ($OTA_LIMIT bytes)"
+            exit 1
+          fi
+          echo "Binary size: $SIZE bytes ($((SIZE / 1024)) KB)"
+
+      - name: Copy and rename binary
+        run: |
+          cp "packages/esp32-projects/${{ inputs.project }}/build/${{ inputs.binary_name }}" \
+             "${{ inputs.project }}.bin"
+
+      - name: Create firmware manifest
+        run: |
+          TAG="${{ inputs.release_tag }}"
+          VERSION="${TAG##*@v}"
+          cat > manifest.json <<EOF
+          {
+            "project": "${{ inputs.project }}",
+            "version": "$VERSION",
+            "release_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "target": "${{ inputs.target }}",
+            "firmware": {
+              "url": "https://github.com/${{ github.repository }}/releases/download/${{ inputs.release_tag }}/${{ inputs.project }}.bin",
+              "sha256": "${{ steps.hashes.outputs.sha256 }}",
+              "size": ${{ steps.hashes.outputs.size }}
+            }
+          }
+          EOF
+
+      - name: Upload firmware to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.release_tag }}
+          files: |
+            ${{ inputs.project }}.bin
+            manifest.json
+
+      - name: Notify robots of new firmware via MQTT
+        if: inputs.mqtt_ota_notify && vars.MQTT_ENABLED == 'true'
+        continue-on-error: true
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq mosquitto-clients
+
+          BROKER_PORT="${{ secrets.MQTT_BROKER_PORT }}"
+          mosquitto_pub \
+            -h "${{ secrets.MQTT_BROKER_HOST }}" \
+            -p "${BROKER_PORT:-1883}" \
+            -t "robocar/ota/notify" \
+            -m "${{ inputs.release_tag }}" \
+            -q 1
+
+      - name: Generate build summary
+        run: |
+          echo "## Firmware Build Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### ${{ inputs.project }} @ \`${{ inputs.release_tag }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Target | ${{ inputs.target }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Size | ${{ steps.hashes.outputs.size }} bytes |" >> $GITHUB_STEP_SUMMARY
+          echo "| SHA256 | \`${{ steps.hashes.outputs.sha256 }}\` |" >> $GITHUB_STEP_SUMMARY
