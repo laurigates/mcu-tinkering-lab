@@ -358,8 +358,8 @@ static void test_enter_maintenance_command(void)
 
 static void test_begin_ota_command_short_tag(void)
 {
-    i2c_command_packet_t pkt  = {0};
-    uint8_t             hash[] = {0xAB, 0xCD, 0xEF, 0x12};
+    i2c_command_packet_t pkt = {0};
+    uint8_t hash[] = {0xAB, 0xCD, 0xEF, 0x12};
     prepare_begin_ota_command(&pkt, "v1.2.3", hash, 0x31);
 
     TEST_ASSERT_EQUAL(CMD_TYPE_BEGIN_OTA, pkt.command_type);
@@ -376,16 +376,16 @@ static void test_begin_ota_command_null_hash_zeroed(void)
     i2c_command_packet_t pkt = {0};
     prepare_begin_ota_command(&pkt, "v0.1.0", NULL, 0x32);
 
-    const ota_begin_data_t *d  = (const ota_begin_data_t *)pkt.data;
-    uint8_t                 zeros[OTA_HASH_LEN] = {0};
+    const ota_begin_data_t *d = (const ota_begin_data_t *)pkt.data;
+    uint8_t zeros[OTA_HASH_LEN] = {0};
     TEST_ASSERT_EQUAL_MEMORY(zeros, d->hash, OTA_HASH_LEN);
     assert_packet_checksum_valid(&pkt);
 }
 
 static void test_begin_ota_command_null_tag_no_crash(void)
 {
-    i2c_command_packet_t pkt  = {0};
-    uint8_t             hash[] = {0, 0, 0, 0};
+    i2c_command_packet_t pkt = {0};
+    uint8_t hash[] = {0, 0, 0, 0};
     prepare_begin_ota_command(&pkt, NULL, hash, 0x33);
 }
 
