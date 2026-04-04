@@ -331,7 +331,7 @@ jobs:
 
       - name: Build ESPHome firmware
         if: steps.should-build.outputs.build == 'true'
-        uses: esphome/build-action@v4
+        uses: esphome/build-action@v7
         id: build
         with:
           yaml-file: ${{ matrix.device.yaml }}
