@@ -75,7 +75,7 @@ jobs:
           cat "$SECRETS_FILE"
 
       - name: Build ESPHome firmware
-        uses: esphome/build-action@v4
+        uses: esphome/build-action@v7
         id: build
         with:
           yaml-file: packages/esp32-projects/${{ inputs.project }}/${{ inputs.yaml_file }}
