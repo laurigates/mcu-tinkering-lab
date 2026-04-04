@@ -68,7 +68,7 @@ static void test_checksum_full_byte_range(void)
 static void test_verify_checksum_correct(void)
 {
     uint8_t buf[] = {0x01, 0x02, 0x04};
-    uint8_t cs    = calculate_checksum(buf, 3);
+    uint8_t cs = calculate_checksum(buf, 3);
     TEST_ASSERT_TRUE(verify_checksum(buf, 3, cs));
 }
 
@@ -88,7 +88,7 @@ static void test_verify_checksum_round_trip(void)
 {
     /* Any buffer should round-trip correctly */
     uint8_t buf[] = {0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0x42};
-    uint8_t cs    = calculate_checksum(buf, sizeof(buf));
+    uint8_t cs = calculate_checksum(buf, sizeof(buf));
     TEST_ASSERT_TRUE(verify_checksum(buf, sizeof(buf), cs));
 }
 
@@ -125,9 +125,8 @@ static void test_movement_command_null_packet(void)
 
 static void test_movement_all_commands_round_trip(void)
 {
-    movement_command_t cmds[] = {MOVE_FORWARD,    MOVE_BACKWARD, MOVE_LEFT,
-                                 MOVE_RIGHT,      MOVE_ROTATE_CW, MOVE_ROTATE_CCW,
-                                 MOVE_STOP};
+    movement_command_t cmds[] = {MOVE_FORWARD,   MOVE_BACKWARD,   MOVE_LEFT, MOVE_RIGHT,
+                                 MOVE_ROTATE_CW, MOVE_ROTATE_CCW, MOVE_STOP};
     for (size_t i = 0; i < sizeof(cmds) / sizeof(cmds[0]); i++) {
         i2c_command_packet_t pkt = {0};
         prepare_movement_command(&pkt, cmds[i], (uint8_t)(i * 32), (uint8_t)i);
