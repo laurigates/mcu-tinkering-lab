@@ -76,14 +76,8 @@ typedef struct {
     uint8_t blue_channel;
 } led_config_t;
 
-#define LEFT_LED_CONFIG                                            \
-    {                                                              \
-        LED_LEFT_R_CHANNEL, LED_LEFT_G_CHANNEL, LED_LEFT_B_CHANNEL \
-    }
-#define RIGHT_LED_CONFIG                                              \
-    {                                                                 \
-        LED_RIGHT_R_CHANNEL, LED_RIGHT_G_CHANNEL, LED_RIGHT_B_CHANNEL \
-    }
+#define LEFT_LED_CONFIG {LED_LEFT_R_CHANNEL, LED_LEFT_G_CHANNEL, LED_LEFT_B_CHANNEL}
+#define RIGHT_LED_CONFIG {LED_RIGHT_R_CHANNEL, LED_RIGHT_G_CHANNEL, LED_RIGHT_B_CHANNEL}
 
 // Servo configuration (using values from pin_config_idf.h)
 typedef struct {
@@ -94,12 +88,12 @@ typedef struct {
     int max_angle;
 } servo_config_t;
 
-#define SERVO_SYSTEM_CONFIG                                                   \
-    {                                                                         \
-        .pan_channel = SERVO_PAN_CHANNEL, .tilt_channel = SERVO_TILT_CHANNEL, \
-        .default_angle = SERVO_DEFAULT_ANGLE, .min_angle = SERVO_MIN_ANGLE,   \
-        .max_angle = SERVO_MAX_ANGLE                                          \
-    }
+#define SERVO_SYSTEM_CONFIG                \
+    {.pan_channel = SERVO_PAN_CHANNEL,     \
+     .tilt_channel = SERVO_TILT_CHANNEL,   \
+     .default_angle = SERVO_DEFAULT_ANGLE, \
+     .min_angle = SERVO_MIN_ANGLE,         \
+     .max_angle = SERVO_MAX_ANGLE}
 
 // ========================================
 // Communication Configuration
@@ -129,11 +123,13 @@ typedef struct {
     uint16_t height;
 } display_config_t;
 
-#define OLED_DISPLAY_CONFIG                                                        \
-    {                                                                              \
-        .sda_pin = OLED_SDA_PIN, .scl_pin = OLED_SCL_PIN, .rst_pin = OLED_RST_PIN, \
-        .i2c_address = OLED_I2C_ADDR, .width = OLED_WIDTH, .height = OLED_HEIGHT   \
-    }
+#define OLED_DISPLAY_CONFIG        \
+    {.sda_pin = OLED_SDA_PIN,      \
+     .scl_pin = OLED_SCL_PIN,      \
+     .rst_pin = OLED_RST_PIN,      \
+     .i2c_address = OLED_I2C_ADDR, \
+     .width = OLED_WIDTH,          \
+     .height = OLED_HEIGHT}
 
 // ========================================
 // Feature Flags
