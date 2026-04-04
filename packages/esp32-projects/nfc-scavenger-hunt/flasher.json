@@ -1,0 +1,9 @@
+{
+  "name": "NFC Scavenger Hunt",
+  "description": "Voice-guided NFC treasure hunt game with Gemini TTS, RC522 reader, and I2S audio output",
+  "chipFamily": "ESP32-S3",
+  "board": "ESP32-S3 with PSRAM",
+  "appBinaryName": "nfc-scavenger-hunt.bin",
+  "category": "games",
+  "flashMode": "uart"
+}

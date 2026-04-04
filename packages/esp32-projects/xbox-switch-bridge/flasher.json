@@ -1,0 +1,9 @@
+{
+  "name": "Xbox-Switch Bridge",
+  "description": "Bridges Xbox Series BLE controller to Nintendo Switch via USB Pro Controller emulation",
+  "chipFamily": "ESP32-S3",
+  "board": "Waveshare ESP32-S3-Zero",
+  "appBinaryName": "xbox-switch-bridge.bin",
+  "category": "tools",
+  "flashMode": "usb"
+}

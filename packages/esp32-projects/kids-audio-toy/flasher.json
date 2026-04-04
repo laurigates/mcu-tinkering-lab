@@ -1,0 +1,9 @@
+{
+  "name": "Kids Audio Toy",
+  "description": "Interactive audio toy with potentiometer-controlled pitch, duration, and rhythm with LED feedback",
+  "chipFamily": "ESP32",
+  "board": "ESP32 DevKit",
+  "appBinaryName": "kids-audio-toy.bin",
+  "category": "games",
+  "flashMode": "uart"
+}

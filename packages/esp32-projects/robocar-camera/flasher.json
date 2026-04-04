@@ -1,0 +1,9 @@
+{
+  "name": "RoboCar Camera Module",
+  "description": "OV2640 AI vision with Claude/Ollama/Gemini backends, UART control output, MQTT telemetry",
+  "chipFamily": "ESP32",
+  "board": "AI Thinker ESP32-CAM",
+  "appBinaryName": "esp32-cam-robocar.bin",
+  "category": "robocar",
+  "flashMode": "gpio0"
+}
