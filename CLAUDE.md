@@ -150,7 +150,7 @@ GPIO14/15 are used for UART to avoid PSRAM conflicts. The ESP32-CAM has very lim
 |----------|---------|---------|
 | `esp32-build.yml` | Push/PR to main/develop | Build all ESP32 firmware + simulation |
 | `test.yml` | Push/PR to main/develop | Pre-commit, pytest, cppcheck, format check |
-| `build-firmware.yml` | Release published | Build + attach firmware binaries to release |
+| `build-firmware.yml` | Release published | Build + attach firmware binaries to release + deploy web flasher |
 | `release-please.yml` | Push to main | Auto-generate release PRs from conventional commits |
 | `claude-code-review.yml` | PR opened/updated | Auto-review PRs with Claude |
 | `claude.yml` | @claude mention | Interactive Claude assistance in issues/PRs |
@@ -162,3 +162,4 @@ GPIO14/15 are used for UART to avoid PSRAM conflicts. The ESP32-CAM has very lim
 - `.gitleaks.toml` — Secret scanning allowlist
 - `tools/scaffold/new-esp32-project.sh` — New project scaffolding
 - `packages/esp32-projects/robocar-docs/` — Robocar coordination justfile and docs
+- `docs/flasher/index.html` — ESP Web Tools browser-based firmware flasher page
