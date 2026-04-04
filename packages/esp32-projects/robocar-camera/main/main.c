@@ -6,6 +6,8 @@
 #include <stdio.h>
 #include <string.h>
 #include "driver/gpio.h"
+#include "driver/uart.h"
+#include "driver/uart_vfs.h"
 #include "esp_log.h"
 #include "esp_system.h"
 #include "freertos/FreeRTOS.h"
@@ -22,6 +24,7 @@
 #include "credentials_loader.h"
 #include "credentials_validator.h"  // Must be first to validate credentials at compile time
 #include "i2c_master.h"
+#include "improv_wifi.h"
 #include "system_state.h"
 #include "unified_logger.h"
 #include "wifi_manager.h"
@@ -90,6 +93,7 @@ static esp_err_t init_wifi_and_credentials(void);
 static esp_err_t init_mqtt_logging(void);
 static esp_err_t init_ai_backend(void);
 static void create_and_start_tasks(void);
+static esp_err_t run_improv_wifi_provisioning(void);
 
 void app_main(void)
 {
@@ -226,7 +230,7 @@ static esp_err_t init_hardware_components(void)
 
 static esp_err_t init_wifi_and_credentials(void)
 {
-    // Initialize WiFi
+    // Initialize WiFi subsystem
     LOGI_DUAL(TAG, "Initializing WiFi...");
     system_state_set_wifi(WIFI_STATE_CONNECTING);
 
@@ -237,18 +241,35 @@ static esp_err_t init_wifi_and_credentials(void)
         return ESP_FAIL;
     }
 
-    // Load and validate credentials
+    // Load credentials: NVS (Improv) → env vars → credentials.h
     ESP_LOGI(TAG, "Loading credentials...");
     if (!are_credentials_available()) {
-        ESP_LOGE(TAG, "Failed to load or validate credentials");
-        system_state_set_wifi(WIFI_STATE_ERROR);
-        i2c_send_sound_command(SOUND_ALERT);
-        return ESP_FAIL;
+        // No credentials found anywhere — start Improv WiFi provisioning
+        LOGI_DUAL(TAG, "No WiFi credentials found — starting Improv WiFi provisioning");
+        LOGI_DUAL(TAG, "Open the web flasher page to configure WiFi credentials");
+        if (run_improv_wifi_provisioning() != ESP_OK) {
+            LOGE_DUAL(TAG, "Improv WiFi provisioning failed or timed out");
+            system_state_set_wifi(WIFI_STATE_ERROR);
+            i2c_send_sound_command(SOUND_ALERT);
+            return ESP_FAIL;
+        }
+        // Reload credentials from NVS after successful provisioning
+        if (!credentials_reload()) {
+            LOGE_DUAL(TAG, "Failed to reload credentials after provisioning");
+            system_state_set_wifi(WIFI_STATE_ERROR);
+            return ESP_FAIL;
+        }
     }
 
     // Connect to WiFi using loaded credentials
     const char *wifi_ssid = get_wifi_ssid();
     const char *wifi_password = get_wifi_password();
+
+    if (!wifi_ssid || strlen(wifi_ssid) == 0) {
+        LOGE_DUAL(TAG, "WiFi SSID is empty after credential loading");
+        system_state_set_wifi(WIFI_STATE_ERROR);
+        return ESP_FAIL;
+    }
 
     LOGI_DUAL(TAG, "Connecting to WiFi: %s", wifi_ssid);
     if (wifi_connect(wifi_ssid, wifi_password) == ESP_OK) {
@@ -759,6 +780,112 @@ static void set_status_led(bool on)
     gpio_set_level(CAM_LED_PIN, on ? 1 : 0);
 #endif
 }
+
+// --- Improv WiFi provisioning -----------------------------------------------
+
+// EventGroup bit set by the credentials callback when provisioning succeeds
+#define IMPROV_PROVISIONED_BIT BIT0
+static EventGroupHandle_t g_improv_event_group = NULL;
+
+// Callback invoked by the Improv WiFi parser when SSID/password are received
+static void on_improv_credentials(const char *ssid, const char *password)
+{
+    ESP_LOGI(TAG, "Improv WiFi: saving credentials for SSID: %s", ssid);
+    if (credentials_nvs_save_wifi(ssid, password)) {
+        improv_wifi_send_state(IMPROV_STATE_PROVISIONED);
+        improv_wifi_send_provisioned_result(NULL);
+        if (g_improv_event_group) {
+            xEventGroupSetBits(g_improv_event_group, IMPROV_PROVISIONED_BIT);
+        }
+    } else {
+        improv_wifi_send_error(IMPROV_ERROR_UNABLE_CONNECT);
+    }
+}
+
+// FreeRTOS task: read UART0, feed bytes to Improv parser, broadcast state
+static void improv_uart_task(void *pvParameters)
+{
+    // Broadcast AUTHORIZED state every second so ESP Web Tools can detect us
+    TickType_t last_state_tx = 0;
+
+    while (1) {
+        uint8_t byte;
+        int len = uart_read_bytes(UART_NUM_0, &byte, 1, pdMS_TO_TICKS(200));
+        if (len > 0) {
+            improv_wifi_process_byte(byte);
+        }
+
+        // Broadcast state every ~1 second
+        TickType_t now = xTaskGetTickCount();
+        if ((now - last_state_tx) >= pdMS_TO_TICKS(1000)) {
+            improv_wifi_send_state(IMPROV_STATE_AUTHORIZED);
+            last_state_tx = now;
+        }
+
+        // Exit when provisioned (EventGroup bit set)
+        if (g_improv_event_group &&
+            (xEventGroupGetBits(g_improv_event_group) & IMPROV_PROVISIONED_BIT)) {
+            break;
+        }
+    }
+    vTaskDelete(NULL);
+}
+
+/**
+ * @brief Block until Improv WiFi credentials are received or timeout.
+ *
+ * Installs the UART0 driver (required for uart_read_bytes/uart_write_bytes),
+ * starts the Improv listener task, and waits up to 10 minutes for the user
+ * to configure WiFi via the web flasher UI.
+ *
+ * @return ESP_OK on success (credentials saved to NVS), ESP_FAIL on timeout.
+ */
+static esp_err_t run_improv_wifi_provisioning(void)
+{
+    // Install UART0 driver so we can use uart_read_bytes / uart_write_bytes
+    uart_config_t uart_config = {
+        .baud_rate = 115200,
+        .data_bits = UART_DATA_8_BITS,
+        .parity = UART_PARITY_DISABLE,
+        .stop_bits = UART_STOP_BITS_1,
+        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+        .source_clk = UART_SCLK_DEFAULT,
+    };
+    esp_err_t err = uart_driver_install(UART_NUM_0, 1024, 1024, 0, NULL, 0);
+    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
+        ESP_LOGW(TAG, "uart_driver_install: %s (may already be installed)", esp_err_to_name(err));
+    }
+    uart_param_config(UART_NUM_0, &uart_config);
+    uart_vfs_dev_use_driver(UART_NUM_0);
+
+    g_improv_event_group = xEventGroupCreate();
+    if (!g_improv_event_group) {
+        ESP_LOGE(TAG, "Failed to create Improv event group");
+        return ESP_FAIL;
+    }
+
+    improv_wifi_init(on_improv_credentials);
+
+    // 10-minute provisioning timeout
+    xTaskCreate(improv_uart_task, "improv_task", 4096, NULL, 5, NULL);
+
+    EventBits_t bits =
+        xEventGroupWaitBits(g_improv_event_group, IMPROV_PROVISIONED_BIT,
+                            pdFALSE, pdFALSE, pdMS_TO_TICKS(10 * 60 * 1000));
+
+    vEventGroupDelete(g_improv_event_group);
+    g_improv_event_group = NULL;
+
+    if (bits & IMPROV_PROVISIONED_BIT) {
+        ESP_LOGI(TAG, "Improv WiFi provisioning successful");
+        return ESP_OK;
+    }
+
+    ESP_LOGW(TAG, "Improv WiFi provisioning timed out after 10 minutes");
+    return ESP_FAIL;
+}
+
+// ---------------------------------------------------------------------------
 
 static void send_startup_commands(void)
 {

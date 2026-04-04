@@ -84,4 +84,26 @@ const char *get_gemini_api_key(void);
  */
 bool are_credentials_available(void);
 
+/**
+ * @brief Save WiFi credentials to NVS (used by Improv WiFi provisioner)
+ *
+ * Credentials saved here take priority over compiled-in credentials on the
+ * next call to load_credentials() / are_credentials_available().
+ *
+ * @param ssid      WiFi SSID (null-terminated)
+ * @param password  WiFi password (null-terminated)
+ * @return true on success
+ */
+bool credentials_nvs_save_wifi(const char *ssid, const char *password);
+
+/**
+ * @brief Reload credentials from all sources (NVS → env → credentials.h).
+ *
+ * Call this after credentials_nvs_save_wifi() to make the new credentials
+ * available via get_wifi_ssid() / get_wifi_password().
+ *
+ * @return true if valid credentials are now available
+ */
+bool credentials_reload(void);
+
 #endif  // CREDENTIALS_LOADER_H

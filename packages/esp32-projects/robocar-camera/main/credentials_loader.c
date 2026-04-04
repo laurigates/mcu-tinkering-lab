@@ -8,12 +8,52 @@
 #include <string.h>
 #include "credentials.h"
 #include "esp_log.h"
+#include "nvs.h"
+#include "nvs_flash.h"
 
 static const char *TAG = "credentials_loader";
+
+// NVS namespace for Improv WiFi provisioned credentials (same as robocar-main)
+#define NVS_NAMESPACE    "wifi_config"
+#define NVS_KEY_SSID     "ssid"
+#define NVS_KEY_PASSWORD "password"
 
 // Global credentials instance
 static credentials_t g_credentials = {0};
 static bool g_credentials_initialized = false;
+
+/**
+ * @brief Attempt to load WiFi credentials from NVS (highest priority source).
+ *
+ * Credentials stored here were provisioned via Improv WiFi.
+ */
+static bool load_from_nvs(credentials_t *creds)
+{
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle);
+    if (err != ESP_OK) {
+        return false;
+    }
+
+    char ssid[MAX_SSID_LENGTH] = {0};
+    char password[MAX_PASSWORD_LENGTH] = {0};
+    size_t ssid_len = sizeof(ssid);
+    size_t pass_len = sizeof(password);
+
+    bool ok = (nvs_get_str(handle, NVS_KEY_SSID, ssid, &ssid_len) == ESP_OK &&
+               nvs_get_str(handle, NVS_KEY_PASSWORD, password, &pass_len) == ESP_OK &&
+               strlen(ssid) > 0);
+    nvs_close(handle);
+
+    if (ok) {
+        strncpy(creds->wifi_ssid, ssid, MAX_SSID_LENGTH - 1);
+        creds->wifi_ssid[MAX_SSID_LENGTH - 1] = '\0';
+        strncpy(creds->wifi_password, password, MAX_PASSWORD_LENGTH - 1);
+        creds->wifi_password[MAX_PASSWORD_LENGTH - 1] = '\0';
+        ESP_LOGI(TAG, "Loaded WiFi credentials from NVS (SSID: %s)", creds->wifi_ssid);
+    }
+    return ok;
+}
 
 /**
  * @brief Attempt to load credential from environment variable
@@ -85,7 +125,16 @@ bool load_credentials(credentials_t *creds)
 
     ESP_LOGI(TAG, "Loading credentials...");
 
-    // Try environment variables first
+    // Priority 1: NVS (credentials stored by Improv WiFi provisioner)
+    if (load_from_nvs(creds)) {
+        // WiFi credentials loaded from NVS; still try env/file for API keys
+        load_from_env("CLAUDE_API_KEY", creds->claude_api_key, MAX_API_KEY_LENGTH);
+        load_from_env("GEMINI_API_KEY", creds->gemini_api_key, MAX_API_KEY_LENGTH);
+        creds->credentials_loaded = true;
+        return true;
+    }
+
+    // Priority 2: Environment variables (CI/CD builds)
     bool env_loaded = true;
     if (!load_from_env("WIFI_SSID", creds->wifi_ssid, MAX_SSID_LENGTH)) {
         env_loaded = false;
@@ -105,14 +154,14 @@ bool load_credentials(credentials_t *creds)
 
     ESP_LOGI(TAG, "Environment variables not available, trying credentials.h file...");
 
-    // Fallback to credentials.h file
+    // Priority 3: credentials.h file (developer builds)
     if (load_from_file(creds)) {
         ESP_LOGI(TAG, "Successfully loaded credentials from credentials.h");
         creds->credentials_loaded = true;
         return true;
     }
 
-    ESP_LOGE(TAG, "Failed to load credentials from any source");
+    ESP_LOGW(TAG, "No WiFi credentials found — Improv WiFi provisioning required");
     return false;
 }
 
@@ -208,4 +257,37 @@ const char *get_gemini_api_key(void)
         return NULL;
     }
     return g_credentials.gemini_api_key;
+}
+
+bool credentials_nvs_save_wifi(const char *ssid, const char *password)
+{
+    if (!ssid || !password) {
+        return false;
+    }
+
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to open NVS for writing: %s", esp_err_to_name(err));
+        return false;
+    }
+
+    bool ok = (nvs_set_str(handle, NVS_KEY_SSID, ssid) == ESP_OK &&
+               nvs_set_str(handle, NVS_KEY_PASSWORD, password) == ESP_OK &&
+               nvs_commit(handle) == ESP_OK);
+
+    nvs_close(handle);
+    if (ok) {
+        ESP_LOGI(TAG, "WiFi credentials saved to NVS (SSID: %s)", ssid);
+    } else {
+        ESP_LOGE(TAG, "Failed to save WiFi credentials to NVS");
+    }
+    return ok;
+}
+
+bool credentials_reload(void)
+{
+    g_credentials_initialized = false;
+    memset(&g_credentials, 0, sizeof(g_credentials));
+    return are_credentials_available();
 }
