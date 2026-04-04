@@ -869,9 +869,8 @@ static esp_err_t run_improv_wifi_provisioning(void)
     // 10-minute provisioning timeout
     xTaskCreate(improv_uart_task, "improv_task", 4096, NULL, 5, NULL);
 
-    EventBits_t bits =
-        xEventGroupWaitBits(g_improv_event_group, IMPROV_PROVISIONED_BIT,
-                            pdFALSE, pdFALSE, pdMS_TO_TICKS(10 * 60 * 1000));
+    EventBits_t bits = xEventGroupWaitBits(g_improv_event_group, IMPROV_PROVISIONED_BIT, pdFALSE,
+                                           pdFALSE, pdMS_TO_TICKS(10 * 60 * 1000));
 
     vEventGroupDelete(g_improv_event_group);
     g_improv_event_group = NULL;

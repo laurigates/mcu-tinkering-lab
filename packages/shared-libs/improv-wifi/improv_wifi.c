@@ -19,20 +19,20 @@ static const char *TAG = "improv_wifi";
 
 // Packet header
 static const uint8_t HEADER[] = {'I', 'M', 'P', 'R', 'O', 'V'};
-#define HEADER_LEN  6
-#define VERSION     0x01
-#define MAX_DATA    255
+#define HEADER_LEN 6
+#define VERSION 0x01
+#define MAX_DATA 255
 
 // Packet type constants
 #define TYPE_CURRENT_STATE 0x01
-#define TYPE_ERROR_STATE   0x02
-#define TYPE_RPC_COMMAND   0x03
-#define TYPE_RPC_RESULT    0x04
+#define TYPE_ERROR_STATE 0x02
+#define TYPE_RPC_COMMAND 0x03
+#define TYPE_RPC_RESULT 0x04
 
 // RPC command IDs
 #define CMD_SEND_WIFI_CREDS 0x01
-#define CMD_IDENTIFY        0x02
-#define CMD_REQUEST_INFO    0x03
+#define CMD_IDENTIFY 0x02
+#define CMD_REQUEST_INFO 0x03
 
 // Internal parser state machine
 typedef enum {
@@ -45,19 +45,18 @@ typedef enum {
 } parse_state_t;
 
 static struct {
-    parse_state_t    state;
-    uint8_t          header_pos;
-    uint8_t          pkt_version;
-    uint8_t          pkt_type;
-    uint8_t          pkt_length;
-    uint8_t          data[MAX_DATA];
-    uint8_t          data_pos;
+    parse_state_t state;
+    uint8_t header_pos;
+    uint8_t pkt_version;
+    uint8_t pkt_type;
+    uint8_t pkt_length;
+    uint8_t data[MAX_DATA];
+    uint8_t data_pos;
     improv_credentials_cb_t credentials_cb;
 } g_ctx;
 
 // Calculate packet checksum
-static uint8_t packet_checksum(uint8_t version, uint8_t type, uint8_t length,
-                                const uint8_t *data)
+static uint8_t packet_checksum(uint8_t version, uint8_t type, uint8_t length, const uint8_t *data)
 {
     uint8_t sum = version + type + length;
     for (uint8_t i = 0; i < length; i++) {
@@ -103,8 +102,8 @@ static void handle_send_wifi_creds(const uint8_t *data, uint8_t length)
         return;
     }
     char ssid[IMPROV_WIFI_MAX_SSID_LEN + 1];
-    uint8_t copy_len = (ssid_len < IMPROV_WIFI_MAX_SSID_LEN) ? (uint8_t)ssid_len
-                                                               : IMPROV_WIFI_MAX_SSID_LEN;
+    uint8_t copy_len =
+        (ssid_len < IMPROV_WIFI_MAX_SSID_LEN) ? (uint8_t)ssid_len : IMPROV_WIFI_MAX_SSID_LEN;
     memcpy(ssid, data + idx, copy_len);
     ssid[copy_len] = '\0';
     idx += ssid_len;
@@ -229,8 +228,8 @@ void improv_wifi_process_byte(uint8_t byte)
             break;
 
         case S_CHECKSUM: {
-            uint8_t expected = packet_checksum(g_ctx.pkt_version, g_ctx.pkt_type,
-                                               g_ctx.pkt_length, g_ctx.data);
+            uint8_t expected =
+                packet_checksum(g_ctx.pkt_version, g_ctx.pkt_type, g_ctx.pkt_length, g_ctx.data);
             g_ctx.state = S_HEADER;
             if (byte != expected) {
                 ESP_LOGW(TAG, "Checksum mismatch: got=0x%02x expected=0x%02x", byte, expected);

@@ -14,8 +14,8 @@
 static const char *TAG = "credentials_loader";
 
 // NVS namespace for Improv WiFi provisioned credentials (same as robocar-main)
-#define NVS_NAMESPACE    "wifi_config"
-#define NVS_KEY_SSID     "ssid"
+#define NVS_NAMESPACE "wifi_config"
+#define NVS_KEY_SSID "ssid"
 #define NVS_KEY_PASSWORD "password"
 
 // Global credentials instance
@@ -40,9 +40,9 @@ static bool load_from_nvs(credentials_t *creds)
     size_t ssid_len = sizeof(ssid);
     size_t pass_len = sizeof(password);
 
-    bool ok = (nvs_get_str(handle, NVS_KEY_SSID, ssid, &ssid_len) == ESP_OK &&
-               nvs_get_str(handle, NVS_KEY_PASSWORD, password, &pass_len) == ESP_OK &&
-               strlen(ssid) > 0);
+    bool ok =
+        (nvs_get_str(handle, NVS_KEY_SSID, ssid, &ssid_len) == ESP_OK &&
+         nvs_get_str(handle, NVS_KEY_PASSWORD, password, &pass_len) == ESP_OK && strlen(ssid) > 0);
     nvs_close(handle);
 
     if (ok) {
@@ -272,9 +272,9 @@ bool credentials_nvs_save_wifi(const char *ssid, const char *password)
         return false;
     }
 
-    bool ok = (nvs_set_str(handle, NVS_KEY_SSID, ssid) == ESP_OK &&
-               nvs_set_str(handle, NVS_KEY_PASSWORD, password) == ESP_OK &&
-               nvs_commit(handle) == ESP_OK);
+    bool ok =
+        (nvs_set_str(handle, NVS_KEY_SSID, ssid) == ESP_OK &&
+         nvs_set_str(handle, NVS_KEY_PASSWORD, password) == ESP_OK && nvs_commit(handle) == ESP_OK);
 
     nvs_close(handle);
     if (ok) {

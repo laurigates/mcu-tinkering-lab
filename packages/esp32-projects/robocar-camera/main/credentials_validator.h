@@ -36,8 +36,7 @@ static inline void validate_credentials_at_runtime(void)
 {
     // Check for default WiFi SSID values — warn only, Improv WiFi will provision
     if (strcmp(WIFI_SSID, "") == 0 || strcmp(WIFI_SSID, "your_wifi_network_name") == 0 ||
-        strcmp(WIFI_SSID, "YOUR_WIFI_NAME") == 0 ||
-        strcmp(WIFI_SSID, "YOUR_WIFI_SSID_HERE") == 0) {
+        strcmp(WIFI_SSID, "YOUR_WIFI_NAME") == 0 || strcmp(WIFI_SSID, "YOUR_WIFI_SSID_HERE") == 0) {
         ESP_LOGW("credentials_validator",
                  "WiFi SSID not configured in credentials.h (value: '%s'). "
                  "Improv WiFi provisioning will be required after flashing.",
@@ -46,8 +45,7 @@ static inline void validate_credentials_at_runtime(void)
     }
 
     // Check for default WiFi password values — warn only
-    if (strcmp(WIFI_PASSWORD, "") == 0 ||
-        strcmp(WIFI_PASSWORD, "your_wifi_password") == 0 ||
+    if (strcmp(WIFI_PASSWORD, "") == 0 || strcmp(WIFI_PASSWORD, "your_wifi_password") == 0 ||
         strcmp(WIFI_PASSWORD, "YOUR_WIFI_PASSWORD") == 0 ||
         strcmp(WIFI_PASSWORD, "YOUR_WIFI_PASSWORD_HERE") == 0) {
         ESP_LOGW("credentials_validator",
