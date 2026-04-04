@@ -15,9 +15,68 @@ permissions:
   pages: write
   id-token: write
 
+env:
+  IDF_VERSION: 'v5.4'
+
 jobs:
-  build-firmware:
+  discover-projects:
+    name: Discover flasher-enabled projects
     runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.discover.outputs.matrix }}
+      project_count: ${{ steps.discover.outputs.project_count }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.release_tag }}
+
+      - name: Scan flasher.json files
+        id: discover
+        run: |
+          INCLUDES="[]"
+          for flasher_json in packages/esp32-projects/*/flasher.json; do
+            project_dir=$(dirname "$flasher_json")
+            project_id=$(basename "$project_dir")
+            chip_family=$(jq -r '.chipFamily' "$flasher_json")
+            app_binary=$(jq -r '.appBinaryName' "$flasher_json")
+
+            # Map chipFamily to ESP-IDF target
+            case "$chip_family" in
+              "ESP32-S3") target="esp32s3" ;;
+              "ESP32-S2") target="esp32s2" ;;
+              "ESP32-C3") target="esp32c3" ;;
+              "ESP32-C6") target="esp32c6" ;;
+              *)          target="esp32"   ;;
+            esac
+
+            # Check if project needs external dependency fetching
+            fetch_deps="false"
+            if [ "$project_id" = "xbox-switch-bridge" ]; then
+              fetch_deps="true"
+            fi
+
+            INCLUDES=$(echo "$INCLUDES" | jq -c \
+              --arg id "$project_id" \
+              --arg target "$target" \
+              --arg app_bin "$app_binary" \
+              --arg fetch_deps "$fetch_deps" \
+              '. + [{"project": $id, "target": $target, "app_binary": $app_bin, "fetch_deps": ($fetch_deps == "true")}]')
+          done
+
+          COUNT=$(echo "$INCLUDES" | jq 'length')
+          echo "Discovered $COUNT flasher-enabled projects"
+          echo "matrix={\"include\":$INCLUDES}" >> "$GITHUB_OUTPUT"
+          echo "project_count=$COUNT" >> "$GITHUB_OUTPUT"
+
+  build-firmware:
+    name: Build ${{ matrix.project }}
+    needs: discover-projects
+    if: needs.discover-projects.outputs.project_count != '0'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.discover-projects.outputs.matrix) }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -25,163 +84,119 @@ jobs:
           submodules: recursive
           ref: ${{ github.event.release.tag_name || inputs.release_tag }}
 
-      - name: Setup ESP-IDF
+      - name: Fetch external dependencies
+        if: matrix.fetch_deps
+        working-directory: packages/esp32-projects/${{ matrix.project }}
+        run: |
+          BP32_DIR="external/bluepad32"
+          BTSTACK_ROOT="$BP32_DIR/external/btstack"
+          BTSTACK_COMP="$BTSTACK_ROOT/port/esp32/components/btstack"
+
+          echo "Cloning bluepad32 release_v3.10.3..."
+          git clone --depth 1 --branch release_v3.10.3 \
+            https://github.com/ricardoquesada/bluepad32.git "$BP32_DIR"
+          cd "$BP32_DIR" && git submodule update --init --depth 1 external/btstack && cd -
+
+          echo "Preparing btstack component..."
+          for dir in src 3rd-party/bluedroid 3rd-party/hxcmod-player \
+                     3rd-party/lwip/dhcp-server 3rd-party/lc3-google \
+                     3rd-party/md5 3rd-party/micro-ecc 3rd-party/yxml \
+                     platform/freertos platform/lwip; do
+            mkdir -p "$BTSTACK_COMP/$(dirname "$dir")"
+            cp -r "$BTSTACK_ROOT/$dir" "$BTSTACK_COMP/$dir"
+          done
+          mkdir -p "$BTSTACK_COMP/platform/embedded"
+          for f in hal_time_ms.h hal_uart_dma.h hci_dump_embedded_stdout.h hci_dump_embedded_stdout.c; do
+            cp "$BTSTACK_ROOT/platform/embedded/$f" "$BTSTACK_COMP/platform/embedded/"
+          done
+          echo "Dependencies ready"
+
+      - name: Build ${{ matrix.project }}
         uses: espressif/esp-idf-ci-action@v1
         with:
-          esp_idf_version: v5.4
-          target: esp32
+          esp_idf_version: ${{ env.IDF_VERSION }}
+          target: ${{ matrix.target }}
+          command: cd packages/esp32-projects/${{ matrix.project }} && idf.py build
 
-      - name: Build robocar-main firmware
-        working-directory: packages/esp32-projects/robocar-main
-        run: |
-          idf.py build
-          cp build/idf-robocar.bin ../../../robocar-main.bin
-          cp build/bootloader/bootloader.bin ../../../robocar-main-bootloader.bin
-          cp build/partition_table/partition-table.bin ../../../robocar-main-partition-table.bin
-          cp build/ota_data_initial.bin ../../../robocar-main-ota_data_initial.bin 2>/dev/null || true
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: firmware-${{ matrix.project }}
+          path: |
+            packages/esp32-projects/${{ matrix.project }}/build/${{ matrix.app_binary }}
+            packages/esp32-projects/${{ matrix.project }}/build/bootloader/bootloader.bin
+            packages/esp32-projects/${{ matrix.project }}/build/partition_table/partition-table.bin
+            packages/esp32-projects/${{ matrix.project }}/build/ota_data_initial.bin
+          retention-days: 7
 
-      - name: Build robocar-camera firmware
-        working-directory: packages/esp32-projects/robocar-camera
-        run: |
-          idf.py build
-          cp build/esp32-cam-robocar.bin ../../../robocar-camera.bin
-          cp build/bootloader/bootloader.bin ../../../robocar-camera-bootloader.bin
-          cp build/partition_table/partition-table.bin ../../../robocar-camera-partition-table.bin
-          cp build/ota_data_initial.bin ../../../robocar-camera-ota_data_initial.bin 2>/dev/null || true
+  assemble-and-deploy:
+    name: Assemble manifests and deploy
+    needs: [discover-projects, build-firmware]
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.release_tag }}
 
-      - name: Generate SHA256 hashes
-        id: hashes
-        run: |
-          MAIN_SHA256=$(sha256sum robocar-main.bin | cut -d' ' -f1)
-          CAMERA_SHA256=$(sha256sum robocar-camera.bin | cut -d' ' -f1)
-          echo "main_sha256=$MAIN_SHA256" >> $GITHUB_OUTPUT
-          echo "camera_sha256=$CAMERA_SHA256" >> $GITHUB_OUTPUT
-
-          MAIN_SIZE=$(stat -c%s robocar-main.bin)
-          CAMERA_SIZE=$(stat -c%s robocar-camera.bin)
-          echo "main_size=$MAIN_SIZE" >> $GITHUB_OUTPUT
-          echo "camera_size=$CAMERA_SIZE" >> $GITHUB_OUTPUT
-
-      - name: Check binary sizes against OTA partition limit
-        run: |
-          OTA_LIMIT=1887436  # 1.8MB OTA partition
-          MAIN_SIZE=${{ steps.hashes.outputs.main_size }}
-          CAMERA_SIZE=${{ steps.hashes.outputs.camera_size }}
-
-          if [ $MAIN_SIZE -gt $OTA_LIMIT ]; then
-            echo "ERROR: robocar-main binary ($MAIN_SIZE bytes) exceeds OTA partition limit ($OTA_LIMIT bytes)"
-            exit 1
-          fi
-
-          if [ $CAMERA_SIZE -gt $OTA_LIMIT ]; then
-            echo "ERROR: robocar-camera binary ($CAMERA_SIZE bytes) exceeds OTA partition limit ($OTA_LIMIT bytes)"
-            exit 1
-          fi
-
-          echo "✓ robocar-main: $MAIN_SIZE bytes"
-          echo "✓ robocar-camera: $CAMERA_SIZE bytes"
+      - name: Download all firmware artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: firmware-*
+          path: artifacts
 
       - name: Get version from tag
         id: version
         run: |
           TAG="${{ github.event.release.tag_name || inputs.release_tag }}"
-          VERSION="${TAG#v}"
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version=${TAG#v}" >> $GITHUB_OUTPUT
 
-      - name: Create OTA manifest
+      - name: Assemble firmware directory
         run: |
-          cat > manifest.json <<EOF
-          {
-            "version": "${{ steps.version.outputs.version }}",
-            "release_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-            "main_controller": {
-              "url": "https://github.com/${{ github.repository }}/releases/download/${{ github.event.release.tag_name || inputs.release_tag }}/robocar-main.bin",
-              "sha256": "${{ steps.hashes.outputs.main_sha256 }}",
-              "size": ${{ steps.hashes.outputs.main_size }}
-            },
-            "esp32_cam": {
-              "url": "https://github.com/${{ github.repository }}/releases/download/${{ github.event.release.tag_name || inputs.release_tag }}/robocar-camera.bin",
-              "sha256": "${{ steps.hashes.outputs.camera_sha256 }}",
-              "size": ${{ steps.hashes.outputs.camera_size }}
-            }
-          }
-          EOF
+          mkdir -p firmware
 
-      - name: Generate ESP Web Tools manifests
+          for flasher_json in packages/esp32-projects/*/flasher.json; do
+            project_dir=$(dirname "$flasher_json")
+            project_id=$(basename "$project_dir")
+            app_bin=$(jq -r '.appBinaryName' "$flasher_json")
+            dest="firmware/$project_id"
+            src="artifacts/firmware-$project_id/packages/esp32-projects/$project_id/build"
+            mkdir -p "$dest"
+
+            cp "$src/$app_bin"                            "$dest/" 2>/dev/null || echo "WARN: missing $app_bin for $project_id"
+            cp "$src/bootloader/bootloader.bin"           "$dest/" 2>/dev/null || echo "WARN: missing bootloader for $project_id"
+            cp "$src/partition_table/partition-table.bin"  "$dest/" 2>/dev/null || echo "WARN: missing partition-table for $project_id"
+            cp "$src/ota_data_initial.bin"                "$dest/" 2>/dev/null || true
+          done
+
+      - name: Generate flasher manifests and projects.json
+        run: bash tools/generate-flasher-manifests.sh "${{ steps.version.outputs.version }}" firmware
+
+      - name: Assemble Pages site
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
+          mkdir -p _site/firmware
+          cp docs/flasher/* _site/
+          cp -r firmware/* _site/firmware/
+          # Expose projects.json at the root so index.html can fetch it
+          cp firmware/projects.json _site/projects.json
 
-          # robocar-main manifest
-          # Offsets: bootloader=0x1000, partition-table=0x8000, otadata=0xF000, app=0x12000
-          MAIN_PARTS='[{"path":"bootloader.bin","offset":4096},{"path":"partition-table.bin","offset":32768}'
-          if [ -f robocar-main-ota_data_initial.bin ]; then
-            MAIN_PARTS="${MAIN_PARTS},{\"path\":\"ota_data_initial.bin\",\"offset\":61440}"
-          fi
-          MAIN_PARTS="${MAIN_PARTS},{\"path\":\"robocar-main.bin\",\"offset\":73728}]"
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
 
-          cat > esp-web-manifest-main.json <<EOF
-          {
-            "name": "RoboCar Main Controller",
-            "version": "${VERSION}",
-            "builds": [{
-              "chipFamily": "ESP32",
-              "parts": ${MAIN_PARTS}
-            }]
-          }
-          EOF
-
-          # robocar-camera manifest
-          CAM_PARTS='[{"path":"bootloader.bin","offset":4096},{"path":"partition-table.bin","offset":32768}'
-          if [ -f robocar-camera-ota_data_initial.bin ]; then
-            CAM_PARTS="${CAM_PARTS},{\"path\":\"ota_data_initial.bin\",\"offset\":61440}"
-          fi
-          CAM_PARTS="${CAM_PARTS},{\"path\":\"robocar-camera.bin\",\"offset\":73728}]"
-
-          cat > esp-web-manifest-camera.json <<EOF
-          {
-            "name": "RoboCar Camera",
-            "version": "${VERSION}",
-            "builds": [{
-              "chipFamily": "ESP32",
-              "parts": ${CAM_PARTS}
-            }]
-          }
-          EOF
-
-      - name: Assemble web flasher firmware directory
-        run: |
-          mkdir -p firmware/robocar-main firmware/robocar-camera
-
-          cp esp-web-manifest-main.json firmware/robocar-main/manifest.json
-          cp robocar-main.bin firmware/robocar-main/
-          cp robocar-main-bootloader.bin firmware/robocar-main/bootloader.bin
-          cp robocar-main-partition-table.bin firmware/robocar-main/partition-table.bin
-          cp robocar-main-ota_data_initial.bin firmware/robocar-main/ota_data_initial.bin 2>/dev/null || true
-
-          cp esp-web-manifest-camera.json firmware/robocar-camera/manifest.json
-          cp robocar-camera.bin firmware/robocar-camera/
-          cp robocar-camera-bootloader.bin firmware/robocar-camera/bootloader.bin
-          cp robocar-camera-partition-table.bin firmware/robocar-camera/partition-table.bin
-          cp robocar-camera-ota_data_initial.bin firmware/robocar-camera/ota_data_initial.bin 2>/dev/null || true
-
-      - name: Upload firmware artifact for Pages deployment
-        uses: actions/upload-artifact@v7
-        with:
-          name: firmware
-          path: firmware/
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
 
       - name: Upload firmware to release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.release.tag_name || inputs.release_tag }}
           files: |
-            robocar-main.bin
-            robocar-camera.bin
-            manifest.json
-            robocar-main-bootloader.bin
-            robocar-main-partition-table.bin
-            robocar-camera-bootloader.bin
-            robocar-camera-partition-table.bin
+            firmware/*/manifest.json
+            firmware/projects.json
 
       - name: Notify robots of new firmware via MQTT
         if: github.event_name == 'release' && vars.MQTT_ENABLED == 'true'
@@ -200,40 +215,20 @@ jobs:
 
       - name: Generate build summary
         run: |
-          echo "## Firmware Build Complete ✅" >> $GITHUB_STEP_SUMMARY
+          echo "## Firmware Build Complete" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Release: \`${{ github.event.release.tag_name || inputs.release_tag }}\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Component | Size | SHA256 |" >> $GITHUB_STEP_SUMMARY
-          echo "|-----------|------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| robocar-main | ${{ steps.hashes.outputs.main_size }} bytes | \`${{ steps.hashes.outputs.main_sha256 }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| robocar-camera | ${{ steps.hashes.outputs.camera_size }} bytes | \`${{ steps.hashes.outputs.camera_sha256 }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Project | Binary | Size |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|--------|------|" >> $GITHUB_STEP_SUMMARY
 
-  deploy-web-flasher:
-    needs: build-firmware
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-        with:
-          sparse-checkout: docs/flasher
-
-      - name: Download firmware artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: firmware
-          path: _site/firmware
-
-      - name: Assemble Pages site
-        run: |
-          cp docs/flasher/* _site/
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v4
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v5
+          for flasher_json in packages/esp32-projects/*/flasher.json; do
+            project_dir=$(dirname "$flasher_json")
+            project_id=$(basename "$project_dir")
+            app_bin=$(jq -r '.appBinaryName' "$flasher_json")
+            bin_path="firmware/$project_id/$app_bin"
+            if [ -f "$bin_path" ]; then
+              SIZE=$(stat -c%s "$bin_path" 2>/dev/null || echo "?")
+              echo "| $project_id | $app_bin | $SIZE bytes |" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
