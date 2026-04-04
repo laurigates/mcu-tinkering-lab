@@ -1,0 +1,9 @@
+{
+  "name": "IT Troubleshooter",
+  "description": "USB HID keyboard + CDC serial composite device for automated network diagnostics via Claude API",
+  "chipFamily": "ESP32-S3",
+  "board": "Waveshare ESP32-S3-Zero",
+  "appBinaryName": "it-troubleshooter.bin",
+  "category": "tools",
+  "flashMode": "usb"
+}

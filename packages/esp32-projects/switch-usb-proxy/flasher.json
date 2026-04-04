@@ -1,0 +1,9 @@
+{
+  "name": "Switch USB Proxy",
+  "description": "Nintendo Switch Pro Controller USB HID bridge — protocol logic runs on PC via UART",
+  "chipFamily": "ESP32-S3",
+  "board": "Waveshare ESP32-S3-Zero",
+  "appBinaryName": "switch-usb-proxy.bin",
+  "category": "tools",
+  "flashMode": "usb"
+}
