@@ -70,6 +70,14 @@
       font-size: 0.75rem;
       font-weight: 600;
     }
+    .improv-badge {
+      background: #dcfce7;
+      color: #166534;
+      border-radius: 4px;
+      padding: 0.1rem 0.4rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
     .flash-note {
       font-size: 0.78rem;
       color: #b45309;
@@ -295,6 +303,15 @@
           cardFrag.querySelector(".chip-badge").textContent    = project.chipFamily;
           cardFrag.querySelector(".version-label").textContent =
             project.version ? `v${project.version}` : "";
+
+          // Improv WiFi badge — shown when firmware supports Improv WiFi provisioning
+          if (project.improv) {
+            const improvEl = document.createElement("span");
+            improvEl.className = "improv-badge";
+            improvEl.title = "Supports Improv WiFi: configure network credentials via browser after flashing";
+            improvEl.textContent = "Improv WiFi";
+            cardFrag.querySelector(".meta").appendChild(improvEl);
+          }
 
           // Per-card flash-mode note
           const noteEl = cardFrag.querySelector(".flash-note");
