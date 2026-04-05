@@ -12,3 +12,6 @@ main/secrets.h
 # IDE
 .vscode/
 .idea/
+
+# Blueprint work orders (may contain sensitive task details)
+docs/blueprint/work-orders/
