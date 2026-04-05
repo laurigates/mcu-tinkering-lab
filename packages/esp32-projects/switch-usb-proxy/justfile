@@ -3,18 +3,16 @@
 
 set positional-arguments
 
+import '../../../tools/esp32.just'
+
 project_dir := "packages/esp32-projects/switch-usb-proxy"
 tools_dir := justfile_directory() / "../../.." / "tools"
-# Auto-detect ESP32-S3 USB-Serial-JTAG by Espressif VID (0x303a=12346); override with PORT env var
-port := env("PORT", `ioreg -r -c IOUSBHostDevice -l 2>/dev/null | grep -A 30 '"idVendor" = 12346' | grep IODialinDevice | head -1 | sed 's/.*"\(\/dev\/[^"]*\)".*/\1/' | sed 's/tty\./cu./' || true`)
+port := env("PORT", _detected_s3)
 baud := env("BAUD", "460800")
 target := "esp32s3"
 
-# Container engine (docker or podman)
-container_cmd := env("CONTAINER_CMD", "docker")
-
 # Auto-detect CP2102 USB-UART adapter; override with UART_PORT env var
-uart_port := env("UART_PORT", `ls /dev/cu.usbserial-* 2>/dev/null | head -1 || true`)
+uart_port := env("UART_PORT", _detected_uart)
 uart_baud := env("UART_BAUD", "921600")
 
 default:
@@ -30,7 +28,7 @@ build:
     #!/usr/bin/env bash
     set -euo pipefail
     echo "Building switch-usb-proxy..."
-    {{container_cmd}} compose -f ../../../docker-compose.yml run --rm \
+    {{container_cmd}} compose -f {{compose_file}} run --rm \
         -w /workspace/{{project_dir}} \
         esp-idf \
         bash -c "idf.py set-target {{target}} && idf.py build" 2>&1 \
@@ -38,7 +36,7 @@ build:
         || true
     if [ ! -f build/switch-usb-proxy.bin ]; then
         echo "FAILED — rerun with verbose output:" >&2
-        echo "  {{container_cmd}} compose -f ../../../docker-compose.yml run --rm -w /workspace/{{project_dir}} esp-idf bash -c 'idf.py build'" >&2
+        echo "  {{container_cmd}} compose -f {{compose_file}} run --rm -w /workspace/{{project_dir}} esp-idf bash -c 'idf.py build'" >&2
         exit 1
     fi
     echo "Build OK"
@@ -48,7 +46,7 @@ build:
 clean:
     #!/usr/bin/env bash
     set -euo pipefail
-    {{container_cmd}} compose -f ../../../docker-compose.yml run --rm \
+    {{container_cmd}} compose -f {{compose_file}} run --rm \
         -w /workspace/{{project_dir}} \
         esp-idf \
         idf.py fullclean
@@ -57,7 +55,7 @@ clean:
 # Interactive shell in ESP-IDF container
 [group: "build"]
 shell:
-    {{container_cmd}} compose -f ../../../docker-compose.yml run --rm \
+    {{container_cmd}} compose -f {{compose_file}} run --rm \
         -w /workspace/{{project_dir}} \
         esp-idf \
         /bin/bash
@@ -65,17 +63,6 @@ shell:
 ##########
 # Flash & Monitor (native)
 ##########
-
-# Require a valid port for device recipes
-[private]
-require-port:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ -z "{{port}}" ]; then
-        echo "ERROR: No ESP32-S3 USB-Serial-JTAG device found" >&2
-        echo "  Is the board plugged in? Override with: PORT=/dev/cu.usbmodem1101 just flash" >&2
-        exit 1
-    fi
 
 # Flash firmware to device
 [group: "device"]

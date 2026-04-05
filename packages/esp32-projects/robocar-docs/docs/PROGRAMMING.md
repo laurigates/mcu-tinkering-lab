@@ -100,7 +100,7 @@ Remember to follow the same GPIO0-to-GND and reset procedure as described in the
 
 ## Using the Makefile (Recommended Command-Line Method)
 
-The project includes a `Makefile` that simplifies the command-line build and upload process using `arduino-cli` and `esptool.py`. Ensure you have `make` installed on your system (common on macOS and Linux, may need installation on Windows).
+The project includes a `Makefile` that simplifies the command-line build and upload process using `arduino-cli` and `esptool`. Ensure you have `make` installed on your system (common on macOS and Linux, may need installation on Windows).
 
 1.  **Navigate to the project root directory** in your terminal.
 2.  **Set up the environment (first time only):**

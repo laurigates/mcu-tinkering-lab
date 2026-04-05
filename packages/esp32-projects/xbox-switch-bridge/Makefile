@@ -26,8 +26,8 @@ build: ## Build firmware (containerized)
 
 flash: ## Flash firmware to device (native)
 	esptool -p $(PORT) -b $(BAUD) \
-		--before default_reset --after hard_reset \
-		write_flash @build/flash_args
+		--before default-reset --after hard-reset \
+		write-flash @build/flash_args
 
 monitor: ## Start serial monitor (native)
 	python3 -m esp_idf_monitor -p $(PORT) build/$(PROJECT_NAME).elf

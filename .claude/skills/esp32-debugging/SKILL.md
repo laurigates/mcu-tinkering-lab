@@ -100,13 +100,13 @@ Checklist:
 
 ```bash
 # Clean build to eliminate stale objects
-make robocar-clean && make robocar-build-main
+just robocar::clean-all && just robocar::build-main
 
 # Build with verbose output
 cd packages/esp32-projects/robocar-main && idf.py build -v
 
 # Start serial monitor
-make robocar-monitor-main PORT=/dev/cu.usbserial-0001
+just robocar::monitor-main PORT=/dev/cu.usbserial-0001
 ```
 
 ### 6. Useful ESP-IDF Config Options

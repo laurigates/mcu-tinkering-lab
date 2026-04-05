@@ -3,12 +3,13 @@
 
 set positional-arguments
 
+import '../../../tools/esp32.just'
+
 project_dir := "packages/esp32-projects/esp32-wifitest"
 tools_dir := justfile_directory() / "../../.." / "tools"
-port := env("PORT", `ioreg -r -c IOUSBHostDevice -l 2>/dev/null | grep -A 30 '"idVendor" = 12346' | grep IODialinDevice | head -1 | sed 's/.*"\(\/dev\/[^"]*\)".*/\1/' | sed 's/tty\./cu./' || true`)
+port := env("PORT", _detected_s3)
 baud := env("BAUD", "460800")
 target := "esp32s3"
-container_cmd := env("CONTAINER_CMD", "docker")
 
 default:
     @just --list
@@ -23,7 +24,7 @@ build:
     #!/usr/bin/env bash
     set -euo pipefail
     echo "Building esp32-wifitest..."
-    {{container_cmd}} compose -f ../../../docker-compose.yml run --rm \
+    {{container_cmd}} compose -f {{compose_file}} run --rm \
         -w /workspace/{{project_dir}} \
         esp-idf \
         bash -c "idf.py set-target {{target}} && idf.py build" 2>&1 \
@@ -31,7 +32,7 @@ build:
         || true
     if [ ! -f build/esp32-wifitest.bin ]; then
         echo "FAILED — rerun with verbose output:" >&2
-        echo "  {{container_cmd}} compose -f ../../../docker-compose.yml run --rm -w /workspace/{{project_dir}} esp-idf bash -c 'idf.py build'" >&2
+        echo "  {{container_cmd}} compose -f {{compose_file}} run --rm -w /workspace/{{project_dir}} esp-idf bash -c 'idf.py build'" >&2
         exit 1
     fi
     echo "Build OK"
@@ -41,7 +42,7 @@ build:
 clean:
     #!/usr/bin/env bash
     set -euo pipefail
-    {{container_cmd}} compose -f ../../../docker-compose.yml run --rm \
+    {{container_cmd}} compose -f {{compose_file}} run --rm \
         -w /workspace/{{project_dir}} \
         esp-idf \
         idf.py fullclean
@@ -50,17 +51,6 @@ clean:
 ##########
 # Flash & Monitor
 ##########
-
-# Require a valid port
-[private]
-require-port:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ -z "{{port}}" ]; then
-        echo "ERROR: No ESP32-S3 USB-Serial-JTAG device found" >&2
-        echo "  Is the board plugged in? Override with: PORT=/dev/cu.usbmodem101 just flash" >&2
-        exit 1
-    fi
 
 # Flash firmware to device
 [group: "device"]

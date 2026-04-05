@@ -90,16 +90,16 @@ Dual ESP32 autonomous robot with AI vision and physics simulation.
 **Quick Start:**
 ```bash
 # Build both controllers
-just robocar-build-all
+just robocar::build-all
 
 # Flash main controller
-just robocar-flash-main PORT=/dev/ttyUSB0
+just robocar::flash-main PORT=/dev/ttyUSB0
 
 # Flash camera (connect GPIO0 to GND first)
-just robocar-flash-cam PORT=/dev/ttyUSB1
+just robocar::flash-cam PORT=/dev/ttyUSB1
 
 # Start development workflow (build + flash + monitor)
-just robocar-develop-main
+just robocar::develop-main
 ```
 
 ### ESP32-CAM LLM Telegram Bot
@@ -122,11 +122,11 @@ just --list
 # Build commands
 just build-all              # Build all projects
 just build-esp32            # Build all ESP32 projects
-just robocar-build-all      # Build robocar main + camera
+just robocar::build-all     # Build robocar main + camera
 
 # Development workflows (build + flash + monitor)
-just robocar-develop-main   # Main controller
-just robocar-develop-cam    # Camera module
+just robocar::develop-main  # Main controller
+just robocar::develop-cam   # Camera module
 
 # Code quality
 just lint                   # Run all linters
@@ -180,7 +180,7 @@ just docker-dev
 
 # Run specific commands
 just docker-run CMD="just build-all"
-just docker-run CMD="just robocar-build-main"
+just docker-run CMD="just robocar::build-main"
 
 # Manage containers
 just docker-up              # Start services in background
@@ -320,7 +320,7 @@ sudo usermod -a -G dialout $USER
 # Log out and back in
 
 # Or use sudo
-sudo just robocar-flash-main
+sudo just robocar::flash-main
 ```
 
 ### Docker USB Device Not Found

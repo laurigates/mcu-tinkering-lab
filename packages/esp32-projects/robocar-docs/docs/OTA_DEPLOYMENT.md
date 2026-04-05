@@ -13,16 +13,16 @@ Both boards must be flashed with firmware via USB before OTA updates can work.
 1. Connect ESP32-CAM to your machine via USB (using CH340 or similar adapter)
 2. From the repo root, build the camera firmware:
    ```bash
-   just robocar-build-cam
+   just robocar::build-cam
    ```
 3. Flash the firmware:
    ```bash
-   PORT=/dev/cu.usbserial-0001 just robocar-flash-cam
+   PORT=/dev/cu.usbserial-0001 just robocar::flash-cam
    ```
    (adjust PORT if your USB device is different)
 4. Monitor startup logs:
    ```bash
-   PORT=/dev/cu.usbserial-0001 just robocar-monitor-cam
+   PORT=/dev/cu.usbserial-0001 just robocar::monitor-cam
    ```
    Look for `OTA_Manager: Current firmware version: X.Y.Z`
 
@@ -31,15 +31,15 @@ Both boards must be flashed with firmware via USB before OTA updates can work.
 1. Connect the Heltec board to your machine via USB
 2. From the repo root, build the main controller firmware:
    ```bash
-   just robocar-build-main
+   just robocar::build-main
    ```
 3. Flash the firmware:
    ```bash
-   PORT=/dev/cu.usbserial-0002 just robocar-flash-main
+   PORT=/dev/cu.usbserial-0002 just robocar::flash-main
    ```
 4. Monitor startup logs:
    ```bash
-   PORT=/dev/cu.usbserial-0002 just robocar-monitor-main
+   PORT=/dev/cu.usbserial-0002 just robocar::monitor-main
    ```
 
 ### 1.2 WiFi Credential Provisioning

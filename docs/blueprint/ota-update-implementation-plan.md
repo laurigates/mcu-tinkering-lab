@@ -260,7 +260,7 @@ Key implementation details:
   ```c
   snprintf(url, sizeof(url), "%s/%s/robocar-main.bin", OTA_REPO_BASE_URL, tag);
   ```
-- **WiFi initialization**: Call `wifi_manager_init()` + `wifi_manager_connect(NULL, NULL)` (loads NVS credentials). WiFi credentials must be pre-provisioned via `make robocar-credentials` or NVS.
+- **WiFi initialization**: Call `wifi_manager_init()` + `wifi_manager_connect(NULL, NULL)` (loads NVS credentials). WiFi credentials must be pre-provisioned via `just robocar::credentials` or NVS.
 - **OTA download**: Same `esp_https_ota()` + certificate bundle approach as camera
 - **Status reporting** (0x52): Return `ota_status_response_t` with progress percentage
 - **Version reporting** (0x53): Return `version_response_t` from `esp_app_get_description()`

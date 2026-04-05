@@ -30,13 +30,13 @@ Apply this skill when the user:
 
 ```bash
 # Build main controller
-make robocar-build-main
+just robocar::build-main
 
 # Build camera module
-make robocar-build-cam
+just robocar::build-cam
 
 # Or build both
-make robocar-build-all
+just robocar::build-all
 ```
 
 ## Monitor Both Controllers
@@ -47,12 +47,12 @@ Open two terminals and monitor both:
 
 **Terminal 1 - Main Controller:**
 ```bash
-make robocar-monitor-main PORT=/dev/cu.usbserial-0001
+just robocar::monitor-main PORT=/dev/cu.usbserial-0001
 ```
 
 **Terminal 2 - Camera Module:**
 ```bash
-make robocar-monitor-cam PORT=/dev/cu.usbserial-0002
+just robocar::monitor-cam PORT=/dev/cu.usbserial-0002
 ```
 
 ### Identifying Ports
@@ -139,11 +139,11 @@ vTaskDelay(pdMS_TO_TICKS(10));  // Wait for slave to process
 
 ```bash
 # Flash main controller first
-make robocar-flash-main PORT=/dev/cu.usbserial-0001
+just robocar::flash-main PORT=/dev/cu.usbserial-0001
 
 # Then flash camera (requires GPIO0 to GND)
 # Connect GPIO0 to GND on ESP32-CAM
-make robocar-flash-cam PORT=/dev/cu.usbserial-0002
+just robocar::flash-cam PORT=/dev/cu.usbserial-0002
 # Disconnect GPIO0 from GND and reset
 ```
 
@@ -152,9 +152,9 @@ make robocar-flash-cam PORT=/dev/cu.usbserial-0002
 For rapid iteration:
 
 1. Make code changes
-2. Build: `make robocar-build-all`
-3. Flash main: `make robocar-flash-main`
-4. Flash camera (GPIO0→GND): `make robocar-flash-cam`
+2. Build: `just robocar::build-all`
+3. Flash main: `just robocar::flash-main`
+4. Flash camera (GPIO0→GND): `just robocar::flash-cam`
 5. Monitor both in separate terminals
 
 ## Common Synchronization Issues
@@ -199,18 +199,18 @@ For rapid iteration:
 
 ```bash
 # Show system info
-make robocar-info
+just robocar::info
 
 # Check environment
 make check-environment
 
 # Clean and rebuild
-make robocar-clean
-make robocar-build-all
+just robocar::clean-all
+just robocar::build-all
 
 # Full dev cycle for main
-make robocar-develop-main PORT=/dev/xxx
+just robocar::develop-main PORT=/dev/xxx
 
 # Full dev cycle for camera
-make robocar-develop-cam PORT=/dev/xxx
+just robocar::develop-cam PORT=/dev/xxx
 ```

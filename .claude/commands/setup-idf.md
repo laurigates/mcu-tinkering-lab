@@ -1,51 +1,54 @@
 ---
-description: Install or update ESP-IDF development framework
-allowed-tools: Bash(make:*), Bash(git:*)
+description: Set up ESP-IDF development environment (Docker-based)
+allowed-tools: Bash(docker:*), Bash(just:*)
 ---
 
-# Setup ESP-IDF Development Framework
+# Setup ESP-IDF Development Environment
 
-Help the user set up or update the ESP-IDF development framework.
+All ESP-IDF projects build inside Docker containers. No local ESP-IDF installation needed.
 
 ## Steps
 
-1. First check the current ESP-IDF status:
+1. Check the current environment:
    ```bash
-   make check-idf-version
+   just check-environment
    ```
 
-2. If not installed, install ESP-IDF:
+2. Build the Docker development images:
    ```bash
-   make setup-idf
+   just docker-build
    ```
 
-3. If already installed but needs update:
+3. Install host-side development tools (linters, formatters, pre-commit):
    ```bash
-   make update-idf IDF_VERSION=v5.3.2
+   just install-dev-tools
    ```
 
-4. Verify the installation:
+4. Or do both at once:
    ```bash
-   make check-environment
+   just setup-all
    ```
 
-## Configuration Options
+## Verify
 
-The user can customize these variables:
-- `IDF_PATH` - Installation directory (default: ~/repos/esp-idf)
-- `IDF_VERSION` - ESP-IDF version (default: v5.3.2)
-- `IDF_TARGETS` - Target chips (default: esp32,esp32s3,esp32c3)
-
-Example with custom settings:
+Test that a project builds in the container:
 ```bash
-make setup-idf IDF_PATH=/custom/path IDF_VERSION=v5.4 IDF_TARGETS=esp32s3
+just webserver::build
 ```
 
-## Post-Installation
+## Host-Side Tools
 
-After installation, remind the user to add the alias to their shell profile:
+These run natively (not in container):
+- `esptool` — for flashing firmware (`pip install esptool`)
+- `clang-format` — C/C++ formatting (`brew install clang-format`)
+- `cppcheck` — C/C++ linting (`brew install cppcheck`)
+- `ruff` — Python linting (`pip install ruff`)
+- `pre-commit` — git hooks (`pip install pre-commit`)
+
+## Interactive Container Shell
+
+For debugging build issues:
 ```bash
-alias get_idf='. $HOME/repos/esp-idf/export.sh'
+just docker-dev          # Root-level interactive shell
+just webserver::shell    # Project-specific shell
 ```
-
-Report the installation status and any errors encountered.

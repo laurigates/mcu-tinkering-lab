@@ -1,6 +1,6 @@
 ---
 name: esp-idf-setup
-description: Set up ESP-IDF development environment, create new projects, and configure build systems
+description: Set up ESP-IDF development environment via Docker and create new projects
 ---
 
 # ESP-IDF Project Setup Guide
@@ -8,36 +8,33 @@ description: Set up ESP-IDF development environment, create new projects, and co
 ## When to Use This Skill
 
 Apply this skill when the user:
-- Wants to set up ESP-IDF for the first time
+- Wants to set up the build environment for the first time
 - Needs to create a new ESP32 project
 - Wants to configure CMakeLists.txt or component dependencies
 - Needs help with sdkconfig or menuconfig
 - Wants to add a project to the monorepo
 
-## ESP-IDF Installation
+## Environment Setup (Docker-Based)
 
-### Automated Installation
+All ESP-IDF builds run inside Docker containers. No local ESP-IDF installation needed.
 
-Use the Makefile targets:
+### Quick Setup
+
 ```bash
-# Install ESP-IDF v5.3.2
-make setup-idf
+# Full environment: Docker images + dev tools
+just setup-all
 
-# Custom version
-make setup-idf IDF_VERSION=v5.4
-
-# Full environment setup
-make setup-all
+# Or individually:
+just docker-build        # Build ESP-IDF container image
+just install-dev-tools   # Install host-side linters/formatters
 ```
 
-### Shell Configuration
+### Verify
 
-After installation, add alias to shell profile (~/.bashrc or ~/.zshrc):
 ```bash
-alias get_idf='. $HOME/repos/esp-idf/export.sh'
+just check-environment   # Check Docker, serial ports, project structure
+just webserver::build    # Test a container build
 ```
-
-Important: Do NOT add `export.sh` directly to profile - use an alias instead.
 
 ## Creating New Projects
 
@@ -45,6 +42,7 @@ Important: Do NOT add `export.sh` directly to profile - use an alias instead.
 
 ```
 new-project/
+├── justfile
 ├── CMakeLists.txt
 ├── main/
 │   ├── CMakeLists.txt
@@ -52,14 +50,38 @@ new-project/
 └── sdkconfig.defaults
 ```
 
+### Justfile (import shared config)
+
+```just
+# New Project Name
+# Run `just --list` to see available recipes
+
+set positional-arguments
+
+import '../../../tools/esp32.just'
+
+project_dir := "packages/esp32-projects/new-project"
+port := env("PORT", _detected_serial)  # or _detected_s3 for ESP32-S3
+target := "esp32"                       # or "esp32s3"
+
+default:
+    @just --list
+
+[group: "build"]
+build:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Building new-project..."
+    {{container_cmd}} compose -f {{compose_file}} run --rm \
+        -w /workspace/{{project_dir}} \
+        esp-idf \
+        bash -c "idf.py set-target {{target}} && idf.py build"
+```
+
 ### Root CMakeLists.txt
 
 ```cmake
 cmake_minimum_required(VERSION 3.16)
-
-# For monorepo: use shared components
-set(EXTRA_COMPONENT_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/../../shared-libs")
-
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(new-project)
 ```
@@ -77,48 +99,18 @@ idf_component_register(
 ### sdkconfig.defaults
 
 ```ini
-# Target chip
 CONFIG_IDF_TARGET="esp32"
-
-# Flash size
 CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
-
-# Partition table
 CONFIG_PARTITION_TABLE_SINGLE_APP=y
-
-# Log level
 CONFIG_LOG_DEFAULT_LEVEL_INFO=y
 ```
 
 ## Adding to the Monorepo
 
-### Directory Location
-
-Place new ESP32 projects in:
-```
-packages/esp32-projects/new-project-name/
-```
-
-### Create Makefile Target
-
-Add to root Makefile:
-```makefile
-# New project variables
-NEW_PROJECT_DIR = $(ESP32_PACKAGES_DIR)/new-project-name
-
-# Build target
-new-project-build: check-idf
-	@echo "$(BLUE)Building new-project...$(NC)"
-	@cd $(NEW_PROJECT_DIR) && $(IDF_ENV_CMD) && idf.py build
-
-# Flash target
-new-project-flash: check-idf
-	@echo "$(BLUE)Flashing new-project...$(NC)"
-	@cd $(NEW_PROJECT_DIR) && $(IDF_ENV_CMD) && idf.py flash -p $(PORT)
-
-# Add to .PHONY
-.PHONY: new-project-build new-project-flash
-```
+1. Place project in `packages/esp32-projects/new-project-name/`
+2. Create justfile with `import '../../../tools/esp32.just'` (see template above)
+3. Register as module in root justfile: `mod new-project 'packages/esp32-projects/new-project-name'`
+4. Test: `just new-project::build`
 
 ## Component Management
 
@@ -127,68 +119,32 @@ new-project-flash: check-idf
 Create `idf_component.yml` in component directory:
 ```yaml
 dependencies:
-  # From ESP Component Registry
   espressif/led_strip: "^2.0.0"
-
-  # From GitHub
-  my_component:
-    git: https://github.com/user/component.git
-    version: "v1.0.0"
 ```
 
 ### Local Components
 
-Place in project's `components/` directory:
-```
-project/
-├── components/
-│   └── my_component/
-│       ├── CMakeLists.txt
-│       ├── include/
-│       │   └── my_component.h
-│       └── my_component.c
-└── main/
-```
+Place in project's `components/` directory.
 
 ## Common Configuration Tasks
 
-### Setting Target Chip
+### Menuconfig (runs in container)
 
 ```bash
-# Set target (creates fresh sdkconfig)
-idf.py set-target esp32s3
-
-# Or via Makefile
-make robocar-set-target TARGET=esp32s3
+just webserver::menuconfig
+just xbox::menuconfig
 ```
 
-### Menuconfig Options
+### Interactive Shell (for debugging)
 
 ```bash
-idf.py menuconfig
-```
-
-Common sections:
-- Serial flasher config (port, baud rate)
-- Partition table
-- Component config (WiFi, Bluetooth, etc.)
-- FreeRTOS (tick rate, stack sizes)
-
-### Flash Size Configuration
-
-In sdkconfig.defaults:
-```ini
-# 4MB flash
-CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
-
-# 16MB flash (for ESP32-S3)
-CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+just webserver::shell
+just docker-dev          # Root-level shell
 ```
 
 ## Best Practices
 
-1. **Use sdkconfig.defaults** - Don't commit sdkconfig, use defaults
-2. **Pin ESP-IDF version** - Document which version the project requires
-3. **Minimal dependencies** - Only include REQUIRES you actually use
-4. **Target-specific configs** - Use `sdkconfig.defaults.esp32s3` for variants
-5. **Document GPIO usage** - Create a pinout table in README
+1. **Use sdkconfig.defaults** — Don't commit generated sdkconfig
+2. **Import tools/esp32.just** — Don't duplicate container_cmd, require-port, etc.
+3. **Minimal dependencies** — Only include REQUIRES you actually use
+4. **Document GPIO usage** — Create a pinout table in README

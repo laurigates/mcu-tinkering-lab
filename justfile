@@ -20,16 +20,9 @@ mod switch-probe 'tools/switch-controller-usb-test'
 # Auto-detect ESP32-S3 USB-Serial-JTAG by Espressif VID; override with S3_PORT env var
 s3_port := env("S3_PORT", `tools/detect-esp32s3-port.sh --quiet 2>/dev/null || true`)
 
-idf_path := env("IDF_PATH", home_directory() + "/repos/esp-idf")
-idf_version := "v5.3.2"
-idf_targets := "esp32,esp32s3,esp32c3"
-idf_github_assets := "dl.espressif.com/github_assets"
 port := env("PORT", "/dev/cu.usbserial-0001")
 
 robocar_sim_dir := "packages/esp32-projects/robocar-simulation"
-esp32_webserver_dir := "packages/esp32-projects/esp32-cam-webserver"
-esp32_audio_dir := "packages/esp32-projects/esp32-cam-i2s-audio"
-esp32_llm_telegram_dir := "packages/esp32-projects/esp32cam-llm-telegram"
 
 default:
     @just --list
@@ -39,12 +32,16 @@ default:
 check-environment:
     #!/usr/bin/env bash
     set -euo pipefail
-    echo "ESP-IDF Framework:"
-    if [ -d "{{idf_path}}" ]; then
-        echo "  ESP-IDF found at {{idf_path}}"
+    echo "Container Engine:"
+    if command -v docker >/dev/null 2>&1; then
+        echo "  Docker: $(docker --version)"
+        if docker compose version >/dev/null 2>&1; then
+            echo "  Compose: $(docker compose version --short)"
+        else
+            echo "  Compose: NOT found — install Docker Compose"
+        fi
     else
-        echo "  ESP-IDF NOT found at {{idf_path}}"
-        echo "  Run 'just setup-idf' to install"
+        echo "  Docker: NOT found — install Docker Desktop"
     fi
     echo ""
     echo "Serial Port:"
@@ -61,88 +58,16 @@ check-environment:
     [ -d "packages/esp32-projects" ] \
         && echo "  ESP32 packages directory found" || echo "  ESP32 packages missing"
 
-[private]
-check-idf:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ ! -d "{{idf_path}}" ]; then
-        echo "Error: ESP-IDF not found at {{idf_path}}"
-        echo "Run 'just setup-idf' to install"
-        exit 1
-    fi
-
-# Show installed ESP-IDF version
-[group: "environment"]
-check-idf-version:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ -d "{{idf_path}}" ]; then
-        VERSION=$(cd {{idf_path}} && git describe --tags 2>/dev/null || echo "unknown")
-        echo "ESP-IDF Version:    $VERSION"
-        echo "Install Path:       {{idf_path}}"
-        echo "Configured Targets: {{idf_targets}}"
-    else
-        echo "ESP-IDF not installed at {{idf_path}}"
-        echo "Run 'just setup-idf' to install"
-    fi
-
-# Install ESP-IDF (clones repo and installs toolchain)
+# Full dev environment: Docker images + dev tools
 [group: "setup"]
-setup-idf:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    echo "ESP-IDF Setup — version {{idf_version}}, targets: {{idf_targets}}"
-    echo ""
-    if [ -d "{{idf_path}}" ]; then
-        echo "ESP-IDF already installed at {{idf_path}}"
-        echo "To update: just update-idf"
-    else
-        echo "Installing ESP-IDF {{idf_version}}..."
-        mkdir -p "$(dirname {{idf_path}})"
-        git clone --recursive -b {{idf_version}} https://github.com/espressif/esp-idf.git {{idf_path}}
-        echo "Installing toolchain for targets: {{idf_targets}}..."
-        cd {{idf_path}} && IDF_GITHUB_ASSETS="{{idf_github_assets}}" ./install.sh {{idf_targets}}
-        echo ""
-        echo "ESP-IDF {{idf_version}} installed successfully!"
-        echo ""
-        echo "Add to your shell profile:"
-        echo "  alias get_idf='. {{idf_path}}/export.sh'"
-    fi
-
-# Update ESP-IDF to the configured version
-[group: "setup"]
-update-idf:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ ! -d "{{idf_path}}" ]; then
-        echo "ESP-IDF not found — run 'just setup-idf' first"
-        exit 1
-    fi
-    echo "Fetching updates..."
-    cd {{idf_path}} && git fetch --all --tags
-    CURRENT=$(cd {{idf_path}} && git describe --tags 2>/dev/null || echo "unknown")
-    if [ "$CURRENT" = "{{idf_version}}" ]; then
-        echo "Already at version {{idf_version}}"
-    else
-        echo "Switching from $CURRENT to {{idf_version}}..."
-        cd {{idf_path}} && git checkout {{idf_version}} && git submodule update --init --recursive
-        echo "Reinstalling toolchain..."
-        cd {{idf_path}} && IDF_GITHUB_ASSETS="{{idf_github_assets}}" ./install.sh {{idf_targets}}
-        echo "Updated to ESP-IDF {{idf_version}}"
-    fi
-
-# Full dev environment: ESP-IDF + dev tools
-[group: "setup"]
-setup-all: setup-idf install-dev-tools
+setup-all: docker-build install-dev-tools
     @echo ""
     @echo "Full development environment setup complete!"
     @echo ""
     @echo "Next steps:"
-    @echo "  1. Add to your shell profile:"
-    @echo "     alias get_idf='. {{idf_path}}/export.sh'"
-    @echo "  2. just check-environment   # Verify setup"
-    @echo "  3. just list-projects       # See available projects"
-    @echo "  4. just robocar-build-all   # Build the robocar"
+    @echo "  1. just check-environment        # Verify setup"
+    @echo "  2. just list-projects             # See available projects"
+    @echo "  3. just robocar::build-all        # Build the robocar"
 
 # Install development tools and pre-commit hooks
 [group: "setup"]
@@ -155,95 +80,6 @@ install-dev-tools:
     command -v clang-format >/dev/null 2>&1 || echo "clang-format not found — install with: brew install clang-format"
     command -v cppcheck >/dev/null 2>&1 || echo "cppcheck not found — install with: brew install cppcheck"
     echo "Development tools installed"
-
-# Build both main controller and camera module
-[group: "robocar"]
-robocar-build-all: check-idf
-    just robocar::build-all
-
-# Build main controller only
-[group: "robocar"]
-robocar-build-main: check-idf
-    just robocar::build-main
-
-# Build camera module only
-[group: "robocar"]
-robocar-build-cam: check-idf
-    just robocar::build-cam
-
-# Flash both controllers (prompts between each)
-[group: "robocar"]
-robocar-flash-all: check-idf
-    #!/usr/bin/env bash
-    set -euo pipefail
-    just robocar::flash-main
-    echo "Now connect GPIO0 to GND on ESP32-CAM, then press Enter..."
-    read -r
-    just robocar::flash-cam
-
-# Flash main controller
-[group: "robocar"]
-robocar-flash-main: check-idf
-    just robocar::flash-main
-
-# Flash camera module (GPIO0 must be connected to GND)
-[group: "robocar"]
-robocar-flash-cam: check-idf
-    just robocar::flash-cam
-
-# Build, flash, and monitor main controller
-[group: "robocar"]
-robocar-develop-main: check-idf
-    just robocar::develop-main
-
-# Build, flash, and monitor camera module
-[group: "robocar"]
-robocar-develop-cam: check-idf
-    just robocar::develop-cam
-
-# Monitor main controller
-[group: "robocar"]
-robocar-monitor-main: check-idf
-    just robocar::monitor-main
-
-# Monitor camera module
-[group: "robocar"]
-robocar-monitor-cam: check-idf
-    just robocar::monitor-cam
-
-# Setup camera credentials file
-[group: "robocar"]
-robocar-credentials:
-    just robocar::credentials
-
-# Clean robocar builds
-[group: "robocar"]
-robocar-clean:
-    just robocar::clean-all
-
-# Show robocar system information
-[group: "robocar"]
-robocar-info:
-    just robocar::info
-
-# Trigger OTA update check via MQTT
-[group: "robocar"]
-robocar-ota-notify version="latest" broker="localhost":
-    just robocar::ota-notify {{version}} {{broker}}
-
-# Monitor OTA update status via MQTT
-[group: "robocar"]
-robocar-ota-status broker="localhost":
-    just robocar::ota-status {{broker}}
-
-# Show firmware versions from latest GitHub release
-[group: "robocar"]
-robocar-ota-versions:
-    just robocar::ota-versions
-
-# Shortcuts
-dev-main: robocar-develop-main
-dev-cam: robocar-develop-cam
 
 ##########
 # ESP32-S3 Device (shared across S3 projects)
@@ -410,13 +246,15 @@ format-check-python:
 
 # Build robocar projects (use `just <module>::build` for other projects)
 [group: "build"]
-build-all: robocar-build-all
+build-all:
+    just robocar::build-all
     @echo "Robocar projects built. Other projects: just <module>::build"
 
 # Clean all project builds
 [confirm("Clean all build directories?")]
 [group: "clean"]
-clean-all: robocar-clean
+clean-all:
+    just robocar::clean-all
     @echo "All project builds cleaned"
 
 # List all projects in the monorepo
@@ -437,9 +275,9 @@ list-projects:
     fi
     echo ""
     echo "ESP32 Package Projects:"
-    [ -d "{{esp32_webserver_dir}}" ]    && echo "  esp32-cam-webserver         — Live video streaming web server"         || true
-    [ -d "{{esp32_audio_dir}}" ]        && echo "  esp32-cam-i2s-audio         — Camera + I2S audio processing"           || true
-    [ -d "{{esp32_llm_telegram_dir}}" ] && echo "  esp32cam-llm-telegram       — AI vision with Telegram bot"             || true
+    [ -d "packages/esp32-projects/esp32-cam-webserver" ]  && echo "  esp32-cam-webserver         — Live video streaming web server"         || true
+    [ -d "packages/esp32-projects/esp32-cam-i2s-audio" ]  && echo "  esp32-cam-i2s-audio         — Camera + I2S audio processing"           || true
+    [ -d "packages/esp32-projects/esp32cam-llm-telegram" ] && echo "  esp32cam-llm-telegram       — AI vision with Telegram bot"             || true
     [ -d "packages/esp32-projects/xbox-switch-bridge" ]          && echo "  xbox-switch-bridge          — Xbox BLE to Switch USB bridge"           || true
     [ -d "packages/esp32-projects/it-troubleshooter" ]           && echo "  it-troubleshooter           — IT troubleshooting assistant"            || true
     [ -d "packages/esp32-projects/switch-usb-proxy" ]            && echo "  switch-usb-proxy            — Switch USB protocol proxy"               || true
@@ -464,10 +302,10 @@ info: check-environment
     @echo "  Real-time computer vision and scene analysis"
     @echo ""
     @echo "Quick Start:"
-    @echo "  just robocar-info          # Detailed robocar system info"
-    @echo "  just list-projects         # Show all available projects"
-    @echo "  just robocar-build-all     # Build both robocar modules"
-    @echo "  just robocar-develop-main  # Start developing main controller"
+    @echo "  just robocar::info          # Detailed robocar system info"
+    @echo "  just list-projects          # Show all available projects"
+    @echo "  just robocar::build-all     # Build both robocar modules"
+    @echo "  just robocar::develop-main  # Start developing main controller"
 
 # Build Docker development images
 [group: "docker"]

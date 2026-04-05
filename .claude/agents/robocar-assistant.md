@@ -85,23 +85,23 @@ Pluggable AI backends:
 
 ```bash
 # Build both
-make robocar-build-all
+just robocar::build-all
 
 # Build individually
-make robocar-build-main
-make robocar-build-cam
+just robocar::build-main
+just robocar::build-cam
 
 # Flash
-make robocar-flash-main
-make robocar-flash-cam
+just robocar::flash-main
+just robocar::flash-cam
 
 # Monitor
-make robocar-monitor-main
-make robocar-monitor-cam
+just robocar::monitor-main
+just robocar::monitor-cam
 
 # Development workflow
-make robocar-develop-main  # build + flash + monitor
-make robocar-develop-cam
+just robocar::develop-main  # build + flash + monitor
+just robocar::develop-cam
 
 # Simulation
 cd packages/esp32-projects/robocar-simulation
