@@ -152,7 +152,12 @@ jobs:
       - name: Check for test directories
         id: check-tests
         run: |
-          if find packages/esp32-projects -type d -name "test" | grep -q .; then
+          # Only look for host-test directories in project main trees,
+          # excluding managed_components (downloaded deps) and component
+          # internal test dirs which are not standalone host test projects.
+          if find packages/esp32-projects -type d -name "test" \
+               -not -path "*/managed_components/*" \
+               -not -path "*/components/*/test" | grep -q .; then
             echo "tests_exist=true" >> $GITHUB_OUTPUT
           else
             echo "tests_exist=false" >> $GITHUB_OUTPUT
