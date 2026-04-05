@@ -68,104 +68,216 @@ static uint8_t s_timer_counter = 0;
  * Source: https://gist.github.com/spacemeowx2/22171913a36721501e42f14f1fd81633
  */
 static const uint8_t s_hid_report_descriptor[] = {
-    0x05, 0x01, /* Usage Page (Generic Desktop) */
-    0x15, 0x00, /* Logical Minimum (0) */
-    0x09, 0x04, /* Usage (Joystick) */
-    0xA1, 0x01, /* Collection (Application) */
+    0x05,
+    0x01, /* Usage Page (Generic Desktop) */
+    0x15,
+    0x00, /* Logical Minimum (0) */
+    0x09,
+    0x04, /* Usage (Joystick) */
+    0xA1,
+    0x01, /* Collection (Application) */
     /* Report 0x30: Standard input */
-    0x85, 0x30,                   /*   Report ID (0x30) */
-    0x05, 0x01,                   /*   Usage Page (Generic Desktop) */
-    0x05, 0x09,                   /*   Usage Page (Button) */
-    0x19, 0x01,                   /*   Usage Minimum (1) */
-    0x29, 0x0A,                   /*   Usage Maximum (10) */
-    0x15, 0x00,                   /*   Logical Minimum (0) */
-    0x25, 0x01,                   /*   Logical Maximum (1) */
-    0x75, 0x01,                   /*   Report Size (1) */
-    0x95, 0x0A,                   /*   Report Count (10) */
-    0x55, 0x00,                   /*   Unit Exponent (0) */
-    0x65, 0x00,                   /*   Unit (None) */
-    0x81, 0x02,                   /*   Input (Data, Variable, Absolute) */
-    0x05, 0x09,                   /*   Usage Page (Button) */
-    0x19, 0x0B,                   /*   Usage Minimum (11) */
-    0x29, 0x0E,                   /*   Usage Maximum (14) */
-    0x15, 0x00,                   /*   Logical Minimum (0) */
-    0x25, 0x01,                   /*   Logical Maximum (1) */
-    0x75, 0x01,                   /*   Report Size (1) */
-    0x95, 0x04,                   /*   Report Count (4) */
-    0x81, 0x02,                   /*   Input (Data, Variable, Absolute) */
-    0x75, 0x01,                   /*   Report Size (1) */
-    0x95, 0x02,                   /*   Report Count (2) */
-    0x81, 0x03,                   /*   Input (Constant) - padding */
-    0x0B, 0x01, 0x00, 0x01, 0x00, /*   Usage (Generic Desktop:Pointer) */
-    0xA1, 0x00,                   /*   Collection (Physical) */
-    0x0B, 0x30, 0x00, 0x01, 0x00, /*     Usage (X) */
-    0x0B, 0x31, 0x00, 0x01, 0x00, /*     Usage (Y) */
-    0x0B, 0x32, 0x00, 0x01, 0x00, /*     Usage (Z) */
-    0x0B, 0x35, 0x00, 0x01, 0x00, /*     Usage (Rz) */
-    0x15, 0x00,                   /*     Logical Minimum (0) */
-    0x27, 0xFF, 0xFF, 0x00, 0x00, /*     Logical Maximum (65535) */
-    0x75, 0x10,                   /*     Report Size (16) */
-    0x95, 0x04,                   /*     Report Count (4) */
-    0x81, 0x02,                   /*     Input (Data, Variable, Absolute) */
-    0xC0,                         /*   End Collection (Physical) */
-    0x0B, 0x39, 0x00, 0x01, 0x00, /*   Usage (Hat Switch) */
-    0x15, 0x00,                   /*   Logical Minimum (0) */
-    0x25, 0x07,                   /*   Logical Maximum (7) */
-    0x35, 0x00,                   /*   Physical Minimum (0) */
-    0x46, 0x3B, 0x01,             /*   Physical Maximum (315) */
-    0x65, 0x14,                   /*   Unit (Degrees) */
-    0x75, 0x04,                   /*   Report Size (4) */
-    0x95, 0x01,                   /*   Report Count (1) */
-    0x81, 0x02,                   /*   Input (Data, Variable, Absolute) */
-    0x05, 0x09,                   /*   Usage Page (Button) */
-    0x19, 0x0F,                   /*   Usage Minimum (15) */
-    0x29, 0x12,                   /*   Usage Maximum (18) */
-    0x15, 0x00,                   /*   Logical Minimum (0) */
-    0x25, 0x01,                   /*   Logical Maximum (1) */
-    0x75, 0x01,                   /*   Report Size (1) */
-    0x95, 0x04,                   /*   Report Count (4) */
-    0x81, 0x02,                   /*   Input (Data, Variable, Absolute) */
-    0x75, 0x08,                   /*   Report Size (8) */
-    0x95, 0x34,                   /*   Report Count (52) */
-    0x81, 0x03,                   /*   Input (Constant) - padding */
+    0x85,
+    0x30, /*   Report ID (0x30) */
+    0x05,
+    0x01, /*   Usage Page (Generic Desktop) */
+    0x05,
+    0x09, /*   Usage Page (Button) */
+    0x19,
+    0x01, /*   Usage Minimum (1) */
+    0x29,
+    0x0A, /*   Usage Maximum (10) */
+    0x15,
+    0x00, /*   Logical Minimum (0) */
+    0x25,
+    0x01, /*   Logical Maximum (1) */
+    0x75,
+    0x01, /*   Report Size (1) */
+    0x95,
+    0x0A, /*   Report Count (10) */
+    0x55,
+    0x00, /*   Unit Exponent (0) */
+    0x65,
+    0x00, /*   Unit (None) */
+    0x81,
+    0x02, /*   Input (Data, Variable, Absolute) */
+    0x05,
+    0x09, /*   Usage Page (Button) */
+    0x19,
+    0x0B, /*   Usage Minimum (11) */
+    0x29,
+    0x0E, /*   Usage Maximum (14) */
+    0x15,
+    0x00, /*   Logical Minimum (0) */
+    0x25,
+    0x01, /*   Logical Maximum (1) */
+    0x75,
+    0x01, /*   Report Size (1) */
+    0x95,
+    0x04, /*   Report Count (4) */
+    0x81,
+    0x02, /*   Input (Data, Variable, Absolute) */
+    0x75,
+    0x01, /*   Report Size (1) */
+    0x95,
+    0x02, /*   Report Count (2) */
+    0x81,
+    0x03, /*   Input (Constant) - padding */
+    0x0B,
+    0x01,
+    0x00,
+    0x01,
+    0x00, /*   Usage (Generic Desktop:Pointer) */
+    0xA1,
+    0x00, /*   Collection (Physical) */
+    0x0B,
+    0x30,
+    0x00,
+    0x01,
+    0x00, /*     Usage (X) */
+    0x0B,
+    0x31,
+    0x00,
+    0x01,
+    0x00, /*     Usage (Y) */
+    0x0B,
+    0x32,
+    0x00,
+    0x01,
+    0x00, /*     Usage (Z) */
+    0x0B,
+    0x35,
+    0x00,
+    0x01,
+    0x00, /*     Usage (Rz) */
+    0x15,
+    0x00, /*     Logical Minimum (0) */
+    0x27,
+    0xFF,
+    0xFF,
+    0x00,
+    0x00, /*     Logical Maximum (65535) */
+    0x75,
+    0x10, /*     Report Size (16) */
+    0x95,
+    0x04, /*     Report Count (4) */
+    0x81,
+    0x02, /*     Input (Data, Variable, Absolute) */
+    0xC0, /*   End Collection (Physical) */
+    0x0B,
+    0x39,
+    0x00,
+    0x01,
+    0x00, /*   Usage (Hat Switch) */
+    0x15,
+    0x00, /*   Logical Minimum (0) */
+    0x25,
+    0x07, /*   Logical Maximum (7) */
+    0x35,
+    0x00, /*   Physical Minimum (0) */
+    0x46,
+    0x3B,
+    0x01, /*   Physical Maximum (315) */
+    0x65,
+    0x14, /*   Unit (Degrees) */
+    0x75,
+    0x04, /*   Report Size (4) */
+    0x95,
+    0x01, /*   Report Count (1) */
+    0x81,
+    0x02, /*   Input (Data, Variable, Absolute) */
+    0x05,
+    0x09, /*   Usage Page (Button) */
+    0x19,
+    0x0F, /*   Usage Minimum (15) */
+    0x29,
+    0x12, /*   Usage Maximum (18) */
+    0x15,
+    0x00, /*   Logical Minimum (0) */
+    0x25,
+    0x01, /*   Logical Maximum (1) */
+    0x75,
+    0x01, /*   Report Size (1) */
+    0x95,
+    0x04, /*   Report Count (4) */
+    0x81,
+    0x02, /*   Input (Data, Variable, Absolute) */
+    0x75,
+    0x08, /*   Report Size (8) */
+    0x95,
+    0x34, /*   Report Count (52) */
+    0x81,
+    0x03, /*   Input (Constant) - padding */
     /* Report 0x21: Sub-command reply (input) */
-    0x06, 0x00, 0xFF, /*   Usage Page (Vendor Defined) */
-    0x85, 0x21,       /*   Report ID (0x21) */
-    0x09, 0x01,       /*   Usage (Vendor 1) */
-    0x75, 0x08,       /*   Report Size (8) */
-    0x95, 0x3F,       /*   Report Count (63) */
-    0x81, 0x03,       /*   Input (Constant) */
+    0x06,
+    0x00,
+    0xFF, /*   Usage Page (Vendor Defined) */
+    0x85,
+    0x21, /*   Report ID (0x21) */
+    0x09,
+    0x01, /*   Usage (Vendor 1) */
+    0x75,
+    0x08, /*   Report Size (8) */
+    0x95,
+    0x3F, /*   Report Count (63) */
+    0x81,
+    0x03, /*   Input (Constant) */
     /* Report 0x81: USB command reply (input) */
-    0x85, 0x81, /*   Report ID (0x81) */
-    0x09, 0x02, /*   Usage (Vendor 2) */
-    0x75, 0x08, /*   Report Size (8) */
-    0x95, 0x3F, /*   Report Count (63) */
-    0x81, 0x03, /*   Input (Constant) */
+    0x85,
+    0x81, /*   Report ID (0x81) */
+    0x09,
+    0x02, /*   Usage (Vendor 2) */
+    0x75,
+    0x08, /*   Report Size (8) */
+    0x95,
+    0x3F, /*   Report Count (63) */
+    0x81,
+    0x03, /*   Input (Constant) */
     /* Report 0x01: Sub-command (output) */
-    0x85, 0x01, /*   Report ID (0x01) */
-    0x09, 0x03, /*   Usage (Vendor 3) */
-    0x75, 0x08, /*   Report Size (8) */
-    0x95, 0x3F, /*   Report Count (63) */
-    0x91, 0x83, /*   Output (Constant, Variable, Volatile) */
+    0x85,
+    0x01, /*   Report ID (0x01) */
+    0x09,
+    0x03, /*   Usage (Vendor 3) */
+    0x75,
+    0x08, /*   Report Size (8) */
+    0x95,
+    0x3F, /*   Report Count (63) */
+    0x91,
+    0x83, /*   Output (Constant, Variable, Volatile) */
     /* Report 0x10: Rumble only (output) */
-    0x85, 0x10, /*   Report ID (0x10) */
-    0x09, 0x04, /*   Usage (Vendor 4) */
-    0x75, 0x08, /*   Report Size (8) */
-    0x95, 0x3F, /*   Report Count (63) */
-    0x91, 0x83, /*   Output (Constant, Variable, Volatile) */
+    0x85,
+    0x10, /*   Report ID (0x10) */
+    0x09,
+    0x04, /*   Usage (Vendor 4) */
+    0x75,
+    0x08, /*   Report Size (8) */
+    0x95,
+    0x3F, /*   Report Count (63) */
+    0x91,
+    0x83, /*   Output (Constant, Variable, Volatile) */
     /* Report 0x80: USB command (output) */
-    0x85, 0x80, /*   Report ID (0x80) */
-    0x09, 0x05, /*   Usage (Vendor 5) */
-    0x75, 0x08, /*   Report Size (8) */
-    0x95, 0x3F, /*   Report Count (63) */
-    0x91, 0x83, /*   Output (Constant, Variable, Volatile) */
+    0x85,
+    0x80, /*   Report ID (0x80) */
+    0x09,
+    0x05, /*   Usage (Vendor 5) */
+    0x75,
+    0x08, /*   Report Size (8) */
+    0x95,
+    0x3F, /*   Report Count (63) */
+    0x91,
+    0x83, /*   Output (Constant, Variable, Volatile) */
     /* Report 0x82: (output - unused but present in real descriptor) */
-    0x85, 0x82, /*   Report ID (0x82) */
-    0x09, 0x06, /*   Usage (Vendor 6) */
-    0x75, 0x08, /*   Report Size (8) */
-    0x95, 0x3F, /*   Report Count (63) */
-    0x91, 0x83, /*   Output (Constant, Variable, Volatile) */
-    0xC0,       /* End Collection */
+    0x85,
+    0x82, /*   Report ID (0x82) */
+    0x09,
+    0x06, /*   Usage (Vendor 6) */
+    0x75,
+    0x08, /*   Report Size (8) */
+    0x95,
+    0x3F, /*   Report Count (63) */
+    0x91,
+    0x83, /*   Output (Constant, Variable, Volatile) */
+    0xC0, /* End Collection */
 };
 
 /**
