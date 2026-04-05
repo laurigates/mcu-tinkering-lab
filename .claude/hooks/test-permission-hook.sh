@@ -130,9 +130,9 @@ test_case "approve" "which python" "Bash" '{"command":"which python"}'
 
 echo ""
 echo "${YELLOW}Device operations (read-only):${NC}"
-test_case "approve" "esptool read_mac" "Bash" '{"command":"esptool.py read_mac"}'
-test_case "approve" "esptool chip_id" "Bash" '{"command":"esptool.py chip_id"}'
-test_case "approve" "esptool version" "Bash" '{"command":"esptool.py version"}'
+test_case "approve" "esptool read_mac" "Bash" '{"command":"esptool read_mac"}'
+test_case "approve" "esptool chip_id" "Bash" '{"command":"esptool chip_id"}'
+test_case "approve" "esptool version" "Bash" '{"command":"esptool version"}'
 
 echo ""
 echo "${YELLOW}File operations (read-only):${NC}"

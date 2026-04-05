@@ -3,11 +3,11 @@
 
 set positional-arguments
 
+import '../../../tools/esp32.just'
+
 project_dir := justfile_directory()
-compose_file := project_dir / "../../../docker-compose.yml"
 tools_dir := justfile_directory() / "../../.." / "tools"
-# Auto-detect ESP32-S3 USB-Serial-JTAG by Espressif VID (0x303a=12346); override with PORT env var
-port := env("PORT", `ioreg -r -c IOUSBHostDevice -l 2>/dev/null | grep -A 30 '"idVendor" = 12346' | grep IODialinDevice | head -1 | sed 's/.*"\(\/dev\/[^"]*\)".*/\1/' | sed 's/tty\./cu./' || true`)
+port := env("PORT", _detected_s3)
 baud := env("BAUD", "460800")
 
 ##########
@@ -59,17 +59,6 @@ clean:
 [group: "device"]
 detect-port:
     "{{tools_dir}}/detect-esp32s3-port.sh"
-
-# Require a valid port for device recipes
-[private]
-require-port:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ -z "{{port}}" ]; then
-        echo "ERROR: No ESP32-S3 USB-Serial-JTAG device found" >&2
-        echo "  Is the board plugged in? Override with: PORT=/dev/cu.usbmodem101 just flash" >&2
-        exit 1
-    fi
 
 # Flash firmware to device
 [group: "device"]

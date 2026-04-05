@@ -1,12 +1,12 @@
 ---
-description: Build an ESP32 project with error analysis
+description: Build an ESP32 project (containerized)
 argument-hint: "[project-name]"
-allowed-tools: Bash(make:*)
+allowed-tools: Bash(just:*), Bash(docker:*)
 ---
 
 # Build ESP32 Project
 
-Build an ESP32 project and analyze the output for errors.
+Build an ESP32 project in a Docker container and analyze the output for errors.
 
 ## Available Projects
 
@@ -15,22 +15,28 @@ If $ARGUMENTS is empty, show the user the available build targets:
 - `robocar-main` - Main controller (Heltec WiFi LoRa 32)
 - `robocar-cam` - Camera module (ESP32-CAM)
 - `robocar-all` - Both robocar controllers
-- `esp32-webserver` - ESP32-CAM webserver
-- `esp32-audio` - ESP32-CAM I2S audio
-- `llm-telegram` - ESP32-CAM LLM Telegram bot
+- `webserver` - ESP32-CAM webserver
+- `i2s-audio` - ESP32-CAM I2S audio
+- `telegram` - ESP32-CAM LLM Telegram bot
+- `kids-audio` - Kids audio toy
+- `xbox` - Xbox-Switch bridge
+- `wifitest` - WiFi AP test
 
 ## Build Commands
 
 Based on $ARGUMENTS, run the appropriate build command:
 
-- `robocar-main` or `main`: `make robocar-build-main`
-- `robocar-cam` or `cam`: `make robocar-build-cam`
-- `robocar-all` or `all`: `make robocar-build-all`
-- `esp32-webserver` or `webserver`: `make esp32-webserver-build`
-- `esp32-audio` or `audio`: `make esp32-audio-build`
-- `llm-telegram` or `telegram`: `make llm-telegram-build`
+- `robocar-main` or `main`: `just robocar::build-main`
+- `robocar-cam` or `cam`: `just robocar::build-cam`
+- `robocar-all` or `all`: `just robocar::build-all`
+- `webserver`: `just webserver::build`
+- `i2s-audio` or `audio`: `just i2s-audio::build`
+- `telegram`: `just telegram::build`
+- `kids-audio`: `just kids-audio::build`
+- `xbox`: `just xbox::build`
+- `wifitest`: `just wifitest::build`
 
-If no argument provided, build all: `make build-all`
+If no argument provided, build all: `just build-all`
 
 ## Error Analysis
 

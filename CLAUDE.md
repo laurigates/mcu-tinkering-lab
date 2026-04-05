@@ -51,21 +51,21 @@ mcu-tinkering-lab/
 # Show all available commands
 just --list
 
-# Build all projects (requires ESP-IDF)
+# Build all projects (containerized — no local ESP-IDF needed)
 just build-all
 
 # Build specific robocar components
-just robocar-build-main      # Main controller only
-just robocar-build-cam       # Camera module only
-just robocar-build-all       # Both controllers
+just robocar::build-main      # Main controller only
+just robocar::build-cam       # Camera module only
+just robocar::build-all       # Both controllers
 
 # Development workflows (build + flash + monitor)
-just robocar-develop-main    # Main controller
-just robocar-develop-cam     # Camera module
+just robocar::develop-main    # Main controller
+just robocar::develop-cam     # Camera module
 
 # Flash (PORT=/dev/cu.usbserial-0001 by default)
-PORT=/dev/ttyUSB0 just robocar-flash-main
-PORT=/dev/ttyUSB1 just robocar-flash-cam
+PORT=/dev/ttyUSB0 just robocar::flash-main
+PORT=/dev/ttyUSB1 just robocar::flash-cam
 ```
 
 ### Code Quality
@@ -95,11 +95,12 @@ uv sync                      # Install dependencies
 uv run pytest tests/ --cov   # Run tests with coverage
 ```
 
-### Docker
+### Docker (all ESP-IDF builds are containerized — no local ESP-IDF needed)
 
 ```bash
 just docker-build            # Build development images
 just docker-dev              # Interactive ESP-IDF shell
+just setup-all               # Docker images + dev tools
 ```
 
 ## Project Conventions
@@ -165,6 +166,8 @@ Most workflows delegate to reusable workflows from [`laurigates/.github`](https:
 
 ## Important Paths
 
+- `tools/esp32.just` — Shared justfile config imported by all ESP-IDF projects (container_cmd, port detection, require-port, _serial-monitor)
+- `docker-compose.yml` — ESP-IDF container service definition (`espressif/idf:v5.4`)
 - `.clang-format` — C/C++ formatting rules
 - `.pre-commit-config.yaml` — Pre-commit hook definitions
 - `.gitleaks.toml` — Secret scanning allowlist

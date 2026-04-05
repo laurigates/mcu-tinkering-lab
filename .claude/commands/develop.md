@@ -1,43 +1,39 @@
 ---
 description: Full development cycle - build, flash, and monitor
-argument-hint: "[project-name] [port]"
-allowed-tools: Bash(make:*)
+argument-hint: "[project-name]"
+allowed-tools: Bash(just:*), Bash(docker:*)
 ---
 
 # Development Workflow
 
-Execute the full development cycle: build, flash, and monitor.
+Execute the full development cycle: build (containerized), flash (native), and monitor (native).
 
 ## Parse Arguments
 
 $ARGUMENTS may contain:
-- Project name (first word)
-- Serial port (second word)
+- Project name
 
 ## Available Projects
 
 - `robocar-main` or `main` - Main controller development
 - `robocar-cam` or `cam` - Camera module development
-- `llm-telegram` or `telegram` - LLM Telegram bot development
+- `webserver` - ESP32-CAM webserver
+- `telegram` - LLM Telegram bot development
+- `i2s-audio` or `audio` - ESP32-CAM audio
+- `kids-audio` - Kids audio toy
 
 ## Development Commands
 
-Based on project name, run the develop target:
+Based on project name:
 
-- `robocar-main` or `main`:
-  ```bash
-  make robocar-develop-main PORT=/dev/xxx
-  ```
+- `robocar-main` or `main`: `just robocar::develop-main`
+- `robocar-cam` or `cam`: `just robocar::develop-cam`
+- `webserver`: `just webserver::develop`
+- `telegram`: `just telegram::develop`
+- `i2s-audio`: `just i2s-audio::develop`
+- `kids-audio`: `just kids-audio::develop`
 
-- `robocar-cam` or `cam`:
-  ```bash
-  make robocar-develop-cam PORT=/dev/xxx
-  ```
-
-- `llm-telegram` or `telegram`:
-  ```bash
-  make llm-telegram-develop PORT=/dev/xxx
-  ```
+Ports are auto-detected. Override with: `PORT=/dev/... just <module>::develop`
 
 ## For ESP32-CAM Projects
 
@@ -48,6 +44,6 @@ Before running the develop command for ESP32-CAM projects:
 
 ## Monitoring
 
-The development command ends with serial monitor (idf.py monitor).
-- Exit monitor with Ctrl+]
+The development command ends with serial monitor via pyserial.
+- Exit monitor with Ctrl-C
 - The monitor will show boot messages, logs, and any debug output

@@ -1,108 +1,142 @@
 # ESP32 AI-Powered Robot Car — build orchestration and dev services
 # Run `just --list` to see available recipes
 
-idf_path := env("IDF_PATH", home_directory() + "/repos/esp-idf")
-main_port := env("PORT", "/dev/cu.usbserial-0001")
+import '../../../tools/esp32.just'
+
+main_port := env("PORT", _detected_serial)
 cam_port := env("CAM_PORT", main_port)
+# `port` needed by shared require-port recipe
+port := main_port
 
 robocar_main_dir := justfile_directory() + "/../robocar-main"
 robocar_camera_dir := justfile_directory() + "/../robocar-camera"
 robocar_sim_dir := justfile_directory() + "/../robocar-simulation"
 
+# Project paths relative to workspace root (for container -w flag)
+main_project := "packages/esp32-projects/robocar-main"
+cam_project := "packages/esp32-projects/robocar-camera"
+
 default:
     @just --list
 
-[private]
-check-idf:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ ! -d "{{idf_path}}" ]; then
-        echo "Error: ESP-IDF not found at {{idf_path}}"
-        echo "Install ESP-IDF or set IDF_PATH variable"
-        exit 1
-    fi
+##########
+# Build (containerized)
+##########
 
 # Build main controller (Heltec WiFi LoRa 32)
 [group: "build"]
-build-main: check-idf
+build-main:
     #!/usr/bin/env bash
     set -euo pipefail
-    source {{idf_path}}/export.sh
-    cd {{robocar_main_dir}}
-    idf.py build
+    echo "Building robocar-main..."
+    {{container_cmd}} compose -f {{compose_file}} run --rm \
+        -w /workspace/{{main_project}} \
+        esp-idf \
+        bash -c "idf.py set-target esp32 && idf.py build"
 
 # Build camera module (ESP32-CAM)
 [group: "build"]
-build-cam: check-idf
+build-cam:
     #!/usr/bin/env bash
     set -euo pipefail
     if [ ! -f {{robocar_camera_dir}}/main/credentials.h ]; then
         cp {{robocar_camera_dir}}/main/credentials.h.example {{robocar_camera_dir}}/main/credentials.h
         echo "Created credentials.h — edit it before flashing"
     fi
-    source {{idf_path}}/export.sh
-    cd {{robocar_camera_dir}}
-    idf.py build
+    echo "Building robocar-camera..."
+    {{container_cmd}} compose -f {{compose_file}} run --rm \
+        -w /workspace/{{cam_project}} \
+        esp-idf \
+        bash -c "idf.py set-target esp32 && idf.py build"
 
 # Build both main controller and camera module
 [group: "build"]
 build-all: build-main build-cam
 
-# Flash main controller
-[group: "flash"]
-flash-main: check-idf
+##########
+# Flash & Monitor (native — USB passthrough on macOS is unreliable)
+##########
+
+# Require a valid port for device recipes
+[private]
+require-main-port:
     #!/usr/bin/env bash
     set -euo pipefail
-    source {{idf_path}}/export.sh
-    cd {{robocar_main_dir}}
-    idf.py -p {{main_port}} flash
+    if [ -z "{{main_port}}" ]; then
+        echo "ERROR: No serial device found" >&2
+        echo "  Override with: PORT=/dev/cu.usbserial-0001 just flash-main" >&2
+        exit 1
+    fi
+
+[private]
+require-cam-port:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -z "{{cam_port}}" ]; then
+        echo "ERROR: No serial device found" >&2
+        echo "  Override with: CAM_PORT=/dev/cu.usbserial-0001 just flash-cam" >&2
+        exit 1
+    fi
+
+# Flash main controller
+[group: "flash"]
+flash-main: require-main-port
+    #!/usr/bin/env bash
+    set -euo pipefail
+    esptool --chip esp32 -p {{main_port}} -b 460800 \
+        --before default-reset --after hard-reset \
+        write-flash --flash-mode dio --flash-size detect \
+        0x1000 {{robocar_main_dir}}/build/bootloader/bootloader.bin \
+        0x8000 {{robocar_main_dir}}/build/partition_table/partition-table.bin \
+        0x10000 {{robocar_main_dir}}/build/robocar-main.bin
+    echo "Main controller flashed OK"
 
 # Flash camera module (GPIO0 must be connected to GND)
 [group: "flash"]
-flash-cam: check-idf
+flash-cam: require-cam-port
     #!/usr/bin/env bash
     set -euo pipefail
     echo "Make sure GPIO0 is connected to GND for programming"
-    source {{idf_path}}/export.sh
-    cd {{robocar_camera_dir}}
-    idf.py -p {{cam_port}} flash
+    esptool --chip esp32 -p {{cam_port}} -b 460800 \
+        --before default-reset --after hard-reset \
+        write-flash --flash-mode dio --flash-size detect \
+        0x1000 {{robocar_camera_dir}}/build/bootloader/bootloader.bin \
+        0x8000 {{robocar_camera_dir}}/build/partition_table/partition-table.bin \
+        0x10000 {{robocar_camera_dir}}/build/robocar-camera.bin
+    echo "Camera flashed OK — disconnect GPIO0 from GND and reset"
 
-# Monitor main controller serial output (Ctrl+] to exit)
+# Monitor main controller serial output (Ctrl-C to stop)
 [group: "monitor"]
-monitor-main: check-idf
+monitor-main: _serial-monitor
+
+# Monitor camera module serial output (Ctrl-C to stop)
+# Uses cam_port (may differ from main_port)
+[group: "monitor"]
+monitor-cam: require-cam-port
     #!/usr/bin/env bash
     set -euo pipefail
-    source {{idf_path}}/export.sh
-    cd {{robocar_main_dir}}
-    idf.py -p {{main_port}} monitor
-
-# Monitor camera module serial output (Ctrl+] to exit)
-[group: "monitor"]
-monitor-cam: check-idf
-    #!/usr/bin/env bash
-    set -euo pipefail
-    source {{idf_path}}/export.sh
-    cd {{robocar_camera_dir}}
-    idf.py -p {{cam_port}} monitor
+    echo "Monitoring camera on {{cam_port}} @ {{_monitor_baud}} baud — Ctrl-C to stop"
+    exec uvx --from pyserial python3 -c "
+    import serial, sys, signal
+    signal.signal(signal.SIGINT, lambda *a: sys.exit(0))
+    s = serial.Serial('{{cam_port}}', {{_monitor_baud}}, timeout=1)
+    try:
+        while True:
+            data = s.read(4096)
+            if data:
+                sys.stdout.buffer.write(data)
+                sys.stdout.buffer.flush()
+    except serial.SerialException:
+        print('\nDevice disconnected', file=sys.stderr)
+    "
 
 # Build, flash, and monitor main controller
 [group: "develop"]
-develop-main: build-main
-    #!/usr/bin/env bash
-    set -euo pipefail
-    source {{idf_path}}/export.sh
-    cd {{robocar_main_dir}}
-    idf.py -p {{main_port}} flash monitor
+develop-main: build-main flash-main monitor-main
 
 # Build, flash, and monitor camera module (GPIO0 must be connected to GND)
 [group: "develop"]
-develop-cam: build-cam
-    #!/usr/bin/env bash
-    set -euo pipefail
-    echo "Make sure GPIO0 is connected to GND for programming"
-    source {{idf_path}}/export.sh
-    cd {{robocar_camera_dir}}
-    idf.py -p {{cam_port}} flash monitor
+develop-cam: build-cam flash-cam monitor-cam
 
 # Create camera credentials file from template
 [group: "setup"]
@@ -118,21 +152,25 @@ credentials:
 
 # Clean main controller build
 [group: "clean"]
-clean-main: check-idf
+clean-main:
     #!/usr/bin/env bash
     set -euo pipefail
-    source {{idf_path}}/export.sh
-    cd {{robocar_main_dir}}
-    idf.py fullclean
+    {{container_cmd}} compose -f {{compose_file}} run --rm \
+        -w /workspace/{{main_project}} \
+        esp-idf \
+        idf.py fullclean
+    echo "Main clean complete"
 
 # Clean camera module build
 [group: "clean"]
-clean-cam: check-idf
+clean-cam:
     #!/usr/bin/env bash
     set -euo pipefail
-    source {{idf_path}}/export.sh
-    cd {{robocar_camera_dir}}
-    idf.py fullclean
+    {{container_cmd}} compose -f {{compose_file}} run --rm \
+        -w /workspace/{{cam_project}} \
+        esp-idf \
+        idf.py fullclean
+    echo "Camera clean complete"
 
 # Clean all builds
 [confirm("Clean all robocar build directories?")]
@@ -312,11 +350,11 @@ info:
     @echo "ESP32 AI-Powered Robot Car"
     @echo ""
     @echo "Hardware Configuration:"
-    @echo "  Main Controller: Heltec WiFi LoRa 32 V1 (ESP32-S3)"
+    @echo "  Main Controller: Heltec WiFi LoRa 32 V1 (ESP32)"
     @echo "  Camera Module:   ESP32-CAM (AI Thinker) with OV2640"
     @echo "  Main Port:       {{main_port}}"
     @echo "  Camera Port:     {{cam_port}}"
-    @echo "  ESP-IDF Path:    {{idf_path}}"
+    @echo "  Container:       {{container_cmd}}"
     @echo ""
     @echo "Project Structure:"
     @echo "  robocar-main/      — Main controller (motor/LED/servo)"

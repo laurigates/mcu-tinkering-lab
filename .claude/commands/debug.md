@@ -20,7 +20,7 @@ If the user mentions build/compilation errors:
 
 1. Run a fresh build to capture the error:
    ```bash
-   make robocar-build-main 2>&1 | tail -100
+   just robocar::build-main 2>&1 | tail -100
    ```
 
 2. Analyze the error output for:
@@ -39,7 +39,7 @@ If the user mentions crashes or panics:
 
 2. Suggest running monitor to capture the panic:
    ```bash
-   make robocar-monitor-main PORT=/dev/xxx
+   just robocar::monitor-main PORT=/dev/xxx
    ```
 
 ### 3. For I2C/Communication Errors

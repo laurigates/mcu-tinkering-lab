@@ -1,52 +1,54 @@
 ---
 description: Flash firmware to an ESP32 device
 argument-hint: "[project-name] [port]"
-allowed-tools: Bash(make:*), Bash(ls:*)
+allowed-tools: Bash(just:*), Bash(esptool*), Bash(ls:*)
 ---
 
 # Flash Firmware to ESP32 Device
 
-Flash compiled firmware to an ESP32 device.
+Flash compiled firmware to an ESP32 device. Flashing runs natively (not in container).
 
 ## Parse Arguments
 
 $ARGUMENTS may contain:
 - Project name (first word)
-- Serial port (second word, or detect automatically)
+- Serial port (second word, or auto-detected)
 
 ## Available Projects
 
-Same as /build command:
-- `robocar-main`, `robocar-cam`, `esp32-webserver`, `esp32-audio`, `llm-telegram`
+- `robocar-main` or `main`, `robocar-cam` or `cam`
+- `webserver`, `i2s-audio` or `audio`, `telegram`
+- `kids-audio`, `xbox`, `wifitest`
 
-## Port Detection
+## Port Auto-Detection
 
-If no port specified:
-1. Check for common ports:
-   ```bash
-   ls /dev/cu.usbserial-* /dev/ttyUSB* 2>/dev/null || echo "No devices found"
-   ```
-2. Use default: /dev/cu.usbserial-0001 (macOS) or /dev/ttyUSB0 (Linux)
+Ports are auto-detected by `tools/esp32.just`:
+- USB-serial adapters (CH340/CP2102): `ls /dev/cu.usbserial-*`
+- ESP32-S3 native USB: detected by Espressif VID `0x303a`
+- Override with: `PORT=/dev/... just <module>::flash`
 
 ## Flash Commands
 
-Run the appropriate flash command with PORT variable:
+Based on $ARGUMENTS:
 
-- `robocar-main`: `make robocar-flash-main PORT=/dev/xxx`
-- `robocar-cam`: `make robocar-flash-cam PORT=/dev/xxx`
-- `esp32-webserver`: `make esp32-webserver-flash PORT=/dev/xxx`
-- `esp32-audio`: `make esp32-audio-flash PORT=/dev/xxx`
-- `llm-telegram`: `make llm-telegram-flash PORT=/dev/xxx`
+- `robocar-main`: `just robocar::flash-main`
+- `robocar-cam`: `just robocar::flash-cam`
+- `webserver`: `just webserver::flash`
+- `i2s-audio`: `just i2s-audio::flash`
+- `telegram`: `just telegram::flash`
+- `kids-audio`: `just kids-audio::flash`
+- `xbox`: `just xbox::flash`
+- `wifitest`: `just wifitest::flash`
 
 ## ESP32-CAM Note
 
-For ESP32-CAM projects (robocar-cam, esp32-webserver, esp32-audio, llm-telegram):
+For ESP32-CAM projects (robocar-cam, webserver, i2s-audio, telegram):
 - Remind the user: "Connect GPIO0 to GND before flashing"
 - After successful flash: "Disconnect GPIO0 from GND and reset the device"
 
 ## Error Handling
 
 If flashing fails:
-1. Check if port exists
+1. Check if port exists and is accessible
 2. Suggest checking USB connection
 3. For permission errors, suggest: `sudo chmod 666 /dev/xxx`

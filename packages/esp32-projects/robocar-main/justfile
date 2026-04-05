@@ -3,86 +3,81 @@
 
 set positional-arguments
 
-idf_path := env("IDF_PATH", home_directory() + "/repos/esp-idf")
-port := env("PORT", "/dev/cu.usbserial-0001")
+import '../../../tools/esp32.just'
+
+project_dir := "packages/esp32-projects/robocar-main"
+port := env("PORT", _detected_serial)
+target := "esp32"
 
 default:
     @just --list
 
-[private]
-check-idf:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ ! -d "{{idf_path}}" ]; then
-        echo "Error: ESP-IDF not found at {{idf_path}}"
-        echo "Install ESP-IDF or set IDF_PATH variable"
-        exit 1
-    fi
-
 ##########
-# Build
+# Build (containerized)
 ##########
 
 # Build the firmware
 [group: "build"]
-build: check-idf
+build:
     #!/usr/bin/env bash
     set -euo pipefail
-    source {{idf_path}}/export.sh
-    idf.py build
+    echo "Building robocar-main..."
+    {{container_cmd}} compose -f {{compose_file}} run --rm \
+        -w /workspace/{{project_dir}} \
+        esp-idf \
+        bash -c "idf.py set-target {{target}} && idf.py build"
 
 # Clean build files
 [group: "build"]
-clean: check-idf
+clean:
     #!/usr/bin/env bash
     set -euo pipefail
-    source {{idf_path}}/export.sh
-    idf.py clean
-
-# Full clean (removes build directory)
-[confirm("Remove build directory and generated sdkconfig?")]
-[group: "build"]
-fullclean: check-idf
-    #!/usr/bin/env bash
-    set -euo pipefail
-    source {{idf_path}}/export.sh
-    idf.py fullclean
+    {{container_cmd}} compose -f {{compose_file}} run --rm \
+        -w /workspace/{{project_dir}} \
+        esp-idf \
+        idf.py fullclean
+    echo "Clean complete"
 
 # Open configuration menu
 [group: "build"]
-menuconfig: check-idf
-    #!/usr/bin/env bash
-    set -euo pipefail
-    source {{idf_path}}/export.sh
-    idf.py menuconfig
+menuconfig:
+    {{container_cmd}} compose -f {{compose_file}} run --rm \
+        -w /workspace/{{project_dir}} \
+        esp-idf \
+        idf.py menuconfig
+
+# Interactive shell in ESP-IDF container
+[group: "build"]
+shell:
+    {{container_cmd}} compose -f {{compose_file}} run --rm \
+        -w /workspace/{{project_dir}} \
+        esp-idf \
+        /bin/bash
 
 ##########
-# Device
+# Flash & Monitor (native — USB passthrough on macOS is unreliable)
 ##########
 
 # Flash firmware to ESP32
 [group: "device"]
-flash: check-idf
+flash: require-port
     #!/usr/bin/env bash
     set -euo pipefail
-    source {{idf_path}}/export.sh
-    idf.py -p {{port}} flash
+    esptool --chip esp32 -p {{port}} -b 460800 \
+        --before default-reset --after hard-reset \
+        write-flash --flash-mode dio --flash-size detect \
+        0x1000 build/bootloader/bootloader.bin \
+        0x8000 build/partition_table/partition-table.bin \
+        0x10000 build/robocar-main.bin
+    echo "Flashed OK"
+
+# Monitor serial output (Ctrl-C to stop)
+[group: "device"]
+monitor: _serial-monitor
 
 # Flash and immediately start monitoring
 [group: "device"]
-flash-monitor: check-idf
-    #!/usr/bin/env bash
-    set -euo pipefail
-    source {{idf_path}}/export.sh
-    idf.py -p {{port}} flash monitor
-
-# Monitor serial output (Ctrl+] to exit)
-[group: "device"]
-monitor: check-idf
-    #!/usr/bin/env bash
-    set -euo pipefail
-    source {{idf_path}}/export.sh
-    idf.py -p {{port}} monitor
+flash-monitor: flash monitor
 
 ##########
 # Info
@@ -92,6 +87,7 @@ monitor: check-idf
 [group: "info"]
 info:
     @echo "ESP-IDF Robocar Controller"
-    @echo "ESP-IDF Path: {{idf_path}}"
-    @echo "Serial Port:  {{port}}"
-    @echo "Hardware:     Heltec WiFi LoRa 32 V1"
+    @echo "  Target:    ESP32"
+    @echo "  Port:      {{port}}"
+    @echo "  Container: {{container_cmd}}"
+    @echo "  Hardware:  Heltec WiFi LoRa 32 V1"
