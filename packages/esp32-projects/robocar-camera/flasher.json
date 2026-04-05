@@ -5,5 +5,6 @@
   "board": "AI Thinker ESP32-CAM",
   "appBinaryName": "esp32-cam-robocar.bin",
   "category": "robocar",
-  "flashMode": "gpio0"
+  "flashMode": "gpio0",
+  "improv": true
 }

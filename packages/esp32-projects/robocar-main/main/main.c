@@ -17,6 +17,7 @@
 #include "freertos/task.h"
 #include "i2c_protocol.h"
 #include "i2c_slave.h"
+#include "improv_wifi.h"
 #include "pca9685.h"
 #include "system_config.h"
 #include "wifi_manager.h"
@@ -44,6 +45,10 @@ int buffer_pos = 0;
 
 // Mutex protecting all global state above
 static SemaphoreHandle_t g_state_mutex = NULL;
+
+// Improv WiFi state — true while waiting for provisioning via web flasher
+static volatile bool g_improv_active = false;
+static TickType_t g_improv_last_state_tx = 0;
 
 // Safe string copy macro: copies src into dst[size], always null-terminates
 #define SAFE_STRCPY(dst, src, size)        \
@@ -1126,11 +1131,23 @@ void command_task(void *pvParameters)
         int len = uart_read_bytes(UART_NUM_0, data, 1, pdMS_TO_TICKS(100));
 
         if (len > 0) {
+            // Feed every byte to the Improv WiFi parser when provisioning is active.
+            // Non-Improv bytes are silently ignored by the parser.
+            if (g_improv_active) {
+                improv_wifi_process_byte(data[0]);
+            }
+
             char c = (char)data[0];
 
-            // Echo the character back for user feedback
-            printf("%c", c);
-            fflush(stdout);
+            // Only echo and process printable ASCII — don't echo Improv binary bytes
+            if (c >= 32 && c <= 126) {
+                printf("%c", c);
+                fflush(stdout);
+
+                if (c == '\n' || c == '\r') {
+                    // handled below by the newline check
+                }
+            }
 
             if (c == '\n' || c == '\r') {
                 if (buffer_pos > 0) {
@@ -1162,6 +1179,23 @@ void command_task(void *pvParameters)
                     }
                     xSemaphoreGive(g_state_mutex);
                 }
+            }
+        }
+
+        // Improv WiFi: broadcast state every ~1 second while waiting for provisioning,
+        // and transition to PROVISIONED once WiFi connects.
+        if (g_improv_active) {
+            TickType_t now = xTaskGetTickCount();
+            if ((now - g_improv_last_state_tx) >= pdMS_TO_TICKS(1000)) {
+                if (wifi_manager_is_connected()) {
+                    improv_wifi_send_state(IMPROV_STATE_PROVISIONED);
+                    improv_wifi_send_provisioned_result(NULL);
+                    g_improv_active = false;
+                    ESP_LOGI(TAG, "Improv WiFi provisioning complete");
+                } else {
+                    improv_wifi_send_state(IMPROV_STATE_AUTHORIZED);
+                }
+                g_improv_last_state_tx = now;
             }
         }
 
@@ -1292,6 +1326,24 @@ void app_main(void)
     ESP_LOGI(TAG, "Command processing task started. Ready for commands!");
 }
 
+// Improv WiFi credentials callback — called from within command_task UART loop
+static void on_improv_credentials(const char *ssid, const char *password)
+{
+    wifi_credentials_t creds;
+    strncpy(creds.ssid, ssid, WIFI_SSID_MAX_LEN);
+    creds.ssid[WIFI_SSID_MAX_LEN] = '\0';
+    strncpy(creds.password, password, WIFI_PASSWORD_MAX_LEN);
+    creds.password[WIFI_PASSWORD_MAX_LEN] = '\0';
+
+    if (wifi_manager_save_credentials(&creds) == ESP_OK) {
+        ESP_LOGI(TAG, "Improv WiFi: credentials saved, connecting...");
+        wifi_manager_connect(ssid, password);
+        // State update (PROVISIONED) sent from command_task once WiFi is up
+    } else {
+        improv_wifi_send_error(IMPROV_ERROR_UNABLE_CONNECT);
+    }
+}
+
 static esp_err_t init_communication_interfaces(void)
 {
     // Initialize console first for proper serial communication
@@ -1299,20 +1351,24 @@ static esp_err_t init_communication_interfaces(void)
 
     // Initialize WiFi (requires NVS)
     ESP_LOGI(TAG, "Initializing WiFi...");
-    if (wifi_manager_init() == ESP_OK) {
-        ESP_LOGI(TAG, "WiFi initialized successfully");
-
-        // Start connection (will attempt to connect with saved credentials)
-        if (wifi_manager_connect("", "") == ESP_OK) {
-            ESP_LOGI(TAG, "Attempting to connect with saved credentials...");
-        } else {
-            ESP_LOGW(TAG, "No saved credentials found, WiFi ready for configuration");
-        }
-        return ESP_OK;
-    } else {
+    if (wifi_manager_init() != ESP_OK) {
         ESP_LOGE(TAG, "Failed to initialize WiFi");
         return ESP_FAIL;
     }
+    ESP_LOGI(TAG, "WiFi initialized successfully");
+
+    // Try connecting with stored NVS credentials
+    if (wifi_manager_connect("", "") == ESP_OK) {
+        ESP_LOGI(TAG, "Attempting to connect with saved credentials...");
+    } else {
+        // No stored credentials — activate Improv WiFi so the web flasher can
+        // configure them right after flashing
+        ESP_LOGW(TAG, "No saved credentials found — starting Improv WiFi provisioning");
+        improv_wifi_init(on_improv_credentials);
+        improv_wifi_send_state(IMPROV_STATE_AUTHORIZED);
+        g_improv_active = true;
+    }
+    return ESP_OK;
 }
 
 static esp_err_t init_hardware_controllers(void)

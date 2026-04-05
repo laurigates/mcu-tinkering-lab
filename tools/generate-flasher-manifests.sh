@@ -100,6 +100,7 @@ for flasher_json in "${PROJECTS_DIR}"/*/flasher.json; do
     app_binary_name=$(jq -r '.appBinaryName'   "$flasher_json")
     category=$(jq -r '.category // "standalone"' "$flasher_json")
     flash_mode=$(jq -r '.flashMode // "uart"'  "$flasher_json")
+    improv=$(jq -r '.improv // false'          "$flasher_json")
 
     # Determine offsets
     bl_offset=$(bootloader_offset "$chip_family")
@@ -150,6 +151,7 @@ for flasher_json in "${PROJECTS_DIR}"/*/flasher.json; do
         --arg  version      "$VERSION" \
         --arg  category     "$category" \
         --arg  flash_mode   "$flash_mode" \
+        --argjson improv    "$improv" \
         --arg  manifest     "firmware/${project_id}/manifest.json" \
         '. + [{
             "id":           $id,
@@ -160,6 +162,7 @@ for flasher_json in "${PROJECTS_DIR}"/*/flasher.json; do
             "version":      $version,
             "category":     $category,
             "flashMode":    $flash_mode,
+            "improv":       $improv,
             "manifestPath": $manifest
         }]')
 done
