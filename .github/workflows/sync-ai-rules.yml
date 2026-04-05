@@ -1,0 +1,10 @@
+name: Sync AI Rules
+
+on:
+  schedule:
+    - cron: '0 7 * * 1'  # Mondays at 07:00 UTC
+  workflow_dispatch:
+
+jobs:
+  sync-rules:
+    uses: laurigates/.github/.github/workflows/reusable-sync-ai-rules.yml@main
