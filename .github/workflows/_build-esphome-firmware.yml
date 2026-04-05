@@ -51,7 +51,7 @@ jobs:
             case "$secret" in
               *key*|*encryption*)
                 # Base64-encoded placeholder for encryption keys
-                echo "${secret}: \"dGVzdGtleXRlc3RrZXl0ZXN0a2V5dGVzdGs=\"" >> "$SECRETS_FILE"
+                echo "${secret}: \"QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=\"" >> "$SECRETS_FILE"
                 ;;
               *password*|*pass*)
                 echo "${secret}: \"ci_placeholder_password\"" >> "$SECRETS_FILE"
