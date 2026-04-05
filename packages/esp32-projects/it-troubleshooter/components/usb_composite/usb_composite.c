@@ -66,47 +66,80 @@ static const char *s_string_desc[] = {
 
 /* HID boot keyboard report descriptor */
 static const uint8_t s_hid_report_desc[] = {
-    0x05, 0x01, /* Usage Page (Generic Desktop) */
-    0x09, 0x06, /* Usage (Keyboard) */
-    0xA1, 0x01, /* Collection (Application) */
+    0x05,
+    0x01, /* Usage Page (Generic Desktop) */
+    0x09,
+    0x06, /* Usage (Keyboard) */
+    0xA1,
+    0x01, /* Collection (Application) */
 
     /* Modifier keys (8 bits) */
-    0x05, 0x07, /*   Usage Page (Key Codes) */
-    0x19, 0xE0, /*   Usage Minimum (Left Control) */
-    0x29, 0xE7, /*   Usage Maximum (Right GUI) */
-    0x15, 0x00, /*   Logical Minimum (0) */
-    0x25, 0x01, /*   Logical Maximum (1) */
-    0x75, 0x01, /*   Report Size (1) */
-    0x95, 0x08, /*   Report Count (8) */
-    0x81, 0x02, /*   Input (Data, Variable, Absolute) */
+    0x05,
+    0x07, /*   Usage Page (Key Codes) */
+    0x19,
+    0xE0, /*   Usage Minimum (Left Control) */
+    0x29,
+    0xE7, /*   Usage Maximum (Right GUI) */
+    0x15,
+    0x00, /*   Logical Minimum (0) */
+    0x25,
+    0x01, /*   Logical Maximum (1) */
+    0x75,
+    0x01, /*   Report Size (1) */
+    0x95,
+    0x08, /*   Report Count (8) */
+    0x81,
+    0x02, /*   Input (Data, Variable, Absolute) */
 
     /* Reserved byte */
-    0x95, 0x01, /*   Report Count (1) */
-    0x75, 0x08, /*   Report Size (8) */
-    0x81, 0x01, /*   Input (Constant) */
+    0x95,
+    0x01, /*   Report Count (1) */
+    0x75,
+    0x08, /*   Report Size (8) */
+    0x81,
+    0x01, /*   Input (Constant) */
 
     /* LED output (5 bits: Num/Caps/Scroll/Compose/Kana) */
-    0x95, 0x05, /*   Report Count (5) */
-    0x75, 0x01, /*   Report Size (1) */
-    0x05, 0x08, /*   Usage Page (LEDs) */
-    0x19, 0x01, /*   Usage Minimum (Num Lock) */
-    0x29, 0x05, /*   Usage Maximum (Kana) */
-    0x91, 0x02, /*   Output (Data, Variable, Absolute) */
+    0x95,
+    0x05, /*   Report Count (5) */
+    0x75,
+    0x01, /*   Report Size (1) */
+    0x05,
+    0x08, /*   Usage Page (LEDs) */
+    0x19,
+    0x01, /*   Usage Minimum (Num Lock) */
+    0x29,
+    0x05, /*   Usage Maximum (Kana) */
+    0x91,
+    0x02, /*   Output (Data, Variable, Absolute) */
 
     /* LED padding (3 bits) */
-    0x95, 0x01, /*   Report Count (1) */
-    0x75, 0x03, /*   Report Size (3) */
-    0x91, 0x01, /*   Output (Constant) */
+    0x95,
+    0x01, /*   Report Count (1) */
+    0x75,
+    0x03, /*   Report Size (3) */
+    0x91,
+    0x01, /*   Output (Constant) */
 
     /* Key codes (6 bytes) */
-    0x95, 0x06,       /*   Report Count (6) */
-    0x75, 0x08,       /*   Report Size (8) */
-    0x15, 0x00,       /*   Logical Minimum (0) */
-    0x26, 0xFF, 0x00, /* Logical Maximum (255) */
-    0x05, 0x07,       /*   Usage Page (Key Codes) */
-    0x19, 0x00,       /*   Usage Minimum (0) */
-    0x2A, 0xFF, 0x00, /* Usage Maximum (255) */
-    0x81, 0x00,       /*   Input (Data, Array) */
+    0x95,
+    0x06, /*   Report Count (6) */
+    0x75,
+    0x08, /*   Report Size (8) */
+    0x15,
+    0x00, /*   Logical Minimum (0) */
+    0x26,
+    0xFF,
+    0x00, /* Logical Maximum (255) */
+    0x05,
+    0x07, /*   Usage Page (Key Codes) */
+    0x19,
+    0x00, /*   Usage Minimum (0) */
+    0x2A,
+    0xFF,
+    0x00, /* Usage Maximum (255) */
+    0x81,
+    0x00, /*   Input (Data, Array) */
 
     0xC0, /* End Collection */
 };
