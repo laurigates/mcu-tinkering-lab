@@ -1,0 +1,9 @@
+{
+  "name": "LLM Telegram Bot",
+  "description": "ESP32-CAM that analyzes images with Claude or Ollama and sends results to Telegram",
+  "chipFamily": "ESP32",
+  "board": "AI Thinker ESP32-CAM",
+  "appBinaryName": "esp32cam-llm-telegram.bin",
+  "category": "standalone",
+  "flashMode": "gpio0"
+}

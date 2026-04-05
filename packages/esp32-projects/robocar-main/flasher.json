@@ -1,0 +1,10 @@
+{
+  "name": "RoboCar Main Controller",
+  "description": "Motor control (L298N), PCA9685 LED/servo driver, OLED display, buzzer, WiFi OTA",
+  "chipFamily": "ESP32",
+  "board": "Heltec WiFi LoRa 32 V1",
+  "appBinaryName": "idf-robocar.bin",
+  "category": "robocar",
+  "flashMode": "uart",
+  "improv": true
+}

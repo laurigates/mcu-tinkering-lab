@@ -146,14 +146,22 @@ GPIO14/15 are used for UART to avoid PSRAM conflicts. The ESP32-CAM has very lim
 
 ## CI/CD Workflows
 
-| Workflow | Trigger | Purpose |
-|----------|---------|---------|
-| `esp32-build.yml` | Push/PR to main/develop | Build all ESP32 firmware + simulation |
-| `test.yml` | Push/PR to main/develop | Pre-commit, pytest, cppcheck, format check |
-| `build-firmware.yml` | Release published | Build + attach firmware binaries to release |
-| `release-please.yml` | Push to main | Auto-generate release PRs from conventional commits |
-| `claude-code-review.yml` | PR opened/updated | Auto-review PRs with Claude |
-| `claude.yml` | @claude mention | Interactive Claude assistance in issues/PRs |
+Most workflows delegate to reusable workflows from [`laurigates/.github`](https://github.com/laurigates/.github).
+
+| Workflow | Trigger | Purpose | Reusable? |
+|----------|---------|---------|-----------|
+| `esp32-build.yml` | Push/PR to main/develop | Build all ESP32 firmware + simulation | No (local) |
+| `test.yml` | Push/PR to main/develop | Pre-commit, pytest, cppcheck, format check | No (local) |
+| `build-firmware.yml` | Release published | Build + attach firmware binaries to release + deploy web flasher | No (local) |
+| `release-please.yml` | Push to main | Auto-generate release PRs from conventional commits | `reusable-release-please.yml` |
+| `claude-code-review.yml` | PR opened/updated | Auto-review PRs with Claude | `reusable-claude-review.yml` |
+| `claude.yml` | @claude mention | Interactive Claude assistance in issues/PRs | `reusable-claude.yml` |
+| `auto-fix.yml` | CI failure / manual | Analyze and auto-fix CI failures with Claude | `reusable-auto-fix.yml` |
+| `enforce-conventional-commits.yml` | PR opened/edited/sync | Auto-fix PR titles to conventional commits format | `reusable-enforce-conventional-commits.yml` |
+| `security-secrets.yml` | Push/PR to main/develop | AI-powered secret scanning on changed files | `reusable-security-secrets.yml` |
+| `auto-resolve-conflicts.yml` | Push to main / schedule | Auto-resolve merge conflicts in PRs with Claude | `reusable-auto-resolve-conflicts.yml` |
+| `fix-release-conflicts.yml` | Push to main / schedule | Fix conflicts in release-please PRs | `reusable-fix-release-conflicts.yml` |
+| `sync-ai-rules.yml` | Weekly / manual | Sync AI coding rules from `.github` repo | `reusable-sync-ai-rules.yml` |
 
 ## Important Paths
 
@@ -162,3 +170,4 @@ GPIO14/15 are used for UART to avoid PSRAM conflicts. The ESP32-CAM has very lim
 - `.gitleaks.toml` — Secret scanning allowlist
 - `tools/scaffold/new-esp32-project.sh` — New project scaffolding
 - `packages/esp32-projects/robocar-docs/` — Robocar coordination justfile and docs
+- `docs/flasher/index.html` — ESP Web Tools browser-based firmware flasher page

@@ -1,0 +1,39 @@
+name: Build nfc-scavenger-hunt
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag to build for'
+        required: true
+        type: string
+
+jobs:
+  check-tag:
+    runs-on: ubuntu-latest
+    outputs:
+      should_build: ${{ steps.check.outputs.should_build }}
+      tag: ${{ steps.check.outputs.tag }}
+    steps:
+      - id: check
+        run: |
+          TAG="${{ github.event.release.tag_name || inputs.release_tag }}"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          if [[ "$TAG" == "nfc-scavenger-hunt@v"* ]] || [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "should_build=true" >> $GITHUB_OUTPUT
+          else
+            echo "should_build=false" >> $GITHUB_OUTPUT
+          fi
+
+  build:
+    needs: check-tag
+    if: needs.check-tag.outputs.should_build == 'true'
+    uses: ./.github/workflows/_build-esp32-firmware.yml
+    with:
+      project: nfc-scavenger-hunt
+      target: esp32s3
+      binary_name: nfc-scavenger-hunt.bin
+      release_tag: ${{ needs.check-tag.outputs.tag }}
+    secrets: inherit

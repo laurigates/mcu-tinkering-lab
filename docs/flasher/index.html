@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>MCU Tinkering Lab — Web Flasher</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Flash ESP32 firmware directly from your browser using USB">
+  <script
+    type="module"
+    src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"
+  ></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: #1a1a2e;
+      background: #f5f5f7;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem;
+    }
+    h1 { font-size: 1.8rem; margin-bottom: 0.5rem; }
+    .subtitle { color: #555; margin-bottom: 2rem; }
+
+    /* Category sections */
+    .category { width: 100%; max-width: 860px; margin-bottom: 2.5rem; }
+    .category-title {
+      font-size: 1rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #888;
+      margin-bottom: 1rem;
+    }
+
+    /* Card grid */
+    .cards {
+      display: flex;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+    }
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 1.5rem;
+      flex: 1 1 300px;
+      max-width: 380px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .card h3 { font-size: 1.1rem; }
+    .card .board { color: #666; font-size: 0.85rem; }
+    .card .description { font-size: 0.875rem; color: #444; flex-grow: 1; }
+    .card .meta {
+      font-size: 0.78rem;
+      color: #999;
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .chip-badge {
+      background: #e8f0fe;
+      color: #1a56db;
+      border-radius: 4px;
+      padding: 0.1rem 0.4rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .improv-badge {
+      background: #dcfce7;
+      color: #166534;
+      border-radius: 4px;
+      padding: 0.1rem 0.4rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .flash-note {
+      font-size: 0.78rem;
+      color: #b45309;
+      background: #fffbeb;
+      border-radius: 4px;
+      padding: 0.25rem 0.5rem;
+    }
+    esp-web-install-button {
+      margin-top: 0.5rem;
+      align-self: flex-start;
+    }
+    esp-web-install-button button {
+      background: #2563eb;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 0.65rem 1.25rem;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    esp-web-install-button button:hover { background: #1d4ed8; }
+
+    /* State messages */
+    .browser-warning {
+      display: none;
+      max-width: 860px;
+      width: 100%;
+      margin-bottom: 1.5rem;
+      padding: 1rem;
+      background: #fef2f2;
+      border: 1px solid #ef4444;
+      border-radius: 8px;
+      color: #991b1b;
+      font-size: 0.9rem;
+    }
+    .loading-msg {
+      color: #888;
+      font-size: 0.95rem;
+      margin: 2rem 0;
+    }
+    .error-msg {
+      display: none;
+      max-width: 860px;
+      width: 100%;
+      padding: 1.25rem;
+      background: #fffbeb;
+      border: 1px solid #f59e0b;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      color: #92400e;
+      margin-bottom: 1rem;
+    }
+    .error-msg a { color: #92400e; }
+
+    /* Setup instructions */
+    .notice {
+      max-width: 860px;
+      width: 100%;
+      margin-top: 2rem;
+      padding: 1rem 1.25rem;
+      background: #fffbeb;
+      border: 1px solid #f59e0b;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      color: #92400e;
+    }
+    .notice summary { cursor: pointer; font-weight: 600; }
+    .notice ul { padding-left: 1.2rem; margin-top: 0.5rem; }
+    .notice li { margin-bottom: 0.35rem; }
+
+    footer {
+      margin-top: 2.5rem;
+      font-size: 0.8rem;
+      color: #888;
+      text-align: center;
+    }
+    footer a { color: #2563eb; text-decoration: none; }
+    .footer-meta { margin-top: 0.25rem; color: #bbb; }
+  </style>
+</head>
+<body>
+  <h1>MCU Tinkering Lab — Web Flasher</h1>
+  <p class="subtitle">Flash firmware directly from your browser via USB</p>
+
+  <div class="browser-warning" id="browser-warning">
+    Your browser does not support the Web Serial API. Please use
+    <strong>Google Chrome</strong> or <strong>Microsoft Edge</strong>
+    (version 89 or later) on desktop, or Chrome 117+ on Android with USB OTG.
+  </div>
+
+  <p class="loading-msg" id="loading-msg">Loading available firmware&#8230;</p>
+
+  <div class="error-msg" id="error-msg">
+    No firmware releases are available yet.
+    <a href="https://github.com/laurigates/mcu-tinkering-lab/releases">Check the releases page</a>
+    or trigger a release to build firmware.
+  </div>
+
+  <!-- Rendered project categories are injected here -->
+  <div id="projects-container"></div>
+
+  <!-- Templates -->
+  <template id="tmpl-category">
+    <section class="category">
+      <h2 class="category-title"></h2>
+      <div class="cards"></div>
+    </section>
+  </template>
+
+  <template id="tmpl-card">
+    <div class="card">
+      <h3 class="project-name"></h3>
+      <p class="board"></p>
+      <p class="description"></p>
+      <div class="meta">
+        <span class="chip-badge"></span>
+        <span class="version-label"></span>
+      </div>
+      <p class="flash-note" style="display:none"></p>
+      <esp-web-install-button>
+        <button slot="activate" class="flash-btn"></button>
+      </esp-web-install-button>
+    </div>
+  </template>
+
+  <details class="notice">
+    <summary>Setup instructions</summary>
+    <ul>
+      <li><strong>Chrome or Edge required</strong> (Web Serial API). Firefox and Safari are not supported.</li>
+      <li><strong>Android:</strong> Use Chrome 117+ with a USB-C OTG adapter. Grant USB permission when prompted.</li>
+      <li><strong>ESP32-CAM (GPIO0 mode):</strong> Most boards lack onboard USB — connect an FTDI/CP2102 adapter.
+        Hold <strong>GPIO0 LOW</strong> while pressing <strong>RESET</strong> to enter flash mode.
+        Release GPIO0 after flashing begins.</li>
+      <li><strong>ESP32-S3 (USB mode):</strong> Hold <strong>BOOT</strong> while plugging in USB,
+        or hold <strong>BOOT</strong> then press and release <strong>RESET</strong>.</li>
+      <li><strong>Heltec / standard DevKit boards:</strong> Connect via onboard USB. No special boot mode needed.</li>
+      <li><strong>After flashing:</strong> WiFi credentials are not included in pre-built firmware.
+        Use the serial console (<em>Logs &amp; Console</em> in ESP Web Tools) or
+        Improv WiFi (when supported) to configure your network.</li>
+    </ul>
+  </details>
+
+  <footer>
+    <a href="https://github.com/laurigates/mcu-tinkering-lab">laurigates/mcu-tinkering-lab</a>
+    &middot; Powered by <a href="https://esphome.github.io/esp-web-tools/">ESP Web Tools</a>
+    <div class="footer-meta" id="footer-meta"></div>
+  </footer>
+
+  <script>
+    // ---- Browser capability check ----
+    if (!("serial" in navigator)) {
+      document.getElementById("browser-warning").style.display = "block";
+    }
+
+    // ---- Category display configuration ----
+    const CATEGORY_ORDER  = ["robocar", "tools", "games", "standalone"];
+    const CATEGORY_LABELS = {
+      robocar:    "RoboCar Components",
+      tools:      "Utility Tools",
+      games:      "Games & Toys",
+      standalone: "Standalone Projects",
+    };
+
+    // Flash-mode guidance shown on individual cards
+    const FLASH_MODE_NOTES = {
+      gpio0: "ESP32-CAM: hold GPIO0 LOW during reset to enter flash mode.",
+      usb:   "ESP32-S3: hold BOOT while pressing RESET (or during USB plug-in).",
+    };
+
+    // ---- Dynamic project loading ----
+    async function loadProjects() {
+      const response = await fetch("projects.json");
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response.json();
+    }
+
+    function renderProjects(data) {
+      document.getElementById("loading-msg").style.display = "none";
+
+      const projects = data.projects || [];
+      if (projects.length === 0) {
+        document.getElementById("error-msg").style.display = "block";
+        return;
+      }
+
+      // Update footer with generation metadata
+      if (data.version || data.generatedAt) {
+        const parts = [];
+        if (data.version)      parts.push(`v${data.version}`);
+        if (data.generatedAt)  parts.push(`built ${data.generatedAt.slice(0, 10)}`);
+        document.getElementById("footer-meta").textContent = parts.join(" · ");
+      }
+
+      // Group projects by category, preserving order within each group
+      const grouped = new Map();
+      for (const p of projects) {
+        const cat = p.category || "standalone";
+        if (!grouped.has(cat)) grouped.set(cat, []);
+        grouped.get(cat).push(p);
+      }
+
+      // Determine render order: known categories first, then any extras
+      const unknownCats = [...grouped.keys()].filter(c => !CATEGORY_ORDER.includes(c));
+      const orderedCats = [...CATEGORY_ORDER, ...unknownCats].filter(c => grouped.has(c));
+
+      const container   = document.getElementById("projects-container");
+      const catTemplate = document.getElementById("tmpl-category");
+      const cardTemplate = document.getElementById("tmpl-card");
+
+      for (const cat of orderedCats) {
+        const catFrag = catTemplate.content.cloneNode(true);
+        catFrag.querySelector(".category-title").textContent =
+          CATEGORY_LABELS[cat] || cat.charAt(0).toUpperCase() + cat.slice(1);
+        const cardsEl = catFrag.querySelector(".cards");
+
+        for (const project of grouped.get(cat)) {
+          const cardFrag = cardTemplate.content.cloneNode(true);
+
+          cardFrag.querySelector(".project-name").textContent  = project.name;
+          cardFrag.querySelector(".board").textContent         = project.board;
+          cardFrag.querySelector(".description").textContent   = project.description;
+          cardFrag.querySelector(".chip-badge").textContent    = project.chipFamily;
+          cardFrag.querySelector(".version-label").textContent =
+            project.version ? `v${project.version}` : "";
+
+          // Improv WiFi badge — shown when firmware supports Improv WiFi provisioning
+          if (project.improv) {
+            const improvEl = document.createElement("span");
+            improvEl.className = "improv-badge";
+            improvEl.title = "Supports Improv WiFi: configure network credentials via browser after flashing";
+            improvEl.textContent = "Improv WiFi";
+            cardFrag.querySelector(".meta").appendChild(improvEl);
+          }
+
+          // Per-card flash-mode note
+          const noteEl = cardFrag.querySelector(".flash-note");
+          const note   = FLASH_MODE_NOTES[project.flashMode];
+          if (note) {
+            noteEl.textContent      = note;
+            noteEl.style.display    = "";
+          }
+
+          // Attach manifest to the ESP Web Tools custom element
+          const installBtn = cardFrag.querySelector("esp-web-install-button");
+          installBtn.setAttribute("manifest", project.manifestPath);
+          cardFrag.querySelector(".flash-btn").textContent = `Flash ${project.name}`;
+
+          cardsEl.appendChild(cardFrag);
+        }
+
+        container.appendChild(catFrag);
+      }
+    }
+
+    function showError() {
+      document.getElementById("loading-msg").style.display = "none";
+      document.getElementById("error-msg").style.display   = "block";
+    }
+
+    loadProjects().then(renderProjects).catch(showError);
+  </script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+{
+  "name": "ESP32-CAM Web Server",
+  "description": "Live video streaming HTTP server with OV2640 camera and configurable resolution",
+  "chipFamily": "ESP32",
+  "board": "AI Thinker ESP32-CAM",
+  "appBinaryName": "esp32-cam-webserver.bin",
+  "category": "standalone",
+  "flashMode": "gpio0"
+}

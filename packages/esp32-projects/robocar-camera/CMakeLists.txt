@@ -1,5 +1,23 @@
 cmake_minimum_required(VERSION 3.16)
 
+# Generate a stub credentials.h for CI / web-flasher builds where the real
+# credentials.h has not been created from the template.  Real credentials are
+# supplied at runtime via Improv WiFi and stored in NVS.
+if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/main/credentials.h")
+    message(STATUS "credentials.h not found — generating stub for Improv WiFi build")
+    file(WRITE "${CMAKE_CURRENT_SOURCE_DIR}/main/credentials.h"
+"/**\n"
+" * Auto-generated stub credentials.h for Improv WiFi (no-credential) builds.\n"
+" * Real WiFi credentials are provisioned at runtime via the Improv WiFi protocol.\n"
+" * DO NOT add real credentials here — use main/credentials.h.example as a template.\n"
+" */\n"
+"#ifndef CREDENTIALS_H\n"
+"#define CREDENTIALS_H\n"
+"#define WIFI_SSID \"\"\n"
+"#define WIFI_PASSWORD \"\"\n"
+"#endif  // CREDENTIALS_H\n")
+endif()
+
 # Set partition table for OTA support
 set(CONFIG_PARTITION_TABLE_CUSTOM ON)
 set(CONFIG_PARTITION_TABLE_CUSTOM_FILENAME "partitions.csv")

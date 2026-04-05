@@ -24,6 +24,8 @@ jobs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
       has-firmware-changes: ${{ steps.set-matrix.outputs.has-firmware-changes }}
       simulation-changed: ${{ steps.filter.outputs.simulation || 'true' }}
+      audiobook-player-changed: ${{ steps.filter.outputs.audiobook-player || 'true' }}
+      esp32-wireguard-ha-changed: ${{ steps.filter.outputs.esp32-wireguard-ha || 'true' }}
     steps:
       - uses: actions/checkout@v6
 
@@ -40,10 +42,24 @@ jobs:
               - 'packages/esp32-projects/esp32cam-llm-telegram/**'
             esp32-cam-webserver:
               - 'packages/esp32-projects/esp32-cam-webserver/**'
+            esp32-cam-i2s-audio:
+              - 'packages/esp32-projects/esp32-cam-i2s-audio/**'
+            esp32-wifitest:
+              - 'packages/esp32-projects/esp32-wifitest/**'
             it-troubleshooter:
               - 'packages/esp32-projects/it-troubleshooter/**'
+            kids-audio-toy:
+              - 'packages/esp32-projects/kids-audio-toy/**'
+            nfc-scavenger-hunt:
+              - 'packages/esp32-projects/nfc-scavenger-hunt/**'
+            switch-usb-proxy:
+              - 'packages/esp32-projects/switch-usb-proxy/**'
             xbox-switch-bridge:
               - 'packages/esp32-projects/xbox-switch-bridge/**'
+            audiobook-player:
+              - 'packages/esp32-projects/audiobook-player/**'
+            esp32-wireguard-ha:
+              - 'packages/esp32-projects/esp32-wireguard-ha-example/**'
             simulation:
               - 'packages/esp32-projects/robocar-simulation/**'
             workflow:
@@ -57,7 +73,12 @@ jobs:
             {"project":"robocar-camera","target":"esp32","description":"Camera Module (ESP32-CAM)"},
             {"project":"esp32cam-llm-telegram","target":"esp32","description":"LLM Telegram Bot (ESP32-CAM)"},
             {"project":"esp32-cam-webserver","target":"esp32","description":"Webserver (ESP32-CAM)"},
+            {"project":"esp32-cam-i2s-audio","target":"esp32","description":"Camera I2S Audio (ESP32-CAM)"},
+            {"project":"kids-audio-toy","target":"esp32","description":"Kids Audio Toy (ESP32)"},
+            {"project":"esp32-wifitest","target":"esp32s3","description":"WiFi Test (ESP32-S3)"},
             {"project":"it-troubleshooter","target":"esp32s3","description":"IT Troubleshooter (ESP32-S3-Zero)"},
+            {"project":"nfc-scavenger-hunt","target":"esp32s3","description":"NFC Scavenger Hunt (ESP32-S3)"},
+            {"project":"switch-usb-proxy","target":"esp32s3","description":"Switch USB Proxy (ESP32-S3)"},
             {"project":"xbox-switch-bridge","target":"esp32s3","description":"Xbox-Switch Bridge (ESP32-S3-Zero)","fetch_deps":true}
           ]}'
 
@@ -91,8 +112,18 @@ jobs:
             add_project "esp32cam-llm-telegram" "esp32" "LLM Telegram Bot (ESP32-CAM)"
           [ "${{ steps.filter.outputs.esp32-cam-webserver }}" = "true" ] && \
             add_project "esp32-cam-webserver" "esp32" "Webserver (ESP32-CAM)"
+          [ "${{ steps.filter.outputs.esp32-cam-i2s-audio }}" = "true" ] && \
+            add_project "esp32-cam-i2s-audio" "esp32" "Camera I2S Audio (ESP32-CAM)"
+          [ "${{ steps.filter.outputs.kids-audio-toy }}" = "true" ] && \
+            add_project "kids-audio-toy" "esp32" "Kids Audio Toy (ESP32)"
+          [ "${{ steps.filter.outputs.esp32-wifitest }}" = "true" ] && \
+            add_project "esp32-wifitest" "esp32s3" "WiFi Test (ESP32-S3)"
           [ "${{ steps.filter.outputs.it-troubleshooter }}" = "true" ] && \
             add_project "it-troubleshooter" "esp32s3" "IT Troubleshooter (ESP32-S3-Zero)"
+          [ "${{ steps.filter.outputs.nfc-scavenger-hunt }}" = "true" ] && \
+            add_project "nfc-scavenger-hunt" "esp32s3" "NFC Scavenger Hunt (ESP32-S3)"
+          [ "${{ steps.filter.outputs.switch-usb-proxy }}" = "true" ] && \
+            add_project "switch-usb-proxy" "esp32s3" "Switch USB Proxy (ESP32-S3)"
           [ "${{ steps.filter.outputs.xbox-switch-bridge }}" = "true" ] && \
             add_project "xbox-switch-bridge" "esp32s3" "Xbox-Switch Bridge (ESP32-S3-Zero)" "true"
 
@@ -231,9 +262,91 @@ jobs:
           uv run python -c "import numpy; print(f'NumPy {numpy.__version__}')"
           uv run python -c "import pymunk; print(f'Pymunk {pymunk.version}')"
 
+  build-esphome:
+    name: Build ESPHome ${{ matrix.device.name }}
+    needs: [detect-changes]
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      needs.detect-changes.outputs.audiobook-player-changed == 'true' ||
+      needs.detect-changes.outputs.esp32-wireguard-ha-changed == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        device:
+          - name: audiobook-player
+            yaml: packages/esp32-projects/audiobook-player/audiobook-player.yaml
+            changed: audiobook-player-changed
+          - name: esp32-wireguard-ha
+            yaml: packages/esp32-projects/esp32-wireguard-ha-example/esp32-wireguard-ha.yaml
+            changed: esp32-wireguard-ha-changed
+    steps:
+      - name: Check if this device changed
+        id: should-build
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "build=true" >> $GITHUB_OUTPUT
+          elif [ "${{ needs.detect-changes.outputs[matrix.device.changed] }}" = "true" ]; then
+            echo "build=true" >> $GITHUB_OUTPUT
+          else
+            echo "build=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Checkout repository
+        if: steps.should-build.outputs.build == 'true'
+        uses: actions/checkout@v6
+
+      - name: Generate dummy secrets.yaml for CI
+        if: steps.should-build.outputs.build == 'true'
+        run: |
+          YAML_DIR=$(dirname "${{ matrix.device.yaml }}")
+          YAML_FILE=$(basename "${{ matrix.device.yaml }}")
+          cd "$YAML_DIR"
+
+          SECRETS=$(grep -oP '!secret\s+\K\w+' "$YAML_FILE" | sort -u)
+
+          echo "# Auto-generated dummy secrets for CI builds" > secrets.yaml
+          for secret in $SECRETS; do
+            case "$secret" in
+              *key*|*encryption*)
+                echo "${secret}: \"dGVzdGtleXRlc3RrZXl0ZXN0a2V5dGVzdGs=\"" >> secrets.yaml
+                ;;
+              *password*|*pass*)
+                echo "${secret}: \"ci_placeholder_password\"" >> secrets.yaml
+                ;;
+              *ssid*)
+                echo "${secret}: \"CI_PLACEHOLDER_SSID\"" >> secrets.yaml
+                ;;
+              *ip*|*address*|*gateway*|*subnet*|*dns*)
+                echo "${secret}: \"10.0.0.1\"" >> secrets.yaml
+                ;;
+              *port*)
+                echo "${secret}: \"51820\"" >> secrets.yaml
+                ;;
+              *)
+                echo "${secret}: \"ci_placeholder\"" >> secrets.yaml
+                ;;
+            esac
+          done
+
+      - name: Build ESPHome firmware
+        if: steps.should-build.outputs.build == 'true'
+        uses: esphome/build-action@v7
+        id: build
+        with:
+          yaml-file: ${{ matrix.device.yaml }}
+
+      - name: Archive ESPHome firmware
+        if: steps.should-build.outputs.build == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.device.name }}-esphome-${{ github.sha }}
+          path: ${{ steps.build.outputs.name }}/
+          retention-days: 30
+
   build-summary:
     name: Build Summary
-    needs: [detect-changes, build-matrix, build-simulation]
+    needs: [detect-changes, build-matrix, build-simulation, build-esphome]
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -245,5 +358,8 @@ jobs:
           fi
           if [ "${{ needs.build-simulation.result }}" = "failure" ]; then
             echo "::warning::Simulation build failed, but continuing..."
+          fi
+          if [ "${{ needs.build-esphome.result }}" = "failure" ]; then
+            echo "::warning::ESPHome build failed, but continuing..."
           fi
           echo "::notice::Build pipeline completed!"

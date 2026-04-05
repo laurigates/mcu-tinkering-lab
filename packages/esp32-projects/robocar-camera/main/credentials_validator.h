@@ -10,15 +10,15 @@
 #include "credentials.h"
 #include "esp_log.h"
 
-// Basic validation that credentials.h is included
+// WiFi credentials: allow empty placeholders so that pre-built (web flasher)
+// firmware compiles without real credentials.  The Improv WiFi provisioner
+// will supply real credentials at runtime and store them in NVS.
 #ifndef WIFI_SSID
-#error \
-    "WIFI_SSID is not defined in credentials.h. Please create credentials.h from credentials.h.example and configure your WiFi credentials."
+#define WIFI_SSID ""
+#define WIFI_PASSWORD ""
 #endif
-
 #ifndef WIFI_PASSWORD
-#error \
-    "WIFI_PASSWORD is not defined in credentials.h. Please create credentials.h from credentials.h.example and configure your WiFi credentials."
+#define WIFI_PASSWORD ""
 #endif
 
 #ifdef CONFIG_AI_BACKEND_CLAUDE
@@ -28,27 +28,29 @@
 #endif
 #endif
 
-// Runtime validation function that will be called during initialization
+// Runtime validation function that will be called during initialization.
+// WiFi credential checks are advisory: placeholder or empty values mean
+// that Improv WiFi provisioning is required at runtime (NVS will supply them).
+// API key checks remain fatal because they cannot be provisioned at runtime.
 static inline void validate_credentials_at_runtime(void)
 {
-    // Check for default WiFi SSID values
-    if (strcmp(WIFI_SSID, "your_wifi_network_name") == 0 ||
+    // Check for default WiFi SSID values — warn only, Improv WiFi will provision
+    if (strcmp(WIFI_SSID, "") == 0 || strcmp(WIFI_SSID, "your_wifi_network_name") == 0 ||
         strcmp(WIFI_SSID, "YOUR_WIFI_NAME") == 0 || strcmp(WIFI_SSID, "YOUR_WIFI_SSID_HERE") == 0) {
-        ESP_LOGE("credentials_validator",
-                 "WIFI_SSID in credentials.h contains default value '%s'. "
-                 "Please edit credentials.h with your actual WiFi network name.",
+        ESP_LOGW("credentials_validator",
+                 "WiFi SSID not configured in credentials.h (value: '%s'). "
+                 "Improv WiFi provisioning will be required after flashing.",
                  WIFI_SSID);
-        abort();
+        return;  // Skip password check when SSID is already invalid
     }
 
-    // Check for default WiFi password values
-    if (strcmp(WIFI_PASSWORD, "your_wifi_password") == 0 ||
+    // Check for default WiFi password values — warn only
+    if (strcmp(WIFI_PASSWORD, "") == 0 || strcmp(WIFI_PASSWORD, "your_wifi_password") == 0 ||
         strcmp(WIFI_PASSWORD, "YOUR_WIFI_PASSWORD") == 0 ||
         strcmp(WIFI_PASSWORD, "YOUR_WIFI_PASSWORD_HERE") == 0) {
-        ESP_LOGE("credentials_validator",
-                 "WIFI_PASSWORD in credentials.h contains default value. "
-                 "Please edit credentials.h with your actual WiFi password.");
-        abort();
+        ESP_LOGW("credentials_validator",
+                 "WiFi password not configured in credentials.h. "
+                 "Improv WiFi provisioning will be required after flashing.");
     }
 
 #ifdef CONFIG_AI_BACKEND_CLAUDE

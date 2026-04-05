@@ -13,6 +13,10 @@ Primary project: dual-ESP32 AI-powered robot car with pluggable AI vision backen
 | ADR-001 | ADR | Monorepo Structure for Multi-Platform MCU Projects | accepted | 2026-03-05 |
 | ADR-002 | ADR | Dual ESP32 Architecture for Robot Car | accepted | 2026-03-05 |
 | ADR-003 | ADR | Pluggable AI Backends (Claude API vs Ollama) | accepted | 2026-03-05 |
+| ADR-004 | ADR | OTA Firmware Update Architecture | accepted | 2026-03-09 |
+| ADR-005 | ADR | IT Troubleshooter Hardware Selection | accepted | 2026-03-12 |
+| ADR-006 | ADR | USB Composite Device Architecture | accepted | 2026-03-15 |
+| ADR-007 | ADR | Browser-Based Web Flasher Architecture | accepted | 2026-04-03 |
 
 ## Project Overview
 

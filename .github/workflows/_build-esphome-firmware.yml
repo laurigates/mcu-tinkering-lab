@@ -1,0 +1,119 @@
+name: Reusable ESPHome Firmware Build
+
+on:
+  workflow_call:
+    inputs:
+      project:
+        description: 'Project directory name under packages/esp32-projects/'
+        required: true
+        type: string
+      yaml_file:
+        description: 'ESPHome YAML config filename (relative to project dir)'
+        required: true
+        type: string
+      device_name:
+        description: 'Device name for output binary naming'
+        required: true
+        type: string
+      release_tag:
+        description: 'Release tag to build for'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.release_tag }}
+
+      - name: Generate dummy secrets.yaml for CI
+        working-directory: packages/esp32-projects/${{ inputs.project }}
+        run: |
+          # Extract all !secret references from the YAML config and generate
+          # placeholder values so ESPHome can compile without real credentials.
+          SECRETS_FILE="secrets.yaml"
+          YAML_FILE="${{ inputs.yaml_file }}"
+
+          # Find all !secret references
+          SECRETS=$(grep -oP '!secret\s+\K\w+' "$YAML_FILE" | sort -u)
+
+          echo "# Auto-generated dummy secrets for CI builds" > "$SECRETS_FILE"
+          echo "# These placeholders allow compilation but produce non-functional firmware" >> "$SECRETS_FILE"
+          echo "" >> "$SECRETS_FILE"
+
+          for secret in $SECRETS; do
+            case "$secret" in
+              *key*|*encryption*)
+                # Base64-encoded placeholder for encryption keys
+                echo "${secret}: \"dGVzdGtleXRlc3RrZXl0ZXN0a2V5dGVzdGs=\"" >> "$SECRETS_FILE"
+                ;;
+              *password*|*pass*)
+                echo "${secret}: \"ci_placeholder_password\"" >> "$SECRETS_FILE"
+                ;;
+              *ssid*)
+                echo "${secret}: \"CI_PLACEHOLDER_SSID\"" >> "$SECRETS_FILE"
+                ;;
+              *ip*|*address*|*gateway*|*subnet*|*dns*)
+                echo "${secret}: \"10.0.0.1\"" >> "$SECRETS_FILE"
+                ;;
+              *port*)
+                echo "${secret}: \"51820\"" >> "$SECRETS_FILE"
+                ;;
+              *)
+                echo "${secret}: \"ci_placeholder\"" >> "$SECRETS_FILE"
+                ;;
+            esac
+          done
+
+          echo "Generated secrets.yaml with $(echo "$SECRETS" | wc -w) placeholders"
+          cat "$SECRETS_FILE"
+
+      - name: Build ESPHome firmware
+        uses: esphome/build-action@v7
+        id: build
+        with:
+          yaml-file: packages/esp32-projects/${{ inputs.project }}/${{ inputs.yaml_file }}
+
+      - name: Generate MD5 checksum
+        id: hashes
+        run: |
+          FIRMWARE_DIR="${{ steps.build.outputs.name }}"
+          MD5=$(md5sum "${FIRMWARE_DIR}/"*.ota.bin | cut -d' ' -f1)
+          echo "$MD5" > "${FIRMWARE_DIR}/firmware.md5"
+          SHA256=$(sha256sum "${FIRMWARE_DIR}/"*.ota.bin | cut -d' ' -f1)
+          SIZE=$(stat -c%s "${FIRMWARE_DIR}/"*.ota.bin)
+          echo "md5=$MD5" >> $GITHUB_OUTPUT
+          echo "sha256=$SHA256" >> $GITHUB_OUTPUT
+          echo "size=$SIZE" >> $GITHUB_OUTPUT
+
+      - name: Rename output binary
+        run: |
+          FIRMWARE_DIR="${{ steps.build.outputs.name }}"
+          cp "${FIRMWARE_DIR}/"*.ota.bin "${{ inputs.device_name }}.ota.bin"
+          cp "${FIRMWARE_DIR}/firmware.md5" "${{ inputs.device_name }}.md5"
+
+      - name: Upload firmware to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.release_tag }}
+          files: |
+            ${{ inputs.device_name }}.ota.bin
+            ${{ inputs.device_name }}.md5
+
+      - name: Generate build summary
+        run: |
+          echo "## ESPHome Build Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### ${{ inputs.device_name }} @ \`${{ inputs.release_tag }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Size | ${{ steps.hashes.outputs.size }} bytes |" >> $GITHUB_STEP_SUMMARY
+          echo "| SHA256 | \`${{ steps.hashes.outputs.sha256 }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| MD5 | \`${{ steps.hashes.outputs.md5 }}\` |" >> $GITHUB_STEP_SUMMARY
