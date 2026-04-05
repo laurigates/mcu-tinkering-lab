@@ -1,0 +1,135 @@
+{
+  "format_version": "3.2.0",
+  "created_at": "2026-04-05T00:00:00Z",
+  "updated_at": "2026-04-05T11:46:06Z",
+  "created_by": {
+    "blueprint_plugin": "3.2.0"
+  },
+  "project": {
+    "name": "mcu-tinkering-lab",
+    "detected_stack": [
+      "c",
+      "cpp",
+      "python",
+      "esp-idf",
+      "cmake",
+      "docker"
+    ]
+  },
+  "structure": {
+    "has_prds": true,
+    "has_adrs": true,
+    "has_prps": true,
+    "has_work_orders": true,
+    "has_ai_docs": false,
+    "has_modular_rules": true,
+    "has_feature_tracker": true,
+    "has_document_detection": true,
+    "claude_md_mode": "both"
+  },
+  "feature_tracker": {
+    "file": "feature-tracker.json",
+    "source_document": "docs/blueprint/prds/PRD-001-ai-robot-car-system.md",
+    "sync_targets": [
+      "docs/blueprint/feature-tracker.md"
+    ]
+  },
+  "generated": {
+    "rules": {},
+    "commands": {}
+  },
+  "custom_overrides": {
+    "skills": [],
+    "commands": []
+  },
+  "task_registry": {
+    "derive-prd": {
+      "enabled": true,
+      "auto_run": false,
+      "last_completed_at": null,
+      "last_result": null,
+      "schedule": "on-demand",
+      "stats": {},
+      "context": {}
+    },
+    "derive-plans": {
+      "enabled": true,
+      "auto_run": false,
+      "last_completed_at": "2026-04-05T11:46:06Z",
+      "last_result": "success",
+      "schedule": "weekly",
+      "stats": {
+        "runs_total": 1,
+        "items_processed": 133,
+        "items_created": 10
+      },
+      "context": {
+        "commits_analyzed_up_to": "c7850661504cdc582d138783476d000bcf7adc4f",
+        "commits_analyzed_count": 133
+      }
+    },
+    "derive-rules": {
+      "enabled": true,
+      "auto_run": false,
+      "last_completed_at": null,
+      "last_result": null,
+      "schedule": "weekly",
+      "stats": {},
+      "context": {}
+    },
+    "generate-rules": {
+      "enabled": true,
+      "auto_run": false,
+      "last_completed_at": null,
+      "last_result": null,
+      "schedule": "on-change",
+      "stats": {},
+      "context": {}
+    },
+    "adr-validate": {
+      "enabled": true,
+      "auto_run": false,
+      "last_completed_at": null,
+      "last_result": null,
+      "schedule": "weekly",
+      "stats": {},
+      "context": {}
+    },
+    "feature-tracker-sync": {
+      "enabled": true,
+      "auto_run": false,
+      "last_completed_at": null,
+      "last_result": null,
+      "schedule": "daily",
+      "stats": {},
+      "context": {}
+    },
+    "sync-ids": {
+      "enabled": true,
+      "auto_run": false,
+      "last_completed_at": null,
+      "last_result": null,
+      "schedule": "on-change",
+      "stats": {},
+      "context": {}
+    },
+    "claude-md": {
+      "enabled": true,
+      "auto_run": false,
+      "last_completed_at": null,
+      "last_result": null,
+      "schedule": "on-change",
+      "stats": {},
+      "context": {}
+    },
+    "curate-docs": {
+      "enabled": false,
+      "auto_run": false,
+      "last_completed_at": null,
+      "last_result": null,
+      "schedule": "on-demand",
+      "stats": {},
+      "context": {}
+    }
+  }
+}
