@@ -309,7 +309,7 @@ jobs:
           for secret in $SECRETS; do
             case "$secret" in
               *key*|*encryption*)
-                echo "${secret}: \"dGVzdGtleXRlc3RrZXl0ZXN0a2V5dGVzdGs=\"" >> secrets.yaml
+                echo "${secret}: \"QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=\"" >> secrets.yaml
                 ;;
               *password*|*pass*)
                 echo "${secret}: \"ci_placeholder_password\"" >> secrets.yaml
