@@ -1,0 +1,21 @@
+name: Auto-resolve PR Conflicts
+
+on:
+  push:
+    branches: [main, develop]
+  schedule:
+    - cron: '0 6 * * 1-5'  # Weekdays at 06:00 UTC
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'Specific PR number to resolve (leave empty for all)'
+        required: false
+        type: string
+
+jobs:
+  resolve-conflicts:
+    uses: laurigates/.github/.github/workflows/reusable-auto-resolve-conflicts.yml@main
+    with:
+      pr_number: ${{ inputs.pr_number || '' }}
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}

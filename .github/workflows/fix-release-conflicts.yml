@@ -1,0 +1,14 @@
+name: Fix Release-Please Conflicts
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '30 6 * * 1-5'  # Weekdays at 06:30 UTC
+  workflow_dispatch:
+
+jobs:
+  fix-conflicts:
+    uses: laurigates/.github/.github/workflows/reusable-fix-release-conflicts.yml@main
+    secrets:
+      RELEASE_PLEASE_TOKEN: ${{ secrets.MY_RELEASE_PLEASE_TOKEN }}
