@@ -7,6 +7,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 #include "freertos/task.h"
+#include "mdns.h"
 #include "nvs_flash.h"
 
 #include "camera_handler.h"
@@ -297,6 +298,12 @@ void app_main(void)
 
     // Initialize WiFi
     ESP_ERROR_CHECK(wifi_init());
+
+    // Initialize mDNS for esp32cam-llm-telegram.local hostname
+    ESP_ERROR_CHECK(mdns_init());
+    ESP_ERROR_CHECK(mdns_hostname_set("esp32cam-llm-telegram"));
+    ESP_ERROR_CHECK(mdns_instance_name_set("ESP32-CAM LLM Telegram Bot"));
+    ESP_LOGI(TAG, "mDNS initialized: esp32cam-llm-telegram.local");
 
     // Initialize camera
     ESP_ERROR_CHECK(camera_init());

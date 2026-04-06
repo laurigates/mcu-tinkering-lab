@@ -18,6 +18,7 @@
 #include "i2c_protocol.h"
 #include "i2c_slave.h"
 #include "improv_wifi.h"
+#include "mdns.h"
 #include "pca9685.h"
 #include "system_config.h"
 #include "wifi_manager.h"
@@ -1368,6 +1369,13 @@ static esp_err_t init_communication_interfaces(void)
         improv_wifi_send_state(IMPROV_STATE_AUTHORIZED);
         g_improv_active = true;
     }
+
+    // Initialize mDNS for robocar-main.local hostname
+    ESP_ERROR_CHECK(mdns_init());
+    ESP_ERROR_CHECK(mdns_hostname_set("robocar-main"));
+    ESP_ERROR_CHECK(mdns_instance_name_set("Robocar Main Controller"));
+    ESP_LOGI(TAG, "mDNS initialized: robocar-main.local");
+
     return ESP_OK;
 }
 

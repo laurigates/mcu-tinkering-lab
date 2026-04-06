@@ -25,6 +25,7 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "mdns.h"
 #include "nvs_flash.h"
 #include "state_machine.h"
 #include "status_led.h"
@@ -157,6 +158,12 @@ void app_main(void)
     }
     ESP_LOGI(TAG, "WiFi connected");
     sm_set_phase(SM_PHASE_WIFI_CONNECTED);
+
+    /* 6b. Init mDNS for it-troubleshooter.local hostname */
+    ESP_ERROR_CHECK(mdns_init());
+    ESP_ERROR_CHECK(mdns_hostname_set("it-troubleshooter"));
+    ESP_ERROR_CHECK(mdns_instance_name_set("IT Troubleshooter"));
+    ESP_LOGI(TAG, "mDNS initialized: it-troubleshooter.local");
 
     /* 7. Init Claude API client */
     ret = claude_client_init(CLAUDE_API_KEY, CLAUDE_MODEL);

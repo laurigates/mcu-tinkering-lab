@@ -11,6 +11,7 @@
 #include "gemini_tts.h"
 #include "i2s_audio.h"
 #include "local_sounds.h"
+#include "mdns.h"
 #include "prompt_builder.h"
 #include "rc522_driver.h"
 #include "status_led.h"
@@ -240,6 +241,12 @@ void app_main(void)
     if (wifi_ret != ESP_OK) {
         ESP_LOGW(TAG, "WiFi failed — device will work with local sounds only");
         play_local_sound(SOUND_ERROR);
+    } else {
+        /* Initialize mDNS for nfc-scavenger-hunt.local hostname */
+        ESP_ERROR_CHECK(mdns_init());
+        ESP_ERROR_CHECK(mdns_hostname_set("nfc-scavenger-hunt"));
+        ESP_ERROR_CHECK(mdns_instance_name_set("NFC Scavenger Hunt"));
+        ESP_LOGI(TAG, "mDNS initialized: nfc-scavenger-hunt.local");
     }
 
     /* Ready to scan */
