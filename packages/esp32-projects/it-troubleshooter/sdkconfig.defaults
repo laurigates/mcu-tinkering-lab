@@ -30,6 +30,9 @@ CONFIG_LOG_DEFAULT_LEVEL_INFO=y
 # --- Watchdog ---
 CONFIG_ESP_TASK_WDT_TIMEOUT_S=10
 
+# --- mDNS hostname discovery (it-troubleshooter.local) ---
+CONFIG_MDNS_ENABLED=y
+
 # --- WiFi ---
 CONFIG_ESP_WIFI_ENABLED=y
 CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=10

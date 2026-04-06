@@ -13,6 +13,7 @@
 #include "freertos/task.h"
 #include "lwip/err.h"
 #include "lwip/sys.h"
+#include "mdns.h"
 #include "nvs_flash.h"
 
 static const char *TAG = "esp32-cam-webserver";
@@ -303,6 +304,13 @@ void app_main(void)
 
     // Initialize and connect to WiFi
     wifi_init_sta();
+
+    // Initialize mDNS for esp32-cam.local hostname
+    ESP_ERROR_CHECK(mdns_init());
+    ESP_ERROR_CHECK(mdns_hostname_set("esp32-cam"));
+    ESP_ERROR_CHECK(mdns_instance_name_set("ESP32-CAM Web Server"));
+    mdns_service_add(NULL, "_http", "_tcp", 80, NULL, 0);
+    ESP_LOGI(TAG, "mDNS initialized: esp32-cam.local");
 
     // Start the web server
     start_webserver();

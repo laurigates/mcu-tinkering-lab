@@ -19,6 +19,7 @@ idf_component_register(
         mbedtls
         esp_timer
         driver
+        mdns
     EMBED_FILES
         "../data/prompts.txt"
 )
