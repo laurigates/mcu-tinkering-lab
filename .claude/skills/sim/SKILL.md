@@ -1,22 +1,22 @@
 ---
-allowed-tools: Bash(python:*), Bash(cd:*), Bash(uv:*), Read
+name: sim
 description: Run robocar physics simulation environment
+argument-hint: "[options]"
+allowed-tools: Bash(python:*), Bash(cd:*), Bash(uv:*), Read
 ---
 
-## Context
-Simulation directory contents:
-!`ls packages/esp32-projects/robocar-simulation/`
+# Robocar Physics Simulation
 
-## Task
-Run the robocar physics simulation.
+Run the robocar physics simulation: $ARGUMENTS
 
-### Steps
+## Steps
 1. Navigate to simulation directory: `packages/esp32-projects/robocar-simulation/`
 2. Check if virtual environment exists, create if needed using `uv`
-3. Install dependencies if needed: `uv pip install -r requirements.txt`
-4. Run the simulation: `python src/main.py` or the appropriate entry point
+3. Install dependencies if needed: `uv sync`
+4. Run the simulation: `uv run python src/main.py` or the appropriate entry point
 
-### Additional Arguments
+## Additional Arguments
+
 Pass any additional arguments to the simulation: $ARGUMENTS
 
 For example:

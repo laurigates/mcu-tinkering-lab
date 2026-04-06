@@ -1,4 +1,5 @@
 ---
+name: build
 description: Build an ESP32 project (containerized)
 argument-hint: "[project-name]"
 allowed-tools: Bash(just:*), Bash(docker:*)

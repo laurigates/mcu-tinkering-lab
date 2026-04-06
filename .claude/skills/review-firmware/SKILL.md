@@ -1,17 +1,22 @@
 ---
-allowed-tools: Bash(git:*), Read, Grep, Glob
-argument-hint: [files-or-commit]
+name: review-firmware
 description: Review embedded C/C++ code changes for best practices
+argument-hint: "[files-or-commit]"
+allowed-tools: Bash(git:*), Read, Grep, Glob
 ---
 
-## Context
-Recent git changes:
-!`git diff --stat HEAD~1`
+# Review Firmware Code
 
-## Task
 Review the firmware code changes: $ARGUMENTS
 
 If no specific files or commit provided, review the most recent changes.
+
+## Context
+
+Check recent git changes:
+```bash
+git diff --stat HEAD~1
+```
 
 ## Review Checklist
 

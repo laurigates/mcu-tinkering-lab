@@ -1,4 +1,5 @@
 ---
+name: develop
 description: Full development cycle - build, flash, and monitor
 argument-hint: "[project-name]"
 allowed-tools: Bash(just:*), Bash(docker:*)

@@ -1,7 +1,8 @@
 ---
+name: debug
 description: Analyze and debug ESP32 compilation or runtime errors
 argument-hint: "[error-context]"
-allowed-tools: Bash(make:*), Read, Grep
+allowed-tools: Bash(just:*), Read, Grep
 ---
 
 # Debug ESP32 Issues
