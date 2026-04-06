@@ -1,0 +1,98 @@
+# ESP32-S3 PS4 Speaker — Bluetooth PS4 controller + piezo speaker
+# Run `just --list` to see available recipes
+
+set positional-arguments
+
+import '../../../tools/esp32.just'
+
+project_dir := "packages/esp32-projects/esp32-ps4-speaker"
+port := env("PORT", _detected_s3)
+target := "esp32s3"
+
+# Bluepad32 lives in xbox-switch-bridge's external/ directory
+bp32_ext := justfile_directory() / "../xbox-switch-bridge/external/bluepad32"
+
+default:
+    @just --list
+
+##########
+# Setup
+##########
+
+# Ensure bluepad32 deps exist (delegates to xbox-switch-bridge fetch-deps)
+[group: "setup"]
+fetch-deps:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ ! -d "{{bp32_ext}}/src" ]; then
+        echo "Bluepad32 not found — running xbox-switch-bridge fetch-deps..."
+        just xbox::fetch-deps
+    else
+        echo "Bluepad32 deps already present"
+    fi
+
+##########
+# Build (containerized)
+##########
+
+# Build firmware in Docker container
+[group: "build"]
+build: fetch-deps
+    {{container_cmd}} compose -f {{compose_file}} run --rm \
+        -w /workspace/{{project_dir}} \
+        esp-idf \
+        bash -c "idf.py set-target {{target}} && idf.py build"
+
+# Clean build artifacts
+[group: "build"]
+clean:
+    {{container_cmd}} compose -f {{compose_file}} run --rm \
+        -w /workspace/{{project_dir}} \
+        esp-idf \
+        idf.py fullclean
+
+# Open menuconfig
+[group: "build"]
+menuconfig:
+    {{container_cmd}} compose -f {{compose_file}} run --rm \
+        -w /workspace/{{project_dir}} \
+        esp-idf \
+        idf.py menuconfig
+
+# Interactive shell in ESP-IDF container
+[group: "build"]
+shell:
+    {{container_cmd}} compose -f {{compose_file}} run --rm \
+        -w /workspace/{{project_dir}} \
+        esp-idf \
+        /bin/bash
+
+##########
+# Flash & Monitor (native)
+##########
+
+# Flash firmware to device
+[group: "device"]
+flash: require-port
+    esptool --chip esp32s3 -p {{port}} -b 460800 \
+        --before default-reset --after hard-reset \
+        write_flash --flash-mode dio --flash-size 4MB --flash-freq 80m \
+        0x0 build/bootloader/bootloader.bin \
+        0x8000 build/partition_table/partition-table.bin \
+        0x10000 build/esp32-ps4-speaker.bin
+
+# Monitor serial output
+[group: "device"]
+monitor: _serial-monitor
+
+# Build, flash, and monitor
+[group: "device"]
+develop: build flash monitor
+
+# Show project info
+[group: "info"]
+info:
+    @echo "Project: esp32-ps4-speaker"
+    @echo "  Target: ESP32-S3"
+    @echo "  Port:   {{if port == "" { "(not detected)" } else { port } }}"
+    @echo "  Bluepad32: {{bp32_ext}}"
