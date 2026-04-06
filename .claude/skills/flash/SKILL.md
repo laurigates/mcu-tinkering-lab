@@ -1,4 +1,5 @@
 ---
+name: flash
 description: Flash firmware to an ESP32 device
 argument-hint: "[project-name] [port]"
 allowed-tools: Bash(just:*), Bash(esptool*), Bash(ls:*)

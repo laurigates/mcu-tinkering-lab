@@ -1,6 +1,7 @@
 ---
+name: check-env
 description: Verify development environment is properly configured
-allowed-tools: Bash(make:*), Bash(ls:*)
+allowed-tools: Bash(just:*), Bash(ls:*)
 ---
 
 # Check Development Environment
@@ -12,33 +13,33 @@ Verify that the MCU development environment is properly configured.
 Execute the environment verification:
 
 ```bash
-make check-environment
+just check-environment
 ```
 
 ## Additional Checks
 
 Also check:
 
-1. ESP-IDF version:
-   ```bash
-   make check-idf-version
-   ```
-
-2. Available serial ports:
+1. Available serial ports:
    ```bash
    ls -la /dev/cu.usbserial-* /dev/ttyUSB* 2>/dev/null || echo "No USB serial devices found"
    ```
 
+2. Docker availability:
+   ```bash
+   docker --version
+   ```
+
 3. Project structure:
    ```bash
-   make list-projects
+   just --list
    ```
 
 ## Summarize Results
 
 Provide a clear summary:
 
-- ESP-IDF status (installed/missing, version)
+- Docker status (installed/missing, version)
 - Serial ports available
 - Projects found
 - Any missing dependencies
@@ -46,6 +47,6 @@ Provide a clear summary:
 ## Recommendations
 
 If issues found:
-- Missing ESP-IDF: "Run 'make setup-idf' to install"
+- Missing Docker: "Install Docker to build ESP-IDF projects"
 - No serial ports: "Connect your ESP32 device via USB"
-- Missing tools: "Run 'make install-dev-tools' to install development tools"
+- Missing tools: "Run `just install-dev-tools` to install development tools"

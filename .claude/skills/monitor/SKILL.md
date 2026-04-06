@@ -1,10 +1,12 @@
 ---
-allowed-tools: Bash(just:*), Bash(uvx:*)
-argument-hint: "[project-name] [port]"
+name: monitor
 description: Start serial monitor for MCU device
+argument-hint: "[project-name] [port]"
+allowed-tools: Bash(just:*), Bash(uvx:*)
 ---
 
-## Task
+# Serial Monitor
+
 Start serial monitor for the specified project: $ARGUMENTS
 
 ## Available Projects

@@ -1,11 +1,13 @@
 ---
-allowed-tools: Bash(mkdir:*), Bash(cp:*), Bash(idf.py:*), Write, Edit
-argument-hint: <name> <platform>
+name: new-project
 description: Create a new MCU project from template
+argument-hint: "<name> <platform>"
+allowed-tools: Bash(mkdir:*), Bash(cp:*), Write, Edit
 ---
 
-## Task
-Create a new project named "$1" for platform "$2"
+# Create New MCU Project
+
+Create a new project named "$1" for platform "$2".
 
 ## Supported Platforms
 - `esp32` - ESP-IDF based ESP32 project
@@ -14,7 +16,6 @@ Create a new project named "$1" for platform "$2"
 - `stm32` - STM32 platform project
 
 ## Project Structure
-Create the following structure based on platform:
 
 ### ESP32/ESP32-CAM
 ```
@@ -52,5 +53,5 @@ packages/stm32-projects/$1/
 ## Steps
 1. Create directory structure
 2. Generate template files with proper boilerplate
-3. Add project to root Makefile if ESP32
+3. Add project to root justfile if ESP32
 4. Print next steps for the user

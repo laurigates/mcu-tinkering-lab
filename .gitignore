@@ -1,6 +1,8 @@
 .aider*
 # Build artifacts
 build/
+# But don't ignore Claude Code skill directories
+!.claude/skills/build/
 # Host test binaries (produced by make test in test/ directories)
 test_runner
 target/

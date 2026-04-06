@@ -1,4 +1,5 @@
 ---
+name: setup-idf
 description: Set up ESP-IDF development environment (Docker-based)
 allowed-tools: Bash(docker:*), Bash(just:*)
 ---

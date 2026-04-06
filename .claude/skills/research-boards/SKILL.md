@@ -1,7 +1,8 @@
 ---
+name: research-boards
 description: Research and report on new microcontroller board releases from ESP32, STM32, and other manufacturers
-allowed-tools: WebFetch, WebSearch
 argument-hint: "[platform|use-case|timeframe]"
+allowed-tools: WebFetch, WebSearch
 ---
 
 # Research New Microcontroller Boards
