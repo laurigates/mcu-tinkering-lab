@@ -1,6 +1,9 @@
 ---
 name: esp32-debugging
 description: Debug ESP32 firmware issues including compilation errors, runtime panics, memory issues, and communication failures
+user-invocable: true
+argument-hint: "[error-context]"
+allowed-tools: Bash(just:*), Read, Grep, Glob
 ---
 
 # ESP32 Firmware Debugging Guide
@@ -14,15 +17,29 @@ Apply this skill when the user:
 - Experiences I2C/SPI/UART communication failures
 - Needs help interpreting serial monitor output
 
-## Debugging Techniques
+`$ARGUMENTS` may contain error messages or context about the issue.
+
+## Debugging Process
+
+### Ask for Context First
+
+If the error isn't clear from `$ARGUMENTS`, ask the user to provide:
+1. Full error message or panic output
+2. Which project they're building
+3. Recent code changes
 
 ### 1. Compilation Error Analysis
+
+**Run a fresh build to capture the error:**
+```bash
+just <project>::build 2>&1 | tail -100
+```
 
 **Missing Includes**
 ```
 fatal error: driver/gpio.h: No such file or directory
 ```
-Fix: Check CMakeLists.txt and add the component to REQUIRES:
+Fix: Add the component to REQUIRES in `main/CMakeLists.txt`:
 ```cmake
 idf_component_register(
     SRCS "main.c"
@@ -64,7 +81,7 @@ xTaskCreatePinnedToCore(task_fn, "name", 4096, NULL, 5, NULL, 0);
 ```
 Stack smashing detected
 ```
-Fix: Local buffer overflow - check array bounds and string operations.
+Fix: Local buffer overflow — check array bounds and string operations.
 
 ### 3. Memory Debugging
 
@@ -96,44 +113,33 @@ Checklist:
 - TX/RX swapped
 - Missing ground connection
 
+**Dual-Controller Sync (I2C)**
+- Check both controllers are running
+- Verify I2C addresses match
+- Check GPIO pin configuration
+
 ### 5. Build Commands for Debugging
 
 ```bash
 # Clean build to eliminate stale objects
-just robocar::clean-all && just robocar::build-main
-
-# Build with verbose output
-cd packages/esp32-projects/robocar-main && idf.py build -v
+just <project>::clean && just <project>::build
 
 # Start serial monitor
-just robocar::monitor-main PORT=/dev/cu.usbserial-0001
+just <project>::monitor PORT=/dev/cu.usbserial-0001
 ```
 
 ### 6. Useful ESP-IDF Config Options
 
-Enable in `sdkconfig` or via `idf.py menuconfig`:
-- `CONFIG_ESP_SYSTEM_PANIC_PRINT_REBOOT` - Print panic info before reboot
-- `CONFIG_FREERTOS_WATCHPOINT_END_OF_STACK` - Detect stack overflow earlier
-- `CONFIG_HEAP_POISONING_COMPREHENSIVE` - Detect heap corruption
+Enable in `sdkconfig.defaults` or via menuconfig:
+- `CONFIG_ESP_SYSTEM_PANIC_PRINT_REBOOT` — Print panic info before reboot
+- `CONFIG_FREERTOS_WATCHPOINT_END_OF_STACK` — Detect stack overflow earlier
+- `CONFIG_HEAP_POISONING_COMPREHENSIVE` — Detect heap corruption
 
-## Examples
+## Common Fixes
 
-### Example: Debugging a Stack Overflow
-
-User reports: "My ESP32 keeps crashing on startup"
-
-1. Ask for serial monitor output
-2. Look for "Stack overflow" in panic message
-3. Identify which task is overflowing
-4. Suggest increasing stack size from 2048 to 4096
-5. Explain FreeRTOS stack sizing considerations
-
-### Example: I2C Communication Failure
-
-User reports: "I2C device not responding"
-
-1. Verify address with I2C scanner
-2. Check GPIO configuration
-3. Verify pull-up resistors
-4. Check bus speed compatibility
-5. Suggest adding delays between transactions if needed
+| Symptom | Fix |
+|---------|-----|
+| Stack overflow | Increase task stack size in `xTaskCreate` |
+| Memory leak | Check for missing `free()` calls |
+| I2C timeout | Verify connections, pull-ups, addresses |
+| Crash on startup | Increase `CONFIG_ESP_MAIN_TASK_STACK_SIZE` to 8192+ |

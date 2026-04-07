@@ -1,6 +1,7 @@
 ---
 name: embedded-best-practices
 description: Embedded systems development best practices for ESP32, FreeRTOS, and ESP-IDF. Use when writing firmware code, reviewing implementations, or learning about embedded patterns.
+user-invocable: false
 allowed-tools: Read, Grep, Glob
 ---
 

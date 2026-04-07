@@ -1,6 +1,7 @@
 ---
 name: safe-build-operations
 description: Safely execute build, flash, and monitor operations for ESP32/MCU projects. Prevents dangerous operations and validates commands before execution.
+user-invocable: false
 allowed-tools: Bash(just:*), Bash(docker:*), Bash(esptool*), Bash(ls:*), Bash(pwd:*), Read, Glob, Grep
 ---
 
