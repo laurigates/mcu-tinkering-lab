@@ -1,6 +1,7 @@
 ---
 name: dual-controller-sync
 description: Debug and synchronize communication between the robocar main controller (Heltec WiFi LoRa 32) and camera module (ESP32-CAM)
+user-invocable: false
 ---
 
 # Dual-Controller Synchronization Guide
