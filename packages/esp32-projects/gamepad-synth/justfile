@@ -1,16 +1,16 @@
-# ESP32-S3 PS4 Speaker — Bluetooth PS4 controller + piezo speaker
+# Gamepad Synth — BLE controller-driven synthesizer
 # Run `just --list` to see available recipes
 
 set positional-arguments
 
 import '../../../tools/esp32.just'
 
-project_dir := "packages/esp32-projects/esp32-ps4-speaker"
+project_dir := "packages/esp32-projects/gamepad-synth"
 port := env("PORT", _detected_s3)
 target := "esp32s3"
 
-# Bluepad32 lives in xbox-switch-bridge's external/ directory
-bp32_ext := justfile_directory() / "../xbox-switch-bridge/external/bluepad32"
+# Bluepad32 local external directory (symlinked from xbox-switch-bridge or cloned by CI)
+bp32_ext := justfile_directory() / "external/bluepad32"
 
 default:
     @just --list
@@ -19,16 +19,27 @@ default:
 # Setup
 ##########
 
-# Ensure bluepad32 deps exist (delegates to xbox-switch-bridge fetch-deps)
+# Ensure bluepad32 deps exist (symlink from xbox-switch-bridge or clone)
 [group: "setup"]
 fetch-deps:
     #!/usr/bin/env bash
     set -euo pipefail
-    if [ ! -d "{{bp32_ext}}/src" ]; then
-        echo "Bluepad32 not found — running xbox-switch-bridge fetch-deps..."
-        just xbox::fetch-deps
-    else
+    if [ -d "{{bp32_ext}}/src" ]; then
         echo "Bluepad32 deps already present"
+        exit 0
+    fi
+    # Try symlinking from xbox-switch-bridge (avoids duplicate clones)
+    XBOX_BP32="$(dirname "{{bp32_ext}}")/../xbox-switch-bridge/external/bluepad32"
+    if [ -d "$XBOX_BP32/src" ]; then
+        mkdir -p "$(dirname "{{bp32_ext}}")"
+        ln -sfn "$(cd "$XBOX_BP32" && pwd)" "{{bp32_ext}}"
+        echo "Symlinked bluepad32 from xbox-switch-bridge"
+    else
+        echo "xbox-switch-bridge deps not found — fetching for xbox-switch-bridge first..."
+        just xbox::fetch-deps
+        mkdir -p "$(dirname "{{bp32_ext}}")"
+        ln -sfn "$(cd "$XBOX_BP32" && pwd)" "{{bp32_ext}}"
+        echo "Symlinked bluepad32 from xbox-switch-bridge"
     fi
 
 ##########
@@ -41,7 +52,15 @@ build: fetch-deps
     {{container_cmd}} compose -f {{compose_file}} run --rm \
         -w /workspace/{{project_dir}} \
         esp-idf \
-        bash -c "idf.py set-target {{target}} && idf.py build"
+        bash -c "idf.py build 2>&1 | grep -vE '^\[[0-9]+/[0-9]+\] (Building|Generating|Creating|No |Compiling|Linking)'"
+
+# Set target and clean build (only needed when switching chip targets)
+[group: "build"]
+set-target: fetch-deps
+    {{container_cmd}} compose -f {{compose_file}} run --rm \
+        -w /workspace/{{project_dir}} \
+        esp-idf \
+        idf.py set-target {{target}}
 
 # Clean build artifacts
 [group: "build"]
@@ -79,7 +98,7 @@ flash: require-port
         write_flash --flash-mode dio --flash-size 4MB --flash-freq 80m \
         0x0 build/bootloader/bootloader.bin \
         0x8000 build/partition_table/partition-table.bin \
-        0x10000 build/esp32-ps4-speaker.bin
+        0x10000 build/gamepad-synth.bin
 
 # Monitor serial output
 [group: "device"]
@@ -92,7 +111,7 @@ develop: build flash monitor
 # Show project info
 [group: "info"]
 info:
-    @echo "Project: esp32-ps4-speaker"
+    @echo "Project: gamepad-synth"
     @echo "  Target: ESP32-S3"
     @echo "  Port:   {{if port == "" { "(not detected)" } else { port } }}"
     @echo "  Bluepad32: {{bp32_ext}}"
