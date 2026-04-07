@@ -52,7 +52,7 @@ jobs:
 
             # Check if project needs external dependency fetching
             fetch_deps="false"
-            if [ "$project_id" = "xbox-switch-bridge" ]; then
+            if [ "$project_id" = "xbox-switch-bridge" ] || [ "$project_id" = "gamepad-synth" ]; then
               fetch_deps="true"
             fi
 

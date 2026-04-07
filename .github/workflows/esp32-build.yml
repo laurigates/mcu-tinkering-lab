@@ -56,6 +56,8 @@ jobs:
               - 'packages/esp32-projects/switch-usb-proxy/**'
             xbox-switch-bridge:
               - 'packages/esp32-projects/xbox-switch-bridge/**'
+            gamepad-synth:
+              - 'packages/esp32-projects/gamepad-synth/**'
             audiobook-player:
               - 'packages/esp32-projects/audiobook-player/**'
             esp32-wireguard-ha:
@@ -79,7 +81,8 @@ jobs:
             {"project":"it-troubleshooter","target":"esp32s3","description":"IT Troubleshooter (ESP32-S3-Zero)"},
             {"project":"nfc-scavenger-hunt","target":"esp32s3","description":"NFC Scavenger Hunt (ESP32-S3)"},
             {"project":"switch-usb-proxy","target":"esp32s3","description":"Switch USB Proxy (ESP32-S3)"},
-            {"project":"xbox-switch-bridge","target":"esp32s3","description":"Xbox-Switch Bridge (ESP32-S3-Zero)","fetch_deps":true}
+            {"project":"xbox-switch-bridge","target":"esp32s3","description":"Xbox-Switch Bridge (ESP32-S3-Zero)","fetch_deps":true},
+            {"project":"gamepad-synth","target":"esp32s3","description":"Gamepad Synth (ESP32-S3)","fetch_deps":true}
           ]}'
 
           # Build everything on manual dispatch or workflow file changes
@@ -126,6 +129,8 @@ jobs:
             add_project "switch-usb-proxy" "esp32s3" "Switch USB Proxy (ESP32-S3)"
           [ "${{ steps.filter.outputs.xbox-switch-bridge }}" = "true" ] && \
             add_project "xbox-switch-bridge" "esp32s3" "Xbox-Switch Bridge (ESP32-S3-Zero)" "true"
+          [ "${{ steps.filter.outputs.gamepad-synth }}" = "true" ] && \
+            add_project "gamepad-synth" "esp32s3" "Gamepad Synth (ESP32-S3)" "true"
 
           COUNT=$(echo "$INCLUDES" | jq 'length')
           if [ "$COUNT" -gt 0 ]; then
