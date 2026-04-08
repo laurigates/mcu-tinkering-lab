@@ -18,7 +18,16 @@ mcu-tinkering-lab/
 │       ├── robocar-docs/           # Documentation and coordination justfile
 │       ├── esp32cam-llm-telegram/  # Telegram bot with LLM vision
 │       ├── esp32-cam-webserver/    # Live video streaming server
-│       └── esp32-cam-i2s-audio/    # Camera + audio processing
+│       ├── esp32-cam-i2s-audio/    # Camera + audio processing
+│       ├── gamepad-synth/          # PS4 gamepad-controlled I2S audio synthesizer
+│       ├── kids-audio-toy/         # Potentiometer-controlled audio toy
+│       ├── audiobook-player/       # ESPHome audiobook player
+│       ├── xbox-switch-bridge/     # Xbox BLE to Switch USB bridge
+│       ├── switch-usb-proxy/       # Switch USB protocol proxy
+│       ├── it-troubleshooter/      # IT troubleshooting assistant
+│       ├── nfc-scavenger-hunt/     # NFC-based scavenger hunt game
+│       ├── esp32-wifitest/         # WiFi AP test firmware
+│       └── esp32-wireguard-ha-example/ # WireGuard + Home Assistant (ESPHome)
 ├── .github/workflows/              # CI/CD (6 workflows)
 ├── tools/scaffold/                 # Project scaffolding scripts
 ├── docs/blueprint/                 # Architecture docs (PRDs, ADRs)
@@ -40,7 +49,7 @@ mcu-tinkering-lab/
 | Python type checker | mypy |
 | Secret scanning | gitleaks |
 | Pre-commit | pre-commit (8 hooks) |
-| CI/CD | GitHub Actions (6 workflows) |
+| CI/CD | GitHub Actions (11+ workflows) |
 | Containers | Docker + docker-compose |
 
 ## Build Commands
