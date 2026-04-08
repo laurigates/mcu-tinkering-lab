@@ -34,7 +34,7 @@ DerivePointerAlignment: false
 BreakBeforeBraces: Linux
 
 # Other Breaking
-AlwaysBreakAfterReturnType: None
+BreakAfterReturnType: Automatic
 AlwaysBreakBeforeMultilineStrings: false
 BreakBeforeBinaryOperators: None
 BreakBeforeTernaryOperators: true

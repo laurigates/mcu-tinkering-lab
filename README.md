@@ -78,7 +78,16 @@ mcu-tinkering-lab/
 │   │   ├── robocar-docs/           # 📚 Documentation and coordination justfile
 │   │   ├── esp32cam-llm-telegram/  # 💬 Telegram bot with LLM vision
 │   │   ├── esp32-cam-webserver/    # 🌐 Live video streaming server
-│   │   └── esp32-cam-i2s-audio/    # 🔊 Camera + audio processing
+│   │   ├── esp32-cam-i2s-audio/    # 🔊 Camera + audio processing
+│   │   ├── gamepad-synth/          # 🎵 PS4 gamepad I2S audio synthesizer
+│   │   ├── kids-audio-toy/         # 🧸 Potentiometer-controlled audio toy
+│   │   ├── audiobook-player/       # 📖 ESPHome audiobook player
+│   │   ├── xbox-switch-bridge/     # 🎮 Xbox BLE to Switch USB bridge
+│   │   ├── switch-usb-proxy/       # 🔌 Switch USB protocol proxy
+│   │   ├── it-troubleshooter/      # 🔧 IT troubleshooting assistant
+│   │   ├── nfc-scavenger-hunt/     # 📱 NFC-based scavenger hunt game
+│   │   ├── esp32-wifitest/         # 📡 WiFi AP test firmware
+│   │   └── esp32-wireguard-ha-example/ # 🔒 WireGuard + Home Assistant
 │   ├── arduino-projects/           # 🚧 Coming soon
 │   ├── stm32-projects/             # 🚧 Coming soon
 │   └── shared-libs/                # 📦 Shared code libraries (planned)
@@ -351,7 +360,7 @@ just docker-clean
 
 | Platform | Status | Projects | Tests | CI/CD |
 |----------|--------|----------|-------|-------|
-| **ESP32** | ✅ Active | 7 projects | 🚧 In progress | ✅ Automated |
+| **ESP32** | ✅ Active | 16 projects | 🚧 In progress | ✅ Automated |
 | **Arduino** | 🚧 Planned | 0 | ❌ N/A | ❌ N/A |
 | **STM32** | 🚧 Planned | 0 | ❌ N/A | ❌ N/A |
 | **Simulation** | ✅ Active | Python 3.11 | ✅ pytest | ✅ Automated |

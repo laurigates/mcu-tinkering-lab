@@ -47,6 +47,7 @@ docs/blueprint/
 - PRD-005: Xbox-to-Switch Bridge
 - PRD-006: NFC Scavenger Hunt
 - PRD-007: Audiobook Player
+- PRD-008: Gamepad Synth
 
 ### ADRs (Architecture Decision Records)
 - ADR-001: Monorepo Structure for Multi-Platform MCU Projects
@@ -59,6 +60,8 @@ docs/blueprint/
 - ADR-008: Gemini Robotics-ER 1.5 as Third AI Backend
 - ADR-009: Switch Pro Controller On-Device Protocol
 - ADR-010: MQTT Logging Architecture
+- ADR-011: Gamepad Synth I2S Audio
+- ADR-012: Browser-Based Web Flasher Architecture
 
 ### PRPs (Product Requirement Prompts)
 Located in `docs/prps/`:

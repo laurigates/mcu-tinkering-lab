@@ -15,3 +15,15 @@ updates:
     labels:
       - "dependencies"
       - "github-actions"
+
+  # Python dependencies (robocar-simulation)
+  - package-ecosystem: "pip"
+    directory: "/packages/esp32-projects/robocar-simulation"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "python"
