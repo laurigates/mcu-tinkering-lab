@@ -76,7 +76,7 @@ install-dev-tools:
     #!/usr/bin/env bash
     set -euo pipefail
     pip install --upgrade pip
-    pip install pre-commit==3.8.0 ruff==0.6.9 mypy==1.11.2 pytest==8.3.3 pytest-cov==5.0.0 uv==0.4.18
+    pip install pre-commit ruff mypy pytest pytest-cov uv
     pre-commit install
     command -v clang-format >/dev/null 2>&1 || echo "clang-format not found — install with: brew install clang-format"
     command -v cppcheck >/dev/null 2>&1 || echo "cppcheck not found — install with: brew install cppcheck"
@@ -169,7 +169,7 @@ lint-c:
             --suppress=unmatchedSuppression \
             --suppress=unusedStructMember \
             --inline-suppr \
-            --error-exitcode=0 \
+            --error-exitcode=1 \
             --template=gcc \
             2>&1 | tee tmp/cppcheck-report.txt
     echo "C/C++ lint checks passed"
@@ -180,7 +180,7 @@ lint-python:
     #!/usr/bin/env bash
     set -euo pipefail
     command -v ruff >/dev/null 2>&1 || { echo "Warning: ruff not found — pip install ruff"; exit 0; }
-    cd {{robocar_sim_dir}} && ruff check .
+    ruff check .
     echo "Python lint checks passed"
 
 # Format all code (C/C++ and Python)
@@ -211,7 +211,7 @@ format-python:
     #!/usr/bin/env bash
     set -euo pipefail
     command -v ruff >/dev/null 2>&1 || { echo "Warning: ruff not found"; exit 0; }
-    cd {{robocar_sim_dir}} && ruff format .
+    ruff format .
     echo "Python code formatted"
 
 # Check formatting without modifying files
@@ -242,7 +242,7 @@ format-check-python:
     #!/usr/bin/env bash
     set -euo pipefail
     command -v ruff >/dev/null 2>&1 || { echo "Warning: ruff not found"; exit 0; }
-    cd {{robocar_sim_dir}} && ruff format --check .
+    ruff format --check .
     echo "Python formatting check passed"
 
 # Build robocar projects (use `just <module>::build` for other projects)
