@@ -12,5 +12,6 @@
   "packages/esp32-projects/nfc-scavenger-hunt": "0.1.0",
   "packages/esp32-projects/robocar-simulation": "0.1.0",
   "packages/esp32-projects/switch-usb-proxy": "0.1.0",
-  "packages/esp32-projects/xbox-switch-bridge": "0.1.0"
+  "packages/esp32-projects/xbox-switch-bridge": "0.1.0",
+  "packages/esp32-projects/gamepad-synth": "0.1.0"
 }

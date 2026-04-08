@@ -128,6 +128,15 @@
       "include-component-in-tag": true,
       "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": true
+    },
+    "packages/esp32-projects/gamepad-synth": {
+      "release-type": "simple",
+      "component": "gamepad-synth",
+      "package-name": "gamepad-synth",
+      "changelog-path": "CHANGELOG.md",
+      "include-component-in-tag": true,
+      "bump-minor-pre-major": true,
+      "bump-patch-for-minor-pre-major": true
     }
   },
   "release-type": "simple",

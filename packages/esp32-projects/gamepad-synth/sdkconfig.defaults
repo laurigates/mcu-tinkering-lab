@@ -1,17 +1,14 @@
-# ESP32-S3 PS4 Speaker — sdkconfig defaults
+# Gamepad Synth — sdkconfig defaults
 CONFIG_IDF_TARGET="esp32s3"
 
-# --- Bluepad32 (custom platform for PS4 controller) ---
+# --- Bluepad32 (custom platform for BLE gamepad) ---
 CONFIG_BLUEPAD32_PLATFORM_CUSTOM=y
 
-# --- Bluetooth (required for Bluepad32 + PS4 classic BT) ---
+# --- Bluetooth (Bluepad32 uses BTstack — disable NimBLE/Bluedroid) ---
 CONFIG_BT_ENABLED=y
 CONFIG_BT_BLUEDROID_ENABLED=n
-CONFIG_BT_NIMBLE_ENABLED=y
-CONFIG_BT_CONTROLLER_ENABLED=y
-CONFIG_BT_NIMBLE_MAX_CONNECTIONS=4
-CONFIG_BT_NIMBLE_ROLE_CENTRAL=y
-CONFIG_BT_NIMBLE_ROLE_OBSERVER=y
+CONFIG_BT_NIMBLE_ENABLED=n
+CONFIG_BT_CONTROLLER_ONLY=y
 
 # --- FreeRTOS ---
 CONFIG_FREERTOS_HZ=1000

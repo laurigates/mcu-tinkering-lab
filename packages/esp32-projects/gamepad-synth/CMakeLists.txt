@@ -1,9 +1,10 @@
 cmake_minimum_required(VERSION 3.16)
 
-# Reuse bluepad32 + btstack from xbox-switch-bridge's external directory
+# Bluepad32 + btstack components
+# CI clones into external/; local dev symlinks or clones independently
 set(EXTRA_COMPONENT_DIRS
-    "../xbox-switch-bridge/external/bluepad32/src/components"
-    "../xbox-switch-bridge/external/bluepad32/external/btstack/port/esp32/components"
+    "external/bluepad32/src/components"
+    "external/bluepad32/external/btstack/port/esp32/components"
 )
 
 # Version management
@@ -15,4 +16,4 @@ else()
 endif()
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
-project(esp32-ps4-speaker)
+project(gamepad-synth)

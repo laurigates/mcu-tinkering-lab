@@ -16,7 +16,7 @@ mod telegram 'packages/esp32-projects/esp32cam-llm-telegram'
 mod wifitest 'packages/esp32-projects/esp32-wifitest'
 mod switch-proxy 'packages/esp32-projects/switch-usb-proxy'
 mod switch-probe 'tools/switch-controller-usb-test'
-mod ps4-speaker 'packages/esp32-projects/esp32-ps4-speaker'
+mod synth 'packages/esp32-projects/gamepad-synth'
 
 # Auto-detect ESP32-S3 USB-Serial-JTAG by Espressif VID; override with S3_PORT env var
 s3_port := env("S3_PORT", `tools/detect-esp32s3-port.sh --quiet 2>/dev/null || true`)

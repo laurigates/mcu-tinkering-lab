@@ -1,8 +1,8 @@
 /**
  * @file main.c
- * @brief ESP32-S3 PS4 Speaker — Bluetooth PS4 controller drives a piezo speaker
+ * @brief ESP32-S3 Gamepad Synth — Bluetooth controller drives a piezo speaker
  *
- * Four sound modes cycled via Share button:
+ * Four sound modes cycled via View button (Xbox) / Share (PS):
  *   1. Theremin  — sticks control pitch, vibrato, triggers bend pitch
  *   2. Scale     — face buttons + d-pad play notes, shoulders shift octave
  *   3. Arpeggio  — face buttons pick chord, stick controls speed/pattern
@@ -10,6 +10,8 @@
  *
  * Bluepad32 runs on Core 0 (BTstack event loop, blocks forever).
  * Sound engine runs on Core 1 at 50 Hz.
+ *
+ * Tested with: Xbox Series X/S controller (BLE, firmware v5.15+)
  */
 
 #include <math.h>
@@ -32,7 +34,7 @@
 #include "uni_hid_device.h"
 #include "uni_platform.h"
 
-static const char *TAG = "ps4_speaker";
+static const char *TAG = "gamepad_synth";
 
 /* ── Pin Definitions ─────────────────────────────────────── */
 
@@ -45,31 +47,31 @@ static const char *TAG = "ps4_speaker";
 #define LEDC_MODE LEDC_LOW_SPEED_MODE
 #define LEDC_CHANNEL LEDC_CHANNEL_0
 #define LEDC_DUTY_RES LEDC_TIMER_8_BIT
-#define LEDC_DUTY_ON 128  /* 50% duty = square wave */
+#define LEDC_DUTY_ON 128 /* 50% duty = square wave */
 
 /* ── Bluepad32 Button Constants ──────────────────────────── */
 
-#define BTN_A (1 << 0)           /* Cross */
-#define BTN_B (1 << 1)           /* Circle */
-#define BTN_X (1 << 2)           /* Square */
-#define BTN_Y (1 << 3)           /* Triangle */
-#define BTN_SHOULDER_L (1 << 4)  /* L1 */
-#define BTN_SHOULDER_R (1 << 5)  /* R1 */
+#define BTN_A (1 << 0)          /* A (Xbox) / Cross (PS) */
+#define BTN_B (1 << 1)          /* B (Xbox) / Circle (PS) */
+#define BTN_X (1 << 2)          /* X (Xbox) / Square (PS) */
+#define BTN_Y (1 << 3)          /* Y (Xbox) / Triangle (PS) */
+#define BTN_SHOULDER_L (1 << 4) /* LB (Xbox) / L1 (PS) */
+#define BTN_SHOULDER_R (1 << 5) /* RB (Xbox) / R1 (PS) */
 
 #define DPAD_UP (1 << 0)
 #define DPAD_DOWN (1 << 1)
 #define DPAD_RIGHT (1 << 2)
 #define DPAD_LEFT (1 << 3)
 
-#define MISC_BACK (1 << 1)    /* Share on PS4 */
-#define MISC_HOME (1 << 2)    /* PS button */
-#define MISC_SELECT (1 << 3)  /* Options on PS4 */
+#define MISC_BACK (1 << 1)   /* View (Xbox) / Share (PS) */
+#define MISC_HOME (1 << 2)   /* Xbox button / PS button */
+#define MISC_SELECT (1 << 3) /* Menu (Xbox) / Options (PS) */
 
 /* ── Sound Parameters ────────────────────────────────────── */
 
 #define MIN_FREQ 100
 #define MAX_FREQ 2000
-#define STICK_DEADZONE 50  /* ignore stick values below this */
+#define STICK_DEADZONE 50 /* ignore stick values below this */
 #define STICK_MAX 512
 #define TRIGGER_MAX 1023
 
@@ -79,10 +81,10 @@ static const char *TAG = "ps4_speaker";
 /* ── Musical Note Table (C4–B6, equal temperament) ───────── */
 
 static const uint16_t NOTE_FREQ[] = {
-    262, 277, 294, 311, 330, 349, 370, 392, 415, 440, 466, 494,   /* C4–B4 */
-    523, 554, 587, 622, 659, 698, 740, 784, 831, 880, 932, 988,   /* C5–B5 */
-    1047, 1109, 1175, 1245, 1319, 1397, 1480, 1568, 1661, 1760,   /* C6–A6 */
-    1865, 1976,                                                     /* A#6–B6 */
+    262,  277,  294,  311,  330,  349,  370,  392,  415,  440,  466, 494, /* C4–B4 */
+    523,  554,  587,  622,  659,  698,  740,  784,  831,  880,  932, 988, /* C5–B5 */
+    1047, 1109, 1175, 1245, 1319, 1397, 1480, 1568, 1661, 1760,           /* C6–A6 */
+    1865, 1976,                                                           /* A#6–B6 */
 };
 #define NOTE_COUNT (sizeof(NOTE_FREQ) / sizeof(NOTE_FREQ[0]))
 
@@ -189,8 +191,14 @@ static float map_range(float val, float in_min, float in_max, float out_min, flo
 
 /* ── LED Helpers ─────────────────────────────────────────── */
 
-static void led_on(void) { gpio_set_level(LED_PIN, 1); }
-static void led_off(void) { gpio_set_level(LED_PIN, 0); }
+static void led_on(void)
+{
+    gpio_set_level(LED_PIN, 1);
+}
+static void led_off(void)
+{
+    gpio_set_level(LED_PIN, 0);
+}
 
 static void led_blink(int count, int on_ms, int off_ms)
 {
@@ -211,8 +219,8 @@ static void mode_theremin(const gamepad_state_t *gp)
     int16_t ry = gp->axis_ry;
 
     /* Dead zone check — silence if stick is centered */
-    if (abs(ly) < STICK_DEADZONE && abs(lx) < STICK_DEADZONE &&
-        gp->brake == 0 && gp->throttle == 0) {
+    if (abs(ly) < STICK_DEADZONE && abs(lx) < STICK_DEADZONE && gp->brake == 0 &&
+        gp->throttle == 0) {
         tone_stop();
         led_off();
         return;
@@ -221,7 +229,7 @@ static void mode_theremin(const gamepad_state_t *gp)
     /* Base pitch from left stick Y */
     float pitch = map_range((float)ly, -STICK_MAX, STICK_MAX, MIN_FREQ, MAX_FREQ);
 
-    /* Pitch bend from triggers: L2 bends down, R2 bends up */
+    /* Pitch bend from triggers: LT bends down, RT bends up */
     float bend = map_range((float)gp->throttle, 0, TRIGGER_MAX, 0, 300) -
                  map_range((float)gp->brake, 0, TRIGGER_MAX, 0, 300);
     pitch += bend;
@@ -244,7 +252,7 @@ static void mode_theremin(const gamepad_state_t *gp)
 
 static void mode_scale(const gamepad_state_t *gp)
 {
-    /* L1/R1 shift octave (rising edge) */
+    /* LB/RB shift octave (rising edge) */
     static uint16_t prev_buttons = 0;
     uint16_t pressed = gp->buttons & ~prev_buttons;
     prev_buttons = gp->buttons;
@@ -256,14 +264,22 @@ static void mode_scale(const gamepad_state_t *gp)
 
     /* Map buttons to scale degrees */
     int note_idx = -1;
-    if (gp->buttons & BTN_A) note_idx = 0;       /* Do */
-    if (gp->buttons & BTN_B) note_idx = 1;        /* Re */
-    if (gp->buttons & BTN_X) note_idx = 2;        /* Mi */
-    if (gp->buttons & BTN_Y) note_idx = 3;        /* Fa */
-    if (gp->dpad & DPAD_UP) note_idx = 4;         /* Sol */
-    if (gp->dpad & DPAD_RIGHT) note_idx = 5;      /* La */
-    if (gp->dpad & DPAD_DOWN) note_idx = 6;       /* Ti */
-    if (gp->dpad & DPAD_LEFT) note_idx = 7;       /* Do (high) */
+    if (gp->buttons & BTN_A)
+        note_idx = 0; /* A = Do */
+    if (gp->buttons & BTN_B)
+        note_idx = 1; /* B = Re */
+    if (gp->buttons & BTN_X)
+        note_idx = 2; /* X = Mi */
+    if (gp->buttons & BTN_Y)
+        note_idx = 3; /* Y = Fa */
+    if (gp->dpad & DPAD_UP)
+        note_idx = 4; /* Sol */
+    if (gp->dpad & DPAD_RIGHT)
+        note_idx = 5; /* La */
+    if (gp->dpad & DPAD_DOWN)
+        note_idx = 6; /* Ti */
+    if (gp->dpad & DPAD_LEFT)
+        note_idx = 7; /* Do (high) */
 
     if (note_idx < 0) {
         tone_stop();
@@ -291,12 +307,16 @@ static void mode_arpeggio(const gamepad_state_t *gp)
     uint16_t pressed = gp->buttons & ~prev_buttons;
     prev_buttons = gp->buttons;
 
-    if (pressed & BTN_A) s_arp_chord = CHORD_MAJOR;
-    if (pressed & BTN_B) s_arp_chord = CHORD_MINOR;
-    if (pressed & BTN_X) s_arp_chord = CHORD_7TH;
-    if (pressed & BTN_Y) s_arp_chord = CHORD_DIM;
+    if (pressed & BTN_A)
+        s_arp_chord = CHORD_MAJOR; /* A = major */
+    if (pressed & BTN_B)
+        s_arp_chord = CHORD_MINOR; /* B = minor */
+    if (pressed & BTN_X)
+        s_arp_chord = CHORD_7TH; /* X = 7th */
+    if (pressed & BTN_Y)
+        s_arp_chord = CHORD_DIM; /* Y = dim */
 
-    /* L1/R1 shift octave */
+    /* LB/RB shift octave */
     if (pressed & BTN_SHOULDER_L && s_octave > 0)
         s_octave--;
     if (pressed & BTN_SHOULDER_R && s_octave < 2)
@@ -324,7 +344,7 @@ static void mode_arpeggio(const gamepad_state_t *gp)
         }
     }
 
-    /* R2 trigger toggles arpeggio on/off (rising edge) */
+    /* RT trigger toggles arpeggio on/off (rising edge) */
     static bool prev_r2 = false;
     bool r2 = gp->throttle > 100;
     if (r2 && !prev_r2) {
@@ -342,8 +362,7 @@ static void mode_arpeggio(const gamepad_state_t *gp)
     }
 
     /* Speed from left stick Y: 50ms (fast) to 500ms (slow) */
-    float speed_ms =
-        map_range((float)gp->axis_y, -STICK_MAX, STICK_MAX, 50, 500);
+    float speed_ms = map_range((float)gp->axis_y, -STICK_MAX, STICK_MAX, 50, 500);
 
     /* Pattern from left stick X quadrant */
     /* Left = down, right = up, center = up-down */
@@ -408,11 +427,12 @@ static void sfx_tick(void)
 
 static void mode_sfx(const gamepad_state_t *gp)
 {
-    /* Speed multiplier from R2 trigger: 0.5x to 2x */
+    /* Speed multiplier from RT trigger: 0.5x to 2x */
     float speed = map_range((float)gp->throttle, 0, TRIGGER_MAX, 1.0f, 0.3f);
     int base_ticks = 25;
     int ticks = (int)((float)base_ticks * speed);
-    if (ticks < 5) ticks = 5;
+    if (ticks < 5)
+        ticks = 5;
 
     /* Trigger SFX on button press (rising edge) */
     static uint16_t prev_btn = 0;
@@ -422,19 +442,19 @@ static void mode_sfx(const gamepad_state_t *gp)
     prev_btn = gp->buttons;
     prev_dpad = gp->dpad;
 
-    /* Cross = Laser (descending sweep) */
+    /* A = Laser (descending sweep) */
     if (btn_pressed & BTN_A)
         sfx_start(1800, 200, ticks);
 
-    /* Circle = Explosion (descending with low end) */
+    /* B = Explosion (descending with low end) */
     if (btn_pressed & BTN_B)
         sfx_start(800, 100, ticks * 2);
 
-    /* Square = Power-up (ascending sweep) */
+    /* X = Power-up (ascending sweep) */
     if (btn_pressed & BTN_X)
         sfx_start(200, 1600, ticks);
 
-    /* Triangle = Coin (high double-beep handled via short sweep) */
+    /* Y = Coin (high double-beep handled via short sweep) */
     if (btn_pressed & BTN_Y)
         sfx_start(1200, 1800, ticks / 2);
 
@@ -468,7 +488,7 @@ static void plat_init(int argc, const char **argv)
 
 static void plat_on_init_complete(void)
 {
-    ESP_LOGI(TAG, "Scanning for PS4 controllers...");
+    ESP_LOGI(TAG, "Scanning for BLE controllers...");
     uni_bt_enable_new_connections_safe(true);
 }
 
@@ -523,7 +543,7 @@ static void plat_on_oob_event(uni_platform_oob_event_t event, void *data)
 }
 
 static struct uni_platform s_platform = {
-    .name = "ps4_speaker",
+    .name = "gamepad_synth",
     .init = plat_init,
     .on_init_complete = plat_on_init_complete,
     .on_device_connected = plat_on_device_connected,
@@ -537,7 +557,10 @@ static struct uni_platform s_platform = {
     .register_console_cmds = NULL,
 };
 
-struct uni_platform *uni_platform_custom_create(void) { return &s_platform; }
+struct uni_platform *uni_platform_custom_create(void)
+{
+    return &s_platform;
+}
 
 /* ── Hardware Init ───────────────────────────────────────── */
 
@@ -660,7 +683,7 @@ static void sound_task(void *arg)
 
 void app_main(void)
 {
-    ESP_LOGI(TAG, "ESP32-S3 PS4 Speaker starting!");
+    ESP_LOGI(TAG, "ESP32-S3 Gamepad Synth starting!");
 
     init_nvs();
     init_ledc();
@@ -672,6 +695,6 @@ void app_main(void)
     xTaskCreatePinnedToCore(sound_task, "sound", 4096, NULL, 5, NULL, 1);
 
     ESP_LOGI(TAG, "Starting Bluepad32 on Core 0 (will not return)...");
-    ESP_LOGI(TAG, "Put PS4 controller in pairing mode: hold Share + PS button");
+    ESP_LOGI(TAG, "Put controller in pairing mode (Xbox: hold pair button on top)");
     uni_esp32_main();
 }
