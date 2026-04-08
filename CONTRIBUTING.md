@@ -35,17 +35,17 @@ git clone https://github.com/laurigates/mcu-tinkering-lab.git
 cd mcu-tinkering-lab
 
 # Build Docker images
-make docker-build
+just docker-build
 
 # Start development shell
-make docker-dev
+just docker-dev
 ```
 
 #### Option 2: Native Setup
 
 ```bash
 # Install development tools
-make install-dev-tools
+just install-dev-tools
 
 # This will install:
 # - pre-commit hooks
@@ -93,19 +93,19 @@ git checkout -b fix/bug-description
 
 ```bash
 # Format code
-make format
+just format
 
 # Run linters
-make lint
+just lint
 
 # Check formatting (non-destructive)
-make format-check
+just format-check
 
 # Build affected projects
-make build-all
+just build-all
 
 # Run tests (when available)
-make test-all
+just test-all
 ```
 
 ### 4. Commit Your Changes
@@ -138,10 +138,10 @@ We use **clang-format** with Google style (4-space indent, 100 column limit).
 **Formatting:**
 ```bash
 # Format all C/C++ files
-make format-c
+just format-c
 
 # Check formatting without modifying
-make format-check-c
+just format-check-c
 ```
 
 **Style Rules:**
@@ -185,10 +185,10 @@ We use **ruff** for linting and formatting (PEP 8 compatible, 100 character line
 **Formatting:**
 ```bash
 # Format all Python files
-make format-python
+just format-python
 
 # Lint Python code
-make lint-python
+just lint-python
 ```
 
 **Style Rules:**
@@ -345,8 +345,8 @@ Optional scope to specify which part of the codebase is affected:
 ### 1. Before Creating PR
 
 - ✅ All tests pass
-- ✅ Code is formatted (`make format`)
-- ✅ Linters pass (`make lint`)
+- ✅ Code is formatted (`just format`)
+- ✅ Linters pass (`just lint`)
 - ✅ Documentation updated
 - ✅ Commit messages follow convention
 - ✅ Branch is up-to-date with main
