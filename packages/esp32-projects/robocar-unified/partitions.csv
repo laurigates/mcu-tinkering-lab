@@ -1,0 +1,16 @@
+# XIAO ESP32-S3 Sense Partition Table for OTA (8MB Flash)
+# Name,   Type, SubType, Offset,  Size,     Flags
+# Flash Layout:
+#   nvs:      24KB  (Non-Volatile Storage)
+#   otadata:  8KB   (OTA selection data)
+#   phy_init: 4KB   (PHY init data)
+#   ota_0:    3.5MB (OTA app partition 0)
+#   ota_1:    3.5MB (OTA app partition 1)
+#   spiffs:   448KB (File storage)
+# Total: 8MB (0x800000 bytes)
+nvs,      data, nvs,     0x9000,  0x6000,
+otadata,  data, ota,     0xF000,  0x2000,
+phy_init, data, phy,     0x11000, 0x1000,
+ota_0,    app,  ota_0,   0x12000, 0x380000,
+ota_1,    app,  ota_1,   0x392000,0x380000,
+spiffs,   data, spiffs,  0x712000,0xEE000,

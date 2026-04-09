@@ -18,6 +18,15 @@
       "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": true
     },
+    "packages/esp32-projects/robocar-unified": {
+      "release-type": "simple",
+      "component": "robocar-unified",
+      "package-name": "robocar-unified",
+      "changelog-path": "CHANGELOG.md",
+      "include-component-in-tag": true,
+      "bump-minor-pre-major": true,
+      "bump-patch-for-minor-pre-major": true
+    },
     "packages/esp32-projects/audiobook-player": {
       "release-type": "simple",
       "component": "audiobook-player",

@@ -4,6 +4,7 @@
 mod robocar 'packages/esp32-projects/robocar-docs'
 mod robocar-main 'packages/esp32-projects/robocar-main'
 mod robocar-camera 'packages/esp32-projects/robocar-camera'
+mod robocar-unified 'packages/esp32-projects/robocar-unified'
 mod sim 'packages/esp32-projects/robocar-simulation'
 mod audiobook 'packages/esp32-projects/audiobook-player'
 mod wireguard 'packages/esp32-projects/esp32-wireguard-ha-example'
