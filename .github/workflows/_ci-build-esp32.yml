@@ -1,0 +1,110 @@
+name: Reusable ESP-IDF CI Build
+
+on:
+  workflow_call:
+    inputs:
+      project:
+        description: 'Project directory name under packages/esp32-projects/'
+        required: true
+        type: string
+      target:
+        description: 'ESP-IDF target (esp32, esp32s3, etc.)'
+        required: true
+        type: string
+      fetch_bluepad32:
+        description: 'Whether to clone bluepad32 dependencies'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  IDF_VERSION: 'v5.4'
+
+jobs:
+  build:
+    name: Build ${{ inputs.project }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Fetch bluepad32 dependencies
+        if: inputs.fetch_bluepad32
+        working-directory: packages/esp32-projects/${{ inputs.project }}
+        run: |
+          BP32_DIR="external/bluepad32"
+          BTSTACK_ROOT="$BP32_DIR/external/btstack"
+          BTSTACK_COMP="$BTSTACK_ROOT/port/esp32/components/btstack"
+
+          echo "Cloning bluepad32 release_v3.10.3..."
+          git clone --depth 1 --branch release_v3.10.3 \
+            https://github.com/ricardoquesada/bluepad32.git "$BP32_DIR"
+          cd "$BP32_DIR" && git submodule update --init --depth 1 external/btstack && cd -
+
+          echo "Preparing btstack component..."
+          for dir in src 3rd-party/bluedroid 3rd-party/hxcmod-player \
+                     3rd-party/lwip/dhcp-server 3rd-party/lc3-google \
+                     3rd-party/md5 3rd-party/micro-ecc 3rd-party/yxml \
+                     platform/freertos platform/lwip; do
+            mkdir -p "$BTSTACK_COMP/$(dirname "$dir")"
+            cp -r "$BTSTACK_ROOT/$dir" "$BTSTACK_COMP/$dir"
+          done
+          mkdir -p "$BTSTACK_COMP/platform/embedded"
+          for f in hal_time_ms.h hal_uart_dma.h hci_dump_embedded_stdout.h hci_dump_embedded_stdout.c; do
+            cp "$BTSTACK_ROOT/platform/embedded/$f" "$BTSTACK_COMP/platform/embedded/"
+          done
+          echo "Dependencies ready"
+
+      - name: Build ${{ inputs.project }}
+        uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: ${{ env.IDF_VERSION }}
+          target: ${{ inputs.target }}
+          command: >-
+            cd packages/esp32-projects/${{ inputs.project }} &&
+            idf.py build &&
+            echo "# Build Size Analysis for ${{ inputs.project }}" > size-report.txt &&
+            idf.py size >> size-report.txt 2>&1;
+            idf.py size-components >> size-report.txt 2>&1; true
+
+      - name: Archive firmware binaries
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ inputs.project }}-firmware-${{ github.sha }}
+          path: |
+            packages/esp32-projects/${{ inputs.project }}/build/*.bin
+            packages/esp32-projects/${{ inputs.project }}/build/*.elf
+            packages/esp32-projects/${{ inputs.project }}/build/*.map
+            packages/esp32-projects/${{ inputs.project }}/build/bootloader/*.bin
+            packages/esp32-projects/${{ inputs.project }}/build/partition_table/*.bin
+          retention-days: 30
+
+      - name: Archive size analysis
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ inputs.project }}-size-report-${{ github.sha }}
+          path: packages/esp32-projects/${{ inputs.project }}/size-report.txt
+          retention-days: 30
+
+      - name: Check binary size limits
+        working-directory: packages/esp32-projects/${{ inputs.project }}
+        run: |
+          APP_SIZE=$(stat -c%s "build/${{ inputs.project }}.bin" 2>/dev/null || stat -f%z "build/${{ inputs.project }}.bin" 2>/dev/null || echo "0")
+
+          WARNING_THRESHOLD=1572864  # 1.5 MB
+          CRITICAL_THRESHOLD=1835008  # 1.75 MB
+
+          echo "Application binary size: $APP_SIZE bytes ($(($APP_SIZE / 1024)) KB)"
+
+          if [ $APP_SIZE -gt $CRITICAL_THRESHOLD ]; then
+            echo "::error::Binary size ($APP_SIZE bytes) exceeds critical threshold ($CRITICAL_THRESHOLD bytes)!"
+            echo "This may not fit in OTA partitions. Consider optimizing code or disabling features."
+            exit 1
+          elif [ $APP_SIZE -gt $WARNING_THRESHOLD ]; then
+            echo "::warning::Binary size ($APP_SIZE bytes) exceeds warning threshold ($WARNING_THRESHOLD bytes)."
+            echo "Consider optimizing code to leave headroom for OTA updates."
+          else
+            echo "::notice::Binary size is within acceptable limits."
+          fi

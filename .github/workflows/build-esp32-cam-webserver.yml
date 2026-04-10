@@ -1,17 +1,37 @@
 name: Build esp32-cam-webserver
 
 on:
+  push:
+    branches: [main, develop, 'claude/**']
+    paths:
+      - 'packages/esp32-projects/esp32-cam-webserver/**'
+      - '.github/workflows/build-esp32-cam-webserver.yml'
+      - '.github/workflows/_ci-build-esp32.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'packages/esp32-projects/esp32-cam-webserver/**'
+      - '.github/workflows/build-esp32-cam-webserver.yml'
+      - '.github/workflows/_ci-build-esp32.yml'
   release:
     types: [published]
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Release tag to build for'
-        required: true
+        description: 'Release tag to build for (leave empty for CI build)'
+        required: false
         type: string
 
 jobs:
+  ci-build:
+    if: github.event_name == 'push' || github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.release_tag == '')
+    uses: ./.github/workflows/_ci-build-esp32.yml
+    with:
+      project: esp32-cam-webserver
+      target: esp32
+
   check-tag:
+    if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
     runs-on: ubuntu-latest
     outputs:
       should_build: ${{ steps.check.outputs.should_build }}
@@ -27,7 +47,7 @@ jobs:
             echo "should_build=false" >> $GITHUB_OUTPUT
           fi
 
-  build:
+  release-build:
     needs: check-tag
     if: needs.check-tag.outputs.should_build == 'true'
     uses: ./.github/workflows/_build-esp32-firmware.yml

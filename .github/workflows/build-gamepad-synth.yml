@@ -1,17 +1,17 @@
-name: Build kids-audio-toy
+name: Build gamepad-synth
 
 on:
   push:
     branches: [main, develop, 'claude/**']
     paths:
-      - 'packages/esp32-projects/kids-audio-toy/**'
-      - '.github/workflows/build-kids-audio-toy.yml'
+      - 'packages/esp32-projects/gamepad-synth/**'
+      - '.github/workflows/build-gamepad-synth.yml'
       - '.github/workflows/_ci-build-esp32.yml'
   pull_request:
     branches: [main, develop]
     paths:
-      - 'packages/esp32-projects/kids-audio-toy/**'
-      - '.github/workflows/build-kids-audio-toy.yml'
+      - 'packages/esp32-projects/gamepad-synth/**'
+      - '.github/workflows/build-gamepad-synth.yml'
       - '.github/workflows/_ci-build-esp32.yml'
   release:
     types: [published]
@@ -27,8 +27,9 @@ jobs:
     if: github.event_name == 'push' || github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.release_tag == '')
     uses: ./.github/workflows/_ci-build-esp32.yml
     with:
-      project: kids-audio-toy
-      target: esp32
+      project: gamepad-synth
+      target: esp32s3
+      fetch_bluepad32: true
 
   check-tag:
     if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
@@ -41,7 +42,7 @@ jobs:
         run: |
           TAG="${{ github.event.release.tag_name || inputs.release_tag }}"
           echo "tag=$TAG" >> $GITHUB_OUTPUT
-          if [[ "$TAG" == "kids-audio-toy@v"* ]] || [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          if [[ "$TAG" == "gamepad-synth@v"* ]] || [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             echo "should_build=true" >> $GITHUB_OUTPUT
           else
             echo "should_build=false" >> $GITHUB_OUTPUT
@@ -52,8 +53,9 @@ jobs:
     if: needs.check-tag.outputs.should_build == 'true'
     uses: ./.github/workflows/_build-esp32-firmware.yml
     with:
-      project: kids-audio-toy
-      target: esp32
-      binary_name: kids-audio-toy.bin
+      project: gamepad-synth
+      target: esp32s3
+      binary_name: gamepad-synth.bin
+      fetch_bluepad32: true
       release_tag: ${{ needs.check-tag.outputs.tag }}
     secrets: inherit

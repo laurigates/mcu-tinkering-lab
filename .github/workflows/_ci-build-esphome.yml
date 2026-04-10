@@ -1,0 +1,64 @@
+name: Reusable ESPHome CI Build
+
+on:
+  workflow_call:
+    inputs:
+      project:
+        description: 'Project directory name under packages/esp32-projects/'
+        required: true
+        type: string
+      yaml_file:
+        description: 'ESPHome YAML config filename (relative to project dir)'
+        required: true
+        type: string
+
+jobs:
+  build:
+    name: Build ${{ inputs.project }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Generate dummy secrets.yaml for CI
+        working-directory: packages/esp32-projects/${{ inputs.project }}
+        run: |
+          YAML_FILE="${{ inputs.yaml_file }}"
+          SECRETS=$(grep -oP '!secret\s+\K\w+' "$YAML_FILE" | sort -u)
+
+          echo "# Auto-generated dummy secrets for CI builds" > secrets.yaml
+          for secret in $SECRETS; do
+            case "$secret" in
+              *key*|*encryption*)
+                echo "${secret}: \"QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=\"" >> secrets.yaml
+                ;;
+              *password*|*pass*)
+                echo "${secret}: \"ci_placeholder_password\"" >> secrets.yaml
+                ;;
+              *ssid*)
+                echo "${secret}: \"CI_PLACEHOLDER_SSID\"" >> secrets.yaml
+                ;;
+              *ip*|*address*|*gateway*|*subnet*|*dns*)
+                echo "${secret}: \"10.0.0.1\"" >> secrets.yaml
+                ;;
+              *port*)
+                echo "${secret}: \"51820\"" >> secrets.yaml
+                ;;
+              *)
+                echo "${secret}: \"ci_placeholder\"" >> secrets.yaml
+                ;;
+            esac
+          done
+
+      - name: Build ESPHome firmware
+        uses: esphome/build-action@v7
+        id: build
+        with:
+          yaml-file: packages/esp32-projects/${{ inputs.project }}/${{ inputs.yaml_file }}
+
+      - name: Archive ESPHome firmware
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ inputs.project }}-esphome-${{ github.sha }}
+          path: ${{ steps.build.outputs.name }}/
+          retention-days: 30
