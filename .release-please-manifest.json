@@ -1,6 +1,7 @@
 {
   "packages/esp32-projects/robocar-main": "0.1.0",
   "packages/esp32-projects/robocar-camera": "0.1.0",
+  "packages/esp32-projects/robocar-unified": "0.1.0",
   "packages/esp32-projects/audiobook-player": "0.1.0",
   "packages/esp32-projects/esp32-cam-i2s-audio": "0.1.0",
   "packages/esp32-projects/esp32-cam-webserver": "0.1.0",
