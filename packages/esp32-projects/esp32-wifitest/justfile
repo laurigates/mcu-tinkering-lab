@@ -3,7 +3,7 @@
 
 set positional-arguments
 
-import '../../../tools/esp32.just'
+import '../../../tools/esp32-idf.just'
 
 project_dir := "packages/esp32-projects/esp32-wifitest"
 tools_dir := justfile_directory() / "../../.." / "tools"
@@ -15,7 +15,7 @@ default:
     @just --list
 
 ##########
-# Build
+# Build (custom — output filtering + binary validation)
 ##########
 
 # Build firmware in Docker container
@@ -37,16 +37,17 @@ build:
     fi
     echo "Build OK"
 
-# Clean build artifacts
+# Clean build artifacts (containerized)
 [group: "build"]
-clean:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    {{container_cmd}} compose -f {{compose_file}} run --rm \
-        -w /workspace/{{project_dir}} \
-        esp-idf \
-        idf.py fullclean
-    echo "Clean complete"
+clean: _idf-clean
+
+# Open configuration menu (containerized)
+[group: "build"]
+menuconfig: _idf-menuconfig
+
+# Interactive shell in ESP-IDF container
+[group: "build"]
+shell: _idf-shell
 
 ##########
 # Flash & Monitor

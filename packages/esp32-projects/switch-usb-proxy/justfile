@@ -1,9 +1,9 @@
-# Switch USB Proxy — thin USB HID ↔ UART bridge for protocol development
+# Switch USB Proxy — thin USB HID <-> UART bridge for protocol development
 # Run `just --list` to see available recipes
 
 set positional-arguments
 
-import '../../../tools/esp32.just'
+import '../../../tools/esp32-idf.just'
 
 project_dir := "packages/esp32-projects/switch-usb-proxy"
 tools_dir := justfile_directory() / "../../.." / "tools"
@@ -19,7 +19,7 @@ default:
     @just --list
 
 ##########
-# Build (containerized)
+# Build (custom — output filtering + binary validation)
 ##########
 
 # Build firmware in Docker container
@@ -41,24 +41,17 @@ build:
     fi
     echo "Build OK"
 
-# Clean build artifacts via container
+# Clean build artifacts (containerized)
 [group: "build"]
-clean:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    {{container_cmd}} compose -f {{compose_file}} run --rm \
-        -w /workspace/{{project_dir}} \
-        esp-idf \
-        idf.py fullclean
-    echo "Clean complete"
+clean: _idf-clean
 
 # Interactive shell in ESP-IDF container
 [group: "build"]
-shell:
-    {{container_cmd}} compose -f {{compose_file}} run --rm \
-        -w /workspace/{{project_dir}} \
-        esp-idf \
-        /bin/bash
+shell: _idf-shell
+
+# Open configuration menu (containerized)
+[group: "build"]
+menuconfig: _idf-menuconfig
 
 ##########
 # Flash & Monitor (native)

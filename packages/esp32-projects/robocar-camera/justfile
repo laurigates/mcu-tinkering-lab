@@ -3,7 +3,7 @@
 
 set positional-arguments
 
-import '../../../tools/esp32.just'
+import '../../../tools/esp32-idf.just'
 
 project_dir := "packages/esp32-projects/robocar-camera"
 port := env("PORT", _detected_serial)
@@ -28,47 +28,21 @@ credentials:
         echo "Credentials file exists"
     fi
 
-##########
-# Build (containerized)
-##########
-
-# Build the firmware
+# Build the firmware (requires credentials)
 [group: "build"]
-build: credentials
-    #!/usr/bin/env bash
-    set -euo pipefail
-    echo "Building robocar-camera..."
-    {{container_cmd}} compose -f {{compose_file}} run --rm \
-        -w /workspace/{{project_dir}} \
-        esp-idf \
-        bash -c "idf.py set-target {{target}} && idf.py build"
+build: credentials _idf-build
 
-# Clean build files
+# Clean build artifacts (containerized)
 [group: "build"]
-clean:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    {{container_cmd}} compose -f {{compose_file}} run --rm \
-        -w /workspace/{{project_dir}} \
-        esp-idf \
-        idf.py fullclean
-    echo "Clean complete"
+clean: _idf-clean
 
-# Open configuration menu
+# Open configuration menu (containerized)
 [group: "build"]
-menuconfig:
-    {{container_cmd}} compose -f {{compose_file}} run --rm \
-        -w /workspace/{{project_dir}} \
-        esp-idf \
-        idf.py menuconfig
+menuconfig: _idf-menuconfig
 
 # Interactive shell in ESP-IDF container
 [group: "build"]
-shell:
-    {{container_cmd}} compose -f {{compose_file}} run --rm \
-        -w /workspace/{{project_dir}} \
-        esp-idf \
-        /bin/bash
+shell: _idf-shell
 
 ##########
 # Flash & Monitor (native — USB passthrough on macOS is unreliable)
