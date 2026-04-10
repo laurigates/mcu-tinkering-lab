@@ -1,6 +1,8 @@
 # Audiobook Player — ESPHome project
 # Run `just --list` to see available recipes
 
+import '../../../tools/esphome.just'
+
 device_name := "audiobook-player"
 config_file := device_name + ".yaml"
 secrets_file := "secrets.yaml"
@@ -9,22 +11,9 @@ secrets_example := "secrets.yaml.example"
 default:
     @just --list
 
-# Install ESPHome
-[group: "setup"]
-install:
-    pip install --upgrade esphome
-
 # Create secrets.yaml from template
 [group: "setup"]
-config:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ ! -f {{secrets_file}} ]; then
-        cp {{secrets_example}} {{secrets_file}}
-        echo "Created {{secrets_file}} — edit it with your WiFi credentials"
-    else
-        echo "{{secrets_file}} already exists"
-    fi
+config: _esphome-config
 
 # Initial setup: install ESPHome and create config
 [group: "setup"]
@@ -35,16 +24,6 @@ init: install config
     @echo "  1. Edit {{secrets_file}} with your WiFi credentials"
     @echo "  2. Run 'just upload' to flash the device via USB"
     @echo "  3. Run 'just logs' to view device logs"
-
-# Validate ESPHome configuration
-[group: "build"]
-validate:
-    esphome config {{config_file}}
-
-# Compile firmware
-[group: "build"]
-compile:
-    esphome compile {{config_file}}
 
 # Compile and upload via USB (auto-detects serial port)
 [group: "flash"]
@@ -65,18 +44,13 @@ upload:
     echo "Found device at $PORT"
     esphome run {{config_file}} --device "$PORT"
 
-# Upload via WiFi OTA
-[group: "flash"]
-wireless:
-    esphome run {{config_file}} --device {{device_name}}.local
-
 # First USB flash (run before wireless updates are possible)
 [group: "flash"]
 first-flash: config upload
     @echo ""
     @echo "First flash complete! Future updates: just wireless"
 
-# View device logs via USB (auto-detects serial port)
+# View device logs via USB (auto-detects serial port, falls back to OTA)
 [group: "monitor"]
 logs:
     #!/usr/bin/env bash
@@ -98,30 +72,6 @@ logs-wireless:
 # Alias for logs
 [group: "monitor"]
 monitor: logs
-
-# Open ESPHome dashboard (access at http://localhost:6052)
-[group: "monitor"]
-dashboard:
-    esphome dashboard .
-
-# Clean build files
-[confirm("Remove .esphome/ build directory?")]
-[group: "build"]
-clean:
-    rm -rf .esphome/ *.bin *.elf *.map
-
-# Show project status
-[group: "info"]
-status:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    echo "Device: {{device_name}}"
-    echo "Config: {{config_file}}"
-    if [ -f {{secrets_file}} ]; then
-        echo "Status: Configured"
-    else
-        echo "Status: Not configured — run 'just config'"
-    fi
 
 # Display pin assignment reference
 [group: "info"]

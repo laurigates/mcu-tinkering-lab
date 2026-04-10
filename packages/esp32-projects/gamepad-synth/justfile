@@ -3,7 +3,7 @@
 
 set positional-arguments
 
-import '../../../tools/esp32.just'
+import '../../../tools/esp32-idf.just'
 
 project_dir := "packages/esp32-projects/gamepad-synth"
 port := env("PORT", _detected_s3)
@@ -43,7 +43,7 @@ fetch-deps:
     fi
 
 ##########
-# Build (containerized)
+# Build (custom — output filtering + fetch-deps)
 ##########
 
 # Build firmware in Docker container
@@ -62,29 +62,17 @@ set-target: fetch-deps
         esp-idf \
         idf.py set-target {{target}}
 
-# Clean build artifacts
+# Clean build artifacts (containerized)
 [group: "build"]
-clean:
-    {{container_cmd}} compose -f {{compose_file}} run --rm \
-        -w /workspace/{{project_dir}} \
-        esp-idf \
-        idf.py fullclean
+clean: _idf-clean
 
-# Open menuconfig
+# Open configuration menu (containerized)
 [group: "build"]
-menuconfig:
-    {{container_cmd}} compose -f {{compose_file}} run --rm \
-        -w /workspace/{{project_dir}} \
-        esp-idf \
-        idf.py menuconfig
+menuconfig: _idf-menuconfig
 
 # Interactive shell in ESP-IDF container
 [group: "build"]
-shell:
-    {{container_cmd}} compose -f {{compose_file}} run --rm \
-        -w /workspace/{{project_dir}} \
-        esp-idf \
-        /bin/bash
+shell: _idf-shell
 
 ##########
 # Flash & Monitor (native)
