@@ -1,5 +1,21 @@
 # OTA Firmware Update System — Implementation Plan
 
+## Phase Status
+
+| Phase | Description | Status | Notes |
+|-------|-------------|--------|-------|
+| 1 | Camera OTA Manager (robocar-camera) | Complete | `ota_manager.c` with esp_ghota, MQTT trigger, I2C orchestration |
+| 2 | Main Controller OTA Handler (robocar-main) | Complete | `ota_handler.c` with WiFi-on-demand, I2C command handlers |
+| 3 | CI/CD Integration | Partial | Manifest generation and binary size checks done; MQTT notification template exists but requires `MQTT_BROKER_HOST` secret |
+| 4 | ESPHome Template | Not started | Documented here as a pattern; no workflow file created yet |
+| 5 | Documentation | Complete | ADR-004, OTA_UPDATES.md, OTA_DEPLOYMENT.md, WEB_FLASHER.md |
+| 6 | Delta OTA Optimization | Deferred | Will revisit once full-image OTA is proven in production |
+
+**Related documentation:**
+- [ADR-004: OTA Update Architecture](adrs/ADR-004-ota-update-architecture.md) — Architecture decision
+- [OTA_UPDATES.md](../../packages/esp32-projects/robocar-docs/docs/OTA_UPDATES.md) — System guide
+- [OTA_DEPLOYMENT.md](../../packages/esp32-projects/robocar-docs/docs/OTA_DEPLOYMENT.md) — Operator runbook
+
 ## Context & Current State
 
 The robocar project needs over-the-air firmware updates integrated with release-please + GitHub Actions. Two solutions are needed: **ESP-IDF** (robocar, now) and **ESPHome** (future projects, template only).

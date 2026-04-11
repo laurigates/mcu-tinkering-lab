@@ -2,6 +2,8 @@
 
 Flash robocar firmware directly from your browser using the [ESP Web Tools](https://esphome.github.io/esp-web-tools/) web flasher. No toolchain installation required.
 
+> **Note:** The web flasher is for **initial flashing only**. Once firmware is installed and WiFi is configured, subsequent updates are delivered automatically via [OTA](OTA_UPDATES.md).
+
 **Live page**: `https://laurigates.github.io/mcu-tinkering-lab/`
 
 ## Requirements
