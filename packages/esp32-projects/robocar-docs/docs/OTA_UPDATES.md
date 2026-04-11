@@ -19,6 +19,15 @@ The main controller (Heltec WiFi LoRa 32) updates itself:
 - Initializes WiFi on-demand using NVS-stored credentials
 - Downloads firmware directly from GitHub Releases via HTTPS
 
+### Unified Board Variant (robocar-unified)
+
+The [XIAO ESP32-S3 Sense](../../../docs/blueprint/adrs/ADR-013-single-board-robocar.md) single-board variant uses a simplified OTA flow:
+- Self-updates via `esp_ghota` — same mechanism as the camera board
+- No I2C orchestration needed (all functionality is on one board)
+- 8MB flash with 3.5MB OTA partitions (vs. 1.8MB on 4MB boards)
+- Filename match: `robocar-unified` (configured in `config.h`)
+- OTA task runs on Core 1 alongside WiFi/MQTT, while motor control stays on Core 0
+
 ## How It Works
 
 ```
@@ -83,6 +92,26 @@ Both boards use ESP-IDF's built-in app rollback mechanism:
 - A 60-second stability timer runs after boot
 - If the device crashes before the timer fires, the bootloader automatically rolls back to the previous firmware on next boot
 - Once the timer fires, `esp_ota_mark_app_valid_cancel_rollback()` is called, making the new firmware permanent
+
+## Security
+
+The OTA system enforces several layers of protection:
+
+- **HTTPS only** — `CONFIG_ESP_HTTPS_OTA_ALLOW_HTTP=n` prevents plaintext firmware downloads. All connections to GitHub use TLS.
+- **Certificate bundle** — `CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_FULL=y` embeds Mozilla's root CA certificates so the device can verify GitHub's TLS certificate without manual cert management. Adds ~50KB to the binary.
+- **Hash verification** — The main controller verifies a SHA256 prefix during I2C-triggered updates to confirm the firmware matches the expected release.
+- **Rollback protection** — Dual OTA partitions with a 60-second stability timer provide defense-in-depth against broken firmware (see above).
+- **No inbound connections** — Devices pull updates from GitHub; no ports are exposed on the device network.
+
+## Dependencies
+
+| Component | Version | Purpose | Fallback |
+|-----------|---------|---------|----------|
+| [`esp_ghota`](https://github.com/Fishwaldo/esp_ghota) | `>=0.0.3` | GitHub API integration, semver comparison, periodic polling | Replace with direct `esp_https_ota` + manual GitHub API calls |
+| `esp_https_ota` | ESP-IDF built-in | HTTPS firmware download and flash | Core ESP-IDF component, no external dependency |
+| `semver` | Bundled with esp_ghota | Semantic version parsing and comparison | — |
+
+`esp_ghota` is pinned in `idf_component.yml` for both `robocar-camera` and `robocar-unified`. If the upstream project becomes unmaintained, the essential functionality (GitHub release checking + download) can be reimplemented using `esp_http_client` + `cJSON` + `esp_https_ota` directly.
 
 ## Prerequisites
 
@@ -217,6 +246,10 @@ I (1234) OTA_Manager: Current firmware version: 0.1.0
 - Check I2C communication between camera and main controller
 - Monitor main controller serial output for OTA handler logs
 
-## Architecture Decision
+## Related Documents
 
-See [ADR-004: OTA Update Architecture](../../../docs/blueprint/adrs/ADR-004-ota-update-architecture.md) for the full rationale, alternatives considered, and trade-offs.
+- [OTA_DEPLOYMENT.md](OTA_DEPLOYMENT.md) — Operator runbook: provisioning, releasing, monitoring, rollback, and recovery procedures
+- [WEB_FLASHER.md](WEB_FLASHER.md) — Browser-based initial flashing (OTA handles subsequent updates)
+- [ADR-004: OTA Update Architecture](../../../docs/blueprint/adrs/ADR-004-ota-update-architecture.md) — Architecture decision with rationale, alternatives, and trade-offs
+- [OTA Implementation Plan](../../../docs/blueprint/ota-update-implementation-plan.md) — Phase-by-phase implementation plan with status tracking
+- [PARTITION_UPDATE_NOTES.md](PARTITION_UPDATE_NOTES.md) — Partition table migration from 6MB to 4MB layout

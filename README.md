@@ -298,7 +298,7 @@ just esp32-my-new-project-build
 - [Hardware Connections](packages/esp32-projects/robocar-docs/hardware-connections.md) - Pin mappings and wiring
 - [Web Flasher Guide](packages/esp32-projects/robocar-docs/docs/WEB_FLASHER.md) - Browser-based firmware flashing
 - [WiFi Setup](packages/esp32-projects/robocar-main/WIFI_SETUP.md) - Network configuration
-- [OTA Updates](packages/esp32-projects/robocar-docs/PARTITION_UPDATE_NOTES.md) - Over-the-air firmware updates
+- [OTA Updates](packages/esp32-projects/robocar-docs/docs/OTA_UPDATES.md) - Over-the-air firmware updates
 - [Simulation Guide](packages/esp32-projects/robocar-simulation/README.md) - Physics simulation setup
 
 ## 🤝 Contributing

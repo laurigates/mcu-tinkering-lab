@@ -593,6 +593,44 @@ To enable MQTT notifications in GitHub Actions:
 
 ---
 
+## End-to-End Verification Checklist
+
+Use this checklist to verify the full OTA pipeline after initial setup or major changes.
+
+### Prerequisites
+- [ ] Both boards flashed via USB with OTA-enabled firmware
+- [ ] WiFi credentials provisioned on both boards (camera via `credentials.h`, main via WiFi manager)
+- [ ] MQTT broker running and reachable from both boards
+- [ ] A GitHub Release exists with correctly named binaries (`robocar-camera.bin`, `robocar-main.bin`)
+
+### Camera Self-Update
+- [ ] Trigger update check: `mosquitto_pub -h <broker> -t "robocar/ota/notify" -m '{"version":"<new>","tag":"v<new>"}'`
+- [ ] Camera logs show `esp_ghota: New version available`
+- [ ] Camera downloads and flashes firmware (monitor progress via serial or MQTT status topic)
+- [ ] Camera reboots and logs `Current firmware version: <new>`
+- [ ] Stability timer completes (60s) and logs `Firmware marked as valid`
+
+### Main Controller Update (Orchestrated by Camera)
+- [ ] Camera queries main controller version via I2C
+- [ ] Camera sends `CMD_TYPE_ENTER_MAINTENANCE_MODE` (motors stop)
+- [ ] Camera sends `CMD_TYPE_BEGIN_OTA` with release tag
+- [ ] Main controller initializes WiFi and downloads firmware
+- [ ] Main controller logs OTA progress and reboots
+- [ ] Main controller stability timer completes (60s)
+
+### Rollback Verification
+- [ ] Flash a known-broken firmware (e.g., one that crashes within 10s)
+- [ ] Confirm bootloader detects crash and reverts to previous partition
+- [ ] Logs show `OTA app rollback detected` after revert
+- [ ] Device resumes normal operation on previous firmware version
+
+### Polling Fallback
+- [ ] Disable MQTT broker (or disconnect device from MQTT)
+- [ ] Wait for periodic poll interval (or reduce `OTA_CHECK_INTERVAL_MIN` for testing)
+- [ ] Confirm camera detects update via polling alone
+
+---
+
 ## Troubleshooting Checklist
 
 | Problem | Check | Solution |
