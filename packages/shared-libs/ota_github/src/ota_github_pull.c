@@ -102,8 +102,9 @@ static void ghota_event_handler(void *arg, esp_event_base_t event_base, int32_t 
                     g_ota_github.cfg.hooks_user_ctx);
             }
             if (proceed != ESP_OK) {
-                ESP_LOGW(TAG, "on_update_ready_to_reboot aborted reboot (%s) — "
-                              "update remains pending-verify",
+                ESP_LOGW(TAG,
+                         "on_update_ready_to_reboot aborted reboot (%s) — "
+                         "update remains pending-verify",
                          esp_err_to_name(proceed));
                 break;
             }

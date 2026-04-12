@@ -133,7 +133,7 @@ esp_err_t ota_github_init(const ota_github_config_t *cfg)
         g_ota_github.cfg.task_priority = 5;
     }
     if (g_ota_github.cfg.mode == OTA_GITHUB_MODE_PULL && g_ota_github.cfg.poll_interval_min == 0) {
-        g_ota_github.cfg.poll_interval_min = 360;  /* 6 hours */
+        g_ota_github.cfg.poll_interval_min = 360; /* 6 hours */
     }
 
     g_ota_github.mutex = xSemaphoreCreateMutex();
@@ -145,8 +145,8 @@ esp_err_t ota_github_init(const ota_github_config_t *cfg)
     const esp_app_desc_t *app_desc = esp_app_get_description();
     ESP_LOGI(TAG, "Initializing ota_github v%s (mode=%s, repo=%s/%s)",
              app_desc ? app_desc->version : "?",
-             cfg->mode == OTA_GITHUB_MODE_PULL ? "PULL" : "TRIGGERED",
-             cfg->github_org, cfg->github_repo);
+             cfg->mode == OTA_GITHUB_MODE_PULL ? "PULL" : "TRIGGERED", cfg->github_org,
+             cfg->github_repo);
 
     /* Mode-specific bring-up. */
     esp_err_t ret = ESP_OK;
@@ -168,8 +168,8 @@ esp_err_t ota_github_init(const ota_github_config_t *cfg)
 
     /* Start rollback-stability timer. */
     g_ota_github.stability_timer =
-        xTimerCreate("ota_stability", pdMS_TO_TICKS(g_ota_github.cfg.stability_timeout_ms),
-                     pdFALSE, NULL, stability_timer_cb);
+        xTimerCreate("ota_stability", pdMS_TO_TICKS(g_ota_github.cfg.stability_timeout_ms), pdFALSE,
+                     NULL, stability_timer_cb);
     if (g_ota_github.stability_timer) {
         xTimerStart(g_ota_github.stability_timer, 0);
         ESP_LOGI(TAG, "Rollback stability timer started (%u ms)",
@@ -232,8 +232,7 @@ esp_err_t ota_github_trigger_tag(const char *asset_override, const char *tag,
 uint8_t ota_github_get_progress(void)
 {
     uint8_t v = 0;
-    if (g_ota_github.mutex &&
-        xSemaphoreTake(g_ota_github.mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+    if (g_ota_github.mutex && xSemaphoreTake(g_ota_github.mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
         v = g_ota_github.progress;
         xSemaphoreGive(g_ota_github.mutex);
     }
@@ -243,8 +242,7 @@ uint8_t ota_github_get_progress(void)
 ota_github_status_t ota_github_get_status(void)
 {
     ota_github_status_t v = OTA_GITHUB_STATUS_IDLE;
-    if (g_ota_github.mutex &&
-        xSemaphoreTake(g_ota_github.mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+    if (g_ota_github.mutex && xSemaphoreTake(g_ota_github.mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
         v = g_ota_github.status;
         xSemaphoreGive(g_ota_github.mutex);
     }
@@ -254,8 +252,7 @@ ota_github_status_t ota_github_get_status(void)
 uint8_t ota_github_get_error_code(void)
 {
     uint8_t v = 0;
-    if (g_ota_github.mutex &&
-        xSemaphoreTake(g_ota_github.mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+    if (g_ota_github.mutex && xSemaphoreTake(g_ota_github.mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
         v = g_ota_github.error_code;
         xSemaphoreGive(g_ota_github.mutex);
     }

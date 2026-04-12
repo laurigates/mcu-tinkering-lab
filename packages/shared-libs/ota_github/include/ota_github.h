@@ -136,8 +136,8 @@ typedef struct {
 typedef struct {
     /* --- Required --- */
     ota_github_mode_t mode;
-    const char *github_org;   /**< GitHub org/user (e.g. "laurigates"). */
-    const char *github_repo;  /**< GitHub repo name. */
+    const char *github_org;  /**< GitHub org/user (e.g. "laurigates"). */
+    const char *github_repo; /**< GitHub repo name. */
 
     /* --- PULL mode --- */
     /** Substring that release asset names must contain (e.g. "robocar-camera").
@@ -187,14 +187,14 @@ typedef struct {
  * @brief Sensible defaults. Equivalent to `{0}` plus the tuned timing
  *        constants used in production by the robocar reference project.
  */
-#define OTA_GITHUB_CONFIG_DEFAULT()               \
-    ((ota_github_config_t){                       \
-        .mode = OTA_GITHUB_MODE_PULL,             \
-        .poll_interval_min = 360,                 \
-        .stability_timeout_ms = 60000,            \
-        .http_timeout_ms = 30000,                 \
-        .task_stack_size = 8192,                  \
-        .task_priority = 5,                       \
+#define OTA_GITHUB_CONFIG_DEFAULT()    \
+    ((ota_github_config_t){            \
+        .mode = OTA_GITHUB_MODE_PULL,  \
+        .poll_interval_min = 360,      \
+        .stability_timeout_ms = 60000, \
+        .http_timeout_ms = 30000,      \
+        .task_stack_size = 8192,       \
+        .task_priority = 5,            \
     })
 
 /**
