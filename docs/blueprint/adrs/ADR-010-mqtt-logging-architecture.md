@@ -1,8 +1,8 @@
 # ADR-010: MQTT Logging Architecture
 
-**Status**: accepted  
-**Date**: 2025-08-13  
-**Source commit**: feat: implement comprehensive MQTT logging system (041fdca)  
+**Status**: accepted
+**Date**: 2025-08-13
+**Source commit**: feat: implement comprehensive MQTT logging system (041fdca)
 **Confidence**: 8/10
 
 ---

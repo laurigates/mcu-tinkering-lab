@@ -1,8 +1,8 @@
 # ADR-008: Gemini Robotics-ER 1.5 as Third AI Backend
 
-**Status**: accepted  
-**Date**: 2026-03-22  
-**Source commit**: feat: add Gemini Robotics-ER 1.5 as third AI backend for robocar-camera (#140, 9bc9fa8)  
+**Status**: accepted
+**Date**: 2026-03-22
+**Source commit**: feat: add Gemini Robotics-ER 1.5 as third AI backend for robocar-camera (#140, 9bc9fa8)
 **Confidence**: 9/10
 
 ---
