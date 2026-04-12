@@ -46,7 +46,7 @@ mcu-tinkering-lab/
 | C/C++ linter | cppcheck |
 | Python formatter | ruff |
 | Python linter | ruff |
-| Python type checker | mypy |
+| Python type checker | ty (astral) |
 | Secret scanning | gitleaks |
 | Pre-commit | pre-commit (8 hooks) |
 | CI/CD | GitHub Actions (11+ workflows) |

@@ -70,7 +70,7 @@ dev = [
 
     # Code quality
     "ruff>=0.1.0",
-    "mypy>=1.5.0",
+    "ty",
     "types-PyYAML",
     "types-toml",
 
@@ -138,32 +138,17 @@ indent-style = "space"
 skip-magic-trailing-comma = false
 line-ending = "auto"
 
-[tool.mypy]
-python_version = "3.11"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true
-disallow_incomplete_defs = true
-check_untyped_defs = true
-disallow_untyped_decorators = true
-no_implicit_optional = true
-warn_redundant_casts = true
-warn_unused_ignores = true
-warn_no_return = true
-warn_unreachable = true
-strict_equality = true
+[tool.ty]
+# Python type checker by Astral (https://github.com/astral-sh/ty).
+# Successor to mypy; uses sensible strict defaults.
 
-[[tool.mypy.overrides]]
-module = [
-    "genesis.*",
-    "spatialmath.*",
-    "pymunk.*",
-    "cv2.*",
-    "websockets.*",
-    "serial.*",
-    "trimesh.*",
-]
-ignore_missing_imports = true
+[tool.ty.src]
+include = ["src"]
+
+[tool.ty.rules]
+# Silence import-resolution errors for third-party packages without type stubs.
+# Equivalent to mypy's `ignore_missing_imports` for these modules.
+unresolved-import = "ignore"
 
 [tool.pytest.ini_options]
 minversion = "6.0"
