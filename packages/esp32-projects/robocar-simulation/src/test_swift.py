@@ -7,6 +7,7 @@ issues before integrating with the main simulation.
 """
 
 import asyncio
+import math
 import sys
 import time
 
@@ -106,7 +107,7 @@ def test_visual_mode():
             start_time = time.time()
             while time.time() - start_time < 10.0:
                 # Move the cylinder up and down
-                z = 0.1 + 0.05 * (1 + time.sin((time.time() - start_time) * 3.0))
+                z = 0.1 + 0.05 * (1 + math.sin((time.time() - start_time) * 3.0))
                 transform = SE3(0, 0, z).A
                 test_cylinder.apply_transform(SE3.inv(test_cylinder.transform) @ transform)
                 env.step(0.1)
