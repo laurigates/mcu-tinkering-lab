@@ -121,7 +121,7 @@ class MatplotlibVisualizer:
                 if len(self.trail_points) > 1:
                     trail_x, trail_y = zip(*self.trail_points, strict=False)
                     if hasattr(self, "trail_line"):
-                        self.trail_line.remove()
+                        self.trail_line.remove()  # ty: ignore[unresolved-attribute]
                     (self.trail_line,) = self.ax.plot(
                         trail_x, trail_y, "g-", alpha=0.5, linewidth=2
                     )
@@ -441,8 +441,8 @@ class RobotVisualizer:
             world_y = state.y + sin_theta * local_pos[0] + cos_theta * local_pos[1]
             world_z = local_pos[2]
 
-            wheel.set_pos((world_x, world_y, world_z))
-            wheel.set_quat(robot_quat)
+            wheel.set_pos((world_x, world_y, world_z))  # ty: ignore[unresolved-attribute]
+            wheel.set_quat(robot_quat)  # ty: ignore[unresolved-attribute]
 
         # Update camera with pan angle
         if self.camera_entity:
@@ -570,7 +570,7 @@ class RobotVisualizer:
 
     def _create_simple_robot_visualization(self):
         """Create a simple robot visualization for testing"""
-        if not self.env:
+        if not self.env:  # ty: ignore[unresolved-attribute]
             return
 
         # Simple robot representation
@@ -580,14 +580,14 @@ class RobotVisualizer:
         )
         robot_box.visual.face_colors = [100, 150, 200, 255]  # Blue
         self.robot_mesh = robot_box
-        self.env.add(self.robot_mesh)
+        self.env.add(self.robot_mesh)  # ty: ignore[unresolved-attribute]
 
         # Add a direction indicator (arrow)
         arrow = trimesh.primitives.Cylinder(
             radius=0.01, height=0.08, transform=SE3(0.06, 0, 0.03) * SE3.Ry(np.pi / 2).A
         )
         arrow.visual.face_colors = [255, 0, 0, 255]  # Red arrow
-        self.env.add(arrow)
+        self.env.add(arrow)  # ty: ignore[unresolved-attribute]
 
         print("✓ Simple robot visualization created")
 

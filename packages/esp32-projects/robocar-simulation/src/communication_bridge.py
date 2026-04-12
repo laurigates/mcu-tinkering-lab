@@ -361,7 +361,7 @@ class ESP32CommunicationBridge:
             },
             camera_frame=state.camera_frame,
             encoder_positions=encoder_pos,
-            last_commands=[cmd.action for cmd in self.ai_processor.command_history[-3:]],
+            last_commands=[cmd.action for cmd in self.ai_processor.command_history[-3:]],  # ty: ignore[unresolved-attribute]
         )
 
     def _send_ai_response(self, success: bool, ai_command) -> None:

@@ -77,7 +77,7 @@ install-dev-tools:
     #!/usr/bin/env bash
     set -euo pipefail
     pip install --upgrade pip
-    pip install pre-commit ruff mypy pytest pytest-cov uv
+    pip install pre-commit ruff ty pytest pytest-cov uv
     pre-commit install
     command -v clang-format >/dev/null 2>&1 || echo "clang-format not found — install with: brew install clang-format"
     command -v cppcheck >/dev/null 2>&1 || echo "cppcheck not found — install with: brew install cppcheck"

@@ -43,16 +43,17 @@ repos:
       - id: ruff-format
         files: \.py$
 
-  # Python type checking
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.19.1
+  # Python type checking with ty (astral)
+  # ty has no dedicated pre-commit hook repo yet, so we invoke it via uv.
+  # Scoped to robocar-simulation — the only package with [tool.ty] config.
+  - repo: local
     hooks:
-      - id: mypy
-        files: \.py$
-        exclude: 'tests/|test_.*\.py$'
-        additional_dependencies:
-          - types-PyYAML
-          - types-toml
+      - id: ty
+        name: ty type check (robocar-simulation)
+        entry: bash -c 'cd packages/esp32-projects/robocar-simulation && uvx ty check src/'
+        language: system
+        files: '^packages/esp32-projects/robocar-simulation/src/.*\.py$'
+        pass_filenames: false
 
   # Secret scanning
   - repo: https://github.com/gitleaks/gitleaks

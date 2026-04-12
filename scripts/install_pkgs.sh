@@ -36,4 +36,12 @@ if ! command -v just >/dev/null 2>&1; then
   rm -rf "$tmp_dir"
 fi
 
+# ---------- cppcheck ----------
+# Required by `just lint-c` / `just lint` for C/C++ static analysis.
+if ! command -v cppcheck >/dev/null 2>&1; then
+  echo "Installing cppcheck..."
+  apt-get update -qq
+  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq cppcheck
+fi
+
 echo "All tools installed successfully."

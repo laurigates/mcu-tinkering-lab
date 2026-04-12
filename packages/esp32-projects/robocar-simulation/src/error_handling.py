@@ -393,7 +393,7 @@ def resilient_operation(
                 handled = error_handler.handle_error(
                     component=component,
                     error_type=error_type,
-                    message=f"Function {func.__name__} failed: {str(e)}",
+                    message=f"Function {func.__name__} failed: {str(e)}",  # ty: ignore[unresolved-attribute]
                     exception=e,
                     severity=severity,
                 )
@@ -429,7 +429,7 @@ def async_resilient_operation(
                 handled = error_handler.handle_error(
                     component=component,
                     error_type=error_type,
-                    message=f"Async function {func.__name__} failed: {str(e)}",
+                    message=f"Async function {func.__name__} failed: {str(e)}",  # ty: ignore[unresolved-attribute]
                     exception=e,
                     severity=severity,
                 )

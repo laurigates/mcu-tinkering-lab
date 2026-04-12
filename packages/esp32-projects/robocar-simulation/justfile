@@ -136,10 +136,10 @@ lint:
 format:
     uv run ruff format src/ tests/
 
-# Run type checking with mypy
+# Run type checking with ty (astral)
 [group: "dev"]
 type-check:
-    uv run mypy src/ --ignore-missing-imports
+    uvx ty check src/
 
 # Validate robot config YAML
 [group: "dev"]
@@ -167,6 +167,7 @@ clean:
     find . -type f -name ".coverage" -delete
     find . -type d -name ".pytest_cache" -exec rm -rf {} +
     find . -type d -name ".mypy_cache" -exec rm -rf {} +
+    find . -type d -name ".ty_cache" -exec rm -rf {} +
 
 ##########
 # info

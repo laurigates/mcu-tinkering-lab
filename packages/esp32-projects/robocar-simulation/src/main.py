@@ -197,7 +197,7 @@ class SimulationManager:
                 self.robot.set_motor_commands(100, 80)  # Slight turn
 
             # Run for extended duration
-            self.swift_sim.run_simulation(duration=300.0)  # 5 minutes
+            self.swift_sim.run_simulation(duration=300.0)  # 5 minutes  # ty: ignore[unresolved-attribute]
         except Exception as e:
             print(f"Genesis simulation error: {e}")
 
@@ -304,7 +304,7 @@ class SimulationManager:
 
 def main():
     """Main function"""
-    sys.stdout.reconfigure(line_buffering=True)
+    sys.stdout.reconfigure(line_buffering=True)  # ty: ignore[unresolved-attribute]
     parser = argparse.ArgumentParser(
         description="ESP32 Robot Car Simulation with Genesis Visualizer",
         formatter_class=argparse.RawDescriptionHelpFormatter,

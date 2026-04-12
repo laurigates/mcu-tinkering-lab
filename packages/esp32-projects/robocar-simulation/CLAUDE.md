@@ -12,7 +12,7 @@ just run-browser     # Browser-based (http://localhost:52000)
 just test            # Run test suite
 just lint            # Ruff check
 just format          # Ruff format
-just type-check      # Mypy
+just type-check      # ty (astral)
 ```
 
 **Package manager**: `uv` (primary). Use `uv run <cmd>` for one-off commands. Run `uv sync --extra dev` to install dev dependencies.
