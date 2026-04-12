@@ -1,0 +1,30 @@
+sequenceDiagram
+    autonumber
+    participant App
+    participant ota_github
+    participant esp_ghota
+    participant GitHub
+
+    App->>ota_github: ota_github_init(PULL)
+    ota_github->>esp_ghota: ghota_init + start_update_timer
+    loop every poll_interval_min
+        esp_ghota->>GitHub: GET /releases/latest
+        GitHub-->>esp_ghota: JSON (tag, assets)
+        alt newer tag
+            esp_ghota-->>ota_github: GHOTA_EVENT_UPDATE_AVAILABLE
+            ota_github->>App: hooks.on_update_available
+            ota_github->>App: hooks.pre_download_hook
+            App-->>ota_github: ESP_OK
+            ota_github->>esp_ghota: ghota_start_update
+            esp_ghota->>GitHub: GET /releases/download/...
+            GitHub-->>esp_ghota: firmware stream
+            esp_ghota-->>ota_github: PROGRESS events
+            ota_github->>App: hooks.on_progress
+            esp_ghota-->>ota_github: FINISH_FIRMWARE_UPDATE
+            ota_github->>App: hooks.on_update_ready_to_reboot
+            App-->>ota_github: ESP_OK
+            ota_github->>ota_github: esp_restart
+        else no update
+            esp_ghota-->>ota_github: NOUPDATE_AVAILABLE
+        end
+    end

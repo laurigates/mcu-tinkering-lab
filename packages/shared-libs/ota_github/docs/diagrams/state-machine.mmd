@@ -1,0 +1,9 @@
+stateDiagram-v2
+    [*] --> IDLE
+    IDLE --> IN_PROGRESS : update detected / trigger
+    IN_PROGRESS --> SUCCESS : download + verify OK
+    IN_PROGRESS --> FAILED : any error
+    SUCCESS --> [*] : esp_restart
+    FAILED --> IDLE : error surfaced to caller
+    IDLE --> MAINTENANCE_MODE : caller sets it (e.g. peer is updating)
+    MAINTENANCE_MODE --> IDLE : caller clears it

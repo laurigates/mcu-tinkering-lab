@@ -1,0 +1,14 @@
+## IDF Component Manager manifest for the ota_github shared component.
+##
+## Declares the external GitHub-OTA dependency (esp_ghota) so that any
+## ESP-IDF project that adds ota_github to EXTRA_COMPONENT_DIRS picks it up
+## transitively — consumers no longer need to list esp_ghota in their own
+## idf_component.yml.
+dependencies:
+  idf:
+    version: '>=5.1'
+  # GitHub release polling + semver comparison. Only required by the
+  # PULL-mode source (src/ota_github_pull.c). If you only use TRIGGERED
+  # mode you can still build, but the symbol references are resolved at
+  # link time so this dependency is always pulled.
+  fishwaldo/esp_ghota: '>=0.0.3'
