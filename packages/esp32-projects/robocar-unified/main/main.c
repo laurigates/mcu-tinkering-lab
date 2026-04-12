@@ -10,32 +10,32 @@
  */
 
 #include <string.h>
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "freertos/queue.h"
-#include "freertos/semphr.h"
-#include "freertos/timers.h"
 #include "esp_log.h"
 #include "esp_system.h"
 #include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
+#include "freertos/semphr.h"
+#include "freertos/task.h"
+#include "freertos/timers.h"
 #include "nvs_flash.h"
 
-#include "config.h"
-#include "pin_config.h"
-#include "i2c_bus.h"
-#include "motor_controller.h"
-#include "led_controller.h"
-#include "servo_controller.h"
-#include "buzzer.h"
-#include "camera.h"
 #include "ai_backend.h"
 #include "ai_response_parser.h"
-#include "wifi_manager.h"
+#include "buzzer.h"
+#include "camera.h"
+#include "config.h"
 #include "credentials_loader.h"
-#include "mqtt_logger.h"
-#include "system_state.h"
-#include "ota_manager.h"
+#include "i2c_bus.h"
+#include "led_controller.h"
 #include "mdns.h"
+#include "motor_controller.h"
+#include "mqtt_logger.h"
+#include "ota_manager.h"
+#include "pin_config.h"
+#include "servo_controller.h"
+#include "system_state.h"
+#include "wifi_manager.h"
 
 static const char *TAG = "robocar";
 
@@ -101,13 +101,27 @@ static void motor_control_task(void *pvParameters)
             s_last_motor_cmd_time = esp_timer_get_time();
 
             switch (cmd.type) {
-                case MOTOR_CMD_FORWARD:  motor_move_forward(cmd.speed); break;
-                case MOTOR_CMD_BACKWARD: motor_move_backward(cmd.speed); break;
-                case MOTOR_CMD_LEFT:     motor_turn_left(cmd.speed); break;
-                case MOTOR_CMD_RIGHT:    motor_turn_right(cmd.speed); break;
-                case MOTOR_CMD_ROTATE_CW:  motor_rotate_cw(cmd.speed); break;
-                case MOTOR_CMD_ROTATE_CCW: motor_rotate_ccw(cmd.speed); break;
-                case MOTOR_CMD_STOP:     motor_stop(); break;
+                case MOTOR_CMD_FORWARD:
+                    motor_move_forward(cmd.speed);
+                    break;
+                case MOTOR_CMD_BACKWARD:
+                    motor_move_backward(cmd.speed);
+                    break;
+                case MOTOR_CMD_LEFT:
+                    motor_turn_left(cmd.speed);
+                    break;
+                case MOTOR_CMD_RIGHT:
+                    motor_turn_right(cmd.speed);
+                    break;
+                case MOTOR_CMD_ROTATE_CW:
+                    motor_rotate_cw(cmd.speed);
+                    break;
+                case MOTOR_CMD_ROTATE_CCW:
+                    motor_rotate_ccw(cmd.speed);
+                    break;
+                case MOTOR_CMD_STOP:
+                    motor_stop();
+                    break;
             }
         }
 
@@ -174,28 +188,41 @@ static void dispatch_periph_cmd(const periph_cmd_t *cmd)
 
 static void dispatch_movement(const char *movement)
 {
-    if (!movement) return;
+    if (!movement)
+        return;
 
     uint8_t speed = (uint8_t)(DEFAULT_SPEED * 255 / PCA9685_PWM_MAX);
 
-    if (strcmp(movement, "forward") == 0) dispatch_motor_cmd(MOTOR_CMD_FORWARD, speed);
-    else if (strcmp(movement, "backward") == 0) dispatch_motor_cmd(MOTOR_CMD_BACKWARD, speed);
-    else if (strcmp(movement, "left") == 0) dispatch_motor_cmd(MOTOR_CMD_LEFT, speed);
-    else if (strcmp(movement, "right") == 0) dispatch_motor_cmd(MOTOR_CMD_RIGHT, speed);
-    else if (strcmp(movement, "rotate_cw") == 0) dispatch_motor_cmd(MOTOR_CMD_ROTATE_CW, speed);
-    else if (strcmp(movement, "rotate_ccw") == 0) dispatch_motor_cmd(MOTOR_CMD_ROTATE_CCW, speed);
-    else if (strcmp(movement, "stop") == 0) dispatch_motor_cmd(MOTOR_CMD_STOP, 0);
+    if (strcmp(movement, "forward") == 0)
+        dispatch_motor_cmd(MOTOR_CMD_FORWARD, speed);
+    else if (strcmp(movement, "backward") == 0)
+        dispatch_motor_cmd(MOTOR_CMD_BACKWARD, speed);
+    else if (strcmp(movement, "left") == 0)
+        dispatch_motor_cmd(MOTOR_CMD_LEFT, speed);
+    else if (strcmp(movement, "right") == 0)
+        dispatch_motor_cmd(MOTOR_CMD_RIGHT, speed);
+    else if (strcmp(movement, "rotate_cw") == 0)
+        dispatch_motor_cmd(MOTOR_CMD_ROTATE_CW, speed);
+    else if (strcmp(movement, "rotate_ccw") == 0)
+        dispatch_motor_cmd(MOTOR_CMD_ROTATE_CCW, speed);
+    else if (strcmp(movement, "stop") == 0)
+        dispatch_motor_cmd(MOTOR_CMD_STOP, 0);
 }
 
 static void dispatch_sound(const char *sound)
 {
-    if (!sound) return;
+    if (!sound)
+        return;
 
     periph_cmd_t cmd;
-    if (strcmp(sound, "beep") == 0) cmd.type = PERIPH_CMD_SOUND_BEEP;
-    else if (strcmp(sound, "melody") == 0) cmd.type = PERIPH_CMD_SOUND_MELODY;
-    else if (strcmp(sound, "alert") == 0) cmd.type = PERIPH_CMD_SOUND_ALERT;
-    else return;
+    if (strcmp(sound, "beep") == 0)
+        cmd.type = PERIPH_CMD_SOUND_BEEP;
+    else if (strcmp(sound, "melody") == 0)
+        cmd.type = PERIPH_CMD_SOUND_MELODY;
+    else if (strcmp(sound, "alert") == 0)
+        cmd.type = PERIPH_CMD_SOUND_ALERT;
+    else
+        return;
 
     dispatch_periph_cmd(&cmd);
 }
@@ -304,13 +331,34 @@ static void command_task(void *pvParameters)
                 // Single-letter movement commands (backward compatible)
                 if (buf_pos == 1) {
                     switch (buf[0]) {
-                        case 'F': case 'f': dispatch_movement("forward"); break;
-                        case 'B': case 'b': dispatch_movement("backward"); break;
-                        case 'L': case 'l': dispatch_movement("left"); break;
-                        case 'R': case 'r': dispatch_movement("right"); break;
-                        case 'C': case 'c': dispatch_movement("rotate_cw"); break;
-                        case 'W': case 'w': dispatch_movement("rotate_ccw"); break;
-                        case 'S': case 's': dispatch_movement("stop"); break;
+                        case 'F':
+                        case 'f':
+                            dispatch_movement("forward");
+                            break;
+                        case 'B':
+                        case 'b':
+                            dispatch_movement("backward");
+                            break;
+                        case 'L':
+                        case 'l':
+                            dispatch_movement("left");
+                            break;
+                        case 'R':
+                        case 'r':
+                            dispatch_movement("right");
+                            break;
+                        case 'C':
+                        case 'c':
+                            dispatch_movement("rotate_cw");
+                            break;
+                        case 'W':
+                        case 'w':
+                            dispatch_movement("rotate_ccw");
+                            break;
+                        case 'S':
+                        case 's':
+                            dispatch_movement("stop");
+                            break;
                     }
                 }
 
@@ -418,16 +466,16 @@ static void create_tasks(void)
     s_ai_mutex = xSemaphoreCreateMutex();
 
     // Core 0 tasks: motor control + peripherals + serial
-    xTaskCreatePinnedToCore(motor_control_task, "motor", MOTOR_TASK_STACK_SIZE,
-                            NULL, MOTOR_TASK_PRIORITY, NULL, MOTOR_TASK_CORE);
-    xTaskCreatePinnedToCore(peripheral_task, "periph", PERIPHERAL_TASK_STACK_SIZE,
-                            NULL, PERIPHERAL_TASK_PRIORITY, NULL, PERIPHERAL_TASK_CORE);
-    xTaskCreatePinnedToCore(command_task, "cmd", COMMAND_TASK_STACK_SIZE,
-                            NULL, COMMAND_TASK_PRIORITY, NULL, COMMAND_TASK_CORE);
+    xTaskCreatePinnedToCore(motor_control_task, "motor", MOTOR_TASK_STACK_SIZE, NULL,
+                            MOTOR_TASK_PRIORITY, NULL, MOTOR_TASK_CORE);
+    xTaskCreatePinnedToCore(peripheral_task, "periph", PERIPHERAL_TASK_STACK_SIZE, NULL,
+                            PERIPHERAL_TASK_PRIORITY, NULL, PERIPHERAL_TASK_CORE);
+    xTaskCreatePinnedToCore(command_task, "cmd", COMMAND_TASK_STACK_SIZE, NULL,
+                            COMMAND_TASK_PRIORITY, NULL, COMMAND_TASK_CORE);
 
     // Core 1 tasks: camera + AI
-    xTaskCreatePinnedToCore(ai_analysis_task, "ai", AI_TASK_STACK_SIZE,
-                            NULL, AI_TASK_PRIORITY, NULL, AI_TASK_CORE);
+    xTaskCreatePinnedToCore(ai_analysis_task, "ai", AI_TASK_STACK_SIZE, NULL, AI_TASK_PRIORITY,
+                            NULL, AI_TASK_CORE);
 }
 
 // ========================================

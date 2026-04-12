@@ -53,15 +53,15 @@ esp_err_t ota_manager_init(void)
     ESP_LOGI(TAG, "Initializing OTA manager");
 
     ota_github_config_t cfg = OTA_GITHUB_CONFIG_DEFAULT();
-    cfg.mode                    = OTA_GITHUB_MODE_PULL;
-    cfg.github_org              = OTA_GITHUB_ORG;
-    cfg.github_repo             = OTA_GITHUB_REPO;
+    cfg.mode = OTA_GITHUB_MODE_PULL;
+    cfg.github_org = OTA_GITHUB_ORG;
+    cfg.github_repo = OTA_GITHUB_REPO;
     cfg.firmware_filename_match = OTA_FIRMWARE_FILENAME_MATCH;
-    cfg.poll_interval_min       = OTA_CHECK_INTERVAL_MIN;
-    cfg.stability_timeout_ms    = OTA_STABILITY_TIMEOUT_MS;
-    cfg.http_timeout_ms         = OTA_HTTP_TIMEOUT_MS;
-    cfg.task_stack_size         = OTA_TASK_STACK_SIZE;
-    cfg.task_priority           = OTA_TASK_PRIORITY;
+    cfg.poll_interval_min = OTA_CHECK_INTERVAL_MIN;
+    cfg.stability_timeout_ms = OTA_STABILITY_TIMEOUT_MS;
+    cfg.http_timeout_ms = OTA_HTTP_TIMEOUT_MS;
+    cfg.task_stack_size = OTA_TASK_STACK_SIZE;
+    cfg.task_priority = OTA_TASK_PRIORITY;
 
     esp_err_t ret = ota_github_init(&cfg);
     if (ret != ESP_OK) {
@@ -72,8 +72,7 @@ esp_err_t ota_manager_init(void)
     /* Observe events so we can run robocar-specific orchestration when
      * the camera's own firmware is confirmed healthy after boot, and so
      * we can publish MQTT status messages. */
-    ret = esp_event_handler_register(OTA_GITHUB_EVENTS, ESP_EVENT_ANY_ID, &ota_event_handler,
-                                     NULL);
+    ret = esp_event_handler_register(OTA_GITHUB_EVENTS, ESP_EVENT_ANY_ID, &ota_event_handler, NULL);
     if (ret != ESP_OK) {
         ESP_LOGW(TAG, "register ota_github event handler: %s", esp_err_to_name(ret));
     }
@@ -138,8 +137,8 @@ static void ota_event_handler(void *arg, esp_event_base_t base, int32_t id, void
             /* Camera is confirmed healthy — now see if the main controller
              * needs updating too. Run as a separate task to keep the event
              * callback fast. */
-            xTaskCreate(orchestrate_main_controller_update, "ota_main_ctrl",
-                        OTA_TASK_STACK_SIZE, NULL, OTA_TASK_PRIORITY, NULL);
+            xTaskCreate(orchestrate_main_controller_update, "ota_main_ctrl", OTA_TASK_STACK_SIZE,
+                        NULL, OTA_TASK_PRIORITY, NULL);
             break;
 
         default:
@@ -302,8 +301,7 @@ static void orchestrate_main_controller_update(void *pvParameters)
         }
     }
 
-    ESP_LOGE(TAG, "Main controller OTA timed out after %d seconds",
-             OTA_STATUS_TIMEOUT_MS / 1000);
+    ESP_LOGE(TAG, "Main controller OTA timed out after %d seconds", OTA_STATUS_TIMEOUT_MS / 1000);
     semver_free(&mc_version);
 
 done:
