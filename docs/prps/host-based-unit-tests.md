@@ -1,8 +1,8 @@
 # PRP: Host-Based Unit Tests Expansion
 
-**Status**: in-progress  
-**Source**: Feature FR-015, commit feat: add host-based unit tests for i2c_protocol and status_led (#129)  
-**Priority**: P2  
+**Status**: in-progress
+**Source**: Feature FR-015, commit feat: add host-based unit tests for i2c_protocol and status_led (#129)
+**Priority**: P2
 **Confidence**: 8/10
 
 ---

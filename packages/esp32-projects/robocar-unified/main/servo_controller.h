@@ -42,8 +42,8 @@ esp_err_t servo_enable(servo_id_t servo_id);
 esp_err_t servo_enable_all(void);
 bool servo_is_initialized(void);
 bool servo_is_angle_valid(servo_id_t servo_id, int16_t angle);
-esp_err_t servo_move_smooth(servo_id_t servo_id, int16_t target_angle,
-                            uint8_t step_size, uint32_t delay_ms);
+esp_err_t servo_move_smooth(servo_id_t servo_id, int16_t target_angle, uint8_t step_size,
+                            uint32_t delay_ms);
 esp_err_t servo_sweep(servo_id_t servo_id, int16_t start_angle, int16_t end_angle,
                       uint8_t step_size, uint32_t delay_ms, uint32_t cycles);
 esp_err_t servo_stop_motion(void);

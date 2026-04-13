@@ -40,8 +40,8 @@ esp_err_t led_turn_off(led_position_t position);
 esp_err_t led_turn_off_all(void);
 esp_err_t led_update(void);
 esp_err_t led_get_color(led_position_t position, rgb_color_t *color);
-esp_err_t led_blink(led_position_t position, const rgb_color_t *color,
-                    uint32_t on_time_ms, uint32_t off_time_ms, uint32_t blink_count);
+esp_err_t led_blink(led_position_t position, const rgb_color_t *color, uint32_t on_time_ms,
+                    uint32_t off_time_ms, uint32_t blink_count);
 esp_err_t led_stop_blink(void);
 bool led_is_initialized(void);
 

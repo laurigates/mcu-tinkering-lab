@@ -6,12 +6,12 @@
 #include "i2c_bus.h"
 #include "pin_config.h"
 
+#include <esp_log.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
-#include <esp_log.h>
 #include <i2cdev.h>
-#include <tca9548.h>
 #include <pca9685.h>
+#include <tca9548.h>
 
 static const char *TAG = "i2c_bus";
 
@@ -92,8 +92,8 @@ esp_err_t i2c_bus_init(void)
     tca9548_set_channels(&s_tca9548, 0x00);
 
     s_initialized = true;
-    ESP_LOGI(TAG, "I2C bus initialized: TCA9548A(0x%02X) + PCA9685(0x%02X) @ %dHz",
-             TCA9548A_ADDR, PCA9685_ADDR, PCA9685_FREQ_HZ);
+    ESP_LOGI(TAG, "I2C bus initialized: TCA9548A(0x%02X) + PCA9685(0x%02X) @ %dHz", TCA9548A_ADDR,
+             PCA9685_ADDR, PCA9685_FREQ_HZ);
     return ESP_OK;
 }
 
@@ -138,7 +138,8 @@ i2c_dev_t *i2c_bus_get_pca9685(void)
 esp_err_t i2c_bus_pca9685_set(uint8_t channel, uint16_t value)
 {
     esp_err_t ret = i2c_bus_select_channel(I2C_BUS_CHANNEL_PCA9685);
-    if (ret != ESP_OK) return ret;
+    if (ret != ESP_OK)
+        return ret;
 
     ret = pca9685_set_pwm_value(&s_pca9685, channel, value);
 
@@ -149,7 +150,8 @@ esp_err_t i2c_bus_pca9685_set(uint8_t channel, uint16_t value)
 esp_err_t i2c_bus_pca9685_set_multi(uint8_t first_ch, uint8_t count, const uint16_t *values)
 {
     esp_err_t ret = i2c_bus_select_channel(I2C_BUS_CHANNEL_PCA9685);
-    if (ret != ESP_OK) return ret;
+    if (ret != ESP_OK)
+        return ret;
 
     ret = pca9685_set_pwm_values(&s_pca9685, first_ch, count, values);
 
@@ -159,7 +161,8 @@ esp_err_t i2c_bus_pca9685_set_multi(uint8_t first_ch, uint8_t count, const uint1
 
 void i2c_bus_deinit(void)
 {
-    if (!s_initialized) return;
+    if (!s_initialized)
+        return;
 
     // All PCA9685 channels off
     tca9548_set_channels(&s_tca9548, TCA9548_CHANNEL0);

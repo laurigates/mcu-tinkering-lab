@@ -1,7 +1,7 @@
 # PRD-008: Gamepad Synth
 
-**Status**: active  
-**Created**: 2026-04-07  
+**Status**: active
+**Created**: 2026-04-07
 **Confidence**: 9/10
 
 ---
@@ -43,51 +43,51 @@ The current implementation (`v0.1.0`, formerly `esp32-ps4-speaker`) uses LEDC PW
 
 ### Phase A: I2S DAC Output + DDS Oscillator
 
-**FR-A01: I2S streaming to MAX98357A**  
+**FR-A01: I2S streaming to MAX98357A**
 Replace LEDC PWM with continuous I2S PCM output at 44.1 kHz, 16-bit. Audio render task on Core 1 fills 256-sample blocks via `synth_render()` callback.
 
-**FR-A02: DDS oscillator with multiple waveforms**  
+**FR-A02: DDS oscillator with multiple waveforms**
 Phase-accumulator oscillator supporting: sawtooth, triangle, sine, square, and noise. Waveform selectable per mode.
 
-**FR-A03: Re-implement existing modes on I2S engine**  
+**FR-A03: Re-implement existing modes on I2S engine**
 Theremin, Scale, Arpeggiator, and Retro SFX modes continue working identically but with richer waveforms instead of square-only.
 
 ### Phase B: Resonant Low-Pass Filter
 
-**FR-B01: State-variable filter (SVF)**  
+**FR-B01: State-variable filter (SVF)**
 Software low-pass filter with cutoff frequency and resonance parameters. Provides the characteristic Korg Monotron squelch when resonance is high.
 
-**FR-B02: Controller mapping**  
+**FR-B02: Controller mapping**
 Right stick Y controls filter cutoff (100 Hz to 10 kHz). Right stick X controls resonance (0 to self-oscillation threshold).
 
 ### Phase C: LFO Modulation
 
-**FR-C01: Low-frequency oscillator**  
+**FR-C01: Low-frequency oscillator**
 Sub-audio oscillator (0.1-20 Hz) with triangle and square waveforms. Modulates oscillator pitch (vibrato), filter cutoff (wah), or both.
 
-**FR-C02: Controller mapping**  
+**FR-C02: Controller mapping**
 LT (brake) controls LFO rate. RT (throttle) controls LFO depth. LFO target depends on active mode.
 
 ### Phase D: Delay Effect
 
-**FR-D01: Circular buffer delay with feedback**  
+**FR-D01: Circular buffer delay with feedback**
 0.5-second delay buffer (~44 KB RAM) with configurable delay time and feedback amount. Short delay + high feedback produces Karplus-Strong string-like tones. Long delay + moderate feedback creates the Monotron Delay's cosmic echo.
 
-**FR-D02: Controller mapping**  
+**FR-D02: Controller mapping**
 Mapped per-mode. In Delay Synth mode: right stick Y = delay time, right stick X = feedback.
 
 ### Phase E: New Modes
 
-**FR-E01: Mono Synth mode**  
+**FR-E01: Mono Synth mode**
 Single oscillator + filter + LFO. Classic Monotron emulation. Left stick Y = pitch, right stick Y = filter cutoff, right stick X = resonance, triggers = LFO rate/depth.
 
-**FR-E02: Dual Osc mode**  
+**FR-E02: Dual Osc mode**
 Two oscillators with controllable interval and detune. Face buttons select interval (unison, fifth, octave, two octaves). Right stick X = detune amount for fat analog sound.
 
-**FR-E03: Delay Synth mode**  
+**FR-E03: Delay Synth mode**
 Oscillator + delay with feedback. The delay acts as a second sound source when feedback is high (Monotron Delay behavior). Left stick Y = pitch, right stick Y = delay time, right stick X = feedback.
 
-**FR-E04: Drone mode**  
+**FR-E04: Drone mode**
 Two sustained oscillators, LFO modulates everything. Left stick Y = osc A pitch, right stick Y = osc B pitch, triggers = filter parameters. No note-off — continuous evolving texture.
 
 ## Mode Map

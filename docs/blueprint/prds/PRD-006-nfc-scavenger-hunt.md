@@ -1,8 +1,8 @@
 # PRD-006: NFC Scavenger Hunt
 
-**Status**: active  
-**Created**: 2026-04-05 (retroactively derived from git history)  
-**Source commits**: feat: add NFC scavenger hunt firmware for ESP32-S3 (#146), feat: add audio cues for buttons and unique RFID tag tones (#148)  
+**Status**: active
+**Created**: 2026-04-05 (retroactively derived from git history)
+**Source commits**: feat: add NFC scavenger hunt firmware for ESP32-S3 (#146), feat: add audio cues for buttons and unique RFID tag tones (#148)
 **Confidence**: 7/10
 
 ---

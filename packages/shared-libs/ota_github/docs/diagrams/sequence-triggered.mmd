@@ -1,0 +1,16 @@
+sequenceDiagram
+    autonumber
+    participant Orchestrator as Peer MCU (PULL + orchestration)
+    participant Target as Target MCU (TRIGGERED)
+    participant GitHub
+
+    Note over Orchestrator: Finished self-update, now updates peer
+    Orchestrator->>Target: I2C/UART: BEGIN_OTA(tag, sha256[0..3])
+    Target->>Target: ota_github_trigger_tag(tag, sha)
+    Target->>Target: hooks.pre_download_hook (lazy WiFi)
+    Target->>GitHub: GET /releases/download/{tag}/{asset}.bin
+    GitHub-->>Target: firmware stream
+    Target->>Target: verify SHA256 prefix (4 bytes)
+    Target-->>Orchestrator: I2C status polling (ota_github_get_status)
+    Orchestrator->>Target: I2C: REBOOT
+    Target->>Target: esp_restart

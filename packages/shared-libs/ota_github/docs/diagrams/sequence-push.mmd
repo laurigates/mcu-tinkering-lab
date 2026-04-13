@@ -1,0 +1,16 @@
+sequenceDiagram
+    autonumber
+    participant CI as GitHub Actions
+    participant Broker as MQTT broker
+    participant Device as ota_github (device)
+    participant GitHub
+
+    CI->>Broker: publish mqtt_notify_topic = release_tag
+    Broker-->>Device: DATA event (topic, payload)
+    Device->>Device: rate-limit (max 1/60s)
+    alt PULL mode
+        Device->>Device: ota_github_check_now
+    else TRIGGERED mode
+        Device->>Device: ota_github_trigger_tag(payload)
+    end
+    Device->>GitHub: GET /releases/...

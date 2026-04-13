@@ -25,6 +25,11 @@ on:
         required: false
         default: false
         type: boolean
+      mqtt_notify_topic:
+        description: 'MQTT topic to publish the release tag to (e.g. "myproject/ota/notify"). Required when mqtt_ota_notify is true.'
+        required: false
+        default: ''
+        type: string
       release_tag:
         description: 'Release tag to build for'
         required: true
@@ -129,8 +134,8 @@ jobs:
             ${{ inputs.project }}.bin
             manifest.json
 
-      - name: Notify robots of new firmware via MQTT
-        if: inputs.mqtt_ota_notify && vars.MQTT_ENABLED == 'true'
+      - name: Notify devices of new firmware via MQTT
+        if: inputs.mqtt_ota_notify && vars.MQTT_ENABLED == 'true' && inputs.mqtt_notify_topic != ''
         continue-on-error: true
         run: |
           sudo apt-get update -qq
@@ -140,7 +145,7 @@ jobs:
           mosquitto_pub \
             -h "${{ secrets.MQTT_BROKER_HOST }}" \
             -p "${BROKER_PORT:-1883}" \
-            -t "robocar/ota/notify" \
+            -t "${{ inputs.mqtt_notify_topic }}" \
             -m "${{ inputs.release_tag }}" \
             -q 1
 

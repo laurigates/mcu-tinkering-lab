@@ -6,12 +6,12 @@
  */
 
 #include "buzzer.h"
-#include "pin_config.h"
 #include "driver/gpio.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "pin_config.h"
 
 static const char *TAG = "buzzer";
 
@@ -33,7 +33,8 @@ esp_err_t buzzer_init(void)
 
 void buzzer_play_tone(uint32_t frequency_hz, uint32_t duration_ms)
 {
-    if (frequency_hz == 0) return;
+    if (frequency_hz == 0)
+        return;
 
     uint32_t half_period_us = 500000 / frequency_hz;
     int64_t end_time = esp_timer_get_time() + (int64_t)duration_ms * 1000;

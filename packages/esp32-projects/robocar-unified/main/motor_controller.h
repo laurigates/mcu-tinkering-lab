@@ -21,9 +21,9 @@ esp_err_t motor_turn_right(uint8_t speed);
 esp_err_t motor_rotate_cw(uint8_t speed);
 esp_err_t motor_rotate_ccw(uint8_t speed);
 esp_err_t motor_stop(void);
-esp_err_t motor_set_individual(uint8_t left_speed, uint8_t right_speed,
-                               uint8_t left_direction, uint8_t right_direction);
-esp_err_t motor_get_state(uint8_t *left_speed, uint8_t *right_speed,
-                          uint8_t *left_direction, uint8_t *right_direction);
+esp_err_t motor_set_individual(uint8_t left_speed, uint8_t right_speed, uint8_t left_direction,
+                               uint8_t right_direction);
+esp_err_t motor_get_state(uint8_t *left_speed, uint8_t *right_speed, uint8_t *left_direction,
+                          uint8_t *right_direction);
 
 #endif  // MOTOR_CONTROLLER_H

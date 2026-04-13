@@ -1,8 +1,8 @@
 # PRP: SLAM and Autonomous Navigation
 
-**Status**: planned  
-**Source**: Feature FR-016, PRD-001 (AI Robot Car System) future enhancements  
-**Priority**: P3  
+**Status**: planned
+**Source**: Feature FR-016, PRD-001 (AI Robot Car System) future enhancements
+**Priority**: P3
 **Confidence**: 5/10
 
 ---

@@ -56,5 +56,6 @@ jobs:
       target: esp32
       binary_name: esp32-cam-robocar.bin
       mqtt_ota_notify: true
+      mqtt_notify_topic: robocar/ota/notify
       release_tag: ${{ needs.check-tag.outputs.tag }}
     secrets: inherit
