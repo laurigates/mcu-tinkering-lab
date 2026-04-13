@@ -1,8 +1,8 @@
 # PRD-007: Audiobook Player
 
-**Status**: active  
-**Created**: 2026-04-05 (retroactively derived from git history)  
-**Source commits**: feat: Add ESPHome-based RFID audiobook player, feat: Migrate audiobook player from ESP8266 to ESP32 (2025-11-13), feat/audiobook (#48, 2025-11-23), feat: add activity-based deep sleep for audiobook-player (#143, 2026-03-23)  
+**Status**: active
+**Created**: 2026-04-05 (retroactively derived from git history)
+**Source commits**: feat: Add ESPHome-based RFID audiobook player, feat: Migrate audiobook player from ESP8266 to ESP32 (2025-11-13), feat/audiobook (#48, 2025-11-23), feat: add activity-based deep sleep for audiobook-player (#143, 2026-03-23)
 **Confidence**: 8/10
 
 ---

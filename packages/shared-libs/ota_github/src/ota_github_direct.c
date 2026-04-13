@@ -49,8 +49,7 @@ static void direct_task(void *pvParameters)
 
     /* Optional pre-download hook (WiFi-on-demand, VPN bring-up, …). */
     if (g_ota_github.cfg.hooks.pre_download_hook) {
-        esp_err_t phret =
-            g_ota_github.cfg.hooks.pre_download_hook(g_ota_github.cfg.hooks_user_ctx);
+        esp_err_t phret = g_ota_github.cfg.hooks.pre_download_hook(g_ota_github.cfg.hooks_user_ctx);
         if (phret != ESP_OK) {
             ESP_LOGE(TAG, "pre_download_hook failed: %s", esp_err_to_name(phret));
             post_failed(2);
@@ -140,7 +139,7 @@ static void direct_task(void *pvParameters)
                              new_desc.app_elf_sha256[3]);
                     post_failed(6);
                     esp_ota_mark_app_invalid_rollback_and_reboot();
-                    goto cleanup;  /* unreachable but paranoid */
+                    goto cleanup; /* unreachable but paranoid */
                 }
                 ESP_LOGI(TAG, "SHA256 prefix verification passed");
             } else {

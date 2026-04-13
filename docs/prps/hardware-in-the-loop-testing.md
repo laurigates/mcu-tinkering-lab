@@ -1,8 +1,8 @@
 # PRP: Hardware-in-the-Loop (HIL) Testing
 
-**Status**: planned  
-**Source**: Feature FR-007, PRD-003 (Robot Car Physics Simulation)  
-**Priority**: P2  
+**Status**: planned
+**Source**: Feature FR-007, PRD-003 (Robot Car Physics Simulation)
+**Priority**: P2
 **Confidence**: 6/10
 
 ---

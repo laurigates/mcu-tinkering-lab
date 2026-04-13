@@ -23,7 +23,7 @@
 
 static const char *TAG = "ota_github.mqtt";
 
-static const int64_t RATE_LIMIT_US = 60LL * 1000LL * 1000LL;  /* 60 seconds */
+static const int64_t RATE_LIMIT_US = 60LL * 1000LL * 1000LL; /* 60 seconds */
 static int64_t s_last_trigger_us = 0;
 
 static void handle_notify(const char *payload, int payload_len)
@@ -60,8 +60,7 @@ static void handle_notify(const char *payload, int payload_len)
     }
 }
 
-static void mqtt_event_handler(void *arg, esp_event_base_t base, int32_t event_id,
-                               void *event_data)
+static void mqtt_event_handler(void *arg, esp_event_base_t base, int32_t event_id, void *event_data)
 {
     (void)arg;
     (void)base;
@@ -71,9 +70,9 @@ static void mqtt_event_handler(void *arg, esp_event_base_t base, int32_t event_i
         case MQTT_EVENT_CONNECTED:
             if (g_ota_github.cfg.mqtt_notify_topic) {
                 int msg_id = esp_mqtt_client_subscribe(g_ota_github.cfg.mqtt_client,
-                                                      g_ota_github.cfg.mqtt_notify_topic, 1);
-                ESP_LOGI(TAG, "Subscribed to %s (msg_id=%d)",
-                         g_ota_github.cfg.mqtt_notify_topic, msg_id);
+                                                       g_ota_github.cfg.mqtt_notify_topic, 1);
+                ESP_LOGI(TAG, "Subscribed to %s (msg_id=%d)", g_ota_github.cfg.mqtt_notify_topic,
+                         msg_id);
             }
             break;
 
@@ -101,8 +100,8 @@ esp_err_t ota_github_mqtt_init(void)
         return ESP_ERR_INVALID_ARG;
     }
 
-    esp_err_t ret = esp_mqtt_client_register_event(g_ota_github.cfg.mqtt_client,
-                                                   ESP_EVENT_ANY_ID, mqtt_event_handler, NULL);
+    esp_err_t ret = esp_mqtt_client_register_event(g_ota_github.cfg.mqtt_client, ESP_EVENT_ANY_ID,
+                                                   mqtt_event_handler, NULL);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "esp_mqtt_client_register_event: %s", esp_err_to_name(ret));
         return ret;

@@ -1,8 +1,8 @@
 # PRD-005: Xbox-to-Switch Bridge
 
-**Status**: active  
-**Created**: 2026-04-05 (retroactively derived from git history)  
-**Source commits**: feat: xbox-switch-bridge (2026-02), feat(xbox-switch-bridge): multiple PRs (#89, #101, #106, #121, #122), feat: move Switch Pro Controller protocol handling on-device (#134), feat: add Switch USB Proxy project (#131)  
+**Status**: active
+**Created**: 2026-04-05 (retroactively derived from git history)
+**Source commits**: feat: xbox-switch-bridge (2026-02), feat(xbox-switch-bridge): multiple PRs (#89, #101, #106, #121, #122), feat: move Switch Pro Controller protocol handling on-device (#134), feat: add Switch USB Proxy project (#131)
 **Confidence**: 8/10
 
 ---

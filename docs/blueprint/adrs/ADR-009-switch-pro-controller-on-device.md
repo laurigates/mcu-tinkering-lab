@@ -1,8 +1,8 @@
 # ADR-009: Switch Pro Controller Protocol On-Device
 
-**Status**: accepted  
-**Date**: 2026-03-15  
-**Source commits**: feat: move Switch Pro Controller protocol handling on-device (#134), fix(switch_pro_usb): correct SPI address map, ACK bytes (#124, dd6e79c), Add swappable controller profile system (#125)  
+**Status**: accepted
+**Date**: 2026-03-15
+**Source commits**: feat: move Switch Pro Controller protocol handling on-device (#134), fix(switch_pro_usb): correct SPI address map, ACK bytes (#124, dd6e79c), Add swappable controller profile system (#125)
 **Confidence**: 8/10
 
 ---

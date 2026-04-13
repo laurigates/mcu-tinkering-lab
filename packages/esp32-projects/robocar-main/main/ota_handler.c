@@ -58,16 +58,16 @@ static esp_err_t pre_download_hook(void *ctx)
 
 esp_err_t ota_handler_init(void)
 {
-    ota_github_config_t cfg       = OTA_GITHUB_CONFIG_DEFAULT();
-    cfg.mode                      = OTA_GITHUB_MODE_TRIGGERED;
-    cfg.github_org                = OTA_GITHUB_ORG;
-    cfg.github_repo               = OTA_GITHUB_REPO;
-    cfg.triggered_asset_filename  = "robocar-main.bin";
-    cfg.stability_timeout_ms      = OTA_STABILITY_TIMEOUT_MS;
-    cfg.http_timeout_ms           = OTA_HTTP_TIMEOUT_MS;
-    cfg.task_stack_size           = OTA_TASK_STACK_SIZE;
-    cfg.task_priority             = OTA_TASK_PRIORITY;
-    cfg.hooks.pre_download_hook   = pre_download_hook;
+    ota_github_config_t cfg = OTA_GITHUB_CONFIG_DEFAULT();
+    cfg.mode = OTA_GITHUB_MODE_TRIGGERED;
+    cfg.github_org = OTA_GITHUB_ORG;
+    cfg.github_repo = OTA_GITHUB_REPO;
+    cfg.triggered_asset_filename = "robocar-main.bin";
+    cfg.stability_timeout_ms = OTA_STABILITY_TIMEOUT_MS;
+    cfg.http_timeout_ms = OTA_HTTP_TIMEOUT_MS;
+    cfg.task_stack_size = OTA_TASK_STACK_SIZE;
+    cfg.task_priority = OTA_TASK_PRIORITY;
+    cfg.hooks.pre_download_hook = pre_download_hook;
 
     esp_err_t ret = ota_github_init(&cfg);
     if (ret != ESP_OK) {

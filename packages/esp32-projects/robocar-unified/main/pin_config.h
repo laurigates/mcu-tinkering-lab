@@ -21,8 +21,8 @@
 // ========================================
 // I2C Bus (to TCA9548A multiplexer)
 // ========================================
-#define I2C_SDA_PIN GPIO_NUM_5   // XIAO D4/SDA
-#define I2C_SCL_PIN GPIO_NUM_6   // XIAO D5/SCL
+#define I2C_SDA_PIN GPIO_NUM_5     // XIAO D4/SDA
+#define I2C_SCL_PIN GPIO_NUM_6     // XIAO D5/SCL
 #define I2C_MASTER_FREQ_HZ 400000  // 400kHz for fast I2C
 
 // ========================================
@@ -38,8 +38,8 @@
 // ========================================
 // PCA9685 PWM Driver (via TCA9548A ch0)
 // ========================================
-#define PCA9685_ADDR 0x40      // Default PCA9685 address
-#define PCA9685_FREQ_HZ 200   // 200Hz: compromise for servos + motors + LEDs
+#define PCA9685_ADDR 0x40    // Default PCA9685 address
+#define PCA9685_FREQ_HZ 200  // 200Hz: compromise for servos + motors + LEDs
 
 // LED channels (2x RGB)
 #define LED_LEFT_R_CHANNEL 0
@@ -63,11 +63,11 @@
 // Channels 14-15: reserved for future expansion
 
 // PCA9685 digital output values (for direction pins)
-#define PCA9685_FULL_ON 4096   // Bit 12 set = full-on
-#define PCA9685_FULL_OFF 0     // All bits clear = full-off
+#define PCA9685_FULL_ON 4096  // Bit 12 set = full-on
+#define PCA9685_FULL_OFF 0    // All bits clear = full-off
 
 // PCA9685 PWM resolution
-#define PCA9685_PWM_MAX 4095   // 12-bit resolution
+#define PCA9685_PWM_MAX 4095  // 12-bit resolution
 
 // ========================================
 // Motor Control (TB6612FNG)
@@ -93,8 +93,8 @@
 // At 200Hz, period = 5000us. Pulse width range: 500-2500us.
 // PCA9685 counts = (pulse_us * 4096) / 5000
 #define SERVO_PERIOD_US 5000
-#define SERVO_MIN_PULSE_US 500    // 0 degrees
-#define SERVO_MAX_PULSE_US 2500   // 180 degrees
+#define SERVO_MIN_PULSE_US 500      // 0 degrees
+#define SERVO_MAX_PULSE_US 2500     // 180 degrees
 #define SERVO_CENTER_PULSE_US 1500  // 90 degrees
 
 // Convert pulse width (us) to PCA9685 count at 200Hz
@@ -146,7 +146,7 @@
 // ========================================
 // Timing
 // ========================================
-#define COMMAND_TIMEOUT_MS 1000    // Stop motors if no command for this long
+#define COMMAND_TIMEOUT_MS 1000   // Stop motors if no command for this long
 #define CAPTURE_INTERVAL_MS 5000  // AI capture interval
 
 #endif  // PIN_CONFIG_H

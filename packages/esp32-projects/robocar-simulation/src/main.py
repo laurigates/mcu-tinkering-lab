@@ -196,8 +196,8 @@ class SimulationManager:
             if not self.bridge:
                 self.robot.set_motor_commands(100, 80)  # Slight turn
 
-            # Run for extended duration
-            self.swift_sim.run_simulation(duration=300.0)  # 5 minutes  # ty: ignore[unresolved-attribute]
+            # Run for extended duration (5 minutes); swift_sim narrowed at runtime
+            self.swift_sim.run_simulation(duration=300.0)  # ty: ignore[unresolved-attribute]
         except Exception as e:
             print(f"Genesis simulation error: {e}")
 

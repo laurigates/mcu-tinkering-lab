@@ -1,8 +1,8 @@
 # ADR-007: Shared I2C Protocol Component
 
-**Status**: accepted  
-**Date**: 2026-03-12  
-**Source commit**: refactor(i2c): extract shared I2C protocol component (#110, c092847)  
+**Status**: accepted
+**Date**: 2026-03-12
+**Source commit**: refactor(i2c): extract shared I2C protocol component (#110, c092847)
 **Confidence**: 9/10
 
 ---

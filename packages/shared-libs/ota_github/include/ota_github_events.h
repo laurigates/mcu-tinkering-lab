@@ -45,9 +45,9 @@ typedef enum {
 /** @brief Payload posted with each event. Fields unset for a given event
  *         are zero. */
 typedef struct {
-    uint8_t progress;        /**< 0..100, valid for PROGRESS events. */
-    uint8_t error_code;      /**< Non-zero for FAILED events. */
-    char version[32];        /**< New version, for UPDATE_AVAILABLE events. */
+    uint8_t progress;   /**< 0..100, valid for PROGRESS events. */
+    uint8_t error_code; /**< Non-zero for FAILED events. */
+    char version[32];   /**< New version, for UPDATE_AVAILABLE events. */
 } ota_github_event_payload_t;
 
 #ifdef __cplusplus

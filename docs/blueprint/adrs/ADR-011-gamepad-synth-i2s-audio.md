@@ -1,7 +1,7 @@
 # ADR-011: Gamepad Synth I2S Audio Architecture
 
-**Status**: accepted  
-**Date**: 2026-04-07  
+**Status**: accepted
+**Date**: 2026-04-07
 **Confidence**: 9/10
 
 ---

@@ -10,10 +10,10 @@
  */
 
 #include "motor_controller.h"
-#include "i2c_bus.h"
-#include "pin_config.h"
 #include "driver/gpio.h"
 #include "esp_log.h"
+#include "i2c_bus.h"
+#include "pin_config.h"
 
 static const char *TAG = "motor_controller";
 
@@ -32,8 +32,8 @@ static uint16_t speed_to_pwm(uint8_t speed)
 }
 
 // Set both motors in a single I2C transaction (6 channels: IN1, IN2, PWM x2)
-static esp_err_t set_motors(uint16_t r_in1, uint16_t r_in2, uint16_t r_pwm,
-                            uint16_t l_in1, uint16_t l_in2, uint16_t l_pwm)
+static esp_err_t set_motors(uint16_t r_in1, uint16_t r_in2, uint16_t r_pwm, uint16_t l_in1,
+                            uint16_t l_in2, uint16_t l_pwm)
 {
     uint16_t values[6] = {r_in1, r_in2, r_pwm, l_in1, l_in2, l_pwm};
     return i2c_bus_pca9685_set_multi(MOTOR_RIGHT_IN1_CHANNEL, 6, values);
@@ -71,11 +71,12 @@ esp_err_t motor_controller_init(void)
 
 esp_err_t motor_move_forward(uint8_t speed)
 {
-    if (!motor_state.initialized) return ESP_ERR_INVALID_STATE;
+    if (!motor_state.initialized)
+        return ESP_ERR_INVALID_STATE;
 
     uint16_t pwm = speed_to_pwm(speed);
-    esp_err_t ret = set_motors(PCA9685_FULL_ON, PCA9685_FULL_OFF, pwm,
-                               PCA9685_FULL_ON, PCA9685_FULL_OFF, pwm);
+    esp_err_t ret =
+        set_motors(PCA9685_FULL_ON, PCA9685_FULL_OFF, pwm, PCA9685_FULL_ON, PCA9685_FULL_OFF, pwm);
 
     if (ret == ESP_OK) {
         motor_state.left_speed = speed;
@@ -89,11 +90,12 @@ esp_err_t motor_move_forward(uint8_t speed)
 
 esp_err_t motor_move_backward(uint8_t speed)
 {
-    if (!motor_state.initialized) return ESP_ERR_INVALID_STATE;
+    if (!motor_state.initialized)
+        return ESP_ERR_INVALID_STATE;
 
     uint16_t pwm = speed_to_pwm(speed);
-    esp_err_t ret = set_motors(PCA9685_FULL_OFF, PCA9685_FULL_ON, pwm,
-                               PCA9685_FULL_OFF, PCA9685_FULL_ON, pwm);
+    esp_err_t ret =
+        set_motors(PCA9685_FULL_OFF, PCA9685_FULL_ON, pwm, PCA9685_FULL_OFF, PCA9685_FULL_ON, pwm);
 
     if (ret == ESP_OK) {
         motor_state.left_speed = speed;
@@ -107,12 +109,13 @@ esp_err_t motor_move_backward(uint8_t speed)
 
 esp_err_t motor_turn_left(uint8_t speed)
 {
-    if (!motor_state.initialized) return ESP_ERR_INVALID_STATE;
+    if (!motor_state.initialized)
+        return ESP_ERR_INVALID_STATE;
 
     uint16_t full_pwm = speed_to_pwm(speed);
     uint16_t half_pwm = speed_to_pwm(speed / 2);
-    esp_err_t ret = set_motors(PCA9685_FULL_ON, PCA9685_FULL_OFF, full_pwm,
-                               PCA9685_FULL_ON, PCA9685_FULL_OFF, half_pwm);
+    esp_err_t ret = set_motors(PCA9685_FULL_ON, PCA9685_FULL_OFF, full_pwm, PCA9685_FULL_ON,
+                               PCA9685_FULL_OFF, half_pwm);
 
     if (ret == ESP_OK) {
         motor_state.right_speed = speed;
@@ -126,12 +129,13 @@ esp_err_t motor_turn_left(uint8_t speed)
 
 esp_err_t motor_turn_right(uint8_t speed)
 {
-    if (!motor_state.initialized) return ESP_ERR_INVALID_STATE;
+    if (!motor_state.initialized)
+        return ESP_ERR_INVALID_STATE;
 
     uint16_t full_pwm = speed_to_pwm(speed);
     uint16_t half_pwm = speed_to_pwm(speed / 2);
-    esp_err_t ret = set_motors(PCA9685_FULL_ON, PCA9685_FULL_OFF, half_pwm,
-                               PCA9685_FULL_ON, PCA9685_FULL_OFF, full_pwm);
+    esp_err_t ret = set_motors(PCA9685_FULL_ON, PCA9685_FULL_OFF, half_pwm, PCA9685_FULL_ON,
+                               PCA9685_FULL_OFF, full_pwm);
 
     if (ret == ESP_OK) {
         motor_state.right_speed = speed / 2;
@@ -145,12 +149,13 @@ esp_err_t motor_turn_right(uint8_t speed)
 
 esp_err_t motor_rotate_cw(uint8_t speed)
 {
-    if (!motor_state.initialized) return ESP_ERR_INVALID_STATE;
+    if (!motor_state.initialized)
+        return ESP_ERR_INVALID_STATE;
 
     uint16_t pwm = speed_to_pwm(speed);
     // Right backward, left forward
-    esp_err_t ret = set_motors(PCA9685_FULL_OFF, PCA9685_FULL_ON, pwm,
-                               PCA9685_FULL_ON, PCA9685_FULL_OFF, pwm);
+    esp_err_t ret =
+        set_motors(PCA9685_FULL_OFF, PCA9685_FULL_ON, pwm, PCA9685_FULL_ON, PCA9685_FULL_OFF, pwm);
 
     if (ret == ESP_OK) {
         motor_state.left_speed = speed;
@@ -164,12 +169,13 @@ esp_err_t motor_rotate_cw(uint8_t speed)
 
 esp_err_t motor_rotate_ccw(uint8_t speed)
 {
-    if (!motor_state.initialized) return ESP_ERR_INVALID_STATE;
+    if (!motor_state.initialized)
+        return ESP_ERR_INVALID_STATE;
 
     uint16_t pwm = speed_to_pwm(speed);
     // Right forward, left backward
-    esp_err_t ret = set_motors(PCA9685_FULL_ON, PCA9685_FULL_OFF, pwm,
-                               PCA9685_FULL_OFF, PCA9685_FULL_ON, pwm);
+    esp_err_t ret =
+        set_motors(PCA9685_FULL_ON, PCA9685_FULL_OFF, pwm, PCA9685_FULL_OFF, PCA9685_FULL_ON, pwm);
 
     if (ret == ESP_OK) {
         motor_state.left_speed = speed;
@@ -184,8 +190,8 @@ esp_err_t motor_rotate_ccw(uint8_t speed)
 esp_err_t motor_stop(void)
 {
     // Brake mode: all direction pins low, PWM = 0
-    esp_err_t ret = set_motors(PCA9685_FULL_OFF, PCA9685_FULL_OFF, 0,
-                               PCA9685_FULL_OFF, PCA9685_FULL_OFF, 0);
+    esp_err_t ret =
+        set_motors(PCA9685_FULL_OFF, PCA9685_FULL_OFF, 0, PCA9685_FULL_OFF, PCA9685_FULL_OFF, 0);
 
     if (ret == ESP_OK) {
         motor_state.left_speed = 0;
@@ -197,18 +203,19 @@ esp_err_t motor_stop(void)
     return ret;
 }
 
-esp_err_t motor_set_individual(uint8_t left_speed, uint8_t right_speed,
-                               uint8_t left_direction, uint8_t right_direction)
+esp_err_t motor_set_individual(uint8_t left_speed, uint8_t right_speed, uint8_t left_direction,
+                               uint8_t right_direction)
 {
-    if (!motor_state.initialized) return ESP_ERR_INVALID_STATE;
+    if (!motor_state.initialized)
+        return ESP_ERR_INVALID_STATE;
 
     uint16_t r_in1 = right_direction ? PCA9685_FULL_ON : PCA9685_FULL_OFF;
     uint16_t r_in2 = right_direction ? PCA9685_FULL_OFF : PCA9685_FULL_ON;
     uint16_t l_in1 = left_direction ? PCA9685_FULL_ON : PCA9685_FULL_OFF;
     uint16_t l_in2 = left_direction ? PCA9685_FULL_OFF : PCA9685_FULL_ON;
 
-    esp_err_t ret = set_motors(r_in1, r_in2, speed_to_pwm(right_speed),
-                               l_in1, l_in2, speed_to_pwm(left_speed));
+    esp_err_t ret =
+        set_motors(r_in1, r_in2, speed_to_pwm(right_speed), l_in1, l_in2, speed_to_pwm(left_speed));
 
     if (ret == ESP_OK) {
         motor_state.left_speed = left_speed;
@@ -219,15 +226,20 @@ esp_err_t motor_set_individual(uint8_t left_speed, uint8_t right_speed,
     return ret;
 }
 
-esp_err_t motor_get_state(uint8_t *left_speed, uint8_t *right_speed,
-                          uint8_t *left_direction, uint8_t *right_direction)
+esp_err_t motor_get_state(uint8_t *left_speed, uint8_t *right_speed, uint8_t *left_direction,
+                          uint8_t *right_direction)
 {
-    if (!motor_state.initialized) return ESP_ERR_INVALID_STATE;
+    if (!motor_state.initialized)
+        return ESP_ERR_INVALID_STATE;
 
-    if (left_speed) *left_speed = motor_state.left_speed;
-    if (right_speed) *right_speed = motor_state.right_speed;
-    if (left_direction) *left_direction = motor_state.left_direction;
-    if (right_direction) *right_direction = motor_state.right_direction;
+    if (left_speed)
+        *left_speed = motor_state.left_speed;
+    if (right_speed)
+        *right_speed = motor_state.right_speed;
+    if (left_direction)
+        *left_direction = motor_state.left_direction;
+    if (right_direction)
+        *right_direction = motor_state.right_direction;
 
     return ESP_OK;
 }

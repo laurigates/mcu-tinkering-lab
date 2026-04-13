@@ -13,12 +13,12 @@
 #define CAMERA_PINS_H
 
 // XIAO ESP32-S3 Sense (OV2640) internal pin definitions
-#define CAM_PIN_PWDN -1     // Not connected on XIAO Sense
-#define CAM_PIN_RESET -1    // Not connected on XIAO Sense
-#define CAM_PIN_XCLK 10     // Camera master clock
+#define CAM_PIN_PWDN -1   // Not connected on XIAO Sense
+#define CAM_PIN_RESET -1  // Not connected on XIAO Sense
+#define CAM_PIN_XCLK 10   // Camera master clock
 
-#define CAM_PIN_SIOD 40     // SCCB SDA (camera I2C)
-#define CAM_PIN_SIOC 39     // SCCB SCL (camera I2C)
+#define CAM_PIN_SIOD 40  // SCCB SDA (camera I2C)
+#define CAM_PIN_SIOC 39  // SCCB SCL (camera I2C)
 
 #define CAM_PIN_D7 48
 #define CAM_PIN_D6 11
