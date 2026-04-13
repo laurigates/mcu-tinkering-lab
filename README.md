@@ -74,6 +74,7 @@ mcu-tinkering-lab/
 │   ├── esp32-projects/
 │   │   ├── robocar-main/           # 🤖 AI robot car controller (Heltec WiFi LoRa 32)
 │   │   ├── robocar-camera/         # 📹 ESP32-CAM vision with Claude/Ollama AI
+│   │   ├── robocar-unified/        # 🤖 Single-board ESP32-S3 Sense consolidated firmware
 │   │   ├── robocar-simulation/     # 🎮 Python 3.11 physics simulation
 │   │   ├── robocar-docs/           # 📚 Documentation and coordination justfile
 │   │   ├── esp32cam-llm-telegram/  # 💬 Telegram bot with LLM vision
@@ -90,7 +91,9 @@ mcu-tinkering-lab/
 │   │   └── esp32-wireguard-ha-example/ # 🔒 WireGuard + Home Assistant
 │   ├── arduino-projects/           # 🚧 Coming soon
 │   ├── stm32-projects/             # 🚧 Coming soon
-│   └── shared-libs/                # 📦 Shared code libraries (planned)
+│   └── shared-libs/                # 📦 Shared code libraries
+│       ├── improv-wifi/            # Improv-WiFi BLE provisioning
+│       └── robocar-i2c-protocol/   # Shared I2C protocol (with unit tests)
 ├── .github/workflows/              # 🔄 CI/CD pipelines
 ├── tools/                          # 🛠️ Build scripts and utilities
 ├── docs/                           # 📖 Documentation

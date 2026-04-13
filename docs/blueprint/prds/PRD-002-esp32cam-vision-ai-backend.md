@@ -1,7 +1,7 @@
 ---
 id: PRD-002
 title: ESP32-CAM Vision and AI Backend
-status: draft
+status: active
 created: 2026-03-05
 ---
 

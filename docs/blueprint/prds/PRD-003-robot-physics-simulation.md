@@ -1,7 +1,7 @@
 ---
 id: PRD-003
 title: Robot Car Physics Simulation
-status: draft
+status: active
 created: 2026-03-05
 ---
 

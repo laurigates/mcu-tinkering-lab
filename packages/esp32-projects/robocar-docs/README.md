@@ -127,18 +127,18 @@ For a detailed technical overview of the architecture, see [docs/PLUGGABLE_AI.md
 
 ### Configuring the AI Backend
 
-To select and configure the AI backend, edit `esp32-cam-idf/main/config.h`:
+To select and configure the AI backend, edit `packages/esp32-projects/robocar-camera/main/config.h`:
 
 1.  **Choose your backend**: Comment out the backend you don't want to use and make sure the one you want is active.
     ```h
-    // In esp32-cam-idf/main/config.h
+    // In packages/esp32-projects/robocar-camera/main/config.h
 
     #define CONFIG_AI_BACKEND_CLAUDE
     // #define CONFIG_AI_BACKEND_OLLAMA
     ```
 2.  **Configure API Settings**:
-    - For **Claude**: Make sure your `CLAUDE_API_KEY` is set in `esp32-cam-idf/main/credentials.h`.
-    - For **Ollama**: Set the `OLLAMA_API_URL` and `OLLAMA_MODEL` in `esp32-cam-idf/main/config.h` to point to your local Ollama server.
+    - For **Claude**: Make sure your `CLAUDE_API_KEY` is set in `packages/esp32-projects/robocar-camera/main/credentials.h`.
+    - For **Ollama**: Set the `OLLAMA_API_URL` and `OLLAMA_MODEL` in `packages/esp32-projects/robocar-camera/main/config.h` to point to your local Ollama server.
 
 ## Getting Started
 
@@ -154,82 +154,64 @@ To select and configure the AI backend, edit `esp32-cam-idf/main/config.h`:
 
 1. **Clone and Setup**
    ```bash
-   git clone <repository>
-   cd robocar_test
-   make info  # Check system configuration
+   git clone https://github.com/laurigates/mcu-tinkering-lab.git
+   cd mcu-tinkering-lab
+   just --list              # List all available recipes
    ```
 
 2. **Configure Credentials**
    ```bash
-   cd esp32-cam-idf
+   cd packages/esp32-projects/robocar-camera
    cp main/credentials.h.example main/credentials.h
    # Edit credentials.h with your WiFi SSID and password. API keys are also stored here. See the "Pluggable AI Backend" section for more details.
    ```
 
-3. **Start Development Stack**
+3. **Build and Flash Main Controller**
    ```bash
-   make dev-stack-start     # Start Ollama AI + MQTT broker with service discovery
+   just robocar::build-main
+   PORT=/dev/ttyUSB0 just robocar::flash-main
    ```
 
-4. **Build and Flash Main Controller**
-   ```bash
-   make build-main
-   make flash-main
-   ```
-
-5. **Build and Flash ESP32-CAM**
+4. **Build and Flash ESP32-CAM**
    ```bash
    # Connect GPIO0 to GND for programming mode
-   make build-cam
-   make flash-cam
+   just robocar::build-cam
+   PORT=/dev/ttyUSB1 just robocar::flash-cam
    # Disconnect GPIO0 and reset
    ```
 
-6. **Monitor Operation**
+5. **Monitor Operation**
    ```bash
-   make monitor-main        # Monitor main controller
-   make monitor-cam         # Monitor camera module
+   just robocar::monitor-main   # Monitor main controller
+   just robocar::monitor-cam    # Monitor camera module
    # MQTT logs available at: mqtt://192.168.0.100:1883/robocar/logs
    ```
 
 ## Development Commands
 
-### Complete Development Stack
+### ESP-IDF Framework (containerized via Docker)
 ```bash
-make dev-stack-start     # Start Ollama AI + MQTT broker with service discovery
-make dev-stack-stop      # Stop complete development stack
-```
-
-### Individual Services
-```bash
-make ollama-start        # Start Ollama AI backend
-make mosquitto-start     # Start MQTT broker
-make ollama-stop         # Stop Ollama services
-make mosquitto-stop      # Stop MQTT services
-```
-
-### ESP-IDF Framework (Primary)
-```bash
-make build-main          # Build main controller
-make build-cam           # Build camera module
-make flash-main          # Flash main controller
-make flash-cam           # Flash camera module
-make monitor-main        # Monitor main controller
-make monitor-cam         # Monitor camera module
-make clean-main          # Clean main build
-make clean-cam           # Clean camera build
+just robocar::build-main            # Build main controller
+just robocar::build-cam             # Build camera module
+just robocar::build-all             # Build both controllers
+just robocar::flash-main PORT=...   # Flash main controller
+just robocar::flash-cam  PORT=...   # Flash camera module
+just robocar::monitor-main          # Monitor main controller
+just robocar::monitor-cam           # Monitor camera module
+just robocar::clean-main            # Clean main build
+just robocar::clean-cam             # Clean camera build
 ```
 
 ### Development Shortcuts
 ```bash
-make develop-main        # Build, flash, and monitor main controller
-make develop-cam         # Build, flash, and monitor camera module
+just robocar::develop-main   # Build, flash, and monitor main controller
+just robocar::develop-cam    # Build, flash, and monitor camera module
 ```
 
 ### System Information
 ```bash
-make info                # Show configuration and status
-make help                # Show all available commands
+just --list              # Show all available recipes
+just list-projects       # Show all projects in the monorepo
 ```
 
 ## System Architecture
@@ -320,15 +302,14 @@ mosquitto_sub -h 192.168.0.100 -t "robocar/logs" -v
 - **WiFi connection problems**: Verify credentials in credentials.h
 - **Motor not moving**: Check power supply and TB6612FNG connections
 - **OLED not displaying**: Verify I2C connections and address (0x3C)
-- **MQTT not connecting**: Check broker is running with `make mosquitto-start`
+- **MQTT not connecting**: Check that your MQTT broker is running and reachable
 - **Service discovery fails**: Verify mDNS is working on your network
 
 ### Debug Commands
 ```bash
-make monitor-main        # Check main controller logs
-make monitor-cam         # Check camera module logs
-make clean-cam && make build-cam  # Clean rebuild camera
-make dev-stack-start     # Start complete development environment
+just robocar::monitor-main                     # Check main controller logs
+just robocar::monitor-cam                      # Check camera module logs
+just robocar::clean-cam && just robocar::build-cam  # Clean rebuild camera
 ```
 
 ## Future Enhancements
