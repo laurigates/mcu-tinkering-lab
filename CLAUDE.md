@@ -14,6 +14,7 @@ mcu-tinkering-lab/
 │   └── esp32-projects/
 │       ├── robocar-main/           # Main controller (Heltec WiFi LoRa 32 V1)
 │       ├── robocar-camera/         # Vision system (ESP32-CAM + Claude/Ollama AI)
+│       ├── robocar-unified/        # Single-board ESP32-S3 Sense consolidated firmware
 │       ├── robocar-simulation/     # Python 3.11 physics simulation (Pymunk)
 │       ├── robocar-docs/           # Documentation and coordination justfile
 │       ├── esp32cam-llm-telegram/  # Telegram bot with LLM vision
@@ -28,7 +29,10 @@ mcu-tinkering-lab/
 │       ├── nfc-scavenger-hunt/     # NFC-based scavenger hunt game
 │       ├── esp32-wifitest/         # WiFi AP test firmware
 │       └── esp32-wireguard-ha-example/ # WireGuard + Home Assistant (ESPHome)
-├── .github/workflows/              # CI/CD (6 workflows)
+├── packages/shared-libs/
+│   ├── improv-wifi/                # Improv-WiFi BLE provisioning component
+│   └── robocar-i2c-protocol/       # Shared I2C protocol definitions + tests
+├── .github/workflows/              # CI/CD (31 workflows)
 ├── tools/scaffold/                 # Project scaffolding scripts
 ├── docs/blueprint/                 # Architecture docs (PRDs, ADRs)
 └── justfile                        # Build coordination (60+ targets)

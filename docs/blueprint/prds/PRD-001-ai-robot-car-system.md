@@ -1,7 +1,7 @@
 ---
 id: PRD-001
 title: AI-Powered Robot Car System
-status: draft
+status: active
 created: 2026-03-05
 ---
 

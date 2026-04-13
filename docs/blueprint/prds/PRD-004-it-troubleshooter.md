@@ -1,7 +1,7 @@
 ---
 id: PRD-004
 title: Autonomous IT Troubleshooter Device
-status: draft
+status: active
 created: 2026-03-09
 ---
 
