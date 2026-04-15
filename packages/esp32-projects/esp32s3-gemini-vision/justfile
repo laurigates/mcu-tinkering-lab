@@ -1,0 +1,112 @@
+# XIAO ESP32-S3 Sense + Gemini Robotics-ER vision demo
+# Run `just --list` to see available recipes
+
+set positional-arguments
+
+import '../../../tools/esp32.just'
+
+project_dir := "packages/esp32-projects/esp32s3-gemini-vision"
+port := env("PORT", _detected_s3)
+target := "esp32s3"
+
+default:
+    @just --list
+
+##########
+# Setup
+##########
+
+# Copy credentials template on first build
+[group: "setup"]
+credentials:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ ! -f main/credentials.h ]; then
+        cp main/credentials.h.example main/credentials.h
+        echo "Created main/credentials.h — edit WIFI_SSID, WIFI_PASSWORD, GEMINI_API_KEY"
+    fi
+
+##########
+# Build (containerized)
+##########
+
+# Build the firmware
+[group: "build"]
+build: credentials
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Building esp32s3-gemini-vision..."
+    {{container_cmd}} compose -f {{compose_file}} run --rm \
+        -w /workspace/{{project_dir}} \
+        esp-idf \
+        bash -c "idf.py set-target {{target}} && idf.py build"
+
+# Clean build artifacts
+[group: "build"]
+clean:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    {{container_cmd}} compose -f {{compose_file}} run --rm \
+        -w /workspace/{{project_dir}} \
+        esp-idf \
+        idf.py fullclean
+    echo "Clean complete"
+
+# Open sdkconfig menu
+[group: "build"]
+menuconfig:
+    {{container_cmd}} compose -f {{compose_file}} run --rm \
+        -w /workspace/{{project_dir}} \
+        esp-idf \
+        idf.py menuconfig
+
+# Interactive shell in ESP-IDF container
+[group: "build"]
+shell:
+    {{container_cmd}} compose -f {{compose_file}} run --rm \
+        -w /workspace/{{project_dir}} \
+        esp-idf \
+        /bin/bash
+
+##########
+# Flash & Monitor (native — XIAO uses USB-Serial-JTAG)
+##########
+
+# Flash firmware
+[group: "device"]
+flash: require-port
+    #!/usr/bin/env bash
+    set -euo pipefail
+    esptool --chip esp32s3 -p {{port}} -b 460800 \
+        --before default-reset --after hard-reset \
+        write-flash --flash-mode dio --flash-size detect \
+        0x0 build/bootloader/bootloader.bin \
+        0x8000 build/partition_table/partition-table.bin \
+        0x10000 build/esp32s3-gemini-vision.bin
+    echo "Flashed OK"
+
+# Monitor serial output (Ctrl-C to stop)
+[group: "device"]
+monitor: _serial-monitor
+
+# Build, flash, then monitor
+[group: "device"]
+flash-monitor: flash monitor
+
+# Full dev cycle
+[group: "device"]
+develop: build flash monitor
+
+##########
+# Info
+##########
+
+# Show project information
+[group: "info"]
+info:
+    @echo "esp32s3-gemini-vision"
+    @echo "  Target:   ESP32-S3"
+    @echo "  Hardware: XIAO ESP32-S3 Sense (OV2640, 8MB PSRAM)"
+    @echo "  AI:       Gemini Robotics-ER 1.5 (cloud, on-demand)"
+    @echo "  Port:     {{port}}"
+    @echo "  URL:      http://xiao-vision.local/"

@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>XIAO Gemini Vision</title>
+<style>
+  :root { color-scheme: dark; --bg:#111; --fg:#eee; --accent:#4ade80; --warn:#fbbf24; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, -apple-system, sans-serif; background:var(--bg); color:var(--fg); display:grid; grid-template-columns: 1fr 320px; min-height:100vh; }
+  @media (max-width: 720px) { body { grid-template-columns: 1fr; } }
+  main { position:relative; padding:1rem; display:flex; justify-content:center; align-items:flex-start; }
+  .stage { position:relative; width:100%; max-width:720px; aspect-ratio: 4 / 3; background:#000; border-radius:8px; overflow:hidden; }
+  .stage img, .stage canvas { position:absolute; inset:0; width:100%; height:100%; }
+  aside { padding:1rem; background:#1a1a1a; border-left:1px solid #2a2a2a; }
+  h1 { font-size:1.05rem; margin:0 0 .75rem; letter-spacing:.02em; }
+  button { width:100%; padding:.6rem; background:var(--accent); color:#000; border:0; border-radius:6px; font-weight:600; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  label { display:flex; justify-content:space-between; align-items:center; margin:.75rem 0 .25rem; font-size:.85rem; color:#bbb; }
+  input[type=range] { width:100%; }
+  .row { display:flex; gap:.5rem; align-items:center; }
+  .chip { display:inline-block; padding:.15rem .5rem; border-radius:4px; background:#2a2a2a; font-size:.75rem; margin:.1rem .25rem .1rem 0; }
+  .meta { font-size:.8rem; color:#888; margin-top:.5rem; }
+  .objects { margin-top:.75rem; max-height:40vh; overflow:auto; }
+  .error { color: var(--warn); font-size:.85rem; margin-top:.5rem; }
+</style>
+</head>
+<body>
+<main>
+  <div class="stage" id="stage">
+    <img id="stream" alt="camera" />
+    <canvas id="overlay"></canvas>
+  </div>
+</main>
+<aside>
+  <h1>XIAO Gemini Vision</h1>
+  <button id="detectBtn">Detect now</button>
+  <label><span>Auto mode</span><input type="checkbox" id="autoToggle" /></label>
+  <label><span>Interval</span><span id="intervalLabel">5 s</span></label>
+  <input type="range" id="intervalSlider" min="3" max="30" step="1" value="5" />
+  <div class="meta" id="statusLine">idle</div>
+  <div class="objects" id="objectsList"></div>
+  <div class="error" id="errorLine"></div>
+</aside>
+<script>
+(() => {
+  const stream = document.getElementById('stream');
+  const overlay = document.getElementById('overlay');
+  const ctx = overlay.getContext('2d');
+  const stage = document.getElementById('stage');
+  const statusLine = document.getElementById('statusLine');
+  const objectsList = document.getElementById('objectsList');
+  const errorLine = document.getElementById('errorLine');
+  const detectBtn = document.getElementById('detectBtn');
+  const autoToggle = document.getElementById('autoToggle');
+  const slider = document.getElementById('intervalSlider');
+  const intervalLabel = document.getElementById('intervalLabel');
+
+  function resizeOverlay() {
+    const r = stage.getBoundingClientRect();
+    overlay.width = r.width;
+    overlay.height = r.height;
+  }
+  window.addEventListener('resize', resizeOverlay);
+  setTimeout(resizeOverlay, 100);
+
+  // Stream runs on a separate httpd instance (port 81) so the MJPEG loop
+  // cannot block /metadata and /detect on port 80.
+  stream.src = `http://${location.hostname}:81/stream`;
+
+  function drawBoxes(objects) {
+    ctx.clearRect(0, 0, overlay.width, overlay.height);
+    if (!Array.isArray(objects)) return;
+    ctx.lineWidth = 2;
+    ctx.font = '14px system-ui, sans-serif';
+    ctx.textBaseline = 'top';
+    for (const o of objects) {
+      if (!o || !Array.isArray(o.box_2d) || o.box_2d.length !== 4) continue;
+      const [ymin, xmin, ymax, xmax] = o.box_2d;
+      const x = (xmin / 1000) * overlay.width;
+      const y = (ymin / 1000) * overlay.height;
+      const w = ((xmax - xmin) / 1000) * overlay.width;
+      const h = ((ymax - ymin) / 1000) * overlay.height;
+      ctx.strokeStyle = '#4ade80';
+      ctx.strokeRect(x, y, w, h);
+      const label = o.label || '?';
+      const tw = ctx.measureText(label).width + 8;
+      ctx.fillStyle = 'rgba(74, 222, 128, 0.85)';
+      ctx.fillRect(x, Math.max(0, y - 18), tw, 18);
+      ctx.fillStyle = '#000';
+      ctx.fillText(label, x + 4, Math.max(0, y - 17));
+    }
+  }
+
+  function renderList(objects) {
+    if (!Array.isArray(objects)) { objectsList.innerHTML = ''; return; }
+    objectsList.innerHTML = objects.map(o => `<span class="chip">${o.label || '?'}</span>`).join('');
+  }
+
+  let lastTs = 0;
+  async function pollMetadata() {
+    try {
+      const res = await fetch('/metadata', { cache: 'no-store' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      const busy = data.busy;
+      statusLine.textContent =
+        `${busy ? 'detecting…' : 'idle'} · latency ${data.latency_ms ?? '—'} ms · auto ${data.auto_interval_s}s`;
+      detectBtn.disabled = busy;
+      // objects arrives as either a JSON array string or already-parsed
+      let objects = data.objects;
+      if (typeof objects === 'string') { try { objects = JSON.parse(objects); } catch { objects = []; } }
+      if (objects && objects.error) {
+        errorLine.textContent = 'Error: ' + objects.error;
+        drawBoxes([]); renderList([]);
+      } else {
+        errorLine.textContent = '';
+        if (data.timestamp_ms !== lastTs) {
+          lastTs = data.timestamp_ms;
+          drawBoxes(objects || []);
+          renderList(objects || []);
+        }
+      }
+    } catch (e) {
+      errorLine.textContent = 'poll error: ' + e.message;
+    }
+  }
+  setInterval(pollMetadata, 500);
+  pollMetadata();
+
+  detectBtn.addEventListener('click', async () => {
+    detectBtn.disabled = true;
+    try { await fetch('/detect', { method: 'POST' }); } catch {}
+  });
+
+  async function setInterval_s(sec) {
+    try { await fetch('/config?interval=' + sec); } catch {}
+  }
+  autoToggle.addEventListener('change', () => {
+    setInterval_s(autoToggle.checked ? parseInt(slider.value, 10) : 0);
+  });
+  slider.addEventListener('input', () => {
+    intervalLabel.textContent = slider.value + ' s';
+    if (autoToggle.checked) setInterval_s(parseInt(slider.value, 10));
+  });
+  stream.addEventListener('load', resizeOverlay);
+})();
+</script>
+</body>
+</html>
