@@ -28,20 +28,7 @@
       "autoUpdate": true
     }
   },
-  "enabledPlugins": {
-    "configure-plugin@claude-plugins": true,
-    "health-plugin@claude-plugins": true,
-    "hooks-plugin@claude-plugins": true,
-    "git-plugin@claude-plugins": true,
-    "python-plugin@claude-plugins": true,
-    "code-quality-plugin@claude-plugins": true,
-    "testing-plugin@claude-plugins": true,
-    "container-plugin@claude-plugins": true,
-    "github-actions-plugin@claude-plugins": true,
-    "documentation-plugin@claude-plugins": true,
-    "project-plugin@claude-plugins": true,
-    "tools-plugin@claude-plugins": true
-  },
+  "enabledPlugins": {},
   "hooks": {
     "SessionStart": [
       {
