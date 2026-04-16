@@ -101,9 +101,10 @@ static esp_err_t camera_init(void)
 }
 
 // ------------------------------------------------------------------ WiFi ----
+// Canonical STA setup — see .claude/skills/wifi-sta-setup/SKILL.md
 #define WIFI_CONNECTED_BIT BIT0
 #define WIFI_FAIL_BIT BIT1
-#define WIFI_MAX_RETRY 10
+#define WIFI_MAX_RETRY 5
 
 static EventGroupHandle_t s_wifi_event_group;
 static int s_retry_num = 0;
@@ -113,12 +114,20 @@ static void wifi_event_handler(void *arg, esp_event_base_t base, int32_t id, voi
     if (base == WIFI_EVENT && id == WIFI_EVENT_STA_START) {
         esp_wifi_connect();
     } else if (base == WIFI_EVENT && id == WIFI_EVENT_STA_DISCONNECTED) {
+        wifi_event_sta_disconnected_t *disconnected = (wifi_event_sta_disconnected_t *)data;
+        ESP_LOGW(TAG, "WiFi disconnected. Reason: %d (%s)", disconnected->reason,
+                 disconnected->reason == WIFI_REASON_NO_AP_FOUND         ? "AP not found"
+                 : disconnected->reason == WIFI_REASON_AUTH_FAIL         ? "Auth failed"
+                 : disconnected->reason == WIFI_REASON_ASSOC_FAIL        ? "Assoc failed"
+                 : disconnected->reason == WIFI_REASON_HANDSHAKE_TIMEOUT ? "Handshake timeout"
+                                                                         : "Other");
         if (s_retry_num < WIFI_MAX_RETRY) {
             esp_wifi_connect();
             s_retry_num++;
-            ESP_LOGW(TAG, "WiFi retry %d/%d", s_retry_num, WIFI_MAX_RETRY);
+            ESP_LOGI(TAG, "Retry %d/%d to connect to the AP", s_retry_num, WIFI_MAX_RETRY);
         } else {
             xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
+            ESP_LOGE(TAG, "Failed to connect to AP after %d retries", WIFI_MAX_RETRY);
         }
     } else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t *evt = (ip_event_got_ip_t *)data;
@@ -137,6 +146,10 @@ static esp_err_t wifi_sta_start(void)
 
     wifi_init_config_t init_cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&init_cfg));
+    // Regulatory: allow channels 1–13 (default clips to 1–11 and hides APs on 12/13)
+    wifi_country_t country = {
+        .cc = "FI", .schan = 1, .nchan = 13, .policy = WIFI_COUNTRY_POLICY_AUTO};
+    ESP_ERROR_CHECK(esp_wifi_set_country(&country));
     ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
     ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID,
                                                         &wifi_event_handler, NULL, NULL));
@@ -145,11 +158,12 @@ static esp_err_t wifi_sta_start(void)
     wifi_config_t wifi_cfg = {
         .sta =
             {
-                .threshold.authmode = WIFI_AUTH_WPA2_PSK,
+                // Mixed-mode tolerant: accepts APs that advertise WPA or WPA2
+                .threshold.authmode = WIFI_AUTH_WPA_WPA2_PSK,
                 // PMF capable-but-not-required fixes 4-way handshake timeouts
                 // against APs that advertise PMF (common on modern WiFi 6).
                 .pmf_cfg = {.capable = true, .required = false},
-                .scan_method = WIFI_ALL_CHANNEL_SCAN,
+                .scan_method = WIFI_FAST_SCAN,
                 .sort_method = WIFI_CONNECT_AP_BY_SIGNAL,
             },
     };
