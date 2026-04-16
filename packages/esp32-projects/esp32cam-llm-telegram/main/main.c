@@ -2,6 +2,7 @@
 #include <string.h>
 #include "esp_event.h"
 #include "esp_log.h"
+#include "esp_netif.h"
 #include "esp_system.h"
 #include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
@@ -21,8 +22,11 @@
 static const char *TAG = "MAIN";
 
 // Event group for WiFi connection
+// Canonical STA setup — see .claude/skills/wifi-sta-setup/SKILL.md
 static EventGroupHandle_t wifi_event_group;
 const int WIFI_CONNECTED_BIT = BIT0;
+const int WIFI_FAIL_BIT = BIT1;
+static int s_retry_num = 0;
 
 // Global app configuration
 static app_config_t app_config;
@@ -34,31 +38,39 @@ static telegram_bot_t telegram_bot;
 static TaskHandle_t camera_task_handle = NULL;
 static TaskHandle_t telegram_task_handle = NULL;
 
-// WiFi event handler
+// WiFi event handler — canonical with disconnect reason code logging
 static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id,
                                void *event_data)
 {
-    if (event_base == WIFI_EVENT) {
-        switch (event_id) {
-            case WIFI_EVENT_STA_START:
-                esp_wifi_connect();
-                break;
-            case WIFI_EVENT_STA_DISCONNECTED:
-                ESP_LOGI(TAG, "WiFi disconnected, retrying...");
-                esp_wifi_connect();
-                xEventGroupClearBits(wifi_event_group, WIFI_CONNECTED_BIT);
-                break;
-            default:
-                break;
+    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
+        esp_wifi_connect();
+    } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
+        wifi_event_sta_disconnected_t *disconnected = (wifi_event_sta_disconnected_t *)event_data;
+        ESP_LOGW(TAG, "WiFi disconnected. Reason: %d (%s)", disconnected->reason,
+                 disconnected->reason == WIFI_REASON_NO_AP_FOUND         ? "AP not found"
+                 : disconnected->reason == WIFI_REASON_AUTH_FAIL         ? "Auth failed"
+                 : disconnected->reason == WIFI_REASON_ASSOC_FAIL        ? "Assoc failed"
+                 : disconnected->reason == WIFI_REASON_HANDSHAKE_TIMEOUT ? "Handshake timeout"
+                                                                         : "Other");
+        xEventGroupClearBits(wifi_event_group, WIFI_CONNECTED_BIT);
+
+        if (s_retry_num < WIFI_MAXIMUM_RETRY) {
+            esp_wifi_connect();
+            s_retry_num++;
+            ESP_LOGI(TAG, "Retry %d/%d to connect to the AP", s_retry_num, WIFI_MAXIMUM_RETRY);
+        } else {
+            xEventGroupSetBits(wifi_event_group, WIFI_FAIL_BIT);
+            ESP_LOGE(TAG, "Failed to connect to AP after %d retries", WIFI_MAXIMUM_RETRY);
         }
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
         ESP_LOGI(TAG, "Got IP: " IPSTR, IP2STR(&event->ip_info.ip));
+        s_retry_num = 0;
         xEventGroupSetBits(wifi_event_group, WIFI_CONNECTED_BIT);
     }
 }
 
-// Initialize WiFi
+// Initialize WiFi — canonical STA setup (see .claude/skills/wifi-sta-setup)
 static esp_err_t wifi_init(void)
 {
     ESP_LOGI(TAG, "Initializing WiFi");
@@ -72,6 +84,14 @@ static esp_err_t wifi_init(void)
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
+    // Regulatory: allow channels 1–13 (default clips to 1–11 and hides APs on 12/13)
+    wifi_country_t country = {
+        .cc = "FI", .schan = 1, .nchan = 13, .policy = WIFI_COUNTRY_POLICY_AUTO};
+    ESP_ERROR_CHECK(esp_wifi_set_country(&country));
+
+    // Disable power save for better connectivity
+    ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
+
     ESP_ERROR_CHECK(
         esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL));
     ESP_ERROR_CHECK(
@@ -80,23 +100,29 @@ static esp_err_t wifi_init(void)
     wifi_config_t wifi_config = {
         .sta =
             {
-                .threshold.authmode = WIFI_AUTH_WPA2_PSK,
+                // Mixed-mode tolerant: accepts APs that advertise WPA or WPA2
+                .threshold.authmode = WIFI_AUTH_WPA_WPA2_PSK,
+                // PMF capable-but-not-required fixes 4-way handshake timeouts
+                // against APs that advertise PMF (common on modern WiFi 6).
                 .pmf_cfg = {.capable = true, .required = false},
+                .scan_method = WIFI_FAST_SCAN,
+                .sort_method = WIFI_CONNECT_AP_BY_SIGNAL,
             },
     };
 
-    strcpy((char *)wifi_config.sta.ssid, app_config.wifi_ssid);
-    strcpy((char *)wifi_config.sta.password, app_config.wifi_password);
+    strncpy((char *)wifi_config.sta.ssid, app_config.wifi_ssid, sizeof(wifi_config.sta.ssid) - 1);
+    strncpy((char *)wifi_config.sta.password, app_config.wifi_password,
+            sizeof(wifi_config.sta.password) - 1);
 
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-    ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_config));
+    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
     ESP_ERROR_CHECK(esp_wifi_start());
 
     ESP_LOGI(TAG, "WiFi initialization finished. Waiting for connection...");
 
-    // Wait for connection
-    EventBits_t bits =
-        xEventGroupWaitBits(wifi_event_group, WIFI_CONNECTED_BIT, pdFALSE, pdFALSE, portMAX_DELAY);
+    // Wait for either CONNECTED or FAIL (set by event handler after retry cap)
+    EventBits_t bits = xEventGroupWaitBits(wifi_event_group, WIFI_CONNECTED_BIT | WIFI_FAIL_BIT,
+                                           pdFALSE, pdFALSE, portMAX_DELAY);
 
     if (bits & WIFI_CONNECTED_BIT) {
         ESP_LOGI(TAG, "Connected to WiFi SSID: %s", app_config.wifi_ssid);
