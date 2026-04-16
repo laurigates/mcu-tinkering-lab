@@ -98,14 +98,22 @@ static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
         esp_wifi_connect();
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
+        wifi_event_sta_disconnected_t *disconnected = (wifi_event_sta_disconnected_t *)event_data;
+        ESP_LOGW(TAG, "WiFi disconnected. Reason: %d (%s)", disconnected->reason,
+                 disconnected->reason == WIFI_REASON_NO_AP_FOUND         ? "AP not found"
+                 : disconnected->reason == WIFI_REASON_AUTH_FAIL         ? "Auth failed"
+                 : disconnected->reason == WIFI_REASON_ASSOC_FAIL        ? "Assoc failed"
+                 : disconnected->reason == WIFI_REASON_HANDSHAKE_TIMEOUT ? "Handshake timeout"
+                                                                         : "Other");
+
         if (s_retry_num < WIFI_MAXIMUM_RETRY) {
             esp_wifi_connect();
             s_retry_num++;
-            ESP_LOGI(TAG, "Retry to connect to the AP");
+            ESP_LOGI(TAG, "Retry %d/%d to connect to the AP", s_retry_num, WIFI_MAXIMUM_RETRY);
         } else {
             xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
+            ESP_LOGE(TAG, "Failed to connect to AP after %d retries", WIFI_MAXIMUM_RETRY);
         }
-        ESP_LOGI(TAG, "Connect to the AP fail");
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
         ESP_LOGI(TAG, "Got IP:" IPSTR, IP2STR(&event->ip_info.ip));
@@ -127,6 +135,14 @@ void wifi_init_sta(void)
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
+    // Set country code for regulatory compliance (Finland — allows channels 1-13)
+    wifi_country_t country = {
+        .cc = "FI", .schan = 1, .nchan = 13, .policy = WIFI_COUNTRY_POLICY_AUTO};
+    ESP_ERROR_CHECK(esp_wifi_set_country(&country));
+
+    // Disable power save — server-class device needs steady connectivity
+    ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
+
     esp_event_handler_instance_t instance_any_id;
     esp_event_handler_instance_t instance_got_ip;
     ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID,
@@ -139,11 +155,10 @@ void wifi_init_sta(void)
             {
                 .ssid = WIFI_SSID,
                 .password = WIFI_PASS,
-                /* Setting a password implies station will connect to all security modes including
-                 * WEP/WPA. However these modes are deprecated and not advisable to be used. Incase
-                 * your Access point doesn't support WPA2, these mode can be enabled by commenting
-                 * below line */
-                .threshold.authmode = WIFI_AUTH_WPA2_PSK,
+                .threshold.authmode = WIFI_AUTH_WPA_WPA2_PSK,     // mixed-mode tolerant
+                .pmf_cfg = {.capable = true, .required = false},  // 4-way handshake tolerance
+                .scan_method = WIFI_FAST_SCAN,
+                .sort_method = WIFI_CONNECT_AP_BY_SIGNAL,
             },
     };
 
