@@ -54,10 +54,6 @@ CONFIG_ESP_WIFI_AMPDU_RX_ENABLED=n
 CONFIG_ESP_WIFI_AMSDU_TX_ENABLED=n
 CONFIG_ESP_WIFI_NVS_ENABLED=y
 
-# Cap TX power — in tight USB supplies the radio at max power can brown the
-# 3.3V rail during handshake bursts, which presents as 4-way handshake timeout.
-CONFIG_ESP_PHY_MAX_WIFI_TX_POWER=15
-
 # Logging
 CONFIG_LOG_DEFAULT_LEVEL_INFO=y
 CONFIG_LOG_DEFAULT_LEVEL=3
