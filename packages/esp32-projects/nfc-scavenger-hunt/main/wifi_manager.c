@@ -14,7 +14,7 @@ static const char *TAG = "wifi";
 
 #define WIFI_CONNECTED_BIT BIT0
 #define WIFI_FAIL_BIT BIT1
-#define MAX_RETRY 10
+#define WIFI_MAXIMUM_RETRY 5
 
 static EventGroupHandle_t wifi_event_group;
 static int retry_count = 0;
@@ -24,12 +24,20 @@ static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
         esp_wifi_connect();
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
-        if (retry_count < MAX_RETRY) {
+        wifi_event_sta_disconnected_t *disconnected = (wifi_event_sta_disconnected_t *)data;
+        ESP_LOGW(TAG, "WiFi disconnected. Reason: %d (%s)", disconnected->reason,
+                 disconnected->reason == WIFI_REASON_NO_AP_FOUND         ? "AP not found"
+                 : disconnected->reason == WIFI_REASON_AUTH_FAIL         ? "Auth failed"
+                 : disconnected->reason == WIFI_REASON_ASSOC_FAIL        ? "Assoc failed"
+                 : disconnected->reason == WIFI_REASON_HANDSHAKE_TIMEOUT ? "Handshake timeout"
+                                                                         : "Other");
+
+        if (retry_count < WIFI_MAXIMUM_RETRY) {
             retry_count++;
-            ESP_LOGW(TAG, "WiFi disconnected, retry %d/%d", retry_count, MAX_RETRY);
+            ESP_LOGI(TAG, "Retry %d/%d to connect to the AP", retry_count, WIFI_MAXIMUM_RETRY);
             esp_wifi_connect();
         } else {
-            ESP_LOGE(TAG, "WiFi connection failed after %d retries", MAX_RETRY);
+            ESP_LOGE(TAG, "Failed to connect to AP after %d retries", WIFI_MAXIMUM_RETRY);
             xEventGroupSetBits(wifi_event_group, WIFI_FAIL_BIT);
         }
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
@@ -51,6 +59,14 @@ esp_err_t wifi_manager_init(void)
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
+    // Set country code for regulatory compliance (Finland, channels 1-13)
+    wifi_country_t country = {
+        .cc = "FI", .schan = 1, .nchan = 13, .policy = WIFI_COUNTRY_POLICY_AUTO};
+    ESP_ERROR_CHECK(esp_wifi_set_country(&country));
+
+    // Power save off for reliable connectivity
+    ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
+
     ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID,
                                                         &event_handler, NULL, NULL));
     ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP,
@@ -61,7 +77,10 @@ esp_err_t wifi_manager_init(void)
             {
                 .ssid = WIFI_SSID,
                 .password = WIFI_PASSWORD,
-                .threshold.authmode = WIFI_AUTH_WPA2_PSK,
+                .threshold.authmode = WIFI_AUTH_WPA_WPA2_PSK,
+                .pmf_cfg = {.capable = true, .required = false},
+                .scan_method = WIFI_FAST_SCAN,
+                .sort_method = WIFI_CONNECT_AP_BY_SIGNAL,
             },
     };
 
