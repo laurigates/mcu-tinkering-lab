@@ -517,7 +517,7 @@ static void plat_on_controller_data(uni_hid_device_t *d, uni_controller_t *ctl)
     (void)d;
     if (ctl->klass != UNI_CONTROLLER_CLASS_GAMEPAD)
         return;
-    uni_gamepad_t *gp = &ctl->gamepad;
+    const uni_gamepad_t *gp = &ctl->gamepad;
     s_gp.buttons = gp->buttons;
     s_gp.dpad = gp->dpad;
     s_gp.misc_buttons = gp->misc_buttons;

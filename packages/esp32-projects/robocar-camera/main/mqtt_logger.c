@@ -4,6 +4,7 @@
  */
 
 #include "mqtt_logger.h"
+#include <inttypes.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
@@ -348,8 +349,8 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
 
             // Publish online status
             char status_msg[128];
-            snprintf(status_msg, sizeof(status_msg), "{\"status\":\"online\",\"timestamp\":%lld}",
-                     get_timestamp_ms());
+            snprintf(status_msg, sizeof(status_msg),
+                     "{\"status\":\"online\",\"timestamp\":%" PRId64 "}", get_timestamp_ms());
             mqtt_logger_publish_status(status_msg);
 
             xSemaphoreTake(s_context.mutex, pdMS_TO_TICKS(SEMAPHORE_TIMEOUT_MS));

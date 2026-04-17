@@ -164,7 +164,7 @@ esp_err_t servo_set_angle(servo_id_t servo_id, int16_t angle)
     }
 
     uint8_t channel;
-    bool *enabled;
+    const bool *enabled;
     int16_t *current_angle;
 
     if (servo_id == SERVO_PAN) {

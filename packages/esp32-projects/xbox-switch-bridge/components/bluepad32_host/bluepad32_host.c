@@ -79,7 +79,7 @@ static void bridge_on_controller_data(uni_hid_device_t *d, uni_controller_t *ctl
     if (ctl->klass != UNI_CONTROLLER_CLASS_GAMEPAD)
         return;
 
-    uni_gamepad_t *gp = &ctl->gamepad;
+    const uni_gamepad_t *gp = &ctl->gamepad;
     s_gamepad_state.buttons = gp->buttons;
     s_gamepad_state.dpad = gp->dpad;
     s_gamepad_state.misc_buttons = gp->misc_buttons;

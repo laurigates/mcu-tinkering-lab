@@ -363,7 +363,7 @@ esp_err_t i2c_get_version(char *version, size_t version_len)
 
     if (err == ESP_OK && response.status == 0x00) {
         if (response.data_length == sizeof(version_response_t)) {
-            version_response_t *ver = (version_response_t *)response.data;
+            const version_response_t *ver = (const version_response_t *)response.data;
             strncpy(version, ver->version, version_len);
             version[version_len - 1] = '\0';
             ESP_LOGI(TAG, "Firmware version: %s", version);

@@ -141,7 +141,7 @@ static void rc522_reset(void)
     }
 }
 
-static esp_err_t rc522_communicate(uint8_t cmd, uint8_t *send_data, uint8_t send_len,
+static esp_err_t rc522_communicate(uint8_t cmd, const uint8_t *send_data, uint8_t send_len,
                                    uint8_t *recv_data, uint8_t *recv_len, uint8_t *valid_bits)
 {
     uint8_t irq_en = 0x00;

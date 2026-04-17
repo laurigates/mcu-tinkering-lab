@@ -1,4 +1,5 @@
 #include "motor_controller.h"
+#include <inttypes.h>
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -277,9 +278,9 @@ char *motor_get_telemetry_string(void)
              "Command: %s\n"
              "Left Speed: %d\n"
              "Right Speed: %d\n"
-             "Distance: %.1f mm\n"
+             "Distance: %" PRIu32 " mm\n"
              "Heading: %.1f°\n"
-             "Runtime: %lu ms\n"
+             "Runtime: %" PRIu32 " ms\n"
              "Status: %s",
              motor_get_command_name(motor_status.current_command), motor_status.left_speed,
              motor_status.right_speed, motor_status.distance_traveled_mm,

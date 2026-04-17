@@ -47,6 +47,7 @@ static esp_err_t http_event_handler(esp_http_client_event_t *evt)
                     s_response_len += bytes_to_copy;
                     s_response_buffer[s_response_len] = '\0';
 
+                    // cppcheck-suppress knownConditionTrueFalse // true when buffer fills partially
                     if (bytes_to_copy < evt->data_len) {
                         ESP_LOGW(
                             TAG,

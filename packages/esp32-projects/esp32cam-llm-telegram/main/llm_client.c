@@ -239,7 +239,7 @@ static esp_err_t send_ollama_request(const char *prompt, const char *image_base6
 }
 
 // Initialize LLM client
-esp_err_t llm_client_init(llm_config_t *config)
+esp_err_t llm_client_init(const llm_config_t *config)
 {
     if (!config) {
         return ESP_ERR_INVALID_ARG;

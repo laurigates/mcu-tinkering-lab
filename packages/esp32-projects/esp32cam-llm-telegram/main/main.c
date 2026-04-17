@@ -1,3 +1,4 @@
+#include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
 #include "esp_event.h"
@@ -144,7 +145,7 @@ static void camera_capture_callback(const uint8_t *data, size_t size, void *user
 
     if (err == ESP_OK) {
         // Format and send Telegram message
-        char *message = vision_format_telegram_message(&vision_result);
+        const char *message = vision_format_telegram_message(&vision_result);
         telegram_send_text(&telegram_bot, message);
 
         // Send the actual image
@@ -163,7 +164,7 @@ static void camera_capture_callback(const uint8_t *data, size_t size, void *user
         motor_execute_command(cmd, speed, duration);
 
         // Send motor telemetry
-        char *telemetry = motor_get_telemetry_string();
+        const char *telemetry = motor_get_telemetry_string();
         telegram_send_text(&telegram_bot, telemetry);
 
         // Simulate movement
@@ -226,12 +227,12 @@ static void process_telegram_command(const char *command, const char *args)
         snprintf(status_msg, sizeof(status_msg),
                  "*System Status*\n\n"
                  "📷 Camera: %s\n"
-                 "Captures: %lu\n"
-                 "Errors: %lu\n\n"
+                 "Captures: %" PRIu32 "\n"
+                 "Errors: %" PRIu32 "\n\n"
                  "🚗 Motor: %s\n"
-                 "Distance: %.1f mm\n"
+                 "Distance: %" PRIu32 " mm\n"
                  "Heading: %.1f°\n\n"
-                 "👁 Vision: %d/%d analyses\n"
+                 "👁 Vision: %" PRIu32 "/%" PRIu32 " analyses\n"
                  "Backend: %s",
                  cam_status.is_capturing ? "Active" : "Idle", cam_status.capture_count,
                  cam_status.error_count, motor_status.is_running ? "Running" : "Stopped",
