@@ -94,20 +94,12 @@ static bool load_from_file(credentials_t *creds)
     creds->wifi_password[MAX_PASSWORD_LENGTH - 1] = '\0';
     ESP_LOGI(TAG, "Loaded WiFi password from credentials.h");
 
-#ifdef CLAUDE_API_KEY
-    strncpy(creds->claude_api_key, CLAUDE_API_KEY, MAX_API_KEY_LENGTH - 1);
-    creds->claude_api_key[MAX_API_KEY_LENGTH - 1] = '\0';
-    ESP_LOGI(TAG, "Loaded Claude API key from credentials.h");
-#else
-    ESP_LOGI(TAG, "Claude API key not configured - only required for Claude backend");
-#endif
-
 #ifdef GEMINI_API_KEY
     strncpy(creds->gemini_api_key, GEMINI_API_KEY, MAX_API_KEY_LENGTH - 1);
     creds->gemini_api_key[MAX_API_KEY_LENGTH - 1] = '\0';
     ESP_LOGI(TAG, "Loaded Gemini API key from credentials.h");
 #else
-    ESP_LOGI(TAG, "Gemini API key not configured - only required for Gemini backend");
+    ESP_LOGI(TAG, "Gemini API key not configured - planner will fail safe to STOP");
 #endif
 
     return true;
@@ -127,8 +119,7 @@ bool load_credentials(credentials_t *creds)
 
     // Priority 1: NVS (credentials stored by Improv WiFi provisioner)
     if (load_from_nvs(creds)) {
-        // WiFi credentials loaded from NVS; still try env/file for API keys
-        load_from_env("CLAUDE_API_KEY", creds->claude_api_key, MAX_API_KEY_LENGTH);
+        // WiFi credentials loaded from NVS; still try env/file for API key
         load_from_env("GEMINI_API_KEY", creds->gemini_api_key, MAX_API_KEY_LENGTH);
         creds->credentials_loaded = true;
         return true;
@@ -142,8 +133,7 @@ bool load_credentials(credentials_t *creds)
     if (!load_from_env("WIFI_PASSWORD", creds->wifi_password, MAX_PASSWORD_LENGTH)) {
         env_loaded = false;
     }
-    // API keys are optional — only needed for their respective backends
-    load_from_env("CLAUDE_API_KEY", creds->claude_api_key, MAX_API_KEY_LENGTH);
+    // Gemini API key is required for the planner
     load_from_env("GEMINI_API_KEY", creds->gemini_api_key, MAX_API_KEY_LENGTH);
 
     if (env_loaded) {
@@ -184,27 +174,11 @@ bool validate_credentials(const credentials_t *creds)
         return false;
     }
 
-// Claude API key validation (optional - only required for Claude backend)
-#ifdef CONFIG_AI_BACKEND_CLAUDE
-    if (strlen(creds->claude_api_key) == 0) {
-        ESP_LOGE(TAG, "Claude API key is required for Claude backend but not provided");
-        return false;
-    }
-
-    // Basic API key format validation
-    if (strncmp(creds->claude_api_key, "sk-ant-api03-", 13) != 0) {
-        ESP_LOGE(TAG, "Claude API key format appears invalid");
-        return false;
-    }
-#endif
-
-// Gemini API key validation (optional - only required for Gemini backend)
-#ifdef CONFIG_AI_BACKEND_GEMINI
+    // Gemini API key is required — the planner cannot function without it.
     if (strlen(creds->gemini_api_key) == 0) {
-        ESP_LOGE(TAG, "Gemini API key is required for Gemini backend but not provided");
+        ESP_LOGE(TAG, "Gemini API key is required but not provided");
         return false;
     }
-#endif
 
     ESP_LOGI(TAG, "Credentials validation successful");
     return true;
@@ -240,15 +214,6 @@ const char *get_wifi_password(void)
         return NULL;
     }
     return g_credentials.wifi_password;
-}
-
-const char *get_claude_api_key(void)
-{
-    if (!are_credentials_available()) {
-        ESP_LOGE(TAG, "Credentials not available");
-        return NULL;
-    }
-    return g_credentials.claude_api_key;
 }
 
 const char *get_gemini_api_key(void)

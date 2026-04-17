@@ -32,8 +32,6 @@
 // ========================================
 // Buffer and Stack Sizes
 // ========================================
-#define CLAUDE_RESPONSE_BUFFER_SIZE 4096
-#define CLAUDE_MAX_TOKENS 512
 #define CAPTURE_TASK_STACK_SIZE 16384
 #define MOVEMENT_CMD_MAX_LEN 16
 #define SOUND_CMD_MAX_LEN 64
@@ -46,24 +44,8 @@
 // ========================================
 // AI Backend Configuration
 // ========================================
-#ifndef CONFIG_AI_BACKEND_OLLAMA
-#define CONFIG_AI_BACKEND_OLLAMA
-#endif
-
-// Ollama Configuration
-#define OLLAMA_API_URL "http://192.168.0.115:11434/api/generate"
-#define OLLAMA_MODEL "gemma3:4b"
-
-// Gemini Configuration
-#define GEMINI_API_URL "https://generativelanguage.googleapis.com/v1beta/models"
-#define GEMINI_MODEL "gemini-robotics-er-1.5-preview"
-
-// Ollama Service Discovery
-#define OLLAMA_USE_SERVICE_DISCOVERY 1
-#define OLLAMA_SRV_RECORD "_ollama._tcp.local"
-#define OLLAMA_FALLBACK_URL "http://192.168.0.115:11434"
-#define OLLAMA_DISCOVERY_TIMEOUT_MS 5000
-#define OLLAMA_USE_MDNS 1
+// Gemini Robotics-ER 1.6 is the sole planner backend (see planner_task.c).
+// gemini_backend.c owns its own URL and model constants; nothing to configure here.
 
 // ========================================
 // MQTT Remote Logging Configuration

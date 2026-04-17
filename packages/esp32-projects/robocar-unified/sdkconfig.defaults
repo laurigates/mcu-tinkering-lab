@@ -63,9 +63,6 @@ CONFIG_OTA_GITHUB_REPO="mcu-tinkering-lab"
 # mDNS hostname discovery (robocar.local)
 CONFIG_MDNS_ENABLED=y
 
-# AI Backend Configuration
-CONFIG_AI_BACKEND_OLLAMA=y
-
 # Heap configuration (disable advanced features)
 CONFIG_HEAP_TRACING=n
 CONFIG_HEAP_CORRUPTION_DETECTION=n
