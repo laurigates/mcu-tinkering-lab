@@ -94,4 +94,5 @@ info:
     @echo "See README.md for detailed setup instructions"
 
 # Quick dev cycle: upload then watch logs
-dev: upload logs
+[group: "device"]
+develop: upload logs

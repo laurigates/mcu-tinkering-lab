@@ -93,4 +93,5 @@ pins:
     @echo "Status LED:   GPIO25 (built-in blue LED)"
 
 # Quick dev cycle: upload then watch logs
-dev: upload logs
+[group: "device"]
+develop: upload logs

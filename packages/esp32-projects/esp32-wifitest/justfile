@@ -6,7 +6,6 @@ set positional-arguments
 import '../../../tools/esp32-idf.just'
 
 project_dir := "packages/esp32-projects/esp32-wifitest"
-tools_dir := justfile_directory() / "../../.." / "tools"
 port := env("PORT", _detected_s3)
 baud := env("BAUD", "460800")
 target := "esp32s3"

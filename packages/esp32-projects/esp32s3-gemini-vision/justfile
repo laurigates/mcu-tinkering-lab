@@ -3,7 +3,8 @@
 
 set positional-arguments
 
-import '../../../tools/esp32.just'
+import '../../../tools/esp32-idf.just'
+import '../../../tools/esp32-credentials.just'
 
 project_dir := "packages/esp32-projects/esp32s3-gemini-vision"
 port := env("PORT", _detected_s3)
@@ -18,55 +19,27 @@ default:
 
 # Copy credentials template on first build
 [group: "setup"]
-credentials:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ ! -f main/credentials.h ]; then
-        cp main/credentials.h.example main/credentials.h
-        echo "Created main/credentials.h — edit WIFI_SSID, WIFI_PASSWORD, GEMINI_API_KEY"
-    fi
+credentials: (_credentials "edit WIFI_SSID, WIFI_PASSWORD, GEMINI_API_KEY")
 
 ##########
 # Build (containerized)
 ##########
 
-# Build the firmware
+# Build firmware (containerized)
 [group: "build"]
-build: credentials
-    #!/usr/bin/env bash
-    set -euo pipefail
-    echo "Building esp32s3-gemini-vision..."
-    {{container_cmd}} compose -f {{compose_file}} run --rm \
-        -w /workspace/{{project_dir}} \
-        esp-idf \
-        bash -c "idf.py set-target {{target}} && idf.py build"
+build: credentials _idf-build
 
-# Clean build artifacts
+# Clean build artifacts (containerized)
 [group: "build"]
-clean:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    {{container_cmd}} compose -f {{compose_file}} run --rm \
-        -w /workspace/{{project_dir}} \
-        esp-idf \
-        idf.py fullclean
-    echo "Clean complete"
+clean: _idf-clean
 
-# Open sdkconfig menu
+# Open sdkconfig menu (containerized)
 [group: "build"]
-menuconfig:
-    {{container_cmd}} compose -f {{compose_file}} run --rm \
-        -w /workspace/{{project_dir}} \
-        esp-idf \
-        idf.py menuconfig
+menuconfig: _idf-menuconfig
 
 # Interactive shell in ESP-IDF container
 [group: "build"]
-shell:
-    {{container_cmd}} compose -f {{compose_file}} run --rm \
-        -w /workspace/{{project_dir}} \
-        esp-idf \
-        /bin/bash
+shell: _idf-shell
 
 ##########
 # Flash & Monitor (native — XIAO uses USB-Serial-JTAG)
