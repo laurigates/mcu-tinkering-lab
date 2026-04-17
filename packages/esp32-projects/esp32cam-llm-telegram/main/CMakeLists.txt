@@ -15,6 +15,8 @@ idf_component_register(
         esp_camera
         nvs_flash
         esp_wifi
+        esp_netif
+        esp_event
         json
         mbedtls
         esp_timer
