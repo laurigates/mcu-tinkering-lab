@@ -284,7 +284,7 @@ static void process_i2c_command(const i2c_command_packet_t *command,
 
         case CMD_TYPE_DISPLAY: {
             if (command->data_length == sizeof(display_data_t)) {
-                display_data_t *display_data = (display_data_t *)command->data;
+                const display_data_t *display_data = (const display_data_t *)command->data;
                 process_i2c_display_command(display_data->line, display_data->message);
                 prepare_response(response, 0x00, command->sequence_number, NULL, 0);
             } else {

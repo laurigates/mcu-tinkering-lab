@@ -1,4 +1,5 @@
 #include "telegram_bot.h"
+#include <inttypes.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
@@ -115,8 +116,8 @@ esp_err_t telegram_send_text(telegram_bot_t *bot, const char *text)
 }
 
 // Send photo with caption
-esp_err_t telegram_send_photo(telegram_bot_t *bot, const uint8_t *photo_data, size_t photo_size,
-                              const char *caption)
+esp_err_t telegram_send_photo(const telegram_bot_t *bot, const uint8_t *photo_data,
+                              size_t photo_size, const char *caption)
 {
     if (!bot || !photo_data || photo_size == 0 || !bot->is_connected) {
         return ESP_ERR_INVALID_ARG;
@@ -145,7 +146,7 @@ esp_err_t telegram_send_photo(telegram_bot_t *bot, const uint8_t *photo_data, si
     snprintf(header, sizeof(header),
              "------%s\r\n"
              "Content-Disposition: form-data; name=\"chat_id\"\r\n\r\n"
-             "%lld\r\n"
+             "%" PRId64 "\r\n"
              "------%s\r\n"
              "Content-Disposition: form-data; name=\"photo\"; filename=\"photo.jpg\"\r\n"
              "Content-Type: image/jpeg\r\n\r\n",
@@ -210,7 +211,7 @@ esp_err_t telegram_poll_updates(telegram_bot_t *bot, telegram_message_t *msg)
     }
 
     char url[512];
-    snprintf(url, sizeof(url), "%s%s/getUpdates?offset=%d&timeout=10", TELEGRAM_API_URL,
+    snprintf(url, sizeof(url), "%s%s/getUpdates?offset=%" PRIu32 "&timeout=10", TELEGRAM_API_URL,
              bot->bot_token, bot->last_update_id + 1);
 
     char *response = malloc(HTTP_BUFFER_SIZE);
@@ -229,21 +230,21 @@ esp_err_t telegram_poll_updates(telegram_bot_t *bot, telegram_message_t *msg)
             if (ok && cJSON_IsTrue(ok) && result && cJSON_IsArray(result)) {
                 cJSON *update = cJSON_GetArrayItem(result, 0);
                 if (update) {
-                    cJSON *update_id = cJSON_GetObjectItem(update, "update_id");
+                    const cJSON *update_id = cJSON_GetObjectItem(update, "update_id");
                     cJSON *message = cJSON_GetObjectItem(update, "message");
 
                     if (update_id && message) {
                         bot->last_update_id = update_id->valueint;
 
-                        cJSON *text = cJSON_GetObjectItem(message, "text");
+                        const cJSON *text = cJSON_GetObjectItem(message, "text");
                         cJSON *chat = cJSON_GetObjectItem(message, "chat");
-                        cJSON *message_id = cJSON_GetObjectItem(message, "message_id");
+                        const cJSON *message_id = cJSON_GetObjectItem(message, "message_id");
 
                         if (text && chat) {
                             msg->text = strdup(text->valuestring);
                             msg->type = TELEGRAM_MSG_TEXT;
 
-                            cJSON *chat_id = cJSON_GetObjectItem(chat, "id");
+                            const cJSON *chat_id = cJSON_GetObjectItem(chat, "id");
                             if (chat_id) {
                                 msg->chat_id = chat_id->valueint;
                             }

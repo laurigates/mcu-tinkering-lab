@@ -28,7 +28,7 @@ typedef struct {
 } llm_config_t;
 
 // Initialize LLM client
-esp_err_t llm_client_init(llm_config_t *config);
+esp_err_t llm_client_init(const llm_config_t *config);
 
 // Analyze image with LLM
 esp_err_t llm_analyze_image(const uint8_t *image_data, size_t image_size, const char *prompt,

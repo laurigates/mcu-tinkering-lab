@@ -34,8 +34,8 @@ esp_err_t telegram_bot_init(telegram_bot_t *bot, const char *token, int64_t chat
 esp_err_t telegram_send_text(telegram_bot_t *bot, const char *text);
 
 // Send photo with caption
-esp_err_t telegram_send_photo(telegram_bot_t *bot, const uint8_t *photo_data, size_t photo_size,
-                              const char *caption);
+esp_err_t telegram_send_photo(const telegram_bot_t *bot, const uint8_t *photo_data,
+                              size_t photo_size, const char *caption);
 
 // Send formatted status message
 esp_err_t telegram_send_status(telegram_bot_t *bot, const char *format, ...);

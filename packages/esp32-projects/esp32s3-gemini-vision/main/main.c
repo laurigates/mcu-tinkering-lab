@@ -267,7 +267,9 @@ static void auto_timer_cb(TimerHandle_t t)
 }
 
 // --------------------------------------------------------- HTTP handlers ----
+// cppcheck-suppress syntaxError // GCC asm() rename extension (embedded html blob)
 extern const uint8_t index_html_start[] asm("_binary_index_html_start");
+// cppcheck-suppress syntaxError
 extern const uint8_t index_html_end[] asm("_binary_index_html_end");
 
 static esp_err_t root_handler(httpd_req_t *req)

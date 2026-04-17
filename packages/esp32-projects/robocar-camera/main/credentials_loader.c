@@ -155,6 +155,7 @@ bool load_credentials(credentials_t *creds)
     ESP_LOGI(TAG, "Environment variables not available, trying credentials.h file...");
 
     // Priority 3: credentials.h file (developer builds)
+    // cppcheck-suppress knownConditionTrueFalse // guarded for future failure modes
     if (load_from_file(creds)) {
         ESP_LOGI(TAG, "Successfully loaded credentials from credentials.h");
         creds->credentials_loaded = true;

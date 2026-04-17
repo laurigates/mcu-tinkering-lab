@@ -133,7 +133,7 @@ static esp_err_t discover_via_mdns(const char *service_name, ollama_service_info
         return err;
     }
 
-    mdns_result_t *r = results;
+    const mdns_result_t *r = results;
     size_t count = 0;
 
     while (r && count < max_services) {

@@ -46,16 +46,16 @@ static esp_err_t led_set_hardware(led_position_t position, const rgb_color_t *co
     esp_err_t ret = ESP_OK;
 
     if (position == LED_LEFT || position == LED_BOTH) {
-        uint16_t vals[3] = {color_to_pwm(color->red), color_to_pwm(color->green),
-                            color_to_pwm(color->blue)};
+        const uint16_t vals[3] = {color_to_pwm(color->red), color_to_pwm(color->green),
+                                  color_to_pwm(color->blue)};
         ret = i2c_bus_pca9685_set_multi(LED_LEFT_R_CHANNEL, 3, vals);
         if (ret == ESP_OK)
             led_state.left_color = *color;
     }
 
     if ((position == LED_RIGHT || position == LED_BOTH) && ret == ESP_OK) {
-        uint16_t vals[3] = {color_to_pwm(color->red), color_to_pwm(color->green),
-                            color_to_pwm(color->blue)};
+        const uint16_t vals[3] = {color_to_pwm(color->red), color_to_pwm(color->green),
+                                  color_to_pwm(color->blue)};
         ret = i2c_bus_pca9685_set_multi(LED_RIGHT_R_CHANNEL, 3, vals);
         if (ret == ESP_OK)
             led_state.right_color = *color;

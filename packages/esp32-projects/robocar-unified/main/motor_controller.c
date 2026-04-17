@@ -35,7 +35,7 @@ static uint16_t speed_to_pwm(uint8_t speed)
 static esp_err_t set_motors(uint16_t r_in1, uint16_t r_in2, uint16_t r_pwm, uint16_t l_in1,
                             uint16_t l_in2, uint16_t l_pwm)
 {
-    uint16_t values[6] = {r_in1, r_in2, r_pwm, l_in1, l_in2, l_pwm};
+    const uint16_t values[6] = {r_in1, r_in2, r_pwm, l_in1, l_in2, l_pwm};
     return i2c_bus_pca9685_set_multi(MOTOR_RIGHT_IN1_CHANNEL, 6, values);
 }
 

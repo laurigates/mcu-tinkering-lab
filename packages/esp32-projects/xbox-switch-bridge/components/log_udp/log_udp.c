@@ -43,6 +43,7 @@ static void wifi_event_handler(void *arg, esp_event_base_t base, int32_t id, voi
 {
     if (base == WIFI_EVENT && id == WIFI_EVENT_AP_STACONNECTED) {
         wifi_event_ap_staconnected_t *event = (wifi_event_ap_staconnected_t *)data;
+        // cppcheck-suppress unknownMacro // MACSTR/MAC2STR live in esp_mac.h (included)
         ESP_LOGI(TAG, "Client connected (MAC: " MACSTR ")", MAC2STR(event->mac));
         s_client_connected = true;
     } else if (base == WIFI_EVENT && id == WIFI_EVENT_AP_STADISCONNECTED) {

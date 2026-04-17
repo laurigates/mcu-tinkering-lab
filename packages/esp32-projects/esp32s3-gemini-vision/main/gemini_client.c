@@ -59,6 +59,8 @@ static esp_err_t http_event_handler(esp_http_client_event_t *evt)
             acc->len += to_copy;
             acc->buf[acc->len] = '\0';
         }
+        // cppcheck-suppress knownConditionTrueFalse // true when buffer fills
+        // (to_copy==avail<data_len)
         if (to_copy < (size_t)evt->data_len) {
             ESP_LOGW(TAG, "response truncated (discarded %d bytes)",
                      (int)((size_t)evt->data_len - to_copy));

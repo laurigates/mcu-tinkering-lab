@@ -214,28 +214,20 @@ static esp_err_t root_handler(httpd_req_t *req)
 // Handler for streaming video frames
 static esp_err_t stream_handler(httpd_req_t *req)
 {
-    camera_fb_t *fb = NULL;
     esp_err_t res = ESP_OK;
     char part_buf[128];
-    static int64_t last_frame = 0;
 
     // Set content type for multipart/x-mixed-replace
     httpd_resp_set_type(req, STREAM_CONTENT_TYPE);
 
     while (true) {
         // Get camera frame
-        fb = esp_camera_fb_get();
+        camera_fb_t *fb = esp_camera_fb_get();
         if (!fb) {
             ESP_LOGE(TAG, "Camera capture failed");
             res = ESP_FAIL;
             break;
         }
-
-        // Calculate time since last frame
-        int64_t fr_start = esp_timer_get_time();
-        int64_t frame_time = fr_start - last_frame;
-        last_frame = fr_start;
-        frame_time /= 1000;  // Convert to ms
 
         // Format HTTP response with frame data
         size_t hlen = snprintf((char *)part_buf, sizeof(part_buf),

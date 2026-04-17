@@ -710,9 +710,9 @@ void oled_draw_text(int x, int y, const char *text, bool clear_line)
 
                     if (pixel_x < OLED_WIDTH && pixel_y < OLED_HEIGHT) {
                         int byte_index = (pixel_y / 8) * OLED_WIDTH + pixel_x;
-                        int bit_offset = pixel_y % 8;
 
                         if (byte_index < sizeof(display_buffer)) {
+                            int bit_offset = pixel_y % 8;
                             if (font_row & (1 << (7 - col))) {
                                 display_buffer[byte_index] |= (1 << bit_offset);
                             } else {
@@ -1144,10 +1144,6 @@ void command_task(void *pvParameters)
             if (c >= 32 && c <= 126) {
                 printf("%c", c);
                 fflush(stdout);
-
-                if (c == '\n' || c == '\r') {
-                    // handled below by the newline check
-                }
             }
 
             if (c == '\n' || c == '\r') {

@@ -260,8 +260,6 @@ esp_err_t wifi_manager_connect(const char *ssid, const char *password)
         ESP_LOGI(TAG, "No credentials provided, loading from NVS");
         wifi_credentials_t stored_creds;
         if (wifi_manager_load_credentials(&stored_creds) == ESP_OK) {
-            ssid = stored_creds.ssid;
-            password = stored_creds.password;
             memcpy(&g_wifi_context.current_credentials, &stored_creds, sizeof(wifi_credentials_t));
         } else {
             ESP_LOGW(TAG, "No stored credentials found");
@@ -772,8 +770,10 @@ static void ip_event_handler(void *arg, esp_event_base_t event_base, int32_t eve
 /**
  * Reconnection timer callback
  */
+// cppcheck-suppress constParameterCallback // signature fixed by esp_timer_cb_t
 static void reconnect_timer_callback(void *arg)
 {
+    (void)arg;
     ESP_LOGI(TAG, "Reconnection timer triggered");
     esp_wifi_connect();
 }
