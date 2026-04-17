@@ -81,7 +81,10 @@ static esp_err_t camera_init(void)
         .jpeg_quality = 12,
         .fb_count = 2,
         .fb_location = CAMERA_FB_IN_PSRAM,
-        .grab_mode = CAMERA_GRAB_WHEN_EMPTY,
+        // LATEST drops stale frames under backpressure — for live streaming this
+        // keeps the feed fresh and lets the camera run at its natural rate. With
+        // WHEN_EMPTY the camera stalls for the slowest consumer.
+        .grab_mode = CAMERA_GRAB_LATEST,
     };
     esp_err_t err = esp_camera_init(&cfg);
     if (err != ESP_OK) {
@@ -284,6 +287,9 @@ static esp_err_t stream_handler(httpd_req_t *req)
 {
     httpd_resp_set_type(req, STREAM_CT);
     char part[96];
+    uint32_t frames = 0;
+    size_t bytes = 0;
+    int64_t last_log_us = esp_timer_get_time();
     for (;;) {
         camera_fb_t *fb = esp_camera_fb_get();
         if (!fb) {
@@ -298,8 +304,19 @@ static esp_err_t stream_handler(httpd_req_t *req)
             esp_camera_fb_return(fb);
             return ESP_FAIL;
         }
+        frames++;
+        bytes += fb->len;
         esp_camera_fb_return(fb);
-        vTaskDelay(pdMS_TO_TICKS(66));  // ~15 fps (leave headroom for HTTPS)
+
+        int64_t now = esp_timer_get_time();
+        if (now - last_log_us >= 2000000) {
+            float secs = (now - last_log_us) / 1000000.0f;
+            ESP_LOGI(TAG, "stream: %.1f fps, avg %u bytes/frame, %.1f kB/s", frames / secs,
+                     (unsigned)(bytes / frames), (bytes / 1024.0f) / secs);
+            frames = 0;
+            bytes = 0;
+            last_log_us = now;
+        }
     }
 }
 

@@ -106,9 +106,9 @@ CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=10
 CONFIG_ESP_WIFI_DYNAMIC_RX_BUFFER_NUM=32
 CONFIG_ESP_WIFI_TX_BUFFER_TYPE=1
 CONFIG_ESP_WIFI_DYNAMIC_TX_BUFFER_NUM=32
-CONFIG_ESP_WIFI_AMPDU_TX_ENABLED=n
-CONFIG_ESP_WIFI_AMPDU_RX_ENABLED=n
-CONFIG_ESP_WIFI_AMSDU_TX_ENABLED=n
+CONFIG_ESP_WIFI_AMPDU_TX_ENABLED=y
+CONFIG_ESP_WIFI_AMPDU_RX_ENABLED=y
+CONFIG_ESP_WIFI_AMSDU_TX_ENABLED=y
 CONFIG_ESP_WIFI_NVS_ENABLED=y
 ```
 
@@ -177,7 +177,8 @@ Drift check (compare against canonical values):
 | Disconnect reason logged | Yes, with name mapping |
 | Retry cap | `WIFI_MAXIMUM_RETRY = 5` (higher is drift) |
 | `CONFIG_ESP_PHY_MAX_WIFI_TX_POWER` | Not set (unless justified by brownout+measurement) |
-| `CONFIG_ESP_WIFI_AMPDU_*` / `AMSDU_TX_ENABLED` | `n` |
+| `CONFIG_ESP_WIFI_AMPDU_*` / `AMSDU_TX_ENABLED` | `y` (ESP-IDF default; materially improves STA throughput) |
+| SoftAP-on-S3 exception | If the project runs `WIFI_MODE_AP` on ESP32-S3, keep AMPDU off — see espressif/esp-idf#13508 (clients can't see the AP with AMPDU on) |
 | `CMakeLists.txt REQUIRES` | Includes `esp_wifi nvs_flash esp_netif esp_event` |
 
 ## Apply process (`apply <project-path>`)
