@@ -14,6 +14,7 @@ idf_component_register(
         "ollama_backend.c"
         "ollama_discovery.c"
         "gemini_backend.c"
+        "goal_state.c"
         "credentials_loader.c"
         "wifi_manager.c"
         "mqtt_logger.c"

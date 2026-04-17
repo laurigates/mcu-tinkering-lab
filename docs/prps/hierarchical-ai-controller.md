@@ -98,7 +98,7 @@ Six roles. Files listed are each agent's exclusive write scope to avoid collisio
 | C | **Reactive executor + ultrasonic** | refactor | `main/reactive_controller.c/.h`, `main/ultrasonic.c/.h` (new), additions to `main/pin_config.h` | B |
 | D | **Planner task + backend cleanup** | refactor | `main/planner_task.c/.h` (new, replaces `ai_backend.c/.h`); deletes `claude_api.c/.h`, `claude_backend.h`, `ollama_backend.c`, `ollama_discovery.c`, `ai_response_parser.c/.h`; drops Kconfig `CONFIG_AI_BACKEND_CLAUDE`/`OLLAMA`; serialized `main.c` wiring | A, B, C |
 | E | **Host tests + simulation hook** | test | `packages/esp32-projects/robocar-simulation/**`, new `packages/esp32-projects/robocar-unified/test/**` | B, C, D |
-| F | **Docs** | docs | `docs/blueprint/adrs/ADR-011-hierarchical-ai-controller.md`, `packages/esp32-projects/robocar-unified/CLAUDE.md`, `WIRING.md`, README touchpoints | all others |
+| F | **Docs** | docs | `docs/blueprint/adrs/ADR-016-hierarchical-ai-controller.md`, `packages/esp32-projects/robocar-unified/CLAUDE.md`, `WIRING.md`, README touchpoints | all others |
 
 ### Orchestration
 
@@ -113,7 +113,7 @@ Phases:
 
 ### Parallelism rules
 - Agents must not edit `main.c` concurrently; all `main.c` wiring is a single serialized pass in Phase 3 by D.
-- ADR lives in `docs/blueprint/adrs/`; next number after `ADR-010-mqtt-logging-architecture.md` is `ADR-011`.
+- ADR lives in `docs/blueprint/adrs/`; the next free number is `ADR-016` (directory currently goes through ADR-015).
 
 ## Validation gates
 
@@ -138,7 +138,7 @@ Each gate must pass before the next phase merges.
 
 ## Acceptance criteria
 
-- [ ] ADR-011 merged, describing the hierarchical pattern, the Claude/Ollama removal, and the ultrasonic reflex layer. Supersedes ADR-003 for robocar-unified specifically.
+- [ ] ADR-016 merged, describing the hierarchical pattern, the Claude/Ollama removal, and the ultrasonic reflex layer. Supersedes ADR-003 for robocar-unified specifically.
 - [ ] `claude_*` and `ollama_*` sources deleted; `CONFIG_AI_BACKEND_*` Kconfig removed; no references remain in `robocar-unified`.
 - [ ] Ultrasonic wired (GPIO7/8), driver reads distances reliably, pin map documented in `WIRING.md`.
 - [ ] Robot completes "track cup" and "drive to wall and stop" tasks smoothly; ultrasonic reflex demonstrably overrides goal on obstacle.
