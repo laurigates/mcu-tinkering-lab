@@ -118,6 +118,7 @@ typedef struct {
     goal_t goal;
     int64_t written_at_us; /**< Timestamp of last write (us).           */
     uint32_t ttl_ms;       /**< TTL of the current goal (ms).           */
+    bool has_been_written; /**< False until the first goal_state_write. */
     bool initialised;
 } goal_state_t;
 
@@ -167,6 +168,7 @@ esp_err_t goal_state_init(void)
     g_gs.goal.kind = GOAL_KIND_NONE;
     g_gs.written_at_us = 0;
     g_gs.ttl_ms = GOAL_STATE_DEFAULT_TTL_MS;
+    g_gs.has_been_written = false;
     g_gs.initialised = true;
 
     ESP_LOGI(TAG, "Initialised (default TTL %u ms)", GOAL_STATE_DEFAULT_TTL_MS);
@@ -195,6 +197,7 @@ esp_err_t goal_state_write(const goal_t *goal, uint32_t ttl_ms)
     g_gs.goal = *goal;
     g_gs.written_at_us = now_us();
     g_gs.ttl_ms = effective_ttl;
+    g_gs.has_been_written = true;
     gs_mutex_unlock(&g_gs.mutex);
 
     /* Log only when the goal kind changes to keep the serial log readable. */
@@ -218,6 +221,7 @@ esp_err_t goal_state_read(goal_t *out, bool *is_fresh_out)
     /* Snapshot under the lock — no computation, no logging. */
     int64_t written_at_us;
     uint32_t ttl_ms;
+    bool has_been_written;
 
     if (!gs_mutex_lock(&g_gs.mutex)) {
         ESP_LOGE(TAG, "Mutex timeout in goal_state_read");
@@ -226,16 +230,16 @@ esp_err_t goal_state_read(goal_t *out, bool *is_fresh_out)
     *out = g_gs.goal;
     written_at_us = g_gs.written_at_us;
     ttl_ms = g_gs.ttl_ms;
+    has_been_written = g_gs.has_been_written;
     gs_mutex_unlock(&g_gs.mutex);
 
     /*
-     * Evaluate freshness outside the lock.
-     *
-     * Edge case: written_at_us == 0 means no goal has ever been written
-     * (module just initialised).  Treat that as stale so the executor starts
-     * in the safe STOP state without waiting for a TTL to expire.
+     * Evaluate freshness outside the lock.  Pre-first-write the flag is false
+     * so we report stale without waiting on a TTL — the executor starts in the
+     * safe STOP state.  This separates the sentinel from the timestamp so the
+     * module works correctly with a test clock starting at 0.
      */
-    bool fresh = (written_at_us != 0) && is_fresh(written_at_us, ttl_ms);
+    bool fresh = has_been_written && is_fresh(written_at_us, ttl_ms);
     *is_fresh_out = fresh;
 
     if (!fresh) {

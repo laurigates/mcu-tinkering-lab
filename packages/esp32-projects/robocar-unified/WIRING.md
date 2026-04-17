@@ -12,13 +12,13 @@ The XIAO exposes only 11 GPIOs on its headers. Camera pins are internal to the S
 |----------|------|----------|-------|
 | D0 | GPIO1 | TB6612FNG STBY | HIGH = motors enabled |
 | D1 | GPIO2 | Piezo buzzer | LEDC PWM |
-| D2 | GPIO3 | *spare* | future: ultrasonic trigger |
-| D3 | GPIO4 | *spare* | future: ultrasonic echo |
+| D2 | GPIO3 | Ultrasonic TRIG | 10 µs pulse output |
+| D3 | GPIO4 | Ultrasonic ECHO | Pulse width input (RMT RX) |
 | D4 | GPIO5 | **I2C SDA** | to TCA9548A |
 | D5 | GPIO6 | **I2C SCL** | to TCA9548A |
 | D6 | GPIO43 | USB Serial TX | debug console |
 | D7 | GPIO44 | USB Serial RX | debug console |
-| D8–D10 | GPIO7–9 | *spare* | future: SPI |
+| D8–D10 | GPIO7–9 | *spare* | future: SPI or expansion |
 
 I2C runs at **400 kHz**.
 
@@ -74,6 +74,19 @@ graph TD
 ```
 
 **Common ground required across all components.**
+
+## Ultrasonic rangefinder
+
+A 3.3 V-compatible ultrasonic sensor (HC-SR04P, RCWL-1601, or US-100) provides distance readings for the reactive controller's obstacle reflex.
+
+| Signal | Pin | Voltage | Function |
+|--------|-----|---------|----------|
+| TRIG | GPIO3 (D2) | 3.3 V | Output; 10 µs pulse triggers measurement |
+| ECHO | GPIO4 (D3) | 3.3 V | Input; pulse width encodes distance (RMT RX) |
+| VCC | 3.3 V | 3.3 V | **Must be 3.3 V variant** (HC-SR04P, not HC-SR04) |
+| GND | any GND | – | shared ground |
+
+The sensor samples at ~20 Hz. Obstacle reflex: if distance < 15 cm, the executor immediately stops and reverses, independent of planner goals. The specific module will be confirmed on first wiring; update this table if a different 3.3 V sensor is used.
 
 ## Full connection diagram
 
