@@ -4,6 +4,7 @@
 set positional-arguments
 
 import '../../../tools/esp32-idf.just'
+import '../../../tools/esp32-credentials.just'
 
 project_dir := "packages/esp32-projects/esp32-cam-webserver"
 port := env("PORT", _detected_serial)
@@ -18,15 +19,7 @@ default:
 
 # Create credentials file from template
 [group: "setup"]
-credentials:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ ! -f main/credentials.h ]; then
-        cp main/credentials.h.example main/credentials.h
-        echo "Created main/credentials.h — edit it with your WiFi credentials"
-    else
-        echo "Credentials file exists"
-    fi
+credentials: (_credentials "edit it with your WiFi credentials")
 
 # Build the firmware (requires credentials)
 [group: "build"]

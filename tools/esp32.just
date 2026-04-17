@@ -4,6 +4,7 @@
 # Provides:
 #   container_cmd    — docker or podman
 #   compose_file     — path to shared docker-compose.yml
+#   tools_dir        — absolute path to the monorepo tools/ directory
 #   _detected_serial — auto-detected USB-serial adapter port (CH340/CP2102/FTDI)
 #   _detected_s3     — auto-detected ESP32-S3 USB-Serial-JTAG port
 #   _monitor_baud    — serial monitor baud rate (default 115200, override in project)
@@ -15,6 +16,9 @@ container_cmd := env("CONTAINER_CMD", "docker")
 
 # Shared docker-compose.yml (relative to each project at packages/esp32-projects/<name>/)
 compose_file := "../../../docker-compose.yml"
+
+# Absolute path to monorepo tools/ directory (for helper scripts)
+tools_dir := justfile_directory() / "../../.." / "tools"
 
 # Auto-detect USB-serial adapter (CH340/CP2102/FTDI)
 _detected_serial := `ls /dev/cu.usbserial-* 2>/dev/null | head -1 || true`

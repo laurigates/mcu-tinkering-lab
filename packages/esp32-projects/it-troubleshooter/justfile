@@ -3,10 +3,11 @@
 
 set positional-arguments
 
-import '../../../tools/esp32.just'
+import '../../../tools/esp32-idf.just'
+import '../../../tools/esp32-credentials.just'
 
-project_dir := justfile_directory()
-tools_dir := justfile_directory() / "../../.." / "tools"
+project_dir := "packages/esp32-projects/it-troubleshooter"
+target := "esp32s3"
 port := env("PORT", _detected_s3)
 baud := env("BAUD", "460800")
 
@@ -23,29 +24,17 @@ default:
 
 # Create credentials.h from example template (required before first build)
 [group: "setup"]
-setup:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ -f main/credentials.h ]; then
-        echo "main/credentials.h already exists — no changes made"
-    else
-        cp main/credentials.h.example main/credentials.h
-        echo "Created main/credentials.h — edit with your WiFi SSID, password, and API key"
-    fi
+setup: (_credentials "edit with your WiFi SSID, password, and API key")
 
 ##########
 # Build
 ##########
 
-# Build firmware in Docker container
+# Build firmware (containerized)
 [group: "build"]
-build:
-    docker compose -f {{compose_file}} run --rm \
-        -w /workspace/packages/esp32-projects/it-troubleshooter \
-        esp-idf \
-        bash -c "idf.py set-target esp32s3 && idf.py build"
+build: _idf-build
 
-# Clean build artifacts
+# Clean build artifacts, sdkconfig, and managed_components
 [group: "build"]
 [confirm("Remove build/, sdkconfig, and managed_components?")]
 clean:
@@ -63,7 +52,7 @@ detect-port:
 # Flash firmware to device
 [group: "device"]
 flash: require-port
-    cd {{project_dir}}/build && esptool --chip esp32s3 -p {{port}} -b {{baud}} \
+    cd build && esptool --chip esp32s3 -p {{port}} -b {{baud}} \
         --before default-reset --after hard-reset \
         write-flash @flash_args
 
@@ -89,13 +78,13 @@ monitor: require-port
 # Config
 ##########
 
-# Run menuconfig in Docker
+# Run menuconfig (containerized)
 [group: "config"]
-menuconfig:
-    docker compose -f {{compose_file}} run --rm \
-        -w /workspace/packages/esp32-projects/it-troubleshooter \
-        esp-idf \
-        idf.py menuconfig
+menuconfig: _idf-menuconfig
+
+# Interactive shell in ESP-IDF container
+[group: "config"]
+shell: _idf-shell
 
 ##########
 # Info
