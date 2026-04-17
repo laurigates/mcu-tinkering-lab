@@ -2,11 +2,14 @@
  * @file main.c
  * @brief Unified robocar firmware for XIAO ESP32-S3 Sense
  *
- * Single-board architecture replacing the dual-board (Heltec + ESP32-CAM)
- * design. Camera, AI, motor control, and peripherals all run on one board
- * with core affinity for isolation:
- *   - Core 0: motor control, peripheral I/O, serial commands
- *   - Core 1: camera capture, AI analysis, WiFi/MQTT/OTA
+ * Hierarchical AI controller architecture:
+ *   - Core 0: motor control, peripheral I/O, serial commands, reactive executor (30 Hz)
+ *   - Core 1: camera capture, Gemini planner (1 Hz), WiFi/MQTT/OTA
+ *
+ * The planner (planner_task, Core 1) captures frames, calls Gemini ER 1.6,
+ * and writes structured goals into goal_state.  The reactive executor
+ * (reactive_controller, Core 0) reads goals at 30 Hz and drives motors.
+ * Serial / MQTT commands remain available for manual override.
  */
 
 #include <string.h>
@@ -20,12 +23,11 @@
 #include "freertos/timers.h"
 #include "nvs_flash.h"
 
-#include "ai_backend.h"
-#include "ai_response_parser.h"
 #include "buzzer.h"
 #include "camera.h"
 #include "config.h"
 #include "credentials_loader.h"
+#include "goal_state.h"
 #include "i2c_bus.h"
 #include "led_controller.h"
 #include "mdns.h"
@@ -33,6 +35,8 @@
 #include "mqtt_logger.h"
 #include "ota_manager.h"
 #include "pin_config.h"
+#include "planner_task.h"
+#include "reactive_controller.h"
 #include "servo_controller.h"
 #include "system_state.h"
 #include "wifi_manager.h"
@@ -82,8 +86,6 @@ typedef struct {
 // ========================================
 static QueueHandle_t s_motor_queue;
 static QueueHandle_t s_periph_queue;
-static SemaphoreHandle_t s_ai_mutex;
-static const ai_backend_t *s_ai_backend;
 static int64_t s_last_motor_cmd_time;
 
 // ========================================
@@ -173,7 +175,7 @@ static void peripheral_task(void *pvParameters)
 }
 
 // ========================================
-// Dispatch helpers (used by AI and serial)
+// Dispatch helpers (used by serial command task)
 // ========================================
 static void dispatch_motor_cmd(motor_cmd_type_t type, uint8_t speed)
 {
@@ -228,84 +230,6 @@ static void dispatch_sound(const char *sound)
 }
 
 // ========================================
-// Process AI commands (replaces I2C dispatch)
-// ========================================
-static void process_ai_commands(const ai_command_t *cmd)
-{
-    if (cmd->has_movement) {
-        const char *movement = movement_to_command(cmd->movement_command);
-        dispatch_movement(movement);
-        ESP_LOGI(TAG, "AI movement: %s", movement);
-    }
-
-    if (cmd->has_sound) {
-        dispatch_sound(cmd->sound_command);
-    }
-
-    if (cmd->has_pan) {
-        periph_cmd_t pcmd = {.type = PERIPH_CMD_SERVO_PAN, .angle = (int16_t)cmd->pan_angle};
-        dispatch_periph_cmd(&pcmd);
-    }
-
-    if (cmd->has_tilt) {
-        periph_cmd_t pcmd = {.type = PERIPH_CMD_SERVO_TILT, .angle = (int16_t)cmd->tilt_angle};
-        dispatch_periph_cmd(&pcmd);
-    }
-}
-
-// ========================================
-// AI analysis task (Core 1, priority 3)
-// ========================================
-static void ai_analysis_task(void *pvParameters)
-{
-    (void)pvParameters;
-
-    ESP_LOGI(TAG, "AI analysis task started on core %d", xPortGetCoreID());
-
-    // Wait for system to stabilize
-    vTaskDelay(pdMS_TO_TICKS(SYSTEM_STABILIZATION_DELAY_MS));
-
-    while (1) {
-        vTaskDelay(pdMS_TO_TICKS(CAPTURE_INTERVAL_MS));
-
-        if (!s_ai_backend) {
-            ESP_LOGW(TAG, "AI backend not available");
-            continue;
-        }
-
-        // Capture image
-        camera_fb_t *fb = camera_capture();
-        if (!fb) {
-            ESP_LOGW(TAG, "Camera capture failed");
-            continue;
-        }
-
-        // Analyze with AI
-        if (xSemaphoreTake(s_ai_mutex, pdMS_TO_TICKS(SEMAPHORE_TIMEOUT_MS)) == pdTRUE) {
-            ai_response_t response = {0};
-            esp_err_t ret = s_ai_backend->analyze_image(fb->buf, fb->len, &response);
-
-            camera_return_fb(fb);
-
-            if (ret == ESP_OK && response.response_text) {
-                ESP_LOGI(TAG, "AI response: %.100s...", response.response_text);
-
-                ai_command_t cmd = {0};
-                if (parse_ai_response(response.response_text, &cmd)) {
-                    process_ai_commands(&cmd);
-                }
-
-                s_ai_backend->free_response(&response);
-            } else {
-                ESP_LOGW(TAG, "AI analysis failed: %s", esp_err_to_name(ret));
-            }
-
-            xSemaphoreGive(s_ai_mutex);
-        }
-    }
-}
-
-// ========================================
 // Serial command task (Core 0, priority 5)
 // ========================================
 static void command_task(void *pvParameters)
@@ -328,7 +252,7 @@ static void command_task(void *pvParameters)
                 buf[buf_pos] = '\0';
                 ESP_LOGI(TAG, "Serial cmd: %s", buf);
 
-                // Single-letter movement commands (backward compatible)
+                // Single-letter movement commands (manual override / debug)
                 if (buf_pos == 1) {
                     switch (buf[0]) {
                         case 'F':
@@ -429,30 +353,18 @@ static esp_err_t init_network(void)
     return ESP_OK;
 }
 
-static esp_err_t init_ai_backend(void)
+static esp_err_t init_hierarchical_ai(void)
 {
-    ESP_LOGI(TAG, "Phase 4: AI backend");
+    ESP_LOGI(TAG, "Phase 4: Hierarchical AI controller");
 
-    s_ai_backend = ai_backend_get_current();
-    if (!s_ai_backend) {
-        ESP_LOGW(TAG, "No AI backend configured");
-        return ESP_OK;
-    }
+    // goal_state must be initialised before reactive_controller and planner_task
+    ESP_RETURN_ON_ERROR(goal_state_init(), TAG, "goal_state_init failed");
 
-    ai_config_t ai_config = {0};
-#if defined(CONFIG_AI_BACKEND_OLLAMA)
-    ai_config.api_url = OLLAMA_API_URL;
-    ai_config.model = OLLAMA_MODEL;
-#elif defined(CONFIG_AI_BACKEND_GEMINI)
-    ai_config.api_url = GEMINI_API_URL;
-    ai_config.model = GEMINI_MODEL;
-#endif
+    // reactive_controller spawns the 30 Hz executor on Core 0
+    ESP_RETURN_ON_ERROR(reactive_controller_init(), TAG, "reactive_controller_init failed");
 
-    esp_err_t ret = s_ai_backend->init(&ai_config);
-    if (ret != ESP_OK) {
-        ESP_LOGW(TAG, "AI backend init failed: %s", esp_err_to_name(ret));
-        s_ai_backend = NULL;
-    }
+    // planner_task spawns the 1 Hz Gemini planner on Core 1 (requires WiFi)
+    ESP_RETURN_ON_ERROR(planner_task_init(), TAG, "planner_task_init failed");
 
     return ESP_OK;
 }
@@ -463,19 +375,16 @@ static void create_tasks(void)
 
     s_motor_queue = xQueueCreate(MOTOR_CMD_QUEUE_DEPTH, sizeof(motor_cmd_t));
     s_periph_queue = xQueueCreate(PERIPHERAL_CMD_QUEUE_DEPTH, sizeof(periph_cmd_t));
-    s_ai_mutex = xSemaphoreCreateMutex();
 
-    // Core 0 tasks: motor control + peripherals + serial
+    // Core 0 tasks: motor control, peripherals, serial commands
     xTaskCreatePinnedToCore(motor_control_task, "motor", MOTOR_TASK_STACK_SIZE, NULL,
                             MOTOR_TASK_PRIORITY, NULL, MOTOR_TASK_CORE);
     xTaskCreatePinnedToCore(peripheral_task, "periph", PERIPHERAL_TASK_STACK_SIZE, NULL,
                             PERIPHERAL_TASK_PRIORITY, NULL, PERIPHERAL_TASK_CORE);
     xTaskCreatePinnedToCore(command_task, "cmd", COMMAND_TASK_STACK_SIZE, NULL,
                             COMMAND_TASK_PRIORITY, NULL, COMMAND_TASK_CORE);
-
-    // Core 1 tasks: camera + AI
-    xTaskCreatePinnedToCore(ai_analysis_task, "ai", AI_TASK_STACK_SIZE, NULL, AI_TASK_PRIORITY,
-                            NULL, AI_TASK_CORE);
+    // Note: reactive_controller task is created inside reactive_controller_init() (Core 0)
+    // Note: planner task is created inside planner_task_init() (Core 1)
 }
 
 // ========================================
@@ -490,7 +399,7 @@ void app_main(void)
     ESP_ERROR_CHECK(init_hardware());
     ESP_ERROR_CHECK(init_camera());
     init_network();
-    init_ai_backend();
+    ESP_ERROR_CHECK(init_hierarchical_ai());
     create_tasks();
 
     ESP_LOGI(TAG, "=== System ready ===");

@@ -8,13 +8,26 @@ Single-board consolidation of the dual-ESP32 robocar onto a **XIAO ESP32-S3 Sens
 
 ## Architecture
 
+Implements a hierarchical AI controller pattern: a **slow planner** (Core 1, ~1 Hz) that emits structured goals, and a **fast reactive executor** (Core 0, ~30 Hz) that drives the robot toward those goals. See [ADR-016](../../docs/blueprint/adrs/ADR-016-hierarchical-ai-controller.md) for the canonical design.
+
 Core affinity is load-bearing — do not change without understanding the trade-offs:
 
-- **Core 0** (motor-critical, timing-sensitive): `motor_task`, `peripheral_task`, `command_task`
-- **Core 1** (bursty, I/O-bound): `camera_task`, `ai_task`, `network_task`, OTA
-- Camera DMA is pinned to Core 1 via `CONFIG_CAMERA_CORE1=y` so motor PWM isn't jittered by frame captures
+- **Core 0** (motor-critical, timing-sensitive, ~30 Hz):
+  - `reactive_controller` — reads `goal_state`, implements visual servo and heading hold, owns all motor PWM output
+  - `motor_task` — low-level PWM driver for motors and servos
+  - `peripheral_task` — I2C devices (OLED, LEDs), buzzer
+  - `command_task` — serial console command dispatch
+  - `ultrasonic` driver — distance reflex at ~20 Hz sampling
 
-Tasks communicate via FreeRTOS queues (see `motor_cmd_t`, `peripheral_cmd_t` in `main.c`).
+- **Core 1** (bursty, I/O-bound):
+  - `planner_task` — captures frames on a schedule, calls Gemini Robotics-ER, writes `goal_state`
+  - `camera_task` — OV2640 frame capture (DMA pinned to Core 1 via `CONFIG_CAMERA_CORE1=y`)
+  - `network_task` — WiFi, MQTT, credentials
+  - OTA manager
+
+Camera DMA is pinned to Core 1 so motor PWM jitter on Core 0 isn't degraded by frame captures.
+
+Tasks communicate via FreeRTOS queues and the shared `goal_state` struct (mutex-protected).
 
 ## I2C topology
 
@@ -30,15 +43,18 @@ All motor direction, motor PWM, servo, and LED outputs go through the PCA9685 �
 
 Motor direction uses PCA9685 "full-on" (4096) / "full-off" (0) values on IN1/IN2 channels.
 
-## AI backends
+## AI planner
 
-Selected at **compile time** via sdkconfig:
+**Gemini Robotics-ER 1.6 only.** The planner calls Gemini to emit function-call goals:
 
-- `CONFIG_AI_BACKEND_OLLAMA` (default) — self-hosted, discovered via mDNS
-- `CONFIG_AI_BACKEND_CLAUDE` — Anthropic API
-- `CONFIG_AI_BACKEND_GEMINI` — Google Gemini Robotics-ER
+- `drive(heading_deg, distance_cm, speed_pct)` — absolute heading + distance
+- `track(box_2d, max_speed_pct)` — visual servo toward a bounding box
+- `rotate(angle_deg)` — spin in place
+- `stop()` — hold position
 
-`ai_backend.c` provides the abstraction; each backend has its own `.c/.h` pair. `ai_response_parser.c` extracts motor commands from the AI response.
+The planner runs at ~1 Hz on Core 1; the executor drives the goal at ~30 Hz on Core 0. No on-demand inference or blocking on responses — the planner is a background task that constantly updates `goal_state`, and the executor always has something to do.
+
+Claude and Ollama backends have been removed from this project. If an alternative planner becomes necessary in the future, it should be designed as a clean abstraction, not a resurrection of deleted code. See ADR-016 for the rationale.
 
 ## WiFi provisioning
 
@@ -71,12 +87,15 @@ Key settings that matter:
 - `CONFIG_SPIRAM_MODE_OCT=y` — XIAO ESP32-S3 Sense has **octal** PSRAM (not quad); wrong mode = boot loop
 - `CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192` — bumped from default 3584 for WiFi + BLE + camera init
 - `CONFIG_ESP_BROWNOUT_DET=n` — disabled; motor inrush was tripping it
-- `CONFIG_MDNS_ENABLED=y` — required for Ollama discovery and `robocar.local`
+- `CONFIG_MDNS_ENABLED=y` — required for hostname discovery (`robocar-unified.local`)
 
 ## Don't
 
+- Don't call `motor_controller.c` directly from anywhere except `reactive_controller.c` — the executor owns motor output
+- Don't add goal sources outside `planner_task.c` — structured goals keep the two layers decoupled. If a new goal source is needed, it should write `goal_state` the same way the planner does
 - Don't add direct GPIO motor control — everything goes through PCA9685 via `motor_controller.c`
 - Don't bypass the TCA9548A — devices on different channels can share addresses (e.g. PCA9685 and OLED would conflict without it)
 - Don't commit `main/credentials.h` — it's gitignored; use the `.example` as template
 - Don't hand-edit `version.txt` — release-please owns it
 - Don't change camera core pinning without re-verifying motor PWM jitter
+- Don't resurrect `claude_*` or `ollama_*` source files. If a second backend becomes necessary, design an abstraction; old code paths are not a foundation

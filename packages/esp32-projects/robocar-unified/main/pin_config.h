@@ -83,6 +83,14 @@
 #define OLED_HEIGHT 64
 
 // ========================================
+// Ultrasonic Rangefinder (HC-SR04P / RCWL-1601 / US-100)
+// 3.3 V-compatible sensor on XIAO D2/D3 (formerly "spare" headers).
+// ECHO is captured via RMT RX at 1 µs resolution; TRIG is a plain GPIO output.
+// ========================================
+#define ULTRASONIC_TRIG_PIN GPIO_NUM_3  // XIAO D2 — 10 µs trigger pulse (output)
+#define ULTRASONIC_ECHO_PIN GPIO_NUM_4  // XIAO D3 — echo pulse width (RMT RX input)
+
+// ========================================
 // Piezo Buzzer
 // ========================================
 #define PIEZO_PIN GPIO_NUM_2  // XIAO D1

@@ -7,6 +7,7 @@ Single-board robocar firmware consolidating the dual-ESP32 design (`robocar-main
 | Component | Role | Connection |
 |-----------|------|-----------|
 | XIAO ESP32-S3 Sense | MCU + camera (OV2640) + 8MB PSRAM | USB-C (native USB-Serial-JTAG) |
+| Ultrasonic rangefinder | Distance reflex (obstacle avoidance) | GPIO3 (TRIG), GPIO4 (ECHO) |
 | TCA9548A | I2C multiplexer | GPIO5 (SDA), GPIO6 (SCL) |
 | PCA9685 | 16-ch PWM driver (LEDs, servos, motor control) | TCA9548A ch0 |
 | SSD1306 OLED | 128x64 status display | TCA9548A ch1 |
@@ -19,10 +20,10 @@ See [WIRING.md](WIRING.md) for full connection details.
 
 ## Architecture
 
-- **Core 0**: motor control, peripheral I/O, serial commands
-- **Core 1**: camera capture, AI analysis, WiFi / MQTT / OTA
+Implements a hierarchical AI controller: a **slow planner** (~1 Hz, Core 1) that calls Gemini Robotics-ER to emit structured goals, and a **fast reactive executor** (~30 Hz, Core 0) that drives the robot smoothly toward those goals. See [ADR-016](../../docs/blueprint/adrs/ADR-016-hierarchical-ai-controller.md) for the detailed design.
 
-AI backend is selected at compile time via sdkconfig (`CONFIG_AI_BACKEND_OLLAMA` by default; Claude and Gemini backends also available).
+- **Core 0**: reactive executor (visual servo, heading hold, motor PWM), motor control, peripheral I/O, obstacle reflex via ultrasonic sensor
+- **Core 1**: planner task (Gemini calls), camera capture, WiFi / MQTT / OTA
 
 ## Build & flash
 
@@ -50,8 +51,12 @@ OTA is enabled (`CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y`) and configured to pul
 
 ## Key files
 
-- `main/main.c` — FreeRTOS task setup and command dispatch
+- `main/main.c` — FreeRTOS task setup and core affinity
 - `main/pin_config.h` — all GPIO / PCA9685 channel assignments
-- `main/ai_backend.c` — AI backend abstraction (Claude / Ollama / Gemini)
+- `main/planner_task.c/.h` — Gemini Robotics-ER calls, goal state writes (~1 Hz)
+- `main/reactive_controller.c/.h` — visual servo, heading hold, motor output (~30 Hz)
+- `main/ultrasonic.c/.h` — distance measurement and reflex (~20 Hz sampling)
+- `main/goal_state.c/.h` — shared planner-executor state (mutex-protected)
+- `main/motor_controller.c/.h` — low-level motor PWM (called only by executor)
 - `sdkconfig.defaults` — PSRAM, camera core pinning, OTA, mDNS config
 - `partitions.csv` — OTA-capable partition table for 8MB flash

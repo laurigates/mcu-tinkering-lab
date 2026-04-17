@@ -21,13 +21,6 @@
 #define WIFI_PASSWORD ""
 #endif
 
-#ifdef CONFIG_AI_BACKEND_CLAUDE
-#ifndef CLAUDE_API_KEY
-#error \
-    "CLAUDE_API_KEY is not defined in credentials.h but Claude backend is selected. Please add your Claude API key to credentials.h."
-#endif
-#endif
-
 // Runtime validation function that will be called during initialization.
 // WiFi credential checks are advisory: placeholder or empty values mean
 // that Improv WiFi provisioning is required at runtime (NVS will supply them).
@@ -52,17 +45,6 @@ static inline void validate_credentials_at_runtime(void)
                  "WiFi password not configured in credentials.h. "
                  "Improv WiFi provisioning will be required after flashing.");
     }
-
-#ifdef CONFIG_AI_BACKEND_CLAUDE
-    // Check for default Claude API key values
-    if (strcmp(CLAUDE_API_KEY, "your_claude_api_key_from_anthropic") == 0 ||
-        strcmp(CLAUDE_API_KEY, "sk-ant-api03-YOUR_ACTUAL_API_KEY_HERE") == 0) {
-        ESP_LOGE("credentials_validator",
-                 "CLAUDE_API_KEY in credentials.h contains default value. "
-                 "Please edit credentials.h with your actual Claude API key from Anthropic.");
-        abort();
-    }
-#endif
 }
 
 #endif  // CREDENTIALS_VALIDATOR_H

@@ -24,7 +24,6 @@
 typedef struct {
     char wifi_ssid[MAX_SSID_LENGTH];
     char wifi_password[MAX_PASSWORD_LENGTH];
-    char claude_api_key[MAX_API_KEY_LENGTH];
     char gemini_api_key[MAX_API_KEY_LENGTH];
     bool credentials_loaded;
 } credentials_t;
@@ -33,7 +32,7 @@ typedef struct {
  * @brief Load credentials from environment variables or credentials.h
  *
  * This function attempts to load credentials in the following order:
- * 1. Environment variables (WIFI_SSID, WIFI_PASSWORD, CLAUDE_API_KEY)
+ * 1. Environment variables (WIFI_SSID, WIFI_PASSWORD, GEMINI_API_KEY)
  * 2. Fallback to credentials.h file
  *
  * @param creds Pointer to credentials structure to populate
@@ -62,13 +61,6 @@ const char *get_wifi_ssid(void);
  * @return Pointer to WiFi password string
  */
 const char *get_wifi_password(void);
-
-/**
- * @brief Get Claude API key
- *
- * @return Pointer to Claude API key string
- */
-const char *get_claude_api_key(void);
 
 /**
  * @brief Get Gemini API key
