@@ -78,12 +78,12 @@ A 3.3 V-compatible ultrasonic sensor (HC-SR04P, RCWL-1601, or US-100 — confirm
 
 **Pin budget** (XIAO ESP32-S3 Sense header GPIOs; already used: `GPIO1` STBY, `GPIO2` buzzer, `GPIO5`/`6` I2C):
 
-| Signal | Pin | Notes |
-|---|---|---|
-| ULTRASONIC_TRIG | GPIO7 | Output; 10 µs pulse |
-| ULTRASONIC_ECHO | GPIO8 | Input; measure pulse width via RMT RX (precise, non-blocking) |
+| Signal | Pin | Header | Notes |
+|---|---|---|---|
+| ULTRASONIC_TRIG | GPIO3 | D2 | Output; 10 µs pulse |
+| ULTRASONIC_ECHO | GPIO4 | D3 | Input; measure pulse width via RMT RX (precise, non-blocking) |
 
-Free headers after this change: GPIO3, 4, 9, 10. Driver lives in `main/ultrasonic.c/.h` and is called by the reactive executor at ~20 Hz (measurement cycle is ~30 ms max range). Pin mapping goes in `main/pin_config.h`.
+`pin_config.h` already reserves D2/D3 for this purpose. Free headers after this change: GPIO7/8/9 (D8-D10). Driver lives in `main/ultrasonic.c/.h` and is called by the reactive executor at ~20 Hz (measurement cycle is ~30 ms max range). Pin mapping goes in `main/pin_config.h`.
 
 **Reflex behavior**: if `distance_cm < STOP_THRESHOLD` (e.g. 15 cm), the executor overrides any planner goal with an immediate `stop()` and a brief reverse, regardless of goal ttl. This is the fast "don't hit things" loop that decouples safety from inference latency.
 
@@ -140,7 +140,7 @@ Each gate must pass before the next phase merges.
 
 - [ ] ADR-016 merged, describing the hierarchical pattern, the Claude/Ollama removal, and the ultrasonic reflex layer. Supersedes ADR-003 for robocar-unified specifically.
 - [ ] `claude_*` and `ollama_*` sources deleted; `CONFIG_AI_BACKEND_*` Kconfig removed; no references remain in `robocar-unified`.
-- [ ] Ultrasonic wired (GPIO7/8), driver reads distances reliably, pin map documented in `WIRING.md`.
+- [ ] Ultrasonic wired (GPIO3 TRIG / GPIO4 ECHO), driver reads distances reliably, pin map documented in `WIRING.md`.
 - [ ] Robot completes "track cup" and "drive to wall and stop" tasks smoothly; ultrasonic reflex demonstrably overrides goal on obstacle.
 - [ ] Reactive loop telemetry shows ≥25 Hz sustained; planner p50 latency ≤1500 ms on Gemini ER 1.6 with `thinking_budget=0`.
 - [ ] All existing tests green; new tests for `goal_state`, reactive controller, and ultrasonic driver added.
