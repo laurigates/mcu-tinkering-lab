@@ -23,7 +23,7 @@
 static const char *TAG = "gemini";
 
 #define GEMINI_MODEL "gemini-robotics-er-1.5-preview"
-#define GEMINI_URL                                                                             \
+#define GEMINI_URL \
     "https://generativelanguage.googleapis.com/v1beta/models/" GEMINI_MODEL ":generateContent"
 
 #define GEMINI_RESPONSE_BUF_SIZE (16 * 1024)

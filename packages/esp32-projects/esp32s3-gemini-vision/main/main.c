@@ -197,7 +197,7 @@ static void detection_store_update(const char *json, uint32_t latency_ms)
 }
 
 // ---------------------------------------------------- Gemini worker task ----
-static QueueHandle_t s_trigger_queue;     // messages: uint8_t (ignored; presence is the signal)
+static QueueHandle_t s_trigger_queue;  // messages: uint8_t (ignored; presence is the signal)
 static volatile bool s_inference_busy = false;
 static volatile uint32_t s_auto_interval_s = 0;  // 0 = disabled
 
@@ -273,8 +273,7 @@ extern const uint8_t index_html_end[] asm("_binary_index_html_end");
 static esp_err_t root_handler(httpd_req_t *req)
 {
     httpd_resp_set_type(req, "text/html; charset=utf-8");
-    return httpd_resp_send(req, (const char *)index_html_start,
-                           index_html_end - index_html_start);
+    return httpd_resp_send(req, (const char *)index_html_start, index_html_end - index_html_start);
 }
 
 static const char *STREAM_CT = "multipart/x-mixed-replace;boundary=frame";
@@ -331,10 +330,10 @@ static esp_err_t metadata_handler(httpd_req_t *req)
     }
     if (xSemaphoreTake(s_detection_mutex, portMAX_DELAY) == pdTRUE) {
         int n = snprintf(out, DETECTION_BUF_SIZE + 256,
-                         "{\"timestamp_ms\":%lld,\"latency_ms\":%u,\"busy\":%s,\"auto_interval_s\":%u,\"objects\":%s}",
+                         "{\"timestamp_ms\":%lld,\"latency_ms\":%u,\"busy\":%s,\"auto_interval_s\":"
+                         "%u,\"objects\":%s}",
                          (long long)(s_detection_timestamp_us / 1000),
-                         (unsigned)s_detection_latency_ms,
-                         s_inference_busy ? "true" : "false",
+                         (unsigned)s_detection_latency_ms, s_inference_busy ? "true" : "false",
                          (unsigned)s_auto_interval_s, s_detection_json);
         xSemaphoreGive(s_detection_mutex);
         httpd_resp_set_type(req, "application/json");
@@ -353,8 +352,10 @@ static esp_err_t config_handler(httpd_req_t *req)
         char val[16];
         if (httpd_query_key_value(query, "interval", val, sizeof(val)) == ESP_OK) {
             int v = atoi(val);
-            if (v < 0) v = 0;
-            if (v > 300) v = 300;
+            if (v < 0)
+                v = 0;
+            if (v > 300)
+                v = 300;
             s_auto_interval_s = v;
             ESP_LOGI(TAG, "auto_interval_s = %d", v);
         }
@@ -394,8 +395,7 @@ static void http_start(void)
     scfg.stack_size = 8192;
     httpd_handle_t stream = NULL;
     ESP_ERROR_CHECK(httpd_start(&stream, &scfg));
-    httpd_uri_t stream_uri = {
-        .uri = "/stream", .method = HTTP_GET, .handler = stream_handler};
+    httpd_uri_t stream_uri = {.uri = "/stream", .method = HTTP_GET, .handler = stream_handler};
     httpd_register_uri_handler(stream, &stream_uri);
 
     ESP_LOGI(TAG, "HTTP: api on :80, stream on :81");
