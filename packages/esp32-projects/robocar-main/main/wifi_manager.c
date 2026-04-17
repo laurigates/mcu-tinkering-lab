@@ -127,6 +127,24 @@ esp_err_t wifi_manager_init(void)
         goto cleanup;
     }
 
+    // Regulatory: allow channels 1–13 (default US policy clips to 1–11, hiding
+    // APs on 12/13). Must be set before any scan/connect path.
+    wifi_country_t country = {
+        .cc = "FI", .schan = 1, .nchan = 13, .policy = WIFI_COUNTRY_POLICY_AUTO};
+    ret = esp_wifi_set_country(&country);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to set country code: %s", esp_err_to_name(ret));
+        goto cleanup;
+    }
+
+    // Disable WiFi power save by default for robotics (low latency, reliable
+    // connectivity). wifi_manager_set_power_mode() can still override this.
+    ret = esp_wifi_set_ps(WIFI_PS_NONE);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to disable power save: %s", esp_err_to_name(ret));
+        goto cleanup;
+    }
+
     // Register event handlers
     ret = esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler,
                                               NULL, NULL);
@@ -161,7 +179,7 @@ esp_err_t wifi_manager_init(void)
     g_wifi_context.initialized = true;
     g_wifi_context.auto_reconnect = true;
     g_wifi_context.info.state = WIFI_STATE_DISCONNECTED;
-    g_wifi_context.power_mode = WIFI_POWER_BALANCED;
+    g_wifi_context.power_mode = WIFI_POWER_MAX_PERFORMANCE;
 
     // Start WiFi
     ESP_ERROR_CHECK(esp_wifi_start());
@@ -284,10 +302,14 @@ esp_err_t wifi_manager_connect(const char *ssid, const char *password)
         strncpy((char *)wifi_config.sta.password, g_wifi_context.current_credentials.password,
                 sizeof(wifi_config.sta.password) - 1);
 
-        // Security settings
-        wifi_config.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
+        // Security settings (canonical: mixed-mode-tolerant auth, PMF optional)
+        wifi_config.sta.threshold.authmode = WIFI_AUTH_WPA_WPA2_PSK;
         wifi_config.sta.pmf_cfg.capable = true;
         wifi_config.sta.pmf_cfg.required = false;
+
+        // Scan behavior (canonical: fast scan, prefer strongest signal)
+        wifi_config.sta.scan_method = WIFI_FAST_SCAN;
+        wifi_config.sta.sort_method = WIFI_CONNECT_AP_BY_SIGNAL;
 
         // Set configuration
         ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
@@ -674,7 +696,12 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
 
         case WIFI_EVENT_STA_DISCONNECTED: {
             wifi_event_sta_disconnected_t *event = (wifi_event_sta_disconnected_t *)event_data;
-            ESP_LOGW(TAG, "Disconnected from AP, reason: %d", event->reason);
+            ESP_LOGW(TAG, "WiFi disconnected. Reason: %d (%s)", event->reason,
+                     event->reason == WIFI_REASON_NO_AP_FOUND         ? "AP not found"
+                     : event->reason == WIFI_REASON_AUTH_FAIL         ? "Auth failed"
+                     : event->reason == WIFI_REASON_ASSOC_FAIL        ? "Assoc failed"
+                     : event->reason == WIFI_REASON_HANDSHAKE_TIMEOUT ? "Handshake timeout"
+                                                                      : "Other");
 
             g_wifi_context.info.is_connected = false;
             g_wifi_context.info.last_disconnect_reason = event->reason;

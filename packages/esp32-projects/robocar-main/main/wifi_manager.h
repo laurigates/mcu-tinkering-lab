@@ -15,7 +15,7 @@
 #include "esp_wifi_types.h"
 
 // WiFi configuration constants
-#define WIFI_MAXIMUM_RETRY 10               // Maximum number of connection attempts
+#define WIFI_MAXIMUM_RETRY 5  // Canonical retry cap (higher values only lengthen the failure path)
 #define WIFI_RETRY_BASE_DELAY_MS 1000       // Initial retry delay (exponential backoff)
 #define WIFI_MAX_RETRY_DELAY_MS 30000       // Maximum retry delay
 #define WIFI_SSID_MAX_LEN 32                // Maximum SSID length
