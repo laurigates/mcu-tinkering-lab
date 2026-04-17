@@ -31,13 +31,21 @@ CONFIG_CAMERA_PIN_PCLK=22
 # PSRAM is required for camera applications
 CONFIG_ESP32_SPIRAM_SUPPORT=y
 
-# Wi-Fi configuration
+# Wi-Fi configuration (canonical block — see .claude/skills/wifi-sta-setup)
 CONFIG_ESP_WIFI_ENABLED=y
-CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=16
+CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=10
 CONFIG_ESP_WIFI_DYNAMIC_RX_BUFFER_NUM=32
+CONFIG_ESP_WIFI_TX_BUFFER_TYPE=1
 CONFIG_ESP_WIFI_DYNAMIC_TX_BUFFER_NUM=32
+CONFIG_ESP_WIFI_AMPDU_TX_ENABLED=n
+CONFIG_ESP_WIFI_AMPDU_RX_ENABLED=n
+CONFIG_ESP_WIFI_AMSDU_TX_ENABLED=n
+CONFIG_ESP_WIFI_NVS_ENABLED=y
 
-# Reduce WiFi TX power to lower current draw during initialization
+# Brownout-justified TX power cap: AI-Thinker ESP32-CAM has documented
+# brownout-during-WiFi-association issues; brownout detector is enabled above.
+# See README.md "Power Considerations" and the 1-second power stabilization
+# delay in app_main(). Do not remove without re-verifying brownout behaviour.
 CONFIG_ESP_PHY_MAX_WIFI_TX_POWER=15
 CONFIG_ESP_PHY_MAX_TX_POWER=15
 
