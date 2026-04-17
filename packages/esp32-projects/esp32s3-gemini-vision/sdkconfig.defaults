@@ -42,16 +42,18 @@ CONFIG_MDNS_ENABLED=y
 # Brownout disabled (camera + WiFi startup can dip voltage on some USB ports)
 CONFIG_ESP_BROWNOUT_DET=n
 
-# WiFi tuning — mirrors robocar-unified which runs reliably on XIAO S3 Sense.
-# Larger RX buffers reduce drops during bursty traffic; amsdu/ampdu off avoids
-# aggregation edge cases some APs mis-handle.
+# WiFi tuning
+# Larger RX buffers reduce drops during bursty traffic.
+# AMPDU aggregation is ESP-IDF's default and materially improves throughput —
+# especially useful for MJPEG streaming / bulk uploads. Modern APs handle it
+# without issue.
 CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=10
 CONFIG_ESP_WIFI_DYNAMIC_RX_BUFFER_NUM=32
 CONFIG_ESP_WIFI_TX_BUFFER_TYPE=1
 CONFIG_ESP_WIFI_DYNAMIC_TX_BUFFER_NUM=32
-CONFIG_ESP_WIFI_AMPDU_TX_ENABLED=n
-CONFIG_ESP_WIFI_AMPDU_RX_ENABLED=n
-CONFIG_ESP_WIFI_AMSDU_TX_ENABLED=n
+CONFIG_ESP_WIFI_AMPDU_TX_ENABLED=y
+CONFIG_ESP_WIFI_AMPDU_RX_ENABLED=y
+CONFIG_ESP_WIFI_AMSDU_TX_ENABLED=y
 CONFIG_ESP_WIFI_NVS_ENABLED=y
 
 # Logging
