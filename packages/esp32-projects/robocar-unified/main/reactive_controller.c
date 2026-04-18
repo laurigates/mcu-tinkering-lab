@@ -403,6 +403,7 @@ esp_err_t reactive_controller_get_telemetry(reactive_telemetry_t *out)
 
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "goal_state.h"

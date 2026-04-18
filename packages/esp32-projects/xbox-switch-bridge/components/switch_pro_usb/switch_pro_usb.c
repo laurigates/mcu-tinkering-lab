@@ -66,7 +66,11 @@ static uint8_t s_timer_counter = 0;
  * and structurally valid for enumeration to succeed.
  *
  * Source: https://gist.github.com/spacemeowx2/22171913a36721501e42f14f1fd81633
+ *
+ * The paired-byte layout below encodes meaning (each line is one HID item);
+ * do not reflow.
  */
+/* clang-format off */
 static const uint8_t s_hid_report_descriptor[] = {
     0x05, 0x01, /* Usage Page (Generic Desktop) */
     0x15, 0x00, /* Logical Minimum (0) */
@@ -167,6 +171,7 @@ static const uint8_t s_hid_report_descriptor[] = {
     0x91, 0x83, /*   Output (Constant, Variable, Volatile) */
     0xC0,       /* End Collection */
 };
+/* clang-format on */
 
 /**
  * USB Configuration Descriptor for HID with IN + OUT endpoints.

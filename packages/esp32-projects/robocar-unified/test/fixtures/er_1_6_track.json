@@ -1,0 +1,26 @@
+{
+  "candidates": [
+    {
+      "content": {
+        "role": "model",
+        "parts": [
+          {
+            "functionCall": {
+              "name": "track",
+              "args": {
+                "box_2d": [380, 410, 620, 590],
+                "max_speed_pct": 55
+              }
+            }
+          }
+        ]
+      },
+      "finishReason": "STOP"
+    }
+  ],
+  "usageMetadata": {
+    "promptTokenCount": 1425,
+    "candidatesTokenCount": 28,
+    "totalTokenCount": 1453
+  }
+}
