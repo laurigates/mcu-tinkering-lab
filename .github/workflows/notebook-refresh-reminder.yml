@@ -87,10 +87,15 @@ jobs:
           - [ ] USB gadget & HID on ESP32-S3 — `e91ebe8d`
           - [ ] I2S audio & synthesis on ESP32 — `8cbdd8bb`
           - [ ] ESP32-S3 hardware families — `3bb67ba2`
+          - [ ] ESP32 classic boards (CAM, Heltec, TTGO) — `d2d63711`
           - [ ] Sensors & modules used in this lab — `c2d44a8c`
+          - [ ] Motor drivers & power electronics — `197ef318`
           - [ ] ESP32 peripherals: I2C, UART, I2S, GPIO — `5601a768`
           - [ ] ESP-IDF v5.4+ core reference — `f5af16f1`
+          - [ ] ESPHome platform & components — `2cb7153a`
+          - [ ] Bluepad32 & BLE HID input — `f696b00a`
           - [ ] ChameleonUltra RFID/NFC — `4831062f`
+          - [ ] Python simulation & robotics math — `28c00388`
           - [ ] Claude Code workflow & plugins — `ae5b0f8b`
 
           ## New docs since last refresh
