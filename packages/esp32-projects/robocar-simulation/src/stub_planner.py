@@ -28,11 +28,11 @@ Usage::
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 
-class GoalKind(str, Enum):
+class GoalKind(StrEnum):
     """Mirrors goal_kind_t in goal_state.h."""
 
     NONE = "none"
