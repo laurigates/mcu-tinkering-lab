@@ -1,0 +1,98 @@
+name: NotebookLM Doc Reminder
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'docs/decisions/**'
+      - 'docs/requirements/**'
+      - 'docs/flasher/**'
+      - 'packages/components/**'
+      - 'CLAUDE.md'
+      - '.claude/rules/**'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute affected notebooks
+        id: map
+        run: |
+          # Collect changed files from the PR
+          git fetch origin "${{ github.base_ref }}" --depth=1
+          FILES=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")
+          echo "changed files:"
+          echo "${FILES//$'\n'/$'\n  '}" | sed '1s/^/  /'
+
+          declare -A HITS
+          while IFS= read -r f; do
+            case "$f" in
+              docs/decisions/ADR-003-*|docs/decisions/ADR-008-*|docs/decisions/ADR-016-*|docs/requirements/PRD-002-*)
+                HITS["a755b5cd — AI vision backends for embedded"]=1 ;;
+              docs/decisions/ADR-004-*|docs/decisions/ADR-012-*|docs/decisions/ADR-015-*|packages/components/ota-github/*|docs/flasher/*)
+                HITS["c6868def — OTA updates & browser-based flashing"]=1 ;;
+              docs/decisions/ADR-010-*|packages/components/improv-wifi/*|.claude/rules/mdns-hostname.md)
+                HITS["ada2b18e — WiFi provisioning, mDNS & MQTT"]=1 ;;
+              docs/decisions/ADR-006-*|docs/decisions/ADR-009-*|docs/requirements/PRD-005-*|packages/input-gaming/*)
+                HITS["e91ebe8d — USB gadget & HID on ESP32-S3"]=1 ;;
+              docs/decisions/ADR-011-*|docs/requirements/PRD-008-*|packages/audio/*)
+                HITS["8cbdd8bb — I2S audio & synthesis on ESP32"]=1 ;;
+              docs/decisions/ADR-007-*|packages/components/i2c-protocol/*)
+                HITS["5601a768 — ESP32 peripherals (I2C, UART, I2S, GPIO)"]=1 ;;
+              docs/requirements/PRD-006-*|packages/games/nfc-scavenger-hunt/*)
+                HITS["4831062f — ChameleonUltra RFID/NFC"]=1 ;;
+              CLAUDE.md|.claude/rules/*)
+                HITS["ae5b0f8b — Claude Code workflow & plugins"]=1 ;;
+            esac
+          done <<< "$FILES"
+
+          if [[ ${#HITS[@]} -eq 0 ]]; then
+            echo "no_hits=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "no_hits=false" >> "$GITHUB_OUTPUT"
+            {
+              echo 'list<<EOF'
+              for key in "${!HITS[@]}"; do
+                echo "- $key"
+              done
+              echo 'EOF'
+            } >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Post or update PR comment
+        if: steps.map.outputs.no_hits != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          MARKER='<!-- notebook-reminder -->'
+          BODY=$(cat <<EOF
+          $MARKER
+          **NotebookLM reminder** — this PR touches docs/components linked to curated notebooks:
+
+          ${{ steps.map.outputs.list }}
+
+          Consider adding primary references from this change to the matching
+          notebook(s) in the same PR (or before closing the next monthly
+          refresh issue). See \`docs/reference/notebook-mapping.md\`.
+          EOF
+          )
+
+          EXISTING=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" \
+            --jq ".[] | select(.body | contains(\"$MARKER\")) | .id" | head -1)
+
+          if [[ -n "$EXISTING" ]]; then
+            gh api "repos/$REPO/issues/comments/$EXISTING" \
+              --method PATCH -f "body=$BODY" >/dev/null
+            echo "updated existing comment $EXISTING"
+          else
+            gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$BODY"
+            echo "posted new comment"
+          fi
