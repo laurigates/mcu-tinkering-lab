@@ -347,6 +347,19 @@ docker-clean:
 docker-logs:
     docker compose logs -f
 
+##########
+# NotebookLM knowledge base
+##########
+
+# Audit curated NotebookLM notebooks: source counts + recent ADR/PRD changes
+[group: "notebooks"]
+notebooks-status:
+    tools/notebooks-status.sh
+
+##########
+# Git
+##########
+
 # Check for credential files in the git staging area
 [group: "git"]
 git-check-credentials:

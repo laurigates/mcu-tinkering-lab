@@ -1,0 +1,135 @@
+name: NotebookLM Refresh Reminder
+
+on:
+  schedule:
+    # 1st of each month at 06:17 UTC (off-the-hour to avoid fleet alignment)
+    - cron: '17 6 1 * *'
+  workflow_dispatch:
+    inputs:
+      force_quarterly:
+        description: 'Include quarterly tasks (mind-map, study-guide) even off-quarter'
+        required: false
+        default: 'false'
+        type: boolean
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  open-refresh-issue:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine cycle
+        id: cycle
+        run: |
+          MONTH=$(date -u +%-m)
+          YEAR=$(date -u +%Y)
+          echo "month_name=$(date -u +%B)" >> "$GITHUB_OUTPUT"
+          echo "year=$YEAR" >> "$GITHUB_OUTPUT"
+          if [[ "$MONTH" == "1" || "$MONTH" == "4" || "$MONTH" == "7" || "$MONTH" == "10" ]]; then
+            echo "is_quarterly=true" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ inputs.force_quarterly }}" == "true" ]]; then
+            echo "is_quarterly=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_quarterly=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip if an open refresh issue already exists for this month
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TITLE_PREFIX="NotebookLM refresh: ${{ steps.cycle.outputs.month_name }} ${{ steps.cycle.outputs.year }}"
+          COUNT=$(gh issue list --repo "${{ github.repository }}" \
+            --label notebooks --state open --search "$TITLE_PREFIX in:title" \
+            --json number --jq 'length')
+          if [[ "$COUNT" -gt 0 ]]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Ensure `notebooks` label exists
+        if: steps.check.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create notebooks \
+            --color 5319E7 \
+            --description "NotebookLM knowledge base maintenance" \
+            --repo "${{ github.repository }}" || true
+
+      - name: Build issue body
+        if: steps.check.outputs.skip != 'true'
+        id: body
+        run: |
+          {
+            echo 'body<<EOF'
+            cat <<'TEMPLATE'
+          Scheduled monthly refresh of the curated NotebookLM knowledge base.
+          See `docs/reference/notebook-mapping.md` for the full mapping.
+
+          **How to run:** `notebooklm login` (once) then `just notebooks-refresh`
+          from your local machine. The CLI is not available in CI because auth
+          lives on your machine.
+
+          ## Active notebooks — monthly checklist
+
+          Regenerate a briefing-doc report on each, skim it, and add/remove
+          sources where the answer drifted.
+
+          - [ ] AI vision backends for embedded — `a755b5cd`
+          - [ ] OTA updates & browser-based flashing — `c6868def`
+          - [ ] WiFi provisioning, mDNS & MQTT — `ada2b18e`
+          - [ ] USB gadget & HID on ESP32-S3 — `e91ebe8d`
+          - [ ] I2S audio & synthesis on ESP32 — `8cbdd8bb`
+          - [ ] ESP32-S3 hardware families — `3bb67ba2`
+          - [ ] Sensors & modules used in this lab — `c2d44a8c`
+          - [ ] ESP32 peripherals: I2C, UART, I2S, GPIO — `5601a768`
+          - [ ] ESP-IDF v5.4+ core reference — `f5af16f1`
+          - [ ] ChameleonUltra RFID/NFC — `4831062f`
+          - [ ] Claude Code workflow & plugins — `ae5b0f8b`
+
+          ## New docs since last refresh
+
+          Check whether any ADRs / PRDs merged since last refresh have been
+          seeded into the matching notebook:
+
+          ```
+          git log --since="1 month ago" --name-only --pretty=format: \
+            -- docs/decisions docs/requirements | sort -u
+          ```
+
+          TEMPLATE
+            if [[ "${{ steps.cycle.outputs.is_quarterly }}" == "true" ]]; then
+              cat <<'QUARTERLY'
+          ## Quarterly tasks
+
+          - [ ] Regenerate mind-map on each active notebook (`notebooklm generate mind-map --notebook <id>` + `download mind-map`)
+          - [ ] Regenerate study-guide report on the five new domain notebooks
+          - [ ] Audit source counts; trim any notebook above ~30 down toward target
+
+          QUARTERLY
+            fi
+            cat <<'FOOTER'
+          ## Done?
+
+          Close this issue when the checklist is complete. The next reminder
+          will open automatically on the 1st of next month.
+          FOOTER
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Open issue
+        if: steps.check.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create \
+            --repo "${{ github.repository }}" \
+            --title "NotebookLM refresh: ${{ steps.cycle.outputs.month_name }} ${{ steps.cycle.outputs.year }}" \
+            --label notebooks \
+            --body "${{ steps.body.outputs.body }}"
