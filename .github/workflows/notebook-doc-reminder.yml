@@ -27,14 +27,18 @@ jobs:
   remind:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
       - name: Compute affected notebooks
         id: map
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
         run: |
-          # Collect changed files from the PR
-          git fetch origin "${{ github.base_ref }}" --depth=1
-          FILES=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")
+          # Collect changed files from the PR via the API (robust against
+          # shallow clones and force-pushes).
+          FILES=$(gh api --paginate \
+            "repos/$REPO/pulls/$PR_NUMBER/files" \
+            --jq '.[].filename')
           echo "changed files:"
           echo "${FILES//$'\n'/$'\n  '}" | sed '1s/^/  /'
 
