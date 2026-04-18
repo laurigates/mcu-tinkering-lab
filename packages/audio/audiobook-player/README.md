@@ -1,4 +1,4 @@
-# Audiobook Player
+# RFID Audiobook Player
 
 An RFID-based audiobook player that integrates with Home Assistant. Scan picture cards with RFID tags to play different audiobooks, with physical play/pause buttons.
 

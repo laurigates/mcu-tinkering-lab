@@ -1,4 +1,4 @@
-# ESP32 Robot Car Simulation
+# Robocar Physics Simulation
 
 A comprehensive simulation environment for the ESP32-based robot car with physics modeling using Pymunk. This simulation provides accurate physics modeling, 2D visualization (matplotlib), and seamless communication with the actual ESP32 hardware.
 
