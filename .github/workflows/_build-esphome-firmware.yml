@@ -4,7 +4,11 @@ on:
   workflow_call:
     inputs:
       project:
-        description: 'Project directory name under packages/esp32-projects/'
+        description: 'Project basename (used for artifact naming and display)'
+        required: true
+        type: string
+      project_path:
+        description: 'Project directory relative to packages/ (e.g. audio/audiobook-player)'
         required: true
         type: string
       yaml_file:
@@ -33,7 +37,7 @@ jobs:
           ref: ${{ inputs.release_tag }}
 
       - name: Generate dummy secrets.yaml for CI
-        working-directory: packages/esp32-projects/${{ inputs.project }}
+        working-directory: packages/${{ inputs.project_path }}
         run: |
           # Extract all !secret references from the YAML config and generate
           # placeholder values so ESPHome can compile without real credentials.
@@ -78,7 +82,7 @@ jobs:
         uses: esphome/build-action@v7
         id: build
         with:
-          yaml-file: packages/esp32-projects/${{ inputs.project }}/${{ inputs.yaml_file }}
+          yaml-file: packages/${{ inputs.project_path }}/${{ inputs.yaml_file }}
 
       - name: Generate MD5 checksum
         id: hashes

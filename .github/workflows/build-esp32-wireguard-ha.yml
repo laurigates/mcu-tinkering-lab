@@ -4,13 +4,13 @@ on:
   push:
     branches: [main, develop, 'claude/**']
     paths:
-      - 'packages/esp32-projects/esp32-wireguard-ha-example/**'
+      - 'packages/networking/wireguard-ha/**'
       - '.github/workflows/build-esp32-wireguard-ha.yml'
       - '.github/workflows/_ci-build-esphome.yml'
   pull_request:
     branches: [main, develop]
     paths:
-      - 'packages/esp32-projects/esp32-wireguard-ha-example/**'
+      - 'packages/networking/wireguard-ha/**'
       - '.github/workflows/build-esp32-wireguard-ha.yml'
       - '.github/workflows/_ci-build-esphome.yml'
   release:
@@ -28,6 +28,7 @@ jobs:
     uses: ./.github/workflows/_ci-build-esphome.yml
     with:
       project: esp32-wireguard-ha-example
+      project_path: networking/wireguard-ha
       yaml_file: esp32-wireguard-ha.yaml
 
   check-tag:
@@ -53,6 +54,7 @@ jobs:
     uses: ./.github/workflows/_build-esphome-firmware.yml
     with:
       project: esp32-wireguard-ha-example
+      project_path: networking/wireguard-ha
       yaml_file: esp32-wireguard-ha.yaml
       device_name: esp32-wireguard-ha
       release_tag: ${{ needs.check-tag.outputs.tag }}

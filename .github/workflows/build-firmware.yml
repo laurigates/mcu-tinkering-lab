@@ -35,9 +35,10 @@ jobs:
         id: discover
         run: |
           INCLUDES="[]"
-          for flasher_json in packages/esp32-projects/*/flasher.json; do
+          for flasher_json in packages/*/*/flasher.json; do
             project_dir=$(dirname "$flasher_json")
             project_id=$(basename "$project_dir")
+            project_path="${project_dir#packages/}"
             chip_family=$(jq -r '.chipFamily' "$flasher_json")
             app_binary=$(jq -r '.appBinaryName' "$flasher_json")
 
@@ -58,10 +59,11 @@ jobs:
 
             INCLUDES=$(echo "$INCLUDES" | jq -c \
               --arg id "$project_id" \
+              --arg path "$project_path" \
               --arg target "$target" \
               --arg app_bin "$app_binary" \
               --arg fetch_deps "$fetch_deps" \
-              '. + [{"project": $id, "target": $target, "app_binary": $app_bin, "fetch_deps": ($fetch_deps == "true")}]')
+              '. + [{"project": $id, "project_path": $path, "target": $target, "app_binary": $app_bin, "fetch_deps": ($fetch_deps == "true")}]')
           done
 
           COUNT=$(echo "$INCLUDES" | jq 'length')
@@ -86,7 +88,7 @@ jobs:
 
       - name: Fetch external dependencies
         if: matrix.fetch_deps
-        working-directory: packages/esp32-projects/${{ matrix.project }}
+        working-directory: packages/${{ matrix.project_path }}
         run: |
           BP32_DIR="external/bluepad32"
           BTSTACK_ROOT="$BP32_DIR/external/btstack"
@@ -116,17 +118,17 @@ jobs:
         with:
           esp_idf_version: ${{ env.IDF_VERSION }}
           target: ${{ matrix.target }}
-          command: cd packages/esp32-projects/${{ matrix.project }} && idf.py build
+          command: cd packages/${{ matrix.project_path }} && idf.py build
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v7
         with:
           name: firmware-${{ matrix.project }}
           path: |
-            packages/esp32-projects/${{ matrix.project }}/build/${{ matrix.app_binary }}
-            packages/esp32-projects/${{ matrix.project }}/build/bootloader/bootloader.bin
-            packages/esp32-projects/${{ matrix.project }}/build/partition_table/partition-table.bin
-            packages/esp32-projects/${{ matrix.project }}/build/ota_data_initial.bin
+            packages/${{ matrix.project_path }}/build/${{ matrix.app_binary }}
+            packages/${{ matrix.project_path }}/build/bootloader/bootloader.bin
+            packages/${{ matrix.project_path }}/build/partition_table/partition-table.bin
+            packages/${{ matrix.project_path }}/build/ota_data_initial.bin
           retention-days: 7
 
   assemble-and-deploy:
@@ -158,12 +160,13 @@ jobs:
         run: |
           mkdir -p firmware
 
-          for flasher_json in packages/esp32-projects/*/flasher.json; do
+          for flasher_json in packages/*/*/flasher.json; do
             project_dir=$(dirname "$flasher_json")
             project_id=$(basename "$project_dir")
+            project_path="${project_dir#packages/}"
             app_bin=$(jq -r '.appBinaryName' "$flasher_json")
             dest="firmware/$project_id"
-            src="artifacts/firmware-$project_id/packages/esp32-projects/$project_id/build"
+            src="artifacts/firmware-$project_id/packages/$project_path/build"
             mkdir -p "$dest"
 
             cp "$src/$app_bin"                            "$dest/" 2>/dev/null || echo "WARN: missing $app_bin for $project_id"
@@ -222,7 +225,7 @@ jobs:
           echo "| Project | Binary | Size |" >> $GITHUB_STEP_SUMMARY
           echo "|---------|--------|------|" >> $GITHUB_STEP_SUMMARY
 
-          for flasher_json in packages/esp32-projects/*/flasher.json; do
+          for flasher_json in packages/*/*/flasher.json; do
             project_dir=$(dirname "$flasher_json")
             project_id=$(basename "$project_dir")
             app_bin=$(jq -r '.appBinaryName' "$flasher_json")

@@ -35,10 +35,10 @@ Pluggable AI backends:
 
 ## Project Locations
 
-- Main controller: `packages/esp32-projects/robocar-main/`
-- Camera module: `packages/esp32-projects/robocar-camera/`
-- Simulation: `packages/esp32-projects/robocar-simulation/`
-- Documentation: `packages/esp32-projects/robocar-docs/`
+- Main controller: `packages/robocar/main/`
+- Camera module: `packages/robocar/camera/`
+- Simulation: `packages/robocar/simulation/`
+- Documentation: `packages/robocar/docs/`
 
 ## Capabilities
 
@@ -104,7 +104,7 @@ just robocar::develop-main  # build + flash + monitor
 just robocar::develop-cam
 
 # Simulation
-cd packages/esp32-projects/robocar-simulation
+cd packages/robocar/simulation
 python src/main.py
 ```
 

@@ -4,7 +4,7 @@
 [[allowlists]]
 description = "ESPHome secrets example template - contains dummy values only"
 paths = [
-    "(?i)packages/esp32-projects/.*/secrets\\.yaml$"
+    "(?i)packages/.*/secrets\\.yaml$"
 ]
 
 [[allowlists]]

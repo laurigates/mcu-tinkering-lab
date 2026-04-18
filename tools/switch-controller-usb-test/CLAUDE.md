@@ -14,7 +14,7 @@ Three tools, three approaches:
 | `switch_gadget.py` | PC emulates a Pro Controller via Linux USB gadget | Linux with USB OTG (Raspberry Pi) |
 | `switch_proxy.py` | ESP32-S3 handles USB, PC handles protocol via UART | ESP32-S3 + USB-UART adapter |
 
-**Relationship to xbox-switch-bridge:** These tools support development of the Switch Pro Controller USB protocol used by `packages/esp32-projects/xbox-switch-bridge/components/switch_pro_usb/`. The proxy tool pairs with `packages/esp32-projects/switch-usb-proxy/` firmware.
+**Relationship to xbox-switch-bridge:** These tools support development of the Switch Pro Controller USB protocol used by `packages/input-gaming/xbox-switch-bridge/components/switch_pro_usb/`. The proxy tool pairs with `packages/input-gaming/switch-usb-proxy/` firmware.
 
 ## Commands
 
@@ -61,6 +61,6 @@ All three tools share the same Switch Pro Controller protocol knowledge:
 
 ## Related Projects
 
-- `packages/esp32-projects/xbox-switch-bridge/` — Production firmware using this protocol
-- `packages/esp32-projects/switch-usb-proxy/` — Thin ESP32-S3 firmware for the proxy tool
-- `packages/esp32-projects/xbox-switch-bridge/docs/switch-pro-controller-protocol.md` — Protocol reference
+- `packages/input-gaming/xbox-switch-bridge/` — Production firmware using this protocol
+- `packages/input-gaming/switch-usb-proxy/` — Thin ESP32-S3 firmware for the proxy tool
+- `packages/input-gaming/xbox-switch-bridge/docs/switch-pro-controller-protocol.md` — Protocol reference

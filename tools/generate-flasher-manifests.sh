@@ -8,7 +8,7 @@
 #   version      Release version string, e.g. "0.3.1"
 #   firmware-dir Output directory for manifests (default: "firmware")
 #
-# For every packages/esp32-projects/*/flasher.json found, this script:
+# For every packages/*/*/flasher.json found, this script:
 #   1. Reads chipFamily and appBinaryName from flasher.json
 #   2. Determines flash offsets (bootloader/partition-table/otadata/app) from
 #      partitions.csv if present, otherwise uses chip-family defaults
@@ -30,7 +30,7 @@ set -euo pipefail
 
 VERSION="${1:?Usage: $0 <version> [firmware-dir]}"
 FIRMWARE_DIR="${2:-firmware}"
-PROJECTS_DIR="packages/esp32-projects"
+PROJECTS_GLOB="packages/*/*/flasher.json"
 
 # Associative array: chip family -> bootloader offset (decimal)
 bootloader_offset() {
@@ -83,9 +83,9 @@ parse_otadata_offset() {
 
 PROJECTS_JSON_ARRAY="[]"
 
-echo "Scanning ${PROJECTS_DIR}/*/flasher.json ..."
+echo "Scanning ${PROJECTS_GLOB} ..."
 
-for flasher_json in "${PROJECTS_DIR}"/*/flasher.json; do
+for flasher_json in ${PROJECTS_GLOB}; do
     project_dir=$(dirname "$flasher_json")
     project_id=$(basename "$project_dir")
 

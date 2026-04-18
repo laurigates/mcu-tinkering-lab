@@ -4,13 +4,13 @@ on:
   push:
     branches: [main, develop, 'claude/**']
     paths:
-      - 'packages/esp32-projects/robocar-main/**'
+      - 'packages/robocar/main/**'
       - '.github/workflows/build-robocar-main.yml'
       - '.github/workflows/_ci-build-esp32.yml'
   pull_request:
     branches: [main, develop]
     paths:
-      - 'packages/esp32-projects/robocar-main/**'
+      - 'packages/robocar/main/**'
       - '.github/workflows/build-robocar-main.yml'
       - '.github/workflows/_ci-build-esp32.yml'
   release:
@@ -28,6 +28,7 @@ jobs:
     uses: ./.github/workflows/_ci-build-esp32.yml
     with:
       project: robocar-main
+      project_path: robocar/main
       target: esp32
 
   check-tag:
@@ -53,6 +54,7 @@ jobs:
     uses: ./.github/workflows/_build-esp32-firmware.yml
     with:
       project: robocar-main
+      project_path: robocar/main
       target: esp32
       binary_name: idf-robocar.bin
       mqtt_ota_notify: true

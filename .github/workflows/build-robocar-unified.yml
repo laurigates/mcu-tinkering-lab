@@ -4,13 +4,13 @@ on:
   push:
     branches: [main, develop, 'claude/**']
     paths:
-      - 'packages/esp32-projects/robocar-unified/**'
+      - 'packages/robocar/unified/**'
       - '.github/workflows/build-robocar-unified.yml'
       - '.github/workflows/_ci-build-esp32.yml'
   pull_request:
     branches: [main, develop]
     paths:
-      - 'packages/esp32-projects/robocar-unified/**'
+      - 'packages/robocar/unified/**'
       - '.github/workflows/build-robocar-unified.yml'
       - '.github/workflows/_ci-build-esp32.yml'
   release:
@@ -28,6 +28,7 @@ jobs:
     uses: ./.github/workflows/_ci-build-esp32.yml
     with:
       project: robocar-unified
+      project_path: robocar/unified
       target: esp32s3
 
   check-tag:
@@ -53,6 +54,7 @@ jobs:
     uses: ./.github/workflows/_build-esp32-firmware.yml
     with:
       project: robocar-unified
+      project_path: robocar/unified
       target: esp32s3
       binary_name: robocar-unified.bin
       release_tag: ${{ needs.check-tag.outputs.tag }}

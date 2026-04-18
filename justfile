@@ -1,31 +1,31 @@
 # MCU Tinkering Lab — Unified Build System
 # Run `just --list` to see available recipes
 
-mod robocar 'packages/esp32-projects/robocar-docs'
-mod robocar-main 'packages/esp32-projects/robocar-main'
-mod robocar-camera 'packages/esp32-projects/robocar-camera'
-mod robocar-unified 'packages/esp32-projects/robocar-unified'
-mod sim 'packages/esp32-projects/robocar-simulation'
-mod audiobook 'packages/esp32-projects/audiobook-player'
-mod wireguard 'packages/esp32-projects/esp32-wireguard-ha-example'
-mod kids-audio 'packages/esp32-projects/kids-audio-toy'
-mod xbox 'packages/esp32-projects/xbox-switch-bridge'
-mod troubleshooter 'packages/esp32-projects/it-troubleshooter'
-mod webserver 'packages/esp32-projects/esp32-cam-webserver'
-mod i2s-audio 'packages/esp32-projects/esp32-cam-i2s-audio'
-mod telegram 'packages/esp32-projects/esp32cam-llm-telegram'
-mod wifitest 'packages/esp32-projects/esp32-wifitest'
-mod switch-proxy 'packages/esp32-projects/switch-usb-proxy'
+mod robocar 'packages/robocar/docs'
+mod robocar-main 'packages/robocar/main'
+mod robocar-camera 'packages/robocar/camera'
+mod robocar-unified 'packages/robocar/unified'
+mod sim 'packages/robocar/simulation'
+mod audiobook 'packages/audio/audiobook-player'
+mod wireguard 'packages/networking/wireguard-ha'
+mod kids-audio 'packages/audio/kids-audio-toy'
+mod xbox 'packages/input-gaming/xbox-switch-bridge'
+mod troubleshooter 'packages/networking/it-troubleshooter'
+mod webserver 'packages/camera-vision/cam-webserver'
+mod i2s-audio 'packages/camera-vision/cam-i2s-audio'
+mod telegram 'packages/camera-vision/llm-telegram'
+mod wifitest 'packages/networking/wifitest'
+mod switch-proxy 'packages/input-gaming/switch-usb-proxy'
 mod switch-probe 'tools/switch-controller-usb-test'
-mod synth 'packages/esp32-projects/gamepad-synth'
-mod gemini-vision 'packages/esp32-projects/esp32s3-gemini-vision'
+mod synth 'packages/audio/gamepad-synth'
+mod gemini-vision 'packages/camera-vision/gemini-vision'
 
 # Auto-detect ESP32-S3 USB-Serial-JTAG by Espressif VID; override with S3_PORT env var
 s3_port := env("S3_PORT", `tools/detect-esp32s3-port.sh --quiet 2>/dev/null || true`)
 
 port := env("PORT", "/dev/cu.usbserial-0001")
 
-robocar_sim_dir := "packages/esp32-projects/robocar-simulation"
+robocar_sim_dir := "packages/robocar/simulation"
 
 default:
     @just --list
@@ -56,10 +56,10 @@ check-environment:
     fi
     echo ""
     echo "Project Structure:"
-    [ -d "packages/esp32-projects/robocar-main" ] && [ -d "packages/esp32-projects/robocar-camera" ] \
+    [ -d "packages/robocar/main" ] && [ -d "packages/robocar/camera" ] \
         && echo "  Robocar projects found" || echo "  Robocar projects missing"
-    [ -d "packages/esp32-projects" ] \
-        && echo "  ESP32 packages directory found" || echo "  ESP32 packages missing"
+    [ -d "packages" ] \
+        && echo "  packages/ directory found" || echo "  packages/ directory missing"
 
 # Full dev environment: Docker images + dev tools
 [group: "setup"]
@@ -157,7 +157,7 @@ lint-c:
     set -euo pipefail
     command -v cppcheck >/dev/null 2>&1 || { echo "Error: cppcheck not found — brew install cppcheck"; exit 1; }
     mkdir -p tmp
-    find packages/esp32-projects -type f \( -name "*.c" -o -name "*.h" -o -name "*.cpp" -o -name "*.hpp" \) \
+    find packages -type f \( -name "*.c" -o -name "*.h" -o -name "*.cpp" -o -name "*.hpp" \) \
         ! -path "*/managed_components/*" \
         ! -path "*/components/esp-idf-lib/*" \
         ! -path "*/external/*" \
@@ -196,7 +196,7 @@ format-c:
     #!/usr/bin/env bash
     set -euo pipefail
     command -v clang-format >/dev/null 2>&1 || { echo "Warning: clang-format not found — brew install clang-format"; exit 0; }
-    find packages/esp32-projects -type f \( -name "*.c" -o -name "*.h" -o -name "*.cpp" -o -name "*.hpp" \) \
+    find packages -type f \( -name "*.c" -o -name "*.h" -o -name "*.cpp" -o -name "*.hpp" \) \
         ! -path "*/managed_components/*" \
         ! -path "*/components/esp-idf-lib/*" \
         ! -path "*/external/*" \
@@ -227,7 +227,7 @@ format-check-c:
     #!/usr/bin/env bash
     set -euo pipefail
     command -v clang-format >/dev/null 2>&1 || { echo "Error: clang-format not found"; exit 1; }
-    find packages/esp32-projects -type f \( -name "*.c" -o -name "*.h" -o -name "*.cpp" -o -name "*.hpp" \) \
+    find packages -type f \( -name "*.c" -o -name "*.h" -o -name "*.cpp" -o -name "*.hpp" \) \
         ! -path "*/managed_components/*" \
         ! -path "*/components/esp-idf-lib/*" \
         ! -path "*/external/*" \
@@ -268,7 +268,7 @@ list-projects:
     echo "MCU Tinkering Lab — Project Inventory"
     echo ""
     echo "AI-Powered Robot Car (Primary):"
-    if [ -d "packages/esp32-projects/robocar-main" ] && [ -d "packages/esp32-projects/robocar-camera" ]; then
+    if [ -d "packages/robocar/main" ] && [ -d "packages/robocar/camera" ]; then
         echo "  Dual ESP32 autonomous robot with AI vision"
         echo "    Main Controller: Heltec WiFi LoRa 32 V1"
         echo "    Vision System:   ESP32-CAM with Claude/Ollama AI"
@@ -278,16 +278,16 @@ list-projects:
     fi
     echo ""
     echo "ESP32 Package Projects:"
-    [ -d "packages/esp32-projects/esp32-cam-webserver" ]  && echo "  esp32-cam-webserver         — Live video streaming web server"         || true
-    [ -d "packages/esp32-projects/esp32-cam-i2s-audio" ]  && echo "  esp32-cam-i2s-audio         — Camera + I2S audio processing"           || true
-    [ -d "packages/esp32-projects/esp32cam-llm-telegram" ] && echo "  esp32cam-llm-telegram       — AI vision with Telegram bot"             || true
-    [ -d "packages/esp32-projects/xbox-switch-bridge" ]          && echo "  xbox-switch-bridge          — Xbox BLE to Switch USB bridge"           || true
-    [ -d "packages/esp32-projects/it-troubleshooter" ]           && echo "  it-troubleshooter           — IT troubleshooting assistant"            || true
-    [ -d "packages/esp32-projects/switch-usb-proxy" ]            && echo "  switch-usb-proxy            — Switch USB protocol proxy"               || true
-    [ -d "packages/esp32-projects/esp32-wifitest" ]              && echo "  esp32-wifitest              — WiFi AP test firmware"                   || true
-    [ -d "packages/esp32-projects/kids-audio-toy" ]              && echo "  kids-audio-toy              — Potentiometer-controlled audio toy"      || true
-    [ -d "packages/esp32-projects/audiobook-player" ]            && echo "  audiobook-player            — ESPHome audiobook player"                || true
-    [ -d "packages/esp32-projects/esp32-wireguard-ha-example" ]  && echo "  esp32-wireguard-ha-example  — WireGuard + Home Assistant (ESPHome)"    || true
+    [ -d "packages/camera-vision/cam-webserver" ]  && echo "  esp32-cam-webserver         — Live video streaming web server"         || true
+    [ -d "packages/camera-vision/cam-i2s-audio" ]  && echo "  esp32-cam-i2s-audio         — Camera + I2S audio processing"           || true
+    [ -d "packages/camera-vision/llm-telegram" ] && echo "  esp32cam-llm-telegram       — AI vision with Telegram bot"             || true
+    [ -d "packages/input-gaming/xbox-switch-bridge" ]          && echo "  xbox-switch-bridge          — Xbox BLE to Switch USB bridge"           || true
+    [ -d "packages/networking/it-troubleshooter" ]           && echo "  it-troubleshooter           — IT troubleshooting assistant"            || true
+    [ -d "packages/input-gaming/switch-usb-proxy" ]            && echo "  switch-usb-proxy            — Switch USB protocol proxy"               || true
+    [ -d "packages/networking/wifitest" ]              && echo "  esp32-wifitest              — WiFi AP test firmware"                   || true
+    [ -d "packages/audio/kids-audio-toy" ]              && echo "  kids-audio-toy              — Potentiometer-controlled audio toy"      || true
+    [ -d "packages/audio/audiobook-player" ]            && echo "  audiobook-player            — ESPHome audiobook player"                || true
+    [ -d "packages/networking/wireguard-ha" ]  && echo "  esp32-wireguard-ha-example  — WireGuard + Home Assistant (ESPHome)"    || true
     echo ""
     echo "Use 'just <module>::build' to build individual projects."
     echo "Module names: just --list --list-submodules"

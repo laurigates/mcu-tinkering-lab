@@ -4,13 +4,13 @@ on:
   push:
     branches: [main, develop, 'claude/**']
     paths:
-      - 'packages/esp32-projects/it-troubleshooter/**'
+      - 'packages/networking/it-troubleshooter/**'
       - '.github/workflows/build-it-troubleshooter.yml'
       - '.github/workflows/_ci-build-esp32.yml'
   pull_request:
     branches: [main, develop]
     paths:
-      - 'packages/esp32-projects/it-troubleshooter/**'
+      - 'packages/networking/it-troubleshooter/**'
       - '.github/workflows/build-it-troubleshooter.yml'
       - '.github/workflows/_ci-build-esp32.yml'
   release:
@@ -28,6 +28,7 @@ jobs:
     uses: ./.github/workflows/_ci-build-esp32.yml
     with:
       project: it-troubleshooter
+      project_path: networking/it-troubleshooter
       target: esp32s3
 
   check-tag:
@@ -53,6 +54,7 @@ jobs:
     uses: ./.github/workflows/_build-esp32-firmware.yml
     with:
       project: it-troubleshooter
+      project_path: networking/it-troubleshooter
       target: esp32s3
       binary_name: it-troubleshooter.bin
       release_tag: ${{ needs.check-tag.outputs.tag }}

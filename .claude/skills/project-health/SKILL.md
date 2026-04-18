@@ -11,7 +11,7 @@ allowed-tools: Read, Grep, Glob, Bash(just:*), Bash(ls:*)
 Audit project(s) for completeness against the monorepo standard checklist.
 
 - If `$ARGUMENTS` is a project path → audit that single project
-- If `$ARGUMENTS` is `all` or empty → audit all projects under `packages/esp32-projects/`
+- If `$ARGUMENTS` is `all` or empty → audit all projects under `packages/<domain>/`
 
 ## Checklist
 

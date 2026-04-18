@@ -4,13 +4,13 @@ on:
   push:
     branches: [main, develop, 'claude/**']
     paths:
-      - 'packages/esp32-projects/switch-usb-proxy/**'
+      - 'packages/input-gaming/switch-usb-proxy/**'
       - '.github/workflows/build-switch-usb-proxy.yml'
       - '.github/workflows/_ci-build-esp32.yml'
   pull_request:
     branches: [main, develop]
     paths:
-      - 'packages/esp32-projects/switch-usb-proxy/**'
+      - 'packages/input-gaming/switch-usb-proxy/**'
       - '.github/workflows/build-switch-usb-proxy.yml'
       - '.github/workflows/_ci-build-esp32.yml'
   release:
@@ -28,6 +28,7 @@ jobs:
     uses: ./.github/workflows/_ci-build-esp32.yml
     with:
       project: switch-usb-proxy
+      project_path: input-gaming/switch-usb-proxy
       target: esp32s3
 
   check-tag:
@@ -53,6 +54,7 @@ jobs:
     uses: ./.github/workflows/_build-esp32-firmware.yml
     with:
       project: switch-usb-proxy
+      project_path: input-gaming/switch-usb-proxy
       target: esp32s3
       binary_name: switch-usb-proxy.bin
       release_tag: ${{ needs.check-tag.outputs.tag }}

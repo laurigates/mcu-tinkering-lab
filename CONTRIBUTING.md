@@ -415,8 +415,8 @@ Brief description of changes
 
 1. **Create project directory:**
    ```bash
-   mkdir -p packages/esp32-projects/my-new-project
-   cd packages/esp32-projects/my-new-project
+   mkdir -p packages/<domain>/my-new-project
+   cd packages/<domain>/my-new-project
    ```
 
 2. **Create CMakeLists.txt:**

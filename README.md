@@ -18,7 +18,7 @@ Flash pre-built firmware directly from your browser — no ESP-IDF, no Docker, n
 3. Select your board and click **Flash**
 
 > Requires Chrome/Edge 89+ (Web Serial API). Android supported with USB OTG.
-> See [Web Flasher docs](packages/esp32-projects/robocar-docs/docs/WEB_FLASHER.md) for details.
+> See [Web Flasher docs](packages/robocar/docs/docs/WEB_FLASHER.md) for details.
 
 ### Option 1: Docker (Recommended)
 
@@ -71,33 +71,38 @@ just build-all
 ```
 mcu-tinkering-lab/
 ├── packages/
-│   ├── esp32-projects/
-│   │   ├── robocar-main/           # 🤖 AI robot car controller (Heltec WiFi LoRa 32)
-│   │   ├── robocar-camera/         # 📹 ESP32-CAM vision with Claude/Ollama AI
-│   │   ├── robocar-unified/        # 🤖 Single-board ESP32-S3 Sense consolidated firmware
-│   │   ├── robocar-simulation/     # 🎮 Python 3.11 physics simulation
-│   │   ├── robocar-docs/           # 📚 Documentation and coordination justfile
-│   │   ├── esp32cam-llm-telegram/  # 💬 Telegram bot with LLM vision
-│   │   ├── esp32-cam-webserver/    # 🌐 Live video streaming server
-│   │   ├── esp32-cam-i2s-audio/    # 🔊 Camera + audio processing
-│   │   ├── gamepad-synth/          # 🎵 PS4 gamepad I2S audio synthesizer
-│   │   ├── kids-audio-toy/         # 🧸 Potentiometer-controlled audio toy
-│   │   ├── audiobook-player/       # 📖 ESPHome audiobook player
-│   │   ├── xbox-switch-bridge/     # 🎮 Xbox BLE to Switch USB bridge
-│   │   ├── switch-usb-proxy/       # 🔌 Switch USB protocol proxy
-│   │   ├── it-troubleshooter/      # 🔧 IT troubleshooting assistant
-│   │   ├── nfc-scavenger-hunt/     # 📱 NFC-based scavenger hunt game
-│   │   ├── esp32-wifitest/         # 📡 WiFi AP test firmware
-│   │   └── esp32-wireguard-ha-example/ # 🔒 WireGuard + Home Assistant
-│   ├── arduino-projects/           # 🚧 Coming soon
-│   ├── stm32-projects/             # 🚧 Coming soon
-│   └── shared-libs/                # 📦 Shared code libraries
+│   ├── robocar/                    # 🤖 Dual-ESP32 AI robot car system
+│   │   ├── main/                   # Main controller (Heltec WiFi LoRa 32)
+│   │   ├── camera/                 # ESP32-CAM vision with Claude/Ollama/Gemini AI
+│   │   ├── unified/                # Single-board ESP32-S3 Sense consolidation
+│   │   ├── simulation/             # Python 3.11 physics simulation
+│   │   ├── docs/                   # Docs and coordination justfile
+│   │   └── components/i2c-protocol/ # Robocar-internal I2C protocol + tests
+│   ├── camera-vision/              # 📹 Standalone camera / AI vision projects
+│   │   ├── cam-webserver/          # Live video streaming server
+│   │   ├── cam-i2s-audio/          # Camera + I2S audio processing
+│   │   ├── llm-telegram/           # LLM vision with Telegram bot
+│   │   └── gemini-vision/          # Gemini Robotics-ER object detection UI
+│   ├── audio/                      # 🎵 Audio / synth / toys
+│   │   ├── gamepad-synth/          # PS4 gamepad I2S synthesizer
+│   │   ├── kids-audio-toy/         # Potentiometer-controlled audio toy
+│   │   └── audiobook-player/       # RFID audiobook player (ESPHome)
+│   ├── input-gaming/               # 🎮 Gamepads and controller bridges
+│   │   ├── xbox-switch-bridge/     # Xbox BLE → Switch USB bridge
+│   │   └── switch-usb-proxy/       # Switch USB protocol proxy
+│   ├── networking/                 # 📡 WiFi tests, VPN, network tools
+│   │   ├── it-troubleshooter/      # IT troubleshooting assistant
+│   │   ├── wifitest/               # WiFi AP test firmware
+│   │   └── wireguard-ha/           # WireGuard + Home Assistant (ESPHome)
+│   ├── games/
+│   │   └── nfc-scavenger-hunt/     # NFC-based scavenger hunt game
+│   └── components/                 # 📦 Reusable ESP-IDF components
 │       ├── improv-wifi/            # Improv-WiFi BLE provisioning
-│       └── robocar-i2c-protocol/   # Shared I2C protocol (with unit tests)
+│       └── ota-github/             # GitHub Releases OTA updater
 ├── .github/workflows/              # 🔄 CI/CD pipelines
 ├── tools/                          # 🛠️ Build scripts and utilities
 ├── docs/                           # 📖 Documentation
-└── justfile                        # 🎯 Root build coordination (60+ targets)
+└── justfile                        # 🎯 Root build coordination
 ```
 
 ## 🎯 Featured Projects
@@ -174,7 +179,7 @@ just clean-all              # Clean all builds
 just test-all                  # (Coming soon)
 
 # Python simulation tests
-cd packages/esp32-projects/robocar-simulation
+cd packages/robocar/simulation
 uv sync
 uv run pytest tests/ --cov
 
@@ -283,8 +288,8 @@ Add to your PRs to see build status at a glance.
 
 ```bash
 # Copy template (manual for now)
-cp -r packages/esp32-projects/esp32-cam-webserver packages/esp32-projects/my-new-project
-cd packages/esp32-projects/my-new-project
+cp -r packages/camera-vision/cam-webserver packages/<domain>/my-new-project
+cd packages/<domain>/my-new-project
 
 # Update CMakeLists.txt
 sed -i 's/esp32-cam-webserver/my-new-project/g' CMakeLists.txt
@@ -297,12 +302,12 @@ just esp32-my-new-project-build
 
 ## 📚 Documentation
 
-- [Architecture Overview](packages/esp32-projects/robocar-docs/README.md) - System design and communication protocols
-- [Hardware Connections](packages/esp32-projects/robocar-docs/hardware-connections.md) - Pin mappings and wiring
-- [Web Flasher Guide](packages/esp32-projects/robocar-docs/docs/WEB_FLASHER.md) - Browser-based firmware flashing
-- [WiFi Setup](packages/esp32-projects/robocar-main/WIFI_SETUP.md) - Network configuration
-- [OTA Updates](packages/esp32-projects/robocar-docs/docs/OTA_UPDATES.md) - Over-the-air firmware updates
-- [Simulation Guide](packages/esp32-projects/robocar-simulation/README.md) - Physics simulation setup
+- [Architecture Overview](packages/robocar/docs/README.md) - System design and communication protocols
+- [Hardware Connections](packages/robocar/docs/hardware-connections.md) - Pin mappings and wiring
+- [Web Flasher Guide](packages/robocar/docs/docs/WEB_FLASHER.md) - Browser-based firmware flashing
+- [WiFi Setup](packages/robocar/main/WIFI_SETUP.md) - Network configuration
+- [OTA Updates](packages/robocar/docs/docs/OTA_UPDATES.md) - Over-the-air firmware updates
+- [Simulation Guide](packages/robocar/simulation/README.md) - Physics simulation setup
 
 ## 🤝 Contributing
 

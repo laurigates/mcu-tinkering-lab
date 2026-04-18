@@ -4,12 +4,12 @@ on:
   push:
     branches: [main, develop, 'claude/**']
     paths:
-      - 'packages/esp32-projects/robocar-simulation/**'
+      - 'packages/robocar/simulation/**'
       - '.github/workflows/esp32-build.yml'
   pull_request:
     branches: [main, develop]
     paths:
-      - 'packages/esp32-projects/robocar-simulation/**'
+      - 'packages/robocar/simulation/**'
       - '.github/workflows/esp32-build.yml'
   workflow_dispatch:
 
@@ -30,11 +30,11 @@ jobs:
         run: pip install uv
 
       - name: Install dependencies
-        working-directory: packages/esp32-projects/robocar-simulation
+        working-directory: packages/robocar/simulation
         run: uv sync
 
       - name: Check imports
-        working-directory: packages/esp32-projects/robocar-simulation
+        working-directory: packages/robocar/simulation
         run: |
           uv run python -c "import sys; print(f'Python {sys.version}')"
           uv run python -c "import numpy; print(f'NumPy {numpy.__version__}')"

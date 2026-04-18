@@ -1,6 +1,6 @@
 {
   "packages": {
-    "packages/esp32-projects/robocar-main": {
+    "packages/robocar/main": {
       "release-type": "simple",
       "component": "robocar-main",
       "package-name": "robocar-main",
@@ -9,7 +9,7 @@
       "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": true
     },
-    "packages/esp32-projects/robocar-camera": {
+    "packages/robocar/camera": {
       "release-type": "simple",
       "component": "robocar-camera",
       "package-name": "robocar-camera",
@@ -18,7 +18,7 @@
       "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": true
     },
-    "packages/esp32-projects/robocar-unified": {
+    "packages/robocar/unified": {
       "release-type": "simple",
       "component": "robocar-unified",
       "package-name": "robocar-unified",
@@ -27,7 +27,7 @@
       "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": true
     },
-    "packages/esp32-projects/audiobook-player": {
+    "packages/audio/audiobook-player": {
       "release-type": "simple",
       "component": "audiobook-player",
       "package-name": "audiobook-player",
@@ -36,7 +36,7 @@
       "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": true
     },
-    "packages/esp32-projects/esp32-cam-i2s-audio": {
+    "packages/camera-vision/cam-i2s-audio": {
       "release-type": "simple",
       "component": "esp32-cam-i2s-audio",
       "package-name": "esp32-cam-i2s-audio",
@@ -45,7 +45,7 @@
       "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": true
     },
-    "packages/esp32-projects/esp32-cam-webserver": {
+    "packages/camera-vision/cam-webserver": {
       "release-type": "simple",
       "component": "esp32-cam-webserver",
       "package-name": "esp32-cam-webserver",
@@ -54,7 +54,7 @@
       "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": true
     },
-    "packages/esp32-projects/esp32-wifitest": {
+    "packages/networking/wifitest": {
       "release-type": "simple",
       "component": "esp32-wifitest",
       "package-name": "esp32-wifitest",
@@ -63,7 +63,7 @@
       "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": true
     },
-    "packages/esp32-projects/esp32-wireguard-ha-example": {
+    "packages/networking/wireguard-ha": {
       "release-type": "simple",
       "component": "esp32-wireguard-ha-example",
       "package-name": "esp32-wireguard-ha-example",
@@ -72,7 +72,7 @@
       "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": true
     },
-    "packages/esp32-projects/esp32cam-llm-telegram": {
+    "packages/camera-vision/llm-telegram": {
       "release-type": "simple",
       "component": "esp32cam-llm-telegram",
       "package-name": "esp32cam-llm-telegram",
@@ -81,7 +81,7 @@
       "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": true
     },
-    "packages/esp32-projects/it-troubleshooter": {
+    "packages/networking/it-troubleshooter": {
       "release-type": "simple",
       "component": "it-troubleshooter",
       "package-name": "it-troubleshooter",
@@ -90,7 +90,7 @@
       "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": true
     },
-    "packages/esp32-projects/kids-audio-toy": {
+    "packages/audio/kids-audio-toy": {
       "release-type": "simple",
       "component": "kids-audio-toy",
       "package-name": "kids-audio-toy",
@@ -99,7 +99,7 @@
       "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": true
     },
-    "packages/esp32-projects/nfc-scavenger-hunt": {
+    "packages/games/nfc-scavenger-hunt": {
       "release-type": "simple",
       "component": "nfc-scavenger-hunt",
       "package-name": "nfc-scavenger-hunt",
@@ -108,7 +108,7 @@
       "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": true
     },
-    "packages/esp32-projects/robocar-simulation": {
+    "packages/robocar/simulation": {
       "release-type": "simple",
       "component": "robocar-simulation",
       "package-name": "robocar-simulation",
@@ -120,7 +120,7 @@
         {"type": "generic", "path": "pyproject.toml"}
       ]
     },
-    "packages/esp32-projects/switch-usb-proxy": {
+    "packages/input-gaming/switch-usb-proxy": {
       "release-type": "simple",
       "component": "switch-usb-proxy",
       "package-name": "switch-usb-proxy",
@@ -129,7 +129,7 @@
       "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": true
     },
-    "packages/esp32-projects/xbox-switch-bridge": {
+    "packages/input-gaming/xbox-switch-bridge": {
       "release-type": "simple",
       "component": "xbox-switch-bridge",
       "package-name": "xbox-switch-bridge",
@@ -138,7 +138,7 @@
       "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": true
     },
-    "packages/esp32-projects/gamepad-synth": {
+    "packages/audio/gamepad-synth": {
       "release-type": "simple",
       "component": "gamepad-synth",
       "package-name": "gamepad-synth",

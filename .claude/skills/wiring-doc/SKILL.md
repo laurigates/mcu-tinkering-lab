@@ -7,7 +7,7 @@ allowed-tools: Read, Write, Edit, Grep, Glob, Agent
 
 ## Task
 
-Generate or update a `WIRING.md` file for the project at `$1` (relative path under `packages/esp32-projects/`).
+Generate or update a `WIRING.md` file for the project at `$1` (relative path under `packages/<domain>/`).
 
 ## Process
 

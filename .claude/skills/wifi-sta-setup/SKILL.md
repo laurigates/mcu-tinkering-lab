@@ -17,11 +17,11 @@ Invocation:
 - `apply <project-path>` — migrate source + sdkconfig to canonical.
 
 `<project-path>` is relative to repo root, typically
-`packages/esp32-projects/<project-name>`.
+`packages/<domain>/<project-name>`.
 
 The canonical source of truth is
-`packages/esp32-projects/robocar-unified/main/wifi_manager.c` (identical to
-`packages/esp32-projects/robocar-camera/main/wifi_manager.c`). That project
+`packages/robocar/unified/main/wifi_manager.c` (identical to
+`packages/robocar/camera/main/wifi_manager.c`). That project
 runs reliably on XIAO ESP32-S3 Sense in the same environment as every other
 WiFi project in this monorepo, so its configuration is the reference.
 

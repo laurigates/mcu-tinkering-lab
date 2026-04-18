@@ -56,7 +56,7 @@ __pycache__/
 .cache/
 
 # Blueprint work orders (may contain sensitive task details)
-docs/blueprint/work-orders/
+docs/work-orders/
 
 # Development tools
 cppcheck-report.txt

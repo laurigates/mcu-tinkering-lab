@@ -4,13 +4,13 @@ on:
   push:
     branches: [main, develop, 'claude/**']
     paths:
-      - 'packages/esp32-projects/kids-audio-toy/**'
+      - 'packages/audio/kids-audio-toy/**'
       - '.github/workflows/build-kids-audio-toy.yml'
       - '.github/workflows/_ci-build-esp32.yml'
   pull_request:
     branches: [main, develop]
     paths:
-      - 'packages/esp32-projects/kids-audio-toy/**'
+      - 'packages/audio/kids-audio-toy/**'
       - '.github/workflows/build-kids-audio-toy.yml'
       - '.github/workflows/_ci-build-esp32.yml'
   release:
@@ -28,6 +28,7 @@ jobs:
     uses: ./.github/workflows/_ci-build-esp32.yml
     with:
       project: kids-audio-toy
+      project_path: audio/kids-audio-toy
       target: esp32
 
   check-tag:
@@ -53,6 +54,7 @@ jobs:
     uses: ./.github/workflows/_build-esp32-firmware.yml
     with:
       project: kids-audio-toy
+      project_path: audio/kids-audio-toy
       target: esp32
       binary_name: kids-audio-toy.bin
       release_tag: ${{ needs.check-tag.outputs.tag }}

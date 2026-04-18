@@ -2,7 +2,7 @@
 # Import this from ESP-IDF project justfiles: import '../../../tools/esp32-idf.just'
 #
 # Requires these variables defined in your project justfile:
-#   project_dir  — relative path from repo root (e.g., "packages/esp32-projects/robocar-main")
+#   project_dir  — relative path from repo root (e.g., "packages/robocar/main")
 #   target       — ESP32 chip target (e.g., "esp32", "esp32s3")
 #
 # Provides (all private — compose into public recipes in your project justfile):
@@ -19,7 +19,7 @@
 #
 #   import '../../../tools/esp32-idf.just'
 #
-#   project_dir := "packages/esp32-projects/my-project"
+#   project_dir := "packages/<domain>/my-project"
 #   target := "esp32"
 #
 #   [group: "build"]

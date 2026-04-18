@@ -1,0 +1,80 @@
+# ESP32-S3 WiFi AP Test — bare-minimum SoftAP for hardware validation
+# Run `just` or `just --list` to see available recipes
+
+set positional-arguments
+
+import '../../../tools/esp32-idf.just'
+
+project_dir := "packages/networking/wifitest"
+port := env("PORT", _detected_s3)
+baud := env("BAUD", "460800")
+target := "esp32s3"
+
+default:
+    @just --list
+
+##########
+# Build (custom — output filtering + binary validation)
+##########
+
+# Build firmware in Docker container
+[group: "build"]
+build:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Building esp32-wifitest..."
+    {{container_cmd}} compose -f {{compose_file}} run --rm \
+        -w /workspace/{{project_dir}} \
+        esp-idf \
+        bash -c "idf.py set-target {{target}} && idf.py build" 2>&1 \
+        | grep -E "warning:|error:|ninja: build stopped|binary size|Build complete" \
+        || true
+    if [ ! -f build/esp32-wifitest.bin ]; then
+        echo "FAILED — rerun with verbose output:" >&2
+        echo "  {{container_cmd}} compose -f {{compose_file}} run --rm -w /workspace/{{project_dir}} esp-idf bash -c 'idf.py build'" >&2
+        exit 1
+    fi
+    echo "Build OK"
+
+# Clean build artifacts (containerized)
+[group: "build"]
+clean: _idf-clean
+
+# Open configuration menu (containerized)
+[group: "build"]
+menuconfig: _idf-menuconfig
+
+# Interactive shell in ESP-IDF container
+[group: "build"]
+shell: _idf-shell
+
+##########
+# Flash & Monitor
+##########
+
+# Flash firmware to device
+[group: "device"]
+flash: require-port
+    #!/usr/bin/env bash
+    set -euo pipefail
+    esptool -s --chip esp32s3 -p {{port}} -b {{baud}} \
+        --before default-reset --after hard-reset \
+        write-flash --flash-mode dio --flash-size 4MB --flash-freq 80m \
+        0x0 build/bootloader/bootloader.bin \
+        0x8000 build/partition_table/partition-table.bin \
+        0x10000 build/esp32-wifitest.bin
+    echo "Flashed OK"
+
+# Reset board via USB-Serial-JTAG CDC control signals
+[group: "device"]
+reset: require-port
+    "{{tools_dir}}/esp32s3-reset.sh" "{{port}}"
+
+# Serial monitor with reset (Ctrl-C to stop)
+[group: "device"]
+monitor: require-port
+    "{{tools_dir}}/esp32s3-monitor.sh" "{{port}}"
+
+# Flash and monitor
+[group: "device"]
+flash-monitor: flash monitor
