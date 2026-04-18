@@ -7,7 +7,15 @@ on:
       - 'docs/decisions/**'
       - 'docs/requirements/**'
       - 'docs/flasher/**'
+      - 'docs/reference/boards/**'
       - 'packages/components/**'
+      - 'packages/audio/**'
+      - 'packages/input-gaming/**'
+      - 'packages/networking/wireguard-ha/**'
+      - 'packages/robocar/camera/**'
+      - 'packages/robocar/main/**'
+      - 'packages/robocar/simulation/**'
+      - 'packages/robocar/unified/main/motor_controller.*'
       - 'CLAUDE.md'
       - '.claude/rules/**'
 
@@ -40,13 +48,23 @@ jobs:
               docs/decisions/ADR-010-*|packages/components/improv-wifi/*|.claude/rules/mdns-hostname.md)
                 HITS["ada2b18e — WiFi provisioning, mDNS & MQTT"]=1 ;;
               docs/decisions/ADR-006-*|docs/decisions/ADR-009-*|docs/requirements/PRD-005-*|packages/input-gaming/*)
-                HITS["e91ebe8d — USB gadget & HID on ESP32-S3"]=1 ;;
-              docs/decisions/ADR-011-*|docs/requirements/PRD-008-*|packages/audio/*)
+                HITS["e91ebe8d — USB gadget & HID on ESP32-S3"]=1 ;;&
+              docs/decisions/ADR-009-*|docs/requirements/PRD-008-*|packages/audio/gamepad-synth/*|packages/input-gaming/*)
+                HITS["f696b00a — Bluepad32 & BLE HID input"]=1 ;;
+              packages/robocar/*/main/motor_controller.*)
+                HITS["197ef318 — Motor drivers & power electronics"]=1 ;;
+              docs/requirements/PRD-007-*|packages/audio/audiobook-player/*|packages/networking/wireguard-ha/*)
+                HITS["2cb7153a — ESPHome platform & components"]=1 ;;
+              docs/decisions/ADR-011-*|packages/audio/*)
                 HITS["8cbdd8bb — I2S audio & synthesis on ESP32"]=1 ;;
               docs/decisions/ADR-007-*|packages/components/i2c-protocol/*)
                 HITS["5601a768 — ESP32 peripherals (I2C, UART, I2S, GPIO)"]=1 ;;
               docs/requirements/PRD-006-*|packages/games/nfc-scavenger-hunt/*)
                 HITS["4831062f — ChameleonUltra RFID/NFC"]=1 ;;
+              packages/robocar/camera/*|packages/robocar/main/*|docs/reference/boards/ttgo-lora32-v2.md)
+                HITS["d2d63711 — ESP32 classic boards (CAM, Heltec, TTGO)"]=1 ;;
+              docs/requirements/PRD-003-*|packages/robocar/simulation/*)
+                HITS["28c00388 — Python simulation & robotics math"]=1 ;;
               CLAUDE.md|.claude/rules/*)
                 HITS["ae5b0f8b — Claude Code workflow & plugins"]=1 ;;
             esac
