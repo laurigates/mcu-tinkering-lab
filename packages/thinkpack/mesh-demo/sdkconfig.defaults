@@ -1,0 +1,41 @@
+# ESP32-S3 target
+CONFIG_IDF_TARGET="esp32s3"
+
+# USB-Serial-JTAG for monitoring
+CONFIG_ESP_CONSOLE_UART_DEFAULT=y
+
+# WiFi — required by ESP-NOW
+CONFIG_ESP_WIFI_ENABLED=y
+
+# Enable ESP-NOW (part of esp_wifi; on by default but documented here)
+CONFIG_ESP_WIFI_ESPNOW_ENABLED=y
+
+# Disable WiFi AMPDU (known S3 AP visibility workaround)
+CONFIG_ESP_WIFI_AMPDU_RX_ENABLED=n
+CONFIG_ESP_WIFI_AMPDU_TX_ENABLED=n
+
+# Disable WiFi NVS storage
+CONFIG_ESP_WIFI_NVS_ENABLED=n
+
+# Reduce WiFi buffers
+CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=4
+CONFIG_ESP_WIFI_DYNAMIC_RX_BUFFER_NUM=8
+CONFIG_ESP_WIFI_DYNAMIC_TX_BUFFER_NUM=8
+
+# Disable 11kv
+CONFIG_ESP_WIFI_11KV_SUPPORT=n
+
+# Disable Bluetooth entirely
+CONFIG_BT_ENABLED=n
+
+# No PSRAM
+CONFIG_SPIRAM=n
+
+# Default partition table (no custom partitions.csv)
+CONFIG_PARTITION_TABLE_SINGLE_APP=y
+
+# Logging level
+CONFIG_LOG_DEFAULT_LEVEL_INFO=y
+
+# Larger main task stack for WiFi + ESP-NOW init
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
