@@ -64,7 +64,10 @@ static const char *s_string_desc[] = {
     [3] = "000001",
 };
 
-/* HID boot keyboard report descriptor */
+/* HID boot keyboard report descriptor.
+ * The paired-byte layout below encodes meaning (each line is one HID item);
+ * do not reflow. */
+/* clang-format off */
 static const uint8_t s_hid_report_desc[] = {
     0x05, 0x01, /* Usage Page (Generic Desktop) */
     0x09, 0x06, /* Usage (Keyboard) */
@@ -99,17 +102,18 @@ static const uint8_t s_hid_report_desc[] = {
     0x91, 0x01, /*   Output (Constant) */
 
     /* Key codes (6 bytes) */
-    0x95, 0x06,       /*   Report Count (6) */
-    0x75, 0x08,       /*   Report Size (8) */
-    0x15, 0x00,       /*   Logical Minimum (0) */
+    0x95, 0x06, /*   Report Count (6) */
+    0x75, 0x08, /*   Report Size (8) */
+    0x15, 0x00, /*   Logical Minimum (0) */
     0x26, 0xFF, 0x00, /* Logical Maximum (255) */
-    0x05, 0x07,       /*   Usage Page (Key Codes) */
-    0x19, 0x00,       /*   Usage Minimum (0) */
+    0x05, 0x07, /*   Usage Page (Key Codes) */
+    0x19, 0x00, /*   Usage Minimum (0) */
     0x2A, 0xFF, 0x00, /* Usage Maximum (255) */
-    0x81, 0x00,       /*   Input (Data, Array) */
+    0x81, 0x00, /*   Input (Data, Array) */
 
     0xC0, /* End Collection */
 };
+/* clang-format on */
 
 /* ─── Configuration Descriptor ─────────────────────────────────────────────── */
 

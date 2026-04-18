@@ -1,0 +1,27 @@
+{
+  "candidates": [
+    {
+      "content": {
+        "role": "model",
+        "parts": [
+          {
+            "functionCall": {
+              "name": "drive",
+              "args": {
+                "heading_deg": 0,
+                "distance_cm": 100,
+                "speed_pct": 60
+              }
+            }
+          }
+        ]
+      },
+      "finishReason": "STOP"
+    }
+  ],
+  "usageMetadata": {
+    "promptTokenCount": 1425,
+    "candidatesTokenCount": 23,
+    "totalTokenCount": 1448
+  }
+}

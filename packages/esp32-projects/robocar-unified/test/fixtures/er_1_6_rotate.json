@@ -1,0 +1,25 @@
+{
+  "candidates": [
+    {
+      "content": {
+        "role": "model",
+        "parts": [
+          {
+            "functionCall": {
+              "name": "rotate",
+              "args": {
+                "angle_deg": -45
+              }
+            }
+          }
+        ]
+      },
+      "finishReason": "STOP"
+    }
+  ],
+  "usageMetadata": {
+    "promptTokenCount": 1425,
+    "candidatesTokenCount": 18,
+    "totalTokenCount": 1443
+  }
+}

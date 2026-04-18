@@ -312,6 +312,7 @@ esp_err_t ultrasonic_deinit(void)
  * ========================================================================= */
 #else /* ULTRASONIC_HOST_TEST */
 
+#include <stddef.h>
 #include <stdint.h>
 
 static uint16_t s_injected_distance = ULTRASONIC_DIST_ERROR;
