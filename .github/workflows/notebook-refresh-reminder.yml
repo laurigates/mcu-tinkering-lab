@@ -66,8 +66,8 @@ jobs:
         if: steps.check.outputs.skip != 'true'
         id: body
         run: |
+          BODY_FILE="$RUNNER_TEMP/issue-body.md"
           {
-            echo 'body<<EOF'
             cat <<'TEMPLATE'
           Scheduled monthly refresh of the curated NotebookLM knowledge base.
           See `docs/reference/notebook-mapping.md` for the full mapping.
@@ -125,8 +125,8 @@ jobs:
           Close this issue when the checklist is complete. The next reminder
           will open automatically on the 1st of next month.
           FOOTER
-            echo 'EOF'
-          } >> "$GITHUB_OUTPUT"
+          } > "$BODY_FILE"
+          echo "path=$BODY_FILE" >> "$GITHUB_OUTPUT"
 
       - name: Open issue
         if: steps.check.outputs.skip != 'true'
@@ -137,4 +137,4 @@ jobs:
             --repo "${{ github.repository }}" \
             --title "NotebookLM refresh: ${{ steps.cycle.outputs.month_name }} ${{ steps.cycle.outputs.year }}" \
             --label notebooks \
-            --body "${{ steps.body.outputs.body }}"
+            --body-file "${{ steps.body.outputs.path }}"
