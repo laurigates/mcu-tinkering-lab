@@ -4,13 +4,13 @@ on:
   push:
     branches: [main, develop, 'claude/**']
     paths:
-      - 'packages/esp32-projects/esp32-wifitest/**'
+      - 'packages/networking/wifitest/**'
       - '.github/workflows/build-esp32-wifitest.yml'
       - '.github/workflows/_ci-build-esp32.yml'
   pull_request:
     branches: [main, develop]
     paths:
-      - 'packages/esp32-projects/esp32-wifitest/**'
+      - 'packages/networking/wifitest/**'
       - '.github/workflows/build-esp32-wifitest.yml'
       - '.github/workflows/_ci-build-esp32.yml'
   release:
@@ -28,6 +28,7 @@ jobs:
     uses: ./.github/workflows/_ci-build-esp32.yml
     with:
       project: esp32-wifitest
+      project_path: networking/wifitest
       target: esp32s3
 
   check-tag:
@@ -53,6 +54,7 @@ jobs:
     uses: ./.github/workflows/_build-esp32-firmware.yml
     with:
       project: esp32-wifitest
+      project_path: networking/wifitest
       target: esp32s3
       binary_name: esp32-wifitest.bin
       release_tag: ${{ needs.check-tag.outputs.tag }}

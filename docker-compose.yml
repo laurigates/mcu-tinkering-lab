@@ -34,7 +34,7 @@ services:
     image: mcu-tinkering-lab/simulation:latest
     container_name: mcu-tinkering-lab-simulation
     volumes:
-      - ./packages/esp32-projects/robocar-simulation:/workspace
+      - ./packages/robocar/simulation:/workspace
       # X11 socket for GUI applications
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
     ports:

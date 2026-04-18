@@ -8,34 +8,45 @@ MCU Tinkering Lab is a production-ready embedded systems monorepo for ESP32, STM
 
 ## Repository Structure
 
+Projects are grouped by domain under `packages/`. Add new projects to the
+folder that matches the domain, or create a new domain folder. Drop the
+`esp32-` prefix — the category already implies it.
+
 ```
 mcu-tinkering-lab/
 ├── packages/
-│   └── esp32-projects/
-│       ├── robocar-main/           # Main controller (Heltec WiFi LoRa 32 V1)
-│       ├── robocar-camera/         # Vision system (ESP32-CAM + Claude/Ollama AI)
-│       ├── robocar-unified/        # Single-board ESP32-S3 Sense consolidated firmware
-│       ├── robocar-simulation/     # Python 3.11 physics simulation (Pymunk)
-│       ├── robocar-docs/           # Documentation and coordination justfile
-│       ├── esp32cam-llm-telegram/  # Telegram bot with LLM vision
-│       ├── esp32-cam-webserver/    # Live video streaming server
-│       ├── esp32-cam-i2s-audio/    # Camera + audio processing
-│       ├── gamepad-synth/          # PS4 gamepad-controlled I2S audio synthesizer
-│       ├── kids-audio-toy/         # Potentiometer-controlled audio toy
-│       ├── audiobook-player/       # ESPHome audiobook player
-│       ├── xbox-switch-bridge/     # Xbox BLE to Switch USB bridge
-│       ├── switch-usb-proxy/       # Switch USB protocol proxy
-│       ├── it-troubleshooter/      # IT troubleshooting assistant
-│       ├── nfc-scavenger-hunt/     # NFC-based scavenger hunt game
-│       ├── esp32-wifitest/         # WiFi AP test firmware
-│       └── esp32-wireguard-ha-example/ # WireGuard + Home Assistant (ESPHome)
-├── packages/shared-libs/
-│   ├── improv-wifi/                # Improv-WiFi BLE provisioning component
-│   └── robocar-i2c-protocol/       # Shared I2C protocol definitions + tests
-├── .github/workflows/              # CI/CD (31 workflows)
+│   ├── robocar/                    # Dual-ESP32 AI robot car system
+│   │   ├── main/                   # Main controller (Heltec WiFi LoRa 32)
+│   │   ├── camera/                 # ESP32-CAM vision (Claude/Ollama/Gemini)
+│   │   ├── unified/                # Single-board XIAO ESP32-S3 Sense consolidation
+│   │   ├── simulation/             # Python 3.11 physics simulation (Pymunk)
+│   │   ├── docs/                   # Docs and coordination justfile
+│   │   └── components/i2c-protocol/ # Robocar-internal I2C protocol + tests
+│   ├── camera-vision/              # Standalone camera / AI vision projects
+│   │   ├── cam-webserver/          # MJPEG streaming server
+│   │   ├── cam-i2s-audio/          # Camera + I2S audio
+│   │   ├── llm-telegram/           # LLM vision with Telegram bot
+│   │   └── gemini-vision/          # Gemini Robotics-ER object detection
+│   ├── audio/                      # Audio / synth / toys
+│   │   ├── gamepad-synth/          # PS4 gamepad I2S synthesizer
+│   │   ├── kids-audio-toy/         # Potentiometer-controlled audio toy
+│   │   └── audiobook-player/       # RFID audiobook player (ESPHome)
+│   ├── input-gaming/               # Gamepads and controller bridges
+│   │   ├── xbox-switch-bridge/     # Xbox BLE → Switch USB bridge
+│   │   └── switch-usb-proxy/       # Switch USB protocol proxy
+│   ├── networking/                 # WiFi tests, VPN, network tools
+│   │   ├── it-troubleshooter/      # IT troubleshooting assistant
+│   │   ├── wifitest/               # WiFi AP test firmware
+│   │   └── wireguard-ha/           # WireGuard + Home Assistant (ESPHome)
+│   ├── games/
+│   │   └── nfc-scavenger-hunt/     # NFC-based scavenger hunt game
+│   └── components/                 # Reusable ESP-IDF components
+│       ├── improv-wifi/            # Improv-WiFi BLE provisioning
+│       └── ota-github/             # GitHub Releases OTA updater
+├── .github/workflows/              # CI/CD pipelines
 ├── tools/scaffold/                 # Project scaffolding scripts
-├── docs/blueprint/                 # Architecture docs (PRDs, ADRs)
-└── justfile                        # Build coordination (60+ targets)
+├── docs/                           # decisions/, requirements/, prompts/, reference/
+└── justfile                        # Build coordination
 ```
 
 ## Tech Stack
@@ -103,7 +114,7 @@ pre-commit run --all-files
 ### Python Simulation
 
 ```bash
-cd packages/esp32-projects/robocar-simulation
+cd packages/robocar/simulation
 uv sync                      # Install dependencies
 uv run pytest tests/ --cov   # Run tests with coverage
 ```
@@ -132,9 +143,13 @@ Examples:
 - Pre-commit hooks enforce formatting automatically on commit.
 
 ### File Organization
-- ESP32 firmware projects go in `packages/esp32-projects/<project-name>/`
+- ESP32 firmware projects go in `packages/<domain>/<project-name>/` (pick an
+  existing domain folder that fits, or create a new one)
 - Each ESP32 project has its own `CMakeLists.txt`, `main/`, and `sdkconfig.defaults`
-- Shared components are planned for `packages/shared-libs/`
+- Repo-wide reusable components live in `packages/components/` (improv-wifi,
+  ota-github)
+- Domain-local components live in `packages/<domain>/components/` (e.g.
+  `packages/robocar/components/i2c-protocol/`)
 
 ### Credentials
 - **Never commit** `credentials.h`, `wifi_config.h`, or files ending in `.key`, `.secret`, `.token`
@@ -185,5 +200,5 @@ Most workflows delegate to reusable workflows from [`laurigates/.github`](https:
 - `.pre-commit-config.yaml` — Pre-commit hook definitions
 - `.gitleaks.toml` — Secret scanning allowlist
 - `tools/scaffold/new-esp32-project.sh` — New project scaffolding
-- `packages/esp32-projects/robocar-docs/` — Robocar coordination justfile and docs
+- `packages/robocar/docs/` — Robocar coordination justfile and docs
 - `docs/flasher/index.html` — ESP Web Tools browser-based firmware flasher page

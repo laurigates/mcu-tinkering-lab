@@ -4,13 +4,13 @@ on:
   push:
     branches: [main, develop, 'claude/**']
     paths:
-      - 'packages/esp32-projects/nfc-scavenger-hunt/**'
+      - 'packages/games/nfc-scavenger-hunt/**'
       - '.github/workflows/build-nfc-scavenger-hunt.yml'
       - '.github/workflows/_ci-build-esp32.yml'
   pull_request:
     branches: [main, develop]
     paths:
-      - 'packages/esp32-projects/nfc-scavenger-hunt/**'
+      - 'packages/games/nfc-scavenger-hunt/**'
       - '.github/workflows/build-nfc-scavenger-hunt.yml'
       - '.github/workflows/_ci-build-esp32.yml'
   release:
@@ -28,6 +28,7 @@ jobs:
     uses: ./.github/workflows/_ci-build-esp32.yml
     with:
       project: nfc-scavenger-hunt
+      project_path: games/nfc-scavenger-hunt
       target: esp32s3
 
   check-tag:
@@ -53,6 +54,7 @@ jobs:
     uses: ./.github/workflows/_build-esp32-firmware.yml
     with:
       project: nfc-scavenger-hunt
+      project_path: games/nfc-scavenger-hunt
       target: esp32s3
       binary_name: nfc-scavenger-hunt.bin
       release_tag: ${{ needs.check-tag.outputs.tag }}

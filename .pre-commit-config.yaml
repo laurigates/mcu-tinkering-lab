@@ -50,9 +50,9 @@ repos:
     hooks:
       - id: ty
         name: ty type check (robocar-simulation)
-        entry: bash -c 'cd packages/esp32-projects/robocar-simulation && uvx ty check src/'
+        entry: bash -c 'cd packages/robocar/simulation && uvx ty check src/'
         language: system
-        files: '^packages/esp32-projects/robocar-simulation/src/.*\.py$'
+        files: '^packages/robocar/simulation/src/.*\.py$'
         pass_filenames: false
 
   # Secret scanning

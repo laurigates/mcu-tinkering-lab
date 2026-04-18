@@ -3,7 +3,7 @@
 ## Python Simulation Tests
 
 ```bash
-cd packages/esp32-projects/robocar-simulation
+cd packages/robocar/simulation
 uv run pytest tests/ --cov
 ```
 

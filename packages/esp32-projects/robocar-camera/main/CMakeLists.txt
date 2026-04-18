@@ -1,3 +1,0 @@
-idf_component_register(SRCS "main.c" "camera.c" "wifi_manager.c" "claude_api.c" "base64.c" "ai_response_parser.c" "i2c_master.c" "ai_backend.c" "ollama_backend.c" "ollama_discovery.c" "gemini_backend.c" "credentials_loader.c" "mqtt_logger.c" "system_state.c" "serial_comm.c" "ota_manager.c"
-                    INCLUDE_DIRS "."
-                    REQUIRES "esp32-camera" "esp_wifi" "esp_http_client" "json" "nvs_flash" "driver" "espressif__mdns" "mqtt" "esp_https_ota" "app_update" "robocar-i2c-protocol" "improv-wifi" "ota_github")

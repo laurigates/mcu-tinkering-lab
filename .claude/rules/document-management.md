@@ -6,9 +6,9 @@ Rules for organizing and managing project documentation.
 
 | Document Type | Directory | Naming Convention | Purpose |
 |--------------|-----------|-------------------|---------|
-| PRD | `docs/blueprint/prds/` | `PRD-{NNN}-{title}.md` | Product Requirements Documents |
-| ADR | `docs/blueprint/adrs/` | `ADR-{NNN}-{title}.md` | Architecture Decision Records |
-| PRP | `docs/prps/` | `{feature-name}.md` | Product Requirement Prompts |
+| PRD | `docs/requirements/` | `PRD-{NNN}-{title}.md` | Product Requirements Documents |
+| ADR | `docs/decisions/` | `ADR-{NNN}-{title}.md` | Architecture Decision Records |
+| PRP | `docs/prompts/` | `{feature-name}.md` | Product Requirement Prompts |
 
 ## Root Directory Policy
 
@@ -23,8 +23,8 @@ The repository root should contain only:
 - Build/CI configuration (.github/, etc.)
 
 ### Not Allowed in Root
-- Requirements documents (move to `docs/blueprint/prds/`)
-- Architecture documents (move to `docs/blueprint/adrs/`)
+- Requirements documents (move to `docs/requirements/`)
+- Architecture documents (move to `docs/decisions/`)
 - Design documents (move to `docs/` or appropriate subdirectory)
 
 ## Document Lifecycle
@@ -45,7 +45,7 @@ User approves document creation via AskUserQuestion prompt:
 Document created in appropriate location with proper naming convention.
 
 ### 4. Tracking
-Manifest updated with document metadata in `docs/blueprint/manifest.json`.
+Manifest updated with document metadata in `docs/manifest.json`.
 
 ## Automatic Detection
 
@@ -64,7 +64,9 @@ Current highest: ADR-006 (USB Composite Architecture)
 
 ## Cross-Referencing
 
-Link related documents using relative paths:
+Link related documents using relative paths. From a PRD in
+`docs/requirements/`, reference an ADR via `../decisions/ADR-NNN-...`:
+
 ```markdown
-See [ADR-001: Monorepo Structure](../adrs/ADR-001-monorepo-structure.md)
+See [ADR-001: Monorepo Structure](../decisions/ADR-001-monorepo-structure.md)
 ```

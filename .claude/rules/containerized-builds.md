@@ -51,7 +51,7 @@ ESPHome projects import `tools/esphome.just` for standard recipes (install, conf
 # Standard ESP-IDF project (gets build, clean, menuconfig, shell, monitor, flash-monitor):
 import '../../../tools/esp32-idf.just'
 
-project_dir := "packages/esp32-projects/my-project"
+project_dir := "packages/<domain>/my-project"
 port := env("PORT", _detected_serial)  # USB-serial adapter boards
 # or
 port := env("PORT", _detected_s3)      # ESP32-S3 native USB boards
@@ -87,7 +87,7 @@ ESP32-S3 projects with native USB-Serial-JTAG override `monitor` with their own 
 4. Define `info` recipe (project-specific)
 5. Override `build` if pre-build steps are needed (e.g., `build: credentials _idf-build`)
 6. Use `require-port` as dependency for flash recipes
-7. Register as a module in the root justfile: `mod name 'packages/esp32-projects/name'`
+7. Register as a module in the root justfile: `mod name 'packages/<domain>/name'`
 
 ## Do Not
 

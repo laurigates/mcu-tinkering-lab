@@ -14,7 +14,7 @@
 # Container engine (docker or podman)
 container_cmd := env("CONTAINER_CMD", "docker")
 
-# Shared docker-compose.yml (relative to each project at packages/esp32-projects/<name>/)
+# Shared docker-compose.yml (relative to each project at packages/<domain>/<name>/)
 compose_file := "../../../docker-compose.yml"
 
 # Absolute path to monorepo tools/ directory (for helper scripts)

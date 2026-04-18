@@ -32,7 +32,7 @@ ESP Web Tools requires decimal integer offsets (not hex). The manifests are gene
 
 - `docs/flasher/index.html` — Flasher web page (source, deployed to Pages root)
 - `.github/workflows/build-firmware.yml` — Builds firmware, generates manifests, deploys Pages
-- `packages/esp32-projects/*/partitions.csv` — Source of truth for flash offsets
+- `packages/*/*/partitions.csv` — Source of truth for flash offsets
 
 ## Deployment Pipeline
 

@@ -33,8 +33,8 @@ RUN pip install --no-cache-dir --upgrade pip && \
 WORKDIR /workspace
 
 # Copy simulation requirements
-COPY packages/esp32-projects/robocar-simulation/pyproject.toml /tmp/
-COPY packages/esp32-projects/robocar-simulation/requirements.txt /tmp/ 2>/dev/null || true
+COPY packages/robocar/simulation/pyproject.toml /tmp/
+COPY packages/robocar/simulation/requirements.txt /tmp/ 2>/dev/null || true
 
 # Install Python dependencies using uv (much faster than pip)
 RUN cd /tmp && \

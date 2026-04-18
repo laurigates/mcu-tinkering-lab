@@ -97,7 +97,7 @@ If issues found:
 ### ESP32/ESP32-CAM Structure
 
 ```
-packages/esp32-projects/$name/
+packages/<domain>/$name/
 ├── justfile
 ├── CMakeLists.txt
 ├── sdkconfig.defaults
@@ -118,7 +118,7 @@ set positional-arguments
 
 import '../../../tools/esp32.just'
 
-project_dir := "packages/esp32-projects/project-name"
+project_dir := "packages/<domain>/project-name"
 port := env("PORT", _detected_serial)  # or _detected_s3 for ESP32-S3
 target := "esp32"                       # or "esp32s3"
 
@@ -188,9 +188,9 @@ packages/stm32-projects/$name/
 
 ## Adding to the Monorepo
 
-1. Place project in `packages/esp32-projects/<name>/`
+1. Place project in `packages/<domain>/<name>/`
 2. Create justfile with `import '../../../tools/esp32.just'`
-3. Register as module in root justfile: `mod name 'packages/esp32-projects/<name>'`
+3. Register as module in root justfile: `mod name 'packages/<domain>/<name>'`
 4. Test: `just name::build`
 
 ## Component Management

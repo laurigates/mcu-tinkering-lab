@@ -4,13 +4,13 @@ on:
   push:
     branches: [main, develop, 'claude/**']
     paths:
-      - 'packages/esp32-projects/audiobook-player/**'
+      - 'packages/audio/audiobook-player/**'
       - '.github/workflows/build-audiobook-player.yml'
       - '.github/workflows/_ci-build-esphome.yml'
   pull_request:
     branches: [main, develop]
     paths:
-      - 'packages/esp32-projects/audiobook-player/**'
+      - 'packages/audio/audiobook-player/**'
       - '.github/workflows/build-audiobook-player.yml'
       - '.github/workflows/_ci-build-esphome.yml'
   release:
@@ -28,6 +28,7 @@ jobs:
     uses: ./.github/workflows/_ci-build-esphome.yml
     with:
       project: audiobook-player
+      project_path: audio/audiobook-player
       yaml_file: audiobook-player.yaml
 
   check-tag:
@@ -53,6 +54,7 @@ jobs:
     uses: ./.github/workflows/_build-esphome-firmware.yml
     with:
       project: audiobook-player
+      project_path: audio/audiobook-player
       yaml_file: audiobook-player.yaml
       device_name: audiobook-player
       release_tag: ${{ needs.check-tag.outputs.tag }}

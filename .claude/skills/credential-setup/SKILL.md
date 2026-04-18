@@ -8,7 +8,7 @@ allowed-tools: Read, Write, Edit, Grep, Glob
 
 ## Task
 
-Standardize credential handling for the project at `$1` (relative path under `packages/esp32-projects/`).
+Standardize credential handling for the project at `$1` (relative path under `packages/<domain>/`).
 
 ## Standard Patterns
 

@@ -93,7 +93,7 @@ Switch --USB--> ESP32-S3 --UART--> USB-UART adapter --USB--> PC
 ### Flash the proxy firmware (one time)
 
 ```bash
-cd packages/esp32-projects/switch-usb-proxy
+cd packages/input-gaming/switch-usb-proxy
 idf.py build
 idf.py flash
 ```
@@ -143,5 +143,5 @@ Then reload: `sudo udevadm control --reload-rules && sudo udevadm trigger`
 
 ## Protocol Reference
 
-See `packages/esp32-projects/xbox-switch-bridge/docs/switch-pro-controller-protocol.md`
+See `packages/input-gaming/xbox-switch-bridge/docs/switch-pro-controller-protocol.md`
 for the full protocol documentation.

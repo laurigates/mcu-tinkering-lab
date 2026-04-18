@@ -8,7 +8,7 @@ allowed-tools: Read, Write, Edit, Grep, Glob, Agent
 
 ## Task
 
-Generate or update a `CLAUDE.md` for the project at `$1` (relative path under `packages/esp32-projects/`).
+Generate or update a `CLAUDE.md` for the project at `$1` (relative path under `packages/<domain>/`).
 
 ## Process
 

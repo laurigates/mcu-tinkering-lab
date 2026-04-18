@@ -14,7 +14,7 @@ Register the project `$1` in the monorepo infrastructure.
 
 ### 1. Verify Project Exists
 
-Check that `packages/esp32-projects/$1/` exists and has the basic structure:
+Check that `packages/<domain>/$1/` exists and has the basic structure:
 - `CMakeLists.txt` or ESPHome `.yaml` file
 - `main/` directory (for ESP-IDF projects)
 - `justfile`
@@ -24,7 +24,7 @@ Check that `packages/esp32-projects/$1/` exists and has the basic structure:
 Add a `mod` line to the root `justfile` if not already present:
 
 ```just
-mod project-name 'packages/esp32-projects/project-name'
+mod project-name 'packages/<domain>/project-name'
 ```
 
 Place it alphabetically among the existing `mod` declarations. Use the justfile recipe naming convention (lowercase-kebab-case).

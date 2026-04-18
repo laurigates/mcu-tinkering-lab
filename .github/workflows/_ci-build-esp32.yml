@@ -4,7 +4,11 @@ on:
   workflow_call:
     inputs:
       project:
-        description: 'Project directory name under packages/esp32-projects/'
+        description: 'Project basename (used for binary filename and display)'
+        required: true
+        type: string
+      project_path:
+        description: 'Project directory relative to packages/ (e.g. robocar/main)'
         required: true
         type: string
       target:
@@ -32,7 +36,7 @@ jobs:
 
       - name: Fetch bluepad32 dependencies
         if: inputs.fetch_bluepad32
-        working-directory: packages/esp32-projects/${{ inputs.project }}
+        working-directory: packages/${{ inputs.project_path }}
         run: |
           BP32_DIR="external/bluepad32"
           BTSTACK_ROOT="$BP32_DIR/external/btstack"
@@ -63,7 +67,7 @@ jobs:
           esp_idf_version: ${{ env.IDF_VERSION }}
           target: ${{ inputs.target }}
           command: >-
-            cd packages/esp32-projects/${{ inputs.project }} &&
+            cd packages/${{ inputs.project_path }} &&
             idf.py build &&
             echo "# Build Size Analysis for ${{ inputs.project }}" > size-report.txt &&
             idf.py size >> size-report.txt 2>&1;
@@ -74,22 +78,22 @@ jobs:
         with:
           name: ${{ inputs.project }}-firmware-${{ github.sha }}
           path: |
-            packages/esp32-projects/${{ inputs.project }}/build/*.bin
-            packages/esp32-projects/${{ inputs.project }}/build/*.elf
-            packages/esp32-projects/${{ inputs.project }}/build/*.map
-            packages/esp32-projects/${{ inputs.project }}/build/bootloader/*.bin
-            packages/esp32-projects/${{ inputs.project }}/build/partition_table/*.bin
+            packages/${{ inputs.project_path }}/build/*.bin
+            packages/${{ inputs.project_path }}/build/*.elf
+            packages/${{ inputs.project_path }}/build/*.map
+            packages/${{ inputs.project_path }}/build/bootloader/*.bin
+            packages/${{ inputs.project_path }}/build/partition_table/*.bin
           retention-days: 30
 
       - name: Archive size analysis
         uses: actions/upload-artifact@v7
         with:
           name: ${{ inputs.project }}-size-report-${{ github.sha }}
-          path: packages/esp32-projects/${{ inputs.project }}/size-report.txt
+          path: packages/${{ inputs.project_path }}/size-report.txt
           retention-days: 30
 
       - name: Check binary size limits
-        working-directory: packages/esp32-projects/${{ inputs.project }}
+        working-directory: packages/${{ inputs.project_path }}
         run: |
           APP_SIZE=$(stat -c%s "build/${{ inputs.project }}.bin" 2>/dev/null || stat -f%z "build/${{ inputs.project }}.bin" 2>/dev/null || echo "0")
 

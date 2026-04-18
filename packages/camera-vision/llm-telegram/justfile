@@ -1,0 +1,98 @@
+# ESP32-CAM LLM Telegram Bot — AI vision with Telegram integration
+# Run `just` or `just --list` to see available recipes
+
+set positional-arguments
+
+import '../../../tools/esp32-idf.just'
+
+project_dir := "packages/camera-vision/llm-telegram"
+port := env("PORT", _detected_serial)
+project_name := "esp32cam-llm-telegram"
+target := "esp32"
+
+default:
+    @just --list
+
+# Build firmware (containerized)
+[group: "build"]
+build: _idf-build
+
+# Clean build artifacts (containerized)
+[group: "build"]
+clean: _idf-clean
+
+# Open configuration menu (containerized)
+[group: "build"]
+menuconfig: _idf-menuconfig
+
+# Show binary size analysis
+[group: "build"]
+size: (_idf "size")
+
+# Show per-component size breakdown
+[group: "build"]
+size-components: (_idf "size-components")
+
+# Interactive shell in ESP-IDF container
+[group: "build"]
+shell: _idf-shell
+
+##########
+# Flash & Monitor (native — USB passthrough on macOS is unreliable)
+##########
+
+# Flash firmware to ESP32-CAM (GPIO0 must be connected to GND)
+[group: "device"]
+flash: require-port
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Make sure GPIO0 is connected to GND for programming mode"
+    esptool --chip esp32 -p {{port}} -b 460800 \
+        --before default-reset --after hard-reset \
+        write-flash --flash-mode dio --flash-size detect \
+        0x1000 build/bootloader/bootloader.bin \
+        0x8000 build/partition_table/partition-table.bin \
+        0x10000 build/esp32cam-llm-telegram.bin
+    echo "Flashed OK — disconnect GPIO0 from GND and reset"
+
+# Monitor serial output (Ctrl-C to stop)
+[group: "device"]
+monitor: _serial-monitor
+
+# Flash and immediately start monitoring
+[group: "device"]
+flash-monitor: flash monitor
+
+# Build, flash, and monitor (full development cycle)
+[group: "device"]
+develop: build flash-monitor
+
+##########
+# Info
+##########
+
+# Show project information
+[group: "info"]
+info:
+    @echo "{{project_name}} — AI Vision with Telegram Integration"
+    @echo "  Target:    ESP32"
+    @echo "  Port:      {{port}}"
+    @echo "  Container: {{container_cmd}}"
+    @echo ""
+    @echo "Features:"
+    @echo "  Camera capture with OV2640"
+    @echo "  LLM-powered image analysis"
+    @echo "  Telegram bot interface"
+    @echo "  Motor control via vision commands"
+    @echo ""
+    @echo "Note: Credentials are in main/config.h (placeholder values)."
+    @echo "  Edit config.h with your WiFi, Telegram, and LLM API credentials."
+    @echo "  Uses custom partition table (partitions.csv)."
+    @echo "  data/prompts.txt is embedded into the binary at build time."
+    @echo ""
+    @echo "Programming ESP32-CAM:"
+    @echo "  1. Connect GPIO0 to GND"
+    @echo "  2. Power on or reset the board"
+    @echo "  3. Run: just flash or just flash-monitor"
+    @echo "  4. Disconnect GPIO0 from GND after flashing"
+    @echo "  5. Reset the board to run the new firmware"

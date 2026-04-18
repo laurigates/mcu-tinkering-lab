@@ -4,7 +4,11 @@ on:
   workflow_call:
     inputs:
       project:
-        description: 'Project directory name under packages/esp32-projects/'
+        description: 'Project basename (used for artifact naming and display)'
+        required: true
+        type: string
+      project_path:
+        description: 'Project directory relative to packages/ (e.g. audio/audiobook-player)'
         required: true
         type: string
       yaml_file:
@@ -21,7 +25,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Generate dummy secrets.yaml for CI
-        working-directory: packages/esp32-projects/${{ inputs.project }}
+        working-directory: packages/${{ inputs.project_path }}
         run: |
           YAML_FILE="${{ inputs.yaml_file }}"
           SECRETS=$(grep -oP '!secret\s+\K\w+' "$YAML_FILE" | sort -u)
@@ -54,7 +58,7 @@ jobs:
         uses: esphome/build-action@v7
         id: build
         with:
-          yaml-file: packages/esp32-projects/${{ inputs.project }}/${{ inputs.yaml_file }}
+          yaml-file: packages/${{ inputs.project_path }}/${{ inputs.yaml_file }}
 
       - name: Archive ESPHome firmware
         uses: actions/upload-artifact@v7

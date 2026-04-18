@@ -18,7 +18,7 @@ updates:
 
   # Python dependencies (robocar-simulation)
   - package-ecosystem: "pip"
-    directory: "/packages/esp32-projects/robocar-simulation"
+    directory: "/packages/robocar/simulation"
     schedule:
       interval: "weekly"
     commit-message:

@@ -4,7 +4,11 @@ on:
   workflow_call:
     inputs:
       project:
-        description: 'Project directory name under packages/esp32-projects/'
+        description: 'Project basename (used for binary filename and display)'
+        required: true
+        type: string
+      project_path:
+        description: 'Project directory relative to packages/ (e.g. robocar/main)'
         required: true
         type: string
       target:
@@ -53,7 +57,7 @@ jobs:
 
       - name: Fetch bluepad32 dependencies
         if: inputs.fetch_bluepad32
-        working-directory: packages/esp32-projects/${{ inputs.project }}
+        working-directory: packages/${{ inputs.project_path }}
         run: |
           BP32_DIR="external/bluepad32"
           BTSTACK_ROOT="$BP32_DIR/external/btstack"
@@ -83,11 +87,11 @@ jobs:
         with:
           esp_idf_version: ${{ env.IDF_VERSION }}
           target: ${{ inputs.target }}
-          command: cd packages/esp32-projects/${{ inputs.project }} && idf.py build
+          command: cd packages/${{ inputs.project_path }} && idf.py build
 
       - name: Generate SHA256 hash and check size
         id: hashes
-        working-directory: packages/esp32-projects/${{ inputs.project }}
+        working-directory: packages/${{ inputs.project_path }}
         run: |
           BIN_PATH="build/${{ inputs.binary_name }}"
           SHA256=$(sha256sum "$BIN_PATH" | cut -d' ' -f1)
@@ -105,7 +109,7 @@ jobs:
 
       - name: Copy and rename binary
         run: |
-          cp "packages/esp32-projects/${{ inputs.project }}/build/${{ inputs.binary_name }}" \
+          cp "packages/${{ inputs.project_path }}/build/${{ inputs.binary_name }}" \
              "${{ inputs.project }}.bin"
 
       - name: Create firmware manifest

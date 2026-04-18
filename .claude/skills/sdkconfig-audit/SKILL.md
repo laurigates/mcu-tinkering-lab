@@ -8,7 +8,7 @@ allowed-tools: Read, Grep, Glob
 
 ## Task
 
-Audit `sdkconfig.defaults` for the project at `$1` (relative path under `packages/esp32-projects/`).
+Audit `sdkconfig.defaults` for the project at `$1` (relative path under `packages/<domain>/`).
 
 ## Process
 
