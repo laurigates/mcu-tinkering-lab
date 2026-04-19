@@ -16,6 +16,7 @@ idf_component_register(
         thinkpack-mesh
         thinkpack-behaviors
         thinkpack-audio
+        thinkpack-ota
     PRIV_REQUIRES
         esp_timer
         freertos

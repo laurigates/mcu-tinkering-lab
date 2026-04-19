@@ -18,6 +18,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "group_mode.h"
+#include "ota_handler.h"
 #include "sdkconfig.h"
 #include "standalone_mode.h"
 #include "thinkpack_ai.h"
@@ -137,6 +138,11 @@ void app_main(void)
     ESP_ERROR_CHECK(group_mode_init());
     ESP_ERROR_CHECK(thinkpack_mesh_set_event_callback(group_mode_on_event, NULL));
     ESP_ERROR_CHECK(thinkpack_mesh_start());
+
+    /* --- OTA handler (PR F) ---------------------------------------- */
+    /* Initialised AFTER mesh so the ESP-NOW broadcaster has peers to
+     * push to. Failure is non-fatal — Brainbox still operates. */
+    (void)ota_handler_init();
 
     /* --- AI backend ------------------------------------------------- */
     const thinkpack_ai_backend_t *ai = thinkpack_ai_get_current();

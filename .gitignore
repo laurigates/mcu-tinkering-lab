@@ -6,6 +6,10 @@ build/
 # Host test binaries (produced by make test in test/ directories)
 test_runner
 *_test_runner
+# thinkpack-ota uses per-test binaries rather than a single test_runner.
+packages/components/thinkpack-ota/test/test_chunk_state
+packages/components/thinkpack-ota/test/test_manifest_parser
+packages/components/thinkpack-ota/test/test_sha256_verify
 target/
 *.o
 *.a

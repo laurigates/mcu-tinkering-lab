@@ -31,6 +31,7 @@
 #include "standalone_mode.h"
 #include "tag_registry.h"
 #include "thinkpack_nfc.h"
+#include "thinkpack_ota.h"
 #include "thinkpack_protocol.h"
 #include "thinkpack_rc522.h"
 
@@ -103,9 +104,12 @@ void app_main(void)
     ESP_ERROR_CHECK(thinkpack_mesh_init(&cfg));
 
     /* Wire the group-mode event handler before starting the mesh so
-     * LEADER_ELECTED events fire through us from the very first tick. */
+     * LEADER_ELECTED events fire through us from the very first tick.
+     * OTA receiver becomes the primary mesh event consumer and chains
+     * group_mode_on_event behind it via thinkpack_ota_receiver_chain_callback. */
     group_mode_init(&s_registry);
-    ESP_ERROR_CHECK(thinkpack_mesh_set_event_callback(group_mode_on_event, NULL));
+    thinkpack_ota_receiver_chain_callback((thinkpack_ota_chained_cb_t)group_mode_on_event, NULL);
+    ESP_ERROR_CHECK(thinkpack_ota_receiver_init(BOX_FINDERBOX));
 
     ESP_ERROR_CHECK(thinkpack_mesh_start());
 

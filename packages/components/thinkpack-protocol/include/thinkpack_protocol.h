@@ -63,6 +63,11 @@ typedef enum {
     MSG_FRAGMENT = 0x0C,             /**< Fragment of a large message         */
     MSG_AUDIO_CLIP_BROADCAST = 0x0D, /**< Leader-driven echo-chamber clip ref */
     /* 0x0E reserved for future audio use */
+    MSG_OTA_MANIFEST = 0x0F, /**< OTA firmware manifest (PR F)                 */
+    MSG_OTA_CHUNK = 0x10,    /**< OTA firmware chunk (PR F)                    */
+    MSG_OTA_ACK = 0x11,      /**< OTA aggregated ACK (PR F)                    */
+    MSG_OTA_COMPLETE = 0x12, /**< OTA completion marker + SHA256 (PR F)        */
+    MSG_OTA_ERROR = 0x13,    /**< OTA error notification (PR F)                */
 } thinkpack_msg_type_t;
 
 /* ------------------------------------------------------------------ */
@@ -219,6 +224,60 @@ typedef struct __attribute__((packed)) {
     int8_t per_peer_semitone_shift[8]; /**< Per-slot pitch offset, clamped to ±12 */
     uint8_t flags;                     /**< Reserved — must be 0 */
 } audio_clip_broadcast_payload_t;
+
+/* ------------------------------------------------------------------ */
+/* OTA payloads (PR F)                                                 */
+/*                                                                     */
+/* OTA uses the mesh to relay firmware from Brainbox to followers.    */
+/* A manifest announces the update; chunks carry the binary; a        */
+/* completion packet carries the full SHA256 for end-to-end verify.   */
+/* All structs are packed and sized to fit inside THINKPACK_MAX_DATA_LEN. */
+/* ------------------------------------------------------------------ */
+
+/** Maximum payload bytes carried in a single OTA chunk. */
+#define THINKPACK_OTA_CHUNK_DATA_MAX 180
+/** Maximum number of chunks in a single OTA session (≈180 KB @180 B/chunk).
+ *  Larger firmware must be split into multiple sessions or chunk size raised. */
+#define THINKPACK_OTA_MAX_CHUNKS 1024
+/** Sentinel target_box_mask meaning "everyone". */
+#define THINKPACK_OTA_TARGET_ALL 0xFFu
+
+/** Payload for MSG_OTA_MANIFEST — announces an incoming firmware update. */
+typedef struct __attribute__((packed)) {
+    uint32_t version;        /**< Monotonic firmware version integer. */
+    uint32_t total_size;     /**< Total firmware size in bytes.       */
+    uint16_t chunk_count;    /**< Number of MSG_OTA_CHUNK packets.    */
+    uint8_t sha256[32];      /**< Expected SHA256 of the whole image. */
+    uint8_t target_box_mask; /**< Bitmask over thinkpack_box_type_t,
+                                  or THINKPACK_OTA_TARGET_ALL.        */
+    uint8_t reserved;        /**< Pad to even length; must be 0.      */
+} ota_manifest_payload_t;
+
+/** Payload for MSG_OTA_CHUNK — one slice of the firmware image. */
+typedef struct __attribute__((packed)) {
+    uint16_t chunk_index;                       /**< 0-based index.     */
+    uint8_t data_len;                           /**< Bytes in data[].   */
+    uint8_t data[THINKPACK_OTA_CHUNK_DATA_MAX]; /**< Raw firmware bytes.*/
+} ota_chunk_payload_t;
+
+/** Payload for MSG_OTA_ACK — aggregated acknowledgement. */
+typedef struct __attribute__((packed)) {
+    uint16_t chunk_index;    /**< Highest contiguous chunk received.    */
+    uint8_t receiver_box_id; /**< thinkpack_box_type_t of the ACKer.    */
+} ota_ack_payload_t;
+
+/** Payload for MSG_OTA_COMPLETE — all chunks sent, final SHA256. */
+typedef struct __attribute__((packed)) {
+    uint32_t version;         /**< Matches the manifest version.      */
+    uint8_t success;          /**< 1 = broadcast OK, 0 = aborted.     */
+    uint8_t final_sha256[32]; /**< Full-image SHA256 for verification.*/
+} ota_complete_payload_t;
+
+/** Payload for MSG_OTA_ERROR — notifies sender that a receiver aborted. */
+typedef struct __attribute__((packed)) {
+    uint8_t error_code;   /**< thinkpack_ota_error_t, see thinkpack_ota.h */
+    uint16_t chunk_index; /**< Chunk where the failure was detected.      */
+} ota_error_payload_t;
 
 /* ------------------------------------------------------------------ */
 /* Helper function prototypes                                          */

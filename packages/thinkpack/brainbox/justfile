@@ -97,6 +97,29 @@ monitor: require-port
 flash-monitor: flash monitor
 
 ##########
+# OTA (PR F) — ESP-NOW relay
+##########
+
+# Trigger an OTA push from Brainbox to all followers over ESP-NOW.
+#
+# The Brainbox firmware listens for the string "OTA-PUSH-ALL\n" on its
+# USB-Serial-JTAG CDC console at any time after boot and calls
+# ota_handler_check_and_push_all(0xFF) when it sees it. This recipe
+# sends that trigger over the current serial port.
+#
+# The handler is deliberately minimal today: it emits a log-only
+# placeholder, because the HTTP-stream-to-RAM fetch is pending
+# hardware verification. Use this recipe as the canonical entry point
+# for end-to-end testing once the fetch path lands.
+[group: "ota"]
+ota-push-all: require-port
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Sending OTA-PUSH-ALL trigger on {{port}}..."
+    printf 'OTA-PUSH-ALL\n' > "{{port}}"
+    echo "Trigger sent — watch 'just monitor' for broadcaster log lines."
+
+##########
 # Info
 ##########
 

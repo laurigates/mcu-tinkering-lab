@@ -30,6 +30,7 @@
 #include "led_ring.h"
 #include "light_sensor.h"
 #include "standalone_mode.h"
+#include "thinkpack_ota.h"
 #include "thinkpack_protocol.h"
 
 static const char *TAG = "glowbug";
@@ -97,7 +98,10 @@ void app_main(void)
     strncpy(cfg.name, "glowbug", THINKPACK_BOX_NAME_LEN - 1);
 
     ESP_ERROR_CHECK(thinkpack_mesh_init(&cfg));
-    thinkpack_mesh_set_event_callback(group_mode_on_event, NULL);
+    /* Chain the existing group_mode observer under the OTA receiver so
+     * both see the same events; OTA receiver must be installed last. */
+    thinkpack_ota_receiver_chain_callback((thinkpack_ota_chained_cb_t)group_mode_on_event, NULL);
+    ESP_ERROR_CHECK(thinkpack_ota_receiver_init(BOX_GLOWBUG));
     ESP_ERROR_CHECK(thinkpack_mesh_start());
 
     ESP_LOGI(TAG, "Mesh started — spawning animation task on Core 1");
