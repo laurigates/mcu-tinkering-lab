@@ -6,9 +6,9 @@ For monorepo-wide conventions, see the root [CLAUDE.md](../../../CLAUDE.md).
 
 ## Project Overview
 
-Gamepad Synth turns a BLE Bluetooth controller (Xbox Series X/S, PS5 DualSense, Switch Pro) into a musical instrument. An ESP32-S3 reads gamepad input via Bluepad32 and drives a piezo buzzer through four sound modes: Theremin, Scale Player, Arpeggiator, and Retro SFX.
+Gamepad Synth turns a BLE Bluetooth controller (Xbox Series X/S, PS5 DualSense, Switch Pro) into a musical instrument. An ESP32-S3 reads gamepad input via Bluepad32 and produces audio through an I2S DAC (MAX98357A) in four sound modes: Theremin, Scale Player, Arpeggiator, and Retro SFX.
 
-**Status**: v0.1.0 — LEDC PWM piezo output. I2S DAC upgrade planned (see PRD-008).
+**Status**: v0.2.0 — I2S DAC output (Phase A of PRD-008). Square wave synthesis via DDS phase accumulator. Next: Phase B (oscillator waveforms), Phase C (filter + LFO).
 
 ## Tech Stack
 
@@ -17,7 +17,7 @@ Gamepad Synth turns a BLE Bluetooth controller (Xbox Series X/S, PS5 DualSense, 
 | MCU | ESP32-S3 (no PSRAM, no WiFi) |
 | Framework | ESP-IDF v5.4+ |
 | Bluetooth | Bluepad32 + BTstack (BLE only) |
-| Tone generation | LEDC PWM, 8-bit duty, square wave |
+| Audio output | I2S DAC (MAX98357A), 44.1 kHz, 16-bit, square wave via DDS |
 | Build | CMake (via ESP-IDF), containerized Docker builds |
 | Task runner | justfile (imports `tools/esp32.just`) |
 
@@ -50,15 +50,21 @@ Port is auto-detected for ESP32-S3. Override with `PORT=/dev/ttyUSB0 just flash`
 ### Dual-Core Design
 
 - **Core 0**: Bluepad32 BTstack event loop — handles all Bluetooth communication. Blocks forever in `uni_esp32_enable()`.
-- **Core 1**: Sound engine FreeRTOS task at 50 Hz (`SOUND_TASK_HZ`). Reads latest gamepad state and updates LEDC PWM tone.
+- **Core 1**: Two tasks:
+  - **Control task** (50 Hz, priority 5): reads gamepad state, updates `synth_state_t` (target frequency + active flag)
+  - **Audio render task** (continuous, priority 10): DDS phase accumulator generates 256-sample blocks, writes to I2S DMA via `i2s_channel_write()` (blocks when DMA buffers are full)
 
 ### Key Constants
 
 | Define | Value | Purpose |
 |--------|-------|---------|
-| `PIEZO_PIN` | GPIO4 | LEDC PWM output to passive piezo buzzer |
+| `I2S_BCLK_PIN` | GPIO5 | I2S bit clock to MAX98357A |
+| `I2S_WS_PIN` | GPIO6 | I2S word select (LRCLK) |
+| `I2S_DOUT_PIN` | GPIO7 | I2S serial data out |
 | `LED_PIN` | GPIO2 | Status LED (on during tone, blinks for mode switch) |
-| `SOUND_TASK_HZ` | 50 | Sound engine update rate |
+| `SAMPLE_RATE` | 44100 | Audio sample rate (Hz) |
+| `BLOCK_SIZE` | 256 | Samples per render block (~5.8 ms) |
+| `CONTROL_TASK_HZ` | 50 | Gamepad polling rate |
 | `STICK_DEADZONE` | 50 | Analog stick dead zone (out of ±512) |
 | `MIN_FREQ` / `MAX_FREQ` | 100 / 2000 Hz | Tone frequency range |
 
@@ -92,11 +98,11 @@ gamepad-synth/
 
 ## Code Conventions
 
-- **Single-file firmware**: All code lives in `main/main.c`. Keep it that way until the I2S refactor (PRD-008 Phase A).
+- **Single-file firmware**: All code lives in `main/main.c`. Will split into modules in Phase B (oscillators) or Phase C (filter/LFO).
 - **C style**: Google style, 4-space indent, 100-char lines (enforced by `.clang-format` at repo root).
 - **ESP-IDF patterns**: Use `ESP_LOGI`/`ESP_LOGW`/`ESP_LOGE` for logging with `TAG`. Use `ESP_ERROR_CHECK` for IDF API calls.
 - **Bluepad32 callbacks**: Register via `uni_platform` struct. Callbacks run on Core 0 — keep them fast, copy data to shared state for Core 1.
-- **Shared state**: Gamepad state is copied in the Bluepad32 callback and read by the sound task. Currently not mutex-protected (atomic-width fields on single reader/writer).
+- **Shared state**: Gamepad state is copied in the Bluepad32 callback and read by the control task. Synth state (`synth_state_t`) is written by the control task and read by the audio render task. Both on Core 1 with the audio task at higher priority — no mutex needed.
 
 ## sdkconfig Highlights
 
