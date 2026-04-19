@@ -172,9 +172,38 @@ typedef struct {
     float target_freq;
     bool active;
     waveform_t waveform;
+    bool filter_enabled;
+    float filter_cutoff;    /* Hz, [40 .. 18000] */
+    float filter_resonance; /* Q-like, [0.5 .. 6.0] */
 } synth_state_t;
 
 static volatile synth_state_t s_synth = {0};
+
+/* ── State-Variable Filter (Chamberlin form) ─────────────── */
+
+#define FILTER_CUTOFF_MIN 40.0f
+#define FILTER_CUTOFF_MAX 18000.0f
+#define FILTER_Q_MIN 0.5f
+#define FILTER_Q_MAX 6.0f
+
+/* Filter memory lives in the audio render task; only coefficients
+ * are recomputed per block from the shared cutoff/resonance values.
+ * f = 2 * sin(pi * fc / fs), q = 1 / Q (damping, lower = more resonance)
+ */
+static inline int16_t svf_process(int16_t sample, float f, float q, float *low, float *band)
+{
+    float in = (float)sample;
+    *low += f * (*band);
+    float high = in - (*low) - q * (*band);
+    *band += f * high;
+    /* Clip to int16 range to prevent resonance overflow */
+    float out = *low;
+    if (out > 32767.0f)
+        out = 32767.0f;
+    if (out < -32768.0f)
+        out = -32768.0f;
+    return (int16_t)out;
+}
 
 /* ── Sound Modes ─────────────────────────────────────────── */
 
@@ -228,6 +257,21 @@ static void synth_set_waveform(waveform_t wave)
     s_synth.waveform = wave;
 }
 
+static void synth_set_filter(bool enabled, float cutoff, float resonance)
+{
+    if (cutoff < FILTER_CUTOFF_MIN)
+        cutoff = FILTER_CUTOFF_MIN;
+    if (cutoff > FILTER_CUTOFF_MAX)
+        cutoff = FILTER_CUTOFF_MAX;
+    if (resonance < FILTER_Q_MIN)
+        resonance = FILTER_Q_MIN;
+    if (resonance > FILTER_Q_MAX)
+        resonance = FILTER_Q_MAX;
+    s_synth.filter_enabled = enabled;
+    s_synth.filter_cutoff = cutoff;
+    s_synth.filter_resonance = resonance;
+}
+
 static void tone_stop(void)
 {
     s_synth.active = false;
@@ -279,6 +323,7 @@ static void mode_theremin(const gamepad_state_t *gp)
 {
     int16_t ly = gp->axis_y;
     int16_t lx = gp->axis_x;
+    int16_t rx = gp->axis_rx;
     int16_t ry = gp->axis_ry;
 
     /* Dead zone check — silence if stick is centered */
@@ -297,15 +342,18 @@ static void mode_theremin(const gamepad_state_t *gp)
                  map_range((float)gp->brake, 0, TRIGGER_MAX, 0, 300);
     pitch += bend;
 
-    /* Vibrato from left stick X (depth) and right stick Y (speed) */
+    /* Vibrato from left stick X (depth) — fixed 5 Hz speed */
     float vib_depth = map_range((float)abs(lx), 0, STICK_MAX, 0, 100);
-    float vib_speed = map_range((float)abs(ry), 0, STICK_MAX, 1, 20);
-
-    /* Simple sine vibrato using tick count */
     static uint32_t tick = 0;
     tick++;
-    float vib = vib_depth * sinf(2.0f * 3.14159f * vib_speed * (float)tick / CONTROL_TASK_HZ);
+    float vib = vib_depth * sinf(2.0f * 3.14159f * 5.0f * (float)tick / CONTROL_TASK_HZ);
     pitch += vib;
+
+    /* Filter: right stick Y = cutoff (logarithmic), right stick X = resonance */
+    float cutoff_norm = map_range((float)ry, -STICK_MAX, STICK_MAX, 0.0f, 1.0f);
+    float cutoff = FILTER_CUTOFF_MIN * powf(FILTER_CUTOFF_MAX / FILTER_CUTOFF_MIN, cutoff_norm);
+    float resonance = map_range((float)abs(rx), 0, STICK_MAX, FILTER_Q_MIN, FILTER_Q_MAX);
+    synth_set_filter(true, cutoff, resonance);
 
     tone_play((uint32_t)pitch);
     led_on();
@@ -731,6 +779,8 @@ static void audio_render_task(void *arg)
     ESP_LOGI(TAG, "Audio render task started on core %d", xPortGetCoreID());
 
     float phase = 0.0f;
+    float svf_low = 0.0f;
+    float svf_band = 0.0f;
     int16_t stereo_buf[BLOCK_SIZE * 2];
 
     ESP_ERROR_CHECK(i2s_channel_enable(s_tx_chan));
@@ -742,11 +792,22 @@ static void audio_render_task(void *arg)
         if (!active || freq < (float)MIN_FREQ) {
             memset(stereo_buf, 0, sizeof(stereo_buf));
             phase = 0.0f;
+            svf_low = 0.0f;
+            svf_band = 0.0f;
         } else {
             waveform_t wave = s_synth.waveform;
+            bool filter_on = s_synth.filter_enabled;
             float phase_inc = freq / (float)SAMPLE_RATE;
+
+            /* Recompute filter coefficients once per block */
+            float f_coef = 2.0f * sinf(3.14159265f * s_synth.filter_cutoff / (float)SAMPLE_RATE);
+            float q_coef = 1.0f / s_synth.filter_resonance;
+
             for (int i = 0; i < BLOCK_SIZE; i++) {
                 int16_t sample = osc_sample(phase, wave);
+                if (filter_on) {
+                    sample = svf_process(sample, f_coef, q_coef, &svf_low, &svf_band);
+                }
                 stereo_buf[i * 2] = sample;
                 stereo_buf[i * 2 + 1] = sample;
                 phase += phase_inc;
@@ -799,6 +860,27 @@ static void control_task(void *arg)
             };
             synth_set_waveform(mode_waves[s_mode]);
 
+            /* Set per-mode filter defaults */
+            switch (s_mode) {
+                case MODE_THEREMIN:
+                    /* Updated dynamically from right stick each tick */
+                    synth_set_filter(true, 6000.0f, 1.5f);
+                    break;
+                case MODE_SCALE:
+                    /* Static warm low-pass */
+                    synth_set_filter(true, 5000.0f, 0.8f);
+                    break;
+                case MODE_ARPEGGIO:
+                    /* Slight emphasis on square harmonics */
+                    synth_set_filter(true, 4000.0f, 1.2f);
+                    break;
+                case MODE_SFX:
+                default:
+                    /* Bypass — preserve raw sound effects */
+                    synth_set_filter(false, FILTER_CUTOFF_MAX, FILTER_Q_MIN);
+                    break;
+            }
+
             ESP_LOGI(TAG, "Mode: %d waveform: %d", s_mode, mode_waves[s_mode]);
             led_blink(s_mode + 1, 80, 80);
         }
@@ -836,6 +918,7 @@ void app_main(void)
     init_i2s();
     init_led();
     synth_set_waveform(WAVE_SAWTOOTH);
+    synth_set_filter(true, 6000.0f, 1.5f);
 
     play_startup_jingle();
 
