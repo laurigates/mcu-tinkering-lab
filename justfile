@@ -20,6 +20,8 @@ mod switch-probe 'tools/switch-controller-usb-test'
 mod synth 'packages/audio/gamepad-synth'
 mod gemini-vision 'packages/camera-vision/gemini-vision'
 mod thinkpack-mesh-demo 'packages/thinkpack/mesh-demo'
+mod thinkpack-glowbug 'packages/thinkpack/glowbug'
+mod thinkpack-boombox 'packages/thinkpack/boombox'
 
 # Auto-detect ESP32-S3 USB-Serial-JTAG by Espressif VID; override with S3_PORT env var
 s3_port := env("S3_PORT", `tools/detect-esp32s3-port.sh --quiet 2>/dev/null || true`)
