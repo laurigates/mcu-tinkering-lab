@@ -1,0 +1,23 @@
+idf_component_register(
+    SRCS
+        "main.c"
+        "audio_engine.c"
+        "touch_driver.c"
+        "standalone_mode.c"
+        "group_mode.c"
+    INCLUDE_DIRS "."
+    REQUIRES
+        driver
+        nvs_flash
+        esp_netif
+        esp_event
+        esp_wifi
+        thinkpack-protocol
+        thinkpack-mesh
+        thinkpack-behaviors
+        thinkpack-audio
+    PRIV_REQUIRES
+        esp_timer
+        freertos
+        esp_system
+)
