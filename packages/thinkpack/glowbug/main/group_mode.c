@@ -2,10 +2,13 @@
  * @file group_mode.c
  * @brief Mesh event handler for glowbug group behaviour.
  *
- * Handles three event types:
- *  - THINKPACK_EVENT_SYNC_PULSE      → ANIM_SYNC_PULSE (200 ms flash)
- *  - THINKPACK_EVENT_COMMAND_RECEIVED → CMD_LED_PATTERN (0x10) dispatch
+ * Event handling:
+ *  - THINKPACK_EVENT_SYNC_PULSE       → ANIM_SYNC_PULSE (phase-locked)
+ *  - THINKPACK_EVENT_COMMAND_RECEIVED → command_executor_dispatch()
  *  - THINKPACK_EVENT_PEER_DISCOVERED  → 150 ms white hello-chime flash
+ *
+ * CMD_LED_PATTERN is registered with command_executor in group_mode_init;
+ * the executor unpacks the envelope and invokes led_pattern_handler.
  *
  * Called from the receive task on Core 0; must not block.
  *
@@ -17,12 +20,45 @@
 #include <string.h>
 
 #include "animations.h"
+#include "command_executor.h"
 #include "esp_log.h"
 #include "esp_mac.h"
 #include "led_ring.h"
+#include "thinkpack_commands.h"
 #include "thinkpack_protocol.h"
 
 static const char *TAG = "group_mode";
+
+/* ------------------------------------------------------------------ */
+/* Command handlers                                                    */
+/* ------------------------------------------------------------------ */
+
+/** Handler for CMD_LED_PATTERN — registered with command_executor. */
+static void led_pattern_handler(uint8_t command_id, const uint8_t *payload, uint8_t length,
+                                void *user_ctx)
+{
+    (void)command_id;
+    (void)user_ctx;
+
+    if (length < sizeof(cmd_led_pattern_payload_t)) {
+        ESP_LOGW(TAG, "CMD_LED_PATTERN: payload too short (%u bytes)", length);
+        return;
+    }
+
+    cmd_led_pattern_payload_t p;
+    memcpy(&p, payload, sizeof(p));
+
+    ESP_LOGI(TAG, "CMD_LED_PATTERN r=%u g=%u b=%u mode=%u", p.r, p.g, p.b, p.pattern);
+
+    /* Validate mode byte (shared with anim_mode_t enum range) */
+    if (p.pattern > (uint8_t)ANIM_MOOD_MIRROR) {
+        ESP_LOGW(TAG, "CMD_LED_PATTERN: unknown mode %u, ignoring", p.pattern);
+        return;
+    }
+
+    /* Derive hue from r channel (compatible with prior behaviour) */
+    animations_set_mode((anim_mode_t)p.pattern, p.r);
+}
 
 /* ------------------------------------------------------------------ */
 /* Internal helpers                                                    */
@@ -41,47 +77,6 @@ static void handle_sync_pulse(const thinkpack_packet_t *pkt)
 
     ESP_LOGD(TAG, "SYNC_PULSE ts=%lu phase=%u", (unsigned long)pulse->timestamp_ms, pulse->phase);
     animations_set_mode(ANIM_SYNC_PULSE, pulse->phase);
-}
-
-/** Handle MSG_COMMAND: dispatch on command_id. */
-static void handle_command(const thinkpack_packet_t *pkt, const uint8_t peer_mac[6])
-{
-    if (pkt->data_length < sizeof(thinkpack_command_data_t)) {
-        ESP_LOGW(TAG, "COMMAND payload too short (%u bytes)", pkt->data_length);
-        return;
-    }
-
-    const thinkpack_command_data_t *cmd = (const thinkpack_command_data_t *)(const void *)pkt->data;
-
-    switch (cmd->command_id) {
-        case CMD_LED_PATTERN: {
-            if (cmd->length < 4) {
-                ESP_LOGW(TAG, "CMD_LED_PATTERN: payload too short (%u bytes)", cmd->length);
-                break;
-            }
-            uint8_t r = cmd->payload[0];
-            uint8_t g = cmd->payload[1];
-            uint8_t b = cmd->payload[2];
-            uint8_t mode_byte = cmd->payload[3];
-
-            ESP_LOGI(TAG, "CMD_LED_PATTERN from " MACSTR " r=%u g=%u b=%u mode=%u",
-                     MAC2STR(peer_mac), r, g, b, mode_byte);
-
-            /* Validate mode byte */
-            if (mode_byte <= (uint8_t)ANIM_MOOD_MIRROR) {
-                /* Derive hue from r/g/b: use r as a simple hue approximation */
-                animations_set_mode((anim_mode_t)mode_byte, r);
-            } else {
-                ESP_LOGW(TAG, "CMD_LED_PATTERN: unknown mode %u, ignoring", mode_byte);
-            }
-            break;
-        }
-
-        default:
-            ESP_LOGI(TAG, "Unknown command 0x%02x from " MACSTR " — ignored", cmd->command_id,
-                     MAC2STR(peer_mac));
-            break;
-    }
 }
 
 /** Handle PEER_DISCOVERED: brief white hello-chime flash (150 ms). */
@@ -104,6 +99,16 @@ static void handle_peer_discovered(const uint8_t peer_mac[6])
 /* Public API                                                          */
 /* ------------------------------------------------------------------ */
 
+void group_mode_init(void)
+{
+    esp_err_t err = command_executor_register(CMD_LED_PATTERN, led_pattern_handler, NULL);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to register CMD_LED_PATTERN handler: %s", esp_err_to_name(err));
+    } else {
+        ESP_LOGI(TAG, "Registered CMD_LED_PATTERN handler");
+    }
+}
+
 void group_mode_on_event(const thinkpack_mesh_event_data_t *event, void *user_ctx)
 {
     (void)user_ctx;
@@ -117,7 +122,7 @@ void group_mode_on_event(const thinkpack_mesh_event_data_t *event, void *user_ct
 
         case THINKPACK_EVENT_COMMAND_RECEIVED:
             if (event->packet != NULL) {
-                handle_command(event->packet, event->peer_mac);
+                command_executor_dispatch(event->packet);
             }
             break;
 

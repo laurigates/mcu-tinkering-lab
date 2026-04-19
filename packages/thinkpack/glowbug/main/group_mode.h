@@ -3,8 +3,8 @@
  * @brief Mesh event handler for glowbug group (multi-box) behaviour.
  *
  * Register group_mode_on_event as the thinkpack_mesh event callback.
- * Handles SYNC_PULSE, COMMAND_RECEIVED, and PEER_DISCOVERED events and
- * translates them into animation directives.
+ * Handles SYNC_PULSE, COMMAND_RECEIVED (via command_executor), and
+ * PEER_DISCOVERED events and translates them into animation directives.
  *
  * See https://github.com/laurigates/mcu-tinkering-lab/issues/195
  */
@@ -19,19 +19,19 @@ extern "C" {
 #endif
 
 /**
- * @brief LED_PATTERN command ID (MSG_COMMAND payload command_id).
+ * @brief Initialise group-mode state and register command handlers.
  *
- * Payload layout: {r, g, b, mode} — 4 bytes.
- *   r, g, b: target colour (full-scale; brightness cap applied by led_ring).
- *   mode:    anim_mode_t to switch to (ignored if out of range).
+ * Must be called once before thinkpack_mesh_start().  Registers the
+ * CMD_LED_PATTERN (0x10) handler with command_executor so that
+ * incoming MSG_COMMAND packets are dispatched to animation helpers.
  */
-#define CMD_LED_PATTERN 0x10u
+void group_mode_init(void);
 
 /**
  * @brief Mesh event callback — register with thinkpack_mesh_set_event_callback().
  *
  * Called from the receive task on Core 0.  Dispatches to animation helpers
- * without blocking.
+ * without blocking.  Command packets are forwarded to command_executor.
  *
  * @param event     Event descriptor; valid only for the duration of this call.
  * @param user_ctx  Unused; pass NULL.

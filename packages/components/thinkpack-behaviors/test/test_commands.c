@@ -402,6 +402,105 @@ static void test_executor_reset_stops_dispatch(void)
 }
 
 /* ------------------------------------------------------------------ */
+/* Registration-flow integration: replicate glowbug+boombox pattern     */
+/* ------------------------------------------------------------------ */
+
+/* Capture context for the LED handler (glowbug-style). */
+static capture_t s_led_cap;
+
+static void led_pattern_handler(uint8_t command_id, const uint8_t *payload, uint8_t length,
+                                void *user_ctx)
+{
+    (void)user_ctx;
+    s_led_cap.call_count++;
+    s_led_cap.last_command_id = command_id;
+    s_led_cap.last_length = length;
+    if (length <= sizeof(s_led_cap.last_payload)) {
+        memcpy(s_led_cap.last_payload, payload, length);
+    }
+}
+
+/* Capture context for the melody handler (boombox-style). */
+static capture_t s_melody_cap;
+
+static void play_melody_handler(uint8_t command_id, const uint8_t *payload, uint8_t length,
+                                void *user_ctx)
+{
+    (void)user_ctx;
+    s_melody_cap.call_count++;
+    s_melody_cap.last_command_id = command_id;
+    s_melody_cap.last_length = length;
+    if (length <= sizeof(s_melody_cap.last_payload)) {
+        memcpy(s_melody_cap.last_payload, payload, length);
+    }
+}
+
+/**
+ * @brief End-to-end: two followers register disjoint handlers; each
+ *        receives only the command it registered for.
+ *
+ * This mirrors how packages/thinkpack/glowbug and packages/thinkpack/boombox
+ * wire group_mode_init() → command_executor_register() at startup.  The
+ * executor is a shared singleton per binary, so this test instantiates it
+ * once with both handlers (as if a single hypothetical follower was handling
+ * both domains) and verifies routing fidelity.
+ */
+static void test_registration_flow_routes_to_registered_handlers(void)
+{
+    command_executor_reset();
+    memset(&s_led_cap, 0, sizeof(s_led_cap));
+    memset(&s_melody_cap, 0, sizeof(s_melody_cap));
+
+    /* Register both handlers, each for a different command id. */
+    TEST_ASSERT_EQUAL(ESP_OK,
+                      command_executor_register(CMD_LED_PATTERN, led_pattern_handler, NULL));
+    TEST_ASSERT_EQUAL(ESP_OK,
+                      command_executor_register(CMD_PLAY_MELODY, play_melody_handler, NULL));
+
+    /* Dispatch an LED packet — only led handler should fire. */
+    cmd_led_pattern_payload_t led_in = {.r = 10, .g = 20, .b = 30, .pattern = LED_PATTERN_BREATHE};
+    thinkpack_packet_t led_pkt;
+    command_build_led_pattern(&led_pkt, TEST_SEQ, TEST_MAC, &led_in);
+    command_executor_dispatch(&led_pkt);
+
+    TEST_ASSERT_EQUAL(1, s_led_cap.call_count);
+    TEST_ASSERT_EQUAL(0, s_melody_cap.call_count);
+    TEST_ASSERT_EQUAL(CMD_LED_PATTERN, s_led_cap.last_command_id);
+    TEST_ASSERT_EQUAL((uint8_t)sizeof(cmd_led_pattern_payload_t), s_led_cap.last_length);
+
+    cmd_led_pattern_payload_t led_out;
+    memcpy(&led_out, s_led_cap.last_payload, sizeof(led_out));
+    TEST_ASSERT_EQUAL(10, led_out.r);
+    TEST_ASSERT_EQUAL(20, led_out.g);
+    TEST_ASSERT_EQUAL(30, led_out.b);
+    TEST_ASSERT_EQUAL(LED_PATTERN_BREATHE, led_out.pattern);
+
+    /* Dispatch a melody packet — only melody handler should fire. */
+    cmd_play_melody_payload_t mel_in = {.pattern_id = 1, .repeat_count = 4};
+    thinkpack_packet_t mel_pkt;
+    command_build_play_melody(&mel_pkt, TEST_SEQ, TEST_MAC, &mel_in);
+    command_executor_dispatch(&mel_pkt);
+
+    TEST_ASSERT_EQUAL(1, s_led_cap.call_count); /* still only the earlier LED dispatch */
+    TEST_ASSERT_EQUAL(1, s_melody_cap.call_count);
+    TEST_ASSERT_EQUAL(CMD_PLAY_MELODY, s_melody_cap.last_command_id);
+
+    cmd_play_melody_payload_t mel_out;
+    memcpy(&mel_out, s_melody_cap.last_payload, sizeof(mel_out));
+    TEST_ASSERT_EQUAL(1, mel_out.pattern_id);
+    TEST_ASSERT_EQUAL(4, mel_out.repeat_count);
+
+    /* Unregistered command_id — neither handler fires. */
+    cmd_set_mood_payload_t mood_in = {.hue = 100, .intensity = 50};
+    thinkpack_packet_t mood_pkt;
+    command_build_set_mood(&mood_pkt, TEST_SEQ, TEST_MAC, &mood_in);
+    command_executor_dispatch(&mood_pkt);
+
+    TEST_ASSERT_EQUAL(1, s_led_cap.call_count);
+    TEST_ASSERT_EQUAL(1, s_melody_cap.call_count);
+}
+
+/* ------------------------------------------------------------------ */
 /* main                                                                */
 /* ------------------------------------------------------------------ */
 
@@ -431,6 +530,9 @@ int main(void)
     /* Executor reset */
     RUN_TEST(test_executor_reset_clears_all);
     RUN_TEST(test_executor_reset_stops_dispatch);
+
+    /* End-to-end registration flow (PR A: glowbug+boombox migration) */
+    RUN_TEST(test_registration_flow_routes_to_registered_handlers);
 
     int failures = UNITY_END();
     return failures == 0 ? 0 : 1;

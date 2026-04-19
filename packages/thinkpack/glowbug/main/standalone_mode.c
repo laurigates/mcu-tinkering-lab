@@ -18,8 +18,13 @@
 
 #include "animations.h"
 #include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "imu.h"
+#include "led_ring.h"
 #include "light_sensor.h"
+#include "nvs.h"
+#include "nvs_flash.h"
 
 static const char *TAG = "standalone";
 
@@ -125,4 +130,34 @@ void standalone_mode_cycle_override(void)
 
     const char *names[] = {"AUTO", "BREATHE", "RAINBOW_CHASE", "SPARKLE_BURST"};
     ESP_LOGI(TAG, "Override -> %s", names[s_override]);
+}
+
+void standalone_mode_factory_reset(void)
+{
+    ESP_LOGW(TAG, "Factory reset: clearing override + NVS 'thinkpack' namespace");
+
+    s_override = OVERRIDE_AUTO;
+    s_auto_mode = ANIM_BREATHE;
+    s_in_sparkle = false;
+
+    /* Best-effort NVS erase — thinkpack namespace may not exist yet. */
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open("thinkpack", NVS_READWRITE, &handle);
+    if (err == ESP_OK) {
+        err = nvs_erase_all(handle);
+        if (err != ESP_OK) {
+            ESP_LOGW(TAG, "nvs_erase_all failed: %s", esp_err_to_name(err));
+        }
+        (void)nvs_commit(handle);
+        nvs_close(handle);
+    } else if (err != ESP_ERR_NVS_NOT_FOUND) {
+        ESP_LOGW(TAG, "nvs_open failed: %s", esp_err_to_name(err));
+    }
+
+    /* ~300 ms red flash as visual confirmation. */
+    led_ring_fill(255, 0, 0);
+    (void)led_ring_show();
+    vTaskDelay(pdMS_TO_TICKS(300));
+    led_ring_clear();
+    (void)led_ring_show();
 }
