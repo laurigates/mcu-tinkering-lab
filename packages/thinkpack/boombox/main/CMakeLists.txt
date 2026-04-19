@@ -9,5 +9,5 @@ idf_component_register(
         "standalone_mode.c"
         "group_mode.c"
     INCLUDE_DIRS "."
-    REQUIRES driver esp_adc led_strip thinkpack-protocol thinkpack-mesh thinkpack-behaviors thinkpack-ota
+    REQUIRES driver esp_adc led_strip thinkpack-protocol thinkpack-mesh thinkpack-behaviors thinkpack-ota thinkpack-power
 )

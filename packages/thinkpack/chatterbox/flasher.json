@@ -1,0 +1,9 @@
+{
+  "name": "ThinkPack Chatterbox",
+  "description": "Touch-driven hold-to-record voice toy with I2S mic/speaker and pitch shift over the ThinkPack ESP-NOW mesh",
+  "chipFamily": "ESP32-S3",
+  "board": "ESP32-S3 SuperMini",
+  "appBinaryName": "thinkpack-chatterbox.bin",
+  "category": "thinkpack",
+  "flashMode": "usb"
+}

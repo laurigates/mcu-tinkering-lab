@@ -31,6 +31,7 @@
 #include "light_sensor.h"
 #include "standalone_mode.h"
 #include "thinkpack_ota.h"
+#include "thinkpack_power.h"
 #include "thinkpack_protocol.h"
 
 static const char *TAG = "glowbug";
@@ -103,6 +104,13 @@ void app_main(void)
     thinkpack_ota_receiver_chain_callback((thinkpack_ota_chained_cb_t)group_mode_on_event, NULL);
     ESP_ERROR_CHECK(thinkpack_ota_receiver_init(BOX_GLOWBUG));
     ESP_ERROR_CHECK(thinkpack_mesh_start());
+
+    /* Power monitor — started after mesh so the mesh is up before the first
+     * classifier tick fires (classifier state transitions log, eventually
+     * reconfiguring beacon rate).  GPIO1/ADC1_CH0: verify against WIRING.md
+     * before committing to a real board. */
+    (void)thinkpack_power_init(
+        &(power_config_t){.adc_gpio = 1, .tick_interval_ms = 5000, .divider_ratio_x10 = 20});
 
     ESP_LOGI(TAG, "Mesh started — spawning animation task on Core 1");
 

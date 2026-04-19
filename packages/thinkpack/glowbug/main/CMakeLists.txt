@@ -17,6 +17,7 @@ idf_component_register(
         thinkpack-mesh
         thinkpack-behaviors
         thinkpack-ota
+        thinkpack-power
     PRIV_REQUIRES
         led_strip
         esp_timer

@@ -22,6 +22,7 @@
 #include "sdkconfig.h"
 #include "standalone_mode.h"
 #include "thinkpack_ai.h"
+#include "thinkpack_power.h"
 #include "thinkpack_protocol.h"
 #include "wifi_manager.h"
 
@@ -114,6 +115,22 @@ void app_main(void)
 
     /* --- WiFi ------------------------------------------------------- */
     ESP_ERROR_CHECK(wifi_manager_init());
+
+    /* Improv WiFi fallback. If nothing is stored in NVS, block on UART0
+     * until the browser provides credentials (up to 10 minutes). When
+     * credentials already exist this returns ESP_OK immediately so we
+     * don't re-prompt on every boot. */
+    if (!creds_ok) {
+        esp_err_t improv_ret =
+            wifi_manager_start_improv_provisioning(10u * 60u * 1000u); /* 10 minute timeout */
+        if (improv_ret != ESP_OK) {
+            ESP_LOGW(TAG,
+                     "Improv provisioning did not complete (%s) — Brainbox will operate in "
+                     "offline mode",
+                     esp_err_to_name(improv_ret));
+        }
+    }
+
     /* Empty strings → wifi_manager loads credentials from NVS / credentials.h. */
     esp_err_t wifi_ret = wifi_manager_connect("", "");
     if (wifi_ret != ESP_OK) {
@@ -143,6 +160,13 @@ void app_main(void)
     /* Initialised AFTER mesh so the ESP-NOW broadcaster has peers to
      * push to. Failure is non-fatal — Brainbox still operates. */
     (void)ota_handler_init();
+
+    /* --- Power monitor ---------------------------------------------- */
+    /* After mesh/OTA so the classifier can eventually feed a
+     * thinkpack_mesh_set_beacon_interval_ms() hook without race.
+     * GPIO1/ADC1_CH0 by default: verify against WIRING.md. */
+    (void)thinkpack_power_init(
+        &(power_config_t){.adc_gpio = 1, .tick_interval_ms = 5000, .divider_ratio_x10 = 20});
 
     /* --- AI backend ------------------------------------------------- */
     const thinkpack_ai_backend_t *ai = thinkpack_ai_get_current();

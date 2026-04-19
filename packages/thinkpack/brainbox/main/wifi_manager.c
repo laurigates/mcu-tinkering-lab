@@ -9,6 +9,7 @@
 #include "wifi_manager.h"
 #include <math.h>
 #include <string.h>
+#include "driver/uart.h"
 #include "esp_event.h"
 #include "esp_log.h"
 #include "esp_system.h"
@@ -18,6 +19,7 @@
 #include "freertos/event_groups.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
+#include "improv_wifi.h"
 #include "lwip/err.h"
 #include "lwip/sys.h"
 #include "nvs_flash.h"
@@ -815,4 +817,124 @@ static void notify_state_change(wifi_state_t new_state)
     if (g_wifi_context.user_callback) {
         g_wifi_context.user_callback(new_state, g_wifi_context.user_callback_data);
     }
+}
+
+/* ------------------------------------------------------------------ */
+/* Improv WiFi Serial provisioning                                     */
+/* ------------------------------------------------------------------ */
+
+#define IMPROV_PROVISIONED_BIT BIT0
+static EventGroupHandle_t s_improv_event_group = NULL;
+
+/**
+ * Called from improv_wifi_process_byte() when the browser has sent SSID
+ * + password. Saves credentials to NVS, responds with PROVISIONED state,
+ * and wakes the waiter.
+ */
+static void on_improv_credentials(const char *ssid, const char *password)
+{
+    ESP_LOGI(TAG, "Improv: credentials received for SSID: %s", ssid ? ssid : "(null)");
+
+    wifi_credentials_t creds;
+    memset(&creds, 0, sizeof(creds));
+    if (ssid) {
+        strncpy(creds.ssid, ssid, WIFI_SSID_MAX_LEN);
+    }
+    if (password) {
+        strncpy(creds.password, password, WIFI_PASSWORD_MAX_LEN);
+    }
+
+    esp_err_t ret = wifi_manager_save_credentials(&creds);
+    if (ret == ESP_OK) {
+        improv_wifi_send_state(IMPROV_STATE_PROVISIONED);
+        improv_wifi_send_provisioned_result(NULL);
+        if (s_improv_event_group) {
+            xEventGroupSetBits(s_improv_event_group, IMPROV_PROVISIONED_BIT);
+        }
+    } else {
+        ESP_LOGE(TAG, "Improv: failed to save credentials: %s", esp_err_to_name(ret));
+        improv_wifi_send_error(IMPROV_ERROR_UNABLE_CONNECT);
+    }
+}
+
+/**
+ * Task pumps UART0 bytes into the Improv parser and periodically
+ * broadcasts the "authorized" state so ESP Web Tools can discover us.
+ */
+static void improv_uart_task(void *arg)
+{
+    (void)arg;
+    TickType_t last_state_tx = 0;
+    while (1) {
+        uint8_t byte;
+        int len = uart_read_bytes(UART_NUM_0, &byte, 1, pdMS_TO_TICKS(200));
+        if (len > 0) {
+            improv_wifi_process_byte(byte);
+        }
+
+        TickType_t now = xTaskGetTickCount();
+        if ((now - last_state_tx) >= pdMS_TO_TICKS(1000)) {
+            improv_wifi_send_state(IMPROV_STATE_AUTHORIZED);
+            last_state_tx = now;
+        }
+
+        if (s_improv_event_group &&
+            (xEventGroupGetBits(s_improv_event_group) & IMPROV_PROVISIONED_BIT)) {
+            break;
+        }
+    }
+    vTaskDelete(NULL);
+}
+
+esp_err_t wifi_manager_start_improv_provisioning(uint32_t timeout_ms)
+{
+    /* If credentials already exist in NVS we skip Improv entirely — this
+     * prevents re-running provisioning on every boot. */
+    wifi_credentials_t existing;
+    if (wifi_manager_load_credentials(&existing) == ESP_OK && strlen(existing.ssid) > 0) {
+        ESP_LOGI(TAG, "Improv: credentials already stored, skipping provisioning");
+        return ESP_OK;
+    }
+
+    ESP_LOGI(TAG, "Improv: no stored credentials — starting UART0 provisioning listener");
+
+    /* Install UART0 driver so uart_read_bytes works. Running twice after a
+     * previous install returns ESP_ERR_INVALID_STATE, which is harmless. */
+    uart_config_t uart_cfg = {
+        .baud_rate = 115200,
+        .data_bits = UART_DATA_8_BITS,
+        .parity = UART_PARITY_DISABLE,
+        .stop_bits = UART_STOP_BITS_1,
+        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+        .source_clk = UART_SCLK_DEFAULT,
+    };
+    esp_err_t err = uart_driver_install(UART_NUM_0, 1024, 1024, 0, NULL, 0);
+    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
+        ESP_LOGE(TAG, "uart_driver_install failed: %s", esp_err_to_name(err));
+        return err;
+    }
+    uart_param_config(UART_NUM_0, &uart_cfg);
+
+    s_improv_event_group = xEventGroupCreate();
+    if (!s_improv_event_group) {
+        return ESP_ERR_NO_MEM;
+    }
+
+    improv_wifi_init(on_improv_credentials);
+    xTaskCreate(improv_uart_task, "improv_uart", 4096, NULL, 5, NULL);
+
+    TickType_t wait_ticks = (timeout_ms == 0) ? portMAX_DELAY : pdMS_TO_TICKS(timeout_ms);
+    EventBits_t bits = xEventGroupWaitBits(s_improv_event_group, IMPROV_PROVISIONED_BIT, pdFALSE,
+                                           pdFALSE, wait_ticks);
+
+    vEventGroupDelete(s_improv_event_group);
+    s_improv_event_group = NULL;
+
+    if (bits & IMPROV_PROVISIONED_BIT) {
+        ESP_LOGI(TAG, "Improv: provisioning successful");
+        return ESP_OK;
+    }
+
+    ESP_LOGW(TAG, "Improv: provisioning timed out after %u ms", (unsigned)timeout_ms);
+    return ESP_ERR_TIMEOUT;
 }
