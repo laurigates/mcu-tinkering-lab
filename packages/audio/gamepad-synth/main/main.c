@@ -1,15 +1,17 @@
 /**
  * @file main.c
- * @brief ESP32-S3 Gamepad Synth — Bluetooth controller drives a piezo speaker
+ * @brief ESP32-S3 Gamepad Synth — Bluetooth controller drives I2S audio
  *
- * Four sound modes cycled via View button (Xbox) / Share (PS):
+ * Four sound modes cycled via View button (Xbox) / Share (PS) / - (Switch):
  *   1. Theremin  — sticks control pitch, vibrato, triggers bend pitch
  *   2. Scale     — face buttons + d-pad play notes, shoulders shift octave
  *   3. Arpeggio  — face buttons pick chord, stick controls speed/pattern
  *   4. Retro SFX — buttons trigger classic game sound effects
  *
  * Bluepad32 runs on Core 0 (BTstack event loop, blocks forever).
- * Sound engine runs on Core 1 at 50 Hz.
+ * Core 1 runs two tasks:
+ *   - Control task at 50 Hz: reads gamepad, updates synth parameters
+ *   - Audio render task: generates samples, writes to I2S DMA (MAX98357A)
  *
  * Tested with: Xbox Series X/S controller (BLE, firmware v5.15+)
  */
@@ -19,7 +21,7 @@
 #include <string.h>
 
 #include "driver/gpio.h"
-#include "driver/ledc.h"
+#include "driver/i2s_std.h"
 #include "esp_log.h"
 #include "esp_random.h"
 #include "freertos/FreeRTOS.h"
@@ -38,16 +40,19 @@ static const char *TAG = "gamepad_synth";
 
 /* ── Pin Definitions ─────────────────────────────────────── */
 
-#define PIEZO_PIN GPIO_NUM_4
+#define I2S_BCLK_PIN GPIO_NUM_5
+#define I2S_WS_PIN GPIO_NUM_6
+#define I2S_DOUT_PIN GPIO_NUM_7
 #define LED_PIN GPIO_NUM_2
 
-/* ── LEDC Configuration ──────────────────────────────────── */
+/* ── I2S / Audio Configuration ───────────────────────────── */
 
-#define LEDC_TIMER LEDC_TIMER_0
-#define LEDC_MODE LEDC_LOW_SPEED_MODE
-#define LEDC_CHANNEL LEDC_CHANNEL_0
-#define LEDC_DUTY_RES LEDC_TIMER_8_BIT
-#define LEDC_DUTY_ON 128 /* 50% duty = square wave */
+#define SAMPLE_RATE 44100
+#define BLOCK_SIZE 256
+#define DMA_DESC_NUM 4
+#define AMPLITUDE 8000
+
+static i2s_chan_handle_t s_tx_chan;
 
 /* ── Bluepad32 Button Constants ──────────────────────────── */
 
@@ -75,8 +80,8 @@ static const char *TAG = "gamepad_synth";
 #define STICK_MAX 512
 #define TRIGGER_MAX 1023
 
-#define SOUND_TASK_HZ 50
-#define SOUND_TASK_PERIOD_MS (1000 / SOUND_TASK_HZ)
+#define CONTROL_TASK_HZ 50
+#define CONTROL_TASK_PERIOD_MS (1000 / CONTROL_TASK_HZ)
 
 /* ── Musical Note Table (C4–B6, equal temperament) ───────── */
 
@@ -116,6 +121,15 @@ typedef struct {
 
 static volatile gamepad_state_t s_gp;
 
+/* ── Synth State (written by control task, read by audio task) ── */
+
+typedef struct {
+    float target_freq;
+    bool active;
+} synth_state_t;
+
+static volatile synth_state_t s_synth = {0};
+
 /* ── Sound Modes ─────────────────────────────────────────── */
 
 typedef enum {
@@ -151,7 +165,7 @@ static int s_octave = 1;
 /* Mode switch debounce */
 static uint8_t s_prev_misc = 0;
 
-/* ── Tone Helpers ────────────────────────────────────────── */
+/* ── Tone Helpers (now set synth state instead of LEDC) ──── */
 
 static void tone_play(uint32_t freq_hz)
 {
@@ -159,15 +173,13 @@ static void tone_play(uint32_t freq_hz)
         freq_hz = MIN_FREQ;
     if (freq_hz > MAX_FREQ)
         freq_hz = MAX_FREQ;
-    ledc_set_freq(LEDC_MODE, LEDC_TIMER, freq_hz);
-    ledc_set_duty(LEDC_MODE, LEDC_CHANNEL, LEDC_DUTY_ON);
-    ledc_update_duty(LEDC_MODE, LEDC_CHANNEL);
+    s_synth.target_freq = (float)freq_hz;
+    s_synth.active = true;
 }
 
 static void tone_stop(void)
 {
-    ledc_set_duty(LEDC_MODE, LEDC_CHANNEL, 0);
-    ledc_update_duty(LEDC_MODE, LEDC_CHANNEL);
+    s_synth.active = false;
 }
 
 static uint16_t note_at(int semitone)
@@ -241,7 +253,7 @@ static void mode_theremin(const gamepad_state_t *gp)
     /* Simple sine vibrato using tick count */
     static uint32_t tick = 0;
     tick++;
-    float vib = vib_depth * sinf(2.0f * 3.14159f * vib_speed * (float)tick / SOUND_TASK_HZ);
+    float vib = vib_depth * sinf(2.0f * 3.14159f * vib_speed * (float)tick / CONTROL_TASK_HZ);
     pitch += vib;
 
     tone_play((uint32_t)pitch);
@@ -564,28 +576,30 @@ struct uni_platform *uni_platform_custom_create(void)
 
 /* ── Hardware Init ───────────────────────────────────────── */
 
-static void init_ledc(void)
+static void init_i2s(void)
 {
-    ledc_timer_config_t timer = {
-        .speed_mode = LEDC_MODE,
-        .timer_num = LEDC_TIMER,
-        .duty_resolution = LEDC_DUTY_RES,
-        .freq_hz = 440,
-        .clk_cfg = LEDC_AUTO_CLK,
-    };
-    ESP_ERROR_CHECK(ledc_timer_config(&timer));
+    i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
+    chan_cfg.dma_desc_num = DMA_DESC_NUM;
+    chan_cfg.dma_frame_num = BLOCK_SIZE;
+    ESP_ERROR_CHECK(i2s_new_channel(&chan_cfg, &s_tx_chan, NULL));
 
-    ledc_channel_config_t channel = {
-        .speed_mode = LEDC_MODE,
-        .channel = LEDC_CHANNEL,
-        .timer_sel = LEDC_TIMER,
-        .intr_type = LEDC_INTR_DISABLE,
-        .gpio_num = PIEZO_PIN,
-        .duty = 0,
-        .hpoint = 0,
+    i2s_std_config_t std_cfg = {
+        .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(SAMPLE_RATE),
+        .slot_cfg =
+            I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO),
+        .gpio_cfg =
+            {
+                .mclk = I2S_GPIO_UNUSED,
+                .bclk = I2S_BCLK_PIN,
+                .ws = I2S_WS_PIN,
+                .dout = I2S_DOUT_PIN,
+                .din = I2S_GPIO_UNUSED,
+                .invert_flags = {0},
+            },
     };
-    ESP_ERROR_CHECK(ledc_channel_config(&channel));
-    ESP_LOGI(TAG, "LEDC initialized on GPIO%d", PIEZO_PIN);
+    ESP_ERROR_CHECK(i2s_channel_init_std_mode(s_tx_chan, &std_cfg));
+    ESP_LOGI(TAG, "I2S initialized: BCLK=GPIO%d WS=GPIO%d DOUT=GPIO%d @ %d Hz",
+             I2S_BCLK_PIN, I2S_WS_PIN, I2S_DOUT_PIN, SAMPLE_RATE);
 }
 
 static void init_led(void)
@@ -608,28 +622,98 @@ static void init_nvs(void)
     ESP_ERROR_CHECK(ret);
 }
 
-/* ── Startup Jingle ──────────────────────────────────────── */
+/* ── Startup Jingle (blocking, runs before tasks) ────────── */
 
 static void play_startup_jingle(void)
 {
-    /* C5 E5 G5 C6 — major arpeggio */
+    /* C5 E5 G5 C6 — major arpeggio rendered directly via I2S */
     const uint16_t notes[] = {523, 659, 784, 1047};
-    for (int i = 0; i < 4; i++) {
-        tone_play(notes[i]);
+    const int note_samples = SAMPLE_RATE * 120 / 1000; /* 120 ms per note */
+    const int gap_samples = SAMPLE_RATE * 60 / 1000;   /* 60 ms gap */
+    int16_t stereo_buf[BLOCK_SIZE * 2];
+
+    ESP_ERROR_CHECK(i2s_channel_enable(s_tx_chan));
+
+    for (int n = 0; n < 4; n++) {
+        float phase = 0.0f;
+        float phase_inc = (float)notes[n] / (float)SAMPLE_RATE;
+        int remaining = note_samples;
+
         led_on();
-        vTaskDelay(pdMS_TO_TICKS(120));
-        tone_stop();
+        while (remaining > 0) {
+            int chunk = (remaining < BLOCK_SIZE) ? remaining : BLOCK_SIZE;
+            for (int i = 0; i < chunk; i++) {
+                int16_t sample = (phase < 0.5f) ? AMPLITUDE : -AMPLITUDE;
+                stereo_buf[i * 2] = sample;
+                stereo_buf[i * 2 + 1] = sample;
+                phase += phase_inc;
+                if (phase >= 1.0f)
+                    phase -= 1.0f;
+            }
+            size_t written;
+            i2s_channel_write(s_tx_chan, stereo_buf, chunk * 2 * sizeof(int16_t), &written,
+                              portMAX_DELAY);
+            remaining -= chunk;
+        }
+
+        /* Silence gap */
         led_off();
-        vTaskDelay(pdMS_TO_TICKS(60));
+        remaining = gap_samples;
+        memset(stereo_buf, 0, sizeof(stereo_buf));
+        while (remaining > 0) {
+            int chunk = (remaining < BLOCK_SIZE) ? remaining : BLOCK_SIZE;
+            size_t written;
+            i2s_channel_write(s_tx_chan, stereo_buf, chunk * 2 * sizeof(int16_t), &written,
+                              portMAX_DELAY);
+            remaining -= chunk;
+        }
+    }
+
+    ESP_ERROR_CHECK(i2s_channel_disable(s_tx_chan));
+}
+
+/* ── Audio Render Task (Core 1, high priority) ───────────── */
+
+static void audio_render_task(void *arg)
+{
+    (void)arg;
+    ESP_LOGI(TAG, "Audio render task started on core %d", xPortGetCoreID());
+
+    float phase = 0.0f;
+    int16_t stereo_buf[BLOCK_SIZE * 2];
+
+    ESP_ERROR_CHECK(i2s_channel_enable(s_tx_chan));
+
+    while (1) {
+        float freq = s_synth.target_freq;
+        bool active = s_synth.active;
+
+        if (!active || freq < (float)MIN_FREQ) {
+            memset(stereo_buf, 0, sizeof(stereo_buf));
+            phase = 0.0f;
+        } else {
+            float phase_inc = freq / (float)SAMPLE_RATE;
+            for (int i = 0; i < BLOCK_SIZE; i++) {
+                int16_t sample = (phase < 0.5f) ? AMPLITUDE : -AMPLITUDE;
+                stereo_buf[i * 2] = sample;
+                stereo_buf[i * 2 + 1] = sample;
+                phase += phase_inc;
+                if (phase >= 1.0f)
+                    phase -= 1.0f;
+            }
+        }
+
+        size_t written;
+        i2s_channel_write(s_tx_chan, stereo_buf, sizeof(stereo_buf), &written, portMAX_DELAY);
     }
 }
 
-/* ── Sound Task (Core 1) ────────────────────────────────── */
+/* ── Control Task (Core 1, reads gamepad, updates synth) ── */
 
-static void sound_task(void *arg)
+static void control_task(void *arg)
 {
     (void)arg;
-    ESP_LOGI(TAG, "Sound task started on core %d", xPortGetCoreID());
+    ESP_LOGI(TAG, "Control task started on core %d", xPortGetCoreID());
 
     TickType_t last_wake = xTaskGetTickCount();
 
@@ -640,7 +724,7 @@ static void sound_task(void *arg)
         if (!gp.connected) {
             tone_stop();
             led_off();
-            vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(SOUND_TASK_PERIOD_MS));
+            vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(CONTROL_TASK_PERIOD_MS));
             continue;
         }
 
@@ -675,7 +759,7 @@ static void sound_task(void *arg)
                 break;
         }
 
-        vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(SOUND_TASK_PERIOD_MS));
+        vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(CONTROL_TASK_PERIOD_MS));
     }
 }
 
@@ -686,13 +770,16 @@ void app_main(void)
     ESP_LOGI(TAG, "ESP32-S3 Gamepad Synth starting!");
 
     init_nvs();
-    init_ledc();
+    init_i2s();
     init_led();
 
     play_startup_jingle();
 
-    ESP_LOGI(TAG, "Starting sound task on Core 1...");
-    xTaskCreatePinnedToCore(sound_task, "sound", 4096, NULL, 5, NULL, 1);
+    ESP_LOGI(TAG, "Starting audio render task on Core 1 (priority 10)...");
+    xTaskCreatePinnedToCore(audio_render_task, "audio", 4096, NULL, 10, NULL, 1);
+
+    ESP_LOGI(TAG, "Starting control task on Core 1 (priority 5)...");
+    xTaskCreatePinnedToCore(control_task, "control", 4096, NULL, 5, NULL, 1);
 
     ESP_LOGI(TAG, "Starting Bluepad32 on Core 0 (will not return)...");
     ESP_LOGI(TAG, "Put controller in pairing mode (Xbox: hold pair button on top)");

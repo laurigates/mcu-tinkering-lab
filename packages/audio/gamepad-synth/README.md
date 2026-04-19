@@ -1,11 +1,12 @@
 # Gamepad Synth
 
-Turn a Bluetooth controller into a musical instrument. An ESP32-S3 reads gamepad input via [Bluepad32](https://github.com/ricardoquesada/bluepad32) and drives a piezo buzzer through four sound modes.
+Turn a Bluetooth controller into a musical instrument. An ESP32-S3 reads gamepad input via [Bluepad32](https://github.com/ricardoquesada/bluepad32) and produces audio through an I2S DAC (MAX98357A) in four sound modes.
 
 ## Hardware
 
 - ESP32-S3 development board (any with USB-Serial-JTAG)
-- Passive piezo buzzer on GPIO4
+- MAX98357A I2S DAC breakout (BCLK=GPIO5, WS=GPIO6, DIN=GPIO7)
+- 4-8 ohm speaker (2-3W)
 - Status LED on GPIO2
 
 See [WIRING.md](WIRING.md) for the full wiring guide.
@@ -121,5 +122,7 @@ just monitor
 ## Architecture
 
 - **Core 0**: Bluepad32 BTstack event loop (Bluetooth handling)
-- **Core 1**: Sound engine task at 50 Hz (LEDC PWM tone generation)
-- **Tone generation**: LEDC timer with 8-bit duty resolution, 50% duty cycle for square wave output
+- **Core 1**: Two tasks:
+  - **Control task** (50 Hz): reads gamepad state, updates synth parameters
+  - **Audio render task** (continuous, priority 10): generates 256-sample blocks of square wave via DDS phase accumulator, writes to I2S DMA
+- **Audio output**: 44.1 kHz, 16-bit stereo (mono duplicated) via MAX98357A I2S DAC

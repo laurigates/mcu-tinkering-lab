@@ -28,7 +28,7 @@ mcu-tinkering-lab/
 │   │   ├── llm-telegram/           # LLM vision with Telegram bot
 │   │   └── gemini-vision/          # Gemini Robotics-ER object detection
 │   ├── audio/                      # Audio / synth / toys
-│   │   ├── gamepad-synth/          # PS4 gamepad I2S synthesizer
+│   │   ├── gamepad-synth/          # BLE gamepad I2S synthesizer (Monotron-inspired)
 │   │   ├── kids-audio-toy/         # Potentiometer-controlled audio toy
 │   │   └── audiobook-player/       # RFID audiobook player (ESPHome)
 │   ├── input-gaming/               # Gamepads and controller bridges
