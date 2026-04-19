@@ -8,7 +8,7 @@ For monorepo-wide conventions, see the root [CLAUDE.md](../../../CLAUDE.md).
 
 Gamepad Synth turns a BLE Bluetooth controller (Xbox Series X/S, PS5 DualSense, Switch Pro) into a musical instrument. An ESP32-S3 reads gamepad input via Bluepad32 and produces audio through an I2S DAC (MAX98357A) in four sound modes: Theremin, Scale Player, Arpeggiator, and Retro SFX.
 
-**Status**: v0.4.0 — Resonant low-pass filter (Phase B complete). State-variable filter with cutoff + resonance applied to oscillator output. Theremin maps right stick to cutoff/resonance (Monotron-style). Next: Phase C (LFO), Phase D (delay).
+**Status**: v0.5.0 — LFO modulation (Phase C complete). Block-rate triangle LFO (0.1 - 20 Hz) modulates filter cutoff or oscillator pitch. Theremin triggers drive LFO rate (LT) and depth (RT) for classic Monotron wah. Next: Phase D (delay), Phase E (new modes).
 
 ## Tech Stack
 
@@ -70,7 +70,7 @@ Port is auto-detected for ESP32-S3. Override with `PORT=/dev/ttyUSB0 just flash`
 
 ### Sound Modes (cycled via View/Share button)
 
-1. **Theremin** (sawtooth + dynamic filter) — Left stick Y = pitch, left stick X = vibrato depth (fixed 5 Hz), right stick Y = filter cutoff, right stick X = filter resonance, triggers = pitch bend
+1. **Theremin** (sawtooth + dynamic filter + LFO wah) — Left stick Y = pitch, left stick X = vibrato depth (fixed 5 Hz), right stick Y = filter cutoff, right stick X = filter resonance, LT = LFO rate, RT = LFO depth (cutoff modulation)
 2. **Scale Player** (sine + warm filter) — Face buttons + d-pad = C major scale notes, shoulders = octave shift (C4-C6)
 3. **Arpeggiator** (square + resonant filter) — Face buttons = chord type, RT = toggle, left stick Y = speed, left stick X = pattern
 4. **Retro SFX** (square, filter bypassed) — Face buttons + d-pad = game sound effects, RT = speed multiplier

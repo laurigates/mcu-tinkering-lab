@@ -168,6 +168,13 @@ static volatile gamepad_state_t s_gp;
 
 /* ── Synth State (written by control task, read by audio task) ── */
 
+typedef enum {
+    LFO_TARGET_NONE = 0,
+    LFO_TARGET_PITCH,
+    LFO_TARGET_CUTOFF,
+    LFO_TARGET_BOTH,
+} lfo_target_t;
+
 typedef struct {
     float target_freq;
     bool active;
@@ -175,6 +182,9 @@ typedef struct {
     bool filter_enabled;
     float filter_cutoff;    /* Hz, [40 .. 18000] */
     float filter_resonance; /* Q-like, [0.5 .. 6.0] */
+    lfo_target_t lfo_target;
+    float lfo_rate;  /* Hz, [0.1 .. 20] */
+    float lfo_depth; /* 0.0 .. 1.0 */
 } synth_state_t;
 
 static volatile synth_state_t s_synth = {0};
@@ -203,6 +213,17 @@ static inline int16_t svf_process(int16_t sample, float f, float q, float *low, 
     if (out < -32768.0f)
         out = -32768.0f;
     return (int16_t)out;
+}
+
+/* ── LFO (block-rate, triangle wave) ─────────────────────── */
+
+#define LFO_RATE_MIN 0.1f
+#define LFO_RATE_MAX 20.0f
+
+/* Triangle wave in [-1, 1] given phase in [0, 1) */
+static inline float lfo_triangle(float phase)
+{
+    return (phase < 0.5f) ? (4.0f * phase - 1.0f) : (3.0f - 4.0f * phase);
 }
 
 /* ── Sound Modes ─────────────────────────────────────────── */
@@ -272,6 +293,21 @@ static void synth_set_filter(bool enabled, float cutoff, float resonance)
     s_synth.filter_resonance = resonance;
 }
 
+static void synth_set_lfo(lfo_target_t target, float rate, float depth)
+{
+    if (rate < LFO_RATE_MIN)
+        rate = LFO_RATE_MIN;
+    if (rate > LFO_RATE_MAX)
+        rate = LFO_RATE_MAX;
+    if (depth < 0.0f)
+        depth = 0.0f;
+    if (depth > 1.0f)
+        depth = 1.0f;
+    s_synth.lfo_target = target;
+    s_synth.lfo_rate = rate;
+    s_synth.lfo_depth = depth;
+}
+
 static void tone_stop(void)
 {
     s_synth.active = false;
@@ -327,8 +363,7 @@ static void mode_theremin(const gamepad_state_t *gp)
     int16_t ry = gp->axis_ry;
 
     /* Dead zone check — silence if stick is centered */
-    if (abs(ly) < STICK_DEADZONE && abs(lx) < STICK_DEADZONE && gp->brake == 0 &&
-        gp->throttle == 0) {
+    if (abs(ly) < STICK_DEADZONE && abs(lx) < STICK_DEADZONE) {
         tone_stop();
         led_off();
         return;
@@ -337,12 +372,7 @@ static void mode_theremin(const gamepad_state_t *gp)
     /* Base pitch from left stick Y */
     float pitch = map_range((float)ly, -STICK_MAX, STICK_MAX, MIN_FREQ, MAX_FREQ);
 
-    /* Pitch bend from triggers: LT bends down, RT bends up */
-    float bend = map_range((float)gp->throttle, 0, TRIGGER_MAX, 0, 300) -
-                 map_range((float)gp->brake, 0, TRIGGER_MAX, 0, 300);
-    pitch += bend;
-
-    /* Vibrato from left stick X (depth) — fixed 5 Hz speed */
+    /* Manual vibrato from left stick X (depth) — fixed 5 Hz speed */
     float vib_depth = map_range((float)abs(lx), 0, STICK_MAX, 0, 100);
     static uint32_t tick = 0;
     tick++;
@@ -354,6 +384,12 @@ static void mode_theremin(const gamepad_state_t *gp)
     float cutoff = FILTER_CUTOFF_MIN * powf(FILTER_CUTOFF_MAX / FILTER_CUTOFF_MIN, cutoff_norm);
     float resonance = map_range((float)abs(rx), 0, STICK_MAX, FILTER_Q_MIN, FILTER_Q_MAX);
     synth_set_filter(true, cutoff, resonance);
+
+    /* LFO: LT = rate (0.1-20 Hz), RT = depth (0-1). Modulates filter cutoff. */
+    float lfo_rate = map_range((float)gp->brake, 0, TRIGGER_MAX, LFO_RATE_MIN, LFO_RATE_MAX);
+    float lfo_depth = map_range((float)gp->throttle, 0, TRIGGER_MAX, 0.0f, 1.0f);
+    lfo_target_t lfo_target = (gp->throttle > 50) ? LFO_TARGET_CUTOFF : LFO_TARGET_NONE;
+    synth_set_lfo(lfo_target, lfo_rate, lfo_depth);
 
     tone_play((uint32_t)pitch);
     led_on();
@@ -781,7 +817,10 @@ static void audio_render_task(void *arg)
     float phase = 0.0f;
     float svf_low = 0.0f;
     float svf_band = 0.0f;
+    float lfo_phase = 0.0f;
     int16_t stereo_buf[BLOCK_SIZE * 2];
+
+    const float block_period = (float)BLOCK_SIZE / (float)SAMPLE_RATE;
 
     ESP_ERROR_CHECK(i2s_channel_enable(s_tx_chan));
 
@@ -797,10 +836,34 @@ static void audio_render_task(void *arg)
         } else {
             waveform_t wave = s_synth.waveform;
             bool filter_on = s_synth.filter_enabled;
+            float cutoff = s_synth.filter_cutoff;
+
+            /* Update LFO (block-rate triangle) and apply to pitch/cutoff */
+            lfo_target_t lfo_tgt = s_synth.lfo_target;
+            if (lfo_tgt != LFO_TARGET_NONE) {
+                lfo_phase += s_synth.lfo_rate * block_period;
+                if (lfo_phase >= 1.0f)
+                    lfo_phase -= (float)((int)lfo_phase);
+                float lfo_val = lfo_triangle(lfo_phase); /* [-1, 1] */
+                float depth = s_synth.lfo_depth;
+                if (lfo_tgt == LFO_TARGET_PITCH || lfo_tgt == LFO_TARGET_BOTH) {
+                    /* Up to one octave pitch mod at full depth */
+                    freq *= powf(2.0f, depth * lfo_val);
+                }
+                if (lfo_tgt == LFO_TARGET_CUTOFF || lfo_tgt == LFO_TARGET_BOTH) {
+                    /* Up to two octaves cutoff mod at full depth */
+                    cutoff *= powf(2.0f, 2.0f * depth * lfo_val);
+                    if (cutoff < FILTER_CUTOFF_MIN)
+                        cutoff = FILTER_CUTOFF_MIN;
+                    if (cutoff > FILTER_CUTOFF_MAX)
+                        cutoff = FILTER_CUTOFF_MAX;
+                }
+            }
+
             float phase_inc = freq / (float)SAMPLE_RATE;
 
             /* Recompute filter coefficients once per block */
-            float f_coef = 2.0f * sinf(3.14159265f * s_synth.filter_cutoff / (float)SAMPLE_RATE);
+            float f_coef = 2.0f * sinf(3.14159265f * cutoff / (float)SAMPLE_RATE);
             float q_coef = 1.0f / s_synth.filter_resonance;
 
             for (int i = 0; i < BLOCK_SIZE; i++) {
@@ -881,6 +944,11 @@ static void control_task(void *arg)
                     break;
             }
 
+            /* LFO: only Theremin uses it (driven per-tick from triggers) */
+            if (s_mode != MODE_THEREMIN) {
+                synth_set_lfo(LFO_TARGET_NONE, 5.0f, 0.0f);
+            }
+
             ESP_LOGI(TAG, "Mode: %d waveform: %d", s_mode, mode_waves[s_mode]);
             led_blink(s_mode + 1, 80, 80);
         }
@@ -919,6 +987,7 @@ void app_main(void)
     init_led();
     synth_set_waveform(WAVE_SAWTOOTH);
     synth_set_filter(true, 6000.0f, 1.5f);
+    synth_set_lfo(LFO_TARGET_NONE, 5.0f, 0.0f);
 
     play_startup_jingle();
 
