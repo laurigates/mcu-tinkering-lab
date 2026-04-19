@@ -185,6 +185,10 @@ typedef struct {
     lfo_target_t lfo_target;
     float lfo_rate;  /* Hz, [0.1 .. 20] */
     float lfo_depth; /* 0.0 .. 1.0 */
+    bool delay_enabled;
+    int delay_samples;    /* [1 .. DELAY_MAX_SAMPLES] */
+    float delay_feedback; /* 0.0 .. 0.95 */
+    float delay_mix;      /* 0.0 dry .. 1.0 wet */
 } synth_state_t;
 
 static volatile synth_state_t s_synth = {0};
@@ -224,6 +228,40 @@ static inline int16_t svf_process(int16_t sample, float f, float q, float *low, 
 static inline float lfo_triangle(float phase)
 {
     return (phase < 0.5f) ? (4.0f * phase - 1.0f) : (3.0f - 4.0f * phase);
+}
+
+/* ── Delay Line (circular buffer, ~44 KB in DRAM) ────────── */
+
+#define DELAY_MAX_SAMPLES 22050 /* 0.5 seconds @ 44.1 kHz */
+#define DELAY_FEEDBACK_MAX 0.95f
+
+static int16_t s_delay_buf[DELAY_MAX_SAMPLES];
+static int s_delay_write_idx = 0;
+
+static inline int16_t clip_i16(float x)
+{
+    if (x > 32767.0f)
+        return 32767;
+    if (x < -32768.0f)
+        return -32768;
+    return (int16_t)x;
+}
+
+static inline int16_t delay_process(int16_t in, int delay_samples, float feedback, float mix)
+{
+    int read_idx = s_delay_write_idx - delay_samples;
+    if (read_idx < 0)
+        read_idx += DELAY_MAX_SAMPLES;
+    int16_t delayed = s_delay_buf[read_idx];
+
+    /* Write input + feedback into the buffer */
+    s_delay_buf[s_delay_write_idx] = clip_i16((float)in + feedback * (float)delayed);
+    s_delay_write_idx++;
+    if (s_delay_write_idx >= DELAY_MAX_SAMPLES)
+        s_delay_write_idx = 0;
+
+    /* Output is dry + wet mix */
+    return clip_i16((1.0f - mix) * (float)in + mix * (float)delayed);
 }
 
 /* ── Sound Modes ─────────────────────────────────────────── */
@@ -306,6 +344,26 @@ static void synth_set_lfo(lfo_target_t target, float rate, float depth)
     s_synth.lfo_target = target;
     s_synth.lfo_rate = rate;
     s_synth.lfo_depth = depth;
+}
+
+static void synth_set_delay(bool enabled, int samples, float feedback, float mix)
+{
+    if (samples < 1)
+        samples = 1;
+    if (samples > DELAY_MAX_SAMPLES)
+        samples = DELAY_MAX_SAMPLES;
+    if (feedback < 0.0f)
+        feedback = 0.0f;
+    if (feedback > DELAY_FEEDBACK_MAX)
+        feedback = DELAY_FEEDBACK_MAX;
+    if (mix < 0.0f)
+        mix = 0.0f;
+    if (mix > 1.0f)
+        mix = 1.0f;
+    s_synth.delay_enabled = enabled;
+    s_synth.delay_samples = samples;
+    s_synth.delay_feedback = feedback;
+    s_synth.delay_mix = mix;
 }
 
 static void tone_stop(void)
@@ -866,10 +924,18 @@ static void audio_render_task(void *arg)
             float f_coef = 2.0f * sinf(3.14159265f * cutoff / (float)SAMPLE_RATE);
             float q_coef = 1.0f / s_synth.filter_resonance;
 
+            bool delay_on = s_synth.delay_enabled;
+            int delay_samples = s_synth.delay_samples;
+            float delay_fb = s_synth.delay_feedback;
+            float delay_mix = s_synth.delay_mix;
+
             for (int i = 0; i < BLOCK_SIZE; i++) {
                 int16_t sample = osc_sample(phase, wave);
                 if (filter_on) {
                     sample = svf_process(sample, f_coef, q_coef, &svf_low, &svf_band);
+                }
+                if (delay_on) {
+                    sample = delay_process(sample, delay_samples, delay_fb, delay_mix);
                 }
                 stereo_buf[i * 2] = sample;
                 stereo_buf[i * 2 + 1] = sample;
@@ -949,6 +1015,24 @@ static void control_task(void *arg)
                 synth_set_lfo(LFO_TARGET_NONE, 5.0f, 0.0f);
             }
 
+            /* Per-mode delay preset */
+            switch (s_mode) {
+                case MODE_SCALE:
+                    /* Slapback — short delay, low feedback */
+                    synth_set_delay(true, SAMPLE_RATE * 120 / 1000, 0.25f, 0.3f);
+                    break;
+                case MODE_ARPEGGIO:
+                    /* Cosmic echo — medium delay, high feedback */
+                    synth_set_delay(true, SAMPLE_RATE * 250 / 1000, 0.55f, 0.4f);
+                    break;
+                case MODE_THEREMIN:
+                case MODE_SFX:
+                default:
+                    /* Dry — Theremin already dense, SFX needs to stay raw */
+                    synth_set_delay(false, 1, 0.0f, 0.0f);
+                    break;
+            }
+
             ESP_LOGI(TAG, "Mode: %d waveform: %d", s_mode, mode_waves[s_mode]);
             led_blink(s_mode + 1, 80, 80);
         }
@@ -988,6 +1072,7 @@ void app_main(void)
     synth_set_waveform(WAVE_SAWTOOTH);
     synth_set_filter(true, 6000.0f, 1.5f);
     synth_set_lfo(LFO_TARGET_NONE, 5.0f, 0.0f);
+    synth_set_delay(false, 1, 0.0f, 0.0f);
 
     play_startup_jingle();
 

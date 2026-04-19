@@ -130,3 +130,4 @@ just monitor
 - **Waveforms**: Square, sawtooth, triangle, sine (256-entry lookup table), noise. Each mode uses a default waveform: Theremin=sawtooth, Scale=sine, Arpeggio=square, SFX=square
 - **Filter**: State-variable low-pass with cutoff (40 Hz - 18 kHz) and resonance (Q 0.5 - 6.0). Chamberlin topology, coefficients recomputed once per 256-sample block. Self-oscillates at high resonance
 - **LFO**: Block-rate triangle LFO (0.1 - 20 Hz) modulating filter cutoff or oscillator pitch. Up to ±2 octaves cutoff mod or ±1 octave pitch mod at full depth
+- **Delay**: Circular-buffer delay line (0.5 s / 22050 samples, ~44 KB static RAM) with configurable delay time, feedback (up to 0.95), and wet/dry mix. Scale = slapback, Arpeggio = cosmic echo
