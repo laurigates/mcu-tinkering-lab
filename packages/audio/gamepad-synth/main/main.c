@@ -179,6 +179,10 @@ typedef struct {
     float target_freq;
     bool active;
     waveform_t waveform;
+    /* Oscillator B for dual-osc and drone modes */
+    bool osc_b_enabled;
+    float target_freq_b;
+    waveform_t waveform_b;
     bool filter_enabled;
     float filter_cutoff;    /* Hz, [40 .. 18000] */
     float filter_resonance; /* Q-like, [0.5 .. 6.0] */
@@ -267,14 +271,17 @@ static inline int16_t delay_process(int16_t in, int delay_samples, float feedbac
 /* ── Sound Modes ─────────────────────────────────────────── */
 
 typedef enum {
-    MODE_THEREMIN = 0,
+    MODE_MONO = 0,   /* Monotron-style single osc + filter + LFO */
+    MODE_DUAL_OSC,   /* Two oscillators with selectable interval + detune */
+    MODE_DELAY_SYNTH, /* Single osc + dynamic delay (RY=time, RX=feedback) */
     MODE_SCALE,
     MODE_ARPEGGIO,
     MODE_SFX,
+    MODE_DRONE,      /* Two sustained oscillators with LFO modulation */
     MODE_COUNT,
 } sound_mode_t;
 
-static sound_mode_t s_mode = MODE_THEREMIN;
+static sound_mode_t s_mode = MODE_MONO;
 
 /* Arpeggiator state */
 static const uint8_t *s_arp_chord = CHORD_MAJOR;
@@ -314,6 +321,17 @@ static void tone_play(uint32_t freq_hz)
 static void synth_set_waveform(waveform_t wave)
 {
     s_synth.waveform = wave;
+}
+
+static void synth_set_osc_b(bool enabled, float freq_hz, waveform_t wave)
+{
+    if (freq_hz < (float)MIN_FREQ)
+        freq_hz = (float)MIN_FREQ;
+    if (freq_hz > (float)MAX_FREQ)
+        freq_hz = (float)MAX_FREQ;
+    s_synth.osc_b_enabled = enabled;
+    s_synth.target_freq_b = freq_hz;
+    s_synth.waveform_b = wave;
 }
 
 static void synth_set_filter(bool enabled, float cutoff, float resonance)
@@ -411,9 +429,9 @@ static void led_blink(int count, int on_ms, int off_ms)
     }
 }
 
-/* ── Mode 1: Theremin ────────────────────────────────────── */
+/* ── Mode 1: Mono Synth (Monotron-style) ─────────────────── */
 
-static void mode_theremin(const gamepad_state_t *gp)
+static void mode_mono(const gamepad_state_t *gp)
 {
     int16_t ly = gp->axis_y;
     int16_t lx = gp->axis_x;
@@ -453,7 +471,111 @@ static void mode_theremin(const gamepad_state_t *gp)
     led_on();
 }
 
-/* ── Mode 2: Scale Player ────────────────────────────────── */
+/* ── Mode 2: Dual Osc (two oscillators, face-button interval) ── */
+
+static void mode_dual_osc(const gamepad_state_t *gp)
+{
+    /* A=unison, B=fifth, X=octave, Y=two octaves */
+    static int s_interval_semitones = 0;
+    static uint16_t prev_buttons = 0;
+    uint16_t pressed = gp->buttons & ~prev_buttons;
+    prev_buttons = gp->buttons;
+
+    if (pressed & BTN_A)
+        s_interval_semitones = 0; /* unison */
+    if (pressed & BTN_B)
+        s_interval_semitones = 7; /* perfect fifth */
+    if (pressed & BTN_X)
+        s_interval_semitones = 12; /* octave */
+    if (pressed & BTN_Y)
+        s_interval_semitones = 24; /* two octaves */
+
+    int16_t ly = gp->axis_y;
+    int16_t rx = gp->axis_rx;
+    int16_t ry = gp->axis_ry;
+
+    if (abs(ly) < STICK_DEADZONE) {
+        tone_stop();
+        synth_set_osc_b(false, (float)MIN_FREQ, WAVE_SAWTOOTH);
+        led_off();
+        return;
+    }
+
+    float pitch_a = map_range((float)ly, -STICK_MAX, STICK_MAX, MIN_FREQ, MAX_FREQ);
+    /* Detune from RX: ±50 cents */
+    float detune_cents = map_range((float)rx, -STICK_MAX, STICK_MAX, -50.0f, 50.0f);
+    float detune_mult = powf(2.0f, detune_cents / 1200.0f);
+    float pitch_b = pitch_a * powf(2.0f, (float)s_interval_semitones / 12.0f) * detune_mult;
+
+    /* Filter cutoff from RY (logarithmic) */
+    float cutoff_norm = map_range((float)ry, -STICK_MAX, STICK_MAX, 0.0f, 1.0f);
+    float cutoff = FILTER_CUTOFF_MIN * powf(FILTER_CUTOFF_MAX / FILTER_CUTOFF_MIN, cutoff_norm);
+    synth_set_filter(true, cutoff, 1.0f);
+
+    tone_play((uint32_t)pitch_a);
+    synth_set_osc_b(true, pitch_b, WAVE_SAWTOOTH);
+    led_on();
+}
+
+/* ── Mode 3: Delay Synth (single osc + dynamic delay) ────── */
+
+static void mode_delay_synth(const gamepad_state_t *gp)
+{
+    int16_t ly = gp->axis_y;
+    int16_t rx = gp->axis_rx;
+    int16_t ry = gp->axis_ry;
+
+    if (abs(ly) < STICK_DEADZONE) {
+        tone_stop();
+        led_off();
+        return;
+    }
+
+    float pitch = map_range((float)ly, -STICK_MAX, STICK_MAX, MIN_FREQ, MAX_FREQ);
+
+    /* Delay time: RY from -STICK_MAX..STICK_MAX → 20..500 ms */
+    float delay_ms = map_range((float)ry, -STICK_MAX, STICK_MAX, 20.0f, 500.0f);
+    int delay_samples = (int)(SAMPLE_RATE * delay_ms / 1000.0f);
+    /* Feedback: RX from -STICK_MAX..STICK_MAX → 0.0..0.9 */
+    float feedback = map_range((float)rx, -STICK_MAX, STICK_MAX, 0.0f, 0.9f);
+    synth_set_delay(true, delay_samples, feedback, 0.5f);
+
+    /* Filter modulated by triggers (LT = cutoff down, RT = cutoff up) */
+    float cutoff_norm = 0.5f + map_range((float)gp->throttle, 0, TRIGGER_MAX, 0.0f, 0.5f) -
+                        map_range((float)gp->brake, 0, TRIGGER_MAX, 0.0f, 0.5f);
+    if (cutoff_norm < 0.0f)
+        cutoff_norm = 0.0f;
+    if (cutoff_norm > 1.0f)
+        cutoff_norm = 1.0f;
+    float cutoff = FILTER_CUTOFF_MIN * powf(FILTER_CUTOFF_MAX / FILTER_CUTOFF_MIN, cutoff_norm);
+    synth_set_filter(true, cutoff, 1.2f);
+
+    tone_play((uint32_t)pitch);
+    led_on();
+}
+
+/* ── Mode 7: Drone (two sustained oscillators, LFO on both) ── */
+
+static void mode_drone(const gamepad_state_t *gp)
+{
+    /* Both oscillators always active; sticks control their pitches */
+    float pitch_a = map_range((float)gp->axis_y, -STICK_MAX, STICK_MAX, MIN_FREQ, MAX_FREQ);
+    float pitch_b = map_range((float)gp->axis_ry, -STICK_MAX, STICK_MAX, MIN_FREQ, MAX_FREQ);
+
+    /* Triggers drive LFO: LT = rate, RT = depth. Target: BOTH (pitch + cutoff). */
+    float lfo_rate = map_range((float)gp->brake, 0, TRIGGER_MAX, LFO_RATE_MIN, 5.0f);
+    float lfo_depth = map_range((float)gp->throttle, 0, TRIGGER_MAX, 0.0f, 1.0f);
+    synth_set_lfo(LFO_TARGET_BOTH, lfo_rate, lfo_depth);
+
+    /* Filter: slightly warm default, modulated by LFO */
+    synth_set_filter(true, 3000.0f, 1.5f);
+
+    tone_play((uint32_t)pitch_a);
+    synth_set_osc_b(true, pitch_b, WAVE_TRIANGLE);
+    led_on();
+}
+
+/* ── Mode 4: Scale Player ────────────────────────────────── */
 
 static void mode_scale(const gamepad_state_t *gp)
 {
@@ -503,7 +625,7 @@ static void mode_scale(const gamepad_state_t *gp)
     led_on();
 }
 
-/* ── Mode 3: Arpeggiator ────────────────────────────────── */
+/* ── Mode 5: Arpeggiator ────────────────────────────────── */
 
 static void mode_arpeggio(const gamepad_state_t *gp)
 {
@@ -607,7 +729,7 @@ static void mode_arpeggio(const gamepad_state_t *gp)
     }
 }
 
-/* ── Mode 4: Retro SFX ──────────────────────────────────── */
+/* ── Mode 6: Retro SFX ──────────────────────────────────── */
 
 static void sfx_start(float start, float end, int ticks)
 {
@@ -873,6 +995,7 @@ static void audio_render_task(void *arg)
     ESP_LOGI(TAG, "Audio render task started on core %d", xPortGetCoreID());
 
     float phase = 0.0f;
+    float phase_b = 0.0f;
     float svf_low = 0.0f;
     float svf_band = 0.0f;
     float lfo_phase = 0.0f;
@@ -889,12 +1012,16 @@ static void audio_render_task(void *arg)
         if (!active || freq < (float)MIN_FREQ) {
             memset(stereo_buf, 0, sizeof(stereo_buf));
             phase = 0.0f;
+            phase_b = 0.0f;
             svf_low = 0.0f;
             svf_band = 0.0f;
         } else {
             waveform_t wave = s_synth.waveform;
             bool filter_on = s_synth.filter_enabled;
             float cutoff = s_synth.filter_cutoff;
+            bool osc_b_on = s_synth.osc_b_enabled;
+            float freq_b = s_synth.target_freq_b;
+            waveform_t wave_b = s_synth.waveform_b;
 
             /* Update LFO (block-rate triangle) and apply to pitch/cutoff */
             lfo_target_t lfo_tgt = s_synth.lfo_target;
@@ -919,6 +1046,7 @@ static void audio_render_task(void *arg)
             }
 
             float phase_inc = freq / (float)SAMPLE_RATE;
+            float phase_inc_b = freq_b / (float)SAMPLE_RATE;
 
             /* Recompute filter coefficients once per block */
             float f_coef = 2.0f * sinf(3.14159265f * cutoff / (float)SAMPLE_RATE);
@@ -931,6 +1059,14 @@ static void audio_render_task(void *arg)
 
             for (int i = 0; i < BLOCK_SIZE; i++) {
                 int16_t sample = osc_sample(phase, wave);
+                if (osc_b_on) {
+                    int16_t sample_b = osc_sample(phase_b, wave_b);
+                    /* Average A and B to stay within int16 range */
+                    sample = (int16_t)(((int32_t)sample + (int32_t)sample_b) / 2);
+                    phase_b += phase_inc_b;
+                    if (phase_b >= 1.0f)
+                        phase_b -= 1.0f;
+                }
                 if (filter_on) {
                     sample = svf_process(sample, f_coef, q_coef, &svf_low, &svf_band);
                 }
@@ -982,53 +1118,63 @@ static void control_task(void *arg)
 
             /* Set default waveform per mode */
             static const waveform_t mode_waves[] = {
-                [MODE_THEREMIN] = WAVE_SAWTOOTH,
+                [MODE_MONO] = WAVE_SAWTOOTH,
+                [MODE_DUAL_OSC] = WAVE_SAWTOOTH,
+                [MODE_DELAY_SYNTH] = WAVE_SAWTOOTH,
                 [MODE_SCALE] = WAVE_SINE,
                 [MODE_ARPEGGIO] = WAVE_SQUARE,
                 [MODE_SFX] = WAVE_SQUARE,
+                [MODE_DRONE] = WAVE_SAWTOOTH,
             };
             synth_set_waveform(mode_waves[s_mode]);
 
+            /* Turn off osc B unless the mode uses it */
+            synth_set_osc_b(false, (float)MIN_FREQ, WAVE_SAWTOOTH);
+
             /* Set per-mode filter defaults */
             switch (s_mode) {
-                case MODE_THEREMIN:
-                    /* Updated dynamically from right stick each tick */
+                case MODE_MONO:
+                case MODE_DUAL_OSC:
+                case MODE_DELAY_SYNTH:
+                case MODE_DRONE:
+                    /* Updated dynamically from sticks each tick */
                     synth_set_filter(true, 6000.0f, 1.5f);
                     break;
                 case MODE_SCALE:
-                    /* Static warm low-pass */
                     synth_set_filter(true, 5000.0f, 0.8f);
                     break;
                 case MODE_ARPEGGIO:
-                    /* Slight emphasis on square harmonics */
                     synth_set_filter(true, 4000.0f, 1.2f);
                     break;
                 case MODE_SFX:
                 default:
-                    /* Bypass — preserve raw sound effects */
                     synth_set_filter(false, FILTER_CUTOFF_MAX, FILTER_Q_MIN);
                     break;
             }
 
-            /* LFO: only Theremin uses it (driven per-tick from triggers) */
-            if (s_mode != MODE_THEREMIN) {
+            /* LFO: Mono (triggers) and Drone (triggers) drive it per-tick.
+             * Others get it disabled. */
+            if (s_mode != MODE_MONO && s_mode != MODE_DRONE) {
                 synth_set_lfo(LFO_TARGET_NONE, 5.0f, 0.0f);
             }
 
             /* Per-mode delay preset */
             switch (s_mode) {
                 case MODE_SCALE:
-                    /* Slapback — short delay, low feedback */
                     synth_set_delay(true, SAMPLE_RATE * 120 / 1000, 0.25f, 0.3f);
                     break;
                 case MODE_ARPEGGIO:
-                    /* Cosmic echo — medium delay, high feedback */
                     synth_set_delay(true, SAMPLE_RATE * 250 / 1000, 0.55f, 0.4f);
                     break;
-                case MODE_THEREMIN:
+                case MODE_DELAY_SYNTH:
+                    /* Starting preset — mode_delay_synth updates each tick */
+                    synth_set_delay(true, SAMPLE_RATE * 200 / 1000, 0.5f, 0.5f);
+                    break;
+                case MODE_MONO:
+                case MODE_DUAL_OSC:
                 case MODE_SFX:
+                case MODE_DRONE:
                 default:
-                    /* Dry — Theremin already dense, SFX needs to stay raw */
                     synth_set_delay(false, 1, 0.0f, 0.0f);
                     break;
             }
@@ -1039,8 +1185,14 @@ static void control_task(void *arg)
 
         /* Dispatch to current mode */
         switch (s_mode) {
-            case MODE_THEREMIN:
-                mode_theremin(&gp);
+            case MODE_MONO:
+                mode_mono(&gp);
+                break;
+            case MODE_DUAL_OSC:
+                mode_dual_osc(&gp);
+                break;
+            case MODE_DELAY_SYNTH:
+                mode_delay_synth(&gp);
                 break;
             case MODE_SCALE:
                 mode_scale(&gp);
@@ -1050,6 +1202,9 @@ static void control_task(void *arg)
                 break;
             case MODE_SFX:
                 mode_sfx(&gp);
+                break;
+            case MODE_DRONE:
+                mode_drone(&gp);
                 break;
             default:
                 break;

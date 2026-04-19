@@ -6,9 +6,9 @@ For monorepo-wide conventions, see the root [CLAUDE.md](../../../CLAUDE.md).
 
 ## Project Overview
 
-Gamepad Synth turns a BLE Bluetooth controller (Xbox Series X/S, PS5 DualSense, Switch Pro) into a musical instrument. An ESP32-S3 reads gamepad input via Bluepad32 and produces audio through an I2S DAC (MAX98357A) in four sound modes: Theremin, Scale Player, Arpeggiator, and Retro SFX.
+Gamepad Synth turns a BLE Bluetooth controller (Xbox Series X/S, PS5 DualSense, Switch Pro) into a Korg Monotron-inspired synthesizer. An ESP32-S3 reads gamepad input via Bluepad32 and produces audio through an I2S DAC (MAX98357A) in seven sound modes.
 
-**Status**: v0.6.0 — Delay effect (Phase D complete). 0.5 s circular buffer (~44 KB) with configurable delay time, feedback, and wet/dry mix. Scale gets slapback (120 ms), Arpeggio gets cosmic echo (250 ms, 55% feedback). Next: Phase E (new modes — Mono Synth, Dual Osc, Delay Synth, Drone).
+**Status**: v1.0.0 — All PRD-008 phases complete. Mono Synth, Dual Osc, Delay Synth, Scale, Arpeggio, Retro SFX, Drone modes. Full signal chain: dual DDS oscillators → resonant SVF filter → LFO modulation → 0.5 s delay → I2S DAC.
 
 ## Tech Stack
 
@@ -68,12 +68,15 @@ Port is auto-detected for ESP32-S3. Override with `PORT=/dev/ttyUSB0 just flash`
 | `STICK_DEADZONE` | 50 | Analog stick dead zone (out of ±512) |
 | `MIN_FREQ` / `MAX_FREQ` | 100 / 2000 Hz | Tone frequency range |
 
-### Sound Modes (cycled via View/Share button)
+### Sound Modes (cycled via View/Share/- button, LED blinks 1-7)
 
-1. **Theremin** (sawtooth + dynamic filter + LFO wah) — Left stick Y = pitch, left stick X = vibrato depth (fixed 5 Hz), right stick Y = filter cutoff, right stick X = filter resonance, LT = LFO rate, RT = LFO depth (cutoff modulation)
-2. **Scale Player** (sine + warm filter + slapback) — Face buttons + d-pad = C major scale notes, shoulders = octave shift (C4-C6)
-3. **Arpeggiator** (square + resonant filter + cosmic echo) — Face buttons = chord type, RT = toggle, left stick Y = speed, left stick X = pattern
-4. **Retro SFX** (square, filter bypassed) — Face buttons + d-pad = game sound effects, RT = speed multiplier
+1. **Mono Synth** — Monotron-style single osc. LY=pitch, LX=vibrato depth, RY=filter cutoff, RX=resonance, LT=LFO rate, RT=LFO depth (cutoff wah)
+2. **Dual Osc** — Two sawtooth oscillators. LY=pitch, face buttons=interval (A=unison, B=fifth, X=octave, Y=two octaves), RX=detune (±50 cents), RY=cutoff
+3. **Delay Synth** — Single osc with dynamic delay. LY=pitch, RY=delay time (20-500 ms), RX=feedback, LT/RT=filter cutoff modulation
+4. **Scale Player** (sine + slapback) — Face buttons + d-pad = C major scale notes, shoulders = octave shift
+5. **Arpeggiator** (square + cosmic echo) — Face buttons = chord type, RT = toggle, LY = speed, LX = pattern
+6. **Retro SFX** (filter/delay bypassed) — Face buttons + d-pad = game SFX, RT = speed multiplier
+7. **Drone** — Two sustained oscillators with LFO. LY=osc A pitch, RY=osc B pitch, LT=LFO rate, RT=LFO depth (pitch + cutoff)
 
 ### Dependencies
 
