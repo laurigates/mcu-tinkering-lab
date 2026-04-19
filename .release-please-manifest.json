@@ -14,5 +14,7 @@
   "packages/robocar/simulation": "0.1.0",
   "packages/input-gaming/switch-usb-proxy": "0.1.0",
   "packages/input-gaming/xbox-switch-bridge": "0.1.0",
-  "packages/audio/gamepad-synth": "0.1.0"
+  "packages/audio/gamepad-synth": "0.1.0",
+  "packages/thinkpack/chatterbox": "0.0.0",
+  "packages/thinkpack/finderbox": "0.0.0"
 }

@@ -146,6 +146,24 @@
       "include-component-in-tag": true,
       "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": true
+    },
+    "packages/thinkpack/chatterbox": {
+      "release-type": "simple",
+      "component": "thinkpack-chatterbox",
+      "package-name": "thinkpack-chatterbox",
+      "changelog-path": "CHANGELOG.md",
+      "include-component-in-tag": true,
+      "bump-minor-pre-major": true,
+      "bump-patch-for-minor-pre-major": true
+    },
+    "packages/thinkpack/finderbox": {
+      "release-type": "simple",
+      "component": "thinkpack-finderbox",
+      "package-name": "thinkpack-finderbox",
+      "changelog-path": "CHANGELOG.md",
+      "include-component-in-tag": true,
+      "bump-minor-pre-major": true,
+      "bump-patch-for-minor-pre-major": true
     }
   },
   "release-type": "simple",
