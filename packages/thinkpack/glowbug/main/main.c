@@ -35,12 +35,17 @@
 static const char *TAG = "glowbug";
 
 /* ------------------------------------------------------------------ */
-/* Button callback                                                     */
+/* Button callbacks                                                    */
 /* ------------------------------------------------------------------ */
 
-static void on_button_press(void)
+static void on_button_short_press(void)
 {
     standalone_mode_cycle_override();
+}
+
+static void on_button_long_press(void)
+{
+    standalone_mode_factory_reset();
 }
 
 /* ------------------------------------------------------------------ */
@@ -74,11 +79,12 @@ void app_main(void)
     ESP_ERROR_CHECK(led_ring_init());
     ESP_ERROR_CHECK(imu_init());
     ESP_ERROR_CHECK(light_sensor_init());
-    ESP_ERROR_CHECK(button_init(on_button_press));
+    ESP_ERROR_CHECK(button_init(on_button_short_press, on_button_long_press));
 
     /* Animation engine + standalone state machine */
     animations_init();
     standalone_mode_init();
+    group_mode_init();
 
     /* Mesh */
     thinkpack_mesh_config_t cfg;

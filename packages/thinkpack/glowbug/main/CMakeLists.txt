@@ -12,8 +12,10 @@ idf_component_register(
     REQUIRES
         driver
         esp_adc
+        nvs_flash
         thinkpack-protocol
         thinkpack-mesh
+        thinkpack-behaviors
     PRIV_REQUIRES
         led_strip
         esp_timer

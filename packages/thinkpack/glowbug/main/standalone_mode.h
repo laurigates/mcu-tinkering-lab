@@ -42,6 +42,16 @@ void standalone_mode_tick(uint32_t now_ms);
  */
 void standalone_mode_cycle_override(void);
 
+/**
+ * @brief Soft factory reset: clear override + persistent state.
+ *
+ * Invoked on a 2 s long-press.  Clears any override, erases the
+ * "thinkpack" NVS namespace (best-effort — missing namespace is not
+ * an error), and flashes the LED ring red for ~300 ms as visual
+ * feedback.  Returns after the flash completes.
+ */
+void standalone_mode_factory_reset(void);
+
 #ifdef __cplusplus
 }
 #endif

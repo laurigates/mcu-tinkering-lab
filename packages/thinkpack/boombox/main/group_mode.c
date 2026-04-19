@@ -1,11 +1,15 @@
 /**
  * @file group_mode.c
  * @brief Mesh event handling: sync-pulse beat alignment, hello chime,
- *        PLAY_MELODY command, leader sync-pulse broadcast timer.
+ *        PLAY_MELODY via command_executor, leader sync-pulse broadcast timer.
  *
  * The hello chime (C5 E5 G5, 80 ms each) is executed note-by-note in
  * group_mode_tick() using a small state machine so it never blocks the
  * mesh receive task.
+ *
+ * CMD_PLAY_MELODY is registered with command_executor in group_mode_init;
+ * the executor unpacks the envelope and invokes play_melody_handler,
+ * which installs a temporary pattern override for N beats.
  *
  * The sync-pulse broadcast timer is a FreeRTOS timer created on
  * BECAME_LEADER and deleted on BECAME_FOLLOWER. Timer period is
@@ -18,6 +22,7 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "command_executor.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
@@ -26,16 +31,11 @@
 #include "melody_gen.h"
 #include "pot_reader.h"
 #include "standalone_mode.h"
+#include "thinkpack_commands.h"
 #include "thinkpack_protocol.h"
 #include "tone_engine.h"
 
 static const char *TAG = "group_mode";
-
-/* ------------------------------------------------------------------ */
-/* PLAY_MELODY command id                                              */
-/* ------------------------------------------------------------------ */
-
-#define CMD_PLAY_MELODY 0x20u
 
 /* ------------------------------------------------------------------ */
 /* Hello chime                                                         */
@@ -57,7 +57,7 @@ static uint8_t s_chime_step;
 static uint32_t s_chime_deadline_ms;
 
 /* ------------------------------------------------------------------ */
-/* Temporary pattern override (PLAY_MELODY command)                   */
+/* Temporary pattern override (CMD_PLAY_MELODY)                        */
 /* ------------------------------------------------------------------ */
 
 static bool s_override_active;
@@ -65,7 +65,7 @@ static melody_pattern_t s_saved_pattern;
 static uint32_t s_override_end_beat;
 
 /* ------------------------------------------------------------------ */
-/* Leader sync-pulse timer                                            */
+/* Leader sync-pulse timer                                             */
 /* ------------------------------------------------------------------ */
 
 static TimerHandle_t s_sync_timer;
@@ -98,6 +98,39 @@ static void sync_timer_cb(TimerHandle_t xTimer)
 }
 
 /* ------------------------------------------------------------------ */
+/* Command handlers                                                    */
+/* ------------------------------------------------------------------ */
+
+/** Handler for CMD_PLAY_MELODY — registered with command_executor. */
+static void play_melody_handler(uint8_t command_id, const uint8_t *payload, uint8_t length,
+                                void *user_ctx)
+{
+    (void)command_id;
+    (void)user_ctx;
+
+    if (length < sizeof(cmd_play_melody_payload_t)) {
+        ESP_LOGW(TAG, "CMD_PLAY_MELODY: payload too short (%u bytes)", length);
+        return;
+    }
+
+    cmd_play_melody_payload_t p;
+    memcpy(&p, payload, sizeof(p));
+
+    melody_pattern_t new_pattern = (melody_pattern_t)p.pattern_id;
+    if (new_pattern >= MELODY_COUNT || p.repeat_count == 0) {
+        ESP_LOGW(TAG, "CMD_PLAY_MELODY: bad args pattern=%u repeat=%u", p.pattern_id,
+                 p.repeat_count);
+        return;
+    }
+
+    s_saved_pattern = melody_gen_get_pattern();
+    melody_gen_set_pattern(new_pattern);
+    s_override_end_beat = standalone_mode_get_beat_index() + (uint32_t)p.repeat_count;
+    s_override_active = true;
+    ESP_LOGI(TAG, "PLAY_MELODY: pattern %d for %u beats", (int)new_pattern, p.repeat_count);
+}
+
+/* ------------------------------------------------------------------ */
 /* Public API                                                          */
 /* ------------------------------------------------------------------ */
 
@@ -110,6 +143,12 @@ void group_mode_init(void)
     s_saved_pattern = MELODY_MARCH;
     s_override_end_beat = 0;
     s_sync_timer = NULL;
+
+    esp_err_t err = command_executor_register(CMD_PLAY_MELODY, play_melody_handler, NULL);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to register CMD_PLAY_MELODY handler: %s", esp_err_to_name(err));
+    }
+
     ESP_LOGI(TAG, "Group mode initialized");
 }
 
@@ -138,23 +177,11 @@ void group_mode_on_event(const thinkpack_mesh_event_data_t *event, void *user_ct
             ESP_LOGI(TAG, "Peer discovered: " MACSTR, MAC2STR(event->peer_mac));
             break;
 
-        case THINKPACK_EVENT_COMMAND_RECEIVED: {
-            const thinkpack_command_data_t *cmd =
-                (const thinkpack_command_data_t *)event->packet->data;
-            if (cmd->command_id == CMD_PLAY_MELODY && cmd->length >= 2) {
-                melody_pattern_t new_pattern = (melody_pattern_t)cmd->payload[0];
-                uint8_t repeat_count = cmd->payload[1];
-                if (new_pattern < MELODY_COUNT && repeat_count > 0) {
-                    s_saved_pattern = melody_gen_get_pattern();
-                    melody_gen_set_pattern(new_pattern);
-                    s_override_end_beat = standalone_mode_get_beat_index() + (uint32_t)repeat_count;
-                    s_override_active = true;
-                    ESP_LOGI(TAG, "PLAY_MELODY: pattern %d for %u beats", (int)new_pattern,
-                             repeat_count);
-                }
+        case THINKPACK_EVENT_COMMAND_RECEIVED:
+            if (event->packet != NULL) {
+                command_executor_dispatch(event->packet);
             }
             break;
-        }
 
         case THINKPACK_EVENT_BECAME_LEADER: {
             ESP_LOGI(TAG, "Became leader — starting sync-pulse timer");
