@@ -1,0 +1,38 @@
+menu "ThinkPack Brainbox Configuration"
+
+    choice AI_BACKEND
+        prompt "AI Backend Selection"
+        default AI_BACKEND_OLLAMA
+        help
+            Select which AI backend Brainbox uses to generate collective-play
+            directives.
+
+        config AI_BACKEND_CLAUDE
+            bool "Claude API"
+            help
+                Use Claude API for text generation. Requires API key and WiFi.
+
+        config AI_BACKEND_OLLAMA
+            bool "Ollama"
+            help
+                Use local or remote Ollama server. Supports mDNS discovery.
+
+        config AI_BACKEND_GEMINI
+            bool "Gemini"
+            help
+                Use Google Gemini. Requires Gemini API key.
+    endchoice
+
+    config CONFIG_AI_BACKEND_CLAUDE
+        bool
+        default y if AI_BACKEND_CLAUDE
+
+    config CONFIG_AI_BACKEND_OLLAMA
+        bool
+        default y if AI_BACKEND_OLLAMA
+
+    config CONFIG_AI_BACKEND_GEMINI
+        bool
+        default y if AI_BACKEND_GEMINI
+
+endmenu
