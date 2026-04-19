@@ -1,0 +1,22 @@
+idf_component_register(
+    SRCS
+        "main.c"
+        "led_ring.c"
+        "imu.c"
+        "light_sensor.c"
+        "button.c"
+        "animations.c"
+        "standalone_mode.c"
+        "group_mode.c"
+    INCLUDE_DIRS "."
+    REQUIRES
+        driver
+        esp_adc
+        thinkpack-protocol
+        thinkpack-mesh
+    PRIV_REQUIRES
+        led_strip
+        esp_timer
+        freertos
+        esp_system
+)
