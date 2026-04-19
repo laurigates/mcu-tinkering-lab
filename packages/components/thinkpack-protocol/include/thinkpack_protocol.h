@@ -60,7 +60,9 @@ typedef enum {
     MSG_LLM_RESPONSE = 0x09,
     MSG_SYNC_PULSE = 0x0A,
     MSG_COLLECTIVE_TRIGGER = 0x0B,
-    MSG_FRAGMENT = 0x0C /**< Fragment of a large message */
+    MSG_FRAGMENT = 0x0C,             /**< Fragment of a large message         */
+    MSG_AUDIO_CLIP_BROADCAST = 0x0D, /**< Leader-driven echo-chamber clip ref */
+    /* 0x0E reserved for future audio use */
 } thinkpack_msg_type_t;
 
 /* ------------------------------------------------------------------ */
@@ -196,6 +198,27 @@ typedef struct __attribute__((packed)) {
     uint8_t data_length;                       /**< Bytes of data[] populated in this fragment  */
     uint8_t data[THINKPACK_MAX_FRAGMENT_DATA]; /**< Fragment payload bytes     */
 } thinkpack_fragment_data_t;
+
+/**
+ * @brief Payload for MSG_AUDIO_CLIP_BROADCAST — echo-chamber clip metadata.
+ *
+ * Chatterbox leader announces a just-recorded clip; each follower applies the
+ * semitone shift in @p per_peer_semitone_shift at its own slot index (0-based,
+ * wraps mod THINKPACK_MAX_PEERS).  The actual PCM is streamed separately via
+ * the fragmented-send path (thinkpack_mesh_send_large with MSG_LLM_RESPONSE-
+ * style transport); this payload is a lightweight metadata header carried in
+ * a normal-size packet so every box learns about the clip quickly.
+ *
+ * Slot mapping convention: the slot index is the follower's position in the
+ * leader's peer table at send time (0-based).  Followers that don't know
+ * their own slot default to slot 0.  Unused slots are clamped to 0 semitones.
+ */
+typedef struct __attribute__((packed)) {
+    uint8_t clip_id;                   /**< Unique per broadcast (wraps mod 256) */
+    uint16_t sample_count;             /**< PCM samples (<= THINKPACK_AUDIO_CLIP_MAX_SAMPLES) */
+    int8_t per_peer_semitone_shift[8]; /**< Per-slot pitch offset, clamped to ±12 */
+    uint8_t flags;                     /**< Reserved — must be 0 */
+} audio_clip_broadcast_payload_t;
 
 /* ------------------------------------------------------------------ */
 /* Helper function prototypes                                          */
