@@ -28,6 +28,7 @@
 #include "freertos/task.h"
 #include "nvs_flash.h"
 
+#include "fragment_reassembler.h"
 #include "group_manager.h"
 #include "leader_election.h"
 #include "thinkpack_protocol.h"
@@ -84,6 +85,16 @@ static void *s_event_cb_ctx = NULL;
 static SemaphoreHandle_t s_cb_mutex = NULL;
 
 static bool s_running = false;
+
+/* ------------------------------------------------------------------ */
+/* Fragmentation state                                                 */
+/* ------------------------------------------------------------------ */
+
+static reassembly_slot_t s_reassembly_cache[REASSEMBLY_CACHE_SIZE];
+static uint8_t s_large_msg_id = 0;
+
+/** Stale-fragment timeout: prune incomplete messages older than 5 s. */
+#define FRAGMENT_STALE_MS 5000u
 
 /* ------------------------------------------------------------------ */
 /* Internal helpers                                                    */
@@ -274,6 +285,9 @@ static void beacon_task(void *arg)
             /* Prune peers that have gone quiet. */
             group_manager_prune(t, stale_ms, on_peer_pruned, NULL);
 
+            /* Prune incomplete fragment reassembly slots older than 5 s. */
+            reassembler_prune(s_reassembly_cache, t, FRAGMENT_STALE_MS);
+
             last_beacon_ms = t;
         }
 
@@ -398,6 +412,58 @@ static void recv_task(void *arg)
                 fire_event(THINKPACK_EVENT_COMMAND_RECEIVED, entry.src_mac, pkt);
                 break;
 
+            case MSG_FRAGMENT: {
+                if (pkt->data_length < sizeof(thinkpack_fragment_data_t)) {
+                    ESP_LOGW(TAG, "Short MSG_FRAGMENT from " MACSTR " — discarding",
+                             MAC2STR(entry.src_mac));
+                    break;
+                }
+                const thinkpack_fragment_data_t *frag =
+                    (const thinkpack_fragment_data_t *)pkt->data;
+
+                reassembly_slot_t *completed = NULL;
+                reassemble_result_t result =
+                    reassembler_absorb(s_reassembly_cache, entry.src_mac, frag, t, &completed);
+
+                switch (result) {
+                    case REASSEMBLE_COMPLETE: {
+                        ESP_LOGD(TAG,
+                                 "Large message reassembled from " MACSTR
+                                 " msg_id=%u type=0x%02x len=%zu",
+                                 MAC2STR(entry.src_mac), frag->msg_id, completed->original_msg_type,
+                                 completed->reassembled_len);
+
+                        xSemaphoreTake(s_cb_mutex, portMAX_DELAY);
+                        thinkpack_mesh_event_cb_t cb = s_event_cb;
+                        void *ctx = s_event_cb_ctx;
+                        xSemaphoreGive(s_cb_mutex);
+
+                        if (cb) {
+                            thinkpack_mesh_event_data_t ev = {
+                                .type = THINKPACK_EVENT_LARGE_MESSAGE_RECEIVED,
+                                .packet = NULL,
+                                .large_data = completed->buffer,
+                                .large_length = completed->reassembled_len,
+                                .original_msg_type = completed->original_msg_type,
+                            };
+                            memcpy(ev.peer_mac, entry.src_mac, 6);
+                            cb(&ev, ctx);
+                        }
+
+                        reassembler_release(completed);
+                        break;
+                    }
+                    case REASSEMBLE_ERROR:
+                        ESP_LOGW(TAG, "Fragment error from " MACSTR " msg_id=%u",
+                                 MAC2STR(entry.src_mac), frag->msg_id);
+                        break;
+                    case REASSEMBLE_INCOMPLETE:
+                    default:
+                        break;
+                }
+                break;
+            }
+
             default:
                 ESP_LOGD(TAG, "Unhandled msg_type 0x%02x from " MACSTR, pkt->msg_type,
                          MAC2STR(entry.src_mac));
@@ -478,6 +544,9 @@ esp_err_t thinkpack_mesh_init(const thinkpack_mesh_config_t *config)
     /* ---- Sub-modules ---- */
     ESP_ERROR_CHECK(group_manager_init());
     ESP_ERROR_CHECK(leader_election_init(s_own_priority, s_own_mac, on_leader_change, NULL));
+
+    /* ---- Fragment reassembler ---- */
+    reassembler_init(s_reassembly_cache);
 
     ESP_LOGI(TAG, "Mesh initialised on channel %d", config->channel);
     return ESP_OK;
@@ -570,4 +639,78 @@ void thinkpack_mesh_get_mac(uint8_t out_mac[6])
 size_t thinkpack_mesh_peer_count(void)
 {
     return group_manager_count();
+}
+
+esp_err_t thinkpack_mesh_send_large(const uint8_t *mac, uint8_t msg_type, const uint8_t *data,
+                                    size_t length)
+{
+    if (!data) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (length > THINKPACK_MAX_REASSEMBLED) {
+        ESP_LOGE(TAG, "send_large: length %zu exceeds THINKPACK_MAX_REASSEMBLED (%d)", length,
+                 THINKPACK_MAX_REASSEMBLED);
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    const uint8_t *dest = mac ? mac : BROADCAST_MAC;
+
+    if (mac) {
+        esp_err_t ret = ensure_peer(mac);
+        if (ret != ESP_OK) {
+            return ret;
+        }
+    }
+
+    /* Small enough to send as a single unfragmented packet. */
+    if (length <= THINKPACK_MAX_DATA_LEN) {
+        thinkpack_packet_t pkt;
+        memset(&pkt, 0, sizeof(pkt));
+        pkt.msg_type = msg_type;
+        pkt.sequence_number = s_seq++;
+        memcpy(pkt.src_mac, s_own_mac, 6);
+        pkt.data_length = (uint8_t)length;
+        memcpy(pkt.data, data, length);
+        thinkpack_finalize(&pkt);
+        return esp_now_send(dest, (const uint8_t *)&pkt, sizeof(pkt));
+    }
+
+    /* Split into fragments. */
+    uint8_t total = thinkpack_fragment_count(length);
+    uint8_t msg_id = s_large_msg_id++;
+
+    ESP_LOGI(TAG, "send_large: msg_id=%u type=0x%02x len=%zu total_fragments=%u", msg_id, msg_type,
+             length, total);
+
+    esp_err_t last_err = ESP_OK;
+    for (uint8_t i = 0; i < total; i++) {
+        size_t offset = (size_t)i * THINKPACK_MAX_FRAGMENT_DATA;
+        size_t remaining = length - offset;
+        size_t chunk =
+            remaining < THINKPACK_MAX_FRAGMENT_DATA ? remaining : THINKPACK_MAX_FRAGMENT_DATA;
+
+        thinkpack_fragment_data_t frag;
+        memset(&frag, 0, sizeof(frag));
+        frag.msg_id = msg_id;
+        frag.fragment_index = i;
+        frag.total_fragments = total;
+        frag.original_msg_type = msg_type;
+        frag.data_length = (uint8_t)chunk;
+        memcpy(frag.data, data + offset, chunk);
+
+        thinkpack_packet_t pkt;
+        thinkpack_prepare_fragment(&pkt, s_seq++, s_own_mac, &frag);
+
+        esp_err_t ret = esp_now_send(dest, (const uint8_t *)&pkt, sizeof(pkt));
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG, "send_large: fragment %u send failed: %s", i, esp_err_to_name(ret));
+            last_err = ret;
+        }
+
+        if (i < (uint8_t)(total - 1)) {
+            vTaskDelay(pdMS_TO_TICKS(5));
+        }
+    }
+
+    return last_err;
 }

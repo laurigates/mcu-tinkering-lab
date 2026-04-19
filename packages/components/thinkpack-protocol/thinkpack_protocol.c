@@ -25,6 +25,8 @@ _Static_assert(sizeof(thinkpack_sync_pulse_data_t) <= THINKPACK_MAX_DATA_LEN,
                "thinkpack_sync_pulse_data_t exceeds THINKPACK_MAX_DATA_LEN");
 _Static_assert(sizeof(thinkpack_command_data_t) <= THINKPACK_MAX_DATA_LEN,
                "thinkpack_command_data_t exceeds THINKPACK_MAX_DATA_LEN");
+_Static_assert(sizeof(thinkpack_fragment_data_t) <= THINKPACK_MAX_DATA_LEN,
+               "thinkpack_fragment_data_t exceeds THINKPACK_MAX_DATA_LEN");
 
 /* ------------------------------------------------------------------ */
 /* Checksum                                                            */
@@ -171,5 +173,21 @@ void thinkpack_prepare_sync_pulse(thinkpack_packet_t *p, uint8_t seq, const uint
     memcpy(p->src_mac, src_mac, 6);
     p->data_length = sizeof(thinkpack_sync_pulse_data_t);
     memcpy(p->data, &pulse, sizeof(thinkpack_sync_pulse_data_t));
+    thinkpack_finalize(p);
+}
+
+void thinkpack_prepare_fragment(thinkpack_packet_t *p, uint8_t seq, const uint8_t src_mac[6],
+                                const thinkpack_fragment_data_t *fragment)
+{
+    if (!p || !fragment) {
+        return;
+    }
+
+    memset(p, 0, sizeof(*p));
+    p->msg_type = MSG_FRAGMENT;
+    p->sequence_number = seq;
+    memcpy(p->src_mac, src_mac, 6);
+    p->data_length = sizeof(thinkpack_fragment_data_t);
+    memcpy(p->data, fragment, sizeof(thinkpack_fragment_data_t));
     thinkpack_finalize(p);
 }

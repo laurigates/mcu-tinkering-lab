@@ -34,6 +34,17 @@
 #define THINKPACK_BOX_NAME_LEN 16
 
 /* ------------------------------------------------------------------ */
+/* Fragmentation constants                                             */
+/* ------------------------------------------------------------------ */
+
+/** Data bytes per fragment — leaves room for the fragment header. */
+#define THINKPACK_MAX_FRAGMENT_DATA 192
+/** Maximum fragments per large message (16 × 192 = 3072 bytes). */
+#define THINKPACK_MAX_FRAGMENTS 16
+/** Maximum bytes a reassembled large message may span. */
+#define THINKPACK_MAX_REASSEMBLED (THINKPACK_MAX_FRAGMENTS * THINKPACK_MAX_FRAGMENT_DATA)
+
+/* ------------------------------------------------------------------ */
 /* Message types                                                       */
 /* ------------------------------------------------------------------ */
 
@@ -48,7 +59,8 @@ typedef enum {
     MSG_LLM_REQUEST = 0x08,
     MSG_LLM_RESPONSE = 0x09,
     MSG_SYNC_PULSE = 0x0A,
-    MSG_COLLECTIVE_TRIGGER = 0x0B
+    MSG_COLLECTIVE_TRIGGER = 0x0B,
+    MSG_FRAGMENT = 0x0C /**< Fragment of a large message */
 } thinkpack_msg_type_t;
 
 /* ------------------------------------------------------------------ */
@@ -168,6 +180,23 @@ typedef struct __attribute__((packed)) {
     uint8_t payload[48]; /**< Command-specific data                  */
 } thinkpack_command_data_t;
 
+/**
+ * @brief Payload for MSG_FRAGMENT — one slice of a large message.
+ *
+ * Senders split a large buffer into up to THINKPACK_MAX_FRAGMENTS fragments
+ * and send each as a separate MSG_FRAGMENT packet.  Receivers accumulate
+ * fragments and emit a single THINKPACK_EVENT_LARGE_MESSAGE_RECEIVED event
+ * once all fragments for a (src_mac, msg_id) arrive.
+ */
+typedef struct __attribute__((packed)) {
+    uint8_t msg_id;                            /**< Unique ID per large message (wraps mod 256) */
+    uint8_t fragment_index;                    /**< 0-based index of this fragment              */
+    uint8_t total_fragments;                   /**< Total number of fragments in the message    */
+    uint8_t original_msg_type;                 /**< Logical type wrapped (e.g. MSG_LLM_RESPONSE) */
+    uint8_t data_length;                       /**< Bytes of data[] populated in this fragment  */
+    uint8_t data[THINKPACK_MAX_FRAGMENT_DATA]; /**< Fragment payload bytes     */
+} thinkpack_fragment_data_t;
+
 /* ------------------------------------------------------------------ */
 /* Helper function prototypes                                          */
 /* ------------------------------------------------------------------ */
@@ -252,5 +281,34 @@ void thinkpack_prepare_sync_pulse(thinkpack_packet_t *p, uint8_t seq, const uint
  * @return              32-bit priority value.
  */
 uint32_t thinkpack_priority_for_capabilities(uint16_t capabilities, const uint8_t mac[6]);
+
+/**
+ * @brief Build a MSG_FRAGMENT packet.
+ *
+ * @param p        Packet buffer to populate.
+ * @param seq      Sequence number.
+ * @param src_mac  Sender's 6-byte MAC.
+ * @param fragment Fragment payload to embed.
+ */
+void thinkpack_prepare_fragment(thinkpack_packet_t *p, uint8_t seq, const uint8_t src_mac[6],
+                                const thinkpack_fragment_data_t *fragment);
+
+/**
+ * @brief Compute the number of fragments needed to send @p total_bytes.
+ *
+ * Returns 0 for zero-length input; otherwise ceil(total_bytes /
+ * THINKPACK_MAX_FRAGMENT_DATA), capped at THINKPACK_MAX_FRAGMENTS.
+ *
+ * @param total_bytes  Total number of bytes to fragment.
+ * @return             Number of fragments (0 … THINKPACK_MAX_FRAGMENTS).
+ */
+static inline uint8_t thinkpack_fragment_count(size_t total_bytes)
+{
+    if (total_bytes == 0) {
+        return 0;
+    }
+    size_t count = (total_bytes + THINKPACK_MAX_FRAGMENT_DATA - 1) / THINKPACK_MAX_FRAGMENT_DATA;
+    return (uint8_t)(count > THINKPACK_MAX_FRAGMENTS ? THINKPACK_MAX_FRAGMENTS : count);
+}
 
 #endif /* THINKPACK_PROTOCOL_H */

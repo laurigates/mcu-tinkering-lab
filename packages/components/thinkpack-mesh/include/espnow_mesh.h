@@ -62,14 +62,15 @@ typedef struct {
  * @brief Event types delivered to the application via the event callback.
  */
 typedef enum {
-    THINKPACK_EVENT_PEER_DISCOVERED,  /**< A new peer was seen for the first time */
-    THINKPACK_EVENT_PEER_LOST,        /**< A previously known peer has gone stale */
-    THINKPACK_EVENT_LEADER_ELECTED,   /**< Election resolved; a leader is known */
-    THINKPACK_EVENT_LEADER_LOST,      /**< Leader went silent; re-election triggered */
-    THINKPACK_EVENT_BECAME_LEADER,    /**< This node won the election */
-    THINKPACK_EVENT_BECAME_FOLLOWER,  /**< This node deferred to a higher-priority peer */
-    THINKPACK_EVENT_SYNC_PULSE,       /**< MSG_SYNC_PULSE received from leader */
-    THINKPACK_EVENT_COMMAND_RECEIVED, /**< MSG_COMMAND received */
+    THINKPACK_EVENT_PEER_DISCOVERED,        /**< A new peer was seen for the first time    */
+    THINKPACK_EVENT_PEER_LOST,              /**< A previously known peer has gone stale    */
+    THINKPACK_EVENT_LEADER_ELECTED,         /**< Election resolved; a leader is known      */
+    THINKPACK_EVENT_LEADER_LOST,            /**< Leader went silent; re-election triggered */
+    THINKPACK_EVENT_BECAME_LEADER,          /**< This node won the election                */
+    THINKPACK_EVENT_BECAME_FOLLOWER,        /**< This node deferred to a higher-priority peer */
+    THINKPACK_EVENT_SYNC_PULSE,             /**< MSG_SYNC_PULSE received from leader       */
+    THINKPACK_EVENT_COMMAND_RECEIVED,       /**< MSG_COMMAND received                      */
+    THINKPACK_EVENT_LARGE_MESSAGE_RECEIVED, /**< All fragments reassembled; full payload ready */
 } thinkpack_mesh_event_t;
 
 /**
@@ -79,11 +80,23 @@ typedef enum {
  * THINKPACK_EVENT_COMMAND_RECEIVED. It points into a temporary buffer
  * on the receive task stack and must not be retained after the callback
  * returns.
+ *
+ * For THINKPACK_EVENT_LARGE_MESSAGE_RECEIVED:
+ *   - @p large_data points to the fully reassembled buffer (valid until the
+ *     callback returns; do not retain the pointer).
+ *   - @p large_length is the total number of reassembled bytes.
+ *   - @p original_msg_type is the logical message type that was fragmented
+ *     (e.g. MSG_LLM_RESPONSE).
+ *   - @p packet is NULL.
+ * All three fields are zeroed / NULL for every other event type.
  */
 typedef struct {
-    thinkpack_mesh_event_t type;      /**< Event kind */
-    uint8_t peer_mac[6];              /**< MAC address of the relevant peer */
-    const thinkpack_packet_t *packet; /**< Non-NULL for SYNC_PULSE / COMMAND_RECEIVED */
+    thinkpack_mesh_event_t type;      /**< Event kind                                       */
+    uint8_t peer_mac[6];              /**< MAC address of the relevant peer                 */
+    const thinkpack_packet_t *packet; /**< Non-NULL for SYNC_PULSE / COMMAND_RECEIVED       */
+    const uint8_t *large_data;        /**< Reassembled buffer (LARGE_MESSAGE_RECEIVED only) */
+    size_t large_length;              /**< Byte count of large_data                         */
+    uint8_t original_msg_type;        /**< Wrapped logical type (LARGE_MESSAGE_RECEIVED only) */
 } thinkpack_mesh_event_data_t;
 
 /**
@@ -164,6 +177,28 @@ esp_err_t thinkpack_mesh_set_event_callback(thinkpack_mesh_event_cb_t cb, void *
  * @return ESP_OK on success, or a forwarded ESP-IDF error code.
  */
 esp_err_t thinkpack_mesh_send(const uint8_t *mac, const thinkpack_packet_t *packet);
+
+/**
+ * @brief Send a large buffer, fragmenting if necessary.
+ *
+ * If @p length <= THINKPACK_MAX_DATA_LEN the data is sent as a single packet
+ * with @p msg_type directly (no fragmentation overhead). Otherwise the buffer
+ * is split into MSG_FRAGMENT packets (each wrapping @p msg_type) and sent
+ * sequentially with a 5 ms inter-frame delay to avoid overwhelming the
+ * ESP-NOW driver.
+ *
+ * The receiver collects all fragments and fires a single
+ * THINKPACK_EVENT_LARGE_MESSAGE_RECEIVED event once every fragment arrives.
+ *
+ * @param mac      6-byte destination MAC, or NULL for broadcast.
+ * @param msg_type Logical message type (e.g. MSG_LLM_RESPONSE).
+ * @param data     Buffer to send (must not be NULL).
+ * @param length   Bytes in @p data (max THINKPACK_MAX_REASSEMBLED).
+ * @return ESP_OK on success, ESP_ERR_INVALID_ARG for bad arguments,
+ *         or a forwarded ESP-IDF error on send failure.
+ */
+esp_err_t thinkpack_mesh_send_large(const uint8_t *mac, uint8_t msg_type, const uint8_t *data,
+                                    size_t length);
 
 /* ------------------------------------------------------------------ */
 /* Accessors                                                           */

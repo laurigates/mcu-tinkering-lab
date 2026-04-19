@@ -400,6 +400,107 @@ static void test_payload_structs_fit_in_max_data_len(void)
 }
 
 /* ------------------------------------------------------------------ */
+/* thinkpack_fragment_count                                            */
+/* ------------------------------------------------------------------ */
+
+static void test_fragment_count_zero(void)
+{
+    TEST_ASSERT_EQUAL(0, thinkpack_fragment_count(0));
+}
+
+static void test_fragment_count_one_byte(void)
+{
+    TEST_ASSERT_EQUAL(1, thinkpack_fragment_count(1));
+}
+
+static void test_fragment_count_exactly_one_fragment(void)
+{
+    TEST_ASSERT_EQUAL(1, thinkpack_fragment_count(THINKPACK_MAX_FRAGMENT_DATA));
+}
+
+static void test_fragment_count_one_over_boundary(void)
+{
+    TEST_ASSERT_EQUAL(2, thinkpack_fragment_count(THINKPACK_MAX_FRAGMENT_DATA + 1));
+}
+
+static void test_fragment_count_max_payload(void)
+{
+    TEST_ASSERT_EQUAL(THINKPACK_MAX_FRAGMENTS, thinkpack_fragment_count(THINKPACK_MAX_REASSEMBLED));
+}
+
+/* ------------------------------------------------------------------ */
+/* thinkpack_prepare_fragment                                          */
+/* ------------------------------------------------------------------ */
+
+static void test_prepare_fragment_fields(void)
+{
+    thinkpack_packet_t pkt = {0};
+    thinkpack_fragment_data_t frag = {0};
+    frag.msg_id = 7;
+    frag.fragment_index = 2;
+    frag.total_fragments = 5;
+    frag.original_msg_type = MSG_LLM_RESPONSE;
+    frag.data_length = 3;
+    frag.data[0] = 0xAB;
+    frag.data[1] = 0xCD;
+    frag.data[2] = 0xEF;
+
+    thinkpack_prepare_fragment(&pkt, 0x60, TEST_MAC, &frag);
+
+    TEST_ASSERT_EQUAL(MSG_FRAGMENT, pkt.msg_type);
+    TEST_ASSERT_EQUAL(0x60, pkt.sequence_number);
+    TEST_ASSERT_EQUAL_MEMORY(TEST_MAC, pkt.src_mac, 6);
+    TEST_ASSERT_EQUAL(sizeof(thinkpack_fragment_data_t), pkt.data_length);
+    assert_magic_valid(&pkt);
+    assert_packet_checksum_valid(&pkt);
+}
+
+static void test_prepare_fragment_round_trip(void)
+{
+    thinkpack_packet_t pkt = {0};
+    thinkpack_fragment_data_t frag = {0};
+    frag.msg_id = 42;
+    frag.fragment_index = 0;
+    frag.total_fragments = 3;
+    frag.original_msg_type = MSG_LLM_RESPONSE;
+    frag.data_length = 8;
+    for (int i = 0; i < 8; i++) {
+        frag.data[i] = (uint8_t)(0x10 + i);
+    }
+
+    thinkpack_prepare_fragment(&pkt, 0x01, TEST_MAC, &frag);
+
+    TEST_ASSERT_TRUE(thinkpack_verify_checksum(&pkt));
+
+    thinkpack_fragment_data_t out = {0};
+    memcpy(&out, pkt.data, sizeof(out));
+
+    TEST_ASSERT_EQUAL(42, out.msg_id);
+    TEST_ASSERT_EQUAL(0, out.fragment_index);
+    TEST_ASSERT_EQUAL(3, out.total_fragments);
+    TEST_ASSERT_EQUAL(MSG_LLM_RESPONSE, out.original_msg_type);
+    TEST_ASSERT_EQUAL(8, out.data_length);
+    for (int i = 0; i < 8; i++) {
+        TEST_ASSERT_EQUAL(0x10 + i, out.data[i]);
+    }
+}
+
+static void test_prepare_fragment_null_no_crash(void)
+{
+    thinkpack_fragment_data_t frag = {0};
+    thinkpack_prepare_fragment(NULL, 0, TEST_MAC, &frag);
+
+    thinkpack_packet_t pkt = {0};
+    thinkpack_prepare_fragment(&pkt, 0, TEST_MAC, NULL);
+}
+
+static void test_fragment_data_size_fits_max_data_len(void)
+{
+    /* Runtime counterpart to the _Static_assert in thinkpack_protocol.c */
+    TEST_ASSERT_TRUE((int)sizeof(thinkpack_fragment_data_t) <= THINKPACK_MAX_DATA_LEN);
+}
+
+/* ------------------------------------------------------------------ */
 /* main                                                                */
 /* ------------------------------------------------------------------ */
 
@@ -457,6 +558,19 @@ int main(void)
     RUN_TEST(test_packet_size_within_espnow_limit);
     RUN_TEST(test_packet_size_exact);
     RUN_TEST(test_payload_structs_fit_in_max_data_len);
+
+    /* thinkpack_fragment_count */
+    RUN_TEST(test_fragment_count_zero);
+    RUN_TEST(test_fragment_count_one_byte);
+    RUN_TEST(test_fragment_count_exactly_one_fragment);
+    RUN_TEST(test_fragment_count_one_over_boundary);
+    RUN_TEST(test_fragment_count_max_payload);
+
+    /* thinkpack_prepare_fragment */
+    RUN_TEST(test_prepare_fragment_fields);
+    RUN_TEST(test_prepare_fragment_round_trip);
+    RUN_TEST(test_prepare_fragment_null_no_crash);
+    RUN_TEST(test_fragment_data_size_fits_max_data_len);
 
     int failures = UNITY_END();
     return (failures > 0) ? 1 : 0;
