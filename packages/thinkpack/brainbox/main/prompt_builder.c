@@ -169,3 +169,89 @@ int prompt_builder_collective(const char *trigger, const group_manifest_t *manif
      * have been written (matches snprintf convention). */
     return pos;
 }
+
+/* ------------------------------------------------------------------ */
+/* NFC sound-story prompt (Finderbox STORY scan)                        */
+/* ------------------------------------------------------------------ */
+
+/**
+ * @brief Human-readable difficulty label for the LLM prompt.
+ *
+ * Kept intentionally short — the LLM associates the adjective with the
+ * pacing and density of the generated sequence.
+ */
+static const char *difficulty_label(story_difficulty_t d)
+{
+    switch (d) {
+        case STORY_DIFFICULTY_EASY:
+            return "easy";
+        case STORY_DIFFICULTY_MEDIUM:
+            return "medium";
+        case STORY_DIFFICULTY_HARD:
+            return "hard";
+        default:
+            return "easy";
+    }
+}
+
+story_difficulty_t prompt_builder_difficulty_from_param(uint8_t param)
+{
+    if (param == 0) {
+        return STORY_DIFFICULTY_EASY;
+    }
+    if (param < 10) {
+        return STORY_DIFFICULTY_MEDIUM;
+    }
+    return STORY_DIFFICULTY_HARD;
+}
+
+int prompt_builder_nfc_story(const char *uid_hex, const char *label, story_difficulty_t difficulty,
+                             char *out, size_t out_size)
+{
+    if (!uid_hex || !label || !out || out_size == 0) {
+        return -1;
+    }
+
+    int pos = 0;
+
+    append(out, out_size, &pos,
+           "You are the Brainbox narrator for a ThinkPack NFC sound-story.  "
+           "A Finderbox just scanned a tagged object and is asking for a "
+           "short musical sequence to play back for a toddler aged 2-4.\n"
+           "\n"
+           "TAG UID: %s\n"
+           "TAG LABEL: \"%s\"\n"
+           "DIFFICULTY: %s\n"
+           "\n",
+           uid_hex, label, difficulty_label(difficulty));
+
+    append(out, out_size, &pos,
+           "DIFFICULTY GUIDELINES:\n"
+           "  easy   — 2 to 3 steps, gentle tones (300-800 Hz), generous waits\n"
+           "  medium — 4 to 6 steps, wider range (200-1500 Hz), mix tones + waits\n"
+           "  hard   — 7 to 10 steps, quicker pacing, up to 2000 Hz, may layer clips\n"
+           "\n");
+
+    append(out, out_size, &pos,
+           "SAFETY CONSTRAINTS (mandatory):\n"
+           "  - Max 16 steps total.\n"
+           "  - Tone frequency: 200..2000 Hz (integer Hz).\n"
+           "  - Wait duration: 30..2000 ms.\n"
+           "  - Clip IDs: 0..15.\n"
+           "  - No strobe / rapid alternation patterns.\n"
+           "\n");
+
+    append(out, out_size, &pos,
+           "OUTPUT FORMAT: Respond with ONLY a valid JSON object — no explanation, "
+           "no markdown fences. Schema:\n"
+           "{\n"
+           "  \"sequence\": [\n"
+           "    {\"kind\": \"tone\", \"param\": <freq_hz>},\n"
+           "    {\"kind\": \"wait\", \"param\": <ms>},\n"
+           "    {\"kind\": \"clip\", \"param\": <clip_id>}\n"
+           "  ]\n"
+           "}\n"
+           "Respond ONLY with the JSON object matching this schema.\n");
+
+    return pos;
+}

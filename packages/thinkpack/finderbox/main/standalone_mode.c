@@ -10,6 +10,7 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "group_mode.h"
 #include "led_ring.h"
 #include "piezo.h"
 #include "tag_registry.h"
@@ -127,6 +128,8 @@ static void scan_task(void *arg)
                     memcpy(&s_last_entry, entry, sizeof(s_last_entry));
                     s_have_last = true;
                     dispatch_behavior(entry);
+                    /* Group-mode hook (PR E): SEEK / STORY dispatch over mesh. */
+                    group_mode_on_local_scan(entry);
                 } else {
                     ESP_LOGI(TAG, "Unknown UID — no registry entry");
                 }
@@ -169,4 +172,5 @@ void standalone_mode_replay_last(void)
     ESP_LOGI(TAG, "Replay — behaviour=%u label='%s'", (unsigned)s_last_entry.behavior,
              s_last_entry.label);
     dispatch_behavior(&s_last_entry);
+    group_mode_on_local_scan(&s_last_entry);
 }

@@ -24,6 +24,7 @@
 #include "espnow_mesh.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "group_mode.h"
 #include "led_ring.h"
 #include "nvs_flash.h"
 #include "piezo.h"
@@ -100,6 +101,12 @@ void app_main(void)
     strncpy(cfg.name, "finderbox", THINKPACK_BOX_NAME_LEN - 1);
 
     ESP_ERROR_CHECK(thinkpack_mesh_init(&cfg));
+
+    /* Wire the group-mode event handler before starting the mesh so
+     * LEADER_ELECTED events fire through us from the very first tick. */
+    group_mode_init(&s_registry);
+    ESP_ERROR_CHECK(thinkpack_mesh_set_event_callback(group_mode_on_event, NULL));
+
     ESP_ERROR_CHECK(thinkpack_mesh_start());
 
     ESP_LOGI(TAG, "Mesh started — starting scan task");
