@@ -1,6 +1,6 @@
 # Gamepad Synth
 
-Turn a Bluetooth controller into a musical instrument. An ESP32-S3 reads gamepad input via [Bluepad32](https://github.com/ricardoquesada/bluepad32) and produces audio through an I2S DAC (MAX98357A) in four sound modes.
+Turn a Bluetooth controller into a Korg Monotron-inspired synthesizer. An ESP32-S3 reads gamepad input via [Bluepad32](https://github.com/ricardoquesada/bluepad32) and produces audio through an I2S DAC (MAX98357A) in seven sound modes. Features dual DDS oscillators, resonant SVF filter, LFO modulation, and a 0.5-second delay line.
 
 ## Hardware
 
@@ -40,11 +40,11 @@ The ESP32-S3 only supports **BLE** (no Bluetooth Classic). Compatible controller
 
 ## Sound Modes
 
-Press **View** (Xbox) / **Share** (PS) / **-** (Switch) to cycle through modes. The LED blinks 1-4 times to indicate the current mode.
+Press **View** (Xbox) / **Share** (PS) / **-** (Switch) to cycle through modes. The LED blinks 1-7 times to indicate the current mode.
 
-### Mode 1: Theremin
+### Mode 1: Mono Synth
 
-Continuous pitch control with Monotron-style resonant filter and LFO wah.
+Monotron-style single oscillator with resonant filter and LFO wah.
 
 | Control | Function |
 |---------|----------|
@@ -55,9 +55,34 @@ Continuous pitch control with Monotron-style resonant filter and LFO wah.
 | LT | LFO rate (0.1 - 20 Hz) |
 | RT | LFO depth (0 = off, max = ±2 octaves of cutoff modulation) |
 
-Release left stick to silence. Sweep right stick Y upward while holding right stick X for classic Monotron squelch. Hold RT while varying LT for filter "wah".
+Sweep right stick Y upward while holding RX for classic Monotron squelch. Hold RT while varying LT for filter "wah".
 
-### Mode 2: Scale Player
+### Mode 2: Dual Osc
+
+Two sawtooth oscillators with selectable interval and detune for fat analog sound.
+
+| Control | Function |
+|---------|----------|
+| Left stick Y | Base pitch |
+| A / B / X / Y | Interval: unison / fifth / octave / two octaves |
+| Right stick X | Detune (±50 cents) |
+| Right stick Y | Filter cutoff |
+
+### Mode 3: Delay Synth
+
+Single oscillator with dynamic delay-as-secondary-voice (Monotron Delay behavior).
+
+| Control | Function |
+|---------|----------|
+| Left stick Y | Base pitch |
+| Right stick Y | Delay time (20 - 500 ms) |
+| Right stick X | Feedback (up to 0.9 — Karplus-Strong territory at max) |
+| LT | Filter cutoff down |
+| RT | Filter cutoff up |
+
+Short delay + high feedback produces string-like tones. Long delay + moderate feedback creates cosmic echoes.
+
+### Mode 4: Scale Player
 
 Play a C major scale with buttons and d-pad. Each button maps to a scale degree.
 
@@ -77,7 +102,7 @@ Play a C major scale with buttons and d-pad. Each button maps to a scale degree.
 
 Three octave range: C4, C5 (default), C6.
 
-### Mode 3: Arpeggiator
+### Mode 5: Arpeggiator
 
 Automatically cycles through chord notes. Select a chord, then toggle the arpeggio on.
 
@@ -94,9 +119,9 @@ Automatically cycles through chord notes. Select a chord, then toggle the arpegg
 | LB | Octave down |
 | RB | Octave up |
 
-### Mode 4: Retro SFX
+### Mode 6: Retro SFX
 
-Trigger classic game sound effects with button presses.
+Trigger classic game sound effects with button presses (filter and delay bypassed for raw effects).
 
 | Control | Sound Effect |
 |---------|-------------|
@@ -109,6 +134,19 @@ Trigger classic game sound effects with button presses.
 | D-pad Left | Jump (ascending chirp) |
 | D-pad Right | Warp (sweep up) |
 | RT | Speed multiplier (0.5x-2x) |
+
+### Mode 7: Drone
+
+Two continuously-sustained oscillators with LFO modulation for evolving textures.
+
+| Control | Function |
+|---------|----------|
+| Left stick Y | Oscillator A pitch (sawtooth) |
+| Right stick Y | Oscillator B pitch (triangle) |
+| LT | LFO rate |
+| RT | LFO depth (modulates both pitch and filter cutoff) |
+
+No note-off — the drone plays continuously while in this mode. Dial in a static interval with the sticks, then add slow LFO modulation for a shifting ambient pad.
 
 ## Building
 
