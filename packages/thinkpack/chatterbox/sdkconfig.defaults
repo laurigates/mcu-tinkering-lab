@@ -1,0 +1,46 @@
+# ESP32-S3 target (SuperMini variant — DIO flash / octal PSRAM)
+CONFIG_IDF_TARGET="esp32s3"
+
+# USB-Serial-JTAG for monitoring / flashing
+CONFIG_ESP_CONSOLE_UART_DEFAULT=y
+
+# WiFi — required by ESP-NOW
+CONFIG_ESP_WIFI_ENABLED=y
+CONFIG_ESP_WIFI_ESPNOW_ENABLED=y
+
+# Disable WiFi AMPDU (S3 AP visibility workaround also applies to ESP-NOW peering)
+CONFIG_ESP_WIFI_AMPDU_RX_ENABLED=n
+CONFIG_ESP_WIFI_AMPDU_TX_ENABLED=n
+
+# Chatterbox is ESP-NOW only — no STA credentials persisted
+CONFIG_ESP_WIFI_NVS_ENABLED=n
+
+# Reduce WiFi buffers to make room for audio in RAM
+CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=4
+CONFIG_ESP_WIFI_DYNAMIC_RX_BUFFER_NUM=8
+CONFIG_ESP_WIFI_DYNAMIC_TX_BUFFER_NUM=8
+CONFIG_ESP_WIFI_11KV_SUPPORT=n
+
+# No Bluetooth
+CONFIG_BT_ENABLED=n
+
+# PSRAM — required for the 2 s clip buffer (32000 samples × 2 bytes = 64 KB)
+#
+# SuperMini ESP32-S3 boards ship with octal PSRAM; swap to _MODE_QUAD if you
+# are using a QIO variant.
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_SPEED_80M=y
+CONFIG_SPIRAM_USE_CAPS_ALLOC=y
+
+# Partition table — default single factory app is fine for now
+CONFIG_PARTITION_TABLE_SINGLE_APP=y
+
+# Logging level
+CONFIG_LOG_DEFAULT_LEVEL_INFO=y
+
+# Larger main task stack for WiFi + ESP-NOW + I2S init in a single task
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+
+# Flash size (SuperMini 4 MB)
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
