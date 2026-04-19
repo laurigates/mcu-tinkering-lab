@@ -12,10 +12,12 @@ idf_component_register(
          "display_manager.c"
          "standalone_mode.c"
          "group_mode.c"
+         "ota_handler.c"
     INCLUDE_DIRS "."
     REQUIRES thinkpack-protocol thinkpack-mesh thinkpack-behaviors
+             thinkpack-ota ota-github
              esp_wifi esp_event esp_netif esp_http_client esp_timer
              nvs_flash mdns driver esp_adc json improv-wifi
-             led_strip
+             led_strip app_update
     PRIV_REQUIRES freertos
 )
