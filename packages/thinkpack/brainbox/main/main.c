@@ -115,6 +115,22 @@ void app_main(void)
 
     /* --- WiFi ------------------------------------------------------- */
     ESP_ERROR_CHECK(wifi_manager_init());
+
+    /* Improv WiFi fallback. If nothing is stored in NVS, block on UART0
+     * until the browser provides credentials (up to 10 minutes). When
+     * credentials already exist this returns ESP_OK immediately so we
+     * don't re-prompt on every boot. */
+    if (!creds_ok) {
+        esp_err_t improv_ret =
+            wifi_manager_start_improv_provisioning(10u * 60u * 1000u); /* 10 minute timeout */
+        if (improv_ret != ESP_OK) {
+            ESP_LOGW(TAG,
+                     "Improv provisioning did not complete (%s) — Brainbox will operate in "
+                     "offline mode",
+                     esp_err_to_name(improv_ret));
+        }
+    }
+
     /* Empty strings → wifi_manager loads credentials from NVS / credentials.h. */
     esp_err_t wifi_ret = wifi_manager_connect("", "");
     if (wifi_ret != ESP_OK) {

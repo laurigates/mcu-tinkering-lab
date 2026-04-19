@@ -227,4 +227,28 @@ wifi_state_t wifi_manager_get_state(void);
  */
 const char *wifi_manager_state_to_string(wifi_state_t state);
 
+/**
+ * @brief Run Improv WiFi Serial provisioning over UART0.
+ *
+ * This function is intended to be called from the brainbox main() when
+ * @ref wifi_manager_load_credentials returns ESP_ERR_NVS_NOT_FOUND (no
+ * stored credentials). It installs the UART0 driver, hands bytes to the
+ * Improv parser, and blocks the caller up to @p timeout_ms waiting for
+ * the browser to send SSID + password.
+ *
+ * On success the credentials are saved to NVS and the function returns
+ * ESP_OK. The caller should then invoke @ref wifi_manager_connect("", "")
+ * to actually join the network.
+ *
+ * The call is idempotent in the sense that repeated invocations when
+ * credentials already exist return ESP_OK immediately without starting
+ * the parser — callers do not need to re-check NVS state.
+ *
+ * @param timeout_ms How long to wait for provisioning (0 = wait forever).
+ * @return ESP_OK on successful provisioning or when credentials already
+ *         exist, ESP_ERR_TIMEOUT on timeout, other ESP errors on driver
+ *         failures.
+ */
+esp_err_t wifi_manager_start_improv_provisioning(uint32_t timeout_ms);
+
 #endif  // WIFI_MANAGER_H
