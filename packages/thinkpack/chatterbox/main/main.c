@@ -29,6 +29,7 @@
 #include "group_mode.h"
 #include "nvs_flash.h"
 #include "standalone_mode.h"
+#include "thinkpack_ota.h"
 #include "thinkpack_protocol.h"
 #include "touch_driver.h"
 
@@ -98,7 +99,8 @@ void app_main(void)
     strncpy(cfg.name, "chatterbox", THINKPACK_BOX_NAME_LEN - 1);
 
     ESP_ERROR_CHECK(thinkpack_mesh_init(&cfg));
-    thinkpack_mesh_set_event_callback(group_mode_on_event, NULL);
+    thinkpack_ota_receiver_chain_callback((thinkpack_ota_chained_cb_t)group_mode_on_event, NULL);
+    ESP_ERROR_CHECK(thinkpack_ota_receiver_init(BOX_CHATTERBOX));
     ESP_ERROR_CHECK(thinkpack_mesh_start());
 
     ESP_LOGI(TAG, "mesh started — spawning audio task");
