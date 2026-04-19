@@ -5,6 +5,7 @@ build/
 !.claude/skills/build/
 # Host test binaries (produced by make test in test/ directories)
 test_runner
+*_test_runner
 target/
 *.o
 *.a
