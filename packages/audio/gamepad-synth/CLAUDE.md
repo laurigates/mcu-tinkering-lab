@@ -8,7 +8,7 @@ For monorepo-wide conventions, see the root [CLAUDE.md](../../../CLAUDE.md).
 
 Gamepad Synth turns a BLE Bluetooth controller (Xbox Series X/S, PS5 DualSense, Switch Pro) into a musical instrument. An ESP32-S3 reads gamepad input via Bluepad32 and produces audio through an I2S DAC (MAX98357A) in four sound modes: Theremin, Scale Player, Arpeggiator, and Retro SFX.
 
-**Status**: v0.2.0 — I2S DAC output (Phase A of PRD-008). Square wave synthesis via DDS phase accumulator. Next: Phase B (oscillator waveforms), Phase C (filter + LFO).
+**Status**: v0.3.0 — I2S DAC output with multiple waveforms (Phase A complete). DDS oscillator supports square, sawtooth, triangle, sine, and noise. Next: Phase B (resonant filter), Phase C (LFO).
 
 ## Tech Stack
 
@@ -17,7 +17,7 @@ Gamepad Synth turns a BLE Bluetooth controller (Xbox Series X/S, PS5 DualSense, 
 | MCU | ESP32-S3 (no PSRAM, no WiFi) |
 | Framework | ESP-IDF v5.4+ |
 | Bluetooth | Bluepad32 + BTstack (BLE only) |
-| Audio output | I2S DAC (MAX98357A), 44.1 kHz, 16-bit, square wave via DDS |
+| Audio output | I2S DAC (MAX98357A), 44.1 kHz, 16-bit, multi-waveform DDS |
 | Build | CMake (via ESP-IDF), containerized Docker builds |
 | Task runner | justfile (imports `tools/esp32.just`) |
 
@@ -51,8 +51,8 @@ Port is auto-detected for ESP32-S3. Override with `PORT=/dev/ttyUSB0 just flash`
 
 - **Core 0**: Bluepad32 BTstack event loop — handles all Bluetooth communication. Blocks forever in `uni_esp32_enable()`.
 - **Core 1**: Two tasks:
-  - **Control task** (50 Hz, priority 5): reads gamepad state, updates `synth_state_t` (target frequency + active flag)
-  - **Audio render task** (continuous, priority 10): DDS phase accumulator generates 256-sample blocks, writes to I2S DMA via `i2s_channel_write()` (blocks when DMA buffers are full)
+  - **Control task** (50 Hz, priority 5): reads gamepad state, updates `synth_state_t` (target frequency, waveform, active flag)
+  - **Audio render task** (continuous, priority 10): DDS phase accumulator with selectable waveform (square/saw/tri/sine/noise) generates 256-sample blocks, writes to I2S DMA
 
 ### Key Constants
 
@@ -70,10 +70,10 @@ Port is auto-detected for ESP32-S3. Override with `PORT=/dev/ttyUSB0 just flash`
 
 ### Sound Modes (cycled via View/Share button)
 
-1. **Theremin** — Left stick Y = pitch, left stick X = vibrato depth, right stick Y = vibrato speed, triggers = pitch bend
-2. **Scale Player** — Face buttons + d-pad = C major scale notes, shoulders = octave shift (C4-C6)
-3. **Arpeggiator** — Face buttons = chord type, RT = toggle, left stick Y = speed, left stick X = pattern
-4. **Retro SFX** — Face buttons + d-pad = game sound effects, RT = speed multiplier
+1. **Theremin** (sawtooth) — Left stick Y = pitch, left stick X = vibrato depth, right stick Y = vibrato speed, triggers = pitch bend
+2. **Scale Player** (sine) — Face buttons + d-pad = C major scale notes, shoulders = octave shift (C4-C6)
+3. **Arpeggiator** (square) — Face buttons = chord type, RT = toggle, left stick Y = speed, left stick X = pattern
+4. **Retro SFX** (square) — Face buttons + d-pad = game sound effects, RT = speed multiplier
 
 ### Dependencies
 

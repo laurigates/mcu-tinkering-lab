@@ -51,8 +51,53 @@ static const char *TAG = "gamepad_synth";
 #define BLOCK_SIZE 256
 #define DMA_DESC_NUM 4
 #define AMPLITUDE 8000
+#define SINE_TABLE_SIZE 256
 
 static i2s_chan_handle_t s_tx_chan;
+
+/* ── Waveform Types ──────────────────────────────────────── */
+
+typedef enum {
+    WAVE_SQUARE = 0,
+    WAVE_SAWTOOTH,
+    WAVE_TRIANGLE,
+    WAVE_SINE,
+    WAVE_NOISE,
+    WAVE_COUNT,
+} waveform_t;
+
+/* Pre-computed sine table (256 entries, -AMPLITUDE to +AMPLITUDE) */
+static int16_t s_sine_table[SINE_TABLE_SIZE];
+
+static void init_sine_table(void)
+{
+    for (int i = 0; i < SINE_TABLE_SIZE; i++) {
+        s_sine_table[i] = (int16_t)(AMPLITUDE * sinf(2.0f * 3.14159265f * (float)i /
+                                                      (float)SINE_TABLE_SIZE));
+    }
+}
+
+static inline int16_t osc_sample(float phase, waveform_t wave)
+{
+    switch (wave) {
+        case WAVE_SQUARE:
+            return (phase < 0.5f) ? AMPLITUDE : -AMPLITUDE;
+        case WAVE_SAWTOOTH:
+            return (int16_t)(AMPLITUDE * (2.0f * phase - 1.0f));
+        case WAVE_TRIANGLE: {
+            float tri = (phase < 0.5f) ? (4.0f * phase - 1.0f) : (3.0f - 4.0f * phase);
+            return (int16_t)(AMPLITUDE * tri);
+        }
+        case WAVE_SINE: {
+            int idx = (int)(phase * SINE_TABLE_SIZE) & (SINE_TABLE_SIZE - 1);
+            return s_sine_table[idx];
+        }
+        case WAVE_NOISE:
+            return (int16_t)((esp_random() >> 17) - AMPLITUDE);
+        default:
+            return 0;
+    }
+}
 
 /* ── Bluepad32 Button Constants ──────────────────────────── */
 
@@ -126,6 +171,7 @@ static volatile gamepad_state_t s_gp;
 typedef struct {
     float target_freq;
     bool active;
+    waveform_t waveform;
 } synth_state_t;
 
 static volatile synth_state_t s_synth = {0};
@@ -175,6 +221,11 @@ static void tone_play(uint32_t freq_hz)
         freq_hz = MAX_FREQ;
     s_synth.target_freq = (float)freq_hz;
     s_synth.active = true;
+}
+
+static void synth_set_waveform(waveform_t wave)
+{
+    s_synth.waveform = wave;
 }
 
 static void tone_stop(void)
@@ -692,9 +743,10 @@ static void audio_render_task(void *arg)
             memset(stereo_buf, 0, sizeof(stereo_buf));
             phase = 0.0f;
         } else {
+            waveform_t wave = s_synth.waveform;
             float phase_inc = freq / (float)SAMPLE_RATE;
             for (int i = 0; i < BLOCK_SIZE; i++) {
-                int16_t sample = (phase < 0.5f) ? AMPLITUDE : -AMPLITUDE;
+                int16_t sample = osc_sample(phase, wave);
                 stereo_buf[i * 2] = sample;
                 stereo_buf[i * 2 + 1] = sample;
                 phase += phase_inc;
@@ -737,7 +789,17 @@ static void control_task(void *arg)
             s_mode = (s_mode + 1) % MODE_COUNT;
             s_arp_running = false;
             s_sfx.ticks_left = 0;
-            ESP_LOGI(TAG, "Mode: %d", s_mode);
+
+            /* Set default waveform per mode */
+            static const waveform_t mode_waves[] = {
+                [MODE_THEREMIN] = WAVE_SAWTOOTH,
+                [MODE_SCALE] = WAVE_SINE,
+                [MODE_ARPEGGIO] = WAVE_SQUARE,
+                [MODE_SFX] = WAVE_SQUARE,
+            };
+            synth_set_waveform(mode_waves[s_mode]);
+
+            ESP_LOGI(TAG, "Mode: %d waveform: %d", s_mode, mode_waves[s_mode]);
             led_blink(s_mode + 1, 80, 80);
         }
 
@@ -770,8 +832,10 @@ void app_main(void)
     ESP_LOGI(TAG, "ESP32-S3 Gamepad Synth starting!");
 
     init_nvs();
+    init_sine_table();
     init_i2s();
     init_led();
+    synth_set_waveform(WAVE_SAWTOOTH);
 
     play_startup_jingle();
 
