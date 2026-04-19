@@ -124,5 +124,6 @@ just monitor
 - **Core 0**: Bluepad32 BTstack event loop (Bluetooth handling)
 - **Core 1**: Two tasks:
   - **Control task** (50 Hz): reads gamepad state, updates synth parameters
-  - **Audio render task** (continuous, priority 10): generates 256-sample blocks of square wave via DDS phase accumulator, writes to I2S DMA
+  - **Audio render task** (continuous, priority 10): DDS phase accumulator with selectable waveform, writes 256-sample blocks to I2S DMA
 - **Audio output**: 44.1 kHz, 16-bit stereo (mono duplicated) via MAX98357A I2S DAC
+- **Waveforms**: Square, sawtooth, triangle, sine (256-entry lookup table), noise. Each mode uses a default waveform: Theremin=sawtooth, Scale=sine, Arpeggio=square, SFX=square
