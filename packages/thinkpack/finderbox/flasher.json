@@ -1,0 +1,9 @@
+{
+  "name": "ThinkPack Finderbox",
+  "description": "NFC tag scanner with LED ring and piezo buzzer; standalone chime + group Hot-Cold/Story-Sounds behaviours over ESP-NOW",
+  "chipFamily": "ESP32-S3",
+  "board": "ESP32-S3 SuperMini",
+  "appBinaryName": "thinkpack-finderbox.bin",
+  "category": "thinkpack",
+  "flashMode": "usb"
+}
