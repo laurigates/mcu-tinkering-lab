@@ -3,6 +3,7 @@ idf_component_register(
         "main.c"
         "tag_registry.c"
         "standalone_mode.c"
+        "group_mode.c"
         "piezo.c"
         "led_ring.c"
     INCLUDE_DIRS "."
