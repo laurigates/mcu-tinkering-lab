@@ -1,0 +1,22 @@
+idf_component_register(
+    SRCS
+        "main.c"
+        "tag_registry.c"
+        "standalone_mode.c"
+        "piezo.c"
+        "led_ring.c"
+    INCLUDE_DIRS "."
+    REQUIRES
+        driver
+        esp_timer
+        nvs_flash
+        thinkpack-protocol
+        thinkpack-mesh
+        thinkpack-behaviors
+        thinkpack-nfc
+        thinkpack-rc522
+    PRIV_REQUIRES
+        led_strip
+        freertos
+        esp_system
+)
