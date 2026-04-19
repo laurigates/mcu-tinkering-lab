@@ -44,7 +44,7 @@ Press **View** (Xbox) / **Share** (PS) / **-** (Switch) to cycle through modes. 
 
 ### Mode 1: Theremin
 
-Continuous pitch control with Monotron-style resonant filter shaping.
+Continuous pitch control with Monotron-style resonant filter and LFO wah.
 
 | Control | Function |
 |---------|----------|
@@ -52,10 +52,10 @@ Continuous pitch control with Monotron-style resonant filter shaping.
 | Left stick X | Vibrato depth (fixed 5 Hz speed) |
 | Right stick Y | Filter cutoff (40 Hz to 18 kHz, logarithmic) |
 | Right stick X | Filter resonance (self-oscillation at max) |
-| LT | Pitch bend down |
-| RT | Pitch bend up |
+| LT | LFO rate (0.1 - 20 Hz) |
+| RT | LFO depth (0 = off, max = ±2 octaves of cutoff modulation) |
 
-Release both sticks to silence. Sweep right stick Y upward while holding right stick X for a classic Monotron "wah" squelch.
+Release left stick to silence. Sweep right stick Y upward while holding right stick X for classic Monotron squelch. Hold RT while varying LT for filter "wah".
 
 ### Mode 2: Scale Player
 
@@ -129,3 +129,4 @@ just monitor
 - **Audio output**: 44.1 kHz, 16-bit stereo (mono duplicated) via MAX98357A I2S DAC
 - **Waveforms**: Square, sawtooth, triangle, sine (256-entry lookup table), noise. Each mode uses a default waveform: Theremin=sawtooth, Scale=sine, Arpeggio=square, SFX=square
 - **Filter**: State-variable low-pass with cutoff (40 Hz - 18 kHz) and resonance (Q 0.5 - 6.0). Chamberlin topology, coefficients recomputed once per 256-sample block. Self-oscillates at high resonance
+- **LFO**: Block-rate triangle LFO (0.1 - 20 Hz) modulating filter cutoff or oscillator pitch. Up to ±2 octaves cutoff mod or ±1 octave pitch mod at full depth
