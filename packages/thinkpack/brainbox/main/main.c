@@ -22,6 +22,7 @@
 #include "sdkconfig.h"
 #include "standalone_mode.h"
 #include "thinkpack_ai.h"
+#include "thinkpack_power.h"
 #include "thinkpack_protocol.h"
 #include "wifi_manager.h"
 
@@ -143,6 +144,13 @@ void app_main(void)
     /* Initialised AFTER mesh so the ESP-NOW broadcaster has peers to
      * push to. Failure is non-fatal — Brainbox still operates. */
     (void)ota_handler_init();
+
+    /* --- Power monitor ---------------------------------------------- */
+    /* After mesh/OTA so the classifier can eventually feed a
+     * thinkpack_mesh_set_beacon_interval_ms() hook without race.
+     * GPIO1/ADC1_CH0 by default: verify against WIRING.md. */
+    (void)thinkpack_power_init(
+        &(power_config_t){.adc_gpio = 1, .tick_interval_ms = 5000, .divider_ratio_x10 = 20});
 
     /* --- AI backend ------------------------------------------------- */
     const thinkpack_ai_backend_t *ai = thinkpack_ai_get_current();

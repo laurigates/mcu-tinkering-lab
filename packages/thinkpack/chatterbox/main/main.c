@@ -30,6 +30,7 @@
 #include "nvs_flash.h"
 #include "standalone_mode.h"
 #include "thinkpack_ota.h"
+#include "thinkpack_power.h"
 #include "thinkpack_protocol.h"
 #include "touch_driver.h"
 
@@ -102,6 +103,11 @@ void app_main(void)
     thinkpack_ota_receiver_chain_callback((thinkpack_ota_chained_cb_t)group_mode_on_event, NULL);
     ESP_ERROR_CHECK(thinkpack_ota_receiver_init(BOX_CHATTERBOX));
     ESP_ERROR_CHECK(thinkpack_mesh_start());
+
+    /* Power monitor — after mesh. GPIO1/ADC1_CH0 by default: verify against
+     * WIRING.md before committing to a real board. */
+    (void)thinkpack_power_init(
+        &(power_config_t){.adc_gpio = 1, .tick_interval_ms = 5000, .divider_ratio_x10 = 20});
 
     ESP_LOGI(TAG, "mesh started — spawning audio task");
     xTaskCreate(audio_task, "chat_audio", 4096, NULL, 5, NULL);

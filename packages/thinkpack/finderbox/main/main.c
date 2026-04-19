@@ -32,6 +32,7 @@
 #include "tag_registry.h"
 #include "thinkpack_nfc.h"
 #include "thinkpack_ota.h"
+#include "thinkpack_power.h"
 #include "thinkpack_protocol.h"
 #include "thinkpack_rc522.h"
 
@@ -112,6 +113,11 @@ void app_main(void)
     ESP_ERROR_CHECK(thinkpack_ota_receiver_init(BOX_FINDERBOX));
 
     ESP_ERROR_CHECK(thinkpack_mesh_start());
+
+    /* Power monitor — after mesh. GPIO1/ADC1_CH0 by default: verify against
+     * WIRING.md before committing to a real board. */
+    (void)thinkpack_power_init(
+        &(power_config_t){.adc_gpio = 1, .tick_interval_ms = 5000, .divider_ratio_x10 = 20});
 
     ESP_LOGI(TAG, "Mesh started — starting scan task");
 

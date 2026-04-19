@@ -17,6 +17,7 @@ idf_component_register(
         thinkpack-nfc
         thinkpack-rc522
         thinkpack-ota
+        thinkpack-power
     PRIV_REQUIRES
         led_strip
         freertos
