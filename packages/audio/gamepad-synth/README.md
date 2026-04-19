@@ -44,17 +44,18 @@ Press **View** (Xbox) / **Share** (PS) / **-** (Switch) to cycle through modes. 
 
 ### Mode 1: Theremin
 
-Continuous pitch control with the analog sticks.
+Continuous pitch control with Monotron-style resonant filter shaping.
 
 | Control | Function |
 |---------|----------|
 | Left stick Y | Base pitch (100-2000 Hz) |
-| Left stick X | Vibrato depth |
-| Right stick Y | Vibrato speed |
+| Left stick X | Vibrato depth (fixed 5 Hz speed) |
+| Right stick Y | Filter cutoff (40 Hz to 18 kHz, logarithmic) |
+| Right stick X | Filter resonance (self-oscillation at max) |
 | LT | Pitch bend down |
 | RT | Pitch bend up |
 
-Release both sticks to silence.
+Release both sticks to silence. Sweep right stick Y upward while holding right stick X for a classic Monotron "wah" squelch.
 
 ### Mode 2: Scale Player
 
@@ -127,3 +128,4 @@ just monitor
   - **Audio render task** (continuous, priority 10): DDS phase accumulator with selectable waveform, writes 256-sample blocks to I2S DMA
 - **Audio output**: 44.1 kHz, 16-bit stereo (mono duplicated) via MAX98357A I2S DAC
 - **Waveforms**: Square, sawtooth, triangle, sine (256-entry lookup table), noise. Each mode uses a default waveform: Theremin=sawtooth, Scale=sine, Arpeggio=square, SFX=square
+- **Filter**: State-variable low-pass with cutoff (40 Hz - 18 kHz) and resonance (Q 0.5 - 6.0). Chamberlin topology, coefficients recomputed once per 256-sample block. Self-oscillates at high resonance
