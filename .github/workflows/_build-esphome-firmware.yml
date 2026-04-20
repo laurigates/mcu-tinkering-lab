@@ -103,7 +103,7 @@ jobs:
           cp "${FIRMWARE_DIR}/firmware.md5" "${{ inputs.device_name }}.md5"
 
       - name: Upload firmware to release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ inputs.release_tag }}
           files: |
