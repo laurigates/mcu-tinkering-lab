@@ -1,0 +1,12 @@
+[project]
+name = "mcu-tinkering-lab-schematics"
+version = "0.1.0"
+description = "Text-defined circuit schematics for MCU Tinkering Lab projects"
+requires-python = ">=3.11"
+dependencies = [
+    "schemdraw>=0.22",
+    "cairosvg>=2.7",
+]
+
+[tool.uv]
+package = false

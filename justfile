@@ -25,6 +25,7 @@ mod thinkpack-boombox 'packages/thinkpack/boombox'
 mod thinkpack-brainbox 'packages/thinkpack/brainbox'
 mod thinkpack-chatterbox 'packages/thinkpack/chatterbox'
 mod thinkpack-finderbox 'packages/thinkpack/finderbox'
+mod schematics 'docs/schematics'
 
 # Auto-detect ESP32-S3 USB-Serial-JTAG by Espressif VID; override with S3_PORT env var
 s3_port := env("S3_PORT", `tools/detect-esp32s3-port.sh --quiet 2>/dev/null || true`)
