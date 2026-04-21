@@ -1,9 +1,9 @@
 {
-  "format_version": "3.2.0",
+  "format_version": "3.3.0",
   "created_at": "2026-04-05T00:00:00Z",
-  "updated_at": "2026-04-05T11:46:06Z",
+  "updated_at": "2026-04-20T00:00:00Z",
   "created_by": {
-    "blueprint_plugin": "3.2.0"
+    "blueprint_plugin": "3.3.0"
   },
   "project": {
     "name": "mcu-tinkering-lab",
@@ -131,5 +131,17 @@
       "stats": {},
       "context": {}
     }
-  }
+  },
+  "upgrade_history": [
+    {
+      "from": "3.2.0",
+      "to": "3.3.0",
+      "date": "2026-04-20T00:00:00Z",
+      "changes": [
+        "Relocated manifest from docs/ to docs/blueprint/ (canonical v3.3 path)",
+        "Bumped format_version to 3.3.0",
+        "Classified workspace role as standalone (no ancestor or descendant blueprints found)"
+      ]
+    }
+  ]
 }
