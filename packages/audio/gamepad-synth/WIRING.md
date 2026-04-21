@@ -22,6 +22,10 @@ All three I2S pins are plain GPIOs on the ESP32-S3 (no special strapping roles),
 
 ## Wiring Diagram
 
+![Gamepad Synth schematic](../../../docs/schematics/images/gamepad_synth.png)
+
+Source: [`docs/schematics/circuits/gamepad_synth.py`](../../../docs/schematics/circuits/gamepad_synth.py).
+
 ```
 ESP32-S3                MAX98357A
  ________               ________

@@ -1,0 +1,25 @@
+project_dir := "docs/schematics"
+
+default:
+    @just --list
+
+# Install Python dependencies into .venv via uv
+[group: "setup"]
+sync:
+    uv sync
+
+# Render every circuit in circuits/ to SVG + PNG in images/
+[group: "build"]
+render: sync
+    uv run python render.py
+
+# Render a single circuit by name (without .py), e.g. `just schematics::render-one gamepad_synth`
+[group: "build"]
+render-one name: sync
+    uv run python circuits/{{name}}.py images/{{name}}.svg
+    uv run python -c "import cairosvg; cairosvg.svg2png(url='images/{{name}}.svg', write_to='images/{{name}}.png', output_width=1400)"
+
+# Delete generated images
+[group: "clean"]
+clean:
+    rm -f images/*.svg images/*.png
