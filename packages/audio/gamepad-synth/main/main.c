@@ -72,8 +72,8 @@ static int16_t s_sine_table[SINE_TABLE_SIZE];
 static void init_sine_table(void)
 {
     for (int i = 0; i < SINE_TABLE_SIZE; i++) {
-        s_sine_table[i] = (int16_t)(AMPLITUDE * sinf(2.0f * 3.14159265f * (float)i /
-                                                      (float)SINE_TABLE_SIZE));
+        s_sine_table[i] =
+            (int16_t)(AMPLITUDE * sinf(2.0f * 3.14159265f * (float)i / (float)SINE_TABLE_SIZE));
     }
 }
 
@@ -271,13 +271,13 @@ static inline int16_t delay_process(int16_t in, int delay_samples, float feedbac
 /* ── Sound Modes ─────────────────────────────────────────── */
 
 typedef enum {
-    MODE_MONO = 0,   /* Monotron-style single osc + filter + LFO */
-    MODE_DUAL_OSC,   /* Two oscillators with selectable interval + detune */
+    MODE_MONO = 0,    /* Monotron-style single osc + filter + LFO */
+    MODE_DUAL_OSC,    /* Two oscillators with selectable interval + detune */
     MODE_DELAY_SYNTH, /* Single osc + dynamic delay (RY=time, RX=feedback) */
     MODE_SCALE,
     MODE_ARPEGGIO,
     MODE_SFX,
-    MODE_DRONE,      /* Two sustained oscillators with LFO modulation */
+    MODE_DRONE, /* Two sustained oscillators with LFO modulation */
     MODE_COUNT,
 } sound_mode_t;
 
@@ -913,8 +913,8 @@ static void init_i2s(void)
             },
     };
     ESP_ERROR_CHECK(i2s_channel_init_std_mode(s_tx_chan, &std_cfg));
-    ESP_LOGI(TAG, "I2S initialized: BCLK=GPIO%d WS=GPIO%d DOUT=GPIO%d @ %d Hz",
-             I2S_BCLK_PIN, I2S_WS_PIN, I2S_DOUT_PIN, SAMPLE_RATE);
+    ESP_LOGI(TAG, "I2S initialized: BCLK=GPIO%d WS=GPIO%d DOUT=GPIO%d @ %d Hz", I2S_BCLK_PIN,
+             I2S_WS_PIN, I2S_DOUT_PIN, SAMPLE_RATE);
 }
 
 static void init_led(void)
@@ -1118,12 +1118,9 @@ static void control_task(void *arg)
 
             /* Set default waveform per mode */
             static const waveform_t mode_waves[] = {
-                [MODE_MONO] = WAVE_SAWTOOTH,
-                [MODE_DUAL_OSC] = WAVE_SAWTOOTH,
-                [MODE_DELAY_SYNTH] = WAVE_SAWTOOTH,
-                [MODE_SCALE] = WAVE_SINE,
-                [MODE_ARPEGGIO] = WAVE_SQUARE,
-                [MODE_SFX] = WAVE_SQUARE,
+                [MODE_MONO] = WAVE_SAWTOOTH,        [MODE_DUAL_OSC] = WAVE_SAWTOOTH,
+                [MODE_DELAY_SYNTH] = WAVE_SAWTOOTH, [MODE_SCALE] = WAVE_SINE,
+                [MODE_ARPEGGIO] = WAVE_SQUARE,      [MODE_SFX] = WAVE_SQUARE,
                 [MODE_DRONE] = WAVE_SAWTOOTH,
             };
             synth_set_waveform(mode_waves[s_mode]);
