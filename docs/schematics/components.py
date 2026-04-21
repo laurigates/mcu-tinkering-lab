@@ -48,21 +48,26 @@ def esp32_s3_zero() -> elm.Ic:
 
 
 def max98357a() -> elm.Ic:
-    """MAX98357A mono I2S Class-D amplifier breakout (Adafruit #3006 pinout)."""
+    """MAX98357A mono I2S Class-D amplifier breakout (Adafruit #3006 pinout).
+
+    I2S pins are placed on the *left* side so they face the MCU when the amp
+    is drawn to the right of it — wires don't have to cross the chip body.
+    """
     return elm.Ic(
         pins=[
-            # Left (bottom → top)
-            elm.IcPin(name="GAIN", side="L"),
-            elm.IcPin(name="SD", side="L"),
-            elm.IcPin(name="GND", side="L"),
-            elm.IcPin(name="VIN", side="L"),
-            # Right (bottom → top) — matches ESP32-S3 GPIO7/6/5 ordering
-            elm.IcPin(name="DIN", side="R"),
-            elm.IcPin(name="LRC", side="R"),
-            elm.IcPin(name="BCLK", side="R"),
-            # Bottom — speaker outputs
-            elm.IcPin(name="OUT-", side="B", pin="-"),
-            elm.IcPin(name="OUT+", side="B", pin="+"),
+            # Left (bottom → top) — I2S bus, faces MCU
+            elm.IcPin(name="DIN", side="L"),
+            elm.IcPin(name="LRC", side="L"),
+            elm.IcPin(name="BCLK", side="L"),
+            # Right (bottom → top) — power + config, faces outward
+            elm.IcPin(name="GAIN", side="R"),
+            elm.IcPin(name="SD", side="R"),
+            elm.IcPin(name="GND", side="R"),
+            elm.IcPin(name="VIN", side="R"),
+            # Bottom — speaker outputs. Slightly inset from the corners so
+            # their labels don't collide with DIN / GAIN on the adjacent sides.
+            elm.IcPin(name="OUT-", side="B", pin="-", pos=0.15),
+            elm.IcPin(name="OUT+", side="B", pin="+", pos=0.85),
         ],
-        size=(3, 5),
+        size=(4, 5),
     )
