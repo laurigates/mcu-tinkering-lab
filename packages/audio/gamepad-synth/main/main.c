@@ -36,6 +36,8 @@
 #include "uni_hid_device.h"
 #include "uni_platform.h"
 
+#include "piezo_voice.h"
+
 static const char *TAG = "gamepad_synth";
 
 /* ── Pin Definitions ─────────────────────────────────────── */
@@ -44,6 +46,13 @@ static const char *TAG = "gamepad_synth";
 #define I2S_WS_PIN GPIO_NUM_6
 #define I2S_DOUT_PIN GPIO_NUM_7
 #define LED_PIN GPIO_NUM_2
+
+#define PIEZO_A_PIN GPIO_NUM_8
+#define PIEZO_B_PIN GPIO_NUM_9
+
+/* Detune between the two piezos in Drone mode. Fixed ratio so beating rate
+ * scales with pitch: ~4 Hz beat at 200 Hz → ~40 Hz warble at 2 kHz. */
+#define PIEZO_DETUNE_RATIO 1.02f
 
 /* ── I2S / Audio Configuration ───────────────────────────── */
 
@@ -571,7 +580,10 @@ static void mode_drone(const gamepad_state_t *gp)
     synth_set_filter(true, 3000.0f, 1.5f);
 
     tone_play((uint32_t)pitch_a);
-    synth_set_osc_b(true, pitch_b, WAVE_TRIANGLE);
+    /* Route osc B onto the two piezos with a fixed detune so the beating
+     * happens acoustically in air rather than inside the DAC mix. */
+    piezo_voice_note_on(PIEZO_A, pitch_b);
+    piezo_voice_note_on(PIEZO_B, pitch_b * PIEZO_DETUNE_RATIO);
     led_on();
 }
 
@@ -1101,6 +1113,8 @@ static void control_task(void *arg)
 
         if (!gp.connected) {
             tone_stop();
+            piezo_voice_note_off(PIEZO_A);
+            piezo_voice_note_off(PIEZO_B);
             led_off();
             vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(CONTROL_TASK_PERIOD_MS));
             continue;
@@ -1112,6 +1126,8 @@ static void control_task(void *arg)
 
         if (misc_pressed & MISC_BACK) {
             tone_stop();
+            piezo_voice_note_off(PIEZO_A);
+            piezo_voice_note_off(PIEZO_B);
             s_mode = (s_mode + 1) % MODE_COUNT;
             s_arp_running = false;
             s_sfx.ticks_left = 0;
@@ -1221,6 +1237,8 @@ void app_main(void)
     init_sine_table();
     init_i2s();
     init_led();
+    piezo_voice_init(PIEZO_A, PIEZO_A_PIN);
+    piezo_voice_init(PIEZO_B, PIEZO_B_PIN);
     synth_set_waveform(WAVE_SAWTOOTH);
     synth_set_filter(true, 6000.0f, 1.5f);
     synth_set_lfo(LFO_TARGET_NONE, 5.0f, 0.0f);

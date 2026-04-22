@@ -17,8 +17,12 @@ The firmware runs at 240 MHz on one core (audio) while Bluepad32 uses the other 
 | 6 | I2S LRCLK (WS) | Output | MAX98357A LRC |
 | 7 | I2S DOUT | Output | MAX98357A DIN |
 | 2 | Status LED | Output | LED anode (via 220-330 Ω resistor) |
+| 8 | Piezo A (LEDC) | Output | Piezo disc (+) — used in Drone mode |
+| 9 | Piezo B (LEDC) | Output | Piezo disc (+) — used in Drone mode |
 
 All three I2S pins are plain GPIOs on the ESP32-S3 (no special strapping roles), so any other trio works too — just update `I2S_BCLK_PIN` / `I2S_WS_PIN` / `I2S_DOUT_PIN` in `main/main.c`.
+
+The piezos are optional accent voices that only sound in Drone mode. Skip them entirely if you just want the DAC synth.
 
 ## Wiring Diagram
 
@@ -66,6 +70,7 @@ Optional:
 
 - 100 µF electrolytic between MAX98357A VIN and GND if you hear USB-related whine or the amp resets under peak load
 - 4.7 kΩ pull-up on the MAX98357A `SD` pin if you want to use the left-channel-only mode (tying SD directly to VIN gives mono sum; leaving it floating also gives mono sum on most breakouts)
+- 2× piezo disc transducers (any 27-35 mm disc) — one leg to GPIO8/9, other leg to GND. Drive is GPIO-direct via LEDC square wave; piezos are high-impedance capacitive, so no transistor needed for a bench test. Add a small MOSFET half-bridge later if you want more volume.
 
 ## MAX98357A Gain Selection
 
@@ -119,4 +124,4 @@ Oscillator A ──┐
 Oscillator B ──┘
 ```
 
-All DSP runs at 44.1 kHz, 16-bit, mono (duplicated to both I2S slots to satisfy the MAX98357A's stereo I2S expectation).
+All DSP runs at 44.1 kHz, 16-bit, mono. The I2S bus carries two slots (L/R) per frame; we write the same sample to both, and the MAX98357A sums them to its mono speaker output.
