@@ -2,6 +2,10 @@
 
 Single-board wiring for the consolidated robocar. All pin assignments are authoritative in [`main/pin_config.h`](main/pin_config.h); this document mirrors them for human reference.
 
+![Schematic](../../../docs/schematics/images/robocar_unified.png)
+
+Schematic source: [`docs/schematics/circuits/robocar_unified.py`](../../../docs/schematics/circuits/robocar_unified.py). Re-render with `just schematics::render-one robocar_unified` after pin changes.
+
 **All components must share a common ground (GND).**
 
 ## GPIO assignments (XIAO ESP32-S3 Sense)

@@ -47,6 +47,11 @@ def main() -> int:
         svg_path = IMAGES / f"{py.stem}.svg"
         png_path = IMAGES / f"{py.stem}.png"
         mod.draw().save(str(svg_path))
+        # schemdraw writes SVG without a trailing newline, which trips the
+        # repo's end-of-file-fixer pre-commit hook. Normalize here.
+        svg_text = svg_path.read_text()
+        if not svg_text.endswith("\n"):
+            svg_path.write_text(svg_text + "\n")
         cairosvg.svg2png(
             url=str(svg_path), write_to=str(png_path), output_width=PNG_WIDTH
         )
