@@ -45,3 +45,16 @@ Later files override earlier ones. Each overlay should only contain the settings
 ## Stack Sizing
 
 The default main task stack (`CONFIG_ESP_MAIN_TASK_STACK_SIZE=3584`) is often too small when initializing WiFi + BLE + USB. Set 8192 or higher for projects that initialize multiple subsystems in `app_main()`. Use `uxTaskGetStackHighWaterMark()` to verify headroom at runtime.
+
+## Bluepad32 Requires UART as Primary Console
+
+Bluepad32 v3.10.x (and its vendored btstack) unconditionally reference UART-console symbols in `uni_console.c` and `btstack_stdio_esp32.c` (`CONFIG_ESP_CONSOLE_UART_BAUDRATE`, `esp_console_dev_uart_config_t`, `esp_console_new_repl_uart`). ESP-IDF 5.4 only defines these when `CONFIG_ESP_CONSOLE_UART_DEFAULT` or `CONFIG_ESP_CONSOLE_UART_CUSTOM` is set, so `CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y` as primary breaks the build.
+
+Keep UART as primary and select USB_SERIAL_JTAG as the secondary — ESP-IDF duplicates log output to both channels, so USB-C logging still works:
+
+```
+CONFIG_ESP_CONSOLE_UART_DEFAULT=y
+CONFIG_ESP_CONSOLE_SECONDARY_USB_SERIAL_JTAG=y
+```
+
+Upstream issue: https://github.com/ricardoquesada/bluepad32/issues/209

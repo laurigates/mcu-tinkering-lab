@@ -17,8 +17,12 @@ CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
 # --- Flash ---
 CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
 
-# --- Console (USB-Serial-JTAG for logging) ---
-CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+# --- Console ---
+# UART is the primary console so the vendored Bluepad32/btstack code
+# (which references CONFIG_ESP_CONSOLE_UART_BAUDRATE unconditionally) compiles.
+# USB-Serial-JTAG is kept as the secondary output so USB-C logging still works.
+CONFIG_ESP_CONSOLE_UART_DEFAULT=y
+CONFIG_ESP_CONSOLE_SECONDARY_USB_SERIAL_JTAG=y
 
 # --- Compiler (suppress GCC 13+ warnings in vendored btstack) ---
 CONFIG_COMPILER_DISABLE_GCC13_WARNINGS=y
