@@ -96,3 +96,4 @@ ESP32-S3 projects with native USB-Serial-JTAG override `monitor` with their own 
 - Define `container_cmd`, `require-port`, `_monitor_baud`, or `_serial-monitor` locally — they come from the import
 - Define `build`, `clean`, `menuconfig`, or `shell` with inline container commands — use `esp32-idf.just` shared recipes
 - Copy the pyserial monitor block inline — use `_serial-monitor` instead
+- Use absolute symlinks for vendored dependencies (`external/<name>`) — absolute targets like `/Users/...` don't resolve inside the container's `/workspace` bind mount. Use relative symlinks that stay under the repo root, e.g. `ln -sfn ../../../input-gaming/xbox-switch-bridge/external/bluepad32 external/bluepad32`.
