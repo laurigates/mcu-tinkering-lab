@@ -251,6 +251,27 @@ static inline float lfo_triangle(float phase)
 static int16_t s_delay_buf[DELAY_MAX_SAMPLES];
 static int s_delay_write_idx = 0;
 
+/* ── Confirmation Blip ───────────────────────────────────── */
+
+/* Short sine ping mixed over the main voice to confirm silent state changes
+ * (octave shifts, chord/interval picks, mode toggles). Control task writes;
+ * audio task consumes. Ducking keeps the blip audible when a voice is active.
+ */
+#define BLIP_DURATION_MS 70
+#define BLIP_FREQ_NEUTRAL 880.0f /* A5 — generic state toggle */
+#define BLIP_FREQ_UP 1320.0f     /* E6 — "up" direction */
+#define BLIP_FREQ_DOWN 660.0f    /* E5 — "down" direction */
+#define BLIP_MAIN_DUCK_SHIFT 2   /* >> 2 = -12 dB on the underlying voice */
+
+static volatile int s_blip_samples_remaining = 0;
+static volatile float s_blip_freq_hz = BLIP_FREQ_NEUTRAL;
+
+static void synth_blip(float freq_hz)
+{
+    s_blip_freq_hz = freq_hz;
+    s_blip_samples_remaining = (SAMPLE_RATE * BLIP_DURATION_MS) / 1000;
+}
+
 static inline int16_t clip_i16(float x)
 {
     if (x > 32767.0f)
@@ -490,14 +511,22 @@ static void mode_dual_osc(const gamepad_state_t *gp)
     uint16_t pressed = gp->buttons & ~prev_buttons;
     prev_buttons = gp->buttons;
 
-    if (pressed & BTN_A)
+    if (pressed & BTN_A) {
         s_interval_semitones = 0; /* unison */
-    if (pressed & BTN_B)
+        synth_blip(BLIP_FREQ_DOWN);
+    }
+    if (pressed & BTN_B) {
         s_interval_semitones = 7; /* perfect fifth */
-    if (pressed & BTN_X)
+        synth_blip(BLIP_FREQ_NEUTRAL);
+    }
+    if (pressed & BTN_X) {
         s_interval_semitones = 12; /* octave */
-    if (pressed & BTN_Y)
+        synth_blip(BLIP_FREQ_UP);
+    }
+    if (pressed & BTN_Y) {
         s_interval_semitones = 24; /* two octaves */
+        synth_blip(BLIP_FREQ_UP * 1.5f);
+    }
 
     int16_t ly = gp->axis_y;
     int16_t rx = gp->axis_rx;
@@ -596,10 +625,14 @@ static void mode_scale(const gamepad_state_t *gp)
     uint16_t pressed = gp->buttons & ~prev_buttons;
     prev_buttons = gp->buttons;
 
-    if (pressed & BTN_SHOULDER_L && s_octave > 0)
+    if (pressed & BTN_SHOULDER_L && s_octave > 0) {
         s_octave--;
-    if (pressed & BTN_SHOULDER_R && s_octave < 2)
+        synth_blip(BLIP_FREQ_DOWN);
+    }
+    if (pressed & BTN_SHOULDER_R && s_octave < 2) {
         s_octave++;
+        synth_blip(BLIP_FREQ_UP);
+    }
 
     /* Map buttons to scale degrees */
     int note_idx = -1;
@@ -646,20 +679,32 @@ static void mode_arpeggio(const gamepad_state_t *gp)
     uint16_t pressed = gp->buttons & ~prev_buttons;
     prev_buttons = gp->buttons;
 
-    if (pressed & BTN_A)
+    if (pressed & BTN_A) {
         s_arp_chord = CHORD_MAJOR; /* A = major */
-    if (pressed & BTN_B)
+        synth_blip(BLIP_FREQ_UP);
+    }
+    if (pressed & BTN_B) {
         s_arp_chord = CHORD_MINOR; /* B = minor */
-    if (pressed & BTN_X)
+        synth_blip(BLIP_FREQ_DOWN);
+    }
+    if (pressed & BTN_X) {
         s_arp_chord = CHORD_7TH; /* X = 7th */
-    if (pressed & BTN_Y)
+        synth_blip(BLIP_FREQ_NEUTRAL);
+    }
+    if (pressed & BTN_Y) {
         s_arp_chord = CHORD_DIM; /* Y = dim */
+        synth_blip(BLIP_FREQ_DOWN * 0.75f);
+    }
 
     /* LB/RB shift octave */
-    if (pressed & BTN_SHOULDER_L && s_octave > 0)
+    if (pressed & BTN_SHOULDER_L && s_octave > 0) {
         s_octave--;
-    if (pressed & BTN_SHOULDER_R && s_octave < 2)
+        synth_blip(BLIP_FREQ_DOWN);
+    }
+    if (pressed & BTN_SHOULDER_R && s_octave < 2) {
         s_octave++;
+        synth_blip(BLIP_FREQ_UP);
+    }
 
     /* D-pad transpose root note */
     if (gp->dpad & DPAD_UP) {
@@ -669,6 +714,7 @@ static void mode_arpeggio(const gamepad_state_t *gp)
             s_arp_root++;
             if (s_arp_root > 11)
                 s_arp_root = 11;
+            synth_blip(BLIP_FREQ_UP);
             last_up = now;
         }
     }
@@ -679,6 +725,7 @@ static void mode_arpeggio(const gamepad_state_t *gp)
             s_arp_root--;
             if (s_arp_root < 0)
                 s_arp_root = 0;
+            synth_blip(BLIP_FREQ_DOWN);
             last_down = now;
         }
     }
@@ -690,6 +737,7 @@ static void mode_arpeggio(const gamepad_state_t *gp)
         s_arp_running = !s_arp_running;
         s_arp_index = 0;
         s_arp_direction = 1;
+        synth_blip(s_arp_running ? BLIP_FREQ_UP : BLIP_FREQ_DOWN);
         if (!s_arp_running)
             tone_stop();
     }
@@ -1011,6 +1059,7 @@ static void audio_render_task(void *arg)
     float svf_low = 0.0f;
     float svf_band = 0.0f;
     float lfo_phase = 0.0f;
+    float blip_phase = 0.0f;
     int16_t stereo_buf[BLOCK_SIZE * 2];
 
     const float block_period = (float)BLOCK_SIZE / (float)SAMPLE_RATE;
@@ -1091,6 +1140,38 @@ static void audio_render_task(void *arg)
                 if (phase >= 1.0f)
                     phase -= 1.0f;
             }
+        }
+
+        /* Mix confirmation blip over the top (post-main synthesis). The main
+         * voice is ducked so the blip is audible even at full volume. */
+        int blip_rem = s_blip_samples_remaining;
+        if (blip_rem > 0) {
+            float blip_inc = s_blip_freq_hz / (float)SAMPLE_RATE;
+            int total_samples = (SAMPLE_RATE * BLIP_DURATION_MS) / 1000;
+            int count = (blip_rem < BLOCK_SIZE) ? blip_rem : BLOCK_SIZE;
+            for (int i = 0; i < count; i++) {
+                /* Linear fade-out over the last 20% of the blip to avoid a click. */
+                int pos = total_samples - blip_rem + i;
+                float env = 1.0f;
+                int fade_start = (total_samples * 4) / 5;
+                if (pos > fade_start) {
+                    env = (float)(total_samples - pos) / (float)(total_samples - fade_start);
+                    if (env < 0.0f)
+                        env = 0.0f;
+                }
+                int idx = (int)(blip_phase * SINE_TABLE_SIZE) & (SINE_TABLE_SIZE - 1);
+                int16_t blip_sample = (int16_t)((float)s_sine_table[idx] * env);
+                int16_t ducked = stereo_buf[i * 2] >> BLIP_MAIN_DUCK_SHIFT;
+                int16_t mixed = clip_i16((float)ducked + (float)blip_sample);
+                stereo_buf[i * 2] = mixed;
+                stereo_buf[i * 2 + 1] = mixed;
+                blip_phase += blip_inc;
+                if (blip_phase >= 1.0f)
+                    blip_phase -= 1.0f;
+            }
+            s_blip_samples_remaining = blip_rem - count;
+            if (s_blip_samples_remaining <= 0)
+                blip_phase = 0.0f;
         }
 
         size_t written;
@@ -1193,6 +1274,7 @@ static void control_task(void *arg)
             }
 
             ESP_LOGI(TAG, "Mode: %d waveform: %d", s_mode, mode_waves[s_mode]);
+            synth_blip(BLIP_FREQ_NEUTRAL);
             led_blink(s_mode + 1, 80, 80);
         }
 
