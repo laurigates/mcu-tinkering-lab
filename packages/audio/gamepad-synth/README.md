@@ -8,6 +8,7 @@ Turn a Bluetooth controller into a Korg Monotron-inspired synthesizer. An ESP32-
 - MAX98357A I2S DAC breakout (BCLK=GPIO5, WS=GPIO6, DIN=GPIO7)
 - 4-8 ohm speaker (2-3W)
 - Status LED on GPIO2
+- Optional: two piezo discs on GPIO8/GPIO9 for Drone-mode accent voices
 
 See [WIRING.md](WIRING.md) for the full wiring guide.
 
@@ -137,16 +138,16 @@ Trigger classic game sound effects with button presses (filter and delay bypasse
 
 ### Mode 7: Drone
 
-Two continuously-sustained oscillators with LFO modulation for evolving textures.
+Two continuously-sustained oscillators with LFO modulation for evolving textures. Oscillator A plays through the DAC; oscillator B plays through the optional piezo pair (if wired) with a fixed 1.02 detune ratio between the two discs, so the beating happens acoustically in air.
 
 | Control | Function |
 |---------|----------|
-| Left stick Y | Oscillator A pitch (sawtooth) |
-| Right stick Y | Oscillator B pitch (triangle) |
+| Left stick Y | Oscillator A pitch (sawtooth, DAC) |
+| Right stick Y | Oscillator B pitch (square wave on piezos) |
 | LT | LFO rate |
-| RT | LFO depth (modulates both pitch and filter cutoff) |
+| RT | LFO depth (modulates both pitch and filter cutoff on the DAC voice) |
 
-No note-off — the drone plays continuously while in this mode. Dial in a static interval with the sticks, then add slow LFO modulation for a shifting ambient pad.
+No note-off — the drone plays continuously while in this mode. Dial in a static interval with the sticks, then add slow LFO modulation for a shifting ambient pad. Without the piezos wired, oscillator B is silent and only the DAC drone is heard.
 
 ## Building
 
@@ -165,7 +166,8 @@ just monitor
   - **Control task** (50 Hz): reads gamepad state, updates synth parameters
   - **Audio render task** (continuous, priority 10): DDS phase accumulator with selectable waveform, writes 256-sample blocks to I2S DMA
 - **Audio output**: 44.1 kHz, 16-bit stereo (mono duplicated) via MAX98357A I2S DAC
-- **Waveforms**: Square, sawtooth, triangle, sine (256-entry lookup table), noise. Each mode uses a default waveform: Theremin=sawtooth, Scale=sine, Arpeggio=square, SFX=square
+- **Piezo accents** (Drone mode only): two GPIO-driven LEDC square-wave voices on GPIO8/GPIO9 with a fixed 1.02 detune ratio, running in parallel to the DAC path
+- **Waveforms**: Square, sawtooth, triangle, sine (256-entry lookup table), noise. Per-mode defaults: Mono/Dual Osc/Delay Synth/Drone=sawtooth, Scale=sine, Arpeggio=square, SFX=square
 - **Filter**: State-variable low-pass with cutoff (40 Hz - 18 kHz) and resonance (Q 0.5 - 6.0). Chamberlin topology, coefficients recomputed once per 256-sample block. Self-oscillates at high resonance
 - **LFO**: Block-rate triangle LFO (0.1 - 20 Hz) modulating filter cutoff or oscillator pitch. Up to ±2 octaves cutoff mod or ±1 octave pitch mod at full depth
 - **Delay**: Circular-buffer delay line (0.5 s / 22050 samples, ~44 KB static RAM) with configurable delay time, feedback (up to 0.95), and wet/dry mix. Scale = slapback, Arpeggio = cosmic echo

@@ -59,6 +59,28 @@ def draw() -> schemdraw.Drawing:
     d.add(elm.Line().left(0.5))
     d.add(elm.Ground().label("GND", loc="left"))
 
+    # Optional Drone-mode piezo pair: GPIO8/GPIO9 on the bottom drive two
+    # piezo discs (second leg to GND). Speaker symbols stand in for piezos.
+    piezo_y = esp.GPIO8.y - 2.5
+    pz_a = d.add(
+        elm.Speaker()
+        .right()
+        .at((esp.GPIO8.x - 0.25, piezo_y))
+        .label("Piezo A", loc="bot", ofst=0.3)
+    )
+    pz_b = d.add(
+        elm.Speaker()
+        .right()
+        .at((esp.GPIO9.x - 0.25, piezo_y))
+        .label("Piezo B", loc="bot", ofst=0.3)
+    )
+    d.add(elm.Wire("|-").at(esp.GPIO8).to(pz_a.in1).color("darkorange"))
+    d.add(elm.Wire("|-").at(esp.GPIO9).to(pz_b.in1).color("darkorange"))
+    d.add(elm.Line().down(0.5).at(pz_a.in2))
+    d.add(elm.Ground())
+    d.add(elm.Line().down(0.5).at(pz_b.in2))
+    d.add(elm.Ground())
+
     return d
 
 

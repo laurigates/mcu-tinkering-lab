@@ -29,7 +29,8 @@ def esp32_s3_zero() -> elm.Ic:
     """Waveshare ESP32-S3-Zero dev board (compact, castellated).
 
     Right side holds the I2S pins (GPIO5/6/7, top-to-bottom) to align with
-    :func:`max98357a`. GPIO2 (status LED) is routed out the top.
+    :func:`max98357a`. GPIO2 (status LED) is routed out the top. GPIO8/GPIO9
+    sit on the bottom for the optional Drone-mode piezo pair.
     """
     return elm.Ic(
         pins=[
@@ -42,6 +43,9 @@ def esp32_s3_zero() -> elm.Ic:
             elm.IcPin(name="GPIO7", side="R", pin="7"),
             elm.IcPin(name="GPIO6", side="R", pin="6"),
             elm.IcPin(name="GPIO5", side="R", pin="5"),
+            # Bottom — optional piezo-pair outputs (Drone mode only)
+            elm.IcPin(name="GPIO8", side="B", pin="8", pos=0.3),
+            elm.IcPin(name="GPIO9", side="B", pin="9", pos=0.7),
         ],
         size=(3, 5),
     )
