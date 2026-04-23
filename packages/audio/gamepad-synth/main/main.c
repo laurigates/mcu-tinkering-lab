@@ -263,25 +263,30 @@ volatile int s_settings_cursor = 0;
 /* Settings edit input debounce tracking (rising-edge and d-pad repeat) */
 #define SETTINGS_DPAD_REPEAT_MS 200
 
-/* ── State-Variable Filter (Chamberlin form) ─────────────── */
+/* ── State-Variable Filter (TPT form, unconditionally stable) ── */
 
 #define FILTER_CUTOFF_MIN 40.0f
 #define FILTER_CUTOFF_MAX 18000.0f
 #define FILTER_Q_MIN 0.5f
 #define FILTER_Q_MAX 6.0f
 
-/* Filter memory lives in the audio render task; only coefficients
- * are recomputed per block from the shared cutoff/resonance values.
- * f = 2 * sin(pi * fc / fs), q = 1 / Q (damping, lower = more resonance)
+/* Topology-Preserving Transform SVF (Zavalishin/Simper). Unconditionally
+ * stable for any cutoff/resonance — the previous Chamberlin form diverged
+ * at high cutoff (fc above ~fs/6) because f² + 2·f·q exceeded 4, sending
+ * the state to NaN and silencing the audio until the active-flag reset.
+ * Per-block coefficients: g = tan(pi·fc/fs), k = 1/Q,
+ * a1 = 1 / (1 + g·(g + k)). State variables s1, s2 are integrator equivs;
+ * v2 is the low-pass output.
  */
-static inline int16_t svf_process(int16_t sample, float f, float q, float *low, float *band)
+static inline int16_t svf_process(int16_t sample, float g, float k, float a1, float *s1, float *s2)
 {
-    float in = (float)sample;
-    *low += f * (*band);
-    float high = in - (*low) - q * (*band);
-    *band += f * high;
-    /* Clip to int16 range to prevent resonance overflow */
-    float out = *low;
+    float v0 = (float)sample;
+    float v3 = v0 - *s2;
+    float v1 = a1 * (*s1 + g * v3);
+    float v2 = *s2 + g * v1;
+    *s1 = 2.0f * v1 - *s1;
+    *s2 = 2.0f * v2 - *s2;
+    float out = v2;
     if (out > 32767.0f)
         out = 32767.0f;
     if (out < -32768.0f)
@@ -1196,9 +1201,10 @@ static void audio_render_task(void *arg)
             float phase_inc = freq / (float)SAMPLE_RATE;
             float phase_inc_b = freq_b / (float)SAMPLE_RATE;
 
-            /* Recompute filter coefficients once per block */
-            float f_coef = 2.0f * sinf(3.14159265f * cutoff / (float)SAMPLE_RATE);
-            float q_coef = 1.0f / s_synth.filter_resonance;
+            /* Recompute filter coefficients once per block (TPT SVF) */
+            float g_coef = tanf(3.14159265f * cutoff / (float)SAMPLE_RATE);
+            float k_coef = 1.0f / s_synth.filter_resonance;
+            float a1_coef = 1.0f / (1.0f + g_coef * (g_coef + k_coef));
 
             bool delay_on = s_synth.delay_enabled;
             int delay_samples = s_synth.delay_samples;
@@ -1216,7 +1222,7 @@ static void audio_render_task(void *arg)
                         phase_b -= 1.0f;
                 }
                 if (filter_on) {
-                    sample = svf_process(sample, f_coef, q_coef, &svf_low, &svf_band);
+                    sample = svf_process(sample, g_coef, k_coef, a1_coef, &svf_low, &svf_band);
                 }
                 if (delay_on) {
                     sample = delay_process(sample, delay_samples, delay_fb, delay_mix);
