@@ -36,6 +36,7 @@
 #include "uni_hid_device.h"
 #include "uni_platform.h"
 
+#include "drums.h"
 #include "piezo_voice.h"
 
 static const char *TAG = "gamepad_synth";
@@ -335,6 +336,14 @@ static int s_octave = 1;
 
 /* Mode switch debounce */
 static uint8_t s_prev_misc = 0;
+
+/* Drum engine: remembered pattern when toggled on via Home button.
+ * TODO(settings-integration): when the settings-page branch lands and
+ * s_settings.drum_pattern / drum_tempo_bpm / drum_volume appear in this
+ * file, replace this static with the settings struct and push tempo/volume
+ * from the control task each tick. */
+static int s_drum_pattern_remembered = 1;
+static bool s_drum_on = false;
 
 /* ── Tone Helpers (now set synth state instead of LEDC) ──── */
 
@@ -1142,6 +1151,10 @@ static void audio_render_task(void *arg)
             }
         }
 
+        /* Mix background drum engine into the synth output before the blip.
+         * drums_render_block() performs saturating add into L/R. */
+        drums_render_block(stereo_buf, BLOCK_SIZE);
+
         /* Mix confirmation blip over the top (post-main synthesis). The main
          * voice is ducked so the blip is audible even at full volume. */
         int blip_rem = s_blip_samples_remaining;
@@ -1278,6 +1291,31 @@ static void control_task(void *arg)
             led_blink(s_mode + 1, 80, 80);
         }
 
+        /* Home button toggles background drum engine (rising edge). */
+        if (misc_pressed & MISC_HOME) {
+            s_drum_on = !s_drum_on;
+            if (s_drum_on) {
+                int pat = s_drum_pattern_remembered;
+                if (pat < 1 || pat > 4)
+                    pat = 1;
+                drums_set_pattern(pat);
+                synth_blip(BLIP_FREQ_UP);
+            } else {
+                /* Remember whatever pattern was active so next toggle resumes it. */
+                if (s_drum_pattern_remembered < 1 || s_drum_pattern_remembered > 4)
+                    s_drum_pattern_remembered = 1;
+                drums_set_pattern(0);
+                synth_blip(BLIP_FREQ_DOWN);
+            }
+            ESP_LOGI(TAG, "Drums: %s", s_drum_on ? "on" : "off");
+        }
+
+        /* TODO(settings-integration): when s_settings is merged, call
+         *   drums_set_tempo(s_settings.drum_tempo_bpm);
+         *   drums_set_volume(s_settings.drum_volume);
+         * here so settings-page changes take effect live. For now the init
+         * defaults (110 BPM, 0.5 volume) are used. */
+
         /* Dispatch to current mode */
         switch (s_mode) {
             case MODE_MONO:
@@ -1317,6 +1355,7 @@ void app_main(void)
 
     init_nvs();
     init_sine_table();
+    drums_init();
     init_i2s();
     init_led();
     piezo_voice_init(PIEZO_A, PIEZO_A_PIN);
