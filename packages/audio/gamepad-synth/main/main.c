@@ -206,6 +206,62 @@ typedef struct {
 
 static volatile synth_state_t s_synth = {0};
 
+/* ── Settings Page ────────────────────────────────────────
+ *
+ * Settings-edit mode is toggled by the Menu button (MISC_SELECT). While
+ * active, the normal mode-dispatch is suppressed and the d-pad is
+ * repurposed:
+ *   left/right — move cursor across fields
+ *   up/down    — increment/decrement the currently-cursored value
+ *
+ * Audible feedback uses the existing synth_blip() infrastructure:
+ *   • cursor move → neutral blip, then a "value ladder" encoding the value
+ *   • increment   → BLIP_FREQ_UP (+ clamp)
+ *   • decrement   → BLIP_FREQ_DOWN (+ clamp)
+ *
+ * master_volume is consumed once, in audio_render_task right before the
+ * blip mix, by multiplying every sample in stereo_buf. The other fields
+ * are exposed here for sibling agents (drum engine, LFO-wiring pass);
+ * this module does not consume them.
+ */
+
+typedef enum {
+    SETTING_MASTER_VOL = 0,
+    SETTING_DRUM_PATTERN,
+    SETTING_DRUM_TEMPO,
+    SETTING_DRUM_VOLUME,
+    SETTING_LFO_RATE,
+    SETTING_LFO_DEPTH,
+    SETTING_LFO_TARGET,
+    SETTING_COUNT,
+} setting_id_t;
+
+typedef struct {
+    float master_volume;  /* 0.0 .. 1.0 */
+    int drum_pattern;     /* 0 = off, 1..4 */
+    int drum_tempo_bpm;   /* 60..200 */
+    float drum_volume;    /* 0.0 .. 1.0 */
+    float lfo_rate_hz;    /* 0.1 .. 20.0 */
+    float lfo_depth;      /* 0.0 .. 1.0 */
+    int lfo_target;       /* lfo_target_t value */
+} settings_t;
+
+volatile settings_t s_settings = {
+    .master_volume = 0.7f,
+    .drum_pattern = 0,
+    .drum_tempo_bpm = 110,
+    .drum_volume = 0.5f,
+    .lfo_rate_hz = 5.0f,
+    .lfo_depth = 0.3f,
+    .lfo_target = LFO_TARGET_CUTOFF,
+};
+
+volatile bool s_settings_edit_active = false;
+volatile int s_settings_cursor = 0;
+
+/* Settings edit input debounce tracking (rising-edge and d-pad repeat) */
+#define SETTINGS_DPAD_REPEAT_MS 200
+
 /* ── State-Variable Filter (Chamberlin form) ─────────────── */
 
 #define FILTER_CUTOFF_MIN 40.0f
@@ -1142,6 +1198,19 @@ static void audio_render_task(void *arg)
             }
         }
 
+        /* Master volume attenuation — applied to the rendered main voice
+         * before the blip mix so confirmation blips stay audible at low
+         * volumes. Read once per block to avoid torn reads. */
+        float master_vol = s_settings.master_volume;
+        if (master_vol < 0.999f) {
+            for (int i = 0; i < BLOCK_SIZE; i++) {
+                int16_t left = stereo_buf[i * 2];
+                int16_t right = stereo_buf[i * 2 + 1];
+                stereo_buf[i * 2] = clip_i16((float)left * master_vol);
+                stereo_buf[i * 2 + 1] = clip_i16((float)right * master_vol);
+            }
+        }
+
         /* Mix confirmation blip over the top (post-main synthesis). The main
          * voice is ducked so the blip is audible even at full volume. */
         int blip_rem = s_blip_samples_remaining;
@@ -1176,6 +1245,157 @@ static void audio_render_task(void *arg)
 
         size_t written;
         i2s_channel_write(s_tx_chan, stereo_buf, sizeof(stereo_buf), &written, portMAX_DELAY);
+    }
+}
+
+/* ── Settings Page Helpers ───────────────────────────────── */
+
+#define SETTINGS_LADDER_GAP_MS 100
+
+/* Play a sequence of `count` blips at the given frequency, 100 ms apart.
+ * The blip engine is single-slot so we space the emissions out with a
+ * short vTaskDelay — acceptable here because this runs on the control
+ * task which is idle while editing settings. */
+static void settings_play_ladder(int count, float freq_hz)
+{
+    if (count < 1)
+        count = 1;
+    if (count > 12)
+        count = 12;
+    for (int i = 0; i < count; i++) {
+        synth_blip(freq_hz);
+        vTaskDelay(pdMS_TO_TICKS(SETTINGS_LADDER_GAP_MS));
+    }
+}
+
+/* Encode the current value of s_settings_cursor as an audible ladder. */
+static void settings_play_value_ladder(int cursor)
+{
+    switch (cursor) {
+        case SETTING_MASTER_VOL: {
+            int n = (int)(s_settings.master_volume * 10.0f + 0.5f) + 1;
+            settings_play_ladder(n, BLIP_FREQ_NEUTRAL);
+            break;
+        }
+        case SETTING_DRUM_PATTERN: {
+            int n = s_settings.drum_pattern + 1;
+            settings_play_ladder(n, BLIP_FREQ_NEUTRAL);
+            break;
+        }
+        case SETTING_DRUM_TEMPO:
+            /* 3 neutral blips — hearing the exact BPM isn't useful yet
+             * because no drum engine consumes the value (sibling agent). */
+            settings_play_ladder(3, BLIP_FREQ_NEUTRAL);
+            break;
+        case SETTING_DRUM_VOLUME: {
+            int n = (int)(s_settings.drum_volume * 10.0f + 0.5f) + 1;
+            settings_play_ladder(n, BLIP_FREQ_NEUTRAL);
+            break;
+        }
+        case SETTING_LFO_RATE:
+            settings_play_ladder(3, BLIP_FREQ_NEUTRAL);
+            break;
+        case SETTING_LFO_DEPTH: {
+            int n = (int)(s_settings.lfo_depth * 10.0f + 0.5f) + 1;
+            settings_play_ladder(n, BLIP_FREQ_NEUTRAL);
+            break;
+        }
+        case SETTING_LFO_TARGET: {
+            int n = s_settings.lfo_target + 1;
+            settings_play_ladder(n, BLIP_FREQ_NEUTRAL);
+            break;
+        }
+        default:
+            break;
+    }
+}
+
+/* Clamp helpers — keep each setting within documented bounds. */
+static inline float clampf(float v, float lo, float hi)
+{
+    if (v < lo)
+        return lo;
+    if (v > hi)
+        return hi;
+    return v;
+}
+static inline int clampi(int v, int lo, int hi)
+{
+    if (v < lo)
+        return lo;
+    if (v > hi)
+        return hi;
+    return v;
+}
+
+/* Apply a step (±1) to the currently-cursored setting. */
+static void settings_adjust(int cursor, int direction)
+{
+    switch (cursor) {
+        case SETTING_MASTER_VOL:
+            s_settings.master_volume =
+                clampf(s_settings.master_volume + 0.1f * direction, 0.0f, 1.0f);
+            break;
+        case SETTING_DRUM_PATTERN:
+            s_settings.drum_pattern = clampi(s_settings.drum_pattern + direction, 0, 4);
+            break;
+        case SETTING_DRUM_TEMPO:
+            s_settings.drum_tempo_bpm =
+                clampi(s_settings.drum_tempo_bpm + 5 * direction, 60, 200);
+            break;
+        case SETTING_DRUM_VOLUME:
+            s_settings.drum_volume =
+                clampf(s_settings.drum_volume + 0.1f * direction, 0.0f, 1.0f);
+            break;
+        case SETTING_LFO_RATE:
+            s_settings.lfo_rate_hz =
+                clampf(s_settings.lfo_rate_hz + 0.5f * direction, LFO_RATE_MIN, LFO_RATE_MAX);
+            break;
+        case SETTING_LFO_DEPTH:
+            s_settings.lfo_depth = clampf(s_settings.lfo_depth + 0.1f * direction, 0.0f, 1.0f);
+            break;
+        case SETTING_LFO_TARGET: {
+            int t = s_settings.lfo_target + direction;
+            /* Wrap within [LFO_TARGET_NONE .. LFO_TARGET_BOTH] */
+            int count = LFO_TARGET_BOTH + 1;
+            t = ((t % count) + count) % count;
+            s_settings.lfo_target = t;
+            break;
+        }
+        default:
+            break;
+    }
+}
+
+/* Settings-edit d-pad handler. Debounces with SETTINGS_DPAD_REPEAT_MS
+ * between retriggers while held. */
+static void settings_edit_handle(const gamepad_state_t *gp)
+{
+    static uint32_t last_dpad_ms = 0;
+    uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
+    if (now - last_dpad_ms < SETTINGS_DPAD_REPEAT_MS)
+        return;
+
+    if (gp->dpad & DPAD_LEFT) {
+        s_settings_cursor = (s_settings_cursor + SETTING_COUNT - 1) % SETTING_COUNT;
+        last_dpad_ms = now;
+        synth_blip(BLIP_FREQ_NEUTRAL);
+        vTaskDelay(pdMS_TO_TICKS(SETTINGS_LADDER_GAP_MS));
+        settings_play_value_ladder(s_settings_cursor);
+    } else if (gp->dpad & DPAD_RIGHT) {
+        s_settings_cursor = (s_settings_cursor + 1) % SETTING_COUNT;
+        last_dpad_ms = now;
+        synth_blip(BLIP_FREQ_NEUTRAL);
+        vTaskDelay(pdMS_TO_TICKS(SETTINGS_LADDER_GAP_MS));
+        settings_play_value_ladder(s_settings_cursor);
+    } else if (gp->dpad & DPAD_UP) {
+        settings_adjust(s_settings_cursor, +1);
+        last_dpad_ms = now;
+        synth_blip(BLIP_FREQ_UP);
+    } else if (gp->dpad & DPAD_DOWN) {
+        settings_adjust(s_settings_cursor, -1);
+        last_dpad_ms = now;
+        synth_blip(BLIP_FREQ_DOWN);
     }
 }
 
@@ -1278,6 +1498,33 @@ static void control_task(void *arg)
             led_blink(s_mode + 1, 80, 80);
         }
 
+        /* Menu button toggles the settings-edit overlay (rising edge) */
+        if (misc_pressed & MISC_SELECT) {
+            s_settings_edit_active = !s_settings_edit_active;
+            if (s_settings_edit_active) {
+                tone_stop();
+                piezo_voice_note_off(PIEZO_A);
+                piezo_voice_note_off(PIEZO_B);
+                synth_blip(BLIP_FREQ_UP);
+                ESP_LOGI(TAG, "Settings edit: ENTER (cursor=%d)", s_settings_cursor);
+                /* Render the current field's value ladder so the user knows
+                 * what they're adjusting. Gap before the ladder so the entry
+                 * blip stays distinct. */
+                vTaskDelay(pdMS_TO_TICKS(SETTINGS_LADDER_GAP_MS));
+                settings_play_value_ladder(s_settings_cursor);
+            } else {
+                synth_blip(BLIP_FREQ_DOWN);
+                ESP_LOGI(TAG, "Settings edit: EXIT");
+            }
+        }
+
+        /* While editing, suppress mode dispatch and run the edit handler */
+        if (s_settings_edit_active) {
+            settings_edit_handle(&gp);
+            vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(CONTROL_TASK_PERIOD_MS));
+            continue;
+        }
+
         /* Dispatch to current mode */
         switch (s_mode) {
             case MODE_MONO:
@@ -1325,6 +1572,24 @@ void app_main(void)
     synth_set_filter(true, 6000.0f, 1.5f);
     synth_set_lfo(LFO_TARGET_NONE, 5.0f, 0.0f);
     synth_set_delay(false, 1, 0.0f, 0.0f);
+
+    /* Settings-page defaults (also set via static initializer; reassigned
+     * here so any future reset-to-defaults path has a single code location
+     * to mirror). */
+    s_settings.master_volume = 0.7f;
+    s_settings.drum_pattern = 0;
+    s_settings.drum_tempo_bpm = 110;
+    s_settings.drum_volume = 0.5f;
+    s_settings.lfo_rate_hz = 5.0f;
+    s_settings.lfo_depth = 0.3f;
+    s_settings.lfo_target = LFO_TARGET_CUTOFF;
+    s_settings_edit_active = false;
+    s_settings_cursor = 0;
+    ESP_LOGI(TAG, "Settings: master_vol=%.2f drum_ptn=%d drum_bpm=%d drum_vol=%.2f "
+                  "lfo_rate=%.1f lfo_depth=%.2f lfo_tgt=%d",
+             s_settings.master_volume, s_settings.drum_pattern, s_settings.drum_tempo_bpm,
+             s_settings.drum_volume, s_settings.lfo_rate_hz, s_settings.lfo_depth,
+             s_settings.lfo_target);
 
     play_startup_jingle();
 
