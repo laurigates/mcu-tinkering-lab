@@ -298,6 +298,22 @@ static inline int16_t delay_process(int16_t in, int delay_samples, float feedbac
     return clip_i16((1.0f - mix) * (float)in + mix * (float)delayed);
 }
 
+/* ── Trigger-driven Pitch Bend ───────────────────────────── */
+
+/* LT/RT act as a pitch-bend pair across pitched modes. Range is ±7 semitones,
+ * where LT full = −7 st and RT full = +7 st. Both pressed equally cancels out
+ * to a 1.0 multiplier; asymmetric presses give a fine detune. */
+static inline float compute_bend_mult(const gamepad_state_t *gp)
+{
+    float bend_semitones =
+        ((float)(gp->throttle - gp->brake) / (float)TRIGGER_MAX) * 7.0f;
+    if (bend_semitones > 7.0f)
+        bend_semitones = 7.0f;
+    if (bend_semitones < -7.0f)
+        bend_semitones = -7.0f;
+    return powf(2.0f, bend_semitones / 12.0f);
+}
+
 /* ── Sound Modes ─────────────────────────────────────────── */
 
 typedef enum {
@@ -490,12 +506,11 @@ static void mode_mono(const gamepad_state_t *gp)
     float cutoff = FILTER_CUTOFF_MIN * powf(FILTER_CUTOFF_MAX / FILTER_CUTOFF_MIN, cutoff_norm);
     float resonance = map_range((float)abs(rx), 0, STICK_MAX, FILTER_Q_MIN, FILTER_Q_MAX);
     synth_set_filter(true, cutoff, resonance);
+    synth_set_lfo(LFO_TARGET_CUTOFF, 5.0f, 0.3f);
 
-    /* LFO: LT = rate (0.1-20 Hz), RT = depth (0-1). Modulates filter cutoff. */
-    float lfo_rate = map_range((float)gp->brake, 0, TRIGGER_MAX, LFO_RATE_MIN, LFO_RATE_MAX);
-    float lfo_depth = map_range((float)gp->throttle, 0, TRIGGER_MAX, 0.0f, 1.0f);
-    lfo_target_t lfo_target = (gp->throttle > 50) ? LFO_TARGET_CUTOFF : LFO_TARGET_NONE;
-    synth_set_lfo(lfo_target, lfo_rate, lfo_depth);
+    /* Triggers = pitch bend (±7 semitones) */
+    float bend_mult = compute_bend_mult(gp);
+    pitch *= bend_mult;
 
     tone_play((uint32_t)pitch);
     led_on();
@@ -550,6 +565,11 @@ static void mode_dual_osc(const gamepad_state_t *gp)
     float cutoff = FILTER_CUTOFF_MIN * powf(FILTER_CUTOFF_MAX / FILTER_CUTOFF_MIN, cutoff_norm);
     synth_set_filter(true, cutoff, 1.0f);
 
+    /* Triggers = pitch bend on both oscillators */
+    float bend_mult = compute_bend_mult(gp);
+    pitch_a *= bend_mult;
+    pitch_b *= bend_mult;
+
     tone_play((uint32_t)pitch_a);
     synth_set_osc_b(true, pitch_b, WAVE_SAWTOOTH);
     led_on();
@@ -559,6 +579,9 @@ static void mode_dual_osc(const gamepad_state_t *gp)
 
 static void mode_delay_synth(const gamepad_state_t *gp)
 {
+    /* Fixed filter — triggers are repurposed as pitch bend. */
+    synth_set_filter(true, 4000.0f, 1.2f);
+
     int16_t ly = gp->axis_y;
     int16_t rx = gp->axis_rx;
     int16_t ry = gp->axis_ry;
@@ -578,15 +601,9 @@ static void mode_delay_synth(const gamepad_state_t *gp)
     float feedback = map_range((float)rx, -STICK_MAX, STICK_MAX, 0.0f, 0.9f);
     synth_set_delay(true, delay_samples, feedback, 0.5f);
 
-    /* Filter modulated by triggers (LT = cutoff down, RT = cutoff up) */
-    float cutoff_norm = 0.5f + map_range((float)gp->throttle, 0, TRIGGER_MAX, 0.0f, 0.5f) -
-                        map_range((float)gp->brake, 0, TRIGGER_MAX, 0.0f, 0.5f);
-    if (cutoff_norm < 0.0f)
-        cutoff_norm = 0.0f;
-    if (cutoff_norm > 1.0f)
-        cutoff_norm = 1.0f;
-    float cutoff = FILTER_CUTOFF_MIN * powf(FILTER_CUTOFF_MAX / FILTER_CUTOFF_MIN, cutoff_norm);
-    synth_set_filter(true, cutoff, 1.2f);
+    /* Triggers = pitch bend (±7 semitones) */
+    float bend_mult = compute_bend_mult(gp);
+    pitch *= bend_mult;
 
     tone_play((uint32_t)pitch);
     led_on();
@@ -600,13 +617,16 @@ static void mode_drone(const gamepad_state_t *gp)
     float pitch_a = map_range((float)gp->axis_y, -STICK_MAX, STICK_MAX, MIN_FREQ, MAX_FREQ);
     float pitch_b = map_range((float)gp->axis_ry, -STICK_MAX, STICK_MAX, MIN_FREQ, MAX_FREQ);
 
-    /* Triggers drive LFO: LT = rate, RT = depth. Target: BOTH (pitch + cutoff). */
-    float lfo_rate = map_range((float)gp->brake, 0, TRIGGER_MAX, LFO_RATE_MIN, 5.0f);
-    float lfo_depth = map_range((float)gp->throttle, 0, TRIGGER_MAX, 0.0f, 1.0f);
-    synth_set_lfo(LFO_TARGET_BOTH, lfo_rate, lfo_depth);
+    /* Fixed LFO — triggers repurposed as pitch bend. */
+    synth_set_lfo(LFO_TARGET_BOTH, 2.0f, 0.4f);
 
     /* Filter: slightly warm default, modulated by LFO */
     synth_set_filter(true, 3000.0f, 1.5f);
+
+    /* Triggers = pitch bend on both oscillators */
+    float bend_mult = compute_bend_mult(gp);
+    pitch_a *= bend_mult;
+    pitch_b *= bend_mult;
 
     tone_play((uint32_t)pitch_a);
     /* Route osc B onto the two piezos with a fixed detune so the beating
@@ -662,9 +682,13 @@ static void mode_scale(const gamepad_state_t *gp)
     int semitone = (s_octave * 12) + SCALE_MAJOR[note_idx];
     float freq = (float)note_at(semitone);
 
-    /* Pitch bend from right stick Y */
+    /* Pitch bend from right stick Y — fine bend in Hz. */
     float bend = map_range((float)gp->axis_ry, -STICK_MAX, STICK_MAX, -50, 50);
     freq += bend;
+
+    /* Triggers = coarse pitch bend (±7 semitones) */
+    float bend_mult = compute_bend_mult(gp);
+    freq *= bend_mult;
 
     tone_play((uint32_t)freq);
     led_on();
