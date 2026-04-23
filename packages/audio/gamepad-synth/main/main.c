@@ -36,6 +36,7 @@
 #include "uni_hid_device.h"
 #include "uni_platform.h"
 
+#include "drums.h"
 #include "piezo_voice.h"
 
 static const char *TAG = "gamepad_synth";
@@ -206,6 +207,62 @@ typedef struct {
 
 static volatile synth_state_t s_synth = {0};
 
+/* ── Settings Page ────────────────────────────────────────
+ *
+ * Settings-edit mode is toggled by the Menu button (MISC_SELECT). While
+ * active, the normal mode-dispatch is suppressed and the d-pad is
+ * repurposed:
+ *   left/right — move cursor across fields
+ *   up/down    — increment/decrement the currently-cursored value
+ *
+ * Audible feedback uses the existing synth_blip() infrastructure:
+ *   • cursor move → neutral blip, then a "value ladder" encoding the value
+ *   • increment   → BLIP_FREQ_UP (+ clamp)
+ *   • decrement   → BLIP_FREQ_DOWN (+ clamp)
+ *
+ * master_volume is consumed once, in audio_render_task right before the
+ * blip mix, by multiplying every sample in stereo_buf. The other fields
+ * are exposed here for sibling agents (drum engine, LFO-wiring pass);
+ * this module does not consume them.
+ */
+
+typedef enum {
+    SETTING_MASTER_VOL = 0,
+    SETTING_DRUM_PATTERN,
+    SETTING_DRUM_TEMPO,
+    SETTING_DRUM_VOLUME,
+    SETTING_LFO_RATE,
+    SETTING_LFO_DEPTH,
+    SETTING_LFO_TARGET,
+    SETTING_COUNT,
+} setting_id_t;
+
+typedef struct {
+    float master_volume; /* 0.0 .. 1.0 */
+    int drum_pattern;    /* 0 = off, 1..4 */
+    int drum_tempo_bpm;  /* 60..200 */
+    float drum_volume;   /* 0.0 .. 1.0 */
+    float lfo_rate_hz;   /* 0.1 .. 20.0 */
+    float lfo_depth;     /* 0.0 .. 1.0 */
+    int lfo_target;      /* lfo_target_t value */
+} settings_t;
+
+volatile settings_t s_settings = {
+    .master_volume = 0.7f,
+    .drum_pattern = 0,
+    .drum_tempo_bpm = 110,
+    .drum_volume = 0.5f,
+    .lfo_rate_hz = 5.0f,
+    .lfo_depth = 0.3f,
+    .lfo_target = LFO_TARGET_CUTOFF,
+};
+
+volatile bool s_settings_edit_active = false;
+volatile int s_settings_cursor = 0;
+
+/* Settings edit input debounce tracking (rising-edge and d-pad repeat) */
+#define SETTINGS_DPAD_REPEAT_MS 200
+
 /* ── State-Variable Filter (Chamberlin form) ─────────────── */
 
 #define FILTER_CUTOFF_MIN 40.0f
@@ -251,6 +308,27 @@ static inline float lfo_triangle(float phase)
 static int16_t s_delay_buf[DELAY_MAX_SAMPLES];
 static int s_delay_write_idx = 0;
 
+/* ── Confirmation Blip ───────────────────────────────────── */
+
+/* Short sine ping mixed over the main voice to confirm silent state changes
+ * (octave shifts, chord/interval picks, mode toggles). Control task writes;
+ * audio task consumes. Ducking keeps the blip audible when a voice is active.
+ */
+#define BLIP_DURATION_MS 70
+#define BLIP_FREQ_NEUTRAL 880.0f /* A5 — generic state toggle */
+#define BLIP_FREQ_UP 1320.0f     /* E6 — "up" direction */
+#define BLIP_FREQ_DOWN 660.0f    /* E5 — "down" direction */
+#define BLIP_MAIN_DUCK_SHIFT 2   /* >> 2 = -12 dB on the underlying voice */
+
+static volatile int s_blip_samples_remaining = 0;
+static volatile float s_blip_freq_hz = BLIP_FREQ_NEUTRAL;
+
+static void synth_blip(float freq_hz)
+{
+    s_blip_freq_hz = freq_hz;
+    s_blip_samples_remaining = (SAMPLE_RATE * BLIP_DURATION_MS) / 1000;
+}
+
 static inline int16_t clip_i16(float x)
 {
     if (x > 32767.0f)
@@ -275,6 +353,21 @@ static inline int16_t delay_process(int16_t in, int delay_samples, float feedbac
 
     /* Output is dry + wet mix */
     return clip_i16((1.0f - mix) * (float)in + mix * (float)delayed);
+}
+
+/* ── Trigger-driven Pitch Bend ───────────────────────────── */
+
+/* LT/RT act as a pitch-bend pair across pitched modes. Range is ±7 semitones,
+ * where LT full = −7 st and RT full = +7 st. Both pressed equally cancels out
+ * to a 1.0 multiplier; asymmetric presses give a fine detune. */
+static inline float compute_bend_mult(const gamepad_state_t *gp)
+{
+    float bend_semitones = ((float)(gp->throttle - gp->brake) / (float)TRIGGER_MAX) * 7.0f;
+    if (bend_semitones > 7.0f)
+        bend_semitones = 7.0f;
+    if (bend_semitones < -7.0f)
+        bend_semitones = -7.0f;
+    return powf(2.0f, bend_semitones / 12.0f);
 }
 
 /* ── Sound Modes ─────────────────────────────────────────── */
@@ -314,6 +407,11 @@ static int s_octave = 1;
 
 /* Mode switch debounce */
 static uint8_t s_prev_misc = 0;
+
+/* Drum engine: on/off toggled by Home button. The pattern index itself
+ * lives in s_settings.drum_pattern and is read on toggle. Tempo/volume
+ * are pushed to the engine every control-task tick. */
+static bool s_drum_on = false;
 
 /* ── Tone Helpers (now set synth state instead of LEDC) ──── */
 
@@ -469,12 +567,12 @@ static void mode_mono(const gamepad_state_t *gp)
     float cutoff = FILTER_CUTOFF_MIN * powf(FILTER_CUTOFF_MAX / FILTER_CUTOFF_MIN, cutoff_norm);
     float resonance = map_range((float)abs(rx), 0, STICK_MAX, FILTER_Q_MIN, FILTER_Q_MAX);
     synth_set_filter(true, cutoff, resonance);
+    synth_set_lfo((lfo_target_t)s_settings.lfo_target, s_settings.lfo_rate_hz,
+                  s_settings.lfo_depth);
 
-    /* LFO: LT = rate (0.1-20 Hz), RT = depth (0-1). Modulates filter cutoff. */
-    float lfo_rate = map_range((float)gp->brake, 0, TRIGGER_MAX, LFO_RATE_MIN, LFO_RATE_MAX);
-    float lfo_depth = map_range((float)gp->throttle, 0, TRIGGER_MAX, 0.0f, 1.0f);
-    lfo_target_t lfo_target = (gp->throttle > 50) ? LFO_TARGET_CUTOFF : LFO_TARGET_NONE;
-    synth_set_lfo(lfo_target, lfo_rate, lfo_depth);
+    /* Triggers = pitch bend (±7 semitones) */
+    float bend_mult = compute_bend_mult(gp);
+    pitch *= bend_mult;
 
     tone_play((uint32_t)pitch);
     led_on();
@@ -490,14 +588,22 @@ static void mode_dual_osc(const gamepad_state_t *gp)
     uint16_t pressed = gp->buttons & ~prev_buttons;
     prev_buttons = gp->buttons;
 
-    if (pressed & BTN_A)
+    if (pressed & BTN_A) {
         s_interval_semitones = 0; /* unison */
-    if (pressed & BTN_B)
+        synth_blip(BLIP_FREQ_DOWN);
+    }
+    if (pressed & BTN_B) {
         s_interval_semitones = 7; /* perfect fifth */
-    if (pressed & BTN_X)
+        synth_blip(BLIP_FREQ_NEUTRAL);
+    }
+    if (pressed & BTN_X) {
         s_interval_semitones = 12; /* octave */
-    if (pressed & BTN_Y)
+        synth_blip(BLIP_FREQ_UP);
+    }
+    if (pressed & BTN_Y) {
         s_interval_semitones = 24; /* two octaves */
+        synth_blip(BLIP_FREQ_UP * 1.5f);
+    }
 
     int16_t ly = gp->axis_y;
     int16_t rx = gp->axis_rx;
@@ -521,6 +627,11 @@ static void mode_dual_osc(const gamepad_state_t *gp)
     float cutoff = FILTER_CUTOFF_MIN * powf(FILTER_CUTOFF_MAX / FILTER_CUTOFF_MIN, cutoff_norm);
     synth_set_filter(true, cutoff, 1.0f);
 
+    /* Triggers = pitch bend on both oscillators */
+    float bend_mult = compute_bend_mult(gp);
+    pitch_a *= bend_mult;
+    pitch_b *= bend_mult;
+
     tone_play((uint32_t)pitch_a);
     synth_set_osc_b(true, pitch_b, WAVE_SAWTOOTH);
     led_on();
@@ -530,6 +641,9 @@ static void mode_dual_osc(const gamepad_state_t *gp)
 
 static void mode_delay_synth(const gamepad_state_t *gp)
 {
+    /* Fixed filter — triggers are repurposed as pitch bend. */
+    synth_set_filter(true, 4000.0f, 1.2f);
+
     int16_t ly = gp->axis_y;
     int16_t rx = gp->axis_rx;
     int16_t ry = gp->axis_ry;
@@ -549,15 +663,9 @@ static void mode_delay_synth(const gamepad_state_t *gp)
     float feedback = map_range((float)rx, -STICK_MAX, STICK_MAX, 0.0f, 0.9f);
     synth_set_delay(true, delay_samples, feedback, 0.5f);
 
-    /* Filter modulated by triggers (LT = cutoff down, RT = cutoff up) */
-    float cutoff_norm = 0.5f + map_range((float)gp->throttle, 0, TRIGGER_MAX, 0.0f, 0.5f) -
-                        map_range((float)gp->brake, 0, TRIGGER_MAX, 0.0f, 0.5f);
-    if (cutoff_norm < 0.0f)
-        cutoff_norm = 0.0f;
-    if (cutoff_norm > 1.0f)
-        cutoff_norm = 1.0f;
-    float cutoff = FILTER_CUTOFF_MIN * powf(FILTER_CUTOFF_MAX / FILTER_CUTOFF_MIN, cutoff_norm);
-    synth_set_filter(true, cutoff, 1.2f);
+    /* Triggers = pitch bend (±7 semitones) */
+    float bend_mult = compute_bend_mult(gp);
+    pitch *= bend_mult;
 
     tone_play((uint32_t)pitch);
     led_on();
@@ -571,13 +679,17 @@ static void mode_drone(const gamepad_state_t *gp)
     float pitch_a = map_range((float)gp->axis_y, -STICK_MAX, STICK_MAX, MIN_FREQ, MAX_FREQ);
     float pitch_b = map_range((float)gp->axis_ry, -STICK_MAX, STICK_MAX, MIN_FREQ, MAX_FREQ);
 
-    /* Triggers drive LFO: LT = rate, RT = depth. Target: BOTH (pitch + cutoff). */
-    float lfo_rate = map_range((float)gp->brake, 0, TRIGGER_MAX, LFO_RATE_MIN, 5.0f);
-    float lfo_depth = map_range((float)gp->throttle, 0, TRIGGER_MAX, 0.0f, 1.0f);
-    synth_set_lfo(LFO_TARGET_BOTH, lfo_rate, lfo_depth);
+    /* LFO from settings — triggers repurposed as pitch bend. */
+    synth_set_lfo((lfo_target_t)s_settings.lfo_target, s_settings.lfo_rate_hz,
+                  s_settings.lfo_depth);
 
     /* Filter: slightly warm default, modulated by LFO */
     synth_set_filter(true, 3000.0f, 1.5f);
+
+    /* Triggers = pitch bend on both oscillators */
+    float bend_mult = compute_bend_mult(gp);
+    pitch_a *= bend_mult;
+    pitch_b *= bend_mult;
 
     tone_play((uint32_t)pitch_a);
     /* Route osc B onto the two piezos with a fixed detune so the beating
@@ -596,10 +708,14 @@ static void mode_scale(const gamepad_state_t *gp)
     uint16_t pressed = gp->buttons & ~prev_buttons;
     prev_buttons = gp->buttons;
 
-    if (pressed & BTN_SHOULDER_L && s_octave > 0)
+    if (pressed & BTN_SHOULDER_L && s_octave > 0) {
         s_octave--;
-    if (pressed & BTN_SHOULDER_R && s_octave < 2)
+        synth_blip(BLIP_FREQ_DOWN);
+    }
+    if (pressed & BTN_SHOULDER_R && s_octave < 2) {
         s_octave++;
+        synth_blip(BLIP_FREQ_UP);
+    }
 
     /* Map buttons to scale degrees */
     int note_idx = -1;
@@ -629,9 +745,13 @@ static void mode_scale(const gamepad_state_t *gp)
     int semitone = (s_octave * 12) + SCALE_MAJOR[note_idx];
     float freq = (float)note_at(semitone);
 
-    /* Pitch bend from right stick Y */
+    /* Pitch bend from right stick Y — fine bend in Hz. */
     float bend = map_range((float)gp->axis_ry, -STICK_MAX, STICK_MAX, -50, 50);
     freq += bend;
+
+    /* Triggers = coarse pitch bend (±7 semitones) */
+    float bend_mult = compute_bend_mult(gp);
+    freq *= bend_mult;
 
     tone_play((uint32_t)freq);
     led_on();
@@ -646,20 +766,32 @@ static void mode_arpeggio(const gamepad_state_t *gp)
     uint16_t pressed = gp->buttons & ~prev_buttons;
     prev_buttons = gp->buttons;
 
-    if (pressed & BTN_A)
+    if (pressed & BTN_A) {
         s_arp_chord = CHORD_MAJOR; /* A = major */
-    if (pressed & BTN_B)
+        synth_blip(BLIP_FREQ_UP);
+    }
+    if (pressed & BTN_B) {
         s_arp_chord = CHORD_MINOR; /* B = minor */
-    if (pressed & BTN_X)
+        synth_blip(BLIP_FREQ_DOWN);
+    }
+    if (pressed & BTN_X) {
         s_arp_chord = CHORD_7TH; /* X = 7th */
-    if (pressed & BTN_Y)
+        synth_blip(BLIP_FREQ_NEUTRAL);
+    }
+    if (pressed & BTN_Y) {
         s_arp_chord = CHORD_DIM; /* Y = dim */
+        synth_blip(BLIP_FREQ_DOWN * 0.75f);
+    }
 
     /* LB/RB shift octave */
-    if (pressed & BTN_SHOULDER_L && s_octave > 0)
+    if (pressed & BTN_SHOULDER_L && s_octave > 0) {
         s_octave--;
-    if (pressed & BTN_SHOULDER_R && s_octave < 2)
+        synth_blip(BLIP_FREQ_DOWN);
+    }
+    if (pressed & BTN_SHOULDER_R && s_octave < 2) {
         s_octave++;
+        synth_blip(BLIP_FREQ_UP);
+    }
 
     /* D-pad transpose root note */
     if (gp->dpad & DPAD_UP) {
@@ -669,6 +801,7 @@ static void mode_arpeggio(const gamepad_state_t *gp)
             s_arp_root++;
             if (s_arp_root > 11)
                 s_arp_root = 11;
+            synth_blip(BLIP_FREQ_UP);
             last_up = now;
         }
     }
@@ -679,6 +812,7 @@ static void mode_arpeggio(const gamepad_state_t *gp)
             s_arp_root--;
             if (s_arp_root < 0)
                 s_arp_root = 0;
+            synth_blip(BLIP_FREQ_DOWN);
             last_down = now;
         }
     }
@@ -690,6 +824,7 @@ static void mode_arpeggio(const gamepad_state_t *gp)
         s_arp_running = !s_arp_running;
         s_arp_index = 0;
         s_arp_direction = 1;
+        synth_blip(s_arp_running ? BLIP_FREQ_UP : BLIP_FREQ_DOWN);
         if (!s_arp_running)
             tone_stop();
     }
@@ -1011,6 +1146,7 @@ static void audio_render_task(void *arg)
     float svf_low = 0.0f;
     float svf_band = 0.0f;
     float lfo_phase = 0.0f;
+    float blip_phase = 0.0f;
     int16_t stereo_buf[BLOCK_SIZE * 2];
 
     const float block_period = (float)BLOCK_SIZE / (float)SAMPLE_RATE;
@@ -1093,8 +1229,207 @@ static void audio_render_task(void *arg)
             }
         }
 
+        /* Mix background drum engine into the synth output. Drums are
+         * program material, so they pass through the master-volume stage
+         * below. drums_render_block() does a saturating add into L/R. */
+        drums_render_block(stereo_buf, BLOCK_SIZE);
+
+        /* Master volume attenuation — applied to (synth + drums) before the
+         * blip mix so confirmation blips stay audible at low volumes. Read
+         * once per block to avoid torn reads. */
+        float master_vol = s_settings.master_volume;
+        if (master_vol < 0.999f) {
+            for (int i = 0; i < BLOCK_SIZE; i++) {
+                int16_t left = stereo_buf[i * 2];
+                int16_t right = stereo_buf[i * 2 + 1];
+                stereo_buf[i * 2] = clip_i16((float)left * master_vol);
+                stereo_buf[i * 2 + 1] = clip_i16((float)right * master_vol);
+            }
+        }
+
+        /* Mix confirmation blip over the top (post-main synthesis). The main
+         * voice is ducked so the blip is audible even at full volume. */
+        int blip_rem = s_blip_samples_remaining;
+        if (blip_rem > 0) {
+            float blip_inc = s_blip_freq_hz / (float)SAMPLE_RATE;
+            int total_samples = (SAMPLE_RATE * BLIP_DURATION_MS) / 1000;
+            int count = (blip_rem < BLOCK_SIZE) ? blip_rem : BLOCK_SIZE;
+            for (int i = 0; i < count; i++) {
+                /* Linear fade-out over the last 20% of the blip to avoid a click. */
+                int pos = total_samples - blip_rem + i;
+                float env = 1.0f;
+                int fade_start = (total_samples * 4) / 5;
+                if (pos > fade_start) {
+                    env = (float)(total_samples - pos) / (float)(total_samples - fade_start);
+                    if (env < 0.0f)
+                        env = 0.0f;
+                }
+                int idx = (int)(blip_phase * SINE_TABLE_SIZE) & (SINE_TABLE_SIZE - 1);
+                int16_t blip_sample = (int16_t)((float)s_sine_table[idx] * env);
+                int16_t ducked = stereo_buf[i * 2] >> BLIP_MAIN_DUCK_SHIFT;
+                int16_t mixed = clip_i16((float)ducked + (float)blip_sample);
+                stereo_buf[i * 2] = mixed;
+                stereo_buf[i * 2 + 1] = mixed;
+                blip_phase += blip_inc;
+                if (blip_phase >= 1.0f)
+                    blip_phase -= 1.0f;
+            }
+            s_blip_samples_remaining = blip_rem - count;
+            if (s_blip_samples_remaining <= 0)
+                blip_phase = 0.0f;
+        }
+
         size_t written;
         i2s_channel_write(s_tx_chan, stereo_buf, sizeof(stereo_buf), &written, portMAX_DELAY);
+    }
+}
+
+/* ── Settings Page Helpers ───────────────────────────────── */
+
+#define SETTINGS_LADDER_GAP_MS 100
+
+/* Play a sequence of `count` blips at the given frequency, 100 ms apart.
+ * The blip engine is single-slot so we space the emissions out with a
+ * short vTaskDelay — acceptable here because this runs on the control
+ * task which is idle while editing settings. */
+static void settings_play_ladder(int count, float freq_hz)
+{
+    if (count < 1)
+        count = 1;
+    if (count > 12)
+        count = 12;
+    for (int i = 0; i < count; i++) {
+        synth_blip(freq_hz);
+        vTaskDelay(pdMS_TO_TICKS(SETTINGS_LADDER_GAP_MS));
+    }
+}
+
+/* Encode the current value of s_settings_cursor as an audible ladder. */
+static void settings_play_value_ladder(int cursor)
+{
+    switch (cursor) {
+        case SETTING_MASTER_VOL: {
+            int n = (int)(s_settings.master_volume * 10.0f + 0.5f) + 1;
+            settings_play_ladder(n, BLIP_FREQ_NEUTRAL);
+            break;
+        }
+        case SETTING_DRUM_PATTERN: {
+            int n = s_settings.drum_pattern + 1;
+            settings_play_ladder(n, BLIP_FREQ_NEUTRAL);
+            break;
+        }
+        case SETTING_DRUM_TEMPO:
+            /* 3 neutral blips — hearing the exact BPM isn't useful yet
+             * because no drum engine consumes the value (sibling agent). */
+            settings_play_ladder(3, BLIP_FREQ_NEUTRAL);
+            break;
+        case SETTING_DRUM_VOLUME: {
+            int n = (int)(s_settings.drum_volume * 10.0f + 0.5f) + 1;
+            settings_play_ladder(n, BLIP_FREQ_NEUTRAL);
+            break;
+        }
+        case SETTING_LFO_RATE:
+            settings_play_ladder(3, BLIP_FREQ_NEUTRAL);
+            break;
+        case SETTING_LFO_DEPTH: {
+            int n = (int)(s_settings.lfo_depth * 10.0f + 0.5f) + 1;
+            settings_play_ladder(n, BLIP_FREQ_NEUTRAL);
+            break;
+        }
+        case SETTING_LFO_TARGET: {
+            int n = s_settings.lfo_target + 1;
+            settings_play_ladder(n, BLIP_FREQ_NEUTRAL);
+            break;
+        }
+        default:
+            break;
+    }
+}
+
+/* Clamp helpers — keep each setting within documented bounds. */
+static inline float clampf(float v, float lo, float hi)
+{
+    if (v < lo)
+        return lo;
+    if (v > hi)
+        return hi;
+    return v;
+}
+static inline int clampi(int v, int lo, int hi)
+{
+    if (v < lo)
+        return lo;
+    if (v > hi)
+        return hi;
+    return v;
+}
+
+/* Apply a step (±1) to the currently-cursored setting. */
+static void settings_adjust(int cursor, int direction)
+{
+    switch (cursor) {
+        case SETTING_MASTER_VOL:
+            s_settings.master_volume =
+                clampf(s_settings.master_volume + 0.1f * direction, 0.0f, 1.0f);
+            break;
+        case SETTING_DRUM_PATTERN:
+            s_settings.drum_pattern = clampi(s_settings.drum_pattern + direction, 0, 4);
+            break;
+        case SETTING_DRUM_TEMPO:
+            s_settings.drum_tempo_bpm = clampi(s_settings.drum_tempo_bpm + 5 * direction, 60, 200);
+            break;
+        case SETTING_DRUM_VOLUME:
+            s_settings.drum_volume = clampf(s_settings.drum_volume + 0.1f * direction, 0.0f, 1.0f);
+            break;
+        case SETTING_LFO_RATE:
+            s_settings.lfo_rate_hz =
+                clampf(s_settings.lfo_rate_hz + 0.5f * direction, LFO_RATE_MIN, LFO_RATE_MAX);
+            break;
+        case SETTING_LFO_DEPTH:
+            s_settings.lfo_depth = clampf(s_settings.lfo_depth + 0.1f * direction, 0.0f, 1.0f);
+            break;
+        case SETTING_LFO_TARGET: {
+            int t = s_settings.lfo_target + direction;
+            /* Wrap within [LFO_TARGET_NONE .. LFO_TARGET_BOTH] */
+            int count = LFO_TARGET_BOTH + 1;
+            t = ((t % count) + count) % count;
+            s_settings.lfo_target = t;
+            break;
+        }
+        default:
+            break;
+    }
+}
+
+/* Settings-edit d-pad handler. Debounces with SETTINGS_DPAD_REPEAT_MS
+ * between retriggers while held. */
+static void settings_edit_handle(const gamepad_state_t *gp)
+{
+    static uint32_t last_dpad_ms = 0;
+    uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
+    if (now - last_dpad_ms < SETTINGS_DPAD_REPEAT_MS)
+        return;
+
+    if (gp->dpad & DPAD_LEFT) {
+        s_settings_cursor = (s_settings_cursor + SETTING_COUNT - 1) % SETTING_COUNT;
+        last_dpad_ms = now;
+        synth_blip(BLIP_FREQ_NEUTRAL);
+        vTaskDelay(pdMS_TO_TICKS(SETTINGS_LADDER_GAP_MS));
+        settings_play_value_ladder(s_settings_cursor);
+    } else if (gp->dpad & DPAD_RIGHT) {
+        s_settings_cursor = (s_settings_cursor + 1) % SETTING_COUNT;
+        last_dpad_ms = now;
+        synth_blip(BLIP_FREQ_NEUTRAL);
+        vTaskDelay(pdMS_TO_TICKS(SETTINGS_LADDER_GAP_MS));
+        settings_play_value_ladder(s_settings_cursor);
+    } else if (gp->dpad & DPAD_UP) {
+        settings_adjust(s_settings_cursor, +1);
+        last_dpad_ms = now;
+        synth_blip(BLIP_FREQ_UP);
+    } else if (gp->dpad & DPAD_DOWN) {
+        settings_adjust(s_settings_cursor, -1);
+        last_dpad_ms = now;
+        synth_blip(BLIP_FREQ_DOWN);
     }
 }
 
@@ -1193,7 +1528,59 @@ static void control_task(void *arg)
             }
 
             ESP_LOGI(TAG, "Mode: %d waveform: %d", s_mode, mode_waves[s_mode]);
+            synth_blip(BLIP_FREQ_NEUTRAL);
             led_blink(s_mode + 1, 80, 80);
+        }
+
+        /* Home button toggles the background drum engine (rising edge).
+         * Reads s_settings.drum_pattern as the "remembered" pattern so
+         * settings-page changes take effect on the next toggle. */
+        if (misc_pressed & MISC_HOME) {
+            s_drum_on = !s_drum_on;
+            if (s_drum_on) {
+                int pat = s_settings.drum_pattern;
+                if (pat < 1 || pat > 4)
+                    pat = 1;
+                drums_set_pattern(pat);
+                synth_blip(BLIP_FREQ_UP);
+            } else {
+                drums_set_pattern(0);
+                synth_blip(BLIP_FREQ_DOWN);
+            }
+            ESP_LOGI(TAG, "Drums: %s", s_drum_on ? "on" : "off");
+        }
+
+        /* Push live settings-page values into the drum engine so tempo/volume
+         * changes take effect while drums are running. Cheap assignments —
+         * the drum engine re-arms the esp_timer only if BPM actually changed. */
+        drums_set_tempo(s_settings.drum_tempo_bpm);
+        drums_set_volume(s_settings.drum_volume);
+
+        /* Menu button toggles the settings-edit overlay (rising edge) */
+        if (misc_pressed & MISC_SELECT) {
+            s_settings_edit_active = !s_settings_edit_active;
+            if (s_settings_edit_active) {
+                tone_stop();
+                piezo_voice_note_off(PIEZO_A);
+                piezo_voice_note_off(PIEZO_B);
+                synth_blip(BLIP_FREQ_UP);
+                ESP_LOGI(TAG, "Settings edit: ENTER (cursor=%d)", s_settings_cursor);
+                /* Render the current field's value ladder so the user knows
+                 * what they're adjusting. Gap before the ladder so the entry
+                 * blip stays distinct. */
+                vTaskDelay(pdMS_TO_TICKS(SETTINGS_LADDER_GAP_MS));
+                settings_play_value_ladder(s_settings_cursor);
+            } else {
+                synth_blip(BLIP_FREQ_DOWN);
+                ESP_LOGI(TAG, "Settings edit: EXIT");
+            }
+        }
+
+        /* While editing, suppress mode dispatch and run the edit handler */
+        if (s_settings_edit_active) {
+            settings_edit_handle(&gp);
+            vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(CONTROL_TASK_PERIOD_MS));
+            continue;
         }
 
         /* Dispatch to current mode */
@@ -1235,6 +1622,7 @@ void app_main(void)
 
     init_nvs();
     init_sine_table();
+    drums_init();
     init_i2s();
     init_led();
     piezo_voice_init(PIEZO_A, PIEZO_A_PIN);
@@ -1243,6 +1631,25 @@ void app_main(void)
     synth_set_filter(true, 6000.0f, 1.5f);
     synth_set_lfo(LFO_TARGET_NONE, 5.0f, 0.0f);
     synth_set_delay(false, 1, 0.0f, 0.0f);
+
+    /* Settings-page defaults (also set via static initializer; reassigned
+     * here so any future reset-to-defaults path has a single code location
+     * to mirror). */
+    s_settings.master_volume = 0.7f;
+    s_settings.drum_pattern = 0;
+    s_settings.drum_tempo_bpm = 110;
+    s_settings.drum_volume = 0.5f;
+    s_settings.lfo_rate_hz = 5.0f;
+    s_settings.lfo_depth = 0.3f;
+    s_settings.lfo_target = LFO_TARGET_CUTOFF;
+    s_settings_edit_active = false;
+    s_settings_cursor = 0;
+    ESP_LOGI(TAG,
+             "Settings: master_vol=%.2f drum_ptn=%d drum_bpm=%d drum_vol=%.2f "
+             "lfo_rate=%.1f lfo_depth=%.2f lfo_tgt=%d",
+             s_settings.master_volume, s_settings.drum_pattern, s_settings.drum_tempo_bpm,
+             s_settings.drum_volume, s_settings.lfo_rate_hz, s_settings.lfo_depth,
+             s_settings.lfo_target);
 
     play_startup_jingle();
 
