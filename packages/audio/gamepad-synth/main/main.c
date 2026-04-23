@@ -238,13 +238,13 @@ typedef enum {
 } setting_id_t;
 
 typedef struct {
-    float master_volume;  /* 0.0 .. 1.0 */
-    int drum_pattern;     /* 0 = off, 1..4 */
-    int drum_tempo_bpm;   /* 60..200 */
-    float drum_volume;    /* 0.0 .. 1.0 */
-    float lfo_rate_hz;    /* 0.1 .. 20.0 */
-    float lfo_depth;      /* 0.0 .. 1.0 */
-    int lfo_target;       /* lfo_target_t value */
+    float master_volume; /* 0.0 .. 1.0 */
+    int drum_pattern;    /* 0 = off, 1..4 */
+    int drum_tempo_bpm;  /* 60..200 */
+    float drum_volume;   /* 0.0 .. 1.0 */
+    float lfo_rate_hz;   /* 0.1 .. 20.0 */
+    float lfo_depth;     /* 0.0 .. 1.0 */
+    int lfo_target;      /* lfo_target_t value */
 } settings_t;
 
 volatile settings_t s_settings = {
@@ -362,8 +362,7 @@ static inline int16_t delay_process(int16_t in, int delay_samples, float feedbac
  * to a 1.0 multiplier; asymmetric presses give a fine detune. */
 static inline float compute_bend_mult(const gamepad_state_t *gp)
 {
-    float bend_semitones =
-        ((float)(gp->throttle - gp->brake) / (float)TRIGGER_MAX) * 7.0f;
+    float bend_semitones = ((float)(gp->throttle - gp->brake) / (float)TRIGGER_MAX) * 7.0f;
     if (bend_semitones > 7.0f)
         bend_semitones = 7.0f;
     if (bend_semitones < -7.0f)
@@ -1377,12 +1376,10 @@ static void settings_adjust(int cursor, int direction)
             s_settings.drum_pattern = clampi(s_settings.drum_pattern + direction, 0, 4);
             break;
         case SETTING_DRUM_TEMPO:
-            s_settings.drum_tempo_bpm =
-                clampi(s_settings.drum_tempo_bpm + 5 * direction, 60, 200);
+            s_settings.drum_tempo_bpm = clampi(s_settings.drum_tempo_bpm + 5 * direction, 60, 200);
             break;
         case SETTING_DRUM_VOLUME:
-            s_settings.drum_volume =
-                clampf(s_settings.drum_volume + 0.1f * direction, 0.0f, 1.0f);
+            s_settings.drum_volume = clampf(s_settings.drum_volume + 0.1f * direction, 0.0f, 1.0f);
             break;
         case SETTING_LFO_RATE:
             s_settings.lfo_rate_hz =
@@ -1586,7 +1583,6 @@ static void control_task(void *arg)
             continue;
         }
 
-
         /* Dispatch to current mode */
         switch (s_mode) {
             case MODE_MONO:
@@ -1648,8 +1644,9 @@ void app_main(void)
     s_settings.lfo_target = LFO_TARGET_CUTOFF;
     s_settings_edit_active = false;
     s_settings_cursor = 0;
-    ESP_LOGI(TAG, "Settings: master_vol=%.2f drum_ptn=%d drum_bpm=%d drum_vol=%.2f "
-                  "lfo_rate=%.1f lfo_depth=%.2f lfo_tgt=%d",
+    ESP_LOGI(TAG,
+             "Settings: master_vol=%.2f drum_ptn=%d drum_bpm=%d drum_vol=%.2f "
+             "lfo_rate=%.1f lfo_depth=%.2f lfo_tgt=%d",
              s_settings.master_volume, s_settings.drum_pattern, s_settings.drum_tempo_bpm,
              s_settings.drum_volume, s_settings.lfo_rate_hz, s_settings.lfo_depth,
              s_settings.lfo_target);
