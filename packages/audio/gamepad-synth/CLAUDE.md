@@ -6,9 +6,9 @@ For monorepo-wide conventions, see the root [CLAUDE.md](../../../CLAUDE.md).
 
 ## Project Overview
 
-Gamepad Synth turns a BLE Bluetooth controller (Xbox Series X/S, PS5 DualSense, Switch Pro) into a Korg Monotron-inspired synthesizer. An ESP32-S3 reads gamepad input via Bluepad32 and produces audio through an I2S DAC (MAX98357A) in seven sound modes.
+Gamepad Synth turns a BLE Bluetooth controller (Xbox Series X/S, PS5 DualSense, Switch Pro) into a Korg Monotron-inspired synthesizer. An ESP32-S3 reads gamepad input via Bluepad32 and produces audio through an I2S DAC (MAX98357A). Three top-level voicings (Continuous, Discrete, One-shot) with orthogonal toggles (DUAL_OSC, DRONE_HOLD, DELAY, ARP, WAVEFORM) set via RB-held + face button.
 
-**Status**: v1.0.0 — All PRD-008 phases complete. Mono Synth, Dual Osc, Delay Synth, Scale, Arpeggio, Retro SFX, Drone modes. Full signal chain: dual DDS oscillators → resonant SVF filter → LFO modulation → 0.5 s delay → I2S DAC.
+**Status**: Phase 2 — voicing-based control model. Full signal chain: dual DDS oscillators → resonant TPT SVF filter → LFO modulation → 0.5 s delay → I2S DAC. Per-voicing config persists across voicing switches.
 
 ## Tech Stack
 
@@ -68,15 +68,43 @@ Port is auto-detected for ESP32-S3. Override with `PORT=/dev/ttyUSB0 just flash`
 | `STICK_DEADZONE` | 50 | Analog stick dead zone (out of ±512) |
 | `MIN_FREQ` / `MAX_FREQ` | 100 / 2000 Hz | Tone frequency range |
 
-### Sound Modes (cycled via View/Share/- button, LED blinks 1-7)
+### Control Paradigm
 
-1. **Mono Synth** — Monotron-style single osc. LY=pitch, LX=vibrato depth, RY=filter cutoff, RX=resonance, LT=LFO rate, RT=LFO depth (cutoff wah)
-2. **Dual Osc** — Two sawtooth oscillators. LY=pitch, face buttons=interval (A=unison, B=fifth, X=octave, Y=two octaves), RX=detune (±50 cents), RY=cutoff
-3. **Delay Synth** — Single osc with dynamic delay. LY=pitch, RY=delay time (20-500 ms), RX=feedback, LT/RT=filter cutoff modulation
-4. **Scale Player** (sine + slapback) — Face buttons + d-pad = C major scale notes, shoulders = octave shift
-5. **Arpeggiator** (square + cosmic echo) — Face buttons = chord type, RT = toggle, LY = speed, LX = pattern
-6. **Retro SFX** (filter/delay bypassed) — Face buttons + d-pad = game SFX, RT = speed multiplier
-7. **Drone** — Two sustained oscillators with LFO. LY=osc A pitch, RY=osc B pitch, LT=LFO rate, RT=LFO depth (pitch + cutoff)
+Tweak sticks (typically RY/RX) use **rate control**: stick displacement = rate of change of the parameter, not absolute position. Holding off-center changes the value over time; releasing to center holds the last value. This makes it possible to find a sweet spot and release, rather than having to hold the stick still. A short "bump" blip fires when a parameter reaches its min/max limit.
+
+Primary pitch sticks (LY in Continuous/Discrete) stay **absolute** for theremin-style muscle memory — stick up = high note. Under `DRONE_HOLD`, LY becomes integrating too (slow drift).
+
+Tweak parameter state (cutoff, resonance, delay time, feedback, detune, pitch offset) persists across ticks within a voicing, resets on voicing switch, and resets on LS-click.
+
+Per-voicing configuration (`DUAL_OSC`, `DRONE_HOLD`, `DELAY`, `ARP`, `WAVEFORM`, interval semitones) persists **across** voicing switches, so you can tune up a Continuous setup, switch to Discrete for a chord bridge, and come back with the Continuous toggles still on.
+
+### Global Buttons (every voicing)
+
+| Button | Action |
+|---|---|
+| D-pad ↑/↓ | Master volume nudge (±0.05 per step), auto-repeats at 4 Hz |
+| D-pad ←/→ | Drum tempo nudge (±5 BPM), also drives the arp step rate |
+| Share/View/− (`MISC_BACK`) | Cycle voicing (3 choices). Brief LED flash, then a per-voicing signature gesture plays. |
+| Home/PS/Xbox tap | Toggle drum engine on/off. Pattern/volume come from the settings page. |
+| Home/PS/Xbox held + A/B/X/Y | Select drum pattern 1/2/3/4 directly (auto-starts drums if off) |
+| Menu/Options/+ | Enter/exit settings-edit overlay. Inside, d-pad becomes field navigation (not volume/tempo). |
+| LS click (left-stick press) | Reset current voicing's tweak parameters to defaults |
+| LT / RT triggers | ±7-semitone pitch bend (global in pitched voicings) |
+| **RB + A** | Toggle `DUAL_OSC` (Continuous) |
+| **RB + B** | Toggle `DRONE_HOLD` (Continuous; forces DUAL_OSC on) |
+| **RB + X** | Toggle `DELAY` (Continuous + Discrete) |
+| **RB + Y** | Cycle `WAVEFORM` (global: square → saw → triangle → sine) |
+| **RB + LB** | Toggle `ARP` (Discrete) |
+
+While RB is held, face buttons are fully suppressed from normal voicing dispatch so the modifier-key metaphor stays clean. All toggles play a confirmation cue (two-blip up / single down / waveform-specific blip).
+
+**Settings-edit overlay**: d-pad ←/→ moves cursor between fields (drum_pattern, drum_volume, lfo_rate_hz, lfo_depth, lfo_target); ↑/↓ adjusts the selected field. Each cursor move plays a short value ladder so the user can audit the current value without a screen. Master volume and tempo live on the global d-pad.
+
+### Voicings (cycled via View/Share/- button; each plays a signature gesture on entry)
+
+1. **Continuous** (Mono + Dual Osc + Delay Synth + Drone collapsed) — LY=pitch (absolute; integrating under DRONE_HOLD), LX=vibrato (or filter cutoff under DRONE_HOLD), RY=filter cutoff (integrating, log; osc B pitch under DRONE_HOLD), RX=filter resonance (integrating). Face buttons select dual-osc interval (unison/5th/8va/2×8va) when DUAL_OSC is on. LB+RY/RX fine-tunes delay time/feedback when DELAY is on. DRONE_HOLD routes osc B to the piezos at a fixed 1.02 detune ratio. Signature: pitch-bend chirp on sawtooth.
+2. **Discrete** (Scale + Arpeggio collapsed) — LY integrates pitch offset (±12 st). Without ARP: face buttons play scale degrees (A=Do/B=Re/X=Mi/Y=Fa; LB held → Sol/La/Ti/Do); RY=fine bend (±50 Hz, absolute); RX=filter cutoff (integrating). With ARP: face buttons pick chord (major/minor/7th/dim); LX-zones pick pattern (left=down, right=up, center=up-down); RT toggles arp running; step rate from the global tempo (16ths). Signature: Do-Mi-Sol on sine.
+3. **One-shot** (Retro SFX) — A/B/X/Y (no LB) trigger Laser/Explosion/Power-up/Coin; LB+face triggers Siren/Engine/Jump/Warp. RT = speed multiplier (0.3-1.0x). Filter and delay bypassed. Signature: laser zap.
 
 ### Dependencies
 

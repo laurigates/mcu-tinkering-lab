@@ -1,6 +1,6 @@
 # Gamepad Synth
 
-Turn a Bluetooth controller into a Korg Monotron-inspired synthesizer. An ESP32-S3 reads gamepad input via [Bluepad32](https://github.com/ricardoquesada/bluepad32) and produces audio through an I2S DAC (MAX98357A) in seven sound modes. Features dual DDS oscillators, resonant SVF filter, LFO modulation, and a 0.5-second delay line.
+Turn a Bluetooth controller into a Korg Monotron-inspired synthesizer. An ESP32-S3 reads gamepad input via [Bluepad32](https://github.com/ricardoquesada/bluepad32) and produces audio through an I2S DAC (MAX98357A). Three top-level voicings (Continuous, Discrete, One-shot) with orthogonal toggles for dual-osc, drone-hold, delay, arpeggiator, and waveform. Features dual DDS oscillators, resonant SVF filter, LFO modulation, and a 0.5-second delay line.
 
 ## Hardware
 
@@ -8,7 +8,7 @@ Turn a Bluetooth controller into a Korg Monotron-inspired synthesizer. An ESP32-
 - MAX98357A I2S DAC breakout (BCLK=GPIO5, WS=GPIO6, DIN=GPIO7)
 - 4-8 ohm speaker (2-3W)
 - Status LED on GPIO2
-- Optional: two piezo discs on GPIO8/GPIO9 for Drone-mode accent voices
+- Optional: two piezo discs on GPIO8/GPIO9 for Drone-hold accent voices
 
 See [WIRING.md](WIRING.md) for the full wiring guide.
 
@@ -39,115 +39,93 @@ The ESP32-S3 only supports **BLE** (no Bluetooth Classic). Compatible controller
 3. The LED blinks and the startup jingle plays when the board boots
 4. Once paired, the controller auto-reconnects on subsequent power-ups (just press the home button)
 
-## Sound Modes
-
-Press **View** (Xbox) / **Share** (PS) / **-** (Switch) to cycle through modes. The LED blinks 1-7 times to indicate the current mode.
-
-### Mode 1: Mono Synth
-
-Monotron-style single oscillator with resonant filter and LFO wah.
+## Global Controls
 
 | Control | Function |
 |---------|----------|
-| Left stick Y | Base pitch (100-2000 Hz) |
-| Left stick X | Vibrato depth (fixed 5 Hz speed) |
-| Right stick Y | Filter cutoff (40 Hz to 18 kHz, logarithmic) |
-| Right stick X | Filter resonance (self-oscillation at max) |
-| LT | LFO rate (0.1 - 20 Hz) |
-| RT | LFO depth (0 = off, max = ±2 octaves of cutoff modulation) |
+| D-pad ↑/↓ | Master volume (±0.05, auto-repeats at 4 Hz) |
+| D-pad ←/→ | Drum tempo (±5 BPM, also drives arp step rate) |
+| Share / View / − | Cycle voicing (Continuous → Discrete → One-shot) |
+| Home / PS / Xbox tap | Toggle drum engine on/off |
+| Home held + A/B/X/Y | Select drum pattern 1-4 |
+| Menu / Options / + | Enter/exit settings-edit overlay (d-pad navigates fields) |
+| LS click | Reset tweak parameters to defaults |
+| LT / RT triggers | ±7-semitone pitch bend in pitched voicings |
 
-Sweep right stick Y upward while holding RX for classic Monotron squelch. Hold RT while varying LT for filter "wah".
+## Modifier Toggles (RB-held + face button)
 
-### Mode 2: Dual Osc
+Each toggle plays a confirmation cue and persists per-voicing across voicing switches.
 
-Two sawtooth oscillators with selectable interval and detune for fat analog sound.
+| Combo | Toggle | Scope | Effect |
+|-------|--------|-------|--------|
+| RB + A | DUAL_OSC | Continuous | Enables osc B; face buttons select interval (unison/5th/8va/2×8va) |
+| RB + B | DRONE_HOLD | Continuous | LY+RY integrate pitch; osc B plays on piezos; forces DUAL_OSC on |
+| RB + X | DELAY | Continuous + Discrete | Enables delay tail; LB held + RY/RX fine-tunes time/feedback |
+| RB + Y | WAVEFORM | All | Cycles square → saw → triangle → sine |
+| RB + LB | ARP | Discrete | Overlays arpeggiator; face button picks chord, steps fire at 16ths |
 
-| Control | Function |
-|---------|----------|
-| Left stick Y | Base pitch |
-| A / B / X / Y | Interval: unison / fifth / octave / two octaves |
-| Right stick X | Detune (±50 cents) |
-| Right stick Y | Filter cutoff |
+## Voicings
 
-### Mode 3: Delay Synth
+Press **Share / View / −** to cycle. Each voicing plays a signature gesture on entry so you can identify the voicing without a screen.
 
-Single oscillator with dynamic delay-as-secondary-voice (Monotron Delay behavior).
+### Continuous
 
-| Control | Function |
-|---------|----------|
-| Left stick Y | Base pitch |
-| Right stick Y | Delay time (20 - 500 ms) |
-| Right stick X | Feedback (up to 0.9 — Karplus-Strong territory at max) |
-| LT | Filter cutoff down |
-| RT | Filter cutoff up |
-
-Short delay + high feedback produces string-like tones. Long delay + moderate feedback creates cosmic echoes.
-
-### Mode 4: Scale Player
-
-Play a C major scale with buttons and d-pad. Each button maps to a scale degree.
-
-| Control | Note |
-|---------|------|
-| A | Do (C) |
-| B | Re (D) |
-| X | Mi (E) |
-| Y | Fa (F) |
-| D-pad Up | Sol (G) |
-| D-pad Right | La (A) |
-| D-pad Down | Ti (B) |
-| D-pad Left | Do (C, high) |
-| LB | Octave down |
-| RB | Octave up |
-| Right stick Y | Pitch bend |
-
-Three octave range: C4, C5 (default), C6.
-
-### Mode 5: Arpeggiator
-
-Automatically cycles through chord notes. Select a chord, then toggle the arpeggio on.
+Monotron-style instrument: LY is the pitch stick, the right stick shapes the tone.
 
 | Control | Function |
 |---------|----------|
-| A | Major chord |
-| B | Minor chord |
-| X | Dominant 7th chord |
-| Y | Diminished chord |
-| RT | Toggle arpeggio on/off |
-| Left stick Y | Speed (50-500 ms per note) |
+| Left stick Y | Pitch (100-2000 Hz, absolute; integrating under DRONE_HOLD) |
+| Left stick X | Vibrato depth at 5 Hz (absolute; filter cutoff integrator under DRONE_HOLD) |
+| Right stick Y | Filter cutoff (40 Hz - 18 kHz, log, integrating; osc B pitch under DRONE_HOLD) |
+| Right stick X | Filter resonance (0.5 - 6.0, integrating) |
+| A/B/X/Y (no RB) | Interval: unison/5th/8va/2×8va (only when DUAL_OSC is on) |
+| LB + Right stick Y | Delay time adjust (when DELAY is on) |
+| LB + Right stick X | Delay feedback adjust (when DELAY is on) |
+| LT / RT | ±7-semitone pitch bend |
+
+Sweep RY upward while nudging RX for classic Monotron squelch. Toggle DRONE_HOLD (RB+B) for sustained drones that drift when sticks are released.
+
+### Discrete
+
+Face buttons pick scalar notes. Optional arpeggiator overlay.
+
+Without ARP:
+
+| Control | Function |
+|---------|----------|
+| A / B / X / Y (no LB) | Do / Re / Mi / Fa (lower tetrachord) |
+| LB + A / B / X / Y | Sol / La / Ti / Do (upper tetrachord) |
+| Left stick Y | Pitch offset, ±12 st (integrating) |
+| Right stick Y | Fine bend, ±50 Hz (absolute) |
+| Right stick X | Filter cutoff (integrating) |
+
+With ARP (RB+LB toggle):
+
+| Control | Function |
+|---------|----------|
+| A / B / X / Y | Chord: major / minor / 7th / diminished |
 | Left stick X | Pattern: left=down, right=up, center=up-down |
-| D-pad Up/Down | Transpose root note up/down |
-| LB | Octave down |
-| RB | Octave up |
+| Left stick Y | Root transpose, ±12 st (integrating) |
+| RT trigger rising edge | Start/stop arp running |
+| Right stick X | Filter cutoff (integrating) |
 
-### Mode 6: Retro SFX
+Step rate follows the global tempo (16th notes).
 
-Trigger classic game sound effects with button presses (filter and delay bypassed for raw effects).
+### One-shot
+
+Face buttons trigger retro SFX envelopes. Filter and delay bypassed.
 
 | Control | Sound Effect |
-|---------|-------------|
-| A | Laser (descending sweep) |
-| B | Explosion (low rumble) |
-| X | Power-up (ascending sweep) |
-| Y | Coin (high chirp) |
-| D-pad Up | Siren (oscillating) |
-| D-pad Down | Engine (low rumble) |
-| D-pad Left | Jump (ascending chirp) |
-| D-pad Right | Warp (sweep up) |
-| RT | Speed multiplier (0.5x-2x) |
-
-### Mode 7: Drone
-
-Two continuously-sustained oscillators with LFO modulation for evolving textures. Oscillator A plays through the DAC; oscillator B plays through the optional piezo pair (if wired) with a fixed 1.02 detune ratio between the two discs, so the beating happens acoustically in air.
-
-| Control | Function |
-|---------|----------|
-| Left stick Y | Oscillator A pitch (sawtooth, DAC) |
-| Right stick Y | Oscillator B pitch (square wave on piezos) |
-| LT | LFO rate |
-| RT | LFO depth (modulates both pitch and filter cutoff on the DAC voice) |
-
-No note-off — the drone plays continuously while in this mode. Dial in a static interval with the sticks, then add slow LFO modulation for a shifting ambient pad. Without the piezos wired, oscillator B is silent and only the DAC drone is heard.
+|---------|--------------|
+| A (no LB) | Laser (descending sweep) |
+| B (no LB) | Explosion (low rumble) |
+| X (no LB) | Power-up (ascending sweep) |
+| Y (no LB) | Coin (high chirp) |
+| LB + A | Siren |
+| LB + B | Engine |
+| LB + X | Jump |
+| LB + Y | Warp |
+| RT | Speed multiplier (0.3×-1.0×) |
 
 ## Building
 
@@ -159,6 +137,14 @@ just flash
 just monitor
 ```
 
+To enable verbose axis/dispatch diagnostic logging for debugging input-mapping issues:
+
+```bash
+just menuconfig
+# Navigate to "Gamepad Synth" → enable "Enable verbose axis..."
+just build && just flash && just monitor
+```
+
 ## Architecture
 
 - **Core 0**: Bluepad32 BTstack event loop (Bluetooth handling)
@@ -166,8 +152,8 @@ just monitor
   - **Control task** (50 Hz): reads gamepad state, updates synth parameters
   - **Audio render task** (continuous, priority 10): DDS phase accumulator with selectable waveform, writes 256-sample blocks to I2S DMA
 - **Audio output**: 44.1 kHz, 16-bit stereo (mono duplicated) via MAX98357A I2S DAC
-- **Piezo accents** (Drone mode only): two GPIO-driven LEDC square-wave voices on GPIO8/GPIO9 with a fixed 1.02 detune ratio, running in parallel to the DAC path
-- **Waveforms**: Square, sawtooth, triangle, sine (256-entry lookup table), noise. Per-mode defaults: Mono/Dual Osc/Delay Synth/Drone=sawtooth, Scale=sine, Arpeggio=square, SFX=square
-- **Filter**: State-variable low-pass with cutoff (40 Hz - 18 kHz) and resonance (Q 0.5 - 6.0). Chamberlin topology, coefficients recomputed once per 256-sample block. Self-oscillates at high resonance
+- **Piezo accents** (DRONE_HOLD only): two GPIO-driven LEDC square-wave voices on GPIO8/GPIO9 with a fixed 1.02 detune ratio, running in parallel to the DAC path
+- **Waveforms**: Square, sawtooth, triangle, sine (256-entry lookup table), noise. Cycle via RB+Y
+- **Filter**: Topology-preserving SVF (low-pass) with cutoff (40 Hz - 18 kHz) and resonance (Q 0.5 - 6.0). Unconditionally stable. Coefficients recomputed once per 256-sample block. Defensive NaN recovery guards against corner cases
 - **LFO**: Block-rate triangle LFO (0.1 - 20 Hz) modulating filter cutoff or oscillator pitch. Up to ±2 octaves cutoff mod or ±1 octave pitch mod at full depth
-- **Delay**: Circular-buffer delay line (0.5 s / 22050 samples, ~44 KB static RAM) with configurable delay time, feedback (up to 0.95), and wet/dry mix. Scale = slapback, Arpeggio = cosmic echo
+- **Delay**: Circular-buffer delay line (0.5 s / 22050 samples, ~44 KB static RAM) with configurable delay time, feedback (up to 0.9), and wet/dry mix

@@ -2,15 +2,35 @@
  * @file main.c
  * @brief ESP32-S3 Gamepad Synth — Bluetooth controller drives I2S audio
  *
- * Four sound modes cycled via View button (Xbox) / Share (PS) / - (Switch):
- *   1. Theremin  — sticks control pitch, vibrato, triggers bend pitch
- *   2. Scale     — face buttons + d-pad play notes, shoulders shift octave
- *   3. Arpeggio  — face buttons pick chord, stick controls speed/pattern
- *   4. Retro SFX — buttons trigger classic game sound effects
+ * Three top-level voicings cycled via the Share/View/- button:
+ *   1. Continuous — monotron-style instrument (LY=pitch, sticks=tone)
+ *   2. Discrete   — face buttons pick notes / chord degrees
+ *   3. One-shot   — face buttons trigger retro SFX envelopes
+ *
+ * Orthogonal toggles layer on top (RB-held + face button):
+ *   RB+A = DUAL_OSC   (Continuous: face picks interval)
+ *   RB+B = DRONE_HOLD (Continuous: LY+RY integrate pitch, piezos sing)
+ *   RB+X = DELAY      (Continuous + Discrete: LB+RY/RX fine-tunes)
+ *   RB+Y = WAVEFORM   (global: cycles sq→saw→tri→sine)
+ *   RB+LB = ARP       (Discrete: arpeggiate chord at global tempo)
+ *
+ * Global controls:
+ *   D-pad ↑/↓     = master volume         (4 Hz auto-repeat)
+ *   D-pad ←/→     = drum tempo / arp step (4 Hz auto-repeat)
+ *   Share/View/-  = cycle voicing (3 choices)
+ *   Home/PS/Xbox  = tap toggles drum engine, hold+face selects pattern 1-4
+ *   Menu/Options  = enter settings-edit overlay (d-pad navigates fields)
+ *   LT/RT         = ±7-semitone pitch bend in pitched voicings
+ *   LS click      = reset per-voicing tweak parameters to defaults
+ *
+ * Sticks use *rate control* for tweak parameters (RY/RX): holding
+ * off-center changes the value over time; releasing holds. Primary pitch
+ * sticks (LY in Continuous/Discrete) stay absolute unless DRONE_HOLD.
  *
  * Bluepad32 runs on Core 0 (BTstack event loop, blocks forever).
  * Core 1 runs two tasks:
- *   - Control task at 50 Hz: reads gamepad, updates synth parameters
+ *   - Control task at 50 Hz: reads gamepad, integrates stick state,
+ *     drives synth parameters
  *   - Audio render task: generates samples, writes to I2S DMA (MAX98357A)
  *
  * Tested with: Xbox Series X/S controller (BLE, firmware v5.15+)
@@ -40,6 +60,17 @@
 #include "piezo_voice.h"
 
 static const char *TAG = "gamepad_synth";
+
+/* Gated diagnostic logging for axis / dispatch debugging. Enable via
+ * `idf.py menuconfig` → "Gamepad Synth" → "Enable verbose axis..." to
+ * trace input-mapping bugs (e.g. right-stick cardinal-axis cutoff). */
+#if CONFIG_GAMEPAD_SYNTH_DEBUG_AXES
+#define DBG_AXES(fmt, ...) ESP_LOGI(TAG, "AXES: " fmt, ##__VA_ARGS__)
+#else
+#define DBG_AXES(fmt, ...) \
+    do {                   \
+    } while (0)
+#endif
 
 /* ── Pin Definitions ─────────────────────────────────────── */
 
@@ -117,6 +148,10 @@ static inline int16_t osc_sample(float phase, waveform_t wave)
 #define BTN_Y (1 << 3)          /* Y (Xbox) / Triangle (PS) */
 #define BTN_SHOULDER_L (1 << 4) /* LB (Xbox) / L1 (PS) */
 #define BTN_SHOULDER_R (1 << 5) /* RB (Xbox) / R1 (PS) */
+#define BTN_THUMB_L (1 << 8)    /* Left-stick click (LSB/L3) */
+#define BTN_THUMB_R (1 << 9)    /* Right-stick click (RSB/R3) */
+
+#define BTN_FACE_MASK (BTN_A | BTN_B | BTN_X | BTN_Y)
 
 #define DPAD_UP (1 << 0)
 #define DPAD_DOWN (1 << 1)
@@ -226,10 +261,11 @@ static volatile synth_state_t s_synth = {0};
  * this module does not consume them.
  */
 
+/* Master volume and tempo moved to the d-pad (global) in phase 1, so
+ * they are no longer fields here. Pattern stays because it's a discrete
+ * four-way selector and Home+face is the other entry point. */
 typedef enum {
-    SETTING_MASTER_VOL = 0,
-    SETTING_DRUM_PATTERN,
-    SETTING_DRUM_TEMPO,
+    SETTING_DRUM_PATTERN = 0,
     SETTING_DRUM_VOLUME,
     SETTING_LFO_RATE,
     SETTING_LFO_DEPTH,
@@ -262,6 +298,10 @@ volatile int s_settings_cursor = 0;
 
 /* Settings edit input debounce tracking (rising-edge and d-pad repeat) */
 #define SETTINGS_DPAD_REPEAT_MS 200
+
+/* Global d-pad auto-repeat: 4 Hz while held. Applies to the volume
+ * (↑/↓) and tempo (←/→) nudges outside the settings-edit overlay. */
+#define GLOBAL_DPAD_REPEAT_MS 250
 
 /* ── State-Variable Filter (TPT form, unconditionally stable) ── */
 
@@ -375,22 +415,39 @@ static inline float compute_bend_mult(const gamepad_state_t *gp)
     return powf(2.0f, bend_semitones / 12.0f);
 }
 
-/* ── Sound Modes ─────────────────────────────────────────── */
+/* ── Voicings and Voicing Config ─────────────────────────
+ *
+ * Three top-level voicings cycled by Share/View/-. Orthogonal toggles
+ * layer on top (RB-held + face button). Per-voicing config persists
+ * across voicing switches — finding a sweet setup in Continuous and
+ * switching to Discrete for a chord bridge preserves the Continuous
+ * setup.
+ */
 
 typedef enum {
-    MODE_MONO = 0,    /* Monotron-style single osc + filter + LFO */
-    MODE_DUAL_OSC,    /* Two oscillators with selectable interval + detune */
-    MODE_DELAY_SYNTH, /* Single osc + dynamic delay (RY=time, RX=feedback) */
-    MODE_SCALE,
-    MODE_ARPEGGIO,
-    MODE_SFX,
-    MODE_DRONE, /* Two sustained oscillators with LFO modulation */
-    MODE_COUNT,
-} sound_mode_t;
+    VOICING_CONTINUOUS = 0, /* LY=pitch, sticks shape the tone */
+    VOICING_DISCRETE,       /* Face buttons play notes / chord degrees */
+    VOICING_ONE_SHOT,       /* Face buttons trigger SFX envelopes */
+    VOICING_COUNT,
+} voicing_t;
 
-static sound_mode_t s_mode = MODE_MONO;
+typedef struct {
+    bool dual_osc;       /* Continuous only: enable osc B */
+    bool drone_hold;     /* Continuous only: LY+RY integrate pitch, piezos sing; forces dual_osc */
+    bool delay;          /* Continuous + Discrete: delay tail */
+    bool arp;            /* Discrete only: arp overlay */
+    waveform_t waveform; /* Per-voicing timbre */
+    int interval_semitones; /* Dual-osc interval (Continuous) */
+} voicing_cfg_t;
 
-/* Arpeggiator state */
+static voicing_t s_voicing = VOICING_CONTINUOUS;
+static voicing_cfg_t s_cfg[VOICING_COUNT] = {
+    [VOICING_CONTINUOUS] = {.waveform = WAVE_SAWTOOTH, .interval_semitones = 0},
+    [VOICING_DISCRETE] = {.waveform = WAVE_SINE, .interval_semitones = 0},
+    [VOICING_ONE_SHOT] = {.waveform = WAVE_SQUARE, .interval_semitones = 0},
+};
+
+/* Arpeggiator state (used by VOICING_DISCRETE when cfg.arp is true) */
 static const uint8_t *s_arp_chord = CHORD_MAJOR;
 static int s_arp_root = 0;      /* semitone offset from C4 */
 static int s_arp_index = 0;     /* current note in chord */
@@ -398,7 +455,7 @@ static int s_arp_direction = 1; /* 1=up, -1=down */
 static bool s_arp_running = false;
 static uint32_t s_arp_last_ms = 0;
 
-/* SFX state */
+/* SFX state (used by VOICING_ONE_SHOT) */
 typedef struct {
     float freq;
     float freq_end;
@@ -407,7 +464,7 @@ typedef struct {
 } sfx_state_t;
 static sfx_state_t s_sfx = {0};
 
-/* Scale octave: 0=C4, 1=C5, 2=C6 */
+/* Scale octave for arp: 0=C4, 1=C5, 2=C6 */
 static int s_octave = 1;
 
 /* Mode switch debounce */
@@ -520,6 +577,133 @@ static float map_range(float val, float in_min, float in_max, float out_min, flo
     return out_min + (out_max - out_min) * ((val - in_min) / (in_max - in_min));
 }
 
+/* ── Integrating-stick helpers ─────────────────────────────
+ *
+ * Sticks now drive *rate of change* for parameters rather than absolute
+ * position (except for the primary pitch stick in pitched modes, where
+ * absolute mapping preserves theremin-style muscle memory).
+ *
+ * stick_rate()        : raw stick value → normalized rate in [-1, +1]
+ *                       after deadzone. Linear beyond the deadzone.
+ *
+ * integrate_exp()     : multiply a value by 2^(rate·octaves_per_sec·dt)
+ *                       and clamp. Use for log-perceptual params like
+ *                       cutoff, pitch, delay-time.
+ *
+ * integrate_lin()     : value += rate·units_per_sec·dt, clamped.
+ *                       Use for linear params (resonance, feedback,
+ *                       detune cents, mix).
+ *
+ * Both integrate_* return true when the value is clamped at a limit
+ * *this tick*, so the caller can emit a "bump" blip at the edge.
+ */
+#define INTEGRATION_DT (1.0f / (float)CONTROL_TASK_HZ)
+#define STICK_RATE_RANGE ((float)(STICK_MAX - STICK_DEADZONE))
+
+static inline float stick_rate(int16_t stick_val)
+{
+    if (stick_val > STICK_DEADZONE)
+        return (float)(stick_val - STICK_DEADZONE) / STICK_RATE_RANGE;
+    if (stick_val < -STICK_DEADZONE)
+        return (float)(stick_val + STICK_DEADZONE) / STICK_RATE_RANGE;
+    return 0.0f;
+}
+
+static inline bool integrate_exp(float *value, float rate, float octaves_per_sec, float min_v,
+                                 float max_v, float dt)
+{
+    if (rate == 0.0f)
+        return false;
+    float prev = *value;
+    *value *= powf(2.0f, rate * octaves_per_sec * dt);
+    if (*value < min_v) {
+        *value = min_v;
+        return prev > min_v;
+    }
+    if (*value > max_v) {
+        *value = max_v;
+        return prev < max_v;
+    }
+    return false;
+}
+
+static inline bool integrate_lin(float *value, float rate, float units_per_sec, float min_v,
+                                 float max_v, float dt)
+{
+    if (rate == 0.0f)
+        return false;
+    float prev = *value;
+    *value += rate * units_per_sec * dt;
+    if (*value < min_v) {
+        *value = min_v;
+        return prev > min_v;
+    }
+    if (*value > max_v) {
+        *value = max_v;
+        return prev < max_v;
+    }
+    return false;
+}
+
+/* ── Shared Tweak Parameter State ─────────────────────────
+ *
+ * These persist across ticks within a mode (so finding a sweet spot and
+ * releasing the stick keeps the value). They reset on mode switch and on
+ * LS-click. Every pitched mode pulls cutoff/resonance from here so the
+ * right stick always means the same thing.
+ */
+#define TWEAK_CUTOFF_DEFAULT 6000.0f
+#define TWEAK_RESONANCE_DEFAULT 1.5f
+#define TWEAK_DELAY_MS_DEFAULT 200.0f
+#define TWEAK_FEEDBACK_DEFAULT 0.4f
+#define TWEAK_DETUNE_CENTS_DEFAULT 0.0f
+#define TWEAK_PITCH_OFFSET_ST_DEFAULT 0.0f
+
+static float s_tweak_cutoff_hz = TWEAK_CUTOFF_DEFAULT;
+static float s_tweak_resonance = TWEAK_RESONANCE_DEFAULT;
+static float s_tweak_delay_ms = TWEAK_DELAY_MS_DEFAULT;
+static float s_tweak_feedback = TWEAK_FEEDBACK_DEFAULT;
+static float s_tweak_detune_cents = TWEAK_DETUNE_CENTS_DEFAULT;
+static float s_tweak_pitch_offset_st = TWEAK_PITCH_OFFSET_ST_DEFAULT; /* Scale root slide */
+/* Drone mode: both oscillator freqs drift via integrating sticks. */
+static float s_drone_freq_a = 220.0f;
+static float s_drone_freq_b = 330.0f;
+
+static void reset_tweaks(void)
+{
+    s_tweak_cutoff_hz = TWEAK_CUTOFF_DEFAULT;
+    s_tweak_resonance = TWEAK_RESONANCE_DEFAULT;
+    s_tweak_delay_ms = TWEAK_DELAY_MS_DEFAULT;
+    s_tweak_feedback = TWEAK_FEEDBACK_DEFAULT;
+    s_tweak_detune_cents = TWEAK_DETUNE_CENTS_DEFAULT;
+    s_tweak_pitch_offset_st = TWEAK_PITCH_OFFSET_ST_DEFAULT;
+    s_drone_freq_a = 220.0f;
+    s_drone_freq_b = 330.0f;
+}
+
+/* Integrate cutoff (RY) and resonance (RX) from the right stick. Applies
+ * the result via synth_set_filter(). Emits a short bump-blip at the
+ * edges so the user can tell they're maxed out. */
+static void integrate_right_stick_filter(int16_t ry, int16_t rx)
+{
+    bool bumped = false;
+    bumped |= integrate_exp(&s_tweak_cutoff_hz, stick_rate(ry), 4.0f, FILTER_CUTOFF_MIN,
+                            FILTER_CUTOFF_MAX, INTEGRATION_DT);
+    bumped |= integrate_lin(&s_tweak_resonance, stick_rate(rx), 3.0f, FILTER_Q_MIN, FILTER_Q_MAX,
+                            INTEGRATION_DT);
+    synth_set_filter(true, s_tweak_cutoff_hz, s_tweak_resonance);
+
+    /* Rate-limit the bump blip so it doesn't spam while pinned at a limit. */
+    static uint32_t last_bump_ms = 0;
+    if (bumped) {
+        uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
+        if (now - last_bump_ms > 400) {
+            synth_blip(BLIP_FREQ_NEUTRAL * 0.5f); /* low "thud" */
+            last_bump_ms = now;
+        }
+    }
+}
+
 /* ── LED Helpers ─────────────────────────────────────────── */
 
 static void led_on(void)
@@ -531,357 +715,7 @@ static void led_off(void)
     gpio_set_level(LED_PIN, 0);
 }
 
-static void led_blink(int count, int on_ms, int off_ms)
-{
-    for (int i = 0; i < count; i++) {
-        led_on();
-        vTaskDelay(pdMS_TO_TICKS(on_ms));
-        led_off();
-        vTaskDelay(pdMS_TO_TICKS(off_ms));
-    }
-}
-
-/* ── Mode 1: Mono Synth (Monotron-style) ─────────────────── */
-
-static void mode_mono(const gamepad_state_t *gp)
-{
-    int16_t ly = gp->axis_y;
-    int16_t lx = gp->axis_x;
-    int16_t rx = gp->axis_rx;
-    int16_t ry = gp->axis_ry;
-
-    /* Dead zone check — silence if stick is centered */
-    if (abs(ly) < STICK_DEADZONE && abs(lx) < STICK_DEADZONE) {
-        tone_stop();
-        led_off();
-        return;
-    }
-
-    /* Base pitch from left stick Y */
-    float pitch = map_range((float)ly, -STICK_MAX, STICK_MAX, MIN_FREQ, MAX_FREQ);
-
-    /* Manual vibrato from left stick X (depth) — fixed 5 Hz speed */
-    float vib_depth = map_range((float)abs(lx), 0, STICK_MAX, 0, 100);
-    static uint32_t tick = 0;
-    tick++;
-    float vib = vib_depth * sinf(2.0f * 3.14159f * 5.0f * (float)tick / CONTROL_TASK_HZ);
-    pitch += vib;
-
-    /* Filter: right stick Y = cutoff (logarithmic), right stick X = resonance */
-    float cutoff_norm = map_range((float)ry, -STICK_MAX, STICK_MAX, 0.0f, 1.0f);
-    float cutoff = FILTER_CUTOFF_MIN * powf(FILTER_CUTOFF_MAX / FILTER_CUTOFF_MIN, cutoff_norm);
-    float resonance = map_range((float)abs(rx), 0, STICK_MAX, FILTER_Q_MIN, FILTER_Q_MAX);
-    synth_set_filter(true, cutoff, resonance);
-    synth_set_lfo((lfo_target_t)s_settings.lfo_target, s_settings.lfo_rate_hz,
-                  s_settings.lfo_depth);
-
-    /* Triggers = pitch bend (±7 semitones) */
-    float bend_mult = compute_bend_mult(gp);
-    pitch *= bend_mult;
-
-    tone_play((uint32_t)pitch);
-    led_on();
-}
-
-/* ── Mode 2: Dual Osc (two oscillators, face-button interval) ── */
-
-static void mode_dual_osc(const gamepad_state_t *gp)
-{
-    /* A=unison, B=fifth, X=octave, Y=two octaves */
-    static int s_interval_semitones = 0;
-    static uint16_t prev_buttons = 0;
-    uint16_t pressed = gp->buttons & ~prev_buttons;
-    prev_buttons = gp->buttons;
-
-    if (pressed & BTN_A) {
-        s_interval_semitones = 0; /* unison */
-        synth_blip(BLIP_FREQ_DOWN);
-    }
-    if (pressed & BTN_B) {
-        s_interval_semitones = 7; /* perfect fifth */
-        synth_blip(BLIP_FREQ_NEUTRAL);
-    }
-    if (pressed & BTN_X) {
-        s_interval_semitones = 12; /* octave */
-        synth_blip(BLIP_FREQ_UP);
-    }
-    if (pressed & BTN_Y) {
-        s_interval_semitones = 24; /* two octaves */
-        synth_blip(BLIP_FREQ_UP * 1.5f);
-    }
-
-    int16_t ly = gp->axis_y;
-    int16_t rx = gp->axis_rx;
-    int16_t ry = gp->axis_ry;
-
-    if (abs(ly) < STICK_DEADZONE) {
-        tone_stop();
-        synth_set_osc_b(false, (float)MIN_FREQ, WAVE_SAWTOOTH);
-        led_off();
-        return;
-    }
-
-    float pitch_a = map_range((float)ly, -STICK_MAX, STICK_MAX, MIN_FREQ, MAX_FREQ);
-    /* Detune from RX: ±50 cents */
-    float detune_cents = map_range((float)rx, -STICK_MAX, STICK_MAX, -50.0f, 50.0f);
-    float detune_mult = powf(2.0f, detune_cents / 1200.0f);
-    float pitch_b = pitch_a * powf(2.0f, (float)s_interval_semitones / 12.0f) * detune_mult;
-
-    /* Filter cutoff from RY (logarithmic) */
-    float cutoff_norm = map_range((float)ry, -STICK_MAX, STICK_MAX, 0.0f, 1.0f);
-    float cutoff = FILTER_CUTOFF_MIN * powf(FILTER_CUTOFF_MAX / FILTER_CUTOFF_MIN, cutoff_norm);
-    synth_set_filter(true, cutoff, 1.0f);
-
-    /* Triggers = pitch bend on both oscillators */
-    float bend_mult = compute_bend_mult(gp);
-    pitch_a *= bend_mult;
-    pitch_b *= bend_mult;
-
-    tone_play((uint32_t)pitch_a);
-    synth_set_osc_b(true, pitch_b, WAVE_SAWTOOTH);
-    led_on();
-}
-
-/* ── Mode 3: Delay Synth (single osc + dynamic delay) ────── */
-
-static void mode_delay_synth(const gamepad_state_t *gp)
-{
-    /* Fixed filter — triggers are repurposed as pitch bend. */
-    synth_set_filter(true, 4000.0f, 1.2f);
-
-    int16_t ly = gp->axis_y;
-    int16_t rx = gp->axis_rx;
-    int16_t ry = gp->axis_ry;
-
-    if (abs(ly) < STICK_DEADZONE) {
-        tone_stop();
-        led_off();
-        return;
-    }
-
-    float pitch = map_range((float)ly, -STICK_MAX, STICK_MAX, MIN_FREQ, MAX_FREQ);
-
-    /* Delay time: RY from -STICK_MAX..STICK_MAX → 20..500 ms */
-    float delay_ms = map_range((float)ry, -STICK_MAX, STICK_MAX, 20.0f, 500.0f);
-    int delay_samples = (int)(SAMPLE_RATE * delay_ms / 1000.0f);
-    /* Feedback: RX from -STICK_MAX..STICK_MAX → 0.0..0.9 */
-    float feedback = map_range((float)rx, -STICK_MAX, STICK_MAX, 0.0f, 0.9f);
-    synth_set_delay(true, delay_samples, feedback, 0.5f);
-
-    /* Triggers = pitch bend (±7 semitones) */
-    float bend_mult = compute_bend_mult(gp);
-    pitch *= bend_mult;
-
-    tone_play((uint32_t)pitch);
-    led_on();
-}
-
-/* ── Mode 7: Drone (two sustained oscillators, LFO on both) ── */
-
-static void mode_drone(const gamepad_state_t *gp)
-{
-    /* Both oscillators always active; sticks control their pitches */
-    float pitch_a = map_range((float)gp->axis_y, -STICK_MAX, STICK_MAX, MIN_FREQ, MAX_FREQ);
-    float pitch_b = map_range((float)gp->axis_ry, -STICK_MAX, STICK_MAX, MIN_FREQ, MAX_FREQ);
-
-    /* LFO from settings — triggers repurposed as pitch bend. */
-    synth_set_lfo((lfo_target_t)s_settings.lfo_target, s_settings.lfo_rate_hz,
-                  s_settings.lfo_depth);
-
-    /* Filter: slightly warm default, modulated by LFO */
-    synth_set_filter(true, 3000.0f, 1.5f);
-
-    /* Triggers = pitch bend on both oscillators */
-    float bend_mult = compute_bend_mult(gp);
-    pitch_a *= bend_mult;
-    pitch_b *= bend_mult;
-
-    tone_play((uint32_t)pitch_a);
-    /* Route osc B onto the two piezos with a fixed detune so the beating
-     * happens acoustically in air rather than inside the DAC mix. */
-    piezo_voice_note_on(PIEZO_A, pitch_b);
-    piezo_voice_note_on(PIEZO_B, pitch_b * PIEZO_DETUNE_RATIO);
-    led_on();
-}
-
-/* ── Mode 4: Scale Player ────────────────────────────────── */
-
-static void mode_scale(const gamepad_state_t *gp)
-{
-    /* LB/RB shift octave (rising edge) */
-    static uint16_t prev_buttons = 0;
-    uint16_t pressed = gp->buttons & ~prev_buttons;
-    prev_buttons = gp->buttons;
-
-    if (pressed & BTN_SHOULDER_L && s_octave > 0) {
-        s_octave--;
-        synth_blip(BLIP_FREQ_DOWN);
-    }
-    if (pressed & BTN_SHOULDER_R && s_octave < 2) {
-        s_octave++;
-        synth_blip(BLIP_FREQ_UP);
-    }
-
-    /* Map buttons to scale degrees */
-    int note_idx = -1;
-    if (gp->buttons & BTN_A)
-        note_idx = 0; /* A = Do */
-    if (gp->buttons & BTN_B)
-        note_idx = 1; /* B = Re */
-    if (gp->buttons & BTN_X)
-        note_idx = 2; /* X = Mi */
-    if (gp->buttons & BTN_Y)
-        note_idx = 3; /* Y = Fa */
-    if (gp->dpad & DPAD_UP)
-        note_idx = 4; /* Sol */
-    if (gp->dpad & DPAD_RIGHT)
-        note_idx = 5; /* La */
-    if (gp->dpad & DPAD_DOWN)
-        note_idx = 6; /* Ti */
-    if (gp->dpad & DPAD_LEFT)
-        note_idx = 7; /* Do (high) */
-
-    if (note_idx < 0) {
-        tone_stop();
-        led_off();
-        return;
-    }
-
-    int semitone = (s_octave * 12) + SCALE_MAJOR[note_idx];
-    float freq = (float)note_at(semitone);
-
-    /* Pitch bend from right stick Y — fine bend in Hz. */
-    float bend = map_range((float)gp->axis_ry, -STICK_MAX, STICK_MAX, -50, 50);
-    freq += bend;
-
-    /* Triggers = coarse pitch bend (±7 semitones) */
-    float bend_mult = compute_bend_mult(gp);
-    freq *= bend_mult;
-
-    tone_play((uint32_t)freq);
-    led_on();
-}
-
-/* ── Mode 5: Arpeggiator ────────────────────────────────── */
-
-static void mode_arpeggio(const gamepad_state_t *gp)
-{
-    /* Face buttons select chord (rising edge) */
-    static uint16_t prev_buttons = 0;
-    uint16_t pressed = gp->buttons & ~prev_buttons;
-    prev_buttons = gp->buttons;
-
-    if (pressed & BTN_A) {
-        s_arp_chord = CHORD_MAJOR; /* A = major */
-        synth_blip(BLIP_FREQ_UP);
-    }
-    if (pressed & BTN_B) {
-        s_arp_chord = CHORD_MINOR; /* B = minor */
-        synth_blip(BLIP_FREQ_DOWN);
-    }
-    if (pressed & BTN_X) {
-        s_arp_chord = CHORD_7TH; /* X = 7th */
-        synth_blip(BLIP_FREQ_NEUTRAL);
-    }
-    if (pressed & BTN_Y) {
-        s_arp_chord = CHORD_DIM; /* Y = dim */
-        synth_blip(BLIP_FREQ_DOWN * 0.75f);
-    }
-
-    /* LB/RB shift octave */
-    if (pressed & BTN_SHOULDER_L && s_octave > 0) {
-        s_octave--;
-        synth_blip(BLIP_FREQ_DOWN);
-    }
-    if (pressed & BTN_SHOULDER_R && s_octave < 2) {
-        s_octave++;
-        synth_blip(BLIP_FREQ_UP);
-    }
-
-    /* D-pad transpose root note */
-    if (gp->dpad & DPAD_UP) {
-        static uint32_t last_up = 0;
-        uint32_t now = xTaskGetTickCount();
-        if (now - last_up > pdMS_TO_TICKS(200)) {
-            s_arp_root++;
-            if (s_arp_root > 11)
-                s_arp_root = 11;
-            synth_blip(BLIP_FREQ_UP);
-            last_up = now;
-        }
-    }
-    if (gp->dpad & DPAD_DOWN) {
-        static uint32_t last_down = 0;
-        uint32_t now = xTaskGetTickCount();
-        if (now - last_down > pdMS_TO_TICKS(200)) {
-            s_arp_root--;
-            if (s_arp_root < 0)
-                s_arp_root = 0;
-            synth_blip(BLIP_FREQ_DOWN);
-            last_down = now;
-        }
-    }
-
-    /* RT trigger toggles arpeggio on/off (rising edge) */
-    static bool prev_r2 = false;
-    bool r2 = gp->throttle > 100;
-    if (r2 && !prev_r2) {
-        s_arp_running = !s_arp_running;
-        s_arp_index = 0;
-        s_arp_direction = 1;
-        synth_blip(s_arp_running ? BLIP_FREQ_UP : BLIP_FREQ_DOWN);
-        if (!s_arp_running)
-            tone_stop();
-    }
-    prev_r2 = r2;
-
-    if (!s_arp_running) {
-        led_off();
-        return;
-    }
-
-    /* Speed from left stick Y: 50ms (fast) to 500ms (slow) */
-    float speed_ms = map_range((float)gp->axis_y, -STICK_MAX, STICK_MAX, 50, 500);
-
-    /* Pattern from left stick X quadrant */
-    /* Left = down, right = up, center = up-down */
-    int pattern = 0; /* 0=up, 1=down, 2=up-down */
-    if (gp->axis_x < -STICK_DEADZONE)
-        pattern = 1;
-    else if (gp->axis_x > STICK_DEADZONE)
-        pattern = 0;
-    else
-        pattern = 2;
-
-    uint32_t now_ms = xTaskGetTickCount() * portTICK_PERIOD_MS;
-    if (now_ms - s_arp_last_ms >= (uint32_t)speed_ms) {
-        s_arp_last_ms = now_ms;
-
-        int semitone = (s_octave * 12) + s_arp_root + s_arp_chord[s_arp_index];
-        tone_play(note_at(semitone));
-        led_on();
-
-        /* Advance index based on pattern */
-        if (pattern == 0) {
-            s_arp_index = (s_arp_index + 1) % CHORD_LEN;
-        } else if (pattern == 1) {
-            s_arp_index--;
-            if (s_arp_index < 0)
-                s_arp_index = CHORD_LEN - 1;
-        } else {
-            s_arp_index += s_arp_direction;
-            if (s_arp_index >= CHORD_LEN) {
-                s_arp_index = CHORD_LEN - 2;
-                s_arp_direction = -1;
-            } else if (s_arp_index < 0) {
-                s_arp_index = 1;
-                s_arp_direction = 1;
-            }
-        }
-    }
-}
-
-/* ── Mode 6: Retro SFX ──────────────────────────────────── */
+/* ── SFX helpers (used by VOICING_ONE_SHOT) ──────────────── */
 
 static void sfx_start(float start, float end, int ticks)
 {
@@ -904,56 +738,409 @@ static void sfx_tick(void)
     s_sfx.ticks_left--;
 }
 
-static void mode_sfx(const gamepad_state_t *gp)
+/* Arpeggiator core — called from VOICING_DISCRETE when cfg.arp is true.
+ * Handles chord selection on face-button rising edge and steps through
+ * the chord at global-tempo 16ths. */
+static void arp_tick(const gamepad_state_t *gp, uint16_t face_pressed)
 {
-    /* Speed multiplier from RT trigger: 0.5x to 2x */
+    if (face_pressed & BTN_A) {
+        s_arp_chord = CHORD_MAJOR;
+        s_arp_running = true;
+        s_arp_index = 0;
+        s_arp_direction = 1;
+        synth_blip(BLIP_FREQ_UP);
+    } else if (face_pressed & BTN_B) {
+        s_arp_chord = CHORD_MINOR;
+        s_arp_running = true;
+        s_arp_index = 0;
+        s_arp_direction = 1;
+        synth_blip(BLIP_FREQ_DOWN);
+    } else if (face_pressed & BTN_X) {
+        s_arp_chord = CHORD_7TH;
+        s_arp_running = true;
+        s_arp_index = 0;
+        s_arp_direction = 1;
+        synth_blip(BLIP_FREQ_NEUTRAL);
+    } else if (face_pressed & BTN_Y) {
+        s_arp_chord = CHORD_DIM;
+        s_arp_running = true;
+        s_arp_index = 0;
+        s_arp_direction = 1;
+        synth_blip(BLIP_FREQ_DOWN * 0.75f);
+    }
+
+    /* LY-integrated pitch offset drives the arp root. */
+    s_arp_root = (int)s_tweak_pitch_offset_st;
+
+    /* RT rising edge still toggles arp running (off-switch without
+     * disabling the whole cfg.arp toggle). */
+    static bool prev_r2 = false;
+    bool r2 = gp->throttle > 100;
+    if (r2 && !prev_r2) {
+        s_arp_running = !s_arp_running;
+        s_arp_index = 0;
+        s_arp_direction = 1;
+        synth_blip(s_arp_running ? BLIP_FREQ_UP : BLIP_FREQ_DOWN);
+        if (!s_arp_running)
+            tone_stop();
+    }
+    prev_r2 = r2;
+
+    if (!s_arp_running) {
+        led_off();
+        DBG_AXES("voicing=discrete arp=on running=false stop_reason=arp_not_running");
+        return;
+    }
+
+    /* Step rate is derived from the global tempo (16th notes). */
+    float speed_ms = 60000.0f / (float)s_settings.drum_tempo_bpm / 4.0f;
+
+    /* Pattern from left stick X quadrant: left=down, right=up, center=up-down */
+    int pattern;
+    if (gp->axis_x < -STICK_DEADZONE)
+        pattern = 1;
+    else if (gp->axis_x > STICK_DEADZONE)
+        pattern = 0;
+    else
+        pattern = 2;
+
+    uint32_t now_ms = xTaskGetTickCount() * portTICK_PERIOD_MS;
+    if (now_ms - s_arp_last_ms >= (uint32_t)speed_ms) {
+        s_arp_last_ms = now_ms;
+
+        int semitone = (s_octave * 12) + s_arp_root + s_arp_chord[s_arp_index];
+        tone_play(note_at(semitone));
+        led_on();
+
+        if (pattern == 0) {
+            s_arp_index = (s_arp_index + 1) % CHORD_LEN;
+        } else if (pattern == 1) {
+            s_arp_index--;
+            if (s_arp_index < 0)
+                s_arp_index = CHORD_LEN - 1;
+        } else {
+            s_arp_index += s_arp_direction;
+            if (s_arp_index >= CHORD_LEN) {
+                s_arp_index = CHORD_LEN - 2;
+                s_arp_direction = -1;
+            } else if (s_arp_index < 0) {
+                s_arp_index = 1;
+                s_arp_direction = 1;
+            }
+        }
+    }
+}
+
+/* ── Voicing 1: Continuous (Mono + Dual Osc + Delay + Drone) ── */
+
+static void voicing_continuous(const gamepad_state_t *gp, uint16_t face_pressed)
+{
+    const voicing_cfg_t cfg = s_cfg[VOICING_CONTINUOUS];
+    bool lb_held = (gp->buttons & BTN_SHOULDER_L) != 0;
+
+    /* LFO from settings (Mono+Drone both wired this up). */
+    synth_set_lfo((lfo_target_t)s_settings.lfo_target, s_settings.lfo_rate_hz,
+                  s_settings.lfo_depth);
+
+    /* Face-button interval pick (dual-osc, not drone-hold). Drone-hold
+     * doesn't use intervals because osc B is piezo-only and follows
+     * RY-integrating pitch instead. */
+    if (cfg.dual_osc && !cfg.drone_hold) {
+        if (face_pressed & BTN_A) {
+            s_cfg[VOICING_CONTINUOUS].interval_semitones = 0;
+            synth_blip(BLIP_FREQ_DOWN);
+        } else if (face_pressed & BTN_B) {
+            s_cfg[VOICING_CONTINUOUS].interval_semitones = 7;
+            synth_blip(BLIP_FREQ_NEUTRAL);
+        } else if (face_pressed & BTN_X) {
+            s_cfg[VOICING_CONTINUOUS].interval_semitones = 12;
+            synth_blip(BLIP_FREQ_UP);
+        } else if (face_pressed & BTN_Y) {
+            s_cfg[VOICING_CONTINUOUS].interval_semitones = 24;
+            synth_blip(BLIP_FREQ_UP * 1.5f);
+        }
+    }
+
+    /* Right-stick tweaks — delay params if LB+delay, else filter. */
+    if (cfg.delay && lb_held) {
+        bool bumped = false;
+        bumped |= integrate_exp(&s_tweak_delay_ms, stick_rate(gp->axis_ry), 2.0f, 20.0f, 500.0f,
+                                INTEGRATION_DT);
+        bumped |= integrate_lin(&s_tweak_feedback, stick_rate(gp->axis_rx), 0.5f, 0.0f, 0.9f,
+                                INTEGRATION_DT);
+        static uint32_t last_bump_ms = 0;
+        if (bumped) {
+            uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
+            if (now - last_bump_ms > 400) {
+                synth_blip(BLIP_FREQ_NEUTRAL * 0.5f);
+                last_bump_ms = now;
+            }
+        }
+    } else if (cfg.drone_hold) {
+        /* Drone-hold: LX integrates filter cutoff, RX integrates resonance.
+         * (LY=pitch A, RY=pitch B are handled below in the render path.) */
+        integrate_exp(&s_tweak_cutoff_hz, stick_rate(gp->axis_x), 4.0f, FILTER_CUTOFF_MIN,
+                      FILTER_CUTOFF_MAX, INTEGRATION_DT);
+        integrate_lin(&s_tweak_resonance, stick_rate(gp->axis_rx), 3.0f, FILTER_Q_MIN, FILTER_Q_MAX,
+                      INTEGRATION_DT);
+        synth_set_filter(true, s_tweak_cutoff_hz, s_tweak_resonance);
+    } else {
+        integrate_right_stick_filter(gp->axis_ry, gp->axis_rx);
+    }
+
+    /* Apply delay from persistent tweak state (when delay is enabled). */
+    if (cfg.delay) {
+        int delay_samples = (int)(SAMPLE_RATE * s_tweak_delay_ms / 1000.0f);
+        synth_set_delay(true, delay_samples, s_tweak_feedback, 0.5f);
+    } else {
+        synth_set_delay(false, 1, 0.0f, 0.0f);
+    }
+
+    float bend_mult = compute_bend_mult(gp);
+
+    if (cfg.drone_hold) {
+        /* Both DAC osc A pitch (LY) and piezo osc B pitch (RY) integrate. */
+        integrate_exp(&s_drone_freq_a, stick_rate(gp->axis_y), 2.0f, (float)MIN_FREQ,
+                      (float)MAX_FREQ, INTEGRATION_DT);
+        integrate_exp(&s_drone_freq_b, stick_rate(gp->axis_ry), 2.0f, (float)MIN_FREQ,
+                      (float)MAX_FREQ, INTEGRATION_DT);
+        float pitch_a = s_drone_freq_a * bend_mult;
+        float pitch_b = s_drone_freq_b * bend_mult;
+        tone_play((uint32_t)pitch_a);
+        synth_set_osc_b(false, (float)MIN_FREQ, cfg.waveform); /* Osc B is piezo-only in drone */
+        piezo_voice_note_on(PIEZO_A, pitch_b);
+        piezo_voice_note_on(PIEZO_B, pitch_b * PIEZO_DETUNE_RATIO);
+        led_on();
+        return;
+    }
+
+    /* Standard continuous: LY=absolute pitch, LX=vibrato depth. */
+    int16_t ly = gp->axis_y;
+    int16_t lx = gp->axis_x;
+    if (abs(ly) < STICK_DEADZONE && abs(lx) < STICK_DEADZONE) {
+        tone_stop();
+        synth_set_osc_b(false, (float)MIN_FREQ, cfg.waveform);
+        piezo_voice_note_off(PIEZO_A);
+        piezo_voice_note_off(PIEZO_B);
+        led_off();
+        DBG_AXES("voicing=continuous ly=%d lx=%d stop_reason=deadzone", ly, lx);
+        return;
+    }
+
+    float pitch = map_range((float)ly, -STICK_MAX, STICK_MAX, MIN_FREQ, MAX_FREQ);
+    float vib_depth = map_range((float)abs(lx), 0, STICK_MAX, 0, 100);
+    static uint32_t tick = 0;
+    tick++;
+    float vib = vib_depth * sinf(2.0f * 3.14159f * 5.0f * (float)tick / CONTROL_TASK_HZ);
+    pitch += vib;
+    pitch *= bend_mult;
+
+    tone_play((uint32_t)pitch);
+
+    if (cfg.dual_osc) {
+        int interval = s_cfg[VOICING_CONTINUOUS].interval_semitones;
+        float detune_mult = powf(2.0f, s_tweak_detune_cents / 1200.0f);
+        float pitch_b = pitch * powf(2.0f, (float)interval / 12.0f) * detune_mult;
+        synth_set_osc_b(true, pitch_b, cfg.waveform);
+    } else {
+        synth_set_osc_b(false, (float)MIN_FREQ, cfg.waveform);
+    }
+    led_on();
+}
+
+/* ── Voicing 2: Discrete (Scale + Arpeggio) ───────────────── */
+
+static void voicing_discrete(const gamepad_state_t *gp, uint16_t face_pressed)
+{
+    const voicing_cfg_t cfg = s_cfg[VOICING_DISCRETE];
+    bool lb_held = (gp->buttons & BTN_SHOULDER_L) != 0;
+
+    /* LY integrates pitch offset (±12 st) — root transpose or scale slide. */
+    integrate_lin(&s_tweak_pitch_offset_st, stick_rate(gp->axis_y), 6.0f, -12.0f, 12.0f,
+                  INTEGRATION_DT);
+
+    /* RX integrates filter cutoff (resonance stays at current tweak state
+     * unless the user flips over to Continuous and adjusts it). */
+    if (cfg.delay && lb_held) {
+        bool bumped = false;
+        bumped |= integrate_exp(&s_tweak_delay_ms, stick_rate(gp->axis_ry), 2.0f, 20.0f, 500.0f,
+                                INTEGRATION_DT);
+        bumped |= integrate_lin(&s_tweak_feedback, stick_rate(gp->axis_rx), 0.5f, 0.0f, 0.9f,
+                                INTEGRATION_DT);
+        static uint32_t last_bump_ms = 0;
+        if (bumped) {
+            uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
+            if (now - last_bump_ms > 400) {
+                synth_blip(BLIP_FREQ_NEUTRAL * 0.5f);
+                last_bump_ms = now;
+            }
+        }
+    } else {
+        integrate_exp(&s_tweak_cutoff_hz, stick_rate(gp->axis_rx), 4.0f, FILTER_CUTOFF_MIN,
+                      FILTER_CUTOFF_MAX, INTEGRATION_DT);
+    }
+    synth_set_filter(true, s_tweak_cutoff_hz, s_tweak_resonance);
+
+    if (cfg.delay) {
+        int delay_samples = (int)(SAMPLE_RATE * s_tweak_delay_ms / 1000.0f);
+        synth_set_delay(true, delay_samples, s_tweak_feedback, 0.5f);
+    } else {
+        synth_set_delay(false, 1, 0.0f, 0.0f);
+    }
+    synth_set_osc_b(false, (float)MIN_FREQ, cfg.waveform);
+
+    if (cfg.arp) {
+        arp_tick(gp, face_pressed);
+        return;
+    }
+
+    /* Scale mode: face buttons play scalar notes.
+     *   LB-not-held + A/B/X/Y → Do  Re  Mi  Fa
+     *   LB-held     + A/B/X/Y → Sol La  Ti  Do  */
+    int note_idx = -1;
+    if (gp->buttons & BTN_A)
+        note_idx = lb_held ? 4 : 0;
+    if (gp->buttons & BTN_B)
+        note_idx = lb_held ? 5 : 1;
+    if (gp->buttons & BTN_X)
+        note_idx = lb_held ? 6 : 2;
+    if (gp->buttons & BTN_Y)
+        note_idx = lb_held ? 7 : 3;
+
+    if (note_idx < 0) {
+        tone_stop();
+        led_off();
+        DBG_AXES("voicing=discrete arp=off stop_reason=no_face_button");
+        return;
+    }
+
+    int semitone = (12 /* base C5 */) + SCALE_MAJOR[note_idx] + (int)s_tweak_pitch_offset_st;
+    float freq = (float)note_at(semitone);
+    /* RY = fine bend (absolute). */
+    freq += map_range((float)gp->axis_ry, -STICK_MAX, STICK_MAX, -50, 50);
+    freq *= compute_bend_mult(gp);
+    tone_play((uint32_t)freq);
+    led_on();
+}
+
+/* ── Voicing 3: One-Shot (Retro SFX) ──────────────────────── */
+
+static void voicing_one_shot(const gamepad_state_t *gp, uint16_t face_pressed)
+{
+    /* RT = speed multiplier on the sweep tick count. */
     float speed = map_range((float)gp->throttle, 0, TRIGGER_MAX, 1.0f, 0.3f);
     int base_ticks = 25;
     int ticks = (int)((float)base_ticks * speed);
     if (ticks < 5)
         ticks = 5;
 
-    /* Trigger SFX on button press (rising edge) */
-    static uint16_t prev_btn = 0;
-    static uint8_t prev_dpad = 0;
-    uint16_t btn_pressed = gp->buttons & ~prev_btn;
-    uint8_t dpad_pressed = gp->dpad & ~prev_dpad;
-    prev_btn = gp->buttons;
-    prev_dpad = gp->dpad;
+    bool lb_held = (gp->buttons & BTN_SHOULDER_L) != 0;
 
-    /* A = Laser (descending sweep) */
-    if (btn_pressed & BTN_A)
-        sfx_start(1800, 200, ticks);
-
-    /* B = Explosion (descending with low end) */
-    if (btn_pressed & BTN_B)
-        sfx_start(800, 100, ticks * 2);
-
-    /* X = Power-up (ascending sweep) */
-    if (btn_pressed & BTN_X)
-        sfx_start(200, 1600, ticks);
-
-    /* Y = Coin (high double-beep handled via short sweep) */
-    if (btn_pressed & BTN_Y)
-        sfx_start(1200, 1800, ticks / 2);
-
-    /* D-pad Up = Siren (oscillating — start high, go low, we'll reverse) */
-    if (dpad_pressed & DPAD_UP)
-        sfx_start(400, 1200, ticks * 3);
-
-    /* D-pad Down = Engine (low rumble) */
-    if (dpad_pressed & DPAD_DOWN)
-        sfx_start(100, 250, ticks * 3);
-
-    /* D-pad Left = Jump (quick ascending chirp) */
-    if (dpad_pressed & DPAD_LEFT)
-        sfx_start(300, 1400, ticks / 2);
-
-    /* D-pad Right = Warp (sweep up then down via two-phase) */
-    if (dpad_pressed & DPAD_RIGHT)
-        sfx_start(400, 1800, ticks);
+    if (!lb_held) {
+        if (face_pressed & BTN_A)
+            sfx_start(1800, 200, ticks); /* Laser */
+        if (face_pressed & BTN_B)
+            sfx_start(800, 100, ticks * 2); /* Explosion */
+        if (face_pressed & BTN_X)
+            sfx_start(200, 1600, ticks); /* Power-up */
+        if (face_pressed & BTN_Y)
+            sfx_start(1200, 1800, ticks / 2); /* Coin */
+    } else {
+        if (face_pressed & BTN_A)
+            sfx_start(400, 1200, ticks * 3); /* Siren */
+        if (face_pressed & BTN_B)
+            sfx_start(100, 250, ticks * 3); /* Engine */
+        if (face_pressed & BTN_X)
+            sfx_start(300, 1400, ticks / 2); /* Jump */
+        if (face_pressed & BTN_Y)
+            sfx_start(400, 1800, ticks); /* Warp */
+    }
 
     sfx_tick();
+}
+
+/* ── Voicing Signature Gestures ──────────────────────────
+ *
+ * On voicing switch, play a short phrase *in that voicing's own voice*
+ * so the user hears which voicing they're in without having to count
+ * LED blinks. Blocks the control task for ~300-500 ms; audio render
+ * keeps running, so the user hears the gesture immediately.
+ */
+static void play_voicing_signature(voicing_t voicing)
+{
+    switch (voicing) {
+        case VOICING_CONTINUOUS: {
+            /* Pitch-bend chirp (sawtooth, 400→1200 Hz) — instrument feel */
+            synth_set_waveform(WAVE_SAWTOOTH);
+            synth_set_filter(true, 6000.0f, 1.5f);
+            synth_set_osc_b(false, (float)MIN_FREQ, WAVE_SAWTOOTH);
+            synth_set_lfo(LFO_TARGET_NONE, 5.0f, 0.0f);
+            synth_set_delay(false, 1, 0.0f, 0.0f);
+            for (int i = 0; i < 5; i++) {
+                tone_play(400 + i * 200);
+                vTaskDelay(pdMS_TO_TICKS(60));
+            }
+            break;
+        }
+        case VOICING_DISCRETE: {
+            /* Do-Mi-Sol ascending on sine — melodic feel */
+            synth_set_waveform(WAVE_SINE);
+            synth_set_filter(true, 5000.0f, 0.8f);
+            synth_set_osc_b(false, (float)MIN_FREQ, WAVE_SAWTOOTH);
+            synth_set_lfo(LFO_TARGET_NONE, 5.0f, 0.0f);
+            synth_set_delay(true, SAMPLE_RATE * 120 / 1000, 0.25f, 0.3f);
+            tone_play(523);
+            vTaskDelay(pdMS_TO_TICKS(110));
+            tone_play(659);
+            vTaskDelay(pdMS_TO_TICKS(110));
+            tone_play(784);
+            vTaskDelay(pdMS_TO_TICKS(160));
+            break;
+        }
+        case VOICING_ONE_SHOT: {
+            /* Laser zap — descending square sweep */
+            synth_set_waveform(WAVE_SQUARE);
+            synth_set_filter(false, FILTER_CUTOFF_MAX, FILTER_Q_MIN);
+            synth_set_osc_b(false, (float)MIN_FREQ, WAVE_SAWTOOTH);
+            synth_set_lfo(LFO_TARGET_NONE, 5.0f, 0.0f);
+            synth_set_delay(false, 1, 0.0f, 0.0f);
+            for (int i = 0; i < 10; i++) {
+                tone_play(1800 - i * 160);
+                vTaskDelay(pdMS_TO_TICKS(22));
+            }
+            break;
+        }
+        default:
+            break;
+    }
+    tone_stop();
+    vTaskDelay(pdMS_TO_TICKS(60));
+}
+
+/* ── Toggle cues ─────────────────────────────────────────── */
+
+/* Two-blip rising cue for toggle-on, single descending blip for toggle-off. */
+static void toggle_cue(bool enabled)
+{
+    if (enabled) {
+        synth_blip(BLIP_FREQ_UP);
+        vTaskDelay(pdMS_TO_TICKS(110));
+        synth_blip(BLIP_FREQ_UP * 1.25f);
+    } else {
+        synth_blip(BLIP_FREQ_DOWN);
+    }
+}
+
+/* Waveform cycle cue: signature blip frequency per waveform so the user
+ * can identify the new timbre without hearing it yet. */
+static void waveform_cue(waveform_t w)
+{
+    static const float freqs[WAVE_COUNT] = {
+        [WAVE_SQUARE] = BLIP_FREQ_NEUTRAL,      [WAVE_SAWTOOTH] = BLIP_FREQ_UP,
+        [WAVE_TRIANGLE] = BLIP_FREQ_UP * 1.15f, [WAVE_SINE] = BLIP_FREQ_UP * 1.3f,
+        [WAVE_NOISE] = BLIP_FREQ_DOWN * 0.75f,
+    };
+    synth_blip(freqs[w]);
 }
 
 /* ── Bluepad32 Custom Platform ───────────────────────────── */
@@ -1158,9 +1345,16 @@ static void audio_render_task(void *arg)
 
     ESP_ERROR_CHECK(i2s_channel_enable(s_tx_chan));
 
+    bool prev_active = false;
     while (1) {
         float freq = s_synth.target_freq;
         bool active = s_synth.active;
+
+        if (active != prev_active) {
+            DBG_AXES("audio: active %d -> %d (freq=%.1f reason=%s)", prev_active, active, freq,
+                     !active ? (freq < (float)MIN_FREQ ? "freq<MIN" : "!active") : "on");
+            prev_active = active;
+        }
 
         if (!active || freq < (float)MIN_FREQ) {
             memset(stereo_buf, 0, sizeof(stereo_buf));
@@ -1232,6 +1426,17 @@ static void audio_render_task(void *arg)
                 phase += phase_inc;
                 if (phase >= 1.0f)
                     phase -= 1.0f;
+            }
+
+            /* Defensive NaN guard — TPT SVF should be unconditionally
+             * stable, but a stale config or coefficient corner could
+             * still propagate NaN and silence the audio until the
+             * active-flag reset. Clear to zero and log once per event. */
+            if (isnan(svf_low) || isnan(svf_band)) {
+                ESP_LOGW(TAG, "SVF state NaN recovered (cutoff=%.1f Q=%.2f)", cutoff,
+                         s_synth.filter_resonance);
+                svf_low = 0.0f;
+                svf_band = 0.0f;
             }
         }
 
@@ -1314,21 +1519,11 @@ static void settings_play_ladder(int count, float freq_hz)
 static void settings_play_value_ladder(int cursor)
 {
     switch (cursor) {
-        case SETTING_MASTER_VOL: {
-            int n = (int)(s_settings.master_volume * 10.0f + 0.5f) + 1;
-            settings_play_ladder(n, BLIP_FREQ_NEUTRAL);
-            break;
-        }
         case SETTING_DRUM_PATTERN: {
             int n = s_settings.drum_pattern + 1;
             settings_play_ladder(n, BLIP_FREQ_NEUTRAL);
             break;
         }
-        case SETTING_DRUM_TEMPO:
-            /* 3 neutral blips — hearing the exact BPM isn't useful yet
-             * because no drum engine consumes the value (sibling agent). */
-            settings_play_ladder(3, BLIP_FREQ_NEUTRAL);
-            break;
         case SETTING_DRUM_VOLUME: {
             int n = (int)(s_settings.drum_volume * 10.0f + 0.5f) + 1;
             settings_play_ladder(n, BLIP_FREQ_NEUTRAL);
@@ -1374,15 +1569,8 @@ static inline int clampi(int v, int lo, int hi)
 static void settings_adjust(int cursor, int direction)
 {
     switch (cursor) {
-        case SETTING_MASTER_VOL:
-            s_settings.master_volume =
-                clampf(s_settings.master_volume + 0.1f * direction, 0.0f, 1.0f);
-            break;
         case SETTING_DRUM_PATTERN:
             s_settings.drum_pattern = clampi(s_settings.drum_pattern + direction, 0, 4);
-            break;
-        case SETTING_DRUM_TEMPO:
-            s_settings.drum_tempo_bpm = clampi(s_settings.drum_tempo_bpm + 5 * direction, 60, 200);
             break;
         case SETTING_DRUM_VOLUME:
             s_settings.drum_volume = clampf(s_settings.drum_volume + 0.1f * direction, 0.0f, 1.0f);
@@ -1441,12 +1629,170 @@ static void settings_edit_handle(const gamepad_state_t *gp)
 
 /* ── Control Task (Core 1, reads gamepad, updates synth) ── */
 
+/* Apply per-voicing synth defaults on entry. Waveform comes from the
+ * persistent voicing cfg; osc B, filter, LFO, and delay reset so the
+ * user starts from a known state. Per-voicing toggles (dual_osc, arp,
+ * delay) are re-applied on the first tick of the voicing function. */
+static void apply_voicing_defaults(voicing_t voicing)
+{
+    const voicing_cfg_t cfg = s_cfg[voicing];
+    synth_set_waveform(cfg.waveform);
+    synth_set_osc_b(false, (float)MIN_FREQ, cfg.waveform);
+
+    switch (voicing) {
+        case VOICING_CONTINUOUS:
+            synth_set_filter(true, TWEAK_CUTOFF_DEFAULT, TWEAK_RESONANCE_DEFAULT);
+            break;
+        case VOICING_DISCRETE:
+            synth_set_filter(true, 5000.0f, 0.8f);
+            break;
+        case VOICING_ONE_SHOT:
+        default:
+            synth_set_filter(false, FILTER_CUTOFF_MAX, FILTER_Q_MIN);
+            break;
+    }
+
+    /* LFO is driven per-tick by Continuous (from settings). Discrete
+     * and One-shot silence it on entry. */
+    if (voicing != VOICING_CONTINUOUS)
+        synth_set_lfo(LFO_TARGET_NONE, 5.0f, 0.0f);
+
+    /* Delay tail default; if cfg.delay is true, the voicing function
+     * will re-enable on the next tick via synth_set_delay(). */
+    if (cfg.delay) {
+        int delay_samples = (int)(SAMPLE_RATE * s_tweak_delay_ms / 1000.0f);
+        synth_set_delay(true, delay_samples, s_tweak_feedback, 0.5f);
+    } else {
+        synth_set_delay(false, 1, 0.0f, 0.0f);
+    }
+}
+
+/* Handle a voicing switch: silence voices, reset transient state, play
+ * the signature gesture, and restore the voicing's defaults. Per-voicing
+ * cfg (dual_osc, delay, waveform, ...) is preserved across switches. */
+static void enter_voicing(voicing_t new_voicing)
+{
+    tone_stop();
+    piezo_voice_note_off(PIEZO_A);
+    piezo_voice_note_off(PIEZO_B);
+    s_voicing = new_voicing;
+    s_arp_running = false;
+    s_sfx.ticks_left = 0;
+    reset_tweaks();
+
+    led_on();
+    vTaskDelay(pdMS_TO_TICKS(40));
+    led_off();
+
+    apply_voicing_defaults(new_voicing);
+    play_voicing_signature(new_voicing);
+    apply_voicing_defaults(new_voicing);
+
+    ESP_LOGI(TAG, "Voicing: %d cfg={dual=%d drone=%d delay=%d arp=%d wave=%d}", s_voicing,
+             s_cfg[s_voicing].dual_osc, s_cfg[s_voicing].drone_hold, s_cfg[s_voicing].delay,
+             s_cfg[s_voicing].arp, s_cfg[s_voicing].waveform);
+}
+
+/* Handle RB-held + face-button toggle combos. Returns the bitmask of
+ * face buttons "consumed" (suppressed from voicing dispatch) when RB is
+ * held, so the normal face-button-as-note behavior doesn't fire. */
+static uint16_t handle_toggle_combo(uint16_t face_pressed, bool rb_held, bool lb_pressed)
+{
+    if (!rb_held)
+        return 0;
+
+    uint16_t consumed = 0;
+
+    if (face_pressed & BTN_A) {
+        if (s_voicing == VOICING_CONTINUOUS) {
+            s_cfg[VOICING_CONTINUOUS].dual_osc = !s_cfg[VOICING_CONTINUOUS].dual_osc;
+            if (!s_cfg[VOICING_CONTINUOUS].dual_osc)
+                s_cfg[VOICING_CONTINUOUS].drone_hold = false;
+            toggle_cue(s_cfg[VOICING_CONTINUOUS].dual_osc);
+            ESP_LOGI(TAG, "Toggle DUAL_OSC: %d", s_cfg[VOICING_CONTINUOUS].dual_osc);
+        }
+        consumed |= BTN_A;
+    }
+    if (face_pressed & BTN_B) {
+        if (s_voicing == VOICING_CONTINUOUS) {
+            s_cfg[VOICING_CONTINUOUS].drone_hold = !s_cfg[VOICING_CONTINUOUS].drone_hold;
+            if (s_cfg[VOICING_CONTINUOUS].drone_hold)
+                s_cfg[VOICING_CONTINUOUS].dual_osc = true;
+            toggle_cue(s_cfg[VOICING_CONTINUOUS].drone_hold);
+            ESP_LOGI(TAG, "Toggle DRONE_HOLD: %d", s_cfg[VOICING_CONTINUOUS].drone_hold);
+        }
+        consumed |= BTN_B;
+    }
+    if (face_pressed & BTN_X) {
+        if (s_voicing == VOICING_CONTINUOUS || s_voicing == VOICING_DISCRETE) {
+            s_cfg[s_voicing].delay = !s_cfg[s_voicing].delay;
+            toggle_cue(s_cfg[s_voicing].delay);
+            ESP_LOGI(TAG, "Toggle DELAY[%d]: %d", s_voicing, s_cfg[s_voicing].delay);
+        }
+        consumed |= BTN_X;
+    }
+    if (face_pressed & BTN_Y) {
+        waveform_t next =
+            (waveform_t)((s_cfg[s_voicing].waveform + 1) % (WAVE_NOISE)); /* skip noise */
+        s_cfg[s_voicing].waveform = next;
+        synth_set_waveform(next);
+        waveform_cue(next);
+        ESP_LOGI(TAG, "Cycle WAVEFORM[%d]: %d", s_voicing, next);
+        consumed |= BTN_Y;
+    }
+    if (lb_pressed && s_voicing == VOICING_DISCRETE) {
+        s_cfg[VOICING_DISCRETE].arp = !s_cfg[VOICING_DISCRETE].arp;
+        if (!s_cfg[VOICING_DISCRETE].arp) {
+            s_arp_running = false;
+            tone_stop();
+        }
+        toggle_cue(s_cfg[VOICING_DISCRETE].arp);
+        ESP_LOGI(TAG, "Toggle ARP: %d", s_cfg[VOICING_DISCRETE].arp);
+    }
+
+    return consumed;
+}
+
+/* Global d-pad: ↑/↓ nudges master_volume by ±0.05, ←/→ nudges tempo by
+ * ±5 BPM. Auto-repeats at GLOBAL_DPAD_REPEAT_MS while held. */
+static void handle_global_dpad(uint8_t dpad)
+{
+    static uint32_t last_repeat_ms = 0;
+    uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
+    if (now - last_repeat_ms < GLOBAL_DPAD_REPEAT_MS)
+        return;
+
+    bool acted = false;
+    if (dpad & DPAD_UP) {
+        s_settings.master_volume = clampf(s_settings.master_volume + 0.05f, 0.0f, 1.0f);
+        synth_blip(BLIP_FREQ_UP);
+        acted = true;
+    } else if (dpad & DPAD_DOWN) {
+        s_settings.master_volume = clampf(s_settings.master_volume - 0.05f, 0.0f, 1.0f);
+        synth_blip(BLIP_FREQ_DOWN);
+        acted = true;
+    } else if (dpad & DPAD_RIGHT) {
+        s_settings.drum_tempo_bpm = clampi(s_settings.drum_tempo_bpm + 5, 60, 200);
+        synth_blip(BLIP_FREQ_UP);
+        acted = true;
+    } else if (dpad & DPAD_LEFT) {
+        s_settings.drum_tempo_bpm = clampi(s_settings.drum_tempo_bpm - 5, 60, 200);
+        synth_blip(BLIP_FREQ_DOWN);
+        acted = true;
+    }
+    if (acted)
+        last_repeat_ms = now;
+}
+
 static void control_task(void *arg)
 {
     (void)arg;
     ESP_LOGI(TAG, "Control task started on core %d", xPortGetCoreID());
 
     TickType_t last_wake = xTaskGetTickCount();
+    static uint16_t s_prev_buttons_global = 0;
+    static uint16_t s_home_prev_face = 0;
+    static bool s_home_used_as_modifier = false;
 
     while (1) {
         gamepad_state_t gp;
@@ -1461,104 +1807,78 @@ static void control_task(void *arg)
             continue;
         }
 
-        /* Mode switch on Share button (rising edge) */
         uint8_t misc_pressed = gp.misc_buttons & ~s_prev_misc;
+        uint8_t misc_released = s_prev_misc & ~gp.misc_buttons;
         s_prev_misc = gp.misc_buttons;
 
+        uint16_t btn_pressed_global = gp.buttons & ~s_prev_buttons_global;
+        s_prev_buttons_global = gp.buttons;
+
+        /* Voicing switch on Share button (rising edge) */
         if (misc_pressed & MISC_BACK) {
-            tone_stop();
-            piezo_voice_note_off(PIEZO_A);
-            piezo_voice_note_off(PIEZO_B);
-            s_mode = (s_mode + 1) % MODE_COUNT;
-            s_arp_running = false;
-            s_sfx.ticks_left = 0;
-
-            /* Set default waveform per mode */
-            static const waveform_t mode_waves[] = {
-                [MODE_MONO] = WAVE_SAWTOOTH,        [MODE_DUAL_OSC] = WAVE_SAWTOOTH,
-                [MODE_DELAY_SYNTH] = WAVE_SAWTOOTH, [MODE_SCALE] = WAVE_SINE,
-                [MODE_ARPEGGIO] = WAVE_SQUARE,      [MODE_SFX] = WAVE_SQUARE,
-                [MODE_DRONE] = WAVE_SAWTOOTH,
-            };
-            synth_set_waveform(mode_waves[s_mode]);
-
-            /* Turn off osc B unless the mode uses it */
-            synth_set_osc_b(false, (float)MIN_FREQ, WAVE_SAWTOOTH);
-
-            /* Set per-mode filter defaults */
-            switch (s_mode) {
-                case MODE_MONO:
-                case MODE_DUAL_OSC:
-                case MODE_DELAY_SYNTH:
-                case MODE_DRONE:
-                    /* Updated dynamically from sticks each tick */
-                    synth_set_filter(true, 6000.0f, 1.5f);
-                    break;
-                case MODE_SCALE:
-                    synth_set_filter(true, 5000.0f, 0.8f);
-                    break;
-                case MODE_ARPEGGIO:
-                    synth_set_filter(true, 4000.0f, 1.2f);
-                    break;
-                case MODE_SFX:
-                default:
-                    synth_set_filter(false, FILTER_CUTOFF_MAX, FILTER_Q_MIN);
-                    break;
-            }
-
-            /* LFO: Mono (triggers) and Drone (triggers) drive it per-tick.
-             * Others get it disabled. */
-            if (s_mode != MODE_MONO && s_mode != MODE_DRONE) {
-                synth_set_lfo(LFO_TARGET_NONE, 5.0f, 0.0f);
-            }
-
-            /* Per-mode delay preset */
-            switch (s_mode) {
-                case MODE_SCALE:
-                    synth_set_delay(true, SAMPLE_RATE * 120 / 1000, 0.25f, 0.3f);
-                    break;
-                case MODE_ARPEGGIO:
-                    synth_set_delay(true, SAMPLE_RATE * 250 / 1000, 0.55f, 0.4f);
-                    break;
-                case MODE_DELAY_SYNTH:
-                    /* Starting preset — mode_delay_synth updates each tick */
-                    synth_set_delay(true, SAMPLE_RATE * 200 / 1000, 0.5f, 0.5f);
-                    break;
-                case MODE_MONO:
-                case MODE_DUAL_OSC:
-                case MODE_SFX:
-                case MODE_DRONE:
-                default:
-                    synth_set_delay(false, 1, 0.0f, 0.0f);
-                    break;
-            }
-
-            ESP_LOGI(TAG, "Mode: %d waveform: %d", s_mode, mode_waves[s_mode]);
-            synth_blip(BLIP_FREQ_NEUTRAL);
-            led_blink(s_mode + 1, 80, 80);
+            voicing_t next = (voicing_t)((s_voicing + 1) % VOICING_COUNT);
+            enter_voicing(next);
         }
 
-        /* Home button toggles the background drum engine (rising edge).
-         * Reads s_settings.drum_pattern as the "remembered" pattern so
-         * settings-page changes take effect on the next toggle. */
-        if (misc_pressed & MISC_HOME) {
-            s_drum_on = !s_drum_on;
-            if (s_drum_on) {
-                int pat = s_settings.drum_pattern;
-                if (pat < 1 || pat > 4)
-                    pat = 1;
+        /* Home held → modifier for drum-pattern select. Face-button tap
+         * while Home held assigns pattern 1..4 and marks Home as "used as
+         * modifier" so the tap-release doesn't toggle drums off. */
+        bool home_held = (gp.misc_buttons & MISC_HOME) != 0;
+        if (home_held) {
+            uint16_t face_pressed = gp.buttons & ~s_home_prev_face;
+            s_home_prev_face = gp.buttons;
+            int pat = 0;
+            if (face_pressed & BTN_A)
+                pat = 1;
+            else if (face_pressed & BTN_B)
+                pat = 2;
+            else if (face_pressed & BTN_X)
+                pat = 3;
+            else if (face_pressed & BTN_Y)
+                pat = 4;
+            if (pat > 0) {
+                s_settings.drum_pattern = pat;
+                s_drum_on = true;
                 drums_set_pattern(pat);
                 synth_blip(BLIP_FREQ_UP);
-            } else {
-                drums_set_pattern(0);
-                synth_blip(BLIP_FREQ_DOWN);
+                s_home_used_as_modifier = true;
+                ESP_LOGI(TAG, "Drum pattern: %d (via Home+face)", pat);
             }
-            ESP_LOGI(TAG, "Drums: %s", s_drum_on ? "on" : "off");
+        } else {
+            s_home_prev_face = gp.buttons;
         }
 
-        /* Push live settings-page values into the drum engine so tempo/volume
-         * changes take effect while drums are running. Cheap assignments —
-         * the drum engine re-arms the esp_timer only if BPM actually changed. */
+        /* Home released: only toggle drums if Home wasn't used as modifier
+         * during this press. */
+        if (misc_released & MISC_HOME) {
+            if (s_home_used_as_modifier) {
+                s_home_used_as_modifier = false;
+            } else {
+                s_drum_on = !s_drum_on;
+                if (s_drum_on) {
+                    int pat = s_settings.drum_pattern;
+                    if (pat < 1 || pat > 4)
+                        pat = 1;
+                    drums_set_pattern(pat);
+                    synth_blip(BLIP_FREQ_UP);
+                } else {
+                    drums_set_pattern(0);
+                    synth_blip(BLIP_FREQ_DOWN);
+                }
+                ESP_LOGI(TAG, "Drums: %s", s_drum_on ? "on" : "off");
+            }
+        }
+
+        /* LS-click (left thumb) resets per-mode tweak parameters to
+         * defaults. Confirmation blip descends like "reset". */
+        if (btn_pressed_global & BTN_THUMB_L) {
+            reset_tweaks();
+            synth_blip(BLIP_FREQ_DOWN);
+            ESP_LOGI(TAG, "Tweaks reset to defaults");
+        }
+
+        /* Push live settings-page values into the drum engine so
+         * d-pad-tempo and settings-volume changes take effect immediately. */
         drums_set_tempo(s_settings.drum_tempo_bpm);
         drums_set_volume(s_settings.drum_volume);
 
@@ -1571,9 +1891,6 @@ static void control_task(void *arg)
                 piezo_voice_note_off(PIEZO_B);
                 synth_blip(BLIP_FREQ_UP);
                 ESP_LOGI(TAG, "Settings edit: ENTER (cursor=%d)", s_settings_cursor);
-                /* Render the current field's value ladder so the user knows
-                 * what they're adjusting. Gap before the ladder so the entry
-                 * blip stays distinct. */
                 vTaskDelay(pdMS_TO_TICKS(SETTINGS_LADDER_GAP_MS));
                 settings_play_value_ladder(s_settings_cursor);
             } else {
@@ -1582,35 +1899,59 @@ static void control_task(void *arg)
             }
         }
 
-        /* While editing, suppress mode dispatch and run the edit handler */
+        /* Settings overlay: d-pad is navigation, mode dispatch suppressed. */
         if (s_settings_edit_active) {
             settings_edit_handle(&gp);
             vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(CONTROL_TASK_PERIOD_MS));
             continue;
         }
 
-        /* Dispatch to current mode */
-        switch (s_mode) {
-            case MODE_MONO:
-                mode_mono(&gp);
+        /* Home held without a face-button hit also suppresses mode dispatch
+         * (otherwise holding Home to try patterns would accidentally play
+         * notes/scales). */
+        if (home_held) {
+            tone_stop();
+            vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(CONTROL_TASK_PERIOD_MS));
+            continue;
+        }
+
+        /* Global d-pad: volume (↑/↓) and tempo (←/→). */
+        handle_global_dpad(gp.dpad);
+
+        /* RB-held + face / LB toggles combos. Face buttons consumed by
+         * toggle combos are masked out before reaching voicing dispatch
+         * so the normal note/interval behavior doesn't double-fire. */
+        bool rb_held = (gp.buttons & BTN_SHOULDER_R) != 0;
+        uint16_t face_pressed = btn_pressed_global & BTN_FACE_MASK;
+        bool lb_pressed_edge = (btn_pressed_global & BTN_SHOULDER_L) != 0;
+        uint16_t consumed = handle_toggle_combo(face_pressed, rb_held, lb_pressed_edge);
+        uint16_t face_for_voicing = face_pressed & ~consumed;
+        /* While RB is held, suppress note/interval face-button semantics
+         * entirely so the user can think of RB as a "modifier" key. */
+        if (rb_held)
+            face_for_voicing = 0;
+
+        /* Periodic axis log (every ~10 ticks, 5 Hz) for diagnostics. */
+        static int s_dbg_tick = 0;
+        if (++s_dbg_tick >= 10) {
+            s_dbg_tick = 0;
+            DBG_AXES("lx=%d ly=%d rx=%d ry=%d btns=0x%04x dpad=0x%02x misc=0x%02x "
+                     "voicing=%d active=%d freq=%.1f cutoff=%.1f Q=%.2f",
+                     gp.axis_x, gp.axis_y, gp.axis_rx, gp.axis_ry, gp.buttons, gp.dpad,
+                     gp.misc_buttons, s_voicing, s_synth.active, s_synth.target_freq,
+                     s_synth.filter_cutoff, s_synth.filter_resonance);
+        }
+
+        /* Dispatch to current voicing */
+        switch (s_voicing) {
+            case VOICING_CONTINUOUS:
+                voicing_continuous(&gp, face_for_voicing);
                 break;
-            case MODE_DUAL_OSC:
-                mode_dual_osc(&gp);
+            case VOICING_DISCRETE:
+                voicing_discrete(&gp, face_for_voicing);
                 break;
-            case MODE_DELAY_SYNTH:
-                mode_delay_synth(&gp);
-                break;
-            case MODE_SCALE:
-                mode_scale(&gp);
-                break;
-            case MODE_ARPEGGIO:
-                mode_arpeggio(&gp);
-                break;
-            case MODE_SFX:
-                mode_sfx(&gp);
-                break;
-            case MODE_DRONE:
-                mode_drone(&gp);
+            case VOICING_ONE_SHOT:
+                voicing_one_shot(&gp, face_for_voicing);
                 break;
             default:
                 break;
