@@ -21,7 +21,7 @@ from pathlib import Path
 from google import genai
 from google.genai import types
 
-MODEL = "gemini-2.5-flash-preview-tts"
+MODEL = "gemini-3.1-flash-tts-preview"
 RETRIES = 3
 RETRY_DELAY_S = 10.0
 PER_CALL_DELAY_S = 2.0

@@ -1,6 +1,6 @@
 # Gamepad Synth
 
-Turn a Bluetooth controller into a Korg Monotron-inspired synthesizer. An ESP32-S3 reads gamepad input via [Bluepad32](https://github.com/ricardoquesada/bluepad32) and produces audio through an I2S DAC (MAX98357A). Three top-level voicings (Continuous, Discrete, One-shot) with orthogonal toggles for dual-osc, drone-hold, delay, arpeggiator, and waveform. Features dual DDS oscillators, resonant SVF filter, LFO modulation, and a 0.5-second delay line. On voicing switch, a short TTS clip ("Continuous" / "Discrete" / "One shot") plays before the musical signature gesture so you always know which voicing you're in without a screen.
+Turn a Bluetooth controller into a Korg Monotron-inspired synthesizer. An ESP32-S3 reads gamepad input via [Bluepad32](https://github.com/ricardoquesada/bluepad32) and produces audio through an I2S DAC (MAX98357A). Three top-level voicings (Theremin, Melody, Effects) with orthogonal toggles for dual-osc, drone-hold, delay, arpeggiator, and waveform. Features dual DDS oscillators, resonant SVF filter, LFO modulation, and a 0.5-second delay line. On voicing switch, a short TTS clip ("Theremin" / "Melody" / "Effects") speaks the voicing name — a cleaner cue than the musical signature it replaced.
 
 ## Hardware
 
@@ -45,7 +45,7 @@ The ESP32-S3 only supports **BLE** (no Bluetooth Classic). Compatible controller
 |---------|----------|
 | D-pad ↑/↓ | Master volume (±0.05, auto-repeats at 4 Hz) |
 | D-pad ←/→ | Drum tempo (±5 BPM, also drives arp step rate) |
-| Share / View / − | Cycle voicing (Continuous → Discrete → One-shot) |
+| Share / View / − | Cycle voicing (Theremin → Melody → Effects) |
 | Home / PS / Xbox tap | Toggle drum engine on/off |
 | Home held + A/B/X/Y | Select drum pattern 1-4 |
 | Menu / Options / + | Enter/exit settings-edit overlay (d-pad navigates fields) |
@@ -58,17 +58,17 @@ Each toggle plays a confirmation cue and persists per-voicing across voicing swi
 
 | Combo | Toggle | Scope | Effect |
 |-------|--------|-------|--------|
-| RB + A | DUAL_OSC | Continuous | Enables osc B; face buttons select interval (unison/5th/8va/2×8va) |
-| RB + B | DRONE_HOLD | Continuous | LY+RY integrate pitch; osc B plays on piezos; forces DUAL_OSC on |
-| RB + X | DELAY | Continuous + Discrete | Enables delay tail; LB held + RY/RX fine-tunes time/feedback |
+| RB + A | DUAL_OSC | Theremin | Enables osc B; face buttons select interval (unison/5th/8va/2×8va) |
+| RB + B | DRONE_HOLD | Theremin | LY+RY integrate pitch; osc B plays on piezos; forces DUAL_OSC on |
+| RB + X | DELAY | Theremin + Melody | Enables delay tail; LB held + RY/RX fine-tunes time/feedback |
 | RB + Y | WAVEFORM | All | Cycles square → saw → triangle → sine |
-| RB + LB | ARP | Discrete | Overlays arpeggiator; face button picks chord, steps fire at 16ths |
+| RB + LB | ARP | Melody | Overlays arpeggiator; face button picks chord, steps fire at 16ths |
 
 ## Voicings
 
-Press **Share / View / −** to cycle. Each voicing plays a signature gesture on entry so you can identify the voicing without a screen.
+Press **Share / View / −** to cycle. Each voicing speaks its name on entry (or plays a short musical signature if `voice_announce` is off in settings) so you can identify the voicing without a screen.
 
-### Continuous
+### Theremin
 
 Monotron-style instrument: LY is the pitch stick, the right stick shapes the tone.
 
@@ -85,7 +85,7 @@ Monotron-style instrument: LY is the pitch stick, the right stick shapes the ton
 
 Sweep RY upward while nudging RX for classic Monotron squelch. Toggle DRONE_HOLD (RB+B) for sustained drones that drift when sticks are released.
 
-### Discrete
+### Melody
 
 Face buttons pick scalar notes. Optional arpeggiator overlay.
 
@@ -111,7 +111,7 @@ With ARP (RB+LB toggle):
 
 Step rate follows the global tempo (16th notes).
 
-### One-shot
+### Effects
 
 Face buttons trigger retro SFX envelopes. Filter and delay bypassed.
 
