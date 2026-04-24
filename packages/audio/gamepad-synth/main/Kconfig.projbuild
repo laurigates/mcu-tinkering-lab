@@ -1,0 +1,16 @@
+menu "Gamepad Synth"
+
+config GAMEPAD_SYNTH_DEBUG_AXES
+    bool "Enable verbose axis and dispatch diagnostic logging"
+    default n
+    help
+        When enabled, the control task periodically logs raw gamepad axis
+        values along with the current voicing, target frequency, and filter
+        state. Each voicing function also logs the reason it called
+        tone_stop (deadzone, no-face-button, arp-not-running, etc.), and
+        the audio render task logs when the active flag transitions false.
+
+        Intended to diagnose input-mapping bugs like the right-stick
+        cardinal-axis cutoff. Noisy at 5 Hz — disable for normal use.
+
+endmenu
