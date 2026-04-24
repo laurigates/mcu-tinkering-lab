@@ -68,15 +68,38 @@ Port is auto-detected for ESP32-S3. Override with `PORT=/dev/ttyUSB0 just flash`
 | `STICK_DEADZONE` | 50 | Analog stick dead zone (out of ±512) |
 | `MIN_FREQ` / `MAX_FREQ` | 100 / 2000 Hz | Tone frequency range |
 
-### Sound Modes (cycled via View/Share/- button, LED blinks 1-7)
+### Control Paradigm
 
-1. **Mono Synth** — Monotron-style single osc. LY=pitch, LX=vibrato depth, RY=filter cutoff, RX=resonance, LT=LFO rate, RT=LFO depth (cutoff wah)
-2. **Dual Osc** — Two sawtooth oscillators. LY=pitch, face buttons=interval (A=unison, B=fifth, X=octave, Y=two octaves), RX=detune (±50 cents), RY=cutoff
-3. **Delay Synth** — Single osc with dynamic delay. LY=pitch, RY=delay time (20-500 ms), RX=feedback, LT/RT=filter cutoff modulation
-4. **Scale Player** (sine + slapback) — Face buttons + d-pad = C major scale notes, shoulders = octave shift
-5. **Arpeggiator** (square + cosmic echo) — Face buttons = chord type, RT = toggle, LY = speed, LX = pattern
-6. **Retro SFX** (filter/delay bypassed) — Face buttons + d-pad = game SFX, RT = speed multiplier
-7. **Drone** — Two sustained oscillators with LFO. LY=osc A pitch, RY=osc B pitch, LT=LFO rate, RT=LFO depth (pitch + cutoff)
+Tweak sticks (RY, RX, plus LX/LY in Drone) use **rate control**: stick displacement = rate of change of the parameter, not absolute position. Holding off-center changes the value over time; releasing to center holds the last value. This makes it possible to find a sweet spot and release, rather than having to hold the stick still. A short "bump" blip fires when a parameter reaches its min/max limit.
+
+Primary pitch sticks (LY in Mono/Dual/Delay) stay **absolute** for theremin-style muscle memory — stick up = high note.
+
+Tweak parameter state (cutoff, resonance, delay time, feedback, detune, pitch offset) persists across ticks within a mode, resets on mode switch, and resets on LS-click.
+
+### Global Buttons (every mode)
+
+| Button | Action |
+|---|---|
+| D-pad ↑/↓ | Master volume nudge (±0.05 per step), auto-repeats at 4 Hz |
+| D-pad ←/→ | Drum tempo nudge (±5 BPM), also drives the arp step rate |
+| Share/View/− (`MISC_BACK`) | Cycle sound mode (1-7). Brief LED flash, then a per-mode signature gesture plays. |
+| Home/PS/Xbox tap | Toggle drum engine on/off. Pattern/volume come from the settings page. |
+| Home/PS/Xbox held + A/B/X/Y | Select drum pattern 1/2/3/4 directly (auto-starts drums if off) |
+| Menu/Options/+ | Enter/exit settings-edit overlay. Inside, d-pad becomes field navigation (not volume/tempo). |
+| LS click (left-stick press) | Reset current mode's tweak parameters to defaults |
+| LT / RT triggers | ±7-semitone pitch bend (global in pitched modes) |
+
+**Settings-edit overlay**: d-pad ←/→ moves cursor between fields (drum_pattern, drum_volume, lfo_rate_hz, lfo_depth, lfo_target); ↑/↓ adjusts the selected field. Each cursor move plays a short value ladder so the user can audit the current value without a screen. Master volume and tempo moved to the global d-pad.
+
+### Sound Modes (cycled via View/Share/- button; each plays a signature gesture on entry)
+
+1. **Mono Synth** — Monotron-style single osc. LY=pitch (absolute), LX=vibrato depth (absolute, fixed 5 Hz rate), RY=filter cutoff (integrating, log), RX=resonance (integrating). LFO target/rate/depth from settings.
+2. **Dual Osc** — Two sawtooth oscillators. LY=pitch (absolute), face buttons pick interval (A=unison, B=fifth, X=octave, Y=2 octaves), RY=cutoff (integrating), RX=resonance (integrating). Detune persists in `s_tweak_detune_cents` (phase-2 entry point for a shoulder modifier).
+3. **Delay Synth** — Single osc with dynamic delay. LY=pitch (absolute), RY=delay time (integrating, 20-500 ms, log), RX=feedback (integrating, 0-0.9). Filter fixed at 4 kHz / Q 1.2.
+4. **Scale Player** (sine + slapback) — A/B/X/Y (no LB) = Do/Re/Mi/Fa; **LB held** + A/B/X/Y = Sol/La/Ti/Do-high. LY integrates pitch offset (±12 st); RY = fine bend (±50 Hz, absolute).
+5. **Arpeggiator** (square + cosmic echo) — Face buttons = chord (A=major, B=minor, X=7th, Y=dim), LB/RB = octave, LY integrates root transpose (±12 st), LX-zones = pattern (left=down, right=up, center=up-down), RT toggles arp. Step rate is derived from the global tempo (16th notes).
+6. **Retro SFX** (filter/delay bypassed) — A/B/X/Y (no LB) = Laser/Explosion/Power-up/Coin; **LB held** + A/B/X/Y = Siren/Engine/Jump/Warp. RT = speed multiplier (0.3-1.0x on tick count).
+7. **Drone** — Two sustained oscillators. LY integrates osc A pitch, RY integrates osc B pitch (both drift slowly), LX integrates filter cutoff, RX integrates resonance. Osc B is also routed to the two piezos at a fixed detune ratio for acoustic beating. LFO from settings.
 
 ### Dependencies
 
