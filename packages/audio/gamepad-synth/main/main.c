@@ -454,6 +454,7 @@ typedef struct {
     bool arp;            /* Discrete only: arp overlay */
     waveform_t waveform; /* Per-voicing timbre */
     int interval_semitones; /* Dual-osc interval (Continuous) */
+    int octave_shift;       /* Theremin: ±octaves applied to output pitch */
 } voicing_cfg_t;
 
 static voicing_t s_voicing = VOICING_THEREMIN;
@@ -858,9 +859,10 @@ static void voicing_theremin(const gamepad_state_t *gp, uint16_t face_pressed)
     synth_set_lfo((lfo_target_t)s_settings.lfo_target, s_settings.lfo_rate_hz,
                   s_settings.lfo_depth);
 
-    /* Face-button interval pick (dual-osc, not drone-hold). Drone-hold
-     * doesn't use intervals because osc B is piezo-only and follows
-     * RY-integrating pitch instead. */
+    /* Face buttons: in dual-osc (non-drone) mode they pick the osc-B
+     * interval; otherwise they latch an octave shift on the primary pitch
+     * (A=-1, B=0/home, X=+1, Y=+2). Drone-hold doesn't use intervals
+     * because osc B is piezo-only and follows RY-integrating pitch. */
     if (cfg.dual_osc && !cfg.drone_hold) {
         if (face_pressed & BTN_A) {
             s_cfg[VOICING_THEREMIN].interval_semitones = 0;
@@ -875,7 +877,23 @@ static void voicing_theremin(const gamepad_state_t *gp, uint16_t face_pressed)
             s_cfg[VOICING_THEREMIN].interval_semitones = 24;
             synth_blip(BLIP_FREQ_UP * 1.5f);
         }
+    } else {
+        if (face_pressed & BTN_A) {
+            s_cfg[VOICING_THEREMIN].octave_shift = -1;
+            synth_blip(BLIP_FREQ_DOWN);
+        } else if (face_pressed & BTN_B) {
+            s_cfg[VOICING_THEREMIN].octave_shift = 0;
+            synth_blip(BLIP_FREQ_NEUTRAL);
+        } else if (face_pressed & BTN_X) {
+            s_cfg[VOICING_THEREMIN].octave_shift = 1;
+            synth_blip(BLIP_FREQ_UP);
+        } else if (face_pressed & BTN_Y) {
+            s_cfg[VOICING_THEREMIN].octave_shift = 2;
+            synth_blip(BLIP_FREQ_UP * 1.5f);
+        }
     }
+
+    float octave_mult = powf(2.0f, (float)s_cfg[VOICING_THEREMIN].octave_shift);
 
     /* Right-stick tweaks — delay params if LB+delay, else filter. */
     if (cfg.delay && lb_held) {
@@ -920,8 +938,8 @@ static void voicing_theremin(const gamepad_state_t *gp, uint16_t face_pressed)
                       (float)MAX_FREQ, INTEGRATION_DT);
         integrate_exp(&s_drone_freq_b, stick_rate(gp->axis_ry), 2.0f, (float)MIN_FREQ,
                       (float)MAX_FREQ, INTEGRATION_DT);
-        float pitch_a = s_drone_freq_a * bend_mult;
-        float pitch_b = s_drone_freq_b * bend_mult;
+        float pitch_a = s_drone_freq_a * bend_mult * octave_mult;
+        float pitch_b = s_drone_freq_b * bend_mult * octave_mult;
         tone_play((uint32_t)pitch_a);
         synth_set_osc_b(false, (float)MIN_FREQ, cfg.waveform); /* Osc B is piezo-only in drone */
         piezo_voice_note_on(PIEZO_A, pitch_b);
@@ -949,7 +967,7 @@ static void voicing_theremin(const gamepad_state_t *gp, uint16_t face_pressed)
     tick++;
     float vib = vib_depth * sinf(2.0f * 3.14159f * 5.0f * (float)tick / CONTROL_TASK_HZ);
     pitch += vib;
-    pitch *= bend_mult;
+    pitch *= bend_mult * octave_mult;
 
     tone_play((uint32_t)pitch);
 
