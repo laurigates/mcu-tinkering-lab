@@ -3,16 +3,16 @@
  * @brief ESP32-S3 Gamepad Synth — Bluetooth controller drives I2S audio
  *
  * Three top-level voicings cycled via the Share/View/- button:
- *   1. Continuous — monotron-style instrument (LY=pitch, sticks=tone)
- *   2. Discrete   — face buttons pick notes / chord degrees
- *   3. One-shot   — face buttons trigger retro SFX envelopes
+ *   1. Theremin — monotron-style instrument (LY=pitch, sticks=tone)
+ *   2. Melody   — face buttons pick notes / chord degrees
+ *   3. Effects  — face buttons trigger retro SFX envelopes
  *
  * Orthogonal toggles layer on top (RB-held + face button):
- *   RB+A = DUAL_OSC   (Continuous: face picks interval)
- *   RB+B = DRONE_HOLD (Continuous: LY+RY integrate pitch, piezos sing)
- *   RB+X = DELAY      (Continuous + Discrete: LB+RY/RX fine-tunes)
+ *   RB+A = DUAL_OSC   (Theremin: face picks interval)
+ *   RB+B = DRONE_HOLD (Theremin: LY+RY integrate pitch, piezos sing)
+ *   RB+X = DELAY      (Theremin + Melody: LB+RY/RX fine-tunes)
  *   RB+Y = WAVEFORM   (global: cycles sq→saw→tri→sine)
- *   RB+LB = ARP       (Discrete: arpeggiate chord at global tempo)
+ *   RB+LB = ARP       (Melody: arpeggiate chord at global tempo)
  *
  * Global controls:
  *   D-pad ↑/↓     = master volume         (4 Hz auto-repeat)
@@ -25,7 +25,7 @@
  *
  * Sticks use *rate control* for tweak parameters (RY/RX): holding
  * off-center changes the value over time; releasing holds. Primary pitch
- * sticks (LY in Continuous/Discrete) stay absolute unless DRONE_HOLD.
+ * sticks (LY in Theremin/Melody) stay absolute unless DRONE_HOLD.
  *
  * Bluepad32 runs on Core 0 (BTstack event loop, blocks forever).
  * Core 1 runs two tasks:
@@ -58,6 +58,19 @@
 
 #include "drums.h"
 #include "piezo_voice.h"
+#include "tts_player.h"
+
+/* Voicing-announcement PCM blobs (raw 16-bit LE, 24 kHz mono) embedded via
+ * EMBED_FILES in main/CMakeLists.txt. Regenerate with `just tts-generate`. */
+extern const uint8_t tts_theremin_pcm_start[] asm("_binary_tts_theremin_pcm_start");
+extern const uint8_t tts_theremin_pcm_end[] asm("_binary_tts_theremin_pcm_end");
+extern const uint8_t tts_melody_pcm_start[] asm("_binary_tts_melody_pcm_start");
+extern const uint8_t tts_melody_pcm_end[] asm("_binary_tts_melody_pcm_end");
+extern const uint8_t tts_effects_pcm_start[] asm("_binary_tts_effects_pcm_start");
+extern const uint8_t tts_effects_pcm_end[] asm("_binary_tts_effects_pcm_end");
+
+#define TTS_SRC_RATE 24000
+#define TTS_TAIL_MS 80
 
 static const char *TAG = "gamepad_synth";
 
@@ -270,6 +283,7 @@ typedef enum {
     SETTING_LFO_RATE,
     SETTING_LFO_DEPTH,
     SETTING_LFO_TARGET,
+    SETTING_VOICE_ANNOUNCE,
     SETTING_COUNT,
 } setting_id_t;
 
@@ -281,6 +295,7 @@ typedef struct {
     float lfo_rate_hz;   /* 0.1 .. 20.0 */
     float lfo_depth;     /* 0.0 .. 1.0 */
     int lfo_target;      /* lfo_target_t value */
+    bool voice_announce; /* true → speak voicing name on switch */
 } settings_t;
 
 volatile settings_t s_settings = {
@@ -291,6 +306,7 @@ volatile settings_t s_settings = {
     .lfo_rate_hz = 5.0f,
     .lfo_depth = 0.3f,
     .lfo_target = LFO_TARGET_CUTOFF,
+    .voice_announce = true,
 };
 
 volatile bool s_settings_edit_active = false;
@@ -425,9 +441,9 @@ static inline float compute_bend_mult(const gamepad_state_t *gp)
  */
 
 typedef enum {
-    VOICING_CONTINUOUS = 0, /* LY=pitch, sticks shape the tone */
-    VOICING_DISCRETE,       /* Face buttons play notes / chord degrees */
-    VOICING_ONE_SHOT,       /* Face buttons trigger SFX envelopes */
+    VOICING_THEREMIN = 0, /* LY=pitch, sticks shape the tone */
+    VOICING_MELODY,       /* Face buttons play notes / chord degrees */
+    VOICING_EFFECTS,      /* Face buttons trigger SFX envelopes */
     VOICING_COUNT,
 } voicing_t;
 
@@ -440,14 +456,14 @@ typedef struct {
     int interval_semitones; /* Dual-osc interval (Continuous) */
 } voicing_cfg_t;
 
-static voicing_t s_voicing = VOICING_CONTINUOUS;
+static voicing_t s_voicing = VOICING_THEREMIN;
 static voicing_cfg_t s_cfg[VOICING_COUNT] = {
-    [VOICING_CONTINUOUS] = {.waveform = WAVE_SAWTOOTH, .interval_semitones = 0},
-    [VOICING_DISCRETE] = {.waveform = WAVE_SINE, .interval_semitones = 0},
-    [VOICING_ONE_SHOT] = {.waveform = WAVE_SQUARE, .interval_semitones = 0},
+    [VOICING_THEREMIN] = {.waveform = WAVE_SAWTOOTH, .interval_semitones = 0},
+    [VOICING_MELODY] = {.waveform = WAVE_SINE, .interval_semitones = 0},
+    [VOICING_EFFECTS] = {.waveform = WAVE_SQUARE, .interval_semitones = 0},
 };
 
-/* Arpeggiator state (used by VOICING_DISCRETE when cfg.arp is true) */
+/* Arpeggiator state (used by VOICING_MELODY when cfg.arp is true) */
 static const uint8_t *s_arp_chord = CHORD_MAJOR;
 static int s_arp_root = 0;      /* semitone offset from C4 */
 static int s_arp_index = 0;     /* current note in chord */
@@ -455,7 +471,7 @@ static int s_arp_direction = 1; /* 1=up, -1=down */
 static bool s_arp_running = false;
 static uint32_t s_arp_last_ms = 0;
 
-/* SFX state (used by VOICING_ONE_SHOT) */
+/* SFX state (used by VOICING_EFFECTS) */
 typedef struct {
     float freq;
     float freq_end;
@@ -715,7 +731,7 @@ static void led_off(void)
     gpio_set_level(LED_PIN, 0);
 }
 
-/* ── SFX helpers (used by VOICING_ONE_SHOT) ──────────────── */
+/* ── SFX helpers (used by VOICING_EFFECTS) ──────────────── */
 
 static void sfx_start(float start, float end, int ticks)
 {
@@ -738,7 +754,7 @@ static void sfx_tick(void)
     s_sfx.ticks_left--;
 }
 
-/* Arpeggiator core — called from VOICING_DISCRETE when cfg.arp is true.
+/* Arpeggiator core — called from VOICING_MELODY when cfg.arp is true.
  * Handles chord selection on face-button rising edge and steps through
  * the chord at global-tempo 16ths. */
 static void arp_tick(const gamepad_state_t *gp, uint16_t face_pressed)
@@ -788,7 +804,7 @@ static void arp_tick(const gamepad_state_t *gp, uint16_t face_pressed)
 
     if (!s_arp_running) {
         led_off();
-        DBG_AXES("voicing=discrete arp=on running=false stop_reason=arp_not_running");
+        DBG_AXES("voicing=melody arp=on running=false stop_reason=arp_not_running");
         return;
     }
 
@@ -833,9 +849,9 @@ static void arp_tick(const gamepad_state_t *gp, uint16_t face_pressed)
 
 /* ── Voicing 1: Continuous (Mono + Dual Osc + Delay + Drone) ── */
 
-static void voicing_continuous(const gamepad_state_t *gp, uint16_t face_pressed)
+static void voicing_theremin(const gamepad_state_t *gp, uint16_t face_pressed)
 {
-    const voicing_cfg_t cfg = s_cfg[VOICING_CONTINUOUS];
+    const voicing_cfg_t cfg = s_cfg[VOICING_THEREMIN];
     bool lb_held = (gp->buttons & BTN_SHOULDER_L) != 0;
 
     /* LFO from settings (Mono+Drone both wired this up). */
@@ -847,16 +863,16 @@ static void voicing_continuous(const gamepad_state_t *gp, uint16_t face_pressed)
      * RY-integrating pitch instead. */
     if (cfg.dual_osc && !cfg.drone_hold) {
         if (face_pressed & BTN_A) {
-            s_cfg[VOICING_CONTINUOUS].interval_semitones = 0;
+            s_cfg[VOICING_THEREMIN].interval_semitones = 0;
             synth_blip(BLIP_FREQ_DOWN);
         } else if (face_pressed & BTN_B) {
-            s_cfg[VOICING_CONTINUOUS].interval_semitones = 7;
+            s_cfg[VOICING_THEREMIN].interval_semitones = 7;
             synth_blip(BLIP_FREQ_NEUTRAL);
         } else if (face_pressed & BTN_X) {
-            s_cfg[VOICING_CONTINUOUS].interval_semitones = 12;
+            s_cfg[VOICING_THEREMIN].interval_semitones = 12;
             synth_blip(BLIP_FREQ_UP);
         } else if (face_pressed & BTN_Y) {
-            s_cfg[VOICING_CONTINUOUS].interval_semitones = 24;
+            s_cfg[VOICING_THEREMIN].interval_semitones = 24;
             synth_blip(BLIP_FREQ_UP * 1.5f);
         }
     }
@@ -914,7 +930,7 @@ static void voicing_continuous(const gamepad_state_t *gp, uint16_t face_pressed)
         return;
     }
 
-    /* Standard continuous: LY=absolute pitch, LX=vibrato depth. */
+    /* Standard theremin: LY=absolute pitch, LX=vibrato depth. */
     int16_t ly = gp->axis_y;
     int16_t lx = gp->axis_x;
     if (abs(ly) < STICK_DEADZONE && abs(lx) < STICK_DEADZONE) {
@@ -923,7 +939,7 @@ static void voicing_continuous(const gamepad_state_t *gp, uint16_t face_pressed)
         piezo_voice_note_off(PIEZO_A);
         piezo_voice_note_off(PIEZO_B);
         led_off();
-        DBG_AXES("voicing=continuous ly=%d lx=%d stop_reason=deadzone", ly, lx);
+        DBG_AXES("voicing=theremin ly=%d lx=%d stop_reason=deadzone", ly, lx);
         return;
     }
 
@@ -938,7 +954,7 @@ static void voicing_continuous(const gamepad_state_t *gp, uint16_t face_pressed)
     tone_play((uint32_t)pitch);
 
     if (cfg.dual_osc) {
-        int interval = s_cfg[VOICING_CONTINUOUS].interval_semitones;
+        int interval = s_cfg[VOICING_THEREMIN].interval_semitones;
         float detune_mult = powf(2.0f, s_tweak_detune_cents / 1200.0f);
         float pitch_b = pitch * powf(2.0f, (float)interval / 12.0f) * detune_mult;
         synth_set_osc_b(true, pitch_b, cfg.waveform);
@@ -950,9 +966,9 @@ static void voicing_continuous(const gamepad_state_t *gp, uint16_t face_pressed)
 
 /* ── Voicing 2: Discrete (Scale + Arpeggio) ───────────────── */
 
-static void voicing_discrete(const gamepad_state_t *gp, uint16_t face_pressed)
+static void voicing_melody(const gamepad_state_t *gp, uint16_t face_pressed)
 {
-    const voicing_cfg_t cfg = s_cfg[VOICING_DISCRETE];
+    const voicing_cfg_t cfg = s_cfg[VOICING_MELODY];
     bool lb_held = (gp->buttons & BTN_SHOULDER_L) != 0;
 
     /* LY integrates pitch offset (±12 st) — root transpose or scale slide. */
@@ -1010,7 +1026,7 @@ static void voicing_discrete(const gamepad_state_t *gp, uint16_t face_pressed)
     if (note_idx < 0) {
         tone_stop();
         led_off();
-        DBG_AXES("voicing=discrete arp=off stop_reason=no_face_button");
+        DBG_AXES("voicing=melody arp=off stop_reason=no_face_button");
         return;
     }
 
@@ -1025,7 +1041,7 @@ static void voicing_discrete(const gamepad_state_t *gp, uint16_t face_pressed)
 
 /* ── Voicing 3: One-Shot (Retro SFX) ──────────────────────── */
 
-static void voicing_one_shot(const gamepad_state_t *gp, uint16_t face_pressed)
+static void voicing_effects(const gamepad_state_t *gp, uint16_t face_pressed)
 {
     /* RT = speed multiplier on the sweep tick count. */
     float speed = map_range((float)gp->throttle, 0, TRIGGER_MAX, 1.0f, 0.3f);
@@ -1059,6 +1075,51 @@ static void voicing_one_shot(const gamepad_state_t *gp, uint16_t face_pressed)
     sfx_tick();
 }
 
+/* ── TTS voicing announcement ────────────────────────────
+ *
+ * Plays the spoken voicing name (embedded PCM, 24 kHz mono) before the
+ * musical signature gesture. Blocks the control task for the clip's
+ * duration + 80 ms tail so the buffer drains cleanly before the signature
+ * starts. Drum engine volume is ducked to 0 during the clip and restored
+ * afterward so two-syllable words stay intelligible over a running beat.
+ *
+ * Synth is already silent at this point (tone_stop() fires earlier in
+ * enter_voicing), so we don't need to mute the synth path.
+ */
+static void tts_play_voicing(voicing_t v)
+{
+    const uint8_t *start = NULL;
+    const uint8_t *end = NULL;
+    switch (v) {
+        case VOICING_THEREMIN:
+            start = tts_theremin_pcm_start;
+            end = tts_theremin_pcm_end;
+            break;
+        case VOICING_MELODY:
+            start = tts_melody_pcm_start;
+            end = tts_melody_pcm_end;
+            break;
+        case VOICING_EFFECTS:
+            start = tts_effects_pcm_start;
+            end = tts_effects_pcm_end;
+            break;
+        default:
+            return;
+    }
+
+    int num_bytes = (int)(end - start);
+    int num_samples = num_bytes / (int)sizeof(int16_t);
+    if (num_samples <= 1)
+        return;
+    int duration_ms = (num_samples * 1000) / TTS_SRC_RATE + TTS_TAIL_MS;
+
+    float saved_vol = s_settings.drum_volume;
+    drums_set_volume(0.0f);
+    tts_player_start((const int16_t *)start, num_samples);
+    vTaskDelay(pdMS_TO_TICKS(duration_ms));
+    drums_set_volume(saved_vol);
+}
+
 /* ── Voicing Signature Gestures ──────────────────────────
  *
  * On voicing switch, play a short phrase *in that voicing's own voice*
@@ -1069,7 +1130,7 @@ static void voicing_one_shot(const gamepad_state_t *gp, uint16_t face_pressed)
 static void play_voicing_signature(voicing_t voicing)
 {
     switch (voicing) {
-        case VOICING_CONTINUOUS: {
+        case VOICING_THEREMIN: {
             /* Pitch-bend chirp (sawtooth, 400→1200 Hz) — instrument feel */
             synth_set_waveform(WAVE_SAWTOOTH);
             synth_set_filter(true, 6000.0f, 1.5f);
@@ -1082,7 +1143,7 @@ static void play_voicing_signature(voicing_t voicing)
             }
             break;
         }
-        case VOICING_DISCRETE: {
+        case VOICING_MELODY: {
             /* Do-Mi-Sol ascending on sine — melodic feel */
             synth_set_waveform(WAVE_SINE);
             synth_set_filter(true, 5000.0f, 0.8f);
@@ -1097,7 +1158,7 @@ static void play_voicing_signature(voicing_t voicing)
             vTaskDelay(pdMS_TO_TICKS(160));
             break;
         }
-        case VOICING_ONE_SHOT: {
+        case VOICING_EFFECTS: {
             /* Laser zap — descending square sweep */
             synth_set_waveform(WAVE_SQUARE);
             synth_set_filter(false, FILTER_CUTOFF_MAX, FILTER_Q_MIN);
@@ -1445,6 +1506,10 @@ static void audio_render_task(void *arg)
          * below. drums_render_block() does a saturating add into L/R. */
         drums_render_block(stereo_buf, BLOCK_SIZE);
 
+        /* Voicing-announcement TTS clip (24 kHz → 44.1 kHz linear upsample,
+         * saturating overlay mix). Subject to master volume like drums. */
+        tts_player_render_block(stereo_buf, BLOCK_SIZE);
+
         /* Master volume attenuation — applied to (synth + drums) before the
          * blip mix so confirmation blips stay audible at low volumes. Read
          * once per block to avoid torn reads. */
@@ -1542,6 +1607,12 @@ static void settings_play_value_ladder(int cursor)
             settings_play_ladder(n, BLIP_FREQ_NEUTRAL);
             break;
         }
+        case SETTING_VOICE_ANNOUNCE: {
+            /* 1 blip = off, 2 blips = on — so "more blips = more feature". */
+            int n = s_settings.voice_announce ? 2 : 1;
+            settings_play_ladder(n, BLIP_FREQ_NEUTRAL);
+            break;
+        }
         default:
             break;
     }
@@ -1590,6 +1661,10 @@ static void settings_adjust(int cursor, int direction)
             s_settings.lfo_target = t;
             break;
         }
+        case SETTING_VOICE_ANNOUNCE:
+            /* Bool field — any direction toggles it. */
+            s_settings.voice_announce = !s_settings.voice_announce;
+            break;
         default:
             break;
     }
@@ -1640,21 +1715,21 @@ static void apply_voicing_defaults(voicing_t voicing)
     synth_set_osc_b(false, (float)MIN_FREQ, cfg.waveform);
 
     switch (voicing) {
-        case VOICING_CONTINUOUS:
+        case VOICING_THEREMIN:
             synth_set_filter(true, TWEAK_CUTOFF_DEFAULT, TWEAK_RESONANCE_DEFAULT);
             break;
-        case VOICING_DISCRETE:
+        case VOICING_MELODY:
             synth_set_filter(true, 5000.0f, 0.8f);
             break;
-        case VOICING_ONE_SHOT:
+        case VOICING_EFFECTS:
         default:
             synth_set_filter(false, FILTER_CUTOFF_MAX, FILTER_Q_MIN);
             break;
     }
 
-    /* LFO is driven per-tick by Continuous (from settings). Discrete
-     * and One-shot silence it on entry. */
-    if (voicing != VOICING_CONTINUOUS)
+    /* LFO is driven per-tick by Theremin (from settings). Melody and
+     * Effects silence it on entry. */
+    if (voicing != VOICING_THEREMIN)
         synth_set_lfo(LFO_TARGET_NONE, 5.0f, 0.0f);
 
     /* Delay tail default; if cfg.delay is true, the voicing function
@@ -1685,7 +1760,14 @@ static void enter_voicing(voicing_t new_voicing)
     led_off();
 
     apply_voicing_defaults(new_voicing);
-    play_voicing_signature(new_voicing);
+    /* Exactly one cue plays per switch: spoken name when voice_announce is
+     * on, musical signature gesture when it's off. Playing both ran long
+     * and felt cluttered. */
+    if (s_settings.voice_announce) {
+        tts_play_voicing(new_voicing);
+    } else {
+        play_voicing_signature(new_voicing);
+    }
     apply_voicing_defaults(new_voicing);
 
     ESP_LOGI(TAG, "Voicing: %d cfg={dual=%d drone=%d delay=%d arp=%d wave=%d}", s_voicing,
@@ -1704,27 +1786,27 @@ static uint16_t handle_toggle_combo(uint16_t face_pressed, bool rb_held, bool lb
     uint16_t consumed = 0;
 
     if (face_pressed & BTN_A) {
-        if (s_voicing == VOICING_CONTINUOUS) {
-            s_cfg[VOICING_CONTINUOUS].dual_osc = !s_cfg[VOICING_CONTINUOUS].dual_osc;
-            if (!s_cfg[VOICING_CONTINUOUS].dual_osc)
-                s_cfg[VOICING_CONTINUOUS].drone_hold = false;
-            toggle_cue(s_cfg[VOICING_CONTINUOUS].dual_osc);
-            ESP_LOGI(TAG, "Toggle DUAL_OSC: %d", s_cfg[VOICING_CONTINUOUS].dual_osc);
+        if (s_voicing == VOICING_THEREMIN) {
+            s_cfg[VOICING_THEREMIN].dual_osc = !s_cfg[VOICING_THEREMIN].dual_osc;
+            if (!s_cfg[VOICING_THEREMIN].dual_osc)
+                s_cfg[VOICING_THEREMIN].drone_hold = false;
+            toggle_cue(s_cfg[VOICING_THEREMIN].dual_osc);
+            ESP_LOGI(TAG, "Toggle DUAL_OSC: %d", s_cfg[VOICING_THEREMIN].dual_osc);
         }
         consumed |= BTN_A;
     }
     if (face_pressed & BTN_B) {
-        if (s_voicing == VOICING_CONTINUOUS) {
-            s_cfg[VOICING_CONTINUOUS].drone_hold = !s_cfg[VOICING_CONTINUOUS].drone_hold;
-            if (s_cfg[VOICING_CONTINUOUS].drone_hold)
-                s_cfg[VOICING_CONTINUOUS].dual_osc = true;
-            toggle_cue(s_cfg[VOICING_CONTINUOUS].drone_hold);
-            ESP_LOGI(TAG, "Toggle DRONE_HOLD: %d", s_cfg[VOICING_CONTINUOUS].drone_hold);
+        if (s_voicing == VOICING_THEREMIN) {
+            s_cfg[VOICING_THEREMIN].drone_hold = !s_cfg[VOICING_THEREMIN].drone_hold;
+            if (s_cfg[VOICING_THEREMIN].drone_hold)
+                s_cfg[VOICING_THEREMIN].dual_osc = true;
+            toggle_cue(s_cfg[VOICING_THEREMIN].drone_hold);
+            ESP_LOGI(TAG, "Toggle DRONE_HOLD: %d", s_cfg[VOICING_THEREMIN].drone_hold);
         }
         consumed |= BTN_B;
     }
     if (face_pressed & BTN_X) {
-        if (s_voicing == VOICING_CONTINUOUS || s_voicing == VOICING_DISCRETE) {
+        if (s_voicing == VOICING_THEREMIN || s_voicing == VOICING_MELODY) {
             s_cfg[s_voicing].delay = !s_cfg[s_voicing].delay;
             toggle_cue(s_cfg[s_voicing].delay);
             ESP_LOGI(TAG, "Toggle DELAY[%d]: %d", s_voicing, s_cfg[s_voicing].delay);
@@ -1740,14 +1822,14 @@ static uint16_t handle_toggle_combo(uint16_t face_pressed, bool rb_held, bool lb
         ESP_LOGI(TAG, "Cycle WAVEFORM[%d]: %d", s_voicing, next);
         consumed |= BTN_Y;
     }
-    if (lb_pressed && s_voicing == VOICING_DISCRETE) {
-        s_cfg[VOICING_DISCRETE].arp = !s_cfg[VOICING_DISCRETE].arp;
-        if (!s_cfg[VOICING_DISCRETE].arp) {
+    if (lb_pressed && s_voicing == VOICING_MELODY) {
+        s_cfg[VOICING_MELODY].arp = !s_cfg[VOICING_MELODY].arp;
+        if (!s_cfg[VOICING_MELODY].arp) {
             s_arp_running = false;
             tone_stop();
         }
-        toggle_cue(s_cfg[VOICING_DISCRETE].arp);
-        ESP_LOGI(TAG, "Toggle ARP: %d", s_cfg[VOICING_DISCRETE].arp);
+        toggle_cue(s_cfg[VOICING_MELODY].arp);
+        ESP_LOGI(TAG, "Toggle ARP: %d", s_cfg[VOICING_MELODY].arp);
     }
 
     return consumed;
@@ -1944,14 +2026,14 @@ static void control_task(void *arg)
 
         /* Dispatch to current voicing */
         switch (s_voicing) {
-            case VOICING_CONTINUOUS:
-                voicing_continuous(&gp, face_for_voicing);
+            case VOICING_THEREMIN:
+                voicing_theremin(&gp, face_for_voicing);
                 break;
-            case VOICING_DISCRETE:
-                voicing_discrete(&gp, face_for_voicing);
+            case VOICING_MELODY:
+                voicing_melody(&gp, face_for_voicing);
                 break;
-            case VOICING_ONE_SHOT:
-                voicing_one_shot(&gp, face_for_voicing);
+            case VOICING_EFFECTS:
+                voicing_effects(&gp, face_for_voicing);
                 break;
             default:
                 break;
@@ -1989,14 +2071,15 @@ void app_main(void)
     s_settings.lfo_rate_hz = 5.0f;
     s_settings.lfo_depth = 0.3f;
     s_settings.lfo_target = LFO_TARGET_CUTOFF;
+    s_settings.voice_announce = true;
     s_settings_edit_active = false;
     s_settings_cursor = 0;
     ESP_LOGI(TAG,
              "Settings: master_vol=%.2f drum_ptn=%d drum_bpm=%d drum_vol=%.2f "
-             "lfo_rate=%.1f lfo_depth=%.2f lfo_tgt=%d",
+             "lfo_rate=%.1f lfo_depth=%.2f lfo_tgt=%d voice=%d",
              s_settings.master_volume, s_settings.drum_pattern, s_settings.drum_tempo_bpm,
              s_settings.drum_volume, s_settings.lfo_rate_hz, s_settings.lfo_depth,
-             s_settings.lfo_target);
+             s_settings.lfo_target, s_settings.voice_announce);
 
     play_startup_jingle();
 
