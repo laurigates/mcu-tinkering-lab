@@ -1,0 +1,5 @@
+[
+  {"clip": "continuous", "text": "Continuous", "voice": "Charon"},
+  {"clip": "discrete",   "text": "Discrete",   "voice": "Charon"},
+  {"clip": "one_shot",   "text": "One shot",   "voice": "Charon"}
+]

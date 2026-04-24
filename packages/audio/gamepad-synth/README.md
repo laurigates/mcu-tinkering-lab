@@ -1,6 +1,6 @@
 # Gamepad Synth
 
-Turn a Bluetooth controller into a Korg Monotron-inspired synthesizer. An ESP32-S3 reads gamepad input via [Bluepad32](https://github.com/ricardoquesada/bluepad32) and produces audio through an I2S DAC (MAX98357A). Three top-level voicings (Continuous, Discrete, One-shot) with orthogonal toggles for dual-osc, drone-hold, delay, arpeggiator, and waveform. Features dual DDS oscillators, resonant SVF filter, LFO modulation, and a 0.5-second delay line.
+Turn a Bluetooth controller into a Korg Monotron-inspired synthesizer. An ESP32-S3 reads gamepad input via [Bluepad32](https://github.com/ricardoquesada/bluepad32) and produces audio through an I2S DAC (MAX98357A). Three top-level voicings (Continuous, Discrete, One-shot) with orthogonal toggles for dual-osc, drone-hold, delay, arpeggiator, and waveform. Features dual DDS oscillators, resonant SVF filter, LFO modulation, and a 0.5-second delay line. On voicing switch, a short TTS clip ("Continuous" / "Discrete" / "One shot") plays before the musical signature gesture so you always know which voicing you're in without a screen.
 
 ## Hardware
 
@@ -136,6 +136,20 @@ just build
 just flash
 just monitor
 ```
+
+## Voicing Announcements
+
+The spoken clips are committed to the repo under `data/tts_<clip>.pcm` and embedded into the firmware at build time — no API key is needed to build or flash. The `voice_announce` setting (settings-edit overlay → last field) toggles the spoken clip on/off; the musical signature gesture still plays either way.
+
+To retune the wording, voice, or add a new clip:
+
+```bash
+# Edit tools/tts/voices.json, then:
+GEMINI_API_KEY=... just tts-generate   # writes data/tts_<clip>.pcm
+just build flash                        # re-embed and flash
+```
+
+See [tools/tts/README.md](tools/tts/README.md) for the generator details (Gemini model, output format, auditioning a raw PCM clip).
 
 To enable verbose axis/dispatch diagnostic logging for debugging input-mapping issues:
 

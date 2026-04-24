@@ -42,6 +42,11 @@ fetch-deps:
         echo "Symlinked bluepad32 from xbox-switch-bridge"
     fi
 
+# Regenerate voicing-announcement TTS clips via Gemini (needs GEMINI_API_KEY)
+[group: "setup"]
+tts-generate:
+    cd tools/tts && uv sync && uv run python generate.py ../../data
+
 ##########
 # Build (custom — output filtering + fetch-deps)
 ##########

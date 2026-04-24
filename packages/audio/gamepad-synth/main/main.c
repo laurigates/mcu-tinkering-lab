@@ -58,6 +58,19 @@
 
 #include "drums.h"
 #include "piezo_voice.h"
+#include "tts_player.h"
+
+/* Voicing-announcement PCM blobs (raw 16-bit LE, 24 kHz mono) embedded via
+ * EMBED_FILES in main/CMakeLists.txt. Regenerate with `just tts-generate`. */
+extern const uint8_t tts_continuous_pcm_start[] asm("_binary_tts_continuous_pcm_start");
+extern const uint8_t tts_continuous_pcm_end[] asm("_binary_tts_continuous_pcm_end");
+extern const uint8_t tts_discrete_pcm_start[] asm("_binary_tts_discrete_pcm_start");
+extern const uint8_t tts_discrete_pcm_end[] asm("_binary_tts_discrete_pcm_end");
+extern const uint8_t tts_one_shot_pcm_start[] asm("_binary_tts_one_shot_pcm_start");
+extern const uint8_t tts_one_shot_pcm_end[] asm("_binary_tts_one_shot_pcm_end");
+
+#define TTS_SRC_RATE 24000
+#define TTS_TAIL_MS 80
 
 static const char *TAG = "gamepad_synth";
 
@@ -270,6 +283,7 @@ typedef enum {
     SETTING_LFO_RATE,
     SETTING_LFO_DEPTH,
     SETTING_LFO_TARGET,
+    SETTING_VOICE_ANNOUNCE,
     SETTING_COUNT,
 } setting_id_t;
 
@@ -281,6 +295,7 @@ typedef struct {
     float lfo_rate_hz;   /* 0.1 .. 20.0 */
     float lfo_depth;     /* 0.0 .. 1.0 */
     int lfo_target;      /* lfo_target_t value */
+    bool voice_announce; /* true → speak voicing name on switch */
 } settings_t;
 
 volatile settings_t s_settings = {
@@ -291,6 +306,7 @@ volatile settings_t s_settings = {
     .lfo_rate_hz = 5.0f,
     .lfo_depth = 0.3f,
     .lfo_target = LFO_TARGET_CUTOFF,
+    .voice_announce = true,
 };
 
 volatile bool s_settings_edit_active = false;
@@ -1059,6 +1075,51 @@ static void voicing_one_shot(const gamepad_state_t *gp, uint16_t face_pressed)
     sfx_tick();
 }
 
+/* ── TTS voicing announcement ────────────────────────────
+ *
+ * Plays the spoken voicing name (embedded PCM, 24 kHz mono) before the
+ * musical signature gesture. Blocks the control task for the clip's
+ * duration + 80 ms tail so the buffer drains cleanly before the signature
+ * starts. Drum engine volume is ducked to 0 during the clip and restored
+ * afterward so two-syllable words stay intelligible over a running beat.
+ *
+ * Synth is already silent at this point (tone_stop() fires earlier in
+ * enter_voicing), so we don't need to mute the synth path.
+ */
+static void tts_play_voicing(voicing_t v)
+{
+    const uint8_t *start = NULL;
+    const uint8_t *end = NULL;
+    switch (v) {
+        case VOICING_CONTINUOUS:
+            start = tts_continuous_pcm_start;
+            end = tts_continuous_pcm_end;
+            break;
+        case VOICING_DISCRETE:
+            start = tts_discrete_pcm_start;
+            end = tts_discrete_pcm_end;
+            break;
+        case VOICING_ONE_SHOT:
+            start = tts_one_shot_pcm_start;
+            end = tts_one_shot_pcm_end;
+            break;
+        default:
+            return;
+    }
+
+    int num_bytes = (int)(end - start);
+    int num_samples = num_bytes / (int)sizeof(int16_t);
+    if (num_samples <= 1)
+        return;
+    int duration_ms = (num_samples * 1000) / TTS_SRC_RATE + TTS_TAIL_MS;
+
+    float saved_vol = s_settings.drum_volume;
+    drums_set_volume(0.0f);
+    tts_player_start((const int16_t *)start, num_samples);
+    vTaskDelay(pdMS_TO_TICKS(duration_ms));
+    drums_set_volume(saved_vol);
+}
+
 /* ── Voicing Signature Gestures ──────────────────────────
  *
  * On voicing switch, play a short phrase *in that voicing's own voice*
@@ -1445,6 +1506,10 @@ static void audio_render_task(void *arg)
          * below. drums_render_block() does a saturating add into L/R. */
         drums_render_block(stereo_buf, BLOCK_SIZE);
 
+        /* Voicing-announcement TTS clip (24 kHz → 44.1 kHz linear upsample,
+         * saturating overlay mix). Subject to master volume like drums. */
+        tts_player_render_block(stereo_buf, BLOCK_SIZE);
+
         /* Master volume attenuation — applied to (synth + drums) before the
          * blip mix so confirmation blips stay audible at low volumes. Read
          * once per block to avoid torn reads. */
@@ -1542,6 +1607,12 @@ static void settings_play_value_ladder(int cursor)
             settings_play_ladder(n, BLIP_FREQ_NEUTRAL);
             break;
         }
+        case SETTING_VOICE_ANNOUNCE: {
+            /* 1 blip = off, 2 blips = on — so "more blips = more feature". */
+            int n = s_settings.voice_announce ? 2 : 1;
+            settings_play_ladder(n, BLIP_FREQ_NEUTRAL);
+            break;
+        }
         default:
             break;
     }
@@ -1590,6 +1661,10 @@ static void settings_adjust(int cursor, int direction)
             s_settings.lfo_target = t;
             break;
         }
+        case SETTING_VOICE_ANNOUNCE:
+            /* Bool field — any direction toggles it. */
+            s_settings.voice_announce = !s_settings.voice_announce;
+            break;
         default:
             break;
     }
@@ -1685,6 +1760,9 @@ static void enter_voicing(voicing_t new_voicing)
     led_off();
 
     apply_voicing_defaults(new_voicing);
+    if (s_settings.voice_announce) {
+        tts_play_voicing(new_voicing);
+    }
     play_voicing_signature(new_voicing);
     apply_voicing_defaults(new_voicing);
 
@@ -1989,14 +2067,15 @@ void app_main(void)
     s_settings.lfo_rate_hz = 5.0f;
     s_settings.lfo_depth = 0.3f;
     s_settings.lfo_target = LFO_TARGET_CUTOFF;
+    s_settings.voice_announce = true;
     s_settings_edit_active = false;
     s_settings_cursor = 0;
     ESP_LOGI(TAG,
              "Settings: master_vol=%.2f drum_ptn=%d drum_bpm=%d drum_vol=%.2f "
-             "lfo_rate=%.1f lfo_depth=%.2f lfo_tgt=%d",
+             "lfo_rate=%.1f lfo_depth=%.2f lfo_tgt=%d voice=%d",
              s_settings.master_volume, s_settings.drum_pattern, s_settings.drum_tempo_bpm,
              s_settings.drum_volume, s_settings.lfo_rate_hz, s_settings.lfo_depth,
-             s_settings.lfo_target);
+             s_settings.lfo_target, s_settings.voice_announce);
 
     play_startup_jingle();
 
