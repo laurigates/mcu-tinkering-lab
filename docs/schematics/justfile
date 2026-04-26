@@ -1,5 +1,20 @@
 project_dir := "docs/schematics"
 
+# On macOS, cairosvg dlopens libcairo.2.dylib via cairocffi but Homebrew
+# installs it under /opt/homebrew/opt/cairo/lib (or /usr/local/opt on Intel),
+# which isn't on the dynamic loader search path by default. macOS SIP scrubs
+# DYLD_* from sh's environment on exec of hardened binaries, so the value has
+# to be inline-prefixed in front of the (non-hardened) `uv` invocation rather
+# than `export`ed at the justfile level. Linux/CI ships libcairo on the system
+# path — the prefix is empty there.
+cairo_dyld := if path_exists("/opt/homebrew/opt/cairo/lib") == "true" {
+    "DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/opt/cairo/lib"
+} else if path_exists("/usr/local/opt/cairo/lib") == "true" {
+    "DYLD_FALLBACK_LIBRARY_PATH=/usr/local/opt/cairo/lib"
+} else {
+    ""
+}
+
 default:
     @just --list
 
@@ -11,13 +26,12 @@ sync:
 # Render every circuit in circuits/ to SVG + PNG in images/
 [group: "build"]
 render: sync
-    uv run python render.py
+    {{cairo_dyld}} uv run python render.py
 
 # Render a single circuit by name (without .py), e.g. `just schematics::render-one gamepad_synth`
 [group: "build"]
 render-one name: sync
-    uv run python circuits/{{name}}.py images/{{name}}.svg
-    uv run python -c "import cairosvg; cairosvg.svg2png(url='images/{{name}}.svg', write_to='images/{{name}}.png', output_width=1400)"
+    {{cairo_dyld}} uv run python render.py {{name}}
 
 # Delete generated images
 [group: "clean"]

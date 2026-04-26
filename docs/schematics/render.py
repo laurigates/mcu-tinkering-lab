@@ -1,8 +1,9 @@
-"""Render every circuit in ``circuits/`` to SVG + PNG in ``images/``.
+"""Render circuits in ``circuits/`` to SVG + PNG in ``images/``.
 
 Each file in ``circuits/`` that defines a ``draw() -> Drawing`` function is
-rendered. Run with ``just schematics::render`` or directly via
-``python render.py``.
+rendered. Run with ``just schematics::render`` (all circuits) or
+``just schematics::render-one <name>`` (single circuit), or directly via
+``python render.py [name ...]``.
 """
 
 from __future__ import annotations
@@ -28,14 +29,22 @@ def _load_module(path: Path):
     return mod
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    names = list(argv) if argv is not None else sys.argv[1:]
     sys.path.insert(0, str(ROOT))
     IMAGES.mkdir(exist_ok=True)
 
-    circuit_files = sorted(CIRCUITS.glob("*.py"))
-    if not circuit_files:
-        print(f"no circuits found in {CIRCUITS}", file=sys.stderr)
-        return 1
+    if names:
+        circuit_files = [CIRCUITS / f"{name}.py" for name in names]
+        missing = [str(p) for p in circuit_files if not p.is_file()]
+        if missing:
+            print(f"no such circuit(s): {', '.join(missing)}", file=sys.stderr)
+            return 1
+    else:
+        circuit_files = sorted(CIRCUITS.glob("*.py"))
+        if not circuit_files:
+            print(f"no circuits found in {CIRCUITS}", file=sys.stderr)
+            return 1
 
     for py in circuit_files:
         if py.stem.startswith("_"):
