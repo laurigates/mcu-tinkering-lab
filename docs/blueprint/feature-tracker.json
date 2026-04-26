@@ -130,12 +130,36 @@
       "status": "planned",
       "priority": "P3",
       "notes": "Listed as future enhancement"
+    },
+    {
+      "id": "FR-017",
+      "name": "Melody detector firmware (CV + ESP-DL + I2S)",
+      "prd": "PRD-011",
+      "status": "planned",
+      "priority": "P2",
+      "notes": "XIAO ESP32-S3 Sense + MAX98357A; ROI classifier with INT8 CNN"
+    },
+    {
+      "id": "FR-018",
+      "name": "Melody detector training pipeline",
+      "prd": "PRD-011",
+      "status": "planned",
+      "priority": "P2",
+      "notes": "PyTorch + ESP-PPQ; programmatic + diffusion synthetic data"
+    },
+    {
+      "id": "FR-019",
+      "name": "Melody detector validation harness",
+      "prd": "PRD-011",
+      "status": "planned",
+      "priority": "P3",
+      "notes": "Gemini Robotics-ER 1.6 oracle benchmark"
     }
   ],
   "summary": {
-    "total": 16,
+    "total": 19,
     "active": 12,
-    "planned": 3,
+    "planned": 6,
     "in_progress": 0,
     "blocked": 0
   }
