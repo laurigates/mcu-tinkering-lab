@@ -47,28 +47,60 @@ Use **ESP-DL v3.x** as the on-device inference framework. Train models in
 PyTorch on the local workstation, quantize to INT8 with **ESP-PPQ**, and
 ship `.espdl` model files as part of the firmware.
 
-### Pipeline
+### Training pipeline
 
+```mermaid
+flowchart LR
+    A[PyTorch model<br/>on RTX 4090] --> B[ONNX export]
+    B --> C[ESP-PPQ<br/>INT8 quantization<br/>+ calibration]
+    C --> D[.espdl model file]
+    D --> E[Embedded in firmware<br/>via EMBED_FILES]
+    E --> F[ESP-DL runtime<br/>on XIAO ESP32-S3 Sense]
 ```
-PyTorch (RTX 4090) ── ONNX export ── ESP-PPQ (calibration + INT8) ── .espdl
-                                                                        │
-                                                                        ▼
-                                                    ESP-DL runtime in ESP-IDF
-                                                          on XIAO ESP32-S3 Sense
+
+### Runtime pipeline
+
+```mermaid
+flowchart LR
+    A[Camera frame<br/>OV2640<br/>640×480] --> B
+
+    subgraph CV["Classical CV (on-device, no ML)"]
+        direction TB
+        B[1. Fiducial detect] --> C[2. Perspective rectify]
+        C --> D[3. Staff line refine]
+        D --> E[4. ROI extraction]
+    end
+
+    E -->|"30–80 ROIs<br/>32×32 each"| F
+
+    subgraph ML["ESP-DL CNN classifier"]
+        F[5. INT8 inference]
+    end
+
+    F -->|"empty / quarter / half /<br/>rest / other"| G
+
+    subgraph LU["Geometric lookup (no ML)"]
+        G[6. Pitch from row<br/>Duration from class<br/>Time from column]
+    end
+
+    G -->|"[(pitch, duration), ...]"| H[7. I2S tone synthesis]
+    H --> I[MAX98357A<br/>→ speaker]
 ```
 
 ### Model approach
 
-- Stage 1 (classical CV, on-device): detect the 5 staff lines via Hough
-  transform, locate the corner fiducials, rectify the image, and extract
-  notehead-sized ROIs.
+- Stage 1 (classical CV, on-device): detect the corner fiducials on the
+  pre-printed sheet, compute a perspective homography to rectify the image,
+  refine the 5 staff lines by per-row darkness peak, and extract a grid of
+  32×32 ROIs covering each beat-column × staff-row intersection.
 - Stage 2 (ESP-DL, on-device): a small INT8 CNN (~50–200 KB) classifies
   each ROI as `empty / quarter / half / rest / other`.
-- Pitch is determined geometrically from ROI position relative to the
-  rectified staff lines, not by the model.
+- Pitch is determined geometrically from ROI row index, not by the model.
 
 This split keeps the model small and fast (a classifier, not a detector)
-and offloads spatial reasoning to deterministic geometry.
+and offloads spatial reasoning to deterministic geometry. The pre-printed
+sheets that anchor this geometry are in
+[`packages/audio/melody-detector/sheets/`](../../packages/audio/melody-detector/sheets/).
 
 ### Training data
 
