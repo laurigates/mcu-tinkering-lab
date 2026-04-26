@@ -28,7 +28,9 @@
       "autoUpdate": true
     }
   },
-  "enabledPlugins": {},
+  "enabledPlugins": {
+    "blueprint-plugin@claude-plugins": true
+  },
   "hooks": {
     "SessionStart": [
       {
