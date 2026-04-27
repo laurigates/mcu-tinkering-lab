@@ -62,11 +62,25 @@ uv run python render.py
 - **Labels**: factories don't set a center label — individual circuits add
   `.label('Name', loc='bot', ofst=0.4)` to avoid collisions with pin labels.
 - **Colors**: signal buses use `steelblue`; power/ground use default black.
-- **Output format**: SVG is the source of truth (diff-friendly, crisp);
-  PNG is generated alongside for easier embedding in READMEs.
+- **Output format**: SVG is the source of truth — schemdraw writes
+  byte-deterministic SVG, so `git diff` on it is reliable signal that the
+  rendered output is out of sync with `circuits/<name>.py`. The PNG is
+  generated alongside via cairosvg for easier embedding in READMEs, but its
+  bytes vary with the host's cairo encoder version, so it's *not* a reliable
+  diff target.
 
 ## Source of truth
 
 Each circuit file cites the authoritative wiring document at the top (usually
 the project's `WIRING.md`). Keep the schematic and that document in sync when
 pins change.
+
+## Freshness check
+
+`.github/workflows/schematics-check.yml` re-renders all circuits on every PR
+that touches `docs/schematics/**` and fails if `images/*.svg` would change.
+The workflow is SVG-only on purpose (PNG drift is encoder-version noise, not
+content drift); the workflow surfaces PNG diffs as `::notice` only.
+
+When the check fails, run `just schematics::render` locally and commit both
+the regenerated SVG and PNG.
