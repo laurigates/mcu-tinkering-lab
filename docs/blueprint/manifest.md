@@ -22,11 +22,14 @@ Primary project: dual-ESP32 AI-powered robot car with pluggable AI vision backen
 | ADR-010 | ADR | MQTT Logging Architecture | accepted | 2026-03-25 |
 | ADR-011 | ADR | Gamepad Synth I2S Audio | accepted | 2026-04-07 |
 | ADR-012 | ADR | Browser-Based Web Flasher Architecture | accepted | 2026-04-03 |
+| ADR-017 | ADR | ESP-DL for On-Device Vision (Melody Detector) | proposed | 2026-04-26 |
 | PRD-004 | PRD | IT Troubleshooter | draft | 2026-03-12 |
 | PRD-005 | PRD | Xbox-to-Switch Bridge | draft | 2026-03-15 |
 | PRD-006 | PRD | NFC Scavenger Hunt | draft | 2026-03-18 |
 | PRD-007 | PRD | Audiobook Player | draft | 2026-03-22 |
 | PRD-008 | PRD | Gamepad Synth | draft | 2026-04-07 |
+| PRD-011 | PRD | Melody Detector | draft | 2026-04-26 |
+| PRP-melody-detector | PRP | Melody Detector — Implementation Plan | planned | 2026-04-26 |
 
 ## Project Overview
 

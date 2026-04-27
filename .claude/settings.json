@@ -28,7 +28,29 @@
       "autoUpdate": true
     }
   },
-  "enabledPlugins": {},
+  "enabledPlugins": {
+    "agent-patterns-plugin@claude-plugins": true,
+    "agents-plugin@claude-plugins": true,
+    "blueprint-plugin@claude-plugins": true,
+    "code-quality-plugin@claude-plugins": true,
+    "codebase-attributes-plugin@claude-plugins": true,
+    "configure-plugin@claude-plugins": true,
+    "container-plugin@claude-plugins": true,
+    "documentation-plugin@claude-plugins": true,
+    "feedback-plugin@claude-plugins": true,
+    "git-plugin@claude-plugins": true,
+    "github-actions-plugin@claude-plugins": true,
+    "health-plugin@claude-plugins": true,
+    "home-assistant-plugin@claude-plugins": true,
+    "hooks-plugin@claude-plugins": true,
+    "networking-plugin@claude-plugins": true,
+    "project-plugin@claude-plugins": true,
+    "prompt-engineering-plugin@claude-plugins": true,
+    "python-plugin@claude-plugins": true,
+    "testing-plugin@claude-plugins": true,
+    "tools-plugin@claude-plugins": true,
+    "workflow-orchestration-plugin@claude-plugins": true
+  },
   "hooks": {
     "SessionStart": [
       {

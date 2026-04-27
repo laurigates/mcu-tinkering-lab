@@ -1,0 +1,131 @@
+% blank-staff.tex - Printable melody sheet for the melody-detector project.
+%
+% Self-contained TikZ document: produces an A4 page with four corner
+% fiducials (for camera alignment), three 5-line staves, beat-column
+% guides, and pitch letter labels in the margin.
+%
+% The geometry here is the ground truth that the on-device CV pipeline
+% (fiducial detect -> homography -> staff-line refine -> ROI extract)
+% relies on. Do not change calibrated constants without also updating
+% the firmware and the synthetic data generator.
+%
+% Build:  pdflatex blank-staff.tex
+% Output: blank-staff.pdf (A4, ready to print at 100% scale)
+
+\documentclass[a4paper,10pt]{article}
+
+\usepackage[a4paper, top=15mm, bottom=15mm, left=15mm, right=15mm]{geometry}
+\usepackage{tikz}
+\usetikzlibrary{calc, positioning}
+
+\setlength{\parindent}{0pt}
+\pagestyle{empty}
+
+% ---------------------------------------------------------------------------
+% Calibrated constants (mm). Keep in sync with firmware + data generator.
+% ---------------------------------------------------------------------------
+\def\fidSize{8}        % side length of corner fiducial (mm)
+\def\fidInset{10}      % distance from page edge to fiducial (mm)
+\def\staffWidth{180}   % staff width (mm)
+\def\staffLineGap{5}   % vertical gap between staff lines (mm)
+\def\beatCount{8}      % number of beat columns per staff
+\def\rowLetters{F,D,B,G,E}  % pitch letters top-to-bottom (treble clef lines)
+
+% ---------------------------------------------------------------------------
+% Fiducial: solid black square with a centred white inner square. Simple
+% enough to detect by threshold + contour; distinctive enough to reject
+% noise. The orientation marker variant adds a black inner dot so the
+% top-left corner is identifiable.
+% ---------------------------------------------------------------------------
+\newcommand{\plainFiducial}[1]{%
+  \begin{scope}[shift={(#1)}]
+    \fill (0,0) rectangle (\fidSize mm, \fidSize mm);
+    \fill[white] (2mm, 2mm) rectangle (\fidSize mm - 2mm, \fidSize mm - 2mm);
+  \end{scope}
+}
+
+\newcommand{\orientedFiducial}[1]{%
+  \begin{scope}[shift={(#1)}]
+    \fill (0,0) rectangle (\fidSize mm, \fidSize mm);
+    \fill[white] (2mm, 2mm) rectangle (\fidSize mm - 2mm, \fidSize mm - 2mm);
+    \fill (3mm, 3mm) rectangle (\fidSize mm - 3mm, \fidSize mm - 3mm);
+  \end{scope}
+}
+
+% ---------------------------------------------------------------------------
+% One empty 5-line staff with beat column guides and pitch labels.
+% Origin at bottom-left of the lowest line. Width = \staffWidth mm.
+% ---------------------------------------------------------------------------
+\newcommand{\drawStaff}{%
+  \begin{tikzpicture}[x=1mm, y=1mm]
+    % 5 staff lines
+    \foreach \i in {0,1,2,3,4} {
+      \draw[line width=0.4pt, black]
+        (0, \i * \staffLineGap) -- (\staffWidth, \i * \staffLineGap);
+    }
+    % Faint beat column guides (interior columns only)
+    \foreach \b in {1,...,7} {
+      \draw[line width=0.2pt, gray!30]
+        ({\b * \staffWidth / \beatCount}, -3) --
+        ({\b * \staffWidth / \beatCount}, {4 * \staffLineGap + 3});
+    }
+    % Beat numbers above the staff
+    \foreach \b in {1,...,8} {
+      \node[gray!50, font=\tiny, anchor=south]
+        at ({(\b - 0.5) * \staffWidth / \beatCount},
+            {4 * \staffLineGap + 4}) {\b};
+    }
+    % Pitch letter labels in the left margin (top-down, so reverse i for line 4..0)
+    \foreach \name [count=\i from 0] in \rowLetters {
+      \node[gray!70, font=\footnotesize\bfseries, anchor=east]
+        at (-4, {(4 - \i) * \staffLineGap}) {\name};
+    }
+  \end{tikzpicture}%
+}
+
+\begin{document}
+
+% Corner fiducials, anchored to the page so position is invariant of
+% the document body content. Top-left uses the oriented variant.
+\begin{tikzpicture}[overlay, remember picture]
+  \orientedFiducial{[xshift=\fidInset mm,
+                     yshift=-\fidInset mm - \fidSize mm]current page.north west}
+  \plainFiducial{[xshift=-\fidInset mm - \fidSize mm,
+                  yshift=-\fidInset mm - \fidSize mm]current page.north east}
+  \plainFiducial{[xshift=\fidInset mm,
+                  yshift=\fidInset mm]current page.south west}
+  \plainFiducial{[xshift=-\fidInset mm - \fidSize mm,
+                  yshift=\fidInset mm]current page.south east}
+\end{tikzpicture}
+
+% Title and metadata block
+\vspace*{6mm}
+\begin{center}
+  {\Large\bfseries My Melody Sheet}\\[3mm]
+  {\footnotesize Name: \rule{50mm}{0.4pt} \hspace{8mm}
+                 Song: \rule{60mm}{0.4pt}}
+\end{center}
+
+\vspace{8mm}
+
+% Three staves, generously spaced
+\drawStaff
+
+\vspace{18mm}
+
+\drawStaff
+
+\vspace{18mm}
+
+\drawStaff
+
+\vfill
+
+% Legend at the bottom
+\begin{center}\footnotesize\itshape
+  Filled circle = short note (1 beat) \quad
+  Hollow circle = long note (2 beats) \quad
+  Squiggle = rest
+\end{center}
+
+\end{document}

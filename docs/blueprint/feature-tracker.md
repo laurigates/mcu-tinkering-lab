@@ -22,6 +22,9 @@
 | ESP32 host-based unit tests | — | planned | P2 | Blocked; no tests exist yet |
 | SLAM / autonomous navigation | — | planned | P3 | Listed as future enhancement |
 | Multi-robot swarm coordination | — | planned | P3 | Listed as future enhancement |
+| Melody detector firmware (CV + ESP-DL + I2S) | PRD-011 | planned | P2 | XIAO ESP32-S3 Sense + MAX98357A; ROI classifier with INT8 CNN |
+| Melody detector training pipeline | PRD-011 | planned | P2 | PyTorch + ESP-PPQ; programmatic + diffusion synthetic data |
+| Melody detector validation harness | PRD-011 | planned | P3 | Gemini Robotics-ER 1.6 oracle benchmark |
 
 ## Status Key
 
