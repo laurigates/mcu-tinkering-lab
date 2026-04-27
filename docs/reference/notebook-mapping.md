@@ -21,7 +21,7 @@ purpose below.
 
 | Notebook | ID | Primary repo touchpoints |
 |---|---|---|
-| ESP32-S3 hardware families (XIAO Sense, XIAO Plus, ESP32-S3-Zero) | `3bb67ba2-58b4-4485-a306-6ab49ec38160` | ADR-013; `packages/robocar/unified/`, XIAO projects; XIAO ESP32-C6 cross-ref |
+| ESP32-S3 hardware families (XIAO Sense, XIAO Plus, ESP32-S3-Zero) | `3bb67ba2-58b4-4485-a306-6ab49ec38160` | ADR-013, ADR-017; PRD-011; `packages/robocar/unified/`, `packages/audio/melody-detector/`, XIAO projects; XIAO ESP32-C6 cross-ref |
 | ESP32 classic boards (CAM, Heltec, TTGO) | `d2d63711-4843-48e7-9965-018362dad0e5` | `packages/robocar/camera/`, `packages/robocar/main/`, `docs/reference/boards/ttgo-lora32-v2.md` |
 
 ### Peripheral IC classes
@@ -30,7 +30,7 @@ purpose below.
 |---|---|---|
 | Sensors & modules used in this lab | `c2d44a8c-cba1-436f-9c5c-0fe98f672909` | Module references used anywhere in `packages/` |
 | Motor drivers & power electronics | `197ef318-9983-4168-9a3b-d92288d832b6` | `packages/robocar/*/main/motor_controller.*`; TB6612FNG, L298N, DRV8833, TP4056, MT3608, XL6009, AMS1117, NE555 |
-| I2S audio & synthesis on ESP32 | `8cbdd8bb-e88e-4a26-a94f-d0126e68a09e` | ADR-011; PRD-008; `packages/audio/`, `packages/camera-vision/cam-i2s-audio/` |
+| I2S audio & synthesis on ESP32 | `8cbdd8bb-e88e-4a26-a94f-d0126e68a09e` | ADR-011, ADR-017; PRD-008, PRD-011; `packages/audio/`, `packages/camera-vision/cam-i2s-audio/` |
 | USB gadget & HID on ESP32-S3 | `e91ebe8d-4b93-4321-9d7e-b97aa34956aa` | ADR-006, ADR-009; PRD-005; `packages/input-gaming/` |
 | ChameleonUltra: Advanced RFID and NFC Card Emulation Platform | `4831062f-84ab-4f67-89c0-61345941e3ea` | PRD-006; `packages/games/nfc-scavenger-hunt/` |
 
@@ -54,7 +54,7 @@ purpose below.
 
 | Notebook | ID | Primary repo touchpoints |
 |---|---|---|
-| AI vision backends for embedded (Claude / Ollama / Gemini) | `a755b5cd-22ec-4b5a-844e-ba7c1a258957` | ADR-003, ADR-008, ADR-016; PRD-002; `packages/robocar/camera/`, `packages/camera-vision/` |
+| AI vision backends for embedded (Claude / Ollama / Gemini) | `a755b5cd-22ec-4b5a-844e-ba7c1a258957` | ADR-003, ADR-008, ADR-016; PRD-002; `packages/robocar/camera/`, `packages/camera-vision/`; `docs/reference/vision-labeling-services.md`; `docs/reference/synthetic-image-generation.md` |
 
 ### Dev tooling & simulation
 
@@ -73,7 +73,7 @@ purpose below.
 | `docs/decisions/ADR-010-*`, `packages/components/improv-wifi/**`, `.claude/rules/mdns-hostname.md` | WiFi / mDNS / MQTT |
 | `docs/decisions/ADR-006-*`, `docs/requirements/PRD-005-*` | USB / HID |
 | `docs/decisions/ADR-009-*`, `docs/requirements/PRD-008-*`, `packages/audio/gamepad-synth/**`, `packages/input-gaming/**` | USB / HID + Bluepad32 |
-| `docs/decisions/ADR-011-*`, `packages/audio/**` (non-gamepad) | I2S audio |
+| `docs/decisions/ADR-011-*`, `docs/decisions/ADR-017-*`, `docs/requirements/PRD-011-*`, `packages/audio/**` (non-gamepad) | I2S audio + ESP32-S3 boards |
 | `docs/decisions/ADR-007-*`, `packages/components/i2c-protocol/**` | ESP32 peripherals |
 | `docs/requirements/PRD-006-*`, `packages/games/nfc-scavenger-hunt/**` | ChameleonUltra RFID/NFC |
 | `packages/robocar/camera/**`, `packages/robocar/main/**`, `docs/reference/boards/ttgo-lora32-v2.md` | ESP32 classic boards |
@@ -81,6 +81,8 @@ purpose below.
 | `docs/requirements/PRD-007-*`, `packages/audio/audiobook-player/**`, `packages/networking/wireguard-ha/**` | ESPHome platform & components |
 | `docs/requirements/PRD-003-*`, `packages/robocar/simulation/**` | Python simulation & robotics math |
 | `CLAUDE.md`, `.claude/**` | Claude Code workflow |
+| `docs/reference/vision-labeling-services.md`, `docs/reference/synthetic-image-generation.md` | AI vision backends |
+| `docs/reference/tinyml-esp32-frameworks.md` | *(no notebook yet — candidate for a new "TinyML & on-device inference" notebook)* |
 
 ## Maintenance cadence
 
