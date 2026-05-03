@@ -1,0 +1,19 @@
+# ESP-IDF build artifacts
+/build/
+/sdkconfig
+/sdkconfig.old
+
+# Managed components
+/managed_components/
+
+# Training pipeline (Track B) — local artifacts not checked in
+training/data/
+training/runs/
+training/checkpoints/
+training/.venv/
+training/__pycache__/
+training/**/__pycache__/
+
+# IDE
+.vscode/
+.idea/
