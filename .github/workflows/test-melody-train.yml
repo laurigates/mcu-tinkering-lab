@@ -1,0 +1,49 @@
+name: Test melody-train
+
+on:
+  push:
+    branches: [main, develop, 'claude/**']
+    paths:
+      - 'packages/audio/melody-detector/training/**'
+      - '.github/workflows/test-melody-train.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'packages/audio/melody-detector/training/**'
+      - '.github/workflows/test-melody-train.yml'
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Test melody-train
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/audio/melody-detector/training
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: packages/audio/melody-detector/training/uv.lock
+
+      - name: Set up Python
+        run: uv python install
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Lint (ruff)
+        run: uv run ruff check --output-format=github .
+
+      - name: Format check (ruff)
+        run: uv run ruff format --check .
+
+      - name: Type check (ty)
+        run: uv run ty check src
+
+      - name: Pytest
+        run: uv run pytest --cov --cov-report=term-missing

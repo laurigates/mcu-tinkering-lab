@@ -1,0 +1,22 @@
+# uv / Python
+.venv/
+__pycache__/
+*.pyc
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+.ty_cache/
+
+# Generated datasets, training runs, model artifacts
+data/
+runs/
+checkpoints/
+*.onnx
+*.espdl
+*.info
+*.json.lock
+
+# Editor / IDE
+.vscode/
+.idea/
