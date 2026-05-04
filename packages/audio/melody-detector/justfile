@@ -1,0 +1,77 @@
+# Melody Detector — XIAO ESP32-S3 Sense
+# Run `just --list` to see available recipes
+
+set positional-arguments
+
+import '../../../tools/esp32-idf.just'
+
+project_dir := "packages/audio/melody-detector"
+port := env("PORT", _detected_s3)
+target := "esp32s3"
+
+default:
+    @just --list
+
+##########
+# Build (containerized)
+##########
+
+# Build firmware (containerized)
+[group: "build"]
+build: _idf-build
+
+# Clean build artifacts (containerized)
+[group: "build"]
+clean: _idf-clean
+
+# Open sdkconfig menu (containerized)
+[group: "build"]
+menuconfig: _idf-menuconfig
+
+# Interactive shell in ESP-IDF container
+[group: "build"]
+shell: _idf-shell
+
+##########
+# Flash & Monitor (native — XIAO uses USB-Serial-JTAG)
+##########
+
+# Flash firmware to XIAO ESP32-S3 Sense
+[group: "device"]
+flash: require-port
+    #!/usr/bin/env bash
+    set -euo pipefail
+    esptool --chip esp32s3 -p {{port}} -b 460800 \
+        --before default-reset --after hard-reset \
+        write-flash --flash-mode dio --flash-size detect \
+        0x0 build/bootloader/bootloader.bin \
+        0x8000 build/partition_table/partition-table.bin \
+        0xD000 build/ota_data_initial.bin \
+        0x10000 build/melody-detector.bin
+    echo "Flashed OK"
+
+# Monitor serial output (Ctrl-C to stop)
+[group: "device"]
+monitor: _serial-monitor
+
+# Flash and immediately start monitoring
+[group: "device"]
+flash-monitor: flash monitor
+
+# Full dev cycle
+[group: "device"]
+develop: build flash monitor
+
+##########
+# Info
+##########
+
+# Show project information
+[group: "info"]
+info:
+    @echo "Melody Detector"
+    @echo "  Target:    ESP32-S3"
+    @echo "  Hardware:  XIAO ESP32-S3 Sense + MAX98357A I2S amp + speaker"
+    @echo "  Audio:     I2S BCLK=GPIO6, LRC=GPIO43, DIN=GPIO44"
+    @echo "  Trigger:   Capture button on GPIO2 (XIAO D1)"
+    @echo "  Port:      {{port}}"

@@ -1,0 +1,48 @@
+# XIAO ESP32-S3 Sense — Melody Detector
+# See PRD-011 + ADR-017 for system-level decisions.
+
+CONFIG_IDF_TARGET="esp32s3"
+
+# PSRAM (XIAO ESP32-S3 Sense has 8MB Octal PSRAM — wrong mode = boot loop)
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_SPEED_80M=y
+CONFIG_SPIRAM_USE_MALLOC=y
+CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=16384
+CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL=32768
+
+# Flash
+CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
+
+# Custom partition table (OTA-capable; CI guards 1.75MB app size)
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+# OTA rollback support (WiFi/OTA wiring is deferred to v2; this flag costs nothing)
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
+
+# USB Serial/JTAG console (XIAO native USB-C). Frees U0TX (GPIO43) and
+# U0RX (GPIO44) for use as I2S LRC/DIN to the MAX98357A.
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+
+# Main task stack — camera + I2S init plus eventual ESP-DL warmup
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+
+# Camera DMA isolated to Core 1 so audio I2S DMA on Core 0 isn't disturbed
+CONFIG_CAMERA_CORE1=y
+CONFIG_CAMERA_DMA_BUFFER_SIZE_MAX=32768
+
+# Brownout disabled — camera + flash LED inrush on weak USB ports trips it
+CONFIG_ESP_BROWNOUT_DET=n
+
+# Logging
+CONFIG_LOG_DEFAULT_LEVEL_INFO=y
+CONFIG_LOG_DEFAULT_LEVEL=3
+
+# FreeRTOS
+CONFIG_FREERTOS_HZ=1000
+
+# Heap (no tracing in production builds)
+CONFIG_HEAP_TRACING=n
+CONFIG_HEAP_TASK_TRACKING=n
+CONFIG_HEAP_POISONING_DISABLED=y
