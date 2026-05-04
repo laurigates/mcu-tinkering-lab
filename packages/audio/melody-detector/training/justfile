@@ -1,0 +1,89 @@
+# melody-detector training pipeline (uv)
+# Run `just --list` for available recipes
+
+set positional-arguments
+
+default:
+    @just --list
+
+##########
+# Setup
+##########
+
+# Install dependencies (base only)
+[group: "setup"]
+sync:
+    uv sync
+
+# Install with training extras (torch + torchvision)
+[group: "setup"]
+sync-train:
+    uv sync --extra train --extra dev
+
+# Install with quantization extras (esp-ppq + onnx)
+[group: "setup"]
+sync-quantize:
+    uv sync --extra train --extra quantize --extra dev
+
+##########
+# Pipeline
+##########
+
+# Generate a synthetic dataset (default 5000 per class, seed 0)
+[group: "pipeline"]
+gen seed="0" out="data/" per_class="5000":
+    uv run python -m melody_train.gen --seed {{seed}} --out {{out}} --per-class {{per_class}}
+
+# Train the ROI classifier (B2)
+[group: "pipeline"]
+train *args:
+    uv run python -m melody_train.train {{args}}
+
+# Export the trained model to ONNX (B3)
+[group: "pipeline"]
+export *args:
+    uv run python -m melody_train.export {{args}}
+
+# Quantize ONNX to .espdl via ESP-PPQ (B4)
+[group: "pipeline"]
+quantize *args:
+    uv run python -m melody_train.quantize {{args}}
+
+##########
+# Quality
+##########
+
+# Run all tests
+[group: "quality"]
+test *args:
+    uv run pytest {{args}}
+
+# Run tests with coverage
+[group: "quality"]
+test-cov:
+    uv run pytest --cov --cov-report=term-missing
+
+# Lint
+[group: "quality"]
+lint:
+    uv run ruff check .
+
+# Format
+[group: "quality"]
+format:
+    uv run ruff format .
+
+# Format check (CI-safe)
+[group: "quality"]
+format-check:
+    uv run ruff format --check .
+
+# Type-check with ty
+[group: "quality"]
+type-check:
+    uv run ty check src
+
+# All quality gates
+[group: "quality"]
+check: lint format-check type-check test
+    @echo "All quality checks passed"
