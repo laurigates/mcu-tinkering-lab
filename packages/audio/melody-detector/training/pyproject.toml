@@ -36,6 +36,8 @@ dev = [
     "pytest-cov>=4.1",
     "ruff>=0.5",
     "ty",
+    "onnx>=1.16",
+    "onnxscript>=0.1",
 ]
 
 [project.scripts]
