@@ -368,6 +368,22 @@ Recent commands: {", ".join(context.last_commands[-3:]) if context.last_commands
         await self.http_client.aclose()
 
 
+def _compute_drive_duration(robot, pwm: int, distance: float) -> float | None:
+    """Estimate seconds needed to travel ``distance`` metres at the given PWM.
+
+    Returns ``None`` when the speed is non-positive (motor commanded to stop or
+    reverse), so the caller can skip the sleep instead of dividing by zero.
+    """
+    pwm_magnitude = abs(pwm)
+    if pwm_magnitude == 0 or distance <= 0:
+        return None
+    max_speed_ms = robot.motor_left.max_rpm * 2 * np.pi / 60 * robot.wheel_radius
+    actual_speed_ms = (pwm_magnitude / 255.0) * max_speed_ms
+    if actual_speed_ms <= 0:
+        return None
+    return distance / actual_speed_ms
+
+
 async def execute_ai_command(command: AICommand, robot) -> bool:
     """
     Execute AI command on robot
@@ -405,20 +421,20 @@ async def execute_ai_command(command: AICommand, robot) -> bool:
             speed = params.get("speed", 0.5)
             pwm = int(speed * 100)
             robot.set_motor_commands(pwm, pwm)
-            max_speed_ms = robot.motor_left.max_rpm * 2 * np.pi / 60 * robot.wheel_radius
-            duration = distance / (speed * max_speed_ms)
-            await asyncio.sleep(duration)
-            robot.set_motor_commands(0, 0)
+            duration = _compute_drive_duration(robot, pwm, distance)
+            if duration is not None:
+                await asyncio.sleep(duration)
+                robot.set_motor_commands(0, 0)
 
         elif action == "backward":
             distance = params.get("distance_meters", 1.0)
             speed = params.get("speed", 0.5)
             pwm = int(speed * 100)
             robot.set_motor_commands(-pwm, -pwm)
-            max_speed_ms = robot.motor_left.max_rpm * 2 * np.pi / 60 * robot.wheel_radius
-            duration = distance / (speed * max_speed_ms)
-            await asyncio.sleep(duration)
-            robot.set_motor_commands(0, 0)
+            duration = _compute_drive_duration(robot, pwm, distance)
+            if duration is not None:
+                await asyncio.sleep(duration)
+                robot.set_motor_commands(0, 0)
 
         elif action == "turn":
             angle = params.get("angle_degrees", 90.0)
