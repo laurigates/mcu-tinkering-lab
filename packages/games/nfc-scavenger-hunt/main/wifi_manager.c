@@ -32,6 +32,12 @@ static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_
                  : disconnected->reason == WIFI_REASON_HANDSHAKE_TIMEOUT ? "Handshake timeout"
                                                                          : "Other");
 
+        /* Clear the connected bit so wifi_manager_is_connected() reflects reality
+         * after the link drops. Without this, the bit remains set forever from the
+         * first IP_EVENT_STA_GOT_IP — callers keep firing HTTPS requests against a
+         * dead link and never play the offline error tone. */
+        xEventGroupClearBits(wifi_event_group, WIFI_CONNECTED_BIT);
+
         if (retry_count < WIFI_MAXIMUM_RETRY) {
             retry_count++;
             ESP_LOGI(TAG, "Retry %d/%d to connect to the AP", retry_count, WIFI_MAXIMUM_RETRY);
