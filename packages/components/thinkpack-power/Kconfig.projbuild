@@ -1,0 +1,34 @@
+menu "ThinkPack Power Monitor"
+
+    config THINKPACK_POWER_ENABLE
+        bool "Enable battery voltage monitor"
+        default n
+        help
+            Enable the thinkpack-power runtime that periodically samples
+            Vbat through ADC1 and classifies battery state (OK / LOW /
+            CRITICAL).
+
+            Disabled by default because no thinkpack reference board
+            currently exposes a Vbat divider on a free ADC1 channel —
+            on boombox and glowbug the only ADC1 pins (GPIO1, GPIO2)
+            are already consumed by the pot_reader and light_sensor
+            drivers, so leaving the monitor on would either silently
+            fail (ADC unit collision) or read sensor input as battery
+            voltage.
+
+            Enable this once your board adds a Vbat divider on a free
+            ADC1 channel. When enabling on a board that already uses
+            ADC1 for sensors, supply the existing oneshot unit handle
+            via power_config_t::adc_handle so the monitor shares the
+            unit instead of trying to install a second driver.
+
+    config THINKPACK_POWER_LOG_DISABLED_ONCE
+        bool "Log a one-shot warning when init is called while disabled"
+        default y
+        depends on !THINKPACK_POWER_ENABLE
+        help
+            Emit a single ESP_LOGW from thinkpack_power_init() when the
+            runtime is gated off, so the call site (e.g. boombox/glowbug
+            main) doesn't appear silently unreachable in logs.
+
+endmenu

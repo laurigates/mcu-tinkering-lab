@@ -15,6 +15,8 @@
 
 #include <stdint.h>
 
+#include "esp_adc/adc_oneshot.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -65,6 +67,20 @@ uint16_t pot_tempo_to_bpm(uint16_t raw);
  * @return     Semitone shift in [-12, +12].
  */
 int8_t pot_pitch_to_semitones(uint16_t raw);
+
+/**
+ * @brief Borrow the ADC1 oneshot unit handle owned by pot_reader.
+ *
+ * Returned handle is valid for the lifetime of the program after
+ * pot_reader_init() succeeds. Other modules (e.g. thinkpack-power) may
+ * configure additional channels on this handle to share the unit
+ * instead of re-installing the driver, which would silently fail with
+ * ESP_ERR_INVALID_STATE.
+ *
+ * @return Shared handle, or NULL if pot_reader_init() has not yet
+ *         completed successfully.
+ */
+adc_oneshot_unit_handle_t pot_reader_get_adc_handle(void);
 
 #ifdef __cplusplus
 }

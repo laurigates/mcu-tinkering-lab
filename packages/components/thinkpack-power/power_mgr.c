@@ -22,11 +22,13 @@
 #include "esp_log.h"
 #include "esp_sleep.h"
 #include "esp_timer.h"
+#include "sdkconfig.h"
 
 static const char *TAG = "tp_power";
 
 typedef struct {
     bool initialised;
+    bool owns_adc; /**< true => destroy s_ctx.adc on teardown; false => caller-owned */
     power_config_t config;
     adc_oneshot_unit_handle_t adc;
     adc_cali_handle_t cali;
@@ -82,6 +84,23 @@ static void periodic_tick(void *arg)
 
 esp_err_t thinkpack_power_init(const power_config_t *config)
 {
+#if !CONFIG_THINKPACK_POWER_ENABLE
+    /* Runtime gated off via Kconfig. The default state on every reference
+     * board today: no Vbat divider is wired, and on boombox/glowbug the
+     * obvious ADC1 channels (GPIO1/GPIO2) are already owned by other
+     * drivers. Returning ESP_OK here keeps the call site non-fatal but
+     * makes the disabled state explicit in logs. */
+    (void)config;
+#if CONFIG_THINKPACK_POWER_LOG_DISABLED_ONCE
+    static bool logged = false;
+    if (!logged) {
+        logged = true;
+        ESP_LOGW(TAG, "thinkpack_power_init: runtime disabled "
+                      "(CONFIG_THINKPACK_POWER_ENABLE=n); skipping ADC setup");
+    }
+#endif
+    return ESP_OK;
+#else
     if (!config || config->adc_gpio < 0) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -98,23 +117,36 @@ esp_err_t thinkpack_power_init(const power_config_t *config)
         s_ctx.config.divider_ratio_x10 = 20u; /* 1:2 divider by default */
     }
 
-    adc_oneshot_unit_init_cfg_t init_cfg = {.unit_id = ADC_UNIT_1};
-    esp_err_t err = adc_oneshot_new_unit(&init_cfg, &s_ctx.adc);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "adc_oneshot_new_unit failed: %d", err);
-        return err;
+    esp_err_t err;
+    if (config->adc_handle != NULL) {
+        /* Caller already owns an ADC1 oneshot unit (e.g. pot_reader or
+         * light_sensor). Share it instead of installing a second driver,
+         * which would return ESP_ERR_INVALID_STATE and silently disable
+         * the power monitor. */
+        s_ctx.adc = config->adc_handle;
+        s_ctx.owns_adc = false;
+    } else {
+        adc_oneshot_unit_init_cfg_t init_cfg = {.unit_id = ADC_UNIT_1};
+        err = adc_oneshot_new_unit(&init_cfg, &s_ctx.adc);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "adc_oneshot_new_unit failed: %d", err);
+            return err;
+        }
+        s_ctx.owns_adc = true;
     }
 
     adc_oneshot_chan_cfg_t chan_cfg = {.atten = ADC_ATTEN_DB_12, .bitwidth = ADC_BITWIDTH_DEFAULT};
     /* ADC1 channel from GPIO lookup is target-specific; for the ESP32-S3
-     * SuperMini we default to the GPIO1/CH0 wiring documented in WIRING.md.
+     * SuperMini the GPIO->channel mapping is GPIO1->CH0, GPIO2->CH1, etc.
      * Caller supplies adc_gpio in power_config_t; we trust the pinout. */
-    s_ctx.channel = (adc_channel_t)(config->adc_gpio - 1); /* GPIO1 -> CH0, GPIO2 -> CH1, ... */
+    s_ctx.channel = (adc_channel_t)(config->adc_gpio - 1);
     err = adc_oneshot_config_channel(s_ctx.adc, s_ctx.channel, &chan_cfg);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "adc_oneshot_config_channel failed: %d", err);
-        adc_oneshot_del_unit(s_ctx.adc);
-        s_ctx.adc = NULL;
+        if (s_ctx.owns_adc && s_ctx.adc) {
+            adc_oneshot_del_unit(s_ctx.adc);
+            s_ctx.adc = NULL;
+        }
         return err;
     }
 
@@ -140,7 +172,9 @@ esp_err_t thinkpack_power_init(const power_config_t *config)
             adc_cali_delete_scheme_curve_fitting(s_ctx.cali);
             s_ctx.cali = NULL;
         }
-        adc_oneshot_del_unit(s_ctx.adc);
+        if (s_ctx.owns_adc && s_ctx.adc) {
+            adc_oneshot_del_unit(s_ctx.adc);
+        }
         s_ctx.adc = NULL;
         return err;
     }
@@ -155,7 +189,9 @@ esp_err_t thinkpack_power_init(const power_config_t *config)
             adc_cali_delete_scheme_curve_fitting(s_ctx.cali);
             s_ctx.cali = NULL;
         }
-        adc_oneshot_del_unit(s_ctx.adc);
+        if (s_ctx.owns_adc && s_ctx.adc) {
+            adc_oneshot_del_unit(s_ctx.adc);
+        }
         s_ctx.adc = NULL;
         return err;
     }
@@ -165,6 +201,7 @@ esp_err_t thinkpack_power_init(const power_config_t *config)
     ESP_LOGI(TAG, "power monitor started — gpio=%d tick=%u ms", config->adc_gpio,
              (unsigned)s_ctx.config.tick_interval_ms);
     return ESP_OK;
+#endif /* CONFIG_THINKPACK_POWER_ENABLE */
 }
 
 uint16_t thinkpack_power_read_voltage_mv(void)
