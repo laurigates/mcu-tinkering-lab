@@ -47,6 +47,7 @@ static const char *TAG = "esp32-cam-robocar";
 // Global state (now managed by centralized state manager)
 static TimerHandle_t capture_timer = NULL;
 static TimerHandle_t status_led_timer = NULL;
+static TaskHandle_t capture_task_handle = NULL;
 static const ai_backend_t *g_ai_backend = NULL;
 static SemaphoreHandle_t g_ai_backend_mutex = NULL;
 
@@ -457,7 +458,8 @@ static void create_and_start_tasks(void)
                                     NULL, status_led_timer_callback);
 
     // Create tasks - use named constant for capture task stack size
-    xTaskCreate(capture_and_analyze_task, "capture_task", CAPTURE_TASK_STACK_SIZE, NULL, 5, NULL);
+    xTaskCreate(capture_and_analyze_task, "capture_task", CAPTURE_TASK_STACK_SIZE, NULL, 5,
+                &capture_task_handle);
     xTaskCreate(status_led_task, "status_led_task", 2048, NULL, 1, NULL);
 
     // Start timers
@@ -473,8 +475,7 @@ static void create_and_start_tasks(void)
 
 static void capture_timer_callback(TimerHandle_t xTimer)
 {
-    // Signal capture task to run
-    static TaskHandle_t capture_task_handle = NULL;
+    // Signal capture task to run (handle is set in create_and_start_tasks)
     if (capture_task_handle) {
         xTaskNotifyGive(capture_task_handle);
     }
