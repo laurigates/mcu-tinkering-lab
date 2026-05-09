@@ -68,12 +68,34 @@ esp_err_t mqtt_logger_init(const mqtt_logger_config_t *config)
     // Copy configuration
     memcpy(&s_context.config, config, sizeof(mqtt_logger_config_t));
 
+    // Required topic/uri fields must be present in the caller's config —
+    // strdup(NULL) is undefined behavior and a NULL broker URI passed to the
+    // MQTT client below would crash inside esp-mqtt.
+    if (!config->broker_uri || !config->client_id || !config->log_topic || !config->status_topic ||
+        !config->command_topic) {
+        ESP_LOGE(TAG, "Required config string is NULL");
+        return ESP_ERR_INVALID_ARG;
+    }
+
     // Allocate strings
     s_context.config.broker_uri = strdup(config->broker_uri);
     s_context.config.client_id = strdup(config->client_id);
     s_context.config.log_topic = strdup(config->log_topic);
     s_context.config.status_topic = strdup(config->status_topic);
     s_context.config.command_topic = strdup(config->command_topic);
+
+    if (!s_context.config.broker_uri || !s_context.config.client_id ||
+        !s_context.config.log_topic || !s_context.config.status_topic ||
+        !s_context.config.command_topic) {
+        ESP_LOGE(TAG, "Failed to duplicate config strings (out of memory)");
+        free((void *)s_context.config.broker_uri);
+        free((void *)s_context.config.client_id);
+        free((void *)s_context.config.log_topic);
+        free((void *)s_context.config.status_topic);
+        free((void *)s_context.config.command_topic);
+        memset(&s_context.config, 0, sizeof(s_context.config));
+        return ESP_ERR_NO_MEM;
+    }
 
     if (config->username) {
         s_context.config.username = strdup(config->username);
@@ -379,8 +401,12 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
             break;
 
         case MQTT_EVENT_DATA:
-            // Handle remote commands
-            if (strncmp(event->topic, s_context.config.command_topic, event->topic_len) == 0) {
+            // Handle remote commands. event->topic is NOT NUL-terminated; the
+            // received length must match the configured topic exactly,
+            // otherwise "robocar" would match "robocar/cmd" via strncmp.
+            if (s_context.config.command_topic && event->topic && event->topic_len > 0 &&
+                (size_t)event->topic_len == strlen(s_context.config.command_topic) &&
+                strncmp(event->topic, s_context.config.command_topic, event->topic_len) == 0) {
                 ESP_LOGI(TAG, "Received command: %.*s", event->data_len, event->data);
                 // TODO: Implement command processing
             }
@@ -516,9 +542,10 @@ static char *create_log_json(const mqtt_log_message_t *log_msg)
 
     cJSON_AddNumberToObject(json, "timestamp", log_msg->timestamp);
     cJSON_AddNumberToObject(json, "level", log_msg->level);
-    cJSON_AddStringToObject(json, "tag", log_msg->tag);
-    cJSON_AddStringToObject(json, "message", log_msg->message);
-    cJSON_AddStringToObject(json, "component", log_msg->component);
+    /* cJSON_AddStringToObject dereferences the value pointer; substitute "" when NULL. */
+    cJSON_AddStringToObject(json, "tag", log_msg->tag ? log_msg->tag : "");
+    cJSON_AddStringToObject(json, "message", log_msg->message ? log_msg->message : "");
+    cJSON_AddStringToObject(json, "component", log_msg->component ? log_msg->component : "");
     cJSON_AddNumberToObject(json, "heap_free", log_msg->heap_free);
     cJSON_AddNumberToObject(json, "wifi_rssi", log_msg->wifi_rssi);
 
@@ -544,6 +571,10 @@ static esp_err_t queue_log_message(esp_log_level_t level, const char *tag, const
 {
     if (!s_context.initialized) {
         return ESP_ERR_INVALID_STATE;
+    }
+    /* strdup(NULL) is undefined behavior in glibc/newlib; guard at the boundary. */
+    if (!tag || !message) {
+        return ESP_ERR_INVALID_ARG;
     }
 
     log_buffer_entry_t entry = {.message = strdup(message),

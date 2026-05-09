@@ -225,6 +225,9 @@ esp_err_t servo_move_smooth(servo_id_t servo_id, int16_t target_angle, uint8_t s
         return ESP_ERR_INVALID_STATE;
     if (!servo_is_angle_valid(servo_id, target_angle))
         return ESP_ERR_INVALID_ARG;
+    /* step_size = 0 would never advance current and the loop would never exit. */
+    if (step_size == 0)
+        return ESP_ERR_INVALID_ARG;
 
     int16_t current;
     esp_err_t ret = servo_get_angle(servo_id, &current);

@@ -302,9 +302,18 @@ static void orchestrate_main_controller_update(void *pvParameters)
     }
     vTaskDelay(pdMS_TO_TICKS(OTA_MAINTENANCE_SETTLE_MS));
 
-    // Step 6: Send OTA begin with release tag (e.g., "v0.2.0")
+    // Step 6: Send OTA begin with release tag (e.g., "v0.2.0").
+    // OTA_TAG_MAX_LEN = 20; the receiver looks the tag up against the GitHub
+    // release name, so silent truncation here would point the main controller
+    // at the wrong (or no) release. Abort instead of sending a partial tag.
     char release_tag[OTA_TAG_MAX_LEN];
-    snprintf(release_tag, sizeof(release_tag), "v%s", latest_str);
+    int written = snprintf(release_tag, sizeof(release_tag), "v%s", latest_str);
+    if (written < 0 || (size_t)written >= sizeof(release_tag)) {
+        ESP_LOGE(TAG, "Release tag '%s' would exceed %u-byte limit — aborting main OTA", latest_str,
+                 (unsigned)sizeof(release_tag));
+        semver_free(&mc_version);
+        goto done;
+    }
 
     ret = i2c_send_begin_ota(release_tag, NULL);
     if (ret != ESP_OK) {
