@@ -113,11 +113,13 @@ camera_fb_t *camera_capture(void)
     return fb;
 }
 
-void camera_return_fb(camera_fb_t *fb)
+esp_err_t camera_return_fb(camera_fb_t *fb)
 {
-    if (fb) {
-        esp_camera_fb_return(fb);
+    if (!fb) {
+        return ESP_ERR_INVALID_ARG;
     }
+    esp_camera_fb_return(fb);
+    return ESP_OK;
 }
 
 void camera_deinit(void)

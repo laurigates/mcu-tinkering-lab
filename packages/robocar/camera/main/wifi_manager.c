@@ -86,6 +86,11 @@ esp_err_t wifi_init(void)
 
 esp_err_t wifi_connect(const char *ssid, const char *password)
 {
+    if (!ssid) {
+        ESP_LOGE(TAG, "wifi_connect: SSID is NULL");
+        return ESP_ERR_INVALID_ARG;
+    }
+
     ESP_LOGI(TAG, "Connecting to WiFi SSID: %s", ssid);
 
     wifi_config_t wifi_config = {
@@ -99,7 +104,10 @@ esp_err_t wifi_connect(const char *ssid, const char *password)
     };
 
     strncpy((char *)wifi_config.sta.ssid, ssid, sizeof(wifi_config.sta.ssid) - 1);
-    strncpy((char *)wifi_config.sta.password, password, sizeof(wifi_config.sta.password) - 1);
+    // password may be NULL (open network); leave the buffer zeroed in that case
+    if (password) {
+        strncpy((char *)wifi_config.sta.password, password, sizeof(wifi_config.sta.password) - 1);
+    }
 
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));

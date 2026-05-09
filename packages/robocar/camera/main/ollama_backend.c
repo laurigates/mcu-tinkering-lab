@@ -348,16 +348,21 @@ static esp_err_t ollama_analyze_image(const uint8_t *image_data, size_t image_si
             cJSON *response_json = cJSON_GetObjectItem(root, "response");
             if (cJSON_IsString(response_json)) {
                 const char *response_str = cJSON_GetStringValue(response_json);
-                size_t len = strlen(response_str);
-                response->response_text = malloc(len + 1);
-                if (response->response_text) {
-                    strcpy(response->response_text, response_str);
-                    response->response_length = len;
-                    ESP_LOGI(TAG, "Successfully extracted Ollama response");
-                    err = ESP_OK;
+                if (!response_str) {
+                    ESP_LOGE(TAG, "Null string value in Ollama response field");
+                    err = ESP_FAIL;
                 } else {
-                    ESP_LOGE(TAG, "Failed to allocate memory for response text");
-                    err = ESP_ERR_NO_MEM;
+                    size_t len = strlen(response_str);
+                    response->response_text = malloc(len + 1);
+                    if (response->response_text) {
+                        memcpy(response->response_text, response_str, len + 1);
+                        response->response_length = len;
+                        ESP_LOGI(TAG, "Successfully extracted Ollama response");
+                        err = ESP_OK;
+                    } else {
+                        ESP_LOGE(TAG, "Failed to allocate memory for response text");
+                        err = ESP_ERR_NO_MEM;
+                    }
                 }
             } else {
                 ESP_LOGE(TAG, "Failed to parse 'response' field from Ollama JSON");
