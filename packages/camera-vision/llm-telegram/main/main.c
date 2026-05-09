@@ -244,7 +244,8 @@ static void process_telegram_command(const char *command, const char *args)
     } else if (strcmp(command, "auto") == 0) {
         if (strcmp(args, "on") == 0) {
             app_config.auto_capture_enabled = true;
-            if (!cam_status.is_capturing) {
+            camera_status_t auto_cam_status = camera_get_status();
+            if (!auto_cam_status.is_capturing) {
                 camera_start_capture(app_config.capture_interval_ms, camera_capture_callback, NULL);
             }
             telegram_send_text(&telegram_bot, "✅ Auto capture enabled");
