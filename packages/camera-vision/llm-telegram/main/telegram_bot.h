@@ -43,7 +43,11 @@ esp_err_t telegram_send_status(telegram_bot_t *bot, const char *format, ...);
 // Poll for updates (commands from user)
 esp_err_t telegram_poll_updates(telegram_bot_t *bot, telegram_message_t *msg);
 
-// Parse incoming command
+// Parse incoming command. The caller MUST size `command` to at least
+// TELEGRAM_COMMAND_BUF_SIZE bytes and `args` to at least TELEGRAM_ARGS_BUF_SIZE
+// bytes; the parser truncates inputs to those bounds to prevent overflow.
+#define TELEGRAM_COMMAND_BUF_SIZE 32
+#define TELEGRAM_ARGS_BUF_SIZE 256
 bool telegram_parse_command(const char *text, char *command, char *args);
 
 // Free message resources
