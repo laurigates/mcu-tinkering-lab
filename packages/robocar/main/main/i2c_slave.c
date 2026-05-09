@@ -5,7 +5,6 @@
 
 #include "i2c_slave.h"
 #include <string.h>
-#include "display_manager.h"
 #include "driver/i2c.h"
 #include "esp_app_desc.h"
 #include "esp_log.h"
@@ -15,7 +14,6 @@
 #include "freertos/task.h"
 #include "freertos/timers.h"
 #include "i2c_config.h"
-#include "motor_controller.h"
 #include "ota_handler.h"
 
 static const char *TAG = "i2c_slave";
@@ -34,6 +32,8 @@ extern void process_i2c_movement_command(movement_command_t movement, uint8_t sp
 extern void process_i2c_sound_command(sound_command_t sound);
 extern void process_i2c_servo_command(servo_command_t servo, uint8_t angle);
 extern void process_i2c_display_command(uint8_t line, const char *message);
+extern void stop_motors(void);
+extern void oled_show_claude_message(int line, const char *message);
 
 // Internal functions
 static void i2c_slave_task(void *pvParameters);
@@ -350,11 +350,10 @@ static void handle_ota_commands(const i2c_command_packet_t *command,
     switch (command->command_type) {
         case CMD_TYPE_ENTER_MAINTENANCE_MODE: {
             ESP_LOGI(TAG, "Entering maintenance mode — stopping motors");
-            motor_stop();
+            stop_motors();
             s_maintenance_mode = true;
-            display_clear();
-            display_show_message(0, "OTA UPDATE");
-            display_show_message(1, "Do not power off");
+            oled_show_claude_message(0, "OTA UPDATE");
+            oled_show_claude_message(1, "Do not power off");
             prepare_response(response, 0x00, command->sequence_number, NULL, 0);
             break;
         }
