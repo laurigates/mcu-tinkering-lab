@@ -30,6 +30,16 @@ typedef struct {
     int64_t timestamp;
 } log_buffer_entry_t;
 
+// Maximum number of distinct topic subscriptions registered via
+// mqtt_logger_subscribe(). Bumped only as needed — keep small to
+// minimise per-message dispatch cost.
+#define MQTT_LOGGER_MAX_SUBSCRIPTIONS 4
+
+typedef struct {
+    char *topic;                          ///< Owned copy of topic filter (NULL slot = unused)
+    mqtt_logger_subscribe_cb_t callback;  ///< Callback to invoke on match
+} mqtt_subscription_t;
+
 typedef struct {
     mqtt_logger_config_t config;
     esp_mqtt_client_handle_t client;
@@ -39,6 +49,7 @@ typedef struct {
     bool initialized;
     bool connected;
     TaskHandle_t log_task_handle;
+    mqtt_subscription_t subscriptions[MQTT_LOGGER_MAX_SUBSCRIPTIONS];
 } mqtt_logger_context_t;
 
 static mqtt_logger_context_t s_context = {0};
@@ -229,6 +240,15 @@ esp_err_t mqtt_logger_deinit(void)
     if (s_context.config.password)
         free((void *)s_context.config.password);
 
+    // Free subscription registry
+    for (int i = 0; i < MQTT_LOGGER_MAX_SUBSCRIPTIONS; i++) {
+        if (s_context.subscriptions[i].topic != NULL) {
+            free(s_context.subscriptions[i].topic);
+            s_context.subscriptions[i].topic = NULL;
+            s_context.subscriptions[i].callback = NULL;
+        }
+    }
+
     memset(&s_context, 0, sizeof(s_context));
 
     ESP_LOGI(TAG, "MQTT logger deinitialized");
@@ -286,6 +306,94 @@ esp_err_t mqtt_logger_publish_status(const char *status_json)
         s_context.stats.messages_failed++;
         xSemaphoreGive(s_context.mutex);
         return ESP_FAIL;
+    }
+
+    return ESP_OK;
+}
+
+esp_err_t mqtt_logger_publish(const char *topic, const char *payload, int qos, bool retain)
+{
+    if (!s_context.initialized || !s_context.connected) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (!topic) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    int payload_len = (payload != NULL) ? (int)strlen(payload) : 0;
+    int msg_id =
+        esp_mqtt_client_publish(s_context.client, topic, payload, payload_len, qos, retain);
+
+    if (msg_id < 0) {
+        xSemaphoreTake(s_context.mutex, pdMS_TO_TICKS(SEMAPHORE_TIMEOUT_MS));
+        s_context.stats.messages_failed++;
+        xSemaphoreGive(s_context.mutex);
+        return ESP_FAIL;
+    }
+
+    return ESP_OK;
+}
+
+esp_err_t mqtt_logger_subscribe(const char *topic, mqtt_logger_subscribe_cb_t callback)
+{
+    if (!s_context.initialized) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (!topic || !callback) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    xSemaphoreTake(s_context.mutex, pdMS_TO_TICKS(SEMAPHORE_TIMEOUT_MS));
+
+    // Find a free slot, or refresh an existing entry for the same topic.
+    int slot = -1;
+    for (int i = 0; i < MQTT_LOGGER_MAX_SUBSCRIPTIONS; i++) {
+        if (s_context.subscriptions[i].topic != NULL &&
+            strcmp(s_context.subscriptions[i].topic, topic) == 0) {
+            slot = i;
+            break;
+        }
+    }
+    if (slot < 0) {
+        for (int i = 0; i < MQTT_LOGGER_MAX_SUBSCRIPTIONS; i++) {
+            if (s_context.subscriptions[i].topic == NULL) {
+                slot = i;
+                break;
+            }
+        }
+    }
+
+    if (slot < 0) {
+        xSemaphoreGive(s_context.mutex);
+        ESP_LOGE(TAG, "No free subscription slot (max %d)", MQTT_LOGGER_MAX_SUBSCRIPTIONS);
+        return ESP_ERR_NO_MEM;
+    }
+
+    // Replace existing topic copy if updating; otherwise allocate fresh.
+    if (s_context.subscriptions[slot].topic != NULL) {
+        free(s_context.subscriptions[slot].topic);
+    }
+    s_context.subscriptions[slot].topic = strdup(topic);
+    s_context.subscriptions[slot].callback = callback;
+
+    if (!s_context.subscriptions[slot].topic) {
+        s_context.subscriptions[slot].callback = NULL;
+        xSemaphoreGive(s_context.mutex);
+        return ESP_ERR_NO_MEM;
+    }
+
+    xSemaphoreGive(s_context.mutex);
+
+    // If currently connected, send the subscription now. Otherwise it will
+    // be (re-)issued on the next MQTT_EVENT_CONNECTED.
+    if (s_context.connected && s_context.client) {
+        int msg_id = esp_mqtt_client_subscribe(s_context.client, topic, s_context.config.qos_level);
+        if (msg_id < 0) {
+            ESP_LOGW(TAG, "Failed to subscribe to topic %s (will retry on reconnect)", topic);
+            // Keep the registration; reconnect handler will retry.
+        }
     }
 
     return ESP_OK;
@@ -369,6 +477,14 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
                 esp_mqtt_client_subscribe(s_context.client, s_context.config.command_topic, 1);
             }
 
+            // (Re-)issue any subscriptions registered via mqtt_logger_subscribe()
+            for (int i = 0; i < MQTT_LOGGER_MAX_SUBSCRIPTIONS; i++) {
+                if (s_context.subscriptions[i].topic != NULL) {
+                    esp_mqtt_client_subscribe(s_context.client, s_context.subscriptions[i].topic,
+                                              s_context.config.qos_level);
+                }
+            }
+
             // Publish online status
             char status_msg[128];
             snprintf(status_msg, sizeof(status_msg),
@@ -409,6 +525,31 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
                 strncmp(event->topic, s_context.config.command_topic, event->topic_len) == 0) {
                 ESP_LOGI(TAG, "Received command: %.*s", event->data_len, event->data);
                 // TODO: Implement command processing
+            }
+
+            // Dispatch to subscriptions registered via mqtt_logger_subscribe().
+            // event->topic is NOT NUL-terminated; copy a bounded slice to a stack
+            // buffer so the callback can treat its `topic` argument as a C string.
+            if (event->topic != NULL && event->topic_len > 0) {
+                char topic_buf[128];
+                int copy_len = event->topic_len < (int)sizeof(topic_buf) - 1
+                                   ? event->topic_len
+                                   : (int)sizeof(topic_buf) - 1;
+                memcpy(topic_buf, event->topic, copy_len);
+                topic_buf[copy_len] = '\0';
+
+                for (int i = 0; i < MQTT_LOGGER_MAX_SUBSCRIPTIONS; i++) {
+                    mqtt_subscription_t *sub = &s_context.subscriptions[i];
+                    if (sub->topic == NULL || sub->callback == NULL) {
+                        continue;
+                    }
+                    // Exact-match dispatch. Wildcard subscriptions (`+`, `#`)
+                    // are still forwarded to the broker, but no consumer in
+                    // this codebase relies on wildcard local dispatch yet.
+                    if (strcmp(sub->topic, topic_buf) == 0) {
+                        sub->callback(topic_buf, event->data, event->data_len);
+                    }
+                }
             }
             break;
 
