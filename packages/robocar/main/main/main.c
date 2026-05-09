@@ -183,6 +183,21 @@ void init_oled(void)
         return;
     }
 
+    // Hardware constraint: ESP32 has only two I2C controllers (I2C_NUM_0 and
+    // I2C_NUM_1). I2C_NUM_0 is held by i2cdev for PCA9685 (master, pins 21/22).
+    // I2C_NUM_1 must be reserved for the inter-controller slave link
+    // (slave mode, pins 26/27 — see i2c_slave.c). The OLED would also need
+    // I2C_NUM_1 in master mode on pins 4/15, which is mutually exclusive
+    // with slave mode. When the slave has already claimed the controller,
+    // skip OLED bring-up and run with oled_initialized = false (every OLED
+    // helper is guarded on that flag, so the rest of the firmware degrades
+    // gracefully to "no display").
+    if (i2c_slave_is_ready()) {
+        ESP_LOGW(TAG, "OLED skipped: I2C_NUM_1 is owned by the inter-controller slave link. "
+                      "OLED and the camera I2C link cannot share the bus on this board.");
+        return;
+    }
+
     ESP_LOGI(TAG, "Initializing OLED display using native ESP-IDF LCD driver");
 
     // Configure I2C master
@@ -1305,15 +1320,19 @@ void app_main(void)
         return;
     }
 
-    // Phase 3: Display and feedback systems
-    if (init_display_and_feedback() != ESP_OK) {
-        ESP_LOGE(TAG, "Display initialization failed");
+    // Phase 3: Inter-board communication (I2C slave). Must run before
+    // init_display_and_feedback() so the slave claims I2C_NUM_1 first;
+    // the OLED on this board would otherwise stomp the slave's pin
+    // configuration. See init_oled() for the constraint detail.
+    if (init_inter_board_communication() != ESP_OK) {
+        ESP_LOGE(TAG, "Inter-board communication initialization failed");
         return;
     }
 
-    // Phase 4: Inter-board communication (I2C slave)
-    if (init_inter_board_communication() != ESP_OK) {
-        ESP_LOGE(TAG, "Inter-board communication initialization failed");
+    // Phase 4: Display and feedback systems. Skipped automatically when
+    // the slave already owns I2C_NUM_1 — OLED degrades gracefully to off.
+    if (init_display_and_feedback() != ESP_OK) {
+        ESP_LOGE(TAG, "Display initialization failed");
         return;
     }
 
