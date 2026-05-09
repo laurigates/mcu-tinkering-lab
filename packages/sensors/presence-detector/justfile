@@ -77,8 +77,8 @@ monitor: logs
 [group: "info"]
 pins:
     @echo "LD2410 mmWave sensor (UART):"
-    @echo "  RX → GPIO02 (ESP32-C6 TX)"
-    @echo "  TX → GPIO21 (ESP32-C6 RX)"
+    @echo "  LD2410 TX → GPIO02 (ESP32-C6 RX)"
+    @echo "  LD2410 RX → GPIO21 (ESP32-C6 TX)"
     @echo "  Baud: 256000 8N1"
     @echo ""
     @echo "Board: Seeed Studio XIAO ESP32-C6 (4MB flash)"
