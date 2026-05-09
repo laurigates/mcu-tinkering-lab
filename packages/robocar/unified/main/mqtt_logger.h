@@ -104,6 +104,44 @@ esp_err_t mqtt_logger_logf(esp_log_level_t level, const char *tag, const char *f
 esp_err_t mqtt_logger_publish_status(const char *status_json);
 
 /**
+ * @brief MQTT subscription callback signature
+ *
+ * Invoked when a message arrives on a topic registered via
+ * mqtt_logger_subscribe(). The callback runs from the MQTT event
+ * task — keep work short and copy data if it must outlive the call.
+ *
+ * @param topic    Topic the message arrived on (NUL-terminated copy)
+ * @param data     Message payload (NOT NUL-terminated; use data_len)
+ * @param data_len Length of the payload in bytes
+ */
+typedef void (*mqtt_logger_subscribe_cb_t)(const char *topic, const char *data, int data_len);
+
+/**
+ * @brief Publish a message to an arbitrary MQTT topic
+ *
+ * @param topic   Topic to publish to (must not be NULL)
+ * @param payload Message payload (NUL-terminated; may be NULL for empty)
+ * @param qos     QoS level (0, 1, or 2)
+ * @param retain  Whether the broker should retain the message
+ * @return ESP_OK on success, error code otherwise
+ */
+esp_err_t mqtt_logger_publish(const char *topic, const char *payload, int qos, bool retain);
+
+/**
+ * @brief Subscribe to an MQTT topic with a callback
+ *
+ * Registers @p callback for messages arriving on @p topic. If the
+ * client is connected the subscription is sent immediately; otherwise
+ * it will be sent on the next connect. Wildcards (`+`, `#`) follow
+ * MQTT topic-matching rules.
+ *
+ * @param topic    Topic filter to subscribe to (must not be NULL)
+ * @param callback Callback invoked on each matching message
+ * @return ESP_OK on success, error code otherwise
+ */
+esp_err_t mqtt_logger_subscribe(const char *topic, mqtt_logger_subscribe_cb_t callback);
+
+/**
  * @brief Get MQTT logger statistics
  *
  * @param stats Pointer to statistics structure to fill
