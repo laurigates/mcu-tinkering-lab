@@ -824,6 +824,8 @@ static void notify_state_change(wifi_state_t new_state)
 /* ------------------------------------------------------------------ */
 
 #define IMPROV_PROVISIONED_BIT BIT0
+#define IMPROV_STOP_BIT BIT1
+#define IMPROV_EXITED_BIT BIT2
 static EventGroupHandle_t s_improv_event_group = NULL;
 
 /**
@@ -860,10 +862,16 @@ static void on_improv_credentials(const char *ssid, const char *password)
 /**
  * Task pumps UART0 bytes into the Improv parser and periodically
  * broadcasts the "authorized" state so ESP Web Tools can discover us.
+ *
+ * @p arg is the EventGroupHandle_t captured at task creation. Capturing
+ * locally avoids a use-after-free against the static @ref s_improv_event_group
+ * pointer when wifi_manager_start_improv_provisioning() races to delete it.
+ * The task signals @ref IMPROV_EXITED_BIT before vTaskDelete so the caller
+ * can wait for a clean exit before destroying the event group.
  */
 static void improv_uart_task(void *arg)
 {
-    (void)arg;
+    EventGroupHandle_t group = (EventGroupHandle_t)arg;
     TickType_t last_state_tx = 0;
     while (1) {
         uint8_t byte;
@@ -878,11 +886,12 @@ static void improv_uart_task(void *arg)
             last_state_tx = now;
         }
 
-        if (s_improv_event_group &&
-            (xEventGroupGetBits(s_improv_event_group) & IMPROV_PROVISIONED_BIT)) {
+        EventBits_t bits = xEventGroupGetBits(group);
+        if (bits & (IMPROV_PROVISIONED_BIT | IMPROV_STOP_BIT)) {
             break;
         }
     }
+    xEventGroupSetBits(group, IMPROV_EXITED_BIT);
     vTaskDelete(NULL);
 }
 
@@ -919,16 +928,30 @@ esp_err_t wifi_manager_start_improv_provisioning(uint32_t timeout_ms)
     if (!s_improv_event_group) {
         return ESP_ERR_NO_MEM;
     }
+    /* Capture handle locally so the task does not race against the static
+     * pointer when we tear down. */
+    EventGroupHandle_t group = s_improv_event_group;
 
     improv_wifi_init(on_improv_credentials);
-    xTaskCreate(improv_uart_task, "improv_uart", 4096, NULL, 5, NULL);
+    if (xTaskCreate(improv_uart_task, "improv_uart", 4096, group, 5, NULL) != pdPASS) {
+        ESP_LOGE(TAG, "Improv: task creation failed");
+        vEventGroupDelete(group);
+        s_improv_event_group = NULL;
+        return ESP_ERR_NO_MEM;
+    }
 
     TickType_t wait_ticks = (timeout_ms == 0) ? portMAX_DELAY : pdMS_TO_TICKS(timeout_ms);
-    EventBits_t bits = xEventGroupWaitBits(s_improv_event_group, IMPROV_PROVISIONED_BIT, pdFALSE,
-                                           pdFALSE, wait_ticks);
+    EventBits_t bits =
+        xEventGroupWaitBits(group, IMPROV_PROVISIONED_BIT, pdFALSE, pdFALSE, wait_ticks);
 
-    vEventGroupDelete(s_improv_event_group);
+    /* Tell the task to stop and wait for it to acknowledge. The task always
+     * sets IMPROV_EXITED_BIT before vTaskDelete(NULL), so once we see that
+     * bit it is safe to free the event group. */
+    xEventGroupSetBits(group, IMPROV_STOP_BIT);
+    (void)xEventGroupWaitBits(group, IMPROV_EXITED_BIT, pdFALSE, pdFALSE, portMAX_DELAY);
+
     s_improv_event_group = NULL;
+    vEventGroupDelete(group);
 
     if (bits & IMPROV_PROVISIONED_BIT) {
         ESP_LOGI(TAG, "Improv: provisioning successful");
