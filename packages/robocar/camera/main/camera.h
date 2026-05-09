@@ -24,8 +24,9 @@ camera_fb_t *camera_capture(void);
 /**
  * @brief Return the camera frame buffer
  * @param fb Frame buffer to return
+ * @return ESP_OK on success, ESP_ERR_INVALID_ARG if fb is NULL
  */
-void camera_return_fb(camera_fb_t *fb);
+esp_err_t camera_return_fb(camera_fb_t *fb);
 
 /**
  * @brief Deinitialize the camera
