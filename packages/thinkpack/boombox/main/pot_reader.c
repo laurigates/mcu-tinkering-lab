@@ -140,3 +140,8 @@ int8_t pot_pitch_to_semitones(uint16_t raw)
         shift = SEMITONE_MAX;
     return (int8_t)shift;
 }
+
+adc_oneshot_unit_handle_t pot_reader_get_adc_handle(void)
+{
+    return s_adc_handle;
+}
