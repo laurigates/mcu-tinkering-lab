@@ -278,7 +278,7 @@ class CameraSimulation:
         self._render_objects(img, cam_pos, cam_forward, cam_up)
 
         # Add some basic lighting effects
-        self._apply_lighting(img, cam_pos)
+        img = self._apply_lighting(img, cam_pos)
 
         # Add camera distortion to simulate ESP32-CAM lens characteristics
         img = self._apply_camera_distortion(img)
@@ -346,7 +346,6 @@ class CameraSimulation:
     ):
         """Render a box object"""
         box_pos = np.array(box["position"])
-        np.array(box["size"])
         color = box["color"]
 
         # Simple box rendering - just check if objects are in view
@@ -467,14 +466,16 @@ class CameraSimulation:
 
         return None
 
-    def _apply_lighting(self, img: np.ndarray, cam_pos: np.ndarray):
-        """Apply basic lighting effects"""
-        # Simple ambient lighting with distance-based attenuation
-        height, width = img.shape[:2]
+    def _apply_lighting(self, img: np.ndarray, cam_pos: np.ndarray) -> np.ndarray:
+        """Apply basic lighting effects.
 
+        Returns the brightness-adjusted image. The previous implementation
+        rebound the local ``img`` name without returning it, so the caller
+        always saw the unmodified image.
+        """
         # Add some brightness variation based on viewing angle
         brightness_factor = 0.8 + 0.2 * np.random.random()
-        img = cv2.convertScaleAbs(img, alpha=brightness_factor, beta=10)
+        return cv2.convertScaleAbs(img, alpha=brightness_factor, beta=10)
 
     def _apply_camera_distortion(self, img: np.ndarray) -> np.ndarray:
         """Apply camera lens distortion to simulate ESP32-CAM characteristics"""

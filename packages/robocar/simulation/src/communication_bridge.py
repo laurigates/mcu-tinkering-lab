@@ -124,6 +124,10 @@ class ESP32CommunicationBridge:
         self.update_thread = None
         self.lock = threading.Lock()
 
+        # Event loop captured when start() runs, used to dispatch async
+        # message handlers (AI command) from the serial-reader thread.
+        self._event_loop: asyncio.AbstractEventLoop | None = None
+
     def _load_config(self, config_path: str) -> dict:
         """Load configuration from YAML file"""
         with open(config_path) as f:
@@ -291,10 +295,21 @@ class ESP32CommunicationBridge:
 
     def _handle_i2c_message(self, message: I2CMessage):
         """Handle I2C protocol messages"""
-        if message.message_type in self.message_handlers:
-            self.message_handlers[message.message_type](message)
-        else:
+        handler = self.message_handlers.get(message.message_type)
+        if handler is None:
             print(f"Unknown message type: {message.message_type}")
+            return
+
+        result = handler(message)
+        if asyncio.iscoroutine(result):
+            # Async handlers (e.g. AI command) cannot be awaited from this
+            # sync serial-reader thread. Dispatch them onto the bridge's
+            # event loop if one is captured, otherwise run them in a fresh
+            # loop so the coroutine is not silently discarded.
+            if self._event_loop is not None and self._event_loop.is_running():
+                asyncio.run_coroutine_threadsafe(result, self._event_loop)
+            else:
+                asyncio.run(result)
 
     def _handle_move_command(self, message: I2CMessage):
         """Handle move command from ESP32"""
@@ -454,6 +469,10 @@ class ESP32CommunicationBridge:
     async def start(self, serial_port: str | None = None):
         """Start the communication bridge"""
         self.running = True
+
+        # Capture the running event loop so async message handlers invoked
+        # from the serial-reader thread can be dispatched back onto it.
+        self._event_loop = asyncio.get_running_loop()
 
         # Start WebSocket server
         await self.start_websocket_server()
