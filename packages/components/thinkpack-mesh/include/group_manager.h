@@ -117,6 +117,11 @@ const thinkpack_peer_t *group_manager_get(size_t index);
 /**
  * @brief Find a peer by its MAC address.
  *
+ * The returned pointer is into the internal static table. It remains
+ * valid until the next call to group_manager_upsert() or
+ * group_manager_prune() — copy the data if you need to retain it across
+ * any further group_manager_* call from another task.
+ *
  * @param mac  6-byte MAC to look up.
  * @return Pointer to the matching descriptor, or NULL if not found.
  */

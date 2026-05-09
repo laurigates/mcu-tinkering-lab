@@ -99,7 +99,7 @@ uint32_t thinkpack_priority_for_capabilities(uint16_t capabilities, const uint8_
 void thinkpack_prepare_beacon(thinkpack_packet_t *p, uint8_t seq, const uint8_t src_mac[6],
                               const thinkpack_beacon_data_t *beacon)
 {
-    if (!p || !beacon) {
+    if (!p || !src_mac || !beacon) {
         return;
     }
 
@@ -115,7 +115,7 @@ void thinkpack_prepare_beacon(thinkpack_packet_t *p, uint8_t seq, const uint8_t 
 void thinkpack_prepare_election_bid(thinkpack_packet_t *p, uint8_t seq, const uint8_t src_mac[6],
                                     uint32_t priority)
 {
-    if (!p) {
+    if (!p || !src_mac) {
         return;
     }
 
@@ -136,7 +136,7 @@ void thinkpack_prepare_election_bid(thinkpack_packet_t *p, uint8_t seq, const ui
 void thinkpack_prepare_leader_claim(thinkpack_packet_t *p, uint8_t seq, const uint8_t src_mac[6],
                                     uint32_t priority, uint8_t channel)
 {
-    if (!p) {
+    if (!p || !src_mac) {
         return;
     }
 
@@ -158,7 +158,7 @@ void thinkpack_prepare_leader_claim(thinkpack_packet_t *p, uint8_t seq, const ui
 void thinkpack_prepare_sync_pulse(thinkpack_packet_t *p, uint8_t seq, const uint8_t src_mac[6],
                                   uint32_t timestamp_ms, uint8_t phase)
 {
-    if (!p) {
+    if (!p || !src_mac) {
         return;
     }
 
@@ -179,7 +179,7 @@ void thinkpack_prepare_sync_pulse(thinkpack_packet_t *p, uint8_t seq, const uint
 void thinkpack_prepare_fragment(thinkpack_packet_t *p, uint8_t seq, const uint8_t src_mac[6],
                                 const thinkpack_fragment_data_t *fragment)
 {
-    if (!p || !fragment) {
+    if (!p || !src_mac || !fragment) {
         return;
     }
 

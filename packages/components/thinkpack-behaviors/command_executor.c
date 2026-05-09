@@ -89,9 +89,20 @@ void command_executor_dispatch(const thinkpack_packet_t *packet)
     const thinkpack_command_data_t *cmd =
         (const thinkpack_command_data_t *)(const void *)packet->data;
 
+    /* The command envelope's `payload` array is a fixed 48 bytes (see
+     * thinkpack_command_data_t). A remote sender could set `cmd->length`
+     * larger than that, which would cause the handler to read past the
+     * payload buffer. Clamp before dispatch. */
+    uint8_t payload_len = cmd->length;
+    if (payload_len > sizeof(cmd->payload)) {
+        ESP_LOGW(TAG, "command 0x%02x payload length %u clamped to %zu", cmd->command_id,
+                 payload_len, sizeof(cmd->payload));
+        payload_len = (uint8_t)sizeof(cmd->payload);
+    }
+
     for (int i = 0; i < EXECUTOR_MAX_HANDLERS; i++) {
         if (s_registry[i].active && s_registry[i].command_id == cmd->command_id) {
-            s_registry[i].handler(cmd->command_id, cmd->payload, cmd->length,
+            s_registry[i].handler(cmd->command_id, cmd->payload, payload_len,
                                   s_registry[i].user_ctx);
             return;
         }

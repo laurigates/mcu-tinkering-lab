@@ -113,6 +113,8 @@ esp_err_t thinkpack_power_init(const power_config_t *config)
     err = adc_oneshot_config_channel(s_ctx.adc, s_ctx.channel, &chan_cfg);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "adc_oneshot_config_channel failed: %d", err);
+        adc_oneshot_del_unit(s_ctx.adc);
+        s_ctx.adc = NULL;
         return err;
     }
 
@@ -134,6 +136,12 @@ esp_err_t thinkpack_power_init(const power_config_t *config)
     err = esp_timer_create(&timer_args, &s_ctx.tick_timer);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "esp_timer_create failed: %d", err);
+        if (s_ctx.cali) {
+            adc_cali_delete_scheme_curve_fitting(s_ctx.cali);
+            s_ctx.cali = NULL;
+        }
+        adc_oneshot_del_unit(s_ctx.adc);
+        s_ctx.adc = NULL;
         return err;
     }
 
@@ -141,6 +149,14 @@ esp_err_t thinkpack_power_init(const power_config_t *config)
                                    (uint64_t)s_ctx.config.tick_interval_ms * 1000ULL);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "esp_timer_start_periodic failed: %d", err);
+        esp_timer_delete(s_ctx.tick_timer);
+        s_ctx.tick_timer = NULL;
+        if (s_ctx.cali) {
+            adc_cali_delete_scheme_curve_fitting(s_ctx.cali);
+            s_ctx.cali = NULL;
+        }
+        adc_oneshot_del_unit(s_ctx.adc);
+        s_ctx.adc = NULL;
         return err;
     }
 
