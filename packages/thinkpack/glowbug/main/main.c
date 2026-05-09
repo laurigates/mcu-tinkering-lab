@@ -105,12 +105,20 @@ void app_main(void)
     ESP_ERROR_CHECK(thinkpack_ota_receiver_init(BOX_GLOWBUG));
     ESP_ERROR_CHECK(thinkpack_mesh_start());
 
-    /* Power monitor — started after mesh so the mesh is up before the first
-     * classifier tick fires (classifier state transitions log, eventually
-     * reconfiguring beacon rate).  GPIO1/ADC1_CH0: verify against WIRING.md
-     * before committing to a real board. */
-    (void)thinkpack_power_init(
-        &(power_config_t){.adc_gpio = 1, .tick_interval_ms = 5000, .divider_ratio_x10 = 20});
+    /* Power monitor — gated off by default (CONFIG_THINKPACK_POWER_ENABLE=n)
+     * because glowbug has no Vbat divider in WIRING.md and GPIO1/ADC1_CH0
+     * is already owned by light_sensor. When a future revision adds a Vbat
+     * divider on a free ADC1 channel, set the Kconfig option, change
+     * adc_gpio to that pin, and the shared adc_handle below lets
+     * thinkpack-power configure the new channel without re-installing the
+     * ADC1 oneshot driver (which would fail with ESP_ERR_INVALID_STATE and
+     * silently disable the monitor). */
+    (void)thinkpack_power_init(&(power_config_t){
+        .adc_gpio = 1, /* placeholder — replace once a real Vbat pin is wired */
+        .tick_interval_ms = 5000,
+        .divider_ratio_x10 = 20,
+        .adc_handle = light_sensor_get_adc_handle(),
+    });
 
     ESP_LOGI(TAG, "Mesh started — spawning animation task on Core 1");
 

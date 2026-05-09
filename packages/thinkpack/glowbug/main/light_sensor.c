@@ -49,3 +49,8 @@ esp_err_t light_sensor_read(int *out_raw)
 {
     return adc_oneshot_read(s_adc, LIGHT_SENSOR_ADC_CHANNEL, out_raw);
 }
+
+adc_oneshot_unit_handle_t light_sensor_get_adc_handle(void)
+{
+    return s_adc;
+}

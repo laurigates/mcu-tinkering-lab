@@ -13,6 +13,7 @@
 
 #include <stdint.h>
 
+#include "esp_adc/adc_oneshot.h"
 #include "esp_err.h"
 
 #ifdef __cplusplus
@@ -41,6 +42,20 @@ esp_err_t light_sensor_init(void);
  * @return ESP_OK on success.
  */
 esp_err_t light_sensor_read(int *out_raw);
+
+/**
+ * @brief Borrow the ADC1 oneshot unit handle owned by light_sensor.
+ *
+ * Returned handle is valid for the lifetime of the program after
+ * light_sensor_init() succeeds. Other modules (e.g. thinkpack-power) may
+ * configure additional channels on this handle to share the unit
+ * instead of re-installing the driver, which would silently fail with
+ * ESP_ERR_INVALID_STATE.
+ *
+ * @return Shared handle, or NULL if light_sensor_init() has not yet
+ *         completed successfully.
+ */
+adc_oneshot_unit_handle_t light_sensor_get_adc_handle(void);
 
 #ifdef __cplusplus
 }
