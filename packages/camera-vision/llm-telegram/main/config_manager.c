@@ -336,11 +336,12 @@ void config_print(const app_config_t *config)
 
     ESP_LOGI(TAG, "=== Configuration ===");
     ESP_LOGI(TAG, "WiFi SSID: %s", config->wifi_ssid);
-    ESP_LOGI(TAG, "Telegram Bot Token: %s...%s",
-             config->telegram_bot_token[0] != 0 ? "***" : "NOT SET",
-             config->telegram_bot_token[0] != 0
-                 ? config->telegram_bot_token + strlen(config->telegram_bot_token) - 4
-                 : "");
+    // Show last 4 chars of the token (or "NOT SET"). Guard against tokens
+    // shorter than 4 chars: pointer arithmetic `token + len - 4` would
+    // underflow into stack memory before the buffer.
+    size_t token_len = strlen(config->telegram_bot_token);
+    const char *token_tail = (token_len >= 4) ? config->telegram_bot_token + token_len - 4 : "";
+    ESP_LOGI(TAG, "Telegram Bot Token: %s...%s", token_len > 0 ? "***" : "NOT SET", token_tail);
     ESP_LOGI(TAG, "Telegram Chat ID: %lld", config->telegram_chat_id);
     ESP_LOGI(TAG, "LLM Backend: %s", config->llm_backend_type ? "Claude" : "Ollama");
     if (config->llm_backend_type) {

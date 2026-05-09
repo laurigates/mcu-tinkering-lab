@@ -37,8 +37,13 @@ static esp_err_t telegram_http_request(const char *url, const char *post_data,
 
     if (err == ESP_OK) {
         int content_length = esp_http_client_get_content_length(client);
-        if (content_length > 0 && content_length < buffer_size && response_buffer) {
+        if (content_length > 0 && (size_t)content_length < buffer_size && response_buffer) {
             int read_len = esp_http_client_read(client, response_buffer, content_length);
+            // esp_http_client_read can return -1 on error; clamp to 0 before
+            // null-terminating to avoid writing to response_buffer[-1].
+            if (read_len < 0) {
+                read_len = 0;
+            }
             response_buffer[read_len] = '\0';
         }
     }
@@ -177,9 +182,15 @@ esp_err_t telegram_send_photo(const telegram_bot_t *bot, const uint8_t *photo_da
 
     char response[1024];
     int content_length = esp_http_client_fetch_headers(client);
-    if (content_length > 0 && content_length < sizeof(response)) {
-        esp_http_client_read(client, response, content_length);
-        response[content_length] = '\0';
+    if (content_length > 0 && (size_t)content_length < sizeof(response)) {
+        int read_len = esp_http_client_read(client, response, content_length);
+        // esp_http_client_read returns the bytes read or -1 on error; clamp to 0
+        // before null-terminating, and use read_len (not content_length) so the
+        // terminator goes after the data we actually received.
+        if (read_len < 0) {
+            read_len = 0;
+        }
+        response[read_len] = '\0';
         ESP_LOGD(TAG, "Photo send response: %s", response);
     }
 
@@ -240,8 +251,13 @@ esp_err_t telegram_poll_updates(telegram_bot_t *bot, telegram_message_t *msg)
                         cJSON *chat = cJSON_GetObjectItem(message, "chat");
                         const cJSON *message_id = cJSON_GetObjectItem(message, "message_id");
 
-                        if (text && chat) {
+                        if (text && cJSON_IsString(text) && text->valuestring && chat) {
                             msg->text = strdup(text->valuestring);
+                            if (!msg->text) {
+                                cJSON_Delete(root);
+                                free(response);
+                                return ESP_ERR_NO_MEM;
+                            }
                             msg->type = TELEGRAM_MSG_TEXT;
 
                             const cJSON *chat_id = cJSON_GetObjectItem(chat, "id");
@@ -271,7 +287,9 @@ esp_err_t telegram_poll_updates(telegram_bot_t *bot, telegram_message_t *msg)
     return err;
 }
 
-// Parse incoming command
+// Parse incoming command. Both `command` and `args` are expected to be sized
+// per the TELEGRAM_*_BUF_SIZE macros in the header; long Telegram messages
+// otherwise overflow the caller's stack buffers.
 bool telegram_parse_command(const char *text, char *command, char *args)
 {
     if (!text || text[0] != '/') {
@@ -282,12 +300,17 @@ bool telegram_parse_command(const char *text, char *command, char *args)
     if (space) {
         // Command with arguments
         size_t cmd_len = space - text - 1;  // Exclude '/'
-        strncpy(command, text + 1, cmd_len);
+        if (cmd_len >= TELEGRAM_COMMAND_BUF_SIZE) {
+            cmd_len = TELEGRAM_COMMAND_BUF_SIZE - 1;
+        }
+        memcpy(command, text + 1, cmd_len);
         command[cmd_len] = '\0';
-        strcpy(args, space + 1);
+        strncpy(args, space + 1, TELEGRAM_ARGS_BUF_SIZE - 1);
+        args[TELEGRAM_ARGS_BUF_SIZE - 1] = '\0';
     } else {
         // Command without arguments
-        strcpy(command, text + 1);  // Skip '/'
+        strncpy(command, text + 1, TELEGRAM_COMMAND_BUF_SIZE - 1);  // Skip '/'
+        command[TELEGRAM_COMMAND_BUF_SIZE - 1] = '\0';
         args[0] = '\0';
     }
 

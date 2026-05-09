@@ -163,8 +163,9 @@ esp_err_t vision_parse_llm_response(const llm_response_t *llm_response, vision_r
     // Parse objects detected
     if (llm_response->objects_detected) {
         result->objects_detected = strdup(llm_response->objects_detected);
-    } else {
-        // Try to extract from text
+    } else if (llm_response->text) {
+        // Try to extract from text — guard against a NULL text field, which
+        // strstr() would dereference and crash on.
         const char *objects_marker = strstr(llm_response->text, "objects:");
         if (!objects_marker) {
             objects_marker = strstr(llm_response->text, "see:");
@@ -202,13 +203,17 @@ esp_err_t vision_parse_llm_response(const llm_response_t *llm_response, vision_r
     // Set duration (default 2 seconds for movements)
     result->suggested_duration_ms = (result->suggested_action == MOTOR_CMD_STOP) ? 0 : 2000;
 
-    // Extract reasoning
-    const char *because = strstr(llm_response->text, "because");
-    if (!because) {
-        because = strstr(llm_response->text, "since");
-    }
-    if (!because) {
-        because = strstr(llm_response->text, "due to");
+    // Extract reasoning — guard against a NULL text field; strstr() would
+    // crash if dereferenced on NULL.
+    const char *because = NULL;
+    if (llm_response->text) {
+        because = strstr(llm_response->text, "because");
+        if (!because) {
+            because = strstr(llm_response->text, "since");
+        }
+        if (!because) {
+            because = strstr(llm_response->text, "due to");
+        }
     }
     if (because) {
         result->reasoning = strdup(because);
