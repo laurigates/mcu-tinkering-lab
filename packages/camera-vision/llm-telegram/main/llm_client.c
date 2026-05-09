@@ -26,45 +26,48 @@ static char *base64_encode(const uint8_t *data, size_t len)
     return encoded;
 }
 
-// HTTP event handler
+// Per-request response accumulator passed via esp_http_client config.user_data.
+// Avoids the static-buffer leak the previous handler had: the buffer's lifetime
+// is now bound to a single request and freed by the caller before return.
+typedef struct {
+    char *buffer;  // malloc'd, NUL-terminated by caller after perform
+    int capacity;  // current allocation size (excluding NUL terminator)
+    int length;    // bytes written so far
+} llm_response_buffer_t;
+
+// HTTP event handler — accumulates the response body into a caller-owned
+// buffer pointed to by evt->user_data. The handler does no allocation that
+// outlives a single request, so HTTP_EVENT_ON_FINISH / DISCONNECTED do not
+// need to free anything; the caller owns and frees the buffer.
 static esp_err_t http_event_handler(esp_http_client_event_t *evt)
 {
-    static char *output_buffer;
-    static int output_len;
-
-    switch (evt->event_id) {
-        case HTTP_EVENT_ON_DATA:
-            if (!esp_http_client_is_chunked_response(evt->client)) {
-                if (output_buffer == NULL) {
-                    output_buffer = (char *)malloc(esp_http_client_get_content_length(evt->client));
-                    output_len = 0;
-                    if (output_buffer == NULL) {
-                        ESP_LOGE(TAG, "Failed to allocate memory for output buffer");
-                        return ESP_FAIL;
-                    }
-                }
-                memcpy(output_buffer + output_len, evt->data, evt->data_len);
-                output_len += evt->data_len;
-            }
-            break;
-        case HTTP_EVENT_ON_FINISH:
-            if (output_buffer != NULL) {
-                evt->data = output_buffer;
-                evt->data_len = output_len;
-                output_buffer = NULL;
-                output_len = 0;
-            }
-            break;
-        case HTTP_EVENT_DISCONNECTED:
-            if (output_buffer != NULL) {
-                free(output_buffer);
-                output_buffer = NULL;
-                output_len = 0;
-            }
-            break;
-        default:
-            break;
+    if (evt->event_id != HTTP_EVENT_ON_DATA) {
+        return ESP_OK;
     }
+
+    llm_response_buffer_t *acc = (llm_response_buffer_t *)evt->user_data;
+    if (acc == NULL || evt->data_len <= 0) {
+        return ESP_OK;
+    }
+
+    // Grow on demand — handles both content-length and chunked responses.
+    int needed = acc->length + evt->data_len;
+    if (needed > acc->capacity) {
+        int new_capacity = acc->capacity > 0 ? acc->capacity : 1024;
+        while (new_capacity < needed) {
+            new_capacity *= 2;
+        }
+        char *resized = realloc(acc->buffer, new_capacity + 1);
+        if (resized == NULL) {
+            ESP_LOGE(TAG, "Failed to grow response buffer to %d bytes", new_capacity);
+            return ESP_FAIL;
+        }
+        acc->buffer = resized;
+        acc->capacity = new_capacity;
+    }
+
+    memcpy(acc->buffer + acc->length, evt->data, evt->data_len);
+    acc->length += evt->data_len;
     return ESP_OK;
 }
 
@@ -110,12 +113,18 @@ static esp_err_t send_claude_request(const char *prompt, const char *image_base6
     char *json_str = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
 
+    // Per-request response accumulator. The body is delivered to the event
+    // handler during esp_http_client_perform; reading from the client after
+    // perform returns no useful data because the stream is already consumed.
+    llm_response_buffer_t acc = {0};
+
     // Configure HTTP client
     esp_http_client_config_t config = {
         .url = CLAUDE_API_URL,
         .method = HTTP_METHOD_POST,
         .timeout_ms = llm_config.timeout_ms,
         .event_handler = http_event_handler,
+        .user_data = &acc,
         .buffer_size = HTTP_BUFFER_SIZE,
     };
 
@@ -128,42 +137,36 @@ static esp_err_t send_claude_request(const char *prompt, const char *image_base6
 
     esp_http_client_set_post_field(client, json_str, strlen(json_str));
 
-    // Perform request
+    // Perform request — the event handler fills `acc` while this runs.
     err = esp_http_client_perform(client);
 
     if (err == ESP_OK) {
         int status_code = esp_http_client_get_status_code(client);
-        if (status_code == 200) {
-            int content_length = esp_http_client_get_content_length(client);
-            char *buffer = malloc(content_length + 1);
+        if (status_code == 200 && acc.buffer != NULL && acc.length > 0) {
+            acc.buffer[acc.length] = '\0';
 
-            if (buffer) {
-                esp_http_client_read(client, buffer, content_length);
-                buffer[content_length] = '\0';
-
-                // Parse response
-                cJSON *response = cJSON_Parse(buffer);
-                if (response) {
-                    cJSON *content_item = cJSON_GetObjectItem(response, "content");
-                    if (content_item && cJSON_IsArray(content_item)) {
-                        cJSON *first = cJSON_GetArrayItem(content_item, 0);
-                        if (first) {
-                            cJSON *text = cJSON_GetObjectItem(first, "text");
-                            if (text && cJSON_IsString(text)) {
-                                *response_text = strdup(text->valuestring);
-                            }
+            // Parse response
+            cJSON *response = cJSON_Parse(acc.buffer);
+            if (response) {
+                cJSON *content_item = cJSON_GetObjectItem(response, "content");
+                if (content_item && cJSON_IsArray(content_item)) {
+                    cJSON *first = cJSON_GetArrayItem(content_item, 0);
+                    if (first) {
+                        cJSON *text = cJSON_GetObjectItem(first, "text");
+                        if (text && cJSON_IsString(text)) {
+                            *response_text = strdup(text->valuestring);
                         }
                     }
-                    cJSON_Delete(response);
                 }
-                free(buffer);
+                cJSON_Delete(response);
             }
-        } else {
+        } else if (status_code != 200) {
             ESP_LOGE(TAG, "HTTP request failed with status: %d", status_code);
             err = ESP_FAIL;
         }
     }
 
+    free(acc.buffer);
     free(json_str);
     esp_http_client_cleanup(client);
 
@@ -196,11 +199,16 @@ static esp_err_t send_ollama_request(const char *prompt, const char *image_base6
     char url[256];
     snprintf(url, sizeof(url), "%s/api/generate", llm_config.server_url);
 
+    // Per-request response accumulator (see send_claude_request for rationale).
+    llm_response_buffer_t acc = {0};
+
     // Configure HTTP client
     esp_http_client_config_t config = {
         .url = url,
         .method = HTTP_METHOD_POST,
         .timeout_ms = llm_config.timeout_ms,
+        .event_handler = http_event_handler,
+        .user_data = &acc,
         .buffer_size = HTTP_BUFFER_SIZE,
     };
 
@@ -211,27 +219,21 @@ static esp_err_t send_ollama_request(const char *prompt, const char *image_base6
 
     err = esp_http_client_perform(client);
 
-    if (err == ESP_OK) {
-        int content_length = esp_http_client_get_content_length(client);
-        char *buffer = malloc(content_length + 1);
+    if (err == ESP_OK && acc.buffer != NULL && acc.length > 0) {
+        acc.buffer[acc.length] = '\0';
 
-        if (buffer) {
-            esp_http_client_read(client, buffer, content_length);
-            buffer[content_length] = '\0';
-
-            // Parse response
-            cJSON *response = cJSON_Parse(buffer);
-            if (response) {
-                cJSON *response_field = cJSON_GetObjectItem(response, "response");
-                if (response_field && cJSON_IsString(response_field)) {
-                    *response_text = strdup(response_field->valuestring);
-                }
-                cJSON_Delete(response);
+        // Parse response
+        cJSON *response = cJSON_Parse(acc.buffer);
+        if (response) {
+            cJSON *response_field = cJSON_GetObjectItem(response, "response");
+            if (response_field && cJSON_IsString(response_field)) {
+                *response_text = strdup(response_field->valuestring);
             }
-            free(buffer);
+            cJSON_Delete(response);
         }
     }
 
+    free(acc.buffer);
     free(json_str);
     esp_http_client_cleanup(client);
 
