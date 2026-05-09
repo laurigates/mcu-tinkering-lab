@@ -18,6 +18,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "group_mode.h"
+#include "mdns.h"
 #include "ota_handler.h"
 #include "sdkconfig.h"
 #include "standalone_mode.h"
@@ -136,6 +137,18 @@ void app_main(void)
     if (wifi_ret != ESP_OK) {
         ESP_LOGW(TAG, "WiFi connect returned %s — continuing (Improv may provision later)",
                  esp_err_to_name(wifi_ret));
+    }
+
+    /* mDNS hostname: every WiFi STA project must publish a brainbox.local
+     * record (per .claude/rules/mdns-hostname.md). ollama_discovery may also
+     * call mdns_init() later for SRV lookups; the second init is a no-op. */
+    esp_err_t mdns_ret = mdns_init();
+    if (mdns_ret == ESP_OK) {
+        (void)mdns_hostname_set("brainbox");
+        (void)mdns_instance_name_set("ThinkPack Brainbox");
+        ESP_LOGI(TAG, "mDNS initialised: brainbox.local");
+    } else {
+        ESP_LOGW(TAG, "mDNS init failed: %s", esp_err_to_name(mdns_ret));
     }
 
     /* --- Mesh ------------------------------------------------------- */
