@@ -266,10 +266,18 @@ void improv_wifi_send_provisioned_result(const char *redirect_url)
     uint8_t idx = 0;
     data[idx++] = CMD_SEND_WIFI_CREDS;  // RPC result ID
     if (redirect_url != NULL && redirect_url[0] != '\0') {
-        uint8_t url_len = (uint8_t)strlen(redirect_url);
-        data[idx++] = url_len;
+        // Clamp the URL to the remaining buffer (data[] minus the cmd + len bytes
+        // already reserved). Without this clamp, any redirect_url longer than
+        // ~125 bytes would overflow the 128-byte data[] buffer.
+        size_t url_full_len = strlen(redirect_url);
+        size_t max_url = sizeof(data) - idx - 1;
+        size_t url_len = url_full_len < max_url ? url_full_len : max_url;
+        if (url_full_len > max_url) {
+            ESP_LOGW(TAG, "redirect_url truncated from %zu to %zu bytes", url_full_len, url_len);
+        }
+        data[idx++] = (uint8_t)url_len;
         memcpy(data + idx, redirect_url, url_len);
-        idx += url_len;
+        idx += (uint8_t)url_len;
     } else {
         data[idx++] = 0;  // Empty redirect URL
     }
