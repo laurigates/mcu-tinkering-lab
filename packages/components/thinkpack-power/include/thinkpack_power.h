@@ -39,6 +39,7 @@
 #include <stdint.h>
 
 #ifdef ESP_PLATFORM
+#include "esp_adc/adc_oneshot.h"
 #include "esp_err.h"
 #else
 typedef int esp_err_t;
@@ -48,6 +49,10 @@ typedef int esp_err_t;
 #ifndef ESP_ERR_INVALID_ARG
 #define ESP_ERR_INVALID_ARG (-1)
 #endif
+/* Host shim — adc_oneshot_unit_handle_t is opaque on device; on host we
+ * never touch it, but the type must still be declared so power_config_t
+ * compiles in the host test build. */
+typedef void *adc_oneshot_unit_handle_t;
 #endif
 
 #ifdef __cplusplus
@@ -78,6 +83,21 @@ typedef struct {
     int adc_gpio;               /**< GPIO number to read Vbat from (ADC1 channel). */
     uint32_t tick_interval_ms;  /**< Periodic classifier tick (default 5000). */
     uint16_t divider_ratio_x10; /**< Vbat / Vadc * 10 (e.g. 20 for a 1:2 divider). 0 => 20. */
+    /**
+     * Optional ADC1 oneshot unit handle owned by the caller.
+     *
+     * When non-NULL, thinkpack_power_init() configures @ref adc_gpio as
+     * an additional channel on the supplied unit and shares it for
+     * sampling. Use this on boards where another driver (e.g. a
+     * potentiometer reader or light sensor) already installed the ADC1
+     * oneshot driver — calling adc_oneshot_new_unit() a second time on
+     * the same unit returns ESP_ERR_INVALID_STATE and silently disables
+     * the power monitor.
+     *
+     * When NULL, the component creates its own ADC1 oneshot unit and
+     * owns its lifecycle.
+     */
+    adc_oneshot_unit_handle_t adc_handle;
 } power_config_t;
 
 /* ------------------------------------------------------------------ */
