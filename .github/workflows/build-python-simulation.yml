@@ -5,13 +5,20 @@ on:
     branches: [main, develop, 'claude/**']
     paths:
       - 'packages/robocar/simulation/**'
-      - '.github/workflows/esp32-build.yml'
+      - '.github/workflows/build-python-simulation.yml'
   pull_request:
     branches: [main, develop]
     paths:
       - 'packages/robocar/simulation/**'
-      - '.github/workflows/esp32-build.yml'
+      - '.github/workflows/build-python-simulation.yml'
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
 
 jobs:
   build-simulation:
