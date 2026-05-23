@@ -4,6 +4,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        # Match the host UID/GID so build outputs in the bind-mounted
+        # workspace are owned by the developer, not root. See issue #318.
+        USER_UID: ${USER_UID:-1000}
+        USER_GID: ${USER_GID:-1000}
     image: mcu-tinkering-lab/esp-idf:v5.4
     volumes:
       # Mount the entire workspace (build output stays on host for flashing)
