@@ -34,6 +34,39 @@ jobs:
         with:
           submodules: recursive
 
+      # Cache the espressif/idf Docker image as a tarball so subsequent jobs
+      # skip the multi-GB `docker pull`. Keyed strictly on IDF_VERSION since
+      # the image tag is immutable once published.
+      - name: Cache ESP-IDF Docker image
+        id: idf-image-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/esp-idf-docker
+          key: esp-idf-docker-${{ runner.os }}-${{ env.IDF_VERSION }}
+
+      - name: Load ESP-IDF Docker image from cache
+        if: steps.idf-image-cache.outputs.cache-hit == 'true'
+        run: docker load --input ~/.cache/esp-idf-docker/espressif-idf-${{ env.IDF_VERSION }}.tar
+
+      - name: Pull and save ESP-IDF Docker image
+        if: steps.idf-image-cache.outputs.cache-hit != 'true'
+        run: |
+          docker pull espressif/idf:${{ env.IDF_VERSION }}
+          mkdir -p ~/.cache/esp-idf-docker
+          docker save espressif/idf:${{ env.IDF_VERSION }} \
+            -o ~/.cache/esp-idf-docker/espressif-idf-${{ env.IDF_VERSION }}.tar
+
+      # Cache IDF Component Manager downloads (~/managed_components inside each
+      # project) keyed on the lockfile. Falls back to the latest cache for this
+      # project on lockfile change.
+      - name: Cache IDF managed components
+        uses: actions/cache@v4
+        with:
+          path: packages/${{ inputs.project_path }}/managed_components
+          key: idf-components-${{ runner.os }}-${{ env.IDF_VERSION }}-${{ inputs.project }}-${{ hashFiles(format('packages/{0}/dependencies.lock', inputs.project_path), format('packages/{0}/main/idf_component.yml', inputs.project_path)) }}
+          restore-keys: |
+            idf-components-${{ runner.os }}-${{ env.IDF_VERSION }}-${{ inputs.project }}-
+
       - name: Fetch bluepad32 dependencies
         if: inputs.fetch_bluepad32
         working-directory: packages/${{ inputs.project_path }}
