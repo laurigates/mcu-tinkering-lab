@@ -204,16 +204,19 @@ jobs:
       - name: Notify robots of new firmware via MQTT
         if: github.event_name == 'release' && vars.MQTT_ENABLED == 'true'
         continue-on-error: true
+        env:
+          MQTT_BROKER_HOST: ${{ secrets.MQTT_BROKER_HOST }}
+          MQTT_BROKER_PORT: ${{ secrets.MQTT_BROKER_PORT }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq mosquitto-clients
 
-          BROKER_PORT="${{ secrets.MQTT_BROKER_PORT }}"
           mosquitto_pub \
-            -h "${{ secrets.MQTT_BROKER_HOST }}" \
-            -p "${BROKER_PORT:-1883}" \
+            -h "$MQTT_BROKER_HOST" \
+            -p "${MQTT_BROKER_PORT:-1883}" \
             -t "robocar/ota/notify" \
-            -m "${{ github.event.release.tag_name }}" \
+            -m "$RELEASE_TAG" \
             -q 1
 
       - name: Generate build summary
