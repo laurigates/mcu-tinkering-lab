@@ -3,6 +3,8 @@
 build/
 # But don't ignore Claude Code skill directories
 !.claude/skills/build/
+# Per-machine Claude Code agent worktrees (created by /worktree-* skills)
+.claude/worktrees/
 # Host test binaries (produced by make test in test/ directories)
 test_runner
 *_test_runner
