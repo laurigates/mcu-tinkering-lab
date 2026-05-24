@@ -1,5 +1,5 @@
 [
-  {"clip": "theremin", "text": "Theremin", "voice": "Algenib"},
-  {"clip": "melody",   "text": "Melody",   "voice": "Algenib"},
-  {"clip": "effects",  "text": "Effects",  "voice": "Algenib"}
+  {"clip": "theremin", "text": "Say in Finnish: Ufo",     "voice": "Kore"},
+  {"clip": "melody",   "text": "Say in Finnish: Melodia", "voice": "Kore"},
+  {"clip": "effects",  "text": "Say in Finnish: Efektit", "voice": "Kore"}
 ]

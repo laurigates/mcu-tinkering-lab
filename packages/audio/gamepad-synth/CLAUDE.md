@@ -92,6 +92,7 @@ Per-voicing configuration (`DUAL_OSC`, `DRONE_HOLD`, `DELAY`, `ARP`, `WAVEFORM`,
 | Home/PS/Xbox held + A/B/X/Y | Select drum pattern 1/2/3/4 directly (auto-starts drums if off) |
 | Menu/Options/+ | Enter/exit settings-edit overlay. Inside, d-pad becomes field navigation (not volume/tempo). |
 | LS click (left-stick press) | Reset current voicing's tweak parameters to defaults |
+| RS click (right-stick press) | Per-voicing utility: Theremin = cycle dual-osc detune (0/7/14/25 cents); Melody = cycle octave (C3/C4/C5); Effects = replay last SFX |
 | LT / RT triggers | ±7-semitone pitch bend (global in pitched voicings) |
 | **RB + A** | Toggle `DUAL_OSC` (Theremin) |
 | **RB + B** | Toggle `DRONE_HOLD` (Theremin; forces DUAL_OSC on) |
@@ -108,8 +109,8 @@ While RB is held, face buttons are fully suppressed from normal voicing dispatch
 On voicing entry the flow is: LED flash → single entry cue → return to real-time dispatch. The cue is the spoken voicing name (TTS) when `voice_announce` is on, or the musical signature gesture when it's off — not both. Drums are ducked to 0 during the spoken clip so two-syllable words stay intelligible. The control task blocks for clip duration + 80 ms tail.
 
 1. **Theremin** (Mono + Dual Osc + Delay Synth + Drone collapsed) — LY=pitch (absolute; integrating under DRONE_HOLD), LX=vibrato (or filter cutoff under DRONE_HOLD), RY=filter cutoff (integrating, log; osc B pitch under DRONE_HOLD), RX=filter resonance (integrating). Face buttons latch an octave shift on the output pitch (A=−1, B=0/home, X=+1, Y=+2); when DUAL_OSC is on (non-drone) they instead pick the osc-B interval (unison/5th/8va/2×8va). LB+RY/RX fine-tunes delay time/feedback when DELAY is on. DRONE_HOLD routes osc B to the piezos at a fixed 1.02 detune ratio. Fallback signature (voice off): pitch-bend chirp on sawtooth.
-2. **Melody** (Scale + Arpeggio collapsed) — LY integrates pitch offset (±12 st). Without ARP: face buttons play scale degrees (A=Do/B=Re/X=Mi/Y=Fa; LB held → Sol/La/Ti/Do); RY=fine bend (±50 Hz, absolute); RX=filter cutoff (integrating). With ARP: face buttons pick chord (major/minor/7th/dim); LX-zones pick pattern (left=down, right=up, center=up-down); RT toggles arp running; step rate from the global tempo (16ths). Fallback signature: Do-Mi-Sol on sine.
-3. **Effects** (Retro SFX) — A/B/X/Y (no LB) trigger Laser/Explosion/Power-up/Coin; LB+face triggers Siren/Engine/Jump/Warp. RT = speed multiplier (0.3-1.0x). Filter and delay bypassed. Fallback signature: laser zap.
+2. **Melody** (Scale + Arpeggio collapsed) — LY integrates pitch offset (±12 st). Without ARP: face buttons play scale degrees (A=Do/B=Re/X=Mi/Y=Fa; LB held → Sol/La/Ti/Do); LX=vibrato depth on held note (5 Hz LFO, ±60 Hz); RY=fine bend (±50 Hz, absolute); RX=filter cutoff (integrating). With ARP: face buttons pick chord (major/minor/7th/dim); LX-zones pick pattern (left=down, right=up, center=up-down); RY=cutoff bend ±2 kHz on top of tweak baseline (wah expression); RT toggles arp running; step rate from the global tempo (16ths). Fallback signature: Do-Mi-Sol on sine.
+3. **Effects** (Retro SFX) — A/B/X/Y (no LB) trigger Laser/Explosion/Power-up/Coin; LB+face triggers Siren/Engine/Jump/Warp. LT/RT = speed multiplier (combined: LT pulls slow 2.0×, RT pulls fast 0.3×, both centered = 1.0×). Filter and delay bypassed. Fallback signature: laser zap.
 
 ### TTS Voicing Announcements
 
