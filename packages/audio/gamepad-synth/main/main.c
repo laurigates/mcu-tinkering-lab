@@ -481,6 +481,11 @@ typedef struct {
 } sfx_state_t;
 static sfx_state_t s_sfx = {0};
 
+/* Last-played SFX params for RS-click replay (Effects voicing). */
+static float s_sfx_last_start = 0.0f;
+static float s_sfx_last_end = 0.0f;
+static int s_sfx_last_ticks = 0;
+
 /* Scale octave for arp: 0=C4, 1=C5, 2=C6 */
 static int s_octave = 1;
 
@@ -740,6 +745,16 @@ static void sfx_start(float start, float end, int ticks)
     s_sfx.freq_end = end;
     s_sfx.step = (end - start) / (float)ticks;
     s_sfx.ticks_left = ticks;
+    s_sfx_last_start = start;
+    s_sfx_last_end = end;
+    s_sfx_last_ticks = ticks;
+}
+
+static void sfx_replay(void)
+{
+    if (s_sfx_last_ticks <= 0)
+        return;
+    sfx_start(s_sfx_last_start, s_sfx_last_end, s_sfx_last_ticks);
 }
 
 static void sfx_tick(void)
@@ -808,6 +823,15 @@ static void arp_tick(const gamepad_state_t *gp, uint16_t face_pressed)
         DBG_AXES("voicing=melody arp=on running=false stop_reason=arp_not_running");
         return;
     }
+
+    /* RY = real-time cutoff bend on top of s_tweak_cutoff_hz (wah expression). */
+    float cutoff_bend = map_range((float)gp->axis_ry, -STICK_MAX, STICK_MAX, -2000.0f, 2000.0f);
+    float bent_cutoff = s_tweak_cutoff_hz + cutoff_bend;
+    if (bent_cutoff < FILTER_CUTOFF_MIN)
+        bent_cutoff = FILTER_CUTOFF_MIN;
+    if (bent_cutoff > FILTER_CUTOFF_MAX)
+        bent_cutoff = FILTER_CUTOFF_MAX;
+    synth_set_filter(true, bent_cutoff, s_tweak_resonance);
 
     /* Step rate is derived from the global tempo (16th notes). */
     float speed_ms = 60000.0f / (float)s_settings.drum_tempo_bpm / 4.0f;
@@ -1048,10 +1072,18 @@ static void voicing_melody(const gamepad_state_t *gp, uint16_t face_pressed)
         return;
     }
 
-    int semitone = (12 /* base C5 */) + SCALE_MAJOR[note_idx] + (int)s_tweak_pitch_offset_st;
+    int semitone = (s_octave * 12) + SCALE_MAJOR[note_idx] + (int)s_tweak_pitch_offset_st;
     float freq = (float)note_at(semitone);
     /* RY = fine bend (absolute). */
     freq += map_range((float)gp->axis_ry, -STICK_MAX, STICK_MAX, -50, 50);
+    /* LX = vibrato depth on held note (5 Hz LFO, ±60 Hz max). */
+    int16_t lx = gp->axis_x;
+    if (abs(lx) >= STICK_DEADZONE) {
+        float vib_depth = map_range((float)abs(lx), 0, STICK_MAX, 0, 60);
+        static uint32_t mel_tick = 0;
+        mel_tick++;
+        freq += vib_depth * sinf(2.0f * 3.14159f * 5.0f * (float)mel_tick / CONTROL_TASK_HZ);
+    }
     freq *= compute_bend_mult(gp);
     tone_play((uint32_t)freq);
     led_on();
@@ -1061,12 +1093,16 @@ static void voicing_melody(const gamepad_state_t *gp, uint16_t face_pressed)
 
 static void voicing_effects(const gamepad_state_t *gp, uint16_t face_pressed)
 {
-    /* RT = speed multiplier on the sweep tick count. */
-    float speed = map_range((float)gp->throttle, 0, TRIGGER_MAX, 1.0f, 0.3f);
+    /* LT/RT = speed multiplier on the sweep tick count.
+     * RT pulls toward fast (0.3×), LT pulls toward slow (2.0×), both centered = 1.0×. */
+    float trig = (float)(gp->throttle - gp->brake);
+    float speed = map_range(trig, -TRIGGER_MAX, TRIGGER_MAX, 2.0f, 0.3f);
     int base_ticks = 25;
     int ticks = (int)((float)base_ticks * speed);
     if (ticks < 5)
         ticks = 5;
+    if (ticks > 100)
+        ticks = 100;
 
     bool lb_held = (gp->buttons & BTN_SHOULDER_L) != 0;
 
@@ -1975,6 +2011,35 @@ static void control_task(void *arg)
             reset_tweaks();
             synth_blip(BLIP_FREQ_DOWN);
             ESP_LOGI(TAG, "Tweaks reset to defaults");
+        }
+
+        /* RS-click (right thumb): per-voicing utility cycle.
+         *   Theremin → cycles dual-osc detune (0/7/14/25 cents)
+         *   Melody   → cycles octave (C3/C4/C5)
+         *   Effects  → replays the last triggered SFX */
+        if (btn_pressed_global & BTN_THUMB_R) {
+            switch (s_voicing) {
+                case VOICING_THEREMIN: {
+                    static const float detune_cycle[] = {0.0f, 7.0f, 14.0f, 25.0f};
+                    static int detune_idx = 0;
+                    detune_idx = (detune_idx + 1) % 4;
+                    s_tweak_detune_cents = detune_cycle[detune_idx];
+                    synth_blip(detune_idx == 0 ? BLIP_FREQ_DOWN : BLIP_FREQ_UP);
+                    ESP_LOGI(TAG, "Detune: %.0f cents", s_tweak_detune_cents);
+                    break;
+                }
+                case VOICING_MELODY: {
+                    s_octave = (s_octave + 1) % 3; /* 0=C3, 1=C4, 2=C5 */
+                    synth_blip(s_octave == 0 ? BLIP_FREQ_DOWN : BLIP_FREQ_UP);
+                    ESP_LOGI(TAG, "Octave: %d", s_octave);
+                    break;
+                }
+                case VOICING_EFFECTS:
+                    sfx_replay();
+                    break;
+                default:
+                    break;
+            }
         }
 
         /* Push live settings-page values into the drum engine so
