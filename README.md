@@ -2,7 +2,7 @@
 
 > Production-ready embedded systems monorepo for ESP32, STM32, and Arduino platforms with AI-powered robotics projects
 
-[![ESP32 Build](https://github.com/laurigates/mcu-tinkering-lab/actions/workflows/esp32-build.yml/badge.svg)](https://github.com/laurigates/mcu-tinkering-lab/actions/workflows/esp32-build.yml)
+[![Build Python Simulation](https://github.com/laurigates/mcu-tinkering-lab/actions/workflows/build-python-simulation.yml/badge.svg)](https://github.com/laurigates/mcu-tinkering-lab/actions/workflows/build-python-simulation.yml)
 [![Tests](https://github.com/laurigates/mcu-tinkering-lab/actions/workflows/test.yml/badge.svg)](https://github.com/laurigates/mcu-tinkering-lab/actions/workflows/test.yml)
 
 ## 🚀 Quick Start
@@ -266,7 +266,7 @@ pre-commit run --all-files
 
 Automated checks on every push and pull request:
 
-**Build Pipeline** (`.github/workflows/esp32-build.yml`):
+**Build Pipeline** (`.github/workflows/build-python-simulation.yml` + per-project `build-*.yml`):
 - ✅ Build all ESP32 projects in parallel
 - ✅ Generate size analysis reports
 - ✅ Archive firmware binaries (30-day retention)

@@ -2,7 +2,7 @@ name: Claude Auto-fix CI Failures
 
 on:
   workflow_run:
-    workflows: ["Test Suite", "ESP32 Build Pipeline"]
+    workflows: ["Test Suite", "Build Python Simulation"]
     types: [completed]
 
   workflow_dispatch:

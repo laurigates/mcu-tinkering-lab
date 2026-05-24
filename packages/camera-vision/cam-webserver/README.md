@@ -4,7 +4,7 @@ Live MJPEG video streaming web server for the ESP32-CAM (AI-Thinker) module.
 
 [![ESP-IDF](https://img.shields.io/badge/ESP--IDF-v5.4-blue)](https://docs.espressif.com/projects/esp-idf/en/v5.4/)
 [![Target](https://img.shields.io/badge/target-ESP32-green)](https://www.espressif.com/en/products/socs/esp32)
-[![CI](https://img.shields.io/github/actions/workflow/status/laurigates/mcu-tinkering-lab/esp32-build.yml?label=build)](https://github.com/laurigates/mcu-tinkering-lab/actions/workflows/esp32-build.yml)
+[![CI](https://img.shields.io/github/actions/workflow/status/laurigates/mcu-tinkering-lab/build-esp32-cam-webserver.yml?label=build)](https://github.com/laurigates/mcu-tinkering-lab/actions/workflows/build-esp32-cam-webserver.yml)
 
 ## Features
 

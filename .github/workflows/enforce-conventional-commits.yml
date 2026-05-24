@@ -4,6 +4,13 @@ on:
   pull_request:
     types: [opened, edited, synchronize]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
 jobs:
   conventional-commits:
     uses: laurigates/.github/.github/workflows/reusable-enforce-conventional-commits.yml@main

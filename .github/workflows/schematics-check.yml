@@ -13,6 +13,13 @@ on:
       - '.github/workflows/schematics-check.yml'
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
 jobs:
   svgs-up-to-date:
     name: Verify rendered SVGs match circuit source

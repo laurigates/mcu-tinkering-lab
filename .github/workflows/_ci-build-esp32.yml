@@ -21,6 +21,9 @@ on:
         default: false
         type: boolean
 
+permissions:
+  contents: read
+
 env:
   IDF_VERSION: 'v5.4'
 
