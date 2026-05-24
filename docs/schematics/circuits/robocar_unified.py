@@ -109,20 +109,21 @@ def draw() -> schemdraw.Drawing:
     d.add(elm.Wire("-|").at(mux.SC1).to(oled.SCL).color("steelblue"))
 
     # === PCA9685 servo + LED stubs — extend right into the cleared space. ===
-    # Plain labelled lines (not Tag elements) keep the text readable when the
-    # stub is short.
+    # elm.Arrow renders the arrowhead as an SVG path, not a glyph, so the
+    # destination marker survives PNG rendering on hosts whose default sans
+    # font lacks U+2192 (e.g. macOS Verdana).
     d.add(
-        elm.Line()
+        elm.Arrow()
         .right(2.5)
         .at(pca["PWM 6-7"])
-        .label("→ Pan / Tilt SG90", loc="right", ofst=0.1, fontsize=10)
+        .label("Pan / Tilt SG90", loc="right", ofst=0.1, fontsize=10)
         .color("steelblue")
     )
     d.add(
-        elm.Line()
+        elm.Arrow()
         .right(2.5)
         .at(pca["PWM 0-5"])
-        .label("→ 2× RGB LED", loc="right", ofst=0.1, fontsize=10)
+        .label("2× RGB LED", loc="right", ofst=0.1, fontsize=10)
         .color("steelblue")
     )
 

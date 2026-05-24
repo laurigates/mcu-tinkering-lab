@@ -82,8 +82,9 @@ def xiao_esp32s3_sense() -> elm.Ic:
 
     Camera/PSRAM pins are internal to the Sense module and don't conflict with
     the 11 GPIO header pins. Right side lists the GPIOs the robocar uses, in
-    the order they connect to peripherals top-to-bottom (SDA/SCL at top to
-    align with the I2C mux to the right).
+    the order they connect to peripherals top-to-bottom. SCL is listed *above*
+    SDA so that — when the I2C mux is placed to the right (also SCL-above-SDA
+    on its upstream side) — the two bus wires run parallel instead of crossing.
     """
     return elm.Ic(
         pins=[
@@ -96,8 +97,8 @@ def xiao_esp32s3_sense() -> elm.Ic:
             elm.IcPin(name="GPIO3", side="R", pin="D2"),  # TRIG
             elm.IcPin(name="GPIO2", side="R", pin="D1"),  # Buzzer
             elm.IcPin(name="GPIO1", side="R", pin="D0"),  # STBY
-            elm.IcPin(name="GPIO6", side="R", pin="D5"),  # SCL
             elm.IcPin(name="GPIO5", side="R", pin="D4"),  # SDA
+            elm.IcPin(name="GPIO6", side="R", pin="D5"),  # SCL
         ],
         size=(3.5, 7),
     )
