@@ -64,6 +64,15 @@ _sim-build:
     cc -dynamiclib -O2 -o sim/libaudio_core.dylib main/audio_core.c
 
 ##########
+# Bench test (hardware-in-the-loop — board must be flashed and running)
+##########
+
+# Record the piezo via the mic and report pitch/duration/interval (see test/README.md)
+[group: "test"]
+bench-audio *args:
+    uv run test/bench_audio.py {{args}}
+
+##########
 # Info
 ##########
 
