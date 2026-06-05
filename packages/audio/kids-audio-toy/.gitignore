@@ -14,6 +14,9 @@
 __pycache__/
 *.pyc
 
+# Host simulator build artifact (built by `just sim`)
+sim/libaudio_core.dylib
+
 # macOS
 .DS_Store
 

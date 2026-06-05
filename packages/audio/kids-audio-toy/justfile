@@ -44,6 +44,26 @@ monitor: _serial-monitor
 flash-monitor: flash monitor
 
 ##########
+# Host development (no ESP32 needed — runs the shared audio_core logic)
+##########
+
+# Run audio_core host unit tests
+[group: "test"]
+test:
+    cc -std=c11 -Wall -Wextra -I main -o /tmp/kat_test test/test_audio_core.c main/audio_core.c -lm
+    /tmp/kat_test
+
+# Webcam-in / speaker-out simulator driving the real audio_core logic
+[group: "test"]
+sim *args: _sim-build
+    uv run sim/toy_sim.py {{args}}
+
+# Build the audio_core shared library the simulator loads via ctypes
+[private]
+_sim-build:
+    cc -dynamiclib -O2 -o sim/libaudio_core.dylib main/audio_core.c
+
+##########
 # Info
 ##########
 
