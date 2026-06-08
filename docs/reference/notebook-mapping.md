@@ -23,6 +23,11 @@ purpose below.
 |---|---|---|
 | ESP32-S3 hardware families (XIAO Sense, XIAO Plus, ESP32-S3-Zero) | `3bb67ba2-58b4-4485-a306-6ab49ec38160` | ADR-013, ADR-017; PRD-011; `packages/robocar/unified/`, `packages/audio/melody-detector/`, XIAO projects; XIAO ESP32-C6 cross-ref |
 | ESP32 classic boards (CAM, Heltec, TTGO) | `d2d63711-4843-48e7-9965-018362dad0e5` | `packages/robocar/camera/`, `packages/robocar/main/`, `docs/reference/boards/ttgo-lora32-v2.md` |
+| XIAO ESP32-C3 (RISC-V, WiFi/BLE) | `4ca90889-755f-4918-afa9-25999fb07d05` | XIAO C3 board projects; cross-ref from ESP32-S3 families |
+| XIAO ESP32-C5 (RISC-V, dual-band WiFi) | `878b1f67-d2ac-4e77-a009-ee6f96d1bce5` | XIAO C5 board projects |
+| XIAO ESP32-C6 (RISC-V, WiFi 6 / Thread / Zigbee) | `4165a6db-5021-44c0-b1f5-42ceb2b2bab7` | XIAO C6 board projects; ESP32-S3 families cross-ref |
+| ESP32-P4 (RISC-V, high-performance, no radio) | `25de0275-7d54-44a2-a574-5d4efb8ef62d` | ESP32-P4 board projects |
+| RP2350 (Raspberry Pi, dual-core ARM/RISC-V) | `c8675955-0cd1-4ab0-a641-58f1ad139bb9` | RP2350 board projects |
 
 ### Peripheral IC classes
 
