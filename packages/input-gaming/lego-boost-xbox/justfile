@@ -1,0 +1,17 @@
+# LEGO Boost <- Xbox controller bridge
+#
+# Option A (this dir, `web/`) is a browser app: no build step, no native deps.
+# Web Bluetooth requires a secure context, which http://localhost satisfies, so
+# a plain static server is enough. Chrome or Edge required (Web Bluetooth).
+
+default:
+    @just --list
+
+# Serve the browser bridge at http://localhost:8000 (open in Chrome/Edge).
+serve:
+    @echo "Open http://localhost:8000/web/ in Chrome or Edge"
+    python3 -m http.server 8000
+
+# Open the bridge in the default browser (after `just serve` in another shell).
+open:
+    open http://localhost:8000/web/
