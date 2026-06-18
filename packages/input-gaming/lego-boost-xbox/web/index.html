@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LEGO Boost ⟵ Xbox Controller</title>
+    <style>
+      :root { color-scheme: dark; }
+      body {
+        font-family: system-ui, -apple-system, sans-serif;
+        max-width: 44rem;
+        margin: 2rem auto;
+        padding: 0 1rem;
+        background: #15171a;
+        color: #e6e6e6;
+      }
+      h1 { font-size: 1.4rem; }
+      button {
+        font-size: 1rem;
+        padding: 0.7rem 1.4rem;
+        border: 0;
+        border-radius: 0.5rem;
+        background: #2f81f7;
+        color: #fff;
+        cursor: pointer;
+      }
+      button:hover { background: #1f6fe0; }
+      #status {
+        margin: 1rem 0;
+        padding: 0.8rem 1rem;
+        border-radius: 0.5rem;
+        background: #22262b;
+        font-weight: 600;
+      }
+      #status.ok { background: #14361f; color: #7ee787; }
+      #status.warn { background: #3a2f10; color: #f2cc60; }
+      #status.err { background: #3a1518; color: #ff7b72; }
+      #log {
+        white-space: pre-wrap;
+        font-family: ui-monospace, monospace;
+        font-size: 0.8rem;
+        background: #0d0f12;
+        padding: 0.8rem;
+        border-radius: 0.5rem;
+        height: 14rem;
+        overflow-y: auto;
+        color: #9aa4af;
+      }
+      kbd {
+        background: #2a2f36;
+        border-radius: 0.3rem;
+        padding: 0.1rem 0.4rem;
+        font-size: 0.85em;
+      }
+      .hint { color: #9aa4af; font-size: 0.9rem; }
+    </style>
+  </head>
+  <body>
+    <h1>🤖 LEGO Boost ⟵ 🎮 Xbox Controller</h1>
+    <p class="hint">
+      Browser bridge (Option A): the Xbox controller is read via the Gamepad API,
+      the Move Hub is driven via Web Bluetooth. Chrome or Edge required.
+    </p>
+    <button id="connect">Connect Hub</button>
+    <div id="status">Idle. Pair the Xbox controller to this computer, then click Connect Hub.</div>
+    <p class="hint">
+      <strong>Controls:</strong> left stick = drive (forward / turn) ·
+      right stick <kbd>←/→</kbd> = turn head.
+    </p>
+    <div id="log"></div>
+    <!-- node-poweredup's browser bundle still references Node's `process`
+         global in the motor-command path (process.env/nextTick/type). Shim it
+         before the bundle loads so setPower() doesn't throw in the browser. -->
+    <script>
+      window.process = window.process || {
+        env: {},
+        type: "browser",
+        nextTick: (fn, ...args) => setTimeout(() => fn(...args), 0),
+      };
+    </script>
+    <!-- Vendored self-contained browser bundle; exposes window.PoweredUP. -->
+    <script src="./vendor/poweredup.js"></script>
+    <script type="module" src="./boost-xbox.js"></script>
+  </body>
+</html>
