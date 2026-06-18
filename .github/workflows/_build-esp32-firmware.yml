@@ -60,7 +60,7 @@ jobs:
       # the image tag is immutable once published.
       - name: Cache ESP-IDF Docker image
         id: idf-image-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cache/esp-idf-docker
           key: esp-idf-docker-${{ runner.os }}-${{ env.IDF_VERSION }}
@@ -81,7 +81,7 @@ jobs:
       # project) keyed on the lockfile. Falls back to the latest cache for this
       # project on lockfile change.
       - name: Cache IDF managed components
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: packages/${{ inputs.project_path }}/managed_components
           key: idf-components-${{ runner.os }}-${{ env.IDF_VERSION }}-${{ inputs.project }}-${{ hashFiles(format('packages/{0}/dependencies.lock', inputs.project_path), format('packages/{0}/main/idf_component.yml', inputs.project_path)) }}
