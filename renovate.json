@@ -1,0 +1,25 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Tool version pins in scripts/install_pkgs.sh",
+      "managerFilePatterns": ["/^scripts/install_pkgs\\.sh$/"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: extractVersion=(?<extractVersion>\\S+))?\\s+\\w+_VERSION=\"(?<currentValue>[^\"]+)\""
+      ],
+      "datasourceTemplate": "{{{datasource}}}"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "Keep gitleaks in lockstep across scripts/install_pkgs.sh (github-releases) and .pre-commit-config.yaml (pre-commit manager).",
+      "matchDepNames": ["gitleaks/gitleaks"],
+      "groupName": "gitleaks"
+    }
+  ],
+  "pre-commit": {
+    "enabled": true
+  }
+}
