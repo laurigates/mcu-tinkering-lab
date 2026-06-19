@@ -25,7 +25,7 @@ jobs:
     name: Verify rendered SVGs match circuit source
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       # cairosvg dlopens libcairo at import time. Ubuntu runners don't ship
       # it by default in all images, so install explicitly.
