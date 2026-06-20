@@ -62,7 +62,7 @@ loop with on-hardware measurements.
   `info` recipes
 - Root `justfile` registers the module: `mod melody-detector
   'packages/audio/melody-detector'`
-- CI matrix entry in `.github/workflows/esp32-build.yml`
+- Per-project CI workflow `.github/workflows/build-melody-detector.yml` (calls the reusable `_ci-build-esp32.yml`)
 - Skeleton `README.md`, `WIRING.md`, `CLAUDE.md` (use the
   `project-readme`, `wiring-doc`, `project-claude-md` skills)
 - Status LED feedback patterns

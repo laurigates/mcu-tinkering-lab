@@ -29,11 +29,11 @@ mod project-name 'packages/<domain>/project-name'
 
 Place it alphabetically among the existing `mod` declarations. Use the justfile recipe naming convention (lowercase-kebab-case).
 
-### 3. Verify CI Matrix
+### 3. Verify CI Build Workflow
 
-Check `.github/workflows/esp32-build.yml` for the project matrix. If the project should be built in CI:
-- Verify it appears in the build matrix
-- Or note that it needs to be added manually (don't auto-edit workflow files without confirmation)
+Each ESP32 project has its own `.github/workflows/build-<project>.yml` (calling the reusable `_ci-build-esp32.yml`). If the project should be built in CI:
+- Verify `.github/workflows/build-<project>.yml` exists
+- Or note that it needs to be created (copy an existing one such as `build-melody-detector.yml`; don't auto-edit workflow files without confirmation)
 
 ### 4. Check Standard File Inventory
 

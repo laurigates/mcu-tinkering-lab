@@ -179,7 +179,8 @@ Most workflows delegate to reusable workflows from [`laurigates/.github`](https:
 
 | Workflow | Trigger | Purpose | Reusable? |
 |----------|---------|---------|-----------|
-| `esp32-build.yml` | Push/PR to main/develop | Build all ESP32 firmware + simulation | No (local) |
+| `build-<project>.yml` | Push/PR (path-filtered) / release | Per-project ESP32 firmware build (CI via `_ci-build-esp32.yml`, release via `_build-esp32-firmware.yml`) | Local reusable `_*.yml` |
+| `build-python-simulation.yml` | Push/PR to main/develop | Build the Python simulation package (import check) | No (local) |
 | `test.yml` | Push/PR to main/develop | Pre-commit, pytest, cppcheck, format check | No (local) |
 | `build-firmware.yml` | Release published | Build + attach firmware binaries to release + deploy web flasher | No (local) |
 | `release-please.yml` | Push to main | Auto-generate release PRs from conventional commits | `reusable-release-please.yml` |

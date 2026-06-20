@@ -183,6 +183,6 @@ echo -e "  4. ${CYAN}idf.py build${NC} to build the project"
 echo
 echo "Optional:"
 echo -e "  - Add to root Makefile for easy building: ${CYAN}make $PROJECT_NAME-build${NC}"
-echo -e "  - Add to CI pipeline: ${CYAN}.github/workflows/esp32-build.yml${NC}"
+echo -e "  - Add to CI pipeline: ${CYAN}create .github/workflows/build-$PROJECT_NAME.yml (copy build-melody-detector.yml)${NC}"
 echo
 echo -e "${GREEN}Happy coding! 🚀${NC}"
