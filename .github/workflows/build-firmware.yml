@@ -27,7 +27,7 @@ jobs:
       project_count: ${{ steps.discover.outputs.project_count }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.release.tag_name || inputs.release_tag }}
 
@@ -81,7 +81,7 @@ jobs:
       matrix: ${{ fromJson(needs.discover-projects.outputs.matrix) }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           submodules: recursive
           ref: ${{ github.event.release.tag_name || inputs.release_tag }}
@@ -140,7 +140,7 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.release.tag_name || inputs.release_tag }}
 
