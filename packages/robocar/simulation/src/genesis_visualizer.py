@@ -71,6 +71,7 @@ class MatplotlibVisualizer:
                 self.robot_patch = patches.Circle((0, 0), 0.2, color="blue", alpha=0.7)
                 self.direction_line = None
                 self.trail_points: list[tuple[float, float]] = []
+                self.trail_line = None
 
                 self.ax.add_patch(self.robot_patch)
                 print("✓ Matplotlib visualizer initialized on main thread")
@@ -120,8 +121,8 @@ class MatplotlibVisualizer:
                 # Draw trail
                 if len(self.trail_points) > 1:
                     trail_x, trail_y = zip(*self.trail_points, strict=False)
-                    if hasattr(self, "trail_line"):
-                        self.trail_line.remove()  # ty: ignore[unresolved-attribute]
+                    if self.trail_line is not None:
+                        self.trail_line.remove()
                     (self.trail_line,) = self.ax.plot(
                         trail_x, trail_y, "g-", alpha=0.5, linewidth=2
                     )
