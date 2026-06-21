@@ -1,0 +1,75 @@
+# Custom Move Hub firmware — feasibility spike tooling
+#
+# Hardware-in-the-loop: these recipes build/flash custom Pybricks firmware for the
+# LEGO Boost Move Hub and run MicroPython test scripts on it via pybricksdev.
+# The actual flashing/observation happens on YOUR physical hub + Xbox controller.
+#
+# Toolchain: the firmware is built inside a container (docker/Dockerfile) so no
+# local arm-none-eabi toolchain is needed. Flashing/running uses `pybricksdev`
+# (`pipx install pybricksdev` or `uvx pybricksdev ...`) over BLE from the host.
+#
+# Quick start:
+#   just boost-fw::setup        # clone pybricks-micropython into external/ (gitignored)
+#   just boost-fw::build        # build vanilla movehub firmware (Phase 2)
+#   just boost-fw::flash        # install it on the hub (hold button if prompted)
+#   just boost-fw::run motor_test
+#   just boost-fw::restore      # back to official Pybricks
+
+pybricks_repo := "https://github.com/pybricks/pybricks-micropython"
+pybricks_dir  := "external/pybricks-micropython"
+hub           := "movehub"
+build_image   := "boost-fw-pybricks-build"
+firmware      := pybricks_dir / "bricks" / hub / "build" / "firmware.zip"
+
+default:
+    @just --list
+
+# Clone pybricks-micropython into external/ (no --recursive; make fetches submodules on demand).
+setup:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -d "{{pybricks_dir}}/.git" ]; then
+        echo "{{pybricks_dir}} already present — pulling latest"
+        git -C "{{pybricks_dir}}" pull --ff-only
+    else
+        mkdir -p external
+        git clone "{{pybricks_repo}}" "{{pybricks_dir}}"
+    fi
+
+# Build the container that holds the ARM toolchain + poetry (see docker/Dockerfile).
+docker-image:
+    docker build -t {{build_image}} docker
+
+# NOTE: if the build complains about the GCC version, cross-check the pinned toolchain
+# in external/pybricks-micropython/.github/workflows/ and adjust docker/Dockerfile.
+# Build vanilla Move Hub firmware in the container (output: bricks/movehub/build/).
+build: docker-image
+    docker run --rm -v "$PWD/{{pybricks_dir}}:/src" -w /src {{build_image}} \
+        bash -lc "poetry install --no-root && poetry run make {{hub}}"
+    @echo "Firmware: {{firmware}}"
+
+# The patch is produced during the Phase-3 investigation (see patches/README.md).
+# Phase 3: enable the Xbox controller feature for the movehub build, then re-run `build`.
+enable-xbox:
+    git -C "{{pybricks_dir}}" apply --verbose "$PWD/patches/enable-xbox-movehub.patch"
+
+# Revert any local changes to the pybricks checkout (drops the enable-xbox patch).
+reset-pybricks:
+    git -C "{{pybricks_dir}}" checkout -- .
+
+# Install the freshly built firmware onto the hub over BLE (hold the green button if asked).
+flash:
+    pybricksdev flash "{{firmware}}"
+
+# Run a spike script on the hub over BLE, e.g. `just boost-fw::run motor_test`.
+run script:
+    pybricksdev run ble "spike/{{script}}.py"
+
+# Recover the hub to official firmware (installer at https://code.pybricks.com).
+restore:
+    @echo "Restore official Pybricks via https://code.pybricks.com (Settings -> Install firmware)."
+    @echo "Or place an official firmware.zip here and run: pybricksdev flash <that zip>"
+
+# Remove the cloned upstream and build artifacts (keeps your spike/, patches/, docs/).
+clean:
+    rm -rf external

@@ -32,6 +32,33 @@ for the full hardware findings, the platform/language/framework options
 (extend Pybricks · bare-metal STM32 + BlueNRG-MS ACI · Zephyr · libopencm3), the
 recommendation, and the step-by-step feasibility spike.
 
+## Feasibility spike (thin)
+
+Tooling to kill-or-confirm the two unknowns — **does it fit flash** and **does
+the BlueNRG driver have the pairing path** — using the *extend Pybricks* option
+as the spike vehicle. This is **hardware-in-the-loop**: the recipes build/flash
+firmware and run test scripts on *your* physical Move Hub + Xbox controller.
+
+```sh
+just boost-fw::setup     # clone pybricks-micropython into external/ (gitignored)
+just boost-fw::build     # build vanilla movehub firmware in a container
+just boost-fw::flash     # install on the hub via pybricksdev (hold the button)
+just boost-fw::run motor_test     # Phase 2 baseline: spin the motors
+just boost-fw::restore   # back to official Pybricks (code.pybricks.com)
+```
+
+| Path | What it is |
+|---|---|
+| `justfile` | spike recipes (setup, build, flash, run, enable-xbox, restore) |
+| `docker/Dockerfile` | ARM toolchain + poetry build container |
+| `spike/*.py` | `motor_test` (Phase 2), `remote_test` (Phase 1, needs a handset), `xbox_test` (Phase 3) |
+| `patches/` | the Phase-3 "enable Xbox for movehub" patch (produced during the spike) |
+| `docs/spike-log.md` | running record of results → the go/no-go decision |
+
+Prereqs on the host: Docker, and `pybricksdev` (`pipx install pybricksdev`).
+The three phases and their pass/fail gates are tracked in
+[`docs/spike-log.md`](docs/spike-log.md).
+
 ## Related
 
 - [`lego-boost-xbox`](../lego-boost-xbox/) — the working browser-bridge middleman
