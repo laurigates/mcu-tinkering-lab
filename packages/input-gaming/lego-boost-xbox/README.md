@@ -3,6 +3,11 @@
 Drive a **LEGO Boost Creative Toolbox (set 17101)** Move Hub model — Vernie /
 MTR4 — with an **Xbox Series X|S controller**.
 
+> **Related:** an experimental, separate track explores removing the middleman
+> entirely with **custom hub firmware** (pairing the Xbox controller *directly*
+> with the Move Hub). See [`../lego-boost-xbox-fw`](../lego-boost-xbox-fw/). This
+> browser bridge remains the working, supported version.
+
 ## Why a middleman is required
 
 The Boost Move Hub speaks the **LEGO Wireless Protocol (LWP) v3** over Bluetooth
@@ -12,11 +17,15 @@ HID peripheral. Two peripherals cannot connect to each other; a BLE **central**
 must sit in the middle.
 
 > **Can't I just pair the Xbox controller straight to the hub?**
-> No — not with the 17101. Pybricks firmware *can* turn a hub into a central that
-> hosts an Xbox controller, but only on the **Technic** and **City** hubs. The
-> Move Hub's ~106 KiB of free flash is too small for that feature (and too small
-> even for stdin-over-BLE). So the 17101 structurally needs a PC or microcontroller
-> in the middle.
+> Not with *stock or Pybricks* firmware on the 17101. Pybricks hosts an Xbox
+> controller only on the **Technic / SPIKE / Inventor** hubs — not the Move Hub.
+> The blocker there is **flash space** (Pybricks' MicroPython leaves only ~106 KiB,
+> already >95% full), **not** the radio: the Move Hub's **BlueNRG-MS** chip *does*
+> support the BLE central role, and Pybricks' own Move Hub driver already calls the
+> central ACI functions. So with the existing firmware the 17101 needs a PC or
+> microcontroller in the middle — but **dedicated custom firmware** could pair the
+> controller directly. That avenue is explored in the separate
+> [`lego-boost-xbox-fw`](../lego-boost-xbox-fw/) track.
 
 ## Two architectures (we keep both)
 
