@@ -433,7 +433,7 @@ Brief description of changes
    ```
 
 4. **Add to CI pipeline:**
-   Edit `.github/workflows/esp32-build.yml` to include your project in the build matrix.
+   Create a per-project workflow `.github/workflows/build-<project>.yml` (copy an existing one such as `build-melody-detector.yml`) that calls the reusable `_ci-build-esp32.yml` workflow with your project's `project`, `project_path`, and `target`.
 
 5. **Update root justfile:**
    Add build/flash targets for your project.

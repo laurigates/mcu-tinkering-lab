@@ -26,7 +26,7 @@ ESP-IDF supports building and running unit tests on the host machine via `CONFIG
 - `packages/robocar/camera/main/` — AI command parsing, UART message formatting
 
 ### Phase 3: CI integration
-- Add host-test job to `esp32-build.yml` GitHub Actions workflow
+- Add host-test job to the `test.yml` GitHub Actions workflow (the Test Suite that already runs pre-commit / pytest / cppcheck)
 - Run all host tests as part of PR checks
 
 ## Test Framework
