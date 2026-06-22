@@ -1,0 +1,13 @@
+# Upstream pybricks-micropython is cloned here on demand (just boost-fw::setup) —
+# never committed (huge, has its own submodules).
+external/
+
+# Build / firmware artifacts
+*.zip
+*.bin
+*.elf
+*.map
+
+# Python
+__pycache__/
+*.pyc
