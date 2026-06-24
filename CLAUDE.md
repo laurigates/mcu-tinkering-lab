@@ -22,6 +22,13 @@ mcu-tinkering-lab/
 │   │   ├── simulation/             # Python 3.11 physics simulation (Pymunk)
 │   │   ├── docs/                   # Docs and coordination justfile
 │   │   └── components/i2c-protocol/ # Robocar-internal I2C protocol + tests
+│   ├── thinkpack/                  # ESP-NOW mesh of modular companion "boxes"
+│   │   ├── brainbox/               # LLM mesh coordinator (ESP32-S3)
+│   │   ├── boombox/                # Audio playback box
+│   │   ├── chatterbox/             # Conversational box
+│   │   ├── finderbox/              # NFC/finder box
+│   │   ├── glowbug/                # LED peer box
+│   │   └── mesh-demo/              # ESP-NOW mesh demo
 │   ├── camera-vision/              # Standalone camera / AI vision projects
 │   │   ├── cam-webserver/          # MJPEG streaming server
 │   │   ├── cam-i2s-audio/          # Camera + I2S audio
@@ -30,19 +37,25 @@ mcu-tinkering-lab/
 │   ├── audio/                      # Audio / synth / toys
 │   │   ├── gamepad-synth/          # BLE gamepad I2S synthesizer (Monotron-inspired)
 │   │   ├── kids-audio-toy/         # Potentiometer-controlled audio toy
+│   │   ├── melody-detector/        # Melody detection + ML training
 │   │   └── audiobook-player/       # RFID audiobook player (ESPHome)
 │   ├── input-gaming/               # Gamepads and controller bridges
 │   │   ├── xbox-switch-bridge/     # Xbox BLE → Switch USB bridge
-│   │   └── switch-usb-proxy/       # Switch USB protocol proxy
+│   │   ├── switch-usb-proxy/       # Switch USB protocol proxy
+│   │   ├── lego-boost-xbox/        # Drive LEGO Boost with an Xbox controller
+│   │   └── lego-boost-xbox-fw/     # LEGO Boost direct Xbox-pairing hub firmware
 │   ├── networking/                 # WiFi tests, VPN, network tools
 │   │   ├── it-troubleshooter/      # IT troubleshooting assistant
 │   │   ├── wifitest/               # WiFi AP test firmware
 │   │   └── wireguard-ha/           # WireGuard + Home Assistant (ESPHome)
+│   ├── sensors/                    # Sensor firmware
+│   │   └── presence-detector/      # 24 GHz mmWave presence sensor (ESPHome)
 │   ├── games/
 │   │   └── nfc-scavenger-hunt/     # NFC-based scavenger hunt game
 │   └── components/                 # Reusable ESP-IDF components
 │       ├── improv-wifi/            # Improv-WiFi BLE provisioning
-│       └── ota-github/             # GitHub Releases OTA updater
+│       ├── ota-github/             # GitHub Releases OTA updater
+│       └── thinkpack-*/            # ThinkPack shared components (audio, mesh, nfc, power, …)
 ├── .github/workflows/              # CI/CD pipelines
 ├── tools/scaffold/                 # Project scaffolding scripts
 ├── docs/                           # decisions/, requirements/, prompts/, reference/

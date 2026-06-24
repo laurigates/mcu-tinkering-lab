@@ -74,33 +74,46 @@ mcu-tinkering-lab/
 │   ├── robocar/                    # 🤖 Dual-ESP32 AI robot car system
 │   │   ├── main/                   # Main controller (Heltec WiFi LoRa 32)
 │   │   ├── camera/                 # ESP32-CAM vision with Claude/Ollama/Gemini AI
-│   │   ├── unified/                # Single-board ESP32-S3 Sense consolidation
+│   │   ├── unified/                # Single-board XIAO ESP32-S3 Sense consolidation
 │   │   ├── simulation/             # Python 3.11 physics simulation
 │   │   ├── docs/                   # Docs and coordination justfile
 │   │   └── components/i2c-protocol/ # Robocar-internal I2C protocol + tests
+│   ├── thinkpack/                  # 🎒 ESP-NOW mesh of modular companion "boxes"
+│   │   ├── brainbox/               # LLM mesh coordinator (ESP32-S3)
+│   │   ├── boombox/                # Audio playback box
+│   │   ├── chatterbox/             # Conversational box
+│   │   ├── finderbox/              # NFC/finder box
+│   │   ├── glowbug/                # LED peer box
+│   │   └── mesh-demo/              # ESP-NOW mesh demo
 │   ├── camera-vision/              # 📹 Standalone camera / AI vision projects
 │   │   ├── cam-webserver/          # Live video streaming server
 │   │   ├── cam-i2s-audio/          # Camera + I2S audio processing
 │   │   ├── llm-telegram/           # LLM vision with Telegram bot
 │   │   └── gemini-vision/          # Gemini Robotics-ER object detection UI
 │   ├── audio/                      # 🎵 Audio / synth / toys
-│   │   ├── gamepad-synth/          # PS4 gamepad I2S synthesizer
+│   │   ├── gamepad-synth/          # Bluetooth gamepad I2S synth (Monotron-inspired)
 │   │   ├── kids-audio-toy/         # Potentiometer-controlled audio toy
+│   │   ├── melody-detector/        # Melody detection + ML training
 │   │   └── audiobook-player/       # RFID audiobook player (ESPHome)
 │   ├── input-gaming/               # 🎮 Gamepads and controller bridges
 │   │   ├── xbox-switch-bridge/     # Xbox BLE → Switch USB bridge
-│   │   └── switch-usb-proxy/       # Switch USB protocol proxy
+│   │   ├── switch-usb-proxy/       # Switch USB protocol proxy
+│   │   ├── lego-boost-xbox/        # Drive LEGO Boost with an Xbox controller
+│   │   └── lego-boost-xbox-fw/     # LEGO Boost direct Xbox-pairing hub firmware
 │   ├── networking/                 # 📡 WiFi tests, VPN, network tools
 │   │   ├── it-troubleshooter/      # IT troubleshooting assistant
 │   │   ├── wifitest/               # WiFi AP test firmware
 │   │   └── wireguard-ha/           # WireGuard + Home Assistant (ESPHome)
+│   ├── sensors/                    # 🛰️ Sensor firmware
+│   │   └── presence-detector/      # 24 GHz mmWave presence sensor (ESPHome)
 │   ├── games/
 │   │   └── nfc-scavenger-hunt/     # NFC-based scavenger hunt game
 │   └── components/                 # 📦 Reusable ESP-IDF components
 │       ├── improv-wifi/            # Improv-WiFi BLE provisioning
-│       └── ota-github/             # GitHub Releases OTA updater
+│       ├── ota-github/             # GitHub Releases OTA updater
+│       └── thinkpack-*/            # ThinkPack shared components (audio, mesh, nfc, power, …)
 ├── .github/workflows/              # 🔄 CI/CD pipelines
-├── tools/                          # 🛠️ Build scripts and utilities
+├── tools/                          # 🛠️ Scaffolding (scaffold/new-esp32-project.sh) + shared justfile imports
 ├── docs/                           # 📖 Documentation
 └── justfile                        # 🎯 Root build coordination
 ```
@@ -235,7 +248,7 @@ devices:
 
 **Python Tools:**
 - `ruff` - Fast linting and formatting
-- `mypy` - Type checking
+- `ty` (astral) - Type checking
 - `pytest` - Testing framework
 
 ### Pre-commit Hooks
@@ -284,21 +297,19 @@ Add to your PRs to see build status at a glance.
 
 ## 🚧 Creating New Projects
 
-### ESP32 Project Template
+### ESP32 Project Scaffolding
+
+Use the interactive scaffolding script — it prompts for a project name and
+domain folder, then generates `CMakeLists.txt`, `main/`, `sdkconfig.defaults`,
+and a justfile wired to the shared containerized build recipes:
 
 ```bash
-# Copy template (manual for now)
-cp -r packages/camera-vision/cam-webserver packages/<domain>/my-new-project
-cd packages/<domain>/my-new-project
-
-# Update CMakeLists.txt
-sed -i 's/esp32-cam-webserver/my-new-project/g' CMakeLists.txt
-
-# Build
-just esp32-my-new-project-build
+./tools/scaffold/new-esp32-project.sh
 ```
 
-**Automated scaffolding tool coming soon!**
+After scaffolding, register the project as a module in the root `justfile`
+(`mod <name> 'packages/<domain>/<name>'`) and add a path-filtered
+`build-<name>.yml` workflow.
 
 ## 📚 Documentation
 
@@ -368,7 +379,7 @@ just docker-clean
 
 | Platform | Status | Projects | Tests | CI/CD |
 |----------|--------|----------|-------|-------|
-| **ESP32** | ✅ Active | 16 projects | 🚧 In progress | ✅ Automated |
+| **ESP32** | ✅ Active | 25+ projects | 🚧 In progress | ✅ Automated |
 | **Arduino** | 🚧 Planned | 0 | ❌ N/A | ❌ N/A |
 | **STM32** | 🚧 Planned | 0 | ❌ N/A | ❌ N/A |
 | **Simulation** | ✅ Active | Python 3.11 | ✅ pytest | ✅ Automated |
