@@ -158,6 +158,10 @@ filterwarnings = [
     "error",
     "ignore::UserWarning",
     "ignore::DeprecationWarning",
+    # spatialmath-python docstrings contain invalid escape sequences; on
+    # Python >=3.12 these raise SyntaxWarning at import, which the "error"
+    # filter above would turn into collection errors. Third-party code.
+    "ignore:invalid escape sequence:SyntaxWarning",
 ]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",

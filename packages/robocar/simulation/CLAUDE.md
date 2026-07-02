@@ -97,7 +97,7 @@ uv run pytest -m "not slow"        # Skip slow tests
 uv run pytest tests/test_robot_model.py  # Specific file
 ```
 
-**Current status**: 18/24 tests pass. 6 failing tests are physics calibration tests (energy conservation, velocity matching accuracy) — non-critical, known issues.
+**Current status**: suite is green; 4 physics calibration tests (kinematics, energy conservation, stability) are marked `xfail` — non-critical, known issues. CI fails on real regressions (no more `|| true`) and enforces `--cov-fail-under=25`.
 
 **Test markers**: `slow`, `integration`, `hardware`
 
