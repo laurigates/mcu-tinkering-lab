@@ -7,7 +7,7 @@ packages = ["src"]
 
 [project]
 name = "esp32-robot-simulation"
-version = "0.1.0" # x-release-please-version
+version = "0.1.1" # x-release-please-version
 description = "ESP32 Robot Car Simulation with Genesis Physics Framework"
 readme = "README.md"
 license = {text = "MIT"}
