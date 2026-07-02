@@ -17,5 +17,5 @@
   "packages/audio/gamepad-synth": "0.1.2",
   "packages/thinkpack/chatterbox": "1.1.0",
   "packages/thinkpack/finderbox": "1.1.0",
-  "packages/robotics/balancebot": "0.1.0"
+  "packages/robotics/balancebot": "0.1.1"
 }
