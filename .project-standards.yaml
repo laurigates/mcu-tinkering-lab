@@ -1,0 +1,27 @@
+# Infrastructure standards tracking — written by /configure:all audits.
+# See laurigates/claude-plugins configure-plugin for the component checks.
+standards_version: "1.0"
+project_type: embedded-monorepo  # ESP-IDF C/C++ + Python subprojects
+last_audit: "2026-07-02"
+components:
+  justfile: pass
+  pre-commit: pass
+  linting: pass        # ruff + cppcheck + ty
+  formatting: pass     # clang-format + ruff format + editorconfig
+  editor: pass
+  docs: pass
+  tests: pass          # pytest (simulation, melody-train), cppcheck for firmware
+  coverage: pass       # --cov-fail-under=25 on simulation suite
+  security: pass       # gitleaks, security-secrets workflow, renovate, SECURITY.md
+  release-please: pass # App-token pattern; credentials via gitops release_please flag
+  workflows: pass
+  github-pages: pass   # web flasher deploys on release publish
+  dead-code: skipped   # no vulture config yet — candidate for a future pass
+  container-registry: not-applicable  # dev-only images, nothing published
+  skaffold: not-applicable
+  sentry: not-applicable
+  cache-busting: not-applicable
+  memory-profiling: not-applicable
+notes:
+  - "Physics calibration tests in robocar simulation are xfail-marked known issues."
+  - "sync-ai-rules schedule disabled pending laurigates/.github#10."

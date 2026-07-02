@@ -127,7 +127,8 @@ jobs:
             --cov-report=xml \
             --cov-report=term \
             --cov-report=html \
-            -v || true
+            --cov-fail-under=25 \
+            -v
 
       - name: Archive coverage reports
         uses: actions/upload-artifact@v7
