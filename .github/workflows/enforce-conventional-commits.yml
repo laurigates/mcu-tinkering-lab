@@ -8,8 +8,10 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# The reusable workflow needs pull-requests: write to rewrite PR titles;
+# a called workflow cannot exceed the caller's grant, so it must be here.
 permissions:
-  contents: read
+  pull-requests: write
 
 jobs:
   conventional-commits:
