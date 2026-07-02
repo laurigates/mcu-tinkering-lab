@@ -1,0 +1,47 @@
+;
+; Variable-rate STEP pulse generator for DRV8825 (one state machine per motor).
+;
+; The SM clock is divided to 1 MHz (1 tick = 1 us). The CPU pushes a 32-bit
+; "low count" N; the program emits a 2 us high pulse (DRV8825 needs >= 1.9 us)
+; followed by N+1 ticks low, i.e. step period = N + 7 ticks including loop
+; overhead (see stepper.c which does the period -> N conversion).
+;
+; `pull noblock` reloads OSR from X when the TX FIFO is empty, so the last
+; pushed rate is held between updates and pulses continue glitch-free.
+; Stopping and direction changes are handled CPU-side (see stepper.c): the SM
+; is parked at zero rate, and DIR only changes while the motor is stopped.
+;
+
+.program stepper
+
+.wrap_target
+    pull noblock       ; OSR = new low count, or X (last value) if FIFO empty
+    mov x, osr         ; X = backup for the next noblock reload
+    mov y, osr         ; Y = countdown for this period
+    set pins, 1 [1]    ; STEP high for 2 ticks (2 us)
+    set pins, 0        ; STEP low
+count_loop:
+    jmp y-- count_loop ; low for Y+1 ticks
+.wrap
+
+% c-sdk {
+#include "hardware/clocks.h"
+
+// Cycles of fixed overhead per period: pull, mov, mov, set[1] (2), set = 6,
+// plus the final non-taken jmp = 1. A pushed count of N gives N + 7 ticks.
+#define STEPPER_PIO_OVERHEAD_TICKS 7u
+
+static inline void stepper_program_init(PIO pio, uint sm, uint offset, uint step_pin) {
+    pio_gpio_init(pio, step_pin);
+    pio_sm_set_consecutive_pindirs(pio, sm, step_pin, 1, true);
+
+    pio_sm_config c = stepper_program_get_default_config(offset);
+    sm_config_set_set_pins(&c, step_pin, 1);
+
+    // 1 MHz state machine clock: 1 tick = 1 us.
+    float div = (float)clock_get_hz(clk_sys) / 1e6f;
+    sm_config_set_clkdiv(&c, div);
+
+    pio_sm_init(pio, sm, offset, &c);
+}
+%}

@@ -1,0 +1,86 @@
+# Balancebot — XIAO RP2350 self-balancing robot
+# Run `just --list` to see available recipes
+
+set positional-arguments
+
+import '../../../tools/pico.just'
+
+project_dir := "packages/robotics/balancebot"
+board := "seeed_xiao_rp2350"
+port := env("PORT", _detected_pico)
+
+default:
+    @just --list
+
+##########
+# Build (containerized)
+##########
+
+# Build firmware (containerized cmake + ninja, produces build/balancebot.uf2)
+[group: "build"]
+build: _pico-build
+
+# Remove build artifacts
+[group: "build"]
+clean: _pico-clean
+
+# Interactive shell in the Pico SDK container
+[group: "build"]
+shell: _pico-shell
+
+# Build and run host-side unit tests (PID, filter, CRC — no hardware)
+[group: "build"]
+test:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cmake -S tests/host -B build-host -G Ninja
+    cmake --build build-host
+    ctest --test-dir build-host --output-on-failure
+
+##########
+# Flash & Monitor (native — USB CDC / BOOTSEL)
+##########
+
+# Flash via picotool (reboots a running board into BOOTSEL automatically)
+[group: "device"]
+flash:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    command -v picotool >/dev/null 2>&1 || { echo "Error: picotool not found — brew install picotool"; exit 1; }
+    picotool load -f build/balancebot.uf2
+    picotool reboot
+    echo "Flashed OK"
+
+# Flash without picotool: drag-and-drop instructions
+[group: "device"]
+flash-uf2:
+    @echo "1. Hold BOOT on the XIAO RP2350 and plug in USB (or hold BOOT and tap RESET)"
+    @echo "2. A drive named RP2350 appears"
+    @echo "3. Copy build/balancebot.uf2 onto it — the board reboots into the firmware"
+
+# Monitor USB CDC serial output (Ctrl-C to stop)
+[group: "device"]
+monitor: _serial-monitor
+
+# Flash and immediately start monitoring
+[group: "device"]
+flash-monitor: flash monitor
+
+# Full dev cycle
+[group: "device"]
+develop: build flash monitor
+
+##########
+# Info
+##########
+
+# Show project information
+[group: "info"]
+info:
+    @echo "Balancebot — self-balancing robot"
+    @echo "  Board:     Seeed XIAO RP2350 (PICO_BOARD={{board}})"
+    @echo "  IMU:       MPU6050 on I2C1 (SDA=GPIO6/D4, SCL=GPIO7/D5, INT=GPIO5/D3)"
+    @echo "  Steppers:  2x DRV8825 + NEMA17, 1/8 microstep"
+    @echo "             STEP L/R=GPIO2/3 (PIO0), DIR L/R=GPIO4/0, nENABLE=GPIO1"
+    @echo "  Tuning:    USB CDC CLI — 'just balancebot::monitor' then 'help'"
+    @echo "  Port:      {{port}}"
