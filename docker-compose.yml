@@ -31,6 +31,28 @@ services:
     tty: true
     network_mode: host  # For mDNS and network testing
 
+  # Raspberry Pi Pico SDK development environment (RP2040/RP2350)
+  pico-sdk:
+    build:
+      context: .
+      dockerfile: Dockerfile.pico
+      args:
+        # Match the host UID/GID so build outputs in the bind-mounted
+        # workspace are owned by the developer, not root. See issue #318.
+        USER_UID: ${USER_UID:-1000}
+        USER_GID: ${USER_GID:-1000}
+    image: mcu-tinkering-lab/pico-sdk:2.2.0
+    volumes:
+      # Mount the entire workspace (build output stays on host for flashing)
+      - .:/workspace
+    environment:
+      - PICO_SDK_PATH=/opt/pico-sdk
+      - USER_UID=${USER_UID:-1000}
+      - USER_GID=${USER_GID:-1000}
+    working_dir: /workspace
+    stdin_open: true
+    tty: true
+
   # Python simulation environment
   simulation:
     build:

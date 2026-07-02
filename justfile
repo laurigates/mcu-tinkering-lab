@@ -29,6 +29,7 @@ mod thinkpack-brainbox 'packages/thinkpack/brainbox'
 mod thinkpack-chatterbox 'packages/thinkpack/chatterbox'
 mod thinkpack-finderbox 'packages/thinkpack/finderbox'
 mod presence-detector 'packages/sensors/presence-detector'
+mod balancebot 'packages/robotics/balancebot'
 mod schematics 'docs/schematics'
 
 # Auto-detect ESP32-S3 USB-Serial-JTAG by Espressif VID; override with S3_PORT env var
@@ -300,6 +301,9 @@ list-projects:
     [ -d "packages/audio/audiobook-player" ]            && echo "  audiobook-player            — ESPHome audiobook player"                || true
     [ -d "packages/networking/wireguard-ha" ]  && echo "  esp32-wireguard-ha-example  — WireGuard + Home Assistant (ESPHome)"    || true
     [ -d "packages/sensors/presence-detector" ] && echo "  presence-detector           — XIAO ESP32-C6 + LD2410 mmWave (ESPHome)"  || true
+    echo ""
+    echo "Robotics (Pico SDK):"
+    [ -d "packages/robotics/balancebot" ]       && echo "  balancebot                  — Self-balancing robot (XIAO RP2350)"       || true
     echo ""
     echo "Use 'just <module>::build' to build individual projects."
     echo "Module names: just --list --list-submodules"
