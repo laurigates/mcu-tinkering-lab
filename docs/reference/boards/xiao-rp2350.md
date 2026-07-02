@@ -44,7 +44,7 @@ Raspberry Pi RP2350-based board in the XIAO form factor (21 x 17.8 mm). Dual-arc
 | Buttons | RESET (bottom, labeled "B"), BOOT |
 | Battery | LiPo charge management (~370 mA), voltage sense on GPIO29 |
 | Dimensions | 21 x 17.8 mm |
-| Operating temp | -20°C to 85°C |
+| Operating temp | -20°C to 70°C |
 
 ## Pinout
 
