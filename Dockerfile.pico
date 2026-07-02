@@ -1,0 +1,82 @@
+# MCU Tinkering Lab - Raspberry Pi Pico SDK Development Container
+# For RP2040/RP2350 projects (first user: packages/robotics/balancebot)
+#
+# The SDK is baked into the image at a pinned tag; bump PICO_SDK_TAG and
+# the picotool tag together (they must match SDK minor versions).
+
+FROM ubuntu:24.04
+
+LABEL maintainer="MCU Tinkering Lab"
+LABEL description="Raspberry Pi Pico SDK development environment (RP2040/RP2350)"
+
+ARG PICO_SDK_TAG=2.2.0
+
+RUN apt-get update && apt-get install -y \
+    gcc-arm-none-eabi \
+    libnewlib-arm-none-eabi \
+    libstdc++-arm-none-eabi-newlib \
+    cmake \
+    ninja-build \
+    git \
+    make \
+    python3 \
+    clang-format \
+    cppcheck \
+    # picotool build dependencies
+    build-essential \
+    pkg-config \
+    libusb-1.0-0-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Pico SDK at a pinned tag. Only the tinyusb submodule is initialized —
+# it is required for USB CDC stdio; the other submodules (cyw43, btstack,
+# lwip, mbedtls) are wireless-only and the XIAO RP2350 has no radio.
+RUN git clone --branch "${PICO_SDK_TAG}" --depth 1 \
+        https://github.com/raspberrypi/pico-sdk.git /opt/pico-sdk \
+    && git -C /opt/pico-sdk submodule update --init --depth 1 lib/tinyusb
+
+ENV PICO_SDK_PATH=/opt/pico-sdk
+
+# picotool at the matching tag, preinstalled so the SDK's UF2 packaging
+# does not fetch it from the network at build time.
+RUN git clone --branch "${PICO_SDK_TAG}" --depth 1 \
+        https://github.com/raspberrypi/picotool.git /tmp/picotool \
+    && cmake -S /tmp/picotool -B /tmp/picotool/build -G Ninja \
+        -DPICO_SDK_PATH=/opt/pico-sdk \
+    && ninja -C /tmp/picotool/build \
+    && cmake --install /tmp/picotool/build \
+    && rm -rf /tmp/picotool
+
+# Let the SDK's find_package(picotool) locate the preinstalled copy
+# (default install prefix /usr/local puts the CMake config here).
+ENV picotool_DIR=/usr/local/picotool
+
+# Create a non-root user matching the host UID/GID so build outputs in the
+# bind-mounted workspace are owned by the developer, not root. Same pattern
+# as the ESP-IDF Dockerfile (see issue #318).
+ARG USER_UID=1000
+ARG USER_GID=1000
+RUN set -eux; \
+    if getent group "${USER_GID}" >/dev/null; then \
+        groupmod --new-name dev "$(getent group "${USER_GID}" | cut -d: -f1)" || true; \
+    else \
+        groupadd --gid "${USER_GID}" dev; \
+    fi; \
+    if getent passwd "${USER_UID}" >/dev/null; then \
+        existing_user="$(getent passwd "${USER_UID}" | cut -d: -f1)"; \
+        usermod --login dev --home /home/dev --move-home --shell /bin/bash --gid "${USER_GID}" "${existing_user}" 2>/dev/null \
+            || usermod --home /home/dev --shell /bin/bash --gid "${USER_GID}" "${existing_user}"; \
+    else \
+        useradd --create-home --uid "${USER_UID}" --gid "${USER_GID}" --shell /bin/bash dev; \
+    fi; \
+    install -d -o "${USER_UID}" -g "${USER_GID}" /home/dev /home/dev/.cache
+
+WORKDIR /workspace
+
+RUN git config --global --add safe.directory /workspace
+USER dev
+RUN git config --global --add safe.directory /workspace
+
+ENV HOME=/home/dev
+
+CMD ["/bin/bash"]

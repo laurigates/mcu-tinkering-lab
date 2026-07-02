@@ -1,0 +1,135 @@
+name: Reusable Pico SDK CI Build
+
+# Builds an RP2040/RP2350 firmware with the Raspberry Pi Pico SDK and runs
+# the project's host-side unit tests (tests/host/) if present.
+#
+# The SDK tag pinned here must match Dockerfile.pico (local builds) — bump
+# both together.
+
+on:
+  workflow_call:
+    inputs:
+      project:
+        description: 'Project basename (used for binary filename and display)'
+        required: true
+        type: string
+      project_path:
+        description: 'Project directory relative to packages/ (e.g. robotics/balancebot)'
+        required: true
+        type: string
+      board:
+        description: 'PICO_BOARD value (e.g. seeed_xiao_rp2350)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  PICO_SDK_VERSION: '2.2.0'
+
+jobs:
+  build:
+    name: Build ${{ inputs.project }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install ARM toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gcc-arm-none-eabi libnewlib-arm-none-eabi libstdc++-arm-none-eabi-newlib \
+            cmake ninja-build
+
+      # The SDK clone (+ tinyusb submodule for USB CDC stdio) is ~400 MB and
+      # immutable per tag — cache it keyed on the pinned version only.
+      - name: Cache Pico SDK
+        id: sdk-cache
+        uses: actions/cache@v5
+        with:
+          path: ~/pico-sdk
+          key: pico-sdk-${{ runner.os }}-${{ env.PICO_SDK_VERSION }}
+
+      - name: Fetch Pico SDK
+        if: steps.sdk-cache.outputs.cache-hit != 'true'
+        run: |
+          git clone --branch "${{ env.PICO_SDK_VERSION }}" --depth 1 \
+            https://github.com/raspberrypi/pico-sdk.git ~/pico-sdk
+          git -C ~/pico-sdk submodule update --init --depth 1 lib/tinyusb
+
+      # SDK >= 2.0 needs picotool to produce UF2s; preinstall it (cached) so
+      # the firmware build never fetches it mid-build.
+      - name: Cache picotool
+        id: picotool-cache
+        uses: actions/cache@v5
+        with:
+          path: ~/picotool-install
+          key: picotool-${{ runner.os }}-${{ env.PICO_SDK_VERSION }}
+
+      - name: Build picotool
+        if: steps.picotool-cache.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get install -y --no-install-recommends build-essential pkg-config libusb-1.0-0-dev
+          git clone --branch "${{ env.PICO_SDK_VERSION }}" --depth 1 \
+            https://github.com/raspberrypi/picotool.git ~/picotool-src
+          cmake -S ~/picotool-src -B ~/picotool-src/build -G Ninja \
+            -DPICO_SDK_PATH=~/pico-sdk
+          ninja -C ~/picotool-src/build
+          cmake --install ~/picotool-src/build --prefix ~/picotool-install
+
+      - name: Build ${{ inputs.project }}
+        working-directory: packages/${{ inputs.project_path }}
+        run: |
+          cmake -B build -G Ninja \
+            -DPICO_SDK_PATH="$HOME/pico-sdk" \
+            -DPICO_BOARD="${{ inputs.board }}" \
+            -Dpicotool_DIR="$HOME/picotool-install/picotool"
+          ninja -C build
+
+      - name: Host unit tests
+        working-directory: packages/${{ inputs.project_path }}
+        run: |
+          if [ -f tests/host/CMakeLists.txt ]; then
+            cmake -S tests/host -B build-host -G Ninja
+            cmake --build build-host
+            ctest --test-dir build-host --output-on-failure
+          else
+            echo "No host tests (tests/host/) — skipping"
+          fi
+
+      - name: Archive firmware binaries
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ inputs.project }}-firmware-${{ github.sha }}
+          path: |
+            packages/${{ inputs.project_path }}/build/*.uf2
+            packages/${{ inputs.project_path }}/build/*.elf
+            packages/${{ inputs.project_path }}/build/*.elf.map
+          retention-days: 30
+
+      - name: Check binary size limits
+        working-directory: packages/${{ inputs.project_path }}
+        run: |
+          # The XIAO RP2350 has 2 MB flash (the SDK board header claims 4 MB —
+          # trust the hardware spec). Reserve the last two 4 KB sectors: the
+          # parameter store lives in the second-to-last, and the last is
+          # clobbered by the picotool RP2350-E10 UF2 workaround block.
+          BIN_SIZE=$(stat -c%s "build/${{ inputs.project }}.bin" 2>/dev/null || echo "0")
+          FLASH_LIMIT=$(( 2 * 1024 * 1024 - 2 * 4096 ))
+          WARNING_THRESHOLD=$(( FLASH_LIMIT * 3 / 4 ))
+
+          echo "Firmware binary size: $BIN_SIZE bytes ($(($BIN_SIZE / 1024)) KB) of $FLASH_LIMIT available"
+
+          if [ "$BIN_SIZE" -eq 0 ]; then
+            echo "::error::build/${{ inputs.project }}.bin missing or empty"
+            exit 1
+          elif [ "$BIN_SIZE" -gt "$FLASH_LIMIT" ]; then
+            echo "::error::Binary ($BIN_SIZE bytes) exceeds the 2 MB flash minus the parameter sector!"
+            exit 1
+          elif [ "$BIN_SIZE" -gt "$WARNING_THRESHOLD" ]; then
+            echo "::warning::Binary ($BIN_SIZE bytes) is over 75% of flash."
+          else
+            echo "::notice::Binary size is within acceptable limits."
+          fi

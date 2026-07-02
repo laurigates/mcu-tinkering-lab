@@ -44,7 +44,7 @@ Raspberry Pi RP2350-based board in the XIAO form factor (21 x 17.8 mm). Dual-arc
 | Buttons | RESET (bottom, labeled "B"), BOOT |
 | Battery | LiPo charge management (~370 mA), voltage sense on GPIO29 |
 | Dimensions | 21 x 17.8 mm |
-| Operating temp | -20°C to 85°C |
+| Operating temp | -20°C to 70°C |
 
 ## Pinout
 
@@ -190,7 +190,14 @@ The RP2350 brings production-grade security to a $5 board:
 
 ## In This Repository
 
-The XIAO RP2350 is not currently used in any project. It is a candidate for:
+Used by **[balancebot](../../../packages/robotics/balancebot/)** — a
+self-balancing robot that uses PIO state machines for jitter-free stepper
+step-pulse generation and dedicates core 1 to the 500 Hz control loop. See
+[PRD-012](../../requirements/PRD-012-balancebot.md) and
+[ADR-018](../../decisions/ADR-018-pico-sdk-balancebot.md) (which also
+introduced the repo's Pico SDK build infrastructure).
+
+Still a candidate for:
 
 - PIO-driven LED strip controllers (WS2812 without DMA jitter)
 - USB HID devices where Wi-Fi is not needed (cheaper than ESP32-S3)

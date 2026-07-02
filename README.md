@@ -106,6 +106,8 @@ mcu-tinkering-lab/
 │   │   └── wireguard-ha/           # WireGuard + Home Assistant (ESPHome)
 │   ├── sensors/                    # 🛰️ Sensor firmware
 │   │   └── presence-detector/      # 24 GHz mmWave presence sensor (ESPHome)
+│   ├── robotics/                   # 🦿 Motion-control robotics (Pico SDK)
+│   │   └── balancebot/             # Self-balancing robot (XIAO RP2350 + steppers)
 │   ├── games/
 │   │   └── nfc-scavenger-hunt/     # NFC-based scavenger hunt game
 │   └── components/                 # 📦 Reusable ESP-IDF components
@@ -380,6 +382,7 @@ just docker-clean
 | Platform | Status | Projects | Tests | CI/CD |
 |----------|--------|----------|-------|-------|
 | **ESP32** | ✅ Active | 25+ projects | 🚧 In progress | ✅ Automated |
+| **RP2350 (Pico SDK)** | ✅ Active | 1 (balancebot) | ✅ Host unit tests | ✅ Automated |
 | **Arduino** | 🚧 Planned | 0 | ❌ N/A | ❌ N/A |
 | **STM32** | 🚧 Planned | 0 | ❌ N/A | ❌ N/A |
 | **Simulation** | ✅ Active | Python 3.11 | ✅ pytest | ✅ Automated |

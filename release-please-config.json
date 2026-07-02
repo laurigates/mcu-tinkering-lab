@@ -117,7 +117,10 @@
       "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": true,
       "extra-files": [
-        {"type": "generic", "path": "pyproject.toml"}
+        {
+          "type": "generic",
+          "path": "pyproject.toml"
+        }
       ]
     },
     "packages/input-gaming/switch-usb-proxy": {
@@ -160,6 +163,15 @@
       "release-type": "simple",
       "component": "thinkpack-finderbox",
       "package-name": "thinkpack-finderbox",
+      "changelog-path": "CHANGELOG.md",
+      "include-component-in-tag": true,
+      "bump-minor-pre-major": true,
+      "bump-patch-for-minor-pre-major": true
+    },
+    "packages/robotics/balancebot": {
+      "release-type": "simple",
+      "component": "balancebot",
+      "package-name": "balancebot",
       "changelog-path": "CHANGELOG.md",
       "include-component-in-tag": true,
       "bump-minor-pre-major": true,

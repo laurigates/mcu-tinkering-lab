@@ -24,10 +24,12 @@ Files use a flat `category--component-name.md` convention:
 - [Heltec WiFi LoRa 32 V1](board--heltec-wifi-lora-32-v1.md) — Main controller
 - [ESP32-CAM AI Thinker](board--esp32-cam-ai-thinker.md) — Camera module
 - [Waveshare ESP32-S3-Zero](board--waveshare-esp32-s3-zero.md) — IT troubleshooter / Xbox-Switch bridge
+- [Seeed Studio XIAO RP2350](board--xiao-rp2350.md) — Balancebot
 
 ### MCUs
 - [ESP32](mcu--esp32.md) — Dual-core LX6, WiFi + BT (Heltec, ESP32-CAM)
 - [ESP32-S3](mcu--esp32-s3.md) — Dual-core LX7, WiFi + BLE 5 (Waveshare S3-Zero)
+- [RP2350](mcu--rp2350.md) — Dual Cortex-M33/Hazard3, PIO, no radio (XIAO RP2350)
 
 ### Peripherals
 - [OV2640](camera--ov2640.md) — 2MP CMOS image sensor
