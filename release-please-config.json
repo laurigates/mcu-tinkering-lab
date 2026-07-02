@@ -169,7 +169,6 @@
   "release-type": "simple",
   "bump-minor-pre-major": true,
   "bump-patch-for-minor-pre-major": true,
-  "pull-request-title-pattern": "chore: release ${version}",
   "changelog-sections": [
     {
       "type": "feat",
@@ -193,6 +192,5 @@
       "hidden": false
     }
   ],
-  "group-pull-request-title-pattern": "chore: release ${version}",
   "separate-pull-requests": false
 }
