@@ -56,3 +56,7 @@ the host tests can compile them — keep them that way.
 - Don't add `sdkconfig` / ESP-IDF patterns here; shared Pico recipes live
   in `tools/pico.just`, and the SDK pin lives in `Dockerfile.pico` +
   `.github/workflows/_ci-build-pico.yml` (bump both together).
+- Don't rely on internal GPIO pull-downs — broken on the A2 stepping
+  (RP2350-E9); use external pulls or actively driven lines.
+- Don't move the param store to the last flash sector — UF2 downloads
+  erase it (picotool RP2350-E10 workaround block).

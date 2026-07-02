@@ -169,9 +169,10 @@ telemetry snapshot out.
 **FR-5.01**: Full CLI: `help stat get set stream cal arm disarm rate
 save load`.
 
-**FR-5.02**: Parameter store in the last 4 KB flash sector (magic +
+**FR-5.02**: Parameter store in a reserved 4 KB flash sector (magic +
 version + CRC32), written via `flash_safe_execute()` only while
-disarmed.
+disarmed. The sector is the second-to-last — the last flash block is
+erased by the picotool RP2350-E10 UF2 workaround on every download.
 
 **FR-5.03**: Outer velocity loop (100 Hz): wheel-velocity feedback
 trims the angle setpoint so the robot holds station instead of
@@ -183,8 +184,9 @@ parameter-store CRC, run in CI.
 ## Constraints
 
 - **Memory**: 520 KB SRAM, 2 MB flash. Note: the pico-sdk board header
-  claims 4 MB — the parameter sector is pinned at 2 MB − 4 KB, valid
-  either way. Firmware + param sector must fit in 2 MB (CI-enforced).
+  claims 4 MB — the parameter sector is pinned near the end of 2 MB,
+  valid either way. Firmware + reserved sectors must fit in 2 MB
+  (CI-enforced).
 - **Timing**: control loop period 2 ms ± jitter budget 100 µs; the
   I2C burst read (~0.4 ms @ 400 kHz) fits inside the tick.
 - **Tuning is tethered**: USB CDC only; the robot balances untethered

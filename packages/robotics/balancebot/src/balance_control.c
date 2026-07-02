@@ -184,13 +184,21 @@ static void handle_command(const balance_cmd_t *cmd)
     }
 }
 
-// Wait for the IMU data-ready edge, with a deadline so a wedged INT line
-// degrades to timer pacing instead of stalling the loop.
+// Wait for the IMU data-ready rising edge, with a deadline fallback. Edge
+// detection (rather than level) keeps the loop paced even if the INT line
+// is stuck high — e.g. a disconnected sensor floating at ~2.2 V via the
+// RP2350-E9 leakage — in which case ticks degrade to the timeout rate.
 static void wait_for_sample(void)
 {
+    static bool armed;  // saw INT low since the last serviced sample
     absolute_time_t deadline = make_timeout_time_us(CONTROL_TICK_TIMEOUT_US);
-    // INT is a 50 us pulse cleared by the burst read; wait for assertion.
-    while (!mpu6050_data_ready() && absolute_time_diff_us(get_absolute_time(), deadline) > 0) {
+    while (absolute_time_diff_us(get_absolute_time(), deadline) > 0) {
+        if (!mpu6050_data_ready()) {
+            armed = true;  // INT is latched until read; low means "serviced"
+        } else if (armed) {
+            armed = false;
+            return;
+        }
         tight_loop_contents();
     }
 }

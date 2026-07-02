@@ -43,9 +43,12 @@
 #define TELEMETRY_DEFAULT_HZ 25
 #define BATTERY_POLL_MS 1000
 
-// Parameter store: last 4 KB sector of a 2 MB flash. The pico-sdk board
-// header claims PICO_FLASH_SIZE_BYTES = 4 MB but Seeed specs the XIAO
-// RP2350 at 2 MB — pin the sector at 2 MB - 4 KB, valid either way.
-#define PARAM_FLASH_OFFSET ((2u * 1024u * 1024u) - 4096u)
+// Parameter store: the SECOND-to-last 4 KB sector of a 2 MB flash.
+// Not the last sector: on RP2350 A2, UF2s carry a picotool workaround
+// block for erratum RP2350-E10 that erases the last flash block on every
+// download — the last sector would lose saved gains on each reflash.
+// Hard-pinned to the 2 MB Seeed spec (the pico-sdk board header wrongly
+// claims 4 MB).
+#define PARAM_FLASH_OFFSET ((2u * 1024u * 1024u) - 2u * 4096u)
 
 #endif  // BALANCEBOT_CONFIG_H

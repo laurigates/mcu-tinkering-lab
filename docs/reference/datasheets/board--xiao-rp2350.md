@@ -29,6 +29,17 @@
   claims 4 MB flash; the board ships with 2 MB
 - BOOTSEL: hold BOOT while plugging in (or hold BOOT, tap RESET) → `RP2350` UF2 drive
 
+## Silicon Errata (A2 stepping, as shipped)
+
+- **RP2350-E9**: internal GPIO pull-downs cannot hold an undriven input low
+  — a floating input latches at ~2.2 V (reads high). Use external pull-downs
+  (≤ 8.2 kΩ) or design so inputs are always actively driven. Pull-ups work
+  normally.
+- **RP2350-E10**: UF2 downloads carry a picotool workaround block that
+  **erases the last flash block** on every flash. Don't store persistent
+  data in the last 4 KB sector.
+- Full list: RP2350 datasheet, Appendix E (fixed in the A3 stepping).
+
 ## Datasheets & References
 
 - **RP2350 datasheet PDF (Raspberry Pi):** <https://datasheets.raspberrypi.com/rp2350/rp2350-datasheet.pdf>

@@ -58,6 +58,12 @@ BOOTSEL the XIAO's GPIOs are hi-Z — without the pull-up the motors would
 be live while nothing is in control. Verify strapping against the TI
 DRV8825 datasheet table when assembling.
 
+**Do not substitute the RP2350's internal pulls for external resistors
+anywhere in this harness**: on the A2 stepping the internal pull-downs
+cannot hold an undriven pin low (silicon erratum RP2350-E9 — a floating
+input latches at ~2.2 V). The firmware assumes the MPU6050 INT line is
+actively driven (push-pull) and uses no internal pull on it.
+
 ### Current limit (Vref)
 
 Set per driver, motors connected, before first `arm`:

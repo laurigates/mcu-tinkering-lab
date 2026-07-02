@@ -1,4 +1,5 @@
-// Persistence of balance_params_t in the last 4 KB flash sector.
+// Persistence of balance_params_t in a reserved 4 KB flash sector
+// (second-to-last — see PARAM_FLASH_OFFSET in config.h for why).
 // Record framing: magic + version + params + CRC32. Writes go through
 // flash_safe_execute() and MUST only happen while the motors are disarmed
 // (a sector erase stalls XIP for both cores). Called from core 1.

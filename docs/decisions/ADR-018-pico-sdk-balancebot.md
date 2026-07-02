@@ -159,8 +159,13 @@ control loop never blocks and never allocates.
 - Flash writes stall XIP for both cores; mitigated by writing gains via
   `flash_safe_execute()` only while motors are disarmed.
 - The pico-sdk board header claims 4 MB flash but Seeed specs 2 MB; the
-  parameter sector is hard-pinned at 2 MB − 4 KB (valid either way) and
-  the CI size gate assumes 2 MB until measured on hardware.
+  parameter sector is hard-pinned near the end of 2 MB (valid either way)
+  and the CI size gate assumes 2 MB until measured on hardware.
+- The A2 silicon errata constrain two details: internal pull-downs are
+  unreliable (RP2350-E9), so the IMU INT input uses no pull and the loop
+  paces on edges with a deadline fallback; and UF2 downloads erase the
+  last flash block (picotool's RP2350-E10 workaround), so the parameter
+  sector is the second-to-last sector, not the last.
 
 ## Alternatives Considered
 

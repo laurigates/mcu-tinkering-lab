@@ -52,7 +52,11 @@ bool mpu6050_init(void)
 
     gpio_init(PIN_IMU_INT);
     gpio_set_dir(PIN_IMU_INT, GPIO_IN);
-    gpio_pull_down(PIN_IMU_INT);  // INT is push-pull active high
+    // No internal pull: the MPU6050 INT output is push-pull, and on the A2
+    // stepping internal pull-downs can't hold an undriven input low anyway
+    // (RP2350-E9) — a disconnected sensor floats high, which the control
+    // loop's deadline pacing tolerates.
+    gpio_disable_pulls(PIN_IMU_INT);
 
     sleep_ms(100);  // sensor power-up
 

@@ -113,10 +113,11 @@ jobs:
         working-directory: packages/${{ inputs.project_path }}
         run: |
           # The XIAO RP2350 has 2 MB flash (the SDK board header claims 4 MB —
-          # trust the hardware spec). Reserve the last 4 KB sector for the
-          # parameter store.
+          # trust the hardware spec). Reserve the last two 4 KB sectors: the
+          # parameter store lives in the second-to-last, and the last is
+          # clobbered by the picotool RP2350-E10 UF2 workaround block.
           BIN_SIZE=$(stat -c%s "build/${{ inputs.project }}.bin" 2>/dev/null || echo "0")
-          FLASH_LIMIT=$(( 2 * 1024 * 1024 - 4096 ))
+          FLASH_LIMIT=$(( 2 * 1024 * 1024 - 2 * 4096 ))
           WARNING_THRESHOLD=$(( FLASH_LIMIT * 3 / 4 ))
 
           echo "Firmware binary size: $BIN_SIZE bytes ($(($BIN_SIZE / 1024)) KB) of $FLASH_LIMIT available"
