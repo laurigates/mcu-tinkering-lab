@@ -208,3 +208,100 @@ def hc_sr04p() -> elm.Ic:
         ],
         size=(3.5, 3),
     )
+
+
+def xiao_rp2350() -> elm.Ic:
+    """Seeed XIAO RP2350 — RP2350 in the XIAO form factor.
+
+    Left side carries the power rails (facing outward). Right side lists the
+    side-header GPIOs in the order they connect to peripherals top-to-bottom:
+    MPU6050 I2C + INT at the top, then the two DRV8825 STEP/DIR pairs and the
+    shared nENABLE below. Pin labels show the XIAO ``Dn`` silkscreen numbers.
+
+    Source of truth: packages/robotics/balancebot/src/pin_config.h
+    """
+    return elm.Ic(
+        pins=[
+            # Left (bottom → top): power rails facing outward
+            elm.IcPin(name="GND", side="L"),
+            elm.IcPin(name="3V3", side="L"),
+            elm.IcPin(name="5V", side="L"),
+            # Right (bottom → top): GPIOs facing peripherals
+            elm.IcPin(name="GPIO0", side="R", pin="D6"),  # right DRV8825 DIR
+            elm.IcPin(name="GPIO3", side="R", pin="D10"),  # right DRV8825 STEP
+            elm.IcPin(name="GPIO1", side="R", pin="D7"),  # shared nENABLE
+            elm.IcPin(name="GPIO4", side="R", pin="D9"),  # left DRV8825 DIR
+            elm.IcPin(name="GPIO2", side="R", pin="D8"),  # left DRV8825 STEP
+            elm.IcPin(name="GPIO5", side="R", pin="D3"),  # MPU6050 INT
+            elm.IcPin(name="GPIO6", side="R", pin="D4"),  # MPU6050 SDA
+            elm.IcPin(name="GPIO7", side="R", pin="D5"),  # MPU6050 SCL
+        ],
+        size=(3.5, 9),
+    )
+
+
+def mpu6050() -> elm.Ic:
+    """GY-521 MPU6050 6-axis IMU breakout.
+
+    All pins on the left so they face the MCU when the breakout is drawn to
+    the right of it — wires don't cross the chip body. Bottom→top ordered so
+    SCL sits above SDA, matching the XIAO's right-side I2C order (no bus
+    crossing). The breakout's onboard regulator is bypassed by feeding VCC
+    from 3V3 directly (see WIRING.md).
+    """
+    return elm.Ic(
+        pins=[
+            elm.IcPin(name="GND", side="L"),
+            elm.IcPin(name="VCC", side="L"),
+            elm.IcPin(name="INT", side="L"),
+            elm.IcPin(name="SDA", side="L"),
+            elm.IcPin(name="SCL", side="L"),
+        ],
+        size=(3.5, 4),
+    )
+
+
+def drv8825() -> elm.Ic:
+    """DRV8825 stepper driver carrier (Pololu / generic breakout).
+
+    Control + power on the left (facing the MCU); the two bipolar coil-output
+    pairs on the right (facing the stepper). ``VMOT`` is the motor supply
+    (battery), ``VDD`` the 3.3 V logic rail. ``nENABLE`` is active-low with an
+    external 10 kΩ pull-up. Coil pins are ordered to align with
+    :func:`stepper_nema17` when placed at the same y-center.
+    """
+    return elm.Ic(
+        pins=[
+            # Left (bottom → top): power, enable, direction, step
+            elm.IcPin(name="GND", side="L"),
+            elm.IcPin(name="VDD", side="L"),
+            elm.IcPin(name="VMOT", side="L"),
+            elm.IcPin(name="nENABLE", side="L"),
+            elm.IcPin(name="DIR", side="L"),
+            elm.IcPin(name="STEP", side="L"),
+            # Right (bottom → top): bipolar coil outputs
+            elm.IcPin(name="B2", side="R"),
+            elm.IcPin(name="B1", side="R"),
+            elm.IcPin(name="A2", side="R"),
+            elm.IcPin(name="A1", side="R"),
+        ],
+        size=(4, 6),
+    )
+
+
+def stepper_nema17() -> elm.Ic:
+    """4-wire bipolar stepper motor (NEMA17), two coils A and B.
+
+    Coil pins on the left so they face the driver when drawn to its right.
+    Pin order mirrors :func:`drv8825`'s right side so the four coil wires run
+    straight across without crossing.
+    """
+    return elm.Ic(
+        pins=[
+            elm.IcPin(name="B2", side="L"),
+            elm.IcPin(name="B1", side="L"),
+            elm.IcPin(name="A2", side="L"),
+            elm.IcPin(name="A1", side="L"),
+        ],
+        size=(2.5, 4),
+    )

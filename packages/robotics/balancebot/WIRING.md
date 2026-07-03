@@ -2,6 +2,10 @@
 
 Board: Seeed XIAO RP2350. Pin-map source of truth: `src/pin_config.h`.
 
+![Schematic](../../../docs/schematics/images/balancebot.png)
+
+Schematic source: [`docs/schematics/circuits/balancebot.py`](../../../docs/schematics/circuits/balancebot.py). Re-render with `just schematics::render-one balancebot` after pin changes.
+
 ## Overview
 
 ```

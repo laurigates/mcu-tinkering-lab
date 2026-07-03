@@ -38,18 +38,23 @@ jobs:
 
       - uses: astral-sh/setup-uv@v7
 
+      # --frozen installs the exact versions from the committed uv.lock and
+      # errors if the lock is stale, instead of resolving fresh. SVG output
+      # is version-sensitive (e.g. schemdraw 0.23 rounds path coordinates
+      # that 0.22 emits at full precision), so the freshness check below is
+      # only meaningful when the dependency set is pinned.
       - name: Install Python deps
         working-directory: docs/schematics
-        run: uv sync
+        run: uv sync --frozen
 
       - name: Render all circuits
         working-directory: docs/schematics
         run: uv run python render.py
 
-      # SVGs are byte-deterministic from schemdraw, so a diff means the
-      # author edited circuits/<name>.py without committing the regenerated
-      # image. PNG output via cairosvg is encoder-version-sensitive — we
-      # skip the strict PNG check on purpose.
+      # SVGs are byte-deterministic given the pinned dependency set (uv.lock),
+      # so a diff means the author edited circuits/<name>.py without committing
+      # the regenerated image. PNG output via cairosvg is encoder-version-
+      # sensitive — we skip the strict PNG check on purpose.
       - name: Verify SVGs are up to date
         run: |
           if ! git diff --exit-code -- 'docs/schematics/images/*.svg'; then
