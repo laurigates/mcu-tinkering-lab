@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/laurigates/mcu-tinkering-lab/compare/balancebot-v0.1.1...balancebot-v0.1.2) (2026-07-03)
+
+
+### Documentation
+
+* **balancebot:** add wiring schematic ([#364](https://github.com/laurigates/mcu-tinkering-lab/issues/364)) ([7274ac6](https://github.com/laurigates/mcu-tinkering-lab/commit/7274ac68912d59ca8a06c30c10a399ee31151fc4))
+
 ## [0.1.1](https://github.com/laurigates/mcu-tinkering-lab/compare/balancebot-v0.1.0...balancebot-v0.1.1) (2026-07-02)
 
 
