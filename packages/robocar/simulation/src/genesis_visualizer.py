@@ -9,6 +9,7 @@ import os
 import queue
 import threading
 import time
+from typing import Any
 
 # Configure matplotlib for thread safety BEFORE importing pyplot
 import matplotlib
@@ -31,9 +32,12 @@ from robot_model import DifferentialDriveRobot, RobotState
 # Detect Genesis availability WITHOUT importing the heavy stack (genesis pulls
 # torch, adding ~2s to import time). The actual import is deferred to
 # _ensure_genesis(), called lazily by methods that dereference these globals.
-gs = None
-trimesh = None
-SE3 = None
+# Typed Any so static type checkers (ty) accept attribute access after the
+# lazy import populates them; without this they infer `None` and flag every
+# gs.*/trimesh.*/SE3(...) dereference as unresolved-attribute.
+gs: Any = None
+trimesh: Any = None
+SE3: Any = None
 HAS_GENESIS = importlib.util.find_spec("genesis") is not None
 
 if not HAS_GENESIS:
