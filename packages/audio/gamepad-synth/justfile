@@ -28,17 +28,21 @@ fetch-deps:
         echo "Bluepad32 deps already present"
         exit 0
     fi
-    # Try symlinking from xbox-switch-bridge (avoids duplicate clones)
-    XBOX_BP32="$(dirname "{{bp32_ext}}")/../xbox-switch-bridge/external/bluepad32"
-    if [ -d "$XBOX_BP32/src" ]; then
+    # Try symlinking from xbox-switch-bridge (avoids duplicate clones).
+    # Keep the symlink RELATIVE so it resolves inside the container's
+    # /workspace bind mount (see .claude/rules/containerized-builds.md).
+    # xbox-switch-bridge lives under packages/input-gaming/ since the re-org.
+    XBOX_SRC="$(dirname "{{bp32_ext}}")/../../../input-gaming/xbox-switch-bridge/external/bluepad32"
+    XBOX_REL="../../../input-gaming/xbox-switch-bridge/external/bluepad32"
+    if [ -d "$XBOX_SRC/src" ]; then
         mkdir -p "$(dirname "{{bp32_ext}}")"
-        ln -sfn "$(cd "$XBOX_BP32" && pwd)" "{{bp32_ext}}"
+        ln -sfn "$XBOX_REL" "{{bp32_ext}}"
         echo "Symlinked bluepad32 from xbox-switch-bridge"
     else
         echo "xbox-switch-bridge deps not found — fetching for xbox-switch-bridge first..."
         just xbox::fetch-deps
         mkdir -p "$(dirname "{{bp32_ext}}")"
-        ln -sfn "$(cd "$XBOX_BP32" && pwd)" "{{bp32_ext}}"
+        ln -sfn "$XBOX_REL" "{{bp32_ext}}"
         echo "Symlinked bluepad32 from xbox-switch-bridge"
     fi
 
