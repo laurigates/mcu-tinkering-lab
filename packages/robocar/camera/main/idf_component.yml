@@ -1,11 +1,11 @@
 ## IDF Component Manager Manifest File
 dependencies:
-  ## Required IDF version (ESP-IDF 6.0)
+  ## Required IDF version
   idf:
-    version: '>=6.0.0'
-  # ESP32 Camera component (latest compatible with ESP-IDF 6.0)
+    version: '>=5.4'
+  # ESP32 Camera component
   espressif/esp32-camera: '^2.0.0'
-  # mDNS component (latest compatible with ESP-IDF 6.0)
+  # mDNS component
   espressif/mdns: '^1.8.0'
   # Note: fishwaldo/esp_ghota is now provided transitively by the shared
   # ota_github component (see packages/components/ota-github).

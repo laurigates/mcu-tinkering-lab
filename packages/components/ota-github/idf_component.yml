@@ -11,4 +11,6 @@ dependencies:
   # PULL-mode source (src/ota_github_pull.c). If you only use TRIGGERED
   # mode you can still build, but the symbol references are resolved at
   # link time so this dependency is always pulled.
-  fishwaldo/esp_ghota: '>=0.0.3'
+  fishwaldo/esp_ghota:
+    git: https://github.com/FishWaldo/esp_ghota.git
+    version: 'v1.0.0'
