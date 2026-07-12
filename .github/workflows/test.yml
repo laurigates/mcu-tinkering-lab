@@ -93,6 +93,15 @@ jobs:
           path: ~/.cache/pre-commit
           key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
 
+      # Install the simulation dev dependencies so the `ty check src/` pre-commit
+      # hook can resolve imports and perform deep attribute checks. Without this,
+      # ty only sees unresolved-import and silently skips the real type errors,
+      # making the gate a no-op in CI while it is RED for a developer with the
+      # sim deps installed (local<->CI parity gap, issue #369).
+      - name: Sync simulation dev dependencies (for ty pre-commit hook)
+        working-directory: packages/robocar/simulation
+        run: uv sync --extra dev
+
       - name: Run pre-commit hooks
         run: pre-commit run --all-files --show-diff-on-failure
 

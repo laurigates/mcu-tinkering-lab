@@ -164,7 +164,7 @@ GUIDELINES:
         _, buffer = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, 85])
 
         # Convert to base64
-        image_base64 = base64.b64encode(buffer).decode("utf-8")
+        image_base64 = base64.b64encode(buffer.tobytes()).decode("utf-8")
         return image_base64
 
     async def process_command(self, user_input: str, robot_context: RobotContext) -> AICommand:
