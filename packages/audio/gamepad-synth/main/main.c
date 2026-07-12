@@ -312,6 +312,9 @@ volatile settings_t s_settings = {
 volatile bool s_settings_edit_active = false;
 volatile int s_settings_cursor = 0;
 
+/* NVS namespace for persisted settings-page values. */
+#define SETTINGS_NVS_NAMESPACE "gpsynth"
+
 /* Settings edit input debounce tracking (rising-edge and d-pad repeat) */
 #define SETTINGS_DPAD_REPEAT_MS 200
 
@@ -1391,6 +1394,101 @@ static void init_nvs(void)
     ESP_ERROR_CHECK(ret);
 }
 
+/* Bounds-clamp helpers are defined later in the file; forward-declare them so
+ * the NVS load path can clamp values read back from flash. */
+static inline float clampf(float v, float lo, float hi);
+static inline int clampi(int v, int lo, int hi);
+
+/* ── Settings Persistence (NVS) ──────────────────────────────
+ *
+ * Settings-page values live in RAM (s_settings) and are written to NVS only on
+ * exit from the settings-edit overlay, to limit flash wear. On boot they are
+ * loaded over the compiled-in defaults. Each field gets its own key (robust to
+ * future field additions); floats go through a non-volatile local because
+ * s_settings is `volatile` and passing &s_settings.<float> to nvs_*_blob would
+ * discard the qualifier under the build's strict flags.
+ */
+static void settings_save_to_nvs(void)
+{
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open(SETTINGS_NVS_NAMESPACE, NVS_READWRITE, &handle);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "settings_save: nvs_open failed: %s", esp_err_to_name(err));
+        return;
+    }
+
+    float tmp;
+    tmp = s_settings.master_volume;
+    nvs_set_blob(handle, "master_vol", &tmp, sizeof(tmp));
+    nvs_set_i32(handle, "drum_ptn", s_settings.drum_pattern);
+    nvs_set_i32(handle, "drum_bpm", s_settings.drum_tempo_bpm);
+    tmp = s_settings.drum_volume;
+    nvs_set_blob(handle, "drum_vol", &tmp, sizeof(tmp));
+    tmp = s_settings.lfo_rate_hz;
+    nvs_set_blob(handle, "lfo_rate", &tmp, sizeof(tmp));
+    tmp = s_settings.lfo_depth;
+    nvs_set_blob(handle, "lfo_depth", &tmp, sizeof(tmp));
+    nvs_set_i32(handle, "lfo_tgt", s_settings.lfo_target);
+    nvs_set_u8(handle, "voice", s_settings.voice_announce ? 1 : 0);
+
+    err = nvs_commit(handle);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "settings_save: nvs_commit failed: %s", esp_err_to_name(err));
+    } else {
+        ESP_LOGI(TAG, "Settings saved to NVS");
+    }
+    nvs_close(handle);
+}
+
+static void settings_load_from_nvs(void)
+{
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open(SETTINGS_NVS_NAMESPACE, NVS_READONLY, &handle);
+    if (err != ESP_OK) {
+        /* A missing store on first boot is normal, not an error. */
+        ESP_LOGI(TAG, "settings_load: no saved settings (%s), using defaults",
+                 esp_err_to_name(err));
+        return;
+    }
+
+    int32_t i32;
+    uint8_t u8;
+    float tmp;
+    size_t blob_len;
+
+    blob_len = sizeof(tmp);
+    if (nvs_get_blob(handle, "master_vol", &tmp, &blob_len) == ESP_OK) {
+        s_settings.master_volume = clampf(tmp, 0.0f, 1.0f);
+    }
+    if (nvs_get_i32(handle, "drum_ptn", &i32) == ESP_OK) {
+        s_settings.drum_pattern = clampi(i32, 0, 4);
+    }
+    if (nvs_get_i32(handle, "drum_bpm", &i32) == ESP_OK) {
+        s_settings.drum_tempo_bpm = clampi(i32, 60, 200);
+    }
+    blob_len = sizeof(tmp);
+    if (nvs_get_blob(handle, "drum_vol", &tmp, &blob_len) == ESP_OK) {
+        s_settings.drum_volume = clampf(tmp, 0.0f, 1.0f);
+    }
+    blob_len = sizeof(tmp);
+    if (nvs_get_blob(handle, "lfo_rate", &tmp, &blob_len) == ESP_OK) {
+        s_settings.lfo_rate_hz = clampf(tmp, LFO_RATE_MIN, LFO_RATE_MAX);
+    }
+    blob_len = sizeof(tmp);
+    if (nvs_get_blob(handle, "lfo_depth", &tmp, &blob_len) == ESP_OK) {
+        s_settings.lfo_depth = clampf(tmp, 0.0f, 1.0f);
+    }
+    if (nvs_get_i32(handle, "lfo_tgt", &i32) == ESP_OK) {
+        s_settings.lfo_target = clampi(i32, LFO_TARGET_NONE, LFO_TARGET_BOTH);
+    }
+    if (nvs_get_u8(handle, "voice", &u8) == ESP_OK) {
+        s_settings.voice_announce = (u8 != 0);
+    }
+
+    nvs_close(handle);
+    ESP_LOGI(TAG, "Settings loaded from NVS");
+}
+
 /* ── Startup Jingle (blocking, runs before tasks) ────────── */
 
 static void play_startup_jingle(void)
@@ -2061,6 +2159,7 @@ static void control_task(void *arg)
             } else {
                 synth_blip(BLIP_FREQ_DOWN);
                 ESP_LOGI(TAG, "Settings edit: EXIT");
+                settings_save_to_nvs();
             }
         }
 
@@ -2157,6 +2256,10 @@ void app_main(void)
     s_settings.voice_announce = true;
     s_settings_edit_active = false;
     s_settings_cursor = 0;
+
+    /* Load any persisted settings over the defaults before the jingle. */
+    settings_load_from_nvs();
+
     ESP_LOGI(TAG,
              "Settings: master_vol=%.2f drum_ptn=%d drum_bpm=%d drum_vol=%.2f "
              "lfo_rate=%.1f lfo_depth=%.2f lfo_tgt=%d voice=%d",
