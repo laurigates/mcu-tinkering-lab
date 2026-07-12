@@ -1,7 +1,13 @@
 {
-  "version": "1.0.0",
+  "version": "1.0.1",
   "source_document": "docs/requirements/PRD-001-ai-robot-car-system.md",
-  "last_synced_at": "2026-04-05T00:00:00Z",
+  "source_documents": [
+    "docs/requirements/PRD-001-ai-robot-car-system.md",
+    "docs/requirements/PRD-002-esp32cam-vision-ai-backend.md",
+    "docs/requirements/PRD-003-robot-physics-simulation.md",
+    "docs/requirements/PRD-011-melody-detector.md"
+  ],
+  "last_synced_at": "2026-07-12T00:00:00Z",
   "features": [
     {
       "id": "FR-001",
@@ -158,7 +164,7 @@
   ],
   "summary": {
     "total": 19,
-    "active": 12,
+    "active": 13,
     "planned": 6,
     "in_progress": 0,
     "blocked": 0

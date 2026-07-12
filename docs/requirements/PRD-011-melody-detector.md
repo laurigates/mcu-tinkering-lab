@@ -1,10 +1,13 @@
+---
+id: PRD-011
+title: Melody Detector
+status: draft
+created: 2026-04-26
+---
+
 # PRD-011: Melody Detector
 
-**Status**: draft
-**Created**: 2026-04-26
 **Confidence**: 7/10
-
----
 
 ## Overview
 
