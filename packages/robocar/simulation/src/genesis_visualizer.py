@@ -4,26 +4,17 @@ Genesis Visualizer for ESP32 Robot Car Simulation
 This module provides 3D visualization using the Genesis simulation framework.
 """
 
+import importlib.util
 import os
 import queue
 import threading
 import time
-
-import numpy as np
-import yaml
-
-try:
-    import genesis as gs
-    import trimesh
-    from spatialmath import SE3
-
-    HAS_GENESIS = True
-except ImportError:
-    HAS_GENESIS = False
-    print("Info: Genesis simulation framework not available - using matplotlib fallback")
+from typing import Any
 
 # Configure matplotlib for thread safety BEFORE importing pyplot
 import matplotlib
+import numpy as np
+import yaml
 
 # Use Agg backend for headless, TkAgg for GUI (with main thread requirement)
 if "DISPLAY" not in os.environ or os.environ.get("TERM_PROGRAM") == "vscode":
@@ -37,6 +28,29 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 
 from robot_model import DifferentialDriveRobot, RobotState
+
+# Detect Genesis availability WITHOUT importing the heavy stack (genesis pulls
+# torch, adding ~2s to import time). The actual import is deferred to
+# _ensure_genesis(), called lazily by methods that dereference these globals.
+# Typed Any so static type checkers (ty) accept attribute access after the
+# lazy import populates them; without this they infer `None` and flag every
+# gs.*/trimesh.*/SE3(...) dereference as unresolved-attribute.
+gs: Any = None
+trimesh: Any = None
+SE3: Any = None
+HAS_GENESIS = importlib.util.find_spec("genesis") is not None
+
+if not HAS_GENESIS:
+    print("Info: Genesis simulation framework not available - using matplotlib fallback")
+
+
+def _ensure_genesis():
+    """Import the heavy Genesis stack into module globals on first use."""
+    global gs, trimesh, SE3
+    if gs is None:
+        import genesis as gs
+        import trimesh
+        from spatialmath import SE3
 
 
 class MatplotlibVisualizer:
@@ -226,6 +240,7 @@ class RobotVisualizer:
 
     def _init_genesis_environment(self):
         """Initialize Genesis simulation environment"""
+        _ensure_genesis()
         try:
             print(f"Initializing Genesis in {self.viz_mode} mode...")
 
@@ -261,6 +276,7 @@ class RobotVisualizer:
 
     def _create_environment(self):
         """Create the simulation environment"""
+        _ensure_genesis()
         if not self.scene:
             return
 
@@ -281,6 +297,7 @@ class RobotVisualizer:
 
     def _create_obstacle(self, obstacle: dict, index: int):
         """Create obstacle in the environment"""
+        _ensure_genesis()
         if not self.scene:
             return
         pos = obstacle["position"]
@@ -306,6 +323,7 @@ class RobotVisualizer:
 
     def _add_coordinate_axes(self):
         """Add coordinate axes to the environment"""
+        _ensure_genesis()
         if not self.scene:
             return
 
@@ -339,6 +357,7 @@ class RobotVisualizer:
 
     def _create_robot_model(self):
         """Create 3D model of the robot"""
+        _ensure_genesis()
         if not self.scene:
             return
 
@@ -411,6 +430,7 @@ class RobotVisualizer:
 
     def _update_robot_state(self, state: RobotState):
         """Update robot visualization with new state"""
+        _ensure_genesis()
         if not self.scene:
             return
 
@@ -493,6 +513,7 @@ class RobotVisualizer:
 
     def _update_sensor_visualization(self, state: RobotState):
         """Update sensor visualization"""
+        _ensure_genesis()
         if not self.scene:
             return
 
@@ -511,6 +532,7 @@ class RobotVisualizer:
 
     def add_trajectory_point(self, x: float, y: float, color: list[float] | None = None):
         """Add a trajectory point marker"""
+        _ensure_genesis()
         if color is None:
             color = [1.0, 1.0, 1.0]
         if not self.scene:
@@ -522,6 +544,7 @@ class RobotVisualizer:
 
     def add_waypoint(self, x: float, y: float, z: float = 0.1):
         """Add a waypoint marker"""
+        _ensure_genesis()
         if not self.scene:
             return
         self.scene.add_entity(
@@ -571,6 +594,7 @@ class RobotVisualizer:
 
     def _create_simple_robot_visualization(self):
         """Create a simple robot visualization for testing"""
+        _ensure_genesis()
         if not self.env:  # ty: ignore[unresolved-attribute]
             return
 
