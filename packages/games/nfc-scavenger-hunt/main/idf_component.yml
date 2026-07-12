@@ -1,0 +1,6 @@
+## IDF Component Manager Manifest File
+dependencies:
+  idf:
+    version: '>=5.4'
+  # mDNS is a managed component in IDF 5.x (main REQUIRES mdns)
+  espressif/mdns: '^1.8.0'

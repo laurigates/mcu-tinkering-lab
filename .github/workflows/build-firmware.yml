@@ -18,6 +18,12 @@ permissions:
 env:
   IDF_VERSION: 'v5.4'
 
+# Collapse the duplicate full-matrix runs produced when many releases are
+# published in one batch — keep only the latest run per release tag.
+concurrency:
+  group: build-firmware-${{ github.event.release.tag_name || inputs.release_tag }}
+  cancel-in-progress: true
+
 jobs:
   discover-projects:
     name: Discover flasher-enabled projects

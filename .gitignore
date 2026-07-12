@@ -42,6 +42,7 @@ target/
 sdkconfig
 sdkconfig.old
 managed_components/
+dependencies.lock
 
 # Credentials and sensitive files
 **/credentials.h
