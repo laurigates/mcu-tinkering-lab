@@ -290,7 +290,7 @@ class PhysicsEngine:
         # Perform segment query (raycast)
         query_info = self.space.segment_query_first(start_pos, end_pos, 0, pymunk.ShapeFilter())
 
-        if query_info.shape:
+        if query_info is not None and query_info.shape:
             # Calculate distance to hit point
             hit_point = query_info.point
             distance = np.sqrt(

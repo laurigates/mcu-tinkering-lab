@@ -141,8 +141,12 @@ class ESP32CommunicationBridge:
 
         print(f"Starting WebSocket server on {host}:{port}")
 
-        async def handle_client(websocket, path):
-            """Handle WebSocket client connections"""
+        async def handle_client(websocket):
+            """Handle WebSocket client connections.
+
+            websockets >=14 invokes the handler with a single connection
+            argument; the legacy ``path`` parameter was removed.
+            """
             self.clients.add(websocket)
             print(f"Client connected: {websocket.remote_address}")
 

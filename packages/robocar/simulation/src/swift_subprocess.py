@@ -33,12 +33,18 @@ async def run_swift():
 
     # Add simple test objects
     test_box = trimesh.primitives.Box(extents=[0.15, 0.10, 0.05])
-    test_box.visual.face_colors = [100, 150, 200, 255]
+    box_color = [100, 150, 200, 255]
+    # ty: trimesh stubs type .visual as ColorVisuals|TextureVisuals|None;
+    # primitives return ColorVisuals, whose face_colors is settable.
+    test_box.visual.face_colors = box_color  # ty: ignore[invalid-assignment]
     env.add(test_box)
 
     # Add direction indicator
     arrow = trimesh.primitives.Cylinder(radius=0.01, height=0.08, transform=SE3(0.06, 0, 0.03).A)
-    arrow.visual.face_colors = [255, 0, 0, 255]
+    arrow_color = [255, 0, 0, 255]
+    # ty: trimesh stubs type .visual as ColorVisuals|TextureVisuals|None;
+    # primitives return ColorVisuals, whose face_colors is settable.
+    arrow.visual.face_colors = arrow_color  # ty: ignore[invalid-assignment]
     env.add(arrow)
 
     print("✓ Robot visualization created")

@@ -181,7 +181,7 @@ class MatplotlibVisualizer:
         self._running = False
         if self.enabled and hasattr(self, "fig"):
             try:
-                if hasattr(self, "anim"):
+                if hasattr(self, "anim") and self.anim.event_source is not None:
                     self.anim.event_source.stop()
                 plt.close(self.fig)
                 print("✓ Matplotlib visualization closed")

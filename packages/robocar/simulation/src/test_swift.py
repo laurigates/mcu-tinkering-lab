@@ -42,7 +42,10 @@ def test_browser_mode():
 
             # Add a simple test object
             test_box = trimesh.primitives.Box(extents=[0.1, 0.1, 0.1])
-            test_box.visual.face_colors = [255, 0, 0, 255]  # Red
+            box_color = [255, 0, 0, 255]  # Red
+            # ty: trimesh stubs type .visual as ColorVisuals|TextureVisuals|None;
+            # primitives return ColorVisuals, whose face_colors is settable.
+            test_box.visual.face_colors = box_color  # ty: ignore[invalid-assignment]
             env.add(test_box)
             print("✓ Test object added")
 
@@ -98,7 +101,10 @@ def test_visual_mode():
 
             # Add a simple test object
             test_cylinder = trimesh.primitives.Cylinder(radius=0.05, height=0.2)
-            test_cylinder.visual.face_colors = [0, 255, 0, 255]  # Green
+            cylinder_color = [0, 255, 0, 255]  # Green
+            # ty: trimesh stubs type .visual as ColorVisuals|TextureVisuals|None;
+            # primitives return ColorVisuals, whose face_colors is settable.
+            test_cylinder.visual.face_colors = cylinder_color  # ty: ignore[invalid-assignment]
             env.add(test_cylinder)
             print("✓ Test object added")
 
@@ -149,7 +155,10 @@ def test_headless_mode():
 
             # Add a simple test object
             test_sphere = trimesh.primitives.Sphere(radius=0.05)
-            test_sphere.visual.face_colors = [0, 0, 255, 255]  # Blue
+            sphere_color = [0, 0, 255, 255]  # Blue
+            # ty: trimesh stubs type .visual as ColorVisuals|TextureVisuals|None;
+            # primitives return ColorVisuals, whose face_colors is settable.
+            test_sphere.visual.face_colors = sphere_color  # ty: ignore[invalid-assignment]
             env.add(test_sphere)
             print("✓ Test object added")
 
