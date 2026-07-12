@@ -30,8 +30,14 @@
   "feature_tracker": {
     "file": "feature-tracker.json",
     "source_document": "docs/requirements/PRD-001-ai-robot-car-system.md",
+    "source_documents": [
+      "docs/requirements/PRD-001-ai-robot-car-system.md",
+      "docs/requirements/PRD-002-esp32cam-vision-ai-backend.md",
+      "docs/requirements/PRD-003-robot-physics-simulation.md",
+      "docs/requirements/PRD-011-melody-detector.md"
+    ],
     "sync_targets": [
-      "docs/feature-tracker.md"
+      "docs/blueprint/feature-tracker.md"
     ]
   },
   "generated": {

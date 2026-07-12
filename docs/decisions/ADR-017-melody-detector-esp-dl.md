@@ -1,10 +1,13 @@
+---
+id: ADR-017
+title: ESP-DL for On-Device Vision in Melody Detector
+status: proposed
+created: 2026-04-26
+---
+
 # ADR-017: ESP-DL for On-Device Vision in Melody Detector
 
-**Status**: proposed
-**Date**: 2026-04-26
 **Confidence**: 8/10
-
----
 
 ## Context
 
