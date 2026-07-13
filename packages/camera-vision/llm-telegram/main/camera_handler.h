@@ -13,7 +13,7 @@ typedef struct {
     uint32_t capture_count;
     uint32_t error_count;
     size_t last_frame_size;
-} camera_status_t;
+} camera_handler_status_t;
 
 // Camera capture callback
 typedef void (*camera_capture_cb)(const uint8_t *data, size_t size, void *user_data);
@@ -37,7 +37,7 @@ esp_err_t camera_start_capture(uint32_t interval_ms, camera_capture_cb callback,
 esp_err_t camera_stop_capture(void);
 
 // Get camera status
-camera_status_t camera_get_status(void);
+camera_handler_status_t camera_get_status(void);
 
 // Adjust camera settings
 esp_err_t camera_set_quality(int quality);

@@ -219,7 +219,7 @@ static void process_telegram_command(const char *command, const char *args)
         motor_stop();
         telegram_send_text(&telegram_bot, "✅ Stopped");
     } else if (strcmp(command, "status") == 0) {
-        camera_status_t cam_status = camera_get_status();
+        camera_handler_status_t cam_status = camera_get_status();
         motor_status_t motor_status = motor_get_status();
         vision_interpreter_t vision_status = vision_get_status();
 
@@ -244,7 +244,7 @@ static void process_telegram_command(const char *command, const char *args)
     } else if (strcmp(command, "auto") == 0) {
         if (strcmp(args, "on") == 0) {
             app_config.auto_capture_enabled = true;
-            camera_status_t auto_cam_status = camera_get_status();
+            camera_handler_status_t auto_cam_status = camera_get_status();
             if (!auto_cam_status.is_capturing) {
                 camera_start_capture(app_config.capture_interval_ms, camera_capture_callback, NULL);
             }

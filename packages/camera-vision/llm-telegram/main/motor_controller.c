@@ -107,7 +107,7 @@ esp_err_t motor_execute_command(motor_command_t command, int speed, uint32_t dur
         return ESP_ERR_INVALID_STATE;
     }
 
-    ESP_LOGI(TAG, "Executing command: %s, speed: %d, duration: %d ms",
+    ESP_LOGI(TAG, "Executing command: %s, speed: %d, duration: %" PRIu32 " ms",
              motor_get_command_name(command), speed, duration_ms);
 
     motor_status.current_command = command;

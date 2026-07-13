@@ -1,4 +1,5 @@
 #include "camera_handler.h"
+#include <inttypes.h>
 #include <string.h>
 #include "config.h"
 #include "esp_log.h"
@@ -28,7 +29,7 @@ static const char *TAG = "CAMERA_HANDLER";
 #define PCLK_GPIO_NUM 22
 
 // Camera state
-static camera_status_t camera_status = {0};
+static camera_handler_status_t camera_status = {0};
 static SemaphoreHandle_t camera_mutex = NULL;
 static TaskHandle_t capture_task_handle = NULL;
 static camera_capture_cb capture_callback = NULL;
@@ -234,7 +235,7 @@ esp_err_t camera_start_capture(uint32_t interval_ms, camera_capture_cb callback,
     xTaskCreate(camera_capture_task, "camera_capture", 4096, NULL, CAMERA_TASK_PRIORITY,
                 &capture_task_handle);
 
-    ESP_LOGI(TAG, "Started continuous capture with interval %d ms", interval_ms);
+    ESP_LOGI(TAG, "Started continuous capture with interval %" PRIu32 " ms", interval_ms);
     return ESP_OK;
 }
 
@@ -259,7 +260,7 @@ esp_err_t camera_stop_capture(void)
 }
 
 // Get camera status
-camera_status_t camera_get_status(void)
+camera_handler_status_t camera_get_status(void)
 {
     return camera_status;
 }
