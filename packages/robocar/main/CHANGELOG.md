@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.3](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-main-v0.1.2...robocar-main-v0.1.3) (2026-07-13)
+
+
+### Bug Fixes
+
+* **build-firmware:** resolve release firmware build failures blocking web flasher deploy ([ac3cd9b](https://github.com/laurigates/mcu-tinkering-lab/commit/ac3cd9be0e7fa5f1e71064ca06916702ddbb67d2)), closes [#362](https://github.com/laurigates/mcu-tinkering-lab/issues/362)
+* **robocar-main:** correct uint32_t/int32_t log format specifiers ([8f93f45](https://github.com/laurigates/mcu-tinkering-lab/commit/8f93f4589b37c6bde901d1cadca3ccfeefc749fa))
+
 ## [0.1.2](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-main-v0.1.1...robocar-main-v0.1.2) (2026-07-02)
 
 
