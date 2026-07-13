@@ -19,9 +19,11 @@
 
 #include "leader_election.h"
 
+#include <inttypes.h>
 #include <string.h>
 
 #include "esp_log.h"
+#include "esp_mac.h"
 
 static const char *TAG = "election";
 

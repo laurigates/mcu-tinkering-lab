@@ -264,7 +264,7 @@ static void orchestrate_main_controller_update(void *pvParameters)
 
     /* Step 5: Send OTA begin with release tag. */
     char release_tag[OTA_TAG_MAX_LEN];
-    snprintf(release_tag, sizeof(release_tag), "v%s", latest_str);
+    snprintf(release_tag, sizeof(release_tag), "v%.*s", (int)(sizeof(release_tag) - 2), latest_str);
 
     ret = i2c_send_begin_ota(release_tag, NULL);
     if (ret != ESP_OK) {

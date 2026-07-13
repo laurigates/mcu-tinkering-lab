@@ -5,9 +5,11 @@
 
 #include "group_manager.h"
 
+#include <inttypes.h>
 #include <string.h>
 
 #include "esp_log.h"
+#include "esp_mac.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 

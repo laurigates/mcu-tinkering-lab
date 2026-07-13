@@ -16,6 +16,15 @@ extern "C" {
 #endif
 
 /**
+ * @brief Callback invoked when a message arrives on a subscribed topic
+ *
+ * @param topic Topic the message was received on
+ * @param data Message payload (not NUL-terminated; use data_len)
+ * @param data_len Length of the payload in bytes
+ */
+typedef void (*mqtt_logger_command_cb_t)(const char *topic, const char *data, int data_len);
+
+/**
  * @brief MQTT Logger configuration structure
  */
 typedef struct {
@@ -102,6 +111,26 @@ esp_err_t mqtt_logger_logf(esp_log_level_t level, const char *tag, const char *f
  * @return ESP_OK on success, error code otherwise
  */
 esp_err_t mqtt_logger_publish_status(const char *status_json);
+
+/**
+ * @brief Publish an arbitrary payload to an arbitrary topic
+ *
+ * @param topic Topic to publish to
+ * @param payload Message payload (NUL-terminated string)
+ * @param qos QoS level (0, 1, or 2)
+ * @param retain Whether the broker should retain the message
+ * @return ESP_OK on success, error code otherwise
+ */
+esp_err_t mqtt_logger_publish(const char *topic, const char *payload, int qos, bool retain);
+
+/**
+ * @brief Subscribe to a topic and register a callback for incoming messages
+ *
+ * @param topic Topic to subscribe to
+ * @param callback Callback invoked when a message arrives on the topic
+ * @return ESP_OK on success, error code otherwise
+ */
+esp_err_t mqtt_logger_subscribe(const char *topic, mqtt_logger_command_cb_t callback);
 
 /**
  * @brief Get MQTT logger statistics
