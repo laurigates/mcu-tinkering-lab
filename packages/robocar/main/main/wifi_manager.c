@@ -7,6 +7,7 @@
  */
 
 #include "wifi_manager.h"
+#include <inttypes.h>
 #include <math.h>
 #include <string.h>
 #include "esp_event.h"
@@ -714,8 +715,8 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
                 notify_state_change(WIFI_STATE_RECONNECTING);
 
                 uint32_t delay = calculate_backoff_delay(g_wifi_context.retry_count);
-                ESP_LOGI(TAG, "Reconnection attempt %d/%d in %d ms", g_wifi_context.retry_count,
-                         WIFI_MAXIMUM_RETRY, delay);
+                ESP_LOGI(TAG, "Reconnection attempt %" PRIu32 "/%d in %" PRIu32 " ms",
+                         g_wifi_context.retry_count, WIFI_MAXIMUM_RETRY, delay);
 
                 esp_timer_stop(g_wifi_context.reconnect_timer);
                 esp_timer_start_once(g_wifi_context.reconnect_timer, delay * 1000);
@@ -736,7 +737,7 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
             break;
 
         default:
-            ESP_LOGD(TAG, "Unhandled WiFi event: %d", event_id);
+            ESP_LOGD(TAG, "Unhandled WiFi event: %" PRId32, event_id);
             break;
     }
 }
