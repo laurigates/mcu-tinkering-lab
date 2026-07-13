@@ -39,6 +39,8 @@ typedef struct {
     bool initialized;
     bool connected;
     TaskHandle_t log_task_handle;
+    char *sub_topic;                  ///< Extra subscribed topic (optional)
+    mqtt_logger_command_cb_t sub_cb;  ///< Callback for sub_topic messages
 } mqtt_logger_context_t;
 
 static mqtt_logger_context_t s_context = {0};
@@ -206,6 +208,7 @@ esp_err_t mqtt_logger_deinit(void)
         free((void *)s_context.config.username);
     if (s_context.config.password)
         free((void *)s_context.config.password);
+    free(s_context.sub_topic);
 
     memset(&s_context, 0, sizeof(s_context));
 
@@ -264,6 +267,56 @@ esp_err_t mqtt_logger_publish_status(const char *status_json)
         s_context.stats.messages_failed++;
         xSemaphoreGive(s_context.mutex);
         return ESP_FAIL;
+    }
+
+    return ESP_OK;
+}
+
+esp_err_t mqtt_logger_publish(const char *topic, const char *payload, int qos, bool retain)
+{
+    if (!s_context.initialized || !s_context.connected) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (!topic || !payload) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    int msg_id =
+        esp_mqtt_client_publish(s_context.client, topic, payload, strlen(payload), qos, retain);
+
+    if (msg_id < 0) {
+        xSemaphoreTake(s_context.mutex, pdMS_TO_TICKS(SEMAPHORE_TIMEOUT_MS));
+        s_context.stats.messages_failed++;
+        xSemaphoreGive(s_context.mutex);
+        return ESP_FAIL;
+    }
+
+    return ESP_OK;
+}
+
+esp_err_t mqtt_logger_subscribe(const char *topic, mqtt_logger_command_cb_t callback)
+{
+    if (!s_context.initialized) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (!topic || !callback) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    // Store the subscription so it can be (re-)applied on every connect.
+    free(s_context.sub_topic);
+    s_context.sub_topic = strdup(topic);
+    if (!s_context.sub_topic) {
+        return ESP_ERR_NO_MEM;
+    }
+    s_context.sub_cb = callback;
+
+    // Subscribe immediately if already connected; otherwise the connect
+    // handler will apply it once the session is established.
+    if (s_context.connected) {
+        esp_mqtt_client_subscribe(s_context.client, s_context.sub_topic, 1);
     }
 
     return ESP_OK;
@@ -347,6 +400,11 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
                 esp_mqtt_client_subscribe(s_context.client, s_context.config.command_topic, 1);
             }
 
+            // Re-apply any user subscription registered via mqtt_logger_subscribe
+            if (s_context.sub_topic) {
+                esp_mqtt_client_subscribe(s_context.client, s_context.sub_topic, 1);
+            }
+
             // Publish online status
             char status_msg[128];
             snprintf(status_msg, sizeof(status_msg),
@@ -380,9 +438,15 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
 
         case MQTT_EVENT_DATA:
             // Handle remote commands
-            if (strncmp(event->topic, s_context.config.command_topic, event->topic_len) == 0) {
+            if (s_context.config.command_topic &&
+                strncmp(event->topic, s_context.config.command_topic, event->topic_len) == 0) {
                 ESP_LOGI(TAG, "Received command: %.*s", event->data_len, event->data);
                 // TODO: Implement command processing
+            }
+            // Dispatch to a user subscription registered via mqtt_logger_subscribe
+            if (s_context.sub_topic && s_context.sub_cb &&
+                strncmp(event->topic, s_context.sub_topic, event->topic_len) == 0) {
+                s_context.sub_cb(s_context.sub_topic, event->data, event->data_len);
             }
             break;
 
