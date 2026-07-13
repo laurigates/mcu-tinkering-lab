@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.3](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-simulation-v0.1.2...robocar-simulation-v0.1.3) (2026-07-13)
+
+
+### Bug Fixes
+
+* **robocar-sim:** close ty local/CI parity gap and fix real type errors ([d72ced9](https://github.com/laurigates/mcu-tinkering-lab/commit/d72ced90a76867e99eba6519c1432e0ba30a5df6)), closes [#369](https://github.com/laurigates/mcu-tinkering-lab/issues/369)
+
+
+### Performance Improvements
+
+* **robocar-sim:** make Genesis/torch import lazy in genesis_visualizer ([#368](https://github.com/laurigates/mcu-tinkering-lab/issues/368)) ([1ae7c11](https://github.com/laurigates/mcu-tinkering-lab/commit/1ae7c11ff8ce8be2309f1cc848200806a15b475b))
+
 ## [0.1.2](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-simulation-v0.1.1...robocar-simulation-v0.1.2) (2026-07-02)
 
 

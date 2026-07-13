@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.3](https://github.com/laurigates/mcu-tinkering-lab/compare/gamepad-synth-v0.1.2...gamepad-synth-v0.1.3) (2026-07-13)
+
+
+### Features
+
+* **gamepad-synth:** persist settings to NVS across boots ([#367](https://github.com/laurigates/mcu-tinkering-lab/issues/367)) ([c3af7dc](https://github.com/laurigates/mcu-tinkering-lab/commit/c3af7dcfa9aa85362bf48fa756e6e34b39430736)), closes [#266](https://github.com/laurigates/mcu-tinkering-lab/issues/266)
+
+
+### Bug Fixes
+
+* **gamepad-synth:** correct fetch-deps xbox-switch-bridge path and use relative symlink ([#366](https://github.com/laurigates/mcu-tinkering-lab/issues/366)) ([a777dde](https://github.com/laurigates/mcu-tinkering-lab/commit/a777dde8082718e3fdbccde1ce878c12fc95cf68)), closes [#269](https://github.com/laurigates/mcu-tinkering-lab/issues/269)
+
 ## [0.1.2](https://github.com/laurigates/mcu-tinkering-lab/compare/gamepad-synth-v0.1.1...gamepad-synth-v0.1.2) (2026-07-02)
 
 

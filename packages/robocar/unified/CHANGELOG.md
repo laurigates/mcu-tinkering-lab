@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.3](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.1.2...robocar-unified-v0.1.3) (2026-07-13)
+
+
+### Documentation
+
+* codify build-guide generation as a reusable skill + Typst template ([8aa3a82](https://github.com/laurigates/mcu-tinkering-lab/commit/8aa3a8223f2d14ed1f54977035e0449034c0c4a9))
+* **robocar-unified:** add printable Typst build guide ([618f4a7](https://github.com/laurigates/mcu-tinkering-lab/commit/618f4a774de8efc920881a60bce9cd0f795ad601))
+
 ## [0.1.2](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.1.1...robocar-unified-v0.1.2) (2026-07-02)
 
 
