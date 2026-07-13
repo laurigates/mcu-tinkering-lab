@@ -1,124 +1,34 @@
 // robocar-unified — Printable Build Guide
-// Build with:  typst compile build-guide.typ
-// Pin data mirrors main/pin_config.h (authoritative). Keep in sync on pin changes.
+//
+// Build with the repo root as the sandbox root so the shared template and
+// schematic image resolve:
+//   typst compile --root ../../../.. build-guide.typ
+//
+// Styling + helpers come from tools/typst/build-guide.typ. Pin data mirrors
+// main/pin_config.h (authoritative) — keep in sync on pin changes.
 
-#let version = "0.1.2"
-#let accent = rgb("#1f6feb")
-#let accent-soft = rgb("#e8f0fe")
-#let ink = rgb("#1a1a1a")
-#let muted = rgb("#6a737d")
-#let rule = rgb("#d0d7de")
+#import "../../../../tools/typst/build-guide.typ": guide, callout, htable, theme
 
-#set document(title: "robocar-unified Build Guide", author: "MCU Tinkering Lab")
-#set page(
-  paper: "a4",
-  margin: (top: 2.2cm, bottom: 2cm, x: 1.9cm),
-  header: context {
-    if counter(page).get().first() > 1 [
-      #set text(9pt, fill: muted)
-      #grid(columns: (1fr, 1fr),
-        align(left)[robocar-unified — Build Guide],
-        align(right)[XIAO ESP32-S3 Sense · v#version],
-      )
-      #line(length: 100%, stroke: 0.5pt + rule)
-    ]
-  },
-  footer: context {
-    set text(9pt, fill: muted)
-    grid(columns: (1fr, 1fr),
-      align(left)[MCU Tinkering Lab],
-      align(right)[#counter(page).display("1 / 1", both: true)],
-    )
-  },
-)
-
-#set text(font: ("Libertinus Serif", "DejaVu Serif"), size: 10.5pt, fill: ink)
-#set par(justify: true, leading: 0.62em)
-#show heading: set text(fill: ink)
-#show heading.where(level: 1): it => {
-  v(0.4em)
-  block(text(16pt, weight: "bold", fill: accent)[#it.body])
-  v(0.15em)
-  line(length: 100%, stroke: 1pt + accent)
-  v(0.35em)
-}
-#show heading.where(level: 2): it => {
-  v(0.35em)
-  block(text(12.5pt, weight: "bold")[#it.body])
-  v(0.1em)
-}
-#show heading.where(level: 3): it => block(text(11pt, weight: "bold", fill: accent.darken(10%))[#it.body])
-
-#set table(stroke: none)
-#show table.cell.where(y: 0): set text(weight: "bold", fill: white)
-
-// --- helper for a soft callout box ---
-#let callout(title, body, fill: accent-soft, bar: accent) = block(
-  width: 100%,
-  fill: fill,
-  inset: (x: 10pt, y: 8pt),
-  radius: 4pt,
-  stroke: (left: 3pt + bar),
-)[
-  #text(weight: "bold", fill: bar.darken(15%))[#title] \
-  #body
-]
-
-// --- helper for a header-styled table ---
-#let htable(cols, header, ..rows, aligns: none) = {
-  let n = header.len()
-  table(
-    columns: cols,
-    align: if aligns == none { left } else { aligns },
-    fill: (_, y) => if y == 0 { accent } else if calc.odd(y) { rgb("#f6f8fa") } else { white },
-    inset: (x: 7pt, y: 5pt),
-    table.header(..header),
-    ..rows.pos().flatten(),
-  )
-}
-
-// ============================================================
-// TITLE PAGE
-// ============================================================
-#v(3cm)
-#align(center)[
-  #text(11pt, fill: muted, tracking: 3pt)[MCU TINKERING LAB]
-  #v(0.6cm)
-  #text(30pt, weight: "bold", fill: accent)[robocar-unified]
-  #v(0.15cm)
-  #text(16pt, weight: "bold")[Single-Board AI Robot Car]
-  #v(0.3cm)
-  #text(12pt, fill: muted)[Assembly, Wiring & Firmware Build Guide]
-  #v(1.2cm)
-  #box(width: 80%)[
-    #set text(10.5pt)
-    #set par(justify: false)
+#show: guide.with(
+  title: "robocar-unified",
+  subtitle: "Single-Board AI Robot Car",
+  version: "0.1.2",
+  intro: [
     A hands-on guide to assembling the consolidated robocar on a
     *Seeed Studio XIAO ESP32-S3 Sense*. Camera capture, Gemini AI planning,
     motor control, and peripherals all run on one module.
-  ]
-  #v(1cm)
-  #box(fill: accent-soft, inset: 10pt, radius: 5pt)[
-    #grid(columns: (auto, auto), column-gutter: 1.2cm, row-gutter: 5pt,
-      align(right)[#text(fill: muted)[Firmware version]], [*v#version*],
-      align(right)[#text(fill: muted)[Target MCU]], [ESP32-S3 (8 MB PSRAM / flash)],
-      align(right)[#text(fill: muted)[Toolchain]], [ESP-IDF v5.4 (containerized)],
-      align(right)[#text(fill: muted)[Difficulty]], [Intermediate · \~2–3 h],
-    )
-  ]
-]
-#v(1fr)
-#align(center)[
-  #text(9pt, fill: muted)[
+  ],
+  meta: (
+    ("Target MCU", [ESP32-S3 (8 MB PSRAM / flash)]),
+    ("Toolchain", [ESP-IDF v5.4 (containerized)]),
+  ),
+  difficulty: [Intermediate · \~2–3 h],
+  header-right: "XIAO ESP32-S3 Sense",
+  footer-note: [
     Pin assignments in this guide mirror `main/pin_config.h`, which is authoritative. \
     All components must share a common ground.
-  ]
-]
-#pagebreak()
-
-// ============================================================
-#outline(title: [Contents], indent: 1em, depth: 2)
-#pagebreak()
+  ],
+)
 
 // ============================================================
 = 1 · Overview
@@ -139,13 +49,13 @@ an ultrasonic sensor provides an independent obstacle reflex.
     Reactive executor (visual servo, heading hold, motor PWM), peripheral I/O,
     command console, and the ultrasonic obstacle reflex.
   ],
-  callout("Core 1 — bursty I/O", bar: rgb("#8250df"), fill: rgb("#f3eefc"))[
+  callout("Core 1 — bursty I/O", kind: "purple")[
     Planner (Gemini calls), OV2640 camera DMA, WiFi / MQTT / OTA.
   ],
 )
 
 #v(0.3em)
-#callout("What you get", bar: rgb("#1a7f37"), fill: rgb("#eafbef"))[
+#callout("What you get", kind: "ok")[
   A two-wheel-drive car that captures frames, asks Gemini what to do, and
   drives toward goals — with pan/tilt camera, status LEDs, an OLED display,
   buzzer feedback, WiFi provisioning over Bluetooth, and over-the-air updates.
@@ -155,7 +65,7 @@ an ultrasonic sensor provides an independent obstacle reflex.
 
 #htable(
   (auto, 1fr, auto),
-  ([*Qty*], [*Component*], [*Notes*]),
+  ([Qty], [Component], [Notes]),
   ([1], [XIAO ESP32-S3 Sense], [MCU + OV2640 camera + 8 MB PSRAM, USB-C]),
   ([1], [TCA9548A I²C multiplexer], [Breakout, address 0x70]),
   ([1], [PCA9685 16-ch PWM driver], [Breakout, address 0x40]),
@@ -178,7 +88,7 @@ Soldering iron + solder, wire strippers, small screwdriver set, multimeter
 (for verifying 5 V rail and continuity), a USB-C cable, and a computer with
 Docker (for the containerized firmware build).
 
-#callout("Sensor voltage — read this", bar: rgb("#bf8700"), fill: rgb("#fff8e1"))[
+#callout("Sensor voltage — read this", kind: "warn")[
   The ultrasonic sensor *must be a 3.3 V-compatible module* (HC-SR04P, not the
   classic 5 V HC-SR04). The XIAO's GPIOs are not 5 V-tolerant — a 5 V ECHO line
   can damage the board.
@@ -206,7 +116,7 @@ Sense module and do not conflict.
 
 #htable(
   (auto, auto, 1fr, 1.2fr),
-  ([*XIAO Pin*], [*GPIO*], [*Function*], [*Notes*]),
+  ([XIAO Pin], [GPIO], [Function], [Notes]),
   ([D0], [GPIO1], [TB6612FNG STBY], [HIGH = motors enabled]),
   ([D1], [GPIO2], [Piezo buzzer], [LEDC PWM · 100 Ω in series]),
   ([D2], [GPIO3], [Ultrasonic TRIG], [10 µs pulse output]),
@@ -225,7 +135,7 @@ Select the channel on the multiplexer *before* addressing any downstream device.
 
 #htable(
   (auto, 1fr, auto),
-  ([*Channel*], [*Device*], [*Address*]),
+  ([Channel], [Device], [Address]),
   ([ch0], [PCA9685 PWM driver (motors, servos, LEDs)], [0x40 @ 200 Hz]),
   ([ch1], [SSD1306 OLED display (128×64)], [0x3C]),
   ([ch2–7], [_reserved — IMU / ToF / future sensors_], [—]),
@@ -240,7 +150,7 @@ use the full 12-bit range (0–4095).
 #grid(columns: (1fr, 1fr), column-gutter: 12pt,
   htable(
     (auto, 1fr),
-    ([*Ch*], [*Signal*]),
+    ([Ch], [Signal]),
     ([0], [Left LED — R]),
     ([1], [Left LED — G]),
     ([2], [Left LED — B]),
@@ -253,7 +163,7 @@ use the full 12-bit range (0–4095).
   ),
   htable(
     (auto, 1fr),
-    ([*Ch*], [*Signal*]),
+    ([Ch], [Signal]),
     ([8], [Motor R — IN1 (dir)]),
     ([9], [Motor R — IN2 (dir)]),
     ([10], [Motor R — PWM]),
@@ -265,13 +175,13 @@ use the full 12-bit range (0–4095).
     aligns: (center, left),
   ),
 )
-#text(fill: muted)[200 Hz is a compromise between servo timing (ideal 50 Hz)
+#text(fill: theme.muted)[200 Hz is a compromise between servo timing (ideal 50 Hz)
 and motor PWM smoothness — it works well for SG90s and the TB6612FNG.]
 
 == 4.4 · Ultrasonic rangefinder
 #htable(
   (auto, auto, auto, 1fr),
-  ([*Signal*], [*Pin*], [*Voltage*], [*Function*]),
+  ([Signal], [Pin], [Voltage], [Function]),
   ([TRIG], [GPIO3 (D2)], [3.3 V], [10 µs pulse triggers a measurement]),
   ([ECHO], [GPIO4 (D3)], [3.3 V], [Pulse width encodes distance (RMT RX)]),
   ([VCC], [3.3 V], [3.3 V], [*3.3 V variant only*]),
@@ -293,7 +203,7 @@ executor immediately stops and reverses, independent of planner goals.
   XIAO's 3V3 pin. Keep motor/servo current (high, noisy) on the 5 V rail and
   logic on 3V3.
 ],
-callout("Golden rule", bar: rgb("#cf222e"), fill: rgb("#ffebe9"))[
+callout("Golden rule", kind: "danger")[
   *Common ground everywhere.* Every module — boost converter, XIAO, motor
   driver, PCA9685, servos, sensors — must share one GND. Missing grounds cause
   brown-outs, I²C lockups, and erratic motion.
@@ -336,7 +246,7 @@ just robocar-unified::monitor                      # serial console
 just robocar-unified::flash-monitor
 ```
 
-#callout("Can't enter download mode?", bar: rgb("#bf8700"), fill: rgb("#fff8e1"))[
+#callout("Can't enter download mode?", kind: "warn")[
   Hold *BOOT*, tap *RESET*, then release BOOT to force the bootloader, and
   re-run the flash command.
 ]
@@ -345,7 +255,7 @@ The flasher writes three images to an 8 MB, OTA-capable layout:
 
 #htable(
   (auto, 1fr, auto),
-  ([*Offset*], [*Image*], [*Partition*]),
+  ([Offset], [Image], [Partition]),
   ([`0x0`], [`build/bootloader/bootloader.bin`], [bootloader]),
   ([`0x8000`], [`build/partition_table/partition-table.bin`], [partition table]),
   ([`0x12000`], [`build/robocar-unified.bin`], [ota_0 (app)]),
@@ -370,7 +280,7 @@ The planner uses *Gemini Robotics-ER 1.6* to emit goals — `drive()`, `track()`
 
 == 8.3 · Over-the-air updates
 OTA is enabled with app rollback. The updater pulls releases from the
-`laurigates/mcu-tinkering-lab` GitHub repo; `version.txt` (currently *v#version*)
+`laurigates/mcu-tinkering-lab` GitHub repo; `version.txt` (currently *v0.1.2*)
 is the single source of truth and is managed by release-please.
 
 = 9 · Functional Checkout
@@ -379,7 +289,7 @@ Work through these after first flash, watching the serial monitor:
 
 #htable(
   (auto, 1.2fr, 1.3fr),
-  ([*#sym.checkmark*], [*Check*], [*Expected result*]),
+  ([#sym.checkmark], [Check], [Expected result]),
   ([☐], [Boot log], [No PSRAM / boot-loop errors; tasks pin to cores 0 & 1]),
   ([☐], [I²C scan], [TCA9548A, PCA9685, and OLED all detected]),
   ([☐], [OLED], [Status screen renders (128×64)]),
@@ -397,7 +307,7 @@ Work through these after first flash, watching the serial monitor:
 
 #htable(
   (1fr, 1.4fr),
-  ([*Symptom*], [*Likely cause & fix*]),
+  ([Symptom], [Likely cause & fix]),
   ([Boot loop on power-up], [Wrong PSRAM mode. The Sense uses *octal* PSRAM (`CONFIG_SPIRAM_MODE_OCT=y`); don't change it.]),
   ([Random resets under motor load], [Weak 5 V rail / missing common ground. Use thicker power wires and verify the XL6009 holds 5 V under load.]),
   ([No I²C devices found], [Not selecting the TCA9548A channel first, or SDA/SCL swapped. Check GPIO5=SDA, GPIO6=SCL.]),
@@ -410,11 +320,11 @@ Work through these after first flash, watching the serial monitor:
 )
 
 #v(1fr)
-#line(length: 100%, stroke: 0.5pt + rule)
+#line(length: 100%, stroke: 0.5pt + theme.rule)
 #align(center)[
-  #text(9pt, fill: muted)[
+  #text(9pt, fill: theme.muted)[
     Authoritative pin data: `packages/robocar/unified/main/pin_config.h` ·
     Design rationale: `docs/decisions/ADR-016-hierarchical-ai-controller.md` \
-    Regenerate this PDF with `typst compile build-guide.typ`.
+    Regenerate this PDF with `typst compile --root ../../../.. build-guide.typ`.
   ]
 ]
