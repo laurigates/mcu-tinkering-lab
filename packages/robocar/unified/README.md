@@ -18,6 +18,21 @@ Single-board robocar firmware consolidating the dual-ESP32 design (`robocar-main
 
 See [WIRING.md](WIRING.md) for full connection details.
 
+## Printable build guide
+
+A single-page-format assembly + wiring + flashing guide is available as a
+Typst document: [`docs/build-guide.typ`](docs/build-guide.typ) (rendered PDF:
+[`docs/build-guide.pdf`](docs/build-guide.pdf)). It covers the bill of
+materials, wiring reference, power, assembly steps, firmware build/flash, WiFi
+provisioning, a functional checkout list, and troubleshooting.
+
+Regenerate the PDF after edits (pin data mirrors `main/pin_config.h`):
+
+```bash
+# from packages/robocar/unified/docs, with repo root as the sandbox root
+typst compile --root ../../../.. build-guide.typ
+```
+
 ## Architecture
 
 Implements a hierarchical AI controller: a **slow planner** (~1 Hz, Core 1) that calls Gemini Robotics-ER to emit structured goals, and a **fast reactive executor** (~30 Hz, Core 0) that drives the robot smoothly toward those goals. See [ADR-016](../../docs/decisions/ADR-016-hierarchical-ai-controller.md) for the detailed design.
