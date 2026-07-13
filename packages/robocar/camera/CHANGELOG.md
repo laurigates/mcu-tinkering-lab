@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.3](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-camera-v0.1.2...robocar-camera-v0.1.3) (2026-07-13)
+
+
+### Bug Fixes
+
+* **build-firmware:** resolve release firmware build failures blocking web flasher deploy ([ac3cd9b](https://github.com/laurigates/mcu-tinkering-lab/commit/ac3cd9be0e7fa5f1e71064ca06916702ddbb67d2)), closes [#362](https://github.com/laurigates/mcu-tinkering-lab/issues/362)
+* **thinkpack-mesh:** resolve build failures in shared mesh component and consumers ([69f5b92](https://github.com/laurigates/mcu-tinkering-lab/commit/69f5b92ecbf48b59a97abb9fcd7bdae0b3849d89))
+
 ## [0.1.2](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-camera-v0.1.1...robocar-camera-v0.1.2) (2026-07-02)
 
 
