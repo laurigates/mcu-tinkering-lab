@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.5](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.1.4...robocar-unified-v0.1.5) (2026-07-14)
+
+
+### Features
+
+* **schematics:** add obstacle-aware Manhattan auto-router ([#391](https://github.com/laurigates/mcu-tinkering-lab/issues/391)) ([5ec1723](https://github.com/laurigates/mcu-tinkering-lab/commit/5ec1723e7de7be27f2848c85ad6bc4945395fd6c))
+
 ## [0.1.4](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.1.3...robocar-unified-v0.1.4) (2026-07-13)
 
 
