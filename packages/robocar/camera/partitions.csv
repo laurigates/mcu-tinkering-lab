@@ -1,16 +1,18 @@
 # ESP32-CAM Partition Table for OTA (4MB Flash)
-# Name,   Type, SubType, Offset,  Size,     Flags
+# Name,   Type, SubType, Offset,   Size,     Flags
+# App partitions (ota_0/ota_1) MUST start on a 0x10000 (64KB) boundary —
+# ESP-IDF rejects unaligned app offsets ("Offset ... is not aligned to 0x10000").
 # Flash Layout:
-#   nvs:      24KB  (Non-Volatile Storage)
-#   otadata:  8KB   (OTA selection data)
-#   phy_init: 4KB   (PHY init data)
-#   ota_0:    1.8MB (OTA app partition 0)
-#   ota_1:    1.8MB (OTA app partition 1)
-#   spiffs:   336KB (File storage for AI models)
+#   nvs:      16KB   (Non-Volatile Storage)
+#   otadata:  8KB    (OTA selection data)
+#   phy_init: 4KB    (PHY init data)
+#   ota_0:    1.81MB (OTA app partition 0, @0x10000 — 64KB aligned)
+#   ota_1:    1.81MB (OTA app partition 1, @0x1E0000 — 64KB aligned)
+#   spiffs:   320KB  (File storage for AI models)
 # Total: 4MB (0x400000 bytes)
-nvs,      data, nvs,     0x9000,  0x6000,
-otadata,  data, ota,     0xF000,  0x2000,
-phy_init, data, phy,     0x11000, 0x1000,
-ota_0,    app,  ota_0,   0x12000, 0x1CD000,
-ota_1,    app,  ota_1,   0x1DF000,0x1CD000,
-spiffs,   data, spiffs,  0x3AC000,0x54000,
+nvs,      data, nvs,     0x9000,  0x4000,
+otadata,  data, ota,     0xD000,  0x2000,
+phy_init, data, phy,     0xF000,  0x1000,
+ota_0,    app,  ota_0,   0x10000, 0x1D0000,
+ota_1,    app,  ota_1,   0x1E0000,0x1D0000,
+spiffs,   data, spiffs,  0x3B0000,0x50000,
