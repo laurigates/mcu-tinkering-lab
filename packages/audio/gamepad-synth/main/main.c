@@ -1746,9 +1746,14 @@ static void settings_play_value_ladder(int cursor)
             settings_play_ladder(n, BLIP_FREQ_NEUTRAL);
             break;
         }
-        case SETTING_LFO_RATE:
-            settings_play_ladder(3, BLIP_FREQ_NEUTRAL);
+        case SETTING_LFO_RATE: {
+            /* Map 0.1..20 Hz onto a 1..11 blip ladder — higher rate = more
+             * blips, mirroring the drum_volume / lfo_depth encoding. */
+            float norm = (s_settings.lfo_rate_hz - LFO_RATE_MIN) / (LFO_RATE_MAX - LFO_RATE_MIN);
+            int n = (int)(norm * 10.0f + 0.5f) + 1;
+            settings_play_ladder(n, BLIP_FREQ_NEUTRAL);
             break;
+        }
         case SETTING_LFO_DEPTH: {
             int n = (int)(s_settings.lfo_depth * 10.0f + 0.5f) + 1;
             settings_play_ladder(n, BLIP_FREQ_NEUTRAL);
