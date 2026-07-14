@@ -29,8 +29,11 @@ provisioning, a functional checkout list, and troubleshooting.
 Regenerate the PDF after edits (pin data mirrors `main/pin_config.h`):
 
 ```bash
-# from packages/robocar/unified/docs, with repo root as the sandbox root
-typst compile --root ../../../.. build-guide.typ
+# from packages/robocar/unified/docs, with repo root as the sandbox root.
+# The canonical flags keep output byte-reproducible so the build-guide-check CI
+# guard (which recompiles and diffs) doesn't false-positive. Match the Typst
+# version pinned in .github/workflows/build-guide-check.yml.
+typst compile --creation-timestamp 0 --ignore-system-fonts --root ../../../.. build-guide.typ
 ```
 
 ## Architecture
