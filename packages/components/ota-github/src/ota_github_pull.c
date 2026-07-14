@@ -63,9 +63,9 @@ static void ghota_event_handler(void *arg, esp_event_base_t event_base, int32_t 
                 }
             }
 
-            esp_err_t ret = ghota_start_update(s_ghota_client);
+            esp_err_t ret = ghota_start_update_task(s_ghota_client);
             if (ret != ESP_OK) {
-                ESP_LOGE(TAG, "ghota_start_update failed: %s", esp_err_to_name(ret));
+                ESP_LOGE(TAG, "ghota_start_update_task failed: %s", esp_err_to_name(ret));
                 ota_github_set_state(OTA_GITHUB_STATUS_FAILED, 0, 3);
                 ota_github_event_payload_t fp = {.error_code = 3};
                 ota_github_post_event(OTA_GITHUB_EVENT_FAILED, &fp);
@@ -90,7 +90,7 @@ static void ghota_event_handler(void *arg, esp_event_base_t event_base, int32_t 
             break;
         }
 
-        case GHOTA_EVENT_FINISH_FIRMWARE_UPDATE: {
+        case GHOTA_EVENT_FINISH_UPDATE: {
             ESP_LOGI(TAG, "Firmware update complete — preparing to reboot");
             ota_github_set_state(OTA_GITHUB_STATUS_SUCCESS, 100, 0);
             ota_github_post_event(OTA_GITHUB_EVENT_SUCCESS, NULL);
@@ -136,13 +136,17 @@ esp_err_t ota_github_pull_init(void)
         return ESP_ERR_INVALID_ARG;
     }
 
+    /* esp_ghota's filenamematch is a fixed char[] buffer (not a char *), so it
+     * must be copied in rather than assigned in the initializer. The designated
+     * initializer zero-fills the remaining fields (storagenamematch etc.). */
     ghota_config_t ghota_cfg = {
-        .filenamematch = (char *)g_ota_github.cfg.firmware_filename_match,
         .hostname = "github.com",
         .orgname = (char *)g_ota_github.cfg.github_org,
         .reponame = (char *)g_ota_github.cfg.github_repo,
         .updateInterval = g_ota_github.cfg.poll_interval_min,
     };
+    strncpy(ghota_cfg.filenamematch, g_ota_github.cfg.firmware_filename_match,
+            sizeof(ghota_cfg.filenamematch) - 1);
 
     s_ghota_client = ghota_init(&ghota_cfg);
     if (!s_ghota_client) {

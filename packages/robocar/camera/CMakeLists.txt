@@ -18,9 +18,9 @@ if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/main/credentials.h")
 "#endif  // CREDENTIALS_H\n")
 endif()
 
-# Set partition table for OTA support
-set(CONFIG_PARTITION_TABLE_CUSTOM ON)
-set(CONFIG_PARTITION_TABLE_CUSTOM_FILENAME "partitions.csv")
+# Partition table + flash size are configured in sdkconfig.defaults
+# (CONFIG_PARTITION_TABLE_CUSTOM / CONFIG_ESPTOOLPY_FLASHSIZE_4MB). ESP-IDF
+# ignores set(CONFIG_* ...) here, so it is not repeated in this file.
 
 # Read version from release-please managed manifest for OTA version tracking
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/version.txt")

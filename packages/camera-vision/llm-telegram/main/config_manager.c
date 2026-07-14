@@ -9,7 +9,7 @@
 static const char *TAG = "CONFIG_MANAGER";
 static const char *NVS_NAMESPACE = "esp32cam_llm";
 
-static nvs_handle_t nvs_handle = 0;
+static nvs_handle_t s_nvs_handle = 0;
 static bool is_initialized = false;
 
 // Initialize configuration manager
@@ -28,7 +28,7 @@ esp_err_t config_manager_init(void)
     ESP_ERROR_CHECK(err);
 
     // Open NVS handle
-    err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &nvs_handle);
+    err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &s_nvs_handle);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Error opening NVS handle: %s", esp_err_to_name(err));
         return err;
@@ -53,74 +53,74 @@ esp_err_t config_load(app_config_t *config)
 
     // Load WiFi settings
     length = sizeof(config->wifi_ssid);
-    err = nvs_get_str(nvs_handle, "wifi_ssid", config->wifi_ssid, &length);
+    err = nvs_get_str(s_nvs_handle, "wifi_ssid", config->wifi_ssid, &length);
     if (err != ESP_OK) {
         strcpy(config->wifi_ssid, WIFI_SSID_DEFAULT);
     }
 
     length = sizeof(config->wifi_password);
-    err = nvs_get_str(nvs_handle, "wifi_pass", config->wifi_password, &length);
+    err = nvs_get_str(s_nvs_handle, "wifi_pass", config->wifi_password, &length);
     if (err != ESP_OK) {
         strcpy(config->wifi_password, WIFI_PASSWORD_DEFAULT);
     }
 
     // Load Telegram settings
     length = sizeof(config->telegram_bot_token);
-    err = nvs_get_str(nvs_handle, "tg_token", config->telegram_bot_token, &length);
+    err = nvs_get_str(s_nvs_handle, "tg_token", config->telegram_bot_token, &length);
     if (err != ESP_OK) {
         strcpy(config->telegram_bot_token, TELEGRAM_BOT_TOKEN);
     }
 
-    err = nvs_get_i64(nvs_handle, "tg_chat_id", &config->telegram_chat_id);
+    err = nvs_get_i64(s_nvs_handle, "tg_chat_id", &config->telegram_chat_id);
     if (err != ESP_OK) {
         config->telegram_chat_id = 0;  // Will need to be set
     }
 
     // Load LLM settings
-    err = nvs_get_i32(nvs_handle, "llm_backend", &config->llm_backend_type);
+    err = nvs_get_i32(s_nvs_handle, "llm_backend", (int32_t *)&config->llm_backend_type);
     if (err != ESP_OK) {
         config->llm_backend_type = LLM_BACKEND_TYPE;
     }
 
     length = sizeof(config->claude_api_key);
-    err = nvs_get_str(nvs_handle, "claude_key", config->claude_api_key, &length);
+    err = nvs_get_str(s_nvs_handle, "claude_key", config->claude_api_key, &length);
     if (err != ESP_OK) {
         strcpy(config->claude_api_key, CLAUDE_API_KEY);
     }
 
     length = sizeof(config->ollama_server_url);
-    err = nvs_get_str(nvs_handle, "ollama_url", config->ollama_server_url, &length);
+    err = nvs_get_str(s_nvs_handle, "ollama_url", config->ollama_server_url, &length);
     if (err != ESP_OK) {
         strcpy(config->ollama_server_url, OLLAMA_SERVER_URL);
     }
 
     length = sizeof(config->llm_model);
-    err = nvs_get_str(nvs_handle, "llm_model", config->llm_model, &length);
+    err = nvs_get_str(s_nvs_handle, "llm_model", config->llm_model, &length);
     if (err != ESP_OK) {
         strcpy(config->llm_model, config->llm_backend_type ? CLAUDE_MODEL : OLLAMA_MODEL);
     }
 
     // Load camera settings
-    err = nvs_get_i32(nvs_handle, "cam_quality", &config->camera_quality);
+    err = nvs_get_i32(s_nvs_handle, "cam_quality", (int32_t *)&config->camera_quality);
     if (err != ESP_OK) {
         config->camera_quality = CAMERA_JPEG_QUALITY;
     }
 
-    err = nvs_get_i32(nvs_handle, "cam_interval", &config->capture_interval_ms);
+    err = nvs_get_i32(s_nvs_handle, "cam_interval", (int32_t *)&config->capture_interval_ms);
     if (err != ESP_OK) {
         config->capture_interval_ms = CAMERA_CAPTURE_INTERVAL_MS;
     }
 
     // Load system settings
     uint8_t auto_capture;
-    err = nvs_get_u8(nvs_handle, "auto_capture", &auto_capture);
+    err = nvs_get_u8(s_nvs_handle, "auto_capture", &auto_capture);
     config->auto_capture_enabled = (err == ESP_OK) ? auto_capture : true;
 
     uint8_t tg_commands;
-    err = nvs_get_u8(nvs_handle, "tg_commands", &tg_commands);
+    err = nvs_get_u8(s_nvs_handle, "tg_commands", &tg_commands);
     config->telegram_commands_enabled = (err == ESP_OK) ? tg_commands : true;
 
-    err = nvs_get_i32(nvs_handle, "log_level", &config->log_level);
+    err = nvs_get_i32(s_nvs_handle, "log_level", (int32_t *)&config->log_level);
     if (err != ESP_OK) {
         config->log_level = LOG_LEVEL_DEBUG;
     }
@@ -141,64 +141,64 @@ esp_err_t config_save(const app_config_t *config)
     esp_err_t err;
 
     // Save WiFi settings
-    err = nvs_set_str(nvs_handle, "wifi_ssid", config->wifi_ssid);
+    err = nvs_set_str(s_nvs_handle, "wifi_ssid", config->wifi_ssid);
     if (err != ESP_OK)
         goto save_error;
 
-    err = nvs_set_str(nvs_handle, "wifi_pass", config->wifi_password);
+    err = nvs_set_str(s_nvs_handle, "wifi_pass", config->wifi_password);
     if (err != ESP_OK)
         goto save_error;
 
     // Save Telegram settings
-    err = nvs_set_str(nvs_handle, "tg_token", config->telegram_bot_token);
+    err = nvs_set_str(s_nvs_handle, "tg_token", config->telegram_bot_token);
     if (err != ESP_OK)
         goto save_error;
 
-    err = nvs_set_i64(nvs_handle, "tg_chat_id", config->telegram_chat_id);
+    err = nvs_set_i64(s_nvs_handle, "tg_chat_id", config->telegram_chat_id);
     if (err != ESP_OK)
         goto save_error;
 
     // Save LLM settings
-    err = nvs_set_i32(nvs_handle, "llm_backend", config->llm_backend_type);
+    err = nvs_set_i32(s_nvs_handle, "llm_backend", config->llm_backend_type);
     if (err != ESP_OK)
         goto save_error;
 
-    err = nvs_set_str(nvs_handle, "claude_key", config->claude_api_key);
+    err = nvs_set_str(s_nvs_handle, "claude_key", config->claude_api_key);
     if (err != ESP_OK)
         goto save_error;
 
-    err = nvs_set_str(nvs_handle, "ollama_url", config->ollama_server_url);
+    err = nvs_set_str(s_nvs_handle, "ollama_url", config->ollama_server_url);
     if (err != ESP_OK)
         goto save_error;
 
-    err = nvs_set_str(nvs_handle, "llm_model", config->llm_model);
+    err = nvs_set_str(s_nvs_handle, "llm_model", config->llm_model);
     if (err != ESP_OK)
         goto save_error;
 
     // Save camera settings
-    err = nvs_set_i32(nvs_handle, "cam_quality", config->camera_quality);
+    err = nvs_set_i32(s_nvs_handle, "cam_quality", config->camera_quality);
     if (err != ESP_OK)
         goto save_error;
 
-    err = nvs_set_i32(nvs_handle, "cam_interval", config->capture_interval_ms);
+    err = nvs_set_i32(s_nvs_handle, "cam_interval", config->capture_interval_ms);
     if (err != ESP_OK)
         goto save_error;
 
     // Save system settings
-    err = nvs_set_u8(nvs_handle, "auto_capture", config->auto_capture_enabled ? 1 : 0);
+    err = nvs_set_u8(s_nvs_handle, "auto_capture", config->auto_capture_enabled ? 1 : 0);
     if (err != ESP_OK)
         goto save_error;
 
-    err = nvs_set_u8(nvs_handle, "tg_commands", config->telegram_commands_enabled ? 1 : 0);
+    err = nvs_set_u8(s_nvs_handle, "tg_commands", config->telegram_commands_enabled ? 1 : 0);
     if (err != ESP_OK)
         goto save_error;
 
-    err = nvs_set_i32(nvs_handle, "log_level", config->log_level);
+    err = nvs_set_i32(s_nvs_handle, "log_level", config->log_level);
     if (err != ESP_OK)
         goto save_error;
 
     // Commit changes
-    err = nvs_commit(nvs_handle);
+    err = nvs_commit(s_nvs_handle);
     if (err != ESP_OK)
         goto save_error;
 
@@ -243,9 +243,9 @@ esp_err_t config_set_string(const char *key, const char *value)
         return ESP_ERR_INVALID_ARG;
     }
 
-    esp_err_t err = nvs_set_str(nvs_handle, key, value);
+    esp_err_t err = nvs_set_str(s_nvs_handle, key, value);
     if (err == ESP_OK) {
-        err = nvs_commit(nvs_handle);
+        err = nvs_commit(s_nvs_handle);
     }
     return err;
 }
@@ -257,9 +257,9 @@ esp_err_t config_set_int(const char *key, int value)
         return ESP_ERR_INVALID_ARG;
     }
 
-    esp_err_t err = nvs_set_i32(nvs_handle, key, value);
+    esp_err_t err = nvs_set_i32(s_nvs_handle, key, value);
     if (err == ESP_OK) {
-        err = nvs_commit(nvs_handle);
+        err = nvs_commit(s_nvs_handle);
     }
     return err;
 }
@@ -271,7 +271,7 @@ esp_err_t config_get_string(const char *key, char *value, size_t max_len)
         return ESP_ERR_INVALID_ARG;
     }
 
-    return nvs_get_str(nvs_handle, key, value, &max_len);
+    return nvs_get_str(s_nvs_handle, key, value, &max_len);
 }
 
 // Get single int configuration value
@@ -281,7 +281,7 @@ esp_err_t config_get_int(const char *key, int *value)
         return ESP_ERR_INVALID_ARG;
     }
 
-    return nvs_get_i32(nvs_handle, key, value);
+    return nvs_get_i32(s_nvs_handle, key, (int32_t *)value);
 }
 
 // Validate configuration

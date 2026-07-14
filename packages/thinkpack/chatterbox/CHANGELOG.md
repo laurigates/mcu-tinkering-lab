@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/laurigates/mcu-tinkering-lab/compare/thinkpack-chatterbox-v1.1.0...thinkpack-chatterbox-v1.1.1) (2026-07-13)
+
+
+### Bug Fixes
+
+* **thinkpack-mesh:** resolve build failures in shared mesh component and consumers ([69f5b92](https://github.com/laurigates/mcu-tinkering-lab/commit/69f5b92ecbf48b59a97abb9fcd7bdae0b3849d89))
+
 ## [1.1.0](https://github.com/laurigates/mcu-tinkering-lab/compare/thinkpack-chatterbox-v1.0.0...thinkpack-chatterbox-v1.1.0) (2026-07-02)
 
 

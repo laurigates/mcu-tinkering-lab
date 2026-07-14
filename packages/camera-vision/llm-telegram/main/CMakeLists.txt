@@ -12,7 +12,7 @@ idf_component_register(
     REQUIRES
         esp_http_client
         esp_https_server
-        esp_camera
+        esp32-camera
         nvs_flash
         esp_wifi
         esp_netif

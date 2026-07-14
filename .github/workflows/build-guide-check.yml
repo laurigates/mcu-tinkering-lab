@@ -1,0 +1,102 @@
+name: Build Guide Up-to-Date Check
+
+on:
+  push:
+    branches: [main, develop, 'claude/**']
+    paths:
+      - '**/docs/build-guide.typ'
+      - 'tools/typst/**'
+      - 'docs/schematics/images/**'
+      - '.github/workflows/build-guide-check.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - '**/docs/build-guide.typ'
+      - 'tools/typst/**'
+      - 'docs/schematics/images/**'
+      - '.github/workflows/build-guide-check.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  # Pin the exact Typst version the committed PDFs were compiled with. PDF byte
+  # output changes across compiler releases, so the freshness check below is only
+  # meaningful against a fixed version. Bump this in the same commit that
+  # recompiles every guide with the new CLI.
+  TYPST_VERSION: '0.14.2'
+
+jobs:
+  guides-up-to-date:
+    name: Verify committed PDFs match Typst source
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # GitHub-release binaries are blocked by this org's egress proxy, so the
+      # CLI is built from crates.io via cargo. The binary is the only cached
+      # artifact — keyed on the pinned version so a bump forces a rebuild.
+      - name: Cache Typst CLI
+        id: cache-typst
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/typst
+          key: typst-cli-${{ runner.os }}-${{ env.TYPST_VERSION }}
+
+      - name: Install Typst CLI
+        if: steps.cache-typst.outputs.cache-hit != 'true'
+        run: cargo install typst-cli --version "${TYPST_VERSION}" --locked
+
+      # ~/.cargo/bin is on PATH by default on GitHub runners, but a cache-restored
+      # binary skips the cargo step, so make PATH explicit for both paths.
+      - name: Ensure cargo bin on PATH
+        run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      # Recompile in place with the canonical, deterministic invocation and let
+      # `git diff` surface drift — the same shape as schematics-check.yml.
+      #
+      #   --creation-timestamp 0  pins the embedded PDF timestamp (epoch), which
+      #                           otherwise carries wall-clock time and never
+      #                           reproduces.
+      #   --ignore-system-fonts   embeds only Typst's bundled fonts, so a glyph's
+      #                           fallback is identical on every machine instead
+      #                           of pulling in whatever the OS happens to ship
+      #                           (Linux FreeSans vs macOS SF/LastResort).
+      #
+      # Guides are discovered with `git ls-files` so new projects are covered
+      # without editing this workflow.
+      - name: Recompile every build guide and check for drift
+        run: |
+          set -euo pipefail
+          typst --version
+          status=0
+          while IFS= read -r typ; do
+            [ -n "$typ" ] || continue
+            pdf="${typ%.typ}.pdf"
+            if ! git ls-files --error-unmatch "$pdf" >/dev/null 2>&1; then
+              echo "::error file=$typ::No committed PDF next to this guide ($pdf). Compile and commit it."
+              status=1
+              continue
+            fi
+            echo "::group::$typ"
+            typst compile --creation-timestamp 0 --ignore-system-fonts --root "$PWD" "$typ" "$pdf"
+            if git diff --quiet -- "$pdf"; then
+              echo "up to date: $pdf"
+            else
+              echo "::error file=$pdf::Committed PDF is stale relative to $typ (or the shared template / embedded assets)."
+              status=1
+            fi
+            echo "::endgroup::"
+          done < <(git ls-files '**/docs/build-guide.typ')
+          if [ "$status" -ne 0 ]; then
+            echo "::error::One or more build-guide PDFs are out of date. Install the pinned CLI and recompile:"
+            echo "::error::  cargo install typst-cli --version ${TYPST_VERSION} --locked"
+            echo "::error::  typst compile --creation-timestamp 0 --ignore-system-fonts --root . <path>/build-guide.typ <path>/build-guide.pdf"
+            echo "::error::then commit the regenerated PDF(s)."
+            exit 1
+          fi
