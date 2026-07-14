@@ -19,15 +19,19 @@ from components import (
     tca9548a,
     xiao_esp32s3_sense,
 )
+from routing import Router
 
 
 def draw() -> schemdraw.Drawing:
     d = schemdraw.Drawing(show=False)
     d.config(unit=2.0, fontsize=11)
 
-    # === Top row: MCU → I2C mux → PCA9685 (chained left-to-right). ===
-    # TB6612FNG sits below-and-right of PCA so PCA's right side stays clear
-    # for the LED/servo stub tags.
+    # === Components first, so every net below routes with full obstacle
+    # awareness (the auto-router only avoids components already placed). ===
+
+    # Top row: MCU → I2C mux → PCA9685 (chained left-to-right). TB6612FNG
+    # sits below-and-right of PCA so PCA's right side stays clear for the
+    # LED/servo stub tags.
     xiao = d.add(xiao_esp32s3_sense().label("XIAO ESP32-S3 Sense", loc="bot", ofst=0.4))
 
     mux = d.add(
@@ -52,50 +56,23 @@ def draw() -> schemdraw.Drawing:
         .label("TB6612FNG", loc="bot", ofst=0.4)
     )
 
-    # I2C bus: XIAO right side ↔ mux left side (top two pins).
-    d.add(elm.Wire("-").at(xiao.GPIO5).to(mux.SDA).color("steelblue"))
-    d.add(elm.Wire("-").at(xiao.GPIO6).to(mux.SCL).color("steelblue"))
-
-    # Mux ch0 (SD0/SC0) → PCA9685 SDA/SCL.
-    d.add(elm.Wire("-").at(mux.SD0).to(pca.SDA).color("steelblue"))
-    d.add(elm.Wire("-").at(mux.SC0).to(pca.SCL).color("steelblue"))
-
-    # PCA9685 PWM 8-13 group → TB6612FNG control cluster.
-    # 6 logical signals (PWMA, AIN1/2, PWMB, BIN1/2) drawn as one trunk.
-    d.add(elm.Wire("-|").at(pca["PWM 8-13"]).to(tb.PWMA).color("steelblue"))
-
-    # === Motors on the far right, driven by TB outputs. ===
+    # Motors on the far right, driven by TB outputs.
     motor_l = d.add(
         elm.Motor()
         .right()
         .at((tb.center.x + 5, tb.BO1.y - 0.5))
         .label("Left motor", loc="bot", ofst=0.4)
     )
-    d.add(elm.Wire("-|").at(tb.BO1).to(motor_l.start))
-    d.add(elm.Wire("|-").at(tb.BO2).to(motor_l.end))
-
     motor_r = d.add(
         elm.Motor()
         .right()
         .at((tb.center.x + 5, tb.AO1.y - 0.5))
         .label("Right motor", loc="bot", ofst=0.4)
     )
-    d.add(elm.Wire("-|").at(tb.AO1).to(motor_r.start))
-    d.add(elm.Wire("|-").at(tb.AO2).to(motor_r.end))
 
-    # === STBY direct from MCU GPIO1 — routed UNDER everything. ===
-    # Below TB's bottom edge so it can't collide with I2C buses or PCA stubs.
-    stby_y = tb.GND.y - 2.5
-    d.add(
-        elm.Wire("|-").at(xiao.GPIO1).to((tb.STBY.x - 1.5, stby_y)).color("steelblue")
-    )
-    d.add(elm.Wire("-|").at((tb.STBY.x - 1.5, stby_y)).to(tb.STBY).color("steelblue"))
-
-    # === Mux ch1 → SSD1306 OLED. ===
-    # Explicit .right() locks orientation — without it, the OLED inherits the
-    # previous wire's "up" direction and gets rotated 90°. Place OLED so its
-    # left edge is to the RIGHT of mux's right edge; otherwise -| / |- wires
-    # would route backward through the mux chip body.
+    # Mux ch1 → SSD1306 OLED. Explicit .right() locks orientation — without
+    # it, the OLED inherits the previous element's "up" direction and gets
+    # rotated 90°.
     oled = d.add(
         ssd1306_oled()
         .right()
@@ -103,12 +80,61 @@ def draw() -> schemdraw.Drawing:
         .anchor("center")
         .label("SSD1306 OLED\n0x3C, 128x64", loc="bot", ofst=0.4)
     )
-    # -| (right-then-down) drops through the gap between mux right edge and
-    # OLED left edge, then enters each pin cleanly from the left.
-    d.add(elm.Wire("-|").at(mux.SD1).to(oled.SDA).color("steelblue"))
-    d.add(elm.Wire("-|").at(mux.SC1).to(oled.SCL).color("steelblue"))
 
-    # === PCA9685 servo + LED stubs — extend right into the cleared space. ===
+    # Ultrasonic below the MCU.
+    us = d.add(
+        hc_sr04p()
+        .right()
+        .at((xiao.center.x + 4, xiao.GPIO3.y - 5))
+        .anchor("center")
+        .label("HC-SR04P\nultrasonic", loc="bot", ofst=0.4)
+    )
+
+    # Piezo buzzer on GPIO2 — small branch through resistor to ground. Placed
+    # before routing (GPIO2 isn't a routed net in this circuit): the
+    # resistor/speaker are real components, not cosmetic tags, and the STBY
+    # run below happens to pass nearby.
+    d.add(elm.Line().right(0.5).at(xiao.GPIO2))
+    d.add(elm.Resistor().right().label("100 Ω"))
+    buz = d.add(elm.Speaker().right().label("Piezo", loc="top", ofst=0.3))
+    d.add(elm.Line().down(0.5).at(buz.in2))
+    d.add(elm.Ground())
+
+    # === Nets: auto-routed orthogonal, obstacle-avoiding wires. ===
+    router = Router(d)
+
+    # I2C bus: XIAO right side ↔ mux left side (top two pins).
+    router.wire(xiao.GPIO5, mux.SDA, color="steelblue")
+    router.wire(xiao.GPIO6, mux.SCL, color="steelblue")
+
+    # Mux ch0 (SD0/SC0) → PCA9685 SDA/SCL.
+    router.wire(mux.SD0, pca.SDA, color="steelblue")
+    router.wire(mux.SC0, pca.SCL, color="steelblue")
+
+    # PCA9685 PWM 8-13 group → TB6612FNG control cluster.
+    # 6 logical signals (PWMA, AIN1/2, PWMB, BIN1/2) drawn as one trunk.
+    router.wire(pca["PWM 8-13"], tb.PWMA, color="steelblue")
+
+    router.wire(tb.BO1, motor_l.start)
+    router.wire(tb.BO2, motor_l.end)
+    router.wire(tb.AO1, motor_r.start)
+    router.wire(tb.AO2, motor_r.end)
+
+    # STBY direct from MCU GPIO1 — the router finds its own way around the
+    # mux/PCA/motor obstacles now that every component is already placed.
+    router.wire(xiao.GPIO1, tb.STBY, color="steelblue")
+
+    router.wire(mux.SD1, oled.SDA, color="steelblue")
+    router.wire(mux.SC1, oled.SCL, color="steelblue")
+
+    router.wire(xiao.GPIO3, us.TRIG, color="steelblue")
+    router.wire(xiao.GPIO4, us.ECHO, color="steelblue")
+
+    # === Local stubs (power tags, servo/LED arrows, piezo branch) stay
+    # hand-drawn — these aren't point-to-point nets between two components,
+    # so the router adds nothing here. ===
+
+    # PCA9685 servo + LED stubs — extend right into the cleared space.
     # elm.Arrow renders the arrowhead as an SVG path, not a glyph, so the
     # destination marker survives PNG rendering on hosts whose default sans
     # font lacks U+2192 (e.g. macOS Verdana).
@@ -126,24 +152,6 @@ def draw() -> schemdraw.Drawing:
         .label("2× RGB LED", loc="right", ofst=0.1, fontsize=10)
         .color("steelblue")
     )
-
-    # === Ultrasonic + buzzer below the MCU. ===
-    us = d.add(
-        hc_sr04p()
-        .right()
-        .at((xiao.center.x + 4, xiao.GPIO3.y - 5))
-        .anchor("center")
-        .label("HC-SR04P\nultrasonic", loc="bot", ofst=0.4)
-    )
-    d.add(elm.Wire("|-").at(xiao.GPIO3).to(us.TRIG).color("steelblue"))
-    d.add(elm.Wire("|-").at(xiao.GPIO4).to(us.ECHO).color("steelblue"))
-
-    # Piezo buzzer on GPIO2 — small branch through resistor to ground.
-    d.add(elm.Line().right(0.5).at(xiao.GPIO2))
-    d.add(elm.Resistor().right().label("100 Ω"))
-    buz = d.add(elm.Speaker().right().label("Piezo", loc="top", ofst=0.3))
-    d.add(elm.Line().down(0.5).at(buz.in2))
-    d.add(elm.Ground())
 
     # === Power rails. ===
     # MCU 3V3 / 5V / GND tags on its outward (left) side.

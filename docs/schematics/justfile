@@ -33,6 +33,12 @@ render: sync
 render-one name: sync
     {{cairo_dyld}} uv run python render.py {{name}}
 
+# Run the routing.py test suite
+[group: "test"]
+test:
+    uv sync --group dev
+    uv run pytest test_routing.py -v
+
 # Delete generated images
 [group: "clean"]
 clean:
