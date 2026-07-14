@@ -45,7 +45,11 @@ jobs:
       # only meaningful when the dependency set is pinned.
       - name: Install Python deps
         working-directory: docs/schematics
-        run: uv sync --frozen
+        run: uv sync --frozen --group dev
+
+      - name: Run routing.py test suite
+        working-directory: docs/schematics
+        run: uv run pytest test_routing.py -v
 
       - name: Render all circuits
         working-directory: docs/schematics

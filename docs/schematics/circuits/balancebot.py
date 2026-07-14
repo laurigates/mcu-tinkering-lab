@@ -22,13 +22,16 @@ from components import (
     stepper_nema17,
     xiao_rp2350,
 )
+from routing import Router
 
 
 def draw() -> schemdraw.Drawing:
     d = schemdraw.Drawing(show=False)
     d.config(unit=2.0, fontsize=11)
 
-    # === MCU on the left; peripherals stacked on the right. ===
+    # === Components first, so every net below routes with full obstacle
+    # awareness (the auto-router only avoids components already placed). ===
+    # MCU on the left; peripherals stacked on the right.
     xiao = d.add(xiao_rp2350().label("XIAO RP2350", loc="bot", ofst=0.4))
 
     # MPU6050 up-and-right so its I2C+INT pins face the XIAO's top GPIOs. The
@@ -71,19 +74,15 @@ def draw() -> schemdraw.Drawing:
         .label("Right NEMA17", loc="bot", ofst=0.4)
     )
 
-    # === I2C + INT: XIAO top GPIOs → MPU6050 (parallel, no crossing). ===
-    d.add(elm.Wire("-|").at(xiao.GPIO7).to(mpu.SCL).color("steelblue"))
-    d.add(elm.Wire("-|").at(xiao.GPIO6).to(mpu.SDA).color("steelblue"))
-    d.add(elm.Wire("-|").at(xiao.GPIO5).to(mpu.INT).color("steelblue"))
+    # === Local stubs (power tags, nENABLE bus) before routing, so their
+    # footprint — e.g. a GND tag protruding from a chip's side — is a known
+    # obstacle to every net below. Placed after routing, the router can't
+    # see them and a wire can end up drawn right through one. ===
 
-    # === STEP / DIR to each driver. ===
-    d.add(elm.Wire("-|").at(xiao.GPIO2).to(drv_l.STEP).color("steelblue"))
-    d.add(elm.Wire("-|").at(xiao.GPIO4).to(drv_l.DIR).color("steelblue"))
-    d.add(elm.Wire("-|").at(xiao.GPIO3).to(drv_r.STEP).color("steelblue"))
-    d.add(elm.Wire("-|").at(xiao.GPIO0).to(drv_r.DIR).color("steelblue"))
-
-    # === Shared nENABLE trunk: GPIO1 → vertical bus → both nENABLE pins,
-    # with the 10 kΩ pull-up to 3V3 tapping the top of the bus. ===
+    # Shared nENABLE trunk: GPIO1 → vertical bus → both nENABLE pins, with
+    # the 10 kΩ pull-up to 3V3 tapping the top of the bus. This is a
+    # multi-endpoint bus (a T-junction fan-out), not a point-to-point net,
+    # so it stays hand-drawn — the router only handles two-terminal wires.
     nen_x = xiao.center.x + 4.0
     top = (nen_x, drv_l.nENABLE.y)
     bot = (nen_x, drv_r.nENABLE.y)
@@ -96,14 +95,7 @@ def draw() -> schemdraw.Drawing:
     d.add(elm.Resistor().up().label("10 kΩ"))
     d.add(elm.Vdd().label("+3V3"))
 
-    # === Coil pairs: each DRV8825 right side → its stepper (straight runs). ===
-    for drv, step in ((drv_l, step_l), (drv_r, step_r)):
-        d.add(elm.Wire("-").at(drv.A1).to(step.A1))
-        d.add(elm.Wire("-").at(drv.A2).to(step.A2))
-        d.add(elm.Wire("-").at(drv.B1).to(step.B1))
-        d.add(elm.Wire("-").at(drv.B2).to(step.B2))
-
-    # === Power rails. ===
+    # Power rails.
     # XIAO: 3V3 logic, 5V from the buck converter, common ground — left side.
     d.add(elm.Line().left(0.5).at(xiao["3V3"]))
     d.add(elm.Vdd().label("+3V3"))
@@ -127,6 +119,27 @@ def draw() -> schemdraw.Drawing:
         d.add(elm.Vdd().label("+VMOT"))
         d.add(elm.Line().left(1.0).at(drv.GND))
         d.add(elm.Ground())
+
+    # === Nets: auto-routed orthogonal, obstacle-avoiding wires. ===
+    router = Router(d)
+
+    # I2C + INT: XIAO top GPIOs → MPU6050.
+    router.wire(xiao.GPIO7, mpu.SCL, color="steelblue")
+    router.wire(xiao.GPIO6, mpu.SDA, color="steelblue")
+    router.wire(xiao.GPIO5, mpu.INT, color="steelblue")
+
+    # STEP / DIR to each driver.
+    router.wire(xiao.GPIO2, drv_l.STEP, color="steelblue")
+    router.wire(xiao.GPIO4, drv_l.DIR, color="steelblue")
+    router.wire(xiao.GPIO3, drv_r.STEP, color="steelblue")
+    router.wire(xiao.GPIO0, drv_r.DIR, color="steelblue")
+
+    # Coil pairs: each DRV8825 right side → its stepper.
+    for drv, step in ((drv_l, step_l), (drv_r, step_r)):
+        router.wire(drv.A1, step.A1)
+        router.wire(drv.A2, step.A2)
+        router.wire(drv.B1, step.B1)
+        router.wire(drv.B2, step.B2)
 
     return d
 
