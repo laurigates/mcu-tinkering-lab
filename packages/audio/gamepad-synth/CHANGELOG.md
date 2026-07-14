@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.4](https://github.com/laurigates/mcu-tinkering-lab/compare/gamepad-synth-v0.1.3...gamepad-synth-v0.1.4) (2026-07-14)
+
+
+### Features
+
+* **gamepad-synth:** encode lfo_rate as value-scaled blip ladder ([#387](https://github.com/laurigates/mcu-tinkering-lab/issues/387)) ([877c7e4](https://github.com/laurigates/mcu-tinkering-lab/commit/877c7e4674643e8fd8c2a774e1dd0868d39b2aa0)), closes [#267](https://github.com/laurigates/mcu-tinkering-lab/issues/267)
+
 ## [0.1.3](https://github.com/laurigates/mcu-tinkering-lab/compare/gamepad-synth-v0.1.2...gamepad-synth-v0.1.3) (2026-07-13)
 
 

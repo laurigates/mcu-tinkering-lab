@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.4](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-camera-v0.1.3...robocar-camera-v0.1.4) (2026-07-14)
+
+
+### Bug Fixes
+
+* **robocar:** apply custom OTA partition table via sdkconfig so release builds fit ([#389](https://github.com/laurigates/mcu-tinkering-lab/issues/389)) ([ea72395](https://github.com/laurigates/mcu-tinkering-lab/commit/ea72395109229d2359141ce9fa74ad90721c1afd))
+
 ## [0.1.3](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-camera-v0.1.2...robocar-camera-v0.1.3) (2026-07-13)
 
 
