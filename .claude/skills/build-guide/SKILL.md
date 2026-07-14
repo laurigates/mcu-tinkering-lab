@@ -128,12 +128,23 @@ CARGO_HTTP_CAINFO=/root/.ccr/ca-bundle.crt cargo install typst-cli --locked
 
 Compile from the guide's directory with the **repo root** as the sandbox root so
 the template import and shared schematic image resolve (both live outside the
-project dir):
+project dir). Use the **canonical flags** — the `build-guide-check.yml` CI guard
+recompiles every guide and fails if the committed PDF differs byte-for-byte, so
+the PDF must be produced deterministically:
 
 ```bash
 cd packages/<domain>/<project>/docs
-typst compile --root ../../../.. build-guide.typ
+typst compile --creation-timestamp 0 --ignore-system-fonts --root ../../../.. build-guide.typ
 ```
+
+- `--creation-timestamp 0` pins the embedded PDF timestamp; without it the file
+  carries wall-clock time and never reproduces.
+- `--ignore-system-fonts` embeds only Typst's bundled fonts, so glyph fallbacks
+  are identical on every machine (otherwise Linux FreeSans vs macOS SF diverge).
+- Match the Typst version the guard pins (see `TYPST_VERSION` in
+  `.github/workflows/build-guide-check.yml`); a different compiler release
+  produces different bytes. Install it with
+  `cargo install typst-cli --version <that-version> --locked`.
 
 Verify by rendering a page or two to PNG (`--pages 1,3`) and eyeballing the
 layout before committing.
