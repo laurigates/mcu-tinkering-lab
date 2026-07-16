@@ -156,11 +156,14 @@ jobs:
           pattern: firmware-*
           path: artifacts
 
+      # Pass the tag verbatim — release-please monorepo tags look like
+      # "robocar-unified-v0.1.5" (no leading "v" to strip). Per-project card
+      # versions come from .release-please-manifest.json inside the generator.
       - name: Get version from tag
         id: version
         run: |
           TAG="${{ github.event.release.tag_name || inputs.release_tag }}"
-          echo "version=${TAG#v}" >> $GITHUB_OUTPUT
+          echo "version=$TAG" >> $GITHUB_OUTPUT
 
       - name: Assemble firmware directory
         run: |

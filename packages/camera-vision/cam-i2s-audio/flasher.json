@@ -1,0 +1,9 @@
+{
+  "name": "ESP32-CAM I2S Audio",
+  "description": "Camera and I2S audio experiments on the AI Thinker ESP32-CAM",
+  "chipFamily": "ESP32",
+  "board": "AI Thinker ESP32-CAM",
+  "appBinaryName": "esp32-cam-i2s-audio.bin",
+  "category": "standalone",
+  "flashMode": "gpio0"
+}

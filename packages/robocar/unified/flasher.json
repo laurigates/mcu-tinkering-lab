@@ -1,0 +1,10 @@
+{
+  "name": "RoboCar Unified",
+  "description": "Single-board robocar consolidation — camera, motor control, and AI vision on one board",
+  "chipFamily": "ESP32-S3",
+  "board": "Seeed XIAO ESP32-S3 Sense",
+  "appBinaryName": "robocar-unified.bin",
+  "category": "robocar",
+  "flashMode": "usb",
+  "improv": true
+}
