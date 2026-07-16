@@ -234,10 +234,11 @@
     }
 
     // ---- Category display configuration ----
-    const CATEGORY_ORDER  = ["thinkpack", "robocar", "tools", "games", "standalone"];
+    const CATEGORY_ORDER  = ["thinkpack", "robocar", "audio", "tools", "games", "standalone"];
     const CATEGORY_LABELS = {
       thinkpack:  "ThinkPack — Modular Toy Mesh",
       robocar:    "RoboCar Components",
+      audio:      "Audio & Synth",
       tools:      "Utility Tools",
       games:      "Games & Toys",
       standalone: "Standalone Projects",
@@ -268,7 +269,9 @@
       // Update footer with generation metadata
       if (data.version || data.generatedAt) {
         const parts = [];
-        if (data.version)      parts.push(`v${data.version}`);
+        // Site-level version is the release tag that triggered the build
+        // (e.g. "robocar-unified-v0.1.5") — already carries its own "v".
+        if (data.version)      parts.push(data.version);
         if (data.generatedAt)  parts.push(`built ${data.generatedAt.slice(0, 10)}`);
         document.getElementById("footer-meta").textContent = parts.join(" · ");
       }

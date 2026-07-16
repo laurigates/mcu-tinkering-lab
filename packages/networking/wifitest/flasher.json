@@ -1,0 +1,9 @@
+{
+  "name": "WiFi Test",
+  "description": "WiFi access-point test firmware for verifying connectivity and radio behaviour",
+  "chipFamily": "ESP32-S3",
+  "board": "ESP32-S3 DevKit",
+  "appBinaryName": "esp32-wifitest.bin",
+  "category": "tools",
+  "flashMode": "usb"
+}

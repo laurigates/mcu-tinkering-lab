@@ -5,8 +5,14 @@
 #   ./tools/generate-flasher-manifests.sh <version> [firmware-dir]
 #
 # Arguments:
-#   version      Release version string, e.g. "0.3.1"
+#   version      Release tag that triggered the build, e.g. "robocar-unified-v0.1.5".
+#                Used as the site-level version and as a fallback for projects
+#                missing from .release-please-manifest.json.
 #   firmware-dir Output directory for manifests (default: "firmware")
+#
+# Per-project versions come from .release-please-manifest.json — this is a
+# release-please monorepo where every package carries its own version, so the
+# triggering release's tag would be wrong for every other project's card.
 #
 # For every packages/*/*/flasher.json found, this script:
 #   1. Reads chipFamily and appBinaryName from flasher.json
@@ -31,6 +37,17 @@ set -euo pipefail
 VERSION="${1:?Usage: $0 <version> [firmware-dir]}"
 FIRMWARE_DIR="${2:-firmware}"
 PROJECTS_GLOB="packages/*/*/flasher.json"
+RELEASE_MANIFEST=".release-please-manifest.json"
+
+# Look up a project's own version in the release-please manifest (keyed by the
+# package path, e.g. "packages/audio/kids-audio-toy"). Falls back to $VERSION.
+project_version() {
+    local dir="$1" v=""
+    if [[ -f "$RELEASE_MANIFEST" ]]; then
+        v=$(jq -r --arg p "$dir" '.[$p] // empty' "$RELEASE_MANIFEST")
+    fi
+    echo "${v:-$VERSION}"
+}
 
 # Associative array: chip family -> bootloader offset (decimal)
 bootloader_offset() {
@@ -101,6 +118,8 @@ for flasher_json in ${PROJECTS_GLOB}; do
     category=$(jq -r '.category // "standalone"' "$flasher_json")
     flash_mode=$(jq -r '.flashMode // "uart"'  "$flasher_json")
     improv=$(jq -r '.improv // false'          "$flasher_json")
+    version=$(project_version "$project_dir")
+    echo "    version=$version"
 
     # Determine offsets
     bl_offset=$(bootloader_offset "$chip_family")
@@ -130,7 +149,7 @@ for flasher_json in ${PROJECTS_GLOB}; do
 
     jq -n \
         --arg  name    "$name" \
-        --arg  version "$VERSION" \
+        --arg  version "$version" \
         --arg  chip    "$chip_family" \
         --argjson parts "$parts" \
         '{
@@ -148,7 +167,7 @@ for flasher_json in ${PROJECTS_GLOB}; do
         --arg  description  "$description" \
         --arg  chip         "$chip_family" \
         --arg  board        "$board" \
-        --arg  version      "$VERSION" \
+        --arg  version      "$version" \
         --arg  category     "$category" \
         --arg  flash_mode   "$flash_mode" \
         --argjson improv    "$improv" \

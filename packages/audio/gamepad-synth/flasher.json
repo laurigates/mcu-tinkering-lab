@@ -1,0 +1,9 @@
+{
+  "name": "Gamepad Synth",
+  "description": "Korg Monotron-inspired synthesizer driven by a BLE gamepad, with dual DDS oscillators and I2S audio out",
+  "chipFamily": "ESP32-S3",
+  "board": "ESP32-S3 DevKit (MAX98357A I2S DAC)",
+  "appBinaryName": "gamepad-synth.bin",
+  "category": "audio",
+  "flashMode": "usb"
+}
