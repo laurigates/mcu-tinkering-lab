@@ -1,11 +1,11 @@
 {
   "packages/robocar/main": "0.1.4",
   "packages/robocar/camera": "0.1.4",
-  "packages/robocar/unified": "0.1.5",
+  "packages/robocar/unified": "0.1.6",
   "packages/audio/audiobook-player": "0.1.2",
-  "packages/camera-vision/cam-i2s-audio": "0.1.2",
+  "packages/camera-vision/cam-i2s-audio": "0.1.3",
   "packages/camera-vision/cam-webserver": "0.1.3",
-  "packages/networking/wifitest": "0.1.2",
+  "packages/networking/wifitest": "0.1.3",
   "packages/networking/wireguard-ha": "0.1.2",
   "packages/camera-vision/llm-telegram": "0.1.3",
   "packages/networking/it-troubleshooter": "0.1.3",
@@ -14,7 +14,7 @@
   "packages/robocar/simulation": "0.1.3",
   "packages/input-gaming/switch-usb-proxy": "0.1.2",
   "packages/input-gaming/xbox-switch-bridge": "0.1.2",
-  "packages/audio/gamepad-synth": "0.1.4",
+  "packages/audio/gamepad-synth": "0.1.5",
   "packages/thinkpack/chatterbox": "1.1.1",
   "packages/thinkpack/finderbox": "1.1.1",
   "packages/robotics/balancebot": "0.1.2"
