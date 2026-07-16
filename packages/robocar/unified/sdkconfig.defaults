@@ -34,6 +34,15 @@ CONFIG_CAMERA_DMA_BUFFER_SIZE_MAX=32768
 
 # Flash (XIAO ESP32-S3 Sense has 8MB flash)
 CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE="8MB"
+
+# Custom OTA partition table (partitions.csv).
+# ESP-IDF ignores set(CONFIG_PARTITION_TABLE_* ...) in CMakeLists — sdkconfig
+# is authoritative — so these MUST live here or the build falls back to the
+# default single-app 1M factory table and the binary overflows it.
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+CONFIG_PARTITION_TABLE_FILENAME="partitions.csv"
 
 # Logging
 CONFIG_LOG_DEFAULT_LEVEL_INFO=y

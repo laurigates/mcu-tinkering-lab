@@ -171,7 +171,7 @@ esp_err_t goal_state_init(void)
     g_gs.has_been_written = false;
     g_gs.initialised = true;
 
-    ESP_LOGI(TAG, "Initialised (default TTL %u ms)", GOAL_STATE_DEFAULT_TTL_MS);
+    ESP_LOGI(TAG, "Initialised (default TTL %u ms)", (unsigned)GOAL_STATE_DEFAULT_TTL_MS);
     return ESP_OK;
 }
 
@@ -203,7 +203,7 @@ esp_err_t goal_state_write(const goal_t *goal, uint32_t ttl_ms)
     /* Log only when the goal kind changes to keep the serial log readable. */
     if (goal->kind != old_kind) {
         ESP_LOGI(TAG, "Goal kind: %d -> %d (ttl %u ms)", (int)old_kind, (int)goal->kind,
-                 effective_ttl);
+                 (unsigned)effective_ttl);
     }
 
     return ESP_OK;

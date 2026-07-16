@@ -1,10 +1,9 @@
 /**
  * @file ota_manager.c
- * @brief OTA update manager implementation for ESP32-CAM robocar
+ * @brief OTA update manager for the single-board unified robocar
  *
  * Uses esp_ghota for GitHub release checking and firmware download,
- * with MQTT notifications for immediate update triggers. After
- * self-updating, orchestrates main controller update via I2C OTA commands.
+ * with MQTT notifications for immediate update triggers.
  */
 
 #include "ota_manager.h"
@@ -19,9 +18,6 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/timers.h"
-#include "i2c_master.h"
-#include "i2c_protocol.h"
-#include "semver.h"
 #if MQTT_LOGGING_ENABLED
 #include "mqtt_logger.h"
 #endif
@@ -38,7 +34,6 @@ static TimerHandle_t s_stability_timer = NULL;
 static void ghota_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id,
                                 void *event_data);
 static void ota_stability_timer_callback(TimerHandle_t xTimer);
-static void orchestrate_main_controller_update(void *pvParameters);
 
 #if MQTT_LOGGING_ENABLED
 static void mqtt_ota_notify_handler(const char *topic, const char *data, int data_len);
@@ -49,14 +44,15 @@ esp_err_t ota_manager_init(void)
     ESP_LOGI(TAG, "Initializing OTA manager");
     ESP_LOGI(TAG, "Current firmware version: %s", ota_manager_get_version());
 
-    // Configure esp_ghota
+    // Configure esp_ghota (filenamematch is a char array — copy, don't assign)
     ghota_config_t ghota_config = {
-        .filenamematch = OTA_FIRMWARE_FILENAME_MATCH,
         .hostname = OTA_GITHUB_HOST,
         .orgname = OTA_GITHUB_ORG,
         .reponame = OTA_GITHUB_REPO,
         .updateInterval = OTA_CHECK_INTERVAL_MIN,
     };
+    strncpy(ghota_config.filenamematch, OTA_FIRMWARE_FILENAME_MATCH,
+            sizeof(ghota_config.filenamematch) - 1);
 
     s_ghota_client = ghota_init(&ghota_config);
     if (!s_ghota_client) {
@@ -157,9 +153,9 @@ static void ghota_event_handler(void *arg, esp_event_base_t event_base, int32_t 
             mqtt_logger_publish(OTA_MQTT_STATUS_TOPIC, "{\"status\":\"downloading\"}", 1, false);
 #endif
             // esp_ghota handles the download and flash automatically
-            esp_err_t update_ret = ghota_start_update(s_ghota_client);
+            esp_err_t update_ret = ghota_start_update_task(s_ghota_client);
             if (update_ret != ESP_OK) {
-                ESP_LOGE(TAG, "ghota_start_update failed: %s", esp_err_to_name(update_ret));
+                ESP_LOGE(TAG, "ghota_start_update_task failed: %s", esp_err_to_name(update_ret));
                 s_ota_in_progress = false;
             }
             break;
@@ -177,7 +173,7 @@ static void ghota_event_handler(void *arg, esp_event_base_t event_base, int32_t 
             ESP_LOGI(TAG, "Storage partition update complete");
             break;
 
-        case GHOTA_EVENT_START_FIRMWARE_UPDATE:
+        case GHOTA_EVENT_START_UPDATE:
             ESP_LOGI(TAG, "Firmware update starting...");
             break;
 
@@ -189,7 +185,7 @@ static void ghota_event_handler(void *arg, esp_event_base_t event_base, int32_t 
             break;
         }
 
-        case GHOTA_EVENT_FINISH_FIRMWARE_UPDATE:
+        case GHOTA_EVENT_FINISH_UPDATE:
             ESP_LOGI(TAG, "Firmware update complete — rebooting...");
             s_ota_in_progress = false;
 
@@ -223,138 +219,9 @@ static void ghota_event_handler(void *arg, esp_event_base_t event_base, int32_t 
 
 static void ota_stability_timer_callback(TimerHandle_t xTimer)
 {
+    (void)xTimer;
     ESP_LOGI(TAG, "Stability timeout reached — confirming firmware validity");
     ota_manager_confirm_valid();
-
-    // After confirming self-update, check if main controller needs updating
-    // This runs as a separate task to avoid blocking the timer callback
-    xTaskCreate(orchestrate_main_controller_update, "ota_main_ctrl", OTA_TASK_STACK_SIZE, NULL,
-                OTA_TASK_PRIORITY, NULL);
-}
-
-// Polling constants for main controller OTA orchestration
-#define OTA_VERSION_POLL_INTERVAL_MS 1000
-#define OTA_VERSION_POLL_MAX_ATTEMPTS 30
-#define OTA_MAINTENANCE_SETTLE_MS 2000
-#define OTA_STATUS_POLL_INTERVAL_MS 5000
-#define OTA_STATUS_TIMEOUT_MS (5 * 60 * 1000)
-
-static void orchestrate_main_controller_update(void *pvParameters)
-{
-    ESP_LOGI(TAG, "Checking if main controller needs OTA update...");
-
-    // Step 1: Get main controller version via I2C helper
-    char mc_version_str[VERSION_STRING_LEN];
-    esp_err_t ret = i2c_get_version(mc_version_str, sizeof(mc_version_str));
-    if (ret != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to query main controller version: %s", esp_err_to_name(ret));
-        goto done;
-    }
-    ESP_LOGI(TAG, "Main controller firmware version: %s", mc_version_str);
-
-    // Step 2: Parse main controller version as semver
-    semver_t mc_version = {};
-    if (semver_parse(mc_version_str, &mc_version) != 0) {
-        ESP_LOGW(TAG, "Failed to parse main controller version: %s", mc_version_str);
-        goto done;
-    }
-
-    // Step 3: Get latest release version from esp_ghota
-    semver_t *latest = ghota_get_latest_version(s_ghota_client);
-    if (!latest || (!latest->major && !latest->minor && !latest->patch)) {
-        ESP_LOGI(TAG, "No cached release info — triggering GitHub check...");
-        ghota_check(s_ghota_client);
-
-        for (int i = 0; i < OTA_VERSION_POLL_MAX_ATTEMPTS; i++) {
-            vTaskDelay(pdMS_TO_TICKS(OTA_VERSION_POLL_INTERVAL_MS));
-            latest = ghota_get_latest_version(s_ghota_client);
-            if (latest && (latest->major || latest->minor || latest->patch)) {
-                break;
-            }
-        }
-    }
-
-    if (!latest || (!latest->major && !latest->minor && !latest->patch)) {
-        ESP_LOGW(TAG, "Could not determine latest release version");
-        semver_free(&mc_version);
-        goto done;
-    }
-
-    char latest_str[32];
-    semver_render(latest, latest_str);
-    ESP_LOGI(TAG, "Latest release version: %s", latest_str);
-
-    // Step 4: Compare — skip if main controller is already up to date
-    if (!semver_gt(*latest, mc_version)) {
-        ESP_LOGI(TAG, "Main controller is up to date (v%s)", mc_version_str);
-        semver_free(&mc_version);
-        goto done;
-    }
-
-    ESP_LOGI(TAG, "Main controller needs update: v%s -> v%s", mc_version_str, latest_str);
-
-    // Step 5: Enter maintenance mode (stops motors on main controller)
-    ret = i2c_send_enter_maintenance_mode();
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to enter maintenance mode: %s", esp_err_to_name(ret));
-        semver_free(&mc_version);
-        goto done;
-    }
-    vTaskDelay(pdMS_TO_TICKS(OTA_MAINTENANCE_SETTLE_MS));
-
-    // Step 6: Send OTA begin with release tag (e.g., "v0.2.0").
-    // OTA_TAG_MAX_LEN = 20; the receiver looks the tag up against the GitHub
-    // release name, so silent truncation here would point the main controller
-    // at the wrong (or no) release. Abort instead of sending a partial tag.
-    char release_tag[OTA_TAG_MAX_LEN];
-    int written = snprintf(release_tag, sizeof(release_tag), "v%s", latest_str);
-    if (written < 0 || (size_t)written >= sizeof(release_tag)) {
-        ESP_LOGE(TAG, "Release tag '%s' would exceed %u-byte limit — aborting main OTA", latest_str,
-                 (unsigned)sizeof(release_tag));
-        semver_free(&mc_version);
-        goto done;
-    }
-
-    ret = i2c_send_begin_ota(release_tag, NULL);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to start main controller OTA: %s", esp_err_to_name(ret));
-        semver_free(&mc_version);
-        goto done;
-    }
-
-    // Step 7: Poll OTA status until success, failure, or timeout
-    const int max_polls = OTA_STATUS_TIMEOUT_MS / OTA_STATUS_POLL_INTERVAL_MS;
-    for (int i = 0; i < max_polls; i++) {
-        vTaskDelay(pdMS_TO_TICKS(OTA_STATUS_POLL_INTERVAL_MS));
-
-        ota_status_response_t ota_status;
-        ret = i2c_get_ota_status(&ota_status);
-        if (ret != ESP_OK) {
-            ESP_LOGW(TAG, "Failed to poll OTA status (%d/%d)", i + 1, max_polls);
-            continue;
-        }
-
-        ESP_LOGI(TAG, "OTA progress: %d%% (status: %d)", ota_status.progress, ota_status.status);
-
-        if (ota_status.status == OTA_STATUS_SUCCESS) {
-            ESP_LOGI(TAG, "Main controller OTA successful — sending reboot");
-            i2c_send_reboot();
-            semver_free(&mc_version);
-            goto done;
-        }
-
-        if (ota_status.status == OTA_STATUS_FAILED) {
-            ESP_LOGE(TAG, "Main controller OTA failed (error: %d)", ota_status.error_code);
-            semver_free(&mc_version);
-            goto done;
-        }
-    }
-
-    ESP_LOGE(TAG, "Main controller OTA timed out after %d seconds", OTA_STATUS_TIMEOUT_MS / 1000);
-    semver_free(&mc_version);
-
-done:
-    vTaskDelete(NULL);
 }
 
 #if MQTT_LOGGING_ENABLED
