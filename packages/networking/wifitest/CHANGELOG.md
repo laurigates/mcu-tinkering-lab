@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.3](https://github.com/laurigates/mcu-tinkering-lab/compare/esp32-wifitest-v0.1.2...esp32-wifitest-v0.1.3) (2026-07-16)
+
+
+### Bug Fixes
+
+* **flasher:** show per-project versions and add missing project cards ([#393](https://github.com/laurigates/mcu-tinkering-lab/issues/393)) ([df12129](https://github.com/laurigates/mcu-tinkering-lab/commit/df1212974b9bae4a391f94a0d0de67ec1d2de87e))
+
 ## [0.1.2](https://github.com/laurigates/mcu-tinkering-lab/compare/esp32-wifitest-v0.1.1...esp32-wifitest-v0.1.2) (2026-07-02)
 
 
