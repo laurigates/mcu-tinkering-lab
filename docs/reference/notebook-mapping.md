@@ -5,7 +5,7 @@ file is the source of truth for:
 
 - The scheduled monthly refresh reminder (`.github/workflows/notebook-refresh-reminder.yml`)
 - The PR-triggered ADR/PRD reminder (`.github/workflows/notebook-doc-reminder.yml`)
-- The `just notebooks-status` audit recipe (`tools/notebooks-status.sh`)
+- The `just notebooks-status` (audit) and `just notebooks-refresh` (report regen) recipes
 
 When you add a new ADR or PRD, update the matching notebook's sources in
 the same PR (or within the next monthly refresh cycle).

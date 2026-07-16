@@ -372,6 +372,11 @@ docker-logs:
 notebooks-status:
     tools/notebooks-status.sh
 
+# Regenerate + download reports for all active notebooks (FORMAT=briefing-doc|study-guide|...)
+[group: "notebooks"]
+notebooks-refresh:
+    tools/notebooks-refresh.sh
+
 ##########
 # Git
 ##########

@@ -72,10 +72,10 @@ jobs:
           Scheduled monthly refresh of the curated NotebookLM knowledge base.
           See `docs/reference/notebook-mapping.md` for the full mapping.
 
-          **How to run:** `notebooklm login` (once) then `just notebooks-status`
-          to audit, and drive the refresh with the `notebooklm` CLI per the
-          mapping doc. The CLI is not available in CI because auth lives on
-          your machine.
+          **How to run:** `notebooklm login` (once), `just notebooks-status`
+          to audit, then `just notebooks-refresh` to regenerate + download
+          the briefing docs. The CLI is not available in CI because auth
+          lives on your machine.
 
           ## Active notebooks — monthly checklist
 
