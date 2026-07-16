@@ -27,7 +27,7 @@ purpose below.
 | XIAO ESP32-C5 (RISC-V, dual-band WiFi) | `878b1f67-d2ac-4e77-a009-ee6f96d1bce5` | XIAO C5 board projects |
 | XIAO ESP32-C6 (RISC-V, WiFi 6 / Thread / Zigbee) | `4165a6db-5021-44c0-b1f5-42ceb2b2bab7` | XIAO C6 board projects; ESP32-S3 families cross-ref |
 | ESP32-P4 (RISC-V, high-performance, no radio) | `25de0275-7d54-44a2-a574-5d4efb8ef62d` | ESP32-P4 board projects |
-| RP2350 (Raspberry Pi, dual-core ARM/RISC-V) | `c8675955-0cd1-4ab0-a641-58f1ad139bb9` | RP2350 board projects |
+| RP2350 (Raspberry Pi, dual-core ARM/RISC-V) | `c8675955-0cd1-4ab0-a641-58f1ad139bb9` | ADR-018; PRD-012; `packages/robotics/balancebot/`; RP2350 board projects |
 
 ### Peripheral IC classes
 
@@ -81,6 +81,7 @@ purpose below.
 | `docs/decisions/ADR-011-*`, `docs/decisions/ADR-017-*`, `docs/requirements/PRD-011-*`, `packages/audio/**` (non-gamepad) | I2S audio + ESP32-S3 boards |
 | `docs/decisions/ADR-007-*`, `packages/components/i2c-protocol/**` | ESP32 peripherals |
 | `docs/requirements/PRD-006-*`, `packages/games/nfc-scavenger-hunt/**` | ChameleonUltra RFID/NFC |
+| `docs/decisions/ADR-018-*`, `docs/requirements/PRD-012-*`, `packages/robotics/balancebot/**` | RP2350 boards |
 | `packages/robocar/camera/**`, `packages/robocar/main/**`, `docs/reference/boards/ttgo-lora32-v2.md` | ESP32 classic boards |
 | `packages/robocar/*/main/motor_controller.*` | Motor drivers & power electronics |
 | `docs/requirements/PRD-007-*`, `packages/audio/audiobook-player/**`, `packages/networking/wireguard-ha/**` | ESPHome platform & components |

@@ -16,6 +16,7 @@ on:
       - 'packages/robocar/main/**'
       - 'packages/robocar/simulation/**'
       - 'packages/robocar/unified/main/motor_controller.*'
+      - 'packages/robotics/**'
       - 'CLAUDE.md'
       - '.claude/rules/**'
 
@@ -65,6 +66,11 @@ jobs:
                 HITS["2cb7153a — ESPHome platform & components"]=1 ;;
               docs/decisions/ADR-011-*|packages/audio/*)
                 HITS["8cbdd8bb — I2S audio & synthesis on ESP32"]=1 ;;
+              docs/decisions/ADR-017-*|docs/requirements/PRD-011-*)
+                HITS["8cbdd8bb — I2S audio & synthesis on ESP32"]=1
+                HITS["3bb67ba2 — ESP32-S3 hardware families"]=1 ;;
+              docs/decisions/ADR-018-*|docs/requirements/PRD-012-*|packages/robotics/balancebot/*)
+                HITS["c8675955 — RP2350 / XIAO RP2350 boards"]=1 ;;
               docs/decisions/ADR-007-*|packages/components/i2c-protocol/*)
                 HITS["5601a768 — ESP32 peripherals (I2C, UART, I2S, GPIO)"]=1 ;;
               docs/requirements/PRD-006-*|packages/games/nfc-scavenger-hunt/*)
