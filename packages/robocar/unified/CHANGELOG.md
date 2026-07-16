@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.7](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.1.6...robocar-unified-v0.1.7) (2026-07-16)
+
+
+### Bug Fixes
+
+* **robocar-unified:** repair esp-idf-lib symlink broken by monorepo re-org ([1eee6e5](https://github.com/laurigates/mcu-tinkering-lab/commit/1eee6e52dbfa6c262491e1de1f3921f6094f9e5f))
+
 ## [0.1.6](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.1.5...robocar-unified-v0.1.6) (2026-07-16)
 
 
