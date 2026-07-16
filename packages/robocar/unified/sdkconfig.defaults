@@ -72,6 +72,9 @@ CONFIG_OTA_GITHUB_REPO="mcu-tinkering-lab"
 # mDNS hostname discovery (robocar.local)
 CONFIG_MDNS_ENABLED=y
 
+# MCP23017 GPIO expander (I2C variant of the mcp23x17 driver)
+CONFIG_MCP23X17_IFACE_I2C=y
+
 # Heap configuration (disable advanced features)
 CONFIG_HEAP_TRACING=n
 CONFIG_HEAP_CORRUPTION_DETECTION=n

@@ -35,7 +35,10 @@ All I2C devices hang off a **TCA9548A multiplexer** on GPIO5/6. Don't talk to de
 
 - ch0: PCA9685 (motors, servos, LEDs)
 - ch1: SSD1306 OLED
-- ch2-7: reserved
+- ch2: MCP23017 GPIO expander (optional — 16 generic GPIOs via `gpio_expander.c`, no roles assigned yet; firmware boots fine without the board fitted)
+- ch3-7: reserved
+
+The MCP23017 (1953W breakout, address 0x20) is exercised from the serial console with `gpio`, `gpio mode <pin> in|up|out`, `gpio set <pin> 0|1`, `gpio get <pin>`.
 
 ## PCA9685 channel layout
 

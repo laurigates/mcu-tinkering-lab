@@ -13,6 +13,8 @@
  */
 
 #include <string.h>
+#include "esp_app_desc.h"
+#include "esp_check.h"
 #include "esp_log.h"
 #include "esp_system.h"
 #include "esp_timer.h"
@@ -28,6 +30,7 @@
 #include "config.h"
 #include "credentials_loader.h"
 #include "goal_state.h"
+#include "gpio_expander.h"
 #include "i2c_bus.h"
 #include "led_controller.h"
 #include "mdns.h"
@@ -230,6 +233,65 @@ static void dispatch_sound(const char *sound)
 }
 
 // ========================================
+// GPIO expander console commands (bench testing)
+//   gpio                     - 16-pin port dump
+//   gpio mode <pin> in|up|out - set direction (up = input with pullup)
+//   gpio set <pin> 0|1       - drive an output pin
+//   gpio get <pin>           - read one pin
+// ========================================
+static void handle_gpio_cmd(const char *buf)
+{
+    if (!gpio_expander_available()) {
+        printf("gpio: no MCP23017 detected\n");
+        return;
+    }
+
+    char op[8] = {0};
+    unsigned pin = 0;
+    char arg[8] = {0};
+    int n = sscanf(buf, "gpio %7s %u %7s", op, &pin, arg);
+
+    esp_err_t ret = ESP_ERR_INVALID_ARG;
+    if (n <= 0) {
+        uint16_t port = 0;
+        ret = gpio_expander_read_port(&port);
+        if (ret == ESP_OK)
+            printf("gpio: port=0x%04X\n", port);
+    } else if (n == 3 && strcmp(op, "mode") == 0) {
+        gpio_expander_mode_t mode;
+        if (strcmp(arg, "in") == 0)
+            mode = GPIO_EXPANDER_INPUT;
+        else if (strcmp(arg, "up") == 0)
+            mode = GPIO_EXPANDER_INPUT_PULLUP;
+        else if (strcmp(arg, "out") == 0)
+            mode = GPIO_EXPANDER_OUTPUT;
+        else {
+            printf("gpio: mode must be in|up|out\n");
+            return;
+        }
+        ret = gpio_expander_set_mode((uint8_t)pin, mode);
+        if (ret == ESP_OK)
+            printf("gpio: pin %u mode=%s\n", pin, arg);
+    } else if (n == 3 && strcmp(op, "set") == 0) {
+        ret = gpio_expander_write((uint8_t)pin, arg[0] != '0');
+        if (ret == ESP_OK)
+            printf("gpio: pin %u = %c\n", pin, arg[0] != '0' ? '1' : '0');
+    } else if (n == 2 && strcmp(op, "get") == 0) {
+        bool level = false;
+        ret = gpio_expander_read((uint8_t)pin, &level);
+        if (ret == ESP_OK)
+            printf("gpio: pin %u = %d\n", pin, level);
+    } else {
+        printf("gpio: usage: gpio | gpio mode <pin> in|up|out | gpio set <pin> 0|1 | gpio get "
+               "<pin>\n");
+        return;
+    }
+
+    if (ret != ESP_OK)
+        printf("gpio: error: %s\n", esp_err_to_name(ret));
+}
+
+// ========================================
 // Serial command task (Core 0, priority 5)
 // ========================================
 static void command_task(void *pvParameters)
@@ -284,6 +346,8 @@ static void command_task(void *pvParameters)
                             dispatch_movement("stop");
                             break;
                     }
+                } else if (strncmp(buf, "gpio", 4) == 0) {
+                    handle_gpio_cmd(buf);
                 }
 
                 buf_pos = 0;
@@ -312,6 +376,8 @@ static esp_err_t init_hardware(void)
     ESP_LOGI(TAG, "Phase 1: I2C bus + peripherals");
 
     ESP_RETURN_ON_ERROR(i2c_bus_init(), TAG, "I2C bus init failed");
+    // Optional hardware: returns ESP_OK even when no expander is fitted
+    ESP_RETURN_ON_ERROR(gpio_expander_init(), TAG, "GPIO expander init failed");
     ESP_RETURN_ON_ERROR(motor_controller_init(), TAG, "Motor init failed");
     ESP_RETURN_ON_ERROR(led_controller_init(), TAG, "LED init failed");
     ESP_RETURN_ON_ERROR(servo_controller_init(), TAG, "Servo init failed");

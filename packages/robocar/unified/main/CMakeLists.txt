@@ -2,6 +2,7 @@ idf_component_register(
     SRCS
         "main.c"
         "i2c_bus.c"
+        "gpio_expander.c"
         "motor_controller.c"
         "led_controller.c"
         "servo_controller.c"
@@ -23,6 +24,7 @@ idf_component_register(
     REQUIRES
         "pca9685"
         "tca9548"
+        "mcp23x17"
         "i2cdev"
         "esp32-camera"
         "esp_wifi"
