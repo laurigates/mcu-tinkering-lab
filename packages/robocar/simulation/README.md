@@ -6,10 +6,12 @@ A comprehensive simulation environment for the ESP32-based robot car with physic
 
 ### Known Issues & Limitations
 
-- **Genesis 3D visualization**: Currently disabled due to compatibility issues. Using matplotlib 2D fallback.
-- **Physics accuracy**: 4 tests fail related to physics calibration (energy conservation, velocity matching). Robot simulation works but physics parameters need tuning.
-- **Test suite**: 18/24 tests pass. Failing tests are non-critical physics accuracy tests.
-- **GUI visualization**: 2D matplotlib visualization works but may require running on main thread. Headless mode recommended for servers.
+- **Genesis 3D GUI**: Works on macOS/Windows/Linux when a display is available. The viewer event loop runs on the main thread, so the simulation update loop runs in a background thread.
+- **Matplotlib 2D fallback**: Works but may require running on the main thread. Headless mode is recommended for servers.
+
+### Test Status
+
+- **Test suite**: 70/70 tests pass, including physics accuracy and kinematics tests.
 
 ### What Works
 
