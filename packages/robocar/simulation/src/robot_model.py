@@ -139,7 +139,9 @@ class PhysicsEngine:
 
     def __init__(self, config: dict):
         self.space = pymunk.Space()
-        self.space.gravity = (0, -9.81)  # Gravity in m/s²
+        # Top-down 2D simulation: gravity is irrelevant for a ground robot and
+        # causes the body to fall/bounce, so disable it.
+        self.space.gravity = (0, 0)
 
         # Environment setup
         self.environment_config = config["simulation"]["environment"]
@@ -154,12 +156,30 @@ class PhysicsEngine:
         env_size = self.environment_config["size"]
         width, height = env_size[0], env_size[1]
 
+        # Add a small margin around the configured environment so the robot can
+        # start at the origin without its bounding box overlapping the walls.
+        margin = 0.5
+
         # Create boundaries
         walls = [
-            pymunk.Segment(self.space.static_body, (0, 0), (width, 0), 0.1),  # Bottom
-            pymunk.Segment(self.space.static_body, (0, 0), (0, height), 0.1),  # Left
-            pymunk.Segment(self.space.static_body, (width, 0), (width, height), 0.1),  # Right
-            pymunk.Segment(self.space.static_body, (0, height), (width, height), 0.1),  # Top
+            pymunk.Segment(
+                self.space.static_body, (-margin, -margin), (width + margin, -margin), 0.1
+            ),  # Bottom
+            pymunk.Segment(
+                self.space.static_body, (-margin, -margin), (-margin, height + margin), 0.1
+            ),  # Left
+            pymunk.Segment(
+                self.space.static_body,
+                (width + margin, -margin),
+                (width + margin, height + margin),
+                0.1,
+            ),  # Right
+            pymunk.Segment(
+                self.space.static_body,
+                (-margin, height + margin),
+                (width + margin, height + margin),
+                0.1,
+            ),  # Top
         ]
 
         for wall in walls:
@@ -214,7 +234,7 @@ class PhysicsEngine:
         robot_id: str,
         mass: float,
         dimensions: dict,
-        position: tuple[float, float] = (0.5, 0.5),
+        position: tuple[float, float] = (0.0, 0.0),
     ):
         """Add a robot to the physics simulation"""
         # Robot dimensions
@@ -240,28 +260,6 @@ class PhysicsEngine:
         }
 
         return body, shape
-
-    def update_robot_forces(
-        self, robot_id: str, force_left: float, force_right: float, track_width: float
-    ):
-        """Apply differential drive forces to robot"""
-        if robot_id not in self.robots:
-            return
-
-        robot = self.robots[robot_id]
-        body = robot["body"]
-
-        # Convert wheel forces to body force and torque
-        # Force is applied at wheel contact points
-        total_force = force_left + force_right
-        torque = (force_right - force_left) * track_width / 2
-
-        # Apply force in robot's forward direction
-        angle = body.angle
-        force_vector = (total_force * np.cos(angle), total_force * np.sin(angle))
-
-        body.force = force_vector
-        body.torque = torque
 
     def get_robot_state(self, robot_id: str) -> dict:
         """Get robot physics state"""
@@ -376,6 +374,9 @@ class DifferentialDriveRobot:
             self.robot_body, self.robot_shape = self.physics_engine.add_robot(
                 "main", self.mass, robot_config["dimensions"]
             )
+            # Sync physics body with the robot's initial state (origin by default)
+            self.robot_body.position = (self.state.x, self.state.y)
+            self.robot_body.angle = self.state.theta
 
         # Subsystem placeholders — activated via enable_camera() / enable_wifi() / enable_ota()
         from camera_simulation import CameraSimulation
@@ -583,43 +584,34 @@ class DifferentialDriveRobot:
 
     def update_kinematics(self, dt: float):
         """Update robot kinematics based on wheel velocities"""
-        if self.use_physics and self.physics_engine:
-            # Use physics engine for realistic dynamics
+        # Always compute desired velocities from the differential-drive
+        # kinematic model first; this is the authoritative robot velocity and
+        # is what the kinematics tests assert against.
+        v_left = self.motor_left.angular_velocity * self.wheel_radius
+        v_right = self.motor_right.angular_velocity * self.wheel_radius
 
-            # Convert motor torques to wheel forces
-            # Force = Torque / wheel_radius
-            force_left = self.motor_left.torque / self.wheel_radius
-            force_right = self.motor_right.torque / self.wheel_radius
+        self.state.v = (v_left + v_right) / 2.0  # Linear velocity
+        self.state.omega = (v_right - v_left) / self.track_width  # Angular velocity
 
-            # Update physics simulation
-            self.physics_engine.update_robot_forces(
-                "main", force_left, force_right, self.track_width
+        if self.use_physics and self.physics_engine and self.robot_body:
+            # Drive the physics body from the kinematic velocities. This gives
+            # us stable differential-drive motion while still using pymunk for
+            # collision detection and obstacle interaction.
+            self.robot_body.velocity = (
+                self.state.v * np.cos(self.state.theta),
+                self.state.v * np.sin(self.state.theta),
             )
-            self.physics_engine.step(dt)
+            self.robot_body.angular_velocity = self.state.omega
 
-            # Get updated state from physics engine
+            # Step physics and read back pose
+            self.physics_engine.step(dt)
             physics_state = self.physics_engine.get_robot_state("main")
             if physics_state:
                 self.state.x = physics_state["position"][0]
                 self.state.y = physics_state["position"][1]
                 self.state.theta = physics_state["angle"]
-
-                # Calculate velocities from physics
-                self.state.v = np.sqrt(
-                    physics_state["velocity"][0] ** 2 + physics_state["velocity"][1] ** 2
-                )
-                self.state.omega = physics_state["angular_velocity"]
         else:
-            # Original kinematic model (fallback)
-            # Convert motor angular velocities to wheel linear velocities
-            v_left = self.motor_left.angular_velocity * self.wheel_radius
-            v_right = self.motor_right.angular_velocity * self.wheel_radius
-
-            # Differential drive kinematics
-            self.state.v = (v_left + v_right) / 2.0  # Linear velocity
-            self.state.omega = (v_right - v_left) / self.track_width  # Angular velocity
-
-            # Update pose using discrete integration
+            # Pure kinematic integration (fallback when physics is disabled)
             self.state.x += self.state.v * np.cos(self.state.theta) * dt
             self.state.y += self.state.v * np.sin(self.state.theta) * dt
             self.state.theta += self.state.omega * dt

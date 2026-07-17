@@ -53,6 +53,20 @@ def _ensure_genesis():
         from spatialmath import SE3
 
 
+def _quat_mul(q1: np.ndarray, q2: np.ndarray) -> np.ndarray:
+    """Multiply two quaternions in (w, x, y, z) order."""
+    w1, x1, y1, z1 = q1
+    w2, x2, y2, z2 = q2
+    return np.array(
+        [
+            w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2,
+            w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2,
+            w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2,
+            w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2,
+        ]
+    )
+
+
 class MatplotlibVisualizer:
     """2D visualization fallback using matplotlib with thread safety"""
 
@@ -232,6 +246,15 @@ class RobotVisualizer:
         if self.scene:
             self._create_environment()
             self._create_robot_model()
+            self._add_coordinate_axes()
+            self.scene.build()
+
+            # Make the camera follow the robot so it stays in view as it drives.
+            try:
+                if hasattr(self.scene, "viewer") and self.scene.viewer and self.robot_entity:
+                    self.scene.viewer.follow_entity(self.robot_entity, fixed_axis=(None, None, 2.0))
+            except Exception:
+                pass
 
     def _load_config(self, config_path: str) -> dict:
         """Load configuration from YAML file"""
@@ -253,7 +276,7 @@ class RobotVisualizer:
                 "camera_lookat": (0.0, 0.0, 0.0),
             }
             if self.viz_mode != "headless":
-                viewer_kwargs["max_FPS"] = RobotVisualizer.DEFAULT_FPS
+                viewer_kwargs["refresh_rate"] = RobotVisualizer.DEFAULT_FPS
             self.scene = gs.Scene(
                 show_viewer=(self.viz_mode in ["visual", "browser"]),
                 viewer_options=gs.options.ViewerOptions(**viewer_kwargs),
@@ -280,10 +303,14 @@ class RobotVisualizer:
         if not self.scene:
             return
 
-        # Create ground plane
+        # Create ground plane (fixed so it doesn't fall or move during physics)
         ground_size = self.config["simulation"]["environment"]["size"]
         self.scene.add_entity(
-            gs.morphs.Box(size=(ground_size[0], ground_size[1], 0.01), pos=(0, 0, -0.005)),
+            gs.morphs.Box(
+                size=(ground_size[0], ground_size[1], 0.01),
+                pos=(0, 0, -0.005),
+                fixed=True,
+            ),
             surface=gs.surfaces.Default(color=(0.8, 0.8, 0.8, 1.0)),
         )
 
@@ -292,8 +319,7 @@ class RobotVisualizer:
             for i, obstacle in enumerate(self.config["simulation"]["environment"]["obstacles"]):
                 self._create_obstacle(obstacle, i)
 
-        # Build the scene
-        self.scene.build()
+        # Scene is built after the robot model and coordinate axes are added.
 
     def _create_obstacle(self, obstacle: dict, index: int):
         """Create obstacle in the environment"""
@@ -305,14 +331,23 @@ class RobotVisualizer:
         if obstacle["type"] == "box":
             size = obstacle["size"]
             obstacle_entity = self.scene.add_entity(
-                gs.morphs.Box(size=(size[0], size[1], 0.2), pos=(pos[0], pos[1], 0.1)),
+                gs.morphs.Box(
+                    size=(size[0], size[1], 0.2),
+                    pos=(pos[0], pos[1], 0.1),
+                    fixed=True,
+                ),
                 surface=gs.surfaces.Default(color=(1.0, 0.4, 0.4, 1.0)),  # Red
             )
 
         elif obstacle["type"] == "cylinder":
             radius = obstacle["radius"]
             obstacle_entity = self.scene.add_entity(
-                gs.morphs.Cylinder(radius=radius, height=0.2, pos=(pos[0], pos[1], 0.1)),
+                gs.morphs.Cylinder(
+                    radius=radius,
+                    height=0.2,
+                    pos=(pos[0], pos[1], 0.1),
+                    fixed=True,
+                ),
                 surface=gs.surfaces.Default(color=(0.4, 0.4, 1.0, 1.0)),  # Blue
             )
 
@@ -333,7 +368,7 @@ class RobotVisualizer:
                 radius=0.01,
                 height=0.5,
                 pos=(0.25, 0, 0.01),
-                quat=gs.quat_from_euler([0, np.pi / 2, 0]),
+                quat=gs.euler_to_quat([0, 90, 0]),
             ),
             surface=gs.surfaces.Default(color=(1.0, 0.0, 0.0, 1.0)),
         )
@@ -344,7 +379,7 @@ class RobotVisualizer:
                 radius=0.01,
                 height=0.5,
                 pos=(0, 0.25, 0.01),
-                quat=gs.quat_from_euler([-np.pi / 2, 0, 0]),
+                quat=gs.euler_to_quat([-90, 0, 0]),
             ),
             surface=gs.surfaces.Default(color=(0.0, 1.0, 0.0, 1.0)),
         )
@@ -368,31 +403,42 @@ class RobotVisualizer:
         height = robot_config["dimensions"]["height"]
         wheel_radius = robot_config["dimensions"]["wheel_radius"]
 
-        # Main chassis
+        # Main chassis (fixed so user-set poses drive the visualization directly)
         self.robot_entity = self.scene.add_entity(
-            gs.morphs.Box(size=(length, width, height), pos=(0, 0, height / 2)),
+            gs.morphs.Box(
+                size=(length, width, height),
+                pos=(0, 0, height / 2),
+                fixed=True,
+            ),
             surface=gs.surfaces.Default(color=(0.4, 0.6, 0.8, 1.0)),  # Blue-gray
         )
 
-        # Wheels
+        # Wheels positioned so their bottom touches the ground (z=0). The local
+        # wheel quat is stored so it can be combined with the chassis rotation
+        # each frame.
+        wheel_local_quat = gs.euler_to_quat([90, 0, 0])
         wheel_positions = [
-            [-length / 4, -width / 2, wheel_radius / 2],  # Left rear
-            [-length / 4, width / 2, wheel_radius / 2],  # Right rear
-            [length / 4, -width / 2, wheel_radius / 2],  # Left front
-            [length / 4, width / 2, wheel_radius / 2],  # Right front
+            [-length / 4, -width / 2, wheel_radius],  # Left rear
+            [-length / 4, width / 2, wheel_radius],  # Right rear
+            [length / 4, -width / 2, wheel_radius],  # Left front
+            [length / 4, width / 2, wheel_radius],  # Right front
         ]
 
-        for _i, pos in enumerate(wheel_positions):
+        self.wheel_entities: list[object] = []
+        self.wheel_local_quats: list[np.ndarray] = []
+        for pos in wheel_positions:
             wheel = self.scene.add_entity(
                 gs.morphs.Cylinder(
                     radius=wheel_radius,
                     height=0.02,
                     pos=pos,
-                    quat=gs.quat_from_euler([np.pi / 2, 0, 0]),
+                    quat=wheel_local_quat,
+                    fixed=True,
                 ),
                 surface=gs.surfaces.Default(color=(0.2, 0.2, 0.2, 1.0)),  # Dark gray
             )
             self.wheel_entities.append(wheel)
+            self.wheel_local_quats.append(wheel_local_quat)
 
         # Camera (ESP32-CAM)
         camera_pos = robot_config["sensors"]["camera"]["position"]
@@ -400,14 +446,30 @@ class RobotVisualizer:
             gs.morphs.Box(
                 size=(0.03, 0.03, 0.02),
                 pos=(camera_pos[0], camera_pos[1], camera_pos[2] + height / 2),
+                fixed=True,
             ),
             surface=gs.surfaces.Default(color=(1.0, 1.0, 0.0, 1.0)),  # Yellow
         )
 
         # Ultrasonic sensor
         self.scene.add_entity(
-            gs.morphs.Cylinder(radius=0.01, height=0.02, pos=(length / 2, 0, height / 2)),
+            gs.morphs.Cylinder(
+                radius=0.01,
+                height=0.02,
+                pos=(length / 2, 0, height / 2),
+                fixed=True,
+            ),
             surface=gs.surfaces.Default(color=(0.0, 1.0, 1.0, 1.0)),  # Cyan
+        )
+
+        # Ultrasonic distance marker (updated each frame)
+        self.ultrasonic_marker = self.scene.add_entity(
+            gs.morphs.Sphere(
+                radius=0.02,
+                pos=(length / 2 + 1.0, 0, 0.05),
+                fixed=True,
+            ),
+            surface=gs.surfaces.Default(color=(1.0, 0.0, 1.0, 1.0)),  # Magenta
         )
 
     def _set_camera_view(self):
@@ -436,23 +498,28 @@ class RobotVisualizer:
 
         # Update robot position and orientation using Genesis entity transforms
         robot_pos = (state.x, state.y, 0.05)
-        robot_quat = gs.quat_from_euler([0, 0, state.theta])
+        robot_quat = gs.euler_to_quat([0, 0, np.degrees(state.theta)])
 
         # Update chassis
         if self.robot_entity:
             self.robot_entity.set_pos(robot_pos)
             self.robot_entity.set_quat(robot_quat)
 
-        # Update wheels with robot transform
+        # Update wheels with robot transform (read dimensions from config so
+        # they stay consistent with the model created in _create_robot_model).
+        robot_config = self.config["robot"]
+        length = robot_config["dimensions"]["length"]
+        width = robot_config["dimensions"]["width"]
+        wheel_radius = robot_config["dimensions"]["wheel_radius"]
         wheel_local_positions = [
-            [-0.05, -0.075, 0.0175],  # Left rear
-            [-0.05, 0.075, 0.0175],  # Right rear
-            [0.05, -0.075, 0.0175],  # Left front
-            [0.05, 0.075, 0.0175],  # Right front
+            [-length / 4, -width / 2, wheel_radius],  # Left rear
+            [-length / 4, width / 2, wheel_radius],  # Right rear
+            [length / 4, -width / 2, wheel_radius],  # Left front
+            [length / 4, width / 2, wheel_radius],  # Right front
         ]
 
-        for _i, (wheel, local_pos) in enumerate(
-            zip(self.wheel_entities, wheel_local_positions, strict=False)
+        for wheel, local_pos, local_quat in zip(
+            self.wheel_entities, wheel_local_positions, self.wheel_local_quats, strict=False
         ):
             # Transform local wheel position to world coordinates
             cos_theta = np.cos(state.theta)
@@ -462,8 +529,11 @@ class RobotVisualizer:
             world_y = state.y + sin_theta * local_pos[0] + cos_theta * local_pos[1]
             world_z = local_pos[2]
 
+            # Wheel world orientation = chassis rotation * local wheel rotation
+            wheel_world_quat = _quat_mul(robot_quat, local_quat)
+
             wheel.set_pos((world_x, world_y, world_z))  # ty: ignore[unresolved-attribute]
-            wheel.set_quat(robot_quat)  # ty: ignore[unresolved-attribute]
+            wheel.set_quat(wheel_world_quat)  # ty: ignore[unresolved-attribute]
 
         # Update camera with pan angle
         if self.camera_entity:
@@ -479,7 +549,7 @@ class RobotVisualizer:
             cam_y = state.y + sin_theta * camera_local_pos[0] + cos_theta * camera_local_pos[1]
             cam_z = camera_local_pos[2] + 0.05
 
-            camera_quat = gs.quat_from_euler([0, 0, state.theta + camera_pan])
+            camera_quat = gs.euler_to_quat([0, 0, np.degrees(state.theta + camera_pan)])
 
             self.camera_entity.set_pos((cam_x, cam_y, cam_z))
             self.camera_entity.set_quat(camera_quat)
@@ -487,16 +557,17 @@ class RobotVisualizer:
         # Update trail
         self._update_trail(state.x, state.y)
 
-        # Update sensor visualization
-        self._update_sensor_visualization(state)
-
-        # Step the simulation
+        # Update sensor visualization (non-critical)
         try:
-            self.scene.step()
+            self._update_sensor_visualization(state)
         except Exception as e:
             import logging
 
-            logging.getLogger(__name__).debug("Genesis scene step error: %s", e)
+            logging.getLogger(__name__).debug("Genesis sensor visualization error: %s", e)
+
+        # Step the simulation. Errors propagate to the update loop, which
+        # stops and reports them instead of silently spinning.
+        self.scene.step()
 
     def _update_trail(self, x: float, y: float):
         """Update robot trail visualization"""
@@ -521,14 +592,9 @@ class RobotVisualizer:
         ray_end_x = state.x + state.ultrasonic_distance * np.cos(state.theta)
         ray_end_y = state.y + state.ultrasonic_distance * np.sin(state.theta)
 
-        # Create or update ultrasonic marker
+        # Update the marker created during scene setup
         if hasattr(self, "ultrasonic_marker") and self.ultrasonic_marker:
             self.ultrasonic_marker.set_pos((ray_end_x, ray_end_y, 0.05))
-        else:
-            self.ultrasonic_marker = self.scene.add_entity(
-                gs.morphs.Sphere(radius=0.02, pos=(ray_end_x, ray_end_y, 0.05)),
-                surface=gs.surfaces.Default(color=(1.0, 0.0, 1.0, 1.0)),  # Magenta
-            )
 
     def add_trajectory_point(self, x: float, y: float, color: list[float] | None = None):
         """Add a trajectory point marker"""
@@ -558,7 +624,7 @@ class RobotVisualizer:
         pass
 
     def start_update_loop(self):
-        """Start the visualization update loop - simplified"""
+        """Start the visualization update loop in a background thread"""
         if not self.enabled:
             return
 
@@ -574,6 +640,25 @@ class RobotVisualizer:
         self._thread.start()
         print("✓ Visualization update loop started")
 
+    def run_main_thread_loop(self):
+        """Run the visualization update loop on the calling (main) thread.
+
+        GUI windowing systems (especially macOS) require the viewer event loop
+        to run on the main thread. This method blocks until :meth:`stop` is
+        called.
+        """
+        if not self.enabled:
+            return
+
+        # Use fallback visualizer if Genesis not available
+        if self.using_fallback:
+            self.fallback_viz.start_update_loop()
+            return
+
+        self._running = True
+        print("✓ Genesis visualization running on main thread")
+        self._simple_update_loop()
+
     def _simple_update_loop(self):
         """Simple update loop for visualization"""
         last_update = time.time()
@@ -586,9 +671,12 @@ class RobotVisualizer:
                 try:
                     self.update_robot_visualization()
                     last_update = current_time
-                except Exception:
-                    # Ignore visualization errors to keep simulation running
-                    pass
+                except Exception as e:
+                    # A closed viewer window or a render failure would
+                    # otherwise spin silently at full rate forever.
+                    print(f"⚠ Visualization update failed ({e}); stopping viewer loop")
+                    self._running = False
+                    break
 
             time.sleep(0.01)  # Small sleep to prevent busy waiting
 
@@ -656,10 +744,15 @@ class RobotVisualizer:
 class GenesisSimulation:
     """Genesis-based simulation environment"""
 
-    def __init__(self, config_path: str, viz_mode: str = "headless"):
+    def __init__(
+        self,
+        config_path: str,
+        viz_mode: str = "headless",
+        robot: DifferentialDriveRobot | None = None,
+    ):
         self.config_path = config_path
         self.viz_mode = viz_mode
-        self.robot = DifferentialDriveRobot(config_path)
+        self.robot = robot if robot is not None else DifferentialDriveRobot(config_path)
         self.visualizer = RobotVisualizer(config_path, self.robot, viz_mode=viz_mode)
 
         # Simulation control

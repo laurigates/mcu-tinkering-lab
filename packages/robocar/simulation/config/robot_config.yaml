@@ -29,7 +29,7 @@ robot:
       stall_current: 2.0  # A
       resistance: 3.0  # Ohms
       inductance: 0.01  # H (realistic for small DC motor)
-      back_emf_constant: 0.01  # V⋅s/rad
+      back_emf_constant: 0.353  # V⋅s/rad (matches 7.4V supply and 200 RPM max speed)
 
     right:
       pin_config:
@@ -42,7 +42,7 @@ robot:
       stall_current: 2.0  # A
       resistance: 3.0  # Ohms
       inductance: 0.01  # H (realistic for small DC motor)
-      back_emf_constant: 0.01  # V⋅s/rad
+      back_emf_constant: 0.353  # V⋅s/rad (matches 7.4V supply and 200 RPM max speed)
 
   # Servo configuration (Camera mount)
   servos:
