@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.8](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.1.7...robocar-unified-v0.1.8) (2026-07-17)
+
+
+### Features
+
+* **robocar-unified:** MCP23017 GPIO expander + latent IDF 5.4 build repairs ([#399](https://github.com/laurigates/mcu-tinkering-lab/issues/399)) ([4bbf98e](https://github.com/laurigates/mcu-tinkering-lab/commit/4bbf98ea5dcd92d90953d94fc96784be40d678e9))
+
 ## [0.1.7](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.1.6...robocar-unified-v0.1.7) (2026-07-16)
 
 

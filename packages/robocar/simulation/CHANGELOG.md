@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.4](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-simulation-v0.1.3...robocar-simulation-v0.1.4) (2026-07-17)
+
+
+### Bug Fixes
+
+* **robocar-simulation:** repair physics model, GUI threading, and update drivers ([#401](https://github.com/laurigates/mcu-tinkering-lab/issues/401)) ([256dfa0](https://github.com/laurigates/mcu-tinkering-lab/commit/256dfa06993db93f330ab299d2c27f53f74e1f19))
+
 ## [0.1.3](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-simulation-v0.1.2...robocar-simulation-v0.1.3) (2026-07-13)
 
 
