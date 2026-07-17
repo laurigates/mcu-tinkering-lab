@@ -31,9 +31,10 @@
 #define TCA9548A_ADDR 0x70  // Default address (A0=A1=A2=GND)
 
 // TCA9548A channel assignments
-#define I2C_BUS_CHANNEL_PCA9685 0  // Channel 0: PCA9685 PWM driver
-#define I2C_BUS_CHANNEL_OLED 1     // Channel 1: SSD1306 OLED display
-// Channels 2-7: reserved for future sensors (IMU, ToF, etc.)
+#define I2C_BUS_CHANNEL_PCA9685 0   // Channel 0: PCA9685 PWM driver
+#define I2C_BUS_CHANNEL_OLED 1      // Channel 1: SSD1306 OLED display
+#define I2C_BUS_CHANNEL_MCP23017 2  // Channel 2: MCP23017 GPIO expander
+// Channels 3-7: reserved for future sensors (IMU, ToF, etc.)
 
 // ========================================
 // PCA9685 PWM Driver (via TCA9548A ch0)
@@ -74,6 +75,13 @@
 // ========================================
 #define MOTOR_STBY_PIN GPIO_NUM_1  // XIAO D0: HIGH = motors enabled
 #define DEFAULT_SPEED 3200         // Default motor speed (~78% of 4095)
+
+// ========================================
+// MCP23017 GPIO Expander (via TCA9548A ch2)
+// 16 extra GPIOs (pins 0-7 = PORTA, 8-15 = PORTB). No role assigned yet —
+// generic expansion, direction configurable per pin at runtime.
+// ========================================
+#define MCP23017_ADDR 0x20  // Default address (A0=A1=A2=GND)
 
 // ========================================
 // SSD1306 OLED Display (via TCA9548A ch1)
