@@ -4,6 +4,14 @@
 
 The web flasher (`docs/flasher/index.html`) enables browser-based firmware flashing via ESP Web Tools. It is deployed to GitHub Pages on every firmware release.
 
+**`flasher.json` scopes the RELEASE / web-flasher set, not CI.** Only
+flasher-enabled projects carry a `flasher.json`, and `build-firmware.yml`
+discovers them from it on release. CI builds a **superset** — every buildable
+project across ESP-IDF, ESPHome, and Pico — discovered from
+`.github/project-matrix.json` by `build.yml`. Do **not** drive CI discovery from
+`flasher.json`: several CI projects (non-flasher ESP-IDF, ESPHome, Pico) have none
+and would be silently dropped.
+
 ## Flash Offset Reference
 
 Both robocar targets use identical partition layouts on standard ESP32 (4MB flash):
