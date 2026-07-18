@@ -1,0 +1,23 @@
+[
+  { "system": "esp32", "project": "robocar-main",          "path": "robocar/main",                 "target": "esp32",   "fetch_bluepad32": false },
+  { "system": "esp32", "project": "robocar-camera",        "path": "robocar/camera",               "target": "esp32",   "fetch_bluepad32": false },
+  { "system": "esp32", "project": "robocar-unified",       "path": "robocar/unified",              "target": "esp32s3", "fetch_bluepad32": false },
+  { "system": "esp32", "project": "esp32-cam-i2s-audio",   "path": "camera-vision/cam-i2s-audio",  "target": "esp32",   "fetch_bluepad32": false },
+  { "system": "esp32", "project": "esp32-cam-webserver",   "path": "camera-vision/cam-webserver",  "target": "esp32",   "fetch_bluepad32": false },
+  { "system": "esp32", "project": "esp32cam-llm-telegram", "path": "camera-vision/llm-telegram",   "target": "esp32",   "fetch_bluepad32": false },
+  { "system": "esp32", "project": "esp32-wifitest",        "path": "networking/wifitest",          "target": "esp32s3", "fetch_bluepad32": false },
+  { "system": "esp32", "project": "it-troubleshooter",     "path": "networking/it-troubleshooter", "target": "esp32s3", "fetch_bluepad32": false },
+  { "system": "esp32", "project": "switch-usb-proxy",      "path": "input-gaming/switch-usb-proxy","target": "esp32s3", "fetch_bluepad32": false },
+  { "system": "esp32", "project": "xbox-switch-bridge",    "path": "input-gaming/xbox-switch-bridge","target": "esp32s3","fetch_bluepad32": true },
+  { "system": "esp32", "project": "gamepad-synth",         "path": "audio/gamepad-synth",          "target": "esp32s3", "fetch_bluepad32": true },
+  { "system": "esp32", "project": "kids-audio-toy",        "path": "audio/kids-audio-toy",         "target": "esp32",   "fetch_bluepad32": false },
+  { "system": "esp32", "project": "melody-detector",       "path": "audio/melody-detector",        "target": "esp32s3", "fetch_bluepad32": false },
+  { "system": "esp32", "project": "nfc-scavenger-hunt",    "path": "games/nfc-scavenger-hunt",     "target": "esp32s3", "fetch_bluepad32": false },
+  { "system": "esp32", "project": "thinkpack-chatterbox",  "path": "thinkpack/chatterbox",         "target": "esp32s3", "fetch_bluepad32": false },
+  { "system": "esp32", "project": "thinkpack-finderbox",   "path": "thinkpack/finderbox",          "target": "esp32s3", "fetch_bluepad32": false },
+
+  { "system": "esphome", "project": "audiobook-player",            "path": "audio/audiobook-player", "yaml_file": "audiobook-player.yaml" },
+  { "system": "esphome", "project": "esp32-wireguard-ha-example",  "path": "networking/wireguard-ha","yaml_file": "esp32-wireguard-ha.yaml" },
+
+  { "system": "pico", "project": "balancebot", "path": "robotics/balancebot", "board": "seeed_xiao_rp2350" }
+]

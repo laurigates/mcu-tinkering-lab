@@ -194,7 +194,7 @@ Most workflows delegate to reusable workflows from [`laurigates/.github`](https:
 
 | Workflow | Trigger | Purpose | Reusable? |
 |----------|---------|---------|-----------|
-| `build-<project>.yml` | Push/PR (path-filtered) / release | Per-project ESP32 firmware build (CI via `_ci-build-esp32.yml`, release via `_build-esp32-firmware.yml`) | Local reusable `_*.yml` |
+| `build.yml` | Push/PR (path-filtered) | Single CI build for every firmware project (ESP-IDF/ESPHome/Pico). Discovers changed projects from `.github/project-matrix.json` and fans out via the `_ci-build-*.yml` reusables | Local reusable `_ci-build-*.yml` |
 | `build-python-simulation.yml` | Push/PR to main/develop | Build the Python simulation package (import check) | No (local) |
 | `test.yml` | Push/PR to main/develop | Pre-commit, pytest, cppcheck, format check | No (local) |
 | `build-firmware.yml` | Release published | Build + attach firmware binaries to release + deploy web flasher | No (local) |

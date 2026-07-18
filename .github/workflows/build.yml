@@ -1,0 +1,163 @@
+name: Build
+
+# Single CI build workflow for every firmware project across all three build
+# systems (ESP-IDF, ESPHome, Pico SDK). Replaces the ~19 near-identical
+# per-project build-*.yml callers. The buildable-project set is the single
+# source of truth in .github/project-matrix.json; a `discover` job filters it to
+# the projects a push/PR actually touched (failing safe to "build all" on any
+# ambiguity or shared-infra change), then one matrix job per build system calls
+# the matching reusable workflow.
+#
+# Release firmware + web flasher are handled separately by build-firmware.yml.
+
+on:
+  push:
+    branches: [main, develop, 'claude/**']
+    paths:
+      - 'packages/**'
+      - '.github/project-matrix.json'
+      - '.github/workflows/build.yml'
+      - '.github/workflows/_ci-build-esp32.yml'
+      - '.github/workflows/_ci-build-esphome.yml'
+      - '.github/workflows/_ci-build-pico.yml'
+      - 'tools/**'
+      - 'docker-compose.yml'
+      - 'Dockerfile'
+      - 'Dockerfile.pico'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'packages/**'
+      - '.github/project-matrix.json'
+      - '.github/workflows/build.yml'
+      - '.github/workflows/_ci-build-esp32.yml'
+      - '.github/workflows/_ci-build-esphome.yml'
+      - '.github/workflows/_ci-build-pico.yml'
+      - 'tools/**'
+      - 'docker-compose.yml'
+      - 'Dockerfile'
+      - 'Dockerfile.pico'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    name: Discover changed projects
+    runs-on: ubuntu-latest
+    outputs:
+      esp32: ${{ steps.f.outputs.esp32 }}
+      esp32_any: ${{ steps.f.outputs.esp32_any }}
+      esphome: ${{ steps.f.outputs.esphome }}
+      esphome_any: ${{ steps.f.outputs.esphome_any }}
+      pico: ${{ steps.f.outputs.pico }}
+      pico_any: ${{ steps.f.outputs.pico_any }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Filter buildable projects by change scope
+        id: f
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          MANIFEST=.github/project-matrix.json
+
+          # --- Determine the changed file set (fail safe to __ALL__) ----------
+          CHANGED=""
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            CHANGED="__ALL__"
+          elif [ "$EVENT" = "pull_request" ]; then
+            CHANGED=$(git diff --name-only "$PR_BASE" HEAD 2>/dev/null || echo "__ALL__")
+          else
+            if [ -z "$PUSH_BEFORE" ] || ! git cat-file -e "${PUSH_BEFORE}^{commit}" 2>/dev/null; then
+              CHANGED="__ALL__"
+            else
+              CHANGED=$(git diff --name-only "$PUSH_BEFORE" HEAD 2>/dev/null || echo "__ALL__")
+            fi
+          fi
+
+          # A change to any shared / build-infra file rebuilds everything.
+          # (here-string, not a pipe: grep -q closes stdin early and would give a
+          #  false result on a pipe under `set -o pipefail`.)
+          if [ "$CHANGED" != "__ALL__" ]; then
+            if grep -qE '^(\.github/workflows/(build|_ci-build-)|\.github/project-matrix\.json|tools/|docker-compose\.yml|Dockerfile)' <<<"$CHANGED"; then
+              CHANGED="__ALL__"
+            fi
+          fi
+
+          if [ "$CHANGED" = "__ALL__" ]; then
+            echo "Change scope: ALL buildable projects"
+          else
+            echo "Change scope: $(printf '%s' "$CHANGED" | grep -c . || true) changed file(s)"
+          fi
+
+          # --- Emit one matrix per build system ------------------------------
+          for sys in esp32 esphome pico; do
+            if [ "$CHANGED" = "__ALL__" ]; then
+              inc=$(jq -c --arg s "$sys" '[.[] | select(.system == $s)]' "$MANIFEST")
+            else
+              inc=$(jq -c --arg s "$sys" --arg ch "$CHANGED" '
+                ($ch | split("\n") | map(select(length > 0))) as $files
+                | [ .[]
+                    | select(.system == $s)
+                    | select(. as $p | $files | any(startswith("packages/" + $p.path + "/"))) ]
+              ' "$MANIFEST")
+            fi
+            n=$(printf '%s' "$inc" | jq 'length')
+            {
+              echo "${sys}={\"include\":${inc}}"
+              echo "${sys}_any=$([ "$n" -gt 0 ] && echo true || echo false)"
+            } >> "$GITHUB_OUTPUT"
+            echo "  ${sys}: ${n} project(s)"
+          done
+
+  esp32:
+    name: ESP-IDF
+    needs: discover
+    if: needs.discover.outputs.esp32_any == 'true'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.discover.outputs.esp32) }}
+    uses: ./.github/workflows/_ci-build-esp32.yml
+    with:
+      project: ${{ matrix.project }}
+      project_path: ${{ matrix.path }}
+      target: ${{ matrix.target }}
+      fetch_bluepad32: ${{ matrix.fetch_bluepad32 }}
+
+  esphome:
+    name: ESPHome
+    needs: discover
+    if: needs.discover.outputs.esphome_any == 'true'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.discover.outputs.esphome) }}
+    uses: ./.github/workflows/_ci-build-esphome.yml
+    with:
+      project: ${{ matrix.project }}
+      project_path: ${{ matrix.path }}
+      yaml_file: ${{ matrix.yaml_file }}
+
+  pico:
+    name: Pico SDK
+    needs: discover
+    if: needs.discover.outputs.pico_any == 'true'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.discover.outputs.pico) }}
+    uses: ./.github/workflows/_ci-build-pico.yml
+    with:
+      project: ${{ matrix.project }}
+      project_path: ${{ matrix.path }}
+      board: ${{ matrix.board }}
