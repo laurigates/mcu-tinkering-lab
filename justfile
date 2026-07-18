@@ -227,41 +227,15 @@ clean-all:
     just robocar::clean-all
     @echo "All project builds cleaned"
 
-# List all projects in the monorepo
+# List all registered project modules (derived from the mod registry — never drifts)
 [group: "info"]
 list-projects:
     #!/usr/bin/env bash
     set -euo pipefail
-    echo "MCU Tinkering Lab — Project Inventory"
+    echo "MCU Tinkering Lab — registered project modules"
+    echo "Build any with 'just <name>::build'. Full recipe tree: just --list --list-submodules"
     echo ""
-    echo "AI-Powered Robot Car (Primary):"
-    if [ -d "packages/robocar/main" ] && [ -d "packages/robocar/camera" ]; then
-        echo "  Dual ESP32 autonomous robot with AI vision"
-        echo "    Main Controller: Heltec WiFi LoRa 32 V1"
-        echo "    Vision System:   ESP32-CAM with Claude/Ollama AI"
-        echo "    Simulation:      Python 3.11 physics simulation"
-    else
-        echo "  Not found"
-    fi
-    echo ""
-    echo "ESP32 Package Projects:"
-    [ -d "packages/camera-vision/cam-webserver" ]  && echo "  esp32-cam-webserver         — Live video streaming web server"         || true
-    [ -d "packages/camera-vision/cam-i2s-audio" ]  && echo "  esp32-cam-i2s-audio         — Camera + I2S audio processing"           || true
-    [ -d "packages/camera-vision/llm-telegram" ] && echo "  esp32cam-llm-telegram       — AI vision with Telegram bot"             || true
-    [ -d "packages/input-gaming/xbox-switch-bridge" ]          && echo "  xbox-switch-bridge          — Xbox BLE to Switch USB bridge"           || true
-    [ -d "packages/networking/it-troubleshooter" ]           && echo "  it-troubleshooter           — IT troubleshooting assistant"            || true
-    [ -d "packages/input-gaming/switch-usb-proxy" ]            && echo "  switch-usb-proxy            — Switch USB protocol proxy"               || true
-    [ -d "packages/networking/wifitest" ]              && echo "  esp32-wifitest              — WiFi AP test firmware"                   || true
-    [ -d "packages/audio/kids-audio-toy" ]              && echo "  kids-audio-toy              — Potentiometer-controlled audio toy"      || true
-    [ -d "packages/audio/audiobook-player" ]            && echo "  audiobook-player            — ESPHome audiobook player"                || true
-    [ -d "packages/networking/wireguard-ha" ]  && echo "  esp32-wireguard-ha-example  — WireGuard + Home Assistant (ESPHome)"    || true
-    [ -d "packages/sensors/presence-detector" ] && echo "  presence-detector           — XIAO ESP32-C6 + LD2410 mmWave (ESPHome)"  || true
-    echo ""
-    echo "Robotics (Pico SDK):"
-    [ -d "packages/robotics/balancebot" ]       && echo "  balancebot                  — Self-balancing robot (XIAO RP2350)"       || true
-    echo ""
-    echo "Use 'just <module>::build' to build individual projects."
-    echo "Module names: just --list --list-submodules"
+    grep '^mod ' {{justfile()}} | awk '{printf "  %-22s %s\n", $2, $3}' | tr -d "'"
 
 # Show system information
 [group: "info"]

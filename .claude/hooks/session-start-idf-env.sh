@@ -1,50 +1,31 @@
 #!/bin/bash
-# SessionStart hook: Set up ESP-IDF environment for Claude Code sessions
-# This hook runs when Claude Code starts and exports environment variables
-
+# SessionStart hook: print container-oriented dev context for Claude Code sessions.
+#
+# All ESP-IDF / Pico builds are containerized (see .claude/rules/containerized-builds.md);
+# no local ESP-IDF install is required. This hook deliberately does NOT export a
+# local IDF_PATH or advertise a local-install workflow — that contradicted the
+# container-only architecture and pointed at recipes that do not exist.
 set -e
 
-# Default IDF_PATH if not set
-IDF_PATH="${IDF_PATH:-$HOME/repos/esp-idf}"
-
-# Export environment to CLAUDE_ENV_FILE if available
-if [ -n "$CLAUDE_ENV_FILE" ]; then
-    # Export IDF_PATH
-    echo "export IDF_PATH=\"$IDF_PATH\"" >> "$CLAUDE_ENV_FILE"
-
-    # Export common build settings
-    echo "export SDKCONFIG_DEFAULTS=\"sdkconfig.defaults\"" >> "$CLAUDE_ENV_FILE"
-fi
-
-# Print session context
-echo "MCU Tinkering Lab - Development Environment"
+echo "MCU Tinkering Lab — Development Environment"
 echo "============================================"
 echo ""
 
-# Check ESP-IDF installation
-if [ -d "$IDF_PATH" ]; then
-    # Try git describe first, then fall back to version file
-    if [ -d "$IDF_PATH/.git" ]; then
-        VERSION=$(cd "$IDF_PATH" && git describe --tags 2>/dev/null || echo "unknown")
-    elif [ -f "$IDF_PATH/version.txt" ]; then
-        VERSION=$(cat "$IDF_PATH/version.txt")
-    else
-        VERSION="installed (version unknown)"
-    fi
-    echo "ESP-IDF: $VERSION"
-    echo "Path: $IDF_PATH"
+# Builds run in Docker; surface whether the engine is available.
+if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+    echo "Container engine: $(docker --version)"
 else
-    echo "ESP-IDF: Not installed"
-    echo "Run 'make setup-idf' to install automatically"
+    echo "Container engine: Docker not found — builds are containerized, install Docker Desktop"
 fi
 
-# Show available projects
 echo ""
-echo "Quick Commands:"
-echo "  make setup-idf       - Install ESP-IDF"
-echo "  make robocar-build-all - Build robocar"
-echo "  make check-environment - Verify setup"
+echo "Quick commands (run 'just --list' for all):"
+echo "  just check-environment      - Verify Docker + serial port setup"
+echo "  just docker-build           - Build the ESP-IDF dev image"
+echo "  just list-projects          - List registered project modules"
+echo "  just robocar::build-all     - Build the robocar (both controllers)"
+echo "  just <module>::build        - Build any project (see: just --list --list-submodules)"
 echo ""
-echo "Slash Commands: /setup-idf, /build, /flash, /develop, /debug"
+echo "Slash Commands: /build, /flash, /develop, /debug"
 
 exit 0
