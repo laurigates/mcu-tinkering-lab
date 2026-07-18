@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.4](https://github.com/laurigates/mcu-tinkering-lab/compare/esp32cam-llm-telegram-v0.1.3...esp32cam-llm-telegram-v0.1.4) (2026-07-18)
+
+
+### Miscellaneous
+
+* **tooling:** purge dead code and fix drift ([#404](https://github.com/laurigates/mcu-tinkering-lab/issues/404)) ([a2a401d](https://github.com/laurigates/mcu-tinkering-lab/commit/a2a401d77a180cfb333c5af3fcbdb39b7acf133c))
+
 ## [0.1.3](https://github.com/laurigates/mcu-tinkering-lab/compare/esp32cam-llm-telegram-v0.1.2...esp32cam-llm-telegram-v0.1.3) (2026-07-13)
 
 
