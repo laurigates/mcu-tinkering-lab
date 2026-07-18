@@ -6,8 +6,8 @@ set positional-arguments
 import '../../../tools/esp32-idf.just'
 
 project_dir := "packages/thinkpack/brainbox"
+bin_name := "thinkpack-brainbox"
 port := env("PORT", _detected_s3)
-baud := env("BAUD", "460800")
 target := "esp32s3"
 
 default:
@@ -34,24 +34,9 @@ credentials:
 # Build
 ##########
 
-# Build firmware in Docker container (requires credentials)
+# Build firmware in Docker container (requires credentials; validated build)
 [group: "build"]
-build: credentials
-    #!/usr/bin/env bash
-    set -euo pipefail
-    echo "Building thinkpack-brainbox..."
-    {{container_cmd}} compose -f {{compose_file}} run --rm \
-        -w /workspace/{{project_dir}} \
-        esp-idf \
-        bash -c "idf.py set-target {{target}} && idf.py build" 2>&1 \
-        | grep -E "warning:|error:|ninja: build stopped|binary size|Build complete" \
-        || true
-    if [ ! -f build/thinkpack-brainbox.bin ]; then
-        echo "FAILED — rerun with verbose output:" >&2
-        echo "  {{container_cmd}} compose -f {{compose_file}} run --rm -w /workspace/{{project_dir}} esp-idf bash -c 'idf.py build'" >&2
-        exit 1
-    fi
-    echo "Build OK"
+build: credentials (_idf-build-checked bin_name)
 
 # Clean build artifacts (containerized)
 [group: "build"]
@@ -69,28 +54,17 @@ shell: _idf-shell
 # Flash & Monitor
 ##########
 
-# Flash firmware to ESP32-S3 Brainbox
+# Flash firmware to ESP32-S3 Brainbox (standard S3 layout)
 [group: "device"]
-flash: require-port
-    #!/usr/bin/env bash
-    set -euo pipefail
-    esptool -s --chip esp32s3 -p {{port}} -b {{baud}} \
-        --before default-reset --after hard-reset \
-        write-flash --flash-mode dio --flash-size 4MB --flash-freq 80m \
-        0x0 build/bootloader/bootloader.bin \
-        0x8000 build/partition_table/partition-table.bin \
-        0x10000 build/thinkpack-brainbox.bin
-    echo "Flashed OK"
+flash: (_s3-flash bin_name)
 
 # Reset board via USB-Serial-JTAG CDC control signals
 [group: "device"]
-reset: require-port
-    "{{tools_dir}}/esp32s3-reset.sh" "{{port}}"
+reset: _s3-reset
 
 # Serial monitor with reset (Ctrl-C to stop)
 [group: "device"]
-monitor: require-port
-    "{{tools_dir}}/esp32s3-monitor.sh" "{{port}}"
+monitor: _s3-monitor
 
 # Flash and monitor
 [group: "device"]
