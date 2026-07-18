@@ -1,8 +1,14 @@
 esphome:
   name: esp32-wireguard-ha
   friendly_name: "ESP32 WireGuard HA Example"
-  platform: ESP32
+
+# ESPHome 2026.7 removed the legacy esphome.platform/board keys; the platform is
+# now its own component. Keep the arduino framework (the old `platform: ESP32`
+# default) so behaviour is unchanged.
+esp32:
   board: esp32dev
+  framework:
+    type: arduino
 
 # Enable logging
 logger:
