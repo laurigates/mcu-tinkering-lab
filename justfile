@@ -162,31 +162,10 @@ log-listen udp_port="4444":
 lint: lint-c lint-python
     @echo "All lint checks passed"
 
-# Lint C/C++ code with cppcheck
+# Lint C/C++ code with cppcheck (blocking). See tools/cquality.sh for the shared config.
 [group: "quality"]
 lint-c:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    command -v cppcheck >/dev/null 2>&1 || { echo "Error: cppcheck not found — brew install cppcheck"; exit 1; }
-    mkdir -p tmp
-    find packages -type f \( -name "*.c" -o -name "*.h" -o -name "*.cpp" -o -name "*.hpp" \) \
-        ! -path "*/managed_components/*" \
-        ! -path "*/components/esp-idf-lib/*" \
-        ! -path "*/external/*" \
-        ! -path "*/build/*" \
-        ! -path "*/.esphome/*" \
-        ! -path "*/.venv/*" \
-        -print0 | \
-        xargs -0 cppcheck \
-            --enable=warning,style,performance,portability \
-            --suppress=missingIncludeSystem \
-            --suppress=unmatchedSuppression \
-            --suppress=unusedStructMember \
-            --inline-suppr \
-            --error-exitcode=1 \
-            --template=gcc \
-            2>&1 | tee tmp/cppcheck-report.txt
-    echo "C/C++ lint checks passed"
+    tools/cquality.sh lint
 
 # Lint Python code with ruff
 [group: "quality"]
@@ -202,22 +181,10 @@ lint-python:
 format: format-c format-python
     @echo "All code formatting complete"
 
-# Format C/C++ code with clang-format
+# Format C/C++ code with clang-format. See tools/cquality.sh for the shared config.
 [group: "quality"]
 format-c:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    command -v clang-format >/dev/null 2>&1 || { echo "Warning: clang-format not found — brew install clang-format"; exit 0; }
-    find packages -type f \( -name "*.c" -o -name "*.h" -o -name "*.cpp" -o -name "*.hpp" \) \
-        ! -path "*/managed_components/*" \
-        ! -path "*/components/esp-idf-lib/*" \
-        ! -path "*/external/*" \
-        ! -path "*/build/*" \
-        ! -path "*/.esphome/*" \
-        ! -path "*/.venv/*" \
-        -print0 | \
-        xargs -0 clang-format -i --style=file
-    echo "C/C++ code formatted"
+    tools/cquality.sh format
 
 # Format Python code with ruff
 [group: "quality"]
@@ -233,22 +200,10 @@ format-python:
 format-check: format-check-c format-check-python
     @echo "All format checks passed"
 
-# Check C/C++ formatting without modifying
+# Check C/C++ formatting without modifying. See tools/cquality.sh for the shared config.
 [group: "quality"]
 format-check-c:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    command -v clang-format >/dev/null 2>&1 || { echo "Error: clang-format not found"; exit 1; }
-    find packages -type f \( -name "*.c" -o -name "*.h" -o -name "*.cpp" -o -name "*.hpp" \) \
-        ! -path "*/managed_components/*" \
-        ! -path "*/components/esp-idf-lib/*" \
-        ! -path "*/external/*" \
-        ! -path "*/build/*" \
-        ! -path "*/.esphome/*" \
-        ! -path "*/.venv/*" \
-        -print0 | \
-        xargs -0 clang-format --dry-run --Werror --style=file
-    echo "C/C++ formatting check passed"
+    tools/cquality.sh format-check
 
 # Check Python formatting without modifying
 [group: "quality"]

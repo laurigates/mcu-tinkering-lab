@@ -25,19 +25,13 @@ esac
 
 case "$file_path" in
     *.c|*.h|*.cpp|*.hpp)
-        if command -v clang-format >/dev/null 2>&1; then
-            clang-format -i --style=file "$file_path"
-        fi
-        if command -v cppcheck >/dev/null 2>&1; then
-            cppcheck \
-                --enable=warning,style,performance,portability \
-                --suppress=missingIncludeSystem \
-                --suppress=unmatchedSuppression \
-                --suppress=unusedStructMember \
-                --inline-suppr \
-                --quiet \
-                --template=gcc \
-                "$file_path" || true
+        # Single-source the clang-format + cppcheck invocation via tools/cquality.sh
+        # (same flags as the justfile lint-c / CI). Fully non-blocking.
+        repo_root="$(git -C "$(dirname "$file_path")" rev-parse --show-toplevel 2>/dev/null || true)"
+        cq="${repo_root:+$repo_root/}tools/cquality.sh"
+        if [[ -x "$cq" ]]; then
+            "$cq" format-file "$file_path" || true
+            "$cq" lint-file "$file_path" || true
         fi
         ;;
     *.py)
