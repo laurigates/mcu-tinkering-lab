@@ -53,10 +53,16 @@ esp_err_t gemini_backend_init(void);
  * @param out_goal      Output: parsed goal.  Must not be NULL.
  * @param latency_ms_out  Output: round-trip latency in milliseconds.
  *                        May be NULL if the caller does not need it.
+ * @param out_speech    Output: utterance from a parallel `speak` call, or ""
+ *                      if the model did not ask to speak. May be NULL.
+ *                      Populated even when the return value is ESP_FAIL, so a
+ *                      speech-only response still reaches the speaker while
+ *                      the executor safely holds.
+ * @param speech_cap    Size of @p out_speech in bytes.
  * @return ESP_OK on success, ESP_FAIL on recoverable error.
  */
 esp_err_t gemini_backend_plan(const uint8_t *jpeg, size_t jpeg_len, goal_t *out_goal,
-                              uint32_t *latency_ms_out);
+                              uint32_t *latency_ms_out, char *out_speech, size_t speech_cap);
 
 /**
  * @brief Release resources allocated by gemini_backend_init().

@@ -55,7 +55,22 @@ Motor direction uses PCA9685 "full-on" (4096) / "full-off" (0) values on IN1/IN2
 - `rotate(angle_deg)` — spin in place
 - `stop()` — hold position
 
+- `speak(text)` — say one short sentence aloud, emitted *in addition to* a movement call
+
 The planner runs at ~1 Hz on Core 1; the executor drives the goal at ~30 Hz on Core 0. No on-demand inference or blocking on responses — the planner is a background task that constantly updates `goal_state`, and the executor always has something to do.
+
+## Voice (MAX98357A)
+
+The robot speaks through a MAX98357A I2S amplifier on GPIO7/8/9. See [ADR-019](../../docs/decisions/ADR-019-robocar-voice-gemini-tts.md) for the design.
+
+**Speech is a queue, not a goal.** `speak` is deliberately *not* a `goal_kind_t` — it travels via `speech_queue` alongside `goal_state`. Goals are last-write-wins with a TTL that collapses to STOP; applying those semantics to speech would truncate sentences mid-word and make talking and driving mutually exclusive. If you find yourself adding `GOAL_KIND_SPEAK`, read the header comment in `speech_queue.h` first.
+
+The pipeline is two Gemini calls: Robotics-ER decides *what* to say (riding the existing planner call — no extra vision inference), then `gemini-3.1-flash-tts-preview` renders it. Audio is 24 kHz mono PCM, base64 inline, no WAV header — decoded **incrementally** into a PSRAM ring by `base64_stream_feed()` while the player task drains it into I2S, so playback starts before the download finishes. A few seconds of audio is hundreds of kB; it can never be buffered whole.
+
+Two hardware consequences worth knowing before touching this:
+
+- **The microSD slot is gone.** GPIO7/8/9 are the Sense expansion board's SPI bus. No alternative pins exist — I2S needs a real peripheral, so it cannot move behind the PCA9685 or MCP23017.
+- **The GPIO budget is fully allocated.** Further digital I/O goes through the MCP23017 on TCA9548A ch2.
 
 Claude and Ollama backends have been removed from this project. If an alternative planner becomes necessary in the future, it should be designed as a clean abstraction, not a resurrection of deleted code. See ADR-016 for the rationale.
 
@@ -96,6 +111,9 @@ Key settings that matter:
 
 - Don't call `motor_controller.c` directly from anywhere except `reactive_controller.c` — the executor owns motor output
 - Don't add goal sources outside `planner_task.c` — structured goals keep the two layers decoupled. If a new goal source is needed, it should write `goal_state` the same way the planner does
+- Don't fold speech into `goal_t` — see the Voice section above and `speech_queue.h`
+- Don't "normalise" the audio path to 16 kHz to match the ThinkPack projects — 24 kHz is Gemini TTS's native rate, and matching it avoids a resampling stage entirely
+- Don't buffer the TTS response whole — it's hundreds of kB and the response buffer is 16 kB. The streaming decoder exists for this reason
 - Don't add direct GPIO motor control — everything goes through PCA9685 via `motor_controller.c`
 - Don't bypass the TCA9548A — devices on different channels can share addresses (e.g. PCA9685 and OLED would conflict without it)
 - Don't commit `main/credentials.h` — it's gitignored; use the `.example` as template

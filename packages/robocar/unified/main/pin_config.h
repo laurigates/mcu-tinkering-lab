@@ -6,9 +6,12 @@
  *   D4/D5 (GPIO5/6)  = I2C SDA/SCL to TCA9548A
  *   D0 (GPIO1)       = TB6612FNG STBY (motor enable)
  *   D1 (GPIO2)       = Piezo buzzer
- *   D2-D3 (GPIO3-4)  = Spare (future: ultrasonic sensor)
+ *   D2-D3 (GPIO3-4)  = Ultrasonic TRIG/ECHO
  *   D6/D7 (GPIO43/44)= USB Serial TX/RX (debug console)
- *   D8-D10 (GPIO7-9) = Spare (future: SPI expansion)
+ *   D8-D10 (GPIO7-9) = I2S to MAX98357A (BCLK/LRCLK/DIN)
+ *
+ * The GPIO budget is now FULLY ALLOCATED — there are no spare header pins.
+ * Further digital I/O must go through the MCP23017 on TCA9548A ch2.
  *
  * Camera uses internal GPIOs on the Sense module — no conflict with D0-D10.
  */
@@ -104,6 +107,41 @@
 #define PIEZO_PIN GPIO_NUM_2  // XIAO D1
 
 // ========================================
+// MAX98357A I2S Class-D Amplifier (voice output)
+//
+// HARDWARE TRADE-OFF: on the XIAO ESP32-S3 Sense expansion board these three
+// headers are the microSD slot's SPI bus. Wiring the amplifier here gives up
+// the SD card permanently. There is no alternative pin set — I2S needs a real
+// peripheral, so it cannot be moved behind the PCA9685 or the MCP23017.
+//
+// POWER: the MAX98357A draws ~1 A peaks into a 4 ohm load. CONFIG_ESP_BROWNOUT_DET
+// is already disabled because of motor inrush; do not share a thin 5 V rail
+// with the motor driver. See WIRING.md for the decoupling requirement.
+//
+// SD_MODE (amp side) selects the channel: tie to GND to shut down, leave
+// floating for (L+R)/2, or pull to VDD for right-channel-only.
+// ========================================
+#define I2S_BCLK_PIN GPIO_NUM_7   // XIAO D8  — bit clock
+#define I2S_LRCLK_PIN GPIO_NUM_8  // XIAO D9  — word select / LRC
+#define I2S_DIN_PIN GPIO_NUM_9    // XIAO D10 — serial data to amp
+
+/** Gemini TTS emits 24 kHz mono PCM. Running I2S natively at 24 kHz avoids a
+ *  resampling stage entirely — do not "normalise" this to 16 kHz. */
+#define AUDIO_SAMPLE_RATE_HZ 24000
+
+/** Output gain, percent of full scale. The amplifier has no volume control;
+ *  attenuation happens in software before the samples reach the DMA. */
+#define AUDIO_VOLUME_PCT 70
+
+/** PSRAM ring between the TTS download and the I2S writer, in bytes.
+ *  96 kB ~= 2 s of 24 kHz mono, enough to absorb WiFi stalls mid-utterance. */
+#define AUDIO_RING_BYTES (96 * 1024)
+
+/** Playback starts once this much audio has buffered, so a slow first chunk
+ *  does not produce a stuttering opening syllable. */
+#define AUDIO_PREROLL_BYTES (12 * 1024)
+
+// ========================================
 // Servo Configuration (SG90 at 200Hz)
 // ========================================
 // At 200Hz, period = 5000us. Pulse width range: 500-2500us.
@@ -152,6 +190,21 @@
 #define COMMAND_TASK_STACK_SIZE 8192
 #define COMMAND_TASK_PRIORITY 5
 #define COMMAND_TASK_CORE 0
+
+/* Audio lives on Core 1 with the other bursty I/O work (camera, planner,
+ * network). Keeping it off Core 0 preserves the motor-PWM timing guarantee
+ * that ADR-016 pins the reactive controller to.
+ *
+ * Two tasks, because esp_http_client_perform() blocks for the whole TTS
+ * download: the fetch task fills the ring, the player task drains it into
+ * I2S, and playback overlaps the download instead of waiting for it. */
+#define TTS_FETCH_TASK_STACK_SIZE 8192
+#define TTS_FETCH_TASK_PRIORITY 3
+#define TTS_FETCH_TASK_CORE 1
+
+#define AUDIO_PLAYER_TASK_STACK_SIZE 4096
+#define AUDIO_PLAYER_TASK_PRIORITY 5
+#define AUDIO_PLAYER_TASK_CORE 1
 
 // ========================================
 // Queue Configuration

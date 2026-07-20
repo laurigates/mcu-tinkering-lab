@@ -29,6 +29,7 @@
 #include "gemini_parse.h"
 
 #include <stddef.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "cJSON.h"
@@ -47,11 +48,20 @@ static const char *TAG GP_MAYBE_UNUSED = "gemini_parse";
 
 esp_err_t gemini_parse_function_call(const char *json_text, goal_t *out_goal)
 {
+    return gemini_parse_response(json_text, out_goal, NULL, 0);
+}
+
+esp_err_t gemini_parse_response(const char *json_text, goal_t *out_goal, char *out_speech,
+                                size_t speech_cap)
+{
     if (json_text == NULL || out_goal == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
 
     out_goal->kind = GOAL_KIND_STOP; /* safe default */
+    if (out_speech && speech_cap > 0) {
+        out_speech[0] = '\0';
+    }
 
     cJSON *root = cJSON_Parse(json_text);
     if (!root) {
@@ -65,12 +75,39 @@ esp_err_t gemini_parse_function_call(const char *json_text, goal_t *out_goal)
     cJSON *cand0 = candidates ? cJSON_GetArrayItem(candidates, 0) : NULL;
     cJSON *cand_content = cand0 ? cJSON_GetObjectItem(cand0, "content") : NULL;
     cJSON *cand_parts = cand_content ? cJSON_GetObjectItem(cand_content, "parts") : NULL;
-    cJSON *part0 = cand_parts ? cJSON_GetArrayItem(cand_parts, 0) : NULL;
-    cJSON *fn_call = part0 ? cJSON_GetObjectItem(part0, "functionCall") : NULL;
+
+    /* The model may emit several parallel function calls — typically one
+     * motion call plus a `speak`. Scanning only parts[0] (as this parser did
+     * before speech existed) would silently drop whichever came second. */
+    cJSON *fn_call = NULL;
+    const int part_count = cand_parts ? cJSON_GetArraySize(cand_parts) : 0;
+
+    for (int i = 0; i < part_count; i++) {
+        cJSON *part = cJSON_GetArrayItem(cand_parts, i);
+        cJSON *fc = part ? cJSON_GetObjectItem(part, "functionCall") : NULL;
+        cJSON *fc_name = fc ? cJSON_GetObjectItem(fc, "name") : NULL;
+        if (!cJSON_IsString(fc_name)) {
+            continue;
+        }
+
+        if (strcmp(fc_name->valuestring, "speak") == 0) {
+            cJSON *sp_args = cJSON_GetObjectItem(fc, "args");
+            cJSON *text = sp_args ? cJSON_GetObjectItem(sp_args, "text") : NULL;
+            if (cJSON_IsString(text) && out_speech && speech_cap > 0) {
+                /* snprintf rather than strlcpy: this file also builds on the
+                 * host for the unit tests, where strlcpy is not portable. */
+                snprintf(out_speech, speech_cap, "%s", text->valuestring);
+            }
+            continue;
+        }
+
+        if (!fn_call) {
+            fn_call = fc; /* first motion call wins */
+        }
+    }
 
     if (!fn_call) {
-        ESP_LOGE(TAG, "no functionCall in response — candidates[0].content.parts[0].functionCall "
-                      "missing");
+        ESP_LOGE(TAG, "no motion functionCall in response (%d parts scanned)", part_count);
         cJSON *finish_reason = cand0 ? cJSON_GetObjectItem(cand0, "finishReason") : NULL;
         if (cJSON_IsString(finish_reason)) {
             ESP_LOGE(TAG, "finishReason: %s", finish_reason->valuestring);

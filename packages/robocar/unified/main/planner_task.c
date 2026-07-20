@@ -16,6 +16,7 @@
 #include "freertos/task.h"
 #include "gemini_backend.h"
 #include "goal_state.h"
+#include "speech_queue.h"
 
 static const char *TAG = "planner";
 
@@ -81,7 +82,23 @@ static void planner_task(void *pvParameters)
         /* ---- 2. Call Gemini planner ---- */
         goal_t goal = {0};
         uint32_t latency_ms = 0;
-        esp_err_t ret = gemini_backend_plan(fb->buf, fb->len, &goal, &latency_ms);
+        char speech[SPEECH_TEXT_MAX] = {0};
+        esp_err_t ret =
+            gemini_backend_plan(fb->buf, fb->len, &goal, &latency_ms, speech, sizeof(speech));
+
+        /* ---- 2b. Hand any utterance to the TTS task ----
+         * Posted before the goal is written and regardless of whether the
+         * motion goal parsed, so the robot can speak while holding position.
+         * Non-blocking: a full queue drops the line rather than stalling the
+         * planner loop. */
+        if (speech[0] != '\0') {
+            const esp_err_t sp_ret = speech_queue_post(speech);
+            if (sp_ret == ESP_OK) {
+                ESP_LOGI(TAG, "Speech: \"%s\"", speech);
+            } else if (sp_ret == ESP_ERR_NO_MEM) {
+                ESP_LOGD(TAG, "still speaking — dropped: \"%s\"", speech);
+            }
+        }
 
         /* ---- 3 / 4. Write goal or force stop ---- */
         if (ret == ESP_OK) {

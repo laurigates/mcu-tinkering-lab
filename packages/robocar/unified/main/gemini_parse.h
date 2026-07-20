@@ -11,6 +11,8 @@
 #ifndef GEMINI_PARSE_H
 #define GEMINI_PARSE_H
 
+#include <stddef.h>
+
 #include "esp_err.h"
 #include "goal_state.h"
 
@@ -29,6 +31,30 @@ extern "C" {
  *         ESP_ERR_INVALID_ARG if either pointer is NULL.
  */
 esp_err_t gemini_parse_function_call(const char *json_text, goal_t *out_goal);
+
+/**
+ * @brief As gemini_parse_function_call(), but also extracts a `speak` call.
+ *
+ * The model emits motion and speech as *parallel* function calls in the same
+ * response, so both are recovered in one pass. Speech is returned by value
+ * rather than folded into goal_t because the two have different lifetimes —
+ * see speech_queue.h for why speech cannot be a goal.
+ *
+ * The return value reflects the **motion** goal only. A response carrying a
+ * `speak` but no motion call still returns ESP_FAIL with kind=GOAL_KIND_STOP
+ * (the pre-existing fail-safe contract), while `out_speech` is populated —
+ * so the robot holds position and still talks.
+ *
+ * @param json_text   NUL-terminated response body. Must not be NULL.
+ * @param out_goal    Destination goal. Must not be NULL.
+ * @param out_speech  Destination for the utterance, or NULL to ignore speech.
+ *                    Set to "" when the response carries no `speak` call.
+ * @param speech_cap  Size of @p out_speech in bytes. Text is truncated to fit.
+ * @return ESP_OK if a motion goal was parsed, ESP_FAIL otherwise,
+ *         ESP_ERR_INVALID_ARG if @p json_text or @p out_goal is NULL.
+ */
+esp_err_t gemini_parse_response(const char *json_text, goal_t *out_goal, char *out_speech,
+                                size_t speech_cap);
 
 #ifdef __cplusplus
 }
