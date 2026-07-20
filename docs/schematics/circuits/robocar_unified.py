@@ -3,6 +3,7 @@
 XIAO ESP32-S3 Sense driving everything via an I2C multiplexer:
   - TCA9548A ch0 → PCA9685 → 2x RGB LEDs, 2x SG90 servos, TB6612FNG → motors
   - TCA9548A ch1 → SSD1306 OLED
+  - TCA9548A ch2 → MCP23017 GPIO expander (optional; no roles assigned yet)
 Direct GPIO: STBY (motor enable), piezo, ultrasonic TRIG/ECHO,
 and I2S (D8-D10) → MAX98357A → speaker for the robot's voice (ADR-019).
 
@@ -15,6 +16,7 @@ import schemdraw.elements as elm
 from components import (
     hc_sr04p,
     max98357a,
+    mcp23017,
     pca9685,
     ssd1306_oled,
     tb6612fng,
@@ -83,6 +85,19 @@ def draw() -> schemdraw.Drawing:
         .label("SSD1306 OLED\n0x3C, 128x64", loc="bot", ofst=0.4)
     )
 
+    # MCP23017 on mux ch2, below-right of the OLED. Offset rather than directly
+    # beneath it so the ch2 bus gets its own vertical corridor — stacked in the
+    # same column, the ch1 and ch2 pairs ran shoulder to shoulder and crowded
+    # the OLED's power tags. Optional hardware: the firmware boots fine without
+    # the board fitted.
+    mcp = d.add(
+        mcp23017()
+        .right()
+        .at((oled.center.x + 6, oled.center.y - 8))
+        .anchor("center")
+        .label("MCP23017\n0x20 (optional)", loc="bot", ofst=0.4)
+    )
+
     # Ultrasonic below the MCU.
     us = d.add(
         hc_sr04p()
@@ -149,6 +164,9 @@ def draw() -> schemdraw.Drawing:
 
     router.wire(mux.SD1, oled.SDA, color="steelblue")
     router.wire(mux.SC1, oled.SCL, color="steelblue")
+
+    router.wire(mux.SD2, mcp.SDA, color="steelblue")
+    router.wire(mux.SC2, mcp.SCL, color="steelblue")
 
     router.wire(xiao.GPIO3, us.TRIG, color="steelblue")
     router.wire(xiao.GPIO4, us.ECHO, color="steelblue")
@@ -228,6 +246,29 @@ def draw() -> schemdraw.Drawing:
     d.add(elm.Vdd().label("+3V3"))
     d.add(elm.Line().left(1.0).at(us.GND))
     d.add(elm.Ground())
+
+    d.add(elm.Line().left(1.0).at(mcp.VCC))
+    d.add(elm.Vdd().label("+3V3"))
+    d.add(elm.Line().left(1.0).at(mcp.GND))
+    d.add(elm.Ground())
+
+    # MCP23017 ports: 16 generic GPIOs, no roles assigned yet — direction is
+    # set per pin at runtime. (A0-A2 are strapped to GND for 0x20; that's in
+    # the component label rather than drawn, since they carry no signal.)
+    d.add(
+        elm.Arrow()
+        .right(2.5)
+        .at(mcp["GPA0-7"])
+        .label("8 spare GPIO", loc="right", ofst=0.1, fontsize=10)
+        .color("steelblue")
+    )
+    d.add(
+        elm.Arrow()
+        .right(2.5)
+        .at(mcp["GPB0-7"])
+        .label("8 spare GPIO", loc="right", ofst=0.1, fontsize=10)
+        .color("steelblue")
+    )
 
     # Amp power on its outward-facing right side. VIN is 5 V — prefer a
     # separate feed from the boost converter rather than daisy-chaining off
