@@ -22,7 +22,12 @@ The XIAO exposes only 11 GPIOs on its headers. Camera pins are internal to the S
 | D5 | GPIO6 | **I2C SCL** | to TCA9548A |
 | D6 | GPIO43 | USB Serial TX | debug console |
 | D7 | GPIO44 | USB Serial RX | debug console |
-| D8–D10 | GPIO7–9 | *spare* | future: SPI or expansion |
+| D8 | GPIO7 | **I2S BCLK** | to MAX98357A BCLK |
+| D9 | GPIO8 | **I2S LRCLK** | to MAX98357A LRC |
+| D10 | GPIO9 | **I2S DIN** | to MAX98357A DIN |
+
+> **The GPIO budget is fully allocated.** There are no spare header pins left.
+> Additional digital I/O must go through the MCP23017 on TCA9548A channel 2.
 
 I2C runs at **400 kHz**.
 
@@ -74,10 +79,56 @@ graph TD
     PCA --> Servos
     XIAO -->|GPIO2| Piezo[Piezo buzzer]
     XIAO -->|GPIO1| MD
+    Boost -->|5V| AMP[MAX98357A<br/>Vin]
+    XIAO -->|GPIO7/8/9 I2S| AMP
+    AMP --> SPK[4-8 ohm speaker]
     classDef gnd fill:#ccc,stroke:#333
 ```
 
 **Common ground required across all components.**
+
+### Amplifier supply — read before wiring
+
+`CONFIG_ESP_BROWNOUT_DET` is **already disabled** in this project because motor
+inrush was tripping it. The MAX98357A adds transient draw of up to ~1 A into a
+4 Ω load, on the same rail, at moments uncorrelated with motor current. With
+brownout detection off, an undersized rail will not warn you — it will present
+as random resets or corrupt audio mid-sentence.
+
+- Fit a **bulk capacitor (≥ 470 µF) at the amplifier's Vin**, plus the usual
+  0.1 µF close to the pin.
+- Prefer a **separate 5 V feed from the boost converter** to the amplifier
+  rather than daisy-chaining off the motor-driver rail.
+- An **8 Ω speaker roughly halves peak current** versus 4 Ω and is the safer
+  first choice while validating the supply.
+
+## Audio output (MAX98357A)
+
+Mono I2S class-D amplifier providing the robot's voice. Audio is 24 kHz 16-bit
+mono — the native output rate of the Gemini TTS model, carried through without
+resampling.
+
+| Signal | Pin | Function |
+|--------|-----|----------|
+| BCLK | GPIO7 (D8) | Bit clock |
+| LRC | GPIO8 (D9) | Word select / left-right clock |
+| DIN | GPIO9 (D10) | Serial audio data |
+| Vin | 5 V | See supply note above |
+| GND | any GND | Shared ground |
+| SD_MODE | *(see below)* | Channel select / shutdown |
+| GAIN | float | 9 dB default; tie to GND for 12 dB, Vin for 6 dB |
+
+`SD_MODE` selects the channel: leave **floating** for (L+R)/2 — correct here,
+since the firmware duplicates the mono sample into both slots. Tying it to GND
+shuts the amplifier down.
+
+> **Trade-off: this replaces the microSD slot.** On the Sense expansion board
+> D8/D9/D10 are the microSD SPI bus. Wiring the amplifier here gives up the
+> card reader permanently. There is no alternative — I2S needs a hardware
+> peripheral, so it cannot be moved behind the PCA9685 or the MCP23017.
+
+The I2S channel is disabled between utterances: the MAX98357A hisses faintly
+whenever BCLK is running, so leaving it clocking silence is audible.
 
 ## Ultrasonic rangefinder
 

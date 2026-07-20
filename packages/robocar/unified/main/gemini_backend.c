@@ -228,6 +228,37 @@ static cJSON *build_tools(void)
         cJSON_AddItemToArray(tools_arr, fn);
     }
 
+    /* ---- speak ----
+     * Unlike the four above, `speak` is NOT a motion goal — it is emitted
+     * *alongside* one, and travels to the TTS task via speech_queue rather
+     * than goal_state. See speech_queue.h for why the two cannot share a
+     * lifetime. The parser recovers both from the same response. */
+    {
+        cJSON *fn = cJSON_CreateObject();
+        cJSON_AddStringToObject(fn, "name", "speak");
+        cJSON_AddStringToObject(fn, "description",
+                                "Say something out loud through the robot's speaker. Call this "
+                                "IN ADDITION to a movement function, not instead of one. Use it "
+                                "sparingly — only when the scene changes in a way worth "
+                                "remarking on.");
+        cJSON *params = cJSON_AddObjectToObject(fn, "parameters");
+        cJSON_AddStringToObject(params, "type", "OBJECT");
+        cJSON *props = cJSON_AddObjectToObject(params, "properties");
+
+        cJSON *text = cJSON_CreateObject();
+        cJSON_AddStringToObject(text, "type", "STRING");
+        cJSON_AddStringToObject(text, "description",
+                                "One short spoken sentence, at most 20 words. Plain text only — "
+                                "no markdown, no emoji.");
+        cJSON_AddItemToObject(props, "text", text);
+
+        cJSON *required = cJSON_CreateArray();
+        cJSON_AddItemToArray(required, cJSON_CreateString("text"));
+        cJSON_AddItemToObject(params, "required", required);
+
+        cJSON_AddItemToArray(tools_arr, fn);
+    }
+
     return tools_arr;
 }
 
@@ -250,11 +281,15 @@ static char *build_request_json(const char *b64_image)
 {
     static const char *SYSTEM_PROMPT =
         "You are the planning brain of a small wheeled robot. "
-        "Examine the image and choose exactly one action for the robot to take next "
-        "by calling one of the provided functions: drive, track, rotate, or stop. "
+        "Examine the image and choose exactly one movement for the robot to take next "
+        "by calling one of: drive, track, rotate, or stop. "
         "Prefer 'track' when a target object is visible and centred in the frame. "
         "Call 'stop' when the path is blocked or the scene is ambiguous. "
-        "Respond ONLY with a single function call — no prose, no markdown.";
+        "You may ALSO call 'speak' in the same response to say one short sentence out "
+        "loud — do so only when the scene has changed in a way worth remarking on, not "
+        "on every frame. You are consulted about once per second, so narrating "
+        "continuously would be incoherent. "
+        "Respond ONLY with function calls — no prose, no markdown.";
 
     cJSON *root = cJSON_CreateObject();
 
@@ -332,10 +367,13 @@ esp_err_t gemini_backend_init(void)
 }
 
 esp_err_t gemini_backend_plan(const uint8_t *jpeg, size_t jpeg_len, goal_t *out_goal,
-                              uint32_t *latency_ms_out)
+                              uint32_t *latency_ms_out, char *out_speech, size_t speech_cap)
 {
     if (!jpeg || jpeg_len == 0 || !out_goal) {
         return ESP_ERR_INVALID_ARG;
+    }
+    if (out_speech && speech_cap > 0) {
+        out_speech[0] = '\0';
     }
     if (!s_response_buf) {
         ESP_LOGE(TAG, "gemini_backend_plan() called before gemini_backend_init()");
@@ -425,10 +463,12 @@ esp_err_t gemini_backend_plan(const uint8_t *jpeg, size_t jpeg_len, goal_t *out_
         goto cleanup;
     }
 
-    /* ---- Parse function call from response ---- */
-    err = gemini_parse_function_call(acc.buf, out_goal);
+    /* ---- Parse function calls from response ---- */
+    err = gemini_parse_response(acc.buf, out_goal, out_speech, speech_cap);
     if (err != ESP_OK) {
-        /* parse_function_call already set out_goal->kind = GOAL_KIND_STOP */
+        /* gemini_parse_response already set out_goal->kind = GOAL_KIND_STOP.
+         * out_speech may still be populated — a speech-only response is not a
+         * reason to stay silent. */
         ESP_LOGW(TAG, "falling back to STOP due to parse failure");
     }
 

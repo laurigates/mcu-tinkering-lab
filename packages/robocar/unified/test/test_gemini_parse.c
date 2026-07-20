@@ -227,6 +227,106 @@ static void test_parse_unknown_function_defaults_to_stop(void)
 }
 
 /* =========================================================================
+ * speak extraction — parallel function calls
+ * ========================================================================= */
+
+/* A `speak` call sitting in parts[1] alongside a motion call in parts[0].
+ * The pre-speech parser only looked at parts[0], so this is the regression
+ * that guards the multi-part scan. */
+static void test_parse_speak_alongside_motion(void)
+{
+    const char *json =
+        "{\"candidates\":[{\"content\":{\"parts\":["
+        "{\"functionCall\":{\"name\":\"drive\",\"args\":{\"heading_deg\":0,"
+        "\"distance_cm\":50,\"speed_pct\":60}}},"
+        "{\"functionCall\":{\"name\":\"speak\",\"args\":{\"text\":\"I see a red ball\"}}}"
+        "]}}]}";
+    goal_t goal;
+    char speech[160];
+    esp_err_t ret = gemini_parse_response(json, &goal, speech, sizeof(speech));
+    ASSERT(ret == ESP_OK);
+    ASSERT(goal.kind == GOAL_KIND_DRIVE);
+    ASSERT(goal.params.drive.distance_cm == 50);
+    ASSERT(strcmp(speech, "I see a red ball") == 0);
+}
+
+/* Order must not matter — speech first, motion second. */
+static void test_parse_speak_before_motion(void)
+{
+    const char *json =
+        "{\"candidates\":[{\"content\":{\"parts\":["
+        "{\"functionCall\":{\"name\":\"speak\",\"args\":{\"text\":\"Turning around\"}}},"
+        "{\"functionCall\":{\"name\":\"rotate\",\"args\":{\"angle_deg\":180}}}"
+        "]}}]}";
+    goal_t goal;
+    char speech[160];
+    esp_err_t ret = gemini_parse_response(json, &goal, speech, sizeof(speech));
+    ASSERT(ret == ESP_OK);
+    ASSERT(goal.kind == GOAL_KIND_ROTATE);
+    ASSERT(goal.params.rotate.angle_deg == 180);
+    ASSERT(strcmp(speech, "Turning around") == 0);
+}
+
+/* Speech with no motion call: fail-safe STOP, but the utterance survives so
+ * the robot can talk while holding position. */
+static void test_parse_speak_only_still_yields_text(void)
+{
+    const char *json = "{\"candidates\":[{\"content\":{\"parts\":["
+                       "{\"functionCall\":{\"name\":\"speak\",\"args\":{\"text\":\"Hello\"}}}"
+                       "]}}]}";
+    goal_t goal;
+    char speech[160];
+    esp_err_t ret = gemini_parse_response(json, &goal, speech, sizeof(speech));
+    ASSERT(ret == ESP_FAIL);
+    ASSERT(goal.kind == GOAL_KIND_STOP);
+    ASSERT(strcmp(speech, "Hello") == 0);
+}
+
+/* No speak call → empty string, not stale contents. */
+static void test_parse_no_speak_clears_buffer(void)
+{
+    const char *json = "{\"candidates\":[{\"content\":{\"parts\":[{\"functionCall\":{"
+                       "\"name\":\"stop\",\"args\":{}}}]}}]}";
+    goal_t goal;
+    char speech[160];
+    memcpy(speech, "stale", 6);
+    esp_err_t ret = gemini_parse_response(json, &goal, speech, sizeof(speech));
+    ASSERT(ret == ESP_OK);
+    ASSERT(goal.kind == GOAL_KIND_STOP);
+    ASSERT(speech[0] == '\0');
+}
+
+/* Over-long utterances are truncated, not overflowed. */
+static void test_parse_speak_truncates(void)
+{
+    const char *json =
+        "{\"candidates\":[{\"content\":{\"parts\":["
+        "{\"functionCall\":{\"name\":\"speak\",\"args\":{\"text\":\"abcdefghijklmnop\"}}},"
+        "{\"functionCall\":{\"name\":\"stop\",\"args\":{}}}"
+        "]}}]}";
+    goal_t goal;
+    char speech[8];
+    esp_err_t ret = gemini_parse_response(json, &goal, speech, sizeof(speech));
+    ASSERT(ret == ESP_OK);
+    ASSERT(strlen(speech) == 7);
+    ASSERT(strcmp(speech, "abcdefg") == 0);
+}
+
+/* The legacy two-arg entry point must keep behaving exactly as before. */
+static void test_legacy_wrapper_unchanged(void)
+{
+    const char *json = "{\"candidates\":[{\"content\":{\"parts\":["
+                       "{\"functionCall\":{\"name\":\"speak\",\"args\":{\"text\":\"ignored\"}}},"
+                       "{\"functionCall\":{\"name\":\"rotate\",\"args\":{\"angle_deg\":-45}}}"
+                       "]}}]}";
+    goal_t goal;
+    esp_err_t ret = gemini_parse_function_call(json, &goal);
+    ASSERT(ret == ESP_OK);
+    ASSERT(goal.kind == GOAL_KIND_ROTATE);
+    ASSERT(goal.params.rotate.angle_deg == -45);
+}
+
+/* =========================================================================
  * Main
  * ========================================================================= */
 
@@ -245,6 +345,12 @@ int main(void)
     test_run("parse_track_wrong_box_length", test_parse_track_wrong_box_length);
     test_run("parse_unknown_function_defaults_to_stop",
              test_parse_unknown_function_defaults_to_stop);
+    test_run("parse_speak_alongside_motion", test_parse_speak_alongside_motion);
+    test_run("parse_speak_before_motion", test_parse_speak_before_motion);
+    test_run("parse_speak_only_still_yields_text", test_parse_speak_only_still_yields_text);
+    test_run("parse_no_speak_clears_buffer", test_parse_no_speak_clears_buffer);
+    test_run("parse_speak_truncates", test_parse_speak_truncates);
+    test_run("legacy_wrapper_unchanged", test_legacy_wrapper_unchanged);
 
     printf("\n=== Results ===\n");
     printf("Passed: %d / %d\n", test_pass, test_count);

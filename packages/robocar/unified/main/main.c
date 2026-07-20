@@ -25,10 +25,12 @@
 #include "freertos/timers.h"
 #include "nvs_flash.h"
 
+#include "audio_player.h"
 #include "buzzer.h"
 #include "camera.h"
 #include "config.h"
 #include "credentials_loader.h"
+#include "gemini_tts.h"
 #include "goal_state.h"
 #include "gpio_expander.h"
 #include "i2c_bus.h"
@@ -41,6 +43,7 @@
 #include "planner_task.h"
 #include "reactive_controller.h"
 #include "servo_controller.h"
+#include "speech_queue.h"
 #include "system_state.h"
 #include "wifi_manager.h"
 
@@ -425,6 +428,18 @@ static esp_err_t init_hierarchical_ai(void)
 
     // goal_state must be initialised before reactive_controller and planner_task
     ESP_RETURN_ON_ERROR(goal_state_init(), TAG, "goal_state_init failed");
+
+    // Speech path: queue and player must exist before the planner can emit a
+    // `speak` call. Both are non-fatal — a robot that cannot talk should still
+    // drive, so failures here are logged and stepped over rather than aborting
+    // the boot.
+    if (speech_queue_init() != ESP_OK) {
+        ESP_LOGW(TAG, "speech_queue_init failed — voice disabled");
+    } else if (audio_player_init() != ESP_OK) {
+        ESP_LOGW(TAG, "audio_player_init failed — voice disabled");
+    } else if (gemini_tts_start() != ESP_OK) {
+        ESP_LOGW(TAG, "gemini_tts_start failed — voice disabled");
+    }
 
     // reactive_controller spawns the 30 Hz executor on Core 0
     ESP_RETURN_ON_ERROR(reactive_controller_init(), TAG, "reactive_controller_init failed");

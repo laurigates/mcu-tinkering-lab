@@ -89,6 +89,18 @@ target_link_libraries(test_reactive_controller PRIVATE Threads::Threads m)
 add_test(NAME reactive_controller COMMAND test_reactive_controller)
 
 # -----------------------------------------------------------------------------
+# base64 streaming decoder (TTS audio path)
+#
+# base64.c has no ESP-IDF dependencies, so it compiles on the host as-is.
+# -----------------------------------------------------------------------------
+add_executable(test_base64_stream
+    "${MAIN_SRC_DIR}/base64.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_base64_stream.c"
+)
+target_link_libraries(test_base64_stream PRIVATE Threads::Threads m)
+add_test(NAME base64_stream COMMAND test_base64_stream)
+
+# -----------------------------------------------------------------------------
 # gemini parse (Phase 5, gate G1, issue #228)
 #
 # Only built when cJSON is available. Skipped (with a message) otherwise so
