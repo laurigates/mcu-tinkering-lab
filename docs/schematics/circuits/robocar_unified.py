@@ -3,7 +3,8 @@
 XIAO ESP32-S3 Sense driving everything via an I2C multiplexer:
   - TCA9548A ch0 → PCA9685 → 2x RGB LEDs, 2x SG90 servos, TB6612FNG → motors
   - TCA9548A ch1 → SSD1306 OLED
-Direct GPIO: STBY (motor enable), piezo, ultrasonic TRIG/ECHO.
+Direct GPIO: STBY (motor enable), piezo, ultrasonic TRIG/ECHO,
+and I2S (D8-D10) → MAX98357A → speaker for the robot's voice (ADR-019).
 
 Source of truth: packages/robocar/unified/WIRING.md and main/pin_config.h
 """
@@ -13,6 +14,7 @@ import schemdraw.elements as elm
 
 from components import (
     hc_sr04p,
+    max98357a,
     pca9685,
     ssd1306_oled,
     tb6612fng,
@@ -90,6 +92,27 @@ def draw() -> schemdraw.Drawing:
         .label("HC-SR04P\nultrasonic", loc="bot", ofst=0.4)
     )
 
+    # MAX98357A above the MCU: its I2S pins are on the left, and the XIAO's
+    # I2S trio is at the top of its right side, so the bus runs up-and-over
+    # without crossing the I2C wires heading right to the mux.
+    amp = d.add(
+        max98357a()
+        .right()
+        .at((xiao.center.x + 5, xiao.center.y + 11))
+        .anchor("center")
+        .label("MAX98357A", loc="top", ofst=0.4)
+    )
+
+    # Speaker below the amp, clear of the XIAO body. 8 Ω is the safer starting
+    # point — it roughly halves peak current versus 4 Ω on a rail that already
+    # has brownout detection disabled for motor inrush.
+    spk = d.add(
+        elm.Speaker()
+        .right()
+        .at((amp.center.x - 0.25, amp["OUT-"].y - 2.5))
+        .label("8 Ω  2-3 W", loc="bot", ofst=0.4)
+    )
+
     # Piezo buzzer on GPIO2 — small branch through resistor to ground. Placed
     # before routing (GPIO2 isn't a routed net in this circuit): the
     # resistor/speaker are real components, not cosmetic tags, and the STBY
@@ -129,6 +152,14 @@ def draw() -> schemdraw.Drawing:
 
     router.wire(xiao.GPIO3, us.TRIG, color="steelblue")
     router.wire(xiao.GPIO4, us.ECHO, color="steelblue")
+
+    # I2S bus → amplifier. 24 kHz mono, matching Gemini TTS's native rate.
+    router.wire(xiao.GPIO7, amp.BCLK, color="steelblue")
+    router.wire(xiao.GPIO8, amp.LRC, color="steelblue")
+    router.wire(xiao.GPIO9, amp.DIN, color="steelblue")
+
+    router.wire(amp["OUT-"], spk.in1)
+    router.wire(amp["OUT+"], spk.in2)
 
     # === Local stubs (power tags, servo/LED arrows, piezo branch) stay
     # hand-drawn — these aren't point-to-point nets between two components,
@@ -197,6 +228,25 @@ def draw() -> schemdraw.Drawing:
     d.add(elm.Vdd().label("+3V3"))
     d.add(elm.Line().left(1.0).at(us.GND))
     d.add(elm.Ground())
+
+    # Amp power on its outward-facing right side. VIN is 5 V — prefer a
+    # separate feed from the boost converter rather than daisy-chaining off
+    # the motor rail, and fit >=470 uF of bulk here (see WIRING.md).
+    d.add(elm.Line().right(0.5).at(amp.VIN))
+    d.add(elm.Vdd().label("+5V"))
+    d.add(elm.Line().right(0.5).at(amp.GND))
+    d.add(elm.Ground())
+
+    # SD_MODE floating = (L+R)/2, which is what the firmware expects: it
+    # duplicates the mono sample into both I2S slots. Tying it low shuts the
+    # amplifier down.
+    d.add(
+        elm.Arrow()
+        .right(2.0)
+        .at(amp.SD)
+        .label("float = (L+R)/2", loc="right", ofst=0.1, fontsize=10)
+        .color("gray")
+    )
 
     return d
 

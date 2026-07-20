@@ -43,12 +43,20 @@ def _segment_hits_box(p1, p2, box: _BBox) -> bool:
 
 
 def _build_two_chip_drawing():
+    """Two chips with a ~7-unit gap of free space between their facing edges.
+
+    The obstacle coordinates in the tests below are absolute, so they assume
+    that gap. The offset is therefore tied to max98357a()'s body width — when
+    the part was widened from 4 to 6, this had to go from 9 to 10 to keep the
+    amp's left edge at the same x. If a test starts failing because a blocker
+    unexpectedly swallows a pin stub, check that coupling first.
+    """
     d = schemdraw.Drawing(show=False)
     d.config(unit=2.0, fontsize=12)
     esp = d.add(esp32_s3_zero().label("ESP32-S3-Zero", loc="bot", ofst=0.4))
     amp = d.add(
         max98357a()
-        .at((esp.center.x + 9, esp.center.y))
+        .at((esp.center.x + 10, esp.center.y))
         .anchor("center")
         .label("MAX98357A", loc="top", ofst=0.4)
     )

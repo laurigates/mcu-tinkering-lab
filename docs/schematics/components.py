@@ -68,12 +68,15 @@ def max98357a() -> elm.Ic:
             elm.IcPin(name="SD", side="R"),
             elm.IcPin(name="GND", side="R"),
             elm.IcPin(name="VIN", side="R"),
-            # Bottom — speaker outputs. Slightly inset from the corners so
-            # their labels don't collide with DIN / GAIN on the adjacent sides.
-            elm.IcPin(name="OUT-", side="B", pin="-", pos=0.15),
-            elm.IcPin(name="OUT+", side="B", pin="+", pos=0.85),
+            # Bottom — speaker outputs. Their labels have to clear DIN and GAIN
+            # (bottom corners of the adjacent sides, same height) *and* each
+            # other. At the original 4-wide box there was no gap that did both:
+            # 0.15/0.85 overlapped DIN/GAIN, 0.35/0.65 overlapped each other.
+            # Widening the body to 6 opens enough room for both clearances.
+            elm.IcPin(name="OUT-", side="B", pin="-", pos=0.3),
+            elm.IcPin(name="OUT+", side="B", pin="+", pos=0.7),
         ],
-        size=(4, 5),
+        size=(6, 5),
     )
 
 
@@ -85,6 +88,14 @@ def xiao_esp32s3_sense() -> elm.Ic:
     the order they connect to peripherals top-to-bottom. SCL is listed *above*
     SDA so that — when the I2C mux is placed to the right (also SCL-above-SDA
     on its upstream side) — the two bus wires run parallel instead of crossing.
+
+    The I2S trio (D8-D10) sits at the top for the same reason: the amplifier is
+    drawn above-right, and its left-side pins run DIN/LRC/BCLK bottom-to-top,
+    so listing GPIO9/8/7 in that order keeps the three wires parallel.
+
+    All 11 header pins are now assigned. Note D8-D10 double as the Sense
+    expansion board's microSD SPI bus — using them for I2S gives up the card
+    slot. Further digital I/O must go through the MCP23017 on the I2C mux.
     """
     return elm.Ic(
         pins=[
@@ -99,8 +110,11 @@ def xiao_esp32s3_sense() -> elm.Ic:
             elm.IcPin(name="GPIO1", side="R", pin="D0"),  # STBY
             elm.IcPin(name="GPIO5", side="R", pin="D4"),  # SDA
             elm.IcPin(name="GPIO6", side="R", pin="D5"),  # SCL
+            elm.IcPin(name="GPIO9", side="R", pin="D10"),  # I2S DIN
+            elm.IcPin(name="GPIO8", side="R", pin="D9"),  # I2S LRCLK
+            elm.IcPin(name="GPIO7", side="R", pin="D8"),  # I2S BCLK
         ],
-        size=(3.5, 7),
+        size=(3.5, 10),
     )
 
 
