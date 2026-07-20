@@ -68,12 +68,15 @@ def max98357a() -> elm.Ic:
             elm.IcPin(name="SD", side="R"),
             elm.IcPin(name="GND", side="R"),
             elm.IcPin(name="VIN", side="R"),
-            # Bottom — speaker outputs. Slightly inset from the corners so
-            # their labels don't collide with DIN / GAIN on the adjacent sides.
-            elm.IcPin(name="OUT-", side="B", pin="-", pos=0.15),
-            elm.IcPin(name="OUT+", side="B", pin="+", pos=0.85),
+            # Bottom — speaker outputs. Their labels have to clear DIN and GAIN
+            # (bottom corners of the adjacent sides, same height) *and* each
+            # other. At the original 4-wide box there was no gap that did both:
+            # 0.15/0.85 overlapped DIN/GAIN, 0.35/0.65 overlapped each other.
+            # Widening the body to 6 opens enough room for both clearances.
+            elm.IcPin(name="OUT-", side="B", pin="-", pos=0.3),
+            elm.IcPin(name="OUT+", side="B", pin="+", pos=0.7),
         ],
-        size=(4, 5),
+        size=(6, 5),
     )
 
 
@@ -85,6 +88,14 @@ def xiao_esp32s3_sense() -> elm.Ic:
     the order they connect to peripherals top-to-bottom. SCL is listed *above*
     SDA so that — when the I2C mux is placed to the right (also SCL-above-SDA
     on its upstream side) — the two bus wires run parallel instead of crossing.
+
+    The I2S trio (D8-D10) sits at the top for the same reason: the amplifier is
+    drawn above-right, and its left-side pins run DIN/LRC/BCLK bottom-to-top,
+    so listing GPIO9/8/7 in that order keeps the three wires parallel.
+
+    All 11 header pins are now assigned. Note D8-D10 double as the Sense
+    expansion board's microSD SPI bus — using them for I2S gives up the card
+    slot. Further digital I/O must go through the MCP23017 on the I2C mux.
     """
     return elm.Ic(
         pins=[
@@ -99,8 +110,11 @@ def xiao_esp32s3_sense() -> elm.Ic:
             elm.IcPin(name="GPIO1", side="R", pin="D0"),  # STBY
             elm.IcPin(name="GPIO5", side="R", pin="D4"),  # SDA
             elm.IcPin(name="GPIO6", side="R", pin="D5"),  # SCL
+            elm.IcPin(name="GPIO9", side="R", pin="D10"),  # I2S DIN
+            elm.IcPin(name="GPIO8", side="R", pin="D9"),  # I2S LRCLK
+            elm.IcPin(name="GPIO7", side="R", pin="D8"),  # I2S BCLK
         ],
-        size=(3.5, 7),
+        size=(3.5, 10),
     )
 
 
@@ -108,8 +122,8 @@ def tca9548a() -> elm.Ic:
     """TCA9548A 8-channel I2C multiplexer (Adafruit / generic breakout).
 
     Only the channels used by robocar-unified are exposed (ch0 = PCA9685,
-    ch1 = OLED). Upstream I2C + power on the left, downstream channels on
-    the right.
+    ch1 = OLED, ch2 = MCP23017). Channels 3-7 are unused. Upstream I2C +
+    power on the left, downstream channels on the right.
     """
     return elm.Ic(
         pins=[
@@ -121,12 +135,42 @@ def tca9548a() -> elm.Ic:
             # Right (bottom → top): downstream channel pairs ordered SDx/SCx so
             # SCL ends up *above* SDA on each pair — matches the canonical
             # PCA9685/SSD1306 left-side pin order and avoids bus crossings.
+            # Channels descend top-to-bottom (ch0 highest) so each peripheral
+            # can be drawn progressively further down the page.
+            elm.IcPin(name="SD2", side="R"),
+            elm.IcPin(name="SC2", side="R"),
             elm.IcPin(name="SD1", side="R"),
             elm.IcPin(name="SC1", side="R"),
             elm.IcPin(name="SD0", side="R"),
             elm.IcPin(name="SC0", side="R"),
         ],
-        size=(3.5, 5),
+        size=(3.5, 7),
+    )
+
+
+def mcp23017() -> elm.Ic:
+    """MCP23017 16-bit I2C GPIO expander (1953W breakout).
+
+    Reached through TCA9548A ch2 rather than the primary bus. The 16 GPIOs
+    are grouped by port on the right — drawing all 16 would swamp the
+    schematic, and no role is assigned to any of them yet (they are exercised
+    only from the serial console's ``gpio`` command).
+
+    A0-A2 are not drawn: they are strapped to GND for address 0x20, which the
+    circuit annotates as a label rather than three stub pins.
+    """
+    return elm.Ic(
+        pins=[
+            # Left (bottom → top): power + I2C from the mux
+            elm.IcPin(name="GND", side="L"),
+            elm.IcPin(name="VCC", side="L"),
+            elm.IcPin(name="SDA", side="L"),
+            elm.IcPin(name="SCL", side="L"),
+            # Right (bottom → top): grouped ports
+            elm.IcPin(name="GPB0-7", side="R"),  # pins 8-15
+            elm.IcPin(name="GPA0-7", side="R"),  # pins 0-7
+        ],
+        size=(4, 5),
     )
 
 
