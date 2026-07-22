@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.9](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.1.8...robocar-unified-v0.1.9) (2026-07-20)
+
+
+### Features
+
+* **robocar-unified:** give the robot a voice via MAX98357A + Gemini TTS ([#412](https://github.com/laurigates/mcu-tinkering-lab/issues/412)) ([5379d83](https://github.com/laurigates/mcu-tinkering-lab/commit/5379d8319a97e81b29541342747668a1b7933990))
+
 ## [0.1.8](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.1.7...robocar-unified-v0.1.8) (2026-07-17)
 
 
