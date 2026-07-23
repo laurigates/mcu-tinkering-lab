@@ -12,6 +12,7 @@
 #ifndef GEMINI_BACKEND_H
 #define GEMINI_BACKEND_H
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -63,6 +64,28 @@ esp_err_t gemini_backend_init(void);
  */
 esp_err_t gemini_backend_plan(const uint8_t *jpeg, size_t jpeg_len, goal_t *out_goal,
                               uint32_t *latency_ms_out, char *out_speech, size_t speech_cap);
+
+/**
+ * @brief Phrase on-device status facts into one short spoken line via Gemini.
+ *
+ * A text-only generateContent call to a flash text model (NARRATE_MODEL) that
+ * turns @p facts into a single friendly spoken sentence naming anything that is
+ * not working. Self-contained: it allocates its own HTTP client and response
+ * buffer per call and reads the API key via get_gemini_api_key(), so it does
+ * NOT depend on gemini_backend_init() and is safe to call from a task other
+ * than the planner.
+ *
+ * @param facts    NUL-terminated compact facts string (see self_report).
+ * @param is_update true when re-announcing after a health change — the prompt
+ *                 then asks the model to keep to the delta.
+ * @param out      Output: the spoken line, NUL-terminated and whitespace-
+ *                 trimmed. Set to "" on failure. Must not be NULL.
+ * @param out_len  Size of @p out (e.g. SPEECH_TEXT_MAX). The line is truncated
+ *                 to fit.
+ * @return ESP_OK on success, ESP_FAIL on any HTTP/parse failure (the caller
+ *         should then speak its template fallback).
+ */
+esp_err_t gemini_backend_narrate(const char *facts, bool is_update, char *out, size_t out_len);
 
 /**
  * @brief Release resources allocated by gemini_backend_init().

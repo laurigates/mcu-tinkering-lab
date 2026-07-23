@@ -97,6 +97,11 @@ esp_err_t i2c_bus_init(void)
     return ESP_OK;
 }
 
+bool i2c_bus_is_ready(void)
+{
+    return s_initialized;
+}
+
 esp_err_t i2c_bus_select_channel(uint8_t channel)
 {
     if (!s_initialized) {

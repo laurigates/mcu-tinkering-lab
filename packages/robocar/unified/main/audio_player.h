@@ -69,6 +69,9 @@ void audio_player_abort(void);
 /** True while audio is buffered or actively playing. */
 bool audio_player_is_busy(void);
 
+/** True once the player task and PSRAM ring are up (i.e. init succeeded). */
+bool audio_player_is_ready(void);
+
 #ifdef __cplusplus
 }
 #endif
