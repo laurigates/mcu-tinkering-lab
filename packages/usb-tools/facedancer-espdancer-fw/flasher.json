@@ -1,0 +1,9 @@
+{
+  "name": "facedancer-espdancer-fw",
+  "description": "ESP32-S3 raw-USB relay firmware for the facedancer espdancer backend",
+  "chipFamily": "ESP32-S3",
+  "board": "Waveshare ESP32-S3-Zero",
+  "appBinaryName": "facedancer-espdancer-fw.bin",
+  "category": "tools",
+  "flashMode": "usb"
+}

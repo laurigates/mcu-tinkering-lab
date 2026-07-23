@@ -1,0 +1,57 @@
+# facedancer-espdancer-fw — ESP32-S3 configuration
+# Production: TinyUSB owns the USB PHY (raw-DCD device emulator).
+#             Control channel + logging over WiFi SoftAP.
+
+CONFIG_IDF_TARGET="esp32s3"
+
+# --- USB (raw DCD owns the PHY) ---
+# USB-Serial-JTAG and USB-OTG share one PHY on ESP32-S3.
+# Disable USB-Serial-JTAG so the vendored DCD port (components/raw_usb/
+# tinyusb_port/, ADR-0006) can claim it exclusively. We do NOT pull the
+# `espressif/esp_tinyusb` managed component (see main/idf_component.yml):
+# its usbd.c strongly defines dcd_event_handler and its static
+# process_control_request auto-handles USB standard requests; both
+# incompatible with the Facedancer host-driven model.
+CONFIG_USJ_ENABLE_USB_SERIAL_JTAG=n
+CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
+
+# --- FreeRTOS ---
+CONFIG_FREERTOS_HZ=1000
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+
+# --- Flash & PSRAM (Waveshare ESP32-S3-Zero: 4MB flash, 2MB PSRAM) ---
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_QUAD=y
+CONFIG_SPIRAM_SPEED_80M=y
+
+# --- WiFi (control channel + UDP log sink) ---
+# ESP32-S3 supports concurrent WiFi + USB (no BT here, so coexistence is simple).
+CONFIG_ESP_WIFI_ENABLED=y
+# SoftAP-only operation; these AMPDU/NVS workarounds are S3-specific
+# (espressif/esp-idf#13508, #8008) and were validated in xbox-switch-bridge.
+CONFIG_ESP_WIFI_AMPDU_RX_ENABLED=n
+CONFIG_ESP_WIFI_AMPDU_TX_ENABLED=n
+CONFIG_ESP_WIFI_NVS_ENABLED=n
+CONFIG_ESP_WIFI_ENABLE_WPA3_SAE=n
+CONFIG_ESP_WIFI_ENABLE_SAE_PK=n
+CONFIG_ESP_WIFI_11KV_SUPPORT=n
+CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=6
+CONFIG_ESP_WIFI_STATIC_TX_BUFFER_NUM=8
+
+# --- Logging ---
+CONFIG_LOG_DEFAULT_LEVEL_INFO=y
+
+# --- Watchdog ---
+CONFIG_ESP_TASK_WDT_TIMEOUT_S=10
+
+# --- Power Management: disable for lowest USB latency ---
+CONFIG_PM_ENABLE=n
+
+# --- Compiler (GCC 13+ warnings in vendored TinyUSB if present) ---
+CONFIG_COMPILER_DISABLE_GCC13_WARNINGS=y
+
+# --- No Bluetooth (this is a USB device emulator, not a BLE bridge) ---
+CONFIG_BT_ENABLED=n

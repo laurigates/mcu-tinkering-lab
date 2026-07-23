@@ -1,0 +1,12 @@
+# Debug overlay — raw DCD active + logging via UART (GPIO43 TX / GPIO44 RX).
+# Monitor with CP2102 USB-UART adapter: just uart-monitor
+# USB PHY goes to the vendored DCD (USB-Serial-JTAG unavailable).
+# Usage: rm sdkconfig && just build-debug-uart
+
+CONFIG_USJ_ENABLE_USB_SERIAL_JTAG=n
+CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
+CONFIG_ESP_CONSOLE_UART_DEFAULT=y
+
+CONFIG_LOG_DEFAULT_LEVEL_DEBUG=y
+CONFIG_LOG_DEFAULT_LEVEL=4
+CONFIG_LOG_MAXIMUM_LEVEL=4
