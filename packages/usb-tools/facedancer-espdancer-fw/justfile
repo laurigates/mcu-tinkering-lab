@@ -1,0 +1,166 @@
+# facedancer-espdancer-fw — ESP32-S3 raw-USB relay for the facedancer espdancer backend
+# Run `just --list` to see available recipes
+
+set positional-arguments
+
+import '../../../tools/esp32-idf.just'
+
+project_dir := "packages/usb-tools/facedancer-espdancer-fw"
+port := env("PORT", _detected_s3)
+baud := env("BAUD", "460800")
+target := "esp32s3"
+bin_name := "facedancer-espdancer-fw"
+
+default:
+    @just --list
+
+##########
+# Build variants (overlay layered on sdkconfig.defaults; empty = production).
+# SDKCONFIG_DEFAULTS is injected inside the container bash -c (host env does
+# NOT reach the esp-idf service — see xbox-switch-bridge's _idf-build).
+##########
+
+# Shared build helper — overlay is "" for production, else "sdkconfig.<variant>"
+[private]
+_build overlay:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    overlay="{{overlay}}"
+    if [ -n "$overlay" ]; then
+        sdk_env="SDKCONFIG_DEFAULTS=\"sdkconfig.defaults;$overlay\""
+        label="${overlay#sdkconfig.}"
+    else
+        sdk_env=""
+        label="production"
+    fi
+    echo "Building [$label]..."
+    {{container_cmd}} compose -f {{compose_file}} run --rm \
+        -w /workspace/{{project_dir}} \
+        esp-idf \
+        bash -c "${sdk_env:+$sdk_env }idf.py set-target {{target}} && idf.py build" 2>&1 \
+        | grep -E "warning:|error:|ninja: build stopped|binary size|Build complete" \
+        || true
+    if [ ! -f build/{{bin_name}}.bin ]; then
+        echo "FAILED — rerun with verbose output:" >&2
+        echo "  {{container_cmd}} compose -f {{compose_file}} run --rm -w /workspace/{{project_dir}} esp-idf idf.py build" >&2
+        exit 1
+    fi
+    echo "Build OK [$label] ({{bin_name}}.bin)"
+
+# Plain verbose build (no output filtering) — for debugging build failures
+[private]
+_build-verbose overlay:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    overlay="{{overlay}}"
+    if [ -n "$overlay" ]; then
+        sdk_env="SDKCONFIG_DEFAULTS=\"sdkconfig.defaults;$overlay\""
+    else
+        sdk_env=""
+    fi
+    {{container_cmd}} compose -f {{compose_file}} run --rm \
+        -w /workspace/{{project_dir}} \
+        esp-idf \
+        bash -c "${sdk_env:+$sdk_env }idf.py set-target {{target}} && idf.py build"
+
+##########
+# Public build recipes
+##########
+
+# Production build (raw DCD owns the PHY; logs over WiFi UDP)
+[group: "build"]
+build: (_build "")
+
+# Plain verbose production build (no output filtering)
+[group: "build"]
+build-verbose: (_build-verbose "")
+
+# raw DCD ON + UART logging (GPIO43/44 + CP2102)
+# Monitor with: just uart-monitor
+[group: "build"]
+build-debug-uart: (_build "sdkconfig.debug-uart")
+
+# raw DCD OFF + USB-Serial-JTAG logging (no USB emulation — comms bring-up only)
+[group: "build"]
+build-debug-jtag: (_build "sdkconfig.debug-jtag")
+
+# raw DCD ON + verbose WiFi UDP logging (join 'espdancer-log' WiFi)
+[group: "build"]
+build-debug-usb: (_build "sdkconfig.debug-usb")
+
+# Clean / menuconfig / shell (containerized, shared)
+[group: "build"]
+clean: _idf-clean
+
+[group: "build"]
+shell: _idf-shell
+
+[group: "build"]
+menuconfig: _idf-menuconfig
+
+##########
+# Flash & Monitor (native — USB-Serial-JTAG port)
+##########
+
+[group: "device"]
+flash: (_s3-flash bin_name)
+
+[group: "device"]
+reset: _s3-reset
+
+[group: "device"]
+monitor: _s3-monitor
+
+[group: "device"]
+flash-monitor: flash monitor
+
+##########
+# WiFi UDP log listener (debug-usb / production builds)
+# Connect to the "espdancer-log" WiFi first, then:
+##########
+
+[group: "device"]
+log-listen:
+    @echo "Listening for UDP logs on port 4444 (Ctrl-C to stop) — join 'espdancer-log' WiFi first"
+    exec socat UDP-RECV:4444 STDOUT
+
+##########
+# Diagnostic: detect a stale sdkconfig after switching variants
+##########
+
+[private]
+check-sdkconfig:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    [ -f sdkconfig ] || exit 0
+    stale=()
+    for src in sdkconfig.defaults sdkconfig.debug-jtag sdkconfig.debug-uart sdkconfig.debug-usb; do
+        [ -f "$src" ] || continue
+        if [ "$src" -nt sdkconfig ]; then
+            stale+=("$src")
+        fi
+    done
+    if [ ${#stale[@]} -gt 0 ]; then
+        echo "WARNING: sdkconfig is stale — newer than generated config:" >&2
+        printf "  %s\n" "${stale[@]}" >&2
+        echo "Run 'rm sdkconfig' before building a different variant." >&2
+    fi
+
+##########
+# Info
+##########
+
+[group: "info"]
+info:
+    @echo "Project: facedancer-espdancer-fw"
+    @echo "  Target:     ESP32-S3"
+    @echo "  Board:      Waveshare ESP32-S3-Zero (or any ESP32-S3 w/ native USB-OTG)"
+    @echo "  Port:       {{if port == "" { "(not detected)" } else { port } }}"
+    @echo "  Container:  {{container_cmd}}"
+    @echo "  Build bin:  {{bin_name}}.bin"
+    @echo ""
+    @echo "  Control channel: WiFi SoftAP 'espdancer-log', TCP 4444"
+    @echo "  USB: Full Speed only (internal OTG-FS PHY; no ULPI on devkit)"
+    @echo "  Python backend: external/facedancer/facedancer/backends/espdancer.py (Milestone 3)"
+    @echo ""
+    @echo "  See CHECKLIST.md for the working backlog."

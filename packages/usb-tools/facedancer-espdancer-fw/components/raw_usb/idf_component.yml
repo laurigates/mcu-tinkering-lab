@@ -1,0 +1,5 @@
+# raw_usb has no managed dependencies today. The DCD sources are vendored
+# (ADR-0006) into tinyusb_port/ rather than pulled as a managed component, so
+# nothing is declared here. When the port is vendored it becomes a local component
+# under components/raw_usb/tinyusb_port/CMakeLists.txt (no idf_component.yml).
+dependencies: {}

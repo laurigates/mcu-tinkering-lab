@@ -1,0 +1,10 @@
+# We do NOT pull `espressif/esp_tinyusb` as a managed dependency. Its bundled
+# `usbd.c` strongly defines `dcd_event_handler` and its `process_control_request`
+# auto-handles every USB standard request — both incompatible with the
+# Facedancer host-driven model. We vendor a DCD-only TinyUSB port instead
+# (components/raw_usb/tinyusb_port/, ADR-0006) and provide our own
+# `dcd_event_handler` in raw_usb.c.
+#
+# Pulling esp_tinyusb here would produce a duplicate `dcd_event_handler` symbol
+# at link time.
+dependencies: {}
