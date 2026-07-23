@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.10](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.1.9...robocar-unified-v0.1.10) (2026-07-23)
+
+
+### Bug Fixes
+
+* **robocar-unified:** unbrick the boot — flash offset + I2C driver conflict + graceful degradation ([#418](https://github.com/laurigates/mcu-tinkering-lab/issues/418)) ([2203d66](https://github.com/laurigates/mcu-tinkering-lab/commit/2203d66a0eda4eb37edc1b742981dba88366d0d3))
+
 ## [0.1.9](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.1.8...robocar-unified-v0.1.9) (2026-07-20)
 
 
