@@ -31,6 +31,12 @@ CONFIG_ESP_HTTP_CLIENT_ENABLE_BASIC_AUTH=y
 # Camera (DMA on Core 1 to isolate from motor control on Core 0)
 CONFIG_CAMERA_CORE1=y
 CONFIG_CAMERA_DMA_BUFFER_SIZE_MAX=32768
+# Camera SCCB must use the LEGACY I2C driver. esp32-camera Kconfig defaults to
+# the new "driver_ng" (CONFIG_SCCB_HARDWARE_I2C_DRIVER_NEW), but the project bus
+# (i2c_bus.c → i2cdev: TCA9548A + PCA9685 + MCP23017) is legacy. ESP-IDF 5.4
+# aborts at boot if both driver types coexist ("CONFLICT! driver_ng is not
+# allowed to be used with this old driver"). Force legacy for consistency.
+CONFIG_SCCB_HARDWARE_I2C_DRIVER_LEGACY=y
 
 # Flash (XIAO ESP32-S3 Sense has 8MB flash)
 CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y

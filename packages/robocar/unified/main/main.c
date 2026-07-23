@@ -378,7 +378,22 @@ static esp_err_t init_hardware(void)
 {
     ESP_LOGI(TAG, "Phase 1: I2C bus + peripherals");
 
-    ESP_RETURN_ON_ERROR(i2c_bus_init(), TAG, "I2C bus init failed");
+    // The I2C bus (TCA9548A + PCA9685 + optional MCP23017) is non-fatal: a bare
+    // board with no I2C hardware fitted should still boot so the console,
+    // camera, WiFi and AI planner remain reachable. The bus accessors return
+    // ESP_ERR_INVALID_STATE while uninitialised, so the PCA9685-backed
+    // peripherals (motors, servos, LEDs) and the expander fail safely at
+    // runtime rather than crashing.
+    esp_err_t i2c_ret = i2c_bus_init();
+    if (i2c_ret != ESP_OK) {
+        ESP_LOGW(TAG, "I2C bus init failed (%s) — motors/servos/LEDs/expander disabled",
+                 esp_err_to_name(i2c_ret));
+        // Buzzer is on a dedicated GPIO (not I2C) — keep the startup beep.
+        ESP_RETURN_ON_ERROR(buzzer_init(), TAG, "Buzzer init failed");
+        buzzer_beep();
+        return ESP_OK;
+    }
+
     // Optional hardware: returns ESP_OK even when no expander is fitted
     ESP_RETURN_ON_ERROR(gpio_expander_init(), TAG, "GPIO expander init failed");
     ESP_RETURN_ON_ERROR(motor_controller_init(), TAG, "Motor init failed");
