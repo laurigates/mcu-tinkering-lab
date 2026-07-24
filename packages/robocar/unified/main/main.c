@@ -42,6 +42,7 @@
 #include "pin_config.h"
 #include "planner_task.h"
 #include "reactive_controller.h"
+#include "self_report.h"
 #include "servo_controller.h"
 #include "speech_queue.h"
 #include "system_state.h"
@@ -492,11 +493,33 @@ void app_main(void)
     ESP_LOGI(TAG, "Firmware version: %s", esp_app_get_description()->version);
 
     ESP_ERROR_CHECK(init_nvs());
+
+    // init_hardware() degrades gracefully (bare board still returns ESP_OK), so
+    // read the real bus state from its accessor for the self-report note.
     ESP_ERROR_CHECK(init_hardware());
-    ESP_ERROR_CHECK(init_camera());
+    self_report_note_init(SELF_REPORT_SUBSYS_I2C_BUS, i2c_bus_is_ready());
+
+    // Camera is non-fatal here so the robot can still boot, connect, and report
+    // "camera not responding" instead of panicking on a board without the Sense
+    // module fitted.
+    esp_err_t cam_ret = init_camera();
+    self_report_note_init(SELF_REPORT_SUBSYS_CAMERA, cam_ret == ESP_OK);
+    if (cam_ret != ESP_OK) {
+        ESP_LOGW(TAG, "Camera init failed (%s) — continuing so status stays reportable",
+                 esp_err_to_name(cam_ret));
+    }
+
     init_network();
     ESP_ERROR_CHECK(init_hierarchical_ai());
+    self_report_note_init(SELF_REPORT_SUBSYS_AUDIO, audio_player_is_ready());
     create_tasks();
+
+    // Spoken self-introduction + status diagnostic (announces once voice-able,
+    // re-announces on health change). Non-fatal: a robot that cannot start the
+    // monitor still drives.
+    if (self_report_start() != ESP_OK) {
+        ESP_LOGW(TAG, "self_report_start failed — no spoken self-report");
+    }
 
     ESP_LOGI(TAG, "=== System ready ===");
 

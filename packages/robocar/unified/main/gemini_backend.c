@@ -39,6 +39,21 @@ static const char *TAG = "gemini_backend";
 #define GEMINI_BASE_URL \
     "https://generativelanguage.googleapis.com/v1beta/models/" GEMINI_MODEL ":generateContent"
 
+/** Text model that phrases self-report facts into a spoken line. A cheap flash
+ *  text model — this is a short one-sentence completion, not vision. */
+#define NARRATE_MODEL "gemini-flash-latest"
+#define NARRATE_BASE_URL \
+    "https://generativelanguage.googleapis.com/v1beta/models/" NARRATE_MODEL ":generateContent"
+
+/** Narrate uses its own small buffer (not s_response_buf) so it can run
+ *  concurrently with the planner on another task without racing the shared
+ *  buffer. A one-sentence reply is tiny; 4 kB also absorbs an error body. */
+#define NARRATE_RESPONSE_BUF_SIZE (4 * 1024)
+#define NARRATE_TIMEOUT_MS 15000
+/** Ample for one ≤25-word sentence; keeps thinking-capable models from
+ *  spending the whole budget before emitting text. */
+#define NARRATE_MAX_OUTPUT_TOKENS 128
+
 /** HTTP response buffer.  16 kB matches the reference client; function-call
  *  responses are much smaller but the buffer is also used to absorb error
  *  bodies from the API. */
@@ -475,6 +490,181 @@ esp_err_t gemini_backend_plan(const uint8_t *jpeg, size_t jpeg_len, goal_t *out_
 cleanup:
     esp_http_client_cleanup(client);
     free(request_body);
+    return err;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Narration (text-only self-report phrasing)                                  */
+/* -------------------------------------------------------------------------- */
+
+/** Build the text-only generateContent body for a spoken status line. */
+static char *build_narrate_json(const char *facts, bool is_update)
+{
+    char prompt[1024];
+    snprintf(prompt, sizeof(prompt),
+             "You are a small wheeled robot named Robocar, speaking aloud. "
+             "Here are your live on-device subsystem facts:\n%s\n\n"
+             "%s"
+             "Write ONE short, friendly spoken sentence (at most 25 words, plain text only — "
+             "no markdown, no emoji, no quotes) %s and stating your status, naming anything that "
+             "is not responding. Report only the facts above; do not invent hardware.",
+             facts,
+             is_update ? "This is a status UPDATE: a subsystem's health just changed — keep to "
+                         "what changed. "
+                       : "",
+             is_update ? "noting the change" : "introducing yourself");
+
+    cJSON *root = cJSON_CreateObject();
+
+    cJSON *contents = cJSON_AddArrayToObject(root, "contents");
+    cJSON *content = cJSON_CreateObject();
+    cJSON_AddStringToObject(content, "role", "user");
+    cJSON *parts = cJSON_AddArrayToObject(content, "parts");
+    cJSON *text_part = cJSON_CreateObject();
+    cJSON_AddStringToObject(text_part, "text", prompt);
+    cJSON_AddItemToArray(parts, text_part);
+    cJSON_AddItemToArray(contents, content);
+
+    cJSON *gen_config = cJSON_AddObjectToObject(root, "generationConfig");
+    cJSON_AddNumberToObject(gen_config, "maxOutputTokens", NARRATE_MAX_OUTPUT_TOKENS);
+    cJSON_AddNumberToObject(gen_config, "temperature", 0.7);
+    /* Disable thinking so the token budget is spent on the reply, not silent
+     * reasoning (a flash text model would otherwise risk an empty completion). */
+    cJSON *thinking = cJSON_AddObjectToObject(gen_config, "thinkingConfig");
+    cJSON_AddNumberToObject(thinking, "thinkingBudget", 0);
+
+    char *body = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+    return body; /* caller frees */
+}
+
+/** Collapse newlines to spaces and strip surrounding whitespace, in place. */
+static void sanitize_spoken_line(char *s)
+{
+    for (char *p = s; *p != '\0'; ++p) {
+        if (*p == '\n' || *p == '\r' || *p == '\t') {
+            *p = ' ';
+        }
+    }
+    /* trim leading */
+    char *start = s;
+    while (*start == ' ') {
+        ++start;
+    }
+    if (start != s) {
+        memmove(s, start, strlen(start) + 1);
+    }
+    /* trim trailing */
+    size_t len = strlen(s);
+    while (len > 0 && s[len - 1] == ' ') {
+        s[--len] = '\0';
+    }
+}
+
+/** Extract and concatenate candidates[0].content.parts[*].text into @p out. */
+static esp_err_t parse_narrate_response(const char *json, char *out, size_t out_len)
+{
+    cJSON *root = cJSON_Parse(json);
+    if (!root) {
+        return ESP_FAIL;
+    }
+
+    esp_err_t ret = ESP_FAIL;
+    cJSON *candidates = cJSON_GetObjectItem(root, "candidates");
+    cJSON *c0 = cJSON_IsArray(candidates) ? cJSON_GetArrayItem(candidates, 0) : NULL;
+    cJSON *content = c0 ? cJSON_GetObjectItem(c0, "content") : NULL;
+    cJSON *parts = content ? cJSON_GetObjectItem(content, "parts") : NULL;
+
+    if (cJSON_IsArray(parts)) {
+        out[0] = '\0';
+        const int n = cJSON_GetArraySize(parts);
+        for (int i = 0; i < n; ++i) {
+            cJSON *t = cJSON_GetObjectItem(cJSON_GetArrayItem(parts, i), "text");
+            if (cJSON_IsString(t) && t->valuestring) {
+                strlcat(out, t->valuestring, out_len);
+            }
+        }
+        if (out[0] != '\0') {
+            sanitize_spoken_line(out);
+            if (out[0] != '\0') {
+                ret = ESP_OK;
+            }
+        }
+    }
+
+    cJSON_Delete(root);
+    return ret;
+}
+
+esp_err_t gemini_backend_narrate(const char *facts, bool is_update, char *out, size_t out_len)
+{
+    if (!facts || !out || out_len == 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    out[0] = '\0';
+
+    const char *api_key = get_gemini_api_key();
+    if (!api_key || api_key[0] == '\0') {
+        ESP_LOGW(TAG, "narrate: API key unavailable");
+        return ESP_FAIL;
+    }
+
+    char *request_body = build_narrate_json(facts, is_update);
+    if (!request_body) {
+        return ESP_ERR_NO_MEM;
+    }
+
+    /* Own buffer — do not touch s_response_buf, which the planner task uses. */
+    char *resp = malloc(NARRATE_RESPONSE_BUF_SIZE);
+    if (!resp) {
+        free(request_body);
+        return ESP_ERR_NO_MEM;
+    }
+    resp[0] = '\0';
+
+    response_acc_t acc = {.buf = resp, .len = 0, .cap = NARRATE_RESPONSE_BUF_SIZE};
+
+    esp_http_client_config_t cfg = {
+        .url = NARRATE_BASE_URL,
+        .method = HTTP_METHOD_POST,
+        .timeout_ms = NARRATE_TIMEOUT_MS,
+        .event_handler = http_event_handler,
+        .user_data = &acc,
+        .crt_bundle_attach = esp_crt_bundle_attach,
+    };
+
+    esp_http_client_handle_t client = esp_http_client_init(&cfg);
+    if (!client) {
+        free(request_body);
+        free(resp);
+        return ESP_FAIL;
+    }
+
+    esp_http_client_set_header(client, "Content-Type", "application/json");
+    esp_http_client_set_header(client, "x-goog-api-key", api_key);
+    esp_http_client_set_post_field(client, request_body, strlen(request_body));
+
+    esp_err_t err = esp_http_client_perform(client);
+    const int status = esp_http_client_get_status_code(client);
+
+    if (err != ESP_OK || status != 200) {
+        ESP_LOGW(TAG, "narrate request failed: %s status=%d", esp_err_to_name(err), status);
+        if (acc.len > 0) {
+            ESP_LOGD(TAG, "narrate error body: %.*s", (int)acc.len, acc.buf);
+        }
+        err = ESP_FAIL;
+        goto cleanup;
+    }
+
+    err = parse_narrate_response(acc.buf, out, out_len);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "narrate: no usable text in response");
+    }
+
+cleanup:
+    esp_http_client_cleanup(client);
+    free(request_body);
+    free(resp);
     return err;
 }
 

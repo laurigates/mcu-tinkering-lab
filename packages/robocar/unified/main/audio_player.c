@@ -234,3 +234,8 @@ bool audio_player_is_busy(void)
     }
     return s_channel_active || xRingbufferGetCurFreeSize(s_ring) < AUDIO_RING_BYTES;
 }
+
+bool audio_player_is_ready(void)
+{
+    return s_task != NULL && s_ring != NULL;
+}

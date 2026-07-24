@@ -18,6 +18,7 @@ idf_component_register(
         "ultrasonic.c"
         "reactive_controller.c"
         "planner_task.c"
+        "self_report.c"
         "credentials_loader.c"
         "wifi_manager.c"
         "mqtt_logger.c"

@@ -12,6 +12,7 @@
 #include <esp_err.h>
 #include <i2cdev.h>
 #include <pca9685.h>
+#include <stdbool.h>
 #include "pin_config.h"
 
 /**
@@ -24,6 +25,16 @@
  * @return ESP_OK on success
  */
 esp_err_t i2c_bus_init(void);
+
+/**
+ * @brief Whether the I2C bus (TCA9548A + PCA9685) initialised successfully
+ *
+ * False on a bare board where no I2C hardware responded — the bus degrades
+ * gracefully (see init_hardware) and the PCA9685-backed peripherals fail safe.
+ *
+ * @return true if i2c_bus_init() completed
+ */
+bool i2c_bus_is_ready(void);
 
 /**
  * @brief Select a TCA9548A channel and acquire the bus mutex

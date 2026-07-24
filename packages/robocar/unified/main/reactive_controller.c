@@ -301,8 +301,20 @@ static void reactive_task(void *arg)
         s_telemetry.stack_high_water = hwm;
         portEXIT_CRITICAL(&s_telem_mux);
 
-        /* ---- 5. Wait for next period ---- */
-        vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(REACTIVE_LOOP_PERIOD_MS));
+        /* ---- 5. Wait for next period ----
+         * xTaskDelayUntil() returns pdFALSE without blocking when the loop body
+         * already overran the period — e.g. the ultrasonic GPIO poll fallback
+         * busy-waits out its full echo timeout (40 ms > 33 ms) on a board with
+         * no sensor fitted, or with the sensor aimed at open space. A
+         * non-blocking return means this Core-0 task never yields, starving
+         * IDLE0 and tripping the task watchdog. Guarantee at least a one-tick
+         * yield when we have fallen behind, and resync so we don't then fire a
+         * catch-up burst of zero-delay iterations. The healthy path (body fits
+         * the period) still blocks normally, so the 30 Hz cadence is unchanged. */
+        if (xTaskDelayUntil(&last_wake, pdMS_TO_TICKS(REACTIVE_LOOP_PERIOD_MS)) == pdFALSE) {
+            vTaskDelay(1);
+            last_wake = xTaskGetTickCount();
+        }
     }
 
     motor_stop();
