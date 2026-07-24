@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.11](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.1.10...robocar-unified-v0.1.11) (2026-07-24)
+
+
+### Features
+
+* **robocar-unified:** speak a self-introduction + status self-diagnostic ([#421](https://github.com/laurigates/mcu-tinkering-lab/issues/421)) ([cd5273f](https://github.com/laurigates/mcu-tinkering-lab/commit/cd5273f021b9bac74359e88b630a521e756e2324))
+
+
+### Bug Fixes
+
+* **robocar-unified:** size ultrasonic RMT RX block to the SoC minimum (48) ([#422](https://github.com/laurigates/mcu-tinkering-lab/issues/422)) ([c011ac7](https://github.com/laurigates/mcu-tinkering-lab/commit/c011ac785edaf67059373650ecf5454d7ea7a6fa))
+
 ## [0.1.10](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.1.9...robocar-unified-v0.1.10) (2026-07-23)
 
 
