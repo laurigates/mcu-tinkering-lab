@@ -27,7 +27,11 @@ static const char *TAG = "self_report";
 /* Task tuning                                                                 */
 /* -------------------------------------------------------------------------- */
 
-#define STATUS_MONITOR_TASK_STACK_SIZE 4096U
+/* 8 KB, matching the planner task: this task calls gemini_backend_narrate(),
+ * which opens an HTTPS/TLS connection (esp_http_client + mbedTLS + cJSON). The
+ * TLS handshake alone needs several KB of stack — 4 KB overflowed (crash in the
+ * self_report task the moment narration reached the handshake). */
+#define STATUS_MONITOR_TASK_STACK_SIZE 8192U
 #define STATUS_MONITOR_TASK_PRIORITY 2U
 #define STATUS_MONITOR_TASK_CORE 1  //!< bursty + network-bound, like the planner
 
