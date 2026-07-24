@@ -46,12 +46,17 @@ static const char *TAG = "ultrasonic";
 #define RMT_RESOLUTION_HZ 1000000U
 
 /**
- * Maximum echo pulse the RMT RX FIFO must hold.
- * HC-SR04P echo pulse for 6 m = ~35 000 µs.  One rmt_symbol_word_t stores a
- * single level/duration pair; we only ever see one echo pulse so a buffer of 2
- * symbols is sufficient (echo HIGH + trailing LOW).
+ * RMT RX memory-block size in symbols.
+ *
+ * We only ever need one echo pulse (echo HIGH + trailing LOW = 2 symbols), but
+ * ESP-IDF v5.4's rmt_new_rx_channel() requires mem_block_symbols to be even and
+ * at least one channel memory block — 48 on the ESP32-S3
+ * (SOC_RMT_MEM_WORDS_PER_CHANNEL). A smaller value (this was 4) fails init with
+ * ESP_ERR_INVALID_ARG ("mem_block_symbols must be even and at least 48"), which
+ * silently drops the driver into the slower GPIO polling fallback on every boot.
+ * 48 = exactly one memory block; the same constant sizes s_rx_buf (192 bytes).
  */
-#define RMT_RX_BUFFER_SYMBOLS 4U
+#define RMT_RX_BUFFER_SYMBOLS 48U
 
 /* -------------------------------------------------------------------------
  * Module state
