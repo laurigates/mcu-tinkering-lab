@@ -259,8 +259,16 @@ esp_err_t ultrasonic_measure(uint16_t *distance_cm)
         uint32_t notified = ulTaskNotifyTake(pdTRUE, timeout_ticks);
 
         if (notified == 0) {
-            /* Timeout — cancel any pending receive */
+            /* Timeout — no echo ever completed the receive (no sensor fitted, or
+             * the target is out of range), so the RX-done callback never fired
+             * and the channel FSM is stuck in RMT_FSM_RUN. rmt_receive() requires
+             * RMT_FSM_ENABLE, so without aborting here a single missed echo wedges
+             * the channel and every subsequent receive fails with
+             * ESP_ERR_INVALID_STATE. A disable/enable cycle takes RUN -> INIT ->
+             * ENABLE, re-arming it for the next measurement. */
             s_waiting_task = NULL;
+            rmt_disable(s_rx_chan);
+            rmt_enable(s_rx_chan);
             ESP_LOGD(TAG, "Echo timeout");
             *distance_cm = ULTRASONIC_DIST_ERROR;
             return ESP_FAIL;
