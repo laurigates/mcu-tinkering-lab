@@ -223,13 +223,22 @@ esp_err_t ultrasonic_measure(uint16_t *distance_cm)
     /* ---- RMT path ---- */
     if (s_mode == DRIVER_RMT) {
         /*
-         * Configure the RMT receive window.  We expect:
-         *   - signal_range_min_ns: reject glitches < 10 µs  (10 000 ns)
-         *   - signal_range_max_ns: stop capture at 38 ms    (38 000 000 ns)
+         * Configure the RMT receive window. Both bounds are constrained by the
+         * hardware register widths (ESP-IDF v5.4 rmt_receive validates them):
+         *
+         *   - signal_range_min_ns (glitch filter): counted on the RMT SOURCE
+         *     clock (~80 MHz), whose threshold register is 8-bit (max 255). So
+         *     min_ns must be <= ~3187 ns; the previous 10 000 ns overflowed it
+         *     (800 > 255 -> "signal_range_min_ns too big"). 1 µs still rejects
+         *     electrical glitches and passes any real echo (>= 58 µs = 1 cm).
+         *   - signal_range_max_ns (idle threshold): counted on the 1 MHz channel
+         *     resolution, register max 32767 -> max_ns must be <= 32.767 ms; the
+         *     previous 38 ms overflowed it. 30 ms comfortably covers the 4 m
+         *     (~23.2 ms) max echo (ULTRASONIC_MAX_RANGE_CM) with headroom.
          */
         rmt_receive_config_t recv_cfg = {
-            .signal_range_min_ns = 10000U,    /* 10 µs  */
-            .signal_range_max_ns = 38000000U, /* 38 ms  */
+            .signal_range_min_ns = 1000U,     /* 1 µs glitch filter (hw 8-bit @ source clk) */
+            .signal_range_max_ns = 30000000U, /* 30 ms idle (hw cap 32.767 ms @ 1 MHz)      */
         };
 
         s_echo_us = 0;
@@ -250,8 +259,16 @@ esp_err_t ultrasonic_measure(uint16_t *distance_cm)
         uint32_t notified = ulTaskNotifyTake(pdTRUE, timeout_ticks);
 
         if (notified == 0) {
-            /* Timeout — cancel any pending receive */
+            /* Timeout — no echo ever completed the receive (no sensor fitted, or
+             * the target is out of range), so the RX-done callback never fired
+             * and the channel FSM is stuck in RMT_FSM_RUN. rmt_receive() requires
+             * RMT_FSM_ENABLE, so without aborting here a single missed echo wedges
+             * the channel and every subsequent receive fails with
+             * ESP_ERR_INVALID_STATE. A disable/enable cycle takes RUN -> INIT ->
+             * ENABLE, re-arming it for the next measurement. */
             s_waiting_task = NULL;
+            rmt_disable(s_rx_chan);
+            rmt_enable(s_rx_chan);
             ESP_LOGD(TAG, "Echo timeout");
             *distance_cm = ULTRASONIC_DIST_ERROR;
             return ESP_FAIL;
