@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.1.12](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.1.11...robocar-unified-v0.1.12) (2026-07-25)
+
+
+### Features
+
+* **robocar-unified:** working Finnish voice — audio-static, Gemini-API, rate-limit fixes + voice personas ([#428](https://github.com/laurigates/mcu-tinkering-lab/issues/428)) ([35c07dc](https://github.com/laurigates/mcu-tinkering-lab/commit/35c07dc7f8ca0cc6d321772416f01fd0494ccddb))
+
+
+### Bug Fixes
+
+* **robocar-unified:** give the self_report task an 8 KB stack for its TLS call ([#425](https://github.com/laurigates/mcu-tinkering-lab/issues/425)) ([daaa0f3](https://github.com/laurigates/mcu-tinkering-lab/commit/daaa0f319d0c7de80f765a690734d4995ed29fe8))
+* **robocar-unified:** make the ultrasonic RMT receive path functional (signal ranges + no-echo recovery) ([#424](https://github.com/laurigates/mcu-tinkering-lab/issues/424)) ([021679f](https://github.com/laurigates/mcu-tinkering-lab/commit/021679f99b4f24accba45c2daa1b10a8f5371816))
+
 ## [0.1.11](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.1.10...robocar-unified-v0.1.11) (2026-07-24)
 
 
