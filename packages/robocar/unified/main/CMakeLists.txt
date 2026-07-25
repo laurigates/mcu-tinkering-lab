@@ -23,7 +23,6 @@ idf_component_register(
         "credentials_loader.c"
         "wifi_manager.c"
         "mqtt_logger.c"
-        "system_state.c"
         "ota_manager.c"
     INCLUDE_DIRS "."
     REQUIRES
@@ -39,7 +38,6 @@ idf_component_register(
         "driver"
         "espressif__mdns"
         "mqtt"
-        "esp_https_ota"
         "app_update"
         "improv-wifi"
         "esp_timer"

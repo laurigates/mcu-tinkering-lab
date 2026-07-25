@@ -30,12 +30,16 @@
 #include "camera.h"
 #include "config.h"
 #include "credentials_loader.h"
+#include "credentials_validator.h"
 #include "gemini_tts.h"
 #include "goal_state.h"
 #include "gpio_expander.h"
 #include "i2c_bus.h"
+#include "improv_wifi.h"
 #include "led_controller.h"
 #include "mdns.h"
+/* Only for motor_controller_init() in the hardware phase — motor *output* is
+ * the reactive executor's job, and nothing here writes the motors directly. */
 #include "motor_controller.h"
 #include "mqtt_logger.h"
 #include "ota_manager.h"
@@ -46,7 +50,6 @@
 #include "servo_controller.h"
 #include "speech_queue.h"
 #include "voice_persona.h"
-#include "system_state.h"
 #include "wifi_manager.h"
 
 static const char *TAG = "robocar";
@@ -94,11 +97,40 @@ typedef struct {
 // ========================================
 static QueueHandle_t s_motor_queue;
 static QueueHandle_t s_periph_queue;
-static int64_t s_last_motor_cmd_time;
+static bool s_improv_active;
+
+/** Map a queued console command onto the executor's manual-override vocabulary. */
+static reactive_manual_cmd_t to_manual_cmd(motor_cmd_type_t type)
+{
+    switch (type) {
+        case MOTOR_CMD_FORWARD:
+            return REACTIVE_MANUAL_FORWARD;
+        case MOTOR_CMD_BACKWARD:
+            return REACTIVE_MANUAL_BACKWARD;
+        case MOTOR_CMD_LEFT:
+            return REACTIVE_MANUAL_LEFT;
+        case MOTOR_CMD_RIGHT:
+            return REACTIVE_MANUAL_RIGHT;
+        case MOTOR_CMD_ROTATE_CW:
+            return REACTIVE_MANUAL_ROTATE_CW;
+        case MOTOR_CMD_ROTATE_CCW:
+            return REACTIVE_MANUAL_ROTATE_CCW;
+        case MOTOR_CMD_STOP:
+        default:
+            return REACTIVE_MANUAL_STOP;
+    }
+}
 
 // ========================================
 // Motor control task (Core 0, priority 6)
 // ========================================
+/* Console movement commands are handed to the reactive executor rather than
+ * written to the motors here. Two tasks writing the same PCA9685 channels meant
+ * the 30 Hz executor overwrote every console command within 33 ms — and it
+ * violated the project invariant that the executor owns motor output. Routing
+ * through reactive_controller_manual() also puts console driving behind the
+ * obstacle reflex, and its lease replaces the COMMAND_TIMEOUT_MS watchdog that
+ * used to live in this loop. */
 static void motor_control_task(void *pvParameters)
 {
     (void)pvParameters;
@@ -108,39 +140,10 @@ static void motor_control_task(void *pvParameters)
 
     while (1) {
         if (xQueueReceive(s_motor_queue, &cmd, pdMS_TO_TICKS(100)) == pdTRUE) {
-            s_last_motor_cmd_time = esp_timer_get_time();
-
-            switch (cmd.type) {
-                case MOTOR_CMD_FORWARD:
-                    motor_move_forward(cmd.speed);
-                    break;
-                case MOTOR_CMD_BACKWARD:
-                    motor_move_backward(cmd.speed);
-                    break;
-                case MOTOR_CMD_LEFT:
-                    motor_turn_left(cmd.speed);
-                    break;
-                case MOTOR_CMD_RIGHT:
-                    motor_turn_right(cmd.speed);
-                    break;
-                case MOTOR_CMD_ROTATE_CW:
-                    motor_rotate_cw(cmd.speed);
-                    break;
-                case MOTOR_CMD_ROTATE_CCW:
-                    motor_rotate_ccw(cmd.speed);
-                    break;
-                case MOTOR_CMD_STOP:
-                    motor_stop();
-                    break;
-            }
-        }
-
-        // Command timeout watchdog
-        if (s_last_motor_cmd_time > 0) {
-            int64_t elapsed = esp_timer_get_time() - s_last_motor_cmd_time;
-            if (elapsed > (int64_t)COMMAND_TIMEOUT_MS * 1000) {
-                motor_stop();
-                s_last_motor_cmd_time = 0;
+            esp_err_t ret = reactive_controller_manual(to_manual_cmd(cmd.type), cmd.speed,
+                                                       REACTIVE_MANUAL_TTL_MS);
+            if (ret != ESP_OK) {
+                ESP_LOGW(TAG, "Manual command dropped: %s", esp_err_to_name(ret));
             }
         }
     }
@@ -187,12 +190,18 @@ static void peripheral_task(void *pvParameters)
 // ========================================
 static void dispatch_motor_cmd(motor_cmd_type_t type, uint8_t speed)
 {
+    if (!s_motor_queue) {
+        return;
+    }
     motor_cmd_t cmd = {.type = type, .speed = speed};
     xQueueSend(s_motor_queue, &cmd, pdMS_TO_TICKS(100));
 }
 
 static void dispatch_periph_cmd(const periph_cmd_t *cmd)
 {
+    if (!s_periph_queue) {
+        return;
+    }
     xQueueSend(s_periph_queue, cmd, pdMS_TO_TICKS(100));
 }
 
@@ -235,6 +244,65 @@ static void dispatch_sound(const char *sound)
         return;
 
     dispatch_periph_cmd(&cmd);
+}
+
+/* Console access to the peripheral queue.
+ *
+ *   sound beep|melody|alert
+ *   servo pan|tilt <deg>
+ *   led <r> <g> <b>
+ *
+ * These exist because peripheral_task, its queue and every PERIPH_CMD_* case
+ * were unreachable — nothing in the firmware ever built a periph_cmd_t. The
+ * hardware is real and wired (buzzer on GPIO2, pan/tilt servos and both RGB
+ * LEDs on the PCA9685), so the queue is given the bench commands it was
+ * evidently built for rather than being deleted along with the drivers.
+ */
+static void handle_periph_cmd(const char *buf)
+{
+    char arg[16] = {0};
+    int a = 0, b = 0, c = 0;
+
+    if (strncmp(buf, "sound", 5) == 0) {
+        if (sscanf(buf, "sound %15s", arg) != 1) {
+            printf("sound: usage: sound beep|melody|alert\n");
+            return;
+        }
+        dispatch_sound(arg);
+        printf("sound: %s\n", arg);
+        return;
+    }
+
+    if (strncmp(buf, "servo", 5) == 0) {
+        if (sscanf(buf, "servo %15s %d", arg, &a) != 2) {
+            printf("servo: usage: servo pan|tilt <deg>\n");
+            return;
+        }
+        periph_cmd_t cmd = {.angle = (int16_t)a};
+        if (strcmp(arg, "pan") == 0) {
+            cmd.type = PERIPH_CMD_SERVO_PAN;
+        } else if (strcmp(arg, "tilt") == 0) {
+            cmd.type = PERIPH_CMD_SERVO_TILT;
+        } else {
+            printf("servo: usage: servo pan|tilt <deg>\n");
+            return;
+        }
+        dispatch_periph_cmd(&cmd);
+        printf("servo: %s=%d\n", arg, a);
+        return;
+    }
+
+    if (sscanf(buf, "led %d %d %d", &a, &b, &c) != 3) {
+        printf("led: usage: led <r> <g> <b>   (0-255)\n");
+        return;
+    }
+    periph_cmd_t cmd = {.type = PERIPH_CMD_LED_COLOR};
+    cmd.led.r = (uint8_t)a;
+    cmd.led.g = (uint8_t)b;
+    cmd.led.b = (uint8_t)c;
+    cmd.led.position = LED_BOTH;
+    dispatch_periph_cmd(&cmd);
+    printf("led: rgb=%d,%d,%d\n", a, b, c);
 }
 
 // ========================================
@@ -364,6 +432,42 @@ static void handle_gpio_cmd(const char *buf)
 }
 
 // ========================================
+// Improv WiFi provisioning (serial)
+// ========================================
+/* Improv Serial rides the same UART as the console: ESP Web Tools opens the
+ * port after flashing and speaks the protocol over it, which is why the byte
+ * feed lives inside command_task rather than in a task of its own. */
+static void on_improv_credentials(const char *ssid, const char *password)
+{
+    ESP_LOGI(TAG, "Improv: credentials received for SSID '%s'", ssid ? ssid : "");
+    improv_wifi_send_state(IMPROV_STATE_PROVISIONING);
+
+    if (!ssid || strlen(ssid) == 0) {
+        improv_wifi_send_error(IMPROV_ERROR_INVALID_RPC);
+        return;
+    }
+
+    if (wifi_connect(ssid, password ? password : "") != ESP_OK) {
+        ESP_LOGW(TAG, "Improv: could not join '%s'", ssid);
+        improv_wifi_send_error(IMPROV_ERROR_UNABLE_CONNECT);
+        return;
+    }
+
+    /* Persist only after the credentials are proven to work, so a typo cannot
+     * overwrite a known-good stored network. */
+    if (!credentials_nvs_save_wifi(ssid, password ? password : "")) {
+        improv_wifi_send_error(IMPROV_ERROR_UNKNOWN);
+        return;
+    }
+    credentials_reload();
+
+    s_improv_active = false;
+    improv_wifi_send_state(IMPROV_STATE_PROVISIONED);
+    improv_wifi_send_provisioned_result(NULL);
+    ESP_LOGI(TAG, "Improv: provisioning complete");
+}
+
+// ========================================
 // Serial command task (Core 0, priority 5)
 // ========================================
 static void command_task(void *pvParameters)
@@ -371,14 +475,32 @@ static void command_task(void *pvParameters)
     (void)pvParameters;
     char buf[32];
     int buf_pos = 0;
+    int64_t last_improv_announce = 0;
 
     ESP_LOGI(TAG, "Command task started on core %d", xPortGetCoreID());
 
     while (1) {
+        /* While unprovisioned, announce ourselves ~1 Hz so ESP Web Tools can
+         * discover the device on the port it just flashed. */
+        if (s_improv_active) {
+            int64_t now = esp_timer_get_time();
+            if (now - last_improv_announce > 1000000LL) {
+                improv_wifi_send_state(IMPROV_STATE_AUTHORIZED);
+                last_improv_announce = now;
+            }
+        }
+
         int ch = getchar();
         if (ch == EOF) {
             vTaskDelay(pdMS_TO_TICKS(TASK_DELAY_SHORT_MS));
             continue;
+        }
+
+        /* Feed every byte to the Improv parser first; it silently ignores
+         * anything that is not a well-formed Improv packet, so ASCII console
+         * commands still reach the switch below. */
+        if (s_improv_active) {
+            improv_wifi_process_byte((uint8_t)ch);
         }
 
         if (ch == '\n' || ch == '\r') {
@@ -422,6 +544,9 @@ static void command_task(void *pvParameters)
                     handle_gpio_cmd(buf);
                 } else if (strncmp(buf, "voice", 5) == 0) {
                     handle_voice_cmd(buf);
+                } else if (strncmp(buf, "sound", 5) == 0 || strncmp(buf, "servo", 5) == 0 ||
+                           strncmp(buf, "led", 3) == 0) {
+                    handle_periph_cmd(buf);
                 }
 
                 buf_pos = 0;
@@ -489,21 +614,50 @@ static esp_err_t init_network(void)
 {
     ESP_LOGI(TAG, "Phase 3: WiFi + network");
 
+    /* Warns when credentials.h still holds placeholders, which is exactly the
+     * state a web-flasher build boots in — the message tells the user that
+     * Improv provisioning (started below) is the expected next step. */
+    validate_credentials_at_runtime();
+
     // Load credentials and connect WiFi
     credentials_t creds = {0};
     load_credentials(&creds);
     wifi_init();
     if (creds.credentials_loaded && strlen(creds.wifi_ssid) > 0) {
         wifi_connect(creds.wifi_ssid, creds.wifi_password);
-    } else {
-        ESP_LOGW(TAG, "No WiFi credentials - waiting for Improv provisioning");
     }
 
-    // mDNS
-    ESP_ERROR_CHECK(mdns_init());
-    ESP_ERROR_CHECK(mdns_hostname_set("robocar"));
-    ESP_ERROR_CHECK(mdns_instance_name_set("Robocar Unified"));
-    ESP_LOGI(TAG, "mDNS: robocar.local");
+    /* Start Improv whenever we are not on a network — both for a board that has
+     * never been provisioned and for one whose stored SSID no longer exists.
+     * A firmware built without credentials (CI, the web flasher) has no other
+     * way to be given any, which is the whole point of the protocol. */
+    if (!wifi_is_connected()) {
+        ESP_LOGW(TAG, "No WiFi connection — starting Improv provisioning");
+        esp_err_t improv_ret = improv_wifi_init(on_improv_credentials);
+        if (improv_ret == ESP_OK) {
+            s_improv_active = true;
+            ESP_LOGI(TAG, "Improv WiFi ready — connect with ESP Web Tools to provision");
+        } else {
+            ESP_LOGE(TAG, "improv_wifi_init failed (%s) — no provisioning path",
+                     esp_err_to_name(improv_ret));
+        }
+    }
+
+    /* mDNS is a convenience, not a dependency — a failure here must not stop a
+     * robot that is otherwise fine from booting. Hostname matches the project
+     * directory name, per .claude/rules/mdns-hostname.md. */
+    esp_err_t mdns_ret = mdns_init();
+    if (mdns_ret != ESP_OK) {
+        ESP_LOGW(TAG, "mdns_init failed (%s) — .local discovery unavailable",
+                 esp_err_to_name(mdns_ret));
+        return ESP_OK;
+    }
+    if (mdns_hostname_set("robocar-unified") != ESP_OK ||
+        mdns_instance_name_set("Robocar Unified") != ESP_OK) {
+        ESP_LOGW(TAG, "Could not set mDNS hostname");
+        return ESP_OK;
+    }
+    ESP_LOGI(TAG, "mDNS: robocar-unified.local");
 
     return ESP_OK;
 }
@@ -531,31 +685,102 @@ static esp_err_t init_hierarchical_ai(void)
         ESP_LOGW(TAG, "gemini_tts_start failed — voice disabled");
     }
 
-    // reactive_controller spawns the 30 Hz executor on Core 0
+    // reactive_controller spawns the 30 Hz executor on Core 0. This one *is*
+    // required: without the executor nothing drives the motors at all.
     ESP_RETURN_ON_ERROR(reactive_controller_init(), TAG, "reactive_controller_init failed");
 
-    // planner_task spawns the 1 Hz Gemini planner on Core 1 (requires WiFi)
-    ESP_RETURN_ON_ERROR(planner_task_init(), TAG, "planner_task_init failed");
+    /* planner_task spawns the Gemini planner on Core 1 (requires WiFi + an API
+     * key). Non-fatal by design: a board flashed from the web flasher has no
+     * credentials at all, and panicking here would boot-loop the documented
+     * default configuration. Without a planner the executor simply holds STOP,
+     * which is safe — and the console, Improv provisioning and self-report all
+     * stay reachable so the device can be told what it is missing. */
+    esp_err_t planner_ret = planner_task_init();
+    if (planner_ret != ESP_OK) {
+        ESP_LOGW(TAG, "planner_task_init failed (%s) — AI planner disabled, robot holds STOP",
+                 esp_err_to_name(planner_ret));
+    }
+    self_report_note_init(SELF_REPORT_SUBSYS_PLANNER, planner_ret == ESP_OK);
 
     return ESP_OK;
 }
 
-static void create_tasks(void)
+/**
+ * @brief Start the network-dependent background services.
+ *
+ * Both are non-fatal and both are skipped without a link: MQTT would only
+ * buffer into a queue nothing drains, and the OTA poller needs to reach GitHub.
+ */
+static void init_network_services(void)
+{
+    if (!wifi_is_connected()) {
+        ESP_LOGW(TAG, "No WiFi — skipping MQTT logging and OTA");
+        return;
+    }
+
+#if MQTT_LOGGING_ENABLED
+    const mqtt_logger_config_t mqtt_cfg = {
+        .broker_uri = MQTT_BROKER_URI,
+        .client_id = MQTT_CLIENT_ID,
+        .username = MQTT_USERNAME,
+        .password = MQTT_PASSWORD,
+        .log_topic = MQTT_LOG_TOPIC_BASE,
+        .status_topic = MQTT_STATUS_TOPIC,
+        .command_topic = MQTT_COMMAND_TOPIC,
+        .buffer_size = MQTT_LOG_BUFFER_SIZE,
+        .keepalive_interval = MQTT_KEEPALIVE_INTERVAL,
+        .qos_level = MQTT_QOS_LEVEL,
+        .min_level = MQTT_MIN_LOG_LEVEL,
+        .retain_status = MQTT_RETAIN_STATUS,
+    };
+    esp_err_t mqtt_ret = mqtt_logger_init(&mqtt_cfg);
+    if (mqtt_ret != ESP_OK) {
+        ESP_LOGW(TAG, "mqtt_logger_init failed (%s) — remote logging disabled",
+                 esp_err_to_name(mqtt_ret));
+    }
+#endif
+
+#if OTA_ENABLED
+    /* Starting the OTA manager is what arms ota_manager_confirm_valid(). With
+     * CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y an image that is never confirmed
+     * is rolled back on the next boot, so leaving this uncalled would make any
+     * future OTA update silently revert. */
+    esp_err_t ota_ret = ota_manager_init();
+    if (ota_ret != ESP_OK) {
+        ESP_LOGW(TAG, "ota_manager_init failed (%s) — updates disabled", esp_err_to_name(ota_ret));
+    }
+#endif
+}
+
+/* Every other creation site in this firmware checks its result; this one used
+ * to be the outlier, which turned an allocation failure into an assert-abort
+ * inside FreeRTOS rather than a diagnosable message. */
+static esp_err_t create_tasks(void)
 {
     ESP_LOGI(TAG, "Phase 5: Creating FreeRTOS tasks");
 
     s_motor_queue = xQueueCreate(MOTOR_CMD_QUEUE_DEPTH, sizeof(motor_cmd_t));
     s_periph_queue = xQueueCreate(PERIPHERAL_CMD_QUEUE_DEPTH, sizeof(periph_cmd_t));
+    if (!s_motor_queue || !s_periph_queue) {
+        ESP_LOGE(TAG, "Command queue allocation failed");
+        return ESP_ERR_NO_MEM;
+    }
 
     // Core 0 tasks: motor control, peripherals, serial commands
-    xTaskCreatePinnedToCore(motor_control_task, "motor", MOTOR_TASK_STACK_SIZE, NULL,
-                            MOTOR_TASK_PRIORITY, NULL, MOTOR_TASK_CORE);
-    xTaskCreatePinnedToCore(peripheral_task, "periph", PERIPHERAL_TASK_STACK_SIZE, NULL,
-                            PERIPHERAL_TASK_PRIORITY, NULL, PERIPHERAL_TASK_CORE);
-    xTaskCreatePinnedToCore(command_task, "cmd", COMMAND_TASK_STACK_SIZE, NULL,
-                            COMMAND_TASK_PRIORITY, NULL, COMMAND_TASK_CORE);
+    BaseType_t ok = pdPASS;
+    ok &= xTaskCreatePinnedToCore(motor_control_task, "motor", MOTOR_TASK_STACK_SIZE, NULL,
+                                  MOTOR_TASK_PRIORITY, NULL, MOTOR_TASK_CORE);
+    ok &= xTaskCreatePinnedToCore(peripheral_task, "periph", PERIPHERAL_TASK_STACK_SIZE, NULL,
+                                  PERIPHERAL_TASK_PRIORITY, NULL, PERIPHERAL_TASK_CORE);
+    ok &= xTaskCreatePinnedToCore(command_task, "cmd", COMMAND_TASK_STACK_SIZE, NULL,
+                                  COMMAND_TASK_PRIORITY, NULL, COMMAND_TASK_CORE);
+    if (ok != pdPASS) {
+        ESP_LOGE(TAG, "One or more core tasks could not be created");
+        return ESP_ERR_NO_MEM;
+    }
     // Note: reactive_controller task is created inside reactive_controller_init() (Core 0)
     // Note: planner task is created inside planner_task_init() (Core 1)
+    return ESP_OK;
 }
 
 // ========================================
@@ -584,9 +809,24 @@ void app_main(void)
     }
 
     init_network();
-    ESP_ERROR_CHECK(init_hierarchical_ai());
+
+    /* The AI phase is non-fatal end to end now (see init_hierarchical_ai): the
+     * only hard requirement inside it is the executor, and losing that is
+     * reported rather than panicked on so the console stays usable. */
+    esp_err_t ai_ret = init_hierarchical_ai();
+    if (ai_ret != ESP_OK) {
+        ESP_LOGE(TAG, "Hierarchical AI init failed (%s) — motion control unavailable",
+                 esp_err_to_name(ai_ret));
+    }
     self_report_note_init(SELF_REPORT_SUBSYS_AUDIO, audio_player_is_ready());
-    create_tasks();
+
+    esp_err_t tasks_ret = create_tasks();
+    if (tasks_ret != ESP_OK) {
+        ESP_LOGE(TAG, "Task creation failed (%s) — console and manual control unavailable",
+                 esp_err_to_name(tasks_ret));
+    }
+
+    init_network_services();
 
     // Spoken self-introduction + status diagnostic (announces once voice-able,
     // re-announces on health change). Non-fatal: a robot that cannot start the

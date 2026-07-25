@@ -156,6 +156,11 @@ bool load_credentials(credentials_t *creds)
     return false;
 }
 
+/* Validation is deliberately per-credential rather than all-or-nothing. The
+ * credentials here come from three independent sources for two independent
+ * subsystems, so one missing value must not invalidate the others: a board
+ * provisioned over Improv has WiFi but no Gemini key, and an open network has
+ * an SSID but no password. Only a usable SSID is genuinely required. */
 bool validate_credentials(const credentials_t *creds)
 {
     if (!creds || !creds->credentials_loaded) {
@@ -163,39 +168,53 @@ bool validate_credentials(const credentials_t *creds)
         return false;
     }
 
-    // Validate WiFi credentials (required)
+    // The SSID is the one hard requirement — without it there is nothing to join.
     if (strlen(creds->wifi_ssid) == 0) {
         ESP_LOGE(TAG, "WiFi SSID is empty");
         return false;
     }
 
+    // An empty password is legitimate: open networks have none.
     if (strlen(creds->wifi_password) == 0) {
-        ESP_LOGE(TAG, "WiFi password is empty");
-        return false;
+        ESP_LOGW(TAG, "WiFi password is empty — assuming an open network");
     }
 
-    // Gemini API key is required — the planner cannot function without it.
+    // The planner needs the Gemini key, but the robot boots and drives without
+    // it (the executor holds STOP until a goal arrives), so this is not fatal.
     if (strlen(creds->gemini_api_key) == 0) {
-        ESP_LOGE(TAG, "Gemini API key is required but not provided");
-        return false;
+        ESP_LOGW(TAG, "No Gemini API key — AI planner will stay disabled");
     }
 
     ESP_LOGI(TAG, "Credentials validation successful");
     return true;
 }
 
+/**
+ * @brief Load credentials into the module-global cache exactly once.
+ *
+ * The "once" latch is set only after a *successful* load. An early failed
+ * attempt (no credentials yet, Improv provisioning still pending) must not
+ * poison every later accessor — credentials_reload() depends on being able to
+ * re-run this after provisioning writes NVS.
+ */
+static bool ensure_loaded(void)
+{
+    if (g_credentials_initialized) {
+        return true;
+    }
+    if (!load_credentials(&g_credentials)) {
+        return false;
+    }
+    if (!validate_credentials(&g_credentials)) {
+        return false;
+    }
+    g_credentials_initialized = true;
+    return true;
+}
+
 bool are_credentials_available(void)
 {
-    if (!g_credentials_initialized) {
-        g_credentials_initialized = true;
-        if (!load_credentials(&g_credentials)) {
-            return false;
-        }
-        if (!validate_credentials(&g_credentials)) {
-            return false;
-        }
-    }
-    return g_credentials.credentials_loaded;
+    return ensure_loaded() && g_credentials.credentials_loaded;
 }
 
 const char *get_wifi_ssid(void)
@@ -216,13 +235,14 @@ const char *get_wifi_password(void)
     return g_credentials.wifi_password;
 }
 
+/* Independent of the WiFi accessors on purpose: the key can be present when the
+ * SSID is not (env-var CI build), and absent when the SSID is (Improv). */
 const char *get_gemini_api_key(void)
 {
-    if (!are_credentials_available()) {
-        ESP_LOGE(TAG, "Credentials not available");
+    if (!ensure_loaded()) {
         return NULL;
     }
-    return g_credentials.gemini_api_key;
+    return (strlen(g_credentials.gemini_api_key) > 0) ? g_credentials.gemini_api_key : NULL;
 }
 
 bool credentials_nvs_save_wifi(const char *ssid, const char *password)
