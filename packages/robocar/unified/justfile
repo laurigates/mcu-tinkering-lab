@@ -6,6 +6,7 @@ set positional-arguments
 import '../../../tools/esp32-idf.just'
 
 project_dir := "packages/robocar/unified"
+bin_name := "robocar-unified"
 port := env("PORT", _detected_s3)
 target := "esp32s3"
 
@@ -16,9 +17,9 @@ default:
 # Build (containerized)
 ##########
 
-# Build firmware (containerized)
+# Build firmware (containerized, verifies the .bin was produced)
 [group: "build"]
-build: _idf-build
+build: (_idf-build-checked bin_name)
 
 # Clean build artifacts (containerized)
 [group: "build"]
@@ -37,21 +38,36 @@ shell: _idf-shell
 ##########
 
 # Flash firmware to XIAO ESP32-S3 Sense
+#
+# Kept inline rather than composed from the shared `_s3-flash`, per the
+# exotic-layout exception in .claude/rules/containerized-builds.md: this board
+# has 8 MB of flash (the shared recipe hardcodes 4MB) and an OTA layout with an
+# ota_data segment at 0xd000 that the shared single-app recipe does not write.
+# Omitting ota_data leaves stale OTA state behind, which matters here because
+# CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y. Offsets mirror `idf.py build`'s own
+# flash_args output — recheck them against it after any partitions.csv change.
 [group: "device"]
 flash: require-port
     #!/usr/bin/env bash
     set -euo pipefail
-    esptool --chip esp32s3 -p {{port}} -b 460800 \
+    esptool -s --chip esp32s3 -p {{port}} -b "${BAUD:-460800}" \
         --before default-reset --after hard-reset \
-        write-flash --flash-mode dio --flash-size detect \
+        write-flash --flash-mode dio --flash-size 8MB --flash-freq 80m \
         0x0 build/bootloader/bootloader.bin \
         0x8000 build/partition_table/partition-table.bin \
-        0x10000 build/robocar-unified.bin
-    echo "Flashed OK"
+        0xd000 build/ota_data_initial.bin \
+        0x10000 build/{{bin_name}}.bin
+    echo "Flashed {{bin_name}} OK"
 
-# Monitor serial output (Ctrl-C to stop)
+# Reset the board over USB-Serial-JTAG
 [group: "device"]
-monitor: _serial-monitor
+reset: _s3-reset
+
+# Monitor serial output (Ctrl-C to stop) — the XIAO S3 is native
+# USB-Serial-JTAG, not a USB-serial adapter, so it needs the S3 monitor
+# (which does a CDC reset first), not the generic pyserial one.
+[group: "device"]
+monitor: _s3-monitor
 
 # Flash and immediately start monitoring
 [group: "device"]

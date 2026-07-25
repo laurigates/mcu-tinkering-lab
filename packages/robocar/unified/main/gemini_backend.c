@@ -22,10 +22,10 @@
 #include "base64.h"
 #include "cJSON.h"
 #include "credentials_loader.h"
-#include "esp_crt_bundle.h"
 #include "esp_http_client.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "gemini_http.h"
 #include "gemini_parse.h"
 #include "goal_state.h"
 #include "planner_task.h" /* PLANNER_LOOP_PERIOD_MS — keeps the stated cadence honest */
@@ -451,29 +451,9 @@ esp_err_t gemini_backend_plan(const uint8_t *jpeg, size_t jpeg_len, goal_t *out_
     };
     acc.buf[0] = '\0';
 
-    esp_http_client_config_t cfg = {
-        .url = GEMINI_BASE_URL,
-        .method = HTTP_METHOD_POST,
-        .timeout_ms = GEMINI_TIMEOUT_MS,
-        .event_handler = http_event_handler,
-        .user_data = &acc,
-        .crt_bundle_attach = esp_crt_bundle_attach,
-    };
-
-    esp_http_client_handle_t client = esp_http_client_init(&cfg);
-    if (!client) {
-        ESP_LOGE(TAG, "esp_http_client_init() failed");
-        out_goal->kind = GOAL_KIND_STOP;
-        free(request_body);
-        return ESP_FAIL;
-    }
-
-    esp_http_client_set_header(client, "Content-Type", "application/json");
-    esp_http_client_set_header(client, "x-goog-api-key", api_key);
-    esp_http_client_set_post_field(client, request_body, strlen(request_body));
-
-    err = esp_http_client_perform(client);
-    int status = esp_http_client_get_status_code(client);
+    int status = 0;
+    err = gemini_http_post(GEMINI_BASE_URL, api_key, request_body, GEMINI_TIMEOUT_MS,
+                           http_event_handler, &acc, &status);
 
     const int64_t t_end = esp_timer_get_time();
     const uint32_t latency_ms = (uint32_t)((t_end - t_start) / 1000);
@@ -483,14 +463,14 @@ esp_err_t gemini_backend_plan(const uint8_t *jpeg, size_t jpeg_len, goal_t *out_
     ESP_LOGI(TAG, "HTTP %d in %u ms (response body=%zu bytes)", status, (unsigned)latency_ms,
              acc.len);
 
-    if (err != ESP_OK || status != 200) {
+    if (err != ESP_OK) {
         ESP_LOGE(TAG, "request failed: %s status=%d", esp_err_to_name(err), status);
         if (acc.len > 0) {
             ESP_LOGE(TAG, "error body: %.*s", (int)acc.len, acc.buf);
         }
         out_goal->kind = GOAL_KIND_STOP;
-        err = ESP_FAIL;
-        goto cleanup;
+        free(request_body);
+        return ESP_FAIL;
     }
 
     /* ---- Parse function calls from response ---- */
@@ -502,8 +482,6 @@ esp_err_t gemini_backend_plan(const uint8_t *jpeg, size_t jpeg_len, goal_t *out_
         ESP_LOGW(TAG, "falling back to STOP due to parse failure");
     }
 
-cleanup:
-    esp_http_client_cleanup(client);
     free(request_body);
     return err;
 }
@@ -645,30 +623,11 @@ esp_err_t gemini_backend_narrate(const char *facts, bool is_update, char *out, s
 
     response_acc_t acc = {.buf = resp, .len = 0, .cap = NARRATE_RESPONSE_BUF_SIZE};
 
-    esp_http_client_config_t cfg = {
-        .url = NARRATE_BASE_URL,
-        .method = HTTP_METHOD_POST,
-        .timeout_ms = NARRATE_TIMEOUT_MS,
-        .event_handler = http_event_handler,
-        .user_data = &acc,
-        .crt_bundle_attach = esp_crt_bundle_attach,
-    };
+    int status = 0;
+    esp_err_t err = gemini_http_post(NARRATE_BASE_URL, api_key, request_body, NARRATE_TIMEOUT_MS,
+                                     http_event_handler, &acc, &status);
 
-    esp_http_client_handle_t client = esp_http_client_init(&cfg);
-    if (!client) {
-        free(request_body);
-        free(resp);
-        return ESP_FAIL;
-    }
-
-    esp_http_client_set_header(client, "Content-Type", "application/json");
-    esp_http_client_set_header(client, "x-goog-api-key", api_key);
-    esp_http_client_set_post_field(client, request_body, strlen(request_body));
-
-    esp_err_t err = esp_http_client_perform(client);
-    const int status = esp_http_client_get_status_code(client);
-
-    if (err != ESP_OK || status != 200) {
+    if (err != ESP_OK) {
         ESP_LOGW(TAG, "narrate request failed: %s status=%d", esp_err_to_name(err), status);
         if (acc.len > 0) {
             /* Error at E, matching the planner path: at D this body is hidden
@@ -676,8 +635,9 @@ esp_err_t gemini_backend_narrate(const char *facts, bool is_update, char *out, s
              * status code and no indication of which field the API rejected. */
             ESP_LOGE(TAG, "narrate error body: %.*s", (int)acc.len, acc.buf);
         }
-        err = ESP_FAIL;
-        goto cleanup;
+        free(request_body);
+        free(resp);
+        return ESP_FAIL;
     }
 
     err = parse_narrate_response(acc.buf, out, out_len);
@@ -685,8 +645,6 @@ esp_err_t gemini_backend_narrate(const char *facts, bool is_update, char *out, s
         ESP_LOGW(TAG, "narrate: no usable text in response");
     }
 
-cleanup:
-    esp_http_client_cleanup(client);
     free(request_body);
     free(resp);
     return err;

@@ -4,7 +4,7 @@
  *
  * Hierarchical AI controller architecture:
  *   - Core 0: motor control, peripheral I/O, serial commands, reactive executor (30 Hz)
- *   - Core 1: camera capture, Gemini planner (1 Hz), WiFi/MQTT/OTA
+ *   - Core 1: camera capture, Gemini planner (PLANNER_LOOP_PERIOD_MS, 15 s default), WiFi/MQTT/OTA
  *
  * The planner (planner_task, Core 1) captures frames, calls Gemini ER 1.6,
  * and writes structured goals into goal_state.  The reactive executor

@@ -8,7 +8,7 @@ Single-board consolidation of the dual-ESP32 robocar onto a **XIAO ESP32-S3 Sens
 
 ## Architecture
 
-Implements a hierarchical AI controller pattern: a **slow planner** (Core 1, ~1 Hz) that emits structured goals, and a **fast reactive executor** (Core 0, ~30 Hz) that drives the robot toward those goals. See [ADR-016](../../docs/decisions/ADR-016-hierarchical-ai-controller.md) for the canonical design.
+Implements a hierarchical AI controller pattern: a **slow planner** (Core 1, every `PLANNER_LOOP_PERIOD_MS` — 15 s by default, bounded by the Gemini free-tier quota) that emits structured goals, and a **fast reactive executor** (Core 0, ~30 Hz) that drives the robot toward those goals. See [ADR-016](../../docs/decisions/ADR-016-hierarchical-ai-controller.md) for the canonical design.
 
 Core affinity is load-bearing — do not change without understanding the trade-offs:
 
@@ -40,6 +40,19 @@ All I2C devices hang off a **TCA9548A multiplexer** on GPIO5/6. Don't talk to de
 
 The MCP23017 (1953W breakout, address 0x20) is exercised from the serial console with `gpio`, `gpio mode <pin> in|up|out`, `gpio set <pin> 0|1`, `gpio get <pin>`.
 
+## Serial console commands
+
+| Command | Effect |
+|---------|--------|
+| `F` `B` `L` `R` `C` `W` `S` | Manual drive / rotate / stop — a ~1 s lease via `reactive_controller_manual()`, still subject to the obstacle reflex |
+| `gpio …` | MCP23017 expander (see above) |
+| `voice …` | Persona / TTS voice switching and auditioning |
+| `sound beep\|melody\|alert` | Buzzer |
+| `servo pan\|tilt <deg>` | Pan/tilt servos |
+| `led <r> <g> <b>` | Both RGB LEDs |
+
+The `sound`/`servo`/`led` commands are the only producers for `peripheral_task`'s queue — without them the task and every `PERIPH_CMD_*` case are unreachable.
+
 ## PCA9685 channel layout
 
 All motor direction, motor PWM, servo, and LED outputs go through the PCA9685 — the ESP32-S3 only drives STBY (GPIO1), the buzzer (GPIO2), and I2C. GPIO budget on XIAO headers is tight (11 pins). See the channel table in `main/pin_config.h` before reassigning.
@@ -57,7 +70,7 @@ Motor direction uses PCA9685 "full-on" (4096) / "full-off" (0) values on IN1/IN2
 
 - `speak(text)` — say one short sentence aloud, emitted *in addition to* a movement call
 
-The planner runs at ~1 Hz on Core 1; the executor drives the goal at ~30 Hz on Core 0. No on-demand inference or blocking on responses — the planner is a background task that constantly updates `goal_state`, and the executor always has something to do.
+The planner runs every `PLANNER_LOOP_PERIOD_MS` (15 s default, set by the Gemini free-tier quota rather than by control preference) on Core 1; the executor drives the goal at ~30 Hz on Core 0. No on-demand inference or blocking on responses — the planner is a background task that constantly updates `goal_state`, and the executor always has something to do.
 
 ## Voice (MAX98357A)
 
@@ -76,7 +89,11 @@ Claude and Ollama backends have been removed from this project. If an alternativ
 
 ## WiFi provisioning
 
-Uses **Improv WiFi** BLE provisioning by default — no credentials compiled in. `CMakeLists.txt` auto-generates a stub `credentials.h` at configure time if one doesn't exist, so CI and the web flasher don't need credentials. For local dev with hardcoded creds, copy `main/credentials.h.example` to `main/credentials.h` (gitignored).
+Uses **Improv WiFi Serial** provisioning by default — no credentials compiled in. `CMakeLists.txt` auto-generates a stub `credentials.h` at configure time if one doesn't exist, so CI and the web flasher don't need credentials. For local dev with hardcoded creds, copy `main/credentials.h.example` to `main/credentials.h` (gitignored).
+
+It is the **Serial** variant of Improv (the `improv-wifi` component implements the Improv Serial spec over UART0), not BLE. `init_network()` starts it whenever the board has no WiFi connection — including when a stored SSID has gone away — and `command_task` feeds every console byte to the parser, which ignores anything that is not a well-formed Improv packet. Credentials reach NVS only after `wifi_connect()` succeeds with them.
+
+Because the planner is non-fatal, a board with no credentials still boots fully: the executor holds STOP, and the console, provisioning and self-report stay reachable. Do not reintroduce an `ESP_ERROR_CHECK` around the AI init phase — that is exactly what made the documented no-credentials build boot-loop.
 
 NVS stores runtime-provisioned credentials — don't wipe NVS unless you want to re-provision.
 
@@ -105,11 +122,11 @@ Key settings that matter:
 - `CONFIG_SPIRAM_MODE_OCT=y` — XIAO ESP32-S3 Sense has **octal** PSRAM (not quad); wrong mode = boot loop
 - `CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192` — bumped from default 3584 for WiFi + BLE + camera init
 - `CONFIG_ESP_BROWNOUT_DET=n` — disabled; motor inrush was tripping it
-- `CONFIG_MDNS_ENABLED=y` — required for hostname discovery (`robocar-unified.local`)
+- mDNS (`robocar-unified.local`) needs **no** Kconfig switch — it comes from the `espressif/mdns` managed component. There is no `CONFIG_MDNS_ENABLED` symbol; a line setting one is reported as an unknown symbol and silently ignored
 
 ## Don't
 
-- Don't call `motor_controller.c` directly from anywhere except `reactive_controller.c` — the executor owns motor output
+- Don't call `motor_controller.c` directly from anywhere except `reactive_controller.c` — the executor owns motor output. Console/manual movement goes through `reactive_controller_manual()`, which takes a short lease the executor applies *after* the obstacle reflex; a second task writing the PCA9685 directly both fought the 30 Hz executor and bypassed the reflex
 - Don't add goal sources outside `planner_task.c` — structured goals keep the two layers decoupled. If a new goal source is needed, it should write `goal_state` the same way the planner does
 - Don't fold speech into `goal_t` — see the Voice section above and `speech_queue.h`
 - Don't "normalise" the audio path to 16 kHz to match the ThinkPack projects — 24 kHz is Gemini TTS's native rate, and matching it avoids a resampling stage entirely

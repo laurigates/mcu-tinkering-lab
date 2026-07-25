@@ -10,6 +10,7 @@ idf_component_register(
         "camera.c"
         "base64.c"
         "gemini_backend.c"
+        "gemini_http.c"
         "gemini_parse.c"
         "goal_state.c"
         "speech_queue.c"

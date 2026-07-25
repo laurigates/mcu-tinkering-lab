@@ -38,7 +38,7 @@ typst compile --creation-timestamp 0 --ignore-system-fonts --root ../../../.. bu
 
 ## Architecture
 
-Implements a hierarchical AI controller: a **slow planner** (~1 Hz, Core 1) that calls Gemini Robotics-ER to emit structured goals, and a **fast reactive executor** (~30 Hz, Core 0) that drives the robot smoothly toward those goals. See [ADR-016](../../docs/decisions/ADR-016-hierarchical-ai-controller.md) for the detailed design.
+Implements a hierarchical AI controller: a **slow planner** (every 15 s by default — quota-bound, see `PLANNER_LOOP_PERIOD_MS`; Core 1) that calls Gemini Robotics-ER to emit structured goals, and a **fast reactive executor** (~30 Hz, Core 0) that drives the robot smoothly toward those goals. See [ADR-016](../../docs/decisions/ADR-016-hierarchical-ai-controller.md) for the detailed design.
 
 - **Core 0**: reactive executor (visual servo, heading hold, motor PWM), motor control, peripheral I/O, obstacle reflex via ultrasonic sensor
 - **Core 1**: planner task (Gemini calls), camera capture, WiFi / MQTT / OTA
@@ -59,9 +59,11 @@ The XIAO ESP32-S3 uses native USB-Serial-JTAG — no external USB-serial adapter
 
 ## WiFi provisioning
 
-No credentials are compiled in. First boot advertises an Improv WiFi BLE service — use a browser-based provisioner (Chrome on desktop/Android) to send WiFi credentials, which are stored in NVS. For local builds with hardcoded credentials, copy `main/credentials.h.example` to `main/credentials.h`.
+No credentials are compiled in. When the firmware boots without a WiFi connection it starts **Improv WiFi Serial** on the USB console — open the board in [ESP Web Tools](https://esphome.github.io/esp-web-tools/) (or any Improv Serial provisioner) in Chrome and send the WiFi credentials. They are written to NVS only after they are proven to connect, so a typo cannot overwrite a working network. For local builds with hardcoded credentials, copy `main/credentials.h.example` to `main/credentials.h`.
 
-After connection, the device is reachable as `robocar.local` via mDNS.
+Note this is Improv **Serial**, over the same USB port used for flashing — not the BLE variant, so nothing needs to be paired.
+
+After connection, the device is reachable as `robocar-unified.local` via mDNS.
 
 ## OTA updates
 
@@ -71,7 +73,7 @@ OTA is enabled (`CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y`) and configured to pul
 
 - `main/main.c` — FreeRTOS task setup and core affinity
 - `main/pin_config.h` — all GPIO / PCA9685 channel assignments
-- `main/planner_task.c/.h` — Gemini Robotics-ER calls, goal state writes (~1 Hz)
+- `main/planner_task.c/.h` — Gemini Robotics-ER calls, goal state writes (every PLANNER_LOOP_PERIOD_MS, 15 s default)
 - `main/reactive_controller.c/.h` — visual servo, heading hold, motor output (~30 Hz)
 - `main/ultrasonic.c/.h` — distance measurement and reflex (~20 Hz sampling)
 - `main/goal_state.c/.h` — shared planner-executor state (mutex-protected)

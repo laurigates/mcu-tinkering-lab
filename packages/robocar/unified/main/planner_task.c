@@ -1,6 +1,6 @@
 /**
  * @file planner_task.c
- * @brief 1 Hz planner task implementation.
+ * @brief Gemini planner task implementation (PLANNER_LOOP_PERIOD_MS, 15 s default).
  *
  * Captures a JPEG frame, calls Gemini Robotics-ER 1.6 via gemini_backend_plan(),
  * and writes the resulting goal into goal_state.  On any failure the planner
@@ -121,8 +121,9 @@ static void planner_task(void *pvParameters)
                               : (backoff_periods < PLANNER_MAX_BACKOFF_PERIODS)
                                   ? backoff_periods * 2
                                   : PLANNER_MAX_BACKOFF_PERIODS;
-            ESP_LOGW(TAG, "gemini_backend_plan failed (%s) — forcing stop, backing off %" PRIu32
-                          " extra period(s)",
+            ESP_LOGW(TAG,
+                     "gemini_backend_plan failed (%s) — forcing stop, backing off %" PRIu32
+                     " extra period(s)",
                      esp_err_to_name(ret), backoff_periods);
             goal_state_force_stop();
         }
@@ -136,9 +137,8 @@ static void planner_task(void *pvParameters)
          * then returns immediately — so the loop would spin at full tilt
          * exactly when the backend is already struggling. Resync on overrun
          * so the pacing holds. */
-        if (xTaskDelayUntil(&last_wake_time,
-                            pdMS_TO_TICKS(PLANNER_LOOP_PERIOD_MS * (1 + backoff_periods))) ==
-            pdFALSE) {
+        if (xTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(PLANNER_LOOP_PERIOD_MS *
+                                                           (1 + backoff_periods))) == pdFALSE) {
             vTaskDelay(pdMS_TO_TICKS(PLANNER_LOOP_PERIOD_MS));
             last_wake_time = xTaskGetTickCount();
         }

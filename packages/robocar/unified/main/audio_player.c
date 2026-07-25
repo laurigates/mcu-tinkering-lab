@@ -240,7 +240,6 @@ esp_err_t audio_player_write(const uint8_t *pcm, size_t bytes, uint32_t timeout_
         return ESP_OK;
     }
 
-
     /* Keep the byte ring 16-bit aligned. The base64 decoder emits 3-byte
      * groups, so `bytes` is frequently odd; sending odd-length runs into a
      * RINGBUF_TYPE_BYTEBUF lets a 16-bit sample straddle a read boundary, and
@@ -296,7 +295,6 @@ void audio_player_abort(void)
         }
         vRingbufferReturnItem(s_ring, item);
     }
-
 }
 
 bool audio_player_is_busy(void)

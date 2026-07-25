@@ -13,12 +13,12 @@
 #include "base64.h"
 #include "cJSON.h"
 #include "credentials_loader.h"
-#include "esp_crt_bundle.h"
 #include "esp_http_client.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "gemini_http.h"
 #include "pin_config.h"
 #include "speech_queue.h"
 #include "voice_persona.h"
@@ -200,29 +200,10 @@ static void speak(const char *text)
     tts_ctx_t ctx = {0};
     base64_stream_init(&ctx.b64);
 
-    esp_http_client_config_t cfg = {
-        .url = TTS_URL,
-        .method = HTTP_METHOD_POST,
-        .timeout_ms = TTS_TIMEOUT_MS,
-        .event_handler = http_event_handler,
-        .user_data = &ctx,
-        .crt_bundle_attach = esp_crt_bundle_attach,
-    };
-
-    esp_http_client_handle_t client = esp_http_client_init(&cfg);
-    if (!client) {
-        ESP_LOGE(TAG, "esp_http_client_init() failed");
-        free(body);
-        return;
-    }
-
-    esp_http_client_set_header(client, "Content-Type", "application/json");
-    esp_http_client_set_header(client, "x-goog-api-key", api_key);
-    esp_http_client_set_post_field(client, body, strlen(body));
-
     const int64_t t_start = esp_timer_get_time();
-    const esp_err_t err = esp_http_client_perform(client);
-    const int status = esp_http_client_get_status_code(client);
+    int status = 0;
+    const esp_err_t err =
+        gemini_http_post(TTS_URL, api_key, body, TTS_TIMEOUT_MS, http_event_handler, &ctx, &status);
     const uint32_t latency_ms = (uint32_t)((esp_timer_get_time() - t_start) / 1000);
 
     /* Checked before the transport error: a stall now deliberately fails the
@@ -246,7 +227,6 @@ static void speak(const char *text)
 
     audio_player_end_utterance();
 
-    esp_http_client_cleanup(client);
     free(body);
 }
 

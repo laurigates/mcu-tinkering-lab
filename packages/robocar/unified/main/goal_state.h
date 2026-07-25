@@ -2,10 +2,9 @@
  * @file goal_state.h
  * @brief Shared goal state — mutex-protected, last-write-wins with TTL.
  *
- * The planner task (Core 1, ~1 Hz) writes structured goals via
- * goal_state_write().  The reactive executor (Core 0, ~30 Hz) reads them via
- * goal_state_read().  When the planner goes silent the goal ages out and the
- * executor falls back to GOAL_KIND_STOP.
+ * The planner task (Core 1, every PLANNER_LOOP_PERIOD_MS — 15 s default) writes structured goals
+ * via goal_state_write().  The reactive executor (Core 0, ~30 Hz) reads them via goal_state_read().
+ * When the planner goes silent the goal ages out and the executor falls back to GOAL_KIND_STOP.
  *
  * Host-test build
  * ---------------
