@@ -61,17 +61,22 @@ static void test_run(const char *name, void (*fn)(void))
 /**
  * Reset all module state so each test starts from a known baseline.
  *
- * Note: the smoothing buffer inside reactive_controller.c is *process-local*
- * static state. The only way to clear it is to call
- * reactive_controller_init() which memsets it. So we call init here.
+ * Note: the smoothing buffer and the manual-override lease inside
+ * reactive_controller.c are *process-local* static state, cleared only by
+ * reactive_controller_init(). init() is idempotent and returns early when the
+ * controller is already running, so stop() first — otherwise every setup() after
+ * the first is a no-op and state leaks between tests. (That was previously
+ * masked: prime_distance() happens to refill the whole 3-sample filter, so the
+ * stale buffer never showed up.)
  */
 static void setup(void)
 {
+    reactive_controller_stop(); /* no-op on the first call */
     goal_state_init();
     goal_state_force_stop(); /* clear any prior goal */
     motor_stub_reset();
     ultrasonic_test_set_distance(100); /* "clear" default */
-    reactive_controller_init();        /* clears smoothing buffer */
+    reactive_controller_init();        /* clears smoothing buffer + manual lease */
 }
 
 /** Prime the 3-sample running-mean distance filter at @p cm. */
@@ -307,6 +312,108 @@ static void test_stale_goal_stops(void)
 }
 
 /* =========================================================================
+ * Manual override (console / bench driving)
+ * =========================================================================
+ *
+ * The three properties that make routing console commands through the executor
+ * safe, rather than letting a second task write the motors directly:
+ * a manual command beats a live goal, the obstacle reflex still beats a manual
+ * command, and the lease expires on its own so the planner resumes.
+ */
+
+/* A manual command takes precedence over a fresh planner goal. */
+static void test_manual_overrides_goal(void)
+{
+    setup();
+    prime_distance(100); /* clear path */
+
+    goal_t drive = {
+        .kind = GOAL_KIND_DRIVE,
+        .params.drive = {.heading_deg = 0, .distance_cm = 200, .speed_pct = 100},
+    };
+    ASSERT(goal_state_write(&drive, 5000) == ESP_OK);
+
+    /* Reverse is deliberately something no goal kind can express — if the goal
+     * were winning, both directions would read forward. */
+    ASSERT(reactive_controller_manual(REACTIVE_MANUAL_BACKWARD, 120, 1000) == ESP_OK);
+    reactive_controller_tick_for_test();
+
+    uint8_t ls, rs, ld, rd;
+    get_motor_state(&ls, &rs, &ld, &rd);
+    ASSERT(ls == 120);
+    ASSERT(rs == 120);
+    ASSERT(ld == 0); /* backward */
+    ASSERT(rd == 0);
+}
+
+/* The obstacle reflex still wins — a manual command cannot drive into a wall. */
+static void test_reflex_overrides_manual(void)
+{
+    setup();
+
+    ASSERT(reactive_controller_manual(REACTIVE_MANUAL_FORWARD, 200, 5000) == ESP_OK);
+    prime_distance(10); /* below the 15 cm threshold */
+
+    uint8_t ls, rs, ld, rd;
+    get_motor_state(&ls, &rs, &ld, &rd);
+    ASSERT(ls == 0);
+    ASSERT(rs == 0);
+}
+
+/* The lease expires by itself and the planner's goal resumes — no hand-back. */
+static void test_manual_lease_expires_back_to_goal(void)
+{
+    setup();
+    prime_distance(100);
+
+    goal_t drive = {
+        .kind = GOAL_KIND_DRIVE,
+        .params.drive = {.heading_deg = 0, .distance_cm = 200, .speed_pct = 40},
+    };
+    ASSERT(goal_state_write(&drive, 60000) == ESP_OK);
+
+    /* One loop period of lease → exactly one manual tick. */
+    ASSERT(reactive_controller_manual(REACTIVE_MANUAL_BACKWARD, 120, REACTIVE_LOOP_PERIOD_MS) ==
+           ESP_OK);
+
+    reactive_controller_tick_for_test();
+    uint8_t ls, rs, ld, rd;
+    get_motor_state(&ls, &rs, &ld, &rd);
+    ASSERT(ld == 0); /* still manual: reverse */
+
+    reactive_controller_tick_for_test();
+    get_motor_state(&ls, &rs, &ld, &rd);
+    ASSERT(ld == 1); /* lease gone: goal drives forward again */
+    ASSERT(rd == 1);
+    ASSERT(ls == (uint8_t)(40 * 255 / 100));
+}
+
+/* An explicit STOP ends the lease immediately rather than holding for a TTL. */
+static void test_manual_stop_clears_lease(void)
+{
+    setup();
+    prime_distance(100);
+
+    goal_t drive = {
+        .kind = GOAL_KIND_DRIVE,
+        .params.drive = {.heading_deg = 0, .distance_cm = 200, .speed_pct = 40},
+    };
+    ASSERT(goal_state_write(&drive, 60000) == ESP_OK);
+
+    ASSERT(reactive_controller_manual(REACTIVE_MANUAL_FORWARD, 200, 60000) == ESP_OK);
+    reactive_controller_tick_for_test();
+    uint8_t ls, rs, ld, rd;
+    get_motor_state(&ls, &rs, &ld, &rd);
+    ASSERT(ls == 200);
+
+    ASSERT(reactive_controller_manual(REACTIVE_MANUAL_STOP, 0, 60000) == ESP_OK);
+    reactive_controller_tick_for_test();
+    get_motor_state(&ls, &rs, &ld, &rd);
+    /* Back under planner control on the very next tick, not 60 s later. */
+    ASSERT(ls == (uint8_t)(40 * 255 / 100));
+}
+
+/* =========================================================================
  * Main
  * ========================================================================= */
 
@@ -323,6 +430,10 @@ int main(void)
     test_run("rotate_cw", test_rotate_cw);
     test_run("rotate_ccw", test_rotate_ccw);
     test_run("stale_goal_stops", test_stale_goal_stops);
+    test_run("manual_overrides_goal", test_manual_overrides_goal);
+    test_run("reflex_overrides_manual", test_reflex_overrides_manual);
+    test_run("manual_lease_expires_back_to_goal", test_manual_lease_expires_back_to_goal);
+    test_run("manual_stop_clears_lease", test_manual_stop_clears_lease);
 
     printf("\n=== Results ===\n");
     printf("Passed: %d / %d\n", test_pass, test_count);

@@ -552,6 +552,14 @@ esp_err_t reactive_controller_get_telemetry(reactive_telemetry_t *out)
 static reactive_telemetry_t s_telemetry = {0};
 static bool s_running = false;
 
+/* Manual override lease. The host build counts ticks rather than microseconds
+ * so lease expiry is deterministic in tests instead of wall-clock dependent;
+ * reactive_controller_manual() converts the ms TTL at the same 33 ms period the
+ * target executor runs at. */
+static reactive_manual_cmd_t s_manual_cmd = REACTIVE_MANUAL_STOP;
+static uint8_t s_manual_speed = 0;
+static uint32_t s_manual_ticks_left = 0;
+
 /* --- Smoothing buffer (same logic as target) --- */
 static uint16_t s_dist_buf[ULTRASONIC_SMOOTH_N];
 static uint8_t s_dist_idx = 0;
@@ -621,6 +629,54 @@ static void execute_rotate(const goal_t *goal)
     }
 }
 
+static void execute_manual(reactive_manual_cmd_t cmd, uint8_t speed)
+{
+    const uint8_t rot_speed = 153;
+    switch (cmd) {
+        case REACTIVE_MANUAL_FORWARD:
+            motor_move_forward(speed);
+            break;
+        case REACTIVE_MANUAL_BACKWARD:
+            motor_move_backward(speed);
+            break;
+        case REACTIVE_MANUAL_LEFT:
+            motor_turn_left(speed);
+            break;
+        case REACTIVE_MANUAL_RIGHT:
+            motor_turn_right(speed);
+            break;
+        case REACTIVE_MANUAL_ROTATE_CW:
+            motor_rotate_cw(rot_speed);
+            break;
+        case REACTIVE_MANUAL_ROTATE_CCW:
+            motor_rotate_ccw(rot_speed);
+            break;
+        case REACTIVE_MANUAL_STOP:
+        default:
+            motor_stop();
+            break;
+    }
+}
+
+esp_err_t reactive_controller_manual(reactive_manual_cmd_t cmd, uint8_t speed, uint32_t ttl_ms)
+{
+    if (!s_running) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    if (ttl_ms == 0) {
+        ttl_ms = REACTIVE_MANUAL_TTL_MS;
+    }
+    s_manual_cmd = cmd;
+    s_manual_speed = speed;
+    s_manual_ticks_left = (cmd == REACTIVE_MANUAL_STOP)
+                              ? 0
+                              : (ttl_ms + REACTIVE_LOOP_PERIOD_MS - 1) / REACTIVE_LOOP_PERIOD_MS;
+    if (cmd == REACTIVE_MANUAL_STOP) {
+        motor_stop();
+    }
+    return ESP_OK;
+}
+
 /**
  * @brief Single executor tick — exposed for host tests.
  *
@@ -640,8 +696,20 @@ void reactive_controller_tick_for_test(void)
         motor_stop();
         s_telemetry.distance_cm = dist;
         s_telemetry.reflex_active = true;
+        s_telemetry.manual_active = false;
         return;
     }
+
+    /* Manual override, checked after the reflex — mirrors reactive_task(). */
+    if (s_manual_ticks_left > 0) {
+        s_manual_ticks_left--;
+        execute_manual(s_manual_cmd, s_manual_speed);
+        s_telemetry.distance_cm = dist;
+        s_telemetry.reflex_active = false;
+        s_telemetry.manual_active = true;
+        return;
+    }
+    s_telemetry.manual_active = false;
 
     goal_t goal;
     bool is_fresh;
@@ -682,6 +750,8 @@ esp_err_t reactive_controller_init(void)
     memset(s_dist_buf, 0, sizeof(s_dist_buf));
     s_dist_idx = 0;
     s_dist_buf_full = false;
+    s_manual_ticks_left = 0;
+    s_manual_cmd = REACTIVE_MANUAL_STOP;
     s_running = true;
     ultrasonic_init();
     return ESP_OK;

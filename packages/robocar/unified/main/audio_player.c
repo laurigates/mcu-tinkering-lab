@@ -297,14 +297,6 @@ void audio_player_abort(void)
     }
 }
 
-bool audio_player_is_busy(void)
-{
-    if (!s_ring) {
-        return false;
-    }
-    return s_channel_active || xRingbufferGetCurFreeSize(s_ring) < AUDIO_RING_BYTES;
-}
-
 bool audio_player_is_ready(void)
 {
     return s_task != NULL && s_ring != NULL;
