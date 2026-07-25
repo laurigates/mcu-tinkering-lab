@@ -88,8 +88,16 @@ typedef struct {
  * Constants
  * ========================================================================= */
 
-/** Default freshness window in milliseconds (1.5× the 1 Hz planner period). */
-#define GOAL_STATE_DEFAULT_TTL_MS 1500U
+/** Default freshness window in milliseconds (1.5× PLANNER_LOOP_PERIOD_MS).
+ *
+ *  Tracks the planner period — see the quota note in planner_task.h. The 1.5×
+ *  ratio absorbs per-request latency (2–4 s observed) so a goal does not expire
+ *  in the gap between plans; at 1× the executor would stop-start every cycle.
+ *  Consequence of the slower planner: the robot may act on vision up to ~22 s
+ *  old, so the ultrasonic reflex in reactive_controller.c is what keeps a stale
+ *  drive goal from driving into something. Move this with the planner period,
+ *  never independently. */
+#define GOAL_STATE_DEFAULT_TTL_MS 22500U
 
 /* =========================================================================
  * Public API

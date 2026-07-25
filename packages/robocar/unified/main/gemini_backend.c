@@ -28,6 +28,8 @@
 #include "esp_timer.h"
 #include "gemini_parse.h"
 #include "goal_state.h"
+#include "planner_task.h"  /* PLANNER_LOOP_PERIOD_MS — keeps the stated cadence honest */
+#include "voice_persona.h"
 
 static const char *TAG = "gemini_backend";
 
@@ -35,7 +37,11 @@ static const char *TAG = "gemini_backend";
 /* Constants                                                                   */
 /* -------------------------------------------------------------------------- */
 
-#define GEMINI_MODEL "gemini-robotics-er-1.6"
+/* Model id must carry the "-preview" suffix — the bare "gemini-robotics-er-1.6"
+ * 404s on v1beta ("not found ... or is not supported for generateContent").
+ * Verified against ListModels (2026-07): the API advertises
+ * gemini-robotics-er-1.6-preview and gemini-robotics-er-1.5-preview. */
+#define GEMINI_MODEL "gemini-robotics-er-1.6-preview"
 #define GEMINI_BASE_URL \
     "https://generativelanguage.googleapis.com/v1beta/models/" GEMINI_MODEL ":generateContent"
 
@@ -50,9 +56,20 @@ static const char *TAG = "gemini_backend";
  *  buffer. A one-sentence reply is tiny; 4 kB also absorbs an error body. */
 #define NARRATE_RESPONSE_BUF_SIZE (4 * 1024)
 #define NARRATE_TIMEOUT_MS 15000
-/** Ample for one ≤25-word sentence; keeps thinking-capable models from
- *  spending the whole budget before emitting text. */
-#define NARRATE_MAX_OUTPUT_TOKENS 128
+/** Must cover thinking tokens *plus* the sentence: maxOutputTokens is the
+ *  combined budget, and thinking is spent first. gemini-flash-latest resolves to
+ *  a Gemini 3-era model that always thinks, so too small a value spends the whole
+ *  budget on thinking and returns finishReason=MAX_TOKENS with a sentence cut off
+ *  mid-word — or no text at all.
+ *
+ *  Sized from measurement, not guesswork, because thinking is *variable*: the
+ *  same prompt used 487–745 thought tokens across runs (a persona brief costs
+ *  more than plain English — that same prompt cost 395 in English). 512
+ *  truncated every time; 1024 happened to pass but leaves too little margin
+ *  above an observed 745. Raising the ceiling is close to free — thinking tokens
+ *  are billed whether or not the cap truncates the reply, so the cap only
+ *  decides if the sentence survives. */
+#define NARRATE_MAX_OUTPUT_TOKENS 2048
 
 /** HTTP response buffer.  16 kB matches the reference client; function-call
  *  responses are much smaller but the buffer is also used to absorb error
@@ -294,17 +311,25 @@ static cJSON *build_tools(void)
  */
 static char *build_request_json(const char *b64_image)
 {
-    static const char *SYSTEM_PROMPT =
-        "You are the planning brain of a small wheeled robot. "
-        "Examine the image and choose exactly one movement for the robot to take next "
-        "by calling one of: drive, track, rotate, or stop. "
-        "Prefer 'track' when a target object is visible and centred in the frame. "
-        "Call 'stop' when the path is blocked or the scene is ambiguous. "
-        "You may ALSO call 'speak' in the same response to say one short sentence out "
-        "loud — do so only when the scene has changed in a way worth remarking on, not "
-        "on every frame. You are consulted about once per second, so narrating "
-        "continuously would be incoherent. "
-        "Respond ONLY with function calls — no prose, no markdown.";
+    /* Built per call rather than static: the spoken register follows the active
+     * persona, which is switchable at runtime. The cadence is stated from
+     * PLANNER_LOOP_PERIOD_MS so the model's sense of how often it is consulted
+     * cannot drift from the loop that actually calls it. */
+    char system_prompt[1536];
+    snprintf(system_prompt, sizeof(system_prompt),
+             "You are the planning brain of a small wheeled robot. "
+             "Examine the image and choose exactly one movement for the robot to take next "
+             "by calling one of: drive, track, rotate, or stop. "
+             "Prefer 'track' when a target object is visible and centred in the frame. "
+             "Call 'stop' when the path is blocked or the scene is ambiguous. "
+             "You may ALSO call 'speak' in the same response to say one short sentence out "
+             "loud — do so only when the scene has changed in a way worth remarking on, not "
+             "on every frame. You are consulted about every %u seconds, so narrating "
+             "every time would be tiresome. "
+             "When you do call 'speak', the spoken text MUST follow this voice: %s "
+             "Respond ONLY with function calls — no prose, no markdown.",
+             PLANNER_LOOP_PERIOD_MS / 1000U, voice_persona_get()->text_brief);
+    const char *SYSTEM_PROMPT = system_prompt;
 
     cJSON *root = cJSON_CreateObject();
 
@@ -500,15 +525,16 @@ cleanup:
 /** Build the text-only generateContent body for a spoken status line. */
 static char *build_narrate_json(const char *facts, bool is_update)
 {
-    char prompt[1024];
+    char prompt[2048];
     snprintf(prompt, sizeof(prompt),
              "You are a small wheeled robot named Robocar, speaking aloud. "
+             "Voice and language to use: %s\n\n"
              "Here are your live on-device subsystem facts:\n%s\n\n"
              "%s"
              "Write ONE short, friendly spoken sentence (at most 25 words, plain text only — "
              "no markdown, no emoji, no quotes) %s and stating your status, naming anything that "
              "is not responding. Report only the facts above; do not invent hardware.",
-             facts,
+             voice_persona_get()->text_brief, facts,
              is_update ? "This is a status UPDATE: a subsystem's health just changed — keep to "
                          "what changed. "
                        : "",
@@ -528,10 +554,15 @@ static char *build_narrate_json(const char *facts, bool is_update)
     cJSON *gen_config = cJSON_AddObjectToObject(root, "generationConfig");
     cJSON_AddNumberToObject(gen_config, "maxOutputTokens", NARRATE_MAX_OUTPUT_TOKENS);
     cJSON_AddNumberToObject(gen_config, "temperature", 0.7);
-    /* Disable thinking so the token budget is spent on the reply, not silent
-     * reasoning (a flash text model would otherwise risk an empty completion). */
+    /* Hold thinking down so most of the token budget reaches the reply.
+     * NOTE: the field is "thinkingLevel", not "thinkingBudget" — the numeric
+     * thinkingBudget is rejected outright by the Gemini 3-era model behind
+     * gemini-flash-latest, which is what made every narrate call fail with a
+     * bare HTTP 400 "Request contains an invalid argument". These models
+     * always think, so thinking cannot be switched off entirely; budget for it
+     * via NARRATE_MAX_OUTPUT_TOKENS instead. */
     cJSON *thinking = cJSON_AddObjectToObject(gen_config, "thinkingConfig");
-    cJSON_AddNumberToObject(thinking, "thinkingBudget", 0);
+    cJSON_AddStringToObject(thinking, "thinkingLevel", "low");
 
     char *body = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
@@ -650,7 +681,10 @@ esp_err_t gemini_backend_narrate(const char *facts, bool is_update, char *out, s
     if (err != ESP_OK || status != 200) {
         ESP_LOGW(TAG, "narrate request failed: %s status=%d", esp_err_to_name(err), status);
         if (acc.len > 0) {
-            ESP_LOGD(TAG, "narrate error body: %.*s", (int)acc.len, acc.buf);
+            /* Error at E, matching the planner path: at D this body is hidden
+             * at the default log level, which left a 400 showing only its
+             * status code and no indication of which field the API rejected. */
+            ESP_LOGE(TAG, "narrate error body: %.*s", (int)acc.len, acc.buf);
         }
         err = ESP_FAIL;
         goto cleanup;

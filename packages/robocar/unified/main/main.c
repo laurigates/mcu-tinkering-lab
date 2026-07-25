@@ -45,6 +45,7 @@
 #include "self_report.h"
 #include "servo_controller.h"
 #include "speech_queue.h"
+#include "voice_persona.h"
 #include "system_state.h"
 #include "wifi_manager.h"
 
@@ -243,6 +244,73 @@ static void dispatch_sound(const char *sound)
 //   gpio set <pin> 0|1       - drive an output pin
 //   gpio get <pin>           - read one pin
 // ========================================
+/* `voice`                  — show current persona/voice and list the options
+ * `voice <slug>`           — switch persona (e.g. `voice fi-1950`)
+ * `voice say <text>`       — speak a line now, to audition the persona
+ * `voice name <VoiceName>` — override the prebuilt voice (`voice name -` clears)
+ *
+ * Switching and auditioning are runtime rather than compile-time because only a
+ * listener can judge a voice; a reflash per candidate is far too slow a loop. */
+static void handle_voice_cmd(const char *buf)
+{
+    char op[24] = {0};
+    const int n = sscanf(buf, "voice %23s", op);
+
+    if (n <= 0) {
+        char voice[VOICE_PERSONA_VOICE_MAX];
+        voice_persona_effective_voice(voice, sizeof(voice));
+        const voice_persona_t *cur = voice_persona_get();
+        printf("voice: persona=%s lang=%s voice=%s\n", cur->slug, cur->language_code, voice);
+        for (size_t i = 0;; ++i) {
+            const voice_persona_t *p = voice_persona_at(i);
+            if (!p) {
+                break;
+            }
+            printf("  %c %-12s %s\n", (p == cur) ? '*' : ' ', p->slug, p->label);
+        }
+        printf("  usage: voice <slug> | voice say <text> | voice name <VoiceName|->\n");
+        return;
+    }
+
+    if (strcmp(op, "say") == 0) {
+        const char *text = strstr(buf, "say");
+        text = text ? text + 3 : NULL;
+        while (text && *text == ' ') {
+            ++text;
+        }
+        if (!text || *text == '\0') {
+            printf("voice: usage: voice say <text>\n");
+            return;
+        }
+        printf("voice: speaking \"%s\"\n", text);
+        if (speech_queue_post(text) != ESP_OK) {
+            printf("voice: speech queue busy\n");
+        }
+        return;
+    }
+
+    if (strcmp(op, "name") == 0) {
+        char name[VOICE_PERSONA_VOICE_MAX] = {0};
+        if (sscanf(buf, "voice name %23s", name) != 1) {
+            printf("voice: usage: voice name <VoiceName|->\n");
+            return;
+        }
+        const bool clear = (strcmp(name, "-") == 0);
+        if (voice_persona_set_voice(clear ? NULL : name, true) == ESP_OK) {
+            printf("voice: voice=%s\n", clear ? "(persona default)" : name);
+        } else {
+            printf("voice: could not set voice\n");
+        }
+        return;
+    }
+
+    if (voice_persona_set(op, true) == ESP_OK) {
+        printf("voice: persona=%s\n", op);
+    } else {
+        printf("voice: unknown persona '%s'\n", op);
+    }
+}
+
 static void handle_gpio_cmd(const char *buf)
 {
     if (!gpio_expander_available()) {
@@ -352,6 +420,8 @@ static void command_task(void *pvParameters)
                     }
                 } else if (strncmp(buf, "gpio", 4) == 0) {
                     handle_gpio_cmd(buf);
+                } else if (strncmp(buf, "voice", 5) == 0) {
+                    handle_voice_cmd(buf);
                 }
 
                 buf_pos = 0;
@@ -444,6 +514,10 @@ static esp_err_t init_hierarchical_ai(void)
 
     // goal_state must be initialised before reactive_controller and planner_task
     ESP_RETURN_ON_ERROR(goal_state_init(), TAG, "goal_state_init failed");
+
+    // Persona must load before the planner and TTS tasks start, since both read
+    // it while building their first request. Needs NVS, which Phase 0 set up.
+    voice_persona_init();
 
     // Speech path: queue and player must exist before the planner can emit a
     // `speak` call. Both are non-fatal — a robot that cannot talk should still

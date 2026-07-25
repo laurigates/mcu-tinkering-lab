@@ -37,11 +37,14 @@ extern "C" {
 
 /** Longest utterance accepted, including the NUL.
  *
- *  Sized for one or two spoken sentences.  Gemini TTS bills per character and
- *  the robot narrates continuously, so this is a cost guard as much as a
- *  memory one — the planner prompt also asks for short lines.
+ *  Sized for one spoken sentence. Gemini TTS bills per character and the robot
+ *  narrates continuously, so this is a cost guard as much as a memory one — the
+ *  planner prompt also asks for short lines. But it must fit the *rendered*
+ *  sentence: 160 truncated a 25-word Finnish persona line mid-word (both text
+ *  and audio cut at ~148 chars, observed on hardware). Finnish words are long,
+ *  so a 25-word line reaches ~250 chars — size for the language, not English.
  */
-#define SPEECH_TEXT_MAX 160
+#define SPEECH_TEXT_MAX 320
 
 /** Pending utterances held before the TTS fetch. Small on purpose. */
 #define SPEECH_QUEUE_DEPTH 2

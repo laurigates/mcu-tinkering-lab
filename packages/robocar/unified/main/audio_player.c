@@ -36,6 +36,11 @@ static TaskHandle_t s_task = NULL;
 static volatile bool s_channel_active = false;
 static volatile bool s_utterance_ended = false;
 
+/* Odd trailing byte held back from the previous audio_player_write so only
+ * 16-bit-aligned runs enter the ring. See audio_player_write. */
+static uint8_t s_carry = 0;
+static bool s_have_carry = false;
+
 /* ------------------------------------------------------------------ */
 /* I2S setup                                                           */
 /* ------------------------------------------------------------------ */
@@ -92,10 +97,36 @@ static void mono_to_stereo(const int16_t *mono, size_t count, int16_t *stereo)
     }
 }
 
+/** Fill the TX DMA buffers with silence while the channel is still in READY
+ *  state. i2s_channel_enable() starts clocking the DMA buffers out immediately,
+ *  before the first i2s_channel_write() can land — so without this the amp
+ *  reproduces whatever those buffers happen to hold: uninitialised memory on
+ *  the first utterance, and the stale tail of the previous clip on every one
+ *  after (the channel is disabled mid-buffer at end of utterance). That is a
+ *  burst of full-scale static in front of every clip. chan_cfg.auto_clear does
+ *  not cover this: it zeroes on *underrun*, not at enable time.
+ *  i2s_channel_preload_data() is only valid before enable, which is why this
+ *  runs here rather than after. */
+static void preload_silence(void)
+{
+    static const int16_t silence[PLAYER_CHUNK_SAMPLES * 2] = {0};
+    size_t loaded = 0;
+    do {
+        loaded = 0;
+        if (i2s_channel_preload_data(s_tx_chan, silence, sizeof(silence), &loaded) != ESP_OK) {
+            return;
+        }
+        // A short load means the DMA buffers are full.
+    } while (loaded == sizeof(silence));
+}
+
 static void channel_set_active(bool active)
 {
     if (active == s_channel_active) {
         return;
+    }
+    if (active) {
+        preload_silence();
     }
     const esp_err_t err = active ? i2s_channel_enable(s_tx_chan) : i2s_channel_disable(s_tx_chan);
     if (err != ESP_OK) {
@@ -181,6 +212,20 @@ esp_err_t audio_player_init(void)
     return ESP_OK;
 }
 
+static esp_err_t ring_send(const uint8_t *p, size_t n, uint32_t timeout_ms)
+{
+    if (n == 0) {
+        return ESP_OK;
+    }
+    // Blocking send is deliberate backpressure: the download must not outrun
+    // real-time playback, or a long utterance would need unbounded PSRAM.
+    if (xRingbufferSend(s_ring, p, n, pdMS_TO_TICKS(timeout_ms)) != pdTRUE) {
+        ESP_LOGW(TAG, "ring full for %ums — dropping %u bytes", (unsigned)timeout_ms, (unsigned)n);
+        return ESP_ERR_TIMEOUT;
+    }
+    return ESP_OK;
+}
+
 esp_err_t audio_player_write(const uint8_t *pcm, size_t bytes, uint32_t timeout_ms)
 {
     if (!s_ring) {
@@ -192,20 +237,43 @@ esp_err_t audio_player_write(const uint8_t *pcm, size_t bytes, uint32_t timeout_
 
     s_utterance_ended = false;
 
-    // Blocking send is deliberate backpressure: the download must not outrun
-    // real-time playback, or a long utterance would need unbounded PSRAM.
-    if (xRingbufferSend(s_ring, pcm, bytes, pdMS_TO_TICKS(timeout_ms)) != pdTRUE) {
-        ESP_LOGW(TAG, "ring full for %ums — dropping %u bytes", (unsigned)timeout_ms,
-                 (unsigned)bytes);
-        return ESP_ERR_TIMEOUT;
+    /* Keep the byte ring 16-bit aligned. The base64 decoder emits 3-byte
+     * groups, so `bytes` is frequently odd; sending odd-length runs into a
+     * RINGBUF_TYPE_BYTEBUF lets a 16-bit sample straddle a read boundary, and
+     * the player (got / sizeof(int16_t), then returns the whole item) drops the
+     * straggler byte and shifts every following sample by one — loud static.
+     * Because the shift is cumulative, the stream oscillates between aligned
+     * (clean) and misaligned (static) as the drops accumulate. Holding the odd
+     * trailing byte back until the next write keeps only even runs in the ring,
+     * so no sample is ever split. Producer-side (TTS task) only — the player
+     * merely reads — so s_carry needs no lock. */
+    esp_err_t err;
+    if (s_have_carry) {
+        const uint8_t splice[2] = {s_carry, pcm[0]};  // complete the straddled sample
+        if ((err = ring_send(splice, 2, timeout_ms)) != ESP_OK) {
+            return err;
+        }
+        s_have_carry = false;
+        pcm++;
+        bytes--;
     }
-
+    const size_t even = bytes & ~(size_t)1;
+    if ((err = ring_send(pcm, even, timeout_ms)) != ESP_OK) {
+        return err;
+    }
+    if (bytes & 1) {
+        s_carry = pcm[even];
+        s_have_carry = true;
+    }
     return ESP_OK;
 }
 
 void audio_player_end_utterance(void)
 {
     s_utterance_ended = true;
+    // Drop a dangling half-sample (≤1 byte, inaudible) so it cannot prepend to,
+    // and misalign, the next utterance.
+    s_have_carry = false;
 }
 
 void audio_player_abort(void)
@@ -213,6 +281,8 @@ void audio_player_abort(void)
     if (!s_ring) {
         return;
     }
+
+    s_have_carry = false;  // discard any half-sample so the next utterance starts aligned
 
     // Drain whatever is queued without playing it.
     for (;;) {

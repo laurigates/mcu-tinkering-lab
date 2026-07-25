@@ -48,6 +48,16 @@
 // gemini_backend.c owns its own URL and model constants; nothing to configure here.
 
 // ========================================
+// Voice Persona
+// ========================================
+// Language + delivery style of everything the robot says. This is only the
+// boot default — the persona and the TTS voice are switchable at runtime with
+// the `voice` console command and persist in NVS, so tuning by ear does not
+// need a reflash. See voice_persona.h for how a persona reaches the words, the
+// audio, and the offline fallback line.
+#define VOICE_PERSONA_DEFAULT VOICE_PERSONA_FI_1950
+
+// ========================================
 // MQTT Remote Logging Configuration
 // ========================================
 #define MQTT_LOGGING_ENABLED 1
