@@ -35,7 +35,11 @@ static const char *TAG = "gemini_backend";
 /* Constants                                                                   */
 /* -------------------------------------------------------------------------- */
 
-#define GEMINI_MODEL "gemini-robotics-er-1.6"
+/* Model id must carry the "-preview" suffix — the bare "gemini-robotics-er-1.6"
+ * 404s on v1beta ("not found ... or is not supported for generateContent").
+ * Verified against ListModels (2026-07): the API advertises
+ * gemini-robotics-er-1.6-preview and gemini-robotics-er-1.5-preview. */
+#define GEMINI_MODEL "gemini-robotics-er-1.6-preview"
 #define GEMINI_BASE_URL \
     "https://generativelanguage.googleapis.com/v1beta/models/" GEMINI_MODEL ":generateContent"
 
@@ -50,9 +54,20 @@ static const char *TAG = "gemini_backend";
  *  buffer. A one-sentence reply is tiny; 4 kB also absorbs an error body. */
 #define NARRATE_RESPONSE_BUF_SIZE (4 * 1024)
 #define NARRATE_TIMEOUT_MS 15000
-/** Ample for one ≤25-word sentence; keeps thinking-capable models from
- *  spending the whole budget before emitting text. */
-#define NARRATE_MAX_OUTPUT_TOKENS 128
+/** Must cover thinking tokens *plus* the sentence: maxOutputTokens is the
+ *  combined budget, and thinking is spent first. gemini-flash-latest resolves to
+ *  a Gemini 3-era model that always thinks, so too small a value spends the whole
+ *  budget on thinking and returns finishReason=MAX_TOKENS with a sentence cut off
+ *  mid-word — or no text at all.
+ *
+ *  Sized from measurement, not guesswork, because thinking is *variable*: the
+ *  same prompt used 487–745 thought tokens across runs (a persona brief costs
+ *  more than plain English — that same prompt cost 395 in English). 512
+ *  truncated every time; 1024 happened to pass but leaves too little margin
+ *  above an observed 745. Raising the ceiling is close to free — thinking tokens
+ *  are billed whether or not the cap truncates the reply, so the cap only
+ *  decides if the sentence survives. */
+#define NARRATE_MAX_OUTPUT_TOKENS 2048
 
 /** HTTP response buffer.  16 kB matches the reference client; function-call
  *  responses are much smaller but the buffer is also used to absorb error
@@ -528,10 +543,15 @@ static char *build_narrate_json(const char *facts, bool is_update)
     cJSON *gen_config = cJSON_AddObjectToObject(root, "generationConfig");
     cJSON_AddNumberToObject(gen_config, "maxOutputTokens", NARRATE_MAX_OUTPUT_TOKENS);
     cJSON_AddNumberToObject(gen_config, "temperature", 0.7);
-    /* Disable thinking so the token budget is spent on the reply, not silent
-     * reasoning (a flash text model would otherwise risk an empty completion). */
+    /* Hold thinking down so most of the token budget reaches the reply.
+     * NOTE: the field is "thinkingLevel", not "thinkingBudget" — the numeric
+     * thinkingBudget is rejected outright by the Gemini 3-era model behind
+     * gemini-flash-latest, which is what made every narrate call fail with a
+     * bare HTTP 400 "Request contains an invalid argument". These models
+     * always think, so thinking cannot be switched off entirely; budget for it
+     * via NARRATE_MAX_OUTPUT_TOKENS instead. */
     cJSON *thinking = cJSON_AddObjectToObject(gen_config, "thinkingConfig");
-    cJSON_AddNumberToObject(thinking, "thinkingBudget", 0);
+    cJSON_AddStringToObject(thinking, "thinkingLevel", "low");
 
     char *body = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
@@ -650,7 +670,10 @@ esp_err_t gemini_backend_narrate(const char *facts, bool is_update, char *out, s
     if (err != ESP_OK || status != 200) {
         ESP_LOGW(TAG, "narrate request failed: %s status=%d", esp_err_to_name(err), status);
         if (acc.len > 0) {
-            ESP_LOGD(TAG, "narrate error body: %.*s", (int)acc.len, acc.buf);
+            /* Error at E, matching the planner path: at D this body is hidden
+             * at the default log level, which left a 400 showing only its
+             * status code and no indication of which field the API rejected. */
+            ESP_LOGE(TAG, "narrate error body: %.*s", (int)acc.len, acc.buf);
         }
         err = ESP_FAIL;
         goto cleanup;
