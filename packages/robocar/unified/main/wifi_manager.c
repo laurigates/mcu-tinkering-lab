@@ -46,7 +46,23 @@ static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_
         }
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
-        ESP_LOGI(TAG, "Got IP:" IPSTR, IP2STR(&event->ip_info.ip));
+        ESP_LOGI(TAG, "Got IP:" IPSTR ", mask:" IPSTR ", gw:" IPSTR,
+                 IP2STR(&event->ip_info.ip), IP2STR(&event->ip_info.netmask),
+                 IP2STR(&event->ip_info.gw));
+        /* Log the resolver(s) DHCP installed. Purely diagnostic — the firmware
+         * uses whatever DHCP supplies. This exists because a broken resolver
+         * presents as a silent getaddrinfo() EAI_FAIL from deep inside esp-tls,
+         * with nothing naming the resolver actually in use; printing it at
+         * connect time is what distinguishes a link/router fault from a
+         * firmware bug. A 0.0.0.0 entry means the AP offered no DNS server. */
+        esp_netif_dns_info_t dns = {0};
+        if (esp_netif_get_dns_info(event->esp_netif, ESP_NETIF_DNS_MAIN, &dns) == ESP_OK) {
+            ESP_LOGI(TAG, "DNS main (DHCP):" IPSTR, IP2STR(&dns.ip.u_addr.ip4));
+        }
+        if (esp_netif_get_dns_info(event->esp_netif, ESP_NETIF_DNS_BACKUP, &dns) == ESP_OK &&
+            dns.ip.u_addr.ip4.addr != 0) {
+            ESP_LOGI(TAG, "DNS backup (DHCP):" IPSTR, IP2STR(&dns.ip.u_addr.ip4));
+        }
         s_retry_num = 0;
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
     }
