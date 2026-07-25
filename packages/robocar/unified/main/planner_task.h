@@ -26,9 +26,26 @@
 extern "C" {
 #endif
 
-/** Planner loop period in milliseconds. Override at compile time if needed. */
+/** Planner loop period in milliseconds. Override at compile time if needed.
+ *
+ *  Bounded by the Gemini free-tier quota, not by control-loop preference:
+ *  gemini-robotics-er-1.6-preview allows 5 requests/minute
+ *  (GenerateRequestsPerMinutePerProjectPerModel-FreeTier). The ~1 Hz rate
+ *  ADR-016 describes is 60 RPM and drove the API into continuous HTTP 429s,
+ *  where every plan failed and the executor was force-stopped. 15 s = 4 RPM
+ *  leaves one request of headroom.
+ *
+ *  GOAL_STATE_DEFAULT_TTL_MS must stay >= this period, or goals expire between
+ *  plans and the robot stop-starts. Raise both together, and on a paid tier
+ *  lower both together. */
 #ifndef PLANNER_LOOP_PERIOD_MS
-#define PLANNER_LOOP_PERIOD_MS 1000U
+#define PLANNER_LOOP_PERIOD_MS 15000U
+#endif
+
+/** Cap on the exponential backoff after a failed plan, in extra loop periods.
+ *  Bounds worst-case recovery at (1 + this) * PLANNER_LOOP_PERIOD_MS. */
+#ifndef PLANNER_MAX_BACKOFF_PERIODS
+#define PLANNER_MAX_BACKOFF_PERIODS 4U
 #endif
 
 /**

@@ -69,6 +69,13 @@ static void planner_task(void *pvParameters)
 
     TickType_t last_wake_time = xTaskGetTickCount();
 
+    /* Extra periods to wait after a failed plan. Gemini answers a quota
+     * overrun with HTTP 429 and a retryDelay that *grows* while the client
+     * keeps asking (observed climbing 19 s -> 31 s under a 1 Hz loop), so
+     * retrying at full rate makes the outage longer. Capped so recovery stays
+     * bounded; reset on the first success. */
+    uint32_t backoff_periods = 0;
+
     while (1) {
         /* ---- 1. Capture frame ---- */
         camera_fb_t *fb = camera_capture();
@@ -108,16 +115,33 @@ static void planner_task(void *pvParameters)
             }
             ESP_LOGI(TAG, "Goal: %s | latency: %" PRIu32 " ms", goal_kind_name(goal.kind),
                      latency_ms);
+            backoff_periods = 0;
         } else {
-            ESP_LOGW(TAG, "gemini_backend_plan failed (%s) — forcing stop", esp_err_to_name(ret));
+            backoff_periods = (backoff_periods == 0) ? 1
+                              : (backoff_periods < PLANNER_MAX_BACKOFF_PERIODS)
+                                  ? backoff_periods * 2
+                                  : PLANNER_MAX_BACKOFF_PERIODS;
+            ESP_LOGW(TAG, "gemini_backend_plan failed (%s) — forcing stop, backing off %" PRIu32
+                          " extra period(s)",
+                     esp_err_to_name(ret), backoff_periods);
             goal_state_force_stop();
         }
 
         /* ---- 5. Return framebuffer ---- */
         camera_return_fb(fb);
 
-        /* ---- 6. Sleep until next period ---- */
-        vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(PLANNER_LOOP_PERIOD_MS));
+        /* ---- 6. Sleep until next period ----
+         * A request slower than the period (a 21 s DNS timeout beats a 15 s
+         * period) leaves the wake deadline in the past, and xTaskDelayUntil
+         * then returns immediately — so the loop would spin at full tilt
+         * exactly when the backend is already struggling. Resync on overrun
+         * so the pacing holds. */
+        if (xTaskDelayUntil(&last_wake_time,
+                            pdMS_TO_TICKS(PLANNER_LOOP_PERIOD_MS * (1 + backoff_periods))) ==
+            pdFALSE) {
+            vTaskDelay(pdMS_TO_TICKS(PLANNER_LOOP_PERIOD_MS));
+            last_wake_time = xTaskGetTickCount();
+        }
     }
 }
 
