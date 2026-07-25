@@ -28,24 +28,24 @@ extern "C" {
 #define RAW_USB_MAX_ENDPOINTS 7
 
 /* ── USB speed codes (mirror facedancer DeviceSpeed + rpc-protocol.md) ──── */
-#define RAW_USB_SPEED_LOW   1
-#define RAW_USB_SPEED_FULL  2
-#define RAW_USB_SPEED_HIGH  3
+#define RAW_USB_SPEED_LOW 1
+#define RAW_USB_SPEED_FULL 2
+#define RAW_USB_SPEED_HIGH 3
 
 /* ── Endpoint type codes (mirror USBTransferType) ──────────────────────── */
-#define RAW_USB_EP_CONTROL     0
+#define RAW_USB_EP_CONTROL 0
 #define RAW_USB_EP_ISOCHRONOUS 1
-#define RAW_USB_EP_BULK        2
-#define RAW_USB_EP_INTERRUPT   3
+#define RAW_USB_EP_BULK 2
+#define RAW_USB_EP_INTERRUPT 3
 
 /* ── Direction ─────────────────────────────────────────────────────────── */
 #define RAW_USB_DIR_OUT 0
-#define RAW_USB_DIR_IN  1
+#define RAW_USB_DIR_IN 1
 
 /* ── Connect quirks (bit mask); mirror moondancer QuirkFlag ────────────── */
 /* USB directions used internally by the DCD's ep_addr encoding. */
 #define RAW_USB_ADDR_EP_MASK 0x0F
-#define RAW_USB_ADDR_DIR_IN  0x80
+#define RAW_USB_ADDR_DIR_IN 0x80
 
 /* ── Connect quirks (bit mask); mirror moondancer QuirkFlag ────────────── */
 /** If set, the host drives SET_ADDRESS explicitly via raw_usb_set_address;
@@ -61,29 +61,29 @@ typedef enum {
 
 /* ── Runtime descriptor table (see docs/raw-usb-design.md) ─────────────── */
 typedef struct {
-    const uint8_t *device;        /**< 18-byte device descriptor */
-    const uint8_t *config;        /**< configuration (9 + Σintf) descriptor  */
-    const uint8_t *strings;       /**< packed string-set (LANGID + entries), or NULL */
-    uint16_t       device_len;
-    uint16_t       config_len;
-    uint16_t       strings_len;
+    const uint8_t *device;  /**< 18-byte device descriptor */
+    const uint8_t *config;  /**< configuration (9 + Σintf) descriptor  */
+    const uint8_t *strings; /**< packed string-set (LANGID + entries), or NULL */
+    uint16_t device_len;
+    uint16_t config_len;
+    uint16_t strings_len;
 } raw_usb_descriptors_t;
 
 /* ── Event types emitted to the host via usb_rpc_send_event() ──────────── */
 /** Mirror usb_rpc.h USB_RPC_EVENT_* payload shapes (see docs/rpc-protocol.md). */
 typedef enum {
     RAW_USB_EVENT_BUS_RESET = 0x01,
-    RAW_USB_EVENT_SETUP     = 0x02,   /**< ep, setup[8] */
-    RAW_USB_EVENT_OUT_PKT   = 0x03,   /**< ep, len, data[] */
-    RAW_USB_EVENT_SEND_DONE = 0x04,   /**< ep */
-    RAW_USB_EVENT_NAK       = 0x05,   /**< ep (suspected; M2/M4) */
+    RAW_USB_EVENT_SETUP = 0x02,     /**< ep, setup[8] */
+    RAW_USB_EVENT_OUT_PKT = 0x03,   /**< ep, len, data[] */
+    RAW_USB_EVENT_SEND_DONE = 0x04, /**< ep */
+    RAW_USB_EVENT_NAK = 0x05,       /**< ep (suspected; M2/M4) */
 } raw_usb_event_t;
 
 /* Lifecycle */
-esp_err_t raw_usb_init(void);   /**< Install USB ISR + empty event queue. */
+esp_err_t raw_usb_init(void); /**< Install USB ISR + empty event queue. */
 
-esp_err_t raw_usb_connect(const raw_usb_descriptors_t *desc,
-                          uint8_t ep0_max, uint8_t speed, uint8_t quirks);
+esp_err_t raw_usb_connect(const raw_usb_descriptors_t *desc, uint8_t ep0_max, uint8_t speed,
+                          uint8_t quirks);
 esp_err_t raw_usb_disconnect(void);
 esp_err_t raw_usb_reset(void);
 
@@ -96,7 +96,7 @@ esp_err_t raw_usb_ack_status(uint8_t dir, uint8_t ep);
 esp_err_t raw_usb_set_address(uint8_t addr, uint8_t defer);
 
 /* Introspection (valid outside pump task — ro) */
-bool            raw_usb_ready(void);                 /**< enumerated on a host? */
+bool raw_usb_ready(void); /**< enumerated on a host? */
 raw_usb_ep_state_t raw_usb_ep_state(uint8_t ep, uint8_t dir);
 
 /* Relay pump task (started by raw_usb_init; sole writer to the DCD). */

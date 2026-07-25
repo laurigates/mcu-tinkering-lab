@@ -30,6 +30,10 @@ EXCLUDES=(
     '*/build/*'
     '*/.esphome/*'
     '*/.venv/*'
+    # Vendored TinyUSB DCD port. Vendored sources are never rewritten:
+    # reformatting them makes every future upstream sync conflict, and the diff
+    # noise hides the port's own local changes.
+    '*/tinyusb_port/*'
 )
 
 # cppcheck flags shared by the whole-tree lint and the single-file hook.

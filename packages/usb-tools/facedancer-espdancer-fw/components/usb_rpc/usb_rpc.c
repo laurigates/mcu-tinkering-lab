@@ -16,7 +16,7 @@
 #include <errno.h>
 #include <stdbool.h>
 #include <string.h>
-#include <unistd.h>    /* close() */
+#include <unistd.h> /* close() */
 
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
@@ -72,7 +72,8 @@ static esp_err_t send_frame(uint8_t msg_id, const uint8_t *payload, uint16_t len
     uint16_t total = (uint16_t)(len + 1);
     uint8_t body[USB_RPC_MAX_PAYLOAD + 1];
     body[0] = msg_id;
-    if (len) memcpy(body + 1, payload, len);
+    if (len)
+        memcpy(body + 1, payload, len);
     uint8_t crc = crc8(body, total);
 
     uint8_t hdr[4];
@@ -82,11 +83,14 @@ static esp_err_t send_frame(uint8_t msg_id, const uint8_t *payload, uint16_t len
     hdr[3] = (uint8_t)(total & 0xFF);
 
     int n = send(s_conn.sock, hdr, 4, 0);
-    if (n != 4) return ESP_FAIL;
+    if (n != 4)
+        return ESP_FAIL;
     n = send(s_conn.sock, body, total, 0);
-    if (n != total) return ESP_FAIL;
+    if (n != total)
+        return ESP_FAIL;
     n = send(s_conn.sock, &crc, 1, 0);
-    if (n != 1) return ESP_FAIL;
+    if (n != 1)
+        return ESP_FAIL;
     return ESP_OK;
 }
 
@@ -100,16 +104,19 @@ static esp_err_t send_error(uint8_t in_reply_to, uint8_t code, const char *msg)
     uint8_t buf[1 + 64];
     buf[0] = code;
     size_t m = msg ? strnlen(msg, 63) : 0;
-    if (m) memcpy(buf + 1, msg, m);
+    if (m)
+        memcpy(buf + 1, msg, m);
     return send_frame(USB_RPC_ERROR, buf, (uint16_t)(1 + m));
 }
 
 esp_err_t usb_rpc_send_event(uint8_t event_type, const uint8_t *payload, uint16_t len)
 {
-    if (len > USB_RPC_MAX_PAYLOAD - 1) return ESP_ERR_INVALID_SIZE;
+    if (len > USB_RPC_MAX_PAYLOAD - 1)
+        return ESP_ERR_INVALID_SIZE;
     uint8_t buf[USB_RPC_MAX_PAYLOAD];
     buf[0] = event_type;
-    if (len) memcpy(buf + 1, payload, len);
+    if (len)
+        memcpy(buf + 1, payload, len);
     return send_frame(USB_RPC_EVENT, buf, (uint16_t)(1 + len));
 }
 
@@ -171,7 +178,8 @@ static bool read_full(int sock, uint8_t *dst, size_t want)
     size_t got = 0;
     while (got < want) {
         int n = recv(sock, dst + got, (int)(want - got), 0);
-        if (n <= 0) return false;
+        if (n <= 0)
+            return false;
         got += (size_t)n;
     }
     return true;
@@ -188,14 +196,19 @@ static void handle_connection(int sock)
     while (s_conn.connected) {
         /* Resync on magic. */
         uint8_t b[2];
-        if (!read_full(sock, b, 1)) break;
-        if (b[0] != USB_RPC_MAGIC0) continue;
-        if (!read_full(sock, b, 1)) break;
-        if (b[0] != USB_RPC_MAGIC1) continue;
+        if (!read_full(sock, b, 1))
+            break;
+        if (b[0] != USB_RPC_MAGIC0)
+            continue;
+        if (!read_full(sock, b, 1))
+            break;
+        if (b[0] != USB_RPC_MAGIC1)
+            continue;
 
         /* Length (body = msg_id + payload). */
         uint8_t lenb[2];
-        if (!read_full(sock, lenb, 2)) break;
+        if (!read_full(sock, lenb, 2))
+            break;
         uint16_t total = (uint16_t)((lenb[0] << 8) | lenb[1]);
         if (total == 0 || total > (USB_RPC_MAX_PAYLOAD + 1)) {
             ESP_LOGW(TAG, "bad frame len %u", total);
@@ -204,10 +217,12 @@ static void handle_connection(int sock)
 
         /* Body. */
         uint8_t body[USB_RPC_MAX_PAYLOAD + 1];
-        if (!read_full(sock, body, total)) break;
+        if (!read_full(sock, body, total))
+            break;
         /* CRC. */
         uint8_t crc_in;
-        if (!read_full(sock, &crc_in, 1)) break;
+        if (!read_full(sock, &crc_in, 1))
+            break;
         if (crc8(body, total) != crc_in) {
             ESP_LOGW(TAG, "crc mismatch — dropping frame");
             continue;
