@@ -13,6 +13,11 @@
  *                       narrate call fails, so an API outage does not drop the
  *                       robot back into another language mid-character)
  *
+ * The table holds the register that stays *constant* for a persona. What varies
+ * from line to line — openers, sentence shape, which canned fallback is used —
+ * lives in the `dialogue_pool_t` members and is drawn by dialogue_style.c; read
+ * that header before adding a phrase here that would then be said every time.
+ *
  * How style actually reaches the TTS model: Gemini exposes no style/accent/era
  * parameter — delivery is steered by natural-language prompting, i.e. the
  * documented "Say cheerfully: <text>" form. `tts_style` is that prefix.
@@ -33,6 +38,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 
+#include "dialogue_style.h"
 #include "esp_err.h"
 
 #ifdef __cplusplus
@@ -58,15 +64,25 @@ typedef struct {
     const char *voice;         /**< Default Gemini prebuilt voice name. */
     const char *tts_style;     /**< Delivery directive; prefixed as "<style>: <text>". */
     const char *text_brief;    /**< Register/idiom brief for text generation. */
-    const char *fallback_ok;   /**< Canned line: everything healthy. */
+
+    /* Per-utterance variation. The brief above is the persona's *constant*
+     * register; these are what keeps it from being said the same way every
+     * time. One entry is drawn from each pool per generated line and appended
+     * to the prompt — see dialogue_style.h. A persona may leave them zeroed,
+     * which just means it never varies. */
+    dialogue_pool_t openers; /**< How the line starts. */
+    dialogue_pool_t shapes;  /**< What shape/length the line takes. */
+    const char *avoid_lead;  /**< Localised "do not begin with these:" lead-in. */
+
+    dialogue_pool_t fallback_ok; /**< Canned lines: everything healthy. */
     /* The fault line is assembled as prefix + fault-list + suffix rather than
      * held as a printf format. A format string living in a data table is a
      * contract nothing enforces: any persona added with the wrong number or
      * type of conversions would be undefined behaviour at the snprintf() call,
      * and the compiler cannot warn about a non-literal format. */
-    const char *fallback_prefix; /**< Text before the fault list. */
-    const char *fallback_suffix; /**< Text after the fault list (e.g. "."). */
-    const char *fault_wifi;      /**< Localised subsystem names for the fault list. */
+    dialogue_pool_t fallback_prefix; /**< Openers for the fault list. */
+    const char *fallback_suffix;     /**< Text after the fault list (e.g. "."). */
+    const char *fault_wifi;          /**< Localised subsystem names for the fault list. */
     const char *fault_camera;
     const char *fault_motors;
     const char *fault_audio;

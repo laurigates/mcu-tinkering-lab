@@ -9,6 +9,7 @@
 
 #include "audio_player.h"
 #include "credentials_loader.h"
+#include "dialogue_style.h"
 #include "esp_app_desc.h"
 #include "esp_log.h"
 #include "esp_timer.h"
@@ -167,7 +168,9 @@ static void template_line(const robocar_status_t *s, char *out, size_t len)
     /* Wording and subsystem names come from the active persona: this line is
      * spoken exactly when the narrate call failed, and a hardcoded English
      * sentence there would break character precisely when the robot is already
-     * degraded. */
+     * degraded. The opener is drawn rather than fixed — an API outage lasts
+     * many announcements, and one canned sentence repeated through all of them
+     * is the most conspicuous repetition the robot can produce. */
     const voice_persona_t *persona = voice_persona_get();
 
     char faults[160];
@@ -186,9 +189,11 @@ static void template_line(const robocar_status_t *s, char *out, size_t len)
     }
 
     if (faults[0] == '\0') {
-        strlcpy(out, persona->fallback_ok, len);
+        const char *ok = dialogue_style_pick(&persona->fallback_ok, DIALOGUE_SLOT_FALLBACK);
+        strlcpy(out, ok ? ok : "", len);
     } else {
-        snprintf(out, len, "%s%s%s", persona->fallback_prefix, faults, persona->fallback_suffix);
+        const char *prefix = dialogue_style_pick(&persona->fallback_prefix, DIALOGUE_SLOT_FALLBACK);
+        snprintf(out, len, "%s%s%s", prefix ? prefix : "", faults, persona->fallback_suffix);
     }
 }
 
@@ -209,6 +214,10 @@ static void narrate_and_post(const robocar_status_t *status, const char *facts, 
 
     esp_err_t sp = speech_queue_post(line);
     if (sp == ESP_OK) {
+        /* Only once the line is actually queued: a dropped line is never heard,
+         * so telling the next prompt to avoid its opening would spend the
+         * avoid-list on phrasing nobody has had to sit through. */
+        dialogue_style_note_spoken(line);
         ESP_LOGI(TAG, "self-report%s: \"%s\"", is_update ? " (update)" : "", line);
     } else if (sp == ESP_ERR_NO_MEM) {
         ESP_LOGD(TAG, "speech queue full — dropped self-report: \"%s\"", line);

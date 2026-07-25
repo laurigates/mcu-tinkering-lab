@@ -11,6 +11,7 @@
 #include "planner_task.h"
 
 #include "camera.h"
+#include "dialogue_style.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -101,6 +102,10 @@ static void planner_task(void *pvParameters)
         if (speech[0] != '\0') {
             const esp_err_t sp_ret = speech_queue_post(speech);
             if (sp_ret == ESP_OK) {
+                /* Feeds the next prompt's "do not begin with" list. Only on a
+                 * successful post: a line dropped by a full queue is never
+                 * heard, so it is not a repetition anyone can notice. */
+                dialogue_style_note_spoken(speech);
                 ESP_LOGI(TAG, "Speech: \"%s\"", speech);
             } else if (sp_ret == ESP_ERR_NO_MEM) {
                 ESP_LOGD(TAG, "still speaking — dropped: \"%s\"", speech);

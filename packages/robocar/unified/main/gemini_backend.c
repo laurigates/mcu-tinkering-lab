@@ -22,6 +22,7 @@
 #include "base64.h"
 #include "cJSON.h"
 #include "credentials_loader.h"
+#include "dialogue_style.h"
 #include "esp_http_client.h"
 #include "esp_log.h"
 #include "esp_timer.h"
@@ -305,7 +306,16 @@ static char *build_request_json(const char *b64_image)
      * persona, which is switchable at runtime. The cadence is stated from
      * PLANNER_LOOP_PERIOD_MS so the model's sense of how often it is consulted
      * cannot drift from the loop that actually calls it. */
-    char system_prompt[1536];
+    const voice_persona_t *persona = voice_persona_get();
+
+    /* Drawn fresh per request — this is the whole anti-repetition mechanism.
+     * The persona brief is constant, so without a directive that differs call
+     * to call the model converges on one favourite opening and keeps it. */
+    char variation[DIALOGUE_STYLE_MAX];
+    const size_t vlen = dialogue_style_directive(&persona->openers, &persona->shapes,
+                                                 persona->avoid_lead, variation, sizeof(variation));
+
+    char system_prompt[2048];
     snprintf(system_prompt, sizeof(system_prompt),
              "You are the planning brain of a small wheeled robot. "
              "Examine the image and choose exactly one movement for the robot to take next "
@@ -317,8 +327,10 @@ static char *build_request_json(const char *b64_image)
              "on every frame. You are consulted about every %u seconds, so narrating "
              "every time would be tiresome. "
              "When you do call 'speak', the spoken text MUST follow this voice: %s "
+             "%s%s%s"
              "Respond ONLY with function calls — no prose, no markdown.",
-             PLANNER_LOOP_PERIOD_MS / 1000U, voice_persona_get()->text_brief);
+             PLANNER_LOOP_PERIOD_MS / 1000U, persona->text_brief,
+             vlen ? "For this one line only: " : "", variation, vlen ? " " : "");
     const char *SYSTEM_PROMPT = system_prompt;
 
     cJSON *root = cJSON_CreateObject();
@@ -493,7 +505,16 @@ esp_err_t gemini_backend_plan(const uint8_t *jpeg, size_t jpeg_len, goal_t *out_
 /** Build the text-only generateContent body for a spoken status line. */
 static char *build_narrate_json(const char *facts, bool is_update)
 {
-    char prompt[2048];
+    const voice_persona_t *persona = voice_persona_get();
+
+    /* Same per-call draw as the planner path. This one matters more, not less:
+     * the self-introduction is spoken on every boot from a prompt whose facts
+     * barely change, so it is the line a listener hears repeat. */
+    char variation[DIALOGUE_STYLE_MAX];
+    const size_t vlen = dialogue_style_directive(&persona->openers, &persona->shapes,
+                                                 persona->avoid_lead, variation, sizeof(variation));
+
+    char prompt[2560];
     snprintf(prompt, sizeof(prompt),
              "You are a small wheeled robot named Robocar, speaking aloud. "
              "Voice and language to use: %s\n\n"
@@ -501,12 +522,14 @@ static char *build_narrate_json(const char *facts, bool is_update)
              "%s"
              "Write ONE short, friendly spoken sentence (at most 25 words, plain text only — "
              "no markdown, no emoji, no quotes) %s and stating your status, naming anything that "
-             "is not responding. Report only the facts above; do not invent hardware.",
-             voice_persona_get()->text_brief, facts,
+             "is not responding. Report only the facts above; do not invent hardware."
+             "%s%s",
+             persona->text_brief, facts,
              is_update ? "This is a status UPDATE: a subsystem's health just changed — keep to "
                          "what changed. "
                        : "",
-             is_update ? "noting the change" : "introducing yourself");
+             is_update ? "noting the change" : "introducing yourself",
+             vlen ? "\n\nFor this one line only: " : "", variation);
 
     cJSON *root = cJSON_CreateObject();
 
@@ -521,7 +544,12 @@ static char *build_narrate_json(const char *facts, bool is_update)
 
     cJSON *gen_config = cJSON_AddObjectToObject(root, "generationConfig");
     cJSON_AddNumberToObject(gen_config, "maxOutputTokens", NARRATE_MAX_OUTPUT_TOKENS);
-    cJSON_AddNumberToObject(gen_config, "temperature", 0.7);
+    /* 0.9 rather than the original 0.7: the per-call variation directive does
+     * the real work of keeping lines distinct, but a warmer sampler stops the
+     * model from settling on one phrasing *within* a given directive. Not
+     * warmer than this — the prompt asks for a factual status report, and the
+     * "do not invent hardware" constraint is the thing temperature erodes. */
+    cJSON_AddNumberToObject(gen_config, "temperature", 0.9);
     /* Hold thinking down so most of the token budget reaches the reply.
      * NOTE: the field is "thinkingLevel", not "thinkingBudget" — the numeric
      * thinkingBudget is rejected outright by the Gemini 3-era model behind

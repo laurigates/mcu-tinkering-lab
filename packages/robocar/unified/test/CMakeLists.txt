@@ -101,6 +101,19 @@ target_link_libraries(test_base64_stream PRIVATE Threads::Threads m)
 add_test(NAME base64_stream COMMAND test_base64_stream)
 
 # -----------------------------------------------------------------------------
+# dialogue_style variation module (spoken-line repetition)
+#
+# dialogue_style.c is deliberately free of ESP-IDF and FreeRTOS (the PRNG is
+# seeded from outside), so it compiles on the host with no shims at all.
+# -----------------------------------------------------------------------------
+add_executable(test_dialogue_style
+    "${MAIN_SRC_DIR}/dialogue_style.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_dialogue_style.c"
+)
+target_link_libraries(test_dialogue_style PRIVATE Threads::Threads m)
+add_test(NAME dialogue_style COMMAND test_dialogue_style)
+
+# -----------------------------------------------------------------------------
 # gemini parse (Phase 5, gate G1, issue #228)
 #
 # Only built when cJSON is available. Skipped (with a message) otherwise so

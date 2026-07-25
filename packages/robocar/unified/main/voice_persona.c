@@ -9,6 +9,7 @@
 
 #include "config.h"
 #include "esp_log.h"
+#include "esp_random.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "nvs.h"
@@ -36,7 +37,90 @@ static const char *TAG = "voice_persona";
  * the examples this feature was requested with. Note they are dialectal/archaic
  * rather than standard 1950s written Finnish, so they are offered to the model
  * as flavour it *may* use, not as mandatory openers — forcing them into every
- * line reads as caricature. Adjust the brief freely; it is data, not logic. */
+ * line reads as caricature. Adjust the brief freely; it is data, not logic.
+ *
+ * Which is exactly why the period markers are NOT in `text_brief`. A brief that
+ * names one construction gets that construction every single time: naming
+ * "Asianlaita on oikeastaan niin, että ..." there made it the opening of
+ * practically every spoken line. The markers live in the `openers` pool below
+ * instead, so each one turns up on its share of utterances and the pool can
+ * also say "no opener at all". Keep `text_brief` to what should hold for
+ * *every* line, and put anything phrase-shaped in a pool. */
+
+/* --- fi-1950 --------------------------------------------------------------- */
+
+/* Directives are written in the persona's own language: a Finnish instruction
+ * keeps the model inside the register while it follows the instruction, where
+ * an English one tends to pull the reply toward English idiom. */
+static const char *const s_fi_openers[] = {
+    "Aloita suoraan asiasta, ilman mitään aloitussanaa.",
+    "Aloita empivällä täytesanalla, esimerkiksi \"Jaahas\", \"Tuota noin\" tai \"No niin\".",
+    "Aloita lyhyellä huudahduksella, esimerkiksi \"Kas\", \"Kappas\" tai \"Vai niin\".",
+    "Aloita ajan juhlallisella rakenteella, esimerkiksi \"Asianlaita on oikeastaan niin, "
+    "että ...\".",
+    "Aloita puhuttelemalla kuulijaa kohteliaasti, esimerkiksi \"Hyvä herra\" tai "
+    "\"Arvoisa kuulija\".",
+    "Aloita kysymyksellä ja vastaa siihen itse samassa lauseessa.",
+    "Aloita ajan tai paikan määreellä, esimerkiksi \"Täällä\", \"Nyt\" tai \"Tähän ehtooseen\".",
+};
+
+static const char *const s_fi_shapes[] = {
+    "Pidä lause hyvin lyhyenä, korkeintaan kymmenen sanaa.",
+    "Totea asia tyynesti ja vähäeleisesti.",
+    "Anna lauseeseen kevyt, kuiva sävy — älä kuitenkaan vitsaile.",
+    "Muotoile lause kohteliaana huomautuksena kuulijalle.",
+    "Käytä yhtä vanhahtavaa sanaa (esimerkiksi \"ehtoo\", \"jokseenkin\", \"varsin\") mausteena.",
+    "Sano asia suoraan ja koruttomasti, ilman kiertelyä.",
+};
+
+static const char *const s_fi_fallback_ok[] = {
+    "Hyvää päivää, minä olen Robocar, ja kaikki järjestelmät ovat kunnossa.",
+    "Jaahas. Robocar tässä, ja kaikki toimii moitteettomasti.",
+    "Kas, Robocar valmiina. Ei valittamista, kaikki on kunnossa.",
+    "No niin. Robocar raportoi: järjestelmät ovat kunnossa.",
+};
+
+static const char *const s_fi_fallback_prefix[] = {
+    "Hyvää päivää, minä olen Robocar. Asianlaita on tuota niin, että nämä osat eivät vastaa:",
+    "Jaahas. Robocar tässä, ja ikävä kyllä nämä osat eivät vastaa:",
+    "Kas. Robocar raportoi vian, sillä nämä osat eivät vastaa:",
+    "Tuota noin. Robocar tässä. Nämä osat ovat vaiti:",
+};
+
+/* --- en-default ------------------------------------------------------------ */
+
+static const char *const s_en_openers[] = {
+    "Start straight in on the observation, with no opening word at all.",
+    "Open with a short filler, such as \"Well\", \"Right\" or \"So\".",
+    "Open with a small exclamation, such as \"Ah\", \"Look at that\" or \"Huh\".",
+    "Open by addressing the listener directly.",
+    "Open with a question and answer it in the same sentence.",
+    "Open with where or when you are, such as \"Over here\" or \"Right now\".",
+};
+
+static const char *const s_en_shapes[] = {
+    "Keep it very short — ten words at most.",
+    "Say it flatly and matter-of-factly.",
+    "Give it a light, dry humour, but do not tell a joke.",
+    "Phrase it as a polite remark to the listener.",
+    "Say it plainly, without hedging.",
+    "Let a little curiosity show.",
+};
+
+static const char *const s_en_fallback_ok[] = {
+    "Hi, I'm Robocar and all my systems are online.",
+    "Robocar here. Everything checks out.",
+    "Well then. Robocar reporting, all systems nominal.",
+    "All good on my end. Robocar, ready when you are.",
+};
+
+static const char *const s_en_fallback_prefix[] = {
+    "Hi, I'm Robocar. These parts are not responding:",
+    "Robocar here, with bad news. These parts are not responding:",
+    "Well then. Robocar reporting a fault; these are not responding:",
+    "Robocar checking in. Silent parts:",
+};
+
 static const voice_persona_t s_personas[VOICE_PERSONA_COUNT] = {
     [VOICE_PERSONA_EN_DEFAULT] =
         {
@@ -45,9 +129,13 @@ static const voice_persona_t s_personas[VOICE_PERSONA_COUNT] = {
             .language_code = "en-US",
             .voice = "Kore",
             .tts_style = "Say in a friendly, natural tone",
-            .text_brief = "Speak plain, friendly contemporary English.",
-            .fallback_ok = "Hi, I'm Robocar and all my systems are online.",
-            .fallback_prefix = "Hi, I'm Robocar. These parts are not responding:",
+            .text_brief = "Speak plain, friendly contemporary English. Vary how you phrase "
+                          "things — do not reuse the same opening twice running.",
+            .openers = DIALOGUE_POOL(s_en_openers),
+            .shapes = DIALOGUE_POOL(s_en_shapes),
+            .avoid_lead = "Do not begin the sentence with any of these:",
+            .fallback_ok = DIALOGUE_POOL(s_en_fallback_ok),
+            .fallback_prefix = DIALOGUE_POOL(s_en_fallback_prefix),
             .fallback_suffix = ".",
             .fault_wifi = " WiFi",
             .fault_camera = " camera",
@@ -65,14 +153,14 @@ static const voice_persona_t s_personas[VOICE_PERSONA_COUNT] = {
             .text_brief =
                 "Puhu kuin 1950-luvun suomalaisen elokuvan hahmo (vrt. komisario Palmu): "
                 "kohteliasta, hieman vanhahtavaa yleiskieltä, teitittelyä ja herrasmiesmäistä "
-                "sävyä. Saat käyttää ajan täytesanoja ja empimistä, kuten \"tuota\", \"jaahas\" "
-                "ja \"no niin\", sekä vanhahtavia sanoja kuten \"ehtoo\" (ilta) — mausteena, et "
-                "joka lauseessa. Ajan tapaan muotoiltu rakenne, esimerkiksi \"Asianlaita on "
-                "oikeastaan niin, että ...\", sopii hyvin. Vältä nykyslangia, anglismeja, "
-                "lyhenteitä ja emojeita. Kirjoita yksi lyhyt puhuttu lause.",
-            .fallback_ok = "Hyvää päivää, minä olen Robocar, ja kaikki järjestelmät ovat kunnossa.",
-            .fallback_prefix = "Hyvää päivää, minä olen Robocar. Asianlaita on tuota niin, "
-                               "että nämä osat eivät vastaa:",
+                "sävyä. Vältä nykyslangia, anglismeja, lyhenteitä ja emojeita. Vaihtele "
+                "sanontaa: älä toista samaa aloitusta tai fraasia kerrasta toiseen. "
+                "Kirjoita yksi lyhyt puhuttu lause.",
+            .openers = DIALOGUE_POOL(s_fi_openers),
+            .shapes = DIALOGUE_POOL(s_fi_shapes),
+            .avoid_lead = "Älä aloita lausetta näillä sanoilla:",
+            .fallback_ok = DIALOGUE_POOL(s_fi_fallback_ok),
+            .fallback_prefix = DIALOGUE_POOL(s_fi_fallback_prefix),
             .fallback_suffix = ".",
             .fault_wifi = " verkkoyhteys",
             .fault_camera = " kamera",
@@ -121,6 +209,13 @@ void voice_persona_init(void)
     if (!s_lock) {
         s_lock = xSemaphoreCreateMutex();
     }
+
+    /* Seeded here because this is where the voice subsystem comes up, ahead of
+     * both consumers (the planner and self-report tasks). Without a seed the
+     * draw sequence is identical after every boot, which is audible in exactly
+     * the worst place: the self-introduction spoken at power-on would open the
+     * same way every single time — the complaint that motivated the pools. */
+    dialogue_style_seed(esp_random());
 
     nvs_handle_t h;
     if (nvs_open(NVS_NAMESPACE, NVS_READONLY, &h) != ESP_OK) {
@@ -183,6 +278,10 @@ esp_err_t voice_persona_set(const char *slug, bool persist)
     for (size_t i = 0; i < VOICE_PERSONA_COUNT; ++i) {
         if (strcmp(s_personas[i].slug, slug) == 0) {
             s_current = (voice_persona_id_t)i;
+            /* The avoid-list holds openings in the outgoing persona's language;
+             * carrying them into the new one asks the model not to start with
+             * phrases it was never going to use anyway. */
+            dialogue_style_reset_recent();
             ESP_LOGI(TAG, "persona -> '%s' (%s)", s_personas[i].slug, s_personas[i].language_code);
             return persist ? nvs_store(NVS_KEY_PERSONA, slug) : ESP_OK;
         }
