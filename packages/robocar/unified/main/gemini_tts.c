@@ -21,6 +21,7 @@
 #include "freertos/task.h"
 #include "pin_config.h"
 #include "speech_queue.h"
+#include "voice_persona.h"
 
 static const char *TAG = "gemini_tts";
 
@@ -35,8 +36,8 @@ static const char *TAG = "gemini_tts";
 #define TTS_URL \
     "https://generativelanguage.googleapis.com/v1beta/models/" TTS_MODEL ":generateContent"
 
-/** Prebuilt voice name. */
-#define TTS_VOICE "Kore"
+/* Voice name and language now come from the active persona (voice_persona.h),
+ * so they can be switched at runtime rather than pinned here. */
 
 /** Longer than the planner's budget: synthesis plus transferring a few
  *  hundred kB of base64 is slower than a function-call response. */
@@ -136,11 +137,19 @@ static char *build_request_json(const char *text)
         return NULL;
     }
 
+    const voice_persona_t *persona = voice_persona_get();
+
+    /* Delivery style is prompted, not parameterised — Gemini has no style/accent
+     * field, so the documented form is "<style directive>: <text to speak>".
+     * The directive is interpreted rather than read aloud (measured: a ~40-word
+     * directive, 12+ s if spoken, added 0.36 s of audio). */
     cJSON *contents = cJSON_AddArrayToObject(root, "contents");
     cJSON *content = cJSON_CreateObject();
     cJSON *parts = cJSON_AddArrayToObject(content, "parts");
     cJSON *part = cJSON_CreateObject();
-    cJSON_AddStringToObject(part, "text", text);
+    char styled[SPEECH_TEXT_MAX + 256];
+    snprintf(styled, sizeof(styled), "%s: %s", persona->tts_style, text);
+    cJSON_AddStringToObject(part, "text", styled);
     cJSON_AddItemToArray(parts, part);
     cJSON_AddItemToArray(contents, content);
 
@@ -149,9 +158,12 @@ static char *build_request_json(const char *text)
     cJSON_AddItemToArray(modalities, cJSON_CreateString("AUDIO"));
 
     cJSON *speech_cfg = cJSON_AddObjectToObject(gen_cfg, "speechConfig");
+    cJSON_AddStringToObject(speech_cfg, "languageCode", persona->language_code);
     cJSON *voice_cfg = cJSON_AddObjectToObject(speech_cfg, "voiceConfig");
     cJSON *prebuilt = cJSON_AddObjectToObject(voice_cfg, "prebuiltVoiceConfig");
-    cJSON_AddStringToObject(prebuilt, "voiceName", TTS_VOICE);
+    char voice[VOICE_PERSONA_VOICE_MAX];
+    voice_persona_effective_voice(voice, sizeof(voice));
+    cJSON_AddStringToObject(prebuilt, "voiceName", voice);
 
     char *json = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
@@ -246,6 +258,9 @@ esp_err_t gemini_tts_start(void)
         return ESP_FAIL;
     }
 
-    ESP_LOGI(TAG, "TTS task started (model=%s voice=%s)", TTS_MODEL, TTS_VOICE);
+    char voice[VOICE_PERSONA_VOICE_MAX];
+    voice_persona_effective_voice(voice, sizeof(voice));
+    ESP_LOGI(TAG, "TTS task started (model=%s persona=%s lang=%s voice=%s)", TTS_MODEL,
+             voice_persona_get()->slug, voice_persona_get()->language_code, voice);
     return ESP_OK;
 }

@@ -28,6 +28,8 @@
 #include "esp_timer.h"
 #include "gemini_parse.h"
 #include "goal_state.h"
+#include "planner_task.h"  /* PLANNER_LOOP_PERIOD_MS — keeps the stated cadence honest */
+#include "voice_persona.h"
 
 static const char *TAG = "gemini_backend";
 
@@ -309,17 +311,25 @@ static cJSON *build_tools(void)
  */
 static char *build_request_json(const char *b64_image)
 {
-    static const char *SYSTEM_PROMPT =
-        "You are the planning brain of a small wheeled robot. "
-        "Examine the image and choose exactly one movement for the robot to take next "
-        "by calling one of: drive, track, rotate, or stop. "
-        "Prefer 'track' when a target object is visible and centred in the frame. "
-        "Call 'stop' when the path is blocked or the scene is ambiguous. "
-        "You may ALSO call 'speak' in the same response to say one short sentence out "
-        "loud — do so only when the scene has changed in a way worth remarking on, not "
-        "on every frame. You are consulted about once per second, so narrating "
-        "continuously would be incoherent. "
-        "Respond ONLY with function calls — no prose, no markdown.";
+    /* Built per call rather than static: the spoken register follows the active
+     * persona, which is switchable at runtime. The cadence is stated from
+     * PLANNER_LOOP_PERIOD_MS so the model's sense of how often it is consulted
+     * cannot drift from the loop that actually calls it. */
+    char system_prompt[1536];
+    snprintf(system_prompt, sizeof(system_prompt),
+             "You are the planning brain of a small wheeled robot. "
+             "Examine the image and choose exactly one movement for the robot to take next "
+             "by calling one of: drive, track, rotate, or stop. "
+             "Prefer 'track' when a target object is visible and centred in the frame. "
+             "Call 'stop' when the path is blocked or the scene is ambiguous. "
+             "You may ALSO call 'speak' in the same response to say one short sentence out "
+             "loud — do so only when the scene has changed in a way worth remarking on, not "
+             "on every frame. You are consulted about every %u seconds, so narrating "
+             "every time would be tiresome. "
+             "When you do call 'speak', the spoken text MUST follow this voice: %s "
+             "Respond ONLY with function calls — no prose, no markdown.",
+             PLANNER_LOOP_PERIOD_MS / 1000U, voice_persona_get()->text_brief);
+    const char *SYSTEM_PROMPT = system_prompt;
 
     cJSON *root = cJSON_CreateObject();
 
@@ -515,15 +525,16 @@ cleanup:
 /** Build the text-only generateContent body for a spoken status line. */
 static char *build_narrate_json(const char *facts, bool is_update)
 {
-    char prompt[1024];
+    char prompt[2048];
     snprintf(prompt, sizeof(prompt),
              "You are a small wheeled robot named Robocar, speaking aloud. "
+             "Voice and language to use: %s\n\n"
              "Here are your live on-device subsystem facts:\n%s\n\n"
              "%s"
              "Write ONE short, friendly spoken sentence (at most 25 words, plain text only — "
              "no markdown, no emoji, no quotes) %s and stating your status, naming anything that "
              "is not responding. Report only the facts above; do not invent hardware.",
-             facts,
+             voice_persona_get()->text_brief, facts,
              is_update ? "This is a status UPDATE: a subsystem's health just changed — keep to "
                          "what changed. "
                        : "",

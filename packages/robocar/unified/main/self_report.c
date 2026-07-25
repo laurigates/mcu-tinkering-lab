@@ -19,6 +19,7 @@
 #include "i2c_bus.h"
 #include "mqtt_logger.h"
 #include "speech_queue.h"
+#include "voice_persona.h"
 #include "wifi_manager.h"
 
 static const char *TAG = "self_report";
@@ -163,25 +164,31 @@ static uint32_t status_signature(const robocar_status_t *s)
  * speech buffer. Names only what is wrong so a healthy robot stays brief. */
 static void template_line(const robocar_status_t *s, char *out, size_t len)
 {
-    char faults[128];
+    /* Wording and subsystem names come from the active persona: this line is
+     * spoken exactly when the narrate call failed, and a hardcoded English
+     * sentence there would break character precisely when the robot is already
+     * degraded. */
+    const voice_persona_t *persona = voice_persona_get();
+
+    char faults[160];
     faults[0] = '\0';
     if (!s->wifi_up) {
-        strlcat(faults, " WiFi", sizeof(faults));
+        strlcat(faults, persona->fault_wifi, sizeof(faults));
     }
     if (!s->camera_ok) {
-        strlcat(faults, " camera", sizeof(faults));
+        strlcat(faults, persona->fault_camera, sizeof(faults));
     }
     if (!s->i2c_bus_ok) {
-        strlcat(faults, " motors", sizeof(faults));
+        strlcat(faults, persona->fault_motors, sizeof(faults));
     }
     if (!s->audio_ok) {
-        strlcat(faults, " audio", sizeof(faults));
+        strlcat(faults, persona->fault_audio, sizeof(faults));
     }
 
     if (faults[0] == '\0') {
-        strlcpy(out, "Hi, I'm Robocar and all my systems are online.", len);
+        strlcpy(out, persona->fallback_ok, len);
     } else {
-        snprintf(out, len, "Hi, I'm Robocar. These parts are not responding:%s.", faults);
+        snprintf(out, len, persona->fallback_fmt, faults);
     }
 }
 
