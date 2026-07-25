@@ -46,7 +46,7 @@ The MCP23017 (1953W breakout, address 0x20) is exercised from the serial console
 |---------|--------|
 | `F` `B` `L` `R` `C` `W` `S` | Manual drive / rotate / stop — a ~1 s lease via `reactive_controller_manual()`, still subject to the obstacle reflex |
 | `gpio …` | MCP23017 expander (see above) |
-| `voice …` | Persona / TTS voice switching and auditioning |
+| `voice …` | Persona / TTS voice switching and auditioning; `voice vary` shows a drawn variation directive |
 | `sound beep\|melody\|alert` | Buzzer |
 | `servo pan\|tilt <deg>` | Pan/tilt servos |
 | `led <r> <g> <b>` | Both RGB LEDs |
@@ -79,6 +79,10 @@ The robot speaks through a MAX98357A I2S amplifier on GPIO7/8/9. See [ADR-019](.
 **Speech is a queue, not a goal.** `speak` is deliberately *not* a `goal_kind_t` — it travels via `speech_queue` alongside `goal_state`. Goals are last-write-wins with a TTL that collapses to STOP; applying those semantics to speech would truncate sentences mid-word and make talking and driving mutually exclusive. If you find yourself adding `GOAL_KIND_SPEAK`, read the header comment in `speech_queue.h` first.
 
 The pipeline is two Gemini calls: Robotics-ER decides *what* to say (riding the existing planner call — no extra vision inference), then `gemini-3.1-flash-tts-preview` renders it. Audio is 24 kHz mono PCM, base64 inline, no WAV header — decoded **incrementally** into a PSRAM ring by `base64_stream_feed()` while the player task drains it into I2S, so playback starts before the download finishes. A few seconds of audio is hundreds of kB; it can never be buffered whole.
+
+**What the robot says varies per utterance; what it *sounds like* does not.** The persona (`voice_persona.c`) fixes the language, voice and register — the parts that must hold for every line. Anything phrase-shaped lives in that persona's `dialogue_pool_t` pools instead, and `dialogue_style.c` draws one opener and one sentence-shape per generated line, appends them to the prompt, and adds the openings of the last few spoken lines as a "do not begin with these" list. This is prompt-side only: no extra API call, no extra latency, a few hundred bytes of rodata.
+
+The trap it exists to prevent: a phrase named in `text_brief` gets used *every single time*. Naming the period construction "Asianlaita on oikeastaan niin, että ..." there made it the opening of practically every spoken line. Put such a phrase in the `openers` pool, where it turns up on its share of lines and the pool can also say "no opener at all". `voice vary` on the console prints a freshly drawn directive so pools can be tuned without waiting out a 15 s planner period per sample.
 
 Two hardware consequences worth knowing before touching this:
 
@@ -129,6 +133,7 @@ Key settings that matter:
 - Don't call `motor_controller.c` directly from anywhere except `reactive_controller.c` — the executor owns motor output. Console/manual movement goes through `reactive_controller_manual()`, which takes a short lease the executor applies *after* the obstacle reflex; a second task writing the PCA9685 directly both fought the 30 Hz executor and bypassed the reflex
 - Don't add goal sources outside `planner_task.c` — structured goals keep the two layers decoupled. If a new goal source is needed, it should write `goal_state` the same way the planner does
 - Don't fold speech into `goal_t` — see the Voice section above and `speech_queue.h`
+- Don't put a specific phrase, opener or filler word in a persona's `text_brief` — everything named there is said every time. Phrase-shaped flavour goes in the `openers`/`shapes` pools; see `dialogue_style.h`
 - Don't "normalise" the audio path to 16 kHz to match the ThinkPack projects — 24 kHz is Gemini TTS's native rate, and matching it avoids a resampling stage entirely
 - Don't buffer the TTS response whole — it's hundreds of kB and the response buffer is 16 kB. The streaming decoder exists for this reason
 - Don't add direct GPIO motor control — everything goes through PCA9685 via `motor_controller.c`

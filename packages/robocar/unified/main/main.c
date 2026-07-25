@@ -31,6 +31,7 @@
 #include "config.h"
 #include "credentials_loader.h"
 #include "credentials_validator.h"
+#include "dialogue_style.h"
 #include "gemini_tts.h"
 #include "goal_state.h"
 #include "gpio_expander.h"
@@ -316,9 +317,15 @@ static void handle_periph_cmd(const char *buf)
  * `voice <slug>`           — switch persona (e.g. `voice fi-1950`)
  * `voice say <text>`       — speak a line now, to audition the persona
  * `voice name <VoiceName>` — override the prebuilt voice (`voice name -` clears)
+ * `voice vary`             — draw and print a variation directive (see below)
  *
  * Switching and auditioning are runtime rather than compile-time because only a
- * listener can judge a voice; a reflash per candidate is far too slow a loop. */
+ * listener can judge a voice; a reflash per candidate is far too slow a loop.
+ *
+ * `voice vary` exists for the same reason one step further in: the variation
+ * pools (dialogue_style.h) only pay off if their entries read naturally in the
+ * persona's language, and the alternative way to see what the model is being
+ * told is to wait out a 15 s planner period per sample. */
 static void handle_voice_cmd(const char *buf)
 {
     char op[24] = {0};
@@ -336,7 +343,27 @@ static void handle_voice_cmd(const char *buf)
             }
             printf("  %c %-12s %s\n", (p == cur) ? '*' : ' ', p->slug, p->label);
         }
-        printf("  usage: voice <slug> | voice say <text> | voice name <VoiceName|->\n");
+        printf(
+            "  usage: voice <slug> | voice say <text> | voice name <VoiceName|-> | voice vary\n");
+        return;
+    }
+
+    if (strcmp(op, "vary") == 0) {
+        const voice_persona_t *cur = voice_persona_get();
+        char directive[DIALOGUE_STYLE_MAX];
+        char recent[DIALOGUE_RECENT_SLOTS * (DIALOGUE_OPENING_MAX + 4)];
+
+        /* The avoid-list is printed on its own line as well as inside the
+         * directive: it is the only part carried over from what was really
+         * spoken, so it is worth seeing even when the persona has no pools. */
+        printf("voice: avoiding %s\n",
+               dialogue_style_recent_openings(recent, sizeof(recent)) ? recent : "(nothing yet)");
+        if (dialogue_style_directive(&cur->openers, &cur->shapes, cur->avoid_lead, directive,
+                                     sizeof(directive)) > 0) {
+            printf("voice: vary \"%s\"\n", directive);
+        } else {
+            printf("voice: persona '%s' has no variation pools\n", cur->slug);
+        }
         return;
     }
 

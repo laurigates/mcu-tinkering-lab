@@ -17,6 +17,7 @@ idf_component_register(
         "audio_player.c"
         "gemini_tts.c"
         "voice_persona.c"
+        "dialogue_style.c"
         "ultrasonic.c"
         "reactive_controller.c"
         "planner_task.c"
