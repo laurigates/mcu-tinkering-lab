@@ -28,7 +28,7 @@
 #include "esp_timer.h"
 #include "gemini_parse.h"
 #include "goal_state.h"
-#include "planner_task.h"  /* PLANNER_LOOP_PERIOD_MS — keeps the stated cadence honest */
+#include "planner_task.h" /* PLANNER_LOOP_PERIOD_MS — keeps the stated cadence honest */
 #include "voice_persona.h"
 
 static const char *TAG = "gemini_backend";
@@ -129,7 +129,8 @@ static esp_err_t http_event_handler(esp_http_client_event_t *evt)
 
 /**
  * Build the tool declaration array that instructs Gemini to respond with one
- * of drive / track / rotate / stop function calls.
+ * of drive / track / rotate / stop function calls, optionally accompanied by a
+ * speak call (which is not a motion goal — see the note at its declaration).
  *
  * Schema follows the Gemini API "functionDeclarations" format:
  *   https://ai.google.dev/api/generate-content#v1beta.Tool
@@ -174,17 +175,6 @@ static cJSON *build_tools(void)
         cJSON_AddItemToArray(required, cJSON_CreateString("speed_pct"));
         cJSON_AddItemToObject(params, "required", required);
 
-        cJSON *decl = cJSON_CreateObject();
-        cJSON_AddItemToObject(decl, "functionDeclarations",
-                              cJSON_CreateArray()); /* replaced below */
-        /* Simpler: add fn directly into a declarations array inside the tool */
-        cJSON_Delete(decl);
-
-        /* The Gemini API wraps declarations in a "tools" array where each
-         * element has a "functionDeclarations" key.  We collect all four
-         * functions into a single tool object; build that object outside this
-         * helper and just return the individual function objects here.
-         * Restructure: return fn objects via the outer array directly. */
         cJSON_AddItemToArray(tools_arr, fn);
     }
 
@@ -303,7 +293,7 @@ static cJSON *build_tools(void)
  *       { "inlineData": { "mimeType": "image/jpeg", "data": "<b64>" } },
  *       { "text": "<system prompt>" }
  *   ]}],
- *   "tools": [{ "functionDeclarations": [ ...four functions... ] }],
+ *   "tools": [{ "functionDeclarations": [ ...five functions... ] }],
  *   "generationConfig": {
  *     "thinkingConfig": { "thinkingBudget": 0 }
  *   }
@@ -351,7 +341,7 @@ static char *build_request_json(const char *b64_image)
 
     cJSON_AddItemToArray(contents, content);
 
-    /* tools — one tool object containing all four function declarations */
+    /* tools — one tool object containing all five function declarations */
     cJSON *tools_arr = cJSON_AddArrayToObject(root, "tools");
     cJSON *tool_obj = cJSON_CreateObject();
     cJSON *fn_decls = build_tools(); /* array of function objects */

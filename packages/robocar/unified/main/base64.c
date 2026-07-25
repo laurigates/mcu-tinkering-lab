@@ -15,14 +15,14 @@ size_t base64_encode_length(size_t input_length)
     return ((input_length + 2) / 3) * 4 + 1;  // +1 for null terminator
 }
 
-int base64_encode(const uint8_t *input, size_t input_length, char *output, size_t *output_length)
+int base64_encode(const uint8_t *input, size_t input_length, char *output, size_t *inout_length)
 {
-    if (!input || !output || !output_length) {
+    if (!input || !output || !inout_length) {
         return -1;
     }
 
     size_t required_length = base64_encode_length(input_length);
-    if (*output_length < required_length) {
+    if (*inout_length < required_length) {
         return -1;
     }
 
@@ -55,7 +55,7 @@ int base64_encode(const uint8_t *input, size_t input_length, char *output, size_
     }
 
     output[j] = '\0';
-    *output_length = j;
+    *inout_length = j;
     return 0;
 }
 

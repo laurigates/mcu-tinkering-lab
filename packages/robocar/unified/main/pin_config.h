@@ -154,15 +154,11 @@
 // Convert pulse width (us) to PCA9685 count at 200Hz
 #define SERVO_PULSE_TO_COUNT(pulse_us) ((uint16_t)(((uint32_t)(pulse_us) * 4096) / SERVO_PERIOD_US))
 
-#define SERVO_MIN_COUNT SERVO_PULSE_TO_COUNT(SERVO_MIN_PULSE_US)
-#define SERVO_MAX_COUNT SERVO_PULSE_TO_COUNT(SERVO_MAX_PULSE_US)
-#define SERVO_CENTER_COUNT SERVO_PULSE_TO_COUNT(SERVO_CENTER_PULSE_US)
-
-// Servo range limits (degrees from center)
-#define SERVO_PAN_MIN_DEG -90
-#define SERVO_PAN_MAX_DEG 90
-#define SERVO_TILT_MIN_DEG -45
-#define SERVO_TILT_MAX_DEG 45
+// Servo travel limits live in servo_controller.h as SERVO_PAN_MIN_ANGLE /
+// SERVO_PAN_MAX_ANGLE / SERVO_TILT_MIN_ANGLE / SERVO_TILT_MAX_ANGLE, which is
+// what servo_controller.c actually enforces. A second copy here (as *_DEG,
+// plus unused *_COUNT wrappers) was referenced by nothing and could silently
+// drift out of agreement with the limits in force.
 
 // ========================================
 // FreeRTOS Task Configuration

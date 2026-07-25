@@ -22,6 +22,10 @@
 
 static const char *TAG = "mqtt_logger";
 
+/** Pause before retrying a re-queued log entry, so the processing task always
+ *  blocks once per iteration while the broker is unreachable. */
+#define MQTT_LOG_RETRY_BACKOFF_MS 500
+
 // Internal structures
 typedef struct {
     char *message;
@@ -76,6 +80,9 @@ esp_err_t mqtt_logger_init(const mqtt_logger_config_t *config)
         return ESP_OK;
     }
 
+    // Declared up front so the shared cleanup path below can set it.
+    esp_err_t ret = ESP_OK;
+
     // Copy configuration
     memcpy(&s_context.config, config, sizeof(mqtt_logger_config_t));
 
@@ -99,13 +106,7 @@ esp_err_t mqtt_logger_init(const mqtt_logger_config_t *config)
         !s_context.config.log_topic || !s_context.config.status_topic ||
         !s_context.config.command_topic) {
         ESP_LOGE(TAG, "Failed to duplicate config strings (out of memory)");
-        free((void *)s_context.config.broker_uri);
-        free((void *)s_context.config.client_id);
-        free((void *)s_context.config.log_topic);
-        free((void *)s_context.config.status_topic);
-        free((void *)s_context.config.command_topic);
-        memset(&s_context.config, 0, sizeof(s_context.config));
-        return ESP_ERR_NO_MEM;
+        goto fail_free_strings;
     }
 
     if (config->username) {
@@ -119,7 +120,7 @@ esp_err_t mqtt_logger_init(const mqtt_logger_config_t *config)
     s_context.mutex = xSemaphoreCreateMutex();
     if (!s_context.mutex) {
         ESP_LOGE(TAG, "Failed to create mutex");
-        return ESP_ERR_NO_MEM;
+        goto fail_free_strings;
     }
 
     // Create log queue
@@ -128,7 +129,8 @@ esp_err_t mqtt_logger_init(const mqtt_logger_config_t *config)
     if (!s_context.log_queue) {
         ESP_LOGE(TAG, "Failed to create log queue");
         vSemaphoreDelete(s_context.mutex);
-        return ESP_ERR_NO_MEM;
+        s_context.mutex = NULL;
+        goto fail_free_strings;
     }
 
     // Configure MQTT client
@@ -151,21 +153,26 @@ esp_err_t mqtt_logger_init(const mqtt_logger_config_t *config)
     if (!s_context.client) {
         ESP_LOGE(TAG, "Failed to initialize MQTT client");
         vQueueDelete(s_context.log_queue);
+        s_context.log_queue = NULL;
         vSemaphoreDelete(s_context.mutex);
-        return ESP_ERR_NO_MEM;
+        s_context.mutex = NULL;
+        goto fail_free_strings;
     }
 
     // Register event handler
     esp_mqtt_client_register_event(s_context.client, ESP_EVENT_ANY_ID, mqtt_event_handler, NULL);
 
     // Start MQTT client
-    esp_err_t ret = esp_mqtt_client_start(s_context.client);
+    ret = esp_mqtt_client_start(s_context.client);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to start MQTT client: %s", esp_err_to_name(ret));
         esp_mqtt_client_destroy(s_context.client);
+        s_context.client = NULL;
         vQueueDelete(s_context.log_queue);
+        s_context.log_queue = NULL;
         vSemaphoreDelete(s_context.mutex);
-        return ret;
+        s_context.mutex = NULL;
+        goto fail_free_strings_ret;
     }
 
     // Create log processing task
@@ -175,9 +182,12 @@ esp_err_t mqtt_logger_init(const mqtt_logger_config_t *config)
         ESP_LOGE(TAG, "Failed to create log processing task");
         esp_mqtt_client_stop(s_context.client);
         esp_mqtt_client_destroy(s_context.client);
+        s_context.client = NULL;
         vQueueDelete(s_context.log_queue);
+        s_context.log_queue = NULL;
         vSemaphoreDelete(s_context.mutex);
-        return ESP_ERR_NO_MEM;
+        s_context.mutex = NULL;
+        goto fail_free_strings;
     }
 
     // Initialize stats
@@ -192,6 +202,22 @@ esp_err_t mqtt_logger_init(const mqtt_logger_config_t *config)
     ESP_LOGI(TAG, "Log topic: %s", s_context.config.log_topic);
 
     return ESP_OK;
+
+    /* One cleanup path for every post-strdup failure. Each of these returns used
+     * to leak all seven duplicated strings; free(NULL) is a no-op, so the label
+     * is safe from the first strdup onward. */
+fail_free_strings:
+    ret = ESP_ERR_NO_MEM;
+fail_free_strings_ret:
+    free((void *)s_context.config.broker_uri);
+    free((void *)s_context.config.client_id);
+    free((void *)s_context.config.log_topic);
+    free((void *)s_context.config.status_topic);
+    free((void *)s_context.config.command_topic);
+    free((void *)s_context.config.username);
+    free((void *)s_context.config.password);
+    memset(&s_context.config, 0, sizeof(s_context.config));
+    return ret;
 }
 
 esp_err_t mqtt_logger_deinit(void)
@@ -572,6 +598,14 @@ static void log_processing_task(void *pvParameters)
     ESP_LOGI(TAG, "Log processing task started");
 
     while (1) {
+        /* Set whenever an entry is put back on the queue. The 1000 ms receive
+         * timeout below only applies to an *empty* queue: with anything
+         * buffered, receive returns immediately, the entry goes straight back,
+         * and the loop contains no blocking call at all — a 100 % CPU spin for
+         * as long as the broker is unreachable. The delay guarantees the task
+         * blocks at least once per iteration. */
+        bool backoff = false;
+
         // Wait for log messages or notification
         if (xQueueReceive(s_context.log_queue, &entry, pdMS_TO_TICKS(1000)) == pdTRUE) {
             if (s_context.connected) {
@@ -600,6 +634,7 @@ static void log_processing_task(void *pvParameters)
                     if (xQueueSendToFront(s_context.log_queue, &entry, 0) != pdTRUE) {
                         cleanup_log_entry(&entry);
                     }
+                    backoff = true;
                 } else {
                     cleanup_log_entry(&entry);
                 }
@@ -608,12 +643,17 @@ static void log_processing_task(void *pvParameters)
                 if (xQueueSendToBack(s_context.log_queue, &entry, 0) != pdTRUE) {
                     cleanup_log_entry(&entry);
                 }
+                backoff = true;
             }
         }
 
         // Check for task notifications (flush request)
         if (ulTaskNotifyTake(pdFALSE, 0)) {
             ESP_LOGD(TAG, "Flush requested");
+        }
+
+        if (backoff) {
+            vTaskDelay(pdMS_TO_TICKS(MQTT_LOG_RETRY_BACKOFF_MS));
         }
     }
 }

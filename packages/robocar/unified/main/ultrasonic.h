@@ -53,6 +53,22 @@ extern "C" {
 #define ULTRASONIC_ECHO_TIMEOUT_US 40000U
 
 /**
+ * RMT RX idle threshold, in ms.
+ *
+ * Reception completes only after this much line-idle following the last edge,
+ * so it is added to every measurement's latency — and it must exceed the
+ * longest echo we care about (400 cm ≈ 23.2 ms) or a long echo gets truncated
+ * mid-pulse. 25 ms satisfies both and stays under the 32.767 ms hardware cap
+ * documented in .claude/rules/esp-idf-rmt-rx.md.
+ *
+ * Consequence worth knowing: a no-echo measurement blocks for roughly
+ * ULTRASONIC_ECHO_TIMEOUT_US + this, which is longer than the reactive
+ * executor's 33 ms period. The executor's overrun guard keeps IDLE fed, but the
+ * loop rate does drop while the sensor is unanswered.
+ */
+#define ULTRASONIC_RMT_IDLE_MS 25U
+
+/**
  * @brief Initialise the ultrasonic driver.
  *
  * Configures TRIG as a GPIO output and attempts to claim an RMT RX channel for

@@ -188,7 +188,7 @@ static void template_line(const robocar_status_t *s, char *out, size_t len)
     if (faults[0] == '\0') {
         strlcpy(out, persona->fallback_ok, len);
     } else {
-        snprintf(out, len, persona->fallback_fmt, faults);
+        snprintf(out, len, "%s%s%s", persona->fallback_prefix, faults, persona->fallback_suffix);
     }
 }
 
