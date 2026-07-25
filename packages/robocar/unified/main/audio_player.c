@@ -34,7 +34,6 @@ static i2s_chan_handle_t s_tx_chan = NULL;
 static RingbufHandle_t s_ring = NULL;
 static TaskHandle_t s_task = NULL;
 static volatile bool s_channel_active = false;
-static volatile bool s_utterance_ended = false;
 
 /* Odd trailing byte held back from the previous audio_player_write so only
  * 16-bit-aligned runs enter the ring. See audio_player_write. */
@@ -152,7 +151,6 @@ static void player_task(void *arg)
             // (or stalled). Power the amp's clock down.
             if (s_channel_active) {
                 channel_set_active(false);
-                s_utterance_ended = false;
             }
             continue;
         }
@@ -203,6 +201,13 @@ esp_err_t audio_player_init(void)
                                 AUDIO_PLAYER_TASK_PRIORITY, &s_task, AUDIO_PLAYER_TASK_CORE);
     if (ok != pdPASS) {
         ESP_LOGE(TAG, "failed to create player task");
+        // Mirror the i2s_setup() failure path: without this the 96 kB PSRAM
+        // ring and the I2S channel stay allocated with nothing able to use or
+        // release them, since s_task stays NULL and a retry re-allocates.
+        i2s_del_channel(s_tx_chan);
+        s_tx_chan = NULL;
+        vRingbufferDeleteWithCaps(s_ring);
+        s_ring = NULL;
         return ESP_FAIL;
     }
 
@@ -234,8 +239,6 @@ esp_err_t audio_player_write(const uint8_t *pcm, size_t bytes, uint32_t timeout_
     if (!pcm || bytes == 0) {
         return ESP_OK;
     }
-
-    s_utterance_ended = false;
 
     /* Keep the byte ring 16-bit aligned. The base64 decoder emits 3-byte
      * groups, so `bytes` is frequently odd; sending odd-length runs into a
@@ -270,7 +273,6 @@ esp_err_t audio_player_write(const uint8_t *pcm, size_t bytes, uint32_t timeout_
 
 void audio_player_end_utterance(void)
 {
-    s_utterance_ended = true;
     // Drop a dangling half-sample (≤1 byte, inaudible) so it cannot prepend to,
     // and misalign, the next utterance.
     s_have_carry = false;
@@ -293,16 +295,6 @@ void audio_player_abort(void)
         }
         vRingbufferReturnItem(s_ring, item);
     }
-
-    s_utterance_ended = true;
-}
-
-bool audio_player_is_busy(void)
-{
-    if (!s_ring) {
-        return false;
-    }
-    return s_channel_active || xRingbufferGetCurFreeSize(s_ring) < AUDIO_RING_BYTES;
 }
 
 bool audio_player_is_ready(void)

@@ -1,6 +1,7 @@
 /**
  * @file planner_task.h
- * @brief 1 Hz planner task — calls Gemini Robotics-ER 1.6 and writes goals.
+ * @brief Gemini planner task (PLANNER_LOOP_PERIOD_MS, 15 s default) — calls Gemini Robotics-ER 1.6
+ * and writes goals.
  *
  * Runs pinned to Core 1 (camera/network core).  Each iteration:
  *   1. Captures a JPEG frame via camera_capture().
@@ -13,7 +14,7 @@
  * The reactive executor (Core 0, 30 Hz) reads goals independently; this task
  * only writes.
  *
- * Loop period: PLANNER_LOOP_PERIOD_MS (default 1000 ms, configurable).
+ * Loop period: PLANNER_LOOP_PERIOD_MS (15 s default, quota-bound — see the note below).
  * Stack: 8192 bytes (holds JPEG reference, TLS context, cJSON parse).
  * Priority: 3 (below reactive_controller=5, motor_task=6).
  */

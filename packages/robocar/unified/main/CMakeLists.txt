@@ -10,6 +10,7 @@ idf_component_register(
         "camera.c"
         "base64.c"
         "gemini_backend.c"
+        "gemini_http.c"
         "gemini_parse.c"
         "goal_state.c"
         "speech_queue.c"
@@ -23,7 +24,6 @@ idf_component_register(
         "credentials_loader.c"
         "wifi_manager.c"
         "mqtt_logger.c"
-        "system_state.c"
         "ota_manager.c"
     INCLUDE_DIRS "."
     REQUIRES
@@ -39,7 +39,6 @@ idf_component_register(
         "driver"
         "espressif__mdns"
         "mqtt"
-        "esp_https_ota"
         "app_update"
         "improv-wifi"
         "esp_timer"

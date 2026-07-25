@@ -39,6 +39,7 @@ typedef enum {
     SELF_REPORT_SUBSYS_CAMERA = 0,
     SELF_REPORT_SUBSYS_I2C_BUS,  //!< mux + PCA9685: motors, servos, LEDs
     SELF_REPORT_SUBSYS_AUDIO,
+    SELF_REPORT_SUBSYS_PLANNER,  //!< Gemini planner task (needs WiFi + API key)
 } self_report_subsystem_t;
 
 /**

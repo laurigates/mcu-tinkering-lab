@@ -59,8 +59,14 @@ typedef struct {
     const char *tts_style;     /**< Delivery directive; prefixed as "<style>: <text>". */
     const char *text_brief;    /**< Register/idiom brief for text generation. */
     const char *fallback_ok;   /**< Canned line: everything healthy. */
-    const char *fallback_fmt;  /**< Canned line with one %s for the fault list. */
-    const char *fault_wifi;    /**< Localised subsystem names for the fault list. */
+    /* The fault line is assembled as prefix + fault-list + suffix rather than
+     * held as a printf format. A format string living in a data table is a
+     * contract nothing enforces: any persona added with the wrong number or
+     * type of conversions would be undefined behaviour at the snprintf() call,
+     * and the compiler cannot warn about a non-literal format. */
+    const char *fallback_prefix; /**< Text before the fault list. */
+    const char *fallback_suffix; /**< Text after the fault list (e.g. "."). */
+    const char *fault_wifi;      /**< Localised subsystem names for the fault list. */
     const char *fault_camera;
     const char *fault_motors;
     const char *fault_audio;

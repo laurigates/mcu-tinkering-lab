@@ -65,7 +65,9 @@ static const char *TAG = "reactive_ctrl";
  * ---------------------------------------------------------------------- */
 
 static TaskHandle_t s_task_handle = NULL;
-static bool s_running = false;
+/* volatile: written by reactive_controller_stop() from another task and polled
+ * as the executor loop condition, so the compiler must not cache it. */
+static volatile bool s_running = false;
 
 /* Telemetry — written by executor task, read by any task under spinlock. */
 static portMUX_TYPE s_telem_mux = portMUX_INITIALIZER_UNLOCKED;
@@ -74,7 +76,15 @@ static reactive_telemetry_t s_telemetry = {
     .reflex_active = false,
     .loop_hz = 0,
     .stack_high_water = 0,
+    .manual_active = false,
+    .sensor_failed = false,
 };
+
+/* Manual override lease — written by any task, read by the executor. */
+static portMUX_TYPE s_manual_mux = portMUX_INITIALIZER_UNLOCKED;
+static reactive_manual_cmd_t s_manual_cmd = REACTIVE_MANUAL_STOP;
+static uint8_t s_manual_speed = 0;
+static int64_t s_manual_expiry_us = 0;
 
 /* -------------------------------------------------------------------------
  * Skid-steer helpers
@@ -171,6 +181,36 @@ static void execute_rotate(const goal_t *goal)
     }
 }
 
+/** Apply a manual override command. Shared by the target and host-test builds. */
+static void execute_manual(reactive_manual_cmd_t cmd, uint8_t speed)
+{
+    const uint8_t rot_speed = 153; /* ~60 % of 255, matching execute_rotate */
+    switch (cmd) {
+        case REACTIVE_MANUAL_FORWARD:
+            motor_move_forward(speed);
+            break;
+        case REACTIVE_MANUAL_BACKWARD:
+            motor_move_backward(speed);
+            break;
+        case REACTIVE_MANUAL_LEFT:
+            motor_turn_left(speed);
+            break;
+        case REACTIVE_MANUAL_RIGHT:
+            motor_turn_right(speed);
+            break;
+        case REACTIVE_MANUAL_ROTATE_CW:
+            motor_rotate_cw(rot_speed);
+            break;
+        case REACTIVE_MANUAL_ROTATE_CCW:
+            motor_rotate_ccw(rot_speed);
+            break;
+        case REACTIVE_MANUAL_STOP:
+        default:
+            motor_stop();
+            break;
+    }
+}
+
 /* -------------------------------------------------------------------------
  * Running-mean distance filter
  * ---------------------------------------------------------------------- */
@@ -220,11 +260,39 @@ static void reactive_task(void *arg)
     /* Stack HWM report interval */
     int64_t hwm_last_report = esp_timer_get_time();
 
+    uint32_t fail_streak = 0;
+    bool sensor_failed = false;
+
     while (s_running) {
-        /* ---- 1. Measure distance ---- */
+        /* ---- 1. Measure distance ----
+         * A single failed read is deliberately treated as "max range" by
+         * smooth_distance(), so one missed echo cannot trip the reflex. That
+         * hides *sustained* failure, though: a dead sensor then reads as a
+         * permanently clear path. Count the streak so the condition is at
+         * least visible in the log and in telemetry. */
         uint16_t raw_dist = ULTRASONIC_DIST_ERROR;
-        ultrasonic_measure(&raw_dist);
+        if (ultrasonic_measure(&raw_dist) != ESP_OK || raw_dist == ULTRASONIC_DIST_ERROR) {
+            if (fail_streak < ULTRASONIC_FAIL_STREAK) {
+                fail_streak++;
+                if (fail_streak == ULTRASONIC_FAIL_STREAK && !sensor_failed) {
+                    sensor_failed = true;
+                    ESP_LOGW(TAG,
+                             "Rangefinder has failed %u reads in a row — obstacle reflex is blind",
+                             (unsigned)ULTRASONIC_FAIL_STREAK);
+                }
+            }
+        } else {
+            if (sensor_failed) {
+                ESP_LOGI(TAG, "Rangefinder recovered");
+            }
+            fail_streak = 0;
+            sensor_failed = false;
+        }
         uint16_t dist = smooth_distance(raw_dist);
+
+        /* Declared before the first `goto update_telemetry` so every path
+         * reaches the telemetry block with a defined value. */
+        bool manual_active = false;
 
         /* ---- 2. Obstacle reflex ---- */
         bool reflex = (dist < STOP_THRESHOLD_CM);
@@ -242,7 +310,28 @@ static void reactive_task(void *arg)
             goto update_telemetry;
         }
 
-        /* ---- 3. Execute goal ---- */
+        /* ---- 3. Manual override (console / bench) ----
+         * Checked after the reflex on purpose: a manual command must not be
+         * able to drive into an obstacle. The lease expires on its own, so the
+         * planner resumes without an explicit hand-back. */
+        {
+            reactive_manual_cmd_t mcmd;
+            uint8_t mspeed;
+            const int64_t now_us = esp_timer_get_time();
+
+            portENTER_CRITICAL(&s_manual_mux);
+            manual_active = (s_manual_expiry_us > now_us);
+            mcmd = s_manual_cmd;
+            mspeed = s_manual_speed;
+            portEXIT_CRITICAL(&s_manual_mux);
+
+            if (manual_active) {
+                execute_manual(mcmd, mspeed);
+                goto update_telemetry;
+            }
+        }
+
+        /* ---- 4. Execute goal ---- */
         {
             goal_t goal;
             bool is_fresh;
@@ -299,6 +388,8 @@ static void reactive_task(void *arg)
             s_telemetry.loop_hz = measured_hz;
         }
         s_telemetry.stack_high_water = hwm;
+        s_telemetry.manual_active = manual_active;
+        s_telemetry.sensor_failed = sensor_failed;
         portEXIT_CRITICAL(&s_telem_mux);
 
         /* ---- 5. Wait for next period ----
@@ -319,6 +410,11 @@ static void reactive_task(void *arg)
 
     motor_stop();
     ESP_LOGI(TAG, "Reactive executor stopping");
+    /* Publish our own exit before deleting: reactive_controller_stop() uses a
+     * NULL handle to mean "already gone", and clearing it here is what makes
+     * that check race-free — otherwise stop() could vTaskDelete() a handle the
+     * scheduler has already reclaimed. */
+    s_task_handle = NULL;
     vTaskDelete(NULL);
 }
 
@@ -372,14 +468,44 @@ esp_err_t reactive_controller_stop(void)
     vTaskDelay(pdMS_TO_TICKS(REACTIVE_LOOP_PERIOD_MS * 3));
 
     /* If the task handle is still valid (task did not self-delete yet), force
-     * delete it.  This is a last resort; normally the task exits cleanly. */
-    if (s_task_handle != NULL) {
-        vTaskDelete(s_task_handle);
-        s_task_handle = NULL;
+     * delete it.  This is a last resort; normally the task exits cleanly.
+     * Snapshot-and-clear in one step so we cannot delete a handle the task
+     * already retired between the test and the call. */
+    TaskHandle_t handle = s_task_handle;
+    s_task_handle = NULL;
+    if (handle != NULL) {
+        vTaskDelete(handle);
     }
 
     motor_stop();
     ESP_LOGI(TAG, "Reactive controller stopped");
+    return ESP_OK;
+}
+
+esp_err_t reactive_controller_manual(reactive_manual_cmd_t cmd, uint8_t speed, uint32_t ttl_ms)
+{
+    if (!s_running) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    if (ttl_ms == 0) {
+        ttl_ms = REACTIVE_MANUAL_TTL_MS;
+    }
+
+    portENTER_CRITICAL(&s_manual_mux);
+    s_manual_cmd = cmd;
+    s_manual_speed = speed;
+    /* An explicit STOP ends the lease rather than holding the motors stopped
+     * for a further TTL — otherwise the planner could not resume for a second
+     * after every manual stop. */
+    s_manual_expiry_us =
+        (cmd == REACTIVE_MANUAL_STOP) ? 0 : esp_timer_get_time() + (int64_t)ttl_ms * 1000;
+    portEXIT_CRITICAL(&s_manual_mux);
+
+    if (cmd == REACTIVE_MANUAL_STOP) {
+        /* Stop now instead of waiting up to one loop period; the executor will
+         * keep it stopped because no goal outlives its TTL by then. */
+        motor_stop();
+    }
     return ESP_OK;
 }
 
@@ -425,6 +551,14 @@ esp_err_t reactive_controller_get_telemetry(reactive_telemetry_t *out)
 /* Stub telemetry */
 static reactive_telemetry_t s_telemetry = {0};
 static bool s_running = false;
+
+/* Manual override lease. The host build counts ticks rather than microseconds
+ * so lease expiry is deterministic in tests instead of wall-clock dependent;
+ * reactive_controller_manual() converts the ms TTL at the same 33 ms period the
+ * target executor runs at. */
+static reactive_manual_cmd_t s_manual_cmd = REACTIVE_MANUAL_STOP;
+static uint8_t s_manual_speed = 0;
+static uint32_t s_manual_ticks_left = 0;
 
 /* --- Smoothing buffer (same logic as target) --- */
 static uint16_t s_dist_buf[ULTRASONIC_SMOOTH_N];
@@ -495,6 +629,54 @@ static void execute_rotate(const goal_t *goal)
     }
 }
 
+static void execute_manual(reactive_manual_cmd_t cmd, uint8_t speed)
+{
+    const uint8_t rot_speed = 153;
+    switch (cmd) {
+        case REACTIVE_MANUAL_FORWARD:
+            motor_move_forward(speed);
+            break;
+        case REACTIVE_MANUAL_BACKWARD:
+            motor_move_backward(speed);
+            break;
+        case REACTIVE_MANUAL_LEFT:
+            motor_turn_left(speed);
+            break;
+        case REACTIVE_MANUAL_RIGHT:
+            motor_turn_right(speed);
+            break;
+        case REACTIVE_MANUAL_ROTATE_CW:
+            motor_rotate_cw(rot_speed);
+            break;
+        case REACTIVE_MANUAL_ROTATE_CCW:
+            motor_rotate_ccw(rot_speed);
+            break;
+        case REACTIVE_MANUAL_STOP:
+        default:
+            motor_stop();
+            break;
+    }
+}
+
+esp_err_t reactive_controller_manual(reactive_manual_cmd_t cmd, uint8_t speed, uint32_t ttl_ms)
+{
+    if (!s_running) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    if (ttl_ms == 0) {
+        ttl_ms = REACTIVE_MANUAL_TTL_MS;
+    }
+    s_manual_cmd = cmd;
+    s_manual_speed = speed;
+    s_manual_ticks_left = (cmd == REACTIVE_MANUAL_STOP)
+                              ? 0
+                              : (ttl_ms + REACTIVE_LOOP_PERIOD_MS - 1) / REACTIVE_LOOP_PERIOD_MS;
+    if (cmd == REACTIVE_MANUAL_STOP) {
+        motor_stop();
+    }
+    return ESP_OK;
+}
+
 /**
  * @brief Single executor tick — exposed for host tests.
  *
@@ -514,8 +696,20 @@ void reactive_controller_tick_for_test(void)
         motor_stop();
         s_telemetry.distance_cm = dist;
         s_telemetry.reflex_active = true;
+        s_telemetry.manual_active = false;
         return;
     }
+
+    /* Manual override, checked after the reflex — mirrors reactive_task(). */
+    if (s_manual_ticks_left > 0) {
+        s_manual_ticks_left--;
+        execute_manual(s_manual_cmd, s_manual_speed);
+        s_telemetry.distance_cm = dist;
+        s_telemetry.reflex_active = false;
+        s_telemetry.manual_active = true;
+        return;
+    }
+    s_telemetry.manual_active = false;
 
     goal_t goal;
     bool is_fresh;
@@ -556,6 +750,8 @@ esp_err_t reactive_controller_init(void)
     memset(s_dist_buf, 0, sizeof(s_dist_buf));
     s_dist_idx = 0;
     s_dist_buf_full = false;
+    s_manual_ticks_left = 0;
+    s_manual_cmd = REACTIVE_MANUAL_STOP;
     s_running = true;
     ultrasonic_init();
     return ESP_OK;

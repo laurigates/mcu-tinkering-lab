@@ -13,12 +13,12 @@
 #include "base64.h"
 #include "cJSON.h"
 #include "credentials_loader.h"
-#include "esp_crt_bundle.h"
 #include "esp_http_client.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "gemini_http.h"
 #include "pin_config.h"
 #include "speech_queue.h"
 #include "voice_persona.h"
@@ -94,6 +94,16 @@ static esp_err_t http_event_handler(esp_http_client_event_t *evt)
                 break;
             }
 
+            /* Once the playback ring has stalled, stop feeding the decoder.
+             * pcm_sink()'s abort return only ends the *current* feed call — it
+             * does not advance the decoder state — so without this guard the
+             * next chunk resumes decoding, hits the same full ring, and blocks
+             * another full TTS_RING_TIMEOUT_MS. Repeated for every remaining
+             * chunk of a response that is hundreds of kB. */
+            if (tc->ring_stalled) {
+                return ESP_FAIL;  // tear the transfer down
+            }
+
             // Status is known by the time body data arrives. On an error the
             // body is a JSON error object with no "data" key, so the decoder
             // would harmlessly find nothing — but capturing it gives a usable
@@ -110,8 +120,11 @@ static esp_err_t http_event_handler(esp_http_client_event_t *evt)
                 break;
             }
 
-            base64_stream_feed(&tc->b64, (const char *)evt->data, (size_t)evt->data_len, pcm_sink,
-                               tc);
+            if (base64_stream_feed(&tc->b64, (const char *)evt->data, (size_t)evt->data_len,
+                                   pcm_sink, tc) != 0) {
+                ESP_LOGW(TAG, "PCM decode aborted (ring stalled) — ending transfer");
+                return ESP_FAIL;
+            }
             break;
         }
 
@@ -187,37 +200,23 @@ static void speak(const char *text)
     tts_ctx_t ctx = {0};
     base64_stream_init(&ctx.b64);
 
-    esp_http_client_config_t cfg = {
-        .url = TTS_URL,
-        .method = HTTP_METHOD_POST,
-        .timeout_ms = TTS_TIMEOUT_MS,
-        .event_handler = http_event_handler,
-        .user_data = &ctx,
-        .crt_bundle_attach = esp_crt_bundle_attach,
-    };
-
-    esp_http_client_handle_t client = esp_http_client_init(&cfg);
-    if (!client) {
-        ESP_LOGE(TAG, "esp_http_client_init() failed");
-        free(body);
-        return;
-    }
-
-    esp_http_client_set_header(client, "Content-Type", "application/json");
-    esp_http_client_set_header(client, "x-goog-api-key", api_key);
-    esp_http_client_set_post_field(client, body, strlen(body));
-
     const int64_t t_start = esp_timer_get_time();
-    const esp_err_t err = esp_http_client_perform(client);
-    const int status = esp_http_client_get_status_code(client);
+    int status = 0;
+    const esp_err_t err =
+        gemini_http_post(TTS_URL, api_key, body, TTS_TIMEOUT_MS, http_event_handler, &ctx, &status);
     const uint32_t latency_ms = (uint32_t)((esp_timer_get_time() - t_start) / 1000);
 
-    if (err != ESP_OK || status != 200) {
-        ESP_LOGE(TAG, "TTS request failed: %s status=%d%s%s", esp_err_to_name(err), status,
-                 ctx.err_len ? " body=" : "", ctx.err_len ? ctx.err : "");
-    } else if (ctx.ring_stalled) {
+    /* Checked before the transport error: a stall now deliberately fails the
+     * perform() (the handler returns ESP_FAIL to tear the socket down), so the
+     * generic error branch would otherwise mask the real cause. */
+    if (ctx.ring_stalled) {
         ESP_LOGW(TAG, "playback stalled — utterance truncated at %u bytes",
                  (unsigned)ctx.pcm_bytes);
+        // Drop the partial utterance rather than leaving a fragment to drain.
+        audio_player_abort();
+    } else if (err != ESP_OK || status != 200) {
+        ESP_LOGE(TAG, "TTS request failed: %s status=%d%s%s", esp_err_to_name(err), status,
+                 ctx.err_len ? " body=" : "", ctx.err_len ? ctx.err : "");
     } else if (ctx.pcm_bytes == 0) {
         ESP_LOGW(TAG, "HTTP 200 but no audio payload found in response");
     } else {
@@ -228,7 +227,6 @@ static void speak(const char *text)
 
     audio_player_end_utterance();
 
-    esp_http_client_cleanup(client);
     free(body);
 }
 

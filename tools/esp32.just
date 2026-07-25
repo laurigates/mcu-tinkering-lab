@@ -17,8 +17,16 @@ container_cmd := env("CONTAINER_CMD", "docker")
 # Shared docker-compose.yml (relative to each project at packages/<domain>/<name>/)
 compose_file := "../../../docker-compose.yml"
 
-# Absolute path to monorepo tools/ directory (for helper scripts)
-tools_dir := justfile_directory() / "../../.." / "tools"
+# Absolute path to monorepo tools/ directory (for helper scripts).
+#
+# source_directory() is the directory of *this* file (tools/), which is the
+# answer regardless of how just was invoked. justfile_directory() is the
+# directory of the ROOT justfile, so the old `justfile_directory()/../../../
+# tools` only resolved correctly when a recipe was run from inside the package
+# directory; run as a module from the repo root — `just <mod>::monitor`, the
+# documented way — it produced <repo>/../../../tools and every helper-script
+# recipe (_s3-reset, _s3-monitor) failed with "No such file or directory".
+tools_dir := source_directory()
 
 # Auto-detect USB-serial adapter (CH340/CP2102/FTDI)
 _detected_serial := `ls /dev/cu.usbserial-* 2>/dev/null | head -1 || true`

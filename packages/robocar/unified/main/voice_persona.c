@@ -47,7 +47,8 @@ static const voice_persona_t s_personas[VOICE_PERSONA_COUNT] = {
             .tts_style = "Say in a friendly, natural tone",
             .text_brief = "Speak plain, friendly contemporary English.",
             .fallback_ok = "Hi, I'm Robocar and all my systems are online.",
-            .fallback_fmt = "Hi, I'm Robocar. These parts are not responding:%s.",
+            .fallback_prefix = "Hi, I'm Robocar. These parts are not responding:",
+            .fallback_suffix = ".",
             .fault_wifi = " WiFi",
             .fault_camera = " camera",
             .fault_motors = " motors",
@@ -70,8 +71,9 @@ static const voice_persona_t s_personas[VOICE_PERSONA_COUNT] = {
                 "oikeastaan niin, että ...\", sopii hyvin. Vältä nykyslangia, anglismeja, "
                 "lyhenteitä ja emojeita. Kirjoita yksi lyhyt puhuttu lause.",
             .fallback_ok = "Hyvää päivää, minä olen Robocar, ja kaikki järjestelmät ovat kunnossa.",
-            .fallback_fmt = "Hyvää päivää, minä olen Robocar. Asianlaita on tuota niin, "
-                            "että nämä osat eivät vastaa:%s.",
+            .fallback_prefix = "Hyvää päivää, minä olen Robocar. Asianlaita on tuota niin, "
+                               "että nämä osat eivät vastaa:",
+            .fallback_suffix = ".",
             .fault_wifi = " verkkoyhteys",
             .fault_camera = " kamera",
             .fault_motors = " moottorit",

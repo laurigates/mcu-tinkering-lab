@@ -19,13 +19,23 @@ size_t base64_encode_length(size_t input_length);
 
 /**
  * @brief Encode data to base64
- * @param input Input data buffer
- * @param input_length Length of input data
- * @param output Output buffer (must be large enough)
- * @param output_length Pointer to store actual output length
- * @return 0 on success, -1 on error
+ *
+ * @param input          Input data buffer
+ * @param input_length   Length of input data
+ * @param output         Output buffer
+ * @param[in,out] inout_length
+ *        In:  capacity of @p output in bytes. Must be at least
+ *             base64_encode_length(input_length), or the call fails with -1
+ *             rather than overrunning the buffer.
+ *        Out: encoded length, excluding the terminating NUL.
+ *
+ * The dual role is documented explicitly because reading this parameter as
+ * output-only — as the previous comment implied — leads straight to passing an
+ * uninitialised size_t and getting a spurious failure or a truncated encode.
+ *
+ * @return 0 on success, -1 on error (NULL argument or insufficient capacity)
  */
-int base64_encode(const uint8_t *input, size_t input_length, char *output, size_t *output_length);
+int base64_encode(const uint8_t *input, size_t input_length, char *output, size_t *inout_length);
 
 /**
  * @brief Encode data to base64 with memory allocation

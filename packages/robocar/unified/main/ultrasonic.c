@@ -73,14 +73,18 @@ static driver_mode_t s_mode = DRIVER_UNINIT;
 /* RMT path state */
 static rmt_channel_handle_t s_rx_chan = NULL;
 static rmt_symbol_word_t s_rx_buf[RMT_RX_BUFFER_SYMBOLS];
-static TaskHandle_t s_waiting_task = NULL; /* task blocked in ultrasonic_measure */
-static uint32_t s_echo_us = 0;             /* result written by the RX callback   */
+/* volatile: both are written from the RMT RX-done callback (ISR context) and
+ * read by the measuring task, so the compiler must not cache either across the
+ * ulTaskNotifyTake() that separates the write from the read. */
+static volatile TaskHandle_t s_waiting_task = NULL; /* task blocked in ultrasonic_measure */
+static volatile uint32_t s_echo_us = 0;             /* result written by the RX callback   */
 
 /* -------------------------------------------------------------------------
- * Host-test injection (on-target: value is ignored)
+ * Host-test injection (on-target: the setter is a no-op)
  * ---------------------------------------------------------------------- */
-static uint16_t s_injected_distance = ULTRASONIC_DIST_ERROR;
-
+/* No storage here on purpose — the injected value only exists in the host-test
+ * build below. Declaring it on target too made it an unused variable that
+ * warned on every build. */
 void ultrasonic_test_set_distance(uint16_t cm)
 {
     /* No-op on real hardware — the RMT always wins. */
@@ -237,8 +241,8 @@ esp_err_t ultrasonic_measure(uint16_t *distance_cm)
          *     (~23.2 ms) max echo (ULTRASONIC_MAX_RANGE_CM) with headroom.
          */
         rmt_receive_config_t recv_cfg = {
-            .signal_range_min_ns = 1000U,     /* 1 µs glitch filter (hw 8-bit @ source clk) */
-            .signal_range_max_ns = 30000000U, /* 30 ms idle (hw cap 32.767 ms @ 1 MHz)      */
+            .signal_range_min_ns = 1000U, /* 1 µs glitch filter (hw 8-bit @ source clk) */
+            .signal_range_max_ns = ULTRASONIC_RMT_IDLE_MS * 1000000U,
         };
 
         s_echo_us = 0;
@@ -248,14 +252,29 @@ esp_err_t ultrasonic_measure(uint16_t *distance_cm)
         if (ret != ESP_OK) {
             s_waiting_task = NULL;
             ESP_LOGE(TAG, "rmt_receive failed: %s", esp_err_to_name(ret));
+            /* Same re-arm as the timeout path below. A receive that failed to
+             * start can still leave the FSM off RMT_FSM_ENABLE, and without
+             * this every later measurement fails the same way — the exact
+             * permanent wedge the timeout branch was written to prevent. */
+            rmt_disable(s_rx_chan);
+            rmt_enable(s_rx_chan);
             *distance_cm = ULTRASONIC_DIST_ERROR;
             return ESP_FAIL;
         }
 
         send_trig_pulse();
 
-        /* Block until callback fires or timeout (ULTRASONIC_ECHO_TIMEOUT_US µs) */
-        const TickType_t timeout_ticks = pdMS_TO_TICKS((ULTRASONIC_ECHO_TIMEOUT_US / 1000U) + 5U);
+        /* Block until the RX-done callback fires, or give up.
+         *
+         * The wait must cover the echo AND the idle threshold: the driver only
+         * completes reception after ULTRASONIC_RMT_IDLE_MS of line-idle
+         * *following* the last edge, so a valid reading arrives at roughly
+         * echo_us + ULTRASONIC_RMT_IDLE_MS. Sizing this off the echo timeout
+         * alone (as it was) discarded every echo longer than ~14.5 ms — i.e.
+         * every target beyond ~2.5 m — as a timeout, even though the sensor had
+         * answered correctly. */
+        const TickType_t timeout_ticks =
+            pdMS_TO_TICKS((ULTRASONIC_ECHO_TIMEOUT_US / 1000U) + ULTRASONIC_RMT_IDLE_MS + 5U);
         uint32_t notified = ulTaskNotifyTake(pdTRUE, timeout_ticks);
 
         if (notified == 0) {

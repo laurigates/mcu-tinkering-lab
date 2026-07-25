@@ -75,6 +75,13 @@ extern "C" {
  */
 #define ULTRASONIC_SMOOTH_N 3U
 
+/**
+ * Consecutive failed rangefinder reads before the sensor is declared down.
+ * 5 reads at 30 Hz is ~165 ms — long enough that a single missed echo (common,
+ * and already absorbed by the smoothing filter) does not raise a false alarm.
+ */
+#define ULTRASONIC_FAIL_STREAK 5U
+
 /** Reactive controller task stack size in bytes. */
 #define REACTIVE_TASK_STACK_SIZE 4096U
 
@@ -86,6 +93,58 @@ extern "C" {
 
 /** Loop period in ms (target 30 Hz). */
 #define REACTIVE_LOOP_PERIOD_MS 33U
+
+/**
+ * Lifetime of a manual override, in ms. A manual command is a *lease*, not a
+ * mode: the console operator holding "forward" must not leave the robot driving
+ * after the serial link drops, and the planner must be able to take back over
+ * on its own. Matches the old COMMAND_TIMEOUT_MS watchdog this replaced.
+ */
+#define REACTIVE_MANUAL_TTL_MS 1000U
+
+/* =========================================================================
+ * Manual override
+ * ========================================================================= */
+
+/**
+ * @brief Manual movement commands from the serial console / bench testing.
+ *
+ * These exist because the goal vocabulary cannot express them: goals describe
+ * *intent* ("drive toward this heading", "track this box"), while bench testing
+ * needs raw actuation including reverse, which no goal kind encodes.
+ */
+typedef enum {
+    REACTIVE_MANUAL_STOP = 0,
+    REACTIVE_MANUAL_FORWARD,
+    REACTIVE_MANUAL_BACKWARD,
+    REACTIVE_MANUAL_LEFT,
+    REACTIVE_MANUAL_RIGHT,
+    REACTIVE_MANUAL_ROTATE_CW,
+    REACTIVE_MANUAL_ROTATE_CCW,
+} reactive_manual_cmd_t;
+
+/**
+ * @brief Hand a manual movement command to the executor.
+ *
+ * The executor remains the only writer of motor output (see the project
+ * CLAUDE.md "Don't" list) — callers do not touch motor_controller.h. Two
+ * properties follow from routing through here rather than driving the motors
+ * directly, and both are the point of this function:
+ *
+ *   - the obstacle reflex still wins, so a manual command cannot drive the
+ *     robot into a wall;
+ *   - the command expires after @p ttl_ms, after which the planner's goal
+ *     resumes without any explicit hand-back.
+ *
+ * Safe to call from any task. Does not block.
+ *
+ * @param cmd     Movement to apply.  REACTIVE_MANUAL_STOP clears the override.
+ * @param speed   Motor speed 0..255 (ignored for STOP and the rotate commands,
+ *                which use their own fixed rate).
+ * @param ttl_ms  Lease duration; pass 0 for REACTIVE_MANUAL_TTL_MS.
+ * @return ESP_OK, or ESP_ERR_INVALID_STATE if the executor is not running.
+ */
+esp_err_t reactive_controller_manual(reactive_manual_cmd_t cmd, uint8_t speed, uint32_t ttl_ms);
 
 /* =========================================================================
  * Telemetry
@@ -102,6 +161,12 @@ typedef struct {
     bool reflex_active;        /**< True when obstacle reflex has latched stop.  */
     uint32_t loop_hz;          /**< Measured loop rate over the last second.     */
     uint32_t stack_high_water; /**< Stack headroom from uxTaskGetStackHighWaterMark. */
+    bool manual_active;        /**< True while a manual override lease is live.  */
+    /** True when the rangefinder has failed for ULTRASONIC_FAIL_STREAK readings
+     *  in a row. Distinguishes "nothing ahead" from "the sensor stopped
+     *  answering" — the filter maps both to max range, so without this the two
+     *  are indistinguishable from outside. */
+    bool sensor_failed;
 } reactive_telemetry_t;
 
 /* =========================================================================
