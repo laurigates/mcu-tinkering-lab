@@ -84,23 +84,20 @@ void app_main(void)
     if (usb_ret != ESP_OK) {
         ESP_LOGW(TAG, "raw_usb_init failed: %s", esp_err_to_name(usb_ret));
     } else {
-        xTaskCreatePinnedToCore(raw_usb_pump_task, "raw_usb_pump", 4096, NULL, 4,
-                                NULL, 1);
+        xTaskCreatePinnedToCore(raw_usb_pump_task, "raw_usb_pump", 4096, NULL, 4, NULL, 1);
         ESP_LOGI(TAG, "raw_usb pump started on core 1");
     }
 
-    ESP_LOGI(TAG, "Connect to 'espdancer-log' WiFi, then TCP 192.168.4.1:%d",
-             USB_RPC_PORT);
-    ESP_LOGI(TAG, "  Send a HELLO frame: %02X %02X 00 03 01 00 01 (CRC)",
-             USB_RPC_MAGIC0, USB_RPC_MAGIC1);
+    ESP_LOGI(TAG, "Connect to 'espdancer-log' WiFi, then TCP 192.168.4.1:%d", USB_RPC_PORT);
+    ESP_LOGI(TAG, "  Send a HELLO frame: %02X %02X 00 03 01 00 01 (CRC)", USB_RPC_MAGIC0,
+             USB_RPC_MAGIC1);
 
     /* 6. Idle — reflect control-channel state on the LED */
     bool was_connected = false;
     while (1) {
         bool connected = usb_rpc_host_connected();
         if (connected != was_connected) {
-            status_led_set_mode(connected ? STATUS_LED_HOST_CONNECTED
-                                           : STATUS_LED_WIFI_AP_UP);
+            status_led_set_mode(connected ? STATUS_LED_HOST_CONNECTED : STATUS_LED_WIFI_AP_UP);
             ESP_LOGI(TAG, "Host %s", connected ? "connected" : "disconnected");
             was_connected = connected;
         }

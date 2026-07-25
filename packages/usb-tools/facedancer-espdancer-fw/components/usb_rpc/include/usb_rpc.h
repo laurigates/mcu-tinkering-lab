@@ -31,42 +31,42 @@ extern "C" {
 
 #define USB_RPC_MAGIC0 0xF0
 #define USB_RPC_MAGIC1 0xD0
-#define USB_RPC_PORT   4444
+#define USB_RPC_PORT 4444
 #define USB_RPC_PROTO_VERSION 0x0001
-#define USB_RPC_MAX_PAYLOAD   512
+#define USB_RPC_MAX_PAYLOAD 512
 
 /* ── Message IDs ────────────────────────────────────────────────────────── */
 /* Host → device (requests): even */
-#define USB_RPC_HELLO        0x01  /* u16 proto_version */
-#define USB_RPC_GET_VERSION  0x02  /* (none) */
-#define USB_RPC_CONNECT      0x10  /* u8 ep0_max, u8 speed, u8 quirks */
-#define USB_RPC_DISCONNECT   0x11  /* (none) */
-#define USB_RPC_RESET        0x18  /* (none) */
-#define USB_RPC_SET_ADDRESS  0x17  /* u8 addr, u8 defer */
-#define USB_RPC_CONFIGURE_EP 0x12  /* u8 addr, u8 dir, u8 type, u16 max_pkt */
-#define USB_RPC_SEND         0x13  /* u8 ep_num, u16 data_len, data[] */
-#define USB_RPC_STALL        0x14  /* u8 ep_num, u8 dir */
-#define USB_RPC_CLEAR_HALT   0x15  /* u8 ep_num, u8 dir */
-#define USB_RPC_ACK_STATUS   0x16  /* u8 dir, u8 ep_num */
+#define USB_RPC_HELLO 0x01        /* u16 proto_version */
+#define USB_RPC_GET_VERSION 0x02  /* (none) */
+#define USB_RPC_CONNECT 0x10      /* u8 ep0_max, u8 speed, u8 quirks */
+#define USB_RPC_DISCONNECT 0x11   /* (none) */
+#define USB_RPC_RESET 0x18        /* (none) */
+#define USB_RPC_SET_ADDRESS 0x17  /* u8 addr, u8 defer */
+#define USB_RPC_CONFIGURE_EP 0x12 /* u8 addr, u8 dir, u8 type, u16 max_pkt */
+#define USB_RPC_SEND 0x13         /* u8 ep_num, u16 data_len, data[] */
+#define USB_RPC_STALL 0x14        /* u8 ep_num, u8 dir */
+#define USB_RPC_CLEAR_HALT 0x15   /* u8 ep_num, u8 dir */
+#define USB_RPC_ACK_STATUS 0x16   /* u8 dir, u8 ep_num */
 
 /* Device → host (replies + events): odd */
-#define USB_RPC_HELLO_REPLY   0x81  /* u16 proto_version, char[16] fw_version */
-#define USB_RPC_VERSION_REPLY 0x82  /* char[] */
-#define USB_RPC_OK            0x90  /* u8 in_reply_to */
-#define USB_RPC_ERROR         0x91  /* u8 in_reply_to, u8 code, char[] */
-#define USB_RPC_EVENT         0xA0  /* u8 event_type, ... */
+#define USB_RPC_HELLO_REPLY 0x81   /* u16 proto_version, char[16] fw_version */
+#define USB_RPC_VERSION_REPLY 0x82 /* char[] */
+#define USB_RPC_OK 0x90            /* u8 in_reply_to */
+#define USB_RPC_ERROR 0x91         /* u8 in_reply_to, u8 code, char[] */
+#define USB_RPC_EVENT 0xA0         /* u8 event_type, ... */
 
-#define USB_RPC_EVENT_BUS_RESET     0x01
-#define USB_RPC_EVENT_SETUP         0x02  /* u8 ep, u8 setup[8] */
-#define USB_RPC_EVENT_OUT_PACKET    0x03  /* u8 ep, u16 len, data[] */
-#define USB_RPC_EVENT_SEND_COMPLETE 0x04  /* u8 ep */
-#define USB_RPC_EVENT_NAK           0x05  /* u8 ep */
+#define USB_RPC_EVENT_BUS_RESET 0x01
+#define USB_RPC_EVENT_SETUP 0x02         /* u8 ep, u8 setup[8] */
+#define USB_RPC_EVENT_OUT_PACKET 0x03    /* u8 ep, u16 len, data[] */
+#define USB_RPC_EVENT_SEND_COMPLETE 0x04 /* u8 ep */
+#define USB_RPC_EVENT_NAK 0x05           /* u8 ep */
 
 /* Error codes */
 #define USB_RPC_ERR_NOT_IMPLEMENTED 0x01
-#define USB_RPC_ERR_BAD_FRAME       0x02
-#define USB_RPC_ERR_BAD_ARG         0x03
-#define USB_RPC_ERR_USB_FAILED      0x04
+#define USB_RPC_ERR_BAD_FRAME 0x02
+#define USB_RPC_ERR_BAD_ARG 0x03
+#define USB_RPC_ERR_USB_FAILED 0x04
 
 /* ── API ────────────────────────────────────────────────────────────────── */
 

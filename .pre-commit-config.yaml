@@ -2,7 +2,10 @@
 # See https://pre-commit.com for more information
 
 # Exclude third-party component directories from all hooks
-exclude: 'components/esp-idf-lib/|managed_components/'
+# Vendored third-party sources: never rewrite them. Reformatting vendored code
+# makes every future sync with upstream conflict, and the diff noise hides the
+# port's own local changes. tinyusb_port/ is a vendored TinyUSB DCD port.
+exclude: 'components/esp-idf-lib/|managed_components/|tinyusb_port/'
 
 repos:
   # General file checks
