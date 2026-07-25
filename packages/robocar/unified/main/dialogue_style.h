@@ -81,11 +81,13 @@ typedef struct {
     size_t count;
 } dialogue_pool_t;
 
-/** Convenience initialiser from a literal array: DIALOGUE_POOL(s_fi_openers). */
-#define DIALOGUE_POOL(arr)                    \
-    {                                         \
-        (arr), sizeof(arr) / sizeof((arr)[0]) \
-    }
+/** Entry count of a literal pool array, for the `count` field:
+ *  `.openers = {s_fi_openers, DIALOGUE_POOL_COUNT(s_fi_openers)}`.
+ *
+ *  A count macro rather than a whole-initialiser one: a macro expanding to a
+ *  braced list is formatted differently by different clang-format 18.x point
+ *  releases, so it fails the format gate on CI while passing locally. */
+#define DIALOGUE_POOL_COUNT(arr) (sizeof(arr) / sizeof((arr)[0]))
 
 /**
  * @brief Which pool a draw belongs to, for no-immediate-repeat bookkeeping.

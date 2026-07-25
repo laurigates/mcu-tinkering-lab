@@ -57,17 +57,17 @@ static const char *const k_openers[] = {
     "Open with an exclamation.",
     "Open with a question.",
 };
-static const dialogue_pool_t k_opener_pool = DIALOGUE_POOL(k_openers);
+static const dialogue_pool_t k_opener_pool = {k_openers, DIALOGUE_POOL_COUNT(k_openers)};
 
 static const char *const k_shapes[] = {
     "Keep it short.",
     "Say it flatly.",
     "Make it dry.",
 };
-static const dialogue_pool_t k_shape_pool = DIALOGUE_POOL(k_shapes);
+static const dialogue_pool_t k_shape_pool = {k_shapes, DIALOGUE_POOL_COUNT(k_shapes)};
 
 static const char *const k_single[] = {"Only option."};
-static const dialogue_pool_t k_single_pool = DIALOGUE_POOL(k_single);
+static const dialogue_pool_t k_single_pool = {k_single, DIALOGUE_POOL_COUNT(k_single)};
 
 static const dialogue_pool_t k_empty_pool = {NULL, 0};
 
