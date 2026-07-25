@@ -92,10 +92,36 @@ static void mono_to_stereo(const int16_t *mono, size_t count, int16_t *stereo)
     }
 }
 
+/** Fill the TX DMA buffers with silence while the channel is still in READY
+ *  state. i2s_channel_enable() starts clocking the DMA buffers out immediately,
+ *  before the first i2s_channel_write() can land — so without this the amp
+ *  reproduces whatever those buffers happen to hold: uninitialised memory on
+ *  the first utterance, and the stale tail of the previous clip on every one
+ *  after (the channel is disabled mid-buffer at end of utterance). That is a
+ *  burst of full-scale static in front of every clip. chan_cfg.auto_clear does
+ *  not cover this: it zeroes on *underrun*, not at enable time.
+ *  i2s_channel_preload_data() is only valid before enable, which is why this
+ *  runs here rather than after. */
+static void preload_silence(void)
+{
+    static const int16_t silence[PLAYER_CHUNK_SAMPLES * 2] = {0};
+    size_t loaded = 0;
+    do {
+        loaded = 0;
+        if (i2s_channel_preload_data(s_tx_chan, silence, sizeof(silence), &loaded) != ESP_OK) {
+            return;
+        }
+        // A short load means the DMA buffers are full.
+    } while (loaded == sizeof(silence));
+}
+
 static void channel_set_active(bool active)
 {
     if (active == s_channel_active) {
         return;
+    }
+    if (active) {
+        preload_silence();
     }
     const esp_err_t err = active ? i2s_channel_enable(s_tx_chan) : i2s_channel_disable(s_tx_chan);
     if (err != ESP_OK) {
