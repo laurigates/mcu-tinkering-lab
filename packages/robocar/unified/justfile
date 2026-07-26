@@ -10,6 +10,12 @@ bin_name := "robocar-unified"
 port := env("PORT", _detected_s3)
 target := "esp32s3"
 
+# Typst CLI version the committed build-guide PDF is compiled with. PDF byte
+# output changes across compiler releases, so this MUST match TYPST_VERSION in
+# .github/workflows/build-guide-check.yml or every local recompile reads as
+# drift in CI. Bump both in the same commit.
+typst_version := "0.15.0"
+
 default:
     @just --list
 
@@ -72,6 +78,30 @@ monitor: _s3-monitor
 # Flash and immediately start monitoring
 [group: "device"]
 flash-monitor: flash monitor
+
+##########
+# Docs
+##########
+
+# Generate Typst pin definitions from pin_config.h and version.txt
+[group: "docs"]
+gen-pin-defs:
+    python3 ../../../tools/typst/generate-pin-defs.py \
+        main/pin_config.h \
+        version.txt \
+        docs/auto/pin_defs.typ
+
+# Regenerate the printable build guide PDF from the Typst source.
+#
+# Deliberately mirrors .github/workflows/build-guide-check.yml byte for byte:
+# the same pinned CLI (via `mise exec`, so an unrelated homebrew typst upgrade
+# cannot silently change the output) and the same two determinism flags —
+# --creation-timestamp 0 pins the embedded PDF timestamp, --ignore-system-fonts
+# embeds only Typst's bundled fonts so glyph fallback does not vary by OS.
+# Drop either flag and CI reports the freshly compiled PDF as stale.
+[group: "docs"]
+build-guide: gen-pin-defs
+    cd ../../.. && mise exec typst@{{typst_version}} -- typst compile --creation-timestamp 0 --ignore-system-fonts --root . {{project_dir}}/docs/build-guide.typ {{project_dir}}/docs/build-guide.pdf
 
 ##########
 # Info

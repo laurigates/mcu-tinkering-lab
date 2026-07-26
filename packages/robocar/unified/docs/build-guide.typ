@@ -4,15 +4,17 @@
 // schematic image resolve:
 //   typst compile --root ../../../.. build-guide.typ
 //
-// Styling + helpers come from tools/typst/build-guide.typ. Pin data mirrors
-// main/pin_config.h (authoritative) — keep in sync on pin changes.
+// Styling + helpers from tools/typst/build-guide.typ. Pin data auto-generated
+// from main/pin_config.h + version.txt — run `just robocar-unified::gen-pin-defs`
+// to regenerate.
 
 #import "../../../../tools/typst/build-guide.typ": guide, callout, htable, theme
+#import "auto/pin_defs.typ": *
 
 #show: guide.with(
   title: "robocar-unified",
   subtitle: "Single-Board AI Robot Car",
-  version: "0.1.2",
+  version: VERSION,
   intro: [
     A hands-on guide to assembling the consolidated robocar on a
     *Seeed Studio XIAO ESP32-S3 Sense*. Camera capture, Gemini AI planning,
@@ -25,7 +27,7 @@
   difficulty: [Intermediate · \~2–3 h],
   header-right: "XIAO ESP32-S3 Sense",
   footer-note: [
-    Pin assignments in this guide mirror `main/pin_config.h`, which is authoritative. \
+    Pin data auto-generated from `main/pin_config.h` via `just robocar-unified::gen-pin-defs`. \
     All components must share a common ground.
   ],
 )
@@ -71,12 +73,16 @@ an ultrasonic sensor provides an independent obstacle reflex.
   ([1], [PCA9685 16-ch PWM driver], [Breakout, address 0x40]),
   ([1], [TB6612FNG dual motor driver], [Breakout]),
   ([1], [SSD1306 OLED display], [128×64, I²C, address 0x3C]),
+  ([1], [MCP23017 GPIO expander], [Breakout, address 0x20 — optional]),
+  ([1], [MAX98357A I²S class-D amplifier], [Mono, for voice output]),
+  ([1], [Speaker], [4–8 Ω, 2–3 W]),
   ([1], [Ultrasonic rangefinder], [*3.3 V variant*: HC-SR04P / RCWL-1601 / US-100]),
   ([2], [RGB LED], [Common-anode]),
   ([2], [SG90 micro servo], [Pan / tilt]),
   ([2], [DC gear motor + wheel], [\~3–6 V hobby motors]),
   ([1], [Piezo buzzer], [Passive]),
   ([1], [100 Ω resistor], [In series with buzzer]),
+  ([1], [Electrolytic capacitor], [≥470 µF — for MAX98357A supply]),
   ([2], [18650 Li-ion cell + holder], [Battery pack]),
   ([1], [XL6009 boost converter], [Regulated to 5 V]),
   ([—], [Chassis, wiring, headers], [2WD car chassis, jumper wires, standoffs]),
@@ -104,9 +110,11 @@ Docker (for the containerized firmware build).
 Everything on the I²C bus hangs off the *TCA9548A multiplexer* — the ESP32-S3
 never talks to the PCA9685 or OLED directly. This lets devices that would
 otherwise share addresses coexist, and keeps the two 400 kHz devices on
-separate channels. The ESP32-S3 itself drives only four things directly:
-I²C (GPIO5/6), the motor-enable STBY line (GPIO1), the buzzer (GPIO2), and the
-ultrasonic sensor (GPIO3/4).
+separate channels. The ESP32-S3 itself drives only five groups of signals directly:
+I²C (GPIO#I2C_SDA_PIN/#I2C_SCL_PIN), the motor-enable STBY line (GPIO#MOTOR_STBY_PIN),
+the buzzer (GPIO#PIEZO_PIN), the ultrasonic sensor (GPIO#ULTRIG_PIN/#ULECHO_PIN),
+and *I²S audio* (GPIO#I2S_BCLK_PIN/#I2S_LRCLK_PIN/#I2S_DIN_PIN) to the
+MAX98357A amplifier.
 
 = 4 · Wiring Reference
 
@@ -117,28 +125,37 @@ Sense module and do not conflict.
 #htable(
   (auto, auto, 1fr, 1.2fr),
   ([XIAO Pin], [GPIO], [Function], [Notes]),
-  ([D0], [GPIO1], [TB6612FNG STBY], [HIGH = motors enabled]),
-  ([D1], [GPIO2], [Piezo buzzer], [LEDC PWM · 100 Ω in series]),
-  ([D2], [GPIO3], [Ultrasonic TRIG], [10 µs pulse output]),
-  ([D3], [GPIO4], [Ultrasonic ECHO], [Pulse width in (RMT RX)]),
-  ([D4], [GPIO5], [*I²C SDA*], [to TCA9548A]),
-  ([D5], [GPIO6], [*I²C SCL*], [to TCA9548A]),
+  ([D0], [GPIO#MOTOR_STBY_PIN], [TB6612FNG STBY], [HIGH = motors enabled]),
+  ([D1], [GPIO#PIEZO_PIN], [Piezo buzzer], [LEDC PWM · 100 Ω in series]),
+  ([D2], [GPIO#ULTRIG_PIN], [Ultrasonic TRIG], [10 µs pulse output]),
+  ([D3], [GPIO#ULECHO_PIN], [Ultrasonic ECHO], [Pulse width in (RMT RX)]),
+  ([D4], [GPIO#I2C_SDA_PIN], [*I²C SDA*], [to TCA9548A]),
+  ([D5], [GPIO#I2C_SCL_PIN], [*I²C SCL*], [to TCA9548A]),
   ([D6], [GPIO43], [USB Serial TX], [Debug console]),
   ([D7], [GPIO44], [USB Serial RX], [Debug console]),
-  ([D8–D10], [GPIO7–9], [_spare_], [Future SPI / expansion]),
+  ([D8], [GPIO#I2S_BCLK_PIN], [*I²S BCLK*], [to MAX98357A — bit clock]),
+  ([D9], [GPIO#I2S_LRCLK_PIN], [*I²S LRCLK*], [to MAX98357A — word select]),
+  ([D10], [GPIO#I2S_DIN_PIN], [*I²S DIN*], [to MAX98357A — serial data]),
   aligns: (center, center, left, left),
 )
-I²C runs at *400 kHz*.
+I²C runs at *#(I2C_FREQ_HZ / 1000) kHz*.
 
-== 4.2 · I²C topology (TCA9548A @ 0x70)
+#callout("GPIO budget fully allocated", kind: "warn")[
+  There are no spare header pins. Additional digital I/O must go through the
+  MCP23017 on TCA9548A channel 2.
+]
+
+== 4.2 · I²C topology (TCA9548A @ #TCA9548A_ADDR)
 Select the channel on the multiplexer *before* addressing any downstream device.
+The MCP23017 on ch2 is optional — the firmware boots fine without it.
 
 #htable(
   (auto, 1fr, auto),
   ([Channel], [Device], [Address]),
-  ([ch0], [PCA9685 PWM driver (motors, servos, LEDs)], [0x40 @ 200 Hz]),
-  ([ch1], [SSD1306 OLED display (128×64)], [0x3C]),
-  ([ch2–7], [_reserved — IMU / ToF / future sensors_], [—]),
+  ([ch0], [PCA9685 PWM driver (motors, servos, LEDs)], [#PCA9685_ADDR @ #PCA9685_FREQ_HZ Hz]),
+  ([ch1], [SSD1306 OLED display (#OLED_WIDTH×#OLED_HEIGHT)], [#OLED_ADDR]),
+  ([ch2], [MCP23017 GPIO expander (optional)], [#MCP23017_ADDR]),
+  ([ch3–7], [_reserved — IMU / ToF / future sensors_], [—]),
   aligns: (center, left, center),
 )
 
@@ -175,15 +192,15 @@ use the full 12-bit range (0–4095).
     aligns: (center, left),
   ),
 )
-#text(fill: theme.muted)[200 Hz is a compromise between servo timing (ideal 50 Hz)
+#text(fill: theme.muted)[#PCA9685_FREQ_HZ Hz is a compromise between servo timing (ideal 50 Hz)
 and motor PWM smoothness — it works well for SG90s and the TB6612FNG.]
 
 == 4.4 · Ultrasonic rangefinder
 #htable(
   (auto, auto, auto, 1fr),
   ([Signal], [Pin], [Voltage], [Function]),
-  ([TRIG], [GPIO3 (D2)], [3.3 V], [10 µs pulse triggers a measurement]),
-  ([ECHO], [GPIO4 (D3)], [3.3 V], [Pulse width encodes distance (RMT RX)]),
+  ([TRIG], [GPIO#ULTRIG_PIN (D2)], [3.3 V], [10 µs pulse triggers a measurement]),
+  ([ECHO], [GPIO#ULECHO_PIN (D3)], [3.3 V], [Pulse width encodes distance (RMT RX)]),
   ([VCC], [3.3 V], [3.3 V], [*3.3 V variant only*]),
   ([GND], [any GND], [—], [Shared ground]),
   aligns: (center, center, center, left),
@@ -191,17 +208,54 @@ and motor PWM smoothness — it works well for SG90s and the TB6612FNG.]
 The sensor samples at \~20 Hz. *Obstacle reflex:* if distance < 15 cm, the
 executor immediately stops and reverses, independent of planner goals.
 
+== 4.5 · Audio output (MAX98357A I²S amplifier)
+The robot speaks through a mono I²S class-D amplifier. Audio is #(AUDIO_SAMPLE_RATE_HZ / 1000) kHz 16-bit
+PCM — the native output rate of the Gemini TTS model — decoded incrementally
+into a PSRAM ring so playback starts before the download finishes.
+
+#htable(
+  (auto, auto, 1fr),
+  ([Signal], [Pin], [Function]),
+  ([BCLK], [GPIO#I2S_BCLK_PIN (D8)], [Bit clock]),
+  ([LRCLK], [GPIO#I2S_LRCLK_PIN (D9)], [Word select / left-right clock]),
+  ([DIN], [GPIO#I2S_DIN_PIN (D10)], [Serial audio data to amplifier]),
+  ([Vin], [5 V], [Power — see §5 for supply requirements]),
+  ([GND], [any GND], [Shared ground]),
+  ([SD_MODE], [floating], [(L+R)/2 — firmware duplicates mono into both slots]),
+  ([GAIN], [float], [9 dB default]),
+  aligns: (center, center, left),
+)
+
+The I²S channel is disabled between utterances — the MAX98357A hisses faintly
+whenever BCLK is running, so leaving it clocking silence is audible.
+
+#callout("Trade-off", kind: "warn")[
+  Wiring the amplifier on D8–D10 *replaces the microSD slot*. On the Sense
+  expansion board these three pins are the SD card's SPI bus. There is no
+  alternative pin set — I²S needs a hardware peripheral, so it cannot be moved
+  behind the PCA9685 or the MCP23017.
+]
+
 = 5 · Power
 
 #grid(columns: (1.15fr, 1fr), column-gutter: 14pt,
 [
   Power the car from a *2×18650 pack* through an *XL6009 boost converter set to
   5 V*. Distribute that 5 V rail to the XIAO 5 V pin, the TB6612FNG (VM + VCC),
-  the PCA9685 (V+ and VCC), and the servos.
+  the PCA9685 (V+ and VCC), the servos, and the *MAX98357A amplifier (Vin)*.
 
-  The 3.3 V logic for the OLED, ultrasonic sensor, and TCA9548A comes from the
-  XIAO's 3V3 pin. Keep motor/servo current (high, noisy) on the 5 V rail and
-  logic on 3V3.
+  The 3.3 V logic for the OLED, ultrasonic sensor, TCA9548A, and MCP23017
+  comes from the XIAO's 3V3 pin. Keep motor/servo current (high, noisy) on
+  the 5 V rail and logic on 3V3.
+
+  #text(fill: theme.muted, weight: "bold")[Amplifier supply — read this:]
+  The MAX98357A draws up to ~1 A peaks into a 4 Ω load. With brown-out
+  detection already disabled for motor inrush, an undersized rail will not warn
+  you — it will present as random resets or corrupt audio mid-sentence. Fit a
+  *≥470 µF bulk capacitor* at the amplifier's Vin, plus the usual 0.1 µF close
+  to the pin. Prefer a *separate 5 V feed* from the boost converter to the
+  amplifier rather than daisy-chaining off the motor-driver rail. An *8 Ω
+  speaker* roughly halves peak current versus 4 Ω.
 ],
 callout("Golden rule", kind: "danger")[
   *Common ground everywhere.* Every module — boost converter, XIAO, motor
@@ -220,15 +274,17 @@ callout("Golden rule", kind: "danger")[
 + *Wire power first.* Connect the 18650 pack to the XL6009 input, set its output
   to *5.0 V with a multimeter before connecting anything else*, then run the 5 V
   and shared GND rails.
-+ *Place the XIAO* and bring out I²C (GPIO5/6), STBY (GPIO1), buzzer (GPIO2),
-  and the ultrasonic pins (GPIO3/4).
-+ *Wire the I²C chain:* XIAO SDA/SCL → TCA9548A → PCA9685 (ch0) and OLED (ch1).
-  Pull-ups on the breakouts are usually sufficient.
-+ *Wire the motor driver:* PCA9685 ch8–13 → TB6612FNG inputs; STBY → GPIO1;
++ *Place the XIAO* and bring out I²C (GPIO#I2C_SDA_PIN/#I2C_SCL_PIN), STBY (GPIO#MOTOR_STBY_PIN), buzzer (GPIO#PIEZO_PIN),
+  ultrasonic pins (GPIO#ULTRIG_PIN/#ULECHO_PIN), and I²S (GPIO#I2S_BCLK_PIN/#I2S_LRCLK_PIN/#I2S_DIN_PIN).
++ *Wire the I²C chain:* XIAO SDA/SCL → TCA9548A → PCA9685 (ch0), OLED (ch1),
+  and optionally MCP23017 (ch2). Pull-ups on the breakouts are usually sufficient.
++ *Wire the motor driver:* PCA9685 ch8–13 → TB6612FNG inputs; STBY → GPIO#MOTOR_STBY_PIN;
   motor outputs → the two DC motors; VM/VCC → 5 V.
 + *Add servos* (PCA9685 ch6/7) and *RGB LEDs* (ch0–5, common-anode).
-+ *Add the buzzer* on GPIO2 through the 100 Ω resistor, and the ultrasonic
-  sensor on GPIO3/4 (3.3 V power).
++ *Add the buzzer* on GPIO#PIEZO_PIN through the 100 Ω resistor, and the ultrasonic
+  sensor on GPIO#ULTRIG_PIN/#ULECHO_PIN (3.3 V power).
++ *Wire the audio path:* MAX98357A BCLK/LRC/DIN → GPIO#I2S_BCLK_PIN/#I2S_LRCLK_PIN/#I2S_DIN_PIN, Vin → 5 V with
+  ≥470 µF bulk cap, speaker → amp output. Leave SD_MODE floating for (L+R)/2.
 + *Double-check the 3.3 V vs 5 V rails* and confirm common ground with a
   multimeter continuity test before first power-up.
 
@@ -280,7 +336,7 @@ The planner uses *Gemini Robotics-ER 1.6* to emit goals — `drive()`, `track()`
 
 == 8.3 · Over-the-air updates
 OTA is enabled with app rollback. The updater pulls releases from the
-`laurigates/mcu-tinkering-lab` GitHub repo; `version.txt` (currently *v0.1.2*)
+`laurigates/mcu-tinkering-lab` GitHub repo; `version.txt` (currently *#VERSION*)
 is the single source of truth and is managed by release-please.
 
 = 9 · Functional Checkout
@@ -299,6 +355,7 @@ Work through these after first flash, watching the serial monitor:
   ([☐], [Motors], [Both wheels drive forward and reverse; STBY HIGH]),
   ([☐], [Ultrasonic], [Distance readings track a hand moving closer/away]),
   ([☐], [Reflex], [Car stops/reverses when an obstacle is < 15 cm]),
+  ([☐], [Audio / TTS], [Robot speaks startup message; speech queues without blocking motion]),
   ([☐], [WiFi], [Provisions via Improv; `robocar-unified.local` resolves]),
   aligns: (center, left, left),
 )
@@ -312,10 +369,11 @@ Work through these after first flash, watching the serial monitor:
   ([Random resets under motor load], [Weak 5 V rail / missing common ground. Use thicker power wires and verify the XL6009 holds 5 V under load.]),
   ([No I²C devices found], [Not selecting the TCA9548A channel first, or SDA/SCL swapped. Check GPIO5=SDA, GPIO6=SCL.]),
   ([OLED and PCA9685 conflict], [Both bypassing the mux. Route each through its own TCA9548A channel (ch1 / ch0).]),
-  ([Motors don't move], [STBY (GPIO1) not HIGH, or VM not on 5 V. Confirm TB6612FNG power and enable line.]),
+  ([Motors don't move], [STBY (GPIO#MOTOR_STBY_PIN) not HIGH, or VM not on 5 V. Confirm TB6612FNG power and enable line.]),
   ([Servos jitter], [Shared noisy rail. Keep servo power on 5 V with common ground; 200 Hz PWM is expected.]),
   ([Board won't flash], [Force download mode: hold BOOT, tap RESET, release BOOT.]),
   ([Damaged ECHO / no distance], [Used a 5 V HC-SR04. Replace with a 3.3 V module (HC-SR04P).]),
+  ([No audio / distorted speech], [Weak MAX98357A supply. Fit ≥470 µF bulk cap at Vin, or use a separate 5 V feed. Check I2S wiring on GPIO#I2S_BCLK_PIN – #I2S_DIN_PIN.]),
   aligns: (left, left),
 )
 
