@@ -1,8 +1,11 @@
 esphome:
   name: esp32-wireguard-ha
   friendly_name: "ESP32 WireGuard HA Example"
-  platform: ESP32
+
+esp32:
   board: esp32dev
+  framework:
+    type: esp-idf
 
 # Enable logging
 logger:
@@ -82,8 +85,9 @@ wireguard:
 binary_sensor:
   # Status of WireGuard connection
   - platform: wireguard
-    name: "WireGuard Status"
-    id: wg_status
+    status:
+      name: "WireGuard Status"
+      id: wg_status
 
   # Built-in status LED indicator
   - platform: status
@@ -104,15 +108,17 @@ sensor:
 
   # WireGuard latest handshake timestamp
   - platform: wireguard
-    name: "WG Latest Handshake"
-    id: wg_handshake
+    latest_handshake:
+      name: "WG Latest Handshake"
+      id: wg_handshake
 
 # Text sensors
 text_sensor:
   # WireGuard VPN address
   - platform: wireguard
-    name: "WG Address"
-    id: wg_address_sensor
+    address:
+      name: "WG Address"
+      id: wg_address_sensor
 
   # Device IP address
   - platform: wifi_info
