@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.13](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.1.12...robocar-unified-v0.1.13) (2026-07-26)
+
+
+### Features
+
+* **robocar-unified:** generate build-guide pin data from pin_config.h ([#434](https://github.com/laurigates/mcu-tinkering-lab/issues/434)) ([310edda](https://github.com/laurigates/mcu-tinkering-lab/commit/310edda534bef512a21a21631d7897b2896fcbbc))
+* **robocar-unified:** vary spoken dialogue per utterance ([#432](https://github.com/laurigates/mcu-tinkering-lab/issues/432)) ([e25d53a](https://github.com/laurigates/mcu-tinkering-lab/commit/e25d53a3e09a295e047c23d16f1b6d6b8a6c65f8))
+
 ## [0.1.12](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.1.11...robocar-unified-v0.1.12) (2026-07-25)
 
 
