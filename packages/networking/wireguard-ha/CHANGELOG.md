@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.3](https://github.com/laurigates/mcu-tinkering-lab/compare/esp32-wireguard-ha-example-v0.1.2...esp32-wireguard-ha-example-v0.1.3) (2026-07-26)
+
+
+### Bug Fixes
+
+* **wireguard-ha:** modernize ESPHome config for 2026.7 ([#438](https://github.com/laurigates/mcu-tinkering-lab/issues/438)) ([08d2b3d](https://github.com/laurigates/mcu-tinkering-lab/commit/08d2b3d02493ec9f57405e3c3acd27b631355755))
+
 ## [0.1.2](https://github.com/laurigates/mcu-tinkering-lab/compare/esp32-wireguard-ha-example-v0.1.1...esp32-wireguard-ha-example-v0.1.2) (2026-07-02)
 
 
