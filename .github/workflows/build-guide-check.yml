@@ -5,6 +5,8 @@ on:
     branches: [main, develop, 'claude/**']
     paths:
       - '**/docs/build-guide.typ'
+      - '**/docs/auto/pin_defs.typ'
+      - '**/main/pin_config.h'
       - 'tools/typst/**'
       - 'docs/schematics/images/**'
       - '.github/workflows/build-guide-check.yml'
@@ -12,6 +14,8 @@ on:
     branches: [main, develop]
     paths:
       - '**/docs/build-guide.typ'
+      - '**/docs/auto/pin_defs.typ'
+      - '**/main/pin_config.h'
       - 'tools/typst/**'
       - 'docs/schematics/images/**'
       - '.github/workflows/build-guide-check.yml'
@@ -28,8 +32,9 @@ env:
   # Pin the exact Typst version the committed PDFs were compiled with. PDF byte
   # output changes across compiler releases, so the freshness check below is only
   # meaningful against a fixed version. Bump this in the same commit that
-  # recompiles every guide with the new CLI.
-  TYPST_VERSION: '0.14.2'
+  # recompiles every guide with the new CLI — and keep `typst_version` in each
+  # project's justfile in sync, or local recompiles read as drift here.
+  TYPST_VERSION: '0.15.0'
 
 jobs:
   guides-up-to-date:
@@ -84,19 +89,36 @@ jobs:
               continue
             fi
             echo "::group::$typ"
+
+            # Guides may import machine-generated pin data. Where a project
+            # follows the convention (<proj>/docs/auto/pin_defs.typ generated
+            # from <proj>/main/pin_config.h + <proj>/version.txt), regenerate it
+            # here so a pin renamed or moved in the C header cannot silently
+            # leave a *wrong* pin in a printed build guide — the PDF would
+            # recompile cleanly from stale definitions and look up to date.
+            proj="${typ%/docs/build-guide.typ}"
+            defs="$proj/docs/auto/pin_defs.typ"
+            drift_paths=("$pdf")
+            if [ -f "$defs" ] && [ -f "$proj/main/pin_config.h" ] && [ -f "$proj/version.txt" ]; then
+              python3 tools/typst/generate-pin-defs.py \
+                "$proj/main/pin_config.h" "$proj/version.txt" "$defs"
+              drift_paths+=("$defs")
+            fi
+
             typst compile --creation-timestamp 0 --ignore-system-fonts --root "$PWD" "$typ" "$pdf"
-            if git diff --quiet -- "$pdf"; then
-              echo "up to date: $pdf"
+            if git diff --quiet -- "${drift_paths[@]}"; then
+              echo "up to date: ${drift_paths[*]}"
             else
-              echo "::error file=$pdf::Committed PDF is stale relative to $typ (or the shared template / embedded assets)."
+              git --no-pager diff --stat -- "${drift_paths[@]}"
+              echo "::error file=$pdf::Committed build-guide output is stale relative to $typ, its generated pin definitions, or the shared template / embedded assets."
               status=1
             fi
             echo "::endgroup::"
           done < <(git ls-files '**/docs/build-guide.typ')
           if [ "$status" -ne 0 ]; then
-            echo "::error::One or more build-guide PDFs are out of date. Install the pinned CLI and recompile:"
-            echo "::error::  cargo install typst-cli --version ${TYPST_VERSION} --locked"
-            echo "::error::  typst compile --creation-timestamp 0 --ignore-system-fonts --root . <path>/build-guide.typ <path>/build-guide.pdf"
-            echo "::error::then commit the regenerated PDF(s)."
+            echo "::error::One or more build guides are out of date. Regenerate with the project's own recipe, which pins the same CLI version and flags used here:"
+            echo "::error::  just <project>::build-guide     # e.g. just robocar-unified::build-guide"
+            echo "::error::then commit the regenerated pin_defs.typ and PDF."
+            echo "::error::Equivalent by hand: mise exec typst@${TYPST_VERSION} -- typst compile --creation-timestamp 0 --ignore-system-fonts --root . <path>/build-guide.typ <path>/build-guide.pdf"
             exit 1
           fi
