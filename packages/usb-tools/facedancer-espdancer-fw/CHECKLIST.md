@@ -62,12 +62,20 @@ echoes the `HELLO` handshake. No USB emulation yet.
       with `tusb_rhport_init_t{role,speed}` `[new]`
 - [x] `components/raw_usb/CMakeLists.txt` `PRIV_REQUIRES tinyusb_port` (include
       path + dcd_*) `[new]`
-- [ ] Dry compile: `rm -f sdkconfig && just build` against
-      `mcu-tinkering-lab/esp-idf:v5.4`; fix residual `usbd_pvt.h`/OSAL stub /
-      IDF `priv_requires` issues — **pending: docker image not yet built** `[new]`
-- [ ] Remove `espressif/esp_tinyusb` dep from `main/idf_component.yml` (verify
-      it's no longer needed for any KCONFIG_TINYUSB_* symbol the build variants
-      reference) `[new]`
+- [x] Dry compile: `just build-debug-usb` → **green** (63% app-partition free;
+      produces `facedancer-espdancer-fw.bin`). Three fixes landed to get there
+      (PR #415): (1) `CMakeLists.txt` `CMake_CURRENT_SOURCE_DIR` case typo
+      in the version-read `file(READ)`; (2) `main.c` `ESP_LOGI` was passed a
+      ternary as its format string (non-literal breaks the macro) → rewritten
+      as `"Host %s"` + ternary arg; (3) **the vendored `dcd_dwc2.c` references
+      `usbd_spin_lock`/`usbd_spin_unlock` + `usbd_int_set` from `usbd.c`, which
+      this port excludes** — supplied them in `raw_usb.c` as a faithful port of
+      TinyUSB 0.19.0 (`OSAL_SPINLOCK_DEF` + `osal_spin_lock/unlock` from
+      `osal_none.h`; `usbd_int_set` toggles `dcd_int_enable`/`_disable`). See
+      ADR-0006 (resolved risk) `[new]`
+- [x] Remove `espressif/esp_tinyusb` dep from `main/idf_component.yml` — done
+      during scaffolding (`dependencies: {}`); pulling it would compile
+      `usbd.c` and strongly define `dcd_event_handler`, colliding with ours `[new]`
 
 ### raw_usb component
 

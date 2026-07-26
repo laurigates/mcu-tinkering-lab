@@ -114,15 +114,32 @@ interrupt allocator (it calls `esp_intr_alloc`).
 - **Drive the OTG-FS registers directly, no TinyUSB at all.** More control,
   more bugs; the DWC2 DCD is already battle-tested and MIT-licensed.
 
-## Risk
+## Risk → Resolved (build green, PR #415)
+
+The first real `just build-debug-usb` surfaced one hard dependency that the
+"bypass `usbd`" plan had to absorb:
+
+- **`dcd_dwc2.c` references `usbd_spin_lock` / `usbd_spin_unlock` and the
+  `usbd_int_set` interrupt callback**, which normally live in `usbd.c` — the
+  very file we exclude. We supply them in `raw_usb.c` as a faithful port of
+  TinyUSB 0.19.0: an `OSAL_SPINLOCK_DEF(_usbd_spin, usbd_int_set)` whose
+  `usbd_int_set` toggles `dcd_int_enable`/`dcd_int_disable` on our single
+  rhport; `usbd_spin_lock`/`_unlock` delegate to `osal_spin_lock`/`_unlock`
+  from `osal_none.h` (no-op in ISR, int-disable in task context under
+  `CFG_TUSB_OS == OPT_OS_NONE`). **This is a standing obligation: any future
+  refresh of the vendored DCD must re-verify these three symbols are still
+  defined here and still match the upstream signature.**
+
+The other two risks flagged below closed without incident:
 
 - `dcd_dwc2.c` includes `device/usbd_pvt.h` (OSAL + tusb_fifo + tusb_private
   types). Vendoring `usbd_pvt.h` is fine (it's a header); we don't compile
-  `usbd.c`. We must supply an `osal` — `osal_none.h` (no-op) unless the DCD
-  uses an OSAL primitive (spike: confirm during the port compile).
-- Confirm the DWC2 FS interrupt allocator path uses `esp_intr_alloc` from IDF
-  (it does per `dwc2_esp32.h`); verify the ISR is installable without
-  `tusb_init()`.
+  `usbd.c`. We supply `osal_none.h` via the `osal/osal.h` include (resolved
+  once the spinlock shim above was in place).
+- The DWC2 FS interrupt allocator path does use `esp_intr_alloc` from IDF
+  (per `dwc2_esp32.h`); the ISR is installable by `dcd_init()` without
+  `tusb_init()` — confirmed at runtime by the green build.
 
-Confidence on the *design* is high; confidence on a clean first compile is
-medium. Milestone 1's first sub-task is the vendoring + dry compile.
+Confidence on the design is **high**; confidence on the port is now **high**
+post-build. The remaining M1 work (runtime descriptor table, `raw_usb_connect`
+enumeration, control-transfer stages) is application-level, not port-level.
