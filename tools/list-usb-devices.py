@@ -104,7 +104,9 @@ def main():
             ["ioreg", "-r", "-c", "IOUSBHostDevice", "-a"],
             stderr=subprocess.DEVNULL,
         )
-        data = plistlib.loads(raw)
+        # ioreg prints nothing at all (not even an empty plist) when no
+        # entries match the class, e.g. no USB devices currently attached.
+        data = plistlib.loads(raw) if raw.strip() else []
     except Exception as e:
         print(f"Error reading USB registry: {e}", file=sys.stderr)
         sys.exit(1)
