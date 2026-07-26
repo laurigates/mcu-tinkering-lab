@@ -16,6 +16,10 @@ target/
 *.o
 *.a
 *.so
+# macOS shared-library form of *.so — host test/sim cores build to .dylib here
+# (e.g. kids-audio-toy's sim/libaudio_core.dylib) and would otherwise show up
+# as untracked on every developer's Mac.
+*.dylib
 *.elf
 *.bin
 *.hex
