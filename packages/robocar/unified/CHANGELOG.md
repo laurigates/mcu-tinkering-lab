@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.14](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.1.13...robocar-unified-v0.1.14) (2026-07-26)
+
+
+### Documentation
+
+* **robocar-unified:** refresh build guide for 0.1.13 ([#440](https://github.com/laurigates/mcu-tinkering-lab/issues/440)) ([ff47d2a](https://github.com/laurigates/mcu-tinkering-lab/commit/ff47d2a26b54e4eff2472c8de056dcd9a21f3ffb))
+
 ## [0.1.13](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.1.12...robocar-unified-v0.1.13) (2026-07-26)
 
 
