@@ -101,7 +101,9 @@ static void test_decodes_simple_payload(void)
 }
 
 /* The decoder must ignore everything before the payload and stop at the
- * closing quote — trailing JSON must not leak into the audio. */
+ * closing quote — a *differently keyed* trailing string must not leak into the
+ * audio. (A trailing `"data"` key is a second payload and *is* decoded; see
+ * test_decodes_multiple_payloads.) */
 static void test_stops_at_closing_quote(void)
 {
     const char *body = "{\"data\":\"SGVsbG8=\",\"other\":\"QUJD\"}";
@@ -110,6 +112,48 @@ static void test_stops_at_closing_quote(void)
 
     ASSERT(sink.len == 5);
     ASSERT(memcmp(sink.buf, "Hello", 5) == 0);
+}
+
+/* Streaming TTS (:streamGenerateContent) sends one JSON object per SSE event,
+ * each carrying its own `"data"` payload. The decoder must resume seeking after
+ * a payload closes and concatenate every payload in the stream — a decoder that
+ * latched "done" on the first one would play ~1/233rd of an utterance. */
+static void test_decodes_multiple_payloads(void)
+{
+    const char *body = "{\"data\":\"SGVsbG8=\"}{\"data\":\"IHdvcmxk\"}";
+    sink_t sink = {0};
+    feed_chunked(body, strlen(body), &sink);
+
+    ASSERT(sink.len == 11);
+    ASSERT(memcmp(sink.buf, "Hello world", 11) == 0);
+}
+
+/* The real SSE framing: `data: <json>\n\n` per event. The framing keyword is
+ * bare `data:` with no quotes, so it must not satisfy the quoted `"data"` key
+ * match — otherwise the decoder would start consuming the JSON itself as
+ * audio. Swept across chunk sizes because event boundaries land wherever TCP
+ * happens to split. */
+static void test_sse_event_stream(void)
+{
+    const char *body =
+        "data: {\"candidates\":[{\"content\":{\"parts\":[{\"inlineData\":{\"mimeType\":\"audio/"
+        "l16; rate=24000; channels=1\",\"data\":\"VGhlIHF1aWNr\"}}]}}]}\n\n"
+        "data: {\"candidates\":[{\"content\":{\"parts\":[{\"inlineData\":{\"mimeType\":\"audio/"
+        "l16; rate=24000; channels=1\",\"data\":\"IGJyb3duIGZveA==\"}}]}}]}\n\n";
+    const char *expect = "The quick brown fox";
+    const size_t expect_len = strlen(expect);
+
+    for (size_t chunk = 1; chunk <= strlen(body); chunk++) {
+        sink_t sink = {0};
+        feed_chunked(body, chunk, &sink);
+
+        if (sink.len != expect_len || memcmp(sink.buf, expect, expect_len) != 0) {
+            printf("     chunk=%zu produced %zu bytes: %.*s\n", chunk, sink.len, (int)sink.len,
+                   sink.buf);
+        }
+        ASSERT(sink.len == expect_len);
+        ASSERT(memcmp(sink.buf, expect, expect_len) == 0);
+    }
 }
 
 /* The core property: identical output at every chunk size, including 1 (which
@@ -204,7 +248,10 @@ static void test_sink_abort_halts_decode(void)
     ASSERT(sink.len < 30); /* stopped well before the full payload */
 }
 
-/* done() reports true only once the payload's closing quote is consumed. */
+/* done() reports true between payloads — i.e. once a payload's closing quote is
+ * consumed and the decoder is not inside another one. With a multi-payload SSE
+ * stream it therefore flips back to false when the next payload opens; it means
+ * "not mid-payload", not "the stream has ended". */
 static void test_done_flag(void)
 {
     const char *body = "{\"data\":\"QUJD\"}";
@@ -217,6 +264,15 @@ static void test_done_flag(void)
     ASSERT(!base64_stream_done(&st));
     base64_stream_feed(&st, body + 10, strlen(body) - 10, collect, &sink);
     ASSERT(base64_stream_done(&st));
+
+    /* A following payload re-opens the decoder rather than being ignored. */
+    const char *next = "{\"data\":\"REVG\"}";
+    base64_stream_feed(&st, next, 10, collect, &sink); /* mid second payload */
+    ASSERT(!base64_stream_done(&st));
+    base64_stream_feed(&st, next + 10, strlen(next) - 10, collect, &sink);
+    ASSERT(base64_stream_done(&st));
+    ASSERT(sink.len == 6);
+    ASSERT(memcmp(sink.buf, "ABCDEF", 6) == 0);
 }
 
 /* NULL guards. */
@@ -242,6 +298,8 @@ int main(void)
 
     test_run("decodes_simple_payload", test_decodes_simple_payload);
     test_run("stops_at_closing_quote", test_stops_at_closing_quote);
+    test_run("decodes_multiple_payloads", test_decodes_multiple_payloads);
+    test_run("sse_event_stream", test_sse_event_stream);
     test_run("chunk_size_independence", test_chunk_size_independence);
     test_run("binary_payload_with_nuls", test_binary_payload_with_nuls);
     test_run("skips_embedded_whitespace", test_skips_embedded_whitespace);

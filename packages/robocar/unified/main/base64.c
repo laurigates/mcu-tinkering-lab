@@ -164,11 +164,11 @@ int base64_stream_feed(base64_stream_t *st, const char *chunk, size_t len, base6
     for (size_t i = 0; i < len; i++) {
         const char c = chunk[i];
 
-        if (st->phase == 2) {
-            return 0;  // payload already complete; ignore the JSON tail
-        }
-
-        if (st->phase == 0) {
+        /* phase 0 (nothing decoded yet) and phase 2 (between payloads) both
+         * seek the next `"data"` key. Streaming responses carry one payload per
+         * SSE event, so completing a payload must resume the search rather than
+         * latch — see the closing-quote branch below. */
+        if (st->phase != 1) {
             if (st->key_match < BASE64_DATA_KEY_LEN) {
                 if (c == BASE64_DATA_KEY[st->key_match]) {
                     st->key_match++;
@@ -199,8 +199,15 @@ int base64_stream_feed(base64_stream_t *st, const char *chunk, size_t len, base6
             if (!flush_quartet(st, sink, ctx)) {
                 return -1;
             }
+            /* Payload closed. Reset the key matcher and keep scanning: a
+             * streamed response holds one payload per event, and the bytes
+             * after this quote are the next event's JSON, not a tail to skip.
+             * The quartet carry is already drained by flush_quartet(), so the
+             * next payload starts on a clean 4-char boundary. */
             st->phase = 2;
-            return 0;
+            st->key_match = 0;
+            st->saw_colon = false;
+            continue;
         }
         if (c == '=') {
             continue;  // padding; the closing quote triggers the flush

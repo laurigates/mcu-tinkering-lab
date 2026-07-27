@@ -131,6 +131,11 @@ static const voice_persona_t s_personas[VOICE_PERSONA_COUNT] = {
             .tts_style = "Say in a friendly, natural tone",
             .text_brief = "Speak plain, friendly contemporary English. Vary how you phrase "
                           "things — do not reuse the same opening twice running.",
+            .tag_brief = "You may mark delivery with a bracketed tag inside the sentence: "
+                         "[sighs] [laughs] [whispers] [excited] [bored] [gasp]. Use them "
+                         "sparingly and only where they fit what is being said — at most one "
+                         "line in three, and never in a fault report. Write the tag exactly "
+                         "as shown.",
             .openers = {s_en_openers, DIALOGUE_POOL_COUNT(s_en_openers)},
             .shapes = {s_en_shapes, DIALOGUE_POOL_COUNT(s_en_shapes)},
             .avoid_lead = "Do not begin the sentence with any of these:",
@@ -148,14 +153,40 @@ static const voice_persona_t s_personas[VOICE_PERSONA_COUNT] = {
             .label = "Finnish, 1950s film register",
             .language_code = "fi-FI",
             .voice = "Charon",
-            .tts_style = "Puhu rauhallisesti, kohteliaasti ja hieman juhlallisesti, "
-                         "1950-luvun suomalaisen elokuvan ja radiokuuluttajan tapaan",
+            /* Naming the *era* alone produced correct Finnish that did not sound
+             * period at all — the model has no reason to infer the delivery from
+             * a date. What reads as "1950s" is a bundle of concrete, separable
+             * traits, so they are asked for individually: theatre-derived
+             * enunciation (nearly every film actor of the era came from the
+             * stage), full yleiskieli forms rather than colloquial contractions,
+             * a distinctly tapped /r/, held geminates, an unhurried tempo with
+             * real pauses at clause boundaries, and the declamatory rise-and-fall
+             * of a Yleisradio announcer.
+             *
+             * One caveat this directive cannot address: a good part of what makes
+             * an old recording *sound* old is the recording chain, not the
+             * speaking — optical/early-magnetic sound was roughly 100 Hz–5 kHz,
+             * which thins the bass and pushes the midrange forward. TTS returns
+             * clean full-band audio, so that character is simply absent. Closing
+             * it would mean filtering the PCM on the way to I2S, not prompting
+             * harder. See the skill for the sketch. */
+            .tts_style = "Puhu kuin 1950-luvun suomalaisen elokuvan näyttelijä tai Yleisradion "
+                         "kuuluttaja: huoliteltua yleiskieltä, jokainen tavu selvästi "
+                         "artikuloituna, sorahtava ärrä, kaksoiskonsonantit pitkinä pidettyinä. "
+                         "Rauhallinen, hieman verkkainen tempo ja selvät tauot lauseen osien "
+                         "välissä. Juhlallinen, teatterista periytyvä lausunta — älä puhu "
+                         "rennosti tai nykyaikaisen luontevasti",
             .text_brief =
                 "Puhu kuin 1950-luvun suomalaisen elokuvan hahmo (vrt. komisario Palmu): "
                 "kohteliasta, hieman vanhahtavaa yleiskieltä, teitittelyä ja herrasmiesmäistä "
                 "sävyä. Vältä nykyslangia, anglismeja, lyhenteitä ja emojeita. Vaihtele "
                 "sanontaa: älä toista samaa aloitusta tai fraasia kerrasta toiseen. "
                 "Kirjoita yksi lyhyt puhuttu lause.",
+            .tag_brief =
+                "Voit halutessasi merkitä esitystapaa hakasulkeilla suoraan lauseen sisään: "
+                "[sighs] [laughs] [whispers] [excited] [bored] [gasp]. Käytä niitä säästeliäästi "
+                "ja vain silloin kun ne sopivat asiaan — korkeintaan yksi lause kolmesta, eikä "
+                "koskaan vikailmoituksessa. Kirjoita tagi täsmälleen näin, englanniksi.",
             .openers = {s_fi_openers, DIALOGUE_POOL_COUNT(s_fi_openers)},
             .shapes = {s_fi_shapes, DIALOGUE_POOL_COUNT(s_fi_shapes)},
             .avoid_lead = "Älä aloita lausetta näillä sanoilla:",

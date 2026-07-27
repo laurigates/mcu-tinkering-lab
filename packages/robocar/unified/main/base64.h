@@ -59,6 +59,15 @@ char *base64_encode_alloc(const uint8_t *input, size_t input_length);
  * and decodes only the string that follows, ignoring the surrounding JSON.
  * This avoids pulling a streaming JSON parser in for a response whose shape
  * is fixed and known.
+ *
+ * **Multiple payloads per body.**  Against `:streamGenerateContent?alt=sse`
+ * the response is not one JSON object but a sequence of SSE events, each a
+ * complete object carrying its own `"data"` payload (233 of them for a ~15 s
+ * utterance).  The decoder therefore resumes seeking after each closing quote
+ * and concatenates every payload it finds, which is exactly the PCM stream in
+ * order.  The SSE framing keyword is a bare `data:` with no quotes, so it
+ * cannot satisfy the quote-delimited key match and is skipped like any other
+ * non-payload byte.
  * ========================================================================= */
 
 /**
@@ -70,7 +79,7 @@ typedef bool (*base64_sink_fn)(const uint8_t *data, size_t len, void *ctx);
 
 /** Internal decoder state. Zero-initialise, then feed chunks. */
 typedef struct {
-    uint8_t phase;      /**< 0=seeking "data" key, 1=in payload, 2=done  */
+    uint8_t phase;      /**< 0=seeking "data" key, 1=in payload, 2=between  */
     uint8_t key_match;  /**< progress through the literal `"data"`       */
     uint8_t quartet[4]; /**< carry for a partial 4-char group            */
     uint8_t quartet_len;
@@ -91,7 +100,14 @@ void base64_stream_init(base64_stream_t *st);
 int base64_stream_feed(base64_stream_t *st, const char *chunk, size_t len, base64_sink_fn sink,
                        void *ctx);
 
-/** True once the payload's closing quote has been consumed. */
+/**
+ * @brief True when the decoder is *between* payloads — at least one payload's
+ *        closing quote consumed, and not currently inside another.
+ *
+ * Not an end-of-stream signal: on a multi-payload SSE body this flips back to
+ * false as each subsequent payload opens. The transport, not the decoder,
+ * decides when the response is finished.
+ */
 bool base64_stream_done(const base64_stream_t *st);
 
 #endif  // BASE64_H
