@@ -101,6 +101,18 @@ target_link_libraries(test_base64_stream PRIVATE Threads::Threads m)
 add_test(NAME base64_stream COMMAND test_base64_stream)
 
 # -----------------------------------------------------------------------------
+# speech tag filter (inline TTS delivery tags)
+#
+# speech_tags.c is pure C with no ESP-IDF dependency, like base64.c.
+# -----------------------------------------------------------------------------
+add_executable(test_speech_tags
+    "${MAIN_SRC_DIR}/speech_tags.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_speech_tags.c"
+)
+target_link_libraries(test_speech_tags PRIVATE Threads::Threads m)
+add_test(NAME speech_tags COMMAND test_speech_tags)
+
+# -----------------------------------------------------------------------------
 # dialogue_style variation module (spoken-line repetition)
 #
 # dialogue_style.c is deliberately free of ESP-IDF and FreeRTOS (the PRNG is
@@ -108,6 +120,7 @@ add_test(NAME base64_stream COMMAND test_base64_stream)
 # -----------------------------------------------------------------------------
 add_executable(test_dialogue_style
     "${MAIN_SRC_DIR}/dialogue_style.c"
+    "${MAIN_SRC_DIR}/speech_tags.c"  # note_spoken() strips delivery tags
     "${CMAKE_CURRENT_SOURCE_DIR}/test_dialogue_style.c"
 )
 target_link_libraries(test_dialogue_style PRIVATE Threads::Threads m)

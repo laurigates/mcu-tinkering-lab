@@ -65,6 +65,20 @@ typedef struct {
     const char *tts_style;     /**< Delivery directive; prefixed as "<style>: <text>". */
     const char *text_brief;    /**< Register/idiom brief for text generation. */
 
+    /** Instruction telling the generating model which inline delivery tags it
+     *  may place in the spoken text, in the persona's own language.
+     *
+     *  Goes to gemini_backend.c with `text_brief`, *not* into the TTS request:
+     *  the tags are written into the sentence by whoever writes the sentence.
+     *  They are placed rather than drawn at random because a tag has to fit
+     *  what is being said — `[laughs]` on a fault report is worse than no tag
+     *  at all — which is exactly the judgement the openers/shapes pools do not
+     *  need to make. Whatever the model returns is filtered against the
+     *  allow-list in speech_tags.h before it reaches the speaker.
+     *
+     *  May be NULL, which means this persona does not use tags. */
+    const char *tag_brief;
+
     /* Per-utterance variation. The brief above is the persona's *constant*
      * register; these are what keeps it from being said the same way every
      * time. One entry is drawn from each pool per generated line and appended

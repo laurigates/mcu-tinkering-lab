@@ -327,10 +327,11 @@ static char *build_request_json(const char *b64_image)
              "on every frame. You are consulted about every %u seconds, so narrating "
              "every time would be tiresome. "
              "When you do call 'speak', the spoken text MUST follow this voice: %s "
-             "%s%s%s"
+             "%s%s%s%s%s"
              "Respond ONLY with function calls — no prose, no markdown.",
              PLANNER_LOOP_PERIOD_MS / 1000U, persona->text_brief,
-             vlen ? "For this one line only: " : "", variation, vlen ? " " : "");
+             vlen ? "For this one line only: " : "", variation, vlen ? " " : "",
+             persona->tag_brief ? persona->tag_brief : "", persona->tag_brief ? " " : "");
     const char *SYSTEM_PROMPT = system_prompt;
 
     cJSON *root = cJSON_CreateObject();
@@ -506,6 +507,13 @@ esp_err_t gemini_backend_plan(const uint8_t *jpeg, size_t jpeg_len, goal_t *out_
 static char *build_narrate_json(const char *facts, bool is_update)
 {
     const voice_persona_t *persona = voice_persona_get();
+
+    /* Deliberately no tag_brief on this path — unlike the planner's `speak`,
+     * which is an idle observation, this line is a status report. Half of them
+     * name a dead subsystem, and a robot that sighs or giggles while announcing
+     * its own camera failure is the one delivery nobody wants. The filter in
+     * speech_queue_post() still guards the path; this just declines to invite
+     * tags in the first place. */
 
     /* Same per-call draw as the planner path. This one matters more, not less:
      * the self-introduction is spoken on every boot from a prompt whose facts

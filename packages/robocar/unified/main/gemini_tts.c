@@ -33,8 +33,23 @@ static const char *TAG = "gemini_tts";
  *  Returns raw 24 kHz 16-bit mono PCM with NO WAV header, base64-encoded in
  *  candidates[0].content.parts[N].inlineData.data. */
 #define TTS_MODEL "gemini-3.1-flash-tts-preview"
-#define TTS_URL \
-    "https://generativelanguage.googleapis.com/v1beta/models/" TTS_MODEL ":generateContent"
+
+/** Streaming endpoint, not `:generateContent`.
+ *
+ *  `:generateContent` synthesises the *whole* utterance before sending a byte,
+ *  so the ring-buffer overlap this module is built around had almost nothing to
+ *  overlap with. Measured on one Finnish line (2026-07):
+ *
+ *      :generateContent               TTFB 6.42 s   total 7.42 s   1 response
+ *      :streamGenerateContent?alt=sse TTFB 1.16 s   total 3.78 s   233 events
+ *
+ *  Same request body, same model — only the endpoint differs. `alt=sse` frames
+ *  each event as `data: <json>\n\n`, and every event carries its own
+ *  `inlineData.data` chunk of the same 24 kHz PCM, so the streaming decoder
+ *  consumes it unchanged (see base64.h on multi-payload bodies). */
+#define TTS_URL                                                          \
+    "https://generativelanguage.googleapis.com/v1beta/models/" TTS_MODEL \
+    ":streamGenerateContent?alt=sse"
 
 /* Voice name and language now come from the active persona (voice_persona.h),
  * so they can be switched at runtime rather than pinned here. */
@@ -57,6 +72,11 @@ static const char *TAG = "gemini_tts";
 typedef struct {
     base64_stream_t b64;
     size_t pcm_bytes;
+    /** When the first decoded sample reached the ring. This — not the total
+     *  request time — is what the listener perceives as the robot's delay, and
+     *  it is the number the streaming endpoint exists to shrink. Logged so a
+     *  regression back to whole-response synthesis is visible in the monitor. */
+    int64_t first_pcm_us;
     bool ring_stalled;
     bool http_error; /**< non-200: capture body, decode nothing */
     char err[TTS_ERR_BUF_SIZE];
@@ -74,6 +94,10 @@ typedef struct {
 static bool pcm_sink(const uint8_t *data, size_t len, void *ctx)
 {
     tts_ctx_t *tc = (tts_ctx_t *)ctx;
+
+    if (tc->first_pcm_us == 0) {
+        tc->first_pcm_us = esp_timer_get_time();
+    }
 
     if (audio_player_write(data, len, TTS_RING_TIMEOUT_MS) != ESP_OK) {
         tc->ring_stalled = true;
@@ -220,9 +244,12 @@ static void speak(const char *text)
     } else if (ctx.pcm_bytes == 0) {
         ESP_LOGW(TAG, "HTTP 200 but no audio payload found in response");
     } else {
-        ESP_LOGI(TAG, "spoke %u bytes (%u ms audio) in %u ms: \"%s\"", (unsigned)ctx.pcm_bytes,
+        const uint32_t first_ms =
+            ctx.first_pcm_us ? (uint32_t)((ctx.first_pcm_us - t_start) / 1000) : 0;
+        ESP_LOGI(TAG, "spoke %u bytes (%u ms audio) first=%u ms total=%u ms: \"%s\"",
+                 (unsigned)ctx.pcm_bytes,
                  (unsigned)(ctx.pcm_bytes * 1000 / (AUDIO_SAMPLE_RATE_HZ * sizeof(int16_t))),
-                 (unsigned)latency_ms, text);
+                 (unsigned)first_ms, (unsigned)latency_ms, text);
     }
 
     audio_player_end_utterance();

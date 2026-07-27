@@ -10,6 +10,7 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
+#include "speech_tags.h"
 
 static const char *TAG = "speech_queue";
 
@@ -42,6 +43,19 @@ esp_err_t speech_queue_post(const char *text)
 
     speech_request_t req;
     strlcpy(req.text, text, sizeof(req.text));
+
+    /* Single choke point for delivery-tag filtering: every producer (planner
+     * `speak`, self-report narration, the console audition) posts here, so
+     * nothing unvetted can reach the TTS request body. An unrecognised
+     * bracketed run is liable to be spoken aloud rather than performed — see
+     * speech_tags.h. */
+    const size_t dropped = speech_tags_sanitize(req.text);
+    if (dropped > 0) {
+        ESP_LOGD(TAG, "dropped %u unrecognised delivery tag(s)", (unsigned)dropped);
+    }
+    if (req.text[0] == '\0') {
+        return ESP_ERR_INVALID_ARG; /* the line was nothing but tags */
+    }
 
     // Zero timeout: posting happens from the planner task, which must never
     // stall on a busy speaker.

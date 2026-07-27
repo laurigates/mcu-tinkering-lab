@@ -10,6 +10,8 @@
 
 #include <string.h>
 
+#include "speech_tags.h"
+
 /* -------------------------------------------------------------------------- */
 /* PRNG                                                                        */
 /* -------------------------------------------------------------------------- */
@@ -147,8 +149,16 @@ static void extract_opening(const char *line, char *out, size_t out_len)
 
 void dialogue_style_note_spoken(const char *line)
 {
+    /* Delivery tags are stripped before the opening is extracted. A line
+     * beginning "[sighs] Jaahas" would otherwise be remembered as opening with
+     * the tag, and the next prompt would ask the model to avoid *sighing*
+     * rather than to avoid the word "Jaahas" — the mechanism would quietly
+     * start policing the wrong axis. See speech_tags.h. */
+    char words[DIALOGUE_STYLE_MAX];
+    speech_tags_strip(line, words, sizeof(words));
+
     char opening[DIALOGUE_OPENING_MAX];
-    extract_opening(line, opening, sizeof(opening));
+    extract_opening(words, opening, sizeof(opening));
     if (opening[0] == '\0') {
         return;
     }
