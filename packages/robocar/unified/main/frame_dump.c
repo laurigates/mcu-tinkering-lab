@@ -67,22 +67,6 @@ static uint8_t hist_percentile(uint32_t rank)
     return 255;
 }
 
-/** Render the sensor's live exposure, or say plainly that it could not be read.
- *
- *  An unread sensor must never be printed as "gain=0 exp=0" — that is a real
- *  and specific diagnosis ("the sensor is not trying") and reporting an I2C
- *  hiccup in its clothing would send the exposure investigation the wrong way.
- */
-static void format_exposure(char *out, size_t n, const camera_exposure_t *exp)
-{
-    if (exp->valid) {
-        snprintf(out, n, "gain=%u exp=%u ceil=%u(%ux)", exp->gain, exp->exposure, exp->gainceiling,
-                 (unsigned)(1u << (exp->gainceiling + 1)));
-    } else {
-        snprintf(out, n, "sensor=UNREADABLE");
-    }
-}
-
 void frame_stats_log(const uint8_t *jpeg, size_t len)
 {
     /* Static rather than stack: 2400 bytes would be nearly a third of the
@@ -91,8 +75,8 @@ void frame_stats_log(const uint8_t *jpeg, size_t len)
 
     camera_exposure_t exp = {0};
     camera_read_exposure(&exp);
-    char exp_str[48];
-    format_exposure(exp_str, sizeof(exp_str), &exp);
+    char exp_str[64];
+    camera_format_exposure(exp_str, sizeof(exp_str), &exp);
 
     /* Bound the decode against thumb[] BEFORE decoding. jpg2rgb565() passes
      * outbuf_size = UINT32_MAX (its own source calls that "a very bold
@@ -100,7 +84,11 @@ void frame_stats_log(const uint8_t *jpeg, size_t len)
      * size comes from the JPEG's own SOF0 header. A corrupted header — the
      * first few hundred bytes of the file, exactly where a torn capture
      * corrupts — would then write past this fixed static buffer. Reading the
-     * declared geometry first turns a silent .bss corruption into a log line. */
+     * declared geometry first turns a silent .bss corruption into a log line.
+     *
+     * esp_jpeg_get_image_info() reports the SOURCE dimensions, not the scaled
+     * output — comparing them against the 40x30 thumbnail rejected every frame
+     * on the first board this ran on. Compare against the full frame and divide. */
     esp_jpeg_image_cfg_t probe = {
         .indata = (uint8_t *)jpeg,
         .indata_size = len,
@@ -108,10 +96,11 @@ void frame_stats_log(const uint8_t *jpeg, size_t len)
         .out_scale = JPEG_IMAGE_SCALE_1_8,
     };
     esp_jpeg_image_output_t info = {0};
-    if (esp_jpeg_get_image_info(&probe, &info) != ESP_OK || info.width != THUMB_W ||
-        info.height != THUMB_H) {
-        ESP_LOGW(TAG, "jpeg=%u B luma=UNDECODABLE (thumb %ux%u, expected %dx%d) | %s",
-                 (unsigned)len, info.width, info.height, THUMB_W, THUMB_H, exp_str);
+    if (esp_jpeg_get_image_info(&probe, &info) != ESP_OK || info.width != CAMERA_FRAME_WIDTH ||
+        info.height != CAMERA_FRAME_HEIGHT) {
+        ESP_LOGW(TAG, "jpeg=%u B luma=UNDECODABLE (source %ux%u, expected %dx%d) | %s",
+                 (unsigned)len, info.width, info.height, CAMERA_FRAME_WIDTH, CAMERA_FRAME_HEIGHT,
+                 exp_str);
         return;
     }
 
@@ -175,13 +164,15 @@ void frame_dump_maybe(const uint8_t *jpeg, size_t len)
      * esp_rom_crc32_le(0, ...) is bit-identical to Python's binascii.crc32. */
     const uint32_t crc = esp_rom_crc32_le(0, jpeg, len);
 
-    /* The gain/exp/ceil fields are omitted entirely when the sensor could not
-     * be read, rather than sent as zeros — the host decoder treats their
-     * absence as "unknown" and a zero as a real reading. */
+    /* The pid/gain/exp/ceil fields are omitted entirely when the sensor could
+     * not be read, rather than sent as zeros — the host decoder treats their
+     * absence as "unknown" and a zero as a real reading. pid travels with them
+     * because the units are sensor-dependent. */
     if (exp_ok) {
-        printf("SNAPBEGIN seq=%u len=%u crc=%08x w=%d h=%d gain=%u exp=%u ceil=%u\n",
+        printf("SNAPBEGIN seq=%u len=%u crc=%08x w=%d h=%d pid=%04x gain=%u exp=%u ceil=%u\n",
                (unsigned)s_seq, (unsigned)len, (unsigned)crc, CAMERA_FRAME_WIDTH,
-               CAMERA_FRAME_HEIGHT, exp.gain, exp.exposure, exp.gainceiling);
+               CAMERA_FRAME_HEIGHT, exp.pid, (unsigned)exp.gain, (unsigned)exp.exposure,
+               exp.gainceiling);
     } else {
         printf("SNAPBEGIN seq=%u len=%u crc=%08x w=%d h=%d\n", (unsigned)s_seq, (unsigned)len,
                (unsigned)crc, CAMERA_FRAME_WIDTH, CAMERA_FRAME_HEIGHT);

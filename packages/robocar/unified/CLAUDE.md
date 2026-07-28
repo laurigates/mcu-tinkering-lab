@@ -90,7 +90,15 @@ The monitor is **read-only** and resets the board on attach (`tools/esp32s3-moni
 
 The length+CRC are not decoration: the USB-Serial-JTAG console **silently drops** TX bytes once the host stops reading for 50 ms (`TX_FLUSH_TIMEOUT_US`) and reports success anyway. Without the checksum a host hiccup yields a corrupt JPEG that looks exactly like a broken camera.
 
-Exposure is a **runtime knob** (`cam gainceiling 0-6`), not a compile-time constant, because whether a frame is "too dark" is a judgement only a human looking at the room can make and a reflash per trial is far too slow a loop. `CAMERA_DEFAULT_GAINCEILING` is deliberately still 2x — the esp32-camera driver's own forced default for every OV2640, and the lowest of seven — so the first measurements describe the camera as it has been behaving. Pin the winning value there once the luma numbers say what it should be.
+### The sensor is an OV3660, not an OV2640
+
+`camera_pins.h` claimed OV2640 for years and it is **wrong** — the board reports `PID=0x3660`. The first frame this instrument ever dumped is what revealed it, and it inverted the diagnosis:
+
+`set_gainceiling()` means completely different things on the two sensors. On an OV2640 the argument is an enum index (`0` = 2x, the lowest of seven). On an OV3660 the driver writes it as a **raw 10-bit ceiling** into registers `0x3A18`/`0x3A19`, whose power-on default is `0x00F8` = 248 = **15.5x**. `camera_init()` was passing `(gainceiling_t)0`, so on this hardware it was not selecting "2x" — it was clamping the AGC ceiling to **zero gain**. That is why the frames were dark. The call is gone; the driver's own default stands.
+
+The register maps are otherwise incompatible too (OV2640 is 8-bit-addressed and bank-switched, OV3660 is 16-bit-addressed), so `camera_read_exposure()` branches on the PID and returns `false` for anything it does not know rather than reading one sensor's map through another's driver. **Read the PID `camera_init()` logs before reasoning about any sensor register.**
+
+Exposure stays a **runtime knob** (`cam gainceiling N`), not a compile-time constant, because whether a frame is "too dark" is a judgement only a human looking at the room can make and a reflash per trial is far too slow a loop. Its range and units are sensor-dependent — `cam` with no argument prints both.
 
 ## Voice (MAX98357A)
 
@@ -176,6 +184,8 @@ Key settings that matter:
 - Don't feed `audio_player_write()` the decoder's raw 3-byte quartets — every ring send yields to the higher-priority player, so it preempted the fetch task ~25 000 times a second exactly when it needed to get ahead of real time. Batch first (`TTS_PCM_BATCH_BYTES`)
 - Don't set `fb_count = 1` on the camera. Capture halts while the app holds the only buffer, so the planner's frame is one full period (15 s) old — the robot plans motion from a stale view, and `grab_mode` is inert below 2 buffers
 - Don't re-add `set_aec_value()` / `set_agc_gain()` alongside `set_exposure_ctrl(1)` / `set_gain_ctrl(1)` — the sensor's own loops rewrite those registers every frame, so the calls do nothing but read like deliberate tuning. `set_agc_gain(s, 0)` is worse than nothing: it writes the *minimum* gain
+- Don't call `set_gainceiling()` with an OV2640-shaped `0..6` — this board is an OV3660, where the argument is a raw 10-bit value and `0` means *no gain at all*. That one line is what made the frames dark. Check the logged PID first
+- Don't read sensor registers without branching on the PID. One sensor's map read through another's driver returns confident, plausible, meaningless numbers — `gain=0 exp=0` looked like a real "auto-exposure isn't converging" diagnosis until the PID was printed
 - Don't flip `set_aec2()` on the strength of web folklore — the vendored driver's setter writes the inverse of its argument while its getter reads the raw bit, so even the direction of the change is unresolved in the source. A/B it against measured luma or leave it
 - Don't add direct GPIO motor control — everything goes through PCA9685 via `motor_controller.c`
 - Don't bypass the TCA9548A — devices on different channels can share addresses (e.g. PCA9685 and OLED would conflict without it)

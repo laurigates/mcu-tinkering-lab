@@ -475,12 +475,11 @@ static void handle_cam_cmd(const char *buf)
 
     if (n <= 0) {
         camera_exposure_t exp = {0};
-        if (!camera_read_exposure(&exp)) {
-            printf("cam: sensor not readable\n");
-            return;
-        }
-        printf("cam: gain=%u exposure=%u gainceiling=%u (%ux)\n", exp.gain, exp.exposure,
-               exp.gainceiling, 1u << (exp.gainceiling + 1));
+        char buf_exp[64];
+        camera_read_exposure(&exp);
+        camera_format_exposure(buf_exp, sizeof(buf_exp), &exp);
+        printf("cam: pid=%04x %s (gainceiling range 0-%d)\n", exp.pid, buf_exp,
+               camera_gainceiling_max());
         return;
     }
 
@@ -488,7 +487,7 @@ static void handle_cam_cmd(const char *buf)
     if (n == 2 && strcmp(op, "gainceiling") == 0) {
         ret = camera_set_gainceiling(value);
         if (ret == ESP_OK)
-            printf("cam: gainceiling=%d (%dx)\n", value, 1 << (value + 1));
+            printf("cam: gainceiling=%d\n", value);
     } else if (n == 2 && strcmp(op, "ae") == 0) {
         ret = camera_set_ae_level(value);
         if (ret == ESP_OK)
@@ -498,7 +497,8 @@ static void handle_cam_cmd(const char *buf)
         if (ret == ESP_OK)
             printf("cam: brightness=%d\n", value);
     } else {
-        printf("cam: usage: cam | cam gainceiling 0-6 | cam ae -2..2 | cam brightness -2..2\n");
+        printf("cam: usage: cam | cam gainceiling 0-%d | cam ae -2..2 | cam brightness -2..2\n",
+               camera_gainceiling_max());
         return;
     }
 

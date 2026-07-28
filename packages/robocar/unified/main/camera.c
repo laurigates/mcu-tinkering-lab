@@ -102,20 +102,20 @@ esp_err_t camera_init(void)
 
         /* set_aec_value() and set_agc_gain() used to be called here and were
          * DEAD: with set_exposure_ctrl(1) / set_gain_ctrl(1) the sensor's own
-         * AEC/AGC loops rewrite REG04/AEC/REG45 and GAIN every frame, so a
-         * manual value survives at most one frame. Worse, set_agc_gain(s, 0)
-         * writes agc_gain_tbl[0] — the MINIMUM gain — so the frame captured
-         * during this tuning block was pinned at 1x. They read like deliberate
+         * AEC/AGC loops rewrite the exposure and gain registers every frame, so
+         * a manual value survives at most one frame. They read like deliberate
          * exposure tuning and explained nothing; steer brightness with
          * set_ae_level() and the gain ceiling instead, or turn auto off first.
          *
-         * The gain ceiling is left at the driver's own post-init default
-         * (esp_camera.c forces GAINCEILING_2X for every OV2640) so the first
-         * measurements describe the camera as it has been behaving. It is
-         * runtime-adjustable — see camera_set_gainceiling() and the `cam`
-         * console command — because only a human looking at the room can judge
-         * the result. */
-        s->set_gainceiling(s, CAMERA_DEFAULT_GAINCEILING);
+         * set_gainceiling() is likewise NOT called here any more, and that is
+         * the fix for the dark frames. It used to pass (gainceiling_t)0 —
+         * meaningful on an OV2640, where the argument is an enum index and 0
+         * selects 2x. This board is an OV3660 (PID 0x3660, logged below), whose
+         * driver writes the argument as a RAW 10-bit ceiling into 0x3A18/0x3A19.
+         * Zero therefore clamped the AGC ceiling to *no gain at all*, against
+         * the sensor's own power-on default of 0x00F8 = 248 = 15.5x. Leaving the
+         * driver's default in place is both correct and sensor-agnostic; tune it
+         * live with `cam gainceiling N` if a room really needs it. */
         s->set_bpc(s, 0);       // 0 = disable , 1 = enable
         s->set_wpc(s, 1);       // 0 = disable , 1 = enable
         s->set_raw_gma(s, 1);   // 0 = disable , 1 = enable
@@ -160,6 +160,53 @@ esp_err_t camera_init(void)
     return ESP_OK;
 }
 
+/** OV3660: 16-bit register addresses, read one byte at a time (mask <= 0xFF
+ *  selects the driver's single-byte path). Layouts are from ov3660_regs.h:
+ *    exposure = {0x3500[3:0], 0x3501[7:0], 0x3502[7:0]} / 16 rows
+ *    gain     = {0x350A[1:0], 0x350B[7:0]} / 16
+ *    ceiling  = {0x3A18[1:0], 0x3A19[7:0]} / 16   (power-on default 248 = 15.5x)
+ */
+static bool read_exposure_ov3660(sensor_t *s, camera_exposure_t *out)
+{
+    const int e2 = s->get_reg(s, 0x3500, 0x0F);
+    const int e1 = s->get_reg(s, 0x3501, 0xFF);
+    const int e0 = s->get_reg(s, 0x3502, 0xFF);
+    const int g1 = s->get_reg(s, 0x350A, 0x03);
+    const int g0 = s->get_reg(s, 0x350B, 0xFF);
+    const int c1 = s->get_reg(s, 0x3A18, 0x03);
+    const int c0 = s->get_reg(s, 0x3A19, 0xFF);
+
+    if (e2 < 0 || e1 < 0 || e0 < 0 || g1 < 0 || g0 < 0 || c1 < 0 || c0 < 0) {
+        return false;
+    }
+
+    out->exposure = ((uint32_t)(e2 & 0x0F) << 16) | ((uint32_t)e1 << 8) | (uint32_t)e0;
+    out->gain = ((uint32_t)(g1 & 0x03) << 8) | (uint32_t)g0;
+    out->gainceiling = (uint16_t)(((c1 & 0x03) << 8) | c0);
+    return true;
+}
+
+/** OV2640: get_reg() encodes the register bank in bit 8 of `reg`
+ *  (read_reg(sensor, (reg >> 8) & 0x01, reg & 0xFF); BANK_SENSOR == 1), so
+ *  sensor-bank registers are addressed as 0x1xx. */
+static bool read_exposure_ov2640(sensor_t *s, camera_exposure_t *out)
+{
+    const int gain = s->get_reg(s, 0x100, 0xFF);   // GAIN[7:0]
+    const int aec = s->get_reg(s, 0x110, 0xFF);    // AEC[7:0]   — exposure bits 9:2
+    const int reg04 = s->get_reg(s, 0x104, 0x03);  // REG04[1:0] — exposure bits 1:0
+    const int reg45 = s->get_reg(s, 0x145, 0xFF);  // [5:0] exposure 15:10, [7:6] gain 9:8
+    const int com9 = s->get_reg(s, 0x114, 0xFF);   // COM9[7:5] = AGC gain ceiling
+
+    if (gain < 0 || aec < 0 || reg04 < 0 || reg45 < 0 || com9 < 0) {
+        return false;
+    }
+
+    out->gain = (uint32_t)(((reg45 & 0xC0) << 2) | gain);
+    out->exposure = (uint32_t)(((reg45 & 0x3F) << 10) | (aec << 2) | (reg04 & 0x03));
+    out->gainceiling = (uint16_t)((com9 >> 5) & 0x07);
+    return true;
+}
+
 bool camera_read_exposure(camera_exposure_t *out)
 {
     if (!out) {
@@ -171,35 +218,69 @@ bool camera_read_exposure(camera_exposure_t *out)
     if (!s || !s->get_reg) {
         return false;
     }
+    out->pid = s->id.PID;
 
-    /* ov2640's get_reg() encodes the register bank in bit 8 of `reg`
-     * (read_reg(sensor, (reg >> 8) & 0x01, reg & 0xFF); BANK_SENSOR == 1), so
-     * sensor-bank registers are addressed as 0x1xx. */
-    const int gain = s->get_reg(s, 0x100, 0xFF);   // GAIN[7:0]
-    const int aec = s->get_reg(s, 0x110, 0xFF);    // AEC[7:0]   — exposure bits 9:2
-    const int reg04 = s->get_reg(s, 0x104, 0x03);  // REG04[1:0] — exposure bits 1:0
-    const int reg45 = s->get_reg(s, 0x145, 0xFF);  // [5:0] exposure 15:10, [7:6] gain 9:8
-    const int com9 = s->get_reg(s, 0x114, 0xFF);   // COM9[7:5] = AGC gain ceiling
-
-    if (gain < 0 || aec < 0 || reg04 < 0 || reg45 < 0 || com9 < 0) {
-        return false;
+    /* Branch on the fitted sensor rather than assuming. Reading one sensor's
+     * register map through another's driver returns plausible-looking numbers
+     * that mean nothing — this instrument exists to end that class of mistake,
+     * not to add to it. */
+    bool ok;
+    switch (s->id.PID) {
+        case OV3660_PID:
+            ok = read_exposure_ov3660(s, out);
+            break;
+        case OV2640_PID:
+            ok = read_exposure_ov2640(s, out);
+            break;
+        default:
+            return false; /* unknown register map — say nothing rather than guess */
     }
 
-    out->gain = (uint16_t)(((reg45 & 0xC0) << 2) | gain);
-    out->exposure = (uint16_t)(((reg45 & 0x3F) << 10) | (aec << 2) | (reg04 & 0x03));
-    out->gainceiling = (uint8_t)((com9 >> 5) & 0x07);
-    out->valid = true;
-    return true;
+    out->valid = ok;
+    return ok;
+}
+
+void camera_format_exposure(char *out, size_t n, const camera_exposure_t *exp)
+{
+    if (!out || n == 0) {
+        return;
+    }
+    if (!exp || !exp->valid) {
+        snprintf(out, n, "sensor=UNREADABLE");
+        return;
+    }
+
+    if (exp->pid == OV3660_PID) {
+        /* Gain and ceiling are 1/16 steps; print the multiplier, which is the
+         * number worth acting on ("pegged at the ceiling" is the diagnosis). */
+        snprintf(out, n, "gain=%u.%02ux exp=%u ceil=%u.%02ux", (unsigned)(exp->gain / 16),
+                 (unsigned)((exp->gain % 16) * 100 / 16), (unsigned)(exp->exposure / 16),
+                 (unsigned)(exp->gainceiling / 16), (unsigned)((exp->gainceiling % 16) * 100 / 16));
+    } else {
+        snprintf(out, n, "gain=%u exp=%u ceil=%u(%ux)", (unsigned)exp->gain,
+                 (unsigned)exp->exposure, exp->gainceiling, 1u << (exp->gainceiling + 1));
+    }
+}
+
+int camera_gainceiling_max(void)
+{
+    sensor_t *s = esp_camera_sensor_get();
+    if (!s) {
+        return 0;
+    }
+    /* OV3660 takes a raw 10-bit ceiling; OV2640 an enum index. Getting this
+     * wrong is not a range error, it is a silent exposure change. */
+    return (s->id.PID == OV3660_PID) ? 1023 : 6;
 }
 
 esp_err_t camera_set_gainceiling(int ceiling)
 {
-    if (ceiling < 0 || ceiling > 6) {
-        return ESP_ERR_INVALID_ARG;
-    }
     sensor_t *s = esp_camera_sensor_get();
     if (!s || !s->set_gainceiling) {
         return ESP_ERR_INVALID_STATE;
+    }
+    if (ceiling < 0 || ceiling > camera_gainceiling_max()) {
+        return ESP_ERR_INVALID_ARG;
     }
     return (s->set_gainceiling(s, (gainceiling_t)ceiling) == 0) ? ESP_OK : ESP_FAIL;
 }

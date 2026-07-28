@@ -8,7 +8,7 @@
 The firmware (packages/robocar/unified/main/frame_dump.c) emits the exact JPEG
 it hands to Gemini, base64-framed, interleaved with ordinary ESP_LOG output:
 
-    SNAPBEGIN seq=1 len=11423 crc=5276e4c6 w=320 h=240 gain=62 exp=1248 ceil=0
+    SNAPBEGIN seq=1 len=11423 crc=5276e4c6 w=320 h=240 pid=3660 gain=62 exp=1248 ceil=248
     SNAP /9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsL...
     ...
     SNAPEND seq=1 lines=238
@@ -38,11 +38,16 @@ from pathlib import Path
 
 BEGIN_RE = re.compile(
     r"SNAPBEGIN\s+seq=(\d+)\s+len=(\d+)\s+crc=([0-9a-fA-F]{8})"
-    r"(?:\s+w=(\d+))?(?:\s+h=(\d+))?"
+    r"(?:\s+w=(\d+))?(?:\s+h=(\d+))?(?:\s+pid=([0-9a-fA-F]{4}))?"
     r"(?:\s+gain=(\d+))?(?:\s+exp=(\d+))?(?:\s+ceil=(\d+))?"
 )
+
 LINE_RE = re.compile(r"SNAP ([A-Za-z0-9+/=]+)\s*$")
 END_RE = re.compile(r"SNAPEND\s+seq=(\d+)\s+lines=(\d+)")
+
+# Gain/exposure units are sensor-dependent, so the PID travels with them.
+# OV3660 reports gain and ceiling in 1/16 steps; OV2640's ceiling is an enum.
+OV3660_PID = 0x3660
 
 
 @dataclass
@@ -52,10 +57,26 @@ class Frame:
     declared_crc: int
     width: int | None = None
     height: int | None = None
+    pid: int | None = None
     gain: int | None = None
     exposure: int | None = None
     gainceiling: int | None = None
     chunks: list[str] = field(default_factory=list)
+
+    def exposure_str(self) -> str:
+        """Render gain/exposure in the units of the sensor that produced them."""
+        if self.gain is None:
+            return ""
+        name = {0x3660: "OV3660", 0x2640: "OV2640"}.get(self.pid, f"pid={self.pid:04x}")
+        if self.pid == OV3660_PID:
+            ceiling = (
+                f"{self.gainceiling / 16:.2f}x" if self.gainceiling is not None else "?"
+            )
+            return f" | {name} gain={self.gain / 16:.2f}x exp={self.exposure // 16} ceiling={ceiling}"
+        ceiling = (
+            f"{1 << (self.gainceiling + 1)}x" if self.gainceiling is not None else "?"
+        )
+        return f" | {name} gain={self.gain} exp={self.exposure} ceiling={ceiling}"
 
 
 def parse(log: str) -> list[Frame]:
@@ -81,9 +102,10 @@ def parse(log: str) -> list[Frame]:
                 declared_crc=int(m.group(3), 16),
                 width=int(m.group(4)) if m.group(4) else None,
                 height=int(m.group(5)) if m.group(5) else None,
-                gain=int(m.group(6)) if m.group(6) else None,
-                exposure=int(m.group(7)) if m.group(7) else None,
-                gainceiling=int(m.group(8)) if m.group(8) else None,
+                pid=int(m.group(6), 16) if m.group(6) else None,
+                gain=int(m.group(7)) if m.group(7) else None,
+                exposure=int(m.group(8)) if m.group(8) else None,
+                gainceiling=int(m.group(9)) if m.group(9) else None,
             )
             continue
 
@@ -184,27 +206,24 @@ def main() -> int:
         path.write_bytes(payload)
         ok += 1
 
-        exposure = ""
-        if f.gain is not None:
-            ceiling = (
-                f"{1 << (f.gainceiling + 1)}x" if f.gainceiling is not None else "?"
-            )
-            exposure = f" | gain={f.gain} exp={f.exposure} ceiling={ceiling}"
         print(
-            f"frame {f.seq}: {len(payload):6d} B  {luma_stats(payload)}{exposure}  -> {path}"
+            f"frame {f.seq}: {len(payload):6d} B  {luma_stats(payload)}"
+            f"{f.exposure_str()}  -> {path}"
         )
 
     print(f"\n{ok}/{len(frames)} frame(s) recovered into {out_dir}")
     if ok:
         print(
             "\nReading the numbers:\n"
-            "  low mean + gain pegged at the ceiling + high exposure -> sensor is\n"
-            "      starved; raise the ceiling ('cam gainceiling 3' and up)\n"
-            "  low mean + low gain + low exposure                    -> the sensor is not\n"
-            "      trying; auto-exposure is not converging\n"
-            "  low mean + high p95                                   -> backlit, not unlit\n"
-            "  mean above ~60 with structure                         -> the frames are fine;\n"
-            "      the darkness remark is coming from somewhere else"
+            "  low mean + gain at the ceiling + high exposure -> sensor is starved; raise\n"
+            "      the ceiling with 'cam gainceiling N' (units are SENSOR-DEPENDENT:\n"
+            "      OV3660 takes a raw 1/16-step value, default 248 = 15.5x; OV2640 an\n"
+            "      enum 0=2x..6=128x)\n"
+            "  low mean + low gain + low exposure            -> the sensor is not trying;\n"
+            "      auto-exposure is not converging\n"
+            "  low mean + high p95                           -> backlit, not unlit\n"
+            "  mean above ~60 with structure                 -> the frames are fine; the\n"
+            "      darkness remark is coming from somewhere else"
         )
     return 0 if ok else 1
 
