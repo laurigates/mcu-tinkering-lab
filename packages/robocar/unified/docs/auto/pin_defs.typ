@@ -3,7 +3,7 @@
 //         packages/robocar/unified/version.txt
 // Do not edit manually — regenerate with `just robocar-unified::gen-pin-defs`.
 
-#let VERSION = "0.1.13"
+#let VERSION = "0.1.14"
 
 // ── I2C Bus ──
 #let I2C_SDA_PIN = 5
