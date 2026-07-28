@@ -32,6 +32,7 @@
 #include "credentials_loader.h"
 #include "credentials_validator.h"
 #include "dialogue_style.h"
+#include "frame_dump.h"
 #include "gemini_tts.h"
 #include "goal_state.h"
 #include "gpio_expander.h"
@@ -458,6 +459,71 @@ static void handle_gpio_cmd(const char *buf)
         printf("gpio: error: %s\n", esp_err_to_name(ret));
 }
 
+/* Camera inspection and live exposure tuning.
+ *
+ * Exposure is deliberately a runtime knob rather than a compile-time constant:
+ * whether a frame is "too dark" is a judgement only someone looking at the room
+ * and the decoded image can make, and a reflash per trial is far too slow a
+ * loop for it. `cam` prints the sensor's live registers, `snap` puts the actual
+ * JPEG on the wire — tune against those two, then pin the winning value in
+ * CAMERA_DEFAULT_GAINCEILING. */
+static void handle_cam_cmd(const char *buf)
+{
+    char op[16] = {0};
+    int value = 0;
+    const int n = sscanf(buf, "cam %15s %d", op, &value);
+
+    if (n <= 0) {
+        camera_exposure_t exp = {0};
+        if (!camera_read_exposure(&exp)) {
+            printf("cam: sensor not readable\n");
+            return;
+        }
+        printf("cam: gain=%u exposure=%u gainceiling=%u (%ux)\n", exp.gain, exp.exposure,
+               exp.gainceiling, 1u << (exp.gainceiling + 1));
+        return;
+    }
+
+    esp_err_t ret;
+    if (n == 2 && strcmp(op, "gainceiling") == 0) {
+        ret = camera_set_gainceiling(value);
+        if (ret == ESP_OK)
+            printf("cam: gainceiling=%d (%dx)\n", value, 1 << (value + 1));
+    } else if (n == 2 && strcmp(op, "ae") == 0) {
+        ret = camera_set_ae_level(value);
+        if (ret == ESP_OK)
+            printf("cam: ae_level=%d\n", value);
+    } else if (n == 2 && strcmp(op, "brightness") == 0) {
+        ret = camera_set_brightness(value);
+        if (ret == ESP_OK)
+            printf("cam: brightness=%d\n", value);
+    } else {
+        printf("cam: usage: cam | cam gainceiling 0-6 | cam ae -2..2 | cam brightness -2..2\n");
+        return;
+    }
+
+    if (ret != ESP_OK)
+        printf("cam: error: %s\n", esp_err_to_name(ret));
+}
+
+static void handle_snap_cmd(const char *buf)
+{
+    int frames = 1;
+    if (sscanf(buf, "snap %d", &frames) != 1) {
+        frames = 1; /* bare `snap` */
+    } else if (frames < 0) {
+        frames = 0; /* `snap 0` disarms, per frame_dump_arm's contract */
+    }
+    frame_dump_arm(frames);
+    if (frames == 0) {
+        printf("snap: dumping disarmed\n");
+    } else {
+        printf("snap: will dump the next %d planner frame(s) — decode with "
+               "tools/decode-frame-dump.py\n",
+               frames);
+    }
+}
+
 // ========================================
 // Improv WiFi provisioning (serial)
 // ========================================
@@ -571,6 +637,10 @@ static void command_task(void *pvParameters)
                     handle_gpio_cmd(buf);
                 } else if (strncmp(buf, "voice", 5) == 0) {
                     handle_voice_cmd(buf);
+                } else if (strncmp(buf, "snap", 4) == 0) {
+                    handle_snap_cmd(buf);
+                } else if (strncmp(buf, "cam", 3) == 0) {
+                    handle_cam_cmd(buf);
                 } else if (strncmp(buf, "sound", 5) == 0 || strncmp(buf, "servo", 5) == 0 ||
                            strncmp(buf, "led", 3) == 0) {
                     handle_periph_cmd(buf);

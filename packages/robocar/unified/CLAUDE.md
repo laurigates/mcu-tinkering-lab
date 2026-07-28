@@ -47,6 +47,8 @@ The MCP23017 (1953W breakout, address 0x20) is exercised from the serial console
 | `F` `B` `L` `R` `C` `W` `S` | Manual drive / rotate / stop — a ~1 s lease via `reactive_controller_manual()`, still subject to the obstacle reflex |
 | `gpio …` | MCP23017 expander (see above) |
 | `voice …` | Persona / TTS voice switching and auditioning; `voice vary` shows a drawn variation directive |
+| `snap [n]` | Dump the next `n` planner frames over the console as base64 JPEG — see "Seeing what the camera sends" |
+| `cam …` | Read live sensor gain/exposure; `cam gainceiling 0-6`, `cam ae -2..2`, `cam brightness -2..2` tune exposure without a reflash |
 | `sound beep\|melody\|alert` | Buzzer |
 | `servo pan\|tilt <deg>` | Pan/tilt servos |
 | `led <r> <g> <b>` | Both RGB LEDs |
@@ -72,6 +74,24 @@ Motor direction uses PCA9685 "full-on" (4096) / "full-off" (0) values on IN1/IN2
 
 The planner runs every `PLANNER_LOOP_PERIOD_MS` (15 s default, set by the Gemini free-tier quota rather than by control preference) on Core 1; the executor drives the goal at ~30 Hz on Core 0. No on-demand inference or blocking on responses — the planner is a background task that constantly updates `goal_state`, and the executor always has something to do.
 
+## Seeing what the camera actually sends
+
+Every claim about image quality here was inference until `frame_dump.c` existed — the sensor registers, the JPEG size and the frames themselves had never been read off a device. Two instruments, and the pairing is the diagnosis:
+
+- **`frame_stats_log()` runs on every planner frame.** It decodes the JPEG at 1/8 scale and logs `luma mean/p5/p50/p95` next to the sensor's **live** `gain`/`exp`/`ceil` registers. Read them together: high gain + maxed exposure + low luma means the sensor is *starved* and the gain ceiling needs raising; low gain + low exposure + low luma means auto-exposure is not converging; low mean with a **high p95** is backlit, not unlit. The cached `sensor_t` status struct cannot answer this — it holds what was last *written*, not what the AEC/AGC loops have since chosen, which is why `camera_read_exposure()` reads the registers over SCCB instead.
+- **`frame_dump_maybe()` emits the JPEG itself**, base64-framed with a length and CRC32, for the first `FRAME_DUMP_BOOT_FRAMES` frames and on `snap [n]`. These are the exact bytes handed to `gemini_backend_plan()`, dumped while the planner still holds the buffer — no copy, no lifetime question, no chance of showing a different frame from the one the model saw.
+
+```
+just robocar-unified::monitor | tee /tmp/robocar.log
+uv run tools/decode-frame-dump.py /tmp/robocar.log /tmp/frames
+```
+
+The monitor is **read-only** and resets the board on attach (`tools/esp32s3-monitor.sh` never writes to the port), so you cannot type `snap` through it — that is why the first frames auto-dump at boot. Use `screen`/`picocom` if you want the command.
+
+The length+CRC are not decoration: the USB-Serial-JTAG console **silently drops** TX bytes once the host stops reading for 50 ms (`TX_FLUSH_TIMEOUT_US`) and reports success anyway. Without the checksum a host hiccup yields a corrupt JPEG that looks exactly like a broken camera.
+
+Exposure is a **runtime knob** (`cam gainceiling 0-6`), not a compile-time constant, because whether a frame is "too dark" is a judgement only a human looking at the room can make and a reflash per trial is far too slow a loop. `CAMERA_DEFAULT_GAINCEILING` is deliberately still 2x — the esp32-camera driver's own forced default for every OV2640, and the lowest of seven — so the first measurements describe the camera as it has been behaving. Pin the winning value there once the luma numbers say what it should be.
+
 ## Voice (MAX98357A)
 
 The robot speaks through a MAX98357A I2S amplifier on GPIO7/8/9. See [ADR-019](../../docs/decisions/ADR-019-robocar-voice-gemini-tts.md) for the design.
@@ -79,6 +99,12 @@ The robot speaks through a MAX98357A I2S amplifier on GPIO7/8/9. See [ADR-019](.
 **Speech is a queue, not a goal.** `speak` is deliberately *not* a `goal_kind_t` — it travels via `speech_queue` alongside `goal_state`. Goals are last-write-wins with a TTL that collapses to STOP; applying those semantics to speech would truncate sentences mid-word and make talking and driving mutually exclusive. If you find yourself adding `GOAL_KIND_SPEAK`, read the header comment in `speech_queue.h` first.
 
 The pipeline is two Gemini calls: Robotics-ER decides *what* to say (riding the existing planner call — no extra vision inference), then `gemini-3.1-flash-tts-preview` renders it. Audio is 24 kHz mono PCM, base64 inline, no WAV header — decoded **incrementally** into a PSRAM ring by `base64_stream_feed()` while the player task drains it into I2S, so playback starts before the download finishes. A few seconds of audio is hundreds of kB; it can never be buffered whole.
+
+**Playback does not start at the first byte — it waits for `AUDIO_PREROLL_BYTES`, or for the fetch to finish.** Gemini's TTS stream is frequently *slower* than real time: measured across seven live captures (2026-07), real-time factors were 0.55 / 0.79 / 0.84 / 1.88 / 2.70 / 3.08 / 3.81, and the three below 1.0 were all the same *short* line — a fixed 0.9–2.7 s time-to-first-byte amortised over less audio. Draining on arrival therefore ran the ring dry mid-sentence 12–18 times per utterance. That is not merely a gap: ESP-IDF's I2S TX ISR keeps a `desc_num - 1` deep free-buffer queue and **drops the oldest entry** when it overflows, so after a stall `i2s_channel_write()` is handed the descriptor the DMA is about to transmit and its `memcpy` lands in a buffer being read out — torn samples, i.e. broadband noise. The gate's OR-condition is the important half: a short utterance completes before the threshold and plays from a *complete* buffer, so it cannot underrun at all.
+
+Each utterance logs `first=`/`total=`/`rtf=`. **`rtf` below 1.00 means Gemini generated slower than playback consumes** — expected sometimes, and exactly what the preroll gate absorbs. `first=` drifting up toward `total=` means something reverted to whole-response synthesis. `ring full … dropping` or `i2s_channel_write failed` in the log means the gate is not holding and the ring or preroll needs re-sizing.
+
+The decoder itself is **proven correct against real data**: `main/base64.c` was replayed over seven captured SSE bodies at twelve chunk sizes and produced byte-identical PCM to a reference JSON+base64 decode every time, and the literal `"data"` never occurs outside an audio payload (1096/1096 payloads). If the voice sounds wrong, it is not the decode — look at the ring, the gate, or the amp.
 
 **The TTS call goes to `:streamGenerateContent?alt=sse`, not `:generateContent`.** The non-streaming endpoint synthesises the whole utterance before sending a byte, which left the ring buffer with almost nothing to overlap: measured 6.42 s to first byte versus **1.16 s** streaming, same body and model. The streamed body is a sequence of SSE events each carrying its own `"data"` payload, so the decoder seeks past each closing quote and concatenates all of them — `base64_stream_done()` means "between payloads", not "stream ended". Each utterance logs `first=`/`total=` ms; `first=` drifting up toward `total=` means something reverted to whole-response synthesis.
 
@@ -132,6 +158,7 @@ Key settings that matter:
 - `CONFIG_SPIRAM_MODE_OCT=y` — XIAO ESP32-S3 Sense has **octal** PSRAM (not quad); wrong mode = boot loop
 - `CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192` — bumped from default 3584 for WiFi + BLE + camera init
 - `CONFIG_ESP_BROWNOUT_DET=n` — disabled; motor inrush was tripping it
+- `CONFIG_CAMERA_JPEG_MODE_FRAME_SIZE=65536` (with `_AUTO=n`, `_CUSTOM=y`) — the AUTO default computes `width*height/5`, a hard **15360-byte** ceiling at QVGA. Past it the driver aborts accumulation, queues the truncated frame, finds no EOI marker and retries until a 4 s timeout — surfacing as `Camera capture failed` and a forced STOP, not as a bad image. Any detailed or bright scene exceeds it at quality 15, and raising the AGC gain ceiling makes it worse because noise inflates JPEG size
 - mDNS (`robocar-unified.local`) needs **no** Kconfig switch — it comes from the `espressif/mdns` managed component. There is no `CONFIG_MDNS_ENABLED` symbol; a line setting one is reported as an unknown symbol and silently ignored
 
 ## Don't
@@ -145,6 +172,11 @@ Key settings that matter:
 - Don't switch the TTS call back to `:generateContent` — it costs ~5 s of perceived latency (see the Voice section)
 - Don't "normalise" the audio path to 16 kHz to match the ThinkPack projects — 24 kHz is Gemini TTS's native rate, and matching it avoids a resampling stage entirely
 - Don't buffer the TTS response whole — it's hundreds of kB and the response buffer is 16 kB. The streaming decoder exists for this reason
+- Don't start playback on the first decoded byte "to cut latency" — that is the bug the preroll gate fixes, and the measured cost was up to 2855 ms of ring dry-out per sentence. If latency needs cutting, lower `AUDIO_PREROLL_BYTES` and watch `rtf=`; don't remove the gate
+- Don't feed `audio_player_write()` the decoder's raw 3-byte quartets — every ring send yields to the higher-priority player, so it preempted the fetch task ~25 000 times a second exactly when it needed to get ahead of real time. Batch first (`TTS_PCM_BATCH_BYTES`)
+- Don't set `fb_count = 1` on the camera. Capture halts while the app holds the only buffer, so the planner's frame is one full period (15 s) old — the robot plans motion from a stale view, and `grab_mode` is inert below 2 buffers
+- Don't re-add `set_aec_value()` / `set_agc_gain()` alongside `set_exposure_ctrl(1)` / `set_gain_ctrl(1)` — the sensor's own loops rewrite those registers every frame, so the calls do nothing but read like deliberate tuning. `set_agc_gain(s, 0)` is worse than nothing: it writes the *minimum* gain
+- Don't flip `set_aec2()` on the strength of web folklore — the vendored driver's setter writes the inverse of its argument while its getter reads the raw bit, so even the direction of the change is unresolved in the source. A/B it against measured luma or leave it
 - Don't add direct GPIO motor control — everything goes through PCA9685 via `motor_controller.c`
 - Don't bypass the TCA9548A — devices on different channels can share addresses (e.g. PCA9685 and OLED would conflict without it)
 - Don't commit `main/credentials.h` — it's gitignored; use the `.example` as template

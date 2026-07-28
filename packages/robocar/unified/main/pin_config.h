@@ -134,12 +134,26 @@
 #define AUDIO_VOLUME_PCT 70
 
 /** PSRAM ring between the TTS download and the I2S writer, in bytes.
- *  96 kB ~= 2 s of 24 kHz mono, enough to absorb WiFi stalls mid-utterance. */
-#define AUDIO_RING_BYTES (96 * 1024)
+ *
+ *  512 kB ~= 10.6 s of 24 kHz mono. Sized from measurement, not from comfort:
+ *  captured TTS streams (2026-07, 7 live utterances) showed Gemini generating
+ *  audio SLOWER than the 48 kB/s playback rate in 3 of 7 cases — real-time
+ *  factors 0.55 / 0.79 / 0.84 — with a worst cumulative deficit of 2855 ms.
+ *  The starving cases are all SHORT lines, because a fixed 0.9-2.7 s
+ *  time-to-first-byte is amortised over less audio. At this size a short
+ *  utterance buffers whole before a sample is played, so it cannot underrun at
+ *  all. The old 96 kB could not hold even one of the observed deficits. */
+#define AUDIO_RING_BYTES (512 * 1024)
 
-/** Playback starts once this much audio has buffered, so a slow first chunk
- *  does not produce a stuttering opening syllable. */
-#define AUDIO_PREROLL_BYTES (12 * 1024)
+/** Playback starts once this much audio has buffered — 1 s at 24 kHz mono.
+ *
+ *  Was defined but never referenced (dead since the original voice PR), so
+ *  playback actually began on the first ~2 bytes with only the DMA buffers as
+ *  runway. See audio_player.c player_task() for the gate that now uses it, and
+ *  note the OR-condition: an utterance whose download completes before the
+ *  threshold plays immediately rather than waiting for audio that will never
+ *  arrive. */
+#define AUDIO_PREROLL_BYTES (AUDIO_SAMPLE_RATE_HZ * (int)sizeof(int16_t))
 
 // ========================================
 // Servo Configuration (SG90 at 200Hz)
@@ -193,9 +207,16 @@
  *
  * Two tasks, because esp_http_client_perform() blocks for the whole TTS
  * download: the fetch task fills the ring, the player task drains it into
- * I2S, and playback overlaps the download instead of waiting for it. */
+ * I2S, and playback overlaps the download instead of waiting for it.
+ *
+ * The fetch task sits ABOVE the planner (3) and BELOW the player (5). It is
+ * the only thing draining the TLS socket and feeding the ring, so leaving it
+ * at the bottom of the core-1 set meant the producer lost the CPU to the
+ * planner's own Gemini call exactly when it needed to get ahead of real time.
+ * It must stay below the player: the player is what the DMA deadline belongs
+ * to, and it blocks on I2S rather than spinning. */
 #define TTS_FETCH_TASK_STACK_SIZE 8192
-#define TTS_FETCH_TASK_PRIORITY 3
+#define TTS_FETCH_TASK_PRIORITY 4
 #define TTS_FETCH_TASK_CORE 1
 
 #define AUDIO_PLAYER_TASK_STACK_SIZE 4096

@@ -31,6 +31,16 @@ CONFIG_ESP_HTTP_CLIENT_ENABLE_BASIC_AUTH=y
 # Camera (DMA on Core 1 to isolate from motor control on Core 0)
 CONFIG_CAMERA_CORE1=y
 CONFIG_CAMERA_DMA_BUFFER_SIZE_MAX=32768
+# JPEG framebuffer size. The default AUTO mode computes width*height/5, which at
+# QVGA is a hard 15360-byte ceiling: cam_hal.c's FB-OVF guard aborts accumulation
+# past it, the truncated frame is still queued, cam_take then finds no EOI marker
+# and retries until esp_camera_fb_get()'s 4 s timeout — surfacing as "Camera
+# capture failed" and a forced STOP. A detailed or bright scene routinely exceeds
+# 15 kB at quality 15, and raising the AGC gain ceiling makes it worse (noise
+# inflates JPEG size). 64 kB in PSRAM is nothing against 8 MB.
+CONFIG_CAMERA_JPEG_MODE_FRAME_SIZE_AUTO=n
+CONFIG_CAMERA_JPEG_MODE_FRAME_SIZE_CUSTOM=y
+CONFIG_CAMERA_JPEG_MODE_FRAME_SIZE=65536
 # Camera SCCB must use the LEGACY I2C driver. esp32-camera Kconfig defaults to
 # the new "driver_ng" (CONFIG_SCCB_HARDWARE_I2C_DRIVER_NEW), but the project bus
 # (i2c_bus.c → i2cdev: TCA9548A + PCA9685 + MCP23017) is legacy. ESP-IDF 5.4
