@@ -1,5 +1,8 @@
 # ESP-IDF build artifacts
 build/
+
+# Host unit-test build tree (`just robocar-unified::test`)
+build-host/
 sdkconfig
 sdkconfig.old
 
