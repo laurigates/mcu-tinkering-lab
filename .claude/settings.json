@@ -2,6 +2,12 @@
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "permissions": {
     "allow": [
+      "CronCreate",
+      "CronDelete",
+      "CronList",
+      "PushNotification",
+      "RemoteTrigger",
+      "ScheduleWakeup",
       "Bash(clang-format:*)",
       "Bash(cppcheck:*)",
       "Bash(docker compose:*)",
