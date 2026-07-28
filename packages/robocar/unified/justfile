@@ -80,6 +80,31 @@ monitor: _s3-monitor
 flash-monitor: flash monitor
 
 ##########
+# Tests
+##########
+
+# Run the host unit tests (native cmake + ctest — no ESP-IDF container).
+#
+# test/CMakeLists.txt compiles the ESP-IDF-free modules straight from main/
+# against the shims in test/include. Nothing here needs the container, and the
+# suites are seconds — run this after touching goal_state, ultrasonic,
+# reactive_controller, base64, speech_tags, dialogue_style or gemini_parse.
+#
+# gemini_parse needs cjson: `brew install cjson` (found via pkg-config, else
+# Homebrew's prefix).
+#
+# NOTE: no CI job runs these yet — `.github/workflows/` only ctests the Pico
+# project. Until that gap is closed this recipe is the *only* thing exercising
+# them, so run it before pushing rather than trusting a green PR.
+[group: "test"]
+test:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cmake -S test -B build-host
+    cmake --build build-host
+    ctest --test-dir build-host --output-on-failure
+
+##########
 # Docs
 ##########
 
