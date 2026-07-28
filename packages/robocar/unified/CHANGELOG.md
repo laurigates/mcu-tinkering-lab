@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.1.15](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.1.14...robocar-unified-v0.1.15) (2026-07-28)
+
+
+### Features
+
+* **robocar-unified:** stream TTS audio and add inline delivery tags ([#442](https://github.com/laurigates/mcu-tinkering-lab/issues/442)) ([706271a](https://github.com/laurigates/mcu-tinkering-lab/commit/706271aa34db46c838cb4e3ea66755b0573b493f))
+
+
+### Bug Fixes
+
+* **robocar-unified:** stop TTS audio tearing and make camera frames measurable ([#446](https://github.com/laurigates/mcu-tinkering-lab/issues/446)) ([d1ad55d](https://github.com/laurigates/mcu-tinkering-lab/commit/d1ad55d1389e50b03dbee954357df8471b38f84d))
+
+
+### Miscellaneous
+
+* **robocar-unified:** add a just recipe for the host unit tests ([#445](https://github.com/laurigates/mcu-tinkering-lab/issues/445)) ([85f5ed5](https://github.com/laurigates/mcu-tinkering-lab/commit/85f5ed547f5fc9b860678500dc1d2ab04bb89c84))
+
 ## [0.1.14](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.1.13...robocar-unified-v0.1.14) (2026-07-26)
 
 
