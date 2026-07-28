@@ -57,3 +57,31 @@ skips date validation and works with an **unsynced clock** — no SNTP/NTP clien
 is required for HTTPS. Before adding SNTP (or opening an NTP egress rule) to fix a
 TLS failure, check `sdkconfig` for `MBEDTLS_HAVE_TIME_DATE`: if it's off, the
 clock is not your problem.
+
+## 3. `portMAX_DELAY` is not "forever" in an ESP-IDF `timeout_ms` parameter
+
+FreeRTOS APIs take **ticks**, where `portMAX_DELAY` is the block-forever
+sentinel. Many ESP-IDF driver APIs instead take **milliseconds** and convert
+internally — `i2s_channel_write(..., uint32_t timeout_ms)` feeds the value
+through `pdMS_TO_TICKS()` twice (`i2s_common.c`: once for the binary semaphore,
+once for the descriptor queue). Passing `portMAX_DELAY` (`0xFFFFFFFF`) as a
+millisecond count therefore overflows `TickType_t` and yields roughly
+**72 minutes at `CONFIG_FREERTOS_HZ=1000`**, not an infinite block.
+
+It is usually harmless — nothing waits 72 minutes — but it is wrong in a way
+that reads as deliberate, and it hides the case you actually want to see: a
+wedged DMA returning `ESP_ERR_TIMEOUT`. Pass a real bound and log the failure:
+
+```c
+const esp_err_t err = i2s_channel_write(chan, buf, len, &written, 1000 /* ms */);
+if (err != ESP_OK) {
+    ESP_LOGW(TAG, "i2s_channel_write failed: %s (%u/%u bytes)", esp_err_to_name(err),
+             (unsigned)written, (unsigned)len);
+}
+```
+
+**Check the parameter's unit in the header before reaching for `portMAX_DELAY`.**
+If it is named `timeout_ms` or `xTicksToWait`, that name is the answer; the two
+are not interchangeable. Note that a timeout can also return a **partial** write
+(`written < len`) — decide explicitly whether to drop or retry the remainder,
+because silently dropping it is an audible skip in a stream.

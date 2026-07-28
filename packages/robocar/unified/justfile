@@ -80,6 +80,34 @@ monitor: _s3-monitor
 flash-monitor: flash monitor
 
 ##########
+# Diagnostics
+##########
+
+# Capture planner frames off the board and decode them to JPEGs + luma stats
+#
+# The firmware auto-dumps the first FRAME_DUMP_BOOT_FRAMES frames after boot
+# (the monitor is read-only, so `snap` cannot be typed through it) and the
+# monitor resets the board on attach — so this always captures from boot.
+# Ctrl-C once you have enough frames; decoding runs on the way out.
+#
+# Exists because the decoder lives at the REPO ROOT while this justfile runs in
+# the project dir, so the obvious hand-typed `uv run tools/decode-frame-dump.py`
+# fails with "No such file or directory".
+[group: "device"]
+frames log="/tmp/robocar-frames.log" out="/tmp/robocar-frames":
+    #!/usr/bin/env bash
+    set -uo pipefail
+    echo "Capturing to {{log}} — Ctrl-C when you have enough frames..."
+    just monitor 2>&1 | tee "{{log}}" || true
+    echo
+    uv run ../../../tools/decode-frame-dump.py "{{log}}" "{{out}}"
+
+# Decode an existing capture without re-running the monitor
+[group: "device"]
+frames-decode log="/tmp/robocar-frames.log" out="/tmp/robocar-frames":
+    uv run ../../../tools/decode-frame-dump.py "{{log}}" "{{out}}"
+
+##########
 # Docs
 ##########
 

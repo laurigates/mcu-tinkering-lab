@@ -48,6 +48,7 @@ END_RE = re.compile(r"SNAPEND\s+seq=(\d+)\s+lines=(\d+)")
 # Gain/exposure units are sensor-dependent, so the PID travels with them.
 # OV3660 reports gain and ceiling in 1/16 steps; OV2640's ceiling is an enum.
 OV3660_PID = 0x3660
+OV2640_PID = 0x2640
 
 
 @dataclass
@@ -64,19 +65,42 @@ class Frame:
     chunks: list[str] = field(default_factory=list)
 
     def exposure_str(self) -> str:
-        """Render gain/exposure in the units of the sensor that produced them."""
+        """Render gain/exposure in the units of the sensor that produced them.
+
+        Units are sensor-dependent, so without a PID the raw numbers cannot be
+        interpreted — say that rather than picking a sensor and being wrong.
+        Older firmware emitted no `pid=` field, so this path is real.
+        """
         if self.gain is None:
             return ""
-        name = {0x3660: "OV3660", 0x2640: "OV2640"}.get(self.pid, f"pid={self.pid:04x}")
+
+        if self.pid is None:
+            return (
+                f" | gain={self.gain} exp={self.exposure} ceiling={self.gainceiling} "
+                "(raw — no pid= in the dump, units unknown)"
+            )
+
         if self.pid == OV3660_PID:
             ceiling = (
                 f"{self.gainceiling / 16:.2f}x" if self.gainceiling is not None else "?"
             )
-            return f" | {name} gain={self.gain / 16:.2f}x exp={self.exposure // 16} ceiling={ceiling}"
-        ceiling = (
-            f"{1 << (self.gainceiling + 1)}x" if self.gainceiling is not None else "?"
+            return (
+                f" | OV3660 gain={self.gain / 16:.2f}x "
+                f"exp={self.exposure // 16} ceiling={ceiling}"
+            )
+
+        if self.pid == OV2640_PID:
+            ceiling = (
+                f"{1 << (self.gainceiling + 1)}x"
+                if self.gainceiling is not None
+                else "?"
+            )
+            return f" | OV2640 gain={self.gain} exp={self.exposure} ceiling={ceiling}"
+
+        return (
+            f" | pid={self.pid:04x} gain={self.gain} exp={self.exposure} "
+            f"ceiling={self.gainceiling} (raw — unknown sensor, units unknown)"
         )
-        return f" | {name} gain={self.gain} exp={self.exposure} ceiling={ceiling}"
 
 
 def parse(log: str) -> list[Frame]:
