@@ -2,9 +2,18 @@
  * @file camera_pins.h
  * @brief XIAO ESP32-S3 Sense camera pin definitions
  *
- * The XIAO ESP32-S3 Sense has the OV2640 camera connected internally.
- * These pins are NOT on the D0-D10 headers -- they are internal to
- * the Sense expansion board, so there is zero conflict with user GPIOs.
+ * The camera is connected internally on the Sense expansion board. These pins
+ * are NOT on the D0-D10 headers, so there is zero conflict with user GPIOs.
+ *
+ * SENSOR: this board reports PID=0x3660, i.e. an **OV3660** — not the OV2640
+ * this file used to claim. The difference is not cosmetic: the two sensors have
+ * incompatible register maps (OV2640 is 8-bit-addressed and bank-switched,
+ * OV3660 is 16-bit-addressed), and the esp32-camera driver's own
+ * set_gainceiling() means completely different things on each — an enum index
+ * 0..6 on OV2640, a RAW 10-bit ceiling value on OV3660. Writing the OV2640
+ * "lowest" value of 0 to an OV3660 sets its gain ceiling to zero, which is what
+ * made this robot's frames dark. Read the PID that camera_init() logs before
+ * reasoning about any sensor register.
  *
  * Reference: Seeed Studio XIAO ESP32-S3 Sense schematic
  */
@@ -12,7 +21,7 @@
 #ifndef CAMERA_PINS_H
 #define CAMERA_PINS_H
 
-// XIAO ESP32-S3 Sense (OV2640) internal pin definitions
+// XIAO ESP32-S3 Sense internal camera pin definitions
 #define CAM_PIN_PWDN -1   // Not connected on XIAO Sense
 #define CAM_PIN_RESET -1  // Not connected on XIAO Sense
 #define CAM_PIN_XCLK 10   // Camera master clock

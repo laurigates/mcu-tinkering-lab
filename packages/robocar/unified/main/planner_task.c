@@ -13,6 +13,7 @@
 #include "camera.h"
 #include "dialogue_style.h"
 #include "esp_log.h"
+#include "frame_dump.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "gemini_backend.h"
@@ -86,6 +87,14 @@ static void planner_task(void *pvParameters)
             vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(PLANNER_LOOP_PERIOD_MS));
             continue;
         }
+
+        /* ---- 1b. Measure and (if armed) dump the frame ----
+         * Placed here, before gemini_backend_plan() and while the planner still
+         * holds the buffer, so what is measured and dumped is byte-identical to
+         * what the model is about to be shown — and so a frame still lands even
+         * if the HTTP call later hangs or 429s. */
+        frame_stats_log(fb->buf, fb->len);
+        frame_dump_maybe(fb->buf, fb->len);
 
         /* ---- 2. Call Gemini planner ---- */
         goal_t goal = {0};

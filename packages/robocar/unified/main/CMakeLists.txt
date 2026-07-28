@@ -8,6 +8,7 @@ idf_component_register(
         "servo_controller.c"
         "buzzer.c"
         "camera.c"
+        "frame_dump.c"
         "base64.c"
         "gemini_backend.c"
         "gemini_http.c"

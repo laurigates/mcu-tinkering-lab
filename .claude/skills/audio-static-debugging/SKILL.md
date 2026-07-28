@@ -96,6 +96,39 @@ Related sizing gotcha found the same day: the speech text buffer
 a 25-word line ran ~250 chars and a 160-char buffer truncated both text and
 audio mid-word. Size for the language.
 
+## Step 3b — starvation: the network can be slower than real time (2026-07)
+
+Distinct from misalignment, and the cause of the *second* robocar voice bug. A
+streamed source can produce audio **more slowly than the DAC consumes it**, and
+the resulting underrun does not sound like a gap — it sounds like broadband
+noise. Two facts, both verified against ESP-IDF v5.4 source:
+
+- **Measure the real-time factor before theorising.** Across seven live Gemini
+  TTS captures the RTF (audio-ms produced per wallclock-ms after first byte)
+  was `0.55 / 0.79 / 0.84 / 1.88 / 2.70 / 3.08 / 3.81` — **three of seven below
+  1.0**. The slow ones were all the *short* lines: a fixed 0.9–2.7 s
+  time-to-first-byte amortised over less audio. Log an `rtf=` figure per
+  utterance; below 1.00 is normal and must be *absorbed*, not prevented.
+- **Underrun tears, it does not merely gap.** `i2s_common.c` creates
+  `msg_queue` with depth `desc_num - 1` and, when it is full, the TX ISR
+  **drops the oldest entry** (`xQueueIsQueueFullFromISR` →
+  `xQueueReceiveFromISR` into a dummy) before pushing the finished descriptor.
+  After a writer stall longer than `desc_num-1` descriptor periods,
+  `i2s_channel_write()` is handed the *oldest* free descriptor — the very next
+  one the DMA will transmit — so its `memcpy` lands inside a buffer being read
+  out. `auto_clear` zeroing the buffer after send does not save you; that is
+  why the symptom is noise rather than silence.
+
+**Fix shape**: gate playback on a preroll — start when N ms are banked **OR**
+the fetch completes, whichever comes first. The OR is the load-bearing half: a
+short utterance (the class that starves) then plays from a complete buffer and
+cannot underrun at all. Make the gate a property of the **ring**, not of an
+utterance, or back-to-back speech inherits an already-open gate and skips it.
+Widen `dma_desc_num` for margin, and batch the producer's writes — a decoder
+emitting 3 bytes per call forces a `portYIELD_WITHIN_API()` to the
+higher-priority player on every ring send (~25 000/s), starving the producer
+exactly when it needs to get ahead.
+
 ## Step 4 — only now consider the analog side
 
 If the source is clean AND the transport is aligned AND it still hisses/pops in

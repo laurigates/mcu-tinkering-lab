@@ -17,8 +17,20 @@
 
 static const char *TAG = "audio_player";
 
-/** DMA sizing — 4 descriptors x 256 frames ~= 42 ms of slack at 24 kHz. */
-#define I2S_DMA_DESC_NUM 4
+/** DMA sizing — 8 descriptors x 256 frames ~= 85 ms of slack at 24 kHz.
+ *
+ *  Doubled from 4 for margin against the ESP-IDF TX ISR's queue-overflow
+ *  behaviour, which is what turns an underrun into audible NOISE rather than a
+ *  clean gap. i2s_common.c creates msg_queue at `desc_num - 1` and, when it is
+ *  full, the ISR DROPS THE OLDEST entry (xQueueIsQueueFullFromISR ->
+ *  xQueueReceiveFromISR into a dummy) before pushing the newly finished
+ *  descriptor. So after any writer stall longer than desc_num-1 descriptor
+ *  periods, i2s_channel_write() is handed the OLDEST free descriptor — which is
+ *  the very next one the DMA will transmit. The writer's lead collapses to
+ *  roughly one descriptor period and its memcpy can land inside a buffer the
+ *  DMA is actively reading, producing torn samples. More descriptors widen both
+ *  the stall a writer can absorb and the lead it retains afterwards. */
+#define I2S_DMA_DESC_NUM 8
 #define I2S_DMA_FRAME_NUM 256
 
 /** Mono samples converted per I2S write. Keep the stereo scratch off the
@@ -27,13 +39,61 @@ static const char *TAG = "audio_player";
 
 /** Idle grace before the I2S channel is powered down. The MAX98357A emits a
  *  faint hiss whenever BCLK is running, so it is disabled between utterances
- *  rather than left clocking silence. */
+ *  rather than left clocking silence.
+ *
+ *  This is a poll interval, not a verdict: an empty ring means "power down"
+ *  only once no fetch is in flight (s_fetch_active). A dry ring while the
+ *  download is still running is a stall, and tearing the channel down there
+ *  used to inject a further ~85 ms of preloaded silence on re-enable, in the
+ *  middle of a word. Measured 4 such disables inside a single sentence. */
 #define PLAYER_IDLE_TIMEOUT_MS 300
+
+/** Safety net on the preroll wait. Notifications are counting and cleared on
+ *  take, so none can be lost — this only bounds the damage from a future logic
+ *  bug that forgets to notify. */
+#define PLAYER_GATE_POLL_MS 500
+
+/** Bound on a single DMA write. NOT portMAX_DELAY: i2s_channel_write() takes
+ *  MILLISECONDS and feeds the value through pdMS_TO_TICKS() twice
+ *  (i2s_common.c, for the binary semaphore and the descriptor queue), so
+ *  portMAX_DELAY overflows TickType_t into ~72 minutes rather than meaning
+ *  "block forever". A real bound makes a wedged DMA visible in the log. */
+#define PLAYER_I2S_WRITE_TIMEOUT_MS 1000
 
 static i2s_chan_handle_t s_tx_chan = NULL;
 static RingbufHandle_t s_ring = NULL;
 static TaskHandle_t s_task = NULL;
 static volatile bool s_channel_active = false;
+
+/* Preroll gate state.
+ *
+ * The gate is a property of the RING, not of an utterance. That distinction is
+ * load-bearing: an earlier version tracked "bytes banked for this utterance"
+ * and "this utterance's fetch finished", which broke as soon as two utterances
+ * were queued back to back (SPEECH_QUEUE_DEPTH is 2, and three producers post
+ * into it). Utterance B's begin_utterance() would clear the completion flag
+ * while A was still draining, and B would inherit A's already-open gate and
+ * play its first bytes with no preroll at all — silently reintroducing exactly
+ * the underrun this gate exists to prevent, and only in the back-to-back case,
+ * so it would have looked intermittent.
+ *
+ * Occupancy is derived from two MONOTONIC counters with a single writer each,
+ * so there is no shared read-modify-write to tear: the producer only ever adds
+ * to s_written_total, the player only ever adds to s_played_total. Unsigned
+ * wraparound keeps the difference correct. Both tasks are pinned to core 1
+ * (AUDIO_PLAYER_TASK_CORE / TTS_FETCH_TASK_CORE) and a 32-bit aligned load is
+ * atomic, so volatile is sufficient — no lock is needed or wanted on this path.
+ */
+static volatile size_t s_written_total = 0;  /**< producer (TTS fetch task) only */
+static volatile size_t s_played_total = 0;   /**< player task only */
+static volatile bool s_fetch_active = false; /**< producer only: a fetch is in flight */
+static volatile bool s_armed = false;        /**< gate open: playback may start */
+
+/** Bytes currently sitting in the ring. */
+static inline size_t ring_pending(void)
+{
+    return s_written_total - s_played_total;
+}
 
 /* Odd trailing byte held back from the previous audio_player_write so only
  * 16-bit-aligned runs enter the ring. See audio_player_write. */
@@ -142,15 +202,35 @@ static void player_task(void *arg)
     int16_t stereo[PLAYER_CHUNK_SAMPLES * 2];
 
     for (;;) {
+        /* ---- Preroll gate ----
+         * Draining a ring that the network cannot keep filled is what produces
+         * the glitching: once the DMA runs dry the ISR's descriptor queue
+         * overflows and the writer starts landing in a buffer the DMA is
+         * reading (see I2S_DMA_DESC_NUM). Waiting until AUDIO_PREROLL_BYTES is
+         * banked — or until the fetch has finished, whichever comes first —
+         * means a short utterance is played from a complete buffer and cannot
+         * underrun at all, while a long one still overlaps its download. */
+        if (!s_armed) {
+            if (s_channel_active) {
+                channel_set_active(false);
+            }
+            ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(PLAYER_GATE_POLL_MS));
+            continue;
+        }
+
         size_t got = 0;
         void *item = xRingbufferReceiveUpTo(s_ring, &got, pdMS_TO_TICKS(PLAYER_IDLE_TIMEOUT_MS),
                                             PLAYER_CHUNK_SAMPLES * sizeof(int16_t));
 
         if (!item) {
-            // Nothing arrived within the grace window — the utterance is over
-            // (or stalled). Power the amp's clock down.
-            if (s_channel_active) {
-                channel_set_active(false);
+            /* Ring dry. With no fetch in flight nothing more is coming, so the
+             * utterance is genuinely over — close the gate and let the branch
+             * above power the amp's clock down. While a fetch IS running this
+             * is a mid-download stall instead, and the channel keeps clocking
+             * so the rest of the sentence resumes without a teardown in the
+             * middle of a word. */
+            if (!s_fetch_active) {
+                s_armed = false;
             }
             continue;
         }
@@ -160,12 +240,14 @@ static void player_task(void *arg)
         const size_t samples = got / sizeof(int16_t);
         mono_to_stereo((const int16_t *)item, samples, stereo);
         vRingbufferReturnItem(s_ring, item);
+        s_played_total += got;
 
         size_t written = 0;
         const esp_err_t err = i2s_channel_write(s_tx_chan, stereo, samples * 2 * sizeof(int16_t),
-                                                &written, portMAX_DELAY);
+                                                &written, PLAYER_I2S_WRITE_TIMEOUT_MS);
         if (err != ESP_OK) {
-            ESP_LOGW(TAG, "i2s_channel_write failed: %s", esp_err_to_name(err));
+            ESP_LOGW(TAG, "i2s_channel_write failed: %s (%u/%u bytes)", esp_err_to_name(err),
+                     (unsigned)written, (unsigned)(samples * 2 * sizeof(int16_t)));
         }
     }
 }
@@ -268,7 +350,32 @@ esp_err_t audio_player_write(const uint8_t *pcm, size_t bytes, uint32_t timeout_
         s_carry = pcm[even];
         s_have_carry = true;
     }
+
+    /* Open the preroll gate on the way past the threshold — once only, so a
+     * long utterance is not notifying the player on every write. */
+    s_written_total += bytes;
+    if (!s_armed && ring_pending() >= (size_t)AUDIO_PREROLL_BYTES) {
+        s_armed = true;
+        if (s_task) {
+            xTaskNotifyGive(s_task);
+        }
+    }
     return ESP_OK;
+}
+
+void audio_player_begin_utterance(void)
+{
+    s_fetch_active = true;
+    s_have_carry = false;
+
+    /* Make this utterance earn its own preroll — but only if the ring is
+     * actually empty. If the previous utterance is still draining, the gate
+     * must stay open (closing it would cut that audio off mid-word) and this
+     * utterance simply inherits the buffer already in front of it, which is
+     * exactly as much protection as a fresh preroll would have bought. */
+    if (ring_pending() == 0) {
+        s_armed = false;
+    }
 }
 
 void audio_player_end_utterance(void)
@@ -276,6 +383,19 @@ void audio_player_end_utterance(void)
     // Drop a dangling half-sample (≤1 byte, inaudible) so it cannot prepend to,
     // and misalign, the next utterance.
     s_have_carry = false;
+    s_fetch_active = false;
+
+    /* Everything that is coming has arrived, so release the gate even if the
+     * preroll threshold was never reached — a short utterance never reaches it,
+     * and waiting for audio that will never arrive would simply never play.
+     * Conditional on there being something to play: a failed or empty request
+     * must NOT leave the gate open, or the next utterance skips its preroll. */
+    if (ring_pending() > 0) {
+        s_armed = true;
+    }
+    if (s_task) {
+        xTaskNotifyGive(s_task); /* always: the player must re-evaluate */
+    }
 }
 
 void audio_player_abort(void)
@@ -294,6 +414,19 @@ void audio_player_abort(void)
             break;
         }
         vRingbufferReturnItem(s_ring, item);
+    }
+
+    /* Close the gate and wake the player so it powers the channel down. The
+     * player, not this task, disables I2S: it may be inside i2s_channel_write,
+     * and disabling the channel underneath it is not safe. Draining the ring
+     * from here IS safe — the player runs at a higher priority on the same
+     * core, so it cannot be holding an outstanding item while we run, and for
+     * the same reason this task may settle the played counter on its behalf. */
+    s_played_total = s_written_total;
+    s_fetch_active = false;
+    s_armed = false;
+    if (s_task) {
+        xTaskNotifyGive(s_task);
     }
 }
 
