@@ -46,7 +46,7 @@ The MCP23017 (1953W breakout, address 0x20) is exercised from the serial console
 |---------|--------|
 | `F` `B` `L` `R` `C` `W` `S` | Manual drive / rotate / stop — a ~1 s lease via `reactive_controller_manual()`, still subject to the obstacle reflex |
 | `gpio …` | MCP23017 expander (see above) |
-| `voice …` | Persona / TTS voice switching and auditioning; `voice vary` shows a drawn variation directive |
+| `voice …` | Persona / TTS voice switching and auditioning; `voice vary` shows a drawn variation directive, `voice said` the recall ring, `voice quiet`/`budget`/`repeat` the speech rationing |
 | `snap [n]` | Dump the next `n` planner frames over the console as base64 JPEG — see "Seeing what the camera sends" |
 | `cam …` | Read live sensor gain/exposure; `cam gainceiling 0-6`, `cam ae -2..2`, `cam brightness -2..2` tune exposure without a reflash |
 | `sound beep\|melody\|alert` | Buzzer |
@@ -124,6 +124,22 @@ Full API surface, including the multi-speaker config that exists but is unused a
 
 The trap it exists to prevent: a phrase named in `text_brief` gets used *every single time*. Naming the period construction "Asianlaita on oikeastaan niin, että ..." there made it the opening of practically every spoken line. Put such a phrase in the `openers` pool, where it turns up on its share of lines and the pool can also say "no opener at all". `voice vary` on the console prints a freshly drawn directive so pools can be tuned without waiting out a 15 s planner period per sample.
 
+### The robot remembers what it said, and is rationed on how often it says anything
+
+Every planner request is **stateless** — one image, one prompt, no previous frame and no record of having spoken. So the prompt's "remark only when the scene changes" and "narrating every time would be tiresome" were asking for a judgement the model had no information to make: it arrives as a first-time observer on every call. Pointed at a bench that is not moving, it remarked on the same unmoving thing every 15 s, and the three-word avoid-list let it do so with a fresh opening each time.
+
+Three mechanisms, in the order they act on a cycle:
+
+- **The `speak` tool is withheld, not discouraged** (`speech_budget.c`). A minimum gap (60 s) and a rolling cap (3 per 5 min) decide whether `build_tools()` declares `speak` at all. On a quiet cycle the whole speech half of the prompt — persona brief, variation directive, recall list — is omitted too, so the muted request is also the cheaper one. Withholding beats instructing because there is no wording that makes an unknowable fact ("how long since I last spoke") knowable.
+- **The last few whole utterances go into the prompt** (`dialogue_style.c`, `DIALOGUE_RECALL_SLOTS`). Distinct from the avoid-list, which constrains only the first `DIALOGUE_OPENING_WORDS` words — a model can honour that and still reorder the same sentence forever, which is exactly what it did.
+- **The answer is re-checked on-device.** `dialogue_style_is_repetitive()` scores the candidate against the recall ring (Sørensen–Dice over word sets, ASCII-case- and punctuation-insensitive, so reordering does not evade it) and `planner_task.c` drops it above the threshold. An instruction the model can quietly ignore is not a guarantee.
+
+Only *generated* lines are screened. `voice say` is an audition and is meant to repeat on demand; a self-report whose facts have not changed is supposed to read the same.
+
+The three thresholds are console knobs (`voice quiet`, `voice budget`, `voice repeat`) for the same reason `cam gainceiling` is: whether the robot is pleasantly laconic or annoyingly mute is a judgement that needs somebody in the room, and a reflash per trial is far too slow a loop. They deliberately do **not** persist to NVS — a boot should come up at the documented default, not at whatever last night's experiment left behind. `voice` with no argument prints the live budget state (`used=`, next-allowed countdown) and `voice said` prints the recall ring.
+
+None of this survives a reboot: the rings are `.bss`. Persisting them is worth doing if bench reflashes make the first line after every boot the model's favourite phrasing again.
+
 Two hardware consequences worth knowing before touching this:
 
 - **The microSD slot is gone.** GPIO7/8/9 are the Sense expansion board's SPI bus. No alternative pins exist — I2S needs a real peripheral, so it cannot move behind the PCA9685 or MCP23017.
@@ -176,6 +192,9 @@ Key settings that matter:
 - Don't fold speech into `goal_t` — see the Voice section above and `speech_queue.h`
 - Don't put a specific phrase, opener or filler word in a persona's `text_brief` — everything named there is said every time. Phrase-shaped flavour goes in the `openers`/`shapes` pools; see `dialogue_style.h`
 - Don't name an *era* in `tts_style` and expect the delivery to follow — "1950s Finnish film" produced flat contemporary Finnish. Name the audible traits instead (enunciation, tempo, `yleiskieli` forms, tapped /r/, held geminates). Note the ceiling: the era's *recording chain* (~100 Hz–5 kHz) is a filter, not a speaking style, and no prompt adds it
+- Don't try to fix repetition by wording the prompt harder ("do not repeat yourself", "only if the scene changed"). Every request is stateless, so those name facts the model cannot check. Withhold the `speak` declaration instead, and re-check the answer against the recall ring — see the Voice section
+- Don't screen `voice say` or the self-report through `dialogue_style_is_repetitive()`. An audition is supposed to repeat on demand, and a status report whose facts have not changed is supposed to read the same; suppressing either turns a working command into one that silently does nothing
+- Don't grow `GEMINI_SYSTEM_PROMPT_MAX`, a persona brief, or `DIALOGUE_RECALL_*` without looking at `PLANNER_TASK_STACK_SIZE` — the prompt is assembled in one frame on the planner stack. The recall clause is sized against the room left so the closing "function calls only" instruction cannot be the thing truncated away; keep that reserve if you reorder the clauses
 - Don't move delivery tags into a `dialogue_pool_t` — they're model-placed because they must fit the sentence, and the random pools exist for things that don't. Don't drop the allow-list filter either; unknown tags get read out loud
 - Don't switch the TTS call back to `:generateContent` — it costs ~5 s of perceived latency (see the Voice section)
 - Don't "normalise" the audio path to 16 kHz to match the ThinkPack projects — 24 kHz is Gemini TTS's native rate, and matching it avoids a resampling stage entirely

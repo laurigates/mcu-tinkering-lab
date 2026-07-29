@@ -13,11 +13,13 @@
 #include "camera.h"
 #include "dialogue_style.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "frame_dump.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "gemini_backend.h"
 #include "goal_state.h"
+#include "speech_budget.h"
 #include "speech_queue.h"
 
 static const char *TAG = "planner";
@@ -26,7 +28,12 @@ static const char *TAG = "planner";
  * Task constants
  * ========================================================================= */
 
-#define PLANNER_TASK_STACK_SIZE 8192U
+/* 10 KB rather than 8: gemini_backend.c's build_request_json() frame holds the
+ * system prompt (GEMINI_SYSTEM_PROMPT_MAX) plus the variation directive and the
+ * recalled-lines list, which together grew past 4 KB when the robot gained a
+ * memory of what it had said. Grow this with those buffers, not after a stack
+ * overflow reports it. */
+#define PLANNER_TASK_STACK_SIZE 10240U
 #define PLANNER_TASK_PRIORITY 3U
 #define PLANNER_TASK_CORE 1
 
@@ -107,14 +114,25 @@ static void planner_task(void *pvParameters)
          * Posted before the goal is written and regardless of whether the
          * motion goal parsed, so the robot can speak while holding position.
          * Non-blocking: a full queue drops the line rather than stalling the
-         * planner loop. */
+         * planner loop.
+         *
+         * The prompt already carries what was recently said and asks for
+         * something new; this re-checks the answer, because a request is not a
+         * guarantee. Only generated lines are screened — console auditions and
+         * status reports go straight to the queue. See dialogue_style.h. */
+        if (speech[0] != '\0' && dialogue_style_is_repetitive(speech)) {
+            ESP_LOGI(TAG, "Suppressed near-repeat: \"%s\"", speech);
+            speech[0] = '\0';
+        }
         if (speech[0] != '\0') {
             const esp_err_t sp_ret = speech_queue_post(speech);
             if (sp_ret == ESP_OK) {
-                /* Feeds the next prompt's "do not begin with" list. Only on a
-                 * successful post: a line dropped by a full queue is never
-                 * heard, so it is not a repetition anyone can notice. */
+                /* Feeds the next prompt's recall list and avoid-list, and spends
+                 * the speaking budget. Only on a successful post: a line dropped
+                 * by a full queue is never heard, so it is neither a repetition
+                 * anyone can notice nor an utterance worth rationing. */
                 dialogue_style_note_spoken(speech);
+                speech_budget_note((uint32_t)(esp_timer_get_time() / 1000));
                 ESP_LOGI(TAG, "Speech: \"%s\"", speech);
             } else if (sp_ret == ESP_ERR_NO_MEM) {
                 ESP_LOGD(TAG, "still speaking — dropped: \"%s\"", speech);

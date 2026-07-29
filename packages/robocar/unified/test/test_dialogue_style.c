@@ -329,6 +329,182 @@ static void test_recent_openings_respects_a_small_buffer(void)
 }
 
 /* =========================================================================
+ * Recalled whole lines
+ * ========================================================================= */
+
+static void test_recall_keeps_whole_lines(void)
+{
+    fresh(1u);
+    dialogue_style_note_spoken("Edessä on pöydän jalka ja johtoja.");
+
+    char buf[512];
+    ASSERT(dialogue_style_recent_lines(buf, sizeof(buf)) > 0);
+    /* The trailing full stop is trimmed with any other clause punctuation; what
+     * matters is that the whole sentence survived, not just its opening. */
+    ASSERT(strcmp(buf, "\"Edessä on pöydän jalka ja johtoja\"") == 0);
+}
+
+static void test_recall_lists_newest_first_and_evicts(void)
+{
+    fresh(1u);
+    for (int i = 1; i <= DIALOGUE_RECALL_SLOTS + 1; ++i) {
+        char line[64];
+        snprintf(line, sizeof(line), "line number %d here", i);
+        dialogue_style_note_spoken(line);
+    }
+
+    char buf[1024];
+    (void)dialogue_style_recent_lines(buf, sizeof(buf));
+    char newest[64];
+    snprintf(newest, sizeof(newest), "line number %d here", DIALOGUE_RECALL_SLOTS + 1);
+    ASSERT(strncmp(buf + 1, newest, strlen(newest)) == 0); /* newest first, after the quote */
+    ASSERT(strstr(buf, "line number 1 here") == NULL);     /* pushed out of the ring */
+}
+
+static void test_recall_keeps_near_repeats(void)
+{
+    /* The openings ring drops a repeat of its newest entry so one phrase cannot
+     * flood it. The recall ring must NOT do that: a near-repeat is precisely
+     * what the next repetition check has to be able to see. */
+    fresh(1u);
+    dialogue_style_note_spoken("Alpha beta gamma delta");
+    dialogue_style_note_spoken("Alpha beta gamma epsilon");
+
+    char buf[1024];
+    (void)dialogue_style_recent_lines(buf, sizeof(buf));
+    ASSERT(strstr(buf, "delta") != NULL);
+    ASSERT(strstr(buf, "epsilon") != NULL);
+}
+
+static void test_recall_strips_delivery_tags(void)
+{
+    fresh(1u);
+    dialogue_style_note_spoken("[sighs] Tie on yhä tukossa");
+
+    char buf[512];
+    (void)dialogue_style_recent_lines(buf, sizeof(buf));
+    ASSERT(strstr(buf, "sighs") == NULL);
+    ASSERT(strcmp(buf, "\"Tie on yhä tukossa\"") == 0);
+}
+
+static void test_recall_respects_a_small_buffer(void)
+{
+    fresh(1u);
+    dialogue_style_note_spoken("Alpha alpha alpha");
+    dialogue_style_note_spoken("Beta beta beta");
+    dialogue_style_note_spoken("Gamma gamma gamma");
+
+    for (size_t cap = 1; cap < 80; ++cap) {
+        char buf[96];
+        memset(buf, 0x7F, sizeof(buf));
+        const size_t n = dialogue_style_recent_lines(buf, cap);
+        ASSERT(n < cap);
+        ASSERT(strlen(buf) == n);
+        ASSERT((unsigned char)buf[cap] == 0x7Fu);
+    }
+    ASSERT(dialogue_style_recent_lines(NULL, 16) == 0);
+}
+
+/* =========================================================================
+ * Similarity / repetition
+ * ========================================================================= */
+
+static void test_similarity_extremes(void)
+{
+    ASSERT(dialogue_style_similarity("alpha beta gamma", "alpha beta gamma") == 100);
+    ASSERT(dialogue_style_similarity("alpha beta gamma", "kissa koira hevonen") == 0);
+    ASSERT(dialogue_style_similarity("", "") == 0);
+    ASSERT(dialogue_style_similarity(NULL, "alpha") == 0);
+}
+
+static void test_similarity_ignores_case_and_punctuation(void)
+{
+    /* The failure this guards: the same sentence returned with a different
+     * capital or a comma moved would score 0 and sail through as "novel". */
+    ASSERT(dialogue_style_similarity("Alpha, beta; gamma!", "alpha beta gamma") == 100);
+    ASSERT(dialogue_style_similarity("\"Alpha beta gamma.\"", "gamma beta alpha") == 100);
+}
+
+static void test_similarity_ignores_word_order(void)
+{
+    /* Reordering is the exact dodge the three-word avoid-list allowed. */
+    ASSERT(dialogue_style_similarity("tie on tukossa edessä", "edessä tukossa on tie") == 100);
+}
+
+static void test_similarity_partial_overlap(void)
+{
+    /* 3 shared of 4+4 unique -> 2*3/8 = 75%. */
+    ASSERT(dialogue_style_similarity("alpha beta gamma delta", "alpha beta gamma epsilon") == 75);
+    /* 1 shared of 3+3 -> 2/6 = 33%. */
+    ASSERT(dialogue_style_similarity("alpha beta gamma", "alpha kissa koira") == 33);
+}
+
+static void test_similarity_does_not_double_count_repeats(void)
+{
+    /* Word *sets*, not multisets: a filler word repeated inside one sentence
+     * must not inflate the score toward a false repeat. */
+    ASSERT(dialogue_style_similarity("no no no alpha", "no alpha") == 100);
+}
+
+static void test_is_repetitive_against_the_ring(void)
+{
+    fresh(1u);
+    ASSERT(!dialogue_style_is_repetitive("Edessä on pöydän jalka"));
+
+    dialogue_style_note_spoken("Edessä on pöydän jalka");
+    ASSERT(dialogue_style_is_repetitive("Edessä on pöydän jalka"));
+    ASSERT(dialogue_style_is_repetitive("Pöydän jalka on edessä.")); /* reordered */
+    ASSERT(!dialogue_style_is_repetitive("Vasemmalla näkyy avoin ovi"));
+}
+
+static void test_is_repetitive_ignores_delivery_tags(void)
+{
+    fresh(1u);
+    dialogue_style_note_spoken("Tie on tukossa");
+    ASSERT(dialogue_style_is_repetitive("[sighs] Tie on tukossa"));
+}
+
+static void test_is_repetitive_honours_the_threshold(void)
+{
+    fresh(1u);
+    dialogue_style_note_spoken("alpha beta gamma delta");
+
+    /* 75% similar (see test_similarity_partial_overlap). */
+    dialogue_style_set_repeat_pct(70);
+    ASSERT(dialogue_style_is_repetitive("alpha beta gamma epsilon"));
+    dialogue_style_set_repeat_pct(80);
+    ASSERT(!dialogue_style_is_repetitive("alpha beta gamma epsilon"));
+    ASSERT(dialogue_style_is_repetitive("alpha beta gamma delta")); /* verbatim, always */
+
+    /* Out-of-range values are ignored rather than clamped to something silly. */
+    dialogue_style_set_repeat_pct(0);
+    ASSERT(dialogue_style_repeat_pct() == 80);
+    dialogue_style_set_repeat_pct(101);
+    ASSERT(dialogue_style_repeat_pct() == 80);
+    dialogue_style_set_repeat_pct(DIALOGUE_REPEAT_PCT_DEFAULT);
+}
+
+static void test_is_repetitive_handles_empty_input(void)
+{
+    fresh(1u);
+    dialogue_style_note_spoken("alpha beta gamma");
+    ASSERT(!dialogue_style_is_repetitive(NULL));
+    ASSERT(!dialogue_style_is_repetitive(""));
+    ASSERT(!dialogue_style_is_repetitive("[sighs]")); /* nothing but a tag */
+}
+
+static void test_reset_clears_the_recall_ring(void)
+{
+    fresh(1u);
+    dialogue_style_note_spoken("alpha beta gamma");
+    dialogue_style_reset_recent();
+
+    char buf[256];
+    ASSERT(dialogue_style_recent_lines(buf, sizeof(buf)) == 0);
+    ASSERT(!dialogue_style_is_repetitive("alpha beta gamma"));
+}
+
+/* =========================================================================
  * Composed directive
  * ========================================================================= */
 
@@ -456,6 +632,25 @@ int main(void)
     test_run("utf-8 opening survives intact", test_utf8_opening_survives_intact);
     test_run("recent_openings respects a small buffer",
              test_recent_openings_respects_a_small_buffer);
+
+    test_run("recall keeps whole lines", test_recall_keeps_whole_lines);
+    test_run("recall lists newest first and evicts", test_recall_lists_newest_first_and_evicts);
+    test_run("recall keeps near-repeats", test_recall_keeps_near_repeats);
+    test_run("recall strips delivery tags", test_recall_strips_delivery_tags);
+    test_run("recall respects a small buffer", test_recall_respects_a_small_buffer);
+
+    test_run("similarity extremes", test_similarity_extremes);
+    test_run("similarity ignores case and punctuation",
+             test_similarity_ignores_case_and_punctuation);
+    test_run("similarity ignores word order", test_similarity_ignores_word_order);
+    test_run("similarity scores partial overlap", test_similarity_partial_overlap);
+    test_run("similarity does not double-count repeats",
+             test_similarity_does_not_double_count_repeats);
+    test_run("is_repetitive checks the recall ring", test_is_repetitive_against_the_ring);
+    test_run("is_repetitive ignores delivery tags", test_is_repetitive_ignores_delivery_tags);
+    test_run("is_repetitive honours the threshold", test_is_repetitive_honours_the_threshold);
+    test_run("is_repetitive handles empty input", test_is_repetitive_handles_empty_input);
+    test_run("reset clears the recall ring", test_reset_clears_the_recall_ring);
 
     test_run("directive contains an opener and a shape",
              test_directive_contains_an_opener_and_a_shape);

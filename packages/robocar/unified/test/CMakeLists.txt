@@ -127,6 +127,19 @@ target_link_libraries(test_dialogue_style PRIVATE Threads::Threads m)
 add_test(NAME dialogue_style COMMAND test_dialogue_style)
 
 # -----------------------------------------------------------------------------
+# speech_budget rationing (how often the robot is offered the `speak` tool)
+#
+# Pure C with an injected clock, so the uint32 millisecond wrap is reachable in
+# a test instead of only after 49 days of uptime.
+# -----------------------------------------------------------------------------
+add_executable(test_speech_budget
+    "${MAIN_SRC_DIR}/speech_budget.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_speech_budget.c"
+)
+target_link_libraries(test_speech_budget PRIVATE Threads::Threads m)
+add_test(NAME speech_budget COMMAND test_speech_budget)
+
+# -----------------------------------------------------------------------------
 # gemini parse (Phase 5, gate G1, issue #228)
 #
 # Only built when cJSON is available. Skipped (with a message) otherwise so

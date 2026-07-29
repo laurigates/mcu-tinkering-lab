@@ -31,6 +31,15 @@
  *      with these" — the only mechanism here that reacts to what the model
  *      really produced rather than to what it was asked for.
  *
+ *   4. **A recall ring of whole lines, and a repetition check against it.**
+ *      The avoid-list above constrains only the first DIALOGUE_OPENING_WORDS
+ *      words, so a model can honour it and still say the same thing in a
+ *      different order forever — which is exactly what it did.  The recall ring
+ *      keeps the last few *complete* utterances: they go into the prompt as
+ *      "you already said these", and dialogue_style_is_repetitive() re-checks
+ *      the answer against them on-device, because an instruction the model can
+ *      quietly ignore is not a guarantee.
+ *
  * The same pools also back the canned fallback lines, so an API outage does not
  * collapse the robot back onto one fixed sentence.
  *
@@ -49,6 +58,7 @@
 #ifndef DIALOGUE_STYLE_H
 #define DIALOGUE_STYLE_H
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -68,6 +78,32 @@ extern "C" {
 
 /** Words of a spoken line treated as its "opening". */
 #define DIALOGUE_OPENING_WORDS 3
+
+/** How many whole spoken lines are remembered and shown back to the model.
+ *
+ *  Storage is DIALOGUE_RECALL_SLOTS * DIALOGUE_RECALL_MAX bytes of .bss, and
+ *  the rendered list is prompt payload on every planner request — so this trades
+ *  DRAM and tokens for how far back the robot's memory of itself reaches. Five
+ *  lines at a ~60 s speaking floor covers roughly the last five minutes. */
+#define DIALOGUE_RECALL_SLOTS 5
+
+/** Longest remembered line, including NUL.
+ *
+ *  Shorter than SPEECH_TEXT_MAX (320) on purpose: the tail of a sentence is the
+ *  least useful part for "have I said this already", and five full-length slots
+ *  would put 1.6 kB into every prompt. A line longer than this is stored cut at
+ *  a word boundary — never mid multi-byte sequence, since the stored text goes
+ *  straight into a JSON request body. */
+#define DIALOGUE_RECALL_MAX 160
+
+/** Default similarity (percent) at or above which a candidate line counts as a
+ *  repeat of something already said. Sørensen–Dice over the two word sets, so
+ *  100 is "same words", 0 is "nothing in common".
+ *
+ *  60 is a starting point, not a derived constant — how much repetition is
+ *  tolerable is a judgement only somebody listening to the robot can make, which
+ *  is why dialogue_style_set_repeat_pct() exists and the console exposes it. */
+#define DIALOGUE_REPEAT_PCT_DEFAULT 60
 
 /**
  * @brief A pool of interchangeable strings, one of which is drawn per use.
@@ -143,17 +179,65 @@ size_t dialogue_style_directive(const dialogue_pool_t *openers, const dialogue_p
 
 /**
  * @brief Record a line the robot actually spoke, so the next prompt can ask
- *        for a different opening.
+ *        for a different opening — and so the line itself can be recalled.
  *
- * Stores only the first DIALOGUE_OPENING_WORDS words, with trailing
- * punctuation trimmed.  A repeat of the newest stored opening is ignored
- * rather than stored twice — otherwise one stubborn phrase would fill the ring
- * and crowd out the older openings that still need avoiding.
+ * Feeds two rings: the openings ring (first DIALOGUE_OPENING_WORDS words, with
+ * trailing punctuation trimmed) and the recall ring (the whole line, cut at a
+ * word boundary to DIALOGUE_RECALL_MAX).  A repeat of the newest stored opening
+ * is ignored rather than stored twice — otherwise one stubborn phrase would
+ * fill the ring and crowd out the older openings that still need avoiding.
  *
  * Call it for lines the robot generates, not for lines a human typed at the
  * console (`voice say`), which are auditions rather than dialogue.
  */
 void dialogue_style_note_spoken(const char *line);
+
+/**
+ * @brief The remembered whole lines as a quoted, comma-separated list.
+ *
+ * Newest first, so a truncating buffer keeps the most recent — the ones the
+ * listener would notice being repeated. Writes "" and returns 0 when nothing
+ * has been recorded, which the caller must treat as "omit the clause entirely"
+ * rather than emitting a dangling lead-in.
+ */
+size_t dialogue_style_recent_lines(char *out, size_t out_len);
+
+/**
+ * @brief How similar @p a and @p b are, 0..100 (Sørensen–Dice over word sets).
+ *
+ * Word comparison ignores punctuation and ASCII case. Non-ASCII bytes are
+ * compared as-is: case-folding Finnish ä/ö would need a table, and the only
+ * place it would matter is a sentence-initial capital, which changes one word
+ * out of a dozen. Exposed mainly so the threshold can be judged from real
+ * transcripts in a host test.
+ */
+unsigned dialogue_style_similarity(const char *a, const char *b);
+
+/**
+ * @brief True when @p line repeats something in the recall ring.
+ *
+ * The on-device half of the anti-repetition contract: the prompt *asks* the
+ * model not to repeat itself, this *checks*. Delivery tags are stripped before
+ * comparing, so re-saying a line with a different `[sighs]` still counts as a
+ * repeat.
+ *
+ * Apply it to model-generated lines only. A status report whose facts have not
+ * changed is supposed to read the same, and a console audition is meant to be
+ * repeatable on demand.
+ */
+bool dialogue_style_is_repetitive(const char *line);
+
+/**
+ * @brief Set the similarity percentage that counts as a repeat (1..100).
+ *
+ * Values outside the range are ignored. 100 effectively means "only reject a
+ * verbatim repeat". Tunable at runtime because the right value is a matter of
+ * taste — see DIALOGUE_REPEAT_PCT_DEFAULT.
+ */
+void dialogue_style_set_repeat_pct(uint8_t pct);
+
+/** @brief Current repeat threshold, as set by dialogue_style_set_repeat_pct(). */
+uint8_t dialogue_style_repeat_pct(void);
 
 /**
  * @brief The remembered openings as a quoted, comma-separated list.
@@ -163,7 +247,7 @@ void dialogue_style_note_spoken(const char *line);
  */
 size_t dialogue_style_recent_openings(char *out, size_t out_len);
 
-/** @brief Forget all recorded openings (persona switch, or tests). */
+/** @brief Forget all recorded openings and lines (persona switch, or tests). */
 void dialogue_style_reset_recent(void);
 
 #ifdef __cplusplus
