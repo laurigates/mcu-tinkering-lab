@@ -50,6 +50,7 @@
 #include "reactive_controller.h"
 #include "self_report.h"
 #include "servo_controller.h"
+#include "speech_budget.h"
 #include "speech_queue.h"
 #include "voice_persona.h"
 #include "wifi_manager.h"
@@ -314,11 +315,15 @@ static void handle_periph_cmd(const char *buf)
 //   gpio set <pin> 0|1       - drive an output pin
 //   gpio get <pin>           - read one pin
 // ========================================
-/* `voice`                  — show current persona/voice and list the options
- * `voice <slug>`           — switch persona (e.g. `voice fi-1950`)
- * `voice say <text>`       — speak a line now, to audition the persona
- * `voice name <VoiceName>` — override the prebuilt voice (`voice name -` clears)
- * `voice vary`             — draw and print a variation directive (see below)
+/* `voice`                      — show current persona/voice/budget and options
+ * `voice <slug>`               — switch persona (e.g. `voice fi-1950`)
+ * `voice say <text>`           — speak a line now, to audition the persona
+ * `voice name <VoiceName>`     — override the prebuilt voice (`voice name -` clears)
+ * `voice vary`                 — draw and print a variation directive (see below)
+ * `voice said`                 — print what the robot remembers saying
+ * `voice quiet <seconds>`      — minimum gap between utterances (0 = none)
+ * `voice budget <n> <seconds>` — at most n utterances per window (n=0 mutes)
+ * `voice repeat <pct>`         — similarity at which a line counts as a repeat
  *
  * Switching and auditioning are runtime rather than compile-time because only a
  * listener can judge a voice; a reflash per candidate is far too slow a loop.
@@ -326,7 +331,13 @@ static void handle_periph_cmd(const char *buf)
  * `voice vary` exists for the same reason one step further in: the variation
  * pools (dialogue_style.h) only pay off if their entries read naturally in the
  * persona's language, and the alternative way to see what the model is being
- * told is to wait out a 15 s planner period per sample. */
+ * told is to wait out a 15 s planner period per sample.
+ *
+ * `quiet` / `budget` / `repeat` are the same argument again: how talkative and
+ * how repetitive the robot is allowed to be are judgements that need a person in
+ * the room, and every trial otherwise costs a rebuild plus a flash. They are not
+ * persisted — a boot comes up at the documented default rather than at whatever
+ * an experiment left behind. */
 static void handle_voice_cmd(const char *buf)
 {
     char op[24] = {0};
@@ -344,8 +355,75 @@ static void handle_voice_cmd(const char *buf)
             }
             printf("  %c %-12s %s\n", (p == cur) ? '*' : ' ', p->slug, p->label);
         }
-        printf(
-            "  usage: voice <slug> | voice say <text> | voice name <VoiceName|-> | voice vary\n");
+
+        uint32_t gap_ms = 0;
+        uint32_t window_ms = 0;
+        uint8_t max_per = 0;
+        speech_budget_get(&gap_ms, &max_per, &window_ms);
+        const uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000);
+        const uint32_t wait_ms = speech_budget_wait_ms(now_ms);
+        printf("  budget: quiet=%us max=%u/%us used=%u repeat=%u%%\n", (unsigned)(gap_ms / 1000U),
+               (unsigned)max_per, (unsigned)(window_ms / 1000U),
+               (unsigned)speech_budget_used(now_ms), (unsigned)dialogue_style_repeat_pct());
+        if (wait_ms == UINT32_MAX) {
+            printf("  speech: muted\n");
+        } else {
+            printf("  speech: %s (next in %us)\n", wait_ms ? "waiting" : "allowed now",
+                   (unsigned)(wait_ms / 1000U));
+        }
+
+        printf("  usage: voice <slug> | say <text> | name <VoiceName|-> | vary | said\n");
+        printf("         voice quiet <s> | voice budget <n> <s> | voice repeat <pct>\n");
+        return;
+    }
+
+    if (strcmp(op, "said") == 0) {
+        char lines[DIALOGUE_RECALL_SLOTS * (DIALOGUE_RECALL_MAX + 4)];
+        printf("voice: said %s\n",
+               dialogue_style_recent_lines(lines, sizeof(lines)) ? lines : "(nothing yet)");
+        return;
+    }
+
+    if (strcmp(op, "quiet") == 0) {
+        unsigned secs = 0;
+        if (sscanf(buf, "voice quiet %u", &secs) != 1) {
+            printf("voice: usage: voice quiet <seconds>\n");
+            return;
+        }
+        uint32_t window_ms = 0;
+        uint8_t max_per = 0;
+        speech_budget_get(NULL, &max_per, &window_ms);
+        speech_budget_configure(secs * 1000U, max_per, window_ms);
+        printf("voice: quiet=%us\n", secs);
+        return;
+    }
+
+    if (strcmp(op, "budget") == 0) {
+        unsigned max_per = 0;
+        unsigned secs = 0;
+        if (sscanf(buf, "voice budget %u %u", &max_per, &secs) != 2 || max_per > UINT8_MAX) {
+            printf("voice: usage: voice budget <n> <window seconds>  (n=0 mutes)\n");
+            return;
+        }
+        uint32_t gap_ms = 0;
+        speech_budget_get(&gap_ms, NULL, NULL);
+        speech_budget_configure(gap_ms, (uint8_t)max_per, secs * 1000U);
+        /* Read back rather than echo the argument: the cap is clamped to the
+         * history ring, and a silently ignored value is worse than none. */
+        uint8_t applied = 0;
+        speech_budget_get(NULL, &applied, NULL);
+        printf("voice: budget=%u/%us\n", (unsigned)applied, secs);
+        return;
+    }
+
+    if (strcmp(op, "repeat") == 0) {
+        unsigned pct = 0;
+        if (sscanf(buf, "voice repeat %u", &pct) != 1 || pct < 1U || pct > 100U) {
+            printf("voice: usage: voice repeat <1..100>  (percent word overlap)\n");
+            return;
+        }
+        dialogue_style_set_repeat_pct((uint8_t)pct);
+        printf("voice: repeat=%u%%\n", (unsigned)dialogue_style_repeat_pct());
         return;
     }
 
@@ -769,6 +847,11 @@ static esp_err_t init_hierarchical_ai(void)
     // Persona must load before the planner and TTS tasks start, since both read
     // it while building their first request. Needs NVS, which Phase 0 set up.
     voice_persona_init();
+
+    // How often the planner is even offered the `speak` tool. Must be reset
+    // before the planner task starts, since it reads the budget while building
+    // its first request.
+    speech_budget_init();
 
     // Speech path: queue and player must exist before the planner can emit a
     // `speak` call. Both are non-fatal — a robot that cannot talk should still

@@ -14,6 +14,7 @@ idf_component_register(
         "gemini_http.c"
         "gemini_parse.c"
         "goal_state.c"
+        "speech_budget.c"
         "speech_queue.c"
         "speech_tags.c"
         "audio_player.c"

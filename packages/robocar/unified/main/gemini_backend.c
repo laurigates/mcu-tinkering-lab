@@ -16,6 +16,8 @@
 
 #include "gemini_backend.h"
 
+#include <stdarg.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -30,6 +32,7 @@
 #include "gemini_parse.h"
 #include "goal_state.h"
 #include "planner_task.h" /* PLANNER_LOOP_PERIOD_MS — keeps the stated cadence honest */
+#include "speech_budget.h"
 #include "voice_persona.h"
 
 static const char *TAG = "gemini_backend";
@@ -84,6 +87,41 @@ static const char *TAG = "gemini_backend";
 
 #define GEMINI_THINKING_BUDGET 0
 
+/** Planner system prompt buffer.
+ *
+ *  Lives on the planner task stack, so it is sized deliberately rather than
+ *  generously: ~800 bytes of fixed instruction, plus the persona's text_brief
+ *  (~450) and tag_brief (~350), plus a variation directive (up to
+ *  DIALOGUE_STYLE_MAX) and the recalled-lines clause (GEMINI_RECALL_LIST_MAX).
+ *  PLANNER_TASK_STACK_SIZE is set with this frame in mind — grow them together.
+ */
+#define GEMINI_SYSTEM_PROMPT_MAX 3072
+
+/** Cap on the rendered "you already said these" list.
+ *
+ *  Bounds prompt cost, not correctness: dialogue_style_recent_lines() drops
+ *  whole entries (newest first is kept) rather than truncating one, so a
+ *  smaller cap simply means a shorter memory in the prompt. The on-device
+ *  repetition check still sees the full ring. */
+#define GEMINI_RECALL_LIST_MAX 768
+
+/* The two prompt clauses whose length is not fixed at compile time are the
+ * recall list and the persona briefs, and they are assembled *before* the
+ * closing "function calls only" instruction. Left to saturate, a long persona
+ * would silently truncate that instruction away and the model would start
+ * answering in prose — a failure with no obvious cause. So the recall list is
+ * sized against the room actually left, minus exactly what the closing sentence
+ * and this clause's own wrapper need. Both are measured with sizeof from the
+ * literals themselves so editing the wording cannot put the arithmetic out of
+ * date. */
+static const char k_prompt_closing[] = "Respond ONLY with function calls — no prose, no markdown.";
+static const char k_prompt_recall_fmt[] =
+    "You have already said these recently: %s. Do not repeat any of them, and do not restate "
+    "the same observation in different words — if all you would do is say one of them again, "
+    "do not call 'speak' at all. ";
+#define GEMINI_RECALL_CLAUSE_OVERHEAD (sizeof(k_prompt_recall_fmt) - 3u) /* less "%s", less NUL */
+#define GEMINI_PROMPT_TAIL_RESERVE (sizeof(k_prompt_closing) + GEMINI_RECALL_CLAUSE_OVERHEAD)
+
 /* -------------------------------------------------------------------------- */
 /* Module state                                                                 */
 /* -------------------------------------------------------------------------- */
@@ -133,13 +171,19 @@ static esp_err_t http_event_handler(esp_http_client_event_t *evt)
  * of drive / track / rotate / stop function calls, optionally accompanied by a
  * speak call (which is not a motion goal — see the note at its declaration).
  *
+ * @param allow_speak When false the `speak` declaration is omitted entirely, so
+ *        the model *cannot* produce an utterance on this cycle. Withholding the
+ *        tool rather than asking for restraint is the point: a stateless model
+ *        has no way to know how recently it last spoke, so "use it sparingly"
+ *        is advice it cannot act on. See speech_budget.h.
+ *
  * Schema follows the Gemini API "functionDeclarations" format:
  *   https://ai.google.dev/api/generate-content#v1beta.Tool
  *
  * Box coordinates use the ER 1.6 convention: [ymin, xmin, ymax, xmax]
  * integers normalised 0..1000.
  */
-static cJSON *build_tools(void)
+static cJSON *build_tools(bool allow_speak)
 {
     cJSON *tools_arr = cJSON_CreateArray();
 
@@ -256,14 +300,14 @@ static cJSON *build_tools(void)
      * *alongside* one, and travels to the TTS task via speech_queue rather
      * than goal_state. See speech_queue.h for why the two cannot share a
      * lifetime. The parser recovers both from the same response. */
-    {
+    if (allow_speak) {
         cJSON *fn = cJSON_CreateObject();
         cJSON_AddStringToObject(fn, "name", "speak");
         cJSON_AddStringToObject(fn, "description",
                                 "Say something out loud through the robot's speaker. Call this "
-                                "IN ADDITION to a movement function, not instead of one. Use it "
-                                "sparingly — only when the scene changes in a way worth "
-                                "remarking on.");
+                                "IN ADDITION to a movement function, not instead of one. Omit it "
+                                "entirely unless this frame shows something you have not already "
+                                "remarked on — saying nothing is the normal case.");
         cJSON *params = cJSON_AddObjectToObject(fn, "parameters");
         cJSON_AddStringToObject(params, "type", "OBJECT");
         cJSON *props = cJSON_AddObjectToObject(params, "properties");
@@ -300,6 +344,24 @@ static cJSON *build_tools(void)
  *   }
  * }
  */
+/** snprintf-append into @p buf, saturating rather than overrunning.
+ *  @return the new length, always < @p cap. */
+__attribute__((format(printf, 4, 5))) static size_t append_prompt(char *buf, size_t cap, size_t pos,
+                                                                  const char *fmt, ...)
+{
+    if (pos + 1u >= cap) {
+        return cap - 1u;
+    }
+    va_list ap;
+    va_start(ap, fmt);
+    const int n = vsnprintf(buf + pos, cap - pos, fmt, ap);
+    va_end(ap);
+    if (n < 0) {
+        return pos;
+    }
+    return (pos + (size_t)n >= cap) ? (cap - 1u) : (pos + (size_t)n);
+}
+
 static char *build_request_json(const char *b64_image)
 {
     /* Built per call rather than static: the spoken register follows the active
@@ -308,30 +370,69 @@ static char *build_request_json(const char *b64_image)
      * cannot drift from the loop that actually calls it. */
     const voice_persona_t *persona = voice_persona_get();
 
-    /* Drawn fresh per request — this is the whole anti-repetition mechanism.
-     * The persona brief is constant, so without a directive that differs call
-     * to call the model converges on one favourite opening and keeps it. */
-    char variation[DIALOGUE_STYLE_MAX];
-    const size_t vlen = dialogue_style_directive(&persona->openers, &persona->shapes,
-                                                 persona->avoid_lead, variation, sizeof(variation));
+    /* The speech half of the prompt — and the `speak` declaration itself — is
+     * assembled only on a cycle where the budget permits an utterance. Every
+     * request is stateless, so this is the only place the robot's own recent
+     * history exists; see speech_budget.h. */
+    const uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000);
+    const bool may_speak = speech_budget_allows(now_ms);
 
-    char system_prompt[2048];
-    snprintf(system_prompt, sizeof(system_prompt),
-             "You are the planning brain of a small wheeled robot. "
-             "Examine the image and choose exactly one movement for the robot to take next "
-             "by calling one of: drive, track, rotate, or stop. "
-             "Prefer 'track' when a target object is visible and centred in the frame. "
-             "Call 'stop' when the path is blocked or the scene is ambiguous. "
-             "You may ALSO call 'speak' in the same response to say one short sentence out "
-             "loud — do so only when the scene has changed in a way worth remarking on, not "
-             "on every frame. You are consulted about every %u seconds, so narrating "
-             "every time would be tiresome. "
-             "When you do call 'speak', the spoken text MUST follow this voice: %s "
-             "%s%s%s%s%s"
-             "Respond ONLY with function calls — no prose, no markdown.",
-             PLANNER_LOOP_PERIOD_MS / 1000U, persona->text_brief,
-             vlen ? "For this one line only: " : "", variation, vlen ? " " : "",
-             persona->tag_brief ? persona->tag_brief : "", persona->tag_brief ? " " : "");
+    char system_prompt[GEMINI_SYSTEM_PROMPT_MAX];
+    size_t pos = 0;
+
+    pos = append_prompt(system_prompt, sizeof(system_prompt), pos,
+                        "You are the planning brain of a small wheeled robot. "
+                        "Examine the image and choose exactly one movement for the robot to take "
+                        "next by calling one of: drive, track, rotate, or stop. "
+                        "Prefer 'track' when a target object is visible and centred in the frame. "
+                        "Call 'stop' when the path is blocked or the scene is ambiguous. ");
+
+    if (may_speak) {
+        /* Drawn fresh per request — this is the whole anti-repetition mechanism.
+         * The persona brief is constant, so without a directive that differs call
+         * to call the model converges on one favourite opening and keeps it. */
+        char variation[DIALOGUE_STYLE_MAX];
+        const size_t vlen = dialogue_style_directive(
+            &persona->openers, &persona->shapes, persona->avoid_lead, variation, sizeof(variation));
+
+        pos = append_prompt(system_prompt, sizeof(system_prompt), pos,
+                            "You may ALSO call 'speak' in the same response to say one short "
+                            "sentence out loud — do so only if this frame shows something worth "
+                            "remarking on, and stay silent otherwise. You are consulted about "
+                            "every %u seconds, so narrating every time would be tiresome. "
+                            "When you do call 'speak', the spoken text MUST follow this voice: %s ",
+                            PLANNER_LOOP_PERIOD_MS / 1000U, persona->text_brief);
+
+        if (vlen) {
+            pos = append_prompt(system_prompt, sizeof(system_prompt), pos,
+                                "For this one line only: %s ", variation);
+        }
+        if (persona->tag_brief) {
+            pos =
+                append_prompt(system_prompt, sizeof(system_prompt), pos, "%s ", persona->tag_brief);
+        }
+
+        /* What the robot has actually said, last because it is the instruction
+         * most worth having close to the answer — and the one clause that can be
+         * shortened without losing anything the others carry. The avoid-list
+         * inside `variation` only constrains the first few *words*; this is what
+         * stops the model from re-serving the same observation rearranged. */
+        size_t room = sizeof(system_prompt) - GEMINI_PROMPT_TAIL_RESERVE;
+        room = (pos < room) ? (room - pos) : 0u;
+        if (room > GEMINI_RECALL_LIST_MAX) {
+            room = GEMINI_RECALL_LIST_MAX;
+        }
+
+        char recall[GEMINI_RECALL_LIST_MAX];
+        if (room > 0u && dialogue_style_recent_lines(recall, room) > 0u) {
+            pos = append_prompt(system_prompt, sizeof(system_prompt), pos, k_prompt_recall_fmt,
+                                recall);
+        }
+    }
+
+    pos = append_prompt(system_prompt, sizeof(system_prompt), pos, "%s", k_prompt_closing);
+    (void)pos;
+
     const char *SYSTEM_PROMPT = system_prompt;
 
     cJSON *root = cJSON_CreateObject();
@@ -357,7 +458,7 @@ static char *build_request_json(const char *b64_image)
     /* tools — one tool object containing all five function declarations */
     cJSON *tools_arr = cJSON_AddArrayToObject(root, "tools");
     cJSON *tool_obj = cJSON_CreateObject();
-    cJSON *fn_decls = build_tools(); /* array of function objects */
+    cJSON *fn_decls = build_tools(may_speak); /* array of function objects */
     cJSON_AddItemToObject(tool_obj, "functionDeclarations", fn_decls);
     cJSON_AddItemToArray(tools_arr, tool_obj);
 
