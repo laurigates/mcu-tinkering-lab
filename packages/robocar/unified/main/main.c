@@ -48,6 +48,7 @@
 #include "pin_config.h"
 #include "planner_task.h"
 #include "reactive_controller.h"
+#include "scene_change.h"
 #include "self_report.h"
 #include "servo_controller.h"
 #include "speech_budget.h"
@@ -324,6 +325,7 @@ static void handle_periph_cmd(const char *buf)
  * `voice quiet <seconds>`      — minimum gap between utterances (0 = none)
  * `voice budget <n> <seconds>` — at most n utterances per window (n=0 mutes)
  * `voice repeat <pct>`         — similarity at which a line counts as a repeat
+ * `voice scene <n>`            — how much the view must change (0 = gate off)
  *
  * Switching and auditioning are runtime rather than compile-time because only a
  * listener can judge a voice; a reflash per candidate is far too slow a loop.
@@ -333,11 +335,15 @@ static void handle_periph_cmd(const char *buf)
  * persona's language, and the alternative way to see what the model is being
  * told is to wait out a 15 s planner period per sample.
  *
- * `quiet` / `budget` / `repeat` are the same argument again: how talkative and
- * how repetitive the robot is allowed to be are judgements that need a person in
- * the room, and every trial otherwise costs a rebuild plus a flash. They are not
- * persisted — a boot comes up at the documented default rather than at whatever
- * an experiment left behind. */
+ * `quiet` / `budget` / `repeat` / `scene` are the same argument again: how
+ * talkative and how repetitive the robot is allowed to be, and how much the view
+ * must move to be worth mentioning, are judgements that need a person in the
+ * room, and every trial otherwise costs a rebuild plus a flash. `scene` in
+ * particular has no defensible compile-time default — what counts as a changed
+ * view depends on the room and the lens, so read the `scene:` field the planner
+ * logs each cycle and set the threshold from real numbers. None of the four
+ * persist: a boot comes up at the documented default rather than at whatever an
+ * experiment left behind. */
 static void handle_voice_cmd(const char *buf)
 {
     char op[24] = {0};
@@ -365,15 +371,36 @@ static void handle_voice_cmd(const char *buf)
         printf("  budget: quiet=%us max=%u/%us used=%u repeat=%u%%\n", (unsigned)(gap_ms / 1000U),
                (unsigned)max_per, (unsigned)(window_ms / 1000U),
                (unsigned)speech_budget_used(now_ms), (unsigned)dialogue_style_repeat_pct());
+        printf("  scene:  %u/%u (%s)\n", scene_change_score(), (unsigned)scene_change_threshold(),
+               scene_change_threshold() == 0 ? "gate off"
+                                             : (scene_change_novel() ? "new" : "same"));
+        /* Both gates are reported, and which one is holding, because a silent
+         * robot is otherwise indistinguishable from a broken one — and on a
+         * static scene silence is the correct behaviour. */
         if (wait_ms == UINT32_MAX) {
             printf("  speech: muted\n");
+        } else if (wait_ms) {
+            printf("  speech: waiting on budget (%us)\n", (unsigned)(wait_ms / 1000U));
+        } else if (!scene_change_novel()) {
+            printf("  speech: waiting on the view to change\n");
         } else {
-            printf("  speech: %s (next in %us)\n", wait_ms ? "waiting" : "allowed now",
-                   (unsigned)(wait_ms / 1000U));
+            printf("  speech: allowed now\n");
         }
 
         printf("  usage: voice <slug> | say <text> | name <VoiceName|-> | vary | said\n");
-        printf("         voice quiet <s> | voice budget <n> <s> | voice repeat <pct>\n");
+        printf("         voice quiet <s> | budget <n> <s> | repeat <pct> | scene <n>\n");
+        return;
+    }
+
+    if (strcmp(op, "scene") == 0) {
+        unsigned threshold = 0;
+        if (sscanf(buf, "voice scene %u", &threshold) != 1 || threshold > UINT8_MAX) {
+            printf("voice: usage: voice scene <0..255>  (0 = gate off)\n");
+            return;
+        }
+        scene_change_set_threshold((uint8_t)threshold);
+        printf("voice: scene=%u (now %u)\n", (unsigned)scene_change_threshold(),
+               scene_change_score());
         return;
     }
 
@@ -848,10 +875,12 @@ static esp_err_t init_hierarchical_ai(void)
     // it while building their first request. Needs NVS, which Phase 0 set up.
     voice_persona_init();
 
-    // How often the planner is even offered the `speak` tool. Must be reset
-    // before the planner task starts, since it reads the budget while building
-    // its first request.
+    // The two gates on whether the planner is even offered the `speak` tool:
+    // how recently it spoke, and whether the view has changed since. Both must
+    // be reset before the planner task starts, since it reads them while
+    // building its first request.
     speech_budget_init();
+    scene_change_init();
 
     // Speech path: queue and player must exist before the planner can emit a
     // `speak` call. Both are non-fatal — a robot that cannot talk should still

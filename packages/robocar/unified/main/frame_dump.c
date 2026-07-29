@@ -67,11 +67,19 @@ static uint8_t hist_percentile(uint32_t rank)
     return 255;
 }
 
-void frame_stats_log(const uint8_t *jpeg, size_t len)
+void frame_stats_log(const uint8_t *jpeg, size_t len, scene_fingerprint_t *out_fp)
 {
     /* Static rather than stack: 2400 bytes would be nearly a third of the
      * planner task's stack, next to a TLS request. */
     static uint8_t thumb[THUMB_PIXELS * 2];
+    /* The luma plane the statistics and the scene fingerprint are both built
+     * from. Static for the same reason, and separate from thumb[] because the
+     * fingerprint needs the samples laid out as a plane, not interleaved. */
+    static uint8_t luma[THUMB_PIXELS];
+
+    if (out_fp) {
+        memset(out_fp, 0, sizeof(*out_fp)); /* valid = false until we decode */
+    }
 
     camera_exposure_t exp = {0};
     camera_read_exposure(&exp);
@@ -127,13 +135,23 @@ void frame_stats_log(const uint8_t *jpeg, size_t len)
         const uint8_t g = (uint8_t)(((px >> 5) & 0x3F) << 2);
         const uint8_t b = (uint8_t)((px & 0x1F) << 3);
         const uint8_t y = (uint8_t)((77 * r + 150 * g + 29 * b) >> 8);
+        luma[i] = y;
         s_hist[y]++;
         sum += y;
     }
 
+    if (out_fp) {
+        scene_fingerprint_from_luma(luma, THUMB_W, THUMB_H, out_fp);
+    }
+
     /* Percentiles matter as much as the mean: a backlit scene reads dark on
      * average but has a high p95, and that is a completely different problem
-     * from an unlit room. */
+     * from an unlit room.
+     *
+     * The scene-change score is deliberately NOT logged here: at this point the
+     * fingerprint has only just been built and not yet recorded, so any distance
+     * this function could print would be the previous frame's. The planner logs
+     * it against the live reference instead. */
     ESP_LOGI(TAG, "jpeg=%u B luma mean=%u p5=%u p50=%u p95=%u | %s", (unsigned)len,
              (unsigned)(sum / THUMB_PIXELS), hist_percentile((uint32_t)(THUMB_PIXELS * 5 / 100)),
              hist_percentile((uint32_t)(THUMB_PIXELS * 50 / 100)),

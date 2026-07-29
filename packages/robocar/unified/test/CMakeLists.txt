@@ -140,6 +140,20 @@ target_link_libraries(test_speech_budget PRIVATE Threads::Threads m)
 add_test(NAME speech_budget COMMAND test_speech_budget)
 
 # -----------------------------------------------------------------------------
+# scene_change gate (does the view differ from the one last spoken about?)
+#
+# Pure C over a caller-supplied luma plane, so the synthetic frames a bench
+# session cannot produce reliably — an exact brightness shift with no motion —
+# are one memset here.
+# -----------------------------------------------------------------------------
+add_executable(test_scene_change
+    "${MAIN_SRC_DIR}/scene_change.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_scene_change.c"
+)
+target_link_libraries(test_scene_change PRIVATE Threads::Threads m)
+add_test(NAME scene_change COMMAND test_scene_change)
+
+# -----------------------------------------------------------------------------
 # gemini parse (Phase 5, gate G1, issue #228)
 #
 # Only built when cJSON is available. Skipped (with a message) otherwise so

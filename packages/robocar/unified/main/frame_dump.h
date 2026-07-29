@@ -42,6 +42,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "scene_change.h" /* scene_fingerprint_t — a type, not a policy */
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -82,12 +84,20 @@ bool frame_dump_pending(void);
 void frame_dump_maybe(const uint8_t *jpeg, size_t len);
 
 /**
- * @brief Log luma statistics and live sensor exposure for @p jpeg.
+ * @brief Log luma statistics and live sensor exposure for @p jpeg, and hand back
+ *        the frame's coarse appearance.
  *
  * Cheap enough to run on every planner frame. Logs "UNDECODABLE" rather than
  * failing if the JPEG will not decode — which is itself a finding.
+ *
+ * @param out_fp Optional. Receives the scene fingerprint built from the same
+ *        1/8-scale decode the statistics come from, so the scene-change gate
+ *        costs no additional JPEG work. `valid` is false when the frame did not
+ *        decode. Returned rather than acted upon: this file is instrumentation,
+ *        and what the fingerprint *means* for the robot's behaviour is the
+ *        planner's decision (see scene_change.h).
  */
-void frame_stats_log(const uint8_t *jpeg, size_t len);
+void frame_stats_log(const uint8_t *jpeg, size_t len, scene_fingerprint_t *out_fp);
 
 #ifdef __cplusplus
 }
