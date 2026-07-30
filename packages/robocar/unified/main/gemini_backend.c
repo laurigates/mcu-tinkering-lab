@@ -32,6 +32,7 @@
 #include "gemini_parse.h"
 #include "goal_state.h"
 #include "planner_task.h" /* PLANNER_LOOP_PERIOD_MS — keeps the stated cadence honest */
+#include "scene_change.h"
 #include "speech_budget.h"
 #include "voice_persona.h"
 
@@ -371,11 +372,17 @@ static char *build_request_json(const char *b64_image)
     const voice_persona_t *persona = voice_persona_get();
 
     /* The speech half of the prompt — and the `speak` declaration itself — is
-     * assembled only on a cycle where the budget permits an utterance. Every
-     * request is stateless, so this is the only place the robot's own recent
-     * history exists; see speech_budget.h. */
+     * assembled only on a cycle where an utterance is both permitted and
+     * warranted. Every request is stateless, so this is the only place the
+     * robot's own recent history exists.
+     *
+     * Two independent gates because they answer different questions: the budget
+     * knows how recently the robot spoke (speech_budget.h), the scene detector
+     * knows whether anything has changed since it did (scene_change.h). Rationing
+     * alone still narrates a motionless bench, just less often; change-detection
+     * alone would chatter continuously while the robot is driving. */
     const uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000);
-    const bool may_speak = speech_budget_allows(now_ms);
+    const bool may_speak = speech_budget_allows(now_ms) && scene_change_novel();
 
     char system_prompt[GEMINI_SYSTEM_PROMPT_MAX];
     size_t pos = 0;

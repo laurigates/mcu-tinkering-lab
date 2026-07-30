@@ -19,6 +19,7 @@
 #include "freertos/task.h"
 #include "gemini_backend.h"
 #include "goal_state.h"
+#include "scene_change.h"
 #include "speech_budget.h"
 #include "speech_queue.h"
 
@@ -99,8 +100,14 @@ static void planner_task(void *pvParameters)
          * Placed here, before gemini_backend_plan() and while the planner still
          * holds the buffer, so what is measured and dumped is byte-identical to
          * what the model is about to be shown — and so a frame still lands even
-         * if the HTTP call later hangs or 429s. */
-        frame_stats_log(fb->buf, fb->len);
+         * if the HTTP call later hangs or 429s.
+         *
+         * The fingerprint is recorded before the request is built, because
+         * gemini_backend reads scene_change_novel() while deciding whether to
+         * offer the `speak` tool at all. */
+        scene_fingerprint_t fp;
+        frame_stats_log(fb->buf, fb->len, &fp);
+        scene_change_note(&fp);
         frame_dump_maybe(fb->buf, fb->len);
 
         /* ---- 2. Call Gemini planner ---- */
@@ -133,6 +140,9 @@ static void planner_task(void *pvParameters)
                  * anyone can notice nor an utterance worth rationing. */
                 dialogue_style_note_spoken(speech);
                 speech_budget_note((uint32_t)(esp_timer_get_time() / 1000));
+                /* This view is now the one the robot has remarked on, so it
+                 * becomes the reference the next frames are measured against. */
+                scene_change_mark_spoken();
                 ESP_LOGI(TAG, "Speech: \"%s\"", speech);
             } else if (sp_ret == ESP_ERR_NO_MEM) {
                 ESP_LOGD(TAG, "still speaking — dropped: \"%s\"", speech);
@@ -145,8 +155,13 @@ static void planner_task(void *pvParameters)
             if (write_ret != ESP_OK) {
                 ESP_LOGW(TAG, "goal_state_write failed: %d", write_ret);
             }
-            ESP_LOGI(TAG, "Goal: %s | latency: %" PRIu32 " ms", goal_kind_name(goal.kind),
-                     latency_ms);
+            /* scene= is the distance from the frame the robot last spoke about,
+             * against the threshold that gates the `speak` tool. Logged every
+             * cycle so the threshold can be chosen from real numbers in a
+             * monitor log rather than guessed — see scene_change.h. */
+            ESP_LOGI(TAG, "Goal: %s | latency: %" PRIu32 " ms | scene: %u/%u",
+                     goal_kind_name(goal.kind), latency_ms, scene_change_score(),
+                     (unsigned)scene_change_threshold());
             backoff_periods = 0;
         } else {
             backoff_periods = (backoff_periods == 0) ? 1
