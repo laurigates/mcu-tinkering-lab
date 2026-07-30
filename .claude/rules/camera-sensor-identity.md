@@ -84,3 +84,6 @@ the scene does. A gain that never changes is a mis-read, not a stuck AGC.
 - `~/.claude/rules/diagnose-at-the-failure-point.md` — the general form: the
   entity named in an error (or a header comment) is a claim to verify, not a
   fact to reason from
+- `stateless-model-gating.md` §3 — why anything that thresholds a frame-derived
+  measurement must subtract what the AGC/AEC loops do on their own, or the gate
+  measures the driver instead of the scene

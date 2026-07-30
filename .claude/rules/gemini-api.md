@@ -82,3 +82,11 @@ An API `404`/`400`/`429` returns a fast, authoritative JSON error body. Read it
 truth from ListModels — the shape in your head is stale. This is
 `diagnose-at-the-failure-point` applied to a remote API: the failing call's own
 response is the source of truth, above any remembered request shape.
+
+## Related
+
+- `stateless-model-gating.md` — the *design* companion to this file's *API*
+  gotchas: every call here is stateless, so an instruction naming a fact the
+  model cannot access (what it saw last time, what it already said) is
+  unobeyable no matter how it is worded. Withhold the tool instead. Also covers
+  the fixed prompt-buffer truncation that silently eats the closing constraint.
