@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.16](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.1.15...robocar-unified-v0.1.16) (2026-07-30)
+
+
+### Features
+
+* **robocar-unified:** give the robot a memory of what it said, and ration how often it speaks ([#449](https://github.com/laurigates/mcu-tinkering-lab/issues/449)) ([731fd6f](https://github.com/laurigates/mcu-tinkering-lab/commit/731fd6f3aca9ecf8050844e3d1e1653f4c175303))
+* **robocar-unified:** only offer the speak tool when the view has actually changed ([#452](https://github.com/laurigates/mcu-tinkering-lab/issues/452)) ([b510061](https://github.com/laurigates/mcu-tinkering-lab/commit/b5100616435090985f2ea471d90672dd23d531ad))
+
 ## [0.1.15](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.1.14...robocar-unified-v0.1.15) (2026-07-28)
 
 
