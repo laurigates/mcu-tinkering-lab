@@ -93,8 +93,56 @@ void audio_player_end_utterance(void);
  */
 void audio_player_abort(void);
 
-/** True once the player task and PSRAM ring are up (i.e. init succeeded). */
+/** True once the player task and PSRAM ring are up (i.e. init succeeded).
+ *
+ * This is an INIT flag — true forever after a successful boot. It says nothing
+ * about whether sound is coming out right now; see audio_player_is_active().
+ */
 bool audio_player_is_ready(void);
+
+/**
+ * @brief Is a voice turn in flight — fetch, preroll, playback or drain?
+ *
+ * Exists so the PDM microphone can be muted while the amplifier is producing
+ * sound. Acoustic feedback is not hypothetical: the mic and the MAX98357A sit
+ * centimetres apart, so without this gate the robot hears its own last
+ * sentence, the ambient detector reads that as "the room changed", and it
+ * remarks on its own voice on the next planner cycle.
+ *
+ * Do NOT use audio_player_is_ready() for that gate. It is an init-succeeded
+ * flag that is true forever after boot, so gating the mic on it would mute the
+ * mic permanently — a silent failure that looks like broken hardware.
+ *
+ * Derived from the EXISTING playback state, deliberately with no fifth flag of
+ * its own: a parallel bool would be a fifth thing for begin/end/abort to keep
+ * in sync, and the abort path is exactly where such a flag gets left set.
+ * Each term covers a window the others do not:
+ *
+ *   - s_fetch_active   — a TTS request is in flight, before any audio exists.
+ *                        begin_utterance() runs *before* the HTTP post, so this
+ *                        covers the whole request, not just playback.
+ *   - s_armed          — the preroll gate is open; playback is imminent.
+ *   - s_channel_active — the I2S channel is enabled and clocking.
+ *   - ring_pending()   — audio is banked but not yet clocked out.
+ *
+ * DELIBERATELY OVER-INCLUSIVE: true slightly before and slightly after real
+ * sound. A mic gate must fail toward silence — a false "active" costs one
+ * skipped 64 ms frame, a false "idle" costs a feedback loop. Note also the
+ * hangover this inherits for free at the tail: PLAYER_IDLE_TIMEOUT_MS (300 ms)
+ * of idle grace before the channel powers down, plus ~85 ms of TX DMA still
+ * draining after that.
+ *
+ * The one residual gap is audio_player_abort(), which clears all four terms
+ * while up to ~85 ms of DMA is still in the air. Callers that care should also
+ * discard the RX backlog captured across the transition rather than trusting
+ * the predicate alone.
+ *
+ * Lock-free by the same argument as the preroll gate: the two counters are
+ * monotonic with a single writer each, and the bools are single-writer volatile
+ * 32-bit-aligned loads. A reader may observe a transition one instant early or
+ * late, which for this purpose is indistinguishable from asking a moment sooner.
+ */
+bool audio_player_is_active(void);
 
 #ifdef __cplusplus
 }

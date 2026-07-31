@@ -156,6 +156,26 @@
 #define AUDIO_PREROLL_BYTES (AUDIO_SAMPLE_RATE_HZ * (int)sizeof(int16_t))
 
 // ========================================
+// Onboard PDM microphone (XIAO ESP32-S3 Sense expansion board)
+//
+// These two pins are wired to the MSM261D PDM mic on the Sense board itself —
+// they are not brought out to a header, so there is nothing to rewire and no
+// alternative pin set. Neither collides with the camera DVP group
+// (GPIO 10-18, 38-40, 47-48) nor with the D0-D10 headers (GPIO 1-9, 43-44).
+//
+// The mic is 16 kHz / 16-bit / MONO. PDM has no other mode here, and on the
+// ESP32-S3 PDM RX exists only on I2S0 — the same controller audio_player.c
+// already holds for the amplifier. See the allocation comment in mic_pdm.c for
+// why the RX channel must be a separate i2s_new_channel() call.
+// ========================================
+#define MIC_PDM_CLK_PIN GPIO_NUM_42   // PDM clock, driven by the ESP32-S3
+#define MIC_PDM_DATA_PIN GPIO_NUM_41  // PDM data, input
+
+/** Capture rate. Fixed by the microphone, and also what Gemini expects for
+ *  inline audio — no resampling stage anywhere in the path. */
+#define MIC_SAMPLE_RATE_HZ 16000
+
+// ========================================
 // Servo Configuration (SG90 at 200Hz)
 // ========================================
 // At 200Hz, period = 5000us. Pulse width range: 500-2500us.
@@ -200,6 +220,20 @@
 #define COMMAND_TASK_STACK_SIZE 8192
 #define COMMAND_TASK_PRIORITY 5
 #define COMMAND_TASK_CORE 0
+
+/* The ambient listener samples the microphone continuously so the speech gate has
+ * evidence between planner cycles. Core 1 with the other I/O work, never Core 0.
+ *
+ * 4 KB is ample and deliberately not 8 KB: this task makes no HTTPS call, so the
+ * mbedTLS handshake depth that forces 8 KB elsewhere in this firmware does not
+ * apply. Its one large buffer (a 2 KB PCM frame) is at file scope in
+ * ambient_listener.c rather than on this stack, for exactly that reason.
+ *
+ * Priority 3 matches AI_TASK_PRIORITY: background evidence-gathering that must
+ * never preempt the peripheral or command tasks, let alone motor control. */
+#define AMBIENT_LISTENER_TASK_STACK_SIZE 4096
+#define AMBIENT_LISTENER_TASK_PRIORITY 3
+#define AMBIENT_LISTENER_TASK_CORE 1
 
 /* Audio lives on Core 1 with the other bursty I/O work (camera, planner,
  * network). Keeping it off Core 0 preserves the motor-PWM timing guarantee

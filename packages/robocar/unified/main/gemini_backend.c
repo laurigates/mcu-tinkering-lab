@@ -21,6 +21,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "ambient_audio.h"
 #include "base64.h"
 #include "cJSON.h"
 #include "credentials_loader.h"
@@ -376,13 +377,29 @@ static char *build_request_json(const char *b64_image)
      * warranted. Every request is stateless, so this is the only place the
      * robot's own recent history exists.
      *
-     * Two independent gates because they answer different questions: the budget
-     * knows how recently the robot spoke (speech_budget.h), the scene detector
-     * knows whether anything has changed since it did (scene_change.h). Rationing
-     * alone still narrates a motionless bench, just less often; change-detection
-     * alone would chatter continuously while the robot is driving. */
+     * Three gates in two roles, and the shape of the expression is the whole
+     * design. The budget RATIONS: it knows how recently the robot spoke
+     * (speech_budget.h) and caps how much it may talk at all. The scene detector
+     * (scene_change.h) and the ambient detector (ambient_audio.h) are EVIDENCE:
+     * they answer one question — is there anything new to remark on? — through two
+     * different senses.
+     *
+     * So a ration ANDs and the two senses OR. A ration that could be voted down by
+     * evidence is not a ration. Two conservative evidence gates ANDed together
+     * multiply their miss rates, and the case that matters most is precisely the
+     * one AND fails: a person walks into a still room and speaks to the robot. The
+     * soundscape changed; the view may not have moved at all. Under AND the robot
+     * is mute exactly when a human has just addressed it, which reads as broken
+     * rather than as laconic. Under OR the worst case is spending the full ration
+     * — three sentences in five minutes, tunable from the console in seconds.
+     *
+     * Rationing alone still narrates a motionless bench, just less often;
+     * change-detection alone would chatter continuously while the robot is
+     * driving. See ADR-020 for the full argument. */
     const uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000);
-    const bool may_speak = speech_budget_allows(now_ms) && scene_change_novel();
+    const bool scene_novel = scene_change_novel();
+    const bool audio_novel = ambient_audio_novel(now_ms);
+    const bool may_speak = speech_budget_allows(now_ms) && (scene_novel || audio_novel);
 
     char system_prompt[GEMINI_SYSTEM_PROMPT_MAX];
     size_t pos = 0;
@@ -402,13 +419,38 @@ static char *build_request_json(const char *b64_image)
         const size_t vlen = dialogue_style_directive(
             &persona->openers, &persona->shapes, persona->avoid_lead, variation, sizeof(variation));
 
+        /* WHY the tool was offered this cycle, stated plainly, because the model
+         * cannot see the gate that offered it.
+         *
+         * This clause is load-bearing and was missing in the first draft. The old
+         * wording said "do so only if THIS FRAME shows something worth remarking
+         * on" — which is fine while the only evidence is visual, and actively wrong
+         * the moment an audio-only opening is possible. On such a cycle the frame
+         * shows nothing new BY CONSTRUCTION (that is what scene_change_novel()
+         * returning false means), so the instruction would tell the model to stay
+         * silent in exactly the case the gate had just opened for, and the audio
+         * branch would produce either silence or a remark about the wrong thing.
+         *
+         * The fix is the same one this whole subsystem is built on: the request is
+         * stateless, so anything the model must know has to be PUT IN IT. Naming
+         * the evidence is the difference between a tool it can use and one it
+         * politely declines. See .claude/rules/stateless-model-gating.md. */
+        const char *const evidence =
+            (scene_novel && audio_novel)
+                ? "The view has changed AND the room sounds different since you last spoke. "
+                : (scene_novel
+                       ? "The view has changed since you last spoke. "
+                       : "The view has NOT changed, but the room SOUNDS different since you last "
+                         "spoke — something happened out of frame or behind you. Remark on that, "
+                         "not on what you can see. ");
+
         pos = append_prompt(system_prompt, sizeof(system_prompt), pos,
                             "You may ALSO call 'speak' in the same response to say one short "
-                            "sentence out loud — do so only if this frame shows something worth "
+                            "sentence out loud. %sSay something only if it is genuinely worth "
                             "remarking on, and stay silent otherwise. You are consulted about "
                             "every %u seconds, so narrating every time would be tiresome. "
                             "When you do call 'speak', the spoken text MUST follow this voice: %s ",
-                            PLANNER_LOOP_PERIOD_MS / 1000U, persona->text_brief);
+                            evidence, PLANNER_LOOP_PERIOD_MS / 1000U, persona->text_brief);
 
         if (vlen) {
             pos = append_prompt(system_prompt, sizeof(system_prompt), pos,

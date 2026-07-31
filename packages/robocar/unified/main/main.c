@@ -25,6 +25,8 @@
 #include "freertos/timers.h"
 #include "nvs_flash.h"
 
+#include "ambient_audio.h"
+#include "ambient_listener.h"
 #include "audio_player.h"
 #include "buzzer.h"
 #include "camera.h"
@@ -40,6 +42,8 @@
 #include "improv_wifi.h"
 #include "led_controller.h"
 #include "mdns.h"
+#include "mic_dump.h"
+#include "mic_pdm.h"
 /* Only for motor_controller_init() in the hardware phase — motor *output* is
  * the reactive executor's job, and nothing here writes the motors directly. */
 #include "motor_controller.h"
@@ -326,6 +330,9 @@ static void handle_periph_cmd(const char *buf)
  * `voice budget <n> <seconds>` — at most n utterances per window (n=0 mutes)
  * `voice repeat <pct>`         — similarity at which a line counts as a repeat
  * `voice scene <n>`            — how much the view must change (0 = gate off)
+ * `voice loud <db>`            — excursion above the noise floor (0 = sub-gate off)
+ * `voice sound <db>`           — how much the room's spectrum must move (0 = off)
+ * `mic` / `mic dump <n>`       — microphone state; dump PCM frames to the console
  *
  * Switching and auditioning are runtime rather than compile-time because only a
  * listener can judge a voice; a reflash per candidate is far too slow a loop.
@@ -374,21 +381,30 @@ static void handle_voice_cmd(const char *buf)
         printf("  scene:  %u/%u (%s)\n", scene_change_score(), (unsigned)scene_change_threshold(),
                scene_change_threshold() == 0 ? "gate off"
                                              : (scene_change_novel() ? "new" : "same"));
-        /* Both gates are reported, and which one is holding, because a silent
-         * robot is otherwise indistinguishable from a broken one — and on a
-         * static scene silence is the correct behaviour. */
+        printf("  loud:   %u/%u dB (floor %d dB)\n", ambient_audio_loud_score(),
+               (unsigned)ambient_audio_loud_threshold(), (int)ambient_audio_floor_db());
+        printf("  sound:  %u/%u dB (%s)\n", ambient_audio_shape_score(),
+               (unsigned)ambient_audio_shape_threshold(),
+               ambient_listener_is_running() ? (ambient_audio_novel(now_ms) ? "new" : "same")
+                                             : "DEAF — listener not running");
+        /* Every gate is reported, and which one is holding, because a silent robot
+         * is otherwise indistinguishable from a broken one — and on a static,
+         * quiet scene silence is the correct behaviour. The evidence line names
+         * BOTH senses now: after the OR, "waiting on the view" would be a lie
+         * whenever the room could still open the gate by sounding different. */
         if (wait_ms == UINT32_MAX) {
             printf("  speech: muted\n");
         } else if (wait_ms) {
             printf("  speech: waiting on budget (%us)\n", (unsigned)(wait_ms / 1000U));
-        } else if (!scene_change_novel()) {
-            printf("  speech: waiting on the view to change\n");
+        } else if (!scene_change_novel() && !ambient_audio_novel(now_ms)) {
+            printf("  speech: waiting on the view or the room to change\n");
         } else {
             printf("  speech: allowed now\n");
         }
 
         printf("  usage: voice <slug> | say <text> | name <VoiceName|-> | vary | said\n");
         printf("         voice quiet <s> | budget <n> <s> | repeat <pct> | scene <n>\n");
+        printf("         voice loud <db> | sound <db>   (see also: mic)\n");
         return;
     }
 
@@ -401,6 +417,37 @@ static void handle_voice_cmd(const char *buf)
         scene_change_set_threshold((uint8_t)threshold);
         printf("voice: scene=%u (now %u)\n", (unsigned)scene_change_threshold(),
                scene_change_score());
+        return;
+    }
+
+    /* NOTE the inverted zero convention against `voice scene` above, and it is not
+     * a slip: scene is ANDed into the evidence term, so its 0 means "always
+     * novel"; loud and sound are ORed, so their 0 must mean "never contributes".
+     * Both readings say "this gate is not participating" — the polarity just
+     * follows the operator. Setting BOTH loud and sound to 0 restores exactly the
+     * pre-microphone behaviour, which ambient_audio's host tests pin. */
+    if (strcmp(op, "loud") == 0) {
+        unsigned db = 0;
+        if (sscanf(buf, "voice loud %u", &db) != 1 || db > UINT8_MAX) {
+            printf("voice: usage: voice loud <0..255> dB  (0 = sub-gate off)\n");
+            return;
+        }
+        ambient_audio_set_loud_threshold((uint8_t)db);
+        printf("voice: loud=%u dB (now %u dB, floor %d dB)\n",
+               (unsigned)ambient_audio_loud_threshold(), ambient_audio_loud_score(),
+               (int)ambient_audio_floor_db());
+        return;
+    }
+
+    if (strcmp(op, "sound") == 0) {
+        unsigned db = 0;
+        if (sscanf(buf, "voice sound %u", &db) != 1 || db > UINT8_MAX) {
+            printf("voice: usage: voice sound <0..255> dB  (0 = sub-gate off)\n");
+            return;
+        }
+        ambient_audio_set_shape_threshold((uint8_t)db);
+        printf("voice: sound=%u dB (now %u dB)\n", (unsigned)ambient_audio_shape_threshold(),
+               ambient_audio_shape_score());
         return;
     }
 
@@ -629,6 +676,58 @@ static void handle_snap_cmd(const char *buf)
     }
 }
 
+/**
+ * @brief `mic` / `mic dump <n>` — the microphone's counterpart to `cam`.
+ *
+ * Bare `mic` is how a dead microphone is told apart from a quiet room, which is
+ * the single most useful thing this command does: both produce a silent robot,
+ * and only one of them is a fault. A live floor that moves when you clap means
+ * the mic works; a floor frozen at one value with frames still accumulating means
+ * it does not.
+ *
+ * `mic dump` is the `snap` of the audio path, and exists for the same reason
+ * frame_dump.c does: every claim about the camera was inference until somebody
+ * looked at a frame, and the first one dumped disproved the sensor named in the
+ * header. Nobody has listened to this microphone either.
+ */
+static void handle_mic_cmd(const char *buf)
+{
+    int frames = 0;
+    if (sscanf(buf, "mic dump %d", &frames) == 1 || strncmp(buf, "mic dump", 8) == 0) {
+        if (frames <= 0) {
+            frames = (strncmp(buf, "mic dump", 8) == 0 && frames == 0) ? 1 : 0;
+        }
+        mic_dump_arm(frames);
+        if (frames == 0) {
+            printf("mic: dumping disarmed\n");
+        } else {
+            printf("mic: will dump the next %d frame(s) — decode with "
+                   "tools/decode-mic-dump.py\n",
+                   frames);
+        }
+        return;
+    }
+
+    const uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000);
+    const uint32_t last = ambient_listener_last_accept_ms();
+
+    printf("mic: driver=%s listener=%s rate=%u Hz\n", mic_pdm_is_ready() ? "ready" : "NOT READY",
+           ambient_listener_is_running() ? "running" : "STOPPED", (unsigned)MIC_SAMPLE_RATE_HZ);
+    printf("  level:  %d dBFS   floor: %d dB\n", (int)ambient_listener_level_db(),
+           (int)ambient_audio_floor_db());
+    printf("  loud:   %u/%u dB    sound: %u/%u dB\n", ambient_audio_loud_score(),
+           (unsigned)ambient_audio_loud_threshold(), ambient_audio_shape_score(),
+           (unsigned)ambient_audio_shape_threshold());
+    printf("  frames: %u accepted, %u muted by playback\n",
+           (unsigned)ambient_listener_frames_accepted(), (unsigned)ambient_listener_frames_muted());
+    if (last == 0U) {
+        printf("  last:   never — no frame has reached the gate\n");
+    } else {
+        printf("  last:   %u ms ago\n", (unsigned)(now_ms - last));
+    }
+    printf("  usage: mic | mic dump <n>   (thresholds: voice loud <db> | voice sound <db>)\n");
+}
+
 // ========================================
 // Improv WiFi provisioning (serial)
 // ========================================
@@ -744,6 +843,8 @@ static void command_task(void *pvParameters)
                     handle_voice_cmd(buf);
                 } else if (strncmp(buf, "snap", 4) == 0) {
                     handle_snap_cmd(buf);
+                } else if (strncmp(buf, "mic", 3) == 0) {
+                    handle_mic_cmd(buf);
                 } else if (strncmp(buf, "cam", 3) == 0) {
                     handle_cam_cmd(buf);
                 } else if (strncmp(buf, "sound", 5) == 0 || strncmp(buf, "servo", 5) == 0 ||
@@ -875,12 +976,14 @@ static esp_err_t init_hierarchical_ai(void)
     // it while building their first request. Needs NVS, which Phase 0 set up.
     voice_persona_init();
 
-    // The two gates on whether the planner is even offered the `speak` tool:
-    // how recently it spoke, and whether the view has changed since. Both must
-    // be reset before the planner task starts, since it reads them while
-    // building its first request.
+    // The three gates on whether the planner is even offered the `speak` tool:
+    // how recently it spoke (the ration), whether the view has changed since,
+    // and whether the room sounds different since (the two senses). All must be
+    // reset before the planner task starts, since it reads them while building
+    // its first request.
     speech_budget_init();
     scene_change_init();
+    ambient_audio_init();
 
     // Speech path: queue and player must exist before the planner can emit a
     // `speak` call. Both are non-fatal — a robot that cannot talk should still
@@ -892,6 +995,22 @@ static esp_err_t init_hierarchical_ai(void)
         ESP_LOGW(TAG, "audio_player_init failed — voice disabled");
     } else if (gemini_tts_start() != ESP_OK) {
         ESP_LOGW(TAG, "gemini_tts_start failed — voice disabled");
+    }
+
+    /* The microphone comes up AFTER audio_player_init(), and the order is load
+     * bearing rather than stylistic: both live on I2S0, and bringing the TX side
+     * up first means the controller object already exists when the PDM RX channel
+     * asks for the free RX slot. See the allocation comment in mic_pdm.c for what
+     * goes wrong if the two are ever merged into one i2s_new_channel() call.
+     *
+     * Non-fatal end to end, like the rest of this phase: a robot with a broken or
+     * absent microphone must still boot, drive, talk and be provisioned. It simply
+     * never has audio evidence, so the ambient gate never opens and the robot
+     * falls back to exactly its pre-microphone behaviour. */
+    if (mic_pdm_init() != ESP_OK) {
+        ESP_LOGW(TAG, "mic_pdm_init failed — ambient audio gate disabled");
+    } else if (ambient_listener_start() != ESP_OK) {
+        ESP_LOGW(TAG, "ambient_listener_start failed — ambient audio gate disabled");
     }
 
     // reactive_controller spawns the 30 Hz executor on Core 0. This one *is*
