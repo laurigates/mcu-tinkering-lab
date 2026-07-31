@@ -27,6 +27,7 @@
 
 #include "ambient_audio.h"
 #include "ambient_listener.h"
+#include "audio_clip.h"
 #include "audio_player.h"
 #include "buzzer.h"
 #include "camera.h"
@@ -58,6 +59,7 @@
 #include "speech_budget.h"
 #include "speech_queue.h"
 #include "voice_persona.h"
+#include "voice_turn.h"
 #include "wifi_manager.h"
 
 static const char *TAG = "robocar";
@@ -333,6 +335,7 @@ static void handle_periph_cmd(const char *buf)
  * `voice loud <db>`            — excursion above the noise floor (0 = sub-gate off)
  * `voice sound <db>`           — how much the room's spectrum must move (0 = off)
  * `mic` / `mic dump <n>`       — microphone state; dump PCM frames to the console
+ * `listen [seconds]`           — one push-to-talk voice turn (record, ask, answer)
  *
  * Switching and auditioning are runtime rather than compile-time because only a
  * listener can judge a voice; a reflash per candidate is far too slow a loop.
@@ -728,6 +731,53 @@ static void handle_mic_cmd(const char *buf)
     printf("  usage: mic | mic dump <n>   (thresholds: voice loud <db> | voice sound <db>)\n");
 }
 
+/**
+ * @brief `listen [seconds]` — one push-to-talk voice turn.
+ *
+ * Records, asks Gemini, and speaks the reply through the existing TTS path. The
+ * window is a knob rather than a constant because "is four seconds long enough
+ * to finish a sentence" is a judgement only somebody talking to the robot can
+ * make, and a reflash per trial is far too slow a loop.
+ */
+static void handle_listen_cmd(const char *buf)
+{
+    unsigned secs = 0;
+    uint32_t window_ms = AUDIO_CLIP_WINDOW_MS_DEFAULT;
+    if (sscanf(buf, "listen %u", &secs) == 1) {
+        if (secs < AUDIO_CLIP_WINDOW_S_MIN || secs > AUDIO_CLIP_WINDOW_S_MAX) {
+            printf("listen: usage: listen [%d..%d seconds]\n", AUDIO_CLIP_WINDOW_S_MIN,
+                   AUDIO_CLIP_WINDOW_S_MAX);
+            return;
+        }
+        window_ms = (uint32_t)secs * 1000U;
+    }
+
+    const esp_err_t ret = voice_turn_request(window_ms);
+    switch (ret) {
+        case ESP_OK:
+            printf("listen: recording %u ms after the beep — speak now\n", (unsigned)window_ms);
+            break;
+        case ESP_ERR_NO_MEM:
+            printf("listen: busy — a turn is already in flight\n");
+            break;
+        case ESP_ERR_INVALID_STATE:
+            /* Three quite different causes, and telling them apart matters:
+             * a robot mid-sentence is working correctly, a missing microphone is
+             * a fault, and an unstarted task means the AI phase did not come up. */
+            if (!mic_pdm_is_ready()) {
+                printf("listen: no microphone — voice turns unavailable\n");
+            } else if (audio_player_is_active()) {
+                printf("listen: the robot is speaking — try again in a moment\n");
+            } else {
+                printf("listen: voice turns are not running\n");
+            }
+            break;
+        default:
+            printf("listen: rejected (%s)\n", esp_err_to_name(ret));
+            break;
+    }
+}
+
 // ========================================
 // Improv WiFi provisioning (serial)
 // ========================================
@@ -843,6 +893,8 @@ static void command_task(void *pvParameters)
                     handle_voice_cmd(buf);
                 } else if (strncmp(buf, "snap", 4) == 0) {
                     handle_snap_cmd(buf);
+                } else if (strncmp(buf, "listen", 6) == 0) {
+                    handle_listen_cmd(buf);
                 } else if (strncmp(buf, "mic", 3) == 0) {
                     handle_mic_cmd(buf);
                 } else if (strncmp(buf, "cam", 3) == 0) {
@@ -1011,6 +1063,13 @@ static esp_err_t init_hierarchical_ai(void)
         ESP_LOGW(TAG, "mic_pdm_init failed — ambient audio gate disabled");
     } else if (ambient_listener_start() != ESP_OK) {
         ESP_LOGW(TAG, "ambient_listener_start failed — ambient audio gate disabled");
+    }
+
+    /* Push-to-talk. Independent of the ambient listener above — a board whose
+     * gate failed to start can still answer a `listen`, and vice versa — so it
+     * gets its own non-fatal branch rather than riding the same else-if chain. */
+    if (voice_turn_start() != ESP_OK) {
+        ESP_LOGW(TAG, "voice_turn_start failed — `listen` unavailable");
     }
 
     // reactive_controller spawns the 30 Hz executor on Core 0. This one *is*
