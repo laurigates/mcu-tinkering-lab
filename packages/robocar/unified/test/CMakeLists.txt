@@ -154,6 +154,21 @@ target_link_libraries(test_scene_change PRIVATE Threads::Threads m)
 add_test(NAME scene_change COMMAND test_scene_change)
 
 # -----------------------------------------------------------------------------
+# ambient_audio gate (has the ROOM changed since the robot last spoke?)
+#
+# Pure C over a caller-supplied PCM frame with an injected clock, so the cases a
+# bench cannot stage — an exact +12 dB gain change over a byte-identical
+# soundscape, a controlled DC offset, and the uint32 millisecond wrap at day 49
+# — are one memset each.
+# -----------------------------------------------------------------------------
+add_executable(test_ambient_audio
+    "${MAIN_SRC_DIR}/ambient_audio.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_ambient_audio.c"
+)
+target_link_libraries(test_ambient_audio PRIVATE Threads::Threads m)
+add_test(NAME ambient_audio COMMAND test_ambient_audio)
+
+# -----------------------------------------------------------------------------
 # gemini parse (Phase 5, gate G1, issue #228)
 #
 # Only built when cJSON is available. Skipped (with a message) otherwise so

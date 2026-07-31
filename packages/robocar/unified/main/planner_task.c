@@ -10,6 +10,7 @@
 
 #include "planner_task.h"
 
+#include "ambient_audio.h"
 #include "camera.h"
 #include "dialogue_style.h"
 #include "esp_log.h"
@@ -43,6 +44,43 @@ static const char *TAG = "planner";
  * ========================================================================= */
 
 static TaskHandle_t s_planner_task_handle;
+
+/**
+ * @brief Which gate decided this cycle, as a short literal for the log.
+ *
+ * "-" the budget held (rationed, regardless of evidence), "V" the view changed,
+ * "A" the room sounded different, "VA" both, "." neither — nothing to say.
+ *
+ * This exists so the OR in gemini_backend.c can be judged from a capture instead
+ * of defended from an armchair. Count the "A"-only cycles in a 20-minute
+ * `just robocar-unified::monitor | tee` run: if they track the HVAC, the fix is
+ * `voice loud` / `voice sound`; if they coincide with sentences worth hearing, the
+ * OR is vindicated; if "A" never appears at all, the audio gate is dead weight and
+ * either the thresholds or the mic gain are wrong.
+ *
+ * Returns a STRING LITERAL, and callers must pass it as a %s ARGUMENT. A ternary
+ * in the format position expands into a syntax error pointing inside
+ * esp_log_color.h, far from the cause — see .claude/rules/esp-log-format-literal.md.
+ */
+static const char *planner_gate_verdict(void)
+{
+    const uint32_t now = (uint32_t)(esp_timer_get_time() / 1000);
+    if (!speech_budget_allows(now)) {
+        return "-";
+    }
+    const bool v = scene_change_novel();
+    const bool a = ambient_audio_novel(now);
+    if (v && a) {
+        return "VA";
+    }
+    if (v) {
+        return "V";
+    }
+    if (a) {
+        return "A";
+    }
+    return ".";
+}
 
 /* =========================================================================
  * Goal kind name — for human-readable logging
@@ -117,6 +155,13 @@ static void planner_task(void *pvParameters)
         esp_err_t ret =
             gemini_backend_plan(fb->buf, fb->len, &goal, &latency_ms, speech, sizeof(speech));
 
+        /* Which gate opened (or held) THIS cycle, sampled here and not at the log
+         * line below, because mark_spoken() re-references both detectors in
+         * between. Reading them afterwards would report the state the next cycle
+         * starts from and make every successful utterance look like it came from a
+         * closed gate. */
+        const char *const gate_verdict = planner_gate_verdict();
+
         /* ---- 2b. Hand any utterance to the TTS task ----
          * Posted before the goal is written and regardless of whether the
          * motion goal parsed, so the robot can speak while holding position.
@@ -141,8 +186,13 @@ static void planner_task(void *pvParameters)
                 dialogue_style_note_spoken(speech);
                 speech_budget_note((uint32_t)(esp_timer_get_time() / 1000));
                 /* This view is now the one the robot has remarked on, so it
-                 * becomes the reference the next frames are measured against. */
+                 * becomes the reference the next frames are measured against.
+                 * The soundscape is re-referenced for the same reason and at the
+                 * same moment: both detectors measure "since the robot last
+                 * spoke", so they must be marked together or the surviving one
+                 * keeps licensing remarks about evidence already used. */
                 scene_change_mark_spoken();
+                ambient_audio_mark_spoken();
                 ESP_LOGI(TAG, "Speech: \"%s\"", speech);
             } else if (sp_ret == ESP_ERR_NO_MEM) {
                 ESP_LOGD(TAG, "still speaking — dropped: \"%s\"", speech);
@@ -155,13 +205,26 @@ static void planner_task(void *pvParameters)
             if (write_ret != ESP_OK) {
                 ESP_LOGW(TAG, "goal_state_write failed: %d", write_ret);
             }
-            /* scene= is the distance from the frame the robot last spoke about,
-             * against the threshold that gates the `speak` tool. Logged every
-             * cycle so the threshold can be chosen from real numbers in a
-             * monitor log rather than guessed — see scene_change.h. */
-            ESP_LOGI(TAG, "Goal: %s | latency: %" PRIu32 " ms | scene: %u/%u",
+            /* Every gate's live score sits beside its own threshold, so all of
+             * them can be chosen from real numbers in a monitor log rather than
+             * guessed — see scene_change.h and ambient_audio.h.
+             *
+             * scene= distance from the frame the robot last spoke about.
+             * loud=  peak excursion above the adaptive noise floor since then.
+             * sound= how far the room's spectral shape has moved since then.
+             * floor= the adaptive floor itself, which is what explains loud=:
+             *        a high floor with no excursion is a noisy but unchanging
+             *        room, and is the difference between a working gate and a
+             *        deaf one.
+             * gate=  which branch actually decided (see planner_gate_verdict). */
+            ESP_LOGI(TAG,
+                     "Goal: %s | latency: %" PRIu32 " ms | scene: %u/%u | loud: %u/%u dB | "
+                     "sound: %u/%u dB | floor: %d dB | gate: %s",
                      goal_kind_name(goal.kind), latency_ms, scene_change_score(),
-                     (unsigned)scene_change_threshold());
+                     (unsigned)scene_change_threshold(), ambient_audio_loud_score(),
+                     (unsigned)ambient_audio_loud_threshold(), ambient_audio_shape_score(),
+                     (unsigned)ambient_audio_shape_threshold(), (int)ambient_audio_floor_db(),
+                     gate_verdict);
             backoff_periods = 0;
         } else {
             backoff_periods = (backoff_periods == 0) ? 1

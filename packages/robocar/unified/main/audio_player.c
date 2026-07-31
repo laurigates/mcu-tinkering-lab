@@ -434,3 +434,12 @@ bool audio_player_is_ready(void)
 {
     return s_task != NULL && s_ring != NULL;
 }
+
+bool audio_player_is_active(void)
+{
+    /* No new flag on purpose — see audio_player.h. Every term here is already
+     * maintained by begin_utterance / the player task / abort, so there is
+     * nothing extra for those paths to forget. Over-inclusive by design: the
+     * mic gate that consumes this must fail toward silence. */
+    return s_fetch_active || s_armed || s_channel_active || ring_pending() > 0;
+}
