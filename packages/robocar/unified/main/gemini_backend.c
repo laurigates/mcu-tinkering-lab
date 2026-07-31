@@ -723,64 +723,6 @@ static char *build_narrate_json(const char *facts, bool is_update)
     return body; /* caller frees */
 }
 
-/** Collapse newlines to spaces and strip surrounding whitespace, in place. */
-static void sanitize_spoken_line(char *s)
-{
-    for (char *p = s; *p != '\0'; ++p) {
-        if (*p == '\n' || *p == '\r' || *p == '\t') {
-            *p = ' ';
-        }
-    }
-    /* trim leading */
-    char *start = s;
-    while (*start == ' ') {
-        ++start;
-    }
-    if (start != s) {
-        memmove(s, start, strlen(start) + 1);
-    }
-    /* trim trailing */
-    size_t len = strlen(s);
-    while (len > 0 && s[len - 1] == ' ') {
-        s[--len] = '\0';
-    }
-}
-
-/** Extract and concatenate candidates[0].content.parts[*].text into @p out. */
-static esp_err_t parse_narrate_response(const char *json, char *out, size_t out_len)
-{
-    cJSON *root = cJSON_Parse(json);
-    if (!root) {
-        return ESP_FAIL;
-    }
-
-    esp_err_t ret = ESP_FAIL;
-    cJSON *candidates = cJSON_GetObjectItem(root, "candidates");
-    cJSON *c0 = cJSON_IsArray(candidates) ? cJSON_GetArrayItem(candidates, 0) : NULL;
-    cJSON *content = c0 ? cJSON_GetObjectItem(c0, "content") : NULL;
-    cJSON *parts = content ? cJSON_GetObjectItem(content, "parts") : NULL;
-
-    if (cJSON_IsArray(parts)) {
-        out[0] = '\0';
-        const int n = cJSON_GetArraySize(parts);
-        for (int i = 0; i < n; ++i) {
-            cJSON *t = cJSON_GetObjectItem(cJSON_GetArrayItem(parts, i), "text");
-            if (cJSON_IsString(t) && t->valuestring) {
-                strlcat(out, t->valuestring, out_len);
-            }
-        }
-        if (out[0] != '\0') {
-            sanitize_spoken_line(out);
-            if (out[0] != '\0') {
-                ret = ESP_OK;
-            }
-        }
-    }
-
-    cJSON_Delete(root);
-    return ret;
-}
-
 esp_err_t gemini_backend_narrate(const char *facts, bool is_update, char *out, size_t out_len)
 {
     if (!facts || !out || out_len == 0) {
@@ -826,7 +768,7 @@ esp_err_t gemini_backend_narrate(const char *facts, bool is_update, char *out, s
         return ESP_FAIL;
     }
 
-    err = parse_narrate_response(acc.buf, out, out_len);
+    err = gemini_parse_text(acc.buf, out, out_len);
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "narrate: no usable text in response");
     }

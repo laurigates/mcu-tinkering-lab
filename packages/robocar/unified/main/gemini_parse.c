@@ -189,3 +189,80 @@ done:
     cJSON_Delete(root);
     return result;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Plain-text replies                                                          */
+/* -------------------------------------------------------------------------- */
+
+/** Collapse newlines to spaces and strip surrounding whitespace, in place.
+ *
+ *  A spoken line must be one line: the TTS renderer reads the layout otherwise,
+ *  and a leading newline becomes an audible pause before the robot says
+ *  anything. */
+static void sanitize_spoken_line(char *s)
+{
+    for (char *p = s; *p != '\0'; ++p) {
+        if (*p == '\n' || *p == '\r' || *p == '\t') {
+            *p = ' ';
+        }
+    }
+    char *start = s;
+    while (*start == ' ') {
+        ++start;
+    }
+    if (start != s) {
+        memmove(s, start, strlen(start) + 1);
+    }
+    size_t len = strlen(s);
+    while (len > 0 && s[len - 1] == ' ') {
+        s[--len] = '\0';
+    }
+}
+
+esp_err_t gemini_parse_text(const char *json_text, char *out, size_t out_len)
+{
+    if (!json_text || !out || out_len == 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    cJSON *root = cJSON_Parse(json_text);
+    if (!root) {
+        return ESP_FAIL;
+    }
+
+    esp_err_t ret = ESP_FAIL;
+    cJSON *candidates = cJSON_GetObjectItem(root, "candidates");
+    cJSON *c0 = cJSON_IsArray(candidates) ? cJSON_GetArrayItem(candidates, 0) : NULL;
+    cJSON *content = c0 ? cJSON_GetObjectItem(c0, "content") : NULL;
+    cJSON *parts = content ? cJSON_GetObjectItem(content, "parts") : NULL;
+
+    if (cJSON_IsArray(parts)) {
+        out[0] = '\0';
+        size_t pos = 0;
+        const int n = cJSON_GetArraySize(parts);
+        for (int i = 0; i < n && pos + 1 < out_len; ++i) {
+            cJSON *t = cJSON_GetObjectItem(cJSON_GetArrayItem(parts, i), "text");
+            if (cJSON_IsString(t) && t->valuestring) {
+                /* snprintf rather than strlcat: this file also builds on the
+                 * host for the unit tests, where strlcat is not portable. It
+                 * always NUL-terminates and returns the length it WOULD have
+                 * written, so clamp before advancing or a long first part makes
+                 * pos run past the buffer. */
+                const int w = snprintf(out + pos, out_len - pos, "%s", t->valuestring);
+                if (w < 0) {
+                    break;
+                }
+                pos += ((size_t)w < out_len - pos) ? (size_t)w : (out_len - pos - 1);
+            }
+        }
+        if (out[0] != '\0') {
+            sanitize_spoken_line(out);
+            if (out[0] != '\0') {
+                ret = ESP_OK;
+            }
+        }
+    }
+
+    cJSON_Delete(root);
+    return ret;
+}

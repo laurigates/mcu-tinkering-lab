@@ -166,6 +166,20 @@ Note that **`voice loud 0` and `voice sound 0` mean the opposite of `voice scene
 
 None of this survives a reboot: the rings are `.bss`. Persisting them is worth doing if bench reflashes make the first line after every boot the model's favourite phrasing again.
 
+### Talking back: the push-to-talk voice turn
+
+`listen [seconds]` records from the microphone, sends the clip to Gemini, and speaks the reply through the **existing TTS path unchanged** (`voice_turn.c`). It is the opposite of everything above: the planner's speech is unprompted and gated, a voice turn is asked for and answered once.
+
+**It runs on a flash model, not Robotics-ER.** Gemini's free-tier quota is per model and the planner already saturates ER's 5 req/min, so answering someone can never cost the robot its ability to plan a movement.
+
+**The clip is WAV, and that is measured rather than assumed.** A live probe (2026-07) against `gemini-flash-latest:generateContent` with a 0.5 s tone: `mimeType: "audio/wav"` → 200 and a reply; `mimeType: "audio/pcm"` → **HTTP 400 "Request contains an invalid argument"**, naming no field. So `audio_clip.c` builds a canonical 44-byte header on-device, and `test_audio_clip.c` asserts those 44 bytes byte-for-byte — a field-width or byte-order slip there would otherwise surface only as an opaque 400 from a remote server after a ~170 kB upload. Audio costs ~26 tokens/second, so clip length is bounded by **memory**, not by API cost.
+
+**The free order matters more than it looks.** Raw PCM is released as soon as the WAV copy exists, the WAV as soon as base64 exists, and our base64 copy immediately after `cJSON_AddStringToObject` duplicates it. Holding any pair simultaneously roughly doubles the transient to ~800 kB, which does not fit beside the camera framebuffers and the 512 kB TTS ring. The per-turn log prints the upload size and free PSRAM so the claim is checkable rather than trusted.
+
+**A start beep, and then a wait.** The buzzer is GPIO2 — a different peripheral from the I2S amplifier — so `audio_player_is_active()` does not cover it. Without the settle delay and the mic flush, the first fraction of every clip is the robot's own beep, which the model then politely transcribes.
+
+The post-turn bookkeeping is deliberate in both directions. It **does** call `dialogue_style_note_spoken()` (so the planner does not parrot the answer back), `speech_budget_note()` (the robot just talked; a spontaneous remark three seconds later is the chattering the gap exists to stop) and `ambient_audio_mark_spoken()` (the human's voice armed the audio latch — having answered it, the robot must not then volunteer "I heard something"). It **does not** call `scene_change_mark_spoken()`, because answering a question is not remarking on the view and consuming that evidence would silence an observation not yet made; and it does not screen the reply through `dialogue_style_is_repetitive()`, because a direct answer is allowed to repeat — the same exemption `voice say` and the self-report already have.
+
 Two hardware consequences worth knowing before touching this:
 
 - **The microSD slot is gone.** GPIO7/8/9 are the Sense expansion board's SPI bus. No alternative pins exist — I2S needs a real peripheral, so it cannot move behind the PCA9685 or MCP23017.
@@ -225,6 +239,11 @@ Key settings that matter:
 - Don't open the `speak` tool on audio evidence while leaving the prompt saying "only if this frame shows something". On an audio-only cycle the frame shows nothing new by construction, so the model is being told to stay silent in exactly the case the gate opened for. Name the evidence in the prompt — see the Voice section
 - Don't compare the instantaneous audio frame instead of the latched peak. The mic runs ~200x faster than the planner, so a door slam between two planner cycles would never be observed and the gate would look like a threshold problem rather than a sampling one
 - Don't let a failed microphone read reach the gate. An all-zero frame fingerprints as flat silence, which is a legitimate reading, so a run of broken reads would eventually read as a brand-new soundscape and trigger speech about nothing — the same sentinel-zero trap as an unread camera register. `ambient_listener.c` drops them
+- Don't send the recorded clip as `audio/pcm`. Gemini rejects it with an HTTP 400 that names no field; it must be WAV-wrapped and sent as `audio/wav`. This is probed, not inferred — see the Voice section, and `test_audio_clip.c` pins the 44 header bytes so the failure is local instead of remote
+- Don't hold the raw PCM, the WAV copy and the base64 string at the same time. Each is released the moment the next exists, which is what keeps the peak transient near 430 kB instead of ~800 kB; the latter does not fit beside the camera framebuffers and the TTS ring
+- Don't run the voice turn on the planner's Robotics-ER model. Quota is per model and the planner already saturates ER's 5 req/min, so a conversation would start costing the robot its ability to plan a movement
+- Don't screen a voice-turn reply through `dialogue_style_is_repetitive()`, and don't call `scene_change_mark_spoken()` after one. A direct answer is allowed to repeat, and answering a question is not remarking on the view — see the Voice section for the full set of rulings
+- Don't log a Gemini error body at DEBUG. A 400 names no field, so the body *is* the diagnosis; hiding it is what made an earlier call site fail opaquely for a whole debugging round
 - Don't record while the amplifier is sounding, and don't stop at the falling edge either — room reverb and the amp's tail outlive `audio_player_is_active()`, so `ambient_capture_allowed()` quarantines a further `AMBIENT_PLAYBACK_HANGOVER_MS`. An LLM listening to its own voice is a feedback loop with a language model in it
 - Don't re-point the scene reference at the previous frame "so it tracks motion". The reference is the frame the robot last *spoke* about; per-frame comparison lets a slow drift change the whole room without ever tripping the threshold, and marks a just-changed scene as stale before anything has been said about it
 - Don't let an undecodable frame update the scene state. Its fingerprint is all-zero, which is indistinguishable from a flat grey frame, so a run of corrupt captures would read as a completely new view and trigger speech about nothing. `scene_change_note()` drops invalid fingerprints — keep the `valid` flag if you touch that struct

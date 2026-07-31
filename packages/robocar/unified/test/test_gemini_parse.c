@@ -330,6 +330,81 @@ static void test_legacy_wrapper_unchanged(void)
  * Main
  * ========================================================================= */
 
+/* =========================================================================
+ * gemini_parse_text — plain TEXT replies (the narrate + voice-turn path)
+ *
+ * This path had no host test at all while it lived static inside
+ * gemini_backend.c. It is worth one now for a specific reason: a reply that
+ * sanitises to nothing must be reported as FAILURE, not as an empty success,
+ * or the caller cheerfully hands "" to the TTS renderer and the robot performs
+ * a silence that looks exactly like a broken speaker.
+ * ========================================================================= */
+
+static void test_text_single_part(void)
+{
+    const char *json =
+        "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Hei, mita kuuluu?\"}]}}]}";
+    char out[64] = {0};
+    ASSERT(gemini_parse_text(json, out, sizeof(out)) == ESP_OK);
+    ASSERT(strcmp(out, "Hei, mita kuuluu?") == 0);
+}
+
+static void test_text_concatenates_parts_in_order(void)
+{
+    const char *json = "{\"candidates\":[{\"content\":{\"parts\":["
+                       "{\"text\":\"one \"},{\"text\":\"two \"},{\"text\":\"three\"}]}}]}";
+    char out[64] = {0};
+    ASSERT(gemini_parse_text(json, out, sizeof(out)) == ESP_OK);
+    ASSERT(strcmp(out, "one two three") == 0);
+}
+
+static void test_text_collapses_layout_to_one_line(void)
+{
+    /* The TTS renderer pronounces layout: a leading newline is an audible pause
+     * before the robot says anything. */
+    const char *json =
+        "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"\\n  a\\tb\\r\\n  \"}]}}]}";
+    char out[64] = {0};
+    ASSERT(gemini_parse_text(json, out, sizeof(out)) == ESP_OK);
+    ASSERT(strcmp(out, "a b") == 0);
+}
+
+static void test_text_whitespace_only_is_a_failure(void)
+{
+    const char *json = "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"  \\n \"}]}}]}";
+    char out[64] = {0};
+    ASSERT(gemini_parse_text(json, out, sizeof(out)) != ESP_OK);
+}
+
+static void test_text_missing_parts_is_a_failure(void)
+{
+    /* What a MAX_TOKENS truncation actually looks like: a candidate with no
+     * parts array at all. Must not read as an empty success. */
+    const char *json = "{\"candidates\":[{\"finishReason\":\"MAX_TOKENS\"}]}";
+    char out[64] = {0};
+    ASSERT(gemini_parse_text(json, out, sizeof(out)) != ESP_OK);
+}
+
+static void test_text_truncates_without_overrunning(void)
+{
+    const char *json = "{\"candidates\":[{\"content\":{\"parts\":["
+                       "{\"text\":\"aaaaaaaaaa\"},{\"text\":\"bbbbbbbbbb\"}]}}]}";
+    char out[8];
+    memset(out, 0x7F, sizeof(out));
+    ASSERT(gemini_parse_text(json, out, sizeof(out)) == ESP_OK);
+    ASSERT(out[sizeof(out) - 1] == '\0');
+    ASSERT(strlen(out) == sizeof(out) - 1);
+}
+
+static void test_text_rejects_null_and_bad_json(void)
+{
+    char out[16] = {0};
+    ASSERT(gemini_parse_text(NULL, out, sizeof(out)) == ESP_ERR_INVALID_ARG);
+    ASSERT(gemini_parse_text("{}", NULL, sizeof(out)) == ESP_ERR_INVALID_ARG);
+    ASSERT(gemini_parse_text("{}", out, 0) == ESP_ERR_INVALID_ARG);
+    ASSERT(gemini_parse_text("not json", out, sizeof(out)) == ESP_FAIL);
+}
+
 int main(void)
 {
     printf("=== gemini_parse host tests ===\n\n");
@@ -351,6 +426,14 @@ int main(void)
     test_run("parse_no_speak_clears_buffer", test_parse_no_speak_clears_buffer);
     test_run("parse_speak_truncates", test_parse_speak_truncates);
     test_run("legacy_wrapper_unchanged", test_legacy_wrapper_unchanged);
+
+    test_run("text_single_part", test_text_single_part);
+    test_run("text_concatenates_parts_in_order", test_text_concatenates_parts_in_order);
+    test_run("text_collapses_layout_to_one_line", test_text_collapses_layout_to_one_line);
+    test_run("text_whitespace_only_is_a_failure", test_text_whitespace_only_is_a_failure);
+    test_run("text_missing_parts_is_a_failure", test_text_missing_parts_is_a_failure);
+    test_run("text_truncates_without_overrunning", test_text_truncates_without_overrunning);
+    test_run("text_rejects_null_and_bad_json", test_text_rejects_null_and_bad_json);
 
     printf("\n=== Results ===\n");
     printf("Passed: %d / %d\n", test_pass, test_count);

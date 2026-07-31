@@ -191,3 +191,19 @@ if(CJSON_FOUND)
 else()
     message(STATUS "cJSON not found — skipping test_gemini_parse. Install via `brew install cjson` or `apt install libcjson-dev`.")
 endif()
+
+# -----------------------------------------------------------------------------
+# audio_clip (clip sizing, WAV framing, normalisation)
+#
+# Pure C, and the two load-bearing cases are ones the device cannot show you: a
+# 32-bit overflow in the size arithmetic (a wrapped product is an ordinary small
+# number, so the bug is a short allocation that is then overrun), and the exact
+# 44 WAV header bytes — Gemini rejects raw PCM with a 400 that names no field, so
+# a byte-order slip fails remotely and opaquely instead of here.
+# -----------------------------------------------------------------------------
+add_executable(test_audio_clip
+    "${MAIN_SRC_DIR}/audio_clip.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_audio_clip.c"
+)
+target_link_libraries(test_audio_clip PRIVATE Threads::Threads m)
+add_test(NAME audio_clip COMMAND test_audio_clip)
