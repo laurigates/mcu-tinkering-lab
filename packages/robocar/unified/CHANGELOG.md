@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.17](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.1.16...robocar-unified-v0.1.17) (2026-07-31)
+
+
+### Features
+
+* **robocar-unified:** let someone talk to the robot and get an answer ([#454](https://github.com/laurigates/mcu-tinkering-lab/issues/454)) ([39c1571](https://github.com/laurigates/mcu-tinkering-lab/commit/39c1571ee67fc83195eacb7700f10e6708c38bdb))
+* **robocar-unified:** let the robot hear the room, and speak when it changes ([#453](https://github.com/laurigates/mcu-tinkering-lab/issues/453)) ([c017c2a](https://github.com/laurigates/mcu-tinkering-lab/commit/c017c2a9c52ed7eef58f97879dac05b91cd2f170))
+
 ## [0.1.16](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.1.15...robocar-unified-v0.1.16) (2026-07-30)
 
 
