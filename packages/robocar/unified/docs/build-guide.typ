@@ -5,8 +5,13 @@
 //   typst compile --root ../../../.. build-guide.typ
 //
 // Styling + helpers from tools/typst/build-guide.typ. Pin data auto-generated
-// from main/pin_config.h + version.txt — run `just robocar-unified::gen-pin-defs`
-// to regenerate.
+// from main/pin_config.h — run `just robocar-unified::gen-pin-defs` to
+// regenerate.
+//
+// This guide deliberately prints no firmware version. `version.txt` is on none
+// of the drift guard's trigger paths, so a release-please bump left the
+// committed PDF printing the previous version, and regenerating it was itself a
+// `docs:` commit that minted the next release. See issue #439.
 
 #import "../../../../tools/typst/build-guide.typ": guide, callout, htable, theme
 #import "auto/pin_defs.typ": *
@@ -14,7 +19,6 @@
 #show: guide.with(
   title: "robocar-unified",
   subtitle: "Single-Board AI Robot Car",
-  version: VERSION,
   intro: [
     A hands-on guide to assembling the consolidated robocar on a
     *Seeed Studio XIAO ESP32-S3 Sense*. Camera capture, Gemini AI planning,
@@ -336,8 +340,8 @@ The planner uses *Gemini Robotics-ER 1.6* to emit goals — `drive()`, `track()`
 
 == 8.3 · Over-the-air updates
 OTA is enabled with app rollback. The updater pulls releases from the
-`laurigates/mcu-tinkering-lab` GitHub repo; `version.txt` (currently *#VERSION*)
-is the single source of truth and is managed by release-please.
+`laurigates/mcu-tinkering-lab` GitHub repo; `version.txt` is the single source
+of truth for the running version and is managed by release-please.
 
 = 9 · Functional Checkout
 
