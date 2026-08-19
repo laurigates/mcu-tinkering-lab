@@ -92,16 +92,25 @@ jobs:
 
             # Guides may import machine-generated pin data. Where a project
             # follows the convention (<proj>/docs/auto/pin_defs.typ generated
-            # from <proj>/main/pin_config.h + <proj>/version.txt), regenerate it
-            # here so a pin renamed or moved in the C header cannot silently
-            # leave a *wrong* pin in a printed build guide — the PDF would
-            # recompile cleanly from stale definitions and look up to date.
+            # from <proj>/main/pin_config.h), regenerate it here so a pin
+            # renamed or moved in the C header cannot silently leave a *wrong*
+            # pin in a printed build guide — the PDF would recompile cleanly
+            # from stale definitions and look up to date.
+            #
+            # The generated file is hardware data only. `version.txt` was once
+            # an input, which coupled guide freshness to the release cadence:
+            # it is on none of the trigger paths above, so a release-please bump
+            # never ran this guard and the committed PDF kept printing the
+            # previous version — and regenerating it was a `docs:` commit that
+            # minted the next release. Adding it to the paths is the wrong fix;
+            # it would fail every release PR, whose PDF genuinely predates the
+            # version being introduced. See issue #439.
             proj="${typ%/docs/build-guide.typ}"
             defs="$proj/docs/auto/pin_defs.typ"
             drift_paths=("$pdf")
-            if [ -f "$defs" ] && [ -f "$proj/main/pin_config.h" ] && [ -f "$proj/version.txt" ]; then
+            if [ -f "$defs" ] && [ -f "$proj/main/pin_config.h" ]; then
               python3 tools/typst/generate-pin-defs.py \
-                "$proj/main/pin_config.h" "$proj/version.txt" "$defs"
+                "$proj/main/pin_config.h" "$defs"
               drift_paths+=("$defs")
             fi
 

@@ -136,12 +136,11 @@ test:
 # Docs
 ##########
 
-# Generate Typst pin definitions from pin_config.h and version.txt
+# Generate Typst pin definitions from pin_config.h
 [group: "docs"]
 gen-pin-defs:
     python3 ../../../tools/typst/generate-pin-defs.py \
         main/pin_config.h \
-        version.txt \
         docs/auto/pin_defs.typ
 
 # Regenerate the printable build guide PDF from the Typst source.

@@ -57,7 +57,6 @@ consistent and improve together. Import it and drive the document with
 #show: guide.with(
   title: "<project-name>",
   subtitle: "<one-line what it is>",
-  version: "<version.txt contents, if any>",
   intro: [ short paragraph for the title page ],
   meta: (
     ("Target MCU", [ESP32-S3 (8 MB PSRAM / flash)]),
@@ -168,5 +167,12 @@ Add a short "Printable build guide" section to the project `README.md` linking
   guide; import it. Improvements go in `tools/typst/build-guide.typ`.
 - **Callouts for hazards** — voltage mismatches, common-ground, PSRAM mode,
   download-mode go in `warn`/`danger` callouts, not buried in prose.
-- **Keep meta honest** — read `version.txt`, `sdkconfig.defaults`, and the
-  justfile for the meta box; don't invent toolchain versions.
+- **Keep meta honest** — read `sdkconfig.defaults` and the justfile for the meta
+  box; don't invent toolchain versions.
+- **Never print the firmware version** — the template's `version:` parameter
+  exists but must stay unset, and nothing generated into `docs/auto/` may read
+  `version.txt`. release-please bumps `version.txt` without touching any of the
+  drift guard's trigger paths, so the committed PDF silently goes stale, and
+  regenerating it is a `docs:` commit that mints the next release — a loop that
+  never converges. Cite `version.txt` as the source of truth by name if the
+  guide needs to; never interpolate its contents. See issue #439.
