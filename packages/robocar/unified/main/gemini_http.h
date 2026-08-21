@@ -11,10 +11,15 @@
  *
  * What stays at the call site is what genuinely differs: building the request
  * body, the event handler, and interpreting the response.
+ *
+ * Being the single choke point also makes this the right place to time and count
+ * every endpoint call — see activity_trace.h. Callers therefore name which
+ * endpoint they are, and get the LED and the `trace` row for free.
  */
 
 #pragma once
 
+#include "activity_trace.h"
 #include "esp_err.h"
 #include "esp_http_client.h"
 
@@ -28,6 +33,11 @@ extern "C" {
  * Performs the request synchronously and always cleans up the client, including
  * on every error path.
  *
+ * @param endpoint    Which endpoint this is, for the activity indicators and the
+ *                    `trace` counters. Passed in rather than derived from @p url
+ *                    because the URLs carry model ids that move (see
+ *                    .claude/rules/gemini-api.md §1), and a trace row that
+ *                    renames itself on a model bump is worse than no row.
  * @param url         Full endpoint URL, including `:generateContent`.
  * @param api_key     Value for the `x-goog-api-key` header. Must not be NULL.
  * @param body        NUL-terminated JSON request body. Must not be NULL.
@@ -43,8 +53,9 @@ extern "C" {
  *         ESP_FAIL if the client could not be created or the status was not 200;
  *         otherwise the esp_http_client_perform() error.
  */
-esp_err_t gemini_http_post(const char *url, const char *api_key, const char *body, int timeout_ms,
-                           http_event_handle_cb handler, void *user_ctx, int *status_out);
+esp_err_t gemini_http_post(activity_endpoint_t endpoint, const char *url, const char *api_key,
+                           const char *body, int timeout_ms, http_event_handle_cb handler,
+                           void *user_ctx, int *status_out);
 
 #ifdef __cplusplus
 }

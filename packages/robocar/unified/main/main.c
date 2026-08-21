@@ -25,6 +25,7 @@
 #include "freertos/timers.h"
 #include "nvs_flash.h"
 
+#include "activity_trace.h"
 #include "ambient_audio.h"
 #include "ambient_listener.h"
 #include "audio_clip.h"
@@ -336,6 +337,9 @@ static void handle_periph_cmd(const char *buf)
  * `voice sound <db>`           — how much the room's spectrum must move (0 = off)
  * `mic` / `mic dump <n>`       — microphone state; dump PCM frames to the console
  * `listen [seconds]`           — one push-to-talk voice turn (record, ask, answer)
+ * `trace`                      — camera + endpoint activity counters since boot
+ * `trace led on|off`           — LED activity indicators (counters keep running)
+ * `trace reset`                — zero the counters and clear any held fault colour
  *
  * Switching and auditioning are runtime rather than compile-time because only a
  * listener can judge a voice; a reflash per candidate is far too slow a loop.
@@ -694,6 +698,40 @@ static void handle_snap_cmd(const char *buf)
  * looked at a frame, and the first one dumped disproved the sensor named in the
  * header. Nobody has listened to this microphone either.
  */
+/**
+ * @brief `trace` — what the robot has been capturing and calling since boot.
+ *
+ * The console half of activity_trace.h. The LED half is what you read while the
+ * robot is driving; this is what you read afterwards to find out whether the
+ * planner is being rate-limited, whether captures are silently failing, or which
+ * endpoint is eating the wall clock between two planner lines.
+ */
+static void handle_trace_cmd(const char *buf)
+{
+    if (strncmp(buf, "trace led on", 12) == 0) {
+        activity_trace_set_leds(true);
+        printf("trace: LED indicators on (left = camera, right = endpoints)\n");
+        return;
+    }
+    if (strncmp(buf, "trace led off", 13) == 0) {
+        activity_trace_set_leds(false);
+        printf("trace: LED indicators off — counters still running\n");
+        return;
+    }
+    if (strncmp(buf, "trace led", 9) == 0) {
+        printf("trace: usage: trace led on|off  (currently %s)\n",
+               activity_trace_leds_enabled() ? "on" : "off");
+        return;
+    }
+    if (strncmp(buf, "trace reset", 11) == 0) {
+        activity_trace_reset();
+        printf("trace: counters zeroed\n");
+        return;
+    }
+
+    activity_trace_report();
+}
+
 static void handle_mic_cmd(const char *buf)
 {
     int frames = 0;
@@ -900,6 +938,8 @@ static void command_task(void *pvParameters)
                     handle_snap_cmd(buf);
                 } else if (strncmp(buf, "listen", 6) == 0) {
                     handle_listen_cmd(buf);
+                } else if (strncmp(buf, "trace", 5) == 0) {
+                    handle_trace_cmd(buf);
                 } else if (strncmp(buf, "mic", 3) == 0) {
                     handle_mic_cmd(buf);
                 } else if (strncmp(buf, "cam", 3) == 0) {
@@ -960,6 +1000,14 @@ static esp_err_t init_hardware(void)
     // Startup indication
     led_set_both(&LED_COLOR_GREEN);
     buzzer_beep();
+
+    /* Activity indicators take over both LEDs from here. Started after the boot
+     * indication so the green stays visible until the first camera capture or
+     * endpoint call actually happens, and non-fatal like every other optional
+     * subsystem — a robot whose indicators failed must still drive and talk. */
+    if (activity_trace_init() != ESP_OK) {
+        ESP_LOGW(TAG, "activity_trace_init failed — no capture/endpoint indicators");
+    }
 
     return ESP_OK;
 }

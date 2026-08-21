@@ -288,8 +288,8 @@ static void speak(const char *text)
 
     const int64_t t_start = esp_timer_get_time();
     int status = 0;
-    const esp_err_t err =
-        gemini_http_post(TTS_URL, api_key, body, TTS_TIMEOUT_MS, http_event_handler, ctx, &status);
+    const esp_err_t err = gemini_http_post(ACTIVITY_EP_TTS, TTS_URL, api_key, body, TTS_TIMEOUT_MS,
+                                           http_event_handler, ctx, &status);
 
     /* Whatever the decoder left in the accumulator is still real audio — the
      * tail of the utterance. Flush before judging the result, so pcm_bytes and

@@ -6,6 +6,9 @@
 #include "camera.h"
 #include "camera_pins.h"
 #include "esp_camera.h"
+#include "esp_timer.h"
+
+#include "activity_trace.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -311,15 +314,23 @@ esp_err_t camera_set_brightness(int value)
 
 camera_fb_t *camera_capture(void)
 {
-    ESP_LOGI(TAG, "Capturing image...");
+    /* Every picture this firmware takes comes through here, which is why the
+     * indicator is at this level and not at the planner's call site: a later
+     * second caller gets traced for free instead of silently going dark.
+     * activity_trace_camera() only stamps a few words, so the measurement below
+     * is the capture itself and not the instrumentation around it. */
+    const int64_t started_us = esp_timer_get_time();
 
     camera_fb_t *fb = esp_camera_fb_get();
+    const uint32_t elapsed_ms = (uint32_t)((esp_timer_get_time() - started_us) / 1000);
+
     if (!fb) {
-        ESP_LOGE(TAG, "Camera capture failed");
+        ESP_LOGE(TAG, "Camera capture failed after %u ms", (unsigned)elapsed_ms);
+        activity_trace_camera(false, 0, elapsed_ms);
         return NULL;
     }
 
-    ESP_LOGI(TAG, "Image captured: %zu bytes", fb->len);
+    activity_trace_camera(true, fb->len, elapsed_ms);
     return fb;
 }
 

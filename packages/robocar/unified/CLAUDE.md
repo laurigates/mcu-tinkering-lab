@@ -52,8 +52,44 @@ The MCP23017 (1953W breakout, address 0x20) is exercised from the serial console
 | `sound beep\|melody\|alert` | Buzzer |
 | `servo pan\|tilt <deg>` | Pan/tilt servos |
 | `led <r> <g> <b>` | Both RGB LEDs |
+| `mic` / `mic dump <n>` | Microphone state; dump PCM frames — tells a dead mic from a quiet room |
+| `trace …` | Camera + endpoint activity counters since boot; `trace led on\|off`, `trace reset` |
 
 The `sound`/`servo`/`led` commands are the only producers for `peripheral_task`'s queue — without them the task and every `PERIPH_CMD_*` case are unreachable.
+
+## Activity indicators (`activity_trace.c`)
+
+Between two planner lines fifteen seconds apart the robot captures a frame, opens
+TLS, uploads a JPEG, waits on a model and possibly streams back audio. A capture
+that never returns and a request hung for its full timeout look identical from
+the console — and off the tether there is no console at all. So both choke points
+are instrumented: **every** picture comes from `camera_capture()` and **every**
+endpoint call from `gemini_http_post()`, which is why the hooks live there rather
+than at the call sites (a fifth caller then gets traced for free instead of
+silently going dark).
+
+The left LED is the camera, the right is the network:
+
+| LED | Colour | Meaning |
+|---|---|---|
+| left | white | frame captured (brief pulse) |
+| left | red | last capture FAILED — **holds** |
+| right | blue | request in flight — held for as long as it is |
+| right | green | last request returned 200 (brief pulse) |
+| right | yellow | last request was 429 rate-limited — **holds** |
+| right | red | last request failed — **holds** |
+
+**A held blue is the signal worth having**: a request that has not come back,
+otherwise invisible until its timeout expires. Failure colours hold rather than
+pulse so a fault that happened while nobody was watching is still on the robot.
+`trace` totals it all since boot, with mean/max latency per endpoint and — when
+something is wedged — how long the outstanding request has been outstanding.
+
+Indicators may never cost the path they measure: the hot paths only stamp a few
+words, all PCA9685 traffic happens on the indicator task (priority 2, below
+everything it observes), LEDs are written only on a colour change, and the
+counter mutex is taken with a 20 ms timeout and the update **dropped** on
+contention. A lost count is a fair price; a stalled planner is not.
 
 ## PCA9685 channel layout
 
@@ -157,6 +193,8 @@ Goal: STOP | latency: 1188 ms | scene: 3/8 | loud: 4/12 dB | sound: 2/6 dB | flo
 ```
 
 `gate:` is the field that makes the OR auditable rather than merely arguable — `-` budget holding, `V` view only, `A` audio only, `VA` both, `.` nothing to say. Count the `A`-only cycles in a 20-minute capture: if they track the building's ventilation, raise `voice loud` / `voice sound`; if they coincide with sentences worth hearing, the OR is doing its job; if `A` never appears at all, the audio gate is dead weight and either the thresholds or the mic gain are wrong. `floor:` is what explains `loud:` — a high floor with no excursion is a noisy but unchanging room, which is a working gate, not a deaf one.
+
+**`gate: A` with `loud: 0/… | sound: 0/…` is the signature of a broken gate, not a quiet one.** The audio gate claiming novelty while both of its own scores read zero means it is asserting a change it never measured. It used to do exactly that whenever the microphone was absent or dead: `mic_pdm_init()` and `ambient_listener_start()` are both non-fatal, so no frame ever arrived, the reference fingerprint never became valid, and `ambient_audio_novel()` returned `true` on every cycle for the whole boot. Downstream that is not a missing feature but a **false claim** — an audio-only opening tells the model "the room SOUNDS different … something happened out of frame or behind you. Remark on that, not on what you can see", the request is stateless so the model cannot doubt it, and the robot narrates a noisy room that does not exist. The gate now fails **closed** (`!s_current.valid -> false`, ahead of the first-impression branch, mirroring `scene_change.c`), `mark_spoken()` refuses to adopt an unmeasurable reference, and `mic` prints `gate: DEAF` when nothing has ever reached it. Pinned by four host tests in `test_ambient_audio.c`.
 
 Only *generated* lines are screened for repetition. `voice say` is an audition and is meant to repeat on demand; a self-report whose facts have not changed is supposed to read the same.
 
