@@ -275,8 +275,9 @@ static void run_turn(uint32_t window_ms)
     response_acc_t acc = {.buf = s_response, .len = 0, .cap = sizeof(s_response)};
     s_response[0] = '\0';
     int status = 0;
-    const esp_err_t err = gemini_http_post(VOICE_TURN_URL, api_key, body, VOICE_TURN_TIMEOUT_MS,
-                                           http_event_handler, &acc, &status);
+    const esp_err_t err =
+        gemini_http_post(ACTIVITY_EP_VOICE_TURN, VOICE_TURN_URL, api_key, body,
+                         VOICE_TURN_TIMEOUT_MS, http_event_handler, &acc, &status);
     free(body);
 
     if (err != ESP_OK) {

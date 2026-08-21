@@ -615,8 +615,8 @@ esp_err_t gemini_backend_plan(const uint8_t *jpeg, size_t jpeg_len, goal_t *out_
     acc.buf[0] = '\0';
 
     int status = 0;
-    err = gemini_http_post(GEMINI_BASE_URL, api_key, request_body, GEMINI_TIMEOUT_MS,
-                           http_event_handler, &acc, &status);
+    err = gemini_http_post(ACTIVITY_EP_PLANNER, GEMINI_BASE_URL, api_key, request_body,
+                           GEMINI_TIMEOUT_MS, http_event_handler, &acc, &status);
 
     const int64_t t_end = esp_timer_get_time();
     const uint32_t latency_ms = (uint32_t)((t_end - t_start) / 1000);
@@ -752,8 +752,8 @@ esp_err_t gemini_backend_narrate(const char *facts, bool is_update, char *out, s
     response_acc_t acc = {.buf = resp, .len = 0, .cap = NARRATE_RESPONSE_BUF_SIZE};
 
     int status = 0;
-    esp_err_t err = gemini_http_post(NARRATE_BASE_URL, api_key, request_body, NARRATE_TIMEOUT_MS,
-                                     http_event_handler, &acc, &status);
+    esp_err_t err = gemini_http_post(ACTIVITY_EP_NARRATE, NARRATE_BASE_URL, api_key, request_body,
+                                     NARRATE_TIMEOUT_MS, http_event_handler, &acc, &status);
 
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "narrate request failed: %s status=%d", esp_err_to_name(err), status);
