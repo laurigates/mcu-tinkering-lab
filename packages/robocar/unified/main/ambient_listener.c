@@ -119,7 +119,13 @@ static void ambient_listener_task(void *arg)
         ambient_fingerprint_from_pcm(s_frame, got, &fp);
         ambient_audio_note(&fp, t);
 
-        s_level_db = ambient_audio_floor_db();
+        /* THIS FRAME's level, not the floor. Reporting the floor here (as an
+         * earlier version did) made the `mic` status line print the same number
+         * twice under two different labels, and destroyed the one comparison the
+         * line exists for: level sitting hard on the floor with no spread is a
+         * dead or muted microphone, while level moving above a settled floor is
+         * a live one. Two equal numbers can never show that. */
+        s_level_db = fp.level_db;
         s_last_accept_ms = t;
         s_frames_accepted++;
 

@@ -438,14 +438,109 @@ static void test_an_invalid_frame_moves_nothing(void)
 static void test_first_observation_is_novel(void)
 {
     /* Nothing has been responded to yet, and the robot's first impression of a
-     * room genuinely is new. Getting this wrong mutes the boot greeting. */
+     * room it HAS heard genuinely is new.
+     *
+     * Note what is asserted before the first note(): false. The first impression
+     * is of a room, and a gate that has heard nothing has no room to be
+     * impressed by — see test_a_deaf_gate_never_reports_novelty. The boot
+     * greeting does not depend on this gate saying yes; scene_change opens for a
+     * first frame on the other side of the OR in gemini_backend.c. */
     ambient_fingerprint_t quiet;
     fp_alt(QUIET_AMP, &quiet);
 
     ambient_audio_init();
-    ASSERT(ambient_audio_novel(0u));
+    ASSERT(!ambient_audio_novel(0u));
     ambient_audio_note(&quiet, 0u);
     ASSERT(ambient_audio_novel(FRAME_MS));
+}
+
+/* -------------------------------------------------------------------------- */
+/* Fail-closed: a gate that has heard nothing must claim nothing                */
+/* -------------------------------------------------------------------------- */
+
+static void test_a_deaf_gate_never_reports_novelty(void)
+{
+    /* THE REGRESSION THIS FILE EXISTS FOR MOST.
+     *
+     * mic_pdm_init() and ambient_listener_start() are both non-fatal in main.c,
+     * so "no frame ever arrives" is a state a shipped board reaches whenever the
+     * Sense expansion board is unseated or the microphone is dead — not an
+     * exotic one. The gate previously answered `true` in that state on every
+     * call, because s_reference never became valid and the first-impression
+     * branch fired forever.
+     *
+     * Downstream that is not a missing feature but a false claim: an audio-only
+     * opening makes gemini_backend.c tell the model "the room SOUNDS different
+     * since you last spoke — something happened out of frame or behind you.
+     * Remark on that, not on what you can see." The request is stateless, so the
+     * model cannot check it and narrates a noisy room that does not exist, on
+     * every cycle the budget allows, for the whole boot.
+     *
+     * Bench-unstageable in the direction that matters: proving a gate stays shut
+     * for an hour with no microphone fitted takes an hour and a missing part. */
+    ambient_audio_init();
+
+    for (uint32_t cycle = 0; cycle < 8u; ++cycle) {
+        const uint32_t t = 15000u * cycle; /* the planner period */
+        ASSERT(!ambient_audio_novel(t));
+        ASSERT(!ambient_audio_has_measurement());
+        /* Both scores read zero while it claims nothing — the pair is the
+         * signature to look for in a planner log. */
+        ASSERT(ambient_audio_loud_score() == 0u);
+        ASSERT(ambient_audio_shape_score() == 0u);
+        /* The planner marks on every utterance it posts, and speech can be
+         * licensed by the VIEW alone. mark_spoken() must not turn that into a
+         * valid reference built from a frame nobody ever measured. */
+        ambient_audio_mark_spoken();
+    }
+}
+
+static void test_unmeasurable_frames_never_open_the_gate(void)
+{
+    /* The other route to the same state: the listener runs, but every read fails
+     * or every frame is muted, so note() drops all of them. Distinct from the
+     * case above because frames DO arrive — an implementation that keyed on
+     * "has note() been called" rather than "is there a measurement" would pass
+     * the previous test and fail this one. */
+    ambient_audio_init();
+    ambient_fingerprint_t unmeasurable;
+    memset(&unmeasurable, 0, sizeof(unmeasurable)); /* valid == false */
+
+    for (uint32_t cycle = 0; cycle < 4u; ++cycle) {
+        const uint32_t t = 15000u * cycle;
+        for (uint32_t f = 0; f < 200u; ++f) {
+            ambient_audio_note(&unmeasurable, t + f * FRAME_MS);
+        }
+        ASSERT(!ambient_audio_novel(t));
+        ASSERT(!ambient_audio_has_measurement());
+        ambient_audio_mark_spoken();
+    }
+}
+
+static void test_mark_spoken_does_not_adopt_an_unmeasurable_reference(void)
+{
+    /* A voice turn can hold the microphone across a mark_spoken(), and a read can
+     * fail at any moment. Neither may destroy a good reference — adopting an
+     * invalid one would leave every later shape distance measured against
+     * nothing, which reads as "the room changed" the moment a real frame lands. */
+    ambient_fingerprint_t quiet, other;
+    fp_alt(QUIET_AMP, &quiet);
+    fp_alt(QUIET_AMP, &other);
+
+    ambient_audio_init();
+    ambient_audio_note(&quiet, 0u);
+    ambient_audio_mark_spoken(); /* reference := the quiet room */
+    ASSERT(!ambient_audio_novel(FRAME_MS));
+
+    ambient_fingerprint_t unmeasurable;
+    memset(&unmeasurable, 0, sizeof(unmeasurable));
+    ambient_audio_note(&unmeasurable, 2u * FRAME_MS);
+    ambient_audio_mark_spoken();
+
+    /* Still referenced against the quiet room, so an identical room is still
+     * "same" rather than suddenly novel. */
+    ambient_audio_note(&other, 3u * FRAME_MS);
+    ASSERT(!ambient_audio_novel(4u * FRAME_MS));
 }
 
 /** Reference on a quiet 500 Hz room, then one frame that is both louder and a
@@ -467,6 +562,20 @@ static void arm_both_subgates(void)
     ambient_audio_note(&before, 0u);
     ambient_audio_mark_spoken();
     ambient_audio_note(&after, FRAME_MS);
+}
+
+static void test_a_gate_that_goes_deaf_falls_silent_within_the_ttl(void)
+{
+    /* A microphone that dies mid-run leaves the last good fingerprint in place,
+     * so the gate keeps evaluating latches that can no longer be refreshed. The
+     * TTL is what bounds that: whatever it was holding must expire, and the gate
+     * must go quiet rather than re-serving stale evidence forever. */
+    arm_both_subgates(); /* latches set at FRAME_MS; it inits the module itself */
+    ASSERT(ambient_audio_novel(FRAME_MS));
+
+    /* Nothing more is ever noted. Step past the latch TTL. */
+    const uint32_t past_ttl = FRAME_MS + ambient_audio_latch_ttl_ms() + 1000u;
+    ASSERT(!ambient_audio_novel(past_ttl));
 }
 
 static void test_threshold_zero_disables_each_subgate(void)
@@ -599,6 +708,14 @@ int main(void)
     test_run("a threshold equal to the score counts as novel",
              test_threshold_equal_to_the_score_counts_as_novel);
     test_run("mark_spoken clears both latches", test_mark_spoken_clears_the_latches);
+
+    test_run("a deaf gate never reports novelty", test_a_deaf_gate_never_reports_novelty);
+    test_run("unmeasurable frames never open the gate",
+             test_unmeasurable_frames_never_open_the_gate);
+    test_run("mark_spoken does not adopt an unmeasurable reference",
+             test_mark_spoken_does_not_adopt_an_unmeasurable_reference);
+    test_run("a gate that goes deaf falls silent within the TTL",
+             test_a_gate_that_goes_deaf_falls_silent_within_the_ttl);
 
     test_run("capture_allowed honours the playback hangover, including the wrap",
              test_capture_allowed_honours_the_playback_hangover);

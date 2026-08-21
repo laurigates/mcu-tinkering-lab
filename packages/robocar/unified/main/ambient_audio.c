@@ -287,6 +287,11 @@ int16_t ambient_audio_floor_db(void)
     return (int16_t)round_db(s_floor_db);
 }
 
+bool ambient_audio_has_measurement(void)
+{
+    return s_current.valid;
+}
+
 bool ambient_audio_novel(uint32_t now_ms)
 {
     const bool loud_enabled = (s_loud_threshold != 0u);
@@ -296,6 +301,34 @@ bool ambient_audio_novel(uint32_t now_ms)
      * FALSE — the inverse of scene_change's disabled state, because the neutral
      * element follows the operator. See the header. */
     if (!loud_enabled && !shape_enabled) {
+        return false;
+    }
+
+    /* NOTHING MEASURABLE HAS EVER BEEN HEARD -> this gate must report false.
+     *
+     * This check outranks the first-impression case below, and the ordering is
+     * the whole point: you cannot have a first impression of a room you never
+     * heard. Without it the gate FAILS OPEN — mic_pdm_init() and
+     * ambient_listener_start() are both non-fatal (main.c), so a board with an
+     * unseated Sense expansion board, a dead microphone, or a listener that
+     * never started notes no frame ever, leaves s_reference invalid forever,
+     * and returns true on EVERY cycle.
+     *
+     * That is not a quiet bug. gemini_backend.c turns an audio-only opening
+     * into the prompt clause "the room SOUNDS different since you last spoke —
+     * something happened out of frame or behind you. Remark on that, not on
+     * what you can see." The request is stateless, so the model has no channel
+     * by which to doubt it (.claude/rules/stateless-model-gating.md §1) and
+     * dutifully invents a remark about noise. The robot then reports a noisy
+     * room, forever, with a microphone that is not listening.
+     *
+     * Its signature in the planner log is unmistakable once you know it:
+     * `gate: A` while `loud: 0/12 dB | sound: 0/6 dB` — the gate claiming
+     * novelty with both of its own scores at zero. Same class of defect as
+     * .claude/rules/camera-sensor-identity.md #3 (never render an unread
+     * sensor as a measurement) and scene_change.c's `!s_current.valid ->
+     * false`, which is exactly this line and was missing here. */
+    if (!s_current.valid) {
         return false;
     }
 
@@ -324,8 +357,17 @@ bool ambient_audio_novel(uint32_t now_ms)
 void ambient_audio_mark_spoken(void)
 {
     /* Adopts the LAST NOTED frame. A caller that held the microphone through a
-     * voice turn must note a fresh post-turn frame first — see the header. */
-    s_reference = s_current;
+     * voice turn must note a fresh post-turn frame first — see the header.
+     *
+     * An INVALID s_current is never adopted. Overwriting a good reference with
+     * one would make the next frame's shape distance meaningless, and adopting
+     * one when there is no reference yet would leave s_reference invalid for
+     * good — which is how the fail-open above became permanent rather than
+     * merely transient. The latches are still cleared either way: the robot did
+     * speak, so whatever evidence licensed it has been spent. */
+    if (s_current.valid) {
+        s_reference = s_current;
+    }
 
     s_loud_valid = false;
     s_loud_peak_level = 0.0f;

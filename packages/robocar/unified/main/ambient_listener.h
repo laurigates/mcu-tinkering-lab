@@ -69,12 +69,17 @@ esp_err_t ambient_listener_start(void);
 bool ambient_listener_is_running(void);
 
 /**
- * @brief Level of the most recent frame, in dBFS (negative; 0 = full scale).
+ * @brief Level of the most recent accepted frame, in whole dB above one LSB RMS.
  *
- * The live reading behind the `mic` console command. Paired with
- * ambient_audio_floor_db() it is what distinguishes a quiet room from a dead
- * microphone — a dead mic reads a constant floor with no excursion ever, which is
- * otherwise indistinguishable from a very well-behaved room.
+ * Same units and same zero as ambient_audio_floor_db() — deliberately, because
+ * the two are meant to be read against each other. NOT dBFS: 0 is one LSB, not
+ * full scale, so the value is positive and rises with loudness (full scale is
+ * about 90 dB). Subtract 90 if you want dBFS.
+ *
+ * The live reading behind the `mic` console command. Paired with the floor it is
+ * what distinguishes a quiet room from a dead microphone — a dead mic reads a
+ * level pinned exactly to the floor with no excursion ever, which is otherwise
+ * indistinguishable from a very well-behaved room.
  */
 int16_t ambient_listener_level_db(void);
 
