@@ -100,7 +100,10 @@ runs host-native, so no automated gate covers these recipes; a wrong flash offse
 bricks or fails-to-boot the device. Before changing a shared flash/build recipe,
 confirm each consumer still expands to its original command:
 `PORT=/dev/ttyDUMMY just <module>::flash --dry-run` (the `--dry-run` flag must
-precede the recipe).
+precede the recipe). The build-guide drift guard has the same gap for the
+opposite reason — it runs *only* in CI — and
+`build-guide-drift-guard.md` § 2 carries the extract-and-run recipe plus the
+negative control that a guard change needs.
 
 **Exotic flash layouts stay inline.** `_esp32-flash`/`_s3-flash` cover the two
 standard single-app layouts only. Projects with a non-standard memory map (app
