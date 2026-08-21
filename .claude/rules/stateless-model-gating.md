@@ -117,6 +117,58 @@ Two more gate-design points from the same module:
   `~/.claude/rules/diagnose-at-the-failure-point.md` #1: a zero that means
   "uninitialised" masquerading as a real reading.
 
+## 4. A gate feeding a stateless prompt must fail CLOSED, or it fabricates
+
+§1 says: withhold the tool rather than instruct the model to decide something it
+cannot check. There is a mirror-image failure on the same seam, and it is worse
+because it is silent.
+
+When a gate opens, `gemini_backend.c` has to tell the model *why* — the request
+is stateless, so the evidence must be put in it (`"the room SOUNDS different
+since you last spoke — something happened out of frame or behind you. Remark on
+that, not on what you can see."`). That clause is load-bearing and correct. But
+it converts the gate's boolean into an **assertion of fact that the model has no
+channel to doubt**. A gate that opens without evidence does not produce a missing
+remark; it produces a confident, fluent, entirely invented one — and it will keep
+producing it for as long as the gate stays open.
+
+`ambient_audio_novel()` did exactly this. Its sensor is optional:
+`mic_pdm_init()` and `ambient_listener_start()` are both non-fatal by design, so
+"no frame ever arrived" is a state a shipped board reaches whenever the Sense
+expansion board is unseated. In that state no fingerprint was ever noted, the
+reference never became valid, and the first-impression branch (`!s_reference.valid
+-> true`) fired on **every** cycle. The robot reported a noisy room, forever, with
+a microphone that was not listening. `scene_change.c` had the guard that prevents
+this — `if (!s_current.valid) return false;` — and the audio gate did not.
+
+- **Order the branches so "cannot measure" outranks "first impression".** You
+  cannot have a first impression of a room you never heard. The two states are
+  easy to conflate precisely because both mean "no reference yet".
+- **Never let the *spent* path validate a reading nobody took.** `mark_spoken()`
+  adopted `s_current` unconditionally, so an invalid current fingerprint kept the
+  reference invalid and made the fail-open permanent rather than transient.
+- **Give a status command a word for deaf.** A gate that has heard nothing and a
+  gate watching a well-behaved room are indistinguishable from every counter
+  either one exposes; `mic` now prints `gate: DEAF` explicitly.
+- **Log the gate's decision next to its own evidence.** `gate: A` beside
+  `loud: 0/12 | sound: 0/6` is a self-evident contradiction — novelty claimed
+  with both scores at zero. Without those two fields on the same line the bug
+  reads as a tuning problem and survives every threshold you try.
+
+Generalised: **an optional sensor whose absence is non-fatal must make every gate
+that depends on it fail closed.** The neutral element rule from the header
+(`false` for an OR-ed term, `true` for an AND-ed one) tells you which constant
+that is — and it is the constant the *disabled* state already uses, so the guard
+usually costs one line placed correctly. Same family as
+`camera-sensor-identity.md` #3 (never render an unread sensor as `gain=0 exp=0`)
+and §3 above (distinguish "cannot measure" from "measured zero"): a sensor you
+failed to read must never be reported as a measurement — least of all to a model
+that will narrate it.
+
+Pinned by `test_a_deaf_gate_never_reports_novelty` and three siblings in
+`packages/robocar/unified/test/test_ambient_audio.c`; the bench cannot stage
+"prove it stays shut for an hour with no microphone fitted".
+
 ## Where to put the knobs
 
 None of these thresholds — speaking interval, per-window cap, repetition

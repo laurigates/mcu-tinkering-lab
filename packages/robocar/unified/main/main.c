@@ -388,8 +388,9 @@ static void handle_voice_cmd(const char *buf)
                (unsigned)ambient_audio_loud_threshold(), (int)ambient_audio_floor_db());
         printf("  sound:  %u/%u dB (%s)\n", ambient_audio_shape_score(),
                (unsigned)ambient_audio_shape_threshold(),
-               ambient_listener_is_running() ? (ambient_audio_novel(now_ms) ? "new" : "same")
-                                             : "DEAF — listener not running");
+               !ambient_audio_has_measurement() ? "DEAF — nothing ever heard"
+               : ambient_audio_novel(now_ms)    ? "new"
+                                                : "same");
         /* Every gate is reported, and which one is holding, because a silent robot
          * is otherwise indistinguishable from a broken one — and on a static,
          * quiet scene silence is the correct behaviour. The evidence line names
@@ -716,8 +717,12 @@ static void handle_mic_cmd(const char *buf)
 
     printf("mic: driver=%s listener=%s rate=%u Hz\n", mic_pdm_is_ready() ? "ready" : "NOT READY",
            ambient_listener_is_running() ? "running" : "STOPPED", (unsigned)MIC_SAMPLE_RATE_HZ);
-    printf("  level:  %d dBFS   floor: %d dB\n", (int)ambient_listener_level_db(),
-           (int)ambient_audio_floor_db());
+    printf("  level:  %d dB      floor: %d dB   (dB above 1 LSB; full scale ~90)\n",
+           (int)ambient_listener_level_db(), (int)ambient_audio_floor_db());
+    if (!ambient_audio_has_measurement()) {
+        printf("  gate:   DEAF — no measurable frame has ever reached it, so it reports "
+               "no novelty\n");
+    }
     printf("  loud:   %u/%u dB    sound: %u/%u dB\n", ambient_audio_loud_score(),
            (unsigned)ambient_audio_loud_threshold(), ambient_audio_shape_score(),
            (unsigned)ambient_audio_shape_threshold());

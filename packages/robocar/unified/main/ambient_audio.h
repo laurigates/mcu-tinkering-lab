@@ -226,10 +226,19 @@ void ambient_audio_note(const ambient_fingerprint_t *fp, uint32_t now_ms);
  * @brief Whether the room has done something worth remarking on since the robot
  *        last spoke.
  *
- * True before anything has been spoken (the first observation is by definition
- * new), false when BOTH thresholds are 0 (see the header note on polarity), and
- * otherwise the OR of the two sub-gates, each requiring its latch to be both
- * over threshold and younger than the TTL.
+ * False when BOTH thresholds are 0 (see the header note on polarity), false
+ * whenever NOTHING MEASURABLE HAS EVER BEEN HEARD (see below), true before
+ * anything has been spoken about a room that HAS been heard (the first
+ * observation is by definition new), and otherwise the OR of the two sub-gates,
+ * each requiring its latch to be both over threshold and younger than the TTL.
+ *
+ * The no-measurement case outranks the first-impression case, and must: the
+ * microphone is optional and its init is non-fatal, so "never heard anything"
+ * is a state a shipped board reaches routinely. Answering `true` there — as an
+ * earlier version did — makes the robot assert that the room sounds different
+ * on every cycle for the rest of the boot, because the model on the other end
+ * of a stateless request cannot check the claim. See the implementation for the
+ * full chain and for the signature it leaves in the planner log.
  */
 bool ambient_audio_novel(uint32_t now_ms);
 
@@ -246,6 +255,18 @@ unsigned ambient_audio_shape_score(void);
 int16_t ambient_audio_floor_db(void);
 
 /**
+ * @brief Whether any measurable frame has ever reached the gate.
+ *
+ * False means the module has heard NOTHING — no microphone, no listener task,
+ * or every read so far unmeasurable — as opposed to having heard a quiet room.
+ * novel() returns false in that state, so this accessor is what lets a status
+ * line say WHY it is quiet: a deaf gate and a well-behaved room are otherwise
+ * indistinguishable from the outside, which is the confusion that let a
+ * fail-open version of this gate go unnoticed.
+ */
+bool ambient_audio_has_measurement(void);
+
+/**
  * @brief Adopt the current room as the reference and clear both latches.
  *
  * Call when an utterance actually reaches the speech queue. The reference
@@ -254,6 +275,9 @@ int16_t ambient_audio_floor_db(void);
  * this — otherwise the reference is the room as it was before the conversation
  * started, and the robot spontaneously remarks that something changed one cycle
  * after answering you.
+ *
+ * An unmeasurable current fingerprint is NOT adopted; the latches are cleared
+ * regardless, since the utterance spent whatever licensed it.
  */
 void ambient_audio_mark_spoken(void);
 
