@@ -87,6 +87,16 @@ jobs:
             fi
           fi
 
+          # --- Drop files that cannot affect a firmware build -----------------
+          # Denylist, not an allowlist: a new build-relevant file type must never
+          # be silently dropped, so only patterns known to be inert are removed.
+          # Everything else (main/**, src/**, CMakeLists.txt, sdkconfig*,
+          # partitions.csv, version.txt, flasher.json, components/**, ...) still
+          # selects its project. Issue #467.
+          if [ "$CHANGED" != "__ALL__" ]; then
+            CHANGED=$(grep -Ev '(^|/)docs/|\.md$' <<<"$CHANGED" || true)
+          fi
+
           # A change to any shared / build-infra file rebuilds everything.
           # (here-string, not a pipe: grep -q closes stdin early and would give a
           #  false result on a pipe under `set -o pipefail`.)
