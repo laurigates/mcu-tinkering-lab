@@ -1,8 +1,6 @@
 # XIAO ESP32-S3 Sense + Gemini Robotics-ER vision demo
 # Run `just --list` to see available recipes
 
-set positional-arguments
-
 import '../../../tools/esp32-idf.just'
 import '../../../tools/esp32-credentials.just'
 

@@ -114,8 +114,6 @@ packages/<domain>/$name/
 # Project Name
 # Run `just --list` to see available recipes
 
-set positional-arguments
-
 import '../../../tools/esp32.just'
 
 project_dir := "packages/<domain>/project-name"

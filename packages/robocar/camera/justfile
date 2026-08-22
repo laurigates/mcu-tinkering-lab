@@ -1,8 +1,6 @@
 # ESP32-CAM AI Vision System
 # Run `just --list` to see available recipes
 
-set positional-arguments
-
 import '../../../tools/esp32-idf.just'
 import '../../../tools/esp32-credentials.just'
 

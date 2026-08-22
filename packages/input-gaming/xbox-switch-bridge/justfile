@@ -1,8 +1,6 @@
 # Xbox-Switch Bridge — ESP32-S3 Bluetooth-to-USB Controller Bridge
 # Run `just --list` or `just xbox::help` to see available recipes
 
-set positional-arguments
-
 import '../../../tools/esp32.just'
 
 project_dir := "packages/input-gaming/xbox-switch-bridge"

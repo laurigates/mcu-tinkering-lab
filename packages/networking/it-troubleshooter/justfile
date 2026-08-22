@@ -1,8 +1,6 @@
 # IT Troubleshooter — ESP32-S3-Zero USB composite device
 # Run `just --list` for available recipes
 
-set positional-arguments
-
 import '../../../tools/esp32-idf.just'
 import '../../../tools/esp32-credentials.just'
 

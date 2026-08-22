@@ -1,8 +1,6 @@
 # melody-detector training pipeline (uv)
 # Run `just --list` for available recipes
 
-set positional-arguments
-
 default:
     @just --list
 
