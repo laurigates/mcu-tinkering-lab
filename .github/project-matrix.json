@@ -15,6 +15,7 @@
   { "system": "esp32", "project": "nfc-scavenger-hunt",    "path": "games/nfc-scavenger-hunt",     "target": "esp32s3", "fetch_bluepad32": false },
   { "system": "esp32", "project": "thinkpack-chatterbox",  "path": "thinkpack/chatterbox",         "target": "esp32s3", "fetch_bluepad32": false },
   { "system": "esp32", "project": "thinkpack-finderbox",   "path": "thinkpack/finderbox",          "target": "esp32s3", "fetch_bluepad32": false },
+  { "system": "esp32", "project": "facedancer-espdancer-fw", "path": "usb-tools/facedancer-espdancer-fw", "target": "esp32s3", "fetch_bluepad32": false },
 
   { "system": "esphome", "project": "audiobook-player",            "path": "audio/audiobook-player", "yaml_file": "audiobook-player.yaml" },
   { "system": "esphome", "project": "esp32-wireguard-ha-example",  "path": "networking/wireguard-ha","yaml_file": "esp32-wireguard-ha.yaml" },

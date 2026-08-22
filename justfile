@@ -30,6 +30,7 @@ mod thinkpack-chatterbox 'packages/thinkpack/chatterbox'
 mod thinkpack-finderbox 'packages/thinkpack/finderbox'
 mod presence-detector 'packages/sensors/presence-detector'
 mod balancebot 'packages/robotics/balancebot'
+mod espdancer 'packages/usb-tools/facedancer-espdancer-fw'
 mod schematics 'docs/schematics'
 
 # Auto-detect ESP32-S3 USB-Serial-JTAG by Espressif VID; override with S3_PORT env var
