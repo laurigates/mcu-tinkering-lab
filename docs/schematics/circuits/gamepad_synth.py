@@ -1,7 +1,7 @@
 """Gamepad Synth — wiring schematic.
 
 ESP32-S3 dev board driving a MAX98357A I2S amplifier and a status LED.
-Source of truth: packages/audio/gamepad-synth/WIRING.md
+Source of truth: packages/audio/gamepad-synth/WIRING.md and main/pin_config.h
 """
 
 import schemdraw

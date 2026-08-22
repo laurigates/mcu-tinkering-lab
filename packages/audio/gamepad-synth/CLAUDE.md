@@ -131,6 +131,7 @@ Editing wording or voice: edit `tools/tts/voices.json` and run `just tts-generat
 gamepad-synth/
 ├── main/
 │   ├── main.c              # Synth, gamepad, voicings, settings, audio task
+│   ├── pin_config.h        # GPIO pin assignments (single source of truth)
 │   ├── drums.c / drums.h    # 16-step sequencer + 3 voices, overlay-mixes
 │   ├── piezo_voice.c / .h   # LEDC-driven piezo accents for DRONE_HOLD
 │   ├── tts_player.c / .h    # 24 kHz → 44.1 kHz PCM overlay player

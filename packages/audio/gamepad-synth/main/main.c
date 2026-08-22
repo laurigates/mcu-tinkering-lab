@@ -58,6 +58,7 @@
 
 #include "drums.h"
 #include "piezo_voice.h"
+#include "pin_config.h"
 #include "tts_player.h"
 
 /* Voicing-announcement PCM blobs (raw 16-bit LE, 24 kHz mono) embedded via
@@ -85,15 +86,7 @@ static const char *TAG = "gamepad_synth";
     } while (0)
 #endif
 
-/* ── Pin Definitions ─────────────────────────────────────── */
-
-#define I2S_BCLK_PIN GPIO_NUM_5
-#define I2S_WS_PIN GPIO_NUM_6
-#define I2S_DOUT_PIN GPIO_NUM_7
-#define LED_PIN GPIO_NUM_2
-
-#define PIEZO_A_PIN GPIO_NUM_8
-#define PIEZO_B_PIN GPIO_NUM_9
+/* ── Piezo Configuration ─────────────────────────────────── */
 
 /* Detune between the two piezos in Drone mode. Fixed ratio so beating rate
  * scales with pitch: ~4 Hz beat at 200 Hz → ~40 Hz warble at 2 kHz. */
