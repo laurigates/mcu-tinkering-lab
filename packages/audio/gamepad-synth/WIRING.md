@@ -20,7 +20,7 @@ The firmware runs at 240 MHz on one core (audio) while Bluepad32 uses the other 
 | 8 | Piezo A (LEDC) | Output | Piezo disc (+) — used in Drone mode |
 | 9 | Piezo B (LEDC) | Output | Piezo disc (+) — used in Drone mode |
 
-All three I2S pins are plain GPIOs on the ESP32-S3 (no special strapping roles), so any other trio works too — just update `I2S_BCLK_PIN` / `I2S_WS_PIN` / `I2S_DOUT_PIN` in `main/main.c`. The piezo pins (`PIEZO_A_PIN` / `PIEZO_B_PIN`) are defined in the same file; the LEDC-based square-wave driver lives in `main/piezo_voice.c`.
+All three I2S pins are plain GPIOs on the ESP32-S3 (no special strapping roles), so any other trio works too — just update `I2S_BCLK_PIN` / `I2S_WS_PIN` / `I2S_DOUT_PIN` in `main/pin_config.h`. The piezo pins (`PIEZO_A_PIN` / `PIEZO_B_PIN`) are defined in the same file; the LEDC-based square-wave driver lives in `main/piezo_voice.c`.
 
 The piezos are optional accent voices that only sound in Drone mode — they take oscillator B with a fixed ~2% detune between the two discs, so the beating happens acoustically in air. Skip them entirely if you just want the DAC synth.
 
