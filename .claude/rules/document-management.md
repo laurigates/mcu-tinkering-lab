@@ -45,7 +45,8 @@ User approves document creation via AskUserQuestion prompt:
 Document created in appropriate location with proper naming convention.
 
 ### 4. Tracking
-Manifest updated with document metadata in `docs/manifest.json`.
+Blueprint manifest and feature tracker in `docs/blueprint/` updated with document
+metadata (the blueprint tooling owns the filenames there).
 
 ## Automatic Detection
 
@@ -59,8 +60,10 @@ When conversations contain:
 
 ## ADR Numbering
 
-ADRs use sequential numbering: `ADR-001`, `ADR-002`, etc.
-Current highest: ADR-006 (USB Composite Architecture)
+ADRs use sequential numbering: `ADR-001`, `ADR-002`, etc. Number a new ADR one
+above the highest `ADR-NNN-*.md` already in `docs/decisions/` — read the
+directory rather than trusting a number written down here, which goes stale by
+construction.
 
 ## Cross-Referencing
 

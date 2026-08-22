@@ -13,10 +13,10 @@ docs/
 ├── reference/
 │   ├── boards/           # Board profiles (ESP32 variants, STM32, Orange Pi, etc.)
 │   └── datasheets/       # Vendor datasheets for components
+├── schematics/           # Text-defined circuit schematics (Schemdraw)
+├── thinkpack/            # ThinkPack user guides
 ├── flasher/              # Browser-based ESP Web Tools firmware flasher (GitHub Pages)
-├── manifest.json         # Blueprint manifest
-├── manifest.md           # Human-readable manifest
-└── feature-tracker.{json,md}  # Feature tracking
+└── blueprint/            # Blueprint manifest + feature tracker (tool-generated)
 ```
 
 ## Document types
@@ -30,17 +30,20 @@ docs/
 ## ADRs (Architecture Decision Records)
 
 See `decisions/` for the full list. Use sequential numbering: `ADR-001`,
-`ADR-002`, etc. Current highest is ADR-016 (hierarchical AI controller).
+`ADR-002`, etc. Number a new ADR one above the highest `ADR-NNN-*.md` already
+in `decisions/`.
 
 ## PRDs (Product Requirements Documents)
 
 See `requirements/` for the full list. Covers robocar, IT troubleshooter,
-Xbox bridge, NFC scavenger hunt, audiobook player, gamepad synth, thinkpack.
+Xbox bridge, NFC scavenger hunt, audiobook player, gamepad synth, thinkpack,
+melody detector, balancebot.
 
 ## PRPs (Product Requirement Prompts)
 
 See `prompts/` for active/planned implementation prompts: HIL testing,
-host-based unit tests, SLAM, hierarchical AI controller, OTA plan.
+host-based unit tests, SLAM, hierarchical AI controller, OTA plan, melody
+detector.
 
 ## Cross-references
 
