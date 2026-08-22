@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.2](https://github.com/laurigates/mcu-tinkering-lab/compare/thinkpack-chatterbox-v1.1.1...thinkpack-chatterbox-v1.1.2) (2026-08-22)
+
+
+### Miscellaneous
+
+* drop cargo-culted 'set positional-arguments' from justfiles ([998a9c4](https://github.com/laurigates/mcu-tinkering-lab/commit/998a9c479095bb2018e11b37af512d793dc17fa3)), closes [#410](https://github.com/laurigates/mcu-tinkering-lab/issues/410)
+
 ## [1.1.1](https://github.com/laurigates/mcu-tinkering-lab/compare/thinkpack-chatterbox-v1.1.0...thinkpack-chatterbox-v1.1.1) (2026-07-13)
 
 

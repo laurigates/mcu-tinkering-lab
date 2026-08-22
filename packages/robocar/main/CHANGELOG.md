@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.5](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-main-v0.1.4...robocar-main-v0.1.5) (2026-08-22)
+
+
+### Miscellaneous
+
+* drop cargo-culted 'set positional-arguments' from justfiles ([998a9c4](https://github.com/laurigates/mcu-tinkering-lab/commit/998a9c479095bb2018e11b37af512d793dc17fa3)), closes [#410](https://github.com/laurigates/mcu-tinkering-lab/issues/410)
+
 ## [0.1.4](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-main-v0.1.3...robocar-main-v0.1.4) (2026-07-14)
 
 
