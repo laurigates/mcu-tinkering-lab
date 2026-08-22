@@ -1,8 +1,6 @@
 # facedancer-espdancer-fw — ESP32-S3 raw-USB relay for the facedancer espdancer backend
 # Run `just --list` to see available recipes
 
-set positional-arguments
-
 import '../../../tools/esp32-idf.just'
 
 project_dir := "packages/usb-tools/facedancer-espdancer-fw"

@@ -126,6 +126,24 @@ if [ -f "$PROJECT_DIR/main/CMakeLists.txt" ]; then
         sed -i '' "s/$TEMPLATE_NAME/$PROJECT_NAME/g" "$PROJECT_DIR/main/CMakeLists.txt"
 fi
 
+# Drop `set positional-arguments` from the copied justfile.
+# The template is copied wholesale, so this setting propagated into every
+# scaffolded project even though no recipe ever read $1/$@ (issue #410).
+# A project that genuinely needs positional args should add it back deliberately.
+# POSIX awk, not sed: deleting "the blank line after the match" needs either a
+# `addr,+1` range or an embedded-newline regex, and both are GNU-only — the BSD
+# sed arm this script uses elsewhere would reject them and, under `set -e`,
+# abort the scaffold half-written on macOS.
+if [ -f "$PROJECT_DIR/justfile" ] && grep -q '^set positional-arguments$' "$PROJECT_DIR/justfile"; then
+    echo -e "${CYAN}Cleaning up justfile...${NC}"
+    awk '
+        /^set positional-arguments$/ { drop = 1; next }
+        drop && $0 == ""             { drop = 0; next }
+                                     { drop = 0; print }
+    ' "$PROJECT_DIR/justfile" > "$PROJECT_DIR/justfile.tmp" &&
+        mv "$PROJECT_DIR/justfile.tmp" "$PROJECT_DIR/justfile"
+fi
+
 # Create README template
 cat > "$PROJECT_DIR/README.md" <<EOF
 # $PROJECT_NAME

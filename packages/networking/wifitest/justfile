@@ -1,8 +1,6 @@
 # ESP32-S3 WiFi AP Test — bare-minimum SoftAP for hardware validation
 # Run `just` or `just --list` to see available recipes
 
-set positional-arguments
-
 import '../../../tools/esp32-idf.just'
 
 project_dir := "packages/networking/wifitest"

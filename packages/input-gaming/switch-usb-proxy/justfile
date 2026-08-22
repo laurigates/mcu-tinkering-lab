@@ -1,8 +1,6 @@
 # Switch USB Proxy — thin USB HID <-> UART bridge for protocol development
 # Run `just --list` to see available recipes
 
-set positional-arguments
-
 import '../../../tools/esp32-idf.just'
 
 project_dir := "packages/input-gaming/switch-usb-proxy"

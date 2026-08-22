@@ -1,8 +1,6 @@
 # ThinkPack Brainbox — LLM-driven mesh coordinator firmware
 # Run `just` or `just --list` to see available recipes
 
-set positional-arguments
-
 import '../../../tools/esp32-idf.just'
 
 project_dir := "packages/thinkpack/brainbox"

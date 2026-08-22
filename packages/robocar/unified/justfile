@@ -1,8 +1,6 @@
 # ESP-IDF Robocar Unified (XIAO ESP32-S3 Sense)
 # Run `just --list` to see available recipes
 
-set positional-arguments
-
 import '../../../tools/esp32-idf.just'
 
 project_dir := "packages/robocar/unified"

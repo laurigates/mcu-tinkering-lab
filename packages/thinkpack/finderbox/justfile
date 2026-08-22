@@ -1,8 +1,6 @@
 # ThinkPack Finderbox — NFC scan-to-chime box (ESP32-S3 SuperMini)
 # Run `just` or `just --list` to see available recipes
 
-set positional-arguments
-
 import '../../../tools/esp32-idf.just'
 
 project_dir := "packages/thinkpack/finderbox"
