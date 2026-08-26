@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.6](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-main-v0.1.5...robocar-main-v0.1.6) (2026-08-26)
+
+
+### Bug Fixes
+
+* **tools:** gate shared flash recipes on the assumptions they bake in ([#476](https://github.com/laurigates/mcu-tinkering-lab/issues/476)) ([0f9fbbe](https://github.com/laurigates/mcu-tinkering-lab/commit/0f9fbbe306f0f654071473dc9031c79052ac1ea7))
+
 ## [0.1.5](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-main-v0.1.4...robocar-main-v0.1.5) (2026-08-22)
 
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.19](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.1.18...robocar-unified-v0.1.19) (2026-08-26)
+
+
+### Bug Fixes
+
+* **robocar-unified:** stop the playback ring tally drifting and muting the mic ([#474](https://github.com/laurigates/mcu-tinkering-lab/issues/474)) ([480fc2b](https://github.com/laurigates/mcu-tinkering-lab/commit/480fc2b3dacac5c22ad04e807c320d8147b63355))
+
 ## [0.1.18](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.1.17...robocar-unified-v0.1.18) (2026-08-22)
 
 
