@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.1.18](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.1.17...robocar-unified-v0.1.18) (2026-08-22)
+
+
+### Features
+
+* **robocar-unified:** indicate camera captures and endpoint calls ([fc234ef](https://github.com/laurigates/mcu-tinkering-lab/commit/fc234ef964a554069a374306d832b58a7e8c661f))
+
+
+### Bug Fixes
+
+* **build-guide:** drop the firmware version from the generated guide ([#470](https://github.com/laurigates/mcu-tinkering-lab/issues/470)) ([723c32d](https://github.com/laurigates/mcu-tinkering-lab/commit/723c32d3e23f2c30241e13f085d716ea5987a001)), closes [#439](https://github.com/laurigates/mcu-tinkering-lab/issues/439)
+* **robocar-unified:** fail the ambient gate closed when the mic never speaks ([fc63990](https://github.com/laurigates/mcu-tinkering-lab/commit/fc639909ed9820bd34ce2fcd889a4cb487a50a2b))
+
+
+### Documentation
+
+* **robocar-unified:** resync build guide to 0.1.17 ([#465](https://github.com/laurigates/mcu-tinkering-lab/issues/465)) ([a339111](https://github.com/laurigates/mcu-tinkering-lab/commit/a339111390b3410e46969787d2d938e67586eef7))
+
+
+### Miscellaneous
+
+* drop cargo-culted 'set positional-arguments' from justfiles ([998a9c4](https://github.com/laurigates/mcu-tinkering-lab/commit/998a9c479095bb2018e11b37af512d793dc17fa3)), closes [#410](https://github.com/laurigates/mcu-tinkering-lab/issues/410)
+
 ## [0.1.17](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.1.16...robocar-unified-v0.1.17) (2026-07-31)
 
 
