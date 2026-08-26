@@ -144,6 +144,19 @@ bool audio_player_is_ready(void);
  */
 bool audio_player_is_active(void);
 
+#ifdef AUDIO_PLAYER_HOST_TEST
+/**
+ * @brief Test hook: bytes the producer has counted as written into the ring.
+ *
+ * Only meaningful with AUDIO_PLAYER_HOST_TEST=1. Exists so the host test can
+ * assert this against what the ring actually received — the invariant whose
+ * one-byte-per-odd-chunk drift latched audio_player_is_active() true for the
+ * rest of the boot and silently muted the microphone. There is no device use
+ * for this value; read audio_player_is_active() instead.
+ */
+size_t audio_player_written_total_for_test(void);
+#endif
+
 #ifdef __cplusplus
 }
 #endif
