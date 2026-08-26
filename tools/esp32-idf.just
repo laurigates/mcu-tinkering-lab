@@ -129,6 +129,36 @@ _esp32-flash bin: require-port
 # Flash ESP32-S3 firmware natively (bootloader @0x0, 4MB @80MHz).
 # Standard single-app layout. Uses bin_name + baud.
 [private]
+# BEFORE COMPOSING EITHER SHARED FLASH RECIPE, CHECK ALL FOUR:
+#
+#   1. CHIP        _esp32-flash writes the bootloader at 0x1000, _s3-flash at
+#                  0x0. Wrong one = a board that does not boot. (Loud.)
+#   2. FLASH SIZE  _s3-flash HARDCODES --flash-size 4MB into the bootloader
+#                  header. Declaring CONFIG_ESPTOOLPY_FLASHSIZE above 4MB and
+#                  composing it anyway understates the part, and anything past
+#                  4 MB in the partition table becomes unreachable. (Silent.)
+#                  _esp32-flash uses `detect`, so it is exempt.
+#   3. OTA DATA    NEITHER recipe writes ota_data_initial.bin. If the partition
+#                  table has an otadata segment, flashing leaves whatever OTA
+#                  state was there — so a board that has OTA'd to ota_1 keeps
+#                  booting ota_1 while you flash new firmware into ota_0.
+#                  Flashes clean, runs the old image. (Silent, and the nastiest.)
+#   4. APP OFFSET  Both hardcode 0x10000. A table that puts the app elsewhere
+#                  gets its app written to the wrong place. (Silent.)
+#
+# Fail any one and keep the flash recipe INLINE with explicit offsets;
+# packages/robocar/unified/justfile is the worked example. Three of the four
+# fail silently, which is why "does this look like a standard layout?" is the
+# wrong test — run the mechanical one:
+#
+#     python3 tools/check-flash-recipes.py
+#
+# It also runs as a pre-commit hook, so this is enforced rather than remembered.
+# Nothing else covers these recipes: CI builds firmware via esp-idf-ci-action,
+# never through the justfile, and flashing is host-native. After editing either
+# recipe, confirm every consumer still expands as intended with
+# `PORT=/dev/ttyDUMMY just --dry-run <module>::flash`.
+
 _s3-flash bin: require-port
     #!/usr/bin/env bash
     set -euo pipefail

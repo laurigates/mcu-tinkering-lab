@@ -31,9 +31,27 @@ shell: _idf-shell
 # Flash & Monitor (native — USB passthrough on macOS is unreliable)
 ##########
 
-# Flash firmware to ESP32 (standard layout)
+# Flash firmware to ESP32
+#
+# Inline rather than composed from the shared `_esp32-flash`, which does not
+# write ota_data_initial.bin. This project's partitions.csv is ota_0/ota_1 with
+# NO factory partition and CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y, so leaving
+# otadata alone is not harmless: once the board has OTA'd to ota_1, otadata says
+# "boot ota_1", and a flash that writes only 0x10000 (ota_0) then boots the OLD
+# image. It flashes clean and runs the previous firmware — see
+# tools/check-flash-recipes.py, which is what found this.
 [group: "device"]
-flash: (_esp32-flash bin_name)
+flash: require-port
+    #!/usr/bin/env bash
+    set -euo pipefail
+    esptool --chip esp32 -p {{port}} -b "${BAUD:-460800}" \
+        --before default-reset --after hard-reset \
+        write-flash --flash-mode dio --flash-size detect \
+        0x1000 build/bootloader/bootloader.bin \
+        0x8000 build/partition_table/partition-table.bin \
+        0xd000 build/ota_data_initial.bin \
+        0x10000 build/{{bin_name}}.bin
+    echo "Flashed {{bin_name}} OK"
 
 # Monitor serial output (Ctrl-C to stop)
 [group: "device"]
