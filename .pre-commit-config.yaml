@@ -76,6 +76,13 @@ repos:
         pass_filenames: false
         always_run: true
 
+      - id: check-flash-recipes
+        name: Shared flash recipes match their projects
+        entry: python3 tools/check-flash-recipes.py
+        language: system
+        files: '(justfile|sdkconfig\.defaults|partitions\.csv|tools/esp32-idf\.just|tools/check-flash-recipes\.py)$'
+        pass_filenames: false
+
       - id: check-build-artifacts
         name: Check for build artifacts
         entry: >-

@@ -105,11 +105,38 @@ opposite reason — it runs *only* in CI — and
 `build-guide-drift-guard.md` § 2 carries the extract-and-run recipe plus the
 negative control that a guard change needs.
 
-**Exotic flash layouts stay inline.** `_esp32-flash`/`_s3-flash` cover the two
-standard single-app layouts only. Projects with a non-standard memory map (app
-@0x12000, an extra `ota_data` segment, an esptool `@flash_args` argfile) or an
-ESP32-CAM GPIO0 programming reminder keep their flash recipe inline so the offsets
-stay explicit and auditable.
+**A shared flash recipe fits only if all four of its baked-in assumptions hold.**
+`_esp32-flash`/`_s3-flash` each hardcode a chip, a flash size, an app offset and
+the absence of `ota_data`. None of that is visible at the call site — a project
+writes `flash: (_s3-flash bin_name)` and inherits all four silently.
+
+| # | Assumption | Wrong when | Symptom |
+|---|---|---|---|
+| 1 | Bootloader at 0x1000 (`_esp32-flash`) / 0x0 (`_s3-flash`) | target and recipe disagree | Board does not boot — **loud** |
+| 2 | `_s3-flash` writes `--flash-size 4MB` into the bootloader header (`_esp32-flash` uses `detect`) | `CONFIG_ESPTOOLPY_FLASHSIZE` > 4MB | Header understates the part; partitions past 4 MB unreachable — **silent** |
+| 3 | Neither writes `ota_data_initial.bin` | the table has an `otadata` segment | Stale OTA state survives: a board that OTA'd to `ota_1` keeps booting `ota_1` while you flash `ota_0`. Flashes clean, runs the old image — **silent** |
+| 4 | App at 0x10000 | the table puts the app elsewhere | App written to the wrong offset — **silent** |
+
+Fail any one and keep the flash recipe **inline** with explicit offsets;
+`packages/robocar/unified/justfile` and `packages/robocar/main/justfile` are the
+worked examples.
+
+**Do not judge this by eye.** The previous wording here asked whether the layout
+looked "exotic" and listed offsets and argfiles as the tell — flash *size* was
+never mentioned, so an ordinary app-at-0x10000 layout on an 8 MB part read as
+standard and composed the recipe anyway (robocar-bringup, 2026-08, caught only
+because someone happened to run `just --dry-run`). Three of the four fail
+silently, so eyeballing is exactly the wrong instrument. Run the mechanical one:
+
+```
+python3 tools/check-flash-recipes.py
+```
+
+It reports every consumer with its target, declared flash size, partition source,
+app offset and otadata status, and exits non-zero on a mismatch. It also runs as
+a pre-commit hook, so this is enforced rather than remembered — and its first run
+found a pre-existing instance in `robocar/main`, which had an `ota_0`/`ota_1`
+table, no factory partition, and `CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y`.
 
 ### Monitor Recipe
 
@@ -121,9 +148,11 @@ ESP32-S3 projects with native USB-Serial-JTAG override `monitor` with their own 
 
 1. Create justfile with `import '../../../tools/esp32-idf.just'`
 2. Set `project_dir`, `bin_name` (the compiled app basename), `port`, and `target`
-3. Compose the shared flash/build recipes: `build: (_idf-build-checked bin_name)` and
-   `flash: (_esp32-flash bin_name)` (or `(_s3-flash bin_name)`). Standard layouts only —
-   keep an exotic flash recipe inline (see the flash-layout note above)
+3. Compose the shared build recipe: `build: (_idf-build-checked bin_name)`. For
+   flash, check the four assumptions above before composing
+   `flash: (_esp32-flash bin_name)` / `(_s3-flash bin_name)` — then confirm with
+   `python3 tools/check-flash-recipes.py`, which the pre-commit hook runs anyway.
+   Keep the recipe inline if any assumption fails
 4. Define `info` recipe (project-specific)
 5. Override `build` for pre-build steps if needed (e.g., `build: credentials (_idf-build-checked bin_name)`)
 6. Use `require-port` as dependency for flash recipes (the shared `_*-flash` recipes already do)
