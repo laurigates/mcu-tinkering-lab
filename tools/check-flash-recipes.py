@@ -175,7 +175,7 @@ def audit(proj: Project) -> None:
                 proj.name,
                 "TARGET_MISMATCH",
                 f'target "{proj.target}" but {proj.shared} flashes a '
-                f'{spec["chip"]} bootloader at 0x{spec["bootloader_offset"]:x}',
+                f"{spec['chip']} bootloader at 0x{spec['bootloader_offset']:x}",
             )
         )
 
@@ -215,7 +215,7 @@ def audit(proj: Project) -> None:
                 proj.name,
                 "APP_OFFSET",
                 f"{proj.partition_source} puts the app at 0x{proj.app_offset:x} "
-                f'but {proj.shared} writes it to 0x{spec["app_offset"]:x}',
+                f"but {proj.shared} writes it to 0x{spec['app_offset']:x}",
             )
         )
 
