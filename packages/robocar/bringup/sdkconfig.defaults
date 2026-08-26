@@ -1,0 +1,54 @@
+# robocar-bringup — XIAO ESP32-S3 Sense hardware self-test
+#
+# Deliberately a subset of robocar-unified's config. Everything network- or
+# camera-related is absent because this firmware has no network and no camera,
+# which is most of why it builds and flashes quickly enough to run between two
+# solder joints.
+
+CONFIG_IDF_TARGET="esp32s3"
+
+# PSRAM. MODE_OCT is not optional on this board — the XIAO ESP32-S3 Sense has
+# OCTAL PSRAM, and a quad-mode build boot-loops before app_main is reached.
+# The audio_player ring is 512 kB and lives here.
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_SPEED_80M=y
+CONFIG_SPIRAM_USE_MALLOC=y
+CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=16384
+CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL=32768
+
+# Flash (XIAO ESP32-S3 Sense has 8MB)
+CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE="8MB"
+
+# Single-app partition table — no OTA. See partitions.csv for why.
+#
+# The flash recipe is inline in the justfile rather than composed from the shared
+# _s3-flash, for the same reason robocar-unified's is: that recipe hardcodes
+# --flash-size 4MB, and this board has 8 MB. Every other _s3-flash consumer in the
+# repo builds at the 2 MB default, so 4 MB is only wrong for the two robocar
+# projects. Caught by `just --dry-run robocar-bringup::flash`, which is the only
+# thing that exercises a flash recipe — CI builds firmware without ever flashing it.
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+CONFIG_PARTITION_TABLE_FILENAME="partitions.csv"
+
+# MCP23017 expander speaks I2C, not SPI
+CONFIG_MCP23X17_IFACE_I2C=y
+
+CONFIG_LOG_DEFAULT_LEVEL_INFO=y
+CONFIG_LOG_DEFAULT_LEVEL=3
+CONFIG_FREERTOS_HZ=1000
+
+# app_main runs the whole sweep on its own stack, including the tone generator's
+# 512-byte scratch and the microphone's 4 kB sample buffer.
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+
+# USB Serial/JTAG console (XIAO native USB-C, no adapter)
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+
+# Brownout detection off, for the same reason robocar-unified disables it: motor
+# inrush trips it. The motor check here drives the wheels deliberately.
+CONFIG_ESP_BROWNOUT_DET=n
+
+CONFIG_HEAP_POISONING_DISABLED=y
