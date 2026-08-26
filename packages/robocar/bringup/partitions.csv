@@ -1,0 +1,14 @@
+# robocar-bringup partition table (XIAO ESP32-S3 Sense, 8MB flash)
+#
+# Single app, no OTA. This firmware is a bench tool: it has no network, so it has
+# no way to fetch an update and nothing to roll back to. Carrying robocar-unified's
+# ota_0/ota_1 layout here would mean flashing an ota_data segment the app never
+# reads, and reserving 3.5 MB twice for a 310 kB binary.
+#
+# The app partition MUST start on a 0x10000 (64KB) boundary — ESP-IDF rejects an
+# unaligned app offset outright.
+#
+# Name,     Type, SubType, Offset,   Size,     Flags
+nvs,        data, nvs,     0x9000,   0x4000,
+phy_init,   data, phy,     0xD000,   0x1000,
+factory,    app,  factory, 0x10000,  0x300000,

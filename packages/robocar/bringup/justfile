@@ -1,0 +1,85 @@
+# robocar-bringup (XIAO ESP32-S3 Sense hardware self-test)
+# Run `just --list` to see available recipes
+
+import '../../../tools/esp32-idf.just'
+
+project_dir := "packages/robocar/bringup"
+bin_name := "robocar-bringup"
+port := env("PORT", _detected_s3)
+target := "esp32s3"
+
+default:
+    @just --list
+
+##########
+# Build (containerized)
+##########
+
+# Build firmware (containerized, verifies the .bin was produced)
+[group: "build"]
+build: (_idf-build-checked bin_name)
+
+# Clean build artifacts (containerized)
+[group: "build"]
+clean: _idf-clean
+
+# Open configuration menu (containerized)
+[group: "build"]
+menuconfig: _idf-menuconfig
+
+# Interactive shell in ESP-IDF container
+[group: "build"]
+shell: _idf-shell
+
+##########
+# Device
+##########
+
+# Flash the self-test (native esptool; XIAO S3 is USB-Serial-JTAG)
+#
+# Inline rather than composed from the shared `_s3-flash`, per the exotic-layout
+# exception in .claude/rules/containerized-builds.md: this board has 8 MB of flash
+# and the shared recipe hardcodes 4MB, which would write a 4 MB size into the
+# bootloader header of an 8 MB part. No ota_data segment here, unlike
+# robocar-unified — this table is single-app. Offsets mirror `idf.py build`'s own
+# flash_args output; recheck them against it after any partitions.csv change.
+[group: "device"]
+flash: require-port
+    #!/usr/bin/env bash
+    set -euo pipefail
+    esptool -s --chip esp32s3 -p {{port}} -b "${BAUD:-460800}" \
+        --before default-reset --after hard-reset \
+        write-flash --flash-mode dio --flash-size 8MB --flash-freq 80m \
+        0x0 build/bootloader/bootloader.bin \
+        0x8000 build/partition_table/partition-table.bin \
+        0x10000 build/{{bin_name}}.bin
+    echo "Flashed {{bin_name}} OK"
+
+# Reset the board over USB-Serial-JTAG — this is how you RE-RUN the sweep
+[group: "device"]
+reset: _s3-reset
+
+# Watch the sweep. Read-only, and resets the board on attach, which is exactly
+# what you want here: attaching re-runs the sweep from the top.
+[group: "device"]
+monitor: _s3-monitor
+
+# Flash and immediately watch the sweep
+[group: "device"]
+flash-monitor: flash monitor
+
+##########
+# Info
+##########
+
+# Show project information
+[group: "info"]
+info:
+    @echo "robocar-bringup — hardware self-test for the XIAO ESP32-S3 Sense robocar"
+    @echo "  target:  {{target}}"
+    @echo "  binary:  {{bin_name}}.bin"
+    @echo "  port:    {{port}}"
+    @echo ""
+    @echo "  Sweeps every peripheral once at boot, then idles. No WiFi, no API key."
+    @echo "  SKIP means 'not fitted' — normal on a part-built board."
+    @echo "  The motor check DRIVES THE WHEELS after three quick high beeps."
