@@ -133,6 +133,56 @@ def parse_partitions(path: Path) -> tuple[int | None, bool]:
     return app_offset, has_otadata
 
 
+ATTRIBUTE_HINT = (
+    "a just attribute must sit IMMEDIATELY above its recipe; a comment or blank "
+    "line between them orphans it and `just` refuses to parse the whole file"
+)
+
+
+def check_attribute_placement() -> list[Finding]:
+    """Catch an attribute separated from its recipe by a comment or blank line.
+
+    `just` reports this as `error: extraneous attribute` and refuses to parse,
+    which breaks EVERY justfile importing the offending file — so a stray
+    comment in tools/esp32-idf.just takes out every ESP-IDF project at once.
+
+    Checked textually rather than by shelling out to `just`, so it works on a CI
+    runner that has no `just` installed. It is here rather than in a separate
+    script because this file is already the pre-commit hook for justfiles, and
+    the failure it catches is the one that bit while editing the very recipes
+    the rest of this script audits.
+    """
+    findings: list[Finding] = []
+    targets = sorted((REPO_ROOT / "packages").rglob("justfile"))
+    targets += sorted((REPO_ROOT / "tools").glob("*.just"))
+    targets.append(REPO_ROOT / "justfile")
+
+    for path in targets:
+        if not path.is_file():
+            continue
+        lines = path.read_text().split("\n")
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            if not (stripped.startswith("[") and stripped.endswith("]")):
+                continue
+            # Look ahead to the next meaningful line.
+            for follower in lines[i + 1 :]:
+                nxt = follower.strip()
+                if not nxt:
+                    continue  # blank alone is tolerated by just
+                if nxt.startswith("#"):
+                    findings.append(
+                        Finding(
+                            str(path.relative_to(REPO_ROOT)),
+                            "ORPHANED_ATTRIBUTE",
+                            f"line {i + 1}: {stripped} is followed by a comment — "
+                            + ATTRIBUTE_HINT,
+                        )
+                    )
+                break
+    return findings
+
+
 def collect() -> list[Project]:
     projects: list[Project] = []
     for justfile in sorted((REPO_ROOT / "packages").rglob("justfile")):
@@ -230,6 +280,7 @@ def main() -> int:
         audit(proj)
 
     findings = [f for p in projects for f in p.findings]
+    findings += check_attribute_placement()
 
     print("=== SHARED FLASH RECIPE CONSUMERS ===")
     for proj in projects:
