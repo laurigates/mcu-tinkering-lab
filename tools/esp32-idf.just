@@ -112,23 +112,6 @@ _idf-build-checked bin:
     fi
     echo "Build OK ({{bin}}.bin)"
 
-# Flash ESP32 firmware natively (bootloader @0x1000, flash-size detect).
-# Standard single-app layout. Uses bin_name + baud.
-[private]
-_esp32-flash bin: require-port
-    #!/usr/bin/env bash
-    set -euo pipefail
-    esptool --chip esp32 -p {{port}} -b "${BAUD:-460800}" \
-        --before default-reset --after hard-reset \
-        write-flash --flash-mode dio --flash-size detect \
-        0x1000 build/bootloader/bootloader.bin \
-        0x8000 build/partition_table/partition-table.bin \
-        0x10000 build/{{bin}}.bin
-    echo "Flashed {{bin}} OK"
-
-# Flash ESP32-S3 firmware natively (bootloader @0x0, 4MB @80MHz).
-# Standard single-app layout. Uses bin_name + baud.
-[private]
 # BEFORE COMPOSING EITHER SHARED FLASH RECIPE, CHECK ALL FOUR:
 #
 #   1. CHIP        _esp32-flash writes the bootloader at 0x1000, _s3-flash at
@@ -159,6 +142,23 @@ _esp32-flash bin: require-port
 # recipe, confirm every consumer still expands as intended with
 # `PORT=/dev/ttyDUMMY just --dry-run <module>::flash`.
 
+# Flash ESP32 firmware natively (bootloader @0x1000, flash-size detect).
+# Standard single-app layout. Uses bin_name + baud.
+[private]
+_esp32-flash bin: require-port
+    #!/usr/bin/env bash
+    set -euo pipefail
+    esptool --chip esp32 -p {{port}} -b "${BAUD:-460800}" \
+        --before default-reset --after hard-reset \
+        write-flash --flash-mode dio --flash-size detect \
+        0x1000 build/bootloader/bootloader.bin \
+        0x8000 build/partition_table/partition-table.bin \
+        0x10000 build/{{bin}}.bin
+    echo "Flashed {{bin}} OK"
+
+# Flash ESP32-S3 firmware natively (bootloader @0x0, 4MB @80MHz).
+# Standard single-app layout. Uses bin_name + baud.
+[private]
 _s3-flash bin: require-port
     #!/usr/bin/env bash
     set -euo pipefail
