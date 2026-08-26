@@ -207,3 +207,26 @@ add_executable(test_audio_clip
 )
 target_link_libraries(test_audio_clip PRIVATE Threads::Threads m)
 add_test(NAME audio_clip COMMAND test_audio_clip)
+
+# -----------------------------------------------------------------------------
+# audio_player producer accounting (TTS playback ring)
+#
+# audio_player.c is compiled UNMODIFIED against the shims in test/include
+# (freertos/*, driver/*, esp_heap_caps.h) rather than being split behind an
+# #ifdef: the code the test links has to be the code the device runs, or the
+# test pins a transcription instead of the shipped path. Only the ring has real
+# behaviour — see test/host_shims.c.
+#
+# The case it pins is one a bench cannot stage: an utterance whose PCM length
+# leaves an odd remainder after the last 2048-byte batch. That made the write
+# tally drift one byte per utterance, and the consequence surfaced minutes later
+# and in another subsystem — a microphone that had gone permanently deaf.
+# -----------------------------------------------------------------------------
+add_executable(test_audio_player
+    "${MAIN_SRC_DIR}/audio_player.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/host_shims.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_audio_player.c"
+)
+target_compile_definitions(test_audio_player PRIVATE AUDIO_PLAYER_HOST_TEST=1)
+target_link_libraries(test_audio_player PRIVATE Threads::Threads m)
+add_test(NAME audio_player COMMAND test_audio_player)

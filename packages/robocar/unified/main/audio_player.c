@@ -331,21 +331,37 @@ esp_err_t audio_player_write(const uint8_t *pcm, size_t bytes, uint32_t timeout_
      * (clean) and misaligned (static) as the drops accumulate. Holding the odd
      * trailing byte back until the next write keeps only even runs in the ring,
      * so no sample is ever split. Producer-side (TTS task) only — the player
-     * merely reads — so s_carry needs no lock. */
-    esp_err_t err;
+     * merely reads — so s_carry needs no lock.
+     *
+     * s_written_total is advanced HERE, beside each successful ring_send, and by
+     * the length of that send — never by the caller's `bytes`. The two differ by
+     * the carried byte, and counting the caller's figure made s_written_total
+     * drift one byte per odd-length chunk: the carry was counted on the write
+     * that held it back, and end_utterance() then discarded it, so it never
+     * reached the ring at all. ring_pending() therefore never returned to 0 once
+     * an utterance had an odd tail, and audio_player_is_active() — which ORs in
+     * `ring_pending() > 0` — latched true for the rest of the boot, permanently
+     * gating off the microphone (ambient_listener.c) and the `listen` turn
+     * (voice_turn.c). Keeping the increment adjacent to the send is what makes
+     * that unrepresentable: no early return can leave sent-but-uncounted bytes
+     * behind, which a single tally at the end of the function could. */
     if (s_have_carry) {
         const uint8_t splice[2] = {s_carry, pcm[0]};  // complete the straddled sample
-        if ((err = ring_send(splice, 2, timeout_ms)) != ESP_OK) {
+        const esp_err_t err = ring_send(splice, 2, timeout_ms);
+        if (err != ESP_OK) {
             return err;
         }
+        s_written_total += sizeof(splice);
         s_have_carry = false;
         pcm++;
         bytes--;
     }
     const size_t even = bytes & ~(size_t)1;
-    if ((err = ring_send(pcm, even, timeout_ms)) != ESP_OK) {
+    const esp_err_t err = ring_send(pcm, even, timeout_ms);
+    if (err != ESP_OK) {
         return err;
     }
+    s_written_total += even;
     if (bytes & 1) {
         s_carry = pcm[even];
         s_have_carry = true;
@@ -353,7 +369,6 @@ esp_err_t audio_player_write(const uint8_t *pcm, size_t bytes, uint32_t timeout_
 
     /* Open the preroll gate on the way past the threshold — once only, so a
      * long utterance is not notifying the player on every write. */
-    s_written_total += bytes;
     if (!s_armed && ring_pending() >= (size_t)AUDIO_PREROLL_BYTES) {
         s_armed = true;
         if (s_task) {
@@ -434,6 +449,13 @@ bool audio_player_is_ready(void)
 {
     return s_task != NULL && s_ring != NULL;
 }
+
+#ifdef AUDIO_PLAYER_HOST_TEST
+size_t audio_player_written_total_for_test(void)
+{
+    return s_written_total;
+}
+#endif
 
 bool audio_player_is_active(void)
 {

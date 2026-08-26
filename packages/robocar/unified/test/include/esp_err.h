@@ -22,5 +22,11 @@ typedef int esp_err_t;
 #define ESP_ERR_INVALID_ARG (-2)
 #define ESP_ERR_INVALID_STATE (-3)
 #define ESP_ERR_NOT_FOUND (-4)
+#define ESP_ERR_NO_MEM (-5)
+#define ESP_ERR_TIMEOUT (-6)
+
+/** Implemented in host_shims.c. audio_player.c logs it on an I2S write error;
+ *  the ESP_LOG* shims discard the string, but it still has to link. */
+const char *esp_err_to_name(esp_err_t err);
 
 #endif /* ROBOCAR_UNIFIED_HOST_TEST_ESP_ERR_H */
