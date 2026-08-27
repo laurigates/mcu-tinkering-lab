@@ -99,8 +99,36 @@ them.** CI builds firmware via `esp-idf-ci-action` (not the justfile) and flash
 runs host-native, so no automated gate covers these recipes; a wrong flash offset
 bricks or fails-to-boot the device. Before changing a shared flash/build recipe,
 confirm each consumer still expands to its original command:
-`PORT=/dev/ttyDUMMY just <module>::flash --dry-run` (the `--dry-run` flag must
-precede the recipe). The build-guide drift guard has the same gap for the
+`PORT=/dev/ttyDUMMY just --dry-run <module>::flash` (the `--dry-run` flag must
+precede the recipe).
+
+**CI never PARSES a justfile either — verify after the edit, not before.** The
+same gap has a second, wider mouth: nothing in CI runs `just` at all, so a
+justfile that does not parse sails through a fully green matrix, and every
+project importing the broken file loses *every* recipe at once — not just the
+one that was edited.
+
+> Observed 2026-08 (PR #476 → #478): a comment block was inserted directly above
+> `_s3-flash bin:`, which placed it between that recipe's `[private]` attribute
+> and the recipe. `just` answers `error: extraneous attribute` and refuses the
+> whole file. Every ESP-IDF project lost `just build` and `just flash`
+> simultaneously; the break was found on a bench trying to flash, not by CI. The
+> recipes *had* been dry-run verified — before the comment was added and not
+> after, which verifies the wrong artifact.
+
+So the discipline is ordering, not just presence:
+
+```
+just --list <module>                              # does it still PARSE
+PORT=/dev/ttyDUMMY just --dry-run <module>::flash  # does it still EXPAND right
+```
+
+Run both **as the last step**, on every consumer, after the final edit. A shared
+file has no local blast radius: sweep the module list, not one project.
+`tools/check-flash-recipes.py` (pre-commit, and therefore CI) now gates the
+attribute-adjacency case mechanically along with the four flash-recipe
+assumptions — but it cannot know whether a *recipe body* you changed still
+expands to the offsets you meant, so the dry-run stays a human step. The build-guide drift guard has the same gap for the
 opposite reason — it runs *only* in CI — and
 `build-guide-drift-guard.md` § 2 carries the extract-and-run recipe plus the
 negative control that a guard change needs.
