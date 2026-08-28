@@ -35,9 +35,9 @@
 #include "cJSON.h"
 #include "esp_log.h"
 
-/* On the host-test build ESP_LOGx macros are no-ops, leaving TAG and the
- * usageMetadata locals unused. Suppress with a compiler attribute rather
- * than an #ifdef — keeps the source identical across targets. */
+/* On the host-test build ESP_LOGx macros are no-ops, leaving TAG unused.
+ * Suppress with a compiler attribute rather than an #ifdef — keeps the source
+ * identical across targets. */
 #if defined(__GNUC__) || defined(__clang__)
 #define GP_MAYBE_UNUSED __attribute__((unused))
 #else
@@ -45,6 +45,25 @@
 #endif
 
 static const char *TAG GP_MAYBE_UNUSED = "gemini_parse";
+
+/* -------------------------------------------------------------------------- */
+/* Token usage from the most recent planner response                           */
+/* -------------------------------------------------------------------------- */
+
+/** Static rather than an out-parameter, which is safe only because
+ *  gemini_parse_response() has exactly one caller on the target
+ *  (gemini_backend_plan(), on the planner task). The narrate and voice-turn
+ *  paths go through gemini_parse_text(), which deliberately does NOT touch this
+ *  — self_report runs on its own task, and a shared slot would let its parse
+ *  land between the planner's parse and the planner's read. */
+static gemini_usage_t s_last_usage;
+
+void gemini_parse_last_usage(gemini_usage_t *out)
+{
+    if (out) {
+        *out = s_last_usage;
+    }
+}
 
 esp_err_t gemini_parse_function_call(const char *json_text, goal_t *out_goal)
 {
@@ -63,10 +82,39 @@ esp_err_t gemini_parse_response(const char *json_text, goal_t *out_goal, char *o
         out_speech[0] = '\0';
     }
 
+    /* Cleared before the parse, not after it: a caller reading this back must
+     * see "no usage from THIS response", never last response's figures dressed
+     * up as this one's. plan_budget.c charges an assumed cost when `present` is
+     * false, so a stale-but-plausible number here would silently under-charge
+     * the fuse — the one failure mode a spend ceiling cannot have. */
+    s_last_usage = (gemini_usage_t){.prompt = -1, .output = -1, .total = -1, .present = false};
+
     cJSON *root = cJSON_Parse(json_text);
     if (!root) {
         ESP_LOGE(TAG, "failed to parse API response JSON");
         return ESP_FAIL;
+    }
+
+    /* Read before any of the branching below, because several paths reach the
+     * exit through `goto done`. Extracting this at the bottom (where it used to
+     * live) meant a response that parsed as JSON but carried no recognisable
+     * functionCall logged no token count at all — exactly the response you most
+     * want the cost of. */
+    cJSON *usage = cJSON_GetObjectItem(root, "usageMetadata");
+    if (usage) {
+        cJSON *pt = cJSON_GetObjectItem(usage, "promptTokenCount");
+        cJSON *ot = cJSON_GetObjectItem(usage, "candidatesTokenCount");
+        cJSON *tt = cJSON_GetObjectItem(usage, "totalTokenCount");
+        s_last_usage.prompt = cJSON_IsNumber(pt) ? pt->valueint : -1;
+        s_last_usage.output = cJSON_IsNumber(ot) ? ot->valueint : -1;
+        s_last_usage.total = cJSON_IsNumber(tt) ? tt->valueint : -1;
+        /* `present` tracks the TOTAL specifically, not the object: a
+         * usageMetadata block that has lost the one field the budget charges
+         * against is no more useful than no block at all, and treating it as
+         * present would charge zero. */
+        s_last_usage.present = (s_last_usage.total >= 0);
+        ESP_LOGI(TAG, "tokens: prompt=%d output=%d total=%d", (int)s_last_usage.prompt,
+                 (int)s_last_usage.output, (int)s_last_usage.total);
     }
 
     esp_err_t result = ESP_FAIL;
@@ -173,16 +221,6 @@ esp_err_t gemini_parse_response(const char *json_text, goal_t *out_goal, char *o
         ESP_LOGW(TAG, "unrecognised function name: %s — defaulting to stop", name);
         out_goal->kind = GOAL_KIND_STOP;
         result = ESP_OK;
-    }
-
-    cJSON *usage = cJSON_GetObjectItem(root, "usageMetadata");
-    if (usage) {
-        cJSON *pt GP_MAYBE_UNUSED = cJSON_GetObjectItem(usage, "promptTokenCount");
-        cJSON *ot GP_MAYBE_UNUSED = cJSON_GetObjectItem(usage, "candidatesTokenCount");
-        cJSON *tt GP_MAYBE_UNUSED = cJSON_GetObjectItem(usage, "totalTokenCount");
-        ESP_LOGI(TAG, "tokens: prompt=%d output=%d total=%d",
-                 cJSON_IsNumber(pt) ? pt->valueint : -1, cJSON_IsNumber(ot) ? ot->valueint : -1,
-                 cJSON_IsNumber(tt) ? tt->valueint : -1);
     }
 
 done:

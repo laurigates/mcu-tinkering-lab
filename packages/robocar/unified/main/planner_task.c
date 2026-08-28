@@ -10,6 +10,8 @@
 
 #include "planner_task.h"
 
+#include <inttypes.h>
+
 #include "ambient_audio.h"
 #include "camera.h"
 #include "dialogue_style.h"
@@ -20,6 +22,9 @@
 #include "freertos/task.h"
 #include "gemini_backend.h"
 #include "goal_state.h"
+#include "plan_activity.h"
+#include "plan_budget.h"
+#include "reactive_controller.h"
 #include "scene_change.h"
 #include "speech_budget.h"
 #include "speech_queue.h"
@@ -105,6 +110,75 @@ static const char *goal_kind_name(goal_kind_t kind)
 }
 
 /* =========================================================================
+ * Threshold readbacks — the logged score is useless without the number it is
+ * being compared against, and plan_activity/plan_budget expose theirs through
+ * out-parameter getters rather than scalars.
+ * ========================================================================= */
+
+static uint8_t plan_scene_threshold(void)
+{
+    uint8_t scene = 0;
+    plan_activity_get(&scene, NULL);
+    return scene;
+}
+
+static uint8_t plan_range_threshold(void)
+{
+    uint8_t range = 0;
+    plan_activity_get(NULL, &range);
+    return range;
+}
+
+static uint32_t budget_max_requests(void)
+{
+    uint32_t max_requests = 0;
+    plan_budget_get(&max_requests, NULL);
+    return max_requests;
+}
+
+/* =========================================================================
+ * Dormancy evidence
+ * ========================================================================= */
+
+/**
+ * @brief Collect this cycle's on-device evidence for plan_activity.
+ *
+ * Every field is free — a fingerprint the frame decode already produced, a
+ * telemetry snapshot the executor already maintains, a latch the microphone
+ * task already fills. That is the whole reason dormancy can be decided before
+ * the request rather than inside it.
+ */
+static plan_evidence_t gather_evidence(const scene_fingerprint_t *fp, uint32_t now_ms)
+{
+    plan_evidence_t ev = {0};
+    ev.frame = *fp;
+
+    /* ambient_audio_EVENT, not ambient_audio_novel(). novel() additionally
+     * reports a room never spoken about as new — correct for speech, fatal
+     * here: the robot only speaks when awake, so a dormant robot would see that
+     * branch stay true forever and never go quiet at all. See ambient_audio.h. */
+    ev.audio_event = ambient_audio_event(now_ms);
+
+    reactive_telemetry_t tele = {0};
+    if (reactive_controller_get_telemetry(&tele) == ESP_OK) {
+        ev.distance_cm = tele.distance_cm;
+        /* A failed rangefinder reads as max range through the filter, so an
+         * unguarded reading would show one large step and then sit perfectly
+         * still — a sensor that appears to agree that nothing is happening. */
+        ev.range_valid = !tele.sensor_failed;
+        ev.robot_moving = tele.manual_active;
+    }
+
+    goal_t current = {0};
+    bool fresh = false;
+    if (!ev.robot_moving && goal_state_read(&current, &fresh) == ESP_OK) {
+        ev.robot_moving = fresh && current.kind != GOAL_KIND_STOP && current.kind != GOAL_KIND_NONE;
+    }
+
+    return ev;
+}
+
+/* =========================================================================
  * Planner task body
  * ========================================================================= */
 
@@ -123,6 +197,12 @@ static void planner_task(void *pvParameters)
      * retrying at full rate makes the outage longer. Capped so recovery stays
      * bounded; reset on the first success. */
     uint32_t backoff_periods = 0;
+
+    /* One-shot latches so entering dormancy and tripping the fuse are announced
+     * once each rather than every 15 s for the rest of the night — and so the
+     * matching "waking" line has something to be the counterpart of. */
+    bool dormant_announced = false;
+    bool budget_announced = false;
 
     while (1) {
         /* ---- 1. Capture frame ---- */
@@ -148,12 +228,93 @@ static void planner_task(void *pvParameters)
         scene_change_note(&fp);
         frame_dump_maybe(fb->buf, fb->len);
 
+        /* ---- 1c. Decide whether this cycle is worth a request at all ----
+         * The evidence loop above runs every tick regardless; only the network
+         * call below is gated. Capturing and fingerprinting a frame costs CPU
+         * and nothing else, which is what keeps wake latency at one tick even
+         * when the planner has been dormant for hours. */
+        const uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000);
+        const plan_evidence_t ev = gather_evidence(&fp, now_ms);
+        const bool warranted = plan_activity_should_call(&ev, now_ms);
+        const bool affordable = plan_budget_allows();
+
+        if (!warranted || !affordable) {
+            /* No request. The goal is deliberately left to expire on its own
+             * TTL rather than being force-stopped every skipped cycle: the
+             * executor already treats a stale goal as a hold, and re-stopping a
+             * stopped robot 240 times an hour would bury the one transition
+             * that matters in the log. */
+            if (!affordable) {
+                /* The fuse outranks everything else in this branch: while it is
+                 * blown there is no "next request in N ms" to report, and saying
+                 * there is would describe a cadence that will never run. Reported
+                 * once, then silent — an exhausted budget does not become news
+                 * again every 15 s. */
+                if (!budget_announced) {
+                    budget_announced = true;
+                    ESP_LOGE(TAG,
+                             "PLANNER BUDGET EXHAUSTED (%s) — %" PRIu32 " requests, %llu tokens. "
+                             "No further requests until `plan resume`.",
+                             (plan_budget_state() == PLAN_BUDGET_TRIP_REQUESTS) ? "request ceiling"
+                                                                                : "token ceiling",
+                             plan_budget_requests(), (unsigned long long)plan_budget_tokens());
+                    goal_state_force_stop();
+                }
+            } else if (plan_activity_dormant() && !dormant_announced) {
+                dormant_announced = true;
+                ESP_LOGI(TAG,
+                         "Dormant — nothing has changed for the whole ladder. Still watching "
+                         "every %u ms; a moving view, a sound, a range change or any console "
+                         "command wakes it.",
+                         PLANNER_LOOP_PERIOD_MS);
+                goal_state_force_stop();
+            } else if (!plan_activity_dormant()) {
+                /* Climbing the ladder: the interesting phase, and the one whose
+                 * thresholds get tuned from a capture. Logged at INFO with every
+                 * score beside its threshold, the same way the speech gates are.
+                 * Dormant cycles are NOT logged at INFO — an overnight run would
+                 * otherwise emit thousands of identical lines. */
+                ESP_LOGI(TAG,
+                         "Idle: no request | still: %u/%u | range: %u/%u cm | loud: %u/%u dB | "
+                         "rung: %u/%u every %" PRIu32 " ms | why: %s",
+                         plan_activity_scene_score(), (unsigned)plan_scene_threshold(),
+                         plan_activity_range_score(), (unsigned)plan_range_threshold(),
+                         ambient_audio_loud_score(), (unsigned)ambient_audio_loud_threshold(),
+                         (unsigned)plan_activity_step() + 1u, (unsigned)PLAN_LADDER_STEPS,
+                         plan_activity_period_ms(), plan_activity_verdict());
+            } else {
+                ESP_LOGD(TAG, "Dormant: still %u/%u | range %u/%u cm", plan_activity_scene_score(),
+                         (unsigned)plan_scene_threshold(), plan_activity_range_score(),
+                         (unsigned)plan_range_threshold());
+            }
+
+            camera_return_fb(fb);
+            if (xTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(PLANNER_LOOP_PERIOD_MS)) ==
+                pdFALSE) {
+                vTaskDelay(pdMS_TO_TICKS(PLANNER_LOOP_PERIOD_MS));
+                last_wake_time = xTaskGetTickCount();
+            }
+            continue;
+        }
+
+        if (dormant_announced || budget_announced) {
+            ESP_LOGI(TAG, "Waking — %s", plan_activity_verdict());
+            dormant_announced = false;
+            budget_announced = false;
+        }
+
         /* ---- 2. Call Gemini planner ---- */
         goal_t goal = {0};
         uint32_t latency_ms = 0;
         char speech[SPEECH_TEXT_MAX] = {0};
         esp_err_t ret =
             gemini_backend_plan(fb->buf, fb->len, &goal, &latency_ms, speech, sizeof(speech));
+
+        /* Noted whatever the outcome: the request went out, so it moves the
+         * reference to the view just planned on and advances the ladder. Noting
+         * only successes would let a run of failures replan the same unchanged
+         * scene at full rate forever. */
+        plan_activity_note_call(now_ms);
 
         /* Which gate opened (or held) THIS cycle, sampled here and not at the log
          * line below, because mark_spoken() re-references both detectors in
@@ -207,7 +368,7 @@ static void planner_task(void *pvParameters)
             }
             /* Every gate's live score sits beside its own threshold, so all of
              * them can be chosen from real numbers in a monitor log rather than
-             * guessed — see scene_change.h and ambient_audio.h.
+             * guessed — see scene_change.h, ambient_audio.h and plan_activity.h.
              *
              * scene= distance from the frame the robot last spoke about.
              * loud=  peak excursion above the adaptive noise floor since then.
@@ -216,15 +377,24 @@ static void planner_task(void *pvParameters)
              *        a high floor with no excursion is a noisy but unchanging
              *        room, and is the difference between a working gate and a
              *        deaf one.
-             * gate=  which branch actually decided (see planner_gate_verdict). */
+             * gate=  which branch decided whether to SPEAK (planner_gate_verdict).
+             * still= distance from the frame the robot last PLANNED on, and
+             *        why=/step= the request gate's own verdict and ladder rung.
+             *        Distinct from scene= on purpose: the two references move at
+             *        different moments, so a single field could not serve both.
+             * spent= requests and tokens charged against the fuse this boot. */
             ESP_LOGI(TAG,
                      "Goal: %s | latency: %" PRIu32 " ms | scene: %u/%u | loud: %u/%u dB | "
-                     "sound: %u/%u dB | floor: %d dB | gate: %s",
+                     "sound: %u/%u dB | floor: %d dB | gate: %s | still: %u/%u | why: %s | "
+                     "step: %u/%u | spent: %" PRIu32 "/%" PRIu32 " req, %llu tok",
                      goal_kind_name(goal.kind), latency_ms, scene_change_score(),
                      (unsigned)scene_change_threshold(), ambient_audio_loud_score(),
                      (unsigned)ambient_audio_loud_threshold(), ambient_audio_shape_score(),
                      (unsigned)ambient_audio_shape_threshold(), (int)ambient_audio_floor_db(),
-                     gate_verdict);
+                     gate_verdict, plan_activity_scene_score(), (unsigned)plan_scene_threshold(),
+                     plan_activity_verdict(), (unsigned)plan_activity_step() + 1u,
+                     (unsigned)PLAN_LADDER_STEPS, plan_budget_requests(), budget_max_requests(),
+                     (unsigned long long)plan_budget_tokens());
             backoff_periods = 0;
         } else {
             backoff_periods = (backoff_periods == 0) ? 1

@@ -12,6 +12,7 @@
  * Serial / MQTT commands remain available for manual override.
  */
 
+#include <inttypes.h>
 #include <string.h>
 #include "esp_app_desc.h"
 #include "esp_check.h"
@@ -52,6 +53,8 @@
 #include "mqtt_logger.h"
 #include "ota_manager.h"
 #include "pin_config.h"
+#include "plan_activity.h"
+#include "plan_budget.h"
 #include "planner_task.h"
 #include "reactive_controller.h"
 #include "scene_change.h"
@@ -732,6 +735,127 @@ static void handle_trace_cmd(const char *buf)
     activity_trace_report();
 }
 
+/**
+ * `plan` — the request gate and the spend ceiling.
+ *
+ * Every threshold here is a console knob for the same reason `cam gainceiling`
+ * and `voice scene` are: whether the robot is sensibly frugal or annoyingly
+ * asleep is a judgement that needs somebody standing in the room, and a reflash
+ * per trial is far too slow a loop. Like those, they deliberately do NOT persist
+ * to NVS — a boot should come up at the documented default, not at whatever last
+ * night's experiment left behind.
+ */
+static void handle_plan_cmd(const char *buf)
+{
+    char op[16] = {0};
+    long value = 0;
+    const int n = sscanf(buf, "plan %15s %ld", op, &value);
+
+    if (n >= 1) {
+        if (strcmp(op, "on") == 0 || strcmp(op, "off") == 0) {
+            const bool on = (op[0] == 'o' && op[1] == 'n');
+            plan_activity_set_enabled(on);
+            printf("plan: dormancy %s%s\n", on ? "ENABLED" : "DISABLED",
+                   on ? "" : " — a request every planner period, budget still enforced");
+            return;
+        }
+        if (strcmp(op, "wake") == 0) {
+            plan_activity_wake();
+            printf("plan: woken — next planner cycle will make a request\n");
+            return;
+        }
+        if (strcmp(op, "sleep") == 0) {
+            plan_activity_sleep();
+            printf("plan: dormant — still watching, no requests until something changes\n");
+            return;
+        }
+        if (strcmp(op, "resume") == 0) {
+            plan_budget_resume();
+            plan_activity_wake();
+            printf("plan: budget counters cleared, planner released\n");
+            return;
+        }
+        if (n == 2 && strcmp(op, "scene") == 0) {
+            uint8_t range = 0;
+            plan_activity_get(NULL, &range);
+            plan_activity_configure((uint8_t)value, range);
+            printf("plan: wake scene threshold = %ld%s\n", value,
+                   (value == 0) ? " (view no longer wakes it)" : "");
+            return;
+        }
+        if (n == 2 && strcmp(op, "range") == 0) {
+            uint8_t scene = 0;
+            plan_activity_get(&scene, NULL);
+            plan_activity_configure(scene, (uint8_t)value);
+            printf("plan: wake range threshold = %ld cm%s\n", value,
+                   (value == 0) ? " (rangefinder no longer wakes it)" : "");
+            return;
+        }
+        if (n == 2 && strcmp(op, "requests") == 0) {
+            uint32_t max_tokens = 0;
+            plan_budget_get(NULL, &max_tokens);
+            plan_budget_configure((uint32_t)value, max_tokens);
+            printf("plan: request ceiling = %ld%s\n", value, (value == 0) ? " (no limit)" : "");
+            return;
+        }
+        if (n == 2 && strcmp(op, "tokens") == 0) {
+            uint32_t max_requests = 0;
+            plan_budget_get(&max_requests, NULL);
+            plan_budget_configure(max_requests, (uint32_t)value);
+            printf("plan: token ceiling = %ld%s\n", value, (value == 0) ? " (no limit)" : "");
+            return;
+        }
+        printf("plan: usage: plan | plan on|off|wake|sleep|resume | "
+               "plan scene <n> | plan range <cm> | plan requests <n> | plan tokens <n>\n");
+        return;
+    }
+
+    /* ---- Status ---- */
+    uint8_t scene_threshold = 0;
+    uint8_t range_threshold = 0;
+    plan_activity_get(&scene_threshold, &range_threshold);
+
+    uint32_t max_requests = 0;
+    uint32_t max_tokens = 0;
+    plan_budget_get(&max_requests, &max_tokens);
+
+    const plan_budget_state_t budget = plan_budget_state();
+
+    printf("plan: gate=%s state=%s\n", plan_activity_enabled() ? "on" : "OFF",
+           plan_activity_dormant() ? "DORMANT" : "awake");
+    printf("  cadence: step %u/%u -> %" PRIu32 " ms   (base %u ms)\n",
+           (unsigned)plan_activity_step() + 1u, (unsigned)PLAN_LADDER_STEPS,
+           plan_activity_period_ms(), (unsigned)PLANNER_LOOP_PERIOD_MS);
+    printf("  wake on: view %u/%u   range %u/%u cm   sound (see `mic`)   why=%s\n",
+           plan_activity_scene_score(), (unsigned)scene_threshold, plan_activity_range_score(),
+           (unsigned)range_threshold, plan_activity_verdict());
+
+    /* The assumed-cost count is printed unconditionally rather than only when
+     * non-zero: it is the one field that says whether the token figure beside it
+     * is measured or guessed, and a reader who has to notice an ABSENT line to
+     * learn that will not notice it. */
+    printf("  spent:   %" PRIu32 " requests", plan_budget_requests());
+    if (max_requests != 0u) {
+        printf(" / %" PRIu32, max_requests);
+    } else {
+        printf(" (no ceiling)");
+    }
+    printf(",  %llu tokens", (unsigned long long)plan_budget_tokens());
+    if (max_tokens != 0u) {
+        printf(" / %" PRIu32 "\n", max_tokens);
+    } else {
+        printf(" (no ceiling)\n");
+    }
+    printf("  of which %" PRIu32 " request(s) charged the assumed %u tokens because the "
+           "response carried no usageMetadata\n",
+           plan_budget_assumed(), (unsigned)PLAN_BUDGET_ASSUMED_TOKENS);
+
+    if (budget != PLAN_BUDGET_OK) {
+        printf("  *** BUDGET EXHAUSTED (%s) — no requests until `plan resume` ***\n",
+               (budget == PLAN_BUDGET_TRIP_REQUESTS) ? "request ceiling" : "token ceiling");
+    }
+}
+
 static void handle_mic_cmd(const char *buf)
 {
     int frames = 0;
@@ -898,6 +1022,16 @@ static void command_task(void *pvParameters)
                 buf[buf_pos] = '\0';
                 ESP_LOGI(TAG, "Serial cmd: %s", buf);
 
+                /* Somebody is at the console, so the robot is not unattended
+                 * and the whole premise of dormancy has lapsed. Placed here —
+                 * one point, on a completed line — rather than on each command:
+                 * a new command added below then wakes the planner for free
+                 * instead of being the one that silently does not.
+                 *
+                 * Not on every BYTE: Improv provisioning packets are bytes too,
+                 * and a board being provisioned has no WiFi to plan over yet. */
+                plan_activity_wake();
+
                 // Single-letter movement commands (manual override / debug)
                 if (buf_pos == 1) {
                     switch (buf[0]) {
@@ -944,6 +1078,8 @@ static void command_task(void *pvParameters)
                     handle_mic_cmd(buf);
                 } else if (strncmp(buf, "cam", 3) == 0) {
                     handle_cam_cmd(buf);
+                } else if (strncmp(buf, "plan", 4) == 0) {
+                    handle_plan_cmd(buf);
                 } else if (strncmp(buf, "sound", 5) == 0 || strncmp(buf, "servo", 5) == 0 ||
                            strncmp(buf, "led", 3) == 0) {
                     handle_periph_cmd(buf);
@@ -1089,6 +1225,15 @@ static esp_err_t init_hierarchical_ai(void)
     speech_budget_init();
     scene_change_init();
     ambient_audio_init();
+
+    // The two gates on whether the planner makes a REQUEST at all — distinct
+    // from the three above, which only decide what goes INTO one. Initialised
+    // here rather than in planner_task_init() so `plan` reports real state even
+    // on a board whose planner never started (no API key, no WiFi): a status
+    // command that silently shows compile-time defaults is worse than one that
+    // is absent.
+    plan_budget_init();
+    plan_activity_init(PLANNER_LOOP_PERIOD_MS);
 
     // Speech path: queue and player must exist before the planner can emit a
     // `speak` call. Both are non-fatal — a robot that cannot talk should still

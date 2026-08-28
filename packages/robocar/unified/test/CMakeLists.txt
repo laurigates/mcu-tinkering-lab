@@ -169,6 +169,37 @@ target_link_libraries(test_ambient_audio PRIVATE Threads::Threads m)
 add_test(NAME ambient_audio COMMAND test_ambient_audio)
 
 # -----------------------------------------------------------------------------
+# plan_budget (the hard ceiling on planner spend)
+#
+# Pure C with no clock at all. The cases worth pinning are the ones that only
+# appear after hours of running or after somebody else's JSON changes: a
+# response whose token count could not be read must be CHARGED, not free, or the
+# ceiling silently stops being a ceiling.
+# -----------------------------------------------------------------------------
+add_executable(test_plan_budget
+    "${MAIN_SRC_DIR}/plan_budget.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_plan_budget.c"
+)
+target_link_libraries(test_plan_budget PRIVATE Threads::Threads m)
+add_test(NAME plan_budget COMMAND test_plan_budget)
+
+# -----------------------------------------------------------------------------
+# plan_activity (should this cycle make a request at all?)
+#
+# Pure C over caller-supplied luma planes with an injected clock, so the whole
+# nine-minute backoff ladder runs in microseconds and the uint32 millisecond
+# wrap at day 49 is reachable without waiting 49 days. Links scene_change.c for
+# the fingerprint representation it shares.
+# -----------------------------------------------------------------------------
+add_executable(test_plan_activity
+    "${MAIN_SRC_DIR}/plan_activity.c"
+    "${MAIN_SRC_DIR}/scene_change.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_plan_activity.c"
+)
+target_link_libraries(test_plan_activity PRIVATE Threads::Threads m)
+add_test(NAME plan_activity COMMAND test_plan_activity)
+
+# -----------------------------------------------------------------------------
 # gemini parse (Phase 5, gate G1, issue #228)
 #
 # Only built when cJSON is available. Skipped (with a message) otherwise so
