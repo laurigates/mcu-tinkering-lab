@@ -61,7 +61,7 @@
 
 ## 1. Overview
 
-This handheld oscilloscope adopts a dual injection molding process, featuring a beautiful appearance, compact size, convenient portability, and flexible operation. The functional buttons have a clear and intuitive menu interface. The screen utilizes a **3.5-inch IPS full-view color display**, with a multimeter display of up to **25,000 counts**. 
+This handheld oscilloscope adopts a dual injection molding process, featuring a beautiful appearance, compact size, convenient portability, and flexible operation. The functional buttons have a clear and intuitive menu interface. The screen utilizes a **3.5-inch IPS full-view color display**, with a multimeter display of up to **25,000 counts**.
 
 This product integrates the functions of an **oscilloscope**, **signal generator**, and **multimeter** into a 3-in-1 device. With superior performance and powerful functionality, it can be used in various measurement scenarios, meeting a wide range of user measurement needs.
 
@@ -271,7 +271,7 @@ In **Page 6 Menu**, press **F2 (Cursor)**:
   * **Normal Mode:** Sampling rate $200\,\text{MSa/s}$, Bandwidth $30\,\text{MHz}$ (power efficient).
   * **High-Speed Mode:** Sampling rate $280\,\text{MSa/s}$, Bandwidth $50\,\text{MHz}$.
 * **Backlight Brightness (Page 4 F2):** Select `30%`, `50%`, `80%`, or `100%`.
-* **Baseline Calibration (Page 3 F1):** 
+* **Baseline Calibration (Page 3 F1):**
   1. Disconnect probes and input signals.
   2. Select **Calibrate** and press **MENU**. Do not perform any operations during calibration.
 
