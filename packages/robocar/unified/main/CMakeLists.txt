@@ -18,6 +18,8 @@ idf_component_register(
         "scene_change.c"
         "ambient_audio.c"
         "speech_budget.c"
+        "plan_activity.c"
+        "plan_budget.c"
         "speech_queue.c"
         "speech_tags.c"
         "audio_player.c"

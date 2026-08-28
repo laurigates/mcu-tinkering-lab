@@ -242,6 +242,25 @@ void ambient_audio_note(const ambient_fingerprint_t *fp, uint32_t now_ms);
  */
 bool ambient_audio_novel(uint32_t now_ms);
 
+/**
+ * @brief Whether a loudness or spectral-shape event is currently latched and
+ *        unexpired — the same OR that novel() ends in, WITHOUT the
+ *        first-impression branch.
+ *
+ * novel() answers "is there something worth remarking on?", and for that
+ * question a room the robot has never spoken about is by definition new. That
+ * branch is wrong for any caller asking "is the room IDLE?", because it only
+ * ever clears when the robot speaks: a caller that never speaks — the planner's
+ * dormancy gate (plan_activity.h), which decides whether to make a request at
+ * all — would see permanent novelty and never go quiet, which is precisely the
+ * fail-open shape ambient_audio.c already had once when the microphone was
+ * absent.
+ *
+ * Fails closed on the same two conditions novel() does: false when both
+ * thresholds are 0, and false when nothing measurable has ever been heard.
+ */
+bool ambient_audio_event(uint32_t now_ms);
+
 /** @brief Latched loudness excursion above the floor, in whole dB, for logging.
  *         Decays as the floor rises through a steady sound. */
 unsigned ambient_audio_loud_score(void);

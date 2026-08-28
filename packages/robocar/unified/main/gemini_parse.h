@@ -11,7 +11,9 @@
 #ifndef GEMINI_PARSE_H
 #define GEMINI_PARSE_H
 
+#include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 #include "esp_err.h"
 #include "goal_state.h"
@@ -19,6 +21,32 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/**
+ * @brief Token counts reported by a planner response's usageMetadata.
+ *
+ * Each field is -1 when the corresponding key was absent or not a number.
+ * @c present is true only when @c total was readable, because that is the field
+ * plan_budget.c charges against — a usageMetadata block missing it buys nothing
+ * over having no block at all.
+ */
+typedef struct {
+    int32_t prompt;
+    int32_t output;
+    int32_t total;
+    bool present;
+} gemini_usage_t;
+
+/**
+ * @brief Token usage from the most recent gemini_parse_response() call.
+ *
+ * Cleared at the start of every parse, so a caller reading this immediately
+ * after one sees that response's figures or nothing — never the previous
+ * response's. Only the planner path writes it; gemini_parse_text() (narrate,
+ * voice turn) leaves it alone, which is what makes a single static slot safe
+ * across those tasks.
+ */
+void gemini_parse_last_usage(gemini_usage_t *out);
 
 /**
  * @brief Navigate candidates[0].content.parts[0].functionCall from the raw

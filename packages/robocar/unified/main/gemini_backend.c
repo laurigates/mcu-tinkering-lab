@@ -32,6 +32,7 @@
 #include "gemini_http.h"
 #include "gemini_parse.h"
 #include "goal_state.h"
+#include "plan_budget.h"
 #include "planner_task.h" /* PLANNER_LOOP_PERIOD_MS — keeps the stated cadence honest */
 #include "scene_change.h"
 #include "speech_budget.h"
@@ -574,6 +575,18 @@ esp_err_t gemini_backend_plan(const uint8_t *jpeg, size_t jpeg_len, goal_t *out_
         return ESP_FAIL;
     }
 
+    /* The spend ceiling is enforced HERE rather than in planner_task.c, for the
+     * same reason the activity_trace hooks live in gemini_http_post() rather
+     * than at its call sites: a future second caller of this endpoint then
+     * inherits the fuse instead of quietly spending outside it. The planner
+     * checks plan_budget_allows() too, so on the normal path this branch is
+     * never reached — it is the backstop's backstop. */
+    if (!plan_budget_allows()) {
+        ESP_LOGW(TAG, "planner budget exhausted — refusing request (`plan resume` to clear)");
+        out_goal->kind = GOAL_KIND_STOP;
+        return ESP_ERR_NOT_ALLOWED;
+    }
+
     const char *api_key = get_gemini_api_key();
     if (!api_key || api_key[0] == '\0') {
         ESP_LOGE(TAG, "API key unavailable at plan time");
@@ -631,6 +644,12 @@ esp_err_t gemini_backend_plan(const uint8_t *jpeg, size_t jpeg_len, goal_t *out_
         if (acc.len > 0) {
             ESP_LOGE(TAG, "error body: %.*s", (int)acc.len, acc.buf);
         }
+        /* Counted against the request ceiling, charged no tokens. A 429 or a
+         * 400 did consume quota somewhere, but not tokens we can name; a DNS
+         * failure consumed nothing at all. Guessing a cost here would let a
+         * WiFi outage trip the fuse, which is the one situation where the robot
+         * is provably not spending. The request ceiling still bounds the loop. */
+        plan_budget_note(-1, false);
         out_goal->kind = GOAL_KIND_STOP;
         free(request_body);
         return ESP_FAIL;
@@ -638,6 +657,15 @@ esp_err_t gemini_backend_plan(const uint8_t *jpeg, size_t jpeg_len, goal_t *out_
 
     /* ---- Parse function calls from response ---- */
     err = gemini_parse_response(acc.buf, out_goal, out_speech, speech_cap);
+
+    /* Charged whether or not the parse produced a usable goal: the tokens were
+     * spent by the time the body arrived, and a response this firmware cannot
+     * read is not a free one. Reading usage AFTER the parse is what makes the
+     * figure this response's rather than the previous one's. */
+    gemini_usage_t usage;
+    gemini_parse_last_usage(&usage);
+    plan_budget_note(usage.present ? usage.total : -1, true);
+
     if (err != ESP_OK) {
         /* gemini_parse_response already set out_goal->kind = GOAL_KIND_STOP.
          * out_speech may still be populated — a speech-only response is not a

@@ -292,6 +292,42 @@ bool ambient_audio_has_measurement(void)
     return s_current.valid;
 }
 
+/** The two latches, each required to be over threshold AND younger than the
+ *  TTL. Shared by novel() and event(); the ONLY difference between those two is
+ *  the first-impression branch novel() adds on top. */
+static bool ambient_latched_event(uint32_t now_ms)
+{
+    bool loud = false;
+    if (s_loud_threshold != 0u && s_loud_valid) {
+        /* Timestamp read before the value: a torn read then expires a live latch
+         * rather than reviving a dead one, i.e. it fails toward silence. */
+        const uint32_t age = now_ms - s_loud_ms;
+        loud = (age < s_latch_ttl_ms) && (ambient_audio_loud_score() >= (unsigned)s_loud_threshold);
+    }
+
+    bool shape = false;
+    if (s_shape_threshold != 0u && s_shape_valid) {
+        const uint32_t age = now_ms - s_shape_ms;
+        shape =
+            (age < s_latch_ttl_ms) && (ambient_audio_shape_score() >= (unsigned)s_shape_threshold);
+    }
+
+    return loud || shape;
+}
+
+bool ambient_audio_event(uint32_t now_ms)
+{
+    if (s_loud_threshold == 0u && s_shape_threshold == 0u) {
+        return false;
+    }
+    /* Same fail-closed guard as novel(): nothing measurable has ever been heard
+     * means this gate reports nothing, never "everything". */
+    if (!s_current.valid) {
+        return false;
+    }
+    return ambient_latched_event(now_ms);
+}
+
 bool ambient_audio_novel(uint32_t now_ms)
 {
     const bool loud_enabled = (s_loud_threshold != 0u);
@@ -336,22 +372,7 @@ bool ambient_audio_novel(uint32_t now_ms)
         return true; /* nothing spoken about yet — the first impression is new */
     }
 
-    bool loud = false;
-    if (loud_enabled && s_loud_valid) {
-        /* Timestamp read before the value: a torn read then expires a live latch
-         * rather than reviving a dead one, i.e. it fails toward silence. */
-        const uint32_t age = now_ms - s_loud_ms;
-        loud = (age < s_latch_ttl_ms) && (ambient_audio_loud_score() >= (unsigned)s_loud_threshold);
-    }
-
-    bool shape = false;
-    if (shape_enabled && s_shape_valid) {
-        const uint32_t age = now_ms - s_shape_ms;
-        shape =
-            (age < s_latch_ttl_ms) && (ambient_audio_shape_score() >= (unsigned)s_shape_threshold);
-    }
-
-    return loud || shape;
+    return ambient_latched_event(now_ms);
 }
 
 void ambient_audio_mark_spoken(void)
