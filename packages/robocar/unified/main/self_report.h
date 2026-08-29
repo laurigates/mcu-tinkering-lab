@@ -52,7 +52,7 @@ typedef enum {
 typedef struct {
     bool wifi_up;                //!< STA connected
     char ssid[MAX_SSID_LENGTH];  //!< SSID when known, else ""
-    bool camera_ok;              //!< OV2640 init succeeded (boot-recorded)
+    bool camera_ok;              //!< camera init succeeded (boot-recorded)
     bool i2c_bus_ok;             //!< TCA9548A + PCA9685 up (motors/servos/LEDs)
     bool mcp23017_present;       //!< optional GPIO expander detected
     bool audio_ok;               //!< I2S player task + ring ready

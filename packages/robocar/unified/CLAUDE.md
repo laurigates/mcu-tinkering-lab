@@ -21,7 +21,7 @@ Core affinity is load-bearing — do not change without understanding the trade-
 
 - **Core 1** (bursty, I/O-bound):
   - `planner_task` — captures frames on a schedule, calls Gemini Robotics-ER, writes `goal_state`
-  - `camera_task` — OV2640 frame capture (DMA pinned to Core 1 via `CONFIG_CAMERA_CORE1=y`)
+  - `camera_task` — OV3660 frame capture (DMA pinned to Core 1 via `CONFIG_CAMERA_CORE1=y`)
   - `network_task` — WiFi, MQTT, credentials
   - OTA manager
 

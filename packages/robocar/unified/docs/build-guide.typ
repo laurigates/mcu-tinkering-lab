@@ -45,10 +45,12 @@ One module now handles camera capture, AI inference, motor control, and all
 peripherals, using dual-core affinity to keep motor timing isolated from
 bursty network and vision work.
 
-The control system is *hierarchical*: a slow *planner* (\~1 Hz, Core 1) calls
+The control system is *hierarchical*: a slow *planner* (Core 1) calls
 Google's Gemini Robotics-ER to emit structured goals, and a fast *reactive
 executor* (\~30 Hz, Core 0) drives the robot smoothly toward those goals while
-an ultrasonic sensor provides an independent obstacle reflex.
+an ultrasonic sensor provides an independent obstacle reflex. The planner is not
+on a fixed schedule: the board boots *dormant* and asks Gemini only when
+something happened, backing off 15 s #sym.arrow 300 s when nothing does.
 
 #grid(columns: (1fr, 1fr), column-gutter: 12pt,
   callout("Core 0 — real-time")[
@@ -56,7 +58,7 @@ an ultrasonic sensor provides an independent obstacle reflex.
     command console, and the ultrasonic obstacle reflex.
   ],
   callout("Core 1 — bursty I/O", kind: "purple")[
-    Planner (Gemini calls), OV2640 camera DMA, WiFi / MQTT / OTA.
+    Planner (Gemini calls), OV3660 camera DMA, audio, WiFi / MQTT / OTA.
   ],
 )
 
@@ -64,7 +66,7 @@ an ultrasonic sensor provides an independent obstacle reflex.
 #callout("What you get", kind: "ok")[
   A two-wheel-drive car that captures frames, asks Gemini what to do, and
   drives toward goals — with pan/tilt camera, status LEDs, an OLED display,
-  buzzer feedback, WiFi provisioning over Bluetooth, and over-the-air updates.
+  buzzer feedback, WiFi provisioning over the USB console, and over-the-air updates.
 ]
 
 = 2 · Bill of Materials
@@ -72,7 +74,7 @@ an ultrasonic sensor provides an independent obstacle reflex.
 #htable(
   (auto, 1fr, auto),
   ([Qty], [Component], [Notes]),
-  ([1], [XIAO ESP32-S3 Sense], [MCU + OV2640 camera + 8 MB PSRAM, USB-C]),
+  ([1], [XIAO ESP32-S3 Sense], [MCU + OV3660 camera + PDM mic + 8 MB PSRAM, USB-C]),
   ([1], [TCA9548A I²C multiplexer], [Breakout, address 0x70]),
   ([1], [PCA9685 16-ch PWM driver], [Breakout, address 0x40]),
   ([1], [TB6612FNG dual motor driver], [Breakout]),
@@ -324,11 +326,13 @@ The flasher writes three images to an 8 MB, OTA-capable layout:
 
 = 8 · First Boot & Provisioning
 
-== 8.1 · WiFi over Bluetooth (Improv)
-No WiFi credentials are compiled in. On first boot the device advertises an
-*Improv WiFi BLE service*. Use a browser-based Improv provisioner (Chrome on
-desktop or Android) to send your SSID and password; they are stored in NVS and
-reused on later boots.
+== 8.1 · WiFi over the USB console (Improv Serial)
+No WiFi credentials are compiled in. On first boot the device speaks *Improv
+Serial* on the same USB port you flashed it with #sym.dash.en not the BLE
+variant, so there is nothing to pair. Open the board in a browser-based Improv
+Serial provisioner (Chrome desktop, e.g. ESP Web Tools) and send your SSID and
+password. They are written to NVS only after they are proven to connect, so a
+typo cannot overwrite a working network.
 
 For local development you can instead copy `main/credentials.h.example` to
 `main/credentials.h` (gitignored) and hard-code credentials.
@@ -336,7 +340,8 @@ For local development you can instead copy `main/credentials.h.example` to
 == 8.2 · Discovery & AI backend
 After connecting, the car is reachable at *`robocar-unified.local`* via mDNS.
 The planner uses *Gemini Robotics-ER 1.6* to emit goals — `drive()`, `track()`,
-`rotate()`, and `stop()`.
+`rotate()`, and `stop()` — plus `speak()`, which renders a sentence through a
+second TTS model and plays it while the robot keeps driving.
 
 == 8.3 · Over-the-air updates
 OTA is enabled with app rollback. The updater pulls releases from the
@@ -360,6 +365,7 @@ Work through these after first flash, watching the serial monitor:
   ([☐], [Ultrasonic], [Distance readings track a hand moving closer/away]),
   ([☐], [Reflex], [Car stops/reverses when an obstacle is < 15 cm]),
   ([☐], [Audio / TTS], [Robot speaks startup message; speech queues without blocking motion]),
+  ([☐], [Microphone], [`mic` reports frames arriving, not `gate: DEAF`; `listen` answers a spoken question]),
   ([☐], [WiFi], [Provisions via Improv; `robocar-unified.local` resolves]),
   aligns: (center, left, left),
 )
