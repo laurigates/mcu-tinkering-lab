@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.20](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.1.19...robocar-unified-v0.1.20) (2026-08-29)
+
+
+### Features
+
+* **robocar-unified:** gate the planner request on evidence and a spend ceiling ([#480](https://github.com/laurigates/mcu-tinkering-lab/issues/480)) ([bff01cd](https://github.com/laurigates/mcu-tinkering-lab/commit/bff01cd17a35479d41378b389ff7a1f8283e93f1))
+
+
+### Documentation
+
+* **robocar-unified:** correct four stale facts and retire the duplicated diagrams ([#483](https://github.com/laurigates/mcu-tinkering-lab/issues/483)) ([18099f1](https://github.com/laurigates/mcu-tinkering-lab/commit/18099f19f70a852581a926cd0bd427088c197b82))
+
 ## [0.1.19](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.1.18...robocar-unified-v0.1.19) (2026-08-26)
 
 
