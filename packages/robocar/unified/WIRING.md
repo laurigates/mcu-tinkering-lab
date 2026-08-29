@@ -33,13 +33,15 @@ I2C runs at **400 kHz**.
 
 ## I2C topology (TCA9548A multiplexer @ 0x70)
 
-```mermaid
-graph LR
-    ESP32[XIAO ESP32-S3<br/>GPIO5/6] -->|I2C 400kHz| TCA[TCA9548A<br/>0x70]
-    TCA -->|ch0| PCA[PCA9685<br/>0x40 @ 200Hz]
-    TCA -->|ch1| OLED[SSD1306 OLED<br/>0x3C, 128x64]
-    TCA -.->|ch2-7| Future[reserved:<br/>IMU / ToF / sensors]
-```
+Select the channel on the multiplexer **before** addressing any downstream
+device — nothing talks to the primary bus directly.
+
+| Channel | Device | Address |
+|---------|--------|---------|
+| ch0 | PCA9685 PWM driver (motors, servos, LEDs) | 0x40 @ 200 Hz |
+| ch1 | SSD1306 OLED display (128x64) | 0x3C |
+| ch2 | MCP23017 GPIO expander — **optional**, firmware boots without it | 0x20 |
+| ch3-7 | *reserved* (IMU / ToF / future sensors) | — |
 
 ## PCA9685 channel map (0x40, 200 Hz)
 
@@ -130,6 +132,31 @@ shuts the amplifier down.
 The I2S channel is disabled between utterances: the MAX98357A hisses faintly
 whenever BCLK is running, so leaving it clocking silence is audible.
 
+## Onboard microphone (PDM)
+
+The Sense expansion board carries an MSM261D PDM microphone wired to the
+ESP32-S3 directly. **Nothing to wire** — it is on the module — but it is live
+hardware the firmware depends on, so it is recorded here.
+
+| Signal | GPIO | Direction | Function |
+|--------|------|-----------|----------|
+| PDM CLK | GPIO42 | output | Clock, driven by the ESP32-S3 |
+| PDM DATA | GPIO41 | input | Serial PDM data |
+
+16 kHz / 16-bit / mono — fixed by the microphone, and also what Gemini expects
+for inline audio, so there is no resampling stage anywhere in the path. Neither
+pin collides with the camera DVP group (GPIO10-18, 38-40, 47-48) or the D0-D10
+headers (GPIO1-9, 43-44).
+
+It feeds two features: the ambient-audio speech gate ([ADR-020](../../docs/decisions/ADR-020-ambient-audio-speech-gate.md)),
+and the push-to-talk `listen` console command. On the ESP32-S3, PDM RX exists
+only on I2S0 — the same controller the MAX98357A uses — but the RX channel
+**must** be allocated in its own `i2s_new_channel()` call, or the driver goes
+full-duplex and clocks the 16 kHz microphone off the 24 kHz amplifier. See the
+comment at the allocation site in `main/mic_pdm.c`.
+
+Use the `mic` console command to tell a dead microphone from a quiet room.
+
 ## Ultrasonic rangefinder
 
 A 3.3 V-compatible ultrasonic sensor (HC-SR04P, RCWL-1601, or US-100) provides distance readings for the reactive controller's obstacle reflex.
@@ -142,29 +169,6 @@ A 3.3 V-compatible ultrasonic sensor (HC-SR04P, RCWL-1601, or US-100) provides d
 | GND | any GND | – | shared ground |
 
 The sensor samples at ~20 Hz. Obstacle reflex: if distance < 15 cm, the executor immediately stops and reverses, independent of planner goals. The specific module will be confirmed on first wiring; update this table if a different 3.3 V sensor is used.
-
-## Full connection diagram
-
-```mermaid
-graph TD
-    subgraph Board[XIAO ESP32-S3 Sense]
-        ESP[ESP32-S3<br/>+ OV2640 camera<br/>+ 8MB PSRAM]
-    end
-
-    ESP -- GPIO5 SDA --> TCA[TCA9548A 0x70]
-    ESP -- GPIO6 SCL --> TCA
-    ESP -- GPIO1 STBY --> TB[TB6612FNG]
-    ESP -- GPIO2 --> BUZ[Piezo]
-
-    TCA -- ch0 --> PCA[PCA9685 0x40]
-    TCA -- ch1 --> OLED[SSD1306 0x3C]
-
-    PCA -- ch0-5 --> LEDS[2x RGB LEDs]
-    PCA -- ch6-7 --> SRV[Pan/Tilt SG90]
-    PCA -- ch8-13 --> TB
-    TB --> M1[Left motor]
-    TB --> M2[Right motor]
-```
 
 ## Flashing
 

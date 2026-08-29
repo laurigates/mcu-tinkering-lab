@@ -81,7 +81,7 @@ def max98357a() -> elm.Ic:
 
 
 def xiao_esp32s3_sense() -> elm.Ic:
-    """Seeed XIAO ESP32-S3 Sense — ESP32-S3 + OV2640 camera + 8MB PSRAM.
+    """Seeed XIAO ESP32-S3 Sense — ESP32-S3 + OV3660 camera + PDM mic + 8MB PSRAM.
 
     Camera/PSRAM pins are internal to the Sense module and don't conflict with
     the 11 GPIO header pins. Right side lists the GPIOs the robocar uses, in
