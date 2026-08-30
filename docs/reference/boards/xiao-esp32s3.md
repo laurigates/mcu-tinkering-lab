@@ -72,19 +72,29 @@ Thumb-sized dual-core ESP32-S3 board with 8 MB octal PSRAM, 8 MB flash, native U
 
 ### Pin Mapping
 
-| XIAO Pin | GPIO | Default Function | Alternate Functions |
-|----------|------|------------------|---------------------|
-| D0 | GPIO1 | Analog input | ADC1_CH0, Touch1 |
-| D1 | GPIO2 | Analog input | ADC1_CH1, Touch2 |
-| D2 | GPIO3 | Analog input | ADC1_CH2, Touch3 (strapping) |
-| D3 | GPIO4 | Analog input | ADC1_CH3, Touch4 |
-| D4 | GPIO5 | I2C SDA | ADC1_CH4, Touch5 |
-| D5 | GPIO6 | I2C SCL | ADC1_CH5, Touch6 |
-| D6 | GPIO43 | UART TX | — |
-| D7 | GPIO44 | UART RX | — |
-| D8 | GPIO7 | SPI SCK | ADC1_CH6, Touch7 |
-| D9 | GPIO8 | SPI MISO | ADC1_CH7, Touch8 |
-| D10 | GPIO9 | SPI MOSI | ADC1_CH8, Touch9 |
+`Side` and `Pos` give the **physical** header position — `L`/`R` viewing the board
+component-side up with the USB-C connector at the bottom, `Pos 1` nearest the
+antenna end. Together they are the authoritative pad order for any drawing meant
+to be wired from; the ASCII diagram above is the same fact in picture form. All
+14 header positions are listed, power pins included, because a physical layout
+needs the whole header and not only the GPIOs.
+
+| XIAO Pin | GPIO | Side | Pos | Default Function | Alternate Functions |
+|----------|------|------|-----|------------------|---------------------|
+| D0 | GPIO1 | L | 1 | Analog input | ADC1_CH0, Touch1 |
+| D1 | GPIO2 | L | 2 | Analog input | ADC1_CH1, Touch2 |
+| D2 | GPIO3 | L | 3 | Analog input | ADC1_CH2, Touch3 (strapping) |
+| D3 | GPIO4 | L | 4 | Analog input | ADC1_CH3, Touch4 |
+| D4 | GPIO5 | L | 5 | I2C SDA | ADC1_CH4, Touch5 |
+| D5 | GPIO6 | L | 6 | I2C SCL | ADC1_CH5, Touch6 |
+| D6 | GPIO43 | L | 7 | UART TX | — |
+| 5V | — | R | 1 | 5 V rail | USB-C VBUS, unregulated |
+| GND | — | R | 2 | Ground | — |
+| 3V3 | — | R | 3 | 3.3 V out | regulated rail |
+| D10 | GPIO9 | R | 4 | SPI MOSI | ADC1_CH8, Touch9 |
+| D9 | GPIO8 | R | 5 | SPI MISO | ADC1_CH7, Touch8 |
+| D8 | GPIO7 | R | 6 | SPI SCK | ADC1_CH6, Touch7 |
+| D7 | GPIO44 | R | 7 | UART RX | — |
 
 ### Safe Pins for General Use
 
