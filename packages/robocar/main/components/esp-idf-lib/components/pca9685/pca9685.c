@@ -349,19 +349,23 @@ esp_err_t pca9685_set_pwm_values(i2c_dev_t *dev, uint8_t first_ch, uint8_t chann
             "Invalid first_ch or channels: (%d, %d)", first_ch, channels);
 
 
+    // Both `values` and `buf` are indexed RELATIVE to first_ch: `values` holds
+    // `channels` entries and `buf` is sized for exactly those channels, so an
+    // absolute channel index (first_ch + i) reads past `values` and writes past
+    // the end of the stack buffer for any first_ch > 0.
     size_t size = channels * 4;
     uint8_t buf[size];
-    for (uint8_t ch = first_ch; ch < first_ch + channels; ch++)
+    for (uint8_t i = 0; i < channels; i++)
     {
-        bool full_on = values[ch] >= PCA9685_MAX_PWM_VALUE;
-        bool full_off = values[ch] == 0;
+        bool full_on = values[i] >= PCA9685_MAX_PWM_VALUE;
+        bool full_off = values[i] == 0;
 
-        uint16_t val = full_on ? 4095 : values[ch];
+        uint16_t val = full_on ? 4095 : values[i];
 
-        buf[ch * 4] = 0;
-        buf[ch * 4 + 1] = full_on ? LED_FULL_ON_OFF : 0;
-        buf[ch * 4 + 2] = val;
-        buf[ch * 4 + 3] = full_off ? LED_FULL_ON_OFF | (val >> 8) : val >> 8;
+        buf[i * 4] = 0;
+        buf[i * 4 + 1] = full_on ? LED_FULL_ON_OFF : 0;
+        buf[i * 4 + 2] = val;
+        buf[i * 4 + 3] = full_off ? LED_FULL_ON_OFF | (val >> 8) : val >> 8;
     }
 
     I2C_DEV_TAKE_MUTEX(dev);
