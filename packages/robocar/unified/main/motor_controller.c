@@ -187,6 +187,11 @@ esp_err_t motor_rotate_ccw(uint8_t speed)
     return ret;
 }
 
+bool motor_is_initialized(void)
+{
+    return motor_state.initialized;
+}
+
 esp_err_t motor_stop(void)
 {
     // Brake mode: all direction pins low, PWM = 0

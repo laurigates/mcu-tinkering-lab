@@ -1106,7 +1106,26 @@ static esp_err_t init_nvs(void)
     return ret;
 }
 
-static esp_err_t init_hardware(void)
+/**
+ * @brief Log a peripheral's init result and carry on.
+ *
+ * The hardware phase reports rather than aborts, so this is where a failure is
+ * turned into a log line instead of a reboot. Deliberately returns nothing:
+ * there is no caller decision left to make, and a return value would invite
+ * somebody to re-chain these with ESP_RETURN_ON_ERROR.
+ */
+static void init_peripheral(const char *name, esp_err_t ret)
+{
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "%s init failed (%s) — continuing without it", name, esp_err_to_name(ret));
+    }
+}
+
+/* Returns nothing on purpose: after the change above there is no failure this
+ * phase can report that should stop the boot, and a `void` signature is what
+ * stops the next ESP_ERROR_CHECK from being wrapped around it. Health is read
+ * afterwards from the live accessors, not from a return value. */
+static void init_hardware(void)
 {
     ESP_LOGI(TAG, "Phase 1: I2C bus + peripherals");
 
@@ -1121,19 +1140,34 @@ static esp_err_t init_hardware(void)
         ESP_LOGW(TAG, "I2C bus init failed (%s) — motors/servos/LEDs/expander disabled",
                  esp_err_to_name(i2c_ret));
         // Buzzer is on a dedicated GPIO (not I2C) — keep the startup beep.
-        ESP_RETURN_ON_ERROR(buzzer_init(), TAG, "Buzzer init failed");
+        init_peripheral("Buzzer", buzzer_init());
         buzzer_beep();
-        return ESP_OK;
+        return;
     }
 
-    // Optional hardware: returns ESP_OK even when no expander is fitted
-    ESP_RETURN_ON_ERROR(gpio_expander_init(), TAG, "GPIO expander init failed");
-    ESP_RETURN_ON_ERROR(motor_controller_init(), TAG, "Motor init failed");
-    ESP_RETURN_ON_ERROR(led_controller_init(), TAG, "LED init failed");
-    ESP_RETURN_ON_ERROR(servo_controller_init(), TAG, "Servo init failed");
-    ESP_RETURN_ON_ERROR(buzzer_init(), TAG, "Buzzer init failed");
+    /* Nothing past this point is fatal, and that is the whole point (issue
+     * #500). Each of these used to abort the boot, so one peripheral that could
+     * not initialise took down the console, WiFi, provisioning and the planner
+     * with it — the opposite of what the bus-absent path above, and the camera,
+     * network and AI phases below, all do. A reboot loop is also the worst
+     * possible way to report a fault: it takes away the console you would use
+     * to read the report.
+     *
+     * Every one of them fails safe on its own. The PCA9685-backed drivers guard
+     * every entry point on their `initialized` flag and return
+     * ESP_ERR_INVALID_STATE, the expander marks itself unavailable, and the
+     * buzzer's tone routines no-op — so a failure here costs exactly the
+     * function that failed. What is lost instead is visibility, and
+     * self_report_collect() reads all four back through their live accessors so
+     * the facts line names the missing peripheral (`i2c_peripherals=degraded(
+     * servos)`) rather than leaving a silently immobile pan/tilt head. */
+    init_peripheral("GPIO expander", gpio_expander_init());
+    init_peripheral("Motors", motor_controller_init());
+    init_peripheral("LEDs", led_controller_init());
+    init_peripheral("Servos", servo_controller_init());
+    init_peripheral("Buzzer", buzzer_init());
 
-    // Startup indication
+    // Startup indication — each no-ops if its peripheral did not come up.
     led_set_both(&LED_COLOR_GREEN);
     buzzer_beep();
 
@@ -1144,8 +1178,6 @@ static esp_err_t init_hardware(void)
     if (activity_trace_init() != ESP_OK) {
         ESP_LOGW(TAG, "activity_trace_init failed — no capture/endpoint indicators");
     }
-
-    return ESP_OK;
 }
 
 static esp_err_t init_camera(void)
@@ -1378,9 +1410,11 @@ void app_main(void)
 
     ESP_ERROR_CHECK(init_nvs());
 
-    // init_hardware() degrades gracefully (bare board still returns ESP_OK), so
-    // read the real bus state from its accessor for the self-report note.
-    ESP_ERROR_CHECK(init_hardware());
+    /* The hardware phase cannot fail the boot: a missing bus and a peripheral
+     * that would not initialise are both logged and carried past, so what came
+     * up is read back from the live accessors rather than from a return value.
+     * self_report renders the per-peripheral breakdown (issue #500). */
+    init_hardware();
     self_report_note_init(SELF_REPORT_SUBSYS_I2C_BUS, i2c_bus_is_ready());
 
     // Camera is non-fatal here so the robot can still boot, connect, and report

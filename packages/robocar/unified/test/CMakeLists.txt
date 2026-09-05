@@ -311,3 +311,28 @@ target_include_directories(test_servo_controller BEFORE PRIVATE
 target_compile_options(test_servo_controller PRIVATE -Wno-unused-variable)
 target_link_libraries(test_servo_controller PRIVATE Threads::Threads m)
 add_test(NAME servo_controller COMMAND test_servo_controller)
+
+# -----------------------------------------------------------------------------
+# self_report per-peripheral health (issue #500)
+#
+# self_report.c is compiled UNMODIFIED against the shims in test/include plus
+# the recording stubs in self_report_stubs.c, which back every live health
+# accessor with a settable field. That is the whole point: the hardware phase
+# no longer aborts the boot when one PCA9685-backed peripheral fails, so the
+# facts line is the only thing that says which one is missing — and the case
+# worth pinning (a live I2C bus with exactly one dead peripheral) is precisely
+# the one a bench cannot stage.
+# -----------------------------------------------------------------------------
+add_executable(test_self_report
+    "${MAIN_SRC_DIR}/self_report.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/self_report_stubs.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_self_report.c"
+)
+target_include_directories(test_self_report BEFORE PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_host"  # i2c_bus.h -> <i2cdev.h>
+    "${ESP_IDF_LIB_DIR}/pca9685"
+)
+# -Wno-unused-variable: the ESP_LOG* shims are no-ops, which leaves TAG unused.
+target_compile_options(test_self_report PRIVATE -Wno-unused-variable)
+target_link_libraries(test_self_report PRIVATE Threads::Threads m)
+add_test(NAME self_report COMMAND test_self_report)

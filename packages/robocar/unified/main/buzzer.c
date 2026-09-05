@@ -15,6 +15,8 @@
 
 static const char *TAG = "buzzer";
 
+static bool s_initialized = false;
+
 esp_err_t buzzer_init(void)
 {
     gpio_config_t io_conf = {
@@ -24,16 +26,30 @@ esp_err_t buzzer_init(void)
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
         .intr_type = GPIO_INTR_DISABLE,
     };
-    ESP_ERROR_CHECK(gpio_config(&io_conf));
+    /* Returned rather than ESP_ERROR_CHECK'd: an abort here reboots the board
+     * no matter how forgiving init_hardware() is, which is the failure mode
+     * issue #500 exists to remove. The caller logs it and carries on; the
+     * tone routines below then no-op instead of toggling an unconfigured pin. */
+    const esp_err_t ret = gpio_config(&io_conf);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "gpio_config(GPIO%d) failed: %s", PIEZO_PIN, esp_err_to_name(ret));
+        return ret;
+    }
     gpio_set_level(PIEZO_PIN, 0);
 
+    s_initialized = true;
     ESP_LOGI(TAG, "Buzzer initialized on GPIO%d", PIEZO_PIN);
     return ESP_OK;
 }
 
+bool buzzer_is_initialized(void)
+{
+    return s_initialized;
+}
+
 void buzzer_play_tone(uint32_t frequency_hz, uint32_t duration_ms)
 {
-    if (frequency_hz == 0)
+    if (!s_initialized || frequency_hz == 0)
         return;
 
     uint32_t half_period_us = 500000 / frequency_hz;

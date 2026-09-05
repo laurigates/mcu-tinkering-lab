@@ -10,6 +10,7 @@
 #ifndef MOTOR_CONTROLLER_H
 #define MOTOR_CONTROLLER_H
 
+#include <stdbool.h>
 #include <stdint.h>
 #include "esp_err.h"
 
@@ -25,5 +26,16 @@ esp_err_t motor_set_individual(uint8_t left_speed, uint8_t right_speed, uint8_t 
                                uint8_t right_direction);
 esp_err_t motor_get_state(uint8_t *left_speed, uint8_t *right_speed, uint8_t *left_direction,
                           uint8_t *right_direction);
+
+/**
+ * @brief Whether motor_controller_init() succeeded.
+ *
+ * Every motor entry point already refuses with ESP_ERR_INVALID_STATE while
+ * uninitialised, so this is not a precondition callers have to check — it is
+ * how self_report names motors as the missing peripheral on a board that came
+ * up without them (issue #500). Mirrors led_is_initialized() /
+ * servo_is_initialized().
+ */
+bool motor_is_initialized(void);
 
 #endif  // MOTOR_CONTROLLER_H
