@@ -66,6 +66,7 @@ Look for mismatched types between function declarations and implementations.
 | `LoadProhibited` | Reading from invalid memory | Check null pointers |
 | `InstrFetchProhibited` | Corrupted function pointer | Check callback assignments |
 | `IntegerDivideByZero` | Division by zero | Add zero checks |
+| `Double exception`, backtrace `CORRUPTED`, `A0` = a recognisable constant (e.g. `0x10000000`) | Stack buffer overflow *upward* into caller frames — a VLA or local array indexed past its end; the canary only watches the low end | Read the code between the last log line and the panic; look up the top byte of `A0` in the driver just called. See `.claude/rules/gated-init-paths.md` |
 
 **Stack Overflow**
 ```
@@ -82,6 +83,8 @@ xTaskCreatePinnedToCore(task_fn, "name", 4096, NULL, 5, NULL, 0);
 Stack smashing detected
 ```
 Fix: Local buffer overflow — check array bounds and string operations.
+
+That message needs `CONFIG_COMPILER_STACK_CHECK_MODE_*` enabled. With it off (the robocar-unified default) the same overflow reports as a **double exception** with a corrupted backtrace instead — see the table above. Pin the fix with a host test that compiles the file unmodified under `-fsanitize=address` (`packages/robocar/unified/test/test_pca9685_multi.c` is the template).
 
 ### 3. Memory Debugging
 
