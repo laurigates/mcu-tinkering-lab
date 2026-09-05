@@ -1,6 +1,6 @@
 /**
  * @file gemini_backend.h
- * @brief Google Gemini Robotics-ER 1.6 planner backend.
+ * @brief Google Gemini Robotics-ER 2 planner backend.
  *
  * Provides a synchronous planner call: upload a JPEG frame, receive a
  * structured goal_t parsed from the model's function-call response.
@@ -41,7 +41,7 @@ extern "C" {
 esp_err_t gemini_backend_init(void);
 
 /**
- * @brief Upload a JPEG frame to Gemini ER 1.6 and retrieve a structured goal.
+ * @brief Upload a JPEG frame to Gemini ER 2 and retrieve a structured goal.
  *
  * Sends the image together with a function-declaration system prompt.  The
  * model responds with a single functionCall object which is parsed into

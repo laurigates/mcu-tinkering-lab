@@ -6,7 +6,7 @@
  *   - Core 0: motor control, peripheral I/O, serial commands, reactive executor (30 Hz)
  *   - Core 1: camera capture, Gemini planner (PLANNER_LOOP_PERIOD_MS, 15 s default), WiFi/MQTT/OTA
  *
- * The planner (planner_task, Core 1) captures frames, calls Gemini ER 1.6,
+ * The planner (planner_task, Core 1) captures frames, calls Gemini ER 2,
  * and writes structured goals into goal_state.  The reactive executor
  * (reactive_controller, Core 0) reads goals at 30 Hz and drives motors.
  * Serial / MQTT commands remain available for manual override.

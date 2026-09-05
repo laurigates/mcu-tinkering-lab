@@ -54,7 +54,7 @@ typedef enum {
 /**
  * @brief A single structured goal emitted by the planner.
  *
- * Bounding-box coordinates use Gemini Robotics-ER 1.6 normalised units
+ * Bounding-box coordinates use Gemini's normalised units
  * (0..1000 for both axes, origin top-left).
  */
 typedef struct {

@@ -339,7 +339,7 @@ For local development you can instead copy `main/credentials.h.example` to
 
 == 8.2 · Discovery & AI backend
 After connecting, the car is reachable at *`robocar-unified.local`* via mDNS.
-The planner uses *Gemini Robotics-ER 1.6* to emit goals — `drive()`, `track()`,
+The planner uses *Gemini Robotics-ER 2* to emit goals — `drive()`, `track()`,
 `rotate()`, and `stop()` — plus `speak()`, which renders a sentence through a
 second TTS model and plays it while the robot keeps driving.
 

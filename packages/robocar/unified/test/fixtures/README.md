@@ -1,9 +1,13 @@
-# Gemini ER 1.6 response fixtures
+# Gemini ER response fixtures
 
-These JSON files are captured from live
-`generativelanguage.googleapis.com/v1beta/models/gemini-robotics-er-1.6:generateContent`
+These JSON files were captured from live
+`generativelanguage.googleapis.com/v1beta/models/gemini-robotics-er-1.6-preview:generateContent`
 calls and used by `test_gemini_parse.c` to lock down the shape assumptions of
-`gemini_parse_function_call()`.
+`gemini_parse_function_call()`. ER 1.6 was shut down at the end of August
+2026; the firmware now calls `gemini-robotics-er-2-preview`, whose
+function-call response shape was probed live on 2026-09-05 and matches these
+captures. Re-capture against the current model (below) if the parser ever
+disagrees with a live response.
 
 ## Current status
 
@@ -76,8 +80,8 @@ curl -s \
   -H "x-goog-api-key: ${GEMINI_API_KEY}" \
   -X POST \
   -d @/tmp/req.json \
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-robotics-er-1.6:generateContent' \
-  | jq . > er_1_6_<scenario>.json
+  'https://generativelanguage.googleapis.com/v1beta/models/gemini-robotics-er-2-preview:generateContent' \
+  | jq . > er_2_<scenario>.json
 
 # 5. Run the host tests — they should still pass against the live capture.
 cd .. && cmake --build build && ctest --test-dir build --output-on-failure

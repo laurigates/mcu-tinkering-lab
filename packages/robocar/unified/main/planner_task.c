@@ -2,7 +2,7 @@
  * @file planner_task.c
  * @brief Gemini planner task implementation (PLANNER_LOOP_PERIOD_MS, 15 s default).
  *
- * Captures a JPEG frame, calls Gemini Robotics-ER 1.6 via gemini_backend_plan(),
+ * Captures a JPEG frame, calls Gemini Robotics-ER 2 via gemini_backend_plan(),
  * and writes the resulting goal into goal_state.  On any failure the planner
  * writes a STOP goal so the reactive executor immediately falls back to safe
  * hold rather than running stale.

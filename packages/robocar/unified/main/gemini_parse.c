@@ -1,6 +1,6 @@
 /**
  * @file gemini_parse.c
- * @brief Parser for Gemini Robotics-ER 1.6 function-call responses.
+ * @brief Parser for Gemini Robotics-ER 2 function-call responses.
  *
  * Extracted from gemini_backend.c for host-based unit testing. See
  * gemini_parse.h for the public contract.
@@ -22,7 +22,7 @@
  *     "usageMetadata": { "promptTokenCount": 123, ... }
  *   }
  *
- * Box coordinates for ``track`` follow ER 1.6: ``[ymin, xmin, ymax, xmax]``,
+ * Box coordinates for ``track`` follow Gemini's convention: ``[ymin, xmin, ymax, xmax]``,
  * integers normalised 0..1000.
  */
 
