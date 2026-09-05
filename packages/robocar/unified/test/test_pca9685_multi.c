@@ -34,14 +34,31 @@ static uint8_t s_last_data[64];
 static size_t s_last_size;
 static int s_writes;
 
-esp_err_t i2c_dev_create_mutex(i2c_dev_t *dev) { (void)dev; return ESP_OK; }
-esp_err_t i2c_dev_delete_mutex(i2c_dev_t *dev) { (void)dev; return ESP_OK; }
-esp_err_t i2c_dev_take_mutex(i2c_dev_t *dev) { (void)dev; return ESP_OK; }
-esp_err_t i2c_dev_give_mutex(i2c_dev_t *dev) { (void)dev; return ESP_OK; }
+esp_err_t i2c_dev_create_mutex(i2c_dev_t *dev)
+{
+    (void)dev;
+    return ESP_OK;
+}
+esp_err_t i2c_dev_delete_mutex(i2c_dev_t *dev)
+{
+    (void)dev;
+    return ESP_OK;
+}
+esp_err_t i2c_dev_take_mutex(i2c_dev_t *dev)
+{
+    (void)dev;
+    return ESP_OK;
+}
+esp_err_t i2c_dev_give_mutex(i2c_dev_t *dev)
+{
+    (void)dev;
+    return ESP_OK;
+}
 
 esp_err_t i2c_dev_read_reg(const i2c_dev_t *dev, uint8_t reg, void *in_data, size_t in_size)
 {
-    (void)dev; (void)reg;
+    (void)dev;
+    (void)reg;
     memset(in_data, 0, in_size);
     return ESP_OK;
 }
@@ -53,7 +70,8 @@ esp_err_t i2c_dev_write_reg(const i2c_dev_t *dev, uint8_t reg, const void *out_d
     s_last_reg = reg;
     s_last_size = out_size;
     memset(s_last_data, 0xA5, sizeof(s_last_data));
-    if (out_size > sizeof(s_last_data)) return ESP_ERR_INVALID_ARG;
+    if (out_size > sizeof(s_last_data))
+        return ESP_ERR_INVALID_ARG;
     memcpy(s_last_data, out_data, out_size);
     s_writes++;
     return ESP_OK;
@@ -63,14 +81,14 @@ esp_err_t i2c_dev_write_reg(const i2c_dev_t *dev, uint8_t reg, const void *out_d
 
 static int s_failures;
 
-#define CHECK(cond, ...)                                              \
-    do {                                                              \
-        if (!(cond)) {                                                \
-            s_failures++;                                             \
-            fprintf(stderr, "  FAIL %s:%d: ", __FILE__, __LINE__);    \
-            fprintf(stderr, __VA_ARGS__);                             \
-            fputc('\n', stderr);                                      \
-        }                                                             \
+#define CHECK(cond, ...)                                           \
+    do {                                                           \
+        if (!(cond)) {                                             \
+            s_failures++;                                          \
+            fprintf(stderr, "  FAIL %s:%d: ", __FILE__, __LINE__); \
+            fprintf(stderr, __VA_ARGS__);                          \
+            fputc('\n', stderr);                                   \
+        }                                                          \
     } while (0)
 
 static void expect_channel(size_t i, uint16_t value)
@@ -102,7 +120,8 @@ static void test_motor_block_starting_at_channel_8(void)
     CHECK(s_last_reg == REG_LEDX + 8 * 4, "register 0x%02x, expected 0x%02x", s_last_reg,
           REG_LEDX + 8 * 4);
     CHECK(s_last_size == 24, "wrote %zu bytes, expected 24", s_last_size);
-    for (size_t i = 0; i < 6; i++) expect_channel(i, values[i]);
+    for (size_t i = 0; i < 6; i++)
+        expect_channel(i, values[i]);
 }
 
 static void test_led_block_starting_at_channel_3(void)
@@ -115,7 +134,8 @@ static void test_led_block_starting_at_channel_3(void)
     CHECK(pca9685_set_pwm_values(&dev, 3, 3, values) == ESP_OK, "returned error");
     CHECK(s_last_reg == REG_LEDX + 3 * 4, "register 0x%02x", s_last_reg);
     CHECK(s_last_size == 12, "wrote %zu bytes", s_last_size);
-    for (size_t i = 0; i < 3; i++) expect_channel(i, values[i]);
+    for (size_t i = 0; i < 3; i++)
+        expect_channel(i, values[i]);
 }
 
 static void test_block_starting_at_channel_0_still_works(void)
@@ -128,7 +148,8 @@ static void test_block_starting_at_channel_0_still_works(void)
     CHECK(pca9685_set_pwm_values(&dev, 0, 3, values) == ESP_OK, "returned error");
     CHECK(s_last_reg == REG_LEDX, "register 0x%02x", s_last_reg);
     CHECK(s_last_size == 12, "wrote %zu bytes", s_last_size);
-    for (size_t i = 0; i < 3; i++) expect_channel(i, values[i]);
+    for (size_t i = 0; i < 3; i++)
+        expect_channel(i, values[i]);
 }
 
 static void test_last_channel_alone(void)
@@ -157,7 +178,10 @@ static void test_out_of_range_block_is_rejected(void)
 
 int main(void)
 {
-    struct { const char *name; void (*fn)(void); } tests[] = {
+    struct {
+        const char *name;
+        void (*fn)(void);
+    } tests[] = {
         {"motor_block_starting_at_channel_8", test_motor_block_starting_at_channel_8},
         {"led_block_starting_at_channel_3", test_led_block_starting_at_channel_3},
         {"block_starting_at_channel_0_still_works", test_block_starting_at_channel_0_still_works},

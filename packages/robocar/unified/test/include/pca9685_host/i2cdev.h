@@ -11,9 +11,9 @@
 #ifndef ROBOCAR_UNIFIED_HOST_TEST_I2CDEV_H
 #define ROBOCAR_UNIFIED_HOST_TEST_I2CDEV_H
 
+#include <esp_err.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <esp_err.h>
 
 typedef int i2c_port_t;
 typedef int gpio_num_t;
@@ -41,34 +41,36 @@ esp_err_t i2c_dev_read_reg(const i2c_dev_t *dev, uint8_t reg, void *in_data, siz
 esp_err_t i2c_dev_write_reg(const i2c_dev_t *dev, uint8_t reg, const void *out_data,
                             size_t out_size);
 
-#define I2C_DEV_TAKE_MUTEX(dev)                       \
-    do {                                              \
-        esp_err_t __ = i2c_dev_take_mutex(dev);       \
-        if (__ != ESP_OK) return __;                  \
+#define I2C_DEV_TAKE_MUTEX(dev)                 \
+    do {                                        \
+        esp_err_t __ = i2c_dev_take_mutex(dev); \
+        if (__ != ESP_OK)                       \
+            return __;                          \
     } while (0)
 
-#define I2C_DEV_GIVE_MUTEX(dev)                       \
-    do {                                              \
-        esp_err_t __ = i2c_dev_give_mutex(dev);       \
-        if (__ != ESP_OK) return __;                  \
+#define I2C_DEV_GIVE_MUTEX(dev)                 \
+    do {                                        \
+        esp_err_t __ = i2c_dev_give_mutex(dev); \
+        if (__ != ESP_OK)                       \
+            return __;                          \
     } while (0)
 
-#define I2C_DEV_CHECK(dev, X)                         \
-    do {                                              \
-        esp_err_t ___ = X;                            \
-        if (___ != ESP_OK) {                          \
-            I2C_DEV_GIVE_MUTEX(dev);                  \
-            return ___;                               \
-        }                                             \
+#define I2C_DEV_CHECK(dev, X)        \
+    do {                             \
+        esp_err_t ___ = X;           \
+        if (___ != ESP_OK) {         \
+            I2C_DEV_GIVE_MUTEX(dev); \
+            return ___;              \
+        }                            \
     } while (0)
 
-#define I2C_DEV_CHECK_LOGE(dev, X, msg, ...)          \
-    do {                                              \
-        esp_err_t ___ = X;                            \
-        if (___ != ESP_OK) {                          \
-            I2C_DEV_GIVE_MUTEX(dev);                  \
-            return ___;                               \
-        }                                             \
+#define I2C_DEV_CHECK_LOGE(dev, X, msg, ...) \
+    do {                                     \
+        esp_err_t ___ = X;                   \
+        if (___ != ESP_OK) {                 \
+            I2C_DEV_GIVE_MUTEX(dev);         \
+            return ___;                      \
+        }                                    \
     } while (0)
 
 #endif /* ROBOCAR_UNIFIED_HOST_TEST_I2CDEV_H */
