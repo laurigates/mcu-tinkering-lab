@@ -57,13 +57,18 @@ esp_err_t servo_controller_init(void)
     servo_state.tilt_enabled = true;
     servo_state.motion_active = false;
 
+    // Centering goes through servo_set_angle(), which refuses with
+    // ESP_ERR_INVALID_STATE until the module is initialised. Raise the flag
+    // first and lower it again if the bus write fails, so a failed init can be
+    // retried and the servos are never reported as ready when they are not.
+    servo_state.initialized = true;
     esp_err_t ret = servo_center_all();
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to center servos");
+        servo_state.initialized = false;
+        ESP_LOGE(TAG, "Failed to center servos: %s", esp_err_to_name(ret));
         return ret;
     }
 
-    servo_state.initialized = true;
     ESP_LOGI(TAG, "Servo controller initialized");
     return ESP_OK;
 }

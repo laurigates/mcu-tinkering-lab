@@ -288,3 +288,26 @@ target_compile_options(test_pca9685_multi PRIVATE -fsanitize=address -fno-omit-f
 target_link_options(test_pca9685_multi PRIVATE -fsanitize=address)
 target_link_libraries(test_pca9685_multi PRIVATE Threads::Threads m)
 add_test(NAME pca9685_multi COMMAND test_pca9685_multi)
+
+# -----------------------------------------------------------------------------
+# servo_controller init ordering
+#
+# servo_controller.c is compiled UNMODIFIED against the shims in test/include
+# (freertos/*, driver/gpio.h, esp_log.h) plus the pca9685_host i2cdev shim that
+# i2c_bus.h drags in; the i2c_bus itself is a recording stub in the test. The
+# case it pins is init centring the servos through a setter that refuses until
+# init has finished — a failure with no bus traffic to show for it, which on the
+# device read as "Failed to center servos" and a reboot.
+# -----------------------------------------------------------------------------
+add_executable(test_servo_controller
+    "${MAIN_SRC_DIR}/servo_controller.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_servo_controller.c"
+)
+target_include_directories(test_servo_controller BEFORE PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_host"
+    "${ESP_IDF_LIB_DIR}/pca9685"
+)
+# -Wno-unused-variable: the ESP_LOG* shims are no-ops, which leaves TAG unused.
+target_compile_options(test_servo_controller PRIVATE -Wno-unused-variable)
+target_link_libraries(test_servo_controller PRIVATE Threads::Threads m)
+add_test(NAME servo_controller COMMAND test_servo_controller)
