@@ -44,7 +44,7 @@
 // ========================================
 // AI Backend Configuration
 // ========================================
-// Gemini Robotics-ER 1.6 is the sole planner backend (see planner_task.c).
+// Gemini Robotics-ER 2 is the sole planner backend (see planner_task.c).
 // gemini_backend.c owns its own URL and model constants; nothing to configure here.
 
 // ========================================

@@ -100,7 +100,7 @@ Motor direction uses PCA9685 "full-on" (4096) / "full-off" (0) values on IN1/IN2
 
 ## AI planner
 
-**Gemini Robotics-ER 1.6 only.** The planner calls Gemini to emit function-call goals:
+**Gemini Robotics-ER 2 only** (`gemini-robotics-er-2-preview`; ER 1.6 was shut down at the end of August 2026). The planner calls Gemini to emit function-call goals:
 
 - `drive(heading_deg, distance_cm, speed_pct)` — absolute heading + distance
 - `track(box_2d, max_speed_pct)` — visual servo toward a bounding box

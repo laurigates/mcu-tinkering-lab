@@ -1,6 +1,6 @@
 /**
  * @file gemini_parse.h
- * @brief Parse Gemini Robotics-ER 1.6 function-call responses into goal_t.
+ * @brief Parse Gemini Robotics-ER 2 function-call responses into goal_t.
  *
  * Extracted from gemini_backend.c so the parser can be unit-tested on the
  * host without dragging in esp_http_client, WiFi, etc. Fail-safe contract:

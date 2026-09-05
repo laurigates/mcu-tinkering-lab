@@ -14,8 +14,13 @@ below cost a debugging loop in the robocar-unified bring-up (2026-07).
 
 A bare `gemini-robotics-er-1.6` **404s** on `v1beta`
 (`"... is not found for API version v1beta, or is not supported for
-generateContent"`); the real id is `gemini-robotics-er-1.6-preview`.
-`gemini-flash-latest` is a *moving alias* now resolving to a Gemini 3-era model.
+generateContent"`); the real id was `gemini-robotics-er-1.6-preview`. And ids
+**retire**: that one was shut down at the end of August 2026 and now returns the
+*same* 404 as a wrong suffix — the firmware ran on it for two months, then the
+first planner call after the cutoff failed with no code change on our side
+(2026-09-05; replaced by `gemini-robotics-er-2-preview`). So the 404 body does
+not distinguish "never existed" from "existed until last week"; only ListModels
+does. `gemini-flash-latest` is a *moving alias* now resolving to a Gemini 3-era model.
 Don't invent a suffix — list what the key can actually reach:
 
 ```sh
@@ -57,7 +62,7 @@ the cap only decides whether the sentence survives. Size from **measurement**
 ## 4. Free-tier quota is per-model RPM — pace fixed-rate loops under it
 
 Free tier is a per-model requests-per-minute cap (e.g.
-`gemini-robotics-er-1.6-preview` = **5 req/min**, quota
+`gemini-robotics-er-1.6-preview`, since retired, was **5 req/min**, quota
 `GenerateRequestsPerMinutePerProjectPerModel-FreeTier`). A fixed-rate polling
 loop (robocar's 1 Hz planner = 60 RPM) self-inflicts continuous `HTTP 429`, and
 the `retryDelay` in the body **grows while you keep asking** — so retrying at

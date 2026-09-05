@@ -1,6 +1,6 @@
 /**
  * @file planner_task.h
- * @brief Gemini planner task (PLANNER_LOOP_PERIOD_MS, 15 s default) — calls Gemini Robotics-ER 1.6
+ * @brief Gemini planner task (PLANNER_LOOP_PERIOD_MS, 15 s default) — calls Gemini Robotics-ER 2
  * and writes goals.
  *
  * Runs pinned to Core 1 (camera/network core).  Each iteration:
@@ -30,8 +30,10 @@ extern "C" {
 /** Planner loop period in milliseconds. Override at compile time if needed.
  *
  *  Bounded by the Gemini free-tier quota, not by control-loop preference:
- *  gemini-robotics-er-1.6-preview allows 5 requests/minute
- *  (GenerateRequestsPerMinutePerProjectPerModel-FreeTier). The ~1 Hz rate
+ *  the planner model's free tier allowed 5 requests/minute on
+ *  gemini-robotics-er-1.6-preview (GenerateRequestsPerMinutePerProjectPerModel-
+ *  FreeTier); the ER 2 figure has not been measured — a 429 body names the
+ *  quota if it is lower. The ~1 Hz rate
  *  ADR-016 describes is 60 RPM and drove the API into continuous HTTP 429s,
  *  where every plan failed and the executor was force-stopped. 15 s = 4 RPM
  *  leaves one request of headroom.

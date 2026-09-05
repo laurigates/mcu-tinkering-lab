@@ -28,7 +28,7 @@
  * ## Why it does not use the planner's model
  *
  * Gemini's free-tier quota is **per model**, and the planner already saturates
- * `gemini-robotics-er-1.6-preview` at 5 requests/minute. A voice turn on a flash
+ * the Robotics-ER model's per-model cap (5 requests/minute on ER 1.6). A voice turn on a flash
  * model draws on a separate allowance, so answering someone can never cost the
  * robot its ability to plan a movement.
  *

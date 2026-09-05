@@ -1,6 +1,6 @@
 /**
  * @file gemini_backend.c
- * @brief Google Gemini Robotics-ER 1.6 planner backend.
+ * @brief Google Gemini Robotics-ER 2 planner backend.
  *
  * Uploads a JPEG frame to the Gemini generateContent endpoint with a set of
  * tool declarations.  The model responds with a functionCall object which is
@@ -44,11 +44,15 @@ static const char *TAG = "gemini_backend";
 /* Constants                                                                   */
 /* -------------------------------------------------------------------------- */
 
-/* Model id must carry the "-preview" suffix — the bare "gemini-robotics-er-1.6"
+/* Model id must carry the "-preview" suffix — the bare "gemini-robotics-er-2"
  * 404s on v1beta ("not found ... or is not supported for generateContent").
- * Verified against ListModels (2026-07): the API advertises
- * gemini-robotics-er-1.6-preview and gemini-robotics-er-1.5-preview. */
-#define GEMINI_MODEL "gemini-robotics-er-1.6-preview"
+ * Verified against ListModels (2026-09-05): the API advertises
+ * gemini-robotics-er-2-preview (generateContent) and
+ * gemini-robotics-er-2-streaming-preview (Live API only). The previous id,
+ * gemini-robotics-er-1.6-preview, was shut down at the end of August 2026 and
+ * now 404s with the same message. Probed live with this request shape: ER 2
+ * honours thinkingBudget=0 (0 thought tokens) and mode=ANY function calling. */
+#define GEMINI_MODEL "gemini-robotics-er-2-preview"
 #define GEMINI_BASE_URL \
     "https://generativelanguage.googleapis.com/v1beta/models/" GEMINI_MODEL ":generateContent"
 
@@ -183,7 +187,7 @@ static esp_err_t http_event_handler(esp_http_client_event_t *evt)
  * Schema follows the Gemini API "functionDeclarations" format:
  *   https://ai.google.dev/api/generate-content#v1beta.Tool
  *
- * Box coordinates use the ER 1.6 convention: [ymin, xmin, ymax, xmax]
+ * Box coordinates use Gemini's convention: [ymin, xmin, ymax, xmax]
  * integers normalised 0..1000.
  */
 static cJSON *build_tools(bool allow_speak)
@@ -232,7 +236,7 @@ static cJSON *build_tools(bool allow_speak)
         cJSON_AddStringToObject(fn, "name", "track");
         cJSON_AddStringToObject(fn, "description",
                                 "Visually servo toward a bounding box detected in the frame. "
-                                "box_2d uses ER 1.6 format: [ymin, xmin, ymax, xmax] normalised "
+                                "box_2d is [ymin, xmin, ymax, xmax] normalised "
                                 "0..1000.");
         cJSON *params = cJSON_AddObjectToObject(fn, "parameters");
         cJSON_AddStringToObject(params, "type", "OBJECT");
