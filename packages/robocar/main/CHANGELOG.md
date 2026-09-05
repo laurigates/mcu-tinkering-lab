@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.7](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-main-v0.1.6...robocar-main-v0.1.7) (2026-09-05)
+
+
+### Bug Fixes
+
+* **robocar-unified:** two hardware-phase init bugs exposed by the first boot with the PCA9685 fitted ([#498](https://github.com/laurigates/mcu-tinkering-lab/issues/498)) ([6a6f94e](https://github.com/laurigates/mcu-tinkering-lab/commit/6a6f94e3c71eb785ba2c330e2f4482f62a5e2baa))
+
 ## [0.1.6](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-main-v0.1.5...robocar-main-v0.1.6) (2026-08-26)
 
 

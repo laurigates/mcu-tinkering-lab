@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.21](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.1.20...robocar-unified-v0.1.21) (2026-09-05)
+
+
+### Bug Fixes
+
+* **robocar-unified:** make the hardware phase report failures instead of rebooting ([#503](https://github.com/laurigates/mcu-tinkering-lab/issues/503)) ([96614f3](https://github.com/laurigates/mcu-tinkering-lab/commit/96614f334ccdaf61b4375e157130e5925666bef6)), closes [#500](https://github.com/laurigates/mcu-tinkering-lab/issues/500)
+* **robocar-unified:** migrate the planner to gemini-robotics-er-2-preview ([#499](https://github.com/laurigates/mcu-tinkering-lab/issues/499)) ([880841f](https://github.com/laurigates/mcu-tinkering-lab/commit/880841f0133d736f84d11ac8ff4fbab164d50690))
+* **robocar-unified:** two hardware-phase init bugs exposed by the first boot with the PCA9685 fitted ([#498](https://github.com/laurigates/mcu-tinkering-lab/issues/498)) ([6a6f94e](https://github.com/laurigates/mcu-tinkering-lab/commit/6a6f94e3c71eb785ba2c330e2f4482f62a5e2baa))
+
 ## [0.1.20](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.1.19...robocar-unified-v0.1.20) (2026-08-29)
 
 
