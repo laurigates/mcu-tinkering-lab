@@ -53,15 +53,31 @@ typedef struct {
     bool wifi_up;                //!< STA connected
     char ssid[MAX_SSID_LENGTH];  //!< SSID when known, else ""
     bool camera_ok;              //!< camera init succeeded (boot-recorded)
-    bool i2c_bus_ok;             //!< TCA9548A + PCA9685 up (motors/servos/LEDs)
-    bool mcp23017_present;       //!< optional GPIO expander detected
-    bool audio_ok;               //!< I2S player task + ring ready
-    bool key_present;            //!< Gemini API key available
-    char version[32];            //!< firmware version
+    bool i2c_bus_ok;             //!< TCA9548A + PCA9685 up (the bus itself)
+    /* Per-peripheral state behind that bus. The hardware phase is non-fatal end
+     * to end (issue #500), so a board can come up with a live bus and one dead
+     * peripheral — and then the only difference from a healthy robot is a
+     * function that silently never happens. These are what name it. */
+    bool motors_ok;         //!< motor_controller_init() succeeded
+    bool leds_ok;           //!< led_controller_init() succeeded
+    bool servos_ok;         //!< servo_controller_init() succeeded
+    bool buzzer_ok;         //!< buzzer_init() succeeded (GPIO, not I2C)
+    bool mcp23017_present;  //!< optional GPIO expander detected
+    bool audio_ok;          //!< I2S player task + ring ready
+    bool key_present;       //!< Gemini API key available
+    char version[32];       //!< firmware version
 } robocar_status_t;
 
-/** Longest facts string produced by self_report_format_facts(), incl. NUL. */
-#define SELF_REPORT_FACTS_MAX 256
+/** Longest facts string produced by self_report_format_facts(), incl. NUL.
+ *
+ * The worst case measures 263 characters: a live bus with all three
+ * peripherals degraded (a longer value than the "not-responding" a DEAD bus
+ * renders), no expander fitted ("absent(optional)" beats "present" by nine),
+ * and a maximum-length SSID and version. Pinned by
+ * test_worst_case_fits_the_buffer, because snprintf truncates the TAIL — and
+ * the tail is `gemini_key` and `buzzer`, exactly the keys a degraded board most
+ * needs to report. */
+#define SELF_REPORT_FACTS_MAX 320
 
 /**
  * @brief Record a subsystem's boot result. Called from main.c init phases.
@@ -76,8 +92,10 @@ void self_report_note_init(self_report_subsystem_t subsystem, bool ok);
  * @brief Fill @p out with the current health snapshot.
  *
  * Refreshes the dynamic bits from live accessors (wifi_is_connected,
- * i2c_bus_is_ready, audio_player_is_ready, gpio_expander_available,
- * get_gemini_api_key) and folds in the boot-recorded camera result.
+ * i2c_bus_is_ready, motor_is_initialized, led_is_initialized,
+ * servo_is_initialized, buzzer_is_initialized, audio_player_is_ready,
+ * gpio_expander_available, get_gemini_api_key) and folds in the boot-recorded
+ * camera result.
  */
 void self_report_collect(robocar_status_t *out);
 

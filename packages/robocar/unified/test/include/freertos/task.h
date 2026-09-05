@@ -20,6 +20,9 @@ typedef void (*TaskFunction_t)(void *);
 BaseType_t xTaskCreatePinnedToCore(TaskFunction_t fn, const char *name, uint32_t stack, void *arg,
                                    UBaseType_t prio, TaskHandle_t *out, BaseType_t core);
 void vTaskDelay(TickType_t ticks);
+/* Declared here rather than in a portmacro shim: it is the only piece of the
+ * port layer any host-tested module touches (self_report.c logs its core). */
+BaseType_t xPortGetCoreID(void);
 void vTaskDelete(TaskHandle_t task);
 uint32_t ulTaskNotifyTake(BaseType_t clear_on_exit, TickType_t wait);
 void xTaskNotifyGive(TaskHandle_t task);

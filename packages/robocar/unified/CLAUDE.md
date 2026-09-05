@@ -40,6 +40,17 @@ All I2C devices hang off a **TCA9548A multiplexer** on GPIO5/6. Don't talk to de
 
 The MCP23017 (1953W breakout, address 0x20) is exercised from the serial console with `gpio`, `gpio mode <pin> in|up|out`, `gpio set <pin> 0|1`, `gpio get <pin>`.
 
+**Every peripheral above is non-fatal, and that did not always hold.** `init_hardware()` degraded gracefully when the I2C bus was absent — a bare board booted to the console — but once the bus answered, a failure in the expander, motors, LEDs, servos or buzzer aborted the boot. That is how PR #498's servo bug presented: a reboot loop with the console unreachable, i.e. the outcome every other non-fatal phase exists to prevent, and the one state in which nothing can be diagnosed. Since issue #500 the phase returns `void` and logs each failure, and `self_report` reads all four peripherals back through their live accessors so the facts line names which one is missing:
+
+```
+i2c_peripherals=ok                          # bus up, everything behind it up
+i2c_peripherals=degraded(motors,servos)     # bus up, these did not initialise
+i2c_peripherals=not-responding              # no bus at all (bare board, or a bus fault)
+buzzer=not-responding                       # separate key: it is a GPIO, not I2C
+```
+
+The spoken fault line stays coarse — one persona phrase covers "no bus" and "motors did not initialise", because from outside the robot the symptom is identical and the persona has no wording for LEDs, servos or the buzzer. The per-peripheral breakdown lives in the logged and MQTT-published facts line, which is where somebody diagnosing a board is actually looking.
+
 ## Serial console commands
 
 | Command | Effect |
@@ -382,6 +393,8 @@ Key settings that matter:
 - Don't re-point `plan_activity`'s scene reference at `scene_change`'s, or fold the two `scene:`/`still:` log fields into one. They measure from different frames — last spoken about, last planned on — and those move at different moments
 - Don't charge zero tokens for a response whose `usageMetadata` could not be read. That is how a spend ceiling silently stops being one: every log line keeps showing a healthy budget while the robot spends all night. `plan_budget_note()` charges the assumed cost and counts that it had to, and `plan` prints the count unconditionally
 - Don't give the budget fuse a rolling window or an auto-reset. It exists for the unattended board, which is precisely the case that must not resume on its own
+- Don't put `ESP_ERROR_CHECK` or `ESP_RETURN_ON_ERROR` back into the hardware phase. `init_hardware()` returns `void` on purpose (issue #500): a peripheral that would not initialise used to abort the boot, taking the console, WiFi, provisioning and the planner down with it — and a reboot loop removes the very console you would read the fault on. Every driver behind that phase already fails safe (each guards its entry points on `initialized` and returns `ESP_ERR_INVALID_STATE`; the buzzer's tone routines no-op), so a failure costs exactly the function that failed
+- Don't drop a peripheral's `*_is_initialized()` accessor, or let `self_report_collect()` read a cached boot result instead. Those accessors are the only thing standing between a half-populated board and a silent loss of function: the facts line renders `i2c_peripherals=degraded(servos)` from them, and `test_self_report.c` pins the case a bench cannot stage — a live bus with exactly one dead peripheral
 - Don't add goal sources outside `planner_task.c` — structured goals keep the two layers decoupled. If a new goal source is needed, it should write `goal_state` the same way the planner does
 - Don't fold speech into `goal_t` — see the Voice section above and `speech_queue.h`
 - Don't put a specific phrase, opener or filler word in a persona's `text_brief` — everything named there is said every time. Phrase-shaped flavour goes in the `openers`/`shapes` pools; see `dialogue_style.h`

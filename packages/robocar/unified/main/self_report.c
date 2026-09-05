@@ -8,6 +8,7 @@
 #include <string.h>
 
 #include "audio_player.h"
+#include "buzzer.h"
 #include "credentials_loader.h"
 #include "dialogue_style.h"
 #include "esp_app_desc.h"
@@ -18,7 +19,10 @@
 #include "gemini_backend.h"
 #include "gpio_expander.h"
 #include "i2c_bus.h"
+#include "led_controller.h"
+#include "motor_controller.h"
 #include "mqtt_logger.h"
+#include "servo_controller.h"
 #include "speech_queue.h"
 #include "voice_persona.h"
 #include "wifi_manager.h"
@@ -78,8 +82,14 @@ void self_report_collect(robocar_status_t *out)
     /* Boot-recorded (the camera has no live "is ready" accessor). */
     out->camera_ok = s_camera_ok;
 
-    /* Live accessors — authoritative, and what makes change-detection work. */
+    /* Live accessors — authoritative, and what makes change-detection work.
+     * Every peripheral has one, so nothing here is a cached boot result that
+     * could disagree with the hardware. */
     out->i2c_bus_ok = i2c_bus_is_ready();
+    out->motors_ok = motor_is_initialized();
+    out->leds_ok = led_is_initialized();
+    out->servos_ok = servo_is_initialized();
+    out->buzzer_ok = buzzer_is_initialized();
     out->audio_ok = audio_player_is_ready();
     out->mcp23017_present = gpio_expander_available();
     out->wifi_up = wifi_is_connected();
@@ -105,6 +115,50 @@ static const char *req_state(bool ok)
     return ok ? "ok" : "not-responding";
 }
 
+/** Longest i2c_state() output: "degraded(motors,leds,servos)" plus NUL. */
+#define I2C_STATE_MAX 32
+
+/**
+ * @brief Render the I2C peripheral group as one state word.
+ *
+ * Three outcomes, and the distinction matters to whoever reads the line:
+ *   - "not-responding"      — no bus at all (a bare board, or a bus fault).
+ *   - "ok"                  — bus up, every peripheral behind it up.
+ *   - "degraded(motors,..)" — bus up, these peripherals did not initialise.
+ *
+ * The bus-down wording is deliberately unchanged: the persona's spoken fault
+ * line keys off i2c_bus_ok, and a bare board has always read exactly this.
+ */
+static void i2c_state(const robocar_status_t *s, char *buf, size_t len)
+{
+    if (!s->i2c_bus_ok) {
+        strlcpy(buf, req_state(false), len);
+        return;
+    }
+    if (s->motors_ok && s->leds_ok && s->servos_ok) {
+        strlcpy(buf, "ok", len);
+        return;
+    }
+
+    /* Fixed order so two consecutive facts lines diff cleanly. */
+    strlcpy(buf, "degraded(", len);
+    const char *sep = "";
+    if (!s->motors_ok) {
+        strlcat(buf, "motors", len);
+        sep = ",";
+    }
+    if (!s->leds_ok) {
+        strlcat(buf, sep, len);
+        strlcat(buf, "leds", len);
+        sep = ",";
+    }
+    if (!s->servos_ok) {
+        strlcat(buf, sep, len);
+        strlcat(buf, "servos", len);
+    }
+    strlcat(buf, ")", len);
+}
+
 size_t self_report_format_facts(const robocar_status_t *status, char *buf, size_t len)
 {
     if (!buf || len == 0) {
@@ -115,14 +169,20 @@ size_t self_report_format_facts(const robocar_status_t *status, char *buf, size_
         return 0;
     }
 
+    char i2c[I2C_STATE_MAX];
+    i2c_state(status, i2c, sizeof(i2c));
+
+    /* The buzzer gets its own key rather than joining the degraded list: it is
+     * on a dedicated GPIO, so a dead buzzer says nothing about the I2C bus and
+     * a dead bus says nothing about the buzzer. */
     int n = snprintf(buf, len,
                      "robot=robocar version=%s wifi=%s ssid=%s camera=%s i2c_peripherals=%s "
-                     "audio=%s mcp23017=%s gemini_key=%s",
+                     "audio=%s mcp23017=%s gemini_key=%s buzzer=%s",
                      status->version, req_state(status->wifi_up),
-                     status->ssid[0] ? status->ssid : "none", req_state(status->camera_ok),
-                     req_state(status->i2c_bus_ok), req_state(status->audio_ok),
+                     status->ssid[0] ? status->ssid : "none", req_state(status->camera_ok), i2c,
+                     req_state(status->audio_ok),
                      status->mcp23017_present ? "present" : "absent(optional)",
-                     status->key_present ? "present" : "absent");
+                     status->key_present ? "present" : "absent", req_state(status->buzzer_ok));
 
     if (n < 0) {
         buf[0] = '\0';
@@ -147,6 +207,10 @@ static uint32_t status_signature(const robocar_status_t *s)
     MIX_BYTE(s->wifi_up);
     MIX_BYTE(s->camera_ok);
     MIX_BYTE(s->i2c_bus_ok);
+    MIX_BYTE(s->motors_ok);
+    MIX_BYTE(s->leds_ok);
+    MIX_BYTE(s->servos_ok);
+    MIX_BYTE(s->buzzer_ok);
     MIX_BYTE(s->mcp23017_present);
     MIX_BYTE(s->audio_ok);
     MIX_BYTE(s->key_present);
@@ -181,7 +245,12 @@ static void template_line(const robocar_status_t *s, char *out, size_t len)
     if (!s->camera_ok) {
         strlcat(faults, persona->fault_camera, sizeof(faults));
     }
-    if (!s->i2c_bus_ok) {
+    /* One spoken phrase covers both "no bus" and "bus up, motors did not
+     * initialise" — from outside the robot the symptom is identical, and the
+     * persona has no separate wording for the LEDs, servos or buzzer. The
+     * per-peripheral breakdown lives in the logged/published facts line, which
+     * is where somebody diagnosing the board is actually looking. */
+    if (!s->i2c_bus_ok || !s->motors_ok) {
         strlcat(faults, persona->fault_motors, sizeof(faults));
     }
     if (!s->audio_ok) {
