@@ -33,6 +33,8 @@ if (xTaskDelayUntil(&last_wake, pdMS_TO_TICKS(PERIOD_MS)) == pdFALSE) {
 `init_camera()` non-fatal — the board used to panic at camera init and reboot
 *before* the reactive loop ever ran. Making a system boot further routinely
 surfaces latent bugs downstream of the point that used to abort. Expect them.
+`gated-init-paths.md` carries the hardware-phase instance: two bugs from the
+first commit, exposed one boot apart the day the PCA9685 was first fitted.
 
 ## 2. A task that does an HTTPS/TLS call needs ≥ 8 KB stack
 
