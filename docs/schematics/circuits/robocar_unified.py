@@ -270,9 +270,9 @@ def draw() -> schemdraw.Drawing:
         .color("steelblue")
     )
 
-    # Amp power on its outward-facing right side. VIN is 5 V — prefer a
-    # separate feed from the boost converter rather than daisy-chaining off
-    # the motor rail, and fit >=470 uF of bulk here (see WIRING.md).
+    # Amp power on its outward-facing right side. VIN is 5 V — take a separate
+    # feed from the LM2596 regulator's output terminal rather than daisy-chaining
+    # off the motor rail, and fit >=470 uF of bulk here (see WIRING.md).
     d.add(elm.Line().right(0.5).at(amp.VIN))
     d.add(elm.Vdd().label("+5V"))
     d.add(elm.Line().right(0.5).at(amp.GND))

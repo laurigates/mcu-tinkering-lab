@@ -69,25 +69,64 @@ device — nothing talks to the primary bus directly.
 
 ```mermaid
 graph TD
-    Bat[2x 18650 battery pack] --> Boost[XL6009 boost → 5V]
-    Boost -->|5V| XIAO[XIAO ESP32-S3 Sense<br/>5V pin]
-    Boost -->|5V| MD[TB6612FNG<br/>VM + VCC]
-    Boost -->|5V| PCA[PCA9685<br/>V+ + VCC]
-    Boost -->|5V| Servos[SG90 servos]
+    Bat[2x 18650 in SERIES<br/>7.4 V nominal, 8.4 V charged] --> Buck[LM2596 buck module<br/>adjust to 5.0 V]
+    Buck -->|5V| XIAO[XIAO ESP32-S3 Sense<br/>5V pin]
+    Buck -->|5V| MD[TB6612FNG<br/>VM + VCC]
+    Buck -->|5V| PCA[PCA9685<br/>V+ + VCC]
+    Buck -->|5V| AMP[MAX98357A<br/>Vin]
+    PCA --> Servos[SG90 servos]
     MD --> ML[Left motor]
     MD --> MR[Right motor]
     PCA --> LED_L[Left RGB LED<br/>common-anode]
     PCA --> LED_R[Right RGB LED<br/>common-anode]
-    PCA --> Servos
     XIAO -->|GPIO2| Piezo[Piezo buzzer]
     XIAO -->|GPIO1| MD
-    Boost -->|5V| AMP[MAX98357A<br/>Vin]
     XIAO -->|GPIO7/8/9 I2S| AMP
     AMP --> SPK[4-8 ohm speaker]
     classDef gnd fill:#ccc,stroke:#333
 ```
 
 **Common ground required across all components.**
+
+### The regulator is a step-DOWN converter, and its output is adjustable
+
+The pack is **two 18650 cells in series** — 7.4 V nominal, 8.4 V fully charged —
+regulated to 5 V by an **LM2596 buck module**. Series and buck go together: a
+step-down converter needs its input above its output, so a parallel (3.7 V) pack
+could not feed it.
+
+The common LM2596 module is the **adjustable** variant with a multi-turn
+trimpot, so it does not produce 5 V until somebody sets it there.
+
+- **Set the output before connecting anything to it.** Power the module from the
+  pack with its output unloaded, and adjust to **5.0 V** on a meter. It can be
+  turned anywhere from 1.2 V to 37 V.
+- **5.5 V is the ceiling that matters.** The MAX98357A's recommended maximum
+  supply is 5.5 V (absolute maximum 6 V), and this rail also feeds the XIAO's
+  5V pin into its onboard regulator. A trimpot left high damages parts; a
+  trimpot left low gives weak servos and a clipping amplifier.
+
+### The 5 V rail dies before the cells do
+
+The LM2596 needs its input roughly **1.25 V above its output at 3 A**, and about
+**0.95 V above at 1 A** (TI SNVS124G, Figure 7-6). At 5 V out that puts the
+dropout point near **6.3 V of pack under heavy load** — about 3.15 V per cell,
+which a 2S 18650 pack reaches while it still has usable charge left.
+
+So the failure is not a clean shutdown. As the pack sags the 5 V rail follows it
+down, and because `CONFIG_ESP_BROWNOUT_DET` is disabled (see below) nothing
+announces it: the symptoms are weak or stalled servos, clipping or distorted
+audio, and eventually random resets. **A distorted voice is a plausible
+low-battery indication on this robot.** Measure the pack before diagnosing
+anything else on this rail.
+
+### Star-wire the rail; do not daisy-chain
+
+Every load in the diagram takes its own feed from the regulator's output
+terminal. This is load-bearing rather than tidiness: a servo's inrush flowing
+through the amplifier's feed wire modulates the amplifier's local supply, which
+is heard as distortion. The motor driver, the PCA9685/servos and the amplifier
+are the three transient sources, and none of them should share a run.
 
 ### Amplifier supply — read before wiring
 
@@ -98,11 +137,32 @@ brownout detection off, an undersized rail will not warn you — it will present
 as random resets or corrupt audio mid-sentence.
 
 - Fit a **bulk capacitor (≥ 470 µF) at the amplifier's Vin**, plus the usual
-  0.1 µF close to the pin.
-- Prefer a **separate 5 V feed from the boost converter** to the amplifier
-  rather than daisy-chaining off the motor-driver rail.
+  0.1 µF close to the pin. Fit the same at the PCA9685's **V+**: the servos are
+  the harsher transient source of the two.
+- **Never power servos from the XIAO's 5V pin or from USB VBUS.** That pin is a
+  regulator input, not a supply output, and a USB host port cannot source what
+  two SG90s and a class-D amplifier draw. Servos that buzz without moving are
+  the signature.
 - An **8 Ω speaker roughly halves peak current** versus 4 Ω and is the safer
   first choice while validating the supply.
+
+### Powering from the regulator with USB also connected
+
+Both at once is the normal bench case — USB for the console, the pack for the
+motors. Whether it is safe depends on whether the XIAO's 5V pad is isolated from
+USB VBUS by a series diode, which **is worth measuring rather than assuming**:
+with USB alone connected and the regulator off, read the 5V pad against GND.
+Roughly 5.0 V means it is tied straight to VBUS and feeding the rail would
+back-feed the host port; roughly 4.6–4.7 V means a diode is in the way and the
+higher source simply wins.
+
+The arrangement that avoids the question entirely, and the better one for
+debugging anyway: **regulator → amplifier, PCA9685 and motor driver; USB → the
+XIAO; grounds commoned.** The MCU then sits on a rail that servo and motor
+inrush cannot sag.
+
+Do not connect anything to the XIAO's BAT pads while feeding its 5V pin — the
+onboard charger will try to charge whatever it finds there.
 
 ## Audio output (MAX98357A)
 
