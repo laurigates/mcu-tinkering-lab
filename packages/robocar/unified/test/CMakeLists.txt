@@ -313,6 +313,29 @@ target_link_libraries(test_servo_controller PRIVATE Threads::Threads m)
 add_test(NAME servo_controller COMMAND test_servo_controller)
 
 # -----------------------------------------------------------------------------
+# motor_controller idle re-write suppression
+#
+# motor_controller.c is compiled UNMODIFIED against the shims in test/include;
+# the i2c_bus, the STBY GPIO and the clock are all stubs in the test. The cases
+# it pins are the ones a bench cannot stage: a failed write must not be
+# remembered as applied, the suppression must expire so a chip whose contents
+# drifted is re-asserted, and that expiry must survive the uint32 millisecond
+# wrap at day 49 rather than latching the robot into permanent suppression.
+# -----------------------------------------------------------------------------
+add_executable(test_motor_controller
+    "${MAIN_SRC_DIR}/motor_controller.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_motor_controller.c"
+)
+target_include_directories(test_motor_controller BEFORE PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_host"  # i2c_bus.h -> <i2cdev.h>
+    "${ESP_IDF_LIB_DIR}/pca9685"
+)
+# -Wno-unused-variable: the ESP_LOG* shims are no-ops, which leaves TAG unused.
+target_compile_options(test_motor_controller PRIVATE -Wno-unused-variable)
+target_link_libraries(test_motor_controller PRIVATE Threads::Threads m)
+add_test(NAME motor_controller COMMAND test_motor_controller)
+
+# -----------------------------------------------------------------------------
 # self_report per-peripheral health (issue #500)
 #
 # self_report.c is compiled UNMODIFIED against the shims in test/include plus
