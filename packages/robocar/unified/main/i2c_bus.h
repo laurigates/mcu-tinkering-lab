@@ -13,6 +13,7 @@
 #include <i2cdev.h>
 #include <pca9685.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include "pin_config.h"
 
 /**
@@ -35,6 +36,38 @@ esp_err_t i2c_bus_init(void);
  * @return true if i2c_bus_init() completed
  */
 bool i2c_bus_is_ready(void);
+
+/**
+ * @brief Bus activity since boot or the last i2c_bus_stats_reset().
+ *
+ * One "op" is one bus acquisition through i2c_bus_select_channel(): a mux
+ * channel-select write plus whatever device traffic the caller then issues. It
+ * is a lower bound on wire transactions, never an overcount.
+ */
+typedef struct {
+    uint32_t ops;            /**< Successful bus acquisitions. */
+    uint32_t failed;         /**< Mux-select failures and mutex timeouts. */
+    uint32_t per_channel[8]; /**< Ops per TCA9548A channel. */
+    uint32_t hz;             /**< Recent rate; 0 when the bus has gone quiet. */
+    uint32_t peak_hz;        /**< Highest windowed rate seen. */
+    uint32_t elapsed_ms;     /**< Measurement span. */
+} i2c_bus_stats_t;
+
+/**
+ * @brief Read the bus activity counters.
+ *
+ * `hz` is deliberately zeroed once its window has gone stale. A rate whose
+ * window has not been touched for two window lengths is not a rate, it is a
+ * memory of one, and reporting the stale value would show live traffic on a bus
+ * that has gone silent — the exact distinction this counter exists to make.
+ */
+void i2c_bus_stats_get(i2c_bus_stats_t *out);
+
+/** @brief Zero the bus activity counters and restart the measurement span. */
+void i2c_bus_stats_reset(void);
+
+/** @brief Print the bus activity line for the `trace` console command. */
+void i2c_bus_stats_report(void);
 
 /**
  * @brief Select a TCA9548A channel and acquire the bus mutex

@@ -16,7 +16,56 @@
 #include "esp_err.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/ringbuf.h"
+#include "freertos/semphr.h"
 #include "freertos/task.h"
+
+/* -------------------------------------------------------------------------- */
+/* Semaphores                                                                   */
+/*                                                                              */
+/* Always free. The host tests are single-threaded, so the contention path —     */
+/* where activity_trace.c drops a counter update rather than block — is not      */
+/* reachable, and a shim that simulated contention would be testing itself. The  */
+/* handle is a fixed non-NULL token because callers null-check it.               */
+/* -------------------------------------------------------------------------- */
+
+static int s_mutex_token;
+
+SemaphoreHandle_t xSemaphoreCreateMutex(void)
+{
+    return &s_mutex_token;
+}
+
+SemaphoreHandle_t xSemaphoreCreateRecursiveMutex(void)
+{
+    return &s_mutex_token;
+}
+
+BaseType_t xSemaphoreTake(SemaphoreHandle_t sem, TickType_t wait)
+{
+    (void)wait;
+    return sem != NULL ? pdTRUE : pdFALSE;
+}
+
+BaseType_t xSemaphoreGive(SemaphoreHandle_t sem)
+{
+    return sem != NULL ? pdTRUE : pdFALSE;
+}
+
+BaseType_t xSemaphoreTakeRecursive(SemaphoreHandle_t sem, TickType_t wait)
+{
+    (void)wait;
+    return sem != NULL ? pdTRUE : pdFALSE;
+}
+
+BaseType_t xSemaphoreGiveRecursive(SemaphoreHandle_t sem)
+{
+    return sem != NULL ? pdTRUE : pdFALSE;
+}
+
+void vSemaphoreDelete(SemaphoreHandle_t sem)
+{
+    (void)sem;
+}
 
 /* -------------------------------------------------------------------------- */
 /* esp_err                                                                      */

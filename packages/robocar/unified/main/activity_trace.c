@@ -171,54 +171,93 @@ static bool color_equal(const rgb_color_t *a, const rgb_color_t *b)
     return a->red == b->red && a->green == b->green && a->blue == b->blue;
 }
 
+/** What each LED was last successfully written with.
+ *
+ *  `valid` false means the PCA9685's contents are unknown — before the first
+ *  write, after a failed one, and after the LEDs are released on `trace led
+ *  off` — so the next tick writes unconditionally. It replaces an earlier
+ *  impossible-colour sentinel (0xFFFFFF), which achieved the same first-write
+ *  guarantee by asserting a fact about the chip that was not true. */
+typedef struct {
+    rgb_color_t shown;
+    uint32_t written_ms;
+    bool valid;
+} led_shadow_t;
+
+static led_shadow_t s_shadow_cam;
+static led_shadow_t s_shadow_net;
+static bool s_leds_were_enabled = true;
+
+/** Drive one LED toward `want`, writing only when the shadow does not already
+ *  claim that colour or when the claim has expired. */
+static void refresh_led(led_position_t pos, led_shadow_t *shadow, const rgb_color_t *want,
+                        uint32_t now)
+{
+    if (shadow->valid && color_equal(want, &shadow->shown) &&
+        (now - shadow->written_ms) < LED_REFRESH_INTERVAL_MS) {
+        return;
+    }
+
+    if (led_set_color(pos, want) == ESP_OK) {
+        shadow->shown = *want;
+        shadow->written_ms = now;
+        shadow->valid = true;
+    } else {
+        /* A write that did not land must not be remembered as displayed, or the
+         * indicator reports a colour the LED is not showing. */
+        shadow->valid = false;
+    }
+}
+
+/** One indicator tick. Extracted from the task loop so the host test can drive
+ *  it against a stub bus and an injectable clock — the case worth pinning (a
+ *  PCA9685 that silently lost the colour it was told to hold) cannot be staged
+ *  on a bench. */
+ACTIVITY_TRACE_TICK_LINKAGE void activity_trace_tick(void)
+{
+    const bool enabled = s_leds_enabled;
+
+    if (!enabled) {
+        /* Release both LEDs once on the falling edge, then stop touching the
+         * I2C bus entirely — "off" has to mean off, not "written black at
+         * 25 Hz forever", and not "written black once a second" either. */
+        if (s_leds_were_enabled) {
+            led_turn_off_all();
+            s_shadow_cam.valid = false;
+            s_shadow_net.valid = false;
+            s_leds_were_enabled = false;
+        }
+        return;
+    }
+    s_leds_were_enabled = true;
+
+    /* Write only on a change. At 25 Hz an unconditional write would put a
+     * steady PCA9685 transaction load on the shared I2C bus for no benefit,
+     * competing with the motor and servo controllers that share it.
+     *
+     * The claim expires, though, because the shadow describes a chip that
+     * cannot be read back: a PCA9685 that browned out or was re-seated holds
+     * its power-on defaults — all outputs off — while the shadow still says the
+     * colour is lit. Without an expiry the indicator would stay dark until the
+     * colour happened to change, and the states worth seeing are exactly the
+     * ones that do not change: a held red for a failed capture, a held blue for
+     * a request that never returned, a held yellow for a 429. */
+    const uint32_t now = now_ms();
+    const rgb_color_t want_cam = camera_color();
+    refresh_led(LED_LEFT, &s_shadow_cam, &want_cam, now);
+
+    const rgb_color_t want_net = network_color();
+    refresh_led(LED_RIGHT, &s_shadow_net, &want_net, now);
+}
+
 static void activity_trace_task(void *arg)
 {
     (void)arg;
 
-    /* Seeded to a colour that cannot be the first desired one, so the first tick
-     * always writes and the LEDs are never left showing whatever the boot
-     * indication put there. */
-    rgb_color_t shown_cam = {0xFF, 0xFF, 0xFF};
-    rgb_color_t shown_net = {0xFF, 0xFF, 0xFF};
-    bool leds_were_enabled = true;
-
     ESP_LOGI(TAG, "Activity indicators running (left = camera, right = endpoints)");
 
     for (;;) {
-        const bool enabled = s_leds_enabled;
-
-        if (!enabled) {
-            /* Release both LEDs once on the falling edge, then stop touching the
-             * I2C bus entirely — "off" has to mean off, not "written black at
-             * 25 Hz forever". */
-            if (leds_were_enabled) {
-                led_turn_off_all();
-                shown_cam = (rgb_color_t){0xFF, 0xFF, 0xFF};
-                shown_net = (rgb_color_t){0xFF, 0xFF, 0xFF};
-                leds_were_enabled = false;
-            }
-            vTaskDelay(pdMS_TO_TICKS(TRACE_TICK_MS));
-            continue;
-        }
-        leds_were_enabled = true;
-
-        /* Write only on a change. At 25 Hz an unconditional write would put a
-         * steady PCA9685 transaction load on the shared I2C bus for no benefit,
-         * competing with the motor and servo controllers that share it. */
-        const rgb_color_t want_cam = camera_color();
-        if (!color_equal(&want_cam, &shown_cam)) {
-            if (led_set_color(LED_LEFT, &want_cam) == ESP_OK) {
-                shown_cam = want_cam;
-            }
-        }
-
-        const rgb_color_t want_net = network_color();
-        if (!color_equal(&want_net, &shown_net)) {
-            if (led_set_color(LED_RIGHT, &want_net) == ESP_OK) {
-                shown_net = want_net;
-            }
-        }
-
+        activity_trace_tick();
         vTaskDelay(pdMS_TO_TICKS(TRACE_TICK_MS));
     }
 }
