@@ -1,7 +1,7 @@
 # XL6009 — DC-DC Boost Converter
 
 **Manufacturer:** XLSEMI
-**Used in:** Robocar power system (7.4V LiPo → 5V for ESP32, motor driver, PCA9685, servos)
+**Used in:** nothing currently. This page was cited as the robocar power supply, which was never possible — a *boost* converter cannot step 7.4 V down to 5 V. That project uses an [LM2596 buck](power--lm2596.md); kept here as a general reference for step-up applications.
 
 ## Key Specs
 

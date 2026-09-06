@@ -89,8 +89,8 @@ something happened, backing off 15 s #sym.arrow 300 s when nothing does.
   ([1], [Piezo buzzer], [Passive]),
   ([1], [100 Ω resistor], [In series with buzzer]),
   ([1], [Electrolytic capacitor], [≥470 µF — for MAX98357A supply]),
-  ([2], [18650 Li-ion cell + holder], [Battery pack]),
-  ([1], [XL6009 boost converter], [Regulated to 5 V]),
+  ([2], [18650 Li-ion cell + holder], [Wired in SERIES — 7.4 V nominal]),
+  ([1], [LM2596 buck converter module], [Adjustable — set to 5.0 V]),
   ([—], [Chassis, wiring, headers], [2WD car chassis, jumper wires, standoffs]),
   aligns: (center, left, left),
 )
@@ -246,9 +246,21 @@ whenever BCLK is running, so leaving it clocking silence is audible.
 
 #grid(columns: (1.15fr, 1fr), column-gutter: 14pt,
 [
-  Power the car from a *2×18650 pack* through an *XL6009 boost converter set to
-  5 V*. Distribute that 5 V rail to the XIAO 5 V pin, the TB6612FNG (VM + VCC),
-  the PCA9685 (V+ and VCC), the servos, and the *MAX98357A amplifier (Vin)*.
+  Power the car from a *2×18650 pack wired in series* (7.4 V nominal, 8.4 V
+  charged) through an *LM2596 buck converter set to 5.0 V*. Series and buck go
+  together: a step-down regulator needs its input above its output, so a
+  parallel 3.7 V pack could not feed it. Distribute that 5 V rail to the XIAO
+  5 V pin, the TB6612FNG (VM + VCC), the PCA9685 (V+ and VCC), and the
+  *MAX98357A amplifier (Vin)*; the servos take their power from the PCA9685's
+  V+ terminal.
+
+  #text(fill: theme.muted, weight: "bold")[The rail dies before the cells do:]
+  the LM2596 needs its input about *1.25 V above its output at 3 A* (0.95 V at
+  1 A), so 5 V out drops out near *6.3 V of pack* — roughly 3.15 V per cell,
+  which a 2S pack reaches while it still has usable charge. The rail sags rather
+  than shutting down cleanly, and nothing announces it. Weak servos, clipping
+  audio and random resets are all plausible low-battery symptoms; measure the
+  pack before diagnosing anything else on this rail.
 
   The 3.3 V logic for the OLED, ultrasonic sensor, TCA9548A, and MCP23017
   comes from the XIAO's 3V3 pin. Keep motor/servo current (high, noisy) on
@@ -259,12 +271,15 @@ whenever BCLK is running, so leaving it clocking silence is audible.
   detection already disabled for motor inrush, an undersized rail will not warn
   you — it will present as random resets or corrupt audio mid-sentence. Fit a
   *≥470 µF bulk capacitor* at the amplifier's Vin, plus the usual 0.1 µF close
-  to the pin. Prefer a *separate 5 V feed* from the boost converter to the
-  amplifier rather than daisy-chaining off the motor-driver rail. An *8 Ω
-  speaker* roughly halves peak current versus 4 Ω.
+  to the pin, and the same at the PCA9685's *V+* — the servos are the harsher
+  transient source. Star-wire the rail: every load takes its own feed from the
+  regulator's output terminal, because a servo's inrush travelling through the
+  amplifier's feed wire is heard as distortion. Never power servos from the
+  XIAO's 5 V pin or from USB. An *8 Ω speaker* roughly halves peak current
+  versus 4 Ω.
 ],
 callout("Golden rule", kind: "danger")[
-  *Common ground everywhere.* Every module — boost converter, XIAO, motor
+  *Common ground everywhere.* Every module — the regulator, XIAO, motor
   driver, PCA9685, servos, sensors — must share one GND. Missing grounds cause
   brown-outs, I²C lockups, and erratic motion.
 
@@ -277,8 +292,10 @@ callout("Golden rule", kind: "danger")[
 
 + *Mount the mechanics.* Fit the two gear motors and wheels to the chassis, add
   the caster/third wheel, and mount the battery holder low and centered.
-+ *Wire power first.* Connect the 18650 pack to the XL6009 input, set its output
-  to *5.0 V with a multimeter before connecting anything else*, then run the 5 V
++ *Wire power first.* Connect the series 18650 pack to the LM2596 input and,
+  with nothing on its output, turn the trimpot until a multimeter reads *5.0 V*.
+  The adjustable module spans 1.2–37 V and arrives set to anything; above 5.5 V
+  damages the amplifier and the XIAO's regulator input. Only then run the 5 V
   and shared GND rails.
 + *Place the XIAO* and bring out I²C (GPIO#I2C_SDA_PIN/#I2C_SCL_PIN), STBY (GPIO#MOTOR_STBY_PIN), buzzer (GPIO#PIEZO_PIN),
   ultrasonic pins (GPIO#ULTRIG_PIN/#ULECHO_PIN), and I²S (GPIO#I2S_BCLK_PIN/#I2S_LRCLK_PIN/#I2S_DIN_PIN).
@@ -376,7 +393,8 @@ Work through these after first flash, watching the serial monitor:
   (1fr, 1.4fr),
   ([Symptom], [Likely cause & fix]),
   ([Boot loop on power-up], [Wrong PSRAM mode. The Sense uses *octal* PSRAM (`CONFIG_SPIRAM_MODE_OCT=y`); don't change it.]),
-  ([Random resets under motor load], [Weak 5 V rail / missing common ground. Use thicker power wires and verify the XL6009 holds 5 V under load.]),
+  ([Random resets under motor load], [Weak 5 V rail / missing common ground. Use thicker power wires and verify the LM2596 holds 5 V under load — scope it, a multimeter samples too slowly to see a millisecond sag.]),
+  ([Servos buzz but do not move], [Almost always supply, not signal. Check V+ on the PCA9685 is fed from the regulator (VCC powers only the logic), and that the pack is above ~6.3 V. `servo exercise` on the console logs every write, so a still servo with successful writes is a power fault.]),
   ([No I²C devices found], [Not selecting the TCA9548A channel first, or SDA/SCL swapped. Check GPIO5=SDA, GPIO6=SCL.]),
   ([OLED and PCA9685 conflict], [Both bypassing the mux. Route each through its own TCA9548A channel (ch1 / ch0).]),
   ([Motors don't move], [STBY (GPIO#MOTOR_STBY_PIN) not HIGH, or VM not on 5 V. Confirm TB6612FNG power and enable line.]),
