@@ -152,6 +152,35 @@ void activity_trace_set_leds(bool enabled);
 /** @brief Whether the LED indicators are enabled. */
 bool activity_trace_leds_enabled(void);
 
+/**
+ * @brief How long an LED's last written colour is trusted before it is written
+ *        again even though nothing changed.
+ *
+ * The indicator writes only on a colour change, because at 25 Hz an
+ * unconditional write would load the shared I2C bus for no benefit. That
+ * shadow describes a chip that cannot be read back, though: a PCA9685 that
+ * browned out or was re-seated holds its power-on defaults — all outputs off —
+ * while the shadow still claims the colour is lit, and nothing would correct it
+ * until the colour happened to change. The states worth seeing are exactly the
+ * ones that do not: a held red for a failed capture, a held blue for a request
+ * that never returned, a held yellow for a 429.
+ *
+ * Five seconds rather than the motor controller's one: an indicator is read by
+ * a human at human latency and its state is not safety-relevant, so a slower
+ * re-assertion buys a quieter idle bus. Two LEDs at this interval is well under
+ * one transaction per second.
+ */
+#define LED_REFRESH_INTERVAL_MS 5000u
+
+/* activity_trace_tick() is the indicator task's loop body, static in the
+ * firmware and exported only to the host test that drives it directly. */
+#ifdef ACTIVITY_TRACE_HOST_TEST
+#define ACTIVITY_TRACE_TICK_LINKAGE
+void activity_trace_tick(void);
+#else
+#define ACTIVITY_TRACE_TICK_LINKAGE static
+#endif
+
 #ifdef __cplusplus
 }
 #endif

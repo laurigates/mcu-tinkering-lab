@@ -313,6 +313,27 @@ target_link_libraries(test_servo_controller PRIVATE Threads::Threads m)
 add_test(NAME servo_controller COMMAND test_servo_controller)
 
 # -----------------------------------------------------------------------------
+# activity_trace LED shadow expiry
+#
+# activity_trace.c is compiled with ACTIVITY_TRACE_HOST_TEST, which changes
+# nothing but activity_trace_tick()'s linkage so the test can drive the
+# indicator task's loop body directly. The led_controller it writes through and
+# the clock it reads are stubs in the test. The case it pins cannot be staged on
+# a bench: a PCA9685 that silently lost the colour it was told to hold, leaving
+# a held red or blue indicator dark with nothing to correct it.
+# -----------------------------------------------------------------------------
+add_executable(test_activity_trace
+    "${MAIN_SRC_DIR}/activity_trace.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/host_shims.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_activity_trace.c"
+)
+target_compile_definitions(test_activity_trace PRIVATE ACTIVITY_TRACE_HOST_TEST=1)
+# -Wno-unused-variable: the ESP_LOG* shims are no-ops, which leaves TAG unused.
+target_compile_options(test_activity_trace PRIVATE -Wno-unused-variable)
+target_link_libraries(test_activity_trace PRIVATE Threads::Threads m)
+add_test(NAME activity_trace COMMAND test_activity_trace)
+
+# -----------------------------------------------------------------------------
 # self_report per-peripheral health (issue #500)
 #
 # self_report.c is compiled UNMODIFIED against the shims in test/include plus

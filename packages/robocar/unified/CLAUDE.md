@@ -97,6 +97,20 @@ pulse so a fault that happened while nobody was watching is still on the robot.
 `trace` totals it all since boot, with mean/max latency per endpoint and — when
 something is wedged — how long the outstanding request has been outstanding.
 
+**A colour is written only when it changes, and re-asserted every
+`LED_REFRESH_INTERVAL_MS` even when it does not.** The suppression keeps a 25 Hz
+task off the shared I2C bus; the re-assertion exists because the shadow it keeps
+is a claim about a chip that cannot be read back. A PCA9685 that browned out or
+was re-seated holds its power-on defaults — all outputs off — while the shadow
+still says the colour is lit, and the states worth seeing are exactly the ones
+that never change on their own: a held red for a failed capture, a held blue for
+a request that never returned, a held yellow for a 429. Without the expiry a
+stale indicator reads as "nothing happening", which is the opposite of what it
+means. A failed write invalidates the shadow rather than being remembered as
+displayed, and `trace led off` still means off — the refresh does not resume
+writing. Pinned by `test_activity_trace.c`, including the uint32 millisecond
+wrap at day 49.
+
 Indicators may never cost the path they measure: the hot paths only stamp a few
 words, all PCA9685 traffic happens on the indicator task (priority 2, below
 everything it observes), LEDs are written only on a colour change, and the
