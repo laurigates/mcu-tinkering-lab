@@ -154,6 +154,13 @@ void i2c_bus_stats_report(void)
     printf("%s\n", any ? "" : " none");
 }
 
+/* The PCA9685's prescaler is chip-wide: one frequency for motors, servos and
+ * LEDs alike. Tracked here because the servo pulse maths needs it — a pulse
+ * width is only a pulse width once you know the period it sits in — and
+ * because the bench needs to change it without a reflash to find out whether
+ * the servos are simply being clocked out of spec. */
+static uint16_t s_pwm_freq_hz = PCA9685_FREQ_HZ;
+
 esp_err_t i2c_bus_init(void)
 {
     if (s_initialized) {
@@ -210,6 +217,7 @@ esp_err_t i2c_bus_init(void)
     }
 
     ret = pca9685_set_pwm_frequency(&s_pca9685, PCA9685_FREQ_HZ);
+    s_pwm_freq_hz = PCA9685_FREQ_HZ;
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "PCA9685 set_pwm_frequency failed: %s", esp_err_to_name(ret));
         return ret;
@@ -275,6 +283,36 @@ esp_err_t i2c_bus_release(void)
 i2c_dev_t *i2c_bus_get_pca9685(void)
 {
     return &s_pca9685;
+}
+
+uint16_t i2c_bus_pca9685_frequency(void)
+{
+    return s_pwm_freq_hz;
+}
+
+esp_err_t i2c_bus_pca9685_set_frequency(uint16_t hz)
+{
+    if (!s_initialized) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    /* The driver's own range. Below 24 Hz the prescaler saturates; above 1526
+     * it underflows. Rejecting here keeps a typo from silently landing on a
+     * clamped value that then reads back as if it had been accepted. */
+    if (hz < 24u || hz > 1526u) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    esp_err_t ret = i2c_bus_select_channel(I2C_BUS_CHANNEL_PCA9685);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+    ret = pca9685_set_pwm_frequency(&s_pca9685, hz);
+    i2c_bus_release();
+
+    if (ret == ESP_OK) {
+        s_pwm_freq_hz = hz;
+    }
+    return ret;
 }
 
 esp_err_t i2c_bus_pca9685_set(uint8_t channel, uint16_t value)

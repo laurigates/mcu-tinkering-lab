@@ -70,6 +70,27 @@ void i2c_bus_stats_reset(void);
 void i2c_bus_stats_report(void);
 
 /**
+ * @brief The PCA9685's current PWM frequency, in Hz.
+ *
+ * The prescaler is chip-wide — one frequency for motors, servos and LEDs — so
+ * this is a property of the board, not of a channel. The servo pulse maths
+ * needs it: a pulse width only means something relative to the period it sits
+ * in, and a period baked in as a constant silently stops being true the moment
+ * the frequency is changed.
+ */
+uint16_t i2c_bus_pca9685_frequency(void);
+
+/**
+ * @brief Set the PCA9685's PWM frequency (24-1526 Hz).
+ *
+ * Affects every channel at once, motors and LEDs included. Intended for bench
+ * bring-up: the shipped 200 Hz is a compromise chosen for motor smoothness, and
+ * whether an analog servo will track pulses at that frame rate is a question
+ * about the specific servos fitted. Does not persist to NVS.
+ */
+esp_err_t i2c_bus_pca9685_set_frequency(uint16_t hz);
+
+/**
  * @brief Select a TCA9548A channel and acquire the bus mutex
  *
  * Must be paired with i2c_bus_release(). While the mutex is held,

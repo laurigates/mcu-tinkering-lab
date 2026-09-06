@@ -185,8 +185,11 @@
 #define SERVO_MAX_PULSE_US 2500     // 180 degrees
 #define SERVO_CENTER_PULSE_US 1500  // 90 degrees
 
-// Convert pulse width (us) to PCA9685 count at 200Hz
-#define SERVO_PULSE_TO_COUNT(pulse_us) ((uint16_t)(((uint32_t)(pulse_us) * 4096) / SERVO_PERIOD_US))
+// Pulse width -> PCA9685 count lives in servo_controller.c now, because it
+// depends on the frequency the chip is ACTUALLY running at. The macro that used
+// to sit here divided by SERVO_PERIOD_US unconditionally, which made it correct
+// only at 200 Hz and silently wrong at any other — a second copy of a fact the
+// PCA9685's prescaler already owns. Use servo_angle_to_count().
 
 // Servo travel limits live in servo_controller.h as SERVO_PAN_MIN_ANGLE /
 // SERVO_PAN_MAX_ANGLE / SERVO_TILT_MIN_ANGLE / SERVO_TILT_MAX_ANGLE, which is

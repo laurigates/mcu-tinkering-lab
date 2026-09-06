@@ -61,11 +61,22 @@ The spoken fault line stays coarse — one persona phrase covers "no bus" and "m
 | `snap [n]` | Dump the next `n` planner frames over the console as base64 JPEG — see "Seeing what the camera sends" |
 | `cam …` | Read live sensor gain/exposure; `cam gainceiling 0-6`, `cam ae -2..2`, `cam brightness -2..2` tune exposure without a reflash |
 | `sound beep\|melody\|alert` | Buzzer |
-| `servo pan\|tilt <deg>` | Pan/tilt servos |
+| `servo …` | `servo` alone reports readiness, both angles with the PCA9685 counts, and the live PWM frequency; `servo pan\|tilt <deg>` moves one; `servo exercise` shakes then nods, logging every write; `servo freq <24-1526>` changes the chip-wide prescaler |
 | `led <r> <g> <b>` | Both RGB LEDs |
 | `mic` / `mic dump <n>` | Microphone state; dump PCM frames — tells a dead mic from a quiet room |
 | `plan …` | The gate on whether the planner makes a request at all — `plan` alone reports cadence, wake scores and spend; `plan on\|off\|wake\|sleep\|resume`, `plan scene\|range\|requests\|tokens <n>` |
 | `trace …` | Camera + endpoint activity counters since boot; `trace led on\|off`, `trace reset` |
+
+**`servo exercise` exists because "the servos are not moving" has four causes
+that look identical from across the room**: no V+ on the PCA9685 (VCC powers only
+the logic), a failed init, a pulse train outside the servos' frame rate, and a
+dead servo. Every step logs the angle, the PCA9685 count written and the bus
+result, so a servo that does not move *while the writes succeed* is a different
+diagnosis from one whose writes are failing — and `servo freq 50` settles the
+frame-rate question without a reflash. The shipped 200 Hz is a compromise chosen
+for motor smoothness and LED flicker, and whether an analog servo tracks pulses
+at that rate is a property of the servos fitted, not something the firmware can
+assert. Note the prescaler is chip-wide: changing it moves motors and LEDs too.
 
 The `sound`/`servo`/`led` commands are the only producers for `peripheral_task`'s queue — without them the task and every `PERIPH_CMD_*` case are unreachable.
 

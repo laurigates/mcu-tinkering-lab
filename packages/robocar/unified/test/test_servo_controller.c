@@ -39,6 +39,15 @@ static struct {
 static int s_write_count;
 static esp_err_t s_next_result = ESP_OK;
 
+/* The chip-wide prescaler the pulse maths reads. Settable so the tests can ask
+ * what a given angle becomes at a frequency other than the shipped 200 Hz. */
+static uint16_t s_pwm_hz = 200u;
+
+uint16_t i2c_bus_pca9685_frequency(void)
+{
+    return s_pwm_hz;
+}
+
 esp_err_t i2c_bus_pca9685_set(uint8_t channel, uint16_t count)
 {
     if (s_write_count < (int)(sizeof(s_writes) / sizeof(s_writes[0]))) {
@@ -116,6 +125,51 @@ static void test_set_angle_writes_after_init(void)
           "set_angle must write the pan channel once");
 }
 
+/* The centre pulse is 1500 us (SERVO_CENTER_PULSE_US), and a PCA9685 count is
+ * that width as a fraction of the period over 4096 steps. So a centred servo's
+ * count is entirely determined by the frequency:
+ *
+ *   200 Hz ->  5000 us period -> 1500 * 4096 /  5000 = 1228
+ *    50 Hz -> 20000 us period -> 1500 * 4096 / 20000 =  307
+ *
+ * The maths used to divide by a hardcoded 5000, so both came out 1228 — and at
+ * 50 Hz that count is a 6 ms pulse, several times longer than any servo range
+ * accepts. Nothing caught it because the frequency could not be changed. */
+static void test_the_count_tracks_the_pwm_frequency(void)
+{
+    s_pwm_hz = 200u;
+    CHECK(servo_angle_to_count(SERVO_PAN, SERVO_PAN_CENTER) == 1228u,
+          "centre at 200 Hz should be count 1228, got %u",
+          (unsigned)servo_angle_to_count(SERVO_PAN, SERVO_PAN_CENTER));
+
+    s_pwm_hz = 50u;
+    CHECK(servo_angle_to_count(SERVO_PAN, SERVO_PAN_CENTER) == 307u,
+          "centre at 50 Hz should be count 307, got %u",
+          (unsigned)servo_angle_to_count(SERVO_PAN, SERVO_PAN_CENTER));
+
+    /* The endpoints scale with it too, rather than staying put. */
+    s_pwm_hz = 200u;
+    const uint16_t max_200 = servo_angle_to_count(SERVO_PAN, SERVO_PAN_MAX_ANGLE);
+    s_pwm_hz = 50u;
+    const uint16_t max_50 = servo_angle_to_count(SERVO_PAN, SERVO_PAN_MAX_ANGLE);
+    CHECK(max_50 < max_200, "a lower frequency must need a smaller count: %u vs %u",
+          (unsigned)max_50, (unsigned)max_200);
+
+    s_pwm_hz = 200u;
+}
+
+/* A pulse cannot outlast its period. At the driver's 1526 Hz ceiling the
+ * 2500 us maximum is longer than the 655 us frame, and an unclamped count would
+ * wrap in the 12-bit register and emerge as a SHORT pulse — a servo slamming to
+ * the opposite endpoint rather than refusing. */
+static void test_an_impossible_pulse_is_clamped(void)
+{
+    s_pwm_hz = 1526u;
+    const uint16_t count = servo_angle_to_count(SERVO_TILT, SERVO_TILT_MAX_ANGLE);
+    CHECK(count == 4095u, "an over-long pulse must clamp to 4095, got %u", (unsigned)count);
+    s_pwm_hz = 200u;
+}
+
 int main(void)
 {
     struct {
@@ -126,6 +180,8 @@ int main(void)
          test_failed_centring_leaves_module_uninitialised},
         {"init_centres_both_servos", test_init_centres_both_servos},
         {"set_angle_writes_after_init", test_set_angle_writes_after_init},
+        {"count_tracks_the_pwm_frequency", test_the_count_tracks_the_pwm_frequency},
+        {"an_impossible_pulse_is_clamped", test_an_impossible_pulse_is_clamped},
     };
     for (size_t i = 0; i < sizeof(tests) / sizeof(tests[0]); i++) {
         int before = s_failures;
