@@ -38,4 +38,22 @@ esp_err_t motor_get_state(uint8_t *left_speed, uint8_t *right_speed, uint8_t *le
  */
 bool motor_is_initialized(void);
 
+/**
+ * @brief How long a cached PCA9685 motor state is trusted before it is written
+ *        again even though nothing changed.
+ *
+ * An unchanged state is not re-written: reactive_controller's 30 Hz loop calls
+ * motor_stop() on every iteration it is not driving, so a parked robot used to
+ * re-state six identical registers 30 times a second — the firmware's only
+ * continuous I2C traffic.
+ *
+ * The suppression expires because the cache describes a chip that cannot be
+ * read back. A PCA9685 that browned out, was re-seated, or dropped a
+ * transaction reported as successful no longer matches the cache, and with no
+ * expiry nothing would re-assert the true state. Exposed here rather than kept
+ * private so test_motor_controller.c pins the shipped value instead of a
+ * retyped copy of it.
+ */
+#define MOTOR_REFRESH_INTERVAL_MS 1000U
+
 #endif  // MOTOR_CONTROLLER_H

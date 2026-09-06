@@ -15,6 +15,9 @@
 #ifndef ROBOCAR_UNIFIED_HOST_TEST_ESP_ERR_H
 #define ROBOCAR_UNIFIED_HOST_TEST_ESP_ERR_H
 
+#include <stdio.h>
+#include <stdlib.h>
+
 typedef int esp_err_t;
 
 #define ESP_OK 0
@@ -28,5 +31,17 @@ typedef int esp_err_t;
 /** Implemented in host_shims.c. audio_player.c logs it on an I2S write error;
  *  the ESP_LOG* shims discard the string, but it still has to link. */
 const char *esp_err_to_name(esp_err_t err);
+
+/** Aborts on the host rather than silently swallowing, so a stub that starts
+ *  failing fails the test run instead of the assertion below it. */
+#define ESP_ERROR_CHECK(x)                                                                  \
+    do {                                                                                    \
+        const esp_err_t _esp_err_rc = (x);                                                  \
+        if (_esp_err_rc != ESP_OK) {                                                        \
+            fprintf(stderr, "ESP_ERROR_CHECK failed: %d at %s:%d\n", _esp_err_rc, __FILE__, \
+                    __LINE__);                                                              \
+            abort();                                                                        \
+        }                                                                                   \
+    } while (0)
 
 #endif /* ROBOCAR_UNIFIED_HOST_TEST_ESP_ERR_H */
