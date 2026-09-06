@@ -25,7 +25,27 @@ static struct {
     bool motion_active;
 } servo_state = {0};
 
-static uint16_t angle_to_count(servo_id_t id, int16_t angle)
+/* Convert a pulse width to a PCA9685 count at the frequency the chip is
+ * ACTUALLY running at.
+ *
+ * This used to be SERVO_PULSE_TO_COUNT(), which divided by a hardcoded
+ * SERVO_PERIOD_US of 5000 — correct only at 200 Hz. That constant and the
+ * chip's prescaler were two independent copies of the same fact, so changing
+ * the frequency silently produced pulses several times too long: at 50 Hz the
+ * macro's "1500 us" count is a 6 ms pulse, well outside any servo's range. */
+static uint16_t pulse_to_count(uint16_t pulse_us)
+{
+    const uint16_t hz = i2c_bus_pca9685_frequency();
+    const uint32_t period_us = (hz > 0u) ? (1000000u / hz) : SERVO_PERIOD_US;
+    uint32_t count = ((uint32_t)pulse_us * (PCA9685_PWM_MAX + 1u)) / period_us;
+
+    if (count > PCA9685_PWM_MAX) {
+        count = PCA9685_PWM_MAX;
+    }
+    return (uint16_t)count;
+}
+
+uint16_t servo_angle_to_count(servo_id_t id, int16_t angle)
 {
     int16_t min_angle = (id == SERVO_PAN) ? SERVO_PAN_MIN_ANGLE : SERVO_TILT_MIN_ANGLE;
     int16_t max_angle = (id == SERVO_PAN) ? SERVO_PAN_MAX_ANGLE : SERVO_TILT_MAX_ANGLE;
@@ -39,7 +59,12 @@ static uint16_t angle_to_count(servo_id_t id, int16_t angle)
     uint16_t pulse_us =
         SERVO_MIN_PULSE_US + (uint16_t)(normalized * (SERVO_MAX_PULSE_US - SERVO_MIN_PULSE_US));
 
-    return SERVO_PULSE_TO_COUNT(pulse_us);
+    return pulse_to_count(pulse_us);
+}
+
+static uint16_t angle_to_count(servo_id_t id, int16_t angle)
+{
+    return servo_angle_to_count(id, angle);
 }
 
 esp_err_t servo_controller_init(void)
@@ -276,6 +301,69 @@ esp_err_t servo_sweep(servo_id_t servo_id, int16_t start_angle, int16_t end_angl
         count++;
     }
     return ESP_OK;
+}
+
+/* Bench bring-up gesture: shake the head, then nod.
+ *
+ * Exists because "the servos are not moving" has at least four causes that look
+ * identical from across the room — no V+ on the PCA9685 (VCC powers only the
+ * logic), a failed init, a pulse train outside the servo's frame rate, and a
+ * dead servo — and the console could not tell them apart. Every step logs the
+ * angle, the PCA9685 count written, and the bus result, so a servo that does
+ * not move while the writes succeed is a different diagnosis from one whose
+ * writes are failing.
+ *
+ * Blocking, by several seconds. Called on peripheral_task, never from the
+ * console task. */
+esp_err_t servo_exercise(void)
+{
+    if (!servo_state.initialized) {
+        ESP_LOGE(TAG, "exercise: servos not initialised — nothing was written");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    static const struct {
+        servo_id_t id;
+        int16_t angle;
+        const char *what;
+    } k_steps[] = {
+        {SERVO_PAN, SERVO_PAN_CENTER, "centre"},
+        {SERVO_PAN, SERVO_PAN_MIN_ANGLE, "look left"},
+        {SERVO_PAN, SERVO_PAN_MAX_ANGLE, "look right"},
+        {SERVO_PAN, SERVO_PAN_CENTER, "centre"},
+        {SERVO_TILT, SERVO_TILT_CENTER, "centre"},
+        {SERVO_TILT, SERVO_TILT_MAX_ANGLE, "nod up"},
+        {SERVO_TILT, SERVO_TILT_MIN_ANGLE, "nod down"},
+        {SERVO_TILT, SERVO_TILT_MAX_ANGLE, "nod up"},
+        {SERVO_TILT, SERVO_TILT_MIN_ANGLE, "nod down"},
+        {SERVO_TILT, SERVO_TILT_CENTER, "centre"},
+    };
+
+    ESP_LOGI(TAG, "exercise: PCA9685 at %u Hz", (unsigned)i2c_bus_pca9685_frequency());
+
+    esp_err_t first_error = ESP_OK;
+    for (size_t i = 0; i < sizeof(k_steps) / sizeof(k_steps[0]); ++i) {
+        const uint16_t count = servo_angle_to_count(k_steps[i].id, k_steps[i].angle);
+        const esp_err_t ret = servo_set_angle(k_steps[i].id, k_steps[i].angle);
+
+        ESP_LOGI(TAG, "exercise: %-10s %s=%+d deg -> count %u  %s", k_steps[i].what,
+                 (k_steps[i].id == SERVO_PAN) ? "pan" : "tilt", k_steps[i].angle, (unsigned)count,
+                 esp_err_to_name(ret));
+
+        if (ret != ESP_OK && first_error == ESP_OK) {
+            first_error = ret;
+        }
+        vTaskDelay(pdMS_TO_TICKS(SERVO_EXERCISE_STEP_MS));
+    }
+
+    if (first_error == ESP_OK) {
+        ESP_LOGI(TAG,
+                 "exercise: every write succeeded. If nothing moved, the fault is downstream of "
+                 "the PCA9685 — check V+ (VCC powers only the logic), the servo leads, and "
+                 "whether these servos track pulses at %u Hz (`servo freq 50`).",
+                 (unsigned)i2c_bus_pca9685_frequency());
+    }
+    return first_error;
 }
 
 esp_err_t servo_stop_motion(void)

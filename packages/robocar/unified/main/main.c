@@ -90,6 +90,7 @@ typedef enum {
     PERIPH_CMD_LED_COLOR,
     PERIPH_CMD_SERVO_PAN,
     PERIPH_CMD_SERVO_TILT,
+    PERIPH_CMD_SERVO_EXERCISE,
     PERIPH_CMD_SOUND_BEEP,
     PERIPH_CMD_SOUND_MELODY,
     PERIPH_CMD_SOUND_ALERT,
@@ -184,6 +185,11 @@ static void peripheral_task(void *pvParameters)
                     break;
                 case PERIPH_CMD_SERVO_TILT:
                     servo_set_tilt(cmd.angle);
+                    break;
+                case PERIPH_CMD_SERVO_EXERCISE:
+                    /* Runs here rather than on the console task because it
+                     * blocks for several seconds. */
+                    servo_exercise();
                     break;
                 case PERIPH_CMD_SOUND_BEEP:
                     buzzer_beep();
@@ -288,21 +294,62 @@ static void handle_periph_cmd(const char *buf)
     }
 
     if (strncmp(buf, "servo", 5) == 0) {
-        if (sscanf(buf, "servo %15s %d", arg, &a) != 2) {
-            printf("servo: usage: servo pan|tilt <deg>\n");
+        const int n = sscanf(buf, "servo %15s %d", arg, &a);
+
+        if (n <= 0) {
+            /* State first: three of the four ways this goes wrong are visible
+             * here, and the fourth (nothing moves while every write succeeds)
+             * is what `servo exercise` is for. */
+            servo_position_t pos = {0};
+            const bool ready = servo_is_initialized();
+            servo_get_position(&pos);
+            printf("servo: %s | pca9685=%u Hz\n", ready ? "ready" : "NOT INITIALISED",
+                   (unsigned)i2c_bus_pca9685_frequency());
+            printf("       pan=%+d deg (count %u)  tilt=%+d deg (count %u)\n", pos.pan_angle,
+                   (unsigned)servo_angle_to_count(SERVO_PAN, pos.pan_angle), pos.tilt_angle,
+                   (unsigned)servo_angle_to_count(SERVO_TILT, pos.tilt_angle));
+            printf("       usage: servo pan|tilt <deg> | servo exercise | servo freq <24-1526>\n");
             return;
         }
+
+        if (strcmp(arg, "exercise") == 0) {
+            periph_cmd_t cmd = {.type = PERIPH_CMD_SERVO_EXERCISE};
+            dispatch_periph_cmd(&cmd);
+            printf("servo: exercise queued — shake then nod, ~6 s; watch the log for each write\n");
+            return;
+        }
+
+        if (n == 2 && strcmp(arg, "freq") == 0) {
+            const esp_err_t ret = i2c_bus_pca9685_set_frequency((uint16_t)a);
+            if (ret == ESP_OK) {
+                printf("servo: pca9685=%d Hz — affects motors and LEDs too, and does not persist\n",
+                       a);
+            } else {
+                printf("servo: freq failed: %s\n", esp_err_to_name(ret));
+            }
+            return;
+        }
+
+        if (n != 2) {
+            printf(
+                "servo: usage: servo | servo pan|tilt <deg> | servo exercise | servo freq <hz>\n");
+            return;
+        }
+
         periph_cmd_t cmd = {.angle = (int16_t)a};
         if (strcmp(arg, "pan") == 0) {
             cmd.type = PERIPH_CMD_SERVO_PAN;
         } else if (strcmp(arg, "tilt") == 0) {
             cmd.type = PERIPH_CMD_SERVO_TILT;
         } else {
-            printf("servo: usage: servo pan|tilt <deg>\n");
+            printf(
+                "servo: usage: servo | servo pan|tilt <deg> | servo exercise | servo freq <hz>\n");
             return;
         }
         dispatch_periph_cmd(&cmd);
-        printf("servo: %s=%d\n", arg, a);
+        printf("servo: %s=%d (count %u)\n", arg, a,
+               (unsigned)servo_angle_to_count(
+                   (cmd.type == PERIPH_CMD_SERVO_PAN) ? SERVO_PAN : SERVO_TILT, (int16_t)a));
         return;
     }
 
