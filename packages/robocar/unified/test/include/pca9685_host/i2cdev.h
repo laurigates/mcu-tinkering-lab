@@ -18,6 +18,12 @@
 typedef int i2c_port_t;
 typedef int gpio_num_t;
 
+/* i2c_bus.c names the port and calls the library's init; the vendored drivers
+ * do neither, so both live here rather than in the drivers' own shim needs. */
+#define I2C_NUM_0 0
+
+esp_err_t i2cdev_init(void);
+
 /* Just the fields pca9685.c touches; the real struct carries the whole
  * legacy-driver i2c_config_t. */
 typedef struct {

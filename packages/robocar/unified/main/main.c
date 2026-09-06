@@ -728,11 +728,17 @@ static void handle_trace_cmd(const char *buf)
     }
     if (strncmp(buf, "trace reset", 11) == 0) {
         activity_trace_reset();
+        i2c_bus_stats_reset();
         printf("trace: counters zeroed\n");
         return;
     }
 
     activity_trace_report();
+    /* Printed alongside the camera and endpoint counters because it answers the
+     * same kind of question about the third shared resource on this board. An
+     * idle robot should read close to zero here; a steady rate with nothing
+     * moving means something is writing the bus on a timer. */
+    i2c_bus_stats_report();
 }
 
 /**

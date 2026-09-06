@@ -6,7 +6,11 @@
 #include "i2c_bus.h"
 #include "pin_config.h"
 
+#include <stdio.h>
+#include <string.h>
+
 #include <esp_log.h>
+#include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 #include <i2cdev.h>
@@ -19,6 +23,136 @@ static i2c_dev_t s_tca9548;
 static i2c_dev_t s_pca9685;
 static SemaphoreHandle_t s_bus_mutex;
 static bool s_initialized = false;
+
+/* -------------------------------------------------------------------------- */
+/* Bus activity counters                                                        */
+/*                                                                              */
+/* Counted here because i2c_bus_select_channel() is the single gate every        */
+/* downstream transaction passes through — PCA9685 writes, the expander, and     */
+/* anything added later. Instrumenting the callers instead would mean a new      */
+/* writer goes uncounted, which is precisely the case worth catching: an         */
+/* unguarded periodic write is invisible from the console and only shows up as   */
+/* a symptom somewhere else on the board.                                        */
+/*                                                                              */
+/* One "op" is one bus acquisition: a mux channel-select write plus whatever     */
+/* device traffic the caller then issues. It is a lower bound on wire            */
+/* transactions, never an overcount.                                             */
+/*                                                                              */
+/* No lock. The success path already holds the bus mutex, so those increments    */
+/* are serialised; the two failure paths are not, so a simultaneous failure on   */
+/* both cores can lose a count. That is the same trade activity_trace makes —    */
+/* an instrument that blocks the path it measures changes the number it is       */
+/* reporting.                                                                    */
+/* -------------------------------------------------------------------------- */
+
+/** Length of the rate window. */
+#define I2C_STATS_WINDOW_MS 1000u
+
+static uint32_t s_ops;
+static uint32_t s_failed;
+static uint32_t s_per_channel[8];
+static uint32_t s_window_start_ms;
+static uint32_t s_window_ops;
+static uint32_t s_last_hz;
+static uint32_t s_peak_hz;
+static uint32_t s_since_ms;
+
+static inline uint32_t now_ms(void)
+{
+    return (uint32_t)(esp_timer_get_time() / 1000);
+}
+
+/** Fold a completed op into the rate window.
+ *
+ *  The window is advanced by traffic, not by a timer, so its length is however
+ *  long the ops actually took — hence the division rather than a bare count. A
+ *  bare count would report the LED refresh's one op per five seconds as 1 Hz. */
+static void note_op(uint8_t channel)
+{
+    const uint32_t now = now_ms();
+
+    s_ops++;
+    if (channel < 8u) {
+        s_per_channel[channel]++;
+    }
+
+    if (s_window_start_ms == 0u) {
+        s_window_start_ms = (now == 0u) ? 1u : now;
+    }
+
+    const uint32_t elapsed = now - s_window_start_ms;
+    if (elapsed >= I2C_STATS_WINDOW_MS) {
+        s_last_hz = (uint32_t)(((uint64_t)s_window_ops * 1000u) / elapsed);
+        if (s_last_hz > s_peak_hz) {
+            s_peak_hz = s_last_hz;
+        }
+        s_window_ops = 0u;
+        s_window_start_ms = (now == 0u) ? 1u : now;
+    }
+    s_window_ops++;
+}
+
+void i2c_bus_stats_get(i2c_bus_stats_t *out)
+{
+    if (out == NULL) {
+        return;
+    }
+
+    const uint32_t now = now_ms();
+
+    out->ops = s_ops;
+    out->failed = s_failed;
+    memcpy(out->per_channel, s_per_channel, sizeof(out->per_channel));
+    out->peak_hz = s_peak_hz;
+    out->elapsed_ms = now - s_since_ms;
+
+    /* A rate whose window has not been touched for a while is not a rate, it is
+     * a memory of one. Reporting the stale value would read as live traffic on
+     * a bus that has gone quiet — the exact reading this counter exists to
+     * distinguish. */
+    out->hz = (s_window_start_ms != 0u && (now - s_window_start_ms) < (2u * I2C_STATS_WINDOW_MS))
+                  ? s_last_hz
+                  : 0u;
+}
+
+void i2c_bus_stats_reset(void)
+{
+    s_ops = 0u;
+    s_failed = 0u;
+    memset(s_per_channel, 0, sizeof(s_per_channel));
+    s_window_start_ms = 0u;
+    s_window_ops = 0u;
+    s_last_hz = 0u;
+    s_peak_hz = 0u;
+    s_since_ms = now_ms();
+}
+
+void i2c_bus_stats_report(void)
+{
+    i2c_bus_stats_t st;
+    i2c_bus_stats_get(&st);
+
+    const uint32_t secs = st.elapsed_ms / 1000u;
+    /* Tenths, by integer math: at these rates a whole number rounds the idle
+     * bus to 0 and hides exactly the difference being measured. */
+    const uint32_t mean_tenths =
+        (st.elapsed_ms > 0u) ? (uint32_t)(((uint64_t)st.ops * 10000u) / st.elapsed_ms) : 0u;
+
+    printf("  i2c: %u ops in %us (mean %u.%u/s, now %u/s, peak %u/s), %u failed\n",
+           (unsigned)st.ops, (unsigned)secs, (unsigned)(mean_tenths / 10u),
+           (unsigned)(mean_tenths % 10u), (unsigned)st.hz, (unsigned)st.peak_hz,
+           (unsigned)st.failed);
+
+    printf("       per channel:");
+    bool any = false;
+    for (uint8_t ch = 0; ch < 8u; ++ch) {
+        if (st.per_channel[ch] > 0u) {
+            printf(" ch%u=%u", (unsigned)ch, (unsigned)st.per_channel[ch]);
+            any = true;
+        }
+    }
+    printf("%s\n", any ? "" : " none");
+}
 
 esp_err_t i2c_bus_init(void)
 {
@@ -113,16 +247,19 @@ esp_err_t i2c_bus_select_channel(uint8_t channel)
 
     if (xSemaphoreTakeRecursive(s_bus_mutex, pdMS_TO_TICKS(5000)) != pdTRUE) {
         ESP_LOGE(TAG, "Bus mutex timeout");
+        s_failed++;
         return ESP_ERR_TIMEOUT;
     }
 
     esp_err_t ret = tca9548_set_channels(&s_tca9548, (1 << channel));
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Channel select failed: %s", esp_err_to_name(ret));
+        s_failed++;
         xSemaphoreGiveRecursive(s_bus_mutex);
         return ret;
     }
 
+    note_op(channel);
     return ESP_OK;
 }
 

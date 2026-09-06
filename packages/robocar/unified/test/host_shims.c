@@ -51,6 +51,17 @@ BaseType_t xSemaphoreGive(SemaphoreHandle_t sem)
     return sem != NULL ? pdTRUE : pdFALSE;
 }
 
+BaseType_t xSemaphoreTakeRecursive(SemaphoreHandle_t sem, TickType_t wait)
+{
+    (void)wait;
+    return sem != NULL ? pdTRUE : pdFALSE;
+}
+
+BaseType_t xSemaphoreGiveRecursive(SemaphoreHandle_t sem)
+{
+    return sem != NULL ? pdTRUE : pdFALSE;
+}
+
 void vSemaphoreDelete(SemaphoreHandle_t sem)
 {
     (void)sem;
