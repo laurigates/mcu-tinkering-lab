@@ -10,12 +10,19 @@
  */
 
 #include "motor_controller.h"
+
+#include <string.h>
+
 #include "driver/gpio.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "i2c_bus.h"
 #include "pin_config.h"
 
 static const char *TAG = "motor_controller";
+
+/** Number of PCA9685 channels written per motor update: IN1, IN2, PWM x2. */
+#define MOTOR_CHANNEL_COUNT 6
 
 static struct {
     uint8_t left_speed;
@@ -25,18 +32,64 @@ static struct {
     bool initialized;
 } motor_state = {0};
 
+/** Last state successfully written to the PCA9685. `valid` is false whenever
+ *  the chip's contents are unknown — before the first write, and after any
+ *  failed one, so a transaction that did not land is never remembered as
+ *  applied. */
+static struct {
+    uint16_t values[MOTOR_CHANNEL_COUNT];
+    uint32_t written_ms;
+    bool valid;
+} s_last_write = {0};
+
+static inline uint32_t now_ms(void)
+{
+    return (uint32_t)(esp_timer_get_time() / 1000);
+}
+
 // Map 8-bit speed (0-255) to 12-bit PCA9685 value (0-4095)
 static uint16_t speed_to_pwm(uint8_t speed)
 {
     return (uint16_t)((uint32_t)speed * PCA9685_PWM_MAX / 255);
 }
 
-// Set both motors in a single I2C transaction (6 channels: IN1, IN2, PWM x2)
+/* Set both motors in a single I2C transaction (6 channels: IN1, IN2, PWM x2).
+ *
+ * An unchanged state is not re-written. reactive_controller's 30 Hz loop calls
+ * motor_stop() unconditionally on every iteration it is not driving, so a
+ * parked robot re-wrote six identical registers 30 times a second for as long
+ * as it was powered — the firmware's only continuous I2C traffic, and it
+ * existed solely to restate what the chip already held. See
+ * MOTOR_REFRESH_INTERVAL_MS for why the suppression expires rather than
+ * lasting until the value changes.
+ *
+ * Suppression is fail-safe in the direction that matters: a PCA9685 that reset
+ * under a stale cache holds its power-on defaults, which are all outputs off —
+ * a stop. So the worst a suppressed write can do is keep the robot stopped for
+ * up to MOTOR_REFRESH_INTERVAL_MS, never keep it moving. */
 static esp_err_t set_motors(uint16_t r_in1, uint16_t r_in2, uint16_t r_pwm, uint16_t l_in1,
                             uint16_t l_in2, uint16_t l_pwm)
 {
-    const uint16_t values[6] = {r_in1, r_in2, r_pwm, l_in1, l_in2, l_pwm};
-    return i2c_bus_pca9685_set_multi(MOTOR_RIGHT_IN1_CHANNEL, 6, values);
+    const uint16_t values[MOTOR_CHANNEL_COUNT] = {r_in1, r_in2, r_pwm, l_in1, l_in2, l_pwm};
+    const uint32_t now = now_ms();
+
+    /* Unsigned subtraction, so the uint32 millisecond wrap at day 49 yields a
+     * correct elapsed time rather than a refresh that never falls due again. */
+    if (s_last_write.valid && memcmp(values, s_last_write.values, sizeof(values)) == 0 &&
+        (now - s_last_write.written_ms) < MOTOR_REFRESH_INTERVAL_MS) {
+        return ESP_OK;
+    }
+
+    const esp_err_t ret =
+        i2c_bus_pca9685_set_multi(MOTOR_RIGHT_IN1_CHANNEL, MOTOR_CHANNEL_COUNT, values);
+    if (ret == ESP_OK) {
+        memcpy(s_last_write.values, values, sizeof(values));
+        s_last_write.written_ms = now;
+        s_last_write.valid = true;
+    } else {
+        s_last_write.valid = false;
+    }
+    return ret;
 }
 
 esp_err_t motor_controller_init(void)
@@ -61,7 +114,8 @@ esp_err_t motor_controller_init(void)
     // Enable motor driver
     gpio_set_level(MOTOR_STBY_PIN, 1);
 
-    // Stop all motors via PCA9685
+    /* Reaches the bus: s_last_write starts invalid, so this first stop is never
+     * suppressed however the board got here. */
     motor_stop();
 
     motor_state.initialized = true;
