@@ -20,6 +20,8 @@ SemaphoreHandle_t xSemaphoreCreateMutex(void);
 SemaphoreHandle_t xSemaphoreCreateRecursiveMutex(void);
 BaseType_t xSemaphoreTake(SemaphoreHandle_t sem, TickType_t wait);
 BaseType_t xSemaphoreGive(SemaphoreHandle_t sem);
+BaseType_t xSemaphoreTakeRecursive(SemaphoreHandle_t sem, TickType_t wait);
+BaseType_t xSemaphoreGiveRecursive(SemaphoreHandle_t sem);
 void vSemaphoreDelete(SemaphoreHandle_t sem);
 
 #endif /* ROBOCAR_UNIFIED_HOST_TEST_SEMPHR_H */

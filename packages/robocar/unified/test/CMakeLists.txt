@@ -334,6 +334,30 @@ target_link_libraries(test_activity_trace PRIVATE Threads::Threads m)
 add_test(NAME activity_trace COMMAND test_activity_trace)
 
 # -----------------------------------------------------------------------------
+# i2c_bus activity counters
+#
+# i2c_bus.c is compiled UNMODIFIED against the shims in test/include plus driver
+# stubs in the test, so the counters are exercised through the real
+# i2c_bus_select_channel() gate rather than by poking their statics. The case
+# worth pinning is the one that would lie: a rate whose window stopped advancing
+# because the traffic stopped must read 0, not the last value it remembers.
+# -----------------------------------------------------------------------------
+add_executable(test_i2c_bus_stats
+    "${MAIN_SRC_DIR}/i2c_bus.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/host_shims.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_i2c_bus_stats.c"
+)
+target_include_directories(test_i2c_bus_stats BEFORE PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_host"  # i2c_bus.h -> <i2cdev.h>
+    "${ESP_IDF_LIB_DIR}/pca9685"
+    "${ESP_IDF_LIB_DIR}/tca9548"
+)
+# -Wno-unused-variable: the ESP_LOG* shims are no-ops, which leaves TAG unused.
+target_compile_options(test_i2c_bus_stats PRIVATE -Wno-unused-variable)
+target_link_libraries(test_i2c_bus_stats PRIVATE Threads::Threads m)
+add_test(NAME i2c_bus_stats COMMAND test_i2c_bus_stats)
+
+# -----------------------------------------------------------------------------
 # self_report per-peripheral health (issue #500)
 #
 # self_report.c is compiled UNMODIFIED against the shims in test/include plus

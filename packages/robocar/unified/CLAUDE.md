@@ -97,6 +97,20 @@ pulse so a fault that happened while nobody was watching is still on the robot.
 `trace` totals it all since boot, with mean/max latency per endpoint and — when
 something is wedged — how long the outstanding request has been outstanding.
 
+`trace` also prints the **I2C bus** line, counted in `i2c_bus_select_channel()`
+because that is the single gate every downstream transaction passes through —
+PCA9685 writes, the expander, and anything added later. Instrumenting the
+callers instead would let a new writer go uncounted, which is exactly the case
+worth catching: a peripheral written on a timer is invisible from the console
+and surfaces as a symptom somewhere else on the board. One "op" is one bus
+acquisition (a mux channel-select plus the caller's device traffic), so it is a
+lower bound on wire transactions, never an overcount.
+
+An idle robot should read close to zero. A steady rate with nothing moving means
+something is writing the bus on a timer. The `now` field is **zeroed once its
+window goes stale** rather than reporting the last rate it saw: a remembered
+rate on a silent bus is the one reading this counter exists to rule out.
+
 **A colour is written only when it changes, and re-asserted every
 `LED_REFRESH_INTERVAL_MS` even when it does not.** The suppression keeps a 25 Hz
 task off the shared I2C bus; the re-assertion exists because the shadow it keeps
