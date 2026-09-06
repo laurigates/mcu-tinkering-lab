@@ -119,12 +119,14 @@ esp_err_t camera_init(void)
          * the sensor's own power-on default of 0x00F8 = 248 = 15.5x. Leaving the
          * driver's default in place is both correct and sensor-agnostic; tune it
          * live with `cam gainceiling N` if a room really needs it. */
-        s->set_bpc(s, 0);       // 0 = disable , 1 = enable
-        s->set_wpc(s, 1);       // 0 = disable , 1 = enable
-        s->set_raw_gma(s, 1);   // 0 = disable , 1 = enable
-        s->set_lenc(s, 1);      // 0 = disable , 1 = enable
-        s->set_hmirror(s, 0);   // 0 = disable , 1 = enable
-        s->set_vflip(s, 0);     // 0 = disable , 1 = enable
+        s->set_bpc(s, 0);      // 0 = disable , 1 = enable
+        s->set_wpc(s, 1);      // 0 = disable , 1 = enable
+        s->set_raw_gma(s, 1);  // 0 = disable , 1 = enable
+        s->set_lenc(s, 1);     // 0 = disable , 1 = enable
+        /* Mounting orientation. The board is fitted inverted, so this is a
+         * 180-degree rotation — both axes. See CAMERA_VFLIP_DEFAULT. */
+        s->set_hmirror(s, CAMERA_HMIRROR_DEFAULT ? 1 : 0);
+        s->set_vflip(s, CAMERA_VFLIP_DEFAULT ? 1 : 0);
         s->set_dcw(s, 1);       // 0 = disable , 1 = enable
         s->set_colorbar(s, 0);  // 0 = disable , 1 = enable
 
@@ -274,6 +276,41 @@ int camera_gainceiling_max(void)
     /* OV3660 takes a raw 10-bit ceiling; OV2640 an enum index. Getting this
      * wrong is not a range error, it is a silent exposure change. */
     return (s->id.PID == OV3660_PID) ? 1023 : 6;
+}
+
+/* Orientation is read back from the driver's cached status rather than kept in
+ * a second copy here. That cache is untrustworthy for exposure — the AEC/AGC
+ * loops rewrite those registers every frame, so it holds what was last WRITTEN
+ * rather than what the sensor chose — but there is no auto loop for flip or
+ * mirror, so for these two the last write IS the current state. */
+esp_err_t camera_set_vflip(bool enable)
+{
+    sensor_t *s = esp_camera_sensor_get();
+    if (!s || !s->set_vflip) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    return (s->set_vflip(s, enable ? 1 : 0) == 0) ? ESP_OK : ESP_FAIL;
+}
+
+esp_err_t camera_set_hmirror(bool enable)
+{
+    sensor_t *s = esp_camera_sensor_get();
+    if (!s || !s->set_hmirror) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    return (s->set_hmirror(s, enable ? 1 : 0) == 0) ? ESP_OK : ESP_FAIL;
+}
+
+bool camera_get_vflip(void)
+{
+    const sensor_t *s = esp_camera_sensor_get();
+    return (s != NULL) && (s->status.vflip != 0);
+}
+
+bool camera_get_hmirror(void)
+{
+    const sensor_t *s = esp_camera_sensor_get();
+    return (s != NULL) && (s->status.hmirror != 0);
 }
 
 esp_err_t camera_set_gainceiling(int ceiling)

@@ -69,6 +69,38 @@ void camera_format_exposure(char *out, size_t n, const camera_exposure_t *exp);
  * OV2640-shaped 0..6 to an OV3660 sets a ceiling of essentially zero gain,
  * which is exactly the bug that made this robot's frames dark.
  */
+/**
+ * @brief Mounting orientation, applied in the sensor at init.
+ *
+ * The camera is mounted inverted, so the frame needs rotating 180 degrees —
+ * which is a vertical flip AND a horizontal mirror, not either one alone. A
+ * flip on its own would leave the image mirrored, which reads as "the right way
+ * up" at a glance and puts left and right the wrong way round for anything
+ * acting on the frame: the planner's `track(box_2d)` would steer the robot away
+ * from what it is trying to follow.
+ *
+ * Done in the sensor rather than in software because it costs nothing there —
+ * it is a readout-order change, not a transform — and because it corrects every
+ * consumer at once: the planner's frame, the `snap` dumps, and the block
+ * fingerprints that gate speech and planner dormancy.
+ *
+ * Orientation is a fact about how the board is screwed down, so these are only
+ * the boot defaults; `cam flip` and `cam mirror` change them live. Neither
+ * persists to NVS, for the same reason `cam gainceiling` does not.
+ */
+#define CAMERA_VFLIP_DEFAULT true
+#define CAMERA_HMIRROR_DEFAULT true
+
+/** @brief Flip the image vertically in the sensor. */
+esp_err_t camera_set_vflip(bool enable);
+
+/** @brief Mirror the image horizontally in the sensor. */
+esp_err_t camera_set_hmirror(bool enable);
+
+/** @brief Current vertical flip / horizontal mirror, as last written. */
+bool camera_get_vflip(void);
+bool camera_get_hmirror(void);
+
 esp_err_t camera_set_gainceiling(int ceiling);
 
 /** @brief Largest value camera_set_gainceiling() accepts for the fitted sensor. */

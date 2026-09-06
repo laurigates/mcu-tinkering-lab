@@ -643,6 +643,9 @@ static void handle_cam_cmd(const char *buf)
         camera_format_exposure(buf_exp, sizeof(buf_exp), &exp);
         printf("cam: pid=%04x %s (gainceiling range 0-%d)\n", exp.pid, buf_exp,
                camera_gainceiling_max());
+        printf("     orientation: flip=%s mirror=%s%s\n", camera_get_vflip() ? "on" : "off",
+               camera_get_hmirror() ? "on" : "off",
+               (camera_get_vflip() && camera_get_hmirror()) ? " (rotated 180)" : "");
         return;
     }
 
@@ -659,8 +662,26 @@ static void handle_cam_cmd(const char *buf)
         ret = camera_set_brightness(value);
         if (ret == ESP_OK)
             printf("cam: brightness=%d\n", value);
+    } else if (strcmp(op, "flip") == 0 || strcmp(op, "mirror") == 0) {
+        /* Parsed off the raw line rather than the %d above: "on"/"off" reads
+         * better than 1/0 for a two-state control, and sscanf already failed to
+         * fill `value` for them. */
+        const bool on = (strstr(buf, " on") != NULL);
+        const bool off = (strstr(buf, " off") != NULL);
+        if (on == off) {
+            printf("cam: usage: cam %s on|off  (currently %s)\n", op,
+                   ((strcmp(op, "flip") == 0) ? camera_get_vflip() : camera_get_hmirror()) ? "on"
+                                                                                           : "off");
+            return;
+        }
+        ret = (strcmp(op, "flip") == 0) ? camera_set_vflip(on) : camera_set_hmirror(on);
+        if (ret == ESP_OK) {
+            printf("cam: %s=%s — the next frame will read as a scene change\n", op,
+                   on ? "on" : "off");
+        }
     } else {
-        printf("cam: usage: cam | cam gainceiling 0-%d | cam ae -2..2 | cam brightness -2..2\n",
+        printf("cam: usage: cam | cam gainceiling 0-%d | cam ae -2..2 | cam brightness -2..2"
+               " | cam flip on|off | cam mirror on|off\n",
                camera_gainceiling_max());
         return;
     }
