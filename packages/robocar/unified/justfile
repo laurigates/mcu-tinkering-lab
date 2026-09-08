@@ -141,7 +141,8 @@ gen-pin-defs:
         main/pin_config.h \
         docs/auto/pin_defs.typ
 
-# Regenerate the printable build guide PDF from the Typst source.
+# Regenerate every printable Typst document in docs/ — the build guide and the
+# bench cards beside it.
 #
 # Deliberately mirrors .github/workflows/build-guide-check.yml byte for byte:
 # the same pinned CLI (via `mise exec`, so an unrelated homebrew typst upgrade
@@ -149,9 +150,24 @@ gen-pin-defs:
 # --creation-timestamp 0 pins the embedded PDF timestamp, --ignore-system-fonts
 # embeds only Typst's bundled fonts so glyph fallback does not vary by OS.
 # Drop either flag and CI reports the freshly compiled PDF as stale.
+#
+# The loop matches the guard's own discovery, so adding a card to docs/ needs no
+# edit here. docs/auto/ is excluded for the same reason it is there: pin_defs.typ
+# is an include, not a document, and has no PDF.
+#
+# `--others --exclude-standard` is what makes the recipe usable on a card that
+# does not exist in the index yet. CI only ever sees tracked files, so the flags
+# are a no-op there; locally, without them, a newly written .typ is skipped in
+# silence and the first sign of it is the guard failing with "No committed PDF".
 [group: "docs"]
 build-guide: gen-pin-defs
-    cd ../../.. && mise exec typst@{{typst_version}} -- typst compile --creation-timestamp 0 --ignore-system-fonts --root . {{project_dir}}/docs/build-guide.typ {{project_dir}}/docs/build-guide.pdf
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd ../../..
+    for typ in $(git ls-files --cached --others --exclude-standard ':(glob)'"{{project_dir}}"'/docs/*.typ'); do
+        echo "compiling $typ"
+        mise exec typst@{{typst_version}} -- typst compile --creation-timestamp 0 --ignore-system-fonts --root . "$typ" "${typ%.typ}.pdf"
+    done
 
 ##########
 # Info
