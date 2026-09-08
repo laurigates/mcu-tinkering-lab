@@ -15,23 +15,24 @@ for the robot's voice.
 Pin assignments, channel maps, power and the wiring schematic are in
 **[WIRING.md](WIRING.md)**; `main/pin_config.h` is authoritative for all of them.
 
-## Printable build guide
+## Printable guides
 
-A single-page-format assembly + wiring + flashing guide is available as a
-Typst document: [`docs/build-guide.typ`](docs/build-guide.typ) (rendered PDF:
-[`docs/build-guide.pdf`](docs/build-guide.pdf)). It covers the bill of
-materials, wiring reference, power, assembly steps, firmware build/flash, WiFi
-provisioning, a functional checkout list, and troubleshooting.
+| Document | Scope |
+|---|---|
+| [`docs/build-guide.typ`](docs/build-guide.typ) → [PDF](docs/build-guide.pdf) | Whole build: bill of materials, wiring reference, power, assembly, flashing, WiFi provisioning, functional checkout, troubleshooting |
+| [`docs/wiring-card-motors.typ`](docs/wiring-card-motors.typ) → [PDF](docs/wiring-card-motors.pdf) | One bench card for the PCA9685 → TB6612FNG motor wiring, with both board layouts drawn from the vendors' Eagle files |
 
-Regenerate the PDF after edits (pin data mirrors `main/pin_config.h`):
+Regenerate every PDF after editing any of them — channel numbers come from
+`main/pin_config.h` via `docs/auto/pin_defs.typ`, so a pin moved in the header
+changes what these print:
 
 ```bash
-# from packages/robocar/unified/docs, with repo root as the sandbox root.
-# The canonical flags keep output byte-reproducible so the build-guide-check CI
-# guard (which recompiles and diffs) doesn't false-positive. Match the Typst
-# version pinned in .github/workflows/build-guide-check.yml.
-typst compile --creation-timestamp 0 --ignore-system-fonts --root ../../../.. build-guide.typ
+just robocar-unified::build-guide
 ```
+
+The recipe pins the Typst version and the two determinism flags that
+`.github/workflows/build-guide-check.yml` recompiles with, so a hand-run
+`typst compile` with different flags will read as drift in CI.
 
 ## Architecture
 
