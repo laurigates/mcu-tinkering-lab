@@ -18,6 +18,38 @@ gate that keeps the board booting also keeps the code behind it untested.
 **When a gate opens for the first time, expect a chain, and clear it one bug at
 a time.**
 
+## The gate is not a clean A/B variable — unplugging one chip silences the bus
+
+`i2c_bus_init()` returns as soon as the **PCA9685** fails to answer
+(`i2c_bus.c:72-76`), and `init_hardware()` treats that failure as "no I2C
+hardware fitted" and returns early (`main.c:1138-1146`). So removing that one
+breakout does far more than remove one device:
+
+| | PCA9685 out | PCA9685 in |
+|---|---|---|
+| I2C traffic | **none, ever** | continuous |
+| `motor_controller_init()` | never runs | runs |
+| STBY (GPIO1) → TB6612FNG | never driven — driver in standby | **driven HIGH, driver enabled** |
+| `activity_trace` task | never started | started, writes LEDs |
+| Servos | never centred | centred, then held |
+
+That matters when the gate is used as an experiment. Observed 2026-09: audio was
+distorted with the PCA9685 fitted and clean without, which reads as "the PCA9685
+causes it" — but the comparison changed the bus traffic, the motor driver's
+standby state, the servo outputs and a whole task at once. Quieting the bus
+(PR #504) did not fix the audio, so the traffic was not the cause; at the time of
+writing the leading hypothesis is the supply, because the servo and amplifier
+V+ was found taken from the XIAO's VUSB and fitting the board adds the load that
+would expose it. That is unconfirmed pending a measurement — which is the point:
+four sessions' worth of theories were argued off a comparison that was never
+one-variable.
+
+**Before treating "works without it, fails with it" as evidence about a
+component, enumerate what else its presence switches on.** A gate that keeps a
+board booting is exactly the kind of thing that turns a one-variable test into a
+five-variable one, silently — the same masking property that leaves the code
+behind it untested, applied to the bench instead of the build.
+
 ## Read the code between the last log line and the panic before any electrical theory
 
 Boot 1 was first diagnosed as a supply sag: the panic landed the instant STBY

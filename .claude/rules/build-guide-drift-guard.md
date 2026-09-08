@@ -74,6 +74,31 @@ The negative control is the load-bearing one — it is the only evidence the gua
 can still fail. Restore with `git checkout -- packages/<proj>/main/pin_config.h
 packages/<proj>/docs/` afterwards.
 
+**Run it from a clean tree, or its verdict is meaningless.** The guard recompiles
+each PDF and then asks `git diff --quiet` whether the result matches what is
+committed. So in a dirty working tree it reports the output as **stale whether or
+not anything is wrong** — you just changed the source, so the regenerated
+artifact legitimately differs from `HEAD`. Observed 2026-09: a correctly
+regenerated PDF was reported stale, and the message ("Committed build-guide
+output is stale…") reads exactly like a real finding.
+
+The order is therefore: edit the `.typ`, run `just <proj>::build-guide`, **commit
+the regenerated PDF and `pin_defs.typ`**, and only then run the guard. Both
+controls above assume that commit has already happened.
+
+**And read the guard's own exit code, not a pipe's.** `mise exec … -- bash
+guard.sh | tail` makes `$?` the status of `tail`, so a guard that failed prints
+`exit=0`. Redirect to a file and check the status, or test the command directly:
+
+```sh
+mise exec typst@0.15.0 -- bash /tmp/guard.sh > /tmp/guard.log 2>&1; echo "exit=$?"
+```
+
+The extracted script also references `TYPST_VERSION` in its failure message,
+which the workflow sets as job-level `env:` rather than inside the `run:` block —
+so export it before running, or a genuine failure dies on `unbound variable`
+before it can tell you what was stale.
+
 ## 3. Do not grep a Typst PDF for text
 
 Typst embeds subset fonts with custom glyph encodings, so searching the
