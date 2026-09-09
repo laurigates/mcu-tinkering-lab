@@ -243,7 +243,11 @@ class RobotVisualizer:
         # Initialize Genesis environment
         self._init_genesis_environment()
 
-        if self.scene:
+        # ty narrows self.scene to None from the `self.scene = None` above and
+        # does not model _init_genesis_environment() rebinding it, so it reads
+        # this branch as dead. At runtime the scene is populated unless Genesis
+        # failed to initialize.
+        if self.scene:  # ty: ignore[redundant-condition]
             self._create_environment()
             self._create_robot_model()
             self._add_coordinate_axes()
