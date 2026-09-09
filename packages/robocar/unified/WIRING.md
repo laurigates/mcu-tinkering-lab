@@ -55,15 +55,25 @@ device — nothing talks to the primary bus directly.
 | 5 | Right LED B | |
 | 6 | Pan PWM | SG90 servo |
 | 7 | Tilt PWM | SG90 servo |
-| 8 | Motor R IN1 | TB6612FNG (digital: 0 / 4096) |
-| 9 | Motor R IN2 | TB6612FNG (digital) |
-| 10 | Motor R PWM | TB6612FNG (PWM 0-4095) |
-| 11 | Motor L IN1 | TB6612FNG (digital) |
-| 12 | Motor L IN2 | TB6612FNG (digital) |
-| 13 | Motor L PWM | TB6612FNG (PWM 0-4095) |
+| 8 | Motor R PWM | TB6612FNG **PWMA** (PWM 0-4095) |
+| 9 | Motor R IN2 | TB6612FNG **AIN2** (digital: 0 / 4096) |
+| 10 | Motor R IN1 | TB6612FNG **AIN1** (digital) |
+| 11 | Motor L IN1 | TB6612FNG **BIN1** (digital) |
+| 12 | Motor L IN2 | TB6612FNG **BIN2** (digital) |
+| 13 | Motor L PWM | TB6612FNG **PWMB** (PWM 0-4095) |
 | 14-15 | *reserved* | |
 
 200 Hz is a compromise between servo timing (ideal 50 Hz) and motor PWM smoothness — works well for SG90s and TB6612FNG.
+
+**Channels 8-13 are in the motor driver's own pin order, not in a per-motor
+order.** Read the TB6612FNG's control header top to bottom and it is PWMA,
+AIN2, AIN1, STBY, BIN1, BIN2, PWMB — symmetric about STBY rather than repeated
+— so following it makes the six jumpers run straight across with no crossings,
+at the cost of the A side reading PWM-then-direction and the B side
+direction-then-PWM. STBY is skipped here because it comes from GPIO1, not from
+the PCA9685. `docs/wiring-card-motors.pdf` draws both boards; `main/pin_config.h`
+is authoritative, and `set_motors()` places each value by channel rather than by
+position so this ordering cannot silently mis-drive a pin.
 
 ## Power
 

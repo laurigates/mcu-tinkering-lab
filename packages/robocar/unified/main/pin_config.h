@@ -57,13 +57,29 @@
 #define SERVO_PAN_CHANNEL 6
 #define SERVO_TILT_CHANNEL 7
 
-// Motor channels (TB6612FNG via PCA9685 digital/PWM outputs)
-#define MOTOR_RIGHT_IN1_CHANNEL 8   // Direction: digital 0 or 4096
-#define MOTOR_RIGHT_IN2_CHANNEL 9   // Direction: digital 0 or 4096
-#define MOTOR_RIGHT_PWM_CHANNEL 10  // Speed: PWM 0-4095
-#define MOTOR_LEFT_IN1_CHANNEL 11   // Direction: digital 0 or 4096
-#define MOTOR_LEFT_IN2_CHANNEL 12   // Direction: digital 0 or 4096
-#define MOTOR_LEFT_PWM_CHANNEL 13   // Speed: PWM 0-4095
+// Motor channels (TB6612FNG via PCA9685 digital/PWM outputs).
+//
+// The order follows the TB6612FNG's control header read top to bottom — PWMA,
+// AIN2, AIN1, then, across STBY, BIN1, BIN2, PWMB — so the six jumpers run
+// straight across with no crossings. STBY is skipped because it comes from the
+// MCU (MOTOR_STBY_PIN), not from the PCA9685.
+//
+// That header is symmetric about STBY rather than repeated, which is why the A
+// side reads PWM-then-direction and the B side direction-then-PWM. It looks
+// like an inconsistency in this list and is the opposite: it is what makes the
+// physical wiring consistent.
+//
+// The six are one consecutive block so both motors can be set in a single I2C
+// transaction. motor_controller.c places each value by its channel and
+// static-asserts the block property, so renumbering here is a safe edit —
+// but it is a REWIRING, not a refactor.
+#define MOTOR_FIRST_CHANNEL 8       // Base of the block; keep in step with the six below
+#define MOTOR_RIGHT_PWM_CHANNEL 8   // -> PWMA. Speed: PWM 0-4095
+#define MOTOR_RIGHT_IN2_CHANNEL 9   // -> AIN2. Direction: digital 0 or 4096
+#define MOTOR_RIGHT_IN1_CHANNEL 10  // -> AIN1. Direction: digital 0 or 4096
+#define MOTOR_LEFT_IN1_CHANNEL 11   // -> BIN1. Direction: digital 0 or 4096
+#define MOTOR_LEFT_IN2_CHANNEL 12   // -> BIN2. Direction: digital 0 or 4096
+#define MOTOR_LEFT_PWM_CHANNEL 13   // -> PWMB. Speed: PWM 0-4095
 // Channels 14-15: reserved for future expansion
 
 // PCA9685 digital output values (for direction pins)

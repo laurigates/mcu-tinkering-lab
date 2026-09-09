@@ -23,10 +23,13 @@
   footer-note: [Channels from `main/pin_config.h` · layouts from vendor board files],
 )
 
+// Sorted, because the roles are now assigned in the motor driver's pin order
+// rather than in a per-motor order — so the declaration order below is not the
+// channel order, and used.at(0)/used.at(5) are read as the ends of the range.
 #let used = (
   pins.PCA_CH_MOTOR_R_IN1, pins.PCA_CH_MOTOR_R_IN2, pins.PCA_CH_MOTOR_R_PWM,
   pins.PCA_CH_MOTOR_L_IN1, pins.PCA_CH_MOTOR_L_IN2, pins.PCA_CH_MOTOR_L_PWM,
-)
+).sorted()
 
 #callout("Six signal wires, plus one that does not come from the PCA9685", [
   Channels #used.at(0)–#used.at(5) carry direction and speed for both motors.
@@ -194,18 +197,31 @@
 
 = 2 · The seven wires
 
+Rows are in the motor driver's own pin order, top to bottom, so working down
+this table is working down the header. Channel numbers ascend with it — that is
+the point of the assignment, not a coincidence.
+
 #htable(
   (auto, auto, auto, 1fr),
-  ([], [From], [To], [Carries]),
-  ([☐], [PCA9685 ch #pins.PCA_CH_MOTOR_R_IN1 · PWM row], [TB6612 *AIN1*], [Right motor direction bit 1 — driven full-on (4096) or full-off (0), never a duty cycle]),
-  ([☐], [PCA9685 ch #pins.PCA_CH_MOTOR_R_IN2 · PWM row], [TB6612 *AIN2*], [Right motor direction bit 2]),
-  ([☐], [PCA9685 ch #pins.PCA_CH_MOTOR_R_PWM · PWM row], [TB6612 *PWMA*], [Right motor speed — the only modulated line of the three]),
-  ([☐], [PCA9685 ch #pins.PCA_CH_MOTOR_L_IN1 · PWM row], [TB6612 *BIN1*], [Left motor direction bit 1]),
-  ([☐], [PCA9685 ch #pins.PCA_CH_MOTOR_L_IN2 · PWM row], [TB6612 *BIN2*], [Left motor direction bit 2]),
-  ([☐], [PCA9685 ch #pins.PCA_CH_MOTOR_L_PWM · PWM row], [TB6612 *PWMB*], [Left motor speed]),
-  ([☐], [XIAO *D0 / GPIO#pins.MOTOR_STBY_PIN*], [TB6612 *STBY*], [Global enable, straight from the MCU — high enables both bridges]),
+  ([], [TB6612 pin], [From], [Carries]),
+  ([☐], [1 · *PWMA*], [PCA9685 ch #pins.PCA_CH_MOTOR_R_PWM · PWM row], [Right motor speed — the only modulated line of the three]),
+  ([☐], [2 · *AIN2*], [PCA9685 ch #pins.PCA_CH_MOTOR_R_IN2 · PWM row], [Right motor direction bit 2]),
+  ([☐], [3 · *AIN1*], [PCA9685 ch #pins.PCA_CH_MOTOR_R_IN1 · PWM row], [Right motor direction bit 1 — driven full-on (4096) or full-off (0), never a duty cycle]),
+  ([☐], [4 · *STBY*], [XIAO *D0 / GPIO#pins.MOTOR_STBY_PIN*], [Global enable, straight from the MCU — the one wire in this column that is not a PCA9685 channel]),
+  ([☐], [5 · *BIN1*], [PCA9685 ch #pins.PCA_CH_MOTOR_L_IN1 · PWM row], [Left motor direction bit 1]),
+  ([☐], [6 · *BIN2*], [PCA9685 ch #pins.PCA_CH_MOTOR_L_IN2 · PWM row], [Left motor direction bit 2]),
+  ([☐], [7 · *PWMB*], [PCA9685 ch #pins.PCA_CH_MOTOR_L_PWM · PWM row], [Left motor speed]),
+  ([—], [8 · GND], [—], [Redundant on-board with the other GND; leave it]),
   aligns: (center, left, left, left),
 )
+
+#v(3pt)
+#callout("The A side is PWM-then-direction, the B side direction-then-PWM", [
+  Not an inconsistency — the header is symmetric about STBY rather than
+  repeated, so following it in order is what removes the crossings. If the
+  channel numbers ever stop ascending down this table, the wiring and
+  `main/pin_config.h` have diverged.
+], kind: "info")
 
 #v(3pt)
 #callout("Leave the V+ and GND rows of those six columns unconnected", [

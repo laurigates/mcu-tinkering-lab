@@ -24,6 +24,30 @@ static const char *TAG = "motor_controller";
 /** Number of PCA9685 channels written per motor update: IN1, IN2, PWM x2. */
 #define MOTOR_CHANNEL_COUNT 6
 
+/** Position of a motor channel within the single consecutive block written by
+ * i2c_bus_pca9685_set_multi(). Values are placed by channel rather than by
+ * argument order because the roles are NOT in a tidy per-motor sequence: the
+ * channel numbering follows the TB6612FNG's control header top to bottom
+ * (PWMA, AIN2, AIN1, BIN1, BIN2, PWMB) so the jumpers do not cross. A
+ * positional array would still compile and still write six consecutive
+ * channels after any renumber in pin_config.h — it would just drive the wrong
+ * pins, which on a motor driver means a wheel that spins when it was told to
+ * stop. */
+#define MOTOR_CH_SLOT(ch) ((ch) - MOTOR_FIRST_CHANNEL)
+
+/* One expression proving all three properties the multi-write depends on: every
+ * channel lies inside the block, no two share a slot, and the block has no
+ * holes. Renumber in pin_config.h and this fails at compile time. */
+_Static_assert(((1u << MOTOR_CH_SLOT(MOTOR_RIGHT_PWM_CHANNEL)) |
+                (1u << MOTOR_CH_SLOT(MOTOR_RIGHT_IN2_CHANNEL)) |
+                (1u << MOTOR_CH_SLOT(MOTOR_RIGHT_IN1_CHANNEL)) |
+                (1u << MOTOR_CH_SLOT(MOTOR_LEFT_IN1_CHANNEL)) |
+                (1u << MOTOR_CH_SLOT(MOTOR_LEFT_IN2_CHANNEL)) |
+                (1u << MOTOR_CH_SLOT(MOTOR_LEFT_PWM_CHANNEL))) ==
+                   ((1u << MOTOR_CHANNEL_COUNT) - 1u),
+               "the six motor channels must be a gap-free, non-overlapping block of "
+               "MOTOR_CHANNEL_COUNT starting at MOTOR_FIRST_CHANNEL");
+
 static struct {
     uint8_t left_speed;
     uint8_t right_speed;
@@ -70,7 +94,14 @@ static uint16_t speed_to_pwm(uint8_t speed)
 static esp_err_t set_motors(uint16_t r_in1, uint16_t r_in2, uint16_t r_pwm, uint16_t l_in1,
                             uint16_t l_in2, uint16_t l_pwm)
 {
-    const uint16_t values[MOTOR_CHANNEL_COUNT] = {r_in1, r_in2, r_pwm, l_in1, l_in2, l_pwm};
+    const uint16_t values[MOTOR_CHANNEL_COUNT] = {
+        [MOTOR_CH_SLOT(MOTOR_RIGHT_IN1_CHANNEL)] = r_in1,
+        [MOTOR_CH_SLOT(MOTOR_RIGHT_IN2_CHANNEL)] = r_in2,
+        [MOTOR_CH_SLOT(MOTOR_RIGHT_PWM_CHANNEL)] = r_pwm,
+        [MOTOR_CH_SLOT(MOTOR_LEFT_IN1_CHANNEL)] = l_in1,
+        [MOTOR_CH_SLOT(MOTOR_LEFT_IN2_CHANNEL)] = l_in2,
+        [MOTOR_CH_SLOT(MOTOR_LEFT_PWM_CHANNEL)] = l_pwm,
+    };
     const uint32_t now = now_ms();
 
     /* Unsigned subtraction, so the uint32 millisecond wrap at day 49 yields a
@@ -81,7 +112,7 @@ static esp_err_t set_motors(uint16_t r_in1, uint16_t r_in2, uint16_t r_pwm, uint
     }
 
     const esp_err_t ret =
-        i2c_bus_pca9685_set_multi(MOTOR_RIGHT_IN1_CHANNEL, MOTOR_CHANNEL_COUNT, values);
+        i2c_bus_pca9685_set_multi(MOTOR_FIRST_CHANNEL, MOTOR_CHANNEL_COUNT, values);
     if (ret == ESP_OK) {
         memcpy(s_last_write.values, values, sizeof(values));
         s_last_write.written_ms = now;
