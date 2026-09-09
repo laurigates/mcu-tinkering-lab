@@ -243,10 +243,11 @@ class RobotVisualizer:
         # Initialize Genesis environment
         self._init_genesis_environment()
 
-        # ty narrows self.scene to None from the `self.scene = None` above and
-        # does not model _init_genesis_environment() rebinding it, so it reads
-        # this branch as dead. At runtime the scene is populated unless Genesis
-        # failed to initialize.
+        # ty does not model attribute mutation through a method call, so it
+        # still sees the `self.scene = None` assigned above and calls this
+        # check redundant. At runtime _init_genesis_environment() sets it to a
+        # gs.Scene on both its success paths, and to None only when Genesis
+        # fails to initialize — which is exactly what this guards.
         if self.scene:  # ty: ignore[redundant-condition]
             self._create_environment()
             self._create_robot_model()
