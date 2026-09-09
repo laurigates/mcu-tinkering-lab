@@ -381,6 +381,30 @@ target_link_libraries(test_motor_controller PRIVATE Threads::Threads m)
 add_test(NAME motor_controller COMMAND test_motor_controller)
 
 # -----------------------------------------------------------------------------
+# LED colour-to-channel placement
+#
+# led_controller.c is compiled UNMODIFIED. Its write path is the same shape as
+# motor_controller.c's — one run of consecutive PCA9685 channels per LED — and
+# carried the same defect: a positional {red, green, blue} array that silently
+# encoded the order of LED_*_R/G/B_CHANNEL in pin_config.h. Reordering those
+# lights the wrong colour with nothing failing, and the bench check for it is
+# "look at an LED and trust your eyes about which leg is which".
+# -----------------------------------------------------------------------------
+add_executable(test_led_controller
+    "${MAIN_SRC_DIR}/led_controller.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/host_shims.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_led_controller.c"
+)
+target_include_directories(test_led_controller BEFORE PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_host"  # i2c_bus.h -> <i2cdev.h>
+    "${ESP_IDF_LIB_DIR}/pca9685"
+)
+# -Wno-unused-variable: the ESP_LOG* shims are no-ops, which leaves TAG unused.
+target_compile_options(test_led_controller PRIVATE -Wno-unused-variable)
+target_link_libraries(test_led_controller PRIVATE Threads::Threads m)
+add_test(NAME led_controller COMMAND test_led_controller)
+
+# -----------------------------------------------------------------------------
 # self_report per-peripheral health (issue #500)
 #
 # self_report.c is compiled UNMODIFIED against the shims in test/include plus

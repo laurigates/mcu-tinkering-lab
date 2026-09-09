@@ -44,6 +44,51 @@ not interpolate its contents, and the shared template's `version:` parameter mus
 stay unset. `.claude/skills/build-guide/SKILL.md` carries this as a style rule so
 a newly scaffolded guide cannot reintroduce the loop.
 
+## 1a. A literal is invisible to the guard — interpolate every coordinate
+
+The guard regenerates `pin_defs.typ`, recompiles, and fails on a byte diff. That
+catches a stale page only where the page **interpolates** a generated binding. A
+literal cannot go stale by construction: the PDF recompiles identically, the
+guard reports `up to date`, and the page keeps printing a channel the firmware
+stopped using.
+
+Observed 2026-09: the build guide's PCA9685 channel map listed
+`([8], [Motor R — IN1 (dir)])` through `([13], …)` as literals. The motor
+channels were renumbered to follow the TB6612FNG's pin order and the table kept
+printing the old assignment, green throughout — in the one document somebody
+builds the robot from. Converting those rows to `#PCA_CH_MOTOR_R_PWM` and
+friends produced a **byte-identical PDF**, which is the proof rather than a
+coincidence: the guard could never have distinguished the two states.
+
+`tools/check-typst-docs.py` now enforces it (pre-commit, so also CI): inside a
+table whose first header cell is a hardware coordinate (`Ch`, `Channel`,
+`GPIO`, `Pin`, `Pad`), a row's first cell may not be a bare integer. Ranges
+(`14–15`), names (`D2`) and interpolations all pass. The report names every
+binding sharing that value, because several do — channel 6 is both
+`PCA_CH_SERVO_PAN` and `I2C_SCL_PIN`, and naming one would misdirect the fix.
+
+## 1b. `git ls-files '**/docs/*.typ'` also matches `docs/auto/`
+
+Git's **default** pathspec matching is fnmatch *without* `FNM_PATHNAME`, so a
+bare `*` crosses `/`. The obvious widening of the guard's discovery therefore
+also matches `<proj>/docs/auto/pin_defs.typ` — the generated include, which has
+no PDF beside it and fails the "No committed PDF" branch on every run. The
+pattern reads correctly, which is why review does not catch it.
+
+Use the `:(glob)` magic, under which `*` stops at a separator and `**` spans
+directories:
+
+```sh
+git ls-files ':(glob)**/docs/*.typ'      # documents only
+git ls-files '**/docs/*.typ'             # also pin_defs.typ — the trap
+```
+
+`check-typst-docs.py` asserts the discovery set excludes `docs/auto/` and that
+every discovered document has a committed PDF — and **control-tests itself** by
+requiring the bare glob to still return a different set. If git ever changes
+those semantics, the control fails loudly instead of the assertion quietly
+becoming vacuous.
+
 ## 2. Verify a guard change by running the shipped script, with a negative control
 
 Nothing else exercises this workflow — same gap as the flash recipes in

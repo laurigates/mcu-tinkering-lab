@@ -18,6 +18,7 @@
 #include "freertos/ringbuf.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
+#include "freertos/timers.h"
 
 /* -------------------------------------------------------------------------- */
 /* Semaphores                                                                   */
@@ -239,6 +240,64 @@ uint32_t ulTaskNotifyTake(BaseType_t clear_on_exit, TickType_t wait)
 void xTaskNotifyGive(TaskHandle_t task)
 {
     (void)task;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Software timers — inert; see freertos/timers.h                               */
+/* -------------------------------------------------------------------------- */
+
+static int s_fake_timer_object;
+
+TimerHandle_t xTimerCreate(const char *name, TickType_t period, UBaseType_t auto_reload,
+                           void *timer_id, TimerCallbackFunction_t callback)
+{
+    (void)name;
+    (void)period;
+    (void)auto_reload;
+    (void)timer_id;
+    (void)callback;
+    return &s_fake_timer_object;
+}
+
+BaseType_t xTimerStart(TimerHandle_t timer, TickType_t block)
+{
+    (void)timer;
+    (void)block;
+    return pdPASS;
+}
+
+BaseType_t xTimerStop(TimerHandle_t timer, TickType_t block)
+{
+    (void)timer;
+    (void)block;
+    return pdPASS;
+}
+
+BaseType_t xTimerDelete(TimerHandle_t timer, TickType_t block)
+{
+    (void)timer;
+    (void)block;
+    return pdPASS;
+}
+
+BaseType_t xTimerChangePeriod(TimerHandle_t timer, TickType_t period, TickType_t block)
+{
+    (void)timer;
+    (void)period;
+    (void)block;
+    return pdPASS;
+}
+
+BaseType_t xTimerIsTimerActive(TimerHandle_t timer)
+{
+    (void)timer;
+    return pdFALSE;
+}
+
+void *pvTimerGetTimerID(TimerHandle_t timer)
+{
+    (void)timer;
+    return NULL;
 }
 
 /* -------------------------------------------------------------------------- */
