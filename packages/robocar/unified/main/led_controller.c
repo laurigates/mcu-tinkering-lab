@@ -12,6 +12,30 @@
 
 static const char *TAG = "led_controller";
 
+/** One RGB LED is written as a run of consecutive PCA9685 channels, so the
+ * value array is indexed by CHANNEL rather than by colour order — the same
+ * discipline as motor_controller.c's set_motors(), and for the same reason: a
+ * positional {red, green, blue} literal silently encodes an assumption about
+ * pin_config.h that nothing checks. Reorder the LED channels there and a
+ * positional array keeps compiling, keeps writing three consecutive channels,
+ * and lights the wrong colour.
+ *
+ * The static asserts below prove what the run-write depends on: each LED's
+ * three channels are a gap-free, non-overlapping block starting at its own R
+ * channel. */
+#define LED_CHANNEL_COUNT 3
+#define LED_CH_SLOT(ch, first) ((ch) - (first))
+
+#define LED_BLOCK_MASK(r, g, b) \
+    ((1u << LED_CH_SLOT((r), (r))) | (1u << LED_CH_SLOT((g), (r))) | (1u << LED_CH_SLOT((b), (r))))
+
+_Static_assert(LED_BLOCK_MASK(LED_LEFT_R_CHANNEL, LED_LEFT_G_CHANNEL, LED_LEFT_B_CHANNEL) ==
+                   ((1u << LED_CHANNEL_COUNT) - 1u),
+               "left RGB channels must be a gap-free block of 3 starting at LED_LEFT_R_CHANNEL");
+_Static_assert(LED_BLOCK_MASK(LED_RIGHT_R_CHANNEL, LED_RIGHT_G_CHANNEL, LED_RIGHT_B_CHANNEL) ==
+                   ((1u << LED_CHANNEL_COUNT) - 1u),
+               "right RGB channels must be a gap-free block of 3 starting at LED_RIGHT_R_CHANNEL");
+
 static struct {
     bool initialized;
     rgb_color_t left_color;
@@ -46,17 +70,23 @@ static esp_err_t led_set_hardware(led_position_t position, const rgb_color_t *co
     esp_err_t ret = ESP_OK;
 
     if (position == LED_LEFT || position == LED_BOTH) {
-        const uint16_t vals[3] = {color_to_pwm(color->red), color_to_pwm(color->green),
-                                  color_to_pwm(color->blue)};
-        ret = i2c_bus_pca9685_set_multi(LED_LEFT_R_CHANNEL, 3, vals);
+        const uint16_t vals[LED_CHANNEL_COUNT] = {
+            [LED_CH_SLOT(LED_LEFT_R_CHANNEL, LED_LEFT_R_CHANNEL)] = color_to_pwm(color->red),
+            [LED_CH_SLOT(LED_LEFT_G_CHANNEL, LED_LEFT_R_CHANNEL)] = color_to_pwm(color->green),
+            [LED_CH_SLOT(LED_LEFT_B_CHANNEL, LED_LEFT_R_CHANNEL)] = color_to_pwm(color->blue),
+        };
+        ret = i2c_bus_pca9685_set_multi(LED_LEFT_R_CHANNEL, LED_CHANNEL_COUNT, vals);
         if (ret == ESP_OK)
             led_state.left_color = *color;
     }
 
     if ((position == LED_RIGHT || position == LED_BOTH) && ret == ESP_OK) {
-        const uint16_t vals[3] = {color_to_pwm(color->red), color_to_pwm(color->green),
-                                  color_to_pwm(color->blue)};
-        ret = i2c_bus_pca9685_set_multi(LED_RIGHT_R_CHANNEL, 3, vals);
+        const uint16_t vals[LED_CHANNEL_COUNT] = {
+            [LED_CH_SLOT(LED_RIGHT_R_CHANNEL, LED_RIGHT_R_CHANNEL)] = color_to_pwm(color->red),
+            [LED_CH_SLOT(LED_RIGHT_G_CHANNEL, LED_RIGHT_R_CHANNEL)] = color_to_pwm(color->green),
+            [LED_CH_SLOT(LED_RIGHT_B_CHANNEL, LED_RIGHT_R_CHANNEL)] = color_to_pwm(color->blue),
+        };
+        ret = i2c_bus_pca9685_set_multi(LED_RIGHT_R_CHANNEL, LED_CHANNEL_COUNT, vals);
         if (ret == ESP_OK)
             led_state.right_color = *color;
     }

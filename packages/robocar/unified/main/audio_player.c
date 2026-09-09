@@ -145,12 +145,39 @@ static esp_err_t i2s_setup(void)
 /* Player task                                                         */
 /* ------------------------------------------------------------------ */
 
-/** Scale to AUDIO_VOLUME_PCT and duplicate each mono sample into L and R. */
+/** Live output gain, percent of full scale. Seeded from AUDIO_VOLUME_PCT and
+ *  moved by `voice volume`, because how loud is right depends on the room, the
+ *  speaker fitted and the hour of the day — none of which the firmware can see,
+ *  and all of which a reflash per trial is far too slow a loop for.
+ *
+ *  Single writer (the console task), read per sample by the player task. A
+ *  32-bit aligned load either sees the old value or the new one, so the worst
+ *  case is one chunk rendered at the previous gain — inaudible, and cheaper
+ *  than taking a lock in the hot loop. */
+static volatile uint8_t s_volume_pct = AUDIO_VOLUME_PCT;
+
+void audio_player_set_volume_pct(uint8_t pct)
+{
+    /* Clamping is load-bearing, not defensive. mono_to_stereo() casts the
+     * scaled sample straight to int16, which is in range only while pct <= 100:
+     * at 200 a full-scale +32767 becomes 65534 and WRAPS to -2, so the output
+     * does not merely clip, it inverts into full-scale noise. Pinned by
+     * test_volume_is_clamped_to_the_int16_safe_range(). */
+    s_volume_pct = (pct > AUDIO_VOLUME_PCT_MAX) ? AUDIO_VOLUME_PCT_MAX : pct;
+}
+
+uint8_t audio_player_volume_pct(void)
+{
+    return s_volume_pct;
+}
+
+/** Scale to the live volume and duplicate each mono sample into L and R. */
 static void mono_to_stereo(const int16_t *mono, size_t count, int16_t *stereo)
 {
+    const int32_t pct = (int32_t)s_volume_pct;
     for (size_t i = 0; i < count; i++) {
-        const int32_t scaled = ((int32_t)mono[i] * AUDIO_VOLUME_PCT) / 100;
-        const int16_t s = (int16_t)scaled;  // in-range by construction (pct <= 100)
+        const int32_t scaled = ((int32_t)mono[i] * pct) / 100;
+        const int16_t s = (int16_t)scaled;  // in range: the setter clamps pct <= 100
         stereo[2 * i] = s;
         stereo[2 * i + 1] = s;
     }

@@ -83,6 +83,13 @@ repos:
         files: '(justfile|sdkconfig\.defaults|partitions\.csv|tools/esp32-idf\.just|tools/check-flash-recipes\.py)$'
         pass_filenames: false
 
+      - id: check-typst-docs
+        name: Typst docs track pin_config.h, and the drift guard sees them
+        entry: python3 tools/check-typst-docs.py
+        language: system
+        files: '(docs/.*\.typ|main/pin_config\.h|tools/check-typst-docs\.py|\.github/workflows/build-guide-check\.yml)$'
+        pass_filenames: false
+
       - id: check-build-artifacts
         name: Check for build artifacts
         entry: >-

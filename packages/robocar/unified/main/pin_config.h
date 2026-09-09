@@ -145,9 +145,24 @@
  *  resampling stage entirely — do not "normalise" this to 16 kHz. */
 #define AUDIO_SAMPLE_RATE_HZ 24000
 
-/** Output gain, percent of full scale. The amplifier has no volume control;
- *  attenuation happens in software before the samples reach the DMA. */
-#define AUDIO_VOLUME_PCT 70
+/** Boot output gain, percent of full scale. The amplifier has no volume
+ *  control, so attenuation happens in software before the samples reach the
+ *  DMA — this scales the PCM linearly.
+ *
+ *  Linear percent is not loudness: halving this is -6 dB, which is clearly
+ *  quieter but not "half as loud" to an ear (roughly -10 dB). Judge it in the
+ *  room, not from the number.
+ *
+ *  Adjustable at runtime with `voice volume <pct>`, and deliberately NOT
+ *  persisted: a boot comes up at this documented default rather than at
+ *  whatever last night's experiment left behind — same convention as
+ *  `cam gainceiling` and the `voice` gate thresholds. */
+#define AUDIO_VOLUME_PCT 35
+
+/** Ceiling for `voice volume`. 100 is full scale, and above it the int16 cast
+ *  in audio_player.c's mono_to_stereo() wraps rather than clips — see the
+ *  clamp in audio_player_set_volume_pct(). */
+#define AUDIO_VOLUME_PCT_MAX 100
 
 /** PSRAM ring between the TTS download and the I2S writer, in bytes.
  *
