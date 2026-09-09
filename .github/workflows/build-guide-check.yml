@@ -1,10 +1,10 @@
-name: Build Guide Up-to-Date Check
+name: Typst Docs Up-to-Date Check
 
 on:
   push:
     branches: [main, develop, 'claude/**']
     paths:
-      - '**/docs/build-guide.typ'
+      - '**/docs/*.typ'
       - '**/docs/auto/pin_defs.typ'
       - '**/main/pin_config.h'
       - 'tools/typst/**'
@@ -13,7 +13,7 @@ on:
   pull_request:
     branches: [main, develop]
     paths:
-      - '**/docs/build-guide.typ'
+      - '**/docs/*.typ'
       - '**/docs/auto/pin_defs.typ'
       - '**/main/pin_config.h'
       - 'tools/typst/**'
@@ -73,9 +73,19 @@ jobs:
       #                           of pulling in whatever the OS happens to ship
       #                           (Linux FreeSans vs macOS SF/LastResort).
       #
-      # Guides are discovered with `git ls-files` so new projects are covered
-      # without editing this workflow.
-      - name: Recompile every build guide and check for drift
+      # Documents are discovered with `git ls-files` so a new project — or a new
+      # bench card beside an existing guide — is covered without editing this
+      # workflow.
+      #
+      # The `:(glob)` pathspec magic is load-bearing, not decoration. Git's
+      # DEFAULT pathspec matching is fnmatch WITHOUT FNM_PATHNAME, so a bare
+      # `*` happily crosses `/` and `'**/docs/*.typ'` also matches
+      # `<proj>/docs/auto/pin_defs.typ` — the generated include, which has no
+      # PDF beside it and would fail the "No committed PDF" branch below on
+      # every run. Under `:(glob)`, `*` stops at a path separator and `**`
+      # spans directories, which is the intent. Verify a change here with
+      # `git ls-files ':(glob)**/docs/*.typ'` and confirm `auto/` is absent.
+      - name: Recompile every Typst document and check for drift
         run: |
           set -euo pipefail
           typst --version
@@ -94,8 +104,8 @@ jobs:
             # follows the convention (<proj>/docs/auto/pin_defs.typ generated
             # from <proj>/main/pin_config.h), regenerate it here so a pin
             # renamed or moved in the C header cannot silently leave a *wrong*
-            # pin in a printed build guide — the PDF would recompile cleanly
-            # from stale definitions and look up to date.
+            # pin in a printed guide or bench card — the PDF would recompile
+            # cleanly from stale definitions and look up to date.
             #
             # The generated file is hardware data only. `version.txt` was once
             # an input, which coupled guide freshness to the release cadence:
@@ -105,7 +115,7 @@ jobs:
             # minted the next release. Adding it to the paths is the wrong fix;
             # it would fail every release PR, whose PDF genuinely predates the
             # version being introduced. See issue #439.
-            proj="${typ%/docs/build-guide.typ}"
+            proj="${typ%/docs/*}"
             defs="$proj/docs/auto/pin_defs.typ"
             drift_paths=("$pdf")
             if [ -f "$defs" ] && [ -f "$proj/main/pin_config.h" ]; then
@@ -119,15 +129,15 @@ jobs:
               echo "up to date: ${drift_paths[*]}"
             else
               git --no-pager diff --stat -- "${drift_paths[@]}"
-              echo "::error file=$pdf::Committed build-guide output is stale relative to $typ, its generated pin definitions, or the shared template / embedded assets."
+              echo "::error file=$pdf::Committed Typst output is stale relative to $typ, its generated pin definitions, or the shared template / embedded assets."
               status=1
             fi
             echo "::endgroup::"
-          done < <(git ls-files '**/docs/build-guide.typ')
+          done < <(git ls-files ':(glob)**/docs/*.typ')
           if [ "$status" -ne 0 ]; then
-            echo "::error::One or more build guides are out of date. Regenerate with the project's own recipe, which pins the same CLI version and flags used here:"
+            echo "::error::One or more Typst documents are out of date. Regenerate with the project's own recipe, which pins the same CLI version and flags used here:"
             echo "::error::  just <project>::build-guide     # e.g. just robocar-unified::build-guide"
             echo "::error::then commit the regenerated pin_defs.typ and PDF."
-            echo "::error::Equivalent by hand: mise exec typst@${TYPST_VERSION} -- typst compile --creation-timestamp 0 --ignore-system-fonts --root . <path>/build-guide.typ <path>/build-guide.pdf"
+            echo "::error::Equivalent by hand: mise exec typst@${TYPST_VERSION} -- typst compile --creation-timestamp 0 --ignore-system-fonts --root . <path>/<doc>.typ <path>/<doc>.pdf"
             exit 1
           fi

@@ -178,3 +178,76 @@
 
   body
 }
+
+// ---- Bench card wrapper -----------------------------------------------------
+// A short, single-purpose sheet meant to be printed and taken to the bench —
+// no title page and no outline, so page 1 is content. Everything else (theme,
+// fonts, heading styling, `callout`, `htable`) is shared with `guide` above, so
+// a card and a build guide still look like the same document family.
+//
+// Use as `#show: card.with(...)`:
+//
+//   #import "../../../../tools/typst/build-guide.typ": card, callout, htable, theme
+//   #show: card.with(
+//     title: "robocar-unified — motor wiring",
+//     subtitle: "PCA9685 → TB6612FNG",
+//     header-right: "XIAO ESP32-S3 Sense",
+//     footer-note: [Channel numbers are generated from `main/pin_config.h`.],
+//   )
+#let card(
+  title: "",
+  subtitle: "",
+  header-right: none,
+  footer-left: "MCU Tinkering Lab",
+  footer-note: none,
+  body,
+) = {
+  let accent = theme.accent
+  let muted = theme.muted
+  let rule = theme.rule
+
+  set document(title: title, author: "MCU Tinkering Lab")
+  set page(
+    paper: "a4",
+    margin: (top: 1.5cm, bottom: 1.4cm, x: 1.5cm),
+    header: context {
+      set text(8.5pt, fill: muted)
+      grid(columns: (1fr, 1fr),
+        align(left)[#title],
+        align(right)[#{ if header-right != none [#header-right] }],
+      )
+      line(length: 100%, stroke: 0.5pt + rule)
+    },
+    footer: context {
+      set text(8.5pt, fill: muted)
+      grid(columns: (1fr, 1fr),
+        align(left)[#{ if footer-note != none [#footer-note] else [#footer-left] }],
+        align(right)[#counter(page).display("1 / 1", both: true)],
+      )
+    },
+  )
+
+  set text(font: ("Libertinus Serif", "DejaVu Serif"), size: 9.5pt, fill: theme.ink)
+  set par(justify: false, leading: 0.6em)
+  show heading: set text(fill: theme.ink)
+  show heading.where(level: 1): it => {
+    v(0.25em)
+    block(text(13pt, weight: "bold", fill: accent)[#it.body])
+    v(0.1em)
+    line(length: 100%, stroke: 0.8pt + accent)
+    v(0.3em)
+  }
+  show heading.where(level: 2): it => {
+    v(0.3em)
+    block(text(11pt, weight: "bold")[#it.body])
+    v(0.08em)
+  }
+
+  block[
+    #text(19pt, weight: "bold", fill: accent)[#title]
+    #if subtitle != "" [ #h(0.4em) #text(12pt, fill: muted)[#subtitle] ]
+  ]
+  v(0.2em)
+
+  body
+}

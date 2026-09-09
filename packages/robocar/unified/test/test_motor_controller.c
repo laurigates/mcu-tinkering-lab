@@ -53,6 +53,11 @@ static struct {
 static int s_write_count;
 static esp_err_t s_next_result = ESP_OK;
 
+/* Values in a write are indexed by CHANNEL, mirroring set_motors(). Indexing
+ * them positionally would quietly test the wrong pin the next time the block is
+ * renumbered to follow the motor driver's header. */
+#define SLOT(ch) ((ch) - MOTOR_FIRST_CHANNEL)
+
 esp_err_t i2c_bus_pca9685_set_multi(uint8_t first_ch, uint8_t count, const uint16_t *values)
 {
     if (s_write_count < MAX_WRITES) {
@@ -112,8 +117,8 @@ static void test_init_writes_the_first_stop(void)
     CHECK(motor_controller_init() == ESP_OK, "init should succeed");
     CHECK(s_stby_level == 1, "init must take the TB6612FNG out of standby, got %d", s_stby_level);
     CHECK(s_write_count == 1, "init should issue exactly one write, got %d", s_write_count);
-    CHECK(s_writes[0].first_ch == MOTOR_RIGHT_IN1_CHANNEL && s_writes[0].count == 6,
-          "init should write 6 channels from %d, got %d from %d", MOTOR_RIGHT_IN1_CHANNEL,
+    CHECK(s_writes[0].first_ch == MOTOR_FIRST_CHANNEL && s_writes[0].count == 6,
+          "init should write 6 channels from %d, got %d from %d", MOTOR_FIRST_CHANNEL,
           s_writes[0].count, s_writes[0].first_ch);
 }
 
@@ -147,12 +152,13 @@ static void test_a_changed_state_always_writes(void)
 
     CHECK(motor_move_forward(200) == ESP_OK, "forward should succeed");
     CHECK(s_write_count == 1, "a changed state must write, got %d", s_write_count);
-    CHECK(s_writes[0].values[2] != 0, "forward should carry a non-zero PWM");
+    CHECK(s_writes[0].values[SLOT(MOTOR_RIGHT_PWM_CHANNEL)] != 0,
+          "forward should carry a non-zero PWM");
 
     /* No clock advance: the guard must key on the values, not only on time. */
     CHECK(motor_stop() == ESP_OK, "stop should succeed");
     CHECK(s_write_count == 2, "stopping from forward must write, got %d", s_write_count);
-    CHECK(s_writes[1].values[2] == 0, "stop should carry a zero PWM");
+    CHECK(s_writes[1].values[SLOT(MOTOR_RIGHT_PWM_CHANNEL)] == 0, "stop should carry a zero PWM");
 }
 
 static void test_a_failed_write_is_not_remembered_as_applied(void)
@@ -200,6 +206,47 @@ static void test_refresh_survives_the_uint32_millisecond_wrap(void)
     motor_stop();
 }
 
+/* The bench cannot stage this one: a mis-slotted value still writes six
+ * consecutive channels and still looks like a working transaction on a scope.
+ * It shows up as a wheel that spins when it was told to stop, by which point
+ * the suspicion is on the wiring rather than on the array literal. */
+static void test_each_value_lands_on_its_own_channel(void)
+{
+    reset_bus();
+
+    /* Distinguishable speeds, and opposite directions so the four direction
+     * slots cannot all hold the same sentinel and pass by luck. */
+    const uint8_t left_speed = 60;
+    const uint8_t right_speed = 240;
+    CHECK(motor_set_individual(left_speed, right_speed, 1, 0) == ESP_OK,
+          "individual drive should succeed");
+    CHECK(s_write_count == 1, "a changed state must write, got %d", s_write_count);
+
+    const uint16_t *v = s_writes[0].values;
+    const uint16_t left_pwm = (uint16_t)((uint32_t)left_speed * PCA9685_PWM_MAX / 255);
+    const uint16_t right_pwm = (uint16_t)((uint32_t)right_speed * PCA9685_PWM_MAX / 255);
+
+    CHECK(v[SLOT(MOTOR_LEFT_PWM_CHANNEL)] == left_pwm,
+          "left PWM belongs on ch%d: expected %u, got %u", MOTOR_LEFT_PWM_CHANNEL, left_pwm,
+          v[SLOT(MOTOR_LEFT_PWM_CHANNEL)]);
+    CHECK(v[SLOT(MOTOR_RIGHT_PWM_CHANNEL)] == right_pwm,
+          "right PWM belongs on ch%d: expected %u, got %u", MOTOR_RIGHT_PWM_CHANNEL, right_pwm,
+          v[SLOT(MOTOR_RIGHT_PWM_CHANNEL)]);
+
+    /* forward = IN1 high, IN2 low; the right motor was asked for reverse. */
+    CHECK(v[SLOT(MOTOR_LEFT_IN1_CHANNEL)] == PCA9685_FULL_ON &&
+              v[SLOT(MOTOR_LEFT_IN2_CHANNEL)] == PCA9685_FULL_OFF,
+          "left forward should be IN1 on ch%d high, IN2 on ch%d low", MOTOR_LEFT_IN1_CHANNEL,
+          MOTOR_LEFT_IN2_CHANNEL);
+    CHECK(v[SLOT(MOTOR_RIGHT_IN1_CHANNEL)] == PCA9685_FULL_OFF &&
+              v[SLOT(MOTOR_RIGHT_IN2_CHANNEL)] == PCA9685_FULL_ON,
+          "right reverse should be IN1 on ch%d low, IN2 on ch%d high", MOTOR_RIGHT_IN1_CHANNEL,
+          MOTOR_RIGHT_IN2_CHANNEL);
+
+    reset_bus();
+    motor_stop();
+}
+
 int main(void)
 {
     printf("test_motor_controller\n");
@@ -210,6 +257,7 @@ int main(void)
     test_a_changed_state_always_writes();
     test_a_failed_write_is_not_remembered_as_applied();
     test_refresh_survives_the_uint32_millisecond_wrap();
+    test_each_value_lands_on_its_own_channel();
 
     if (s_failures != 0) {
         printf("FAILED (%d)\n", s_failures);

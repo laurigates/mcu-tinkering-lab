@@ -148,6 +148,23 @@ All motor direction, motor PWM, servo, and LED outputs go through the PCA9685 �
 
 Motor direction uses PCA9685 "full-on" (4096) / "full-off" (0) values on IN1/IN2 channels.
 
+**Channels 8-13 follow the TB6612FNG's control header, not a per-motor order.**
+Read that header top to bottom and it is PWMA, AIN2, AIN1, STBY, BIN1, BIN2,
+PWMB — symmetric about STBY rather than repeated — so assigning 8-13 in that
+order makes the six jumpers run straight across with no crossings, at the cost
+of the A side reading PWM-then-direction and the B side direction-then-PWM. The
+apparent asymmetry in the `#define` list is what buys the symmetry on the bench.
+STBY is not in the block; it is GPIO1, direct from the MCU.
+
+`set_motors()` writes all six in one transaction and therefore places each value
+by **channel** (`MOTOR_CH_SLOT`), never by argument position, with a
+`_Static_assert` that the six are a gap-free block starting at
+`MOTOR_FIRST_CHANNEL`. A positional array would keep compiling after a renumber
+and simply drive the wrong pins — on a motor driver, a wheel that spins when it
+was told to stop. `test_each_value_lands_on_its_own_channel` in
+`test_motor_controller.c` pins the placement; it was mutation-checked by
+reverting to the positional literal, which fails it.
+
 ## AI planner
 
 **Gemini Robotics-ER 2 only** (`gemini-robotics-er-2-preview`; ER 1.6 was shut down at the end of August 2026). The planner calls Gemini to emit function-call goals:
@@ -435,6 +452,7 @@ Key settings that matter:
 - Don't give the budget fuse a rolling window or an auto-reset. It exists for the unattended board, which is precisely the case that must not resume on its own
 - Don't put `ESP_ERROR_CHECK` or `ESP_RETURN_ON_ERROR` back into the hardware phase. `init_hardware()` returns `void` on purpose (issue #500): a peripheral that would not initialise used to abort the boot, taking the console, WiFi, provisioning and the planner down with it — and a reboot loop removes the very console you would read the fault on. Every driver behind that phase already fails safe (each guards its entry points on `initialized` and returns `ESP_ERR_INVALID_STATE`; the buzzer's tone routines no-op), so a failure costs exactly the function that failed
 - Don't drop a peripheral's `*_is_initialized()` accessor, or let `self_report_collect()` read a cached boot result instead. Those accessors are the only thing standing between a half-populated board and a silent loss of function: the facts line renders `i2c_peripherals=degraded(servos)` from them, and `test_self_report.c` pins the case a bench cannot stage — a live bus with exactly one dead peripheral
+- Don't "tidy" the motor channels back into a per-motor IN1/IN2/PWM order. They are in the motor driver's pin order on purpose, and that ordering is a claim about **soldered wires** — reordering the `#define`s is a rewiring instruction, not a refactor, and the firmware will follow the new numbers perfectly onto the wrong pins
 - Don't add goal sources outside `planner_task.c` — structured goals keep the two layers decoupled. If a new goal source is needed, it should write `goal_state` the same way the planner does
 - Don't fold speech into `goal_t` — see the Voice section above and `speech_queue.h`
 - Don't put a specific phrase, opener or filler word in a persona's `text_brief` — everything named there is said every time. Phrase-shaped flavour goes in the `openers`/`shapes` pools; see `dialogue_style.h`

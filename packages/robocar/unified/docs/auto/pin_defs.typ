@@ -25,9 +25,9 @@
 #let PCA_CH_SERVO_PAN = 6
 #let PCA_CH_SERVO_TILT = 7
 // ── PCA9685 — Motor Channels ──
-#let PCA_CH_MOTOR_R_IN1 = 8
+#let PCA_CH_MOTOR_R_IN1 = 10
 #let PCA_CH_MOTOR_R_IN2 = 9
-#let PCA_CH_MOTOR_R_PWM = 10
+#let PCA_CH_MOTOR_R_PWM = 8
 #let PCA_CH_MOTOR_L_IN1 = 11
 #let PCA_CH_MOTOR_L_IN2 = 12
 #let PCA_CH_MOTOR_L_PWM = 13
