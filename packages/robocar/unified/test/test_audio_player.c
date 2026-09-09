@@ -240,9 +240,48 @@ static void test_abort_resyncs_to_an_idle_state(void)
  * Main
  * ========================================================================= */
 
+/* The clamp is not defensiveness. mono_to_stereo() casts the scaled sample
+ * straight to int16, so the cast is only in range while the gain is <= 100: at
+ * 200 a full-scale +32767 scales to 65534 and WRAPS to -2. The output does not
+ * clip, it inverts — full-scale noise out of a command that reads like it asked
+ * for "louder". A bench test would need somebody willing to send 200 to a
+ * speaker to find that out. */
+static void test_volume_is_clamped_to_the_int16_safe_range(void)
+{
+    audio_player_set_volume_pct(50);
+    ASSERT(audio_player_volume_pct() == 50);
+
+    audio_player_set_volume_pct(200);
+    ASSERT(audio_player_volume_pct() == AUDIO_VOLUME_PCT_MAX);
+
+    audio_player_set_volume_pct(255);
+    ASSERT(audio_player_volume_pct() == AUDIO_VOLUME_PCT_MAX);
+
+    /* Silence is a legitimate setting, and must not be confused with the
+     * clamp: 0 is the one value where "no output" is what was asked for. */
+    audio_player_set_volume_pct(0);
+    ASSERT(audio_player_volume_pct() == 0);
+
+    audio_player_set_volume_pct(AUDIO_VOLUME_PCT);
+    ASSERT(audio_player_volume_pct() == AUDIO_VOLUME_PCT);
+}
+
+/* The knob exists so the value can be moved without a reflash; if it did not
+ * default to the documented constant, a boot would come up at whatever the
+ * header says while the console reported something else. */
+static void test_volume_starts_at_the_documented_default(void)
+{
+    ASSERT(AUDIO_VOLUME_PCT <= AUDIO_VOLUME_PCT_MAX);
+    ASSERT(audio_player_volume_pct() == AUDIO_VOLUME_PCT);
+}
+
 int main(void)
 {
     printf("=== audio_player host tests ===\n\n");
+
+    /* Before anything moves it. */
+    test_run("volume starts at the documented default",
+             test_volume_starts_at_the_documented_default);
 
     test_run("an even utterance is counted exactly", test_even_utterance_is_counted_exactly);
     test_run("an odd tail does not overcount", test_odd_tail_does_not_overcount);
@@ -250,6 +289,8 @@ int main(void)
     test_run("a carried byte is spliced and counted once", test_carry_is_spliced_and_counted_once);
     test_run("a zero-length write counts nothing", test_zero_length_write_counts_nothing);
     test_run("abort resyncs to an idle state", test_abort_resyncs_to_an_idle_state);
+    test_run("volume is clamped to the int16-safe range",
+             test_volume_is_clamped_to_the_int16_safe_range);
 
     printf("\n=== %d/%d passed ===\n", test_pass, test_count);
     return (test_pass == test_count) ? 0 : 1;

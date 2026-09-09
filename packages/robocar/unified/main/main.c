@@ -460,9 +460,31 @@ static void handle_voice_cmd(const char *buf)
             printf("  speech: allowed now\n");
         }
 
+        printf("  volume: %u%% of full scale (boot default %u%%)\n",
+               (unsigned)audio_player_volume_pct(), (unsigned)AUDIO_VOLUME_PCT);
         printf("  usage: voice <slug> | say <text> | name <VoiceName|-> | vary | said\n");
         printf("         voice quiet <s> | budget <n> <s> | repeat <pct> | scene <n>\n");
         printf("         voice loud <db> | sound <db>   (see also: mic)\n");
+        printf("         voice volume <pct>   amplitude, not loudness: halving = -6 dB\n");
+        return;
+    }
+
+    if (strcmp(op, "volume") == 0) {
+        unsigned pct = 0;
+        if (sscanf(buf, "voice volume %u", &pct) != 1 || pct > AUDIO_VOLUME_PCT_MAX) {
+            printf("voice: usage: voice volume <0..%u>  (now %u%%)\n",
+                   (unsigned)AUDIO_VOLUME_PCT_MAX, (unsigned)audio_player_volume_pct());
+            return;
+        }
+        audio_player_set_volume_pct((uint8_t)pct);
+        /* Reported as a ratio against the boot default rather than in dB: the
+         * dB would need log10() and a %f, and a float print is silently wrong
+         * if CONFIG_NEWLIB_NANO_FORMAT is ever turned on. The conversion worth
+         * remembering is fixed anyway and lives in the usage line — halving the
+         * percent is -6 dB, and an ear reads about -10 dB as half as loud. */
+        printf("voice: volume=%u%% of full scale (boot default %u%%, so %u/100 of it)\n",
+               (unsigned)audio_player_volume_pct(), (unsigned)AUDIO_VOLUME_PCT,
+               (unsigned)((audio_player_volume_pct() * 100U) / AUDIO_VOLUME_PCT));
         return;
     }
 
