@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.2.0](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.1.21...robocar-unified-v0.2.0) (2026-09-09)
+
+
+### ⚠ BREAKING CHANGES
+
+* **robocar-unified:** number the motor channels in the driver's pin order, and add a printable wiring card ([#514](https://github.com/laurigates/mcu-tinkering-lab/issues/514))
+
+### refactor
+
+* **robocar-unified:** number the motor channels in the driver's pin order, and add a printable wiring card ([#514](https://github.com/laurigates/mcu-tinkering-lab/issues/514)) ([74eba69](https://github.com/laurigates/mcu-tinkering-lab/commit/74eba69ac8c21bb2c2c6c236ef5affdcf46f9b10))
+
+
+### Features
+
+* **robocar-unified:** servo bring-up gesture, live PWM frequency, frequency-aware pulse maths ([#509](https://github.com/laurigates/mcu-tinkering-lab/issues/509)) ([700bfce](https://github.com/laurigates/mcu-tinkering-lab/commit/700bfcecd2e8bd1ecf2f103ada943c979f76f231))
+
+
+### Bug Fixes
+
+* **robocar-unified:** correct the camera mounting orientation ([#508](https://github.com/laurigates/mcu-tinkering-lab/issues/508)) ([475df58](https://github.com/laurigates/mcu-tinkering-lab/commit/475df58181bccafa686fd7ba2305c3664f0bac9b))
+* **robocar-unified:** LED indicator refresh and I2C bus activity counters ([#505](https://github.com/laurigates/mcu-tinkering-lab/issues/505), [#506](https://github.com/laurigates/mcu-tinkering-lab/issues/506)) ([77fe57b](https://github.com/laurigates/mcu-tinkering-lab/commit/77fe57b9d878d5e403564229e56a5b633dc4491d))
+* **robocar-unified:** stop re-writing an unchanged motor state 30 times a second ([#504](https://github.com/laurigates/mcu-tinkering-lab/issues/504)) ([674a03d](https://github.com/laurigates/mcu-tinkering-lab/commit/674a03d6353d3d3b4d0409aa813cb3916f51806e))
+
+
+### Documentation
+
+* **robocar-unified:** correct the power supply to an LM2596 buck, 2S pack ([#510](https://github.com/laurigates/mcu-tinkering-lab/issues/510)) ([8b4cd0f](https://github.com/laurigates/mcu-tinkering-lab/commit/8b4cd0f240cd906cc9fef301ca962eaf5e439ead))
+
 ## [0.1.21](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.1.20...robocar-unified-v0.1.21) (2026-09-05)
 
 
