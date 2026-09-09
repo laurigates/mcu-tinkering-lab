@@ -162,6 +162,11 @@ filterwarnings = [
     # Python >=3.12 these raise SyntaxWarning at import, which the "error"
     # filter above would turn into collection errors. Third-party code.
     "ignore:invalid escape sequence:SyntaxWarning",
+    # genesis-world decorates its geometry helpers with @torch.jit.script at
+    # import time, which newer torch releases deprecate with a FutureWarning.
+    # Third-party code we do not call directly; only genesis can stop emitting
+    # it. Without this, `import genesis` fails under the "error" filter above.
+    "ignore:`torch.jit.script` is deprecated:FutureWarning",
 ]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
