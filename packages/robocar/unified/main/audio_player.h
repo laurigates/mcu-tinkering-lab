@@ -144,6 +144,26 @@ bool audio_player_is_ready(void);
  */
 bool audio_player_is_active(void);
 
+/**
+ * @brief Set the output gain, percent of full scale (0-AUDIO_VOLUME_PCT_MAX).
+ *
+ * The MAX98357A has no volume control, so this scales the PCM linearly before
+ * it reaches the DMA. Values above the max are clamped rather than rejected:
+ * the scaled sample is cast to int16, so an unclamped 200 would wrap a
+ * full-scale peak to the opposite rail and turn the output into noise.
+ *
+ * Takes effect on the next chunk rendered — an utterance already playing
+ * finishes at whatever gain the remaining chunks are rendered with. Does not
+ * persist; a reboot returns to AUDIO_VOLUME_PCT.
+ *
+ * Note that percent is amplitude, not loudness: halving it is -6 dB, and an
+ * ear reads roughly -10 dB as "half as loud".
+ */
+void audio_player_set_volume_pct(uint8_t pct);
+
+/** Current output gain, percent of full scale. */
+uint8_t audio_player_volume_pct(void);
+
 #ifdef AUDIO_PLAYER_HOST_TEST
 /**
  * @brief Test hook: bytes the producer has counted as written into the ring.
