@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.1](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.0...robocar-unified-v0.2.1) (2026-09-10)
+
+
+### Features
+
+* **robocar-unified:** halve the speaker volume, and make it a console knob ([#519](https://github.com/laurigates/mcu-tinkering-lab/issues/519)) ([c4a5ea3](https://github.com/laurigates/mcu-tinkering-lab/commit/c4a5ea3c3a3b4b5738a3c01cd8237309e2a22ef7))
+
+
+### Bug Fixes
+
+* **robocar-unified:** index batched channel writes by name, and gate the doc equivalent ([#517](https://github.com/laurigates/mcu-tinkering-lab/issues/517)) ([f0dbcec](https://github.com/laurigates/mcu-tinkering-lab/commit/f0dbcec6bac9f4694e4939892266edfc8cd70e9d))
+
 ## [0.2.0](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.1.21...robocar-unified-v0.2.0) (2026-09-09)
 
 
