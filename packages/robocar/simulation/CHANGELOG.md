@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.1.5](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-simulation-v0.1.4...robocar-simulation-v0.1.5) (2026-09-10)
+
+
+### Features
+
+* **tools:** read a breakout's physical pin order from its vendor board file ([#520](https://github.com/laurigates/mcu-tinkering-lab/issues/520)) ([8bb7fed](https://github.com/laurigates/mcu-tinkering-lab/commit/8bb7fedb36e3efd0a65bee8bc62f03e89e304b7a))
+
+
+### Bug Fixes
+
+* **auto:** resolve CI failure in Test Suite ([73ae274](https://github.com/laurigates/mcu-tinkering-lab/commit/73ae2742fb4e3f0baff8dca8db4aff0f24bdfeff))
+* **auto:** resolve CI failure in Test Suite ([6b3af20](https://github.com/laurigates/mcu-tinkering-lab/commit/6b3af209a8c27a6a36c81ba711b65ea401f1180e))
+* **robocar-simulation:** ignore the torch.jit.script FutureWarning genesis raises at import ([#522](https://github.com/laurigates/mcu-tinkering-lab/issues/522)) ([73ae274](https://github.com/laurigates/mcu-tinkering-lab/commit/73ae2742fb4e3f0baff8dca8db4aff0f24bdfeff))
+* **robocar-simulation:** suppress ty false positive on the Genesis scene guard ([#516](https://github.com/laurigates/mcu-tinkering-lab/issues/516)) ([6b3af20](https://github.com/laurigates/mcu-tinkering-lab/commit/6b3af209a8c27a6a36c81ba711b65ea401f1180e))
+
 ## [0.1.4](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-simulation-v0.1.3...robocar-simulation-v0.1.4) (2026-07-17)
 
 
