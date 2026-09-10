@@ -45,6 +45,12 @@ esp_err_t gpio_expander_init(void)
         return ret;
     }
 
+    /* mcp23x17_init_desc() hardcodes 1 MHz, which differs from the rest of the
+     * bus and would make i2cdev delete and reinstall the I2C driver on every
+     * alternation between this device and the mux. Match i2c_bus.c's
+     * pin_bus_clock(). */
+    s_mcp23017.cfg.master.clk_speed = I2C_MASTER_FREQ_HZ;
+
     // Probe: read the IODIR registers. A missing board is expected — the
     // expander is optional hardware, so absence downgrades to a warning.
     ret = i2c_bus_select_channel(I2C_BUS_CHANNEL_MCP23017);

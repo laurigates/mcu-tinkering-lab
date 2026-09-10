@@ -247,6 +247,42 @@ static void test_each_value_lands_on_its_own_channel(void)
     motor_stop();
 }
 
+/* Brake and coast are DIFFERENT electrical states, and the difference lives
+ * entirely in the two direction channels. IN1 = IN2 = high shorts the windings
+ * (short brake); IN1 = IN2 = low leaves the outputs high-impedance and the
+ * robot rolls (Stop/coast). Both write PWM = 0, so a test that only checked
+ * PWM would pass against either. See the truth table in
+ * docs/wiring-card-motors.typ. */
+static void test_brake_and_coast_differ_on_the_direction_channels(void)
+{
+    reset_bus();
+
+    CHECK(motor_brake() == ESP_OK, "brake should succeed");
+    CHECK(s_write_count == 1, "brake must reach the bus, got %d", s_write_count);
+
+    const uint16_t *b = s_writes[0].values;
+    CHECK(b[SLOT(MOTOR_LEFT_IN1_CHANNEL)] == PCA9685_FULL_ON &&
+              b[SLOT(MOTOR_LEFT_IN2_CHANNEL)] == PCA9685_FULL_ON &&
+              b[SLOT(MOTOR_RIGHT_IN1_CHANNEL)] == PCA9685_FULL_ON &&
+              b[SLOT(MOTOR_RIGHT_IN2_CHANNEL)] == PCA9685_FULL_ON,
+          "short brake needs all four direction channels HIGH");
+    CHECK(b[SLOT(MOTOR_LEFT_PWM_CHANNEL)] == 0 && b[SLOT(MOTOR_RIGHT_PWM_CHANNEL)] == 0,
+          "brake should write PWM 0 on both channels");
+
+    reset_bus();
+
+    CHECK(motor_stop() == ESP_OK, "stop should succeed");
+    CHECK(s_write_count == 1, "brake -> stop is a state change and must write, got %d",
+          s_write_count);
+
+    const uint16_t *c = s_writes[0].values;
+    CHECK(c[SLOT(MOTOR_LEFT_IN1_CHANNEL)] == PCA9685_FULL_OFF &&
+              c[SLOT(MOTOR_LEFT_IN2_CHANNEL)] == PCA9685_FULL_OFF &&
+              c[SLOT(MOTOR_RIGHT_IN1_CHANNEL)] == PCA9685_FULL_OFF &&
+              c[SLOT(MOTOR_RIGHT_IN2_CHANNEL)] == PCA9685_FULL_OFF,
+          "coast needs all four direction channels LOW");
+}
+
 int main(void)
 {
     printf("test_motor_controller\n");
@@ -258,6 +294,7 @@ int main(void)
     test_a_failed_write_is_not_remembered_as_applied();
     test_refresh_survives_the_uint32_millisecond_wrap();
     test_each_value_lands_on_its_own_channel();
+    test_brake_and_coast_differ_on_the_direction_channels();
 
     if (s_failures != 0) {
         printf("FAILED (%d)\n", s_failures);

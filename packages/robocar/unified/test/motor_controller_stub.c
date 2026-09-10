@@ -23,6 +23,23 @@ typedef struct {
 
 static motor_state_t g_last_motor_call = {0};
 
+/* Which entry point was called last.
+ *
+ * Recorded because motor_stop() and motor_brake() leave IDENTICAL recorded
+ * state — all speeds and directions zero — so without this a test asserting
+ * "the reflex brakes" passes just as happily against a coast, and pins
+ * nothing. 0 = none/reset, 1 = stop (coast), 2 = brake, 3 = anything that
+ * drives. */
+static int g_last_call = 0;
+
+/**
+ * @brief Which motor entry point was called last (for test assertions).
+ */
+int motor_stub_get_last_call(void)
+{
+    return g_last_call;
+}
+
 /**
  * @brief Get the last recorded motor state (for test assertions).
  */
@@ -45,6 +62,7 @@ void motor_stub_get_last_state(uint8_t *left_speed, uint8_t *right_speed, uint8_
 void motor_stub_reset(void)
 {
     memset(&g_last_motor_call, 0, sizeof(g_last_motor_call));
+    g_last_call = 0;
 }
 
 /* =========================================================================
@@ -113,6 +131,17 @@ esp_err_t motor_rotate_ccw(uint8_t speed)
 
 esp_err_t motor_stop(void)
 {
+    g_last_call = 1; /* coast */
+    g_last_motor_call.left_speed = 0;
+    g_last_motor_call.right_speed = 0;
+    g_last_motor_call.left_direction = 0;
+    g_last_motor_call.right_direction = 0;
+    return ESP_OK;
+}
+
+esp_err_t motor_brake(void)
+{
+    g_last_call = 2; /* short brake */
     g_last_motor_call.left_speed = 0;
     g_last_motor_call.right_speed = 0;
     g_last_motor_call.left_direction = 0;
@@ -123,6 +152,7 @@ esp_err_t motor_stop(void)
 esp_err_t motor_set_individual(uint8_t left_speed, uint8_t right_speed, uint8_t left_direction,
                                uint8_t right_direction)
 {
+    g_last_call = 3; /* driving */
     g_last_motor_call.left_speed = left_speed;
     g_last_motor_call.right_speed = right_speed;
     g_last_motor_call.left_direction = left_direction;

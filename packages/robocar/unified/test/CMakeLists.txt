@@ -290,6 +290,23 @@ target_link_libraries(test_pca9685_multi PRIVATE Threads::Threads m)
 add_test(NAME pca9685_multi COMMAND test_pca9685_multi)
 
 # -----------------------------------------------------------------------------
+# pca9685_phase — phase-staggered LEDn encoding
+#
+# Pure C, no shims needed. The invariant with teeth is that staggering moves a
+# pulse within the period without changing its width: get the 12-bit wrap wrong
+# and a motor silently runs at a duty cycle nobody asked for, which on a bench
+# reads as a mechanical or supply fault rather than an arithmetic one. Also
+# pins that full-on/full-off stay FLAG encodings and take no phase — on this
+# board those are the motor direction pins, and a phase offset there would turn
+# a digital level into a ~197 Hz square wave.
+# -----------------------------------------------------------------------------
+add_executable(test_pca9685_phase
+    "${MAIN_SRC_DIR}/pca9685_phase.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_pca9685_phase.c"
+)
+add_test(NAME pca9685_phase COMMAND test_pca9685_phase)
+
+# -----------------------------------------------------------------------------
 # servo_controller init ordering
 #
 # servo_controller.c is compiled UNMODIFIED against the shims in test/include
@@ -344,6 +361,7 @@ add_test(NAME activity_trace COMMAND test_activity_trace)
 # -----------------------------------------------------------------------------
 add_executable(test_i2c_bus_stats
     "${MAIN_SRC_DIR}/i2c_bus.c"
+    "${MAIN_SRC_DIR}/pca9685_phase.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/host_shims.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/test_i2c_bus_stats.c"
 )
