@@ -279,7 +279,14 @@ bool motor_is_initialized(void)
 
 esp_err_t motor_stop(void)
 {
-    // Brake mode: all direction pins low, PWM = 0
+    /* Coast, not brake. IN1 = IN2 = low is the TB6612FNG's *Stop* state, which
+     * leaves the outputs high-impedance — the wheels roll on inertia. Short
+     * brake is IN1 = IN2 = high and lives in motor_brake(); see the truth table
+     * in docs/wiring-card-motors.typ.
+     *
+     * This is the right state for the idle path. reactive_controller stops on
+     * every 30 Hz iteration it is not driving, so braking here would hold the
+     * windings shorted for as long as the robot is parked. */
     esp_err_t ret =
         set_motors(PCA9685_FULL_OFF, PCA9685_FULL_OFF, 0, PCA9685_FULL_OFF, PCA9685_FULL_OFF, 0);
 
@@ -289,6 +296,30 @@ esp_err_t motor_stop(void)
         motor_state.left_direction = 0;
         motor_state.right_direction = 0;
         ESP_LOGD(TAG, "Motors stopped");
+    }
+    return ret;
+}
+
+esp_err_t motor_brake(void)
+{
+    /* Guarded, unlike motor_stop(): that one is called by
+     * motor_controller_init() before `initialized` is set, so it cannot check.
+     * Braking only ever happens at runtime. */
+    if (!motor_state.initialized)
+        return ESP_ERR_INVALID_STATE;
+
+    /* Short brake: both direction pins high shorts the windings. PWM is
+     * irrelevant in this state per the truth table, but is written low so the
+     * cached six-value state is unambiguous. */
+    esp_err_t ret =
+        set_motors(PCA9685_FULL_ON, PCA9685_FULL_ON, 0, PCA9685_FULL_ON, PCA9685_FULL_ON, 0);
+
+    if (ret == ESP_OK) {
+        motor_state.left_speed = 0;
+        motor_state.right_speed = 0;
+        motor_state.left_direction = 0;
+        motor_state.right_direction = 0;
+        ESP_LOGD(TAG, "Motors braking");
     }
     return ret;
 }

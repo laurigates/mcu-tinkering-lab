@@ -306,7 +306,11 @@ static void reactive_task(void *arg)
         reflex_was_active = reflex;
 
         if (reflex) {
-            motor_stop();
+            /* Brake, not coast. This is the one path where stopping distance
+             * matters, and motor_stop() leaves the outputs high-impedance so
+             * the robot rolls into whatever tripped the reflex. Every other
+             * stop in this loop stays a coast — see motor_brake(). */
+            motor_brake();
             goto update_telemetry;
         }
 
@@ -693,7 +697,7 @@ void reactive_controller_tick_for_test(void)
     bool reflex = (dist < STOP_THRESHOLD_CM);
 
     if (reflex) {
-        motor_stop();
+        motor_brake(); /* mirrors reactive_task() — brake, not coast */
         s_telemetry.distance_cm = dist;
         s_telemetry.reflex_active = true;
         s_telemetry.manual_active = false;

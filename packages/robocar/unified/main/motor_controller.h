@@ -22,6 +22,22 @@ esp_err_t motor_turn_right(uint8_t speed);
 esp_err_t motor_rotate_cw(uint8_t speed);
 esp_err_t motor_rotate_ccw(uint8_t speed);
 esp_err_t motor_stop(void);
+
+/**
+ * @brief Short-brake both motors — IN1 = IN2 = high, PWM = 0.
+ *
+ * Distinct from motor_stop(), which is the TB6612FNG's *Stop (coast)* state
+ * (IN1 = IN2 = low). Per the datasheet truth table reproduced in
+ * `docs/wiring-card-motors.typ`, only IN1 = IN2 = high shorts the windings and
+ * actually resists rotation; low/low leaves the outputs high-impedance and the
+ * robot rolls on inertia.
+ *
+ * Reserved for the obstacle reflex. It is deliberately NOT what the idle path
+ * uses: reactive_controller's 30 Hz loop stops on every iteration it is not
+ * driving, and a parked robot should not sit with its windings shorted for as
+ * long as it is powered.
+ */
+esp_err_t motor_brake(void);
 esp_err_t motor_set_individual(uint8_t left_speed, uint8_t right_speed, uint8_t left_direction,
                                uint8_t right_direction);
 esp_err_t motor_get_state(uint8_t *left_speed, uint8_t *right_speed, uint8_t *left_direction,

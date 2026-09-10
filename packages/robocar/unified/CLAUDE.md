@@ -156,6 +156,16 @@ of the A side reading PWM-then-direction and the B side direction-then-PWM. The
 apparent asymmetry in the `#define` list is what buys the symmetry on the bench.
 STBY is not in the block; it is GPIO1, direct from the MCU.
 
+**Stopping and braking are different electrical states.** `motor_stop()` writes
+IN1 = IN2 = low, which the TB6612FNG truth table calls *Stop* — the outputs go
+high-impedance and the robot rolls on inertia. `motor_brake()` writes
+IN1 = IN2 = **high**, shorting the windings. Only the obstacle reflex brakes;
+every other stop in the 30 Hz loop coasts, because the executor stops on every
+iteration it is not driving and a parked robot should not sit with its windings
+shorted for as long as it is powered. `test_motor_controller.c` pins the two
+encodings apart and `test_reactive_controller.c` pins which path uses which —
+both were mutation-checked, since a PWM-only assertion passes against either.
+
 `set_motors()` writes all six in one transaction and therefore places each value
 by **channel** (`MOTOR_CH_SLOT`), never by argument position, with a
 `_Static_assert` that the six are a gap-free block starting at
@@ -164,6 +174,40 @@ and simply drive the wrong pins — on a motor driver, a wheel that spins when i
 was told to stop. `test_each_value_lands_on_its_own_channel` in
 `test_motor_controller.c` pins the placement; it was mutation-checked by
 reverting to the positional literal, which fails it.
+
+## Bus clock and PWM phase
+
+Two properties of every PCA9685 write, both set in `i2c_bus.c` and neither
+visible at the call site.
+
+**One bus clock for the whole port.** Each esp-idf-lib driver hardcodes its own
+rate in `init_desc()` — the TCA9548A at 100 kHz, the PCA9685 and MCP23017 at
+1 MHz — and i2cdev's `cfg_equal()` compares `clk_speed`, so a differing rate
+makes `i2c_setup_port()` *delete and reinstall the entire I2C driver* before the
+transaction. A mux channel-select always precedes a device write, so that fired
+twice per motor update, ~30 times a second while driving. `pin_bus_clock()`
+overrides all three onto `I2C_MASTER_FREQ_HZ` (400 kHz — the fastest every part
+on this bus is rated for, the TCA9548A being the Fast-mode limit). That define
+had existed since the first commit and nothing read it.
+
+**Outputs are phase-staggered.** The vendored driver hardcodes every channel's
+ON count to 0, so all sixteen outputs rose on the same tick of the ~197 Hz
+period — two motor PWMs, two servos and six LED channels switching together.
+`pca9685_phase.c` gives channel *n* an ON offset of *n*/16 of the period and
+composes the LEDn registers itself, because upstream esp-idf-lib has no API for
+it and the vendored copy is a **symlink into `robocar/main`** — patching it
+would change that firmware too and be reverted by any library refresh.
+
+Staggering moves a pulse within the period without changing its width, so
+nothing downstream can tell: a servo decodes pulse width, not position in the
+frame, and the TB6612FNG sees the same duty cycle. Full-on and full-off are
+flag bits rather than counts and deliberately carry **no** phase — on this board
+those are the motor direction pins, and a phase offset there would turn a
+digital level into a ~197 Hz square wave. `test_pca9685_phase.c` pins all of it,
+including the 12-bit wrap at channel 15 where OFF legitimately lands below ON.
+
+This is headroom, not a fix: the audio distortion that prompted the
+investigation was resolved by adding bulk capacitance.
 
 ## AI planner
 
@@ -454,6 +498,10 @@ Key settings that matter:
 - Don't give the budget fuse a rolling window or an auto-reset. It exists for the unattended board, which is precisely the case that must not resume on its own
 - Don't put `ESP_ERROR_CHECK` or `ESP_RETURN_ON_ERROR` back into the hardware phase. `init_hardware()` returns `void` on purpose (issue #500): a peripheral that would not initialise used to abort the boot, taking the console, WiFi, provisioning and the planner down with it — and a reboot loop removes the very console you would read the fault on. Every driver behind that phase already fails safe (each guards its entry points on `initialized` and returns `ESP_ERR_INVALID_STATE`; the buzzer's tone routines no-op), so a failure costs exactly the function that failed
 - Don't drop a peripheral's `*_is_initialized()` accessor, or let `self_report_collect()` read a cached boot result instead. Those accessors are the only thing standing between a half-populated board and a silent loss of function: the facts line renders `i2c_peripherals=degraded(servos)` from them, and `test_self_report.c` pins the case a bench cannot stage — a live bus with exactly one dead peripheral
+- Don't make `motor_stop()` a short brake, or "unify" it with `motor_brake()`. Low/low is coast and high/high is brake; the reflex wants the second and the 30 Hz idle path wants the first. A test that only checks PWM = 0 passes against either, which is why the stub records which entry point was called
+- Don't let a driver's `init_desc()` pick the bus clock. Each esp-idf-lib driver hardcodes a different one, and i2cdev reinstalls the whole I2C driver whenever consecutive transactions disagree — call `pin_bus_clock()` after every `init_desc()`, including for any device added later
+- Don't give a full-on or full-off channel a phase offset in `pca9685_phase.c`. Those are flag bits, and on this board they are the motor direction pins: a phase offset converts a steady logic level into a ~197 Hz square wave on IN1/IN2
+- Don't patch the vendored `esp-idf-lib` PCA9685 driver to add phase support. `components/esp-idf-lib` is a symlink into `robocar/main`, so the edit lands in that firmware too, and a future library refresh reverts it silently
 - Don't "tidy" the motor channels back into a per-motor IN1/IN2/PWM order. They are in the motor driver's pin order on purpose, and that ordering is a claim about **soldered wires** — reordering the `#define`s is a rewiring instruction, not a refactor, and the firmware will follow the new numbers perfectly onto the wrong pins
 - Don't add goal sources outside `planner_task.c` — structured goals keep the two layers decoupled. If a new goal source is needed, it should write `goal_state` the same way the planner does
 - Don't fold speech into `goal_t` — see the Voice section above and `speech_queue.h`

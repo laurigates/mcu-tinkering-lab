@@ -2,6 +2,7 @@ idf_component_register(
     SRCS
         "main.c"
         "i2c_bus.c"
+        "pca9685_phase.c"
         "gpio_expander.c"
         "motor_controller.c"
         "led_controller.c"

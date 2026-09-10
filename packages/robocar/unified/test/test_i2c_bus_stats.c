@@ -120,6 +120,32 @@ esp_err_t pca9685_set_pwm_values(i2c_dev_t *dev, uint8_t first, uint8_t count,
     return ESP_OK;
 }
 
+/* i2c_bus.c now composes the PCA9685's LEDn registers itself (phase staggering)
+ * and writes them through i2cdev, so these three are needed as well. The
+ * encoding is pinned separately by test_pca9685_phase; here they only have to
+ * link and succeed. */
+esp_err_t i2c_dev_take_mutex(i2c_dev_t *dev)
+{
+    (void)dev;
+    return ESP_OK;
+}
+
+esp_err_t i2c_dev_give_mutex(i2c_dev_t *dev)
+{
+    (void)dev;
+    return ESP_OK;
+}
+
+esp_err_t i2c_dev_write_reg(const i2c_dev_t *dev, uint8_t reg, const void *out_data,
+                            size_t out_size)
+{
+    (void)dev;
+    (void)reg;
+    (void)out_data;
+    (void)out_size;
+    return ESP_OK;
+}
+
 /* ---- harness ------------------------------------------------------------ */
 
 static int s_failures;

@@ -21,6 +21,13 @@
 
 /* From motor_controller_stub.c */
 void motor_stub_reset(void);
+int motor_stub_get_last_call(void);
+
+/* g_last_call values recorded by motor_controller_stub.c. */
+#define MOTOR_CALL_NONE 0
+#define MOTOR_CALL_COAST 1
+#define MOTOR_CALL_BRAKE 2
+#define MOTOR_CALL_DRIVE 3
 void motor_stub_get_last_state(uint8_t *left_speed, uint8_t *right_speed, uint8_t *left_direction,
                                uint8_t *right_direction);
 
@@ -97,7 +104,12 @@ static void get_motor_state(uint8_t *l_speed, uint8_t *r_speed, uint8_t *l_dir, 
  * Tests
  * ========================================================================= */
 
-/* Reflex latch: smoothed distance < 15 cm → motor_stop regardless of goal. */
+/* Reflex latch: smoothed distance < 15 cm → brake, regardless of goal.
+ *
+ * Asserting the recorded speeds are zero is NOT enough — motor_stop() (coast)
+ * and motor_brake() (short brake) both leave every recorded field at zero, so
+ * a speeds-only assertion passes against either and pins neither. The
+ * last-call check is the part with teeth. */
 static void test_reflex_latch_overrides_drive(void)
 {
     setup();
@@ -114,6 +126,8 @@ static void test_reflex_latch_overrides_drive(void)
     get_motor_state(&ls, &rs, &ld, &rd);
     ASSERT(ls == 0);
     ASSERT(rs == 0);
+    /* Brake, not coast: this is the one path where stopping distance matters. */
+    ASSERT(motor_stub_get_last_call() == MOTOR_CALL_BRAKE);
 }
 
 /* Reflex release: distance back above threshold → goal takes effect. */
@@ -309,6 +323,10 @@ static void test_stale_goal_stops(void)
     ASSERT(rs == 0);
 
     goal_state_set_clock_override(NULL);
+    /* Coast, not brake. reactive_controller stops on every 30 Hz tick it is
+     * not driving, so braking here would hold the windings shorted for as
+     * long as the robot is parked. */
+    ASSERT(motor_stub_get_last_call() == MOTOR_CALL_COAST);
 }
 
 /* =========================================================================
@@ -358,6 +376,7 @@ static void test_reflex_overrides_manual(void)
     get_motor_state(&ls, &rs, &ld, &rd);
     ASSERT(ls == 0);
     ASSERT(rs == 0);
+    ASSERT(motor_stub_get_last_call() == MOTOR_CALL_BRAKE);
 }
 
 /* The lease expires by itself and the planner's goal resumes — no hand-back. */

@@ -4,6 +4,7 @@
  */
 
 #include "i2c_bus.h"
+#include "pca9685_phase.h"
 #include "pin_config.h"
 
 #include <stdio.h>
@@ -161,6 +162,72 @@ void i2c_bus_stats_report(void)
  * the servos are simply being clocked out of spec. */
 static uint16_t s_pwm_freq_hz = PCA9685_FREQ_HZ;
 
+/* Force every device on this port onto one bus clock.
+ *
+ * Each esp-idf-lib driver hardcodes its own rate in its init_desc() — the
+ * TCA9548A at 100 kHz, the PCA9685 and MCP23017 at 1 MHz — and i2cdev's
+ * cfg_equal() compares clk_speed, so a differing rate makes i2c_setup_port()
+ * delete and reinstall the whole I2C driver before the transaction. Since a
+ * mux channel-select always precedes the device write, that fired TWICE per
+ * motor update, ~30 times a second while driving.
+ *
+ * 400 kHz is the fastest rate every part on this bus is rated for (the
+ * TCA9548A is a Fast-mode part; the other two are Fm+), and is what
+ * I2C_MASTER_FREQ_HZ has claimed all along while nothing read it.
+ *
+ * Call this after the driver's own init_desc(), which sets clk_speed itself.
+ * Pins, pull-ups and port already match across all three drivers, so clk_speed
+ * is the only field that was forcing a reconfigure. */
+static void pin_bus_clock(i2c_dev_t *dev)
+{
+    dev->cfg.master.clk_speed = I2C_MASTER_FREQ_HZ;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Phase-staggered PCA9685 writes                                              */
+/*                                                                             */
+/* The vendored driver hardcodes each channel's ON count to 0, so every output */
+/* rises on the same tick of the ~197 Hz period: two motor PWMs, two servos    */
+/* and six LED channels all switch together, ~197 times a second. That is the  */
+/* worst case for peak current on the shared 5 V rail, and the PCA9685 has a   */
+/* per-channel ON register precisely so the edges can be spread instead.       */
+/* Upstream esp-idf-lib exposes no API for it (checked against                 */
+/* UncleRus/esp-idf-lib at the time of writing), so the register bytes are     */
+/* composed here rather than by patching the vendored copy — which is a        */
+/* symlink into robocar/main and would change that firmware too, and would be  */
+/* silently reverted by any future refresh of the library.                     */
+/*                                                                             */
+/* Note this is headroom, not a fix for an observed fault: the audio           */
+/* distortion that prompted the investigation was resolved by adding bulk      */
+/* capacitance.                                                                */
+/* -------------------------------------------------------------------------- */
+
+/** Write `count` consecutive channels with phase staggering applied.
+ *
+ * Relies on the MODE1 auto-increment that pca9685_init() sets, exactly as the
+ * vendored multi-write does. Caller must already hold the bus. */
+static esp_err_t pca9685_write_staggered(uint8_t first_ch, uint8_t count, const uint16_t *values)
+{
+    if (values == NULL || count == 0u || (uint16_t)first_ch + count > PCA9685_CHANNELS) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    uint8_t buf[PCA9685_CHANNELS * 4u];
+    for (uint8_t i = 0; i < count; i++) {
+        pca9685_encode((uint8_t)(first_ch + i), values[i], &buf[i * 4]);
+    }
+
+    /* The I2C_DEV_* macros return on failure and release the mutex themselves,
+     * exactly as the vendored driver's own writers do. */
+    I2C_DEV_TAKE_MUTEX(&s_pca9685);
+    I2C_DEV_CHECK(&s_pca9685,
+                  i2c_dev_write_reg(&s_pca9685, (uint8_t)(PCA9685_REG_LED0 + first_ch * 4), buf,
+                                    (size_t)count * 4u));
+    I2C_DEV_GIVE_MUTEX(&s_pca9685);
+
+    return ESP_OK;
+}
+
 esp_err_t i2c_bus_init(void)
 {
     if (s_initialized) {
@@ -188,6 +255,7 @@ esp_err_t i2c_bus_init(void)
         ESP_LOGE(TAG, "TCA9548A init_desc failed: %s", esp_err_to_name(ret));
         return ret;
     }
+    pin_bus_clock(&s_tca9548);
 
     // Disable all channels initially
     ret = tca9548_set_channels(&s_tca9548, 0x00);
@@ -209,6 +277,7 @@ esp_err_t i2c_bus_init(void)
         ESP_LOGE(TAG, "PCA9685 init_desc failed: %s", esp_err_to_name(ret));
         return ret;
     }
+    pin_bus_clock(&s_pca9685);
 
     ret = pca9685_init(&s_pca9685);
     if (ret != ESP_OK) {
@@ -234,8 +303,8 @@ esp_err_t i2c_bus_init(void)
     tca9548_set_channels(&s_tca9548, 0x00);
 
     s_initialized = true;
-    ESP_LOGI(TAG, "I2C bus initialized: TCA9548A(0x%02X) + PCA9685(0x%02X) @ %dHz", TCA9548A_ADDR,
-             PCA9685_ADDR, PCA9685_FREQ_HZ);
+    ESP_LOGI(TAG, "I2C bus initialized: TCA9548A(0x%02X) + PCA9685(0x%02X), bus %d kHz, PWM %d Hz",
+             TCA9548A_ADDR, PCA9685_ADDR, I2C_MASTER_FREQ_HZ / 1000, PCA9685_FREQ_HZ);
     return ESP_OK;
 }
 
@@ -321,7 +390,7 @@ esp_err_t i2c_bus_pca9685_set(uint8_t channel, uint16_t value)
     if (ret != ESP_OK)
         return ret;
 
-    ret = pca9685_set_pwm_value(&s_pca9685, channel, value);
+    ret = pca9685_write_staggered(channel, 1, &value);
 
     i2c_bus_release();
     return ret;
@@ -333,7 +402,7 @@ esp_err_t i2c_bus_pca9685_set_multi(uint8_t first_ch, uint8_t count, const uint1
     if (ret != ESP_OK)
         return ret;
 
-    ret = pca9685_set_pwm_values(&s_pca9685, first_ch, count, values);
+    ret = pca9685_write_staggered(first_ch, count, values);
 
     i2c_bus_release();
     return ret;
