@@ -81,9 +81,11 @@ position so this ordering cannot silently mis-drive a pin.
 graph TD
     Bat[2x 18650 in SERIES<br/>7.4 V nominal, 8.4 V charged] --> Buck[LM2596 buck module<br/>adjust to 5.0 V]
     Buck -->|5V| XIAO[XIAO ESP32-S3 Sense<br/>5V pin]
-    Buck -->|5V| MD[TB6612FNG<br/>VM + VCC]
-    Buck -->|5V| PCA[PCA9685<br/>V+ + VCC]
+    Buck -->|5V| MD[TB6612FNG<br/>VM only]
+    Buck -->|5V| PCA[PCA9685<br/>V+ only]
     Buck -->|5V| AMP[MAX98357A<br/>Vin]
+    XIAO -->|3.3V| MD_L[TB6612FNG VCC]
+    XIAO -->|3.3V| PCA_L[PCA9685 VCC]
     PCA --> Servos[SG90 servos]
     MD --> ML[Left motor]
     MD --> MR[Right motor]
@@ -97,6 +99,26 @@ graph TD
 ```
 
 **Common ground required across all components.**
+
+### Logic rails are 3.3 V, not 5 V
+
+The TB6612FNG's **VCC** and the PCA9685's **VCC** are logic supplies and take
+**3.3 V**; only the TB6612FNG's **VM** and the PCA9685's **V+** take 5 V. This
+diagram fed 5 V to both VCC pins until 2026-09; that was wrong, and the
+arithmetic is not close:
+
+| Part | Threshold | At V_CC = 5 V | At V_CC = 3.3 V |
+|---|---|---|---|
+| PCA9685 SCL/SDA | V_IH = 0.7 x V_DD | 3.5 V — above what the XIAO's 3.3 V I2C can drive | 2.31 V |
+| TB6612FNG IN1/IN2/PWM | V_IH = 0.7 x V_CC | 3.5 V — above what the PCA9685 would output | 2.31 V |
+| TB6612FNG STBY | V_IH = 0.7 x V_CC | 3.5 V — a 3.3 V GPIO cannot reliably lift it, so the motors stay in standby | 2.31 V |
+
+Both parts specify their input threshold as a fraction of *their own* supply, so
+the rail is not a free choice. `docs/wiring-card-motors.typ` and
+`docs/schematics/circuits/robocar_unified.py` carry the same 3.3 V assignment.
+
+**Check before power-up:** continuity between TB6612FNG VM and TB6612FNG VCC
+must read open. A beep means the 5 V and 3.3 V rails are shorted.
 
 ### The regulator is a step-DOWN converter, and its output is adjustable
 
