@@ -268,13 +268,11 @@ so the rail is not a free choice:
 )
 
 #v(3pt)
-#callout("WIRING.md currently says 5 V here — the schematic says 3.3 V", [
-  `WIRING.md`'s power diagram feeds 5 V to both VCC pins; the schematic at
-  `docs/schematics/circuits/robocar_unified.py` feeds 3.3 V. The arithmetic
-  above settles it in favour of 3.3 V for both, with the 5 V rail reaching only
-  TB6612 *VM* and PCA9685 *V+*. Wire it that way and treat the diagram as the
-  stale copy.
-], kind: "danger")
+#callout("Only VM and V+ take 5 V", [
+  The 5 V rail reaches TB6612 *VM* and PCA9685 *V+* and nothing else on this
+  card; both VCC pins are logic supplies and take 3.3 V. `WIRING.md` and the
+  schematic at `docs/schematics/circuits/robocar_unified.py` agree on this.
+], kind: "warn")
 
 = 5 · Before power-up, and first motion
 
