@@ -131,8 +131,8 @@ static void test_a_motor_block_staggers_pwm_but_not_direction(void)
     }
 
     uint16_t r_on, r_off, l_on, l_off;
-    decode(&buf[0], &r_on, &r_off);      /* ch8  */
-    decode(&buf[5 * 4], &l_on, &l_off);  /* ch13 */
+    decode(&buf[0], &r_on, &r_off);     /* ch8  */
+    decode(&buf[5 * 4], &l_on, &l_off); /* ch13 */
 
     CHECK(r_on != l_on, "the two motor PWM channels must not share a phase (%u vs %u)", r_on, l_on);
     CHECK(((r_off + PCA9685_PERIOD_COUNTS - r_on) & 0x0FFFu) == 3195, "right PWM width changed");

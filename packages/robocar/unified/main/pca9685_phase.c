@@ -12,9 +12,9 @@
 
 uint16_t pca9685_phase_on(uint8_t ch)
 {
-    return (uint16_t)(((uint32_t)(ch % PCA9685_CHANNELS) * PCA9685_PERIOD_COUNTS /
-                       PCA9685_CHANNELS) &
-                      0x0FFFu);
+    return (
+        uint16_t)(((uint32_t)(ch % PCA9685_CHANNELS) * PCA9685_PERIOD_COUNTS / PCA9685_CHANNELS) &
+                  0x0FFFu);
 }
 
 void pca9685_encode(uint8_t ch, uint16_t value, uint8_t *buf)
