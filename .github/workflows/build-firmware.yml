@@ -1,3 +1,4 @@
+# yamllint disable rule:line-length
 name: Build and Release Firmware
 
 on:
@@ -163,7 +164,7 @@ jobs:
         id: version
         run: |
           TAG="${{ github.event.release.tag_name || inputs.release_tag }}"
-          echo "version=$TAG" >> $GITHUB_OUTPUT
+          echo "version=$TAG" >> "$GITHUB_OUTPUT"
 
       - name: Assemble firmware directory
         run: |
@@ -202,12 +203,21 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v5
 
+      - name: Prepare distinct manifest asset names for release
+        run: |
+          for d in firmware/*/; do
+            if [ -f "$d/manifest.json" ]; then
+              project_id=$(basename "$d")
+              cp "$d/manifest.json" "firmware/${project_id}-manifest.json"
+            fi
+          done
+
       - name: Upload firmware to release
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.event.release.tag_name || inputs.release_tag }}
           files: |
-            firmware/*/manifest.json
+            firmware/*-manifest.json
             firmware/projects.json
 
       - name: Notify robots of new firmware via MQTT
@@ -229,21 +239,25 @@ jobs:
             -q 1
 
       - name: Generate build summary
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
         run: |
-          echo "## Firmware Build Complete" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Release: \`${{ github.event.release.tag_name || inputs.release_tag }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Project | Binary | Size |" >> $GITHUB_STEP_SUMMARY
-          echo "|---------|--------|------|" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## Firmware Build Complete"
+            echo ""
+            echo "### Release: \`${RELEASE_TAG}\`"
+            echo ""
+            echo "| Project | Binary | Size |"
+            echo "|---------|--------|------|"
 
-          for flasher_json in packages/*/*/flasher.json; do
-            project_dir=$(dirname "$flasher_json")
-            project_id=$(basename "$project_dir")
-            app_bin=$(jq -r '.appBinaryName' "$flasher_json")
-            bin_path="firmware/$project_id/$app_bin"
-            if [ -f "$bin_path" ]; then
-              SIZE=$(stat -c%s "$bin_path" 2>/dev/null || echo "?")
-              echo "| $project_id | $app_bin | $SIZE bytes |" >> $GITHUB_STEP_SUMMARY
-            fi
-          done
+            for flasher_json in packages/*/*/flasher.json; do
+              project_dir=$(dirname "$flasher_json")
+              project_id=$(basename "$project_dir")
+              app_bin=$(jq -r '.appBinaryName' "$flasher_json")
+              bin_path="firmware/$project_id/$app_bin"
+              if [ -f "$bin_path" ]; then
+                SIZE=$(stat -c%s "$bin_path" 2>/dev/null || echo "?")
+                echo "| $project_id | $app_bin | $SIZE bytes |"
+              fi
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
