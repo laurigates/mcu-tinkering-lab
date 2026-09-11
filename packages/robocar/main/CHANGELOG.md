@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.8](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-main-v0.1.7...robocar-main-v0.1.8) (2026-09-11)
+
+
+### Miscellaneous
+
+* **robocar:** migrate esp-idf-lib from a vendored snapshot to managed components ([#529](https://github.com/laurigates/mcu-tinkering-lab/issues/529)) ([8b3b9dd](https://github.com/laurigates/mcu-tinkering-lab/commit/8b3b9dd0d958bba82c134d76bbb5f8f13a0798aa))
+
 ## [0.1.7](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-main-v0.1.6...robocar-main-v0.1.7) (2026-09-05)
 
 
