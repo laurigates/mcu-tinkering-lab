@@ -9,7 +9,7 @@
   "packages/networking/wireguard-ha": "0.1.3",
   "packages/camera-vision/llm-telegram": "0.1.5",
   "packages/networking/it-troubleshooter": "0.1.4",
-  "packages/audio/kids-audio-toy": "0.1.3",
+  "packages/audio/kids-audio-toy": "0.1.4",
   "packages/games/nfc-scavenger-hunt": "0.1.3",
   "packages/robocar/simulation": "0.1.5",
   "packages/input-gaming/switch-usb-proxy": "0.1.3",
