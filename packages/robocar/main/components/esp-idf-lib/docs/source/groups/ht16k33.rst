@@ -1,8 +1,0 @@
-.. _ht16k33:
-
-ht16k33 - Holtek HT16K33 LED Controller driver
-==============================================
-
-.. doxygengroup:: ht16k33
-   :members:
-

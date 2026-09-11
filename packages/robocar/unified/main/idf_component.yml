@@ -13,4 +13,25 @@ dependencies:
   fishwaldo/esp_ghota:
     git: https://github.com/FishWaldo/esp_ghota.git
     version: 'v1.0.0'
+  # ---------------------------------------------------------------------------
+  # esp-idf-lib drivers (previously vendored under robocar/main as a ~95-component
+  # snapshot of the now-archived UncleRus monorepo, shared by symlink).
+  # ---------------------------------------------------------------------------
+  esp-idf-lib/i2cdev: '^2.0.0'
+  esp-idf-lib/tca9548: '^1.0.0'
+  esp-idf-lib/mcp23x17: '^1.1.7'
+  # pca9685: pinned to the fork branch carrying the out-of-bounds fix.
+  #
+  # The published esp-idf-lib/pca9685@1.0.0 still indexes its stack buffer by
+  # the ABSOLUTE channel number while sizing it for `channels` entries, so any
+  # first_ch > 0 writes past the end. motor_stop()'s (first_ch = 8, count = 6)
+  # wrote 32 bytes past a 24-byte VLA and double-faulted this board on the
+  # first boot with the PCA9685 fitted.
+  #
+  # Fix submitted upstream as esp-idf-lib/pca9685#2 (issue #1). SWAP THIS BACK
+  # to a plain version constraint once that merges and a release ships it —
+  # tracked in the issue linked from the migration PR.
+  esp-idf-lib/pca9685:
+    git: https://github.com/laurigates/pca9685.git
+    version: 'bugfix-issue-1-set-pwm-values-indexing'
   # Note: MQTT is built-in to ESP-IDF 6.0, no external dependency needed

@@ -164,20 +164,24 @@ static uint16_t s_pwm_freq_hz = PCA9685_FREQ_HZ;
 
 /* Force every device on this port onto one bus clock.
  *
- * Each esp-idf-lib driver hardcodes its own rate in its init_desc() — the
- * TCA9548A at 100 kHz, the PCA9685 and MCP23017 at 1 MHz — and i2cdev's
- * cfg_equal() compares clk_speed, so a differing rate makes i2c_setup_port()
- * delete and reinstall the whole I2C driver before the transaction. Since a
- * mux channel-select always precedes the device write, that fired TWICE per
- * motor update, ~30 times a second while driving.
+ * Each esp-idf-lib driver picks its own rate in init_desc() — the TCA9548A
+ * 100 kHz, the PCA9685 and MCP23017 1 MHz — so without this the bus runs at
+ * three different speeds depending on which device was addressed last.
+ * I2C_MASTER_FREQ_HZ (400 kHz) is the fastest rate every part here is rated
+ * for: the TCA9548A is a Fast-mode part, the other two are Fm+. It had sat in
+ * pin_config.h unread since the first commit.
  *
- * 400 kHz is the fastest rate every part on this bus is rated for (the
- * TCA9548A is a Fast-mode part; the other two are Fm+), and is what
- * I2C_MASTER_FREQ_HZ has claimed all along while nothing read it.
+ * Under i2cdev 1.x this also fixed a real cost. cfg_equal() compared
+ * clk_speed, so consecutive transactions at different rates made
+ * i2c_setup_port() delete and reinstall the entire I2C driver first — and
+ * since a mux channel-select always precedes a device write, that fired twice
+ * per motor update, ~30 times a second while driving. i2cdev 2.0.0 moved to
+ * ESP-IDF's bus/device API, which caches a per-device handle with its own
+ * scl_speed_hz on a shared bus, so the reinstall is gone by construction. What
+ * remains is the first paragraph: one deliberate bus speed instead of three
+ * accidental ones, and 400 kHz rather than 1 MHz over jumper wiring.
  *
- * Call this after the driver's own init_desc(), which sets clk_speed itself.
- * Pins, pull-ups and port already match across all three drivers, so clk_speed
- * is the only field that was forcing a reconfigure. */
+ * Call this after the driver's own init_desc(), which sets clk_speed itself. */
 static void pin_bus_clock(i2c_dev_t *dev)
 {
     dev->cfg.master.clk_speed = I2C_MASTER_FREQ_HZ;
