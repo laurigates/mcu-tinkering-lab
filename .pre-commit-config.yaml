@@ -90,6 +90,13 @@ repos:
         files: '(docs/.*\.typ|main/pin_config\.h|tools/check-typst-docs\.py|\.github/workflows/build-guide-check\.yml)$'
         pass_filenames: false
 
+      - id: check-doc-facts
+        name: Hand-written docs agree with the firmware
+        entry: python3 tools/check-doc-facts.py
+        language: system
+        files: '(pin_config\.h|WIRING\.md|README\.md|build-guide\.typ|tools/check-doc-facts\.py)$'
+        pass_filenames: false
+
       - id: check-build-artifacts
         name: Check for build artifacts
         entry: >-
