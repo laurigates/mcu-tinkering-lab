@@ -43,8 +43,8 @@ typedef struct {
 float audio_map_adc_to_range(uint32_t adc_value, float lo, float hi);
 
 /* Map the three control ADC readings onto pitch/duration/interval in *out. */
-void audio_params_from_adc(uint32_t pitch_adc, uint32_t duration_adc,
-                           uint32_t interval_adc, audio_params_t *out);
+void audio_params_from_adc(uint32_t pitch_adc, uint32_t duration_adc, uint32_t interval_adc,
+                           audio_params_t *out);
 
 /*
  * Advance the smoothed modulation value given the previous value and a fresh
