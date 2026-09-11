@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.2.2](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.1...robocar-unified-v0.2.2) (2026-09-11)
+
+
+### Bug Fixes
+
+* **robocar-unified:** brake on the reflex, pin the bus clock, stagger PWM phase ([20a2838](https://github.com/laurigates/mcu-tinkering-lab/commit/20a28385a4b1a7df89cb9bc57d4c571834c3000e))
+
+
+### Documentation
+
+* **robocar-unified:** the TB6612FNG and PCA9685 logic rails are 3.3 V, not 5 V ([6029765](https://github.com/laurigates/mcu-tinkering-lab/commit/6029765116e38d37c336652cac105083152ac159))
+
+
+### Miscellaneous
+
+* **robocar:** migrate esp-idf-lib from a vendored snapshot to managed components ([#529](https://github.com/laurigates/mcu-tinkering-lab/issues/529)) ([8b3b9dd](https://github.com/laurigates/mcu-tinkering-lab/commit/8b3b9dd0d958bba82c134d76bbb5f8f13a0798aa))
+
 ## [0.2.1](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.0...robocar-unified-v0.2.1) (2026-09-10)
 
 
