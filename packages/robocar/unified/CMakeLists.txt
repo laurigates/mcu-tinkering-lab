@@ -18,9 +18,9 @@ if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/main/credentials.h")
 "#endif  // CREDENTIALS_H\n")
 endif()
 
-# Add esp-idf-lib to component directories
-set(EXTRA_COMPONENT_DIRS "components/esp-idf-lib/components")
-list(APPEND EXTRA_COMPONENT_DIRS "${CMAKE_CURRENT_LIST_DIR}/../../components")
+# esp-idf-lib drivers come from the component manager (main/idf_component.yml);
+# this list carries only the monorepo's own shared components.
+set(EXTRA_COMPONENT_DIRS "${CMAKE_CURRENT_LIST_DIR}/../../components")
 list(APPEND EXTRA_COMPONENT_DIRS "${CMAKE_CURRENT_LIST_DIR}/../components")
 
 # Partition table + flash size are configured in sdkconfig.defaults

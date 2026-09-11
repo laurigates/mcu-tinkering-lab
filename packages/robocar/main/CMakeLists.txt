@@ -2,9 +2,9 @@
 # CMakeLists in this exact order for cmake to work correctly
 cmake_minimum_required(VERSION 3.5)
 
-# Add esp-idf-lib to component directories
-set(EXTRA_COMPONENT_DIRS "components/esp-idf-lib/components")
-list(APPEND EXTRA_COMPONENT_DIRS "${CMAKE_CURRENT_LIST_DIR}/../../components")
+# esp-idf-lib drivers come from the component manager (main/idf_component.yml);
+# this list carries only the monorepo's own shared components.
+set(EXTRA_COMPONENT_DIRS "${CMAKE_CURRENT_LIST_DIR}/../../components")
 list(APPEND EXTRA_COMPONENT_DIRS "${CMAKE_CURRENT_LIST_DIR}/../components")
 
 # Partition table + flash size are configured in sdkconfig.defaults

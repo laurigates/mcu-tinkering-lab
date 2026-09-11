@@ -5,3 +5,24 @@ dependencies:
   # mDNS is a managed component in IDF 5.x (main REQUIRES mdns).
   # esp_ghota is provided transitively by the shared ota_github component.
   espressif/mdns: '^1.8.0'
+
+  # ---------------------------------------------------------------------------
+  # esp-idf-lib drivers. Previously vendored in-tree at components/esp-idf-lib
+  # (a ~95-component snapshot of the archived UncleRus monorepo, of which this
+  # project used two).
+  # ---------------------------------------------------------------------------
+  esp-idf-lib/i2cdev: '^2.0.0'
+  # pca9685: pinned to the fork branch carrying the out-of-bounds fix.
+  #
+  # The published esp-idf-lib/pca9685@1.0.0 still indexes its stack buffer by
+  # the ABSOLUTE channel number while sizing it for `channels` entries, so any
+  # first_ch > 0 writes past the end. motor_stop()'s (first_ch = 8, count = 6)
+  # wrote 32 bytes past a 24-byte VLA and double-faulted this board on the
+  # first boot with the PCA9685 fitted.
+  #
+  # Fix submitted upstream as esp-idf-lib/pca9685#2 (issue #1). SWAP THIS BACK
+  # to a plain version constraint once that merges and a release ships it —
+  # tracked in the issue linked from the migration PR.
+  esp-idf-lib/pca9685:
+    git: https://github.com/laurigates/pca9685.git
+    version: 'bugfix-issue-1-set-pwm-values-indexing'

@@ -274,20 +274,30 @@ add_test(NAME audio_player COMMAND test_audio_player)
 # a 24-byte VLA and the board double-faulted at the first boot with the PCA9685
 # fitted. Content assertions alone could pass on lucky garbage; ASan cannot.
 # -----------------------------------------------------------------------------
-set(ESP_IDF_LIB_DIR "${MAIN_SRC_DIR}/../../main/components/esp-idf-lib/components")
-add_executable(test_pca9685_multi
-    "${ESP_IDF_LIB_DIR}/pca9685/pca9685.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/test_pca9685_multi.c"
-)
-target_include_directories(test_pca9685_multi BEFORE PRIVATE
-    "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_host"
-    "${ESP_IDF_LIB_DIR}/pca9685"
-)
-# -Wno-unused-variable: the ESP_LOG* shims are no-ops, which leaves the driver's TAG unused.
-target_compile_options(test_pca9685_multi PRIVATE -fsanitize=address -fno-omit-frame-pointer -Wno-unused-variable)
-target_link_options(test_pca9685_multi PRIVATE -fsanitize=address)
-target_link_libraries(test_pca9685_multi PRIVATE Threads::Threads m)
-add_test(NAME pca9685_multi COMMAND test_pca9685_multi)
+# The driver is a MANAGED component now (main/idf_component.yml), so its source
+# lives under managed_components/ — gitignored, and absent until an ESP-IDF
+# build has run. This target is therefore optional: a fresh checkout runs the
+# other suites, and the driver test appears once the firmware has been built.
+set(PCA9685_MANAGED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../managed_components/esp-idf-lib__pca9685")
+if(EXISTS "${PCA9685_MANAGED_DIR}/pca9685.c")
+    add_executable(test_pca9685_multi
+        "${PCA9685_MANAGED_DIR}/pca9685.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/test_pca9685_multi.c"
+    )
+    target_include_directories(test_pca9685_multi BEFORE PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_host"
+        "${PCA9685_MANAGED_DIR}"
+    )
+    # -Wno-unused-variable: the ESP_LOG* shims are no-ops, which leaves the driver's TAG unused.
+    target_compile_options(test_pca9685_multi PRIVATE -fsanitize=address -fno-omit-frame-pointer -Wno-unused-variable)
+    target_link_options(test_pca9685_multi PRIVATE -fsanitize=address)
+    target_link_libraries(test_pca9685_multi PRIVATE Threads::Threads m)
+    add_test(NAME pca9685_multi COMMAND test_pca9685_multi)
+else()
+    message(STATUS
+        "pca9685_multi: SKIPPED — no managed PCA9685 driver at ${PCA9685_MANAGED_DIR}. "
+        "Run an ESP-IDF build (just robocar-unified::build) to fetch it, then re-run the tests.")
+endif()
 
 # -----------------------------------------------------------------------------
 # pca9685_phase — phase-staggered LEDn encoding
@@ -322,7 +332,7 @@ add_executable(test_servo_controller
 )
 target_include_directories(test_servo_controller BEFORE PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_host"
-    "${ESP_IDF_LIB_DIR}/pca9685"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_decl"
 )
 # -Wno-unused-variable: the ESP_LOG* shims are no-ops, which leaves TAG unused.
 target_compile_options(test_servo_controller PRIVATE -Wno-unused-variable)
@@ -367,8 +377,7 @@ add_executable(test_i2c_bus_stats
 )
 target_include_directories(test_i2c_bus_stats BEFORE PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_host"  # i2c_bus.h -> <i2cdev.h>
-    "${ESP_IDF_LIB_DIR}/pca9685"
-    "${ESP_IDF_LIB_DIR}/tca9548"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_decl"  # pca9685.h declarations
 )
 # -Wno-unused-variable: the ESP_LOG* shims are no-ops, which leaves TAG unused.
 target_compile_options(test_i2c_bus_stats PRIVATE -Wno-unused-variable)
@@ -391,7 +400,7 @@ add_executable(test_motor_controller
 )
 target_include_directories(test_motor_controller BEFORE PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_host"  # i2c_bus.h -> <i2cdev.h>
-    "${ESP_IDF_LIB_DIR}/pca9685"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_decl"
 )
 # -Wno-unused-variable: the ESP_LOG* shims are no-ops, which leaves TAG unused.
 target_compile_options(test_motor_controller PRIVATE -Wno-unused-variable)
@@ -415,7 +424,7 @@ add_executable(test_led_controller
 )
 target_include_directories(test_led_controller BEFORE PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_host"  # i2c_bus.h -> <i2cdev.h>
-    "${ESP_IDF_LIB_DIR}/pca9685"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_decl"
 )
 # -Wno-unused-variable: the ESP_LOG* shims are no-ops, which leaves TAG unused.
 target_compile_options(test_led_controller PRIVATE -Wno-unused-variable)
@@ -440,7 +449,7 @@ add_executable(test_self_report
 )
 target_include_directories(test_self_report BEFORE PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_host"  # i2c_bus.h -> <i2cdev.h>
-    "${ESP_IDF_LIB_DIR}/pca9685"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_decl"
 )
 # -Wno-unused-variable: the ESP_LOG* shims are no-ops, which leaves TAG unused.
 target_compile_options(test_self_report PRIVATE -Wno-unused-variable)
