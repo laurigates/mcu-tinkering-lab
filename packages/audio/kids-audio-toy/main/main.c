@@ -22,6 +22,8 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+#include "audio_core.h"
+
 static const char *TAG = "AUDIO_TOY";
 
 // Pin Definitions
@@ -41,17 +43,9 @@ static const char *TAG = "AUDIO_TOY";
 #define LEDC_DUTY_RES LEDC_TIMER_8_BIT  // 8-bit resolution (0-255)
 #define LEDC_DUTY 128                   // 50% duty cycle for square wave
 
-// Audio Parameters
-#define MIN_FREQ_HZ 100       // Lowest frequency (Hz)
-#define MAX_FREQ_HZ 2000      // Highest frequency (Hz)
-#define MIN_DURATION_MS 50    // Shortest beep (ms)
-#define MAX_DURATION_MS 1000  // Longest beep (ms)
-#define MIN_INTERVAL_MS 100   // Shortest pause (ms)
-#define MAX_INTERVAL_MS 2000  // Longest pause (ms)
-
-// Modulation Parameters
-#define MOD_DEPTH_MAX 200  // Maximum frequency deviation (Hz)
-#define MOD_SMOOTHING 0.8  // Smoothing factor for modulation (0.0-1.0)
+// Audio parameter ranges and modulation constants live in audio_core.h
+// (AUDIO_MIN_FREQ_HZ, AUDIO_MOD_DEPTH_MAX, ...) so the firmware, the host
+// unit tests, and the host simulator all share one source of truth.
 
 // Global variables for audio parameters
 static float current_pitch_hz = 440.0;
@@ -149,54 +143,30 @@ static void init_led(void)
 }
 
 /**
- * Map ADC value (0-4095) to a range (min-max)
- */
-static float map_adc_to_range(uint32_t adc_value, float min_val, float max_val)
-{
-    // Clamp ADC value to valid range to prevent out-of-bounds results
-    if (adc_value > 4095) {
-        adc_value = 4095;
-    }
-    return min_val + (max_val - min_val) * (adc_value / 4095.0);
-}
-
-/**
- * Read potentiometers and update audio parameters
+ * Read potentiometers and update audio parameters (mapping in audio_core)
  */
 static void read_controls(void)
 {
-    // Read potentiometers
     uint32_t pitch_adc = adc1_get_raw(POT_PITCH_CHANNEL);
     uint32_t duration_adc = adc1_get_raw(POT_DURATION_CHANNEL);
     uint32_t interval_adc = adc1_get_raw(POT_INTERVAL_CHANNEL);
 
-    // Map to parameter ranges
-    current_pitch_hz = map_adc_to_range(pitch_adc, MIN_FREQ_HZ, MAX_FREQ_HZ);
-    current_duration_ms =
-        (uint32_t)map_adc_to_range(duration_adc, MIN_DURATION_MS, MAX_DURATION_MS);
-    current_interval_ms =
-        (uint32_t)map_adc_to_range(interval_adc, MIN_INTERVAL_MS, MAX_INTERVAL_MS);
+    audio_params_t params;
+    audio_params_from_adc(pitch_adc, duration_adc, interval_adc, &params);
+
+    current_pitch_hz = params.pitch_hz;
+    current_duration_ms = (uint32_t)params.duration_ms;
+    current_interval_ms = (uint32_t)params.interval_ms;
 }
 
 /**
- * Read 555 timer output and apply modulation
+ * Read 555 timer output and apply modulation (smoothing/clamp in audio_core)
  * The 555 output is read as an analog value (voltage level changes create pitch modulation)
  */
 static void read_modulation(void)
 {
     uint32_t mod_adc = adc1_get_raw(TIMER_555_MOD_CHANNEL);
-
-    // Map ADC to modulation depth (-MOD_DEPTH_MAX to +MOD_DEPTH_MAX Hz)
-    float raw_mod = map_adc_to_range(mod_adc, -MOD_DEPTH_MAX, MOD_DEPTH_MAX);
-
-    // Apply smoothing to reduce jitter (exponential moving average)
-    modulation_value = (MOD_SMOOTHING * modulation_value) + ((1.0 - MOD_SMOOTHING) * raw_mod);
-
-    // Clamp smoothed value to prevent drift/overflow
-    if (modulation_value < -MOD_DEPTH_MAX)
-        modulation_value = -MOD_DEPTH_MAX;
-    if (modulation_value > MOD_DEPTH_MAX)
-        modulation_value = MOD_DEPTH_MAX;
+    modulation_value = audio_update_modulation(modulation_value, mod_adc);
 }
 
 /**
@@ -204,14 +174,8 @@ static void read_modulation(void)
  */
 static void play_tone(uint32_t duration_ms)
 {
-    // Apply modulation to base pitch
-    float modulated_freq = current_pitch_hz + modulation_value;
-
-    // Clamp to valid range
-    if (modulated_freq < MIN_FREQ_HZ)
-        modulated_freq = MIN_FREQ_HZ;
-    if (modulated_freq > MAX_FREQ_HZ)
-        modulated_freq = MAX_FREQ_HZ;
+    // Apply modulation to base pitch (clamped to valid range in audio_core)
+    float modulated_freq = audio_modulated_freq(current_pitch_hz, modulation_value);
 
     // Set PWM frequency
     ledc_set_freq(LEDC_MODE, LEDC_TIMER, (uint32_t)modulated_freq);
