@@ -180,15 +180,21 @@ reverting to the positional literal, which fails it.
 Two properties of every PCA9685 write, both set in `i2c_bus.c` and neither
 visible at the call site.
 
-**One bus clock for the whole port.** Each esp-idf-lib driver hardcodes its own
-rate in `init_desc()` — the TCA9548A at 100 kHz, the PCA9685 and MCP23017 at
-1 MHz — and i2cdev's `cfg_equal()` compares `clk_speed`, so a differing rate
-makes `i2c_setup_port()` *delete and reinstall the entire I2C driver* before the
-transaction. A mux channel-select always precedes a device write, so that fired
-twice per motor update, ~30 times a second while driving. `pin_bus_clock()`
-overrides all three onto `I2C_MASTER_FREQ_HZ` (400 kHz — the fastest every part
-on this bus is rated for, the TCA9548A being the Fast-mode limit). That define
-had existed since the first commit and nothing read it.
+**One bus clock for the whole port.** Each esp-idf-lib driver picks its own rate
+in `init_desc()` — TCA9548A 100 kHz, PCA9685 and MCP23017 1 MHz — so without an
+override the bus runs at whichever speed the last-addressed device wanted.
+`pin_bus_clock()` puts all three on `I2C_MASTER_FREQ_HZ` (400 kHz, the fastest
+every part here is rated for; the TCA9548A is the Fast-mode limit). That define
+had sat unread in `pin_config.h` since the first commit.
+
+Under **i2cdev 1.x** this also removed a real cost: `cfg_equal()` compared
+`clk_speed`, so consecutive transactions at different rates made
+`i2c_setup_port()` delete and reinstall the whole I2C driver first — twice per
+motor update, ~30 times a second while driving, because a mux channel-select
+always precedes a device write. **i2cdev 2.0.0 moved to ESP-IDF's bus/device
+API**, which caches a per-device handle carrying its own `scl_speed_hz` on a
+shared bus, so that reinstall is gone by construction. The override stays for
+the first reason only.
 
 **Outputs are phase-staggered.** The vendored driver hardcodes every channel's
 ON count to 0, so all sixteen outputs rose on the same tick of the ~197 Hz
@@ -208,6 +214,37 @@ including the 12-bit wrap at channel 15 where OFF legitimately lands below ON.
 
 This is headroom, not a fix: the audio distortion that prompted the
 investigation was resolved by adding bulk capacitance.
+
+## Where the I2C drivers come from
+
+`pca9685`, `tca9548`, `mcp23x17` and `i2cdev` are **managed components**
+(`main/idf_component.yml`), not vendored source. They used to be a ~95-component
+snapshot of the `UncleRus/esp-idf-lib` monorepo living under `robocar/main` and
+reached from here by symlink; that monorepo is archived, and the library now
+ships as per-component repos under the `esp-idf-lib` org.
+
+**`pca9685` is pinned to a fork branch, and that is deliberate.** The published
+`esp-idf-lib/pca9685@1.0.0` still indexes its stack buffer by the *absolute*
+channel number while sizing it for `channels` entries, so any `first_ch > 0`
+writes past the end — `motor_stop()`'s (8, 6) wrote 32 bytes past a 24-byte VLA
+and double-faulted this board on the first boot with the PCA9685 fitted. The fix
+is upstream as `esp-idf-lib/pca9685#2` (issue #1) and unmerged; until it lands
+and a release ships it, the manifest points at
+`laurigates/pca9685@bugfix-issue-1-set-pwm-values-indexing`.
+
+Do **not** "tidy" that into a plain `'^1.0.0'` constraint — it reintroduces a
+board-crashing bug. `test_pca9685_multi` compiles the resolved driver under
+AddressSanitizer specifically to catch that, and was control-tested against the
+registry source: it aborts with `stack-buffer-overflow ... in
+pca9685_set_pwm_values`.
+
+That test reads the driver from `managed_components/`, which is gitignored, so
+it is **skipped with a `STATUS` message in a fresh checkout** and appears once
+`just robocar-unified::build` has fetched the dependency. The other 21 suites do
+not need it. Two declaration-only shims in `test/include/pca9685_decl/` keep the
+remaining targets configuring without a prior firmware build; they are stubs,
+and the firmware build — which uses the real headers — is what catches any
+disagreement.
 
 ## AI planner
 
@@ -501,7 +538,8 @@ Key settings that matter:
 - Don't make `motor_stop()` a short brake, or "unify" it with `motor_brake()`. Low/low is coast and high/high is brake; the reflex wants the second and the 30 Hz idle path wants the first. A test that only checks PWM = 0 passes against either, which is why the stub records which entry point was called
 - Don't let a driver's `init_desc()` pick the bus clock. Each esp-idf-lib driver hardcodes a different one, and i2cdev reinstalls the whole I2C driver whenever consecutive transactions disagree — call `pin_bus_clock()` after every `init_desc()`, including for any device added later
 - Don't give a full-on or full-off channel a phase offset in `pca9685_phase.c`. Those are flag bits, and on this board they are the motor direction pins: a phase offset converts a steady logic level into a ~197 Hz square wave on IN1/IN2
-- Don't patch the vendored `esp-idf-lib` PCA9685 driver to add phase support. `components/esp-idf-lib` is a symlink into `robocar/main`, so the edit lands in that firmware too, and a future library refresh reverts it silently
+- Don't patch the PCA9685 driver in `managed_components/` to add phase support — it is a fetched dependency, so the edit is wiped by the next `idf.py reconfigure`. Phase lives in `pca9685_phase.c`, which is ours
+- Don't relax `esp-idf-lib/pca9685` to a plain `'^1.0.0'` constraint. The published 1.0.0 still has the out-of-bounds write that double-faulted this board; the manifest points at the fork branch carrying the fix until `esp-idf-lib/pca9685#2` merges *and* a release ships it. `test_pca9685_multi` catches the swap under ASan, but only when `managed_components/` is populated
 - Don't "tidy" the motor channels back into a per-motor IN1/IN2/PWM order. They are in the motor driver's pin order on purpose, and that ordering is a claim about **soldered wires** — reordering the `#define`s is a rewiring instruction, not a refactor, and the firmware will follow the new numbers perfectly onto the wrong pins
 - Don't add goal sources outside `planner_task.c` — structured goals keep the two layers decoupled. If a new goal source is needed, it should write `goal_state` the same way the planner does
 - Don't fold speech into `goal_t` — see the Voice section above and `speech_queue.h`
