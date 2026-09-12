@@ -12,6 +12,10 @@ project across ESP-IDF, ESPHome, and Pico — discovered from
 `flasher.json`: several CI projects (non-flasher ESP-IDF, ESPHome, Pico) have none
 and would be silently dropped.
 
+Verification of what the release pipeline actually published — the artifact-layout
+trap that left every project with zero binaries, and the two gates that now catch
+it — lives in [`release-publish-verification.md`](release-publish-verification.md).
+
 ## Flash Offset Reference
 
 Both robocar targets use identical partition layouts on standard ESP32 (4MB flash):
