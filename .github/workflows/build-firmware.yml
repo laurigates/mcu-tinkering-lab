@@ -275,10 +275,26 @@ jobs:
           cp firmware/projects.json release-assets/projects.json
 
       - name: Upload firmware to release
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ github.event.release.tag_name || inputs.release_tag }}
-          files: release-assets/*
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${{ github.event.release.tag_name || inputs.release_tag }}"
+
+          # `gh release upload` takes the tag directly. softprops/action-gh-release
+          # was used here until it started resolving the release through GITHUB_REF
+          # instead of the tag_name it was given: on a workflow_dispatch that ref is
+          # refs/heads/main, and the call failed with
+          #   Unexpected error fetching GitHub release for tag refs/heads/main:
+          #   Resource not accessible by integration
+          # reproducibly (runs 34692593046 and 34704198704), while the release-event
+          # path kept working because there GITHUB_REF is the tag. See issue #544.
+          #
+          # --clobber is required because a re-dispatch against an existing tag re-stages
+          # asset names the release already carries. Note it DELETES before uploading, so a
+          # failed upload loses the previous copies; every run stages the full set, so the
+          # next successful run restores them.
+          gh release upload "$tag" release-assets/* --clobber
 
       - name: Verify release assets
         shell: bash
@@ -340,6 +356,10 @@ jobs:
       # cache blip must not be able to suppress a release whose assets are
       # already verified good.
       - name: Verify published firmware parts
+        # always() so a release-side failure cannot suppress the Pages half of the
+        # diagnosis; gated on the deploy having succeeded, since the probe reads
+        # steps.deployment.outputs.page_url and would otherwise build bare paths.
+        if: always() && steps.deployment.outcome == 'success'
         shell: bash
         run: |
           base="${{ steps.deployment.outputs.page_url }}"
