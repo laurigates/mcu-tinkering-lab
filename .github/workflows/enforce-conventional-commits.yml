@@ -1,8 +1,16 @@
 name: Enforce Conventional Commits
 
+# NO `synchronize`, deliberately. This check reads exactly one field -- the PR
+# title -- and a code push does not touch it, so `synchronize` only re-runs the
+# same validation against the same title on every commit. Measured on
+# laurigates/comfyui-nodes#169: 48 runs against 25 pushes, each pair sharing a
+# head_sha and both logging "PR title already follows conventional commits
+# format" with no `pulls.update` call. opened/edited are the only events that
+# can change a title, so dropping `synchronize` costs no coverage.
+
 on:
   pull_request:
-    types: [opened, edited, synchronize]
+    types: [opened, edited]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
