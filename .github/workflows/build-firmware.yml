@@ -205,6 +205,17 @@ jobs:
             exit 1
           fi
 
+      - name: Verify firmware coverage
+        shell: bash
+        run: |
+          expected="${{ needs.discover-projects.outputs.project_count }}"
+          actual=$(find firmware -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')
+          echo "Assembled firmware for $actual of $expected discovered projects"
+          if [ "$actual" != "$expected" ]; then
+            echo "::error::assembled firmware directories ($actual) do not match the project count discover-projects reported ($expected) — a project's flasher.json was skipped, or the source tree was narrowed since discovery ran"
+            exit 1
+          fi
+
       - name: Generate flasher manifests and projects.json
         run: bash tools/generate-flasher-manifests.sh "${{ steps.version.outputs.version }}" firmware
 
@@ -222,32 +233,6 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
-
-      - name: Verify published firmware parts
-        run: |
-          base="${{ steps.deployment.outputs.page_url }}"
-          base="${base%/}"
-          missing=()
-
-          for manifest in firmware/*/manifest.json; do
-            project_id=$(basename "$(dirname "$manifest")")
-            parts=$(jq -r '.builds[].parts[].path' "$manifest")
-            while IFS= read -r part; do
-              [ -z "$part" ] && continue
-              url="$base/firmware/$project_id/$part"
-              code=$(curl -s -o /dev/null -w '%{http_code}' "$url")
-              echo "$code $url"
-              if [ "$code" != "200" ]; then
-                missing+=("$project_id/$part -> $code ($url)")
-              fi
-            done <<< "$parts"
-          done
-
-          if [ "${#missing[@]}" -gt 0 ]; then
-            echo "The following manifest-listed parts were not fetchable from the deployed Pages site:"
-            printf '  %s\n' "${missing[@]}"
-            exit 1
-          fi
 
       - name: Prepare distinct release assets
         run: |
@@ -296,33 +281,96 @@ jobs:
           files: release-assets/*
 
       - name: Verify release assets
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           repo="${{ github.repository }}"
           tag="${{ github.event.release.tag_name || inputs.release_tag }}"
 
-          expected=$(find release-assets -type f | wc -l | tr -d ' ')
-          urls=$(gh api "repos/$repo/releases/tags/$tag" --jq '.assets[].browser_download_url')
-          actual=$(printf '%s\n' "$urls" | grep -c . || true)
-
-          if [ "$actual" != "$expected" ]; then
-            echo "::error::expected $expected release assets (from release-assets/), the release has $actual"
+          # Build the expected set from what we actually staged, by NAME —
+          # never by count. A count-only comparison is name-blind: it goes
+          # green if one expected file is silently swapped for an unrelated
+          # one (same total), and it goes red on an unrelated pre-existing
+          # release asset outside this branch's naming scheme (extra total).
+          mapfile -t expected_names < <(find release-assets -mindepth 1 -type f -printf '%f\n' | sort)
+          if [ "${#expected_names[@]}" -eq 0 ]; then
+            echo "::error::no files found under release-assets/ — nothing was staged to verify"
             exit 1
           fi
 
+          assets_json=$(gh api "repos/$repo/releases/tags/$tag" --jq '.assets')
+
           missing=()
-          while IFS= read -r url; do
-            [ -z "$url" ] && continue
-            code=$(curl -sL -o /dev/null -w '%{http_code}' "$url")
-            echo "$code $url"
-            if [ "$code" != "200" ]; then
-              missing+=("$url -> $code")
+          urls=()
+          for name in "${expected_names[@]}"; do
+            url=$(printf '%s' "$assets_json" | jq -r --arg n "$name" '[.[] | select(.name == $n) | .browser_download_url] | first // empty')
+            if [ -z "$url" ]; then
+              missing+=("$name")
+            else
+              urls+=("$url")
             fi
-          done <<< "$urls"
+          done
 
           if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error::the following staged assets are not present on release $tag:"
+            printf '  %s\n' "${missing[@]}"
+            exit 1
+          fi
+
+          failed=()
+          for url in "${urls[@]}"; do
+            code=$(curl -sSL --max-time 30 --retry 5 --retry-all-errors -o /dev/null -w '%{http_code}' "$url" || echo 000)
+            echo "$code $url"
+            if [ "$code" != "200" ]; then
+              failed+=("$url -> $code")
+            fi
+          done
+
+          if [ "${#failed[@]}" -gt 0 ]; then
             echo "The following release assets were not downloadable:"
+            printf '  %s\n' "${failed[@]}"
+            exit 1
+          fi
+
+      # Sequenced AFTER the release publish + its own verification above, on
+      # purpose: this gate probes GitHub Pages, which can serve a stale
+      # cached 404 on a path it hasn't purged yet (observed live: HIT, age
+      # 2597s, on the very first path this gate probes). A Pages-side edge
+      # cache blip must not be able to suppress a release whose assets are
+      # already verified good.
+      - name: Verify published firmware parts
+        shell: bash
+        run: |
+          base="${{ steps.deployment.outputs.page_url }}"
+          base="${base%/}"
+          missing=()
+
+          for manifest in firmware/*/manifest.json; do
+            project_id=$(basename "$(dirname "$manifest")")
+            parts=$(jq -r '.builds[].parts[].path' "$manifest")
+            while IFS= read -r part; do
+              [ -z "$part" ] && continue
+              local_file="firmware/$project_id/$part"
+              expected_size=$(stat -c%s "$local_file" 2>/dev/null || echo -1)
+              url="$base/firmware/$project_id/$part?v=${{ github.run_id }}"
+              # --retry/--max-time absorb a transient Pages blip instead of
+              # killing the step on a bare non-200/timeout; a failure still
+              # lands in the named-failure list below and the job still
+              # fails at the end — this is about tolerating transients and
+              # ordering, not downgrading the gate to a warning.
+              read -r code actual_size <<< "$(curl -sS --max-time 30 --retry 5 --retry-all-errors -o /dev/null -w '%{http_code} %{size_download}' "$url" 2>/dev/null || echo '000 -1')"
+              echo "$code $actual_size (expected $expected_size) $url"
+              if [ "$code" != "200" ]; then
+                missing+=("$project_id/$part -> HTTP $code ($url)")
+              elif [ "$actual_size" != "$expected_size" ]; then
+                missing+=("$project_id/$part -> size mismatch: got $actual_size bytes, expected $expected_size ($url)")
+              fi
+            done <<< "$parts"
+          done
+
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "The following manifest-listed parts failed verification against the deployed Pages site:"
             printf '  %s\n' "${missing[@]}"
             exit 1
           fi
