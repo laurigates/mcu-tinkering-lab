@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.4](https://github.com/laurigates/mcu-tinkering-lab/compare/kids-audio-toy-v0.1.3...kids-audio-toy-v0.1.4) (2026-09-11)
+
+
+### Features
+
+* **kids-audio-toy:** host simulator, shared audio_core, and mic bench test ([#534](https://github.com/laurigates/mcu-tinkering-lab/issues/534)) ([623b2a6](https://github.com/laurigates/mcu-tinkering-lab/commit/623b2a6fa51b0fe08f7d2c55dab7c9a539663a4e))
+
 ## [0.1.3](https://github.com/laurigates/mcu-tinkering-lab/compare/kids-audio-toy-v0.1.2...kids-audio-toy-v0.1.3) (2026-08-22)
 
 
