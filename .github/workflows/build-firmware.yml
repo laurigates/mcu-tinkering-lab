@@ -169,21 +169,41 @@ jobs:
       - name: Assemble firmware directory
         run: |
           mkdir -p firmware
+          missing=()
 
           for flasher_json in packages/*/*/flasher.json; do
             project_dir=$(dirname "$flasher_json")
             project_id=$(basename "$project_dir")
-            project_path="${project_dir#packages/}"
             app_bin=$(jq -r '.appBinaryName' "$flasher_json")
             dest="firmware/$project_id"
-            src="artifacts/firmware-$project_id/packages/$project_path/build"
+            # actions/upload-artifact roots an artifact at the LEAST COMMON
+            # ANCESTOR of the paths it was given. Every path in the matching
+            # "Upload build artifacts" step lives under
+            # packages/<project_path>/build/, so that whole prefix is
+            # stripped at upload time and the downloaded artifact has the
+            # app binary at its root, not under packages/<path>/build.
+            src="artifacts/firmware-$project_id"
             mkdir -p "$dest"
 
-            cp "$src/$app_bin"                            "$dest/" 2>/dev/null || echo "WARN: missing $app_bin for $project_id"
-            cp "$src/bootloader/bootloader.bin"           "$dest/" 2>/dev/null || echo "WARN: missing bootloader for $project_id"
-            cp "$src/partition_table/partition-table.bin"  "$dest/" 2>/dev/null || echo "WARN: missing partition-table for $project_id"
-            cp "$src/ota_data_initial.bin"                "$dest/" 2>/dev/null || true
+            for part in "$app_bin" "bootloader/bootloader.bin" "partition_table/partition-table.bin"; do
+              if [ -f "$src/$part" ]; then
+                cp "$src/$part" "$dest/$(basename "$part")"
+              else
+                echo "::error::missing $part for $project_id (looked in $src/$part)"
+                missing+=("$project_id: $part")
+              fi
+            done
+
+            # ota_data_initial.bin only exists for projects with an OTA
+            # partition table entry — genuinely optional, not a fallback.
+            cp "$src/ota_data_initial.bin" "$dest/" 2>/dev/null || true
           done
+
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "The following firmware parts were not found in their downloaded build artifacts:"
+            printf '  %s\n' "${missing[@]}"
+            exit 1
+          fi
 
       - name: Generate flasher manifests and projects.json
         run: bash tools/generate-flasher-manifests.sh "${{ steps.version.outputs.version }}" firmware
@@ -203,22 +223,109 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v5
 
-      - name: Prepare distinct manifest asset names for release
+      - name: Verify published firmware parts
         run: |
-          for d in firmware/*/; do
-            if [ -f "$d/manifest.json" ]; then
-              project_id=$(basename "$d")
-              cp "$d/manifest.json" "firmware/${project_id}-manifest.json"
+          base="${{ steps.deployment.outputs.page_url }}"
+          base="${base%/}"
+          missing=()
+
+          for manifest in firmware/*/manifest.json; do
+            project_id=$(basename "$(dirname "$manifest")")
+            parts=$(jq -r '.builds[].parts[].path' "$manifest")
+            while IFS= read -r part; do
+              [ -z "$part" ] && continue
+              url="$base/firmware/$project_id/$part"
+              code=$(curl -s -o /dev/null -w '%{http_code}' "$url")
+              echo "$code $url"
+              if [ "$code" != "200" ]; then
+                missing+=("$project_id/$part -> $code ($url)")
+              fi
+            done <<< "$parts"
+          done
+
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "The following manifest-listed parts were not fetchable from the deployed Pages site:"
+            printf '  %s\n' "${missing[@]}"
+            exit 1
+          fi
+
+      - name: Prepare distinct release assets
+        run: |
+          mkdir -p release-assets
+          declare -A seen_binary
+
+          for flasher_json in packages/*/*/flasher.json; do
+            project_dir=$(dirname "$flasher_json")
+            project_id=$(basename "$project_dir")
+            app_bin=$(jq -r '.appBinaryName' "$flasher_json")
+
+            # appBinaryName is unique across every packages/*/*/flasher.json
+            # today (verified: 16/16 distinct), so the app binaries can be
+            # attached to the release under their own names. bootloader.bin
+            # and partition-table.bin are NOT unique (every project's is
+            # named identically) and are deliberately left off the release —
+            # they are only needed for the web flasher's per-project
+            # manifest.json, already served from Pages. Guard the assumption
+            # instead of trusting it silently: a future project reusing an
+            # existing appBinaryName fails the build here rather than
+            # clobbering another project's release asset.
+            if [ -n "${seen_binary[$app_bin]:-}" ]; then
+              echo "::error::appBinaryName '$app_bin' is used by both '${seen_binary[$app_bin]}' and '$project_id' — release assets would collide"
+              exit 1
+            fi
+            seen_binary[$app_bin]="$project_id"
+
+            src="firmware/$project_id/$app_bin"
+            if [ ! -f "$src" ]; then
+              echo "::error::missing $src, cannot attach it to the release"
+              exit 1
+            fi
+            cp "$src" "release-assets/$app_bin"
+
+            if [ -f "firmware/$project_id/manifest.json" ]; then
+              cp "firmware/$project_id/manifest.json" "release-assets/${project_id}-manifest.json"
             fi
           done
+
+          cp firmware/projects.json release-assets/projects.json
 
       - name: Upload firmware to release
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.event.release.tag_name || inputs.release_tag }}
-          files: |
-            firmware/*-manifest.json
-            firmware/projects.json
+          files: release-assets/*
+
+      - name: Verify release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          repo="${{ github.repository }}"
+          tag="${{ github.event.release.tag_name || inputs.release_tag }}"
+
+          expected=$(find release-assets -type f | wc -l | tr -d ' ')
+          urls=$(gh api "repos/$repo/releases/tags/$tag" --jq '.assets[].browser_download_url')
+          actual=$(printf '%s\n' "$urls" | grep -c . || true)
+
+          if [ "$actual" != "$expected" ]; then
+            echo "::error::expected $expected release assets (from release-assets/), the release has $actual"
+            exit 1
+          fi
+
+          missing=()
+          while IFS= read -r url; do
+            [ -z "$url" ] && continue
+            code=$(curl -sL -o /dev/null -w '%{http_code}' "$url")
+            echo "$code $url"
+            if [ "$code" != "200" ]; then
+              missing+=("$url -> $code")
+            fi
+          done <<< "$urls"
+
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "The following release assets were not downloadable:"
+            printf '  %s\n' "${missing[@]}"
+            exit 1
+          fi
 
       - name: Notify robots of new firmware via MQTT
         if: github.event_name == 'release' && vars.MQTT_ENABLED == 'true'
