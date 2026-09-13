@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.2.3](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.2...robocar-unified-v0.2.3) (2026-09-13)
+
+
+### Bug Fixes
+
+* **ci:** decouple OTA asset names from web-flasher names, per-project MQTT notify ([#558](https://github.com/laurigates/mcu-tinkering-lab/issues/558)) ([752df04](https://github.com/laurigates/mcu-tinkering-lab/commit/752df046e1a71e7fc3128443f0229ecf72b2380c))
+* **robocar-unified:** implement MQTT remote-command handler ([#554](https://github.com/laurigates/mcu-tinkering-lab/issues/554)) ([1571d62](https://github.com/laurigates/mcu-tinkering-lab/commit/1571d621f6db9259d7547f10374e1a9184b6786b)), closes [#524](https://github.com/laurigates/mcu-tinkering-lab/issues/524)
+* **robocar-unified:** poll the web-flasher manifest for OTA instead of esp_ghota ([#559](https://github.com/laurigates/mcu-tinkering-lab/issues/559)) ([915d5f1](https://github.com/laurigates/mcu-tinkering-lab/commit/915d5f1cecd07c9273f2f733e6c872f574bbb210))
+* **robocar-unified:** use the new I2C driver for camera SCCB ([#548](https://github.com/laurigates/mcu-tinkering-lab/issues/548)) ([9c1f57a](https://github.com/laurigates/mcu-tinkering-lab/commit/9c1f57a00c0e237dfe67fc2c16cb8029fac27476))
+
+
+### Miscellaneous
+
+* **robocar-unified:** stop clangd faulting on the containerized compile db ([#553](https://github.com/laurigates/mcu-tinkering-lab/issues/553)) ([947246f](https://github.com/laurigates/mcu-tinkering-lab/commit/947246f9ef75a4c8f45db5650f10630c8e1a86a2)), closes [#536](https://github.com/laurigates/mcu-tinkering-lab/issues/536)
+
 ## [0.2.2](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.1...robocar-unified-v0.2.2) (2026-09-11)
 
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.4](https://github.com/laurigates/mcu-tinkering-lab/compare/switch-usb-proxy-v0.1.3...switch-usb-proxy-v0.1.4) (2026-09-13)
+
+
+### Bug Fixes
+
+* **ci:** decouple OTA asset names from web-flasher names, per-project MQTT notify ([#558](https://github.com/laurigates/mcu-tinkering-lab/issues/558)) ([752df04](https://github.com/laurigates/mcu-tinkering-lab/commit/752df046e1a71e7fc3128443f0229ecf72b2380c))
+
 ## [0.1.3](https://github.com/laurigates/mcu-tinkering-lab/compare/switch-usb-proxy-v0.1.2...switch-usb-proxy-v0.1.3) (2026-08-22)
 
 
