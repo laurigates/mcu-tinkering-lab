@@ -361,31 +361,43 @@ info:
     @echo "  packages/robocar/camera/     — AI vision system"
     @echo "  packages/robocar/simulation/ — Python physics simulation"
 
-# Trigger OTA update check via MQTT notification
+# Trigger OTA update check via MQTT notification. project: main | camera
+# (each project's otaNotifyTopic is read from its flasher.json, never hardcoded)
 [group: "ota"]
-ota-notify version="latest" broker="localhost":
+ota-notify project="main" version="latest" broker="localhost":
     #!/usr/bin/env bash
     set -euo pipefail
     command -v mosquitto_pub >/dev/null 2>&1 || { echo "Error: mosquitto_pub not found — install mosquitto-clients"; exit 1; }
+    command -v jq >/dev/null 2>&1 || { echo "Error: jq not found — install jq"; exit 1; }
+    flasher_json="{{justfile_directory()}}/../{{project}}/flasher.json"
+    [ -f "$flasher_json" ] || { echo "Error: no flasher.json for project '{{project}}' (looked at $flasher_json) — use 'main' or 'camera'"; exit 1; }
+    topic=$(jq -r '.otaNotifyTopic // empty' "$flasher_json")
+    [ -n "$topic" ] || { echo "Error: $flasher_json has no otaNotifyTopic"; exit 1; }
     if [ "{{version}}" = "latest" ]; then
         echo "Sending OTA notification to check for latest release..."
-        mosquitto_pub -h "{{broker}}" -t "robocar/ota/notify" \
+        mosquitto_pub -h "{{broker}}" -t "$topic" \
             -m '{"version":"latest","check":"true"}'
     else
         echo "Sending OTA notification for version {{version}}..."
-        mosquitto_pub -h "{{broker}}" -t "robocar/ota/notify" \
+        mosquitto_pub -h "{{broker}}" -t "$topic" \
             -m "{\"version\":\"{{version}}\",\"tag\":\"v{{version}}\"}"
     fi
-    echo "OTA notification sent to robocar/ota/notify"
+    echo "OTA notification sent to $topic"
 
-# Monitor OTA update status via MQTT
+# Monitor OTA update status via MQTT. project: main | camera (selects the
+# notify topic to also watch; the status topic is shared across projects)
 [group: "ota"]
-ota-status broker="localhost":
+ota-status project="main" broker="localhost":
     #!/usr/bin/env bash
     set -euo pipefail
     command -v mosquitto_sub >/dev/null 2>&1 || { echo "Error: mosquitto_sub not found — install mosquitto-clients"; exit 1; }
+    command -v jq >/dev/null 2>&1 || { echo "Error: jq not found — install jq"; exit 1; }
+    flasher_json="{{justfile_directory()}}/../{{project}}/flasher.json"
+    [ -f "$flasher_json" ] || { echo "Error: no flasher.json for project '{{project}}' (looked at $flasher_json) — use 'main' or 'camera'"; exit 1; }
+    topic=$(jq -r '.otaNotifyTopic // empty' "$flasher_json")
+    [ -n "$topic" ] || { echo "Error: $flasher_json has no otaNotifyTopic"; exit 1; }
     echo "Listening for OTA status updates (Ctrl+C to stop)..."
-    mosquitto_sub -h "{{broker}}" -t "robocar/ota/status" -t "robocar/ota/notify" -v
+    mosquitto_sub -h "{{broker}}" -t "robocar/ota/status" -t "$topic" -v
 
 # Show current firmware versions from latest GitHub release
 [group: "ota"]
