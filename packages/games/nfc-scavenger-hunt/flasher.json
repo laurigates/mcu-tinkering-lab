@@ -4,6 +4,8 @@
   "chipFamily": "ESP32-S3",
   "board": "ESP32-S3 with PSRAM",
   "appBinaryName": "nfc-scavenger-hunt.bin",
+  "otaAssetName": "nfc-scavenger-hunt.bin",
+  "otaNotifyTopic": "nfc-scavenger-hunt/ota/notify",
   "category": "games",
   "flashMode": "uart"
 }

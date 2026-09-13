@@ -97,9 +97,15 @@
 #define OTA_GITHUB_HOST "github.com"
 #define OTA_GITHUB_ORG CONFIG_OTA_GITHUB_ORG
 #define OTA_GITHUB_REPO CONFIG_OTA_GITHUB_REPO
-#define OTA_FIRMWARE_FILENAME_MATCH "robocar-camera"
+// fnmatch(pattern, name, 0) is a full-string match with no implicit
+// extension, so the pattern needs its own wildcard to match the actual
+// release asset name (flasher.json otaAssetName: "robocar-camera.bin").
+// See .claude/rules/web-flasher.md and issue #540.
+#define OTA_FIRMWARE_FILENAME_MATCH "robocar-camera*"
 #define OTA_CHECK_INTERVAL_MIN 360  // 6 hours
-#define OTA_MQTT_NOTIFY_TOPIC "robocar/ota/notify"
+// Must equal this project's flasher.json otaNotifyTopic — build-firmware.yml
+// publishes there, not to a shared topic (issue #409).
+#define OTA_MQTT_NOTIFY_TOPIC "robocar-camera/ota/notify"
 #define OTA_MQTT_STATUS_TOPIC "robocar/ota/status"
 #define OTA_STABILITY_TIMEOUT_MS 60000  // 60s before marking valid
 #define OTA_TASK_STACK_SIZE 8192

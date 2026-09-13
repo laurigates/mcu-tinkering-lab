@@ -4,6 +4,8 @@
   "chipFamily": "ESP32-S3",
   "board": "ESP32-S3 DevKit",
   "appBinaryName": "esp32-wifitest.bin",
+  "otaAssetName": "esp32-wifitest.bin",
+  "otaNotifyTopic": "esp32-wifitest/ota/notify",
   "category": "tools",
   "flashMode": "usb"
 }

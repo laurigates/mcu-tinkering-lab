@@ -308,14 +308,35 @@ jobs:
       - name: Prepare distinct release assets
         run: |
           mkdir -p release-assets
-          declare -A seen_binary
+          declare -A seen_asset
+          declare -A seen_topic
 
           for flasher_json in packages/*/*/flasher.json; do
             project_dir=$(dirname "$flasher_json")
             project_id=$(basename "$project_dir")
             app_bin=$(jq -r '.appBinaryName' "$flasher_json")
+            ota_asset=$(jq -r '.otaAssetName // empty' "$flasher_json")
+            ota_topic=$(jq -r '.otaNotifyTopic // empty' "$flasher_json")
 
-            # appBinaryName is unique across every packages/*/*/flasher.json
+            # otaAssetName is deliberately independent of appBinaryName: the
+            # latter only names the binary inside the web-flasher's
+            # per-project manifest.json, while otaAssetName is the release
+            # asset name the project's OWN on-device OTA code expects. Before
+            # this field existed, the release attached appBinaryName and none
+            # of the three OTA-consuming projects looked for that name — see
+            # issue #540. Fail loudly on a missing field rather than fall
+            # back to appBinaryName, so a new flasher.json can't silently
+            # regress to the bug this field was added to fix.
+            if [ -z "$ota_asset" ]; then
+              echo "::error::$flasher_json has no otaAssetName — every flasher-enabled project must declare one (see .claude/rules/web-flasher.md)"
+              exit 1
+            fi
+            if [ -z "$ota_topic" ]; then
+              echo "::error::$flasher_json has no otaNotifyTopic — every flasher-enabled project must declare one (see .claude/rules/web-flasher.md)"
+              exit 1
+            fi
+
+            # otaAssetName is unique across every packages/*/*/flasher.json
             # today (verified: 16/16 distinct), so the app binaries can be
             # attached to the release under their own names. bootloader.bin
             # and partition-table.bin are NOT unique (every project's is
@@ -323,20 +344,29 @@ jobs:
             # they are only needed for the web flasher's per-project
             # manifest.json, already served from Pages. Guard the assumption
             # instead of trusting it silently: a future project reusing an
-            # existing appBinaryName fails the build here rather than
+            # existing otaAssetName fails the build here rather than
             # clobbering another project's release asset.
-            if [ -n "${seen_binary[$app_bin]:-}" ]; then
-              echo "::error::appBinaryName '$app_bin' is used by both '${seen_binary[$app_bin]}' and '$project_id' — release assets would collide"
+            if [ -n "${seen_asset[$ota_asset]:-}" ]; then
+              echo "::error::otaAssetName '$ota_asset' is used by both '${seen_asset[$ota_asset]}' and '$project_id' — release assets would collide"
               exit 1
             fi
-            seen_binary[$app_bin]="$project_id"
+            seen_asset[$ota_asset]="$project_id"
+
+            # otaNotifyTopic uniqueness is what lets the MQTT notify step
+            # (below) wake exactly one project per release — two projects
+            # sharing a topic would wake the wrong robot's on-device poll.
+            if [ -n "${seen_topic[$ota_topic]:-}" ]; then
+              echo "::error::otaNotifyTopic '$ota_topic' is used by both '${seen_topic[$ota_topic]}' and '$project_id' — MQTT notify would wake the wrong robot"
+              exit 1
+            fi
+            seen_topic[$ota_topic]="$project_id"
 
             src="firmware/$project_id/$app_bin"
             if [ ! -f "$src" ]; then
               echo "::error::missing $src, cannot attach it to the release"
               exit 1
             fi
-            cp "$src" "release-assets/$app_bin"
+            cp "$src" "release-assets/$ota_asset"
 
             if [ -f "firmware/$project_id/manifest.json" ]; then
               cp "firmware/$project_id/manifest.json" "release-assets/${project_id}-manifest.json"
@@ -466,7 +496,7 @@ jobs:
             exit 1
           fi
 
-      - name: Notify robots of new firmware via MQTT
+      - name: Notify the released project's robot via MQTT
         if: github.event_name == 'release' && vars.MQTT_ENABLED == 'true'
         continue-on-error: true
         env:
@@ -474,15 +504,47 @@ jobs:
           MQTT_BROKER_PORT: ${{ secrets.MQTT_BROKER_PORT }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
+          # This job always rebuilds and re-attaches EVERY flasher-enabled
+          # project to whichever release fired it (see "Prepare distinct
+          # release assets" above) — most of those binaries are unchanged
+          # rebuilds of a project that did not bump its version. Publishing
+          # the bare tag to one shared topic (the previous behaviour) woke
+          # every listening robot on every release, with no way for a robot
+          # to tell whether the release was its own (issue #409).
+          #
+          # release-please tags this monorepo as <component>-v<semver> with
+          # no custom tag-separator (see release-please-config.json), so the
+          # component is everything before the trailing "-v<semver>". Resolve
+          # it to a project by finding the flasher.json whose otaNotifyTopic
+          # equals "<component>/ota/notify" — that scheme, not this parsing,
+          # is the source of truth: it is set once per project in
+          # flasher.json's otaNotifyTopic and read here, never recomputed.
+          component=$(echo "$RELEASE_TAG" | sed -E 's/-v[0-9]+(\.[0-9]+){0,2}.*$//')
+          topic=""
+          for flasher_json in packages/*/*/flasher.json; do
+            candidate=$(jq -r '.otaNotifyTopic // empty' "$flasher_json")
+            if [ "$candidate" = "${component}/ota/notify" ]; then
+              topic="$candidate"
+              break
+            fi
+          done
+
+          if [ -z "$topic" ]; then
+            echo "::warning::release tag '$RELEASE_TAG' parses to component '$component', which no flasher.json otaNotifyTopic matches — skipping MQTT notify"
+            exit 0
+          fi
+
           sudo apt-get update -qq
           sudo apt-get install -y -qq mosquitto-clients
 
           mosquitto_pub \
             -h "$MQTT_BROKER_HOST" \
             -p "${MQTT_BROKER_PORT:-1883}" \
-            -t "robocar/ota/notify" \
+            -t "$topic" \
             -m "$RELEASE_TAG" \
             -q 1
+
+          echo "Published MQTT notify to $topic for $RELEASE_TAG"
 
       - name: Generate build summary
         env:

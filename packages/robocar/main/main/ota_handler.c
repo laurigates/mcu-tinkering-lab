@@ -62,6 +62,10 @@ esp_err_t ota_handler_init(void)
     cfg.mode = OTA_GITHUB_MODE_TRIGGERED;
     cfg.github_org = OTA_GITHUB_ORG;
     cfg.github_repo = OTA_GITHUB_REPO;
+    /* Must equal this project's flasher.json otaAssetName exactly — this
+     * builds a direct download URL, not a pattern match, so there is no
+     * wildcard to paper over a mismatch. See .claude/rules/web-flasher.md
+     * and issue #540. */
     cfg.triggered_asset_filename = "robocar-main.bin";
     cfg.stability_timeout_ms = OTA_STABILITY_TIMEOUT_MS;
     cfg.http_timeout_ms = OTA_HTTP_TIMEOUT_MS;

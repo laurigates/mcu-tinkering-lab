@@ -4,6 +4,8 @@
   "chipFamily": "ESP32",
   "board": "ESP32 DevKit",
   "appBinaryName": "kids-audio-toy.bin",
+  "otaAssetName": "kids-audio-toy.bin",
+  "otaNotifyTopic": "kids-audio-toy/ota/notify",
   "category": "games",
   "flashMode": "uart"
 }

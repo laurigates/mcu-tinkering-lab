@@ -102,6 +102,13 @@ repos:
         files: '(pin_config\.h|WIRING\.md|README\.md|build-guide\.typ|tools/check-doc-facts\.py)$'
         pass_filenames: false
 
+      - id: check-ota-consumer-agreement
+        name: OTA firmware agrees with flasher.json asset names and topics
+        entry: python3 tools/check-ota-consumer-agreement.py
+        language: system
+        files: '(flasher\.json|ota_handler\.c|config\.h|tools/check-ota-consumer-agreement\.py)$'
+        pass_filenames: false
+
       - id: check-build-artifacts
         name: Check for build artifacts
         entry: >-

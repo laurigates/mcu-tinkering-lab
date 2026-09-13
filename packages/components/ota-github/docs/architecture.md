@@ -159,8 +159,14 @@ writes to the inactive partition. On reboot the bootloader switches.
 `ota_github_confirm_valid` (called automatically after the stability
 timeout) tells the bootloader not to roll back.
 
-**Binary size limit:** 1.8 MB — enforced in CI
-(`_build-esp32-firmware.yml` fails the release build if exceeded).
+**Binary size limit:** 1.8 MB, set by the `ota_0`/`ota_1` partition size
+above — an oversized binary fails to flash regardless of CI. Not currently
+enforced as a CI check: the release pipeline is
+[`build-firmware.yml`](../../../../.github/workflows/build-firmware.yml),
+which does not port the per-project size gate the now-deleted
+`_build-esp32-firmware.yml` had (tracked as a follow-up, see
+[ADR-015](../../../../docs/decisions/ADR-015-ota-github-shared-component.md)'s
+"Update" section).
 
 ## Tasks and memory
 

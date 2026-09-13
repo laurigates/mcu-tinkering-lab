@@ -80,14 +80,19 @@ void app_main(void) {
 
 Two things must be true on GitHub for the device to find firmware:
 
-1. A release exists with a semver tag. If you use the monorepo's
-   per-project tag convention (`my-project@v1.2.3`) esp_ghota still picks
-   the correct version because the comparison is done on the appended
-   semver, not the prefix.
-2. A release **asset** whose filename contains the
-   `firmware_filename_match` substring (e.g. `my-project.bin`).
+1. A release exists with a semver tag. This monorepo's release-please tags
+   are `<component>-v1.2.3`; esp_ghota still picks the correct version
+   because the comparison is done on the appended semver, not the prefix.
+2. A release **asset** whose filename `fnmatch(cfg.firmware_filename_match,
+   name, 0)` matches — a **full-string** match, not a substring match. Set
+   `firmware_filename_match` to your project's `flasher.json` `otaAssetName`
+   exactly, or to a pattern with an explicit wildcard (e.g. `"my-project*"`)
+   if you want to match more than one exact name.
 
-See [release-workflow.md](release-workflow.md) for the full CI pipeline.
+See [release-workflow.md](release-workflow.md) for the full CI pipeline,
+which is [`build-firmware.yml`](../../../../.github/workflows/build-firmware.yml)
+— it discovers every project from its `flasher.json`, not from a per-project
+workflow caller.
 
 ## 5. Optional: add MQTT push-notify
 
@@ -97,13 +102,17 @@ application.
 
 ```c
 cfg.mqtt_enabled      = true;
-cfg.mqtt_client       = my_mqtt_client;          /* already connected */
-cfg.mqtt_notify_topic = "my-project/ota/notify"; /* whatever you want */
+cfg.mqtt_client       = my_mqtt_client;             /* already connected */
+cfg.mqtt_notify_topic = "my-project/ota/notify";    /* must equal your
+                                                      * flasher.json
+                                                      * otaNotifyTopic */
 ```
 
-On the CI side, publish the release tag to the same topic from
-[`_build-esp32-firmware.yml`](../../../../.github/workflows/_build-esp32-firmware.yml)
-(the workflow accepts a `mqtt_notify_topic` input).
+Add the matching `otaNotifyTopic` to your project's `flasher.json` —
+`build-firmware.yml` publishes the release tag there automatically once it
+resolves your release to your project's component. See
+[release-workflow.md § MQTT notify topic](release-workflow.md#mqtt-notify-topic)
+for the scheme and the payload contract.
 
 ## 6. Optional: project-specific hooks
 

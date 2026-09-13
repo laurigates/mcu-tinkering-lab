@@ -4,6 +4,8 @@
   "chipFamily": "ESP32-S3",
   "board": "Waveshare ESP32-S3-Zero",
   "appBinaryName": "it-troubleshooter.bin",
+  "otaAssetName": "it-troubleshooter.bin",
+  "otaNotifyTopic": "it-troubleshooter/ota/notify",
   "category": "tools",
   "flashMode": "usb"
 }

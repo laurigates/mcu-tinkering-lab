@@ -4,6 +4,8 @@
   "chipFamily": "ESP32-S3",
   "board": "Waveshare ESP32-S3-Zero",
   "appBinaryName": "switch-usb-proxy.bin",
+  "otaAssetName": "switch-usb-proxy.bin",
+  "otaNotifyTopic": "switch-usb-proxy/ota/notify",
   "category": "tools",
   "flashMode": "usb"
 }

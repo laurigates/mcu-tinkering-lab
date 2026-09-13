@@ -4,6 +4,8 @@
   "chipFamily": "ESP32",
   "board": "AI Thinker ESP32-CAM",
   "appBinaryName": "esp32-cam-i2s-audio.bin",
+  "otaAssetName": "esp32-cam-i2s-audio.bin",
+  "otaNotifyTopic": "esp32-cam-i2s-audio/ota/notify",
   "category": "standalone",
   "flashMode": "gpio0"
 }

@@ -4,6 +4,8 @@
   "chipFamily": "ESP32-S3",
   "board": "Seeed XIAO ESP32-S3 Sense",
   "appBinaryName": "robocar-unified.bin",
+  "otaAssetName": "robocar-unified.bin",
+  "otaNotifyTopic": "robocar-unified/ota/notify",
   "category": "robocar",
   "flashMode": "usb",
   "improv": true
