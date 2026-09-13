@@ -151,6 +151,26 @@ jobs:
         with:
           ref: ${{ github.event.release.tag_name || inputs.release_tag }}
 
+      # A workflow_dispatch replay can target a tag cut BEFORE this helper
+      # existed (tools/lib/otadata-predicate.sh was added by #555), so the
+      # tag checkout above cannot be relied on to contain it. github.sha is
+      # event-dependent and unusable here too — for a `release` event it is
+      # the tag's own commit, exactly the thing we cannot trust.
+      # github.workflow_sha is "the commit SHA for the workflow file" and, for
+      # a top-level (non-reusable) workflow like this one, always resolves to
+      # the revision this run's build-firmware.yml was itself loaded from —
+      # independent of which tag is being rebuilt. Check that revision out
+      # separately so the predicate is always available, regardless of how
+      # old the target tag is.
+      - name: Checkout workflow revision (for tools/lib helpers)
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.workflow_sha }}
+          sparse-checkout: |
+            tools/lib
+          sparse-checkout-cone-mode: false
+          path: workflow-tools
+
       - name: Download all firmware artifacts
         uses: actions/download-artifact@v8
         with:
@@ -168,8 +188,14 @@ jobs:
 
       - name: Assemble firmware directory
         run: |
-          # shellcheck source=tools/lib/otadata-predicate.sh
-          source tools/lib/otadata-predicate.sh
+          # Sourced from the workflow-revision checkout above, not the tag
+          # checkout — the tag being rebuilt may predate this helper.
+          if [ ! -f workflow-tools/tools/lib/otadata-predicate.sh ]; then
+            echo "::error::tools/lib/otadata-predicate.sh not found at the workflow's own revision (${{ github.workflow_sha }}) — cannot determine otadata requirements, refusing to guess"
+            exit 1
+          fi
+          # shellcheck source=/dev/null
+          source workflow-tools/tools/lib/otadata-predicate.sh
 
           mkdir -p firmware
           missing=()
