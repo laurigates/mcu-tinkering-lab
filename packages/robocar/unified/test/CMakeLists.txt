@@ -455,3 +455,19 @@ target_include_directories(test_self_report BEFORE PRIVATE
 target_compile_options(test_self_report PRIVATE -Wno-unused-variable)
 target_link_libraries(test_self_report PRIVATE Threads::Threads m)
 add_test(NAME self_report COMMAND test_self_report)
+
+# -----------------------------------------------------------------------------
+# ota_version_compare (issue #539 — the OTA manifest poll)
+#
+# Pure C, no ESP-IDF dependency. Compares the manifest's "version" field
+# against esp_app_get_description()->version NUMERICALLY rather than
+# lexically ("0.2.10" > "0.2.9"), and fails CLOSED on anything it cannot
+# parse — a network-fetched string a bench cannot exercise, and the one gate
+# standing between a manifest read and a call to esp_https_ota.
+# -----------------------------------------------------------------------------
+add_executable(test_ota_version_compare
+    "${MAIN_SRC_DIR}/ota_version_compare.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_ota_version_compare.c"
+)
+target_link_libraries(test_ota_version_compare PRIVATE Threads::Threads m)
+add_test(NAME ota_version_compare COMMAND test_ota_version_compare)
