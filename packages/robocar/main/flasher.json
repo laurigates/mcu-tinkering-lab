@@ -4,6 +4,8 @@
   "chipFamily": "ESP32",
   "board": "Heltec WiFi LoRa 32 V1",
   "appBinaryName": "idf-robocar.bin",
+  "otaAssetName": "robocar-main.bin",
+  "otaNotifyTopic": "robocar-main/ota/notify",
   "category": "robocar",
   "flashMode": "uart",
   "improv": true

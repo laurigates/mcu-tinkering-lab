@@ -4,6 +4,8 @@
   "chipFamily": "ESP32",
   "board": "AI Thinker ESP32-CAM",
   "appBinaryName": "esp32-cam-robocar.bin",
+  "otaAssetName": "robocar-camera.bin",
+  "otaNotifyTopic": "robocar-camera/ota/notify",
   "category": "robocar",
   "flashMode": "gpio0",
   "improv": true

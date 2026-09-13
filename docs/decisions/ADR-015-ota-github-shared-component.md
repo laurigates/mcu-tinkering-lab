@@ -2,6 +2,8 @@
 
 **Status**: accepted
 **Date**: 2026-04-12
+**Amended**: 2026-09-13 (see Update below — the CI half of this decision
+never shipped; `build-firmware.yml` is the live release path instead)
 **Supersedes**: — (refines ADR-004)
 **Confidence**: 9/10
 
@@ -182,3 +184,33 @@ Key design choices:
 
 - `packages/robocar/unified/main/ota_manager.c` — still uses the pre-refactor pattern. Migrating robocar-unified is a follow-up; the shared component is ready whenever that project is touched again.
 - `docs/decisions/ADR-004-ota-update-architecture.md` — remains the canonical architectural decision for robocar OTA. This ADR refines its implementation without superseding it.
+
+## Update (2026-09-13)
+
+Decision point 6 and the two `.github/workflows/build-robocar-*.yml` entries
+under "Files Changed" describe a CI design that never actually ran in
+production. `_build-esp32-firmware.yml` gained the `mqtt_notify_topic` input
+as planned, but its only callers were per-project `release-build` jobs gated
+on a `check-tag` step matching `<project>@v` — release-please emits
+`<project>-v`, so that gate never fired and the reusable workflow was
+orphaned from the day it was added. The single-workflow `build-firmware.yml`
+(added later, superseding the abandoned per-project caller design) has
+always been the live release path, and it hardcoded a single MQTT topic
+(`robocar/ota/notify`) shared by every project rather than reading the
+per-project topic this ADR intended.
+
+`_build-esp32-firmware.yml` and `_build-esphome-firmware.yml` were deleted
+as dead code (issue #409). The per-project MQTT topic this ADR called for
+is now implemented in `build-firmware.yml` itself, sourced from each
+project's `flasher.json` (`otaNotifyTopic`) rather than from a workflow
+input — there is no per-project caller workflow for it to be an input to.
+See [`release-workflow.md`](../../packages/components/ota-github/docs/release-workflow.md)
+for the current contract. `architecture.md`, `adoption-guide.md`, and
+`release-workflow.md` are corrected in the same change to point at
+`build-firmware.yml` instead of the deleted reusables.
+
+The 1.8 MB per-release OTA-partition size gate that `_build-esp32-firmware.yml`
+was meant to enforce was never ported to `build-firmware.yml` and remains
+unenforced in CI (tracked as a follow-up, not fixed here) — the partition
+table itself still caps `ota_0`/`ota_1` at 1.8 MB, so an oversized binary
+fails to flash rather than failing a CI check.

@@ -4,6 +4,8 @@
   "chipFamily": "ESP32-S3",
   "board": "ESP32-S3 SuperMini",
   "appBinaryName": "thinkpack-chatterbox.bin",
+  "otaAssetName": "thinkpack-chatterbox.bin",
+  "otaNotifyTopic": "thinkpack-chatterbox/ota/notify",
   "category": "thinkpack",
   "flashMode": "usb"
 }

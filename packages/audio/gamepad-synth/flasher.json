@@ -4,6 +4,8 @@
   "chipFamily": "ESP32-S3",
   "board": "ESP32-S3 DevKit (MAX98357A I2S DAC)",
   "appBinaryName": "gamepad-synth.bin",
+  "otaAssetName": "gamepad-synth.bin",
+  "otaNotifyTopic": "gamepad-synth/ota/notify",
   "category": "audio",
   "flashMode": "usb"
 }

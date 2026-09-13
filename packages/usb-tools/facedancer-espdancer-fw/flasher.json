@@ -4,6 +4,8 @@
   "chipFamily": "ESP32-S3",
   "board": "Waveshare ESP32-S3-Zero",
   "appBinaryName": "facedancer-espdancer-fw.bin",
+  "otaAssetName": "facedancer-espdancer-fw.bin",
+  "otaNotifyTopic": "facedancer-espdancer-fw/ota/notify",
   "category": "tools",
   "flashMode": "usb"
 }

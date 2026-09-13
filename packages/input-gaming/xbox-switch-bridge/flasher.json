@@ -4,6 +4,8 @@
   "chipFamily": "ESP32-S3",
   "board": "Waveshare ESP32-S3-Zero",
   "appBinaryName": "xbox-switch-bridge.bin",
+  "otaAssetName": "xbox-switch-bridge.bin",
+  "otaNotifyTopic": "xbox-switch-bridge/ota/notify",
   "category": "tools",
   "flashMode": "usb"
 }

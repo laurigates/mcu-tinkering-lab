@@ -4,6 +4,8 @@
   "chipFamily": "ESP32",
   "board": "AI Thinker ESP32-CAM",
   "appBinaryName": "esp32-cam-webserver.bin",
+  "otaAssetName": "esp32-cam-webserver.bin",
+  "otaNotifyTopic": "esp32-cam-webserver/ota/notify",
   "category": "standalone",
   "flashMode": "gpio0"
 }

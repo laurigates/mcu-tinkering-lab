@@ -4,6 +4,8 @@
   "chipFamily": "ESP32",
   "board": "AI Thinker ESP32-CAM",
   "appBinaryName": "esp32cam-llm-telegram.bin",
+  "otaAssetName": "esp32cam-llm-telegram.bin",
+  "otaNotifyTopic": "esp32cam-llm-telegram/ota/notify",
   "category": "standalone",
   "flashMode": "gpio0"
 }
