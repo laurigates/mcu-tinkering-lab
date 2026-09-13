@@ -13,7 +13,9 @@ on:
       - 'docker-compose.yml'
       - 'Dockerfile'
   pull_request:
-    branches: [main, develop]
+    # No branches: filter — a PR stacked on a non-default base (e.g. another
+    # open PR's branch) must get the same suite as one targeting main/develop,
+    # or it looks green while nothing ran. See issue #487.
     paths:
       - 'packages/**'
       - '.github/workflows/test.yml'

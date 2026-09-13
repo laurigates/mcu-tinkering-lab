@@ -1,0 +1,129 @@
+name: Non-Default Base CI Notice
+
+# Cheap, always-on companion to the base-branch filters on test.yml, build.yml,
+# schematics-check.yml and build-guide-check.yml. Those still gate their
+# pull_request trigger on paths:, and a few other workflows
+# (build-python-simulation.yml, test-melody-train.yml, security-secrets.yml)
+# still gate on `branches: [main, develop]` too — so a PR stacked on another
+# PR's branch can still run less CI than one targeting main/develop, with no
+# visible sign that anything was skipped. This job never builds or tests
+# anything; it only says so on the PR when it's true. See issue #487.
+#
+# No paths: filter (must fire regardless of which files changed) and no
+# branches: filter on the trigger itself (it exists to report the base, so it
+# must run for every base).
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, edited]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  notice:
+    name: Flag non-default PR base
+    runs-on: ubuntu-latest
+    steps:
+      # No continue-on-error here: neither ruleset on this repo
+      # (default-branch-protection, main) declares a required_status_checks
+      # rule, and /branches/main/protection 404s (no classic branch
+      # protection either) — verified via `gh api repos/.../rulesets/<id>`
+      # and `gh api repos/.../branches/main/protection` immediately before
+      # this change. So a red X here cannot block a merge, and swallowing a
+      # real gh/API failure just reports "checked" on a PR that was never
+      # actually flagged — the exact defect issue #487 exists to remove.
+      - name: Report base-branch CI coverage
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          BASE: ${{ github.event.pull_request.base.ref }}
+          # Empty/mismatched means a fork PR. head.repo is null when the
+          # fork was deleted after opening the PR; GHA expressions return
+          # null (-> empty string here) for a property access on null
+          # rather than erroring, so HEAD_REPO="" is exactly the "treat as
+          # fork" case we want.
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPO: ${{ github.event.pull_request.base.repo.full_name }}
+        run: |
+          set -euo pipefail
+          MARKER='<!-- non-default-base-ci-notice -->'
+
+          # A pull_request event from a fork gets a read-only GITHUB_TOKEN
+          # regardless of the `permissions:` block above, so `gh pr comment`
+          # and `gh api ... -X PATCH/DELETE` all 403 here. Do NOT switch this
+          # workflow to pull_request_target to get write access back — that
+          # runs with the base repo's permissions in a context an external
+          # contributor controls, which is a bigger problem than a missing
+          # comment. Fall back to $GITHUB_STEP_SUMMARY + a `::warning::`
+          # annotation instead: both need no write token and are still
+          # visible on the PR (Summary tab / Checks tab). This must never be
+          # a silent skip — it always writes at least one of the two.
+          if [[ -z "$HEAD_REPO" || "$HEAD_REPO" != "$BASE_REPO" ]]; then
+            if [[ "$BASE" == "main" || "$BASE" == "develop" ]]; then
+              echo "Base is $BASE — no gap to flag (fork PR: comment skipped, read-only token)."
+              echo "base=$BASE (covered, fork PR)" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+
+            echo "::warning::PR base is '$BASE', not main or develop — some CI workflows only trigger on those two bases and will not run here (issue #487). This is a fork PR, so no PR comment could be posted (read-only token) — see this check's job summary instead."
+            {
+              echo "**Base is \`$BASE\`, not \`main\`/\`develop\`** — some workflows only trigger on those two bases (issue #487)."
+              echo
+              echo "This is a fork PR, so this check cannot post a PR comment (the token is read-only for fork \`pull_request\` events). Confirm the checks you need have actually run, or retarget onto \`main\`."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          # Capture the full list before extracting the first line, rather
+          # than piping gh's live output into `head -1`: `head` can close the
+          # pipe as soon as it has its line, which sends `gh` a SIGPIPE (exit
+          # 141). Under `set -o pipefail` that failed the whole pipeline —
+          # and therefore the step, via `set -e` — even when the API call
+          # itself succeeded. A real `gh api` failure still propagates here,
+          # since this is a plain command substitution, not a pipe with an
+          # early-closing consumer.
+          EXISTING_LIST=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" \
+            --jq ".[] | select(.body | contains(\"$MARKER\")) | .id")
+          EXISTING=$(printf '%s\n' "$EXISTING_LIST" | head -1)
+
+          if [[ "$BASE" == "main" || "$BASE" == "develop" ]]; then
+            echo "Base is $BASE — no gap to flag."
+            if [[ -n "$EXISTING" ]]; then
+              gh api "repos/$REPO/issues/comments/$EXISTING" --method DELETE
+              echo "removed stale notice comment $EXISTING (base retargeted to $BASE)"
+            fi
+            echo "base=$BASE (covered)" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          echo "::warning::PR base is '$BASE', not main or develop — some CI workflows only trigger on those two bases and will not run here (issue #487)."
+          echo "base=$BASE (some workflows may not run)" >> "$GITHUB_STEP_SUMMARY"
+
+          BODY=$(cat <<EOF
+          $MARKER
+          **This PR's base is \`$BASE\`, not \`main\`/\`develop\`.**
+
+          A few workflows in this repo still gate their \`pull_request\` trigger
+          on \`branches: [main, develop]\` (see issue #487's audit). Anything
+          caught by that filter does not run against this PR at all — no
+          skipped check, no red X, just an absence from the checks list.
+
+          Before merging, confirm the checks you actually need have run, or
+          retarget this PR onto \`main\`.
+          EOF
+          )
+
+          if [[ -n "$EXISTING" ]]; then
+            gh api "repos/$REPO/issues/comments/$EXISTING" \
+              --method PATCH -f "body=$BODY" >/dev/null
+            echo "updated existing comment $EXISTING"
+          else
+            gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$BODY"
+            echo "posted new comment"
+          fi
