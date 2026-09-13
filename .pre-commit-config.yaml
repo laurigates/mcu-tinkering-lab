@@ -49,11 +49,16 @@ repos:
   # Python type checking with ty (astral)
   # ty has no dedicated pre-commit hook repo yet, so we invoke it via uv.
   # Scoped to robocar-simulation — the only package with [tool.ty] config.
+  # `uv run` resolves ty from the project's pinned dev extra (pyproject.toml)
+  # and lockfile, not `uvx`'s unpinned "latest" — a pre-1.0 `uvx ty` release
+  # changed its diagnostic set and reddened every PR with no commit in this
+  # repo to explain it (issue #515). This also gives ty the real trimesh/etc.
+  # type info from the synced venv instead of treating them as unresolved.
   - repo: local
     hooks:
       - id: ty
         name: ty type check (robocar-simulation)
-        entry: bash -c 'cd packages/robocar/simulation && uvx ty check src/'
+        entry: bash -c 'cd packages/robocar/simulation && uv run ty check src/'
         language: system
         files: '^packages/robocar/simulation/src/.*\.py$'
         pass_filenames: false
