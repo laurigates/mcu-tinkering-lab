@@ -41,12 +41,18 @@ CONFIG_CAMERA_DMA_BUFFER_SIZE_MAX=32768
 CONFIG_CAMERA_JPEG_MODE_FRAME_SIZE_AUTO=n
 CONFIG_CAMERA_JPEG_MODE_FRAME_SIZE_CUSTOM=y
 CONFIG_CAMERA_JPEG_MODE_FRAME_SIZE=65536
-# Camera SCCB must use the LEGACY I2C driver. esp32-camera Kconfig defaults to
-# the new "driver_ng" (CONFIG_SCCB_HARDWARE_I2C_DRIVER_NEW), but the project bus
-# (i2c_bus.c → i2cdev: TCA9548A + PCA9685 + MCP23017) is legacy. ESP-IDF 5.4
-# aborts at boot if both driver types coexist ("CONFLICT! driver_ng is not
-# allowed to be used with this old driver"). Force legacy for consistency.
-CONFIG_SCCB_HARDWARE_I2C_DRIVER_LEGACY=y
+# Camera SCCB must use the NEW I2C driver ("driver_ng"). i2cdev 2.1.2 (the
+# esp-idf-lib driver behind i2c_bus.c: TCA9548A + PCA9685 + MCP23017) migrated
+# to i2c_new_master_bus() a while back, and ESP-IDF 5.4 will not link the
+# legacy driver/i2c.h API into the same binary as the new one at all — the
+# check is a whole-firmware constructor, not a per-port runtime check, so it
+# fires even though SCCB (I2C1) and i2cdev's bus (I2C0) are different
+# peripherals. Violating this aborts at boot with "CONFLICT! driver_ng is not
+# allowed to be used with this old driver". Keep this in sync with whichever
+# driver i2cdev is on — if i2cdev is ever pinned back to a pre-2.0 legacy
+# release, this must flip back to LEGACY.
+CONFIG_SCCB_HARDWARE_I2C_DRIVER_NEW=y
+CONFIG_SCCB_HARDWARE_I2C_PORT1=y
 
 # Flash (XIAO ESP32-S3 Sense has 8MB flash)
 CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
