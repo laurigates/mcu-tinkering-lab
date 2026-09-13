@@ -27,10 +27,11 @@ uv run pytest tests/ --cov
   no motion — which is why a regression there would otherwise reach hardware
   unnoticed.
 
-  **No CI job runs them yet.** `.github/workflows/` only `ctest`s the Pico
-  project, so a regression in these suites lands green. Local/CI parity gap, per
-  `~/.claude/rules/local-ci-parity.md`; the gap is also flagged at the recipe
-  itself in `packages/robocar/unified/justfile`.
+  `.github/workflows/_ci-build-esp32.yml`'s Host unit tests step runs this on
+  every PR touching the project, probing both `test/` and `tests/host/` and
+  installing `libcjson-dev` so `test_gemini_parse` builds rather than silently
+  skipping (issue #482). The same step also runs `packages/audio/kids-audio-toy`'s
+  plain-`cc` host suite (`just kids-audio::test`).
 
 ### Host-based unit tests (shared-core pattern)
 

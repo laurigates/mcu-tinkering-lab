@@ -119,9 +119,8 @@ frames-decode log="/tmp/robocar-frames.log" out="/tmp/robocar-frames":
 # gemini_parse needs cjson: `brew install cjson` (found via pkg-config, else
 # Homebrew's prefix).
 #
-# NOTE: no CI job runs these yet — `.github/workflows/` only ctests the Pico
-# project. Until that gap is closed this recipe is the *only* thing exercising
-# them, so run it before pushing rather than trusting a green PR.
+# `.github/workflows/_ci-build-esp32.yml`'s Host unit tests step runs this
+# exact recipe in CI on any PR touching this project (issue #482).
 [group: "test"]
 test:
     #!/usr/bin/env bash
