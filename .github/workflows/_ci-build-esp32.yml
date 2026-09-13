@@ -111,7 +111,9 @@ jobs:
 
       - name: Host unit tests
         working-directory: packages/${{ inputs.project_path }}
+        shell: bash
         run: |
+          set -o pipefail
           # Directory convention differs by project (issue #482): robocar-unified
           # uses test/, the Pico reusable workflow's own convention is
           # tests/host/ — probe both rather than moving either layout.
