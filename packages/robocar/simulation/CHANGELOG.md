@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.6](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-simulation-v0.1.5...robocar-simulation-v0.1.6) (2026-09-13)
+
+
+### Bug Fixes
+
+* **ci:** pin ty and run it via uv so a new release can't redden every PR ([#552](https://github.com/laurigates/mcu-tinkering-lab/issues/552)) ([bac2e53](https://github.com/laurigates/mcu-tinkering-lab/commit/bac2e53d0342f7434a1ff4f12a4b5bf8312aed2a)), closes [#515](https://github.com/laurigates/mcu-tinkering-lab/issues/515)
+
 ## [0.1.5](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-simulation-v0.1.4...robocar-simulation-v0.1.5) (2026-09-10)
 
 
