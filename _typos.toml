@@ -1,0 +1,10 @@
+# typos-cli config for this repo.
+#
+# `Ded` is not a word we use anywhere — it's a false split of `ANDed` (as in
+# "the operator ANDed two conditions together"). typos treats the transition
+# from an all-caps run to a lowercase run as a word boundary one letter
+# early, so `ANDed` is read as `AN` + `Ded`, and `Ded` is close enough to
+# `Dead` to flag. Allowlisting the token here (rather than rewording the
+# source, e.g. "AND-ed") keeps the comments as written. See issue #536.
+[default.extend-words]
+Ded = "Ded"
