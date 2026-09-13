@@ -109,6 +109,43 @@ jobs:
             idf.py size >> size-report.txt 2>&1;
             idf.py size-components >> size-report.txt 2>&1; true
 
+      - name: Host unit tests
+        working-directory: packages/${{ inputs.project_path }}
+        shell: bash
+        run: |
+          set -o pipefail
+          # Directory convention differs by project (issue #482): robocar-unified
+          # uses test/, the Pico reusable workflow's own convention is
+          # tests/host/ — probe both rather than moving either layout.
+          if [ -f test/CMakeLists.txt ] || [ -f tests/host/CMakeLists.txt ]; then
+            HOST_TEST_DIR="test"
+            [ -f test/CMakeLists.txt ] || HOST_TEST_DIR="tests/host"
+
+            # cJSON is required for test_gemini_parse; test/CMakeLists.txt
+            # degrades to a `message(STATUS ...)` skip when it can't find cJSON,
+            # which would otherwise let that suite land green by absence.
+            # Install it, then fail loudly if the skip message shows up anyway.
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends libcjson-dev cmake
+
+            CONFIGURE_LOG=$(mktemp)
+            cmake -S "$HOST_TEST_DIR" -B build-host 2>&1 | tee "$CONFIGURE_LOG"
+            if grep -q "cJSON not found" "$CONFIGURE_LOG"; then
+              echo "::error::cJSON not found even after installing libcjson-dev — a host-test suite would be silently skipped"
+              exit 1
+            fi
+
+            cmake --build build-host
+            ctest --test-dir build-host --output-on-failure
+          elif [ -f test/test_audio_core.c ] && [ -f main/audio_core.c ]; then
+            # Shared-core pattern (no CMake, no ESP-IDF container needed) —
+            # matches `just kids-audio::test` exactly, per local-ci-parity.
+            cc -std=c11 -Wall -Wextra -I main -o /tmp/host_test_audio_core test/test_audio_core.c main/audio_core.c -lm
+            /tmp/host_test_audio_core
+          else
+            echo "No host tests (test/CMakeLists.txt, tests/host/CMakeLists.txt, or test/test_audio_core.c) — skipping"
+          fi
+
       - name: Archive firmware binaries
         uses: actions/upload-artifact@v7
         with:
