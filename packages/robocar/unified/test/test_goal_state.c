@@ -72,7 +72,8 @@ static void test_fresh_default_is_stop(void)
     esp_err_t ret = goal_state_read(&goal, &is_fresh);
     ASSERT(ret == ESP_OK);
     ASSERT(!is_fresh);
-    ASSERT(goal.kind == GOAL_KIND_DRIVE); /* DELIBERATELY BROKEN for CI negative control (PR #551) */
+    ASSERT(goal.kind ==
+           GOAL_KIND_DRIVE); /* DELIBERATELY BROKEN for CI negative control (PR #551) */
 }
 
 static void test_write_read_roundtrip_drive(void)
