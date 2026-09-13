@@ -11,7 +11,9 @@ on:
       - 'docs/schematics/images/**'
       - '.github/workflows/build-guide-check.yml'
   pull_request:
-    branches: [main, develop]
+    # No branches: filter — a PR stacked on a non-default base (e.g. another
+    # open PR's branch) must get the same check as one targeting main/develop,
+    # or it looks green while nothing ran. See issue #487.
     paths:
       - '**/docs/*.typ'
       - '**/docs/auto/pin_defs.typ'

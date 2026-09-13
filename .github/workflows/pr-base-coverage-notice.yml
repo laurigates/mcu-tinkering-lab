@@ -1,0 +1,80 @@
+name: Non-Default Base CI Notice
+
+# Cheap, always-on companion to the base-branch filters on test.yml, build.yml,
+# schematics-check.yml and build-guide-check.yml. Those still gate their
+# pull_request trigger on paths:, and a few other workflows
+# (build-python-simulation.yml, test-melody-train.yml, security-secrets.yml)
+# still gate on `branches: [main, develop]` too — so a PR stacked on another
+# PR's branch can still run less CI than one targeting main/develop, with no
+# visible sign that anything was skipped. This job never builds or tests
+# anything; it only says so on the PR when it's true. See issue #487.
+#
+# No paths: filter (must fire regardless of which files changed) and no
+# branches: filter on the trigger itself (it exists to report the base, so it
+# must run for every base).
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, edited]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  notice:
+    name: Flag non-default PR base
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report base-branch CI coverage
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          BASE: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -euo pipefail
+          MARKER='<!-- non-default-base-ci-notice -->'
+
+          EXISTING=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" \
+            --jq ".[] | select(.body | contains(\"$MARKER\")) | .id" | head -1)
+
+          if [[ "$BASE" == "main" || "$BASE" == "develop" ]]; then
+            echo "Base is $BASE — no gap to flag."
+            if [[ -n "$EXISTING" ]]; then
+              gh api "repos/$REPO/issues/comments/$EXISTING" --method DELETE
+              echo "removed stale notice comment $EXISTING (base retargeted to $BASE)"
+            fi
+            echo "base=$BASE (covered)" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          echo "::warning::PR base is '$BASE', not main or develop — some CI workflows only trigger on those two bases and will not run here (issue #487)."
+          echo "base=$BASE (some workflows may not run)" >> "$GITHUB_STEP_SUMMARY"
+
+          BODY=$(cat <<EOF
+          $MARKER
+          **This PR's base is \`$BASE\`, not \`main\`/\`develop\`.**
+
+          A few workflows in this repo still gate their \`pull_request\` trigger
+          on \`branches: [main, develop]\` (see issue #487's audit). Anything
+          caught by that filter does not run against this PR at all — no
+          skipped check, no red X, just an absence from the checks list.
+
+          Before merging, confirm the checks you actually need have run, or
+          retarget this PR onto \`main\`.
+          EOF
+          )
+
+          if [[ -n "$EXISTING" ]]; then
+            gh api "repos/$REPO/issues/comments/$EXISTING" \
+              --method PATCH -f "body=$BODY" >/dev/null
+            echo "updated existing comment $EXISTING"
+          else
+            gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$BODY"
+            echo "posted new comment"
+          fi
+        continue-on-error: true
