@@ -432,6 +432,24 @@ target_link_libraries(test_led_controller PRIVATE Threads::Threads m)
 add_test(NAME led_controller COMMAND test_led_controller)
 
 # -----------------------------------------------------------------------------
+# mqtt_command (issue #524) — MQTT command-topic validator/dispatcher
+#
+# mqtt_command.c is deliberately free of ESP-IDF and FreeRTOS (mqtt_logger.c
+# owns everything protocol-specific and calls in with plain ints/chars), so it
+# compiles with no shims at all. The cases worth pinning are the ones a
+# network boundary must never let through: an oversized or non-printable
+# payload, and a message fragmented across multiple MQTT_EVENT_DATA callbacks
+# (event->total_data_len / event->current_data_offset) — a target (the topic)
+# resolved once, with more of the payload still arriving.
+# -----------------------------------------------------------------------------
+add_executable(test_mqtt_command
+    "${MAIN_SRC_DIR}/mqtt_command.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_mqtt_command.c"
+)
+target_link_libraries(test_mqtt_command PRIVATE Threads::Threads m)
+add_test(NAME mqtt_command COMMAND test_mqtt_command)
+
+# -----------------------------------------------------------------------------
 # self_report per-peripheral health (issue #500)
 #
 # self_report.c is compiled UNMODIFIED against the shims in test/include plus

@@ -142,6 +142,32 @@ esp_err_t mqtt_logger_publish(const char *topic, const char *payload, int qos, b
 esp_err_t mqtt_logger_subscribe(const char *topic, mqtt_logger_subscribe_cb_t callback);
 
 /**
+ * @brief Command-topic callback signature
+ *
+ * Invoked with an already bound-checked, NUL-terminated command line
+ * received on the configured command_topic (see mqtt_command.h for what
+ * "bound-checked" means: printable ASCII, in-bounds, and not a fragment of a
+ * larger message). Runs from the MQTT event task — keep work short.
+ *
+ * @param line NUL-terminated command line, e.g. "F" or "plan resume".
+ */
+typedef void (*mqtt_logger_command_cb_t)(const char *line);
+
+/**
+ * @brief Register the handler for messages on the configured command_topic
+ *
+ * Distinct from mqtt_logger_subscribe(): the command topic is already
+ * subscribed internally by mqtt_logger_init() at QoS 1, and this only wires
+ * what happens when a message arrives on it. Call after mqtt_logger_init().
+ * Passing NULL clears the handler — an inbound command is then logged and
+ * dropped rather than silently ignored.
+ *
+ * @param callback Handler for validated command lines, or NULL to clear it
+ * @return ESP_OK on success, ESP_ERR_INVALID_STATE if not yet initialized
+ */
+esp_err_t mqtt_logger_set_command_handler(mqtt_logger_command_cb_t callback);
+
+/**
  * @brief Get MQTT logger statistics
  *
  * @param stats Pointer to statistics structure to fill

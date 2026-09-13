@@ -67,6 +67,50 @@ The spoken fault line stays coarse — one persona phrase covers "no bus" and "m
 | `plan …` | The gate on whether the planner makes a request at all — `plan` alone reports cadence, wake scores and spend; `plan on\|off\|wake\|sleep\|resume`, `plan scene\|range\|requests\|tokens <n>` |
 | `trace …` | Camera + endpoint activity counters since boot; `trace led on\|off`, `trace reset` |
 
+### MQTT remote commands
+
+Every command above is also reachable over MQTT, for the case the console table
+above already exists for but cannot reach: a board with no serial link
+attached. Publish a plain-text line — the exact same grammar as the console,
+not JSON — to `MQTT_COMMAND_TOPIC` (`robocar/commands`, QoS 1):
+
+```
+mosquitto_pub -h <broker> -t robocar/commands -m "plan resume"
+mosquitto_pub -h <broker> -t robocar/commands -m "F"
+```
+
+`mqtt_command.c` (pure C, host-tested in `test/test_mqtt_command.c`) validates
+and classifies the payload before anything acts on it:
+
+- **Movement** — the console's single letters (`F`/`B`/`L`/`R`/`C`/`W`/`S`,
+  case-insensitive) or their word form (`forward`/`backward`/`left`/`right`/
+  `rotate_cw`/`rotate_ccw`/`stop`) — routes through `dispatch_movement()`,
+  the same queue + `motor_control_task` the console uses, so it reaches
+  `reactive_controller_manual()` and stays behind the obstacle reflex.
+  `REACTIVE_MANUAL_TTL_MS` (1 s) still applies: a single MQTT message buys
+  one second of motion, so continuous remote driving means republishing at
+  ~1 Hz, and a dropped connection stops the robot within a second.
+- **Everything else** in the console table above (`plan`, `voice`, `trace`,
+  `mic`, `cam`, `servo`, `led`, `sound`, `gpio`, `snap`, `listen`) — forwarded
+  verbatim to `execute_console_line()`, the exact function the serial console
+  calls, so the two entry points can never disagree about what a command
+  does.
+- **Anything else, and any malformed or oversized payload, is rejected and
+  logged rather than dispatched.** `event->data` is not NUL-terminated, and
+  esp-mqtt can split one message across several `MQTT_EVENT_DATA` callbacks
+  once it exceeds the internal buffer (`event->total_data_len` /
+  `event->current_data_offset`) — a fragment is the topic ("target") already
+  resolved once, with more of the payload still arriving, and dispatching on
+  it would act on a truncated command. `mqtt_command_extract_line()` rejects
+  anything that is not a single, complete, in-bounds (≤63 bytes), printable-
+  ASCII line before `mqtt_command_dispatch()` ever sees it.
+
+The broker credentials are `NULL`/`NULL` by default (`MQTT_USERNAME`/
+`MQTT_PASSWORD` in `config.h`) — an unauthenticated broker can currently drive
+the robot. That is unchanged by this command handler and is a broader design
+question (a separate, deliberately-unsubscribed movement topic, or requiring
+auth) the issue that added this raised but did not resolve; see issue #524.
+
 **`servo exercise` exists because "the servos are not moving" has four causes
 that look identical from across the room**: no V+ on the PCA9685 (VCC powers only
 the logic), a failed init, a pulse train outside the servos' frame rate, and a
@@ -527,6 +571,8 @@ Key settings that matter:
 ## Don't
 
 - Don't call `motor_controller.c` directly from anywhere except `reactive_controller.c` — the executor owns motor output. Console/manual movement goes through `reactive_controller_manual()`, which takes a short lease the executor applies *after* the obstacle reflex; a second task writing the PCA9685 directly both fought the 30 Hz executor and bypassed the reflex
+- Don't give `mqtt_command.c` a second, parallel notion of what a command does. It classifies a line and calls exactly two injected callbacks (`movement`, wired to `dispatch_movement()`; `console_line`, wired to `execute_console_line()`) — both already shared with the serial console. Adding logic that calls `motor_controller.c`, a peripheral driver, or a handler directly from `mqtt_command.c` or its callbacks would create a second entry point that can silently diverge from the console's, and for movement specifically would bypass the obstacle reflex the same way a direct `motor_controller.c` call does
+- Don't skip `mqtt_command_extract_line()`'s fragmentation check (`current_data_offset != 0 || total_data_len != data_len`) when touching the MQTT command path. `event->data` is a fragment, not the whole payload, once a message exceeds esp-mqtt's buffer — the topic ("target") is resolved once on the first `MQTT_EVENT_DATA` callback, and dispatching on a later fragment acts on a truncated command before the rest of it has arrived
 - Don't drop the idle re-write suppression in `set_motors()`, and don't make it permanent by removing the refresh. `reactive_controller`'s 30 Hz loop calls `motor_stop()` on every iteration it is not driving, so a parked robot re-stated six identical PCA9685 registers 30 times a second — the firmware's only continuous I2C traffic, and what makes the bus go from silent to permanently busy the moment the PCA9685 is fitted. The suppression expires after `MOTOR_REFRESH_INTERVAL_MS` because the cache describes a chip that cannot be read back: a PCA9685 that browned out or was re-seated no longer matches it, and with no expiry nothing would re-assert the true state. Pinned by `test_motor_controller.c`, including the case a bench cannot stage — the uint32 millisecond wrap at day 49, where a signed elapsed comparison either refreshes on every call or never refreshes again
 - Don't make the planner's request unconditional again, and don't "simplify" the ladder into an on/off switch. An idle board went from 240 requests an hour to zero because the request itself is gated; a binary sleep is only as good as its wake detector, and a detector that fails closed is a robot that never wakes. See ADR-022 and the planner-dormancy section above
 - Don't feed `ambient_audio_novel()` to the dormancy gate. It reports a room never spoken about as novel — right for speech, fatal here, because a dormant robot never speaks and so would never see that branch clear. `ambient_audio_event()` exists for exactly this and is the same OR without the first-impression branch
