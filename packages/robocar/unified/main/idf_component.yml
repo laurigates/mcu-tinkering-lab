@@ -7,12 +7,6 @@ dependencies:
   espressif/esp32-camera: '^2.0.0'
   # mDNS component
   espressif/mdns: '^1.8.0'
-  # GitHub OTA component for automated firmware updates from GitHub Releases.
-  # Registry only has 0.0.1 — pin the git tag instead (same fix as the shared
-  # ota-github component, see commit ac3cd9b).
-  fishwaldo/esp_ghota:
-    git: https://github.com/FishWaldo/esp_ghota.git
-    version: 'v1.0.0'
   # ---------------------------------------------------------------------------
   # esp-idf-lib drivers (previously vendored under robocar/main as a ~95-component
   # snapshot of the now-archived UncleRus monorepo, shared by symlink).

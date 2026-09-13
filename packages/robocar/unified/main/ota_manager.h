@@ -1,10 +1,10 @@
 /**
  * @file ota_manager.h
- * @brief OTA update manager for ESP32-CAM robocar
+ * @brief OTA update manager for the single-board unified robocar
  *
- * Manages firmware updates via esp_ghota (GitHub OTA) with periodic polling
- * and MQTT push notifications. Orchestrates updates for both camera and
- * main controller boards.
+ * Manages firmware updates by polling the web-flasher's published manifest
+ * (see ota_manager.c and issue #539) with a periodic timer and MQTT
+ * check-now nudges.
  */
 
 #ifndef OTA_MANAGER_H
@@ -15,9 +15,8 @@
 /**
  * @brief Initialize OTA manager
  *
- * Sets up esp_ghota for periodic GitHub release checking, subscribes to
- * MQTT OTA notification topic, and registers event handlers for update
- * progress tracking.
+ * Starts the periodic manifest-poll task (see ota_manager.c), subscribes to
+ * the MQTT OTA notification topic, and starts the rollback stability timer.
  *
  * Requires WiFi and MQTT to be initialized first.
  *
@@ -28,10 +27,10 @@ esp_err_t ota_manager_init(void);
 /**
  * @brief Manually trigger an update check
  *
- * Forces an immediate check against GitHub Releases, bypassing the
- * periodic timer. Useful when an MQTT notification is received.
+ * Wakes the OTA task immediately instead of waiting for the periodic
+ * timeout. Called from the MQTT check-now nudge.
  *
- * @return ESP_OK if check started, error code otherwise
+ * @return ESP_OK if the check was queued, error code otherwise
  */
 esp_err_t ota_manager_check_update(void);
 

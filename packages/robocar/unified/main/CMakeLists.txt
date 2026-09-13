@@ -41,6 +41,8 @@ idf_component_register(
         "mqtt_logger.c"
         "mqtt_command.c"
         "ota_manager.c"
+        "ota_version_compare.c"
+        "ota_interval.c"
     INCLUDE_DIRS "."
     REQUIRES
         "esp-idf-lib__pca9685"
@@ -50,6 +52,7 @@ idf_component_register(
         "esp32-camera"
         "esp_wifi"
         "esp_http_client"
+        "esp_https_ota"
         "json"
         "nvs_flash"
         "driver"
