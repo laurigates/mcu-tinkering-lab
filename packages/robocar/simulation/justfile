@@ -139,7 +139,7 @@ format:
 # Run type checking with ty (astral)
 [group: "dev"]
 type-check:
-    uvx ty check src/
+    uv run ty check src/
 
 # Validate robot config YAML
 [group: "dev"]
