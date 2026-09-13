@@ -50,6 +50,7 @@
 /* Only for motor_controller_init() in the hardware phase — motor *output* is
  * the reactive executor's job, and nothing here writes the motors directly. */
 #include "motor_controller.h"
+#include "mqtt_command.h"
 #include "mqtt_logger.h"
 #include "ota_manager.h"
 #include "pin_config.h"
@@ -1077,6 +1078,95 @@ static void on_improv_credentials(const char *ssid, const char *password)
     ESP_LOGI(TAG, "Improv: provisioning complete");
 }
 
+/**
+ * @brief Execute one already-trimmed, multi-word console command line.
+ *
+ * Shared by the serial console (command_task, below) and the MQTT command
+ * topic (mqtt_command_received(), via init_network_services()), so the two
+ * entry points can never diverge on what a command line does. Single-letter
+ * movement (F/B/L/R/C/W/S) is handled separately by each caller instead —
+ * see command_task()'s buf_pos==1 switch and mqtt_command.c's
+ * movement_word_for() — because the two reach it through different framing
+ * (a bare console keystroke vs. an MQTT payload naming a movement word) and
+ * both already route to dispatch_movement().
+ */
+static void execute_console_line(const char *buf)
+{
+    if (strncmp(buf, "gpio", 4) == 0) {
+        handle_gpio_cmd(buf);
+    } else if (strncmp(buf, "voice", 5) == 0) {
+        handle_voice_cmd(buf);
+    } else if (strncmp(buf, "snap", 4) == 0) {
+        handle_snap_cmd(buf);
+    } else if (strncmp(buf, "listen", 6) == 0) {
+        handle_listen_cmd(buf);
+    } else if (strncmp(buf, "trace", 5) == 0) {
+        handle_trace_cmd(buf);
+    } else if (strncmp(buf, "mic", 3) == 0) {
+        handle_mic_cmd(buf);
+    } else if (strncmp(buf, "cam", 3) == 0) {
+        handle_cam_cmd(buf);
+    } else if (strncmp(buf, "plan", 4) == 0) {
+        handle_plan_cmd(buf);
+    } else if (strncmp(buf, "sound", 5) == 0 || strncmp(buf, "servo", 5) == 0 ||
+               strncmp(buf, "led", 3) == 0) {
+        handle_periph_cmd(buf);
+    }
+}
+
+/**
+ * @brief mqtt_command_ops_t::movement callback for the MQTT command topic.
+ *
+ * Reuses dispatch_movement() unchanged — the same function the console's
+ * single-letter commands call — so an MQTT-originated drive command reaches
+ * reactive_controller_manual() via the existing motor queue + executor lease,
+ * never motor_controller.c directly.
+ */
+static void mqtt_cmd_movement(const char *word, void *ctx)
+{
+    (void)ctx;
+    dispatch_movement(word);
+}
+
+/**
+ * @brief mqtt_command_ops_t::console_line callback for the MQTT command topic.
+ *
+ * Reuses execute_console_line() unchanged — the same dispatch the serial
+ * console uses for everything past single-letter movement.
+ */
+static void mqtt_cmd_console_line(const char *line, void *ctx)
+{
+    (void)ctx;
+    execute_console_line(line);
+}
+
+/**
+ * @brief Registered with mqtt_logger via mqtt_logger_set_command_handler().
+ *
+ * mqtt_logger.c has already bound-checked and validated the payload into a
+ * NUL-terminated line (mqtt_command_extract_line()) before calling here; this
+ * only classifies it and routes it through the same handlers the serial
+ * console uses. An unrecognised line is logged and dropped rather than
+ * silently ignored (mqtt_command_dispatch() dispatches neither callback).
+ */
+static void mqtt_command_received(const char *line)
+{
+    static const mqtt_command_ops_t ops = {
+        .movement = mqtt_cmd_movement,
+        .console_line = mqtt_cmd_console_line,
+        .ctx = NULL,
+    };
+
+    /* An inbound remote command is the MQTT equivalent of "somebody is at the
+     * console" — the robot is not unattended, so dormancy's whole premise has
+     * lapsed. Matches the wake call in command_task() below. */
+    plan_activity_wake();
+
+    if (!mqtt_command_dispatch(line, &ops)) {
+        ESP_LOGW(TAG, "Rejected unrecognised MQTT command: %s", line);
+    }
+}
+
 // ========================================
 // Serial command task (Core 0, priority 5)
 // ========================================
@@ -1160,25 +1250,8 @@ static void command_task(void *pvParameters)
                             dispatch_movement("stop");
                             break;
                     }
-                } else if (strncmp(buf, "gpio", 4) == 0) {
-                    handle_gpio_cmd(buf);
-                } else if (strncmp(buf, "voice", 5) == 0) {
-                    handle_voice_cmd(buf);
-                } else if (strncmp(buf, "snap", 4) == 0) {
-                    handle_snap_cmd(buf);
-                } else if (strncmp(buf, "listen", 6) == 0) {
-                    handle_listen_cmd(buf);
-                } else if (strncmp(buf, "trace", 5) == 0) {
-                    handle_trace_cmd(buf);
-                } else if (strncmp(buf, "mic", 3) == 0) {
-                    handle_mic_cmd(buf);
-                } else if (strncmp(buf, "cam", 3) == 0) {
-                    handle_cam_cmd(buf);
-                } else if (strncmp(buf, "plan", 4) == 0) {
-                    handle_plan_cmd(buf);
-                } else if (strncmp(buf, "sound", 5) == 0 || strncmp(buf, "servo", 5) == 0 ||
-                           strncmp(buf, "led", 3) == 0) {
-                    handle_periph_cmd(buf);
+                } else {
+                    execute_console_line(buf);
                 }
 
                 buf_pos = 0;
@@ -1450,6 +1523,12 @@ static void init_network_services(void)
     if (mqtt_ret != ESP_OK) {
         ESP_LOGW(TAG, "mqtt_logger_init failed (%s) — remote logging disabled",
                  esp_err_to_name(mqtt_ret));
+    } else {
+        /* app_main() calls create_tasks() before init_network_services(), so
+         * s_motor_queue/s_periph_queue — which mqtt_cmd_movement() and the
+         * console handlers execute_console_line() dispatches into already
+         * exist by the time a command can arrive here. */
+        mqtt_logger_set_command_handler(mqtt_command_received);
     }
 #endif
 

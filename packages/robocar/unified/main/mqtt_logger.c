@@ -19,6 +19,7 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "mqtt_client.h"
+#include "mqtt_command.h"
 
 static const char *TAG = "mqtt_logger";
 
@@ -54,6 +55,7 @@ typedef struct {
     bool connected;
     TaskHandle_t log_task_handle;
     mqtt_subscription_t subscriptions[MQTT_LOGGER_MAX_SUBSCRIPTIONS];
+    mqtt_logger_command_cb_t command_cb;  ///< Handler for the command_topic; NULL until registered
 } mqtt_logger_context_t;
 
 static mqtt_logger_context_t s_context = {0};
@@ -425,6 +427,19 @@ esp_err_t mqtt_logger_subscribe(const char *topic, mqtt_logger_subscribe_cb_t ca
     return ESP_OK;
 }
 
+esp_err_t mqtt_logger_set_command_handler(mqtt_logger_command_cb_t callback)
+{
+    if (!s_context.initialized) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    xSemaphoreTake(s_context.mutex, pdMS_TO_TICKS(SEMAPHORE_TIMEOUT_MS));
+    s_context.command_cb = callback;
+    xSemaphoreGive(s_context.mutex);
+
+    return ESP_OK;
+}
+
 esp_err_t mqtt_logger_get_stats(mqtt_logger_stats_t *stats)
 {
     if (!stats) {
@@ -549,8 +564,27 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
             if (s_context.config.command_topic && event->topic && event->topic_len > 0 &&
                 (size_t)event->topic_len == strlen(s_context.config.command_topic) &&
                 strncmp(event->topic, s_context.config.command_topic, event->topic_len) == 0) {
-                ESP_LOGI(TAG, "Received command: %.*s", event->data_len, event->data);
-                // TODO: Implement command processing
+                // event->data is untrusted input from a network boundary and is
+                // NOT NUL-terminated. mqtt_command_extract_line() also rejects a
+                // message fragmented across multiple MQTT_EVENT_DATA callbacks
+                // (event->total_data_len / event->current_data_offset) — the
+                // topic ("target") was resolved on the first callback, and
+                // dispatching on a fragment would act on a truncated command
+                // before the rest of it arrives.
+                char cmd_line[MQTT_COMMAND_MAX_LEN + 1];
+                if (mqtt_command_extract_line(event->data, event->data_len, event->total_data_len,
+                                              event->current_data_offset, cmd_line,
+                                              sizeof(cmd_line))) {
+                    ESP_LOGI(TAG, "Received command: %s", cmd_line);
+                    if (s_context.command_cb) {
+                        s_context.command_cb(cmd_line);
+                    } else {
+                        ESP_LOGW(TAG, "No command handler registered — dropping: %s", cmd_line);
+                    }
+                } else {
+                    ESP_LOGW(TAG, "Rejected malformed/oversized command payload (%d/%d bytes)",
+                             event->data_len, event->total_data_len);
+                }
             }
 
             // Dispatch to subscriptions registered via mqtt_logger_subscribe().

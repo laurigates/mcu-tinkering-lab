@@ -39,6 +39,7 @@ idf_component_register(
         "credentials_loader.c"
         "wifi_manager.c"
         "mqtt_logger.c"
+        "mqtt_command.c"
         "ota_manager.c"
     INCLUDE_DIRS "."
     REQUIRES
