@@ -34,6 +34,10 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/otadata-predicate.sh
+source "${SCRIPT_DIR}/lib/otadata-predicate.sh"
+
 VERSION="${1:?Usage: $0 <version> [firmware-dir]}"
 FIRMWARE_DIR="${2:-firmware}"
 PROJECTS_GLOB="packages/*/*/flasher.json"
@@ -78,25 +82,9 @@ parse_app_offset() {
     fi
 }
 
-# Parse the OTA data partition offset from partitions.csv.
-# Returns decimal offset, or empty string if no OTA data partition exists.
-parse_otadata_offset() {
-    local csv="$1"
-    local offset=""
-    if [[ -f "$csv" ]]; then
-        offset=$(grep -v '^#' "$csv" \
-            | awk -F',' '{ gsub(/[[:space:]]/, "", $2); gsub(/[[:space:]]/, "", $3) } $2 == "data" && $3 == "ota" { gsub(/[[:space:]]/, "", $4); print $4; exit }')
-    fi
-    if [[ -z "$offset" ]]; then
-        echo ""
-        return
-    fi
-    if [[ "$offset" == 0x* || "$offset" == 0X* ]]; then
-        printf "%d\n" "$offset"
-    else
-        echo "$offset"
-    fi
-}
+# parse_otadata_offset() is defined in lib/otadata-predicate.sh, shared with
+# build-firmware.yml's assemble step so the two never parse partitions.csv
+# differently.
 
 PROJECTS_JSON_ARRAY="[]"
 

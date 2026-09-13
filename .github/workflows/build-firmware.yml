@@ -168,6 +168,9 @@ jobs:
 
       - name: Assemble firmware directory
         run: |
+          # shellcheck source=tools/lib/otadata-predicate.sh
+          source tools/lib/otadata-predicate.sh
+
           mkdir -p firmware
           missing=()
 
@@ -194,9 +197,23 @@ jobs:
               fi
             done
 
-            # ota_data_initial.bin only exists for projects with an OTA
-            # partition table entry — genuinely optional, not a fallback.
-            cp "$src/ota_data_initial.bin" "$dest/" 2>/dev/null || true
+            # ota_data_initial.bin is required exactly when partitions.csv
+            # declares a `data,ota` row — the same predicate
+            # tools/generate-flasher-manifests.sh uses to decide whether the
+            # generated manifest names the file at all. Keeping this
+            # conditional in sync with the generator's is the whole point of
+            # sharing lib/otadata-predicate.sh: a project whose otadata row
+            # disappears loses the requirement here in the same commit that
+            # removes it from the manifest, instead of a manifest silently
+            # naming a part the build never produced (issue #541).
+            if has_otadata_partition "$project_dir/partitions.csv"; then
+              if [ -f "$src/ota_data_initial.bin" ]; then
+                cp "$src/ota_data_initial.bin" "$dest/"
+              else
+                echo "::error::missing ota_data_initial.bin for $project_id (partitions.csv declares a data,ota row, looked in $src/ota_data_initial.bin)"
+                missing+=("$project_id: ota_data_initial.bin")
+              fi
+            fi
           done
 
           if [ "${#missing[@]}" -gt 0 ]; then
@@ -218,6 +235,34 @@ jobs:
 
       - name: Generate flasher manifests and projects.json
         run: bash tools/generate-flasher-manifests.sh "${{ steps.version.outputs.version }}" firmware
+
+      - name: Verify manifest parts exist locally
+        # Cheaper, earlier sibling of "Verify published firmware parts" below:
+        # that step only catches a manifest naming a missing part after Pages
+        # has already deployed it. This one reads the same manifests against
+        # the local firmware/ tree, before anything is uploaded or published,
+        # so the mismatch this issue is about (#541) fails here instead of
+        # after a broken flasher page is live.
+        run: |
+          missing=()
+
+          for manifest in firmware/*/manifest.json; do
+            project_id=$(basename "$(dirname "$manifest")")
+            parts=$(jq -r '.builds[].parts[].path' "$manifest")
+            while IFS= read -r part; do
+              [ -z "$part" ] && continue
+              local_file="firmware/$project_id/$part"
+              if [ ! -f "$local_file" ]; then
+                missing+=("$project_id/$part -> named in manifest.json but not found at $local_file")
+              fi
+            done <<< "$parts"
+          done
+
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "The following manifest-listed parts are missing from the assembled firmware/ tree:"
+            printf '  %s\n' "${missing[@]}"
+            exit 1
+          fi
 
       - name: Assemble Pages site
         run: |
