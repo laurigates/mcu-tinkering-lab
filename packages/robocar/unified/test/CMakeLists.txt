@@ -471,3 +471,20 @@ add_executable(test_ota_version_compare
 )
 target_link_libraries(test_ota_version_compare PRIVATE Threads::Threads m)
 add_test(NAME ota_version_compare COMMAND test_ota_version_compare)
+
+# -----------------------------------------------------------------------------
+# ota_interval (PR #559 review follow-up)
+#
+# Pure C, no ESP-IDF dependency. Reproduces pdMS_TO_TICKS()'s own formula in a
+# 64-bit intermediate so OTA_CHECK_INTERVAL_MIN=360 at CONFIG_FREERTOS_HZ=1000
+# resolves to the exact 21,600,000-tick interval the firmware needs, instead
+# of the ~125,163 ticks (~125 s instead of ~21,600 s) a 32-bit
+# TickType_t-only computation silently wrapped to on this project's non-SMP
+# FreeRTOS kernel.
+# -----------------------------------------------------------------------------
+add_executable(test_ota_interval
+    "${MAIN_SRC_DIR}/ota_interval.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_ota_interval.c"
+)
+target_link_libraries(test_ota_interval PRIVATE Threads::Threads m)
+add_test(NAME ota_interval COMMAND test_ota_interval)

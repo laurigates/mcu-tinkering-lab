@@ -86,6 +86,11 @@
 #define OTA_MANIFEST_URL \
     "https://laurigates.github.io/mcu-tinkering-lab/firmware/unified/manifest.json"
 #define OTA_CHECK_INTERVAL_MIN 360
+// Used only if ota_interval_ticks_from_minutes() reports OTA_CHECK_INTERVAL_MIN
+// would overflow a uint32_t tick count at the running tick rate — see
+// ota_interval.h. 360 min at any tick rate below ~11.9 MHz fits comfortably,
+// so this is a defensive fallback, not an expected path.
+#define OTA_INTERVAL_OVERFLOW_FALLBACK_MS 60000
 // Per-project topic — see PR #558 (issue #409), which must land alongside
 // this change: it is what makes robocar-unified's flasher.json (and the
 // build-firmware.yml notify step) publish to this exact topic instead of the

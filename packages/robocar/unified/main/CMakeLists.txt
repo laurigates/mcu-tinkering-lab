@@ -41,6 +41,7 @@ idf_component_register(
         "mqtt_logger.c"
         "ota_manager.c"
         "ota_version_compare.c"
+        "ota_interval.c"
     INCLUDE_DIRS "."
     REQUIRES
         "esp-idf-lib__pca9685"

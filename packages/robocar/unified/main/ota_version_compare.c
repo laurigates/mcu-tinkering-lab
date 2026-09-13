@@ -7,10 +7,18 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <string.h>
 
 /** "0.2.10" has three; leave headroom for a build/patch component nobody
  *  currently uses without silently truncating a longer string into a match. */
 #define OTA_VERSION_MAX_COMPONENTS 4
+
+/** 9 digits (max 999,999,999) is comfortably below ULONG_MAX on every
+ *  platform (32-bit `unsigned long` tops out at 4,294,967,295), so a
+ *  component this short can never overflow the accumulator below. A
+ *  manifest that names a 10-digit component is malformed, not a real
+ *  version — reject rather than wrap. */
+#define OTA_VERSION_MAX_COMPONENT_DIGITS 9
 
 /**
  * Parse a dotted-numeric version string into up to
@@ -20,9 +28,11 @@
  * Returns true on success. Returns false — and leaves @p out untouched by
  * the caller's contract, since the caller must not act on it — for: NULL or
  * empty input, any character that is not a digit or '.', an empty component
- * (leading '.', trailing '.', or ".."), or more than OTA_VERSION_MAX_COMPONENTS
- * components. This is the fail-closed boundary: anything this function cannot
- * confidently parse is treated as malformed, not as "0".
+ * (leading '.', trailing '.', or ".."), more than OTA_VERSION_MAX_COMPONENTS
+ * components, or a component longer than OTA_VERSION_MAX_COMPONENT_DIGITS
+ * digits (which would overflow the unsigned long accumulator on a 32-bit
+ * `unsigned long`). This is the fail-closed boundary: anything this function
+ * cannot confidently parse is treated as malformed, not as "0".
  */
 static bool parse_version(const char *s, unsigned long out[OTA_VERSION_MAX_COMPONENTS])
 {
@@ -45,9 +55,14 @@ static bool parse_version(const char *s, unsigned long out[OTA_VERSION_MAX_COMPO
         }
 
         unsigned long value = 0;
+        int digits = 0;
         while (*p >= '0' && *p <= '9') {
+            if (digits >= OTA_VERSION_MAX_COMPONENT_DIGITS) {
+                return false; /* component too long to accumulate safely */
+            }
             value = (value * 10) + (unsigned long)(*p - '0');
             p++;
+            digits++;
         }
         out[component++] = value;
 
@@ -84,4 +99,12 @@ ota_version_compare_result_t ota_version_compare(const char *current_version,
     }
 
     return OTA_VERSION_COMPARE_NO_UPDATE; /* exactly equal */
+}
+
+bool ota_version_fits(const char *version, size_t buf_size)
+{
+    if (version == NULL || buf_size == 0) {
+        return false;
+    }
+    return strlen(version) < buf_size; /* strictly less: room for the NUL */
 }

@@ -37,6 +37,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/timers.h"
+#include "ota_interval.h"
 #include "ota_version_compare.h"
 #if MQTT_LOGGING_ENABLED
 #include "mqtt_logger.h"
@@ -169,7 +170,25 @@ esp_err_t ota_manager_confirm_valid(void)
 static void ota_task(void *arg)
 {
     (void)arg;
-    const TickType_t interval_ticks = pdMS_TO_TICKS((uint32_t)OTA_CHECK_INTERVAL_MIN * 60u * 1000u);
+
+    // pdMS_TO_TICKS() on this project's non-SMP FreeRTOS kernel computes
+    // (ms * configTICK_RATE_HZ) / 1000 entirely in TickType_t (uint32_t), so
+    // feeding it OTA_CHECK_INTERVAL_MIN converted to milliseconds overflows
+    // before the division runs — see ota_interval.h. Do the multiply in a
+    // 64-bit intermediate instead, and fail closed to a short, known-safe
+    // interval (never a silent truncation) if it still would not fit.
+    uint32_t interval_ticks_u32 = 0;
+    TickType_t interval_ticks;
+    if (ota_interval_ticks_from_minutes((uint32_t)OTA_CHECK_INTERVAL_MIN,
+                                        (uint32_t)configTICK_RATE_HZ, &interval_ticks_u32)) {
+        interval_ticks = (TickType_t)interval_ticks_u32;
+    } else {
+        ESP_LOGE(
+            TAG,
+            "OTA_CHECK_INTERVAL_MIN=%d overflows a tick count at %d Hz — falling back to %d ms",
+            OTA_CHECK_INTERVAL_MIN, (int)configTICK_RATE_HZ, OTA_INTERVAL_OVERFLOW_FALLBACK_MS);
+        interval_ticks = pdMS_TO_TICKS(OTA_INTERVAL_OVERFLOW_FALLBACK_MS);
+    }
 
     for (;;) {
         ulTaskNotifyTake(pdTRUE, interval_ticks);
@@ -347,6 +366,17 @@ static void run_update_check(void)
     const cJSON *version_node = cJSON_GetObjectItemCaseSensitive(manifest, "version");
     if (!cJSON_IsString(version_node) || !version_node->valuestring) {
         ESP_LOGW(TAG, "Manifest missing a usable \"version\" field");
+        cJSON_Delete(manifest);
+        return;
+    }
+
+    // Reject rather than silently truncate — a truncated string could parse
+    // as a shorter, DIFFERENT version and compare as "newer" or "older" than
+    // what the manifest actually published. See ota_version_fits().
+    if (!ota_version_fits(version_node->valuestring, OTA_VERSION_STR_BUF_SIZE)) {
+        ESP_LOGW(TAG,
+                 "Manifest \"version\" is %zu bytes (max %d) — refusing to truncate; no update",
+                 strlen(version_node->valuestring), OTA_VERSION_STR_BUF_SIZE - 1);
         cJSON_Delete(manifest);
         return;
     }

@@ -14,6 +14,9 @@
 #ifndef OTA_VERSION_COMPARE_H
 #define OTA_VERSION_COMPARE_H
 
+#include <stdbool.h>
+#include <stddef.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -48,6 +51,19 @@ typedef enum {
  */
 ota_version_compare_result_t ota_version_compare(const char *current_version,
                                                  const char *remote_version);
+
+/**
+ * Returns true iff @p version (a NUL-terminated string) fits, including its
+ * terminator, in a buffer of @p buf_size bytes.
+ *
+ * The caller uses this to refuse a manifest-supplied version string that
+ * would otherwise be silently truncated by snprintf() before comparison — a
+ * truncated string can parse as a shorter, DIFFERENT version and compare as
+ * "newer" or "older" than what the manifest actually published.
+ *
+ * Returns false for a NULL @p version or a @p buf_size of 0.
+ */
+bool ota_version_fits(const char *version, size_t buf_size);
 
 #ifdef __cplusplus
 }
