@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.4](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.3...robocar-unified-v0.2.4) (2026-09-14)
+
+
+### Features
+
+* **robocar-unified:** conversational entity Teuvo with multi-turn multimodal voice and VAD ([#567](https://github.com/laurigates/mcu-tinkering-lab/issues/567)) ([dff0f66](https://github.com/laurigates/mcu-tinkering-lab/commit/dff0f66348b8138a391b86fad7176b9c9e10d655))
+* **robocar-unified:** digital gain and peak normalisation for mic audio ([#566](https://github.com/laurigates/mcu-tinkering-lab/issues/566)) ([a63aad3](https://github.com/laurigates/mcu-tinkering-lab/commit/a63aad330fe522515b26018c06cee0d04f691f59)), closes [#561](https://github.com/laurigates/mcu-tinkering-lab/issues/561)
+
 ## [0.2.3](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.2...robocar-unified-v0.2.3) (2026-09-13)
 
 
