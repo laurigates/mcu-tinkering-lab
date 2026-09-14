@@ -71,11 +71,25 @@ extern "C" {
  */
 #define AUDIO_CLIP_MAX_BYTES 256000u
 
-/** Per-clip measurements, all computed in one pass. */
+/** Target peak amplitude for normalisation (~ -2.7 dBFS, leaving headroom below 32767). */
+#define AUDIO_CLIP_TARGET_PEAK 24000
+
+/** Minimum raw peak required to apply digital gain. Signals at or below this are treated
+ *  as digital silence or quiet background noise and left unamplified (1.0x gain). */
+#define AUDIO_CLIP_NOISE_THRESHOLD 32
+
+/** Maximum digital gain factor (128x = ~42 dB). Caps amplification so faint background
+ *  hum just above the noise threshold is not blown up to full scale, while allowing
+ *  conversational speech at ~1 m (peak ~100-300) to reach AUDIO_CLIP_TARGET_PEAK. */
+#define AUDIO_CLIP_MAX_GAIN_FACTOR 128
+
+/** Per-clip measurements and normalisation results. */
 typedef struct {
     int32_t dc;       /**< Mean sample value before removal. Large = a DC-biased mic. */
-    int16_t peak;     /**< Largest absolute sample after DC removal. */
-    uint32_t clipped; /**< Samples at or beyond full scale. */
+    int16_t raw_peak; /**< Largest absolute sample after DC removal, before digital gain. */
+    int16_t peak;     /**< Largest absolute sample after digital gain and saturation. */
+    uint32_t gain_q8; /**< Digital gain applied in Q8 fixed-point (256 = 1.0x). */
+    uint32_t clipped; /**< Samples at or beyond full scale after gain. */
     uint32_t samples; /**< Samples examined. */
 } audio_clip_stats_t;
 
@@ -113,16 +127,32 @@ bool audio_clip_wav_header(uint8_t *out, size_t pcm_bytes, uint32_t sample_rate_
                            uint16_t channels, uint16_t bits);
 
 /**
- * @brief Remove DC and measure the clip, in place.
+ * @brief Remove DC, apply peak normalisation / digital gain, and measure the clip in place.
  *
- * The stats are the point, not the DC removal: `peak` and `clipped` are the
- * audio analogue of what `cam` prints for gain and exposure, and they are the
- * only way to tell a mis-set microphone gain from a bad model reply. A clip that
- * comes back with peak ~200 was never going to be transcribed no matter what the
- * model said.
+ * ## Why digital gain is needed
  *
- * A large `dc` is itself diagnostic: PDM microphones carry a substantial DC
- * term, and leaving it in wastes headroom and biases every downstream measure.
+ * The onboard PDM MEMS microphone on the XIAO ESP32-S3 Sense outputs raw signals
+ * at normal conversational distance (~1 m) with peak amplitudes of only ~100-300
+ * out of 32767 (-40 to -45 dBFS). Without digital gain, Gemini Flash receives
+ * practically inaudible audio and cannot reliably transcribe user speech.
+ *
+ * ## Normalisation behavior
+ *
+ * 1. DC bias is calculated as the mean sample value and subtracted from each sample.
+ * 2. The raw peak amplitude (`raw_peak`) after DC removal is determined.
+ * 3. If `raw_peak` <= AUDIO_CLIP_NOISE_THRESHOLD, the signal is considered digital
+ *    silence or faint background noise; unity gain (1.0x, gain_q8 = 256) is applied.
+ * 4. If `raw_peak` > AUDIO_CLIP_NOISE_THRESHOLD and < AUDIO_CLIP_TARGET_PEAK, digital
+ *    gain is computed as `target_peak / raw_peak`, capped at AUDIO_CLIP_MAX_GAIN_FACTOR.
+ * 5. If `raw_peak` >= AUDIO_CLIP_TARGET_PEAK, already loud audio is left at unity gain
+ *    (1.0x) to avoid distortion or over-amplification.
+ * 6. Scaled samples are saturated to [-32768, 32767] to prevent wrap clicks.
+ *    Any saturation increments `clipped`.
+ * 7. `peak` reports the final peak after gain and saturation.
+ *
+ * @param pcm        Array of int16 samples modified in place.
+ * @param samples    Number of samples in @p pcm.
+ * @param out_stats  Optional output statistics struct populated by the call.
  */
 void audio_clip_normalise(int16_t *pcm, size_t samples, audio_clip_stats_t *out_stats);
 

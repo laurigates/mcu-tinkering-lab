@@ -169,8 +169,133 @@ static void test_peak_survives_dc_removal(void)
     audio_clip_stats_t st;
     audio_clip_normalise(pcm, 4, &st);
     ASSERT(st.dc == 0);
-    ASSERT(st.peak == 300);
+    ASSERT(st.raw_peak == 300);
+    ASSERT(st.peak == (int16_t)AUDIO_CLIP_TARGET_PEAK);
+    ASSERT(st.gain_q8 == 80u * 256u);
     ASSERT(st.clipped == 0u);
+    ASSERT(pcm[0] == 8000);
+    ASSERT(pcm[1] == -8000);
+    ASSERT(pcm[2] == (int16_t)AUDIO_CLIP_TARGET_PEAK);
+    ASSERT(pcm[3] == -(int16_t)AUDIO_CLIP_TARGET_PEAK);
+}
+
+static void test_faint_audio_amplified_to_target(void)
+{
+    /* Faint conversational audio (peak 200, zero DC offset).
+     * Needs 120x gain to reach AUDIO_CLIP_TARGET_PEAK (24000). */
+    int16_t pcm[4] = {50, -100, 200, -150};
+    audio_clip_stats_t st;
+    audio_clip_normalise(pcm, 4, &st);
+
+    ASSERT(st.dc == 0);
+    ASSERT(st.raw_peak == 200);
+    ASSERT(st.gain_q8 == 120u * 256u);
+    ASSERT(st.peak == (int16_t)AUDIO_CLIP_TARGET_PEAK);
+    ASSERT(st.clipped == 0u);
+    ASSERT(pcm[0] == 6000);                            /* 50 * 120 */
+    ASSERT(pcm[1] == -12000);                          /* -100 * 120 */
+    ASSERT(pcm[2] == (int16_t)AUDIO_CLIP_TARGET_PEAK); /* 200 * 120 = 24000 */
+    ASSERT(pcm[3] == -18000);                          /* -150 * 120 */
+}
+
+static void test_silence_and_sub_threshold_noise_not_amplified(void)
+{
+    /* Sub-threshold noise with peak 10 (below AUDIO_CLIP_NOISE_THRESHOLD = 32).
+     * Must remain at unity gain (1.0x) so background floor is not blown up. */
+    int16_t pcm[4] = {5, -10, 8, -3};
+    audio_clip_stats_t st;
+    audio_clip_normalise(pcm, 4, &st);
+
+    ASSERT(st.raw_peak == 10);
+    ASSERT(st.gain_q8 == 256u); /* 1.0x unity gain */
+    ASSERT(st.peak == 10);
+    ASSERT(st.clipped == 0u);
+    for (size_t i = 0; i < 4; ++i) {
+        ASSERT(pcm[i] >= -10 && pcm[i] <= 10);
+    }
+}
+
+static void test_flat_silence_not_amplified(void)
+{
+    /* Pure digital silence (flat zeros). */
+    int16_t pcm[8] = {0};
+    audio_clip_stats_t st;
+    audio_clip_normalise(pcm, 8, &st);
+
+    ASSERT(st.raw_peak == 0);
+    ASSERT(st.peak == 0);
+    ASSERT(st.gain_q8 == 256u);
+    ASSERT(st.clipped == 0u);
+    for (size_t i = 0; i < 8; ++i) {
+        ASSERT(pcm[i] == 0);
+    }
+}
+
+static void test_loud_audio_not_over_amplified(void)
+{
+    /* Audio already louder than target peak: peak 28000.
+     * Must remain at unity gain (1.0x) with no over-amplification or distortion. */
+    int16_t pcm[4] = {14000, -28000, 20000, -6000};
+    audio_clip_stats_t st;
+    audio_clip_normalise(pcm, 4, &st);
+
+    ASSERT(st.dc == 0);
+    ASSERT(st.raw_peak == 28000);
+    ASSERT(st.gain_q8 == 256u); /* Unity gain */
+    ASSERT(st.peak == 28000);
+    ASSERT(st.clipped == 0u);
+    ASSERT(pcm[0] == 14000);
+    ASSERT(pcm[1] == -28000);
+    ASSERT(pcm[2] == 20000);
+    ASSERT(pcm[3] == -6000);
+}
+
+static void test_audio_at_exact_target_peak(void)
+{
+    int16_t pcm[2] = {24000, -24000};
+    audio_clip_stats_t st;
+    audio_clip_normalise(pcm, 2, &st);
+
+    ASSERT(st.raw_peak == 24000);
+    ASSERT(st.gain_q8 == 256u);
+    ASSERT(st.peak == 24000);
+    ASSERT(st.clipped == 0u);
+    ASSERT(pcm[0] == 24000);
+    ASSERT(pcm[1] == -24000);
+}
+
+static void test_max_gain_cap_enforced(void)
+{
+    /* Faint signal just above threshold (peak 50).
+     * 24000 / 50 = 480x, which exceeds AUDIO_CLIP_MAX_GAIN_FACTOR (128x).
+     * Gain must be capped at 128x. */
+    int16_t pcm[2] = {50, -50};
+    audio_clip_stats_t st;
+    audio_clip_normalise(pcm, 2, &st);
+
+    ASSERT(st.raw_peak == 50);
+    ASSERT(st.gain_q8 == (uint32_t)AUDIO_CLIP_MAX_GAIN_FACTOR * 256u);
+    ASSERT(st.peak == (int16_t)(50 * AUDIO_CLIP_MAX_GAIN_FACTOR));
+    ASSERT(st.clipped == 0u);
+    ASSERT(pcm[0] == (int16_t)(50 * AUDIO_CLIP_MAX_GAIN_FACTOR));
+    ASSERT(pcm[1] == (int16_t)(-50 * AUDIO_CLIP_MAX_GAIN_FACTOR));
+}
+
+static void test_clipping_count_accuracy(void)
+{
+    /* 6 samples: two at +32000, four at -32000.
+     * sum = 64000 - 128000 = -64000.
+     * dc = -64000 / 6 = -10666.
+     * Positive samples after DC subtraction: 32000 - (-10666) = 42666 > 32767.
+     * Both must saturate to 32767 and st.clipped must accurately report 2. */
+    int16_t pcm[6] = {32000, 32000, -32000, -32000, -32000, -32000};
+    audio_clip_stats_t st;
+    audio_clip_normalise(pcm, 6, &st);
+
+    ASSERT(st.clipped == 2u);
+    ASSERT(pcm[0] == 32767);
+    ASSERT(pcm[1] == 32767);
+    ASSERT(st.peak == 32767);
 }
 
 static void test_clipping_saturates_rather_than_wraps(void)
@@ -220,6 +345,14 @@ int main(void)
 
     test_run("DC is removed and reported", test_dc_is_removed_and_reported);
     test_run("peak survives DC removal", test_peak_survives_dc_removal);
+    test_run("faint audio amplified to target", test_faint_audio_amplified_to_target);
+    test_run("silence and sub-threshold noise not amplified",
+             test_silence_and_sub_threshold_noise_not_amplified);
+    test_run("flat silence not amplified", test_flat_silence_not_amplified);
+    test_run("loud audio not over-amplified", test_loud_audio_not_over_amplified);
+    test_run("audio at exact target peak", test_audio_at_exact_target_peak);
+    test_run("max gain cap enforced", test_max_gain_cap_enforced);
+    test_run("clipping count accuracy", test_clipping_count_accuracy);
     test_run("clipping saturates rather than wraps", test_clipping_saturates_rather_than_wraps);
     test_run("degenerate input is safe", test_degenerate_input_is_safe);
 

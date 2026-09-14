@@ -105,6 +105,7 @@ void audio_clip_normalise(int16_t *pcm, size_t samples, audio_clip_stats_t *out_
     }
     st.samples = (uint32_t)samples;
 
+    /* Pass 1: compute DC offset. */
     int64_t sum = 0;
     for (size_t i = 0; i < samples; ++i) {
         sum += pcm[i];
@@ -112,8 +113,39 @@ void audio_clip_normalise(int16_t *pcm, size_t samples, audio_clip_stats_t *out_
     const int32_t dc = (int32_t)(sum / (int64_t)samples);
     st.dc = dc;
 
+    /* Pass 2: find raw peak after DC removal (before gain). */
+    int32_t max_raw = 0;
+    for (size_t i = 0; i < samples; ++i) {
+        const int32_t v = (int32_t)pcm[i] - dc;
+        const int32_t mag = (v < 0) ? -v : v;
+        if (mag > max_raw) {
+            max_raw = mag;
+        }
+    }
+    st.raw_peak = (int16_t)((max_raw > 32767) ? 32767 : max_raw);
+
+    /* Determine digital gain in Q8 fixed-point (256 = 1.0x).
+     * Sub-threshold noise / silence: do not amplify (unity gain).
+     * Already loud audio (>= target peak): unity gain to avoid over-amplification.
+     * Faint speech: scale to target peak, subject to max gain cap. */
+    uint32_t gain_q8 = 256u;
+    if (st.raw_peak > AUDIO_CLIP_NOISE_THRESHOLD && st.raw_peak < AUDIO_CLIP_TARGET_PEAK) {
+        gain_q8 = ((uint32_t)AUDIO_CLIP_TARGET_PEAK * 256u) / (uint32_t)st.raw_peak;
+        const uint32_t max_gain_q8 = (uint32_t)AUDIO_CLIP_MAX_GAIN_FACTOR * 256u;
+        if (gain_q8 > max_gain_q8) {
+            gain_q8 = max_gain_q8;
+        }
+    }
+    st.gain_q8 = gain_q8;
+
+    /* Pass 3: apply gain, saturate, and measure final peak & clipping. */
     for (size_t i = 0; i < samples; ++i) {
         int32_t v = (int32_t)pcm[i] - dc;
+        if (gain_q8 != 256u) {
+            const int64_t scaled = (int64_t)v * (int64_t)gain_q8;
+            v = (int32_t)((scaled >= 0) ? (scaled + 128) / 256 : (scaled - 128) / 256);
+        }
+
         /* Saturate rather than wrap. A wrapped sample flips sign at full scale,
          * which is an audible click AND destroys the clipped-count's meaning —
          * the one number that says the gain is too high. */
