@@ -689,13 +689,13 @@ esp_err_t gemini_backend_plan(const uint8_t *jpeg, size_t jpeg_len, goal_t *out_
 static char *build_narrate_json(const char *facts, bool is_update)
 {
     const voice_persona_t *persona = voice_persona_get();
+    const char *name =
+        (persona && persona->name && persona->name[0] != '\0') ? persona->name : "Robocar";
 
-    /* Deliberately no tag_brief on this path — unlike the planner's `speak`,
-     * which is an idle observation, this line is a status report. Half of them
-     * name a dead subsystem, and a robot that sighs or giggles while announcing
-     * its own camera failure is the one delivery nobody wants. The filter in
-     * speech_queue_post() still guards the path; this just declines to invite
-     * tags in the first place. */
+    /* Delivery tags enabled across all speech paths per ADR-024:
+     * Teuvo is allowed to sigh [sighs] or chuckle wryly [laughs] over his own
+     * hardware faults or obstacles, and whisper [whispers] in quiet settings.
+     * The filter in speech_queue_post() still guards the path against unapproved tags. */
 
     /* Same per-call draw as the planner path. This one matters more, not less:
      * the self-introduction is spoken on every boot from a prompt whose facts
@@ -706,20 +706,23 @@ static char *build_narrate_json(const char *facts, bool is_update)
 
     char prompt[2560];
     snprintf(prompt, sizeof(prompt),
-             "You are a small wheeled robot named Robocar, speaking aloud. "
+             "You are a small wheeled robot named %s, speaking aloud. "
              "Voice and language to use: %s\n\n"
              "Here are your live on-device subsystem facts:\n%s\n\n"
              "%s"
              "Write ONE short, friendly spoken sentence (at most 25 words, plain text only — "
              "no markdown, no emoji, no quotes) %s and stating your status, naming anything that "
              "is not responding. Report only the facts above; do not invent hardware."
+             "%s%s"
              "%s%s",
-             persona->text_brief, facts,
+             name, persona->text_brief, facts,
              is_update ? "This is a status UPDATE: a subsystem's health just changed — keep to "
                          "what changed. "
                        : "",
              is_update ? "noting the change" : "introducing yourself",
-             vlen ? "\n\nFor this one line only: " : "", variation);
+             vlen ? "\n\nFor this one line only: " : "", variation,
+             (persona->tag_brief && persona->tag_brief[0] != '\0') ? "\n\n" : "",
+             (persona->tag_brief && persona->tag_brief[0] != '\0') ? persona->tag_brief : "");
 
     cJSON *root = cJSON_CreateObject();
 

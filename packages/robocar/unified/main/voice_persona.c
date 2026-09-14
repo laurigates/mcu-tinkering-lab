@@ -74,17 +74,17 @@ static const char *const s_fi_shapes[] = {
 };
 
 static const char *const s_fi_fallback_ok[] = {
-    "Hyvää päivää, minä olen Robocar, ja kaikki järjestelmät ovat kunnossa.",
-    "Jaahas. Robocar tässä, ja kaikki toimii moitteettomasti.",
-    "Kas, Robocar valmiina. Ei valittamista, kaikki on kunnossa.",
-    "No niin. Robocar raportoi: järjestelmät ovat kunnossa.",
+    "Hyvää päivää, minä olen Teuvo, ja kaikki järjestelmät ovat kunnossa.",
+    "Jaahas. Teuvo tässä, ja kaikki toimii moitteettomasti.",
+    "Kas, Teuvo valmiina maantielle. Ei valittamista, kaikki on kunnossa.",
+    "No niin. Teuvo raportoi: järjestelmät ovat kunnossa.",
 };
 
 static const char *const s_fi_fallback_prefix[] = {
-    "Hyvää päivää, minä olen Robocar. Asianlaita on tuota niin, että nämä osat eivät vastaa:",
-    "Jaahas. Robocar tässä, ja ikävä kyllä nämä osat eivät vastaa:",
-    "Kas. Robocar raportoi vian, sillä nämä osat eivät vastaa:",
-    "Tuota noin. Robocar tässä. Nämä osat ovat vaiti:",
+    "Hyvää päivää, Teuvo tässä. Asianlaita on tuota niin, että nämä osat eivät vastaa:",
+    "Jaahas. Teuvo tässä, ja ikävä kyllä nämä osat eivät vastaa:",
+    "Kas. Teuvo raportoi vian, sillä nämä osat eivät vastaa:",
+    "Tuota noin. Teuvo tässä. Nämä osat ovat vaiti:",
 };
 
 /* --- en-default ------------------------------------------------------------ */
@@ -124,6 +124,7 @@ static const char *const s_en_fallback_prefix[] = {
 static const voice_persona_t s_personas[VOICE_PERSONA_COUNT] = {
     [VOICE_PERSONA_EN_DEFAULT] =
         {
+            .name = "Robocar",
             .slug = "en-default",
             .label = "English, plain contemporary",
             .language_code = "en-US",
@@ -149,6 +150,7 @@ static const voice_persona_t s_personas[VOICE_PERSONA_COUNT] = {
         },
     [VOICE_PERSONA_FI_1950] =
         {
+            .name = "Teuvo",
             .slug = "fi-1950",
             .label = "Finnish, 1950s film register",
             .language_code = "fi-FI",
@@ -177,16 +179,19 @@ static const voice_persona_t s_personas[VOICE_PERSONA_COUNT] = {
                          "välissä. Juhlallinen, teatterista periytyvä lausunta — älä puhu "
                          "rennosti tai nykyaikaisen luontevasti",
             .text_brief =
-                "Puhu kuin 1950-luvun suomalaisen elokuvan hahmo (vrt. komisario Palmu): "
-                "kohteliasta, hieman vanhahtavaa yleiskieltä, teitittelyä ja herrasmiesmäistä "
-                "sävyä. Vältä nykyslangia, anglismeja, lyhenteitä ja emojeita. Vaihtele "
+                "Puhu kuin Teuvo: 1950-luvun suomalaisen elokuvan hahmo (vrt. komisario Palmu) "
+                "yhdistettynä maanteiden kuninkaan herrasmiesmäiseen itsevarmuuteen. "
+                "Kohteliasta, hieman vanhahtavaa yleiskieltä, teitittelyä ja kuivan arvokasta "
+                "sävyä. "
+                "Vältä nykyslangia, anglismeja, lyhenteitä ja emojeita. Vaihtele "
                 "sanontaa: älä toista samaa aloitusta tai fraasia kerrasta toiseen. "
                 "Kirjoita yksi lyhyt puhuttu lause.",
             .tag_brief =
                 "Voit halutessasi merkitä esitystapaa hakasulkeilla suoraan lauseen sisään: "
-                "[sighs] [laughs] [whispers] [excited] [bored] [gasp]. Käytä niitä säästeliäästi "
-                "ja vain silloin kun ne sopivat asiaan — korkeintaan yksi lause kolmesta, eikä "
-                "koskaan vikailmoituksessa. Kirjoita tagi täsmälleen näin, englanniksi.",
+                "[sighs] [laughs] [whispers] [excited] [bored] [gasp]. Käytä niitä tilanteeseen "
+                "sopivasti — voit esimerkiksi huokaista [sighs] tai naurahtaa [laughs] vikojen tai "
+                "esteiden kohdalla, tai kuiskata [whispers] jos on hiljaista. Kirjoita tagi "
+                "täsmälleen näin, englanniksi.",
             .openers = {s_fi_openers, DIALOGUE_POOL_COUNT(s_fi_openers)},
             .shapes = {s_fi_shapes, DIALOGUE_POOL_COUNT(s_fi_shapes)},
             .avoid_lead = "Älä aloita lausetta näillä sanoilla:",

@@ -54,11 +54,12 @@ The spoken fault line stays coarse — one persona phrase covers "no bus" and "m
 ## Serial console commands
 
 | Command | Effect |
-|---------|--------|
+| --------- | -------- |
 | `F` `B` `L` `R` `C` `W` `S` | Manual drive / rotate / stop — a ~1 s lease via `reactive_controller_manual()`, still subject to the obstacle reflex |
 | `gpio …` | MCP23017 expander (see above) |
-| `voice …` | Persona / TTS voice switching and auditioning; `voice vary` shows a drawn variation directive, `voice said` the recall ring, `voice quiet`/`budget`/`repeat`/`scene` the gates on speaking, `voice volume <pct>` the output gain |
+| `voice …` | Persona / TTS voice switching and auditioning; `voice vary` shows a drawn variation directive, `voice said` the recall ring, `voice quiet`/`budget`/`repeat`/`scene` the gates on speaking, `voice vad on\|off` toggles VAD auto-triggering, `voice volume <pct>` the output gain |
 | `snap [n]` | Dump the next `n` planner frames over the console as base64 JPEG — see "Seeing what the camera sends" |
+| `listen [ms]` / `listen clear` | Record and answer a conversational turn (or clear conversational history) |
 | `cam …` | Read live sensor gain/exposure; `cam gainceiling 0-6`, `cam ae -2..2`, `cam brightness -2..2` tune exposure without a reflash |
 | `sound beep\|melody\|alert` | Buzzer |
 | `servo …` | `servo` alone reports readiness, both angles with the PCA9685 counts, and the live PWM frequency; `servo pan\|tilt <deg>` moves one; `servo exercise` shakes then nods, logging every write; `servo freq <24-1526>` changes the chip-wide prescaler |
@@ -74,7 +75,7 @@ above already exists for but cannot reach: a board with no serial link
 attached. Publish a plain-text line — the exact same grammar as the console,
 not JSON — to `MQTT_COMMAND_TOPIC` (`robocar/commands`, QoS 1):
 
-```
+```bash
 mosquitto_pub -h <broker> -t robocar/commands -m "plan resume"
 mosquitto_pub -h <broker> -t robocar/commands -m "F"
 ```
@@ -122,6 +123,18 @@ for motor smoothness and LED flicker, and whether an analog servo tracks pulses
 at that rate is a property of the servos fitted, not something the firmware can
 assert. Note the prescaler is chip-wide: changing it moves motors and LEDs too.
 
+**The wheels get the same treatment at boot, from `run_wheel_exercise()` in
+`main.c`.** It drives forward then backward for `MOTOR_EXERCISE_HOLD_MS` (1 s) at
+`MOTOR_EXERCISE_SPEED`, right after the executor comes up, so a drivetrain that
+does not turn over is distinguishable from a silent everything-else before the
+console is reachable. It goes through `reactive_controller_manual()` rather than
+`motor_controller.h` — the executor stays the only writer of motor output, and
+the obstacle reflex still governs, so a bench with a wall inside
+`STOP_THRESHOLD_CM` holds the wheels and logs that it did. **The robot moves on
+every boot**, which is a real hazard on a bench edge or with the wheels on the
+floor; block it or put it on its back if that matters. There is no console
+command for it yet, so re-running one means a reset.
+
 The `sound`/`servo`/`led` commands are the only producers for `peripheral_task`'s queue — without them the task and every `PERIPH_CMD_*` case are unreachable.
 
 ## Activity indicators (`activity_trace.c`)
@@ -138,7 +151,7 @@ silently going dark).
 The left LED is the camera, the right is the network:
 
 | LED | Colour | Meaning |
-|---|---|---|
+| --- | --- | --- |
 | left | white | frame captured (brief pulse) |
 | left | red | last capture FAILED — **holds** |
 | right | blue | request in flight — held for as long as it is |
@@ -387,7 +400,7 @@ the cost of.
 
 ### Reading it
 
-```
+```text
 Goal: STOP | latency: 1188 ms | scene: 3/8 | ... | gate: . | still: 1/6 | why: + | step: 2/5 | spent: 41/500 req, 149203 tok
 Idle: no request | still: 0/6 | range: 0/20 cm | loud: 2/12 dB | next in 60000 ms | why: .
 ```
@@ -420,7 +433,7 @@ Every claim about image quality here was inference until `frame_dump.c` existed 
 - **`frame_stats_log()` runs on every planner frame.** It decodes the JPEG at 1/8 scale and logs `luma mean/p5/p50/p95` next to the sensor's **live** `gain`/`exp`/`ceil` registers. Read them together: high gain + maxed exposure + low luma means the sensor is *starved* and the gain ceiling needs raising; low gain + low exposure + low luma means auto-exposure is not converging; low mean with a **high p95** is backlit, not unlit. The cached `sensor_t` status struct cannot answer this — it holds what was last *written*, not what the AEC/AGC loops have since chosen, which is why `camera_read_exposure()` reads the registers over SCCB instead. The same decode also yields the scene fingerprint that gates speech (see the Voice section), which is why it is *returned* rather than acted on here: this file is instrumentation, and what a frame means for the robot's behaviour is the planner's call.
 - **`frame_dump_maybe()` emits the JPEG itself**, base64-framed with a length and CRC32, for the first `FRAME_DUMP_BOOT_FRAMES` frames and on `snap [n]`. These are the exact bytes handed to `gemini_backend_plan()`, dumped while the planner still holds the buffer — no copy, no lifetime question, no chance of showing a different frame from the one the model saw.
 
-```
+```bash
 just robocar-unified::monitor | tee /tmp/robocar.log
 uv run tools/decode-frame-dump.py /tmp/robocar.log /tmp/frames
 ```
@@ -455,7 +468,7 @@ The decoder itself is **proven correct against real data**: `main/base64.c` was 
 
 **The TTS call goes to `:streamGenerateContent?alt=sse`, not `:generateContent`.** The non-streaming endpoint synthesises the whole utterance before sending a byte, which left the ring buffer with almost nothing to overlap: measured 6.42 s to first byte versus **1.16 s** streaming, same body and model. The streamed body is a sequence of SSE events each carrying its own `"data"` payload, so the decoder seeks past each closing quote and concatenates all of them — `base64_stream_done()` means "between payloads", not "stream ended". Each utterance logs `first=`/`total=` ms; `first=` drifting up toward `total=` means something reverted to whole-response synthesis.
 
-**Delivery tags are placed by the model, not drawn from a pool.** Gemini performs `[sighs]`, `[laughs]`, `[whispers]`, `[excited]`, `[bored]`, `[gasp]` inline rather than reading them aloud. Unlike openers and shapes — interchangeable by construction, hence random — a tag has to fit the sentence, so the persona's `tag_brief` invites the *generating* model to place them. Everything coming back is filtered against the allow-list in `speech_tags.h` at the single choke point in `speech_queue_post()`: an unrecognised bracketed run is liable to be **spoken aloud**, so the robot would announce its own stage directions. The self-report path deliberately gets no `tag_brief` — half its lines name a dead subsystem.
+**Delivery tags are placed by the model, not drawn from a pool.** Gemini performs `[sighs]`, `[laughs]`, `[whispers]`, `[excited]`, `[bored]`, `[gasp]` inline rather than reading them aloud. Unlike openers and shapes — interchangeable by construction, hence random — a tag has to fit the sentence, so the persona's `tag_brief` invites the *generating* model to place them. Everything coming back is filtered against the allow-list in `speech_tags.h` at the single choke point in `speech_queue_post()`: an unrecognised bracketed run is liable to be **spoken aloud**, so the robot would announce its own stage directions. Under ADR-024, tags are encouraged across all speech paths (including character reactions to hardware faults and conversational turns) to give Robocar dramatic agency.
 
 Full API surface, including the multi-speaker config that exists but is unused and why custom/cloned voices are not available here: [`.claude/skills/gemini-tts-voice/`](../../../.claude/skills/gemini-tts-voice/SKILL.md).
 
@@ -471,7 +484,7 @@ Five mechanisms, in the order they act on a cycle:
 
 - **The room must sound different, or the view must have changed** (`ambient_audio.c`, `ambient_listener.c`). The onboard PDM microphone is sampled continuously at ~15 frames/s and reduced to two level-shift-invariant scores: a peak *excursion* above a slowly adapting noise floor (a door slam), and the distance between the room's *spectral shape* and its shape when the robot last spoke (an empty room becoming a room with someone talking in it). Both store their measurements relative to a running mean for the same reason `scene_change` subtracts the frame mean — a mic's own level drifts, so an absolute threshold would track the HVAC. The floor rises at a bounded rate, so a fan that switches on raises the level, is absorbed within seconds, and stops being news *by construction*.
 - **The view must have changed since the robot last spoke** (`scene_change.c`). `frame_stats_log()` already decodes every planner frame to a 40x30 thumbnail; that same decode is reduced to 48 block means, each stored as its deviation from the frame mean, and compared against the frame the robot last remarked on. Subtracting the frame mean is the load-bearing part: the sensor's AGC/AEC rewrites gain and exposure every frame, so an *absolute* comparison would report a scene change every time a cloud passed — the exact false positive that would put the chattering back.
-- **The `speak` tool is withheld, not discouraged** (`speech_budget.c`). A minimum gap (60 s) and a rolling cap (3 per 5 min) decide whether `build_tools()` declares `speak` at all. On a quiet cycle the whole speech half of the prompt — persona brief, variation directive, recall list — is omitted too, so the muted request is also the cheaper one. Withholding beats instructing because there is no wording that makes an unknowable fact ("how long since I last spoke") knowable.
+- **The `speak` tool is withheld, not discouraged** (`speech_budget.c`). A minimum gap (20 s) and a rolling cap (6 per 5 min) decide whether `build_tools()` declares `speak` at all. On a quiet cycle the whole speech half of the prompt — persona brief, variation directive, recall list — is omitted too, so the muted request is also the cheaper one. Withholding beats instructing because there is no wording that makes an unknowable fact ("how long since I last spoke") knowable.
 - **The last few whole utterances go into the prompt** (`dialogue_style.c`, `DIALOGUE_RECALL_SLOTS`). Distinct from the avoid-list, which constrains only the first `DIALOGUE_OPENING_WORDS` words — a model can honour that and still reorder the same sentence forever, which is exactly what it did.
 - **The answer is re-checked on-device.** `dialogue_style_is_repetitive()` scores the candidate against the recall ring (Sørensen–Dice over word sets, ASCII-case- and punctuation-insensitive, so reordering does not evade it) and `planner_task.c` drops it above the threshold. An instruction the model can quietly ignore is not a guarantee.
 
@@ -481,7 +494,7 @@ The first three gate the *tool*; the last two gate the *line*. The three tool ga
 speech_budget_allows(now_ms) && (scene_novel || audio_novel)
 ```
 
-and the shape of that expression is the design, not an accident. The budget **rations** — it caps how much the robot may talk at all, so it ANDs, because a ration that evidence can vote down is not a ration. Scene and ambient are **evidence**: they answer one question through two senses, so they OR. Under AND the decisive case fails — a person walks into a still room and speaks, the soundscape changes, the view does not, and the robot is mute exactly when a human has just addressed it, which reads as broken rather than laconic. Under OR the worst case is spending the full ration, three sentences in five minutes, tunable from the console in seconds. [ADR-020](../../docs/decisions/ADR-020-ambient-audio-speech-gate.md) carries the full argument.
+and the shape of that expression is the design, not an accident. The budget **rations** — it caps how much the robot may talk at all, so it ANDs, because a ration that evidence can vote down is not a ration. Scene and ambient are **evidence**: they answer one question through two senses, so they OR. Under AND the decisive case fails — a person walks into a still room and speaks, the soundscape changes, the view does not, and the robot is mute exactly when a human has just addressed it, which reads as broken rather than laconic. Under OR the worst case is spending the full ration, six sentences in five minutes, tunable from the console in seconds. [ADR-020](../../docs/decisions/ADR-020-ambient-audio-speech-gate.md) carries the full argument.
 
 **Opening the tool is only half of it — the prompt has to say *why* it opened.** The speech clause used to read "do so only if this frame shows something worth remarking on", which is correct while the only evidence is visual and actively wrong the moment audio can open the gate: on an audio-only cycle the frame shows nothing new *by construction*, so that sentence instructs the model to stay silent in precisely the case the gate just opened for. `build_request_json()` now names the evidence — view changed, room sounds different, or both — and on an audio-only opening tells the model to remark on what it *heard*, not on what it can see. This is the same law as the rest of this section: the request is stateless, so anything the model must know has to be put in it.
 
@@ -491,7 +504,7 @@ The same reasoning applies to the soundscape, and the reference moves at the sam
 
 A consequence worth stating plainly: **in a genuinely static, quiet room this robot goes quiet and stays quiet.** That is correct, not broken — which is why `voice` prints every live score and names whichever gate is holding, why `mic` exists to tell a dead microphone from a quiet room, and why the planner logs the whole gate state every cycle:
 
-```
+```text
 Goal: STOP | latency: 1188 ms | scene: 3/8 | loud: 4/12 dB | sound: 2/6 dB | floor: -51 dB | gate: .
 ```
 
@@ -511,9 +524,17 @@ None of this survives a reboot: the rings are `.bss`. Persisting them is worth d
 
 ### Talking back: the push-to-talk voice turn
 
-`listen [seconds]` records from the microphone, sends the clip to Gemini, and speaks the reply through the **existing TTS path unchanged** (`voice_turn.c`). It is the opposite of everything above: the planner's speech is unprompted and gated, a voice turn is asked for and answered once.
+`listen [seconds]` records from the microphone, sends the clip to Gemini, and speaks the reply through the **existing TTS path unchanged** (`voice_turn.c`). It is the opposite of everything above: the planner's speech is unprompted and gated, a voice turn is asked for and answered on demand. See [ADR-024](../../docs/decisions/ADR-024-conversational-entity-and-multimodal-voice.md) for the roadmap evolving this into a multi-turn, camera-aware conversational entity with digital audio gain and autonomous VAD.
 
 **It runs on a flash model, not Robotics-ER.** Gemini's free-tier quota is per model and the planner already saturates ER's 5 req/min, so answering someone can never cost the robot its ability to plan a movement.
+
+**Multi-turn conversational memory & camera context (`voice_history.c`)**:
+`voice_turn` maintains a rolling buffer of the last 4 conversational turns in PSRAM, retaining alternating `user` / `model` text context while discarding bulky raw audio from prior turns. Old turns expire automatically after 60 seconds of idle time. The current turn attaches both the recorded audio WAV and the latest camera frame JPEG (`camera_capture()`), together with live ultrasonic obstacle telemetry, so Teuvo can converse directly about what he sees and does.
+
+**Digital audio gain**: The PDM MEMS microphone on the XIAO Sense outputs raw signals that are quiet at conversational distance (~-40 dBFS). `audio_clip_normalise()` in `audio_clip.c` applies a 3-pass digital gain & normalisation pipeline (target peak 24000, max gain 128x, noise gate 32) so audio reaching Gemini Flash is clean and loud.
+
+**Hands-free voice engagement (VAD)**:
+`ambient_listener.c` can automatically trigger a 3.5 s conversational recording when voice energy is detected above the ambient noise floor (`voice vad on`). Gemini Flash filters out background noise by replying with `__IGNORE__` (which suppresses audio playback). When Teuvo speaks, he opens a 7-second active conversation follow-up window where subsequent replies trigger immediately without wake words.
 
 **The clip is WAV, and that is measured rather than assumed.** A live probe (2026-07) against `gemini-flash-latest:generateContent` with a 0.5 s tone: `mimeType: "audio/wav"` → 200 and a reply; `mimeType: "audio/pcm"` → **HTTP 400 "Request contains an invalid argument"**, naming no field. So `audio_clip.c` builds a canonical 44-byte header on-device, and `test_audio_clip.c` asserts those 44 bytes byte-for-byte — a field-width or byte-order slip there would otherwise surface only as an opaque 400 from a remote server after a ~170 kB upload. Audio costs ~26 tokens/second, so clip length is bounded by **memory**, not by API cost.
 
@@ -572,6 +593,7 @@ Do not invoke `idf.py` directly on the host — there's no local ESP-IDF install
 See repo `.claude/rules/esp-idf-sdkconfig.md`. If you change `sdkconfig.defaults`, delete the generated `sdkconfig` and run `just robocar-unified::clean` before rebuilding — ESP-IDF preserves existing `sdkconfig` values and silently ignores new defaults otherwise.
 
 Key settings that matter:
+
 - `CONFIG_SPIRAM_MODE_OCT=y` — XIAO ESP32-S3 Sense has **octal** PSRAM (not quad); wrong mode = boot loop
 - `CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192` — bumped from default 3584 for WiFi + BLE + camera init
 - `CONFIG_ESP_BROWNOUT_DET=n` — disabled; motor inrush was tripping it

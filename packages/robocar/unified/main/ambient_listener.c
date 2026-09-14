@@ -19,8 +19,13 @@
 #include "mic_dump.h"
 #include "mic_pdm.h"
 #include "pin_config.h"
+#include "voice_turn.h"
 
 static const char *TAG = "ambient_listener";
+
+/** VAD auto-trigger recording window and cooldown intervals. */
+#define VAD_RECORD_WINDOW_MS 3500
+#define VAD_IDLE_COOLDOWN_MS 10000
 
 /** Bound on one frame's DMA wait. Deliberately not portMAX_DELAY: mic_pdm_read()
  *  takes MILLISECONDS, and portMAX_DELAY in a millisecond parameter is ~72 minutes
@@ -44,6 +49,7 @@ static volatile int16_t s_level_db;
 static volatile uint32_t s_last_accept_ms;
 static volatile uint32_t s_frames_accepted;
 static volatile uint32_t s_frames_muted;
+static uint32_t s_last_vad_trigger_ms;
 
 /** When playback last went inactive. Seeded to 0 meaning "long ago", so the very
  *  first frames after boot are accepted rather than quarantined. */
@@ -136,6 +142,30 @@ static void ambient_listener_task(void *arg)
                  ambient_audio_loud_score(), ambient_audio_shape_score());
 
         mic_dump_maybe(s_frame, got);
+
+        /* Hands-free voice engagement auto-trigger (VAD).
+         * Fires when VAD is enabled, the robot is not busy or playing audio, and
+         * loudness exceeds the threshold. Rate-limited to 10 s between triggers
+         * when idle; during an active conversation window (7 s after robot replied),
+         * triggers as soon as playback and hangover have finished. */
+        if (voice_turn_get_vad() && !voice_turn_is_busy() && !audio_player_is_active()) {
+            const bool in_conv = voice_turn_in_conversation();
+            const uint32_t elapsed = t - s_last_vad_trigger_ms;
+            const bool cooldown_ok =
+                (s_last_vad_trigger_ms == 0) ||
+                (in_conv ? (elapsed >= VAD_RECORD_WINDOW_MS) : (elapsed >= VAD_IDLE_COOLDOWN_MS));
+
+            if (cooldown_ok) {
+                const uint8_t thresh = ambient_audio_loud_threshold();
+                if (thresh > 0 && ambient_audio_loud_score() >= thresh) {
+                    if (voice_turn_request(VAD_RECORD_WINDOW_MS) == ESP_OK) {
+                        s_last_vad_trigger_ms = t;
+                        ESP_LOGI(TAG, "VAD auto-trigger (loud=%u thresh=%u in_conv=%d)",
+                                 ambient_audio_loud_score(), thresh, (int)in_conv);
+                    }
+                }
+            }
+        }
     }
 }
 

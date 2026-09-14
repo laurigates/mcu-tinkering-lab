@@ -46,6 +46,7 @@
 
 #include "esp_err.h"
 
+// pi-lens-ignore: identifier
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -87,6 +88,35 @@ esp_err_t voice_turn_request(uint32_t window_ms);
 /** @brief True while a turn is recording, uploading or awaiting a reply. */
 bool voice_turn_is_busy(void);
 
+/**
+ * @brief Reset conversational history.
+ *
+ * Clears remembered turns and resets the idle timer.
+ */
+void voice_turn_reset_history(void);
+
+/**
+ * @brief Check whether an active conversation window is currently open.
+ *
+ * True within 7 seconds of a successful spoken reply (not ignored), allowing
+ * smooth hands-free follow-up turns without waiting for the 10 s VAD cooldown.
+ */
+bool voice_turn_in_conversation(void);
+
+/**
+ * @brief Enable or disable Voice Activity Detection (VAD) auto-triggering.
+ *
+ * When enabled, ambient_listener triggers voice_turn_request() on loud audio events.
+ * Default: false.
+ */
+void voice_turn_set_vad(bool enabled);
+
+/**
+ * @brief Get current VAD auto-triggering state.
+ */
+bool voice_turn_get_vad(void);
+
+// pi-lens-ignore: identifier
 #ifdef __cplusplus
 }
 #endif

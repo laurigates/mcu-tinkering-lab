@@ -200,16 +200,20 @@ static void test_survives_the_uint32_wrap(void)
 
 static void test_either_limit_can_veto(void)
 {
-    speech_budget_init(); /* 60 s gap, 3 per 300 s */
+    speech_budget_init(); /* 20 s gap, 6 per 300 s */
 
     ASSERT(speech_budget_allows(0u));
     speech_budget_note(0u);
-    ASSERT(!speech_budget_allows(30000u)); /* gap */
-    ASSERT(speech_budget_allows(60000u));
+    ASSERT(!speech_budget_allows(10000u)); /* gap */
+    ASSERT(speech_budget_allows(20000u));
+    speech_budget_note(20000u);
+    speech_budget_note(40000u);
     speech_budget_note(60000u);
-    speech_budget_note(120000u);
-    ASSERT(!speech_budget_allows(180000u)); /* window, though the gap is clear */
-    ASSERT(speech_budget_allows(300000u));  /* the first has aged out */
+    speech_budget_note(80000u);
+    speech_budget_note(100000u);
+    ASSERT(!speech_budget_allows(
+        120000u)); /* window (6 utterances in window), though the gap is clear */
+    ASSERT(speech_budget_allows(300000u)); /* the first (at 0u) has aged out */
 }
 
 /* =========================================================================

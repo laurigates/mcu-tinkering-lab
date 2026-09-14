@@ -19,6 +19,7 @@
 #include "base64.h"
 #include "buzzer.h"
 #include "cJSON.h"
+#include "camera.h"
 #include "credentials_loader.h"
 #include "dialogue_style.h"
 #include "esp_heap_caps.h"
@@ -32,8 +33,10 @@
 #include "gemini_parse.h"
 #include "mic_pdm.h"
 #include "pin_config.h"
+#include "reactive_controller.h"
 #include "speech_budget.h"
 #include "speech_queue.h"
+#include "voice_history.h"
 #include "voice_persona.h"
 
 static const char *TAG = "voice_turn";
@@ -73,12 +76,14 @@ typedef struct {
 
 static QueueHandle_t s_queue;
 static volatile bool s_busy;
+static bool s_vad_enabled;
 
 /* Per-turn state at FILE scope, not on the 8 kB stack — the same reason
  * gemini_tts.c keeps its context static. The response buffer alone would be
  * half the stack. */
 static char s_response[VOICE_TURN_RESPONSE_BUF_SIZE];
 static char s_reply[SPEECH_TEXT_MAX];
+static char s_sys_prompt[1536];
 
 typedef struct {
     char *buf;
@@ -143,50 +148,38 @@ static esp_err_t record_clip(int16_t *pcm, size_t samples, size_t *out_samples)
 }
 
 /** Build the request body, taking ownership of nothing and freeing nothing. */
-static char *build_body(const char *b64_wav)
+static char *build_body(const char *b64_wav, const char *b64_jpeg, const reactive_telemetry_t *tele,
+                        bool has_telemetry, uint32_t now_ms)
 {
     const voice_persona_t *persona = voice_persona_get();
+    const char *name =
+        (persona && persona->name && persona->name[0] != '\0') ? persona->name : "Robocar";
 
-    cJSON *root = cJSON_CreateObject();
-    cJSON *contents = cJSON_AddArrayToObject(root, "contents");
-    cJSON *turn = cJSON_CreateObject();
-    cJSON_AddItemToArray(contents, turn);
-    cJSON *parts = cJSON_AddArrayToObject(turn, "parts");
+    char brief[512];
+    if (persona && persona->text_brief) {
+        if (persona->tag_brief && persona->tag_brief[0] != '\0') {
+            snprintf(brief, sizeof(brief), "%s %s", persona->text_brief, persona->tag_brief);
+        } else {
+            snprintf(brief, sizeof(brief), "%s", persona->text_brief);
+        }
+    } else {
+        snprintf(brief, sizeof(brief), "Be brief.");
+    }
 
-    cJSON *text_part = cJSON_CreateObject();
-    cJSON_AddItemToArray(parts, text_part);
-    cJSON_AddStringToObject(
-        text_part, "text",
-        "You are a small wheeled robot. Someone has just spoken to you; the audio follows. "
-        "Answer them in ONE short spoken sentence. Reply with the sentence itself and nothing "
-        "else — no preamble, no quotation marks, no stage directions, no markdown. If the audio "
-        "contains no intelligible speech, say so briefly in the same voice.");
+    snprintf(s_sys_prompt, sizeof(s_sys_prompt),
+             "%s\n"
+             "Listen to the audio.\n"
+             "- If someone speaks to you (addresses you as %s or 'robotti', asks you a question, "
+             "or makes a comment directed at you), answer them in ONE short spoken sentence in "
+             "your persona.\n"
+             "- If people are talking in the room and you are idle, you may occasionally chime in "
+             "with a brief, dry witty remark.\n"
+             "- If the audio contains only background noise, coughs, typing, or speech not "
+             "directed at you, reply with '__IGNORE__'.",
+             brief, name);
 
-    cJSON *audio_part = cJSON_CreateObject();
-    cJSON_AddItemToArray(parts, audio_part);
-    cJSON *inline_data = cJSON_AddObjectToObject(audio_part, "inlineData");
-    /* audio/wav, never audio/pcm: the latter is rejected with a 400 that names
-     * no field. See audio_clip.h for the probe that established this. */
-    cJSON_AddStringToObject(inline_data, "mimeType", "audio/wav");
-    cJSON_AddStringToObject(inline_data, "data", b64_wav);
-
-    cJSON *sys = cJSON_AddObjectToObject(root, "systemInstruction");
-    cJSON *sys_parts = cJSON_AddArrayToObject(sys, "parts");
-    cJSON *sys_text = cJSON_CreateObject();
-    cJSON_AddItemToArray(sys_parts, sys_text);
-    cJSON_AddStringToObject(sys_text, "text",
-                            persona && persona->text_brief ? persona->text_brief : "Be brief.");
-
-    cJSON *gen = cJSON_AddObjectToObject(root, "generationConfig");
-    cJSON_AddNumberToObject(gen, "maxOutputTokens", VOICE_TURN_MAX_OUTPUT_TOKENS);
-    cJSON *thinking = cJSON_AddObjectToObject(gen, "thinkingConfig");
-    /* thinkingLevel, NOT thinkingBudget: the numeric form is rejected by
-     * Gemini 3-era models with a bare 400 that names no field. */
-    cJSON_AddStringToObject(thinking, "thinkingLevel", "low");
-
-    char *body = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
-    return body; /* caller frees */
+    return voice_history_build_request_body(name, s_sys_prompt, tele, has_telemetry, b64_jpeg,
+                                            b64_wav, now_ms);
 }
 
 static void run_turn(uint32_t window_ms)
@@ -255,11 +248,33 @@ static void run_turn(uint32_t window_ms)
         return;
     }
 
-    char *body = build_body(b64);
-    /* cJSON duplicated the string when it was added; holding both is a pure
-     * waste of ~170 kB at the exact moment the body is also live. */
+    /* Camera multimodal context: capture JPEG frame if available. */
+    char *b64_jpeg = NULL;
+    camera_fb_t *fb = camera_capture();
+    if (fb) {
+        b64_jpeg = base64_encode_alloc(fb->buf, fb->len);
+        camera_return_fb(fb);
+        fb = NULL;
+        if (!b64_jpeg) {
+            ESP_LOGW(TAG, "camera JPEG base64 encode failed — continuing without image");
+        }
+    }
+
+    /* Physical telemetry context: obstacle distance and reflex state. */
+    reactive_telemetry_t tele = {0};
+    const bool has_telemetry = (reactive_controller_get_telemetry(&tele) == ESP_OK);
+
+    const uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000);
+    char *body = build_body(b64, b64_jpeg, &tele, has_telemetry, now_ms);
+
+    /* Free base64 buffers immediately after adding to request body to preserve PSRAM. */
     free(b64);
     b64 = NULL;
+    if (b64_jpeg) {
+        free(b64_jpeg);
+        b64_jpeg = NULL;
+    }
+
     if (!body) {
         ESP_LOGE(TAG, "request build failed");
         return;
@@ -267,10 +282,11 @@ static void run_turn(uint32_t window_ms)
 
     const size_t body_len = strlen(body);
     ESP_LOGI(TAG,
-             "listen: window=%u ms samples=%u peak=%d clipped=%u dc=%d | upload=%u B | free "
-             "PSRAM=%u B",
-             (unsigned)window_ms, (unsigned)got, (int)st.peak, (unsigned)st.clipped, (int)st.dc,
-             (unsigned)body_len, (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+             "listen: window=%u ms samples=%u raw_peak=%d gain=%.1fx peak=%d clipped=%u dc=%d | "
+             "upload=%u B | free PSRAM=%u B",
+             (unsigned)window_ms, (unsigned)got, (int)st.raw_peak, (double)st.gain_q8 / 256.0,
+             (int)st.peak, (unsigned)st.clipped, (int)st.dc, (unsigned)body_len,
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
 
     response_acc_t acc = {.buf = s_response, .len = 0, .cap = sizeof(s_response)};
     s_response[0] = '\0';
@@ -294,13 +310,25 @@ static void run_turn(uint32_t window_ms)
         return;
     }
 
-    const uint32_t latency_ms = (uint32_t)(esp_timer_get_time() / 1000) - t_start;
+    if (voice_history_is_ignore(s_reply)) {
+        ESP_LOGI(TAG, "listen: ignored (not addressed to robot)");
+        return;
+    }
+
+    /* Record reply in conversational history ring */
+    const uint32_t reply_now_ms = (uint32_t)(esp_timer_get_time() / 1000);
+    voice_history_record(s_reply, reply_now_ms);
+
+    const uint32_t latency_ms = reply_now_ms - t_start;
     ESP_LOGI(TAG, "listen: latency=%u ms reply=\"%s\"", (unsigned)latency_ms, s_reply);
 
     if (speech_queue_post(s_reply) != ESP_OK) {
         ESP_LOGW(TAG, "speech queue full — reply dropped");
         return;
     }
+
+    const uint32_t post_speak_ms = (uint32_t)(esp_timer_get_time() / 1000);
+    voice_history_mark_conversation_active(post_speak_ms);
 
     /* Post-speech bookkeeping. Each of these is a deliberate ruling:
      *
@@ -389,4 +417,25 @@ esp_err_t voice_turn_request(uint32_t window_ms)
 bool voice_turn_is_busy(void)
 {
     return s_busy;
+}
+
+void voice_turn_reset_history(void)
+{
+    voice_history_reset();
+}
+
+bool voice_turn_in_conversation(void)
+{
+    const uint32_t now = (uint32_t)(esp_timer_get_time() / 1000);
+    return voice_history_in_conversation(now);
+}
+
+void voice_turn_set_vad(bool enabled)
+{
+    s_vad_enabled = enabled;
+}
+
+bool voice_turn_get_vad(void)
+{
+    return s_vad_enabled;
 }

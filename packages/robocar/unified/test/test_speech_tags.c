@@ -64,7 +64,7 @@ static void test_keeps_allowed_tags(void)
 /* Text with no brackets at all must come through byte-identical. */
 static void test_untagged_text_unchanged(void)
 {
-    check_sanitize("Hyvää päivää, minä olen Robocar.", "Hyvää päivää, minä olen Robocar.", 0);
+    check_sanitize("Hyvää päivää, minä olen Teuvo.", "Hyvää päivää, minä olen Teuvo.", 0);
     check_sanitize("", "", 0);
 }
 

@@ -28,6 +28,7 @@ idf_component_register(
         "mic_dump.c"
         "ambient_listener.c"
         "audio_clip.c"
+        "voice_history.c"
         "voice_turn.c"
         "gemini_tts.c"
         "voice_persona.c"
