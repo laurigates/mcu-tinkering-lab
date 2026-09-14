@@ -219,8 +219,17 @@ if(CJSON_FOUND)
         "FIXTURE_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/fixtures\""
     )
     add_test(NAME gemini_parse COMMAND test_gemini_parse)
+
+    add_executable(test_voice_history
+        "${MAIN_SRC_DIR}/voice_history.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/test_voice_history.c"
+    )
+    target_include_directories(test_voice_history PRIVATE ${CJSON_INCLUDE_DIRS})
+    target_link_directories(test_voice_history PRIVATE ${CJSON_LIBRARY_DIRS})
+    target_link_libraries(test_voice_history PRIVATE ${CJSON_LIBRARIES} Threads::Threads m)
+    add_test(NAME voice_history COMMAND test_voice_history)
 else()
-    message(STATUS "cJSON not found — skipping test_gemini_parse. Install via `brew install cjson` or `apt install libcjson-dev`.")
+    message(STATUS "cJSON not found — skipping test_gemini_parse and test_voice_history. Install via `brew install cjson` or `apt install libcjson-dev`.")
 endif()
 
 # -----------------------------------------------------------------------------

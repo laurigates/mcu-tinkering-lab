@@ -41,6 +41,7 @@
 #include "dialogue_style.h"
 #include "esp_err.h"
 
+// pi-lens-ignore: identifier
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -58,6 +59,7 @@ typedef enum {
  *  so a pointer handed out here stays valid for the life of the program and can
  *  be read from any task without locking. */
 typedef struct {
+    const char *name;          /**< Persona / character name ("Teuvo", "Robocar"). */
     const char *slug;          /**< Stable id for console + NVS ("fi-1950"). */
     const char *label;         /**< Human description for `voice` listing. */
     const char *language_code; /**< BCP-47 for speechConfig.languageCode. */
@@ -70,11 +72,9 @@ typedef struct {
      *
      *  Goes to gemini_backend.c with `text_brief`, *not* into the TTS request:
      *  the tags are written into the sentence by whoever writes the sentence.
-     *  They are placed rather than drawn at random because a tag has to fit
-     *  what is being said — `[laughs]` on a fault report is worse than no tag
-     *  at all — which is exactly the judgement the openers/shapes pools do not
-     *  need to make. Whatever the model returns is filtered against the
-     *  allow-list in speech_tags.h before it reaches the speaker.
+     *  Delivery tags ([sighs], [laughs], [whispers], etc.) are enabled across
+     *  all speech paths per ADR-024. Whatever the model returns is filtered
+     *  against the allow-list in speech_tags.h before it reaches the speaker.
      *
      *  May be NULL, which means this persona does not use tags. */
     const char *tag_brief;
@@ -144,6 +144,7 @@ esp_err_t voice_persona_set_voice(const char *voice, bool persist);
 /** @brief Table entry at @p index, or NULL when out of range (for listing). */
 const voice_persona_t *voice_persona_at(size_t index);
 
+// pi-lens-ignore: identifier
 #ifdef __cplusplus
 }
 #endif

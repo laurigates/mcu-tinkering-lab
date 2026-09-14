@@ -47,8 +47,9 @@
 #include "mdns.h"
 #include "mic_dump.h"
 #include "mic_pdm.h"
-/* Only for motor_controller_init() in the hardware phase — motor *output* is
- * the reactive executor's job, and nothing here writes the motors directly. */
+/* motor_controller_init() in the hardware phase and motor_is_initialized() in
+ * the boot wheel exercise — both reads. Motor *output* is the reactive
+ * executor's job, and nothing here writes the motors directly. */
 #include "motor_controller.h"
 #include "mqtt_command.h"
 #include "mqtt_logger.h"
@@ -249,6 +250,66 @@ static void dispatch_movement(const char *movement)
         dispatch_motor_cmd(MOTOR_CMD_STOP, 0);
 }
 
+/**
+ * @brief Boot diagnostic: drive forward, then backward, then stop.
+ *
+ * The point is the one thing a log line cannot prove on its own — that the
+ * drivetrain turns over — before anything downstream (WiFi, the planner, the
+ * spoken self-report) has a chance to claim the robot is ready.
+ *
+ * It goes through reactive_controller_manual() rather than motor_controller.h
+ * for the two reasons that API exists, and both are load-bearing here: the
+ * executor stays the only writer of motor output (see the "Don't" list in
+ * CLAUDE.md), and the obstacle reflex still governs. A bench with a wall inside
+ * STOP_THRESHOLD_CM will hold the wheels stopped — the correct outcome, and one
+ * that is logged rather than silently swallowed, because a diagnostic that
+ * quietly does nothing is worse than no diagnostic.
+ *
+ * Blocking, ~2 s. Called once from app_main after the executor is up; this is a
+ * boot step, not control logic, so it does not belong on the executor task.
+ */
+static void run_wheel_exercise(void)
+{
+    if (!motor_is_initialized()) {
+        ESP_LOGW(TAG, "wheel exercise: skipped — motors not initialised");
+        return;
+    }
+
+    const uint8_t speed = MOTOR_EXERCISE_SPEED;
+    const uint32_t hold_ms = MOTOR_EXERCISE_HOLD_MS;
+    /* The lease has to outlive the delay it is driving: a TTL of exactly
+     * hold_ms lets the executor drop the command a tick or two before the next
+     * one is issued, so the wheels coast through the hand-off. */
+    const uint32_t ttl_ms = hold_ms + REACTIVE_MANUAL_TTL_MS;
+
+    esp_err_t ret = reactive_controller_manual(REACTIVE_MANUAL_FORWARD, speed, ttl_ms);
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "wheel exercise: unavailable (%s)", esp_err_to_name(ret));
+        return;
+    }
+
+    ESP_LOGI(TAG, "wheel exercise: forward %u ms at %u/255", (unsigned)hold_ms, (unsigned)speed);
+    /* Sample halfway through rather than at the end: a reflex that latched
+     * during the pulse is what explains wheels that did not turn, and by the
+     * time the pulse is over the reading may already have cleared. */
+    vTaskDelay(pdMS_TO_TICKS(hold_ms / 2));
+    reactive_telemetry_t tele = {0};
+    if (reactive_controller_get_telemetry(&tele) == ESP_OK && tele.reflex_active) {
+        ESP_LOGW(TAG, "wheel exercise: obstacle reflex active at %u cm — wheels held stopped",
+                 (unsigned)tele.distance_cm);
+    }
+    vTaskDelay(pdMS_TO_TICKS(hold_ms - hold_ms / 2));
+
+    reactive_controller_manual(REACTIVE_MANUAL_BACKWARD, speed, ttl_ms);
+    ESP_LOGI(TAG, "wheel exercise: backward %u ms at %u/255", (unsigned)hold_ms, (unsigned)speed);
+    vTaskDelay(pdMS_TO_TICKS(hold_ms));
+
+    /* STOP ends the lease immediately instead of holding the motors stopped for
+     * a further TTL, so the planner can resume on the next executor tick. */
+    reactive_controller_manual(REACTIVE_MANUAL_STOP, 0, 0);
+    ESP_LOGI(TAG, "wheel exercise: done");
+}
+
 static void dispatch_sound(const char *sound)
 {
     if (!sound)
@@ -446,6 +507,7 @@ static void handle_voice_cmd(const char *buf)
                !ambient_audio_has_measurement() ? "DEAF — nothing ever heard"
                : ambient_audio_novel(now_ms)    ? "new"
                                                 : "same");
+        printf("  vad:    %s\n", voice_turn_get_vad() ? "on" : "off");
         /* Every gate is reported, and which one is holding, because a silent robot
          * is otherwise indistinguishable from a broken one — and on a static,
          * quiet scene silence is the correct behaviour. The evidence line names
@@ -465,7 +527,7 @@ static void handle_voice_cmd(const char *buf)
                (unsigned)audio_player_volume_pct(), (unsigned)AUDIO_VOLUME_PCT);
         printf("  usage: voice <slug> | say <text> | name <VoiceName|-> | vary | said\n");
         printf("         voice quiet <s> | budget <n> <s> | repeat <pct> | scene <n>\n");
-        printf("         voice loud <db> | sound <db>   (see also: mic)\n");
+        printf("         voice loud <db> | sound <db> | vad on|off   (see also: mic)\n");
         printf("         voice volume <pct>   amplitude, not loudness: halving = -6 dB\n");
         return;
     }
@@ -633,7 +695,23 @@ static void handle_voice_cmd(const char *buf)
         return;
     }
 
+    if (strcmp(op, "vad") == 0) {
+        char state[8] = {0};
+        if (sscanf(buf, "voice vad %7s", state) != 1 ||
+            (strcmp(state, "on") != 0 && strcmp(state, "off") != 0)) {
+            printf("voice: usage: voice vad on|off  (now %s)\n",
+                   voice_turn_get_vad() ? "on" : "off");
+            return;
+        }
+        const bool enable = (strcmp(state, "on") == 0);
+        voice_turn_set_vad(enable);
+        printf("voice: vad=%s\n", enable ? "on" : "off");
+        ESP_LOGI(TAG, "voice: vad=%s", enable ? "on" : "off");
+        return;
+    }
+
     if (voice_persona_set(op, true) == ESP_OK) {
+        voice_turn_reset_history();
         printf("voice: persona=%s\n", op);
     } else {
         printf("voice: unknown persona '%s'\n", op);
@@ -1005,12 +1083,18 @@ static void handle_mic_cmd(const char *buf)
  */
 static void handle_listen_cmd(const char *buf)
 {
+    if (strcmp(buf, "listen clear") == 0) {
+        voice_turn_reset_history();
+        printf("listen: conversational history cleared\n");
+        return;
+    }
+
     unsigned secs = 0;
     uint32_t window_ms = AUDIO_CLIP_WINDOW_MS_DEFAULT;
     if (sscanf(buf, "listen %u", &secs) == 1) {
         if (secs < AUDIO_CLIP_WINDOW_S_MIN || secs > AUDIO_CLIP_WINDOW_S_MAX) {
-            printf("listen: usage: listen [%d..%d seconds]\n", AUDIO_CLIP_WINDOW_S_MIN,
-                   AUDIO_CLIP_WINDOW_S_MAX);
+            printf("listen: usage: listen [%d..%d seconds] | listen clear\n",
+                   AUDIO_CLIP_WINDOW_S_MIN, AUDIO_CLIP_WINDOW_S_MAX);
             return;
         }
         window_ms = (uint32_t)secs * 1000U;
@@ -1619,6 +1703,11 @@ void app_main(void)
         ESP_LOGE(TAG, "Task creation failed (%s) — console and manual control unavailable",
                  esp_err_to_name(tasks_ret));
     }
+
+    /* Boot diagnostic: prove the drivetrain turns over before any later phase
+     * claims the robot is ready. Subject to the obstacle reflex, and skipped
+     * gracefully when the motors are absent or the executor never started. */
+    run_wheel_exercise();
 
     init_network_services();
 

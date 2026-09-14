@@ -27,9 +27,17 @@ dedicated ESP32 boards allows each to focus on its domain without contention.
 
 ## Non-Goals
 
-- Voice command recognition (listed as future enhancement).
-- SLAM or map-based navigation (future enhancement).
 - Multi-robot coordination (future enhancement).
+- Local offline STT/wake-word recognition (handled via cloud VAD & Gemini Flash; see ADR-020, ADR-024).
+
+### Conversational Entity & Voice Interaction (Consolidated Sense Platform)
+
+With the consolidation onto the single XIAO ESP32-S3 Sense board (ADR-013, ADR-016),
+audio output (MAX98357A I2S amplifier, ADR-019) and audio input (onboard PDM microphone,
+ADR-020) enable real-time character interaction:
+- **Speech Output**: Low-latency streaming TTS (`gemini-3.1-flash-tts-preview`) with expressive delivery tags (`[whispers]`, `[sighs]`, `[laughs]`).
+- **Conversational Voice**: Multi-turn multimodal dialogue (`gemini-flash-latest`), combining camera vision with audio input (ADR-024).
+- **Hands-Free Engagement**: Ambient acoustic triggering (VAD), wake-word / name recognition, and active follow-up conversational windows.
 
 ## Requirements
 

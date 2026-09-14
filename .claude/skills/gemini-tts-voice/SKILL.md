@@ -70,9 +70,10 @@ precisely because their entries are interchangeable by construction. Don't
 The mechanism:
 
 1. `voice_persona_t.tag_brief` names the allowed tags in the persona's language.
-2. `gemini_backend.c` appends it to the planner's `speak` prompt. It is
-   **deliberately absent** from the self-report/narrate prompt — that path
-   announces subsystem faults.
+2. `gemini_backend.c` appends it to the planner's `speak` prompt, the
+   self-report status narration, and the conversational `voice_turn` prompt.
+   Per ADR-024, tags are enabled across all paths so the persona (Teuvo)
+   can express emotion (wry chuckles, theatrical sighs over hardware faults or obstacles).
 3. Whatever comes back is filtered in `speech_queue_post()` against
    `SPEECH_TAG_ALLOWED`, capped at `SPEECH_TAG_MAX_PER_LINE`.
 

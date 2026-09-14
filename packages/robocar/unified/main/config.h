@@ -25,6 +25,18 @@
 #define CAMERA_FRAME_SIZE FRAMESIZE_QVGA
 #define CAMERA_JPEG_QUALITY 15
 
+// ========================================
+// Boot Diagnostics
+// ========================================
+// run_wheel_exercise() (main.c) drives both wheels forward then backward for
+// this long at boot, so a drivetrain that does not turn over is distinguishable
+// from everything-else-is-silent before a console is reachable. Speed is 0-255
+// on the motor_controller / reactive_controller_manual scale, NOT the 12-bit
+// PCA9685 scale DEFAULT_SPEED uses. Kept short and slow on purpose: the robot
+// actually moves, and only the obstacle reflex bounds how far.
+#define MOTOR_EXERCISE_SPEED 100      // 0-255 (~39 % duty)
+#define MOTOR_EXERCISE_HOLD_MS 1000U  // per direction
+
 // Debug Configuration
 #define ENABLE_VERBOSE_LOGGING 1
 #define ENABLE_SERIAL_ECHO 1

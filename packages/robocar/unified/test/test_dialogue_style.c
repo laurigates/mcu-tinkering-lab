@@ -302,7 +302,7 @@ static void test_opening_truncates_at_a_word_boundary(void)
 static void test_utf8_opening_survives_intact(void)
 {
     fresh(1u);
-    dialogue_style_note_spoken("Hyvää päivää, minä olen Robocar.");
+    dialogue_style_note_spoken("Hyvää päivää, minä olen Teuvo.");
 
     char buf[256];
     (void)dialogue_style_recent_openings(buf, sizeof(buf));

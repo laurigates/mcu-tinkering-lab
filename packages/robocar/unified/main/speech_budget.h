@@ -48,19 +48,22 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+// pi-lens-ignore: identifier
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/** Minimum gap between two utterances, ms. Four planner periods at the 15 s
- *  default — enough that the robot reads as commenting rather than narrating. */
-#define SPEECH_BUDGET_MIN_GAP_MS_DEFAULT 60000u
+/** Minimum gap between two utterances, ms. 20 s — enough that the robot reads
+ *  as commenting rather than narrating, without locking into 60-second silences. */
+#define SPEECH_BUDGET_MIN_GAP_MS_DEFAULT 20000u
+#define SPEECH_BUDGET_MIN_GAP_MS SPEECH_BUDGET_MIN_GAP_MS_DEFAULT
 
 /** Rolling window for the cap, ms. */
 #define SPEECH_BUDGET_WINDOW_MS_DEFAULT 300000u
 
 /** Utterances allowed per window. */
-#define SPEECH_BUDGET_MAX_PER_WINDOW_DEFAULT 3u
+#define SPEECH_BUDGET_MAX_PER_WINDOW_DEFAULT 6u
+#define SPEECH_BUDGET_MAX_UTTERANCES SPEECH_BUDGET_MAX_PER_WINDOW_DEFAULT
 
 /** Timestamps retained. Only the newest SPEECH_BUDGET_MAX_PER_WINDOW_DEFAULT-ish
  *  matter, but the cap is runtime-tunable, so keep headroom for a raised one. */
@@ -109,6 +112,7 @@ uint32_t speech_budget_wait_ms(uint32_t now_ms);
 /** @brief Utterances inside the current window, for the console status line. */
 uint8_t speech_budget_used(uint32_t now_ms);
 
+// pi-lens-ignore: identifier
 #ifdef __cplusplus
 }
 #endif
