@@ -28,6 +28,7 @@ EXCLUDES=(
     '*/components/esp-idf-lib/*'
     '*/external/*'
     '*/build/*'
+    '*/build-host/*'
     '*/.esphome/*'
     '*/.venv/*'
     # Vendored TinyUSB DCD port. Vendored sources are never rewritten:

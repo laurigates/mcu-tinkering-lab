@@ -1,6 +1,7 @@
 .aider*
 # Build artifacts
 build/
+build-host/
 # But don't ignore Claude Code skill directories
 !.claude/skills/build/
 # Per-machine Claude Code agent worktrees (created by /worktree-* skills)
