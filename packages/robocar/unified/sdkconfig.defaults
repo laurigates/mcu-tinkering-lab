@@ -28,6 +28,15 @@ CONFIG_ESP_WIFI_MGMT_SBUF_NUM=32
 CONFIG_ESP_HTTP_CLIENT_ENABLE_HTTPS=y
 CONFIG_ESP_HTTP_CLIENT_ENABLE_BASIC_AUTH=y
 
+# mbedTLS buffers in PSRAM. The default (internal) allocator gives every TLS
+# connection a 16 kB RX buffer plus handshake state from internal RAM, and the
+# planner, TTS stream and voice turn each hold their own connection. Overlapping
+# handshakes ran internal RAM down to 259 bytes (min_ever, logged by
+# gemini_http.c) and failed with -0x7F00 / -0x2880 / -0x0010 *_ALLOC_FAILED —
+# which presented as a robot that "does not hear": the voice turn recorded fine
+# and then never reached Gemini.
+CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC=y
+
 # Camera (DMA on Core 1 to isolate from motor control on Core 0)
 CONFIG_CAMERA_CORE1=y
 CONFIG_CAMERA_DMA_BUFFER_SIZE_MAX=32768

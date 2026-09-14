@@ -9,6 +9,7 @@
 
 #include "activity_trace.h"
 #include "esp_crt_bundle.h"
+#include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 
@@ -66,6 +67,16 @@ esp_err_t gemini_http_post(activity_endpoint_t endpoint, const char *url, const 
     }
 
     activity_trace_http_end(endpoint, err, status, elapsed_ms);
+
+    if (err != ESP_OK) {
+        /* mbedTLS allocates from INTERNAL RAM in this build, and concurrent
+         * handshakes (planner + TTS + voice turn) fail with *_ALLOC_FAILED. Read
+         * the pool at the failure point rather than inferring it. */
+        ESP_LOGW(TAG, "connect failed: internal free=%u largest=%u min_ever=%u",
+                 (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+                 (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+                 (unsigned)heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+    }
 
     if (err == ESP_OK && status != 200) {
         err = ESP_FAIL;
