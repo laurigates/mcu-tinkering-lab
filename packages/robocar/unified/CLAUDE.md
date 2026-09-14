@@ -597,6 +597,7 @@ Key settings that matter:
 - `CONFIG_SPIRAM_MODE_OCT=y` — XIAO ESP32-S3 Sense has **octal** PSRAM (not quad); wrong mode = boot loop
 - `CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192` — bumped from default 3584 for WiFi + BLE + camera init
 - `CONFIG_ESP_BROWNOUT_DET=n` — disabled; motor inrush was tripping it
+- `CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC=y` — mbedTLS buffers go to PSRAM. On the internal allocator the planner, TTS stream and voice turn each hold a TLS connection with a 16 kB RX buffer, and overlapping handshakes ran internal RAM down to 259 bytes and failed with `-0x7F00` / `-0x2880` / `-0x0010` (`*_ALLOC_FAILED`). It presented as a robot that does not hear: the voice turn recorded fine and never reached Gemini. `gemini_http.c` logs internal free/largest/min-ever on every failed request so a regression is visible at the failure point
 - `CONFIG_CAMERA_JPEG_MODE_FRAME_SIZE=65536` (with `_AUTO=n`, `_CUSTOM=y`) — the AUTO default computes `width*height/5`, a hard **15360-byte** ceiling at QVGA. Past it the driver aborts accumulation, queues the truncated frame, finds no EOI marker and retries until a 4 s timeout — surfacing as `Camera capture failed` and a forced STOP, not as a bad image. Any detailed or bright scene exceeds it at quality 15, and raising the AGC gain ceiling makes it worse because noise inflates JPEG size
 - mDNS (`robocar-unified.local`) needs **no** Kconfig switch — it comes from the `espressif/mdns` managed component. There is no `CONFIG_MDNS_ENABLED` symbol; a line setting one is reported as an unknown symbol and silently ignored
 
