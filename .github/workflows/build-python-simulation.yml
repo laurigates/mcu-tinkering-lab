@@ -33,8 +33,11 @@ jobs:
         with:
           python-version: '3.11'
 
+      # Pinned: uv 0.12.14 refuses to install dracopy into .venv/lib64
+      # ("Cannot install into symlinked directory", astral-sh/uv#21692).
+      # 0.12.10 is the last version this job ran green on. Bump deliberately.
       - name: Install UV
-        run: pip install uv
+        run: pip install uv==0.12.10
 
       - name: Install dependencies
         working-directory: packages/robocar/simulation

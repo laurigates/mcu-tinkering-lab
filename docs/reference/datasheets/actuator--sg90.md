@@ -27,9 +27,11 @@ and TowerPro's product pages.
 ## Robocar note
 
 `packages/robocar/unified` drives these from a PCA9685 shipped at **200 Hz**,
-four times the specified frame rate, and the firmware's 2500 µs pan maximum
-exceeds the 2400 µs range. See [servo selection](../servo-selection.md) for
-the test and the options.
+four times the specified frame rate. The fitted servos do move at 200 Hz; an
+early "no response" was a loose PCA9685 VCC lead, not the frame rate. The
+firmware's pan maximum was 2500 µs, past the 2400 µs range, until PR #574
+clamped pulses to 500–2400 µs. See [servo selection](../servo-selection.md)
+for the wiring checks and the frame-rate options.
 
 ## Wiring
 
