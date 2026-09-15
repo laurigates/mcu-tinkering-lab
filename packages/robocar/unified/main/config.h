@@ -73,7 +73,14 @@
 // MQTT Remote Logging Configuration
 // ========================================
 #define MQTT_LOGGING_ENABLED 1
+// The broker is a property of the local network, not of the firmware, so a
+// gitignored main/credentials.h may define MQTT_BROKER_URI and win over this
+// default. credentials.h always exists at build time — CMakeLists.txt writes a
+// stub when it is missing — so the include cannot fail.
+#include "credentials.h"
+#ifndef MQTT_BROKER_URI
 #define MQTT_BROKER_URI "mqtt://192.168.0.100:1883"
+#endif
 #define MQTT_CLIENT_ID "robocar_unified"
 #define MQTT_LOG_TOPIC_BASE "robocar/logs"
 #define MQTT_STATUS_TOPIC "robocar/status"
