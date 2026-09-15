@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.2.5](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.4...robocar-unified-v0.2.5) (2026-09-15)
+
+
+### Features
+
+* **robocar-unified:** aim the pan/tilt head from the reactive executor ([#578](https://github.com/laurigates/mcu-tinkering-lab/issues/578)) ([5e38916](https://github.com/laurigates/mcu-tinkering-lab/commit/5e38916adfcc8eb1d0829b6527885b8212a9aaee))
+* **robocar-unified:** let credentials.h override the MQTT broker URI ([#572](https://github.com/laurigates/mcu-tinkering-lab/issues/572)) ([ac338f3](https://github.com/laurigates/mcu-tinkering-lab/commit/ac338f3169068c8d646d8a746891c6db183af97f))
+
+
+### Bug Fixes
+
+* **robocar-unified:** allocate mbedTLS buffers in PSRAM ([#569](https://github.com/laurigates/mcu-tinkering-lab/issues/569)) ([cc31e4f](https://github.com/laurigates/mcu-tinkering-lab/commit/cc31e4f1f11302b8d32e105381aa1c08c988591c))
+* **robocar-unified:** keep servos off their end stops ([#574](https://github.com/laurigates/mcu-tinkering-lab/issues/574)) ([d1520c2](https://github.com/laurigates/mcu-tinkering-lab/commit/d1520c26d087d7574ac4a623023671d89db176f5))
+
+
+### Documentation
+
+* **robocar-unified:** interpolate planner cadence into the build guide ([#577](https://github.com/laurigates/mcu-tinkering-lab/issues/577)) ([2f413d1](https://github.com/laurigates/mcu-tinkering-lab/commit/2f413d13ebea33252b67bb0b0b95fc205f58aa8f)), closes [#485](https://github.com/laurigates/mcu-tinkering-lab/issues/485)
+
 ## [0.2.4](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.3...robocar-unified-v0.2.4) (2026-09-14)
 
 
