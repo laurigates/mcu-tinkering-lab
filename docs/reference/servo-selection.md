@@ -60,16 +60,19 @@ Pan/tilt brackets and servo mounts are made for a **size class**. The screws go
 through the servo's **mounting tabs** (also called mounting ears or flanges), so
 both the case size and the distance across the tabs have to match.
 
-| Servo | Class | Case (mm) | Across tabs (mm) | Weight | Source |
-|-------|-------|-----------|------------------|--------|--------|
-| SG90 Analog | micro (9 g) | 23 × 12.2 × 29 | 32.3 | 9 g | vendor page |
-| SG90 Digital | micro (9 g) | 23 × 12.2 × 29 | 32.3 | 9 g | vendor page |
-| MG90S | micro | 22.8 × 12.2 × 28.5 | — | 13.4 g | vendor page |
-| MG90D | micro | 22.8 × 12.2 × 28.5 | 31.5 | 13 g | vendor page |
-| MG996R | **standard** | 40.7 × 19.7 × 42.9 | 53.6 | 55 g | datasheet |
+| Servo | Class | Modulation | Case (mm) | Across tabs (mm) | Weight | Source |
+|-------|-------|------------|-----------|------------------|--------|--------|
+| [SG90](datasheets/actuator--sg90.md) Analog | micro (9 g) | analog | 23 × 12.2 × 29 | 32.3 | 9 g | vendor page |
+| [SG90](datasheets/actuator--sg90.md) Digital | micro (9 g) | digital | 23 × 12.2 × 29 | 32.3 | 9 g | vendor page |
+| [MG90S](datasheets/actuator--mg90s.md) | micro | digital | 22.8 × 12.2 × 28.5 | 32.1 | 13.4 g | vendor page |
+| [MG90D](datasheets/actuator--mg90d.md) | micro | digital | 22.8 × 12.2 × 28.5 | 31.5 | 13 g | vendor page |
+| [MG996R](datasheets/actuator--mg996r.md) | **standard** | digital | 40.7 × 19.7 × 42.9 | 53.6 | 55 g | datasheet |
 
-"Across tabs" is TowerPro's dimension E for the micro servos and the 53.6 mm
-figure on the MG996R drawing. TowerPro's MG90S page gave no lettered dimensions.
+"Across tabs" is TowerPro's dimension E for the micro servos, which its
+dimension key defines as the length across the mounting tabs, and the 53.6 mm
+figure on the MG996R drawing. Modulation is as the manufacturer or datasheet
+states it; for the MG996R that is the Handsontec guide, not TowerPro. Genuine
+TowerPro parts only: counterfeits and reseller listings may differ.
 
 **The MG996R is not a drop-in replacement for the SG90.** Its case is about
 1.75× longer and 1.6× wider, the tab span is 53.6 mm against 32.3 mm, and it
