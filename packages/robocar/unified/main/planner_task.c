@@ -26,6 +26,7 @@
 #include "plan_budget.h"
 #include "reactive_controller.h"
 #include "scene_change.h"
+#include "servo_controller.h"
 #include "speech_budget.h"
 #include "speech_queue.h"
 
@@ -214,6 +215,19 @@ static void planner_task(void *pvParameters)
             continue;
         }
 
+        /* Where the head was pointing when this frame was taken. The reactive
+         * executor aims the head between plans (issue #511), so by the time the
+         * goal comes back — seconds later — the head has usually moved, and a
+         * box or drive heading read against the head's pose at that moment
+         * would be read in the wrong coordinates. Sampled right after the
+         * capture returns: the head slews at most HEAD_SLEW_DEG_PER_TICK per
+         * 33 ms, so the gap costs a few degrees at worst. Zero with no servos,
+         * which is the head-forward assumption the robot always made. */
+        servo_position_t head_at_capture = {0};
+        if (servo_is_initialized()) {
+            (void)servo_get_position(&head_at_capture);
+        }
+
         /* ---- 1b. Measure and (if armed) dump the frame ----
          * Placed here, before gemini_backend_plan() and while the planner still
          * holds the buffer, so what is measured and dumped is byte-identical to
@@ -362,6 +376,8 @@ static void planner_task(void *pvParameters)
 
         /* ---- 3 / 4. Write goal or force stop ---- */
         if (ret == ESP_OK) {
+            goal.head_pan_deg = head_at_capture.pan_angle;
+            goal.head_tilt_deg = head_at_capture.tilt_angle;
             esp_err_t write_ret = goal_state_write(&goal, 0 /* use default TTL */);
             if (write_ret != ESP_OK) {
                 ESP_LOGW(TAG, "goal_state_write failed: %d", write_ret);

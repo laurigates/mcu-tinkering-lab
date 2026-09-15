@@ -147,6 +147,75 @@ typedef enum {
 esp_err_t reactive_controller_manual(reactive_manual_cmd_t cmd, uint8_t speed, uint32_t ttl_ms);
 
 /* =========================================================================
+ * Pan/tilt head (issue #511)
+ * =========================================================================
+ *
+ * The executor owns the head the same way it owns the wheels: it aims a track
+ * goal with it and re-centres it otherwise (see head_aim.h). A console command
+ * that moves the head therefore takes a *head lease*, the counterpart of
+ * reactive_controller_manual(), instead of writing the servos itself — a second
+ * writer would be overwritten within one refresh interval and would fight the
+ * aiming loop meanwhile.
+ *
+ * While any head lease is live, a track goal is steered with the wheels alone,
+ * exactly as on a board with no servos.
+ */
+
+/** Head axis for reactive_controller_head_hold(). */
+typedef enum {
+    REACTIVE_HEAD_PAN = 0,
+    REACTIVE_HEAD_TILT,
+} reactive_head_axis_t;
+
+/**
+ * Lifetime of a console head lease, in ms. Long, unlike the 1 s motor lease:
+ * a held head angle is a bench diagnostic somebody wants to look at, and a head
+ * left pointing somewhere is not a hazard the way a driving robot is.
+ */
+#define REACTIVE_HEAD_HOLD_TTL_MS 30000U
+
+/**
+ * @brief Hold one head axis at an angle for @p ttl_ms, overriding aiming.
+ *
+ * The other axis holds where it is. The executor clamps the held angle to the
+ * live travel limits on every write, so a limit narrowed during the lease still
+ * applies. Safe from any task; does not block.
+ *
+ * @param ttl_ms  Lease duration; 0 for REACTIVE_HEAD_HOLD_TTL_MS.
+ * @return ESP_OK, or ESP_ERR_INVALID_STATE if the executor is not running.
+ */
+esp_err_t reactive_controller_head_hold(reactive_head_axis_t axis, int16_t angle_deg,
+                                        uint32_t ttl_ms);
+
+/**
+ * @brief Keep the executor's hands off the head for @p ttl_ms.
+ *
+ * For a caller that drives the servos itself over several seconds — the only
+ * one is servo_exercise() on peripheral_task. The executor writes nothing while
+ * this is live. End it with reactive_controller_head_release() when done; the
+ * TTL is a backstop, not the normal end.
+ *
+ * @param ttl_ms  Lease duration; 0 for REACTIVE_HEAD_HOLD_TTL_MS.
+ * @return ESP_OK, or ESP_ERR_INVALID_STATE if the executor is not running.
+ */
+esp_err_t reactive_controller_head_external(uint32_t ttl_ms);
+
+/** End any head lease now. The executor resumes from wherever the head is. */
+esp_err_t reactive_controller_head_release(void);
+
+/** What the executor did with the head on its last tick. */
+typedef enum {
+    REACTIVE_HEAD_UNAVAILABLE = 0, /**< Servos not initialised or released.   */
+    REACTIVE_HEAD_CENTRE,          /**< No fresh track goal: re-centring.     */
+    REACTIVE_HEAD_AIM,             /**< Head covers the track target.         */
+    REACTIVE_HEAD_TURN,            /**< Body turning toward the head.         */
+    REACTIVE_HEAD_LEASE,           /**< A console lease owns the head.        */
+} reactive_head_mode_t;
+
+/** Short name for a head mode, for the console and logs. */
+const char *reactive_head_mode_name(reactive_head_mode_t mode);
+
+/* =========================================================================
  * Telemetry
  * ========================================================================= */
 
@@ -167,6 +236,8 @@ typedef struct {
      *  answering" — the filter maps both to max range, so without this the two
      *  are indistinguishable from outside. */
     bool sensor_failed;
+    /** What the executor did with the pan/tilt head on the last tick. */
+    reactive_head_mode_t head_mode;
 } reactive_telemetry_t;
 
 /* =========================================================================

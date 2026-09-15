@@ -34,6 +34,14 @@ void motor_stub_get_last_state(uint8_t *left_speed, uint8_t *right_speed, uint8_
 /* From reactive_controller.c (host-test build) */
 void reactive_controller_tick_for_test(void);
 
+/* From servo_controller_stub.c */
+#include "servo_controller.h"
+void servo_stub_reset(bool initialized);
+int servo_stub_writes(void);
+int servo_stub_out_of_limit_attempts(void);
+void servo_stub_set_enabled(bool pan, bool tilt);
+void servo_stub_set_limits(int16_t pan_min, int16_t pan_max, int16_t tilt_min, int16_t tilt_max);
+
 /* =========================================================================
  * Test harness
  * ========================================================================= */
@@ -82,6 +90,10 @@ static void setup(void)
     goal_state_init();
     goal_state_force_stop(); /* clear any prior goal */
     motor_stub_reset();
+    /* No servos by default: the tests above the head section pin the
+     * wheel-only behaviour, which is exactly what a board without a working
+     * pan/tilt head must keep doing. Head tests re-reset with servos present. */
+    servo_stub_reset(false);
     ultrasonic_test_set_distance(100); /* "clear" default */
     reactive_controller_init();        /* clears smoothing buffer + manual lease */
 }
@@ -433,6 +445,257 @@ static void test_manual_stop_clears_lease(void)
 }
 
 /* =========================================================================
+ * Pan/tilt head (issue #511): the head leads, the wheels follow
+ * ========================================================================= */
+
+/** setup(), with the servos initialised and enabled at the boot limits. */
+static void setup_with_head(void)
+{
+    setup();
+    servo_stub_reset(true);
+}
+
+static goal_t track_goal(uint16_t cx, int16_t capture_pan, uint8_t speed_pct)
+{
+    goal_t g = {
+        .kind = GOAL_KIND_TRACK,
+        .params.track = {.ymin = 450,
+                         .xmin = cx - 50,
+                         .ymax = 550,
+                         .xmax = cx + 50,
+                         .max_speed_pct = speed_pct},
+        .head_pan_deg = capture_pan,
+    };
+    return g;
+}
+
+static void ticks(int n)
+{
+    for (int i = 0; i < n; ++i) {
+        reactive_controller_tick_for_test();
+    }
+}
+
+static int16_t head_pan(void)
+{
+    servo_position_t pos = {0};
+    servo_get_position(&pos);
+    return pos.pan_angle;
+}
+
+/* A target inside the head's travel is covered by the head: it turns toward
+ * the target and the wheels creep straight instead of steering. */
+static void test_head_leads_before_wheels(void)
+{
+    setup_with_head();
+    prime_distance(100);
+
+    goal_t g = track_goal(800, 0, 60); /* +18 deg */
+    ASSERT(goal_state_write(&g, 60000) == ESP_OK);
+    ticks(10);
+
+    ASSERT(head_pan() == 18);
+    uint8_t ls, rs, ld, rd;
+    get_motor_state(&ls, &rs, &ld, &rd);
+    ASSERT(ls == rs); /* no differential: the head is doing the aiming */
+    ASSERT(ld == 1 && rd == 1);
+    ASSERT(ls == (uint8_t)(60 * 255 / 100));
+
+    reactive_telemetry_t t;
+    reactive_controller_get_telemetry(&t);
+    ASSERT(t.head_mode == REACTIVE_HEAD_AIM);
+}
+
+/* A bearing past the pan engage edge turns the body in place toward it, and
+ * the head comes back toward centre as the heading catches up. */
+static void test_wheels_engage_near_pan_limit(void)
+{
+    setup_with_head();
+    prime_distance(100);
+
+    /* Frame taken with the head at +40; target at its right edge: +70. */
+    goal_t g = track_goal(950, 40, 60);
+    ASSERT(goal_state_write(&g, 60000) == ESP_OK);
+    reactive_controller_tick_for_test();
+
+    uint8_t ls, rs, ld, rd;
+    get_motor_state(&ls, &rs, &ld, &rd);
+    ASSERT(ld == 1 && rd == 0); /* rotate CW */
+    reactive_telemetry_t t;
+    reactive_controller_get_telemetry(&t);
+    ASSERT(t.head_mode == REACTIVE_HEAD_TURN);
+
+    ticks(60);
+    get_motor_state(&ls, &rs, &ld, &rd);
+    ASSERT(ld == 1 && rd == 1); /* the turn ended; creeping forward again */
+    ASSERT(ls == rs);
+    ASSERT(head_pan() <= 5 && head_pan() >= -5);
+    ASSERT(servo_stub_out_of_limit_attempts() == 0);
+}
+
+/* A stale goal re-centres the head, as it stops the motors. */
+static void test_stale_goal_recentres_head(void)
+{
+    setup_with_head();
+    prime_distance(100);
+
+    g_test_time_us = 0;
+    goal_state_set_clock_override(test_clock);
+    /* +41 deg: inside the 48 deg engage edge, so the head alone holds it. */
+    goal_t g = track_goal(850, 20, 0);
+    ASSERT(goal_state_write(&g, 1000) == ESP_OK);
+    ticks(15);
+    ASSERT(head_pan() == 41);
+
+    g_test_time_us = 2000 * 1000LL; /* past the TTL */
+    ticks(15);
+    goal_state_set_clock_override(NULL);
+
+    ASSERT(head_pan() == 0);
+    ASSERT(motor_stub_get_last_call() == MOTOR_CALL_COAST);
+    reactive_telemetry_t t;
+    reactive_controller_get_telemetry(&t);
+    ASSERT(t.head_mode == REACTIVE_HEAD_CENTRE);
+}
+
+/* A non-track goal re-centres the head too. */
+static void test_drive_goal_recentres_head(void)
+{
+    setup_with_head();
+    prime_distance(100);
+
+    goal_t g = track_goal(800, 0, 0);
+    ASSERT(goal_state_write(&g, 60000) == ESP_OK);
+    ticks(10);
+    ASSERT(head_pan() == 18);
+
+    goal_t drive = {.kind = GOAL_KIND_DRIVE,
+                    .params.drive = {.heading_deg = 0, .distance_cm = 100, .speed_pct = 50}};
+    ASSERT(goal_state_write(&drive, 60000) == ESP_OK);
+    ticks(10);
+    ASSERT(head_pan() == 0);
+}
+
+/* No servo write ever falls outside the live limits: a far target, and the
+ * limits narrowed mid-track. The stub counts any attempt outside them. */
+static void test_head_never_commanded_outside_limits(void)
+{
+    setup_with_head();
+    prime_distance(10); /* reflex on: head aims, body held, bearing stays far */
+
+    goal_t g = track_goal(950, 60, 0); /* +87 deg */
+    g.params.track.ymin = 0;
+    g.params.track.ymax = 100; /* tilt target past +30 */
+    ASSERT(goal_state_write(&g, 60000) == ESP_OK);
+    ticks(30);
+    ASSERT(head_pan() == 60);
+
+    servo_stub_set_limits(-20, 20, -10, 10);
+    ticks(30);
+    ASSERT(head_pan() == 20);
+    ASSERT(servo_stub_out_of_limit_attempts() == 0);
+}
+
+/* Without servos a track goal steers with the wheels exactly as before, and
+ * nothing touches the servo driver. Same after `servo off`. */
+static void test_track_falls_back_to_wheels_without_servos(void)
+{
+    setup(); /* servos not initialised */
+    prime_distance(100);
+
+    goal_t g = track_goal(800, 0, 60);
+    ASSERT(goal_state_write(&g, 60000) == ESP_OK);
+    ticks(5);
+
+    uint8_t ls, rs, ld, rd;
+    get_motor_state(&ls, &rs, &ld, &rd);
+    ASSERT(ls > rs); /* wheel-only P controller steers right */
+    ASSERT(servo_stub_writes() == 0);
+    reactive_telemetry_t t;
+    reactive_controller_get_telemetry(&t);
+    ASSERT(t.head_mode == REACTIVE_HEAD_UNAVAILABLE);
+
+    setup_with_head();
+    servo_stub_set_enabled(false, false); /* `servo off`, before any tick */
+    prime_distance(100);
+    ASSERT(goal_state_write(&g, 60000) == ESP_OK);
+    ticks(5);
+    get_motor_state(&ls, &rs, &ld, &rd);
+    ASSERT(ls > rs);
+    ASSERT(servo_stub_writes() == 0);
+}
+
+/* A parked head is not rewritten every tick; the refresh re-asserts it about
+ * once a second. */
+static void test_idle_head_writes_are_suppressed(void)
+{
+    setup_with_head();
+    ticks(3);
+    const int after_first = servo_stub_writes();
+    ASSERT(after_first == 2); /* pan and tilt, once */
+
+    ticks(20); /* 660 ms */
+    ASSERT(servo_stub_writes() == after_first);
+
+    ticks(15); /* past 1000 ms since the first write */
+    ASSERT(servo_stub_writes() == after_first + 2);
+}
+
+/* A console hold beats an active track goal; the track goal is steered with
+ * the wheels meanwhile, and aiming resumes when the lease expires. */
+static void test_console_head_hold_is_a_lease(void)
+{
+    setup_with_head();
+    prime_distance(100);
+
+    goal_t g = track_goal(800, 0, 60);
+    ASSERT(goal_state_write(&g, 60000) == ESP_OK);
+    ASSERT(reactive_controller_head_hold(REACTIVE_HEAD_PAN, -25, REACTIVE_LOOP_PERIOD_MS * 5) ==
+           ESP_OK);
+    ticks(3);
+    ASSERT(head_pan() == -25);
+    uint8_t ls, rs, ld, rd;
+    get_motor_state(&ls, &rs, &ld, &rd);
+    ASSERT(ls > rs); /* wheels-only while the head is leased */
+
+    ticks(20); /* lease gone */
+    ASSERT(head_pan() == 18);
+}
+
+/* An external lease (servo exercise) keeps the executor from writing at all. */
+static void test_external_head_lease_writes_nothing(void)
+{
+    setup_with_head();
+    prime_distance(100);
+    ASSERT(reactive_controller_head_external(60000) == ESP_OK);
+    const int before = servo_stub_writes();
+    ticks(60);
+    ASSERT(servo_stub_writes() == before);
+
+    ASSERT(reactive_controller_head_release() == ESP_OK);
+    ticks(1);
+    ASSERT(servo_stub_writes() > before);
+}
+
+/* drive(heading) from a frame taken with the head turned steers by the sum. */
+static void test_drive_heading_folds_head_pan(void)
+{
+    setup();
+    prime_distance(100);
+
+    goal_t drive = {.kind = GOAL_KIND_DRIVE,
+                    .params.drive = {.heading_deg = 0, .distance_cm = 100, .speed_pct = 80},
+                    .head_pan_deg = 40};
+    ASSERT(goal_state_write(&drive, 60000) == ESP_OK);
+    reactive_controller_tick_for_test();
+
+    uint8_t ls, rs, ld, rd;
+    get_motor_state(&ls, &rs, &ld, &rd);
+    /* "Straight ahead in the picture" was 40 deg right of the body. */
+    ASSERT(ls > rs);
+}
+
+/* =========================================================================
  * Main
  * ========================================================================= */
 
@@ -453,6 +716,17 @@ int main(void)
     test_run("reflex_overrides_manual", test_reflex_overrides_manual);
     test_run("manual_lease_expires_back_to_goal", test_manual_lease_expires_back_to_goal);
     test_run("manual_stop_clears_lease", test_manual_stop_clears_lease);
+    test_run("head_leads_before_wheels", test_head_leads_before_wheels);
+    test_run("wheels_engage_near_pan_limit", test_wheels_engage_near_pan_limit);
+    test_run("stale_goal_recentres_head", test_stale_goal_recentres_head);
+    test_run("drive_goal_recentres_head", test_drive_goal_recentres_head);
+    test_run("head_never_commanded_outside_limits", test_head_never_commanded_outside_limits);
+    test_run("track_falls_back_to_wheels_without_servos",
+             test_track_falls_back_to_wheels_without_servos);
+    test_run("idle_head_writes_are_suppressed", test_idle_head_writes_are_suppressed);
+    test_run("console_head_hold_is_a_lease", test_console_head_hold_is_a_lease);
+    test_run("external_head_lease_writes_nothing", test_external_head_lease_writes_nothing);
+    test_run("drive_heading_folds_head_pan", test_drive_heading_folds_head_pan);
 
     printf("\n=== Results ===\n");
     printf("Passed: %d / %d\n", test_pass, test_count);

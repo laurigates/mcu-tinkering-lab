@@ -188,11 +188,18 @@ static void peripheral_task(void *pvParameters)
                 case PERIPH_CMD_SERVO_TILT:
                     servo_set_tilt(cmd.angle);
                     break;
-                case PERIPH_CMD_SERVO_EXERCISE:
+                case PERIPH_CMD_SERVO_EXERCISE: {
                     /* Runs here rather than on the console task because it
-                     * blocks for several seconds. */
+                     * blocks for several seconds. The executor owns the head,
+                     * so it is told to keep its hands off for the duration —
+                     * otherwise it would re-centre over every step. */
+                    const bool leased = (reactive_controller_head_external(0) == ESP_OK);
                     servo_exercise();
+                    if (leased) {
+                        reactive_controller_head_release();
+                    }
                     break;
+                }
                 case PERIPH_CMD_SOUND_BEEP:
                     buzzer_beep();
                     break;
@@ -379,6 +386,10 @@ static void handle_periph_cmd(const char *buf)
             printf("       tilt=%+d deg (count %u, %s, limits %+d..%+d)\n", pos.tilt_angle,
                    (unsigned)servo_angle_to_count(SERVO_TILT, pos.tilt_angle),
                    servo_is_enabled(SERVO_TILT) ? "on" : "off", tilt_lo, tilt_hi);
+            reactive_telemetry_t tele = {0};
+            if (reactive_controller_get_telemetry(&tele) == ESP_OK) {
+                printf("       executor head: %s\n", reactive_head_mode_name(tele.head_mode));
+            }
             printf("%s", k_servo_usage);
             return;
         }
@@ -491,6 +502,18 @@ static void handle_periph_cmd(const char *buf)
             return;
         }
 
+        /* The executor owns the head (issue #511), so a console move is a
+         * lease it applies, not a second writer it would overwrite. Only when
+         * the executor is not running — nothing else is writing the servos —
+         * does the move go straight to peripheral_task as before. */
+        const esp_err_t lease_ret = reactive_controller_head_hold(
+            (id == SERVO_PAN) ? REACTIVE_HEAD_PAN : REACTIVE_HEAD_TILT, (int16_t)a, 0);
+        if (lease_ret == ESP_OK) {
+            printf("servo: %s=%d (count %u) — held %u s, then the executor takes the head back\n",
+                   arg, a, (unsigned)servo_angle_to_count(id, (int16_t)a),
+                   (unsigned)(REACTIVE_HEAD_HOLD_TTL_MS / 1000U));
+            return;
+        }
         cmd.angle = (int16_t)a;
         dispatch_periph_cmd(&cmd);
         printf("servo: %s=%d (count %u)\n", arg, a, (unsigned)servo_angle_to_count(id, (int16_t)a));

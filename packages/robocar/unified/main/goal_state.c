@@ -119,6 +119,7 @@ typedef struct {
     int64_t written_at_us; /**< Timestamp of last write (us).           */
     uint32_t ttl_ms;       /**< TTL of the current goal (ms).           */
     bool has_been_written; /**< False until the first goal_state_write. */
+    uint32_t write_seq;    /**< Incremented on every write.             */
     bool initialised;
 } goal_state_t;
 
@@ -198,6 +199,7 @@ esp_err_t goal_state_write(const goal_t *goal, uint32_t ttl_ms)
     g_gs.written_at_us = now_us();
     g_gs.ttl_ms = effective_ttl;
     g_gs.has_been_written = true;
+    g_gs.write_seq++;
     gs_mutex_unlock(&g_gs.mutex);
 
     /* Log only when the goal kind changes to keep the serial log readable. */
@@ -210,6 +212,11 @@ esp_err_t goal_state_write(const goal_t *goal, uint32_t ttl_ms)
 }
 
 esp_err_t goal_state_read(goal_t *out, bool *is_fresh_out)
+{
+    return goal_state_read_seq(out, is_fresh_out, NULL);
+}
+
+esp_err_t goal_state_read_seq(goal_t *out, bool *is_fresh_out, uint32_t *seq_out)
 {
     if (!out || !is_fresh_out) {
         return ESP_ERR_INVALID_ARG;
@@ -231,6 +238,9 @@ esp_err_t goal_state_read(goal_t *out, bool *is_fresh_out)
     written_at_us = g_gs.written_at_us;
     ttl_ms = g_gs.ttl_ms;
     has_been_written = g_gs.has_been_written;
+    if (seq_out) {
+        *seq_out = g_gs.write_seq;
+    }
     gs_mutex_unlock(&g_gs.mutex);
 
     /*
