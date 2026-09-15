@@ -1,7 +1,9 @@
 # Servo Selection: Frame Rate, Analog vs Digital, and Size
 
 What was learned in 2026-09 while diagnosing the robocar-unified pan/tilt head,
-whose SG90 servos did not respond at the firmware's shipped 200 Hz. Per-part
+whose SG90 servos at first did not move. Frame rate was suspected; the actual
+cause was a loose 3.3 V lead to the PCA9685's VCC (logic) pin, and once it was
+reconnected the servos moved at the firmware's shipped 200 Hz. Per-part
 specs live in the datasheet notes
 ([SG90](datasheets/actuator--sg90.md), [MG996R](datasheets/actuator--mg996r.md));
 this page covers the choices those specs feed.
@@ -95,20 +97,24 @@ an MG996R.
   `packages/robocar/unified/main/pin_config.h`, shipped at 200 Hz), so the
   servos share it with the motor PWM and the RGB LEDs. See
   [`driver--pca9685.md`](datasheets/driver--pca9685.md).
-- **Test before changing anything.** On the console, run `servo freq 50`, then
-  `servo exercise`. If the head moves, frame rate was the cause. If every step
-  logs `ESP_OK` and nothing moves, check servo power (the PCA9685 V+ terminal;
-  VCC powers only its logic) and the servo leads. The frequency change is not
-  persisted, so a reboot restores 200 Hz.
-- If frame rate is confirmed, there are two ways forward:
+- **Check wiring before frame rate.** If `servo exercise` logs `ESP_OK` for
+  every step and nothing moves, check the PCA9685's VCC (3.3 V logic; a loose
+  VCC lead was the cause in 2026-09), its V+ terminal (servo power), and the
+  servo leads. Only then try `servo freq 50` followed by `servo exercise`. The
+  frequency change is not persisted, so a reboot restores 200 Hz.
+- The fitted SG90s move at 200 Hz. Whether they track as smoothly there as at
+  50 Hz has not been assessed yet. If a servo is found not to track at 200 Hz,
+  there are two ways forward:
 
   | Option | Keeps | Costs |
   |--------|-------|-------|
   | Run the whole PCA9685 at 50 Hz | The fitted SG90s | Possible visible LED flicker; coarser motor PWM |
   | Fit digital micro servos | 200 Hz for motors and LEDs | Buying servos, and confirming the chosen model actually tracks at 200 Hz, since no vendor page above publishes a rating |
 
-- The firmware maps pan ±90° onto 500–2500 µs (`SERVO_MIN_PULSE_US` /
-  `SERVO_MAX_PULSE_US`), so pan +90° exceeds the SG90's 2400 µs maximum.
+- The firmware at the time mapped pan ±90° onto 500–2500 µs
+  (`SERVO_MIN_PULSE_US` / `SERVO_MAX_PULSE_US`), so pan +90° exceeded the
+  SG90's 2400 µs maximum. PR #574 maps angles as real servo angles clamped to
+  500–2400 µs and adds live travel limits.
 
 ## Sources
 
