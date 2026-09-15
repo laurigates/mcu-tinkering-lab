@@ -17,7 +17,13 @@
 /** Multipliers of the planner's base period: 15 s, 30 s, 1 min, 2 min, 5 min.
  *  Spending the whole ladder from a standing start takes 1+2+4+8+20 = 35 base
  *  periods, about nine minutes, and costs five requests. */
-static const uint8_t k_ladder[PLAN_LADDER_STEPS] = {1u, 2u, 4u, 8u, 20u};
+static const uint8_t k_ladder[] = {1u, 2u, 4u, 8u, PLAN_LADDER_TOP_MULTIPLIER};
+
+/* Unsized on purpose: the count comes from the initialiser, so adding or
+ * removing a rung without updating PLAN_LADDER_STEPS fails here, and the top
+ * rung stays PLAN_LADDER_TOP_MULTIPLIER (which the build guide prints). */
+_Static_assert(sizeof(k_ladder) / sizeof(k_ladder[0]) == PLAN_LADDER_STEPS,
+               "k_ladder must have exactly PLAN_LADDER_STEPS rungs");
 
 /* -------------------------------------------------------------------------- */
 /* State                                                                       */

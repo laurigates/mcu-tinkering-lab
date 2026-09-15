@@ -90,6 +90,14 @@ extern "C" {
 /** Rungs on the backoff ladder. */
 #define PLAN_LADDER_STEPS 5
 
+/** Multiplier of PLANNER_LOOP_PERIOD_MS on the ladder's top rung, i.e. the
+ *  longest interval between keep-alive requests before the planner goes
+ *  dormant. It is the last entry of the ladder table in plan_activity.c, which
+ *  is written in terms of this macro and _Static_assert-ed to have exactly
+ *  PLAN_LADDER_STEPS entries, so the two cannot disagree. Exposed here so the
+ *  build guide can print the top interval instead of a literal (issue #485). */
+#define PLAN_LADDER_TOP_MULTIPLIER 20u
+
 /** Mean absolute block difference from the last-planned view at or above which
  *  the scene counts as worth planning again.
  *

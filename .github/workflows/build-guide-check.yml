@@ -7,6 +7,8 @@ on:
       - '**/docs/*.typ'
       - '**/docs/auto/pin_defs.typ'
       - '**/main/pin_config.h'
+      - '**/main/planner_task.h'
+      - '**/main/plan_activity.h'
       - 'tools/typst/**'
       - 'docs/schematics/images/**'
       - '.github/workflows/build-guide-check.yml'
@@ -18,6 +20,8 @@ on:
       - '**/docs/*.typ'
       - '**/docs/auto/pin_defs.typ'
       - '**/main/pin_config.h'
+      - '**/main/planner_task.h'
+      - '**/main/plan_activity.h'
       - 'tools/typst/**'
       - 'docs/schematics/images/**'
       - '.github/workflows/build-guide-check.yml'
@@ -109,20 +113,34 @@ jobs:
             # pin in a printed guide or bench card — the PDF would recompile
             # cleanly from stale definitions and look up to date.
             #
-            # The generated file is hardware data only. `version.txt` was once
-            # an input, which coupled guide freshness to the release cadence:
-            # it is on none of the trigger paths above, so a release-please bump
-            # never ran this guard and the committed PDF kept printing the
-            # previous version — and regenerating it was a `docs:` commit that
-            # minted the next release. Adding it to the paths is the wrong fix;
-            # it would fail every release PR, whose PDF genuinely predates the
-            # version being introduced. See issue #439.
+            # What may feed the generated file is decided by who writes the
+            # source, not by whether it is hardware. A firmware constant only a
+            # human edits (pin_config.h, and since issue #485 the planner
+            # cadence in planner_task.h / plan_activity.h) is safe: its header
+            # is on the trigger paths above, so changing it runs this guard.
+            # Every header passed to the generator below MUST also be listed in
+            # both trigger-path blocks. A file release automation rewrites is
+            # never safe. `version.txt` was once an input, which coupled guide
+            # freshness to the release cadence: it is on none of the trigger
+            # paths, so a release-please bump never ran this guard and the
+            # committed PDF kept printing the previous version — and
+            # regenerating it was a `docs:` commit that minted the next
+            # release. Adding it to the paths is the wrong fix; it would fail
+            # every release PR, whose PDF genuinely predates the version being
+            # introduced. See issue #439.
             proj="${typ%/docs/*}"
             defs="$proj/docs/auto/pin_defs.typ"
             drift_paths=("$pdf")
             if [ -f "$defs" ] && [ -f "$proj/main/pin_config.h" ]; then
-              python3 tools/typst/generate-pin-defs.py \
-                "$proj/main/pin_config.h" "$defs"
+              headers=("$proj/main/pin_config.h")
+              # Optional per-project inputs, passed only where they exist; keep
+              # in sync with the project's `gen-pin-defs` recipe.
+              for extra in planner_task.h plan_activity.h; do
+                if [ -f "$proj/main/$extra" ]; then
+                  headers+=("$proj/main/$extra")
+                fi
+              done
+              python3 tools/typst/generate-pin-defs.py "${headers[@]}" "$defs"
               drift_paths+=("$defs")
             fi
 

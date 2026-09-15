@@ -7,12 +7,17 @@ which is what makes it cheap and also what makes the two failure modes below
 silent. Companion to `web-flasher.md` (the release/flasher path) and
 `containerized-builds.md` (the ESP-IDF build path).
 
-## 1. Only hardware data may feed the generated file
+## 1. Only human-edited firmware constants may feed the generated file
 
-`generate-pin-defs.py` takes `main/pin_config.h` and nothing else. Every `#let`
-it emits derives from hardware. **Do not add an input that release automation
-owns** — the guard's trigger paths are the only thing that makes its verdict
-meaningful, and a file outside them changes the committed artifact with no gate.
+`generate-pin-defs.py` takes `main/pin_config.h` plus, for robocar-unified, the
+planner cadence headers `main/planner_task.h` and `main/plan_activity.h` (issue
+#485). The criterion is who writes the source, not whether it is hardware: a
+constant only a human edits changes in a source commit that is on the guard's
+trigger paths, so the guard runs. **Do not add an input that release automation
+owns**, and **add every new input header to both trigger-path blocks** in
+`build-guide-check.yml` — the trigger paths are the only thing that makes the
+guard's verdict meaningful, and a file outside them changes the committed
+artifact with no gate.
 
 The concrete failure (issue #439, five hand-resyncs over three weeks):
 
