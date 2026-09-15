@@ -62,7 +62,7 @@ The spoken fault line stays coarse — one persona phrase covers "no bus" and "m
 | `listen [ms]` / `listen clear` | Record and answer a conversational turn (or clear conversational history) |
 | `cam …` | Read live sensor gain/exposure; `cam gainceiling 0-6`, `cam ae -2..2`, `cam brightness -2..2` tune exposure without a reflash |
 | `sound beep\|melody\|alert` | Buzzer |
-| `servo …` | `servo` alone reports readiness, both angles with the PCA9685 counts, and the live PWM frequency; `servo pan\|tilt <deg>` moves one; `servo exercise` shakes then nods, logging every write; `servo freq <24-1526>` changes the chip-wide prescaler |
+| `servo …` | `servo` alone reports readiness, on/off, both angles with the PCA9685 counts, the live travel limits and the PWM frequency; `servo pan\|tilt <deg>` moves one (refused outside its limits); `servo on\|off` drives or releases both outputs, and runs directly on the console task so `off` works mid-exercise; `servo limit pan\|tilt <min> <max>` sets the live travel limits (boot default pan ±60°, tilt ±30°; not persisted); `servo exercise` shakes then nods between the limits, logging every write; `servo freq <24-1526>` changes the chip-wide prescaler and re-sends both servo pulses at the new period |
 | `led <r> <g> <b>` | Both RGB LEDs |
 | `mic` / `mic dump <n>` | Microphone state; dump PCM frames — tells a dead mic from a quiet room |
 | `plan …` | The gate on whether the planner makes a request at all — `plan` alone reports cadence, wake scores and spend; `plan on\|off\|wake\|sleep\|resume`, `plan scene\|range\|requests\|tokens <n>` |
@@ -112,10 +112,12 @@ the robot. That is unchanged by this command handler and is a broader design
 question (a separate, deliberately-unsubscribed movement topic, or requiring
 auth) the issue that added this raised but did not resolve; see issue #524.
 
-**`servo exercise` exists because "the servos are not moving" has four causes
-that look identical from across the room**: no V+ on the PCA9685 (VCC powers only
-the logic), a failed init, a pulse train outside the servos' frame rate, and a
-dead servo. Every step logs the angle, the PCA9685 count written and the bus
+**`servo exercise` exists because "the servos are not moving" has five causes
+that look identical from across the room**: no VCC on the PCA9685 (its 3.3 V
+logic supply — a loose VCC lead was the actual cause on the 2026-09 bench), no V+
+(servo power), a failed init, a pulse train outside the servos' frame rate, and a
+dead servo. The exercise travels between the live `servo limit` values, so it
+cannot drive past an end stop somebody has measured. Every step logs the angle, the PCA9685 count written and the bus
 result, so a servo that does not move *while the writes succeed* is a different
 diagnosis from one whose writes are failing — and `servo freq 50` settles the
 frame-rate question without a reflash. The shipped 200 Hz is a compromise chosen
@@ -616,6 +618,7 @@ Key settings that matter:
 - Don't drop a peripheral's `*_is_initialized()` accessor, or let `self_report_collect()` read a cached boot result instead. Those accessors are the only thing standing between a half-populated board and a silent loss of function: the facts line renders `i2c_peripherals=degraded(servos)` from them, and `test_self_report.c` pins the case a bench cannot stage — a live bus with exactly one dead peripheral
 - Don't make `motor_stop()` a short brake, or "unify" it with `motor_brake()`. Low/low is coast and high/high is brake; the reflex wants the second and the 30 Hz idle path wants the first. A test that only checks PWM = 0 passes against either, which is why the stub records which entry point was called
 - Don't let a driver's `init_desc()` pick the bus clock. Each esp-idf-lib driver hardcodes a different one, and i2cdev reinstalls the whole I2C driver whenever consecutive transactions disagree — call `pin_bus_clock()` after every `init_desc()`, including for any device added later
+- Don't change the PCA9685 frequency without re-sending the servo counts — call `servo_set_pwm_frequency()`, never `i2c_bus_pca9685_set_frequency()` directly. The prescaler write leaves every channel's count in place, and a count is a fraction of the period: the 50 Hz centre count (307) replayed at 200 Hz is a ~0.37 ms pulse, which drove both servos into their end stops on the 2026-09-15 bench. `servo_set_pwm_frequency()` releases the enabled outputs, changes the prescaler and re-sends each angle; `test_a_frequency_change_keeps_every_pulse_width` pins it
 - Don't give a full-on or full-off channel a phase offset in `pca9685_phase.c`. Those are flag bits, and on this board they are the motor direction pins: a phase offset converts a steady logic level into a ~197 Hz square wave on IN1/IN2
 - Don't patch the PCA9685 driver in `managed_components/` to add phase support — it is a fetched dependency, so the edit is wiped by the next `idf.py reconfigure`. Phase lives in `pca9685_phase.c`, which is ours
 - Don't relax `esp-idf-lib/pca9685` to a plain `'^1.0.0'` constraint. The published 1.0.0 still has the out-of-bounds write that double-faulted this board; the manifest points at the fork branch carrying the fix until `esp-idf-lib/pca9685#2` merges *and* a release ships it. `test_pca9685_multi` catches the swap under ASan, but only when `managed_components/` is populated

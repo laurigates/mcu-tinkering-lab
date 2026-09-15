@@ -1,9 +1,12 @@
 /**
  * @file servo_controller.c
- * @brief Servo control via PCA9685 at 200Hz through TCA9548A I2C bus
+ * @brief Servo control via PCA9685 through TCA9548A I2C bus
  *
- * At 200Hz (5ms period), pulse width range 500-2500us maps to:
- *   PCA9685 count = (pulse_us * 4096) / 5000
+ * An angle is a real servo angle about centre:
+ *   pulse_us = SERVO_CENTER_PULSE_US + angle * SERVO_PULSE_US_PER_90_DEG / 90
+ * clamped to [SERVO_MIN_PULSE_US, SERVO_MAX_PULSE_US], the SG90 datasheet
+ * range. The PCA9685 count is that pulse as a fraction of the period the chip
+ * is actually running at.
  */
 
 #include "servo_controller.h"
@@ -15,15 +18,46 @@
 
 static const char *TAG = "servo_controller";
 
+/* The angles at which the pulse reaches the datasheet range: the widest travel
+ * limits servo_set_limits() accepts. -90 and +81 with the shipped constants. */
+#define SERVO_ANGLE_HW_MIN                                                         \
+    ((int16_t)(((int32_t)SERVO_MIN_PULSE_US - (int32_t)SERVO_CENTER_PULSE_US) * 90 / \
+               (int32_t)SERVO_PULSE_US_PER_90_DEG))
+#define SERVO_ANGLE_HW_MAX                                                         \
+    ((int16_t)(((int32_t)SERVO_MAX_PULSE_US - (int32_t)SERVO_CENTER_PULSE_US) * 90 / \
+               (int32_t)SERVO_PULSE_US_PER_90_DEG))
+
+_Static_assert(SERVO_PAN_LIMIT_MIN_DEFAULT >= SERVO_ANGLE_HW_MIN &&
+                   SERVO_PAN_LIMIT_MAX_DEFAULT <= SERVO_ANGLE_HW_MAX &&
+                   SERVO_PAN_LIMIT_MIN_DEFAULT <= SERVO_PAN_CENTER &&
+                   SERVO_PAN_CENTER <= SERVO_PAN_LIMIT_MAX_DEFAULT,
+               "pan limit defaults must lie inside the SG90 pulse range and contain centre");
+_Static_assert(SERVO_TILT_LIMIT_MIN_DEFAULT >= SERVO_ANGLE_HW_MIN &&
+                   SERVO_TILT_LIMIT_MAX_DEFAULT <= SERVO_ANGLE_HW_MAX &&
+                   SERVO_TILT_LIMIT_MIN_DEFAULT <= SERVO_TILT_CENTER &&
+                   SERVO_TILT_CENTER <= SERVO_TILT_LIMIT_MAX_DEFAULT,
+               "tilt limit defaults must lie inside the SG90 pulse range and contain centre");
+
 static struct {
     bool initialized;
     int16_t pan_angle;
     int16_t tilt_angle;
     bool pan_enabled;
     bool tilt_enabled;
+    /* Live travel limits. Initialised statically so they gate angles before
+     * init as well as after. */
+    int16_t pan_min;
+    int16_t pan_max;
+    int16_t tilt_min;
+    int16_t tilt_max;
     TaskHandle_t motion_task;
     bool motion_active;
-} servo_state = {0};
+} servo_state = {
+    .pan_min = SERVO_PAN_LIMIT_MIN_DEFAULT,
+    .pan_max = SERVO_PAN_LIMIT_MAX_DEFAULT,
+    .tilt_min = SERVO_TILT_LIMIT_MIN_DEFAULT,
+    .tilt_max = SERVO_TILT_LIMIT_MAX_DEFAULT,
+};
 
 /* Convert a pulse width to a PCA9685 count at the frequency the chip is
  * ACTUALLY running at.
@@ -45,21 +79,28 @@ static uint16_t pulse_to_count(uint16_t pulse_us)
     return (uint16_t)count;
 }
 
+/* The angle used to be stretched across the whole pulse span between the
+ * configured min and max, so tilt's "±45 deg" was really the servo's full
+ * ±90 deg travel and pan's +90 deg asked for 2500 us, past the SG90's 2400 us
+ * ceiling. Both stalled the head against its end stops. */
+static uint16_t angle_to_pulse_us(int16_t angle)
+{
+    int32_t pulse = (int32_t)SERVO_CENTER_PULSE_US +
+                    ((int32_t)angle * (int32_t)SERVO_PULSE_US_PER_90_DEG) / 90;
+
+    if (pulse < (int32_t)SERVO_MIN_PULSE_US) {
+        pulse = SERVO_MIN_PULSE_US;
+    }
+    if (pulse > (int32_t)SERVO_MAX_PULSE_US) {
+        pulse = SERVO_MAX_PULSE_US;
+    }
+    return (uint16_t)pulse;
+}
+
 uint16_t servo_angle_to_count(servo_id_t id, int16_t angle)
 {
-    int16_t min_angle = (id == SERVO_PAN) ? SERVO_PAN_MIN_ANGLE : SERVO_TILT_MIN_ANGLE;
-    int16_t max_angle = (id == SERVO_PAN) ? SERVO_PAN_MAX_ANGLE : SERVO_TILT_MAX_ANGLE;
-
-    if (angle < min_angle)
-        angle = min_angle;
-    if (angle > max_angle)
-        angle = max_angle;
-
-    float normalized = (float)(angle - min_angle) / (max_angle - min_angle);
-    uint16_t pulse_us =
-        SERVO_MIN_PULSE_US + (uint16_t)(normalized * (SERVO_MAX_PULSE_US - SERVO_MIN_PULSE_US));
-
-    return pulse_to_count(pulse_us);
+    (void)id;
+    return pulse_to_count(angle_to_pulse_us(angle));
 }
 
 static uint16_t angle_to_count(servo_id_t id, int16_t angle)
@@ -74,7 +115,8 @@ esp_err_t servo_controller_init(void)
         return ESP_OK;
     }
 
-    ESP_LOGI(TAG, "Initializing servo controller (PCA9685 @ 200Hz)");
+    ESP_LOGI(TAG, "Initializing servo controller (PCA9685 @ %uHz)",
+             (unsigned)i2c_bus_pca9685_frequency());
 
     servo_state.pan_angle = SERVO_PAN_CENTER;
     servo_state.tilt_angle = SERVO_TILT_CENTER;
@@ -94,7 +136,9 @@ esp_err_t servo_controller_init(void)
         return ret;
     }
 
-    ESP_LOGI(TAG, "Servo controller initialized");
+    ESP_LOGI(TAG, "Servo controller initialized (limits pan %+d..%+d, tilt %+d..%+d deg)",
+             servo_state.pan_min, servo_state.pan_max, servo_state.tilt_min,
+             servo_state.tilt_max);
     return ESP_OK;
 }
 
@@ -239,13 +283,132 @@ bool servo_is_initialized(void)
     return servo_state.initialized;
 }
 
+bool servo_is_enabled(servo_id_t servo_id)
+{
+    if (!servo_state.initialized)
+        return false;
+    if (servo_id == SERVO_PAN)
+        return servo_state.pan_enabled;
+    if (servo_id == SERVO_TILT)
+        return servo_state.tilt_enabled;
+    return false;
+}
+
 bool servo_is_angle_valid(servo_id_t servo_id, int16_t angle)
 {
     if (servo_id == SERVO_PAN)
-        return angle >= SERVO_PAN_MIN_ANGLE && angle <= SERVO_PAN_MAX_ANGLE;
+        return angle >= servo_state.pan_min && angle <= servo_state.pan_max;
     if (servo_id == SERVO_TILT)
-        return angle >= SERVO_TILT_MIN_ANGLE && angle <= SERVO_TILT_MAX_ANGLE;
+        return angle >= servo_state.tilt_min && angle <= servo_state.tilt_max;
     return false;
+}
+
+void servo_get_hw_range(int16_t *min_deg, int16_t *max_deg)
+{
+    if (min_deg)
+        *min_deg = SERVO_ANGLE_HW_MIN;
+    if (max_deg)
+        *max_deg = SERVO_ANGLE_HW_MAX;
+}
+
+esp_err_t servo_get_limits(servo_id_t servo_id, int16_t *min_deg, int16_t *max_deg)
+{
+    if (!min_deg || !max_deg)
+        return ESP_ERR_INVALID_ARG;
+    if (servo_id == SERVO_PAN) {
+        *min_deg = servo_state.pan_min;
+        *max_deg = servo_state.pan_max;
+    } else if (servo_id == SERVO_TILT) {
+        *min_deg = servo_state.tilt_min;
+        *max_deg = servo_state.tilt_max;
+    } else {
+        return ESP_ERR_INVALID_ARG;
+    }
+    return ESP_OK;
+}
+
+esp_err_t servo_set_limits(servo_id_t servo_id, int16_t min_deg, int16_t max_deg)
+{
+    if (servo_id != SERVO_PAN && servo_id != SERVO_TILT)
+        return ESP_ERR_INVALID_ARG;
+
+    const int16_t center = (servo_id == SERVO_PAN) ? SERVO_PAN_CENTER : SERVO_TILT_CENTER;
+    /* Centre must stay reachable: init and servo_center() drive to it. */
+    if (min_deg < SERVO_ANGLE_HW_MIN || max_deg > SERVO_ANGLE_HW_MAX || min_deg >= max_deg ||
+        min_deg > center || max_deg < center)
+        return ESP_ERR_INVALID_ARG;
+
+    int16_t *current;
+    bool enabled;
+    if (servo_id == SERVO_PAN) {
+        servo_state.pan_min = min_deg;
+        servo_state.pan_max = max_deg;
+        current = &servo_state.pan_angle;
+        enabled = servo_state.pan_enabled;
+    } else {
+        servo_state.tilt_min = min_deg;
+        servo_state.tilt_max = max_deg;
+        current = &servo_state.tilt_angle;
+        enabled = servo_state.tilt_enabled;
+    }
+
+    if (!servo_state.initialized)
+        return ESP_OK;
+
+    /* A narrowed range must not leave the servo parked outside it. */
+    int16_t inside = *current;
+    if (inside < min_deg)
+        inside = min_deg;
+    if (inside > max_deg)
+        inside = max_deg;
+    if (inside == *current)
+        return ESP_OK;
+    if (!enabled) {
+        *current = inside;
+        return ESP_OK;
+    }
+    return servo_set_angle(servo_id, inside);
+}
+
+esp_err_t servo_set_pwm_frequency(uint16_t hz)
+{
+    const bool pan_live = servo_state.initialized && servo_state.pan_enabled;
+    const bool tilt_live = servo_state.initialized && servo_state.tilt_enabled;
+    esp_err_t ret;
+
+    /* Release first, so no output carries a count from the old period while the
+     * prescaler changes. A failed release leaves the frequency alone: changing
+     * it would re-time a count that is still being output. */
+    if (pan_live) {
+        ret = i2c_bus_pca9685_set(SERVO_PAN_CHANNEL, 0);
+        if (ret != ESP_OK)
+            return ret;
+    }
+    if (tilt_live) {
+        ret = i2c_bus_pca9685_set(SERVO_TILT_CHANNEL, 0);
+        if (ret != ESP_OK)
+            return ret;
+    }
+
+    const esp_err_t freq_ret = i2c_bus_pca9685_set_frequency(hz);
+
+    /* Re-send even if the change failed: the outputs were just released, and
+     * the pulse maths reads back whichever frequency is now in force. */
+    esp_err_t resend_ret = ESP_OK;
+    if (pan_live) {
+        ret = i2c_bus_pca9685_set(SERVO_PAN_CHANNEL,
+                                  angle_to_count(SERVO_PAN, servo_state.pan_angle));
+        if (ret != ESP_OK)
+            resend_ret = ret;
+    }
+    if (tilt_live) {
+        ret = i2c_bus_pca9685_set(SERVO_TILT_CHANNEL,
+                                  angle_to_count(SERVO_TILT, servo_state.tilt_angle));
+        if (ret != ESP_OK && resend_ret == ESP_OK)
+            resend_ret = ret;
+    }
+
+    return (freq_ret != ESP_OK) ? freq_ret : resend_ret;
 }
 
 esp_err_t servo_move_smooth(servo_id_t servo_id, int16_t target_angle, uint8_t step_size,
@@ -305,16 +468,17 @@ esp_err_t servo_sweep(servo_id_t servo_id, int16_t start_angle, int16_t end_angl
 
 /* Bench bring-up gesture: shake the head, then nod.
  *
- * Exists because "the servos are not moving" has at least four causes that look
- * identical from across the room — no V+ on the PCA9685 (VCC powers only the
- * logic), a failed init, a pulse train outside the servo's frame rate, and a
- * dead servo — and the console could not tell them apart. Every step logs the
- * angle, the PCA9685 count written, and the bus result, so a servo that does
- * not move while the writes succeed is a different diagnosis from one whose
- * writes are failing.
+ * Exists because "the servos are not moving" has several causes that look
+ * identical from across the room — no VCC on the PCA9685 (its logic), no V+
+ * (servo power), a failed init, a pulse train outside the servo's frame rate,
+ * and a dead servo — and the console could not tell them apart. Every step logs
+ * the angle, the PCA9685 count written, and the bus result, so a servo that
+ * does not move while the writes succeed is a different diagnosis from one
+ * whose writes are failing.
  *
- * Blocking, by several seconds. Called on peripheral_task, never from the
- * console task. */
+ * Travels between the live limits, so it can never drive past an end stop
+ * someone has measured. Blocking, by several seconds. Called on
+ * peripheral_task, never from the console task. */
 esp_err_t servo_exercise(void)
 {
     if (!servo_state.initialized) {
@@ -322,24 +486,26 @@ esp_err_t servo_exercise(void)
         return ESP_ERR_INVALID_STATE;
     }
 
-    static const struct {
+    const struct {
         servo_id_t id;
         int16_t angle;
         const char *what;
     } k_steps[] = {
         {SERVO_PAN, SERVO_PAN_CENTER, "centre"},
-        {SERVO_PAN, SERVO_PAN_MIN_ANGLE, "look left"},
-        {SERVO_PAN, SERVO_PAN_MAX_ANGLE, "look right"},
+        {SERVO_PAN, servo_state.pan_min, "look left"},
+        {SERVO_PAN, servo_state.pan_max, "look right"},
         {SERVO_PAN, SERVO_PAN_CENTER, "centre"},
         {SERVO_TILT, SERVO_TILT_CENTER, "centre"},
-        {SERVO_TILT, SERVO_TILT_MAX_ANGLE, "nod up"},
-        {SERVO_TILT, SERVO_TILT_MIN_ANGLE, "nod down"},
-        {SERVO_TILT, SERVO_TILT_MAX_ANGLE, "nod up"},
-        {SERVO_TILT, SERVO_TILT_MIN_ANGLE, "nod down"},
+        {SERVO_TILT, servo_state.tilt_max, "nod up"},
+        {SERVO_TILT, servo_state.tilt_min, "nod down"},
+        {SERVO_TILT, servo_state.tilt_max, "nod up"},
+        {SERVO_TILT, servo_state.tilt_min, "nod down"},
         {SERVO_TILT, SERVO_TILT_CENTER, "centre"},
     };
 
-    ESP_LOGI(TAG, "exercise: PCA9685 at %u Hz", (unsigned)i2c_bus_pca9685_frequency());
+    ESP_LOGI(TAG, "exercise: PCA9685 at %u Hz, limits pan %+d..%+d tilt %+d..%+d deg",
+             (unsigned)i2c_bus_pca9685_frequency(), servo_state.pan_min, servo_state.pan_max,
+             servo_state.tilt_min, servo_state.tilt_max);
 
     esp_err_t first_error = ESP_OK;
     for (size_t i = 0; i < sizeof(k_steps) / sizeof(k_steps[0]); ++i) {
@@ -359,8 +525,8 @@ esp_err_t servo_exercise(void)
     if (first_error == ESP_OK) {
         ESP_LOGI(TAG,
                  "exercise: every write succeeded. If nothing moved, the fault is downstream of "
-                 "the PCA9685 — check V+ (VCC powers only the logic), the servo leads, and "
-                 "whether these servos track pulses at %u Hz (`servo freq 50`).",
+                 "the PCA9685's registers — check VCC (3.3 V logic), V+ (servo power), the servo "
+                 "leads, and whether these servos track pulses at %u Hz (`servo freq 50`).",
                  (unsigned)i2c_bus_pca9685_frequency());
     }
     return first_error;
