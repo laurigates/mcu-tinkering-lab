@@ -272,6 +272,8 @@ TEST(test_the_ladder_climbs_then_stops)
 
     /* Rungs, in base-period multiples: 1, 2, 4, 8, 20. */
     static const uint32_t k_expect[PLAN_LADDER_STEPS] = {1u, 2u, 4u, 8u, 20u};
+    /* The build guide prints the top interval from this macro (issue #485). */
+    ASSERT(k_expect[PLAN_LADDER_STEPS - 1] == PLAN_LADDER_TOP_MULTIPLIER);
 
     uint32_t last_call = 0u;
     for (int rung = 0; rung < PLAN_LADDER_STEPS; rung++) {

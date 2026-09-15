@@ -4,9 +4,9 @@
 // schematic image resolve:
 //   typst compile --root ../../../.. build-guide.typ
 //
-// Styling + helpers from tools/typst/build-guide.typ. Pin data auto-generated
-// from main/pin_config.h — run `just robocar-unified::gen-pin-defs` to
-// regenerate.
+// Styling + helpers from tools/typst/build-guide.typ. Pin data and planner
+// cadence auto-generated from main/pin_config.h, main/planner_task.h and
+// main/plan_activity.h — run `just robocar-unified::gen-pin-defs` to regenerate.
 //
 // This guide deliberately prints no firmware version. `version.txt` is on none
 // of the drift guard's trigger paths, so a release-please bump left the
@@ -50,7 +50,8 @@ Google's Gemini Robotics-ER to emit structured goals, and a fast *reactive
 executor* (\~30 Hz, Core 0) drives the robot smoothly toward those goals while
 an ultrasonic sensor provides an independent obstacle reflex. The planner is not
 on a fixed schedule: the board boots *dormant* and asks Gemini only when
-something happened, backing off 15 s #sym.arrow 300 s when nothing does.
+something happened, backing off #(PLANNER_LOOP_PERIOD_MS / 1000) s #sym.arrow
+#(PLANNER_LOOP_PERIOD_MS * PLAN_LADDER_TOP_MULTIPLIER / 1000) s when nothing does.
 
 #grid(columns: (1fr, 1fr), column-gutter: 12pt,
   callout("Core 0 — real-time")[
