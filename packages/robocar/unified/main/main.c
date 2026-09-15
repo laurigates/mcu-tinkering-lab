@@ -400,8 +400,7 @@ static void handle_periph_cmd(const char *buf)
             if (ret == ESP_OK) {
                 servo_position_t pos = {0};
                 servo_get_position(&pos);
-                printf("servo: on — holding pan=%+d tilt=%+d deg\n", pos.pan_angle,
-                       pos.tilt_angle);
+                printf("servo: on — holding pan=%+d tilt=%+d deg\n", pos.pan_angle, pos.tilt_angle);
             } else {
                 printf("servo: on failed: %s\n", esp_err_to_name(ret));
             }
@@ -418,10 +417,10 @@ static void handle_periph_cmd(const char *buf)
                 return;
             }
             const servo_id_t id = (strcmp(which, "pan") == 0) ? SERVO_PAN : SERVO_TILT;
-            const esp_err_t ret = (lo < INT16_MIN || lo > INT16_MAX || hi < INT16_MIN ||
-                                   hi > INT16_MAX)
-                                      ? ESP_ERR_INVALID_ARG
-                                      : servo_set_limits(id, (int16_t)lo, (int16_t)hi);
+            const esp_err_t ret =
+                (lo < INT16_MIN || lo > INT16_MAX || hi < INT16_MIN || hi > INT16_MAX)
+                    ? ESP_ERR_INVALID_ARG
+                    : servo_set_limits(id, (int16_t)lo, (int16_t)hi);
             if (ret == ESP_OK) {
                 printf("servo: %s limits %+d..%+d deg — does not persist\n", which, lo, hi);
             } else {
@@ -443,9 +442,8 @@ static void handle_periph_cmd(const char *buf)
         }
 
         if (n == 2 && strcmp(arg, "freq") == 0) {
-            const esp_err_t ret = (a < 0 || a > 0xFFFF)
-                                      ? ESP_ERR_INVALID_ARG
-                                      : servo_set_pwm_frequency((uint16_t)a);
+            const esp_err_t ret =
+                (a < 0 || a > 0xFFFF) ? ESP_ERR_INVALID_ARG : servo_set_pwm_frequency((uint16_t)a);
             if (ret == ESP_OK) {
                 printf("servo: pca9685=%d Hz — servo pulses re-sent; affects motors and LEDs "
                        "too, and does not persist\n",
@@ -495,8 +493,7 @@ static void handle_periph_cmd(const char *buf)
 
         cmd.angle = (int16_t)a;
         dispatch_periph_cmd(&cmd);
-        printf("servo: %s=%d (count %u)\n", arg, a,
-               (unsigned)servo_angle_to_count(id, (int16_t)a));
+        printf("servo: %s=%d (count %u)\n", arg, a, (unsigned)servo_angle_to_count(id, (int16_t)a));
         return;
     }
 

@@ -215,9 +215,9 @@
 // -90 deg is 500 us and +81 deg already reaches the 2400 us ceiling.
 // SERVO_PERIOD_US is only the fallback if the frequency reads back as zero.
 #define SERVO_PERIOD_US 5000
-#define SERVO_MIN_PULSE_US 500       // SG90 datasheet minimum
-#define SERVO_MAX_PULSE_US 2400      // SG90 datasheet maximum
-#define SERVO_CENTER_PULSE_US 1500   // 0 deg
+#define SERVO_MIN_PULSE_US 500      // SG90 datasheet minimum
+#define SERVO_MAX_PULSE_US 2400     // SG90 datasheet maximum
+#define SERVO_CENTER_PULSE_US 1500  // 0 deg
 #define SERVO_PULSE_US_PER_90_DEG 1000
 
 // Pulse width -> PCA9685 count lives in servo_controller.c now, because it

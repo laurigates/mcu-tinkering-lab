@@ -20,10 +20,10 @@ static const char *TAG = "servo_controller";
 
 /* The angles at which the pulse reaches the datasheet range: the widest travel
  * limits servo_set_limits() accepts. -90 and +81 with the shipped constants. */
-#define SERVO_ANGLE_HW_MIN                                                         \
+#define SERVO_ANGLE_HW_MIN                                                           \
     ((int16_t)(((int32_t)SERVO_MIN_PULSE_US - (int32_t)SERVO_CENTER_PULSE_US) * 90 / \
                (int32_t)SERVO_PULSE_US_PER_90_DEG))
-#define SERVO_ANGLE_HW_MAX                                                         \
+#define SERVO_ANGLE_HW_MAX                                                           \
     ((int16_t)(((int32_t)SERVO_MAX_PULSE_US - (int32_t)SERVO_CENTER_PULSE_US) * 90 / \
                (int32_t)SERVO_PULSE_US_PER_90_DEG))
 
@@ -85,8 +85,8 @@ static uint16_t pulse_to_count(uint16_t pulse_us)
  * ceiling. Both stalled the head against its end stops. */
 static uint16_t angle_to_pulse_us(int16_t angle)
 {
-    int32_t pulse = (int32_t)SERVO_CENTER_PULSE_US +
-                    ((int32_t)angle * (int32_t)SERVO_PULSE_US_PER_90_DEG) / 90;
+    int32_t pulse =
+        (int32_t)SERVO_CENTER_PULSE_US + ((int32_t)angle * (int32_t)SERVO_PULSE_US_PER_90_DEG) / 90;
 
     if (pulse < (int32_t)SERVO_MIN_PULSE_US) {
         pulse = SERVO_MIN_PULSE_US;
@@ -137,8 +137,7 @@ esp_err_t servo_controller_init(void)
     }
 
     ESP_LOGI(TAG, "Servo controller initialized (limits pan %+d..%+d, tilt %+d..%+d deg)",
-             servo_state.pan_min, servo_state.pan_max, servo_state.tilt_min,
-             servo_state.tilt_max);
+             servo_state.pan_min, servo_state.pan_max, servo_state.tilt_min, servo_state.tilt_max);
     return ESP_OK;
 }
 

@@ -110,11 +110,11 @@ static int s_failures;
         }                                                          \
     } while (0)
 
-#define CHECK_WRITE(i, ch, count)                                                         \
-    CHECK(s_events[i].kind == EV_WRITE && s_events[i].channel == (ch) &&                  \
-              s_events[i].value == (count),                                               \
+#define CHECK_WRITE(i, ch, count)                                                             \
+    CHECK(s_events[i].kind == EV_WRITE && s_events[i].channel == (ch) &&                      \
+              s_events[i].value == (count),                                                   \
           "event %d: expected write ch%u=%u, got kind=%d ch%u value=%u", (i), (unsigned)(ch), \
-          (unsigned)(count), (int)s_events[i].kind, (unsigned)s_events[i].channel,        \
+          (unsigned)(count), (int)s_events[i].kind, (unsigned)s_events[i].channel,            \
           (unsigned)s_events[i].value)
 
 /* The module keeps its state in a file-static struct with no reset hook, so
@@ -191,8 +191,8 @@ static void test_the_count_tracks_the_pwm_frequency(void)
     const uint16_t at_200 = servo_angle_to_count(SERVO_PAN, 45);
     s_pwm_hz = 50u;
     const uint16_t at_50 = servo_angle_to_count(SERVO_PAN, 45);
-    CHECK(at_50 < at_200, "a lower frequency must need a smaller count: %u vs %u",
-          (unsigned)at_50, (unsigned)at_200);
+    CHECK(at_50 < at_200, "a lower frequency must need a smaller count: %u vs %u", (unsigned)at_50,
+          (unsigned)at_200);
 
     s_pwm_hz = 200u;
 }
@@ -238,8 +238,8 @@ static void test_the_boot_limits_gate_every_move(void)
     reset_bus();
 
     int16_t lo = 0, hi = 0;
-    CHECK(servo_get_limits(SERVO_PAN, &lo, &hi) == ESP_OK &&
-              lo == SERVO_PAN_LIMIT_MIN_DEFAULT && hi == SERVO_PAN_LIMIT_MAX_DEFAULT,
+    CHECK(servo_get_limits(SERVO_PAN, &lo, &hi) == ESP_OK && lo == SERVO_PAN_LIMIT_MIN_DEFAULT &&
+              hi == SERVO_PAN_LIMIT_MAX_DEFAULT,
           "pan boot limits %d..%d", lo, hi);
 
     CHECK(servo_set_angle(SERVO_PAN, SERVO_PAN_LIMIT_MAX_DEFAULT + 1) == ESP_ERR_INVALID_ARG,
@@ -365,8 +365,8 @@ static void test_the_exercise_never_leaves_the_limits(void)
     for (int i = 0; i < s_event_count && i < 32; i++) {
         const uint16_t v = s_events[i].value;
         if (s_events[i].channel == SERVO_PAN_CHANNEL) {
-            CHECK(v >= pan_lo && v <= pan_hi, "pan step %d count %u outside %u..%u", i,
-                  (unsigned)v, (unsigned)pan_lo, (unsigned)pan_hi);
+            CHECK(v >= pan_lo && v <= pan_hi, "pan step %d count %u outside %u..%u", i, (unsigned)v,
+                  (unsigned)pan_lo, (unsigned)pan_hi);
         } else {
             CHECK(v >= tilt_lo && v <= tilt_hi, "tilt step %d count %u outside %u..%u", i,
                   (unsigned)v, (unsigned)tilt_lo, (unsigned)tilt_hi);
