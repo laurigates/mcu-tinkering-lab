@@ -207,14 +207,18 @@
 #define MIC_SAMPLE_RATE_HZ 16000
 
 // ========================================
-// Servo Configuration (SG90 at 200Hz)
+// Servo Configuration (SG90)
 // ========================================
-// At 200Hz, period = 5000us. Pulse width range: 500-2500us.
-// PCA9685 counts = (pulse_us * 4096) / 5000
+// An angle is a real servo angle about centre:
+//   pulse_us = SERVO_CENTER_PULSE_US + angle * SERVO_PULSE_US_PER_90_DEG / 90
+// and every pulse is clamped to the SG90 datasheet range (500-2400 us), so
+// -90 deg is 500 us and +81 deg already reaches the 2400 us ceiling.
+// SERVO_PERIOD_US is only the fallback if the frequency reads back as zero.
 #define SERVO_PERIOD_US 5000
-#define SERVO_MIN_PULSE_US 500      // 0 degrees
-#define SERVO_MAX_PULSE_US 2500     // 180 degrees
-#define SERVO_CENTER_PULSE_US 1500  // 90 degrees
+#define SERVO_MIN_PULSE_US 500      // SG90 datasheet minimum
+#define SERVO_MAX_PULSE_US 2400     // SG90 datasheet maximum
+#define SERVO_CENTER_PULSE_US 1500  // 0 deg
+#define SERVO_PULSE_US_PER_90_DEG 1000
 
 // Pulse width -> PCA9685 count lives in servo_controller.c now, because it
 // depends on the frequency the chip is ACTUALLY running at. The macro that used
@@ -222,11 +226,9 @@
 // only at 200 Hz and silently wrong at any other — a second copy of a fact the
 // PCA9685's prescaler already owns. Use servo_angle_to_count().
 
-// Servo travel limits live in servo_controller.h as SERVO_PAN_MIN_ANGLE /
-// SERVO_PAN_MAX_ANGLE / SERVO_TILT_MIN_ANGLE / SERVO_TILT_MAX_ANGLE, which is
-// what servo_controller.c actually enforces. A second copy here (as *_DEG,
-// plus unused *_COUNT wrappers) was referenced by nothing and could silently
-// drift out of agreement with the limits in force.
+// Servo travel limits are live: boot defaults are SERVO_PAN_LIMIT_*_DEFAULT /
+// SERVO_TILT_LIMIT_*_DEFAULT in servo_controller.h, changed at runtime with
+// `servo limit pan|tilt <min> <max>`. servo_controller.c enforces them.
 
 // ========================================
 // FreeRTOS Task Configuration

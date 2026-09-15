@@ -356,35 +356,97 @@ static void handle_periph_cmd(const char *buf)
     }
 
     if (strncmp(buf, "servo", 5) == 0) {
+        static const char k_servo_usage[] =
+            "servo: usage: servo | servo pan|tilt <deg> | servo on|off | "
+            "servo limit pan|tilt <min> <max> | servo exercise | servo freq <24-1526>\n";
         const int n = sscanf(buf, "servo %15s %d", arg, &a);
 
         if (n <= 0) {
-            /* State first: three of the four ways this goes wrong are visible
-             * here, and the fourth (nothing moves while every write succeeds)
-             * is what `servo exercise` is for. */
+            /* State first: most of the ways this goes wrong are visible here,
+             * and the rest (nothing moves while every write succeeds) is what
+             * `servo exercise` is for. */
             servo_position_t pos = {0};
+            int16_t pan_lo = 0, pan_hi = 0, tilt_lo = 0, tilt_hi = 0;
             const bool ready = servo_is_initialized();
             servo_get_position(&pos);
+            servo_get_limits(SERVO_PAN, &pan_lo, &pan_hi);
+            servo_get_limits(SERVO_TILT, &tilt_lo, &tilt_hi);
             printf("servo: %s | pca9685=%u Hz\n", ready ? "ready" : "NOT INITIALISED",
                    (unsigned)i2c_bus_pca9685_frequency());
-            printf("       pan=%+d deg (count %u)  tilt=%+d deg (count %u)\n", pos.pan_angle,
-                   (unsigned)servo_angle_to_count(SERVO_PAN, pos.pan_angle), pos.tilt_angle,
-                   (unsigned)servo_angle_to_count(SERVO_TILT, pos.tilt_angle));
-            printf("       usage: servo pan|tilt <deg> | servo exercise | servo freq <24-1526>\n");
+            printf("       pan=%+d deg (count %u, %s, limits %+d..%+d)\n", pos.pan_angle,
+                   (unsigned)servo_angle_to_count(SERVO_PAN, pos.pan_angle),
+                   servo_is_enabled(SERVO_PAN) ? "on" : "off", pan_lo, pan_hi);
+            printf("       tilt=%+d deg (count %u, %s, limits %+d..%+d)\n", pos.tilt_angle,
+                   (unsigned)servo_angle_to_count(SERVO_TILT, pos.tilt_angle),
+                   servo_is_enabled(SERVO_TILT) ? "on" : "off", tilt_lo, tilt_hi);
+            printf("%s", k_servo_usage);
+            return;
+        }
+
+        /* on/off run here rather than on peripheral_task, so `servo off` still
+         * releases the outputs while an exercise is blocking that queue. */
+        if (strcmp(arg, "off") == 0) {
+            const esp_err_t ret = servo_disable_all();
+            if (ret == ESP_OK) {
+                printf("servo: off — pan and tilt outputs released (no pulses)\n");
+            } else {
+                printf("servo: off failed: %s\n", esp_err_to_name(ret));
+            }
+            return;
+        }
+
+        if (strcmp(arg, "on") == 0) {
+            const esp_err_t ret = servo_enable_all();
+            if (ret == ESP_OK) {
+                servo_position_t pos = {0};
+                servo_get_position(&pos);
+                printf("servo: on — holding pan=%+d tilt=%+d deg\n", pos.pan_angle, pos.tilt_angle);
+            } else {
+                printf("servo: on failed: %s\n", esp_err_to_name(ret));
+            }
+            return;
+        }
+
+        if (strcmp(arg, "limit") == 0) {
+            char which[8] = {0};
+            int lo = 0;
+            int hi = 0;
+            if (sscanf(buf, "servo limit %7s %d %d", which, &lo, &hi) != 3 ||
+                (strcmp(which, "pan") != 0 && strcmp(which, "tilt") != 0)) {
+                printf("servo: usage: servo limit pan|tilt <min> <max>\n");
+                return;
+            }
+            const servo_id_t id = (strcmp(which, "pan") == 0) ? SERVO_PAN : SERVO_TILT;
+            const esp_err_t ret =
+                (lo < INT16_MIN || lo > INT16_MAX || hi < INT16_MIN || hi > INT16_MAX)
+                    ? ESP_ERR_INVALID_ARG
+                    : servo_set_limits(id, (int16_t)lo, (int16_t)hi);
+            if (ret == ESP_OK) {
+                printf("servo: %s limits %+d..%+d deg — does not persist\n", which, lo, hi);
+            } else {
+                int16_t hw_lo = 0, hw_hi = 0;
+                servo_get_hw_range(&hw_lo, &hw_hi);
+                printf("servo: limit rejected (%s) — need %+d <= min <= 0 <= max <= %+d, "
+                       "min < max\n",
+                       esp_err_to_name(ret), hw_lo, hw_hi);
+            }
             return;
         }
 
         if (strcmp(arg, "exercise") == 0) {
             periph_cmd_t cmd = {.type = PERIPH_CMD_SERVO_EXERCISE};
             dispatch_periph_cmd(&cmd);
-            printf("servo: exercise queued — shake then nod, ~6 s; watch the log for each write\n");
+            printf("servo: exercise queued — shake then nod within the limits, ~6 s; watch the "
+                   "log for each write\n");
             return;
         }
 
         if (n == 2 && strcmp(arg, "freq") == 0) {
-            const esp_err_t ret = i2c_bus_pca9685_set_frequency((uint16_t)a);
+            const esp_err_t ret =
+                (a < 0 || a > 0xFFFF) ? ESP_ERR_INVALID_ARG : servo_set_pwm_frequency((uint16_t)a);
             if (ret == ESP_OK) {
-                printf("servo: pca9685=%d Hz — affects motors and LEDs too, and does not persist\n",
+                printf("servo: pca9685=%d Hz — servo pulses re-sent; affects motors and LEDs "
+                       "too, and does not persist\n",
                        a);
             } else {
                 printf("servo: freq failed: %s\n", esp_err_to_name(ret));
@@ -393,25 +455,45 @@ static void handle_periph_cmd(const char *buf)
         }
 
         if (n != 2) {
-            printf(
-                "servo: usage: servo | servo pan|tilt <deg> | servo exercise | servo freq <hz>\n");
+            printf("%s", k_servo_usage);
             return;
         }
 
-        periph_cmd_t cmd = {.angle = (int16_t)a};
+        periph_cmd_t cmd = {0};
+        servo_id_t id;
         if (strcmp(arg, "pan") == 0) {
             cmd.type = PERIPH_CMD_SERVO_PAN;
+            id = SERVO_PAN;
         } else if (strcmp(arg, "tilt") == 0) {
             cmd.type = PERIPH_CMD_SERVO_TILT;
+            id = SERVO_TILT;
         } else {
-            printf(
-                "servo: usage: servo | servo pan|tilt <deg> | servo exercise | servo freq <hz>\n");
+            printf("%s", k_servo_usage);
             return;
         }
+
+        /* Checked here as well as in servo_set_angle(), because the move itself
+         * runs later on peripheral_task and its refusal would be silent. */
+        if (!servo_is_initialized()) {
+            printf("servo: NOT INITIALISED — nothing sent\n");
+            return;
+        }
+        if (a < INT16_MIN || a > INT16_MAX || !servo_is_angle_valid(id, (int16_t)a)) {
+            int16_t lo = 0, hi = 0;
+            servo_get_limits(id, &lo, &hi);
+            printf("servo: %s=%d rejected — limits are %+d..%+d deg (`servo limit %s <min> "
+                   "<max>`)\n",
+                   arg, a, lo, hi, arg);
+            return;
+        }
+        if (!servo_is_enabled(id)) {
+            printf("servo: %s is off — `servo on` first\n", arg);
+            return;
+        }
+
+        cmd.angle = (int16_t)a;
         dispatch_periph_cmd(&cmd);
-        printf("servo: %s=%d (count %u)\n", arg, a,
-               (unsigned)servo_angle_to_count(
-                   (cmd.type == PERIPH_CMD_SERVO_PAN) ? SERVO_PAN : SERVO_TILT, (int16_t)a));
+        printf("servo: %s=%d (count %u)\n", arg, a, (unsigned)servo_angle_to_count(id, (int16_t)a));
         return;
     }
 
