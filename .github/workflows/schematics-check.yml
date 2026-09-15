@@ -38,7 +38,11 @@ jobs:
         with:
           python-version: '3.11'
 
+      # Pinned with the other uv installs: 0.12.14 regressed wheel installs into
+      # symlinked venv dirs (astral-sh/uv#21692).
       - uses: astral-sh/setup-uv@v7
+        with:
+          version: '0.12.10'
 
       # --frozen installs the exact versions from the committed uv.lock and
       # errors if the lock is stale, instead of resolving fresh. SVG output
