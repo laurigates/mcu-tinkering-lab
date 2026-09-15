@@ -4,6 +4,7 @@
 **Date**: 2026-04-17
 **Source**: PRP: Hierarchical AI Controller (Planner + Reactive Executor), conversation 2026-04-17
 **Confidence**: 8/10
+**Extended by**: [ADR-025](ADR-025-reactive-head-aiming.md) — the executor also owns the pan/tilt head and aims `track` goals with it; the planner gains no tool
 
 ---
 

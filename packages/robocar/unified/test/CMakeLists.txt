@@ -81,12 +81,27 @@ add_test(NAME ultrasonic_stub COMMAND test_ultrasonic_stub)
 add_executable(test_reactive_controller
     "${MAIN_SRC_DIR}/goal_state.c"
     "${MAIN_SRC_DIR}/ultrasonic.c"
+    "${MAIN_SRC_DIR}/head_aim.c"
     "${MAIN_SRC_DIR}/reactive_controller.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/motor_controller_stub.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/servo_controller_stub.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/test_reactive_controller.c"
 )
 target_link_libraries(test_reactive_controller PRIVATE Threads::Threads m)
 add_test(NAME reactive_controller COMMAND test_reactive_controller)
+
+# -----------------------------------------------------------------------------
+# head_aim — pan/tilt aiming for track goals (issue #511)
+#
+# Pure C, compiled unmodified. The executor integration (servo writes, the
+# wheel-only fallback, head leases) is pinned in test_reactive_controller.
+# -----------------------------------------------------------------------------
+add_executable(test_head_aim
+    "${MAIN_SRC_DIR}/head_aim.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_head_aim.c"
+)
+target_link_libraries(test_head_aim PRIVATE m)
+add_test(NAME head_aim COMMAND test_head_aim)
 
 # -----------------------------------------------------------------------------
 # base64 streaming decoder (TTS audio path)

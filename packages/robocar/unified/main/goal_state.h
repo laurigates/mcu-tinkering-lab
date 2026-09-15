@@ -81,6 +81,20 @@ typedef struct {
             int16_t angle_deg; /**< +CW, -CCW                           */
         } rotate;
     } params;
+
+    /**
+     * Head pose when the frame this goal was planned from was captured, in
+     * degrees about centre (+pan right, +tilt up). Set by planner_task, never by
+     * the parser: the model does not know the head moved.
+     *
+     * Recorded with the goal, not read by the executor when it acts, because
+     * the two moments are seconds apart and the head leads a track goal during
+     * that gap. A box and a drive heading are both stated in the coordinates of
+     * the frame the planner saw; only the pose at capture converts them into
+     * body-relative angles. Zero when the servos are not initialised.
+     */
+    int16_t head_pan_deg;
+    int16_t head_tilt_deg;
 } goal_t;
 
 /* =========================================================================
@@ -141,6 +155,18 @@ esp_err_t goal_state_write(const goal_t *goal, uint32_t ttl_ms);
  *         (not initialised).
  */
 esp_err_t goal_state_read(goal_t *out, bool *is_fresh);
+
+/**
+ * @brief goal_state_read(), plus the write sequence of the goal returned.
+ *
+ * The sequence increments on every goal_state_write() and is read under the
+ * same lock as the goal, so it identifies *this* write: two plans that happen
+ * to carry an identical box are still two goals. The executor uses it to latch
+ * a track box's bearing once per plan (see head_aim.h).
+ *
+ * @param seq  Optional; may be NULL.
+ */
+esp_err_t goal_state_read_seq(goal_t *out, bool *is_fresh, uint32_t *seq);
 
 /**
  * @brief Atomically set the goal to GOAL_KIND_STOP with the default TTL.

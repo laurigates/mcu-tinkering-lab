@@ -201,6 +201,36 @@ static void test_ttl_expiry(void)
     goal_state_set_clock_override(NULL);
 }
 
+/* Every write gets a new sequence, even an identical goal — the executor
+ * latches a track box's bearing once per plan, and two plans carrying the same
+ * box are still two plans. */
+static void test_write_sequence_identifies_each_write(void)
+{
+    goal_state_init();
+
+    const goal_t track = {
+        .kind = GOAL_KIND_TRACK,
+        .params.track = {.ymin = 1, .xmin = 2, .ymax = 3, .xmax = 4, .max_speed_pct = 5},
+        .head_pan_deg = -12,
+        .head_tilt_deg = 7,
+    };
+    goal_t out;
+    bool fresh;
+    uint32_t seq_a = 0, seq_b = 0, seq_c = 0;
+
+    ASSERT(goal_state_write(&track, 60000) == ESP_OK);
+    ASSERT(goal_state_read_seq(&out, &fresh, &seq_a) == ESP_OK);
+    ASSERT(goal_state_read_seq(&out, &fresh, &seq_b) == ESP_OK);
+    ASSERT(seq_a == seq_b); /* reading does not advance it */
+    ASSERT(out.head_pan_deg == -12 && out.head_tilt_deg == 7);
+
+    ASSERT(goal_state_write(&track, 60000) == ESP_OK);
+    ASSERT(goal_state_read_seq(&out, &fresh, &seq_c) == ESP_OK);
+    ASSERT(seq_c != seq_a);
+
+    ASSERT(goal_state_read_seq(&out, &fresh, NULL) == ESP_OK); /* seq optional */
+}
+
 static void test_force_stop(void)
 {
     goal_state_init();
@@ -355,6 +385,7 @@ int main(void)
     test_run("write_read_roundtrip_rotate", test_write_read_roundtrip_rotate);
     test_run("write_read_roundtrip_stop", test_write_read_roundtrip_stop);
     test_run("ttl_expiry", test_ttl_expiry);
+    test_run("write_sequence_identifies_each_write", test_write_sequence_identifies_each_write);
     test_run("force_stop", test_force_stop);
     test_run("null_args", test_null_args);
     test_run("concurrent_fuzz", test_concurrent_fuzz);
