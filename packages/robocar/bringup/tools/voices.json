@@ -1,0 +1,67 @@
+[
+  {
+    "clip": "psram",
+    "text": "Read this aloud as a technician working through a checklist, clearly and unhurried, no extra words: P S RAM",
+    "voice": "Kore"
+  },
+  {
+    "clip": "flash",
+    "text": "Read this aloud as a technician working through a checklist, clearly and unhurried, no extra words: Flash",
+    "voice": "Kore"
+  },
+  {
+    "clip": "buzzer",
+    "text": "Read this aloud as a technician working through a checklist, clearly and unhurried, no extra words: Buzzer",
+    "voice": "Kore"
+  },
+  {
+    "clip": "i2c_mux",
+    "text": "Read this aloud as a technician working through a checklist, clearly and unhurried, no extra words: I two C mux",
+    "voice": "Kore"
+  },
+  {
+    "clip": "i2c_scan",
+    "text": "Read this aloud as a technician working through a checklist, clearly and unhurried, no extra words: I two C scan",
+    "voice": "Kore"
+  },
+  {
+    "clip": "oled",
+    "text": "Read this aloud as a technician working through a checklist, clearly and unhurried, no extra words. Pronounce it as one word, oh-led: OLED",
+    "voice": "Kore"
+  },
+  {
+    "clip": "leds",
+    "text": "Read this aloud as a technician working through a checklist, clearly and unhurried, no extra words: L E Ds",
+    "voice": "Kore"
+  },
+  {
+    "clip": "servos",
+    "text": "Read this aloud as a technician working through a checklist, clearly and unhurried, no extra words: Servos",
+    "voice": "Kore"
+  },
+  {
+    "clip": "motors",
+    "text": "Read this aloud as a technician warning a colleague, clear and firm, no extra words: Motors. Wheels will move.",
+    "voice": "Kore"
+  },
+  {
+    "clip": "mcp23017",
+    "text": "Read this aloud as a technician working through a checklist, clearly and unhurried, no extra words: M C P expander",
+    "voice": "Kore"
+  },
+  {
+    "clip": "sonar",
+    "text": "Read this aloud as a technician working through a checklist, clearly and unhurried, no extra words: Sonar",
+    "voice": "Kore"
+  },
+  {
+    "clip": "amp",
+    "text": "Read this aloud as a technician working through a checklist, clearly and unhurried, no extra words: Amplifier",
+    "voice": "Kore"
+  },
+  {
+    "clip": "mic",
+    "text": "Read this aloud as a technician working through a checklist, clearly and unhurried, no extra words: Microphone",
+    "voice": "Kore"
+  }
+]

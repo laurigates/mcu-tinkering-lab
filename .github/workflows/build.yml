@@ -117,13 +117,24 @@ jobs:
           # --- Emit one matrix per build system ------------------------------
           for sys in esp32 esphome pico; do
             if [ "$CHANGED" = "__ALL__" ]; then
-              inc=$(jq -c --arg s "$sys" '[.[] | select(.system == $s)]' "$MANIFEST")
+              # del(.extra_paths) here too: it is a discovery input, not a
+              # matrix field, and leaving it in puts the path list into every
+              # job's display name on a full-matrix run.
+              inc=$(jq -c --arg s "$sys" '[.[] | select(.system == $s) | del(.extra_paths)]' "$MANIFEST")
             else
+              # A project is rebuilt when its own directory changed, or when any
+              # directory it names in `extra_paths` did. robocar-bringup compiles
+              # robocar-unified's drivers straight out of ../unified/main, so a
+              # unified-only PR used to leave it unbuilt — and it sat broken for
+              # four merged PRs with a green matrix every time (#529 deleted the
+              # component tree its CMakeLists still named).
               inc=$(jq -c --arg s "$sys" --arg ch "$CHANGED" '
                 ($ch | split("\n") | map(select(length > 0))) as $files
                 | [ .[]
                     | select(.system == $s)
-                    | select(. as $p | $files | any(startswith("packages/" + $p.path + "/"))) ]
+                    | select(([.path] + (.extra_paths // []))
+                             | any(. as $d | $files | any(startswith("packages/" + $d + "/"))))
+                    | del(.extra_paths) ]
               ' "$MANIFEST")
             fi
             n=$(printf '%s' "$inc" | jq 'length')

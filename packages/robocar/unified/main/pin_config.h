@@ -42,8 +42,26 @@
 // ========================================
 // PCA9685 PWM Driver (via TCA9548A ch0)
 // ========================================
-#define PCA9685_ADDR 0x40    // Default PCA9685 address
-#define PCA9685_FREQ_HZ 200  // 200Hz: compromise for servos + motors + LEDs
+#define PCA9685_ADDR 0x40  // Default PCA9685 address
+// 100 Hz, chosen from a measurement rather than a guess (2026-09-18 bench,
+// robocar-bringup's servo rate ladder). The SG90s fitted here track cleanly at
+// 50, 100 and 125 Hz and BUZZ at 200 — they stall against the pulse train
+// instead of following it, which is what made a freshly booted robot sweep its
+// head and then sit humming at an end stop.
+//
+// One rung below the highest rate that worked, deliberately. 125 Hz passed with
+// no margin left above it, and the bench test was the optimistic case: the
+// servos were unloaded and off the camera mount, while a loaded servo draws
+// more current, sags the shared rail, and degrades exactly the timing that is
+// already marginal.
+//
+// The prescaler is CHIP-WIDE, so this is a three-way compromise and not a servo
+// setting. LEDs flicker more the lower it goes (100 Hz is above the ~60-90 Hz
+// fusion threshold, but a moving robot can still show stroboscopic artefacts),
+// and motor PWM is audible at any rate in this range — a TB6612FNG would rather
+// have kilohertz. Raise to 125 if the LEDs look bad; `servo freq <hz>` changes
+// it at runtime without a reflash, so try before editing.
+#define PCA9685_FREQ_HZ 100
 
 // LED channels (2x RGB)
 #define LED_LEFT_R_CHANNEL 0
@@ -214,7 +232,9 @@
 // and every pulse is clamped to the SG90 datasheet range (500-2400 us), so
 // -90 deg is 500 us and +81 deg already reaches the 2400 us ceiling.
 // SERVO_PERIOD_US is only the fallback if the frequency reads back as zero.
-#define SERVO_PERIOD_US 5000
+// Kept in step with PCA9685_FREQ_HZ so the fallback is not itself a wrong
+// answer: 1000000 / 100 Hz.
+#define SERVO_PERIOD_US 10000
 #define SERVO_MIN_PULSE_US 500      // SG90 datasheet minimum
 #define SERVO_MAX_PULSE_US 2400     // SG90 datasheet maximum
 #define SERVO_CENTER_PULSE_US 1500  // 0 deg
@@ -223,7 +243,7 @@
 // Pulse width -> PCA9685 count lives in servo_controller.c now, because it
 // depends on the frequency the chip is ACTUALLY running at. The macro that used
 // to sit here divided by SERVO_PERIOD_US unconditionally, which made it correct
-// only at 200 Hz and silently wrong at any other — a second copy of a fact the
+// at one frequency only and silently wrong at any other — a second copy of a fact the
 // PCA9685's prescaler already owns. Use servo_angle_to_count().
 
 // Servo travel limits are live: boot defaults are SERVO_PAN_LIMIT_*_DEFAULT /

@@ -18,8 +18,10 @@ idf_component_register(
         "checks.c"
         "cues.c"
         "oled.c"
+        "speech.c"
         # --- shared, unmodified, from robocar-unified ---
         "${UNIFIED_MAIN}/i2c_bus.c"
+        "${UNIFIED_MAIN}/pca9685_phase.c"
         "${UNIFIED_MAIN}/gpio_expander.c"
         "${UNIFIED_MAIN}/motor_controller.c"
         "${UNIFIED_MAIN}/led_controller.c"
@@ -28,6 +30,23 @@ idf_component_register(
         "${UNIFIED_MAIN}/ultrasonic.c"
         "${UNIFIED_MAIN}/audio_player.c"
         "${UNIFIED_MAIN}/mic_pdm.c"
+    EMBED_FILES
+        # Spoken check names: raw 24 kHz mono s16 PCM, rendered offline by
+        # tools/voices.json (see speech.h). The device never talks to the
+        # network; regenerating these is an explicit developer action.
+        "../data/tts_psram.pcm"
+        "../data/tts_flash.pcm"
+        "../data/tts_buzzer.pcm"
+        "../data/tts_i2c_mux.pcm"
+        "../data/tts_i2c_scan.pcm"
+        "../data/tts_oled.pcm"
+        "../data/tts_leds.pcm"
+        "../data/tts_servos.pcm"
+        "../data/tts_motors.pcm"
+        "../data/tts_mcp23017.pcm"
+        "../data/tts_sonar.pcm"
+        "../data/tts_amp.pcm"
+        "../data/tts_mic.pcm"
     INCLUDE_DIRS
         "."
         "${UNIFIED_MAIN}"

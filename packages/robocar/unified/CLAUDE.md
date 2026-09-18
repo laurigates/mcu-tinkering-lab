@@ -120,10 +120,12 @@ dead servo. The exercise travels between the live `servo limit` values, so it
 cannot drive past an end stop somebody has measured. Every step logs the angle, the PCA9685 count written and the bus
 result, so a servo that does not move *while the writes succeed* is a different
 diagnosis from one whose writes are failing — and `servo freq 50` settles the
-frame-rate question without a reflash. The shipped 200 Hz is a compromise chosen
-for motor smoothness and LED flicker, and whether an analog servo tracks pulses
-at that rate is a property of the servos fitted, not something the firmware can
-assert. Note the prescaler is chip-wide: changing it moves motors and LEDs too.
+frame-rate question without a reflash. That question is now answered for this
+build: `robocar-bringup`'s rate ladder (2026-09-18) showed the SG90s fitted here
+track cleanly at 50, 100 and 125 Hz and **buzz at 200**, so `PCA9685_FREQ_HZ` is
+100 — one rung below the highest rate that worked, because the bench servos were
+unloaded and a loaded one has less timing margin. Note the prescaler is
+chip-wide: changing it moves motors and LEDs too.
 
 **The wheels get the same treatment at boot, from `run_wheel_exercise()` in
 `main.c`.** It drives forward then backward for `MOTOR_EXERCISE_HOLD_MS` (1 s) at
@@ -157,7 +159,7 @@ The planner has **no head tool** ([ADR-025](../../docs/decisions/ADR-025-reactiv
 
 A known race carried over from PR #574: `servo_controller.c` has no lock, so a `servo off` landing inside another task's `servo_set_angle()` can have its release overwritten by that one write. `servo exercise` already had this exposure; the executor adds a second writer, though it writes only on a change or once a second.
 
-**Nothing here has run on hardware.** The head was reported not following commands at 200 Hz when this was written, and the executor has nothing to drive until `servo exercise` shows it moving.
+**The executor's aiming has not run on hardware.** The servos themselves are now confirmed good: the 2026-09-18 bench found one mechanically binding (not dead) and traced the non-following at 200 Hz to the PWM frame rate, which `PCA9685_FREQ_HZ` = 100 fixes. What remains unexercised is `head_aim` driving them.
 
 ## Activity indicators (`activity_trace.c`)
 

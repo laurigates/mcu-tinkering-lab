@@ -1,11 +1,12 @@
 # robocar-bringup
 
 Hardware self-test for the XIAO ESP32-S3 Sense robocar build. Power it up, it
-exercises every peripheral once and tells you what answered — by ear, by LED, on
-the OLED, and over serial.
+exercises every peripheral once and tells you what answered — by ear, by voice,
+by LED, on the OLED, and over serial.
 
-No WiFi, no API key, no credentials, no cost. 310 kB against `robocar-unified`'s
-1.29 MB, so it flashes in a fraction of the time.
+No WiFi, no API key, no credentials, no cost — on the device. 1.09 MB against
+`robocar-unified`'s 1.29 MB, of which 799 kB is the embedded spoken vocabulary;
+the code itself is 314 kB.
 
 ## Why it exists
 
@@ -15,7 +16,8 @@ and a 15-second loop. That is the wrong instrument for the half hour where wires
 are being soldered one at a time.
 
 This one answers a narrower question — *is the thing I just soldered working?* —
-and answers it in about twelve seconds.
+and answers it in about thirty seconds — twelve of checks and seventeen of
+spoken names, which is the trade the voice announcements buy.
 
 ## Quick start
 
@@ -41,7 +43,7 @@ is not a failure. A sweep on a bare board should sound calm and report eleven
 SKIPs — if unfitted hardware sounded like a fault, you would learn to ignore the
 sweep and it would stop being worth running.
 
-### By ear (works with nothing but power and a piezo)
+### By ear — the piezo (works with nothing but power and a piezo)
 
 | Sound | Meaning |
 |---|---|
@@ -56,6 +58,47 @@ sweep and it would stop being worth running.
 
 Pitch carries the verdict and length carries severity, so a fault is
 distinguishable without counting beeps across thirteen checks.
+
+### By voice (needs PSRAM + the MAX98357A)
+
+The speaker says the NAME of each check *before* it runs — "servos", "motors,
+wheels will move", "microphone". The piezo still carries the verdict, and that
+split is the design: pitch tells you the result, speech tells you which check
+produced it. Beeps alone cannot say *which*, and on a sweep that stops, the last
+name you heard is the only clue to where it stopped.
+
+The names reach the amplifier nine checks before `amp` does, so an audio fault
+shows up early as silence. `amp` still owns the verdict — it plays a known
+synthesised tone, and silence cannot be mistaken for that.
+
+Degrades silently: no PSRAM for the ring, no amplifier, or a check with no clip
+all mean the sweep beeps exactly as it did before. A bench tool whose
+announcements failed must not look like a board fault. `speech: 13/13 checks
+have a spoken name` on the serial log at boot is how you know the vocabulary
+still matches the sweep.
+
+#### Regenerating the vocabulary
+
+Clips are raw 24 kHz mono s16 PCM — `audio_player`'s native format, so they are
+written to the ring unresampled — rendered offline by the Gemini TTS API and
+committed under `data/`. The device never talks to the network.
+
+Edit `tools/voices.json`, then, with `GEMINI_API_KEY` in the environment (it
+lives in `~/.api_tokens`, sourced by mise):
+
+```
+cd ../../audio/gamepad-synth/tools/tts && uv run python generate.py ../../../../robocar/bringup/data ../../../../robocar/bringup/tools/voices.json --trim
+```
+
+One generator, two vocabularies, no copy to drift — gamepad-synth owns the
+script and passes its own voices file by default. `--trim` strips the ~0.3 s of
+silence Gemini puts at each end of every clip; for one-word announcements that
+is more silence than speech, and the sweep would pay it thirteen times.
+
+Adding a check means adding an entry to `tools/voices.json`, an `EMBED_FILES`
+line, and a `SPEECH_ENTRY` in `speech.c`. Forget any of them and the check runs
+unannounced rather than mis-announced — the table is matched to `g_checks` by
+name, not by index, and `speech_audit()` names the gap at boot.
 
 ### By LED (needs the mux + PCA9685)
 
@@ -88,7 +131,7 @@ In order. The order is load-bearing — see the header comment in `main/checks.c
 | `i2c-scan` | **Every mux channel scanned, every address that answers listed.** The most useful line in the sweep while an iron is hot |
 | `oled` | SSD1306 on channel 1, initialised and cleared |
 | `leds` | Both RGB LEDs through red/green/blue/white |
-| `servos` | Pan ±30°, tilt ±20°, then centre and release |
+| `servos` | Pan ±30°, tilt ±20°, one axis at a time — **at 50, 100, 125 and 200 Hz** — then centre and release |
 | `motors` | **Drives the wheels.** Four pulses: left fwd, left rev, right fwd, right rev |
 | `mcp23017` | Expander on channel 2, pin 0 written and read back |
 | `sonar` | Five HC-SR04 readings; reports the count and the median |
@@ -100,6 +143,48 @@ In order. The order is load-bearing — see the header comment in `main/checks.c
 Three quick high beeps sound first, then four short pulses at ~27% speed. A robot
 with wheels on, sitting near the edge of a bench, will drive off it. Put it on
 its back or clear the bench before running the sweep with a motor driver fitted.
+
+### The servo check is a frame-rate A/B, not a pass/fail
+
+The PCA9685's prescaler is chip-wide — one rate for the servos, the motors and
+the LEDs. An SG90's analog decoder is specified at 50 Hz, but conceding 50 costs
+visible LED flicker and coarse motor PWM, so the number worth knowing is the
+*highest* rate the fitted servos still track. Firmware cannot assert that, so the
+sweep measures it: the same excursion at 50, 100, 125 and 200 Hz, one axis at a
+time, with the pulse widths preserved across each change (within 1 µs of 1500,
+verified on the board), holding ~0.8 s at each off-centre pose so a stall is
+audible.
+
+It has already paid for itself: on 2026-09-18 it found these SG90s track at 50,
+100 and 125 Hz and buzz at 200, which is what set `robocar-unified`'s
+`PCA9685_FREQ_HZ` to 100.
+
+Read the serial lines, which carry the count written and the bus result per
+pose:
+
+```
+  ===== 125 Hz (period 8000 us) =====
+  125 Hz  pan (ch6)  LEFT   -30 deg -> count  597   ESP_OK
+  125 Hz  tilt(ch7)  UP     +20 deg -> count  881   ESP_OK
+```
+
+Each axis is written and reported separately, naming its channel. `servo_set_position()`
+is deliberately not used: it writes pan first and returns early on failure, so a
+pan-side fault would suppress tilt's result entirely — the one thing the log must
+not do when a channel is under suspicion.
+
+- **Tracks up to some rate, buzzes above it** → the frame rate is the fault, and
+  the highest clean rung is the answer. Set `PCA9685_FREQ_HZ` one rung below it:
+  the bench case is unloaded, and a loaded servo has less timing margin.
+- **No rate moves it, every write `ESP_OK`** → downstream of the chip's
+  registers: V+ (servo power), VCC (3.3 V logic), the leads, the servo — or the
+  head binding mechanically, which is what one "dead" servo turned out to be.
+- **Writes fail** → bus or power, and the check names the rate and move it died
+  at.
+
+The prescaler is chip-wide, so this moves the motors and LEDs too. The entry
+frequency is restored before `motors` runs — including when an excursion fails,
+since leaving the board off-rate would mis-report every later check.
 
 ### The amplifier tone is a diagnostic, not a jingle
 
