@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.8](https://github.com/laurigates/mcu-tinkering-lab/compare/gamepad-synth-v0.1.7...gamepad-synth-v0.1.8) (2026-09-18)
+
+
+### Bug Fixes
+
+* **robocar:** the servo buzz is the PCA9685 frame rate — 200 Hz → 100 Hz, measured with a repaired bringup sweep ([#580](https://github.com/laurigates/mcu-tinkering-lab/issues/580)) ([6492e04](https://github.com/laurigates/mcu-tinkering-lab/commit/6492e0429c758b7b5763ed5a7a3b161b70941459))
+
 ## [0.1.7](https://github.com/laurigates/mcu-tinkering-lab/compare/gamepad-synth-v0.1.6...gamepad-synth-v0.1.7) (2026-09-13)
 
 
