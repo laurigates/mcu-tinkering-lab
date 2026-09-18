@@ -296,10 +296,14 @@ static check_result_t check_leds(void)
  * A servo that tracks at 50 Hz and stalls at 200 Hz answers the question in one
  * sweep, untethered. One that does neither is unpowered, unwired, or dead, and
  * the per-pose bus result below says which. */
-static const uint16_t k_servo_frame_rates_hz[] = {50, 200};
+static const uint16_t k_servo_frame_rates_hz[] = {50, 100, 125, 200};
 
-/** Held at an off-centre pose long enough for a stall to become audible. */
-#define SERVO_HOLD_MS 1500
+/** Held at an off-centre pose long enough for a stall to become audible.
+ *  Shorter than it was, because the rate ladder multiplies it by four. */
+#define SERVO_HOLD_MS 800
+
+/** Held at centre between excursions — long enough to see the return, no more. */
+#define SERVO_SETTLE_MS 250
 
 /**
  * Pan and tilt through a small excursion, at each frame rate in turn.
@@ -323,21 +327,28 @@ static check_result_t check_servos(void)
      * moves the motors and the LEDs too — and check_motors() runs next. */
     const uint16_t entry_hz = i2c_bus_pca9685_frequency();
 
-    /* Small excursions: a servo that is not fitted costs nothing, and one that
-     * is fitted into a half-built chassis should not slam into it. Every angle
-     * is inside servo_controller.c's live travel limits, which reject anything
-     * outside them rather than driving to it. */
+    /* One axis at a time, and written per axis rather than through
+     * servo_set_position() — that helper writes pan first and RETURNS EARLY on
+     * failure, so a pan-side fault would hide tilt's result entirely. With a
+     * channel under suspicion that is the one thing the log must not do.
+     *
+     * Every angle is inside servo_controller.c's live travel limits, which
+     * reject rather than drive to anything outside them. */
     const struct {
-        int16_t pan;
-        int16_t tilt;
+        servo_id_t id;
+        int16_t angle;
+        const char *what;
         bool hold;
-    } poses[] = {
-        {0, 0, false}, {-30, 0, true}, {30, 0, true}, {0, -20, true}, {0, 20, true}, {0, 0, false},
+    } moves[] = {
+        {SERVO_PAN, 0, "centre", false},  {SERVO_PAN, -30, "LEFT", true},
+        {SERVO_PAN, 30, "RIGHT", true},   {SERVO_PAN, 0, "centre", false},
+        {SERVO_TILT, 0, "centre", false}, {SERVO_TILT, -20, "DOWN", true},
+        {SERVO_TILT, 20, "UP", true},     {SERVO_TILT, 0, "centre", false},
     };
 
     esp_err_t first_error = ESP_OK;
-    size_t failed_at = 0;
     uint16_t failed_hz = 0;
+    const char *failed_what = "";
 
     for (size_t f = 0; f < sizeof(k_servo_frame_rates_hz) / sizeof(k_servo_frame_rates_hz[0]);
          f++) {
@@ -353,28 +364,28 @@ static check_result_t check_servos(void)
             if (first_error == ESP_OK) {
                 first_error = freq_err;
                 failed_hz = hz;
+                failed_what = "prescaler";
             }
             continue;
         }
 
-        ESP_LOGI(TAG, "  --- %u Hz (period %u us) ---", (unsigned)hz,
+        ESP_LOGI(TAG, "  ===== %u Hz (period %u us) =====", (unsigned)hz,
                  (unsigned)(1000000u / (hz ? hz : 1u)));
 
-        for (size_t i = 0; i < sizeof(poses) / sizeof(poses[0]); i++) {
-            const uint16_t pan_count = servo_angle_to_count(SERVO_PAN, poses[i].pan);
-            const uint16_t tilt_count = servo_angle_to_count(SERVO_TILT, poses[i].tilt);
-            const esp_err_t err = servo_set_position(poses[i].pan, poses[i].tilt);
+        for (size_t i = 0; i < sizeof(moves) / sizeof(moves[0]); i++) {
+            const char *axis = (moves[i].id == SERVO_PAN) ? "pan (ch6)" : "tilt(ch7)";
+            const uint16_t count = servo_angle_to_count(moves[i].id, moves[i].angle);
+            const esp_err_t err = servo_set_angle(moves[i].id, moves[i].angle);
 
-            ESP_LOGI(TAG, "  %3u Hz  pan %+3d -> %4u   tilt %+3d -> %4u   %s", (unsigned)hz,
-                     poses[i].pan, (unsigned)pan_count, poses[i].tilt, (unsigned)tilt_count,
-                     esp_err_to_name(err));
+            ESP_LOGI(TAG, "  %3u Hz  %s  %-6s %+3d deg -> count %4u   %s", (unsigned)hz, axis,
+                     moves[i].what, moves[i].angle, (unsigned)count, esp_err_to_name(err));
 
             if (err != ESP_OK && first_error == ESP_OK) {
                 first_error = err;
-                failed_at = i;
                 failed_hz = hz;
+                failed_what = moves[i].what;
             }
-            vTaskDelay(pdMS_TO_TICKS(poses[i].hold ? SERVO_HOLD_MS : 280));
+            vTaskDelay(pdMS_TO_TICKS(moves[i].hold ? SERVO_HOLD_MS : SERVO_SETTLE_MS));
         }
     }
 
@@ -395,10 +406,10 @@ static check_result_t check_servos(void)
     servo_disable_all();
 
     if (first_error != ESP_OK) {
-        return result(CHECK_FAIL, "write failed at %u Hz pose %u: %s", (unsigned)failed_hz,
-                      (unsigned)failed_at, esp_err_to_name(first_error));
+        return result(CHECK_FAIL, "%u Hz %s: %s", (unsigned)failed_hz, failed_what,
+                      esp_err_to_name(first_error));
     }
-    return result(CHECK_PASS, "50Hz then 200Hz - which tracked?");
+    return result(CHECK_PASS, "50/100/125/200Hz - top rate that tracked?");
 }
 
 /**
