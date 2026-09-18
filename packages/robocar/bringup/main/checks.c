@@ -284,7 +284,32 @@ static check_result_t check_leds(void)
     return result(CHECK_PASS, "r/g/b/white both - correct?");
 }
 
-/** Pan and tilt through a small excursion, then centre. */
+/* Frame rates the servo check runs the same excursion at, in order.
+ *
+ * The board ships at PCA9685_FREQ_HZ (200), a compromise chosen for motor
+ * smoothness and LED flicker — not for servos. An SG90's analog decoder is
+ * specified at 50 Hz, and whether the servos actually fitted track a 5 ms frame
+ * is a property of those servos, which no amount of firmware can assert. So the
+ * sweep stops asserting it and measures it instead: the same excursion twice,
+ * once per rate, with the pulse widths preserved across the change.
+ *
+ * A servo that tracks at 50 Hz and stalls at 200 Hz answers the question in one
+ * sweep, untethered. One that does neither is unpowered, unwired, or dead, and
+ * the per-pose bus result below says which. */
+static const uint16_t k_servo_frame_rates_hz[] = {50, 200};
+
+/** Held at an off-centre pose long enough for a stall to become audible. */
+#define SERVO_HOLD_MS 1500
+
+/**
+ * Pan and tilt through a small excursion, at each frame rate in turn.
+ *
+ * Logs the angle, the PCA9685 count and the bus result for every write, because
+ * "the servos are not moving" has several causes that look identical from across
+ * the room and only the count-plus-result pair separates them: a write that
+ * failed is a bus or power fault, a write that succeeded while nothing moved is
+ * downstream of the chip's registers.
+ */
 static check_result_t check_servos(void)
 {
     if (!i2c_bus_is_ready()) {
@@ -294,24 +319,86 @@ static check_result_t check_servos(void)
         return result(CHECK_FAIL, "servo_controller_init failed");
     }
 
+    /* Restored before returning. The PCA9685's prescaler is CHIP-WIDE, so this
+     * moves the motors and the LEDs too — and check_motors() runs next. */
+    const uint16_t entry_hz = i2c_bus_pca9685_frequency();
+
     /* Small excursions: a servo that is not fitted costs nothing, and one that
-     * is fitted into a half-built chassis should not slam into it. */
+     * is fitted into a half-built chassis should not slam into it. Every angle
+     * is inside servo_controller.c's live travel limits, which reject anything
+     * outside them rather than driving to it. */
     const struct {
         int16_t pan;
         int16_t tilt;
-    } poses[] = {{0, 0}, {-30, 0}, {30, 0}, {0, -20}, {0, 20}, {0, 0}};
+        bool hold;
+    } poses[] = {
+        {0, 0, false}, {-30, 0, true}, {30, 0, true}, {0, -20, true}, {0, 20, true}, {0, 0, false},
+    };
 
-    for (size_t i = 0; i < sizeof(poses) / sizeof(poses[0]); i++) {
-        if (servo_set_position(poses[i].pan, poses[i].tilt) != ESP_OK) {
-            return result(CHECK_FAIL, "write failed at pose %u", (unsigned)i);
+    esp_err_t first_error = ESP_OK;
+    size_t failed_at = 0;
+    uint16_t failed_hz = 0;
+
+    for (size_t f = 0; f < sizeof(k_servo_frame_rates_hz) / sizeof(k_servo_frame_rates_hz[0]);
+         f++) {
+        const uint16_t hz = k_servo_frame_rates_hz[f];
+
+        /* Releases both outputs, changes the prescaler, then re-sends each angle
+         * at the new period — a count is a fraction of the period, so replaying
+         * one across a frequency change is a different pulse entirely. */
+        const esp_err_t freq_err = servo_set_pwm_frequency(hz);
+        if (freq_err != ESP_OK) {
+            ESP_LOGW(TAG, "  %3u Hz: prescaler write failed: %s", (unsigned)hz,
+                     esp_err_to_name(freq_err));
+            if (first_error == ESP_OK) {
+                first_error = freq_err;
+                failed_hz = hz;
+            }
+            continue;
         }
-        vTaskDelay(pdMS_TO_TICKS(280));
+
+        ESP_LOGI(TAG, "  --- %u Hz (period %u us) ---", (unsigned)hz,
+                 (unsigned)(1000000u / (hz ? hz : 1u)));
+
+        for (size_t i = 0; i < sizeof(poses) / sizeof(poses[0]); i++) {
+            const uint16_t pan_count = servo_angle_to_count(SERVO_PAN, poses[i].pan);
+            const uint16_t tilt_count = servo_angle_to_count(SERVO_TILT, poses[i].tilt);
+            const esp_err_t err = servo_set_position(poses[i].pan, poses[i].tilt);
+
+            ESP_LOGI(TAG, "  %3u Hz  pan %+3d -> %4u   tilt %+3d -> %4u   %s", (unsigned)hz,
+                     poses[i].pan, (unsigned)pan_count, poses[i].tilt, (unsigned)tilt_count,
+                     esp_err_to_name(err));
+
+            if (err != ESP_OK && first_error == ESP_OK) {
+                first_error = err;
+                failed_at = i;
+                failed_hz = hz;
+            }
+            vTaskDelay(pdMS_TO_TICKS(poses[i].hold ? SERVO_HOLD_MS : 280));
+        }
+    }
+
+    /* Put the chip back before check_motors() drives anything through it. Done
+     * even when an excursion failed: leaving the board on a rate nothing else
+     * expects would mis-report every later check that shares the prescaler. */
+    const esp_err_t restore_err = servo_set_pwm_frequency(entry_hz);
+    if (restore_err != ESP_OK) {
+        ESP_LOGE(TAG, "  could not restore %u Hz (%s) — motors and LEDs are now off-rate",
+                 (unsigned)entry_hz, esp_err_to_name(restore_err));
+        if (first_error == ESP_OK) {
+            first_error = restore_err;
+        }
     }
 
     /* Released rather than left holding: a stalled SG90 draws hundreds of mA
      * continuously, and the amplifier check further down shares this rail. */
     servo_disable_all();
-    return result(CHECK_PASS, "pan +-30 tilt +-20 - moved?");
+
+    if (first_error != ESP_OK) {
+        return result(CHECK_FAIL, "write failed at %u Hz pose %u: %s", (unsigned)failed_hz,
+                      (unsigned)failed_at, esp_err_to_name(first_error));
+    }
+    return result(CHECK_PASS, "50Hz then 200Hz - which tracked?");
 }
 
 /**

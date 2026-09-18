@@ -88,7 +88,7 @@ In order. The order is load-bearing — see the header comment in `main/checks.c
 | `i2c-scan` | **Every mux channel scanned, every address that answers listed.** The most useful line in the sweep while an iron is hot |
 | `oled` | SSD1306 on channel 1, initialised and cleared |
 | `leds` | Both RGB LEDs through red/green/blue/white |
-| `servos` | Pan ±30°, tilt ±20°, then centre and release |
+| `servos` | Pan ±30°, tilt ±20° — **run twice, at 50 Hz then 200 Hz** — then centre and release |
 | `motors` | **Drives the wheels.** Four pulses: left fwd, left rev, right fwd, right rev |
 | `mcp23017` | Expander on channel 2, pin 0 written and read back |
 | `sonar` | Five HC-SR04 readings; reports the count and the median |
@@ -100,6 +100,35 @@ In order. The order is load-bearing — see the header comment in `main/checks.c
 Three quick high beeps sound first, then four short pulses at ~27% speed. A robot
 with wheels on, sitting near the edge of a bench, will drive off it. Put it on
 its back or clear the bench before running the sweep with a motor driver fitted.
+
+### The servo check is a frame-rate A/B, not a pass/fail
+
+The PCA9685 ships at 200 Hz — a compromise picked for motor smoothness and LED
+flicker, not for servos. An SG90's analog decoder is specified at 50 Hz, and
+whether the servos actually fitted track a 5 ms frame is a property of those
+servos. Firmware cannot assert it, so the sweep measures it: the same excursion
+at 50 Hz, then again at 200 Hz, with the pulse widths preserved across the
+change, holding ~1.5 s at each off-centre pose so a stall is audible.
+
+Read the serial lines, which carry the count written and the bus result per
+pose:
+
+```
+  --- 50 Hz (period 20000 us) ---
+   50 Hz  pan -30 ->  245   tilt  +0 ->  307   ESP_OK
+```
+
+- **Tracks at 50 Hz, stalls or buzzes at 200 Hz** → the frame rate is the fault.
+  The robot's own `servo freq 50` reproduces it, and the fix is a PCA9685
+  frequency the servos and the motors can share.
+- **Neither rate moves it, every write `ESP_OK`** → the fault is downstream of
+  the chip's registers: V+ (servo power), VCC (3.3 V logic), or the leads.
+- **Writes fail** → bus or power, and the check reports the rate and pose it
+  died at.
+
+The prescaler is chip-wide, so this moves the motors and LEDs too. The entry
+frequency is restored before `motors` runs — including when an excursion fails,
+since leaving the board off-rate would mis-report every later check.
 
 ### The amplifier tone is a diagnostic, not a jingle
 
