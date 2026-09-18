@@ -1,0 +1,25 @@
+## IDF Component Manager Manifest File
+##
+## robocar-unified's main/idf_component.yml is the CANONICAL list for this
+## board's I2C drivers. This file exists because the component manager has no
+## way to include another project's manifest, and because bringup compiles
+## unified's drivers (i2c_bus.c, servo_controller.c, ...) directly — so it must
+## resolve the same components they were written against.
+##
+## Keep the four entries below in step with unified's manifest. A divergence is
+## silent: both projects build, and the bench tool then measures a different
+## driver from the robot it is supposed to be the control for.
+dependencies:
+  idf:
+    version: '>=5.4'
+  esp-idf-lib/i2cdev: '^2.0.0'
+  esp-idf-lib/tca9548: '^1.0.0'
+  esp-idf-lib/mcp23x17: '^1.1.7'
+  # pca9685: pinned to the fork branch carrying the out-of-bounds fix, exactly
+  # as unified pins it. The published esp-idf-lib/pca9685@1.0.0 indexes its
+  # stack buffer by the ABSOLUTE channel number while sizing it for `channels`
+  # entries, so motor_stop()'s (first_ch = 8, count = 6) writes past the end.
+  # A bringup sweep drives the motors, so this project reaches that path too.
+  esp-idf-lib/pca9685:
+    git: https://github.com/laurigates/pca9685.git
+    version: 'bugfix-issue-1-set-pwm-values-indexing'

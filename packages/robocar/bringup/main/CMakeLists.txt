@@ -20,6 +20,7 @@ idf_component_register(
         "oled.c"
         # --- shared, unmodified, from robocar-unified ---
         "${UNIFIED_MAIN}/i2c_bus.c"
+        "${UNIFIED_MAIN}/pca9685_phase.c"
         "${UNIFIED_MAIN}/gpio_expander.c"
         "${UNIFIED_MAIN}/motor_controller.c"
         "${UNIFIED_MAIN}/led_controller.c"
