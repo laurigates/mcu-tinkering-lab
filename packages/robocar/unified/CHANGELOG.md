@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.6](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.5...robocar-unified-v0.2.6) (2026-09-18)
+
+
+### Bug Fixes
+
+* **robocar:** the servo buzz is the PCA9685 frame rate — 200 Hz → 100 Hz, measured with a repaired bringup sweep ([#580](https://github.com/laurigates/mcu-tinkering-lab/issues/580)) ([6492e04](https://github.com/laurigates/mcu-tinkering-lab/commit/6492e0429c758b7b5763ed5a7a3b161b70941459))
+
 ## [0.2.5](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.4...robocar-unified-v0.2.5) (2026-09-15)
 
 
