@@ -111,8 +111,10 @@ def main() -> int:
     # generator with its own vocabulary instead of copying this script — see
     # packages/robocar/bringup/tools/voices.json. Defaults to the sibling file,
     # so gamepad-synth's own `just tts-generate` is unchanged.
-    voices_path = Path(argv[1]).resolve() if len(argv) == 2 else Path(__file__).with_name(
-        "voices.json"
+    voices_path = (
+        Path(argv[1]).resolve()
+        if len(argv) == 2
+        else Path(__file__).with_name("voices.json")
     )
     entries = load_voices(voices_path)
     print(f"Reading {len(entries)} entries from {voices_path}")
