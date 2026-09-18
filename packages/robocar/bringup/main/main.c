@@ -26,8 +26,14 @@
  *
  *   buzzer  (GPIO2, always)         — a verdict per check, by pitch
  *   serial  (USB-C, always)         — the full table, with the numbers
+ *   speaker (needs PSRAM + amp)     — the NAME of the check about to run
  *   LEDs    (needs mux + PCA9685)   — running colour, then a final verdict
  *   OLED    (needs mux + SSD1306)   — which check failed, untethered
+ *
+ * The buzzer and the speaker split the message deliberately: pitch carries the
+ * verdict, speech carries the name. Beeps alone cannot say WHICH check is
+ * running, and the speaker needs PSRAM and an amplifier — so the channel that
+ * works on a bare board keeps the verdict.
  *
  * SKIP IS THE NORMAL RESULT. Hardware that is not fitted is not a failure —
  * see checks.h. A sweep on a bare board should sound calm and report eleven
@@ -47,6 +53,7 @@
 #include "led_controller.h"
 #include "oled.h"
 #include "pin_config.h"
+#include "speech.h"
 
 static const char *TAG = "bringup";
 
@@ -141,12 +148,30 @@ void app_main(void)
      * announced on, and check_buzzer() only confirms it a moment later. */
     cues_play(CUE_SWEEP_START);
 
+    /* Audio up BEFORE the first check, not inside check_amp() near the end,
+     * because a name spoken after its check has run announces nothing. This
+     * does move the sweep's first exercise of the I2S path forward: the spoken
+     * names now reach the amplifier nine checks before `amp` does, so an audio
+     * fault is audible (as silence) far sooner. `amp` still owns the verdict —
+     * it plays a known synthesised tone, which silence cannot be mistaken for.
+     *
+     * Non-fatal, like everything else here: no PSRAM for the ring or no
+     * amplifier means the sweep beeps exactly as it did before. */
+    speech_init();
+    speech_audit();
+
     int pass = 0, warn = 0, skip = 0, fail = 0;
 
     for (size_t i = 0; i < g_check_count && i < sizeof(s_results) / sizeof(s_results[0]); i++) {
         printf("[%2u/%2u] %-10s ... ", (unsigned)(i + 1), (unsigned)g_check_count,
                g_checks[i].name);
         fflush(stdout);
+
+        /* Spoken BEFORE the check runs, and waited out. Announcing afterwards
+         * would name a check that has already finished, which is useless for
+         * the case this exists for: a sweep that stops, where the last thing
+         * you heard is the only clue to which check it stopped in. */
+        speech_say(g_checks[i].name);
 
         s_results[i] = g_checks[i].run();
 

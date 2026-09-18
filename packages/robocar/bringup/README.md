@@ -1,11 +1,12 @@
 # robocar-bringup
 
 Hardware self-test for the XIAO ESP32-S3 Sense robocar build. Power it up, it
-exercises every peripheral once and tells you what answered — by ear, by LED, on
-the OLED, and over serial.
+exercises every peripheral once and tells you what answered — by ear, by voice,
+by LED, on the OLED, and over serial.
 
-No WiFi, no API key, no credentials, no cost. 310 kB against `robocar-unified`'s
-1.29 MB, so it flashes in a fraction of the time.
+No WiFi, no API key, no credentials, no cost — on the device. 1.09 MB against
+`robocar-unified`'s 1.29 MB, of which 799 kB is the embedded spoken vocabulary;
+the code itself is 314 kB.
 
 ## Why it exists
 
@@ -15,7 +16,8 @@ and a 15-second loop. That is the wrong instrument for the half hour where wires
 are being soldered one at a time.
 
 This one answers a narrower question — *is the thing I just soldered working?* —
-and answers it in about twelve seconds.
+and answers it in about thirty seconds — twelve of checks and seventeen of
+spoken names, which is the trade the voice announcements buy.
 
 ## Quick start
 
@@ -41,7 +43,7 @@ is not a failure. A sweep on a bare board should sound calm and report eleven
 SKIPs — if unfitted hardware sounded like a fault, you would learn to ignore the
 sweep and it would stop being worth running.
 
-### By ear (works with nothing but power and a piezo)
+### By ear — the piezo (works with nothing but power and a piezo)
 
 | Sound | Meaning |
 |---|---|
@@ -56,6 +58,47 @@ sweep and it would stop being worth running.
 
 Pitch carries the verdict and length carries severity, so a fault is
 distinguishable without counting beeps across thirteen checks.
+
+### By voice (needs PSRAM + the MAX98357A)
+
+The speaker says the NAME of each check *before* it runs — "servos", "motors,
+wheels will move", "microphone". The piezo still carries the verdict, and that
+split is the design: pitch tells you the result, speech tells you which check
+produced it. Beeps alone cannot say *which*, and on a sweep that stops, the last
+name you heard is the only clue to where it stopped.
+
+The names reach the amplifier nine checks before `amp` does, so an audio fault
+shows up early as silence. `amp` still owns the verdict — it plays a known
+synthesised tone, and silence cannot be mistaken for that.
+
+Degrades silently: no PSRAM for the ring, no amplifier, or a check with no clip
+all mean the sweep beeps exactly as it did before. A bench tool whose
+announcements failed must not look like a board fault. `speech: 13/13 checks
+have a spoken name` on the serial log at boot is how you know the vocabulary
+still matches the sweep.
+
+#### Regenerating the vocabulary
+
+Clips are raw 24 kHz mono s16 PCM — `audio_player`'s native format, so they are
+written to the ring unresampled — rendered offline by the Gemini TTS API and
+committed under `data/`. The device never talks to the network.
+
+Edit `tools/voices.json`, then, with `GEMINI_API_KEY` in the environment (it
+lives in `~/.api_tokens`, sourced by mise):
+
+```
+cd ../../audio/gamepad-synth/tools/tts && uv run python generate.py ../../../../robocar/bringup/data ../../../../robocar/bringup/tools/voices.json --trim
+```
+
+One generator, two vocabularies, no copy to drift — gamepad-synth owns the
+script and passes its own voices file by default. `--trim` strips the ~0.3 s of
+silence Gemini puts at each end of every clip; for one-word announcements that
+is more silence than speech, and the sweep would pay it thirteen times.
+
+Adding a check means adding an entry to `tools/voices.json`, an `EMBED_FILES`
+line, and a `SPEECH_ENTRY` in `speech.c`. Forget any of them and the check runs
+unannounced rather than mis-announced — the table is matched to `g_checks` by
+name, not by index, and `speech_audit()` names the gap at boot.
 
 ### By LED (needs the mux + PCA9685)
 
