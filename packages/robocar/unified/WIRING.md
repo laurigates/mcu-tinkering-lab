@@ -38,12 +38,12 @@ device — nothing talks to the primary bus directly.
 
 | Channel | Device | Address |
 |---------|--------|---------|
-| ch0 | PCA9685 PWM driver (motors, servos, LEDs) | 0x40 @ 200 Hz |
+| ch0 | PCA9685 PWM driver (motors, servos, LEDs) | 0x40 @ 100 Hz |
 | ch1 | SSD1306 OLED display (128x64) | 0x3C |
 | ch2 | MCP23017 GPIO expander — **optional**, firmware boots without it | 0x20 |
 | ch3-7 | *reserved* (IMU / ToF / future sensors) | — |
 
-## PCA9685 channel map (0x40, 200 Hz)
+## PCA9685 channel map (0x40, 100 Hz)
 
 | Ch | Signal | Device |
 |----|--------|--------|
@@ -63,7 +63,7 @@ device — nothing talks to the primary bus directly.
 | 13 | Motor L PWM | TB6612FNG **PWMB** (PWM 0-4095) |
 | 14-15 | *reserved* | |
 
-200 Hz is a compromise between servo timing (ideal 50 Hz) and motor PWM smoothness — works well for SG90s and TB6612FNG.
+100 Hz is a chip-wide compromise — one prescaler serves the servos, the motors and the LEDs. Measured on this build (2026-09-18): the SG90s fitted track at 50, 100 and 125 Hz and **buzz at 200**, stalling against the pulse train instead of following it. 100 sits one rung below the highest rate that worked, because the bench test was unloaded and a loaded servo has less timing margin. `servo freq <hz>` retunes it live without a reflash.
 
 **Channels 8-13 are in the motor driver's own pin order, not in a per-motor
 order.** Read the TB6612FNG's control header top to bottom and it is PWMA,

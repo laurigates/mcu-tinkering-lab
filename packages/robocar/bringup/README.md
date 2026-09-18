@@ -131,7 +131,7 @@ In order. The order is load-bearing — see the header comment in `main/checks.c
 | `i2c-scan` | **Every mux channel scanned, every address that answers listed.** The most useful line in the sweep while an iron is hot |
 | `oled` | SSD1306 on channel 1, initialised and cleared |
 | `leds` | Both RGB LEDs through red/green/blue/white |
-| `servos` | Pan ±30°, tilt ±20° — **run twice, at 50 Hz then 200 Hz** — then centre and release |
+| `servos` | Pan ±30°, tilt ±20°, one axis at a time — **at 50, 100, 125 and 200 Hz** — then centre and release |
 | `motors` | **Drives the wheels.** Four pulses: left fwd, left rev, right fwd, right rev |
 | `mcp23017` | Expander on channel 2, pin 0 written and read back |
 | `sonar` | Five HC-SR04 readings; reports the count and the median |
@@ -146,28 +146,41 @@ its back or clear the bench before running the sweep with a motor driver fitted.
 
 ### The servo check is a frame-rate A/B, not a pass/fail
 
-The PCA9685 ships at 200 Hz — a compromise picked for motor smoothness and LED
-flicker, not for servos. An SG90's analog decoder is specified at 50 Hz, and
-whether the servos actually fitted track a 5 ms frame is a property of those
-servos. Firmware cannot assert it, so the sweep measures it: the same excursion
-at 50 Hz, then again at 200 Hz, with the pulse widths preserved across the
-change, holding ~1.5 s at each off-centre pose so a stall is audible.
+The PCA9685's prescaler is chip-wide — one rate for the servos, the motors and
+the LEDs. An SG90's analog decoder is specified at 50 Hz, but conceding 50 costs
+visible LED flicker and coarse motor PWM, so the number worth knowing is the
+*highest* rate the fitted servos still track. Firmware cannot assert that, so the
+sweep measures it: the same excursion at 50, 100, 125 and 200 Hz, one axis at a
+time, with the pulse widths preserved across each change (within 1 µs of 1500,
+verified on the board), holding ~0.8 s at each off-centre pose so a stall is
+audible.
+
+It has already paid for itself: on 2026-09-18 it found these SG90s track at 50,
+100 and 125 Hz and buzz at 200, which is what set `robocar-unified`'s
+`PCA9685_FREQ_HZ` to 100.
 
 Read the serial lines, which carry the count written and the bus result per
 pose:
 
 ```
-  --- 50 Hz (period 20000 us) ---
-   50 Hz  pan -30 ->  245   tilt  +0 ->  307   ESP_OK
+  ===== 125 Hz (period 8000 us) =====
+  125 Hz  pan (ch6)  LEFT   -30 deg -> count  597   ESP_OK
+  125 Hz  tilt(ch7)  UP     +20 deg -> count  881   ESP_OK
 ```
 
-- **Tracks at 50 Hz, stalls or buzzes at 200 Hz** → the frame rate is the fault.
-  The robot's own `servo freq 50` reproduces it, and the fix is a PCA9685
-  frequency the servos and the motors can share.
-- **Neither rate moves it, every write `ESP_OK`** → the fault is downstream of
-  the chip's registers: V+ (servo power), VCC (3.3 V logic), or the leads.
-- **Writes fail** → bus or power, and the check reports the rate and pose it
-  died at.
+Each axis is written and reported separately, naming its channel. `servo_set_position()`
+is deliberately not used: it writes pan first and returns early on failure, so a
+pan-side fault would suppress tilt's result entirely — the one thing the log must
+not do when a channel is under suspicion.
+
+- **Tracks up to some rate, buzzes above it** → the frame rate is the fault, and
+  the highest clean rung is the answer. Set `PCA9685_FREQ_HZ` one rung below it:
+  the bench case is unloaded, and a loaded servo has less timing margin.
+- **No rate moves it, every write `ESP_OK`** → downstream of the chip's
+  registers: V+ (servo power), VCC (3.3 V logic), the leads, the servo — or the
+  head binding mechanically, which is what one "dead" servo turned out to be.
+- **Writes fail** → bus or power, and the check names the rate and move it died
+  at.
 
 The prescaler is chip-wide, so this moves the motors and LEDs too. The entry
 frequency is restored before `motors` runs — including when an excursion fails,

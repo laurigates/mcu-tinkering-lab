@@ -166,7 +166,7 @@ The MCP23017 on ch2 is optional — the firmware boots fine without it.
   aligns: (center, left, center),
 )
 
-== 4.3 · PCA9685 channel map (0x40, 200 Hz)
+== 4.3 · PCA9685 channel map (#PCA9685_ADDR, #PCA9685_FREQ_HZ Hz)
 All motor direction, motor PWM, servo, and LED outputs go through the PCA9685.
 Motor direction pins use PCA9685 "full-on" (4096) / "full-off" (0); PWM pins
 use the full 12-bit range (0–4095).
@@ -199,8 +199,11 @@ use the full 12-bit range (0–4095).
     aligns: (center, left),
   ),
 )
-#text(fill: theme.muted)[#PCA9685_FREQ_HZ Hz is a compromise between servo timing (ideal 50 Hz)
-and motor PWM smoothness — it works well for SG90s and the TB6612FNG.]
+#text(fill: theme.muted)[#PCA9685_FREQ_HZ Hz is a chip-wide compromise: one prescaler
+serves the servos, the motors and the LEDs. Measured on this build — the SG90s
+fitted track at 50, 100 and 125 Hz and buzz at 200, so this sits one rung below
+the highest rate that worked. Raise it for steadier LEDs, lower it for happier
+servos; `servo freq <hz>` retunes it live, without a reflash.]
 
 == 4.4 · Ultrasonic rangefinder
 #htable(
@@ -399,7 +402,7 @@ Work through these after first flash, watching the serial monitor:
   ([No I²C devices found], [Not selecting the TCA9548A channel first, or SDA/SCL swapped. Check GPIO5=SDA, GPIO6=SCL.]),
   ([OLED and PCA9685 conflict], [Both bypassing the mux. Route each through its own TCA9548A channel (ch1 / ch0).]),
   ([Motors don't move], [STBY (GPIO#MOTOR_STBY_PIN) not HIGH, or VM not on 5 V. Confirm TB6612FNG power and enable line.]),
-  ([Servos jitter], [Shared noisy rail. Keep servo power on 5 V with common ground; 200 Hz PWM is expected.]),
+  ([Servos jitter or buzz], [Shared noisy rail: keep servo power on 5 V with common ground. A servo that BUZZES and holds against a stop is the PWM frame rate, not the rail — these SG90s track at 50–125 Hz and stall at 200. `servo freq <hz>` retunes it live.]),
   ([Board won't flash], [Force download mode: hold BOOT, tap RESET, release BOOT.]),
   ([Damaged ECHO / no distance], [Used a 5 V HC-SR04. Replace with a 3.3 V module (HC-SR04P).]),
   ([No audio / distorted speech], [Weak MAX98357A supply. Fit ≥470 µF bulk cap at Vin, or use a separate 5 V feed. Check I2S wiring on GPIO#I2S_BCLK_PIN – #I2S_DIN_PIN.]),

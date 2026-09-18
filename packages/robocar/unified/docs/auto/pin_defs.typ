@@ -15,7 +15,7 @@
 #let TCA_CH_MCP23017 = 2
 // ── PCA9685 PWM Driver ──
 #let PCA9685_ADDR = "0x40"
-#let PCA9685_FREQ_HZ = 200
+#let PCA9685_FREQ_HZ = 100
 // ── PCA9685 — LED Channels ──
 #let PCA_CH_LED_LEFT_R = 0
 #let PCA_CH_LED_LEFT_G = 1

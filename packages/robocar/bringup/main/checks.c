@@ -286,16 +286,20 @@ static check_result_t check_leds(void)
 
 /* Frame rates the servo check runs the same excursion at, in order.
  *
- * The board ships at PCA9685_FREQ_HZ (200), a compromise chosen for motor
- * smoothness and LED flicker — not for servos. An SG90's analog decoder is
+ * The board ships at PCA9685_FREQ_HZ, a chip-wide compromise serving the
+ * motors and the LEDs as well — not a servo setting. An SG90's analog decoder is
  * specified at 50 Hz, and whether the servos actually fitted track a 5 ms frame
  * is a property of those servos, which no amount of firmware can assert. So the
  * sweep stops asserting it and measures it instead: the same excursion twice,
  * once per rate, with the pulse widths preserved across the change.
  *
- * A servo that tracks at 50 Hz and stalls at 200 Hz answers the question in one
- * sweep, untethered. One that does neither is unpowered, unwired, or dead, and
- * the per-pose bus result below says which. */
+ * A ladder rather than an A/B because the useful answer is the HIGHEST rate that
+ * still tracks: the prescaler is chip-wide, so conceding 50 Hz costs LED flicker
+ * and coarse motor PWM that 100 or 125 would not. One that tracks at no rate is
+ * unpowered, unwired, binding, or dead, and the per-move bus result says which.
+ *
+ * Found on the 2026-09-18 bench: these SG90s track at 50/100/125 and buzz at
+ * 200, which set robocar-unified's PCA9685_FREQ_HZ to 100. */
 static const uint16_t k_servo_frame_rates_hz[] = {50, 100, 125, 200};
 
 /** Held at an off-centre pose long enough for a stall to become audible.
