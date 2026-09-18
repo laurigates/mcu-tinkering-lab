@@ -59,10 +59,7 @@ typedef struct {
     const uint8_t *end;
 } speech_clip_t;
 
-#define SPEECH_ENTRY(name, sym)      \
-    {                                \
-        name, sym##_start, sym##_end \
-    }
+#define SPEECH_ENTRY(name, sym) {name, sym##_start, sym##_end}
 
 static const speech_clip_t k_clips[] = {
     SPEECH_ENTRY("psram", psram),       SPEECH_ENTRY("flash", flash),
