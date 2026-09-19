@@ -252,3 +252,11 @@ against a hardcoded 1.75 MB, a path that does not exist for robocar-main
 returned 0 and 0 bytes was "within limits"; and the build command ended in
 `; true` at top level, so a failed `idf.py build` — and therefore any
 overflow — exited 0. Both are corrected in the same change.
+
+The first CI run with the exit status propagated found a live instance:
+`nfc-scavenger-hunt` at 0x100560 bytes had outgrown its 1 MB
+`CONFIG_PARTITION_TABLE_SINGLE_APP` factory partition by 0x560, so every PR
+build of it had been failing inside `idf.py build` and reporting green — and
+every release run since at least robocar-unified v0.2.5 had been red on that
+one job. Moved to `SINGLE_APP_LARGE` (1500K factory, same offsets) in the
+same PR. A hardcoded 1.8 MB gate would have passed it.
