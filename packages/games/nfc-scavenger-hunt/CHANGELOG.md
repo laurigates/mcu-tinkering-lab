@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.5](https://github.com/laurigates/mcu-tinkering-lab/compare/nfc-scavenger-hunt-v0.1.4...nfc-scavenger-hunt-v0.1.5) (2026-09-19)
+
+
+### Bug Fixes
+
+* **nfc-scavenger-hunt:** move to the 1.5 MB single-app-large partition table ([5175b9e](https://github.com/laurigates/mcu-tinkering-lab/commit/5175b9e0ef1886c616f4d921ca4c6519b82f10da))
+
 ## [0.1.4](https://github.com/laurigates/mcu-tinkering-lab/compare/nfc-scavenger-hunt-v0.1.3...nfc-scavenger-hunt-v0.1.4) (2026-09-13)
 
 
