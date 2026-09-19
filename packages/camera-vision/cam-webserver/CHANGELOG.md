@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.6](https://github.com/laurigates/mcu-tinkering-lab/compare/esp32-cam-webserver-v0.1.5...esp32-cam-webserver-v0.1.6) (2026-09-19)
+
+
+### Bug Fixes
+
+* **it-troubleshooter,cam-webserver:** move to the 1.5 MB single-app-large partition table ([ba248f9](https://github.com/laurigates/mcu-tinkering-lab/commit/ba248f93bd4c3cd69c15be0780d0fbe46a3de782))
+
 ## [0.1.5](https://github.com/laurigates/mcu-tinkering-lab/compare/esp32-cam-webserver-v0.1.4...esp32-cam-webserver-v0.1.5) (2026-09-13)
 
 
