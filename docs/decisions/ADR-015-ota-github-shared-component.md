@@ -260,3 +260,11 @@ build of it had been failing inside `idf.py build` and reporting green — and
 every release run since at least robocar-unified v0.2.5 had been red on that
 one job. Moved to `SINGLE_APP_LARGE` (1500K factory, same offsets) in the
 same PR. A hardcoded 1.8 MB gate would have passed it.
+
+The same report showed it-troubleshooter at 2% free and esp32-cam-webserver
+at 5% — fitting, green, one feature from the same failure, with ESP-IDF's
+"nearly full" line as the only signal. Both moved to `SINGLE_APP_LARGE`
+(#584), and the fit script gained a headroom floor: below
+`APP_PARTITION_MIN_FREE_PCT` percent free (default 5, ESP-IDF's own warning
+threshold; 0 disables) the build fails and names the partition change to
+make. A warning inside a green job is not a guard; this turns it into one.

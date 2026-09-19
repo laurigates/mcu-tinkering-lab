@@ -50,9 +50,14 @@ ESP Web Tools requires decimal integer offsets (not hex). The manifests are gene
   (ESP-IDF's `app_check_size`, reading the built `partition-table.bin`);
   `tools/check-app-partition-fit.sh` re-runs that same shipped check after every
   CI and release build so the verdict is a per-project report, and so a build
-  that skipped the check fails rather than passing by absence. A hardcoded
-  "1.8 MB" gate was wrong for 14 of the 16 flasher projects, and even for the
-  two it was written for (issue #556).
+  that skipped the check fails rather than passing by absence. It also fails
+  below a **headroom floor** of 5% free (`APP_PARTITION_MIN_FREE_PCT`, 0
+  disables): fitting with 2% to spare is how it-troubleshooter sat one feature
+  away from a red build, and the only signal was a warning in a green job. The
+  fix it asks for is the one-line partition change
+  (`CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE=y` or a `partitions.csv`), not a
+  build trimmed to the byte. A hardcoded "1.8 MB" gate was wrong for 14 of the
+  16 flasher projects, and even for the two it was written for (issue #556).
 - **No credentials in CI builds**: Pre-built firmware does not include WiFi credentials. Post-flash provisioning (Improv WiFi) is required.
 
 ## File Locations
