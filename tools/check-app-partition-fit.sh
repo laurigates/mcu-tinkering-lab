@@ -31,7 +31,18 @@
 # variables the build used — no re-parse of partitions.csv, no assumption
 # about the project name, no 0x8000 typed in by hand.
 #
-# Exit: 0 fits, 1 does not fit (or the check could not run), 2 usage.
+# Headroom floor. Fitting is not enough: it-troubleshooter fit with 0x4570
+# bytes (2%) to spare and esp32-cam-webserver with 5%, and the only signal
+# was ESP-IDF's "nearly full" line inside a green job (#582, #584). So the
+# script also FAILS when free space in the smallest app partition is below
+# APP_PARTITION_MIN_FREE_PCT percent (default 5, the same threshold ESP-IDF
+# warns at). The fix it asks for is the one-line partition change, made in
+# the PR that would otherwise have sailed through:
+#     CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE=y   # or a partitions.csv
+# Set APP_PARTITION_MIN_FREE_PCT=0 to disable the floor for one run.
+#
+# Exit: 0 fits with headroom, 1 does not fit / below the floor / the check
+# could not run, 2 usage.
 
 set -euo pipefail
 
@@ -43,6 +54,12 @@ usage() {
 project_dir="${1:-}"
 [[ -n "$project_dir" ]] || usage
 report="${2:-$project_dir/build/app-partition-fit.txt}"
+
+min_free_pct="${APP_PARTITION_MIN_FREE_PCT:-5}"
+if ! [[ "$min_free_pct" =~ ^[0-9]+$ ]] || (( min_free_pct > 100 )); then
+    echo "APP_PARTITION_MIN_FREE_PCT must be an integer 0-100, got '$min_free_pct'" >&2
+    exit 2
+fi
 
 if [[ -z "${IDF_PATH:-}" ]]; then
     echo "::error::IDF_PATH is not set — run this inside the ESP-IDF container, after idf.py build"
@@ -89,12 +106,31 @@ if ! python3 "$checker" --offset "$pt_offset" partition --type app "$pt_bin" "$a
     exit 1
 fi
 
-# A run that measured nothing must not pass by absence.
-if ! grep -q 'binary size' "$report"; then
+# A run that measured nothing must not pass by absence. The two hex values
+# on the verdict line are the floor's inputs, so parse them rather than
+# grep for a phrase: a line that fails to parse is treated the same way.
+read -r bin_hex part_hex < <(sed -n \
+    's/.*binary size \(0x[0-9a-fA-F]*\) bytes\. Smallest app partition is \(0x[0-9a-fA-F]*\) bytes\..*/\1 \2/p' \
+    "$report")
+if [[ -z "${bin_hex:-}" || -z "${part_hex:-}" ]]; then
     echo "::error::$project_id: check_sizes.py produced no size verdict for $app_file — refusing to treat that as a pass"
     exit 1
 fi
 
+bin_size=$((bin_hex))
+part_size=$((part_hex))
+free=$((part_size - bin_size))
+# Integer percent, truncated, so a 4.9% margin reads as 4 and fails a 5 floor.
+free_pct=$((free * 100 / part_size))
+if (( free * 100 < min_free_pct * part_size )); then
+    printf '::error::%s: %s leaves %#x bytes (%d%%) of the %#x-byte app partition — below the %d%% headroom floor (APP_PARTITION_MIN_FREE_PCT). Enlarge the partition, e.g. CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE=y or a partitions.csv, rather than trimming the build to the byte.\n' \
+        "$project_id" "$app_file" "$free" "$free_pct" "$part_size" "$min_free_pct"
+    exit 1
+fi
+echo "headroom: $free_pct% free, floor $min_free_pct%" | tee -a "$report"
+
+# ESP-IDF's own "nearly full" line, or a partial fit (some app partitions
+# too small), surfaces as a warning when the floor above did not fail it.
 if grep -q '^Warning:' "$report"; then
     echo "::warning::$project_id: $(grep -m1 '^Warning:' "$report")"
 fi
