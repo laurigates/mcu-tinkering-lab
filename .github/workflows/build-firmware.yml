@@ -129,7 +129,7 @@ jobs:
         with:
           ref: ${{ github.workflow_sha }}
           sparse-checkout: |
-            tools
+            /tools/
           sparse-checkout-cone-mode: false
           path: workflow-tools
 
