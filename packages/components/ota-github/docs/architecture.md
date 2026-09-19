@@ -159,14 +159,16 @@ writes to the inactive partition. On reboot the bootloader switches.
 `ota_github_confirm_valid` (called automatically after the stability
 timeout) tells the bootloader not to roll back.
 
-**Binary size limit:** 1.8 MB, set by the `ota_0`/`ota_1` partition size
-above — an oversized binary fails to flash regardless of CI. Not currently
-enforced as a CI check: the release pipeline is
-[`build-firmware.yml`](../../../../.github/workflows/build-firmware.yml),
-which does not port the per-project size gate the now-deleted
-`_build-esp32-firmware.yml` had (tracked as a follow-up, see
+**Binary size limit:** the smallest app partition of *your* table — 1.81 MB
+(`0x1D0000`) in the layout above, 3.5 MB on the 8 MB XIAO, whatever yours
+declares. `idf.py build` fails on overflow (ESP-IDF's `app_check_size`
+against the built `partition-table.bin`), and the release pipeline
+[`build-firmware.yml`](../../../../.github/workflows/build-firmware.yml)
+re-runs that same check per project via `tools/check-app-partition-fit.sh`
+and shows the headroom in the run summary. There is deliberately no
+repo-wide byte limit — see
 [ADR-015](../../../../docs/decisions/ADR-015-ota-github-shared-component.md)'s
-"Update" section).
+2026-09-19 update for why the old "1.8 MB" number was wrong for every table.
 
 ## Tasks and memory
 

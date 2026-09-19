@@ -120,12 +120,36 @@ jobs:
           done
           echo "Dependencies ready"
 
+      # Same reasoning as the assemble job's "Checkout workflow revision"
+      # step: a workflow_dispatch replay can target a tag older than
+      # tools/check-app-partition-fit.sh, so the script comes from the
+      # revision this workflow file was loaded from, not from the tag.
+      - name: Checkout workflow revision (for tools/ helpers)
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.workflow_sha }}
+          sparse-checkout: |
+            tools
+          sparse-checkout-cone-mode: false
+          path: workflow-tools
+
+      # The app-partition size gate is ESP-IDF's own: `idf.py build` fails
+      # when the app exceeds the smallest app partition of the table it just
+      # generated (esptool_py's app_check_size target), so the limit is each
+      # project's real partition table rather than one number for all sixteen.
+      # The script re-runs that shipped check so its verdict is a per-project
+      # report the summary can show, and so a build that somehow skipped the
+      # check fails here instead of passing by absence (issue #556). $OLDPWD
+      # is the repo root after the cd; the action runs this via `bash -c`.
       - name: Build ${{ matrix.project }}
         uses: espressif/esp-idf-ci-action@v1
         with:
           esp_idf_version: ${{ env.IDF_VERSION }}
           target: ${{ matrix.target }}
-          command: cd packages/${{ matrix.project_path }} && idf.py build
+          command: >-
+            cd packages/${{ matrix.project_path }} &&
+            idf.py build &&
+            bash "$OLDPWD/workflow-tools/tools/check-app-partition-fit.sh" .
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v7
@@ -136,6 +160,7 @@ jobs:
             packages/${{ matrix.project_path }}/build/bootloader/bootloader.bin
             packages/${{ matrix.project_path }}/build/partition_table/partition-table.bin
             packages/${{ matrix.project_path }}/build/ota_data_initial.bin
+            packages/${{ matrix.project_path }}/build/app-partition-fit.txt
           retention-days: 7
 
   assemble-and-deploy:
@@ -555,17 +580,22 @@ jobs:
             echo ""
             echo "### Release: \`${RELEASE_TAG}\`"
             echo ""
-            echo "| Project | Binary | Size |"
-            echo "|---------|--------|------|"
+            echo "| Project | Binary | Size | Partition fit |"
+            echo "|---------|--------|------|---------------|"
 
             for flasher_json in packages/*/*/flasher.json; do
               project_dir=$(dirname "$flasher_json")
               project_id=$(basename "$project_dir")
               app_bin=$(jq -r '.appBinaryName' "$flasher_json")
               bin_path="firmware/$project_id/$app_bin"
+              # Verdict written by tools/check-app-partition-fit.sh in the
+              # build job (ESP-IDF's own check against the project's real
+              # partition table); same artifact root as the binaries above.
+              fit_report="artifacts/firmware-$project_id/app-partition-fit.txt"
               if [ -f "$bin_path" ]; then
                 SIZE=$(stat -c%s "$bin_path" 2>/dev/null || echo "?")
-                echo "| $project_id | $app_bin | $SIZE bytes |"
+                FIT=$(head -n1 "$fit_report" 2>/dev/null || echo "no report")
+                echo "| $project_id | $app_bin | $SIZE bytes | $FIT |"
               fi
             done
           } >> "$GITHUB_STEP_SUMMARY"
