@@ -63,3 +63,7 @@ CONFIG_MDNS_ENABLED=y
 
 # Flash memory
 CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+# "Single factory app (large)": factory grows 1M -> 1500K at the same 0x10000
+# offset, nvs/phy_init unchanged. The implicit 1 MB SINGLE_APP default had
+# 0xCAB0 bytes (5%) left on 2026-09-19 (#582).
+CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE=y

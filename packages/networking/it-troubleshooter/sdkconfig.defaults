@@ -17,7 +17,10 @@ CONFIG_FREERTOS_HZ=1000
 
 # --- Flash & PSRAM (Waveshare ESP32-S3-Zero: 4MB flash, 2MB PSRAM) ---
 CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
-CONFIG_PARTITION_TABLE_SINGLE_APP=y
+# "Single factory app (large)": factory grows 1M -> 1500K at the same 0x10000
+# offset, nvs/phy_init unchanged. The 1 MB table had 0x4570 bytes (2%) left
+# on 2026-09-19 — the next feature would have failed app_check_size (#582).
+CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE=y
 
 # --- PSRAM (2MB on ESP32-S3-Zero) ---
 CONFIG_SPIRAM=y
