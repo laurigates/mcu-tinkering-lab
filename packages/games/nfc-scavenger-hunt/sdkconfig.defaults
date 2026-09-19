@@ -48,8 +48,13 @@ CONFIG_ESP_TASK_WDT_TIMEOUT_S=30
 # NVS encryption not needed for home toy
 CONFIG_NVS_ENCRYPTION=n
 
-# Partition table — default single factory app
-CONFIG_PARTITION_TABLE_SINGLE_APP=y
+# Partition table — ESP-IDF's built-in "Single factory app (large), no OTA":
+# nvs 0x9000/0x6000, phy_init 0xF000/0x1000, factory 0x10000/1500K. The
+# 1 MB SINGLE_APP default stopped fitting at 0x100560 bytes (overflow 0x560);
+# the build's own app_check_size had been failing on it, hidden by a
+# swallowed exit status in CI until PR #582. Same offsets as before, so a
+# board's NVS survives the reflash.
+CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE=y
 
 # Flash size (match board: 4MB SuperMini, 8MB XIAO)
 CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
