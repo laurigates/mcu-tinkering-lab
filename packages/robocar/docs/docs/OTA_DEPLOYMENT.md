@@ -173,7 +173,7 @@ Once a GitHub Release is published:
    - Calculates SHA256 hashes
    - Creates `manifest.json` with download URLs and checksums
    - Uploads all three files to the release assets
-   - **Binary size check**: verifies each binary ≤ 1.8MB (OTA partition limit)
+   - **Binary size check**: the build fails if a binary exceeds its project's smallest app partition (1.81 MB on the robocar tables)
    - If `MQTT_BROKER_HOST` secret is configured, publishes to `robocar/ota/notify`
 
 2. **Devices receive notification:**
@@ -464,17 +464,18 @@ idf.py monitor
 
 ## 7. Binary Size Limits
 
-Each firmware binary must fit within the OTA partition, which is limited to **1.8MB** (1,887,436 bytes).
+Each firmware binary must fit within the OTA partition — **0x1D0000 = 1,900,544 bytes** (1.81 MB) on both robocar tables (`partitions.csv` is the source of truth).
 
 ### 7.1 Check Binary Size
 
-After building, the CI workflow automatically checks binary sizes:
+`idf.py build` checks this itself (ESP-IDF's `app_check_size`) and fails on
+overflow; CI re-runs the same check and reports the headroom per project:
 
 ```bash
 # After build, check locally
 ls -lh build/robocar-camera.bin build/robocar-main.bin
 
-# Expected output should show binaries < 1.8MB
+# Expected output should show binaries < 0x1D0000 (1,900,544 bytes)
 # Example:
 # -rw-r--r--  1 user  group  1.2M  Jan 15 12:34 robocar-camera.bin
 # -rw-r--r--  1 user  group  950K  Jan 15 12:34 robocar-main.bin
@@ -482,7 +483,7 @@ ls -lh build/robocar-camera.bin build/robocar-main.bin
 
 ### 7.2 If Binary Exceeds Limit
 
-If a binary approaches or exceeds 1.8MB:
+If a binary approaches or exceeds the partition size:
 
 1. **Reduce log verbosity:**
    ```c

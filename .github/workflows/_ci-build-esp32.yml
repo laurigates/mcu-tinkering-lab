@@ -102,12 +102,24 @@ jobs:
         with:
           esp_idf_version: ${{ env.IDF_VERSION }}
           target: ${{ inputs.target }}
+          # The action runs this through `bash -c` from the repo root. The
+          # exit status of the whole string is the job's verdict, so the shape
+          # matters: the build and the partition-fit check are `&&`-chained
+          # and MUST be able to fail; only the size-report commands (advisory,
+          # already redirected into a file) are allowed to fail, inside their
+          # own `{ ...; true; }` group. The previous form ended in `; true`
+          # at top level, which returned 0 for a failed `idf.py build` too —
+          # the size-report artifact then held the compiler error and the job
+          # went green. tools/check-app-partition-fit.sh is ESP-IDF's own
+          # app-fits-partition check made visible (issue #556); $OLDPWD is the
+          # repo root after the cd.
           command: >-
             cd packages/${{ inputs.project_path }} &&
             idf.py build &&
-            echo "# Build Size Analysis for ${{ inputs.project }}" > size-report.txt &&
+            bash "$OLDPWD/tools/check-app-partition-fit.sh" . &&
+            { echo "# Build Size Analysis for ${{ inputs.project }}" > size-report.txt;
             idf.py size >> size-report.txt 2>&1;
-            idf.py size-components >> size-report.txt 2>&1; true
+            idf.py size-components >> size-report.txt 2>&1; true; }
 
       - name: Host unit tests
         working-directory: packages/${{ inputs.project_path }}
@@ -165,23 +177,30 @@ jobs:
           path: packages/${{ inputs.project_path }}/size-report.txt
           retention-days: 30
 
-      - name: Check binary size limits
+      - name: Report app partition fit
+        # The size gate itself is ESP-IDF's app_check_size, re-run inside the
+        # build step above by tools/check-app-partition-fit.sh against the
+        # smallest app partition of THIS project's partition table — not a byte
+        # count typed in here. The step this replaces compared
+        # build/<project>.bin against a hardcoded 1.75 MB: wrong for every
+        # table that is not 1.81 MB (robocar-unified's is 3.5 MB), and vacuous
+        # for robocar-main and robocar-camera, whose binaries are not named
+        # after the project, so `stat` returned 0 and 0 bytes was "within
+        # limits" (issue #556). This step only surfaces the verdict. A missing
+        # report means the check did not run, which is a failure, not a pass.
         working-directory: packages/${{ inputs.project_path }}
+        shell: bash
         run: |
-          APP_SIZE=$(stat -c%s "build/${{ inputs.project }}.bin" 2>/dev/null || stat -f%z "build/${{ inputs.project }}.bin" 2>/dev/null || echo "0")
-
-          WARNING_THRESHOLD=1572864  # 1.5 MB
-          CRITICAL_THRESHOLD=1835008  # 1.75 MB
-
-          echo "Application binary size: $APP_SIZE bytes ($(($APP_SIZE / 1024)) KB)"
-
-          if [ $APP_SIZE -gt $CRITICAL_THRESHOLD ]; then
-            echo "::error::Binary size ($APP_SIZE bytes) exceeds critical threshold ($CRITICAL_THRESHOLD bytes)!"
-            echo "This may not fit in OTA partitions. Consider optimizing code or disabling features."
+          report=build/app-partition-fit.txt
+          if [ ! -f "$report" ]; then
+            echo "::error::$report not found — tools/check-app-partition-fit.sh did not run after the build"
             exit 1
-          elif [ $APP_SIZE -gt $WARNING_THRESHOLD ]; then
-            echo "::warning::Binary size ($APP_SIZE bytes) exceeds warning threshold ($WARNING_THRESHOLD bytes)."
-            echo "Consider optimizing code to leave headroom for OTA updates."
-          else
-            echo "::notice::Binary size is within acceptable limits."
           fi
+          cat "$report"
+          {
+            echo "### App partition fit: ${{ inputs.project }}"
+            echo ""
+            echo '```'
+            cat "$report"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

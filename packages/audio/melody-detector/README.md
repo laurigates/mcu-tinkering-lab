@@ -54,7 +54,7 @@ If flashing fails, hold BOOT and tap RESET to enter download mode.
 ## Phase 1 acceptance
 
 - `just build` succeeds in the container
-- Binary fits the 1.75 MB CI guard (well under the 1.8 MB OTA partition)
+- Binary fits the 3.5 MB `ota_0`/`ota_1` partitions with room to spare (CI reports the headroom per build)
 - Pressing the button: status LED transitions idle → capturing → processing
   → playing, the serial log reports the captured frame size, and a 1 kHz
   test tone plays for 500 ms

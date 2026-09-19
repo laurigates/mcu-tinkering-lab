@@ -42,7 +42,17 @@ ESP Web Tools requires decimal integer offsets (not hex). The manifests are gene
 
 - **CORS**: Firmware binaries must be served from the same origin as the HTML page (GitHub Pages). Do not reference GitHub Releases URLs in the ESP Web Tools manifest.
 - **ESP32-CAM boot mode**: GPIO0 must be held LOW during reset to enter flash mode. This must be documented on the flasher page.
-- **Binary size limit**: App binaries must be under 1.8MB (1887436 bytes) to fit the OTA partition. This is enforced in CI.
+- **Binary size limit**: an app binary must fit the *smallest app partition of
+  its own project's partition table* — there is no repo-wide number. That is
+  1.81 MB (0x1D0000) `ota_0`/`ota_1` on the 4 MB robocars, 3.5 MB on the 8 MB
+  XIAO, 2–3 MB factory-only tables elsewhere, and the 1 MB single-app default
+  for projects with no `partitions.csv`. `idf.py build` itself fails on overflow
+  (ESP-IDF's `app_check_size`, reading the built `partition-table.bin`);
+  `tools/check-app-partition-fit.sh` re-runs that same shipped check after every
+  CI and release build so the verdict is a per-project report, and so a build
+  that skipped the check fails rather than passing by absence. A hardcoded
+  "1.8 MB" gate was wrong for 14 of the 16 flasher projects, and even for the
+  two it was written for (issue #556).
 - **No credentials in CI builds**: Pre-built firmware does not include WiFi credentials. Post-flash provisioning (Improv WiFi) is required.
 
 ## File Locations

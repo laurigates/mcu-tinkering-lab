@@ -192,7 +192,9 @@ ota_github_get_progress();
 
 ## 10. Verification checklist
 
-- [ ] `idf.py build` succeeds and binary is ≤ 1.8 MB
+- [ ] `idf.py build` succeeds — it fails by itself if the binary exceeds the
+      smallest `ota_0`/`ota_1` partition of your table; read the
+      `binary size … free` line it prints for headroom
 - [ ] Device boots; logs show `ota_github initialized`
 - [ ] `Rollback stability timer started (60000 ms)` appears once
 - [ ] `Firmware marked as valid — rollback cancelled` appears 60 s later

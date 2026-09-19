@@ -210,7 +210,45 @@ for the current contract. `architecture.md`, `adoption-guide.md`, and
 `build-firmware.yml` instead of the deleted reusables.
 
 The 1.8 MB per-release OTA-partition size gate that `_build-esp32-firmware.yml`
-was meant to enforce was never ported to `build-firmware.yml` and remains
-unenforced in CI (tracked as a follow-up, not fixed here) — the partition
-table itself still caps `ota_0`/`ota_1` at 1.8 MB, so an oversized binary
-fails to flash rather than failing a CI check.
+was meant to enforce was never ported to `build-firmware.yml`; issue #556
+tracked the decision.
+
+## Update (2026-09-19): the size gate is ESP-IDF's, not ours
+
+**Decision: do not port the hardcoded 1.8 MB gate. The build already is one.**
+
+`idf.py build` fails when the app binary exceeds the smallest app partition of
+the partition table it just generated — `components/esptool_py/CMakeLists.txt`
+attaches `app_check_size` (which runs `partition_table/check_sizes.py` against
+the built `partition-table.bin`) to the `app` target, in every ESP-IDF 5.x
+build. So the limit each project is held to is its own real table, in the very
+step `build-firmware.yml` runs, before anything is attached to a release.
+
+The number the old gate hardcoded was wrong twice over:
+
+| Project | Smallest app partition | Old gate (1887436) would have |
+|---|---|---|
+| robocar-main, robocar-camera | `0x1D0000` = 1900544 B | rejected a binary that fits, from 1887437 B up |
+| robocar-unified, melody-detector | `0x380000` = 3.5 MB | rejected everything past 1.8 MB, with 1.7 MB still free |
+| factory-only tables (switch-usb-proxy, xbox-switch-bridge, facedancer, bringup) | 2–3 MB | same, wrongly |
+| the 9 flasher projects with no `partitions.csv` | 1 MB `CONFIG_PARTITION_TABLE_SINGLE_APP` default | passed a 1.5 MB binary that cannot flash |
+
+What shipped instead (`tools/check-app-partition-fit.sh`, run after every CI
+and release build): the same `check_sizes.py` invoked verbatim, with the app
+file, table file and table offset read from the build's own
+`flasher_args.json` — no re-parse of `partitions.csv`, no name assumption.
+Its verdict is written to `build/app-partition-fit.txt`, shown in the job
+summary per project, and its *absence* fails the job, so the check cannot
+silently stop running if a future ESP-IDF detaches the target.
+
+Verified with a negative control against the fetched v5.4 tool: exit 0 at
+exactly 0x1D0000 bytes on robocar-main's table, exit 1 at one byte more, and
+the same pair at 0x380000 on robocar-unified's.
+
+Two pre-existing defects in `_ci-build-esp32.yml` fell out of reading it for
+this: its "Check binary size limits" step compared `build/<project>.bin`
+against a hardcoded 1.75 MB, a path that does not exist for robocar-main
+(`idf-robocar.bin`) or robocar-camera (`esp32-cam-robocar.bin`), so `stat`
+returned 0 and 0 bytes was "within limits"; and the build command ended in
+`; true` at top level, so a failed `idf.py build` — and therefore any
+overflow — exited 0. Both are corrected in the same change.

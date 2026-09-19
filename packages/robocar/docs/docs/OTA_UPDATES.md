@@ -188,7 +188,9 @@ The `build-firmware.yml` workflow handles the release pipeline:
 3. Creates a `manifest.json` with download URLs and checksums
 4. Uploads binaries + manifest to the GitHub Release
 5. Publishes MQTT notification to `robocar/ota/notify` (if `MQTT_BROKER_HOST` secret is configured)
-6. Checks binary sizes against OTA partition limits (1.8MB)
+6. Fails the build if a binary exceeds its project's smallest app partition
+   (ESP-IDF's own check, re-run by `tools/check-app-partition-fit.sh`; the
+   robocar tables hold 1.81 MB)
 
 ### GitHub Actions Secrets (Optional)
 
@@ -238,7 +240,7 @@ I (1234) OTA_Manager: Current firmware version: 0.1.0
 - The previous firmware version will be restored automatically
 
 ### Binary too large for OTA partition
-- OTA partition is 1.8MB — the CI pipeline checks this automatically
+- OTA partitions are 1.81 MB (`0x1D0000`) on the 4 MB boards — `idf.py build` fails on overflow, and CI shows the headroom per project
 - If approaching the limit, consider reducing log verbosity, removing unused components, or using `CONFIG_COMPILER_OPTIMIZATION_SIZE`
 
 ### Main controller won't update
