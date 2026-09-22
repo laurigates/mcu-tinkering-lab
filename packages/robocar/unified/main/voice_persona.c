@@ -154,7 +154,7 @@ static const voice_persona_t s_personas[VOICE_PERSONA_COUNT] = {
             .slug = "fi-1950",
             .label = "Finnish, 1950s film register",
             .language_code = "fi-FI",
-            .voice = "Charon",
+            .voice = "Schedar",
             /* Naming the *era* alone produced correct Finnish that did not sound
              * period at all — the model has no reason to infer the delivery from
              * a date. What reads as "1950s" is a bundle of concrete, separable

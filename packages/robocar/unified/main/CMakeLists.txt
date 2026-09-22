@@ -17,6 +17,7 @@ idf_component_register(
         "gemini_parse.c"
         "goal_state.c"
         "scene_change.c"
+        "voice_fx_core.c"
         "ambient_audio.c"
         "speech_budget.c"
         "plan_activity.c"
