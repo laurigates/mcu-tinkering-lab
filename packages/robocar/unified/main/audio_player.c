@@ -5,6 +5,8 @@
 
 #include "audio_player.h"
 
+#include "voice_fx_core.h"
+
 #include <string.h>
 
 #include "driver/i2s_std.h"
@@ -98,6 +100,12 @@ static inline size_t ring_pending(void)
 /* Odd trailing byte held back from the previous audio_player_write so only
  * 16-bit-aligned runs enter the ring. See audio_player_write. */
 static uint8_t s_carry = 0;
+
+/* The retro-robot body resonance. Lives here because this is the one place
+ * every voice sample passes through, so a future second producer inherits
+ * the effect instead of quietly bypassing it -- the same argument that puts
+ * the activity_trace hooks inside gemini_http_post(). */
+static voice_fx_t s_fx;
 static bool s_have_carry = false;
 
 /* ------------------------------------------------------------------ */
@@ -169,6 +177,11 @@ void audio_player_set_volume_pct(uint8_t pct)
 uint8_t audio_player_volume_pct(void)
 {
     return s_volume_pct;
+}
+
+voice_fx_t *audio_player_fx(void)
+{
+    return &s_fx;
 }
 
 /** Scale to the live volume and duplicate each mono sample into L and R. */
@@ -265,6 +278,10 @@ static void player_task(void *arg)
         channel_set_active(true);
 
         const size_t samples = got / sizeof(int16_t);
+        /* Before mono_to_stereo(), deliberately. The effect must see a level
+         * that does not move when somebody turns the volume down, or the
+         * saturator's character changes with the volume knob. */
+        voice_fx_apply(&s_fx, (int16_t *)item, samples);
         mono_to_stereo((const int16_t *)item, samples, stereo);
         vRingbufferReturnItem(s_ring, item);
         s_played_total += got;
@@ -288,6 +305,8 @@ esp_err_t audio_player_init(void)
     if (s_task) {
         return ESP_OK;
     }
+
+    voice_fx_init(&s_fx, AUDIO_SAMPLE_RATE_HZ);
 
     // The ring lives in PSRAM: 96 kB of internal RAM would meaningfully cut
     // into the WiFi/TLS and camera framebuffer budget.
@@ -409,6 +428,10 @@ void audio_player_begin_utterance(void)
 {
     s_fetch_active = true;
     s_have_carry = false;
+    /* Clear the comb tail so the previous sentence does not ring through
+     * the front of this one. Without it two identical utterances render
+     * differently depending on what preceded them. */
+    voice_fx_reset(&s_fx);
 
     /* Make this utterance earn its own preroll — but only if the ring is
      * actually empty. If the previous utterance is still draining, the gate
@@ -446,7 +469,8 @@ void audio_player_abort(void)
         return;
     }
 
-    s_have_carry = false;  // discard any half-sample so the next utterance starts aligned
+    s_have_carry = false;   // discard any half-sample so the next utterance starts aligned
+    voice_fx_reset(&s_fx);  // an abort wants silence now, not a decaying tail
 
     // Drain whatever is queued without playing it.
     for (;;) {

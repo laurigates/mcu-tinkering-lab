@@ -155,6 +155,20 @@ target_link_libraries(test_speech_budget PRIVATE Threads::Threads m)
 add_test(NAME speech_budget COMMAND test_speech_budget)
 
 # -----------------------------------------------------------------------------
+# voice_fx_core (the retro-robot body resonance on the way to I2S)
+#
+# The load-bearing case is the comb's (1-g) input trim: without it the feedback
+# gain is 1/(1-g) and the effect pins at the rail instead of resonating. That
+# still sounds like a robot on a bench, which is exactly why it needs a test.
+# -----------------------------------------------------------------------------
+add_executable(test_voice_fx_core
+    "${MAIN_SRC_DIR}/voice_fx_core.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_voice_fx_core.c"
+)
+target_link_libraries(test_voice_fx_core PRIVATE Threads::Threads m)
+add_test(NAME voice_fx_core COMMAND test_voice_fx_core)
+
+# -----------------------------------------------------------------------------
 # scene_change gate (does the view differ from the one last spoken about?)
 #
 # Pure C over a caller-supplied luma plane, so the synthetic frames a bench
@@ -279,6 +293,10 @@ add_test(NAME audio_clip COMMAND test_audio_clip)
 # -----------------------------------------------------------------------------
 add_executable(test_audio_player
     "${MAIN_SRC_DIR}/audio_player.c"
+    # audio_player.c applies the voice effect in its drain loop, so the real
+    # module links in here rather than a stub: a stub would let the two drift,
+    # and the player's own tests would stop covering the call at all.
+    "${MAIN_SRC_DIR}/voice_fx_core.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/host_shims.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/test_audio_player.c"
 )

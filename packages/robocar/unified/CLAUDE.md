@@ -540,6 +540,38 @@ Only *generated* lines are screened for repetition. `voice say` is an audition a
 
 Output gain is a console knob too — `voice volume <pct>`, boot default `AUDIO_VOLUME_PCT`. It scales the PCM linearly before the DMA, because the MAX98357A has no volume control, and the setter **clamps at 100**: `mono_to_stereo()` casts the scaled sample to `int16`, so an unclamped 200 wraps a full-scale peak to the opposite rail and the output inverts into noise rather than clipping. Percent is amplitude, not loudness — halving it is −6 dB, and an ear reads roughly −10 dB as half as loud, so expect the first guess to be wrong and adjust in the room. Pinned by `test_audio_player.c`.
 
+**Teuvo sounds like a robot because of a filter, not a prompt.** `voice_fx_core.c`
+adds a feedback comb (the metal body) and a soft saturation (the amplifier inside
+him) to every sample on its way to I2S, applied in `audio_player.c`'s drain loop
+before the volume scale. The split is deliberate and was measured, not assumed: a
+sweep of seven `tts_style` directives over one Finnish line (2026-09) moved tempo
+by up to 2.7x and measurably changed timbre, so **pace, weight and rasp are
+promptable and belong in `voice_persona.c`** — but the same sweep asked the model
+in Finnish for a narrow, band-limited "old radio" sound and got audio with *more*
+high-frequency energy than the unprompted control (0.77% vs 0.59% above 4 kHz).
+The medium is not promptable. That is the whole justification for DSP here.
+
+The chain is comb + saturation at **full bandwidth**, with no band-limit, and
+that is a character decision rather than an omission: band-limiting would say
+"you are hearing a 1956 recording *of* Robby", and Teuvo is in the room. Three
+knobs, all integers on the console because `%f` is silently wrong under
+`CONFIG_NEWLIB_NANO_FORMAT` — `voice fx body <tenths of a ms>` (the body size;
+6.5 ms resonates near 154 Hz), `voice fx metal <pct>` (feedback), `voice fx drive
+<pct>`, plus `voice fx on|off`. Like every other knob here they do not persist.
+
+The `(1-g)` input trim on the comb is load-bearing, not tidiness: a feedback comb
+has DC gain `1/(1-g)`, so an untrimmed one pins at the rail and is a clipper
+wearing a resonator's name — and it still sounds like a robot on a bench, which
+is why `test_voice_fx_core.c` pins it and was mutation-checked by removing it.
+The delay line is cleared at both utterance edges so one sentence does not ring
+through the front of the next.
+
+Prototyping happens on the workstation, not on the board: `just
+robocar-unified::voice-sweep` auditions `tts_style` directives, `voice-fx` a
+chain over one clip, and `voice-voices` all 30 prebuilt voices through one chain.
+All three write WAVs to `tmp/` and loudness-match every arm, because the louder
+of two clips is judged the better one almost regardless of what else changed.
+
 All six thresholds are console knobs (`voice quiet`, `voice budget`, `voice repeat`, `voice scene`, `voice loud`, `voice sound`) for the same reason `cam gainceiling` is: whether the robot is pleasantly laconic or annoyingly mute is a judgement that needs somebody in the room, and a reflash per trial is far too slow a loop. `voice scene` especially has **no defensible compile-time default** — what counts as a changed view depends on the room and the lens, so the shipped 8 is a starting point and the logged `scene:` field is how you replace it with a measured one. They deliberately do **not** persist to NVS — a boot should come up at the documented default, not at whatever last night's experiment left behind. `voice said` prints the recall ring.
 
 Note that **`voice loud 0` and `voice sound 0` mean the opposite of `voice scene 0`**, and the inversion is forced by the operator rather than chosen: `scene` is ANDed into the evidence term, so 0 there means "always novel"; `loud` and `sound` are ORed, so 0 must mean "never contributes". Both readings say *this gate is not participating*. Setting both audio thresholds to 0 restores the pre-microphone behaviour exactly, and `test_ambient_audio.c` pins that as an invariant.
@@ -652,6 +684,8 @@ Key settings that matter:
 - Don't add goal sources outside `planner_task.c` — structured goals keep the two layers decoupled. If a new goal source is needed, it should write `goal_state` the same way the planner does
 - Don't fold speech into `goal_t` — see the Voice section above and `speech_queue.h`
 - Don't put a specific phrase, opener or filler word in a persona's `text_brief` — everything named there is said every time. Phrase-shaped flavour goes in the `openers`/`shapes` pools; see `dialogue_style.h`
+- Don't add a band-limit, ring modulator, bitcrusher or impulse-train "drone" to `voice_fx_core.c`. All four were auditioned and rejected with reasons recorded in that file's header — ring modulation costs intelligibility in a language that contrasts geminates and vowel length, bitcrushing is a 1980s artifact that also injects a DC offset into a BTL class-D voice coil, the drone samples `|x[n]|` at one arbitrary instant per period, and a band-limit changes the character from "Robby in the room" to "a recording of Robby"
+- Don't drop the comb's `(1-g)` input trim, or "simplify" it to a plain `x + g*y[n-D]`. The DC gain becomes `1/(1-g)` and the effect pins at the rail; it still sounds robotic, so nothing on a bench catches it
 - Don't name an *era* in `tts_style` and expect the delivery to follow — "1950s Finnish film" produced flat contemporary Finnish. Name the audible traits instead (enunciation, tempo, `yleiskieli` forms, tapped /r/, held geminates). Note the ceiling: the era's *recording chain* (~100 Hz–5 kHz) is a filter, not a speaking style, and no prompt adds it
 - Don't try to fix repetition by wording the prompt harder ("do not repeat yourself", "only if the scene changed"). Every request is stateless, so those name facts the model cannot check. Withhold the `speak` declaration instead, and re-check the answer against the recall ring — see the Voice section
 - Don't compare scene fingerprints in absolute luma. The AGC/AEC rewrites gain and exposure every frame, so a motionless scene drifts in brightness continuously and an absolute comparison calls that a scene change. `scene_change.c` stores each block relative to the frame mean for exactly this reason; `test_scene_change.c` pins it with a same-scene +80 shift that must score 0

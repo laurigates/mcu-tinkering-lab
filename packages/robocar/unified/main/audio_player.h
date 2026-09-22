@@ -29,6 +29,7 @@
 #include <stdint.h>
 
 #include "esp_err.h"
+#include "voice_fx_core.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -163,6 +164,21 @@ void audio_player_set_volume_pct(uint8_t pct);
 
 /** Current output gain, percent of full scale. */
 uint8_t audio_player_volume_pct(void);
+
+/**
+ * @brief The retro-robot voice effect this player applies, for the console.
+ *
+ * Handed out as a pointer rather than wrapped in five setters because the
+ * console is the only caller and voice_fx_core.h already validates every range.
+ *
+ * Lock-free by the same argument as the volume knob: the parameters are
+ * word-sized single-writer stores, and the reader is one 128-sample chunk
+ * behind at worst. voice_fx_set_body_ms() additionally clears the 2 kB delay
+ * line, which can race the player mid-chunk — the cost is one click, which is
+ * the correct outcome for a live parameter change on a resonator anyway.
+ * Do NOT start calling this from a second task without revisiting that.
+ */
+voice_fx_t *audio_player_fx(void);
 
 #ifdef AUDIO_PLAYER_HOST_TEST
 /**

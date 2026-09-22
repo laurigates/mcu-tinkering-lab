@@ -634,6 +634,9 @@ static void handle_voice_cmd(const char *buf)
         printf("         voice quiet <s> | budget <n> <s> | repeat <pct> | scene <n>\n");
         printf("         voice loud <db> | sound <db> | vad on|off   (see also: mic)\n");
         printf("         voice volume <pct>   amplitude, not loudness: halving = -6 dB\n");
+        printf("         voice fx [on|off|body <10..200>|metal <0..85>|drive <10..400>]\n");
+        printf(
+            "                              retro-robot body resonance; body is TENTHS of a ms\n");
         return;
     }
 
@@ -653,6 +656,57 @@ static void handle_voice_cmd(const char *buf)
         printf("voice: volume=%u%% of full scale (boot default %u%%, so %u/100 of it)\n",
                (unsigned)audio_player_volume_pct(), (unsigned)AUDIO_VOLUME_PCT,
                (unsigned)((audio_player_volume_pct() * 100U) / AUDIO_VOLUME_PCT));
+        return;
+    }
+
+    /* The retro-robot body resonance. Every parameter is an INTEGER on the
+     * console even though the effect is float internally: printing a float
+     * needs %f, and %f is silently wrong under CONFIG_NEWLIB_NANO_FORMAT — the
+     * same reason `voice volume` reports a ratio rather than dB. Body is in
+     * tenths of a millisecond, the other two in percent.
+     *
+     * Not persisted, like every other knob here: a boot comes up at the
+     * documented default rather than at last night's experiment. */
+    if (strcmp(op, "fx") == 0) {
+        voice_fx_t *fx = audio_player_fx();
+        char sub[16] = {0};
+        unsigned value = 0;
+        const int got = sscanf(buf, "voice fx %15s %u", sub, &value);
+
+        if (got >= 1 && strcmp(sub, "on") == 0) {
+            voice_fx_set_enabled(fx, true);
+        } else if (got >= 1 && strcmp(sub, "off") == 0) {
+            voice_fx_set_enabled(fx, false);
+        } else if (got == 2 && strcmp(sub, "body") == 0) {
+            if (!voice_fx_set_body_ms(fx, (float)value / 10.0f)) {
+                printf("voice: fx body out of range (10..200 tenths of a ms)\n");
+                return;
+            }
+        } else if (got == 2 && strcmp(sub, "metal") == 0) {
+            if (!voice_fx_set_feedback(fx, (float)value / 100.0f)) {
+                printf("voice: fx metal out of range (0..85 %%)\n");
+                return;
+            }
+        } else if (got == 2 && strcmp(sub, "drive") == 0) {
+            if (!voice_fx_set_drive(fx, (float)value / 100.0f)) {
+                printf("voice: fx drive out of range (10..400 %%)\n");
+                return;
+            }
+        } else if (got >= 1) {
+            printf(
+                "voice: usage: voice fx [on|off|body <10..200>|metal <0..85>|drive <10..400>]\n");
+            return;
+        }
+
+        /* Report unconditionally, including after a bare `voice fx`, so the
+         * command doubles as the read-back. The resonance frequency is what
+         * `body` actually means to an ear, so it is printed beside it. */
+        const unsigned body_tenths = (unsigned)(fx->body_ms * 10.0f + 0.5f);
+        const unsigned resonance_hz = body_tenths ? (unsigned)(10000u / body_tenths) : 0u;
+        printf("voice: fx=%s body=%u.%u ms (~%u Hz, %u samples) metal=%u%% drive=%u%%\n",
+               fx->enabled ? "on" : "off", body_tenths / 10u, body_tenths % 10u, resonance_hz,
+               (unsigned)fx->delay_samples, (unsigned)(fx->feedback * 100.0f + 0.5f),
+               (unsigned)(fx->drive * 100.0f + 0.5f));
         return;
     }
 
