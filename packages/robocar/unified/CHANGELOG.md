@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.7](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.6...robocar-unified-v0.2.7) (2026-09-22)
+
+
+### Features
+
+* **robocar-unified:** add host-side voice auditioning tools ([e4959c4](https://github.com/laurigates/mcu-tinkering-lab/commit/e4959c4f6db84aeaf3fda796eeb1e2eb01451622))
+* **robocar-unified:** give Teuvo a metal body and the Schedar voice ([306b335](https://github.com/laurigates/mcu-tinkering-lab/commit/306b335b61c654fadd14aa881488bb1d3b15d036))
+
 ## [0.2.6](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.5...robocar-unified-v0.2.6) (2026-09-18)
 
 
