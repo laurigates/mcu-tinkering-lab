@@ -184,3 +184,78 @@ info:
     @echo "  Port:      {{port}}"
     @echo "  Container: {{container_cmd}}"
     @echo "  Hardware:  XIAO ESP32-S3 Sense + TCA9548A + PCA9685"
+
+##########
+# Voice
+##########
+
+# Audition Teuvo delivery directives — the cheap lever, before any DSP.
+#
+# Renders one shipped Finnish line through several candidate `tts_style`
+# directives and writes WAVs you can listen to, instead of reflashing per
+# candidate. Only the directive varies: same line, same voice (Charon), same
+# language, so a difference you hear is attributable to the thing under test.
+#
+# Two of the seven arms are controls, not candidates — 00-bare (no directive)
+# and 01-shipped (the live one, extracted from voice_persona.c rather than
+# retyped). Judging candidates without them measures Charon, not the prompt.
+#
+# Costs 7 Gemini TTS calls and needs GEMINI_API_KEY (from ~/.api_tokens via
+# mise). Nothing it writes is committed; the vocabulary is regenerated from the
+# persona table on every run so the control cannot go stale.
+[group: "voice"]
+voice-sweep out="../../../tmp/voice-sweep":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    proj="$PWD"
+    mkdir -p "{{out}}"
+    out="$(cd "{{out}}" && pwd)"
+    python3 tools/make-style-sweep.py > "$out/styles.teuvo.json"
+    cd ../../audio/gamepad-synth/tools/tts
+    uv sync --quiet
+    uv run python generate.py "$out" "$out/styles.teuvo.json" --trim --wav
+    echo
+    echo "Listen in order:  open $out"
+
+# Audition retro-robot DSP chains on an already-rendered clip. No API calls, no
+# flashing — the whole point is that a filter question is answerable on the
+# workstation once the prompt question has been settled by `voice-sweep`.
+#
+# Chains span the range from unprocessed (C-3PO, where the performance carries
+# the robot) through a period medium and a metal-head resonance to full 45 Hz
+# ring modulation (Dalek). Every chain is loudness-matched to the dry clip, or
+# the louder one wins the A/B regardless of character.
+#
+# Defaults to the shipped-directive arm of the sweep so the only variable is
+# the DSP. Pass another WAV to hear a chain over a different delivery.
+[group: "voice"]
+voice-fx chainset="span" src="../../../tmp/voice-sweep/01-shipped.wav" out="../../../tmp/voice-fx":
+    python3 tools/voice-fx-preview.py "{{src}}" "{{out}}/{{chainset}}" "{{chainset}}"
+
+# Audition all 30 Gemini prebuilt voices through the selected Teuvo chain.
+#
+# The inverse experiment of `voice-fx`: there the voice was fixed and the chain
+# varied, here the chain is fixed and the voice varies. Both halves matter —
+# DSP gives the body, the prebuilt voice gives the pitch and timbre, and an
+# octave is not something to synthesise on an MCU.
+#
+# Every clip carries the SHIPPED tts_style, so this is a voice comparison and
+# not a second style sweep. The voice list is parsed out of the gemini-tts-voice
+# skill and cross-checked against the count its own prose states.
+#
+# 30 TTS calls, paced by TTS_CALL_DELAY_S (default 5 s for the free-tier RPM).
+[group: "voice"]
+voice-voices preset="in-the-room" raw="../../../tmp/voice-voices/raw" out="../../../tmp/voice-voices":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    proj="$PWD"
+    mkdir -p "{{raw}}" "{{out}}"
+    raw="$(cd "{{raw}}" && pwd)"
+    out="$(cd "{{out}}" && pwd)"
+    python3 tools/make-style-sweep.py --voices > "$out/voices.teuvo.json"
+    cd ../../audio/gamepad-synth/tools/tts
+    uv sync --quiet
+    TTS_CALL_DELAY_S="${TTS_CALL_DELAY_S:-5}" uv run python generate.py \
+        "$raw" "$out/voices.teuvo.json" --trim --wav
+    cd "$proj"
+    python3 tools/voice-fx-preview.py "$raw" "$out/{{preset}}" "{{preset}}"
