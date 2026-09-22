@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.9](https://github.com/laurigates/mcu-tinkering-lab/compare/gamepad-synth-v0.1.8...gamepad-synth-v0.1.9) (2026-09-22)
+
+
+### Features
+
+* **robocar-unified:** add host-side voice auditioning tools ([e4959c4](https://github.com/laurigates/mcu-tinkering-lab/commit/e4959c4f6db84aeaf3fda796eeb1e2eb01451622))
+
 ## [0.1.8](https://github.com/laurigates/mcu-tinkering-lab/compare/gamepad-synth-v0.1.7...gamepad-synth-v0.1.8) (2026-09-18)
 
 
