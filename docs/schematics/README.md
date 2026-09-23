@@ -74,7 +74,7 @@ schemdraw's static SVG output.
 from routing import Router
 
 router = Router(d)
-router.wire(esp.GPIO5, amp.BCLK, color="steelblue")
+router.wire(esp.GPIO5, amp.BCLK, net="i2s")
 router.finish()
 ```
 
@@ -90,6 +90,31 @@ router.finish()
   `render.py`, `metrics.py` and the tests with an error naming it, rather
   than rendering with no wires.
 
+- **Crossings and junctions are marked by `.finish()`** (#493). Where two
+  wires cross, the horizontal one hops over the vertical one with a small
+  arc — KiCad's `ShouldHopOver` convention, so exactly one of the pair
+  hops. No hop is drawn at a wire's own endpoint (a T or a shared end is a
+  connection) or where more than two wires meet (that is a junction). A
+  filled dot goes on every junction: three or more wire ends at one point,
+  or one wire ending on another's interior. Hand-drawn `elm.Wire`/`elm.Line`
+  leads already in the drawing count too — a routed wire hops a lead on
+  either axis, since the lead is never redrawn — so call `.finish()` *after*
+  the hand-drawn stubs; a lead added later is invisible to it, and
+  `test_routing.py` fails on any crossing it left unmarked. A lead ending on
+  a `Vdd`/`Ground` tag ends on the tag, so only that end is discounted: a
+  wire running through the point is not dotted, but a real T there is.
+  Hops are two quarter-circle cubic Béziers
+  (`HOP_RADIUS = 0.15`), never the SVG `A` arc: schemdraw's matplotlib
+  backend turns `A` into a MOVETO. Crossings closer than a hop diameter —
+  adjacent grid columns — merge into one bridge. `.finish()` may run more
+  than once; a wire an earlier call drew is redrawn in place if a later
+  wire or lead crosses it. The marks must also *read*: `test_routing.py`
+  fails on a hop within `HOP_RADIUS + JUNCTION_RADIUS` of a dot (the dot
+  hides the arc and draws a connection that is not there), a hop near
+  another wire's corner or shrunk by its own segment end, a dot joining
+  two net classes, or two hand-drawn leads crossing (nothing would hop
+  them). Hand-drawn leads placed before `Router(d)` routes also count as
+  occupied, so a net is not drawn on top of one.
 - **Place components, then route**: call `Router(d)` and every `.wire(...)`
   *after* every component in the circuit is placed, so each net has full
   obstacle awareness. A wire routed before a later component exists can't
@@ -108,7 +133,8 @@ router.finish()
   A multi-endpoint bus (e.g. one GPIO driving a vertical trunk that fans out
   to several chips' pins) is a T-junction, not a point-to-point net, and
   stays hand-drawn with `elm.Wire(...)` — see the nENABLE trunk in
-  `circuits/balancebot.py` for an example.
+  `circuits/balancebot.py` for an example. Colour it with
+  `net_color("<class>")` and `.finish()` dots its junctions.
 - **Tuning**: `Router(d, grid=0.25, clearance=0.3, stub=0.75,
   turn_penalty=4.0, overlap_penalty=6.0)` — defaults suit this repo's
   `unit=2.0`-scale circuits. Lower `turn_penalty` allows more bends in
@@ -125,7 +151,8 @@ router.finish()
   `routing.py` or any `circuits/*.py`; CI runs the whole directory.
 - **Measuring a router change**: `metrics.py` reports, per circuit, total
   wire length, length inside component bodies (own and foreign), crossings,
-  tight parallel pairs, collinear overlaps and junctions — each defined
+  tight parallel pairs, collinear overlaps, junctions (routed-wire ends
+  only) and the hops and dots actually drawn — each defined
   exactly in its module docstring and pinned by `test_metrics.py`. Run
   `just schematics::metrics` (`--json` for machine output) before and after
   a routing change and quote both in the commit, rather than judging the
@@ -142,7 +169,30 @@ router.finish()
   on the left and 3 on the right.
 - **Labels**: factories don't set a center label — individual circuits add
   `.label('Name', loc='bot', ofst=0.4)` to avoid collisions with pin labels.
-- **Colors**: signal buses use `steelblue`; power/ground use default black.
+- **Colors — by net class, never by literal**: every `router.wire()` passes
+  `net=` one of the classes in `routing.NET_COLORS`, which alone decides the
+  colour; there is no `color=` argument. Hand-drawn leads that carry a net
+  use `net_color("<class>")` rather than a literal, so they cannot drift from
+  the palette. Colour is by class rather than by graph colouring (ADR-023): a
+  graph colouring reassigns colours whenever an unrelated net moves, turning
+  every render into a large SVG diff. The palette is Okabe-Ito, which stays
+  distinguishable under the common colour-vision deficiencies (its yellow is
+  left out — too faint on white):
+
+  | Class | Colour | For |
+  |---|---|---|
+  | `power` | vermillion `#D55E00` | supply rails and their tags |
+  | `ground` | black `#000000` | ground leads and tags |
+  | `i2c` | blue `#0072B2` | SDA/SCL, including behind a mux |
+  | `i2s` | bluish green `#009E73` | BCLK/LRC/DIN |
+  | `pwm` | orange `#E69F00` | PWM duty outputs (PCA9685 channels, LEDC tones) |
+  | `sensor` | reddish purple `#CC79A7` | sensor trigger/echo/interrupt lines |
+  | `signal` | sky blue `#56B4E9` | any other digital GPIO (enable, step/dir) |
+  | `load` | grey `#666666` | driver output into a motor coil or speaker |
+
+  A wire routed with no `net=` is drawn black and fails the tests for the
+  real circuits. The one literal left is the gray `SD_MODE` annotation arrow
+  in `robocar_unified.py`: it marks a pin left floating, not a net.
 - **Output format**: SVG is the source of truth — schemdraw writes
   byte-deterministic SVG, so `git diff` on it is reliable signal that the
   rendered output is out of sync with `circuits/<name>.py`. The PNG is

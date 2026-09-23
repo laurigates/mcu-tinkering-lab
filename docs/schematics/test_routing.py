@@ -66,7 +66,7 @@ def _build_two_chip_drawing():
 def test_simple_wire_is_orthogonal_and_exact():
     d, esp, amp = _build_two_chip_drawing()
     router = Router(d)
-    handle = router.wire(esp.GPIO5, amp.BCLK, color="steelblue")
+    handle = router.wire(esp.GPIO5, amp.BCLK, net="i2s")
     router.finish()
     # The drawn Path, not just the recorded polyline: the exact-endpoint
     # claim is about what reaches the SVG.
@@ -91,7 +91,7 @@ def test_wire_avoids_obstacle_placed_between_pins():
     blocker_box = _BBox(*d.elements[-1].get_bbox(transform=True, includetext=False))
 
     router = Router(d)
-    abspoints = router.wire(esp.GPIO6, amp.LRC, color="steelblue").points
+    abspoints = router.wire(esp.GPIO6, amp.LRC, net="i2s").points
 
     _segments_are_orthogonal(abspoints)
     for p1, p2 in zip(abspoints, abspoints[1:]):
@@ -116,7 +116,7 @@ def test_unreachable_goal_fails_fast():
     router = Router(d)
     t0 = time.monotonic()
     try:
-        router.wire(esp.GPIO6, amp.LRC, color="steelblue")
+        router.wire(esp.GPIO6, amp.LRC, net="i2s")
         raise AssertionError("expected RuntimeError for an unreachable goal")
     except RuntimeError:
         pass
@@ -134,8 +134,7 @@ def test_own_component_is_not_treated_as_an_obstacle():
 
 
 def _abspoints(el):
-    at = el._userparams["at"]
-    return [(at[0] + x, at[1] + y) for x, y in el.segments[0].path]
+    return list(el.polyline)
 
 
 def _box_of(el) -> _BBox:
@@ -184,8 +183,9 @@ def test_overlapping_box_around_a_pin_and_its_stub_does_not_block_it():
 def test_router_wire_defaults_to_visible_stroke():
     # Regression: passing color=None straight through to Path used to omit
     # the SVG stroke attribute entirely, which CSS defaults to `stroke: none`
-    # -> an invisible wire (this is how OUT-/OUT+ in gamepad_synth.py are
-    # called: no color= argument).
+    # -> an invisible wire (this is how OUT-/OUT+ in gamepad_synth.py were
+    # called before net classes: no color= argument). An unclassified wire
+    # must still be drawn visibly.
     d, esp, amp = _build_two_chip_drawing()
     router = Router(d)
     handle = router.wire(esp.GPIO5, amp.BCLK)
@@ -216,10 +216,7 @@ def _all_real_circuit_paths():
         for el in d.elements:
             if not isinstance(el, Path):
                 continue
-            pts = el.segments[0].path
-            at = el._userparams["at"]
-            abspts = [(at[0] + x, at[1] + y) for x, y in pts]
-            yield py.stem, abspts, obstacles
+            yield py.stem, list(el.polyline), obstacles
 
 
 def _contains_endpoint(box: _BBox, point, eps=1e-6) -> bool:
@@ -359,7 +356,7 @@ def test_wire_records_without_drawing_until_finish():
     d, esp, amp = _build_two_chip_drawing()
     router = Router(d)
     before = len(d.elements)
-    handle = router.wire(esp.GPIO5, amp.BCLK, color="steelblue")
+    handle = router.wire(esp.GPIO5, amp.BCLK, net="i2s")
     assert len(d.elements) == before, "wire() drew instead of recording"
     assert handle.element is None
     assert handle.points[0] == (float(esp.GPIO5[0]), float(esp.GPIO5[1]))
@@ -437,3 +434,423 @@ def test_render_harness_rejects_a_forgotten_finish():
     except RuntimeError as exc:
         assert "finish()" in str(exc)
     assert draw_circuit(SimpleNamespace(__name__="ok", draw=lambda: draw(True)))
+
+
+# -- crossings, junctions and net colour (#493) ---------------------------------
+#
+# Until these existed a crossing and a connection were the same mark: two wires
+# that merely cross looked exactly like two that join. finish() now bridges
+# every crossing with a hop, dots every junction, and colours each wire by its
+# net class. The rules are KiCad's (ShouldHopOver): the horizontal wire hops,
+# never at a wire's own endpoint, never where more than two wires meet.
+
+
+def _free_router():
+    """A router on an empty drawing: no boxes, so no stubs and straight runs."""
+    d = schemdraw.Drawing(show=False)
+    d.config(unit=2.0)
+    return d, Router(d)
+
+
+def _curve_path(el):
+    """The drawn command list of a routed Path: strings and points."""
+    from schemdraw.segments import SegmentPath
+
+    (seg,) = el.segments[:1]
+    assert isinstance(seg, SegmentPath), f"wire drawn as {type(seg).__name__}"
+    return seg.path
+
+
+def test_a_crossing_gets_one_hop_on_the_horizontal_wire():
+    from metrics import crossings
+
+    d, router = _free_router()
+    h = router.wire((0.0, 0.0), (4.0, 0.0), net="i2c")
+    v = router.wire((2.0, -2.0), (2.0, 2.0), net="pwm")
+    router.finish()
+
+    assert crossings([h.points, v.points]) == 1
+    assert h.hops == [(2.0, 0.0)]
+    assert v.hops == [], "the vertical wire hopped too; exactly one may"
+    # Two quarter-circle cubics, never the SVG arc command: schemdraw's
+    # matplotlib backend turns "A" into a MOVETO and breaks the path.
+    cmds = [c for c in _curve_path(h.element) if isinstance(c, str)]
+    assert cmds.count("C") == 2 and "A" not in cmds
+    assert "C" not in [c for c in _curve_path(v.element) if isinstance(c, str)]
+    # And the logical polyline the metrics read is untouched by the drawing.
+    assert h.element.polyline == h.points
+
+
+def test_no_hop_at_a_shared_endpoint_or_a_tee():
+    from routing import _hop_sites
+
+    corner = [[(0.0, 0.0), (2.0, 0.0)], [(2.0, 0.0), (2.0, 2.0)]]
+    tee = [[(0.0, 0.0), (4.0, 0.0)], [(2.0, 0.0), (2.0, 2.0)]]
+    assert _hop_sites(corner) == [[], []]
+    assert _hop_sites(tee) == [[], []]
+
+
+def test_no_hop_where_more_than_two_wires_meet():
+    # A third wire through the crossing point makes it a junction, not a
+    # crossing — and hopping one wire over two others would draw a bridge
+    # across a connection.
+    from routing import _hop_sites
+
+    wires = [
+        [(0.0, 0.0), (4.0, 0.0)],
+        [(2.0, -2.0), (2.0, 2.0)],
+        [(2.0, 1.0), (2.0, -1.0)],
+    ]
+    assert _hop_sites(wires) == [[], [], []]
+
+
+def test_hop_bulges_the_same_side_whichever_way_the_wire_runs():
+    # The segment angle is normalised into [0, pi) before choosing the side,
+    # so a wire routed right-to-left does not flip its hop upside down.
+    from routing import HOP_RADIUS, Path
+
+    for pts in ([(0.0, 0.0), (4.0, 0.0)], [(4.0, 0.0), (0.0, 0.0)]):
+        ys = [
+            p[1]
+            for p in _curve_path(Path(pts, hops=[(2.0, 0.0)]))
+            if not isinstance(p, str)
+        ]
+        assert min(ys) >= -1e-9
+        assert abs(max(ys) - HOP_RADIUS) < 1e-9
+
+
+def test_hops_closer_than_a_diameter_merge_into_one_bridge():
+    # Adjacent verticals sit one grid step (0.25) apart, closer than two hop
+    # radii: two separate arcs would overlap and double back on themselves.
+    from routing import Path
+
+    xs = [
+        p[0]
+        for p in _curve_path(
+            Path([(0.0, 0.0), (4.0, 0.0)], hops=[(2.0, 0.0), (2.25, 0.0)])
+        )
+        if not isinstance(p, str)
+    ]
+    assert xs == sorted(xs), f"bridge doubles back: {xs}"
+
+
+def test_hop_near_a_segment_end_stays_inside_the_segment():
+    from routing import Path
+
+    el = Path([(0.0, 0.0), (2.05, 0.0), (2.05, 3.0)], hops=[(2.0, 0.0)])
+    xs = [p[0] for p in _curve_path(el) if not isinstance(p, str)]
+    assert max(xs) <= 2.05 + 1e-9
+
+
+def test_junction_dot_where_three_wire_ends_meet():
+    d, router = _free_router()
+    router.wire((2.0, 0.0), (0.0, 0.0), net="i2c")
+    router.wire((2.0, 0.0), (4.0, 0.0), net="i2c")
+    router.wire((2.0, 0.0), (2.0, 2.0), net="i2c")
+    router.finish()
+    dots = [el for el in d.elements if isinstance(el, elm.Dot)]
+    assert router.junctions == [(2.0, 0.0)]
+    assert len(dots) == 1
+
+
+def test_junction_dot_where_a_wire_ends_on_another_wires_interior():
+    from routing import _junction_points
+
+    tee = [[(0.0, 0.0), (4.0, 0.0)], [(2.0, 0.0), (2.0, 2.0)]]
+    on_bend = [[(0.0, 0.0), (2.0, 0.0), (2.0, 2.0)], [(2.0, 0.0), (4.0, 0.0)]]
+    corner = [[(0.0, 0.0), (2.0, 0.0)], [(2.0, 0.0), (2.0, 2.0)]]
+    crossing = [[(0.0, 0.0), (4.0, 0.0)], [(2.0, -2.0), (2.0, 2.0)]]
+    assert _junction_points(tee) == [(2.0, 0.0)]
+    assert _junction_points(on_bend) == [(2.0, 0.0)]
+    assert _junction_points(corner) == [], "two ends meeting is a bend, not a join"
+    assert _junction_points(crossing) == [], "a crossing is not a join"
+
+
+def test_wire_net_class_sets_colour_and_rejects_unknown_classes():
+    from routing import NET_COLORS
+
+    d, router = _free_router()
+    w = router.wire((0.0, 0.0), (4.0, 0.0), net="i2s")
+    router.finish()
+    assert w.net == "i2s"
+    assert w.element.params["color"] == NET_COLORS["i2s"]
+    try:
+        router.wire((0.0, 1.0), (4.0, 1.0), net="steelblue")
+        raise AssertionError("an unknown net class was accepted")
+    except ValueError as exc:
+        assert "i2c" in str(exc), "the error should list the valid classes"
+
+
+def _real_circuit_drawings():
+    from render import circuit_files, draw_circuit, load_circuit
+
+    for path in circuit_files([]):
+        mod = load_circuit(path)
+        if mod is not None:
+            yield path.stem, draw_circuit(mod)
+
+
+def test_every_real_wire_has_a_net_class():
+    from routing import NET_COLORS
+
+    seen = 0
+    for name, d in _real_circuit_drawings():
+        for router in d._routers:
+            for w in router._wires:
+                assert w.net in NET_COLORS, f"{name}: {w.points[0]} has no net class"
+                assert w.element.params["color"] != "steelblue"
+                seen += 1
+    assert seen > 0
+
+
+def test_every_real_crossing_carries_a_hop():
+    # Hops between two routed wires, against the metric that counts exactly
+    # those crossings. Hops over hand-drawn leads are checked further down.
+    from metrics import crossings, drawing_wires
+    from routing import _on_wire
+
+    for name, d in _real_circuit_drawings():
+        routed = [w.points for r in d._routers for w in r._wires]
+        hops = [
+            p
+            for r in d._routers
+            for w in r._wires
+            for p in w.hops
+            if sum(_on_wire(p, o) for o in routed) == 2
+        ]
+        assert len(hops) == crossings(drawing_wires(d)), name
+
+
+def test_robocar_unified_renders_byte_identically_twice():
+    from render import circuit_files, draw_circuit, load_circuit
+
+    (path,) = circuit_files(["robocar_unified"])
+    first = draw_circuit(load_circuit(path)).get_imagedata("svg")
+    second = draw_circuit(load_circuit(path)).get_imagedata("svg")
+    assert first == second
+    assert b" C " in first, "no hop was drawn in the densest circuit"
+
+
+# Hand-drawn leads (elm.Wire / elm.Line: bus trunks, power stubs) are part of
+# the rendered output too. finish() cannot redraw them, so a routed wire takes
+# the hop across a lead whichever axis it runs on, and a lead ending on a
+# routed wire is a junction like any other.
+
+
+def test_routed_wire_hops_a_hand_drawn_lead_on_either_axis():
+    d, router = _free_router()
+    d.add(elm.Wire("-").at((2.0, -2.0)).to((2.0, 2.0)))
+    d.add(elm.Line().right(4.0).at((10.0, 0.0)))
+    h = router.wire((0.0, 0.0), (4.0, 0.0), net="i2c")
+    v = router.wire((12.0, -2.0), (12.0, 2.0), net="i2c")
+    router.finish()
+    assert h.hops == [(2.0, 0.0)]
+    assert v.hops == [(12.0, 0.0)], "a lead cannot hop, so the routed wire must"
+
+
+def test_hand_drawn_lead_ending_on_a_routed_wire_gets_a_dot():
+    d, router = _free_router()
+    router.wire((0.0, 0.0), (4.0, 0.0), net="signal")
+    d.add(elm.Wire("-").at((2.0, 2.0)).to((2.0, 0.0)))
+    router.finish()
+    assert router.junctions == [(2.0, 0.0)]
+
+
+def _lead_polylines(d):
+    from routing import Path, _simplify
+
+    return [
+        _simplify([tuple(el.transform.transform(p)) for p in el.segments[0].path])
+        for el in d.elements
+        if isinstance(el, (elm.Wire, elm.Line)) and not isinstance(el, Path)
+    ]
+
+
+def test_every_crossing_with_a_routed_wire_is_hopped_in_real_circuits():
+    # Over the *final* drawing, so a lead added after finish() that crosses
+    # a routed wire — and so was never seen by it — fails here too.
+    from routing import _axis_segments, _on_wire
+
+    for name, d in _real_circuit_drawings():
+        routed = [w for r in d._routers for w in r._wires]
+        everything = [w.points for w in routed] + _lead_polylines(d)
+        hopped = {p for w in routed for p in w.hops}
+        for i, w in enumerate(routed):
+            for _, axis, fixed, lo, hi in _axis_segments(w.points):
+                for j, other in enumerate(everything):
+                    if j == i:
+                        continue
+                    for _, o_axis, o_fixed, o_lo, o_hi in _axis_segments(other):
+                        if o_axis == axis:
+                            continue
+                        if not (lo + 1e-6 < o_fixed < hi - 1e-6):
+                            continue
+                        if not (o_lo + 1e-6 < fixed < o_hi - 1e-6):
+                            continue
+                        p = (o_fixed, fixed) if axis == "H" else (fixed, o_fixed)
+                        if sum(_on_wire(p, e) for e in everything) > 2:
+                            continue
+                        assert any(
+                            abs(p[0] - q[0]) < 1e-6 and abs(p[1] - q[1]) < 1e-6
+                            for q in hopped
+                        ), f"{name}: crossing at {p} has no hop"
+
+
+def test_no_dot_where_a_routed_wire_runs_through_a_power_or_ground_tag():
+    # A lead ending in a Ground/Vdd tag ends *on the tag*, not free. A routed
+    # wire passing through that point (tags are not obstacles) would
+    # otherwise read as a T and be dotted — drawing a connection to ground
+    # that does not exist. robocar_unified's STBY net ran through the
+    # TCA9548A's GND tag and got exactly that dot.
+    d, router = _free_router()
+    d.add(elm.Line().right(2.0).at((0.0, 0.0)))
+    d.add(elm.Ground())
+    router.wire((2.0, -2.0), (2.0, 2.0), net="signal")
+    router.finish()
+    assert router.junctions == []
+    assert not [el for el in d.elements if isinstance(el, elm.Dot)]
+
+
+# -- legibility of the marks ------------------------------------------------------
+#
+# A hop or a dot the tests can count is worth nothing if the drawing hides it.
+# balancebot's GPIO4 -> DIR net ran 0.07 below the nENABLE lead, so its hop
+# over the trunk sat 0.07 from the trunk's junction dot: the dot covered the
+# arc and the row read as a T into the bus — a connection that does not exist,
+# drawn by the very commit meant to tell the two apart.
+
+
+def _dot_points(d):
+    """Centre of every junction dot drawn in ``d``: Dots and dotted Paths."""
+    from routing import Path
+
+    points = []
+    for el in d.elements:
+        if isinstance(el, elm.Dot):
+            x, y = el.absanchors["start"]
+            points.append((float(x), float(y)))
+        elif isinstance(el, Path) and any(
+            type(s).__name__ == "SegmentCircle" for s in el.segments
+        ):
+            points.append(el.polyline[-1])
+    return points
+
+
+def test_router_keeps_off_a_hand_drawn_lead():
+    # The balancebot shape in miniature: a net whose ends sit a sliver off a
+    # lead's row. The search runs on the lattice row nearest its ends — the
+    # lead's own row — so unless the lead counts as occupied the net is drawn
+    # alongside it for its whole length, too close to read as two wires.
+    d, router = _free_router()
+    g = router.grid
+    d.add(elm.Wire("-").at((2 * g, 0.0)).to((18 * g, 0.0)))
+    w = router.wire((0.0, -0.3 * g), (20 * g, -0.3 * g), net="signal")
+    for (ax, ay), (bx, by) in zip(w.points, w.points[1:]):
+        if abs(ay - by) > 1e-6:
+            continue  # vertical: at most a crossing
+        overlap = min(max(ax, bx), 18 * g) - max(min(ax, bx), 2 * g)
+        assert not (abs(ay) < g - 1e-6 and overlap > 1e-6), (
+            f"wire runs at y={ay} beside the lead at y=0"
+        )
+
+
+def test_every_hop_in_real_circuits_is_drawn_clear_and_full_size():
+    # A hop must be visible: clear of every junction dot (a dot over an arc
+    # turns a crossing into a connection), clear of every other wire's end or
+    # bend (the arc would merge into the corner), and far enough from its own
+    # segment's ends not to shrink into an unreadable bump.
+    import math
+
+    from routing import HOP_RADIUS, JUNCTION_RADIUS, _on_wire
+
+    for name, d in _real_circuit_drawings():
+        routed = [w for r in d._routers for w in r._wires]
+        everything = [w.points for w in routed] + _lead_polylines(d)
+        dots = _dot_points(d)
+        for w in routed:
+            for h in w.hops:
+                for p in dots:
+                    gap = math.dist(h, p)
+                    assert gap >= HOP_RADIUS + JUNCTION_RADIUS - 1e-6, (
+                        f"{name}: hop at {h} is {gap:.3f} from the dot at {p}"
+                    )
+                for a, b in zip(w.points, w.points[1:]):
+                    if _on_wire(h, [a, b]):
+                        room = min(math.dist(h, a), math.dist(h, b))
+                        assert room >= HOP_RADIUS - 1e-6, (
+                            f"{name}: hop at {h} shrinks to r={room:.3f}"
+                        )
+                for other in everything:
+                    if other is w.points:
+                        continue
+                    for p in other:
+                        gap = math.dist(h, p)
+                        assert not 1e-6 < gap < HOP_RADIUS - 1e-6, (
+                            f"{name}: hop at {h} is {gap:.3f} from a corner at {p}"
+                        )
+
+
+def test_no_two_hand_drawn_leads_cross_in_real_circuits():
+    # finish() hops every crossing that involves a routed wire; a crossing
+    # between two leads it cannot redraw would carry no hop at all. None
+    # exists today — this keeps "every crossing carries a hop" true.
+    from metrics import crossings
+
+    for name, d in _real_circuit_drawings():
+        assert crossings(_lead_polylines(d)) == 0, name
+
+
+def test_every_junction_in_real_circuits_joins_one_net_class():
+    # A dot takes one colour; wires of two classes meeting at it means a lead
+    # was left uncoloured or a net mis-classed — a drawing error, so fail.
+    from routing import _on_wire
+
+    for name, d in _real_circuit_drawings():
+        coloured = [(w.points, w.color) for r in d._routers for w in r._wires] + [
+            (pts, c) for r in d._routers for pts, c in r._leads()
+        ]
+        for p in _dot_points(d):
+            colours = sorted({c for pts, c in coloured if _on_wire(p, pts)})
+            assert len(colours) == 1, f"{name}: junction at {p} joins {colours}"
+
+
+def test_a_later_finish_rehops_a_wire_drawn_by_an_earlier_one():
+    # finish() may run more than once. A wire drawn by the first call that a
+    # later wire crosses is the one that must hop (it is horizontal), so its
+    # Path is redrawn in place — same element, same paint position.
+    d, router = _free_router()
+    h = router.wire((0.0, 0.0), (4.0, 0.0), net="i2c")
+    router.finish()
+    first = h.element
+    assert "C" not in _curve_path(first)
+    router.wire((2.0, -2.0), (2.0, 2.0), net="pwm")
+    router.finish()
+    assert h.element is first
+    assert h.hops == [(2.0, 0.0)]
+    assert "C" in _curve_path(first)
+    assert sum(isinstance(el, type(first)) for el in d.elements) == 2
+
+
+def test_a_real_t_at_a_tag_point_keeps_its_dot():
+    # Only the tag-terminated lead's end is discounted, not the whole point:
+    # a routed wire ending on another that runs through the tag point is a
+    # genuine T there and must still be dotted.
+    d, router = _free_router()
+    d.add(elm.Line().right(2.0).at((0.0, 0.0)))
+    d.add(elm.Ground())
+    router.wire((2.0, -2.0), (2.0, 2.0), net="ground")
+    router.wire((4.0, 0.0), (2.0, 0.0), net="ground")
+    router.finish()
+    assert router.junctions == [(2.0, 0.0)]
+
+
+def test_a_lead_with_float_noise_is_marked_on_its_own_axis():
+    # A lead's points come through a schemdraw transform, so a horizontal
+    # stub can end at y = 1.0000000000000002. Classified by exact equality it
+    # marked as a *vertical* run, and balancebot's GPIO3 net paid a phantom
+    # overlap charge to cross the left DRV8825's GND stub.
+    from routing import _mark_cells
+
+    occupied = {}
+    _mark_cells(occupied, [(12.25, 1.0), (11.25, 1.0000000000000002)], 0.25)
+    assert occupied and all(axes == {"H"} for axes in occupied.values())

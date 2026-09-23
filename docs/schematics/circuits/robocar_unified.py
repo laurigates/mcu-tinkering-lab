@@ -23,7 +23,7 @@ from components import (
     tca9548a,
     xiao_esp32s3_sense,
 )
-from routing import Router
+from routing import Router, net_color
 
 
 def draw() -> schemdraw.Drawing:
@@ -135,53 +135,49 @@ def draw() -> schemdraw.Drawing:
     d.add(elm.Line().right(0.5).at(xiao.GPIO2))
     d.add(elm.Resistor().right().label("100 Ω"))
     buz = d.add(elm.Speaker().right().label("Piezo", loc="top", ofst=0.3))
-    d.add(elm.Line().down(0.5).at(buz.in2))
-    d.add(elm.Ground())
+    d.add(elm.Line().down(0.5).at(buz.in2).color(net_color("ground")))
+    d.add(elm.Ground().color(net_color("ground")))
 
     # === Nets: auto-routed orthogonal, obstacle-avoiding wires. ===
     router = Router(d)
 
     # I2C bus: XIAO right side ↔ mux left side (top two pins).
-    router.wire(xiao.GPIO5, mux.SDA, color="steelblue")
-    router.wire(xiao.GPIO6, mux.SCL, color="steelblue")
+    router.wire(xiao.GPIO5, mux.SDA, net="i2c")
+    router.wire(xiao.GPIO6, mux.SCL, net="i2c")
 
     # Mux ch0 (SD0/SC0) → PCA9685 SDA/SCL.
-    router.wire(mux.SD0, pca.SDA, color="steelblue")
-    router.wire(mux.SC0, pca.SCL, color="steelblue")
+    router.wire(mux.SD0, pca.SDA, net="i2c")
+    router.wire(mux.SC0, pca.SCL, net="i2c")
 
     # PCA9685 PWM 8-13 group → TB6612FNG control cluster.
     # 6 logical signals (PWMA, AIN1/2, PWMB, BIN1/2) drawn as one trunk.
-    router.wire(pca["PWM 8-13"], tb.PWMA, color="steelblue")
+    router.wire(pca["PWM 8-13"], tb.PWMA, net="pwm")
 
-    router.wire(tb.BO1, motor_l.start)
-    router.wire(tb.BO2, motor_l.end)
-    router.wire(tb.AO1, motor_r.start)
-    router.wire(tb.AO2, motor_r.end)
+    router.wire(tb.BO1, motor_l.start, net="load")
+    router.wire(tb.BO2, motor_l.end, net="load")
+    router.wire(tb.AO1, motor_r.start, net="load")
+    router.wire(tb.AO2, motor_r.end, net="load")
 
     # STBY direct from MCU GPIO1 — the router finds its own way around the
     # mux/PCA/motor obstacles now that every component is already placed.
-    router.wire(xiao.GPIO1, tb.STBY, color="steelblue")
+    router.wire(xiao.GPIO1, tb.STBY, net="signal")
 
-    router.wire(mux.SD1, oled.SDA, color="steelblue")
-    router.wire(mux.SC1, oled.SCL, color="steelblue")
+    router.wire(mux.SD1, oled.SDA, net="i2c")
+    router.wire(mux.SC1, oled.SCL, net="i2c")
 
-    router.wire(mux.SD2, mcp.SDA, color="steelblue")
-    router.wire(mux.SC2, mcp.SCL, color="steelblue")
+    router.wire(mux.SD2, mcp.SDA, net="i2c")
+    router.wire(mux.SC2, mcp.SCL, net="i2c")
 
-    router.wire(xiao.GPIO3, us.TRIG, color="steelblue")
-    router.wire(xiao.GPIO4, us.ECHO, color="steelblue")
+    router.wire(xiao.GPIO3, us.TRIG, net="sensor")
+    router.wire(xiao.GPIO4, us.ECHO, net="sensor")
 
     # I2S bus → amplifier. 24 kHz mono, matching Gemini TTS's native rate.
-    router.wire(xiao.GPIO7, amp.BCLK, color="steelblue")
-    router.wire(xiao.GPIO8, amp.LRC, color="steelblue")
-    router.wire(xiao.GPIO9, amp.DIN, color="steelblue")
+    router.wire(xiao.GPIO7, amp.BCLK, net="i2s")
+    router.wire(xiao.GPIO8, amp.LRC, net="i2s")
+    router.wire(xiao.GPIO9, amp.DIN, net="i2s")
 
-    router.wire(amp["OUT-"], spk.in1)
-    router.wire(amp["OUT+"], spk.in2)
-
-    # Every net is routed; draw them all here, where each Path used to be
-    # added as it was routed, so the SVG's element order is unchanged.
-    router.finish()
+    router.wire(amp["OUT-"], spk.in1, net="load")
+    router.wire(amp["OUT+"], spk.in2, net="load")
 
     # === Local stubs (power tags, servo/LED arrows, piezo branch) stay
     # hand-drawn — these aren't point-to-point nets between two components,
@@ -196,65 +192,65 @@ def draw() -> schemdraw.Drawing:
         .right(2.5)
         .at(pca["PWM 6-7"])
         .label("Pan / Tilt SG90", loc="right", ofst=0.1, fontsize=10)
-        .color("steelblue")
+        .color(net_color("pwm"))
     )
     d.add(
         elm.Arrow()
         .right(2.5)
         .at(pca["PWM 0-5"])
         .label("2× RGB LED", loc="right", ofst=0.1, fontsize=10)
-        .color("steelblue")
+        .color(net_color("pwm"))
     )
 
     # === Power rails. ===
     # MCU 3V3 / 5V / GND tags on its outward (left) side.
-    d.add(elm.Line().left(0.5).at(xiao["3V3"]))
-    d.add(elm.Vdd().label("+3V3"))
-    d.add(elm.Line().left(0.5).at(xiao.GND))
-    d.add(elm.Ground())
-    d.add(elm.Line().left(0.5).at(xiao["5V"]))
-    d.add(elm.Vdd().label("+5V"))
+    d.add(elm.Line().left(0.5).at(xiao["3V3"]).color(net_color("power")))
+    d.add(elm.Vdd().label("+3V3").color(net_color("power")))
+    d.add(elm.Line().left(0.5).at(xiao.GND).color(net_color("ground")))
+    d.add(elm.Ground().color(net_color("ground")))
+    d.add(elm.Line().left(0.5).at(xiao["5V"]).color(net_color("power")))
+    d.add(elm.Vdd().label("+5V").color(net_color("power")))
 
     # Mux power (3V3 logic) — left side, away from I2C bus on right.
-    d.add(elm.Line().left(0.5).at(mux.VCC))
-    d.add(elm.Vdd().label("+3V3"))
-    d.add(elm.Line().left(0.5).at(mux.GND))
-    d.add(elm.Ground())
+    d.add(elm.Line().left(0.5).at(mux.VCC).color(net_color("power")))
+    d.add(elm.Vdd().label("+3V3").color(net_color("power")))
+    d.add(elm.Line().left(0.5).at(mux.GND).color(net_color("ground")))
+    d.add(elm.Ground().color(net_color("ground")))
 
     # PCA9685: power tags pulled FAR left (1.5 units) so the Vdd labels clear
     # the I2C wires entering on the right.
-    d.add(elm.Line().left(1.5).at(pca.VCC))
-    d.add(elm.Vdd().label("+3V3"))
-    d.add(elm.Line().left(1.5).at(pca["V+"]))
-    d.add(elm.Vdd().label("+5V"))
-    d.add(elm.Line().left(1.5).at(pca.GND))
-    d.add(elm.Ground())
+    d.add(elm.Line().left(1.5).at(pca.VCC).color(net_color("power")))
+    d.add(elm.Vdd().label("+3V3").color(net_color("power")))
+    d.add(elm.Line().left(1.5).at(pca["V+"]).color(net_color("power")))
+    d.add(elm.Vdd().label("+5V").color(net_color("power")))
+    d.add(elm.Line().left(1.5).at(pca.GND).color(net_color("ground")))
+    d.add(elm.Ground().color(net_color("ground")))
 
     # TB6612FNG: VCC = 3V3 logic, VM = 5V motor supply.
-    d.add(elm.Line().left(0.5).at(tb.VCC))
-    d.add(elm.Vdd().label("+3V3"))
-    d.add(elm.Line().left(0.5).at(tb.VM))
-    d.add(elm.Vdd().label("+5V"))
-    d.add(elm.Line().left(0.5).at(tb.GND))
-    d.add(elm.Ground())
+    d.add(elm.Line().left(0.5).at(tb.VCC).color(net_color("power")))
+    d.add(elm.Vdd().label("+3V3").color(net_color("power")))
+    d.add(elm.Line().left(0.5).at(tb.VM).color(net_color("power")))
+    d.add(elm.Vdd().label("+5V").color(net_color("power")))
+    d.add(elm.Line().left(0.5).at(tb.GND).color(net_color("ground")))
+    d.add(elm.Ground().color(net_color("ground")))
 
     # OLED + ultrasonic only have pins on the LEFT side, so power tags also
     # extend leftward — going right would draw INTO the chip body. The Vdd
     # label sits well below the I2C wires entering at SDA/SCL.
-    d.add(elm.Line().left(1.0).at(oled.VCC))
-    d.add(elm.Vdd().label("+3V3"))
-    d.add(elm.Line().left(1.0).at(oled.GND))
-    d.add(elm.Ground())
+    d.add(elm.Line().left(1.0).at(oled.VCC).color(net_color("power")))
+    d.add(elm.Vdd().label("+3V3").color(net_color("power")))
+    d.add(elm.Line().left(1.0).at(oled.GND).color(net_color("ground")))
+    d.add(elm.Ground().color(net_color("ground")))
 
-    d.add(elm.Line().left(1.0).at(us.VCC))
-    d.add(elm.Vdd().label("+3V3"))
-    d.add(elm.Line().left(1.0).at(us.GND))
-    d.add(elm.Ground())
+    d.add(elm.Line().left(1.0).at(us.VCC).color(net_color("power")))
+    d.add(elm.Vdd().label("+3V3").color(net_color("power")))
+    d.add(elm.Line().left(1.0).at(us.GND).color(net_color("ground")))
+    d.add(elm.Ground().color(net_color("ground")))
 
-    d.add(elm.Line().left(1.0).at(mcp.VCC))
-    d.add(elm.Vdd().label("+3V3"))
-    d.add(elm.Line().left(1.0).at(mcp.GND))
-    d.add(elm.Ground())
+    d.add(elm.Line().left(1.0).at(mcp.VCC).color(net_color("power")))
+    d.add(elm.Vdd().label("+3V3").color(net_color("power")))
+    d.add(elm.Line().left(1.0).at(mcp.GND).color(net_color("ground")))
+    d.add(elm.Ground().color(net_color("ground")))
 
     # MCP23017 ports: 16 generic GPIOs, no roles assigned yet — direction is
     # set per pin at runtime. (A0-A2 are strapped to GND for 0x20; that's in
@@ -264,27 +260,28 @@ def draw() -> schemdraw.Drawing:
         .right(2.5)
         .at(mcp["GPA0-7"])
         .label("8 spare GPIO", loc="right", ofst=0.1, fontsize=10)
-        .color("steelblue")
+        .color(net_color("signal"))
     )
     d.add(
         elm.Arrow()
         .right(2.5)
         .at(mcp["GPB0-7"])
         .label("8 spare GPIO", loc="right", ofst=0.1, fontsize=10)
-        .color("steelblue")
+        .color(net_color("signal"))
     )
 
     # Amp power on its outward-facing right side. VIN is 5 V — take a separate
     # feed from the LM2596 regulator's output terminal rather than daisy-chaining
     # off the motor rail, and fit >=470 uF of bulk here (see WIRING.md).
-    d.add(elm.Line().right(0.5).at(amp.VIN))
-    d.add(elm.Vdd().label("+5V"))
-    d.add(elm.Line().right(0.5).at(amp.GND))
-    d.add(elm.Ground())
+    d.add(elm.Line().right(0.5).at(amp.VIN).color(net_color("power")))
+    d.add(elm.Vdd().label("+5V").color(net_color("power")))
+    d.add(elm.Line().right(0.5).at(amp.GND).color(net_color("ground")))
+    d.add(elm.Ground().color(net_color("ground")))
 
     # SD_MODE floating = (L+R)/2, which is what the firmware expects: it
     # duplicates the mono sample into both I2S slots. Tying it low shuts the
-    # amplifier down.
+    # amplifier down. Gray, not a net class: the arrow is an annotation on a
+    # pin left unconnected, and a class colour would claim it carries a net.
     d.add(
         elm.Arrow()
         .right(2.0)
@@ -292,6 +289,12 @@ def draw() -> schemdraw.Drawing:
         .label("float = (L+R)/2", loc="right", ofst=0.1, fontsize=10)
         .color("gray")
     )
+
+    # Draw the routed nets last: finish() hops every hand-drawn lead already
+    # in the drawing and dots every junction with one (#493), and the power
+    # stubs above cross routed wires. Routing itself was fixed at wire() time,
+    # so this moves only the Paths' place in the SVG's paint order.
+    router.finish()
 
     return d
 
