@@ -141,6 +141,10 @@ def draw() -> schemdraw.Drawing:
         router.wire(drv.B1, step.B1)
         router.wire(drv.B2, step.B2)
 
+    # Every net is routed; draw them all here, where each Path used to be
+    # added as it was routed, so the SVG's element order is unchanged.
+    router.finish()
+
     return d
 
 

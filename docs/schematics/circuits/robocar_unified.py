@@ -179,6 +179,10 @@ def draw() -> schemdraw.Drawing:
     router.wire(amp["OUT-"], spk.in1)
     router.wire(amp["OUT+"], spk.in2)
 
+    # Every net is routed; draw them all here, where each Path used to be
+    # added as it was routed, so the SVG's element order is unchanged.
+    router.finish()
+
     # === Local stubs (power tags, servo/LED arrows, piezo branch) stay
     # hand-drawn — these aren't point-to-point nets between two components,
     # so the router adds nothing here. ===

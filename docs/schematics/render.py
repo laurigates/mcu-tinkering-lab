@@ -66,6 +66,24 @@ def load_circuit(path: Path):
     return mod
 
 
+def draw_circuit(mod):
+    """Call ``mod.draw()`` and return the drawing, refusing one left unfinished.
+
+    ``Router.wire()`` only records a net; ``Router.finish()`` draws it
+    (#492). A circuit that forgets ``finish()`` still returns a valid
+    drawing — one with every routed wire missing — so every harness that
+    renders or measures a circuit goes through here and fails instead.
+    """
+    from routing import assert_finished
+
+    d = mod.draw()
+    try:
+        assert_finished(d)
+    except RuntimeError as exc:
+        raise RuntimeError(f"{mod.__name__}: {exc}") from None
+    return d
+
+
 def main(argv: list[str] | None = None) -> int:
     # Imported here rather than at module level so metrics.py (and its tests)
     # can reuse the loader above without needing libcairo present.
@@ -85,7 +103,7 @@ def main(argv: list[str] | None = None) -> int:
             continue
         svg_path = IMAGES / f"{py.stem}.svg"
         png_path = IMAGES / f"{py.stem}.png"
-        mod.draw().save(str(svg_path))
+        draw_circuit(mod).save(str(svg_path))
         # schemdraw writes SVG without a trailing newline, which trips the
         # repo's end-of-file-fixer pre-commit hook. Normalize here.
         svg_text = svg_path.read_text()

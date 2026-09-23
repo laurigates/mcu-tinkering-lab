@@ -49,8 +49,9 @@ uv run python render.py
 2. Create `circuits/<name>.py` with a `draw() -> schemdraw.Drawing` function.
    Reference `circuits/gamepad_synth.py` as a template: place every
    component first, then create a `Router(d)` and call `.wire(a, b)` for
-   each point-to-point net (see "Routing" below), then add any hand-drawn
-   local stubs (power tags, LED branches, bus fan-outs).
+   each point-to-point net and `.finish()` once after the last one (see
+   "Routing" below), then add any hand-drawn local stubs (power tags, LED
+   branches, bus fan-outs).
 3. Run `just schematics::render`. The SVG + PNG land in `images/`.
 4. Link the rendered PNG from the project's README or WIRING.md:
    ```markdown
@@ -74,7 +75,20 @@ from routing import Router
 
 router = Router(d)
 router.wire(esp.GPIO5, amp.BCLK, color="steelblue")
+router.finish()
 ```
+
+- **Route, then finish**: `.wire(...)` routes a net and records it — it
+  marks the net's cells at once, so later nets still steer around it — but
+  draws nothing. `.finish()` adds every recorded wire to the drawing, in
+  routing order, and belongs straight after the last `.wire(...)`: where it
+  is called is where the wires sit in the SVG's paint order. `.wire(...)`
+  returns a handle whose `.points` is the routed polyline and whose
+  `.element` is the drawn `Path` once `.finish()` has run. The split exists
+  because hops, nudging and net ordering depend on the finished set of
+  wires (#492, ADR-023). A circuit that forgets `.finish()` fails
+  `render.py`, `metrics.py` and the tests with an error naming it, rather
+  than rendering with no wires.
 
 - **Place components, then route**: call `Router(d)` and every `.wire(...)`
   *after* every component in the circuit is placed, so each net has full

@@ -19,13 +19,20 @@ Usage::
 
     router = Router(d)
     router.wire(esp.GPIO5, amp.BCLK, color='steelblue')
+    router.finish()  # draws every recorded wire, in the order routed
+
+Routing and drawing are separate steps (#492): ``wire()`` routes a net and
+records its polyline, ``finish()`` adds the Paths to the drawing. Hops,
+nudging and net ordering are properties of the *finished* set of wires — you
+cannot know which wire jumps which until every wire exists — so drawing each
+net the moment it is routed would leave no point at which to decide them.
 """
 
 from __future__ import annotations
 
 import heapq
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import schemdraw.elements as elm
 from schemdraw.segments import Segment
@@ -79,6 +86,24 @@ class Path(elm.Element):
         self.params["theta"] = 0
 
 
+@dataclass
+class RoutedWire:
+    """One net routed by :meth:`Router.wire`, drawn by :meth:`Router.finish`.
+
+    ``points`` is the absolute polyline, fixed at routing time. ``element``
+    is ``None`` until ``finish()`` adds the :class:`Path` for it, after
+    which it is that Path — the handle ``wire()`` used to return directly.
+    ``name`` and ``dot`` are applied to it then, since there is nothing to
+    apply them to before.
+    """
+
+    points: list[Coord]
+    color: str | None = None
+    name: str | None = None
+    dot: bool = False
+    element: Path | None = field(default=None, repr=False)
+
+
 class Router:
     """Routes orthogonal, obstacle-avoiding wires between points in ``d``.
 
@@ -120,6 +145,19 @@ class Router:
         self.turn_penalty = turn_penalty
         self.overlap_penalty = overlap_penalty
         self._occupied: dict[tuple[int, int], set[str]] = {}
+        # Every net wire() has routed, in routing order; finish() draws the
+        # ones whose ``element`` is still None, in this same order.
+        self._wires: list[RoutedWire] = []
+        # Registered on the drawing so a harness holding only ``d`` (render.py
+        # and metrics.py receive a finished Drawing, never the Router) can
+        # tell a circuit that forgot finish() from one with no nets — the
+        # former would otherwise render with every wire silently missing.
+        # A list, not a set: order must never depend on hashing.
+        routers = getattr(d, "_routers", None)
+        if routers is None:
+            routers = []
+            d._routers = routers
+        routers.append(self)
 
     # Elements that are never treated as routing obstacles: Wire and Line
     # (Arrow is a Line subclass) are simple leads, not component bodies — a
@@ -316,7 +354,11 @@ class Router:
         name: str | None = None,
         dot: bool = False,
     ):
-        """Route and draw an orthogonal, obstacle-avoiding wire from ``start`` to ``end``.
+        """Route an orthogonal, obstacle-avoiding wire from ``start`` to ``end``.
+
+        The wire is recorded, not drawn: it appears in the drawing when
+        :meth:`finish` is called. Returns its :class:`RoutedWire` handle,
+        whose ``element`` is the drawn Path once ``finish()`` has run.
 
         ``start``/``end`` are normally pin anchors (e.g. ``esp.GPIO5``). A
         fixed stub lead carries the wire straight out of its own chip body;
@@ -375,14 +417,61 @@ class Router:
                 end,
             ]
         )
+        # Occupancy is marked now, not at finish(): the next wire() must see
+        # this one to be penalised for running on or beside it, exactly as
+        # when routing and drawing were one step. Deferring the draw itself
+        # cannot change routing, because a drawn Path is in _NON_OBSTACLES.
         self._mark_occupied(points)
 
-        el = self.d.add(Path(points, **({"color": color} if color else {})))
-        if name:
-            el.name = name
-        if dot:
-            el.dot()
-        return el
+        routed = RoutedWire(points, color=color, name=name, dot=dot)
+        self._wires.append(routed)
+        return routed
+
+    @property
+    def undrawn(self) -> list[RoutedWire]:
+        """Recorded wires that ``finish()`` has not drawn yet, in routing order."""
+        return [w for w in self._wires if w.element is None]
+
+    def finish(self) -> list[Path]:
+        """Draw every recorded wire not yet drawn, in the order it was routed.
+
+        Call it once after a circuit's last ``wire()``. Where it is called
+        decides where the Paths sit in the drawing's element list, and so in
+        the SVG's paint order: circuits call it immediately after their
+        wire block, where each Path used to be added as it was routed.
+        Calling it again draws only wires recorded since, so it is safe to
+        call more than once. Returns the Paths it added.
+        """
+        drawn = []
+        for w in self.undrawn:
+            el = self.d.add(Path(w.points, **({"color": w.color} if w.color else {})))
+            if w.name:
+                el.name = w.name
+            if w.dot:
+                el.dot()
+            w.element = el
+            drawn.append(el)
+        return drawn
+
+
+def assert_finished(d) -> None:
+    """Raise if any :class:`Router` on ``d`` still holds undrawn wires.
+
+    A circuit module that routes its nets and forgets ``Router.finish()``
+    produces a drawing that is valid, renders, and has no wires in it. The
+    render and metrics harnesses call this on every drawing ``draw()``
+    returns, so that mistake fails loudly instead. They check rather than
+    call ``finish()`` themselves: drawing late would put the Paths after
+    every element the circuit added past its wire block, reordering the SVG.
+    """
+    pending = [w for r in getattr(d, "_routers", ()) for w in r.undrawn]
+    if pending:
+        first = pending[0].points
+        raise RuntimeError(
+            f"{len(pending)} routed wire(s) were never drawn (first: "
+            f"{first[0]} -> {first[-1]}); call router.finish() after the "
+            "last router.wire()"
+        )
 
 
 def _snap_initial_approach(path: list[Coord], start: Coord) -> list[Coord]:
