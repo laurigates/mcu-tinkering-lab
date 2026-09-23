@@ -81,7 +81,7 @@ router.finish()
 - **Route, then finish**: `.wire(...)` routes a net and records it — it
   marks the net's cells at once, so later nets still steer around it — but
   draws nothing. `.finish()` adds every recorded wire to the drawing, in
-  routing order, and belongs straight after the last `.wire(...)`: where it
+  the order `.wire(...)` was called, and belongs straight after the last `.wire(...)`: where it
   is called is where the wires sit in the SVG's paint order. `.wire(...)`
   returns a handle whose `.points` is the routed polyline and whose
   `.element` is the drawn `Path` once `.finish()` has run. The split exists
@@ -91,10 +91,10 @@ router.finish()
   and the rest detour round it. It re-routes the recorded nets under a
   fixed list of candidate orders (`routing.ORDERINGS`: as written,
   shortest-first, longest-first, by net class, reversed), scores each
-  finished set — collinear overlaps, then tight parallel pairs, then
-  crossings, then length, by `metrics.py`'s own rulers — and keeps the
-  best, the authored order winning any tie. `router.ordering` names the
-  one chosen. The score sees routed wires only: a tight pair or crossing
+  finished set — a weighted sum of collinear overlaps (1000 each), tight
+  parallel pairs (20), crossings (4) and length, by `metrics.py`'s own
+  rulers — and keeps the lowest, the authored order winning any tie.
+  `router.ordering` names the one chosen. The score sees routed wires only: a tight pair or crossing
   against a hand-drawn lead is not counted, so a future ordering could
   trade a wire-wire pair for a wire-lead one unseen. All three circuits
   measured 0 wire-lead overlaps and 0 wire-lead tight pairs at #494, and

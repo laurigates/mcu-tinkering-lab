@@ -10,8 +10,9 @@ before this module existed).
 :class:`Router` fixes that: point it at a live ``Drawing``, ask it to
 ``.wire(a, b)`` between two pin anchors, and it grid-searches an
 orthogonal (4-direction) path from ``a`` to ``b`` that avoids every placed
-component's bounding box and discourages crossing wires already routed in
-the same drawing — similar in spirit to the auto-routed connectors in
+component's bounding box and discourages running on top of, or one grid
+step beside, wires already routed in the same drawing (a perpendicular
+crossing costs nothing: ``finish()`` marks it with a hop) — similar in spirit to the auto-routed connectors in
 https://github.com/niknah/quick-connections, adapted to schemdraw's static
 SVG output instead of a live canvas.
 
@@ -19,7 +20,7 @@ Usage::
 
     router = Router(d)
     router.wire(esp.GPIO5, amp.BCLK, net="i2s")
-    router.finish()  # draws every recorded wire, in the order routed
+    router.finish()  # draws every recorded wire, in the order wire() was called
 
 Routing and drawing are separate steps (#492): ``wire()`` routes a net and
 records its polyline, ``finish()`` adds the Paths to the drawing. Hops,
@@ -497,7 +498,8 @@ class Router:
         # marked here (lead cells, say) would silently vanish at finish().
         # Leads have their own map, _lead_occupancy().
         self._occupied: _Occupancy = {}
-        # Every net wire() has routed, in routing order; finish() draws the
+        # Every net wire() has routed, in the order wire() was called (never
+        # permuted: _choose_order() only re-routes); finish() draws the
         # ones whose ``element`` is still None, in this same order.
         self._wires: list[RoutedWire] = []
         # Junction points finish() has dotted, in the order it dotted them.
@@ -841,7 +843,7 @@ class Router:
 
     @property
     def undrawn(self) -> list[RoutedWire]:
-        """Recorded wires that ``finish()`` has not drawn yet, in routing order."""
+        """Recorded wires that ``finish()`` has not drawn yet, in ``wire()`` order."""
         return [w for w in self._wires if w.element is None]
 
     def finish(self) -> list[Path]:
