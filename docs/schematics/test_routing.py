@@ -304,3 +304,49 @@ def test_robocar_unified_wire_stays_out_of_component_bodies():
         f"robocar_unified routes {m.inside_any:.2f} units of wire inside "
         "component bodies"
     )
+
+
+def _route_circuit_with_overlap_penalty(monkeypatch, name, penalty):
+    """``name``'s routed wires with every ``Router`` built at ``penalty``.
+
+    Circuits construct ``Router(d)`` with defaults, so the penalty is swapped
+    in at the keyword default rather than by editing a circuit file.
+    """
+    from metrics import drawing_wires
+    from render import circuit_files, load_circuit
+
+    monkeypatch.setitem(Router.__init__.__kwdefaults__, "overlap_penalty", penalty)
+    (path,) = circuit_files([name])
+    return drawing_wires(load_circuit(path).draw())
+
+
+def test_overlap_penalty_is_load_bearing(monkeypatch):
+    # overlap_penalty is the only thing keeping parallel nets apart, and
+    # the rendered SVG was byte-identical at 6, 50 and 1000 (#491). It was
+    # not strictly dead — 0 and 6 routed differently — but it saturated at
+    # once: it charged only a wire running exactly on top of another, the
+    # default already removed every such run, and the wires one lattice row
+    # apart that ADR-023 complains about cost nothing at any setting. A
+    # parameter that changes nothing when multiplied tenfold is not one, so
+    # robocar_unified, the densest drawing, must route differently at 6
+    # than at 60.
+    low = _route_circuit_with_overlap_penalty(monkeypatch, "robocar_unified", 6.0)
+    high = _route_circuit_with_overlap_penalty(monkeypatch, "robocar_unified", 60.0)
+    assert len(low) == len(high)
+    assert low != high, "overlap_penalty 6 and 60 routed identical geometry"
+
+
+def test_parallel_neighbour_is_pushed_a_lattice_row_further_away():
+    # The mechanism behind the test above, pinned without a real circuit:
+    # a net whose ends sit one lattice row beside an already-routed wire
+    # must not run its whole length in that neighbouring row. Its ends sit
+    # a little off the lattice (row 1 is y = 0.25), as a stub point
+    # generally does across its lead, so it also exercises the search
+    # starting and finishing at the nearest lattice point.
+    router = Router(schemdraw.Drawing(show=False))
+    g = router.grid
+    router.wire((0.0, 0.0), (20 * g, 0.0))
+    el = router.wire((0.0, 1.1 * g), (20 * g, 1.1 * g))
+    oy = el._userparams["at"][1]  # Path stores points relative to "at"
+    ys = [oy + y for _, y in el.segments[0].path]
+    assert max(ys) >= 2 * g - 1e-6, f"second wire at y={ys} hugs the first"
