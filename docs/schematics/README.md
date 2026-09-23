@@ -99,7 +99,11 @@ router.wire(esp.GPIO5, amp.BCLK, color="steelblue")
   turn_penalty=4.0, overlap_penalty=6.0)` — defaults suit this repo's
   `unit=2.0`-scale circuits. Lower `turn_penalty` allows more bends in
   exchange for tighter routing; raise `clearance` if a wire hugs a chip
-  outline too closely.
+  outline too closely. `overlap_penalty` is charged in full for running on
+  top of an earlier wire and a quarter of it per earlier wire one grid step
+  beside, so raising it spreads parallel nets apart at the cost of length
+  and crossings. Do not raise `clearance` to separate *wires* — it pushes
+  more of them through component bodies instead (#491).
 - `test_routing.py` covers the router directly (orthogonality, obstacle
   avoidance, fast failure on an unreachable goal) and re-checks every wire
   every real circuit actually draws. Run every suite with

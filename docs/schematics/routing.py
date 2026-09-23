@@ -35,6 +35,11 @@ Coord = tuple[float, float]
 # tie-broken paths instead of arbitrary ones when costs are equal).
 _DIRECTIONS: tuple[Coord, ...] = ((1, 0), (0, 1), (-1, 0), (0, -1))
 
+# Share of ``overlap_penalty`` charged per same-axis wire in the lattice row
+# (or column) directly beside a step. Must stay well under 0.5 so that even a
+# step squeezed between two wires costs less than running on top of one.
+_NEIGHBOUR_FRACTION = 0.25
+
 
 @dataclass
 class _BBox:
@@ -91,8 +96,11 @@ class Router:
         turn_penalty: Extra cost charged per direction change, in units of
             grid steps. Higher values produce straighter, fewer-bend paths.
         overlap_penalty: Extra cost charged per grid step that reuses a
-            cell already occupied by a previously routed wire in this
-            router. Discourages (but doesn't forbid) wires overlapping.
+            cell already occupied, along the same axis, by a previously
+            routed wire in this router; a quarter of it is charged for each
+            such wire in the lattice row/column directly beside the step.
+            Discourages (but doesn't forbid) wires overlapping or running
+            one grid step apart.
     """
 
     def __init__(
@@ -177,9 +185,20 @@ class Router:
     def _astar(
         self, start: Coord, goal: Coord, obstacles: list[_BBox]
     ) -> list[Coord] | None:
+        # One lattice for every net: index (ix, iy) is the absolute point
+        # (ix * grid, iy * grid), the same cells _mark_occupied keys by.
+        # This used to be anchored at each net's own ``start`` (#491), so a
+        # net leaving a pin at y = 6.125 searched rows 6.125 + k * grid while
+        # occupancy was recorded on the absolute rows — the overlap penalty
+        # then charged whichever absolute cell a row happened to *round* to,
+        # which is not the cell another wire actually runs in. ``start`` and
+        # ``goal`` are generally off-lattice along one axis (a stub point is
+        # snapped only along its lead), so the search runs between their
+        # nearest lattice points and the ends are pulled back onto the exact
+        # points afterwards (_snap_initial_approach / _snap_final_approach).
         grid = self.grid
-        ox, oy = start
-        gx, gy = round((goal[0] - ox) / grid), round((goal[1] - oy) / grid)
+        sx, sy = round(start[0] / grid), round(start[1] / grid)
+        gx, gy = round(goal[0] / grid), round(goal[1] / grid)
 
         # Bound the search to a margin around start/goal/obstacles. Without
         # this, a goal that's unreachable (e.g. a stub point that landed
@@ -198,27 +217,42 @@ class Router:
             + [b.ymin for b in obstacles]
             + [b.ymax for b in obstacles]
         )
-        ix_lo = math.floor((min(xs) - margin - ox) / grid)
-        ix_hi = math.ceil((max(xs) + margin - ox) / grid)
-        iy_lo = math.floor((min(ys) - margin - oy) / grid)
-        iy_hi = math.ceil((max(ys) + margin - oy) / grid)
+        ix_lo = math.floor((min(xs) - margin) / grid)
+        ix_hi = math.ceil((max(xs) + margin) / grid)
+        iy_lo = math.floor((min(ys) - margin) / grid)
+        iy_hi = math.ceil((max(ys) + margin) / grid)
 
         def blocked(ix: int, iy: int) -> bool:
             if not (ix_lo <= ix <= ix_hi and iy_lo <= iy <= iy_hi):
                 return True
-            x, y = ox + ix * grid, oy + iy * grid
+            x, y = ix * grid, iy * grid
             return any(b.contains(x, y) for b in obstacles)
 
         def occ_penalty(ix: int, iy: int, axis: str) -> float:
-            x, y = ox + ix * grid, oy + iy * grid
-            key = (round(x / grid), round(y / grid))
-            # Only penalize reusing a cell along the *same* axis (a wire
-            # running parallel to / on top of another). A perpendicular
-            # crossing is normal, unambiguous schematic notation and costs
-            # nothing extra.
-            return self.overlap_penalty if axis in self._occupied.get(key, ()) else 0.0
+            # Only penalize running along the *same* axis as a previously
+            # routed wire. A perpendicular crossing is normal, unambiguous
+            # schematic notation and costs nothing extra.
+            occupied = self._occupied
+            if axis in occupied.get((ix, iy), ()):
+                return self.overlap_penalty
+            # A wire one lattice row (or column) beside another is the
+            # "near-parallel verticals cannot be told apart" defect of
+            # ADR-023, and an exact-cell charge alone never sees it: with
+            # the lattice shared (#491), 6, 60 and 1000 all routed the same
+            # geometry, because the default already removed every on-top
+            # run and adjacency was free. Charge each occupied neighbour a
+            # fraction of the full penalty, so beside stays strictly cheaper
+            # than on top — at an equal charge (fraction 1.0) the search
+            # traded adjacency for collinear overlap, the one outcome worse
+            # than a tight pair, and at 1/3 it still did once in balancebot.
+            nx, ny = (0, 1) if axis == "H" else (1, 0)
+            neighbours = sum(
+                axis in occupied.get((ix + side * nx, iy + side * ny), ())
+                for side in (-1, 1)
+            )
+            return self.overlap_penalty * _NEIGHBOUR_FRACTION * neighbours
 
-        start_node = (0, 0, None)  # (ix, iy, incoming direction)
+        start_node = (sx, sy, None)  # (ix, iy, incoming direction)
         frontier: list[tuple[float, int, tuple]] = [(0.0, 0, start_node)]
         came_from: dict[tuple, tuple | None] = {start_node: None}
         cost_so_far: dict[tuple, float] = {start_node: 0.0}
@@ -228,7 +262,8 @@ class Router:
             _, _, current = heapq.heappop(frontier)
             cix, ciy, cdir = current
             if (cix, ciy) == (gx, gy):
-                return self._reconstruct(came_from, current, (ox, oy), grid)
+                path = self._reconstruct(came_from, current, grid)
+                return _snap_initial_approach(path, start)
 
             for dx, dy in _DIRECTIONS:
                 nix, niy = cix + dx, ciy + dy
@@ -248,13 +283,12 @@ class Router:
                     came_from[nstate] = current
         return None
 
-    def _reconstruct(self, came_from, end_state, origin, grid) -> list[Coord]:
-        ox, oy = origin
+    def _reconstruct(self, came_from, end_state, grid) -> list[Coord]:
         points: list[Coord] = []
         state = end_state
         while state is not None:
             ix, iy, _ = state
-            points.append((ox + ix * grid, oy + iy * grid))
+            points.append((round(ix * grid, 6), round(iy * grid, 6)))
             state = came_from[state]
         points.reverse()
         return _simplify(points)
@@ -351,14 +385,44 @@ class Router:
         return el
 
 
+def _snap_initial_approach(path: list[Coord], start: Coord) -> list[Coord]:
+    """Move the first segment so it leaves exactly from ``start``.
+
+    The A* search runs on the global lattice, so its path begins at the
+    lattice point nearest ``start`` — up to half a grid step off along
+    whichever axis the stub was not snapped on. Rather than draw that sliver
+    as a jog out of the pin's stub, shift the whole first run onto
+    ``start``'s row (a horizontal first move) or column (a vertical one):
+    the wire then leaves the stub in a straight line exactly as it did when
+    the lattice was anchored at ``start``. The run keeps the occupancy cell
+    the search charged for it, since a shift of under half a step rounds
+    back to the same key in _mark_occupied.
+
+    ``path[1]`` is only ever moved along the axis perpendicular to the first
+    move, which is the axis the *next* segment runs along, so that segment
+    stays axis-aligned. When the path is a single run, ``path[1]`` is the
+    lattice goal and _snap_final_approach overwrites it anyway.
+    """
+    path = list(path)
+    if len(path) < 2:
+        return [start]
+    ay, (bx, by) = path[0][1], path[1]
+    if ay == by:  # horizontal first move -> carry it on start's row
+        path[1] = (bx, start[1])
+    else:  # vertical first move -> carry it on start's column
+        path[1] = (start[0], by)
+    path[0] = start
+    return path
+
+
 def _snap_final_approach(path: list[Coord], goal: Coord) -> list[Coord]:
     """Straighten the last segment so it lands exactly on ``goal``.
 
-    The A* search runs on a grid anchored at the path's start (``path[0]``,
-    a fixed entry point that must not move), so an independently-computed
-    ``goal`` is generally not an exact multiple of the grid step away — the
-    search lands within half a grid cell of it. Left alone, appending the
-    exact ``goal`` afterward draws a tiny, pointless extra jog.
+    The A* search runs on the global lattice, so an independently-computed
+    ``goal`` is generally not on it — the search lands within half a grid
+    cell of it. Left alone, appending the exact ``goal`` afterward draws a
+    tiny, pointless extra jog. ``path[0]`` has already been moved onto the
+    exact entry point by _snap_initial_approach, and must not move again.
 
     When the raw path has an interior bend (length >= 3), nudge the
     second-to-last point onto the same row/column as ``goal``. When it's a
