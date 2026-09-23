@@ -66,10 +66,11 @@ def _build_two_chip_drawing():
 def test_simple_wire_is_orthogonal_and_exact():
     d, esp, amp = _build_two_chip_drawing()
     router = Router(d)
-    el = router.wire(esp.GPIO5, amp.BCLK, color="steelblue")
-    points = el.segments[0].path
-    at = el._userparams["at"]
-    abspoints = [(at[0] + x, at[1] + y) for x, y in points]
+    handle = router.wire(esp.GPIO5, amp.BCLK, color="steelblue")
+    router.finish()
+    # The drawn Path, not just the recorded polyline: the exact-endpoint
+    # claim is about what reaches the SVG.
+    abspoints = _abspoints(handle.element)
 
     assert abspoints[0] == (float(esp.GPIO5[0]), float(esp.GPIO5[1]))
     assert abspoints[-1] == (float(amp.BCLK[0]), float(amp.BCLK[1]))
@@ -90,10 +91,7 @@ def test_wire_avoids_obstacle_placed_between_pins():
     blocker_box = _BBox(*d.elements[-1].get_bbox(transform=True, includetext=False))
 
     router = Router(d)
-    el = router.wire(esp.GPIO6, amp.LRC, color="steelblue")
-    points = el.segments[0].path
-    at = el._userparams["at"]
-    abspoints = [(at[0] + x, at[1] + y) for x, y in points]
+    abspoints = router.wire(esp.GPIO6, amp.LRC, color="steelblue").points
 
     _segments_are_orthogonal(abspoints)
     for p1, p2 in zip(abspoints, abspoints[1:]):
@@ -152,8 +150,7 @@ def test_wire_does_not_cut_through_its_own_destination_chip():
     # amp's right edge, facing away from the ESP32; the only honest route
     # goes around the amp.
     d, esp, amp = _build_two_chip_drawing()
-    el = Router(d).wire(esp.GPIO5, amp.GAIN)
-    abspoints = _abspoints(el)
+    abspoints = Router(d).wire(esp.GPIO5, amp.GAIN).points
     amp_box = _box_of(amp)
 
     _segments_are_orthogonal(abspoints)
@@ -179,8 +176,7 @@ def test_overlapping_box_around_a_pin_and_its_stub_does_not_block_it():
     overlap = _box_of(d.elements[-1])
     assert overlap.contains(bx, by) and overlap.contains(bx - 0.75, by)
 
-    el = Router(d).wire(esp.GPIO5, amp.BCLK)
-    abspoints = _abspoints(el)
+    abspoints = Router(d).wire(esp.GPIO5, amp.BCLK).points
     assert abspoints[-1] == (bx, by)
     _segments_are_orthogonal(abspoints)
 
@@ -192,12 +188,15 @@ def test_router_wire_defaults_to_visible_stroke():
     # called: no color= argument).
     d, esp, amp = _build_two_chip_drawing()
     router = Router(d)
-    el = router.wire(esp.GPIO5, amp.BCLK)
-    assert el.params.get("color") is not None
+    handle = router.wire(esp.GPIO5, amp.BCLK)
+    router.finish()
+    assert handle.element.params.get("color") is not None
 
 
 def _all_real_circuit_paths():
     import importlib.util
+
+    from render import draw_circuit
 
     circuits_dir = FsPath(__file__).parent / "circuits"
     for py in sorted(circuits_dir.glob("*.py")):
@@ -206,7 +205,7 @@ def _all_real_circuit_paths():
         spec.loader.exec_module(mod)
         if not hasattr(mod, "draw"):
             continue
-        d = mod.draw()
+        d = draw_circuit(mod)
         from routing import Path, Router
 
         obstacles = [
@@ -313,11 +312,11 @@ def _route_circuit_with_overlap_penalty(monkeypatch, name, penalty):
     in at the keyword default rather than by editing a circuit file.
     """
     from metrics import drawing_wires
-    from render import circuit_files, load_circuit
+    from render import circuit_files, draw_circuit, load_circuit
 
     monkeypatch.setitem(Router.__init__.__kwdefaults__, "overlap_penalty", penalty)
     (path,) = circuit_files([name])
-    return drawing_wires(load_circuit(path).draw())
+    return drawing_wires(draw_circuit(load_circuit(path)))
 
 
 def test_overlap_penalty_is_load_bearing(monkeypatch):
@@ -346,7 +345,95 @@ def test_parallel_neighbour_is_pushed_a_lattice_row_further_away():
     router = Router(schemdraw.Drawing(show=False))
     g = router.grid
     router.wire((0.0, 0.0), (20 * g, 0.0))
-    el = router.wire((0.0, 1.1 * g), (20 * g, 1.1 * g))
-    oy = el._userparams["at"][1]  # Path stores points relative to "at"
-    ys = [oy + y for _, y in el.segments[0].path]
+    ys = [y for _, y in router.wire((0.0, 1.1 * g), (20 * g, 1.1 * g)).points]
     assert max(ys) >= 2 * g - 1e-6, f"second wire at y={ys} hugs the first"
+
+
+# -- record / finish split (#492) ------------------------------------------------
+#
+# Hops, nudging and net ordering are properties of the *finished* set of wires,
+# so wire() only routes and records; finish() is what puts Paths in the drawing.
+
+
+def test_wire_records_without_drawing_until_finish():
+    d, esp, amp = _build_two_chip_drawing()
+    router = Router(d)
+    before = len(d.elements)
+    handle = router.wire(esp.GPIO5, amp.BCLK, color="steelblue")
+    assert len(d.elements) == before, "wire() drew instead of recording"
+    assert handle.element is None
+    assert handle.points[0] == (float(esp.GPIO5[0]), float(esp.GPIO5[1]))
+    assert handle.points[-1] == (float(amp.BCLK[0]), float(amp.BCLK[1]))
+
+    router.finish()
+    assert len(d.elements) == before + 1
+    assert handle.element is d.elements[-1]
+    assert _abspoints(handle.element) == handle.points
+
+
+def test_finish_draws_in_recorded_order_once():
+    d, esp, amp = _build_two_chip_drawing()
+    router = Router(d)
+    handles = [
+        router.wire(esp.GPIO5, amp.BCLK),
+        router.wire(esp.GPIO6, amp.LRC),
+        router.wire(esp.GPIO7, amp.DIN),
+    ]
+    before = len(d.elements)
+    drawn = router.finish()
+    assert [h.element for h in handles] == drawn == d.elements[before:]
+    # A second finish() has nothing left to draw and must not duplicate.
+    assert router.finish() == []
+    assert len(d.elements) == before + 3
+
+
+def test_finish_applies_name_to_the_drawn_path():
+    d, esp, amp = _build_two_chip_drawing()
+    router = Router(d)
+    handle = router.wire(esp.GPIO5, amp.BCLK, name="bclk")
+    router.finish()
+    assert handle.element.name == "bclk"
+
+
+def test_deferring_the_draw_does_not_change_routing():
+    # Occupancy is marked at wire() time and drawn Paths are never obstacles,
+    # so drawing each wire immediately or all at the end must route the same.
+    def route(finish_each: bool):
+        d, esp, amp = _build_two_chip_drawing()
+        router = Router(d)
+        points = []
+        for a, b in (
+            (esp.GPIO5, amp.BCLK),
+            (esp.GPIO6, amp.LRC),
+            (esp.GPIO7, amp.GAIN),
+        ):
+            points.append(router.wire(a, b).points)
+            if finish_each:
+                router.finish()
+        router.finish()
+        return points
+
+    assert route(True) == route(False)
+
+
+def test_render_harness_rejects_a_forgotten_finish():
+    # render.py loads circuits dynamically: a draw() that never calls
+    # finish() would otherwise render a drawing with no wires at all.
+    from types import SimpleNamespace
+
+    from render import draw_circuit
+
+    def draw(finish: bool):
+        d, esp, amp = _build_two_chip_drawing()
+        router = Router(d)
+        router.wire(esp.GPIO5, amp.BCLK)
+        if finish:
+            router.finish()
+        return d
+
+    try:
+        draw_circuit(SimpleNamespace(__name__="forgetful", draw=lambda: draw(False)))
+        raise AssertionError("an unfinished router rendered without error")
+    except RuntimeError as exc:
+        assert "finish()" in str(exc)
+    assert draw_circuit(SimpleNamespace(__name__="ok", draw=lambda: draw(True)))

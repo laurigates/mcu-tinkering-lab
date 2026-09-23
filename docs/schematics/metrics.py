@@ -68,8 +68,8 @@ ROOT = FsPath(__file__).parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from render import circuit_files, load_circuit  # noqa: E402
-from routing import _EPS, Path, Router, _BBox  # noqa: E402
+from render import circuit_files, draw_circuit, load_circuit  # noqa: E402
+from routing import _EPS, Path, Router, _BBox, assert_finished  # noqa: E402
 
 Coord = tuple[float, float]
 Wire = list[Coord]
@@ -257,7 +257,12 @@ def measure_drawing(name: str, d, *, grid: float | None = None) -> CircuitMetric
     nothing to ``d``. ``grid`` defaults to the router's default step, which
     every circuit currently uses — pass it explicitly if a circuit ever
     routes on a different grid.
+
+    Refuses a drawing whose routers still hold undrawn wires: the metrics
+    read drawn Paths, so they would silently measure a circuit with its
+    nets missing.
     """
+    assert_finished(d)
     probe = Router(d)
     return measure(
         name,
@@ -276,7 +281,7 @@ def measure_circuits(names: list[str] | None = None) -> list[CircuitMetrics]:
             mod = load_circuit(path)
         if mod is None:
             continue
-        results.append(measure_drawing(path.stem, mod.draw()))
+        results.append(measure_drawing(path.stem, draw_circuit(mod)))
     return sorted(results, key=lambda m: m.name)
 
 

@@ -65,6 +65,10 @@ def draw() -> schemdraw.Drawing:
     router.wire(esp.GPIO8, pz_a.in1, color="darkorange")
     router.wire(esp.GPIO9, pz_b.in1, color="darkorange")
 
+    # Every net is routed; draw them all here, where each Path used to be
+    # added as it was routed, so the SVG's element order is unchanged.
+    router.finish()
+
     # === Local stubs (power tags, LED branch, piezo grounds) stay
     # hand-drawn — these aren't point-to-point nets between two components,
     # so the router adds nothing here. ===
