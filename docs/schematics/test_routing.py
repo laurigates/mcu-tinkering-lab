@@ -135,6 +135,56 @@ def test_own_component_is_not_treated_as_an_obstacle():
     router.wire(esp.GPIO7, amp.DIN)
 
 
+def _abspoints(el):
+    at = el._userparams["at"]
+    return [(at[0] + x, at[1] + y) for x, y in el.segments[0].path]
+
+
+def _box_of(el) -> _BBox:
+    return _BBox(*el.get_bbox(transform=True, includetext=False))
+
+
+def test_wire_does_not_cut_through_its_own_destination_chip():
+    # Regression (#490): wire() used to drop every box containing either
+    # endpoint from the obstacle list for the *whole* search, so a net whose
+    # pin sits on the far side of its destination chip took the short way —
+    # straight in one side of the body and out the other. GAIN is on the
+    # amp's right edge, facing away from the ESP32; the only honest route
+    # goes around the amp.
+    d, esp, amp = _build_two_chip_drawing()
+    el = Router(d).wire(esp.GPIO5, amp.GAIN)
+    abspoints = _abspoints(el)
+    amp_box = _box_of(amp)
+
+    _segments_are_orthogonal(abspoints)
+    for p1, p2 in zip(abspoints, abspoints[1:]):
+        assert not _segment_hits_box(p1, p2, amp_box), (
+            f"routed segment {p1} -> {p2} cuts through its own chip {amp_box}"
+        )
+
+
+def test_overlapping_box_around_a_pin_and_its_stub_does_not_block_it():
+    # The legitimate reason wire() drops boxes at all: two components can
+    # overlap a little, and a second box that contains the pin *and* the
+    # stub point the search starts from would otherwise make that end
+    # unreachable outright. Narrowing the exclusion to the stub (#490) must
+    # keep this case routable.
+    d, esp, amp = _build_two_chip_drawing()
+    bx, by = float(amp.BCLK[0]), float(amp.BCLK[1])
+    d.add(
+        elm.Ic(pins=[elm.IcPin(name="X", side="L")], size=(1.5, 1))
+        .at((bx - 0.5, by))
+        .anchor("center")
+    )
+    overlap = _box_of(d.elements[-1])
+    assert overlap.contains(bx, by) and overlap.contains(bx - 0.75, by)
+
+    el = Router(d).wire(esp.GPIO5, amp.BCLK)
+    abspoints = _abspoints(el)
+    assert abspoints[-1] == (bx, by)
+    _segments_are_orthogonal(abspoints)
+
+
 def test_router_wire_defaults_to_visible_stroke():
     # Regression: passing color=None straight through to Path used to omit
     # the SVG stroke attribute entirely, which CSS defaults to `stroke: none`
@@ -180,24 +230,77 @@ def _contains_endpoint(box: _BBox, point, eps=1e-6) -> bool:
     )
 
 
+def _trim_ends(points, length):
+    """``points`` with ``length`` of polyline cut off each end.
+
+    Returns an empty list when the wire is too short to have a middle.
+    """
+
+    def trim_front(pts, remaining):
+        pts = list(pts)
+        while len(pts) >= 2:
+            (ax, ay), (bx, by) = pts[0], pts[1]
+            seg = abs(bx - ax) + abs(by - ay)  # axis-aligned: L1 == length
+            if seg > remaining:
+                f = remaining / seg
+                pts[0] = (ax + (bx - ax) * f, ay + (by - ay) * f)
+                return pts
+            remaining -= seg
+            pts.pop(0)
+        return []
+
+    front = trim_front(points, length)
+    return list(reversed(trim_front(list(reversed(front)), length)))
+
+
 def test_all_real_circuits_route_orthogonally_without_crossing_components():
-    # A wire legitimately touches the boundary of its own source/destination
-    # component (that's where the pin lives) — exclude those two boxes per
-    # wire, same as Router.wire() does internally, so only genuine
-    # cut-through-an-unrelated-component cases fail this check.
+    # Only the pin's stub lead may pass through a box: it runs from the pin,
+    # which sits on its own chip's edge (and possibly inside a neighbour
+    # that overlaps it), out to the stub point where the A* search starts.
+    # Past the stub, a wire must clear every body — including the chips it
+    # terminates on (#490). So trim a stub's worth off each end, then exempt
+    # only the boxes the *trimmed* ends still sit in: the overlapping-box
+    # case wire() exists to keep routable.
+    #
+    # This used to exempt every box containing the raw endpoints — exactly
+    # the set wire() dropped from its search — so it could never observe a
+    # wire tunnelling through its own chip. The trim is the stub plus half a
+    # grid step because the stub point is snapped to the grid.
+    probe = Router(schemdraw.Drawing(show=False))
+    trim = probe.stub + probe.grid / 2
     checked = 0
     for name, abspts, obstacles in _all_real_circuit_paths():
         _segments_are_orthogonal(abspts)
+        middle = _trim_ends(abspts, trim)
+        if not middle:
+            continue
         relevant = [
             box
             for box in obstacles
-            if not _contains_endpoint(box, abspts[0])
-            and not _contains_endpoint(box, abspts[-1])
+            if not _contains_endpoint(box, middle[0])
+            and not _contains_endpoint(box, middle[-1])
         ]
-        for p1, p2 in zip(abspts, abspts[1:]):
+        for p1, p2 in zip(middle, middle[1:]):
             for box in relevant:
                 assert not _segment_hits_box(p1, p2, box), (
                     f"{name}: routed segment {p1} -> {p2} cuts through {box}"
                 )
         checked += 1
     assert checked > 0, "no circuits were found to check"
+
+
+def test_robocar_unified_wire_stays_out_of_component_bodies():
+    # The whole-drawing figure behind #490: with every terminal box dropped
+    # for the entire search, robocar_unified carried ~26 units of wire
+    # inside component bodies — nets entering their own chip on one side
+    # and leaving on the other. Once only a stub may cross a body the
+    # figure is 0.00 here; the issue's own target was ~3 units, the length
+    # a few stub leads through boxes overlapping their pins would add. The
+    # bound admits that legitimate case, not a tunnel coming back.
+    from metrics import measure_circuits
+
+    (m,) = measure_circuits(["robocar_unified"])
+    assert m.inside_any < 3.5, (
+        f"robocar_unified routes {m.inside_any:.2f} units of wire inside "
+        "component bodies"
+    )
