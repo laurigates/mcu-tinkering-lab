@@ -284,10 +284,10 @@ class Router:
     ):
         """Route and draw an orthogonal, obstacle-avoiding wire from ``start`` to ``end``.
 
-        ``start``/``end`` are normally pin anchors (e.g. ``esp.GPIO5``);
-        their owning component is automatically excluded from the obstacle
-        set so the wire can leave the pin without being blocked by its own
-        chip body.
+        ``start``/``end`` are normally pin anchors (e.g. ``esp.GPIO5``). A
+        fixed stub lead carries the wire straight out of its own chip body;
+        past that stub the chip is an obstacle like any other, so a net
+        never cuts across the component it terminates on.
         """
         start = (float(start[0]), float(start[1]))
         end = (float(end[0]), float(end[1]))
@@ -296,21 +296,32 @@ class Router:
 
         start_owner = self._owning_box(start, boxes)
         end_owner = self._owning_box(end, boxes)
-        # Exclude *every* box containing either endpoint, not just the
-        # smallest ("owning") one: two components can legitimately overlap
-        # a little (e.g. densely packed pin breakouts), and if a second
-        # box also contains the goal point, leaving it in the obstacle list
-        # makes the goal unreachable outright.
-        obstacles = [
-            b
-            for raw, b in zip(boxes, inflated)
-            if not raw.contains(*start) and not raw.contains(*end)
-        ]
-
         start_dir = self._exit_direction(start, start_owner) if start_owner else None
         end_dir = self._exit_direction(end, end_owner) if end_owner else None
         entry = self._stub_point(start, start_dir) if start_dir else start
         exit_ = self._stub_point(end, end_dir) if end_dir else end
+
+        # The A* search runs from ``entry`` to ``exit_``, so a box is only in
+        # its way if its inflated footprint swallows one of those stub
+        # points. Drop exactly those, and only when the same box also holds
+        # the pin the stub hangs off: two components can legitimately
+        # overlap a little (e.g. densely packed pin breakouts), and a second
+        # box covering both a pin and its stub would otherwise make that end
+        # unreachable outright.
+        #
+        # Everything else stays an obstacle for the whole search — above
+        # all the pin's *own* chip, which the stub already clears. This
+        # used to drop every box containing either raw endpoint instead,
+        # which let a net enter its destination chip on one side and leave
+        # on the other (#490). A foreign box that swallows a stub without
+        # holding its pin is a malformed layout, and stays in so the search
+        # fails fast rather than tunnelling through it.
+        ends = ((start, entry), (end, exit_))
+        obstacles = [
+            b
+            for raw, b in zip(boxes, inflated)
+            if not any(raw.contains(*pin) and b.contains(*stub) for pin, stub in ends)
+        ]
 
         path = self._astar(entry, exit_, obstacles)
         if path is None:
