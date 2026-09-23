@@ -800,6 +800,41 @@ def test_no_two_hand_drawn_leads_cross_in_real_circuits():
         assert crossings(_lead_polylines(d)) == 0, name
 
 
+def _wire_lead_contacts(wires, leads, grid):
+    # Pairs with one routed wire and one lead only: measure the mixed set
+    # and take away what each side scores on its own.
+    from metrics import collinear_overlaps, tight_parallel_pairs
+
+    def mixed(count):
+        return count(wires + leads) - count(wires) - count(leads)
+
+    return (
+        mixed(collinear_overlaps),
+        mixed(lambda ws: tight_parallel_pairs(ws, grid)),
+    )
+
+
+def test_wire_lead_contacts_are_counted():
+    # Negative control for the helper below: a wire laid over a lead and one
+    # a single row beside it must both register, or its zeros mean nothing.
+    lead = [(0.0, 0.0), (4.0, 0.0)]
+    assert _wire_lead_contacts([[(1.0, 0.0), (3.0, 0.0)]], [lead], 0.25) == (1, 0)
+    assert _wire_lead_contacts([[(1.0, 0.25), (3.0, 0.25)]], [lead], 0.25) == (0, 1)
+
+
+def test_no_routed_wire_runs_on_or_beside_a_lead_in_real_circuits():
+    # finish()'s ordering score sees routed wires only, and two circuits
+    # draw leads after routing, so neither the plan's lead snapshot nor the
+    # score knows about them. A candidate ordering could therefore trade a
+    # wire-wire pair for a wire-lead one unseen; pin the measured zeros.
+    from metrics import drawing_wires
+
+    for name, d in _real_circuit_drawings():
+        grid = d._routers[0].grid
+        contacts = _wire_lead_contacts(drawing_wires(d), _lead_polylines(d), grid)
+        assert contacts == (0, 0), f"{name}: wire-lead (collinear, tight) {contacts}"
+
+
 def test_every_junction_in_real_circuits_joins_one_net_class():
     # A dot takes one colour; wires of two classes meeting at it means a lead
     # was left uncoloured or a net mis-classed — a drawing error, so fail.
@@ -853,4 +888,165 @@ def test_a_lead_with_float_noise_is_marked_on_its_own_axis():
 
     occupied = {}
     _mark_cells(occupied, [(12.25, 1.0), (11.25, 1.0000000000000002)], 0.25)
-    assert occupied and all(axes == {"H"} for axes in occupied.values())
+    assert occupied and all(axes == ("H",) for axes in occupied.values())
+
+
+# -- net ordering and occupancy order (#494) ------------------------------------
+#
+# The router is greedy and first-come, so the order nets are routed in decides
+# which of them detours. finish() re-routes the recorded batch under a fixed
+# list of candidate orderings and keeps the best-scoring finished set; every
+# part of that choice must be a pure function of the circuit, because CI
+# compares the SVG bytes.
+
+
+def test_occupancy_records_axes_as_sorted_tuples():
+    # A set's iteration order depends on string hashing, which is salted per
+    # process; a value that is never iterated today is one refactor away from
+    # being iterated into the output. Tuples, sorted, so there is no order to
+    # depend on.
+    _, router = _free_router()
+    router.wire((0.0, 1.0), (2.0, 1.0))
+    router.wire((1.0, 0.0), (1.0, 2.0))
+    router.finish()
+    values = list(router._occupied.values())
+    assert values and all(isinstance(v, tuple) for v in values)
+    assert all(list(v) == sorted(set(v)) for v in values)
+    assert router._occupied[(4, 4)] == ("H", "V")  # the crossing cell
+
+
+def _l_net_then_straight_net(router):
+    # Authored order routes the L-shaped net first, along the row the second
+    # net needs for its straight run, so the straight net has to detour round
+    # it. Routing the straight net first leaves the L net a free path.
+    first = router.wire((4.0, 1.0), (1.0, 3.5))
+    second = router.wire((5.0, 1.0), (1.0, 1.0))
+    return first, second
+
+
+def test_finish_reroutes_in_a_better_order_than_authored():
+    from metrics import crossings, total_length
+
+    d, router = _free_router()
+    first, second = _l_net_then_straight_net(router)
+    greedy = [first.points, second.points]
+    drawn = router.finish()
+
+    assert router.ordering not in (None, "authored")
+    assert second.points == [(5.0, 1.0), (1.0, 1.0)], "straight net still detours"
+    finished = [first.points, second.points]
+    assert (crossings(finished), total_length(finished)) < (
+        crossings(greedy),
+        total_length(greedy),
+    )
+    # Only the routing order moves: the paint order stays as authored. (The
+    # L net starts on the straight one, so a junction dot follows them.)
+    assert drawn == [first.element, second.element]
+    assert d.elements.index(first.element) < d.elements.index(second.element)
+    assert _abspoints(first.element) == first.points
+    assert _abspoints(second.element) == second.points
+
+
+def test_finish_keeps_authored_order_when_no_candidate_is_better():
+    # Two nets that never meet score the same in every order, and the tie
+    # goes to the first candidate: the circuit exactly as its author wrote it.
+    _, router = _free_router()
+    a = router.wire((0.0, 0.0), (3.0, 0.0))
+    b = router.wire((0.0, 5.0), (3.0, 5.0))
+    before = [a.points, b.points]
+    router.finish()
+    assert router.ordering == "authored"
+    assert [a.points, b.points] == before
+
+
+def test_a_net_wired_after_finish_avoids_the_rerouted_batch():
+    # finish() replaces the occupancy with the chosen ordering's, so a net
+    # routed after it avoids where the batch finally lies, not where the
+    # greedy pass first put it. The L net's greedy route ran up x = 1; the
+    # chosen ordering moves it to x = 4. A later net wanting x = 4 must see
+    # it there — with the greedy occupancy kept it runs straight on top.
+    from metrics import collinear_overlaps
+
+    _, router = _free_router()
+    first, second = _l_net_then_straight_net(router)
+    router.finish()
+    assert first.points == [(4.0, 1.0), (4.0, 3.5), (1.0, 3.5)]
+    later = router.wire((4.0, 4.5), (4.0, 2.0))
+    assert later.points != [(4.0, 4.5), (4.0, 2.0)], "ran over the moved L net"
+    assert collinear_overlaps([first.points, second.points, later.points]) == 0
+
+
+def test_a_wire_without_a_plan_is_routed_round_and_kept_in_occupancy():
+    # No code path records a wire without a _Plan today, but finish() swaps
+    # in the chosen ordering's occupancy wholesale: a plan-less undrawn wire
+    # left out of the candidates' starting occupancy would vanish from it,
+    # and every later net would route straight over it.
+    from routing import RoutedWire, _mark_cells
+
+    _, router = _free_router()
+    _l_net_then_straight_net(router)
+    fixed = RoutedWire([(0.0, 2.0), (6.0, 2.0)])
+    router._wires.append(fixed)
+    router.finish()
+    cells = {}
+    _mark_cells(cells, fixed.points, router.grid)
+    for cell, axes in cells.items():
+        assert set(axes) <= set(router._occupied.get(cell, ())), cell
+
+
+def test_ordering_choice_is_reproducible_across_hash_seeds():
+    # "Across runs and machines": the one input that differs between two
+    # otherwise identical runs is the string-hash salt, so route the densest
+    # circuit under two salts in fresh interpreters and require the same
+    # ordering, the same geometry and the same SVG bytes, hop and dot markup
+    # included. A forward guard rather than a
+    # regression proof: the pre-change router never iterated a set into its
+    # output either, so only the "authored" assertion depends on #494. It is
+    # here so a future candidate or tie-break keyed on a set or a hash cannot
+    # land without failing.
+    import os
+    import subprocess
+
+    script = (
+        "import sys, contextlib, json; sys.path.insert(0, '.');"
+        "from render import circuit_files, load_circuit;"
+        "f = contextlib.redirect_stdout(sys.stderr); f.__enter__();"
+        "d = load_circuit(circuit_files(['robocar_unified'])[0]).draw();"
+        "f.__exit__(None, None, None);"
+        "import hashlib;"
+        "svg = hashlib.sha256(d.get_imagedata('svg')).hexdigest();"
+        "print(json.dumps([svg, [[r.ordering, [w.points for w in r._wires]]"
+        " for r in d._routers]]))"
+    )
+    here = str(FsPath(__file__).parent)
+    outputs = []
+    for seed in ("0", "12345"):
+        env = {**os.environ, "PYTHONHASHSEED": seed}
+        run = subprocess.run(
+            [sys.executable, "-c", script],
+            cwd=here,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        outputs.append(run.stdout)
+    assert outputs[0] == outputs[1]
+    assert '"authored"' not in outputs[0], "robocar_unified no longer reorders"
+
+
+def test_robocar_unified_tight_parallel_pairs_drop_below_baseline():
+    # The #494 baseline, measured by metrics.py on the tree before ordering
+    # search: robocar_unified 2 tight parallel pairs, 24 crossings, 206.39
+    # units of wire. The chosen ordering must beat it on tight pairs without
+    # paying for it in overlaps, crossings or length. These numbers are a
+    # property of robocar_unified.py as it stood, not of the router: an
+    # edit to that circuit can trip or loosen this pin, so re-measure the
+    # baseline (ordering search off) whenever the circuit changes (#463).
+    from metrics import measure_circuits
+
+    (m,) = measure_circuits(["robocar_unified"])
+    assert m.tight_parallel <= 1, f"{m.tight_parallel} tight pairs (baseline 2)"
+    assert m.collinear_overlaps == 0
+    assert m.crossings <= 24
+    assert m.total_length <= 206.39 + 1e-6
