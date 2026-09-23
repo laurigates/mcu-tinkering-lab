@@ -8,7 +8,7 @@ import schemdraw
 import schemdraw.elements as elm
 
 from components import esp32_s3_zero, max98357a
-from routing import Router
+from routing import Router, net_color
 
 
 def draw() -> schemdraw.Drawing:
@@ -55,49 +55,51 @@ def draw() -> schemdraw.Drawing:
     router = Router(d)
 
     # I2S signal bus — ESP right side ↔ amp left side.
-    router.wire(esp.GPIO5, amp.BCLK, color="steelblue")
-    router.wire(esp.GPIO6, amp.LRC, color="steelblue")
-    router.wire(esp.GPIO7, amp.DIN, color="steelblue")
+    router.wire(esp.GPIO5, amp.BCLK, net="i2s")
+    router.wire(esp.GPIO6, amp.LRC, net="i2s")
+    router.wire(esp.GPIO7, amp.DIN, net="i2s")
 
-    router.wire(amp["OUT-"], spk.in1)
-    router.wire(amp["OUT+"], spk.in2)
+    router.wire(amp["OUT-"], spk.in1, net="load")
+    router.wire(amp["OUT+"], spk.in2, net="load")
 
-    router.wire(esp.GPIO8, pz_a.in1, color="darkorange")
-    router.wire(esp.GPIO9, pz_b.in1, color="darkorange")
-
-    # Every net is routed; draw them all here, where each Path used to be
-    # added as it was routed, so the SVG's element order is unchanged.
-    router.finish()
+    router.wire(esp.GPIO8, pz_a.in1, net="pwm")
+    router.wire(esp.GPIO9, pz_b.in1, net="pwm")
 
     # === Local stubs (power tags, LED branch, piezo grounds) stay
     # hand-drawn — these aren't point-to-point nets between two components,
     # so the router adds nothing here. ===
 
     # ESP power: +3V3 and Ground tags on the outward-facing left side.
-    d.add(elm.Line().left(0.5).at(esp["3V3"]))
-    d.add(elm.Vdd().label("+3V3"))
-    d.add(elm.Line().left(0.5).at(esp.GND))
-    d.add(elm.Ground())
+    d.add(elm.Line().left(0.5).at(esp["3V3"]).color(net_color("power")))
+    d.add(elm.Vdd().label("+3V3").color(net_color("power")))
+    d.add(elm.Line().left(0.5).at(esp.GND).color(net_color("ground")))
+    d.add(elm.Ground().color(net_color("ground")))
 
     # Amp power: +3V3 and Ground tags on the outward-facing right side.
-    d.add(elm.Line().right(0.5).at(amp.VIN))
-    d.add(elm.Vdd().label("+3V3"))
-    d.add(elm.Line().right(0.5).at(amp.GND))
-    d.add(elm.Ground())
+    d.add(elm.Line().right(0.5).at(amp.VIN).color(net_color("power")))
+    d.add(elm.Vdd().label("+3V3").color(net_color("power")))
+    d.add(elm.Line().right(0.5).at(amp.GND).color(net_color("ground")))
+    d.add(elm.Ground().color(net_color("ground")))
 
     # Status LED branch from GPIO2 (top-left of ESP): out, up, through R + LED
     # to ground — routed clear of the power rails below.
     d.add(elm.Line().left(0.5).at(esp.GPIO2))
     d.add(elm.Resistor().up().label("220 Ω"))
     d.add(elm.LED().up().label("Status", loc="left"))
-    d.add(elm.Line().left(0.5))
-    d.add(elm.Ground().label("GND", loc="left"))
+    d.add(elm.Line().left(0.5).color(net_color("ground")))
+    d.add(elm.Ground().label("GND", loc="left").color(net_color("ground")))
 
     # Piezo grounds.
-    d.add(elm.Line().down(0.5).at(pz_a.in2))
-    d.add(elm.Ground())
-    d.add(elm.Line().down(0.5).at(pz_b.in2))
-    d.add(elm.Ground())
+    d.add(elm.Line().down(0.5).at(pz_a.in2).color(net_color("ground")))
+    d.add(elm.Ground().color(net_color("ground")))
+    d.add(elm.Line().down(0.5).at(pz_b.in2).color(net_color("ground")))
+    d.add(elm.Ground().color(net_color("ground")))
+
+    # Draw the routed nets last: finish() hops every hand-drawn lead already
+    # in the drawing and dots every junction with one (#493), and the power
+    # stubs above cross routed wires. Routing itself was fixed at wire() time,
+    # so this moves only the Paths' place in the SVG's paint order.
+    router.finish()
 
     return d
 

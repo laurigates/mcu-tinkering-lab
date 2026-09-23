@@ -207,3 +207,26 @@ def test_real_circuits_load_and_measure():
     for m in results:
         assert m.wires > 0
         assert m.total_length > 0
+
+
+# -- drawn marks ----------------------------------------------------------------
+
+
+def test_measure_drawing_counts_the_hops_and_dots_actually_drawn():
+    # ``junctions`` counts routed-wire ends only; ``hops`` and ``dots`` count
+    # the marks in the drawing, hand-drawn leads included, so the report
+    # matches what the image shows.
+    import schemdraw
+    import schemdraw.elements as elm
+
+    from metrics import measure_drawing
+    from routing import Router
+
+    d = schemdraw.Drawing(show=False)
+    router = Router(d)
+    router.wire((0.0, 0.0), (4.0, 0.0), net="i2c")
+    router.wire((2.0, -2.0), (2.0, 2.0), net="pwm")
+    d.add(elm.Wire("-").at((3.0, 2.0)).to((3.0, 0.0)))  # a T onto the i2c wire
+    router.finish()
+    m = measure_drawing("demo", d)
+    assert (m.hops, m.dots, m.junctions) == (1, 1, 0)

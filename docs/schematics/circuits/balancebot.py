@@ -22,7 +22,7 @@ from components import (
     stepper_nema17,
     xiao_rp2350,
 )
-from routing import Router
+from routing import Router, net_color
 
 
 def draw() -> schemdraw.Drawing:
@@ -86,63 +86,70 @@ def draw() -> schemdraw.Drawing:
     nen_x = xiao.center.x + 4.0
     top = (nen_x, drv_l.nENABLE.y)
     bot = (nen_x, drv_r.nENABLE.y)
-    d.add(elm.Wire("-").at(top).to(bot).color("steelblue"))  # vertical bus
-    d.add(elm.Wire("-").at(top).to(drv_l.nENABLE).color("steelblue"))
-    d.add(elm.Wire("-").at(bot).to(drv_r.nENABLE).color("steelblue"))
-    d.add(elm.Wire("-|").at(xiao.GPIO1).to((nen_x, xiao.GPIO1.y)).color("steelblue"))
+    d.add(elm.Wire("-").at(top).to(bot).color(net_color("signal")))  # vertical bus
+    d.add(elm.Wire("-").at(top).to(drv_l.nENABLE).color(net_color("signal")))
+    d.add(elm.Wire("-").at(bot).to(drv_r.nENABLE).color(net_color("signal")))
+    d.add(
+        elm.Wire("-|")
+        .at(xiao.GPIO1)
+        .to((nen_x, xiao.GPIO1.y))
+        .color(net_color("signal"))
+    )
     # Pull-up above the bus — lifted clear of the I2C wires before the +3V3 tag.
-    d.add(elm.Line().up(1.5).at(top))
+    # Its lead is still the nENABLE net, so it takes the bus colour: the
+    # junction at ``top`` joins it, and a dot must join a single class.
+    d.add(elm.Line().up(1.5).at(top).color(net_color("signal")))
     d.add(elm.Resistor().up().label("10 kΩ"))
-    d.add(elm.Vdd().label("+3V3"))
+    d.add(elm.Vdd().label("+3V3").color(net_color("power")))
 
     # Power rails.
     # XIAO: 3V3 logic, 5V from the buck converter, common ground — left side.
-    d.add(elm.Line().left(0.5).at(xiao["3V3"]))
-    d.add(elm.Vdd().label("+3V3"))
-    d.add(elm.Line().left(0.5).at(xiao["5V"]))
-    d.add(elm.Vdd().label("+5V buck"))
-    d.add(elm.Line().left(0.5).at(xiao.GND))
-    d.add(elm.Ground())
+    d.add(elm.Line().left(0.5).at(xiao["3V3"]).color(net_color("power")))
+    d.add(elm.Vdd().label("+3V3").color(net_color("power")))
+    d.add(elm.Line().left(0.5).at(xiao["5V"]).color(net_color("power")))
+    d.add(elm.Vdd().label("+5V buck").color(net_color("power")))
+    d.add(elm.Line().left(0.5).at(xiao.GND).color(net_color("ground")))
+    d.add(elm.Ground().color(net_color("ground")))
 
     # MPU6050: 3V3 + ground on its left, below the signal wires.
-    d.add(elm.Line().left(1.0).at(mpu.VCC))
-    d.add(elm.Vdd().label("+3V3"))
-    d.add(elm.Line().left(1.0).at(mpu.GND))
-    d.add(elm.Ground())
+    d.add(elm.Line().left(1.0).at(mpu.VCC).color(net_color("power")))
+    d.add(elm.Vdd().label("+3V3").color(net_color("power")))
+    d.add(elm.Line().left(1.0).at(mpu.GND).color(net_color("ground")))
+    d.add(elm.Ground().color(net_color("ground")))
 
     # DRV8825 carriers: VDD = 3V3 logic, VMOT = battery motor supply
     # (+100 µF electrolytic close to the pins), GND common.
     for drv in (drv_l, drv_r):
-        d.add(elm.Line().left(1.0).at(drv.VDD))
-        d.add(elm.Vdd().label("+3V3"))
-        d.add(elm.Line().left(1.0).at(drv.VMOT))
-        d.add(elm.Vdd().label("+VMOT"))
-        d.add(elm.Line().left(1.0).at(drv.GND))
-        d.add(elm.Ground())
+        d.add(elm.Line().left(1.0).at(drv.VDD).color(net_color("power")))
+        d.add(elm.Vdd().label("+3V3").color(net_color("power")))
+        d.add(elm.Line().left(1.0).at(drv.VMOT).color(net_color("power")))
+        d.add(elm.Vdd().label("+VMOT").color(net_color("power")))
+        d.add(elm.Line().left(1.0).at(drv.GND).color(net_color("ground")))
+        d.add(elm.Ground().color(net_color("ground")))
 
     # === Nets: auto-routed orthogonal, obstacle-avoiding wires. ===
     router = Router(d)
 
     # I2C + INT: XIAO top GPIOs → MPU6050.
-    router.wire(xiao.GPIO7, mpu.SCL, color="steelblue")
-    router.wire(xiao.GPIO6, mpu.SDA, color="steelblue")
-    router.wire(xiao.GPIO5, mpu.INT, color="steelblue")
+    router.wire(xiao.GPIO7, mpu.SCL, net="i2c")
+    router.wire(xiao.GPIO6, mpu.SDA, net="i2c")
+    router.wire(xiao.GPIO5, mpu.INT, net="sensor")
 
     # STEP / DIR to each driver.
-    router.wire(xiao.GPIO2, drv_l.STEP, color="steelblue")
-    router.wire(xiao.GPIO4, drv_l.DIR, color="steelblue")
-    router.wire(xiao.GPIO3, drv_r.STEP, color="steelblue")
-    router.wire(xiao.GPIO0, drv_r.DIR, color="steelblue")
+    router.wire(xiao.GPIO2, drv_l.STEP, net="signal")
+    router.wire(xiao.GPIO4, drv_l.DIR, net="signal")
+    router.wire(xiao.GPIO3, drv_r.STEP, net="signal")
+    router.wire(xiao.GPIO0, drv_r.DIR, net="signal")
 
     # Coil pairs: each DRV8825 right side → its stepper.
     for drv, step in ((drv_l, step_l), (drv_r, step_r)):
-        router.wire(drv.A1, step.A1)
-        router.wire(drv.A2, step.A2)
-        router.wire(drv.B1, step.B1)
-        router.wire(drv.B2, step.B2)
+        router.wire(drv.A1, step.A1, net="load")
+        router.wire(drv.A2, step.A2, net="load")
+        router.wire(drv.B1, step.B1, net="load")
+        router.wire(drv.B2, step.B2, net="load")
 
-    # Every net is routed; draw them all here, where each Path used to be
-    # added as it was routed, so the SVG's element order is unchanged.
+    # Every net is routed; draw them all here. The nENABLE trunk and power
+    # stubs are already in the drawing, so finish() hops and dots them too.
     router.finish()
 
     return d

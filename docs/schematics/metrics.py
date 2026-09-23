@@ -46,8 +46,16 @@ axis-aligned (``test_routing.py`` enforces that); a diagonal is an error.
     (separation zero) whose extents overlap by a positive length — drawn on
     top of each other, which is worse than tight and so counted apart.
 ``junctions``
-    Points where three or more wire *ends* coincide. Only ends: a wire
-    ending on another wire's interior (a T) is not counted.
+    Points where three or more routed-wire *ends* coincide. Only ends: a
+    wire ending on another wire's interior (a T) is not counted, and nor is
+    anything on a hand-drawn lead — it is a routing measure, not a count of
+    the dots drawn.
+``hops`` / ``dots``
+    The marks actually drawn (#493): hop points on every routed Path, and
+    junction dots — ``elm.Dot`` elements plus Paths drawn with an end dot.
+    These read the finished drawing, so they include marks on hand-drawn
+    leads that the wire-only columns above never see; ``measure()`` on bare
+    polylines leaves them 0.
 
 All coordinate comparisons use a ``1e-6`` tolerance, the same as
 ``routing._EPS``, because pin and grid coordinates reach the polyline along
@@ -63,6 +71,9 @@ import sys
 from collections import Counter
 from dataclasses import asdict, dataclass
 from pathlib import Path as FsPath
+
+import schemdraw.elements as elm
+from schemdraw.segments import SegmentCircle
 
 ROOT = FsPath(__file__).parent
 if str(ROOT) not in sys.path:
@@ -222,6 +233,8 @@ class CircuitMetrics:
     tight_parallel: int
     collinear_overlaps: int
     junctions: int
+    hops: int = 0
+    dots: int = 0
 
 
 def measure(name: str, wires: list[Wire], boxes: list[Box], grid: float):
@@ -244,8 +257,9 @@ def drawing_wires(d) -> list[Wire]:
     for el in d.elements:
         if not isinstance(el, Path):
             continue
-        ox, oy = el._userparams["at"]
-        wires.append([(ox + x, oy + y) for x, y in el.segments[0].path])
+        # The routed polyline, not the drawn segment: that also carries hop
+        # arcs and their Bezier control points (#493).
+        wires.append(list(el.polyline))
     return wires
 
 
@@ -264,12 +278,23 @@ def measure_drawing(name: str, d, *, grid: float | None = None) -> CircuitMetric
     """
     assert_finished(d)
     probe = Router(d)
-    return measure(
+    m = measure(
         name,
         drawing_wires(d),
         probe._component_boxes(),
         probe.grid if grid is None else grid,
     )
+    m.hops, m.dots = drawn_marks(d)
+    return m
+
+
+def drawn_marks(d) -> tuple[int, int]:
+    """``(hops, dots)`` drawn in ``d``: see the module docstring."""
+    paths = [el for el in d.elements if isinstance(el, Path)]
+    hops = sum(len(el.hops) for el in paths)
+    dots = sum(isinstance(el, elm.Dot) for el in d.elements)
+    dots += sum(isinstance(s, SegmentCircle) for el in paths for s in el.segments)
+    return hops, dots
 
 
 def measure_circuits(names: list[str] | None = None) -> list[CircuitMetrics]:
@@ -297,6 +322,8 @@ _COLUMNS = (
     ("tight_par", "tight_parallel"),
     ("collinear", "collinear_overlaps"),
     ("junctions", "junctions"),
+    ("hops", "hops"),
+    ("dots", "dots"),
 )
 
 
