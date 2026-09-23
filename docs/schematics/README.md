@@ -86,9 +86,23 @@ router.finish()
   returns a handle whose `.points` is the routed polyline and whose
   `.element` is the drawn `Path` once `.finish()` has run. The split exists
   because hops, nudging and net ordering depend on the finished set of
-  wires (#492, ADR-023). A circuit that forgets `.finish()` fails
-  `render.py`, `metrics.py` and the tests with an error naming it, rather
-  than rendering with no wires.
+  wires (#492, ADR-023). `.finish()` also picks the *routing* order (#494):
+  the router is greedy, so whichever net routes first takes the best path
+  and the rest detour round it. It re-routes the recorded nets under a
+  fixed list of candidate orders (`routing.ORDERINGS`: as written,
+  shortest-first, longest-first, by net class, reversed), scores each
+  finished set — collinear overlaps, then tight parallel pairs, then
+  crossings, then length, by `metrics.py`'s own rulers — and keeps the
+  best, the authored order winning any tie. `router.ordering` names the
+  one chosen. The score sees routed wires only: a tight pair or crossing
+  against a hand-drawn lead is not counted, so a future ordering could
+  trade a wire-wire pair for a wire-lead one unseen. All three circuits
+  measured 0 wire-lead overlaps and 0 wire-lead tight pairs at #494, and
+  `test_no_routed_wire_runs_on_or_beside_a_lead_in_real_circuits` holds
+  them there. The drawing order does not change with it, so a handle's
+  `.points` can differ after `.finish()` but its place in the SVG cannot.
+  A circuit that forgets `.finish()` fails `render.py`, `metrics.py` and
+  the tests with an error naming it, rather than rendering with no wires.
 
 - **Crossings and junctions are marked by `.finish()`** (#493). Where two
   wires cross, the horizontal one hops over the vertical one with a small
@@ -142,8 +156,10 @@ router.finish()
   outline too closely. `overlap_penalty` is charged in full for running on
   top of an earlier wire and a quarter of it per earlier wire one grid step
   beside, so raising it spreads parallel nets apart at the cost of length
-  and crossings. Do not raise `clearance` to separate *wires* — it pushes
-  more of them through component bodies instead (#491).
+  and crossings. Nothing is charged two steps away: that is the spacing a
+  bus settles into, and no circuit improved when it was taxed (#494). Do
+  not raise `clearance` to separate *wires* — it pushes more of them
+  through component bodies instead (#491).
 - `test_routing.py` covers the router directly (orthogonality, obstacle
   avoidance, fast failure on an unreachable goal) and re-checks every wire
   every real circuit actually draws. Run every suite with

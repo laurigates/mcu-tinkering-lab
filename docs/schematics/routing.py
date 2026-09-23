@@ -37,20 +37,37 @@ from __future__ import annotations
 
 import heapq
 import math
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 
 import schemdraw.elements as elm
 from schemdraw.segments import SegmentCircle, SegmentPath
 
 Coord = tuple[float, float]
+# Lattice cell (ix, iy) -> the sorted axes ("H", "V") wires run along there.
+_Occupancy = dict[tuple[int, int], tuple[str, ...]]
 # (x, y) directions, in routing preference order (helps produce consistent,
 # tie-broken paths instead of arbitrary ones when costs are equal).
 _DIRECTIONS: tuple[Coord, ...] = ((1, 0), (0, 1), (-1, 0), (0, -1))
 
-# Share of ``overlap_penalty`` charged per same-axis wire in the lattice row
-# (or column) directly beside a step. Must stay well under 0.5 so that even a
-# step squeezed between two wires costs less than running on top of one.
-_NEIGHBOUR_FRACTION = 0.25
+# Share of ``overlap_penalty`` charged per same-axis wire running *near* a
+# step, indexed by distance - 1: the lattice row (or column) directly beside
+# it, then any further tiers. The fractions on both sides together must stay
+# under 1.0, so that even a step hemmed in on both sides costs less than
+# running on top of one wire — the one outcome worse than a tight pair.
+#
+# One tier, on purpose (#494). A second, decaying tier two rows out was built
+# and measured at weights 0.01 to 0.15, and none improved any circuit on the
+# finished-set score finish() picks orderings by. At 0.1, robocar_unified kept
+# four tight pairs under every candidate ordering against one with a single
+# tier, and balancebot's authored order gained a collinear overlap; at 0.01
+# robocar_unified matched one tier on tight pairs but crossed six more times.
+# Two rows is 0.5 drawing units at the default grid — the spacing a routed
+# bus settles into naturally — so the charge taxed the healthy spacing along
+# its whole length and squeezed the bus into adjacent rows wherever it could
+# not afford to spread to three. The tiers count lattice cells, not drawing
+# units, so a finer grid may want one more; re-measure with metrics.py first.
+_NEIGHBOUR_FRACTIONS: tuple[float, ...] = (0.25,)
 
 
 @dataclass
@@ -373,11 +390,39 @@ class Path(elm.Element):
         self.segments[0] = SegmentPath(_path_commands(relative, rel_hops, self.radius))
 
 
+@dataclass(frozen=True)
+class _Plan:
+    """One net's routing problem, minus the other wires: see ``Router.wire``.
+
+    ``entry``/``exit_`` are the stub points the search runs between,
+    ``obstacles`` the inflated boxes in its way and ``leads`` the hand-drawn
+    leads' occupancy, all as they stood when ``wire()`` was called.
+
+    ``obstacles`` is a tuple so ``frozen`` means what it says for it: the
+    plan is the world a re-route must see unchanged. ``leads`` is still a
+    dict; nothing mutates it after ``_lead_occupancy()`` builds it fresh.
+    """
+
+    start: Coord
+    end: Coord
+    entry: Coord
+    exit_: Coord
+    obstacles: tuple[_BBox, ...] = field(repr=False)
+    leads: _Occupancy = field(repr=False)
+
+    @property
+    def span(self) -> float:
+        """Manhattan distance between the pins: the net's length at best."""
+        return abs(self.end[0] - self.start[0]) + abs(self.end[1] - self.start[1])
+
+
 @dataclass
 class RoutedWire:
     """One net routed by :meth:`Router.wire`, drawn by :meth:`Router.finish`.
 
-    ``points`` is the absolute polyline, fixed at routing time. ``element``
+    ``points`` is the absolute polyline: routed greedily by ``wire()``, then
+    replaced once by ``finish()`` if it re-routes the batch in a better net
+    order, and fixed from the moment the wire is drawn. ``element``
     is ``None`` until ``finish()`` adds the :class:`Path` for it, after
     which it is that Path — the handle ``wire()`` used to return directly.
     ``name`` and ``dot`` are applied to it then, since there is nothing to
@@ -392,6 +437,9 @@ class RoutedWire:
     dot: bool = False
     hops: list[Coord] = field(default_factory=list)
     element: Path | None = field(default=None, repr=False)
+    # What wire() routed it against, so finish() can route it again in
+    # another net order (#494).
+    _plan: "_Plan | None" = field(default=None, repr=False, compare=False)
 
     @property
     def color(self) -> str:
@@ -440,12 +488,23 @@ class Router:
         self.stub = stub
         self.turn_penalty = turn_penalty
         self.overlap_penalty = overlap_penalty
-        self._occupied: dict[tuple[int, int], set[str]] = {}
+        # Lattice cell -> the axes routed wires run along through it, as a
+        # sorted tuple rather than a set (#494): nothing may ever read a set's
+        # iteration order into the output, and an immutable value also lets
+        # finish() copy the whole map per candidate ordering with dict().
+        # It must hold routed-wire cells only: _choose_order() rebuilds it
+        # from wire points alone and swaps the result in, so anything else
+        # marked here (lead cells, say) would silently vanish at finish().
+        # Leads have their own map, _lead_occupancy().
+        self._occupied: _Occupancy = {}
         # Every net wire() has routed, in routing order; finish() draws the
         # ones whose ``element`` is still None, in this same order.
         self._wires: list[RoutedWire] = []
         # Junction points finish() has dotted, in the order it dotted them.
         self.junctions: list[Coord] = []
+        # Name of the ORDERINGS candidate finish() last routed a batch in,
+        # or None while no batch of two or more nets has been finished.
+        self.ordering: str | None = None
         # Registered on the drawing so a harness holding only ``d`` (render.py
         # and metrics.py receive a finished Drawing, never the Router) can
         # tell a circuit that forgot finish() from one with no nets — the
@@ -520,7 +579,12 @@ class Router:
 
     # -- search ----------------------------------------------------------
     def _astar(
-        self, start: Coord, goal: Coord, obstacles: list[_BBox]
+        self,
+        start: Coord,
+        goal: Coord,
+        obstacles: Sequence[_BBox],
+        occupied: _Occupancy,
+        leads: _Occupancy,
     ) -> list[Coord] | None:
         # One lattice for every net: index (ix, iy) is the absolute point
         # (ix * grid, iy * grid), the same cells _mark_occupied keys by.
@@ -565,14 +629,12 @@ class Router:
             x, y = ix * grid, iy * grid
             return any(b.contains(x, y) for b in obstacles)
 
-        leads = self._lead_occupancy()
-
         def occ_penalty(ix: int, iy: int, axis: str) -> float:
             # Only penalize running along the *same* axis as a previously
             # routed wire or a hand-drawn lead. A perpendicular crossing is
             # normal, unambiguous schematic notation and costs nothing extra.
             key = (ix, iy)
-            if axis in self._occupied.get(key, ()) or axis in leads.get(key, ()):
+            if axis in occupied.get(key, ()) or axis in leads.get(key, ()):
                 return self.overlap_penalty
             # A wire one lattice row (or column) beside another is the
             # "near-parallel verticals cannot be told apart" defect of
@@ -584,14 +646,20 @@ class Router:
             # than on top — at an equal charge (fraction 1.0) the search
             # traded adjacency for collinear overlap, the one outcome worse
             # than a tight pair, and at 1/3 it still did once in balancebot.
+            # The loop charges one fraction per tier of _NEIGHBOUR_FRACTIONS,
+            # so a charge decaying with distance is supported, but only the
+            # adjacent tier ships: two rows out is free, and a wire this
+            # pushes lands there and pays nothing. That is deliberate — see
+            # the constant's comment for the measurements behind it (#494).
             # Routed wires only: see _lead_occupancy for why a lead is not
             # charged as a neighbour.
             nx, ny = (0, 1) if axis == "H" else (1, 0)
-            neighbours = sum(
-                axis in self._occupied.get((ix + side * nx, iy + side * ny), ())
-                for side in (-1, 1)
-            )
-            return self.overlap_penalty * _NEIGHBOUR_FRACTION * neighbours
+            share = 0.0
+            for distance, fraction in enumerate(_NEIGHBOUR_FRACTIONS, start=1):
+                for side in (-distance, distance):
+                    if axis in occupied.get((ix + side * nx, iy + side * ny), ()):
+                        share += fraction
+            return self.overlap_penalty * share
 
         start_node = (sx, sy, None)  # (ix, iy, incoming direction)
         frontier: list[tuple[float, int, tuple]] = [(0.0, 0, start_node)]
@@ -639,7 +707,7 @@ class Router:
         tagged with that segment's axis, for future overlap-penalty checks."""
         _mark_cells(self._occupied, points, self.grid)
 
-    def _lead_occupancy(self) -> dict[tuple[int, int], set[str]]:
+    def _lead_occupancy(self) -> _Occupancy:
         """Occupancy of the hand-drawn leads in ``d`` right now.
 
         A lead is a drawn wire like any routed one, so a net drawn on top of
@@ -666,7 +734,7 @@ class Router:
         already drawn are seen — circuits that draw their power stubs after
         routing are unaffected, as with components.
         """
-        occupied: dict[tuple[int, int], set[str]] = {}
+        occupied: _Occupancy = {}
         for points, _ in self._leads():
             _mark_cells(occupied, points, self.grid)
         return occupied
@@ -727,22 +795,41 @@ class Router:
         # holding its pin is a malformed layout, and stays in so the search
         # fails fast rather than tunnelling through it.
         ends = ((start, entry), (end, exit_))
-        obstacles = [
+        obstacles = tuple(
             b
             for raw, b in zip(boxes, inflated)
             if not any(raw.contains(*pin) and b.contains(*stub) for pin, stub in ends)
-        ]
+        )
 
-        path = self._astar(entry, exit_, obstacles)
+        # Everything the search depends on except other wires' occupancy is
+        # fixed here, at wire() time — the obstacles and the hand-drawn leads
+        # as they stand now — so finish() can re-route this net in another
+        # order against exactly the world it was first routed in, even if
+        # the circuit adds leads or parts between nets.
+        plan = _Plan(start, end, entry, exit_, obstacles, self._lead_occupancy())
+        points = self._route(plan, self._occupied)
+        # Occupancy is marked now, not at finish(): the next wire() must see
+        # this one to be penalised for running on or beside it, exactly as
+        # when routing and drawing were one step. Deferring the draw itself
+        # cannot change routing, because a drawn Path is in _NON_OBSTACLES.
+        self._mark_occupied(points)
+
+        routed = RoutedWire(points, net=net, name=name, dot=dot, _plan=plan)
+        self._wires.append(routed)
+        return routed
+
+    def _route(self, plan: "_Plan", occupied: _Occupancy) -> list[Coord]:
+        """The polyline for ``plan`` given the wires already in ``occupied``."""
+        path = self._astar(plan.entry, plan.exit_, plan.obstacles, occupied, plan.leads)
         if path is None:
             raise RuntimeError(
-                f"Router: no orthogonal path found from {start} to {end} "
-                "(try a larger grid, more clearance, or check for a fully "
-                "enclosed pin)"
+                f"Router: no orthogonal path found from {plan.start} to "
+                f"{plan.end} (try a larger grid, more clearance, or check for "
+                "a fully enclosed pin)"
             )
-        path = _snap_final_approach(path, exit_)
-
-        points = _simplify(
+        path = _snap_final_approach(path, plan.exit_)
+        start, entry, exit_, end = plan.start, plan.entry, plan.exit_, plan.end
+        return _simplify(
             [
                 start,
                 *([entry] if entry != start else []),
@@ -751,15 +838,6 @@ class Router:
                 end,
             ]
         )
-        # Occupancy is marked now, not at finish(): the next wire() must see
-        # this one to be penalised for running on or beside it, exactly as
-        # when routing and drawing were one step. Deferring the draw itself
-        # cannot change routing, because a drawn Path is in _NON_OBSTACLES.
-        self._mark_occupied(points)
-
-        routed = RoutedWire(points, net=net, name=name, dot=dot)
-        self._wires.append(routed)
-        return routed
 
     @property
     def undrawn(self) -> list[RoutedWire]:
@@ -767,7 +845,7 @@ class Router:
         return [w for w in self._wires if w.element is None]
 
     def finish(self) -> list[Path]:
-        """Draw every recorded wire not yet drawn, in the order it was routed.
+        """Draw every recorded wire not yet drawn, in the order it was recorded.
 
         Call it once after a circuit's last ``wire()``. Where it is called
         decides where the Paths sit in the drawing's element list, and so in
@@ -775,6 +853,10 @@ class Router:
         wire block, where each Path used to be added as it was routed.
         Calling it again draws only wires recorded since, so it is safe to
         call more than once. Returns the Paths it added.
+
+        Before drawing, it re-routes those wires in the best of a fixed list
+        of net orderings (:meth:`_choose_order`); already-drawn wires are
+        never moved, only routed around.
 
         This is where the finished set is marked up: each wire is drawn with
         its hops (:func:`_hop_sites`) and in its class colour, then a
@@ -785,6 +867,7 @@ class Router:
         has its Path redrawn in place (:meth:`Path.set_hops`), so where in
         the element list it sits — and so the SVG paint order — never moves.
         """
+        self._choose_order()
         polylines = [w.points for w in self._wires]
         leads = self._leads()
         sites = _hop_sites(polylines, [pts for pts, _ in leads])
@@ -832,6 +915,69 @@ class Router:
             self.junctions.append(point)
         return drawn
 
+    def _choose_order(self) -> None:
+        """Re-route the undrawn wires in the best of :data:`ORDERINGS`.
+
+        The router is greedy and first-come: each net routes around the ones
+        before it, so the order nets are routed in decides which of them
+        detours, and there was no way to choose it (#494). With the whole
+        batch recorded, finish() can instead route it once per candidate
+        ordering — each from the same starting occupancy, the wires already
+        drawn and any it cannot re-route — score every finished set with
+        :func:`_order_score` and keep the lowest. A fixed list rather than a
+        search over permutations, and never a shuffle: the SVG is
+        byte-compared in CI, so the choice must come out the same on every
+        run and machine, and a strict ``<`` over a fixed list with the
+        authored order first is the tie-break.
+
+        Only the routing order changes. Each wire keeps its place in
+        ``_wires``, so finish() still draws in the order the circuit wrote,
+        and the SVG's paint order does not move with the chosen ordering.
+        The authored candidate reproduces wire()'s own result exactly when
+        every undrawn wire has a plan, so a batch no candidate improves is
+        left precisely as routed. A plan-less undrawn wire is the exception:
+        it sits in ``fixed``, so even batch wires recorded before it route
+        round it here, which wire() did not do. No circuit creates one.
+        """
+        # A wire without a plan cannot be re-routed, so it stays where it is
+        # and every candidate routes round it, exactly like a drawn one.
+        # Leaving it out of ``fixed`` instead would route the batch as if it
+        # were not there and then drop it from the occupancy swapped in below.
+        batch = [w for w in self._wires if w.element is None and w._plan is not None]
+        if len(batch) < 2:
+            return
+        fixed = [
+            w.points for w in self._wires if w.element is not None or w._plan is None
+        ]
+        # Rebuilt from wire points alone, then swapped in for _occupied
+        # below: correct only because _occupied holds nothing but routed
+        # wire cells (see __init__).
+        base: _Occupancy = {}
+        for points in fixed:
+            _mark_cells(base, points, self.grid)
+
+        best = None
+        tried: list[tuple[int, ...]] = []
+        for name, key in ORDERINGS:
+            order = tuple(key(batch))
+            if order in tried:
+                continue  # same routing as an earlier candidate: same score
+            tried.append(order)
+            occupied = dict(base)
+            routed: list[list[Coord] | None] = [None] * len(batch)
+            for i in order:
+                routed[i] = self._route(batch[i]._plan, occupied)
+                _mark_cells(occupied, routed[i], self.grid)
+            score = _order_score(fixed + routed, self.grid)
+            if best is None or score < best[0]:
+                best = (score, name, routed, occupied)
+        # ORDERINGS is non-empty and its first entry, the authored order, can
+        # never be skipped as a duplicate, so at least one candidate scored.
+        assert best is not None, "ORDERINGS must not be empty"
+        _, self.ordering, routed, self._occupied = best
+        for w, points in zip(batch, routed):
+            w.points = points
+
     def _leads(self) -> list[tuple[list[Coord], str]]:
         """Absolute polyline and colour of every hand-drawn lead in ``d``.
 
@@ -854,6 +1000,69 @@ class Router:
         return leads
 
 
+# -- net ordering ----------------------------------------------------------------
+
+
+def _by_class(batch: list[RoutedWire]) -> list[int]:
+    rank = {net: i for i, net in enumerate(NET_COLORS)}
+    return sorted(range(len(batch)), key=lambda i: rank.get(batch[i].net, len(rank)))
+
+
+# Candidate routing orders finish() tries, first to last, as (name, key): key
+# maps the batch to a permutation of its indices. Every sort is stable, so
+# nets that tie keep their authored order and the permutation is a pure
+# function of the circuit. The authored order comes first, so it wins any tie.
+ORDERINGS: tuple[tuple[str, Callable[[list[RoutedWire]], Iterable[int]]], ...] = (
+    ("authored", lambda batch: range(len(batch))),
+    # Short nets have the fewest ways round an obstacle; routing them first
+    # lets the long ones, which can detour cheaply, do the detouring.
+    (
+        "shortest-first",
+        lambda batch: sorted(range(len(batch)), key=lambda i: batch[i]._plan.span),
+    ),
+    (
+        "longest-first",
+        lambda batch: sorted(range(len(batch)), key=lambda i: -batch[i]._plan.span),
+    ),
+    # A bus's lines route consecutively and so settle beside each other,
+    # in NET_COLORS order: power and ground before the signals.
+    ("by-class", _by_class),
+    ("reversed", lambda batch: reversed(range(len(batch)))),
+)
+
+# Weights of the finished-set score (lower is better), in drawing units of
+# wire length. A collinear overlap draws two nets as one, the worst outcome,
+# so nothing else may buy it; a tight pair is the defect this ordering exists
+# to remove (#494) and outranks a crossing, which finish() now marks with a
+# hop and so reads unambiguously; length only breaks the rest.
+_SCORE_COLLINEAR = 1000.0
+_SCORE_TIGHT = 20.0
+_SCORE_CROSSING = 4.0
+
+
+def _order_score(wires: list[list[Coord]], grid: float) -> float:
+    """Weighted badness of a finished set of wires, by metrics.py's rulers.
+
+    Imported here rather than at module level because metrics.py imports
+    this module. Rounded so that float noise in the length sum can never
+    decide a tie that the candidate order is meant to break.
+    """
+    from metrics import (
+        collinear_overlaps,
+        crossings,
+        tight_parallel_pairs,
+        total_length,
+    )
+
+    return round(
+        _SCORE_COLLINEAR * collinear_overlaps(wires)
+        + _SCORE_TIGHT * tight_parallel_pairs(wires, grid)
+        + _SCORE_CROSSING * crossings(wires)
+        + total_length(wires),
+        6,
+    )
+
+
 def assert_finished(d) -> None:
     """Raise if any :class:`Router` on ``d`` still holds undrawn wires.
 
@@ -874,9 +1083,7 @@ def assert_finished(d) -> None:
         )
 
 
-def _mark_cells(
-    occupied: dict[tuple[int, int], set[str]], points: list[Coord], grid: float
-) -> None:
+def _mark_cells(occupied: _Occupancy, points: list[Coord], grid: float) -> None:
     """Add every lattice cell each segment of ``points`` passes through to
     ``occupied``, tagged with that segment's axis.
 
@@ -891,7 +1098,10 @@ def _mark_cells(
         for i in range(steps + 1):
             along = lo + (hi - lo) * i / steps if steps else lo
             x, y = (along, fixed) if axis == "H" else (fixed, along)
-            occupied.setdefault((round(x / grid), round(y / grid)), set()).add(axis)
+            key = (round(x / grid), round(y / grid))
+            axes = occupied.get(key, ())
+            if axis not in axes:
+                occupied[key] = tuple(sorted((*axes, axis)))
 
 
 def _snap_initial_approach(path: list[Coord], start: Coord) -> list[Coord]:
