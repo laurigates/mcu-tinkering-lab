@@ -53,9 +53,11 @@ jobs:
         working-directory: docs/schematics
         run: uv sync --frozen --group dev
 
-      - name: Run routing.py test suite
+      # The whole directory, not one file: a test module added beside
+      # test_routing.py (test_metrics.py, ...) must not be silently skipped.
+      - name: Run schematics test suites
         working-directory: docs/schematics
-        run: uv run pytest test_routing.py -v
+        run: uv run pytest -v
 
       - name: Render all circuits
         working-directory: docs/schematics

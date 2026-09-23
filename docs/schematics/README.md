@@ -17,6 +17,8 @@ docs/schematics/
 ├── components.py          # Reusable chip/breakout factories (ESP32, MAX98357A, ...)
 ├── routing.py             # Manhattan auto-router (Router) used by circuits for nets
 ├── test_routing.py        # pytest suite for routing.py
+├── metrics.py             # Routing-quality metrics per circuit (crossings, ...)
+├── test_metrics.py        # pytest suite for metrics.py
 ├── images/                # Generated SVG + PNG (committed so GitHub renders them)
 ├── render.py              # Batch-render every circuit in circuits/
 ├── justfile               # `just schematics::render`, `::clean`, ...
@@ -100,9 +102,16 @@ router.wire(esp.GPIO5, amp.BCLK, color="steelblue")
   outline too closely.
 - `test_routing.py` covers the router directly (orthogonality, obstacle
   avoidance, fast failure on an unreachable goal) and re-checks every wire
-  every real circuit actually draws. Run it with
-  `uv run --group dev pytest test_routing.py` after touching `routing.py` or
-  any `circuits/*.py`.
+  every real circuit actually draws. Run every suite with
+  `just schematics::test` (or `uv run --group dev pytest`) after touching
+  `routing.py` or any `circuits/*.py`; CI runs the whole directory.
+- **Measuring a router change**: `metrics.py` reports, per circuit, total
+  wire length, length inside component bodies (own and foreign), crossings,
+  tight parallel pairs, collinear overlaps and junctions — each defined
+  exactly in its module docstring and pinned by `test_metrics.py`. Run
+  `just schematics::metrics` (`--json` for machine output) before and after
+  a routing change and quote both in the commit, rather than judging the
+  SVG by eye.
 
 ## Conventions
 
