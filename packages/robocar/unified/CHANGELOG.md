@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.8](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.7...robocar-unified-v0.2.8) (2026-09-24)
+
+
+### Documentation
+
+* **robocar-unified:** recompile build guide for the re-rendered schematic ([7bf5ec4](https://github.com/laurigates/mcu-tinkering-lab/commit/7bf5ec4b76ca4d0f81e50317b8ad313277370281))
+
 ## [0.2.7](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.6...robocar-unified-v0.2.7) (2026-09-22)
 
 
