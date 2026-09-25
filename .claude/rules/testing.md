@@ -14,8 +14,10 @@ uv run pytest tests/ --cov
 
 - Static analysis via `cppcheck` (run in CI)
 - Format checking via `clang-format --dry-run`
-- **Host unit tests exist for robocar-unified** — 22 suites under
-  `packages/robocar/unified/test/`, run natively with no ESP-IDF container:
+- **Host unit tests exist for robocar-unified** — the suites under
+  `packages/robocar/unified/test/` (one `add_test` each in its
+  `CMakeLists.txt`; the recipe's ctest summary gives the current count), run
+  natively with no ESP-IDF container:
 
   ```bash
   just robocar-unified::test

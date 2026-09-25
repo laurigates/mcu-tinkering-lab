@@ -1,6 +1,7 @@
 ---
 description: Gotchas for driving LEGO Powered UP / Boost hubs from a browser via node-poweredup + Web Bluetooth
-globs: ["packages/input-gaming/lego-boost-xbox/**"]
+paths:
+  - "web/**"
 ---
 
 # node-poweredup in the Browser (Web Bluetooth)
