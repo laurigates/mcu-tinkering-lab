@@ -24,10 +24,11 @@ fundamental.
 
 1. Flash and run the toy (`just flash-monitor`), piezo near the laptop mic.
 2. Set the **pitch** pot to min / mid / max and run the test at each — confirm
-   the reported pitch lands near **100 / ~1050 / 2000 Hz**.
-3. Repeat the min/mid/max sweep on the **duration** (50-1000 ms) and
-   **interval** (100-2000 ms) pots, checking the `duration (ms)` and
-   `gap (ms)` columns.
+   the reported pitch lands near the minimum / midpoint / maximum of the
+   firmware pitch range the script prints.
+3. Repeat the min/mid/max sweep on the **duration** and **interval** pots,
+   checking the `duration (ms)` and `gap (ms)` columns against the printed
+   firmware ranges.
 
 ### Notes & limits
 
@@ -38,5 +39,7 @@ fundamental.
   you've dialed in.
 - Very short beeps (≤30 ms) are filtered as noise; the envelope threshold and
   filters are constants at the top of the script if you need to tune them.
-- The parameter ranges mirror `main/main.c` — keep them in sync if the
-  firmware constants change.
+- The parameter ranges are read at startup from `main/audio_core.h`
+  (`AUDIO_MIN_FREQ_HZ` … `AUDIO_MAX_INTERVAL_MS`), the header the firmware
+  compiles, and printed under the results. The script exits with an error if
+  any of the six `#define`s is missing.
