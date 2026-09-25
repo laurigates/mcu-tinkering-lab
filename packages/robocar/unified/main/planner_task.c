@@ -293,7 +293,7 @@ static void planner_task(void *pvParameters)
                          "rung: %u/%u every %" PRIu32 " ms | why: %s",
                          plan_activity_scene_score(), (unsigned)plan_scene_threshold(),
                          plan_activity_range_score(), (unsigned)plan_range_threshold(),
-                         ambient_audio_loud_score(), (unsigned)ambient_audio_loud_threshold(),
+                         ambient_audio_loud_score(now_ms), (unsigned)ambient_audio_loud_threshold(),
                          (unsigned)plan_activity_step() + 1u, (unsigned)PLAN_LADDER_STEPS,
                          plan_activity_period_ms(), plan_activity_verdict());
             } else {
@@ -399,13 +399,16 @@ static void planner_task(void *pvParameters)
              *        Distinct from scene= on purpose: the two references move at
              *        different moments, so a single field could not serve both.
              * spent= requests and tokens charged against the fuse this boot. */
+            /* Scores are read at log time, after the request's latency, so the
+             * printed latch age matches what the gate would decide right now. */
+            const uint32_t log_ms = (uint32_t)(esp_timer_get_time() / 1000);
             ESP_LOGI(TAG,
                      "Goal: %s | latency: %" PRIu32 " ms | scene: %u/%u | loud: %u/%u dB | "
                      "sound: %u/%u dB | floor: %d dB | gate: %s | still: %u/%u | why: %s | "
                      "step: %u/%u | spent: %" PRIu32 "/%" PRIu32 " req, %llu tok",
                      goal_kind_name(goal.kind), latency_ms, scene_change_score(),
-                     (unsigned)scene_change_threshold(), ambient_audio_loud_score(),
-                     (unsigned)ambient_audio_loud_threshold(), ambient_audio_shape_score(),
+                     (unsigned)scene_change_threshold(), ambient_audio_loud_score(log_ms),
+                     (unsigned)ambient_audio_loud_threshold(), ambient_audio_shape_score(log_ms),
                      (unsigned)ambient_audio_shape_threshold(), (int)ambient_audio_floor_db(),
                      gate_verdict, plan_activity_scene_score(), (unsigned)plan_scene_threshold(),
                      plan_activity_verdict(), (unsigned)plan_activity_step() + 1u,

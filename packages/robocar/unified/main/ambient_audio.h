@@ -262,12 +262,16 @@ bool ambient_audio_novel(uint32_t now_ms);
 bool ambient_audio_event(uint32_t now_ms);
 
 /** @brief Latched loudness excursion above the floor, in whole dB, for logging.
- *         Decays as the floor rises through a steady sound. */
-unsigned ambient_audio_loud_score(void);
+ *         Decays as the floor rises through a steady sound, and reads 0 once the
+ *         latch is AMBIENT_LATCH_TTL_MS old at @p now_ms — the same expiry the
+ *         gate applies, so a status line can never print a live-looking score
+ *         beside a gate that has stopped honouring it (issue #579). */
+unsigned ambient_audio_loud_score(uint32_t now_ms);
 
 /** @brief Latched spectral-shape distance from the last spoken-about room, in
- *         whole dB, for logging. */
-unsigned ambient_audio_shape_score(void);
+ *         whole dB, for logging. Reads 0 once the latch has expired at
+ *         @p now_ms, as ambient_audio_loud_score() does. */
+unsigned ambient_audio_shape_score(uint32_t now_ms);
 
 /** @brief Current adapted noise floor in whole dB, for logging. A floor that
  *         never moves is the tell that the listener has stopped feeding. */

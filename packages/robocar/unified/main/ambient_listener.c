@@ -139,7 +139,7 @@ static void ambient_listener_task(void *arg)
          * line per frame would bury every other message in the monitor. The
          * tunable values ride the planner's 15 s line instead. */
         ESP_LOGD(TAG, "frame: %u samples, loud %u, shape %u", (unsigned)got,
-                 ambient_audio_loud_score(), ambient_audio_shape_score());
+                 ambient_audio_loud_score(t), ambient_audio_shape_score(t));
 
         mic_dump_maybe(s_frame, got);
 
@@ -157,11 +157,11 @@ static void ambient_listener_task(void *arg)
 
             if (cooldown_ok) {
                 const uint8_t thresh = ambient_audio_loud_threshold();
-                if (thresh > 0 && ambient_audio_loud_score() >= thresh) {
+                if (thresh > 0 && ambient_audio_loud_score(t) >= thresh) {
                     if (voice_turn_request(VAD_RECORD_WINDOW_MS) == ESP_OK) {
                         s_last_vad_trigger_ms = t;
                         ESP_LOGI(TAG, "VAD auto-trigger (loud=%u thresh=%u in_conv=%d)",
-                                 ambient_audio_loud_score(), thresh, (int)in_conv);
+                                 ambient_audio_loud_score(t), thresh, (int)in_conv);
                     }
                 }
             }
