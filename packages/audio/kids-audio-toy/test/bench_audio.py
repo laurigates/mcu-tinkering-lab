@@ -14,9 +14,10 @@ built-in microphone), detects each beep, and reports its fundamental
 frequency, duration, and the gap to the next beep. Eyeball the table against
 the knob positions you set on the toy.
 
-The firmware plays a PWM square wave whose pitch tracks the pitch pot
-(100-2000 Hz), with per-beep duration (50-1000 ms) and inter-beep interval
-(100-2000 ms) set by the other two pots. A square wave's fundamental is its
+The firmware plays a PWM square wave whose pitch tracks the pitch pot, with
+per-beep duration and inter-beep interval set by the other two pots. The
+ranges are read at startup from main/audio_core.h (AUDIO_MIN_FREQ_HZ etc.),
+the same header the firmware compiles, and printed with the results. A square wave's fundamental is its
 strongest spectral component (harmonics fall off as 1/n), so an argmax over
 the expected band recovers the pitch directly.
 
@@ -27,23 +28,56 @@ Usage:
     uv run bench_audio.py --device 2       # pick a specific input device
 
 Acceptance check: set the pitch pot to min / mid / max and confirm the
-reported fundamental lands near 100 / ~1050 / 2000 Hz. Repeat the min/mid/max
-sweep on the duration and interval pots against their documented ranges.
+reported fundamental lands near the minimum / midpoint / maximum of the
+firmware pitch range. Repeat the min/mid/max sweep on the duration and
+interval pots against the firmware ranges the script prints.
 """
 
 import argparse
+import re
 import sys
+from pathlib import Path
 
 import numpy as np
 import sounddevice as sd
 
-# Firmware parameter ranges (keep in sync with main/main.c)
-MIN_FREQ_HZ = 100
-MAX_FREQ_HZ = 2000
+AUDIO_CORE_H = Path(__file__).resolve().parent.parent / "main" / "audio_core.h"
+RANGE_NAMES = (
+    "MIN_FREQ_HZ",
+    "MAX_FREQ_HZ",
+    "MIN_DURATION_MS",
+    "MAX_DURATION_MS",
+    "MIN_INTERVAL_MS",
+    "MAX_INTERVAL_MS",
+)
+
+
+def load_firmware_ranges(header: Path = AUDIO_CORE_H) -> dict[str, float]:
+    """Read the parameter ranges from audio_core.h, the firmware's single
+    source of truth, so the bench test checks what the firmware actually
+    does rather than a hand-copied duplicate. Fails loudly if any bound is
+    missing: a regex that matches nothing must not pass as a clean parse."""
+    text = header.read_text()
+    ranges = {}
+    for name in RANGE_NAMES:
+        m = re.search(
+            rf"^\s*#define\s+AUDIO_{name}\s+([0-9]+(?:\.[0-9]*)?)f?\b",
+            text,
+            re.MULTILINE,
+        )
+        if m is None:
+            raise RuntimeError(f"AUDIO_{name} not found in {header}")
+        ranges[name] = float(m.group(1))
+    return ranges
+
+
+FIRMWARE = load_firmware_ranges()
+MIN_FREQ_HZ = FIRMWARE["MIN_FREQ_HZ"]
+MAX_FREQ_HZ = FIRMWARE["MAX_FREQ_HZ"]
 # Search band padded slightly beyond the firmware range so a pot at the
-# extreme still lands inside the window.
-BAND_LOW_HZ = 80
-BAND_HIGH_HZ = 2200
+# extreme still lands inside the window (80-2200 Hz for 100-2000 Hz).
+BAND_LOW_HZ = MIN_FREQ_HZ * 0.8
+BAND_HIGH_HZ = MAX_FREQ_HZ * 1.1
 
 SAMPLE_RATE = 44_100
 FRAME_MS = 10  # envelope analysis hop
@@ -185,8 +219,14 @@ def analyze(audio: np.ndarray) -> None:
     if valid:
         print(
             f"\n  pitch range: {min(valid):.0f}-{max(valid):.0f} Hz "
-            f"(firmware: {MIN_FREQ_HZ}-{MAX_FREQ_HZ} Hz)"
+            f"(firmware: {MIN_FREQ_HZ:.0f}-{MAX_FREQ_HZ:.0f} Hz)"
         )
+    print(
+        f"  firmware duration: {FIRMWARE['MIN_DURATION_MS']:.0f}-"
+        f"{FIRMWARE['MAX_DURATION_MS']:.0f} ms, interval: "
+        f"{FIRMWARE['MIN_INTERVAL_MS']:.0f}-{FIRMWARE['MAX_INTERVAL_MS']:.0f} ms "
+        f"(from {AUDIO_CORE_H.name})"
+    )
     out_of_band = [p for p in valid if p < MIN_FREQ_HZ - 20 or p > MAX_FREQ_HZ + 20]
     if out_of_band:
         print(
