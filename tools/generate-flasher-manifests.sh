@@ -17,7 +17,8 @@
 # For every packages/*/*/flasher.json found, this script:
 #   1. Reads chipFamily and appBinaryName from flasher.json
 #   2. Determines flash offsets (bootloader/partition-table/otadata/app) from
-#      partitions.csv if present, otherwise uses chip-family defaults
+#      the partition table sdkconfig.defaults selects (resolve_partition_table,
+#      default partitions.csv) if present, otherwise uses chip-family defaults
 #   3. Writes firmware/<project-id>/manifest.json (ESP Web Tools format)
 #   4. Writes firmware/projects.json index consumed by the flasher page
 #
@@ -27,10 +28,10 @@
 #   ESP32, ESP32-S2  ->  0x1000 (4096)
 #   ESP32-S3, ESP32-C3, ESP32-C6, ESP32-H2  ->  0x0 (0)
 #
-# Default partition offsets (no partitions.csv):
+# Default partition offsets (no partition table file):
 #   partition-table  ->  0x8000  (32768)  -- same for all families
 #   app              ->  0x10000 (65536)  -- same for all families
-#   otadata          ->  none             -- only if found in partitions.csv
+#   otadata          ->  none             -- only if found in the partition table
 
 set -euo pipefail
 
@@ -61,7 +62,7 @@ bootloader_offset() {
     esac
 }
 
-# Parse the first app partition offset from partitions.csv.
+# Parse the first app partition offset from a partition table CSV.
 # Returns decimal offset, or 65536 (0x10000) if not found.
 parse_app_offset() {
     local csv="$1"
@@ -83,7 +84,7 @@ parse_app_offset() {
 }
 
 # parse_otadata_offset() is defined in lib/otadata-predicate.sh, shared with
-# build-firmware.yml's assemble step so the two never parse partitions.csv
+# build-firmware.yml's assemble step so the two never parse a partition table
 # differently.
 
 PROJECTS_JSON_ARRAY="[]"
@@ -112,8 +113,9 @@ for flasher_json in ${PROJECTS_GLOB}; do
     # Determine offsets
     bl_offset=$(bootloader_offset "$chip_family")
     pt_offset=32768   # 0x8000  -- partition table always here
-    app_offset=$(parse_app_offset "${project_dir}/partitions.csv")
-    ota_offset=$(parse_otadata_offset "${project_dir}/partitions.csv")
+    partition_table=$(resolve_partition_table "$project_dir")
+    app_offset=$(parse_app_offset "$partition_table")
+    ota_offset=$(parse_otadata_offset "$partition_table")
 
     echo "    chip=$chip_family  bl=0x$(printf '%x' "$bl_offset")  pt=0x$(printf '%x' "$pt_offset")  app=0x$(printf '%x' "$app_offset")"
     [[ -n "$ota_offset" ]] && echo "    otadata=0x$(printf '%x' "$ota_offset")"
