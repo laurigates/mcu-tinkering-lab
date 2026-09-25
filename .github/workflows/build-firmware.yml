@@ -167,6 +167,11 @@ jobs:
     name: Assemble manifests and deploy
     needs: [discover-projects, build-firmware]
     runs-on: ubuntu-latest
+    # The job normally finishes in ~1.5 min. Without a bound, an unreachable
+    # Pages origin costs ~31 s of curl retries per probed URL (52 URLs across
+    # 16 manifests as of 2026-09), and a black-holed one up to ~3.5 min per
+    # URL, against the 360-minute default job timeout (issue #542).
+    timeout-minutes: 30
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -501,13 +506,19 @@ jobs:
               [ -z "$part" ] && continue
               local_file="firmware/$project_id/$part"
               expected_size=$(stat -c%s "$local_file" 2>/dev/null || echo -1)
-              url="$base/firmware/$project_id/$part?v=${{ github.run_id }}"
-              # --retry/--max-time absorb a transient Pages blip instead of
-              # killing the step on a bare non-200/timeout; a failure still
-              # lands in the named-failure list below and the job still
-              # fails at the end — this is about tolerating transients and
-              # ordering, not downgrading the gate to a warning.
-              read -r code actual_size <<< "$(curl -sS --max-time 30 --retry 5 --retry-all-errors -o /dev/null -w '%{http_code} %{size_download}' "$url" 2>/dev/null || echo '000 -1')"
+              url="$base/firmware/$project_id/$part"
+              # --retry/--retry-all-errors/--max-time cover connection-level
+              # transients only (refused, reset, timed out). Without --fail
+              # curl treats any HTTP response, a 404 included, as success, so
+              # no retry engages on one. Nothing here can bypass a stale
+              # cached 404 either: Fastly, in front of Pages, leaves the query
+              # string out of its cache key, so a ?v= suffix is still a cache
+              # HIT (issue #542). What keeps such a 404 from suppressing a
+              # good release is the step ordering described above. A failure
+              # still lands in the named-failure list below and fails the job.
+              # -w ends in \n so the fallback lands on its own line instead of
+              # being glued onto curl's partial output.
+              read -r code actual_size <<< "$(curl -sS --max-time 30 --retry 5 --retry-all-errors -o /dev/null -w '%{http_code} %{size_download}\n' "$url" 2>/dev/null || echo '000 -1')"
               echo "$code $actual_size (expected $expected_size) $url"
               if [ "$code" != "200" ]; then
                 missing+=("$project_id/$part -> HTTP $code ($url)")
