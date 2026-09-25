@@ -112,8 +112,9 @@ for flasher_json in ${PROJECTS_GLOB}; do
     # Determine offsets
     bl_offset=$(bootloader_offset "$chip_family")
     pt_offset=32768   # 0x8000  -- partition table always here
-    app_offset=$(parse_app_offset "${project_dir}/partitions.csv")
-    ota_offset=$(parse_otadata_offset "${project_dir}/partitions.csv")
+    partition_table=$(resolve_partition_table "$project_dir")
+    app_offset=$(parse_app_offset "$partition_table")
+    ota_offset=$(parse_otadata_offset "$partition_table")
 
     echo "    chip=$chip_family  bl=0x$(printf '%x' "$bl_offset")  pt=0x$(printf '%x' "$pt_offset")  app=0x$(printf '%x' "$app_offset")"
     [[ -n "$ota_offset" ]] && echo "    otadata=0x$(printf '%x' "$ota_offset")"

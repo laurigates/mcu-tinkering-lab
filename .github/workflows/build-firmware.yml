@@ -248,8 +248,9 @@ jobs:
               fi
             done
 
-            # ota_data_initial.bin is required exactly when partitions.csv
-            # declares a `data,ota` row — the same predicate
+            # ota_data_initial.bin is required exactly when the project's
+            # partition table (the file sdkconfig.defaults selects, see
+            # resolve_partition_table) declares a `data,ota` row — the same predicate
             # tools/generate-flasher-manifests.sh uses to decide whether the
             # generated manifest names the file at all. Keeping this
             # conditional in sync with the generator's is the whole point of
@@ -257,11 +258,12 @@ jobs:
             # disappears loses the requirement here in the same commit that
             # removes it from the manifest, instead of a manifest silently
             # naming a part the build never produced (issue #541).
-            if has_otadata_partition "$project_dir/partitions.csv"; then
+            partition_table=$(resolve_partition_table "$project_dir")
+            if has_otadata_partition "$partition_table"; then
               if [ -f "$src/ota_data_initial.bin" ]; then
                 cp "$src/ota_data_initial.bin" "$dest/"
               else
-                echo "::error::missing ota_data_initial.bin for $project_id (partitions.csv declares a data,ota row, looked in $src/ota_data_initial.bin)"
+                echo "::error::missing ota_data_initial.bin for $project_id ($partition_table declares a data,ota row, looked in $src/ota_data_initial.bin)"
                 missing+=("$project_id: ota_data_initial.bin")
               fi
             fi
