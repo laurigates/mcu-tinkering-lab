@@ -29,6 +29,7 @@ idf_component_register(
         "${UNIFIED_MAIN}/buzzer.c"
         "${UNIFIED_MAIN}/ultrasonic.c"
         "${UNIFIED_MAIN}/audio_player.c"
+        "${UNIFIED_MAIN}/voice_fx_core.c"
         "${UNIFIED_MAIN}/mic_pdm.c"
     EMBED_FILES
         # Spoken check names: raw 24 kHz mono s16 PCM, rendered offline by
