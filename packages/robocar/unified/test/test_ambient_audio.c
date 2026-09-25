@@ -601,8 +601,11 @@ static void test_an_expired_latch_is_not_reported_as_live(void)
     ASSERT(ambient_audio_loud_score(FRAME_MS + 190000u) == 0u);
     ASSERT(ambient_audio_shape_score(FRAME_MS + 190000u) == 0u);
 
-    /* The same expiry across the uint32 wrap: an elapsed test written as
-     * `now > stamp + ttl` would report this latch live for another 49 days. */
+    /* The same expiry across the uint32 wrap. `stamp + ttl` overflows here, so
+     * an expiry written as `now >= stamp + ttl` reads this latch as already
+     * expired one frame after the bang, before `now` itself has wrapped. The
+     * pre-wrap sample is the one that catches it; the post-wrap ones pin the
+     * TTL on the far side. */
     ambient_fingerprint_t quiet;
     ambient_fingerprint_t loud;
     fp_alt(QUIET_AMP, &quiet);
@@ -617,6 +620,7 @@ static void test_an_expired_latch_is_not_reported_as_live(void)
 
     const uint32_t bang = 0xFFFFF000u;
     ambient_audio_note(&loud, bang);
+    ASSERT(ambient_audio_loud_score(bang + FRAME_MS) >= AMBIENT_LOUD_THRESHOLD_DB_DEFAULT);
     ASSERT(ambient_audio_loud_score(0x00001000u) >= AMBIENT_LOUD_THRESHOLD_DB_DEFAULT);
     ASSERT(ambient_audio_loud_score(bang + ttl) == 0u);
 }
