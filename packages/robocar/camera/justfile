@@ -5,6 +5,9 @@ import '../../../tools/esp32-idf.just'
 import '../../../tools/esp32-credentials.just'
 
 project_dir := "packages/robocar/camera"
+# = the CMake project() name, which is what `idf.py build` writes to build/.
+# flasher.json's otaAssetName (robocar-camera.bin) is the RELEASE asset name, not this.
+bin_name := "esp32-cam-robocar"
 port := env("PORT", _detected_serial)
 target := "esp32"
 
@@ -40,6 +43,11 @@ shell: _idf-shell
 ##########
 
 # Flash firmware to ESP32-CAM (GPIO0 must be connected to GND)
+#
+# Writes ota_data_initial.bin for the same reason robocar-main does: the table
+# is ota_0/ota_1 with NO factory partition and CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y,
+# so a board that has OTA'd to ota_1 keeps booting ota_1 unless otadata is reset
+# while the new image goes into ota_0.
 [group: "device"]
 flash: require-port
     #!/usr/bin/env bash
@@ -50,7 +58,8 @@ flash: require-port
         write-flash --flash-mode dio --flash-size detect \
         0x1000 build/bootloader/bootloader.bin \
         0x8000 build/partition_table/partition-table.bin \
-        0x10000 build/robocar-camera.bin
+        0xd000 build/ota_data_initial.bin \
+        0x10000 build/{{bin_name}}.bin
     echo "Flashed OK — disconnect GPIO0 from GND and reset"
 
 # Monitor serial output (Ctrl-C to stop)
