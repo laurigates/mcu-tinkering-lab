@@ -321,8 +321,8 @@ pca9685_set_pwm_values`.
 
 That test reads the driver from `managed_components/`, which is gitignored, so
 it is **skipped with a `STATUS` message in a fresh checkout** and appears once
-`just robocar-unified::build` has fetched the dependency. The other 21 suites do
-not need it. Two declaration-only shims in `test/include/pca9685_decl/` keep the
+`just robocar-unified::build` has fetched the dependency. No other suite needs
+it. Two declaration-only shims in `test/include/pca9685_decl/` keep the
 remaining targets configuring without a prior firmware build; they are stubs,
 and the firmware build — which uses the real headers — is what catches any
 disagreement.
