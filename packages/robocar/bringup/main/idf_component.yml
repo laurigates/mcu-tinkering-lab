@@ -15,11 +15,9 @@ dependencies:
   esp-idf-lib/i2cdev: '^2.0.0'
   esp-idf-lib/tca9548: '^1.0.0'
   esp-idf-lib/mcp23x17: '^1.1.7'
-  # pca9685: pinned to the fork branch carrying the out-of-bounds fix, exactly
-  # as unified pins it. The published esp-idf-lib/pca9685@1.0.0 indexes its
-  # stack buffer by the ABSOLUTE channel number while sizing it for `channels`
-  # entries, so motor_stop()'s (first_ch = 8, count = 6) writes past the end.
-  # A bringup sweep drives the motors, so this project reaches that path too.
-  esp-idf-lib/pca9685:
-    git: https://github.com/laurigates/pca9685.git
-    version: 'bugfix-issue-1-set-pwm-values-indexing'
+  # pca9685: floor at 1.0.8, the first release carrying esp-idf-lib/pca9685#2.
+  # Earlier releases index the stack buffer in pca9685_set_pwm_values() by the
+  # ABSOLUTE channel number while sizing it for `channels` entries, so
+  # motor_stop()'s (first_ch = 8, count = 6) writes 32 bytes past a 24-byte VLA
+  # and double-faults the board. Do not lower this floor.
+  esp-idf-lib/pca9685: '^1.0.8'
