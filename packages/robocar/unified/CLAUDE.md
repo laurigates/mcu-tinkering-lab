@@ -304,19 +304,18 @@ snapshot of the `UncleRus/esp-idf-lib` monorepo living under `robocar/main` and
 reached from here by symlink; that monorepo is archived, and the library now
 ships as per-component repos under the `esp-idf-lib` org.
 
-**`pca9685` is pinned to a fork branch, and that is deliberate.** The published
-`esp-idf-lib/pca9685@1.0.0` still indexes its stack buffer by the *absolute*
-channel number while sizing it for `channels` entries, so any `first_ch > 0`
-writes past the end — `motor_stop()`'s (8, 6) wrote 32 bytes past a 24-byte VLA
-and double-faulted this board on the first boot with the PCA9685 fitted. The fix
-is upstream as `esp-idf-lib/pca9685#2` (issue #1) and unmerged; until it lands
-and a release ships it, the manifest points at
-`laurigates/pca9685@bugfix-issue-1-set-pwm-values-indexing`.
+**`pca9685` is floored at `'^1.0.8'`, and the floor is load-bearing.** Releases
+up to 1.0.7 index the stack buffer in `pca9685_set_pwm_values()` by the
+*absolute* channel number while sizing it for `channels` entries, so any
+`first_ch > 0` writes past the end — `motor_stop()`'s (8, 6) wrote 32 bytes past
+a 24-byte VLA and double-faulted this board on the first boot with the PCA9685
+fitted. The fix landed upstream as `esp-idf-lib/pca9685#2` and shipped in 1.0.8;
+until then the manifest pointed at a fork branch (issue #526).
 
-Do **not** "tidy" that into a plain `'^1.0.0'` constraint — it reintroduces a
-board-crashing bug. `test_pca9685_multi` compiles the resolved driver under
+Do **not** relax it to `'^1.0.0'` — the resolver could then pick a release with
+the board-crashing bug. `test_pca9685_multi` compiles the resolved driver under
 AddressSanitizer specifically to catch that, and was control-tested against the
-registry source: it aborts with `stack-buffer-overflow ... in
+1.0.0 registry source: it aborts with `stack-buffer-overflow ... in
 pca9685_set_pwm_values`.
 
 That test reads the driver from `managed_components/`, which is gitignored, so
@@ -675,7 +674,7 @@ Key settings that matter:
 - Don't change the PCA9685 frequency without re-sending the servo counts — call `servo_set_pwm_frequency()`, never `i2c_bus_pca9685_set_frequency()` directly. The prescaler write leaves every channel's count in place, and a count is a fraction of the period: the 50 Hz centre count (307) replayed at 200 Hz is a ~0.37 ms pulse, which drove both servos into their end stops on the 2026-09-15 bench. `servo_set_pwm_frequency()` releases the enabled outputs, changes the prescaler and re-sends each angle; `test_a_frequency_change_keeps_every_pulse_width` pins it
 - Don't give a full-on or full-off channel a phase offset in `pca9685_phase.c`. Those are flag bits, and on this board they are the motor direction pins: a phase offset converts a steady logic level into a ~197 Hz square wave on IN1/IN2
 - Don't patch the PCA9685 driver in `managed_components/` to add phase support — it is a fetched dependency, so the edit is wiped by the next `idf.py reconfigure`. Phase lives in `pca9685_phase.c`, which is ours
-- Don't relax `esp-idf-lib/pca9685` to a plain `'^1.0.0'` constraint. The published 1.0.0 still has the out-of-bounds write that double-faulted this board; the manifest points at the fork branch carrying the fix until `esp-idf-lib/pca9685#2` merges *and* a release ships it. `test_pca9685_multi` catches the swap under ASan, but only when `managed_components/` is populated
+- Don't lower the `esp-idf-lib/pca9685` floor below `'^1.0.8'`. Releases up to 1.0.7 carry the out-of-bounds write that double-faulted this board. `test_pca9685_multi` catches it under ASan, but only when `managed_components/` is populated
 - Don't "tidy" the motor channels back into a per-motor IN1/IN2/PWM order. They are in the motor driver's pin order on purpose, and that ordering is a claim about **soldered wires** — reordering the `#define`s is a rewiring instruction, not a refactor, and the firmware will follow the new numbers perfectly onto the wrong pins
 - Don't write the pan/tilt servos from anywhere except `reactive_controller.c` and the console lease path (`reactive_controller_head_hold()` for `servo pan|tilt`, `reactive_controller_head_external()` around `servo exercise`). The executor re-asserts the head every refresh interval and aims it at 30 Hz, so a second writer is overwritten within a second and fights the aiming loop meanwhile — the same failure the motors had before `reactive_controller_manual()`
 - Don't add a head-aiming planner tool (`look`, `aim`, a `GOAL_KIND_LOOK`), as was ruled for `speak`. The planner calls every 15 s and sleeps when idle, so it cannot follow a moving target; the 30 Hz executor can. `track` stays the only aiming primitive and the executor chooses head, wheels or both — see ADR-025
