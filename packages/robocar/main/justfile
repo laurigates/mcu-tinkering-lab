@@ -4,7 +4,9 @@
 import '../../../tools/esp32-idf.just'
 
 project_dir := "packages/robocar/main"
-bin_name := "robocar-main"
+# = the CMake project() name, which is what `idf.py build` writes to build/.
+# flasher.json's otaAssetName (robocar-main.bin) is the RELEASE asset name, not this.
+bin_name := "idf-robocar"
 port := env("PORT", _detected_serial)
 target := "esp32"
 

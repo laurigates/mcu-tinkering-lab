@@ -79,6 +79,9 @@ require-cam-port:
     fi
 
 # Flash main controller
+#
+# Same image set and offsets as `just robocar-main::flash` (see that recipe for
+# why otadata at 0xd000 is written). The app file is build/<CMake project()>.bin.
 [group: "flash"]
 flash-main: require-main-port
     #!/usr/bin/env bash
@@ -88,7 +91,8 @@ flash-main: require-main-port
         write-flash --flash-mode dio --flash-size detect \
         0x1000 {{robocar_main_dir}}/build/bootloader/bootloader.bin \
         0x8000 {{robocar_main_dir}}/build/partition_table/partition-table.bin \
-        0x10000 {{robocar_main_dir}}/build/robocar-main.bin
+        0xd000 {{robocar_main_dir}}/build/ota_data_initial.bin \
+        0x10000 {{robocar_main_dir}}/build/idf-robocar.bin
     echo "Main controller flashed OK"
 
 # Flash camera module (GPIO0 must be connected to GND)
@@ -102,7 +106,8 @@ flash-cam: require-cam-port
         write-flash --flash-mode dio --flash-size detect \
         0x1000 {{robocar_camera_dir}}/build/bootloader/bootloader.bin \
         0x8000 {{robocar_camera_dir}}/build/partition_table/partition-table.bin \
-        0x10000 {{robocar_camera_dir}}/build/robocar-camera.bin
+        0xd000 {{robocar_camera_dir}}/build/ota_data_initial.bin \
+        0x10000 {{robocar_camera_dir}}/build/esp32-cam-robocar.bin
     echo "Camera flashed OK — disconnect GPIO0 from GND and reset"
 
 # Monitor main controller serial output (Ctrl-C to stop)

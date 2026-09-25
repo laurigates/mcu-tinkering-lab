@@ -472,13 +472,15 @@ Each firmware binary must fit within the OTA partition — **0x1D0000 = 1,900,54
 overflow; CI re-runs the same check and reports the headroom per project:
 
 ```bash
-# After build, check locally
-ls -lh build/robocar-camera.bin build/robocar-main.bin
+# After build, check locally. The build names each image after its CMake
+# project(); robocar-camera.bin / robocar-main.bin are only the release asset
+# names.
+ls -lh packages/robocar/camera/build/esp32-cam-robocar.bin packages/robocar/main/build/idf-robocar.bin
 
 # Expected output should show binaries < 0x1D0000 (1,900,544 bytes)
 # Example:
-# -rw-r--r--  1 user  group  1.2M  Jan 15 12:34 robocar-camera.bin
-# -rw-r--r--  1 user  group  950K  Jan 15 12:34 robocar-main.bin
+# -rw-r--r--  1 user  group  1.2M  Jan 15 12:34 esp32-cam-robocar.bin
+# -rw-r--r--  1 user  group  950K  Jan 15 12:34 idf-robocar.bin
 ```
 
 ### 7.2 If Binary Exceeds Limit
@@ -511,7 +513,7 @@ If a binary approaches or exceeds the partition size:
    ```bash
    rm -rf build
    idf.py build
-   ls -lh build/robocar-camera.bin
+   ls -lh build/esp32-cam-robocar.bin
    ```
 
 ---
