@@ -264,8 +264,8 @@ static void test_changed_shape_at_identical_level(void)
     ambient_audio_mark_spoken();
     ambient_audio_note(&high, FRAME_MS);
 
-    ASSERT(ambient_audio_loud_score() < AMBIENT_LOUD_THRESHOLD_DB_DEFAULT);
-    ASSERT(ambient_audio_shape_score() >= AMBIENT_SHAPE_THRESHOLD_DB_DEFAULT);
+    ASSERT(ambient_audio_loud_score(FRAME_MS) < AMBIENT_LOUD_THRESHOLD_DB_DEFAULT);
+    ASSERT(ambient_audio_shape_score(FRAME_MS) >= AMBIENT_SHAPE_THRESHOLD_DB_DEFAULT);
     ASSERT(ambient_audio_novel(FRAME_MS));
 }
 
@@ -289,17 +289,17 @@ static void test_a_steady_sound_is_absorbed_by_the_floor(void)
     for (int i = 0; i < 50; ++i, t += FRAME_MS) {
         ambient_audio_note(&quiet, t);
     }
-    ASSERT(ambient_audio_loud_score() == 0u);
+    ASSERT(ambient_audio_loud_score(t) == 0u);
 
     const uint32_t onset = t;
     ambient_audio_note(&loud, t);
     t += FRAME_MS;
-    ASSERT(ambient_audio_loud_score() >= AMBIENT_LOUD_THRESHOLD_DB_DEFAULT);
+    ASSERT(ambient_audio_loud_score(t) >= AMBIENT_LOUD_THRESHOLD_DB_DEFAULT);
 
     uint32_t absorbed_at = 0u;
     for (int i = 0; i < 400; ++i, t += FRAME_MS) {
         ambient_audio_note(&loud, t);
-        if (absorbed_at == 0u && ambient_audio_loud_score() < AMBIENT_LOUD_THRESHOLD_DB_DEFAULT) {
+        if (absorbed_at == 0u && ambient_audio_loud_score(t) < AMBIENT_LOUD_THRESHOLD_DB_DEFAULT) {
             absorbed_at = t;
         }
     }
@@ -309,7 +309,7 @@ static void test_a_steady_sound_is_absorbed_by_the_floor(void)
      * not be instant either or a real transient would never be heard. */
     ASSERT((absorbed_at - onset) <= 21000u);
     ASSERT((absorbed_at - onset) >= 2000u);
-    ASSERT(ambient_audio_loud_score() < AMBIENT_LOUD_THRESHOLD_DB_DEFAULT);
+    ASSERT(ambient_audio_loud_score(t) < AMBIENT_LOUD_THRESHOLD_DB_DEFAULT);
     ASSERT(ambient_audio_floor_db() > (int16_t)50); /* the floor climbed to meet it */
 }
 
@@ -329,19 +329,19 @@ static void test_a_single_transient_is_not_absorbed(void)
     for (int i = 0; i < 100; ++i, t += FRAME_MS) {
         ambient_audio_note(&quiet, t);
     }
-    ASSERT(ambient_audio_loud_score() == 0u);
+    ASSERT(ambient_audio_loud_score(t) == 0u);
 
     ambient_audio_note(&loud, t);
     t += FRAME_MS;
-    const unsigned peak = ambient_audio_loud_score();
+    const unsigned peak = ambient_audio_loud_score(t);
     ASSERT(peak >= AMBIENT_LOUD_THRESHOLD_DB_DEFAULT);
 
     for (int i = 0; i < 100; ++i, t += FRAME_MS) { /* 6.4 s of quiet room */
         ambient_audio_note(&quiet, t);
     }
     /* Still latched, and NOT inflated by the floor falling back either. */
-    ASSERT(ambient_audio_loud_score() >= AMBIENT_LOUD_THRESHOLD_DB_DEFAULT);
-    ASSERT(ambient_audio_loud_score() <= peak);
+    ASSERT(ambient_audio_loud_score(t) >= AMBIENT_LOUD_THRESHOLD_DB_DEFAULT);
+    ASSERT(ambient_audio_loud_score(t) <= peak);
 }
 
 static void test_the_latch_expires(void)
@@ -416,8 +416,8 @@ static void test_an_invalid_frame_moves_nothing(void)
     t += FRAME_MS;
 
     const int16_t floor_before = ambient_audio_floor_db();
-    const unsigned loud_before = ambient_audio_loud_score();
-    const unsigned shape_before = ambient_audio_shape_score();
+    const unsigned loud_before = ambient_audio_loud_score(t);
+    const unsigned shape_before = ambient_audio_shape_score(t);
 
     ambient_fingerprint_t bad;
     memset(&bad, 0, sizeof(bad)); /* valid == false */
@@ -427,8 +427,8 @@ static void test_an_invalid_frame_moves_nothing(void)
     ambient_audio_note(NULL, t);
 
     ASSERT(ambient_audio_floor_db() == floor_before);
-    ASSERT(ambient_audio_loud_score() == loud_before);
-    ASSERT(ambient_audio_shape_score() == shape_before);
+    ASSERT(ambient_audio_loud_score(t) == loud_before);
+    ASSERT(ambient_audio_shape_score(t) == shape_before);
 }
 
 /* =========================================================================
@@ -486,8 +486,8 @@ static void test_a_deaf_gate_never_reports_novelty(void)
         ASSERT(!ambient_audio_has_measurement());
         /* Both scores read zero while it claims nothing — the pair is the
          * signature to look for in a planner log. */
-        ASSERT(ambient_audio_loud_score() == 0u);
-        ASSERT(ambient_audio_shape_score() == 0u);
+        ASSERT(ambient_audio_loud_score(t) == 0u);
+        ASSERT(ambient_audio_shape_score(t) == 0u);
         /* The planner marks on every utterance it posts, and speech can be
          * licensed by the VIEW alone. mark_spoken() must not turn that into a
          * valid reference built from a frame nobody ever measured. */
@@ -578,6 +578,53 @@ static void test_a_gate_that_goes_deaf_falls_silent_within_the_ttl(void)
     ASSERT(!ambient_audio_novel(past_ttl));
 }
 
+static void test_an_expired_latch_is_not_reported_as_live(void)
+{
+    /* Issue #579. The `mic` and `voice` status lines and the planner's log line
+     * print these scores beside the gate's verdict. On the bench a peak latched
+     * minutes earlier kept printing as `loud: 32/12 dB` next to `gate: .`,
+     * which reads as a stuck-open gate and cost two wrong diagnoses. A latch
+     * the gate no longer honours must score 0 in the getters too, so the number
+     * and the verdict can never disagree. */
+    arm_both_subgates(); /* both latches set at FRAME_MS */
+    const uint32_t ttl = ambient_audio_latch_ttl_ms();
+
+    const uint32_t last_live = FRAME_MS + ttl - 1u;
+    ASSERT(ambient_audio_loud_score(last_live) >= AMBIENT_LOUD_THRESHOLD_DB_DEFAULT);
+    ASSERT(ambient_audio_shape_score(last_live) >= AMBIENT_SHAPE_THRESHOLD_DB_DEFAULT);
+
+    const uint32_t expired = FRAME_MS + ttl;
+    ASSERT(ambient_audio_loud_score(expired) == 0u);
+    ASSERT(ambient_audio_shape_score(expired) == 0u);
+    ASSERT(!ambient_audio_event(expired));
+    /* 190 s later, the span of the three bench `mic` reads. */
+    ASSERT(ambient_audio_loud_score(FRAME_MS + 190000u) == 0u);
+    ASSERT(ambient_audio_shape_score(FRAME_MS + 190000u) == 0u);
+
+    /* The same expiry across the uint32 wrap. `stamp + ttl` overflows here, so
+     * an expiry written as `now >= stamp + ttl` reads this latch as already
+     * expired one frame after the bang, before `now` itself has wrapped. The
+     * pre-wrap sample is the one that catches it; the post-wrap ones pin the
+     * TTL on the far side. */
+    ambient_fingerprint_t quiet;
+    ambient_fingerprint_t loud;
+    fp_alt(QUIET_AMP, &quiet);
+    fp_alt(LOUD_AMP, &loud);
+
+    ambient_audio_init();
+    uint32_t t = 0xFFFF0000u;
+    for (int i = 0; i < 20; ++i, t += FRAME_MS) {
+        ambient_audio_note(&quiet, t);
+    }
+    ambient_audio_mark_spoken();
+
+    const uint32_t bang = 0xFFFFF000u;
+    ambient_audio_note(&loud, bang);
+    ASSERT(ambient_audio_loud_score(bang + FRAME_MS) >= AMBIENT_LOUD_THRESHOLD_DB_DEFAULT);
+    ASSERT(ambient_audio_loud_score(0x00001000u) >= AMBIENT_LOUD_THRESHOLD_DB_DEFAULT);
+    ASSERT(ambient_audio_loud_score(bang + ttl) == 0u);
+}
+
 static void test_threshold_zero_disables_each_subgate(void)
 {
     /* THE polarity test. scene_change is AND-ed, so its 0 means "always novel";
@@ -586,8 +633,8 @@ static void test_threshold_zero_disables_each_subgate(void)
      * getting it backwards makes the robot speak on every permitted cycle and
      * look like a tuning problem. */
     arm_both_subgates();
-    ASSERT(ambient_audio_loud_score() >= AMBIENT_LOUD_THRESHOLD_DB_DEFAULT);
-    ASSERT(ambient_audio_shape_score() >= AMBIENT_SHAPE_THRESHOLD_DB_DEFAULT);
+    ASSERT(ambient_audio_loud_score(FRAME_MS) >= AMBIENT_LOUD_THRESHOLD_DB_DEFAULT);
+    ASSERT(ambient_audio_shape_score(FRAME_MS) >= AMBIENT_SHAPE_THRESHOLD_DB_DEFAULT);
     ASSERT(ambient_audio_novel(FRAME_MS));
 
     ambient_audio_set_loud_threshold(0);
@@ -618,8 +665,8 @@ static void test_threshold_equal_to_the_score_counts_as_novel(void)
     /* >=, not >. Mirrors test_scene_change's boundary case. */
     arm_both_subgates();
 
-    const unsigned loud = ambient_audio_loud_score();
-    const unsigned shape = ambient_audio_shape_score();
+    const unsigned loud = ambient_audio_loud_score(FRAME_MS);
+    const unsigned shape = ambient_audio_shape_score(FRAME_MS);
     ASSERT(loud > 0u && loud < 255u);
     ASSERT(shape > 0u && shape < 255u);
 
@@ -645,8 +692,8 @@ static void test_mark_spoken_clears_the_latches(void)
 
     ambient_audio_mark_spoken();
     ASSERT(!ambient_audio_novel(FRAME_MS));
-    ASSERT(ambient_audio_loud_score() == 0u);
-    ASSERT(ambient_audio_shape_score() == 0u);
+    ASSERT(ambient_audio_loud_score(FRAME_MS) == 0u);
+    ASSERT(ambient_audio_shape_score(FRAME_MS) == 0u);
 }
 
 /* =========================================================================
@@ -716,6 +763,8 @@ int main(void)
              test_mark_spoken_does_not_adopt_an_unmeasurable_reference);
     test_run("a gate that goes deaf falls silent within the TTL",
              test_a_gate_that_goes_deaf_falls_silent_within_the_ttl);
+    test_run("an expired latch is not reported as live (#579)",
+             test_an_expired_latch_is_not_reported_as_live);
 
     test_run("capture_allowed honours the playback hangover, including the wrap",
              test_capture_allowed_honours_the_playback_hangover);

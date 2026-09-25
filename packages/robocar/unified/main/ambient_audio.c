@@ -260,9 +260,19 @@ void ambient_audio_note(const ambient_fingerprint_t *fp, uint32_t now_ms)
     }
 }
 
-unsigned ambient_audio_loud_score(void)
+/** Whether a latch set at @p set_ms is still evidence at @p now_ms. An unsigned
+ *  difference, never `now > stamp + ttl`, so the answer survives the uint32
+ *  millisecond wrap at day 49. */
+static bool latch_live(bool valid, uint32_t set_ms, uint32_t now_ms)
 {
-    if (!s_loud_valid) {
+    return valid && (now_ms - set_ms) < s_latch_ttl_ms;
+}
+
+unsigned ambient_audio_loud_score(uint32_t now_ms)
+{
+    /* Timestamp read before the value: a torn read then expires a live latch
+     * rather than reviving a dead one, i.e. it fails toward silence. */
+    if (!latch_live(s_loud_valid, s_loud_ms, now_ms)) {
         return 0u;
     }
     /* Measure the peak against the floor as it stands NOW, but never below the
@@ -277,9 +287,9 @@ unsigned ambient_audio_loud_score(void)
     return (unsigned)round_db(score);
 }
 
-unsigned ambient_audio_shape_score(void)
+unsigned ambient_audio_shape_score(uint32_t now_ms)
 {
-    return s_shape_valid ? s_shape_peak : 0u;
+    return latch_live(s_shape_valid, s_shape_ms, now_ms) ? s_shape_peak : 0u;
 }
 
 int16_t ambient_audio_floor_db(void)
@@ -293,25 +303,16 @@ bool ambient_audio_has_measurement(void)
 }
 
 /** The two latches, each required to be over threshold AND younger than the
- *  TTL. Shared by novel() and event(); the ONLY difference between those two is
- *  the first-impression branch novel() adds on top. */
+ *  TTL — both of which the score getters already fold in, so the gate reads
+ *  exactly the numbers the status lines print. Shared by novel() and event();
+ *  the ONLY difference between those two is the first-impression branch novel()
+ *  adds on top. */
 static bool ambient_latched_event(uint32_t now_ms)
 {
-    bool loud = false;
-    if (s_loud_threshold != 0u && s_loud_valid) {
-        /* Timestamp read before the value: a torn read then expires a live latch
-         * rather than reviving a dead one, i.e. it fails toward silence. */
-        const uint32_t age = now_ms - s_loud_ms;
-        loud = (age < s_latch_ttl_ms) && (ambient_audio_loud_score() >= (unsigned)s_loud_threshold);
-    }
-
-    bool shape = false;
-    if (s_shape_threshold != 0u && s_shape_valid) {
-        const uint32_t age = now_ms - s_shape_ms;
-        shape =
-            (age < s_latch_ttl_ms) && (ambient_audio_shape_score() >= (unsigned)s_shape_threshold);
-    }
-
+    const bool loud = (s_loud_threshold != 0u) &&
+                      (ambient_audio_loud_score(now_ms) >= (unsigned)s_loud_threshold);
+    const bool shape = (s_shape_threshold != 0u) &&
+                       (ambient_audio_shape_score(now_ms) >= (unsigned)s_shape_threshold);
     return loud || shape;
 }
 

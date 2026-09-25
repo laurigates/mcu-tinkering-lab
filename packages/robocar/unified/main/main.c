@@ -605,9 +605,9 @@ static void handle_voice_cmd(const char *buf)
         printf("  scene:  %u/%u (%s)\n", scene_change_score(), (unsigned)scene_change_threshold(),
                scene_change_threshold() == 0 ? "gate off"
                                              : (scene_change_novel() ? "new" : "same"));
-        printf("  loud:   %u/%u dB (floor %d dB)\n", ambient_audio_loud_score(),
+        printf("  loud:   %u/%u dB (floor %d dB)\n", ambient_audio_loud_score(now_ms),
                (unsigned)ambient_audio_loud_threshold(), (int)ambient_audio_floor_db());
-        printf("  sound:  %u/%u dB (%s)\n", ambient_audio_shape_score(),
+        printf("  sound:  %u/%u dB (%s)\n", ambient_audio_shape_score(now_ms),
                (unsigned)ambient_audio_shape_threshold(),
                !ambient_audio_has_measurement() ? "DEAF — nothing ever heard"
                : ambient_audio_novel(now_ms)    ? "new"
@@ -736,7 +736,8 @@ static void handle_voice_cmd(const char *buf)
         }
         ambient_audio_set_loud_threshold((uint8_t)db);
         printf("voice: loud=%u dB (now %u dB, floor %d dB)\n",
-               (unsigned)ambient_audio_loud_threshold(), ambient_audio_loud_score(),
+               (unsigned)ambient_audio_loud_threshold(),
+               ambient_audio_loud_score((uint32_t)(esp_timer_get_time() / 1000)),
                (int)ambient_audio_floor_db());
         return;
     }
@@ -749,7 +750,7 @@ static void handle_voice_cmd(const char *buf)
         }
         ambient_audio_set_shape_threshold((uint8_t)db);
         printf("voice: sound=%u dB (now %u dB)\n", (unsigned)ambient_audio_shape_threshold(),
-               ambient_audio_shape_score());
+               ambient_audio_shape_score((uint32_t)(esp_timer_get_time() / 1000)));
         return;
     }
 
@@ -1219,8 +1220,8 @@ static void handle_mic_cmd(const char *buf)
         printf("  gate:   DEAF — no measurable frame has ever reached it, so it reports "
                "no novelty\n");
     }
-    printf("  loud:   %u/%u dB    sound: %u/%u dB\n", ambient_audio_loud_score(),
-           (unsigned)ambient_audio_loud_threshold(), ambient_audio_shape_score(),
+    printf("  loud:   %u/%u dB    sound: %u/%u dB\n", ambient_audio_loud_score(now_ms),
+           (unsigned)ambient_audio_loud_threshold(), ambient_audio_shape_score(now_ms),
            (unsigned)ambient_audio_shape_threshold());
     printf("  frames: %u accepted, %u muted by playback\n",
            (unsigned)ambient_listener_frames_accepted(), (unsigned)ambient_listener_frames_muted());
