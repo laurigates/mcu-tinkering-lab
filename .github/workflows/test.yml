@@ -43,9 +43,9 @@ jobs:
       c-code: ${{ steps.filter.outputs.c-code }}
       any-code: ${{ steps.filter.outputs.any-code }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
 
-      - uses: dorny/paths-filter@v4
+      - uses: dorny/paths-filter@v4.0.3
         id: filter
         if: github.event_name != 'workflow_dispatch'
         with:
@@ -78,19 +78,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v6.3.0
         with:
-          python-version: '3.11'
+          python-version: '3.11.16'
 
       # Pinned: uv 0.12.14 refuses to install dracopy into .venv/lib64
       # ("Cannot install into symlinked directory", astral-sh/uv#21692), which
       # failed the simulation sync below. 0.12.10 is the last version this job
       # ran green on. Bump deliberately, together with the other uv pins.
       - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@v7.6.0
         with:
           version: '0.12.10'
 
@@ -98,7 +98,7 @@ jobs:
         run: pip install pre-commit
 
       - name: Cache pre-commit environments
-        uses: actions/cache@v5
+        uses: actions/cache@v5.1.0
         with:
           path: ~/.cache/pre-commit
           key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
@@ -124,12 +124,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v6.3.0
         with:
-          python-version: '3.11'
+          python-version: '3.11.16'
 
       # Pinned: see the `Install uv` step in Code Quality Checks above.
       - name: Install UV
@@ -151,7 +151,7 @@ jobs:
             -v
 
       - name: Archive coverage reports
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: coverage-reports-${{ github.sha }}
           path: |
@@ -160,7 +160,7 @@ jobs:
           retention-days: 30
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v7
+        uses: codecov/codecov-action@v7.1.1
         if: always()
         with:
           files: packages/robocar/simulation/coverage.xml
@@ -177,7 +177,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
       - name: Install cppcheck
         run: sudo apt-get update && sudo apt-get install -y cppcheck
@@ -189,7 +189,7 @@ jobs:
         run: tools/cquality.sh lint --advisory
 
       - name: Upload cppcheck report
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: cppcheck-report-${{ github.sha }}
           path: tmp/cppcheck-report.txt
@@ -204,7 +204,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
       - name: Install clang-format
         # Pin to 18.1.8 to match the pre-commit hook (mirrors-clang-format v18.1.8).

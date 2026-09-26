@@ -2,10 +2,10 @@
 name = "switch-controller-usb-test"
 version = "0.2.0"
 description = "Nintendo Switch Pro Controller USB protocol testing tools"
-requires-python = ">=3.11"
+requires-python = "==3.14.7"
 dependencies = [
-    "hidapi>=0.14.0",
-    "pyserial>=3.5",
+    "hidapi==0.15.0",
+    "pyserial==3.5",
 ]
 
 [project.scripts]

@@ -34,7 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
       - name: Install ARM toolchain
         run: |
@@ -47,7 +47,7 @@ jobs:
       # immutable per tag — cache it keyed on the pinned version only.
       - name: Cache Pico SDK
         id: sdk-cache
-        uses: actions/cache@v5
+        uses: actions/cache@v5.1.0
         with:
           path: ~/pico-sdk
           key: pico-sdk-${{ runner.os }}-${{ env.PICO_SDK_VERSION }}
@@ -63,7 +63,7 @@ jobs:
       # the firmware build never fetches it mid-build.
       - name: Cache picotool
         id: picotool-cache
-        uses: actions/cache@v5
+        uses: actions/cache@v5.1.0
         with:
           path: ~/picotool-install
           key: picotool-${{ runner.os }}-${{ env.PICO_SDK_VERSION }}
@@ -100,7 +100,7 @@ jobs:
           fi
 
       - name: Archive firmware binaries
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: ${{ inputs.project }}-firmware-${{ github.sha }}
           path: |

@@ -34,7 +34,7 @@ jobs:
       project_count: ${{ steps.discover.outputs.project_count }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
         with:
           ref: ${{ github.event.release.tag_name || inputs.release_tag }}
 
@@ -88,7 +88,7 @@ jobs:
       matrix: ${{ fromJson(needs.discover-projects.outputs.matrix) }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
         with:
           submodules: recursive
           ref: ${{ github.event.release.tag_name || inputs.release_tag }}
@@ -125,7 +125,7 @@ jobs:
       # tools/check-app-partition-fit.sh, so the script comes from the
       # revision this workflow file was loaded from, not from the tag.
       - name: Checkout workflow revision (for tools/ helpers)
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
         with:
           ref: ${{ github.workflow_sha }}
           sparse-checkout: |
@@ -142,7 +142,7 @@ jobs:
       # check fails here instead of passing by absence (issue #556). $OLDPWD
       # is the repo root after the cd; the action runs this via `bash -c`.
       - name: Build ${{ matrix.project }}
-        uses: espressif/esp-idf-ci-action@v1
+        uses: espressif/esp-idf-ci-action@v1.2.0
         with:
           esp_idf_version: ${{ env.IDF_VERSION }}
           target: ${{ matrix.target }}
@@ -152,7 +152,7 @@ jobs:
             bash "$OLDPWD/workflow-tools/tools/check-app-partition-fit.sh" .
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: firmware-${{ matrix.project }}
           path: |
@@ -177,7 +177,7 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
         with:
           ref: ${{ github.event.release.tag_name || inputs.release_tag }}
 
@@ -193,7 +193,7 @@ jobs:
       # separately so the predicate is always available, regardless of how
       # old the target tag is.
       - name: Checkout workflow revision (for tools/lib helpers)
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
         with:
           ref: ${{ github.workflow_sha }}
           sparse-checkout: |
@@ -202,7 +202,7 @@ jobs:
           path: workflow-tools
 
       - name: Download all firmware artifacts
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v8.0.1
         with:
           pattern: firmware-*
           path: artifacts
@@ -331,11 +331,11 @@ jobs:
           cp firmware/projects.json _site/projects.json
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v5
+        uses: actions/upload-pages-artifact@v5.0.0
 
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v5
+        uses: actions/deploy-pages@v5.0.1
 
       - name: Prepare distinct release assets
         run: |
