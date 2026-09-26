@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.7](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-camera-v0.1.6...robocar-camera-v0.1.7) (2026-09-26)
+
+
+### Bug Fixes
+
+* **robocar:** flash recipes write otadata and the app file the build emits ([#598](https://github.com/laurigates/mcu-tinkering-lab/issues/598)) ([095baa4](https://github.com/laurigates/mcu-tinkering-lab/commit/095baa47e873406bae8c134c00497f5195aaa993))
+
 ## [0.1.6](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-camera-v0.1.5...robocar-camera-v0.1.6) (2026-09-13)
 
 
