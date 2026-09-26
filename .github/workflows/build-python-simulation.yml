@@ -26,12 +26,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v6.3.0
         with:
-          python-version: '3.11'
+          python-version: '3.11.16'
 
       # Pinned: uv 0.12.14 refuses to install dracopy into .venv/lib64
       # ("Cannot install into symlinked directory", astral-sh/uv#21692).

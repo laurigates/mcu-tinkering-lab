@@ -27,20 +27,20 @@ jobs:
     name: Verify rendered SVGs match circuit source
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
 
       # cairosvg dlopens libcairo at import time. Ubuntu runners don't ship
       # it by default in all images, so install explicitly.
       - name: Install system cairo
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libcairo2
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v6.3.0
         with:
-          python-version: '3.11'
+          python-version: '3.11.16'
 
       # Pinned with the other uv installs: 0.12.14 regressed wheel installs into
       # symlinked venv dirs (astral-sh/uv#21692).
-      - uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@v7.6.0
         with:
           version: '0.12.10'
 
