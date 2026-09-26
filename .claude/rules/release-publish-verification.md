@@ -64,12 +64,17 @@ published. See §5.
 GitHub Pages serves through Fastly, which **does not include the query string in
 its cache key**. Measured with a control: a brand-new path with `?v=111` returns
 `x-cache: MISS`; the same path with `?v=222` returns `x-cache: HIT`; a second
-brand-new path returns `MISS`. So `?v=${{ github.run_id }}` appended to a probe
-URL changes nothing.
+brand-new path returns `MISS`. The Pages probe used to append
+`?v=${{ github.run_id }}` to each URL; it changed nothing, and #604 removed it.
 
 `curl --retry-all-errors` does not help either: curl exits 0 on a 404 without
 `--fail`, so no retry engages (0.17 s, one request — against ~31 s for a
-genuinely retried refused connection). Tracked in #542.
+genuinely retried refused connection). The probe keeps its retry flags for
+connection-level transients only; `--fail` was deliberately not added, because a
+retried 404 hits the same cache entry and returns the same verdict (#542).
+A stale cached 404 can still turn the probe red; what stops it suppressing a
+good release is step ordering — the probe runs after the release assets are
+published and verified.
 
 **Cache-bust a Pages URL by changing the path, not the query**, and treat retry
 flags as covering connection-level transients only.
