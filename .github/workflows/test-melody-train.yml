@@ -36,7 +36,7 @@ jobs:
         with:
           # Pinned with the other uv installs: 0.12.14 regressed wheel installs
           # into symlinked venv dirs (astral-sh/uv#21692).
-          version: '0.12.10'
+          version: '0.12.18'
           enable-cache: true
           cache-dependency-glob: packages/audio/melody-detector/training/uv.lock
 

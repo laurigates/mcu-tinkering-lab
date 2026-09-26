@@ -76,7 +76,7 @@ dev = [
     # An unpinned resolve reddened every PR with no commit to explain it
     # (issue #515). Bump deliberately, verifying `uv run ty check src/`
     # still passes, rather than dropping the pin.
-    "ty==0.0.80",
+    "ty==0.0.83",
     "types-PyYAML",
     "types-toml",
 
