@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.9](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.8...robocar-unified-v0.2.9) (2026-09-26)
+
+
+### Bug Fixes
+
+* **robocar-unified:** expire the ambient latch in the score getters ([#599](https://github.com/laurigates/mcu-tinkering-lab/issues/599)) ([55dac27](https://github.com/laurigates/mcu-tinkering-lab/commit/55dac2738f8e01a15c052c7cf3020a28d60b9d46))
+
+
+### Documentation
+
+* **claude:** stop hard-coding the robocar-unified suite count ([#602](https://github.com/laurigates/mcu-tinkering-lab/issues/602)) ([b458905](https://github.com/laurigates/mcu-tinkering-lab/commit/b458905ed9f0a7e0df367f54fbbce84da0110e39))
+
 ## [0.2.8](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.7...robocar-unified-v0.2.8) (2026-09-24)
 
 
