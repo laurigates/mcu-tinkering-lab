@@ -131,7 +131,7 @@ In order. The order is load-bearing — see the header comment in `main/checks.c
 | `i2c-scan` | **Every mux channel scanned, every address that answers listed.** The most useful line in the sweep while an iron is hot |
 | `oled` | SSD1306 on channel 1, initialised and cleared |
 | `leds` | Both RGB LEDs through red/green/blue/white |
-| `servos` | Pan ±30°, tilt ±20°, one axis at a time — **at 50, 100, 125 and 200 Hz** — then centre and release |
+| `servos` | Pan ±30°, tilt ±20°, one axis at a time at the board's 100 Hz frame rate, then centre and release |
 | `motors` | **Drives the wheels.** Four pulses: left fwd, left rev, right fwd, right rev |
 | `mcp23017` | Expander on channel 2, pin 0 written and read back |
 | `sonar` | Five HC-SR04 readings; reports the count and the median |
@@ -165,28 +165,24 @@ after 60 s.
 Hold mode is unavailable, and says so in the log, when the I2C bus is down.
 Without the PCA9685, STBY is never driven and nothing can be held.
 
-### The servo check is a frame-rate A/B, not a pass/fail
+### The servo check runs at 100 Hz only
 
-The PCA9685's prescaler is chip-wide — one rate for the servos, the motors and
-the LEDs. An SG90's analog decoder is specified at 50 Hz, but conceding 50 costs
-visible LED flicker and coarse motor PWM, so the number worth knowing is the
-*highest* rate the fitted servos still track. Firmware cannot assert that, so the
-sweep measures it: the same excursion at 50, 100, 125 and 200 Hz, one axis at a
-time, with the pulse widths preserved across each change (within 1 µs of 1500,
-verified on the board), holding ~0.8 s at each off-centre pose so a stall is
-audible.
+The excursion runs at the rate the PCA9685 is brought up at, `PCA9685_FREQ_HZ`
+(100 Hz), the same rate `robocar-unified` ships. The prescaler is chip-wide, so
+the check leaves it alone, and the motors and LEDs never run off-rate. Each
+off-centre pose is held ~0.8 s, long enough for a stall to be audible.
 
-It has already paid for itself: on 2026-09-18 it found these SG90s track at 50,
-100 and 125 Hz and buzz at 200, which is what set `robocar-unified`'s
-`PCA9685_FREQ_HZ` to 100.
+100 Hz was chosen on the 2026-09-18 bench, where these SG90s tracked at 50, 100
+and 125 Hz and buzzed at 200. The rate ladder that measured this was removed
+after it had answered the question. It is in git history if a different servo
+needs the measurement again.
 
 Read the serial lines, which carry the count written and the bus result per
 pose:
 
 ```
-  ===== 125 Hz (period 8000 us) =====
-  125 Hz  pan (ch6)  LEFT   -30 deg -> count  597   ESP_OK
-  125 Hz  tilt(ch7)  UP     +20 deg -> count  881   ESP_OK
+  100 Hz  pan (ch6)  LEFT   -30 deg -> count  ...   ESP_OK
+  100 Hz  tilt(ch7)  UP     +20 deg -> count  ...   ESP_OK
 ```
 
 Each axis is written and reported separately, naming its channel. `servo_set_position()`
@@ -194,18 +190,12 @@ is deliberately not used: it writes pan first and returns early on failure, so a
 pan-side fault would suppress tilt's result entirely — the one thing the log must
 not do when a channel is under suspicion.
 
-- **Tracks up to some rate, buzzes above it** → the frame rate is the fault, and
-  the highest clean rung is the answer. Set `PCA9685_FREQ_HZ` one rung below it:
-  the bench case is unloaded, and a loaded servo has less timing margin.
-- **No rate moves it, every write `ESP_OK`** → downstream of the chip's
-  registers: V+ (servo power), VCC (3.3 V logic), the leads, the servo — or the
-  head binding mechanically, which is what one "dead" servo turned out to be.
-- **Writes fail** → bus or power, and the check names the rate and move it died
-  at.
-
-The prescaler is chip-wide, so this moves the motors and LEDs too. The entry
-frequency is restored before `motors` runs — including when an excursion fails,
-since leaving the board off-rate would mis-report every later check.
+- **Doesn't move, every write `ESP_OK`** → downstream of the chip's registers:
+  V+ (servo power), VCC (3.3 V logic), the leads, the servo — or the head binding
+  mechanically, which is what one "dead" servo turned out to be.
+- **Buzzes or jitters at a pose** → the servo is not tracking 100 Hz. Check it
+  against the bench result above before changing `PCA9685_FREQ_HZ`.
+- **Writes fail** → bus or power, and the check names the move it died at.
 
 ### The amplifier tone is a diagnostic, not a jingle
 
