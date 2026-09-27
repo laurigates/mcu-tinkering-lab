@@ -19,6 +19,7 @@ idf_component_register(
         "cues.c"
         "oled.c"
         "speech.c"
+        "motor_hold.c"
         # --- shared, unmodified, from robocar-unified ---
         "${UNIFIED_MAIN}/i2c_bus.c"
         "${UNIFIED_MAIN}/pca9685_phase.c"

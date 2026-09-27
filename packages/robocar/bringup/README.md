@@ -144,6 +144,27 @@ Three quick high beeps sound first, then four short pulses at ~27% speed. A robo
 with wheels on, sitting near the edge of a bench, will drive off it. Put it on
 its back or clear the bench before running the sweep with a motor driver fitted.
 
+The check PASSes when the PCA9685 accepts the writes. It does not know whether a
+wheel turned.
+
+### Motor hold: BOOT holds one motor on for a multimeter
+
+A 220 ms pulse is too short for a DMM (the ZT-703S samples ~3×/s), and ~27% may
+not start a geared motor at all. Once the sweep is done, each press of the
+XIAO's **BOOT** button steps through:
+
+`off → left fwd → left rev → right fwd → right rev → off`
+
+Each drive state runs one motor at 100%, with the other braked. It sounds the
+three-beep armed cue first and prints what each node should read: STBY, IN1,
+IN2 and PWM, with PCA9685 channel numbers taken from `pin_config.h`, and the
+sign of `O1 − O2` across the motor. Measure along the chain. The first node that
+disagrees with the table is where the fault is. A held state stops by itself
+after 60 s.
+
+Hold mode is unavailable, and says so in the log, when the I2C bus is down.
+Without the PCA9685, STBY is never driven and nothing can be held.
+
 ### The servo check is a frame-rate A/B, not a pass/fail
 
 The PCA9685's prescaler is chip-wide — one rate for the servos, the motors and
