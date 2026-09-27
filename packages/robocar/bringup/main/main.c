@@ -15,7 +15,9 @@
  *
  * HOW IT REPORTS, AND WHY THAT SHAPE
  *
- * It runs the whole sweep once at boot and then idles. It is not console-driven,
+ * It runs the whole sweep once at boot and then idles, with one exception: the
+ * BOOT button then steps through held motor states (motor_hold.h), because a
+ * 220 ms pulse is too short for a multimeter. It is not console-driven,
  * because both serial monitors in use here — `just robocar-bringup::monitor` and
  * the `serial-monitor` helper in the dotfiles — are READ-ONLY and reset the
  * board on attach. A design that needed commands typed at it would mean putting
@@ -51,6 +53,7 @@
 #include "freertos/task.h"
 #include "i2c_bus.h"
 #include "led_controller.h"
+#include "motor_hold.h"
 #include "oled.h"
 #include "pin_config.h"
 #include "speech.h"
@@ -63,6 +66,10 @@ static const char *TAG = "bringup";
 /** Heartbeat once the sweep is done, so a finished board is distinguishable
  *  from a crashed one at a glance. */
 #define IDLE_BLINK_PERIOD_MS 2000
+
+/** Idle loop tick: the BOOT button's poll interval (see motor_hold.h). */
+#define IDLE_POLL_MS 20
+#define IDLE_BLINK_TICKS (IDLE_BLINK_PERIOD_MS / IDLE_POLL_MS)
 
 static check_result_t s_results[16];
 
@@ -142,7 +149,8 @@ void app_main(void)
     printf(" XIAO ESP32-S3 Sense hardware self-test\n");
     printf("========================================\n");
     printf("SKIP means 'not fitted' — that is normal on a part-built board.\n");
-    printf("The motor check DRIVES THE WHEELS after three quick high beeps.\n\n");
+    printf("The motor check DRIVES THE WHEELS after three quick high beeps.\n");
+    printf("After the sweep, BOOT holds one motor at 100%% for DMM readings.\n\n");
 
     /* Buzzer first and unconditionally: it is the channel every result below is
      * announced on, and check_buzzer() only confirms it a moment later. */
@@ -243,17 +251,24 @@ void app_main(void)
     const rgb_color_t *final_color =
         (fail > 0) ? &k_color_fail : ((warn > 0) ? &k_color_warn : &k_color_pass);
 
+    motor_hold_init();
+
     /* Idle with a slow blink rather than a solid colour or a bare `for(;;)`.
      * A solid LED and a hung board look identical; a blink says the firmware is
-     * still running and the sweep is simply over. */
-    for (;;) {
+     * still running and the sweep is simply over.
+     *
+     * Ticked rather than slept through, so the BOOT button is polled between
+     * blinks. Both run on this one task, which keeps the LED and motor writes
+     * to the PCA9685 from ever interleaving. */
+    for (uint32_t tick = 0;; tick = (tick + 1) % IDLE_BLINK_TICKS) {
         if (led_is_initialized()) {
-            led_set_both(final_color);
-            vTaskDelay(pdMS_TO_TICKS(IDLE_BLINK_PERIOD_MS / 4));
-            led_turn_off_all();
-            vTaskDelay(pdMS_TO_TICKS(IDLE_BLINK_PERIOD_MS * 3 / 4));
-        } else {
-            vTaskDelay(pdMS_TO_TICKS(IDLE_BLINK_PERIOD_MS));
+            if (tick == 0) {
+                led_set_both(final_color);
+            } else if (tick == IDLE_BLINK_TICKS / 4) {
+                led_turn_off_all();
+            }
         }
+        motor_hold_poll();
+        vTaskDelay(pdMS_TO_TICKS(IDLE_POLL_MS));
     }
 }
