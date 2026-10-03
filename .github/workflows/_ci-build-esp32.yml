@@ -33,7 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
         with:
           submodules: recursive
 
@@ -42,7 +42,7 @@ jobs:
       # the image tag is immutable once published.
       - name: Cache ESP-IDF Docker image
         id: idf-image-cache
-        uses: actions/cache@v5
+        uses: actions/cache@v5.1.0
         with:
           path: ~/.cache/esp-idf-docker
           key: esp-idf-docker-${{ runner.os }}-${{ env.IDF_VERSION }}
@@ -63,7 +63,7 @@ jobs:
       # project) keyed on the lockfile. Falls back to the latest cache for this
       # project on lockfile change.
       - name: Cache IDF managed components
-        uses: actions/cache@v5
+        uses: actions/cache@v5.1.0
         with:
           path: packages/${{ inputs.project_path }}/managed_components
           key: idf-components-${{ runner.os }}-${{ env.IDF_VERSION }}-${{ inputs.project }}-${{ hashFiles(format('packages/{0}/dependencies.lock', inputs.project_path), format('packages/{0}/main/idf_component.yml', inputs.project_path)) }}
@@ -98,7 +98,7 @@ jobs:
           echo "Dependencies ready"
 
       - name: Build ${{ inputs.project }}
-        uses: espressif/esp-idf-ci-action@v1
+        uses: espressif/esp-idf-ci-action@v1.2.0
         with:
           esp_idf_version: ${{ env.IDF_VERSION }}
           target: ${{ inputs.target }}
@@ -159,7 +159,7 @@ jobs:
           fi
 
       - name: Archive firmware binaries
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: ${{ inputs.project }}-firmware-${{ github.sha }}
           path: |
@@ -171,7 +171,7 @@ jobs:
           retention-days: 30
 
       - name: Archive size analysis
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: ${{ inputs.project }}-size-report-${{ github.sha }}
           path: packages/${{ inputs.project_path }}/size-report.txt
