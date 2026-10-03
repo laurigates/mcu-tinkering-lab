@@ -31,7 +31,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.11'
+          python-version: '3.14'
 
       # Pinned: uv 0.12.14 refuses to install dracopy into .venv/lib64
       # ("Cannot install into symlinked directory", astral-sh/uv#21692).
