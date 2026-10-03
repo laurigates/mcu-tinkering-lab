@@ -12,6 +12,7 @@
 
 #include "ambient_audio.h"
 #include "audio_player.h"
+#include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
@@ -19,12 +20,15 @@
 #include "mic_dump.h"
 #include "mic_pdm.h"
 #include "pin_config.h"
+#include "voice_preroll.h"
 #include "voice_turn.h"
 
 static const char *TAG = "ambient_listener";
 
-/** VAD auto-trigger recording window and cooldown intervals. */
-#define VAD_RECORD_WINDOW_MS 3500
+/** VAD auto-trigger cooldowns: between triggers inside an active conversation,
+ *  and when idle. The first used to double as the fixed VAD recording window;
+ *  VAD turns now end on silence (issue #616), so it is only a cooldown. */
+#define VAD_CONV_COOLDOWN_MS 3500
 #define VAD_IDLE_COOLDOWN_MS 10000
 
 /** Bound on one frame's DMA wait. Deliberately not portMAX_DELAY: mic_pdm_read()
@@ -43,6 +47,12 @@ static const char *TAG = "ambient_listener";
  *  half of AMBIENT_LISTENER_TASK_STACK_SIZE. Single-reader by construction (only
  *  this task touches it), so it needs no lock of its own. */
 static int16_t s_frame[AMBIENT_FRAME_SAMPLES];
+
+/** The pre-roll for hands-free voice turns (issue #616). Storage is PSRAM —
+ *  1.5 s is 48 kB, far too much for internal RAM — allocated at start. Guarded
+ *  by the microphone lock: offered here and taken by a voice turn only while
+ *  holding it. */
+static voice_preroll_t s_preroll;
 
 static volatile bool s_running;
 static volatile int16_t s_level_db;
@@ -93,12 +103,29 @@ static void ambient_listener_task(void *arg)
             continue;
         }
 
+        /* The start cue is sampled on both sides of the read: it lasts 320 ms
+         * against a 64 ms frame, so a cue overlapping this frame is active at one
+         * end of it or the other. */
+        const bool cue_before = voice_turn_cue_active();
         size_t got = 0;
         const esp_err_t err =
             mic_pdm_read(s_frame, AMBIENT_FRAME_SAMPLES, &got, LISTENER_READ_TIMEOUT_MS);
+        const bool cue = cue_before || voice_turn_cue_active();
+
+        const uint32_t t = now_ms();
+        const bool playing = playback_active_edge();
+        const bool allowed = ambient_capture_allowed(playing, t, s_last_playback_end_ms,
+                                                     AMBIENT_PLAYBACK_HANGOVER_MS_DEFAULT);
+
+        /* Offered while the lock is still held, so a voice turn that takes the
+         * lock next finds the ring complete and the DMA's next samples directly
+         * after its last one. A failed read is a gap in time, so it empties the
+         * ring the same way the playback quarantine does. */
+        const bool read_ok = (err == ESP_OK && got != 0);
+        voice_preroll_offer(&s_preroll, s_frame, got, read_ok && allowed, cue);
         mic_pdm_unlock();
 
-        if (err != ESP_OK || got == 0) {
+        if (!read_ok) {
             /* A read failure must NOT reach the gate. An all-zero or partial frame
              * fingerprints as flat silence, which is a legitimate reading, so the
              * gate could not tell "the mic broke" from "the room went quiet" — and
@@ -112,11 +139,7 @@ static void ambient_listener_task(void *arg)
             continue;
         }
 
-        const uint32_t t = now_ms();
-        const bool playing = playback_active_edge();
-
-        if (!ambient_capture_allowed(playing, t, s_last_playback_end_ms,
-                                     AMBIENT_PLAYBACK_HANGOVER_MS_DEFAULT)) {
+        if (!allowed) {
             s_frames_muted++;
             continue;
         }
@@ -153,12 +176,12 @@ static void ambient_listener_task(void *arg)
             const uint32_t elapsed = t - s_last_vad_trigger_ms;
             const bool cooldown_ok =
                 (s_last_vad_trigger_ms == 0) ||
-                (in_conv ? (elapsed >= VAD_RECORD_WINDOW_MS) : (elapsed >= VAD_IDLE_COOLDOWN_MS));
+                (in_conv ? (elapsed >= VAD_CONV_COOLDOWN_MS) : (elapsed >= VAD_IDLE_COOLDOWN_MS));
 
             if (cooldown_ok) {
                 const uint8_t thresh = ambient_audio_loud_threshold();
                 if (thresh > 0 && ambient_audio_loud_score(t) >= thresh) {
-                    if (voice_turn_request(VAD_RECORD_WINDOW_MS) == ESP_OK) {
+                    if (voice_turn_request_vad() == ESP_OK) {
                         s_last_vad_trigger_ms = t;
                         ESP_LOGI(TAG, "VAD auto-trigger (loud=%u thresh=%u in_conv=%d)",
                                  ambient_audio_loud_score(t), thresh, (int)in_conv);
@@ -178,6 +201,16 @@ esp_err_t ambient_listener_start(void)
         ESP_LOGW(TAG, "PDM microphone not ready — ambient gate will never report novelty");
         return ESP_ERR_INVALID_STATE;
     }
+
+    /* Non-fatal like everything else on this path: without the ring a
+     * hands-free turn simply starts at the cue, as it did before issue #616. */
+    int16_t *preroll = heap_caps_malloc(VOICE_PREROLL_SAMPLES * sizeof(int16_t),
+                                        MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!preroll) {
+        ESP_LOGW(TAG, "no PSRAM for the %u-sample pre-roll — VAD turns start at the cue",
+                 (unsigned)VOICE_PREROLL_SAMPLES);
+    }
+    voice_preroll_init(&s_preroll, preroll, preroll ? VOICE_PREROLL_SAMPLES : 0);
 
     const BaseType_t ok = xTaskCreatePinnedToCore(
         ambient_listener_task, "ambient_listener", AMBIENT_LISTENER_TASK_STACK_SIZE, NULL,
@@ -213,4 +246,9 @@ uint32_t ambient_listener_frames_accepted(void)
 uint32_t ambient_listener_frames_muted(void)
 {
     return s_frames_muted;
+}
+
+size_t ambient_listener_take_preroll(int16_t *dst, size_t max)
+{
+    return voice_preroll_take(&s_preroll, dst, max);
 }
