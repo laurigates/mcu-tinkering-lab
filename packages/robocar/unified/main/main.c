@@ -64,6 +64,7 @@
 #include "servo_controller.h"
 #include "speech_budget.h"
 #include "speech_queue.h"
+#include "speech_trigger.h"
 #include "voice_persona.h"
 #include "voice_turn.h"
 #include "wifi_manager.h"
@@ -553,6 +554,7 @@ static void handle_periph_cmd(const char *buf)
  * `voice loud <db>`            — excursion above the noise floor (0 = sub-gate off)
  * `voice sound <db>`           — how much the room's spectrum must move (0 = off)
  * `voice endpoint <ms> <db>`   — quiet time / speech margin that ends a VAD turn
+ * `voice trigger <%> <db> <ms>` — voice-band share / floor margin / duration that starts one
  * `mic` / `mic dump <n>`       — microphone state; dump PCM frames to the console
  * `listen [seconds]`           — one push-to-talk voice turn (record, ask, answer)
  * `trace`                      — camera + endpoint activity counters since boot
@@ -621,6 +623,9 @@ static void handle_voice_cmd(const char *buf)
         printf("  vad:    %s | endpoint: quiet %u ms at %u dB over floor, min %u ms, max %u ms\n",
                voice_turn_get_vad() ? "on" : "off", (unsigned)ep_silence, (unsigned)ep_margin,
                (unsigned)ep_min, (unsigned)ep_max);
+        printf("          trigger: voice band >= %u%%, +%u dB over floor, for %u ms\n",
+               (unsigned)speech_trigger_share_pct(), (unsigned)speech_trigger_margin_db(),
+               (unsigned)speech_trigger_sustain_ms());
         /* Every gate is reported, and which one is holding, because a silent robot
          * is otherwise indistinguishable from a broken one — and on a static,
          * quiet scene silence is the correct behaviour. The evidence line names
@@ -643,6 +648,7 @@ static void handle_voice_cmd(const char *buf)
         printf("         voice loud <db> | sound <db> | vad on|off   (see also: mic)\n");
         printf(
             "         voice endpoint <quiet_ms> <db>   when a hands-free turn stops recording\n");
+        printf("         voice trigger <band%%> <db> <ms>  what starts one (see `mic`)\n");
         printf("         voice volume <pct>   amplitude, not loudness: halving = -6 dB\n");
         printf("         voice fx [on|off|body <10..200>|metal <0..85>|drive <10..400>]\n");
         printf(
@@ -899,6 +905,29 @@ static void handle_voice_cmd(const char *buf)
         }
         voice_turn_set_endpoint((uint32_t)quiet_ms, (uint8_t)margin_db);
         printf("voice: endpoint quiet=%u ms margin=%u dB\n", quiet_ms, margin_db);
+        return;
+    }
+
+    if (strcmp(op, "trigger") == 0) {
+        /* Not persisted. Tune by speaking and reading `mic`: its speech line
+         * shows the highest voice-band share and longest run since the last
+         * `mic`, so a threshold set too high shows up as a near miss. */
+        unsigned share = 0;
+        unsigned margin_db = 0;
+        unsigned sustain_ms = 0;
+        if (sscanf(buf, "voice trigger %u %u %u", &share, &margin_db, &sustain_ms) != 3 ||
+            share > 100 || margin_db > 40 || sustain_ms > 2000) {
+            printf("voice: usage: voice trigger <0..100 %%> <0..40 dB> <0..2000 ms>  (now %u%%, "
+                   "%u dB, %u ms; 0 drops a check)\n",
+                   (unsigned)speech_trigger_share_pct(), (unsigned)speech_trigger_margin_db(),
+                   (unsigned)speech_trigger_sustain_ms());
+            return;
+        }
+        speech_trigger_set_share_pct((uint8_t)share);
+        speech_trigger_set_margin_db((uint8_t)margin_db);
+        speech_trigger_set_sustain_ms((uint32_t)sustain_ms);
+        printf("voice: trigger band=%u%% margin=%u dB sustain=%u ms\n", share, margin_db,
+               sustain_ms);
         return;
     }
 
@@ -1255,6 +1284,18 @@ static void handle_mic_cmd(const char *buf)
     printf("  loud:   %u/%u dB    sound: %u/%u dB\n", ambient_audio_loud_score(now_ms),
            (unsigned)ambient_audio_loud_threshold(), ambient_audio_shape_score(now_ms),
            (unsigned)ambient_audio_shape_threshold());
+    /* The hands-free trigger's evidence. "best" is since the previous `mic`, and
+     * reading it clears it: speak once, then type `mic`, and the line says how
+     * close the voice came to each threshold. */
+    uint32_t best_run = 0;
+    uint8_t peak_share = 0;
+    speech_trigger_best(&best_run, &peak_share, true);
+    printf("  speech: now band %u%% run %u ms | best since last mic: band %u%% run %u ms | "
+           "need %u%% +%u dB %u ms (vad %s)\n",
+           (unsigned)speech_trigger_last_share_pct(), (unsigned)speech_trigger_run_ms(),
+           (unsigned)peak_share, (unsigned)best_run, (unsigned)speech_trigger_share_pct(),
+           (unsigned)speech_trigger_margin_db(), (unsigned)speech_trigger_sustain_ms(),
+           voice_turn_get_vad() ? "on" : "off");
     printf("  frames: %u accepted, %u muted by playback\n",
            (unsigned)ambient_listener_frames_accepted(), (unsigned)ambient_listener_frames_muted());
     if (last == 0U) {
@@ -1262,7 +1303,8 @@ static void handle_mic_cmd(const char *buf)
     } else {
         printf("  last:   %u ms ago\n", (unsigned)(now_ms - last));
     }
-    printf("  usage: mic | mic dump <n>   (thresholds: voice loud <db> | voice sound <db>)\n");
+    printf("  usage: mic | mic dump <n>   (thresholds: voice loud <db> | voice sound <db> | "
+           "voice trigger)\n");
 }
 
 /**

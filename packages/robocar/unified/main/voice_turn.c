@@ -96,7 +96,12 @@ typedef struct {
 
 static QueueHandle_t s_queue;
 static volatile bool s_busy;
-static bool s_vad_enabled;
+
+/** Hands-free listening is ON at boot (issue #617). It was off while the
+ *  trigger was a broadband loudness excursion, because a slam or the motors
+ *  would start turns; the speech-shaped trigger (speech_trigger.h) is selective
+ *  enough to leave on. `voice vad off` still disables it, until the next boot. */
+static bool s_vad_enabled = true;
 
 /** True from just before the start beep until its settle time has passed. The
  *  ambient listener reads it to keep the beep out of the pre-roll (as silence of

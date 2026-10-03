@@ -31,6 +31,7 @@ idf_component_register(
         "audio_clip.c"
         "voice_preroll.c"
         "voice_endpoint.c"
+        "speech_trigger.c"
         "voice_history.c"
         "voice_turn.c"
         "gemini_tts.c"
