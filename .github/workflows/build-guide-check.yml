@@ -47,14 +47,14 @@ jobs:
     name: Verify committed PDFs match Typst source
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
 
       # GitHub-release binaries are blocked by this org's egress proxy, so the
       # CLI is built from crates.io via cargo. The binary is the only cached
       # artifact — keyed on the pinned version so a bump forces a rebuild.
       - name: Cache Typst CLI
         id: cache-typst
-        uses: actions/cache@v4
+        uses: actions/cache@v4.3.0
         with:
           path: ~/.cargo/bin/typst
           key: typst-cli-${{ runner.os }}-${{ env.TYPST_VERSION }}
