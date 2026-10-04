@@ -25,6 +25,8 @@ typedef struct {
     const char *ssid;
     const char *api_key;
     const char *version;
+    const char *mqtt_user;  //!< get_mqtt_username(); NULL = unconfigured
+    const char *mqtt_pass;  //!< get_mqtt_password(); NULL = unconfigured
 } self_report_stub_state_t;
 
 extern self_report_stub_state_t g_stub;

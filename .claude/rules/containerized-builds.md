@@ -193,6 +193,12 @@ ESP32-S3 projects with native USB-Serial-JTAG override `monitor` with their own 
 
 - Add `idf_path`, `check-idf`, or `source export.sh` patterns — those are the old local-install approach
 - Hardcode `../../../docker-compose.yml` — use `{{compose_file}}` from the import
+- Build a path from `justfile_directory()` in a package justfile — every one is
+  loaded as a `mod`, and inside a module that function returns the **root**
+  justfile's directory, so `justfile_directory() + "/../main"` lands outside the
+  repo and nothing errors until the recipe runs (issue #605). Use
+  `source_directory()`, the directory of the file it is written in.
+  `tools/check-flash-recipes.py` rejects it outside the root justfile
 - Define `container_cmd`, `require-port`, `_monitor_baud`, or `_serial-monitor` locally — they come from the import
 - Define `build`, `clean`, `menuconfig`, or `shell` with inline container commands — use `esp32-idf.just` shared recipes
 - Copy the pyserial monitor block inline — use `_serial-monitor` instead

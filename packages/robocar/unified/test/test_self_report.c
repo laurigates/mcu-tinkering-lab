@@ -181,6 +181,37 @@ static int test_worst_case_fits_the_buffer(void)
     CHECK(strstr(facts, "i2c_peripherals=degraded(motors,leds,servos)") != NULL);
     CHECK(strstr(facts, "gemini_key=absent") != NULL);
     CHECK(strstr(facts, "buzzer=not-responding") != NULL);
+    /* "read-only" is the longer of the two mode words, and the key is last. */
+    CHECK(strstr(facts, "mqtt_commands=read-only") != NULL);
+    return 0;
+}
+
+/**
+ * The MQTT command mode is in the facts line (issue #626), because the
+ * published status is where somebody whose MQTT drive command did nothing will
+ * look — and "refused: read-only" is otherwise only in the serial log. The
+ * mode follows the same both-halves rule as the dispatcher, so a username
+ * alone still reads read-only.
+ */
+static int test_mqtt_mode_is_reported(void)
+{
+    stub_reset_healthy();
+    char facts[SELF_REPORT_FACTS_MAX];
+
+    g_stub.mqtt_user = NULL;
+    g_stub.mqtt_pass = NULL;
+    facts_now(facts, sizeof(facts));
+    CHECK(strstr(facts, "mqtt_commands=read-only") != NULL);
+
+    g_stub.mqtt_user = "robocar";
+    facts_now(facts, sizeof(facts));
+    CHECK(strstr(facts, "mqtt_commands=read-only") != NULL);
+
+    g_stub.mqtt_pass = "secret";
+    facts_now(facts, sizeof(facts));
+    CHECK(strstr(facts, "mqtt_commands=full") != NULL);
+    /* The credential itself never reaches the line that is published. */
+    CHECK(strstr(facts, "secret") == NULL);
     return 0;
 }
 
@@ -217,6 +248,7 @@ int main(void)
         {"multiple_failures_all_listed", test_multiple_failures_all_listed},
         {"buzzer_reported_separately", test_buzzer_reported_separately},
         {"worst_case_fits_the_buffer", test_worst_case_fits_the_buffer},
+        {"mqtt_mode_is_reported", test_mqtt_mode_is_reported},
         {"collect_reads_live_state", test_collect_reads_live_state},
     };
 

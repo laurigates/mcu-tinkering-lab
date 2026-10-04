@@ -85,6 +85,45 @@ esp_err_t voice_turn_start(void);
  */
 esp_err_t voice_turn_request(uint32_t window_ms);
 
+/**
+ * @brief Request one hands-free (VAD) turn: pre-roll plus end-of-speech.
+ *
+ * Unlike voice_turn_request() there is no fixed window. The clip starts with
+ * the ambient listener's pre-roll ring, so the speech that set off the trigger
+ * is kept, and recording stops once the speaker has been quiet for the
+ * endpointing hangover (voice_endpoint.h), bounded by a memory ceiling.
+ * Issue #616: the fixed window used to start after the beep and a flush, which
+ * threw away exactly the words that triggered it.
+ *
+ * Same return values as voice_turn_request().
+ */
+esp_err_t voice_turn_request_vad(void);
+
+/**
+ * @brief True while the start cue (beep + settle) is sounding.
+ *
+ * The ambient listener samples this around each read and offers an
+ * overlapping frame to the pre-roll as silence, so the piezo never enters a
+ * clip. See voice_preroll.h.
+ */
+bool voice_turn_cue_active(void);
+
+/**
+ * @brief Set the VAD turn's end-of-speech knobs (`voice endpoint`).
+ *
+ * @param silence_ms  Quiet after the last speech frame that ends the turn.
+ * @param margin_db   dB above the noise floor that counts as speech; 0 records
+ *                    to the ceiling every time.
+ *
+ * Not persisted: a boot comes up at the voice_endpoint.h defaults.
+ */
+void voice_turn_set_endpoint(uint32_t silence_ms, uint8_t margin_db);
+
+/** @brief Current endpointing knobs plus the fixed minimum and ceiling. Every
+ *         pointer is optional. */
+void voice_turn_get_endpoint(uint32_t *silence_ms, uint8_t *margin_db, uint32_t *min_ms,
+                             uint32_t *max_ms);
+
 /** @brief True while a turn is recording, uploading or awaiting a reply. */
 bool voice_turn_is_busy(void);
 
@@ -106,8 +145,9 @@ bool voice_turn_in_conversation(void);
 /**
  * @brief Enable or disable Voice Activity Detection (VAD) auto-triggering.
  *
- * When enabled, ambient_listener triggers voice_turn_request() on loud audio events.
- * Default: false.
+ * When enabled, ambient_listener triggers voice_turn_request_vad() on sustained
+ * speech-shaped audio (speech_trigger.h). Default: true since issue #617; not
+ * persisted, so `voice vad off` lasts until the next boot.
  */
 void voice_turn_set_vad(bool enabled);
 
