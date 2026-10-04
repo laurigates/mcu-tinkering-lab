@@ -211,6 +211,7 @@ Most workflows delegate to reusable workflows from [`laurigates/.github`](https:
 ## Important Paths
 
 - `tools/esp32.just` — Shared justfile config imported by all ESP-IDF projects (container_cmd, port detection, require-port, _serial-monitor)
+- `tools/hardware/` — the board × header × parts join ([ADR-021](docs/decisions/ADR-021-hardware-source-of-truth.md)): reads a project's `hardware.toml`, its `pin_config.h` and its `docs/reference/boards/` page; `just hardware::gen` regenerates what it feeds (`docs/auto/pin_defs.typ` today)
 - `docker-compose.yml` — ESP-IDF container service definition (`espressif/idf:v5.4`)
 - `.clang-format` — C/C++ formatting rules
 - `.pre-commit-config.yaml` — Pre-commit hook definitions

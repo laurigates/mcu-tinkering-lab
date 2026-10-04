@@ -133,16 +133,13 @@ test:
 # Docs
 ##########
 
-# Generate Typst definitions from pin_config.h and the planner cadence headers.
-# Keep the header list in sync with the drift guard's generator invocation and
-# trigger paths in .github/workflows/build-guide-check.yml.
+# Generate Typst definitions from the hardware join (tools/hardware/, ADR-021).
+# The headers it reads — pin_config.h and the planner cadence headers — are
+# listed once, in hardware.toml's [source]; every one of them must also be on
+# the trigger paths in .github/workflows/build-guide-check.yml.
 [group: "docs"]
 gen-pin-defs:
-    python3 ../../../tools/typst/generate-pin-defs.py \
-        main/pin_config.h \
-        main/planner_task.h \
-        main/plan_activity.h \
-        docs/auto/pin_defs.typ
+    python3 ../../../tools/typst/generate-pin-defs.py .
 
 # Regenerate every printable Typst document in docs/ — the build guide and the
 # bench cards beside it.
