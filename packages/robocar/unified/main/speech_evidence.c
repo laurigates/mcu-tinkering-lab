@@ -21,8 +21,9 @@ static const char k_audio_only[] =
 
 /* The sound changed, but the view was never compared — the scene gate is off
  * (`voice scene 0`), or the robot has not yet spoken about a frame it could
- * decode. Saying "The view has NOT changed" here asserted a comparison nobody
- * made (issue #631), so the view is simply not mentioned. */
+ * decode. Before issue #631 this state got "The view has changed", and "The
+ * view has NOT changed" would be no truer: either asserts a comparison nobody
+ * made, so the view is simply not mentioned. */
 static const char k_audio_view_unknown[] =
     "The room's sound level or character has changed since you last "
     "spoke. " SPEECH_EVIDENCE_NO_AUDIO SPEECH_EVIDENCE_SOUND_ONLY_ACTION;
