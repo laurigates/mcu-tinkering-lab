@@ -28,20 +28,13 @@ from components import (  # noqa: E402
     tca9548a,
     xiao_esp32s3_sense,
 )
-from hardware import board_layout  # noqa: E402
+from hardware import board_layout, join  # noqa: E402
 
-PIN_CONFIG = (
-    FsPath(__file__).resolve().parents[2] / "packages/robocar/unified/main/pin_config.h"
-)
+UNIFIED = FsPath(__file__).resolve().parents[2] / "packages/robocar/unified"
 
 
-def _firmware_gpio(macro: str) -> str:
-    """Read ``#define <macro> GPIO_NUM_<n>`` from robocar-unified's pin_config.h."""
-    match = re.search(
-        rf"^#define\s+{macro}\s+GPIO_NUM_(\d+)\b", PIN_CONFIG.read_text(), re.M
-    )
-    assert match, f"{macro} not found in {PIN_CONFIG}"
-    return f"GPIO{match.group(1)}"
+def _mic(clk: str = "GPIO42", data: str = "GPIO41"):
+    return pdm_microphone(clk=clk, data=data)
 
 
 def _svg_text(svg: bytes) -> list[str]:
@@ -49,23 +42,20 @@ def _svg_text(svg: bytes) -> list[str]:
 
 
 def test_pdm_microphone_exposes_clk_and_data_by_name():
-    names = {p.name for p in pdm_microphone()._userparams["pins"]}
+    names = {p.name for p in _mic()._userparams["pins"]}
     assert names == {"CLK", "DATA"}
 
 
-def test_pdm_microphone_pins_carry_the_firmware_gpio_numbers():
-    # Read from pin_config.h rather than restated, so a renumbered mic pin in
-    # the firmware fails here instead of leaving the schematic quietly wrong.
-    pins = {p.name: p.pin for p in pdm_microphone()._userparams["pins"]}
-    assert pins == {
-        "CLK": _firmware_gpio("MIC_PDM_CLK_PIN"),
-        "DATA": _firmware_gpio("MIC_PDM_DATA_PIN"),
-    }
+def test_pdm_microphone_prints_the_pins_it_is_given():
+    # The GPIOs come from the hardware join in the circuit (#462); the factory
+    # only places them. Distinct values catch a CLK/DATA swap.
+    pins = {p.name: p.pin for p in _mic("CLKPAD", "DATAPAD")._userparams["pins"]}
+    assert pins == {"CLK": "CLKPAD", "DATA": "DATAPAD"}
 
 
 def test_pdm_microphone_is_dashed_so_it_reads_as_on_module():
     # A solid outline is what every breakout the builder solders looks like.
-    assert pdm_microphone()._userparams.get("ls") == "--"
+    assert _mic()._userparams.get("ls") == "--"
 
 
 def test_robocar_unified_draws_the_onboard_microphone(real_circuit):
@@ -98,8 +88,20 @@ def test_robocar_unified_draws_the_onboard_microphone(real_circuit):
         assert lead._userparams.get("ls") == "--"
         assert lead._userparams.get("color") == "gray"
 
+    # Each pin is labelled with its role's GPIO from the join. The GPIO value
+    # is read, not restated, but which role feeds which pin is still chosen by
+    # hand in the circuit: the mic roles are [[undrawn]], so no [[nets]] entry
+    # binds them and check_all_drawn() cannot see a CLK/DATA role swap. This
+    # pins that choice, and fails on exactly that swap.
+    roles = join(UNIFIED).roles
+    labels = {p.name: p.pin for p in mic._userparams["pins"]}
+    assert labels == {
+        "CLK": f"GPIO{roles['MIC_PDM_CLK_PIN']}",
+        "DATA": f"GPIO{roles['MIC_PDM_DATA_PIN']}",
+    }
+
     text = _svg_text(circuit.svg)
-    assert "GPIO42" in text and "GPIO41" in text
+    assert set(labels.values()) <= set(text)
     # The block must say it needs no wiring, or the dashes are left to guesswork.
     assert any("no wiring" in t for t in text)
 

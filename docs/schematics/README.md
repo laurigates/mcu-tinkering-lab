@@ -16,6 +16,8 @@ docs/schematics/
 │   └── gamepad_synth.py
 ├── components.py          # Reusable chip/breakout factories (ESP32, MAX98357A, ...)
 ├── routing.py             # Manhattan auto-router (Router) used by circuits for nets
+├── hardware_nets.py       # MCU net endpoints by pin role, from a hardware.toml join
+├── test_hardware_nets.py  # pytest suite for hardware_nets.py
 ├── test_routing.py        # pytest suite for routing.py
 ├── metrics.py             # Routing-quality metrics per circuit (crossings, ...)
 ├── test_metrics.py        # pytest suite for metrics.py
@@ -259,13 +261,24 @@ Each circuit file cites the authoritative wiring document at the top (usually
 the project's `WIRING.md`). Keep the schematic and that document in sync when
 pins change.
 
+A project with a `hardware.toml` (ADR-021) does not transcribe its MCU wiring.
+`robocar_unified.py` loads the join live at render time and asks
+`hardware_nets.JoinedNets` for each net by pin role —
+`router.wire(*nets.ends("I2S_BCLK_PIN"), net="i2s")` — so the XIAO pad comes
+from `pin_config.h` and the board reference, and the part pin from the
+`[[nets]]` entry. Chip addresses, the PWM frequency and the PCA9685 and mux
+channel numbers in its labels come from the same headers. Placement, net order
+and net colour stay in the circuit. After the last MCU wire,
+`nets.check_all_drawn()` fails the render for any `[[nets]]` entry the drawing
+left out, so a net added to `hardware.toml` cannot ship a schematic without it.
+
 ## Freshness check
 
 `.github/workflows/schematics-check.yml` re-renders all circuits on every PR
 that touches `docs/schematics/**` — or an input a circuit reads at render
 time: the board references in `docs/reference/boards/`, `tools/hardware/`,
-and the `main/pin_config.h` that robocar-unified's PCA9685 channel numbers
-come from — and fails if `images/*.svg` would change. A circuit that starts
+and the `main/pin_config.h` and `hardware.toml` that robocar-unified's wiring
+and labels come from — and fails if `images/*.svg` would change. A circuit that starts
 reading a new file needs that file on the workflow's trigger paths, or the
 SVG can go stale with no check running.
 The workflow is SVG-only on purpose (PNG drift is encoder-version noise, not
