@@ -228,7 +228,9 @@ whenever BCLK is running, so leaving it clocking silence is audible.
 
 The Sense expansion board carries an MSM261D PDM microphone wired to the
 ESP32-S3 directly. **Nothing to wire** — it is on the module — but it is live
-hardware the firmware depends on, so it is recorded here.
+hardware the firmware depends on, so it is recorded here. The schematic draws
+it with a dashed outline and dashed leads, up and to the left of the XIAO, to
+mark it as on-module rather than as a breakout to solder.
 
 | Signal | GPIO | Direction | Function |
 |--------|------|-----------|----------|

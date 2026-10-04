@@ -6,6 +6,7 @@ XIAO ESP32-S3 Sense driving everything via an I2C multiplexer:
   - TCA9548A ch2 → MCP23017 GPIO expander (optional; no roles assigned yet)
 Direct GPIO: STBY (motor enable), piezo, ultrasonic TRIG/ECHO,
 and I2S (D8-D10) → MAX98357A → speaker for the robot's voice (ADR-019).
+On-module, drawn dashed: the Sense board's PDM microphone (GPIO42/41).
 
 Source of truth: packages/robocar/unified/WIRING.md and main/pin_config.h
 """
@@ -18,6 +19,7 @@ from components import (
     max98357a,
     mcp23017,
     pca9685,
+    pdm_microphone,
     ssd1306_oled,
     tb6612fng,
     tca9548a,
@@ -97,6 +99,41 @@ def draw() -> schemdraw.Drawing:
         .anchor("center")
         .label("MCP23017\n0x20 (optional)", loc="bot", ofst=0.4)
     )
+
+    # Onboard PDM microphone (issue #486): on the Sense expansion board, wired
+    # to GPIO42/GPIO41 there and not to any header pad, so it is drawn dashed
+    # with dashed gray leads into the XIAO body instead of routed nets — there
+    # is nothing for a builder to connect. Up and to the left of the module:
+    # the I2S bus to the amplifier runs over the XIAO's top edge, and the +5V
+    # tag stands at its top-left corner, so the block sits above that tag and
+    # the leads drop into the left half of the top edge. It shares I2S0 with
+    # the MAX98357A: PDM RX exists only on I2S0 on the ESP32-S3, and the RX
+    # channel needs its own i2s_new_channel() call or the 16 kHz mic is
+    # clocked off the 24 kHz amp.
+    xiao_box = xiao.get_bbox(transform=True)
+    mic = d.add(
+        pdm_microphone()
+        .right()
+        .at((xiao.center.x - 4.5, xiao_box.ymax + 2))
+        .anchor("center")
+        .label(
+            "PDM mic (MSM261D)\non Sense board, no wiring\nI2S0 RX, shared with amp",
+            loc="top",
+            ofst=0.4,
+        )
+    )
+    # CLK (the upper pin) drops the further right, so the two leads nest.
+    for pin, drop_x in (
+        (mic.DATA, xiao.center.x - 1.25),
+        (mic.CLK, xiao.center.x - 0.75),
+    ):
+        d.add(
+            elm.Wire("-|")
+            .at(pin)
+            .to((drop_x, xiao_box.ymax))
+            .linestyle("--")
+            .color("gray")
+        )
 
     # Ultrasonic below the MCU.
     us = d.add(
