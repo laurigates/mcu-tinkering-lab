@@ -21,6 +21,12 @@ is rejected so a `gpio = 5` cannot slip in beside one:
     to   = "amp.BCLK"
     note = "bit clock"          # optional
 
+    [[channel_nets]]            # from a PWM driver's output, not the MCU (#666)
+    role = "MOTOR_RIGHT_PWM_CHANNEL"  # a channel role in `header`
+    from = "pwm"                # the driver part; its pad is the channel number
+    to   = "motor_driver.PWMA"
+    note = "speed"              # optional
+
     [[undrawn]]                 # a pin role deliberately on no drawn net
     role = "MIC_PDM_CLK_PIN"
     why  = "internal to the Sense module"
@@ -45,6 +51,15 @@ A part's `board` names its own physical-layout page, where one exists (#629):
 `hardware.pinout` draws that board and labels each pad a net lands on. A part
 with no vendor-sourced layout leaves the key out and is not drawn.
 
+A `[[channel_nets]]` role is a channel role (`header.CHANNEL_CONVENTIONS`),
+resolved to its channel number from the header, so this file still holds no
+number. Where a part has a `board` page, both ends must be pads there: the
+driver's pad is named by the channel number, as the PCA9685's silkscreen is. Two
+wired roles on one channel, and one pin driven by two outputs (two channels, or
+a channel and an MCU net), are errors; one channel to several pins is a fan-out.
+`[[nets]]` stays MCU-only, so every consumer that reads it as GPIO wiring still
+can.
+
 `[[undrawn]]` is an array of tables rather than ADR-021's `undrawn = [...]`
 key: written after a `[[nets]]` block, that key would belong to the last net.
 """
@@ -52,23 +67,24 @@ key: written after a `[[nets]]` block, that key would belong to the last net.
 from __future__ import annotations
 
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from .board import Board, BoardPin, parse_board_table
 from .errors import HardwareError
-from .header import parse_defines, roles_from_defines
+from .header import channels_from_defines, parse_defines, roles_from_defines
 from .layout import parse_layout
 
 SIDECAR = "hardware.toml"
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 _KEYS = {
-    "": {"source", "parts", "nets", "undrawn", "rails", "outputs"},
+    "": {"source", "parts", "nets", "channel_nets", "undrawn", "rails", "outputs"},
     "source": {"convention", "header", "extra_headers", "board", "mcu"},
     "part": {"name", "kind", "note", "board"},
     "net": {"role", "to", "note"},
+    "channel_net": {"role", "from", "to", "note"},
     "undrawn": {"role", "why"},
     "rail": {"name", "from", "to"},
     "output": {"from", "to"},
@@ -88,6 +104,16 @@ class Part:
 @dataclass(frozen=True)
 class Net:
     role: str
+    part: str
+    pin: str
+    note: str
+
+
+@dataclass(frozen=True)
+class ChannelNet:
+    role: str  # a channel role: "MOTOR_RIGHT_PWM_CHANNEL"
+    channel: int  # its number, from the header
+    source: str  # the driver part id: "pwm"
     part: str
     pin: str
     note: str
@@ -131,6 +157,8 @@ class HardwareModel:
     rails: tuple[Rail, ...] = ()
     outputs: tuple[Output, ...] = ()
     mcu: str = "MCU"  # display name of the MCU board
+    channels: dict[str, int] = field(default_factory=dict)  # channel role -> number
+    channel_nets: tuple[ChannelNet, ...] = ()
 
     def pin_for(self, role: str) -> BoardPin | None:
         """The header pad a role lands on, or None if its GPIO is not broken out."""
@@ -159,6 +187,7 @@ def _power(
     data: dict[str, Any],
     parts: dict[str, Part],
     nets: list[Net],
+    channel_nets: list[ChannelNet],
     roles: dict[str, int],
     board: Board,
     repo_root: Path,
@@ -174,6 +203,10 @@ def _power(
         pad = board.by_gpio.get(roles[n.role])
         if pad is not None:
             signal[MCU, pad.name] = n.role
+    # A channel net is a signal at both ends: the driver's output pad and the pin.
+    for c in channel_nets:
+        signal[c.part, c.pin] = c.role
+        signal[c.source, str(c.channel)] = c.role
 
     def endpoint(where: str, value: Any) -> Endpoint:
         part, dot, pin = (
@@ -245,6 +278,82 @@ def _power(
     return tuple(rails), tuple(outputs)
 
 
+def _channel_nets(
+    sidecar: Path,
+    tables: list[Any],
+    parts: dict[str, Part],
+    nets: list[Net],
+    channels: dict[str, int],
+    defines: dict[str, str],
+    header: Path,
+    repo_root: Path,
+) -> list[ChannelNet]:
+    """[[channel_nets]], checked against the header, the parts and their boards."""
+    pads: dict[str, set[str]] = {}
+    for key, part in parts.items():
+        if part.board:
+            pads[key] = {p.name for p in parse_layout(repo_root / part.board).pads}
+    # Who drives each part pin: an MCU net, or a channel net added below.
+    driver: dict[tuple[str, str], str] = {(n.part, n.pin): n.role for n in nets}
+    on_channel: dict[tuple[str, int], str] = {}
+    result: list[ChannelNet] = []
+    for i, table in enumerate(tables):
+        where = f"{sidecar} [[channel_nets]] #{i + 1}"
+        _check_keys(where, "channel_net", table)
+        role = _require(where, table, "role")
+        if role not in channels:
+            what = "is not a channel role" if role in defines else "is not defined"
+            raise HardwareError(f"{where}: role {role!r} {what} in {header.name}")
+        channel = channels[role]
+        source = _require(where, table, "from")
+        to = _require(where, table, "to")
+        part, dot, pin = to.partition(".")
+        if not dot or not part or not pin:
+            raise HardwareError(f"{where}: 'to' must be 'part.PIN', got {to!r}")
+        for key in (source, part):
+            if key not in parts:
+                raise HardwareError(
+                    f"{where}: part {key!r} is not declared under [parts]"
+                )
+        if part == source:
+            raise HardwareError(
+                f"{where}: {role} runs from {source} to {to}, one of its own pins"
+            )
+        if source in pads and str(channel) not in pads[source]:
+            raise HardwareError(
+                f"{where}: {role} is channel {channel}, and "
+                f"{Path(parts[source].board).name} has no pad named '{channel}'"
+            )
+        if part in pads and pin not in pads[part]:
+            raise HardwareError(
+                f"{where}: {to}: {Path(parts[part].board).name} has no pad named {pin!r}"
+            )
+        if any(c.role == role and c.part == part and c.pin == pin for c in result):
+            raise HardwareError(f"{where}: {role} -> {to} is listed twice")
+        other = on_channel.setdefault((source, channel), role)
+        if other != role:
+            raise HardwareError(
+                f"{where}: channel {channel} of {source} is wired as both {other} and "
+                f"{role}; {header.name} gives them the same number"
+            )
+        if (part, pin) in driver and driver[part, pin] != role:
+            raise HardwareError(
+                f"{where}: {to} is driven by both {driver[part, pin]} and {role}"
+            )
+        driver[part, pin] = role
+        result.append(
+            ChannelNet(
+                role=role,
+                channel=channel,
+                source=source,
+                part=part,
+                pin=pin,
+                note=table.get("note", ""),
+            )
+        )
+    return result
+
+
 def join(project_dir: Path, repo_root: Path = REPO_ROOT) -> HardwareModel:
     """Parse `project_dir/hardware.toml` and the files it names into one model."""
     project_dir = project_dir.resolve()
@@ -279,6 +388,7 @@ def join(project_dir: Path, repo_root: Path = REPO_ROOT) -> HardwareModel:
 
     defines = parse_defines(headers)
     roles = roles_from_defines(parse_defines([header]), convention)
+    channels = channels_from_defines(parse_defines([header]), convention)
 
     def resolve(where: str, role: str) -> str:
         if role not in roles:
@@ -352,11 +462,24 @@ def join(project_dir: Path, repo_root: Path = REPO_ROOT) -> HardwareModel:
             raise HardwareError(f"{where}: role {role!r} is excused twice")
         undrawn.append(Undrawn(role=role, why=_require(where, table, "why")))
 
+    channel_nets = _channel_nets(
+        sidecar,
+        array("channel_nets"),
+        parts,
+        nets,
+        channels,
+        defines,
+        header,
+        repo_root,
+    )
+
     board = parse_board_table(board_path)
     mcu = source.get("mcu", "MCU")
     if not isinstance(mcu, str) or not mcu:
         raise HardwareError(f"{sidecar} [source]: mcu must be a name, got {mcu!r}")
-    rails, outputs = _power(sidecar, data, parts, nets, roles, board, repo_root)
+    rails, outputs = _power(
+        sidecar, data, parts, nets, channel_nets, roles, board, repo_root
+    )
 
     return HardwareModel(
         project_dir=project_dir,
@@ -370,4 +493,6 @@ def join(project_dir: Path, repo_root: Path = REPO_ROOT) -> HardwareModel:
         rails=rails,
         outputs=outputs,
         mcu=mcu,
+        channels=channels,
+        channel_nets=tuple(channel_nets),
     )

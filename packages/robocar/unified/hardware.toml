@@ -103,6 +103,95 @@ role = "I2S_DIN_PIN"
 to = "amp.DIN"
 note = "Serial audio data"
 
+# --- PCA9685 outputs (#666) -------------------------------------------------
+# The same rule as above, one hop further out: every `role` is a `*_CHANNEL`
+# macro in main/pin_config.h, so the channel number lives there and nowhere
+# here. tools/hardware/ fails if a role does not resolve, if its channel is not
+# a pad on the PCA9685's board page, if two wired roles share a channel, or if a
+# pin is driven twice. The pinout images label both ends from these.
+#
+# The six motor lines follow the TB6612FNG's control header (CLAUDE.md §PCA9685
+# channel layout). MOTOR_FIRST_CHANNEL is the base of that block, the same
+# channel as MOTOR_RIGHT_PWM_CHANNEL, and needs no net of its own.
+
+[[channel_nets]]
+role = "LED_LEFT_R_CHANNEL"
+from = "pwm"
+to = "led_left.R"
+
+[[channel_nets]]
+role = "LED_LEFT_G_CHANNEL"
+from = "pwm"
+to = "led_left.G"
+
+[[channel_nets]]
+role = "LED_LEFT_B_CHANNEL"
+from = "pwm"
+to = "led_left.B"
+
+[[channel_nets]]
+role = "LED_RIGHT_R_CHANNEL"
+from = "pwm"
+to = "led_right.R"
+
+[[channel_nets]]
+role = "LED_RIGHT_G_CHANNEL"
+from = "pwm"
+to = "led_right.G"
+
+[[channel_nets]]
+role = "LED_RIGHT_B_CHANNEL"
+from = "pwm"
+to = "led_right.B"
+
+[[channel_nets]]
+role = "SERVO_PAN_CHANNEL"
+from = "pwm"
+to = "servos.PAN"
+note = "Signal lead of the pan servo"
+
+[[channel_nets]]
+role = "SERVO_TILT_CHANNEL"
+from = "pwm"
+to = "servos.TILT"
+note = "Signal lead of the tilt servo"
+
+[[channel_nets]]
+role = "MOTOR_RIGHT_PWM_CHANNEL"
+from = "pwm"
+to = "motor_driver.PWMA"
+note = "Right motor speed, PWM 0-4095"
+
+[[channel_nets]]
+role = "MOTOR_RIGHT_IN2_CHANNEL"
+from = "pwm"
+to = "motor_driver.AIN2"
+note = "Right motor direction, full-on / full-off"
+
+[[channel_nets]]
+role = "MOTOR_RIGHT_IN1_CHANNEL"
+from = "pwm"
+to = "motor_driver.AIN1"
+note = "Right motor direction, full-on / full-off"
+
+[[channel_nets]]
+role = "MOTOR_LEFT_IN1_CHANNEL"
+from = "pwm"
+to = "motor_driver.BIN1"
+note = "Left motor direction, full-on / full-off"
+
+[[channel_nets]]
+role = "MOTOR_LEFT_IN2_CHANNEL"
+from = "pwm"
+to = "motor_driver.BIN2"
+note = "Left motor direction, full-on / full-off"
+
+[[channel_nets]]
+role = "MOTOR_LEFT_PWM_CHANNEL"
+from = "pwm"
+to = "motor_driver.PWMB"
+note = "Left motor speed, PWM 0-4095"
+
 [[undrawn]]
 role = "MIC_PDM_CLK_PIN"
 why = "wired to the PDM microphone on the Sense expansion board, not brought out to a header"

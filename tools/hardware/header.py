@@ -7,6 +7,10 @@ spells that binding is its pin-macro convention, and the repo has three:
     balancebot     #define PIN_IMU_SDA 6              in src/pin_config.h
     gamepad-synth  the robocar shape, but in main.c   (no pin_config.h at all)
 
+A *channel role* is the same idea one hop out: a PWM-driver output bound to a
+channel number (`#define SERVO_PAN_CHANNEL 6`), spelled per convention in
+`CHANNEL_CONVENTIONS` (#666).
+
 Only `robocar` is implemented. The other two are named here so the next
 project to adopt a hardware.toml extends this table rather than writing a
 parser of its own (ADR-021: one join, many emitters).
@@ -35,6 +39,16 @@ _DEFINE = re.compile(
 # (a frequency, an address, a PCA9685 channel).
 CONVENTIONS: dict[str, re.Pattern[str]] = {
     "robocar": re.compile(r"GPIO_NUM_\(?(\d+)\)?"),
+}
+
+# Convention name -> (name pattern, value pattern) for a *channel role*: an
+# output of a PWM driver (`#define SERVO_PAN_CHANNEL 6`), the second kind of
+# pin a hardware.toml net can start from (#666). The value's group 1 is the
+# channel number. The name is part of the test because the value alone is a
+# bare integer, which an address or a count also is; `I2C_BUS_CHANNEL_OLED` is
+# a multiplexer channel and does not end in `_CHANNEL`, so it is not one.
+CHANNEL_CONVENTIONS: dict[str, tuple[re.Pattern[str], re.Pattern[str]]] = {
+    "robocar": (re.compile(r"\w+_CHANNEL"), re.compile(r"(\d+)")),
 }
 
 
@@ -78,3 +92,19 @@ def roles_from_defines(defines: dict[str, str], convention: str) -> dict[str, in
         if m:
             roles[name] = int(m.group(1))
     return roles
+
+
+def channels_from_defines(defines: dict[str, str], convention: str) -> dict[str, int]:
+    """Return channel role -> channel number for every PWM-driver output macro."""
+    if convention not in CHANNEL_CONVENTIONS:
+        raise HardwareError(
+            f"pin-macro convention {convention!r} has no channel convention; "
+            f"implemented: {sorted(CHANNEL_CONVENTIONS)}"
+        )
+    name_re, value_re = CHANNEL_CONVENTIONS[convention]
+    channels: dict[str, int] = {}
+    for name, value in defines.items():
+        m = value_re.fullmatch(value)
+        if name_re.fullmatch(name) and m:
+            channels[name] = int(m.group(1))
+    return channels
