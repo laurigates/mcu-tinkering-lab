@@ -89,7 +89,8 @@ something happened, backing off #(PLANNER_LOOP_PERIOD_MS / 1000) s #sym.arrow
   ([2], [DC gear motor + wheel], [\~3–6 V hobby motors]),
   ([1], [Piezo buzzer], [Passive]),
   ([1], [100 Ω resistor], [In series with buzzer]),
-  ([1], [Electrolytic capacitor], [≥470 µF — for MAX98357A supply]),
+  ([3], [Electrolytic capacitor], [470 µF, 16 V — C1–C3, see §5]),
+  ([3], [Ceramic capacitor], [100 nF — C4–C6, optional, see §5]),
   ([2], [18650 Li-ion cell + holder], [Wired in SERIES — 7.4 V nominal]),
   ([1], [LM2596 buck converter module], [Adjustable — set to 5.0 V]),
   ([—], [Chassis, wiring, headers], [2WD car chassis, jumper wires, standoffs]),
@@ -274,9 +275,9 @@ whenever BCLK is running, so leaving it clocking silence is audible.
   The MAX98357A draws up to ~1 A peaks into a 4 Ω load. With brown-out
   detection already disabled for motor inrush, an undersized rail will not warn
   you — it will present as random resets or corrupt audio mid-sentence. Fit a
-  *≥470 µF bulk capacitor* at the amplifier's Vin, plus the usual 0.1 µF close
-  to the pin, and the same at the PCA9685's *V+* — the servos are the harsher
-  transient source. Star-wire the rail: every load takes its own feed from the
+  *470 µF bulk capacitor* at the amplifier's Vin (the breakout already carries
+  the datasheet's 0.1 µF + 10 µF), and the same at the PCA9685's *V+* — the
+  servos are the harsher transient source. Star-wire the rail: every load takes its own feed from the
   regulator's output terminal, because a servo's inrush travelling through the
   amplifier's feed wire is heard as distortion. Never power servos from the
   XIAO's 5 V pin or from USB. An *8 Ω speaker* roughly halves peak current
@@ -291,6 +292,26 @@ callout("Golden rule", kind: "danger")[
   it; a stiff 5 V supply and thick power wires matter.
 ],
 )
+
+== Suggested capacitors
+The schematic draws six capacitors that no breakout carries. Solder each one
+across the pin it names and the nearest GND pad, with short leads — a capacitor
+at the regulator's end of a jumper cannot supply a transient at the far end.
+Electrolytics go stripe (−) to GND. 16 V leaves margin even over a mis-set
+regulator, which cannot output more than the 8.4 V pack it steps down.
+
+#htable(
+  (auto, auto, auto, auto, 1fr),
+  ([Ref], [Part], [Fit at], [Status], [Why]),
+  ([C1], [470 µF electrolytic], [PCA9685 V+], [Recommended], [Servo transients; the board's empty electrolytic footprint]),
+  ([C2], [470 µF electrolytic], [TB6612FNG VM], [Recommended], [Motor start/stall current; board fits only 10 µF + 0.1 µF]),
+  ([C3], [470 µF electrolytic], [MAX98357A Vin], [Recommended], [Datasheet asks for bulk on long supply runs; board fits 10 µF + 0.1 µF]),
+  ([C4], [100 nF ceramic], [PCA9685 VCC], [Optional], [Board fits only a 10 µF]),
+  ([C5], [100 nF ceramic], [TCA9548A VIN], [Optional], [Board fits only a 10 µF]),
+  ([C6], [100 nF ceramic], [MCP23017 VCC], [Optional], [Module unidentified; skip if it has one]),
+  aligns: (center, left, left, left, left),
+)
+#text(fill: theme.muted)[Sources, board file by board file, are in `WIRING.md` § Suggested capacitors.]
 
 = 6 · Assembly Steps
 
@@ -311,7 +332,8 @@ callout("Golden rule", kind: "danger")[
 + *Add the buzzer* on GPIO#PIEZO_PIN through the 100 Ω resistor, and the ultrasonic
   sensor on GPIO#ULTRIG_PIN/#ULECHO_PIN (3.3 V power).
 + *Wire the audio path:* MAX98357A BCLK/LRC/DIN → GPIO#I2S_BCLK_PIN/#I2S_LRCLK_PIN/#I2S_DIN_PIN, Vin → 5 V with
-  ≥470 µF bulk cap, speaker → amp output. Leave SD_MODE floating for (L+R)/2.
+  C3 (470 µF) at Vin, speaker → amp output. Fit C1 at the PCA9685's V+ and C2 at
+  the TB6612FNG's VM the same way. Leave SD_MODE floating for (L+R)/2.
 + *Double-check the 3.3 V vs 5 V rails* and confirm common ground with a
   multimeter continuity test before first power-up.
 
