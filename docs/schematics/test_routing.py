@@ -1183,7 +1183,7 @@ def test_robocar_unified_tight_parallel_pairs_drop_below_baseline(real_circuit):
     # the wire is longer (217.14 before) while the crossings fell from 23.
     # The chosen ordering (shortest-first) crosses 11 times.
     m = real_circuit("robocar_unified").metrics
-    assert m.tight_parallel <= 1, f"{m.tight_parallel} tight pairs (baseline 0)"
+    assert m.tight_parallel == 0, f"{m.tight_parallel} tight pairs (baseline 0)"
     assert m.collinear_overlaps == 0
     assert m.crossings <= 15
     assert m.total_length <= 298.8345 + 1e-6
