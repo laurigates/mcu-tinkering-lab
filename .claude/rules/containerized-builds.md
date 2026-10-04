@@ -127,9 +127,11 @@ Run both **as the last step**, on every consumer, after the final edit. A shared
 file has no local blast radius: sweep the module list, not one project.
 `tools/check-flash-recipes.py` (pre-commit, and therefore CI) now gates the
 attribute-adjacency case mechanically along with the four flash-recipe
-assumptions, and dry-runs every flash recipe to check the files it names (see
-below) — but it cannot know whether a *recipe body* you changed still expands
-to the offsets you meant, so the dry-run stays a human step. The build-guide drift guard has the same gap for the
+assumptions, and dry-runs every flash recipe to check the files it names and
+the offset in front of each (see below). It cannot check a recipe whose expansion
+it cannot read — a shell variable for an offset, a part outside `build/`, a
+target missing from `BOOTLOADER_OFFSETS` — so read your own dry-run once after
+the final edit as well. The build-guide drift guard has the same gap for the
 opposite reason — it runs *only* in CI — and
 `build-guide-drift-guard.md` § 2 carries the extract-and-run recipe plus the
 negative control that a guard change needs.
@@ -170,7 +172,7 @@ table, no factory partition, and `CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y`.
 **Inline recipes are checked too, by what they expand to.** The four-assumption
 audit reads only recipes that compose a shared one. For every flash recipe —
 inline or shared — the same script runs `PORT=/dev/ttyDUMMY just --dry-run
-<module>::<recipe>` and asserts two things that need no knowledge of how the
+<module>::<recipe>` and asserts three things that need no knowledge of how the
 recipe is written:
 
 - every `.bin` it names is one the build writes: `build/<CMake project()>.bin`,
@@ -178,7 +180,16 @@ recipe is written:
   or `build/ota_data_initial.bin`;
 - a full flash (one that writes the partition table) also writes
   `ota_data_initial.bin` whenever the table has an otadata row, with the table
-  found by `tools/lib/otadata-predicate.sh` — the parser the release path uses.
+  found by `tools/lib/otadata-predicate.sh` — the parser the release path uses;
+- each `<offset> build/<file>.bin` pair puts the file where the build expects it
+  (issue #651): the bootloader at the target's ROM offset (0x1000 on
+  esp32/esp32s2, 0x2000 on esp32p4/esp32c5, 0x0 elsewhere, from the project
+  justfile's `target`), the partition table at `CONFIG_PARTITION_TABLE_OFFSET`
+  (default 0x8000), otadata at the table's otadata row, and the app at the
+  partition `idf.py flash` uses — `factory` if there is one, else the lowest
+  `ota_N`, or 0x10000 for ESP-IDF's built-in tables. A part whose expected offset
+  cannot be worked out (unknown target, an app row with a blank offset) is
+  reported as unverifiable rather than passed.
 
 robocar-main and robocar-camera failed both for months (fixed in #598): the
 recipes flashed `build/robocar-{main,camera}.bin`, which no build writes, and the
@@ -187,7 +198,10 @@ Its first run found `llm-telegram` skipping otadata too (issue #608). A recipe
 handing esptool the build's own `@flash_args` passes by construction; recipes
 that do not run esptool (ESPHome, picotool, pybricks) are out of scope. The check
 needs `just` on PATH and fails without it, which is why `test.yml` installs it.
-It does **not** check offsets — that is still the dry-run's job.
+A wrong offset is the silent case: esptool writes the file wherever it is told,
+over whatever partition sits there. `llm-telegram`'s otadata at 0xe000 (not the
+usual 0xd000, because its nvs is 0x5000) was copied from `partitions.csv` by hand
+in #648; moving it to 0xd000 now fails the check.
 
 ### Monitor Recipe
 

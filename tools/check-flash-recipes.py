@@ -19,23 +19,25 @@ layout on an 8 MB part read as standard and composed the recipe anyway. Caught b
 check made mechanical, so it does not depend on anyone remembering.
 
 It also audits EVERY flash recipe, hand-written ones included, by expanding it
-with `just --dry-run` and checking the files it names against what an ESP-IDF
-build writes (see check_flash_recipe_outputs). Hand-written recipes stay
+with `just --dry-run` and checking the files it names, and the offset in front
+of each, against what an ESP-IDF build writes and where it expects them (see
+check_flash_recipe_outputs). Hand-written recipes stay
 hand-written for layout reasons, so the structural audit above cannot read them;
 their dry-run text needs no structure to check. That half needs `just` on PATH
 and fails, rather than skipping, without it.
 
 Run: python3 tools/check-flash-recipes.py [--verbose]
 Exit: 0 clean; 1 on any finding (a shared-recipe mismatch, a flash recipe
-naming a file the build does not write or skipping otadata, a failed
-dry-run), when `just` is missing, or when the otadata predicate or
-`just --summary` cannot run.
+naming a file the build does not write, writing one at the wrong offset or
+skipping otadata, a failed dry-run), when `just` is missing, or when the
+otadata predicate or `just --summary` cannot run.
 Tests: python3 -m unittest tools/test_check_flash_recipes.py
 """
 
 from __future__ import annotations
 
 import argparse
+import functools
 import os
 import re
 import shutil
@@ -253,29 +255,83 @@ def check_justfile_directory() -> list[Finding]:
 # The shared-recipe audit above can reason about structure because it knows the
 # recipe. A hand-written recipe has no structure to know — but its dry-run is
 # just text naming files, and the files an ESP-IDF build writes are a short,
-# fixed list. So the check reads the expanded command and asks two questions
+# fixed list. So the check reads the expanded command and asks three questions
 # that need no knowledge of how the recipe is written:
 #   1. is every .bin it names one the build produces?
 #   2. if it is a full flash and the partition table has an otadata row, does it
 #      write ota_data_initial.bin?
+#   3. is each file written at the offset the project's target and partition
+#      table give it (issue #651)? A right file at a wrong offset overwrites
+#      whatever partition sits there, and esptool reports success.
 # robocar-main and robocar-camera failed both for months (fixed in #598): their
 # recipes flashed build/robocar-{main,camera}.bin, which no build ever wrote, and
 # the camera recipe never wrote otadata on an ota_0/ota_1 table with rollback.
 # ---------------------------------------------------------------------------
 
 APP_SUFFIX = ".bin"
+BOOTLOADER_OUTPUT = "bootloader/bootloader.bin"
 PARTITION_TABLE_OUTPUT = "partition_table/partition-table.bin"
 OTADATA_OUTPUT = "ota_data_initial.bin"
 # Written by every ESP-IDF build regardless of project name. otadata only exists
 # when the table has a `data,ota` row, but naming it on a table without one is a
 # missing-file error at flash time, not a silent one, so it is allowed here.
 FIXED_BUILD_OUTPUTS = (
-    "bootloader/bootloader.bin",
+    BOOTLOADER_OUTPUT,
     PARTITION_TABLE_OUTPUT,
     OTADATA_OUTPUT,
 )
 
+# Where the ROM loads the second-stage bootloader from, per target. Copied from
+# ESP-IDF v5.4 components/bootloader/Kconfig.projbuild, BOOTLOADER_OFFSET_IN_FLASH
+# ("not configurable in ESP-IDF"): 0x1000 on esp32/esp32s2, 0x2000 on
+# esp32p4/esp32c5, 0x0 on every other target. A target outside this table gets
+# no offset, and a recipe flashing its bootloader is reported unverifiable.
+BOOTLOADER_OFFSETS = {
+    "esp32": 0x1000,
+    "esp32s2": 0x1000,
+    "esp32s3": 0x0,
+    "esp32c2": 0x0,
+    "esp32c3": 0x0,
+    "esp32c6": 0x0,
+    "esp32c61": 0x0,
+    "esp32h2": 0x0,
+    "esp32c5": 0x2000,
+    "esp32p4": 0x2000,
+}
+DEFAULT_PARTITION_TABLE_OFFSET = 0x8000
+# ESP-IDF's built-in tables (single app, large single app, two OTA) leave the
+# offsets blank; gen_esp32part.py places nvs and phy_init after the table and
+# aligns the first app to 64 KB, which lands on 0x10000 behind a table at 0x8000.
+BUILT_IN_TABLE_APP_OFFSET = 0x10000
+# parttool.py's --partition-boot-default search, which is where `idf.py flash`
+# writes the app: factory if the table has one, else the lowest ota_N.
+BOOT_APP_SUBTYPES = ("factory", *(f"ota_{n}" for n in range(16)))
+
+
+@dataclass
+class FlashLayout:
+    """Where each build output of one project belongs in flash.
+
+    None means the offset could not be determined; `why` says why, and is
+    quoted in the finding. For otadata, None means the table has no otadata row.
+    """
+
+    bootloader: int | None
+    partition_table: int | None
+    otadata: int | None
+    app: int | None
+    why: dict[str, str] = field(default_factory=dict)
+
+
 BIN_TOKEN_RE = re.compile(r"""[^\s"'`=]+\.bin\b""")
+# `<offset> <file>.bin`, the pair esptool write-flash takes. A .bin with no
+# number in front (a `test -f` guard, an argument to another tool) is not being
+# written at an address, so it has no offset to check.
+OFFSET_PAIR_RE = re.compile(
+    r"(?<![\w.:/-])(?P<offset>0[xX][0-9a-fA-F]+|\d+)\s+(?P<token>"
+    + BIN_TOKEN_RE.pattern
+    + ")"
+)
 ESPTOOL_RE = re.compile(r"\besptool(?:\.py)?\b")
 # ESP-IDF writes build/flash_args itself, with every part the table needs —
 # otadata included — so a recipe that hands esptool the argfile is correct by
@@ -319,7 +375,7 @@ def audit_dry_run(
     module_dir: Path,
     text: str,
     project_name: Callable[[Path], str | None],
-    has_otadata: Callable[[Path], bool],
+    layout: Callable[[Path], FlashLayout],
 ) -> tuple[str, list[Finding]]:
     """Audit one recipe's dry-run text. Returns (status, findings).
 
@@ -380,11 +436,13 @@ def audit_dry_run(
             )
         written.setdefault(project_dir, set()).add(rel)
 
+    findings += audit_offsets(recipe, module_dir, body, project_name, layout)
+
     for project_dir, rels in written.items():
         # Only a FULL flash owes otadata. An app-only recipe leaving the OTA
         # state alone is the point of an app-only recipe.
         if PARTITION_TABLE_OUTPUT in rels and OTADATA_OUTPUT not in rels:
-            if has_otadata(project_dir):
+            if layout(project_dir).otadata is not None:
                 findings.append(
                     Finding(
                         recipe,
@@ -399,6 +457,69 @@ def audit_dry_run(
     return "checked", findings
 
 
+def audit_offsets(
+    recipe: str,
+    module_dir: Path,
+    body: str,
+    project_name: Callable[[Path], str | None],
+    layout: Callable[[Path], FlashLayout],
+) -> list[Finding]:
+    """Check the offset in front of each build output against its project's layout.
+
+    Files that are not a build output were already reported by audit_dry_run
+    and are skipped here, so one bad path does not produce two findings.
+    """
+    findings: list[Finding] = []
+    for match in OFFSET_PAIR_RE.finditer(body):
+        token = match.group("token")
+        try:
+            offset = int(match.group("offset"), 0)
+        except ValueError:  # e.g. "0100": base-0 int() rejects leading zeros
+            continue
+        split = split_build_path(token, module_dir)
+        if split is None:
+            continue
+        project_dir, rel = split
+        name = project_name(project_dir)
+        if name is None:
+            continue
+        role = {
+            BOOTLOADER_OUTPUT: "bootloader",
+            PARTITION_TABLE_OUTPUT: "partition_table",
+            OTADATA_OUTPUT: "otadata",
+            name + APP_SUFFIX: "app",
+        }.get(rel)
+        if role is None:
+            continue
+        parts = layout(project_dir)
+        expected = getattr(parts, role)
+        if expected is None:
+            # No otadata row: the build writes no ota_data_initial.bin, so the
+            # flash fails loudly on the missing file (see FIXED_BUILD_OUTPUTS).
+            if role != "otadata":
+                findings.append(
+                    Finding(
+                        recipe,
+                        "OFFSET_UNVERIFIABLE",
+                        f"{token} at 0x{offset:x}: no offset to check it against "
+                        f"— {parts.why.get(role, 'unknown')}",
+                    )
+                )
+            continue
+        if offset != expected:
+            findings.append(
+                Finding(
+                    recipe,
+                    "WRONG_OFFSET",
+                    f"{token} is written at 0x{offset:x}, but it belongs at "
+                    f"0x{expected:x} ({parts.why.get(role, role)}); esptool "
+                    "writes it there anyway, over whatever partition sits at "
+                    f"0x{offset:x}",
+                )
+            )
+    return findings
+
+
 def cmake_project_name(project_dir: Path) -> str | None:
     """The CMake project() name of an ESP-IDF project, which names build/<name>.bin."""
     cmake = project_dir / "CMakeLists.txt"
@@ -411,26 +532,106 @@ def cmake_project_name(project_dir: Path) -> str | None:
     return match.group("name") if match else None
 
 
-def otadata_partition(project_dir: Path) -> bool:
-    """Ask tools/lib/otadata-predicate.sh, the one parser the release path uses.
+def partition_table(project_dir: Path) -> tuple[Path, int | None]:
+    """The table the build uses and its otadata offset, from the release path's parser.
 
-    Calling it rather than re-parsing here keeps this check, the flasher
-    manifests and the release assembly from disagreeing about which table a
-    project builds (issues #541, #560). A predicate that fails to run raises —
-    reading that as "no otadata row" would fail this check open.
+    Asks tools/lib/otadata-predicate.sh rather than re-parsing here, which keeps
+    this check, the flasher manifests and the release assembly from disagreeing
+    about which table a project builds (issues #541, #560). A predicate that
+    fails to run raises — reading that as "no otadata row" would fail this
+    check open.
     """
-    script = 'source "$1" || exit 2; t=$(resolve_partition_table "$2") || exit 2; parse_otadata_offset "$t"'
+    script = (
+        'source "$1" || exit 2; t=$(resolve_partition_table "$2") || exit 2; '
+        'printf "%s\\n" "$t"; parse_otadata_offset "$t"'
+    )
     proc = subprocess.run(
         ["bash", "-c", script, "_", str(OTADATA_PREDICATE), str(project_dir)],
         capture_output=True,
         text=True,
         check=False,
     )
-    if proc.returncode != 0:
+    lines = proc.stdout.split("\n")
+    if proc.returncode != 0 or len(lines) < 2 or not lines[0]:
         raise RuntimeError(
             f"otadata predicate failed for {_display(project_dir)}: {proc.stderr.strip()}"
         )
-    return bool(proc.stdout.strip())
+    otadata = lines[1].strip()
+    return Path(lines[0]), int(otadata) if otadata else None
+
+
+def boot_app_offset(table: Path) -> tuple[int | None, str]:
+    """Offset of the partition `idf.py flash` writes the app to, and its name.
+
+    Returns (None, reason) when the table has no app partition, or when that
+    partition's offset is blank and left to gen_esp32part.py to place.
+    """
+    apps: dict[str, str] = {}
+    for line in table.read_text().splitlines():
+        cols = [c.strip() for c in line.split("#", 1)[0].split(",")]
+        if len(cols) >= 4 and cols[1] == "app":
+            apps.setdefault(cols[2], cols[3])
+    for subtype in BOOT_APP_SUBTYPES:
+        if subtype in apps:
+            where = f"{_display(table)}'s {subtype} partition"
+            try:
+                return int(apps[subtype], 0), where
+            except ValueError:
+                return None, f"{where} has no explicit offset"
+    return None, f"{_display(table)} has no factory or ota_N app partition"
+
+
+def flash_layout(project_dir: Path) -> FlashLayout:
+    """Where an ESP-IDF build of project_dir expects each output to be flashed."""
+    why: dict[str, str] = {}
+    cfg = parse_sdkconfig(project_dir / "sdkconfig.defaults")
+
+    # `just build` runs `idf.py set-target {{target}}`, so the justfile's target
+    # is the chip the bootloader in build/ was built for.
+    justfile = project_dir / "justfile"
+    match = TARGET_RE.search(justfile.read_text()) if justfile.is_file() else None
+    target = match.group("target") if match else cfg.get("CONFIG_IDF_TARGET")
+    bootloader = BOOTLOADER_OFFSETS.get(target) if target else None
+    if target is None:
+        why["bootloader"] = (
+            f"{_display(project_dir)} sets no target in its justfile or sdkconfig.defaults"
+        )
+    elif bootloader is None:
+        why["bootloader"] = f'target "{target}" is not in BOOTLOADER_OFFSETS'
+    else:
+        why["bootloader"] = f"the {target} ROM loads its bootloader there"
+
+    raw = cfg.get("CONFIG_PARTITION_TABLE_OFFSET")
+    try:
+        table_offset = int(raw, 0) if raw else DEFAULT_PARTITION_TABLE_OFFSET
+        why["partition_table"] = (
+            "CONFIG_PARTITION_TABLE_OFFSET" if raw else "ESP-IDF's default table offset"
+        )
+    except ValueError:
+        table_offset = None
+        why["partition_table"] = f"CONFIG_PARTITION_TABLE_OFFSET={raw} is not a number"
+
+    table, otadata = partition_table(project_dir)
+    why["otadata"] = f"{_display(table)}'s otadata row"
+    if table.is_file():
+        app, why["app"] = boot_app_offset(table)
+    elif table_offset == DEFAULT_PARTITION_TABLE_OFFSET:
+        app = BUILT_IN_TABLE_APP_OFFSET
+        why["app"] = "ESP-IDF's built-in partition table"
+    else:
+        app = None
+        why["app"] = (
+            "a built-in partition table behind a moved partition table; "
+            "its app offset is not computed here"
+        )
+
+    return FlashLayout(
+        bootloader=bootloader,
+        partition_table=table_offset,
+        otadata=otadata,
+        app=app,
+        why=why,
+    )
 
 
 def flash_recipes(just: str) -> tuple[list[tuple[str, Path]], list[Finding]]:
@@ -483,6 +684,9 @@ def check_flash_recipe_outputs(just: str) -> tuple[dict[str, str], list[Finding]
             )
         )
 
+    # Recipes share projects (flash and flash-monitor, robocar::flash-main and
+    # robocar-main::flash), and each lookup runs the predicate in bash.
+    layout = functools.cache(flash_layout)
     statuses: dict[str, str] = {}
     for recipe, module_dir in recipes:
         proc = runs[recipe]
@@ -496,7 +700,7 @@ def check_flash_recipe_outputs(just: str) -> tuple[dict[str, str], list[Finding]
             module_dir,
             proc.stdout + proc.stderr,
             project_name=cmake_project_name,
-            has_otadata=otadata_partition,
+            layout=layout,
         )
         statuses[recipe] = status
         findings += found
@@ -661,7 +865,8 @@ def main() -> int:
             "see packages/robocar/unified/justfile for the worked example.\n"
             "Any flash recipe must name only files the build writes: the app is\n"
             "build/<CMake project() name>.bin, and a full flash on a table with\n"
-            "an otadata row writes build/ota_data_initial.bin too. Verify with:\n"
+            "an otadata row writes build/ota_data_initial.bin too, and each file\n"
+            "goes at the offset the target and partition table give it. Verify with:\n"
             "PORT=/dev/ttyDUMMY just --dry-run <module>::flash"
         )
         return 1
