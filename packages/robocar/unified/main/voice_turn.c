@@ -118,21 +118,6 @@ static voice_endpoint_cfg_t s_endpoint_cfg = {
     .margin_db = VOICE_ENDPOINT_MARGIN_DB_DEFAULT,
 };
 
-/** True from just before the start beep until its settle time has passed. The
- *  ambient listener reads it to keep the beep out of the pre-roll (as silence of
- *  the same length — see voice_preroll.h). */
-static volatile bool s_cue_active;
-
-/** Endpointing knobs (`voice endpoint`). Not persisted, like every other voice
- *  threshold: a boot comes up at the documented defaults. max_ms is not used
- *  from here; it is set per turn from the buffer actually allocated. */
-static voice_endpoint_cfg_t s_endpoint_cfg = {
-    .min_ms = VOICE_ENDPOINT_MIN_MS_DEFAULT,
-    .max_ms = VOICE_TURN_VAD_MAX_MS,
-    .silence_ms = VOICE_ENDPOINT_SILENCE_MS_DEFAULT,
-    .margin_db = VOICE_ENDPOINT_MARGIN_DB_DEFAULT,
-};
-
 /* Per-turn state at FILE scope, not on the 8 kB stack — the same reason
  * gemini_tts.c keeps its context static. The response buffer alone would be
  * half the stack. */
