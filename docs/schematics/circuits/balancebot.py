@@ -99,8 +99,11 @@ def draw() -> schemdraw.Drawing:
     # Its lead is still the nENABLE net, so it takes the bus colour: the
     # junction at ``top`` joins it, and a dot must join a single class.
     d.add(elm.Line().up(1.5).at(top).color(net_color("signal")))
-    d.add(elm.Resistor().up().label("10 kΩ"))
-    d.add(elm.Vdd().label("+3V3").color(net_color("power")))
+    # Both labels sit right of the pull-up (#641). On the left, "10 kΩ"
+    # covered GPIO5's stub point; above its tag, "+3V3" lay across the I2C
+    # nets' row. The router then routed round them, from 2 crossings to 8.
+    d.add(elm.Resistor().up().label("10 kΩ", loc="bot"))
+    d.add(elm.Vdd().label("+3V3", loc="right").color(net_color("power")))
 
     # Power rails.
     # XIAO: 3V3 logic, 5V from the buck converter, common ground — left side.
@@ -111,9 +114,11 @@ def draw() -> schemdraw.Drawing:
     d.add(elm.Line().left(0.5).at(xiao.GND).color(net_color("ground")))
     d.add(elm.Ground().color(net_color("ground")))
 
-    # MPU6050: 3V3 + ground on its left, below the signal wires.
+    # MPU6050: 3V3 + ground on its left, below the signal wires. The label
+    # sits beside its tag: above it, "+3V3" reached the INT row and that
+    # net's stub ran through the text (#641).
     d.add(elm.Line().left(1.0).at(mpu.VCC).color(net_color("power")))
-    d.add(elm.Vdd().label("+3V3").color(net_color("power")))
+    d.add(elm.Vdd().label("+3V3", loc="right").color(net_color("power")))
     d.add(elm.Line().left(1.0).at(mpu.GND).color(net_color("ground")))
     d.add(elm.Ground().color(net_color("ground")))
 

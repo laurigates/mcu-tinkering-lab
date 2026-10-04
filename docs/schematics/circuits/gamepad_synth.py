@@ -17,7 +17,9 @@ def draw() -> schemdraw.Drawing:
 
     # === Components first, so every net below routes with full obstacle
     # awareness (the auto-router only avoids components already placed). ===
-    esp = d.add(esp32_s3_zero().label("ESP32-S3-Zero", loc="bot", ofst=0.4))
+    # Name on top: GPIO8/GPIO9 leave the bottom edge, and their stubs ran
+    # straight through it there (#641).
+    esp = d.add(esp32_s3_zero().label("ESP32-S3-Zero", loc="top", ofst=0.4))
     amp = d.add(
         max98357a()
         .at((esp.center.x + 9, esp.center.y))
