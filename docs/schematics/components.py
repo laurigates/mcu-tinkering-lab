@@ -133,9 +133,18 @@ def physical_module(
     return elm.Ic(pins=pins, size=(width, height), pinspacing=PITCH)
 
 
+def gpio_anchor(gpio: int) -> str:
+    """The anchor an MCU's physical symbol gives the pad wired to ``gpio``.
+
+    One spelling for the factory that names the pads and the circuits that
+    look them up by pin role (#462), so the two cannot drift apart.
+    """
+    return f"GPIO{gpio}"
+
+
 def _gpio_label(pad: Pad) -> str:
     """Firmware name for a GPIO pad (``GPIO5``), the silkscreen for the rest."""
-    return f"GPIO{pad.gpio}" if pad.gpio is not None else pad.name
+    return gpio_anchor(pad.gpio) if pad.gpio is not None else pad.name
 
 
 def _silkscreen_if_gpio(pad: Pad) -> str:
@@ -255,14 +264,16 @@ def xiao_esp32s3_sense(layout: str = "schematic") -> elm.Ic:
     )
 
 
-def pdm_microphone() -> elm.Ic:
+def pdm_microphone(*, clk: str, data: str) -> elm.Ic:
     """MSM261D PDM microphone on the XIAO ESP32-S3 Sense expansion board.
 
-    Nothing here is soldered: GPIO42 (CLK) and GPIO41 (DATA) run to the mic on
-    the Sense board itself and are not brought out to a header. The outline is
+    Nothing here is soldered: the CLK and DATA lines run to the mic on the
+    Sense board itself and are not brought out to a header. The outline is
     dashed so the block reads as on-module rather than as another breakout;
-    the circuit should still say so in its label. Pin numbers carry the GPIOs
-    from ``pin_config.h`` because there is no header ``Dn`` to print.
+    the circuit should still say so in its label. ``clk`` and ``data`` are the
+    text printed beside each pin — the GPIO each one uses, which the circuit
+    takes from the hardware join (#462) because there is no header ``Dn`` to
+    print and no number this factory could know.
 
     Pins face right so the block can sit up and to the left of the XIAO, clear
     of the I2S bus that runs over the module's top edge to the amplifier.
@@ -273,8 +284,8 @@ def pdm_microphone() -> elm.Ic:
     return elm.Ic(
         pins=[
             # Right (bottom → top)
-            elm.IcPin(name="DATA", side="R", pin="GPIO41"),
-            elm.IcPin(name="CLK", side="R", pin="GPIO42"),
+            elm.IcPin(name="DATA", side="R", pin=data),
+            elm.IcPin(name="CLK", side="R", pin=clk),
         ],
         size=(3, 2),
     ).linestyle("--")
