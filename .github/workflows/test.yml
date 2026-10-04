@@ -97,6 +97,14 @@ jobs:
       - name: Install pre-commit
         run: pip install pre-commit
 
+      # check-flash-recipes expands every flash recipe with `just --dry-run` and
+      # fails without `just` rather than skipping (issue #608). Pinned so a just
+      # release cannot change the dry-run text the check reads; bump deliberately.
+      - name: Install just
+        uses: extractions/setup-just@v4
+        with:
+          just-version: '1.58.0'
+
       - name: Cache pre-commit environments
         uses: actions/cache@v5
         with:
