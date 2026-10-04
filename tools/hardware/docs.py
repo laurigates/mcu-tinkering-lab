@@ -24,6 +24,9 @@ Usage, from the repo root:
     PYTHONPATH=tools python3 -m hardware.docs [--check] [<project_dir> ...]
 
 With no project, every git-tracked `packages/**/hardware.toml` is processed.
+Within a project, every Markdown file git would track is scanned, at any depth
+(#653) — a block in `docs/<x>.md` is checked like one in WIRING.md. A
+subdirectory with its own hardware.toml is a separate project and is skipped.
 `--check` writes nothing and exits 1 with a diff if any block is stale — the
 same regenerate-and-compare shape as the build-guide and schematic guards.
 """
@@ -255,11 +258,55 @@ def inject(text: str, render: Callable[[str], str], where: str) -> str:
     return "".join(out)
 
 
+def _markdown(project_dir: Path) -> list[Path]:
+    """Every Markdown file git would track under the project, at any depth (#653).
+
+    Read through `git ls-files` so `build/` and `managed_components/` stay out,
+    and with `--others --exclude-standard` so a doc not committed yet is still
+    checked. A subdirectory carrying its own hardware.toml is a separate
+    project and is left to its own run.
+    """
+    listed = subprocess.run(
+        [
+            "git",
+            "ls-files",
+            "-z",
+            "--cached",
+            "--others",
+            "--exclude-standard",
+            "--",
+            ":(glob)**/*.md",
+        ],
+        cwd=project_dir,
+        capture_output=True,
+        text=True,
+    )
+    if listed.returncode != 0:
+        raise HardwareError(
+            f"{project_dir}: cannot list Markdown files — not inside a git work "
+            f"tree? ({listed.stderr.strip()})"
+        )
+    paths = []
+    for rel in listed.stdout.split("\0"):
+        if not rel:
+            continue
+        path = project_dir / rel
+        nested = any(
+            (project_dir / d / SIDECAR).is_file()
+            for d in Path(rel).parents
+            if d != Path(".")
+        )
+        # --cached lists a tracked file that was deleted from the working tree.
+        if path.is_file() and not nested:
+            paths.append(path)
+    return paths
+
+
 def _docs(project_dir: Path) -> list[Path]:
-    """The project's top-level Markdown files that carry at least one block."""
+    """The project's Markdown files, at any depth, that carry at least one block."""
     return sorted(
         p
-        for p in project_dir.glob("*.md")
+        for p in _markdown(project_dir)
         if any(_BEGIN.match(ln) for ln in p.read_text(encoding="utf-8").splitlines())
     )
 

@@ -6,12 +6,15 @@ python3 -m unittest discover -s tools/hardware -t tools
 from __future__ import annotations
 
 import io
+import os
 import shutil
+import subprocess
 import tempfile
 import textwrap
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
+from unittest import mock
 
 from hardware import HardwareError, join
 from hardware.docs import (
@@ -29,6 +32,11 @@ from hardware.docs import (
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 UNIFIED = REPO_ROOT / "packages/robocar/unified"
+
+
+def git_init(path: Path) -> None:
+    """The scan reads `git ls-files`; untracked files count, so no commit is needed."""
+    subprocess.run(["git", "init", "-q", str(path)], check=True)
 
 
 def write(path: Path, text: str) -> Path:
@@ -381,6 +389,77 @@ class InjectTest(unittest.TestCase):
             inject(doc("<!-- BEGIN GENERATED pin-table -->", END), self.render, "x.md")
 
 
+class DocsDiscoveryTest(Fixture):
+    """#653: a block in a nested Markdown file is checked, not silently skipped."""
+
+    STALE = doc("# Nested", "", BEGIN("signals:buzzer"), "stale body", END)
+
+    def setUp(self):
+        super().setUp()
+        git_init(self.root)
+
+    def drifted(self) -> list[str]:
+        return [
+            p.relative_to(self.proj).as_posix()
+            for p, _ in check_project(self.proj, repo_root=self.root)
+        ]
+
+    def test_a_block_in_a_nested_file_is_checked(self):
+        write(self.proj / "docs/deep/notes.md", self.STALE)
+        self.assertEqual(self.drifted(), ["docs/deep/notes.md"])
+
+    def test_a_top_level_file_is_still_checked(self):
+        write(self.proj / "WIRING.md", self.STALE)
+        self.assertEqual(self.drifted(), ["WIRING.md"])
+
+    def test_a_staged_file_is_checked(self):
+        # Unmodified tracked files are what CI sees, and --others does not list
+        # them: without --cached the real WIRING.md would go unscanned.
+        write(self.proj / "WIRING.md", self.STALE)
+        write(self.proj / "docs/deep/notes.md", self.STALE)
+        subprocess.run(["git", "add", "-A"], cwd=self.root, check=True)
+        self.assertEqual(self.drifted(), ["WIRING.md", "docs/deep/notes.md"])
+
+    def test_a_tracked_file_deleted_from_the_work_tree_is_skipped(self):
+        notes = write(self.proj / "docs/notes.md", self.STALE)
+        subprocess.run(["git", "add", "-A"], cwd=self.root, check=True)
+        notes.unlink()
+        self.assertEqual(self.drifted(), [])
+
+    def test_a_gitignored_file_is_not_scanned(self):
+        # build/ and managed_components/ hold vendored Markdown nobody edits.
+        write(self.proj / ".gitignore", "build/\n")
+        write(self.proj / "build/stale.md", self.STALE)
+        self.assertEqual(self.drifted(), [])
+
+    def test_a_nested_project_with_its_own_sidecar_is_left_to_itself(self):
+        # Its blocks render against its own hardware.toml, not this one's.
+        write(self.proj / "child/hardware.toml", SIDECAR)
+        write(self.proj / "child/docs/notes.md", self.STALE)
+        self.assertEqual(self.drifted(), [])
+
+    def test_regenerating_fixes_the_nested_file(self):
+        notes = write(self.proj / "docs/notes.md", self.STALE)
+        with redirect_stdout(io.StringIO()):
+            self.assertEqual(main([str(self.proj)], repo_root=self.root), 0)
+        self.assertEqual(self.drifted(), [])
+        self.assertIn("| + | GPIO7 (D1) |", notes.read_text(encoding="utf-8"))
+
+    def test_a_project_outside_a_git_work_tree_is_an_error(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        bare = Path(tmp.name) / "proj"
+        shutil.copytree(self.proj, bare)
+        write(Path(tmp.name) / "board.md", BOARD_MD)
+        # Stop git's upward search at the temp dir, so a TMPDIR that happens to
+        # sit inside some work tree cannot make the scan succeed.
+        ceiling = mock.patch.dict(os.environ, {"GIT_CEILING_DIRECTORIES": tmp.name})
+        ceiling.start()
+        self.addCleanup(ceiling.stop)
+        with self.assertRaisesRegex(HardwareError, "not inside a git work tree"):
+            check_project(bare, repo_root=Path(tmp.name))
+
+
 class RobocarUnifiedDocsTest(unittest.TestCase):
     """The acceptance in #461: green on the committed tree, red after a hand edit."""
 
@@ -394,6 +473,7 @@ class RobocarUnifiedDocsTest(unittest.TestCase):
             shutil.copy(UNIFIED / "main" / name, proj / "main")
         for name in ("WIRING.md", "README.md"):
             shutil.copy(UNIFIED / name, proj)
+        git_init(proj)
         return proj
 
     def test_the_committed_docs_are_up_to_date(self):
