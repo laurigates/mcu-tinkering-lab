@@ -28,6 +28,14 @@
 #define VOICE_HISTORY_CONVERSATION_WINDOW_MS 7000
 #define VOICE_HISTORY_IGNORE_TAG "__IGNORE__"
 
+/** Bytes the request-body buffer reserves beyond the two base64 payloads, for
+ *  the JSON skeleton: keys, the system prompt, the current prompt and the
+ *  history replies. The largest skeleton the firmware can build (a full history
+ *  ring of SPEECH_TEXT_MAX replies, a filled 1536-byte system prompt) prints to
+ *  ~3.7 kB unescaped; this is twice that and more, so escaped quotes and
+ *  newlines still fit. Pinned by test_request_body_peak_is_one_copy. */
+#define VOICE_HISTORY_BODY_HEADROOM (8 * 1024)
+
 typedef struct {
     char reply[SPEECH_TEXT_MAX];
 } voice_history_entry_t;
@@ -156,6 +164,10 @@ void voice_history_build_prompt(const char *name, bool has_image, const char *te
  * @param b64_wav Base64 audio WAV data.
  * @param now_ms Current timestamp in milliseconds.
  * @return True on success, false on allocation failure.
+ *
+ * The two `data` strings are attached BY REFERENCE, not copied: @p b64_jpeg and
+ * @p b64_wav must outlive the tree, and deleting the tree does not free them.
+ * Copying would put a second 341 kB clip in PSRAM beside the caller's (#625).
  */
 bool voice_history_build_contents(cJSON *contents, const char *prompt_text, const char *b64_jpeg,
                                   const char *b64_wav, uint32_t now_ms);
@@ -164,6 +176,11 @@ bool voice_history_build_contents(cJSON *contents, const char *prompt_text, cons
  * @brief Build complete unformatted JSON request body for Gemini API.
  *
  * Caller is responsible for free()ing the returned string.
+ *
+ * Memory: the only large allocation is the returned body, presized to both
+ * payloads plus VOICE_HISTORY_BODY_HEADROOM, so the peak while building is the
+ * caller's two base64 strings plus one body — not the ~2x that
+ * cJSON_PrintUnformatted()'s doubling growth and a copied tree used to cost.
  *
  * @param name Robot persona name (NULL for "Robocar").
  * @param sys_prompt System instruction prompt text (NULL for "Be brief.").

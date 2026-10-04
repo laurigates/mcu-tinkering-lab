@@ -6,6 +6,8 @@
 #include "voice_history.h"
 
 #include <assert.h>
+#include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -457,6 +459,124 @@ static void test_full_request_body_generation(void)
 }
 
 /* =========================================================================
+ * Request-body memory peak (issue #625)
+ *
+ * The body carries the clip's base64 (341 392 chars for an 8 s `listen`) and
+ * the camera frame's (up to 87 384 for a 64 kB JPEG). Two things used to
+ * multiply that on the way out: cJSON_AddStringToObject() duplicated both
+ * strings into the tree, and cJSON_PrintUnformatted() grows its buffer to TWICE
+ * the bytes needed at each step, so the print alone reached ~860 kB. These
+ * hooks count every byte cJSON allocates while the body is built. They also
+ * disable cJSON's realloc path (custom hooks always do), so a grow is a fresh
+ * allocation plus the old buffer — the worst case on a heap that cannot extend
+ * a block in place, which is the case a peak figure has to cover.
+ * ========================================================================= */
+
+typedef union {
+    size_t size;
+    max_align_t align;
+} track_hdr_t;
+
+static size_t s_track_live;
+static size_t s_track_peak;
+
+static void *track_malloc(size_t size)
+{
+    track_hdr_t *h = malloc(sizeof(track_hdr_t) + size);
+    if (!h) {
+        return NULL;
+    }
+    h->size = size;
+    s_track_live += size;
+    if (s_track_live > s_track_peak) {
+        s_track_peak = s_track_live;
+    }
+    return h + 1;
+}
+
+static void track_free(void *ptr)
+{
+    if (!ptr) {
+        return;
+    }
+    track_hdr_t *h = (track_hdr_t *)ptr - 1;
+    s_track_live -= h->size;
+    free(h);
+}
+
+/** A base64-looking string of exactly @p len characters (plain malloc: it is
+ *  the caller's copy, which voice_turn.c holds anyway and is not cJSON's). */
+static char *fake_b64(size_t len, char fill)
+{
+    char *s = malloc(len + 1);
+    ASSERT(s != NULL);
+    memset(s, fill, len);
+    s[len] = '\0';
+    return s;
+}
+
+static void test_request_body_peak_is_one_copy(void)
+{
+    /* Worst case the firmware can produce: 8 s clip, a JPEG at the 64 kB
+     * CONFIG_CAMERA_JPEG_MODE_FRAME_SIZE ceiling, a full history ring of
+     * maximum-length replies, and a system prompt filling its buffer. */
+    const size_t wav_len = ((256000 + 44 + 2) / 3) * 4; /* 341 392 */
+    const size_t jpeg_len = ((65536 + 2) / 3) * 4;      /* 87 384 */
+    char *b64_wav = fake_b64(wav_len, 'A');
+    char *b64_jpeg = fake_b64(jpeg_len, 'B');
+
+    char reply[SPEECH_TEXT_MAX];
+    memset(reply, 'r', sizeof(reply) - 1);
+    reply[sizeof(reply) - 1] = '\0';
+    voice_history_reset();
+    for (uint32_t i = 0; i < VOICE_HISTORY_MAX_TURNS; i++) {
+        voice_history_record(reply, 1000 + i);
+    }
+    char sys_prompt[1536];
+    memset(sys_prompt, 's', sizeof(sys_prompt) - 1);
+    sys_prompt[sizeof(sys_prompt) - 1] = '\0';
+
+    reactive_telemetry_t tele = {.distance_cm = 50};
+    cJSON_Hooks hooks = {.malloc_fn = track_malloc, .free_fn = track_free};
+    cJSON_InitHooks(&hooks);
+    s_track_live = 0;
+    s_track_peak = 0;
+
+    char *body =
+        voice_history_build_request_body("Teuvo", sys_prompt, &tele, true, b64_jpeg, b64_wav, 2000);
+    const size_t peak = s_track_peak;
+    ASSERT(body != NULL);
+    const size_t body_len = strlen(body);
+    printf("     body=%zu B, cJSON peak=%zu B (caller's strings %zu B not counted)\n", body_len,
+           peak, wav_len + jpeg_len);
+
+    /* One copy of the payload plus the body skeleton. Anything near double
+     * means a string was duplicated into the tree or the print buffer grew. */
+    ASSERT(peak <= wav_len + jpeg_len + 32 * 1024);
+
+    /* And the body still carries both payloads intact. */
+    cJSON *root = cJSON_Parse(body);
+    ASSERT(root != NULL);
+    cJSON *curr = cJSON_GetArrayItem(cJSON_GetObjectItem(root, "contents"),
+                                     (int)(2 * VOICE_HISTORY_MAX_TURNS));
+    cJSON *parts = cJSON_GetObjectItem(curr, "parts");
+    ASSERT(cJSON_GetArraySize(parts) == 3);
+    const cJSON *img = cJSON_GetObjectItem(
+        cJSON_GetObjectItem(cJSON_GetArrayItem(parts, 1), "inlineData"), "data");
+    const cJSON *aud = cJSON_GetObjectItem(
+        cJSON_GetObjectItem(cJSON_GetArrayItem(parts, 2), "inlineData"), "data");
+    ASSERT(img != NULL && strcmp(img->valuestring, b64_jpeg) == 0);
+    ASSERT(aud != NULL && strcmp(aud->valuestring, b64_wav) == 0);
+    cJSON_Delete(root);
+    cJSON_free(body);
+
+    ASSERT(s_track_live == 0); /* nothing leaked, nothing of the caller's freed */
+    cJSON_InitHooks(NULL);
+    free(b64_wav);
+    free(b64_jpeg);
+}
+
+/* =========================================================================
  * Main entry point
  * ========================================================================= */
 
@@ -482,6 +602,7 @@ int main(void)
     test_run("contents_without_history", test_contents_without_history);
     test_run("contents_with_history_and_image", test_contents_with_history_and_image);
     test_run("full_request_body_generation", test_full_request_body_generation);
+    test_run("request_body_peak_is_one_copy", test_request_body_peak_is_one_copy);
 
     printf("=== %d/%d tests passed ===\n", test_pass, test_count);
     return (test_pass == test_count) ? 0 : 1;

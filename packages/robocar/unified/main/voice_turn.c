@@ -3,9 +3,10 @@
  * @brief Push-to-talk: record a clip, ask Gemini, speak the reply.
  *
  * See voice_turn.h for the design. The ordering inside run_turn() is the part
- * worth reading — it is what keeps the transient allocation at roughly 430 kB
- * rather than 800 kB, on a device where the camera framebuffers and the 512 kB
- * TTS ring are already spoken for.
+ * worth reading: each buffer is released as soon as the next exists, so no two
+ * copies of the clip outlive the step that needs both. For an 8 s `listen` the
+ * peak is the request-body build, ~873 kB with a 64 kB frame attached — the
+ * step-by-step figures are on AUDIO_CLIP_MAX_BYTES in audio_clip.h (issue #625).
  */
 
 #include "voice_turn.h"
@@ -414,7 +415,8 @@ static void run_turn(uint32_t window_ms, bool vad)
     const uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000);
     char *body = build_body(b64, b64_jpeg, &tele, has_telemetry, now_ms);
 
-    /* Free base64 buffers immediately after adding to request body to preserve PSRAM. */
+    /* The body now holds the only other copy (the cJSON tree only referenced
+     * these strings), so release ours before the upload, not after it. */
     free(b64);
     b64 = NULL;
     if (b64_jpeg) {
