@@ -325,7 +325,7 @@ static void run_turn(uint32_t window_ms, bool vad)
      * turn makes no sound. */
     const voice_budget_verdict_t verdict = voice_budget_check(t_start, vad);
     if (verdict != VOICE_BUDGET_OK) {
-        ESP_LOGW(TAG, "listen: refused at start — %s",
+        ESP_LOGW(TAG, "listen: %s turn refused at start — %s", vad ? "hands-free" : "listen",
                  verdict == VOICE_BUDGET_TRIP_CEILING ? "spend ceiling reached" : "rationed");
         return;
     }

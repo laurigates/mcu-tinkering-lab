@@ -595,12 +595,15 @@ static void print_voice_turn_budget(const char *indent, uint32_t now_ms)
     const uint32_t ceiling = voice_budget_ceiling();
     const uint32_t requests = voice_budget_requests();
     const uint32_t vad = voice_budget_vad_requests();
+    /* Clamped: the two counters are read unlocked, and a charge landing between
+     * the reads (or a resume) can leave vad > requests for one line. */
+    const uint32_t listen = (requests > vad) ? (requests - vad) : 0u;
     printf("%sturns:  %u", indent, (unsigned)requests);
     if (ceiling) {
         printf("/%u", (unsigned)ceiling);
     }
     printf(" requests (hands-free %u, ignored %u; listen %u, ignored %u)%s\n", (unsigned)vad,
-           (unsigned)voice_budget_ignored_vad(), (unsigned)(requests - vad),
+           (unsigned)voice_budget_ignored_vad(), (unsigned)listen,
            (unsigned)voice_budget_ignored_listen(), ceiling ? "" : " — NO CEILING");
 
     uint8_t ration_max = 0;

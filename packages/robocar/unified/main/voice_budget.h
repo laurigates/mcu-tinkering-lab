@@ -44,8 +44,9 @@
  *     the dumbest thing in the chain, a counter that a detector failing open
  *     cannot argue with.
  *
- * Tripping the ceiling is terminal until `voice resume`, an MQTT command or a
- * reboot. There is no auto-reset, for plan_budget.h's reason: a fuse that resets
+ * Tripping the ceiling is terminal until `voice resume` (on the console, or over
+ * MQTT when broker credentials are configured) or a reboot. There is no
+ * auto-reset, for plan_budget.h's reason: a fuse that resets
  * itself resumes spending on an unattended board the moment it rolls over.
  *
  * A request is charged when it is *attempted* (immediately before the HTTP
@@ -73,6 +74,8 @@
  * worst let one extra request through the ration or misreport a count by one
  * for one line; the ceiling is checked again on the voice-turn task before each
  * request, so it cannot be overrun by more than the single turn already queued.
+ * A `voice resume` that lands mid-charge can also drop that one charge, so the
+ * first window after a resume may admit one request more than it shows.
  */
 
 #ifndef VOICE_BUDGET_H
