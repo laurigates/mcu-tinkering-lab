@@ -53,8 +53,10 @@ static void test_run(const char *name, void (*fn)(void))
 #define RATE 24000u
 
 /** Init with the chain switched on. The boot default is off
- *  (VOICE_FX_DEFAULT_ENABLED), and every test below except the bypass one is
- *  about what the chain does to a signal, so each enables it explicitly. */
+ *  (VOICE_FX_DEFAULT_ENABLED), and the tests below are about what the chain
+ *  does to a signal, so each enables it explicitly. The bypass test enables it
+ *  too and then switches it off, so it covers the ON->OFF edge; the boot
+ *  default itself is pinned by test_the_chain_boots_disabled. */
 static void fx_init_on(voice_fx_t *fx)
 {
     voice_fx_init(fx, RATE);
@@ -204,6 +206,24 @@ static void test_disabled_is_a_byte_exact_bypass(void)
     ASSERT(memcmp(buf, ref, sizeof(buf)) == 0);
 }
 
+/** The boot default is the plain TTS voice: voice_fx_init() alone must leave
+ *  the chain off and the samples byte-identical, with no set_enabled() call. */
+static void test_the_chain_boots_disabled(void)
+{
+    voice_fx_t fx;
+    voice_fx_init(&fx, RATE);
+    ASSERT(!fx.enabled);
+
+    int16_t buf[64];
+    int16_t ref[64];
+    for (size_t i = 0; i < 64; i++) {
+        buf[i] = (int16_t)(i * 500 - 16000);
+    }
+    memcpy(ref, buf, sizeof(buf));
+    voice_fx_apply(&fx, buf, 64);
+    ASSERT(memcmp(buf, ref, sizeof(buf)) == 0);
+}
+
 /** Reset must leave no tail — silence in, exact silence out. */
 static void test_reset_clears_the_tail(void)
 {
@@ -303,6 +323,7 @@ int main(void)
     test_run("state survives a chunk boundary", test_state_survives_a_chunk_boundary);
 
     test_run("disabled is a byte-exact bypass", test_disabled_is_a_byte_exact_bypass);
+    test_run("the chain boots disabled", test_the_chain_boots_disabled);
     test_run("reset clears the tail", test_reset_clears_the_tail);
 
     test_run("out-of-range parameters are refused", test_out_of_range_parameters_are_refused);
