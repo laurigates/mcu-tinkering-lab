@@ -128,10 +128,10 @@ file has no local blast radius: sweep the module list, not one project.
 `tools/check-flash-recipes.py` (pre-commit, and therefore CI) now gates the
 attribute-adjacency case mechanically along with the four flash-recipe
 assumptions, and dry-runs every flash recipe to check the files it names and
-the offset in front of each (see below). It cannot check a recipe whose expansion
-it cannot read — a shell variable for an offset, a part outside `build/`, a
-target missing from `BOOTLOADER_OFFSETS` — so read your own dry-run once after
-the final edit as well. The build-guide drift guard has the same gap for the
+the offset in front of each (see below). An offset that is not a literal number
+in the dry-run (a shell variable inside a shebang recipe) is skipped without a
+finding, so read your own dry-run once after the final edit as well. A target
+missing from `BOOTLOADER_OFFSETS` is not skipped: it fails as unverifiable. The build-guide drift guard has the same gap for the
 opposite reason — it runs *only* in CI — and
 `build-guide-drift-guard.md` § 2 carries the extract-and-run recipe plus the
 negative control that a guard change needs.
@@ -183,8 +183,8 @@ recipe is written:
   found by `tools/lib/otadata-predicate.sh` — the parser the release path uses;
 - each `<offset> build/<file>.bin` pair puts the file where the build expects it
   (issue #651): the bootloader at the target's ROM offset (0x1000 on
-  esp32/esp32s2, 0x2000 on esp32p4/esp32c5, 0x0 elsewhere, from the project
-  justfile's `target`), the partition table at `CONFIG_PARTITION_TABLE_OFFSET`
+  esp32/esp32s2, 0x2000 on esp32p4/esp32c5, 0x0 on the other targets listed in
+  `BOOTLOADER_OFFSETS`, from the project justfile's `target`), the partition table at `CONFIG_PARTITION_TABLE_OFFSET`
   (default 0x8000), otadata at the table's otadata row, and the app at the
   partition `idf.py flash` uses — `factory` if there is one, else the lowest
   `ota_N`, or 0x10000 for ESP-IDF's built-in tables. A part whose expected offset

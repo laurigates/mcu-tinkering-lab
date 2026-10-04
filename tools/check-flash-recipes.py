@@ -28,8 +28,8 @@ and fails, rather than skipping, without it.
 
 Run: python3 tools/check-flash-recipes.py [--verbose]
 Exit: 0 clean; 1 on any finding (a shared-recipe mismatch, a flash recipe
-naming a file the build does not write, writing one at the wrong offset or
-skipping otadata, a failed dry-run), when `just` is missing, or when the
+naming a file the build does not write, writing one at the wrong offset or at
+one that cannot be worked out, or skipping otadata, a failed dry-run), when `just` is missing, or when the
 otadata predicate or `just --summary` cannot run.
 Tests: python3 -m unittest tools/test_check_flash_recipes.py
 """

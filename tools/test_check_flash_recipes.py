@@ -236,6 +236,21 @@ class OffsetTests(unittest.TestCase):
         self.assertEqual([f.code for f in findings], ["OFFSET_UNVERIFIABLE"])
         self.assertIn("esp32x", findings[0].detail)
 
+    def test_an_unknown_app_or_partition_table_offset_cannot_pass_either(self):
+        for role in ("app", "partition_table"):
+            with self.subTest(role=role):
+                fields = dict(
+                    bootloader=0x1000,
+                    partition_table=0x8000,
+                    otadata=0xD000,
+                    app=0x10000,
+                )
+                fields[role] = None
+                layout = cfr.FlashLayout(**fields, why={role: f"no {role} offset"})
+                _, findings = audit(esptool(*FULL), layouts={MAIN: layout})
+                self.assertEqual([f.code for f in findings], ["OFFSET_UNVERIFIABLE"])
+                self.assertIn(f"no {role} offset", findings[0].detail)
+
     def test_otadata_named_without_an_otadata_row_is_not_offset_checked(self):
         # Without the row the build writes no ota_data_initial.bin, so esptool
         # fails loudly on the missing file; there is no offset to compare.
@@ -327,7 +342,11 @@ class LookupTests(unittest.TestCase):
             ("esp32", 0x1000),
             ("esp32s2", 0x1000),
             ("esp32s3", 0x0),
+            ("esp32c2", 0x0),
             ("esp32c3", 0x0),
+            ("esp32c6", 0x0),
+            ("esp32c61", 0x0),
+            ("esp32h2", 0x0),
             ("esp32c5", 0x2000),
             ("esp32p4", 0x2000),
         ):
