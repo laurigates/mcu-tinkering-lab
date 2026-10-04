@@ -16,7 +16,9 @@ import tempfile
 import textwrap
 import unittest
 from pathlib import Path
+from unittest import mock
 
+import hardware.header
 from hardware import (
     HardwareError,
     join,
@@ -683,6 +685,27 @@ class ChannelNetTest(unittest.TestCase):
         ):
             self.channels(edit)
 
+    def test_an_mcu_net_onto_a_channel_pad_fails(self):
+        # The driver's channel pad is an output: a GPIO wired to it is a second
+        # driver on the same node, at the source end rather than the far one.
+        def edit(s: str) -> str:
+            excused = '[[undrawn]]\n    role = "BEEP_PIN"\n    why = "test"'
+            return (
+                s.replace(excused, "") + '\n[[nets]]\nrole = "BEEP_PIN"\nto = "drv.1"\n'
+            )
+
+        with self.assertRaisesRegex(HardwareError, "drv.1.*BEEP_PIN.*SPEED_CHANNEL"):
+            self.channels(edit)
+
+    def test_a_sidecar_without_channel_nets_needs_no_channel_convention(self):
+        # A project adopting hardware.toml extends CONVENTIONS; until it wires a
+        # PWM driver it must not also need a CHANNEL_CONVENTIONS entry.
+        with mock.patch.dict(hardware.header.CHANNEL_CONVENTIONS, clear=True):
+            model = self.join(self.make(SIDECAR))
+            self.assertEqual((model.channels, model.channel_nets), ({}, ()))
+            with self.assertRaisesRegex(HardwareError, "no channel convention"):
+                self.channels()
+
     def test_a_channel_net_from_an_undeclared_part_fails(self):
         with self.assertRaisesRegex(HardwareError, "part 'dvr' is not declared"):
             self.channels(lambda s: s.replace('from = "drv"', 'from = "dvr"', 1))
@@ -759,6 +782,10 @@ class RobocarUnifiedJoinTest(unittest.TestCase):
         # (MOTOR_FIRST_CHANNEL) needs no net of its own.
         wired = {n.channel for n in self.model.channel_nets if n.source == "pwm"}
         self.assertEqual(wired, set(self.model.channels.values()))
+        # By role too: a new macro on an already-wired channel (a second role
+        # on channel 6 beside SERVO_PAN) passes the number check above.
+        unwired = set(self.model.channels) - {n.role for n in self.model.channel_nets}
+        self.assertEqual(unwired, {"MOTOR_FIRST_CHANNEL"})
 
     def test_the_motor_driver_mapping_agrees_with_pin_config_comments(self):
         # pin_config.h states the PCA9685 -> TB6612FNG mapping in comments

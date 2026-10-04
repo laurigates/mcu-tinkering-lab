@@ -341,6 +341,13 @@ def _channel_nets(
                 f"{where}: {to} is driven by both {driver[part, pin]} and {role}"
             )
         driver[part, pin] = role
+        # The driver's own channel pad is an output too: nothing else may drive it.
+        pad = (source, str(channel))
+        if pad in driver and driver[pad] != role:
+            raise HardwareError(
+                f"{where}: {source}.{channel} is driven by both {driver[pad]} and {role}"
+            )
+        driver[pad] = role
         result.append(
             ChannelNet(
                 role=role,
@@ -388,7 +395,6 @@ def join(project_dir: Path, repo_root: Path = REPO_ROOT) -> HardwareModel:
 
     defines = parse_defines(headers)
     roles = roles_from_defines(parse_defines([header]), convention)
-    channels = channels_from_defines(parse_defines([header]), convention)
 
     def resolve(where: str, role: str) -> str:
         if role not in roles:
@@ -403,6 +409,14 @@ def join(project_dir: Path, repo_root: Path = REPO_ROOT) -> HardwareModel:
         if not isinstance(value, list):
             raise HardwareError(f"{sidecar}: {key} must be [[{key}]] tables")
         return value
+
+    # Only a sidecar that wires channels needs a channel convention, so a project
+    # adopting hardware.toml extends CONVENTIONS alone until it has a PWM driver.
+    channels = (
+        channels_from_defines(parse_defines([header]), convention)
+        if array("channel_nets")
+        else {}
+    )
 
     parts_table = data.get("parts", {})
     if not isinstance(parts_table, dict):

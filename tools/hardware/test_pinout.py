@@ -221,6 +221,17 @@ class LabelsFromJoinTest(unittest.TestCase):
             labels[str(ch["LED_LEFT_R_CHANNEL"])], "LED_LEFT_R → Left RGB LED R"
         )
 
+    def test_a_fanned_out_channel_names_every_pin_it_reaches(self):
+        path = REPO_ROOT / self.model.parts["pwm"].board
+        model = self.model
+        (red,) = [n for n in model.channel_nets if n.role == "LED_LEFT_R_CHANNEL"]
+        both = dataclasses.replace(red, part="led_right", pin="R")
+        fanned = dataclasses.replace(model, channel_nets=(*model.channel_nets, both))
+        labels = part_labels(fanned, "pwm", parse_layout(path))
+        self.assertEqual(
+            labels[str(red.channel)], "LED_LEFT_R → Left RGB LED R, Right RGB LED R"
+        )
+
     def test_a_channel_net_to_a_pin_the_board_lacks_is_an_error(self):
         path = REPO_ROOT / self.model.parts["motor_driver"].board
         layout = parse_layout(path)
