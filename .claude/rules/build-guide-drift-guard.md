@@ -9,9 +9,13 @@ silent. Companion to `web-flasher.md` (the release/flasher path) and
 
 ## 1. Only human-edited firmware constants may feed the generated file
 
-`generate-pin-defs.py` takes `main/pin_config.h` plus, for robocar-unified, the
-planner cadence headers `main/planner_task.h` and `main/plan_activity.h` (issue
-#485). The criterion is who writes the source, not whether it is hardware: a
+`generate-pin-defs.py` reads the project through the hardware join
+(`tools/hardware/`, issue #459), which takes its inputs from the project's
+`hardware.toml`: `[source] header` (`main/pin_config.h`) plus `extra_headers` —
+for robocar-unified the planner cadence headers `main/planner_task.h` and
+`main/plan_activity.h` (issue #485). That list lives once, in the sidecar; the
+justfile recipe and the guard both pass only the project directory. The
+criterion is who writes the source, not whether it is hardware: a
 constant only a human edits changes in a source commit that is on the guard's
 trigger paths, so the guard runs. **Do not add an input that release automation
 owns**, and **add every new input header to both trigger-path blocks** in
@@ -179,4 +183,5 @@ up as a dangling label if a guard on `!= none` is missing.
 - `~/.claude/rules/never-fabricate-test-identifiers.md` — extract the shipped
   text; control-test every negative that gates an action
 - ADR-021 (`docs/decisions/ADR-021-hardware-source-of-truth.md`) — the join that
-  `pin_defs.typ` is an output of; issue #459 re-points the generator onto it
+  `pin_defs.typ` is an output of; since issue #459 the generator reads it through
+  `tools/hardware/`
