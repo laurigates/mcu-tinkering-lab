@@ -203,6 +203,25 @@ router.finish()
   on the left and 3 on the right.
 - **Labels**: factories don't set a center label — individual circuits add
   `.label('Name', loc='bot', ofst=0.4)` to avoid collisions with pin labels.
+- **Physical layouts** (ADR-023 stage 6, #495): the two conventions above
+  describe `layout="schematic"` symbols, whose pin order was chosen for the
+  router. A board with a vendor-sourced layout also has a `layout="physical"`
+  symbol — currently the XIAO ESP32-S3 Sense, TCA9548A, PCA9685, TB6612FNG
+  and MAX98357A — drawn by `components.physical_module()`: every pad of the
+  real header, on the real edge, in the real order as seen from the
+  component side, `PITCH = 1.0` drawing units apart (true 2.54 mm would be
+  too tight for the router). The pad list is read from
+  `docs/reference/boards/<board>.md` through `tools/hardware/layout.py`,
+  never typed into `components.py`, and each breakout page records the
+  vendor board file it was read from with `tools/breakout-pinout.py`
+  (`.claude/rules/board-layout-from-vendor-files.md`). A name the board
+  repeats is anchored by edge and position (`tb["GND.L3"]`,
+  `pca["SCL.R3"]`); the XIAO's GPIO pads are anchored by firmware name
+  (`xiao.GPIO5`). Do not rotate or mirror a physical symbol — place the
+  other parts around its pin order instead. The default stays `"schematic"`,
+  so a circuit changes only when it opts in. A new board gets a page under
+  `docs/reference/boards/` (a `Pin | Side | Pos` table) before it gets a
+  physical symbol.
 - **Colors — by net class, never by literal**: every `router.wire()` passes
   `net=` one of the classes in `routing.NET_COLORS`, which alone decides the
   colour; there is no `color=` argument. Hand-drawn leads that carry a net
@@ -243,7 +262,12 @@ pins change.
 ## Freshness check
 
 `.github/workflows/schematics-check.yml` re-renders all circuits on every PR
-that touches `docs/schematics/**` and fails if `images/*.svg` would change.
+that touches `docs/schematics/**` — or an input a circuit reads at render
+time: the board references in `docs/reference/boards/`, `tools/hardware/`,
+and the `main/pin_config.h` that robocar-unified's PCA9685 channel numbers
+come from — and fails if `images/*.svg` would change. A circuit that starts
+reading a new file needs that file on the workflow's trigger paths, or the
+SVG can go stale with no check running.
 The workflow is SVG-only on purpose (PNG drift is encoder-version noise, not
 content drift); the workflow surfaces PNG diffs as `::notice` only.
 

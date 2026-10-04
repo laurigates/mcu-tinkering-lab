@@ -314,10 +314,17 @@ def test_overlap_penalty_is_load_bearing(monkeypatch):
     # default already removed every such run, and the wires one lattice row
     # apart that ADR-023 complains about cost nothing at any setting. A
     # parameter that changes nothing when multiplied tenfold is not one, so
-    # robocar_unified, the densest drawing, must route differently at 6
+    # a real circuit with parallel neighbours must route differently at 6
     # than at 60.
-    low = _route_circuit_with_overlap_penalty(monkeypatch, "robocar_unified", 6.0)
-    high = _route_circuit_with_overlap_penalty(monkeypatch, "robocar_unified", 60.0)
+    #
+    # The circuit is balancebot, not robocar_unified: since #495 draws the
+    # robocar's boards physically, that drawing routes with no tight pair
+    # even in authored order, so it has no neighbour for the penalty to push
+    # and routes identically at 6 and 60 (it still differs between 0 and 6).
+    # balancebot keeps two tight pairs and responds. A circuit edit can move
+    # this again — re-check which drawing has parallel runs (#463).
+    low = _route_circuit_with_overlap_penalty(monkeypatch, "balancebot", 6.0)
+    high = _route_circuit_with_overlap_penalty(monkeypatch, "balancebot", 60.0)
     assert len(low) == len(high)
     assert low != high, "overlap_penalty 6 and 60 routed identical geometry"
 
@@ -1164,16 +1171,19 @@ def test_ordering_choice_is_reproducible_across_hash_seeds():
 
 def test_robocar_unified_tight_parallel_pairs_drop_below_baseline(real_circuit):
     # The #494 baseline, measured by metrics.py with ordering search off
-    # (ORDERINGS cut to "authored"): robocar_unified 3 tight parallel pairs,
-    # 23 crossings, 217.14 units of wire. The chosen ordering must beat it
-    # on tight pairs without paying for it in overlaps, crossings or length.
+    # (ORDERINGS cut to "authored"): robocar_unified 0 tight parallel pairs,
+    # 15 crossings, 298.83 units of wire. The chosen ordering must not lose
+    # to it on tight pairs, overlaps, crossings or length.
     # These numbers are a property of robocar_unified.py as it stood, not of
     # the router: an edit to that circuit can trip or loosen this pin, so
     # re-measure the baseline whenever the circuit changes (#463). Last
-    # re-measured for #591, which drew the power tags before routing and
-    # sent STBY up and over the mux rather than down a GND tag's edge.
+    # re-measured for #495, which draws the XIAO, TCA9548A, PCA9685,
+    # TB6612FNG and MAX98357A physically: the boards are larger and the six
+    # motor-driver lines are drawn individually instead of as one trunk, so
+    # the wire is longer (217.14 before) while the crossings fell from 23.
+    # The chosen ordering (shortest-first) crosses 11 times.
     m = real_circuit("robocar_unified").metrics
-    assert m.tight_parallel <= 1, f"{m.tight_parallel} tight pairs (baseline 3)"
+    assert m.tight_parallel == 0, f"{m.tight_parallel} tight pairs (baseline 0)"
     assert m.collinear_overlaps == 0
-    assert m.crossings <= 23
-    assert m.total_length <= 217.14 + 1e-6
+    assert m.crossings <= 15
+    assert m.total_length <= 298.8345 + 1e-6
