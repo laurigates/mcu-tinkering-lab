@@ -324,6 +324,50 @@ static void test_threshold_zero_disables_the_gate(void)
     ASSERT(scene_change_novel());
 }
 
+static void test_compared_only_against_a_spoken_about_frame(void)
+{
+    /* novel() answers true in two states where it compared nothing: before any
+     * frame has been spoken about, and with the gate switched off. The planner
+     * prompt must not phrase either as "the view has changed since you last
+     * spoke" (issue #631), so the gate says whether it actually compared. */
+    scene_change_init();
+    ASSERT(scene_change_novel());
+    ASSERT(!scene_change_compared()); /* no frame, no reference */
+
+    fill(100);
+    observe();
+    ASSERT(scene_change_novel());
+    ASSERT(!scene_change_compared()); /* a frame, but nothing spoken about yet */
+
+    scene_change_mark_spoken();
+    ASSERT(!scene_change_novel());
+    ASSERT(scene_change_compared()); /* "same" is now a measured answer */
+
+    rect(0, 0, 12, 12, 20);
+    observe();
+    ASSERT(scene_change_novel());
+    ASSERT(scene_change_compared()); /* and so is "changed" */
+
+    scene_change_set_threshold(0);
+    ASSERT(scene_change_novel());
+    ASSERT(!scene_change_compared()); /* gate off: true without a comparison */
+    scene_change_set_threshold(SCENE_CHANGE_THRESHOLD_DEFAULT);
+}
+
+static void test_speaking_before_any_decodable_frame_is_not_a_reference(void)
+{
+    /* The robot can speak (the sound gate opened) before the camera has produced
+     * a frame anyone could decode. mark_spoken() then copies an invalid frame,
+     * and a later "same"/"changed" would be measured against nothing. */
+    scene_change_init();
+    scene_change_mark_spoken();
+    ASSERT(!scene_change_compared());
+
+    fill(100);
+    observe();
+    ASSERT(!scene_change_compared());
+}
+
 static void test_threshold_decides_the_verdict(void)
 {
     scene_change_init();
@@ -378,6 +422,10 @@ int main(void)
     test_run("undecodable frames do not move the gate",
              test_undecodable_frames_do_not_move_the_gate);
     test_run("threshold zero disables the gate", test_threshold_zero_disables_the_gate);
+    test_run("compared only against a spoken-about frame",
+             test_compared_only_against_a_spoken_about_frame);
+    test_run("speaking before any decodable frame is not a reference",
+             test_speaking_before_any_decodable_frame_is_not_a_reference);
     test_run("the threshold decides the verdict", test_threshold_decides_the_verdict);
 
     printf("\n=== %d/%d passed ===\n", test_pass, test_count);

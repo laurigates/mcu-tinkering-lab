@@ -563,6 +563,46 @@ static void arm_both_subgates(void)
     ambient_audio_note(&after, FRAME_MS);
 }
 
+static void test_compared_only_against_a_spoken_about_room(void)
+{
+    /* novel()'s first-impression branch answers true with nothing compared, so
+     * the planner prompt must not phrase it as "the room's sound has changed
+     * since you last spoke" (issue #631). compared() says whether the verdict
+     * is a measurement. */
+    ambient_fingerprint_t quiet;
+    fp_alt(QUIET_AMP, &quiet);
+
+    ambient_audio_init();
+    ASSERT(!ambient_audio_compared()); /* deaf */
+
+    ambient_audio_note(&quiet, 0u);
+    ASSERT(ambient_audio_novel(FRAME_MS));
+    ASSERT(!ambient_audio_compared()); /* heard, but nothing spoken about */
+
+    ambient_audio_mark_spoken();
+    ASSERT(!ambient_audio_novel(FRAME_MS));
+    ASSERT(ambient_audio_compared()); /* "same" is now a measured answer */
+
+    arm_both_subgates(); /* reference, then a louder, different-shaped frame */
+    ASSERT(ambient_audio_novel(FRAME_MS));
+    ASSERT(ambient_audio_compared()); /* and so is "changed" */
+
+    /* Both sub-gates off: the term drops out of the OR, and there is no
+     * comparison to report either. */
+    ambient_audio_set_loud_threshold(0u);
+    ambient_audio_set_shape_threshold(0u);
+    ASSERT(!ambient_audio_compared());
+}
+
+static void test_a_deaf_gate_never_reports_a_comparison(void)
+{
+    /* mark_spoken() on a deaf gate leaves the reference invalid, so nothing the
+     * gate says afterwards is a comparison either. */
+    ambient_audio_init();
+    ambient_audio_mark_spoken();
+    ASSERT(!ambient_audio_compared());
+}
+
 static void test_a_gate_that_goes_deaf_falls_silent_within_the_ttl(void)
 {
     /* A microphone that dies mid-run leaves the last good fingerprint in place,
@@ -884,6 +924,9 @@ int main(void)
              test_unmeasurable_frames_never_open_the_gate);
     test_run("mark_spoken does not adopt an unmeasurable reference",
              test_mark_spoken_does_not_adopt_an_unmeasurable_reference);
+    test_run("compared only against a spoken-about room (#631)",
+             test_compared_only_against_a_spoken_about_room);
+    test_run("a deaf gate never reports a comparison", test_a_deaf_gate_never_reports_a_comparison);
     test_run("a gate that goes deaf falls silent within the TTL",
              test_a_gate_that_goes_deaf_falls_silent_within_the_ttl);
     test_run("an expired latch is not reported as live (#579)",

@@ -403,6 +403,15 @@ static char *build_request_json(const char *b64_image)
      * change-detection alone would chatter continuously while the robot is
      * driving. See ADR-020 for the full argument. */
     const uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000);
+    /* compared() is read BEFORE novel(), not beside the clause below. A
+     * reference only ever goes from invalid to valid, and voice_turn calls
+     * ambient_audio_mark_spoken() on its own task — so read in the other order,
+     * a first-impression novel() could pair with a compared() that turned true
+     * in between, and the clause would claim a change nobody measured
+     * (issue #631). Read first, a true compared() means novel() then compared
+     * against a valid reference too. */
+    const bool scene_compared = scene_change_compared();
+    const bool audio_compared = ambient_audio_compared();
     const bool scene_novel = scene_change_novel();
     const bool audio_novel = ambient_audio_novel(now_ms);
     const bool may_speak = speech_budget_allows(now_ms) && (scene_novel || audio_novel);
@@ -449,8 +458,15 @@ static char *build_request_json(const char *b64_image)
          * gap by inventing sources (bangs, echoes, moving furniture; issue #618).
          * The audio clauses now say only that the room's sound changed, that the
          * source is unknown, and forbid naming one. The wording lives in
-         * speech_evidence.c so a host test can pin it. */
-        const char *const evidence = speech_evidence_clause(scene_novel, audio_novel);
+         * speech_evidence.c so a host test can pin it.
+         *
+         * And only what the gates COMPARED. Both also answer novel without
+         * comparing anything — the first impression, a disabled scene gate — and
+         * "since you last spoke" is false there (issue #631). compared() tells
+         * the two apart; a sense that did not compare is left out. */
+        const char *const evidence =
+            speech_evidence_clause(speech_sense_from_gate(scene_novel, scene_compared),
+                                   speech_sense_from_gate(audio_novel, audio_compared));
 
         pos = append_prompt(system_prompt, sizeof(system_prompt), pos,
                             "You may ALSO call 'speak' in the same response to say one short "
