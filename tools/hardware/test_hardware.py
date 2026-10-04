@@ -344,6 +344,29 @@ class JoinTest(unittest.TestCase):
         sidecar = SIDECAR.replace('kind = "led"', 'kind = "led"\nnote = "red"')
         self.assertEqual(self.join(self.make(sidecar=sidecar)).parts["led"].note, "red")
 
+    def test_a_part_board_is_kept_and_defaults_to_none(self):
+        self.assertEqual(self.join(self.make()).parts["led"].board, "")
+        sidecar = SIDECAR.replace('kind = "led"', 'kind = "led"\nboard = "board.md"')
+        self.assertEqual(
+            self.join(self.make(sidecar=sidecar)).parts["led"].board, "board.md"
+        )
+
+    def test_a_part_board_that_does_not_exist_fails(self):
+        sidecar = SIDECAR.replace('kind = "led"', 'kind = "led"\nboard = "nope.md"')
+        with self.assertRaisesRegex(
+            HardwareError, r"\[parts.led\].*nope.md does not exist"
+        ):
+            self.join(self.make(sidecar=sidecar))
+
+    def test_a_part_board_that_is_not_a_path_fails(self):
+        for value in ('""', "5"):
+            sidecar = SIDECAR.replace('kind = "led"', f'kind = "led"\nboard = {value}')
+            with (
+                self.subTest(value=value),
+                self.assertRaisesRegex(HardwareError, "board"),
+            ):
+                self.join(self.make(sidecar=sidecar))
+
     def test_wrongly_shaped_values_fail_as_hardware_errors(self):
         # A traceback would bypass the generator's one-line `error:` exit.
         for broken in (

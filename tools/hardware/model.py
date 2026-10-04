@@ -12,8 +12,9 @@ is rejected so a `gpio = 5` cannot slip in beside one:
     board         = "docs/reference/boards/x.md"      # repo-relative
 
     [parts.amp]
-    name = "MAX98357A"
-    kind = "i2s-amp"
+    name  = "MAX98357A"
+    kind  = "i2s-amp"
+    board = "docs/reference/boards/adafruit-max98357a.md"  # optional; repo-relative
 
     [[nets]]
     role = "I2S_BCLK_PIN"
@@ -23,6 +24,10 @@ is rejected so a `gpio = 5` cannot slip in beside one:
     [[undrawn]]                 # a pin role deliberately on no drawn net
     role = "MIC_PDM_CLK_PIN"
     why  = "internal to the Sense module"
+
+A part's `board` names its own physical-layout page, where one exists (#629):
+`hardware.pinout` draws that board and labels each pad a net lands on. A part
+with no vendor-sourced layout leaves the key out and is not drawn.
 
 `[[undrawn]]` is an array of tables rather than ADR-021's `undrawn = [...]`
 key: written after a `[[nets]]` block, that key would belong to the last net.
@@ -45,7 +50,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 _KEYS = {
     "": {"source", "parts", "nets", "undrawn"},
     "source": {"convention", "header", "extra_headers", "board"},
-    "part": {"name", "kind", "note"},
+    "part": {"name", "kind", "note", "board"},
     "net": {"role", "to", "note"},
     "undrawn": {"role", "why"},
 }
@@ -57,6 +62,7 @@ class Part:
     name: str  # "MAX98357A"
     kind: str  # "i2s-amp"
     note: str = ""
+    board: str = ""  # repo-relative physical-layout page; "" for none
 
 
 @dataclass(frozen=True)
@@ -162,11 +168,19 @@ def join(project_dir: Path, repo_root: Path = REPO_ROOT) -> HardwareModel:
     for key, table in parts_table.items():
         where = f"{sidecar} [parts.{key}]"
         _check_keys(where, "part", table)
+        board = ""
+        if "board" in table:
+            board = _require(where, table, "board")
+            if not (repo_root / board).is_file():
+                raise HardwareError(
+                    f"{where}: board reference {repo_root / board} does not exist"
+                )
         parts[key] = Part(
             key=key,
             name=_require(where, table, "name"),
             kind=_require(where, table, "kind"),
             note=table.get("note", ""),
+            board=board,
         )
 
     # One role on several nets is a fan-out (a bus pin to two devices) and is

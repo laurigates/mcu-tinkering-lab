@@ -11,6 +11,8 @@ guide's Typst bindings) and `hardware.docs` (the marked tables in WIRING.md).
 
 `hardware.layout` reads the board-facts layer on its own: each board's
 physical header layout, for drawings meant to be wired from (#495).
+`hardware.pinout` draws those layouts as the build guide's pinout images,
+labelled from the join (#629).
 """
 
 from .board import Board, BoardPin, parse_board_table

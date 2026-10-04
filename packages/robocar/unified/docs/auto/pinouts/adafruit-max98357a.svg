@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="107.14mm" height="79.82mm" viewBox="0 0 428.5 319.3" font-family="DejaVu Sans Mono">
+<title>Adafruit MAX98357A I2S Class-D Mono Amp Breakout (#3006)</title>
+<rect x="0" y="0" width="428.5" height="319.3" fill="#ffffff"/>
+<text x="12.0" y="19.2" font-size="12" text-anchor="start" dominant-baseline="central" fill="#1f2933">Adafruit MAX98357A I2S Class-D Mono Amp Breakout (#3006)</text>
+<rect x="12.0" y="31.2" width="178.0" height="144.1" rx="6" fill="#eef4ee" stroke="#1f2933" stroke-width="1.5"/>
+<circle cx="90.0" cy="42.2" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="VO-" data-side="T" data-pos="1"/>
+<text x="90.0" y="53.7" font-size="10" text-anchor="end" dominant-baseline="central" fill="#1f2933" transform="rotate(-90 90.0 53.7)">VO-</text>
+<circle cx="112.0" cy="42.2" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="VO+" data-side="T" data-pos="2"/>
+<text x="112.0" y="53.7" font-size="10" text-anchor="end" dominant-baseline="central" fill="#1f2933" transform="rotate(-90 112.0 53.7)">VO+</text>
+<circle cx="35.0" cy="164.3" r="5.5" fill="#2f6fb0" stroke="#1f2933" stroke-width="1" data-anchor="LRC" data-side="B" data-pos="1"/>
+<text x="35.0" y="152.8" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933" transform="rotate(-90 35.0 152.8)">LRC</text>
+<text x="35.0" y="181.3" font-size="9" text-anchor="end" dominant-baseline="central" fill="#1f2933" transform="rotate(-90 35.0 181.3)">MCU D9 · I2S_LRCLK</text>
+<circle cx="57.0" cy="164.3" r="5.5" fill="#2f6fb0" stroke="#1f2933" stroke-width="1" data-anchor="BCLK" data-side="B" data-pos="2"/>
+<text x="57.0" y="152.8" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933" transform="rotate(-90 57.0 152.8)">BCLK</text>
+<text x="57.0" y="181.3" font-size="9" text-anchor="end" dominant-baseline="central" fill="#1f2933" transform="rotate(-90 57.0 181.3)">MCU D8 · I2S_BCLK</text>
+<circle cx="79.0" cy="164.3" r="5.5" fill="#2f6fb0" stroke="#1f2933" stroke-width="1" data-anchor="DIN" data-side="B" data-pos="3"/>
+<text x="79.0" y="152.8" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933" transform="rotate(-90 79.0 152.8)">DIN</text>
+<text x="79.0" y="181.3" font-size="9" text-anchor="end" dominant-baseline="central" fill="#1f2933" transform="rotate(-90 79.0 181.3)">MCU D10 · I2S_DIN</text>
+<circle cx="101.0" cy="164.3" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="GAIN" data-side="B" data-pos="4"/>
+<text x="101.0" y="152.8" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933" transform="rotate(-90 101.0 152.8)">GAIN</text>
+<circle cx="123.0" cy="164.3" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="SD" data-side="B" data-pos="5"/>
+<text x="123.0" y="152.8" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933" transform="rotate(-90 123.0 152.8)">SD</text>
+<circle cx="145.0" cy="164.3" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="GND" data-side="B" data-pos="6"/>
+<text x="145.0" y="152.8" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933" transform="rotate(-90 145.0 152.8)">GND</text>
+<circle cx="167.0" cy="164.3" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="Vin" data-side="B" data-pos="7"/>
+<text x="167.0" y="152.8" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933" transform="rotate(-90 167.0 152.8)">Vin</text>
+<text x="12.0" y="290.5" font-size="8" text-anchor="start" dominant-baseline="central" fill="#5b6770">Pads from docs/reference/boards/adafruit-max98357a.md</text>
+<text x="12.0" y="301.7" font-size="8" text-anchor="start" dominant-baseline="central" fill="#5b6770">Component side up · pad order exact · not to scale</text>
+</svg>

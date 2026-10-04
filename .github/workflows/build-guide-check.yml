@@ -6,6 +6,7 @@ on:
     paths:
       - '**/docs/*.typ'
       - '**/docs/auto/pin_defs.typ'
+      - '**/docs/auto/pinouts/*.svg'
       - '**/main/pin_config.h'
       - '**/main/planner_task.h'
       - '**/main/plan_activity.h'
@@ -22,6 +23,7 @@ on:
     paths:
       - '**/docs/*.typ'
       - '**/docs/auto/pin_defs.typ'
+      - '**/docs/auto/pinouts/*.svg'
       - '**/main/pin_config.h'
       - '**/main/planner_task.h'
       - '**/main/plan_activity.h'
@@ -145,10 +147,25 @@ jobs:
               drift_paths+=("$defs")
             fi
 
+            # The board pinout images (#629) are drawn from the board
+            # references hardware.toml names, so they go stale the same way
+            # pin_defs.typ does. A board added to hardware.toml produces an
+            # SVG nobody committed, which `git diff` cannot see (it ignores
+            # untracked files), so drift is read from `git status` instead.
+            # pinout.py also deletes an SVG no board produces any more, which
+            # both commands report. Only a document that embeds the images
+            # takes them into its drift set; a sibling bench card that does
+            # not would otherwise be reported stale for the guide's images.
+            if [ -f "$proj/hardware.toml" ] && grep -q 'auto/pinouts/' "$typ"; then
+              PYTHONPATH=tools python3 -m hardware.pinout "$proj"
+              drift_paths+=("$proj/docs/auto/pinouts")
+            fi
+
             typst compile --creation-timestamp 0 --ignore-system-fonts --root "$PWD" "$typ" "$pdf"
-            if git diff --quiet -- "${drift_paths[@]}"; then
+            if [ -z "$(git status --porcelain -- "${drift_paths[@]}")" ]; then
               echo "up to date: ${drift_paths[*]}"
             else
+              git status --short -- "${drift_paths[@]}"
               git --no-pager diff --stat -- "${drift_paths[@]}"
               echo "::error file=$pdf::Committed Typst output is stale relative to $typ, its generated pin definitions, or the shared template / embedded assets."
               status=1

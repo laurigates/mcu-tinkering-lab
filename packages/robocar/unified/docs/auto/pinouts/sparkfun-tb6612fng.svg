@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96.30mm" height="67.90mm" viewBox="0 0 385.2 271.6" font-family="DejaVu Sans Mono">
+<title>SparkFun Motor Driver — Dual TB6612FNG (ROB-14451)</title>
+<rect x="0" y="0" width="385.2" height="271.6" fill="#ffffff"/>
+<text x="12.0" y="19.2" font-size="12" text-anchor="start" dominant-baseline="central" fill="#1f2933">SparkFun Motor Driver — Dual TB6612FNG (ROB-14451)</text>
+<rect x="12.0" y="31.2" width="144.1" height="200.0" rx="6" fill="#eef4ee" stroke="#1f2933" stroke-width="1.5"/>
+<circle cx="23.0" cy="54.2" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="VM" data-side="L" data-pos="1"/>
+<text x="34.5" y="54.2" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933">VM</text>
+<circle cx="23.0" cy="76.2" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="VCC" data-side="L" data-pos="2"/>
+<text x="34.5" y="76.2" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933">VCC</text>
+<circle cx="23.0" cy="98.2" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="GND.L3" data-side="L" data-pos="3"/>
+<text x="34.5" y="98.2" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933">GND</text>
+<circle cx="23.0" cy="120.2" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="A01" data-side="L" data-pos="4"/>
+<text x="34.5" y="120.2" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933">A01</text>
+<circle cx="23.0" cy="142.2" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="A02" data-side="L" data-pos="5"/>
+<text x="34.5" y="142.2" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933">A02</text>
+<circle cx="23.0" cy="164.2" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="B02" data-side="L" data-pos="6"/>
+<text x="34.5" y="164.2" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933">B02</text>
+<circle cx="23.0" cy="186.2" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="B01" data-side="L" data-pos="7"/>
+<text x="34.5" y="186.2" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933">B01</text>
+<circle cx="23.0" cy="208.2" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="GND.L8" data-side="L" data-pos="8"/>
+<text x="34.5" y="208.2" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933">GND</text>
+<circle cx="145.1" cy="54.2" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="PWMA" data-side="R" data-pos="1"/>
+<text x="133.6" y="54.2" font-size="10" text-anchor="end" dominant-baseline="central" fill="#1f2933">PWMA</text>
+<circle cx="145.1" cy="76.2" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="AIN2" data-side="R" data-pos="2"/>
+<text x="133.6" y="76.2" font-size="10" text-anchor="end" dominant-baseline="central" fill="#1f2933">AIN2</text>
+<circle cx="145.1" cy="98.2" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="AIN1" data-side="R" data-pos="3"/>
+<text x="133.6" y="98.2" font-size="10" text-anchor="end" dominant-baseline="central" fill="#1f2933">AIN1</text>
+<circle cx="145.1" cy="120.2" r="5.5" fill="#2f6fb0" stroke="#1f2933" stroke-width="1" data-anchor="STBY" data-side="R" data-pos="4"/>
+<text x="133.6" y="120.2" font-size="10" text-anchor="end" dominant-baseline="central" fill="#1f2933">STBY</text>
+<text x="162.1" y="120.2" font-size="9" text-anchor="start" dominant-baseline="central" fill="#1f2933">MCU D0 · MOTOR_STBY</text>
+<circle cx="145.1" cy="142.2" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="BIN1" data-side="R" data-pos="5"/>
+<text x="133.6" y="142.2" font-size="10" text-anchor="end" dominant-baseline="central" fill="#1f2933">BIN1</text>
+<circle cx="145.1" cy="164.2" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="BIN2" data-side="R" data-pos="6"/>
+<text x="133.6" y="164.2" font-size="10" text-anchor="end" dominant-baseline="central" fill="#1f2933">BIN2</text>
+<circle cx="145.1" cy="186.2" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="PWMB" data-side="R" data-pos="7"/>
+<text x="133.6" y="186.2" font-size="10" text-anchor="end" dominant-baseline="central" fill="#1f2933">PWMB</text>
+<circle cx="145.1" cy="208.2" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="GND.R8" data-side="R" data-pos="8"/>
+<text x="133.6" y="208.2" font-size="10" text-anchor="end" dominant-baseline="central" fill="#1f2933">GND</text>
+<text x="12.0" y="242.8" font-size="8" text-anchor="start" dominant-baseline="central" fill="#5b6770">Pads from docs/reference/boards/sparkfun-tb6612fng.md</text>
+<text x="12.0" y="254.0" font-size="8" text-anchor="start" dominant-baseline="central" fill="#5b6770">Component side up · pad order exact · not to scale</text>
+</svg>
