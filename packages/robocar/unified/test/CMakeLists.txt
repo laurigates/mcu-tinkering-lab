@@ -631,3 +631,20 @@ add_executable(test_ota_interval
 )
 target_link_libraries(test_ota_interval PRIVATE Threads::Threads m)
 add_test(NAME ota_interval COMMAND test_ota_interval)
+
+# -----------------------------------------------------------------------------
+# improv_wifi reply transport (issue #644)
+#
+# Compiles the shared component from packages/components/improv-wifi unmodified.
+# Its UART0 default writer lives in improv_wifi_uart.c (ESP-IDF only) and is
+# replaced by a recorder in the test, so the suite can assert which transport a
+# reply took: UART0 by default (robocar-main, brainbox), the injected writer
+# once one is set (robocar-unified's USB-Serial-JTAG console).
+# -----------------------------------------------------------------------------
+set(IMPROV_WIFI_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../components/improv-wifi")
+add_executable(test_improv_wifi
+    "${IMPROV_WIFI_DIR}/improv_wifi.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_improv_wifi.c"
+)
+target_include_directories(test_improv_wifi PRIVATE "${IMPROV_WIFI_DIR}")
+add_test(NAME improv_wifi COMMAND test_improv_wifi)

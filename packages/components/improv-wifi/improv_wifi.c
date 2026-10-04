@@ -12,7 +12,6 @@
 
 #include "improv_wifi.h"
 #include <string.h>
-#include "driver/uart.h"
 #include "esp_log.h"
 
 static const char *TAG = "improv_wifi";
@@ -55,6 +54,10 @@ static struct {
     improv_credentials_cb_t credentials_cb;
 } g_ctx;
 
+/* Outside g_ctx on purpose: improv_wifi_init() clears g_ctx, and a writer set
+ * before init must survive it (robocar-unified sets it first). */
+static improv_wifi_write_fn_t s_writer;
+
 // Calculate packet checksum
 static uint8_t packet_checksum(uint8_t version, uint8_t type, uint8_t length, const uint8_t *data)
 {
@@ -65,12 +68,13 @@ static uint8_t packet_checksum(uint8_t version, uint8_t type, uint8_t length, co
     return sum;
 }
 
-// Write a complete Improv packet to UART0
+// Write a complete Improv packet through the configured transport, in one
+// call so a concurrent log line cannot land in the middle of it.
 static void send_packet(uint8_t type, const uint8_t *data, uint8_t length)
 {
     // Max packet size: HEADER_LEN + 1(ver) + 1(type) + 1(len) + MAX_DATA + 1(chk)
     uint8_t pkt[HEADER_LEN + 3 + MAX_DATA + 1];
-    uint8_t idx = 0;
+    size_t idx = 0;  // up to 265 bytes, which a uint8_t index would wrap
 
     memcpy(pkt, HEADER, HEADER_LEN);
     idx += HEADER_LEN;
@@ -82,7 +86,8 @@ static void send_packet(uint8_t type, const uint8_t *data, uint8_t length)
         idx += length;
     }
     pkt[idx++] = packet_checksum(VERSION, type, length, data ? data : (const uint8_t *)"");
-    uart_write_bytes(UART_NUM_0, (const char *)pkt, idx);
+    improv_wifi_write_fn_t write = (s_writer != NULL) ? s_writer : improv_wifi_uart0_write;
+    write(pkt, idx);
 }
 
 // Handle the "Send WiFi Credentials" RPC command
@@ -175,6 +180,11 @@ static void dispatch_rpc(const uint8_t *data, uint8_t length)
 }
 
 // --- Public API ---
+
+void improv_wifi_set_writer(improv_wifi_write_fn_t writer)
+{
+    s_writer = writer;
+}
 
 esp_err_t improv_wifi_init(improv_credentials_cb_t cb)
 {

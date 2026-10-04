@@ -92,7 +92,8 @@ repos:
         name: check-flash-recipes unit tests
         entry: python3 -m unittest tools/test_check_flash_recipes.py
         language: system
-        files: '^tools/(check-flash-recipes\.py|test_check_flash_recipes\.py)$'
+        # The lookup tests run the real otadata predicate, so its edits rerun them.
+        files: '^tools/(check-flash-recipes\.py|test_check_flash_recipes\.py|lib/otadata-predicate\.sh)$'
         pass_filenames: false
 
       - id: check-typst-docs
