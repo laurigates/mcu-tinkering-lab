@@ -281,6 +281,14 @@ class JustfileDirectoryTests(TempRepo):
         )
         self.assertEqual(self.reported(), {})
 
+    def test_a_real_use_with_a_trailing_comment_is_still_reported(self):
+        # Only WHOLE-line comments are skipped; a skip on any `#` would hide this.
+        self.write(
+            "packages/a/justfile",
+            'project_dir := justfile_directory() / "main"  # build root\n',
+        )
+        self.assertEqual(list(self.reported()), ["packages/a/justfile"])
+
     def test_the_root_justfile_may_use_it(self):
         # There justfile_directory() is its own directory, which is correct.
         self.write("justfile", self.USES)
@@ -332,14 +340,15 @@ class SharedRecipeTests(TempRepo):
     """collect() + audit(): a shared-flash consumer must fit the recipe's baked-in layout."""
 
     FACTORY_TABLE = "nvs,data,nvs,0x9000,0x6000,\nfactory,app,factory,0x10000,1M,\n"
+    FOUR_MB = 'CONFIG_ESPTOOLPY_FLASHSIZE="4MB"\n'
 
     def consumer(
         self,
         *,
         shared: str = "_s3-flash",
         target: str = "esp32s3",
-        sdkconfig: str = "",
-        table: str | None = None,
+        sdkconfig: str = FOUR_MB,
+        table: str | None = FACTORY_TABLE,
         rel: str = "packages/demo/thing",
     ) -> None:
         self.write(
@@ -359,18 +368,15 @@ class SharedRecipeTests(TempRepo):
         return [f.code for p in projects for f in p.findings]
 
     def test_a_consumer_that_fits_has_no_findings(self):
-        # The control: every mismatch test below differs from this in one input.
-        self.consumer(
-            sdkconfig='CONFIG_ESPTOOLPY_FLASHSIZE="4MB"\n', table=self.FACTORY_TABLE
-        )
+        # The control: the consumer() defaults. Every mismatch test below
+        # overrides exactly one of them.
+        self.consumer()
         projects = cfr.collect()
         self.assertEqual([p.name for p in projects], ["packages/demo/thing"])
         self.assertEqual(self.findings(), [])
 
     def test_an_8mb_part_on_the_4mb_s3_recipe_is_a_mismatch(self):
-        self.consumer(
-            sdkconfig='CONFIG_ESPTOOLPY_FLASHSIZE="8MB"\n', table=self.FACTORY_TABLE
-        )
+        self.consumer(sdkconfig='CONFIG_ESPTOOLPY_FLASHSIZE="8MB"\n')
         self.assertEqual(self.findings(), ["FLASH_SIZE"])
 
     def test_an_8mb_part_on_the_esp32_recipe_is_fine(self):
@@ -379,7 +385,6 @@ class SharedRecipeTests(TempRepo):
             shared="_esp32-flash",
             target="esp32",
             sdkconfig='CONFIG_ESPTOOLPY_FLASHSIZE="8MB"\n',
-            table=self.FACTORY_TABLE,
         )
         self.assertEqual(self.findings(), [])
 
@@ -391,7 +396,10 @@ class SharedRecipeTests(TempRepo):
         self.assertEqual(self.findings(), ["OTADATA_UNWRITTEN"])
 
     def test_the_idf_two_ota_preset_is_a_mismatch(self):
-        self.consumer(sdkconfig="CONFIG_PARTITION_TABLE_TWO_OTA=y\n")
+        # The preset replaces the custom table, so it is the one input changed.
+        self.consumer(
+            sdkconfig=self.FOUR_MB + "CONFIG_PARTITION_TABLE_TWO_OTA=y\n", table=None
+        )
         self.assertEqual(self.findings(), ["OTADATA_UNWRITTEN"])
 
     def test_an_app_not_at_0x10000_is_a_mismatch(self):
@@ -401,7 +409,7 @@ class SharedRecipeTests(TempRepo):
         self.assertEqual(self.findings(), ["APP_OFFSET"])
 
     def test_a_target_the_recipe_does_not_flash_is_a_mismatch(self):
-        self.consumer(target="esp32", table=self.FACTORY_TABLE)
+        self.consumer(target="esp32")
         self.assertEqual(self.findings(), ["TARGET_MISMATCH"])
 
     def test_a_consumer_with_dependencies_before_the_group_is_collected(self):
