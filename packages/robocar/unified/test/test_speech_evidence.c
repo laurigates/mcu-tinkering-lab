@@ -60,6 +60,8 @@ static void test_audio_only_states_the_source_is_unknown(void)
     /* And it still says the view did not change, so the model does not go
      * looking for a visual cause either. */
     ASSERT(CONTAINS(c, "view has NOT changed"));
+    ASSERT(CONTAINS(c, "sound level or character has changed"));
+    ASSERT(!CONTAINS(c, "SOUNDS different"));
 }
 
 /* The combined case has the same blind spot: the model still has no audio. */
@@ -70,6 +72,11 @@ static void test_view_and_audio_also_forbid_naming_a_source(void)
     ASSERT(CONTAINS(c, "NO audio"));
     ASSERT(CONTAINS(c, "Do NOT name, describe or guess"));
     ASSERT(!CONTAINS(c, "something happened"));
+    ASSERT(!CONTAINS(c, "SOUNDS different"));
+    /* It still reports the sound change, and points the remark at the view —
+     * the one thing in this request the model can actually describe. */
+    ASSERT(CONTAINS(c, "sound level or character has also changed"));
+    ASSERT(CONTAINS(c, "Remark on what you can see"));
 }
 
 static void test_scene_only_says_nothing_about_sound(void)

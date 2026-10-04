@@ -123,9 +123,10 @@ Two more gate-design points from the same module:
 cannot check. There is a mirror-image failure on the same seam, and it is worse
 because it is silent.
 
-When a gate opens, `gemini_backend.c` has to tell the model *why* — the request
-is stateless, so the evidence must be put in it (`"the room's sound level or
-character has changed since you last spoke"`). That clause is load-bearing. But
+When a gate opens, the planner prompt has to tell the model *why* — the request
+is stateless, so the evidence must be put in it (`speech_evidence.c`: `"The view
+has NOT changed, but the room's sound level or character has changed since you
+last spoke."`). That clause is load-bearing. But
 it converts the gate's boolean into an **assertion of fact that the model has no
 channel to doubt**. A gate that opens without evidence does not produce a missing
 remark; it produces a confident, fluent, entirely invented one — and it will keep
