@@ -14,8 +14,10 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 _SPEC = importlib.util.spec_from_file_location(
     "check_flash_recipes", Path(__file__).with_name("check-flash-recipes.py")
@@ -146,6 +148,63 @@ class ScopeTests(unittest.TestCase):
         )
         self.assertEqual(status, "checked")
         self.assertEqual([f.code for f in findings], ["NO_BUILD_OUTPUTS"])
+
+
+class LookupTests(unittest.TestCase):
+    """The two lookups the audit tests above inject, run against real files."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self._tmp.name)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def write(self, name: str, text: str) -> None:
+        (self.dir / name).write_text(text)
+
+    def test_an_otadata_row_in_the_resolved_table_reads_true(self):
+        self.write(
+            "sdkconfig.defaults", 'CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="t.csv"\n'
+        )
+        self.write(
+            "t.csv", "nvs,data,nvs,0x9000,0x4000,\notadata,data,ota,0xd000,0x2000,\n"
+        )
+        self.assertTrue(cfr.otadata_partition(self.dir))
+
+    def test_a_table_without_an_otadata_row_reads_false(self):
+        self.write(
+            "partitions.csv",
+            "nvs,data,nvs,0x9000,0x6000,\nfactory,app,factory,0x10000,1M,\n",
+        )
+        self.assertFalse(cfr.otadata_partition(self.dir))
+
+    def test_a_predicate_that_cannot_run_raises_rather_than_reading_false(self):
+        # Reading a broken predicate as "no otadata row" would fail the check open.
+        missing = self.dir / "no-such-predicate.sh"
+        with mock.patch.object(cfr, "OTADATA_PREDICATE", missing):
+            with self.assertRaises(RuntimeError):
+                cfr.otadata_partition(self.dir)
+
+    def test_the_cmake_project_name_names_the_app_file(self):
+        self.write(
+            "CMakeLists.txt",
+            "cmake_minimum_required(VERSION 3.16)\n"
+            "# project(old-name)\n"
+            "include($ENV{IDF_PATH}/tools/cmake/project.cmake)\n"
+            "project(idf-robocar)\n",
+        )
+        self.assertEqual(cfr.cmake_project_name(self.dir), "idf-robocar")
+
+    def test_a_cmake_project_that_is_not_esp_idf_has_no_name(self):
+        self.write(
+            "CMakeLists.txt",
+            "cmake_minimum_required(VERSION 3.13)\nproject(balancebot)\n",
+        )
+        self.assertIsNone(cfr.cmake_project_name(self.dir))
+
+    def test_a_directory_without_cmakelists_has_no_name(self):
+        self.assertIsNone(cfr.cmake_project_name(self.dir))
 
 
 if __name__ == "__main__":

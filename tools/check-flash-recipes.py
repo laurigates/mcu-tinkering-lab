@@ -26,7 +26,10 @@ their dry-run text needs no structure to check. That half needs `just` on PATH
 and fails, rather than skipping, without it.
 
 Run: python3 tools/check-flash-recipes.py [--verbose]
-Exit: 0 clean, 1 if any project mismatches its recipe.
+Exit: 0 clean; 1 on any finding (a shared-recipe mismatch, a flash recipe
+naming a file the build does not write or skipping otadata, a failed
+dry-run), when `just` is missing, or when the otadata predicate or
+`just --summary` cannot run.
 Tests: python3 -m unittest tools/test_check_flash_recipes.py
 """
 
@@ -609,7 +612,18 @@ def main() -> int:
     findings = [f for p in projects for f in p.findings]
     findings += check_attribute_placement()
     findings += check_justfile_directory()
-    statuses, output_findings = check_flash_recipe_outputs(just)
+    # A lookup that cannot run (the otadata predicate, `just --summary`) has no
+    # answer to report; end on the same STATUS line as every other failure
+    # instead of a traceback.
+    try:
+        statuses, output_findings = check_flash_recipe_outputs(just)
+    except (RuntimeError, subprocess.CalledProcessError) as exc:
+        stderr = (getattr(exc, "stderr", None) or "").strip()
+        print(f"ERROR: flash-recipe output audit could not run: {exc}")
+        if stderr:
+            print(stderr)
+        print("STATUS=FAIL")
+        return 1
     findings += output_findings
     flagged = {f.project for f in output_findings}
 
