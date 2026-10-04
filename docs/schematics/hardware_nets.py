@@ -69,7 +69,11 @@ class JoinedNets:
 
     def pad(self, role: str) -> Point:
         """The MCU header pad ``role``'s GPIO lands on."""
-        gpio = self.model.roles[role]
+        gpio = self.model.roles.get(role)
+        if gpio is None:
+            raise HardwareError(
+                f"{role}: not a pin role in {self.model.headers[0].name}"
+            )
         if self.model.pin_for(role) is None:
             raise HardwareError(
                 f"{role}: GPIO{gpio} is not on a header pad of "

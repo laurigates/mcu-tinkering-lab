@@ -79,6 +79,15 @@ def test_a_role_on_no_header_pad_cannot_be_wired(model, drawn):
         nets.ends("I2S_BCLK_PIN")
 
 
+def test_a_pad_for_an_unknown_role_is_a_hardware_error(model, drawn):
+    # The circuit calls pad() directly for placement, before any net lookup,
+    # so a mistyped role must fail with the module's error type, not KeyError.
+    xiao, amp = drawn
+    nets = JoinedNets(_only_i2s(model), xiao, {"amp": amp})
+    with pytest.raises(HardwareError, match="I2S_BLCK_PIN: not a pin role"):
+        nets.pad("I2S_BLCK_PIN")
+
+
 def test_a_net_to_a_pad_the_drawn_part_lacks_is_an_error(model, drawn):
     xiao, amp = drawn
     bad = Net(role="I2S_BCLK_PIN", part="amp", pin="BCK", note="")

@@ -28,7 +28,9 @@ from components import (  # noqa: E402
     tca9548a,
     xiao_esp32s3_sense,
 )
-from hardware import board_layout  # noqa: E402
+from hardware import board_layout, join  # noqa: E402
+
+UNIFIED = FsPath(__file__).resolve().parents[2] / "packages/robocar/unified"
 
 
 def _mic(clk: str = "GPIO42", data: str = "GPIO41"):
@@ -86,12 +88,17 @@ def test_robocar_unified_draws_the_onboard_microphone(real_circuit):
         assert lead._userparams.get("ls") == "--"
         assert lead._userparams.get("color") == "gray"
 
-    # Each pin is labelled with a GPIO. Which one is read from the join, so
-    # comparing it with pin_config.h here could not fail (#462); what can go
-    # wrong is a circuit that stops passing labels at all.
+    # Each pin is labelled with its role's GPIO from the join. The GPIO value
+    # is read, not restated, but which role feeds which pin is still chosen by
+    # hand in the circuit: the mic roles are [[undrawn]], so no [[nets]] entry
+    # binds them and check_all_drawn() cannot see a CLK/DATA role swap. This
+    # pins that choice, and fails on exactly that swap.
+    roles = join(UNIFIED).roles
     labels = {p.name: p.pin for p in mic._userparams["pins"]}
-    assert all(re.fullmatch(r"GPIO\d+", v) for v in labels.values()), labels
-    assert labels["CLK"] != labels["DATA"]
+    assert labels == {
+        "CLK": f"GPIO{roles['MIC_PDM_CLK_PIN']}",
+        "DATA": f"GPIO{roles['MIC_PDM_DATA_PIN']}",
+    }
 
     text = _svg_text(circuit.svg)
     assert set(labels.values()) <= set(text)
