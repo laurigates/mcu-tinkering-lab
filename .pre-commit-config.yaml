@@ -100,7 +100,7 @@ repos:
         name: Typst docs track pin_config.h, and the drift guard sees them
         entry: python3 tools/check-typst-docs.py
         language: system
-        files: '(docs/.*\.typ|main/pin_config\.h|tools/check-typst-docs\.py|\.github/workflows/build-guide-check\.yml)$'
+        files: '(docs/.*\.typ|main/pin_config\.h|tools/check-typst-docs\.py|\.github/workflows/build-guide-check\.yml|\.claude/rules/build-guide-drift-guard\.md)$'
         pass_filenames: false
 
       - id: hardware-join
