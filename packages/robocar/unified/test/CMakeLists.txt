@@ -155,6 +155,19 @@ target_link_libraries(test_speech_budget PRIVATE Threads::Threads m)
 add_test(NAME speech_budget COMMAND test_speech_budget)
 
 # -----------------------------------------------------------------------------
+# speech_evidence (why the planner may speak this cycle — issue #618)
+#
+# The planner request carries an image and no audio, so the audio-only clause
+# must not assert a sound source the model cannot know. Pinned here because the
+# failure is a fluent fabrication, which no bench run flags as an error.
+# -----------------------------------------------------------------------------
+add_executable(test_speech_evidence
+    "${MAIN_SRC_DIR}/speech_evidence.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_speech_evidence.c"
+)
+add_test(NAME speech_evidence COMMAND test_speech_evidence)
+
+# -----------------------------------------------------------------------------
 # voice_fx_core (the retro-robot body resonance on the way to I2S)
 #
 # The load-bearing case is the comb's (1-g) input trim: without it the feedback
