@@ -9,7 +9,7 @@ default:
 
 # The join emits docs/auto/pin_defs.typ — the build guide's own recipe
 # (`just <project>::build-guide`) recompiles the PDF from it — and the tables
-# between `<!-- BEGIN GENERATED: ... -->` markers in the project's Markdown
+# and power diagram between `<!-- BEGIN GENERATED: ... -->` markers in the project's Markdown
 # (WIRING.md), via tools/hardware/docs.py; and the board pinout images the
 # build guide embeds (docs/auto/pinouts/*.svg), via tools/hardware/pinout.py.
 #

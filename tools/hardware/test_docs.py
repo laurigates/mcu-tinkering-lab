@@ -22,6 +22,7 @@ from hardware.docs import (
     inject,
     main,
     pin_table,
+    power_diagram,
     render_block,
     signals_table,
 )
@@ -198,11 +199,95 @@ class SignalsTableTest(Fixture):
             signals_table(self.model(), "unused")
 
 
+POWER = """
+[parts.reg]
+name = "Regulator"
+kind = "regulator"
+note = "set to 5.0 V"
+
+[parts.blade]
+name = "Blade"
+kind = "load"
+
+[parts.spare]
+name = "Spare"
+kind = "nothing"
+
+[[rails]]
+name = "5V"
+from = "reg.OUT"
+to = ["mcu.5V", "fan.V+"]
+
+[[outputs]]
+from = "fan"
+to = ["blade"]
+"""
+
+
+class PowerDiagramTest(Fixture):
+    def setUp(self):
+        super().setUp()
+        write(self.proj / "hardware.toml", SIDECAR + POWER)
+
+    def diagram(self) -> str:
+        return power_diagram(self.model())
+
+    def lines(self) -> list[str]:
+        return [ln.strip() for ln in self.diagram().splitlines()]
+
+    def test_is_a_fenced_top_down_mermaid_graph(self):
+        text = self.diagram()
+        self.assertTrue(text.startswith("```mermaid\ngraph TD\n"), text)
+        self.assertTrue(text.endswith("```\n"), text)
+
+    def test_each_rail_load_is_a_solid_edge_naming_the_rail_and_pin(self):
+        self.assertIn('reg -->|"5V → 5V"| mcu', self.lines())
+        self.assertIn('reg -->|"5V → V+"| fan', self.lines())
+
+    def test_each_net_is_a_dotted_edge_with_its_gpio_and_pad(self):
+        lines = self.lines()
+        self.assertIn('mcu -.->|"GPIO1 (D0) → SDA"| mux', lines)
+        self.assertIn('mcu -.->|"GPIO1 (D0) → SDA"| oled', lines)
+        self.assertIn('mcu -.->|"GPIO7 (D1) → +"| buzzer', lines)
+
+    def test_a_net_off_the_header_shows_the_gpio_alone(self):
+        self.assertIn('mcu -.->|"GPIO41 → SENSE"| fan', self.lines())
+
+    def test_an_output_is_an_unlabelled_edge(self):
+        self.assertIn("fan --> blade", self.lines())
+
+    def test_every_node_is_declared_once_with_its_name_and_note(self):
+        lines = self.lines()
+        self.assertIn('reg["Regulator<br/>set to 5.0 V"]', lines)
+        self.assertIn('mcu["MCU"]', lines)
+        declared = [ln.split("[", 1)[0] for ln in lines if ln.endswith('"]')]
+        self.assertEqual(len(declared), len(set(declared)), declared)
+        self.assertEqual(
+            set(declared), {"reg", "mcu", "fan", "mux", "oled", "buzzer", "blade"}
+        )
+
+    def test_a_part_on_no_rail_net_or_output_is_left_out(self):
+        self.assertNotIn("spare", self.diagram())
+
+    def test_a_pipe_or_quote_in_a_name_is_escaped(self):
+        self.assertIn('fan["Fan #124; 5 V"]', self.lines())
+
+    def test_the_mcu_node_takes_the_source_name(self):
+        write(
+            self.proj / "hardware.toml",
+            (SIDECAR + POWER).replace(
+                'board = "board.md"', 'board = "board.md"\nmcu = "Dev board"'
+            ),
+        )
+        self.assertIn('mcu["Dev board"]', self.lines())
+
+
 class RenderBlockTest(Fixture):
     def test_known_blocks(self):
         model = self.model()
         self.assertIn("| Pin | GPIO |", render_block(model, "pin-table"))
         self.assertIn("| SDA | GPIO1 (D0) |", render_block(model, "signals:mux"))
+        self.assertIn("```mermaid", render_block(model, "power-diagram"))
 
     def test_an_unknown_block_is_an_error(self):
         with self.assertRaisesRegex(
@@ -297,8 +382,19 @@ class RobocarUnifiedDocsTest(unittest.TestCase):
 
     def test_wiring_carries_every_expected_block(self):
         text = (UNIFIED / "WIRING.md").read_text(encoding="utf-8")
-        for name in ("pin-table", "signals:amp", "signals:ranger"):
+        for name in ("pin-table", "signals:amp", "signals:ranger", "power-diagram"):
             self.assertIn(BEGIN(name), text)
+
+    def test_the_power_diagram_carries_no_hand_typed_gpio(self):
+        # #646: the diagram's GPIO labels come from the join, grouped per part.
+        text = (UNIFIED / "WIRING.md").read_text(encoding="utf-8")
+        self.assertIn(
+            'mcu -.->|"GPIO7 (D8) → BCLK<br/>GPIO8 (D9) → LRC<br/>GPIO9 (D10) → DIN"| amp',
+            text,
+        )
+        self.assertIn('mcu -.->|"GPIO1 (D0) → STBY"| motor_driver', text)
+        for stale in ("|GPIO2|", "|GPIO1|", "|GPIO7/8/9 I2S|"):
+            self.assertNotIn(stale, text)
 
     def test_a_hand_edit_inside_a_block_is_drift(self):
         proj = self.copy_project()
@@ -345,6 +441,23 @@ class RobocarUnifiedDocsTest(unittest.TestCase):
         self.assertIn(
             "| TRIG | GPIO4 (D3) |", (proj / "WIRING.md").read_text(encoding="utf-8")
         )
+
+    def test_a_pin_change_reaches_the_power_diagram(self):
+        # The hand-typed `XIAO -->|GPIO1| MD` edge this replaced (#646) would
+        # have kept saying GPIO1 after this swap.
+        proj = self.copy_project()
+        header = proj / "main/pin_config.h"
+        text = header.read_text(encoding="utf-8")
+        for old, new in (
+            ("MOTOR_STBY_PIN GPIO_NUM_1", "MOTOR_STBY_PIN GPIO_NUM_X"),
+            ("PIEZO_PIN GPIO_NUM_2", "PIEZO_PIN GPIO_NUM_1"),
+            ("MOTOR_STBY_PIN GPIO_NUM_X", "MOTOR_STBY_PIN GPIO_NUM_2"),
+        ):
+            self.assertIn(old, text)
+            text = text.replace(old, new)
+        header.write_text(text, encoding="utf-8")
+        (drift,) = check_project(proj, repo_root=REPO_ROOT)
+        self.assertIn('+    mcu -.->|"GPIO2 (D1) → STBY"| motor_driver', drift[1])
 
     def test_check_mode_exit_status(self):
         proj = self.copy_project()
