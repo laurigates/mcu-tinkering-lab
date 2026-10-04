@@ -7,51 +7,37 @@ Thank you for your interest in contributing to MCU Tinkering Lab! This document 
 - [Getting Started](#getting-started)
 - [Development Workflow](#development-workflow)
 - [Code Style Guidelines](#code-style-guidelines)
+- [Build Commands](#build-commands)
 - [Testing Requirements](#testing-requirements)
 - [Commit Message Convention](#commit-message-convention)
 - [Pull Request Process](#pull-request-process)
 - [Adding New Projects](#adding-new-projects)
 - [Documentation Guidelines](#documentation-guidelines)
+- [CI/CD](#cicd)
+- [Troubleshooting](#troubleshooting)
 
 ## Getting Started
 
 ### Prerequisites
 
-Before you begin, ensure you have:
-
-- **ESP-IDF v5.4+** installed (for ESP32 projects)
-- **Python 3.11+** with `pip` and `uv`
-- **Docker** (optional but recommended)
+- **Docker**, or Podman with `CONTAINER_CMD=podman`. ESP-IDF builds run in the
+  `espressif/idf:v5.4` container; no local ESP-IDF install is needed.
+- **[just](https://github.com/casey/just)**
+- **[uv](https://github.com/astral-sh/uv)** and Python 3.11+ for the simulation
+  and Python tooling
 - **Git** configured with your name and email
-- **Code editor** (VS Code, CLion, or your preference)
 
 ### Setup Development Environment
 
-#### Option 1: Docker (Recommended)
-
 ```bash
-# Clone the repository
-git clone https://github.com/laurigates/mcu-tinkering-lab.git
-cd mcu-tinkering-lab
-
-# Build Docker images
-just docker-build
-
-# Start development shell
-just docker-dev
+just setup-all            # Docker images, dev tools, pre-commit hooks
+just check-environment    # verify Docker and serial port setup
 ```
 
-#### Option 2: Native Setup
-
-```bash
-# Install development tools
-just install-dev-tools
-
-# This will install:
-# - pre-commit hooks
-# - Python tools (ruff, mypy, pytest, uv)
-# - Instructions for clang-format and cppcheck
-```
+Builds and `menuconfig` run in the container. Flashing and the serial monitor
+run on the host, because USB passthrough into containers is unreliable on
+macOS. To reach serial devices from inside the container anyway, uncomment the
+`devices` and `privileged` entries in `docker-compose.yml`.
 
 ### Fork and Clone
 
@@ -101,11 +87,9 @@ just lint
 # Check formatting (non-destructive)
 just format-check
 
-# Build affected projects
-just build-all
-
-# Run tests (when available)
-just test-all
+# Build and test the affected projects
+just <module>::build
+just <module>::test     # where the project has host tests
 ```
 
 ### 4. Commit Your Changes
@@ -234,59 +218,59 @@ pre-commit run --all-files
 ```
 
 **Checks performed:**
-- ✅ C/C++ formatting (clang-format)
-- ✅ Python formatting (ruff)
-- ✅ Python linting (ruff)
-- ✅ Trailing whitespace removal
-- ✅ End-of-file fixing
-- ✅ YAML validation
-- ✅ Credential file detection
-- ✅ Build artifact detection
+- C/C++ formatting (clang-format) and Python formatting and linting (ruff, ty)
+- Secret scanning (gitleaks) and credential-file blocking
+- Flash recipes against partition tables (`tools/check-flash-recipes.py`)
+- Generated wiring tables and build guides against `hardware.toml` and
+  `pin_config.h`
+- Trailing whitespace, end of file, YAML validity, build artifacts
+
+## Build Commands
+
+Each project is a `just` module. `just list-projects` lists them,
+`just --list <module>` shows one project's recipes.
+
+```bash
+just <module>::build          # containerized build
+just <module>::flash          # flash from the host (PORT=/dev/... overrides detection)
+just <module>::monitor        # serial monitor
+just <module>::menuconfig     # containerized menuconfig
+
+just build-all                # robocar main + camera only
+just clean-all                # clean every project build
+
+just lint                     # cppcheck + ruff
+just format                   # clang-format + ruff format
+just format-check             # check only, no changes
+
+just docker-dev               # interactive ESP-IDF shell
+just docker-clean             # remove containers and volumes
+```
 
 ## Testing Requirements
 
-### Unit Tests (When Adding New Code)
+- Add tests for new hardware-independent logic.
+- Run the affected suites before opening a PR.
 
-- Write unit tests for new functions
-- Aim for >70% code coverage
-- Test edge cases and error conditions
+| Suite | Command |
+|---|---|
+| robocar-unified host tests | `just robocar-unified::test` |
+| kids-audio-toy host tests | `just kids-audio::test` |
+| balancebot host tests | `just balancebot::test` |
+| Robocar simulation | `cd packages/robocar/simulation && uv sync && uv run pytest tests/ --cov` |
+| All pre-commit hooks | `pre-commit run --all-files` |
 
-### ESP32 Host-Based Tests (Future)
+### ESP32 Host-Based Tests
 
-```c
-// Example test structure
-#include "unity.h"
-#include "motor_control.h"
+Host tests compile hardware-independent firmware modules with the native
+compiler and run them without a board. Move the logic into a `*_core.{c,h}`
+with no ESP-IDF headers, compile that same file into the firmware and into a
+plain-assert test `main()`, and expose it as a `just test` recipe.
+`packages/audio/kids-audio-toy` is the worked example; the full pattern is in
+`.claude/rules/testing.md`.
 
-void test_motor_speed_calculation(void) {
-    TEST_ASSERT_EQUAL(128, calculate_motor_speed(50, 255));
-    TEST_ASSERT_EQUAL(255, calculate_motor_speed(100, 255));
-    TEST_ASSERT_EQUAL(0, calculate_motor_speed(0, 255));
-}
-
-void app_main(void) {
-    UNITY_BEGIN();
-    RUN_TEST(test_motor_speed_calculation);
-    UNITY_END();
-}
-```
-
-### Python Tests
-
-```python
-import pytest
-from robot_model import RobotModel
-
-def test_robot_initialization():
-    robot = RobotModel(width=0.15, height=0.20)
-    assert robot.width == 0.15
-    assert robot.height == 0.20
-
-def test_motor_command_invalid_range():
-    robot = RobotModel()
-    with pytest.raises(ValueError):
-        robot.set_motor_speed(-10, 50)
-```
+Host tests cover cases a bench cannot stage, such as the 32-bit millisecond
+counter wrapping at day 49.
 
 ## Commit Message Convention
 
@@ -435,8 +419,10 @@ Brief description of changes
 4. **Add to CI pipeline:**
    Add an entry to `.github/project-matrix.json` with your project's `system` (`esp32`), `project`, `path`, and `target` (plus `fetch_bluepad32: true` if it vendors bluepad32). The single `build.yml` workflow discovers it automatically and builds it on push/PR whenever its files change — no per-project workflow file needed.
 
-5. **Update root justfile:**
-   Add build/flash targets for your project.
+5. **Register the module in the root justfile:**
+   `mod <name> 'packages/<domain>/<name>'`, then run
+   `python3 tools/check-flash-recipes.py` to check the flash recipe against the
+   partition table.
 
 6. **Enable web flasher (optional):**
    To include your project in the [Web Flasher](https://laurigates.github.io/mcu-tinkering-lab/),
@@ -497,12 +483,29 @@ def process_image(img: np.ndarray, threshold: int = 128) -> np.ndarray:
 
 For significant architectural changes, update relevant documentation in `docs/` or project-specific `README.md`.
 
+## CI/CD
+
+| Workflow | Purpose |
+|---|---|
+| `build.yml` | Builds every changed firmware project (ESP-IDF, ESPHome, Pico SDK), discovered from `.github/project-matrix.json` |
+| `test.yml` | Pre-commit, pytest, cppcheck, format check |
+| `build-firmware.yml` | On release: builds firmware, attaches binaries, deploys the web flasher, and fetches every published file to verify it |
+| `release-please.yml` | Release PRs from conventional commits |
+| `hardware-check.yml`, `build-guide-check.yml`, `schematics-check.yml` | Generated docs and schematics match their sources |
+| `refresh-idf-locks.yml` | Monthly refresh of tracked `dependencies.lock` files |
+
+## Troubleshooting
+
+**Serial port permission denied (Linux).** Add the user to `dialout` and log in
+again: `sudo usermod -a -G dialout $USER`.
+
+**Port not detected.** `just list-devices` lists connected boards and USB-serial
+adapters. Set `PORT=/dev/...` explicitly when more than one is connected.
+
+**Out of disk space.** `just clean-all`, then `just docker-clean`.
+
 ## Questions or Issues?
 
 - **Questions:** Open a [Discussion](https://github.com/laurigates/mcu-tinkering-lab/discussions)
 - **Bug Reports:** Open an [Issue](https://github.com/laurigates/mcu-tinkering-lab/issues)
 - **Feature Requests:** Open an [Issue](https://github.com/laurigates/mcu-tinkering-lab/issues) with the `enhancement` label
-
----
-
-**Thank you for contributing to MCU Tinkering Lab! 🚀🤖**
