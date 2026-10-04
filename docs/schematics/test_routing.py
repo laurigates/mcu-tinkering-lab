@@ -906,6 +906,42 @@ def test_no_real_wire_runs_over_a_foreign_power_or_ground_tag(real_circuits):
         )
 
 
+def test_every_real_circuit_places_its_tags_before_its_first_net(monkeypatch):
+    # The router charges tag_penalty only for tags already in the drawing when
+    # wire() runs (#591), so a tag added after the nets is invisible to the
+    # search: the test above can only catch a wire over it after the fact
+    # (#649, gamepad_synth). Every net must see the circuit's final tag set.
+    from render import circuit_files, draw_circuit, load_circuit
+
+    def tag_count(d):
+        return sum(isinstance(el, (elm.Vdd, elm.Ground)) for el in d.elements)
+
+    seen: list[tuple[object, int]] = []
+    real_wire = Router.wire
+
+    def counting_wire(self, *args, **kwargs):
+        seen.append((self.d, tag_count(self.d)))
+        return real_wire(self, *args, **kwargs)
+
+    monkeypatch.setattr(Router, "wire", counting_wire)
+    checked = 0
+    for path in circuit_files([]):
+        mod = load_circuit(path)
+        if mod is None:
+            continue
+        seen.clear()
+        d = draw_circuit(mod)
+        final = tag_count(d)
+        nets = [n for drawing, n in seen if drawing is d]
+        late = [n for n in nets if n != final]
+        assert not late, (
+            f"{path.stem}: {len(late)} of {len(nets)} nets routed before all "
+            f"{final} power/ground tags were placed"
+        )
+        checked += 1
+    assert checked > 0, "no circuits were found to check"
+
+
 # -- legibility of the marks ------------------------------------------------------
 #
 # A hop or a dot the tests can count is worth nothing if the drawing hides it.

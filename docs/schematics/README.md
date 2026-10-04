@@ -57,7 +57,11 @@ uv run python render.py
    component first, then its power/ground tags, then create a `Router(d)`
    and call `.wire(a, b)` for each point-to-point net and `.finish()` once
    after the last one (see "Routing" below). Other hand-drawn local stubs
-   (LED branches, bus fan-outs) may come before or after the nets.
+   (LED branches, bus fan-outs) may come before or after the nets, unless
+   they end in a power/ground tag: the router only steers round tags already
+   in the drawing, and
+   `test_every_real_circuit_places_its_tags_before_its_first_net` fails a
+   circuit that adds one after its first `wire()`.
 3. Run `just schematics::render-all`. The SVG + PNG land in `images/`, and
    any build guide that embeds one is recompiled (see "Embedded in a build
    guide" below).
