@@ -82,10 +82,17 @@ repos:
         always_run: true
 
       - id: check-flash-recipes
-        name: Shared flash recipes match their projects
+        name: Flash recipes match their projects and the build
         entry: python3 tools/check-flash-recipes.py
         language: system
-        files: '(justfile|sdkconfig\.defaults|partitions\.csv|tools/esp32-idf\.just|tools/check-flash-recipes\.py)$'
+        files: '(justfile|\.just|sdkconfig\.defaults|partitions\.csv|CMakeLists\.txt|tools/lib/otadata-predicate\.sh|tools/check-flash-recipes\.py)$'
+        pass_filenames: false
+
+      - id: check-flash-recipes-tests
+        name: check-flash-recipes unit tests
+        entry: python3 -m unittest tools/test_check_flash_recipes.py
+        language: system
+        files: '^tools/(check-flash-recipes\.py|test_check_flash_recipes\.py)$'
         pass_filenames: false
 
       - id: check-typst-docs

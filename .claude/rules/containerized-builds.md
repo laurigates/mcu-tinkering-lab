@@ -127,8 +127,9 @@ Run both **as the last step**, on every consumer, after the final edit. A shared
 file has no local blast radius: sweep the module list, not one project.
 `tools/check-flash-recipes.py` (pre-commit, and therefore CI) now gates the
 attribute-adjacency case mechanically along with the four flash-recipe
-assumptions — but it cannot know whether a *recipe body* you changed still
-expands to the offsets you meant, so the dry-run stays a human step. The build-guide drift guard has the same gap for the
+assumptions, and dry-runs every flash recipe to check the files it names (see
+below) — but it cannot know whether a *recipe body* you changed still expands
+to the offsets you meant, so the dry-run stays a human step. The build-guide drift guard has the same gap for the
 opposite reason — it runs *only* in CI — and
 `build-guide-drift-guard.md` § 2 carries the extract-and-run recipe plus the
 negative control that a guard change needs.
@@ -165,6 +166,28 @@ app offset and otadata status, and exits non-zero on a mismatch. It also runs as
 a pre-commit hook, so this is enforced rather than remembered — and its first run
 found a pre-existing instance in `robocar/main`, which had an `ota_0`/`ota_1`
 table, no factory partition, and `CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y`.
+
+**Inline recipes are checked too, by what they expand to.** The four-assumption
+audit reads only recipes that compose a shared one. For every flash recipe —
+inline or shared — the same script runs `PORT=/dev/ttyDUMMY just --dry-run
+<module>::<recipe>` and asserts two things that need no knowledge of how the
+recipe is written:
+
+- every `.bin` it names is one the build writes: `build/<CMake project()>.bin`,
+  `build/bootloader/bootloader.bin`, `build/partition_table/partition-table.bin`
+  or `build/ota_data_initial.bin`;
+- a full flash (one that writes the partition table) also writes
+  `ota_data_initial.bin` whenever the table has an otadata row, with the table
+  found by `tools/lib/otadata-predicate.sh` — the parser the release path uses.
+
+robocar-main and robocar-camera failed both for months (fixed in #598): the
+recipes flashed `build/robocar-{main,camera}.bin`, which no build writes, and the
+camera recipe skipped otadata on an `ota_0`/`ota_1` table with rollback enabled.
+Its first run found `llm-telegram` skipping otadata too (issue #608). A recipe
+handing esptool the build's own `@flash_args` passes by construction; recipes
+that do not run esptool (ESPHome, picotool, pybricks) are out of scope. The check
+needs `just` on PATH and fails without it, which is why `test.yml` installs it.
+It does **not** check offsets — that is still the dry-run's job.
 
 ### Monitor Recipe
 
