@@ -217,6 +217,9 @@ esp_err_t ambient_listener_start(void)
         AMBIENT_LISTENER_TASK_PRIORITY, NULL, AMBIENT_LISTENER_TASK_CORE);
     if (ok != pdPASS) {
         ESP_LOGE(TAG, "failed to create ambient listener task");
+        /* A retry would allocate the ring again, so release this one. */
+        voice_preroll_init(&s_preroll, NULL, 0);
+        heap_caps_free(preroll);
         return ESP_ERR_NO_MEM;
     }
     s_running = true;

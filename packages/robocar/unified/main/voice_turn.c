@@ -214,6 +214,16 @@ static size_t record_vad(int16_t *pcm, size_t samples, record_result_t *res, esp
             break;
         }
     }
+    if (*err != ESP_OK) {
+        ESP_LOGW(TAG, "listen: mic read failed %u ms into a VAD turn: %s",
+                 (unsigned)((recorded * 1000u) / MIC_SAMPLE_RATE_HZ), esp_err_to_name(*err));
+    }
+    /* Leaving the loop without a verdict means the buffer filled on a tail too
+     * short to measure, or a read failed (logged above). Either way the clip
+     * ends where the memory did, so the log line must not read end=continue. */
+    if (res->end == VOICE_ENDPOINT_CONTINUE) {
+        res->end = VOICE_ENDPOINT_END_MAX;
+    }
     res->speech_frames = ep.speech_frames;
     return filled;
 }
@@ -403,7 +413,7 @@ static void run_turn(uint32_t window_ms, bool vad)
     if (vad) {
         /* clip= tracking the utterance is the bench check for issue #616: a short
          * question should end on `silence` well under the ceiling, and preroll=
-         * near a second shows the trigger's own words were kept. */
+         * near 1500 ms (the whole ring) shows the trigger's own words were kept. */
         ESP_LOGI(TAG, "listen: vad clip=%u ms preroll=%u ms end=%s speech=%u frames floor=%d dB",
                  (unsigned)((got * 1000u) / MIC_SAMPLE_RATE_HZ),
                  (unsigned)((rec.preroll_samples * 1000u) / MIC_SAMPLE_RATE_HZ),
