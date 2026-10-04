@@ -183,6 +183,49 @@ def check_attribute_placement() -> list[Finding]:
     return findings
 
 
+JUSTFILE_DIRECTORY_HINT = (
+    "inside a module or import, justfile_directory() is the ROOT justfile's "
+    "directory, not this file's; use source_directory()"
+)
+JUSTFILE_DIRECTORY_RE = re.compile(r"\bjustfile_directory\(\)")
+
+
+def check_justfile_directory() -> list[Finding]:
+    """Catch `justfile_directory()` in any justfile other than the root one.
+
+    Every package justfile is loaded as a `mod` of the root justfile, and in a
+    module `justfile_directory()` returns the ROOT justfile's directory. A path
+    built from it therefore points outside the package — `<repo>/../main` for
+    robocar's coordination justfile (issue #605), `<repo>/external/bluepad32`
+    for gamepad-synth. Nothing errors: `just --list` parses, and the recipe
+    only fails (or writes somewhere unexpected) when it runs. `source_directory()`
+    is the directory of the file it appears in, which is what these paths mean.
+
+    Comment lines are skipped so prose explaining the trap (tools/esp32.just)
+    does not report itself.
+    """
+    findings: list[Finding] = []
+    targets = sorted((REPO_ROOT / "packages").rglob("justfile"))
+    targets += sorted((REPO_ROOT / "tools").rglob("justfile"))
+    targets += sorted((REPO_ROOT / "tools").glob("*.just"))
+
+    for path in targets:
+        if not path.is_file():
+            continue
+        for i, line in enumerate(path.read_text().split("\n")):
+            if line.lstrip().startswith("#"):
+                continue
+            if JUSTFILE_DIRECTORY_RE.search(line):
+                findings.append(
+                    Finding(
+                        str(path.relative_to(REPO_ROOT)),
+                        "JUSTFILE_DIRECTORY_IN_MODULE",
+                        f"line {i + 1}: " + JUSTFILE_DIRECTORY_HINT,
+                    )
+                )
+    return findings
+
+
 def collect() -> list[Project]:
     projects: list[Project] = []
     for justfile in sorted((REPO_ROOT / "packages").rglob("justfile")):
@@ -281,6 +324,7 @@ def main() -> int:
 
     findings = [f for p in projects for f in p.findings]
     findings += check_attribute_placement()
+    findings += check_justfile_directory()
 
     print("=== SHARED FLASH RECIPE CONSUMERS ===")
     for proj in projects:

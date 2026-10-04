@@ -8,9 +8,12 @@ cam_port := env("CAM_PORT", main_port)
 # `port` needed by shared require-port recipe
 port := main_port
 
-robocar_main_dir := justfile_directory() + "/../main"
-robocar_camera_dir := justfile_directory() + "/../camera"
-robocar_sim_dir := justfile_directory() + "/../simulation"
+# source_directory(), not justfile_directory(): this file is loaded as
+# `mod robocar`, and inside a module justfile_directory() is the ROOT justfile's
+# directory, so these resolved to <repo>/../main and friends (issue #605).
+robocar_main_dir := source_directory() + "/../main"
+robocar_camera_dir := source_directory() + "/../camera"
+robocar_sim_dir := source_directory() + "/../simulation"
 
 # Project paths relative to workspace root (for container -w flag)
 main_project := "packages/robocar/main"
@@ -374,7 +377,7 @@ ota-notify project="main" version="latest" broker="localhost":
     set -euo pipefail
     command -v mosquitto_pub >/dev/null 2>&1 || { echo "Error: mosquitto_pub not found — install mosquitto-clients"; exit 1; }
     command -v jq >/dev/null 2>&1 || { echo "Error: jq not found — install jq"; exit 1; }
-    flasher_json="{{justfile_directory()}}/../{{project}}/flasher.json"
+    flasher_json="{{source_directory()}}/../{{project}}/flasher.json"
     [ -f "$flasher_json" ] || { echo "Error: no flasher.json for project '{{project}}' (looked at $flasher_json) — use 'main' or 'camera'"; exit 1; }
     topic=$(jq -r '.otaNotifyTopic // empty' "$flasher_json")
     [ -n "$topic" ] || { echo "Error: $flasher_json has no otaNotifyTopic"; exit 1; }
@@ -397,7 +400,7 @@ ota-status project="main" broker="localhost":
     set -euo pipefail
     command -v mosquitto_sub >/dev/null 2>&1 || { echo "Error: mosquitto_sub not found — install mosquitto-clients"; exit 1; }
     command -v jq >/dev/null 2>&1 || { echo "Error: jq not found — install jq"; exit 1; }
-    flasher_json="{{justfile_directory()}}/../{{project}}/flasher.json"
+    flasher_json="{{source_directory()}}/../{{project}}/flasher.json"
     [ -f "$flasher_json" ] || { echo "Error: no flasher.json for project '{{project}}' (looked at $flasher_json) — use 'main' or 'camera'"; exit 1; }
     topic=$(jq -r '.otaNotifyTopic // empty' "$flasher_json")
     [ -n "$topic" ] || { echo "Error: $flasher_json has no otaNotifyTopic"; exit 1; }
