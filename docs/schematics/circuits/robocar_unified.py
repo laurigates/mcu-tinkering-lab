@@ -7,6 +7,8 @@ XIAO ESP32-S3 Sense driving everything via an I2C multiplexer:
 Direct GPIO: STBY (motor enable), piezo, ultrasonic TRIG/ECHO,
 and I2S (D8-D10) → MAX98357A → speaker for the robot's voice (ADR-019).
 On-module, drawn dashed: the Sense board's PDM microphone (GPIO42/41).
+Standalone between a rail tag and ground: the suggested capacitors C1-C6
+(#628), which no breakout carries.
 
 Every board with a vendor-sourced layout is drawn physically (#495): the
 XIAO, TCA9548A, PCA9685, TB6612FNG and MAX98357A show every pad of their real
@@ -25,6 +27,7 @@ net colour stay hand-authored here.
 
 import sys
 from pathlib import Path
+from typing import NamedTuple
 
 import schemdraw
 import schemdraw.elements as elm
@@ -70,6 +73,63 @@ LED_CHANNELS = (
     "LED_RIGHT_B_CHANNEL",
 )
 SERVO_CHANNELS = ("SERVO_PAN_CHANNEL", "SERVO_TILT_CHANNEL")
+
+
+class SuggestedCap(NamedTuple):
+    """A capacitor the builder adds; none of these is on a breakout (#628)."""
+
+    ref: str
+    value: str
+    rating: str
+    rail: str
+    part_pin: str
+    polar: bool
+    recommended: bool
+
+
+# Read from the vendor board files and datasheets, not recalled; WIRING.md's
+# "Suggested capacitors" section carries the sources row by row, and
+# test_components.py holds that table and the build guide to this list.
+#
+# The bulk electrolytics sit on the three 5 V transient loads, each fed by its
+# own jumper run from the LM2596 — the "long input traces" the MAX98357A
+# datasheet asks additional bulk for. Every breakout already carries the
+# datasheet's own 10 uF (TB6612FNG VM: 0.1 + 10 uF; MAX98357A VDD: 0.1 +
+# 10 uF); the PCA9685 leaves its V+ electrolytic footprint empty for the
+# builder. 16 V: the rail cannot exceed the 8.4 V pack it is bucked from.
+#
+# The ceramics are the smaller half of TI's "larger plus smaller" bypass pair:
+# the Adafruit PCA9685 and TCA9548A boards fit a 10 uF on VCC and nothing
+# smaller. The MCP23017 module is unidentified (#662), so whether it has one
+# is unknown; Microchip's datasheet names no value, and 100 nF is generic
+# practice.
+SUGGESTED_CAPS = (
+    SuggestedCap("C1", "470 µF", "16 V", "+5V", "PCA9685 V+", True, True),
+    SuggestedCap("C2", "470 µF", "16 V", "+5V", "TB6612FNG VM", True, True),
+    SuggestedCap("C3", "470 µF", "16 V", "+5V", "MAX98357A Vin", True, True),
+    SuggestedCap("C4", "100 nF", "ceramic", "+3V3", "PCA9685 VCC", False, False),
+    SuggestedCap("C5", "100 nF", "ceramic", "+3V3", "TCA9548A VIN", False, False),
+    SuggestedCap("C6", "100 nF", "ceramic", "+3V3", "MCP23017 VCC", False, False),
+)
+
+
+def _suggested_cap(d, cap: SuggestedCap, top) -> None:
+    """``cap`` standing between its rail tag at ``top`` and ground below it.
+
+    Drawn standalone rather than on the pin's own tag: the rail symbol names
+    the net, and the label says which pin to fit it at. Hanging each one off
+    its pin would put a capacitor body in every crowded power-pin row.
+    """
+    d.add(elm.Vdd().at(top).label(cap.rail).color(net_color("power")))
+    text = f"{cap.ref} {cap.value}\n{cap.rating}\nat {cap.part_pin}"
+    # Drawn downward, the element's "bot" side is the drawing's right.
+    body = d.add(
+        elm.Capacitor(polar=cap.polar)
+        .down(1.5)
+        .at(top)
+        .label(text, loc="bot", fontsize=10)
+    )
+    d.add(elm.Ground().at(body.end).color(net_color("ground")))
 
 
 def _tag(d, pin, direction: str, length: float, kind: str, label: str = "") -> None:
@@ -337,9 +397,49 @@ def draw(model: HardwareModel | None = None) -> schemdraw.Drawing:
 
     # Amp power on its bottom header. VIN is 5 V — take a separate feed from
     # the LM2596 regulator's output terminal rather than daisy-chaining off
-    # the motor rail, and fit >=470 uF of bulk here (see WIRING.md).
+    # the motor rail, and fit C3's bulk here (SUGGESTED_CAPS, WIRING.md).
     _tag(d, amp.Vin, "down", 0.5, "power", "+5V")
     _tag(d, amp.GND, "down", 0.5, "ground")
+
+    # === Suggested capacitors (#628). ===
+    # Each stands in free space beside the board it belongs to, placed before
+    # routing like the tags above so the router steers round it.
+    def box(el):
+        return el.get_bbox(transform=True, includetext=False)
+
+    pca_box, tb_box, amp_box = box(pca), box(tb), box(amp)
+    mux_box, mcp_box = box(mux), box(mcp)
+    # Each label reads to the right of its capacitor, into the free space the
+    # position was chosen for.
+    where = {
+        "C1": (pca_box.xmax + 1.5, pca_box.ymin - 1.5),
+        "C2": (tb_box.xmin - 1.5, tb_box.ymax + 3.5),
+        "C3": (amp_box.xmax + 1.5, amp_box.ymin - 1.0),
+        "C4": (pca_box.xmax + 2.5, pca_box.ymin - 5.5),
+        "C5": (mux_box.xmax + 2.5, mux_box.ymax - 2.5),
+        "C6": (mcp_box.xmax + 2.0, mcp_box.ymin - 1.0),
+    }
+    for cap in SUGGESTED_CAPS:
+        _suggested_cap(d, cap, where[cap.ref])
+
+    def legend_line(recommended: bool) -> str:
+        caps = [c for c in SUGGESTED_CAPS if c.recommended == recommended]
+        kinds = sorted(
+            {f"{c.value} {'electrolytic' if c.polar else 'ceramic'}" for c in caps}
+        )
+        status = "recommended" if recommended else "optional"
+        return f"{', '.join(c.ref for c in caps)}: {', '.join(kinds)} — {status}"
+
+    d.add(
+        elm.Label()
+        .at((pca_box.xmin, xiao_box.ymax + 3))
+        .label(
+            "Suggested capacitors, none on any breakout (see WIRING.md):\n"
+            f"{legend_line(True)}\n{legend_line(False)}",
+            fontsize=10,
+            halign="left",
+        )
+    )
 
     # === Nets: auto-routed orthogonal, obstacle-avoiding wires. ===
     router = Router(d)

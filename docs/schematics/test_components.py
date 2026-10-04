@@ -221,3 +221,97 @@ def test_robocar_unified_draws_every_known_board_physically(real_circuit):
             f"{slug}: expected one physical symbol, found {len(matches)}"
         )
         assert len(matches[0]._userparams["pins"]) == len(layout.pads), slug
+
+
+# --- Suggested capacitors (#628) ---------------------------------------------
+
+WIRING = UNIFIED / "WIRING.md"
+BUILD_GUIDE = UNIFIED / "docs/build-guide.typ"
+
+
+def _suggested_caps():
+    """robocar_unified's SUGGESTED_CAPS, read from the circuit that draws them."""
+    from render import load_circuit
+
+    path = FsPath(__file__).parent / "circuits" / "robocar_unified.py"
+    return load_circuit(path).SUGGESTED_CAPS
+
+
+def _key(point) -> tuple[float, float]:
+    return (round(point[0], 6), round(point[1], 6))
+
+
+def test_suggested_capacitors_are_the_ones_no_breakout_carries():
+    # Each vendor board file was read for the capacitors it already has
+    # (WIRING.md, "Suggested capacitors"). The bulk electrolytics go on the
+    # three 5 V transient loads; the ceramics on the two Adafruit logic
+    # supplies that carry only a 10 uF, and on the unidentified MCP23017
+    # module. The MAX98357A's 0.1 + 10 uF and the TB6612FNG's VM pair are on
+    # their boards, so a part suggested there would be a duplicate.
+    caps = _suggested_caps()
+    bulk = {c.part_pin for c in caps if c.polar}
+    ceramic = {c.part_pin for c in caps if not c.polar}
+    assert bulk == {"PCA9685 V+", "TB6612FNG VM", "MAX98357A Vin"}
+    assert ceramic == {"PCA9685 VCC", "TCA9548A VIN", "MCP23017 VCC"}
+    assert all(c.rail == "+5V" and c.recommended for c in caps if c.polar)
+    assert all(c.rail == "+3V3" and not c.recommended for c in caps if not c.polar)
+    assert len({c.ref for c in caps}) == len(caps)
+
+
+def test_robocar_unified_draws_every_suggested_capacitor_on_its_rail(real_circuit):
+    circuit = real_circuit("robocar_unified")
+    elements = circuit.drawing.elements
+    drawn = {
+        e._userlabels[0].label.split()[0]: e
+        for e in elements
+        if isinstance(e, elm.Capacitor)
+    }
+    caps = _suggested_caps()
+    assert set(drawn) == {c.ref for c in caps}
+
+    rails = {
+        _key(e.absanchors["start"]): e._userlabels[0].label
+        for e in elements
+        if isinstance(e, elm.Vdd) and e._userlabels
+    }
+    grounds = {
+        _key(e.absanchors["start"]) for e in elements if isinstance(e, elm.Ground)
+    }
+    for c in caps:
+        cap = drawn[c.ref]
+        # An electrolytic fitted backwards fails, so the symbol says which way.
+        assert bool(cap._userparams.get("polar")) == c.polar, c.ref
+        label = cap._userlabels[0].label
+        assert c.value in label and c.part_pin in label, (c.ref, label)
+        assert rails.get(_key(cap.absanchors["start"])) == c.rail, c.ref
+        assert _key(cap.absanchors["end"]) in grounds, c.ref
+
+    # The drawing's legend separates recommended from optional, or the solder
+    # list is left to guesswork.
+    text = " ".join(_svg_text(circuit.svg))
+    assert "recommended" in text and "optional" in text
+
+
+def test_suggested_capacitors_are_mirrored_in_wiring_md_and_the_build_guide():
+    caps = _suggested_caps()
+    wiring = WIRING.read_text()
+    guide = BUILD_GUIDE.read_text()
+    for c in caps:
+        status = "Recommended" if c.recommended else "Optional"
+        row = re.search(rf"^\| {c.ref} \|.*$", wiring, re.M)
+        assert row, f"WIRING.md has no table row for {c.ref}"
+        for fact in (c.value, c.part_pin, status):
+            assert fact in row.group(0), (c.ref, fact)
+        row = re.search(rf"^\s*\(\[{c.ref}\],.*$", guide, re.M)
+        assert row, f"build-guide.typ has no table row for {c.ref}"
+        for fact in (c.value, c.part_pin, status):
+            assert fact in row.group(0), (c.ref, fact)
+
+    # The bill of materials counts them by kind and value.
+    for polar, kind in ((True, "Electrolytic capacitor"), (False, "Ceramic capacitor")):
+        values = {c.value for c in caps if c.polar == polar}
+        assert len(values) == 1, values
+        (value,) = values
+        count = sum(c.polar == polar for c in caps)
+        bom = re.search(rf"^\s*\(\[{count}\], \[{kind}\], \[[^\]]*{value}", guide, re.M)
+        assert bom, f"BOM must list {count}x {kind} {value}"

@@ -173,9 +173,10 @@ inrush was tripping it. The MAX98357A adds transient draw of up to ~1 A into a
 brownout detection off, an undersized rail will not warn you — it will present
 as random resets or corrupt audio mid-sentence.
 
-- Fit a **bulk capacitor (≥ 470 µF) at the amplifier's Vin**, plus the usual
-  0.1 µF close to the pin. Fit the same at the PCA9685's **V+**: the servos are
-  the harsher transient source of the two.
+- Fit a **bulk capacitor (470 µF) at the amplifier's Vin** — C3 below. The
+  breakout already carries the datasheet's 0.1 µF + 10 µF next to the chip, so
+  nothing smaller is needed there. Fit the same at the PCA9685's **V+** (C1):
+  the servos are the harsher transient source of the two.
 - **Never power servos from the XIAO's 5V pin or from USB VBUS.** That pin is a
   regulator input, not a supply output, and a USB host port cannot source what
   two SG90s and a class-D amplifier draw. Servos that buzz without moving are
@@ -200,6 +201,48 @@ inrush cannot sag.
 
 Do not connect anything to the XIAO's BAT pads while feeding its 5V pin — the
 onboard charger will try to charge whatever it finds there.
+
+### Suggested capacitors
+
+The schematic draws six capacitors that no breakout carries, labelled C1–C6.
+C1–C3 are recommended; C4–C6 are optional. Each was chosen by reading what the
+vendor's board file already fits (the Eagle file at the commit its
+`docs/reference/boards/` page cites) against what the part's datasheet asks for.
+
+| Ref | Part | Fit at | Status | Why, and the source |
+|-----|------|--------|--------|---------------------|
+| C1 | 470 µF electrolytic, 16 V | PCA9685 V+ | Recommended | The Adafruit board leaves a through-hole electrolytic footprint on the V+ net empty for the builder (vendor ref C2, 3.5 mm pitch). Adafruit's guide suggests n × 100 µF for n servos as a start — 200 µF for the two SG90s — and says the right value depends on the servos and the supply; 470 µF matches C3. |
+| C2 | 470 µF electrolytic, 16 V | TB6612FNG VM | Recommended | Toshiba's typical application puts 10 µF + 0.1 µF on VM "as close as possible to the IC", and the SparkFun board fits both (C3, C1). The bulk part is for motor start and stall current arriving over a jumper run instead of a short trace — the case C3's datasheet sentence describes. |
+| C3 | 470 µF electrolytic, 16 V | MAX98357A Vin | Recommended | Maxim: "Bypass VDD with a 0.1 µF and 10 µF capacitor to GND" — both on the Adafruit board (C1, C2) — and "apply additional bulk capacitance at the ICs if long input traces between VDD and the power source are used". A jumper from the LM2596 is a long input trace. |
+| C4 | 100 nF ceramic | PCA9685 VCC | Optional | The Adafruit board fits only a 10 µF (C1) on VCC. NXP's datasheet FAQ: about 50 pF of decoupling is on-chip, and whether to add external decoupling as close as possible to the device is left to the designer when many outputs switch together. |
+| C5 | 100 nF ceramic | TCA9548A VIN | Optional | The Adafruit board fits only a 10 µF (C1). TI's layout guidance (SCPS207H §8.4.1) pairs a larger capacitor for supply glitches with a smaller one for high-frequency ripple; this is the smaller one. |
+| C6 | 100 nF ceramic | MCP23017 VCC | Optional | The module fitted is unidentified (#662), so whether it carries one is unknown. Microchip's datasheet (DS20001952) names no value; 100 nF is generic practice. Skip it if the module already has a capacitor beside the chip. |
+
+Fit each one **at the pin it names**, across that pin and the nearest GND pad,
+with short leads. A capacitor at the regulator's end of a jumper cannot supply a
+transient at the far end — the jumper's own resistance and inductance sit
+between them, which is the star-wiring argument above applied to the capacitor.
+
+**16 V is margin, not a guess.** The rail is bucked from a pack that reaches
+8.4 V, and a step-down converter cannot raise its output above its input, so
+even a trimpot turned fully up leaves a 10 V part inside its rating. Fit the
+electrolytics with the stripe (−) to GND; the schematic marks the + plate.
+
+One datasheet recommendation is deliberately not drawn: Toshiba also asks for
+10 µF on the TB6612FNG's **VCC**, and the SparkFun board fits only 0.1 µF there
+(C2). That pin draws 1.1 mA typical (datasheet Icc at 3 V) from the XIAO's 3V3
+pad, so it is left out; it is the first part to add if STBY or the control
+inputs ever misbehave under motor load.
+
+Datasheets: [TB6612FNG](https://cdn.sparkfun.com/datasheets/Robotics/TB6612FNG.pdf),
+[PCA9685](https://cdn-shop.adafruit.com/datasheets/PCA9685.pdf) and
+[Adafruit's PCA9685 guide](https://cdn-learn.adafruit.com/downloads/pdf/16-channel-pwm-servo-driver.pdf),
+[MAX98357A](https://www.analog.com/media/en/technical-documentation/data-sheets/MAX98357A-MAX98357B.pdf),
+[TCA9548A](https://www.ti.com/lit/ds/symlink/tca9548a.pdf),
+[MCP23017](https://ww1.microchip.com/downloads/aemDocuments/documents/APID/ProductDocuments/DataSheets/MCP23017-Data-Sheet-DS20001952.pdf).
+`docs/schematics/circuits/robocar_unified.py` (`SUGGESTED_CAPS`) is the list
+the drawing is made from, and its tests fail if this table or the build guide
+drifts from it.
 
 ## Audio output (MAX98357A)
 
