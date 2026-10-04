@@ -48,6 +48,13 @@ uv sync
 uv run python render.py
 ```
 
+On macOS with Homebrew cairo, run the venv interpreter instead, with the
+library path prefixed on it:
+`DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/opt/cairo/lib .venv/bin/python render.py`.
+The same prefix in front of `uv run` does nothing: `uv` is signed with the
+hardened runtime, so dyld strips `DYLD_*` before the Python child starts
+(issue #654). The justfile header carries the full explanation.
+
 ## Adding a new circuit
 
 1. Add any missing component factories to `components.py`. Keep pin sets

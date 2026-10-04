@@ -2,11 +2,21 @@ project_dir := "docs/schematics"
 
 # On macOS, cairosvg dlopens libcairo.2.dylib via cairocffi but Homebrew
 # installs it under /opt/homebrew/opt/cairo/lib (or /usr/local/opt on Intel),
-# which isn't on the dynamic loader search path by default. macOS SIP scrubs
-# DYLD_* from sh's environment on exec of hardened binaries, so the value has
-# to be inline-prefixed in front of the (non-hardened) `uv` invocation rather
-# than `export`ed at the justfile level. Linux/CI ships libcairo on the system
-# path — the prefix is empty there.
+# which isn't on the dynamic loader search path by default, so the cairo
+# recipes set DYLD_FALLBACK_LIBRARY_PATH for the Python process.
+#
+# dyld discards every DYLD_* variable when it launches a hardened-runtime or
+# SIP-protected binary, and the child that binary spawns inherits the scrubbed
+# environment. That rules out two placements:
+#   - `export`ing it at the justfile level: the recipe shell is /bin/sh, which
+#     is SIP-protected.
+#   - prefixing it in front of `uv run`: uv 0.12.21 is signed with the
+#     hardened runtime (`codesign -dv` shows flags=0x10000(runtime)), so the
+#     variable never reaches the Python child uv spawns (issue #654, a
+#     regression of #285).
+# So it is inline-prefixed in front of the venv interpreter itself, which is
+# not hardened, after the `sync` dependency has created the venv. Linux/CI
+# ships libcairo on the default loader path — the prefix is empty there.
 cairo_dyld := if path_exists("/opt/homebrew/opt/cairo/lib") == "true" {
     "DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/opt/cairo/lib"
 } else if path_exists("/usr/local/opt/cairo/lib") == "true" {
@@ -58,12 +68,12 @@ render-all: _render-images
 
 [private]
 _render-images: sync
-    {{cairo_dyld}} uv run python render.py
+    {{cairo_dyld}} .venv/bin/python render.py
 
 # Render a single circuit by name (without .py), e.g. `just schematics::render-one gamepad_synth`
 [group: "build"]
 render-one name: sync
-    {{cairo_dyld}} uv run python render.py {{name}}
+    {{cairo_dyld}} .venv/bin/python render.py {{name}}
 
 # Run every test suite in this directory (routing, metrics, ...)
 [group: "test"]
