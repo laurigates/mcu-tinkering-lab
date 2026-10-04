@@ -14,7 +14,9 @@ just robocar-unified::live-probe-test     # offline tests, no key or network
 
 Outputs land in the repo's `tmp/live-probe/`, uncommitted like the other voice
 recipes' output: `question.wav` (the rendered
-prompt, reused on later runs), `reply.wav`, and `report.json`.
+prompt, reused on later runs), `report.json`, and `reply.wav` — the last only
+when every reply chunk declared the same rate, since a WAV at a guessed rate
+plays back pitch-shifted.
 
 ## What it measures
 
@@ -27,7 +29,7 @@ prompt, reused on later runs), `reply.wav`, and `report.json`.
 | `output_mime_types`, `output_rate_hz` | As sent by the server, never assumed. `None` if chunks disagree |
 | `arrival_rtf` | Reply audio seconds ÷ wall-clock seconds it took to arrive. Below 1.0 the device would need a preroll gate, as the TTS path has |
 | `input_transcription`, `output_transcription` | What the model heard, and what it said |
-| `usage_last` | The session's last `usageMetadata` (token counts) |
+| `usage_last` | The session's last `usageMetadata` (token counts). The probe keeps reading for 1.5 s after `turnComplete`, because the docs do not promise usage arrives before it |
 | `go_away_time_left` | Set if the server announced a connection end |
 
 Three choices make the latency number mean something:

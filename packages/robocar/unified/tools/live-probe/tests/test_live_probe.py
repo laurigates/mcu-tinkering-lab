@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 from google.genai import types
 
@@ -115,9 +117,19 @@ def test_resample_interpolates_between_samples():
     assert out == [0, 200, 300]
 
 
-def test_resample_clamps_to_int16():
+def test_resample_upsamples_full_scale_without_overflow():
+    # Interpolation between in-range samples stays in range; this pins that a
+    # full-scale input still reaches pcm_bytes() as valid int16.
     out = lp.resample_linear([32767, 32767, 32767], 3, 6)
-    assert max(out) == 32767
+    assert len(out) == 6
+    assert set(out) == {32767}
+    lp.pcm_bytes(out)  # raises OverflowError on any out-of-range sample
+
+
+def test_read_wav_rejects_a_truncated_sample():
+    data = lp.wav_bytes(lp.pcm_bytes([1, 2, 3]), 16000)
+    with pytest.raises(ValueError, match="truncated"):
+        lp.read_wav(data[:-1])
 
 
 def test_chunk_pcm_never_splits_a_sample():
@@ -258,6 +270,48 @@ def test_reply_pcm_concatenates_audio_in_order():
         lp.Event(1.2, "audio", (2, "x", b"\x02\x00")),
     ]
     assert lp.reply_pcm(ev) == b"\x01\x00\x02\x00"
+
+
+# --------------------------------------------------------------------------
+# Session plumbing that does not need the network
+# --------------------------------------------------------------------------
+
+
+def test_stream_paced_stamps_the_last_send_not_its_trailing_sleep():
+    now = [0.0]
+    sent: list[tuple[float, bytes]] = []
+
+    async def send(chunk: bytes) -> None:
+        sent.append((now[0], chunk))
+
+    async def sleep(s: float) -> None:
+        now[0] += s
+
+    t = asyncio.run(
+        lp.stream_paced(send, [b"a", b"b", b"c"], 0.1, lambda: now[0], sleep)
+    )
+    assert [c for _, c in sent] == [b"a", b"b", b"c"]
+    # Chunks leave at 0.0, 0.1, 0.2; the end of speech is the last send (0.2),
+    # not 0.3 after its pacing sleep — that would hide 100 ms of latency.
+    assert t == pytest.approx(0.2)
+    assert now[0] == pytest.approx(0.3)
+
+
+def test_stream_paced_with_nothing_to_send_returns_none():
+    async def never(_: bytes) -> None:
+        raise AssertionError("nothing should be sent")
+
+    assert asyncio.run(lp.stream_paced(never, [], 0.1)) is None
+
+
+def test_live_config_builds_offline_with_voice_and_persona():
+    persona = lp.Persona(name="Teuvo", voice="Charon", instruction="Vastaa suomeksi.")
+    cfg = lp.live_config(persona, "Puck")
+    assert cfg.response_modalities == [types.Modality.AUDIO]
+    assert cfg.speech_config.voice_config.prebuilt_voice_config.voice_name == "Puck"
+    assert "suomeksi" in str(cfg.system_instruction)
+    assert cfg.input_audio_transcription is not None
+    assert cfg.output_audio_transcription is not None
 
 
 def test_main_fails_fast_without_a_key(monkeypatch, capsys):

@@ -36,6 +36,7 @@ The key is read from ``GEMINI_API_KEY`` and never printed. Writes
 from __future__ import annotations
 
 import argparse
+import array
 import asyncio
 import importlib.util
 import io
@@ -46,6 +47,7 @@ import sys
 import time
 import urllib.request
 import wave
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -54,6 +56,7 @@ INPUT_RATE = 16000  # Live API input is natively 16 kHz; it is also the mic's ra
 CHUNK_MS = 100
 DEFAULT_TAIL_SILENCE_MS = 800
 DEFAULT_TIMEOUT_S = 45.0
+USAGE_GRACE_S = 1.5  # keep reading after turnComplete for a trailing usageMetadata
 LIST_MODELS_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
 TOOLS_DIR = Path(__file__).resolve().parent.parent
@@ -143,8 +146,13 @@ def read_wav(data: bytes) -> tuple[list[int], int, int]:
             raise ValueError(f"need 16-bit PCM, got {8 * w.getsampwidth()}-bit")
         rate, channels = w.getframerate(), w.getnchannels()
         frames = w.readframes(w.getnframes())
-    samples = list(memoryview(frames).cast("h"))
-    return samples, rate, channels
+    if len(frames) % 2:
+        raise ValueError("truncated WAV: odd number of PCM bytes")
+    # WAV is little-endian; decode explicitly so this mirrors pcm_bytes().
+    a = array.array("h", frames)
+    if sys.byteorder == "big":
+        a.byteswap()
+    return a.tolist(), rate, channels
 
 
 def to_mono(samples: list[int], channels: int) -> list[int]:
@@ -182,8 +190,6 @@ def resample_linear(samples: list[int], src_rate: int, dst_rate: int) -> list[in
 
 
 def pcm_bytes(samples: list[int]) -> bytes:
-    import array
-
     a = array.array("h", samples)
     if sys.byteorder == "big":
         a.byteswap()
@@ -387,6 +393,46 @@ def reply_pcm(events: list[Event]) -> bytes:
 # --------------------------------------------------------------------------
 
 
+async def stream_paced(
+    send: Callable[[bytes], Awaitable[None]],
+    chunks: list[bytes],
+    chunk_s: float,
+    clock: Callable[[], float] = time.monotonic,
+    sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+) -> float | None:
+    """Send each chunk, then wait one chunk length (real-time pacing).
+
+    Returns ``clock()`` taken right after the *last send*, before its trailing
+    sleep — the instant the final sample left. Stamping after the loop instead
+    lands one chunk later and understates every latency measured from it by
+    ``chunk_s``. None when there was nothing to send.
+    """
+    t_last: float | None = None
+    for chunk in chunks:
+        await send(chunk)
+        t_last = clock()
+        await sleep(chunk_s)
+    return t_last
+
+
+def live_config(persona: Persona, voice: str) -> Any:
+    """The session config. Built here, not inline, so a test can construct it
+    offline and catch an SDK signature change before a paid live run does."""
+    from google.genai import types
+
+    return types.LiveConnectConfig(
+        response_modalities=["AUDIO"],
+        speech_config=types.SpeechConfig(
+            voice_config=types.VoiceConfig(
+                prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=voice)
+            )
+        ),
+        system_instruction=persona.instruction,
+        input_audio_transcription=types.AudioTranscriptionConfig(),
+        output_audio_transcription=types.AudioTranscriptionConfig(),
+    )
+
+
 async def run_session(
     api_key: str,
     model: str,
@@ -400,46 +446,40 @@ async def run_session(
     from google.genai import types
 
     client = genai.Client(api_key=api_key)
-    config = types.LiveConnectConfig(
-        response_modalities=["AUDIO"],
-        speech_config=types.SpeechConfig(
-            voice_config=types.VoiceConfig(
-                prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=voice)
-            )
-        ),
-        system_instruction=persona.instruction,
-        input_audio_transcription=types.AudioTranscriptionConfig(),
-        output_audio_transcription=types.AudioTranscriptionConfig(),
-    )
+    config = live_config(persona, voice)
     mime = f"audio/pcm;rate={INPUT_RATE}"
     events: list[Event] = []
     t0 = time.monotonic()
     async with client.aio.live.connect(model=model, config=config) as session:
         events.append(Event(time.monotonic(), "connected"))
 
-        async def receive() -> None:
+        async def collect(stop_at_turn_complete: bool) -> None:
             while True:
                 async for msg in session.receive():
-                    now = time.monotonic()
-                    batch = events_from_message(msg, now)
+                    batch = events_from_message(msg, time.monotonic())
                     events.extend(batch)
-                    if any(e.kind == "turn_complete" for e in batch):
+                    if stop_at_turn_complete and any(
+                        e.kind == "turn_complete" for e in batch
+                    ):
                         return
 
-        receiver = asyncio.create_task(receive())
-        # Real-time pacing: one chunk per chunk-length of wall clock.
-        for chunk in chunk_pcm(pcm16k, INPUT_RATE, CHUNK_MS):
+        async def send_audio(chunk: bytes) -> None:
             await session.send_realtime_input(
                 audio=types.Blob(data=chunk, mime_type=mime)
             )
-            await asyncio.sleep(CHUNK_MS / 1000)
-        t_speech_end = time.monotonic()
+
+        receiver = asyncio.create_task(collect(stop_at_turn_complete=True))
+        chunk_s = CHUNK_MS / 1000
+        t_last_speech = await stream_paced(
+            send_audio, chunk_pcm(pcm16k, INPUT_RATE, CHUNK_MS), chunk_s
+        )
+        t_speech_end = t_last_speech if t_last_speech is not None else time.monotonic()
         silence = bytes(INPUT_RATE * tail_silence_ms // 1000 * 2)
-        for chunk in chunk_pcm(silence, INPUT_RATE, CHUNK_MS) if silence else []:
-            await session.send_realtime_input(
-                audio=types.Blob(data=chunk, mime_type=mime)
-            )
-            await asyncio.sleep(CHUNK_MS / 1000)
+        await stream_paced(
+            send_audio,
+            chunk_pcm(silence, INPUT_RATE, CHUNK_MS) if silence else [],
+            chunk_s,
+        )
         await session.send_realtime_input(audio_stream_end=True)
         t_stream_end = time.monotonic()
         try:
@@ -447,6 +487,16 @@ async def run_session(
         except TimeoutError:
             events.append(Event(time.monotonic(), "timeout"))
             receiver.cancel()
+        else:
+            # The docs say usageMetadata arrives "periodically", with no promise
+            # that it precedes turnComplete. Keep reading briefly so a trailing
+            # usage message is not lost; latencies are already stamped.
+            try:
+                await asyncio.wait_for(
+                    collect(stop_at_turn_complete=False), timeout=USAGE_GRACE_S
+                )
+            except TimeoutError:
+                pass
     return Timeline(
         t_connect_start=t0,
         t_speech_end=t_speech_end,
