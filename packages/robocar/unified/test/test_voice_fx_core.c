@@ -52,6 +52,17 @@ static void test_run(const char *name, void (*fn)(void))
 
 #define RATE 24000u
 
+/** Init with the chain switched on. The boot default is off
+ *  (VOICE_FX_DEFAULT_ENABLED), and the tests below are about what the chain
+ *  does to a signal, so each enables it explicitly. The bypass test enables it
+ *  too and then switches it off, so it covers the ON->OFF edge; the boot
+ *  default itself is pinned by test_the_chain_boots_disabled. */
+static void fx_init_on(voice_fx_t *fx)
+{
+    voice_fx_init(fx, RATE);
+    voice_fx_set_enabled(fx, true);
+}
+
 static void fill(int16_t *buf, size_t n, int16_t v)
 {
     for (size_t i = 0; i < n; i++) {
@@ -76,7 +87,7 @@ static void fill(int16_t *buf, size_t n, int16_t v)
 static void test_the_input_trim_keeps_a_loud_signal_off_the_rail(void)
 {
     voice_fx_t fx;
-    voice_fx_init(&fx, RATE);
+    fx_init_on(&fx);
     ASSERT(voice_fx_set_feedback(&fx, VOICE_FX_FEEDBACK_MAX));
 
     int16_t buf[2048];
@@ -94,7 +105,7 @@ static void test_the_input_trim_keeps_a_loud_signal_off_the_rail(void)
 static void test_full_scale_never_wraps_sign(void)
 {
     voice_fx_t fx;
-    voice_fx_init(&fx, RATE);
+    fx_init_on(&fx);
     ASSERT(voice_fx_set_feedback(&fx, VOICE_FX_FEEDBACK_MAX));
     ASSERT(voice_fx_set_drive(&fx, VOICE_FX_DRIVE_MAX));
 
@@ -125,7 +136,7 @@ static void test_full_scale_never_wraps_sign(void)
 static void test_the_echo_lands_exactly_one_delay_later(void)
 {
     voice_fx_t fx;
-    voice_fx_init(&fx, RATE);
+    fx_init_on(&fx);
     ASSERT(voice_fx_set_body_ms(&fx, 1.0f));             /* 24 samples at 24 kHz */
     ASSERT(voice_fx_set_drive(&fx, VOICE_FX_DRIVE_MIN)); /* near-linear */
     const size_t d = fx.delay_samples;
@@ -161,12 +172,12 @@ static void test_state_survives_a_chunk_boundary(void)
     memcpy(split, whole, sizeof(whole));
 
     voice_fx_t a;
-    voice_fx_init(&a, RATE);
+    fx_init_on(&a);
     ASSERT(voice_fx_set_body_ms(&a, 1.0f));
     voice_fx_apply(&a, whole, 256);
 
     voice_fx_t b;
-    voice_fx_init(&b, RATE);
+    fx_init_on(&b);
     ASSERT(voice_fx_set_body_ms(&b, 1.0f));
     voice_fx_apply(&b, split, 128);
     voice_fx_apply(&b, split + 128, 128);
@@ -182,8 +193,26 @@ static void test_state_survives_a_chunk_boundary(void)
 static void test_disabled_is_a_byte_exact_bypass(void)
 {
     voice_fx_t fx;
-    voice_fx_init(&fx, RATE);
+    fx_init_on(&fx);
     voice_fx_set_enabled(&fx, false);
+
+    int16_t buf[64];
+    int16_t ref[64];
+    for (size_t i = 0; i < 64; i++) {
+        buf[i] = (int16_t)(i * 500 - 16000);
+    }
+    memcpy(ref, buf, sizeof(buf));
+    voice_fx_apply(&fx, buf, 64);
+    ASSERT(memcmp(buf, ref, sizeof(buf)) == 0);
+}
+
+/** The boot default is the plain TTS voice: voice_fx_init() alone must leave
+ *  the chain off and the samples byte-identical, with no set_enabled() call. */
+static void test_the_chain_boots_disabled(void)
+{
+    voice_fx_t fx;
+    voice_fx_init(&fx, RATE);
+    ASSERT(!fx.enabled);
 
     int16_t buf[64];
     int16_t ref[64];
@@ -199,7 +228,7 @@ static void test_disabled_is_a_byte_exact_bypass(void)
 static void test_reset_clears_the_tail(void)
 {
     voice_fx_t fx;
-    voice_fx_init(&fx, RATE);
+    fx_init_on(&fx);
 
     int16_t loud[256];
     fill(loud, 256, 20000);
@@ -229,7 +258,7 @@ static void test_reset_clears_the_tail(void)
 static void test_out_of_range_parameters_are_refused(void)
 {
     voice_fx_t fx;
-    voice_fx_init(&fx, RATE);
+    fx_init_on(&fx);
 
     const float body = fx.body_ms;
     const float fb = fx.feedback;
@@ -254,7 +283,7 @@ static void test_out_of_range_parameters_are_refused(void)
 static void test_nan_parameters_are_refused(void)
 {
     voice_fx_t fx;
-    voice_fx_init(&fx, RATE);
+    fx_init_on(&fx);
     const float nan_v = (float)NAN;
     ASSERT(!voice_fx_set_body_ms(&fx, nan_v));
     ASSERT(!voice_fx_set_feedback(&fx, nan_v));
@@ -266,7 +295,7 @@ static void test_nan_parameters_are_refused(void)
 static void test_zero_feedback_is_a_dry_path(void)
 {
     voice_fx_t fx;
-    voice_fx_init(&fx, RATE);
+    fx_init_on(&fx);
     ASSERT(voice_fx_set_feedback(&fx, 0.0f));
     ASSERT(voice_fx_set_drive(&fx, VOICE_FX_DRIVE_MIN));
 
@@ -294,6 +323,7 @@ int main(void)
     test_run("state survives a chunk boundary", test_state_survives_a_chunk_boundary);
 
     test_run("disabled is a byte-exact bypass", test_disabled_is_a_byte_exact_bypass);
+    test_run("the chain boots disabled", test_the_chain_boots_disabled);
     test_run("reset clears the tail", test_reset_clears_the_tail);
 
     test_run("out-of-range parameters are refused", test_out_of_range_parameters_are_refused);

@@ -557,6 +557,8 @@ knobs, all integers on the console because `%f` is silently wrong under
 `CONFIG_NEWLIB_NANO_FORMAT` — `voice fx body <tenths of a ms>` (the body size;
 6.5 ms resonates near 154 Hz), `voice fx metal <pct>` (feedback), `voice fx drive
 <pct>`, plus `voice fx on|off`. Like every other knob here they do not persist.
+The chain **boots off** (`VOICE_FX_DEFAULT_ENABLED` in `voice_fx_core.h`), so
+the robot speaks in the plain TTS voice until `voice fx on`.
 
 The `(1-g)` input trim on the comb is load-bearing, not tidiness: a feedback comb
 has DC gain `1/(1-g)`, so an untrimmed one pins at the rail and is a clipper
