@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="123.03mm" height="78.42mm" viewBox="0 0 492.1 313.7" font-family="DejaVu Sans Mono">
+<svg xmlns="http://www.w3.org/2000/svg" width="123.03mm" height="123.27mm" viewBox="0 0 492.1 493.1" font-family="DejaVu Sans Mono">
 <title>Adafruit 16-Channel 12-bit PWM/Servo Driver — PCA9685 (#815)</title>
-<rect x="0" y="0" width="492.1" height="313.7" fill="#ffffff"/>
+<rect x="0" y="0" width="492.1" height="493.1" fill="#ffffff"/>
 <text x="12.0" y="19.2" font-size="12" text-anchor="start" dominant-baseline="central" fill="#1f2933">Adafruit 16-Channel 12-bit PWM/Servo Driver — PCA9685 (#815)</text>
 <rect x="12.0" y="31.2" width="468.1" height="242.1" rx="6" fill="#eef4ee" stroke="#1f2933" stroke-width="1.5"/>
 <circle cx="23.0" cy="100.3" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="GND.L1" data-side="L" data-pos="1"/>
@@ -31,38 +31,52 @@
 <text x="235.1" y="53.7" font-size="10" text-anchor="end" dominant-baseline="central" fill="#1f2933" transform="rotate(-90 235.1 53.7)">V+</text>
 <circle cx="257.1" cy="42.2" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="GND.T2" data-side="T" data-pos="2"/>
 <text x="257.1" y="53.7" font-size="10" text-anchor="end" dominant-baseline="central" fill="#1f2933" transform="rotate(-90 257.1 53.7)">GND</text>
-<circle cx="81.1" cy="262.3" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="0" data-side="B" data-pos="1"/>
+<circle cx="81.1" cy="262.3" r="5.5" fill="#2f6fb0" stroke="#1f2933" stroke-width="1" data-anchor="0" data-side="B" data-pos="1"/>
 <text x="81.1" y="250.8" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933" transform="rotate(-90 81.1 250.8)">0</text>
-<circle cx="103.1" cy="262.3" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="1" data-side="B" data-pos="2"/>
+<text x="81.1" y="279.3" font-size="9" text-anchor="end" dominant-baseline="central" fill="#1f2933" transform="rotate(-90 81.1 279.3)">LED_LEFT_R → Left RGB LED R</text>
+<circle cx="103.1" cy="262.3" r="5.5" fill="#2f6fb0" stroke="#1f2933" stroke-width="1" data-anchor="1" data-side="B" data-pos="2"/>
 <text x="103.1" y="250.8" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933" transform="rotate(-90 103.1 250.8)">1</text>
-<circle cx="125.1" cy="262.3" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="2" data-side="B" data-pos="3"/>
+<text x="103.1" y="279.3" font-size="9" text-anchor="end" dominant-baseline="central" fill="#1f2933" transform="rotate(-90 103.1 279.3)">LED_LEFT_G → Left RGB LED G</text>
+<circle cx="125.1" cy="262.3" r="5.5" fill="#2f6fb0" stroke="#1f2933" stroke-width="1" data-anchor="2" data-side="B" data-pos="3"/>
 <text x="125.1" y="250.8" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933" transform="rotate(-90 125.1 250.8)">2</text>
-<circle cx="147.1" cy="262.3" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="3" data-side="B" data-pos="4"/>
+<text x="125.1" y="279.3" font-size="9" text-anchor="end" dominant-baseline="central" fill="#1f2933" transform="rotate(-90 125.1 279.3)">LED_LEFT_B → Left RGB LED B</text>
+<circle cx="147.1" cy="262.3" r="5.5" fill="#2f6fb0" stroke="#1f2933" stroke-width="1" data-anchor="3" data-side="B" data-pos="4"/>
 <text x="147.1" y="250.8" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933" transform="rotate(-90 147.1 250.8)">3</text>
-<circle cx="169.1" cy="262.3" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="4" data-side="B" data-pos="5"/>
+<text x="147.1" y="279.3" font-size="9" text-anchor="end" dominant-baseline="central" fill="#1f2933" transform="rotate(-90 147.1 279.3)">LED_RIGHT_R → Right RGB LED R</text>
+<circle cx="169.1" cy="262.3" r="5.5" fill="#2f6fb0" stroke="#1f2933" stroke-width="1" data-anchor="4" data-side="B" data-pos="5"/>
 <text x="169.1" y="250.8" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933" transform="rotate(-90 169.1 250.8)">4</text>
-<circle cx="191.1" cy="262.3" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="5" data-side="B" data-pos="6"/>
+<text x="169.1" y="279.3" font-size="9" text-anchor="end" dominant-baseline="central" fill="#1f2933" transform="rotate(-90 169.1 279.3)">LED_RIGHT_G → Right RGB LED G</text>
+<circle cx="191.1" cy="262.3" r="5.5" fill="#2f6fb0" stroke="#1f2933" stroke-width="1" data-anchor="5" data-side="B" data-pos="6"/>
 <text x="191.1" y="250.8" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933" transform="rotate(-90 191.1 250.8)">5</text>
-<circle cx="213.1" cy="262.3" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="6" data-side="B" data-pos="7"/>
+<text x="191.1" y="279.3" font-size="9" text-anchor="end" dominant-baseline="central" fill="#1f2933" transform="rotate(-90 191.1 279.3)">LED_RIGHT_B → Right RGB LED B</text>
+<circle cx="213.1" cy="262.3" r="5.5" fill="#2f6fb0" stroke="#1f2933" stroke-width="1" data-anchor="6" data-side="B" data-pos="7"/>
 <text x="213.1" y="250.8" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933" transform="rotate(-90 213.1 250.8)">6</text>
-<circle cx="235.1" cy="262.3" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="7" data-side="B" data-pos="8"/>
+<text x="213.1" y="279.3" font-size="9" text-anchor="end" dominant-baseline="central" fill="#1f2933" transform="rotate(-90 213.1 279.3)">SERVO_PAN → SG90 servos PAN</text>
+<circle cx="235.1" cy="262.3" r="5.5" fill="#2f6fb0" stroke="#1f2933" stroke-width="1" data-anchor="7" data-side="B" data-pos="8"/>
 <text x="235.1" y="250.8" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933" transform="rotate(-90 235.1 250.8)">7</text>
-<circle cx="257.1" cy="262.3" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="8" data-side="B" data-pos="9"/>
+<text x="235.1" y="279.3" font-size="9" text-anchor="end" dominant-baseline="central" fill="#1f2933" transform="rotate(-90 235.1 279.3)">SERVO_TILT → SG90 servos TILT</text>
+<circle cx="257.1" cy="262.3" r="5.5" fill="#2f6fb0" stroke="#1f2933" stroke-width="1" data-anchor="8" data-side="B" data-pos="9"/>
 <text x="257.1" y="250.8" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933" transform="rotate(-90 257.1 250.8)">8</text>
-<circle cx="279.1" cy="262.3" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="9" data-side="B" data-pos="10"/>
+<text x="257.1" y="279.3" font-size="9" text-anchor="end" dominant-baseline="central" fill="#1f2933" transform="rotate(-90 257.1 279.3)">MOTOR_RIGHT_PWM → TB6612FNG PWMA</text>
+<circle cx="279.1" cy="262.3" r="5.5" fill="#2f6fb0" stroke="#1f2933" stroke-width="1" data-anchor="9" data-side="B" data-pos="10"/>
 <text x="279.1" y="250.8" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933" transform="rotate(-90 279.1 250.8)">9</text>
-<circle cx="301.1" cy="262.3" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="10" data-side="B" data-pos="11"/>
+<text x="279.1" y="279.3" font-size="9" text-anchor="end" dominant-baseline="central" fill="#1f2933" transform="rotate(-90 279.1 279.3)">MOTOR_RIGHT_IN2 → TB6612FNG AIN2</text>
+<circle cx="301.1" cy="262.3" r="5.5" fill="#2f6fb0" stroke="#1f2933" stroke-width="1" data-anchor="10" data-side="B" data-pos="11"/>
 <text x="301.1" y="250.8" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933" transform="rotate(-90 301.1 250.8)">10</text>
-<circle cx="323.1" cy="262.3" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="11" data-side="B" data-pos="12"/>
+<text x="301.1" y="279.3" font-size="9" text-anchor="end" dominant-baseline="central" fill="#1f2933" transform="rotate(-90 301.1 279.3)">MOTOR_RIGHT_IN1 → TB6612FNG AIN1</text>
+<circle cx="323.1" cy="262.3" r="5.5" fill="#2f6fb0" stroke="#1f2933" stroke-width="1" data-anchor="11" data-side="B" data-pos="12"/>
 <text x="323.1" y="250.8" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933" transform="rotate(-90 323.1 250.8)">11</text>
-<circle cx="345.1" cy="262.3" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="12" data-side="B" data-pos="13"/>
+<text x="323.1" y="279.3" font-size="9" text-anchor="end" dominant-baseline="central" fill="#1f2933" transform="rotate(-90 323.1 279.3)">MOTOR_LEFT_IN1 → TB6612FNG BIN1</text>
+<circle cx="345.1" cy="262.3" r="5.5" fill="#2f6fb0" stroke="#1f2933" stroke-width="1" data-anchor="12" data-side="B" data-pos="13"/>
 <text x="345.1" y="250.8" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933" transform="rotate(-90 345.1 250.8)">12</text>
-<circle cx="367.1" cy="262.3" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="13" data-side="B" data-pos="14"/>
+<text x="345.1" y="279.3" font-size="9" text-anchor="end" dominant-baseline="central" fill="#1f2933" transform="rotate(-90 345.1 279.3)">MOTOR_LEFT_IN2 → TB6612FNG BIN2</text>
+<circle cx="367.1" cy="262.3" r="5.5" fill="#2f6fb0" stroke="#1f2933" stroke-width="1" data-anchor="13" data-side="B" data-pos="14"/>
 <text x="367.1" y="250.8" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933" transform="rotate(-90 367.1 250.8)">13</text>
+<text x="367.1" y="279.3" font-size="9" text-anchor="end" dominant-baseline="central" fill="#1f2933" transform="rotate(-90 367.1 279.3)">MOTOR_LEFT_PWM → TB6612FNG PWMB</text>
 <circle cx="389.1" cy="262.3" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="14" data-side="B" data-pos="15"/>
 <text x="389.1" y="250.8" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933" transform="rotate(-90 389.1 250.8)">14</text>
 <circle cx="411.1" cy="262.3" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="15" data-side="B" data-pos="16"/>
 <text x="411.1" y="250.8" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933" transform="rotate(-90 411.1 250.8)">15</text>
-<text x="12.0" y="284.9" font-size="8" text-anchor="start" dominant-baseline="central" fill="#5b6770">Pads from docs/reference/boards/adafruit-pca9685.md</text>
-<text x="12.0" y="296.1" font-size="8" text-anchor="start" dominant-baseline="central" fill="#5b6770">Component side up · pad order exact · not to scale</text>
+<text x="12.0" y="464.3" font-size="8" text-anchor="start" dominant-baseline="central" fill="#5b6770">Pads from docs/reference/boards/adafruit-pca9685.md</text>
+<text x="12.0" y="475.5" font-size="8" text-anchor="start" dominant-baseline="central" fill="#5b6770">Component side up · pad order exact · not to scale</text>
 </svg>

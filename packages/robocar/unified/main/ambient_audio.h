@@ -300,6 +300,17 @@ int16_t ambient_audio_floor_db(void);
 bool ambient_audio_has_measurement(void);
 
 /**
+ * @brief Whether ambient_audio_novel() is, right now, the result of an actual
+ *        comparison against a spoken-about room.
+ *
+ * False when nothing measurable has been heard, when there is no reference yet
+ * (the first-impression branch, which answers true without comparing), and
+ * when both thresholds are 0. The planner prompt says "since you last spoke"
+ * only for a sense that compared (speech_evidence.h, issue #631).
+ */
+bool ambient_audio_compared(void);
+
+/**
  * @brief Adopt the current room as the reference and clear both latches.
  *
  * Call when an utterance actually reaches the speech queue. The reference

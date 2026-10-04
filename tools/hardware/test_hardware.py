@@ -9,13 +9,16 @@ system python3, the justfile, the pre-commit hook) with nothing to install:
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 import tempfile
 import textwrap
 import unittest
 from pathlib import Path
+from unittest import mock
 
+import hardware.header
 from hardware import (
     HardwareError,
     join,
@@ -502,6 +505,225 @@ class PowerTest(unittest.TestCase):
             self.power(lambda s: s.replace('name = "5V"', 'name = "5V"\nvolts = 5'))
 
 
+DRIVER_MD = """\
+    # Test PWM driver
+
+    | Pin | Side | Pos | Header | Notes |
+    |-----|------|-----|--------|-------|
+    | VCC | L | 1 | JP1.1 | |
+    | 0 | B | 1 | JP2.1 | |
+    | 1 | B | 2 | JP2.2 | |
+    | 2 | B | 3 | JP2.3 | |
+    """
+
+MOTOR_MD = """\
+    # Test motor driver
+
+    | Pin | Side | Pos | Header | Notes |
+    |-----|------|-----|--------|-------|
+    | PWMA | L | 1 | J1.1 | |
+    | AIN1 | L | 2 | J1.2 | |
+    | STBY | L | 3 | J1.3 | |
+    | VM | R | 1 | J2.1 | |
+    """
+
+CHANNEL_HEADER = (
+    HEADER_H
+    + """\
+    #define I2C_BUS_CHANNEL_DRV 0
+    #define BLOCK_FIRST_CHANNEL 1
+    #define SPEED_CHANNEL 1
+    #define DIR_CHANNEL 2
+    #define LAMP_CHANNEL 0
+    """
+)
+
+CHANNELS = """
+[parts.drv]
+name = "PWM chip"
+kind = "pwm-driver"
+board = "driver.md"
+
+[parts.motor]
+name = "H-bridge"
+kind = "motor-driver"
+board = "motor.md"
+
+[parts.lamp]
+name = "Lamp"
+kind = "lamp"
+
+[[channel_nets]]
+role = "SPEED_CHANNEL"
+from = "drv"
+to = "motor.PWMA"
+note = "speed"
+
+[[channel_nets]]
+role = "DIR_CHANNEL"
+from = "drv"
+to = "motor.AIN1"
+
+[[channel_nets]]
+role = "LAMP_CHANNEL"
+from = "drv"
+to = "lamp.K"
+"""
+
+
+class ChannelNetTest(unittest.TestCase):
+    """[[channel_nets]] (#666): nets that start at a PWM driver's output."""
+
+    def make(self, sidecar: str, header: str = CHANNEL_HEADER) -> Path:
+        proj = JoinTest.make(self, sidecar=sidecar, header=header)
+        write(proj.parent / "driver.md", DRIVER_MD)
+        write(proj.parent / "motor.md", MOTOR_MD)
+        return proj
+
+    join = JoinTest.join
+
+    def channels(self, edit=lambda s: s, header: str = CHANNEL_HEADER):
+        return self.join(self.make(edit(SIDECAR + CHANNELS), header=header))
+
+    def test_channel_roles_come_from_the_header_by_name_and_value(self):
+        model = self.channels()
+        self.assertEqual(
+            model.channels,
+            {
+                "BLOCK_FIRST_CHANNEL": 1,
+                "SPEED_CHANNEL": 1,
+                "DIR_CHANNEL": 2,
+                "LAMP_CHANNEL": 0,
+            },
+        )
+        # A multiplexer channel is not a driver output, and a pin is not one.
+        self.assertNotIn("I2C_BUS_CHANNEL_DRV", model.channels)
+        self.assertNotIn("LED_PIN", model.channels)
+
+    def test_a_channel_net_resolves_to_its_number_and_both_ends(self):
+        net = self.channels().channel_nets[0]
+        self.assertEqual(
+            (net.role, net.channel, net.source, net.part, net.pin, net.note),
+            ("SPEED_CHANNEL", 1, "drv", "motor", "PWMA", "speed"),
+        )
+
+    def test_channel_nets_leave_the_mcu_nets_alone(self):
+        self.assertEqual([n.role for n in self.channels().nets], ["LED_PIN"])
+
+    def test_a_pin_role_is_not_a_channel_role(self):
+        with self.assertRaisesRegex(HardwareError, "LED_PIN.*not a channel role"):
+            self.channels(lambda s: s.replace('"SPEED_CHANNEL"', '"LED_PIN"'))
+
+    def test_an_undefined_channel_role_fails(self):
+        with self.assertRaisesRegex(HardwareError, "SPEED_CHANNLE.*not defined"):
+            self.channels(lambda s: s.replace('"SPEED_CHANNEL"', '"SPEED_CHANNLE"'))
+
+    def test_a_channel_number_in_the_sidecar_is_rejected(self):
+        # ADR-021 again: the number lives in the header, never here.
+        with self.assertRaisesRegex(HardwareError, "channel"):
+            self.channels(lambda s: s.replace('note = "speed"', "channel = 1"))
+
+    def test_the_channel_must_be_a_pad_on_the_drivers_board(self):
+        header = CHANNEL_HEADER.replace("DIR_CHANNEL 2", "DIR_CHANNEL 7")
+        with self.assertRaisesRegex(
+            HardwareError, "DIR_CHANNEL.*channel 7.*driver.md has no pad named '7'"
+        ):
+            self.channels(header=header)
+
+    def test_the_far_pin_must_be_a_pad_on_its_board(self):
+        with self.assertRaisesRegex(HardwareError, "motor.BIN1.*no pad named 'BIN1'"):
+            self.channels(lambda s: s.replace('"motor.AIN1"', '"motor.BIN1"'))
+
+    def test_two_wired_roles_on_one_channel_fail(self):
+        # The header and hardware.toml disagree: pin_config.h has put the
+        # direction line on the speed line's channel.
+        header = CHANNEL_HEADER.replace("DIR_CHANNEL 2", "DIR_CHANNEL 1")
+        with self.assertRaisesRegex(
+            HardwareError, "channel 1 of drv.*SPEED_CHANNEL.*DIR_CHANNEL"
+        ):
+            self.channels(header=header)
+
+    def test_an_unwired_alias_of_a_wired_channel_is_fine(self):
+        # BLOCK_FIRST_CHANNEL names the same channel as SPEED_CHANNEL; only one
+        # of them is wired, so nothing is driven twice.
+        self.assertEqual(len(self.channels().channel_nets), 3)
+
+    def test_one_channel_to_two_pins_is_a_fan_out(self):
+        extra = (
+            '\n[[channel_nets]]\nrole = "LAMP_CHANNEL"\nfrom = "drv"\nto = "lamp.K2"\n'
+        )
+        nets = self.channels(lambda s: s + extra).channel_nets
+        self.assertEqual([n.pin for n in nets if n.role == "LAMP_CHANNEL"], ["K", "K2"])
+
+    def test_the_same_channel_net_twice_fails(self):
+        extra = (
+            '\n[[channel_nets]]\nrole = "LAMP_CHANNEL"\nfrom = "drv"\nto = "lamp.K"\n'
+        )
+        with self.assertRaisesRegex(HardwareError, "listed twice"):
+            self.channels(lambda s: s + extra)
+
+    def test_a_pin_driven_by_two_channels_fails(self):
+        with self.assertRaisesRegex(
+            HardwareError, "motor.PWMA.*SPEED_CHANNEL.*DIR_CHANNEL"
+        ):
+            self.channels(lambda s: s.replace('"motor.AIN1"', '"motor.PWMA"'))
+
+    def test_a_pin_driven_by_the_mcu_and_a_channel_fails(self):
+        # BEEP_PIN moves from [[undrawn]] onto a net to motor.STBY, and a
+        # channel then claims the same pin.
+        def edit(s: str) -> str:
+            excused = '[[undrawn]]\n    role = "BEEP_PIN"\n    why = "test"'
+            return (
+                s.replace(excused, "")
+                + '\n[[nets]]\nrole = "BEEP_PIN"\nto = "motor.STBY"\n'
+                + '\n[[channel_nets]]\nrole = "LAMP_CHANNEL"\n'
+                + 'from = "drv"\nto = "motor.STBY"\n'
+            )
+
+        with self.assertRaisesRegex(
+            HardwareError, "motor.STBY.*BEEP_PIN.*LAMP_CHANNEL"
+        ):
+            self.channels(edit)
+
+    def test_an_mcu_net_onto_a_channel_pad_fails(self):
+        # The driver's channel pad is an output: a GPIO wired to it is a second
+        # driver on the same node, at the source end rather than the far one.
+        def edit(s: str) -> str:
+            excused = '[[undrawn]]\n    role = "BEEP_PIN"\n    why = "test"'
+            return (
+                s.replace(excused, "") + '\n[[nets]]\nrole = "BEEP_PIN"\nto = "drv.1"\n'
+            )
+
+        with self.assertRaisesRegex(HardwareError, "drv.1.*BEEP_PIN.*SPEED_CHANNEL"):
+            self.channels(edit)
+
+    def test_a_sidecar_without_channel_nets_needs_no_channel_convention(self):
+        # A project adopting hardware.toml extends CONVENTIONS; until it wires a
+        # PWM driver it must not also need a CHANNEL_CONVENTIONS entry.
+        with mock.patch.dict(hardware.header.CHANNEL_CONVENTIONS, clear=True):
+            model = self.join(self.make(SIDECAR))
+            self.assertEqual((model.channels, model.channel_nets), ({}, ()))
+            with self.assertRaisesRegex(HardwareError, "no channel convention"):
+                self.channels()
+
+    def test_a_channel_net_from_an_undeclared_part_fails(self):
+        with self.assertRaisesRegex(HardwareError, "part 'dvr' is not declared"):
+            self.channels(lambda s: s.replace('from = "drv"', 'from = "dvr"', 1))
+
+    def test_a_channel_net_to_its_own_driver_fails(self):
+        with self.assertRaisesRegex(HardwareError, "drv.*its own"):
+            self.channels(lambda s: s.replace('"lamp.K"', '"drv.VCC"'))
+
+    def test_a_rail_on_a_channel_net_fails(self):
+        rail = '\n[[rails]]\nname = "5V"\nfrom = "mcu.5V"\nto = ["{}"]\n'
+        for pin, role in (("motor.PWMA", "SPEED_CHANNEL"), ("drv.1", "SPEED_CHANNEL")):
+            with (
+                self.subTest(pin=pin),
+                self.assertRaisesRegex(HardwareError, f"{pin}.*{role}"),
+            ):
+                self.channels(lambda s, p=pin: s + rail.format(p))
+
+
 class RobocarUnifiedJoinTest(unittest.TestCase):
     """The committed sidecar resolves against the committed header and board."""
 
@@ -553,6 +775,28 @@ class RobocarUnifiedJoinTest(unittest.TestCase):
     def test_the_3v3_rail_comes_from_the_xiaos_3v3_pad(self):
         (three,) = [r for r in self.model.rails if r.name == "3V3"]
         self.assertEqual((three.source.part, three.source.pin), ("mcu", "3V3"))
+
+    def test_every_channel_the_firmware_drives_is_on_a_channel_net(self):
+        # A channel added to pin_config.h without a [[channel_nets]] entry
+        # would draw as a bare pad number; an alias of a wired channel
+        # (MOTOR_FIRST_CHANNEL) needs no net of its own.
+        wired = {n.channel for n in self.model.channel_nets if n.source == "pwm"}
+        self.assertEqual(wired, set(self.model.channels.values()))
+        # By role too: a new macro on an already-wired channel (a second role
+        # on channel 6 beside SERVO_PAN) passes the number check above.
+        unwired = set(self.model.channels) - {n.role for n in self.model.channel_nets}
+        self.assertEqual(unwired, {"MOTOR_FIRST_CHANNEL"})
+
+    def test_the_motor_driver_mapping_agrees_with_pin_config_comments(self):
+        # pin_config.h states the PCA9685 -> TB6612FNG mapping in comments
+        # (`// -> PWMA`); hardware.toml states it as nets. Pin the two together.
+        text = (UNIFIED / "main/pin_config.h").read_text(encoding="utf-8")
+        claimed = dict(re.findall(r"#define (\w+_CHANNEL) \d+\s*// -> (\w+)", text))
+        joined = {
+            n.role: n.pin for n in self.model.channel_nets if n.part == "motor_driver"
+        }
+        self.assertEqual(len(claimed), 6)
+        self.assertEqual(claimed, joined)
 
     def test_headers_are_pin_config_then_the_planner_headers(self):
         rel = [p.relative_to(UNIFIED).as_posix() for p in self.model.headers]

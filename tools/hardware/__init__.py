@@ -18,15 +18,34 @@ labelled from the join (#629).
 
 from .board import Board, BoardPin, parse_board_table
 from .errors import HardwareError
-from .header import CONVENTIONS, parse_defines, roles_from_defines
+from .header import (
+    CHANNEL_CONVENTIONS,
+    CONVENTIONS,
+    channels_from_defines,
+    parse_defines,
+    roles_from_defines,
+)
 from .layout import ModuleLayout, Pad, board_layout, parse_layout
-from .model import MCU, Endpoint, HardwareModel, Net, Output, Part, Rail, Undrawn, join
+from .model import (
+    MCU,
+    ChannelNet,
+    Endpoint,
+    HardwareModel,
+    Net,
+    Output,
+    Part,
+    Rail,
+    Undrawn,
+    join,
+)
 
 __all__ = [
+    "CHANNEL_CONVENTIONS",
     "CONVENTIONS",
     "MCU",
     "Board",
     "BoardPin",
+    "ChannelNet",
     "Endpoint",
     "HardwareError",
     "HardwareModel",
@@ -38,6 +57,7 @@ __all__ = [
     "Rail",
     "Undrawn",
     "board_layout",
+    "channels_from_defines",
     "join",
     "parse_board_table",
     "parse_layout",
