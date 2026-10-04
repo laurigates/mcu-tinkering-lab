@@ -159,6 +159,7 @@ def _power(
     data: dict[str, Any],
     parts: dict[str, Part],
     nets: list[Net],
+    roles: dict[str, int],
     board: Board,
     repo_root: Path,
 ) -> tuple[tuple[Rail, ...], tuple[Output, ...]]:
@@ -168,6 +169,11 @@ def _power(
         if part.board:
             pads[key] = {p.name for p in parse_layout(repo_root / part.board).pads}
     signal = {(n.part, n.pin): n.role for n in nets}
+    # A net's MCU end is a pad too: a rail on it ties the same GPIO to a supply.
+    for n in nets:
+        pad = board.by_gpio.get(roles[n.role])
+        if pad is not None:
+            signal[MCU, pad.name] = n.role
 
     def endpoint(where: str, value: Any) -> Endpoint:
         part, dot, pin = (
@@ -208,6 +214,9 @@ def _power(
         name = _require(where, table, "name")
         source = endpoint(where, _require(where, table, "from"))
         loads = tuple(endpoint(where, v) for v in targets(where, table, "'part.PIN'"))
+        dupes = sorted({f"{e.part}.{e.pin}" for e in loads if loads.count(e) > 1})
+        if dupes:
+            raise HardwareError(f"{where}: {dupes} listed twice")
         for e in (source, *loads):
             if e in on_rail:
                 raise HardwareError(
@@ -347,7 +356,7 @@ def join(project_dir: Path, repo_root: Path = REPO_ROOT) -> HardwareModel:
     mcu = source.get("mcu", "MCU")
     if not isinstance(mcu, str) or not mcu:
         raise HardwareError(f"{sidecar} [source]: mcu must be a name, got {mcu!r}")
-    rails, outputs = _power(sidecar, data, parts, nets, board, repo_root)
+    rails, outputs = _power(sidecar, data, parts, nets, roles, board, repo_root)
 
     return HardwareModel(
         project_dir=project_dir,
