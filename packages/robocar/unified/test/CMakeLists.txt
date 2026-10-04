@@ -226,6 +226,21 @@ target_link_libraries(test_plan_budget PRIVATE Threads::Threads m)
 add_test(NAME plan_budget COMMAND test_plan_budget)
 
 # -----------------------------------------------------------------------------
+# voice_budget (the hands-free ration and the voice-turn spend ceiling)
+#
+# Pure C with an injected clock. Pins what a bench cannot stage: an hour of a
+# talkative room bounded by the ration, an unattended night stopped by the
+# ceiling, `listen` exempt from the first but not the second, and the window
+# across the uint32 millisecond wrap.
+# -----------------------------------------------------------------------------
+add_executable(test_voice_budget
+    "${MAIN_SRC_DIR}/voice_budget.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_voice_budget.c"
+)
+target_link_libraries(test_voice_budget PRIVATE Threads::Threads m)
+add_test(NAME voice_budget COMMAND test_voice_budget)
+
+# -----------------------------------------------------------------------------
 # plan_activity (should this cycle make a request at all?)
 #
 # Pure C over caller-supplied luma planes with an injected clock, so the whole
