@@ -500,7 +500,7 @@ class Router:
             Discourages (but doesn't forbid) wires overlapping or running
             one grid step apart.
         tag_penalty: Extra cost charged per grid step onto a lattice point
-            strictly inside a power or ground tag the wire is not wired to
+            on or inside a power or ground tag the wire is not wired to
             (#591). A soft cost rather than an obstacle, so a pin beside
             its chip's own GND tag stays reachable.
     """

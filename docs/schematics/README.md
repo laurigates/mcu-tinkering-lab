@@ -48,7 +48,7 @@ uv run python render.py
 1. Add any missing component factories to `components.py`. Keep pin sets
    minimal and name pins as the firmware does.
 2. Create `circuits/<name>.py` with a `draw() -> schemdraw.Drawing` function.
-   Reference `circuits/gamepad_synth.py` as a template: place every
+   Reference `circuits/balancebot.py` as a template: place every
    component first, then its power/ground tags, then create a `Router(d)`
    and call `.wire(a, b)` for each point-to-point net and `.finish()` once
    after the last one (see "Routing" below). Other hand-drawn local stubs

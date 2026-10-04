@@ -78,6 +78,7 @@ import contextlib
 import json
 import sys
 from collections import Counter
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path as FsPath
 
@@ -270,7 +271,7 @@ def measure(
     wires: list[Wire],
     boxes: list[Box],
     grid: float,
-    tags: list[Tag] = (),
+    tags: Sequence[Tag] = (),
 ):
     return CircuitMetrics(
         name=name,
