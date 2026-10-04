@@ -6,7 +6,9 @@
 # silently disagree with the firmware about WHICH pin — only about which part a
 # pin is wired to, which is the fact the header cannot express.
 #
-# Regenerate everything that reads it with `just hardware::gen`.
+# Regenerate everything that reads it — docs/auto/pin_defs.typ and the marked
+# tables in WIRING.md — with `just hardware::gen`; `just hardware::check` fails
+# if any of them is stale.
 
 [source]
 convention = "robocar"
@@ -43,7 +45,7 @@ kind = "i2s-amp"
 [[nets]]
 role = "I2C_SDA_PIN"
 to = "mux.SDA"
-note = "every I2C device sits behind the mux"
+note = "Every I2C device sits behind the mux"
 
 [[nets]]
 role = "I2C_SCL_PIN"
@@ -57,30 +59,32 @@ note = "HIGH = motors enabled; the six control lines come from the PCA9685"
 [[nets]]
 role = "ULTRASONIC_TRIG_PIN"
 to = "ranger.TRIG"
+note = "3.3 V output; a 10 µs pulse triggers a measurement"
 
 [[nets]]
 role = "ULTRASONIC_ECHO_PIN"
 to = "ranger.ECHO"
+note = "3.3 V input; pulse width encodes distance (RMT RX)"
 
 [[nets]]
 role = "PIEZO_PIN"
 to = "buzzer.+"
-note = "through a series resistor; the other leg to GND"
+note = "LEDC PWM, through a series resistor; the other leg to GND"
 
 [[nets]]
 role = "I2S_BCLK_PIN"
 to = "amp.BCLK"
-note = "bit clock"
+note = "Bit clock"
 
 [[nets]]
 role = "I2S_LRCLK_PIN"
 to = "amp.LRC"
-note = "word select"
+note = "Word select / left-right clock"
 
 [[nets]]
 role = "I2S_DIN_PIN"
 to = "amp.DIN"
-note = "serial data"
+note = "Serial audio data"
 
 [[undrawn]]
 role = "MIC_PDM_CLK_PIN"
@@ -89,3 +93,11 @@ why = "wired to the PDM microphone on the Sense expansion board, not brought out
 [[undrawn]]
 role = "MIC_PDM_DATA_PIN"
 why = "wired to the PDM microphone on the Sense expansion board, not brought out to a header"
+
+[[undrawn]]
+role = "UART0_TX_PIN"
+why = "UART0 TX, nothing wired: the serial console is USB-Serial-JTAG on the USB-C connector, not this pad"
+
+[[undrawn]]
+role = "UART0_RX_PIN"
+why = "UART0 RX, nothing wired: the serial console is USB-Serial-JTAG on the USB-C connector, not this pad"

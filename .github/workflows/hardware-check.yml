@@ -1,0 +1,61 @@
+name: Hardware Join Docs Up-to-Date Check
+
+# `just hardware::check` in CI (CI does not run `just`, so the recipe's two
+# commands are spelled out below). The join (tools/hardware/, ADR-021) emits
+# the tables between `<!-- BEGIN GENERATED: ... -->` markers in a project's
+# Markdown; this fails when a committed block no longer matches what the
+# header, hardware.toml and the board reference produce — a pin changed in
+# pin_config.h without `just hardware::gen`, or a hand edit inside a block.
+#
+# The trigger paths are every input of the join plus every file that can
+# carry a block. A path missing here is a pin change that skips the check and
+# leaves a stale table green (.claude/rules/build-guide-drift-guard.md §1).
+
+on:
+  push:
+    branches: [main, develop, 'claude/**']
+    paths:
+      - 'packages/**/hardware.toml'
+      - 'packages/**/main/*.h'
+      - 'packages/**/*.md'
+      - 'docs/reference/boards/*.md'
+      - 'tools/hardware/**'
+      - '.github/workflows/hardware-check.yml'
+  pull_request:
+    # No branches: filter — a PR stacked on a non-default base must get the
+    # same check as one targeting main/develop. See issue #487.
+    paths:
+      - 'packages/**/hardware.toml'
+      - 'packages/**/main/*.h'
+      - 'packages/**/*.md'
+      - 'docs/reference/boards/*.md'
+      - 'tools/hardware/**'
+      - '.github/workflows/hardware-check.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  docs-up-to-date:
+    name: Verify generated Markdown blocks match the hardware join
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # tools/hardware is stdlib-only but needs tomllib (3.11+).
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Run the join's unit tests
+        run: python3 -m unittest discover -s tools/hardware -t tools
+
+      - name: Check generated Markdown blocks
+        env:
+          PYTHONPATH: tools
+        run: python3 -m hardware.docs --check

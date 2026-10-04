@@ -6,7 +6,8 @@
 
 Stdlib only (Python 3.11+ for tomllib), so every consumer — the drift guard's
 system python3, a justfile recipe, a pre-commit hook — can import it with
-nothing installed. `tools/typst/generate-pin-defs.py` is the first emitter.
+nothing installed. Two emitters: `tools/typst/generate-pin-defs.py` (the build
+guide's Typst bindings) and `hardware.docs` (the marked tables in WIRING.md).
 """
 
 from .board import Board, BoardPin, parse_board_table
