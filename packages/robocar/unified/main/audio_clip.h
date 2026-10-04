@@ -83,8 +83,8 @@ extern "C" {
  * The 8 MB PSRAM has room for either. What a smaller peak buys is margin and a
  * smaller largest-contiguous-block requirement (one ~437 kB body rather than an
  * ~860 kB print buffer) beside the camera framebuffers, the 512 kB TTS ring and
- * the pre-roll ring. The on-board check is `listen 8` while watching min-ever
- * free PSRAM and the largest free block — see issue #448.
+ * the pre-roll ring. The on-board check is the `start=` / `low=` / `largest=`
+ * fields of voice_turn.c's per-turn log line on a `listen 8` — see issue #448.
  */
 #define AUDIO_CLIP_MAX_BYTES 256000u
 

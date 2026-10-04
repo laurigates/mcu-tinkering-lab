@@ -344,6 +344,13 @@ static void run_turn(uint32_t window_ms, bool vad)
         return;
     }
 
+    /* Read before the first allocation, for the per-turn log line: the boot-wide
+     * low-water mark only says something about THIS turn if it moved during it,
+     * and then `start - low` is the turn's peak (other tasks' allocations in the
+     * same window included). Issue #625. */
+    const size_t psram_start = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+    const size_t psram_low_start = heap_caps_get_minimum_free_size(MALLOC_CAP_SPIRAM);
+
     /* PSRAM: this is hundreds of kB and internal RAM is the scarce pool the
      * camera and the TLS handshake compete for. */
     int16_t *pcm = heap_caps_malloc(pcm_bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
@@ -442,10 +449,13 @@ static void run_turn(uint32_t window_ms, bool vad)
     }
     ESP_LOGI(TAG,
              "listen: window=%u ms samples=%u raw_peak=%d gain=%.1fx peak=%d clipped=%u dc=%d | "
-             "upload=%u B | free PSRAM=%u B",
+             "upload=%u B | free PSRAM=%u B start=%u low=%u->%u largest=%u",
              (unsigned)window_ms, (unsigned)got, (int)st.raw_peak, (double)st.gain_q8 / 256.0,
              (int)st.peak, (unsigned)st.clipped, (int)st.dc, (unsigned)body_len,
-             (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM), (unsigned)psram_start,
+             (unsigned)psram_low_start,
+             (unsigned)heap_caps_get_minimum_free_size(MALLOC_CAP_SPIRAM),
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
 
     /* Charged here, immediately before the post and whatever its outcome, so
      * the ceiling bounds traffic even if every reply is unparseable. This is
