@@ -504,6 +504,7 @@ add_test(NAME mqtt_command COMMAND test_mqtt_command)
 # -----------------------------------------------------------------------------
 add_executable(test_self_report
     "${MAIN_SRC_DIR}/self_report.c"
+    "${MAIN_SRC_DIR}/mqtt_command.c"  # the access-mode rule (issue #626) is shared, not stubbed
     "${CMAKE_CURRENT_SOURCE_DIR}/self_report_stubs.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/test_self_report.c"
 )

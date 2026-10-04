@@ -1333,6 +1333,9 @@ static void on_improv_credentials(const char *ssid, const char *password)
  * movement_word_for() — because the two reach it through different framing
  * (a bare console keystroke vs. an MQTT payload naming a movement word) and
  * both already route to dispatch_movement().
+ *
+ * A command that must stay serial-only (`mqtt`, which sets the broker
+ * credentials) does not belong here; command_task() handles it before this.
  */
 static void execute_console_line(const char *buf)
 {
@@ -1355,6 +1358,37 @@ static void execute_console_line(const char *buf)
     } else if (strncmp(buf, "sound", 5) == 0 || strncmp(buf, "servo", 5) == 0 ||
                strncmp(buf, "led", 3) == 0) {
         handle_periph_cmd(buf);
+    }
+}
+
+/* Longest serial console line, NUL included. 32 until issue #626: `mqtt auth
+ * <user> <pass>` needs room for a 32-character username and a 64-character
+ * password. Every handler parses with width-bounded sscanf formats, so the
+ * longer line is safe for all of them. */
+#define CONSOLE_LINE_MAX 128
+
+/* MQTT command-topic access mode, fixed for the boot (issue #626). Read-only
+ * until init_mqtt_access() finds a complete pair of broker credentials. */
+static mqtt_command_access_t s_mqtt_access = MQTT_COMMAND_ACCESS_READ_ONLY;
+
+/**
+ * @brief Load the broker credentials once and log the MQTT command mode.
+ *
+ * Called right after NVS init, so the boot log always states the mode — even
+ * on a board with no WiFi, where MQTT never starts — and so the credential
+ * load happens on one task before anything else can race it.
+ */
+static void init_mqtt_access(void)
+{
+    s_mqtt_access = mqtt_command_access_for_credentials(get_mqtt_username(), get_mqtt_password());
+    if (s_mqtt_access == MQTT_COMMAND_ACCESS_FULL) {
+        ESP_LOGI(TAG, "MQTT commands: full (broker credentials from %s, user %s)",
+                 get_mqtt_credentials_source(), get_mqtt_username());
+    } else {
+        ESP_LOGW(TAG,
+                 "MQTT commands: read-only — no broker credentials, so movement and settings "
+                 "are refused on %s (set them with `mqtt auth <user> <pass>`)",
+                 MQTT_COMMAND_TOPIC);
     }
 }
 
@@ -1395,20 +1429,86 @@ static void mqtt_cmd_console_line(const char *line, void *ctx)
  */
 static void mqtt_command_received(const char *line)
 {
-    static const mqtt_command_ops_t ops = {
+    const mqtt_command_ops_t ops = {
         .movement = mqtt_cmd_movement,
         .console_line = mqtt_cmd_console_line,
         .ctx = NULL,
+        .access = s_mqtt_access,
     };
+
+    /* Classify before anything acts on the line, so a refused command has no
+     * effect at all — including the planner wake below, which costs Gemini
+     * requests. */
+    const mqtt_command_result_t verdict = mqtt_command_check(line, s_mqtt_access);
+    if (verdict != MQTT_COMMAND_OK) {
+        ESP_LOGW(TAG, "MQTT command %s: %s", mqtt_command_result_reason(verdict), line);
+        return;
+    }
 
     /* An inbound remote command is the MQTT equivalent of "somebody is at the
      * console" — the robot is not unattended, so dormancy's whole premise has
-     * lapsed. Matches the wake call in command_task() below. */
-    plan_activity_wake();
-
-    if (!mqtt_command_dispatch(line, &ops)) {
-        ESP_LOGW(TAG, "Rejected unrecognised MQTT command: %s", line);
+     * lapsed. Matches the wake call in command_task() below. Before dispatch,
+     * not after, so `plan sleep` is not undone by its own wake.
+     *
+     * Full access only: in read-only mode the sender is anonymous, and an
+     * anonymous client polling `plan` once a second would otherwise hold the
+     * planner awake — and spending — until the budget fuse trips. */
+    if (s_mqtt_access == MQTT_COMMAND_ACCESS_FULL) {
+        plan_activity_wake();
     }
+
+    const mqtt_command_result_t result = mqtt_command_dispatch(line, &ops);
+    if (result != MQTT_COMMAND_OK) {
+        ESP_LOGW(TAG, "MQTT command %s: %s", mqtt_command_result_reason(result), line);
+    }
+}
+
+/**
+ * @brief `mqtt` — broker-credential state and NVS provisioning (issue #626).
+ *
+ * Serial console ONLY. command_task() calls this before execute_console_line(),
+ * and "mqtt" is not in mqtt_command.c's forwarded prefixes, so no MQTT message
+ * can reach it — otherwise an anonymous publisher could hand itself the
+ * credentials that lift its own lockout. test_mqtt_command.c pins that.
+ *
+ * Changes apply at the next boot: the MQTT client is created once, with the
+ * credentials it was given, and the mode it reports must be the one it runs.
+ */
+static void handle_mqtt_cmd(const char *buf)
+{
+    /* Scratch buffers as long as the whole console line, so sscanf can never
+     * truncate a token: an over-long credential reaches
+     * credentials_nvs_save_mqtt() whole and is refused there, instead of being
+     * cut to a different, wrong credential that looks saved. */
+    _Static_assert(CONSOLE_LINE_MAX == 128, "keep the %127s widths below in step");
+    char op[8] = {0};
+    char user[CONSOLE_LINE_MAX] = {0};
+    char pass[CONSOLE_LINE_MAX] = {0};
+    const int n = sscanf(buf, "mqtt %7s %127s %127s", op, user, pass);
+
+    if (n <= 0) {
+        printf("mqtt: commands=%s (credentials from %s, user=%s) broker=%s\n",
+               mqtt_command_access_name(s_mqtt_access), get_mqtt_credentials_source(),
+               get_mqtt_username() ? get_mqtt_username() : "-", MQTT_BROKER_URI);
+        printf("  usage: mqtt auth <user> <pass> | mqtt auth clear   (applied at next boot;\n");
+        printf("         max 32/64 chars, no spaces; NVS wins over credentials.h)\n");
+        return;
+    }
+    if (strcmp(op, "auth") == 0 && n == 2 && strcmp(user, "clear") == 0) {
+        printf("mqtt: %s\n", credentials_nvs_clear_mqtt()
+                                 ? "NVS credentials cleared — reboot to apply"
+                                 : "clearing NVS credentials FAILED");
+        return;
+    }
+    /* `mqtt auth clear <x>` falls to the usage line rather than storing a user
+     * literally named "clear". */
+    if (strcmp(op, "auth") == 0 && n == 3 && strcmp(user, "clear") != 0) {
+        printf("mqtt: %s\n", credentials_nvs_save_mqtt(user, pass)
+                                 ? "credentials saved to NVS — reboot to apply"
+                                 : "saving credentials FAILED (too long, or NVS error)");
+        return;
+    }
+    printf("mqtt: usage: mqtt | mqtt auth <user> <pass> | mqtt auth clear\n");
 }
 
 // ========================================
@@ -1417,7 +1517,7 @@ static void mqtt_command_received(const char *line)
 static void command_task(void *pvParameters)
 {
     (void)pvParameters;
-    char buf[32];
+    char buf[CONSOLE_LINE_MAX];
     int buf_pos = 0;
     int64_t last_improv_announce = 0;
 
@@ -1450,7 +1550,10 @@ static void command_task(void *pvParameters)
         if (ch == '\n' || ch == '\r') {
             if (buf_pos > 0) {
                 buf[buf_pos] = '\0';
-                ESP_LOGI(TAG, "Serial cmd: %s", buf);
+                /* Never echo a broker password into the log, which MQTT can
+                 * forward to the very broker it protects. */
+                const bool is_mqtt_cmd = strncmp(buf, "mqtt", 4) == 0;
+                ESP_LOGI(TAG, "Serial cmd: %s", is_mqtt_cmd ? "mqtt ... (redacted)" : buf);
 
                 /* Somebody is at the console, so the robot is not unattended
                  * and the whole premise of dormancy has lapsed. Placed here —
@@ -1494,6 +1597,10 @@ static void command_task(void *pvParameters)
                             dispatch_movement("stop");
                             break;
                     }
+                } else if (is_mqtt_cmd) {
+                    /* Serial-only by construction: kept out of
+                     * execute_console_line(), which the MQTT topic shares. */
+                    handle_mqtt_cmd(buf);
                 } else {
                     execute_console_line(buf);
                 }
@@ -1752,8 +1859,10 @@ static void init_network_services(void)
     const mqtt_logger_config_t mqtt_cfg = {
         .broker_uri = MQTT_BROKER_URI,
         .client_id = MQTT_CLIENT_ID,
-        .username = MQTT_USERNAME,
-        .password = MQTT_PASSWORD,
+        /* NULL when unconfigured, which connects anonymously and leaves the
+         * command topic read-only (init_mqtt_access()). */
+        .username = get_mqtt_username(),
+        .password = get_mqtt_password(),
         .log_topic = MQTT_LOG_TOPIC_BASE,
         .status_topic = MQTT_STATUS_TOPIC,
         .command_topic = MQTT_COMMAND_TOPIC,
@@ -1828,6 +1937,7 @@ void app_main(void)
     ESP_LOGI(TAG, "Firmware version: %s", esp_app_get_description()->version);
 
     ESP_ERROR_CHECK(init_nvs());
+    init_mqtt_access();
 
     /* The hardware phase cannot fail the boot: a missing bus and a peripheral
      * that would not initialise are both logged and carried past, so what came
