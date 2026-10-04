@@ -15,6 +15,10 @@ if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/main/credentials.h")
 "#define CREDENTIALS_H\n"
 "#define WIFI_SSID \"\"\n"
 "#define WIFI_PASSWORD \"\"\n"
+"/* Empty: MQTT accepts only read-only commands until broker credentials are\n"
+" * provisioned (`mqtt auth` on the serial console stores them in NVS). */\n"
+"#define MQTT_USERNAME \"\"\n"
+"#define MQTT_PASSWORD \"\"\n"
 "#endif  // CREDENTIALS_H\n")
 endif()
 

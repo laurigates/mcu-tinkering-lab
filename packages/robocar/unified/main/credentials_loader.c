@@ -277,3 +277,141 @@ bool credentials_reload(void)
     memset(&g_credentials, 0, sizeof(g_credentials));
     return are_credentials_available();
 }
+
+// ---------------------------------------------------------------------------
+// MQTT broker credentials (issue #626)
+// ---------------------------------------------------------------------------
+
+#define NVS_MQTT_NAMESPACE "mqtt_auth"
+#define NVS_KEY_MQTT_USER "user"
+#define NVS_KEY_MQTT_PASS "pass"
+
+/* Empty by default, so a credentials.h written before issue #626 — or the CMake
+ * stub — leaves MQTT in read-only mode rather than failing to compile. */
+#ifndef MQTT_USERNAME
+#define MQTT_USERNAME ""
+#endif
+#ifndef MQTT_PASSWORD
+#define MQTT_PASSWORD ""
+#endif
+/* A truncated credential is a wrong credential that looks configured, so an
+ * over-long one is a build error rather than a silent strlcpy cut. */
+_Static_assert(sizeof(MQTT_USERNAME) <= MAX_MQTT_USERNAME_LENGTH,
+               "MQTT_USERNAME in credentials.h is longer than 32 characters");
+_Static_assert(sizeof(MQTT_PASSWORD) <= MAX_MQTT_PASSWORD_LENGTH,
+               "MQTT_PASSWORD in credentials.h is longer than 64 characters");
+
+static char s_mqtt_user[MAX_MQTT_USERNAME_LENGTH];
+static char s_mqtt_pass[MAX_MQTT_PASSWORD_LENGTH];
+static const char *s_mqtt_source = "none";
+static bool s_mqtt_loaded = false;
+
+/* NVS wins over credentials.h, the same priority the WiFi credentials use, so
+ * a board can be given broker credentials over the serial console without a
+ * rebuild. Only a COMPLETE NVS pair counts: a half-written entry falls back to
+ * credentials.h instead of silently producing a username with no password. */
+static void load_mqtt_credentials(void)
+{
+    /* Read once per boot: the MQTT client is created once, so the mode it
+     * reports must be the mode it was started in. main.c primes this during
+     * boot, before any other task can race the first load. */
+    if (s_mqtt_loaded) {
+        return;
+    }
+    s_mqtt_user[0] = '\0';
+    s_mqtt_pass[0] = '\0';
+    s_mqtt_source = "none";
+
+    nvs_handle_t handle;
+    if (nvs_open(NVS_MQTT_NAMESPACE, NVS_READONLY, &handle) == ESP_OK) {
+        char user[MAX_MQTT_USERNAME_LENGTH] = {0};
+        char pass[MAX_MQTT_PASSWORD_LENGTH] = {0};
+        size_t user_len = sizeof(user);
+        size_t pass_len = sizeof(pass);
+        const bool ok = nvs_get_str(handle, NVS_KEY_MQTT_USER, user, &user_len) == ESP_OK &&
+                        nvs_get_str(handle, NVS_KEY_MQTT_PASS, pass, &pass_len) == ESP_OK &&
+                        user[0] != '\0' && pass[0] != '\0';
+        nvs_close(handle);
+        if (ok) {
+            strlcpy(s_mqtt_user, user, sizeof(s_mqtt_user));
+            strlcpy(s_mqtt_pass, pass, sizeof(s_mqtt_pass));
+            s_mqtt_source = "nvs";
+            s_mqtt_loaded = true;
+            return;
+        }
+    }
+
+    if (MQTT_USERNAME[0] != '\0' && MQTT_PASSWORD[0] != '\0') {
+        strlcpy(s_mqtt_user, MQTT_USERNAME, sizeof(s_mqtt_user));
+        strlcpy(s_mqtt_pass, MQTT_PASSWORD, sizeof(s_mqtt_pass));
+        s_mqtt_source = "credentials.h";
+    }
+    s_mqtt_loaded = true;
+}
+
+const char *get_mqtt_username(void)
+{
+    load_mqtt_credentials();
+    return s_mqtt_user[0] != '\0' ? s_mqtt_user : NULL;
+}
+
+const char *get_mqtt_password(void)
+{
+    load_mqtt_credentials();
+    return s_mqtt_pass[0] != '\0' ? s_mqtt_pass : NULL;
+}
+
+const char *get_mqtt_credentials_source(void)
+{
+    load_mqtt_credentials();
+    return s_mqtt_source;
+}
+
+bool credentials_nvs_save_mqtt(const char *username, const char *password)
+{
+    if (!username || !password || username[0] == '\0' || password[0] == '\0' ||
+        strlen(username) >= MAX_MQTT_USERNAME_LENGTH ||
+        strlen(password) >= MAX_MQTT_PASSWORD_LENGTH) {
+        return false;
+    }
+
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open(NVS_MQTT_NAMESPACE, NVS_READWRITE, &handle);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to open NVS for MQTT credentials: %s", esp_err_to_name(err));
+        return false;
+    }
+    const bool ok = nvs_set_str(handle, NVS_KEY_MQTT_USER, username) == ESP_OK &&
+                    nvs_set_str(handle, NVS_KEY_MQTT_PASS, password) == ESP_OK &&
+                    nvs_commit(handle) == ESP_OK;
+    nvs_close(handle);
+
+    /* The username is logged, the password never is. */
+    if (ok) {
+        ESP_LOGI(TAG, "MQTT credentials saved to NVS (user: %s) — applied at next boot", username);
+    } else {
+        ESP_LOGE(TAG, "Failed to save MQTT credentials to NVS");
+    }
+    return ok;
+}
+
+bool credentials_nvs_clear_mqtt(void)
+{
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open(NVS_MQTT_NAMESPACE, NVS_READWRITE, &handle);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to open NVS for MQTT credentials: %s", esp_err_to_name(err));
+        return false;
+    }
+    err = nvs_erase_all(handle);
+    if (err == ESP_OK) {
+        err = nvs_commit(handle);
+    }
+    nvs_close(handle);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to clear MQTT credentials: %s", esp_err_to_name(err));
+        return false;
+    }
+    ESP_LOGI(TAG, "MQTT credentials cleared from NVS — applied at next boot");
+    return true;
+}

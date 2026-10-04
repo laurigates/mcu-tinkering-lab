@@ -95,6 +95,14 @@ const char *get_gemini_api_key(void)
 {
     return g_stub.api_key;
 }
+const char *get_mqtt_username(void)
+{
+    return g_stub.mqtt_user;
+}
+const char *get_mqtt_password(void)
+{
+    return g_stub.mqtt_pass;
+}
 
 static esp_app_desc_t s_desc;
 

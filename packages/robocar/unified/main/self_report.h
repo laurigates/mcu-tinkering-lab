@@ -29,6 +29,7 @@
 
 #include "credentials_loader.h"  // MAX_SSID_LENGTH
 #include "esp_err.h"
+#include "mqtt_command.h"  // mqtt_command_access_t
 
 #ifdef __cplusplus
 extern "C" {
@@ -66,17 +67,20 @@ typedef struct {
     bool audio_ok;          //!< I2S player task + ring ready
     bool key_present;       //!< Gemini API key available
     char version[32];       //!< firmware version
+    /* What the MQTT command topic may reach (issue #626). Not part of the
+     * health signature: it is fixed for the boot and is not a fault. */
+    mqtt_command_access_t mqtt_access;
 } robocar_status_t;
 
 /** Longest facts string produced by self_report_format_facts(), incl. NUL.
  *
- * The worst case measures 263 characters: a live bus with all three
+ * The worst case measures 287 characters: a live bus with all three
  * peripherals degraded (a longer value than the "not-responding" a DEAD bus
  * renders), no expander fitted ("absent(optional)" beats "present" by nine),
- * and a maximum-length SSID and version. Pinned by
- * test_worst_case_fits_the_buffer, because snprintf truncates the TAIL — and
- * the tail is `gemini_key` and `buzzer`, exactly the keys a degraded board most
- * needs to report. */
+ * and a maximum-length SSID and version, plus `mqtt_commands=read-only`.
+ * Pinned by test_worst_case_fits_the_buffer, because snprintf truncates the
+ * TAIL — and the tail is `gemini_key`, `buzzer` and `mqtt_commands`, exactly the
+ * keys a degraded board most needs to report. */
 #define SELF_REPORT_FACTS_MAX 320
 
 /**
