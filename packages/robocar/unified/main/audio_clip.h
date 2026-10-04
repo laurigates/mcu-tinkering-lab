@@ -69,7 +69,8 @@ extern "C" {
  *   record -> WAV   PCM 256 000 + WAV 256 044                       = 512 kB
  *   base64 encode   WAV 256 044 + base64 341 393                    = 597 kB
  *   request body    base64 341 393 + JPEG base64 <=87 385
- *                   + body (both, plus VOICE_HISTORY_BODY_HEADROOM) <= 873 kB
+ *                   + body (both, plus VOICE_HISTORY_BODY_HEADROOM)
+ *                   + cJSON tree skeleton ~7.5 kB                   <= 873 kB
  *   HTTP post       body <=437 kB
  *
  * so the peak is the body build: ~873 kB with a frame at the 64 kB JPEG ceiling,

@@ -33,7 +33,10 @@
  *  history replies. The largest skeleton the firmware can build (a full history
  *  ring of SPEECH_TEXT_MAX replies, a filled 1536-byte system prompt) prints to
  *  ~3.7 kB unescaped; this is twice that and more, so escaped quotes and
- *  newlines still fit. Pinned by test_request_body_peak_is_one_copy. */
+ *  newlines still fit. test_request_body_peak_is_one_copy checks that the
+ *  unescaped worst case fits without the print buffer growing; the escaped case
+ *  is not tested, and overflowing the headroom costs peak memory, not
+ *  correctness (cJSON grows the buffer). */
 #define VOICE_HISTORY_BODY_HEADROOM (8 * 1024)
 
 typedef struct {
@@ -189,7 +192,8 @@ bool voice_history_build_contents(cJSON *contents, const char *prompt_text, cons
  * @param b64_jpeg Optional base64 JPEG data (NULL to omit).
  * @param b64_wav Base64 audio WAV data.
  * @param now_ms Current timestamp in milliseconds.
- * @return Heap-allocated unformatted JSON string (caller frees), or NULL on failure.
+ * @return Heap-allocated unformatted JSON string (caller frees), or NULL on
+ *         allocation failure or when @p b64_wav is NULL.
  */
 char *voice_history_build_request_body(const char *name, const char *sys_prompt,
                                        const reactive_telemetry_t *tele, bool has_telemetry,

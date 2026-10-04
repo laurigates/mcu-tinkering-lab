@@ -550,9 +550,10 @@ static void test_request_body_peak_is_one_copy(void)
     printf("     body=%zu B, cJSON peak=%zu B (caller's strings %zu B not counted)\n", body_len,
            peak, wav_len + jpeg_len);
 
-    /* One copy of the payload plus the body skeleton. Anything near double
-     * means a string was duplicated into the tree or the print buffer grew. */
-    ASSERT(peak <= wav_len + jpeg_len + 32 * 1024);
+    /* One copy of the payload, the presized headroom and the tree skeleton
+     * (~7.5 kB measured). Anything near double means a string was duplicated
+     * into the tree or the print buffer grew. */
+    ASSERT(peak <= wav_len + jpeg_len + VOICE_HISTORY_BODY_HEADROOM + 16 * 1024);
 
     /* And the body still carries both payloads intact. */
     cJSON *root = cJSON_Parse(body);
