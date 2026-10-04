@@ -66,6 +66,10 @@ static uint32_t s_last_vad_trigger_ms;
  *  first frames after boot are accepted rather than quarantined. */
 static uint32_t s_last_playback_end_ms;
 
+/** When a frame last overlapped the voice turn's start cue. Seeded like the
+ *  playback anchor above; ambient_gate_accepts() moves it. */
+static uint32_t s_last_cue_ms;
+
 static inline uint32_t now_ms(void)
 {
     return (uint32_t)(esp_timer_get_time() / 1000);
@@ -117,6 +121,14 @@ static void ambient_listener_task(void *arg)
         const bool playing = playback_active_edge();
         const bool allowed = ambient_capture_allowed(playing, t, s_last_playback_end_ms,
                                                      AMBIENT_PLAYBACK_HANGOVER_MS_DEFAULT);
+        /* The start cue is the robot's own noise as much as playback is, but it
+         * comes from the buzzer, not the amplifier, so the playback verdict
+         * never covered it: the beep reached the gate and the next planner
+         * cycle reported a room that "sounds different" (issue #624). Computed
+         * before the read-failure branch so a failed read during the cue still
+         * moves the anchor. The pre-roll keeps `allowed` — see below. */
+        const bool to_gate =
+            ambient_gate_accepts(allowed, cue, t, &s_last_cue_ms, AMBIENT_CUE_HANGOVER_MS_DEFAULT);
 
         /* Offered while the lock is still held, so a voice turn that takes the
          * lock next finds the ring complete and the DMA's next samples directly
@@ -141,7 +153,7 @@ static void ambient_listener_task(void *arg)
             continue;
         }
 
-        if (!allowed) {
+        if (!to_gate) {
             s_frames_muted++;
             speech_trigger_reset_run();
             continue;
@@ -166,14 +178,10 @@ static void ambient_listener_task(void *arg)
          * tunable values ride the planner's 15 s line instead. */
         /* The speech trigger runs whether or not VAD is on, so `mic` can show its
          * scores while someone tunes it. The start cue is a 1 kHz beep — in band
-         * and 200 ms long, i.e. speech-shaped by this rule — so it breaks the run
-         * instead of being scored. */
-        bool speech = false;
-        if (cue) {
-            speech_trigger_reset_run();
-        } else {
-            speech = speech_trigger_note(s_frame, got, fp.level_db, ambient_audio_floor_db(), t);
-        }
+         * and 200 ms long, i.e. speech-shaped by this rule — so a cue frame never
+         * gets this far: it is muted above, which breaks the run. */
+        const bool speech =
+            speech_trigger_note(s_frame, got, fp.level_db, ambient_audio_floor_db(), t);
 
         ESP_LOGD(TAG, "frame: %u samples, loud %u, shape %u, voice band %u%%, run %u ms",
                  (unsigned)got, ambient_audio_loud_score(t), ambient_audio_shape_score(t),

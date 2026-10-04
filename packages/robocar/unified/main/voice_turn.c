@@ -105,7 +105,8 @@ static bool s_vad_enabled = true;
 
 /** True from just before the start beep until its settle time has passed. The
  *  ambient listener reads it to keep the beep out of the pre-roll (as silence of
- *  the same length — see voice_preroll.h). */
+ *  the same length — see voice_preroll.h) and out of the ambient gate (see
+ *  ambient_gate_accepts()). */
 static volatile bool s_cue_active;
 
 /** Endpointing knobs (`voice endpoint`). Not persisted, like every other voice
