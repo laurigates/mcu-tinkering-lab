@@ -19,6 +19,8 @@ docs/schematics/
 ├── test_routing.py        # pytest suite for routing.py
 ├── metrics.py             # Routing-quality metrics per circuit (crossings, ...)
 ├── test_metrics.py        # pytest suite for metrics.py
+├── guide_deps.py          # Which Typst documents embed a rendered image (render-all)
+├── test_guide_deps.py     # pytest suite for guide_deps.py
 ├── conftest.py            # Shared fixture: each real circuit routed once per session
 ├── images/                # Generated SVG + PNG (committed so GitHub renders them)
 ├── render.py              # Batch-render every circuit in circuits/
@@ -30,6 +32,7 @@ docs/schematics/
 
 ```bash
 # From repo root
+just schematics::render-all          # renders every circuit + recompiles guides that embed one
 just schematics::render              # renders every circuit
 just schematics::render-one gamepad_synth
 just schematics::clean
@@ -53,7 +56,9 @@ uv run python render.py
    and call `.wire(a, b)` for each point-to-point net and `.finish()` once
    after the last one (see "Routing" below). Other hand-drawn local stubs
    (LED branches, bus fan-outs) may come before or after the nets.
-3. Run `just schematics::render`. The SVG + PNG land in `images/`.
+3. Run `just schematics::render-all`. The SVG + PNG land in `images/`, and
+   any build guide that embeds one is recompiled (see "Embedded in a build
+   guide" below).
 4. Link the rendered PNG from the project's README or WIRING.md:
    ```markdown
    ![Wiring](../../docs/schematics/images/<name>.png)
@@ -242,5 +247,22 @@ that touches `docs/schematics/**` and fails if `images/*.svg` would change.
 The workflow is SVG-only on purpose (PNG drift is encoder-version noise, not
 content drift); the workflow surfaces PNG diffs as `::notice` only.
 
-When the check fails, run `just schematics::render` locally and commit both
-the regenerated SVG and PNG.
+When the check fails, run `just schematics::render-all` locally and commit
+the regenerated SVG and PNG, plus any PDF it recompiled.
+
+## Embedded in a build guide
+
+A Typst document can embed a rendered PNG — the robocar-unified build guide
+embeds `images/robocar_unified.png` — and its committed PDF then carries the
+image's bytes. Re-rendering that circuit leaves the PDF stale, and
+`build-guide-check.yml` fails on it even though this directory's own check
+passes (issue #595).
+
+`just schematics::render-all` closes that gap: it renders, then recompiles
+every document whose source references `docs/schematics/images/`, each through
+its project's own `build-guide` recipe (which pins the Typst CLI and the flags
+CI uses). The documents are found by `guide_deps.py` reading the sources, so a
+new guide that embeds a schematic needs no edit here. Plain
+`just schematics::render` renders only, and afterwards names any project whose
+PDF it has just made stale. The rule that governs the guard is
+`.claude/rules/build-guide-drift-guard.md` § 1c.
