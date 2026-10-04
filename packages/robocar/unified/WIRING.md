@@ -1,6 +1,6 @@
 # Wiring — robocar-unified (XIAO ESP32-S3 Sense)
 
-Single-board wiring for the consolidated robocar. All pin assignments are authoritative in [`main/pin_config.h`](main/pin_config.h); this document mirrors them for human reference.
+Single-board wiring for the consolidated robocar. All pin assignments are authoritative in [`main/pin_config.h`](main/pin_config.h); this document mirrors them for human reference. The pin tables marked `GENERATED` are emitted from [`hardware.toml`](hardware.toml), the header and the board reference by `just hardware::gen` (ADR-021), and CI fails when they are stale — change those sources, not the tables.
 
 ![Schematic](../../../docs/schematics/images/robocar_unified.png)
 
@@ -12,19 +12,24 @@ Schematic source: [`docs/schematics/circuits/robocar_unified.py`](../../../docs/
 
 The XIAO exposes only 11 GPIOs on its headers. Camera pins are internal to the Sense module and do not conflict with header pins.
 
-| XIAO Pin | GPIO | Function | Notes |
-|----------|------|----------|-------|
-| D0 | GPIO1 | TB6612FNG STBY | HIGH = motors enabled |
-| D1 | GPIO2 | Piezo buzzer | LEDC PWM |
-| D2 | GPIO3 | Ultrasonic TRIG | 10 µs pulse output |
-| D3 | GPIO4 | Ultrasonic ECHO | Pulse width input (RMT RX) |
-| D4 | GPIO5 | **I2C SDA** | to TCA9548A |
-| D5 | GPIO6 | **I2C SCL** | to TCA9548A |
-| D6 | GPIO43 | USB Serial TX | debug console |
-| D7 | GPIO44 | USB Serial RX | debug console |
-| D8 | GPIO7 | **I2S BCLK** | to MAX98357A BCLK |
-| D9 | GPIO8 | **I2S LRCLK** | to MAX98357A LRC |
-| D10 | GPIO9 | **I2S DIN** | to MAX98357A DIN |
+<!-- BEGIN GENERATED: pin-table -->
+<!-- Generated from hardware.toml, main/pin_config.h and the board reference by `just hardware::gen` — edit those, not this block. -->
+
+| Pin | GPIO | Macro | Wired to | Notes |
+|-----|------|-------|----------|-------|
+| D0 | GPIO1 | `MOTOR_STBY_PIN` | TB6612FNG STBY | HIGH = motors enabled; the six control lines come from the PCA9685 |
+| D1 | GPIO2 | `PIEZO_PIN` | Piezo buzzer + | LEDC PWM, through a series resistor; the other leg to GND |
+| D2 | GPIO3 | `ULTRASONIC_TRIG_PIN` | HC-SR04P TRIG | 3.3 V output; a 10 µs pulse triggers a measurement |
+| D3 | GPIO4 | `ULTRASONIC_ECHO_PIN` | HC-SR04P ECHO | 3.3 V input; pulse width encodes distance (RMT RX) |
+| D4 | GPIO5 | `I2C_SDA_PIN` | TCA9548A SDA | Every I2C device sits behind the mux |
+| D5 | GPIO6 | `I2C_SCL_PIN` | TCA9548A SCL |  |
+| D6 | GPIO43 | `UART0_TX_PIN` | — | UART0 TX, nothing wired: the serial console is USB-Serial-JTAG on the USB-C connector, not this pad |
+| D7 | GPIO44 | `UART0_RX_PIN` | — | UART0 RX, nothing wired: the serial console is USB-Serial-JTAG on the USB-C connector, not this pad |
+| D8 | GPIO7 | `I2S_BCLK_PIN` | MAX98357A BCLK | Bit clock |
+| D9 | GPIO8 | `I2S_LRCLK_PIN` | MAX98357A LRC | Word select / left-right clock |
+| D10 | GPIO9 | `I2S_DIN_PIN` | MAX98357A DIN | Serial audio data |
+
+<!-- END GENERATED -->
 
 > **The GPIO budget is fully allocated.** There are no spare header pins left.
 > Additional digital I/O must go through the MCP23017 on TCA9548A channel 2.
@@ -202,11 +207,21 @@ Mono I2S class-D amplifier providing the robot's voice. Audio is 24 kHz 16-bit
 mono — the native output rate of the Gemini TTS model, carried through without
 resampling.
 
+<!-- BEGIN GENERATED: signals:amp -->
+<!-- Generated from hardware.toml, main/pin_config.h and the board reference by `just hardware::gen` — edit those, not this block. -->
+
 | Signal | Pin | Function |
 |--------|-----|----------|
 | BCLK | GPIO7 (D8) | Bit clock |
 | LRC | GPIO8 (D9) | Word select / left-right clock |
 | DIN | GPIO9 (D10) | Serial audio data |
+
+<!-- END GENERATED -->
+
+Power and configuration pins:
+
+| Signal | Pin | Function |
+|--------|-----|----------|
 | Vin | 5 V | See supply note above |
 | GND | any GND | Shared ground |
 | SD_MODE | *(see below)* | Channel select / shutdown |
@@ -255,14 +270,24 @@ Use the `mic` console command to tell a dead microphone from a quiet room.
 
 A 3.3 V-compatible ultrasonic sensor (HC-SR04P, RCWL-1601, or US-100) provides distance readings for the reactive controller's obstacle reflex.
 
-| Signal | Pin | Voltage | Function |
-|--------|-----|---------|----------|
-| TRIG | GPIO3 (D2) | 3.3 V | Output; 10 µs pulse triggers measurement |
-| ECHO | GPIO4 (D3) | 3.3 V | Input; pulse width encodes distance (RMT RX) |
-| VCC | 3.3 V | 3.3 V | **Must be 3.3 V variant** (HC-SR04P, not HC-SR04) |
-| GND | any GND | – | shared ground |
+<!-- BEGIN GENERATED: signals:ranger -->
+<!-- Generated from hardware.toml, main/pin_config.h and the board reference by `just hardware::gen` — edit those, not this block. -->
 
-The sensor samples at ~20 Hz. Obstacle reflex: if distance < 15 cm, the executor immediately stops and reverses, independent of planner goals. The specific module will be confirmed on first wiring; update this table if a different 3.3 V sensor is used.
+| Signal | Pin | Function |
+|--------|-----|----------|
+| TRIG | GPIO3 (D2) | 3.3 V output; a 10 µs pulse triggers a measurement |
+| ECHO | GPIO4 (D3) | 3.3 V input; pulse width encodes distance (RMT RX) |
+
+<!-- END GENERATED -->
+
+Power pins:
+
+| Signal | Pin | Function |
+|--------|-----|----------|
+| VCC | 3.3 V | **Must be 3.3 V variant** (HC-SR04P, not HC-SR04) |
+| GND | any GND | Shared ground |
+
+The sensor samples at ~20 Hz. Obstacle reflex: if distance < 15 cm, the executor immediately stops and reverses, independent of planner goals. The specific module will be confirmed on first wiring; if a different 3.3 V sensor is used, change `name` under `[parts.ranger]` in `hardware.toml` and regenerate. Keep the `ranger` key: the `signals:ranger` marker above names it.
 
 ## Flashing
 
