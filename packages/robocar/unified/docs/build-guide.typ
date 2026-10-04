@@ -139,8 +139,8 @@ Sense module and do not conflict.
   ([D3], [GPIO#ULECHO_PIN], [Ultrasonic ECHO], [Pulse width in (RMT RX)]),
   ([D4], [GPIO#I2C_SDA_PIN], [*I²C SDA*], [to TCA9548A]),
   ([D5], [GPIO#I2C_SCL_PIN], [*I²C SCL*], [to TCA9548A]),
-  ([D6], [GPIO#UART0_TX_PIN], [UART0 TX], [Not wired · console is on USB-C]),
-  ([D7], [GPIO#UART0_RX_PIN], [UART0 RX], [Not wired · console is on USB-C]),
+  ([D6], [GPIO#UART0_TX_PIN], [UART0 TX], [Spare · ROM boot log at reset]),
+  ([D7], [GPIO#UART0_RX_PIN], [UART0 RX], [Spare · console is on USB-C]),
   ([D8], [GPIO#I2S_BCLK_PIN], [*I²S BCLK*], [to MAX98357A — bit clock]),
   ([D9], [GPIO#I2S_LRCLK_PIN], [*I²S LRCLK*], [to MAX98357A — word select]),
   ([D10], [GPIO#I2S_DIN_PIN], [*I²S DIN*], [to MAX98357A — serial data]),
@@ -148,9 +148,11 @@ Sense module and do not conflict.
 )
 I²C runs at *#(I2C_FREQ_HZ / 1000) kHz*.
 
-#callout("GPIO budget fully allocated", kind: "warn")[
-  There are no spare header pins. Additional digital I/O must go through the
-  MCP23017 on TCA9548A channel 2.
+#callout("Two spare pads: D6/D7", kind: "warn")[
+  D6/D7 (GPIO#UART0_TX_PIN/#UART0_RX_PIN, UART0) are the only free header pads.
+  The ROM bootloader prints its boot log on GPIO#UART0_TX_PIN at every reset,
+  so anything wired to D6 sees that traffic. Beyond those two, digital I/O goes
+  through the MCP23017 on TCA9548A channel 2.
 ]
 
 == 4.2 · I²C topology (TCA9548A @ #TCA9548A_ADDR)
