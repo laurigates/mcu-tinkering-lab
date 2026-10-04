@@ -19,21 +19,27 @@
 <text x="34.5" y="186.2" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933">B01</text>
 <circle cx="23.0" cy="208.2" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="GND.L8" data-side="L" data-pos="8"/>
 <text x="34.5" y="208.2" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933">GND</text>
-<circle cx="145.1" cy="54.2" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="PWMA" data-side="R" data-pos="1"/>
+<circle cx="145.1" cy="54.2" r="5.5" fill="#2f6fb0" stroke="#1f2933" stroke-width="1" data-anchor="PWMA" data-side="R" data-pos="1"/>
 <text x="133.6" y="54.2" font-size="10" text-anchor="end" dominant-baseline="central" fill="#1f2933">PWMA</text>
-<circle cx="145.1" cy="76.2" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="AIN2" data-side="R" data-pos="2"/>
+<text x="162.1" y="54.2" font-size="9" text-anchor="start" dominant-baseline="central" fill="#1f2933">PCA9685 ch8 · MOTOR_RIGHT_PWM</text>
+<circle cx="145.1" cy="76.2" r="5.5" fill="#2f6fb0" stroke="#1f2933" stroke-width="1" data-anchor="AIN2" data-side="R" data-pos="2"/>
 <text x="133.6" y="76.2" font-size="10" text-anchor="end" dominant-baseline="central" fill="#1f2933">AIN2</text>
-<circle cx="145.1" cy="98.2" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="AIN1" data-side="R" data-pos="3"/>
+<text x="162.1" y="76.2" font-size="9" text-anchor="start" dominant-baseline="central" fill="#1f2933">PCA9685 ch9 · MOTOR_RIGHT_IN2</text>
+<circle cx="145.1" cy="98.2" r="5.5" fill="#2f6fb0" stroke="#1f2933" stroke-width="1" data-anchor="AIN1" data-side="R" data-pos="3"/>
 <text x="133.6" y="98.2" font-size="10" text-anchor="end" dominant-baseline="central" fill="#1f2933">AIN1</text>
+<text x="162.1" y="98.2" font-size="9" text-anchor="start" dominant-baseline="central" fill="#1f2933">PCA9685 ch10 · MOTOR_RIGHT_IN1</text>
 <circle cx="145.1" cy="120.2" r="5.5" fill="#2f6fb0" stroke="#1f2933" stroke-width="1" data-anchor="STBY" data-side="R" data-pos="4"/>
 <text x="133.6" y="120.2" font-size="10" text-anchor="end" dominant-baseline="central" fill="#1f2933">STBY</text>
 <text x="162.1" y="120.2" font-size="9" text-anchor="start" dominant-baseline="central" fill="#1f2933">MCU D0 · MOTOR_STBY</text>
-<circle cx="145.1" cy="142.2" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="BIN1" data-side="R" data-pos="5"/>
+<circle cx="145.1" cy="142.2" r="5.5" fill="#2f6fb0" stroke="#1f2933" stroke-width="1" data-anchor="BIN1" data-side="R" data-pos="5"/>
 <text x="133.6" y="142.2" font-size="10" text-anchor="end" dominant-baseline="central" fill="#1f2933">BIN1</text>
-<circle cx="145.1" cy="164.2" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="BIN2" data-side="R" data-pos="6"/>
+<text x="162.1" y="142.2" font-size="9" text-anchor="start" dominant-baseline="central" fill="#1f2933">PCA9685 ch11 · MOTOR_LEFT_IN1</text>
+<circle cx="145.1" cy="164.2" r="5.5" fill="#2f6fb0" stroke="#1f2933" stroke-width="1" data-anchor="BIN2" data-side="R" data-pos="6"/>
 <text x="133.6" y="164.2" font-size="10" text-anchor="end" dominant-baseline="central" fill="#1f2933">BIN2</text>
-<circle cx="145.1" cy="186.2" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="PWMB" data-side="R" data-pos="7"/>
+<text x="162.1" y="164.2" font-size="9" text-anchor="start" dominant-baseline="central" fill="#1f2933">PCA9685 ch12 · MOTOR_LEFT_IN2</text>
+<circle cx="145.1" cy="186.2" r="5.5" fill="#2f6fb0" stroke="#1f2933" stroke-width="1" data-anchor="PWMB" data-side="R" data-pos="7"/>
 <text x="133.6" y="186.2" font-size="10" text-anchor="end" dominant-baseline="central" fill="#1f2933">PWMB</text>
+<text x="162.1" y="186.2" font-size="9" text-anchor="start" dominant-baseline="central" fill="#1f2933">PCA9685 ch13 · MOTOR_LEFT_PWM</text>
 <circle cx="145.1" cy="208.2" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="GND.R8" data-side="R" data-pos="8"/>
 <text x="133.6" y="208.2" font-size="10" text-anchor="end" dominant-baseline="central" fill="#1f2933">GND</text>
 <text x="12.0" y="242.8" font-size="8" text-anchor="start" dominant-baseline="central" fill="#5b6770">Pads from docs/reference/boards/sparkfun-tb6612fng.md</text>

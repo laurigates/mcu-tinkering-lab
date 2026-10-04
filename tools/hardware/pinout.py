@@ -11,7 +11,9 @@ beside them come from the join:
     is labelled with that GPIO, the pin role `main/pin_config.h` gives it, and
     the part pin hardware.toml wires it to;
   * every `[parts.<id>]` with a `board` key — each pad a net lands on is
-    labelled with the MCU pad and role driving it.
+    labelled with the MCU pad and role driving it, or with the PWM-driver
+    channel and role for a `[[channel_nets]]` entry (#666); a driver's own
+    channel pads are labelled with the role and the pin each one drives.
 
 A net naming a pin the board reference does not have is an error, so the
 picture cannot quietly disagree with hardware.toml.
@@ -244,7 +246,7 @@ def render_svg(pinout: Pinout, notes: tuple[str, ...] = ()) -> str:
 
 
 def _role_name(role: str) -> str:
-    return role.removesuffix("_PIN")
+    return role.removesuffix("_PIN").removesuffix("_CHANNEL")
 
 
 def mcu_labels(model: HardwareModel, layout: ModuleLayout) -> dict[str, str]:
@@ -275,25 +277,49 @@ def mcu_labels(model: HardwareModel, layout: ModuleLayout) -> dict[str, str]:
 def part_labels(
     model: HardwareModel, part: str, layout: ModuleLayout
 ) -> dict[str, str]:
-    """Each pad of one part that a net lands on: the MCU pad and role driving it."""
+    """Each pad of one part that a net lands on or starts from.
+
+    A pad driven from the MCU names the MCU pad and role; one driven from a PWM
+    driver names the driver's channel and role; a driver's own channel pad
+    names the role and every pin it reaches.
+    """
     by_name: dict[str, list[Pad]] = {}
     for pad in layout.pads:
         by_name.setdefault(pad.name, []).append(pad)
 
-    labels: dict[str, list[str]] = {}
-    for net in (n for n in model.nets if n.part == part):
-        pads = by_name.get(net.pin, [])
+    def anchor(role: str, pin: str) -> str:
+        pads = by_name.get(pin, [])
         if len(pads) != 1:
             what = "no pad" if not pads else f"{len(pads)} pads"
             raise HardwareError(
-                f"[parts.{part}] net {net.role} -> {part}.{net.pin}: {layout.path.name} "
-                f"has {what} named {net.pin!r}"
+                f"[parts.{part}] net {role} -> {part}.{pin}: {layout.path.name} "
+                f"has {what} named {pin!r}"
             )
+        return pads[0].anchor
+
+    labels: dict[str, list[str]] = {}
+    for net in (n for n in model.nets if n.part == part):
         mcu = model.pin_for(net.role)
         source = mcu.name if mcu else f"GPIO{model.roles[net.role]}"
-        labels.setdefault(pads[0].anchor, []).append(
+        labels.setdefault(anchor(net.role, net.pin), []).append(
             f"MCU {source} · {_role_name(net.role)}"
         )
+    for net in (n for n in model.channel_nets if n.part == part):
+        driver = model.parts[net.source].name
+        labels.setdefault(anchor(net.role, net.pin), []).append(
+            f"{driver} ch{net.channel} · {_role_name(net.role)}"
+        )
+
+    # A driver's channel pad: the role on it and every pin it reaches.
+    reaches: dict[str, dict[str, list[str]]] = {}
+    for net in (n for n in model.channel_nets if n.source == part):
+        pad = anchor(net.role, str(net.channel))
+        reaches.setdefault(pad, {}).setdefault(net.role, []).append(
+            f"{model.parts[net.part].name} {net.pin}"
+        )
+    for pad, by_role in reaches.items():
+        for role, ends in by_role.items():
+            labels.setdefault(pad, []).append(f"{_role_name(role)} → {', '.join(ends)}")
     return {anchor: " · ".join(texts) for anchor, texts in labels.items()}
 
 

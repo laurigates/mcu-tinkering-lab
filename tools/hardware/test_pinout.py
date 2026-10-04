@@ -11,6 +11,7 @@ same document Typst embeds, not a second description of it.
 
 from __future__ import annotations
 
+import dataclasses
 import io
 import shutil
 import tempfile
@@ -181,11 +182,66 @@ class LabelsFromJoinTest(unittest.TestCase):
         # A power pad has no GPIO and so no label.
         self.assertNotIn("5V", labels)
 
-    def test_a_breakout_pad_names_the_mcu_pad_driving_it(self):
+    def test_a_breakout_pad_names_the_mcu_pad_or_channel_driving_it(self):
+        # #666: the control row comes from the PCA9685, STBY from the XIAO.
         path = REPO_ROOT / self.model.parts["motor_driver"].board
         labels = part_labels(self.model, "motor_driver", parse_layout(path))
         stby = self.model.pin_for("MOTOR_STBY_PIN")
-        self.assertEqual(labels, {"STBY": f"MCU {stby.name} · MOTOR_STBY"})
+        ch = self.model.channels
+
+        def driven(role: str) -> str:
+            return f"PCA9685 ch{ch[role + '_CHANNEL']} · {role}"
+
+        self.assertEqual(
+            labels,
+            {
+                "STBY": f"MCU {stby.name} · MOTOR_STBY",
+                "PWMA": driven("MOTOR_RIGHT_PWM"),
+                "AIN2": driven("MOTOR_RIGHT_IN2"),
+                "AIN1": driven("MOTOR_RIGHT_IN1"),
+                "BIN1": driven("MOTOR_LEFT_IN1"),
+                "BIN2": driven("MOTOR_LEFT_IN2"),
+                "PWMB": driven("MOTOR_LEFT_PWM"),
+            },
+        )
+
+    def test_every_pca9685_channel_the_firmware_drives_is_labelled(self):
+        path = REPO_ROOT / self.model.parts["pwm"].board
+        labels = part_labels(self.model, "pwm", parse_layout(path))
+        ch = self.model.channels
+        self.assertEqual(set(labels), {str(n) for n in ch.values()})
+        self.assertEqual(
+            labels[str(ch["MOTOR_RIGHT_PWM_CHANNEL"])],
+            "MOTOR_RIGHT_PWM → TB6612FNG PWMA",
+        )
+        self.assertEqual(
+            labels[str(ch["SERVO_PAN_CHANNEL"])], "SERVO_PAN → SG90 servos PAN"
+        )
+        self.assertEqual(
+            labels[str(ch["LED_LEFT_R_CHANNEL"])], "LED_LEFT_R → Left RGB LED R"
+        )
+
+    def test_a_fanned_out_channel_names_every_pin_it_reaches(self):
+        path = REPO_ROOT / self.model.parts["pwm"].board
+        model = self.model
+        (red,) = [n for n in model.channel_nets if n.role == "LED_LEFT_R_CHANNEL"]
+        both = dataclasses.replace(red, part="led_right", pin="R")
+        fanned = dataclasses.replace(model, channel_nets=(*model.channel_nets, both))
+        labels = part_labels(fanned, "pwm", parse_layout(path))
+        self.assertEqual(
+            labels[str(red.channel)], "LED_LEFT_R → Left RGB LED R, Right RGB LED R"
+        )
+
+    def test_a_channel_net_to_a_pin_the_board_lacks_is_an_error(self):
+        path = REPO_ROOT / self.model.parts["motor_driver"].board
+        layout = parse_layout(path)
+        model = self.model
+        bad = dataclasses.replace(
+            model.channel_nets[0], part="motor_driver", pin="PWMC"
+        )
+        broken = dataclasses.replace(model, channel_nets=(*model.channel_nets, bad))
+        with self.assertRaisesRegex(HardwareError, "no pad named 'PWMC'"):
+            part_labels(broken, "motor_driver", layout)
 
     def test_a_net_to_a_pin_the_board_lacks_is_an_error(self):
         path = REPO_ROOT / self.model.parts["amp"].board
