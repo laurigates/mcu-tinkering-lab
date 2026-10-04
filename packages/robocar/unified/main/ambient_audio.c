@@ -448,3 +448,15 @@ bool ambient_capture_allowed(bool playback_active, uint32_t now_ms, uint32_t las
      * the uint32 wrap and deafens the robot for the rest of the 49-day cycle. */
     return (uint32_t)(now_ms - last_playback_end_ms) >= hangover_ms;
 }
+
+bool ambient_gate_accepts(bool capture_allowed, bool cue_active, uint32_t now_ms,
+                          uint32_t *last_cue_ms, uint32_t cue_hangover_ms)
+{
+    if (cue_active) {
+        *last_cue_ms = now_ms;
+    }
+    /* The cue is one more source of the robot's own noise, with the same
+     * falling-edge-plus-hangover shape as playback; only the anchor differs. */
+    return capture_allowed &&
+           ambient_capture_allowed(cue_active, now_ms, *last_cue_ms, cue_hangover_ms);
+}

@@ -157,6 +157,16 @@ extern "C" {
  *  hearing its own last word and remarking on it is the failure this prevents. */
 #define AMBIENT_PLAYBACK_HANGOVER_MS_DEFAULT 500u
 
+/** How long after the last frame that overlapped the voice turn's start cue
+ *  the microphone is still considered contaminated, in ms.
+ *
+ *  The piezo's own ring-down is already inside the cue flag (the voice turn's
+ *  settle delay), so this covers only the room's reverberant tail — the same
+ *  physics as the playback hangover, hence the same value. It matters only in
+ *  the window where the listener reads again before the voice turn takes the
+ *  microphone lock; once the turn holds it, the listener reads nothing. */
+#define AMBIENT_CUE_HANGOVER_MS_DEFAULT AMBIENT_PLAYBACK_HANGOVER_MS_DEFAULT
+
 /** Rate at which the noise floor may RISE, in dB per second.
  *
  *  The single constant that decides what "steady" means: a sound must outrun
@@ -214,7 +224,7 @@ void ambient_audio_init(void);
 /**
  * @brief Fold one frame into the floor tracker and the latches.
  *
- * Call for every microphone frame that ambient_capture_allowed() accepted.
+ * Call for every microphone frame that ambient_gate_accepts() accepted.
  * @p now_ms is the caller's monotonic millisecond clock; it is injected rather
  * than read so the latch TTL — including its behaviour across the uint32 wrap —
  * is testable. An invalid fingerprint is DROPPED: it moves neither the floor
@@ -342,6 +352,41 @@ uint32_t ambient_audio_latch_ttl_ms(void);
  */
 bool ambient_capture_allowed(bool playback_active, uint32_t now_ms, uint32_t last_playback_end_ms,
                              uint32_t hangover_ms);
+
+/**
+ * @brief Whether a frame may reach the gate (ambient_audio_note()), given the
+ *        playback verdict and the voice turn's start cue.
+ *
+ * The start cue is a 1 kHz beep on the buzzer (GPIO2), a different peripheral
+ * from the amplifier, so ambient_capture_allowed() never covered it. Fed to the
+ * gate, the robot's own beep registers as a loud excursion and a change of
+ * spectral shape, and the next planner cycle tells the model the room sounds
+ * different (issue #624). Cue frames are therefore quarantined like playback
+ * frames, plus @p cue_hangover_ms for the room's tail.
+ *
+ * This decides only what the GATE sees. The pre-roll treats the cue
+ * differently on purpose — it keeps the ring and writes silence, because
+ * emptying it would throw away the words that triggered the turn — so the
+ * listener still passes ambient_capture_allowed()'s own verdict there.
+ *
+ * @param capture_allowed  ambient_capture_allowed()'s verdict for this frame.
+ * @param cue_active       The start cue overlapped this frame.
+ * @param now_ms           Caller's monotonic clock, sampled after the read.
+ * @param last_cue_ms      In/out: when a frame last overlapped the cue. Moved
+ *                         to @p now_ms on every cue frame, whatever the
+ *                         playback verdict. Anchoring on the last cue frame,
+ *                         not on the first frame without it, matters: a voice
+ *                         turn holds the microphone for seconds after the cue,
+ *                         and the first frame the listener reads afterwards
+ *                         must be measured, not muted.
+ * @param cue_hangover_ms  Quarantine after the last cue frame; 0 refuses only
+ *                         the cue frames themselves.
+ *
+ * Same unsigned elapsed comparison as ambient_capture_allowed(), so it holds
+ * across the uint32 wrap.
+ */
+bool ambient_gate_accepts(bool capture_allowed, bool cue_active, uint32_t now_ms,
+                          uint32_t *last_cue_ms, uint32_t cue_hangover_ms);
 
 #ifdef __cplusplus
 }
