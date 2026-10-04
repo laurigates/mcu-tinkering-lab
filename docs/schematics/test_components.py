@@ -282,7 +282,8 @@ def test_robocar_unified_draws_every_suggested_capacitor_on_its_rail(real_circui
         # An electrolytic fitted backwards fails, so the symbol says which way.
         assert bool(cap._userparams.get("polar")) == c.polar, c.ref
         label = cap._userlabels[0].label
-        assert c.value in label and c.part_pin in label, (c.ref, label)
+        for fact in (c.value, c.rating, c.part_pin):
+            assert fact in label, (c.ref, fact, label)
         assert rails.get(_key(cap.absanchors["start"])) == c.rail, c.ref
         assert _key(cap.absanchors["end"]) in grounds, c.ref
 
@@ -300,7 +301,7 @@ def test_suggested_capacitors_are_mirrored_in_wiring_md_and_the_build_guide():
         status = "Recommended" if c.recommended else "Optional"
         row = re.search(rf"^\| {c.ref} \|.*$", wiring, re.M)
         assert row, f"WIRING.md has no table row for {c.ref}"
-        for fact in (c.value, c.part_pin, status):
+        for fact in (c.value, c.rating, c.part_pin, status):
             assert fact in row.group(0), (c.ref, fact)
         row = re.search(rf"^\s*\(\[{c.ref}\],.*$", guide, re.M)
         assert row, f"build-guide.typ has no table row for {c.ref}"
@@ -309,9 +310,15 @@ def test_suggested_capacitors_are_mirrored_in_wiring_md_and_the_build_guide():
 
     # The bill of materials counts them by kind and value.
     for polar, kind in ((True, "Electrolytic capacitor"), (False, "Ceramic capacitor")):
-        values = {c.value for c in caps if c.polar == polar}
+        values = {(c.value, c.rating) for c in caps if c.polar == polar}
         assert len(values) == 1, values
-        (value,) = values
+        ((value, rating),) = values
         count = sum(c.polar == polar for c in caps)
-        bom = re.search(rf"^\s*\(\[{count}\], \[{kind}\], \[[^\]]*{value}", guide, re.M)
+        bom = re.search(
+            rf"^\s*\(\[{count}\], \[{kind}\], \[[^\]]*{value}.*$", guide, re.M
+        )
         assert bom, f"BOM must list {count}x {kind} {value}"
+        # An electrolytic's rating is a voltage the buyer has to match; a
+        # ceramic's "rating" is its dielectric, already named by the kind.
+        if polar:
+            assert rating in bom.group(0), (kind, rating)

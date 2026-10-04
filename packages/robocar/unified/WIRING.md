@@ -212,10 +212,10 @@ vendor's board file already fits (the Eagle file at the commit its
 | Ref | Part | Fit at | Status | Why, and the source |
 |-----|------|--------|--------|---------------------|
 | C1 | 470 µF electrolytic, 16 V | PCA9685 V+ | Recommended | The Adafruit board leaves a through-hole electrolytic footprint on the V+ net empty for the builder (vendor ref C2, 3.5 mm pitch). Adafruit's guide suggests n × 100 µF for n servos as a start — 200 µF for the two SG90s — and says the right value depends on the servos and the supply; 470 µF matches C3. |
-| C2 | 470 µF electrolytic, 16 V | TB6612FNG VM | Recommended | Toshiba's typical application puts 10 µF + 0.1 µF on VM "as close as possible to the IC", and the SparkFun board fits both (C3, C1). The bulk part is for motor start and stall current arriving over a jumper run instead of a short trace — the case C3's datasheet sentence describes. |
-| C3 | 470 µF electrolytic, 16 V | MAX98357A Vin | Recommended | Maxim: "Bypass VDD with a 0.1 µF and 10 µF capacitor to GND" — both on the Adafruit board (C1, C2) — and "apply additional bulk capacitance at the ICs if long input traces between VDD and the power source are used". A jumper from the LM2596 is a long input trace. |
-| C4 | 100 nF ceramic | PCA9685 VCC | Optional | The Adafruit board fits only a 10 µF (C1) on VCC. NXP's datasheet FAQ: about 50 pF of decoupling is on-chip, and whether to add external decoupling as close as possible to the device is left to the designer when many outputs switch together. |
-| C5 | 100 nF ceramic | TCA9548A VIN | Optional | The Adafruit board fits only a 10 µF (C1). TI's layout guidance (SCPS207H §8.4.1) pairs a larger capacitor for supply glitches with a smaller one for high-frequency ripple; this is the smaller one. |
+| C2 | 470 µF electrolytic, 16 V | TB6612FNG VM | Recommended | Toshiba's typical application puts 10 µF + 0.1 µF on VM "as close as possible to the IC", and the SparkFun board fits both (vendor refs C3, C1). The bulk part is for motor start and stall current arriving over a jumper run instead of a short trace — the case C3's datasheet sentence describes. |
+| C3 | 470 µF electrolytic, 16 V | MAX98357A Vin | Recommended | Maxim: "Bypass VDD with a 0.1 µF and 10 µF capacitor to GND" — both on the Adafruit board (vendor refs C1, C2) — and "apply additional bulk capacitance at the ICs if long input traces between VDD and the power source are used". A jumper from the LM2596 is a long input trace. |
+| C4 | 100 nF ceramic | PCA9685 VCC | Optional | The Adafruit board fits only a 10 µF (vendor ref C1) on VCC. NXP's datasheet FAQ: about 50 pF of decoupling is on-chip, and whether to add external decoupling as close as possible to the device is left to the designer when many outputs switch together. |
+| C5 | 100 nF ceramic | TCA9548A VIN | Optional | The Adafruit board fits only a 10 µF (vendor ref C1). TI's layout guidance (SCPS207H §8.4.1) pairs a larger capacitor for supply glitches with a smaller one for high-frequency ripple; this is the smaller one. |
 | C6 | 100 nF ceramic | MCP23017 VCC | Optional | The module fitted is unidentified (#662), so whether it carries one is unknown. Microchip's datasheet (DS20001952) names no value; 100 nF is generic practice. Skip it if the module already has a capacitor beside the chip. |
 
 Fit each one **at the pin it names**, across that pin and the nearest GND pad,
@@ -230,7 +230,7 @@ electrolytics with the stripe (−) to GND; the schematic marks the + plate.
 
 One datasheet recommendation is deliberately not drawn: Toshiba also asks for
 10 µF on the TB6612FNG's **VCC**, and the SparkFun board fits only 0.1 µF there
-(C2). That pin draws 1.1 mA typical (datasheet Icc at 3 V) from the XIAO's 3V3
+(vendor ref C2). That pin draws 1.1 mA typical (datasheet Icc at 3 V) from the XIAO's 3V3
 pad, so it is left out; it is the first part to add if STBY or the control
 inputs ever misbehave under motor load.
 
