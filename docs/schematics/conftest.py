@@ -1,14 +1,14 @@
 """Shared fixtures for the schematics test suites.
 
 Routing a real circuit is the expensive step in this suite: ``finish()``
-routes every batch under each candidate in ``ORDERINGS`` (#494), and a dozen
+routes every batch under each candidate in ``ORDERINGS`` (#494), and eleven
 read-only tests used to load and route the same circuits independently
 (#594). ``real_circuits`` routes each one once per session and hands every
 test the same finished drawing.
 
 Sharing a mutable ``Drawing`` couples every test that reads it, so the
-function-scoped fixture fingerprints each drawing after the test that used
-it and fails that test if anything changed. Tests that must route afresh —
+function-scoped fixture fingerprints each drawing (and its metrics) after
+the test that used it and fails that test if anything changed. Tests that must route afresh —
 determinism, hash seeds, parameter comparisons — still do so themselves.
 """
 
@@ -34,7 +34,7 @@ class RenderedCircuit:
 
     ``svg`` is the image as first rendered, so a test comparing a fresh
     render against it compares two independent routes of the circuit.
-    ``drawing`` is shared: read it, never change it.
+    ``drawing`` and ``metrics`` are shared: read them, never change them.
     """
 
     name: str
@@ -63,6 +63,26 @@ def drawing_fingerprint(d) -> str:
     return digest.hexdigest()
 
 
+def circuit_fingerprint(c: RenderedCircuit) -> str:
+    """``drawing_fingerprint`` plus the shared metrics, which are mutable too."""
+    digest = hashlib.sha256(drawing_fingerprint(c.drawing).encode())
+    digest.update(repr(c.metrics).encode())
+    return digest.hexdigest()
+
+
+def mutated_circuits(circuits, fingerprints: dict[str, str]) -> list[str]:
+    """Names of the circuits whose fingerprint moved since ``fingerprints``.
+
+    Re-baselines ``fingerprints`` as it goes, so a mutation is blamed on the
+    test that made it only; the run is red either way, and every later test
+    would otherwise report the same mutation as its own.
+    """
+    now = {c.name: circuit_fingerprint(c) for c in circuits}
+    changed = [name for name, digest in now.items() if digest != fingerprints[name]]
+    fingerprints.update(now)
+    return changed
+
+
 @pytest.fixture(scope="session")
 def _rendered_real_circuits():
     circuits = []
@@ -78,7 +98,7 @@ def _rendered_real_circuits():
         metrics = measure_drawing(path.stem, d)
         circuits.append(RenderedCircuit(path.stem, d, metrics, d.get_imagedata("svg")))
     assert circuits, "no real circuits were found"
-    return tuple(circuits), {c.name: drawing_fingerprint(c.drawing) for c in circuits}
+    return tuple(circuits), {c.name: circuit_fingerprint(c) for c in circuits}
 
 
 @pytest.fixture
@@ -86,14 +106,10 @@ def real_circuits(_rendered_real_circuits):
     """Every real circuit, routed once per session; fails a test that mutates one."""
     circuits, fingerprints = _rendered_real_circuits
     yield circuits
-    now = {c.name: drawing_fingerprint(c.drawing) for c in circuits}
-    changed = [name for name, digest in now.items() if digest != fingerprints[name]]
+    changed = mutated_circuits(circuits, fingerprints)
     if changed:
-        # Blame this test only; the run is red either way, and every later
-        # test would otherwise report the same mutation as its own.
-        fingerprints.update(now)
         pytest.fail(
-            f"test mutated the shared drawing(s) {changed}; real_circuits is "
+            f"test mutated the shared circuit(s) {changed}; real_circuits is "
             "read-only — route a fresh copy with draw_circuit(load_circuit(...))",
             pytrace=False,
         )

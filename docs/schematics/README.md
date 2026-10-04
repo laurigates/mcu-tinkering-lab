@@ -168,9 +168,9 @@ router.finish()
   `routing.py` or any `circuits/*.py`; CI runs the whole directory.
   Tests that only *read* a real circuit take the `real_circuits` fixture in
   `conftest.py`, which routes each circuit once per session and fails any
-  test that changes a shared drawing; a test that must route afresh
-  (determinism, a monkeypatched `Router` default) calls
-  `draw_circuit(load_circuit(...))` itself (#594).
+  test that changes a shared drawing or its metrics; a test that must route
+  afresh (determinism, a monkeypatched `Router` default) routes its own copy
+  with `draw_circuit(load_circuit(...))` or in a fresh interpreter (#594).
 - **Measuring a router change**: `metrics.py` reports, per circuit, total
   wire length, length inside component bodies (own and foreign), crossings,
   tight parallel pairs, collinear overlaps, junctions (routed-wire ends

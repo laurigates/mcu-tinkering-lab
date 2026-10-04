@@ -611,6 +611,28 @@ def test_shared_drawing_fingerprint_sees_every_kind_of_mutation():
     assert drawing_fingerprint(d) != before, "added element missed"
 
 
+def test_shared_circuit_guard_blames_each_mutation_once():
+    # The comparison real_circuits runs at teardown: a changed drawing or a
+    # changed metrics field (CircuitMetrics is a plain, mutable dataclass) is
+    # reported, and only by the check that first sees it (#594).
+    from conftest import RenderedCircuit, circuit_fingerprint, mutated_circuits
+    from metrics import measure_drawing
+
+    d, router = _free_router()
+    router.wire((0.0, 0.0), (4.0, 0.0), net="i2c")
+    router.wire((2.0, -2.0), (2.0, 2.0), net="pwm")
+    router.finish()
+    c = RenderedCircuit("probe", d, measure_drawing("probe", d), b"")
+    fingerprints = {c.name: circuit_fingerprint(c)}
+
+    assert mutated_circuits([c], fingerprints) == [], "reading is not a mutation"
+    c.metrics.crossings += 1
+    assert mutated_circuits([c], fingerprints) == ["probe"], "metrics edit missed"
+    assert mutated_circuits([c], fingerprints) == [], "a mutation is blamed once"
+    d.add(elm.Dot().at((8.0, 8.0)))
+    assert mutated_circuits([c], fingerprints) == ["probe"], "drawing edit missed"
+
+
 def test_every_real_wire_has_a_net_class(real_circuits):
     from routing import NET_COLORS
 
@@ -1055,9 +1077,10 @@ def test_ordering_choice_is_reproducible_across_hash_seeds():
         )
         for seed in ("0", "12345")
     ]
+    # Collect both before asserting, so a failure never leaves one running.
+    results = [(run, *run.communicate()) for run in runs]
     outputs = []
-    for run in runs:
-        stdout, stderr = run.communicate()
+    for run, stdout, stderr in results:
         assert run.returncode == 0, stderr
         outputs.append(stdout)
     assert outputs[0] == outputs[1]
