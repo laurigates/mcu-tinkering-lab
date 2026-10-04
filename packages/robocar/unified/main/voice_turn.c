@@ -3,9 +3,10 @@
  * @brief Push-to-talk: record a clip, ask Gemini, speak the reply.
  *
  * See voice_turn.h for the design. The ordering inside run_turn() is the part
- * worth reading — it is what keeps the transient allocation at roughly 430 kB
- * rather than 800 kB, on a device where the camera framebuffers and the 512 kB
- * TTS ring are already spoken for.
+ * worth reading: each buffer is released as soon as the next exists, so no two
+ * copies of the clip outlive the step that needs both. For an 8 s `listen` the
+ * peak is the request-body build, ~873 kB with a 64 kB frame attached — the
+ * step-by-step figures are on AUDIO_CLIP_MAX_BYTES in audio_clip.h (issue #625).
  */
 
 #include "voice_turn.h"
@@ -343,6 +344,13 @@ static void run_turn(uint32_t window_ms, bool vad)
         return;
     }
 
+    /* Read before the first allocation, for the per-turn log line: the boot-wide
+     * low-water mark only says something about THIS turn if it moved during it,
+     * and then `start - low` is the turn's peak (other tasks' allocations in the
+     * same window included). Issue #625. */
+    const size_t psram_start = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+    const size_t psram_low_start = heap_caps_get_minimum_free_size(MALLOC_CAP_SPIRAM);
+
     /* PSRAM: this is hundreds of kB and internal RAM is the scarce pool the
      * camera and the TLS handshake compete for. */
     int16_t *pcm = heap_caps_malloc(pcm_bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
@@ -414,7 +422,8 @@ static void run_turn(uint32_t window_ms, bool vad)
     const uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000);
     char *body = build_body(b64, b64_jpeg, &tele, has_telemetry, now_ms);
 
-    /* Free base64 buffers immediately after adding to request body to preserve PSRAM. */
+    /* The body now holds the only other copy (the cJSON tree only referenced
+     * these strings), so release ours before the upload, not after it. */
     free(b64);
     b64 = NULL;
     if (b64_jpeg) {
@@ -440,10 +449,13 @@ static void run_turn(uint32_t window_ms, bool vad)
     }
     ESP_LOGI(TAG,
              "listen: window=%u ms samples=%u raw_peak=%d gain=%.1fx peak=%d clipped=%u dc=%d | "
-             "upload=%u B | free PSRAM=%u B",
+             "upload=%u B | free PSRAM=%u B start=%u low=%u->%u largest=%u",
              (unsigned)window_ms, (unsigned)got, (int)st.raw_peak, (double)st.gain_q8 / 256.0,
              (int)st.peak, (unsigned)st.clipped, (int)st.dc, (unsigned)body_len,
-             (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM), (unsigned)psram_start,
+             (unsigned)psram_low_start,
+             (unsigned)heap_caps_get_minimum_free_size(MALLOC_CAP_SPIRAM),
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
 
     /* Charged here, immediately before the post and whatever its outcome, so
      * the ceiling bounds traffic even if every reply is unparseable. This is
