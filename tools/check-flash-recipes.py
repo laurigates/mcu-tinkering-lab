@@ -206,8 +206,11 @@ def check_justfile_directory() -> list[Finding]:
     """
     findings: list[Finding] = []
     targets = sorted((REPO_ROOT / "packages").rglob("justfile"))
+    targets += sorted((REPO_ROOT / "packages").rglob("*.just"))
     targets += sorted((REPO_ROOT / "tools").rglob("justfile"))
     targets += sorted((REPO_ROOT / "tools").glob("*.just"))
+    # `mod schematics 'docs/schematics'` is a module outside packages/ and tools/.
+    targets += sorted((REPO_ROOT / "docs").rglob("justfile"))
 
     for path in targets:
         if not path.is_file():
