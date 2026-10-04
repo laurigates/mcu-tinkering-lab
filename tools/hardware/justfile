@@ -1,13 +1,16 @@
 # tools/hardware — the board × header × parts join (ADR-021).
 #
 # Recipes run from the repo root so their paths match CI's
-# (.github/workflows/build-guide-check.yml) and the pre-commit hook's.
+# (.github/workflows/build-guide-check.yml, hardware-check.yml) and the
+# pre-commit hooks'.
 
 default:
     @just --list
 
-# Today the join emits docs/auto/pin_defs.typ; the build guide's own recipe
-# (`just <project>::build-guide`) recompiles the PDF from it.
+# The join emits docs/auto/pin_defs.typ — the build guide's own recipe
+# (`just <project>::build-guide`) recompiles the PDF from it — and the tables
+# between `<!-- BEGIN GENERATED: ... -->` markers in the project's Markdown
+# (WIRING.md), via tools/hardware/docs.py.
 #
 # `--others --exclude-standard` picks up a hardware.toml that is not committed
 # yet, the same reason the build-guide recipe carries it.
@@ -21,8 +24,14 @@ gen:
     for toml in $(git ls-files --cached --others --exclude-standard ':(glob)packages/**/hardware.toml'); do
         python3 tools/typst/generate-pin-defs.py "$(dirname "$toml")"
     done
+    PYTHONPATH=tools python3 -m hardware.docs
 
 # Run the join's unit tests (stdlib unittest — nothing to install)
 [group: "test"]
 test:
     cd ../.. && python3 -m unittest discover -s tools/hardware -t tools
+
+# Fail if any generated Markdown block is stale — what CI runs (hardware-check.yml)
+[group: "test"]
+check: test
+    cd ../.. && PYTHONPATH=tools python3 -m hardware.docs --check

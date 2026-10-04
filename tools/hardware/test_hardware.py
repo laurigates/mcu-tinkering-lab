@@ -381,9 +381,18 @@ class RobocarUnifiedJoinTest(unittest.TestCase):
 
     def test_the_microphone_is_excused_and_on_no_header_pad(self):
         undrawn = {u.role for u in self.model.undrawn}
-        self.assertEqual(undrawn, {"MIC_PDM_CLK_PIN", "MIC_PDM_DATA_PIN"})
-        for role in undrawn:
+        mic = {"MIC_PDM_CLK_PIN", "MIC_PDM_DATA_PIN"}
+        self.assertLessEqual(mic, undrawn)
+        for role in mic:
             self.assertIsNone(self.model.pin_for(role), role)
+
+    def test_the_uart0_pads_are_excused_and_sit_on_d6_d7(self):
+        # Promoted from a doc comment to real macros (#461) so the build guide
+        # and WIRING.md stop hand-typing GPIO43/44.
+        undrawn = {u.role for u in self.model.undrawn}
+        self.assertLessEqual({"UART0_TX_PIN", "UART0_RX_PIN"}, undrawn)
+        self.assertEqual(self.model.pin_for("UART0_TX_PIN").name, "D6")
+        self.assertEqual(self.model.pin_for("UART0_RX_PIN").name, "D7")
 
     def test_headers_are_pin_config_then_the_planner_headers(self):
         rel = [p.relative_to(UNIFIED).as_posix() for p in self.model.headers]

@@ -7,7 +7,7 @@
  *   D0 (GPIO1)       = TB6612FNG STBY (motor enable)
  *   D1 (GPIO2)       = Piezo buzzer
  *   D2-D3 (GPIO3-4)  = Ultrasonic TRIG/ECHO
- *   D6/D7 (GPIO43/44)= USB Serial TX/RX (debug console)
+ *   D6/D7 (GPIO43/44)= UART0 TX/RX, nothing wired (console is USB-C)
  *   D8-D10 (GPIO7-9) = I2S to MAX98357A (BCLK/LRCLK/DIN)
  *
  * The GPIO budget is now FULLY ALLOCATED — there are no spare header pins.
@@ -139,6 +139,19 @@
 // Piezo Buzzer
 // ========================================
 #define PIEZO_PIN GPIO_NUM_2  // XIAO D1
+
+// ========================================
+// UART0 header pads (XIAO D6/D7)
+//
+// Nothing is wired to these. The serial console is the ESP32-S3's
+// USB-Serial-JTAG on the USB-C connector (CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG),
+// which uses the internal USB pins, not D6/D7 — the XIAO has no USB-UART
+// bridge. They are defined so the hardware join (tools/hardware/, ADR-021) and
+// the documents generated from it name these pads from the header rather than
+// from a hand-typed GPIO number. No firmware code reads them.
+// ========================================
+#define UART0_TX_PIN GPIO_NUM_43  // XIAO D6
+#define UART0_RX_PIN GPIO_NUM_44  // XIAO D7
 
 // ========================================
 // MAX98357A I2S Class-D Amplifier (voice output)
