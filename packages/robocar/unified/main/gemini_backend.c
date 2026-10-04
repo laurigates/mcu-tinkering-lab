@@ -449,8 +449,15 @@ static char *build_request_json(const char *b64_image)
          * gap by inventing sources (bangs, echoes, moving furniture; issue #618).
          * The audio clauses now say only that the room's sound changed, that the
          * source is unknown, and forbid naming one. The wording lives in
-         * speech_evidence.c so a host test can pin it. */
-        const char *const evidence = speech_evidence_clause(scene_novel, audio_novel);
+         * speech_evidence.c so a host test can pin it.
+         *
+         * And only what the gates COMPARED. Both also answer novel without
+         * comparing anything — the first impression, a disabled scene gate — and
+         * "since you last spoke" is false there (issue #631). compared() tells
+         * the two apart; a sense that did not compare is left out. */
+        const char *const evidence =
+            speech_evidence_clause(speech_sense_from_gate(scene_novel, scene_change_compared()),
+                                   speech_sense_from_gate(audio_novel, ambient_audio_compared()));
 
         pos = append_prompt(system_prompt, sizeof(system_prompt), pos,
                             "You may ALSO call 'speak' in the same response to say one short "

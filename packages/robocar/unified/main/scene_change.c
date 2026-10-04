@@ -129,6 +129,12 @@ bool scene_change_novel(void)
     return scene_change_score() >= (unsigned)s_threshold;
 }
 
+bool scene_change_compared(void)
+{
+    /* Exactly the states in which novel() reaches its distance comparison. */
+    return (s_threshold != 0u) && s_reference.valid && s_current.valid;
+}
+
 void scene_change_mark_spoken(void)
 {
     s_reference = s_current;

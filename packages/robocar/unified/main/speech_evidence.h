@@ -26,6 +26,15 @@
  * no audio and does not know the source, allow at most a non-specific
  * acknowledgement or question, and forbid naming or describing a source.
  *
+ *  3. Asserting a comparison nobody made (issue #631). Every clause says "since
+ *     you last spoke", but both gates also answer novel when they compared
+ *     nothing: before the robot has spoken about any frame or room (the first
+ *     impression), and the scene gate with its threshold at 0 (`voice scene
+ *     0`). A boolean cannot tell those apart from a measured change, so each
+ *     sense now arrives as a speech_sense_t, and a sense that was not compared
+ *     contributes no sentence at all — neither "has changed" nor "has NOT
+ *     changed".
+ *
  * Pure C with no ESP-IDF dependency, so the wording is pinned by
  * test/test_speech_evidence.c rather than by a bench that cannot stage it.
  */
@@ -37,16 +46,37 @@
 extern "C" {
 #endif
 
+/** What one sense can truthfully be said to have measured this cycle. */
+typedef enum {
+    /** No comparison was made: nothing measured, nothing spoken about yet, or
+     *  the gate disabled. Nothing may be said about this sense. */
+    SPEECH_SENSE_UNKNOWN = 0,
+    /** Compared against the last spoken-about reference; below threshold. */
+    SPEECH_SENSE_SAME,
+    /** Compared against the last spoken-about reference; at or over threshold. */
+    SPEECH_SENSE_CHANGED,
+} speech_sense_t;
+
+/**
+ * @brief Classify one gate's verdict.
+ *
+ * @param novel    the gate's novel() answer this cycle.
+ * @param compared the gate's compared() answer this cycle
+ *                 (scene_change_compared() / ambient_audio_compared()).
+ */
+speech_sense_t speech_sense_from_gate(bool novel, bool compared);
+
 /**
  * @brief The evidence clause for the speak prompt.
  *
- * @param scene_novel scene_change_novel() for this cycle.
- * @param audio_novel ambient_audio_novel() for this cycle.
+ * @param view  the scene gate, via speech_sense_from_gate().
+ * @param sound the ambient gate, via speech_sense_from_gate().
  * @return a static, NUL-terminated clause ending in a space; the empty string
- *         when neither sense reported a change, so no evidence is ever asserted
- *         that was not measured.
+ *         when neither sense measured a change, so no evidence is ever asserted
+ *         that was not measured. A view that was not compared is left out of
+ *         the sound clause rather than stated as unchanged.
  */
-const char *speech_evidence_clause(bool scene_novel, bool audio_novel);
+const char *speech_evidence_clause(speech_sense_t view, speech_sense_t sound);
 
 #ifdef __cplusplus
 }
