@@ -67,10 +67,12 @@ The spoken fault line stays coarse — one persona phrase covers "no bus" and "m
 | `mic` / `mic dump <n>` | Microphone state; dump PCM frames — tells a dead mic from a quiet room |
 | `plan …` | The gate on whether the planner makes a request at all — `plan` alone reports cadence, wake scores and spend; `plan on\|off\|wake\|sleep\|resume`, `plan scene\|range\|requests\|tokens <n>` |
 | `trace …` | Camera + endpoint activity counters since boot; `trace led on\|off`, `trace reset` |
+| `mqtt …` | Serial only. `mqtt` alone prints the MQTT command mode (`full`/`read-only`) and where the broker credentials came from; `mqtt auth <user> <pass>` stores them in NVS, `mqtt auth clear` removes them — both applied at the next boot |
 
 ### MQTT remote commands
 
-Every command above is also reachable over MQTT, for the case the console table
+Every command above except `mqtt` is also reachable over MQTT — all of them
+only once broker credentials are configured, see below — for the case the console table
 above already exists for but cannot reach: a board with no serial link
 attached. Publish a plain-text line — the exact same grammar as the console,
 not JSON — to `MQTT_COMMAND_TOPIC` (`robocar/commands`, QoS 1):
@@ -106,11 +108,45 @@ and classifies the payload before anything acts on it:
   anything that is not a single, complete, in-bounds (≤63 bytes), printable-
   ASCII line before `mqtt_command_dispatch()` ever sees it.
 
-The broker credentials are `NULL`/`NULL` by default (`MQTT_USERNAME`/
-`MQTT_PASSWORD` in `config.h`) — an unauthenticated broker can currently drive
-the robot. That is unchanged by this command handler and is a broader design
-question (a separate, deliberately-unsubscribed movement topic, or requiring
-auth) the issue that added this raised but did not resolve; see issue #524.
+**Without broker credentials the topic is read-only** (issue #626). A board
+with no `MQTT_USERNAME`/`MQTT_PASSWORD` connects anonymously, and on an
+anonymous broker anything on the LAN can publish to `robocar/commands` — so in
+that mode only the bare status forms reach a handler: `plan`, `trace`, `mic`,
+`cam`, `servo`, `gpio`, `voice`, `voice said`. Movement, every setting, and
+`snap`/`mic dump`/`listen` (camera frames and raw audio are not status) are
+refused and logged as `MQTT command refused: read-only …`. With both a
+username and a password configured, the full command set above is available.
+
+- **The allow-list is exact whole lines in `mqtt_command.c`**, not prefixes,
+  because the handlers parse loosely — `trace foo` falls through to the report
+  and `voice <slug>` switches the persona and persists it. A console command
+  added later is therefore locked out of read-only mode until somebody adds it
+  to the list on purpose. `test_mqtt_command.c` pins both sides of the list.
+- **Credentials come from NVS first, then `credentials.h`.** `mqtt auth <user>
+  <pass>` on the serial console stores a pair in NVS, `mqtt auth clear` removes
+  it, and `mqtt` alone prints the mode and where the credentials came from.
+  Both apply at the next boot, because the MQTT client is created once. `mqtt`
+  is serial-only by construction — handled in `command_task()` before
+  `execute_console_line()` and absent from `mqtt_command.c`'s prefixes — so an
+  anonymous publisher cannot set the credentials that would lift its own
+  lockout. The console line grew from 32 to 128 bytes for it, and the line is
+  logged as `mqtt ... (redacted)`. The CI and web-flasher stub defines both as
+  empty, so no shipped image carries a credential.
+- **Credentials only help if the broker enforces them.** The firmware sees
+  whether it was given credentials, not whether the broker refuses anonymous
+  clients — give the broker `allow_anonymous false` and an ACL on
+  `robocar/commands`, or a configured robot is as open as an unconfigured one.
+- **The mode is stated twice**: once in the boot log right after NVS init (on
+  every board, WiFi or not), and as `mqtt_commands=full|read-only` at the end
+  of the self-report facts line that `robocar/status` publishes — which is
+  where somebody whose MQTT drive command did nothing will look.
+- **Only a command that will run wakes the planner, and only with full
+  access.** A refused command has no effect at all, and an anonymous client
+  polling `plan` must not hold the planner awake and spending. The wake still
+  happens before dispatch, so `plan sleep` over MQTT is not undone by it.
+- Command output is `printf` to the serial console, as on the console itself,
+  so a status command sent over MQTT does not answer on MQTT; `robocar/status`
+  is the MQTT-side read-back.
 
 **`servo exercise` exists because "the servos are not moving" has five causes
 that look identical from across the room**: no VCC on the PCA9685 (its 3.3 V
@@ -671,6 +707,8 @@ Key settings that matter:
 
 - Don't call `motor_controller.c` directly from anywhere except `reactive_controller.c` — the executor owns motor output. Console/manual movement goes through `reactive_controller_manual()`, which takes a short lease the executor applies *after* the obstacle reflex; a second task writing the PCA9685 directly both fought the 30 Hz executor and bypassed the reflex
 - Don't give `mqtt_command.c` a second, parallel notion of what a command does. It classifies a line and calls exactly two injected callbacks (`movement`, wired to `dispatch_movement()`; `console_line`, wired to `execute_console_line()`) — both already shared with the serial console. Adding logic that calls `motor_controller.c`, a peripheral driver, or a handler directly from `mqtt_command.c` or its callbacks would create a second entry point that can silently diverge from the console's, and for movement specifically would bypass the obstacle reflex the same way a direct `motor_controller.c` call does
+- Don't widen the MQTT read-only allow-list to prefix matches, or add a command to it without reading its handler in `main.c` end to end. Read-only mode is the only thing between an anonymous LAN publisher and the robot (issue #626), and the handlers parse loosely enough that `voice <anything>` switches and persists the persona. Exact whole lines, each pinned in `test_read_only_allows_status_commands`
+- Don't move the `mqtt` console command into `execute_console_line()`, or add `"mqtt"` to `mqtt_command.c`'s forwarded prefixes. It sets the broker credentials, so reaching it over MQTT would let an anonymous publisher unlock itself; `test_credential_command_is_never_reachable` pins it
 - Don't skip `mqtt_command_extract_line()`'s fragmentation check (`current_data_offset != 0 || total_data_len != data_len`) when touching the MQTT command path. `event->data` is a fragment, not the whole payload, once a message exceeds esp-mqtt's buffer — the topic ("target") is resolved once on the first `MQTT_EVENT_DATA` callback, and dispatching on a later fragment acts on a truncated command before the rest of it has arrived
 - Don't drop the idle re-write suppression in `set_motors()`, and don't make it permanent by removing the refresh. `reactive_controller`'s 30 Hz loop calls `motor_stop()` on every iteration it is not driving, so a parked robot re-stated six identical PCA9685 registers 30 times a second — the firmware's only continuous I2C traffic, and what makes the bus go from silent to permanently busy the moment the PCA9685 is fitted. The suppression expires after `MOTOR_REFRESH_INTERVAL_MS` because the cache describes a chip that cannot be read back: a PCA9685 that browned out or was re-seated no longer matches it, and with no expiry nothing would re-assert the true state. Pinned by `test_motor_controller.c`, including the case a bench cannot stage — the uint32 millisecond wrap at day 49, where a signed elapsed comparison either refreshes on every call or never refreshes again
 - Don't make the planner's request unconditional again, and don't "simplify" the ladder into an on/off switch. An idle board went from 240 requests an hour to zero because the request itself is gated; a binary sleep is only as good as its wake detector, and a detector that fails closed is a robot that never wakes. See ADR-022 and the planner-dormancy section above
