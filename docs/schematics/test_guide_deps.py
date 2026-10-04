@@ -80,6 +80,26 @@ def test_project_dir_strips_the_docs_component():
     )
 
 
+def test_project_dir_of_a_repo_root_document_is_the_root():
+    assert project_dir("docs/build-guide.typ") == "."
+
+
+def test_a_repo_root_document_is_discovered_and_owned_by_the_root(repo: Path):
+    _write(repo, "docs/guide.typ", '#image("schematics/images/robot.png")\n')
+    _write(repo, "docs/schematics/images/robot.png", b"png-v2")
+    assert "docs/guide.typ" not in embedding_documents(
+        repo
+    )  # no docs/schematics/ prefix
+    _write(repo, "docs/guide.typ", '#image("/docs/schematics/images/robot.png")\n')
+    assert embedding_documents(repo)["docs/guide.typ"] == {"robot.png"}
+    assert stale_projects(repo) == [".", "packages/robot"]
+
+
+def test_a_tracked_document_deleted_from_the_work_tree_is_skipped(repo: Path):
+    (repo / "packages/robot/docs/build-guide.typ").unlink()
+    assert embedding_documents(repo) == {}
+
+
 def test_embedding_documents_skips_docs_auto_and_non_embedding_documents(repo: Path):
     assert embedding_documents(repo) == {
         "packages/robot/docs/build-guide.typ": {"robot.png"}

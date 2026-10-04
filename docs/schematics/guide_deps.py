@@ -36,7 +36,11 @@ _DOCUMENT_GLOB = ":(glob)**/docs/*.typ"
 
 def _git_lines(repo: Path, *args: str) -> list[str]:
     out = subprocess.run(
-        ["git", "-C", str(repo), *args], check=True, capture_output=True, text=True
+        ["git", "-C", str(repo), *args],
+        check=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
     ).stdout
     return [line for line in out.splitlines() if line]
 
@@ -47,7 +51,13 @@ def embedded_images(typ_text: str) -> set[str]:
 
 
 def project_dir(document: str) -> str:
-    """``packages/x/y/docs/guide.typ`` -> ``packages/x/y``."""
+    """``packages/x/y/docs/guide.typ`` -> ``packages/x/y``; ``docs/x.typ`` -> ``.``.
+
+    The discovery glob's leading ``**/`` also matches zero directories, so a
+    document directly under the repo root's ``docs/`` belongs to the root.
+    """
+    if "/docs/" not in document:
+        return "."
     return document.rsplit("/docs/", 1)[0]
 
 
@@ -58,7 +68,11 @@ def embedding_documents(repo: Path) -> dict[str, set[str]]:
     )
     found: dict[str, set[str]] = {}
     for document in sorted(set(documents)):
-        images = embedded_images((repo / document).read_text())
+        path = repo / document
+        # --cached still lists a tracked document deleted from the work tree.
+        if not path.is_file():
+            continue
+        images = embedded_images(path.read_text(encoding="utf-8"))
         if images:
             found[document] = images
     return found

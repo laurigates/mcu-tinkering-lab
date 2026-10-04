@@ -123,8 +123,9 @@ skipping a project without one.
 The PNG is the one artifact here that is not byte-reproducible across hosts —
 cairo's encoder varies, which is why `schematics-check.yml` diffs only the SVG.
 That does not weaken this guard: CI compiles the PDF from the *committed* PNG,
-so whatever PNG is committed, the PDF compiled beside it on the same machine
-matches. What breaks the pair is committing one without the other.
+and with the pinned Typst CLI and flags the PDF is a deterministic function of
+its inputs, so a PDF compiled from the committed PNG on any host matches. What
+breaks the pair is committing one without the other.
 
 ## 2. Verify a guard change by running the shipped script, with a negative control
 
