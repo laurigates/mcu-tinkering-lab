@@ -302,6 +302,13 @@ bool ambient_audio_has_measurement(void)
     return s_current.valid;
 }
 
+bool ambient_audio_compared(void)
+{
+    /* Exactly the states in which novel() reaches ambient_latched_event(). */
+    const bool enabled = (s_loud_threshold != 0u) || (s_shape_threshold != 0u);
+    return enabled && s_current.valid && s_reference.valid;
+}
+
 /** The two latches, each required to be over threshold AND younger than the
  *  TTL — both of which the score getters already fold in, so the gate reads
  *  exactly the numbers the status lines print. Shared by novel() and event();

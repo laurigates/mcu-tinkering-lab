@@ -133,6 +133,19 @@ void scene_change_note(const scene_fingerprint_t *fp);
  */
 bool scene_change_novel(void);
 
+/**
+ * @brief Whether scene_change_novel() is, right now, the result of an actual
+ *        comparison against a spoken-about frame.
+ *
+ * False while there is no reference (nothing spoken about yet, or the robot
+ * spoke before any decodable frame), while no decodable frame has been seen,
+ * and while the threshold is 0. In each of those states novel() answers
+ * without comparing, so the planner prompt must not describe its answer as
+ * "the view has (not) changed since you last spoke" (speech_evidence.h,
+ * issue #631).
+ */
+bool scene_change_compared(void);
+
 /** @brief Distance between the current frame and the reference, for logging. */
 unsigned scene_change_score(void);
 
