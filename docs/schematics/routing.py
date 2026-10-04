@@ -70,6 +70,15 @@ _DIRECTIONS: tuple[Coord, ...] = ((1, 0), (0, 1), (-1, 0), (0, -1))
 # units, so a finer grid may want one more; re-measure with metrics.py first.
 _NEIGHBOUR_FRACTIONS: tuple[float, ...] = (0.25,)
 
+# Charge per lattice point on or inside a foreign power/ground tag (#591), in
+# grid steps. Measured with metrics.py's over_tags column: balancebot's SCL
+# net leaves the MPU6050 GND tag from 2 up, but robocar_unified's STBY net
+# keeps running down the TCA9548A GND tag's edge until 14 — its way round is
+# up and over the mux and the PCA9685, ~10 units longer. 20 clears that with
+# margin, and nothing changed between 14 and 100. A soft cost, not a block:
+# no value makes a pin beside its chip's own GND tag unreachable.
+TAG_PENALTY = 20.0
+
 
 @dataclass
 class _BBox:
@@ -91,6 +100,23 @@ class _BBox:
             self.xmin - epsilon <= x <= self.xmax + epsilon
             and self.ymin - epsilon <= y <= self.ymax + epsilon
         )
+
+
+@dataclass(frozen=True)
+class _Tag:
+    """A power or ground tag: its raw body and the points it is wired to.
+
+    ``attached`` is the tag's own terminal plus every point the hand-drawn
+    leads ending there reach — in practice the pin its stub hangs off. A wire
+    terminating at one of those points is the tag's own net (#591): it has to
+    approach that pin, and so the tag beside it, and is not charged for it.
+    """
+
+    box: _BBox
+    attached: tuple[Coord, ...]
+
+    def owned_by(self, point: Coord) -> bool:
+        return self.box.contains(*point) or any(_same(point, p) for p in self.attached)
 
 
 def _snap(value: float, grid: float) -> float:
@@ -396,8 +422,9 @@ class _Plan:
     """One net's routing problem, minus the other wires: see ``Router.wire``.
 
     ``entry``/``exit_`` are the stub points the search runs between,
-    ``obstacles`` the inflated boxes in its way and ``leads`` the hand-drawn
-    leads' occupancy, all as they stood when ``wire()`` was called.
+    ``obstacles`` the inflated boxes in its way, ``leads`` the hand-drawn
+    leads' occupancy and ``tags`` the raw bodies of the power/ground tags the
+    net is not wired to, all as they stood when ``wire()`` was called.
 
     ``obstacles`` is a tuple so ``frozen`` means what it says for it: the
     plan is the world a re-route must see unchanged. ``leads`` is still a
@@ -410,6 +437,7 @@ class _Plan:
     exit_: Coord
     obstacles: tuple[_BBox, ...] = field(repr=False)
     leads: _Occupancy = field(repr=False)
+    tags: tuple[_BBox, ...] = field(default=(), repr=False)
 
     @property
     def span(self) -> float:
@@ -471,6 +499,10 @@ class Router:
             penalty on its own cells too, but no neighbour share.
             Discourages (but doesn't forbid) wires overlapping or running
             one grid step apart.
+        tag_penalty: Extra cost charged per grid step onto a lattice point
+            strictly inside a power or ground tag the wire is not wired to
+            (#591). A soft cost rather than an obstacle, so a pin beside
+            its chip's own GND tag stays reachable.
     """
 
     def __init__(
@@ -482,6 +514,7 @@ class Router:
         stub: float = 0.75,
         turn_penalty: float = 4.0,
         overlap_penalty: float = 6.0,
+        tag_penalty: float = TAG_PENALTY,
     ) -> None:
         self.d = d
         self.grid = grid
@@ -489,6 +522,7 @@ class Router:
         self.stub = stub
         self.turn_penalty = turn_penalty
         self.overlap_penalty = overlap_penalty
+        self.tag_penalty = tag_penalty
         # Lattice cell -> the axes routed wires run along through it, as a
         # sorted tuple rather than a set (#494): nothing may ever read a set's
         # iteration order into the output, and an immutable value also lets
@@ -542,6 +576,35 @@ class Router:
             boxes.append(_BBox(xmin, ymin, xmax, ymax))
         return boxes
 
+    def _tags(self) -> list[_Tag]:
+        """Every power/ground tag in ``d``, in drawing order (#591).
+
+        Not obstacles (see _NON_OBSTACLES), but a wire drawn across one reads
+        as a connection to the rail. Each tag's ``attached`` points follow the
+        hand-drawn leads out from its terminal, transitively, so a tag at the
+        end of a two-piece stub still knows the pin it belongs to.
+        """
+        leads = [pts for pts, _ in self._leads()]
+        tags = []
+        for el in self.d.elements:
+            if not isinstance(el, (elm.Vdd, elm.Ground)):
+                continue
+            xmin, ymin, xmax, ymax = el.get_bbox(transform=True, includetext=False)
+            x, y = el.absanchors["start"]
+            attached = [(float(x), float(y))]
+            grew = True
+            while grew:
+                grew = False
+                for pts in leads:
+                    ends = (pts[0], pts[-1])
+                    if any(_same(e, p) for e in ends for p in attached):
+                        for e in ends:
+                            if not any(_same(e, p) for p in attached):
+                                attached.append(e)
+                                grew = True
+            tags.append(_Tag(_BBox(xmin, ymin, xmax, ymax), tuple(attached)))
+        return tags
+
     def _owning_box(self, point: Coord, boxes: list[_BBox]) -> _BBox | None:
         x, y = point
         best = None
@@ -587,6 +650,7 @@ class Router:
         obstacles: Sequence[_BBox],
         occupied: _Occupancy,
         leads: _Occupancy,
+        tags: Sequence[_BBox] = (),
     ) -> list[Coord] | None:
         # One lattice for every net: index (ix, iy) is the absolute point
         # (ix * grid, iy * grid), the same cells _mark_occupied keys by.
@@ -630,6 +694,20 @@ class Router:
                 return True
             x, y = ix * grid, iy * grid
             return any(b.contains(x, y) for b in obstacles)
+
+        # Lattice points on or inside a foreign tag's body (#591). Its edges
+        # count: a ground tag's box is exactly as wide as its top bar, so a
+        # wire along the edge touches the bar's end and reads as joined. A tag
+        # is wider and taller than a grid step, so any run across one lands on
+        # at least one of these; the stub, which the search never sees, is the
+        # only way past one uncharged.
+        tag_cells = {
+            (ix, iy)
+            for b in tags
+            for ix in range(math.floor(b.xmin / grid), math.ceil(b.xmax / grid) + 1)
+            for iy in range(math.floor(b.ymin / grid), math.ceil(b.ymax / grid) + 1)
+            if b.contains(ix * grid, iy * grid)
+        }
 
         def occ_penalty(ix: int, iy: int, axis: str) -> float:
             # Only penalize running along the *same* axis as a previously
@@ -682,6 +760,8 @@ class Router:
                     continue
                 axis = "H" if dy == 0 else "V"
                 step_cost = 1.0 + occ_penalty(nix, niy, axis)
+                if (nix, niy) in tag_cells:
+                    step_cost += self.tag_penalty
                 if cdir is not None and (dx, dy) != cdir:
                     step_cost += self.turn_penalty
                 new_cost = cost_so_far[current] + step_cost
@@ -808,7 +888,12 @@ class Router:
         # as they stand now — so finish() can re-route this net in another
         # order against exactly the world it was first routed in, even if
         # the circuit adds leads or parts between nets.
-        plan = _Plan(start, end, entry, exit_, obstacles, self._lead_occupancy())
+        # A tag the net is wired to is one it must approach — its stub sits
+        # beside the very pin the wire ends on — so only the others charge.
+        tags = tuple(
+            t.box for t in self._tags() if not t.owned_by(start) and not t.owned_by(end)
+        )
+        plan = _Plan(start, end, entry, exit_, obstacles, self._lead_occupancy(), tags)
         points = self._route(plan, self._occupied)
         # Occupancy is marked now, not at finish(): the next wire() must see
         # this one to be penalised for running on or beside it, exactly as
@@ -822,7 +907,9 @@ class Router:
 
     def _route(self, plan: "_Plan", occupied: _Occupancy) -> list[Coord]:
         """The polyline for ``plan`` given the wires already in ``occupied``."""
-        path = self._astar(plan.entry, plan.exit_, plan.obstacles, occupied, plan.leads)
+        path = self._astar(
+            plan.entry, plan.exit_, plan.obstacles, occupied, plan.leads, plan.tags
+        )
         if path is None:
             raise RuntimeError(
                 f"Router: no orthogonal path found from {plan.start} to "

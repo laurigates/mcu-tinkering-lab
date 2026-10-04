@@ -17,11 +17,13 @@ sys.path.insert(0, str(FsPath(__file__).parent))
 from metrics import (  # noqa: E402
     Box,
     CircuitMetrics,
+    Tag,
     collinear_overlaps,
     crossings,
     format_table,
     junctions,
     length_inside_boxes,
+    length_over_tags,
     measure,
     measure_circuits,
     tight_parallel_pairs,
@@ -75,6 +77,38 @@ def test_foreign_body_length_skips_the_boxes_a_wire_terminates_on():
     assert length_inside_boxes(
         [back], [own, other], exclude_terminal=True
     ) == pytest.approx(0.0)
+
+
+def test_length_over_tags_counts_only_tags_the_wire_is_not_wired_to():
+    # A ground tag whose stub hangs off a pin at (-1, 1): terminal at (0, 1),
+    # body below it. #591's shape: a net passing through the symbol.
+    tag = Tag(Box(-0.25, 0.36, 0.25, 1.0), ((0.0, 1.0), (-1.0, 1.0)))
+    across = [(-3, 0.5), (3, 0.5)]  # straight through the body: 0.5 wide
+    down = [(0, 3), (0, -3)]  # down its centre line: the full 0.64 height
+    # Down the right edge: unlike a component body this counts, because a
+    # ground tag's box is exactly its top bar's width — the run touches the
+    # bar's end. robocar_unified's STBY net did that once moved off-centre.
+    along_edge = [(0.25, 3), (0.25, -3)]
+    beside = [(0.5, 3), (0.5, -3)]  # one grid step clear: nothing
+    own_pin = [(-1.0, 1.0), (-1.0, 3.0)]  # ends on the pin the stub leads to
+    own_terminal = [(0.0, 0.5), (3.0, 0.5)]  # starts inside the tag itself
+    assert length_over_tags([across], [tag]) == pytest.approx(0.5)
+    assert length_over_tags([down], [tag]) == pytest.approx(0.64)
+    assert length_over_tags([along_edge], [tag]) == pytest.approx(0.64)
+    assert length_over_tags([beside], [tag]) == pytest.approx(0.0)
+    assert length_over_tags([own_pin], [tag]) == pytest.approx(0.0)
+    assert length_over_tags([own_terminal], [tag]) == pytest.approx(0.0)
+    # A wire of the tag's own net is still charged for every *other* tag.
+    other = Tag(Box(5.0, 0.0, 5.5, 1.0), ((5.25, 0.0),))
+    own_then_other = [(-1.0, 1.0), (-1.0, 0.5), (8.0, 0.5)]
+    assert length_over_tags([own_then_other], [tag, other]) == pytest.approx(0.5)
+
+
+def test_measure_reports_over_tags():
+    tag = Tag(Box(-0.25, 0.36, 0.25, 1.0), ((0.0, 1.0),))
+    m = measure("demo", [[(-3, 0.5), (3, 0.5)]], [], GRID, [tag])
+    assert m.over_tags == pytest.approx(0.5)
+    assert measure("demo", [[(-3, 0.5), (3, 0.5)]], [], GRID).over_tags == 0.0
 
 
 # -- crossings ----------------------------------------------------------------

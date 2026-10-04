@@ -32,6 +32,15 @@ axis-aligned (``test_routing.py`` enforces that); a diagonal is an error.
     — every box whose closed extent contains the wire's first or last point,
     the same set ``Router.wire()`` drops from its obstacle list. Wire running
     through its *own* chip is ``inside_any - inside_foreign``.
+``over_tags``
+    Length of wire on or inside a power or ground tag's body (``elm.Vdd``,
+    ``elm.Ground``, label excluded) that the wire is not wired to — every
+    tag except those whose terminal, or the pin its stub leads reach, is the
+    wire's first or last point (#591). Tags are not routing obstacles, so a
+    wire may legally pass over one, but it is drawn through the rail symbol
+    and reads as a connection to it. Unlike the body boxes, a run along a
+    tag's edge counts: a ground tag's box is exactly its top bar's width, so
+    such a run touches the bar's end.
 ``crossings``
     Pairs of segments from two distinct wires, one horizontal and one
     vertical, whose intersection lies strictly inside both. A T (one
@@ -80,13 +89,16 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from render import circuit_files, draw_circuit, load_circuit  # noqa: E402
-from routing import _EPS, Path, Router, _BBox, assert_finished  # noqa: E402
+from routing import _EPS, Path, Router, _BBox, _Tag, assert_finished  # noqa: E402
 
 Coord = tuple[float, float]
 Wire = list[Coord]
 # The router's own box type, so ``Box.contains`` is the very predicate
 # ``Router.wire()`` uses to decide which boxes a wire terminates on.
 Box = _BBox
+# A power/ground tag as the router models it, so the wires it belongs to are
+# decided by the very predicate ``Router.wire()`` exempts them with.
+Tag = _Tag
 
 
 @dataclass(frozen=True)
@@ -120,16 +132,20 @@ def total_length(wires: list[Wire]) -> float:
     return sum(s.hi - s.lo for w in wires for s in _segments(w))
 
 
-def _covered(seg: _Seg, boxes: list[Box]) -> float:
-    """Length of ``seg`` inside the union of the boxes' open interiors."""
+def _covered(seg: _Seg, boxes: list[Box], *, closed: bool = False) -> float:
+    """Length of ``seg`` inside the union of the boxes' open interiors.
+
+    With ``closed``, a segment lying on an edge counts as inside too.
+    """
     intervals = []
     for b in boxes:
         if seg.axis == "H":
             f_lo, f_hi, a_lo, a_hi = b.ymin, b.ymax, b.xmin, b.xmax
         else:
             f_lo, f_hi, a_lo, a_hi = b.xmin, b.xmax, b.ymin, b.ymax
-        if not (f_lo + _EPS < seg.fixed < f_hi - _EPS):
-            continue  # on an edge or beside the box: never inside
+        margin = -_EPS if closed else _EPS
+        if not (f_lo + margin < seg.fixed < f_hi - margin):
+            continue  # beside the box (or, open, on an edge): never inside
         lo, hi = max(seg.lo, a_lo), min(seg.hi, a_hi)
         if hi - lo > _EPS:
             intervals.append((lo, hi))
@@ -159,6 +175,17 @@ def length_inside_boxes(
                 b for b in boxes if not b.contains(*w[0]) and not b.contains(*w[-1])
             ]
         total += sum(_covered(s, relevant) for s in _segments(w))
+    return total
+
+
+def length_over_tags(wires: list[Wire], tags: list[Tag]) -> float:
+    """``over_tags``: length inside the bodies of tags the wire is not wired to."""
+    total = 0.0
+    for w in wires:
+        foreign = [
+            t.box for t in tags if not t.owned_by(w[0]) and not t.owned_by(w[-1])
+        ]
+        total += sum(_covered(s, foreign, closed=True) for s in _segments(w))
     return total
 
 
@@ -233,11 +260,18 @@ class CircuitMetrics:
     tight_parallel: int
     collinear_overlaps: int
     junctions: int
+    over_tags: float = 0.0
     hops: int = 0
     dots: int = 0
 
 
-def measure(name: str, wires: list[Wire], boxes: list[Box], grid: float):
+def measure(
+    name: str,
+    wires: list[Wire],
+    boxes: list[Box],
+    grid: float,
+    tags: list[Tag] = (),
+):
     return CircuitMetrics(
         name=name,
         wires=len(wires),
@@ -248,6 +282,7 @@ def measure(name: str, wires: list[Wire], boxes: list[Box], grid: float):
         tight_parallel=tight_parallel_pairs(wires, grid),
         collinear_overlaps=collinear_overlaps(wires),
         junctions=junctions(wires),
+        over_tags=length_over_tags(wires, list(tags)),
     )
 
 
@@ -283,6 +318,7 @@ def measure_drawing(name: str, d, *, grid: float | None = None) -> CircuitMetric
         drawing_wires(d),
         probe._component_boxes(),
         probe.grid if grid is None else grid,
+        probe._tags(),
     )
     m.hops, m.dots = drawn_marks(d)
     return m
@@ -318,6 +354,7 @@ _COLUMNS = (
     ("length", "total_length"),
     ("in_foreign", "inside_foreign"),
     ("in_any", "inside_any"),
+    ("over_tags", "over_tags"),
     ("crossings", "crossings"),
     ("tight_par", "tight_parallel"),
     ("collinear", "collinear_overlaps"),

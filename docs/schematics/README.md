@@ -49,10 +49,10 @@ uv run python render.py
    minimal and name pins as the firmware does.
 2. Create `circuits/<name>.py` with a `draw() -> schemdraw.Drawing` function.
    Reference `circuits/gamepad_synth.py` as a template: place every
-   component first, then create a `Router(d)` and call `.wire(a, b)` for
-   each point-to-point net and `.finish()` once after the last one (see
-   "Routing" below), then add any hand-drawn local stubs (power tags, LED
-   branches, bus fan-outs).
+   component first, then its power/ground tags, then create a `Router(d)`
+   and call `.wire(a, b)` for each point-to-point net and `.finish()` once
+   after the last one (see "Routing" below). Other hand-drawn local stubs
+   (LED branches, bus fan-outs) may come before or after the nets.
 3. Run `just schematics::render`. The SVG + PNG land in `images/`.
 4. Link the rendered PNG from the project's README or WIRING.md:
    ```markdown
@@ -138,7 +138,13 @@ router.finish()
   (`Ic`, `Motor`, `Speaker`, `Resistor`, `LED`, ...). `Wire`, `Line`
   (and `Arrow`, a `Line` subclass), `Vdd`, and `Ground` are excluded — they're
   leads and single-terminal annotation symbols, not physical bodies a real
-  wire needs to route around.
+  wire needs to route around. A wire drawn across a power or ground tag
+  still reads as a connection to the rail, so the search charges
+  `tag_penalty` per grid point on or inside a tag's body (label excluded)
+  that the wire is not wired to — every tag except one whose stub leads to
+  the wire's own end pin (#591). A soft cost, so a pin beside its chip's own
+  GND tag stays reachable; and like every obstacle it only sees tags already
+  drawn, which is why tags go in before `Router(d)`.
 - **Real components placed after routing** (e.g. a resistor/LED branch
   hanging off a GPIO the router doesn't touch) aren't obstacles for nets
   routed earlier — if a later-placed real component's footprint would cross
@@ -151,7 +157,7 @@ router.finish()
   `circuits/balancebot.py` for an example. Colour it with
   `net_color("<class>")` and `.finish()` dots its junctions.
 - **Tuning**: `Router(d, grid=0.25, clearance=0.3, stub=0.75,
-  turn_penalty=4.0, overlap_penalty=6.0)` — defaults suit this repo's
+  turn_penalty=4.0, overlap_penalty=6.0, tag_penalty=20.0)` — defaults suit this repo's
   `unit=2.0`-scale circuits. Lower `turn_penalty` allows more bends in
   exchange for tighter routing; raise `clearance` if a wire hugs a chip
   outline too closely. `overlap_penalty` is charged in full for running on
@@ -172,7 +178,8 @@ router.finish()
   afresh (determinism, a monkeypatched `Router` default) routes its own copy
   with `draw_circuit(load_circuit(...))` or in a fresh interpreter (#594).
 - **Measuring a router change**: `metrics.py` reports, per circuit, total
-  wire length, length inside component bodies (own and foreign), crossings,
+  wire length, length inside component bodies (own and foreign), length
+  over power/ground tags the wire is not wired to, crossings,
   tight parallel pairs, collinear overlaps, junctions (routed-wire ends
   only) and the hops and dots actually drawn — each defined
   exactly in its module docstring and pinned by `test_metrics.py`. Run
