@@ -23,16 +23,18 @@ The XIAO exposes only 11 GPIOs on its headers. Camera pins are internal to the S
 | D3 | GPIO4 | `ULTRASONIC_ECHO_PIN` | HC-SR04P ECHO | 3.3 V input; pulse width encodes distance (RMT RX) |
 | D4 | GPIO5 | `I2C_SDA_PIN` | TCA9548A SDA | Every I2C device sits behind the mux |
 | D5 | GPIO6 | `I2C_SCL_PIN` | TCA9548A SCL |  |
-| D6 | GPIO43 | `UART0_TX_PIN` | — | UART0 TX, nothing wired: the serial console is USB-Serial-JTAG on the USB-C connector, not this pad |
-| D7 | GPIO44 | `UART0_RX_PIN` | — | UART0 RX, nothing wired: the serial console is USB-Serial-JTAG on the USB-C connector, not this pad |
+| D6 | GPIO43 | `UART0_TX_PIN` | — | UART0 TX, spare: the serial console is USB-Serial-JTAG on the USB-C connector, not this pad. The ROM bootloader prints its boot log here at every reset |
+| D7 | GPIO44 | `UART0_RX_PIN` | — | UART0 RX, spare: the serial console is USB-Serial-JTAG on the USB-C connector, not this pad |
 | D8 | GPIO7 | `I2S_BCLK_PIN` | MAX98357A BCLK | Bit clock |
 | D9 | GPIO8 | `I2S_LRCLK_PIN` | MAX98357A LRC | Word select / left-right clock |
 | D10 | GPIO9 | `I2S_DIN_PIN` | MAX98357A DIN | Serial audio data |
 
 <!-- END GENERATED -->
 
-> **The GPIO budget is fully allocated.** There are no spare header pins left.
-> Additional digital I/O must go through the MCP23017 on TCA9548A channel 2.
+> **Two spare pads: D6/D7 (GPIO43/44, UART0).** Nothing uses them. The ROM
+> bootloader prints its boot log on GPIO43 at every reset, so anything wired to
+> D6 sees that traffic. Beyond those two, digital I/O goes through the MCP23017
+> on TCA9548A channel 2.
 
 I2C runs at **400 kHz**.
 
