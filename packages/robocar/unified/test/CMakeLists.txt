@@ -314,6 +314,20 @@ target_link_libraries(test_voice_endpoint PRIVATE Threads::Threads m)
 add_test(NAME voice_endpoint COMMAND test_voice_endpoint)
 
 # -----------------------------------------------------------------------------
+# speech_trigger (issue #617: start a hands-free turn on a voice, not a slam)
+#
+# Synthetic voiced speech, a click, white noise and in-band tones either side of
+# the sustain time — none of which a bench produces on demand — plus the uint32
+# millisecond wrap in the gap test.
+# -----------------------------------------------------------------------------
+add_executable(test_speech_trigger
+    "${MAIN_SRC_DIR}/speech_trigger.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_speech_trigger.c"
+)
+target_link_libraries(test_speech_trigger PRIVATE Threads::Threads m)
+add_test(NAME speech_trigger COMMAND test_speech_trigger)
+
+# -----------------------------------------------------------------------------
 # audio_player producer accounting (TTS playback ring)
 #
 # audio_player.c is compiled UNMODIFIED against the shims in test/include

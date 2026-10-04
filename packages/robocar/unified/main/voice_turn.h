@@ -145,8 +145,9 @@ bool voice_turn_in_conversation(void);
 /**
  * @brief Enable or disable Voice Activity Detection (VAD) auto-triggering.
  *
- * When enabled, ambient_listener triggers voice_turn_request() on loud audio events.
- * Default: false.
+ * When enabled, ambient_listener triggers voice_turn_request_vad() on sustained
+ * speech-shaped audio (speech_trigger.h). Default: true since issue #617; not
+ * persisted, so `voice vad off` lasts until the next boot.
  */
 void voice_turn_set_vad(bool enabled);
 
