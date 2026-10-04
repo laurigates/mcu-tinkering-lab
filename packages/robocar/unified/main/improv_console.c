@@ -59,6 +59,12 @@ void improv_console_write(const uint8_t *data, size_t len)
      * to split the packet across a line-buffer flush. With no host reading,
      * the VFS drops the bytes after 50 ms, which is the right outcome. */
     (void)write(fileno(stdout), data, len);
+    /* The non-driver VFS only flushes the 64-byte TX FIFO when it writes a
+     * '\n' (usb_serial_jtag_tx_char_no_driver), and a packet need not contain
+     * or end with one. Without this the tail of a reply waits in the FIFO for
+     * the next log line. fsync() reaches usb_serial_jtag_wait_tx_done_no_driver
+     * through the console VFS, flushes, and gives up after the same 50 ms. */
+    (void)fsync(fileno(stdout));
     usb_serial_jtag_vfs_set_tx_line_endings(CONSOLE_TX_LINE_ENDINGS);
 
     funlockfile(stderr);
