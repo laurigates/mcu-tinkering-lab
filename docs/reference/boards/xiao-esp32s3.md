@@ -52,11 +52,7 @@ Thumb-sized dual-core ESP32-S3 board with 8 MB octal PSRAM, 8 MB flash, native U
 
 ```
            ┌──────────────────────┐
-           │  XIAO ESP32-S3       │
-           │                      │
-           │        [antenna]     │
-           │                 [U.FL]│
-           │  [RST]    [BOOT]     │
+           │       [USB-C]        │
            ├──┬───────────────┬───┤
     D0/A0  │● │               │ ●│  5V
     D1/A1  │● │               │ ●│  GND
@@ -66,18 +62,30 @@ Thumb-sized dual-core ESP32-S3 board with 8 MB octal PSRAM, 8 MB flash, native U
     D5/SCL │● │               │ ●│  D8/SCK
     D6/TX  │● │               │ ●│  D7/RX
            ├──┴───────────────┴───┤
-           │      [USB-C]         │
+           │  XIAO ESP32-S3       │
+           │  (component side up) │
            └──────────────────────┘
 ```
 
 ### Pin Mapping
 
 `Side` and `Pos` give the **physical** header position — `L`/`R` viewing the board
-component-side up with the USB-C connector at the bottom, `Pos 1` nearest the
-antenna end. Together they are the authoritative pad order for any drawing meant
+component-side up with the USB-C connector at the top, `Pos 1` nearest the USB-C
+connector. Together they are the authoritative pad order for any drawing meant
 to be wired from; the ASCII diagram above is the same fact in picture form. All
 14 header positions are listed, power pins included, because a physical layout
-needs the whole header and not only the GPIOs.
+needs the whole header and not only the GPIOs. `tools/hardware/` reads this table
+(ADR-021), so keep it the only pin-mapping table in this file — a first column
+naming a pin and a column headed exactly `GPIO`.
+
+Source: Seeed's own KiCad library, [`Seeed-Studio/OSHW-XIAO-Series`](https://github.com/Seeed-Studio/OSHW-XIAO-Series/tree/main/Seeed%20Studio%20XIAO%20Series%20Library).
+The `XIAO-ESP32-S3-SMD` footprint runs pads 1–7 down one long edge and 8–14 back
+up the other, with pads 1 and 14 beside the USB-C outline; the `XIAO-ESP32-S3-SMD`
+symbol names pad 1 `D0`, 7 `D6`, 8 `D7`, 11 `D10`, 12 `3V3_OUT`, 13 `GND` and 14
+`VBUS`. Until 2026-10 this section described the view with USB-C at the bottom
+and `Pos 1` at the far end while keeping D0 on the left, which is the mirror
+image of the board; the rows themselves were already correct for the view
+described here.
 
 | XIAO Pin | GPIO | Side | Pos | Default Function | Alternate Functions |
 |----------|------|------|-----|------------------|---------------------|
