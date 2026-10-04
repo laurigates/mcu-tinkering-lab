@@ -264,3 +264,49 @@ voice-voices preset="in-the-room" raw="../../../tmp/voice-voices/raw" out="../..
         "$raw" "$out/voices.teuvo.json" --trim --wav
     cd "$proj"
     python3 tools/voice-fx-preview.py "$raw" "$out/{{preset}}" "{{preset}}"
+
+# Probe the Gemini Live API with one spoken question (issue #619).
+#
+# Opens one Live session, streams the clip at real-time pace, and writes the
+# reply plus report.json: the Live model ListModels offers, time from end of
+# speech to first audio byte, output format/rate, token usage. With no clip it
+# first renders tools/live-probe/question.fi.json through the gamepad-synth TTS
+# generator (one TTS call, cached in the output dir). Any 16-bit WAV works as
+# `clip` — a `mic dump` capture recovered by tools/decode-mic-dump.py included.
+#
+# Costs one ListModels call, one Live session and at most one TTS call; needs
+# GEMINI_API_KEY (from ~/.api_tokens via mise). Workstation only — no board.
+#
+# Probe the Gemini Live API: one session as Teuvo, report in tmp/live-probe.
+[group: "voice"]
+live-probe clip="" out="../../../tmp/live-probe":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    proj="$PWD"
+    mkdir -p "{{out}}"
+    out="$(cd "{{out}}" && pwd)"
+    clip="{{clip}}"
+    if [ -z "$clip" ]; then
+        clip="$out/question.wav"
+        if [ ! -f "$clip" ]; then
+            cd ../../audio/gamepad-synth/tools/tts
+            uv sync --quiet
+            uv run python generate.py "$out" "$proj/tools/live-probe/question.fi.json" --trim --wav
+            cd "$proj"
+        fi
+    else
+        clip="$(cd "$(dirname "$clip")" && pwd)/$(basename "$clip")"
+    fi
+    cd tools/live-probe
+    uv sync --quiet
+    uv run python live_probe.py "$clip" "$out"
+
+# List the Live (bidiGenerateContent) models the key can reach. One ListModels call.
+[group: "voice"]
+live-probe-models:
+    cd tools/live-probe && uv sync --quiet && uv run python live_probe.py --list-models
+
+# Offline tests for the Live probe — no key, no network.
+[group: "test"]
+live-probe-test:
+    cd tools/live-probe && uv sync --quiet && uv run pytest -q
