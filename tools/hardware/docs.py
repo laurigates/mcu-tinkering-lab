@@ -25,7 +25,8 @@ Usage, from the repo root:
 
 With no project, every git-tracked `packages/**/hardware.toml` is processed.
 Within a project, every Markdown file git would track is scanned, at any depth
-(#653) — a block in `docs/<x>.md` is checked like one in WIRING.md.
+(#653) — a block in `docs/<x>.md` is checked like one in WIRING.md. A
+subdirectory with its own hardware.toml is a separate project and is skipped.
 `--check` writes nothing and exits 1 with a diff if any block is stale — the
 same regenerate-and-compare shape as the build-guide and schematic guards.
 """

@@ -6,6 +6,7 @@ python3 -m unittest discover -s tools/hardware -t tools
 from __future__ import annotations
 
 import io
+import os
 import shutil
 import subprocess
 import tempfile
@@ -13,6 +14,7 @@ import textwrap
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
+from unittest import mock
 
 from hardware import HardwareError, join
 from hardware.docs import (
@@ -410,6 +412,20 @@ class DocsDiscoveryTest(Fixture):
         write(self.proj / "WIRING.md", self.STALE)
         self.assertEqual(self.drifted(), ["WIRING.md"])
 
+    def test_a_staged_file_is_checked(self):
+        # Unmodified tracked files are what CI sees, and --others does not list
+        # them: without --cached the real WIRING.md would go unscanned.
+        write(self.proj / "WIRING.md", self.STALE)
+        write(self.proj / "docs/deep/notes.md", self.STALE)
+        subprocess.run(["git", "add", "-A"], cwd=self.root, check=True)
+        self.assertEqual(self.drifted(), ["WIRING.md", "docs/deep/notes.md"])
+
+    def test_a_tracked_file_deleted_from_the_work_tree_is_skipped(self):
+        notes = write(self.proj / "docs/notes.md", self.STALE)
+        subprocess.run(["git", "add", "-A"], cwd=self.root, check=True)
+        notes.unlink()
+        self.assertEqual(self.drifted(), [])
+
     def test_a_gitignored_file_is_not_scanned(self):
         # build/ and managed_components/ hold vendored Markdown nobody edits.
         write(self.proj / ".gitignore", "build/\n")
@@ -435,6 +451,11 @@ class DocsDiscoveryTest(Fixture):
         bare = Path(tmp.name) / "proj"
         shutil.copytree(self.proj, bare)
         write(Path(tmp.name) / "board.md", BOARD_MD)
+        # Stop git's upward search at the temp dir, so a TMPDIR that happens to
+        # sit inside some work tree cannot make the scan succeed.
+        ceiling = mock.patch.dict(os.environ, {"GIT_CEILING_DIRECTORIES": tmp.name})
+        ceiling.start()
+        self.addCleanup(ceiling.stop)
         with self.assertRaisesRegex(HardwareError, "not inside a git work tree"):
             check_project(bare, repo_root=Path(tmp.name))
 
