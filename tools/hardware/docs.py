@@ -224,6 +224,7 @@ def _tracked_projects(repo_root: Path) -> list[Path]:
         [
             "git",
             "ls-files",
+            "-z",
             "--cached",
             "--others",
             "--exclude-standard",
@@ -233,8 +234,8 @@ def _tracked_projects(repo_root: Path) -> list[Path]:
         check=True,
         capture_output=True,
         text=True,
-    ).stdout.split()
-    return [repo_root / Path(p).parent for p in listed]
+    ).stdout.split("\0")
+    return [repo_root / Path(p).parent for p in listed if p]
 
 
 def main(argv: list[str] | None = None, repo_root: Path = REPO_ROOT) -> int:

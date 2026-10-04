@@ -285,7 +285,7 @@ Power pins:
 | VCC | 3.3 V | **Must be 3.3 V variant** (HC-SR04P, not HC-SR04) |
 | GND | any GND | Shared ground |
 
-The sensor samples at ~20 Hz. Obstacle reflex: if distance < 15 cm, the executor immediately stops and reverses, independent of planner goals. The specific module will be confirmed on first wiring; if a different 3.3 V sensor is used, rename `[parts.ranger]` in `hardware.toml` and regenerate.
+The sensor samples at ~20 Hz. Obstacle reflex: if distance < 15 cm, the executor immediately stops and reverses, independent of planner goals. The specific module will be confirmed on first wiring; if a different 3.3 V sensor is used, change `name` under `[parts.ranger]` in `hardware.toml` and regenerate. Keep the `ranger` key: the `signals:ranger` marker above names it.
 
 ## Flashing
 
