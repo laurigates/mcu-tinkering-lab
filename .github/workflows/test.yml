@@ -40,6 +40,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       python: ${{ steps.filter.outputs.python }}
+      live-probe: ${{ steps.filter.outputs.live-probe }}
       c-code: ${{ steps.filter.outputs.c-code }}
       any-code: ${{ steps.filter.outputs.any-code }}
     steps:
@@ -52,6 +53,13 @@ jobs:
           filters: |
             python:
               - 'packages/robocar/simulation/**'
+            # The probe's tests also read the shipped persona table and the
+            # style sweep's C-literal reader, so a change to either reruns them.
+            live-probe:
+              - 'packages/robocar/unified/tools/live-probe/**'
+              - 'packages/robocar/unified/main/voice_persona.c'
+              - 'packages/robocar/unified/tools/make-style-sweep.py'
+              - '.github/workflows/test.yml'
             c-code:
               - 'packages/**/main/**'
               - 'packages/**/components/**'
@@ -176,6 +184,36 @@ jobs:
           name: robocar-simulation
         continue-on-error: true
 
+  test-live-probe:
+    name: Live Probe Offline Tests
+    needs: [detect-changes]
+    if: >
+      needs.detect-changes.outputs.live-probe == 'true' ||
+      github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      # Pinned: see the `Install uv` step in Code Quality Checks above.
+      - name: Install UV
+        run: pip install uv==0.12.10
+
+      # No key and no network beyond the package index: these cover everything
+      # in live_probe.py except the Live session itself (issue #619).
+      - name: Install dependencies
+        working-directory: packages/robocar/unified/tools/live-probe
+        run: uv sync --locked
+
+      - name: Run offline tests
+        working-directory: packages/robocar/unified/tools/live-probe
+        run: uv run pytest -q
+
   lint-c:
     name: C/C++ Linting
     needs: [detect-changes]
@@ -231,7 +269,7 @@ jobs:
 
   test-summary:
     name: Test Summary
-    needs: [detect-changes, code-quality, test-python-simulation, lint-c, format-check]
+    needs: [detect-changes, code-quality, test-python-simulation, test-live-probe, lint-c, format-check]
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -241,12 +279,14 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- Code Quality: ${{ needs.code-quality.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Python Simulation Tests: ${{ needs.test-python-simulation.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Live Probe Offline Tests: ${{ needs.test-live-probe.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- C/C++ Linting: ${{ needs.lint-c.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Format Check: ${{ needs.format-check.result }}" >> $GITHUB_STEP_SUMMARY
 
           # Fail only on actual failures, not skips
           for result in \
             "${{ needs.code-quality.result }}" \
+            "${{ needs.test-live-probe.result }}" \
             "${{ needs.format-check.result }}"; do
             if [ "$result" = "failure" ]; then
               echo "::error::Critical quality checks failed!"
