@@ -85,7 +85,8 @@ def _column(header: list[str], *names: str) -> int | None:
 
 def parse_board_table(path: Path) -> Board:
     """Parse the board reference at `path` into its header pads."""
-    candidates = [t for t in _tables(path.read_text()) if _is_mapping(t[0])]
+    text = path.read_text(encoding="utf-8")
+    candidates = [t for t in _tables(text) if _is_mapping(t[0])]
     if not candidates:
         raise HardwareError(
             f"{path}: no pin-mapping table (first column a pin, one column 'GPIO')"

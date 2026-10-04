@@ -20,11 +20,15 @@ from pathlib import Path
 
 from .errors import HardwareError
 
-# A `#define NAME value` line, with any trailing `//` comment dropped. This is
-# the exact pattern generate-pin-defs.py used before the join existed: the
+# A `#define NAME value` line, with any trailing `//` comment dropped. The
 # generated pin_defs.typ is drift-guarded byte for byte, so a change here is a
-# change to that file's content.
-_DEFINE = re.compile(r"^\s*#define\s+(\w+)\s+(.+?)(?:\s*//.*)?$", re.MULTILINE)
+# change to that file's content. The separators are `[ \t]`, not `\s`: `\s`
+# crosses newlines, so a valueless `#define PIN_CONFIG_H` used to take the next
+# line as its value — harmless while that line is an `#include`, but a `#define`
+# in that position would have vanished from the result.
+_DEFINE = re.compile(
+    r"^[ \t]*#define[ \t]+(\w+)[ \t]+(.+?)(?:[ \t]*//.*)?$", re.MULTILINE
+)
 
 # Convention name -> regex whose group 1 is the GPIO number, matched against
 # the whole macro value. A macro whose value does not match is not a pin role
@@ -36,7 +40,8 @@ CONVENTIONS: dict[str, re.Pattern[str]] = {
 
 def parse_header(path: Path) -> dict[str, str]:
     """Return `#define` name -> raw value string for one header."""
-    return {m.group(1): m.group(2).strip() for m in _DEFINE.finditer(path.read_text())}
+    text = path.read_text(encoding="utf-8")
+    return {m.group(1): m.group(2).strip() for m in _DEFINE.finditer(text)}
 
 
 def parse_defines(paths: Iterable[Path]) -> dict[str, str]:

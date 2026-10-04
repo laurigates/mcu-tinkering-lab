@@ -56,6 +56,7 @@ class Part:
     key: str  # the id nets refer to: "amp"
     name: str  # "MAX98357A"
     kind: str  # "i2s-amp"
+    note: str = ""
 
 
 @dataclass(frozen=True)
@@ -88,7 +89,9 @@ class HardwareModel:
         return self.board.by_gpio.get(self.roles[role])
 
 
-def _check_keys(where: str, kind: str, table: dict[str, Any]) -> None:
+def _check_keys(where: str, kind: str, table: Any) -> None:
+    if not isinstance(table, dict):
+        raise HardwareError(f"{where}: expected a table, got {table!r}")
     unknown = sorted(set(table) - _KEYS[kind])
     if unknown:
         raise HardwareError(
@@ -110,7 +113,7 @@ def join(project_dir: Path, repo_root: Path = REPO_ROOT) -> HardwareModel:
     if not sidecar.is_file():
         raise HardwareError(f"{sidecar}: not found — this project has no {SIDECAR}")
     try:
-        data = tomllib.loads(sidecar.read_text())
+        data = tomllib.loads(sidecar.read_text(encoding="utf-8"))
     except tomllib.TOMLDecodeError as e:
         raise HardwareError(f"{sidecar}: {e}") from e
     _check_keys(str(sidecar), "", data)
@@ -119,7 +122,14 @@ def join(project_dir: Path, repo_root: Path = REPO_ROOT) -> HardwareModel:
     _check_keys(f"{sidecar} [source]", "source", source)
     convention = _require(f"{sidecar} [source]", source, "convention")
     header = project_dir / _require(f"{sidecar} [source]", source, "header")
-    extras = [project_dir / p for p in source.get("extra_headers", [])]
+    extra_names = source.get("extra_headers", [])
+    if not isinstance(extra_names, list) or not all(
+        isinstance(p, str) and p for p in extra_names
+    ):
+        raise HardwareError(
+            f"{sidecar} [source]: extra_headers must be a list of paths, got {extra_names!r}"
+        )
+    extras = [project_dir / p for p in extra_names]
     headers = (header, *extras)
     for h in headers:
         if not h.is_file():
@@ -139,18 +149,30 @@ def join(project_dir: Path, repo_root: Path = REPO_ROOT) -> HardwareModel:
             )
         return role
 
+    def array(key: str) -> list[Any]:
+        value = data.get(key, [])
+        if not isinstance(value, list):
+            raise HardwareError(f"{sidecar}: {key} must be [[{key}]] tables")
+        return value
+
+    parts_table = data.get("parts", {})
+    if not isinstance(parts_table, dict):
+        raise HardwareError(f"{sidecar}: parts must be [parts.<id>] tables")
     parts: dict[str, Part] = {}
-    for key, table in data.get("parts", {}).items():
+    for key, table in parts_table.items():
         where = f"{sidecar} [parts.{key}]"
         _check_keys(where, "part", table)
         parts[key] = Part(
             key=key,
             name=_require(where, table, "name"),
             kind=_require(where, table, "kind"),
+            note=table.get("note", ""),
         )
 
+    # One role on several nets is a fan-out (a bus pin to two devices) and is
+    # allowed; the same role to the same endpoint twice is a copy-paste slip.
     nets: list[Net] = []
-    for i, table in enumerate(data.get("nets", [])):
+    for i, table in enumerate(array("nets")):
         where = f"{sidecar} [[nets]] #{i + 1}"
         _check_keys(where, "net", table)
         role = resolve(where, _require(where, table, "role"))
@@ -161,11 +183,13 @@ def join(project_dir: Path, repo_root: Path = REPO_ROOT) -> HardwareModel:
             )
         if part not in parts:
             raise HardwareError(f"{where}: part {part!r} is not declared under [parts]")
+        if any(n.role == role and n.part == part and n.pin == pin for n in nets):
+            raise HardwareError(f"{where}: {role} -> {part}.{pin} is listed twice")
         nets.append(Net(role=role, part=part, pin=pin, note=table.get("note", "")))
 
     wired = {n.role for n in nets}
     undrawn: list[Undrawn] = []
-    for i, table in enumerate(data.get("undrawn", [])):
+    for i, table in enumerate(array("undrawn")):
         where = f"{sidecar} [[undrawn]] #{i + 1}"
         _check_keys(where, "undrawn", table)
         role = resolve(where, _require(where, table, "role"))
@@ -173,6 +197,8 @@ def join(project_dir: Path, repo_root: Path = REPO_ROOT) -> HardwareModel:
             raise HardwareError(
                 f"{where}: role {role!r} is on a net and excused as undrawn"
             )
+        if any(u.role == role for u in undrawn):
+            raise HardwareError(f"{where}: role {role!r} is excused twice")
         undrawn.append(Undrawn(role=role, why=_require(where, table, "why")))
 
     return HardwareModel(

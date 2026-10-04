@@ -99,7 +99,7 @@ repos:
         name: Hardware join resolves, and pin_defs.typ regenerates byte-identical
         entry: python3 -m unittest discover -s tools/hardware -t tools
         language: system
-        files: '(^tools/hardware/|^tools/typst/generate-pin-defs\.py$|hardware\.toml$|main/(pin_config|planner_task|plan_activity)\.h$|docs/auto/pin_defs\.typ$|^docs/reference/boards/)'
+        files: '(^tools/hardware/|^tools/typst/generate-pin-defs\.py$|hardware\.toml$|main/[^/]+\.h$|docs/auto/pin_defs\.typ$|^docs/reference/boards/)'
         pass_filenames: false
 
       - id: check-doc-facts

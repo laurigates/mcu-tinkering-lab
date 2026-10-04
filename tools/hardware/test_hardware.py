@@ -66,6 +66,16 @@ class ParseDefinesTest(unittest.TestCase):
             b = write(Path(tmp) / "b.h", "#define FOO 1\n")
             self.assertEqual(parse_defines([a, b]), {"FOO": "1"})
 
+    def test_a_valueless_define_does_not_swallow_the_next_line(self):
+        # An include guard right above a #define used to take that whole
+        # line as its value, dropping the next macro from the result.
+        with tempfile.TemporaryDirectory() as tmp:
+            h = write(
+                Path(tmp) / "a.h",
+                "#define A_H\n#define I2C_SDA_PIN GPIO_NUM_5\n",
+            )
+            self.assertEqual(parse_defines([h]), {"I2C_SDA_PIN": "GPIO_NUM_5"})
+
     def test_conflicting_redefinition_is_an_error(self):
         # Output would otherwise depend on argument order.
         with tempfile.TemporaryDirectory() as tmp:
@@ -308,6 +318,45 @@ class JoinTest(unittest.TestCase):
         sidecar = SIDECAR.replace('to = "led.A"', 'to = "led.A"\ngpio = 1')
         with self.assertRaisesRegex(HardwareError, "gpio"):
             self.join(self.make(sidecar=sidecar))
+
+    def test_one_role_on_two_parts_is_a_fan_out(self):
+        sidecar = SIDECAR.replace(
+            "[[undrawn]]",
+            '[parts.scope]\nname = "Probe"\nkind = "probe"\n\n'
+            '[[nets]]\nrole = "LED_PIN"\nto = "scope.CH1"\n\n[[undrawn]]',
+        )
+        nets = self.join(self.make(sidecar=sidecar)).nets
+        self.assertEqual([n.part for n in nets], ["led", "scope"])
+
+    def test_the_same_net_twice_fails(self):
+        sidecar = SIDECAR.replace(
+            "[[undrawn]]", '[[nets]]\nrole = "LED_PIN"\nto = "led.A"\n\n[[undrawn]]'
+        )
+        with self.assertRaisesRegex(HardwareError, "listed twice"):
+            self.join(self.make(sidecar=sidecar))
+
+    def test_the_same_role_excused_twice_fails(self):
+        sidecar = SIDECAR + '\n[[undrawn]]\nrole = "BEEP_PIN"\nwhy = "again"\n'
+        with self.assertRaisesRegex(HardwareError, "excused twice"):
+            self.join(self.make(sidecar=sidecar))
+
+    def test_a_part_note_is_kept(self):
+        sidecar = SIDECAR.replace('kind = "led"', 'kind = "led"\nnote = "red"')
+        self.assertEqual(self.join(self.make(sidecar=sidecar)).parts["led"].note, "red")
+
+    def test_wrongly_shaped_values_fail_as_hardware_errors(self):
+        # A traceback would bypass the generator's one-line `error:` exit.
+        for broken in (
+            SIDECAR.replace(
+                'header = "main/pin_config.h"',
+                'header = "main/pin_config.h"\nextra_headers = "main/x.h"',
+            ),
+            SIDECAR.replace("[[nets]]", "[nets.x]"),
+            SIDECAR.replace("[parts.led]", "[parts]\nled = 5\n[parts.other]"),
+            "source = 5\n",
+        ):
+            with self.subTest(broken=broken), self.assertRaises(HardwareError):
+                self.join(self.make(sidecar=broken))
 
     def test_missing_sidecar_fails(self):
         proj = self.make()
