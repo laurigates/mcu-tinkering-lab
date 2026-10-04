@@ -14,6 +14,7 @@
 #include <string.h>
 
 #include "ambient_audio.h"
+#include "ambient_listener.h"
 #include "audio_clip.h"
 #include "audio_player.h"
 #include "base64.h"
@@ -36,6 +37,7 @@
 #include "reactive_controller.h"
 #include "speech_budget.h"
 #include "speech_queue.h"
+#include "voice_endpoint.h"
 #include "voice_history.h"
 #include "voice_persona.h"
 
@@ -70,13 +72,51 @@ static const char *TAG = "voice_turn";
  *  and the model politely transcribes it. */
 #define VOICE_TURN_BEEP_SETTLE_MS 120
 
+/** Ceiling on a VAD turn's whole clip, pre-roll included (issue #616).
+ *
+ *  Endpointing normally ends the turn well before this; it is the memory bound
+ *  for someone who keeps talking. 6 s keeps the PCM buffer at 192 kB, below the
+ *  8 s `listen` ceiling the PSRAM budget in audio_clip.h was sized for, so a VAD
+ *  turn can never be the one that breaks it. */
+#define VOICE_TURN_VAD_MAX_MS 6000u
+
 typedef struct {
-    uint32_t window_ms;
+    uint32_t window_ms; /**< Fixed window (`listen`), or the ceiling for a VAD turn. */
+    bool vad;           /**< Pre-roll + end-of-speech instead of a fixed window. */
 } voice_turn_req_t;
+
+/** What one recording produced, for the per-turn log line. */
+typedef struct {
+    size_t samples;         /**< Total samples in the clip, pre-roll included. */
+    size_t preroll_samples; /**< How many of them came from the pre-roll ring. */
+    voice_endpoint_verdict_t end;
+    uint32_t speech_frames;
+    int16_t floor_db;
+} record_result_t;
 
 static QueueHandle_t s_queue;
 static volatile bool s_busy;
-static bool s_vad_enabled;
+
+/** Hands-free listening is ON at boot (issue #617). It was off while the
+ *  trigger was a broadband loudness excursion, because a slam or the motors
+ *  would start turns; the speech-shaped trigger (speech_trigger.h) is selective
+ *  enough to leave on. `voice vad off` still disables it, until the next boot. */
+static bool s_vad_enabled = true;
+
+/** True from just before the start beep until its settle time has passed. The
+ *  ambient listener reads it to keep the beep out of the pre-roll (as silence of
+ *  the same length — see voice_preroll.h). */
+static volatile bool s_cue_active;
+
+/** Endpointing knobs (`voice endpoint`). Not persisted, like every other voice
+ *  threshold: a boot comes up at the documented defaults. max_ms is not used
+ *  from here; it is set per turn from the buffer actually allocated. */
+static voice_endpoint_cfg_t s_endpoint_cfg = {
+    .min_ms = VOICE_ENDPOINT_MIN_MS_DEFAULT,
+    .max_ms = VOICE_TURN_VAD_MAX_MS,
+    .silence_ms = VOICE_ENDPOINT_SILENCE_MS_DEFAULT,
+    .margin_db = VOICE_ENDPOINT_MARGIN_DB_DEFAULT,
+};
 
 /* Per-turn state at FILE scope, not on the 8 kB stack — the same reason
  * gemini_tts.c keeps its context static. The response buffer alone would be
@@ -110,37 +150,128 @@ static esp_err_t http_event_handler(esp_http_client_event_t *evt)
     return ESP_OK;
 }
 
+/** Read exactly @p n samples, absorbing short reads. Returns samples read. */
+static size_t read_exact(int16_t *dst, size_t n, esp_err_t *err)
+{
+    size_t filled = 0;
+    *err = ESP_OK;
+    while (filled < n) {
+        size_t got = 0;
+        *err = mic_pdm_read(dst + filled, n - filled, &got, 1000);
+        if (*err != ESP_OK || got == 0) {
+            break;
+        }
+        filled += got;
+    }
+    return filled;
+}
+
 /**
- * @brief Record @p pcm_bytes of audio, holding the microphone for the window.
+ * @brief Record a VAD turn: the pre-roll, then frames until the speaker stops.
+ *
+ * Starts with the listener's pre-roll — the speech that set off the trigger —
+ * and does NOT flush: the listener released the lock straight after offering its
+ * last frame, so what the DMA holds now is the continuation of the ring, and the
+ * clip is one unbroken stretch of audio. Then records listener-sized frames
+ * until voice_endpoint says the speaker has stopped, or the buffer is full.
+ * The caller holds the microphone lock.
+ */
+static size_t record_vad(int16_t *pcm, size_t samples, record_result_t *res, esp_err_t *err)
+{
+    size_t filled = ambient_listener_take_preroll(pcm, samples);
+    res->preroll_samples = filled;
+
+    voice_endpoint_cfg_t cfg = s_endpoint_cfg;
+    cfg.max_ms = (uint32_t)(((uint64_t)(samples - filled) * 1000u) / MIC_SAMPLE_RATE_HZ);
+    /* The floor as it stood before the turn. The listener is locked out for the
+     * duration, so this is the room before anyone spoke — the reference speech
+     * should be measured against, never a floor that has risen to meet it. */
+    res->floor_db = ambient_audio_floor_db();
+
+    /* The clock is derived from samples recorded rather than read from
+     * esp_timer: it is the audio's own time, unaffected by the DMA backlog or by
+     * this task being descheduled. Only the origin comes from the wall clock. */
+    const uint32_t t0 = (uint32_t)(esp_timer_get_time() / 1000);
+    voice_endpoint_t ep;
+    voice_endpoint_begin(&ep, &cfg, t0);
+
+    size_t recorded = 0;
+    *err = ESP_OK;
+    while (filled < samples) {
+        size_t want = samples - filled;
+        if (want > AMBIENT_FRAME_SAMPLES) {
+            want = AMBIENT_FRAME_SAMPLES;
+        }
+        const size_t got = read_exact(pcm + filled, want, err);
+        if (got == 0) {
+            break;
+        }
+        ambient_fingerprint_t fp;
+        ambient_fingerprint_from_pcm(pcm + filled, got, &fp);
+        filled += got;
+        recorded += got;
+        if (got < want || !fp.valid) {
+            break; /* a failed read, or a tail too short to measure: the buffer is full */
+        }
+        const uint32_t now = t0 + (uint32_t)(((uint64_t)recorded * 1000u) / MIC_SAMPLE_RATE_HZ);
+        res->end = voice_endpoint_update(&ep, fp.level_db, res->floor_db, now);
+        if (res->end != VOICE_ENDPOINT_CONTINUE) {
+            break;
+        }
+    }
+    if (*err != ESP_OK) {
+        ESP_LOGW(TAG, "listen: mic read failed %u ms into a VAD turn: %s",
+                 (unsigned)((recorded * 1000u) / MIC_SAMPLE_RATE_HZ), esp_err_to_name(*err));
+    }
+    /* Leaving the loop without a verdict means the buffer filled on a tail too
+     * short to measure, or a read failed (logged above). Either way the clip
+     * ends where the memory did, so the log line must not read end=continue. */
+    if (res->end == VOICE_ENDPOINT_CONTINUE) {
+        res->end = VOICE_ENDPOINT_END_MAX;
+    }
+    res->speech_frames = ep.speech_frames;
+    return filled;
+}
+
+/**
+ * @brief Record into @p pcm, holding the microphone for the whole window.
  *
  * The ambient listener simply misses these frames, and that is correct rather
  * than merely tolerable: the noise floor must not learn from a conversation, or
  * a chat with the robot would raise the floor enough to deafen the gate
  * afterwards.
+ *
+ * A fixed-window turn (`listen`) flushes the DMA and records @p samples after
+ * the beep, as it always has. A VAD turn keeps the triggering speech and stops
+ * on silence instead (record_vad(), issue #616).
+ *
+ * Either way the pre-roll ring is emptied here. Once this function holds the
+ * lock the listener stops reading, so anything left in the ring would be from
+ * before this turn and would open the next one.
  */
-static esp_err_t record_clip(int16_t *pcm, size_t samples, size_t *out_samples)
+static esp_err_t record_clip(int16_t *pcm, size_t samples, bool vad, record_result_t *res)
 {
+    memset(res, 0, sizeof(*res));
+    res->end = VOICE_ENDPOINT_END_MAX;
+
     if (mic_pdm_lock(1000) != ESP_OK) {
         ESP_LOGW(TAG, "microphone busy");
         return ESP_ERR_INVALID_STATE;
     }
 
-    /* Drop whatever the DMA accumulated while we were beeping and settling. */
-    mic_pdm_flush();
-
     size_t filled = 0;
     esp_err_t err = ESP_OK;
-    while (filled < samples) {
-        size_t got = 0;
-        err = mic_pdm_read(pcm + filled, samples - filled, &got, 1000);
-        if (err != ESP_OK || got == 0) {
-            break;
-        }
-        filled += got;
+    if (vad) {
+        filled = record_vad(pcm, samples, res, &err);
+    } else {
+        ambient_listener_take_preroll(NULL, 0); /* discard */
+        /* Drop whatever the DMA accumulated while we were beeping and settling. */
+        mic_pdm_flush();
+        filled = read_exact(pcm, samples, &err);
     }
     mic_pdm_unlock();
 
-    *out_samples = filled;
+    res->samples = filled;
     if (filled == 0) {
         return (err == ESP_OK) ? ESP_FAIL : err;
     }
@@ -182,7 +313,7 @@ static char *build_body(const char *b64_wav, const char *b64_jpeg, const reactiv
                                             b64_wav, now_ms);
 }
 
-static void run_turn(uint32_t window_ms)
+static void run_turn(uint32_t window_ms, bool vad)
 {
     const uint32_t t_start = (uint32_t)(esp_timer_get_time() / 1000);
 
@@ -210,15 +341,18 @@ static void run_turn(uint32_t window_ms)
     /* Record-start feedback. buzzer_beep() blocks for its full duration, which
      * is exactly the "wait for it to finish" this needs; the settle delay covers
      * the piezo ringing down afterwards. */
+    s_cue_active = true;
     buzzer_beep();
     vTaskDelay(pdMS_TO_TICKS(VOICE_TURN_BEEP_SETTLE_MS));
+    s_cue_active = false;
 
-    size_t got = 0;
-    if (record_clip(pcm, samples, &got) != ESP_OK) {
+    record_result_t rec;
+    if (record_clip(pcm, samples, vad, &rec) != ESP_OK) {
         ESP_LOGE(TAG, "recording failed");
         heap_caps_free(pcm);
         return;
     }
+    const size_t got = rec.samples;
 
     audio_clip_stats_t st;
     audio_clip_normalise(pcm, got, &st);
@@ -281,6 +415,16 @@ static void run_turn(uint32_t window_ms)
     }
 
     const size_t body_len = strlen(body);
+    if (vad) {
+        /* clip= tracking the utterance is the bench check for issue #616: a short
+         * question should end on `silence` well under the ceiling, and preroll=
+         * near 1500 ms (the whole ring) shows the trigger's own words were kept. */
+        ESP_LOGI(TAG, "listen: vad clip=%u ms preroll=%u ms end=%s speech=%u frames floor=%d dB",
+                 (unsigned)((got * 1000u) / MIC_SAMPLE_RATE_HZ),
+                 (unsigned)((rec.preroll_samples * 1000u) / MIC_SAMPLE_RATE_HZ),
+                 voice_endpoint_verdict_name(rec.end), (unsigned)rec.speech_frames,
+                 (int)rec.floor_db);
+    }
     ESP_LOGI(TAG,
              "listen: window=%u ms samples=%u raw_peak=%d gain=%.1fx peak=%d clipped=%u dc=%d | "
              "upload=%u B | free PSRAM=%u B",
@@ -364,7 +508,7 @@ static void voice_turn_task(void *arg)
             continue;
         }
         s_busy = true;
-        run_turn(req.window_ms);
+        run_turn(req.window_ms, req.vad);
         s_busy = false;
     }
 }
@@ -392,12 +536,12 @@ esp_err_t voice_turn_start(void)
     return ESP_OK;
 }
 
-esp_err_t voice_turn_request(uint32_t window_ms)
+static esp_err_t enqueue(const voice_turn_req_t *req)
 {
     if (!s_queue) {
         return ESP_ERR_INVALID_STATE;
     }
-    if (audio_clip_pcm_bytes(window_ms, MIC_SAMPLE_RATE_HZ) == 0) {
+    if (audio_clip_pcm_bytes(req->window_ms, MIC_SAMPLE_RATE_HZ) == 0) {
         return ESP_ERR_INVALID_ARG;
     }
     if (!mic_pdm_is_ready()) {
@@ -409,9 +553,47 @@ esp_err_t voice_turn_request(uint32_t window_ms)
     if (audio_player_is_active()) {
         return ESP_ERR_INVALID_STATE;
     }
+    return (xQueueSend(s_queue, req, 0) == pdTRUE) ? ESP_OK : ESP_ERR_NO_MEM;
+}
 
-    const voice_turn_req_t req = {.window_ms = window_ms};
-    return (xQueueSend(s_queue, &req, 0) == pdTRUE) ? ESP_OK : ESP_ERR_NO_MEM;
+esp_err_t voice_turn_request(uint32_t window_ms)
+{
+    const voice_turn_req_t req = {.window_ms = window_ms, .vad = false};
+    return enqueue(&req);
+}
+
+esp_err_t voice_turn_request_vad(void)
+{
+    const voice_turn_req_t req = {.window_ms = VOICE_TURN_VAD_MAX_MS, .vad = true};
+    return enqueue(&req);
+}
+
+bool voice_turn_cue_active(void)
+{
+    return s_cue_active;
+}
+
+void voice_turn_set_endpoint(uint32_t silence_ms, uint8_t margin_db)
+{
+    s_endpoint_cfg.silence_ms = silence_ms;
+    s_endpoint_cfg.margin_db = margin_db;
+}
+
+void voice_turn_get_endpoint(uint32_t *silence_ms, uint8_t *margin_db, uint32_t *min_ms,
+                             uint32_t *max_ms)
+{
+    if (silence_ms) {
+        *silence_ms = s_endpoint_cfg.silence_ms;
+    }
+    if (margin_db) {
+        *margin_db = s_endpoint_cfg.margin_db;
+    }
+    if (min_ms) {
+        *min_ms = s_endpoint_cfg.min_ms;
+    }
+    if (max_ms) {
+        *max_ms = VOICE_TURN_VAD_MAX_MS;
+    }
 }
 
 bool voice_turn_is_busy(void)

@@ -57,11 +57,73 @@ typedef void (*mqtt_command_movement_fn)(const char *word, void *ctx);
  */
 typedef void (*mqtt_command_line_fn)(const char *line, void *ctx);
 
+/**
+ * @brief How much of the command set the MQTT topic may reach (issue #626).
+ *
+ * READ_ONLY is deliberately the zero value: an ops table or status struct
+ * that never set the field is locked down, not open.
+ */
+typedef enum {
+    MQTT_COMMAND_ACCESS_READ_ONLY = 0,  ///< No broker credentials: status commands only.
+    MQTT_COMMAND_ACCESS_FULL,           ///< Credentials configured: everything the console has.
+} mqtt_command_access_t;
+
+/** Outcome of classifying (and possibly dispatching) one command line. */
+typedef enum {
+    MQTT_COMMAND_OK = 0,             ///< Allowed (and, from dispatch, delivered).
+    MQTT_COMMAND_UNRECOGNISED,       ///< Not a command this topic knows, or its category is off.
+    MQTT_COMMAND_REFUSED_READ_ONLY,  ///< Recognised, but not on the read-only allow-list.
+} mqtt_command_result_t;
+
 typedef struct {
     mqtt_command_movement_fn movement;  ///< NULL disables movement commands.
     mqtt_command_line_fn console_line;  ///< NULL disables everything else.
     void *ctx;                          ///< Passed through to both callbacks unchanged.
+    mqtt_command_access_t access;       ///< Zero-initialised = READ_ONLY.
 } mqtt_command_ops_t;
+
+/**
+ * @brief Decide the access mode from the configured broker credentials.
+ *
+ * FULL only when BOTH a username and a password are non-empty. Anything less
+ * (NULL, "", or one half missing) is READ_ONLY. This is the single definition
+ * of "credentials configured"; main.c and self_report.c both call it, so the
+ * boot log, the facts line and the dispatcher cannot disagree about the mode.
+ *
+ * Note what this does and does not buy: credentials only protect the command
+ * topic if the broker refuses anonymous clients and ACLs the topic. The
+ * firmware cannot see the broker's policy, only whether it was given
+ * credentials to present.
+ */
+mqtt_command_access_t mqtt_command_access_for_credentials(const char *username,
+                                                          const char *password);
+
+/** "full" or "read-only" — the word the boot log and the facts line print. */
+const char *mqtt_command_access_name(mqtt_command_access_t access);
+
+/** A short reason for a log line, e.g. "refused: read-only (no broker credentials)". */
+const char *mqtt_command_result_reason(mqtt_command_result_t result);
+
+/**
+ * @brief Whether @p line is on the read-only allow-list.
+ *
+ * Exact whole-line match only. The console handlers parse loosely (`trace foo`
+ * falls through to the report, `voice <slug>` switches and persists the
+ * persona), so a prefix test would let a state-changing line through. A
+ * command added to the console later is therefore locked out of read-only
+ * mode until somebody adds it here on purpose.
+ */
+bool mqtt_command_is_read_only(const char *line);
+
+/**
+ * @brief Classify @p line under @p access without dispatching it.
+ *
+ * Lets the caller decide what to do *before* a command runs — main.c uses it
+ * to wake the planner only for a command that will actually be carried out,
+ * and before rather than after it so that `plan sleep` is not undone by the
+ * wake.
+ */
+mqtt_command_result_t mqtt_command_check(const char *line, mqtt_command_access_t access);
 
 /**
  * @brief Bound-copy an untrusted MQTT payload into a NUL-terminated command line.
@@ -100,15 +162,18 @@ bool mqtt_command_extract_line(const char *data, int data_len, int total_data_le
  * command-line prefixes the serial console dispatches on ("plan", "voice",
  * "trace", "mic", "cam", "servo", "led", "sound", "gpio", "snap", "listen").
  * Anything else — including an empty line — is rejected and dispatches
- * neither callback.
+ * neither callback. Under ops->access == READ_ONLY, a recognised line that is
+ * not on the read-only allow-list (every movement command included) is
+ * refused and likewise dispatches nothing.
  *
  * @param line NUL-terminated command line, e.g. from mqtt_command_extract_line().
  * @param ops  Callback table. A NULL member disables that whole category (a
  *             movement command is then rejected exactly like an unrecognised
  *             one if ops->movement is NULL).
- * @return true if the line was recognised and a callback was invoked.
+ * @return MQTT_COMMAND_OK if a callback was invoked; otherwise the reason it
+ *         was not.
  */
-bool mqtt_command_dispatch(const char *line, const mqtt_command_ops_t *ops);
+mqtt_command_result_t mqtt_command_dispatch(const char *line, const mqtt_command_ops_t *ops);
 
 #ifdef __cplusplus
 }

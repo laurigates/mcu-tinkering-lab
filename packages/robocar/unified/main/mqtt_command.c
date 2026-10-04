@@ -131,28 +131,104 @@ static const char *movement_word_for(const char *line)
     return NULL;
 }
 
-bool mqtt_command_dispatch(const char *line, const mqtt_command_ops_t *ops)
+/*
+ * The read-only allow-list (issue #626): every line here was read in main.c's
+ * handler and only prints state. Whole-line matches, not prefixes — see
+ * mqtt_command_is_read_only() in the header for why.
+ *
+ * Deliberately absent, though they only "read":
+ *   - `snap`, `mic dump`: they put camera frames and raw microphone audio on
+ *     the wire, which is not status;
+ *   - `voice vary`: it draws from the variation PRNG, so it moves state;
+ *   - `voice fx`, `gpio get <pin>`: read-backs, but they share a parser with
+ *     the setters, and the list stays bare status forms so it can be checked
+ *     against main.c at a glance.
+ * Anything not listed is refused in read-only mode, so leaving a harmless
+ * command off costs a convenience; putting a harmful one on costs control of
+ * the robot.
+ */
+static const char *const k_read_only_lines[] = {
+    "plan", "trace", "mic", "cam", "servo", "gpio", "voice", "voice said",
+};
+
+mqtt_command_access_t mqtt_command_access_for_credentials(const char *username,
+                                                          const char *password)
 {
-    if (!line || !ops || line[0] == '\0') {
+    if (username && username[0] != '\0' && password && password[0] != '\0') {
+        return MQTT_COMMAND_ACCESS_FULL;
+    }
+    return MQTT_COMMAND_ACCESS_READ_ONLY;
+}
+
+const char *mqtt_command_access_name(mqtt_command_access_t access)
+{
+    return access == MQTT_COMMAND_ACCESS_FULL ? "full" : "read-only";
+}
+
+const char *mqtt_command_result_reason(mqtt_command_result_t result)
+{
+    switch (result) {
+        case MQTT_COMMAND_OK:
+            return "accepted";
+        case MQTT_COMMAND_REFUSED_READ_ONLY:
+            return "refused: read-only (no broker credentials configured)";
+        case MQTT_COMMAND_UNRECOGNISED:
+        default:
+            return "rejected: unrecognised command";
+    }
+}
+
+bool mqtt_command_is_read_only(const char *line)
+{
+    if (!line) {
         return false;
+    }
+    for (size_t i = 0; i < sizeof(k_read_only_lines) / sizeof(k_read_only_lines[0]); i++) {
+        if (strcmp(line, k_read_only_lines[i]) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+mqtt_command_result_t mqtt_command_check(const char *line, mqtt_command_access_t access)
+{
+    if (!line || line[0] == '\0') {
+        return MQTT_COMMAND_UNRECOGNISED;
+    }
+    /* Recognition first, so an unknown line is logged as unknown rather than
+     * as "refused" — the two call for different fixes. */
+    if (!movement_word_for(line) && !matches_console_prefix(line)) {
+        return MQTT_COMMAND_UNRECOGNISED;
+    }
+    if (access == MQTT_COMMAND_ACCESS_FULL || mqtt_command_is_read_only(line)) {
+        return MQTT_COMMAND_OK;
+    }
+    return MQTT_COMMAND_REFUSED_READ_ONLY;
+}
+
+mqtt_command_result_t mqtt_command_dispatch(const char *line, const mqtt_command_ops_t *ops)
+{
+    if (!ops) {
+        return MQTT_COMMAND_UNRECOGNISED;
+    }
+    const mqtt_command_result_t verdict = mqtt_command_check(line, ops->access);
+    if (verdict != MQTT_COMMAND_OK) {
+        return verdict;
     }
 
     const char *word = movement_word_for(line);
     if (word) {
         if (!ops->movement) {
-            return false;
+            return MQTT_COMMAND_UNRECOGNISED;
         }
         ops->movement(word, ops->ctx);
-        return true;
+        return MQTT_COMMAND_OK;
     }
 
-    if (matches_console_prefix(line)) {
-        if (!ops->console_line) {
-            return false;
-        }
-        ops->console_line(line, ops->ctx);
-        return true;
+    if (!ops->console_line) {
+        return MQTT_COMMAND_UNRECOGNISED;
     }
-
-    return false;
+    ops->console_line(line, ops->ctx);
+    return MQTT_COMMAND_OK;
 }

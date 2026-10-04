@@ -85,8 +85,10 @@
 #define MQTT_LOG_TOPIC_BASE "robocar/logs"
 #define MQTT_STATUS_TOPIC "robocar/status"
 #define MQTT_COMMAND_TOPIC "robocar/commands"
-#define MQTT_USERNAME NULL
-#define MQTT_PASSWORD NULL
+// Broker username/password are NOT defined here: credentials_loader.c reads
+// them from NVS (`mqtt auth` on the serial console) or from MQTT_USERNAME /
+// MQTT_PASSWORD in credentials.h. Without both, the command topic accepts only
+// read-only status commands — see mqtt_command.h (issue #626).
 #define MQTT_LOG_BUFFER_SIZE 2048
 #define MQTT_KEEPALIVE_INTERVAL 60
 #define MQTT_QOS_LEVEL 1
