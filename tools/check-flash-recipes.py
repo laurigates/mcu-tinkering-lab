@@ -18,15 +18,31 @@ layout on an 8 MB part read as standard and composed the recipe anyway. Caught b
 `just --dry-run` only because someone happened to run it. This script is that
 check made mechanical, so it does not depend on anyone remembering.
 
+It also audits EVERY flash recipe, hand-written ones included, by expanding it
+with `just --dry-run` and checking the files it names against what an ESP-IDF
+build writes (see check_flash_recipe_outputs). Hand-written recipes stay
+hand-written for layout reasons, so the structural audit above cannot read them;
+their dry-run text needs no structure to check. That half needs `just` on PATH
+and fails, rather than skipping, without it.
+
 Run: python3 tools/check-flash-recipes.py [--verbose]
-Exit: 0 clean, 1 if any project mismatches its recipe.
+Exit: 0 clean; 1 on any finding (a shared-recipe mismatch, a flash recipe
+naming a file the build does not write or skipping otadata, a failed
+dry-run), when `just` is missing, or when the otadata predicate or
+`just --summary` cannot run.
+Tests: python3 -m unittest tools/test_check_flash_recipes.py
 """
 
 from __future__ import annotations
 
 import argparse
+import os
 import re
+import shutil
+import subprocess
 import sys
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -66,7 +82,8 @@ SIZE_TO_BYTES = {
 # Anchored at column 0 because that is where a just recipe header lives, which is
 # also what keeps a COMMENT mentioning the recipe from matching — robocar/unified
 # and robocar/main both explain in prose why they stayed inline, and counting
-# those as consumers would report the exact projects that got this right.
+# those as consumers would report the exact projects that got this right. Those
+# inline recipes are not unchecked: check_flash_recipe_outputs audits them.
 RECIPE_RE = re.compile(
     r"^(?P<name>[a-z0-9][a-z0-9-]*)\s*:[^\n]*?\((?P<shared>_s3-flash|_esp32-flash)\b",
     re.MULTILINE,
@@ -229,6 +246,263 @@ def check_justfile_directory() -> list[Finding]:
     return findings
 
 
+# ---------------------------------------------------------------------------
+# Every flash recipe, shared or hand-written: audit what `just --dry-run` says
+# it would run against what the build actually produces (issue #608).
+#
+# The shared-recipe audit above can reason about structure because it knows the
+# recipe. A hand-written recipe has no structure to know — but its dry-run is
+# just text naming files, and the files an ESP-IDF build writes are a short,
+# fixed list. So the check reads the expanded command and asks two questions
+# that need no knowledge of how the recipe is written:
+#   1. is every .bin it names one the build produces?
+#   2. if it is a full flash and the partition table has an otadata row, does it
+#      write ota_data_initial.bin?
+# robocar-main and robocar-camera failed both for months (fixed in #598): their
+# recipes flashed build/robocar-{main,camera}.bin, which no build ever wrote, and
+# the camera recipe never wrote otadata on an ota_0/ota_1 table with rollback.
+# ---------------------------------------------------------------------------
+
+APP_SUFFIX = ".bin"
+PARTITION_TABLE_OUTPUT = "partition_table/partition-table.bin"
+OTADATA_OUTPUT = "ota_data_initial.bin"
+# Written by every ESP-IDF build regardless of project name. otadata only exists
+# when the table has a `data,ota` row, but naming it on a table without one is a
+# missing-file error at flash time, not a silent one, so it is allowed here.
+FIXED_BUILD_OUTPUTS = (
+    "bootloader/bootloader.bin",
+    PARTITION_TABLE_OUTPUT,
+    OTADATA_OUTPUT,
+)
+
+BIN_TOKEN_RE = re.compile(r"""[^\s"'`=]+\.bin\b""")
+ESPTOOL_RE = re.compile(r"\besptool(?:\.py)?\b")
+# ESP-IDF writes build/flash_args itself, with every part the table needs —
+# otadata included — so a recipe that hands esptool the argfile is correct by
+# construction and has no paths of its own to check.
+ARGFILE_RE = re.compile(r"\s@(?:flash_args|flash_project_args)\b")
+CMAKE_PROJECT_RE = re.compile(
+    r"^\s*project\(\s*(?P<name>[A-Za-z0-9_.+-]+)", re.MULTILINE
+)
+MOD_RE = re.compile(
+    r"""^mod\s+(?P<name>[A-Za-z0-9_-]+)\s+['"](?P<path>[^'"]+)['"]""", re.MULTILINE
+)
+OTADATA_PREDICATE = REPO_ROOT / "tools" / "lib" / "otadata-predicate.sh"
+# A port that cannot exist, so no recipe expansion can name a real device.
+DRY_RUN_ENV = {"PORT": "/dev/ttyDUMMY", "UART_PORT": "/dev/ttyDUMMY"}
+
+
+def _display(path: Path) -> str:
+    try:
+        return str(path.relative_to(REPO_ROOT))
+    except ValueError:
+        return str(path)
+
+
+def split_build_path(token: str, module_dir: Path) -> tuple[Path, str] | None:
+    """Split a .bin path into (project directory, path inside its build/).
+
+    Relative paths resolve against the module directory, which is where `just`
+    runs a module's recipes. Returns None when no `build` component exists.
+    """
+    raw = Path(token)
+    full = Path(os.path.normpath(raw if raw.is_absolute() else module_dir / raw))
+    parts = full.parts
+    if "build" not in parts:
+        return None
+    i = len(parts) - 1 - parts[::-1].index("build")
+    return Path(*parts[:i]), "/".join(parts[i + 1 :])
+
+
+def audit_dry_run(
+    recipe: str,
+    module_dir: Path,
+    text: str,
+    project_name: Callable[[Path], str | None],
+    has_otadata: Callable[[Path], bool],
+) -> tuple[str, list[Finding]]:
+    """Audit one recipe's dry-run text. Returns (status, findings).
+
+    status is "not-esptool" (out of scope: ESPHome, picotool, pybricks),
+    "argfile" (delegates to the build's own flash_args), or "checked".
+    """
+    # A shebang recipe's dry-run prints its comments; prose explaining why a
+    # file is (or is not) written must not count as writing it.
+    body = "\n".join(ln for ln in text.splitlines() if not ln.lstrip().startswith("#"))
+    if not ESPTOOL_RE.search(body):
+        return "not-esptool", []
+
+    tokens = list(dict.fromkeys(BIN_TOKEN_RE.findall(body)))
+    if not tokens:
+        if ARGFILE_RE.search(body):
+            return "argfile", []
+        return "checked", [
+            Finding(
+                recipe,
+                "NO_BUILD_OUTPUTS",
+                "runs esptool but names no build/*.bin and no @flash_args, so "
+                "nothing it writes can be checked against the build",
+            )
+        ]
+
+    findings: list[Finding] = []
+    written: dict[Path, set[str]] = {}
+    for token in tokens:
+        split = split_build_path(token, module_dir)
+        if split is None:
+            findings.append(
+                Finding(
+                    recipe, "UNKNOWN_BIN", f"{token} is not under any project's build/"
+                )
+            )
+            continue
+        project_dir, rel = split
+        name = project_name(project_dir)
+        if name is None:
+            findings.append(
+                Finding(
+                    recipe,
+                    "NOT_A_PROJECT",
+                    f"{token}: {_display(project_dir)} has no ESP-IDF CMakeLists.txt project()",
+                )
+            )
+            continue
+        allowed = (name + APP_SUFFIX, *FIXED_BUILD_OUTPUTS)
+        if rel not in allowed:
+            findings.append(
+                Finding(
+                    recipe,
+                    "UNKNOWN_BIN",
+                    f"{token}: the {_display(project_dir)} build writes "
+                    f"build/{', build/'.join(allowed)} — not build/{rel} "
+                    f"(the app file is named after CMake project({name}))",
+                )
+            )
+        written.setdefault(project_dir, set()).add(rel)
+
+    for project_dir, rels in written.items():
+        # Only a FULL flash owes otadata. An app-only recipe leaving the OTA
+        # state alone is the point of an app-only recipe.
+        if PARTITION_TABLE_OUTPUT in rels and OTADATA_OUTPUT not in rels:
+            if has_otadata(project_dir):
+                findings.append(
+                    Finding(
+                        recipe,
+                        "OTADATA_UNWRITTEN",
+                        f"{_display(project_dir)}'s partition table has an otadata "
+                        f"row but this full flash never writes build/{OTADATA_OUTPUT}, "
+                        "which `idf.py flash` writes for this table; on an "
+                        "ota_0/ota_1 table the stale OTA state left behind decides "
+                        "which slot boots",
+                    )
+                )
+    return "checked", findings
+
+
+def cmake_project_name(project_dir: Path) -> str | None:
+    """The CMake project() name of an ESP-IDF project, which names build/<name>.bin."""
+    cmake = project_dir / "CMakeLists.txt"
+    if not cmake.is_file():
+        return None
+    text = cmake.read_text()
+    if "project.cmake" not in text:  # a Pico SDK or plain CMake project
+        return None
+    match = CMAKE_PROJECT_RE.search(text)
+    return match.group("name") if match else None
+
+
+def otadata_partition(project_dir: Path) -> bool:
+    """Ask tools/lib/otadata-predicate.sh, the one parser the release path uses.
+
+    Calling it rather than re-parsing here keeps this check, the flasher
+    manifests and the release assembly from disagreeing about which table a
+    project builds (issues #541, #560). A predicate that fails to run raises —
+    reading that as "no otadata row" would fail this check open.
+    """
+    script = 'source "$1" || exit 2; t=$(resolve_partition_table "$2") || exit 2; parse_otadata_offset "$t"'
+    proc = subprocess.run(
+        ["bash", "-c", script, "_", str(OTADATA_PREDICATE), str(project_dir)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"otadata predicate failed for {_display(project_dir)}: {proc.stderr.strip()}"
+        )
+    return bool(proc.stdout.strip())
+
+
+def flash_recipes(just: str) -> tuple[list[tuple[str, Path]], list[Finding]]:
+    """Every public module recipe with "flash" in its name, with its directory."""
+    modules = {
+        m.group("name"): REPO_ROOT / m.group("path")
+        for m in MOD_RE.finditer((REPO_ROOT / "justfile").read_text())
+    }
+    summary = subprocess.run(
+        [just, "--summary"], cwd=REPO_ROOT, capture_output=True, text=True, check=True
+    ).stdout.split()
+    recipes: list[tuple[str, Path]] = []
+    findings: list[Finding] = []
+    for path in summary:
+        module, sep, name = path.rpartition("::")
+        if not sep or "flash" not in name:
+            continue
+        if module not in modules:
+            findings.append(
+                Finding(
+                    path,
+                    "UNRESOLVED_MODULE",
+                    "no top-level `mod` line names this module",
+                )
+            )
+            continue
+        recipes.append((path, modules[module]))
+    return recipes, findings
+
+
+def dry_run(just: str, recipe: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [just, "--dry-run", recipe],
+        cwd=REPO_ROOT,
+        env={**os.environ, **DRY_RUN_ENV},
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def check_flash_recipe_outputs(just: str) -> tuple[dict[str, str], list[Finding]]:
+    recipes, findings = flash_recipes(just)
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        runs = dict(
+            zip(
+                [r for r, _ in recipes],
+                pool.map(lambda r: dry_run(just, r[0]), recipes),
+            )
+        )
+
+    statuses: dict[str, str] = {}
+    for recipe, module_dir in recipes:
+        proc = runs[recipe]
+        if proc.returncode != 0:
+            statuses[recipe] = "dry-run-failed"
+            tail = (proc.stderr.strip().splitlines() or ["(no output)"])[-1]
+            findings.append(Finding(recipe, "DRY_RUN_FAILED", tail))
+            continue
+        status, found = audit_dry_run(
+            recipe,
+            module_dir,
+            proc.stdout + proc.stderr,
+            project_name=cmake_project_name,
+            has_otadata=otadata_partition,
+        )
+        statuses[recipe] = status
+        findings += found
+    return statuses, findings
+
+
 def collect() -> list[Project]:
     projects: list[Project] = []
     for justfile in sorted((REPO_ROOT / "packages").rglob("justfile")):
@@ -318,8 +592,18 @@ def audit(proj: Project) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--verbose", action="store_true", help="list every consumer")
+    parser.add_argument(
+        "--verbose", action="store_true", help="list every consumer and flash recipe"
+    )
     args = parser.parse_args()
+
+    # The output audit needs `just` to expand recipes. Missing it must fail the
+    # check, not skip it: a skipped audit prints the same STATUS=OK as a clean one.
+    just = shutil.which("just")
+    if just is None:
+        print("ERROR: `just` is not on PATH; the flash-recipe output audit needs it")
+        print("STATUS=FAIL")
+        return 1
 
     projects = collect()
     for proj in projects:
@@ -328,6 +612,20 @@ def main() -> int:
     findings = [f for p in projects for f in p.findings]
     findings += check_attribute_placement()
     findings += check_justfile_directory()
+    # A lookup that cannot run (the otadata predicate, `just --summary`) has no
+    # answer to report; end on the same STATUS line as every other failure
+    # instead of a traceback.
+    try:
+        statuses, output_findings = check_flash_recipe_outputs(just)
+    except (RuntimeError, subprocess.CalledProcessError) as exc:
+        stderr = (getattr(exc, "stderr", None) or "").strip()
+        print(f"ERROR: flash-recipe output audit could not run: {exc}")
+        if stderr:
+            print(stderr)
+        print("STATUS=FAIL")
+        return 1
+    findings += output_findings
+    flagged = {f.project for f in output_findings}
 
     print("=== SHARED FLASH RECIPE CONSUMERS ===")
     for proj in projects:
@@ -341,6 +639,14 @@ def main() -> int:
             )
     print(f"CONSUMERS={len(projects)}")
 
+    print("=== FLASH RECIPE OUTPUTS (just --dry-run) ===")
+    for recipe, status in statuses.items():
+        if args.verbose or recipe in flagged:
+            print(f"  {recipe}: {status}")
+    for status in ("checked", "argfile", "not-esptool", "dry-run-failed"):
+        count = sum(1 for s in statuses.values() if s == status)
+        print(f"FLASH_RECIPES_{status.upper().replace('-', '_')}={count}")
+
     if findings:
         print("=== MISMATCHES ===")
         for f in findings:
@@ -352,8 +658,11 @@ def main() -> int:
             "A shared flash recipe bakes in a bootloader offset, a flash-size\n"
             "value, an app offset, and the absence of ota_data. When a project\n"
             "does not fit, keep its flash recipe INLINE with explicit offsets --\n"
-            "see packages/robocar/unified/justfile for the worked example, and\n"
-            "verify with: PORT=/dev/ttyDUMMY just --dry-run <module>::flash"
+            "see packages/robocar/unified/justfile for the worked example.\n"
+            "Any flash recipe must name only files the build writes: the app is\n"
+            "build/<CMake project() name>.bin, and a full flash on a table with\n"
+            "an otadata row writes build/ota_data_initial.bin too. Verify with:\n"
+            "PORT=/dev/ttyDUMMY just --dry-run <module>::flash"
         )
         return 1
 

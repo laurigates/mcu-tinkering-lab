@@ -435,11 +435,11 @@ def test_render_harness_rejects_a_forgotten_finish():
 # never at a wire's own endpoint, never where more than two wires meet.
 
 
-def _free_router():
+def _free_router(**router_kwargs):
     """A router on an empty drawing: no boxes, so no stubs and straight runs."""
     d = schemdraw.Drawing(show=False)
     d.config(unit=2.0)
-    return d, Router(d)
+    return d, Router(d, **router_kwargs)
 
 
 def _curve_path(el):
@@ -747,13 +747,87 @@ def test_no_dot_where_a_routed_wire_runs_through_a_power_or_ground_tag():
     # otherwise read as a T and be dotted — drawing a connection to ground
     # that does not exist. robocar_unified's STBY net ran through the
     # TCA9548A's GND tag and got exactly that dot.
-    d, router = _free_router()
+    # The tag cost (#591) is switched off so the wire still runs through the
+    # tag: this pins the dot rule for the case the cost only discourages.
+    from metrics import length_over_tags
+
+    d, router = _free_router(tag_penalty=0.0)
     d.add(elm.Line().right(2.0).at((0.0, 0.0)))
     d.add(elm.Ground())
-    router.wire((2.0, -2.0), (2.0, 2.0), net="signal")
+    w = router.wire((2.0, -2.0), (2.0, 2.0), net="signal")
     router.finish()
+    assert length_over_tags([w.points], router._tags()) > 0, "precondition"
     assert router.junctions == []
     assert not [el for el in d.elements if isinstance(el, elm.Dot)]
+
+
+# -- power and ground tags (#591) -------------------------------------------------
+#
+# Tags are not obstacles (see Router._NON_OBSTACLES): a chip's own GND tag sits
+# beside its other pins and would make them unreachable. But a wire drawn
+# through a tag reads as a connection to the rail, so the search charges a
+# penalty per lattice cell inside a tag the wire is not wired to.
+
+
+def _tag_drawing():
+    """A ground tag on a 1-unit stub from a "pin" at (0, 0): terminal (1, 0)."""
+    d = schemdraw.Drawing(show=False)
+    d.config(unit=2.0)
+    d.add(elm.Line().right(1.0).at((0.0, 0.0)))
+    d.add(elm.Ground())
+    return d
+
+
+def test_tags_know_the_pin_their_stub_leads_to():
+    d = _tag_drawing()
+    (tag,) = Router(d)._tags()
+    assert tag.owned_by((0.0, 0.0)), "the pin at the far end of the stub"
+    assert tag.owned_by((1.0, 0.0)), "the tag's own terminal"
+    assert not tag.owned_by((0.0, -3.0))
+
+
+def test_a_wire_detours_round_a_foreign_tag():
+    from metrics import length_over_tags
+
+    def route(penalty):
+        d = _tag_drawing()
+        router = Router(d, tag_penalty=penalty)
+        w = router.wire((-3.0, -0.25), (5.0, -0.25), net="signal")
+        return w.points, router._tags()
+
+    straight, tags = route(0.0)
+    assert length_over_tags([straight], tags) > 0, "precondition: runs through"
+    detoured, tags = route(Router.__init__.__kwdefaults__["tag_penalty"])
+    assert length_over_tags([detoured], tags) == 0, f"crossed the tag: {detoured}"
+
+
+def test_a_wire_to_the_tags_own_pin_is_not_charged():
+    # Leaving the pin, the cheapest way to (2, -0.5) is down and straight
+    # across the tag's body. The tag is this net's own, so that is allowed:
+    # charging it would bend the wire round its own rail symbol.
+    from metrics import Tag, length_over_tags
+
+    def route(penalty):
+        d = _tag_drawing()
+        router = Router(d, tag_penalty=penalty)
+        return router.wire((0.0, 0.0), (2.0, -0.5)).points, router._tags()
+
+    free, (tag,) = route(0.0)
+    unowned = Tag(tag.box, ())
+    assert length_over_tags([free], [unowned]) > 0, "precondition: crosses it"
+    charged, _ = route(Router.__init__.__kwdefaults__["tag_penalty"])
+    assert charged == free
+
+
+def test_no_real_wire_runs_over_a_foreign_power_or_ground_tag(real_circuits):
+    # #591: robocar_unified's STBY net ran down through the TCA9548A GND tag
+    # (0.64 units, the tag's full height) and balancebot's GPIO0 net across
+    # the right DRV8825's (0.50). Correctly undotted, but both read as a
+    # connection to ground at a glance.
+    for c in real_circuits:
+        assert c.metrics.over_tags == 0, (
+            f"{c.name}: {c.metrics.over_tags:.2f} units of wire over foreign tags"
+        )
 
 
 # -- legibility of the marks ------------------------------------------------------
@@ -914,8 +988,9 @@ def test_a_later_finish_rehops_a_wire_drawn_by_an_earlier_one():
 def test_a_real_t_at_a_tag_point_keeps_its_dot():
     # Only the tag-terminated lead's end is discounted, not the whole point:
     # a routed wire ending on another that runs through the tag point is a
-    # genuine T there and must still be dotted.
-    d, router = _free_router()
+    # genuine T there and must still be dotted. The tag cost (#591) is off so
+    # the first wire still runs through the tag point.
+    d, router = _free_router(tag_penalty=0.0)
     d.add(elm.Line().right(2.0).at((0.0, 0.0)))
     d.add(elm.Ground())
     router.wire((2.0, -2.0), (2.0, 2.0), net="ground")
@@ -1088,15 +1163,17 @@ def test_ordering_choice_is_reproducible_across_hash_seeds():
 
 
 def test_robocar_unified_tight_parallel_pairs_drop_below_baseline(real_circuit):
-    # The #494 baseline, measured by metrics.py on the tree before ordering
-    # search: robocar_unified 2 tight parallel pairs, 24 crossings, 206.39
-    # units of wire. The chosen ordering must beat it on tight pairs without
-    # paying for it in overlaps, crossings or length. These numbers are a
-    # property of robocar_unified.py as it stood, not of the router: an
-    # edit to that circuit can trip or loosen this pin, so re-measure the
-    # baseline (ordering search off) whenever the circuit changes (#463).
+    # The #494 baseline, measured by metrics.py with ordering search off
+    # (ORDERINGS cut to "authored"): robocar_unified 3 tight parallel pairs,
+    # 23 crossings, 217.14 units of wire. The chosen ordering must beat it
+    # on tight pairs without paying for it in overlaps, crossings or length.
+    # These numbers are a property of robocar_unified.py as it stood, not of
+    # the router: an edit to that circuit can trip or loosen this pin, so
+    # re-measure the baseline whenever the circuit changes (#463). Last
+    # re-measured for #591, which drew the power tags before routing and
+    # sent STBY up and over the mux rather than down a GND tag's edge.
     m = real_circuit("robocar_unified").metrics
-    assert m.tight_parallel <= 1, f"{m.tight_parallel} tight pairs (baseline 2)"
+    assert m.tight_parallel <= 1, f"{m.tight_parallel} tight pairs (baseline 3)"
     assert m.collinear_overlaps == 0
-    assert m.crossings <= 24
-    assert m.total_length <= 206.39 + 1e-6
+    assert m.crossings <= 23
+    assert m.total_length <= 217.14 + 1e-6

@@ -98,6 +98,35 @@ requiring the bare glob to still return a different set. If git ever changes
 those semantics, the control fails loudly instead of the assertion quietly
 becoming vacuous.
 
+## 1c. An embedded schematic is an input too — re-render with `render-all`
+
+`pin_config.h` and its sibling headers are not the only things that invalidate a
+committed PDF. A document that embeds `docs/schematics/images/<name>.png`
+compiles the image's bytes into the PDF, so re-rendering a circuit makes the
+PDF stale with no `.typ` edit at all. The guard sees it — `docs/schematics/images/**`
+is on its trigger paths — but `schematics-check.yml` passes on its own, so the
+first sign used to be this guard failing in CI after the push (#588, fixed in
+13c221a; issue #595).
+
+**After changing a circuit, run `just schematics::render-all`, not `render`.** It
+renders, then recompiles every document whose source references a schematic
+image, through each project's own `build-guide` recipe so the pinned CLI and
+flags match CI. Commit the images and the PDFs together. Plain `render` still
+works and names any project it has just left stale.
+
+The embedding documents are found by reading the `.typ` sources
+(`docs/schematics/guide_deps.py`), not from a list, so a second guide that
+embeds a schematic is covered without editing a recipe. It needs a
+`build-guide` recipe in its project justfile; `render-all` fails rather than
+skipping a project without one.
+
+The PNG is the one artifact here that is not byte-reproducible across hosts —
+cairo's encoder varies, which is why `schematics-check.yml` diffs only the SVG.
+That does not weaken this guard: CI compiles the PDF from the *committed* PNG,
+and with the pinned Typst CLI and flags the PDF is a deterministic function of
+its inputs, so a PDF compiled from the committed PNG on any host matches. What
+breaks the pair is committing one without the other.
+
 ## 2. Verify a guard change by running the shipped script, with a negative control
 
 Nothing else exercises this workflow — same gap as the flash recipes in
