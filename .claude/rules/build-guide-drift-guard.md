@@ -157,13 +157,33 @@ misbehaves is indistinguishable from a real finding.
 
 ```sh
 python3 - <<'PY' > /tmp/guard.sh
-import re, pathlib
+import re, sys, pathlib
 wf = pathlib.Path('.github/workflows/build-guide-check.yml').read_text()
-m = re.search(r'- name: Recompile every build guide and check for drift\n        run: \|\n(.*?)(?=\n      - name:|\Z)', wf, re.S)
+m = re.search(r'- name: [^\n]*check for drift\n        run: \|\n(.*?)(?=\n {0,9}\S|\Z)', wf, re.S)
+if not m:
+    sys.exit("no '... check for drift' step with a run: block in build-guide-check.yml")
 print('\n'.join(l[10:] if l.startswith(' '*10) else l for l in m.group(1).split('\n')))
 PY
 mise exec typst@0.15.0 -- bash /tmp/guard.sh
 ```
+
+The snippet finds the step by the end of its name, `check for drift`, not the
+whole name. The full name has changed once already ("every build guide" became
+"every Typst document"), and the snippet then died on `m.group` before writing a
+script (issue #637). `tools/check-typst-docs.py` runs this snippet exactly as
+printed here and fails unless it emits a script that bash parses and that
+contains `typst compile`. Its pre-commit hook fires on any commit touching the
+workflow or this rule. It reads the pattern from this page, so a rename that
+breaks the anchor fails that check, and the fix is the regex above. In CI the
+hook runs only through `test.yml`, whose path filter lists neither file, so a PR
+touching only the workflow or this rule is checked locally and nowhere else
+(issue #693).
+
+The block ends at the first non-blank line indented less than the `run: |` body's
+ten spaces, not at the next `- name:`. The guard is the last step of the last
+job, so a next-step terminator would run to end of file and take any job, or any
+step key after `run:`, added later into `/tmp/guard.sh`. That text still parses as bash and still
+contains `typst compile`, so the check would not catch it.
 
 Then run **both** controls. A green run alone proves nothing about a guard whose
 condition you just edited:
@@ -178,9 +198,9 @@ can still fail. Restore with `git checkout -- packages/<proj>/main/pin_config.h
 packages/<proj>/docs/` afterwards.
 
 **Run it from a clean tree, or its verdict is meaningless.** The guard recompiles
-each PDF and then asks `git diff --quiet` whether the result matches what is
-committed. So in a dirty working tree it reports the output as **stale whether or
-not anything is wrong** — you just changed the source, so the regenerated
+each PDF and then asks `git status --porcelain` whether the result matches what
+is committed. So in a dirty working tree it reports the output as **stale whether
+or not anything is wrong** — you just changed the source, so the regenerated
 artifact legitimately differs from `HEAD`. Observed 2026-09: a correctly
 regenerated PDF was reported stale, and the message ("Committed build-guide
 output is stale…") reads exactly like a real finding.

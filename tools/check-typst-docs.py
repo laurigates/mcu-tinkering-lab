@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Guard the two ways a printable Typst document silently stops tracking hardware.
+"""Guard the ways a printable Typst document, or its drift guard, silently stops working.
 
-Both checks exist because of defects that shipped, and both are mechanical —
+Each check exists because of a defect that shipped, and each is mechanical —
 they belong outside a reviewer's attention, not inside it.
 
 --- 1. A hardcoded pin/channel number is invisible to the drift guard ---
@@ -37,6 +37,18 @@ This check asserts the discovery set is what the guard needs, and control-tests
 it by confirming the bare glob still behaves differently. If git ever changed
 those semantics the control fails and this check stops being vacuous quietly.
 
+--- 3. The rule's guard-extraction recipe can fall behind the workflow ---
+
+`.claude/rules/build-guide-drift-guard.md` § 2 ships a Python snippet that
+extracts the guard's `run:` block from the workflow, so a change to the guard
+can be verified locally — nothing else exercises that block. The snippet found
+the step by its full name, the step was renamed, and the snippet died with
+`AttributeError: 'NoneType' object has no attribute 'group'` before writing a
+script (issue #637). Nothing noticed, because nothing ran the recipe.
+
+This check runs the snippet exactly as the rule prints it and requires a
+script that bash parses and that still contains the guard's `typst compile`.
+
 Usage: python3 tools/check-typst-docs.py [--verbose]
 Exit 0 when clean, 1 on any violation.
 """
@@ -53,6 +65,11 @@ COORDINATE_HEADERS = {"Ch", "Channel", "GPIO", "Pin", "Pad"}
 
 DISCOVERY_PATHSPEC = ":(glob)**/docs/*.typ"
 BARE_PATHSPEC = "**/docs/*.typ"
+
+DRIFT_GUARD_RULE = REPO_ROOT / ".claude/rules/build-guide-drift-guard.md"
+# The heredoc that opens the recipe in the rule's § 2, and the line closing it.
+RECIPE_OPEN = "python3 - <<'PY' > /tmp/guard.sh\n"
+RECIPE_CLOSE = "\nPY\n"
 
 
 def git_ls_files(*pathspecs: str) -> list[str]:
@@ -164,23 +181,75 @@ def check_discovery_pathspec(verbose: bool) -> list[str]:
     return problems
 
 
+def check_extraction_recipe(verbose: bool) -> list[str]:
+    """Run the rule's guard-extraction snippet as printed and check what it emits."""
+    text = DRIFT_GUARD_RULE.read_text()
+    start = text.find(RECIPE_OPEN)
+    end = text.find(RECIPE_CLOSE, start + len(RECIPE_OPEN))
+    if start < 0 or end < 0:
+        return [
+            f"could not find the guard-extraction recipe ({RECIPE_OPEN.strip()!r} ... 'PY') "
+            f"in {DRIFT_GUARD_RULE.relative_to(REPO_ROOT)}; update this check if it moved"
+        ]
+    snippet = text[start + len(RECIPE_OPEN) : end + 1]
+
+    run = subprocess.run(
+        [sys.executable, "-"],
+        input=snippet,
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    rule = DRIFT_GUARD_RULE.relative_to(REPO_ROOT)
+    if run.returncode != 0:
+        return [
+            f"the guard-extraction recipe in {rule} § 2 exits {run.returncode} against the "
+            f"current workflow: {run.stderr.strip().splitlines()[-1] if run.stderr.strip() else '(no stderr)'}"
+        ]
+
+    script = run.stdout
+    problems = []
+    if "typst compile" not in script:
+        problems.append(
+            f"the guard-extraction recipe in {rule} § 2 emitted a script without "
+            "'typst compile' — it extracted the wrong step, or none"
+        )
+    syntax = subprocess.run(
+        ["bash", "-n"], input=script, capture_output=True, text=True
+    )
+    if syntax.returncode != 0:
+        problems.append(
+            f"the script emitted by the guard-extraction recipe in {rule} § 2 does not "
+            f"parse as bash: {syntax.stderr.strip()}"
+        )
+    if verbose:
+        print(f"extraction recipe: {len(script.splitlines())} line(s) of guard script")
+    return problems
+
+
 def main() -> int:
     verbose = "--verbose" in sys.argv
-    problems = check_literal_coordinates(verbose) + check_discovery_pathspec(verbose)
+    problems = (
+        check_literal_coordinates(verbose)
+        + check_discovery_pathspec(verbose)
+        + check_extraction_recipe(verbose)
+    )
 
     if problems:
         print("Typst document checks FAILED:\n")
         for p in problems:
             print(f"  - {p}")
         print(
-            "\nBoth failures are silent in CI otherwise: a literal recompiles identically,\n"
-            "and a mis-globbed discovery either skips a document or demands a PDF that\n"
-            "cannot exist. See tools/check-typst-docs.py for the cases behind each."
+            "\nEach failure is silent in CI otherwise: a literal recompiles identically,\n"
+            "a mis-globbed discovery either skips a document or demands a PDF that\n"
+            "cannot exist, and a stale recipe only fails for the next person to verify\n"
+            "a guard change. See tools/check-typst-docs.py for the cases behind each."
         )
         return 1
 
     print(
-        "Typst documents OK: no literal hardware coordinates, discovery set is sound."
+        "Typst documents OK: no literal hardware coordinates, discovery set is sound, "
+        "guard-extraction recipe runs."
     )
     return 0
 
