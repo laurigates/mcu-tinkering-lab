@@ -37,6 +37,7 @@
 #include "reactive_controller.h"
 #include "speech_budget.h"
 #include "speech_queue.h"
+#include "voice_budget.h"
 #include "voice_endpoint.h"
 #include "voice_history.h"
 #include "voice_persona.h"
@@ -318,6 +319,17 @@ static void run_turn(uint32_t window_ms, bool vad)
 {
     const uint32_t t_start = (uint32_t)(esp_timer_get_time() / 1000);
 
+    /* Checked again here, on the task that charges, not only at enqueue: a
+     * request can sit in the queue while the turn before it spends the last of
+     * the ceiling, and that one must not go out. Before the beep, so a refused
+     * turn makes no sound. */
+    const voice_budget_verdict_t verdict = voice_budget_check(t_start, vad);
+    if (verdict != VOICE_BUDGET_OK) {
+        ESP_LOGW(TAG, "listen: refused at start — %s",
+                 verdict == VOICE_BUDGET_TRIP_CEILING ? "spend ceiling reached" : "rationed");
+        return;
+    }
+
     const size_t pcm_bytes = audio_clip_pcm_bytes(window_ms, MIC_SAMPLE_RATE_HZ);
     if (pcm_bytes == 0) {
         ESP_LOGE(TAG, "window %u ms rejected by clip sizing", (unsigned)window_ms);
@@ -433,6 +445,18 @@ static void run_turn(uint32_t window_ms, bool vad)
              (int)st.peak, (unsigned)st.clipped, (int)st.dc, (unsigned)body_len,
              (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
 
+    /* Charged here, immediately before the post and whatever its outcome, so
+     * the ceiling bounds traffic even if every reply is unparseable. This is
+     * the only place a voice-turn request is made. */
+    const uint32_t charge_ms = (uint32_t)(esp_timer_get_time() / 1000);
+    voice_budget_note_request(charge_ms, vad);
+    if (voice_budget_check(charge_ms, false) == VOICE_BUDGET_TRIP_CEILING) {
+        ESP_LOGW(TAG,
+                 "listen: voice-turn spend ceiling reached (%u requests) — hands-free and "
+                 "`listen` refused until `voice resume`",
+                 (unsigned)voice_budget_requests());
+    }
+
     response_acc_t acc = {.buf = s_response, .len = 0, .cap = sizeof(s_response)};
     s_response[0] = '\0';
     int status = 0;
@@ -456,7 +480,15 @@ static void run_turn(uint32_t window_ms, bool vad)
     }
 
     if (voice_history_is_ignore(s_reply)) {
-        ESP_LOGI(TAG, "listen: ignored (not addressed to robot)");
+        /* Counted, not just logged: ignored close to the hands-free request count
+         * means the trigger is waking for talk not addressed to the robot, and
+         * `voice trigger` is too permissive. */
+        voice_budget_note_ignored(vad);
+        ESP_LOGI(TAG, "listen: ignored (not addressed to robot) | %s ignored %u of %u",
+                 vad ? "hands-free" : "listen",
+                 (unsigned)(vad ? voice_budget_ignored_vad() : voice_budget_ignored_listen()),
+                 (unsigned)(vad ? voice_budget_vad_requests()
+                                : voice_budget_requests() - voice_budget_vad_requests()));
         return;
     }
 
@@ -553,6 +585,18 @@ static esp_err_t enqueue(const voice_turn_req_t *req)
      * the turn failing silently a second later. */
     if (audio_player_is_active()) {
         return ESP_ERR_INVALID_STATE;
+    }
+    /* The spend ceiling (both kinds) and the hands-free ration (VAD only), at
+     * request time for the same reason: no beep, no recording, and an answer
+     * the console and the listener can act on. A ration refusal is counted so a
+     * room that keeps asking shows up as a number in `voice`. */
+    const voice_budget_verdict_t verdict =
+        voice_budget_check((uint32_t)(esp_timer_get_time() / 1000), req->vad);
+    if (verdict != VOICE_BUDGET_OK) {
+        if (verdict == VOICE_BUDGET_RATIONED) {
+            voice_budget_note_refused();
+        }
+        return ESP_ERR_NOT_ALLOWED;
     }
     return (xQueueSend(s_queue, req, 0) == pdTRUE) ? ESP_OK : ESP_ERR_NO_MEM;
 }

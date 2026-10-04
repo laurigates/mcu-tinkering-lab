@@ -195,7 +195,9 @@ static void ambient_listener_task(void *arg)
          * it used to be a broadband loudness excursion, which a door slam passes
          * as easily as a voice). Rate-limited to 10 s between triggers when idle;
          * during an active conversation window (7 s after robot replied),
-         * triggers as soon as playback and hangover have finished. */
+         * triggers as soon as playback and hangover have finished. Above both
+         * cooldowns sit the hands-free ration and the spend ceiling
+         * (voice_budget.h, issue #623), enforced inside voice_turn_request_vad(). */
         if (speech && voice_turn_get_vad() && !voice_turn_is_busy() && !audio_player_is_active()) {
             const bool in_conv = voice_turn_in_conversation();
             const uint32_t elapsed = t - s_last_vad_trigger_ms;
@@ -203,7 +205,8 @@ static void ambient_listener_task(void *arg)
                 (s_last_vad_trigger_ms == 0) ||
                 (in_conv ? (elapsed >= VAD_CONV_COOLDOWN_MS) : (elapsed >= VAD_IDLE_COOLDOWN_MS));
 
-            if (cooldown_ok && voice_turn_request_vad() == ESP_OK) {
+            const esp_err_t vad_ret = cooldown_ok ? voice_turn_request_vad() : ESP_FAIL;
+            if (vad_ret == ESP_OK) {
                 s_last_vad_trigger_ms = t;
                 ESP_LOGI(
                     TAG, "VAD auto-trigger (speech %u ms, voice band %u%%, +%d dB, in_conv=%d)",
@@ -212,6 +215,16 @@ static void ambient_listener_task(void *arg)
                 /* The next turn must be earned by fresh speech, not by the tail of
                  * this run once the listener gets the microphone back. */
                 speech_trigger_reset_run();
+            } else if (vad_ret == ESP_ERR_NOT_ALLOWED) {
+                /* Rationed or past the spend ceiling (voice_budget.h). Treated as
+                 * a trigger for the cooldown, so a talkative room is refused once
+                 * per cooldown rather than on every frame at ~15 Hz — which is
+                 * also what keeps the `refused` count meaningful. DEBUG: in a
+                 * rationed room this recurs every 10 s, and `voice` has the
+                 * totals. */
+                s_last_vad_trigger_ms = t;
+                speech_trigger_reset_run();
+                ESP_LOGD(TAG, "VAD trigger refused by the voice-turn budget");
             }
         }
     }

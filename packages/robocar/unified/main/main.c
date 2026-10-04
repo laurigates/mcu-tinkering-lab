@@ -66,6 +66,7 @@
 #include "speech_budget.h"
 #include "speech_queue.h"
 #include "speech_trigger.h"
+#include "voice_budget.h"
 #include "voice_persona.h"
 #include "voice_turn.h"
 #include "wifi_manager.h"
@@ -556,6 +557,9 @@ static void handle_periph_cmd(const char *buf)
  * `voice sound <db>`           — how much the room's spectrum must move (0 = off)
  * `voice endpoint <ms> <db>`   — quiet time / speech margin that ends a VAD turn
  * `voice trigger <%> <db> <ms>` — voice-band share / floor margin / duration that starts one
+ * `voice ration <n> <seconds>` — at most n hands-free voice-turn requests per window
+ * `voice turns [<n>]`          — voice-turn spend; with n, the per-boot ceiling (0 = off)
+ * `voice resume`               — reopen a tripped voice-turn ceiling and zero the counters
  * `mic` / `mic dump <n>`       — microphone state; dump PCM frames to the console
  * `listen [seconds]`           — one push-to-talk voice turn (record, ask, answer)
  * `trace`                      — camera + endpoint activity counters since boot
@@ -579,6 +583,47 @@ static void handle_periph_cmd(const char *buf)
  * logs each cycle and set the threshold from real numbers. None of the four
  * persist: a boot comes up at the documented default rather than at whatever an
  * experiment left behind. */
+/**
+ * @brief Two lines on what voice turns have spent (voice_budget.h, issue #623).
+ *
+ * Shared by `voice`, `voice turns` and a refused `listen`, so all three say the
+ * same thing. The ignored count sits beside the hands-free count on purpose:
+ * the two close together is the sign that `voice trigger` is too permissive.
+ */
+static void print_voice_turn_budget(const char *indent, uint32_t now_ms)
+{
+    const uint32_t ceiling = voice_budget_ceiling();
+    const uint32_t requests = voice_budget_requests();
+    const uint32_t vad = voice_budget_vad_requests();
+    printf("%sturns:  %u", indent, (unsigned)requests);
+    if (ceiling) {
+        printf("/%u", (unsigned)ceiling);
+    }
+    printf(" requests (hands-free %u, ignored %u; listen %u, ignored %u)%s\n", (unsigned)vad,
+           (unsigned)voice_budget_ignored_vad(), (unsigned)(requests - vad),
+           (unsigned)voice_budget_ignored_listen(), ceiling ? "" : " — NO CEILING");
+
+    uint8_t ration_max = 0;
+    uint32_t ration_window_ms = 0;
+    voice_budget_get_ration(&ration_max, &ration_window_ms);
+    if (ration_max == 0u || ration_window_ms == 0u) {
+        printf("%s        ration: off (cooldown only), refused %u\n", indent,
+               (unsigned)voice_budget_refused());
+    } else {
+        const uint32_t wait_ms = voice_budget_ration_wait_ms(now_ms);
+        printf("%s        ration: %u/%u per %us, refused %u", indent,
+               (unsigned)voice_budget_ration_used(now_ms), (unsigned)ration_max,
+               (unsigned)(ration_window_ms / 1000U), (unsigned)voice_budget_refused());
+        if (wait_ms) {
+            printf(", next in %us", (unsigned)((wait_ms + 999U) / 1000U));
+        }
+        printf("\n");
+    }
+    if (voice_budget_check(now_ms, false) == VOICE_BUDGET_TRIP_CEILING) {
+        printf("%s        STOPPED: spend ceiling reached — `voice resume` to continue\n", indent);
+    }
+}
+
 static void handle_voice_cmd(const char *buf)
 {
     char op[24] = {0};
@@ -627,6 +672,7 @@ static void handle_voice_cmd(const char *buf)
         printf("          trigger: voice band >= %u%%, +%u dB over floor, for %u ms\n",
                (unsigned)speech_trigger_share_pct(), (unsigned)speech_trigger_margin_db(),
                (unsigned)speech_trigger_sustain_ms());
+        print_voice_turn_budget("  ", now_ms);
         /* Every gate is reported, and which one is holding, because a silent robot
          * is otherwise indistinguishable from a broken one — and on a static,
          * quiet scene silence is the correct behaviour. The evidence line names
@@ -650,6 +696,7 @@ static void handle_voice_cmd(const char *buf)
         printf(
             "         voice endpoint <quiet_ms> <db>   when a hands-free turn stops recording\n");
         printf("         voice trigger <band%%> <db> <ms>  what starts one (see `mic`)\n");
+        printf("         voice ration <n> <s> | turns <n> | resume   what voice turns may spend\n");
         printf("         voice volume <pct>   amplitude, not loudness: halving = -6 dB\n");
         printf("         voice fx [on|off|body <10..200>|metal <0..85>|drive <10..400>]\n");
         printf(
@@ -931,6 +978,47 @@ static void handle_voice_cmd(const char *buf)
         speech_trigger_set_sustain_ms((uint32_t)sustain_ms);
         printf("voice: trigger band=%u%% margin=%u dB sustain=%u ms\n", share, margin_db,
                sustain_ms);
+        return;
+    }
+
+    /* What voice turns may spend (voice_budget.h, issue #623). Not persisted,
+     * like every other knob here — a boot comes up at the documented defaults —
+     * and `resume` is the only thing short of a reboot that reopens a tripped
+     * ceiling, because a fuse that reopens itself is no use on an unattended
+     * board. */
+    if (strcmp(op, "ration") == 0) {
+        unsigned max_per = 0;
+        unsigned secs = 0;
+        if (sscanf(buf, "voice ration %u %u", &max_per, &secs) != 2 || max_per > UINT8_MAX ||
+            secs > 86400U) {
+            printf("voice: usage: voice ration <n> <window seconds>  (hands-free requests per "
+                   "window; n=0 or 0 s removes the ration)\n");
+            return;
+        }
+        voice_budget_configure_ration((uint8_t)max_per, secs * 1000U);
+        /* Read back rather than echo: the cap is clamped to the history ring. */
+        uint8_t applied = 0;
+        voice_budget_get_ration(&applied, NULL);
+        printf("voice: ration=%u/%us\n", (unsigned)applied, secs);
+        return;
+    }
+
+    if (strcmp(op, "turns") == 0) {
+        unsigned max_requests = 0;
+        if (sscanf(buf, "voice turns %u", &max_requests) == 1) {
+            voice_budget_configure_ceiling((uint32_t)max_requests);
+            printf("voice: turns ceiling=%u per boot%s\n", max_requests,
+                   max_requests ? "" : " (disabled)");
+            ESP_LOGI(TAG, "voice: turns ceiling=%u", max_requests);
+        }
+        print_voice_turn_budget("voice: ", (uint32_t)(esp_timer_get_time() / 1000));
+        return;
+    }
+
+    if (strcmp(op, "resume") == 0) {
+        voice_budget_resume();
+        printf("voice: voice-turn budget cleared — counters zeroed, ceiling reopened\n");
+        ESP_LOGI(TAG, "voice: turns resumed");
         return;
     }
 
@@ -1344,6 +1432,12 @@ static void handle_listen_cmd(const char *buf)
             break;
         case ESP_ERR_NO_MEM:
             printf("listen: busy — a turn is already in flight\n");
+            break;
+        case ESP_ERR_NOT_ALLOWED:
+            /* `listen` is exempt from the hands-free ration, so this is always
+             * the ceiling. */
+            printf("listen: voice-turn spend ceiling reached — `voice resume` to continue\n");
+            print_voice_turn_budget("  ", (uint32_t)(esp_timer_get_time() / 1000));
             break;
         case ESP_ERR_INVALID_STATE:
             /* Three quite different causes, and telling them apart matters:
@@ -1870,6 +1964,11 @@ static esp_err_t init_hierarchical_ai(void)
     // is absent.
     plan_budget_init();
     plan_activity_init(PLANNER_LOOP_PERIOD_MS);
+
+    // The same backstop for voice turns (issue #623): a ration on hands-free
+    // triggers and a per-boot ceiling on every voice-turn request. Here, before
+    // the listener and the voice-turn task start, for the same reason as above.
+    voice_budget_init();
 
     // Speech path: queue and player must exist before the planner can emit a
     // `speak` call. Both are non-fatal — a robot that cannot talk should still

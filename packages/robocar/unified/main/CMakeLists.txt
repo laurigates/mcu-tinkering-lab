@@ -34,6 +34,7 @@ idf_component_register(
         "voice_endpoint.c"
         "speech_trigger.c"
         "voice_history.c"
+        "voice_budget.c"
         "voice_turn.c"
         "gemini_tts.c"
         "voice_persona.c"

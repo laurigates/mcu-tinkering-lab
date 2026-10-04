@@ -72,16 +72,13 @@ esp_err_t voice_turn_start(void);
  *
  * Returns immediately; the turn runs on the voice-turn task.
  *
- * Deliberately callable from anywhere, including the ambient listener, so an
- * energy-triggered (VAD) turn can be added later without redesign. Before doing
- * that, note the pacing problem: a VAD in a noisy room would issue turns
- * continuously and Gemini's `retryDelay` grows while a client keeps asking. The
- * likely answer is that a VAD trigger must draw on `speech_budget` too, which is
- * a decision worth making deliberately rather than discovering.
+ * Exempt from the hands-free ration — a person asked — but charged against the
+ * voice-turn spend ceiling like every other request (voice_budget.h).
  *
  * @return ESP_OK when queued; ESP_ERR_INVALID_STATE if the task is not running
  *         or the robot is currently speaking; ESP_ERR_NO_MEM if a turn is
- *         already in flight; ESP_ERR_INVALID_ARG on an out-of-range window.
+ *         already in flight; ESP_ERR_INVALID_ARG on an out-of-range window;
+ *         ESP_ERR_NOT_ALLOWED once the spend ceiling has tripped.
  */
 esp_err_t voice_turn_request(uint32_t window_ms);
 
@@ -95,7 +92,12 @@ esp_err_t voice_turn_request(uint32_t window_ms);
  * Issue #616: the fixed window used to start after the beep and a flush, which
  * threw away exactly the words that triggered it.
  *
- * Same return values as voice_turn_request().
+ * Draws on the hands-free ration as well as the spend ceiling (issue #623).
+ * The ration counts requests, not utterances, so it is separate from
+ * speech_budget — voice_budget.h records why. A refusal for either returns
+ * ESP_ERR_NOT_ALLOWED, and a ration refusal is counted (`voice`).
+ *
+ * Otherwise the same return values as voice_turn_request().
  */
 esp_err_t voice_turn_request_vad(void);
 
