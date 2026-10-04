@@ -136,6 +136,22 @@ def _label(text: str) -> str:
     return text.replace('"', "#quot;").replace("|", "#124;")
 
 
+# Words Mermaid's flowchart grammar reserves; one used as a node id fails the
+# whole chart, which the string-only --check cannot see.
+_MERMAID_RESERVED = {
+    "end",
+    "graph",
+    "flowchart",
+    "subgraph",
+    "class",
+    "classDef",
+    "click",
+    "style",
+    "linkStyle",
+    "direction",
+}
+
+
 def power_diagram(model: HardwareModel) -> str:
     """The supply topology and the MCU's signal nets as one Mermaid graph (#646).
 
@@ -147,6 +163,11 @@ def power_diagram(model: HardwareModel) -> str:
     order: list[str] = []
 
     def node(key: str) -> str:
+        if key in _MERMAID_RESERVED:
+            raise HardwareError(
+                f"part id {key!r} is a Mermaid keyword and cannot be a node in the "
+                "power diagram; rename the part"
+            )
         if key not in order:
             order.append(key)
         return key

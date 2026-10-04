@@ -271,6 +271,25 @@ class PowerDiagramTest(Fixture):
 
     def test_a_pipe_or_quote_in_a_name_is_escaped(self):
         self.assertIn('fan["Fan #124; 5 V"]', self.lines())
+        write(
+            self.proj / "hardware.toml",
+            (SIDECAR + POWER).replace(
+                'board = "board.md"', 'board = "board.md"\nmcu = \'Dev "B"\''
+            ),
+        )
+        self.assertIn('mcu["Dev #quot;B#quot;"]', self.lines())
+
+    def test_a_part_id_mermaid_reserves_is_an_error(self):
+        # `end` closes a Mermaid block; as a node id it fails the whole chart,
+        # and the string-only --check would stay green.
+        write(
+            self.proj / "hardware.toml",
+            (SIDECAR + POWER)
+            .replace("[parts.blade]", "[parts.end]")
+            .replace('to = ["blade"]', 'to = ["end"]'),
+        )
+        with self.assertRaisesRegex(HardwareError, "'end'.*Mermaid"):
+            self.diagram()
 
     def test_the_mcu_node_takes_the_source_name(self):
         write(

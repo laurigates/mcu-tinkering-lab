@@ -470,10 +470,19 @@ class PowerTest(unittest.TestCase):
         ):
             self.power(lambda s: s + extra)
 
+    def test_a_pin_listed_twice_on_one_rail_is_a_duplicate_not_a_short(self):
+        with self.assertRaisesRegex(HardwareError, "led.VCC.*listed twice"):
+            self.power(lambda s: s.replace('"led.VCC"]', '"led.VCC", "led.VCC"]'))
+
     def test_a_rail_pin_that_is_also_a_signal_net_fails(self):
         # led.A carries LED_PIN; putting it on a supply shorts a GPIO to a rail.
         with self.assertRaisesRegex(HardwareError, "led.A.*LED_PIN"):
             self.power(lambda s: s.replace('"led.VCC"', '"led.A"'))
+
+    def test_an_mcu_pad_that_carries_a_signal_net_fails(self):
+        # D0 is GPIO1, which LED_PIN drives: the MCU end of the same short.
+        with self.assertRaisesRegex(HardwareError, "mcu.D0.*LED_PIN"):
+            self.power(lambda s: s.replace('"mcu.5V"', '"mcu.D0"'))
 
     def test_a_part_may_not_take_the_mcu_id(self):
         with self.assertRaisesRegex(HardwareError, "'mcu' is reserved"):
