@@ -53,23 +53,11 @@ def draw() -> schemdraw.Drawing:
         .label("Piezo B", loc="bot", ofst=0.3)
     )
 
-    # === Nets: auto-routed orthogonal, obstacle-avoiding wires. ===
-    router = Router(d)
-
-    # I2S signal bus — ESP right side ↔ amp left side.
-    router.wire(esp.GPIO5, amp.BCLK, net="i2s")
-    router.wire(esp.GPIO6, amp.LRC, net="i2s")
-    router.wire(esp.GPIO7, amp.DIN, net="i2s")
-
-    router.wire(amp["OUT-"], spk.in1, net="load")
-    router.wire(amp["OUT+"], spk.in2, net="load")
-
-    router.wire(esp.GPIO8, pz_a.in1, net="pwm")
-    router.wire(esp.GPIO9, pz_b.in1, net="pwm")
-
     # === Local stubs (power tags, LED branch, piezo grounds) stay
     # hand-drawn — these aren't point-to-point nets between two components,
-    # so the router adds nothing here. ===
+    # so the router adds nothing here. They go in before routing: the router
+    # charges for running over a power/ground tag only if the tag is already
+    # in the drawing when wire() runs (#591, #649). ===
 
     # ESP power: +3V3 and Ground tags on the outward-facing left side.
     d.add(elm.Line().left(0.5).at(esp["3V3"]).color(net_color("power")))
@@ -96,6 +84,20 @@ def draw() -> schemdraw.Drawing:
     d.add(elm.Ground().color(net_color("ground")))
     d.add(elm.Line().down(0.5).at(pz_b.in2).color(net_color("ground")))
     d.add(elm.Ground().color(net_color("ground")))
+
+    # === Nets: auto-routed orthogonal, obstacle-avoiding wires. ===
+    router = Router(d)
+
+    # I2S signal bus — ESP right side ↔ amp left side.
+    router.wire(esp.GPIO5, amp.BCLK, net="i2s")
+    router.wire(esp.GPIO6, amp.LRC, net="i2s")
+    router.wire(esp.GPIO7, amp.DIN, net="i2s")
+
+    router.wire(amp["OUT-"], spk.in1, net="load")
+    router.wire(amp["OUT+"], spk.in2, net="load")
+
+    router.wire(esp.GPIO8, pz_a.in1, net="pwm")
+    router.wire(esp.GPIO9, pz_b.in1, net="pwm")
 
     # Draw the routed nets last: finish() hops every hand-drawn lead already
     # in the drawing and dots every junction with one (#493), and the power
