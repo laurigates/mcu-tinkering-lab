@@ -299,9 +299,8 @@ Read the order off each module's own silkscreen.
   charged) through an *LM2596 buck converter set to 5.0 V*. Series and buck go
   together: a step-down regulator needs its input above its output, so a
   parallel 3.7 V pack could not feed it. Distribute that 5 V rail to the XIAO
-  5 V pin, the TB6612FNG (VM + VCC), the PCA9685 (V+ and VCC), and the
-  *MAX98357A amplifier (Vin)*; the servos take their power from the PCA9685's
-  V+ terminal.
+  5 V pin, the TB6612FNG's *VM*, the PCA9685's *V+*, and the *MAX98357A
+  amplifier (Vin)*; the servos take their power from the PCA9685's V+ terminal.
 
   #text(fill: theme.muted, weight: "bold")[The rail dies before the cells do:]
   the LM2596 needs its input about *1.25 V above its output at 3 A* (0.95 V at
@@ -311,9 +310,13 @@ Read the order off each module's own silkscreen.
   audio and random resets are all plausible low-battery symptoms; measure the
   pack before diagnosing anything else on this rail.
 
-  The 3.3 V logic for the OLED, ultrasonic sensor, TCA9548A, and MCP23017
-  comes from the XIAO's 3V3 pin. Keep motor/servo current (high, noisy) on
-  the 5 V rail and logic on 3V3.
+  The 3.3 V logic for the OLED, ultrasonic sensor, TCA9548A, MCP23017, and
+  the *VCC* pins of the TB6612FNG and PCA9685 comes from the XIAO's 3V3 pin.
+  Those two VCC pins are logic supplies, not power inputs: both parts set their
+  input-high threshold at 0.7 × their own VCC, so on 5 V it is 3.5 V — above
+  what the XIAO's 3.3 V I²C and STBY lines drive, and the motors stay in
+  standby. Keep motor/servo current (high, noisy) on the 5 V rail and logic on
+  3V3.
 
   #text(fill: theme.muted, weight: "bold")[Amplifier supply — read this:]
   The MAX98357A draws up to ~1 A peaks into a 4 Ω load. With brown-out
@@ -370,8 +373,9 @@ regulator, which cannot output more than the 8.4 V pack it steps down.
   ultrasonic pins (GPIO#ULTRIG_PIN/#ULECHO_PIN), and I²S (GPIO#I2S_BCLK_PIN/#I2S_LRCLK_PIN/#I2S_DIN_PIN).
 + *Wire the I²C chain:* XIAO SDA/SCL → TCA9548A → PCA9685 (ch0), OLED (ch1),
   and optionally MCP23017 (ch2). Pull-ups on the breakouts are usually sufficient.
-+ *Wire the motor driver:* PCA9685 ch8–13 → TB6612FNG inputs; STBY → GPIO#MOTOR_STBY_PIN;
-  motor outputs → the two DC motors; VM/VCC → 5 V.
++ *Wire the motor driver:* PCA9685 ch8–13 → TB6612FNG inputs; STBY → GPIO#MOTOR_STBY_PIN\;
+  motor outputs → the two DC motors; VM → 5 V, VCC → 3V3. The PCA9685 likewise
+  takes V+ from 5 V and VCC from 3V3.
 + *Add servos* (PCA9685 ch6/7) and *RGB LEDs* (ch0–5, common-anode).
 + *Add the buzzer* on GPIO#PIEZO_PIN through the 100 Ω resistor, and the ultrasonic
   sensor on GPIO#ULTRIG_PIN/#ULECHO_PIN (3.3 V power).
@@ -379,7 +383,8 @@ regulator, which cannot output more than the 8.4 V pack it steps down.
   C3 (470 µF) at Vin, speaker → amp output. Fit C1 at the PCA9685's V+ and C2 at
   the TB6612FNG's VM the same way. Leave SD_MODE floating for (L+R)/2.
 + *Double-check the 3.3 V vs 5 V rails* and confirm common ground with a
-  multimeter continuity test before first power-up.
+  multimeter continuity test before first power-up. TB6612FNG VM to VCC must
+  read open; a beep means the 5 V and 3.3 V rails are shorted.
 
 = 7 · Build & Flash the Firmware
 
@@ -467,7 +472,7 @@ Work through these after first flash, watching the serial monitor:
   ([Servos buzz but do not move], [Almost always supply, not signal. Check V+ on the PCA9685 is fed from the regulator (VCC powers only the logic), and that the pack is above ~6.3 V. `servo exercise` on the console logs every write, so a still servo with successful writes is a power fault.]),
   ([No I²C devices found], [Not selecting the TCA9548A channel first, or SDA/SCL swapped. Check GPIO5=SDA, GPIO6=SCL.]),
   ([OLED and PCA9685 conflict], [Both bypassing the mux. Route each through its own TCA9548A channel (ch1 / ch0).]),
-  ([Motors don't move], [STBY (GPIO#MOTOR_STBY_PIN) not HIGH, or VM not on 5 V. Confirm TB6612FNG power and enable line.]),
+  ([Motors don't move], [STBY (GPIO#MOTOR_STBY_PIN) not HIGH, VM not on 5 V, or VCC on 5 V instead of 3V3 (STBY's threshold then sits above what a 3.3 V GPIO drives). Confirm TB6612FNG power and enable line.]),
   ([Servos jitter or buzz], [Shared noisy rail: keep servo power on 5 V with common ground. A servo that BUZZES and holds against a stop is the PWM frame rate, not the rail — these SG90s track at 50–125 Hz and stall at 200. `servo freq <hz>` retunes it live.]),
   ([Board won't flash], [Force download mode: hold BOOT, tap RESET, release BOOT.]),
   ([Damaged ECHO / no distance], [Used a 5 V HC-SR04. Replace with a 3.3 V module (HC-SR04P).]),
