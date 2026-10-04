@@ -45,6 +45,17 @@ esp_err_t ota_manager_check_update(void);
 const char *ota_manager_get_version(void);
 
 /**
+ * @brief Get the git commit SHA this firmware was built from
+ *
+ * Resolved at CMake configure time (see the project CMakeLists.txt) and
+ * compared against the OTA manifest's "buildSha" (issue #627).
+ *
+ * @return 40 lowercase hex digits, the same with "-dirty" appended for a tree
+ *         with uncommitted changes, or "unknown" when git was unavailable
+ */
+const char *ota_manager_get_build_sha(void);
+
+/**
  * @brief Mark current firmware as valid after stable boot
  *
  * Should be called after the device has been running stably for

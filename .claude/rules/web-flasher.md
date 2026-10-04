@@ -38,6 +38,15 @@ unaligned app partitions.
 
 ESP Web Tools requires decimal integer offsets (not hex). The manifests are generated dynamically in CI, not checked into the repo. The `chipFamily` must be `"ESP32"` for both targets.
 
+Every manifest also carries a top-level `buildSha` — the full commit the
+binaries were built from (`BUILD_SHA`, default `git rev-parse HEAD`). ESP Web
+Tools ignores it; robocar-unified's OTA reads it, because every release
+rebuilds every project at the triggering commit and a version alone cannot
+name the build (issue #627). A project that compiles its own commit into the
+app declares `"embedsBuildSha": true` in `flasher.json`, and the release and
+PR builds then check the binary contains it — see
+[`release-publish-verification.md`](release-publish-verification.md).
+
 ## Key Constraints
 
 - **CORS**: Firmware binaries must be served from the same origin as the HTML page (GitHub Pages). Do not reference GitHub Releases URLs in the ESP Web Tools manifest.

@@ -19,10 +19,21 @@
 #   2. Determines flash offsets (bootloader/partition-table/otadata/app) from
 #      the partition table sdkconfig.defaults selects (resolve_partition_table,
 #      default partitions.csv) if present, otherwise uses chip-family defaults
-#   3. Writes firmware/<project-id>/manifest.json (ESP Web Tools format)
+#   3. Writes firmware/<project-id>/manifest.json (ESP Web Tools format),
+#      plus a top-level "buildSha" ESP Web Tools ignores (see BUILD_SHA below)
 #   4. Writes firmware/projects.json index consumed by the flasher page
 #
-# Requirements: bash >= 4, jq
+# Environment:
+#   BUILD_SHA    Full 40-hex commit the firmware was built from. Defaults to
+#                `git rev-parse HEAD` of the current checkout, which in
+#                build-firmware.yml is the same tag checkout the build job
+#                compiled. Written into every manifest as "buildSha": every
+#                release rebuilds every project at the triggering commit, so a
+#                project's version alone cannot say which commit its binary
+#                came from. robocar-unified's OTA compares it against the SHA
+#                compiled into the running firmware (issue #627).
+#
+# Requirements: bash >= 4, jq, git (unless BUILD_SHA is set)
 #
 # Chip-family bootloader offsets:
 #   ESP32, ESP32-S2  ->  0x1000 (4096)
@@ -42,6 +53,15 @@ source "${SCRIPT_DIR}/lib/otadata-predicate.sh"
 VERSION="${1:?Usage: $0 <version> [firmware-dir]}"
 FIRMWARE_DIR="${2:-firmware}"
 PROJECTS_GLOB="packages/*/*/flasher.json"
+
+BUILD_SHA="${BUILD_SHA:-$(git rev-parse HEAD 2>/dev/null || true)}"
+# A missing or abbreviated SHA must stop the release here, not publish
+# manifests every OTA consumer would refuse.
+if [[ ! "$BUILD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+    echo "ERROR: build commit SHA '${BUILD_SHA}' is not 40 lowercase hex digits — set BUILD_SHA or run inside the checkout that was built" >&2
+    exit 1
+fi
+echo "Build commit: ${BUILD_SHA}"
 RELEASE_MANIFEST=".release-please-manifest.json"
 
 # Look up a project's own version in the release-please manifest (keyed by the
@@ -141,10 +161,12 @@ for flasher_json in ${PROJECTS_GLOB}; do
         --arg  name    "$name" \
         --arg  version "$version" \
         --arg  chip    "$chip_family" \
+        --arg  sha     "$BUILD_SHA" \
         --argjson parts "$parts" \
         '{
-            "name":    $name,
-            "version": $version,
+            "name":     $name,
+            "version":  $version,
+            "buildSha": $sha,
             "builds": [{"chipFamily": $chip, "parts": $parts}]
         }' > "${manifest_dir}/manifest.json"
 
