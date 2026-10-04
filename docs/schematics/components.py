@@ -129,8 +129,9 @@ def pdm_microphone() -> elm.Ic:
 
     Pins face right so the block can sit up and to the left of the XIAO, clear
     of the I2S bus that runs over the module's top edge to the amplifier.
-    CLK is listed above DATA, so leads that turn down into the XIAO nest
-    instead of crossing when CLK drops the further right of the two.
+    The list runs bottom to top, so CLK is drawn above DATA; leads that turn
+    down into the XIAO then nest instead of crossing when CLK drops the
+    further right of the two.
     """
     return elm.Ic(
         pins=[

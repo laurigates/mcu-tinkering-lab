@@ -117,7 +117,7 @@ def draw() -> schemdraw.Drawing:
         .at((xiao.center.x - 4.5, xiao_box.ymax + 2))
         .anchor("center")
         .label(
-            "PDM mic (MSM261D)\non Sense board, no wiring\nI2S0 RX, shared with amp",
+            "PDM mic (MSM261D)\non Sense board, no wiring\nI2S0 RX, same port as amp",
             loc="top",
             ofst=0.4,
         )
