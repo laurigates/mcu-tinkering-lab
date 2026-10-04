@@ -8,7 +8,7 @@ port := env("PORT", _detected_s3)
 target := "esp32s3"
 
 # Bluepad32 local external directory (symlinked from xbox-switch-bridge or cloned by CI)
-bp32_ext := justfile_directory() / "external/bluepad32"
+bp32_ext := source_directory() / "external/bluepad32"
 
 default:
     @just --list

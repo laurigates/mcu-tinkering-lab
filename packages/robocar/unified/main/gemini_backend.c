@@ -36,6 +36,7 @@
 #include "planner_task.h" /* PLANNER_LOOP_PERIOD_MS — keeps the stated cadence honest */
 #include "scene_change.h"
 #include "speech_budget.h"
+#include "speech_evidence.h"
 #include "voice_persona.h"
 
 static const char *TAG = "gemini_backend";
@@ -439,15 +440,17 @@ static char *build_request_json(const char *b64_image)
          * The fix is the same one this whole subsystem is built on: the request is
          * stateless, so anything the model must know has to be PUT IN IT. Naming
          * the evidence is the difference between a tool it can use and one it
-         * politely declines. See .claude/rules/stateless-model-gating.md. */
-        const char *const evidence =
-            (scene_novel && audio_novel)
-                ? "The view has changed AND the room sounds different since you last spoke. "
-                : (scene_novel
-                       ? "The view has changed since you last spoke. "
-                       : "The view has NOT changed, but the room SOUNDS different since you last "
-                         "spoke — something happened out of frame or behind you. Remark on that, "
-                         "not on what you can see. ");
+         * politely declines. See .claude/rules/stateless-model-gating.md.
+         *
+         * But only what the robot KNOWS. The request carries the JPEG and no
+         * audio, and the first version of this clause said "something happened
+         * out of frame or behind you. Remark on that" — an assertion the model
+         * could neither check nor doubt, with nothing to describe. It filled the
+         * gap by inventing sources (bangs, echoes, moving furniture; issue #618).
+         * The audio clauses now say only that the room's sound changed, that the
+         * source is unknown, and forbid naming one. The wording lives in
+         * speech_evidence.c so a host test can pin it. */
+        const char *const evidence = speech_evidence_clause(scene_novel, audio_novel);
 
         pos = append_prompt(system_prompt, sizeof(system_prompt), pos,
                             "You may ALSO call 'speak' in the same response to say one short "

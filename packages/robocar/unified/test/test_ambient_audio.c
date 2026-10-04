@@ -470,11 +470,10 @@ static void test_a_deaf_gate_never_reports_novelty(void)
      * branch fired forever.
      *
      * Downstream that is not a missing feature but a false claim: an audio-only
-     * opening makes gemini_backend.c tell the model "the room SOUNDS different
-     * since you last spoke — something happened out of frame or behind you.
-     * Remark on that, not on what you can see." The request is stateless, so the
-     * model cannot check it and narrates a noisy room that does not exist, on
-     * every cycle the budget allows, for the whole boot.
+     * opening makes the planner prompt tell the model the room's sound has
+     * changed since it last spoke (speech_evidence.c). The request is
+     * stateless, so the model cannot check it and remarks on a change that
+     * never happened, on every cycle the budget allows, for the whole boot.
      *
      * Bench-unstageable in the direction that matters: proving a gate stays shut
      * for an hour with no microphone fitted takes an hour and a missing part. */
