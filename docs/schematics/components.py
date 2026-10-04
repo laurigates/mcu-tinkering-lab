@@ -118,6 +118,31 @@ def xiao_esp32s3_sense() -> elm.Ic:
     )
 
 
+def pdm_microphone() -> elm.Ic:
+    """MSM261D PDM microphone on the XIAO ESP32-S3 Sense expansion board.
+
+    Nothing here is soldered: GPIO42 (CLK) and GPIO41 (DATA) run to the mic on
+    the Sense board itself and are not brought out to a header. The outline is
+    dashed so the block reads as on-module rather than as another breakout;
+    the circuit should still say so in its label. Pin numbers carry the GPIOs
+    from ``pin_config.h`` because there is no header ``Dn`` to print.
+
+    Pins face right so the block can sit up and to the left of the XIAO, clear
+    of the I2S bus that runs over the module's top edge to the amplifier.
+    The list runs bottom to top, so CLK is drawn above DATA; leads that turn
+    down into the XIAO then nest instead of crossing when CLK drops the
+    further right of the two.
+    """
+    return elm.Ic(
+        pins=[
+            # Right (bottom → top)
+            elm.IcPin(name="DATA", side="R", pin="GPIO41"),
+            elm.IcPin(name="CLK", side="R", pin="GPIO42"),
+        ],
+        size=(3, 2),
+    ).linestyle("--")
+
+
 def tca9548a() -> elm.Ic:
     """TCA9548A 8-channel I2C multiplexer (Adafruit / generic breakout).
 
