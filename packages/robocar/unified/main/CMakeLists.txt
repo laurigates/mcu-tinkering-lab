@@ -45,6 +45,7 @@ idf_component_register(
         "planner_task.c"
         "self_report.c"
         "credentials_loader.c"
+        "improv_console.c"
         "wifi_manager.c"
         "mqtt_logger.c"
         "mqtt_command.c"
@@ -69,6 +70,7 @@ idf_component_register(
         "mqtt"
         "app_update"
         "improv-wifi"
+        "esp_driver_usb_serial_jtag"
         "esp_timer"
 )
 

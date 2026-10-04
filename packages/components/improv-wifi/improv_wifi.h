@@ -7,8 +7,12 @@
  * configuration dialog after flashing when this protocol is active.
  *
  * Usage:
+ *   0. If the serial port you read from is not UART0 (e.g. a USB-Serial-JTAG
+ *      console), call improv_wifi_set_writer() first so replies go back over
+ *      that same port. The default writer is UART0, and the caller must have
+ *      installed the UART0 driver for it to transmit.
  *   1. Call improv_wifi_init(credentials_cb) when no stored credentials are found.
- *   2. Feed received UART bytes to improv_wifi_process_byte().
+ *   2. Feed received serial bytes to improv_wifi_process_byte().
  *   3. Call improv_wifi_send_state() to broadcast device state (call periodically
  *      while waiting for provisioning, ~1 s interval).
  *   4. Your credentials_cb is invoked when the browser sends SSID + password.
@@ -20,6 +24,7 @@
 #define IMPROV_WIFI_H
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include "esp_err.h"
 
@@ -51,6 +56,35 @@ typedef enum {
 typedef void (*improv_credentials_cb_t)(const char *ssid, const char *password);
 
 /**
+ * @brief Transport for outgoing Improv packets.
+ *
+ * Receives one complete packet per call. It must write the bytes unmodified —
+ * no line-ending translation — because packets are binary and any byte,
+ * including 0x0A, can occur in the length, data or checksum.
+ */
+typedef void (*improv_wifi_write_fn_t)(const uint8_t *data, size_t len);
+
+/**
+ * @brief Select where Improv replies are written.
+ *
+ * Replies must leave over the port the requests arrive on, or the browser
+ * never hears back. May be called before or after improv_wifi_init(); init
+ * does not reset it.
+ *
+ * @param writer  Transport to use, or NULL for the default,
+ *                improv_wifi_uart0_write().
+ */
+void improv_wifi_set_writer(improv_wifi_write_fn_t writer);
+
+/**
+ * @brief Default transport: uart_write_bytes() on UART0.
+ *
+ * Requires the UART0 driver to be installed (uart_driver_install()); without
+ * it the write fails and nothing is transmitted.
+ */
+void improv_wifi_uart0_write(const uint8_t *data, size_t len);
+
+/**
  * @brief Initialize the Improv WiFi parser.
  *
  * @param cb  Callback invoked when credentials are received. Must not be NULL.
@@ -59,11 +93,12 @@ typedef void (*improv_credentials_cb_t)(const char *ssid, const char *password);
 esp_err_t improv_wifi_init(improv_credentials_cb_t cb);
 
 /**
- * @brief Process one byte received from UART0.
+ * @brief Process one byte received from the serial port.
  *
  * Call this for every byte read from the serial port while Improv WiFi is
- * active. The function is safe to call even for bytes that belong to normal
- * ASCII commands; non-Improv bytes are silently discarded by the parser.
+ * active. Bytes must arrive untranslated: a console that maps CR to LF on
+ * input corrupts any packet containing 0x0D. The function is safe to call even for bytes that
+ * belong to normal ASCII commands; non-Improv bytes are silently discarded by the parser.
  */
 void improv_wifi_process_byte(uint8_t byte);
 
