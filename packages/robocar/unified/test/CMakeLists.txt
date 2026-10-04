@@ -291,6 +291,29 @@ target_link_libraries(test_audio_clip PRIVATE Threads::Threads m)
 add_test(NAME audio_clip COMMAND test_audio_clip)
 
 # -----------------------------------------------------------------------------
+# voice_preroll + voice_endpoint (issue #616: keep the words that triggered a
+# hands-free turn, and stop recording when the speaker stops)
+#
+# Pure C with caller-supplied storage, PCM and clock, so the failures a bench
+# shows only as "the robot ignored me" — the robot's own voice leaking into the
+# pre-roll, stale audio spliced onto the next turn, a pause that never ends the
+# recording, and the uint32 millisecond wrap at day 49 — are each a few lines.
+# -----------------------------------------------------------------------------
+add_executable(test_voice_preroll
+    "${MAIN_SRC_DIR}/voice_preroll.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_voice_preroll.c"
+)
+target_link_libraries(test_voice_preroll PRIVATE Threads::Threads m)
+add_test(NAME voice_preroll COMMAND test_voice_preroll)
+
+add_executable(test_voice_endpoint
+    "${MAIN_SRC_DIR}/voice_endpoint.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_voice_endpoint.c"
+)
+target_link_libraries(test_voice_endpoint PRIVATE Threads::Threads m)
+add_test(NAME voice_endpoint COMMAND test_voice_endpoint)
+
+# -----------------------------------------------------------------------------
 # audio_player producer accounting (TTS playback ring)
 #
 # audio_player.c is compiled UNMODIFIED against the shims in test/include

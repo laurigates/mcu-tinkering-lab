@@ -553,6 +553,7 @@ static void handle_periph_cmd(const char *buf)
  * `voice scene <n>`            — how much the view must change (0 = gate off)
  * `voice loud <db>`            — excursion above the noise floor (0 = sub-gate off)
  * `voice sound <db>`           — how much the room's spectrum must move (0 = off)
+ * `voice endpoint <ms> <db>`   — quiet time / speech margin that ends a VAD turn
  * `mic` / `mic dump <n>`       — microphone state; dump PCM frames to the console
  * `listen [seconds]`           — one push-to-talk voice turn (record, ask, answer)
  * `trace`                      — camera + endpoint activity counters since boot
@@ -613,7 +614,14 @@ static void handle_voice_cmd(const char *buf)
                !ambient_audio_has_measurement() ? "DEAF — nothing ever heard"
                : ambient_audio_novel(now_ms)    ? "new"
                                                 : "same");
-        printf("  vad:    %s\n", voice_turn_get_vad() ? "on" : "off");
+        uint32_t ep_silence = 0;
+        uint32_t ep_min = 0;
+        uint32_t ep_max = 0;
+        uint8_t ep_margin = 0;
+        voice_turn_get_endpoint(&ep_silence, &ep_margin, &ep_min, &ep_max);
+        printf("  vad:    %s | endpoint: quiet %u ms at %u dB over floor, min %u ms, max %u ms\n",
+               voice_turn_get_vad() ? "on" : "off", (unsigned)ep_silence, (unsigned)ep_margin,
+               (unsigned)ep_min, (unsigned)ep_max);
         /* Every gate is reported, and which one is holding, because a silent robot
          * is otherwise indistinguishable from a broken one — and on a static,
          * quiet scene silence is the correct behaviour. The evidence line names
@@ -634,6 +642,8 @@ static void handle_voice_cmd(const char *buf)
         printf("  usage: voice <slug> | say <text> | name <VoiceName|-> | vary | said\n");
         printf("         voice quiet <s> | budget <n> <s> | repeat <pct> | scene <n>\n");
         printf("         voice loud <db> | sound <db> | vad on|off   (see also: mic)\n");
+        printf(
+            "         voice endpoint <quiet_ms> <db>   when a hands-free turn stops recording\n");
         printf("         voice volume <pct>   amplitude, not loudness: halving = -6 dB\n");
         printf("         voice fx [on|off|body <10..200>|metal <0..85>|drive <10..400>]\n");
         printf(
@@ -868,6 +878,28 @@ static void handle_voice_cmd(const char *buf)
         voice_turn_set_vad(enable);
         printf("voice: vad=%s\n", enable ? "on" : "off");
         ESP_LOGI(TAG, "voice: vad=%s", enable ? "on" : "off");
+        return;
+    }
+
+    if (strcmp(op, "endpoint") == 0) {
+        /* Not persisted, like every other voice knob. Whether 700 ms cuts people
+         * off mid-thought or leaves the robot waiting is a judgement that needs
+         * someone talking to it; the per-turn `listen: vad clip=` line is what
+         * to tune against. */
+        unsigned quiet_ms = 0;
+        unsigned margin_db = 0;
+        if (sscanf(buf, "voice endpoint %u %u", &quiet_ms, &margin_db) != 2 || quiet_ms < 100 ||
+            quiet_ms > 5000 || margin_db > 40) {
+            uint32_t cur_quiet = 0;
+            uint8_t cur_margin = 0;
+            voice_turn_get_endpoint(&cur_quiet, &cur_margin, NULL, NULL);
+            printf("voice: usage: voice endpoint <100..5000 ms> <0..40 dB>  (now %u ms, %u dB;"
+                   " 0 dB records to the ceiling)\n",
+                   (unsigned)cur_quiet, (unsigned)cur_margin);
+            return;
+        }
+        voice_turn_set_endpoint((uint32_t)quiet_ms, (uint8_t)margin_db);
+        printf("voice: endpoint quiet=%u ms margin=%u dB\n", quiet_ms, margin_db);
         return;
     }
 

@@ -42,12 +42,21 @@
  * an entire recording window without fighting a 15 Hz consumer. That also gives a
  * property worth having deliberately: while someone is talking to the robot, the
  * ambient gate learns nothing from the conversation.
+ *
+ * ## The pre-roll ring (issue #616)
+ *
+ * Because this is the only code that reads every frame, it is also the only
+ * place that can remember the audio from just before a hands-free trigger. Each
+ * frame is offered to a voice_preroll ring while the lock is still held, and a
+ * VAD voice turn takes the ring under the same lock as the start of its clip.
+ * See voice_preroll.h for which frames may enter.
  */
 
 #ifndef AMBIENT_LISTENER_H
 #define AMBIENT_LISTENER_H
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #include "esp_err.h"
@@ -97,6 +106,22 @@ uint32_t ambient_listener_frames_accepted(void);
  * looks like a gate that never fires because the speaker never shuts up.
  */
 uint32_t ambient_listener_frames_muted(void);
+
+/**
+ * @brief Copy out the pre-roll — the newest accepted microphone audio, oldest
+ *        first — and empty the ring.
+ *
+ * The caller MUST hold the microphone lock (mic_pdm_lock()). The listener offers
+ * each frame to the ring while it still holds that lock, so holding it here is
+ * what makes the copy consistent, and what guarantees the DMA's next samples
+ * follow the ring's last one with no gap. Pass NULL/0 to discard.
+ *
+ * Returns 0 when the ring could not be allocated at start-up: a hands-free turn
+ * then simply begins at the cue, as it did before issue #616.
+ *
+ * @return Samples written to @p dst.
+ */
+size_t ambient_listener_take_preroll(int16_t *dst, size_t max);
 
 #ifdef __cplusplus
 }
