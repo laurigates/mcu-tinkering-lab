@@ -110,8 +110,8 @@ why = "wired to the PDM microphone on the Sense expansion board, not brought out
 
 [[undrawn]]
 role = "UART0_TX_PIN"
-why = "UART0 TX, nothing wired: the serial console is USB-Serial-JTAG on the USB-C connector, not this pad"
+why = "UART0 TX, spare: the serial console is USB-Serial-JTAG on the USB-C connector, not this pad. The ROM bootloader prints its boot log here at every reset"
 
 [[undrawn]]
 role = "UART0_RX_PIN"
-why = "UART0 RX, nothing wired: the serial console is USB-Serial-JTAG on the USB-C connector, not this pad"
+why = "UART0 RX, spare: the serial console is USB-Serial-JTAG on the USB-C connector, not this pad"

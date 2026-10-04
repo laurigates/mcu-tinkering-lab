@@ -659,10 +659,12 @@ The same blind spot reached the ambient gate (issue #624). The listener keeps re
 
 The post-turn bookkeeping is deliberate in both directions. It **does** call `dialogue_style_note_spoken()` (so the planner does not parrot the answer back), `speech_budget_note()` (the robot just talked; a spontaneous remark three seconds later is the chattering the gap exists to stop) and `ambient_audio_mark_spoken()` (the human's voice armed the audio latch — having answered it, the robot must not then volunteer "I heard something"). It **does not** call `scene_change_mark_spoken()`, because answering a question is not remarking on the view and consuming that evidence would silence an observation not yet made; and it does not screen the reply through `dialogue_style_is_repetitive()`, because a direct answer is allowed to repeat — the same exemption `voice say` and the self-report already have.
 
+**Real-time conversation is being prototyped on the workstation first** (issue #619). Record → `generateContent` → TTS cannot answer within a second or be interrupted; the Gemini Live API (`BidiGenerateContent` over a WebSocket) takes 16 kHz PCM straight from the mic and streams 24 kHz audio back. `just robocar-unified::live-probe` opens one Live session as Teuvo, streams a spoken question at real-time pace, and writes the time from end of speech to first audio byte, the output format and the token usage to `tmp/live-probe/report.json`. Nothing in the firmware uses it yet; [`tools/live-probe/README.md`](tools/live-probe/README.md) carries the measurement design and the documented session limits.
+
 Two hardware consequences worth knowing before touching this:
 
 - **The microSD slot is gone.** GPIO7/8/9 are the Sense expansion board's SPI bus. No alternative pins exist — I2S needs a real peripheral, so it cannot move behind the PCA9685 or MCP23017.
-- **The GPIO budget is fully allocated.** Further digital I/O goes through the MCP23017 on TCA9548A ch2.
+- **Two header pads are spare: D6/D7 (GPIO43/44, UART0).** The ROM bootloader prints its boot log on GPIO43 at every reset, so anything wired to D6 sees that traffic. Beyond those two, digital I/O goes through the MCP23017 on TCA9548A ch2.
 
 Claude and Ollama backends have been removed from this project. If an alternative planner becomes necessary in the future, it should be designed as a clean abstraction, not a resurrection of deleted code. See ADR-016 for the rationale.
 
