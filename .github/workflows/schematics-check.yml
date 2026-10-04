@@ -71,7 +71,7 @@ jobs:
         run: |
           if ! git diff --exit-code -- 'docs/schematics/images/*.svg'; then
             echo "::error::Rendered SVG(s) are out of sync with circuit source."
-            echo "::error::Run 'just schematics::render' locally and commit the regenerated images."
+            echo "::error::Run 'just schematics::render-all' locally and commit the regenerated images, plus any build-guide PDF it recompiled."
             exit 1
           fi
 
