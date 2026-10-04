@@ -258,6 +258,21 @@ info: check-environment
     @echo "  just robocar::build-all     # Build both robocar modules"
     @echo "  just robocar::develop-main  # Start developing main controller"
 
+# Same script the monthly refresh-idf-locks.yml workflow runs; see
+# .claude/rules/esp-idf-dependency-locks.md. Discovery uses git on the host,
+# regeneration runs in the ESP-IDF container.
+#
+# Regenerate git-tracked ESP-IDF dependencies.lock files (all, or the given project dirs)
+[group: "deps"]
+refresh-idf-locks *projects:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    projects="{{projects}}"
+    if [ -z "$projects" ]; then
+        projects=$(python3 tools/refresh-idf-locks.py --list | tr '\n' ' ')
+    fi
+    docker compose run --rm esp-idf python3 tools/refresh-idf-locks.py $projects
+
 # Build Docker development images
 [group: "docker"]
 docker-build:

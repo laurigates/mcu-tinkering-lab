@@ -96,6 +96,13 @@ repos:
         files: '^tools/(check-flash-recipes\.py|test_check_flash_recipes\.py|lib/otadata-predicate\.sh)$'
         pass_filenames: false
 
+      - id: refresh-idf-locks-tests
+        name: refresh-idf-locks unit tests
+        entry: python3 -m unittest tools/test_refresh_idf_locks.py
+        language: system
+        files: '^tools/(refresh-idf-locks\.py|test_refresh_idf_locks\.py)$'
+        pass_filenames: false
+
       - id: check-typst-docs
         name: Typst docs track pin_config.h, and the drift guard sees them
         entry: python3 tools/check-typst-docs.py
