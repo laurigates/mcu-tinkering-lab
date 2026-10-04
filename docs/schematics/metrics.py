@@ -41,6 +41,15 @@ axis-aligned (``test_routing.py`` enforces that); a diagonal is an error.
     and reads as a connection to it. Unlike the body boxes, a run along a
     tag's edge counts: a ground tag's box is exactly its top bar's width, so
     such a run touches the bar's end.
+``over_labels``
+    Length of wire on or inside a text label's box that the wire does not
+    own (#641): one box per text segment of every element — component names,
+    pin names and numbers, tag text, free-standing notes — each as schemdraw
+    estimates its extent. Only a tag's label is owned, by the wires that tag
+    is wired to (the ``over_tags`` predicate); a component's own name crossed
+    by one of its own nets reads no better. As for a tag, a run along an
+    edge counts: the box is an estimate from schemdraw's font metrics, and
+    a viewer substituting a wider font draws the text past it.
 ``crossings``
     Pairs of segments from two distinct wires, one horizontal and one
     vertical, whose intersection lies strictly inside both. A T (one
@@ -90,7 +99,15 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from render import circuit_files, draw_circuit, load_circuit  # noqa: E402
-from routing import _EPS, Path, Router, _BBox, _Tag, assert_finished  # noqa: E402
+from routing import (  # noqa: E402
+    _EPS,
+    Path,
+    Router,
+    _BBox,
+    _Label,
+    _Tag,
+    assert_finished,
+)
 
 Coord = tuple[float, float]
 Wire = list[Coord]
@@ -100,6 +117,8 @@ Box = _BBox
 # A power/ground tag as the router models it, so the wires it belongs to are
 # decided by the very predicate ``Router.wire()`` exempts them with.
 Tag = _Tag
+# A text label as the router models it, owned by the same predicate.
+Label = _Label
 
 
 @dataclass(frozen=True)
@@ -190,6 +209,19 @@ def length_over_tags(wires: list[Wire], tags: list[Tag]) -> float:
     return total
 
 
+def length_over_labels(wires: list[Wire], labels: list[Label]) -> float:
+    """``over_labels``: length inside the text boxes the wire does not own."""
+    total = 0.0
+    for w in wires:
+        foreign = [
+            lbl.box
+            for lbl in labels
+            if not lbl.owned_by(w[0]) and not lbl.owned_by(w[-1])
+        ]
+        total += sum(_covered(s, foreign, closed=True) for s in _segments(w))
+    return total
+
+
 def _wire_pairs(wires: list[Wire]):
     """Every segment pair drawn from two distinct wires, in input order."""
     segs = [_segments(w) for w in wires]
@@ -262,6 +294,7 @@ class CircuitMetrics:
     collinear_overlaps: int
     junctions: int
     over_tags: float = 0.0
+    over_labels: float = 0.0
     hops: int = 0
     dots: int = 0
 
@@ -272,6 +305,7 @@ def measure(
     boxes: list[Box],
     grid: float,
     tags: Sequence[Tag] = (),
+    labels: Sequence[Label] = (),
 ):
     return CircuitMetrics(
         name=name,
@@ -284,6 +318,7 @@ def measure(
         collinear_overlaps=collinear_overlaps(wires),
         junctions=junctions(wires),
         over_tags=length_over_tags(wires, list(tags)),
+        over_labels=length_over_labels(wires, list(labels)),
     )
 
 
@@ -320,6 +355,7 @@ def measure_drawing(name: str, d, *, grid: float | None = None) -> CircuitMetric
         probe._component_boxes(),
         probe.grid if grid is None else grid,
         probe._tags(),
+        probe._labels(),
     )
     m.hops, m.dots = drawn_marks(d)
     return m
@@ -356,6 +392,7 @@ _COLUMNS = (
     ("in_foreign", "inside_foreign"),
     ("in_any", "inside_any"),
     ("over_tags", "over_tags"),
+    ("over_lbl", "over_labels"),
     ("crossings", "crossings"),
     ("tight_par", "tight_parallel"),
     ("collinear", "collinear_overlaps"),
