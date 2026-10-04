@@ -151,7 +151,7 @@ class RefreshIdfLocksTest(unittest.TestCase):
             Path(sdkconfig[0].split("=", 1)[1]).is_relative_to(proj), sdkconfig
         )
 
-    def test_skips_a_lock_with_no_registry_dependency(self) -> None:
+    def test_skips_a_lock_with_only_the_idf_entry(self) -> None:
         proj = self.project("synth", IDF_ONLY_LOCK)
         result = self.run_script(str(proj))
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -159,7 +159,39 @@ class RefreshIdfLocksTest(unittest.TestCase):
         self.assertEqual((proj / "dependencies.lock").read_text(), IDF_ONLY_LOCK)
         self.assertIn("skip", result.stdout)
 
-    def test_failure_restores_the_lock_and_still_refreshes_the_rest(self) -> None:
+    def test_refreshes_a_lock_whose_only_components_are_git_sourced(self) -> None:
+        # No `type: service` line, but the git ref still re-resolves.
+        lock = IDF_ONLY_LOCK.replace(
+            "dependencies:\n",
+            "dependencies:\n"
+            "  some/driver:\n"
+            "    source:\n"
+            "      git: https://example.invalid/driver.git\n"
+            "      type: git\n"
+            "    version: 0123abcd\n",
+        )
+        proj = self.project("gitdep", lock)
+        result = self.run_script(str(proj))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(len(self.calls()), 1)
+        self.assertIn("changed", result.stdout)
+
+    def test_unspawnable_idf_py_still_names_every_project(self) -> None:
+        a = self.project("a", REGISTRY_LOCK.format(target="esp32"))
+        b = self.project("b", REGISTRY_LOCK.format(target="esp32s3"))
+        empty = self.tmp / "empty-bin"
+        empty.mkdir()
+        self.env["PATH"] = str(empty)  # no idf.py anywhere
+        result = self.run_script(str(a), str(b))
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+        self.assertIn(f"{a}:", result.stderr)
+        self.assertIn(f"{b}:", result.stderr)
+        self.assertEqual(
+            (a / "dependencies.lock").read_text(), REGISTRY_LOCK.format(target="esp32")
+        )
+
+    def test_failure_restores_the_lock(self) -> None:
         original = REGISTRY_LOCK.format(target="esp32")
         bad = self.project("bad", original)
         result = self.run_script(str(bad), mode="fail")

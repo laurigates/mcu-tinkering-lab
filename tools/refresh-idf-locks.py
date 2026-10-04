@@ -25,11 +25,12 @@ Per project:
   disagreeing, and esp-idf-ci-action exports IDF_TARGET for the whole job.
 - The build directory and sdkconfig go to a temporary directory, so a local
   build/ or sdkconfig is never touched.
-- A lock with no registry dependency (only the `idf` entry) is skipped and the
-  skip is printed: there is nothing to re-resolve, and the idf version follows
-  the container image.
+- A lock whose only entry is `idf` is skipped and the skip is printed: there
+  is nothing to re-resolve, and the idf version follows the container image.
+  Any other source (registry `service`, `git`, `local`) gets a refresh.
 - On failure the original lock is put back, the remaining projects still run,
-  and the script exits 1 naming every project that failed.
+  and the script exits 1 naming every project that failed, including when
+  idf.py cannot be started at all.
 """
 
 from __future__ import annotations
@@ -43,9 +44,10 @@ from pathlib import Path
 
 LOCK = "dependencies.lock"
 TARGET_RE = re.compile(r"^target:\s*(\S+)\s*$", re.MULTILINE)
-# A registry component's source block carries `type: service`; the idf entry
-# carries `type: idf`, local components `type: local`.
-REGISTRY_RE = re.compile(r"^\s+type:\s*service\s*$", re.MULTILINE)
+# Every entry's source block carries a `type:` line: `idf` for the idf entry,
+# `service` for registry components, `git` / `local` for the others. [ \t]
+# rather than \s, so a match cannot run across a line break.
+SOURCE_TYPE_RE = re.compile(r"^[ \t]+type:[ \t]*(\S+)[ \t]*$", re.MULTILINE)
 
 
 def list_tracked() -> list[str]:
@@ -72,8 +74,8 @@ def refresh(project: Path) -> str:
         raise RuntimeError(f"{LOCK} has no top-level `target:` line")
     target = match.group(1)
 
-    if not REGISTRY_RE.search(original):
-        return "skip (no registry dependencies — nothing to re-resolve)"
+    if all(t == "idf" for t in SOURCE_TYPE_RE.findall(original)):
+        return "skip (only the idf entry — nothing to re-resolve)"
 
     with tempfile.TemporaryDirectory(prefix="idf-lock-") as scratch:
         cmd = [
@@ -114,7 +116,9 @@ def main(argv: list[str]) -> int:
         project = Path(arg)
         try:
             status = refresh(project)
-        except RuntimeError as err:
+        except (RuntimeError, OSError) as err:
+            # OSError: idf.py missing from PATH or not executable. idf.py never
+            # ran, so the lock is untouched and there is nothing to restore.
             failures.append(f"{project}: {err}")
             status = "FAILED"
         print(f"{project}: {status}", flush=True)
