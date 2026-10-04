@@ -132,12 +132,17 @@ def _suggested_cap(d, cap: SuggestedCap, top) -> None:
     d.add(elm.Ground().at(body.end).color(net_color("ground")))
 
 
-def _tag(d, pin, direction: str, length: float, kind: str, label: str = "") -> None:
-    """A power or ground tag on ``pin``, leading ``direction`` for ``length``."""
+def _tag(
+    d, pin, direction: str, length: float, kind: str, label: str = "", loc: str = "top"
+) -> None:
+    """A power or ground tag on ``pin``, leading ``direction`` for ``length``.
+
+    ``loc`` places a power tag's label; ``"top"`` by default.
+    """
     line = getattr(elm.Line(), direction)(length).at(pin)
     d.add(line.color(net_color("power" if kind == "power" else "ground")))
     if kind == "power":
-        d.add(elm.Vdd().label(label).color(net_color("power")))
+        d.add(elm.Vdd().label(label, loc=loc).color(net_color("power")))
     else:
         d.add(elm.Ground().color(net_color("ground")))
 
@@ -387,8 +392,10 @@ def draw(model: HardwareModel | None = None) -> schemdraw.Drawing:
     _tag(d, tb["GND.L3"], "left", 0.5, "ground")
 
     # OLED, ultrasonic and MCP23017 have their pins on the left, so their tags
-    # extend leftward — going right would draw into the chip body.
-    _tag(d, oled.VCC, "left", 1.0, "power", "+3V3")
+    # extend leftward — going right would draw into the chip body. The OLED's
+    # +3V3 label sits beside its tag: above it, the text reached the SDA row
+    # and that net's stub ran through it (#641).
+    _tag(d, oled.VCC, "left", 1.0, "power", "+3V3", loc="right")
     _tag(d, oled.GND, "left", 1.0, "ground")
     _tag(d, us.VCC, "right", 1.0, "power", "+3V3")
     _tag(d, us.GND, "right", 1.0, "ground")

@@ -152,6 +152,17 @@ router.finish()
   the wire's own end pin (#591). A soft cost, so a pin beside its chip's own
   GND tag stays reachable; and like every obstacle it only sees tags already
   drawn, which is why tags go in before `Router(d)`.
+- **Labels are a soft cost too** (#641): every text segment — a part's name,
+  a pin name or number, a tag's text, a free-standing note — is a box the
+  search charges `label_penalty` per grid point on or inside, except a tag's
+  label for the nets wired to that tag. The box is schemdraw's estimate from
+  its font metrics, so its edge counts. The charge cannot move a label that
+  sits over a pin stub (the search never sees a stub), and routing round one
+  that sits across a bundle's natural path costs crossings; move such a label
+  instead with `loc=`. A power tag on a pin whose next pin up is under 0.9
+  units away takes `label(..., loc="right")`: above the symbol, the text
+  reaches that pin's row. A part's name goes on an edge none of its routed
+  pins leave from.
 - **Real components placed after routing** (e.g. a resistor/LED branch
   hanging off a GPIO the router doesn't touch) aren't obstacles for nets
   routed earlier — if a later-placed real component's footprint would cross
@@ -164,7 +175,8 @@ router.finish()
   `circuits/balancebot.py` for an example. Colour it with
   `net_color("<class>")` and `.finish()` dots its junctions.
 - **Tuning**: `Router(d, grid=0.25, clearance=0.3, stub=0.75,
-  turn_penalty=4.0, overlap_penalty=6.0, tag_penalty=20.0)` — defaults suit this repo's
+  turn_penalty=4.0, overlap_penalty=6.0, tag_penalty=20.0, label_penalty=20.0)` —
+  defaults suit this repo's
   `unit=2.0`-scale circuits. Lower `turn_penalty` allows more bends in
   exchange for tighter routing; raise `clearance` if a wire hugs a chip
   outline too closely. `overlap_penalty` is charged in full for running on
@@ -186,7 +198,8 @@ router.finish()
   with `draw_circuit(load_circuit(...))` or in a fresh interpreter (#594).
 - **Measuring a router change**: `metrics.py` reports, per circuit, total
   wire length, length inside component bodies (own and foreign), length
-  over power/ground tags the wire is not wired to, crossings,
+  over power/ground tags the wire is not wired to, length through text
+  labels it does not own, crossings,
   tight parallel pairs, collinear overlaps, junctions (routed-wire ends
   only) and the hops and dots actually drawn — each defined
   exactly in its module docstring and pinned by `test_metrics.py`. Run
@@ -204,7 +217,9 @@ router.finish()
   y-center. E.g. both the ESP32-S3-Zero and MAX98357A factories expose 4 pins
   on the left and 3 on the right.
 - **Labels**: factories don't set a center label — individual circuits add
-  `.label('Name', loc='bot', ofst=0.4)` to avoid collisions with pin labels.
+  `.label('Name', loc='bot', ofst=0.4)` to avoid collisions with pin labels —
+  or `loc='top'` when routed pins leave the bottom edge, whose stubs would
+  run through the name (see "Labels are a soft cost too" above).
 - **Physical layouts** (ADR-023 stage 6, #495): the two conventions above
   describe `layout="schematic"` symbols, whose pin order was chosen for the
   router. A board with a vendor-sourced layout also has a `layout="physical"`

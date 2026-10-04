@@ -7,8 +7,8 @@
 # pin is wired to, which is the fact the header cannot express.
 #
 # Regenerate everything that reads it — docs/auto/pin_defs.typ and the marked
-# tables in WIRING.md — with `just hardware::gen`; `just hardware::check` fails
-# if any of them is stale.
+# tables and power diagram in WIRING.md — with `just hardware::gen`;
+# `just hardware::check` fails if any of them is stale.
 
 [source]
 convention = "robocar"
@@ -21,6 +21,9 @@ extra_headers = ["main/planner_task.h", "main/plan_activity.h"]
 # The base XIAO ESP32-S3 reference carries the pad table, Side/Pos included;
 # the Sense page states the same external pinout and links to it.
 board = "docs/reference/boards/xiao-esp32s3.md"
+# The MCU node's name in the WIRING.md power diagram; rails reach its pads as
+# `mcu.<pad>`, checked against `board`.
+mcu = "XIAO ESP32-S3 Sense"
 
 # `board` names a part's physical-layout page (read from the vendor's board
 # file); tools/hardware/pinout.py draws each one for the build guide (#629).
@@ -32,11 +35,11 @@ name = "TCA9548A"
 kind = "i2c-mux"
 board = "docs/reference/boards/adafruit-tca9548a.md"
 
+# Behind the mux on channel I2C_BUS_CHANNEL_PCA9685, so no MCU net lands on it.
 [parts.pwm]
 name = "PCA9685"
 kind = "pwm-driver"
 board = "docs/reference/boards/adafruit-pca9685.md"
-note = "Behind the mux on channel I2C_BUS_CHANNEL_PCA9685, so no MCU net lands on it"
 
 [parts.motor_driver]
 name = "TB6612FNG"
@@ -115,3 +118,95 @@ why = "UART0 TX, spare: the serial console is USB-Serial-JTAG on the USB-C conne
 [[undrawn]]
 role = "UART0_RX_PIN"
 why = "UART0 RX, spare: the serial console is USB-Serial-JTAG on the USB-C connector, not this pad"
+
+# --- Power (#646) -----------------------------------------------------------
+# The supply side of the join, emitted as WIRING.md's power diagram. A rail
+# endpoint is `part.PIN` (`mcu.<pad>` for the XIAO); a pin on a part with a
+# `board` page must be a pad there. One pin on two rails, or a rail pin that is
+# also a signal net above, fails the join. The rail assignments match the
+# power tags in docs/schematics/circuits/robocar_unified.py. Voltages beyond
+# the rail names, star wiring and capacitor placement stay in WIRING.md's prose.
+
+[parts.pack]
+name = "2x 18650 in series"
+kind = "battery"
+note = "7.4 V nominal, 8.4 V charged"
+
+[parts.buck]
+name = "LM2596 buck module"
+kind = "buck-regulator"
+note = "adjust to 5.0 V before connecting a load"
+
+[parts.oled]
+name = "SSD1306 OLED"
+kind = "display"
+
+[parts.expander]
+name = "MCP23017"
+kind = "gpio-expander"
+note = "optional"
+
+[parts.servos]
+name = "SG90 servos"
+kind = "servo"
+note = "pan, tilt"
+
+[parts.motor_left]
+name = "Left motor"
+kind = "dc-motor"
+
+[parts.motor_right]
+name = "Right motor"
+kind = "dc-motor"
+
+[parts.led_left]
+name = "Left RGB LED"
+kind = "rgb-led"
+note = "common-anode"
+
+[parts.led_right]
+name = "Right RGB LED"
+kind = "rgb-led"
+note = "common-anode"
+
+[parts.speaker]
+name = "Speaker"
+kind = "speaker"
+note = "4–8 Ω"
+
+[[rails]]
+name = "VBAT"
+from = "pack.+"
+to = ["buck.IN+"]
+
+# Star-wired: each load takes its own feed from the regulator's output terminal.
+[[rails]]
+name = "5V"
+from = "buck.OUT+"
+to = ["mcu.5V", "motor_driver.VM", "pwm.V+", "amp.Vin"]
+
+# Logic supplies. TB6612FNG and PCA9685 VCC set their input thresholds from
+# their own supply, so they must sit on the XIAO's 3.3 V, never on 5V above.
+[[rails]]
+name = "3V3"
+from = "mcu.3V3"
+to = [
+    "motor_driver.VCC",
+    "pwm.VCC",
+    "mux.VIN",
+    "ranger.VCC",
+    "oled.VCC",
+    "expander.VCC",
+]
+
+[[outputs]]
+from = "pwm"
+to = ["servos", "led_left", "led_right"]
+
+[[outputs]]
+from = "motor_driver"
+to = ["motor_left", "motor_right"]
+
+[[outputs]]
+from = "amp"
+to = ["speaker"]
