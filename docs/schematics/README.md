@@ -19,6 +19,7 @@ docs/schematics/
 ├── test_routing.py        # pytest suite for routing.py
 ├── metrics.py             # Routing-quality metrics per circuit (crossings, ...)
 ├── test_metrics.py        # pytest suite for metrics.py
+├── conftest.py            # Shared fixture: each real circuit routed once per session
 ├── images/                # Generated SVG + PNG (committed so GitHub renders them)
 ├── render.py              # Batch-render every circuit in circuits/
 ├── justfile               # `just schematics::render`, `::clean`, ...
@@ -165,6 +166,11 @@ router.finish()
   every real circuit actually draws. Run every suite with
   `just schematics::test` (or `uv run --group dev pytest`) after touching
   `routing.py` or any `circuits/*.py`; CI runs the whole directory.
+  Tests that only *read* a real circuit take the `real_circuits` fixture in
+  `conftest.py`, which routes each circuit once per session and fails any
+  test that changes a shared drawing; a test that must route afresh
+  (determinism, a monkeypatched `Router` default) calls
+  `draw_circuit(load_circuit(...))` itself (#594).
 - **Measuring a router change**: `metrics.py` reports, per circuit, total
   wire length, length inside component bodies (own and foreign), crossings,
   tight parallel pairs, collinear overlaps, junctions (routed-wire ends
