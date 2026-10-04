@@ -138,71 +138,11 @@ def draw() -> schemdraw.Drawing:
     d.add(elm.Line().down(0.5).at(buz.in2).color(net_color("ground")))
     d.add(elm.Ground().color(net_color("ground")))
 
-    # === Nets: auto-routed orthogonal, obstacle-avoiding wires. ===
-    router = Router(d)
-
-    # I2C bus: XIAO right side ↔ mux left side (top two pins).
-    router.wire(xiao.GPIO5, mux.SDA, net="i2c")
-    router.wire(xiao.GPIO6, mux.SCL, net="i2c")
-
-    # Mux ch0 (SD0/SC0) → PCA9685 SDA/SCL.
-    router.wire(mux.SD0, pca.SDA, net="i2c")
-    router.wire(mux.SC0, pca.SCL, net="i2c")
-
-    # PCA9685 PWM 8-13 group → TB6612FNG control cluster.
-    # 6 logical signals (PWMA, AIN1/2, PWMB, BIN1/2) drawn as one trunk.
-    router.wire(pca["PWM 8-13"], tb.PWMA, net="pwm")
-
-    router.wire(tb.BO1, motor_l.start, net="load")
-    router.wire(tb.BO2, motor_l.end, net="load")
-    router.wire(tb.AO1, motor_r.start, net="load")
-    router.wire(tb.AO2, motor_r.end, net="load")
-
-    # STBY direct from MCU GPIO1 — the router finds its own way around the
-    # mux/PCA/motor obstacles now that every component is already placed.
-    router.wire(xiao.GPIO1, tb.STBY, net="signal")
-
-    router.wire(mux.SD1, oled.SDA, net="i2c")
-    router.wire(mux.SC1, oled.SCL, net="i2c")
-
-    router.wire(mux.SD2, mcp.SDA, net="i2c")
-    router.wire(mux.SC2, mcp.SCL, net="i2c")
-
-    router.wire(xiao.GPIO3, us.TRIG, net="sensor")
-    router.wire(xiao.GPIO4, us.ECHO, net="sensor")
-
-    # I2S bus → amplifier. 24 kHz mono, matching Gemini TTS's native rate.
-    router.wire(xiao.GPIO7, amp.BCLK, net="i2s")
-    router.wire(xiao.GPIO8, amp.LRC, net="i2s")
-    router.wire(xiao.GPIO9, amp.DIN, net="i2s")
-
-    router.wire(amp["OUT-"], spk.in1, net="load")
-    router.wire(amp["OUT+"], spk.in2, net="load")
-
-    # === Local stubs (power tags, servo/LED arrows, piezo branch) stay
-    # hand-drawn — these aren't point-to-point nets between two components,
-    # so the router adds nothing here. ===
-
-    # PCA9685 servo + LED stubs — extend right into the cleared space.
-    # elm.Arrow renders the arrowhead as an SVG path, not a glyph, so the
-    # destination marker survives PNG rendering on hosts whose default sans
-    # font lacks U+2192 (e.g. macOS Verdana).
-    d.add(
-        elm.Arrow()
-        .right(2.5)
-        .at(pca["PWM 6-7"])
-        .label("Pan / Tilt SG90", loc="right", ofst=0.1, fontsize=10)
-        .color(net_color("pwm"))
-    )
-    d.add(
-        elm.Arrow()
-        .right(2.5)
-        .at(pca["PWM 0-5"])
-        .label("2× RGB LED", loc="right", ofst=0.1, fontsize=10)
-        .color(net_color("pwm"))
-    )
-
     # === Power rails. ===
+    # Drawn before the nets so the router sees the tags (#591): it charges a
+    # wire for running over a power/ground tag it is not wired to, and a tag
+    # added after routing is invisible to it. STBY ran straight down through
+    # the TCA9548A GND tag while these were drawn last.
     # MCU 3V3 / 5V / GND tags on its outward (left) side.
     d.add(elm.Line().left(0.5).at(xiao["3V3"]).color(net_color("power")))
     d.add(elm.Vdd().label("+3V3").color(net_color("power")))
@@ -252,6 +192,78 @@ def draw() -> schemdraw.Drawing:
     d.add(elm.Line().left(1.0).at(mcp.GND).color(net_color("ground")))
     d.add(elm.Ground().color(net_color("ground")))
 
+    # Amp power on its outward-facing right side. VIN is 5 V — take a separate
+    # feed from the LM2596 regulator's output terminal rather than daisy-chaining
+    # off the motor rail, and fit >=470 uF of bulk here (see WIRING.md).
+    d.add(elm.Line().right(0.5).at(amp.VIN).color(net_color("power")))
+    d.add(elm.Vdd().label("+5V").color(net_color("power")))
+    d.add(elm.Line().right(0.5).at(amp.GND).color(net_color("ground")))
+    d.add(elm.Ground().color(net_color("ground")))
+
+    # === Nets: auto-routed orthogonal, obstacle-avoiding wires. ===
+    router = Router(d)
+
+    # I2C bus: XIAO right side ↔ mux left side (top two pins).
+    router.wire(xiao.GPIO5, mux.SDA, net="i2c")
+    router.wire(xiao.GPIO6, mux.SCL, net="i2c")
+
+    # Mux ch0 (SD0/SC0) → PCA9685 SDA/SCL.
+    router.wire(mux.SD0, pca.SDA, net="i2c")
+    router.wire(mux.SC0, pca.SCL, net="i2c")
+
+    # PCA9685 PWM 8-13 group → TB6612FNG control cluster.
+    # 6 logical signals (PWMA, AIN1/2, PWMB, BIN1/2) drawn as one trunk.
+    router.wire(pca["PWM 8-13"], tb.PWMA, net="pwm")
+
+    router.wire(tb.BO1, motor_l.start, net="load")
+    router.wire(tb.BO2, motor_l.end, net="load")
+    router.wire(tb.AO1, motor_r.start, net="load")
+    router.wire(tb.AO2, motor_r.end, net="load")
+
+    # STBY direct from MCU GPIO1 — the router finds its own way around the
+    # mux/PCA/motor obstacles now that every component is already placed.
+    router.wire(xiao.GPIO1, tb.STBY, net="signal")
+
+    router.wire(mux.SD1, oled.SDA, net="i2c")
+    router.wire(mux.SC1, oled.SCL, net="i2c")
+
+    router.wire(mux.SD2, mcp.SDA, net="i2c")
+    router.wire(mux.SC2, mcp.SCL, net="i2c")
+
+    router.wire(xiao.GPIO3, us.TRIG, net="sensor")
+    router.wire(xiao.GPIO4, us.ECHO, net="sensor")
+
+    # I2S bus → amplifier. 24 kHz mono, matching Gemini TTS's native rate.
+    router.wire(xiao.GPIO7, amp.BCLK, net="i2s")
+    router.wire(xiao.GPIO8, amp.LRC, net="i2s")
+    router.wire(xiao.GPIO9, amp.DIN, net="i2s")
+
+    router.wire(amp["OUT-"], spk.in1, net="load")
+    router.wire(amp["OUT+"], spk.in2, net="load")
+
+    # === Local stubs (servo/LED and spare-GPIO arrows) stay hand-drawn —
+    # these aren't point-to-point nets between two components, so the router
+    # adds nothing here. ===
+
+    # PCA9685 servo + LED stubs — extend right into the cleared space.
+    # elm.Arrow renders the arrowhead as an SVG path, not a glyph, so the
+    # destination marker survives PNG rendering on hosts whose default sans
+    # font lacks U+2192 (e.g. macOS Verdana).
+    d.add(
+        elm.Arrow()
+        .right(2.5)
+        .at(pca["PWM 6-7"])
+        .label("Pan / Tilt SG90", loc="right", ofst=0.1, fontsize=10)
+        .color(net_color("pwm"))
+    )
+    d.add(
+        elm.Arrow()
+        .right(2.5)
+        .at(pca["PWM 0-5"])
+        .label("2× RGB LED", loc="right", ofst=0.1, fontsize=10)
+        .color(net_color("pwm"))
+    )
+
     # MCP23017 ports: 16 generic GPIOs, no roles assigned yet — direction is
     # set per pin at runtime. (A0-A2 are strapped to GND for 0x20; that's in
     # the component label rather than drawn, since they carry no signal.)
@@ -270,14 +282,6 @@ def draw() -> schemdraw.Drawing:
         .color(net_color("signal"))
     )
 
-    # Amp power on its outward-facing right side. VIN is 5 V — take a separate
-    # feed from the LM2596 regulator's output terminal rather than daisy-chaining
-    # off the motor rail, and fit >=470 uF of bulk here (see WIRING.md).
-    d.add(elm.Line().right(0.5).at(amp.VIN).color(net_color("power")))
-    d.add(elm.Vdd().label("+5V").color(net_color("power")))
-    d.add(elm.Line().right(0.5).at(amp.GND).color(net_color("ground")))
-    d.add(elm.Ground().color(net_color("ground")))
-
     # SD_MODE floating = (L+R)/2, which is what the firmware expects: it
     # duplicates the mono sample into both I2S slots. Tying it low shuts the
     # amplifier down. Gray, not a net class: the arrow is an annotation on a
@@ -292,8 +296,9 @@ def draw() -> schemdraw.Drawing:
 
     # Draw the routed nets last: finish() hops every hand-drawn lead already
     # in the drawing and dots every junction with one (#493), and the power
-    # stubs above cross routed wires. Routing itself was fixed at wire() time,
-    # so this moves only the Paths' place in the SVG's paint order.
+    # stubs drawn before routing cross routed wires. Routing itself was fixed
+    # at wire() time, so this moves only the Paths' place in the SVG's paint
+    # order.
     router.finish()
 
     return d

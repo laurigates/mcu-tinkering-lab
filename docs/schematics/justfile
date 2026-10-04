@@ -23,9 +23,41 @@ default:
 sync:
     uv sync
 
+# After rendering, names any project whose Typst documents embed a re-rendered
+# image — their committed PDFs are stale until `render-all` recompiles them.
+#
 # Render every circuit in circuits/ to SVG + PNG in images/
 [group: "build"]
-render: sync
+render: _render-images
+    uv run python guide_deps.py hint
+
+# A guide that embeds images/<name>.png compiles the image into its committed
+# PDF, so a re-render invalidates the PDF and build-guide-check.yml fails —
+# but schematics-check.yml passes on its own, so nothing local said so (issue
+# #595). This is the recipe to run after changing a circuit: both checks then
+# pass from what it leaves behind.
+#
+# The guides are found by reading their source (guide_deps.py), not listed
+# here, and each is compiled by its project's own `build-guide` recipe, which
+# pins the Typst CLI and the determinism flags CI uses. Every embedding project
+# is recompiled, changed image or not — the output is byte-deterministic, so
+# an unchanged guide recompiles to an identical PDF. A project with an
+# embedding document but no `build-guide` recipe fails here rather than being
+# skipped.
+#
+# Render every circuit, then recompile every Typst document that embeds one
+[group: "build"]
+render-all: _render-images
+    #!/usr/bin/env bash
+    set -euo pipefail
+    projects=$(uv run python guide_deps.py projects)
+    for proj in $projects; do
+        echo "recompiling Typst documents in $proj"
+        {{just_executable()}} --justfile "{{source_directory()}}/../../$proj/justfile" build-guide
+    done
+
+[private]
+_render-images: sync
     {{cairo_dyld}} uv run python render.py
 
 # Render a single circuit by name (without .py), e.g. `just schematics::render-one gamepad_synth`
