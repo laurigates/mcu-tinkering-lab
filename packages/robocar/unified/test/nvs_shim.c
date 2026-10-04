@@ -153,6 +153,7 @@ esp_err_t nvs_get_str(nvs_handle_t handle, const char *key, char *out_value, siz
         return ESP_OK;
     }
     if (*length < needed) {
+        *length = needed; /* as nvs_api.cpp does: report the size that would fit */
         return ESP_ERR_NVS_INVALID_LENGTH;
     }
     memcpy(out_value, e->value, needed);

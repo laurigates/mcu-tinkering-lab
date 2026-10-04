@@ -239,6 +239,7 @@ static void check_save_refused(const char *user, const char *pass, const char *w
     const int writes = nvs_shim_write_count();
     CHECK(!credentials_nvs_save_mqtt(user, pass), "save accepted %s", what);
     CHECK(nvs_shim_write_count() == writes, "refused save of %s still wrote NVS", what);
+    CHECK(nvs_shim_open_handles() == 0, "refused save of %s left an NVS handle open", what);
 }
 
 static void test_save_refuses_a_missing_or_empty_value(void)
@@ -294,6 +295,16 @@ static void test_saved_credentials_apply_at_the_next_boot(void)
     CHECK_STR(nvs_shim_get(MQTT_NS, MQTT_USER_KEY), "saved-user");
     CHECK_STR(nvs_shim_get(MQTT_NS, MQTT_PASS_KEY), "saved-pass");
     expect_boot("saved-user", "saved-pass", "nvs");
+}
+
+/* `mqtt auth` on a board that already has broker credentials: the new pair
+ * replaces both stored values rather than being refused or half-applied. */
+static void test_save_replaces_a_stored_pair(void)
+{
+    nvs_shim_put(MQTT_NS, MQTT_USER_KEY, "old-user");
+    nvs_shim_put(MQTT_NS, MQTT_PASS_KEY, "old-pass");
+    CHECK(credentials_nvs_save_mqtt("new-user", "new-pass"), "save refused to replace a pair");
+    expect_boot("new-user", "new-pass", "nvs");
 }
 
 static void test_save_fails_when_nvs_will_not_open(void)
@@ -355,6 +366,7 @@ int main(void)
         {"a_refused_save_keeps_the_stored_pair", test_a_refused_save_keeps_the_stored_pair},
         {"save_accepts_the_longest_values_that_fit", test_save_accepts_the_longest_values_that_fit},
         {"saved_credentials_apply_at_the_next_boot", test_saved_credentials_apply_at_the_next_boot},
+        {"save_replaces_a_stored_pair", test_save_replaces_a_stored_pair},
         {"save_fails_when_nvs_will_not_open", test_save_fails_when_nvs_will_not_open},
         {"clear_falls_back_to_credentials_h_at_the_next_boot",
          test_clear_falls_back_to_credentials_h_at_the_next_boot},
