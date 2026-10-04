@@ -8,5 +8,6 @@
   "otaNotifyTopic": "robocar-unified/ota/notify",
   "category": "robocar",
   "flashMode": "usb",
-  "improv": true
+  "improv": true,
+  "embedsBuildSha": true
 }

@@ -88,6 +88,11 @@ URL. `build-firmware.yml` now does it in two places, and both must stay:
 |---|---|
 | `Verify published firmware parts` | every `builds[].parts[].path` of every generated manifest returns 200 from the deployed Pages site, with a matching byte size |
 | `Verify release assets` | every staged basename is present in `.assets[].name` **by name**, then each matched `browser_download_url` fetches 200 |
+| `Verify manifest build SHA` | every manifest's `buildSha` is the tag checkout's `HEAD`, and each `"embedsBuildSha": true` project's app binary contains that SHA NUL-terminated (issue #627) |
+
+The third gate reads local files rather than the deployed site, because what
+it guards is agreement between two producers — CMake inside the build
+container and the generator on the runner — not publication.
 
 Two design points, both learned the hard way:
 

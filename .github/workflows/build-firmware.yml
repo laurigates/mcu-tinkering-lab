@@ -198,6 +198,7 @@ jobs:
           ref: ${{ github.workflow_sha }}
           sparse-checkout: |
             tools/lib
+            tools/check-embedded-build-sha.py
           sparse-checkout-cone-mode: false
           path: workflow-tools
 
@@ -293,6 +294,52 @@ jobs:
 
       - name: Generate flasher manifests and projects.json
         run: bash tools/generate-flasher-manifests.sh "${{ steps.version.outputs.version }}" firmware
+
+      - name: Verify manifest build SHA
+        # Every manifest must name the commit its binaries were built from
+        # ("buildSha", issue #627), and a project that compiles that commit
+        # into its app (flasher.json "embedsBuildSha") must actually contain
+        # the same string. The two come from different places — CMake inside
+        # the espressif/idf container in the build job, the generator here —
+        # and robocar-unified's OTA refuses any manifest whose SHA it cannot
+        # use, so a mismatch would publish a release no robot installs while
+        # every other gate stays green.
+        run: |
+          # The generator ran from the tag checkout. A workflow_dispatch replay
+          # of a tag cut before #627 has a generator that writes no buildSha
+          # and firmware that reads none, so there is nothing to verify; any
+          # tag whose generator knows the field is held to it in full.
+          if ! grep -q 'buildSha' tools/generate-flasher-manifests.sh; then
+            echo "::notice::the generator at this tag predates buildSha (issue #627) — skipping the build SHA check"
+            exit 0
+          fi
+
+          head_sha=$(git rev-parse HEAD)
+          echo "Build commit: $head_sha"
+          failed=()
+
+          for manifest in firmware/*/manifest.json; do
+            project_id=$(basename "$(dirname "$manifest")")
+            sha=$(jq -r '.buildSha // empty' "$manifest")
+            if [ "$sha" != "$head_sha" ]; then
+              failed+=("$project_id: manifest buildSha '${sha:-<missing>}' is not the build commit $head_sha")
+            fi
+          done
+
+          for flasher_json in packages/*/*/flasher.json; do
+            [ "$(jq -r '.embedsBuildSha // false' "$flasher_json")" = "true" ] || continue
+            project_id=$(basename "$(dirname "$flasher_json")")
+            app_bin=$(jq -r '.appBinaryName' "$flasher_json")
+            if ! python3 workflow-tools/tools/check-embedded-build-sha.py "firmware/$project_id/$app_bin" "$head_sha"; then
+              failed+=("$project_id: firmware/$project_id/$app_bin does not embed $head_sha")
+            fi
+          done
+
+          if [ "${#failed[@]}" -gt 0 ]; then
+            echo "Build SHA verification failed:"
+            printf '  %s\n' "${failed[@]}"
+            exit 1
+          fi
 
       - name: Verify manifest parts exist locally
         # Cheaper, earlier sibling of "Verify published firmware parts" below:
