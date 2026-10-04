@@ -104,7 +104,9 @@ esp_err_t voice_turn_request_vad(void);
  *
  * The ambient listener samples this around each read and offers an
  * overlapping frame to the pre-roll as silence, so the piezo never enters a
- * clip. See voice_preroll.h.
+ * clip (see voice_preroll.h), and keeps the frame out of the ambient gate, so
+ * the robot never hears its own beep as a change in the room (see
+ * ambient_gate_accepts()).
  */
 bool voice_turn_cue_active(void);
 
