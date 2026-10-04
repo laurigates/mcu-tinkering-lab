@@ -9,13 +9,15 @@ outside a marker block exactly as it was:
     ...regenerated...
     <!-- END GENERATED -->
 
-Only tables are generated. The prose around them — power, trade-offs, the
-flashing section — is judgment, not a restatement, and stays hand-written.
+Only the tables and the power diagram are generated. The prose around them —
+power budgets, trade-offs, the flashing section — is judgment, not a
+restatement, and stays hand-written.
 
 Blocks:
 
     pin-table         every GPIO pad on the board's header, in silkscreen order
     signals:<part>    the nets landing on one [parts.<part>], in sidecar order
+    power-diagram     [[rails]], the MCU's nets and [[outputs]] as Mermaid (#646)
 
 Usage, from the repo root:
 
@@ -38,7 +40,7 @@ from pathlib import Path
 
 from .board import BoardPin
 from .errors import HardwareError
-from .model import REPO_ROOT, SIDECAR, HardwareModel, join
+from .model import MCU, REPO_ROOT, SIDECAR, HardwareModel, join
 
 END = "<!-- END GENERATED -->"
 NOTICE = (
@@ -129,14 +131,70 @@ def signals_table(model: HardwareModel, part: str) -> str:
     return _table(["Signal", "Pin", "Function"], rows)
 
 
+def _label(text: str) -> str:
+    """Mermaid label text: entity codes for the characters that end a label."""
+    return text.replace('"', "#quot;").replace("|", "#124;")
+
+
+def power_diagram(model: HardwareModel) -> str:
+    """The supply topology and the MCU's signal nets as one Mermaid graph (#646).
+
+    Solid edges are rails (`[[rails]]`), labelled with the rail and the load
+    pin; dotted edges are the MCU's signal nets, one per part, each pin with
+    its GPIO and header pad; unlabelled edges are `[[outputs]]`. A part on
+    none of the three is left out.
+    """
+    order: list[str] = []
+
+    def node(key: str) -> str:
+        if key not in order:
+            order.append(key)
+        return key
+
+    edges: list[str] = []
+    for rail in model.rails:
+        source = node(rail.source.part)
+        for load in rail.loads:
+            label = _label(f"{rail.name} → {load.pin}")
+            edges.append(f'{source} -->|"{label}"| {node(load.part)}')
+    by_part: dict[str, list[str]] = {}
+    for net in model.nets:
+        by_part.setdefault(net.part, []).append(
+            _label(f"{_pin_cell(model, net.role)} → {net.pin}")
+        )
+    for part, pins in by_part.items():
+        edges.append(f'{node(MCU)} -.->|"{"<br/>".join(pins)}"| {node(part)}')
+    for output in model.outputs:
+        source = node(output.part)
+        edges.extend(f"{source} --> {node(load)}" for load in output.loads)
+
+    def title(key: str) -> str:
+        if key == MCU:
+            return _label(model.mcu)
+        part = model.parts[key]
+        return _label(part.name + (f"<br/>{part.note}" if part.note else ""))
+
+    lines = [
+        "```mermaid",
+        "graph TD",
+        *(f'    {key}["{title(key)}"]' for key in order),
+        *(f"    {edge}" for edge in edges),
+        "```",
+    ]
+    return "\n".join(lines) + "\n"
+
+
 def render_block(model: HardwareModel, name: str) -> str:
     if name == "pin-table":
         return pin_table(model)
+    if name == "power-diagram":
+        return power_diagram(model)
     kind, colon, arg = name.partition(":")
     if kind == "signals" and colon and arg:
         return signals_table(model, arg)
     raise HardwareError(
-        f"unknown generated block {name!r}; known: 'pin-table', 'signals:<part>'"
+        f"unknown generated block {name!r}; known: 'pin-table', 'power-diagram', "
+        "'signals:<part>'"
     )
 
 

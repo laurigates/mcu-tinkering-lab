@@ -25,6 +25,22 @@ is rejected so a `gpio = 5` cannot slip in beside one:
     role = "MIC_PDM_CLK_PIN"
     why  = "internal to the Sense module"
 
+    [[rails]]                   # a supply rail: one source pin, its load pins
+    name = "5V"
+    from = "buck.OUT+"
+    to   = ["mcu.5V", "amp.Vin"]
+
+    [[outputs]]                 # loads a part drives from its own terminals
+    from = "motor_driver"
+    to   = ["motor_left", "motor_right"]
+
+A rail endpoint is `part.PIN`. The reserved part id `mcu` is the project's MCU
+board, and its pin must be a pad in the board reference (`[source] mcu` names
+the board for display, default "MCU"). A part with a `board` page must have the
+pin there too. One pin on two rails is a short, and a rail pin that is also a
+signal net ties a GPIO to a supply; both are errors. The rail's `name` is its
+only voltage fact.
+
 A part's `board` names its own physical-layout page, where one exists (#629):
 `hardware.pinout` draws that board and labels each pad a net lands on. A part
 with no vendor-sourced layout leaves the key out and is not drawn.
@@ -43,17 +59,21 @@ from typing import Any
 from .board import Board, BoardPin, parse_board_table
 from .errors import HardwareError
 from .header import parse_defines, roles_from_defines
+from .layout import parse_layout
 
 SIDECAR = "hardware.toml"
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 _KEYS = {
-    "": {"source", "parts", "nets", "undrawn"},
-    "source": {"convention", "header", "extra_headers", "board"},
+    "": {"source", "parts", "nets", "undrawn", "rails", "outputs"},
+    "source": {"convention", "header", "extra_headers", "board", "mcu"},
     "part": {"name", "kind", "note", "board"},
     "net": {"role", "to", "note"},
     "undrawn": {"role", "why"},
+    "rail": {"name", "from", "to"},
+    "output": {"from", "to"},
 }
+MCU = "mcu"  # the reserved part id a rail endpoint uses for the MCU board
 
 
 @dataclass(frozen=True)
@@ -80,6 +100,25 @@ class Undrawn:
 
 
 @dataclass(frozen=True)
+class Endpoint:
+    part: str  # a [parts] id, or MCU for the board itself
+    pin: str
+
+
+@dataclass(frozen=True)
+class Rail:
+    name: str  # "5V"
+    source: Endpoint
+    loads: tuple[Endpoint, ...]
+
+
+@dataclass(frozen=True)
+class Output:
+    part: str
+    loads: tuple[str, ...]  # part ids
+
+
+@dataclass(frozen=True)
 class HardwareModel:
     project_dir: Path
     headers: tuple[Path, ...]  # header first, then extra_headers, in order
@@ -89,6 +128,9 @@ class HardwareModel:
     parts: dict[str, Part]
     nets: tuple[Net, ...]
     undrawn: tuple[Undrawn, ...]
+    rails: tuple[Rail, ...] = ()
+    outputs: tuple[Output, ...] = ()
+    mcu: str = "MCU"  # display name of the MCU board
 
     def pin_for(self, role: str) -> BoardPin | None:
         """The header pad a role lands on, or None if its GPIO is not broken out."""
@@ -110,6 +152,88 @@ def _require(where: str, table: dict[str, Any], key: str) -> str:
     if not isinstance(value, str) or not value:
         raise HardwareError(f"{where}: missing or non-string {key!r}")
     return value
+
+
+def _power(
+    sidecar: Path,
+    data: dict[str, Any],
+    parts: dict[str, Part],
+    nets: list[Net],
+    board: Board,
+    repo_root: Path,
+) -> tuple[tuple[Rail, ...], tuple[Output, ...]]:
+    """[[rails]] and [[outputs]], checked against the parts, the nets and the boards."""
+    pads: dict[str, set[str]] = {MCU: set(board.by_name)}
+    for key, part in parts.items():
+        if part.board:
+            pads[key] = {p.name for p in parse_layout(repo_root / part.board).pads}
+    signal = {(n.part, n.pin): n.role for n in nets}
+
+    def endpoint(where: str, value: Any) -> Endpoint:
+        part, dot, pin = (
+            value.partition(".") if isinstance(value, str) else ("", "", "")
+        )
+        if not dot or not part or not pin:
+            raise HardwareError(f"{where}: endpoint must be 'part.PIN', got {value!r}")
+        if part != MCU and part not in parts:
+            raise HardwareError(f"{where}: part {part!r} is not declared under [parts]")
+        if part in pads and pin not in pads[part]:
+            ref = board.path if part == MCU else repo_root / parts[part].board
+            raise HardwareError(
+                f"{where}: {value}: {ref.name} has no pad named {pin!r}"
+            )
+        if (part, pin) in signal:
+            raise HardwareError(
+                f"{where}: {value} is also the signal net {signal[part, pin]}"
+            )
+        return Endpoint(part, pin)
+
+    def array(key: str) -> list[Any]:
+        value = data.get(key, [])
+        if not isinstance(value, list):
+            raise HardwareError(f"{sidecar}: {key} must be [[{key}]] tables")
+        return value
+
+    def targets(where: str, table: dict[str, Any], what: str) -> list[Any]:
+        value = table.get("to")
+        if not isinstance(value, list) or not value:
+            raise HardwareError(f"{where}: 'to' must be a non-empty list of {what}")
+        return value
+
+    rails: list[Rail] = []
+    on_rail: dict[Endpoint, str] = {}
+    for i, table in enumerate(array("rails")):
+        where = f"{sidecar} [[rails]] #{i + 1}"
+        _check_keys(where, "rail", table)
+        name = _require(where, table, "name")
+        source = endpoint(where, _require(where, table, "from"))
+        loads = tuple(endpoint(where, v) for v in targets(where, table, "'part.PIN'"))
+        for e in (source, *loads):
+            if e in on_rail:
+                raise HardwareError(
+                    f"{where}: {e.part}.{e.pin} is on rail {on_rail[e]!r} "
+                    f"and rail {name!r} — that is a short"
+                )
+            on_rail[e] = name
+        rails.append(Rail(name, source, loads))
+
+    outputs: list[Output] = []
+    for i, table in enumerate(array("outputs")):
+        where = f"{sidecar} [[outputs]] #{i + 1}"
+        _check_keys(where, "output", table)
+        source = _require(where, table, "from")
+        loads = targets(where, table, "part ids")
+        for key in (source, *loads):
+            if not isinstance(key, str) or key not in parts:
+                raise HardwareError(
+                    f"{where}: part {key!r} is not declared under [parts]"
+                )
+        dupes = sorted({k for k in loads if loads.count(k) > 1})
+        if dupes:
+            raise HardwareError(f"{where}: {dupes} listed twice")
+        outputs.append(Output(part=source, loads=tuple(loads)))
+
+    return tuple(rails), tuple(outputs)
 
 
 def join(project_dir: Path, repo_root: Path = REPO_ROOT) -> HardwareModel:
@@ -167,6 +291,10 @@ def join(project_dir: Path, repo_root: Path = REPO_ROOT) -> HardwareModel:
     parts: dict[str, Part] = {}
     for key, table in parts_table.items():
         where = f"{sidecar} [parts.{key}]"
+        if key == MCU:
+            raise HardwareError(
+                f"{where}: the part id {MCU!r} is reserved for the MCU board"
+            )
         _check_keys(where, "part", table)
         board = ""
         if "board" in table:
@@ -215,13 +343,22 @@ def join(project_dir: Path, repo_root: Path = REPO_ROOT) -> HardwareModel:
             raise HardwareError(f"{where}: role {role!r} is excused twice")
         undrawn.append(Undrawn(role=role, why=_require(where, table, "why")))
 
+    board = parse_board_table(board_path)
+    mcu = source.get("mcu", "MCU")
+    if not isinstance(mcu, str) or not mcu:
+        raise HardwareError(f"{sidecar} [source]: mcu must be a name, got {mcu!r}")
+    rails, outputs = _power(sidecar, data, parts, nets, board, repo_root)
+
     return HardwareModel(
         project_dir=project_dir,
         headers=headers,
         defines=defines,
         roles=roles,
-        board=parse_board_table(board_path),
+        board=board,
         parts=parts,
         nets=tuple(nets),
         undrawn=tuple(undrawn),
+        rails=rails,
+        outputs=outputs,
+        mcu=mcu,
     )

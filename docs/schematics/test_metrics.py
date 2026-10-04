@@ -17,12 +17,14 @@ sys.path.insert(0, str(FsPath(__file__).parent))
 from metrics import (  # noqa: E402
     Box,
     CircuitMetrics,
+    Label,
     Tag,
     collinear_overlaps,
     crossings,
     format_table,
     junctions,
     length_inside_boxes,
+    length_over_labels,
     length_over_tags,
     measure,
     measure_circuits,
@@ -109,6 +111,41 @@ def test_measure_reports_over_tags():
     m = measure("demo", [[(-3, 0.5), (3, 0.5)]], [], GRID, [tag])
     assert m.over_tags == pytest.approx(0.5)
     assert measure("demo", [[(-3, 0.5), (3, 0.5)]], [], GRID).over_tags == 0.0
+
+
+def test_length_over_labels_counts_every_label_but_those_of_its_own_tags():
+    # A "+3V3" tag whose stub hangs off a pin at (-1, 0), its text box above
+    # the terminal, and a chip's name label off to the right (#641).
+    tag = Tag(Box(-0.25, 0.0, 0.25, 0.5), ((0.0, 0.0), (-1.0, 0.0)))
+    tag_label = Label(Box(-0.4, 0.5, 0.4, 0.8), "+3V3", tag)
+    chip_label = Label(Box(2.0, 0.0, 4.0, 0.3), "ESP32-S3-Zero")
+    labels = [tag_label, chip_label]
+    across = [(-3, 0.65), (1, 0.65)]  # through the tag's text: 0.8 wide
+    down = [(3, 3), (3, -3)]  # down through the chip label: 0.3 tall
+    # Along the text box's top edge: counts, as for a tag body, because the
+    # box is only schemdraw's estimate of the text and a substituted font
+    # draws past it.
+    along_edge = [(-3, 0.8), (1, 0.8)]
+    beside = [(-3, 1.0), (1, 1.0)]  # clear of it: nothing
+    # Ends on the pin the tag hangs off, so the tag's own label is exempt,
+    # exactly as its body is in over_tags...
+    own = [(-1.0, 0.0), (-1.0, 0.65), (0.6, 0.65)]
+    # ...but no other label is: a chip's name crossed by one of its own nets
+    # is no easier to read (gamepad_synth's GPIO8/GPIO9 did that).
+    own_then_chip = [(-1.0, 0.0), (-1.0, 0.15), (5.0, 0.15)]
+    assert length_over_labels([across], labels) == pytest.approx(0.8)
+    assert length_over_labels([down], labels) == pytest.approx(0.3)
+    assert length_over_labels([along_edge], labels) == pytest.approx(0.8)
+    assert length_over_labels([beside], labels) == pytest.approx(0.0)
+    assert length_over_labels([own], labels) == pytest.approx(0.0)
+    assert length_over_labels([own_then_chip], labels) == pytest.approx(2.0)
+
+
+def test_measure_reports_over_labels():
+    label = Label(Box(-0.4, 0.5, 0.4, 0.8), "+3V3")
+    m = measure("demo", [[(-3, 0.65), (3, 0.65)]], [], GRID, labels=[label])
+    assert m.over_labels == pytest.approx(0.8)
+    assert measure("demo", [[(-3, 0.65), (3, 0.65)]], [], GRID).over_labels == 0.0
 
 
 # -- crossings ----------------------------------------------------------------

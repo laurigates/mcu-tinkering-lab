@@ -1,6 +1,6 @@
 # Wiring — robocar-unified (XIAO ESP32-S3 Sense)
 
-Single-board wiring for the consolidated robocar. All pin assignments are authoritative in [`main/pin_config.h`](main/pin_config.h); this document mirrors them for human reference. The pin tables marked `GENERATED` are emitted from [`hardware.toml`](hardware.toml), the header and the board reference by `just hardware::gen` (ADR-021), and CI fails when they are stale — change those sources, not the tables.
+Single-board wiring for the consolidated robocar. All pin assignments are authoritative in [`main/pin_config.h`](main/pin_config.h); this document mirrors them for human reference. The pin tables and the power diagram marked `GENERATED` are emitted from [`hardware.toml`](hardware.toml), the header and the board reference by `just hardware::gen` (ADR-021), and CI fails when they are stale — change those sources, not the tables.
 
 ![Schematic](../../../docs/schematics/images/robocar_unified.png)
 
@@ -84,26 +84,60 @@ position so this ordering cannot silently mis-drive a pin.
 
 ## Power
 
+Solid edges are supply rails, labelled with the rail and the pin it lands on;
+dotted edges are the XIAO's signal nets, each with its GPIO and header pad;
+unlabelled edges are loads a part drives from its own terminals. The diagram is
+emitted from the `[[rails]]`, `[[nets]]` and `[[outputs]]` in
+[`hardware.toml`](hardware.toml), so a pin or rail changed there or in
+`main/pin_config.h` reaches it through `just hardware::gen`.
+
+<!-- BEGIN GENERATED: power-diagram -->
+<!-- Generated from hardware.toml, main/pin_config.h and the board reference by `just hardware::gen` — edit those, not this block. -->
+
 ```mermaid
 graph TD
-    Bat[2x 18650 in SERIES<br/>7.4 V nominal, 8.4 V charged] --> Buck[LM2596 buck module<br/>adjust to 5.0 V]
-    Buck -->|5V| XIAO[XIAO ESP32-S3 Sense<br/>5V pin]
-    Buck -->|5V| MD[TB6612FNG<br/>VM only]
-    Buck -->|5V| PCA[PCA9685<br/>V+ only]
-    Buck -->|5V| AMP[MAX98357A<br/>Vin]
-    XIAO -->|3.3V| MD_L[TB6612FNG VCC]
-    XIAO -->|3.3V| PCA_L[PCA9685 VCC]
-    PCA --> Servos[SG90 servos]
-    MD --> ML[Left motor]
-    MD --> MR[Right motor]
-    PCA --> LED_L[Left RGB LED<br/>common-anode]
-    PCA --> LED_R[Right RGB LED<br/>common-anode]
-    XIAO -->|GPIO2| Piezo[Piezo buzzer]
-    XIAO -->|GPIO1| MD
-    XIAO -->|GPIO7/8/9 I2S| AMP
-    AMP --> SPK[4-8 ohm speaker]
-    classDef gnd fill:#ccc,stroke:#333
+    pack["2x 18650 in series<br/>7.4 V nominal, 8.4 V charged"]
+    buck["LM2596 buck module<br/>adjust to 5.0 V before connecting a load"]
+    mcu["XIAO ESP32-S3 Sense"]
+    motor_driver["TB6612FNG"]
+    pwm["PCA9685"]
+    amp["MAX98357A"]
+    mux["TCA9548A"]
+    ranger["HC-SR04P"]
+    oled["SSD1306 OLED"]
+    expander["MCP23017<br/>optional"]
+    buzzer["Piezo buzzer"]
+    servos["SG90 servos<br/>pan, tilt"]
+    led_left["Left RGB LED<br/>common-anode"]
+    led_right["Right RGB LED<br/>common-anode"]
+    motor_left["Left motor"]
+    motor_right["Right motor"]
+    speaker["Speaker<br/>4–8 Ω"]
+    pack -->|"VBAT → IN+"| buck
+    buck -->|"5V → 5V"| mcu
+    buck -->|"5V → VM"| motor_driver
+    buck -->|"5V → V+"| pwm
+    buck -->|"5V → Vin"| amp
+    mcu -->|"3V3 → VCC"| motor_driver
+    mcu -->|"3V3 → VCC"| pwm
+    mcu -->|"3V3 → VIN"| mux
+    mcu -->|"3V3 → VCC"| ranger
+    mcu -->|"3V3 → VCC"| oled
+    mcu -->|"3V3 → VCC"| expander
+    mcu -.->|"GPIO5 (D4) → SDA<br/>GPIO6 (D5) → SCL"| mux
+    mcu -.->|"GPIO1 (D0) → STBY"| motor_driver
+    mcu -.->|"GPIO3 (D2) → TRIG<br/>GPIO4 (D3) → ECHO"| ranger
+    mcu -.->|"GPIO2 (D1) → +"| buzzer
+    mcu -.->|"GPIO7 (D8) → BCLK<br/>GPIO8 (D9) → LRC<br/>GPIO9 (D10) → DIN"| amp
+    pwm --> servos
+    pwm --> led_left
+    pwm --> led_right
+    motor_driver --> motor_left
+    motor_driver --> motor_right
+    amp --> speaker
 ```
+
+<!-- END GENERATED -->
 
 **Common ground required across all components.**
 
@@ -161,7 +195,7 @@ anything else on this rail.
 
 ### Star-wire the rail; do not daisy-chain
 
-Every load in the diagram takes its own feed from the regulator's output
+Every 5V load in the diagram takes its own feed from the regulator's output
 terminal. This is load-bearing rather than tidiness: a servo's inrush flowing
 through the amplifier's feed wire modulates the amplifier's local supply, which
 is heard as distortion. The motor driver, the PCA9685/servos and the amplifier

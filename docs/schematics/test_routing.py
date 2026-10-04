@@ -776,12 +776,16 @@ def test_no_dot_where_a_routed_wire_runs_through_a_power_or_ground_tag():
 # penalty per lattice cell inside a tag the wire is not wired to.
 
 
-def _tag_drawing():
-    """A ground tag on a 1-unit stub from a "pin" at (0, 0): terminal (1, 0)."""
+def _tag_drawing(label: str = "", loc: str = "top"):
+    """A ground tag on a 1-unit stub from a "pin" at (0, 0): terminal (1, 0).
+
+    ``label`` gives the tag a text label at ``loc`` (#641).
+    """
     d = schemdraw.Drawing(show=False)
     d.config(unit=2.0)
     d.add(elm.Line().right(1.0).at((0.0, 0.0)))
-    d.add(elm.Ground())
+    tag = elm.Ground()
+    d.add(tag.label(label, loc=loc) if label else tag)
     return d
 
 
@@ -826,6 +830,71 @@ def test_a_wire_to_the_tags_own_pin_is_not_charged():
     assert charged == free
 
 
+# -- labels (#641) ------------------------------------------------------------
+#
+# The obstacle and tag boxes are taken without text, so nothing stopped a wire
+# being drawn straight through a label. Each text segment is its own label box,
+# charged per lattice point like a tag; a tag's label is exempt for the nets
+# wired to that tag, as the tag itself is.
+
+
+def test_labels_are_read_per_text_segment_and_know_their_tag():
+    d = _tag_drawing("GND")
+    d.add(elm.Label().at((4.0, 4.0)).label("NOTE"))
+    labels = Router(d)._labels()
+    assert [lbl.text for lbl in labels] == ["GND", "NOTE"]
+    gnd, note = labels
+    assert gnd.owned_by((0.0, 0.0)), "the pin its tag's stub leads to"
+    assert not gnd.owned_by((0.0, -3.0))
+    assert not note.owned_by((4.0, 4.0)), "a plain label belongs to no net"
+    assert note.box.contains(4.0, 4.0)
+
+
+def test_a_wire_detours_round_a_foreign_label():
+    from metrics import length_over_labels
+
+    def route(penalty):
+        d = schemdraw.Drawing(show=False)
+        d.config(unit=2.0)
+        d.add(elm.Label().at((1.0, 0.0)).label("NOTE"))
+        router = Router(d, label_penalty=penalty)
+        w = router.wire((-3.0, 0.0), (5.0, 0.0), net="signal")
+        return w.points, router._labels()
+
+    straight, labels = route(0.0)
+    assert length_over_labels([straight], labels) > 0, "precondition: runs through"
+    detoured, labels = route(Router.__init__.__kwdefaults__["label_penalty"])
+    assert length_over_labels([detoured], labels) == 0, f"crossed it: {detoured}"
+
+
+def test_a_wire_to_the_tags_own_pin_is_not_charged_for_its_label():
+    # The tag's own net may cross the tag's label, as it may cross its body:
+    # the label sits beside the very pin the wire ends on.
+    def route(penalty):
+        d = _tag_drawing("GND", loc="bot")
+        router = Router(d, label_penalty=penalty, tag_penalty=0.0)
+        return router.wire((0.0, 0.0), (2.0, -1.0)).points, router._labels()
+
+    from metrics import Label, length_over_labels
+
+    free, (label,) = route(0.0)
+    unowned = Label(label.box, label.text)
+    assert length_over_labels([free], [unowned]) > 0, "precondition: crosses it"
+    charged, _ = route(Router.__init__.__kwdefaults__["label_penalty"])
+    assert charged == free
+
+
+def test_no_real_wire_runs_through_a_label(real_circuits):
+    # #641: robocar_unified's SC1 -> OLED SDA net ran down through the OLED's
+    # +3V3 label, balancebot's two MPU6050 nets through both +3V3 labels and
+    # the pull-up's "10 kΩ", and gamepad_synth's two piezo nets left their
+    # pins straight through the chip's own name.
+    for c in real_circuits:
+        assert c.metrics.over_labels == 0, (
+            f"{c.name}: {c.metrics.over_labels:.2f} units of wire through labels"
+        )
+
+
 def test_no_real_wire_runs_over_a_foreign_power_or_ground_tag(real_circuits):
     # #591: robocar_unified's STBY net ran down through the TCA9548A GND tag
     # (0.64 units, the tag's full height) and balancebot's GPIO0 net across
@@ -835,6 +904,42 @@ def test_no_real_wire_runs_over_a_foreign_power_or_ground_tag(real_circuits):
         assert c.metrics.over_tags == 0, (
             f"{c.name}: {c.metrics.over_tags:.2f} units of wire over foreign tags"
         )
+
+
+def test_every_real_circuit_places_its_tags_before_its_first_net(monkeypatch):
+    # The router charges tag_penalty only for tags already in the drawing when
+    # wire() runs (#591), so a tag added after the nets is invisible to the
+    # search: the test above can only catch a wire over it after the fact
+    # (#649, gamepad_synth). Every net must see the circuit's final tag set.
+    from render import circuit_files, draw_circuit, load_circuit
+
+    def tag_count(d):
+        return sum(isinstance(el, (elm.Vdd, elm.Ground)) for el in d.elements)
+
+    seen: list[tuple[object, int]] = []
+    real_wire = Router.wire
+
+    def counting_wire(self, *args, **kwargs):
+        seen.append((self.d, tag_count(self.d)))
+        return real_wire(self, *args, **kwargs)
+
+    monkeypatch.setattr(Router, "wire", counting_wire)
+    checked = 0
+    for path in circuit_files([]):
+        mod = load_circuit(path)
+        if mod is None:
+            continue
+        seen.clear()
+        d = draw_circuit(mod)
+        final = tag_count(d)
+        nets = [n for drawing, n in seen if drawing is d]
+        late = [n for n in nets if n != final]
+        assert not late, (
+            f"{path.stem}: {len(late)} of {len(nets)} nets routed before all "
+            f"{final} power/ground tags were placed"
+        )
+        checked += 1
+    assert checked > 0, "no circuits were found to check"
 
 
 # -- legibility of the marks ------------------------------------------------------

@@ -42,7 +42,7 @@ from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 
 import schemdraw.elements as elm
-from schemdraw.segments import SegmentCircle, SegmentPath
+from schemdraw.segments import SegmentCircle, SegmentPath, SegmentText
 
 Coord = tuple[float, float]
 # Lattice cell (ix, iy) -> the sorted axes ("H", "V") wires run along there.
@@ -78,6 +78,20 @@ _NEIGHBOUR_FRACTIONS: tuple[float, ...] = (0.25,)
 # margin, and nothing changed between 14 and 100. A soft cost, not a block:
 # no value makes a pin beside its chip's own GND tag unreachable.
 TAG_PENALTY = 20.0
+
+# Charge per lattice point on or inside a text label the wire does not own
+# (#641), in grid steps. Measured with metrics.py's over_labels column. Before
+# any circuit changed, robocar_unified's SC1 -> OLED SDA vertical cleared from
+# 2 up with no other column moving, but most of the 3.16 units total could not
+# be charged away: a label over a pin stub, which the search never sees
+# (gamepad_synth's chip name under GPIO8/GPIO9, the MPU6050 +3V3 over
+# balancebot's INT row, the OLED +3V3 over its SDA row), and balancebot's
+# pull-up +3V3 across the I2C bundle's path, which 20 cleared only by taking
+# balancebot from 2 crossings to 8. Those labels moved instead, and every
+# circuit now measures 0 at any value from 0 to 100 with every other column
+# unchanged. The charge is for the next free run through a label; 20 matches
+# TAG_PENALTY, and is paid on top of it where a tag's label overlaps its body.
+LABEL_PENALTY = 20.0
 
 
 @dataclass
@@ -117,6 +131,24 @@ class _Tag:
 
     def owned_by(self, point: Coord) -> bool:
         return self.box.contains(*point) or any(_same(point, p) for p in self.attached)
+
+
+@dataclass(frozen=True)
+class _Label:
+    """One text label: its estimated box and, for a tag's label, the tag (#641).
+
+    ``box`` is schemdraw's own estimate of the text's extent, from its font
+    metrics; a viewer that substitutes another font draws somewhat past it.
+    A tag's label belongs to the nets wired to that tag, exactly as its body
+    does; any other label belongs to no net, its own component's included.
+    """
+
+    box: _BBox
+    text: str
+    tag: _Tag | None = None
+
+    def owned_by(self, point: Coord) -> bool:
+        return self.tag is not None and self.tag.owned_by(point)
 
 
 def _snap(value: float, grid: float) -> float:
@@ -429,6 +461,7 @@ class _Plan:
     ``obstacles`` is a tuple so ``frozen`` means what it says for it: the
     plan is the world a re-route must see unchanged. ``leads`` is still a
     dict; nothing mutates it after ``_lead_occupancy()`` builds it fresh.
+    ``labels`` are the boxes of the text labels the net does not own.
     """
 
     start: Coord
@@ -438,6 +471,7 @@ class _Plan:
     obstacles: tuple[_BBox, ...] = field(repr=False)
     leads: _Occupancy = field(repr=False)
     tags: tuple[_BBox, ...] = field(default=(), repr=False)
+    labels: tuple[_BBox, ...] = field(default=(), repr=False)
 
     @property
     def span(self) -> float:
@@ -503,6 +537,9 @@ class Router:
             on or inside a power or ground tag the wire is not wired to
             (#591). A soft cost rather than an obstacle, so a pin beside
             its chip's own GND tag stays reachable.
+        label_penalty: Extra cost charged per grid step onto a lattice point
+            on or inside a text label the wire does not own (#641): any
+            label but that of a tag it is wired to.
     """
 
     def __init__(
@@ -515,6 +552,7 @@ class Router:
         turn_penalty: float = 4.0,
         overlap_penalty: float = 6.0,
         tag_penalty: float = TAG_PENALTY,
+        label_penalty: float = LABEL_PENALTY,
     ) -> None:
         self.d = d
         self.grid = grid
@@ -523,6 +561,7 @@ class Router:
         self.turn_penalty = turn_penalty
         self.overlap_penalty = overlap_penalty
         self.tag_penalty = tag_penalty
+        self.label_penalty = label_penalty
         # Lattice cell -> the axes routed wires run along through it, as a
         # sorted tuple rather than a set (#494): nothing may ever read a set's
         # iteration order into the output, and an immutable value also lets
@@ -585,25 +624,54 @@ class Router:
         end of a two-piece stub still knows the pin it belongs to.
         """
         leads = [pts for pts, _ in self._leads()]
-        tags = []
+        return [
+            self._tag(el, leads)
+            for el in self.d.elements
+            if isinstance(el, (elm.Vdd, elm.Ground))
+        ]
+
+    @staticmethod
+    def _tag(el, leads: list[list[Coord]]) -> _Tag:
+        """The :class:`_Tag` for power/ground element ``el``: see ``_tags``."""
+        xmin, ymin, xmax, ymax = el.get_bbox(transform=True, includetext=False)
+        x, y = el.absanchors["start"]
+        attached = [(float(x), float(y))]
+        grew = True
+        while grew:
+            grew = False
+            for pts in leads:
+                ends = (pts[0], pts[-1])
+                if any(_same(e, p) for e in ends for p in attached):
+                    for e in ends:
+                        if not any(_same(e, p) for p in attached):
+                            attached.append(e)
+                            grew = True
+        return _Tag(_BBox(xmin, ymin, xmax, ymax), tuple(attached))
+
+    def _labels(self) -> list[_Label]:
+        """Every text label in ``d``, one per text segment, in drawing order.
+
+        Component and tag boxes are both taken without their text, so a wire
+        could otherwise be drawn straight through a label (#641). Routed
+        Paths carry no text and are skipped; a blank label marks nothing.
+        """
+        leads = [pts for pts, _ in self._leads()]
+        labels = []
         for el in self.d.elements:
-            if not isinstance(el, (elm.Vdd, elm.Ground)):
+            if isinstance(el, Path):
                 continue
-            xmin, ymin, xmax, ymax = el.get_bbox(transform=True, includetext=False)
-            x, y = el.absanchors["start"]
-            attached = [(float(x), float(y))]
-            grew = True
-            while grew:
-                grew = False
-                for pts in leads:
-                    ends = (pts[0], pts[-1])
-                    if any(_same(e, p) for e in ends for p in attached):
-                        for e in ends:
-                            if not any(_same(e, p) for p in attached):
-                                attached.append(e)
-                                grew = True
-            tags.append(_Tag(_BBox(xmin, ymin, xmax, ymax), tuple(attached)))
-        return tags
+            texts = [
+                s for s in el.segments if isinstance(s, SegmentText) and s.text.strip()
+            ]
+            if not texts:
+                continue
+            tag = (
+                self._tag(el, leads) if isinstance(el, (elm.Vdd, elm.Ground)) else None
+            )
+            for seg in texts:
+                box = _BBox(*seg.xform(el.transform).get_bbox())
+                labels.append(_Label(box, seg.text, tag))
+        return labels
 
     def _owning_box(self, point: Coord, boxes: list[_BBox]) -> _BBox | None:
         x, y = point
@@ -651,6 +719,7 @@ class Router:
         occupied: _Occupancy,
         leads: _Occupancy,
         tags: Sequence[_BBox] = (),
+        labels: Sequence[_BBox] = (),
     ) -> list[Coord] | None:
         # One lattice for every net: index (ix, iy) is the absolute point
         # (ix * grid, iy * grid), the same cells _mark_occupied keys by.
@@ -704,6 +773,18 @@ class Router:
         tag_cells = {
             (ix, iy)
             for b in tags
+            for ix in range(math.floor(b.xmin / grid), math.ceil(b.xmax / grid) + 1)
+            for iy in range(math.floor(b.ymin / grid), math.ceil(b.ymax / grid) + 1)
+            if b.contains(ix * grid, iy * grid)
+        }
+        # Lattice points on or inside a text label (#641). Edges count, as
+        # for a tag: the box is schemdraw's estimate of the text, and a viewer
+        # substituting a wider font draws past it — balancebot's SDA net run
+        # along the bottom edge of the pull-up's "+3V3" went through the text
+        # in cairosvg's render.
+        label_cells = {
+            (ix, iy)
+            for b in labels
             for ix in range(math.floor(b.xmin / grid), math.ceil(b.xmax / grid) + 1)
             for iy in range(math.floor(b.ymin / grid), math.ceil(b.ymax / grid) + 1)
             if b.contains(ix * grid, iy * grid)
@@ -762,6 +843,8 @@ class Router:
                 step_cost = 1.0 + occ_penalty(nix, niy, axis)
                 if (nix, niy) in tag_cells:
                     step_cost += self.tag_penalty
+                if (nix, niy) in label_cells:
+                    step_cost += self.label_penalty
                 if cdir is not None and (dx, dy) != cdir:
                     step_cost += self.turn_penalty
                 new_cost = cost_so_far[current] + step_cost
@@ -893,7 +976,14 @@ class Router:
         tags = tuple(
             t.box for t in self._tags() if not t.owned_by(start) and not t.owned_by(end)
         )
-        plan = _Plan(start, end, entry, exit_, obstacles, self._lead_occupancy(), tags)
+        labels = tuple(
+            lbl.box
+            for lbl in self._labels()
+            if not lbl.owned_by(start) and not lbl.owned_by(end)
+        )
+        plan = _Plan(
+            start, end, entry, exit_, obstacles, self._lead_occupancy(), tags, labels
+        )
         points = self._route(plan, self._occupied)
         # Occupancy is marked now, not at finish(): the next wire() must see
         # this one to be penalised for running on or beside it, exactly as
@@ -908,7 +998,13 @@ class Router:
     def _route(self, plan: "_Plan", occupied: _Occupancy) -> list[Coord]:
         """The polyline for ``plan`` given the wires already in ``occupied``."""
         path = self._astar(
-            plan.entry, plan.exit_, plan.obstacles, occupied, plan.leads, plan.tags
+            plan.entry,
+            plan.exit_,
+            plan.obstacles,
+            occupied,
+            plan.leads,
+            plan.tags,
+            plan.labels,
         )
         if path is None:
             raise RuntimeError(

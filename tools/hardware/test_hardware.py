@@ -388,6 +388,111 @@ class JoinTest(unittest.TestCase):
             self.join(proj)
 
 
+POWER = """
+[parts.pack]
+name = "Pack"
+kind = "battery"
+
+[parts.lamp]
+name = "Lamp"
+kind = "lamp"
+
+[[rails]]
+name = "5V"
+from = "pack.+"
+to = ["mcu.5V", "led.VCC"]
+
+[[outputs]]
+from = "led"
+to = ["lamp"]
+"""
+
+
+class PowerTest(unittest.TestCase):
+    """[[rails]] and [[outputs]] (#646): the supply side of the join."""
+
+    make = JoinTest.make
+    join = JoinTest.join
+
+    def power(self, edit=lambda s: s):
+        return self.join(self.make(sidecar=edit(SIDECAR + POWER)))
+
+    def test_a_rail_is_split_into_its_source_and_loads(self):
+        (rail,) = self.power().rails
+        self.assertEqual(rail.name, "5V")
+        self.assertEqual((rail.source.part, rail.source.pin), ("pack", "+"))
+        self.assertEqual(
+            [(e.part, e.pin) for e in rail.loads], [("mcu", "5V"), ("led", "VCC")]
+        )
+
+    def test_an_output_names_the_loads_a_part_drives(self):
+        (out,) = self.power().outputs
+        self.assertEqual((out.part, out.loads), ("led", ("lamp",)))
+
+    def test_the_mcu_name_defaults_and_can_be_set(self):
+        self.assertEqual(self.power().mcu, "MCU")
+        model = self.power(
+            lambda s: s.replace('board = "board.md"', 'board = "board.md"\nmcu = "Dev"')
+        )
+        self.assertEqual(model.mcu, "Dev")
+
+    def test_an_mcu_endpoint_must_be_a_pad_on_the_board(self):
+        # The test board has a 5V pad and no 3V3 pad.
+        with self.assertRaisesRegex(HardwareError, "mcu.3V3.*no pad named '3V3'"):
+            self.power(lambda s: s.replace('"mcu.5V"', '"mcu.3V3"'))
+
+    def test_a_rail_pin_must_be_on_the_parts_board_where_it_has_one(self):
+        # led's board is the test board: 5V is a pad there, VCC is not.
+        def edit(s):
+            return s.replace('kind = "led"', 'kind = "led"\nboard = "board.md"')
+
+        with self.assertRaisesRegex(HardwareError, "led.VCC.*no pad named 'VCC'"):
+            self.power(edit)
+        model = self.power(lambda s: edit(s).replace('"led.VCC"', '"led.5V"'))
+        self.assertEqual(model.rails[0].loads[1].pin, "5V")
+
+    def test_a_rail_to_an_undeclared_part_fails(self):
+        with self.assertRaisesRegex(HardwareError, "part 'lde' is not declared"):
+            self.power(lambda s: s.replace('"led.VCC"', '"lde.VCC"'))
+
+    def test_a_rail_endpoint_without_a_pin_fails(self):
+        with self.assertRaisesRegex(HardwareError, "part.PIN"):
+            self.power(lambda s: s.replace('from = "pack.+"', 'from = "pack"'))
+
+    def test_a_rail_with_no_loads_fails(self):
+        with self.assertRaisesRegex(HardwareError, "'to' must be a non-empty list"):
+            self.power(lambda s: s.replace('to = ["mcu.5V", "led.VCC"]', "to = []"))
+
+    def test_one_pin_on_two_rails_is_a_short(self):
+        extra = '\n[[rails]]\nname = "3V3"\nfrom = "pack.-"\nto = ["led.VCC"]\n'
+        with self.assertRaisesRegex(
+            HardwareError, "led.VCC is on rail '5V' and rail '3V3'"
+        ):
+            self.power(lambda s: s + extra)
+
+    def test_a_rail_pin_that_is_also_a_signal_net_fails(self):
+        # led.A carries LED_PIN; putting it on a supply shorts a GPIO to a rail.
+        with self.assertRaisesRegex(HardwareError, "led.A.*LED_PIN"):
+            self.power(lambda s: s.replace('"led.VCC"', '"led.A"'))
+
+    def test_a_part_may_not_take_the_mcu_id(self):
+        with self.assertRaisesRegex(HardwareError, "'mcu' is reserved"):
+            self.power(lambda s: s.replace("[parts.lamp]", "[parts.mcu]"))
+
+    def test_an_output_to_an_undeclared_part_fails(self):
+        with self.assertRaisesRegex(HardwareError, "part 'lmap' is not declared"):
+            self.power(lambda s: s.replace('to = ["lamp"]', 'to = ["lmap"]'))
+
+    def test_an_output_listing_a_load_twice_fails(self):
+        with self.assertRaisesRegex(HardwareError, "lamp.*twice"):
+            self.power(lambda s: s.replace('to = ["lamp"]', 'to = ["lamp", "lamp"]'))
+
+    def test_unknown_rail_keys_are_rejected(self):
+        # A voltage number is prose; the rail's name is its only voltage fact.
+        with self.assertRaisesRegex(HardwareError, "volts"):
+            self.power(lambda s: s.replace('name = "5V"', 'name = "5V"\nvolts = 5'))
+
+
 class RobocarUnifiedJoinTest(unittest.TestCase):
     """The committed sidecar resolves against the committed header and board."""
 
@@ -416,6 +521,29 @@ class RobocarUnifiedJoinTest(unittest.TestCase):
         self.assertLessEqual({"UART0_TX_PIN", "UART0_RX_PIN"}, undrawn)
         self.assertEqual(self.model.pin_for("UART0_TX_PIN").name, "D6")
         self.assertEqual(self.model.pin_for("UART0_RX_PIN").name, "D7")
+
+    def rail_of(self) -> dict[tuple[str, str], str]:
+        return {(e.part, e.pin): r.name for r in self.model.rails for e in r.loads}
+
+    def test_logic_supplies_are_on_3v3_and_only_vm_and_v_plus_on_5v(self):
+        # WIRING.md § Logic rails are 3.3 V: both parts set their input
+        # threshold from their own VCC, so a 5 V VCC strands a 3.3 V GPIO.
+        rail = self.rail_of()
+        self.assertEqual(rail["motor_driver", "VCC"], "3V3")
+        self.assertEqual(rail["pwm", "VCC"], "3V3")
+        self.assertEqual(rail["motor_driver", "VM"], "5V")
+        self.assertEqual(rail["pwm", "V+"], "5V")
+
+    def test_the_amp_and_the_mcu_are_fed_from_the_regulator(self):
+        (five,) = [r for r in self.model.rails if r.name == "5V"]
+        self.assertEqual((five.source.part, five.source.pin), ("buck", "OUT+"))
+        rail = self.rail_of()
+        self.assertEqual(rail["amp", "Vin"], "5V")
+        self.assertEqual(rail["mcu", "5V"], "5V")
+
+    def test_the_3v3_rail_comes_from_the_xiaos_3v3_pad(self):
+        (three,) = [r for r in self.model.rails if r.name == "3V3"]
+        self.assertEqual((three.source.part, three.source.pin), ("mcu", "3V3"))
 
     def test_headers_are_pin_config_then_the_planner_headers(self):
         rel = [p.relative_to(UNIFIED).as_posix() for p in self.model.headers]
