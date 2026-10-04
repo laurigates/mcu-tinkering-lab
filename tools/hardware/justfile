@@ -10,7 +10,8 @@ default:
 # The join emits docs/auto/pin_defs.typ — the build guide's own recipe
 # (`just <project>::build-guide`) recompiles the PDF from it — and the tables
 # between `<!-- BEGIN GENERATED: ... -->` markers in the project's Markdown
-# (WIRING.md), via tools/hardware/docs.py.
+# (WIRING.md), via tools/hardware/docs.py; and the board pinout images the
+# build guide embeds (docs/auto/pinouts/*.svg), via tools/hardware/pinout.py.
 #
 # `--others --exclude-standard` picks up a hardware.toml that is not committed
 # yet, the same reason the build-guide recipe carries it.
@@ -25,6 +26,7 @@ gen:
         python3 tools/typst/generate-pin-defs.py "$(dirname "$toml")"
     done
     PYTHONPATH=tools python3 -m hardware.docs
+    PYTHONPATH=tools python3 -m hardware.pinout
 
 # Run the join's unit tests (stdlib unittest — nothing to install)
 [group: "test"]

@@ -22,13 +22,26 @@ extra_headers = ["main/planner_task.h", "main/plan_activity.h"]
 # the Sense page states the same external pinout and links to it.
 board = "docs/reference/boards/xiao-esp32s3.md"
 
+# `board` names a part's physical-layout page (read from the vendor's board
+# file); tools/hardware/pinout.py draws each one for the build guide (#629).
+# The HC-SR04P, the MCP23017 and the SSD1306 have no page until the fitted
+# modules are identified (#662), so they carry no `board` and are not drawn.
+
 [parts.mux]
 name = "TCA9548A"
 kind = "i2c-mux"
+board = "docs/reference/boards/adafruit-tca9548a.md"
+
+[parts.pwm]
+name = "PCA9685"
+kind = "pwm-driver"
+board = "docs/reference/boards/adafruit-pca9685.md"
+note = "Behind the mux on channel I2C_BUS_CHANNEL_PCA9685, so no MCU net lands on it"
 
 [parts.motor_driver]
 name = "TB6612FNG"
 kind = "motor-driver"
+board = "docs/reference/boards/sparkfun-tb6612fng.md"
 
 [parts.ranger]
 name = "HC-SR04P"
@@ -41,6 +54,7 @@ kind = "piezo"
 [parts.amp]
 name = "MAX98357A"
 kind = "i2s-amp"
+board = "docs/reference/boards/adafruit-max98357a.md"
 
 [[nets]]
 role = "I2C_SDA_PIN"

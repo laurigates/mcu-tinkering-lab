@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="139.55mm" height="62.40mm" viewBox="0 0 558.2 249.6" font-family="DejaVu Sans Mono">
+<title>Seeed Studio XIAO ESP32-S3</title>
+<rect x="0" y="0" width="558.2" height="249.6" fill="#ffffff"/>
+<text x="12.0" y="19.2" font-size="12" text-anchor="start" dominant-baseline="central" fill="#1f2933">Seeed Studio XIAO ESP32-S3</text>
+<rect x="229.3" y="31.2" width="132.1" height="178.0" rx="6" fill="#eef4ee" stroke="#1f2933" stroke-width="1.5"/>
+<circle cx="240.3" cy="54.2" r="5.5" fill="#2f6fb0" stroke="#1f2933" stroke-width="1" data-anchor="D0" data-side="L" data-pos="1"/>
+<text x="251.8" y="54.2" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933">D0</text>
+<text x="223.3" y="54.2" font-size="9" text-anchor="end" dominant-baseline="central" fill="#1f2933">GPIO1 · MOTOR_STBY → TB6612FNG STBY</text>
+<circle cx="240.3" cy="76.2" r="5.5" fill="#2f6fb0" stroke="#1f2933" stroke-width="1" data-anchor="D1" data-side="L" data-pos="2"/>
+<text x="251.8" y="76.2" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933">D1</text>
+<text x="223.3" y="76.2" font-size="9" text-anchor="end" dominant-baseline="central" fill="#1f2933">GPIO2 · PIEZO → Piezo buzzer +</text>
+<circle cx="240.3" cy="98.2" r="5.5" fill="#2f6fb0" stroke="#1f2933" stroke-width="1" data-anchor="D2" data-side="L" data-pos="3"/>
+<text x="251.8" y="98.2" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933">D2</text>
+<text x="223.3" y="98.2" font-size="9" text-anchor="end" dominant-baseline="central" fill="#1f2933">GPIO3 · ULTRASONIC_TRIG → HC-SR04P TRIG</text>
+<circle cx="240.3" cy="120.2" r="5.5" fill="#2f6fb0" stroke="#1f2933" stroke-width="1" data-anchor="D3" data-side="L" data-pos="4"/>
+<text x="251.8" y="120.2" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933">D3</text>
+<text x="223.3" y="120.2" font-size="9" text-anchor="end" dominant-baseline="central" fill="#1f2933">GPIO4 · ULTRASONIC_ECHO → HC-SR04P ECHO</text>
+<circle cx="240.3" cy="142.2" r="5.5" fill="#2f6fb0" stroke="#1f2933" stroke-width="1" data-anchor="D4" data-side="L" data-pos="5"/>
+<text x="251.8" y="142.2" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933">D4</text>
+<text x="223.3" y="142.2" font-size="9" text-anchor="end" dominant-baseline="central" fill="#1f2933">GPIO5 · I2C_SDA → TCA9548A SDA</text>
+<circle cx="240.3" cy="164.2" r="5.5" fill="#2f6fb0" stroke="#1f2933" stroke-width="1" data-anchor="D5" data-side="L" data-pos="6"/>
+<text x="251.8" y="164.2" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933">D5</text>
+<text x="223.3" y="164.2" font-size="9" text-anchor="end" dominant-baseline="central" fill="#1f2933">GPIO6 · I2C_SCL → TCA9548A SCL</text>
+<circle cx="240.3" cy="186.2" r="5.5" fill="#2f6fb0" stroke="#1f2933" stroke-width="1" data-anchor="D6" data-side="L" data-pos="7"/>
+<text x="251.8" y="186.2" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933">D6</text>
+<text x="223.3" y="186.2" font-size="9" text-anchor="end" dominant-baseline="central" fill="#1f2933">GPIO43 · UART0_TX (not wired)</text>
+<circle cx="350.4" cy="54.2" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="5V" data-side="R" data-pos="1"/>
+<text x="338.9" y="54.2" font-size="10" text-anchor="end" dominant-baseline="central" fill="#1f2933">5V</text>
+<circle cx="350.4" cy="76.2" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="GND" data-side="R" data-pos="2"/>
+<text x="338.9" y="76.2" font-size="10" text-anchor="end" dominant-baseline="central" fill="#1f2933">GND</text>
+<circle cx="350.4" cy="98.2" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="3V3" data-side="R" data-pos="3"/>
+<text x="338.9" y="98.2" font-size="10" text-anchor="end" dominant-baseline="central" fill="#1f2933">3V3</text>
+<circle cx="350.4" cy="120.2" r="5.5" fill="#2f6fb0" stroke="#1f2933" stroke-width="1" data-anchor="D10" data-side="R" data-pos="4"/>
+<text x="338.9" y="120.2" font-size="10" text-anchor="end" dominant-baseline="central" fill="#1f2933">D10</text>
+<text x="367.4" y="120.2" font-size="9" text-anchor="start" dominant-baseline="central" fill="#1f2933">GPIO9 · I2S_DIN → MAX98357A DIN</text>
+<circle cx="350.4" cy="142.2" r="5.5" fill="#2f6fb0" stroke="#1f2933" stroke-width="1" data-anchor="D9" data-side="R" data-pos="5"/>
+<text x="338.9" y="142.2" font-size="10" text-anchor="end" dominant-baseline="central" fill="#1f2933">D9</text>
+<text x="367.4" y="142.2" font-size="9" text-anchor="start" dominant-baseline="central" fill="#1f2933">GPIO8 · I2S_LRCLK → MAX98357A LRC</text>
+<circle cx="350.4" cy="164.2" r="5.5" fill="#2f6fb0" stroke="#1f2933" stroke-width="1" data-anchor="D8" data-side="R" data-pos="6"/>
+<text x="338.9" y="164.2" font-size="10" text-anchor="end" dominant-baseline="central" fill="#1f2933">D8</text>
+<text x="367.4" y="164.2" font-size="9" text-anchor="start" dominant-baseline="central" fill="#1f2933">GPIO7 · I2S_BCLK → MAX98357A BCLK</text>
+<circle cx="350.4" cy="186.2" r="5.5" fill="#2f6fb0" stroke="#1f2933" stroke-width="1" data-anchor="D7" data-side="R" data-pos="7"/>
+<text x="338.9" y="186.2" font-size="10" text-anchor="end" dominant-baseline="central" fill="#1f2933">D7</text>
+<text x="367.4" y="186.2" font-size="9" text-anchor="start" dominant-baseline="central" fill="#1f2933">GPIO44 · UART0_RX (not wired)</text>
+<text x="12.0" y="220.8" font-size="8" text-anchor="start" dominant-baseline="central" fill="#5b6770">Pads from docs/reference/boards/xiao-esp32s3.md</text>
+<text x="12.0" y="232.0" font-size="8" text-anchor="start" dominant-baseline="central" fill="#5b6770">Component side up · pad order exact · not to scale</text>
+</svg>

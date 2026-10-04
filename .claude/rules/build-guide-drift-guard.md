@@ -127,6 +127,26 @@ and with the pinned Typst CLI and flags the PDF is a deterministic function of
 its inputs, so a PDF compiled from the committed PNG on any host matches. What
 breaks the pair is committing one without the other.
 
+## 1d. The board pinout images are generated, and the guard regenerates them
+
+robocar-unified's build guide embeds one SVG per board
+(`docs/auto/pinouts/<board-slug>.svg`), drawn by `tools/hardware/pinout.py` from
+the board references hardware.toml names (`[source] board` and each part's
+`board`, #629). Unlike the schematic PNG they are byte-reproducible text, so for
+every document that references `auto/pinouts/` the guard regenerates them,
+exactly as it regenerates `pin_defs.typ`, and fails if the result differs from
+what is committed. A sibling document that embeds no pinout does not take them
+into its drift set, so a stale image is reported against the guide alone.
+
+Drift is read with `git status --porcelain`, not `git diff --quiet`: a board newly
+given a `board` key produces an SVG nobody committed, and `git diff` does not see
+untracked files. `pinout.py` also deletes an SVG no board produces any more.
+
+`just robocar-unified::build-guide` runs `gen-pinouts` first, and
+`just hardware::gen` regenerates them alongside everything else the join emits.
+Commit the SVGs and the PDF together. Edit the board reference or hardware.toml,
+never an SVG: the next regeneration overwrites a hand edit.
+
 ## 2. Verify a guard change by running the shipped script, with a negative control
 
 Nothing else exercises this workflow — same gap as the flash recipes in
