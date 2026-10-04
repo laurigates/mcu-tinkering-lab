@@ -6,8 +6,8 @@ has nothing but python3:
     python3 -m unittest tools/test_check_flash_recipes.py
 
 The dry-run text below is the shape `PORT=/dev/ttyDUMMY just --dry-run
-<module>::flash` actually prints; the two lookups (CMake project name, otadata
-row) are injected so no test depends on the real packages/ tree. The file-set
+<module>::flash` actually prints; the two lookups (CMake project name, flash
+layout) are injected so no test depends on the real packages/ tree. The file-set
 checks (attribute placement, justfile_directory(), the shared-recipe audit)
 walk REPO_ROOT, so their tests build a temporary tree and point REPO_ROOT at it.
 """
@@ -34,7 +34,14 @@ MAIN = Path("/repo/packages/robocar/main")
 DOCS = Path("/repo/packages/robocar/docs")
 
 PROJECTS = {MAIN: "idf-robocar"}
-OTADATA = {MAIN}
+# robocar-main's layout: esp32, default partition-table offset, otadata at 0xd000.
+ESP32_OTA = cfr.FlashLayout(
+    bootloader=0x1000, partition_table=0x8000, otadata=0xD000, app=0x10000
+)
+NO_OTADATA = cfr.FlashLayout(
+    bootloader=0x1000, partition_table=0x8000, otadata=None, app=0x10000
+)
+LAYOUTS = {MAIN: ESP32_OTA}
 
 
 def esptool(*parts: str) -> str:
@@ -48,15 +55,15 @@ def esptool(*parts: str) -> str:
     )
 
 
-def audit(text: str, module_dir: Path = MAIN, projects=None, otadata=None):
+def audit(text: str, module_dir: Path = MAIN, projects=None, layouts=None):
     projects = PROJECTS if projects is None else projects
-    otadata = OTADATA if otadata is None else otadata
+    layouts = LAYOUTS if layouts is None else layouts
     return cfr.audit_dry_run(
         "mod::flash",
         module_dir,
         text,
         project_name=projects.get,
-        has_otadata=lambda d: d in otadata,
+        layout=layouts.__getitem__,
     )
 
 
@@ -113,7 +120,7 @@ class OtadataTests(unittest.TestCase):
 
     def test_a_full_flash_without_otadata_is_fine_on_a_table_without_one(self):
         text = esptool(FULL[0], FULL[1], FULL[3])
-        _, findings = audit(text, otadata=set())
+        _, findings = audit(text, layouts={MAIN: NO_OTADATA})
         self.assertEqual(findings, [])
 
     def test_a_comment_naming_otadata_does_not_count_as_writing_it(self):
@@ -129,6 +136,129 @@ class OtadataTests(unittest.TestCase):
         # alone is then the point of the recipe.
         _, findings = audit(esptool(FULL[3]))
         self.assertEqual(findings, [])
+
+
+class OffsetTests(unittest.TestCase):
+    """Each file must sit where the target and partition table put it (#651)."""
+
+    def codes(self, text: str, layout=ESP32_OTA) -> list[str]:
+        _, findings = audit(text, layouts={MAIN: layout})
+        return [f.code for f in findings]
+
+    def test_every_part_at_its_layout_offset_passes(self):
+        self.assertEqual(self.codes(esptool(*FULL)), [])
+
+    def test_otadata_at_the_wrong_offset_fails(self):
+        # The #651 negative control: llm-telegram's otadata row is at 0xe000.
+        layout = cfr.FlashLayout(
+            bootloader=0x1000, partition_table=0x8000, otadata=0xE000, app=0x10000
+        )
+        _, findings = audit(esptool(*FULL), layouts={MAIN: layout})
+        self.assertEqual([f.code for f in findings], ["WRONG_OFFSET"])
+        self.assertIn("build/ota_data_initial.bin", findings[0].detail)
+        self.assertIn("0xd000", findings[0].detail)
+        self.assertIn("0xe000", findings[0].detail)
+
+    def test_the_app_at_the_wrong_offset_fails(self):
+        text = esptool(*FULL[:3], "0x20000 build/idf-robocar.bin")
+        self.assertEqual(self.codes(text), ["WRONG_OFFSET"])
+
+    def test_the_partition_table_follows_its_configured_offset(self):
+        layout = cfr.FlashLayout(
+            bootloader=0x1000, partition_table=0x9000, otadata=0xD000, app=0x10000
+        )
+        self.assertEqual(self.codes(esptool(*FULL), layout), ["WRONG_OFFSET"])
+
+    def test_an_esp32_bootloader_at_the_s3_offset_fails(self):
+        text = esptool("0x0 build/bootloader/bootloader.bin", *FULL[1:])
+        self.assertEqual(self.codes(text), ["WRONG_OFFSET"])
+
+    def test_an_s3_bootloader_at_the_esp32_offset_fails(self):
+        layout = cfr.FlashLayout(
+            bootloader=0x0, partition_table=0x8000, otadata=0xD000, app=0x10000
+        )
+        self.assertEqual(self.codes(esptool(*FULL), layout), ["WRONG_OFFSET"])
+
+    def test_every_wrong_part_is_reported_not_only_the_first(self):
+        text = esptool(
+            "0x0 build/bootloader/bootloader.bin",
+            "0x9000 build/partition_table/partition-table.bin",
+            "0xe000 build/ota_data_initial.bin",
+            "0x20000 build/idf-robocar.bin",
+        )
+        self.assertEqual(self.codes(text), ["WRONG_OFFSET"] * 4)
+
+    def test_decimal_and_uppercase_hex_offsets_are_read(self):
+        text = esptool(
+            "4096 build/bootloader/bootloader.bin",
+            "0X8000 build/partition_table/partition-table.bin",
+            "0xD000 build/ota_data_initial.bin",
+            "65536 build/idf-robocar.bin",
+        )
+        self.assertEqual(self.codes(text), [])
+
+    def test_a_wrong_decimal_offset_fails(self):
+        # 57344 is 0xe000; a check that only read hex would skip it.
+        text = esptool(*FULL[:2], "57344 build/ota_data_initial.bin", FULL[3])
+        self.assertEqual(self.codes(text), ["WRONG_OFFSET"])
+
+    def test_a_single_line_command_is_checked_too(self):
+        # gamepad-synth's recipe prints every pair on one line.
+        text = (
+            "esptool --chip esp32 -p /dev/ttyDUMMY -b 460800 write_flash "
+            "--flash-size 4MB --flash-freq 80m "
+            "0x1000 build/bootloader/bootloader.bin "
+            "0x8000 build/partition_table/partition-table.bin "
+            "0xd000 build/ota_data_initial.bin 0x1000 build/idf-robocar.bin\n"
+        )
+        self.assertEqual(self.codes(text), ["WRONG_OFFSET"])
+
+    def test_a_sibling_project_is_checked_against_its_own_layout(self):
+        # robocar::flash-main lives in docs/ and flashes ../main/build/...
+        text = esptool(
+            *(f"{p.split()[0]} {DOCS}/../main/{p.split()[1]}" for p in FULL[:3]),
+            f"0x20000 {DOCS}/../main/build/idf-robocar.bin",
+        )
+        _, findings = audit(text, module_dir=DOCS)
+        self.assertEqual([f.code for f in findings], ["WRONG_OFFSET"])
+
+    def test_a_part_whose_offset_is_unknown_cannot_pass(self):
+        # An unrecognised target has no bootloader offset to compare against;
+        # reading that as "fine" would fail the check open.
+        layout = cfr.FlashLayout(
+            bootloader=None,
+            partition_table=0x8000,
+            otadata=0xD000,
+            app=0x10000,
+            why={"bootloader": 'target "esp32x" is not one ESP-IDF v5.4 knows'},
+        )
+        _, findings = audit(esptool(*FULL), layouts={MAIN: layout})
+        self.assertEqual([f.code for f in findings], ["OFFSET_UNVERIFIABLE"])
+        self.assertIn("esp32x", findings[0].detail)
+
+    def test_an_unknown_app_or_partition_table_offset_cannot_pass_either(self):
+        for role in ("app", "partition_table"):
+            with self.subTest(role=role):
+                fields = dict(
+                    bootloader=0x1000,
+                    partition_table=0x8000,
+                    otadata=0xD000,
+                    app=0x10000,
+                )
+                fields[role] = None
+                layout = cfr.FlashLayout(**fields, why={role: f"no {role} offset"})
+                _, findings = audit(esptool(*FULL), layouts={MAIN: layout})
+                self.assertEqual([f.code for f in findings], ["OFFSET_UNVERIFIABLE"])
+                self.assertIn(f"no {role} offset", findings[0].detail)
+
+    def test_otadata_named_without_an_otadata_row_is_not_offset_checked(self):
+        # Without the row the build writes no ota_data_initial.bin, so esptool
+        # fails loudly on the missing file; there is no offset to compare.
+        self.assertEqual(self.codes(esptool(*FULL), NO_OTADATA), [])
+
+    def test_a_bin_without_an_offset_in_front_is_not_offset_checked(self):
+        text = "test -f build/idf-robocar.bin\n" + esptool(*FULL)
+        self.assertEqual(self.codes(text), [])
 
 
 class ScopeTests(unittest.TestCase):
@@ -165,28 +295,130 @@ class LookupTests(unittest.TestCase):
     def write(self, name: str, text: str) -> None:
         (self.dir / name).write_text(text)
 
-    def test_an_otadata_row_in_the_resolved_table_reads_true(self):
+    def test_the_otadata_row_of_the_resolved_table_gives_its_offset(self):
         self.write(
             "sdkconfig.defaults", 'CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="t.csv"\n'
         )
         self.write(
             "t.csv", "nvs,data,nvs,0x9000,0x4000,\notadata,data,ota,0xd000,0x2000,\n"
         )
-        self.assertTrue(cfr.otadata_partition(self.dir))
+        self.assertEqual(cfr.flash_layout(self.dir).otadata, 0xD000)
 
-    def test_a_table_without_an_otadata_row_reads_false(self):
+    def test_an_otadata_row_off_the_usual_address_keeps_its_offset(self):
+        # llm-telegram's table: a larger nvs pushes otadata to 0xe000.
+        self.write(
+            "partitions.csv",
+            "nvs,data,nvs,0x9000,0x5000,\notadata,data,ota,0xe000,0x2000,\n"
+            "factory,app,factory,0x10000,1792K,\n",
+        )
+        self.assertEqual(cfr.flash_layout(self.dir).otadata, 0xE000)
+
+    def test_a_predicate_that_fails_after_resolving_the_table_raises(self):
+        # The table path is printed before the otadata lookup runs, so a
+        # lookup that dies must not read as "no otadata row".
+        stub = self.dir / "stub-predicate.sh"
+        stub.write_text('resolve_partition_table() { echo "$1/partitions.csv"; }\n')
+        with mock.patch.object(cfr, "OTADATA_PREDICATE", stub):
+            with self.assertRaises(RuntimeError):
+                cfr.flash_layout(self.dir)
+
+    def test_a_table_without_an_otadata_row_has_no_otadata_offset(self):
         self.write(
             "partitions.csv",
             "nvs,data,nvs,0x9000,0x6000,\nfactory,app,factory,0x10000,1M,\n",
         )
-        self.assertFalse(cfr.otadata_partition(self.dir))
+        self.assertIsNone(cfr.flash_layout(self.dir).otadata)
 
-    def test_a_predicate_that_cannot_run_raises_rather_than_reading_false(self):
+    def test_a_predicate_that_cannot_run_raises_rather_than_reading_none(self):
         # Reading a broken predicate as "no otadata row" would fail the check open.
         missing = self.dir / "no-such-predicate.sh"
         with mock.patch.object(cfr, "OTADATA_PREDICATE", missing):
             with self.assertRaises(RuntimeError):
-                cfr.otadata_partition(self.dir)
+                cfr.flash_layout(self.dir)
+
+    def test_the_bootloader_offset_follows_the_justfile_target(self):
+        # components/bootloader/Kconfig.projbuild, BOOTLOADER_OFFSET_IN_FLASH.
+        for target, offset in (
+            ("esp32", 0x1000),
+            ("esp32s2", 0x1000),
+            ("esp32s3", 0x0),
+            ("esp32c2", 0x0),
+            ("esp32c3", 0x0),
+            ("esp32c6", 0x0),
+            ("esp32c61", 0x0),
+            ("esp32h2", 0x0),
+            ("esp32c5", 0x2000),
+            ("esp32p4", 0x2000),
+        ):
+            with self.subTest(target=target):
+                self.write("justfile", f'target := "{target}"\n')
+                self.assertEqual(cfr.flash_layout(self.dir).bootloader, offset)
+
+    def test_the_target_falls_back_to_sdkconfig_defaults(self):
+        self.write("sdkconfig.defaults", 'CONFIG_IDF_TARGET="esp32s3"\n')
+        self.assertEqual(cfr.flash_layout(self.dir).bootloader, 0x0)
+
+    def test_the_justfile_target_wins_over_sdkconfig_defaults(self):
+        # `just build` runs `idf.py set-target {{target}}`.
+        self.write("sdkconfig.defaults", 'CONFIG_IDF_TARGET="esp32s3"\n')
+        self.write("justfile", 'target := "esp32"\n')
+        self.assertEqual(cfr.flash_layout(self.dir).bootloader, 0x1000)
+
+    def test_a_missing_target_has_no_bootloader_offset(self):
+        layout = cfr.flash_layout(self.dir)
+        self.assertIsNone(layout.bootloader)
+        self.assertIn("target", layout.why["bootloader"])
+
+    def test_an_unknown_target_has_no_bootloader_offset(self):
+        self.write("justfile", 'target := "esp32x"\n')
+        layout = cfr.flash_layout(self.dir)
+        self.assertIsNone(layout.bootloader)
+        self.assertIn("esp32x", layout.why["bootloader"])
+
+    def test_the_partition_table_offset_defaults_to_0x8000(self):
+        self.assertEqual(cfr.flash_layout(self.dir).partition_table, 0x8000)
+
+    def test_the_partition_table_offset_is_read_from_sdkconfig_defaults(self):
+        self.write("sdkconfig.defaults", "CONFIG_PARTITION_TABLE_OFFSET=0x9000\n")
+        self.assertEqual(cfr.flash_layout(self.dir).partition_table, 0x9000)
+
+    def test_the_app_goes_to_the_factory_partition_when_there_is_one(self):
+        self.write(
+            "partitions.csv",
+            "nvs,data,nvs,0x9000,0x4000,\notadata,data,ota,0xd000,0x2000,\n"
+            "ota_0,app,ota_0,0x10000,1M,\nfactory,app,factory,0x110000,1M,\n",
+        )
+        self.assertEqual(cfr.flash_layout(self.dir).app, 0x110000)
+
+    def test_without_a_factory_partition_the_app_goes_to_the_lowest_ota_slot(self):
+        # parttool.py's boot-default search: factory, then ota_0 .. ota_15.
+        self.write(
+            "partitions.csv",
+            "otadata,data,ota,0xd000,0x2000,\n"
+            "ota_1,app,ota_1,0x10000,1M,\nota_0,app,ota_0,0x110000,1M,\n",
+        )
+        self.assertEqual(cfr.flash_layout(self.dir).app, 0x110000)
+
+    def test_an_auto_placed_app_partition_has_no_offset_to_check(self):
+        self.write(
+            "partitions.csv", "nvs,data,nvs,,0x6000,\nfactory,app,factory,,1M,\n"
+        )
+        layout = cfr.flash_layout(self.dir)
+        self.assertIsNone(layout.app)
+        self.assertIn("factory", layout.why["app"])
+
+    def test_a_table_without_an_app_partition_has_no_app_offset(self):
+        self.write("partitions.csv", "nvs,data,nvs,0x9000,0x6000,\n")
+        self.assertIsNone(cfr.flash_layout(self.dir).app)
+
+    def test_a_built_in_table_puts_the_app_at_0x10000(self):
+        # No partitions.csv: ESP-IDF's presets place factory after nvs and
+        # phy_init, which lands on 0x10000 behind a table at 0x8000.
+        self.assertEqual(cfr.flash_layout(self.dir).app, 0x10000)
+
+    def test_a_built_in_table_behind_a_moved_partition_table_is_not_guessed(self):
+        self.write("sdkconfig.defaults", "CONFIG_PARTITION_TABLE_OFFSET=0x10000\n")
+        self.assertIsNone(cfr.flash_layout(self.dir).app)
 
     def test_the_cmake_project_name_names_the_app_file(self):
         self.write(
