@@ -121,6 +121,25 @@ jobs:
             idf.py size >> size-report.txt 2>&1;
             idf.py size-components >> size-report.txt 2>&1; true; }
 
+      # A project that compiles its build commit into the app (flasher.json
+      # "embedsBuildSha", issue #627) resolves it with git inside the
+      # espressif/idf container, where a root process against this
+      # runner-owned checkout is refused as "dubious ownership" unless the
+      # CMake call passes safe.directory. That failure still builds — it just
+      # embeds "unknown". build-firmware.yml checks the same thing at release;
+      # this runs it on every PR so the container path is exercised before a
+      # release depends on it.
+      - name: Verify embedded build SHA
+        working-directory: packages/${{ inputs.project_path }}
+        shell: bash
+        run: |
+          if [ ! -f flasher.json ] || [ "$(jq -r '.embedsBuildSha // false' flasher.json)" != "true" ]; then
+            echo "flasher.json does not declare embedsBuildSha — skipping"
+            exit 0
+          fi
+          app_bin=$(jq -r '.appBinaryName' flasher.json)
+          python3 "$GITHUB_WORKSPACE/tools/check-embedded-build-sha.py" "build/$app_bin" "$(git rev-parse HEAD)"
+
       - name: Host unit tests
         working-directory: packages/${{ inputs.project_path }}
         shell: bash

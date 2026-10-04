@@ -570,6 +570,23 @@ target_link_libraries(test_ota_version_compare PRIVATE Threads::Threads m)
 add_test(NAME ota_version_compare COMMAND test_ota_version_compare)
 
 # -----------------------------------------------------------------------------
+# ota_update_decision (issue #627 — build SHA in the OTA manifest)
+#
+# Pure C, no ESP-IDF dependency. Combines the version comparison above with
+# the manifest's "buildSha" and the SHA compiled into the firmware: only a
+# strictly newer version with a valid manifest SHA may install, a missing SHA
+# refuses (fail closed), and an equal version is reported by what the SHA
+# comparison found.
+# -----------------------------------------------------------------------------
+add_executable(test_ota_update_decision
+    "${MAIN_SRC_DIR}/ota_update_decision.c"
+    "${MAIN_SRC_DIR}/ota_version_compare.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_ota_update_decision.c"
+)
+target_link_libraries(test_ota_update_decision PRIVATE Threads::Threads m)
+add_test(NAME ota_update_decision COMMAND test_ota_update_decision)
+
+# -----------------------------------------------------------------------------
 # ota_interval (PR #559 review follow-up)
 #
 # Pure C, no ESP-IDF dependency. Reproduces pdMS_TO_TICKS()'s own formula in a
