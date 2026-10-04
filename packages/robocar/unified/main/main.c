@@ -43,6 +43,7 @@
 #include "goal_state.h"
 #include "gpio_expander.h"
 #include "i2c_bus.h"
+#include "improv_console.h"
 #include "improv_wifi.h"
 #include "led_controller.h"
 #include "mdns.h"
@@ -1463,9 +1464,11 @@ static void handle_listen_cmd(const char *buf)
 // ========================================
 // Improv WiFi provisioning (serial)
 // ========================================
-/* Improv Serial rides the same UART as the console: ESP Web Tools opens the
- * port after flashing and speaks the protocol over it, which is why the byte
- * feed lives inside command_task rather than in a task of its own. */
+/* Improv Serial rides the console — the USB-Serial-JTAG, not UART0: ESP Web
+ * Tools opens that port after flashing and speaks the protocol over it, which
+ * is why the byte feed lives inside command_task rather than in a task of its
+ * own. Replies go back over the same port through improv_console_write()
+ * (issue #644); the component's UART0 default would send them to D6/D7. */
 static void on_improv_credentials(const char *ssid, const char *password)
 {
     ESP_LOGI(TAG, "Improv: credentials received for SSID '%s'", ssid ? ssid : "");
@@ -1697,6 +1700,11 @@ static void command_task(void *pvParameters)
 
     ESP_LOGI(TAG, "Command task started on core %d", xPortGetCoreID());
 
+    /* Improv packets are binary: a 0x0D in a request must reach the parser as
+     * 0x0D, not as the LF the console maps it to by default. Both terminators
+     * already end a command line below, so typed commands are unaffected. */
+    improv_console_raw_input();
+
     while (1) {
         /* While unprovisioned, announce ourselves ~1 Hz so ESP Web Tools can
          * discover the device on the port it just flashed. */
@@ -1910,6 +1918,7 @@ static esp_err_t init_network(void)
      * way to be given any, which is the whole point of the protocol. */
     if (!wifi_is_connected()) {
         ESP_LOGW(TAG, "No WiFi connection — starting Improv provisioning");
+        improv_wifi_set_writer(improv_console_write);
         esp_err_t improv_ret = improv_wifi_init(on_improv_credentials);
         if (improv_ret == ESP_OK) {
             s_improv_active = true;
