@@ -14,6 +14,7 @@
 
 #include <inttypes.h>
 #include <string.h>
+#include <strings.h>
 #include "esp_app_desc.h"
 #include "esp_check.h"
 #include "esp_log.h"
@@ -1550,10 +1551,17 @@ static void command_task(void *pvParameters)
         if (ch == '\n' || ch == '\r') {
             if (buf_pos > 0) {
                 buf[buf_pos] = '\0';
-                /* Never echo a broker password into the log, which MQTT can
-                 * forward to the very broker it protects. */
+                /* Never echo a broker password into the serial log, which is
+                 * routinely captured to a file (`monitor | tee`). The redaction
+                 * test is looser than the routing one: a mistyped ` mqtt auth`
+                 * or `MQTT auth` is not run, but it still carries a password. */
                 const bool is_mqtt_cmd = strncmp(buf, "mqtt", 4) == 0;
-                ESP_LOGI(TAG, "Serial cmd: %s", is_mqtt_cmd ? "mqtt ... (redacted)" : buf);
+                const char *lead = buf;
+                while (*lead == ' ' || *lead == '\t') {
+                    ++lead;
+                }
+                const bool redact = strncasecmp(lead, "mqtt", 4) == 0;
+                ESP_LOGI(TAG, "Serial cmd: %s", redact ? "mqtt ... (redacted)" : buf);
 
                 /* Somebody is at the console, so the robot is not unattended
                  * and the whole premise of dormancy has lapsed. Placed here —
