@@ -53,12 +53,7 @@ Same external pinout as the [base XIAO ESP32-S3](xiao-esp32s3.md). The expansion
 
 ```
            ┌──────────────────────┐
-           │  XIAO ESP32-S3 Sense │
-           │  ┌──────────────┐    │
-           │  │  OV2640       │    │
-           │  │  Camera       │    │
-           │  └──────────────┘    │
-           │  [RST]    [BOOT]     │
+           │       [USB-C]        │
            ├──┬───────────────┬───┤
     D0/A0  │● │               │ ●│  5V
     D1/A1  │● │               │ ●│  GND
@@ -68,9 +63,14 @@ Same external pinout as the [base XIAO ESP32-S3](xiao-esp32s3.md). The expansion
     D5/SCL │● │               │ ●│  D8/SCK
     D6/TX  │● │               │ ●│  D7/RX
            ├──┴───────────────┴───┤
-           │      [USB-C]         │
+           │  XIAO ESP32-S3 Sense │
+           │  (component side up) │
            └──────────────────────┘
 ```
+
+Component side up with USB-C at the top, D0 and 5V sit nearest the connector —
+see the base board's [pin mapping](xiao-esp32s3.md#pin-mapping) for the
+physical `Side`/`Pos` of every pad and its source.
 
 ### Expansion Board Internal GPIO Usage
 

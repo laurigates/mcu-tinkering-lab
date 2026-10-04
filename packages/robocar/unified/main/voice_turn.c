@@ -118,6 +118,21 @@ static voice_endpoint_cfg_t s_endpoint_cfg = {
     .margin_db = VOICE_ENDPOINT_MARGIN_DB_DEFAULT,
 };
 
+/** True from just before the start beep until its settle time has passed. The
+ *  ambient listener reads it to keep the beep out of the pre-roll (as silence of
+ *  the same length — see voice_preroll.h). */
+static volatile bool s_cue_active;
+
+/** Endpointing knobs (`voice endpoint`). Not persisted, like every other voice
+ *  threshold: a boot comes up at the documented defaults. max_ms is not used
+ *  from here; it is set per turn from the buffer actually allocated. */
+static voice_endpoint_cfg_t s_endpoint_cfg = {
+    .min_ms = VOICE_ENDPOINT_MIN_MS_DEFAULT,
+    .max_ms = VOICE_TURN_VAD_MAX_MS,
+    .silence_ms = VOICE_ENDPOINT_SILENCE_MS_DEFAULT,
+    .margin_db = VOICE_ENDPOINT_MARGIN_DB_DEFAULT,
+};
+
 /* Per-turn state at FILE scope, not on the 8 kB stack — the same reason
  * gemini_tts.c keeps its context static. The response buffer alone would be
  * half the stack. */
@@ -218,6 +233,16 @@ static size_t record_vad(int16_t *pcm, size_t samples, record_result_t *res, esp
         if (res->end != VOICE_ENDPOINT_CONTINUE) {
             break;
         }
+    }
+    if (*err != ESP_OK) {
+        ESP_LOGW(TAG, "listen: mic read failed %u ms into a VAD turn: %s",
+                 (unsigned)((recorded * 1000u) / MIC_SAMPLE_RATE_HZ), esp_err_to_name(*err));
+    }
+    /* Leaving the loop without a verdict means the buffer filled on a tail too
+     * short to measure, or a read failed (logged above). Either way the clip
+     * ends where the memory did, so the log line must not read end=continue. */
+    if (res->end == VOICE_ENDPOINT_CONTINUE) {
+        res->end = VOICE_ENDPOINT_END_MAX;
     }
     res->speech_frames = ep.speech_frames;
     return filled;
@@ -408,7 +433,7 @@ static void run_turn(uint32_t window_ms, bool vad)
     if (vad) {
         /* clip= tracking the utterance is the bench check for issue #616: a short
          * question should end on `silence` well under the ceiling, and preroll=
-         * near a second shows the trigger's own words were kept. */
+         * near 1500 ms (the whole ring) shows the trigger's own words were kept. */
         ESP_LOGI(TAG, "listen: vad clip=%u ms preroll=%u ms end=%s speech=%u frames floor=%d dB",
                  (unsigned)((got * 1000u) / MIC_SAMPLE_RATE_HZ),
                  (unsigned)((rec.preroll_samples * 1000u) / MIC_SAMPLE_RATE_HZ),

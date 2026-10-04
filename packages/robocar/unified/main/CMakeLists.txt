@@ -20,6 +20,7 @@ idf_component_register(
         "voice_fx_core.c"
         "ambient_audio.c"
         "speech_budget.c"
+        "speech_evidence.c"
         "plan_activity.c"
         "plan_budget.c"
         "speech_queue.c"

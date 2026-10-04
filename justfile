@@ -33,6 +33,7 @@ mod presence-detector 'packages/sensors/presence-detector'
 mod balancebot 'packages/robotics/balancebot'
 mod espdancer 'packages/usb-tools/facedancer-espdancer-fw'
 mod schematics 'docs/schematics'
+mod hardware 'tools/hardware'
 
 # Auto-detect ESP32-S3 USB-Serial-JTAG by Espressif VID; override with S3_PORT env var
 s3_port := env("S3_PORT", `tools/detect-esp32s3-port.sh --quiet 2>/dev/null || true`)

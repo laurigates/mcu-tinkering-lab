@@ -62,7 +62,8 @@ extern "C" {
  *  loudness threshold: the trigger has to reject the room, the endpointer only
  *  has to notice that someone is still talking, and unstressed syllables sit
  *  well below a stressed onset. 0 counts every frame as speech, so the turn
- *  always runs to @c max_ms (the old fixed-window behaviour). */
+ *  always runs to @c max_ms: a fixed window at the ceiling, which is longer
+ *  than the 3.5 s window this module replaced. */
 #define VOICE_ENDPOINT_MARGIN_DB_DEFAULT 6u
 
 typedef struct {

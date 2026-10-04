@@ -75,11 +75,14 @@ extern "C" {
  *
  *  Not persisted to NVS, for the same reason as `voice volume`, `voice scene`
  *  and `cam gainceiling`: a boot comes up at the documented default rather than
- *  at whatever last night's experiment left behind. */
+ *  at whatever last night's experiment left behind.
+ *
+ *  The chain boots disabled: the plain TTS voice is the default, and
+ *  `voice fx on` brings the chain in with the parameters above. */
 #define VOICE_FX_DEFAULT_BODY_MS 6.5f
 #define VOICE_FX_DEFAULT_FEEDBACK 0.72f
 #define VOICE_FX_DEFAULT_DRIVE 1.5f
-#define VOICE_FX_DEFAULT_ENABLED true
+#define VOICE_FX_DEFAULT_ENABLED false
 
 typedef struct {
     bool enabled;

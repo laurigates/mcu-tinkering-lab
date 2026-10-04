@@ -123,10 +123,10 @@ Two more gate-design points from the same module:
 cannot check. There is a mirror-image failure on the same seam, and it is worse
 because it is silent.
 
-When a gate opens, `gemini_backend.c` has to tell the model *why* — the request
-is stateless, so the evidence must be put in it (`"the room SOUNDS different
-since you last spoke — something happened out of frame or behind you. Remark on
-that, not on what you can see."`). That clause is load-bearing and correct. But
+When a gate opens, the planner prompt has to tell the model *why* — the request
+is stateless, so the evidence must be put in it (`speech_evidence.c`: `"The view
+has NOT changed, but the room's sound level or character has changed since you
+last spoke."`). That clause is load-bearing. But
 it converts the gate's boolean into an **assertion of fact that the model has no
 channel to doubt**. A gate that opens without evidence does not produce a missing
 remark; it produces a confident, fluent, entirely invented one — and it will keep
@@ -154,6 +154,17 @@ this — `if (!s_current.valid) return false;` — and the audio gate did not.
   `loud: 0/12 | sound: 0/6` is a self-evident contradiction — novelty claimed
   with both scores at zero. Without those two fields on the same line the bug
   reads as a tuning problem and survives every threshold you try.
+
+**Even a correct gate must not let the clause claim more than it measured.**
+The first wording went further: "something happened out of frame or behind you.
+Remark on that". The planner request carries the image and no audio, so with the
+gate working correctly the model still had nothing to describe, and it invented
+sources — bangs, echoes, moving furniture (issue #618). The clause now states the
+measurement (sound level or character changed), says the source is unknown, and
+forbids naming one; `speech_evidence.c` holds it and `test_speech_evidence.c`
+pins it. Ask of every evidence clause: *could the model answer this from the
+inputs in this request?* If the instruction invites a description of something
+not in the request, it is asking for fabrication.
 
 Generalised: **an optional sensor whose absence is non-fatal must make every gate
 that depends on it fail closed.** The neutral element rule from the header
