@@ -648,3 +648,42 @@ add_executable(test_improv_wifi
 )
 target_include_directories(test_improv_wifi PRIVATE "${IMPROV_WIFI_DIR}")
 add_test(NAME improv_wifi COMMAND test_improv_wifi)
+
+# -----------------------------------------------------------------------------
+# MQTT broker-credential loader (issue #639)
+#
+# credentials_loader.c is compiled unmodified against the in-memory NVS in
+# nvs_shim.c (include/nvs.h). Its output decides whether the MQTT command topic
+# may change anything, and the cases worth pinning are the ones a board reaches
+# without anyone noticing: a half-written NVS pair (which must fall back to
+# credentials.h, never yield a lone username) and an empty or over-long value
+# handed to `mqtt auth`.
+#
+# The source is COPIED into the build tree first, with credentials_fixture.h
+# copied beside it as credentials.h. The loader includes "credentials.h", and
+# the quote form searches the including file's own directory before any -I
+# path — so compiled in place it would pick up the untracked
+# main/credentials.h, whose contents are the CMake stub on one machine and a
+# developer's real broker password on another. configure_file re-copies
+# whenever either source changes, so the copies cannot go stale.
+#
+# Built twice: with broker credentials in the fixture, and without
+# (CREDENTIALS_FIXTURE_NO_MQTT, the CMake stub's shape), so every fallback is
+# asserted both as credentials.h and as "none".
+# -----------------------------------------------------------------------------
+set(CREDENTIALS_LOADER_COPY_DIR "${CMAKE_CURRENT_BINARY_DIR}/credentials_loader_src")
+configure_file("${MAIN_SRC_DIR}/credentials_loader.c"
+               "${CREDENTIALS_LOADER_COPY_DIR}/credentials_loader.c" COPYONLY)
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/credentials_fixture.h"
+               "${CREDENTIALS_LOADER_COPY_DIR}/credentials.h" COPYONLY)
+foreach(_variant credentials_loader credentials_loader_no_mqtt)
+    add_executable(test_${_variant}
+        "${CREDENTIALS_LOADER_COPY_DIR}/credentials_loader.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/nvs_shim.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/test_credentials_loader.c"
+    )
+    # -Wno-unused-variable: the ESP_LOG* shims are no-ops, which leaves TAG unused.
+    target_compile_options(test_${_variant} PRIVATE -Wno-unused-variable)
+    add_test(NAME ${_variant} COMMAND test_${_variant})
+endforeach()
+target_compile_definitions(test_credentials_loader_no_mqtt PRIVATE CREDENTIALS_FIXTURE_NO_MQTT=1)
