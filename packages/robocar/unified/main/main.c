@@ -14,6 +14,7 @@
 
 #include <inttypes.h>
 #include <string.h>
+#include <strings.h>
 #include "esp_app_desc.h"
 #include "esp_check.h"
 #include "esp_log.h"
@@ -64,6 +65,8 @@
 #include "servo_controller.h"
 #include "speech_budget.h"
 #include "speech_queue.h"
+#include "speech_trigger.h"
+#include "voice_budget.h"
 #include "voice_persona.h"
 #include "voice_turn.h"
 #include "wifi_manager.h"
@@ -552,6 +555,11 @@ static void handle_periph_cmd(const char *buf)
  * `voice scene <n>`            — how much the view must change (0 = gate off)
  * `voice loud <db>`            — excursion above the noise floor (0 = sub-gate off)
  * `voice sound <db>`           — how much the room's spectrum must move (0 = off)
+ * `voice endpoint <ms> <db>`   — quiet time / speech margin that ends a VAD turn
+ * `voice trigger <%> <db> <ms>` — voice-band share / floor margin / duration that starts one
+ * `voice ration <n> <seconds>` — at most n hands-free voice-turn requests per window
+ * `voice turns [<n>]`          — voice-turn spend; with n, the per-boot ceiling (0 = off)
+ * `voice resume`               — reopen a tripped voice-turn ceiling and zero the counters
  * `mic` / `mic dump <n>`       — microphone state; dump PCM frames to the console
  * `listen [seconds]`           — one push-to-talk voice turn (record, ask, answer)
  * `trace`                      — camera + endpoint activity counters since boot
@@ -575,6 +583,50 @@ static void handle_periph_cmd(const char *buf)
  * logs each cycle and set the threshold from real numbers. None of the four
  * persist: a boot comes up at the documented default rather than at whatever an
  * experiment left behind. */
+/**
+ * @brief Two lines on what voice turns have spent (voice_budget.h, issue #623).
+ *
+ * Shared by `voice`, `voice turns` and a refused `listen`, so all three say the
+ * same thing. The ignored count sits beside the hands-free count on purpose:
+ * the two close together is the sign that `voice trigger` is too permissive.
+ */
+static void print_voice_turn_budget(const char *indent, uint32_t now_ms)
+{
+    const uint32_t ceiling = voice_budget_ceiling();
+    const uint32_t requests = voice_budget_requests();
+    const uint32_t vad = voice_budget_vad_requests();
+    /* Clamped: the two counters are read unlocked, and a charge landing between
+     * the reads (or a resume) can leave vad > requests for one line. */
+    const uint32_t listen = (requests > vad) ? (requests - vad) : 0u;
+    printf("%sturns:  %u", indent, (unsigned)requests);
+    if (ceiling) {
+        printf("/%u", (unsigned)ceiling);
+    }
+    printf(" requests (hands-free %u, ignored %u; listen %u, ignored %u)%s\n", (unsigned)vad,
+           (unsigned)voice_budget_ignored_vad(), (unsigned)listen,
+           (unsigned)voice_budget_ignored_listen(), ceiling ? "" : " — NO CEILING");
+
+    uint8_t ration_max = 0;
+    uint32_t ration_window_ms = 0;
+    voice_budget_get_ration(&ration_max, &ration_window_ms);
+    if (ration_max == 0u || ration_window_ms == 0u) {
+        printf("%s        ration: off (cooldown only), refused %u\n", indent,
+               (unsigned)voice_budget_refused());
+    } else {
+        const uint32_t wait_ms = voice_budget_ration_wait_ms(now_ms);
+        printf("%s        ration: %u/%u per %us, refused %u", indent,
+               (unsigned)voice_budget_ration_used(now_ms), (unsigned)ration_max,
+               (unsigned)(ration_window_ms / 1000U), (unsigned)voice_budget_refused());
+        if (wait_ms) {
+            printf(", next in %us", (unsigned)((wait_ms + 999U) / 1000U));
+        }
+        printf("\n");
+    }
+    if (voice_budget_check(now_ms, false) == VOICE_BUDGET_TRIP_CEILING) {
+        printf("%s        STOPPED: spend ceiling reached — `voice resume` to continue\n", indent);
+    }
+}
+
 static void handle_voice_cmd(const char *buf)
 {
     char op[24] = {0};
@@ -612,7 +664,18 @@ static void handle_voice_cmd(const char *buf)
                !ambient_audio_has_measurement() ? "DEAF — nothing ever heard"
                : ambient_audio_novel(now_ms)    ? "new"
                                                 : "same");
-        printf("  vad:    %s\n", voice_turn_get_vad() ? "on" : "off");
+        uint32_t ep_silence = 0;
+        uint32_t ep_min = 0;
+        uint32_t ep_max = 0;
+        uint8_t ep_margin = 0;
+        voice_turn_get_endpoint(&ep_silence, &ep_margin, &ep_min, &ep_max);
+        printf("  vad:    %s | endpoint: quiet %u ms at %u dB over floor, min %u ms, max %u ms\n",
+               voice_turn_get_vad() ? "on" : "off", (unsigned)ep_silence, (unsigned)ep_margin,
+               (unsigned)ep_min, (unsigned)ep_max);
+        printf("          trigger: voice band >= %u%%, +%u dB over floor, for %u ms\n",
+               (unsigned)speech_trigger_share_pct(), (unsigned)speech_trigger_margin_db(),
+               (unsigned)speech_trigger_sustain_ms());
+        print_voice_turn_budget("  ", now_ms);
         /* Every gate is reported, and which one is holding, because a silent robot
          * is otherwise indistinguishable from a broken one — and on a static,
          * quiet scene silence is the correct behaviour. The evidence line names
@@ -633,6 +696,10 @@ static void handle_voice_cmd(const char *buf)
         printf("  usage: voice <slug> | say <text> | name <VoiceName|-> | vary | said\n");
         printf("         voice quiet <s> | budget <n> <s> | repeat <pct> | scene <n>\n");
         printf("         voice loud <db> | sound <db> | vad on|off   (see also: mic)\n");
+        printf(
+            "         voice endpoint <quiet_ms> <db>   when a hands-free turn stops recording\n");
+        printf("         voice trigger <band%%> <db> <ms>  what starts one (see `mic`)\n");
+        printf("         voice ration <n> <s> | turns <n> | resume   what voice turns may spend\n");
         printf("         voice volume <pct>   amplitude, not loudness: halving = -6 dB\n");
         printf("         voice fx [on|off|body <10..200>|metal <0..85>|drive <10..400>]\n");
         printf(
@@ -867,6 +934,94 @@ static void handle_voice_cmd(const char *buf)
         voice_turn_set_vad(enable);
         printf("voice: vad=%s\n", enable ? "on" : "off");
         ESP_LOGI(TAG, "voice: vad=%s", enable ? "on" : "off");
+        return;
+    }
+
+    if (strcmp(op, "endpoint") == 0) {
+        /* Not persisted, like every other voice knob. Whether 700 ms cuts people
+         * off mid-thought or leaves the robot waiting is a judgement that needs
+         * someone talking to it; the per-turn `listen: vad clip=` line is what
+         * to tune against. */
+        unsigned quiet_ms = 0;
+        unsigned margin_db = 0;
+        if (sscanf(buf, "voice endpoint %u %u", &quiet_ms, &margin_db) != 2 || quiet_ms < 100 ||
+            quiet_ms > 5000 || margin_db > 40) {
+            uint32_t cur_quiet = 0;
+            uint8_t cur_margin = 0;
+            voice_turn_get_endpoint(&cur_quiet, &cur_margin, NULL, NULL);
+            printf("voice: usage: voice endpoint <100..5000 ms> <0..40 dB>  (now %u ms, %u dB;"
+                   " 0 dB records to the ceiling)\n",
+                   (unsigned)cur_quiet, (unsigned)cur_margin);
+            return;
+        }
+        voice_turn_set_endpoint((uint32_t)quiet_ms, (uint8_t)margin_db);
+        printf("voice: endpoint quiet=%u ms margin=%u dB\n", quiet_ms, margin_db);
+        return;
+    }
+
+    if (strcmp(op, "trigger") == 0) {
+        /* Not persisted. Tune by speaking and reading `mic`: its speech line
+         * shows the highest voice-band share and longest run since the last
+         * `mic`, so a band threshold set too high shows up as a near miss. The
+         * peak band counts only frames that cleared the floor margin, so a
+         * margin set too high reads as band 0%. */
+        unsigned share = 0;
+        unsigned margin_db = 0;
+        unsigned sustain_ms = 0;
+        if (sscanf(buf, "voice trigger %u %u %u", &share, &margin_db, &sustain_ms) != 3 ||
+            share > 100 || margin_db > 40 || sustain_ms > 2000) {
+            printf("voice: usage: voice trigger <0..100 %%> <0..40 dB> <0..2000 ms>  (now %u%%, "
+                   "%u dB, %u ms; 0 drops a check)\n",
+                   (unsigned)speech_trigger_share_pct(), (unsigned)speech_trigger_margin_db(),
+                   (unsigned)speech_trigger_sustain_ms());
+            return;
+        }
+        speech_trigger_set_share_pct((uint8_t)share);
+        speech_trigger_set_margin_db((uint8_t)margin_db);
+        speech_trigger_set_sustain_ms((uint32_t)sustain_ms);
+        printf("voice: trigger band=%u%% margin=%u dB sustain=%u ms\n", share, margin_db,
+               sustain_ms);
+        return;
+    }
+
+    /* What voice turns may spend (voice_budget.h, issue #623). Not persisted,
+     * like every other knob here — a boot comes up at the documented defaults —
+     * and `resume` is the only thing short of a reboot that reopens a tripped
+     * ceiling, because a fuse that reopens itself is no use on an unattended
+     * board. */
+    if (strcmp(op, "ration") == 0) {
+        unsigned max_per = 0;
+        unsigned secs = 0;
+        if (sscanf(buf, "voice ration %u %u", &max_per, &secs) != 2 || max_per > UINT8_MAX ||
+            secs > 86400U) {
+            printf("voice: usage: voice ration <n> <window seconds>  (hands-free requests per "
+                   "window; n=0 or 0 s removes the ration)\n");
+            return;
+        }
+        voice_budget_configure_ration((uint8_t)max_per, secs * 1000U);
+        /* Read back rather than echo: the cap is clamped to the history ring. */
+        uint8_t applied = 0;
+        voice_budget_get_ration(&applied, NULL);
+        printf("voice: ration=%u/%us\n", (unsigned)applied, secs);
+        return;
+    }
+
+    if (strcmp(op, "turns") == 0) {
+        unsigned max_requests = 0;
+        if (sscanf(buf, "voice turns %u", &max_requests) == 1) {
+            voice_budget_configure_ceiling((uint32_t)max_requests);
+            printf("voice: turns ceiling=%u per boot%s\n", max_requests,
+                   max_requests ? "" : " (disabled)");
+            ESP_LOGI(TAG, "voice: turns ceiling=%u", max_requests);
+        }
+        print_voice_turn_budget("voice: ", (uint32_t)(esp_timer_get_time() / 1000));
+        return;
+    }
+
+    if (strcmp(op, "resume") == 0) {
+        voice_budget_resume();
+        printf("voice: voice-turn budget cleared — counters zeroed, ceiling reopened\n");
+        ESP_LOGI(TAG, "voice: turns resumed");
         return;
     }
 
@@ -1223,6 +1378,18 @@ static void handle_mic_cmd(const char *buf)
     printf("  loud:   %u/%u dB    sound: %u/%u dB\n", ambient_audio_loud_score(now_ms),
            (unsigned)ambient_audio_loud_threshold(), ambient_audio_shape_score(now_ms),
            (unsigned)ambient_audio_shape_threshold());
+    /* The hands-free trigger's evidence. "best" is since the previous `mic`, and
+     * reading it clears it: speak once, then type `mic`, and the line says how
+     * close the voice came to each threshold. */
+    uint32_t best_run = 0;
+    uint8_t peak_share = 0;
+    speech_trigger_best(&best_run, &peak_share, true);
+    printf("  speech: now band %u%% run %u ms | best since last mic: band %u%% run %u ms | "
+           "need %u%% +%u dB %u ms (vad %s)\n",
+           (unsigned)speech_trigger_last_share_pct(), (unsigned)speech_trigger_run_ms(),
+           (unsigned)peak_share, (unsigned)best_run, (unsigned)speech_trigger_share_pct(),
+           (unsigned)speech_trigger_margin_db(), (unsigned)speech_trigger_sustain_ms(),
+           voice_turn_get_vad() ? "on" : "off");
     printf("  frames: %u accepted, %u muted by playback\n",
            (unsigned)ambient_listener_frames_accepted(), (unsigned)ambient_listener_frames_muted());
     if (last == 0U) {
@@ -1230,7 +1397,8 @@ static void handle_mic_cmd(const char *buf)
     } else {
         printf("  last:   %u ms ago\n", (unsigned)(now_ms - last));
     }
-    printf("  usage: mic | mic dump <n>   (thresholds: voice loud <db> | voice sound <db>)\n");
+    printf("  usage: mic | mic dump <n>   (thresholds: voice loud <db> | voice sound <db> | "
+           "voice trigger)\n");
 }
 
 /**
@@ -1267,6 +1435,12 @@ static void handle_listen_cmd(const char *buf)
             break;
         case ESP_ERR_NO_MEM:
             printf("listen: busy — a turn is already in flight\n");
+            break;
+        case ESP_ERR_NOT_ALLOWED:
+            /* `listen` is exempt from the hands-free ration, so this is always
+             * the ceiling. */
+            printf("listen: voice-turn spend ceiling reached — `voice resume` to continue\n");
+            print_voice_turn_budget("  ", (uint32_t)(esp_timer_get_time() / 1000));
             break;
         case ESP_ERR_INVALID_STATE:
             /* Three quite different causes, and telling them apart matters:
@@ -1333,6 +1507,9 @@ static void on_improv_credentials(const char *ssid, const char *password)
  * movement_word_for() — because the two reach it through different framing
  * (a bare console keystroke vs. an MQTT payload naming a movement word) and
  * both already route to dispatch_movement().
+ *
+ * A command that must stay serial-only (`mqtt`, which sets the broker
+ * credentials) does not belong here; command_task() handles it before this.
  */
 static void execute_console_line(const char *buf)
 {
@@ -1355,6 +1532,37 @@ static void execute_console_line(const char *buf)
     } else if (strncmp(buf, "sound", 5) == 0 || strncmp(buf, "servo", 5) == 0 ||
                strncmp(buf, "led", 3) == 0) {
         handle_periph_cmd(buf);
+    }
+}
+
+/* Longest serial console line, NUL included. 32 until issue #626: `mqtt auth
+ * <user> <pass>` needs room for a 32-character username and a 64-character
+ * password. Every handler parses with width-bounded sscanf formats, so the
+ * longer line is safe for all of them. */
+#define CONSOLE_LINE_MAX 128
+
+/* MQTT command-topic access mode, fixed for the boot (issue #626). Read-only
+ * until init_mqtt_access() finds a complete pair of broker credentials. */
+static mqtt_command_access_t s_mqtt_access = MQTT_COMMAND_ACCESS_READ_ONLY;
+
+/**
+ * @brief Load the broker credentials once and log the MQTT command mode.
+ *
+ * Called right after NVS init, so the boot log always states the mode — even
+ * on a board with no WiFi, where MQTT never starts — and so the credential
+ * load happens on one task before anything else can race it.
+ */
+static void init_mqtt_access(void)
+{
+    s_mqtt_access = mqtt_command_access_for_credentials(get_mqtt_username(), get_mqtt_password());
+    if (s_mqtt_access == MQTT_COMMAND_ACCESS_FULL) {
+        ESP_LOGI(TAG, "MQTT commands: full (broker credentials from %s, user %s)",
+                 get_mqtt_credentials_source(), get_mqtt_username());
+    } else {
+        ESP_LOGW(TAG,
+                 "MQTT commands: read-only — no broker credentials, so movement and settings "
+                 "are refused on %s (set them with `mqtt auth <user> <pass>`)",
+                 MQTT_COMMAND_TOPIC);
     }
 }
 
@@ -1395,20 +1603,86 @@ static void mqtt_cmd_console_line(const char *line, void *ctx)
  */
 static void mqtt_command_received(const char *line)
 {
-    static const mqtt_command_ops_t ops = {
+    const mqtt_command_ops_t ops = {
         .movement = mqtt_cmd_movement,
         .console_line = mqtt_cmd_console_line,
         .ctx = NULL,
+        .access = s_mqtt_access,
     };
+
+    /* Classify before anything acts on the line, so a refused command has no
+     * effect at all — including the planner wake below, which costs Gemini
+     * requests. */
+    const mqtt_command_result_t verdict = mqtt_command_check(line, s_mqtt_access);
+    if (verdict != MQTT_COMMAND_OK) {
+        ESP_LOGW(TAG, "MQTT command %s: %s", mqtt_command_result_reason(verdict), line);
+        return;
+    }
 
     /* An inbound remote command is the MQTT equivalent of "somebody is at the
      * console" — the robot is not unattended, so dormancy's whole premise has
-     * lapsed. Matches the wake call in command_task() below. */
-    plan_activity_wake();
-
-    if (!mqtt_command_dispatch(line, &ops)) {
-        ESP_LOGW(TAG, "Rejected unrecognised MQTT command: %s", line);
+     * lapsed. Matches the wake call in command_task() below. Before dispatch,
+     * not after, so `plan sleep` is not undone by its own wake.
+     *
+     * Full access only: in read-only mode the sender is anonymous, and an
+     * anonymous client polling `plan` once a second would otherwise hold the
+     * planner awake — and spending — until the budget fuse trips. */
+    if (s_mqtt_access == MQTT_COMMAND_ACCESS_FULL) {
+        plan_activity_wake();
     }
+
+    const mqtt_command_result_t result = mqtt_command_dispatch(line, &ops);
+    if (result != MQTT_COMMAND_OK) {
+        ESP_LOGW(TAG, "MQTT command %s: %s", mqtt_command_result_reason(result), line);
+    }
+}
+
+/**
+ * @brief `mqtt` — broker-credential state and NVS provisioning (issue #626).
+ *
+ * Serial console ONLY. command_task() calls this before execute_console_line(),
+ * and "mqtt" is not in mqtt_command.c's forwarded prefixes, so no MQTT message
+ * can reach it — otherwise an anonymous publisher could hand itself the
+ * credentials that lift its own lockout. test_mqtt_command.c pins that.
+ *
+ * Changes apply at the next boot: the MQTT client is created once, with the
+ * credentials it was given, and the mode it reports must be the one it runs.
+ */
+static void handle_mqtt_cmd(const char *buf)
+{
+    /* Scratch buffers as long as the whole console line, so sscanf can never
+     * truncate a token: an over-long credential reaches
+     * credentials_nvs_save_mqtt() whole and is refused there, instead of being
+     * cut to a different, wrong credential that looks saved. */
+    _Static_assert(CONSOLE_LINE_MAX == 128, "keep the %127s widths below in step");
+    char op[8] = {0};
+    char user[CONSOLE_LINE_MAX] = {0};
+    char pass[CONSOLE_LINE_MAX] = {0};
+    const int n = sscanf(buf, "mqtt %7s %127s %127s", op, user, pass);
+
+    if (n <= 0) {
+        printf("mqtt: commands=%s (credentials from %s, user=%s) broker=%s\n",
+               mqtt_command_access_name(s_mqtt_access), get_mqtt_credentials_source(),
+               get_mqtt_username() ? get_mqtt_username() : "-", MQTT_BROKER_URI);
+        printf("  usage: mqtt auth <user> <pass> | mqtt auth clear   (applied at next boot;\n");
+        printf("         max 32/64 chars, no spaces; NVS wins over credentials.h)\n");
+        return;
+    }
+    if (strcmp(op, "auth") == 0 && n == 2 && strcmp(user, "clear") == 0) {
+        printf("mqtt: %s\n", credentials_nvs_clear_mqtt()
+                                 ? "NVS credentials cleared — reboot to apply"
+                                 : "clearing NVS credentials FAILED");
+        return;
+    }
+    /* `mqtt auth clear <x>` falls to the usage line rather than storing a user
+     * literally named "clear". */
+    if (strcmp(op, "auth") == 0 && n == 3 && strcmp(user, "clear") != 0) {
+        printf("mqtt: %s\n", credentials_nvs_save_mqtt(user, pass)
+                                 ? "credentials saved to NVS — reboot to apply"
+                                 : "saving credentials FAILED (too long, or NVS error)");
+        return;
+    }
+    printf("mqtt: usage: mqtt | mqtt auth <user> <pass> | mqtt auth clear\n");
 }
 
 // ========================================
@@ -1417,7 +1691,7 @@ static void mqtt_command_received(const char *line)
 static void command_task(void *pvParameters)
 {
     (void)pvParameters;
-    char buf[32];
+    char buf[CONSOLE_LINE_MAX];
     int buf_pos = 0;
     int64_t last_improv_announce = 0;
 
@@ -1450,7 +1724,17 @@ static void command_task(void *pvParameters)
         if (ch == '\n' || ch == '\r') {
             if (buf_pos > 0) {
                 buf[buf_pos] = '\0';
-                ESP_LOGI(TAG, "Serial cmd: %s", buf);
+                /* Never echo a broker password into the serial log, which is
+                 * routinely captured to a file (`monitor | tee`). The redaction
+                 * test is looser than the routing one: a mistyped ` mqtt auth`
+                 * or `MQTT auth` is not run, but it still carries a password. */
+                const bool is_mqtt_cmd = strncmp(buf, "mqtt", 4) == 0;
+                const char *lead = buf;
+                while (*lead == ' ' || *lead == '\t') {
+                    ++lead;
+                }
+                const bool redact = strncasecmp(lead, "mqtt", 4) == 0;
+                ESP_LOGI(TAG, "Serial cmd: %s", redact ? "mqtt ... (redacted)" : buf);
 
                 /* Somebody is at the console, so the robot is not unattended
                  * and the whole premise of dormancy has lapsed. Placed here —
@@ -1494,6 +1778,10 @@ static void command_task(void *pvParameters)
                             dispatch_movement("stop");
                             break;
                     }
+                } else if (is_mqtt_cmd) {
+                    /* Serial-only by construction: kept out of
+                     * execute_console_line(), which the MQTT topic shares. */
+                    handle_mqtt_cmd(buf);
                 } else {
                     execute_console_line(buf);
                 }
@@ -1680,6 +1968,11 @@ static esp_err_t init_hierarchical_ai(void)
     plan_budget_init();
     plan_activity_init(PLANNER_LOOP_PERIOD_MS);
 
+    // The same backstop for voice turns (issue #623): a ration on hands-free
+    // triggers and a per-boot ceiling on every voice-turn request. Here, before
+    // the listener and the voice-turn task start, for the same reason as above.
+    voice_budget_init();
+
     // Speech path: queue and player must exist before the planner can emit a
     // `speak` call. Both are non-fatal — a robot that cannot talk should still
     // drive, so failures here are logged and stepped over rather than aborting
@@ -1752,8 +2045,10 @@ static void init_network_services(void)
     const mqtt_logger_config_t mqtt_cfg = {
         .broker_uri = MQTT_BROKER_URI,
         .client_id = MQTT_CLIENT_ID,
-        .username = MQTT_USERNAME,
-        .password = MQTT_PASSWORD,
+        /* NULL when unconfigured, which connects anonymously and leaves the
+         * command topic read-only (init_mqtt_access()). */
+        .username = get_mqtt_username(),
+        .password = get_mqtt_password(),
         .log_topic = MQTT_LOG_TOPIC_BASE,
         .status_topic = MQTT_STATUS_TOPIC,
         .command_topic = MQTT_COMMAND_TOPIC,
@@ -1828,6 +2123,7 @@ void app_main(void)
     ESP_LOGI(TAG, "Firmware version: %s", esp_app_get_description()->version);
 
     ESP_ERROR_CHECK(init_nvs());
+    init_mqtt_access();
 
     /* The hardware phase cannot fail the boot: a missing bus and a peripheral
      * that would not initialise are both logged and carried past, so what came

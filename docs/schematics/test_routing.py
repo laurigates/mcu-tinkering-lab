@@ -193,21 +193,11 @@ def test_router_wire_defaults_to_visible_stroke():
     assert handle.element.params.get("color") is not None
 
 
-def _all_real_circuit_paths():
-    import importlib.util
+def _all_real_circuit_paths(real_circuits):
+    from routing import Path, Router
 
-    from render import draw_circuit
-
-    circuits_dir = FsPath(__file__).parent / "circuits"
-    for py in sorted(circuits_dir.glob("*.py")):
-        spec = importlib.util.spec_from_file_location(py.stem, py)
-        mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
-        if not hasattr(mod, "draw"):
-            continue
-        d = draw_circuit(mod)
-        from routing import Path, Router
-
+    for circuit in real_circuits:
+        d = circuit.drawing
         obstacles = [
             _BBox(*el.get_bbox(transform=True, includetext=False))
             for el in d.elements
@@ -216,7 +206,7 @@ def _all_real_circuit_paths():
         for el in d.elements:
             if not isinstance(el, Path):
                 continue
-            yield py.stem, list(el.polyline), obstacles
+            yield circuit.name, list(el.polyline), obstacles
 
 
 def _contains_endpoint(box: _BBox, point, eps=1e-6) -> bool:
@@ -249,7 +239,9 @@ def _trim_ends(points, length):
     return list(reversed(trim_front(list(reversed(front)), length)))
 
 
-def test_all_real_circuits_route_orthogonally_without_crossing_components():
+def test_all_real_circuits_route_orthogonally_without_crossing_components(
+    real_circuits,
+):
     # Only the pin's stub lead may pass through a box: it runs from the pin,
     # which sits on its own chip's edge (and possibly inside a neighbour
     # that overlaps it), out to the stub point where the A* search starts.
@@ -265,7 +257,7 @@ def test_all_real_circuits_route_orthogonally_without_crossing_components():
     probe = Router(schemdraw.Drawing(show=False))
     trim = probe.stub + probe.grid / 2
     checked = 0
-    for name, abspts, obstacles in _all_real_circuit_paths():
+    for name, abspts, obstacles in _all_real_circuit_paths(real_circuits):
         _segments_are_orthogonal(abspts)
         middle = _trim_ends(abspts, trim)
         if not middle:
@@ -285,7 +277,7 @@ def test_all_real_circuits_route_orthogonally_without_crossing_components():
     assert checked > 0, "no circuits were found to check"
 
 
-def test_robocar_unified_wire_stays_out_of_component_bodies():
+def test_robocar_unified_wire_stays_out_of_component_bodies(real_circuit):
     # The whole-drawing figure behind #490: with every terminal box dropped
     # for the entire search, robocar_unified carried ~26 units of wire
     # inside component bodies — nets entering their own chip on one side
@@ -293,9 +285,7 @@ def test_robocar_unified_wire_stays_out_of_component_bodies():
     # figure is 0.00 here; the issue's own target was ~3 units, the length
     # a few stub leads through boxes overlapping their pins would add. The
     # bound admits that legitimate case, not a tunnel coming back.
-    from metrics import measure_circuits
-
-    (m,) = measure_circuits(["robocar_unified"])
+    m = real_circuit("robocar_unified").metrics
     assert m.inside_any < 3.5, (
         f"robocar_unified routes {m.inside_any:.2f} units of wire inside "
         "component bodies"
@@ -324,10 +314,17 @@ def test_overlap_penalty_is_load_bearing(monkeypatch):
     # default already removed every such run, and the wires one lattice row
     # apart that ADR-023 complains about cost nothing at any setting. A
     # parameter that changes nothing when multiplied tenfold is not one, so
-    # robocar_unified, the densest drawing, must route differently at 6
+    # a real circuit with parallel neighbours must route differently at 6
     # than at 60.
-    low = _route_circuit_with_overlap_penalty(monkeypatch, "robocar_unified", 6.0)
-    high = _route_circuit_with_overlap_penalty(monkeypatch, "robocar_unified", 60.0)
+    #
+    # The circuit is balancebot, not robocar_unified: since #495 draws the
+    # robocar's boards physically, that drawing routes with no tight pair
+    # even in authored order, so it has no neighbour for the penalty to push
+    # and routes identically at 6 and 60 (it still differs between 0 and 6).
+    # balancebot keeps two tight pairs and responds. A circuit edit can move
+    # this again — re-check which drawing has parallel runs (#463).
+    low = _route_circuit_with_overlap_penalty(monkeypatch, "balancebot", 6.0)
+    high = _route_circuit_with_overlap_penalty(monkeypatch, "balancebot", 60.0)
     assert len(low) == len(high)
     assert low != high, "overlap_penalty 6 and 60 routed identical geometry"
 
@@ -445,11 +442,11 @@ def test_render_harness_rejects_a_forgotten_finish():
 # never at a wire's own endpoint, never where more than two wires meet.
 
 
-def _free_router():
+def _free_router(**router_kwargs):
     """A router on an empty drawing: no boxes, so no stubs and straight runs."""
     d = schemdraw.Drawing(show=False)
     d.config(unit=2.0)
-    return d, Router(d)
+    return d, Router(d, **router_kwargs)
 
 
 def _curve_path(el):
@@ -581,20 +578,73 @@ def test_wire_net_class_sets_colour_and_rejects_unknown_classes():
         assert "i2c" in str(exc), "the error should list the valid classes"
 
 
-def _real_circuit_drawings():
-    from render import circuit_files, draw_circuit, load_circuit
-
-    for path in circuit_files([]):
-        mod = load_circuit(path)
-        if mod is not None:
-            yield path.stem, draw_circuit(mod)
+def _real_circuit_drawings(real_circuits):
+    return [(c.name, c.drawing) for c in real_circuits]
 
 
-def test_every_real_wire_has_a_net_class():
+def test_shared_drawing_fingerprint_sees_every_kind_of_mutation():
+    # Negative control for conftest.real_circuits' read-only guard: if the
+    # fingerprint missed a mutation, a test changing a shared drawing would
+    # silently pass and couple every test after it (#594). The in-place edit
+    # is the case a plain SVG hash misses — schemdraw caches the figure.
+    from conftest import drawing_fingerprint
+
+    def routed():
+        d, router = _free_router()
+        router.wire((0.0, 0.0), (4.0, 0.0), net="i2c")
+        router.wire((2.0, -2.0), (2.0, 2.0), net="pwm")
+        router.finish()
+        d.get_imagedata("svg")  # populate the figure cache
+        return d, router
+
+    d, _ = routed()
+    before = drawing_fingerprint(d)
+    assert drawing_fingerprint(d) == before, "reading is not a mutation"
+
+    d, router = routed()
+    path = router._wires[0].element
+    path.polyline[-1] = (5.0, 0.0)
+    path.set_hops(path.hops)  # redraw the Path in place
+    assert drawing_fingerprint(d) != before, "in-place element edit missed"
+
+    d, router = routed()
+    hops = router._wires[0].hops  # the horizontal wire takes the hop
+    assert hops, "the control needs a hop to remove"
+    hops.clear()  # router state only: the drawn Path keeps its own copy
+    assert drawing_fingerprint(d) != before, "router state edit missed"
+
+    d, _ = routed()
+    d.add(elm.Dot().at((8.0, 8.0)))
+    assert drawing_fingerprint(d) != before, "added element missed"
+
+
+def test_shared_circuit_guard_blames_each_mutation_once():
+    # The comparison real_circuits runs at teardown: a changed drawing or a
+    # changed metrics field (CircuitMetrics is a plain, mutable dataclass) is
+    # reported, and only by the check that first sees it (#594).
+    from conftest import RenderedCircuit, circuit_fingerprint, mutated_circuits
+    from metrics import measure_drawing
+
+    d, router = _free_router()
+    router.wire((0.0, 0.0), (4.0, 0.0), net="i2c")
+    router.wire((2.0, -2.0), (2.0, 2.0), net="pwm")
+    router.finish()
+    c = RenderedCircuit("probe", d, measure_drawing("probe", d), b"")
+    fingerprints = {c.name: circuit_fingerprint(c)}
+
+    assert mutated_circuits([c], fingerprints) == [], "reading is not a mutation"
+    c.metrics.crossings += 1
+    assert mutated_circuits([c], fingerprints) == ["probe"], "metrics edit missed"
+    assert mutated_circuits([c], fingerprints) == [], "a mutation is blamed once"
+    d.add(elm.Dot().at((8.0, 8.0)))
+    assert mutated_circuits([c], fingerprints) == ["probe"], "drawing edit missed"
+
+
+def test_every_real_wire_has_a_net_class(real_circuits):
     from routing import NET_COLORS
 
     seen = 0
-    for name, d in _real_circuit_drawings():
+    for name, d in _real_circuit_drawings(real_circuits):
         for router in d._routers:
             for w in router._wires:
                 assert w.net in NET_COLORS, f"{name}: {w.points[0]} has no net class"
@@ -603,13 +653,13 @@ def test_every_real_wire_has_a_net_class():
     assert seen > 0
 
 
-def test_every_real_crossing_carries_a_hop():
+def test_every_real_crossing_carries_a_hop(real_circuits):
     # Hops between two routed wires, against the metric that counts exactly
     # those crossings. Hops over hand-drawn leads are checked further down.
     from metrics import crossings, drawing_wires
     from routing import _on_wire
 
-    for name, d in _real_circuit_drawings():
+    for name, d in _real_circuit_drawings(real_circuits):
         routed = [w.points for r in d._routers for w in r._wires]
         hops = [
             p
@@ -621,11 +671,13 @@ def test_every_real_crossing_carries_a_hop():
         assert len(hops) == crossings(drawing_wires(d)), name
 
 
-def test_robocar_unified_renders_byte_identically_twice():
+def test_robocar_unified_renders_byte_identically_twice(real_circuit):
+    # Two independent routes: the session's shared render (its SVG as first
+    # drawn) and a fresh load-and-route here.
     from render import circuit_files, draw_circuit, load_circuit
 
     (path,) = circuit_files(["robocar_unified"])
-    first = draw_circuit(load_circuit(path)).get_imagedata("svg")
+    first = real_circuit("robocar_unified").svg
     second = draw_circuit(load_circuit(path)).get_imagedata("svg")
     assert first == second
     assert b" C " in first, "no hop was drawn in the densest circuit"
@@ -666,12 +718,12 @@ def _lead_polylines(d):
     ]
 
 
-def test_every_crossing_with_a_routed_wire_is_hopped_in_real_circuits():
+def test_every_crossing_with_a_routed_wire_is_hopped_in_real_circuits(real_circuits):
     # Over the *final* drawing, so a lead added after finish() that crosses
     # a routed wire — and so was never seen by it — fails here too.
     from routing import _axis_segments, _on_wire
 
-    for name, d in _real_circuit_drawings():
+    for name, d in _real_circuit_drawings(real_circuits):
         routed = [w for r in d._routers for w in r._wires]
         everything = [w.points for w in routed] + _lead_polylines(d)
         hopped = {p for w in routed for p in w.hops}
@@ -702,13 +754,87 @@ def test_no_dot_where_a_routed_wire_runs_through_a_power_or_ground_tag():
     # otherwise read as a T and be dotted — drawing a connection to ground
     # that does not exist. robocar_unified's STBY net ran through the
     # TCA9548A's GND tag and got exactly that dot.
-    d, router = _free_router()
+    # The tag cost (#591) is switched off so the wire still runs through the
+    # tag: this pins the dot rule for the case the cost only discourages.
+    from metrics import length_over_tags
+
+    d, router = _free_router(tag_penalty=0.0)
     d.add(elm.Line().right(2.0).at((0.0, 0.0)))
     d.add(elm.Ground())
-    router.wire((2.0, -2.0), (2.0, 2.0), net="signal")
+    w = router.wire((2.0, -2.0), (2.0, 2.0), net="signal")
     router.finish()
+    assert length_over_tags([w.points], router._tags()) > 0, "precondition"
     assert router.junctions == []
     assert not [el for el in d.elements if isinstance(el, elm.Dot)]
+
+
+# -- power and ground tags (#591) -------------------------------------------------
+#
+# Tags are not obstacles (see Router._NON_OBSTACLES): a chip's own GND tag sits
+# beside its other pins and would make them unreachable. But a wire drawn
+# through a tag reads as a connection to the rail, so the search charges a
+# penalty per lattice cell inside a tag the wire is not wired to.
+
+
+def _tag_drawing():
+    """A ground tag on a 1-unit stub from a "pin" at (0, 0): terminal (1, 0)."""
+    d = schemdraw.Drawing(show=False)
+    d.config(unit=2.0)
+    d.add(elm.Line().right(1.0).at((0.0, 0.0)))
+    d.add(elm.Ground())
+    return d
+
+
+def test_tags_know_the_pin_their_stub_leads_to():
+    d = _tag_drawing()
+    (tag,) = Router(d)._tags()
+    assert tag.owned_by((0.0, 0.0)), "the pin at the far end of the stub"
+    assert tag.owned_by((1.0, 0.0)), "the tag's own terminal"
+    assert not tag.owned_by((0.0, -3.0))
+
+
+def test_a_wire_detours_round_a_foreign_tag():
+    from metrics import length_over_tags
+
+    def route(penalty):
+        d = _tag_drawing()
+        router = Router(d, tag_penalty=penalty)
+        w = router.wire((-3.0, -0.25), (5.0, -0.25), net="signal")
+        return w.points, router._tags()
+
+    straight, tags = route(0.0)
+    assert length_over_tags([straight], tags) > 0, "precondition: runs through"
+    detoured, tags = route(Router.__init__.__kwdefaults__["tag_penalty"])
+    assert length_over_tags([detoured], tags) == 0, f"crossed the tag: {detoured}"
+
+
+def test_a_wire_to_the_tags_own_pin_is_not_charged():
+    # Leaving the pin, the cheapest way to (2, -0.5) is down and straight
+    # across the tag's body. The tag is this net's own, so that is allowed:
+    # charging it would bend the wire round its own rail symbol.
+    from metrics import Tag, length_over_tags
+
+    def route(penalty):
+        d = _tag_drawing()
+        router = Router(d, tag_penalty=penalty)
+        return router.wire((0.0, 0.0), (2.0, -0.5)).points, router._tags()
+
+    free, (tag,) = route(0.0)
+    unowned = Tag(tag.box, ())
+    assert length_over_tags([free], [unowned]) > 0, "precondition: crosses it"
+    charged, _ = route(Router.__init__.__kwdefaults__["tag_penalty"])
+    assert charged == free
+
+
+def test_no_real_wire_runs_over_a_foreign_power_or_ground_tag(real_circuits):
+    # #591: robocar_unified's STBY net ran down through the TCA9548A GND tag
+    # (0.64 units, the tag's full height) and balancebot's GPIO0 net across
+    # the right DRV8825's (0.50). Correctly undotted, but both read as a
+    # connection to ground at a glance.
+    for c in real_circuits:
+        assert c.metrics.over_tags == 0, (
+            f"{c.name}: {c.metrics.over_tags:.2f} units of wire over foreign tags"
+        )
 
 
 # -- legibility of the marks ------------------------------------------------------
@@ -754,7 +880,7 @@ def test_router_keeps_off_a_hand_drawn_lead():
         )
 
 
-def test_every_hop_in_real_circuits_is_drawn_clear_and_full_size():
+def test_every_hop_in_real_circuits_is_drawn_clear_and_full_size(real_circuits):
     # A hop must be visible: clear of every junction dot (a dot over an arc
     # turns a crossing into a connection), clear of every other wire's end or
     # bend (the arc would merge into the corner), and far enough from its own
@@ -763,7 +889,7 @@ def test_every_hop_in_real_circuits_is_drawn_clear_and_full_size():
 
     from routing import HOP_RADIUS, JUNCTION_RADIUS, _on_wire
 
-    for name, d in _real_circuit_drawings():
+    for name, d in _real_circuit_drawings(real_circuits):
         routed = [w for r in d._routers for w in r._wires]
         everything = [w.points for w in routed] + _lead_polylines(d)
         dots = _dot_points(d)
@@ -790,13 +916,13 @@ def test_every_hop_in_real_circuits_is_drawn_clear_and_full_size():
                         )
 
 
-def test_no_two_hand_drawn_leads_cross_in_real_circuits():
+def test_no_two_hand_drawn_leads_cross_in_real_circuits(real_circuits):
     # finish() hops every crossing that involves a routed wire; a crossing
     # between two leads it cannot redraw would carry no hop at all. None
     # exists today — this keeps "every crossing carries a hop" true.
     from metrics import crossings
 
-    for name, d in _real_circuit_drawings():
+    for name, d in _real_circuit_drawings(real_circuits):
         assert crossings(_lead_polylines(d)) == 0, name
 
 
@@ -822,25 +948,25 @@ def test_wire_lead_contacts_are_counted():
     assert _wire_lead_contacts([[(1.0, 0.25), (3.0, 0.25)]], [lead], 0.25) == (0, 1)
 
 
-def test_no_routed_wire_runs_on_or_beside_a_lead_in_real_circuits():
+def test_no_routed_wire_runs_on_or_beside_a_lead_in_real_circuits(real_circuits):
     # finish()'s ordering score sees routed wires only, and two circuits
     # draw leads after routing, so neither the plan's lead snapshot nor the
     # score knows about them. A candidate ordering could therefore trade a
     # wire-wire pair for a wire-lead one unseen; pin the measured zeros.
     from metrics import drawing_wires
 
-    for name, d in _real_circuit_drawings():
+    for name, d in _real_circuit_drawings(real_circuits):
         grid = d._routers[0].grid
         contacts = _wire_lead_contacts(drawing_wires(d), _lead_polylines(d), grid)
         assert contacts == (0, 0), f"{name}: wire-lead (collinear, tight) {contacts}"
 
 
-def test_every_junction_in_real_circuits_joins_one_net_class():
+def test_every_junction_in_real_circuits_joins_one_net_class(real_circuits):
     # A dot takes one colour; wires of two classes meeting at it means a lead
     # was left uncoloured or a net mis-classed — a drawing error, so fail.
     from routing import _on_wire
 
-    for name, d in _real_circuit_drawings():
+    for name, d in _real_circuit_drawings(real_circuits):
         coloured = [(w.points, w.color) for r in d._routers for w in r._wires] + [
             (pts, c) for r in d._routers for pts, c in r._leads()
         ]
@@ -869,8 +995,9 @@ def test_a_later_finish_rehops_a_wire_drawn_by_an_earlier_one():
 def test_a_real_t_at_a_tag_point_keeps_its_dot():
     # Only the tag-terminated lead's end is discounted, not the whole point:
     # a routed wire ending on another that runs through the tag point is a
-    # genuine T there and must still be dotted.
-    d, router = _free_router()
+    # genuine T there and must still be dotted. The tag cost (#591) is off so
+    # the first wire still runs through the tag point.
+    d, router = _free_router(tag_penalty=0.0)
     d.add(elm.Line().right(2.0).at((0.0, 0.0)))
     d.add(elm.Ground())
     router.wire((2.0, -2.0), (2.0, 2.0), net="ground")
@@ -1019,34 +1146,44 @@ def test_ordering_choice_is_reproducible_across_hash_seeds():
         " for r in d._routers]]))"
     )
     here = str(FsPath(__file__).parent)
-    outputs = []
-    for seed in ("0", "12345"):
-        env = {**os.environ, "PYTHONHASHSEED": seed}
-        run = subprocess.run(
+    # Both interpreters run at once: each is an independent process, so
+    # overlapping them halves the wall time without sharing any state (#594).
+    runs = [
+        subprocess.Popen(
             [sys.executable, "-c", script],
             cwd=here,
-            env=env,
-            capture_output=True,
+            env={**os.environ, "PYTHONHASHSEED": seed},
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
-            check=True,
         )
-        outputs.append(run.stdout)
+        for seed in ("0", "12345")
+    ]
+    # Collect both before asserting, so a failure never leaves one running.
+    results = [(run, *run.communicate()) for run in runs]
+    outputs = []
+    for run, stdout, stderr in results:
+        assert run.returncode == 0, stderr
+        outputs.append(stdout)
     assert outputs[0] == outputs[1]
     assert '"authored"' not in outputs[0], "robocar_unified no longer reorders"
 
 
-def test_robocar_unified_tight_parallel_pairs_drop_below_baseline():
-    # The #494 baseline, measured by metrics.py on the tree before ordering
-    # search: robocar_unified 2 tight parallel pairs, 24 crossings, 206.39
-    # units of wire. The chosen ordering must beat it on tight pairs without
-    # paying for it in overlaps, crossings or length. These numbers are a
-    # property of robocar_unified.py as it stood, not of the router: an
-    # edit to that circuit can trip or loosen this pin, so re-measure the
-    # baseline (ordering search off) whenever the circuit changes (#463).
-    from metrics import measure_circuits
-
-    (m,) = measure_circuits(["robocar_unified"])
-    assert m.tight_parallel <= 1, f"{m.tight_parallel} tight pairs (baseline 2)"
+def test_robocar_unified_tight_parallel_pairs_drop_below_baseline(real_circuit):
+    # The #494 baseline, measured by metrics.py with ordering search off
+    # (ORDERINGS cut to "authored"): robocar_unified 0 tight parallel pairs,
+    # 15 crossings, 298.83 units of wire. The chosen ordering must not lose
+    # to it on tight pairs, overlaps, crossings or length.
+    # These numbers are a property of robocar_unified.py as it stood, not of
+    # the router: an edit to that circuit can trip or loosen this pin, so
+    # re-measure the baseline whenever the circuit changes (#463). Last
+    # re-measured for #495, which draws the XIAO, TCA9548A, PCA9685,
+    # TB6612FNG and MAX98357A physically: the boards are larger and the six
+    # motor-driver lines are drawn individually instead of as one trunk, so
+    # the wire is longer (217.14 before) while the crossings fell from 23.
+    # The chosen ordering (shortest-first) crosses 11 times.
+    m = real_circuit("robocar_unified").metrics
+    assert m.tight_parallel == 0, f"{m.tight_parallel} tight pairs (baseline 0)"
     assert m.collinear_overlaps == 0
-    assert m.crossings <= 24
-    assert m.total_length <= 206.39 + 1e-6
+    assert m.crossings <= 15
+    assert m.total_length <= 298.8345 + 1e-6

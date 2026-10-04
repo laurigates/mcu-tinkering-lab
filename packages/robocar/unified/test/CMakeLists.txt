@@ -155,6 +155,19 @@ target_link_libraries(test_speech_budget PRIVATE Threads::Threads m)
 add_test(NAME speech_budget COMMAND test_speech_budget)
 
 # -----------------------------------------------------------------------------
+# speech_evidence (why the planner may speak this cycle — issue #618)
+#
+# The planner request carries an image and no audio, so the audio-only clause
+# must not assert a sound source the model cannot know. Pinned here because the
+# failure is a fluent fabrication, which no bench run flags as an error.
+# -----------------------------------------------------------------------------
+add_executable(test_speech_evidence
+    "${MAIN_SRC_DIR}/speech_evidence.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_speech_evidence.c"
+)
+add_test(NAME speech_evidence COMMAND test_speech_evidence)
+
+# -----------------------------------------------------------------------------
 # voice_fx_core (the retro-robot body resonance on the way to I2S)
 #
 # The load-bearing case is the comb's (1-g) input trim: without it the feedback
@@ -211,6 +224,21 @@ add_executable(test_plan_budget
 )
 target_link_libraries(test_plan_budget PRIVATE Threads::Threads m)
 add_test(NAME plan_budget COMMAND test_plan_budget)
+
+# -----------------------------------------------------------------------------
+# voice_budget (the hands-free ration and the voice-turn spend ceiling)
+#
+# Pure C with an injected clock. Pins what a bench cannot stage: an hour of a
+# talkative room bounded by the ration, an unattended night stopped by the
+# ceiling, `listen` exempt from the first but not the second, and the window
+# across the uint32 millisecond wrap.
+# -----------------------------------------------------------------------------
+add_executable(test_voice_budget
+    "${MAIN_SRC_DIR}/voice_budget.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_voice_budget.c"
+)
+target_link_libraries(test_voice_budget PRIVATE Threads::Threads m)
+add_test(NAME voice_budget COMMAND test_voice_budget)
 
 # -----------------------------------------------------------------------------
 # plan_activity (should this cycle make a request at all?)
@@ -276,6 +304,43 @@ add_executable(test_audio_clip
 )
 target_link_libraries(test_audio_clip PRIVATE Threads::Threads m)
 add_test(NAME audio_clip COMMAND test_audio_clip)
+
+# -----------------------------------------------------------------------------
+# voice_preroll + voice_endpoint (issue #616: keep the words that triggered a
+# hands-free turn, and stop recording when the speaker stops)
+#
+# Pure C with caller-supplied storage, PCM and clock, so the failures a bench
+# shows only as "the robot ignored me" — the robot's own voice leaking into the
+# pre-roll, stale audio spliced onto the next turn, a pause that never ends the
+# recording, and the uint32 millisecond wrap at day 49 — are each a few lines.
+# -----------------------------------------------------------------------------
+add_executable(test_voice_preroll
+    "${MAIN_SRC_DIR}/voice_preroll.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_voice_preroll.c"
+)
+target_link_libraries(test_voice_preroll PRIVATE Threads::Threads m)
+add_test(NAME voice_preroll COMMAND test_voice_preroll)
+
+add_executable(test_voice_endpoint
+    "${MAIN_SRC_DIR}/voice_endpoint.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_voice_endpoint.c"
+)
+target_link_libraries(test_voice_endpoint PRIVATE Threads::Threads m)
+add_test(NAME voice_endpoint COMMAND test_voice_endpoint)
+
+# -----------------------------------------------------------------------------
+# speech_trigger (issue #617: start a hands-free turn on a voice, not a slam)
+#
+# Synthetic voiced speech, a click, white noise and in-band tones either side of
+# the sustain time — none of which a bench produces on demand — plus the uint32
+# millisecond wrap in the gap test.
+# -----------------------------------------------------------------------------
+add_executable(test_speech_trigger
+    "${MAIN_SRC_DIR}/speech_trigger.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_speech_trigger.c"
+)
+target_link_libraries(test_speech_trigger PRIVATE Threads::Threads m)
+add_test(NAME speech_trigger COMMAND test_speech_trigger)
 
 # -----------------------------------------------------------------------------
 # audio_player producer accounting (TTS playback ring)
@@ -504,6 +569,7 @@ add_test(NAME mqtt_command COMMAND test_mqtt_command)
 # -----------------------------------------------------------------------------
 add_executable(test_self_report
     "${MAIN_SRC_DIR}/self_report.c"
+    "${MAIN_SRC_DIR}/mqtt_command.c"  # the access-mode rule (issue #626) is shared, not stubbed
     "${CMAKE_CURRENT_SOURCE_DIR}/self_report_stubs.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/test_self_report.c"
 )
@@ -531,6 +597,23 @@ add_executable(test_ota_version_compare
 )
 target_link_libraries(test_ota_version_compare PRIVATE Threads::Threads m)
 add_test(NAME ota_version_compare COMMAND test_ota_version_compare)
+
+# -----------------------------------------------------------------------------
+# ota_update_decision (issue #627 — build SHA in the OTA manifest)
+#
+# Pure C, no ESP-IDF dependency. Combines the version comparison above with
+# the manifest's "buildSha" and the SHA compiled into the firmware: only a
+# strictly newer version with a valid manifest SHA may install, a missing SHA
+# refuses (fail closed), and an equal version is reported by what the SHA
+# comparison found.
+# -----------------------------------------------------------------------------
+add_executable(test_ota_update_decision
+    "${MAIN_SRC_DIR}/ota_update_decision.c"
+    "${MAIN_SRC_DIR}/ota_version_compare.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_ota_update_decision.c"
+)
+target_link_libraries(test_ota_update_decision PRIVATE Threads::Threads m)
+add_test(NAME ota_update_decision COMMAND test_ota_update_decision)
 
 # -----------------------------------------------------------------------------
 # ota_interval (PR #559 review follow-up)

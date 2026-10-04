@@ -63,11 +63,29 @@ extern "C" {
 /**
  * @brief Hard ceiling on raw PCM bytes for one clip.
  *
- * 8 s at 16 kHz mono 16-bit = 256 000 bytes. The base64 of that plus its header
- * is ~341 kB, and cJSON duplicates the string once, so the transient peak is
- * roughly 430 kB of PSRAM if — and only if — the caller frees in the order
- * voice_turn.c documents. That fits alongside the camera framebuffers and the
- * 512 kB TTS ring; much beyond it does not.
+ * 8 s at 16 kHz mono 16-bit = 256 000 bytes. Derived from voice_turn.c's
+ * allocation order for an 8 s `listen` (issue #625), the PSRAM live at each step:
+ *
+ *   record -> WAV   PCM 256 000 + WAV 256 044                       = 512 kB
+ *   base64 encode   WAV 256 044 + base64 341 393                    = 597 kB
+ *   request body    base64 341 393 + JPEG base64 <=87 385
+ *                   + body (both, plus VOICE_HISTORY_BODY_HEADROOM)
+ *                   + cJSON tree skeleton ~7.5 kB                   <= 873 kB
+ *   HTTP post       body <=437 kB
+ *
+ * so the peak is the body build: ~873 kB with a frame at the 64 kB JPEG ceiling,
+ * ~698 kB with no frame. test_voice_history.c measures that step. It depends on
+ * voice_history.c attaching both base64 strings to the cJSON tree BY REFERENCE
+ * and printing into a presized buffer; with copied strings and
+ * cJSON_PrintUnformatted()'s doubling growth the same step measured ~2.2 MB on
+ * the host, where every grow is a fresh block (~1.7-1.9 MB if the heap extends
+ * blocks in place).
+ *
+ * The 8 MB PSRAM has room for either. What a smaller peak buys is margin and a
+ * smaller largest-contiguous-block requirement (one ~437 kB body rather than an
+ * ~860 kB print buffer) beside the camera framebuffers, the 512 kB TTS ring and
+ * the pre-roll ring. The on-board check is the `start=` / `low=` / `largest=`
+ * fields of voice_turn.c's per-turn log line on a `listen 8` — see issue #448.
  */
 #define AUDIO_CLIP_MAX_BYTES 256000u
 

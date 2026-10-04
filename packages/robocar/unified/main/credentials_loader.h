@@ -98,4 +98,38 @@ bool credentials_nvs_save_wifi(const char *ssid, const char *password);
  */
 bool credentials_reload(void);
 
+// ---------------------------------------------------------------------------
+// MQTT broker credentials (issue #626)
+//
+// Independent of the WiFi/Gemini set above: a board can be on WiFi with no
+// broker credentials, and the broker credentials gate whether the MQTT command
+// topic may change anything (see mqtt_command_access_for_credentials()).
+// Sources, highest priority first: NVS (`mqtt auth` on the serial console),
+// then MQTT_USERNAME/MQTT_PASSWORD in the gitignored credentials.h. Nothing is
+// compiled into CI or web-flasher builds — their stub leaves both empty.
+// ---------------------------------------------------------------------------
+
+#define MAX_MQTT_USERNAME_LENGTH 33  // 32 characters + NUL
+#define MAX_MQTT_PASSWORD_LENGTH 65  // 64 characters + NUL
+
+/** Broker username, or NULL when none is configured. */
+const char *get_mqtt_username(void);
+
+/** Broker password, or NULL when none is configured. */
+const char *get_mqtt_password(void);
+
+/** "nvs", "credentials.h" or "none" — where the broker credentials came from. */
+const char *get_mqtt_credentials_source(void);
+
+/**
+ * @brief Store broker credentials in NVS. Both must be non-empty and fit.
+ *
+ * Takes effect at the next boot: the MQTT client is created once, with the
+ * credentials it was given.
+ */
+bool credentials_nvs_save_mqtt(const char *username, const char *password);
+
+/** Erase NVS broker credentials, falling back to credentials.h at the next boot. */
+bool credentials_nvs_clear_mqtt(void);
+
 #endif  // CREDENTIALS_LOADER_H

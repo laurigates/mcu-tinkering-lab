@@ -351,13 +351,13 @@ bool ambient_audio_novel(uint32_t now_ms)
      * never started notes no frame ever, leaves s_reference invalid forever,
      * and returns true on EVERY cycle.
      *
-     * That is not a quiet bug. gemini_backend.c turns an audio-only opening
-     * into the prompt clause "the room SOUNDS different since you last spoke —
-     * something happened out of frame or behind you. Remark on that, not on
-     * what you can see." The request is stateless, so the model has no channel
-     * by which to doubt it (.claude/rules/stateless-model-gating.md §1) and
-     * dutifully invents a remark about noise. The robot then reports a noisy
-     * room, forever, with a microphone that is not listening.
+     * That is not a quiet bug. An audio-only opening puts a clause into the
+     * planner prompt telling the model the room's sound has changed since it
+     * last spoke (speech_evidence.c). The request is stateless, so the model
+     * has no channel by which to doubt it
+     * (.claude/rules/stateless-model-gating.md §4) and remarks on a change
+     * nobody measured. The robot then reports a different-sounding room,
+     * forever, with a microphone that is not listening.
      *
      * Its signature in the planner log is unmistakable once you know it:
      * `gate: A` while `loud: 0/12 dB | sound: 0/6 dB` — the gate claiming
@@ -447,4 +447,16 @@ bool ambient_capture_allowed(bool playback_active, uint32_t now_ms, uint32_t las
     /* Unsigned difference, never `now > end + hangover`: the latter overflows at
      * the uint32 wrap and deafens the robot for the rest of the 49-day cycle. */
     return (uint32_t)(now_ms - last_playback_end_ms) >= hangover_ms;
+}
+
+bool ambient_gate_accepts(bool capture_allowed, bool cue_active, uint32_t now_ms,
+                          uint32_t *last_cue_ms, uint32_t cue_hangover_ms)
+{
+    if (cue_active) {
+        *last_cue_ms = now_ms;
+    }
+    /* The cue is one more source of the robot's own noise, with the same
+     * falling-edge-plus-hangover shape as playback; only the anchor differs. */
+    return capture_allowed &&
+           ambient_capture_allowed(cue_active, now_ms, *last_cue_ms, cue_hangover_ms);
 }

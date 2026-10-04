@@ -82,10 +82,17 @@ repos:
         always_run: true
 
       - id: check-flash-recipes
-        name: Shared flash recipes match their projects
+        name: Flash recipes match their projects and the build
         entry: python3 tools/check-flash-recipes.py
         language: system
-        files: '(justfile|sdkconfig\.defaults|partitions\.csv|tools/esp32-idf\.just|tools/check-flash-recipes\.py)$'
+        files: '(justfile|\.just|sdkconfig\.defaults|partitions\.csv|CMakeLists\.txt|tools/lib/otadata-predicate\.sh|tools/check-flash-recipes\.py)$'
+        pass_filenames: false
+
+      - id: check-flash-recipes-tests
+        name: check-flash-recipes unit tests
+        entry: python3 -m unittest tools/test_check_flash_recipes.py
+        language: system
+        files: '^tools/(check-flash-recipes\.py|test_check_flash_recipes\.py)$'
         pass_filenames: false
 
       - id: check-typst-docs
@@ -93,6 +100,20 @@ repos:
         entry: python3 tools/check-typst-docs.py
         language: system
         files: '(docs/.*\.typ|main/pin_config\.h|tools/check-typst-docs\.py|\.github/workflows/build-guide-check\.yml)$'
+        pass_filenames: false
+
+      - id: hardware-join
+        name: Hardware join resolves, and pin_defs.typ regenerates byte-identical
+        entry: python3 -m unittest discover -s tools/hardware -t tools
+        language: system
+        files: '(^tools/hardware/|^tools/typst/generate-pin-defs\.py$|hardware\.toml$|main/[^/]+\.h$|docs/auto/pin_defs\.typ$|^docs/reference/boards/)'
+        pass_filenames: false
+
+      - id: hardware-docs
+        name: Generated WIRING.md blocks match the hardware join
+        entry: env PYTHONPATH=tools python3 -m hardware.docs --check
+        language: system
+        files: '(^tools/hardware/|hardware\.toml$|main/[^/]+\.h$|^packages/.*\.md$|^docs/reference/boards/)'
         pass_filenames: false
 
       - id: check-doc-facts

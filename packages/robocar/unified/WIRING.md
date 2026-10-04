@@ -1,6 +1,6 @@
 # Wiring — robocar-unified (XIAO ESP32-S3 Sense)
 
-Single-board wiring for the consolidated robocar. All pin assignments are authoritative in [`main/pin_config.h`](main/pin_config.h); this document mirrors them for human reference.
+Single-board wiring for the consolidated robocar. All pin assignments are authoritative in [`main/pin_config.h`](main/pin_config.h); this document mirrors them for human reference. The pin tables marked `GENERATED` are emitted from [`hardware.toml`](hardware.toml), the header and the board reference by `just hardware::gen` (ADR-021), and CI fails when they are stale — change those sources, not the tables.
 
 ![Schematic](../../../docs/schematics/images/robocar_unified.png)
 
@@ -12,19 +12,24 @@ Schematic source: [`docs/schematics/circuits/robocar_unified.py`](../../../docs/
 
 The XIAO exposes only 11 GPIOs on its headers. Camera pins are internal to the Sense module and do not conflict with header pins.
 
-| XIAO Pin | GPIO | Function | Notes |
-|----------|------|----------|-------|
-| D0 | GPIO1 | TB6612FNG STBY | HIGH = motors enabled |
-| D1 | GPIO2 | Piezo buzzer | LEDC PWM |
-| D2 | GPIO3 | Ultrasonic TRIG | 10 µs pulse output |
-| D3 | GPIO4 | Ultrasonic ECHO | Pulse width input (RMT RX) |
-| D4 | GPIO5 | **I2C SDA** | to TCA9548A |
-| D5 | GPIO6 | **I2C SCL** | to TCA9548A |
-| D6 | GPIO43 | USB Serial TX | debug console |
-| D7 | GPIO44 | USB Serial RX | debug console |
-| D8 | GPIO7 | **I2S BCLK** | to MAX98357A BCLK |
-| D9 | GPIO8 | **I2S LRCLK** | to MAX98357A LRC |
-| D10 | GPIO9 | **I2S DIN** | to MAX98357A DIN |
+<!-- BEGIN GENERATED: pin-table -->
+<!-- Generated from hardware.toml, main/pin_config.h and the board reference by `just hardware::gen` — edit those, not this block. -->
+
+| Pin | GPIO | Macro | Wired to | Notes |
+|-----|------|-------|----------|-------|
+| D0 | GPIO1 | `MOTOR_STBY_PIN` | TB6612FNG STBY | HIGH = motors enabled; the six control lines come from the PCA9685 |
+| D1 | GPIO2 | `PIEZO_PIN` | Piezo buzzer + | LEDC PWM, through a series resistor; the other leg to GND |
+| D2 | GPIO3 | `ULTRASONIC_TRIG_PIN` | HC-SR04P TRIG | 3.3 V output; a 10 µs pulse triggers a measurement |
+| D3 | GPIO4 | `ULTRASONIC_ECHO_PIN` | HC-SR04P ECHO | 3.3 V input; pulse width encodes distance (RMT RX) |
+| D4 | GPIO5 | `I2C_SDA_PIN` | TCA9548A SDA | Every I2C device sits behind the mux |
+| D5 | GPIO6 | `I2C_SCL_PIN` | TCA9548A SCL |  |
+| D6 | GPIO43 | `UART0_TX_PIN` | — | UART0 TX, nothing wired: the serial console is USB-Serial-JTAG on the USB-C connector, not this pad |
+| D7 | GPIO44 | `UART0_RX_PIN` | — | UART0 RX, nothing wired: the serial console is USB-Serial-JTAG on the USB-C connector, not this pad |
+| D8 | GPIO7 | `I2S_BCLK_PIN` | MAX98357A BCLK | Bit clock |
+| D9 | GPIO8 | `I2S_LRCLK_PIN` | MAX98357A LRC | Word select / left-right clock |
+| D10 | GPIO9 | `I2S_DIN_PIN` | MAX98357A DIN | Serial audio data |
+
+<!-- END GENERATED -->
 
 > **The GPIO budget is fully allocated.** There are no spare header pins left.
 > Additional digital I/O must go through the MCP23017 on TCA9548A channel 2.
@@ -168,9 +173,10 @@ inrush was tripping it. The MAX98357A adds transient draw of up to ~1 A into a
 brownout detection off, an undersized rail will not warn you — it will present
 as random resets or corrupt audio mid-sentence.
 
-- Fit a **bulk capacitor (≥ 470 µF) at the amplifier's Vin**, plus the usual
-  0.1 µF close to the pin. Fit the same at the PCA9685's **V+**: the servos are
-  the harsher transient source of the two.
+- Fit a **bulk capacitor (470 µF) at the amplifier's Vin** — C3 below. The
+  breakout already carries the datasheet's 0.1 µF + 10 µF next to the chip, so
+  nothing smaller is needed there. Fit the same at the PCA9685's **V+** (C1):
+  the servos are the harsher transient source of the two.
 - **Never power servos from the XIAO's 5V pin or from USB VBUS.** That pin is a
   regulator input, not a supply output, and a USB host port cannot source what
   two SG90s and a class-D amplifier draw. Servos that buzz without moving are
@@ -196,17 +202,69 @@ inrush cannot sag.
 Do not connect anything to the XIAO's BAT pads while feeding its 5V pin — the
 onboard charger will try to charge whatever it finds there.
 
+### Suggested capacitors
+
+The schematic draws six capacitors that no breakout carries, labelled C1–C6.
+C1–C3 are recommended; C4–C6 are optional. Each was chosen by reading what the
+vendor's board file already fits (the Eagle file at the commit its
+`docs/reference/boards/` page cites) against what the part's datasheet asks for.
+
+| Ref | Part | Fit at | Status | Why, and the source |
+|-----|------|--------|--------|---------------------|
+| C1 | 470 µF electrolytic, 16 V | PCA9685 V+ | Recommended | The Adafruit board leaves a through-hole electrolytic footprint on the V+ net empty for the builder (vendor ref C2, 3.5 mm pitch). Adafruit's guide suggests n × 100 µF for n servos as a start — 200 µF for the two SG90s — and says the right value depends on the servos and the supply; 470 µF matches C3. |
+| C2 | 470 µF electrolytic, 16 V | TB6612FNG VM | Recommended | Toshiba's typical application puts 10 µF + 0.1 µF on VM "as close as possible to the IC", and the SparkFun board fits both (vendor refs C3, C1). The bulk part is for motor start and stall current arriving over a jumper run instead of a short trace — the case C3's datasheet sentence describes. |
+| C3 | 470 µF electrolytic, 16 V | MAX98357A Vin | Recommended | Maxim: "Bypass VDD with a 0.1 µF and 10 µF capacitor to GND" — both on the Adafruit board (vendor refs C1, C2) — and "apply additional bulk capacitance at the ICs if long input traces between VDD and the power source are used". A jumper from the LM2596 is a long input trace. |
+| C4 | 100 nF ceramic | PCA9685 VCC | Optional | The Adafruit board fits only a 10 µF (vendor ref C1) on VCC. NXP's datasheet FAQ: about 50 pF of decoupling is on-chip, and whether to add external decoupling as close as possible to the device is left to the designer when many outputs switch together. |
+| C5 | 100 nF ceramic | TCA9548A VIN | Optional | The Adafruit board fits only a 10 µF (vendor ref C1). TI's layout guidance (SCPS207H §8.4.1) pairs a larger capacitor for supply glitches with a smaller one for high-frequency ripple; this is the smaller one. |
+| C6 | 100 nF ceramic | MCP23017 VCC | Optional | The module fitted is unidentified (#662), so whether it carries one is unknown. Microchip's datasheet (DS20001952) names no value; 100 nF is generic practice. Skip it if the module already has a capacitor beside the chip. |
+
+Fit each one **at the pin it names**, across that pin and the nearest GND pad,
+with short leads. A capacitor at the regulator's end of a jumper cannot supply a
+transient at the far end — the jumper's own resistance and inductance sit
+between them, which is the star-wiring argument above applied to the capacitor.
+
+**16 V is margin, not a guess.** The rail is bucked from a pack that reaches
+8.4 V, and a step-down converter cannot raise its output above its input, so
+even a trimpot turned fully up leaves a 10 V part inside its rating. Fit the
+electrolytics with the stripe (−) to GND; the schematic marks the + plate.
+
+One datasheet recommendation is deliberately not drawn: Toshiba also asks for
+10 µF on the TB6612FNG's **VCC**, and the SparkFun board fits only 0.1 µF there
+(vendor ref C2). That pin draws 1.1 mA typical (datasheet Icc at 3 V) from the XIAO's 3V3
+pad, so it is left out; it is the first part to add if STBY or the control
+inputs ever misbehave under motor load.
+
+Datasheets: [TB6612FNG](https://cdn.sparkfun.com/datasheets/Robotics/TB6612FNG.pdf),
+[PCA9685](https://cdn-shop.adafruit.com/datasheets/PCA9685.pdf) and
+[Adafruit's PCA9685 guide](https://cdn-learn.adafruit.com/downloads/pdf/16-channel-pwm-servo-driver.pdf),
+[MAX98357A](https://www.analog.com/media/en/technical-documentation/data-sheets/MAX98357A-MAX98357B.pdf),
+[TCA9548A](https://www.ti.com/lit/ds/symlink/tca9548a.pdf),
+[MCP23017](https://ww1.microchip.com/downloads/aemDocuments/documents/APID/ProductDocuments/DataSheets/MCP23017-Data-Sheet-DS20001952.pdf).
+`docs/schematics/circuits/robocar_unified.py` (`SUGGESTED_CAPS`) is the list
+the drawing is made from, and its tests fail if this table or the build guide
+drifts from it.
+
 ## Audio output (MAX98357A)
 
 Mono I2S class-D amplifier providing the robot's voice. Audio is 24 kHz 16-bit
 mono — the native output rate of the Gemini TTS model, carried through without
 resampling.
 
+<!-- BEGIN GENERATED: signals:amp -->
+<!-- Generated from hardware.toml, main/pin_config.h and the board reference by `just hardware::gen` — edit those, not this block. -->
+
 | Signal | Pin | Function |
 |--------|-----|----------|
 | BCLK | GPIO7 (D8) | Bit clock |
 | LRC | GPIO8 (D9) | Word select / left-right clock |
 | DIN | GPIO9 (D10) | Serial audio data |
+
+<!-- END GENERATED -->
+
+Power and configuration pins:
+
+| Signal | Pin | Function |
+|--------|-----|----------|
 | Vin | 5 V | See supply note above |
 | GND | any GND | Shared ground |
 | SD_MODE | *(see below)* | Channel select / shutdown |
@@ -228,7 +286,8 @@ whenever BCLK is running, so leaving it clocking silence is audible.
 
 The Sense expansion board carries an MSM261D PDM microphone wired to the
 ESP32-S3 directly. **Nothing to wire** — it is on the module — but it is live
-hardware the firmware depends on, so it is recorded here.
+hardware the firmware depends on, so it is recorded here. The schematic draws
+it dashed to mark it as on-module rather than as a breakout to solder.
 
 | Signal | GPIO | Direction | Function |
 |--------|------|-----------|----------|
@@ -253,14 +312,24 @@ Use the `mic` console command to tell a dead microphone from a quiet room.
 
 A 3.3 V-compatible ultrasonic sensor (HC-SR04P, RCWL-1601, or US-100) provides distance readings for the reactive controller's obstacle reflex.
 
-| Signal | Pin | Voltage | Function |
-|--------|-----|---------|----------|
-| TRIG | GPIO3 (D2) | 3.3 V | Output; 10 µs pulse triggers measurement |
-| ECHO | GPIO4 (D3) | 3.3 V | Input; pulse width encodes distance (RMT RX) |
-| VCC | 3.3 V | 3.3 V | **Must be 3.3 V variant** (HC-SR04P, not HC-SR04) |
-| GND | any GND | – | shared ground |
+<!-- BEGIN GENERATED: signals:ranger -->
+<!-- Generated from hardware.toml, main/pin_config.h and the board reference by `just hardware::gen` — edit those, not this block. -->
 
-The sensor samples at ~20 Hz. Obstacle reflex: if distance < 15 cm, the executor immediately stops and reverses, independent of planner goals. The specific module will be confirmed on first wiring; update this table if a different 3.3 V sensor is used.
+| Signal | Pin | Function |
+|--------|-----|----------|
+| TRIG | GPIO3 (D2) | 3.3 V output; a 10 µs pulse triggers a measurement |
+| ECHO | GPIO4 (D3) | 3.3 V input; pulse width encodes distance (RMT RX) |
+
+<!-- END GENERATED -->
+
+Power pins:
+
+| Signal | Pin | Function |
+|--------|-----|----------|
+| VCC | 3.3 V | **Must be 3.3 V variant** (HC-SR04P, not HC-SR04) |
+| GND | any GND | Shared ground |
+
+The sensor samples at ~20 Hz. Obstacle reflex: if distance < 15 cm, the executor immediately stops and reverses, independent of planner goals. The specific module will be confirmed on first wiring; if a different 3.3 V sensor is used, change `name` under `[parts.ranger]` in `hardware.toml` and regenerate. Keep the `ranger` key: the `signals:ranger` marker above names it.
 
 ## Flashing
 

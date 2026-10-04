@@ -9,9 +9,13 @@ silent. Companion to `web-flasher.md` (the release/flasher path) and
 
 ## 1. Only human-edited firmware constants may feed the generated file
 
-`generate-pin-defs.py` takes `main/pin_config.h` plus, for robocar-unified, the
-planner cadence headers `main/planner_task.h` and `main/plan_activity.h` (issue
-#485). The criterion is who writes the source, not whether it is hardware: a
+`generate-pin-defs.py` reads the project through the hardware join
+(`tools/hardware/`, issue #459), which takes its inputs from the project's
+`hardware.toml`: `[source] header` (`main/pin_config.h`) plus `extra_headers` —
+for robocar-unified the planner cadence headers `main/planner_task.h` and
+`main/plan_activity.h` (issue #485). That list lives once, in the sidecar; the
+justfile recipe and the guard both pass only the project directory. The
+criterion is who writes the source, not whether it is hardware: a
 constant only a human edits changes in a source commit that is on the guard's
 trigger paths, so the guard runs. **Do not add an input that release automation
 owns**, and **add every new input header to both trigger-path blocks** in
@@ -93,6 +97,55 @@ every discovered document has a committed PDF — and **control-tests itself** b
 requiring the bare glob to still return a different set. If git ever changes
 those semantics, the control fails loudly instead of the assertion quietly
 becoming vacuous.
+
+## 1c. An embedded schematic is an input too — re-render with `render-all`
+
+`pin_config.h` and its sibling headers are not the only things that invalidate a
+committed PDF. A document that embeds `docs/schematics/images/<name>.png`
+compiles the image's bytes into the PDF, so re-rendering a circuit makes the
+PDF stale with no `.typ` edit at all. The guard sees it — `docs/schematics/images/**`
+is on its trigger paths — but `schematics-check.yml` passes on its own, so the
+first sign used to be this guard failing in CI after the push (#588, fixed in
+13c221a; issue #595).
+
+**After changing a circuit, run `just schematics::render-all`, not `render`.** It
+renders, then recompiles every document whose source references a schematic
+image, through each project's own `build-guide` recipe so the pinned CLI and
+flags match CI. Commit the images and the PDFs together. Plain `render` still
+works and names any project it has just left stale.
+
+The embedding documents are found by reading the `.typ` sources
+(`docs/schematics/guide_deps.py`), not from a list, so a second guide that
+embeds a schematic is covered without editing a recipe. It needs a
+`build-guide` recipe in its project justfile; `render-all` fails rather than
+skipping a project without one.
+
+The PNG is the one artifact here that is not byte-reproducible across hosts —
+cairo's encoder varies, which is why `schematics-check.yml` diffs only the SVG.
+That does not weaken this guard: CI compiles the PDF from the *committed* PNG,
+and with the pinned Typst CLI and flags the PDF is a deterministic function of
+its inputs, so a PDF compiled from the committed PNG on any host matches. What
+breaks the pair is committing one without the other.
+
+## 1d. The board pinout images are generated, and the guard regenerates them
+
+robocar-unified's build guide embeds one SVG per board
+(`docs/auto/pinouts/<board-slug>.svg`), drawn by `tools/hardware/pinout.py` from
+the board references hardware.toml names (`[source] board` and each part's
+`board`, #629). Unlike the schematic PNG they are byte-reproducible text, so for
+every document that references `auto/pinouts/` the guard regenerates them,
+exactly as it regenerates `pin_defs.typ`, and fails if the result differs from
+what is committed. A sibling document that embeds no pinout does not take them
+into its drift set, so a stale image is reported against the guide alone.
+
+Drift is read with `git status --porcelain`, not `git diff --quiet`: a board newly
+given a `board` key produces an SVG nobody committed, and `git diff` does not see
+untracked files. `pinout.py` also deletes an SVG no board produces any more.
+
+`just robocar-unified::build-guide` runs `gen-pinouts` first, and
+`just hardware::gen` regenerates them alongside everything else the join emits.
+Commit the SVGs and the PDF together. Edit the board reference or hardware.toml,
+never an SVG: the next regeneration overwrites a hand edit.
 
 ## 2. Verify a guard change by running the shipped script, with a negative control
 
@@ -179,4 +232,5 @@ up as a dangling label if a guard on `!= none` is missing.
 - `~/.claude/rules/never-fabricate-test-identifiers.md` — extract the shipped
   text; control-test every negative that gates an action
 - ADR-021 (`docs/decisions/ADR-021-hardware-source-of-truth.md`) — the join that
-  `pin_defs.typ` is an output of; issue #459 re-points the generator onto it
+  `pin_defs.typ` is an output of; since issue #459 the generator reads it through
+  `tools/hardware/`

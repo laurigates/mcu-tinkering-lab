@@ -16,9 +16,14 @@ docs/schematics/
 │   └── gamepad_synth.py
 ├── components.py          # Reusable chip/breakout factories (ESP32, MAX98357A, ...)
 ├── routing.py             # Manhattan auto-router (Router) used by circuits for nets
+├── hardware_nets.py       # MCU net endpoints by pin role, from a hardware.toml join
+├── test_hardware_nets.py  # pytest suite for hardware_nets.py
 ├── test_routing.py        # pytest suite for routing.py
 ├── metrics.py             # Routing-quality metrics per circuit (crossings, ...)
 ├── test_metrics.py        # pytest suite for metrics.py
+├── guide_deps.py          # Which Typst documents embed a rendered image (render-all)
+├── test_guide_deps.py     # pytest suite for guide_deps.py
+├── conftest.py            # Shared fixture: each real circuit routed once per session
 ├── images/                # Generated SVG + PNG (committed so GitHub renders them)
 ├── render.py              # Batch-render every circuit in circuits/
 ├── justfile               # `just schematics::render`, `::clean`, ...
@@ -29,6 +34,7 @@ docs/schematics/
 
 ```bash
 # From repo root
+just schematics::render-all          # renders every circuit + recompiles guides that embed one
 just schematics::render              # renders every circuit
 just schematics::render-one gamepad_synth
 just schematics::clean
@@ -47,12 +53,14 @@ uv run python render.py
 1. Add any missing component factories to `components.py`. Keep pin sets
    minimal and name pins as the firmware does.
 2. Create `circuits/<name>.py` with a `draw() -> schemdraw.Drawing` function.
-   Reference `circuits/gamepad_synth.py` as a template: place every
-   component first, then create a `Router(d)` and call `.wire(a, b)` for
-   each point-to-point net and `.finish()` once after the last one (see
-   "Routing" below), then add any hand-drawn local stubs (power tags, LED
-   branches, bus fan-outs).
-3. Run `just schematics::render`. The SVG + PNG land in `images/`.
+   Reference `circuits/balancebot.py` as a template: place every
+   component first, then its power/ground tags, then create a `Router(d)`
+   and call `.wire(a, b)` for each point-to-point net and `.finish()` once
+   after the last one (see "Routing" below). Other hand-drawn local stubs
+   (LED branches, bus fan-outs) may come before or after the nets.
+3. Run `just schematics::render-all`. The SVG + PNG land in `images/`, and
+   any build guide that embeds one is recompiled (see "Embedded in a build
+   guide" below).
 4. Link the rendered PNG from the project's README or WIRING.md:
    ```markdown
    ![Wiring](../../docs/schematics/images/<name>.png)
@@ -137,7 +145,13 @@ router.finish()
   (`Ic`, `Motor`, `Speaker`, `Resistor`, `LED`, ...). `Wire`, `Line`
   (and `Arrow`, a `Line` subclass), `Vdd`, and `Ground` are excluded — they're
   leads and single-terminal annotation symbols, not physical bodies a real
-  wire needs to route around.
+  wire needs to route around. A wire drawn across a power or ground tag
+  still reads as a connection to the rail, so the search charges
+  `tag_penalty` per grid point on or inside a tag's body (label excluded)
+  that the wire is not wired to — every tag except one whose stub leads to
+  the wire's own end pin (#591). A soft cost, so a pin beside its chip's own
+  GND tag stays reachable; and like every obstacle it only sees tags already
+  drawn, which is why tags go in before `Router(d)`.
 - **Real components placed after routing** (e.g. a resistor/LED branch
   hanging off a GPIO the router doesn't touch) aren't obstacles for nets
   routed earlier — if a later-placed real component's footprint would cross
@@ -150,7 +164,7 @@ router.finish()
   `circuits/balancebot.py` for an example. Colour it with
   `net_color("<class>")` and `.finish()` dots its junctions.
 - **Tuning**: `Router(d, grid=0.25, clearance=0.3, stub=0.75,
-  turn_penalty=4.0, overlap_penalty=6.0)` — defaults suit this repo's
+  turn_penalty=4.0, overlap_penalty=6.0, tag_penalty=20.0)` — defaults suit this repo's
   `unit=2.0`-scale circuits. Lower `turn_penalty` allows more bends in
   exchange for tighter routing; raise `clearance` if a wire hugs a chip
   outline too closely. `overlap_penalty` is charged in full for running on
@@ -165,8 +179,14 @@ router.finish()
   every real circuit actually draws. Run every suite with
   `just schematics::test` (or `uv run --group dev pytest`) after touching
   `routing.py` or any `circuits/*.py`; CI runs the whole directory.
+  Tests that only *read* a real circuit take the `real_circuits` fixture in
+  `conftest.py`, which routes each circuit once per session and fails any
+  test that changes a shared drawing or its metrics; a test that must route
+  afresh (determinism, a monkeypatched `Router` default) routes its own copy
+  with `draw_circuit(load_circuit(...))` or in a fresh interpreter (#594).
 - **Measuring a router change**: `metrics.py` reports, per circuit, total
-  wire length, length inside component bodies (own and foreign), crossings,
+  wire length, length inside component bodies (own and foreign), length
+  over power/ground tags the wire is not wired to, crossings,
   tight parallel pairs, collinear overlaps, junctions (routed-wire ends
   only) and the hops and dots actually drawn — each defined
   exactly in its module docstring and pinned by `test_metrics.py`. Run
@@ -185,6 +205,25 @@ router.finish()
   on the left and 3 on the right.
 - **Labels**: factories don't set a center label — individual circuits add
   `.label('Name', loc='bot', ofst=0.4)` to avoid collisions with pin labels.
+- **Physical layouts** (ADR-023 stage 6, #495): the two conventions above
+  describe `layout="schematic"` symbols, whose pin order was chosen for the
+  router. A board with a vendor-sourced layout also has a `layout="physical"`
+  symbol — currently the XIAO ESP32-S3 Sense, TCA9548A, PCA9685, TB6612FNG
+  and MAX98357A — drawn by `components.physical_module()`: every pad of the
+  real header, on the real edge, in the real order as seen from the
+  component side, `PITCH = 1.0` drawing units apart (true 2.54 mm would be
+  too tight for the router). The pad list is read from
+  `docs/reference/boards/<board>.md` through `tools/hardware/layout.py`,
+  never typed into `components.py`, and each breakout page records the
+  vendor board file it was read from with `tools/breakout-pinout.py`
+  (`.claude/rules/board-layout-from-vendor-files.md`). A name the board
+  repeats is anchored by edge and position (`tb["GND.L3"]`,
+  `pca["SCL.R3"]`); the XIAO's GPIO pads are anchored by firmware name
+  (`xiao.GPIO5`). Do not rotate or mirror a physical symbol — place the
+  other parts around its pin order instead. The default stays `"schematic"`,
+  so a circuit changes only when it opts in. A new board gets a page under
+  `docs/reference/boards/` (a `Pin | Side | Pos` table) before it gets a
+  physical symbol.
 - **Colors — by net class, never by literal**: every `router.wire()` passes
   `net=` one of the classes in `routing.NET_COLORS`, which alone decides the
   colour; there is no `color=` argument. Hand-drawn leads that carry a net
@@ -222,12 +261,45 @@ Each circuit file cites the authoritative wiring document at the top (usually
 the project's `WIRING.md`). Keep the schematic and that document in sync when
 pins change.
 
+A project with a `hardware.toml` (ADR-021) does not transcribe its MCU wiring.
+`robocar_unified.py` loads the join live at render time and asks
+`hardware_nets.JoinedNets` for each net by pin role —
+`router.wire(*nets.ends("I2S_BCLK_PIN"), net="i2s")` — so the XIAO pad comes
+from `pin_config.h` and the board reference, and the part pin from the
+`[[nets]]` entry. Chip addresses, the PWM frequency and the PCA9685 and mux
+channel numbers in its labels come from the same headers. Placement, net order
+and net colour stay in the circuit. After the last MCU wire,
+`nets.check_all_drawn()` fails the render for any `[[nets]]` entry the drawing
+left out, so a net added to `hardware.toml` cannot ship a schematic without it.
+
 ## Freshness check
 
 `.github/workflows/schematics-check.yml` re-renders all circuits on every PR
-that touches `docs/schematics/**` and fails if `images/*.svg` would change.
+that touches `docs/schematics/**` — or an input a circuit reads at render
+time: the board references in `docs/reference/boards/`, `tools/hardware/`,
+and the `main/pin_config.h` and `hardware.toml` that robocar-unified's wiring
+and labels come from — and fails if `images/*.svg` would change. A circuit that starts
+reading a new file needs that file on the workflow's trigger paths, or the
+SVG can go stale with no check running.
 The workflow is SVG-only on purpose (PNG drift is encoder-version noise, not
 content drift); the workflow surfaces PNG diffs as `::notice` only.
 
-When the check fails, run `just schematics::render` locally and commit both
-the regenerated SVG and PNG.
+When the check fails, run `just schematics::render-all` locally and commit
+the regenerated SVG and PNG, plus any PDF it recompiled.
+
+## Embedded in a build guide
+
+A Typst document can embed a rendered PNG — the robocar-unified build guide
+embeds `images/robocar_unified.png` — and its committed PDF then carries the
+image's bytes. Re-rendering that circuit leaves the PDF stale, and
+`build-guide-check.yml` fails on it even though this directory's own check
+passes (issue #595).
+
+`just schematics::render-all` closes that gap: it renders, then recompiles
+every document whose source references `docs/schematics/images/`, each through
+its project's own `build-guide` recipe (which pins the Typst CLI and the flags
+CI uses). The documents are found by `guide_deps.py` reading the sources, so a
+new guide that embeds a schematic needs no edit here. Plain
+`just schematics::render` renders only, and afterwards names any project whose
+PDF it has just made stale. The rule that governs the guard is
+`.claude/rules/build-guide-drift-guard.md` § 1c.

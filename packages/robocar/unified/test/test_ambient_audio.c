@@ -470,11 +470,10 @@ static void test_a_deaf_gate_never_reports_novelty(void)
      * branch fired forever.
      *
      * Downstream that is not a missing feature but a false claim: an audio-only
-     * opening makes gemini_backend.c tell the model "the room SOUNDS different
-     * since you last spoke — something happened out of frame or behind you.
-     * Remark on that, not on what you can see." The request is stateless, so the
-     * model cannot check it and narrates a noisy room that does not exist, on
-     * every cycle the budget allows, for the whole boot.
+     * opening makes the planner prompt tell the model the room's sound has
+     * changed since it last spoke (speech_evidence.c). The request is
+     * stateless, so the model cannot check it and remarks on a change that
+     * never happened, on every cycle the budget allows, for the whole boot.
      *
      * Bench-unstageable in the direction that matters: proving a gate stays shut
      * for an hour with no microphone fitted takes an hour and a missing part. */
@@ -723,6 +722,130 @@ static void test_capture_allowed_honours_the_playback_hangover(void)
     ASSERT(ambient_capture_allowed(false, end + hang, end, hang));
 }
 
+/* The voice turn's start cue as the microphone hears it: the piezo's 1 kHz
+ * square wave a few centimetres away, over the same quiet room. */
+static void cue_frames(ambient_fingerprint_t *room, ambient_fingerprint_t *beep)
+{
+    silence();
+    noise(30);
+    fingerprint(room);
+
+    silence();
+    noise(30);
+    tone(1000.0f, 8000.0f);
+    fingerprint(beep);
+}
+
+/**
+ * Run the listener's sequence for one start cue — a settled room, five frames
+ * overlapping the 320 ms cue, one frame straight after it (the race in which
+ * the listener reads again before the voice turn takes the mic lock), then the
+ * room after the hangover — routing every frame through ambient_gate_accepts()
+ * exactly as ambient_listener.c does. @p flag_cue false replays the same audio
+ * with the cue flag withheld, which is what the listener did before #624.
+ */
+static uint32_t play_cue_through_gate(bool flag_cue, int16_t *floor_before_cue)
+{
+    ambient_fingerprint_t room;
+    ambient_fingerprint_t beep;
+    cue_frames(&room, &beep);
+
+    const uint32_t hang = AMBIENT_CUE_HANGOVER_MS_DEFAULT;
+    uint32_t last_cue = 0u;
+    uint32_t t = 10000u; /* well clear of the boot seed */
+
+    ambient_audio_init();
+    for (int i = 0; i < 100; ++i, t += FRAME_MS) {
+        if (ambient_gate_accepts(true, false, t, &last_cue, hang)) {
+            ambient_audio_note(&room, t);
+        }
+    }
+    ambient_audio_mark_spoken(); /* the robot has spoken about this room */
+    ASSERT(!ambient_audio_event(t));
+    *floor_before_cue = ambient_audio_floor_db();
+
+    for (int i = 0; i < 5; ++i, t += FRAME_MS) { /* 200 ms beep + 120 ms settle */
+        if (ambient_gate_accepts(true, flag_cue, t, &last_cue, hang)) {
+            ambient_audio_note(&beep, t);
+        }
+    }
+    /* The piezo's tail, read before the voice turn gets the lock. */
+    if (ambient_gate_accepts(true, false, t, &last_cue, hang)) {
+        ambient_audio_note(&beep, t);
+    }
+    t += hang;
+    for (int i = 0; i < 10; ++i, t += FRAME_MS) {
+        if (ambient_gate_accepts(true, false, t, &last_cue, hang)) {
+            ambient_audio_note(&room, t);
+        }
+    }
+    return t;
+}
+
+static void test_the_start_cue_never_reaches_the_gate(void)
+{
+    /* The buzzer is GPIO2, not the amplifier, so the playback quarantine never
+     * covered it: the robot's own beep latched the gate, and the next planner
+     * cycle told the model the room sounded different (issue #624). */
+    int16_t floor_before = 0;
+    const uint32_t t = play_cue_through_gate(true, &floor_before);
+    ASSERT(!ambient_audio_event(t));
+    ASSERT(ambient_audio_loud_score(t) == 0u);
+    ASSERT(ambient_audio_shape_score(t) == 0u);
+    /* The floor is what voice_endpoint measures the next turn against; the beep
+     * must not lift it either. */
+    ASSERT(ambient_audio_floor_db() == floor_before);
+}
+
+static void test_the_same_beep_unflagged_does_open_the_gate(void)
+{
+    /* The control for the test above: the identical audio without the cue flag
+     * must latch, or the test above passes on a beep the gate could never hear. */
+    int16_t floor_before = 0;
+    const uint32_t t = play_cue_through_gate(false, &floor_before);
+    ASSERT(ambient_audio_event(t));
+    ASSERT(ambient_audio_loud_score(t) >= AMBIENT_LOUD_THRESHOLD_DB_DEFAULT ||
+           ambient_audio_shape_score(t) >= AMBIENT_SHAPE_THRESHOLD_DB_DEFAULT);
+}
+
+static void test_cue_hangover_is_anchored_on_the_last_cue_frame(void)
+{
+    const uint32_t hang = AMBIENT_CUE_HANGOVER_MS_DEFAULT;
+    uint32_t last_cue = 0u;
+
+    /* A cue frame is refused even when the playback quarantine would allow it,
+     * and it moves the anchor. */
+    ASSERT(!ambient_gate_accepts(true, true, 20000u, &last_cue, hang));
+    ASSERT(last_cue == 20000u);
+
+    ASSERT(!ambient_gate_accepts(true, false, 20000u + hang - 1u, &last_cue, hang));
+    ASSERT(ambient_gate_accepts(true, false, 20000u + hang, &last_cue, hang));
+    ASSERT(last_cue == 20000u); /* a clear frame leaves the anchor alone */
+
+    /* A voice turn holds the mic for seconds after the cue. The first frame the
+     * listener reads afterwards is long past the hangover and must be measured;
+     * anchoring on "the first frame without the cue" would mute it instead. */
+    ASSERT(!ambient_gate_accepts(true, true, 30000u, &last_cue, hang));
+    ASSERT(ambient_gate_accepts(true, false, 30000u + 6000u, &last_cue, hang));
+
+    /* The playback quarantine still wins, and a cue inside it still moves the
+     * anchor so the hangover runs from the beep, not from the end of playback. */
+    ASSERT(!ambient_gate_accepts(false, false, 40000u, &last_cue, hang));
+    ASSERT(!ambient_gate_accepts(false, true, 40000u, &last_cue, hang));
+    ASSERT(last_cue == 40000u);
+    ASSERT(!ambient_gate_accepts(true, false, 40000u + hang - 1u, &last_cue, hang));
+
+    /* Hangover 0 refuses only the cue frames themselves. */
+    ASSERT(!ambient_gate_accepts(true, true, 50000u, &last_cue, 0u));
+    ASSERT(ambient_gate_accepts(true, false, 50000u, &last_cue, 0u));
+
+    /* Across the uint32 wrap. */
+    const uint32_t end = 0xFFFFFF00u;
+    ASSERT(!ambient_gate_accepts(true, true, end, &last_cue, hang));
+    ASSERT(!ambient_gate_accepts(true, false, end + hang - 1u, &last_cue, hang));
+    ASSERT(ambient_gate_accepts(true, false, end + hang, &last_cue, hang));
+}
+
 /* =========================================================================
  * Main
  * ========================================================================= */
@@ -768,6 +891,12 @@ int main(void)
 
     test_run("capture_allowed honours the playback hangover, including the wrap",
              test_capture_allowed_honours_the_playback_hangover);
+    test_run("the start cue never reaches the gate (#624)",
+             test_the_start_cue_never_reaches_the_gate);
+    test_run("the same beep without the cue flag does open the gate",
+             test_the_same_beep_unflagged_does_open_the_gate);
+    test_run("the cue hangover is anchored on the last cue frame, including the wrap",
+             test_cue_hangover_is_anchored_on_the_last_cue_frame);
 
     printf("\n=== %d/%d passed ===\n", test_pass, test_count);
     return (test_pass == test_count) ? 0 : 1;

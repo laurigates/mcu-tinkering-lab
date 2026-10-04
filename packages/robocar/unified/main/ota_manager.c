@@ -38,6 +38,7 @@
 #include "freertos/task.h"
 #include "freertos/timers.h"
 #include "ota_interval.h"
+#include "ota_update_decision.h"
 #include "ota_version_compare.h"
 #if MQTT_LOGGING_ENABLED
 #include "mqtt_logger.h"
@@ -56,6 +57,15 @@ static const char *TAG = "OTA_Manager";
 #define OTA_BIN_URL_BUF_SIZE 256
 /** esp_app_get_description()->version is a fixed 32-byte field. */
 #define OTA_VERSION_STR_BUF_SIZE 32
+/** {"status":"refused","reason":<= 20 chars,"version":<= 31 chars} */
+#define OTA_STATUS_PAYLOAD_BUF_SIZE 128
+
+/* Set by main/CMakeLists.txt from the project CMakeLists.txt's commit lookup
+ * (issue #627). The fallback keeps a build outside that path compiling; the
+ * OTA decision treats it exactly like a dirty tree — no usable SHA. */
+#ifndef ROBOCAR_BUILD_SHA
+#define ROBOCAR_BUILD_SHA "unknown"
+#endif
 
 // OTA manager state
 static TaskHandle_t s_ota_task_handle = NULL;
@@ -72,6 +82,7 @@ static bool select_app_part_path(const cJSON *manifest, const char **path_out);
 static bool resolve_relative_url(const char *base_url, const char *relative_path, char *out,
                                  size_t out_size);
 static void ota_stability_timer_callback(TimerHandle_t xTimer);
+static void report_refusal(ota_update_decision_t decision, const char *remote_version);
 
 #if MQTT_LOGGING_ENABLED
 static void mqtt_ota_notify_handler(const char *topic, const char *data, int data_len);
@@ -80,7 +91,8 @@ static void mqtt_ota_notify_handler(const char *topic, const char *data, int dat
 esp_err_t ota_manager_init(void)
 {
     ESP_LOGI(TAG, "Initializing OTA manager");
-    ESP_LOGI(TAG, "Current firmware version: %s", ota_manager_get_version());
+    ESP_LOGI(TAG, "Current firmware version: %s (build %s)", ota_manager_get_version(),
+             ota_manager_get_build_sha());
 
     BaseType_t created =
         xTaskCreatePinnedToCore(ota_task, "ota_task", OTA_TASK_STACK_SIZE, NULL, OTA_TASK_PRIORITY,
@@ -142,6 +154,11 @@ const char *ota_manager_get_version(void)
 {
     const esp_app_desc_t *app_desc = esp_app_get_description();
     return app_desc->version;
+}
+
+const char *ota_manager_get_build_sha(void)
+{
+    return ROBOCAR_BUILD_SHA;
 }
 
 esp_err_t ota_manager_confirm_valid(void)
@@ -384,16 +401,59 @@ static void run_update_check(void)
     char remote_version[OTA_VERSION_STR_BUF_SIZE];
     snprintf(remote_version, sizeof(remote_version), "%s", version_node->valuestring);
     const char *current_version = ota_manager_get_version();
+    const char *current_sha = ota_manager_get_build_sha();
 
-    ota_version_compare_result_t cmp = ota_version_compare(current_version, remote_version);
-    if (cmp != OTA_VERSION_COMPARE_UPDATE_AVAILABLE) {
-        if (cmp == OTA_VERSION_COMPARE_INVALID) {
+    // Absent from manifests written before issue #627; ota_update_decide()
+    // refuses those (fail closed). Read in place — it is only compared and
+    // logged before the manifest is freed below.
+    const cJSON *sha_node = cJSON_GetObjectItemCaseSensitive(manifest, "buildSha");
+    const char *remote_sha =
+        (cJSON_IsString(sha_node) && sha_node->valuestring) ? sha_node->valuestring : NULL;
+
+    const ota_update_decision_t decision =
+        ota_update_decide(current_version, current_sha, remote_version, remote_sha);
+    switch (decision) {
+        case OTA_DECISION_UPDATE:
+            break;
+        case OTA_DECISION_INVALID_VERSION:
             ESP_LOGW(TAG, "Cannot compare versions (\"%s\" running vs \"%s\" manifest) — no update",
                      current_version, remote_version);
-        } else {
-            ESP_LOGI(TAG, "No update available (running %s, manifest %s)", current_version,
+            break;
+        case OTA_DECISION_REFUSE_MANIFEST_SHA_MISSING:
+            ESP_LOGW(TAG,
+                     "Manifest %s carries no valid \"buildSha\" — refusing to install a build "
+                     "it cannot identify",
                      remote_version);
-        }
+            break;
+        case OTA_DECISION_UP_TO_DATE:
+            ESP_LOGI(TAG, "No update available (running %s, build %s — the published build)",
+                     current_version, current_sha);
+            break;
+        case OTA_DECISION_OLDER_REMOTE:
+            ESP_LOGI(TAG, "No update available (running %s, manifest %s is older)", current_version,
+                     remote_version);
+            break;
+        case OTA_DECISION_RUNNING_SHA_UNKNOWN:
+            ESP_LOGI(TAG,
+                     "Manifest %s matches the running version, but this build's SHA is \"%s\" — "
+                     "cannot tell the builds apart; not installing",
+                     remote_version, current_sha);
+            break;
+        case OTA_DECISION_REFUSE_SHA_MISMATCH:
+            // remote_sha passed ota_build_sha_valid() to get here, so it is
+            // exactly 40 hex digits and safe to log as-is.
+            ESP_LOGW(TAG,
+                     "Manifest %s is the running version built from a different commit "
+                     "(running %s, published %s) — not installing unreleased changes under a "
+                     "released version",
+                     remote_version, current_sha, remote_sha);
+            break;
+    }
+    if (decision == OTA_DECISION_REFUSE_MANIFEST_SHA_MISSING ||
+        decision == OTA_DECISION_REFUSE_SHA_MISMATCH) {
+        report_refusal(decision, remote_version);
+    }
+    if (decision != OTA_DECISION_UPDATE) {
         cJSON_Delete(manifest);
         return;
     }
@@ -448,6 +508,27 @@ static void start_https_ota(const char *bin_url)
         mqtt_logger_publish(OTA_MQTT_STATUS_TOPIC, "{\"status\":\"failed\"}", 1, false);
 #endif
     }
+}
+
+/**
+ * Publish a refusal on the OTA status topic, beside downloading / rebooting /
+ * failed. Only the two refusals are reported: they mean the published
+ * manifest and this robot disagree about what the build is, which nobody sees
+ * from a log line on a board without a serial cable. remote_version has
+ * already passed ota_version_compare(), so it holds only digits and dots.
+ */
+static void report_refusal(ota_update_decision_t decision, const char *remote_version)
+{
+#if MQTT_LOGGING_ENABLED
+    char payload[OTA_STATUS_PAYLOAD_BUF_SIZE];
+    snprintf(payload, sizeof(payload),
+             "{\"status\":\"refused\",\"reason\":\"%s\",\"version\":\"%s\"}",
+             ota_update_decision_name(decision), remote_version);
+    mqtt_logger_publish(OTA_MQTT_STATUS_TOPIC, payload, 1, false);
+#else
+    (void)decision;
+    (void)remote_version;
+#endif
 }
 
 static void ota_stability_timer_callback(TimerHandle_t xTimer)

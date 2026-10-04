@@ -97,6 +97,11 @@ void self_report_collect(robocar_status_t *out)
     const char *key = get_gemini_api_key();
     out->key_present = (key != NULL && key[0] != '\0');
 
+    /* The same rule the dispatcher applies, so the published line cannot
+     * claim a mode the command topic is not actually in. */
+    out->mqtt_access =
+        mqtt_command_access_for_credentials(get_mqtt_username(), get_mqtt_password());
+
     const char *ssid = get_wifi_ssid();
     strlcpy(out->ssid, (ssid != NULL) ? ssid : "", sizeof(out->ssid));
 
@@ -177,12 +182,13 @@ size_t self_report_format_facts(const robocar_status_t *status, char *buf, size_
      * a dead bus says nothing about the buzzer. */
     int n = snprintf(buf, len,
                      "robot=robocar version=%s wifi=%s ssid=%s camera=%s i2c_peripherals=%s "
-                     "audio=%s mcp23017=%s gemini_key=%s buzzer=%s",
+                     "audio=%s mcp23017=%s gemini_key=%s buzzer=%s mqtt_commands=%s",
                      status->version, req_state(status->wifi_up),
                      status->ssid[0] ? status->ssid : "none", req_state(status->camera_ok), i2c,
                      req_state(status->audio_ok),
                      status->mcp23017_present ? "present" : "absent(optional)",
-                     status->key_present ? "present" : "absent", req_state(status->buzzer_ok));
+                     status->key_present ? "present" : "absent", req_state(status->buzzer_ok),
+                     mqtt_command_access_name(status->mqtt_access));
 
     if (n < 0) {
         buf[0] = '\0';

@@ -1,0 +1,117 @@
+# Parts and nets around main/pin_config.h — the third layer of ADR-021's
+# board × header × parts join (docs/decisions/ADR-021-hardware-source-of-truth.md).
+#
+# No pin numbers live here. Every `role` is a macro name in main/pin_config.h,
+# and tools/hardware/ fails if one does not resolve, so this file cannot
+# silently disagree with the firmware about WHICH pin — only about which part a
+# pin is wired to, which is the fact the header cannot express.
+#
+# Regenerate everything that reads it — docs/auto/pin_defs.typ and the marked
+# tables in WIRING.md — with `just hardware::gen`; `just hardware::check` fails
+# if any of them is stale.
+
+[source]
+convention = "robocar"
+header = "main/pin_config.h"
+# Read for #define values only (the Typst bindings in docs/auto/pin_defs.typ);
+# pin roles come from `header` alone. Every header listed here must also be on
+# both trigger-path blocks of .github/workflows/build-guide-check.yml — see
+# .claude/rules/build-guide-drift-guard.md §1.
+extra_headers = ["main/planner_task.h", "main/plan_activity.h"]
+# The base XIAO ESP32-S3 reference carries the pad table, Side/Pos included;
+# the Sense page states the same external pinout and links to it.
+board = "docs/reference/boards/xiao-esp32s3.md"
+
+# `board` names a part's physical-layout page (read from the vendor's board
+# file); tools/hardware/pinout.py draws each one for the build guide (#629).
+# The HC-SR04P, the MCP23017 and the SSD1306 have no page until the fitted
+# modules are identified (#662), so they carry no `board` and are not drawn.
+
+[parts.mux]
+name = "TCA9548A"
+kind = "i2c-mux"
+board = "docs/reference/boards/adafruit-tca9548a.md"
+
+[parts.pwm]
+name = "PCA9685"
+kind = "pwm-driver"
+board = "docs/reference/boards/adafruit-pca9685.md"
+note = "Behind the mux on channel I2C_BUS_CHANNEL_PCA9685, so no MCU net lands on it"
+
+[parts.motor_driver]
+name = "TB6612FNG"
+kind = "motor-driver"
+board = "docs/reference/boards/sparkfun-tb6612fng.md"
+
+[parts.ranger]
+name = "HC-SR04P"
+kind = "ultrasonic"
+
+[parts.buzzer]
+name = "Piezo buzzer"
+kind = "piezo"
+
+[parts.amp]
+name = "MAX98357A"
+kind = "i2s-amp"
+board = "docs/reference/boards/adafruit-max98357a.md"
+
+[[nets]]
+role = "I2C_SDA_PIN"
+to = "mux.SDA"
+note = "Every I2C device sits behind the mux"
+
+[[nets]]
+role = "I2C_SCL_PIN"
+to = "mux.SCL"
+
+[[nets]]
+role = "MOTOR_STBY_PIN"
+to = "motor_driver.STBY"
+note = "HIGH = motors enabled; the six control lines come from the PCA9685"
+
+[[nets]]
+role = "ULTRASONIC_TRIG_PIN"
+to = "ranger.TRIG"
+note = "3.3 V output; a 10 µs pulse triggers a measurement"
+
+[[nets]]
+role = "ULTRASONIC_ECHO_PIN"
+to = "ranger.ECHO"
+note = "3.3 V input; pulse width encodes distance (RMT RX)"
+
+[[nets]]
+role = "PIEZO_PIN"
+to = "buzzer.+"
+note = "LEDC PWM, through a series resistor; the other leg to GND"
+
+[[nets]]
+role = "I2S_BCLK_PIN"
+to = "amp.BCLK"
+note = "Bit clock"
+
+[[nets]]
+role = "I2S_LRCLK_PIN"
+to = "amp.LRC"
+note = "Word select / left-right clock"
+
+[[nets]]
+role = "I2S_DIN_PIN"
+to = "amp.DIN"
+note = "Serial audio data"
+
+[[undrawn]]
+role = "MIC_PDM_CLK_PIN"
+why = "wired to the PDM microphone on the Sense expansion board, not brought out to a header"
+
+[[undrawn]]
+role = "MIC_PDM_DATA_PIN"
+why = "wired to the PDM microphone on the Sense expansion board, not brought out to a header"
+
+[[undrawn]]
+role = "UART0_TX_PIN"
+why = "UART0 TX, nothing wired: the serial console is USB-Serial-JTAG on the USB-C connector, not this pad"
+
+[[undrawn]]
+role = "UART0_RX_PIN"
+why = "UART0 RX, nothing wired: the serial console is USB-Serial-JTAG on the USB-C connector, not this pad"

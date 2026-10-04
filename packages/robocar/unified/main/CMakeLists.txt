@@ -20,6 +20,7 @@ idf_component_register(
         "voice_fx_core.c"
         "ambient_audio.c"
         "speech_budget.c"
+        "speech_evidence.c"
         "plan_activity.c"
         "plan_budget.c"
         "speech_queue.c"
@@ -29,7 +30,11 @@ idf_component_register(
         "mic_dump.c"
         "ambient_listener.c"
         "audio_clip.c"
+        "voice_preroll.c"
+        "voice_endpoint.c"
+        "speech_trigger.c"
         "voice_history.c"
+        "voice_budget.c"
         "voice_turn.c"
         "gemini_tts.c"
         "voice_persona.c"
@@ -45,6 +50,7 @@ idf_component_register(
         "mqtt_command.c"
         "ota_manager.c"
         "ota_version_compare.c"
+        "ota_update_decision.c"
         "ota_interval.c"
     INCLUDE_DIRS "."
     REQUIRES
@@ -64,4 +70,15 @@ idf_component_register(
         "app_update"
         "improv-wifi"
         "esp_timer"
+)
+
+# The build commit SHA the project CMakeLists.txt resolved from git (issue
+# #627), compared on-device against the OTA manifest's "buildSha". Scoped to
+# the one file that reads it so a new commit recompiles ota_manager.c, not the
+# whole component.
+if(NOT DEFINED ROBOCAR_BUILD_SHA)
+    set(ROBOCAR_BUILD_SHA "unknown")
+endif()
+set_source_files_properties(ota_manager.c PROPERTIES
+    COMPILE_DEFINITIONS "ROBOCAR_BUILD_SHA=\"${ROBOCAR_BUILD_SHA}\""
 )

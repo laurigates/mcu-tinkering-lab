@@ -6,9 +6,28 @@ XIAO ESP32-S3 Sense driving everything via an I2C multiplexer:
   - TCA9548A ch2 → MCP23017 GPIO expander (optional; no roles assigned yet)
 Direct GPIO: STBY (motor enable), piezo, ultrasonic TRIG/ECHO,
 and I2S (D8-D10) → MAX98357A → speaker for the robot's voice (ADR-019).
+On-module, drawn dashed: the Sense board's PDM microphone (GPIO42/41).
+Standalone between a rail tag and ground: the suggested capacitors C1-C6
+(#628), which no breakout carries.
 
-Source of truth: packages/robocar/unified/WIRING.md and main/pin_config.h
+Every board with a vendor-sourced layout is drawn physically (#495): the
+XIAO, TCA9548A, PCA9685, TB6612FNG and MAX98357A show every pad of their real
+headers, on the real edge, in the real order, as seen from the component side,
+read from docs/reference/boards/. None of them is rotated or mirrored — that
+would draw a board nobody can hold — so placement works around the boards'
+own pin order rather than choosing it. The SSD1306, HC-SR04P and MCP23017
+keep schematic symbols: no vendor board file identifies the modules fitted.
+
+Every MCU wire and every pin label is read from the hardware join (#462,
+ADR-021) at render time: packages/robocar/unified/hardware.toml says which part
+pin each pin role is wired to, main/pin_config.h which GPIO the role is, and
+the board reference which header pad that GPIO is. Placement, net order and
+net colour stay hand-authored here.
 """
+
+import sys
+from pathlib import Path
+from typing import NamedTuple
 
 import schemdraw
 import schemdraw.elements as elm
@@ -18,60 +37,217 @@ from components import (
     max98357a,
     mcp23017,
     pca9685,
+    pdm_microphone,
     ssd1306_oled,
     tb6612fng,
     tca9548a,
     xiao_esp32s3_sense,
 )
+from hardware_nets import JoinedNets
 from routing import Router, net_color
 
+_REPO = Path(__file__).resolve().parents[3]
+if str(_REPO / "tools") not in sys.path:
+    sys.path.insert(0, str(_REPO / "tools"))
+from hardware import HardwareModel, join  # noqa: E402
 
-def draw() -> schemdraw.Drawing:
+PROJECT = _REPO / "packages/robocar/unified"
+
+
+# PCA9685 channel -> TB6612FNG pin. The channel half is the firmware's; the
+# pin half is which motor-driver input each define says it drives.
+MOTOR_LINES = (
+    ("MOTOR_RIGHT_PWM_CHANNEL", "PWMA"),
+    ("MOTOR_RIGHT_IN2_CHANNEL", "AIN2"),
+    ("MOTOR_RIGHT_IN1_CHANNEL", "AIN1"),
+    ("MOTOR_LEFT_IN1_CHANNEL", "BIN1"),
+    ("MOTOR_LEFT_IN2_CHANNEL", "BIN2"),
+    ("MOTOR_LEFT_PWM_CHANNEL", "PWMB"),
+)
+LED_CHANNELS = (
+    "LED_LEFT_R_CHANNEL",
+    "LED_LEFT_G_CHANNEL",
+    "LED_LEFT_B_CHANNEL",
+    "LED_RIGHT_R_CHANNEL",
+    "LED_RIGHT_G_CHANNEL",
+    "LED_RIGHT_B_CHANNEL",
+)
+SERVO_CHANNELS = ("SERVO_PAN_CHANNEL", "SERVO_TILT_CHANNEL")
+
+
+class SuggestedCap(NamedTuple):
+    """A capacitor the builder adds; none of these is on a breakout (#628)."""
+
+    ref: str
+    value: str
+    rating: str
+    rail: str
+    part_pin: str
+    polar: bool
+    recommended: bool
+
+
+# Read from the vendor board files and datasheets, not recalled; WIRING.md's
+# "Suggested capacitors" section carries the sources row by row, and
+# test_components.py holds that table and the build guide to this list.
+#
+# The bulk electrolytics sit on the three 5 V transient loads, each fed by its
+# own jumper run from the LM2596 — the "long input traces" the MAX98357A
+# datasheet asks additional bulk for. Every breakout already carries the
+# datasheet's own 10 uF (TB6612FNG VM: 0.1 + 10 uF; MAX98357A VDD: 0.1 +
+# 10 uF); the PCA9685 leaves its V+ electrolytic footprint empty for the
+# builder. 16 V: the rail cannot exceed the 8.4 V pack it is bucked from.
+#
+# The ceramics are the smaller half of TI's "larger plus smaller" bypass pair:
+# the Adafruit PCA9685 and TCA9548A boards fit a 10 uF on VCC and nothing
+# smaller. The MCP23017 module is unidentified (#662), so whether it has one
+# is unknown; Microchip's datasheet names no value, and 100 nF is generic
+# practice.
+SUGGESTED_CAPS = (
+    SuggestedCap("C1", "470 µF", "16 V", "+5V", "PCA9685 V+", True, True),
+    SuggestedCap("C2", "470 µF", "16 V", "+5V", "TB6612FNG VM", True, True),
+    SuggestedCap("C3", "470 µF", "16 V", "+5V", "MAX98357A Vin", True, True),
+    SuggestedCap("C4", "100 nF", "ceramic", "+3V3", "PCA9685 VCC", False, False),
+    SuggestedCap("C5", "100 nF", "ceramic", "+3V3", "TCA9548A VIN", False, False),
+    SuggestedCap("C6", "100 nF", "ceramic", "+3V3", "MCP23017 VCC", False, False),
+)
+
+
+def _suggested_cap(d, cap: SuggestedCap, top) -> None:
+    """``cap`` standing between its rail tag at ``top`` and ground below it.
+
+    Drawn standalone rather than on the pin's own tag: the rail symbol names
+    the net, and the label says which pin to fit it at. Hanging each one off
+    its pin would put a capacitor body in every crowded power-pin row.
+    """
+    d.add(elm.Vdd().at(top).label(cap.rail).color(net_color("power")))
+    text = f"{cap.ref} {cap.value}\n{cap.rating}\nat {cap.part_pin}"
+    # Drawn downward, the element's "bot" side is the drawing's right.
+    body = d.add(
+        elm.Capacitor(polar=cap.polar)
+        .down(1.5)
+        .at(top)
+        .label(text, loc="bot", fontsize=10)
+    )
+    d.add(elm.Ground().at(body.end).color(net_color("ground")))
+
+
+def _tag(d, pin, direction: str, length: float, kind: str, label: str = "") -> None:
+    """A power or ground tag on ``pin``, leading ``direction`` for ``length``."""
+    line = getattr(elm.Line(), direction)(length).at(pin)
+    d.add(line.color(net_color("power" if kind == "power" else "ground")))
+    if kind == "power":
+        d.add(elm.Vdd().label(label).color(net_color("power")))
+    else:
+        d.add(elm.Ground().color(net_color("ground")))
+
+
+def _stubs(d, ic, pads, label: str, net: str) -> None:
+    """Short leads down from PCA9685 channel pads, one label for the group."""
+    xs = []
+    for pad in pads:
+        point = ic[pad]
+        d.add(elm.Arrow().down(1.0).at(point).color(net_color(net)))
+        xs.append(point[0])
+    y = ic[pads[0]][1] - 1.0
+    d.add(
+        elm.Label()
+        .at(((min(xs) + max(xs)) / 2, y - 0.45))
+        .label(label, fontsize=10, color=net_color(net))
+    )
+
+
+def draw(model: HardwareModel | None = None) -> schemdraw.Drawing:
+    """Draw the schematic from ``model``, by default robocar-unified's live join.
+
+    Taking the model as an argument lets a test hand in a join with one net
+    added, and see the render refuse it.
+    """
+    if model is None:
+        model = join(PROJECT)
+
+    def value(macro: str) -> int:
+        """A numeric ``#define`` from the project's headers (``0x40`` included)."""
+        return int(model.defines[macro], 0)
+
+    # A PCA9685 channel's pad is named by its number, a mux channel's pair by
+    # its digit. Both come from the firmware, not from this file: a renumbered
+    # channel in pin_config.h moves the wire to the new pad instead of leaving
+    # the drawing on the old one.
+    def channel(macro: str) -> str:
+        return str(value(macro))
+
     d = schemdraw.Drawing(show=False)
     d.config(unit=2.0, fontsize=11)
 
     # === Components first, so every net below routes with full obstacle
     # awareness (the auto-router only avoids components already placed). ===
+    #
+    # The XIAO's signal pads are on its left edge (D0-D6) and its power and
+    # I2S pads on the right, so the I2C chain runs off to the left: mux below
+    # and left of the module, PCA9685 further left, motor driver under the
+    # PCA9685's channel row. The amplifier sits above-right, facing the I2S
+    # trio.
+    xiao = d.add(
+        xiao_esp32s3_sense(layout="physical")
+        .right()
+        .label("XIAO ESP32-S3 Sense\n(USB-C at top)", loc="bot", ofst=0.4)
+    )
+    # Every wire from the XIAO is looked up here by pin role. Each part a
+    # hardware.toml net names is registered as it is placed, under its id.
+    parts: dict[str, elm.Element] = {}
+    nets = JoinedNets(model, xiao, parts)
 
-    # Top row: MCU → I2C mux → PCA9685 (chained left-to-right). TB6612FNG
-    # sits below-and-right of PCA so PCA's right side stays clear for the
-    # LED/servo stub tags.
-    xiao = d.add(xiao_esp32s3_sense().label("XIAO ESP32-S3 Sense", loc="bot", ofst=0.4))
-
-    mux = d.add(
-        tca9548a()
-        .at((xiao.center.x + 9, xiao.center.y))
+    mux = parts["mux"] = d.add(
+        tca9548a(layout="physical")
+        .right()
+        .at((xiao.center.x - 5, xiao.center.y - 11))
         .anchor("center")
-        .label("TCA9548A\n0x70", loc="bot", ofst=0.4)
+        .label(f"TCA9548A\n0x{value('TCA9548A_ADDR'):02X}", loc="bot", ofst=0.4)
     )
 
     pca = d.add(
-        pca9685()
-        .at((mux.center.x + 9, mux.center.y))
+        pca9685(layout="physical")
+        .right()
+        .at((mux.center.x - 20, mux.center.y - 3))
         .anchor("center")
-        .label("PCA9685\n0x40 @ 200Hz", loc="bot", ofst=0.4)
+        .label(
+            f"PCA9685\n0x{value('PCA9685_ADDR'):02X} @ {value('PCA9685_FREQ_HZ')}Hz",
+            loc="top",
+            ofst=0.4,
+        )
     )
 
-    # TB6612FNG: shifted down 8 units so PCA's right side is unobstructed.
-    tb = d.add(
-        tb6612fng()
-        .at((pca.center.x + 7, pca.center.y - 8))
+    tb = parts["motor_driver"] = d.add(
+        tb6612fng(layout="physical")
+        .right()
+        .at((pca.center.x - 4, pca.center.y - 15))
         .anchor("center")
         .label("TB6612FNG", loc="bot", ofst=0.4)
     )
 
-    # Motors on the far right, driven by TB outputs.
-    motor_l = d.add(
-        elm.Motor()
-        .right()
-        .at((tb.center.x + 5, tb.BO1.y - 0.5))
-        .label("Left motor", loc="bot", ofst=0.4)
-    )
+    # Motors on the far left, driven by the outputs down TB's left edge.
+    # A01/A02 are channel A, the right motor; B01/B02 channel B, the left.
+    # Stood upright and drawn one pad pitch long (scaled down so the body
+    # fits), so each motor spans exactly its own pair of output pads and
+    # neither pair of wires has to pass the other motor. The left motor stands
+    # further out so its top terminal's lead clears the right motor's bottom
+    # one.
+    tb_left = tb["A01"].x
+    pitch = tb["A01"].y - tb["A02"].y
     motor_r = d.add(
         elm.Motor()
-        .right()
-        .at((tb.center.x + 5, tb.AO1.y - 0.5))
-        .label("Right motor", loc="bot", ofst=0.4)
+        .down(pitch)
+        .scale(0.625)
+        .at((tb_left - 2, tb["A01"].y))
+        .label("Right motor", loc="bot", ofst=0.3)
+    )
+    motor_l = d.add(
+        elm.Motor()
+        .up(pitch)
+        .scale(0.625)
+        .at((tb_left - 3.5, tb["B01"].y))
+        .label("Left motor", loc="top", ofst=0.3)
     )
 
     # Mux ch1 → SSD1306 OLED. Explicit .right() locks orientation — without
@@ -80,177 +256,251 @@ def draw() -> schemdraw.Drawing:
     oled = d.add(
         ssd1306_oled()
         .right()
-        .at((mux.center.x + 4, mux.center.y - 8))
+        .at((mux.center.x + 1, mux.center.y - 12))
         .anchor("center")
-        .label("SSD1306 OLED\n0x3C, 128x64", loc="bot", ofst=0.4)
+        .label(
+            f"SSD1306 OLED\n0x{value('OLED_I2C_ADDR'):02X}, "
+            f"{value('OLED_WIDTH')}x{value('OLED_HEIGHT')}",
+            loc="bot",
+            ofst=0.4,
+        )
     )
 
-    # MCP23017 on mux ch2, below-right of the OLED. Offset rather than directly
-    # beneath it so the ch2 bus gets its own vertical corridor — stacked in the
-    # same column, the ch1 and ch2 pairs ran shoulder to shoulder and crowded
-    # the OLED's power tags. Optional hardware: the firmware boots fine without
-    # the board fitted.
+    # MCP23017 on mux ch2, which leaves the mux's right edge at the bottom.
+    # Optional hardware: the firmware boots fine without the board fitted.
     mcp = d.add(
         mcp23017()
         .right()
-        .at((oled.center.x + 6, oled.center.y - 8))
+        .at((mux.center.x + 10, mux.center.y - 9))
         .anchor("center")
-        .label("MCP23017\n0x20 (optional)", loc="bot", ofst=0.4)
+        .label(
+            f"MCP23017\n0x{value('MCP23017_ADDR'):02X} (optional)", loc="bot", ofst=0.4
+        )
     )
 
-    # Ultrasonic below the MCU.
-    us = d.add(
+    # Onboard PDM microphone (issue #486): on the Sense expansion board, wired
+    # to its GPIOs there and not to any header pad, so it is drawn dashed
+    # with dashed gray leads into the XIAO body instead of routed nets — there
+    # is nothing for a builder to connect. Up and to the left of the module,
+    # clear of the I2S bus that leaves the right edge for the amplifier. It
+    # shares I2S0 with the MAX98357A: PDM RX exists only on I2S0 on the
+    # ESP32-S3, and the RX channel needs its own i2s_new_channel() call or the
+    # 16 kHz mic is clocked off the 24 kHz amp. Both roles are [[undrawn]] in
+    # hardware.toml; their GPIOs label the pins because there is no Dn to print.
+    xiao_box = xiao.get_bbox(transform=True, includetext=False)
+    mic = d.add(
+        pdm_microphone(
+            clk=f"GPIO{model.roles['MIC_PDM_CLK_PIN']}",
+            data=f"GPIO{model.roles['MIC_PDM_DATA_PIN']}",
+        )
+        .right()
+        .at((xiao.center.x - 5, xiao_box.ymax + 3))
+        .anchor("center")
+        .label(
+            "PDM mic (MSM261D)\non Sense board, no wiring\nI2S0 RX, same port as amp",
+            loc="top",
+            ofst=0.4,
+        )
+    )
+    # CLK (the upper pin) drops the further right, so the two leads nest.
+    for pin, drop_x in (
+        (mic.DATA, xiao.center.x - 0.75),
+        (mic.CLK, xiao.center.x - 0.25),
+    ):
+        d.add(
+            elm.Wire("-|")
+            .at(pin)
+            .to((drop_x, xiao_box.ymax))
+            .linestyle("--")
+            .color("gray")
+        )
+
+    # Ultrasonic left of the XIAO, level with its TRIG pad (D2 today).
+    us = parts["ranger"] = d.add(
         hc_sr04p()
         .right()
-        .at((xiao.center.x + 4, xiao.GPIO3.y - 5))
-        .anchor("center")
+        .reverse()
+        .at((xiao.center.x - 11, nets.pad("ULTRASONIC_TRIG_PIN")[1]))
+        .anchor("TRIG")
         .label("HC-SR04P\nultrasonic", loc="bot", ofst=0.4)
     )
 
-    # MAX98357A above the MCU: its I2S pins are on the left, and the XIAO's
-    # I2S trio is at the top of its right side, so the bus runs up-and-over
-    # without crossing the I2C wires heading right to the mux.
-    amp = d.add(
-        max98357a()
+    # MAX98357A above-right: its header is the bottom edge, so the I2S trio
+    # leaves the XIAO's right edge and climbs into it from below. The speaker
+    # terminal is the top edge.
+    amp = parts["amp"] = d.add(
+        max98357a(layout="physical")
         .right()
-        .at((xiao.center.x + 5, xiao.center.y + 11))
+        .at((xiao.center.x + 8.5, xiao.center.y + 7))
         .anchor("center")
-        .label("MAX98357A", loc="top", ofst=0.4)
+        .label("MAX98357A", loc="right", ofst=0.4)
     )
 
-    # Speaker below the amp, clear of the XIAO body. 8 Ω is the safer starting
+    # Speaker above the amp's terminal block. 8 Ω is the safer starting
     # point — it roughly halves peak current versus 4 Ω on a rail that already
     # has brownout detection disabled for motor inrush.
     spk = d.add(
         elm.Speaker()
-        .right()
-        .at((amp.center.x - 0.25, amp["OUT-"].y - 2.5))
+        .up()
+        .at((amp.center.x, amp["VO-"].y + 1.5))
         .label("8 Ω  2-3 W", loc="bot", ofst=0.4)
     )
 
-    # Piezo buzzer on GPIO2 — small branch through resistor to ground. Placed
-    # before routing (GPIO2 isn't a routed net in this circuit): the
-    # resistor/speaker are real components, not cosmetic tags, and the STBY
-    # run below happens to pass nearby.
-    d.add(elm.Line().right(0.5).at(xiao.GPIO2))
-    d.add(elm.Resistor().right().label("100 Ω"))
-    buz = d.add(elm.Speaker().right().label("Piezo", loc="top", ofst=0.3))
+    # Piezo buzzer on PIEZO_PIN (D1) — a small branch through a resistor to
+    # ground, leaving the XIAO's left edge. Placed before routing: the
+    # resistor/speaker are real components, not cosmetic tags.
+    d.add(elm.Line().left(0.5).at(nets.start("PIEZO_PIN")))
+    d.add(elm.Resistor().left().label("100 Ω"))
+    buz = d.add(elm.Speaker().left().label("Piezo", loc="lft", ofst=0.3))
     d.add(elm.Line().down(0.5).at(buz.in2).color(net_color("ground")))
     d.add(elm.Ground().color(net_color("ground")))
+
+    # === Power rails. ===
+    # Drawn before the nets so the router sees the tags (#591): it charges a
+    # wire for running over a power/ground tag it is not wired to, and a tag
+    # added after routing is invisible to it.
+    # XIAO 5V / GND / 3V3 sit together at the top of its right edge.
+    # The 5V/3V3 tags reach just past the router's stub point, so the I2S
+    # wires leaving the pads below pay the tag charge if they climb through
+    # them and run out along their own rows instead. GND reaches further so
+    # its symbol clears the +3V3 label one pad down.
+    _tag(d, xiao["5V"], "right", 0.75, "power", "+5V")
+    _tag(d, xiao["GND"], "right", 1.5, "ground")
+    _tag(d, xiao["3V3"], "right", 0.75, "power", "+3V3")
+
+    # Mux power at the top of its left edge.
+    _tag(d, mux.VIN, "left", 0.5, "power", "+3V3")
+    _tag(d, mux.GND, "left", 0.5, "ground")
+
+    # PCA9685: logic, servo rail and ground come in on the same right-edge
+    # header as the I2C feed from the mux; the left header chains onward and
+    # is left open. V+ is 5 V. The terminal block (top) is the alternative,
+    # reverse-protected V+ input and is not used here.
+    _tag(d, pca["VCC.R5"], "right", 0.5, "power", "+3V3")
+    _tag(d, pca["V+.R6"], "right", 0.5, "power", "+5V")
+    _tag(d, pca["GND.R1"], "right", 0.5, "ground")
+
+    # TB6612FNG: VCC = 3V3 logic, VM = 5V motor supply, at the top of its
+    # left edge.
+    _tag(d, tb.VM, "left", 0.5, "power", "+5V")
+    _tag(d, tb.VCC, "left", 0.5, "power", "+3V3")
+    _tag(d, tb["GND.L3"], "left", 0.5, "ground")
+
+    # OLED, ultrasonic and MCP23017 have their pins on the left, so their tags
+    # extend leftward — going right would draw into the chip body.
+    _tag(d, oled.VCC, "left", 1.0, "power", "+3V3")
+    _tag(d, oled.GND, "left", 1.0, "ground")
+    _tag(d, us.VCC, "right", 1.0, "power", "+3V3")
+    _tag(d, us.GND, "right", 1.0, "ground")
+    _tag(d, mcp.VCC, "left", 1.0, "power", "+3V3")
+    _tag(d, mcp.GND, "left", 1.0, "ground")
+
+    # Amp power on its bottom header. VIN is 5 V — take a separate feed from
+    # the LM2596 regulator's output terminal rather than daisy-chaining off
+    # the motor rail, and fit C3's bulk here (SUGGESTED_CAPS, WIRING.md).
+    _tag(d, amp.Vin, "down", 0.5, "power", "+5V")
+    _tag(d, amp.GND, "down", 0.5, "ground")
+
+    # === Suggested capacitors (#628). ===
+    # Each stands in free space beside the board it belongs to, placed before
+    # routing like the tags above so the router steers round it.
+    def box(el):
+        return el.get_bbox(transform=True, includetext=False)
+
+    pca_box, tb_box, amp_box = box(pca), box(tb), box(amp)
+    mux_box, mcp_box = box(mux), box(mcp)
+    # Each label reads to the right of its capacitor, into the free space the
+    # position was chosen for.
+    where = {
+        "C1": (pca_box.xmax + 1.5, pca_box.ymin - 1.5),
+        "C2": (tb_box.xmin - 1.5, tb_box.ymax + 3.5),
+        "C3": (amp_box.xmax + 1.5, amp_box.ymin - 1.0),
+        "C4": (pca_box.xmax + 2.5, pca_box.ymin - 5.5),
+        "C5": (mux_box.xmax + 2.5, mux_box.ymax - 2.5),
+        "C6": (mcp_box.xmax + 2.0, mcp_box.ymin - 1.0),
+    }
+    for cap in SUGGESTED_CAPS:
+        _suggested_cap(d, cap, where[cap.ref])
+
+    def legend_line(recommended: bool) -> str:
+        caps = [c for c in SUGGESTED_CAPS if c.recommended == recommended]
+        kinds = sorted(
+            {f"{c.value} {'electrolytic' if c.polar else 'ceramic'}" for c in caps}
+        )
+        status = "recommended" if recommended else "optional"
+        return f"{', '.join(c.ref for c in caps)}: {', '.join(kinds)} — {status}"
+
+    d.add(
+        elm.Label()
+        .at((pca_box.xmin, xiao_box.ymax + 3))
+        .label(
+            "Suggested capacitors, none on any breakout (see WIRING.md):\n"
+            f"{legend_line(True)}\n{legend_line(False)}",
+            fontsize=10,
+            halign="left",
+        )
+    )
 
     # === Nets: auto-routed orthogonal, obstacle-avoiding wires. ===
     router = Router(d)
 
-    # I2C bus: XIAO right side ↔ mux left side (top two pins).
-    router.wire(xiao.GPIO5, mux.SDA, net="i2c")
-    router.wire(xiao.GPIO6, mux.SCL, net="i2c")
+    # I2C bus: XIAO D4/D5 → the mux's upstream pins near the top of its left
+    # edge.
+    router.wire(*nets.ends("I2C_SDA_PIN"), net="i2c")
+    router.wire(*nets.ends("I2C_SCL_PIN"), net="i2c")
 
-    # Mux ch0 (SD0/SC0) → PCA9685 SDA/SCL.
-    router.wire(mux.SD0, pca.SDA, net="i2c")
-    router.wire(mux.SC0, pca.SCL, net="i2c")
+    # Mux ch0 (bottom of its left edge) → the PCA9685's right-edge header.
+    ch_pca = channel("I2C_BUS_CHANNEL_PCA9685")
+    router.wire(mux[f"SD{ch_pca}"], pca["SDA.R4"], net="i2c")
+    router.wire(mux[f"SC{ch_pca}"], pca["SCL.R3"], net="i2c")
 
-    # PCA9685 PWM 8-13 group → TB6612FNG control cluster.
-    # 6 logical signals (PWMA, AIN1/2, PWMB, BIN1/2) drawn as one trunk.
-    router.wire(pca["PWM 8-13"], tb.PWMA, net="pwm")
+    # PCA9685 channel pads → TB6612FNG control row. The driver's right edge
+    # runs PWMA, AIN2, AIN1, STBY, BIN1, BIN2, PWMB top to bottom, and the
+    # channels run left to right in the same order, so the six wires nest.
+    for macro, pin in MOTOR_LINES:
+        router.wire(pca[channel(macro)], tb[pin], net="pwm")
 
-    router.wire(tb.BO1, motor_l.start, net="load")
-    router.wire(tb.BO2, motor_l.end, net="load")
-    router.wire(tb.AO1, motor_r.start, net="load")
-    router.wire(tb.AO2, motor_r.end, net="load")
+    router.wire(tb["A01"], motor_r.start, net="load")
+    router.wire(tb["A02"], motor_r.end, net="load")
+    router.wire(tb["B01"], motor_l.start, net="load")
+    router.wire(tb["B02"], motor_l.end, net="load")
 
-    # STBY direct from MCU GPIO1 — the router finds its own way around the
-    # mux/PCA/motor obstacles now that every component is already placed.
-    router.wire(xiao.GPIO1, tb.STBY, net="signal")
+    # STBY direct from MCU GPIO1 (D0) to the gap in the control row.
+    router.wire(*nets.ends("MOTOR_STBY_PIN"), net="signal")
 
-    router.wire(mux.SD1, oled.SDA, net="i2c")
-    router.wire(mux.SC1, oled.SCL, net="i2c")
+    ch_oled = channel("I2C_BUS_CHANNEL_OLED")
+    router.wire(mux[f"SD{ch_oled}"], oled.SDA, net="i2c")
+    router.wire(mux[f"SC{ch_oled}"], oled.SCL, net="i2c")
 
-    router.wire(mux.SD2, mcp.SDA, net="i2c")
-    router.wire(mux.SC2, mcp.SCL, net="i2c")
+    ch_mcp = channel("I2C_BUS_CHANNEL_MCP23017")
+    router.wire(mux[f"SD{ch_mcp}"], mcp.SDA, net="i2c")
+    router.wire(mux[f"SC{ch_mcp}"], mcp.SCL, net="i2c")
 
-    router.wire(xiao.GPIO3, us.TRIG, net="sensor")
-    router.wire(xiao.GPIO4, us.ECHO, net="sensor")
+    router.wire(*nets.ends("ULTRASONIC_TRIG_PIN"), net="sensor")
+    router.wire(*nets.ends("ULTRASONIC_ECHO_PIN"), net="sensor")
 
     # I2S bus → amplifier. 24 kHz mono, matching Gemini TTS's native rate.
-    router.wire(xiao.GPIO7, amp.BCLK, net="i2s")
-    router.wire(xiao.GPIO8, amp.LRC, net="i2s")
-    router.wire(xiao.GPIO9, amp.DIN, net="i2s")
+    router.wire(*nets.ends("I2S_BCLK_PIN"), net="i2s")
+    router.wire(*nets.ends("I2S_LRCLK_PIN"), net="i2s")
+    router.wire(*nets.ends("I2S_DIN_PIN"), net="i2s")
 
-    router.wire(amp["OUT-"], spk.in1, net="load")
-    router.wire(amp["OUT+"], spk.in2, net="load")
+    # Every MCU net in hardware.toml has now been drawn, or this fails the
+    # render naming the one that was not.
+    nets.check_all_drawn()
 
-    # === Local stubs (power tags, servo/LED arrows, piezo branch) stay
-    # hand-drawn — these aren't point-to-point nets between two components,
-    # so the router adds nothing here. ===
+    router.wire(amp["VO-"], spk.in1, net="load")
+    router.wire(amp["VO+"], spk.in2, net="load")
 
-    # PCA9685 servo + LED stubs — extend right into the cleared space.
+    # === Local stubs (servo/LED and spare-GPIO arrows) stay hand-drawn —
+    # these aren't point-to-point nets between two components, so the router
+    # adds nothing here. ===
+
+    # PCA9685 servo + LED channels: short leads down from each pad in use.
     # elm.Arrow renders the arrowhead as an SVG path, not a glyph, so the
     # destination marker survives PNG rendering on hosts whose default sans
     # font lacks U+2192 (e.g. macOS Verdana).
-    d.add(
-        elm.Arrow()
-        .right(2.5)
-        .at(pca["PWM 6-7"])
-        .label("Pan / Tilt SG90", loc="right", ofst=0.1, fontsize=10)
-        .color(net_color("pwm"))
-    )
-    d.add(
-        elm.Arrow()
-        .right(2.5)
-        .at(pca["PWM 0-5"])
-        .label("2× RGB LED", loc="right", ofst=0.1, fontsize=10)
-        .color(net_color("pwm"))
-    )
-
-    # === Power rails. ===
-    # MCU 3V3 / 5V / GND tags on its outward (left) side.
-    d.add(elm.Line().left(0.5).at(xiao["3V3"]).color(net_color("power")))
-    d.add(elm.Vdd().label("+3V3").color(net_color("power")))
-    d.add(elm.Line().left(0.5).at(xiao.GND).color(net_color("ground")))
-    d.add(elm.Ground().color(net_color("ground")))
-    d.add(elm.Line().left(0.5).at(xiao["5V"]).color(net_color("power")))
-    d.add(elm.Vdd().label("+5V").color(net_color("power")))
-
-    # Mux power (3V3 logic) — left side, away from I2C bus on right.
-    d.add(elm.Line().left(0.5).at(mux.VCC).color(net_color("power")))
-    d.add(elm.Vdd().label("+3V3").color(net_color("power")))
-    d.add(elm.Line().left(0.5).at(mux.GND).color(net_color("ground")))
-    d.add(elm.Ground().color(net_color("ground")))
-
-    # PCA9685: power tags pulled FAR left (1.5 units) so the Vdd labels clear
-    # the I2C wires entering on the right.
-    d.add(elm.Line().left(1.5).at(pca.VCC).color(net_color("power")))
-    d.add(elm.Vdd().label("+3V3").color(net_color("power")))
-    d.add(elm.Line().left(1.5).at(pca["V+"]).color(net_color("power")))
-    d.add(elm.Vdd().label("+5V").color(net_color("power")))
-    d.add(elm.Line().left(1.5).at(pca.GND).color(net_color("ground")))
-    d.add(elm.Ground().color(net_color("ground")))
-
-    # TB6612FNG: VCC = 3V3 logic, VM = 5V motor supply.
-    d.add(elm.Line().left(0.5).at(tb.VCC).color(net_color("power")))
-    d.add(elm.Vdd().label("+3V3").color(net_color("power")))
-    d.add(elm.Line().left(0.5).at(tb.VM).color(net_color("power")))
-    d.add(elm.Vdd().label("+5V").color(net_color("power")))
-    d.add(elm.Line().left(0.5).at(tb.GND).color(net_color("ground")))
-    d.add(elm.Ground().color(net_color("ground")))
-
-    # OLED + ultrasonic only have pins on the LEFT side, so power tags also
-    # extend leftward — going right would draw INTO the chip body. The Vdd
-    # label sits well below the I2C wires entering at SDA/SCL.
-    d.add(elm.Line().left(1.0).at(oled.VCC).color(net_color("power")))
-    d.add(elm.Vdd().label("+3V3").color(net_color("power")))
-    d.add(elm.Line().left(1.0).at(oled.GND).color(net_color("ground")))
-    d.add(elm.Ground().color(net_color("ground")))
-
-    d.add(elm.Line().left(1.0).at(us.VCC).color(net_color("power")))
-    d.add(elm.Vdd().label("+3V3").color(net_color("power")))
-    d.add(elm.Line().left(1.0).at(us.GND).color(net_color("ground")))
-    d.add(elm.Ground().color(net_color("ground")))
-
-    d.add(elm.Line().left(1.0).at(mcp.VCC).color(net_color("power")))
-    d.add(elm.Vdd().label("+3V3").color(net_color("power")))
-    d.add(elm.Line().left(1.0).at(mcp.GND).color(net_color("ground")))
-    d.add(elm.Ground().color(net_color("ground")))
+    _stubs(d, pca, [channel(m) for m in LED_CHANNELS], "2× RGB LED", "pwm")
+    _stubs(d, pca, [channel(m) for m in SERVO_CHANNELS], "Pan / Tilt\nSG90", "pwm")
 
     # MCP23017 ports: 16 generic GPIOs, no roles assigned yet — direction is
     # set per pin at runtime. (A0-A2 are strapped to GND for 0x20; that's in
@@ -270,39 +520,29 @@ def draw() -> schemdraw.Drawing:
         .color(net_color("signal"))
     )
 
-    # Amp power on its outward-facing right side. VIN is 5 V — take a separate
-    # feed from the LM2596 regulator's output terminal rather than daisy-chaining
-    # off the motor rail, and fit >=470 uF of bulk here (see WIRING.md).
-    d.add(elm.Line().right(0.5).at(amp.VIN).color(net_color("power")))
-    d.add(elm.Vdd().label("+5V").color(net_color("power")))
-    d.add(elm.Line().right(0.5).at(amp.GND).color(net_color("ground")))
-    d.add(elm.Ground().color(net_color("ground")))
-
     # SD_MODE floating = (L+R)/2, which is what the firmware expects: it
     # duplicates the mono sample into both I2S slots. Tying it low shuts the
     # amplifier down. Gray, not a net class: the arrow is an annotation on a
     # pin left unconnected, and a class colour would claim it carries a net.
     d.add(
         elm.Arrow()
-        .right(2.0)
+        .down(2.5)
         .at(amp.SD)
-        .label("float = (L+R)/2", loc="right", ofst=0.1, fontsize=10)
+        .label("float = (L+R)/2", loc="end", ofst=(0, -0.3), fontsize=10)
         .color("gray")
     )
 
     # Draw the routed nets last: finish() hops every hand-drawn lead already
     # in the drawing and dots every junction with one (#493), and the power
-    # stubs above cross routed wires. Routing itself was fixed at wire() time,
-    # so this moves only the Paths' place in the SVG's paint order.
+    # stubs drawn before routing cross routed wires. Routing itself was fixed
+    # at wire() time, so this moves only the Paths' place in the SVG's paint
+    # order.
     router.finish()
 
     return d
 
 
 if __name__ == "__main__":
-    import sys
-    from pathlib import Path
-
     out = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("robocar_unified.svg")
     draw().save(str(out))
     print(f"wrote {out}")

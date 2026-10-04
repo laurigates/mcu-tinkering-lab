@@ -5,6 +5,7 @@
 
 #include "voice_history.h"
 
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -143,6 +144,21 @@ void voice_history_build_prompt(const char *name, bool has_image, const char *te
     }
 }
 
+/** Attach @p value under @p key WITHOUT copying it. The caller's string must
+ *  outlive the tree; a reference item never frees what it points at. */
+static bool add_string_reference(cJSON *object, const char *key, const char *value)
+{
+    cJSON *item = cJSON_CreateStringReference(value);
+    if (!item) {
+        return false;
+    }
+    if (!cJSON_AddItemToObject(object, key, item)) {
+        cJSON_Delete(item);
+        return false;
+    }
+    return true;
+}
+
 bool voice_history_build_contents(cJSON *contents, const char *prompt_text, const char *b64_jpeg,
                                   const char *b64_wav, uint32_t now_ms)
 {
@@ -221,7 +237,9 @@ bool voice_history_build_contents(cJSON *contents, const char *prompt_text, cons
             return false;
         }
         cJSON_AddStringToObject(inline_img, "mimeType", "image/jpeg");
-        cJSON_AddStringToObject(inline_img, "data", b64_jpeg);
+        if (!add_string_reference(inline_img, "data", b64_jpeg)) {
+            return false;
+        }
     }
 
     cJSON *audio_part = cJSON_CreateObject();
@@ -234,7 +252,12 @@ bool voice_history_build_contents(cJSON *contents, const char *prompt_text, cons
         return false;
     }
     cJSON_AddStringToObject(inline_audio, "mimeType", "audio/wav");
-    cJSON_AddStringToObject(inline_audio, "data", b64_wav);
+    /* By reference, never cJSON_AddStringToObject(): that duplicates the clip's
+     * base64 — 341 kB for an 8 s `listen` — into the tree while the caller still
+     * holds its own copy (issue #625). Same for the JPEG above. */
+    if (!add_string_reference(inline_audio, "data", b64_wav)) {
+        return false;
+    }
 
     return true;
 }
@@ -243,6 +266,10 @@ char *voice_history_build_request_body(const char *name, const char *sys_prompt,
                                        const reactive_telemetry_t *tele, bool has_telemetry,
                                        const char *b64_jpeg, const char *b64_wav, uint32_t now_ms)
 {
+    if (!b64_wav) {
+        return NULL; /* the clip is the turn; there is no request without it */
+    }
+
     char tele_summary[128] = {0};
     if (has_telemetry && tele) {
         voice_history_format_telemetry(tele, tele_summary, sizeof(tele_summary));
@@ -276,7 +303,19 @@ char *voice_history_build_request_body(const char *name, const char *sys_prompt,
     cJSON *thinking = cJSON_AddObjectToObject(gen, "thinkingConfig");
     cJSON_AddStringToObject(thinking, "thinkingLevel", "low");
 
-    char *body = cJSON_PrintUnformatted(root);
+    /* Presized, never cJSON_PrintUnformatted(): that starts at 256 bytes and,
+     * whenever it runs short, grows to TWICE the bytes needed so far. Reaching
+     * the clip's string it asks for ~2x the whole body — ~860 kB for an 8 s
+     * `listen` with a 64 kB frame — and on a heap that cannot extend in place it
+     * holds the old buffer too (issue #625). Sized for both payloads plus the
+     * skeleton, the buffer never grows; if the skeleton ever outgrew the
+     * headroom, cJSON would fall back to growing, so the body stays correct and
+     * only the peak rises. */
+    const size_t payload = strlen(b64_wav) + ((b64_jpeg != NULL) ? strlen(b64_jpeg) : 0);
+    char *body = NULL;
+    if (payload <= (size_t)INT_MAX - VOICE_HISTORY_BODY_HEADROOM) {
+        body = cJSON_PrintBuffered(root, (int)(payload + VOICE_HISTORY_BODY_HEADROOM), false);
+    }
     cJSON_Delete(root);
     return body;
 }

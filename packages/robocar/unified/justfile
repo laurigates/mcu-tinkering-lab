@@ -133,16 +133,21 @@ test:
 # Docs
 ##########
 
-# Generate Typst definitions from pin_config.h and the planner cadence headers.
-# Keep the header list in sync with the drift guard's generator invocation and
-# trigger paths in .github/workflows/build-guide-check.yml.
+# Generate Typst definitions from the hardware join (tools/hardware/, ADR-021).
+# The headers it reads — pin_config.h and the planner cadence headers — are
+# listed once, in hardware.toml's [source]; every one of them must also be on
+# the trigger paths in .github/workflows/build-guide-check.yml.
 [group: "docs"]
 gen-pin-defs:
-    python3 ../../../tools/typst/generate-pin-defs.py \
-        main/pin_config.h \
-        main/planner_task.h \
-        main/plan_activity.h \
-        docs/auto/pin_defs.typ
+    python3 ../../../tools/typst/generate-pin-defs.py .
+
+# The drift guard regenerates these images too, so a board-reference change
+# that skips this recipe fails CI rather than printing a stale header order.
+#
+# Draw the build guide's board pinout images (docs/auto/pinouts/*.svg) from the board references
+[group: "docs"]
+gen-pinouts:
+    cd ../../.. && PYTHONPATH=tools python3 -m hardware.pinout {{project_dir}}
 
 # Regenerate every printable Typst document in docs/ — the build guide and the
 # bench cards beside it.
@@ -163,7 +168,7 @@ gen-pin-defs:
 # are a no-op there; locally, without them, a newly written .typ is skipped in
 # silence and the first sign of it is the guard failing with "No committed PDF".
 [group: "docs"]
-build-guide: gen-pin-defs
+build-guide: gen-pin-defs gen-pinouts
     #!/usr/bin/env bash
     set -euo pipefail
     cd ../../..

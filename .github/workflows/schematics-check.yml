@@ -5,6 +5,14 @@ on:
     branches: [main, develop, 'claude/**']
     paths:
       - 'docs/schematics/**'
+      # Read by circuits at render time (#495): the physical board layouts,
+      # the join that parses them, and robocar-unified's PCA9685 channels.
+      # A change to any of them re-renders an SVG, so it must run this check.
+      # hardware.toml names the part pin every MCU wire lands on (#462).
+      - 'docs/reference/boards/*.md'
+      - 'tools/hardware/**'
+      - '**/main/pin_config.h'
+      - '**/hardware.toml'
       - '.github/workflows/schematics-check.yml'
   pull_request:
     # No branches: filter — a PR stacked on a non-default base (e.g. another
@@ -12,6 +20,10 @@ on:
     # or it looks green while nothing ran. See issue #487.
     paths:
       - 'docs/schematics/**'
+      - 'docs/reference/boards/*.md'
+      - 'tools/hardware/**'
+      - '**/main/pin_config.h'
+      - '**/hardware.toml'
       - '.github/workflows/schematics-check.yml'
   workflow_dispatch:
 
@@ -71,7 +83,7 @@ jobs:
         run: |
           if ! git diff --exit-code -- 'docs/schematics/images/*.svg'; then
             echo "::error::Rendered SVG(s) are out of sync with circuit source."
-            echo "::error::Run 'just schematics::render' locally and commit the regenerated images."
+            echo "::error::Run 'just schematics::render-all' locally and commit the regenerated images, plus any build-guide PDF it recompiled."
             exit 1
           fi
 
