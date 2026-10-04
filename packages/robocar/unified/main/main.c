@@ -911,7 +911,9 @@ static void handle_voice_cmd(const char *buf)
     if (strcmp(op, "trigger") == 0) {
         /* Not persisted. Tune by speaking and reading `mic`: its speech line
          * shows the highest voice-band share and longest run since the last
-         * `mic`, so a threshold set too high shows up as a near miss. */
+         * `mic`, so a band threshold set too high shows up as a near miss. The
+         * peak band counts only frames that cleared the floor margin, so a
+         * margin set too high reads as band 0%. */
         unsigned share = 0;
         unsigned margin_db = 0;
         unsigned sustain_ms = 0;

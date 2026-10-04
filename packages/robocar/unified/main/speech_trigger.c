@@ -10,7 +10,6 @@
 #include "speech_trigger.h"
 
 #include <math.h>
-#include <string.h>
 
 /** One biquad's coefficients, normalised so a0 == 1. */
 typedef struct {

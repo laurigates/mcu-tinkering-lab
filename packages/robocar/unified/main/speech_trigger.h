@@ -51,8 +51,9 @@
  * multiply-accumulate steps per second on a core with an FPU. No FFT.
  *
  * Pure C with module state, like ambient_audio.c; test/test_speech_trigger.c
- * builds it on the host. Single writer (the listener task); the console only
- * reads the scores.
+ * builds it on the host. The listener task writes the run state; the console
+ * task writes the thresholds (`voice trigger`) and clears the tuning peaks
+ * (`mic`). Every shared field is a single aligned word, so no lock is taken.
  */
 
 #ifndef SPEECH_TRIGGER_H
@@ -76,7 +77,7 @@ extern "C" {
 #define SPEECH_TRIGGER_BAND_HI_HZ 3400.0f
 
 /** Least voice-band share of frame energy, percent. Between white noise (~40%)
- *  and synthetic voiced speech (~90% in the host test); a starting point to
+ *  and synthetic voiced speech (~82% in the host test); a starting point to
  *  tune with `voice trigger`, not a measured constant. */
 #define SPEECH_TRIGGER_SHARE_PCT_DEFAULT 65u
 
