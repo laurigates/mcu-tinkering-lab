@@ -932,9 +932,10 @@ def test_every_real_circuit_places_its_tags_before_its_first_net(monkeypatch):
         seen.clear()
         d = draw_circuit(mod)
         final = tag_count(d)
-        late = [n for drawing, n in seen if drawing is d and n != final]
+        nets = [n for drawing, n in seen if drawing is d]
+        late = [n for n in nets if n != final]
         assert not late, (
-            f"{path.stem}: {len(late)} of {len(seen)} nets routed before all "
+            f"{path.stem}: {len(late)} of {len(nets)} nets routed before all "
             f"{final} power/ground tags were placed"
         )
         checked += 1
