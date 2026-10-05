@@ -106,16 +106,24 @@ described here.
 
 ### Safe Pins for General Use
 
-GPIO1, GPIO2, GPIO4, GPIO5, GPIO6, GPIO7, GPIO8, GPIO43 — no boot sequence involvement, no flash/PSRAM connections. Use these first for external peripherals.
+GPIO1, GPIO2, GPIO4, GPIO5, GPIO6, GPIO7, GPIO8, GPIO9 — no boot sequence involvement, no flash/PSRAM connections. Use these first for external peripherals.
 
 ### Pins to Use with Caution
 
 | GPIO | Issue |
 |------|-------|
 | GPIO3 | Strapping pin — sampled at reset for JTAG interface selection |
-| GPIO9 | Connected to external flash hold signal |
-| GPIO10 | Connected to external flash chip select |
 | GPIO20 | USB D+ — avoid if using USB OTG |
+| GPIO43 | D6, UART0 TX (U0TXD). The ROM bootloader prints its boot messages on UART0 at every reset, so a peripheral on D6 receives that traffic before any firmware runs. Printing is on by default; it is suppressed only when the `EFUSE_UART_PRINT_CONTROL` eFuse disables it (or makes it depend on GPIO46), or when `RTC_CNTL_RTC_STORE4_REG[0]` is set |
+
+Sources for the GPIO43 row: [ESP32-S3 Series Datasheet](https://www.espressif.com/sites/default/files/documentation/esp32-s3_datasheet_en.pdf)
+v2.2, Section 3 *Boot Configurations* and Section 3.3 *ROM Messages Printing Control*
+("(Default) UART0 and USB Serial/JTAG controller"), and Section 2.3.5 *Peripheral Pin
+Assignment*, which lists GPIO43/GPIO44 as the UART0 interface to use with caution;
+[ESP32-S3 Technical Reference Manual](https://www.espressif.com/sites/default/files/documentation/esp32-s3_technical_reference_manual_en.pdf)
+v1.8, Section 8.3 *ROM Messages Printing Control*, Table 8.3-1, and the
+`EFUSE_UART_PRINT_CONTROL` field description (00 enabled, 01 enabled when GPIO46 is
+low at reset, 10 enabled when GPIO46 is high, 11 disabled). The eFuse ships unburnt (0).
 
 ### USB Pin Sharing
 
@@ -150,9 +158,11 @@ Same ESP32-S3 silicon quirk as other S3 boards: `esptool --after hard_reset` doe
 
 GPIO41 and GPIO42 (accessible on the Sense expansion board bottom pads) are assigned as A11/A12 but do not support ADC functionality due to ESP32-S3 chip architecture. They work fine as digital I/O.
 
-### Octal PSRAM Pins Reserved
+### Flash and Octal PSRAM Pins Reserved
 
-GPIO33–37 are used internally for the octal PSRAM bus. These pins are not broken out and cannot be used for external peripherals.
+GPIO26–32 are the SPI0/1 flash/PSRAM bus, and GPIO33–37 carry the upper four data lines and DQS of that bus in octal mode, which the ESP32-S3R8's octal PSRAM uses. None of these pins is broken out, and none can be used for external peripherals. Source: [ESP32-S3 Series Datasheet](https://www.espressif.com/sites/default/files/documentation/esp32-s3_datasheet_en.pdf) v2.2, Section 2.6 *Pin Mapping Between Chip and Flash/PSRAM* (Table 2-14) and Section 2.3.5 *Peripheral Pin Assignment*.
+
+GPIO9 and GPIO10 are not flash pins. Table 2-14 does not include them; their default IO MUX function is plain GPIO, and the `SUBSPIHD`/`SUBSPICS0` alternates (Table 2-4 *IO MUX Functions*) belong to a secondary SUBSPI flash bus that is not the default. This file listed them as the flash hold and chip-select lines until 2026-10. GPIO9 is D10 (SPI MOSI) on the header, and GPIO10 is not broken out.
 
 ## ESP-IDF Configuration
 
@@ -214,5 +224,6 @@ The XIAO ESP32-S3 Sense variant is the target for the unified single-board roboc
 - [XIAO ESP32-S3 Pin Multiplexing (Seeed Studio Wiki)](https://wiki.seeedstudio.com/xiao_esp32s3_pin_multiplexing/)
 - [XIAO ESP32-S3 Product Page](https://www.seeedstudio.com/XIAO-ESP32S3-p-5627.html)
 - [ESP32-S3 Series Datasheet (Espressif)](https://www.espressif.com/sites/default/files/documentation/esp32-s3_datasheet_en.pdf)
+- [ESP32-S3 Technical Reference Manual (Espressif)](https://www.espressif.com/sites/default/files/documentation/esp32-s3_technical_reference_manual_en.pdf)
 - [XIAO ESP32-S3 Pinout & Specs (espboards.dev)](https://www.espboards.dev/esp32/xiao-esp32s3/)
 - [XIAO ESP32-S3 Pinout, Datasheet & Guide (components101)](https://components101.com/development-boards/xiao-esp32-s3-sense-datasheet-pinout)
