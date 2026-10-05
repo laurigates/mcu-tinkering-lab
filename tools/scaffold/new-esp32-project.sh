@@ -32,22 +32,30 @@ fi
 # Pick a domain folder (category)
 echo
 echo "Select domain folder:"
-echo "  1) camera-vision  — camera / AI vision projects"
-echo "  2) audio          — audio / synth / toys"
-echo "  3) input-gaming   — gamepads, controllers, bridges"
-echo "  4) networking     — WiFi tests, VPN, network tools"
-echo "  5) games          — games, scavenger hunts"
+echo "  1) audio          — audio / synth / toys"
+echo "  2) camera-vision  — camera / AI vision projects"
+echo "  3) games          — games, scavenger hunts"
+echo "  4) input-gaming   — gamepads, controllers, bridges"
+echo "  5) networking     — WiFi tests, VPN, network tools"
 echo "  6) robocar        — robocar subsystem"
-echo "  7) other          — type a custom domain folder name"
-read -p "Choice [1-7]: " DOMAIN_CHOICE
+echo "  7) robotics       — motion-control robotics"
+echo "  8) sensors        — sensor firmware"
+echo "  9) thinkpack      — ThinkPack ESP-NOW mesh boxes"
+echo " 10) usb-tools      — USB tools and protocol firmware"
+echo " 11) other          — type a custom domain folder name"
+read -p "Choice [1-11]: " DOMAIN_CHOICE
 case $DOMAIN_CHOICE in
-    1) DOMAIN="camera-vision" ;;
-    2) DOMAIN="audio" ;;
-    3) DOMAIN="input-gaming" ;;
-    4) DOMAIN="networking" ;;
-    5) DOMAIN="games" ;;
+    1) DOMAIN="audio" ;;
+    2) DOMAIN="camera-vision" ;;
+    3) DOMAIN="games" ;;
+    4) DOMAIN="input-gaming" ;;
+    5) DOMAIN="networking" ;;
     6) DOMAIN="robocar" ;;
-    7) read -p "Domain folder name: " DOMAIN ;;
+    7) DOMAIN="robotics" ;;
+    8) DOMAIN="sensors" ;;
+    9) DOMAIN="thinkpack" ;;
+    10) DOMAIN="usb-tools" ;;
+    11) read -p "Domain folder name: " DOMAIN ;;
     *) echo -e "${RED}Invalid choice${NC}"; exit 1 ;;
 esac
 
@@ -126,6 +134,13 @@ if [ -f "$PROJECT_DIR/main/CMakeLists.txt" ]; then
         sed -i '' "s/$TEMPLATE_NAME/$PROJECT_NAME/g" "$PROJECT_DIR/main/CMakeLists.txt"
 fi
 
+# Point the copied justfile's project_dir at the new project. Left as is, every
+# containerized recipe would still build the template's directory.
+if [ -f "$PROJECT_DIR/justfile" ]; then
+    sed -i "s|^project_dir := .*|project_dir := \"packages/$DOMAIN/$PROJECT_NAME\"|" "$PROJECT_DIR/justfile" 2>/dev/null || \
+        sed -i '' "s|^project_dir := .*|project_dir := \"packages/$DOMAIN/$PROJECT_NAME\"|" "$PROJECT_DIR/justfile"
+fi
+
 # Drop `set positional-arguments` from the copied justfile.
 # The template is copied wholesale, so this setting propagated into every
 # scaffolded project even though no recipe ever read $1/$@ (issue #410).
@@ -163,26 +178,23 @@ Description of your ESP32 project.
 
 ## Building
 
-\`\`\`bash
-# Build project
-cd packages/$DOMAIN/$PROJECT_NAME
-idf.py build
+Builds run in the ESP-IDF container; no local ESP-IDF install is needed.
 
-# Or use root Makefile (add targets first)
-# make $PROJECT_NAME-build
+\`\`\`bash
+just $PROJECT_NAME::build
 \`\`\`
 
 ## Flashing
 
 \`\`\`bash
-idf.py flash -p /dev/ttyUSB0
-idf.py monitor -p /dev/ttyUSB0
+PORT=/dev/ttyUSB0 just $PROJECT_NAME::flash
+PORT=/dev/ttyUSB0 just $PROJECT_NAME::monitor
 \`\`\`
 
 ## Configuration
 
 \`\`\`bash
-idf.py menuconfig
+just $PROJECT_NAME::menuconfig
 \`\`\`
 
 ## License
@@ -194,13 +206,13 @@ echo
 echo -e "${GREEN}✓ Project created successfully!${NC}"
 echo
 echo "Next steps:"
-echo -e "  1. ${CYAN}cd $PROJECT_DIR${NC}"
-echo -e "  2. ${CYAN}Edit main/main.c to implement your application${NC}"
-echo -e "  3. ${CYAN}Update README.md with project details${NC}"
-echo -e "  4. ${CYAN}idf.py build${NC} to build the project"
+echo -e "  1. Register the module in the root justfile: ${CYAN}mod $PROJECT_NAME 'packages/$DOMAIN/$PROJECT_NAME'${NC}"
+echo -e "  2. Add an entry to ${CYAN}.github/project-matrix.json${NC}: system, project, path, target"
+echo -e "     (plus ${CYAN}fetch_bluepad32: true${NC} if it vendors bluepad32)"
+echo -e "  3. Check the flash recipe: ${CYAN}python3 tools/check-flash-recipes.py${NC}"
+echo -e "  4. Build: ${CYAN}just $PROJECT_NAME::build${NC}"
 echo
 echo "Optional:"
-echo -e "  - Add to root Makefile for easy building: ${CYAN}make $PROJECT_NAME-build${NC}"
-echo -e "  - Add to CI pipeline: ${CYAN}create .github/workflows/build-$PROJECT_NAME.yml (copy build-melody-detector.yml)${NC}"
+echo -e "  - Add ${CYAN}flasher.json${NC} to list it in the web flasher (see packages/audio/kids-audio-toy/flasher.json)"
 echo
-echo -e "${GREEN}Happy coding! 🚀${NC}"
+echo "Details: CONTRIBUTING.md § Adding a project, .claude/rules/containerized-builds.md"
