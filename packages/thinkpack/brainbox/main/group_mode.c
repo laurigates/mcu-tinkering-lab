@@ -18,6 +18,7 @@
 #include "command_dispatcher.h"
 #include "display_manager.h"
 #include "esp_log.h"
+#include "esp_mac.h"
 #include "esp_timer.h"
 #include "espnow_mesh.h"
 #include "freertos/FreeRTOS.h"
