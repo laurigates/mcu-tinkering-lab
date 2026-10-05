@@ -326,6 +326,12 @@ static void test_threshold_zero_disables_the_gate(void)
     scene_change_set_threshold(0);
     ASSERT(scene_change_threshold() == 0);
     ASSERT(scene_change_novel());
+
+    /* Disabled outranks the no-frame fail-closed check (issue #690): with the
+     * gate off it is not participating, frame or no frame. */
+    scene_change_init();
+    scene_change_set_threshold(0);
+    ASSERT(scene_change_novel());
 }
 
 static void test_compared_only_against_a_spoken_about_frame(void)

@@ -127,11 +127,12 @@ void scene_change_note(const scene_fingerprint_t *fp);
  * @brief Whether the current frame differs enough from the last spoken-about
  *        one to be worth remarking on.
  *
- * False while no decodable frame has ever been seen: there is no view to have a
- * first impression of, so the gate fails closed (issue #690). Once one has, true
+ * True whenever the threshold is 0, which disables the gate entirely; that check
+ * comes first, so it holds even before any frame has decoded. Otherwise false
+ * while no decodable frame has ever been seen: there is no view to have a first
+ * impression of, so the gate fails closed (issue #690). Once one has, true
  * before anything has been spoken (nothing to compare against yet, and the
- * robot's first observation is by definition new). True whenever the threshold
- * is 0, which disables the gate entirely.
+ * robot's first observation is by definition new).
  */
 bool scene_change_novel(void);
 
