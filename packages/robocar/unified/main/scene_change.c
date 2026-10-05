@@ -120,11 +120,19 @@ bool scene_change_novel(void)
     if (s_threshold == 0u) {
         return true; /* gate disabled */
     }
+    /* Never seen a decodable frame -> fail CLOSED. This must outrank the
+     * first-impression branch below: there is no first impression of a view
+     * nobody has seen. In the other order this check was unreachable (s_current
+     * never returns to invalid once valid, and s_reference only becomes valid by
+     * copying it), so a camera whose frames never decoded opened the `speak`
+     * tool on every cycle (issue #690). Same ordering as ambient_audio_novel();
+     * see .claude/rules/stateless-model-gating.md §4. The boot greeting is
+     * unaffected once one frame decodes. */
+    if (!s_current.valid) {
+        return false;
+    }
     if (!s_reference.valid) {
         return true; /* nothing spoken about yet — the first view is new */
-    }
-    if (!s_current.valid) {
-        return false; /* never seen a decodable frame: nothing to remark on */
     }
     return scene_change_score() >= (unsigned)s_threshold;
 }
