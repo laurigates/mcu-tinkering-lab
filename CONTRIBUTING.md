@@ -433,7 +433,7 @@ Brief description of changes
    ```
 
 4. **Add to CI pipeline:**
-   Add an entry to `.github/project-matrix.json` with your project's `system` (`esp32`), `project`, `path`, and `target` (plus `fetch_bluepad32: true` if it vendors bluepad32). The single `build.yml` workflow discovers it automatically and builds it on push/PR whenever its files change — no per-project workflow file needed.
+   Add an entry to `.github/project-matrix.json` with your project's `system` (`esp32`), `project`, `path`, and `target` (plus `fetch_bluepad32: true` if it vendors bluepad32). The single `build.yml` workflow discovers it automatically and builds it on push/PR whenever its files change — no per-project workflow file needed. If its `EXTRA_COMPONENT_DIRS` reaches outside the project directory (such as `../../components`), also list each of those component directories, relative to `packages/`, in the entry's `extra_paths`; the `check-component-extra-paths` pre-commit hook names any that are missing.
 
 5. **Update root justfile:**
    Add build/flash targets for your project.

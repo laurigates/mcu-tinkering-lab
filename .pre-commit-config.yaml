@@ -103,6 +103,23 @@ repos:
         files: '^tools/(refresh-idf-locks\.py|test_refresh_idf_locks\.py)$'
         pass_filenames: false
 
+      # build.yml rebuilds a project only when its own path or an extra_paths
+      # entry changed; a component compiled from outside the project needs an
+      # entry or a change to it alone builds nothing (issue #670).
+      - id: check-component-extra-paths
+        name: CI build triggers cover every shared component a project compiles
+        entry: python3 tools/check-component-extra-paths.py
+        language: system
+        files: '(CMakeLists\.txt|\.github/project-matrix\.json|tools/check-component-extra-paths\.py)$'
+        pass_filenames: false
+
+      - id: check-component-extra-paths-tests
+        name: check-component-extra-paths tests
+        entry: uv run --no-project --with pytest==9.1.1 python -m pytest -q tools/test_check_component_extra_paths.py
+        language: system
+        files: '(CMakeLists\.txt|\.github/project-matrix\.json|tools/(check-component-extra-paths|test_check_component_extra_paths)\.py)$'
+        pass_filenames: false
+
       - id: check-typst-docs
         name: Typst docs track pin_config.h, and the drift guard sees them
         entry: python3 tools/check-typst-docs.py
