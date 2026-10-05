@@ -198,9 +198,6 @@ recipes. Then:
    [web flasher](https://laurigates.github.io/mcu-tinkering-lab/).
    `packages/audio/kids-audio-toy/flasher.json` shows the fields.
 
-The scaffolding script's own "next steps" output still mentions a Makefile
-and per-project workflows. Follow the list above instead.
-
 `.claude/rules/containerized-builds.md` covers the justfile conventions and
 the flash recipe checks in detail.
 
