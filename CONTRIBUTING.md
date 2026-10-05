@@ -187,7 +187,11 @@ recipes. Then:
    `mod <name> 'packages/<domain>/<name>'`.
 2. Add an entry to `.github/project-matrix.json` with `system`, `project`,
    `path` and `target`, plus `fetch_bluepad32: true` if it vendors bluepad32.
-   `build.yml` builds it on any push or PR that touches its files.
+   `build.yml` builds it on any push or PR that touches its files. If its
+   `EXTRA_COMPONENT_DIRS` reaches outside the project directory (for example
+   `../../components`), list each of those component directories, relative to
+   `packages/`, in the entry's `extra_paths`. The `check-component-extra-paths`
+   pre-commit hook names any that are missing.
 3. Run `python3 tools/check-flash-recipes.py` to check the flash recipe against
    the partition table.
 4. Optional: add a `flasher.json` to list it in the

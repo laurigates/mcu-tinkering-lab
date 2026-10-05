@@ -224,7 +224,11 @@ ESP32-S3 projects with native USB-Serial-JTAG override `monitor` with their own 
 7. Register as a module in the root justfile: `mod name 'packages/<domain>/name'`
 8. Add a CI entry to `.github/project-matrix.json` (`system`, `project`, `path`, `target`,
    plus `fetch_bluepad32: true` if it vendors bluepad32) — the single `build.yml` matrix
-   discovers it; no per-project `build-<project>.yml` is needed
+   discovers it; no per-project `build-<project>.yml` is needed. If `EXTRA_COMPONENT_DIRS`
+   reaches outside the project (e.g. `../../components`, which builds every
+   `packages/components/*`), list each of those component dirs in `extra_paths`, or a
+   change to one alone rebuilds nothing. `tools/check-component-extra-paths.py` (pre-commit)
+   derives the set from the CMakeLists and fails on a miss (issue #670)
 
 ## Do Not
 
