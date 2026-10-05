@@ -1,11 +1,16 @@
 name: Sync AI Rules
 
-# Schedule disabled: the reusable workflow is broken upstream (no rules/
-# directory in laurigates/.github), so every weekly run fails. Re-enable
-# once laurigates/.github#10 is resolved.
 on:
+  schedule:
+    - cron: '0 7 * * 1'  # Mondays at 07:00 UTC
   workflow_dispatch:
 
 jobs:
   sync-rules:
     uses: laurigates/.github/.github/workflows/reusable-sync-ai-rules.yml@main
+    # App token: this repo does not let GITHUB_TOKEN open pull requests, and a
+    # PR opened with GITHUB_TOKEN would trigger no CI anyway.
+    with:
+      app-id: ${{ vars.RELEASE_PLEASE_CLIENT_ID }}
+    secrets:
+      APP_PRIVATE_KEY: ${{ secrets.RELEASE_PLEASE_PRIVATE_KEY }}
