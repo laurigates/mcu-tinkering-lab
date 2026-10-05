@@ -28,8 +28,10 @@ CONFIG_ESP_WIFI_11KV_SUPPORT=n
 # Disable Bluetooth entirely
 CONFIG_BT_ENABLED=n
 
-# Default partition table (no custom partitions.csv)
-CONFIG_PARTITION_TABLE_SINGLE_APP=y
+# Built-in single-app table with the 1.5 MB factory partition (no custom
+# partitions.csv). The app outgrew the 1 MB SINGLE_APP default once it
+# linked mdns, TLS and the LLM backends (issue #671).
+CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE=y
 
 # Logging level
 CONFIG_LOG_DEFAULT_LEVEL_INFO=y
