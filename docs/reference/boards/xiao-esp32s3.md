@@ -114,7 +114,7 @@ GPIO1, GPIO2, GPIO4, GPIO5, GPIO6, GPIO7, GPIO8, GPIO9 — no boot sequence invo
 |------|-------|
 | GPIO3 | Strapping pin — sampled at reset for JTAG interface selection |
 | GPIO20 | USB D+ — avoid if using USB OTG |
-| GPIO43 | D6, UART0 TX (U0TXD). The ROM bootloader prints its boot messages on UART0 at every reset, so a peripheral on D6 receives that traffic before any firmware runs. Printing is on by default; it is suppressed only when the `EFUSE_UART_PRINT_CONTROL` eFuse disables it (or makes it depend on GPIO46), or when `RTC_CNTL_RTC_STORE4_REG[0]` is set |
+| GPIO43 | D6, UART0 TX (U0TXD). The ROM bootloader prints its boot messages on UART0 at every reset, so a peripheral on D6 receives that traffic before any firmware runs, and a peripheral that drives D6 contends with the chip's TX driver while it prints. Printing is on by default. In SPI boot (a normal reset) it is suppressed only when the `EFUSE_UART_PRINT_CONTROL` eFuse disables it (or makes it depend on GPIO46), or when `RTC_CNTL_RTC_STORE4_REG[0]` is set. In download boot (BOOT held at reset, as when flashing) the ROM ignores both and always prints |
 
 Sources for the GPIO43 row: [ESP32-S3 Series Datasheet](https://www.espressif.com/sites/default/files/documentation/esp32-s3_datasheet_en.pdf)
 v2.2, Section 3 *Boot Configurations* and Section 3.3 *ROM Messages Printing Control*
@@ -162,7 +162,7 @@ GPIO41 and GPIO42 (accessible on the Sense expansion board bottom pads) are assi
 
 GPIO26–32 are the SPI0/1 flash/PSRAM bus, and GPIO33–37 carry the upper four data lines and DQS of that bus in octal mode, which the ESP32-S3R8's octal PSRAM uses. None of these pins is broken out, and none can be used for external peripherals. Source: [ESP32-S3 Series Datasheet](https://www.espressif.com/sites/default/files/documentation/esp32-s3_datasheet_en.pdf) v2.2, Section 2.6 *Pin Mapping Between Chip and Flash/PSRAM* (Table 2-14) and Section 2.3.5 *Peripheral Pin Assignment*.
 
-GPIO9 and GPIO10 are not flash pins. Table 2-14 does not include them; their default IO MUX function is plain GPIO, and the `SUBSPIHD`/`SUBSPICS0` alternates (Table 2-4 *IO MUX Functions*) belong to a secondary SUBSPI flash bus that is not the default. This file listed them as the flash hold and chip-select lines until 2026-10. GPIO9 is D10 (SPI MOSI) on the header, and GPIO10 is not broken out.
+GPIO9 and GPIO10 are not flash pins. Table 2-14 does not include them; their default IO MUX function is plain GPIO, and the `SUBSPIHD`/`SUBSPICS0` alternates (Table 2-4 *IO MUX Functions*) belong to a secondary SUBSPI flash bus that is not the default. This file listed them as the flash hold and chip-select lines until 2026-10. GPIO9 is D10 (SPI MOSI) on the header. GPIO10 is not on the header; the Sense expansion board uses it as the camera XMCLK (see [xiao-esp32s3-sense.md](xiao-esp32s3-sense.md)).
 
 ## ESP-IDF Configuration
 
