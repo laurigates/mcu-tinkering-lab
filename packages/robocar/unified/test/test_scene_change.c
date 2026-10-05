@@ -217,12 +217,16 @@ static void observe(void)
 
 static void test_first_view_is_novel(void)
 {
-    /* Nothing has been spoken about yet, so there is no reference — and the
-     * robot's very first observation genuinely is new. Getting this wrong would
-     * mute the boot self-introduction. */
+    /* No decodable frame yet: there is no view to have a first impression of,
+     * so the gate fails CLOSED (issue #690), like ambient_audio_novel() with no
+     * microphone. Answering true here would open `speak` on the strength of a
+     * camera that has never produced a picture. */
     scene_change_init();
-    ASSERT(scene_change_novel());
+    ASSERT(!scene_change_novel());
 
+    /* Once a frame decodes, nothing has been spoken about yet, so there is no
+     * reference — and the robot's very first observation genuinely is new.
+     * Getting this wrong would mute the boot self-introduction. */
     fill(100);
     observe();
     ASSERT(scene_change_novel());
@@ -322,6 +326,12 @@ static void test_threshold_zero_disables_the_gate(void)
     scene_change_set_threshold(0);
     ASSERT(scene_change_threshold() == 0);
     ASSERT(scene_change_novel());
+
+    /* Disabled outranks the no-frame fail-closed check (issue #690): with the
+     * gate off it is not participating, frame or no frame. */
+    scene_change_init();
+    scene_change_set_threshold(0);
+    ASSERT(scene_change_novel());
 }
 
 static void test_compared_only_against_a_spoken_about_frame(void)
@@ -331,7 +341,7 @@ static void test_compared_only_against_a_spoken_about_frame(void)
      * prompt must not phrase either as "the view has changed since you last
      * spoke" (issue #631), so the gate says whether it actually compared. */
     scene_change_init();
-    ASSERT(scene_change_novel());
+    ASSERT(!scene_change_novel());    /* no frame: fails closed (issue #690) */
     ASSERT(!scene_change_compared()); /* no frame, no reference */
 
     fill(100);
@@ -362,10 +372,12 @@ static void test_speaking_before_any_decodable_frame_is_not_a_reference(void)
     scene_change_init();
     scene_change_mark_spoken();
     ASSERT(!scene_change_compared());
+    ASSERT(!scene_change_novel()); /* still no frame to remark on */
 
     fill(100);
     observe();
     ASSERT(!scene_change_compared());
+    ASSERT(scene_change_novel()); /* the first decodable view is new */
 }
 
 static void test_threshold_decides_the_verdict(void)

@@ -1,414 +1,60 @@
 # MCU Tinkering Lab
 
-> Production-ready embedded systems monorepo for ESP32, STM32, and Arduino platforms with AI-powered robotics projects
+A monorepo of microcontroller projects, mostly ESP32. The largest is a robot car
+that drives on camera input and an LLM's plan. Others cover audio toys, game
+controller bridges, an ESP-NOW mesh of companion boxes, and a self-balancing
+robot on the RP2350.
 
-[![Build Python Simulation](https://github.com/laurigates/mcu-tinkering-lab/actions/workflows/build-python-simulation.yml/badge.svg)](https://github.com/laurigates/mcu-tinkering-lab/actions/workflows/build-python-simulation.yml)
+[![Build](https://github.com/laurigates/mcu-tinkering-lab/actions/workflows/build.yml/badge.svg)](https://github.com/laurigates/mcu-tinkering-lab/actions/workflows/build.yml)
 [![Tests](https://github.com/laurigates/mcu-tinkering-lab/actions/workflows/test.yml/badge.svg)](https://github.com/laurigates/mcu-tinkering-lab/actions/workflows/test.yml)
 
-## 🚀 Quick Start
+## Flash from the browser
 
-Get up and running in **under 5 minutes** using Docker, or 30 minutes with native setup.
+Released firmware can be flashed with the
+[web flasher](https://laurigates.github.io/mcu-tinkering-lab/) in Chrome or
+Edge, with no toolchain installed. See the
+[web flasher guide](packages/robocar/docs/docs/WEB_FLASHER.md).
 
-### Option 0: Web Flasher (No Toolchain Required)
+## Build from source
 
-Flash pre-built firmware directly from your browser — no ESP-IDF, no Docker, no setup.
-
-1. Connect your ESP32 board via USB
-2. Open the [Web Flasher](https://laurigates.github.io/mcu-tinkering-lab/) in Chrome or Edge
-3. Select your board and click **Flash**
-
-> Requires Chrome/Edge 89+ (Web Serial API). Android supported with USB OTG.
-> See [Web Flasher docs](packages/robocar/docs/docs/WEB_FLASHER.md) for details.
-
-### Option 1: Docker (Recommended)
+ESP-IDF builds run in a container, so Docker and
+[just](https://github.com/casey/just) are the only requirements.
 
 ```bash
-# Clone the repository
 git clone https://github.com/laurigates/mcu-tinkering-lab.git
 cd mcu-tinkering-lab
-
-# Build Docker images
-just docker-build
-
-# Start interactive development shell
-just docker-dev
-
-# Inside container: build all projects
-just build-all
+just setup-all                   # Docker images, dev tools, pre-commit hooks
+just list-projects               # every project module
+just robocar-unified::build      # build one
 ```
 
-### Option 2: Native Setup
-
-**Prerequisites:**
-- ESP-IDF v5.4+ (for ESP32 projects)
-- Python 3.11+ (for simulation)
-- Git, [just](https://github.com/casey/just), CMake
-
-```bash
-# Install ESP-IDF
-mkdir -p ~/repos
-cd ~/repos
-git clone --recursive https://github.com/espressif/esp-idf.git
-cd esp-idf
-git checkout v5.4
-./install.sh esp32
-source export.sh
-
-# Clone this repository
-cd ~
-git clone https://github.com/laurigates/mcu-tinkering-lab.git
-cd mcu-tinkering-lab
-
-# Install development tools
-just install-dev-tools
-
-# Build all projects
-just build-all
-```
-
-## 📁 Repository Structure
-
-```
-mcu-tinkering-lab/
-├── packages/
-│   ├── robocar/                    # 🤖 Dual-ESP32 AI robot car system
-│   │   ├── main/                   # Main controller (Heltec WiFi LoRa 32)
-│   │   ├── camera/                 # ESP32-CAM vision with Claude/Ollama/Gemini AI
-│   │   ├── unified/                # Single-board XIAO ESP32-S3 Sense consolidation
-│   │   ├── simulation/             # Python 3.11 physics simulation
-│   │   ├── docs/                   # Docs and coordination justfile
-│   │   └── components/i2c-protocol/ # Robocar-internal I2C protocol + tests
-│   ├── thinkpack/                  # 🎒 ESP-NOW mesh of modular companion "boxes"
-│   │   ├── brainbox/               # LLM mesh coordinator (ESP32-S3)
-│   │   ├── boombox/                # Audio playback box
-│   │   ├── chatterbox/             # Conversational box
-│   │   ├── finderbox/              # NFC/finder box
-│   │   ├── glowbug/                # LED peer box
-│   │   └── mesh-demo/              # ESP-NOW mesh demo
-│   ├── camera-vision/              # 📹 Standalone camera / AI vision projects
-│   │   ├── cam-webserver/          # Live video streaming server
-│   │   ├── cam-i2s-audio/          # Camera + I2S audio processing
-│   │   ├── llm-telegram/           # LLM vision with Telegram bot
-│   │   └── gemini-vision/          # Gemini Robotics-ER object detection UI
-│   ├── audio/                      # 🎵 Audio / synth / toys
-│   │   ├── gamepad-synth/          # Bluetooth gamepad I2S synth (Monotron-inspired)
-│   │   ├── kids-audio-toy/         # Potentiometer-controlled audio toy
-│   │   ├── melody-detector/        # Melody detection + ML training
-│   │   └── audiobook-player/       # RFID audiobook player (ESPHome)
-│   ├── input-gaming/               # 🎮 Gamepads and controller bridges
-│   │   ├── xbox-switch-bridge/     # Xbox BLE → Switch USB bridge
-│   │   ├── switch-usb-proxy/       # Switch USB protocol proxy
-│   │   ├── lego-boost-xbox/        # Drive LEGO Boost with an Xbox controller
-│   │   └── lego-boost-xbox-fw/     # LEGO Boost direct Xbox-pairing hub firmware
-│   ├── networking/                 # 📡 WiFi tests, VPN, network tools
-│   │   ├── it-troubleshooter/      # IT troubleshooting assistant
-│   │   ├── wifitest/               # WiFi AP test firmware
-│   │   └── wireguard-ha/           # WireGuard + Home Assistant (ESPHome)
-│   ├── sensors/                    # 🛰️ Sensor firmware
-│   │   └── presence-detector/      # 24 GHz mmWave presence sensor (ESPHome)
-│   ├── robotics/                   # 🦿 Motion-control robotics (Pico SDK)
-│   │   └── balancebot/             # Self-balancing robot (XIAO RP2350 + steppers)
-│   ├── games/
-│   │   └── nfc-scavenger-hunt/     # NFC-based scavenger hunt game
-│   └── components/                 # 📦 Reusable ESP-IDF components
-│       ├── improv-wifi/            # Improv-WiFi BLE provisioning
-│       ├── ota-github/             # GitHub Releases OTA updater
-│       └── thinkpack-*/            # ThinkPack shared components (audio, mesh, nfc, power, …)
-├── .github/workflows/              # 🔄 CI/CD pipelines
-├── tools/                          # 🛠️ Scaffolding (scaffold/new-esp32-project.sh) + shared justfile imports
-├── docs/                           # 📖 Documentation
-└── justfile                        # 🎯 Root build coordination
-```
-
-## 🎯 Featured Projects
-
-### AI-Powered Robot Car (Primary Project)
-Dual ESP32 autonomous robot with AI vision and physics simulation.
-
-**Components:**
-- **Main Controller:** Heltec WiFi LoRa 32 V1 - Motor control, LEDs, servos
-- **Vision System:** ESP32-CAM - Claude/Ollama AI backends, MQTT telemetry
-- **Simulation:** Python 3.11 with Pymunk 2D physics engine
-
-**Quick Start:**
-```bash
-# Build both controllers
-just robocar::build-all
-
-# Flash main controller
-just robocar::flash-main PORT=/dev/ttyUSB0
-
-# Flash camera (connect GPIO0 to GND first)
-just robocar::flash-cam PORT=/dev/ttyUSB1
-
-# Start development workflow (build + flash + monitor)
-just robocar::develop-main
-```
-
-### ESP32-CAM LLM Telegram Bot
-Vision-enabled Telegram bot with Claude or Ollama AI integration.
-
-```bash
-just llm-telegram-build
-just llm-telegram-flash PORT=/dev/ttyUSB0
-just llm-telegram-monitor
-```
-
-## 🏗️ Build System
-
-The justfile provides **60+ targets** for all projects:
-
-```bash
-# Show all available commands
-just --list
-
-# Build commands
-just build-all              # Build all projects
-just build-esp32            # Build all ESP32 projects
-just robocar::build-all     # Build robocar main + camera
-
-# Development workflows (build + flash + monitor)
-just robocar::develop-main  # Main controller
-just robocar::develop-cam   # Camera module
-
-# Code quality
-just lint                   # Run all linters
-just format                 # Format all code
-just format-check           # Check formatting without modifying
-
-# Docker
-just docker-build           # Build development images
-just docker-dev             # Interactive development shell
-just docker-run CMD="just build-all"  # Run command in container
-
-# Utilities
-just list-projects          # Show all projects
-just check-environment      # Verify development setup
-just clean-all              # Clean all builds
-```
-
-## 🧪 Testing
-
-```bash
-# Run all tests
-just test-all                  # (Coming soon)
-
-# Python simulation tests
-cd packages/robocar/simulation
-uv sync
-uv run pytest tests/ --cov
-
-# ESP32 host-based tests (planned)
-just test-host-all
-
-# Hardware-in-loop tests (planned)
-just test-hil-all
-```
-
-## 🐳 Docker Development
-
-**Benefits:**
-- ✅ Zero manual ESP-IDF setup
-- ✅ Consistent environment across platforms
-- ✅ Works identically on Windows/Mac/Linux
-- ✅ Isolated from host system
-
-**Commands:**
-```bash
-# Build images
-just docker-build
-
-# Interactive shell
-just docker-dev
-
-# Run specific commands
-just docker-run CMD="just build-all"
-just docker-run CMD="just robocar::build-main"
-
-# Manage containers
-just docker-up              # Start services in background
-just docker-down            # Stop services
-just docker-logs            # View logs
-just docker-clean           # Remove containers and volumes
-```
-
-**USB Device Access (for flashing):**
-Uncomment the `devices` section in `docker-compose.yml`:
-```yaml
-devices:
-  - /dev/ttyUSB0:/dev/ttyUSB0
-  - /dev/ttyUSB1:/dev/ttyUSB1
-```
-
-## 🔧 Development Tools
-
-### Code Quality
-
-**C/C++ Tools:**
-- `clang-format` - Code formatting (Google style, 4-space indent)
-- `cppcheck` - Static analysis
-
-**Python Tools:**
-- `ruff` - Fast linting and formatting
-- `ty` (astral) - Type checking
-- `pytest` - Testing framework
-
-### Pre-commit Hooks
-
-Automatically run code quality checks before each commit:
-
-```bash
-# Install hooks
-just install-dev-tools
-
-# Or manually
-pip install pre-commit
-pre-commit install
-
-# Run hooks manually
-pre-commit run --all-files
-```
-
-**Checks:**
-- ✅ C/C++ formatting (clang-format)
-- ✅ Python formatting (ruff)
-- ✅ Trailing whitespace
-- ✅ YAML validation
-- ✅ Credential file detection
-- ✅ Build artifact detection
-
-## 📊 CI/CD Pipeline
-
-Automated checks on every push and pull request:
-
-**Build Pipeline** (`.github/workflows/build-python-simulation.yml` + per-project `build-*.yml`):
-- ✅ Build all ESP32 projects in parallel
-- ✅ Generate size analysis reports
-- ✅ Archive firmware binaries (30-day retention)
-- ✅ Check binary size limits for OTA
-
-**Test Pipeline** (`.github/workflows/test.yml`):
-- ✅ Pre-commit hook validation
-- ✅ Python simulation tests with coverage
-- ✅ C/C++ linting (cppcheck)
-- ✅ Format checking (clang-format)
-- ✅ ESP32 host-based tests (when added)
-
-**Status Badges:**
-Add to your PRs to see build status at a glance.
-
-## 🚧 Creating New Projects
-
-### ESP32 Project Scaffolding
-
-Use the interactive scaffolding script — it prompts for a project name and
-domain folder, then generates `CMakeLists.txt`, `main/`, `sdkconfig.defaults`,
-and a justfile wired to the shared containerized build recipes:
-
-```bash
-./tools/scaffold/new-esp32-project.sh
-```
-
-After scaffolding, register the project as a module in the root `justfile`
-(`mod <name> 'packages/<domain>/<name>'`) and add a path-filtered
-`build-<name>.yml` workflow.
-
-## 📚 Documentation
-
-- [Architecture Overview](packages/robocar/docs/README.md) - System design and communication protocols
-- [Hardware Connections](packages/robocar/docs/hardware-connections.md) - Pin mappings and wiring
-- [Web Flasher Guide](packages/robocar/docs/docs/WEB_FLASHER.md) - Browser-based firmware flashing
-- [WiFi Setup](packages/robocar/main/WIFI_SETUP.md) - Network configuration
-- [OTA Updates](packages/robocar/docs/docs/OTA_UPDATES.md) - Over-the-air firmware updates
-- [Simulation Guide](packages/robocar/simulation/README.md) - Physics simulation setup
-
-## 🤝 Contributing
-
-We welcome contributions! Please follow these guidelines:
-
-1. **Code Style:**
-   - C/C++: Run `just format-c` before committing
-   - Python: Run `just format-python` before committing
-   - All: Pre-commit hooks will enforce standards
-
-2. **Testing:**
-   - Add tests for new features
-   - Ensure existing tests pass
-   - Aim for >70% coverage
-
-3. **Commit Messages:**
-   - Use conventional commits: `feat:`, `fix:`, `docs:`, etc.
-   - Be descriptive: "feat: Add WiFi reconnection logic" not "update code"
-
-4. **Pull Requests:**
-   - Create feature branches: `feat/my-feature`
-   - Ensure CI passes
-   - Request review from maintainers
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
-
-## 🛠️ Troubleshooting
-
-### ESP-IDF Not Found
-```bash
-export IDF_PATH=$HOME/repos/esp-idf
-source $IDF_PATH/export.sh
-```
-
-### Serial Port Permission Denied
-```bash
-# Linux
-sudo usermod -a -G dialout $USER
-# Log out and back in
-
-# Or use sudo
-sudo just robocar::flash-main
-```
-
-### Docker USB Device Not Found
-Ensure `privileged: true` is set in `docker-compose.yml` and devices are mapped correctly.
-
-### Build Fails with "No Space Left"
-```bash
-# Clean all builds
-just clean-all
-
-# In Docker, clean volumes
-just docker-clean
-```
-
-## 📈 Project Status
-
-| Platform | Status | Projects | Tests | CI/CD |
-|----------|--------|----------|-------|-------|
-| **ESP32** | ✅ Active | 25+ projects | 🚧 In progress | ✅ Automated |
-| **RP2350 (Pico SDK)** | ✅ Active | 1 (balancebot) | ✅ Host unit tests | ✅ Automated |
-| **Arduino** | 🚧 Planned | 0 | ❌ N/A | ❌ N/A |
-| **STM32** | 🚧 Planned | 0 | ❌ N/A | ❌ N/A |
-| **Simulation** | ✅ Active | Python 3.11 | ✅ pytest | ✅ Automated |
-
-## 🔗 Links
-
-- **Web Flasher:** https://laurigates.github.io/mcu-tinkering-lab/
-- **Repository:** https://github.com/laurigates/mcu-tinkering-lab
-- **Issues:** https://github.com/laurigates/mcu-tinkering-lab/issues
-- **Discussions:** https://github.com/laurigates/mcu-tinkering-lab/discussions
-- **ESP-IDF:** https://docs.espressif.com/projects/esp-idf/en/latest/
-
-## 📄 License
-
-This project is licensed under the MIT License - see individual project directories for specific licenses.
-
-## ⭐ Acknowledgments
-
-- **ESP-IDF** by Espressif Systems
-- **esp-idf-lib** component library
-- **Claude API** and **Ollama** for AI vision
-- **Pymunk** for 2D physics simulation
-- Open source community
-
----
-
-**Happy tinkering! 🔧🤖**
-
-For questions or support, please open an issue or discussion on GitHub.
+Build, test and CI details are in [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Projects
+
+| Domain | Projects |
+|---|---|
+| [`robocar/`](packages/robocar/docs/README.md) | AI robot car: [single-board firmware](packages/robocar/unified/README.md) (XIAO ESP32-S3 Sense), its bring-up self-test, the earlier dual-board design (Heltec + ESP32-CAM), and a Pymunk simulation |
+| `thinkpack/` | ESP-NOW mesh of companion boxes: brainbox (LLM coordinator), boombox, chatterbox, finderbox, glowbug, mesh-demo |
+| `camera-vision/` | MJPEG webserver, camera + I2S audio, LLM Telegram bot, Gemini object detection |
+| `audio/` | BLE gamepad synth, kids' audio toy, melody detector, RFID audiobook player (ESPHome) |
+| `input-gaming/` | Xbox → Switch bridge, Switch USB proxy, LEGO Boost with an Xbox controller |
+| `networking/` | IT troubleshooter, WiFi AP test, WireGuard + Home Assistant (ESPHome) |
+| `sensors/` | 24 GHz mmWave presence sensor (ESPHome) |
+| `robotics/` | Self-balancing robot (XIAO RP2350, Pico SDK) |
+| `usb-tools/` | ESP32-S3 raw USB relay for facedancer |
+| `games/` | NFC scavenger hunt |
+| `components/` | Shared ESP-IDF components: Improv WiFi provisioning, GitHub Releases OTA, ThinkPack libraries |
+
+Most projects have a README in their directory.
+
+## Documentation
+
+- [docs/](docs/README.md): architecture decisions, requirements, board
+  references, schematics
+- [CONTRIBUTING.md](CONTRIBUTING.md): development setup, build commands,
+  testing, CI, adding a project
+
+## License
+
+MIT. See [LICENSE](LICENSE).
