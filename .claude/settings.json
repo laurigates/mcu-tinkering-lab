@@ -27,6 +27,13 @@
       "Bash(ty:*)",
       "Bash(uv:*)",
       "Bash(uvx:*)"
+    ],
+    "deny": [
+      "Read(.rulesync/)",
+      "Read(node_modules/)",
+      "Read(rulesync.jsonc)",
+      "Read(rulesync.local.jsonc)",
+      "Read(rulesync.lock)"
     ]
   },
   "extraKnownMarketplaces": {
