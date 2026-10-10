@@ -21,6 +21,7 @@ from hardware.docs import (
     BEGIN,
     END,
     NOTICE,
+    channels_table,
     check_project,
     inject,
     main,
@@ -313,6 +314,127 @@ class PowerDiagramTest(Fixture):
             ),
         )
         self.assertIn('mcu["Dev board"]', self.lines())
+
+
+DRIVER_MD = (
+    """\
+    # Test PWM driver
+
+    | Pin | Side | Pos | Header | Notes |
+    |-----|------|-----|--------|-------|
+    | VCC | L | 1 | JP1.1 | |
+"""
+    + "".join(f"    | {i} | B | {i + 1} | JP2.{i + 1} | |\n" for i in range(12))
+    + """    """
+)
+
+CHANNEL_HEADER = (
+    HEADER_H
+    + """\
+    #define SPEED_CHANNEL 2
+    #define LAMP_CHANNEL 10
+    """
+)
+
+CHANNELS = """
+[parts.drv]
+name = "PWM chip"
+kind = "pwm-driver"
+board = "driver.md"
+
+[parts.motor]
+name = "H-bridge"
+kind = "motor-driver"
+
+[parts.lamp]
+name = "Lamp | big"
+kind = "lamp"
+
+[[channel_nets]]
+role = "LAMP_CHANNEL"
+from = "drv"
+to = "lamp.K"
+note = "dimmed"
+
+[[channel_nets]]
+role = "SPEED_CHANNEL"
+from = "drv"
+to = "motor.PWMA"
+"""
+
+
+class ChannelsTableTest(Fixture):
+    def setUp(self):
+        super().setUp()
+        write(self.root / "driver.md", DRIVER_MD)
+        write(self.proj / "main/pin_config.h", CHANNEL_HEADER)
+        write(self.proj / "hardware.toml", SIDECAR + CHANNELS)
+
+    def rows(self, block="channels:drv"):
+        return render_block(self.model(), block, self.root).splitlines()
+
+    def test_every_pad_is_listed_in_numeric_order_with_reserved_rows(self):
+        rows = self.rows()
+        self.assertEqual(rows[0], "| Ch | Macro | Wired to | Notes |")
+        self.assertEqual(
+            [r.split(" | ")[0] for r in rows[2:]], [f"| {i}" for i in range(12)]
+        )
+        self.assertEqual(rows[2], "| 0 | — | *reserved* |  |")
+        self.assertEqual(rows[2 + 11], "| 11 | — | *reserved* |  |")
+
+    def test_pads_ten_and_up_sort_after_nine(self):
+        board = (
+            DRIVER_MD + "    | 14 | T | 1 | JP3.1 | |\n    | 15 | T | 2 | JP3.2 | |\n"
+        )
+        write(self.root / "driver.md", board)
+        nums = [r.split(" | ")[0] for r in self.rows()[2:]]
+        self.assertEqual(nums[-4:], ["| 10", "| 11", "| 14", "| 15"])
+
+    def test_a_wired_row_names_the_macro_part_and_pin(self):
+        rows = self.rows()
+        self.assertIn("| 2 | `SPEED_CHANNEL` | H-bridge **PWMA** |  |", rows)
+        self.assertIn("| 10 | `LAMP_CHANNEL` | Lamp \\| big **K** | dimmed |", rows)
+
+    def test_an_undeclared_part_is_an_error(self):
+        with self.assertRaisesRegex(HardwareError, "'nope' is not declared"):
+            channels_table(self.model(), "nope", self.root)
+
+    def test_a_part_with_no_channel_nets_is_an_error(self):
+        with self.assertRaisesRegex(HardwareError, "'motor' has no channel_nets"):
+            channels_table(self.model(), "motor", self.root)
+
+    def test_a_driver_with_no_board_page_lists_wired_rows_only(self):
+        sidecar = (SIDECAR + CHANNELS).replace('board = "driver.md"\n', "")
+        write(self.proj / "hardware.toml", sidecar)
+        rows = self.rows()[2:]
+        self.assertEqual(len(rows), 2)
+        self.assertTrue(rows[0].startswith("| 2 |"))
+
+    def test_the_channel_number_comes_from_the_header_not_the_row_order(self):
+        before = self.rows()
+        write(
+            self.proj / "main/pin_config.h",
+            CHANNEL_HEADER.replace("LAMP_CHANNEL 10", "LAMP_CHANNEL 4"),
+        )
+        after = self.rows()
+        self.assertNotEqual(before, after)
+        self.assertIn("| 4 | `LAMP_CHANNEL` | Lamp \\| big **K** | dimmed |", after)
+
+    def test_a_stale_block_in_a_doc_fails_check(self):
+        git_init(self.proj)
+        text = doc(BEGIN("channels:drv"), END)
+        write(self.proj / "WIRING.md", text)
+        with redirect_stdout(io.StringIO()):
+            self.assertEqual(main([str(self.proj)], repo_root=self.root), 0)
+        self.assertEqual(check_project(self.proj, repo_root=self.root), [])
+        write(
+            self.proj / "main/pin_config.h",
+            CHANNEL_HEADER.replace("LAMP_CHANNEL 10", "LAMP_CHANNEL 4"),
+        )
+        drift = check_project(self.proj, repo_root=self.root)
+        self.assertEqual([p.name for p, _ in drift], ["WIRING.md"])
+        with redirect_stdout(io.StringIO()):
+            self.assertEqual(main(["--check", str(self.proj)], repo_root=self.root), 1)
 
 
 class RenderBlockTest(Fixture):
