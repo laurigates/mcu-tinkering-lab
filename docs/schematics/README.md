@@ -298,6 +298,11 @@ channel numbers in its labels come from the same headers. Placement, net order
 and net colour stay in the circuit. After the last MCU wire,
 `nets.check_all_drawn()` fails the render for any `[[nets]]` entry the drawing
 left out, so a net added to `hardware.toml` cannot ship a schematic without it.
+Power tags follow the same split: `nets.rail("pwm", "VCC")` gives the label
+(`+3V3`) from `[[rails]]`, the circuit keeps the tag's anchor and direction, and
+`nets.check_all_tagged()` fails the render for a rail pin on a drawn part that
+has no tag. `SUGGESTED_CAPS` keeps its `rail` field for display;
+`test_power_tags.py` holds it to the join.
 
 ## Freshness check
 
