@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -281,7 +282,8 @@ class JoinTest(unittest.TestCase):
 
     def test_a_role_on_no_header_pad_resolves_to_none(self):
         header = HEADER_H + "#define MIC_PIN GPIO_NUM_42\n"
-        model = self.join(self.make(header=header))
+        sidecar = SIDECAR + '\n[[undrawn]]\nrole = "MIC_PIN"\nwhy = "test"\n'
+        model = self.join(self.make(sidecar=sidecar, header=header))
         self.assertIsNone(model.pin_for("MIC_PIN"))
 
     def test_a_net_role_missing_from_the_header_fails(self):
@@ -299,6 +301,33 @@ class JoinTest(unittest.TestCase):
         sidecar = SIDECAR.replace('role = "BEEP_PIN"', 'role = "BEEP_PNI"')
         with self.assertRaisesRegex(HardwareError, "BEEP_PNI"):
             self.join(self.make(sidecar=sidecar))
+
+    def test_a_pin_role_on_no_net_and_not_undrawn_fails(self):
+        # The completeness gate (#460): a new pin macro must be drawn or excused.
+        header = HEADER_H + "#define LIDAR_PWM_PIN GPIO_NUM_12\n"
+        with self.assertRaises(HardwareError) as ctx:
+            self.join(self.make(header=header))
+        self.assertIn("LIDAR_PWM_PIN", str(ctx.exception))
+        self.assertIn("GPIO12", str(ctx.exception))
+        self.assertIn("[[nets]]", str(ctx.exception))
+        self.assertIn("[[undrawn]]", str(ctx.exception))
+
+    def test_an_excused_unwired_pin_role_joins(self):
+        header = HEADER_H + "#define LIDAR_PWM_PIN GPIO_NUM_12\n"
+        sidecar = SIDECAR + '\n[[undrawn]]\nrole = "LIDAR_PWM_PIN"\nwhy = "test"\n'
+        model = self.join(self.make(sidecar=sidecar, header=header))
+        self.assertEqual(model.roles["LIDAR_PWM_PIN"], 12)
+
+    def test_a_non_pin_macro_is_not_flagged_by_the_completeness_gate(self):
+        header = HEADER_H + "#define LIDAR_FREQ_HZ 50\n"
+        self.join(self.make(header=header))
+
+    def test_every_missing_role_is_named_not_just_the_first(self):
+        header = HEADER_H + "#define A_PIN GPIO_NUM_12\n#define B_PIN GPIO_NUM_13\n"
+        with self.assertRaises(HardwareError) as ctx:
+            self.join(self.make(header=header))
+        self.assertIn("A_PIN", str(ctx.exception))
+        self.assertIn("B_PIN", str(ctx.exception))
 
     def test_a_net_to_an_undeclared_part_fails(self):
         sidecar = SIDECAR.replace('to = "led.A"', 'to = "lde.A"')
@@ -730,6 +759,23 @@ class RobocarUnifiedJoinTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.model = join(UNIFIED)
+
+    def test_dropping_an_undrawn_entry_from_the_committed_sidecar_fails(self):
+        # The completeness gate (#460) holds on the real project, not only on
+        # the synthetic one: UART0_TX_PIN is excused only by this entry.
+        text = (UNIFIED / "hardware.toml").read_text(encoding="utf-8")
+        entry = re.search(
+            r'\[\[undrawn\]\]\nrole = "UART0_TX_PIN"\nwhy = "[^"\n]*"\n\n?', text
+        )
+        self.assertIsNotNone(entry)
+        with tempfile.TemporaryDirectory() as tmp:
+            proj = Path(tmp) / "unified"
+            shutil.copytree(UNIFIED / "main", proj / "main")
+            (proj / "hardware.toml").write_text(
+                text.replace(entry.group(0), ""), encoding="utf-8"
+            )
+            with self.assertRaisesRegex(HardwareError, "UART0_TX_PIN"):
+                join(proj, repo_root=REPO_ROOT)
 
     def test_i2s_lands_on_the_amp_via_d8_d9_d10(self):
         nets = {n.role: (n.part, n.pin) for n in self.model.nets}

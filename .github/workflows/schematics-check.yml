@@ -13,6 +13,12 @@ on:
       - 'tools/hardware/**'
       - '**/main/pin_config.h'
       - '**/hardware.toml'
+      # The join also reads hardware.toml's extra_headers and a legacy
+      # src/pin_config.h, and test_components.py reads WIRING.md (#460).
+      - '**/src/pin_config.h'
+      - '**/WIRING.md'
+      - 'packages/robocar/unified/main/planner_task.h'
+      - 'packages/robocar/unified/main/plan_activity.h'
       - '.github/workflows/schematics-check.yml'
   pull_request:
     # No branches: filter — a PR stacked on a non-default base (e.g. another
@@ -24,6 +30,12 @@ on:
       - 'tools/hardware/**'
       - '**/main/pin_config.h'
       - '**/hardware.toml'
+      # The join also reads hardware.toml's extra_headers and a legacy
+      # src/pin_config.h, and test_components.py reads WIRING.md (#460).
+      - '**/src/pin_config.h'
+      - '**/WIRING.md'
+      - 'packages/robocar/unified/main/planner_task.h'
+      - 'packages/robocar/unified/main/plan_activity.h'
       - '.github/workflows/schematics-check.yml'
   workflow_dispatch:
 
