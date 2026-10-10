@@ -1194,6 +1194,10 @@ class Router:
         for points in fixed:
             _mark_cells(base, points, self.grid)
 
+        # Hand-drawn leads are in the drawing already, and finish() hops and
+        # dots them like any wire, so a candidate that lays a wire along one
+        # is as bad as one that crowds another wire (#593).
+        leads = [pts for pts, _ in self._leads()]
         best = None
         tried: list[tuple[int, ...]] = []
         for name, key in ORDERINGS:
@@ -1206,7 +1210,7 @@ class Router:
             for i in order:
                 routed[i] = self._route(batch[i]._plan, occupied)
                 _mark_cells(occupied, routed[i], self.grid)
-            score = _order_score(fixed + routed, self.grid)
+            score = _order_score(fixed + routed, self.grid, leads)
             if best is None or score < best[0]:
                 best = (score, name, routed, occupied)
         # ORDERINGS is non-empty and its first entry, the authored order, can
@@ -1278,8 +1282,14 @@ _SCORE_TIGHT = 20.0
 _SCORE_CROSSING = 4.0
 
 
-def _order_score(wires: list[list[Coord]], grid: float) -> float:
+def _order_score(
+    wires: list[list[Coord]], grid: float, leads: Sequence[list[Coord]] = ()
+) -> float:
     """Weighted badness of a finished set of wires, by metrics.py's rulers.
+
+    ``leads`` are the hand-drawn polylines already in the drawing. Only the
+    pairs with one wire and one lead are added; lead-lead pairs are the same
+    for every candidate ordering, so they are left out rather than scored.
 
     Imported here rather than at module level because metrics.py imports
     this module. Rounded so that float noise in the length sum can never
@@ -1290,12 +1300,24 @@ def _order_score(wires: list[list[Coord]], grid: float) -> float:
         crossings,
         tight_parallel_pairs,
         total_length,
+        wire_lead_pairs,
     )
 
+    def tight(ws):
+        return tight_parallel_pairs(ws, grid)
+
+    leads = list(leads)
+    collinear = collinear_overlaps(wires)
+    tight_pairs = tight(wires)
+    crossed = crossings(wires)
+    if leads:
+        collinear += wire_lead_pairs(collinear_overlaps, wires, leads)
+        tight_pairs += wire_lead_pairs(tight, wires, leads)
+        crossed += wire_lead_pairs(crossings, wires, leads)
     return round(
-        _SCORE_COLLINEAR * collinear_overlaps(wires)
-        + _SCORE_TIGHT * tight_parallel_pairs(wires, grid)
-        + _SCORE_CROSSING * crossings(wires)
+        _SCORE_COLLINEAR * collinear
+        + _SCORE_TIGHT * tight_pairs
+        + _SCORE_CROSSING * crossed
         + total_length(wires),
         6,
     )
