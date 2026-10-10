@@ -171,10 +171,15 @@ def esp32_s3_zero() -> elm.Ic:
             elm.IcPin(name="GPIO6", side="R", pin="6"),
             elm.IcPin(name="GPIO5", side="R", pin="5"),
             # Bottom — optional piezo-pair outputs (Drone mode only)
-            elm.IcPin(name="GPIO8", side="B", pin="8", pos=0.3),
-            elm.IcPin(name="GPIO9", side="B", pin="9", pos=0.7),
+            elm.IcPin(name="GPIO8", side="B", pin="8", pos=0.2),
+            elm.IcPin(name="GPIO9", side="B", pin="9", pos=0.8),
         ],
-        size=(3, 5),
+        # 5 wide with 0.8 side padding puts the bottom pins about 2 units apart, wide
+        # enough that the piezo symbols hung under them (0.875 wide) do not
+        # overlap and the six labels along the bottom edge do not collide (#674).
+        # 3.5-4.5 wide leaves the router no orthogonal path in gamepad_synth.
+        size=(5, 5),
+        edgepadH=0.8,
     )
 
 

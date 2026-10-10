@@ -1547,3 +1547,42 @@ def test_every_real_circuit_label_box_is_the_rendered_rect(real_circuits):
     assert rotated >= 11, f"expected the rotated pin labels, saw {rotated}"
     assert checked > rotated
     assert len(unaligned) >= 3, "the Capacitor '+' marks have align=None"
+
+
+def test_a_pin_on_one_boxs_edge_is_owned_by_that_box_not_an_equal_one_it_is_inside():
+    # #592: two boxes of equal area overlap and pin P lies on B's left edge
+    # but strictly inside A. An area-only tie-break took A (first of the
+    # equals), so P's stub left through B's body.
+    a = _BBox(0.0, 0.0, 2.0, 2.0)
+    b = _BBox(1.0, 0.0, 3.0, 2.0)
+    pin = (1.0, 1.0)
+    router = Router(schemdraw.Drawing())
+    owner = router._owning_box(pin, [a, b])
+    assert owner is b
+    assert router._exit_direction(pin, owner) == (-1.0, 0.0)
+
+
+def test_every_real_circuit_routes_no_wire_inside_a_component_body(real_circuits):
+    # #674: gamepad_synth's GPIO9 stub left through Piezo B's body (1.48 units).
+    for c in real_circuits:
+        assert c.metrics.inside_any == 0, (
+            f"{c.name}: {c.metrics.inside_any:.2f} units of wire inside bodies"
+        )
+
+
+def test_no_two_labels_overlap_in_real_circuits(real_circuits):
+    # #674: gamepad_synth's bottom-pin labels collided with each other and
+    # with the GND / GPIO7 side labels.
+    import itertools
+
+    for c in real_circuits:
+        # The router the circuit was measured with: a fresh one would register
+        # on the shared drawing and trip the read-only guard.
+        labels = c.drawing._routers[0]._labels()
+        clashes = [
+            (a.text, b.text)
+            for a, b in itertools.combinations(labels, 2)
+            if min(a.box.xmax, b.box.xmax) - max(a.box.xmin, b.box.xmin) > 1e-6
+            and min(a.box.ymax, b.box.ymax) - max(a.box.ymin, b.box.ymin) > 1e-6
+        ]
+        assert not clashes, f"{c.name}: overlapping labels {clashes}"

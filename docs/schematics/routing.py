@@ -727,14 +727,27 @@ class Router:
         return labels
 
     def _owning_box(self, point: Coord, boxes: list[_BBox]) -> _BBox | None:
+        """The box ``point`` is a pin of: one whose edge it lies on, else the smallest.
+
+        Overlapping boxes can all contain a pin, but a pin sits on the edge of
+        its own component, so an edge hit outranks area. Area alone picks a
+        neighbour's box on a tie and sends the stub out through its body (#592).
+        """
         x, y = point
         best = None
-        best_area = math.inf
+        best_key = (True, math.inf)
         for box in boxes:
             if box.contains(x, y):
+                edge = min(
+                    abs(x - box.xmin),
+                    abs(x - box.xmax),
+                    abs(y - box.ymin),
+                    abs(y - box.ymax),
+                )
                 area = (box.xmax - box.xmin) * (box.ymax - box.ymin)
-                if area < best_area:
-                    best, best_area = box, area
+                key = (edge > 1e-6, area)
+                if key < best_key:
+                    best, best_key = box, key
         return best
 
     def _exit_direction(self, point: Coord, box: _BBox) -> Coord:
