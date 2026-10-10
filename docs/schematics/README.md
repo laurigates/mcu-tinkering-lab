@@ -202,7 +202,7 @@ router.finish()
   avoidance, fast failure on an unreachable goal) and re-checks every wire
   every real circuit actually draws. Run every suite with
   `just schematics::test` (or `uv run --group dev pytest`) after touching
-  `routing.py` or any `circuits/*.py`; CI runs the whole directory.
+  `routing.py`, `components.py` or any `circuits/*.py`; CI runs the whole directory.
   Tests that only *read* a real circuit take the `real_circuits` fixture in
   `conftest.py`, which routes each circuit once per session and fails any
   test that changes a shared drawing or its metrics; a test that must route
