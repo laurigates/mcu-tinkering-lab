@@ -202,7 +202,7 @@ router.finish()
   avoidance, fast failure on an unreachable goal) and re-checks every wire
   every real circuit actually draws. Run every suite with
   `just schematics::test` (or `uv run --group dev pytest`) after touching
-  `routing.py` or any `circuits/*.py`; CI runs the whole directory.
+  `routing.py`, `components.py` or any `circuits/*.py`; CI runs the whole directory.
   Tests that only *read* a real circuit take the `real_circuits` fixture in
   `conftest.py`, which routes each circuit once per session and fails any
   test that changes a shared drawing or its metrics; a test that must route
@@ -298,6 +298,11 @@ channel numbers in its labels come from the same headers. Placement, net order
 and net colour stay in the circuit. After the last MCU wire,
 `nets.check_all_drawn()` fails the render for any `[[nets]]` entry the drawing
 left out, so a net added to `hardware.toml` cannot ship a schematic without it.
+Power tags follow the same split: `nets.rail("pwm", "VCC")` gives the label
+(`+3V3`) from `[[rails]]`, the circuit keeps the tag's anchor and direction, and
+`nets.check_all_tagged()` fails the render for a rail pin on a drawn part that
+has no tag. `SUGGESTED_CAPS` keeps its `rail` field for display;
+`test_power_tags.py` holds it to the join.
 
 ## Freshness check
 
