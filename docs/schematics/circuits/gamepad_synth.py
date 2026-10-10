@@ -44,13 +44,13 @@ def draw() -> schemdraw.Drawing:
         elm.Speaker()
         .right()
         .at((esp.GPIO8.x - 0.25, piezo_y))
-        .label("Piezo A", loc="bot", ofst=0.3)
+        .label("Piezo A", loc="bot", ofst=1.0)
     )
     pz_b = d.add(
         elm.Speaker()
         .right()
         .at((esp.GPIO9.x - 0.25, piezo_y))
-        .label("Piezo B", loc="bot", ofst=0.3)
+        .label("Piezo B", loc="bot", ofst=1.0)
     )
 
     # === Local stubs (power tags, LED branch, piezo grounds) stay

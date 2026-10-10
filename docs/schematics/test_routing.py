@@ -1557,9 +1557,10 @@ def test_a_pin_on_one_boxs_edge_is_owned_by_that_box_not_an_equal_one_it_is_insi
     b = _BBox(1.0, 0.0, 3.0, 2.0)
     pin = (1.0, 1.0)
     router = Router(schemdraw.Drawing())
-    owner = router._owning_box(pin, [a, b])
-    assert owner is b
-    assert router._exit_direction(pin, owner) == (-1.0, 0.0)
+    for boxes in ([a, b], [b, a]):
+        owner = router._owning_box(pin, boxes)
+        assert owner is b
+        assert router._exit_direction(pin, owner) == (-1.0, 0.0)
 
 
 def test_every_real_circuit_routes_no_wire_inside_a_component_body(real_circuits):
