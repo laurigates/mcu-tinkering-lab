@@ -1275,7 +1275,7 @@ def test_ordering_score_sees_a_tight_pair_against_a_lead(monkeypatch):
     # candidate orderings are the whole search here: authored routes ``b``
     # one row from the lead, reversed routes it clear.
     import routing
-    from metrics import tight_parallel_pairs
+    from metrics import tight_parallel_pairs, wire_lead_pairs
 
     by_name = dict(routing.ORDERINGS)
     monkeypatch.setattr(
@@ -1306,8 +1306,45 @@ def test_ordering_score_sees_a_tight_pair_against_a_lead(monkeypatch):
 
     wires = [a.points, b.points]
     grid = router.grid
-    tight = tight_parallel_pairs(wires + [lead], grid) - tight_parallel_pairs(wires, grid)
+    tight = wire_lead_pairs(lambda ws: tight_parallel_pairs(ws, grid), wires, [lead])
     assert tight == 0, f"{router.ordering}: {tight} wire-lead tight pair(s)"
+    assert router.ordering == "reversed"
+
+
+def test_ordering_score_sees_a_crossing_against_a_lead(monkeypatch):
+    # The crossing term of the same lead score (#593): the candidates tie on
+    # wire-wire score, and authored crosses the vertical lead where reversed
+    # does not.
+    import routing
+    from metrics import crossings, wire_lead_pairs
+
+    by_name = dict(routing.ORDERINGS)
+    monkeypatch.setattr(
+        routing,
+        "ORDERINGS",
+        (("authored", by_name["authored"]), ("reversed", by_name["reversed"])),
+    )
+    scored = []
+    real_score = routing._order_score
+
+    def spy(wires, grid, *args, **kwargs):
+        scored.append(wires)
+        return real_score(wires, grid, *args, **kwargs)
+
+    monkeypatch.setattr(routing, "_order_score", spy)
+
+    d, router = _free_router()
+    lead = [(1.0, -2.0), (1.0, 3.0)]
+    d.add(elm.Wire("-").at(lead[0]).to(lead[1]))
+    a = router.wire((2.0, 3.0), (3.0, 1.0), net="signal")
+    b = router.wire((2.0, 1.5), (0.5, 3.0), net="signal")
+    router.finish()
+
+    wire_only = [real_score(w, router.grid) for w in scored]
+    assert len(wire_only) == 2 and wire_only[0] == wire_only[1]
+
+    crossed = wire_lead_pairs(crossings, [a.points, b.points], [lead])
+    assert crossed == 0, f"{router.ordering}: {crossed} wire-lead crossing(s)"
     assert router.ordering == "reversed"
 
 
