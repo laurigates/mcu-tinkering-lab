@@ -6,9 +6,11 @@ the real circuits, so a future circuit edit that breaks routing fails here
 instead of only showing up as a visual glitch in the rendered SVG.
 """
 
+import math
 import sys
 from pathlib import Path as FsPath
 
+import pytest
 import schemdraw
 import schemdraw.elements as elm
 from schemdraw.segments import SegmentText
@@ -1297,17 +1299,23 @@ def test_robocar_unified_tight_parallel_pairs_drop_below_baseline(real_circuit):
 
 # Label boxes (#681). schemdraw's SegmentText.get_bbox ignores rotation and
 # treats align=None as bottom-left, while the SVG backend draws align=None
-# centred and rotates about the anchor. The reference below is the backend's own
-# test-mode rectangle, so a box that matches it matches what is rendered.
+# centred and rotates about the anchor. The reference below is read off the
+# <text> element text_tosvg emits (anchor, dominant-baseline, transform), i.e.
+# where the glyphs are drawn. It is not the backend's test-mode <rect>: that
+# rectangle sits a line (valign top) or half a line (centre) away from the
+# glyphs, so a box matched to it would be offset from the rendered text.
 
 _PT_TO_UNITS = 2 / 72
 
 
-def _rendered_text_rect(seg):
-    """The <rect> svgtext draws for ``seg`` (already transformed), in drawing units."""
+def _rendered_glyph_box(seg):
+    """Where the glyphs of ``seg`` (already transformed) are drawn, in drawing units."""
+    import re
+
     from schemdraw.backends import svgtext
 
     halign, valign = seg.align or ("center", "center")
+    rotation = seg.rotation or 0
     elem = svgtext.text_tosvg(
         seg.text,
         0.0,
@@ -1315,21 +1323,39 @@ def _rendered_text_rect(seg):
         size=seg.fontsize,
         halign=halign,
         valign=valign,
-        rotation=seg.rotation or 0,
+        rotation=rotation,
         rotation_mode=seg.rotation_mode or "anchor",
-        testmode=True,
     )
-    rect = elem.find("rect")
-    x, y = float(rect.get("x")), float(rect.get("y"))
-    w, h = float(rect.get("width")), float(rect.get("height"))
+    w, h, _ = svgtext.text_approx_size(seg.text, size=seg.fontsize)
+    size = seg.fontsize
+    x, y_attr = float(elem.get("x")), float(elem.get("y"))
+    # The first tspan is shifted down one line (dy=size) from the text's y and
+    # later ones one line each, so the block spans h from the first line's top.
+    baseline_y = y_attr + size
+    left = {"start": x, "middle": x - w / 2, "end": x - w}[elem.get("text-anchor")]
+    top = {
+        "hanging": baseline_y,
+        "central": baseline_y - size / 2,
+        "ideographic": baseline_y - size,
+    }[elem.get("dominant-baseline")]
+    corners = [(left, top), (left + w, top), (left, top + h), (left + w, top + h)]
+    dx = dy = 0.0
+    angle = 0.0
+    transform = elem.get("transform")
+    if transform:
+        shift = re.search(r"translate\(([-\d.e]+) ([-\d.e]+)\)", transform)
+        if shift:
+            dx, dy = float(shift.group(1)), float(shift.group(2))
+        angle = math.radians(
+            float(re.search(r"rotate\(([-\d.e]+)", transform).group(1))
+        )
+    cos, sin = math.cos(angle), math.sin(angle)
+    # SVG rotate(a) about the origin (the anchor), then translate; y points down.
+    pts = [(px * cos - py * sin + dx, px * sin + py * cos + dy) for px, py in corners]
     x0, y0 = seg.xy
-    # SVG y points down, drawing y points up.
-    return (
-        x0 + x * _PT_TO_UNITS,
-        y0 - (y + h) * _PT_TO_UNITS,
-        x0 + (x + w) * _PT_TO_UNITS,
-        y0 - y * _PT_TO_UNITS,
-    )
+    xs = [x0 + px * _PT_TO_UNITS for px, _ in pts]
+    ys = [y0 - py * _PT_TO_UNITS for _, py in pts]
+    return min(xs), min(ys), max(xs), max(ys)
 
 
 def _assert_box_matches_rect(box, rect):
@@ -1362,7 +1388,7 @@ def test_rotated_default_mode_label_box_is_the_rendered_rect():
         rotation=90, rotation_mode="default", align=("center", "top")
     )
     assert box.ymax - box.ymin > box.xmax - box.xmin, "90 degrees makes it tall"
-    _assert_box_matches_rect(box, _rendered_text_rect(seg))
+    _assert_box_matches_rect(box, _rendered_glyph_box(seg))
 
 
 def test_rotated_anchor_mode_label_box_is_the_rendered_rect():
@@ -1370,38 +1396,34 @@ def test_rotated_anchor_mode_label_box_is_the_rendered_rect():
         rotation=90, rotation_mode="anchor", align=("left", "bottom")
     )
     assert box.ymax - box.ymin > box.xmax - box.xmin
-    _assert_box_matches_rect(box, _rendered_text_rect(seg))
+    _assert_box_matches_rect(box, _rendered_glyph_box(seg))
 
 
 def test_unaligned_label_box_is_centred_like_the_render():
     # The backend draws align=None as ('center', 'center'); get_bbox reads it as
-    # bottom-left. (text_tosvg's rect is not a valid reference for an unrotated
-    # centred label, so compare with the explicitly centred segment instead.)
+    # bottom-left.
     box, seg = _label_box_of_segment(align=None)
-    centred = SegmentText(seg.xy, seg.text, align=("center", "center"), fontsize=10)
-    xmin, ymin, xmax, ymax = centred.get_bbox()
-    assert (box.xmin, box.ymin, box.xmax, box.ymax) == (xmin, ymin, xmax, ymax)
+    _assert_box_matches_rect(box, _rendered_glyph_box(seg))
     assert box.contains(3.0, 2.0)
-    assert abs((box.xmin + box.xmax) / 2 - 3.0) < 1e-6
-    assert abs((box.ymin + box.ymax) / 2 - 2.0) < 1e-6
+
+
+@pytest.mark.parametrize("valign", ["top", "center", "bottom"])
+@pytest.mark.parametrize("halign", ["left", "center", "right"])
+@pytest.mark.parametrize(
+    ("rotation", "mode"),
+    [(0, "anchor"), (90, "default"), (90, "anchor"), (45, "default")],
+)
+def test_label_box_is_where_the_glyphs_are_drawn(halign, valign, rotation, mode):
+    box, seg = _label_box_of_segment(
+        rotation=rotation, rotation_mode=mode, align=(halign, valign)
+    )
+    _assert_box_matches_rect(box, _rendered_glyph_box(seg))
 
 
 def test_unaligned_rotated_label_box_is_the_rendered_rect():
     box, seg = _label_box_of_segment(align=None, rotation=90, rotation_mode="default")
     assert box.ymax - box.ymin > box.xmax - box.xmin
-    _assert_box_matches_rect(box, _rendered_text_rect(seg))
-
-
-def _rect_is_a_valid_reference(seg):
-    # text_tosvg's test-mode rectangle only follows the render where its
-    # alignment shift applies: rotated text in 'default' mode, or a bottom/base
-    # valign. For an unrotated or 'anchor'-mode top/centre label it sits half a
-    # line or a line above where the text is drawn, so it cannot be compared.
-    valign = (seg.align or ("center", "center"))[1]
-    return (seg.rotation and seg.rotation_mode == "default") or valign in (
-        "bottom",
-        "base",
-    )
+    _assert_box_matches_rect(box, _rendered_glyph_box(seg))
 
 
 def test_every_real_circuit_label_box_is_the_rendered_rect(real_circuits):
@@ -1421,14 +1443,16 @@ def test_every_real_circuit_label_box_is_the_rendered_rect(real_circuits):
         labels = router._labels()
         assert len(labels) == len(texts), circuit.name
         for label, seg in zip(labels, texts):
-            if _rect_is_a_valid_reference(seg):
-                _assert_box_matches_rect(label.box, _rendered_text_rect(seg))
-                checked += 1
-                rotated += bool(seg.rotation)
+            _assert_box_matches_rect(label.box, _rendered_glyph_box(seg))
+            checked += 1
+            rotated += bool(seg.rotation)
             if seg.align is None:
                 unaligned.append(label.box)
                 assert label.box.contains(*seg.xy), f"{circuit.name} {seg.text!r}"
-                mid = ((label.box.xmin + label.box.xmax) / 2, (label.box.ymin + label.box.ymax) / 2)
+                mid = (
+                    (label.box.xmin + label.box.xmax) / 2,
+                    (label.box.ymin + label.box.ymax) / 2,
+                )
                 assert max(abs(mid[0] - seg.xy[0]), abs(mid[1] - seg.xy[1])) < 1e-6
     assert rotated >= 11, f"expected the rotated pin labels, saw {rotated}"
     assert checked > rotated
