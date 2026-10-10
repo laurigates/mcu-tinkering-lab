@@ -116,6 +116,59 @@ class _BBox:
         )
 
 
+def _text_box(seg: SegmentText) -> _BBox:
+    """The box ``seg`` occupies once drawn (``seg`` already in drawing coordinates).
+
+    ``SegmentText.get_bbox`` ignores rotation and reads ``align=None`` as
+    bottom-left, but the SVG backend draws ``align=None`` centred and rotates
+    the text about its anchor (#681). ``get_bbox`` for the effective alignment
+    is where the glyphs sit unrotated. This rotates that box about the anchor
+    and, in ``'default'`` rotation mode, applies the translation
+    ``schemdraw.backends.svgtext.text_tosvg`` computes. That translation comes
+    from the backend's own test rectangle, which sits one line (valign top) or
+    half a line (centre) above the glyphs, so the rectangle is rebuilt here and
+    its shift applied to the glyph box.
+    """
+    halign, valign = seg.align or ("center", "center")
+    aligned = SegmentText(
+        seg.xy,
+        seg.text,
+        align=(halign, valign),
+        fontsize=seg.fontsize,
+        font=seg.font,
+        mathfont=seg.mathfont,
+    )
+    xmin, ymin, xmax, ymax = aligned.get_bbox()
+    rotation = seg.rotation or 0
+    if not rotation:
+        return _BBox(xmin, ymin, xmax, ymax)
+    x0, y0 = seg.xy
+    cos, sin = math.cos(math.radians(rotation)), math.sin(math.radians(rotation))
+
+    def bounds(box: tuple[float, float, float, float]) -> tuple[float, ...]:
+        corners = [
+            (
+                x0 + (x - x0) * cos - (y - y0) * sin,
+                y0 + (x - x0) * sin + (y - y0) * cos,
+            )
+            for x in (box[0], box[2])
+            for y in (box[1], box[3])
+        ]
+        xs = [c[0] for c in corners]
+        ys = [c[1] for c in corners]
+        return min(xs), min(ys), max(xs), max(ys)
+
+    gx0, gy0, gx1, gy1 = bounds((xmin, ymin, xmax, ymax))
+    if (seg.rotation_mode or "anchor") == "default":
+        line = seg.fontsize * 2 / 72  # one line of text, in drawing units
+        lift = {"top": line, "center": line / 2}.get(valign, 0.0)
+        rx0, ry0, rx1, ry1 = bounds((xmin, ymin + lift, xmax, ymax + lift))
+        dx = {"left": x0 - rx0, "center": x0 - (rx0 + rx1) / 2}.get(halign, x0 - rx1)
+        dy = {"top": y0 - ry1, "center": y0 - (ry0 + ry1) / 2}.get(valign, y0 - ry0)
+        gx0, gx1, gy0, gy1 = gx0 + dx, gx1 + dx, gy0 + dy, gy1 + dy
+    return _BBox(gx0, gy0, gx1, gy1)
+
+
 @dataclass(frozen=True)
 class _Tag:
     """A power or ground tag: its raw body and the points it is wired to.
@@ -669,7 +722,7 @@ class Router:
                 self._tag(el, leads) if isinstance(el, (elm.Vdd, elm.Ground)) else None
             )
             for seg in texts:
-                box = _BBox(*seg.xform(el.transform).get_bbox())
+                box = _text_box(seg.xform(el.transform))
                 labels.append(_Label(box, seg.text, tag))
         return labels
 
