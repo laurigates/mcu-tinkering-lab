@@ -116,6 +116,59 @@ class _BBox:
         )
 
 
+def _text_box(seg: SegmentText) -> _BBox:
+    """The box ``seg`` occupies once drawn (``seg`` already in drawing coordinates).
+
+    ``SegmentText.get_bbox`` ignores rotation and reads ``align=None`` as
+    bottom-left, but the SVG backend draws ``align=None`` centred and rotates
+    the text about its anchor (#681). ``get_bbox`` for the effective alignment
+    is where the glyphs sit unrotated. This rotates that box about the anchor
+    and, in ``'default'`` rotation mode, applies the translation
+    ``schemdraw.backends.svgtext.text_tosvg`` computes. That translation comes
+    from the backend's own test rectangle, which sits one line (valign top) or
+    half a line (centre) above the glyphs, so the rectangle is rebuilt here and
+    its shift applied to the glyph box.
+    """
+    halign, valign = seg.align or ("center", "center")
+    aligned = SegmentText(
+        seg.xy,
+        seg.text,
+        align=(halign, valign),
+        fontsize=seg.fontsize,
+        font=seg.font,
+        mathfont=seg.mathfont,
+    )
+    xmin, ymin, xmax, ymax = aligned.get_bbox()
+    rotation = seg.rotation or 0
+    if not rotation:
+        return _BBox(xmin, ymin, xmax, ymax)
+    x0, y0 = seg.xy
+    cos, sin = math.cos(math.radians(rotation)), math.sin(math.radians(rotation))
+
+    def bounds(box: tuple[float, float, float, float]) -> tuple[float, ...]:
+        corners = [
+            (
+                x0 + (x - x0) * cos - (y - y0) * sin,
+                y0 + (x - x0) * sin + (y - y0) * cos,
+            )
+            for x in (box[0], box[2])
+            for y in (box[1], box[3])
+        ]
+        xs = [c[0] for c in corners]
+        ys = [c[1] for c in corners]
+        return min(xs), min(ys), max(xs), max(ys)
+
+    gx0, gy0, gx1, gy1 = bounds((xmin, ymin, xmax, ymax))
+    if (seg.rotation_mode or "anchor") == "default":
+        line = seg.fontsize * 2 / 72  # one line of text, in drawing units
+        lift = {"top": line, "center": line / 2}.get(valign, 0.0)
+        rx0, ry0, rx1, ry1 = bounds((xmin, ymin + lift, xmax, ymax + lift))
+        dx = {"left": x0 - rx0, "center": x0 - (rx0 + rx1) / 2}.get(halign, x0 - rx1)
+        dy = {"top": y0 - ry1, "center": y0 - (ry0 + ry1) / 2}.get(valign, y0 - ry0)
+        gx0, gx1, gy0, gy1 = gx0 + dx, gx1 + dx, gy0 + dy, gy1 + dy
+    return _BBox(gx0, gy0, gx1, gy1)
+
+
 @dataclass(frozen=True)
 class _Tag:
     """A power or ground tag: its raw body and the points it is wired to.
@@ -669,7 +722,7 @@ class Router:
                 self._tag(el, leads) if isinstance(el, (elm.Vdd, elm.Ground)) else None
             )
             for seg in texts:
-                box = _BBox(*seg.xform(el.transform).get_bbox())
+                box = _text_box(seg.xform(el.transform))
                 labels.append(_Label(box, seg.text, tag))
         return labels
 
@@ -1141,6 +1194,10 @@ class Router:
         for points in fixed:
             _mark_cells(base, points, self.grid)
 
+        # Hand-drawn leads are in the drawing already, and finish() hops and
+        # dots them like any wire, so a candidate that lays a wire along one
+        # is as bad as one that crowds another wire (#593).
+        leads = [pts for pts, _ in self._leads()]
         best = None
         tried: list[tuple[int, ...]] = []
         for name, key in ORDERINGS:
@@ -1153,7 +1210,7 @@ class Router:
             for i in order:
                 routed[i] = self._route(batch[i]._plan, occupied)
                 _mark_cells(occupied, routed[i], self.grid)
-            score = _order_score(fixed + routed, self.grid)
+            score = _order_score(fixed + routed, self.grid, leads)
             if best is None or score < best[0]:
                 best = (score, name, routed, occupied)
         # ORDERINGS is non-empty and its first entry, the authored order, can
@@ -1225,8 +1282,14 @@ _SCORE_TIGHT = 20.0
 _SCORE_CROSSING = 4.0
 
 
-def _order_score(wires: list[list[Coord]], grid: float) -> float:
+def _order_score(
+    wires: list[list[Coord]], grid: float, leads: Sequence[list[Coord]] = ()
+) -> float:
     """Weighted badness of a finished set of wires, by metrics.py's rulers.
+
+    ``leads`` are the hand-drawn polylines already in the drawing. Only the
+    pairs with one wire and one lead are added; lead-lead pairs are the same
+    for every candidate ordering, so they are left out rather than scored.
 
     Imported here rather than at module level because metrics.py imports
     this module. Rounded so that float noise in the length sum can never
@@ -1237,12 +1300,24 @@ def _order_score(wires: list[list[Coord]], grid: float) -> float:
         crossings,
         tight_parallel_pairs,
         total_length,
+        wire_lead_pairs,
     )
 
+    def tight(ws):
+        return tight_parallel_pairs(ws, grid)
+
+    leads = list(leads)
+    collinear = collinear_overlaps(wires)
+    tight_pairs = tight(wires)
+    crossed = crossings(wires)
+    if leads:
+        collinear += wire_lead_pairs(collinear_overlaps, wires, leads)
+        tight_pairs += wire_lead_pairs(tight, wires, leads)
+        crossed += wire_lead_pairs(crossings, wires, leads)
     return round(
-        _SCORE_COLLINEAR * collinear_overlaps(wires)
-        + _SCORE_TIGHT * tight_parallel_pairs(wires, grid)
-        + _SCORE_CROSSING * crossings(wires)
+        _SCORE_COLLINEAR * collinear
+        + _SCORE_TIGHT * tight_pairs
+        + _SCORE_CROSSING * crossed
         + total_length(wires),
         6,
     )

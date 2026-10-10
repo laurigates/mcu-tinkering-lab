@@ -109,6 +109,10 @@ SIDECAR = """\
     [[undrawn]]
     role = "TX_PIN"
     why = "reserved for UART0"
+
+    [[undrawn]]
+    role = "FAN_PIN"
+    why = "spare"
     """
 
 
@@ -157,8 +161,8 @@ class PinTableTest(Fixture):
         # Silently dropping it would read as "this board has no such pad".
         self.assertEqual(self.rows()[3], "| D3 | GPIO8 | — | *unassigned* |  |")
 
-    def test_a_role_on_a_header_pad_but_on_no_net_or_undrawn_is_still_listed(self):
-        self.assertEqual(self.rows()[4], "| D10 | GPIO9 | `FAN_PIN` | — |  |")
+    def test_an_undrawn_role_on_a_header_pad_carries_its_reason(self):
+        self.assertEqual(self.rows()[4], "| D10 | GPIO9 | `FAN_PIN` | — | spare |")
 
     def test_roles_off_the_header_and_power_pads_are_left_out(self):
         table = pin_table(self.model())
@@ -191,7 +195,9 @@ class SignalsTableTest(Fixture):
         # Move the fan's net onto a header pin so its part name reaches the table.
         write(
             self.proj / "hardware.toml",
-            SIDECAR.replace('role = "MIC_PIN"', 'role = "FAN_PIN"'),
+            SIDECAR.replace('role = "MIC_PIN"', 'role = "TMP"')
+            .replace('role = "FAN_PIN"', 'role = "MIC_PIN"')
+            .replace('role = "TMP"', 'role = "FAN_PIN"'),
         )
         self.assertIn("| Fan \\| 5 V SENSE |", pin_table(self.model()))
 

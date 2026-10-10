@@ -267,6 +267,16 @@ def collinear_overlaps(wires: list[Wire]) -> int:
     return count
 
 
+def wire_lead_pairs(count, wires: list[Wire], leads: list[Wire]) -> int:
+    """Pairs ``count`` finds with one routed wire and one lead, no other kind.
+
+    Measures the mixed set and takes away what each side scores on its own,
+    so wire-wire and lead-lead pairs cancel. ``count`` is any one-argument
+    ruler above (bind ``grid`` with a lambda for the tight-pair one).
+    """
+    return count(wires + leads) - count(wires) - count(leads)
+
+
 def junctions(wires: list[Wire]) -> int:
     # Rounding to 6 places merges ends that differ only by float noise
     # (0.1 + 0.2 vs 0.3); drawing coordinates are never that close on purpose.

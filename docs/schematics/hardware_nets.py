@@ -15,6 +15,10 @@ human.
 Each net is consumed once. ``check_all_drawn()`` then fails the render for any
 net the join declares and the drawing never drew, so a ``[[nets]]`` entry
 added to hardware.toml cannot ship a schematic that lacks it.
+
+Power tags work the same way (#679): ``rail()`` gives the label a tag on a
+part pin carries, from ``[[rails]]``, and ``check_all_tagged()`` fails the
+render for any rail endpoint on a drawn part that no tag was asked about.
 """
 
 from __future__ import annotations
@@ -29,7 +33,7 @@ if str(_TOOLS) not in sys.path:
     sys.path.insert(0, str(_TOOLS))
 
 from components import gpio_anchor  # noqa: E402
-from hardware import HardwareError, HardwareModel, Net  # noqa: E402
+from hardware import MCU, Endpoint, HardwareError, HardwareModel, Net  # noqa: E402
 
 Point = tuple[float, float]
 
@@ -53,6 +57,7 @@ class JoinedNets:
         self.mcu = mcu
         self.parts = parts
         self._drawn: set[str] = set()
+        self._tagged: set[Endpoint] = set()
 
     def _net(self, role: str) -> Net:
         nets = [n for n in self.model.nets if n.role == role]
@@ -113,4 +118,32 @@ class JoinedNets:
             listed = ", ".join(f"{n.role} -> {n.part}.{n.pin}" for n in missing)
             raise HardwareError(
                 f"hardware.toml declares net(s) the schematic does not draw: {listed}"
+            )
+
+    def rail(self, part: str, pin: str) -> str:
+        """The label of the rail ``part``.``pin`` is on, e.g. ``"+5V"``.
+
+        ``part`` is a hardware.toml part id (``"mcu"`` for the board) and
+        ``pin`` the model's pin name, not the drawn element's anchor name.
+        """
+        end = Endpoint(part, pin)
+        for rail in self.model.rails:
+            if end == rail.source or end in rail.loads:
+                self._tagged.add(end)
+                return "+" + rail.name
+        raise HardwareError(f"{part}.{pin}: on no [[rails]] entry in hardware.toml")
+
+    def check_all_tagged(self) -> None:
+        """Fail if a rail endpoint on a drawn part was never given a tag."""
+        drawn = {MCU, *self.parts}
+        missing = [
+            f"{e.part}.{e.pin} ({r.name})"
+            for r in self.model.rails
+            for e in (r.source, *r.loads)
+            if e.part in drawn and e not in self._tagged
+        ]
+        if missing:
+            raise HardwareError(
+                "hardware.toml puts drawn part pin(s) on a rail the schematic "
+                f"does not tag: {', '.join(missing)}"
             )
