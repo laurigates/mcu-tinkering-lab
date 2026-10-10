@@ -42,7 +42,7 @@ _TOOLS = Path(__file__).resolve().parents[2] / "tools"
 if str(_TOOLS) not in sys.path:
     sys.path.insert(0, str(_TOOLS))
 
-from hardware import ModuleLayout, Pad, board_layout  # noqa: E402
+from hardware import ModuleLayout, Pad, board_layout
 
 # Drawing units per pad on a physical symbol. True 2.54 mm would be 0.35
 # units — 1.4 router cells, too tight to fit a wire between adjacent pins —
@@ -155,9 +155,12 @@ def _silkscreen_if_gpio(pad: Pad) -> str:
 def esp32_s3_zero() -> elm.Ic:
     """Waveshare ESP32-S3-Zero dev board (compact, castellated).
 
-    Right side holds the I2S pins (GPIO5/6/7, top-to-bottom) to align with
+    Right side holds the I2S pins (GPIO5/6/7, top-to-bottom) facing
     :func:`max98357a`. GPIO2 (status LED) is routed out the top. GPIO8/GPIO9
     sit on the bottom for the optional Drone-mode piezo pair.
+
+    The ``edgepadH`` below moves GPIO5 and GPIO7 0.3 off the amp's BCLK and
+    DIN rows, so those two wires jog once each in gamepad_synth (#727).
     """
     return elm.Ic(
         pins=[
