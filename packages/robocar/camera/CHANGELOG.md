@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.8](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-camera-v0.1.7...robocar-camera-v0.1.8) (2026-10-10)
+
+
+### Miscellaneous
+
+* **robocar-camera:** stop tracking managed_components, pin with dependencies.lock ([#640](https://github.com/laurigates/mcu-tinkering-lab/issues/640)) ([5e111de](https://github.com/laurigates/mcu-tinkering-lab/commit/5e111de351cfc94e810a9cbd74090f6b1149b840)), closes [#609](https://github.com/laurigates/mcu-tinkering-lab/issues/609)
+
 ## [0.1.7](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-camera-v0.1.6...robocar-camera-v0.1.7) (2026-09-26)
 
 

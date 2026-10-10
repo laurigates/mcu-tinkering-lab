@@ -1,5 +1,48 @@
 # Changelog
 
+## [0.2.10](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.9...robocar-unified-v0.2.10) (2026-10-10)
+
+
+### Features
+
+* **hardware:** add the board × header × parts join, re-point generate-pin-defs ([#636](https://github.com/laurigates/mcu-tinkering-lab/issues/636)) ([a68dd55](https://github.com/laurigates/mcu-tinkering-lab/commit/a68dd5551a630ce5e3ac1c2932d91755d045591a))
+* **hardware:** generate the WIRING.md pin tables from the join ([#647](https://github.com/laurigates/mcu-tinkering-lab/issues/647)) ([f540f93](https://github.com/laurigates/mcu-tinkering-lab/commit/f540f938e65d57b41ca73296eba0011478925179))
+* **hardware:** generate WIRING.md's PCA9685 channel map from [[channel_nets]] ([fe517e7](https://github.com/laurigates/mcu-tinkering-lab/commit/fe517e7f86ba419bd1d9d8ff2b8c5315e4d3e1f9)), closes [#694](https://github.com/laurigates/mcu-tinkering-lab/issues/694)
+* **hardware:** generate WIRING.md's PCA9685 channel map from channel_nets ([#717](https://github.com/laurigates/mcu-tinkering-lab/issues/717)) ([fe517e7](https://github.com/laurigates/mcu-tinkering-lab/commit/fe517e7f86ba419bd1d9d8ff2b8c5315e4d3e1f9))
+* **hardware:** model PCA9685 channel nets in the join for pinout labels ([#695](https://github.com/laurigates/mcu-tinkering-lab/issues/695)) ([9aa9135](https://github.com/laurigates/mcu-tinkering-lab/commit/9aa91356ba634546f21fad443e6203c3173b0661))
+* **hardware:** model power rails in the join and generate the WIRING power diagram ([#680](https://github.com/laurigates/mcu-tinkering-lab/issues/680)) ([214bfc7](https://github.com/laurigates/mcu-tinkering-lab/commit/214bfc7ca7d70d18ca3e7e82be4323fe1a8717c1))
+* **robocar-unified:** add a workstation probe for the Gemini Live API ([#635](https://github.com/laurigates/mcu-tinkering-lab/issues/635)) ([9e588ca](https://github.com/laurigates/mcu-tinkering-lab/commit/9e588caeb5994d3db971b941b184daa9a2a0dd29))
+* **robocar-unified:** boot with the voice effect disabled ([#615](https://github.com/laurigates/mcu-tinkering-lab/issues/615)) ([bd41850](https://github.com/laurigates/mcu-tinkering-lab/commit/bd4185021232f7f77c422e4c65af571447f38da5))
+* **robocar-unified:** lock MQTT commands to read-only without broker credentials ([#638](https://github.com/laurigates/mcu-tinkering-lab/issues/638)) ([4f9fdcf](https://github.com/laurigates/mcu-tinkering-lab/commit/4f9fdcffb4f0de3f79f2f6898b88b37eb4dbc653))
+* **robocar-unified:** ration hands-free voice turns and cap their spend ([#659](https://github.com/laurigates/mcu-tinkering-lab/issues/659)) ([00b60d0](https://github.com/laurigates/mcu-tinkering-lab/commit/00b60d0e0ba68a221a4c21e2aa7c433b0218403f))
+* **robocar-unified:** trigger hands-free listening on speech, not loudness ([#622](https://github.com/laurigates/mcu-tinkering-lab/issues/622)) ([20c7217](https://github.com/laurigates/mcu-tinkering-lab/commit/20c721757bb107d017126ff14b4f2e52ee891028))
+* **schematics:** draw robocar-unified's boards with their physical pin layout ([#661](https://github.com/laurigates/mcu-tinkering-lab/issues/661)) ([73cf1df](https://github.com/laurigates/mcu-tinkering-lab/commit/73cf1df1fb9b9db91ac3d4f21dbf503a5b4311ec))
+* **schematics:** draw suggested bulk and decoupling capacitors for robocar-unified ([#665](https://github.com/laurigates/mcu-tinkering-lab/issues/665)) ([5acc005](https://github.com/laurigates/mcu-tinkering-lab/commit/5acc005fac6933b33319df8a02e504da881432cc))
+* **schematics:** take robocar-unified's MCU wiring and labels from the hardware join ([#663](https://github.com/laurigates/mcu-tinkering-lab/issues/663)) ([68f4728](https://github.com/laurigates/mcu-tinkering-lab/commit/68f47282880353f994633d0748204962381f4c42))
+
+
+### Bug Fixes
+
+* **hardware:** reject a rail on an MCU signal pad and a Mermaid-keyword part id ([#687](https://github.com/laurigates/mcu-tinkering-lab/issues/687)) ([a49f907](https://github.com/laurigates/mcu-tinkering-lab/commit/a49f90749b85a50c878ee1b4d8e7b45c70a01a74))
+* **robocar-unified:** build the voice-turn request body with one copy of the clip ([#660](https://github.com/laurigates/mcu-tinkering-lab/issues/660)) ([ca56cba](https://github.com/laurigates/mcu-tinkering-lab/commit/ca56cba544067a13476cb6bc2f8691490b59ae93))
+* **robocar-unified:** carry the build commit SHA in the OTA manifest ([#656](https://github.com/laurigates/mcu-tinkering-lab/issues/656)) ([9027323](https://github.com/laurigates/mcu-tinkering-lab/commit/90273231bf3b9a7647d863a919c75f4e85aac755)), closes [#627](https://github.com/laurigates/mcu-tinkering-lab/issues/627)
+* **robocar-unified:** fail the scene gate closed until a frame decodes ([#700](https://github.com/laurigates/mcu-tinkering-lab/issues/700)) ([9a43e29](https://github.com/laurigates/mcu-tinkering-lab/commit/9a43e295d0bb7ec641cbe6beb6419a652ad83aec))
+* **robocar-unified:** keep the triggering speech in a VAD voice turn ([#621](https://github.com/laurigates/mcu-tinkering-lab/issues/621)) ([ed22bdc](https://github.com/laurigates/mcu-tinkering-lab/commit/ed22bdcc5848778b883a86e1a5568087c0e4eddd))
+* **robocar-unified:** keep the voice-turn start beep out of the ambient gate ([#652](https://github.com/laurigates/mcu-tinkering-lab/issues/652)) ([80132d8](https://github.com/laurigates/mcu-tinkering-lab/commit/80132d870ca949a98827ab8c55d8c6559cffcae0))
+* **robocar-unified:** say "since you last spoke" only for a sense that compared ([#691](https://github.com/laurigates/mcu-tinkering-lab/issues/691)) ([77a1917](https://github.com/laurigates/mcu-tinkering-lab/commit/77a19174ae1f92126dd6556c51f108a24e9d823c))
+* **robocar-unified:** send Improv replies over the USB console, not UART0 ([#672](https://github.com/laurigates/mcu-tinkering-lab/issues/672)) ([7712a59](https://github.com/laurigates/mcu-tinkering-lab/commit/7712a5995e85a3f4358e238631d4fd59816943c5))
+* **robocar-unified:** stop the planner inventing sounds on audio-only openings ([#620](https://github.com/laurigates/mcu-tinkering-lab/issues/620)) ([911fc56](https://github.com/laurigates/mcu-tinkering-lab/commit/911fc5691eee27b1f832dc21073a7c26450eb15e))
+* **schematics:** keep routed wires off power and ground tags ([#642](https://github.com/laurigates/mcu-tinkering-lab/issues/642)) ([a9c39bd](https://github.com/laurigates/mcu-tinkering-lab/commit/a9c39bde444db4d7db7a81cfec18cfc5186e2f22))
+* **schematics:** keep routed wires out of text labels ([#676](https://github.com/laurigates/mcu-tinkering-lab/issues/676)) ([e7558fa](https://github.com/laurigates/mcu-tinkering-lab/commit/e7558fa8c0b50c59d0e7068312b79c5963b1bc5b)), closes [#641](https://github.com/laurigates/mcu-tinkering-lab/issues/641)
+
+
+### Documentation
+
+* **robocar-unified:** count D6/D7 as spare in the GPIO budget callouts ([#668](https://github.com/laurigates/mcu-tinkering-lab/issues/668)) ([d7a0328](https://github.com/laurigates/mcu-tinkering-lab/commit/d7a03280630efe118c900b1c283814786ccd4ff5)), closes [#645](https://github.com/laurigates/mcu-tinkering-lab/issues/645)
+* **robocar-unified:** generate board pinout images for the build guide ([#667](https://github.com/laurigates/mcu-tinkering-lab/issues/667)) ([2902f3a](https://github.com/laurigates/mcu-tinkering-lab/commit/2902f3acfe9fbf495b20c21a30ddc2dab722cb18)), closes [#629](https://github.com/laurigates/mcu-tinkering-lab/issues/629)
+* **robocar-unified:** put TB6612FNG and PCA9685 VCC on 3.3 V in the build guide ([#673](https://github.com/laurigates/mcu-tinkering-lab/issues/673)) ([7e388af](https://github.com/laurigates/mcu-tinkering-lab/commit/7e388afc21aaf1db0489479dd7263fe81f0bbfc6)), closes [#664](https://github.com/laurigates/mcu-tinkering-lab/issues/664)
+* **schematics:** draw the onboard PDM microphone on robocar-unified ([#658](https://github.com/laurigates/mcu-tinkering-lab/issues/658)) ([0b3bf40](https://github.com/laurigates/mcu-tinkering-lab/commit/0b3bf408c814086dc322974ebbf9bea0ed8d2758))
+
 ## [0.2.9](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.8...robocar-unified-v0.2.9) (2026-09-26)
 
 
