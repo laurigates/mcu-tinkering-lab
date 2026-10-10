@@ -6,17 +6,20 @@ the real circuits, so a future circuit edit that breaks routing fails here
 instead of only showing up as a visual glitch in the rendered SVG.
 """
 
+import math
 import sys
 from pathlib import Path as FsPath
 
+import pytest
 import schemdraw
 import schemdraw.elements as elm
+from schemdraw.segments import SegmentText
 
 sys.path.insert(0, str(FsPath(__file__).parent))
 sys.path.insert(0, str(FsPath(__file__).parent / "circuits"))
 
 from components import esp32_s3_zero, max98357a  # noqa: E402
-from routing import Router, _BBox  # noqa: E402
+from routing import Path, Router, _BBox  # noqa: E402
 
 
 def _segments_are_orthogonal(points):
@@ -42,22 +45,39 @@ def _segment_hits_box(p1, p2, box: _BBox) -> bool:
     )
 
 
-def _build_two_chip_drawing():
-    """Two chips with a ~7-unit gap of free space between their facing edges.
+# Free space between the two chips' facing edges in _build_two_chip_drawing().
+_CHIP_GAP = 4.5
 
-    The obstacle coordinates in the tests below are absolute, so they assume
-    that gap. The offset is therefore tied to max98357a()'s body width — when
-    the part was widened from 4 to 6, this had to go from 9 to 10 to keep the
-    amp's left edge at the same x. If a test starts failing because a blocker
-    unexpectedly swallows a pin stub, check that coupling first.
+
+def _box_of(el) -> _BBox:
+    return _BBox(*el.get_bbox(transform=True, includetext=False))
+
+
+def _gap_centre_x(left, right) -> float:
+    """x midway between left's right body edge and right's left body edge."""
+    return (_box_of(left).xmax + _box_of(right).xmin) / 2
+
+
+def _build_two_chip_drawing():
+    """Two chips with a fixed 4.5-unit gap of free space between their facing edges.
+
+    The amp is anchored by its LRC pin, ``_CHIP_GAP`` to the right of the
+    ESP32's GPIO6 pin, so the gap does not change when either symbol is
+    resized. (It used to be a fixed offset from the ESP32's centre, which
+    made the gap depend on both parts' widths: widening the amp from 4 to 6
+    needed the offset to go from 9 to 10.) Tests that place an obstacle in
+    the gap take its x from ``_gap_centre_x``, which reads the two bounding
+    boxes, rather than hardcoding it. Each such test must also assert that
+    its obstacle really blocks the straight path, or a drifted obstacle
+    makes the test pass vacuously.
     """
     d = schemdraw.Drawing(show=False)
     d.config(unit=2.0, fontsize=12)
     esp = d.add(esp32_s3_zero().label("ESP32-S3-Zero", loc="bot", ofst=0.4))
     amp = d.add(
         max98357a()
-        .at((esp.center.x + 10, esp.center.y))
-        .anchor("center")
+        .at((esp.GPIO6[0] + _CHIP_GAP, esp.GPIO6[1]))
+        .anchor("LRC")
         .label("MAX98357A", loc="top", ofst=0.4)
     )
     return d, esp, amp
@@ -85,10 +105,13 @@ def test_wire_avoids_obstacle_placed_between_pins():
     # which makes the goal unreachable — see test_unreachable_goal_fails_fast).
     d.add(
         elm.Ic(pins=[elm.IcPin(name="X", side="L")], size=(1, 1))
-        .at((5.75, esp.GPIO6[1] + 0.2))
+        .at((_gap_centre_x(esp, amp), esp.GPIO6[1] + 0.2))
         .anchor("center")
     )
     blocker_box = _BBox(*d.elements[-1].get_bbox(transform=True, includetext=False))
+    # The detour assertions below only mean something if the naive straight
+    # path is actually blocked.
+    assert _segment_hits_box(esp.GPIO6, amp.LRC, blocker_box)
 
     router = Router(d)
     abspoints = router.wire(esp.GPIO6, amp.LRC, net="i2s").points
@@ -110,7 +133,7 @@ def test_unreachable_goal_fails_fast():
     d, esp, amp = _build_two_chip_drawing()
     d.add(
         elm.Ic(pins=[elm.IcPin(name="X", side="L")], size=(2, 2))
-        .at((esp.center.x + 4.5, esp.center.y + 0.2))
+        .at((_gap_centre_x(esp, amp) + 0.25, esp.center.y + 0.2))
         .anchor("center")
     )
     router = Router(d)
@@ -135,10 +158,6 @@ def test_own_component_is_not_treated_as_an_obstacle():
 
 def _abspoints(el):
     return list(el.polyline)
-
-
-def _box_of(el) -> _BBox:
-    return _BBox(*el.get_bbox(transform=True, includetext=False))
 
 
 def test_wire_does_not_cut_through_its_own_destination_chip():
@@ -1366,3 +1385,165 @@ def test_robocar_unified_tight_parallel_pairs_drop_below_baseline(real_circuit):
     assert m.collinear_overlaps == 0
     assert m.crossings <= 15
     assert m.total_length <= 298.8345 + 1e-6
+
+
+# Label boxes (#681). schemdraw's SegmentText.get_bbox ignores rotation and
+# treats align=None as bottom-left, while the SVG backend draws align=None
+# centred and rotates about the anchor. The reference below is read off the
+# <text> element text_tosvg emits (anchor, dominant-baseline, transform), i.e.
+# where the glyphs are drawn. It is not the backend's test-mode <rect>: that
+# rectangle sits a line (valign top) or half a line (centre) away from the
+# glyphs, so a box matched to it would be offset from the rendered text.
+
+_PT_TO_UNITS = 2 / 72
+
+
+def _rendered_glyph_box(seg):
+    """Where the glyphs of ``seg`` (already transformed) are drawn, in drawing units."""
+    import re
+
+    from schemdraw.backends import svgtext
+
+    halign, valign = seg.align or ("center", "center")
+    rotation = seg.rotation or 0
+    elem = svgtext.text_tosvg(
+        seg.text,
+        0.0,
+        0.0,
+        size=seg.fontsize,
+        halign=halign,
+        valign=valign,
+        rotation=rotation,
+        rotation_mode=seg.rotation_mode or "anchor",
+    )
+    w, h, _ = svgtext.text_approx_size(seg.text, size=seg.fontsize)
+    size = seg.fontsize
+    x, y_attr = float(elem.get("x")), float(elem.get("y"))
+    # The first tspan is shifted down one line (dy=size) from the text's y and
+    # later ones one line each, so the block spans h from the first line's top.
+    baseline_y = y_attr + size
+    left = {"start": x, "middle": x - w / 2, "end": x - w}[elem.get("text-anchor")]
+    top = {
+        "hanging": baseline_y,
+        "central": baseline_y - size / 2,
+        "ideographic": baseline_y - size,
+    }[elem.get("dominant-baseline")]
+    corners = [(left, top), (left + w, top), (left, top + h), (left + w, top + h)]
+    dx = dy = 0.0
+    angle = 0.0
+    transform = elem.get("transform")
+    if transform:
+        shift = re.search(r"translate\(([-\d.e]+) ([-\d.e]+)\)", transform)
+        if shift:
+            dx, dy = float(shift.group(1)), float(shift.group(2))
+        angle = math.radians(
+            float(re.search(r"rotate\(([-\d.e]+)", transform).group(1))
+        )
+    cos, sin = math.cos(angle), math.sin(angle)
+    # SVG rotate(a) about the origin (the anchor), then translate; y points down.
+    pts = [(px * cos - py * sin + dx, px * sin + py * cos + dy) for px, py in corners]
+    x0, y0 = seg.xy
+    xs = [x0 + px * _PT_TO_UNITS for px, _ in pts]
+    ys = [y0 - py * _PT_TO_UNITS for _, py in pts]
+    return min(xs), min(ys), max(xs), max(ys)
+
+
+def _assert_box_matches_rect(box, rect):
+    got = (box.xmin, box.ymin, box.xmax, box.ymax)
+    assert all(abs(g - r) < 1e-6 for g, r in zip(got, rect)), f"{got} != {rect}"
+
+
+def _label_box_of_segment(**kwargs):
+    class _Text(elm.Element):
+        def __init__(self):
+            super().__init__()
+            self.segments.append(SegmentText((3.0, 2.0), "GND", fontsize=10, **kwargs))
+
+    d = schemdraw.Drawing(show=False)
+    d.add(_Text())
+    (label,) = Router(d)._labels()
+    el = d.elements[0]
+    (seg,) = [s for s in el.segments if isinstance(s, SegmentText)]
+    return label.box, seg.xform(el.transform)
+
+
+def test_svg_text_mode_is_text_so_the_reference_rect_is_valid():
+    # With ziamath installed schemdraw draws text as paths and sizes it
+    # differently; text_tosvg's rect would then stop describing the render.
+    assert schemdraw.svgconfig.text == "text"
+
+
+def test_rotated_default_mode_label_box_is_the_rendered_rect():
+    box, seg = _label_box_of_segment(
+        rotation=90, rotation_mode="default", align=("center", "top")
+    )
+    assert box.ymax - box.ymin > box.xmax - box.xmin, "90 degrees makes it tall"
+    _assert_box_matches_rect(box, _rendered_glyph_box(seg))
+
+
+def test_rotated_anchor_mode_label_box_is_the_rendered_rect():
+    box, seg = _label_box_of_segment(
+        rotation=90, rotation_mode="anchor", align=("left", "bottom")
+    )
+    assert box.ymax - box.ymin > box.xmax - box.xmin
+    _assert_box_matches_rect(box, _rendered_glyph_box(seg))
+
+
+def test_unaligned_label_box_is_centred_like_the_render():
+    # The backend draws align=None as ('center', 'center'); get_bbox reads it as
+    # bottom-left.
+    box, seg = _label_box_of_segment(align=None)
+    _assert_box_matches_rect(box, _rendered_glyph_box(seg))
+    assert box.contains(3.0, 2.0)
+
+
+@pytest.mark.parametrize("valign", ["top", "center", "bottom"])
+@pytest.mark.parametrize("halign", ["left", "center", "right"])
+@pytest.mark.parametrize(
+    ("rotation", "mode"),
+    [(0, "anchor"), (90, "default"), (90, "anchor"), (45, "default")],
+)
+def test_label_box_is_where_the_glyphs_are_drawn(halign, valign, rotation, mode):
+    box, seg = _label_box_of_segment(
+        rotation=rotation, rotation_mode=mode, align=(halign, valign)
+    )
+    _assert_box_matches_rect(box, _rendered_glyph_box(seg))
+
+
+def test_unaligned_rotated_label_box_is_the_rendered_rect():
+    box, seg = _label_box_of_segment(align=None, rotation=90, rotation_mode="default")
+    assert box.ymax - box.ymin > box.xmax - box.xmin
+    _assert_box_matches_rect(box, _rendered_glyph_box(seg))
+
+
+def test_every_real_circuit_label_box_is_the_rendered_rect(real_circuits):
+    checked = rotated = 0
+    unaligned = []
+    for circuit in real_circuits:
+        # Reuse the router the circuit was measured with: a fresh Router would
+        # register itself on the shared drawing and trip the read-only guard.
+        router = circuit.drawing._routers[0]
+        texts = [
+            s.xform(el.transform)
+            for el in circuit.drawing.elements
+            if not isinstance(el, Path)
+            for s in el.segments
+            if isinstance(s, SegmentText) and s.text.strip()
+        ]
+        labels = router._labels()
+        assert len(labels) == len(texts), circuit.name
+        for label, seg in zip(labels, texts):
+            _assert_box_matches_rect(label.box, _rendered_glyph_box(seg))
+            checked += 1
+            rotated += bool(seg.rotation)
+            if seg.align is None:
+                unaligned.append(label.box)
+                assert label.box.contains(*seg.xy), f"{circuit.name} {seg.text!r}"
+                mid = (
+                    (label.box.xmin + label.box.xmax) / 2,
+                    (label.box.ymin + label.box.ymax) / 2,
+                )
+                assert max(abs(mid[0] - seg.xy[0]), abs(mid[1] - seg.xy[1])) < 1e-6
+    assert rotated >= 11, f"expected the rotated pin labels, saw {rotated}"
+    assert checked > rotated
+    assert len(unaligned) >= 3, "the Capacitor '+' marks have align=None"
