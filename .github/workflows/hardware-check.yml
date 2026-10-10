@@ -50,7 +50,7 @@ jobs:
       # tools/hardware is stdlib-only but needs tomllib (3.11+).
       - uses: actions/setup-python@v6
         with:
-          python-version: '3.11'
+          python-version: '3.14'
 
       - name: Run the join's unit tests
         run: python3 -m unittest discover -s tools/hardware -t tools

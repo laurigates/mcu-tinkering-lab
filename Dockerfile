@@ -1,7 +1,7 @@
 # MCU Tinkering Lab - ESP-IDF Development Container
 # Based on official Espressif ESP-IDF image
 
-FROM espressif/idf:v5.4
+FROM espressif/idf:v5.5
 
 LABEL maintainer="MCU Tinkering Lab"
 LABEL description="ESP32 development environment with tooling"
