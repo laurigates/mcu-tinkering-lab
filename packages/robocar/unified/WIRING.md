@@ -52,23 +52,29 @@ device — nothing talks to the primary bus directly.
 
 ## PCA9685 channel map (0x40, 100 Hz)
 
-| Ch | Signal | Device |
-|----|--------|--------|
-| 0 | Left LED R | RGB LED (left) |
-| 1 | Left LED G | |
-| 2 | Left LED B | |
-| 3 | Right LED R | RGB LED (right) |
-| 4 | Right LED G | |
-| 5 | Right LED B | |
-| 6 | Pan PWM | SG90 servo |
-| 7 | Tilt PWM | SG90 servo |
-| 8 | Motor R PWM | TB6612FNG **PWMA** (PWM 0-4095) |
-| 9 | Motor R IN2 | TB6612FNG **AIN2** (digital: 0 / 4096) |
-| 10 | Motor R IN1 | TB6612FNG **AIN1** (digital) |
-| 11 | Motor L IN1 | TB6612FNG **BIN1** (digital) |
-| 12 | Motor L IN2 | TB6612FNG **BIN2** (digital) |
-| 13 | Motor L PWM | TB6612FNG **PWMB** (PWM 0-4095) |
-| 14-15 | *reserved* | |
+<!-- BEGIN GENERATED: channels:pwm -->
+<!-- Generated from hardware.toml, main/pin_config.h and the board reference by `just hardware::gen` — edit those, not this block. -->
+
+| Ch | Macro | Wired to | Notes |
+|----|-------|----------|-------|
+| 0 | `LED_LEFT_R_CHANNEL` | Left RGB LED **R** |  |
+| 1 | `LED_LEFT_G_CHANNEL` | Left RGB LED **G** |  |
+| 2 | `LED_LEFT_B_CHANNEL` | Left RGB LED **B** |  |
+| 3 | `LED_RIGHT_R_CHANNEL` | Right RGB LED **R** |  |
+| 4 | `LED_RIGHT_G_CHANNEL` | Right RGB LED **G** |  |
+| 5 | `LED_RIGHT_B_CHANNEL` | Right RGB LED **B** |  |
+| 6 | `SERVO_PAN_CHANNEL` | SG90 servos **PAN** | Signal lead of the pan servo |
+| 7 | `SERVO_TILT_CHANNEL` | SG90 servos **TILT** | Signal lead of the tilt servo |
+| 8 | `MOTOR_RIGHT_PWM_CHANNEL` | TB6612FNG **PWMA** | Right motor speed, PWM 0-4095 |
+| 9 | `MOTOR_RIGHT_IN2_CHANNEL` | TB6612FNG **AIN2** | Right motor direction, full-on / full-off |
+| 10 | `MOTOR_RIGHT_IN1_CHANNEL` | TB6612FNG **AIN1** | Right motor direction, full-on / full-off |
+| 11 | `MOTOR_LEFT_IN1_CHANNEL` | TB6612FNG **BIN1** | Left motor direction, full-on / full-off |
+| 12 | `MOTOR_LEFT_IN2_CHANNEL` | TB6612FNG **BIN2** | Left motor direction, full-on / full-off |
+| 13 | `MOTOR_LEFT_PWM_CHANNEL` | TB6612FNG **PWMB** | Left motor speed, PWM 0-4095 |
+| 14 | — | *reserved* |  |
+| 15 | — | *reserved* |  |
+
+<!-- END GENERATED -->
 
 100 Hz is a chip-wide compromise — one prescaler serves the servos, the motors and the LEDs. Measured on this build (2026-09-18): the SG90s fitted track at 50, 100 and 125 Hz and **buzz at 200**, stalling against the pulse train instead of following it. 100 sits one rung below the highest rate that worked, because the bench test was unloaded and a loaded servo has less timing margin. `servo freq <hz>` retunes it live without a reflash.
 
