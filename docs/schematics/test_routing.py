@@ -1032,16 +1032,11 @@ def test_no_two_hand_drawn_leads_cross_in_real_circuits(real_circuits):
 
 
 def _wire_lead_contacts(wires, leads, grid):
-    # Pairs with one routed wire and one lead only: measure the mixed set
-    # and take away what each side scores on its own.
-    from metrics import collinear_overlaps, tight_parallel_pairs
-
-    def mixed(count):
-        return count(wires + leads) - count(wires) - count(leads)
+    from metrics import collinear_overlaps, tight_parallel_pairs, wire_lead_pairs
 
     return (
-        mixed(collinear_overlaps),
-        mixed(lambda ws: tight_parallel_pairs(ws, grid)),
+        wire_lead_pairs(collinear_overlaps, wires, leads),
+        wire_lead_pairs(lambda ws: tight_parallel_pairs(ws, grid), wires, leads),
     )
 
 
@@ -1054,10 +1049,9 @@ def test_wire_lead_contacts_are_counted():
 
 
 def test_no_routed_wire_runs_on_or_beside_a_lead_in_real_circuits(real_circuits):
-    # finish()'s ordering score sees routed wires only, and two circuits
-    # draw leads after routing, so neither the plan's lead snapshot nor the
-    # score knows about them. A candidate ordering could therefore trade a
-    # wire-wire pair for a wire-lead one unseen; pin the measured zeros.
+    # finish()'s ordering score counts wire-lead pairs from the leads drawn
+    # before it runs (#593); the lead counts there equal the final drawing's
+    # (16/16, 8/8, 34/34). Pin the measured zeros on the final drawing.
     from metrics import drawing_wires
 
     for name, d in _real_circuit_drawings(real_circuits):
@@ -1272,6 +1266,49 @@ def test_ordering_choice_is_reproducible_across_hash_seeds():
         outputs.append(stdout)
     assert outputs[0] == outputs[1]
     assert '"authored"' not in outputs[0], "robocar_unified no longer reorders"
+
+
+def test_ordering_score_sees_a_tight_pair_against_a_lead(monkeypatch):
+    # finish() draws no lead of its own, but a circuit's hand-drawn leads are
+    # already in the drawing when it chooses an ordering, and a wire a row
+    # beside one reads as a tight pair just like a wire-wire one (#593). Two
+    # candidate orderings are the whole search here: authored routes ``b``
+    # one row from the lead, reversed routes it clear.
+    import routing
+    from metrics import tight_parallel_pairs
+
+    by_name = dict(routing.ORDERINGS)
+    monkeypatch.setattr(
+        routing,
+        "ORDERINGS",
+        (("authored", by_name["authored"]), ("reversed", by_name["reversed"])),
+    )
+    scored = []
+    real_score = routing._order_score
+
+    def spy(wires, grid, *args, **kwargs):
+        scored.append(wires)
+        return real_score(wires, grid, *args, **kwargs)
+
+    monkeypatch.setattr(routing, "_order_score", spy)
+
+    d, router = _free_router()
+    lead = [(0.0, 0.0), (6.0, 0.0)]
+    d.add(elm.Wire("-").at(lead[0]).to(lead[1]))
+    a = router.wire((0.5, 1.0), (1.0, 1.5), net="signal")
+    b = router.wire((0.5, 0.75), (4.5, -0.25), net="signal")
+    router.finish()
+
+    # Precondition: the two candidates tie on wire-wire score alone, so only
+    # the lead term can separate them and the assertion below is not vacuous.
+    wire_only = [real_score(w, router.grid) for w in scored]
+    assert len(wire_only) == 2 and wire_only[0] == wire_only[1]
+
+    wires = [a.points, b.points]
+    grid = router.grid
+    tight = tight_parallel_pairs(wires + [lead], grid) - tight_parallel_pairs(wires, grid)
+    assert tight == 0, f"{router.ordering}: {tight} wire-lead tight pair(s)"
+    assert router.ordering == "reversed"
 
 
 def test_robocar_unified_tight_parallel_pairs_drop_below_baseline(real_circuit):
