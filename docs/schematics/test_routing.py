@@ -11,12 +11,13 @@ from pathlib import Path as FsPath
 
 import schemdraw
 import schemdraw.elements as elm
+from schemdraw.segments import SegmentText
 
 sys.path.insert(0, str(FsPath(__file__).parent))
 sys.path.insert(0, str(FsPath(__file__).parent / "circuits"))
 
 from components import esp32_s3_zero, max98357a  # noqa: E402
-from routing import Router, _BBox  # noqa: E402
+from routing import Path, Router, _BBox  # noqa: E402
 
 
 def _segments_are_orthogonal(points):
@@ -1292,3 +1293,143 @@ def test_robocar_unified_tight_parallel_pairs_drop_below_baseline(real_circuit):
     assert m.collinear_overlaps == 0
     assert m.crossings <= 15
     assert m.total_length <= 298.8345 + 1e-6
+
+
+# Label boxes (#681). schemdraw's SegmentText.get_bbox ignores rotation and
+# treats align=None as bottom-left, while the SVG backend draws align=None
+# centred and rotates about the anchor. The reference below is the backend's own
+# test-mode rectangle, so a box that matches it matches what is rendered.
+
+_PT_TO_UNITS = 2 / 72
+
+
+def _rendered_text_rect(seg):
+    """The <rect> svgtext draws for ``seg`` (already transformed), in drawing units."""
+    from schemdraw.backends import svgtext
+
+    halign, valign = seg.align or ("center", "center")
+    elem = svgtext.text_tosvg(
+        seg.text,
+        0.0,
+        0.0,
+        size=seg.fontsize,
+        halign=halign,
+        valign=valign,
+        rotation=seg.rotation or 0,
+        rotation_mode=seg.rotation_mode or "anchor",
+        testmode=True,
+    )
+    rect = elem.find("rect")
+    x, y = float(rect.get("x")), float(rect.get("y"))
+    w, h = float(rect.get("width")), float(rect.get("height"))
+    x0, y0 = seg.xy
+    # SVG y points down, drawing y points up.
+    return (
+        x0 + x * _PT_TO_UNITS,
+        y0 - (y + h) * _PT_TO_UNITS,
+        x0 + (x + w) * _PT_TO_UNITS,
+        y0 - y * _PT_TO_UNITS,
+    )
+
+
+def _assert_box_matches_rect(box, rect):
+    got = (box.xmin, box.ymin, box.xmax, box.ymax)
+    assert all(abs(g - r) < 1e-6 for g, r in zip(got, rect)), f"{got} != {rect}"
+
+
+def _label_box_of_segment(**kwargs):
+    class _Text(elm.Element):
+        def __init__(self):
+            super().__init__()
+            self.segments.append(SegmentText((3.0, 2.0), "GND", fontsize=10, **kwargs))
+
+    d = schemdraw.Drawing(show=False)
+    d.add(_Text())
+    (label,) = Router(d)._labels()
+    el = d.elements[0]
+    (seg,) = [s for s in el.segments if isinstance(s, SegmentText)]
+    return label.box, seg.xform(el.transform)
+
+
+def test_svg_text_mode_is_text_so_the_reference_rect_is_valid():
+    # With ziamath installed schemdraw draws text as paths and sizes it
+    # differently; text_tosvg's rect would then stop describing the render.
+    assert schemdraw.svgconfig.text == "text"
+
+
+def test_rotated_default_mode_label_box_is_the_rendered_rect():
+    box, seg = _label_box_of_segment(
+        rotation=90, rotation_mode="default", align=("center", "top")
+    )
+    assert box.ymax - box.ymin > box.xmax - box.xmin, "90 degrees makes it tall"
+    _assert_box_matches_rect(box, _rendered_text_rect(seg))
+
+
+def test_rotated_anchor_mode_label_box_is_the_rendered_rect():
+    box, seg = _label_box_of_segment(
+        rotation=90, rotation_mode="anchor", align=("left", "bottom")
+    )
+    assert box.ymax - box.ymin > box.xmax - box.xmin
+    _assert_box_matches_rect(box, _rendered_text_rect(seg))
+
+
+def test_unaligned_label_box_is_centred_like_the_render():
+    # The backend draws align=None as ('center', 'center'); get_bbox reads it as
+    # bottom-left. (text_tosvg's rect is not a valid reference for an unrotated
+    # centred label, so compare with the explicitly centred segment instead.)
+    box, seg = _label_box_of_segment(align=None)
+    centred = SegmentText(seg.xy, seg.text, align=("center", "center"), fontsize=10)
+    xmin, ymin, xmax, ymax = centred.get_bbox()
+    assert (box.xmin, box.ymin, box.xmax, box.ymax) == (xmin, ymin, xmax, ymax)
+    assert box.contains(3.0, 2.0)
+    assert abs((box.xmin + box.xmax) / 2 - 3.0) < 1e-6
+    assert abs((box.ymin + box.ymax) / 2 - 2.0) < 1e-6
+
+
+def test_unaligned_rotated_label_box_is_the_rendered_rect():
+    box, seg = _label_box_of_segment(align=None, rotation=90, rotation_mode="default")
+    assert box.ymax - box.ymin > box.xmax - box.xmin
+    _assert_box_matches_rect(box, _rendered_text_rect(seg))
+
+
+def _rect_is_a_valid_reference(seg):
+    # text_tosvg's test-mode rectangle only follows the render where its
+    # alignment shift applies: rotated text in 'default' mode, or a bottom/base
+    # valign. For an unrotated or 'anchor'-mode top/centre label it sits half a
+    # line or a line above where the text is drawn, so it cannot be compared.
+    valign = (seg.align or ("center", "center"))[1]
+    return (seg.rotation and seg.rotation_mode == "default") or valign in (
+        "bottom",
+        "base",
+    )
+
+
+def test_every_real_circuit_label_box_is_the_rendered_rect(real_circuits):
+    checked = rotated = 0
+    unaligned = []
+    for circuit in real_circuits:
+        # Reuse the router the circuit was measured with: a fresh Router would
+        # register itself on the shared drawing and trip the read-only guard.
+        router = circuit.drawing._routers[0]
+        texts = [
+            s.xform(el.transform)
+            for el in circuit.drawing.elements
+            if not isinstance(el, Path)
+            for s in el.segments
+            if isinstance(s, SegmentText) and s.text.strip()
+        ]
+        labels = router._labels()
+        assert len(labels) == len(texts), circuit.name
+        for label, seg in zip(labels, texts):
+            if _rect_is_a_valid_reference(seg):
+                _assert_box_matches_rect(label.box, _rendered_text_rect(seg))
+                checked += 1
+                rotated += bool(seg.rotation)
+            if seg.align is None:
+                unaligned.append(label.box)
+                assert label.box.contains(*seg.xy), f"{circuit.name} {seg.text!r}"
+                mid = ((label.box.xmin + label.box.xmax) / 2, (label.box.ymin + label.box.ymax) / 2)
+                assert max(abs(mid[0] - seg.xy[0]), abs(mid[1] - seg.xy[1])) < 1e-6
+    assert rotated >= 11, f"expected the rotated pin labels, saw {rotated}"
+    assert checked > rotated
+    assert len(unaligned) >= 3, "the Capacitor '+' marks have align=None"
