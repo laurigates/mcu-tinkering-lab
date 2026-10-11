@@ -2,7 +2,7 @@
 
 ## Architecture
 
-All ESP-IDF projects build inside Docker containers using the shared `espressif/idf:v5.5` image. No local ESP-IDF installation is required.
+All ESP-IDF projects build inside Docker containers using the shared `espressif/idf:v5.4` image. No local ESP-IDF installation is required.
 
 - **Build/clean/menuconfig/shell** run inside the container via `docker compose run`
 - **Flash/monitor** run natively on the host (USB passthrough on macOS is unreliable)

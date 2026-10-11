@@ -9,7 +9,7 @@ services:
         # workspace are owned by the developer, not root. See issue #318.
         USER_UID: ${USER_UID:-1000}
         USER_GID: ${USER_GID:-1000}
-    image: mcu-tinkering-lab/esp-idf:v5.5
+    image: mcu-tinkering-lab/esp-idf:v5.4
     volumes:
       # Mount the entire workspace (build output stays on host for flashing)
       - .:/workspace
@@ -56,8 +56,4 @@ services:
 volumes:
   # Persistent volumes for caching
   esp-idf-tools:
-    # Docker seeds a named volume from the image only when the volume is first
-    # created, and this one is mounted over /opt/esp — where the IDF itself
-    # lives. Version the name with the image tag, or a new image keeps running
-    # the IDF copied out of the old one.
-    name: mcu-tinkering-lab-esp-idf-tools-v5.5
+    name: mcu-tinkering-lab-esp-idf-tools
