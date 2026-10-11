@@ -24,13 +24,13 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Scientific/Engineering :: Physics",
     "Topic :: System :: Hardware",
 ]
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
     # Core simulation framework with 3D visualization
     "spatialmath-python==1.1.18",
@@ -105,7 +105,7 @@ esp32-sim = "main:main"
 esp32-robot-sim = "main:main"
 
 [tool.ruff]
-target-version = "py311"
+target-version = "py312"
 line-length = 100
 extend-exclude = ["migrations", "tests/fixtures"]
 
