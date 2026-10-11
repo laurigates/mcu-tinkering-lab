@@ -212,7 +212,8 @@ router.finish()
   wire length, length inside component bodies (own and foreign), length
   over power/ground tags the wire is not wired to, length through text
   labels it does not own, crossings,
-  tight parallel pairs, collinear overlaps, junctions (routed-wire ends
+  tight parallel pairs, collinear overlaps, near-parallel length (runs two
+  rows apart), shared vertices, junctions (routed-wire ends
   only) and the hops and dots actually drawn — each defined
   exactly in its module docstring and pinned by `test_metrics.py`. Run
   `just schematics::metrics` (`--json` for machine output) before and after
