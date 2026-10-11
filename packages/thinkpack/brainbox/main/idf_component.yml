@@ -2,6 +2,7 @@ dependencies:
   idf:
     version: ">=5.4"
   espressif/led_strip:
-    version: "^3.0.0"
+    # 3.1.0 calls rmt_tx_switch_gpio(), which ESP-IDF 5.4 does not have.
+    version: ">=3.0.0,<3.1.0"
   espressif/mdns:
     version: "^1.8.0"
