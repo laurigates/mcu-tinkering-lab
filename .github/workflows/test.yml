@@ -145,7 +145,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v6.3.0
         with:
-          python-version: '3.11.17'
+          python-version: '3.12.15'
 
       # Pinned: see the `Install uv` step in Code Quality Checks above.
       - name: Install UV
@@ -198,7 +198,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v6.3.0
         with:
-          python-version: '3.11.17'
+          python-version: '3.14.8'
 
       # Pinned: see the `Install uv` step in Code Quality Checks above.
       - name: Install UV

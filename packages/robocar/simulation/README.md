@@ -23,13 +23,13 @@ A comprehensive simulation environment for the ESP32-based robot car with physic
 ✅ WiFi and OTA simulation for ESP32 features
 ✅ Camera simulation with OpenCV
 ✅ Error handling with automatic recovery
-✅ UV package management with Python 3.11
+✅ UV package management with Python 3.12
 
 ## Python Version Requirements
 
-**Important:** This simulation requires Python 3.11+ and uses UV for package management.
+**Important:** This simulation requires Python 3.12+ and uses UV for package management.
 
-- ✅ **Python 3.11**: Fully supported and tested
+- ✅ **Python 3.12**: Fully supported and tested
 - ✅ **Python 3.12/3.13**: Should work (not extensively tested)
 
 ### Quick Setup
@@ -40,7 +40,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Setup simulation environment (creates .venv and installs all dependencies)
 cd robocar-simulation
-uv venv --python 3.11
+uv venv --python 3.12
 uv sync
 ```
 
@@ -81,9 +81,9 @@ That's it! All dependencies are now installed in `.venv/`.
 ## Installation
 
 ### Prerequisites
-**Python 3.11+ and uv package manager required**
+**Python 3.12+ and uv package manager required**
 ```bash
-# Check Python version (3.11+ required)
+# Check Python version (3.12+ required)
 python --version
 
 # Install uv package manager (if not already installed)
@@ -99,14 +99,14 @@ cd robocar/simulation
 python setup_uv.py
 
 # Alternative manual setup
-uv venv --python 3.11
+uv venv --python 3.12
 uv sync --extra dev
 ```
 
 ### Manual Installation (if needed)
 ```bash
-# Create virtual environment with Python 3.11
-uv venv --python 3.11
+# Create virtual environment with Python 3.12
+uv venv --python 3.12
 
 # Install core dependencies from pyproject.toml
 uv sync

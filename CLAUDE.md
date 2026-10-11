@@ -19,7 +19,7 @@ mcu-tinkering-lab/
 │   │   ├── main/                   # Main controller (Heltec WiFi LoRa 32)
 │   │   ├── camera/                 # ESP32-CAM vision (Claude/Ollama/Gemini)
 │   │   ├── unified/                # Single-board XIAO ESP32-S3 Sense consolidation
-│   │   ├── simulation/             # Python 3.11 physics simulation (Pymunk)
+│   │   ├── simulation/             # Python 3.12 physics simulation (Pymunk)
 │   │   ├── docs/                   # Docs and coordination justfile
 │   │   └── components/i2c-protocol/ # Robocar-internal I2C protocol + tests
 │   ├── thinkpack/                  # ESP-NOW mesh of modular companion "boxes"
@@ -70,7 +70,7 @@ mcu-tinkering-lab/
 |-------|-----------|
 | Firmware | C/C++ with ESP-IDF v5.4+ |
 | Build system | CMake (via ESP-IDF), justfile |
-| Simulation | Python 3.11, Pymunk, NumPy |
+| Simulation | Python 3.12, Pymunk, NumPy |
 | Python package manager | uv |
 | C/C++ formatter | clang-format (Google style, 4-space indent) |
 | C/C++ linter | cppcheck |
