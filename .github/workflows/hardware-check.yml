@@ -45,12 +45,12 @@ jobs:
     name: Verify generated Markdown blocks match the hardware join
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
 
       # tools/hardware is stdlib-only but needs tomllib (3.11+).
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v6.3.0
         with:
-          python-version: '3.11'
+          python-version: '3.11.17'
 
       - name: Run the join's unit tests
         run: python3 -m unittest discover -s tools/hardware -t tools
