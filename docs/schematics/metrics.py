@@ -63,6 +63,23 @@ axis-aligned (``test_routing.py`` enforces that); a diagonal is an error.
     Pairs of same-axis segments from two distinct wires on the same line
     (separation zero) whose extents overlap by a positive length — drawn on
     top of each other, which is worse than tight and so counted apart.
+``near_parallel``
+    Total overlap length of same-axis segment pairs from two distinct wires
+    whose separation ``s`` satisfies ``grid < s <= 2 * grid`` — two lattice
+    rows apart, the spacing ``tight_parallel`` does not see (#494). A length,
+    not a count, so a short end adjacency weighs less than a long shared run.
+``shared_vertices``
+    Distinct (wire pair, point) where a corner of one wire lies on another
+    wire at a point that is not that wire's end (#494). Two ends meeting is a
+    shared pin and an end landing on another wire is a T, which ``finish()``
+    dots, so neither counts; a corner touching a corner or a straight run is
+    an undotted, unhopped ``+`` that reads as either.
+``collinear_gaps``
+    Pairs of same-axis segments from two distinct wires on the same line
+    whose extents do not overlap and stop ``0 < gap <= grid`` short of each
+    other (#494): two nets drawn as one line with a hairline break, which
+    reads as a single wire. Ends that touch (gap zero) are a shared point,
+    not a gap, and overlapping runs are ``collinear_overlaps``.
 ``junctions``
     Points where three or more routed-wire *ends* coincide. Only ends: a
     wire ending on another wire's interior (a T) is not counted, and nor is
@@ -222,14 +239,20 @@ def length_over_labels(wires: list[Wire], labels: list[Label]) -> float:
     return total
 
 
-def _wire_pairs(wires: list[Wire]):
-    """Every segment pair drawn from two distinct wires, in input order."""
+def _indexed_wire_pairs(wires: list[Wire]):
+    """``(i, j, a, b)`` for every segment pair of wires ``i < j``, in order."""
     segs = [_segments(w) for w in wires]
     for i in range(len(segs)):
         for j in range(i + 1, len(segs)):
             for a in segs[i]:
                 for b in segs[j]:
-                    yield a, b
+                    yield i, j, a, b
+
+
+def _wire_pairs(wires: list[Wire]):
+    """Every segment pair drawn from two distinct wires, in input order."""
+    for _, _, a, b in _indexed_wire_pairs(wires):
+        yield a, b
 
 
 def crossings(wires: list[Wire]) -> int:
@@ -267,6 +290,97 @@ def collinear_overlaps(wires: list[Wire]) -> int:
     return count
 
 
+# Tolerance of the two #494 rulers below, fixed by the issue so that every
+# attempt and the judge measure the same thing.
+_NEAR_EPS = 1e-9
+
+
+def near_parallel_length(wires: list[Wire], grid: float) -> float:
+    """``near_parallel``: overlap length of distinct-wire pairs 1 < rows <= 2."""
+    total = 0.0
+    for a, b in _wire_pairs(wires):
+        if a.axis != b.axis:
+            continue
+        sep = abs(a.fixed - b.fixed)
+        if not (grid + _NEAR_EPS < sep <= 2 * grid + _NEAR_EPS):
+            continue
+        overlap = _parallel_overlap(a, b)
+        if overlap > _NEAR_EPS:
+            total += overlap
+    return total
+
+
+def _on_polyline(point: Coord, wire: Wire) -> bool:
+    x, y = point
+    for s in _segments(wire):
+        along, across = (x, y) if s.axis == "H" else (y, x)
+        if abs(across - s.fixed) <= _EPS and s.lo - _EPS <= along <= s.hi + _EPS:
+            return True
+    return False
+
+
+def _same_point(a: Coord, b: Coord) -> bool:
+    return abs(a[0] - b[0]) <= _EPS and abs(a[1] - b[1]) <= _EPS
+
+
+def shared_vertex_sites(wires: list[Wire]) -> list[tuple[int, int, Coord]]:
+    """``(i, j, point)`` for every shared vertex: see the module docstring.
+
+    A vertex that is an end of the wire it belongs to never counts: on the
+    other wire's end it is a shared pin end, anywhere else on it a T. So only
+    corners count, and only where the other wire does not end. Sorted, and
+    each (pair, point) once however many corners of the pair meet there.
+    """
+    found: set[tuple[int, int, Coord]] = set()
+    for i, a in enumerate(wires):
+        for j, b in enumerate(wires):
+            if i == j or len(b) < 2:
+                continue
+            for corner in a[1:-1]:
+                if any(_same_point(corner, e) for e in (b[0], b[-1])):
+                    continue  # b ends here: a T (or a pin), which is dotted
+                if _on_polyline(corner, b):
+                    point = (round(corner[0], 6) + 0.0, round(corner[1], 6) + 0.0)
+                    found.add((min(i, j), max(i, j), point))
+    return sorted(found)
+
+
+def shared_vertices(wires: list[Wire]) -> int:
+    """``shared_vertices``: see :func:`shared_vertex_sites`."""
+    return len(shared_vertex_sites(wires))
+
+
+def collinear_gap_sites(
+    wires: list[Wire], grid: float
+) -> list[tuple[int, int, str, float, float]]:
+    """``(i, j, axis, fixed, gap)`` for every collinear gap: see the module
+    docstring. Sorted, one entry per segment pair, rounded to 1e-6."""
+    found = []
+    for i, j, a, b in _indexed_wire_pairs(wires):
+        if a.axis != b.axis or abs(a.fixed - b.fixed) > _EPS:
+            continue
+        gap = max(a.lo, b.lo) - min(a.hi, b.hi)
+        if _EPS < gap <= grid + _EPS:
+            fixed = round(a.fixed, 6) + 0.0
+            found.append((i, j, a.axis, fixed, round(gap, 6) + 0.0))
+    return sorted(found)
+
+
+def collinear_gaps(wires: list[Wire], grid: float) -> int:
+    """``collinear_gaps``: see :func:`collinear_gap_sites`."""
+    return len(collinear_gap_sites(wires, grid))
+
+
+def wire_lead_pairs(count, wires: list[Wire], leads: list[Wire]) -> int:
+    """Pairs ``count`` finds with one routed wire and one lead, no other kind.
+
+    Measures the mixed set and takes away what each side scores on its own,
+    so wire-wire and lead-lead pairs cancel. ``count`` is any one-argument
+    ruler above (bind ``grid`` with a lambda for the tight-pair one).
+    """
+    return count(wires + leads) - count(wires) - count(leads)
+
+
 def junctions(wires: list[Wire]) -> int:
     # Rounding to 6 places merges ends that differ only by float noise
     # (0.1 + 0.2 vs 0.3); drawing coordinates are never that close on purpose.
@@ -295,6 +409,9 @@ class CircuitMetrics:
     junctions: int
     over_tags: float = 0.0
     over_labels: float = 0.0
+    near_parallel: float = 0.0
+    shared_vertices: int = 0
+    collinear_gaps: int = 0
     hops: int = 0
     dots: int = 0
 
@@ -319,6 +436,9 @@ def measure(
         junctions=junctions(wires),
         over_tags=length_over_tags(wires, list(tags)),
         over_labels=length_over_labels(wires, list(labels)),
+        near_parallel=near_parallel_length(wires, grid),
+        shared_vertices=shared_vertices(wires),
+        collinear_gaps=collinear_gaps(wires, grid),
     )
 
 
@@ -396,6 +516,9 @@ _COLUMNS = (
     ("crossings", "crossings"),
     ("tight_par", "tight_parallel"),
     ("collinear", "collinear_overlaps"),
+    ("near_par", "near_parallel"),
+    ("shared_vtx", "shared_vertices"),
+    ("coll_gap", "collinear_gaps"),
     ("junctions", "junctions"),
     ("hops", "hops"),
     ("dots", "dots"),

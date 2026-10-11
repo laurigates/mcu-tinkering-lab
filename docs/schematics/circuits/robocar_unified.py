@@ -211,7 +211,7 @@ def draw(model: HardwareModel | None = None) -> schemdraw.Drawing:
         .label(f"TCA9548A\n0x{value('TCA9548A_ADDR'):02X}", loc="bot", ofst=0.4)
     )
 
-    pca = d.add(
+    pca = parts["pwm"] = d.add(
         pca9685(layout="physical")
         .right()
         .at((mux.center.x - 20, mux.center.y - 3))
@@ -258,7 +258,7 @@ def draw(model: HardwareModel | None = None) -> schemdraw.Drawing:
     # Mux ch1 → SSD1306 OLED. Explicit .right() locks orientation — without
     # it, the OLED inherits the previous element's "up" direction and gets
     # rotated 90°.
-    oled = d.add(
+    oled = parts["oled"] = d.add(
         ssd1306_oled()
         .right()
         .at((mux.center.x + 1, mux.center.y - 12))
@@ -273,7 +273,7 @@ def draw(model: HardwareModel | None = None) -> schemdraw.Drawing:
 
     # MCP23017 on mux ch2, which leaves the mux's right edge at the bottom.
     # Optional hardware: the firmware boots fine without the board fitted.
-    mcp = d.add(
+    mcp = parts["expander"] = d.add(
         mcp23017()
         .right()
         .at((mux.center.x + 10, mux.center.y - 9))
@@ -369,43 +369,43 @@ def draw(model: HardwareModel | None = None) -> schemdraw.Drawing:
     # wires leaving the pads below pay the tag charge if they climb through
     # them and run out along their own rows instead. GND reaches further so
     # its symbol clears the +3V3 label one pad down.
-    _tag(d, xiao["5V"], "right", 0.75, "power", "+5V")
+    _tag(d, xiao["5V"], "right", 0.75, "power", nets.rail("mcu", "5V"))
     _tag(d, xiao["GND"], "right", 1.5, "ground")
-    _tag(d, xiao["3V3"], "right", 0.75, "power", "+3V3")
+    _tag(d, xiao["3V3"], "right", 0.75, "power", nets.rail("mcu", "3V3"))
 
     # Mux power at the top of its left edge.
-    _tag(d, mux.VIN, "left", 0.5, "power", "+3V3")
+    _tag(d, mux.VIN, "left", 0.5, "power", nets.rail("mux", "VIN"))
     _tag(d, mux.GND, "left", 0.5, "ground")
 
     # PCA9685: logic, servo rail and ground come in on the same right-edge
     # header as the I2C feed from the mux; the left header chains onward and
     # is left open. V+ is 5 V. The terminal block (top) is the alternative,
     # reverse-protected V+ input and is not used here.
-    _tag(d, pca["VCC.R5"], "right", 0.5, "power", "+3V3")
-    _tag(d, pca["V+.R6"], "right", 0.5, "power", "+5V")
+    _tag(d, pca["VCC.R5"], "right", 0.5, "power", nets.rail("pwm", "VCC"))
+    _tag(d, pca["V+.R6"], "right", 0.5, "power", nets.rail("pwm", "V+"))
     _tag(d, pca["GND.R1"], "right", 0.5, "ground")
 
     # TB6612FNG: VCC = 3V3 logic, VM = 5V motor supply, at the top of its
     # left edge.
-    _tag(d, tb.VM, "left", 0.5, "power", "+5V")
-    _tag(d, tb.VCC, "left", 0.5, "power", "+3V3")
+    _tag(d, tb.VM, "left", 0.5, "power", nets.rail("motor_driver", "VM"))
+    _tag(d, tb.VCC, "left", 0.5, "power", nets.rail("motor_driver", "VCC"))
     _tag(d, tb["GND.L3"], "left", 0.5, "ground")
 
     # OLED, ultrasonic and MCP23017 have their pins on the left, so their tags
     # extend leftward — going right would draw into the chip body. The OLED's
     # +3V3 label sits beside its tag: above it, the text reached the SDA row
     # and that net's stub ran through it (#641).
-    _tag(d, oled.VCC, "left", 1.0, "power", "+3V3", loc="right")
+    _tag(d, oled.VCC, "left", 1.0, "power", nets.rail("oled", "VCC"), loc="right")
     _tag(d, oled.GND, "left", 1.0, "ground")
-    _tag(d, us.VCC, "right", 1.0, "power", "+3V3")
+    _tag(d, us.VCC, "right", 1.0, "power", nets.rail("ranger", "VCC"))
     _tag(d, us.GND, "right", 1.0, "ground")
-    _tag(d, mcp.VCC, "left", 1.0, "power", "+3V3")
+    _tag(d, mcp.VCC, "left", 1.0, "power", nets.rail("expander", "VCC"))
     _tag(d, mcp.GND, "left", 1.0, "ground")
 
     # Amp power on its bottom header. VIN is 5 V — take a separate feed from
     # the LM2596 regulator's output terminal rather than daisy-chaining off
     # the motor rail, and fit C3's bulk here (SUGGESTED_CAPS, WIRING.md).
-    _tag(d, amp.Vin, "down", 0.5, "power", "+5V")
+    _tag(d, amp.Vin, "down", 0.5, "power", nets.rail("amp", "Vin"))
     _tag(d, amp.GND, "down", 0.5, "ground")
 
     # === Suggested capacitors (#628). ===
@@ -494,6 +494,8 @@ def draw(model: HardwareModel | None = None) -> schemdraw.Drawing:
     # Every MCU net in hardware.toml has now been drawn, or this fails the
     # render naming the one that was not.
     nets.check_all_drawn()
+    # Likewise every drawn part pin hardware.toml puts on a rail has a tag.
+    nets.check_all_tagged()
 
     router.wire(amp["VO-"], spk.in1, net="load")
     router.wire(amp["VO+"], spk.in2, net="load")

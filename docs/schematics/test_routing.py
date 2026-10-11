@@ -6,17 +6,20 @@ the real circuits, so a future circuit edit that breaks routing fails here
 instead of only showing up as a visual glitch in the rendered SVG.
 """
 
+import math
 import sys
 from pathlib import Path as FsPath
 
+import pytest
 import schemdraw
 import schemdraw.elements as elm
+from schemdraw.segments import SegmentText
 
 sys.path.insert(0, str(FsPath(__file__).parent))
 sys.path.insert(0, str(FsPath(__file__).parent / "circuits"))
 
 from components import esp32_s3_zero, max98357a  # noqa: E402
-from routing import Router, _BBox  # noqa: E402
+from routing import Path, Router, _BBox  # noqa: E402
 
 
 def _segments_are_orthogonal(points):
@@ -42,22 +45,39 @@ def _segment_hits_box(p1, p2, box: _BBox) -> bool:
     )
 
 
-def _build_two_chip_drawing():
-    """Two chips with a ~7-unit gap of free space between their facing edges.
+# Free space between the two chips' facing edges in _build_two_chip_drawing().
+_CHIP_GAP = 4.5
 
-    The obstacle coordinates in the tests below are absolute, so they assume
-    that gap. The offset is therefore tied to max98357a()'s body width — when
-    the part was widened from 4 to 6, this had to go from 9 to 10 to keep the
-    amp's left edge at the same x. If a test starts failing because a blocker
-    unexpectedly swallows a pin stub, check that coupling first.
+
+def _box_of(el) -> _BBox:
+    return _BBox(*el.get_bbox(transform=True, includetext=False))
+
+
+def _gap_centre_x(left, right) -> float:
+    """x midway between left's right body edge and right's left body edge."""
+    return (_box_of(left).xmax + _box_of(right).xmin) / 2
+
+
+def _build_two_chip_drawing():
+    """Two chips with a fixed 4.5-unit gap of free space between their facing edges.
+
+    The amp is anchored by its LRC pin, ``_CHIP_GAP`` to the right of the
+    ESP32's GPIO6 pin, so the gap does not change when either symbol is
+    resized. (It used to be a fixed offset from the ESP32's centre, which
+    made the gap depend on both parts' widths: widening the amp from 4 to 6
+    needed the offset to go from 9 to 10.) Tests that place an obstacle in
+    the gap take its x from ``_gap_centre_x``, which reads the two bounding
+    boxes, rather than hardcoding it. Each such test must also assert that
+    its obstacle really blocks the straight path, or a drifted obstacle
+    makes the test pass vacuously.
     """
     d = schemdraw.Drawing(show=False)
     d.config(unit=2.0, fontsize=12)
     esp = d.add(esp32_s3_zero().label("ESP32-S3-Zero", loc="bot", ofst=0.4))
     amp = d.add(
         max98357a()
-        .at((esp.center.x + 10, esp.center.y))
-        .anchor("center")
+        .at((esp.GPIO6[0] + _CHIP_GAP, esp.GPIO6[1]))
+        .anchor("LRC")
         .label("MAX98357A", loc="top", ofst=0.4)
     )
     return d, esp, amp
@@ -85,10 +105,13 @@ def test_wire_avoids_obstacle_placed_between_pins():
     # which makes the goal unreachable — see test_unreachable_goal_fails_fast).
     d.add(
         elm.Ic(pins=[elm.IcPin(name="X", side="L")], size=(1, 1))
-        .at((5.75, esp.GPIO6[1] + 0.2))
+        .at((_gap_centre_x(esp, amp), esp.GPIO6[1] + 0.2))
         .anchor("center")
     )
     blocker_box = _BBox(*d.elements[-1].get_bbox(transform=True, includetext=False))
+    # The detour assertions below only mean something if the naive straight
+    # path is actually blocked.
+    assert _segment_hits_box(esp.GPIO6, amp.LRC, blocker_box)
 
     router = Router(d)
     abspoints = router.wire(esp.GPIO6, amp.LRC, net="i2s").points
@@ -110,7 +133,7 @@ def test_unreachable_goal_fails_fast():
     d, esp, amp = _build_two_chip_drawing()
     d.add(
         elm.Ic(pins=[elm.IcPin(name="X", side="L")], size=(2, 2))
-        .at((esp.center.x + 4.5, esp.center.y + 0.2))
+        .at((_gap_centre_x(esp, amp) + 0.25, esp.center.y + 0.2))
         .anchor("center")
     )
     router = Router(d)
@@ -135,10 +158,6 @@ def test_own_component_is_not_treated_as_an_obstacle():
 
 def _abspoints(el):
     return list(el.polyline)
-
-
-def _box_of(el) -> _BBox:
-    return _BBox(*el.get_bbox(transform=True, includetext=False))
 
 
 def test_wire_does_not_cut_through_its_own_destination_chip():
@@ -1032,16 +1051,11 @@ def test_no_two_hand_drawn_leads_cross_in_real_circuits(real_circuits):
 
 
 def _wire_lead_contacts(wires, leads, grid):
-    # Pairs with one routed wire and one lead only: measure the mixed set
-    # and take away what each side scores on its own.
-    from metrics import collinear_overlaps, tight_parallel_pairs
-
-    def mixed(count):
-        return count(wires + leads) - count(wires) - count(leads)
+    from metrics import collinear_overlaps, tight_parallel_pairs, wire_lead_pairs
 
     return (
-        mixed(collinear_overlaps),
-        mixed(lambda ws: tight_parallel_pairs(ws, grid)),
+        wire_lead_pairs(collinear_overlaps, wires, leads),
+        wire_lead_pairs(lambda ws: tight_parallel_pairs(ws, grid), wires, leads),
     )
 
 
@@ -1054,10 +1068,9 @@ def test_wire_lead_contacts_are_counted():
 
 
 def test_no_routed_wire_runs_on_or_beside_a_lead_in_real_circuits(real_circuits):
-    # finish()'s ordering score sees routed wires only, and two circuits
-    # draw leads after routing, so neither the plan's lead snapshot nor the
-    # score knows about them. A candidate ordering could therefore trade a
-    # wire-wire pair for a wire-lead one unseen; pin the measured zeros.
+    # finish()'s ordering score counts wire-lead pairs from the leads drawn
+    # before it runs (#593); the lead counts there equal the final drawing's
+    # (16/16, 8/8, 34/34). Pin the measured zeros on the final drawing.
     from metrics import drawing_wires
 
     for name, d in _real_circuit_drawings(real_circuits):
@@ -1274,6 +1287,86 @@ def test_ordering_choice_is_reproducible_across_hash_seeds():
     assert '"authored"' not in outputs[0], "robocar_unified no longer reorders"
 
 
+def test_ordering_score_sees_a_tight_pair_against_a_lead(monkeypatch):
+    # finish() draws no lead of its own, but a circuit's hand-drawn leads are
+    # already in the drawing when it chooses an ordering, and a wire a row
+    # beside one reads as a tight pair just like a wire-wire one (#593). Two
+    # candidate orderings are the whole search here: authored routes ``b``
+    # one row from the lead, reversed routes it clear.
+    import routing
+    from metrics import tight_parallel_pairs, wire_lead_pairs
+
+    by_name = dict(routing.ORDERINGS)
+    monkeypatch.setattr(
+        routing,
+        "ORDERINGS",
+        (("authored", by_name["authored"]), ("reversed", by_name["reversed"])),
+    )
+    scored = []
+    real_score = routing._order_score
+
+    def spy(wires, grid, *args, **kwargs):
+        scored.append(wires)
+        return real_score(wires, grid, *args, **kwargs)
+
+    monkeypatch.setattr(routing, "_order_score", spy)
+
+    d, router = _free_router()
+    lead = [(0.0, 0.0), (6.0, 0.0)]
+    d.add(elm.Wire("-").at(lead[0]).to(lead[1]))
+    a = router.wire((0.5, 1.0), (1.0, 1.5), net="signal")
+    b = router.wire((0.5, 0.75), (4.5, -0.25), net="signal")
+    router.finish()
+
+    # Precondition: the two candidates tie on wire-wire score alone, so only
+    # the lead term can separate them and the assertion below is not vacuous.
+    wire_only = [real_score(w, router.grid) for w in scored]
+    assert len(wire_only) == 2 and wire_only[0] == wire_only[1]
+
+    wires = [a.points, b.points]
+    grid = router.grid
+    tight = wire_lead_pairs(lambda ws: tight_parallel_pairs(ws, grid), wires, [lead])
+    assert tight == 0, f"{router.ordering}: {tight} wire-lead tight pair(s)"
+    assert router.ordering == "reversed"
+
+
+def test_ordering_score_sees_a_crossing_against_a_lead(monkeypatch):
+    # The crossing term of the same lead score (#593): the candidates tie on
+    # wire-wire score, and authored crosses the vertical lead where reversed
+    # does not.
+    import routing
+    from metrics import crossings, wire_lead_pairs
+
+    by_name = dict(routing.ORDERINGS)
+    monkeypatch.setattr(
+        routing,
+        "ORDERINGS",
+        (("authored", by_name["authored"]), ("reversed", by_name["reversed"])),
+    )
+    scored = []
+    real_score = routing._order_score
+
+    def spy(wires, grid, *args, **kwargs):
+        scored.append(wires)
+        return real_score(wires, grid, *args, **kwargs)
+
+    monkeypatch.setattr(routing, "_order_score", spy)
+
+    d, router = _free_router()
+    lead = [(1.0, -2.0), (1.0, 3.0)]
+    d.add(elm.Wire("-").at(lead[0]).to(lead[1]))
+    a = router.wire((2.0, 3.0), (3.0, 1.0), net="signal")
+    b = router.wire((2.0, 1.5), (0.5, 3.0), net="signal")
+    router.finish()
+
+    wire_only = [real_score(w, router.grid) for w in scored]
+    assert len(wire_only) == 2 and wire_only[0] == wire_only[1]
+
+    crossed = wire_lead_pairs(crossings, [a.points, b.points], [lead])
+    assert crossed == 0, f"{router.ordering}: {crossed} wire-lead crossing(s)"
+    assert router.ordering == "reversed"
+
+
 def test_robocar_unified_tight_parallel_pairs_drop_below_baseline(real_circuit):
     # The #494 baseline, measured by metrics.py with ordering search off
     # (ORDERINGS cut to "authored"): robocar_unified 0 tight parallel pairs,
@@ -1292,3 +1385,409 @@ def test_robocar_unified_tight_parallel_pairs_drop_below_baseline(real_circuit):
     assert m.collinear_overlaps == 0
     assert m.crossings <= 15
     assert m.total_length <= 298.8345 + 1e-6
+
+
+# Label boxes (#681). schemdraw's SegmentText.get_bbox ignores rotation and
+# treats align=None as bottom-left, while the SVG backend draws align=None
+# centred and rotates about the anchor. The reference below is read off the
+# <text> element text_tosvg emits (anchor, dominant-baseline, transform), i.e.
+# where the glyphs are drawn. It is not the backend's test-mode <rect>: that
+# rectangle sits a line (valign top) or half a line (centre) away from the
+# glyphs, so a box matched to it would be offset from the rendered text.
+
+_PT_TO_UNITS = 2 / 72
+
+
+def _rendered_glyph_box(seg):
+    """Where the glyphs of ``seg`` (already transformed) are drawn, in drawing units."""
+    import re
+
+    from schemdraw.backends import svgtext
+
+    halign, valign = seg.align or ("center", "center")
+    rotation = seg.rotation or 0
+    elem = svgtext.text_tosvg(
+        seg.text,
+        0.0,
+        0.0,
+        size=seg.fontsize,
+        halign=halign,
+        valign=valign,
+        rotation=rotation,
+        rotation_mode=seg.rotation_mode or "anchor",
+    )
+    w, h, _ = svgtext.text_approx_size(seg.text, size=seg.fontsize)
+    size = seg.fontsize
+    x, y_attr = float(elem.get("x")), float(elem.get("y"))
+    # The first tspan is shifted down one line (dy=size) from the text's y and
+    # later ones one line each, so the block spans h from the first line's top.
+    baseline_y = y_attr + size
+    left = {"start": x, "middle": x - w / 2, "end": x - w}[elem.get("text-anchor")]
+    top = {
+        "hanging": baseline_y,
+        "central": baseline_y - size / 2,
+        "ideographic": baseline_y - size,
+    }[elem.get("dominant-baseline")]
+    corners = [(left, top), (left + w, top), (left, top + h), (left + w, top + h)]
+    dx = dy = 0.0
+    angle = 0.0
+    transform = elem.get("transform")
+    if transform:
+        shift = re.search(r"translate\(([-\d.e]+) ([-\d.e]+)\)", transform)
+        if shift:
+            dx, dy = float(shift.group(1)), float(shift.group(2))
+        angle = math.radians(
+            float(re.search(r"rotate\(([-\d.e]+)", transform).group(1))
+        )
+    cos, sin = math.cos(angle), math.sin(angle)
+    # SVG rotate(a) about the origin (the anchor), then translate; y points down.
+    pts = [(px * cos - py * sin + dx, px * sin + py * cos + dy) for px, py in corners]
+    x0, y0 = seg.xy
+    xs = [x0 + px * _PT_TO_UNITS for px, _ in pts]
+    ys = [y0 - py * _PT_TO_UNITS for _, py in pts]
+    return min(xs), min(ys), max(xs), max(ys)
+
+
+def _assert_box_matches_rect(box, rect):
+    got = (box.xmin, box.ymin, box.xmax, box.ymax)
+    assert all(abs(g - r) < 1e-6 for g, r in zip(got, rect)), f"{got} != {rect}"
+
+
+def _label_box_of_segment(**kwargs):
+    class _Text(elm.Element):
+        def __init__(self):
+            super().__init__()
+            self.segments.append(SegmentText((3.0, 2.0), "GND", fontsize=10, **kwargs))
+
+    d = schemdraw.Drawing(show=False)
+    d.add(_Text())
+    (label,) = Router(d)._labels()
+    el = d.elements[0]
+    (seg,) = [s for s in el.segments if isinstance(s, SegmentText)]
+    return label.box, seg.xform(el.transform)
+
+
+def test_svg_text_mode_is_text_so_the_reference_rect_is_valid():
+    # With ziamath installed schemdraw draws text as paths and sizes it
+    # differently; text_tosvg's rect would then stop describing the render.
+    assert schemdraw.svgconfig.text == "text"
+
+
+def test_rotated_default_mode_label_box_is_the_rendered_rect():
+    box, seg = _label_box_of_segment(
+        rotation=90, rotation_mode="default", align=("center", "top")
+    )
+    assert box.ymax - box.ymin > box.xmax - box.xmin, "90 degrees makes it tall"
+    _assert_box_matches_rect(box, _rendered_glyph_box(seg))
+
+
+def test_rotated_anchor_mode_label_box_is_the_rendered_rect():
+    box, seg = _label_box_of_segment(
+        rotation=90, rotation_mode="anchor", align=("left", "bottom")
+    )
+    assert box.ymax - box.ymin > box.xmax - box.xmin
+    _assert_box_matches_rect(box, _rendered_glyph_box(seg))
+
+
+def test_unaligned_label_box_is_centred_like_the_render():
+    # The backend draws align=None as ('center', 'center'); get_bbox reads it as
+    # bottom-left.
+    box, seg = _label_box_of_segment(align=None)
+    _assert_box_matches_rect(box, _rendered_glyph_box(seg))
+    assert box.contains(3.0, 2.0)
+
+
+@pytest.mark.parametrize("valign", ["top", "center", "bottom"])
+@pytest.mark.parametrize("halign", ["left", "center", "right"])
+@pytest.mark.parametrize(
+    ("rotation", "mode"),
+    [(0, "anchor"), (90, "default"), (90, "anchor"), (45, "default")],
+)
+def test_label_box_is_where_the_glyphs_are_drawn(halign, valign, rotation, mode):
+    box, seg = _label_box_of_segment(
+        rotation=rotation, rotation_mode=mode, align=(halign, valign)
+    )
+    _assert_box_matches_rect(box, _rendered_glyph_box(seg))
+
+
+def test_unaligned_rotated_label_box_is_the_rendered_rect():
+    box, seg = _label_box_of_segment(align=None, rotation=90, rotation_mode="default")
+    assert box.ymax - box.ymin > box.xmax - box.xmin
+    _assert_box_matches_rect(box, _rendered_glyph_box(seg))
+
+
+def test_every_real_circuit_label_box_is_the_rendered_rect(real_circuits):
+    checked = rotated = 0
+    unaligned = []
+    for circuit in real_circuits:
+        # Reuse the router the circuit was measured with: a fresh Router would
+        # register itself on the shared drawing and trip the read-only guard.
+        router = circuit.drawing._routers[0]
+        texts = [
+            s.xform(el.transform)
+            for el in circuit.drawing.elements
+            if not isinstance(el, Path)
+            for s in el.segments
+            if isinstance(s, SegmentText) and s.text.strip()
+        ]
+        labels = router._labels()
+        assert len(labels) == len(texts), circuit.name
+        for label, seg in zip(labels, texts):
+            _assert_box_matches_rect(label.box, _rendered_glyph_box(seg))
+            checked += 1
+            rotated += bool(seg.rotation)
+            if seg.align is None:
+                unaligned.append(label.box)
+                assert label.box.contains(*seg.xy), f"{circuit.name} {seg.text!r}"
+                mid = (
+                    (label.box.xmin + label.box.xmax) / 2,
+                    (label.box.ymin + label.box.ymax) / 2,
+                )
+                assert max(abs(mid[0] - seg.xy[0]), abs(mid[1] - seg.xy[1])) < 1e-6
+    assert rotated >= 11, f"expected the rotated pin labels, saw {rotated}"
+    assert checked > rotated
+    assert len(unaligned) >= 3, "the Capacitor '+' marks have align=None"
+
+
+def test_a_pin_on_one_boxs_edge_is_owned_by_that_box_not_an_equal_one_it_is_inside():
+    # #592: two boxes of equal area overlap and pin P lies on B's left edge
+    # but strictly inside A. An area-only tie-break took A (first of the
+    # equals), so P's stub left through B's body.
+    a = _BBox(0.0, 0.0, 2.0, 2.0)
+    b = _BBox(1.0, 0.0, 3.0, 2.0)
+    pin = (1.0, 1.0)
+    router = Router(schemdraw.Drawing())
+    for boxes in ([a, b], [b, a]):
+        owner = router._owning_box(pin, boxes)
+        assert owner is b
+        assert router._exit_direction(pin, owner) == (-1.0, 0.0)
+
+
+def test_every_real_circuit_routes_no_wire_inside_a_component_body(real_circuits):
+    # #674: gamepad_synth's GPIO9 stub left through Piezo B's body (1.48 units).
+    for c in real_circuits:
+        assert c.metrics.inside_any == 0, (
+            f"{c.name}: {c.metrics.inside_any:.2f} units of wire inside bodies"
+        )
+
+
+def test_no_two_labels_overlap_in_real_circuits(real_circuits):
+    # #674: gamepad_synth's bottom-pin labels collided with each other and
+    # with the GND / GPIO7 side labels.
+    import itertools
+
+    for c in real_circuits:
+        # The router the circuit was measured with: a fresh one would register
+        # on the shared drawing and trip the read-only guard.
+        labels = c.drawing._routers[0]._labels()
+        clashes = [
+            (a.text, b.text)
+            for a, b in itertools.combinations(labels, 2)
+            if min(a.box.xmax, b.box.xmax) - max(a.box.xmin, b.box.xmin) > 1e-6
+            and min(a.box.ymax, b.box.ymax) - max(a.box.ymin, b.box.ymin) > 1e-6
+        ]
+        assert not clashes, f"{c.name}: overlapping labels {clashes}"
+
+
+# -- separating crowded segments (#494) -----------------------------------------
+
+_NUDGE_GRID = 0.25
+# A straight wire and a wire whose middle run is two rows above it for 4
+# units: one near-parallel pair. Stepping that run up one row both clears it
+# and shortens the wire, since its neighbours rise from it.
+_STRAIGHT = [(0.0, 0.0), (6.0, 0.0)]
+_HAT = [(0.0, 2.0), (1.0, 2.0), (1.0, 0.5), (5.0, 0.5), (5.0, 2.0), (6.0, 2.0)]
+_HAT_STEPPED = [
+    (0.0, 2.0),
+    (1.0, 2.0),
+    (1.0, 0.75),
+    (5.0, 0.75),
+    (5.0, 2.0),
+    (6.0, 2.0),
+]
+
+
+def _bare_plan(points, obstacles=(), tags=(), labels=()):
+    """A plan for a hand-made polyline whose stub points are its second and
+    second-to-last points, with nothing in the world but the boxes given."""
+    from routing import _Plan
+
+    return _Plan(
+        points[0],
+        points[-1],
+        points[1],
+        points[-2],
+        tuple(obstacles),
+        {},
+        tuple(tags),
+        tuple(labels),
+    )
+
+
+def _nudge(wires, movable, leads=(), bodies=(), **boxes):
+    from routing import _nudge_wires
+
+    plans = {i: _bare_plan(wires[i], **boxes) for i in movable}
+    return _nudge_wires(wires, plans, list(leads), list(bodies), _NUDGE_GRID)
+
+
+def test_nudge_steps_a_run_two_rows_from_another_wire_away_from_it():
+    from metrics import near_parallel_length
+
+    assert near_parallel_length([_STRAIGHT, _HAT], _NUDGE_GRID) == pytest.approx(4.0)
+    out = _nudge([_STRAIGHT, _HAT], movable=[1])
+    assert out == [_STRAIGHT, _HAT_STEPPED]
+    assert near_parallel_length(out, _NUDGE_GRID) == 0
+
+
+def test_nudge_moves_only_wires_it_has_a_plan_for():
+    # Drawn and plan-less wires are scored against, never moved.
+    assert _nudge([_STRAIGHT, _HAT], movable=[]) == [_STRAIGHT, _HAT]
+
+
+def test_nudge_removes_a_corner_on_corner_kiss_without_a_new_crossing():
+    # robocar_unified's mux -> PCA9685 SDA/SCL pair at main: the two nets swap
+    # rows, cross once at x = 3.5, and SDA then turns exactly where SCL does.
+    from metrics import collinear_overlaps, crossings, shared_vertices
+
+    sda = [(4.0, 0.0), (0.0, 0.0), (0.0, -1.0), (-1.0, -1.0)]
+    scl = [(4.0, -1.0), (3.5, -1.0), (3.5, 0.5), (0.0, 0.5), (0.0, 0.0), (-1.0, 0.0)]
+    assert shared_vertices([sda, scl]) == 1 and crossings([sda, scl]) == 1
+    out = _nudge([sda, scl], movable=[0, 1])
+    assert shared_vertices(out) == 0
+    assert crossings(out) == 1
+    assert collinear_overlaps(out) == 0
+
+
+@pytest.mark.parametrize("kind", ["obstacles", "tags", "labels", "bodies"])
+def test_nudge_never_steps_onto_a_box_the_search_respects(kind):
+    # The only improving move lifts the hat's run to y = 0.75; a box on that
+    # row (an obstacle, a foreign tag or label, or a component's inflated
+    # body) refuses it. test_nudge_steps_a_run... is the control: the same
+    # wires without the box do move.
+    box = _BBox(2.5, 0.7, 3.5, 0.8)
+    if kind == "bodies":
+        out = _nudge([_STRAIGHT, _HAT], movable=[1], bodies=[box])
+    else:
+        out = _nudge([_STRAIGHT, _HAT], movable=[1], **{kind: [box]})
+    assert out == [_STRAIGHT, _HAT]
+
+
+def test_nudge_never_invents_a_contact():
+    # A third wire ends on the row the hat's run would step to, so the step
+    # would draw a T (a dotted junction) between two unrelated nets.
+    tee = [(3.0, 3.0), (3.0, 0.75)]
+    assert _nudge([_STRAIGHT, _HAT, tee], movable=[1]) == [_STRAIGHT, _HAT, tee]
+    # A hand-drawn lead ending there refuses it the same way.
+    assert _nudge([_STRAIGHT, _HAT], movable=[1], leads=[tee]) == [_STRAIGHT, _HAT]
+
+
+def test_nudge_never_buys_a_clear_run_with_a_crossing():
+    # Stepping the run up still lowers the score (-4 near, -0.5 length, +4 for
+    # the crossing), but crossings may not rise at all.
+    from metrics import crossings
+
+    post = [(3.0, 0.6), (3.0, 1.5)]
+    assert crossings([_HAT_STEPPED, post]) == 1 and crossings([_HAT, post]) == 0
+    assert _nudge([_STRAIGHT, _HAT, post], movable=[1]) == [_STRAIGHT, _HAT, post]
+
+
+def _swapped_pin_pair():
+    # Two chips whose facing pins swap rows, as robocar_unified's mux ->
+    # PCA9685 SDA/SCL do: each net must cross the other, and the first one
+    # routed runs straight along the row the other's stub ends on.
+    d = schemdraw.Drawing(show=False)
+    d.config(unit=2.0)
+    pins = [elm.IcPin(name="A", side="R"), elm.IcPin(name="B", side="R")]
+    left = d.add(elm.Ic(pins=pins, size=(1.5, 2)))
+    right = d.add(
+        elm.Ic(
+            pins=[elm.IcPin(name="B", side="L"), elm.IcPin(name="A", side="L")],
+            size=(1.5, 2),
+        )
+        .at((left.A[0] + 4.0, left.A[1]))
+        .anchor("B")
+    )
+    router = Router(d)
+    a = router.wire(left.A, right.A, net="i2c")
+    b = router.wire(left.B, right.B, net="i2c")
+    router.finish()
+    return [a.points, b.points]
+
+
+def test_finish_keeps_two_swapping_nets_from_touching(monkeypatch):
+    from metrics import collinear_gaps, crossings, shared_vertices
+
+    # Precondition, so the assertions below have teeth: without the nudge
+    # pass the fixture reproduces the kiss through the whole of finish().
+    monkeypatch.setattr(Router, "_nudge_apart", lambda self: None)
+    assert shared_vertices(_swapped_pin_pair()) == 1
+    monkeypatch.undo()
+
+    wires = _swapped_pin_pair()
+    assert shared_vertices(wires) == 0
+    assert collinear_gaps(wires, _NUDGE_GRID) == 0
+    assert crossings(wires) == 1, "the swap is drawn as one hopped crossing"
+
+
+def test_nudge_opens_a_collinear_gap_to_two_rows():
+    # The SDA/SCL pair once the kiss is gone: SDA turns down at x = 0.25,
+    # a row past SCL's turn at x = 0, so both runs sit on y = 0 with a 0.25
+    # break. Stepping SDA's down-turn one more row right widens it to 0.5
+    # at no cost in length, as its two runs trade 0.25 each.
+    from metrics import collinear_gaps, crossings, shared_vertices
+
+    sda = [(4.0, 0.0), (0.25, 0.0), (0.25, -1.0), (-1.0, -1.0)]
+    scl = [(4.0, -1.0), (3.5, -1.0), (3.5, 1.0), (0.0, 1.0), (0.0, 0.0), (-1.0, 0.0)]
+    assert collinear_gaps([sda, scl], _NUDGE_GRID) == 1
+    # Control: with nothing movable the gap stays, so the pass made the move.
+    assert _nudge([sda, scl], movable=[]) == [sda, scl]
+    out = _nudge([sda, scl], movable=[0, 1])
+    assert out[0] == [(4.0, 0.0), (0.5, 0.0), (0.5, -1.0), (-1.0, -1.0)]
+    assert out[1] == scl
+    assert collinear_gaps(out, _NUDGE_GRID) == 0
+    assert crossings(out) == crossings([sda, scl]) and shared_vertices(out) == 0
+
+
+def test_no_real_circuit_draws_two_nets_as_one_broken_line(real_circuits):
+    # #494: removing robocar_unified's SDA/SCL kiss left SDA's run 0.25 short
+    # of SCL's on one row, and balancebot had two such gaps at main (0.25 and
+    # 0.07 between GPIO pin leads).
+    for c in real_circuits:
+        assert c.metrics.collinear_gaps == 0, (
+            f"{c.name}: {c.metrics.collinear_gaps} collinear gaps"
+        )
+
+
+def test_no_real_circuit_draws_a_corner_on_another_wire(real_circuits):
+    # #494: at main, robocar_unified's mux -> PCA9685 SDA turned down at
+    # (-13.75, -10.0), the very point where SCL turned in to its pin: an
+    # undotted, unhopped "+" that reads as a junction of the two lines.
+    for c in real_circuits:
+        assert c.metrics.shared_vertices == 0, (
+            f"{c.name}: {c.metrics.shared_vertices} shared vertices"
+        )
+
+
+def test_robocar_unified_near_parallel_length_drops_below_baseline(real_circuit):
+    # #494 baseline at main 6626863, before the nudge pass: 21.261167 units of
+    # wire two lattice rows from another net's, five pairs (the XIAO -> mux
+    # I2C pair, both mux -> PCA9685 and mux -> OLED pairs, a motor lead and
+    # the speaker leads). The pass leaves only the speaker leads' 0.71: the
+    # pair is the last segment of one lead and the whole of the other, both
+    # hanging off pins, so neither has an interior segment to move.
+    m = real_circuit("robocar_unified").metrics
+    assert m.near_parallel <= 0.705667 + 1e-6, f"{m.near_parallel} (baseline 21.26)"
+
+
+def test_finish_leaves_occupancy_matching_the_drawn_wires(real_circuits):
+    # A net wired after finish() must route round the nudged geometry, so the
+    # occupancy finish() leaves is rebuilt from the wires as drawn.
+    from routing import _mark_cells
+
+    for c in real_circuits:
+        router = c.drawing._routers[0]
+        expected = {}
+        for w in router._wires:
+            _mark_cells(expected, w.points, router.grid)
+        assert router._occupied == expected, c.name

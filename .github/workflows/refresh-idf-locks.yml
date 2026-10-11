@@ -31,7 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
       # Discovery needs git, regeneration needs ESP-IDF, so the list is made
       # here on the runner and handed to the container as arguments.
@@ -52,7 +52,7 @@ jobs:
       # steps below run anyway to open the PR for those; the job still ends red
       # because this step failed.
       - name: Regenerate locks
-        uses: espressif/esp-idf-ci-action@v1
+        uses: espressif/esp-idf-ci-action@v1.2.0
         with:
           esp_idf_version: ${{ env.IDF_VERSION }}
           command: python3 tools/refresh-idf-locks.py ${{ steps.locks.outputs.dirs }}
@@ -99,14 +99,14 @@ jobs:
       - name: Generate GitHub App token
         id: app-token
         if: ${{ !cancelled() && steps.diff.outputs.changed == 'true' }}
-        uses: actions/create-github-app-token@v3
+        uses: actions/create-github-app-token@v3.2.0
         with:
           app-id: ${{ vars.RELEASE_PLEASE_APP_ID }}
           private-key: ${{ secrets.RELEASE_PLEASE_PRIVATE_KEY }}
 
       - name: Open or update the lock-refresh PR
         if: ${{ !cancelled() && steps.diff.outputs.changed == 'true' }}
-        uses: peter-evans/create-pull-request@v8
+        uses: peter-evans/create-pull-request@v8.1.1
         with:
           token: ${{ steps.app-token.outputs.token }}
           branch: chore/refresh-idf-locks

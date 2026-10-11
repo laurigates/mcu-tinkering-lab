@@ -121,6 +121,16 @@ router.finish()
   `test_no_routed_wire_runs_on_or_beside_a_lead_in_real_circuits` holds
   them there. The drawing order does not change with it, so a handle's
   `.points` can differ after `.finish()` but its place in the SVG cannot.
+  With the ordering chosen, `.finish()` steps crowded segments apart
+  (`routing._nudge_wires`, #494): an interior segment one or two lattice
+  rows from another wire's moves one row away, and a corner lying on
+  another wire (an undotted `+` that reads as a junction) moves off it, as
+  does a run stopping a row or less short of another net's on the same
+  line (two nets drawn as one broken line).
+  A move is kept only if it covers no obstacle, foreign tag or foreign
+  label, touches no wire or lead where it did not before, raises no
+  collinear, tight, crossing or shared-vertex count, and lowers the score
+  above plus near-parallel length, shared vertices and collinear gaps.
   A circuit that forgets `.finish()` fails `render.py`, `metrics.py` and
   the tests with an error naming it, rather than rendering with no wires.
 
@@ -202,7 +212,7 @@ router.finish()
   avoidance, fast failure on an unreachable goal) and re-checks every wire
   every real circuit actually draws. Run every suite with
   `just schematics::test` (or `uv run --group dev pytest`) after touching
-  `routing.py` or any `circuits/*.py`; CI runs the whole directory.
+  `routing.py`, `components.py` or any `circuits/*.py`; CI runs the whole directory.
   Tests that only *read* a real circuit take the `real_circuits` fixture in
   `conftest.py`, which routes each circuit once per session and fails any
   test that changes a shared drawing or its metrics; a test that must route
@@ -212,7 +222,8 @@ router.finish()
   wire length, length inside component bodies (own and foreign), length
   over power/ground tags the wire is not wired to, length through text
   labels it does not own, crossings,
-  tight parallel pairs, collinear overlaps, junctions (routed-wire ends
+  tight parallel pairs, collinear overlaps, near-parallel length (runs two
+  rows apart), shared vertices, collinear gaps, junctions (routed-wire ends
   only) and the hops and dots actually drawn — each defined
   exactly in its module docstring and pinned by `test_metrics.py`. Run
   `just schematics::metrics` (`--json` for machine output) before and after
@@ -298,6 +309,11 @@ channel numbers in its labels come from the same headers. Placement, net order
 and net colour stay in the circuit. After the last MCU wire,
 `nets.check_all_drawn()` fails the render for any `[[nets]]` entry the drawing
 left out, so a net added to `hardware.toml` cannot ship a schematic without it.
+Power tags follow the same split: `nets.rail("pwm", "VCC")` gives the label
+(`+3V3`) from `[[rails]]`, the circuit keeps the tag's anchor and direction, and
+`nets.check_all_tagged()` fails the render for a rail pin on a drawn part that
+has no tag. `SUGGESTED_CAPS` keeps its `rail` field for display;
+`test_power_tags.py` holds it to the join.
 
 ## Freshness check
 

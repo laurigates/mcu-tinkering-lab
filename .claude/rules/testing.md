@@ -10,6 +10,16 @@ uv run pytest tests/ --cov
 - Maintain test coverage for simulation code
 - Run tests before committing Python changes
 
+## Schematics
+
+```bash
+just schematics::test      # router, metrics and symbol tests
+just schematics::metrics   # per-circuit routing metrics; compare against the pins in test_routing.py
+```
+
+Run both after touching `docs/schematics/` (`components.py`, `routing.py`,
+`circuits/*.py`). See [`schematic-layout.md`](schematic-layout.md).
+
 ## C/C++ Firmware
 
 - Static analysis via `cppcheck` (run in CI)

@@ -17,6 +17,8 @@ Blocks:
 
     pin-table         every GPIO pad on the board's header, in silkscreen order
     signals:<part>    the nets landing on one [parts.<part>], in sidecar order
+    channels:<part>   a PWM driver's outputs: every numbered pad of its board page,
+                      with [[channel_nets]] rows wired and the rest reserved (#694)
     power-diagram     [[rails]], the MCU's nets and [[outputs]] as Mermaid (#646)
 
 Usage, from the repo root:
@@ -43,6 +45,7 @@ from pathlib import Path
 
 from .board import BoardPin
 from .errors import HardwareError
+from .layout import parse_layout
 from .model import MCU, REPO_ROOT, SIDECAR, HardwareModel, join
 
 END = "<!-- END GENERATED -->"
@@ -134,6 +137,42 @@ def signals_table(model: HardwareModel, part: str) -> str:
     return _table(["Signal", "Pin", "Function"], rows)
 
 
+def channels_table(model: HardwareModel, part: str, repo_root: Path = REPO_ROOT) -> str:
+    """A PWM driver's outputs, numeric by channel (#694).
+
+    Every pad of the part's board page whose name is a number is a row; a
+    `[[channel_nets]]` entry fills it in, and a pad nothing drives is reserved.
+    A part with no board page lists only the wired channels.
+    """
+    if part not in model.parts:
+        raise HardwareError(
+            f"channels:{part}: part {part!r} is not declared under [parts]"
+        )
+    wired = [c for c in model.channel_nets if c.source == part]
+    if not wired:
+        raise HardwareError(f"channels:{part}: part {part!r} has no channel_nets")
+    numbers = {c.channel for c in wired}
+    board = model.parts[part].board
+    if board:
+        layout = parse_layout(repo_root / board)
+        numbers |= {int(p.name) for p in layout.pads if p.name.isdigit()}
+    rows = []
+    for number in sorted(numbers):
+        nets = [c for c in wired if c.channel == number]
+        if not nets:
+            rows.append([str(number), _DASH, "*reserved*", ""])
+            continue
+        rows.append(
+            [
+                str(number),
+                ", ".join(f"`{c.role}`" for c in nets),
+                ", ".join(f"{model.parts[c.part].name} **{c.pin}**" for c in nets),
+                "; ".join(c.note for c in nets if c.note),
+            ]
+        )
+    return _table(["Ch", "Macro", "Wired to", "Notes"], rows)
+
+
 def _label(text: str) -> str:
     """Mermaid label text: entity codes for the characters that end a label."""
     return text.replace('"', "#quot;").replace("|", "#124;")
@@ -208,7 +247,7 @@ def power_diagram(model: HardwareModel) -> str:
     return "\n".join(lines) + "\n"
 
 
-def render_block(model: HardwareModel, name: str) -> str:
+def render_block(model: HardwareModel, name: str, repo_root: Path = REPO_ROOT) -> str:
     if name == "pin-table":
         return pin_table(model)
     if name == "power-diagram":
@@ -216,9 +255,11 @@ def render_block(model: HardwareModel, name: str) -> str:
     kind, colon, arg = name.partition(":")
     if kind == "signals" and colon and arg:
         return signals_table(model, arg)
+    if kind == "channels" and colon and arg:
+        return channels_table(model, arg, repo_root)
     raise HardwareError(
         f"unknown generated block {name!r}; known: 'pin-table', 'power-diagram', "
-        "'signals:<part>'"
+        "'signals:<part>', 'channels:<part>'"
     )
 
 
@@ -321,7 +362,7 @@ def regenerate(
         old = path.read_text(encoding="utf-8")
         result[path] = (
             old,
-            inject(old, lambda name: render_block(model, name), str(path)),
+            inject(old, lambda name: render_block(model, name, repo_root), str(path)),
         )
     return result
 

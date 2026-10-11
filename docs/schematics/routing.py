@@ -68,6 +68,13 @@ _DIRECTIONS: tuple[Coord, ...] = ((1, 0), (0, 1), (-1, 0), (0, -1))
 # its whole length and squeezed the bus into adjacent rows wherever it could
 # not afford to spread to three. The tiers count lattice cells, not drawing
 # units, so a finer grid may want one more; re-measure with metrics.py first.
+# Runs two rows apart are separated after routing instead, by finish()'s
+# nudge pass (_nudge_wires), which scores the finished set's near-parallel
+# length rather than taxing every cell beside a wire. With that pass in
+# place a second tier of 0.01, 0.03, 0.05, 0.08 or 0.12 was re-measured, and
+# each one still raised balancebot from 2 crossings to 6; from 0.03 up it
+# also gave robocar_unified a tight pair, a collinear overlap and two shared
+# vertices.
 _NEIGHBOUR_FRACTIONS: tuple[float, ...] = (0.25,)
 
 # Charge per lattice point on or inside a foreign power/ground tag (#591), in
@@ -114,6 +121,59 @@ class _BBox:
             self.xmin - epsilon <= x <= self.xmax + epsilon
             and self.ymin - epsilon <= y <= self.ymax + epsilon
         )
+
+
+def _text_box(seg: SegmentText) -> _BBox:
+    """The box ``seg`` occupies once drawn (``seg`` already in drawing coordinates).
+
+    ``SegmentText.get_bbox`` ignores rotation and reads ``align=None`` as
+    bottom-left, but the SVG backend draws ``align=None`` centred and rotates
+    the text about its anchor (#681). ``get_bbox`` for the effective alignment
+    is where the glyphs sit unrotated. This rotates that box about the anchor
+    and, in ``'default'`` rotation mode, applies the translation
+    ``schemdraw.backends.svgtext.text_tosvg`` computes. That translation comes
+    from the backend's own test rectangle, which sits one line (valign top) or
+    half a line (centre) above the glyphs, so the rectangle is rebuilt here and
+    its shift applied to the glyph box.
+    """
+    halign, valign = seg.align or ("center", "center")
+    aligned = SegmentText(
+        seg.xy,
+        seg.text,
+        align=(halign, valign),
+        fontsize=seg.fontsize,
+        font=seg.font,
+        mathfont=seg.mathfont,
+    )
+    xmin, ymin, xmax, ymax = aligned.get_bbox()
+    rotation = seg.rotation or 0
+    if not rotation:
+        return _BBox(xmin, ymin, xmax, ymax)
+    x0, y0 = seg.xy
+    cos, sin = math.cos(math.radians(rotation)), math.sin(math.radians(rotation))
+
+    def bounds(box: tuple[float, float, float, float]) -> tuple[float, ...]:
+        corners = [
+            (
+                x0 + (x - x0) * cos - (y - y0) * sin,
+                y0 + (x - x0) * sin + (y - y0) * cos,
+            )
+            for x in (box[0], box[2])
+            for y in (box[1], box[3])
+        ]
+        xs = [c[0] for c in corners]
+        ys = [c[1] for c in corners]
+        return min(xs), min(ys), max(xs), max(ys)
+
+    gx0, gy0, gx1, gy1 = bounds((xmin, ymin, xmax, ymax))
+    if (seg.rotation_mode or "anchor") == "default":
+        line = seg.fontsize * 2 / 72  # one line of text, in drawing units
+        lift = {"top": line, "center": line / 2}.get(valign, 0.0)
+        rx0, ry0, rx1, ry1 = bounds((xmin, ymin + lift, xmax, ymax + lift))
+        dx = {"left": x0 - rx0, "center": x0 - (rx0 + rx1) / 2}.get(halign, x0 - rx1)
+        dy = {"top": y0 - ry1, "center": y0 - (ry0 + ry1) / 2}.get(valign, y0 - ry0)
+        gx0, gx1, gy0, gy1 = gx0 + dx, gx1 + dx, gy0 + dy, gy1 + dy
+    return _BBox(gx0, gy0, gx1, gy1)
 
 
 @dataclass(frozen=True)
@@ -669,19 +729,32 @@ class Router:
                 self._tag(el, leads) if isinstance(el, (elm.Vdd, elm.Ground)) else None
             )
             for seg in texts:
-                box = _BBox(*seg.xform(el.transform).get_bbox())
+                box = _text_box(seg.xform(el.transform))
                 labels.append(_Label(box, seg.text, tag))
         return labels
 
     def _owning_box(self, point: Coord, boxes: list[_BBox]) -> _BBox | None:
+        """The box ``point`` is a pin of: one whose edge it lies on, else the smallest.
+
+        Overlapping boxes can all contain a pin, but a pin sits on the edge of
+        its own component, so an edge hit outranks area. Area alone picks a
+        neighbour's box on a tie and sends the stub out through its body (#592).
+        """
         x, y = point
         best = None
-        best_area = math.inf
+        best_key = (True, math.inf)
         for box in boxes:
             if box.contains(x, y):
+                edge = min(
+                    abs(x - box.xmin),
+                    abs(x - box.xmax),
+                    abs(y - box.ymin),
+                    abs(y - box.ymax),
+                )
                 area = (box.xmax - box.xmin) * (box.ymax - box.ymin)
-                if area < best_area:
-                    best, best_area = box, area
+                key = (edge > 1e-6, area)
+                if key < best_key:
+                    best, best_key = box, key
         return best
 
     def _exit_direction(self, point: Coord, box: _BBox) -> Coord:
@@ -1040,8 +1113,9 @@ class Router:
         call more than once. Returns the Paths it added.
 
         Before drawing, it re-routes those wires in the best of a fixed list
-        of net orderings (:meth:`_choose_order`); already-drawn wires are
-        never moved, only routed around.
+        of net orderings (:meth:`_choose_order`) and then steps crowded
+        segments apart (:meth:`_nudge_apart`); already-drawn wires are never
+        moved, only routed around.
 
         This is where the finished set is marked up: each wire is drawn with
         its hops (:func:`_hop_sites`) and in its class colour, then a
@@ -1053,6 +1127,7 @@ class Router:
         the element list it sits — and so the SVG paint order — never moves.
         """
         self._choose_order()
+        self._nudge_apart()
         polylines = [w.points for w in self._wires]
         leads = self._leads()
         sites = _hop_sites(polylines, [pts for pts, _ in leads])
@@ -1120,9 +1195,14 @@ class Router:
         and the SVG's paint order does not move with the chosen ordering.
         The authored candidate reproduces wire()'s own result exactly when
         every undrawn wire has a plan, so a batch no candidate improves is
-        left precisely as routed. A plan-less undrawn wire is the exception:
-        it sits in ``fixed``, so even batch wires recorded before it route
-        round it here, which wire() did not do. No circuit creates one.
+        left precisely as routed by this step. A plan-less undrawn wire is
+        the exception: it sits in ``fixed``, so even batch wires recorded
+        before it route round it here, which wire() did not do. No circuit
+        creates one.
+        finish() then runs :meth:`_nudge_apart` on the result, which may
+        still move segments of a batch no ordering improved: what finish()
+        draws equals wire()'s polylines only where no segment had a reason
+        or a legal move to step apart (#494).
         """
         # A wire without a plan cannot be re-routed, so it stays where it is
         # and every candidate routes round it, exactly like a drawn one.
@@ -1141,6 +1221,10 @@ class Router:
         for points in fixed:
             _mark_cells(base, points, self.grid)
 
+        # Hand-drawn leads are in the drawing already, and finish() hops and
+        # dots them like any wire, so a candidate that lays a wire along one
+        # is as bad as one that crowds another wire (#593).
+        leads = [pts for pts, _ in self._leads()]
         best = None
         tried: list[tuple[int, ...]] = []
         for name, key in ORDERINGS:
@@ -1153,7 +1237,7 @@ class Router:
             for i in order:
                 routed[i] = self._route(batch[i]._plan, occupied)
                 _mark_cells(occupied, routed[i], self.grid)
-            score = _order_score(fixed + routed, self.grid)
+            score = _order_score(fixed + routed, self.grid, leads)
             if best is None or score < best[0]:
                 best = (score, name, routed, occupied)
         # ORDERINGS is non-empty and its first entry, the authored order, can
@@ -1162,6 +1246,39 @@ class Router:
         _, self.ordering, routed, self._occupied = best
         for w, points in zip(batch, routed):
             w.points = points
+
+    def _nudge_apart(self) -> None:
+        """Step crowded segments of the undrawn wires one lattice row apart (#494).
+
+        A* charges the row beside a wire but not the one two rows out, and it
+        cannot see that its corner lands on another net's stub point. Both
+        are properties of the finished set, so they are fixed here, after
+        the ordering is chosen: see :func:`_nudge_wires` for the moves and
+        the rules a move must pass. Drawn and plan-less wires are scored
+        against but never moved, as in :meth:`_choose_order`.
+        """
+        movable = [
+            i
+            for i, w in enumerate(self._wires)
+            if w.element is None and w._plan is not None
+        ]
+        if not movable:
+            return
+        wires = [list(w.points) for w in self._wires]
+        plans = {i: self._wires[i]._plan for i in movable}
+        leads = [pts for pts, _ in self._leads()]
+        bodies = tuple(b.inflated(self.clearance) for b in self._component_boxes())
+        nudged = _nudge_wires(wires, plans, leads, bodies, self.grid)
+        if nudged == wires:
+            return
+        for i in movable:
+            self._wires[i].points = nudged[i]
+        # Rebuilt from wire points alone, as _choose_order() does, so the
+        # next wire() routes round the nudged geometry, not the old one.
+        occupied: _Occupancy = {}
+        for points in nudged:
+            _mark_cells(occupied, points, self.grid)
+        self._occupied = occupied
 
     def _leads(self) -> list[tuple[list[Coord], str]]:
         """Absolute polyline and colour of every hand-drawn lead in ``d``.
@@ -1225,27 +1342,294 @@ _SCORE_TIGHT = 20.0
 _SCORE_CROSSING = 4.0
 
 
-def _order_score(wires: list[list[Coord]], grid: float) -> float:
-    """Weighted badness of a finished set of wires, by metrics.py's rulers.
+def _score_terms(
+    wires: list[list[Coord]], grid: float, leads: Sequence[list[Coord]] = ()
+) -> tuple[int, int, int, float]:
+    """``(collinear, tight, crossings, length)`` of a finished set of wires.
+
+    The counts are metrics.py's rulers over the wires plus the pairs with
+    one wire and one lead (``leads`` are the hand-drawn polylines already in
+    the drawing); lead-lead pairs are the same whatever the router does, so
+    they are left out rather than scored.
 
     Imported here rather than at module level because metrics.py imports
-    this module. Rounded so that float noise in the length sum can never
-    decide a tie that the candidate order is meant to break.
+    this module.
     """
     from metrics import (
         collinear_overlaps,
         crossings,
         tight_parallel_pairs,
         total_length,
+        wire_lead_pairs,
     )
 
+    def tight(ws):
+        return tight_parallel_pairs(ws, grid)
+
+    leads = list(leads)
+    collinear = collinear_overlaps(wires)
+    tight_pairs = tight(wires)
+    crossed = crossings(wires)
+    if leads:
+        collinear += wire_lead_pairs(collinear_overlaps, wires, leads)
+        tight_pairs += wire_lead_pairs(tight, wires, leads)
+        crossed += wire_lead_pairs(crossings, wires, leads)
+    return collinear, tight_pairs, crossed, total_length(wires)
+
+
+def _order_score(
+    wires: list[list[Coord]], grid: float, leads: Sequence[list[Coord]] = ()
+) -> float:
+    """Weighted badness of a finished set of wires, by metrics.py's rulers.
+
+    The terms are :func:`_score_terms`. Rounded so that float noise in the
+    length sum can never decide a tie that the candidate order is meant to
+    break.
+    """
+    collinear, tight_pairs, crossed, length = _score_terms(wires, grid, leads)
     return round(
-        _SCORE_COLLINEAR * collinear_overlaps(wires)
-        + _SCORE_TIGHT * tight_parallel_pairs(wires, grid)
-        + _SCORE_CROSSING * crossings(wires)
-        + total_length(wires),
+        _SCORE_COLLINEAR * collinear
+        + _SCORE_TIGHT * tight_pairs
+        + _SCORE_CROSSING * crossed
+        + length,
         6,
     )
+
+
+# -- separating crowded segments (#494) -----------------------------------------
+
+# Weights the nudge pass adds to _order_score's, in drawing units of length.
+# One step moves a segment one lattice row, which lengthens its wire by at
+# most two rows (0.5 at the default grid) when both neighbours sit on the far
+# side, so at 1.0 a near-parallel run is stepped away from only where it
+# shares more than that: robocar_unified's 5.5-unit bus pairs are, a 0.25
+# end adjacency is not.
+_NUDGE_NEAR = 1.0
+# A corner lying on another wire is an undotted, unhopped "+" that reads as a
+# junction. It outranks everything but a collinear overlap; the pass never
+# pays for its removal with a tight pair or a crossing anyway, since those
+# may not rise at all (see _nudge_wires).
+_NUDGE_SHARED = 100.0
+# Two nets on one line stopping a row or less short of each other read as a
+# single wire with a hairline break. Removing the kiss above made one in
+# robocar_unified (SDA's run ended 0.25 short of SCL's), and balancebot had
+# two already. Weighted as a tight pair, which it reads like. Measured at 20,
+# 30 and 50 the result is the same; at 1, 5 and 10 balancebot keeps one gap
+# and takes 0.64 units of near-parallel run for a tight pair instead.
+_NUDGE_GAP = _SCORE_TIGHT
+
+
+def _nudge_wires(
+    wires: list[list[Coord]],
+    plans: dict[int, _Plan],
+    leads: Sequence[list[Coord]],
+    bodies: Sequence[_BBox],
+    grid: float,
+) -> list[list[Coord]]:
+    """``wires`` with crowded interior segments stepped apart, one row per move.
+
+    A *move* shifts one interior segment of a wire in ``plans`` — not the
+    first or last, which hang off pins — one lattice step perpendicular to
+    itself, dragging its two perpendicular neighbours longer or shorter.
+    Candidates come from :func:`_nudge_candidates`: a segment one or two rows
+    from a same-axis segment of another wire steps away from it, a segment
+    ending on a shared vertex steps either way, and a segment collinear with
+    another wire's and a row or less short of it steps either way, as does
+    the perpendicular segment closing that end, away from the gap.
+
+    A move is accepted only if all of these hold:
+
+    - neither neighbour shrinks to nothing, so the wire keeps its shape;
+    - the ground it newly covers is clear of the plan's obstacles, foreign
+      tags and foreign labels, and of every component body inflated by the
+      router's clearance (``bodies``), edges included. These are the boxes
+      the search blocks (obstacles) or charges (tags, labels), as a hard
+      rule here, so in_any, over_tags and over_labels cannot rise. A
+      pin's stub lead may get shorter than ``Router.stub``, but
+      never short enough to end inside its own chip's clearance, which is
+      all ``_stub_point`` says the stub is for;
+    - the moved wire touches no wire or lead at a point it did not touch
+      before, so no move invents a junction, T or kiss;
+    - collinear overlaps, tight pairs, crossings (wire-lead pairs included)
+      and shared vertices do not rise, each on its own;
+    - and the score — :func:`_order_score`'s terms plus ``_NUDGE_NEAR`` per
+      unit of near-parallel overlap, ``_NUDGE_SHARED`` per shared vertex and
+      ``_NUDGE_GAP`` per collinear gap — strictly falls.
+
+    Each round applies the best accepted move, the first candidate winning a
+    tie, and the pass stops when none is accepted. The score strictly falls
+    every round over finitely many lattice positions, so it terminates;
+    every choice is a list walked in a fixed order, so it is deterministic.
+    """
+    from metrics import collinear_gaps, near_parallel_length, shared_vertex_sites
+
+    leads = list(leads)
+
+    def evaluate(ws: list[list[Coord]]) -> tuple[float, tuple[int, ...]]:
+        collinear, tight_pairs, crossed, length = _score_terms(ws, grid, leads)
+        shared = len(shared_vertex_sites(ws))
+        score = round(
+            _SCORE_COLLINEAR * collinear
+            + _SCORE_TIGHT * tight_pairs
+            + _SCORE_CROSSING * crossed
+            + length
+            + _NUDGE_NEAR * near_parallel_length(ws, grid)
+            + _NUDGE_SHARED * shared
+            + _NUDGE_GAP * collinear_gaps(ws, grid),
+            6,
+        )
+        return score, (collinear, tight_pairs, crossed, shared)
+
+    wires = [list(w) for w in wires]
+    score, guard = evaluate(wires)
+    while True:
+        best = None
+        for i, k, sign in _nudge_candidates(wires, plans, grid):
+            moved = _step_segment(wires[i], k, sign * grid)
+            if moved is None or not _territory_clear(
+                wires[i], moved, k, plans[i], bodies
+            ):
+                continue
+            others = [w for j, w in enumerate(wires) if j != i] + leads
+            if not all(_contacts(moved, o) <= _contacts(wires[i], o) for o in others):
+                continue
+            trial = [*wires[:i], moved, *wires[i + 1 :]]
+            s, g = evaluate(trial)
+            if s >= score or any(n > o for n, o in zip(g, guard)):
+                continue
+            if best is None or s < best[0]:
+                best = (s, g, i, moved)
+        if best is None:
+            return wires
+        score, guard, i, moved = best
+        wires[i] = moved
+
+
+def _nudge_candidates(
+    wires: list[list[Coord]], plans: dict[int, _Plan], grid: float
+) -> list[tuple[int, int, int]]:
+    """``(wire, segment, sign)`` moves worth trying, deduplicated, in order.
+
+    ``segment`` indexes the segment's first point, and ``sign`` is the
+    direction along the perpendicular axis (+1 up or right). Only interior
+    segments of wires in ``plans`` move.
+    """
+    from metrics import shared_vertex_sites
+
+    segs = [list(_axis_segments(w)) for w in wires]
+
+    def interior(i: int):
+        n = len(wires[i])
+        return [s for s in segs[i] if 1 <= s[0] <= n - 3]
+
+    # A dict as an insertion-ordered set: candidates are tried in the order
+    # found, never in hash order.
+    found: dict[tuple[int, int, int], None] = {}
+    for i in plans:
+        for k, axis, fixed, lo, hi in interior(i):
+            for j, other in enumerate(segs):
+                if j == i:
+                    continue
+                for _, o_axis, o_fixed, o_lo, o_hi in other:
+                    sep = fixed - o_fixed
+                    if (
+                        o_axis == axis
+                        and _EPS < abs(sep) <= 2 * grid + _EPS
+                        and min(hi, o_hi) - max(lo, o_lo) > _EPS
+                    ):
+                        found[(i, k, 1 if sep > 0 else -1)] = None
+    for i in plans:
+        n = len(wires[i])
+        for k, axis, fixed, lo, hi in segs[i]:
+            for j, other in enumerate(segs):
+                if j == i:
+                    continue
+                for _, o_axis, o_fixed, o_lo, o_hi in other:
+                    gap = max(lo, o_lo) - min(hi, o_hi)
+                    if (
+                        o_axis != axis
+                        or abs(o_fixed - fixed) > _EPS
+                        or not _EPS < gap <= grid + _EPS
+                    ):
+                        continue
+                    if 1 <= k <= n - 3:
+                        found[(i, k, 1)] = None
+                        found[(i, k, -1)] = None
+                    # The neighbour closing the end that faces the gap sets
+                    # where the run stops; it steps back from the gap.
+                    ahead = o_lo >= hi - _EPS
+                    end = hi if ahead else lo
+                    along = 0 if axis == "H" else 1
+                    nb = k + 1 if abs(wires[i][k + 1][along] - end) <= _EPS else k - 1
+                    if 1 <= nb <= n - 3:
+                        found[(i, nb, -1 if ahead else 1)] = None
+    for a, b, point in shared_vertex_sites(wires):
+        for i in (a, b):
+            if i not in plans:
+                continue
+            for k, *_ in interior(i):
+                if _same(point, wires[i][k]) or _same(point, wires[i][k + 1]):
+                    found[(i, k, 1)] = None
+                    found[(i, k, -1)] = None
+    return list(found)
+
+
+def _step_segment(points: list[Coord], k: int, delta: float) -> list[Coord] | None:
+    """``points`` with segment ``k`` shifted ``delta`` across itself, or None.
+
+    None when a neighbouring segment would shrink to nothing, which would
+    merge two runs and change the wire's shape rather than its spacing.
+    """
+    (ax, ay), (bx, by) = points[k], points[k + 1]
+    if abs(ay - by) <= _EPS:  # horizontal: shift along y
+        a, b = (ax, round(ay + delta, 6) + 0.0), (bx, round(by + delta, 6) + 0.0)
+    else:
+        a, b = (round(ax + delta, 6) + 0.0, ay), (round(bx + delta, 6) + 0.0, by)
+    if _same(a, points[k - 1]) or _same(b, points[k + 2]):
+        return None
+    return [*points[:k], a, b, *points[k + 2 :]]
+
+
+def _territory_clear(
+    old: list[Coord],
+    new: list[Coord],
+    k: int,
+    plan: _Plan,
+    bodies: Sequence[_BBox],
+) -> bool:
+    """True if the ground segment ``k``'s move newly covers is all legal.
+
+    That ground is the moved segment and the two runs joining its old ends
+    to its new ones (each either an extension of a neighbour or ground the
+    neighbour gives up, which was legal already). It must not touch, edges
+    included, an obstacle of the plan, a foreign tag or label, or any of
+    ``bodies`` (every component's inflated box, the pin's own chip
+    included, which the plan's obstacles may leave out).
+    """
+    runs = [(old[k], new[k]), (new[k], new[k + 1]), (new[k + 1], old[k + 1])]
+    boxes = (*plan.obstacles, *plan.tags, *plan.labels, *bodies)
+    return not any(_run_meets_box(a, b, box) for a, b in runs for box in boxes)
+
+
+def _run_meets_box(a: Coord, b: Coord, box: _BBox) -> bool:
+    """Whether axis-aligned run ``a``-``b`` touches closed ``box``."""
+    x0, x1 = sorted((a[0], b[0]))
+    y0, y1 = sorted((a[1], b[1]))
+    return (
+        x1 >= box.xmin - _EPS
+        and x0 <= box.xmax + _EPS
+        and y1 >= box.ymin - _EPS
+        and y0 <= box.ymax + _EPS
+    )
+
+
+def _contacts(a: list[Coord], b: list[Coord]) -> set[Coord]:
+    """Every vertex of either polyline lying on the other, rounded.
+
+    Only ever compared as a set, never iterated into output.
+    """
+    points = [p for p in a if _on_wire(p, b)] + [p for p in b if _on_wire(p, a)]
+    return {(round(x, 6) + 0.0, round(y, 6) + 0.0) for x, y in points}
 
 
 def assert_finished(d) -> None:

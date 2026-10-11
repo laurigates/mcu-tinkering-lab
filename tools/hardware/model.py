@@ -62,6 +62,11 @@ can.
 
 `[[undrawn]]` is an array of tables rather than ADR-021's `undrawn = [...]`
 key: written after a `[[nets]]` block, that key would belong to the last net.
+
+Every pin role in `header` must be on a `[[nets]]` entry or listed under
+`[[undrawn]]`; `join()` raises naming each one that is neither (#460). The check
+covers pin roles only: channel roles (`*_CHANNEL`) are not required to be wired,
+since some, such as `MOTOR_FIRST_CHANNEL`, are aliases the firmware reads.
 """
 
 from __future__ import annotations
@@ -475,6 +480,17 @@ def join(project_dir: Path, repo_root: Path = REPO_ROOT) -> HardwareModel:
         if any(u.role == role for u in undrawn):
             raise HardwareError(f"{where}: role {role!r} is excused twice")
         undrawn.append(Undrawn(role=role, why=_require(where, table, "why")))
+
+    # Completeness (#460): every pin role in `header` is drawn or excused, so a
+    # macro added to pin_config.h cannot pass every gate while on no net. Pin
+    # roles only; channel roles (a PWM driver's outputs) are out of scope.
+    missing = sorted(set(roles) - wired - {u.role for u in undrawn})
+    if missing:
+        listing = ", ".join(f"{r} (GPIO{roles[r]})" for r in missing)
+        raise HardwareError(
+            f"{sidecar}: pin role(s) on no net and not excused: {listing}. "
+            f"Add a [[nets]] entry for each, or list it under [[undrawn]] with a `why`"
+        )
 
     channel_nets = _channel_nets(
         sidecar,
