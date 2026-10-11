@@ -70,7 +70,11 @@ _DIRECTIONS: tuple[Coord, ...] = ((1, 0), (0, 1), (-1, 0), (0, -1))
 # units, so a finer grid may want one more; re-measure with metrics.py first.
 # Runs two rows apart are separated after routing instead, by finish()'s
 # nudge pass (_nudge_wires), which scores the finished set's near-parallel
-# length rather than taxing every cell beside a wire.
+# length rather than taxing every cell beside a wire. With that pass in
+# place a second tier of 0.01, 0.03, 0.05, 0.08 or 0.12 was re-measured, and
+# each one still raised balancebot from 2 crossings to 6; from 0.03 up it
+# also gave robocar_unified a tight pair, a collinear overlap and two shared
+# vertices.
 _NEIGHBOUR_FRACTIONS: tuple[float, ...] = (0.25,)
 
 # Charge per lattice point on or inside a foreign power/ground tag (#591), in
@@ -1406,6 +1410,13 @@ _NUDGE_NEAR = 1.0
 # pays for its removal with a tight pair or a crossing anyway, since those
 # may not rise at all (see _nudge_wires).
 _NUDGE_SHARED = 100.0
+# Two nets on one line stopping a row or less short of each other read as a
+# single wire with a hairline break. Removing the kiss above made one in
+# robocar_unified (SDA's run ended 0.25 short of SCL's), and balancebot had
+# two already. Weighted as a tight pair, which it reads like. Measured at 20,
+# 30 and 50 the result is the same; at 1, 5 and 10 balancebot keeps one gap
+# and takes 0.64 units of near-parallel run for a tight pair instead.
+_NUDGE_GAP = _SCORE_TIGHT
 
 
 def _nudge_wires(
@@ -1421,8 +1432,10 @@ def _nudge_wires(
     first or last, which hang off pins — one lattice step perpendicular to
     itself, dragging its two perpendicular neighbours longer or shorter.
     Candidates come from :func:`_nudge_candidates`: a segment one or two rows
-    from a same-axis segment of another wire steps away from it, and a
-    segment ending on a shared vertex steps either way.
+    from a same-axis segment of another wire steps away from it, a segment
+    ending on a shared vertex steps either way, and a segment collinear with
+    another wire's and a row or less short of it steps either way, as does
+    the perpendicular segment closing that end, away from the gap.
 
     A move is accepted only if all of these hold:
 
@@ -1440,15 +1453,15 @@ def _nudge_wires(
     - collinear overlaps, tight pairs, crossings (wire-lead pairs included)
       and shared vertices do not rise, each on its own;
     - and the score — :func:`_order_score`'s terms plus ``_NUDGE_NEAR`` per
-      unit of near-parallel overlap and ``_NUDGE_SHARED`` per shared vertex
-      — strictly falls.
+      unit of near-parallel overlap, ``_NUDGE_SHARED`` per shared vertex and
+      ``_NUDGE_GAP`` per collinear gap — strictly falls.
 
     Each round applies the best accepted move, the first candidate winning a
     tie, and the pass stops when none is accepted. The score strictly falls
     every round over finitely many lattice positions, so it terminates;
     every choice is a list walked in a fixed order, so it is deterministic.
     """
-    from metrics import near_parallel_length, shared_vertex_sites
+    from metrics import collinear_gaps, near_parallel_length, shared_vertex_sites
 
     leads = list(leads)
 
@@ -1461,7 +1474,8 @@ def _nudge_wires(
             + _SCORE_CROSSING * crossed
             + length
             + _NUDGE_NEAR * near_parallel_length(ws, grid)
-            + _NUDGE_SHARED * shared,
+            + _NUDGE_SHARED * shared
+            + _NUDGE_GAP * collinear_gaps(ws, grid),
             6,
         )
         return score, (collinear, tight_pairs, crossed, shared)
@@ -1524,6 +1538,31 @@ def _nudge_candidates(
                         and min(hi, o_hi) - max(lo, o_lo) > _EPS
                     ):
                         found[(i, k, 1 if sep > 0 else -1)] = None
+    for i in plans:
+        n = len(wires[i])
+        for k, axis, fixed, lo, hi in segs[i]:
+            for j, other in enumerate(segs):
+                if j == i:
+                    continue
+                for _, o_axis, o_fixed, o_lo, o_hi in other:
+                    gap = max(lo, o_lo) - min(hi, o_hi)
+                    if (
+                        o_axis != axis
+                        or abs(o_fixed - fixed) > _EPS
+                        or not _EPS < gap <= grid + _EPS
+                    ):
+                        continue
+                    if 1 <= k <= n - 3:
+                        found[(i, k, 1)] = None
+                        found[(i, k, -1)] = None
+                    # The neighbour closing the end that faces the gap sets
+                    # where the run stops; it steps back from the gap.
+                    ahead = o_lo >= hi - _EPS
+                    end = hi if ahead else lo
+                    along = 0 if axis == "H" else 1
+                    nb = k + 1 if abs(wires[i][k + 1][along] - end) <= _EPS else k - 1
+                    if 1 <= nb <= n - 3:
+                        found[(i, nb, -1 if ahead else 1)] = None
     for a, b, point in shared_vertex_sites(wires):
         for i in (a, b):
             if i not in plans:

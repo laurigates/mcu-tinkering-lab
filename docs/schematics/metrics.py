@@ -74,6 +74,12 @@ axis-aligned (``test_routing.py`` enforces that); a diagonal is an error.
     shared pin and an end landing on another wire is a T, which ``finish()``
     dots, so neither counts; a corner touching a corner or a straight run is
     an undotted, unhopped ``+`` that reads as either.
+``collinear_gaps``
+    Pairs of same-axis segments from two distinct wires on the same line
+    whose extents do not overlap and stop ``0 < gap <= grid`` short of each
+    other (#494): two nets drawn as one line with a hairline break, which
+    reads as a single wire. Ends that touch (gap zero) are a shared point,
+    not a gap, and overlapping runs are ``collinear_overlaps``.
 ``junctions``
     Points where three or more routed-wire *ends* coincide. Only ends: a
     wire ending on another wire's interior (a T) is not counted, and nor is
@@ -233,14 +239,20 @@ def length_over_labels(wires: list[Wire], labels: list[Label]) -> float:
     return total
 
 
-def _wire_pairs(wires: list[Wire]):
-    """Every segment pair drawn from two distinct wires, in input order."""
+def _indexed_wire_pairs(wires: list[Wire]):
+    """``(i, j, a, b)`` for every segment pair of wires ``i < j``, in order."""
     segs = [_segments(w) for w in wires]
     for i in range(len(segs)):
         for j in range(i + 1, len(segs)):
             for a in segs[i]:
                 for b in segs[j]:
-                    yield a, b
+                    yield i, j, a, b
+
+
+def _wire_pairs(wires: list[Wire]):
+    """Every segment pair drawn from two distinct wires, in input order."""
+    for _, _, a, b in _indexed_wire_pairs(wires):
+        yield a, b
 
 
 def crossings(wires: list[Wire]) -> int:
@@ -338,6 +350,27 @@ def shared_vertices(wires: list[Wire]) -> int:
     return len(shared_vertex_sites(wires))
 
 
+def collinear_gap_sites(
+    wires: list[Wire], grid: float
+) -> list[tuple[int, int, str, float, float]]:
+    """``(i, j, axis, fixed, gap)`` for every collinear gap: see the module
+    docstring. Sorted, one entry per segment pair, rounded to 1e-6."""
+    found = []
+    for i, j, a, b in _indexed_wire_pairs(wires):
+        if a.axis != b.axis or abs(a.fixed - b.fixed) > _EPS:
+            continue
+        gap = max(a.lo, b.lo) - min(a.hi, b.hi)
+        if _EPS < gap <= grid + _EPS:
+            fixed = round(a.fixed, 6) + 0.0
+            found.append((i, j, a.axis, fixed, round(gap, 6) + 0.0))
+    return sorted(found)
+
+
+def collinear_gaps(wires: list[Wire], grid: float) -> int:
+    """``collinear_gaps``: see :func:`collinear_gap_sites`."""
+    return len(collinear_gap_sites(wires, grid))
+
+
 def wire_lead_pairs(count, wires: list[Wire], leads: list[Wire]) -> int:
     """Pairs ``count`` finds with one routed wire and one lead, no other kind.
 
@@ -378,6 +411,7 @@ class CircuitMetrics:
     over_labels: float = 0.0
     near_parallel: float = 0.0
     shared_vertices: int = 0
+    collinear_gaps: int = 0
     hops: int = 0
     dots: int = 0
 
@@ -404,6 +438,7 @@ def measure(
         over_labels=length_over_labels(wires, list(labels)),
         near_parallel=near_parallel_length(wires, grid),
         shared_vertices=shared_vertices(wires),
+        collinear_gaps=collinear_gaps(wires, grid),
     )
 
 
@@ -483,6 +518,7 @@ _COLUMNS = (
     ("collinear", "collinear_overlaps"),
     ("near_par", "near_parallel"),
     ("shared_vtx", "shared_vertices"),
+    ("coll_gap", "collinear_gaps"),
     ("junctions", "junctions"),
     ("hops", "hops"),
     ("dots", "dots"),

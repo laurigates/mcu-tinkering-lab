@@ -1692,6 +1692,73 @@ def test_nudge_never_buys_a_clear_run_with_a_crossing():
     assert _nudge([_STRAIGHT, _HAT, post], movable=[1]) == [_STRAIGHT, _HAT, post]
 
 
+def _swapped_pin_pair():
+    # Two chips whose facing pins swap rows, as robocar_unified's mux ->
+    # PCA9685 SDA/SCL do: each net must cross the other, and the first one
+    # routed runs straight along the row the other's stub ends on.
+    d = schemdraw.Drawing(show=False)
+    d.config(unit=2.0)
+    pins = [elm.IcPin(name="A", side="R"), elm.IcPin(name="B", side="R")]
+    left = d.add(elm.Ic(pins=pins, size=(1.5, 2)))
+    right = d.add(
+        elm.Ic(
+            pins=[elm.IcPin(name="B", side="L"), elm.IcPin(name="A", side="L")],
+            size=(1.5, 2),
+        )
+        .at((left.A[0] + 4.0, left.A[1]))
+        .anchor("B")
+    )
+    router = Router(d)
+    a = router.wire(left.A, right.A, net="i2c")
+    b = router.wire(left.B, right.B, net="i2c")
+    router.finish()
+    return [a.points, b.points]
+
+
+def test_finish_keeps_two_swapping_nets_from_touching(monkeypatch):
+    from metrics import collinear_gaps, crossings, shared_vertices
+
+    # Precondition, so the assertions below have teeth: without the nudge
+    # pass the fixture reproduces the kiss through the whole of finish().
+    monkeypatch.setattr(Router, "_nudge_apart", lambda self: None)
+    assert shared_vertices(_swapped_pin_pair()) == 1
+    monkeypatch.undo()
+
+    wires = _swapped_pin_pair()
+    assert shared_vertices(wires) == 0
+    assert collinear_gaps(wires, _NUDGE_GRID) == 0
+    assert crossings(wires) == 1, "the swap is drawn as one hopped crossing"
+
+
+def test_nudge_opens_a_collinear_gap_to_two_rows():
+    # The SDA/SCL pair once the kiss is gone: SDA turns down at x = 0.25,
+    # a row past SCL's turn at x = 0, so both runs sit on y = 0 with a 0.25
+    # break. Stepping SDA's down-turn one more row right widens it to 0.5
+    # at no cost in length, as its two runs trade 0.25 each.
+    from metrics import collinear_gaps, crossings, shared_vertices
+
+    sda = [(4.0, 0.0), (0.25, 0.0), (0.25, -1.0), (-1.0, -1.0)]
+    scl = [(4.0, -1.0), (3.5, -1.0), (3.5, 1.0), (0.0, 1.0), (0.0, 0.0), (-1.0, 0.0)]
+    assert collinear_gaps([sda, scl], _NUDGE_GRID) == 1
+    # Control: with nothing movable the gap stays, so the pass made the move.
+    assert _nudge([sda, scl], movable=[]) == [sda, scl]
+    out = _nudge([sda, scl], movable=[0, 1])
+    assert out[0] == [(4.0, 0.0), (0.5, 0.0), (0.5, -1.0), (-1.0, -1.0)]
+    assert out[1] == scl
+    assert collinear_gaps(out, _NUDGE_GRID) == 0
+    assert crossings(out) == crossings([sda, scl]) and shared_vertices(out) == 0
+
+
+def test_no_real_circuit_draws_two_nets_as_one_broken_line(real_circuits):
+    # #494: removing robocar_unified's SDA/SCL kiss left SDA's run 0.25 short
+    # of SCL's on one row, and balancebot had two such gaps at main (0.25 and
+    # 0.07 between GPIO pin leads).
+    for c in real_circuits:
+        assert c.metrics.collinear_gaps == 0, (
+            f"{c.name}: {c.metrics.collinear_gaps} collinear gaps"
+        )
+
+
 def test_no_real_circuit_draws_a_corner_on_another_wire(real_circuits):
     # #494: at main, robocar_unified's mux -> PCA9685 SDA turned down at
     # (-13.75, -10.0), the very point where SCL turned in to its pin: an

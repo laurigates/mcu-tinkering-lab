@@ -19,6 +19,8 @@ from metrics import (  # noqa: E402
     CircuitMetrics,
     Label,
     Tag,
+    collinear_gap_sites,
+    collinear_gaps,
     collinear_overlaps,
     crossings,
     format_table,
@@ -322,6 +324,42 @@ def test_measure_reports_near_parallel_and_shared_vertices():
     assert m.shared_vertices == 0
     assert measure("demo", kiss, [], GRID).shared_vertices == 1
     assert "near_par" in format_table([m]) and "shared_vtx" in format_table([m])
+
+
+# -- collinear gaps (#494) ---------------------------------------------------------
+
+
+def test_two_nets_stopping_a_row_short_on_one_line_are_a_collinear_gap():
+    # robocar_unified's SDA run, once stepped off the kiss, ended 0.25 short
+    # of SCL's turn on the same row: one line with a hairline break.
+    sda = [(4, 0), (0.25, 0), (0.25, -1)]
+    scl = [(0, 1), (0, 0), (-1, 0)]
+    assert collinear_gap_sites([sda, scl], GRID) == [(0, 1, "H", 0.0, 0.25)]
+    # Vertical runs count the same way, and a gap of exactly one row counts.
+    up = [(2, 0), (2, 3)]
+    on = [(2, 3 + GRID), (2, 5)]
+    assert collinear_gap_sites([up, on], GRID) == [(0, 1, "V", 2.0, GRID)]
+
+
+def test_touching_far_overlapping_or_offset_runs_are_not_collinear_gaps():
+    a = [(0, 0), (4, 0)]
+    touching = [(4, 0), (8, 0)]  # a shared end: a point, not a gap
+    two_rows = [(4 + 2 * GRID, 0), (8, 0)]  # far enough to read as two lines
+    overlapping = [(3, 0), (8, 0)]  # collinear_overlaps', not this ruler's
+    offset = [(4.25, GRID), (8, GRID)]  # a row up: a different line
+    for other in (touching, two_rows, overlapping, offset):
+        assert collinear_gaps([a, other], GRID) == 0, other
+    # One wire's own runs never pair with each other.
+    assert collinear_gaps([[(0, 0), (1, 0), (1, 1), (2, 1), (2, 0), (3, 0)]], GRID) == 0
+    # Control: the same pair a row short of each other does count, so the
+    # zeros above are the gap test speaking, not a ruler that never fires.
+    assert collinear_gaps([a, [(4 + GRID, 0), (8, 0)]], GRID) == 1
+
+
+def test_measure_reports_collinear_gaps():
+    m = measure("demo", [[(0, 0), (4, 0)], [(4.25, 0), (8, 0)]], [], GRID)
+    assert m.collinear_gaps == 1
+    assert "coll_gap" in format_table([m])
 
 
 # -- junctions ----------------------------------------------------------------
