@@ -121,6 +121,16 @@ router.finish()
   `test_no_routed_wire_runs_on_or_beside_a_lead_in_real_circuits` holds
   them there. The drawing order does not change with it, so a handle's
   `.points` can differ after `.finish()` but its place in the SVG cannot.
+  With the ordering chosen, `.finish()` steps crowded segments apart
+  (`routing._nudge_wires`, #494): an interior segment one or two lattice
+  rows from another wire's moves one row away, and a corner lying on
+  another wire (an undotted `+` that reads as a junction) moves off it, as
+  does a run stopping a row or less short of another net's on the same
+  line (two nets drawn as one broken line).
+  A move is kept only if it covers no obstacle, foreign tag or foreign
+  label, touches no wire or lead where it did not before, raises no
+  collinear, tight, crossing or shared-vertex count, and lowers the score
+  above plus near-parallel length, shared vertices and collinear gaps.
   A circuit that forgets `.finish()` fails `render.py`, `metrics.py` and
   the tests with an error naming it, rather than rendering with no wires.
 
@@ -212,7 +222,8 @@ router.finish()
   wire length, length inside component bodies (own and foreign), length
   over power/ground tags the wire is not wired to, length through text
   labels it does not own, crossings,
-  tight parallel pairs, collinear overlaps, junctions (routed-wire ends
+  tight parallel pairs, collinear overlaps, near-parallel length (runs two
+  rows apart), shared vertices, collinear gaps, junctions (routed-wire ends
   only) and the hops and dots actually drawn — each defined
   exactly in its module docstring and pinned by `test_metrics.py`. Run
   `just schematics::metrics` (`--json` for machine output) before and after

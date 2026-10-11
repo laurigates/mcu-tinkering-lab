@@ -19,6 +19,8 @@ from metrics import (  # noqa: E402
     CircuitMetrics,
     Label,
     Tag,
+    collinear_gap_sites,
+    collinear_gaps,
     collinear_overlaps,
     crossings,
     format_table,
@@ -28,6 +30,9 @@ from metrics import (  # noqa: E402
     length_over_tags,
     measure,
     measure_circuits,
+    near_parallel_length,
+    shared_vertex_sites,
+    shared_vertices,
     tight_parallel_pairs,
     total_length,
 )
@@ -217,6 +222,146 @@ def test_segments_of_the_same_wire_are_never_paired():
     assert collinear_overlaps([zigzag]) == 0
 
 
+# -- near-parallel runs (#494) ----------------------------------------------------
+
+
+def test_near_parallel_sums_the_overlap_of_runs_two_rows_apart():
+    a = [(0, 0), (4, 0)]
+    two_rows = [(1, 2 * GRID), (6, 2 * GRID)]  # overlaps 1..4: 3 units
+    assert near_parallel_length([a, two_rows], GRID) == pytest.approx(3.0)
+    # Vertical runs count the same way.
+    v = [(0, 0), (0, 4)]
+    v_two = [(2 * GRID, 1), (2 * GRID, 2.5)]
+    assert near_parallel_length([v, v_two], GRID) == pytest.approx(1.5)
+
+
+def test_near_parallel_takes_any_separation_up_to_two_rows():
+    # Off-lattice pin rows land between rows: 1.5 grid steps is near.
+    a = [(0, 0), (4, 0)]
+    between = [(0, 1.5 * GRID), (2, 1.5 * GRID)]
+    assert near_parallel_length([a, between], GRID) == pytest.approx(2.0)
+
+
+def test_one_row_and_three_rows_are_not_near_parallel():
+    a = [(0, 0), (4, 0)]
+    one_row = [(0, GRID), (4, GRID)]  # tight_parallel's, not this ruler's
+    three_rows = [(0, 3 * GRID), (4, 3 * GRID)]
+    on_top = [(1, 0), (3, 0)]  # collinear
+    assert near_parallel_length([a, one_row], GRID) == 0
+    assert near_parallel_length([a, three_rows], GRID) == 0
+    assert near_parallel_length([a, on_top], GRID) == 0
+    # Control: the same wires two rows out do count, so the zeros above are
+    # the separation test speaking, not a ruler that never fires.
+    assert near_parallel_length([a, [(0, 2 * GRID), (4, 2 * GRID)]], GRID) > 0
+
+
+def test_near_parallel_needs_a_positive_overlap_and_two_wires():
+    a = [(0, 0), (4, 0)]
+    end_to_end = [(4, 2 * GRID), (8, 2 * GRID)]  # touch at x=4 only
+    assert near_parallel_length([a, end_to_end], GRID) == 0
+    u_turn = [(0, 0), (4, 0), (4, 2 * GRID), (0, 2 * GRID)]
+    assert near_parallel_length([u_turn], GRID) == 0
+
+
+# -- shared vertices (#494) -------------------------------------------------------
+
+
+def test_corner_on_a_corner_is_a_shared_vertex():
+    # robocar_unified's SDA/SCL kiss at main: both wires turn at one point,
+    # drawing a "+" with no dot and no hop.
+    sda = [(4, 0), (0, 0), (0, -1), (-1, -1)]
+    scl = [(4, -1), (3.5, -1), (3.5, 0.5), (0, 0.5), (0, 0), (-1, 0)]
+    assert shared_vertex_sites([sda, scl]) == [(0, 1, (0.0, 0.0))]
+    assert shared_vertices([sda, scl]) == 1
+
+
+def test_corner_on_a_straight_run_is_a_shared_vertex():
+    # Each of a corner's two segments is on one axis, so a corner on another
+    # wire's run always has one of them along that run: this wire joins the
+    # run at (0, 0), follows it, and leaves at (1, 0), two corners on it.
+    run = [(-2, 0), (2, 0)]
+    touching = [(0, 2), (0, 0), (1, 0), (1, -1)]
+    assert shared_vertex_sites([run, touching]) == [
+        (0, 1, (0.0, 0.0)),
+        (0, 1, (1.0, 0.0)),
+    ]
+
+
+def test_a_tee_and_a_shared_pin_end_are_not_shared_vertices():
+    run = [(-2, 0), (2, 0)]
+    tee = [(0, 2), (0, 0)]  # ends on the run's interior: finish() dots it
+    pin_a = [(5, 0), (5, 2), (7, 2)]
+    pin_b = [(5, 0), (3, 0)]  # both end on the same pin anchor
+    assert shared_vertices([run, tee]) == 0
+    assert shared_vertices([pin_a, pin_b]) == 0
+    # An end landing on another wire's corner is a T at a bend: dotted too.
+    bend = [(-2, 0), (0, 0), (0, -2)]
+    assert shared_vertices([bend, [(0, 0), (0, 3)]]) == 0
+    # Control: carry the tee on past the run so it turns there instead of
+    # ending, and the same ruler counts its corner.
+    assert shared_vertices([run, [(0, 2), (0, 0), (-3, 0)]]) == 1
+
+
+def test_a_plain_crossing_is_not_a_shared_vertex():
+    assert shared_vertices([[(-2, 0), (2, 0)], [(0, -2), (0, 2)]]) == 0
+
+
+def test_a_shared_vertex_is_counted_once_per_pair_and_point():
+    # Two corners of each wire meet at one point: still one (pair, point).
+    a = [(-1, 0), (0, 0), (0, 1), (1, 1), (1, 0), (0, 0), (0, -1)]
+    b = [(-1, 1), (0, 1), (0, 0), (2, 0)]
+    sites = shared_vertex_sites([a, b])
+    assert len(sites) == len(set(sites))
+    assert all(i == 0 and j == 1 for i, j, _ in sites)
+
+
+def test_measure_reports_near_parallel_and_shared_vertices():
+    a = [(0, 0), (4, 0)]
+    near = [(0, 2 * GRID), (4, 2 * GRID)]
+    kiss = [[(4, 0), (0, 0), (0, -1)], [(0, 1), (0, 0), (-1, 0)]]
+    m = measure("demo", [a, near], [], GRID)
+    assert m.near_parallel == pytest.approx(4.0)
+    assert m.shared_vertices == 0
+    assert measure("demo", kiss, [], GRID).shared_vertices == 1
+    assert "near_par" in format_table([m]) and "shared_vtx" in format_table([m])
+
+
+# -- collinear gaps (#494) ---------------------------------------------------------
+
+
+def test_two_nets_stopping_a_row_short_on_one_line_are_a_collinear_gap():
+    # robocar_unified's SDA run, once stepped off the kiss, ended 0.25 short
+    # of SCL's turn on the same row: one line with a hairline break.
+    sda = [(4, 0), (0.25, 0), (0.25, -1)]
+    scl = [(0, 1), (0, 0), (-1, 0)]
+    assert collinear_gap_sites([sda, scl], GRID) == [(0, 1, "H", 0.0, 0.25)]
+    # Vertical runs count the same way, and a gap of exactly one row counts.
+    up = [(2, 0), (2, 3)]
+    on = [(2, 3 + GRID), (2, 5)]
+    assert collinear_gap_sites([up, on], GRID) == [(0, 1, "V", 2.0, GRID)]
+
+
+def test_touching_far_overlapping_or_offset_runs_are_not_collinear_gaps():
+    a = [(0, 0), (4, 0)]
+    touching = [(4, 0), (8, 0)]  # a shared end: a point, not a gap
+    two_rows = [(4 + 2 * GRID, 0), (8, 0)]  # far enough to read as two lines
+    overlapping = [(3, 0), (8, 0)]  # collinear_overlaps', not this ruler's
+    offset = [(4.25, GRID), (8, GRID)]  # a row up: a different line
+    for other in (touching, two_rows, overlapping, offset):
+        assert collinear_gaps([a, other], GRID) == 0, other
+    # One wire's own runs never pair with each other.
+    assert collinear_gaps([[(0, 0), (1, 0), (1, 1), (2, 1), (2, 0), (3, 0)]], GRID) == 0
+    # Control: the same pair a row short of each other does count, so the
+    # zeros above are the gap test speaking, not a ruler that never fires.
+    assert collinear_gaps([a, [(4 + GRID, 0), (8, 0)]], GRID) == 1
+
+
+def test_measure_reports_collinear_gaps():
+    m = measure("demo", [[(0, 0), (4, 0)], [(4.25, 0), (8, 0)]], [], GRID)
+    assert m.collinear_gaps == 1
+    assert "coll_gap" in format_table([m])
+
+
 # -- junctions ----------------------------------------------------------------
 
 
@@ -289,7 +434,6 @@ def test_measure_drawing_counts_the_hops_and_dots_actually_drawn():
     # matches what the image shows.
     import schemdraw
     import schemdraw.elements as elm
-
     from metrics import measure_drawing
     from routing import Router
 

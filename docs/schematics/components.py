@@ -42,7 +42,7 @@ _TOOLS = Path(__file__).resolve().parents[2] / "tools"
 if str(_TOOLS) not in sys.path:
     sys.path.insert(0, str(_TOOLS))
 
-from hardware import ModuleLayout, Pad, board_layout
+from hardware import ModuleLayout, Pad, board_layout  # noqa: E402
 
 # Drawing units per pad on a physical symbol. True 2.54 mm would be 0.35
 # units — 1.4 router cells, too tight to fit a wire between adjacent pins —
