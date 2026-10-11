@@ -121,6 +121,14 @@ router.finish()
   `test_no_routed_wire_runs_on_or_beside_a_lead_in_real_circuits` holds
   them there. The drawing order does not change with it, so a handle's
   `.points` can differ after `.finish()` but its place in the SVG cannot.
+  With the ordering chosen, `.finish()` steps crowded segments apart
+  (`routing._nudge_wires`, #494): an interior segment one or two lattice
+  rows from another wire's moves one row away, and a corner lying on
+  another wire (an undotted `+` that reads as a junction) moves off it.
+  A move is kept only if it covers no obstacle, foreign tag or foreign
+  label, touches no wire or lead where it did not before, raises no
+  collinear, tight, crossing or shared-vertex count, and lowers the score
+  above plus near-parallel length and shared vertices.
   A circuit that forgets `.finish()` fails `render.py`, `metrics.py` and
   the tests with an error naming it, rather than rendering with no wires.
 

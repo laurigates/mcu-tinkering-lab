@@ -1587,3 +1587,140 @@ def test_no_two_labels_overlap_in_real_circuits(real_circuits):
             and min(a.box.ymax, b.box.ymax) - max(a.box.ymin, b.box.ymin) > 1e-6
         ]
         assert not clashes, f"{c.name}: overlapping labels {clashes}"
+
+
+# -- separating crowded segments (#494) -----------------------------------------
+
+_NUDGE_GRID = 0.25
+# A straight wire and a wire whose middle run is two rows above it for 4
+# units: one near-parallel pair. Stepping that run up one row both clears it
+# and shortens the wire, since its neighbours rise from it.
+_STRAIGHT = [(0.0, 0.0), (6.0, 0.0)]
+_HAT = [(0.0, 2.0), (1.0, 2.0), (1.0, 0.5), (5.0, 0.5), (5.0, 2.0), (6.0, 2.0)]
+_HAT_STEPPED = [
+    (0.0, 2.0),
+    (1.0, 2.0),
+    (1.0, 0.75),
+    (5.0, 0.75),
+    (5.0, 2.0),
+    (6.0, 2.0),
+]
+
+
+def _bare_plan(points, obstacles=(), tags=(), labels=()):
+    """A plan for a hand-made polyline whose stub points are its second and
+    second-to-last points, with nothing in the world but the boxes given."""
+    from routing import _Plan
+
+    return _Plan(
+        points[0],
+        points[-1],
+        points[1],
+        points[-2],
+        tuple(obstacles),
+        {},
+        tuple(tags),
+        tuple(labels),
+    )
+
+
+def _nudge(wires, movable, leads=(), bodies=(), **boxes):
+    from routing import _nudge_wires
+
+    plans = {i: _bare_plan(wires[i], **boxes) for i in movable}
+    return _nudge_wires(wires, plans, list(leads), list(bodies), _NUDGE_GRID)
+
+
+def test_nudge_steps_a_run_two_rows_from_another_wire_away_from_it():
+    from metrics import near_parallel_length
+
+    assert near_parallel_length([_STRAIGHT, _HAT], _NUDGE_GRID) == pytest.approx(4.0)
+    out = _nudge([_STRAIGHT, _HAT], movable=[1])
+    assert out == [_STRAIGHT, _HAT_STEPPED]
+    assert near_parallel_length(out, _NUDGE_GRID) == 0
+
+
+def test_nudge_moves_only_wires_it_has_a_plan_for():
+    # Drawn and plan-less wires are scored against, never moved.
+    assert _nudge([_STRAIGHT, _HAT], movable=[]) == [_STRAIGHT, _HAT]
+
+
+def test_nudge_removes_a_corner_on_corner_kiss_without_a_new_crossing():
+    # robocar_unified's mux -> PCA9685 SDA/SCL pair at main: the two nets swap
+    # rows, cross once at x = 3.5, and SDA then turns exactly where SCL does.
+    from metrics import collinear_overlaps, crossings, shared_vertices
+
+    sda = [(4.0, 0.0), (0.0, 0.0), (0.0, -1.0), (-1.0, -1.0)]
+    scl = [(4.0, -1.0), (3.5, -1.0), (3.5, 0.5), (0.0, 0.5), (0.0, 0.0), (-1.0, 0.0)]
+    assert shared_vertices([sda, scl]) == 1 and crossings([sda, scl]) == 1
+    out = _nudge([sda, scl], movable=[0, 1])
+    assert shared_vertices(out) == 0
+    assert crossings(out) == 1
+    assert collinear_overlaps(out) == 0
+
+
+@pytest.mark.parametrize("kind", ["obstacles", "tags", "labels", "bodies"])
+def test_nudge_never_steps_onto_a_box_the_search_respects(kind):
+    # The only improving move lifts the hat's run to y = 0.75; a box on that
+    # row (an obstacle, a foreign tag or label, or a component's inflated
+    # body) refuses it. test_nudge_steps_a_run... is the control: the same
+    # wires without the box do move.
+    box = _BBox(2.5, 0.7, 3.5, 0.8)
+    if kind == "bodies":
+        out = _nudge([_STRAIGHT, _HAT], movable=[1], bodies=[box])
+    else:
+        out = _nudge([_STRAIGHT, _HAT], movable=[1], **{kind: [box]})
+    assert out == [_STRAIGHT, _HAT]
+
+
+def test_nudge_never_invents_a_contact():
+    # A third wire ends on the row the hat's run would step to, so the step
+    # would draw a T (a dotted junction) between two unrelated nets.
+    tee = [(3.0, 3.0), (3.0, 0.75)]
+    assert _nudge([_STRAIGHT, _HAT, tee], movable=[1]) == [_STRAIGHT, _HAT, tee]
+    # A hand-drawn lead ending there refuses it the same way.
+    assert _nudge([_STRAIGHT, _HAT], movable=[1], leads=[tee]) == [_STRAIGHT, _HAT]
+
+
+def test_nudge_never_buys_a_clear_run_with_a_crossing():
+    # Stepping the run up still lowers the score (-4 near, -0.5 length, +4 for
+    # the crossing), but crossings may not rise at all.
+    from metrics import crossings
+
+    post = [(3.0, 0.6), (3.0, 1.5)]
+    assert crossings([_HAT_STEPPED, post]) == 1 and crossings([_HAT, post]) == 0
+    assert _nudge([_STRAIGHT, _HAT, post], movable=[1]) == [_STRAIGHT, _HAT, post]
+
+
+def test_no_real_circuit_draws_a_corner_on_another_wire(real_circuits):
+    # #494: at main, robocar_unified's mux -> PCA9685 SDA turned down at
+    # (-13.75, -10.0), the very point where SCL turned in to its pin: an
+    # undotted, unhopped "+" that reads as a junction of the two lines.
+    for c in real_circuits:
+        assert c.metrics.shared_vertices == 0, (
+            f"{c.name}: {c.metrics.shared_vertices} shared vertices"
+        )
+
+
+def test_robocar_unified_near_parallel_length_drops_below_baseline(real_circuit):
+    # #494 baseline at main 6626863, before the nudge pass: 21.261167 units of
+    # wire two lattice rows from another net's, five pairs (the XIAO -> mux
+    # I2C pair, both mux -> PCA9685 and mux -> OLED pairs, a motor lead and
+    # the speaker leads). The pass leaves only the speaker leads' 0.71: the
+    # pair is the last segment of one lead and the whole of the other, both
+    # hanging off pins, so neither has an interior segment to move.
+    m = real_circuit("robocar_unified").metrics
+    assert m.near_parallel <= 0.705667 + 1e-6, f"{m.near_parallel} (baseline 21.26)"
+
+
+def test_finish_leaves_occupancy_matching_the_drawn_wires(real_circuits):
+    # A net wired after finish() must route round the nudged geometry, so the
+    # occupancy finish() leaves is rebuilt from the wires as drawn.
+    from routing import _mark_cells
+
+    for c in real_circuits:
+        router = c.drawing._routers[0]
+        expected = {}
+        for w in router._wires:
+            _mark_cells(expected, w.points, router.grid)
+        assert router._occupied == expected, c.name
