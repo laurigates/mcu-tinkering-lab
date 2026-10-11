@@ -16,17 +16,35 @@ default:
 # `--others --exclude-standard` picks up a hardware.toml that is not committed
 # yet, the same reason the build-guide recipe carries it.
 #
+# The schematics read the join at render time, and the build guides compile all
+# of the above into a committed PDF, so gen regenerates both as well (#724). A
+# pin change then needs this one recipe, and schematics-check.yml and
+# build-guide-check.yml find nothing stale. `schematics::render-all` re-renders
+# every circuit and recompiles each project whose documents embed one. Any
+# other project with a hardware.toml gets its own `build-guide` afterwards,
+# because pin_defs.typ and the pinout images reach its PDF without a schematic.
+# This needs uv and cairo (see docs/schematics/justfile) and mise's pinned Typst.
+#
 # Regenerate everything emitted from the join, for every project with a hardware.toml
 [group: "build"]
 gen:
     #!/usr/bin/env bash
     set -euo pipefail
     cd ../..
-    for toml in $(git ls-files --cached --others --exclude-standard ':(glob)packages/**/hardware.toml'); do
+    tomls=$(git ls-files --cached --others --exclude-standard ':(glob)packages/**/hardware.toml')
+    for toml in $tomls; do
         python3 tools/typst/generate-pin-defs.py "$(dirname "$toml")"
     done
     PYTHONPATH=tools python3 -m hardware.docs
     PYTHONPATH=tools python3 -m hardware.pinout
+    {{just_executable()}} --justfile docs/schematics/justfile render-all
+    rendered=$(cd docs/schematics && uv run --quiet python guide_deps.py projects)
+    for toml in $tomls; do
+        proj=$(dirname "$toml")
+        if grep -qxF "$proj" <<<"$rendered"; then continue; fi
+        echo "recompiling Typst documents in $proj"
+        {{just_executable()}} --justfile "$proj/justfile" build-guide
+    done
 
 # Run the join's unit tests (stdlib unittest — nothing to install)
 [group: "test"]
