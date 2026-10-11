@@ -23,7 +23,7 @@ permissions:
   contents: read
 
 env:
-  IDF_VERSION: 'v5.4'
+  IDF_VERSION: 'v5.5'
 
 jobs:
   refresh:

@@ -68,7 +68,7 @@ mcu-tinkering-lab/
 
 | Layer | Technology |
 |-------|-----------|
-| Firmware | C/C++ with ESP-IDF v5.4+ |
+| Firmware | C/C++ with ESP-IDF v5.5 |
 | Build system | CMake (via ESP-IDF), justfile |
 | Simulation | Python 3.11, Pymunk, NumPy |
 | Python package manager | uv |
@@ -213,7 +213,7 @@ Most workflows delegate to reusable workflows from [`laurigates/.github`](https:
 
 - `tools/esp32.just` — Shared justfile config imported by all ESP-IDF projects (container_cmd, port detection, require-port, _serial-monitor)
 - `tools/hardware/` — the board × header × parts join ([ADR-021](docs/decisions/ADR-021-hardware-source-of-truth.md)): reads a project's `hardware.toml`, its `pin_config.h` and the repo-level `docs/reference/boards/` page the sidecar names; `just hardware::gen` regenerates everything it feeds: `docs/auto/pin_defs.typ`; the tables between `<!-- BEGIN GENERATED -->` markers in any Markdown git would track under a project, at any depth, such as `WIRING.md`; the board pinout images; the schematic SVG/PNG (via `schematics::render-all`); and the build-guide PDFs; `just hardware::check` is the CI gate (`hardware-check.yml`)
-- `docker-compose.yml` — ESP-IDF container service definition (`espressif/idf:v5.4`)
+- `docker-compose.yml` — ESP-IDF container service definition (`espressif/idf:v5.5`)
 - `tools/refresh-idf-locks.py` — the one update path for git-tracked `dependencies.lock` files (`just refresh-idf-locks`, and the monthly `refresh-idf-locks.yml`). Nothing else re-resolves a tracked lock while its `idf_component.yml` is unchanged; editing the manifest re-resolves on the next build. Procedure: [`.claude/rules/esp-idf-dependency-locks.md`](.claude/rules/esp-idf-dependency-locks.md)
 - `.clang-format` — C/C++ formatting rules
 - `.pre-commit-config.yaml` — Pre-commit hook definitions

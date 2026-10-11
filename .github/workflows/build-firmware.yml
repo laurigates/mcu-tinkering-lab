@@ -17,7 +17,7 @@ permissions:
   id-token: write
 
 env:
-  IDF_VERSION: 'v5.4'
+  IDF_VERSION: 'v5.5'
 
 # Collapse the duplicate full-matrix runs produced when many releases are
 # published in one batch — keep only the latest run per release tag.
