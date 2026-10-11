@@ -28,7 +28,7 @@ just sync-quantize  # adds esp-ppq + onnx + onnxruntime (B4)
 ```
 
 The project uses [`uv`](https://docs.astral.sh/uv/) and pins Python
-3.11 via `.python-version`.
+3.12.15 via `.python-version`, matching `requires-python` in `pyproject.toml`.
 
 ## Generate a dataset (B1)
 
