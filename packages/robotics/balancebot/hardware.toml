@@ -108,12 +108,12 @@ why = "switches the XIAO's onboard battery-sense divider, not brought out to a h
 # in WIRING.md's prose. Rail assignments match docs/schematics/circuits/balancebot.py.
 
 [parts.pack]
-name = "2–3S LiPo"
+name = "3S 18650 pack + BMS"
 kind = "battery"
-note = "7.4–11.1 V"
+note = "9.0–12.6 V"
 
 [parts.buck]
-name = "5 V buck converter"
+name = "LM2596 5 V buck"
 kind = "buck-regulator"
 
 [parts.stepper_left]

@@ -102,8 +102,8 @@ available and otherwise idle.
 | Motor drivers | 2× DRV8825 carrier boards, 1/8 microstepping (hardwired), STEP/DIR interface |
 | Motors | 2× NEMA17 bipolar steppers (200 steps/rev; 1600 steps/rev at 1/8 µstep) |
 | Wheels | ~80–100 mm diameter, directly on motor shafts |
-| Motor power | 2–3S LiPo (7.4–11.1 V) → DRV8825 VMOT (100 µF bulk cap at each driver) |
-| Logic power | Battery → 5 V buck converter → XIAO 5V pin (onboard LiPo charger is NOT used for motors) |
+| Motor power | 3S Li-ion pack, 18650 cells with a 3S BMS (9.0–12.6 V) → DRV8825 VMOT (100 µF bulk cap at each driver). 2S is ruled out: it sits below the DRV8825's 8.2 V minimum VM (#739) |
+| Logic power | Battery → LM2596 5 V buck converter → XIAO 5V pin (onboard LiPo charger is NOT used for motors) |
 | Safety strap | 10 kΩ pull-up from shared DRV8825 nENABLE to 3V3 (drivers disabled while MCU boots/resets) |
 | Frame | Two-deck chassis; MPU6050 mounted rigidly at axle height, X axis pointing forward |
 

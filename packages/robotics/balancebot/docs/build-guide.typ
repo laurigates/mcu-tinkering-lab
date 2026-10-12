@@ -88,8 +88,10 @@ seqlock snapshot, so the control loop never blocks and never prints.
   ([2], [DRV8825 stepper carrier], [STEP/DIR, strapped for 1/8 microstep]),
   ([2], [NEMA17 bipolar stepper], [200 steps/rev (1600 at 1/8 µstep)]),
   ([2], [Wheel], [\~80–100 mm, directly on the motor shafts]),
-  ([1], [2–3S LiPo pack], [7.4–11.1 V, motor power]),
-  ([1], [5 V buck converter], [Battery #sym.arrow XIAO 5V pad]),
+  ([3], [18650 Li-ion cell], [Same model, matched voltage; built into a 3S pack (3S2P with 6 for longer runs)]),
+  ([1], [3S BMS board], [≥ 10 A, balance taps, over-discharge cutoff]),
+  ([—], [Pure nickel strip], [0.15 × 8 mm, spot-welded; not nickel-plated steel]),
+  ([1], [LM2596 buck module], [Battery #sym.arrow 5.0 V #sym.arrow XIAO 5V pad]),
   ([2], [100 µF electrolytic capacitor], [Across each DRV8825's VMOT/GND, close to the pins]),
   ([1], [10 kΩ resistor], [nENABLE pull-up to 3V3]),
   ([—], [Frame, wiring, headers], [Two-deck chassis; IMU mounted rigidly at axle height]),
@@ -97,7 +99,7 @@ seqlock snapshot, so the control loop never blocks and never prints.
 )
 
 == Tools required
-Soldering iron and solder, wire strippers, a small screwdriver for the DRV8825
+Soldering iron and solder, a battery spot welder, wire strippers, a small screwdriver for the DRV8825
 trim pots, a multimeter (for the buck output, continuity and Vref), a USB-C
 cable, and a computer with Docker for the containerized build. `picotool`
 (`brew install picotool`) is optional; without it, flash by drag-and-drop.
@@ -214,8 +216,9 @@ so read their header order off each module's own silkscreen.
 
 #grid(columns: (1.15fr, 1fr), column-gutter: 14pt,
 [
-  The *2–3S LiPo* (7.4–11.1 V) feeds both DRV8825 VMOT pins directly, each
-  with a 100 µF electrolytic close to the pins, and a *5 V buck converter*
+  The *3S 18650 pack* (9.0–12.6 V, through its BMS) feeds both DRV8825 VMOT
+  pins directly, each with a 100 µF electrolytic close to the pins, and an
+  *LM2596 buck converter*
   whose output goes to the XIAO's *5V* pad. The XIAO's 3.3 V regulator then
   supplies the MPU6050, the DRV8825 logic straps and the nENABLE pull-up.
 
@@ -233,6 +236,31 @@ callout("Golden rule", kind: "danger")[
 
 = 6 · Assembly Steps
 
+== Build the 3S pack
+Three cells in series keep VMOT between 9.0 V (empty) and 12.6 V (full),
+above the DRV8825's 8.2 V minimum for the whole discharge. A 2S pack is below
+it for most of the curve, so 3S is the only supported pack.
+
++ *Match the cells.* Same model; resting voltages within 0.05 V of each other.
+  Reject any cell below 2.5 V, or one that loses voltage over a few days.
++ *Insulate the positive ends* with fish-paper rings before welding — the can is
+  the negative terminal, right beside the cap.
++ *Spot-weld pure nickel strip* (0.15 × 8 mm): short pulses, two to four welds
+  per tab, pull-test each joint. Never solder to a cell.
++ *Fit the 3S BMS*: B− to the pack's negative end, the B1/B2 balance taps to
+  the two junctions between cells, B+ to the positive end; the load and
+  charger connect to P+ / P−.
++ *Wrap and check*: Kapton or heat-shrink over the pack, then measure 9.0–12.6 V
+  at P+ / P− before anything else is connected.
+
+#callout("The BMS cutoff drops the robot", kind: "warn")[
+  When the pack runs flat the BMS opens the circuit and the motors stop at
+  once. `stat`'s battery figure reads the XIAO's own divider, not this pack,
+  so nothing warns you first. Stop when runs get noticeably shorter, and
+  recharge.
+]
+
+== Wire it up
 + *Wire power first.* Connect the pack to the buck converter's input and, with
   nothing on its output, adjust it until a multimeter reads *5.0 V*. Only then
   run the 5 V feed to the XIAO's 5V pad and the common ground.

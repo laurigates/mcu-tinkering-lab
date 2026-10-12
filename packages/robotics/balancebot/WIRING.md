@@ -13,11 +13,11 @@ Schematic source: [`docs/schematics/circuits/balancebot.py`](../../../docs/schem
 ## Overview
 
 ```
-                 2–3S LiPo (7.4–11.1 V)
+            3S 18650 pack + BMS (9.0–12.6 V)
                      │
         ┌────────────┼───────────────┐
         │            │               │
-   VMOT (left    VMOT (right    5 V buck converter
+   VMOT (left    VMOT (right    LM2596 5 V buck
    DRV8825)      DRV8825)           │
    + 100 µF      + 100 µF           └─→ XIAO 5V pin
                                         (NOT the battery pads — the
@@ -39,8 +39,8 @@ drawn: every part shares it.
 
 ```mermaid
 graph TD
-    pack["2–3S LiPo<br/>7.4–11.1 V"]
-    buck["5 V buck converter"]
+    pack["3S 18650 pack + BMS<br/>9.0–12.6 V"]
+    buck["LM2596 5 V buck"]
     drv_left["Left DRV8825"]
     drv_right["Right DRV8825"]
     mcu["XIAO RP2350"]
