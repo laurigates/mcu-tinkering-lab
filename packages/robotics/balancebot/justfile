@@ -7,6 +7,12 @@ project_dir := "packages/robotics/balancebot"
 board := "seeed_xiao_rp2350"
 port := env("PORT", _detected_pico)
 
+# Typst CLI version the committed build-guide PDF is compiled with. PDF byte
+# output changes across compiler releases, so this MUST match TYPST_VERSION in
+# .github/workflows/build-guide-check.yml or every local recompile reads as
+# drift in CI. Bump both in the same commit.
+typst_version := "0.15.0"
+
 default:
     @just --list
 
@@ -67,6 +73,43 @@ flash-monitor: flash monitor
 # Full dev cycle
 [group: "device"]
 develop: build flash monitor
+
+##########
+# Docs
+##########
+
+# Generate Typst definitions from the hardware join (tools/hardware/, ADR-021).
+# The header it reads, src/pin_config.h, is named once in hardware.toml's
+# [source] and must also be on the trigger paths in
+# .github/workflows/build-guide-check.yml.
+[group: "docs"]
+gen-pin-defs:
+    python3 ../../../tools/typst/generate-pin-defs.py .
+
+# The drift guard regenerates these images too, so a board-reference change
+# that skips this recipe fails CI rather than printing a stale header order.
+#
+# Draw the build guide's board pinout images (docs/auto/pinouts/*.svg) from the board references
+[group: "docs"]
+gen-pinouts:
+    cd ../../.. && PYTHONPATH=tools python3 -m hardware.pinout {{project_dir}}
+
+# Regenerate every printable Typst document in docs/.
+#
+# Mirrors .github/workflows/build-guide-check.yml byte for byte: the same pinned
+# CLI (via `mise exec`) and the same two determinism flags. Drop either flag
+# and CI reports the freshly compiled PDF as stale. `--others
+# --exclude-standard` picks up a .typ not in the index yet; docs/auto/ is
+# excluded because pin_defs.typ is an include with no PDF of its own.
+[group: "docs"]
+build-guide: gen-pin-defs gen-pinouts
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd ../../..
+    for typ in $(git ls-files --cached --others --exclude-standard ':(glob)'"{{project_dir}}"'/docs/*.typ'); do
+        echo "compiling $typ"
+        mise exec typst@{{typst_version}} -- typst compile --creation-timestamp 0 --ignore-system-fonts --root . "$typ" "${typ%.typ}.pdf"
+    done
 
 ##########
 # Info

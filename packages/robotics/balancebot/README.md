@@ -13,6 +13,24 @@ Design docs: [PRD-012](../../../docs/requirements/PRD-012-balancebot.md) ·
 [ADR-018](../../../docs/decisions/ADR-018-pico-sdk-balancebot.md) ·
 [WIRING.md](WIRING.md)
 
+## Printable build guide
+
+[`docs/build-guide.typ`](docs/build-guide.typ) → [PDF](docs/build-guide.pdf):
+the whole build at the bench — bill of materials, wiring reference, power,
+assembly, Vref, flashing, first boot and calibration, functional checkout,
+tuning, troubleshooting.
+
+Regenerate it after editing — GPIO numbers come from `src/pin_config.h` via
+`docs/auto/pin_defs.typ`, so a pin moved in the header changes what it prints:
+
+```bash
+just balancebot::build-guide
+```
+
+The recipe pins the Typst version and the two determinism flags that
+`.github/workflows/build-guide-check.yml` recompiles with, so a hand-run
+`typst compile` with different flags will read as drift in CI.
+
 ## Build
 
 ```bash

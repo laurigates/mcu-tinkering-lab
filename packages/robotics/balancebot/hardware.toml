@@ -1,0 +1,162 @@
+# Parts and nets around src/pin_config.h — the third layer of ADR-021's
+# board × header × parts join (docs/decisions/ADR-021-hardware-source-of-truth.md).
+#
+# No pin numbers live here. Every `role` is a macro name in src/pin_config.h,
+# and tools/hardware/ fails if one does not resolve, so this file cannot
+# silently disagree with the firmware about WHICH pin — only about which part a
+# pin is wired to, which is the fact the header cannot express.
+#
+# Regenerate everything that reads it — docs/auto/pin_defs.typ, the XIAO pinout
+# image and the marked tables and power diagram in WIRING.md — with
+# `just hardware::gen`; `just hardware::check` fails if any of them is stale.
+
+[source]
+convention = "balancebot"
+# Every header named here must also be on both trigger-path blocks of
+# .github/workflows/build-guide-check.yml — see
+# .claude/rules/build-guide-drift-guard.md §1.
+header = "src/pin_config.h"
+board = "docs/reference/boards/xiao-rp2350.md"
+mcu = "XIAO RP2350"
+
+# No part carries a `board` key: there is no vendor-sourced layout page for the
+# GY-521 or the DRV8825 carrier under docs/reference/boards/, so only the XIAO
+# is drawn. Their pin names below are the carriers' silkscreen names, as
+# WIRING.md uses them.
+
+[parts.imu]
+name = "GY-521 MPU6050"
+kind = "imu"
+note = "I2C 0x68"
+
+[parts.drv_left]
+name = "Left DRV8825"
+kind = "stepper-driver"
+
+[parts.drv_right]
+name = "Right DRV8825"
+kind = "stepper-driver"
+
+[parts.pullup]
+name = "10 kΩ resistor"
+kind = "resistor"
+note = "nENABLE pull-up"
+
+[[nets]]
+role = "PIN_IMU_SDA"
+to = "imu.SDA"
+note = "I2C1 SDA"
+
+[[nets]]
+role = "PIN_IMU_SCL"
+to = "imu.SCL"
+note = "I2C1 SCL"
+
+[[nets]]
+role = "PIN_IMU_INT"
+to = "imu.INT"
+note = "Data-ready, active high, push-pull; no internal pull (RP2350-E9)"
+
+[[nets]]
+role = "PIN_STEP_LEFT"
+to = "drv_left.STEP"
+note = "PIO0 SM0"
+
+[[nets]]
+role = "PIN_DIR_LEFT"
+to = "drv_left.DIR"
+
+[[nets]]
+role = "PIN_STEP_RIGHT"
+to = "drv_right.STEP"
+note = "PIO0 SM1"
+
+[[nets]]
+role = "PIN_DIR_RIGHT"
+to = "drv_right.DIR"
+
+# One GPIO, two drivers and the pull-up: a fan-out of the same role.
+[[nets]]
+role = "PIN_MOTOR_NENABLE"
+to = "drv_left.nENABLE"
+note = "Active low, shared by both drivers"
+
+[[nets]]
+role = "PIN_MOTOR_NENABLE"
+to = "drv_right.nENABLE"
+
+[[nets]]
+role = "PIN_MOTOR_NENABLE"
+to = "pullup.B"
+note = "the pull-up holds the drivers disabled while the XIAO boots, resets or sits in BOOTSEL"
+
+[[undrawn]]
+role = "PIN_STATUS_LED"
+why = "the XIAO's onboard user LED, not brought out to a header"
+
+[[undrawn]]
+role = "PIN_BATT_ADC"
+why = "the XIAO's onboard battery-sense divider, not brought out to a header"
+
+[[undrawn]]
+role = "PIN_BATT_ADC_ENABLE"
+why = "switches the XIAO's onboard battery-sense divider, not brought out to a header"
+
+# --- Power --------------------------------------------------------------------
+# The supply side of the join, emitted as WIRING.md's power diagram. Voltages
+# beyond the rail names, the 100 µF bulk capacitors and the common ground stay
+# in WIRING.md's prose. Rail assignments match docs/schematics/circuits/balancebot.py.
+
+[parts.pack]
+name = "2–3S LiPo"
+kind = "battery"
+note = "7.4–11.1 V"
+
+[parts.buck]
+name = "5 V buck converter"
+kind = "buck-regulator"
+
+[parts.stepper_left]
+name = "Left NEMA17"
+kind = "stepper"
+
+[parts.stepper_right]
+name = "Right NEMA17"
+kind = "stepper"
+
+# Motor power straight from the pack; never from the XIAO's battery pads.
+[[rails]]
+name = "VBAT"
+from = "pack.+"
+to = ["buck.IN+", "drv_left.VMOT", "drv_right.VMOT"]
+
+[[rails]]
+name = "5V"
+from = "buck.OUT+"
+to = ["mcu.5V"]
+
+# nSLEEP and nRESET are tied high, and M0/M1 strapped high for 1/8 microstep
+# (M2 to GND), per WIRING.md § DRV8825 carriers.
+[[rails]]
+name = "3V3"
+from = "mcu.3V3"
+to = [
+    "imu.VCC",
+    "pullup.A",
+    "drv_left.nSLEEP",
+    "drv_left.nRESET",
+    "drv_left.M0",
+    "drv_left.M1",
+    "drv_right.nSLEEP",
+    "drv_right.nRESET",
+    "drv_right.M0",
+    "drv_right.M1",
+]
+
+[[outputs]]
+from = "drv_left"
+to = ["stepper_left"]
+
+[[outputs]]
+from = "drv_right"
+to = ["stepper_right"]
