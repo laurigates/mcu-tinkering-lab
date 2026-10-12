@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.4](https://github.com/laurigates/mcu-tinkering-lab/compare/balancebot-v0.1.3...balancebot-v0.1.4) (2026-10-12)
+
+
+### Documentation
+
+* **balancebot:** add a printable build guide generated from the hardware join ([13b99d7](https://github.com/laurigates/mcu-tinkering-lab/commit/13b99d73d01dc8ee04190e0fc24fa5277e4f9dbb))
+
 ## [0.1.3](https://github.com/laurigates/mcu-tinkering-lab/compare/balancebot-v0.1.2...balancebot-v0.1.3) (2026-08-22)
 
 
