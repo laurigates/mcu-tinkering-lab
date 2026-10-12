@@ -1,0 +1,4 @@
+(fp_lib_table
+  (version 7)
+  (lib (name "Seeed_XIAO")(type "KiCad")(uri "${KIPRJMOD}/lib/Seeed_XIAO.pretty")(options "")(descr "Seeed XIAO RP2350, from Seeed-Studio/OSHW-XIAO-Series @ cc7f3bb (MIT)"))
+)
