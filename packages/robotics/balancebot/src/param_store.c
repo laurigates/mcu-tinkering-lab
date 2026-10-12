@@ -1,46 +1,28 @@
 #include "param_store.h"
 
-#include <stddef.h>
 #include <string.h>
 
 #include "config.h"
-#include "crc32.h"
 #include "hardware/flash.h"
+#include "param_record.h"
 #include "pico/flash.h"
 #include "pico/stdlib.h"
 
-#define PARAM_MAGIC 0x42414C42u  // "BALB"
-#define PARAM_VERSION 1u
-
-typedef struct {
-    uint32_t magic;
-    uint32_t version;
-    balance_params_t params;
-    uint32_t crc;  // over magic..params
-} param_record_t;
-
-_Static_assert(sizeof(param_record_t) <= FLASH_PAGE_SIZE, "record must fit one flash page");
+_Static_assert(PARAM_RECORD_MAX_SIZE <= FLASH_PAGE_SIZE, "record must fit one flash page");
 
 void param_store_defaults(balance_params_t *out)
 {
-    out->angle_kp = DEFAULT_ANGLE_KP;
-    out->angle_ki = DEFAULT_ANGLE_KI;
-    out->angle_kd = DEFAULT_ANGLE_KD;
-    out->vel_kp = DEFAULT_VEL_KP;
-    out->vel_ki = DEFAULT_VEL_KI;
-    out->filter_alpha = DEFAULT_FILTER_ALPHA;
-    out->max_rate_sps = DEFAULT_MAX_RATE_SPS;
+    param_defaults(out);
 }
 
 bool param_store_load(balance_params_t *out)
 {
-    const param_record_t *rec = (const param_record_t *)(XIP_BASE + PARAM_FLASH_OFFSET);
-    if (rec->magic == PARAM_MAGIC && rec->version == PARAM_VERSION &&
-        rec->crc == crc32_calc(rec, offsetof(param_record_t, crc))) {
-        *out = rec->params;
+    // Record layout and the v1 -> v2 migration live in param_record.c.
+    const uint8_t *rec = (const uint8_t *)(XIP_BASE + PARAM_FLASH_OFFSET);
+    if (param_record_decode(rec, FLASH_PAGE_SIZE, out, NULL)) {
         return true;
     }
-    param_store_defaults(out);
+    param_defaults(out);
     return false;
 }
 
@@ -55,13 +37,9 @@ bool param_store_save(const balance_params_t *params)
 {
     static uint8_t page[FLASH_PAGE_SIZE];
     memset(page, 0xFF, sizeof page);
-
-    param_record_t rec;
-    rec.magic = PARAM_MAGIC;
-    rec.version = PARAM_VERSION;
-    rec.params = *params;
-    rec.crc = crc32_calc(&rec, offsetof(param_record_t, crc));
-    memcpy(page, &rec, sizeof rec);
+    if (param_record_encode(params, page, sizeof page) == 0) {
+        return false;
+    }
 
     if (flash_safe_execute(do_flash_write, page, 100) != PICO_OK) {
         return false;

@@ -49,3 +49,20 @@ float pid_update(pid_t *pid, float setpoint, float measurement, float rate, floa
     float out = pid->kp * error + pid->ki * pid->integral - pid->kd * d_meas;
     return clampf(out, -pid->out_max, pid->out_max);
 }
+
+void pid_set_integral(pid_t *pid, float integral)
+{
+    pid->integral = clampf(integral, -pid->integral_max, pid->integral_max);
+}
+
+float pid_bumpless_integral(const pid_t *pid, float setpoint, float measurement, float rate,
+                            float dt, float target_out)
+{
+    if (pid->ki == 0.0f) {
+        return 0.0f;
+    }
+    // pid_update: I' = I + e*dt;  out = kp*e + ki*I' - kd*rate.
+    float error = setpoint - measurement;
+    float i_after = (target_out - pid->kp * error + pid->kd * rate) / pid->ki;
+    return i_after - error * dt;
+}

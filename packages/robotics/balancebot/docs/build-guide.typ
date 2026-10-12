@@ -51,13 +51,15 @@ seqlock snapshot, so the control loop never blocks and never prints.
 
 #grid(columns: (1fr, 1fr), column-gutter: 12pt,
   callout("Core 1 — 500 Hz control loop")[
-    MPU6050 burst read #sym.arrow complementary filter #sym.arrow angle PID,
-    whose output is wheel *acceleration* #sym.arrow integrated to a step rate
+    MPU6050 burst read #sym.arrow complementary filter #sym.arrow angle PID
+    or LQR, whose output is wheel *acceleration* #sym.arrow integrated to a
+    step rate
     #sym.arrow PIO0 step pulses. Tilt cutoff, watchdog and flash saves live
     here too.
   ],
   callout("Core 0 — housekeeping", kind: "purple")[
-    USB CDC command line, CSV telemetry, status LED and battery reading.
+    USB CDC command line, CSV telemetry, status LED, battery reading and
+    the LQR gain solve.
     PIO0 SM0/SM1 generate the STEP pulse trains (30–20 000 steps/s)
     independently of either core.
   ],
@@ -276,7 +278,7 @@ which `just` auto-detects.
 ```bash
 # From the repo root
 just balancebot::build       # containerized cmake + ninja -> build/balancebot.uf2
-just balancebot::test        # host unit tests: PID, filter, CRC (no hardware)
+just balancebot::test        # host unit tests: PID, filter, CRC, LQR, params
 just balancebot::flash       # picotool: reboots a running board into BOOTSEL itself
 just balancebot::flash-uf2   # or: prints the drag-and-drop steps
 just balancebot::monitor     # USB CDC serial console
@@ -302,7 +304,8 @@ come from `src/cli.c`:
   ([Command], [Effect]),
   ([`stat`], [State, IMU status, angle and setpoint, step rate, loop time, battery, flash saves, stream]),
   ([`get`], [List the tunable parameters]),
-  ([`set <name> <value>`], [Set a parameter: `kp ki kd vkp vki alpha maxrate`]),
+  ([`set <name> <value>`], [Set a parameter: `kp ki kd vkp vki alpha maxrate`, or an LQR one (§10.2), which re-solves the gains]),
+  ([`ctrl [pid|lqr]`], [Show or switch the balance law, live and bumpless]),
   ([`stream on|off [hz]`], [CSV telemetry, default 25 Hz]),
   ([`arm` · `disarm`], [Start / stop balancing]),
   ([`rate <l|r> <sps>`], [Open-loop motor test, disarmed only]),
@@ -311,7 +314,9 @@ come from `src/cli.c`:
   aligns: (left, left),
 )
 
-CSV columns: `t_ms,state,angle_deg,gyro_dps,setpoint_deg,rate_sps,loop_us`.
+CSV columns: `t_ms,state,angle_deg,gyro_dps,setpoint_deg,rate_sps,loop_us,ctrl,pos_m`.
+`ctrl` is 0 for PID and 1 for LQR; `pos_m` is the commanded wheel travel since
+arming. New columns are only ever appended.
 The status LED blinks at 1 Hz in IDLE, stays on in RUN and blinks fast (5 Hz)
 in FAULT.
 
@@ -345,7 +350,15 @@ in FAULT.
   aligns: (center, left, left),
 )
 
-= 10 · Tuning
+= 10 · Tuning: PID and LQR
+
+Two balance laws share the same path to the wheels. Both output a wheel
+*acceleration*, which the loop integrates into a step rate. `ctrl pid` and
+`ctrl lqr` switch between them while the robot balances. Tune the PID first:
+the LQR takes its sense of "falling forward" from the same `IMU_PITCH_SIGN`, so
+a robot that balances on the PID has the LQR's sign right too.
+
+== 10.1 · PID
 
 The angle loop starts from `kp` 28, `ki` 0, `kd` 1.2; the velocity loop from
 `vkp` 0.004, `vki` 0.0005 (defaults in `src/config.h`). Tune tethered over USB:
@@ -357,6 +370,65 @@ The angle loop starts from `kp` 28, `ki` 0, `kd` 1.2; the velocity loop from
 + Raise `kd` to damp the oscillation.
 + Restore small `vkp` / `vki` so it holds station instead of wandering.
 + `save` to persist the gains (disarmed only; `stat` reports whether it worked).
+
+== 10.2 · LQR
+
+The LQR uses a model of the robot as an inverted pendulum on wheels. It needs
+one measured length and the wheel size; the four gains are then computed, not
+tuned. The XIAO solves them on core 0 at boot and every time one of these
+parameters changes:
+
+#htable(
+  (auto, 1fr, auto),
+  ([Param], [Meaning], [Default]),
+  ([`l_eff_m`], [Equivalent pendulum length, from the swing test below (m)], [0.12]),
+  ([`wheel_diam_m`], [Wheel diameter (m)], [0.09]),
+  ([`steps_per_rev`], [Microsteps per wheel revolution], [1600]),
+  ([`q_theta` `q_dtheta`], [How hard to fight lean angle and lean rate], [400, 1]),
+  ([`q_x` `q_dx`], [How hard to hold position and stop drifting], [25, 4]),
+  ([`r`], [Cost of wheel acceleration; raise it for gentler motion], [0.04]),
+  aligns: (left, left, left),
+)
+
+The `l_eff_m` and `wheel_diam_m` defaults are placeholders. Measure both before
+trusting the LQR.
+
+*The swing test for* `l_eff_m`:
+
++ Disarm and disconnect motor power.
++ Hang the robot from its wheel axle so the body swings freely below it, like a
+  pendulum. A rod through both wheel hubs, resting on two supports, works.
++ Pull the body a few degrees aside and let go. Small swings matter: keep it
+  under about 10°.
++ Time 10 full swings (out and back) with a stopwatch and divide by 10. That is
+  the period $T$ in seconds.
++ Compute $L_"eff" = g (T \/ 2 pi)^2$ with $g = 9.81 "m/s"^2$. For example,
+  $T = 0.70 "s"$ gives $L_"eff" approx 0.122 "m"$.
+
+Hanging below the axle it swings like the upright robot falls. Both depend on
+the same mass distribution, so this one number replaces the guesswork of
+locating the centre of mass and the moment of inertia.
+
+Then, on the console:
+
++ `set l_eff_m` and `set wheel_diam_m` to the measured values. Each change
+  prints the new `K`, the closed-loop `rho` (it must be below 1) and the
+  solver's `residual`. A change whose solve fails is rejected with the reason,
+  and the old value and gains stay.
++ Balance on the PID, then `ctrl lqr`. The robot holds the spot it switched at
+  instead of wandering back to where it armed.
++ Watch `pos_m` and `angle_deg` in the stream. If it rocks, raise `r` or lower
+  `q_theta`. If it drifts away, raise `q_x`.
++ `ctrl pid` switches back. That switch is smooth only with a nonzero `ki`;
+  with `ki` 0 the wheels may jerk once.
++ `save` keeps the mode and the model. The gains are not saved but re-solved at
+  every boot. If that solve fails, the robot runs the PID and `stat` says why.
+
+#callout("ctrl lqr refused", kind: "warn")[
+  `ctrl lqr` is refused while the XIAO holds no valid gains, for example after
+  a `load` whose model cannot be solved. The message names the reason. Fix the
+  parameter, and the next successful `set` makes LQR available again.
+]
 
 = 11 · Troubleshooting
 
@@ -370,6 +442,8 @@ The angle loop starts from `kp` 28, `ki` 0, `kd` 1.2; the velocity loop from
   ([`stat` shows `imu: NOT RESPONDING`], [No I²C answer from the MPU6050. Check SDA on GPIO#PIN_IMU_SDA, SCL on GPIO#PIN_IMU_SCL, VCC on 3V3 and ground. Without the IMU the hold-upright gesture never arms, and `arm` drops straight to FAULT.]),
   ([Drops out to FAULT mid-balance], [Pitch passed the 45° tilt cutoff. It clears after 2 s held upright within 5°.]),
   ([An undriven input reads HIGH (\~2.2 V)], [RP2350-E9 on the A2 stepping: internal pull-downs do not hold. Use an external resistor or a driven line.]),
+  ([`ctrl lqr` answers `refused`], [No valid LQR gains: the last solve failed (the message says why). `q_x` 0 is refused on purpose — nothing would hold position. Correct the parameter with `set`.]),
+  ([Robot jerks when switching back to `ctrl pid`], [With `ki` 0 the PID has no integral to absorb the difference. Set a small `ki`, or switch while the robot is calm.]),
   ([Saved gains lost after a power cycle], [`save` refuses while armed; `disarm` first and check `stat`'s `saves` line.]),
   ([Board will not flash], [Hold BOOT while plugging in USB (or hold BOOT and tap RESET) and copy the UF2 by hand.]),
   aligns: (left, left),
@@ -381,7 +455,8 @@ The angle loop starts from `kp` 28, `ki` 0, `kd` 1.2; the velocity loop from
   #text(9pt, fill: theme.muted)[
     Authoritative pin data: `packages/robotics/balancebot/src/pin_config.h` ·
     Design: `docs/requirements/PRD-012-balancebot.md`,
-    `docs/decisions/ADR-018-pico-sdk-balancebot.md` \
+    `docs/decisions/ADR-018-pico-sdk-balancebot.md`,
+    `docs/decisions/ADR-026-balancebot-lqr-live-switch.md` \
     Regenerate this PDF with `just balancebot::build-guide`.
   ]
 ]

@@ -26,4 +26,17 @@ void pid_reset(pid_t *pid);
 // the numeric difference instead.
 float pid_update(pid_t *pid, float setpoint, float measurement, float rate, float dt);
 
+// Set the integral state, clamped to +/- integral_max.
+void pid_set_integral(pid_t *pid, float integral);
+
+// Bumpless transfer (back-calculation): the integral to load with
+// pid_set_integral() so that the NEXT pid_update() with these exact
+// arguments returns `target_out`. Pure: reads gains and nothing else.
+// With ki == 0 the integral cannot move the output and 0 is returned.
+// Pass a measured `rate` (not NAN): the numeric-derivative path depends on
+// history this function does not model. If the result is clamped by
+// pid_set_integral(), the output saturates short of `target_out`.
+float pid_bumpless_integral(const pid_t *pid, float setpoint, float measurement, float rate,
+                            float dt, float target_out);
+
 #endif  // BALANCEBOT_PID_H
