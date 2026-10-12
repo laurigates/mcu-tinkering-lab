@@ -19,6 +19,10 @@ void balance_control_core1_main(void);
 // Queue a command to the control loop. Returns false if the queue is full.
 bool balance_control_send_cmd(const balance_cmd_t *cmd);
 
+// Queue `n` commands all-or-nothing: returns false, queuing none, if the
+// queue lacks room for all of them. Core 0 only (single producer).
+bool balance_control_send_cmds(const balance_cmd_t *cmds, unsigned n);
+
 // Copy out the latest consistent telemetry snapshot (seqlock read).
 void balance_control_get_snapshot(balance_snapshot_t *out);
 

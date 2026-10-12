@@ -49,6 +49,7 @@ int main(void)
 
     printf("\nbalancebot %s — XIAO RP2350\n", BALANCEBOT_VERSION);
     printf("type 'help' for commands\n");
+    cli_print_boot_notes();
 
     while (true) {
         cli_poll();

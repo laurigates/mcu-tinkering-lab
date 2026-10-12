@@ -43,13 +43,15 @@ void telemetry_poll(void)
     next_due = make_timeout_time_ms(interval_ms);
 
     if (header_pending) {
-        printf("t_ms,state,angle_deg,gyro_dps,setpoint_deg,rate_sps,loop_us\n");
+        printf("t_ms,state,angle_deg,gyro_dps,setpoint_deg,rate_sps,loop_us,ctrl,pos_m\n");
         header_pending = false;
     }
 
     balance_snapshot_t s;
     balance_control_get_snapshot(&s);
-    printf("%lu,%u,%.3f,%.2f,%.3f,%.1f,%.1f\n",
+    // Columns are append-only: existing plots index by position.
+    printf("%lu,%u,%.3f,%.2f,%.3f,%.1f,%.1f,%u,%.4f\n",
            (unsigned long)to_ms_since_boot(get_absolute_time()), s.state, (double)s.pitch_deg,
-           (double)s.gyro_dps, (double)s.angle_setpoint, (double)s.rate_cmd_sps, (double)s.loop_us);
+           (double)s.gyro_dps, (double)s.angle_setpoint, (double)s.rate_cmd_sps, (double)s.loop_us,
+           s.ctrl_mode, (double)s.pos_m);
 }
