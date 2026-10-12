@@ -152,6 +152,7 @@ class Output:
 @dataclass(frozen=True)
 class HardwareModel:
     project_dir: Path
+    convention: str  # [source] convention: a key of header.CONVENTIONS
     headers: tuple[Path, ...]  # header first, then extra_headers, in order
     defines: dict[str, str]  # every #define across `headers`
     roles: dict[str, int]  # pin role -> GPIO, from `header` alone
@@ -513,6 +514,7 @@ def join(project_dir: Path, repo_root: Path = REPO_ROOT) -> HardwareModel:
 
     return HardwareModel(
         project_dir=project_dir,
+        convention=convention,
         headers=headers,
         defines=defines,
         roles=roles,

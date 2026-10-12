@@ -573,6 +573,23 @@ class DocsDiscoveryTest(Fixture):
         self.assertEqual(self.drifted(), [])
         self.assertIn("| + | GPIO7 (D1) |", notes.read_text(encoding="utf-8"))
 
+    def test_the_notice_names_the_projects_own_header(self):
+        # balancebot's header is src/pin_config.h; a notice hardcoding main/
+        # would send the reader to a file that does not exist.
+        (self.proj / "main/pin_config.h").rename(self.proj / "pin_config.h")
+        (self.proj / "src").mkdir()
+        (self.proj / "pin_config.h").rename(self.proj / "src/pin_config.h")
+        sidecar = self.proj / "hardware.toml"
+        sidecar.write_text(
+            sidecar.read_text().replace("main/pin_config.h", "src/pin_config.h")
+        )
+        notes = write(self.proj / "WIRING.md", self.STALE)
+        with redirect_stdout(io.StringIO()):
+            self.assertEqual(main([str(self.proj)], repo_root=self.root), 0)
+        text = notes.read_text(encoding="utf-8")
+        self.assertIn(NOTICE.replace("main/", "src/"), text)
+        self.assertNotIn("main/pin_config.h", text)
+
     def test_a_project_outside_a_git_work_tree_is_an_error(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)

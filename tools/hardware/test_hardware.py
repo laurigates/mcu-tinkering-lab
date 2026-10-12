@@ -8,6 +8,7 @@ system python3, the justfile, the pre-commit hook) with nothing to install:
 
 from __future__ import annotations
 
+import importlib.util
 import os
 import re
 import shutil
@@ -20,6 +21,7 @@ from pathlib import Path
 from unittest import mock
 
 import hardware.header
+import hardware.layout
 from hardware import (
     HardwareError,
     join,
@@ -31,6 +33,8 @@ from hardware import (
 REPO_ROOT = Path(__file__).resolve().parents[2]
 UNIFIED = REPO_ROOT / "packages/robocar/unified"
 XIAO_S3 = REPO_ROOT / "docs/reference/boards/xiao-esp32s3.md"
+BALANCEBOT = REPO_ROOT / "packages/robotics/balancebot"
+XIAO_RP2350 = REPO_ROOT / "docs/reference/boards/xiao-rp2350.md"
 GENERATOR = REPO_ROOT / "tools/typst/generate-pin-defs.py"
 
 
@@ -100,8 +104,50 @@ class RobocarConventionTest(unittest.TestCase):
         self.assertEqual(roles_from_defines(defines, "robocar"), {"I2C_SDA_PIN": 5})
 
     def test_unknown_convention_is_an_error_naming_the_known_ones(self):
-        with self.assertRaisesRegex(HardwareError, "robocar"):
-            roles_from_defines({}, "balancebot")
+        with self.assertRaisesRegex(HardwareError, "balancebot.*robocar"):
+            roles_from_defines({}, "gamepad-synth")
+
+    def test_a_bare_integer_is_not_a_robocar_pin_even_with_a_pin_name(self):
+        self.assertEqual(roles_from_defines({"PIN_IMU_SDA": "6"}, "robocar"), {})
+
+
+class BalancebotConventionTest(unittest.TestCase):
+    def test_pin_prefixed_bare_integers_are_roles(self):
+        defines = {
+            "PIN_IMU_SDA": "6",
+            "PIN_STATUS_LED": "25",
+            "CONTROL_LOOP_HZ": "500",  # a bare integer, but not a pin
+            "MPU6050_ADDR": "0x68",
+            "SPIN_COUNT": "3",  # PIN_ inside the name, not at its start
+            "PIN_ALIAS": "PIN_IMU_SDA",  # not an integer
+        }
+        self.assertEqual(
+            roles_from_defines(defines, "balancebot"),
+            {"PIN_IMU_SDA": 6, "PIN_STATUS_LED": 25},
+        )
+
+    def test_gpio_num_values_are_not_balancebot_pins(self):
+        self.assertEqual(roles_from_defines({"PIN_X": "GPIO_NUM_5"}, "balancebot"), {})
+
+    def test_the_real_header(self):
+        # Every #define in src/pin_config.h except the include guard is a pin.
+        defines = parse_defines([BALANCEBOT / "src/pin_config.h"])
+        self.assertEqual(
+            roles_from_defines(defines, "balancebot"),
+            {
+                "PIN_IMU_SDA": 6,
+                "PIN_IMU_SCL": 7,
+                "PIN_IMU_INT": 5,
+                "PIN_STEP_LEFT": 2,
+                "PIN_STEP_RIGHT": 3,
+                "PIN_DIR_LEFT": 4,
+                "PIN_DIR_RIGHT": 0,
+                "PIN_MOTOR_NENABLE": 1,
+                "PIN_STATUS_LED": 25,
+                "PIN_BATT_ADC": 29,
+                "PIN_BATT_ADC_ENABLE": 19,
+            },
+        )
 
 
 class BoardTableTest(unittest.TestCase):
@@ -216,6 +262,63 @@ class XiaoEsp32s3ReferenceTest(unittest.TestCase):
 
     def test_gpio3_is_the_strapping_pin(self):
         self.assertEqual([p.name for p in self.board.pins if p.strapping], ["D2"])
+
+
+class XiaoRp2350ReferenceTest(unittest.TestCase):
+    """The board reference a balancebot join reads."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.board = parse_board_table(XIAO_RP2350)
+
+    def test_all_fourteen_header_positions_are_listed(self):
+        # Exactly the side header: the bottom-pad table must not be read too.
+        self.assertEqual(len(self.board.pins), 14)
+        self.assertNotIn("D11", self.board.by_name)
+
+    def test_each_side_is_positions_one_to_seven(self):
+        for side in ("L", "R"):
+            positions = sorted(p.pos for p in self.board.pins if p.side == side)
+            self.assertEqual(positions, list(range(1, 8)), side)
+
+    def test_physical_order_matches_seeeds_footprint(self):
+        # Seeed's XIAO-RP2350-DIP footprint: pads 1-7 (D0-D6) down one edge,
+        # 8-14 (D7, D8, D9, D10, 3V3_OUT, GND, VBUS) back up the other, pads 1
+        # and 14 beside the USB-C connector.
+        expect = {
+            "D0": ("L", 1), "D6": ("L", 7),
+            "5V": ("R", 1), "GND": ("R", 2), "3V3": ("R", 3),
+            "D10": ("R", 4), "D9": ("R", 5), "D8": ("R", 6), "D7": ("R", 7),
+        }  # fmt: skip
+        for name, where in expect.items():
+            pin = self.board.by_name[name]
+            self.assertEqual((pin.side, pin.pos), where, name)
+
+    def test_silkscreen_to_gpio_agrees_with_balancebots_header_comments(self):
+        # src/pin_config.h names the XIAO pad beside each GPIO.
+        expect = {
+            "D3": 5,
+            "D4": 6,
+            "D5": 7,
+            "D6": 0,
+            "D7": 1,
+            "D8": 2,
+            "D9": 4,
+            "D10": 3,
+        }
+        for name, gpio in expect.items():
+            self.assertEqual(self.board.by_name[name].gpio, gpio, name)
+
+    def test_power_pads_have_no_gpio(self):
+        for name in ("5V", "GND", "3V3"):
+            self.assertIsNone(self.board.by_name[name].gpio, name)
+
+    def test_layout_reads_the_same_table(self):
+        layout = hardware.layout.parse_layout(XIAO_RP2350)
+        self.assertEqual(
+            [p.name for p in layout.side("R")],
+            ["5V", "GND", "3V3", "D10", "D9", "D8", "D7"],
+        )
 
 
 SIDECAR = """\
@@ -876,6 +979,46 @@ class GeneratorTest(unittest.TestCase):
         # The justfile runs it from the project, CI from the repo root.
         out = self.run_generator(UNIFIED, ".")
         self.assertEqual(out, self.committed.read_bytes())
+
+    def test_balancebot_convention_emits_its_own_extract_list(self):
+        # A stand-in project: balancebot's real header, every role undrawn, so
+        # the test does not depend on a hardware.toml in the project itself.
+        with tempfile.TemporaryDirectory() as tmp:
+            proj = Path(tmp) / "bb"
+            (proj / "src").mkdir(parents=True)
+            shutil.copy(BALANCEBOT / "src/pin_config.h", proj / "src/pin_config.h")
+            roles = roles_from_defines(
+                parse_defines([proj / "src/pin_config.h"]), "balancebot"
+            )
+            sidecar = textwrap.dedent("""\
+                [source]
+                convention = "balancebot"
+                header = "src/pin_config.h"
+                board = "docs/reference/boards/xiao-rp2350.md"
+                """) + "".join(
+                f'\n[[undrawn]]\nrole = "{r}"\nwhy = "test"\n' for r in sorted(roles)
+            )
+            (proj / "hardware.toml").write_text(sidecar)
+            text = self.run_generator(REPO_ROOT, str(proj)).decode()
+        self.assertIn("#let PIN_IMU_SDA = 6\n", text)
+        self.assertIn("#let PIN_MOTOR_NENABLE = 1\n", text)
+        self.assertIn("#let PIN_BATT_ADC_ENABLE = 19\n", text)
+        self.assertNotIn("I2C_SDA_PIN", text)
+        # Not mounted in the root justfile, so it names the script itself.
+        self.assertIn(
+            "regenerate with `python3 tools/typst/generate-pin-defs.py ", text
+        )
+
+    def test_the_regenerate_line_names_the_projects_just_module(self):
+        spec = importlib.util.spec_from_file_location("gen_pin_defs", GENERATOR)
+        gen = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(gen)
+        self.assertEqual(
+            gen.regenerate_command(BALANCEBOT), "just balancebot::gen-pin-defs"
+        )
+        self.assertEqual(
+            gen.regenerate_command(UNIFIED), "just robocar-unified::gen-pin-defs"
+        )
 
 
 if __name__ == "__main__":
