@@ -6,6 +6,7 @@
 #include "config.h"
 #include "hardware/watchdog.h"
 #include "imu_filter.h"
+#include "lqr.h"
 #include "mpu6050.h"
 #include "param_store.h"
 #include "pico/flash.h"
@@ -27,8 +28,20 @@ static imu_filter_t filter;
 static pid_t angle_pid;
 static pid_t vel_pid;
 static balance_state_t state = BAL_STATE_IDLE;
-static float wheel_rate_sps;  // integrated PID output (signed, steps/s)
-static float angle_setpoint;  // deg, 0 + velocity-loop lean offset
+static float wheel_rate_sps;   // integrated controller output (signed, steps/s)
+static float angle_setpoint;   // deg, 0 + velocity-loop lean offset (PID only)
+static float wheel_pos_steps;  // integrated wheel_rate_sps since entering RUN
+static float last_accel_sps2;  // last applied controller output (steps/s^2)
+
+// LQR. Float only on this core: the double solve happens on core 0 and the
+// result arrives as one CMD_SET_LQR_GAINS item, so K never changes mid-tick
+// and is never half-updated.
+static ctrl_mode_t ctrl_mode;  // law in use; starts PID, LQR only via command
+static float lqr_K[LQR_N];
+static bool lqr_k_valid;
+static float x_ref_steps;          // position the LQR holds (set on PID->LQR)
+static float steps_per_m;          // from steps_per_rev and wheel_diam_m
+static bool pid_bumpless_pending;  // LQR->PID: back-calculate on the next RUN tick
 static float open_loop_sps[STEPPER_COUNT];
 static uint32_t gesture_ticks;  // consecutive ticks satisfying arm/clear condition
 static bool save_ok;
@@ -43,18 +56,47 @@ static void apply_gains(void)
     vel_pid.kp = params.vel_kp;
     vel_pid.ki = params.vel_ki;
     filter.alpha = params.filter_alpha;
+    steps_per_m = lqr_steps_per_metre(params.steps_per_rev, params.wheel_diam_m);
+}
+
+// A model value the unit conversion divides by must stay positive and finite;
+// core 0 validates before sending, this is the last line.
+static bool positive(float v)
+{
+    return isfinite(v) && v > 0.0f;
 }
 
 void balance_control_init(const balance_params_t *initial)
 {
     params = *initial;
-    queue_init(&cmd_queue, sizeof(balance_cmd_t), 16);
+    // Fail closed: core 1 starts on the PID and switches to LQR only when a
+    // CMD_SET_CONTROLLER arrives after a valid CMD_SET_LQR_GAINS.
+    params.ctrl_mode = CTRL_PID;
+    ctrl_mode = CTRL_PID;
+    lqr_k_valid = false;
+    steps_per_m = lqr_steps_per_metre(params.steps_per_rev, params.wheel_diam_m);
+    queue_init(&cmd_queue, sizeof(balance_cmd_t), BAL_CMD_QUEUE_DEPTH);
     memset((void *)&snapshot, 0, sizeof snapshot);
 }
 
 bool balance_control_send_cmd(const balance_cmd_t *cmd)
 {
     return queue_try_add(&cmd_queue, cmd);
+}
+
+bool balance_control_send_cmds(const balance_cmd_t *cmds, unsigned n)
+{
+    // Core 0 is the only producer, so free space can only grow between this
+    // check and the adds: all n land, or none do.
+    if (BAL_CMD_QUEUE_DEPTH - queue_get_level(&cmd_queue) < n) {
+        return false;
+    }
+    for (unsigned i = 0; i < n; i++) {
+        if (!queue_try_add(&cmd_queue, &cmds[i])) {
+            return false;
+        }
+    }
+    return true;
 }
 
 void balance_control_get_snapshot(balance_snapshot_t *out)
@@ -86,6 +128,12 @@ static void publish(uint32_t tick, bool imu_ok, float pitch, float gyro, float l
     snapshot.rate_cmd_sps = wheel_rate_sps;
     snapshot.angle_setpoint = angle_setpoint;
     snapshot.loop_us = loop_us;
+    snapshot.ctrl_mode = (uint8_t)ctrl_mode;
+    snapshot.lqr_k_valid = lqr_k_valid;
+    for (int i = 0; i < LQR_N; i++) {
+        snapshot.lqr_K[i] = lqr_K[i];
+    }
+    snapshot.pos_m = wheel_pos_steps / steps_per_m;
     __compiler_memory_barrier();
     snapshot.seq++;  // even: stable
 }
@@ -100,6 +148,10 @@ static void enter_state(balance_state_t next)
         pid_reset(&vel_pid);
         wheel_rate_sps = 0.0f;
         angle_setpoint = 0.0f;
+        wheel_pos_steps = 0.0f;
+        x_ref_steps = 0.0f;
+        last_accel_sps2 = 0.0f;
+        pid_bumpless_pending = false;
         stepper_enable(true);
         if (!watchdog_started) {
             // Enabled on first arm so bench work (flash saves, gyro cal)
@@ -144,6 +196,37 @@ static void handle_command(const balance_cmd_t *cmd)
                 case PARAM_MAX_RATE:
                     params.max_rate_sps = cmd->value;
                     break;
+                // Model and weights: the gains arrive separately (core 0
+                // solves); these are kept for CMD_SAVE and the steps<->metres
+                // scale.
+                case PARAM_L_EFF:
+                    params.l_eff_m = cmd->value;
+                    break;
+                case PARAM_WHEEL_DIAM:
+                    if (positive(cmd->value)) {
+                        params.wheel_diam_m = cmd->value;
+                    }
+                    break;
+                case PARAM_STEPS_PER_REV:
+                    if (positive(cmd->value)) {
+                        params.steps_per_rev = cmd->value;
+                    }
+                    break;
+                case PARAM_Q_THETA:
+                    params.q_theta = cmd->value;
+                    break;
+                case PARAM_Q_DTHETA:
+                    params.q_dtheta = cmd->value;
+                    break;
+                case PARAM_Q_X:
+                    params.q_x = cmd->value;
+                    break;
+                case PARAM_Q_DX:
+                    params.q_dx = cmd->value;
+                    break;
+                case PARAM_R:
+                    params.r = cmd->value;
+                    break;
                 default:
                     break;
             }
@@ -171,6 +254,38 @@ static void handle_command(const balance_cmd_t *cmd)
                 save_ok = param_store_save(&params);
                 save_count++;
             }
+            break;
+        case CMD_SET_LQR_GAINS: {
+            bool ok = true;
+            for (int i = 0; i < LQR_N; i++) {
+                ok = ok && isfinite(cmd->lqr_K[i]);
+            }
+            if (ok) {
+                for (int i = 0; i < LQR_N; i++) {
+                    lqr_K[i] = cmd->lqr_K[i];
+                }
+                lqr_k_valid = true;
+            }
+            break;
+        }
+        case CMD_SET_CONTROLLER:
+            if (cmd->ctrl_mode == CTRL_LQR && ctrl_mode != CTRL_LQR) {
+                if (!lqr_k_valid || !positive(steps_per_m)) {
+                    break;  // refused; core 0 checks first and reports why
+                }
+                // PID -> LQR, bumpless: hold the current position (error
+                // starts at 0); wheel_rate_sps carries over unchanged.
+                x_ref_steps = wheel_pos_steps;
+                angle_setpoint = 0.0f;
+                pid_bumpless_pending = false;
+                ctrl_mode = CTRL_LQR;
+            } else if (cmd->ctrl_mode == CTRL_PID && ctrl_mode != CTRL_PID) {
+                // LQR -> PID: the integral back-calculation needs this tick's
+                // pitch, so it runs in the RUN branch below.
+                pid_bumpless_pending = (state == BAL_STATE_RUN);
+                ctrl_mode = CTRL_PID;
+            }
+            params.ctrl_mode = (uint32_t)ctrl_mode;
             break;
         case CMD_OPEN_LOOP_RATE:
             if (state == BAL_STATE_IDLE && cmd->param_id < STEPPER_COUNT) {
@@ -254,16 +369,47 @@ void balance_control_core1_main(void)
                     enter_state(BAL_STATE_FAULT);
                     break;
                 }
-                // Outer loop (100 Hz): lean against wheel velocity to hold
-                // station. Positive wheel rate = drifting forward -> lean back.
-                if (tick % VELOCITY_LOOP_DIV == 0) {
-                    angle_setpoint =
-                        pid_update(&vel_pid, 0.0f, wheel_rate_sps, NAN, dt * VELOCITY_LOOP_DIV);
-                }
-                // Inner loop: PID output is wheel acceleration (steps/s^2),
-                // integrated into a step rate.
                 {
-                    float accel = pid_update(&angle_pid, angle_setpoint, pitch, gyro_rate, dt);
+                    float accel;
+                    if (ctrl_mode == CTRL_LQR) {
+                        // u = -K [theta, theta_dot, x - x_ref, x_dot] in m/s^2,
+                        // scaled to steps/s^2. theta's sign follows the PID
+                        // (see lqr.h), so IMU_PITCH_SIGN carries over.
+                        float x_err_m = (wheel_pos_steps - x_ref_steps) / steps_per_m;
+                        float x_dot = wheel_rate_sps / steps_per_m;
+                        float u = lqr_accel(lqr_K, lqr_theta_from_pitch(pitch),
+                                            lqr_theta_dot_from_gyro(gyro_rate), x_err_m, x_dot);
+                        accel = u * steps_per_m;
+                        if (accel > ANGLE_PID_OUT_MAX) {
+                            accel = ANGLE_PID_OUT_MAX;
+                        }
+                        if (accel < -ANGLE_PID_OUT_MAX) {
+                            accel = -ANGLE_PID_OUT_MAX;
+                        }
+                    } else {
+                        // Outer loop (100 Hz): lean against wheel velocity to
+                        // hold station. Positive wheel rate = drifting forward
+                        // -> lean back.
+                        if (pid_bumpless_pending) {
+                            // LQR -> PID: the velocity PI restarts from a zero
+                            // integral, then the angle integral is loaded so
+                            // this tick's PID output equals the last LQR one.
+                            pid_reset(&vel_pid);
+                            angle_setpoint = pid_update(&vel_pid, 0.0f, wheel_rate_sps, NAN,
+                                                        dt * VELOCITY_LOOP_DIV);
+                            pid_set_integral(
+                                &angle_pid, pid_bumpless_integral(&angle_pid, angle_setpoint, pitch,
+                                                                  gyro_rate, dt, last_accel_sps2));
+                            pid_bumpless_pending = false;
+                        } else if (tick % VELOCITY_LOOP_DIV == 0) {
+                            angle_setpoint = pid_update(&vel_pid, 0.0f, wheel_rate_sps, NAN,
+                                                        dt * VELOCITY_LOOP_DIV);
+                        }
+                        // Inner loop: PID output is wheel acceleration
+                        // (steps/s^2), integrated into a step rate.
+                        accel = pid_update(&angle_pid, angle_setpoint, pitch, gyro_rate, dt);
+                    }
+                    last_accel_sps2 = accel;
                     wheel_rate_sps += accel * dt;
                     if (wheel_rate_sps > params.max_rate_sps) {
                         wheel_rate_sps = params.max_rate_sps;
@@ -271,6 +417,7 @@ void balance_control_core1_main(void)
                     if (wheel_rate_sps < -params.max_rate_sps) {
                         wheel_rate_sps = -params.max_rate_sps;
                     }
+                    wheel_pos_steps += wheel_rate_sps * dt;
                     stepper_set_rate(STEPPER_LEFT, wheel_rate_sps, params.max_rate_sps, dt);
                     stepper_set_rate(STEPPER_RIGHT, wheel_rate_sps, params.max_rate_sps, dt);
                 }

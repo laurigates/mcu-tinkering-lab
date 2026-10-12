@@ -5,6 +5,7 @@ monorepo-wide conventions, and the canonical design documents:
 
 - [PRD-012: Balancebot](../../../docs/requirements/PRD-012-balancebot.md)
 - [ADR-018: Pico SDK Toolchain and Balancebot Architecture](../../../docs/decisions/ADR-018-pico-sdk-balancebot.md)
+- [ADR-026: LQR With a Live, Bumpless PID/LQR Switch](../../../docs/decisions/ADR-026-balancebot-lqr-live-switch.md)
 
 ## What this project is
 
@@ -18,9 +19,10 @@ ESP-IDF** — no sdkconfig, no idf.py; plain CMake with
 
 ```
 core 1 (hard real-time, 500 Hz):  MPU6050 → complementary filter → angle PID
-                                  (output = wheel ACCELERATION) → integrate →
-                                  step rate → PIO0 SM0/SM1 step pulses
+                                  or LQR (output = wheel ACCELERATION) →
+                                  integrate → step rate → PIO0 SM0/SM1 pulses
 core 0 (soft):                    USB CDC CLI + CSV telemetry + LED + battery
+                                  + LQR gain solve (double, ~2.1 KB stack)
 ```
 
 - core0 → core1: `pico_util` queue of `balance_cmd_t` (see `src/ipc.h`)
@@ -31,11 +33,12 @@ core 0 (soft):                    USB CDC CLI + CSV telemetry + LED + battery
 
 ```bash
 just balancebot::build   # containerized, → build/balancebot.uf2
-just balancebot::test    # host unit tests for pid/imu_filter/crc32
+just balancebot::test    # host unit tests: pid, imu_filter, crc32, lqr, param_record
 ```
 
-`pid.c`, `imu_filter.c`, `crc32.c` are **pure C with no SDK includes** so
-the host tests can compile them — keep them that way.
+`pid.c`, `imu_filter.c`, `crc32.c`, `lqr.c` and `param_record.c` are **pure C
+with no SDK includes** so the host tests can compile them — keep them that
+way. `param_store.c` only moves `param_record.c`'s bytes to and from flash.
 
 ## Don't
 
@@ -58,5 +61,13 @@ the host tests can compile them — keep them that way.
   `.github/workflows/_ci-build-pico.yml` (bump both together).
 - Don't rely on internal GPIO pull-downs — broken on the A2 stepping
   (RP2350-E9); use external pulls or actively driven lines.
+- Don't call `lqr_solve()` from core 1 or from anything the loop reaches —
+  it is double math (the M33 FPU is single precision; double goes through
+  SDK routines) with ~2.1 KB of stack. Core 0
+  solves; core 1 receives K as one `CMD_SET_LQR_GAINS` item. Keep core-1 code
+  float-only (`-Wdouble-promotion` is on for the loop's sources).
+- Don't reorder `balance_params_t`'s first seven floats — they are the v1
+  flash record, and `param_record.c` migrates from that prefix. Add new
+  fields at the end and bump `PARAM_VERSION` with a migration and a test.
 - Don't move the param store to the last flash sector — UF2 downloads
   erase it (picotool RP2350-E10 workaround block).

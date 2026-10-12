@@ -4,6 +4,8 @@
 #ifndef BALANCEBOT_CONFIG_H
 #define BALANCEBOT_CONFIG_H
 
+#include "lqr.h"
+
 // Control loop
 #define CONTROL_LOOP_HZ 500
 #define CONTROL_DT_S (1.0f / CONTROL_LOOP_HZ)
@@ -24,11 +26,22 @@
 #define DEFAULT_VEL_KI 0.0005f
 #define DEFAULT_MAX_RATE_SPS 4000.0f  // step-rate clamp (steps/s), 2.5 rev/s at 1/8 ustep
 
+// Default LQR model and weights (runtime-tunable, PARAM_VERSION 2). The
+// values and their rationale live once, in lqr.h. ctrl_mode defaults to PID.
+#define DEFAULT_L_EFF_M LQR_DEFAULT_L_EFF_M
+#define DEFAULT_WHEEL_DIAM_M LQR_DEFAULT_WHEEL_DIAM_M
+#define DEFAULT_STEPS_PER_REV LQR_DEFAULT_STEPS_PER_REV
+#define DEFAULT_Q_THETA LQR_DEFAULT_Q_THETA
+#define DEFAULT_Q_DTHETA LQR_DEFAULT_Q_DTHETA
+#define DEFAULT_Q_X LQR_DEFAULT_Q_X
+#define DEFAULT_Q_DX LQR_DEFAULT_Q_DX
+#define DEFAULT_R LQR_DEFAULT_R
+
 // Fixed limits (not runtime-tunable)
 #define MAX_ACCEL_SPS2 40000.0f      // acceleration clamp (steps/s^2)
 #define MIN_RATE_SPS 30.0f           // below this the PIO SM is parked
 #define MAX_LEAN_OFFSET_DEG 3.0f     // velocity loop authority over the angle setpoint
-#define ANGLE_PID_OUT_MAX 40000.0f   // angle PID output clamp (steps/s^2)
+#define ANGLE_PID_OUT_MAX 40000.0f   // angle PID (and LQR) output clamp (steps/s^2)
 #define ANGLE_INTEGRAL_MAX 10000.0f  // anti-windup clamp
 
 // Safety
@@ -38,6 +51,10 @@
 #define FAULT_CLEAR_DEG 5.0f   // upright within this ...
 #define FAULT_CLEAR_S 2.0f     // ... for this long clears FAULT to IDLE
 #define WATCHDOG_TIMEOUT_MS 100
+
+// core0 -> core1 command queue depth. `load` sends every parameter plus the
+// LQR gains and the controller in one burst (PARAM_COUNT + 2 items).
+#define BAL_CMD_QUEUE_DEPTH 32
 
 // Telemetry
 #define TELEMETRY_DEFAULT_HZ 25
