@@ -1,6 +1,10 @@
 # Balancebot Wiring
 
 Board: Seeed XIAO RP2350. Pin-map source of truth: `src/pin_config.h`.
+The pin table and the power diagram marked `GENERATED` are emitted from
+[`hardware.toml`](hardware.toml), the header and the board reference by
+`just hardware::gen` (ADR-021), and CI fails when they are stale — change
+those sources, not the generated blocks.
 
 ![Schematic](../../../docs/schematics/images/balancebot.png)
 
@@ -23,22 +27,76 @@ Schematic source: [`docs/schematics/circuits/balancebot.py`](../../../docs/schem
    All grounds common: battery −, both DRV8825 GND, buck GND, XIAO GND.
 ```
 
+### Power and signal topology
+
+Solid edges are supply rails, labelled with the rail and the pin it lands on;
+dotted edges are the XIAO's signal nets, each with its GPIO and header pad;
+unlabelled edges are loads a part drives from its own terminals. Ground is not
+drawn: every part shares it.
+
+<!-- BEGIN GENERATED: power-diagram -->
+<!-- Generated from hardware.toml, src/pin_config.h and the board reference by `just hardware::gen` — edit those, not this block. -->
+
+```mermaid
+graph TD
+    pack["2–3S LiPo<br/>7.4–11.1 V"]
+    buck["5 V buck converter"]
+    drv_left["Left DRV8825"]
+    drv_right["Right DRV8825"]
+    mcu["XIAO RP2350"]
+    imu["GY-521 MPU6050<br/>I2C 0x68"]
+    pullup["10 kΩ resistor<br/>nENABLE pull-up"]
+    stepper_left["Left NEMA17"]
+    stepper_right["Right NEMA17"]
+    pack -->|"VBAT → IN+"| buck
+    pack -->|"VBAT → VMOT"| drv_left
+    pack -->|"VBAT → VMOT"| drv_right
+    buck -->|"5V → 5V"| mcu
+    mcu -->|"3V3 → VCC"| imu
+    mcu -->|"3V3 → A"| pullup
+    mcu -->|"3V3 → nSLEEP"| drv_left
+    mcu -->|"3V3 → nRESET"| drv_left
+    mcu -->|"3V3 → M0"| drv_left
+    mcu -->|"3V3 → M1"| drv_left
+    mcu -->|"3V3 → nSLEEP"| drv_right
+    mcu -->|"3V3 → nRESET"| drv_right
+    mcu -->|"3V3 → M0"| drv_right
+    mcu -->|"3V3 → M1"| drv_right
+    mcu -.->|"GPIO6 (D4) → SDA<br/>GPIO7 (D5) → SCL<br/>GPIO5 (D3) → INT"| imu
+    mcu -.->|"GPIO2 (D8) → STEP<br/>GPIO4 (D9) → DIR<br/>GPIO1 (D7) → nENABLE"| drv_left
+    mcu -.->|"GPIO3 (D10) → STEP<br/>GPIO0 (D6) → DIR<br/>GPIO1 (D7) → nENABLE"| drv_right
+    mcu -.->|"GPIO1 (D7) → B"| pullup
+    drv_left --> stepper_left
+    drv_right --> stepper_right
+```
+
+<!-- END GENERATED -->
+
 ## XIAO RP2350 connections
 
-| XIAO pin | GPIO | Connects to |
-|----------|------|-------------|
-| D4 | GPIO6 | MPU6050 SDA |
-| D5 | GPIO7 | MPU6050 SCL |
-| D3 | GPIO5 | MPU6050 INT |
-| D8 | GPIO2 | left DRV8825 STEP |
-| D10 | GPIO3 | right DRV8825 STEP |
-| D9 | GPIO4 | left DRV8825 DIR |
-| D6 | GPIO0 | right DRV8825 DIR |
-| D7 | GPIO1 | both DRV8825 nENABLE **+ 10 kΩ pull-up to 3V3** |
-| 3V3 | — | MPU6050 VCC, DRV8825 logic (see below), pull-up |
-| GND | — | common ground |
-| 5V | — | from buck converter output |
-| D0–D2 | GPIO26–28 | spare (ADC-capable) |
+<!-- BEGIN GENERATED: pin-table -->
+<!-- Generated from hardware.toml, src/pin_config.h and the board reference by `just hardware::gen` — edit those, not this block. -->
+
+| Pin | GPIO | Macro | Wired to | Notes |
+|-----|------|-------|----------|-------|
+| D0 | GPIO26 | — | *unassigned* |  |
+| D1 | GPIO27 | — | *unassigned* |  |
+| D2 | GPIO28 | — | *unassigned* |  |
+| D3 | GPIO5 | `PIN_IMU_INT` | GY-521 MPU6050 INT | Data-ready, active high, push-pull; no internal pull (RP2350-E9) |
+| D4 | GPIO6 | `PIN_IMU_SDA` | GY-521 MPU6050 SDA | I2C1 SDA |
+| D5 | GPIO7 | `PIN_IMU_SCL` | GY-521 MPU6050 SCL | I2C1 SCL |
+| D6 | GPIO0 | `PIN_DIR_RIGHT` | Right DRV8825 DIR |  |
+| D7 | GPIO1 | `PIN_MOTOR_NENABLE` | Left DRV8825 nENABLE, Right DRV8825 nENABLE, 10 kΩ resistor B | Active low, shared by both drivers; the pull-up holds the drivers disabled while the XIAO boots, resets or sits in BOOTSEL |
+| D8 | GPIO2 | `PIN_STEP_LEFT` | Left DRV8825 STEP | PIO0 SM0 |
+| D9 | GPIO4 | `PIN_DIR_LEFT` | Left DRV8825 DIR |  |
+| D10 | GPIO3 | `PIN_STEP_RIGHT` | Right DRV8825 STEP | PIO0 SM1 |
+
+<!-- END GENERATED -->
+
+The power pads are not in the table: **3V3** feeds the MPU6050 VCC, the
+DRV8825 nSLEEP/nRESET/M0/M1 straps (see below) and the nENABLE pull-up; **5V**
+takes the buck converter's output; **GND** is the common ground. D0–D2
+(GPIO26–28) are spare and ADC-capable.
 
 The GY-521 MPU6050 breakout has an onboard 3.3 V regulator and works fed
 from 3V3 directly (bypassing the regulator) — INT is push-pull 3.3 V,

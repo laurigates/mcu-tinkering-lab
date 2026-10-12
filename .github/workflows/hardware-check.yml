@@ -17,6 +17,7 @@ on:
     paths:
       - 'packages/**/hardware.toml'
       - 'packages/**/main/*.h'
+      - 'packages/**/src/pin_config.h'
       - 'packages/**/*.md'
       - 'docs/reference/boards/*.md'
       - 'tools/hardware/**'
@@ -27,6 +28,7 @@ on:
     paths:
       - 'packages/**/hardware.toml'
       - 'packages/**/main/*.h'
+      - 'packages/**/src/pin_config.h'
       - 'packages/**/*.md'
       - 'docs/reference/boards/*.md'
       - 'tools/hardware/**'
