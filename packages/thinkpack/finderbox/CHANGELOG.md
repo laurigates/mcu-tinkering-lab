@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.4](https://github.com/laurigates/mcu-tinkering-lab/compare/thinkpack-finderbox-v1.1.3...thinkpack-finderbox-v1.1.4) (2026-10-12)
+
+
+### Bug Fixes
+
+* **ci:** cap led_strip, fix melody-train and simulation Python versions ([#733](https://github.com/laurigates/mcu-tinkering-lab/issues/733)) ([16c99a4](https://github.com/laurigates/mcu-tinkering-lab/commit/16c99a4e78342cf6216c483623fe5b855b100163))
+
 ## [1.1.3](https://github.com/laurigates/mcu-tinkering-lab/compare/thinkpack-finderbox-v1.1.2...thinkpack-finderbox-v1.1.3) (2026-09-13)
 
 

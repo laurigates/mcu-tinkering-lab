@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.7](https://github.com/laurigates/mcu-tinkering-lab/compare/it-troubleshooter-v0.1.6...it-troubleshooter-v0.1.7) (2026-10-12)
+
+
+### Bug Fixes
+
+* **ci:** cap led_strip, fix melody-train and simulation Python versions ([#733](https://github.com/laurigates/mcu-tinkering-lab/issues/733)) ([16c99a4](https://github.com/laurigates/mcu-tinkering-lab/commit/16c99a4e78342cf6216c483623fe5b855b100163))
+
 ## [0.1.6](https://github.com/laurigates/mcu-tinkering-lab/compare/it-troubleshooter-v0.1.5...it-troubleshooter-v0.1.6) (2026-09-19)
 
 

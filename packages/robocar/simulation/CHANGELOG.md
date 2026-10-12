@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.7](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-simulation-v0.1.6...robocar-simulation-v0.1.7) (2026-10-12)
+
+
+### Bug Fixes
+
+* **ci:** cap led_strip, fix melody-train and simulation Python versions ([#733](https://github.com/laurigates/mcu-tinkering-lab/issues/733)) ([16c99a4](https://github.com/laurigates/mcu-tinkering-lab/commit/16c99a4e78342cf6216c483623fe5b855b100163))
+* **deps:** pin dependencies ([#610](https://github.com/laurigates/mcu-tinkering-lab/issues/610)) ([6901032](https://github.com/laurigates/mcu-tinkering-lab/commit/69010321faddf5613abe22a52681786acd1cf830))
+* **deps:** update all non-major dependencies ([#611](https://github.com/laurigates/mcu-tinkering-lab/issues/611)) ([cdedb5c](https://github.com/laurigates/mcu-tinkering-lab/commit/cdedb5cfb755e382f64895d30f301f07767aed9e))
+
 ## [0.1.6](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-simulation-v0.1.5...robocar-simulation-v0.1.6) (2026-09-13)
 
 

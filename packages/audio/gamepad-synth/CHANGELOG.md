@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.10](https://github.com/laurigates/mcu-tinkering-lab/compare/gamepad-synth-v0.1.9...gamepad-synth-v0.1.10) (2026-10-12)
+
+
+### Bug Fixes
+
+* **deps:** pin dependencies ([#610](https://github.com/laurigates/mcu-tinkering-lab/issues/610)) ([6901032](https://github.com/laurigates/mcu-tinkering-lab/commit/69010321faddf5613abe22a52681786acd1cf830))
+* **robocar:** resolve module justfile paths with source_directory() ([#630](https://github.com/laurigates/mcu-tinkering-lab/issues/630)) ([3b53042](https://github.com/laurigates/mcu-tinkering-lab/commit/3b530427b4e06b8af1db7d9313e7092181024d96))
+
 ## [0.1.9](https://github.com/laurigates/mcu-tinkering-lab/compare/gamepad-synth-v0.1.8...gamepad-synth-v0.1.9) (2026-09-22)
 
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.5](https://github.com/laurigates/mcu-tinkering-lab/compare/xbox-switch-bridge-v0.1.4...xbox-switch-bridge-v0.1.5) (2026-10-12)
+
+
+### Bug Fixes
+
+* **ci:** cap led_strip, fix melody-train and simulation Python versions ([#733](https://github.com/laurigates/mcu-tinkering-lab/issues/733)) ([16c99a4](https://github.com/laurigates/mcu-tinkering-lab/commit/16c99a4e78342cf6216c483623fe5b855b100163))
+
 ## [0.1.4](https://github.com/laurigates/mcu-tinkering-lab/compare/xbox-switch-bridge-v0.1.3...xbox-switch-bridge-v0.1.4) (2026-09-13)
 
 
