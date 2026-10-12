@@ -11,9 +11,9 @@ A *channel role* is the same idea one hop out: a PWM-driver output bound to a
 channel number (`#define SERVO_PAN_CHANNEL 6`), spelled per convention in
 `CHANNEL_CONVENTIONS` (#666).
 
-Only `robocar` is implemented. The other two are named here so the next
-project to adopt a hardware.toml extends this table rather than writing a
-parser of its own (ADR-021: one join, many emitters).
+`robocar` and `balancebot` are implemented. `gamepad-synth` is named here so
+the next project to adopt a hardware.toml extends this table rather than
+writing a parser of its own (ADR-021: one join, many emitters).
 """
 
 from __future__ import annotations
@@ -34,11 +34,15 @@ _DEFINE = re.compile(
     r"^[ \t]*#define[ \t]+(\w+)[ \t]+(.+?)(?:[ \t]*//.*)?$", re.MULTILINE
 )
 
-# Convention name -> regex whose group 1 is the GPIO number, matched against
-# the whole macro value. A macro whose value does not match is not a pin role
-# (a frequency, an address, a PCA9685 channel).
-CONVENTIONS: dict[str, re.Pattern[str]] = {
-    "robocar": re.compile(r"GPIO_NUM_\(?(\d+)\)?"),
+# Convention name -> (name pattern, value pattern) for a *pin role*, each
+# matched against the whole macro name or value; the value's group 1 is the
+# GPIO number. A macro failing either is not a pin role (a frequency, an
+# address, a PCA9685 channel). robocar's value carries the type (`GPIO_NUM_7`),
+# so any name will do. balancebot's value is a bare integer, which a count or a
+# rate also is, so there the name is what marks a pin: `PIN_IMU_SDA`.
+CONVENTIONS: dict[str, tuple[re.Pattern[str], re.Pattern[str]]] = {
+    "robocar": (re.compile(r"\w+"), re.compile(r"GPIO_NUM_\(?(\d+)\)?")),
+    "balancebot": (re.compile(r"PIN_\w+"), re.compile(r"(\d+)")),
 }
 
 # Convention name -> (name pattern, value pattern) for a *channel role*: an
@@ -80,16 +84,16 @@ def parse_defines(paths: Iterable[Path]) -> dict[str, str]:
 
 def roles_from_defines(defines: dict[str, str], convention: str) -> dict[str, int]:
     """Return role -> GPIO for every macro that the convention reads as a pin."""
-    pattern = CONVENTIONS.get(convention)
-    if pattern is None:
+    if convention not in CONVENTIONS:
         raise HardwareError(
             f"unknown pin-macro convention {convention!r}; implemented: "
             f"{sorted(CONVENTIONS)} (see tools/hardware/header.py for the others)"
         )
+    name_re, value_re = CONVENTIONS[convention]
     roles: dict[str, int] = {}
     for name, value in defines.items():
-        m = pattern.fullmatch(value)
-        if m:
+        m = value_re.fullmatch(value)
+        if name_re.fullmatch(name) and m:
             roles[name] = int(m.group(1))
     return roles
 

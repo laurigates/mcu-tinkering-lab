@@ -50,11 +50,7 @@ Raspberry Pi RP2350-based board in the XIAO form factor (21 x 17.8 mm). Dual-arc
 
 ```
            ┌──────────────────────┐
-           │  XIAO RP2350         │
-           │                      │
-           │        [RGB LED]     │
-           │                      │
-           │           [BOOT]     │
+           │       [USB-C]        │
            ├──┬───────────────┬───┤
     D0/A0  │● │               │ ●│  5V
     D1/A1  │● │               │ ●│  GND
@@ -64,30 +60,54 @@ Raspberry Pi RP2350-based board in the XIAO form factor (21 x 17.8 mm). Dual-arc
     D5/SCL │● │               │ ●│  D8/SCK
     D6/TX  │● │               │ ●│  D7/RX
            ├──┴───────────────┴───┤
-           │      [USB-C]  [RST]  │
+           │  XIAO RP2350         │
+           │  (component side up) │
            └──────────────────────┘
 ```
 
+Top view, component side up, USB-C connector at the top — the same view as
+the [XIAO ESP32-S3](xiao-esp32s3.md) page. Until 2026-10 this diagram drew the
+USB-C connector at the bottom while keeping D0 at the top left, which is the
+mirror image of the board.
+
 ### Side Header Pin Mapping
 
-| XIAO Pin | GPIO | Default Function | Alternate Functions |
-|----------|------|------------------|---------------------|
-| D0 | GPIO26 | Analog input | ADC0 |
-| D1 | GPIO27 | Analog input | ADC1 |
-| D2 | GPIO28 | Analog input | ADC2 |
-| D3 | GPIO5 | Digital I/O | SPI0 CS |
-| D4 | GPIO6 | I2C1 SDA | Digital I/O |
-| D5 | GPIO7 | I2C1 SCL | Digital I/O |
-| D6 | GPIO0 | UART0 TX | Digital I/O |
-| D7 | GPIO1 | UART0 RX | Digital I/O |
-| D8 | GPIO2 | SPI0 SCK | Digital I/O |
-| D9 | GPIO4 | SPI0 MISO | Digital I/O |
-| D10 | GPIO3 | SPI0 MOSI | Digital I/O |
+`Side` and `Pos` give the **physical** header position — `L`/`R` in the view
+above, `Pos 1` nearest the USB-C connector. All 14 header positions are listed,
+power pins included, because a physical layout needs the whole header and not
+only the GPIOs. `tools/hardware/` reads this table (ADR-021), so keep it the
+only pin-mapping table in this file — a first column naming a pin and a column
+headed exactly `GPIO`. The bottom-pad table below is headed `Bottom pad` for
+that reason.
+
+Source: Seeed's own KiCad library, [`Seeed-Studio/OSHW-XIAO-Series`](https://github.com/Seeed-Studio/OSHW-XIAO-Series/tree/main/Seeed%20Studio%20XIAO%20Series%20Library).
+The `XIAO-RP2350-DIP` footprint runs pads 1–7 along one long edge and 8–14
+back along the other, with pads 1 and 14 at the end beside the USB-C outline;
+the `XIAO-RP2350-DIP` symbol names pad 1 `D0`, 7 `D6`, 8 `D7`, 9 `D8`, 10 `D9`,
+11 `D10`, 12 `3V3_OUT`, 13 `GND` and 14 `VBUS`. The symbol names pads, not
+GPIOs, so the GPIO column is not checked against these files.
+
+| XIAO Pin | GPIO | Side | Pos | Default Function | Alternate Functions |
+|----------|------|------|-----|------------------|---------------------|
+| D0 | GPIO26 | L | 1 | Analog input | ADC0 |
+| D1 | GPIO27 | L | 2 | Analog input | ADC1 |
+| D2 | GPIO28 | L | 3 | Analog input | ADC2 |
+| D3 | GPIO5 | L | 4 | Digital I/O | SPI0 CS |
+| D4 | GPIO6 | L | 5 | I2C1 SDA | Digital I/O |
+| D5 | GPIO7 | L | 6 | I2C1 SCL | Digital I/O |
+| D6 | GPIO0 | L | 7 | UART0 TX | Digital I/O |
+| 5V | — | R | 1 | 5 V rail | USB-C VBUS, unregulated |
+| GND | — | R | 2 | Ground | — |
+| 3V3 | — | R | 3 | 3.3 V out | regulated rail |
+| D10 | GPIO3 | R | 4 | SPI0 MOSI | Digital I/O |
+| D9 | GPIO4 | R | 5 | SPI0 MISO | Digital I/O |
+| D8 | GPIO2 | R | 6 | SPI0 SCK | Digital I/O |
+| D7 | GPIO1 | R | 7 | UART0 RX | Digital I/O |
 
 ### Bottom Castellated Pads
 
-| XIAO Pin | GPIO | Default Function | Alternate Functions |
-|----------|------|------------------|---------------------|
+| Bottom pad | GPIO | Default Function | Alternate Functions |
+|------------|------|------------------|---------------------|
 | D11 | GPIO21 | UART1 RX | Digital I/O |
 | D12 | GPIO20 | UART1 TX | Digital I/O |
 | D13 | GPIO17 | I2C0 SCL | Digital I/O |

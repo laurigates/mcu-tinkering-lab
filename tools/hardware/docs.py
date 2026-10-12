@@ -49,10 +49,17 @@ from .layout import parse_layout
 from .model import MCU, REPO_ROOT, SIDECAR, HardwareModel, join
 
 END = "<!-- END GENERATED -->"
-NOTICE = (
-    "<!-- Generated from hardware.toml, main/pin_config.h and the board reference"
-    " by `just hardware::gen` — edit those, not this block. -->"
-)
+
+
+def notice(header: str = "main/pin_config.h") -> str:
+    """The comment opening every block, naming the project's own pin header."""
+    return (
+        f"<!-- Generated from hardware.toml, {header} and the board reference"
+        " by `just hardware::gen` — edit those, not this block. -->"
+    )
+
+
+NOTICE = notice()
 _BEGIN = re.compile(r"^<!-- BEGIN GENERATED: (\S+) -->$")
 # Anything that looks like a marker but does not parse is an error rather than
 # prose: a typo would otherwise leave a hand-edited table that nothing checks.
@@ -263,7 +270,9 @@ def render_block(model: HardwareModel, name: str, repo_root: Path = REPO_ROOT) -
     )
 
 
-def inject(text: str, render: Callable[[str], str], where: str) -> str:
+def inject(
+    text: str, render: Callable[[str], str], where: str, banner: str = NOTICE
+) -> str:
     """Replace every marker block's body with `render(name)`; nothing else moves."""
     out: list[str] = []
     open_name: str | None = None
@@ -283,7 +292,7 @@ def inject(text: str, render: Callable[[str], str], where: str) -> str:
         if bare == END:
             if open_name is None:
                 raise HardwareError(f"{where}:{i}: END GENERATED with no open block")
-            out.append(f"{NOTICE}\n\n{render(open_name)}\n")
+            out.append(f"{banner}\n\n{render(open_name)}\n")
             out.append(line)
             open_name = None
             continue
@@ -357,12 +366,18 @@ def regenerate(
 ) -> dict[Path, tuple[str, str]]:
     """Path -> (current text, regenerated text) for every doc with blocks."""
     model = join(project_dir, repo_root=repo_root)
+    banner = notice(model.headers[0].relative_to(model.project_dir).as_posix())
     result = {}
     for path in _docs(model.project_dir):
         old = path.read_text(encoding="utf-8")
         result[path] = (
             old,
-            inject(old, lambda name: render_block(model, name, repo_root), str(path)),
+            inject(
+                old,
+                lambda name: render_block(model, name, repo_root),
+                str(path),
+                banner,
+            ),
         )
     return result
 
