@@ -1,0 +1,8 @@
+(version 1)
+
+# Every GND pad is also routed with a track (route_board.py routes GND before
+# pouring), so a thermal relief is a second connection, not the only one. Between
+# 2.54 mm-pitch header pins the routed tracks can leave room for a single spoke.
+(rule "GND thermals may resolve to one spoke"
+	(condition "A.Type == 'Pad' && A.NetName == 'GND'")
+	(constraint min_resolved_spokes 1))
