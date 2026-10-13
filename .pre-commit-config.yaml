@@ -131,14 +131,14 @@ repos:
         name: Hardware join resolves, and pin_defs.typ regenerates byte-identical
         entry: python3 -m unittest discover -s tools/hardware -t tools
         language: system
-        files: '(^tools/hardware/|^tools/typst/generate-pin-defs\.py$|hardware\.toml$|main/[^/]+\.h$|docs/auto/pin_defs\.typ$|^docs/reference/boards/)'
+        files: '(^tools/hardware/|^tools/typst/generate-pin-defs\.py$|hardware\.toml$|main/[^/]+\.h$|src/pin_config\.h$|docs/auto/pin_defs\.typ$|^docs/reference/boards/)'
         pass_filenames: false
 
       - id: hardware-docs
         name: Generated WIRING.md blocks match the hardware join
         entry: env PYTHONPATH=tools python3 -m hardware.docs --check
         language: system
-        files: '(^tools/hardware/|hardware\.toml$|main/[^/]+\.h$|^packages/.*\.md$|^docs/reference/boards/)'
+        files: '(^tools/hardware/|hardware\.toml$|main/[^/]+\.h$|src/pin_config\.h$|^packages/.*\.md$|^docs/reference/boards/)'
         pass_filenames: false
 
       - id: check-doc-facts

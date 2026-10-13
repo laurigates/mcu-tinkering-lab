@@ -6,6 +6,12 @@
 # silently disagree with the firmware about WHICH pin — only about which part a
 # pin is wired to, which is the fact the header cannot express.
 #
+# Two builds read this file. Entries with no `build` key are in both.
+#   build = "harness"  only the hand-wired harness
+#   build = "carrier"  only the carrier PCB (hardware/carrier/, issue #750)
+# The docs generators — WIRING.md, pin_defs.typ, the pinouts and the docs
+# schematic — read the harness view, `join()`'s default.
+#
 # Regenerate everything that reads it — docs/auto/pin_defs.typ, the XIAO pinout
 # image and the marked tables and power diagram in WIRING.md — with
 # `just hardware::gen`; `just hardware::check` fails if any of them is stale.
@@ -18,29 +24,46 @@ convention = "balancebot"
 header = "src/pin_config.h"
 board = "docs/reference/boards/xiao-rp2350.md"
 mcu = "XIAO RP2350"
+# The XIAO on the carrier: a parts-registry entry and its reference designator.
+part = "seeed-xiao-rp2350-socket"
+ref = "U1"
 
 # No part carries a `board` key: there is no vendor-sourced layout page for the
 # GY-521 or the DRV8825 carrier under docs/reference/boards/, so only the XIAO
 # is drawn. Their pin names below are the carriers' silkscreen names, as
-# WIRING.md uses them.
+# WIRING.md uses them. `part` names the parts-registry entry that maps those
+# names to KiCad symbol pins (#750); `ref`, `value` and `lcsc` are the carrier
+# PCB's reference designator, value text and JLCPCB part number.
 
 [parts.imu]
 name = "GY-521 MPU6050"
 kind = "imu"
 note = "I2C 0x68"
+part = "gy-521"
+ref = "J3"
 
 [parts.drv_left]
 name = "Left DRV8825"
 kind = "stepper-driver"
+part = "pololu-drv8825"
+ref = "A1"
+value = "DRV8825 left"
 
 [parts.drv_right]
 name = "Right DRV8825"
 kind = "stepper-driver"
+part = "pololu-drv8825"
+ref = "A2"
+value = "DRV8825 right"
 
 [parts.pullup]
 name = "10 kΩ resistor"
 kind = "resistor"
 note = "nENABLE pull-up"
+part = "r0805"
+ref = "R1"
+value = "10k"
+lcsc = "C17414"
 
 [[nets]]
 role = "PIN_IMU_SDA"
@@ -90,6 +113,29 @@ role = "PIN_MOTOR_NENABLE"
 to = "pullup.B"
 note = "the pull-up holds the drivers disabled while the XIAO boots, resets or sits in BOOTSEL"
 
+# The carrier's pack-voltage divider into D0. Firmware does not read it yet (#747).
+[[nets]]
+role = "PIN_PACK_SENSE"
+to = "sense_top.B"
+build = "carrier"
+note = "100 kΩ from VBAT"
+
+[[nets]]
+role = "PIN_PACK_SENSE"
+to = "sense_bottom.A"
+build = "carrier"
+note = "27 kΩ to GND: 12.6 V reads 2.68 V"
+
+[[nets]]
+role = "PIN_PACK_SENSE"
+to = "sense_filter.A"
+build = "carrier"
+
+[[undrawn]]
+role = "PIN_PACK_SENSE"
+why = "only the carrier PCB has the pack divider (R2/R3/C3); the hand-wired harness leaves D0 free"
+build = "harness"
+
 [[undrawn]]
 role = "PIN_STATUS_LED"
 why = "the XIAO's onboard user LED, not brought out to a header"
@@ -106,23 +152,117 @@ why = "switches the XIAO's onboard battery-sense divider, not brought out to a h
 # The supply side of the join, emitted as WIRING.md's power diagram. Voltages
 # beyond the rail names, the 100 µF bulk capacitors and the common ground stay
 # in WIRING.md's prose. Rail assignments match docs/schematics/circuits/balancebot.py.
+# The carrier PCB adds its own: the bulk capacitors and the divider on VBAT, the
+# B5819W that splits 5V into BUCK_5V and XIAO_5V, and GND.
 
 [parts.pack]
 name = "3S 18650 pack + BMS"
 kind = "battery"
 note = "9.0–12.6 V"
+part = "battery-xt30"
+ref = "J1"
+value = "XT30 pack in"
 
 [parts.buck]
 name = "LM2596 5 V buck"
 kind = "buck-regulator"
+part = "lm2596-buck-module"
+ref = "J2"
+value = "LM2596 module"
 
 [parts.stepper_left]
 name = "Left NEMA17"
 kind = "stepper"
+part = "nema17-stepper"
+ref = "J4"
+value = "Motor left"
 
 [parts.stepper_right]
 name = "Right NEMA17"
 kind = "stepper"
+part = "nema17-stepper"
+ref = "J5"
+value = "Motor right"
+
+[parts.bulk_left]
+name = "100 µF 35 V bulk capacitor, left driver"
+kind = "capacitor"
+build = "carrier"
+part = "cp-elec-6.3x7.7"
+ref = "C1"
+value = "100uF 35V"
+lcsc = "C2836437"
+
+[parts.bulk_right]
+name = "100 µF 35 V bulk capacitor, right driver"
+kind = "capacitor"
+build = "carrier"
+part = "cp-elec-6.3x7.7"
+ref = "C2"
+value = "100uF 35V"
+lcsc = "C2836437"
+
+[parts.buck_diode]
+name = "B5819W Schottky, buck to XIAO 5V"
+kind = "diode"
+build = "carrier"
+part = "b5819w"
+ref = "D1"
+
+[parts.sense_top]
+name = "100 kΩ pack divider, top"
+kind = "resistor"
+build = "carrier"
+part = "r0805"
+ref = "R2"
+value = "100k"
+lcsc = "C149504"
+
+[parts.sense_bottom]
+name = "27 kΩ pack divider, bottom"
+kind = "resistor"
+build = "carrier"
+part = "r0805"
+ref = "R3"
+value = "27k"
+lcsc = "C17593"
+
+[parts.sense_filter]
+name = "100 nF pack divider filter"
+kind = "capacitor"
+build = "carrier"
+part = "c0805"
+ref = "C3"
+value = "100nF"
+lcsc = "C49678"
+
+[parts.hole_1]
+name = "M3 mounting hole"
+kind = "mounting-hole"
+build = "carrier"
+part = "m3-mounting-hole"
+ref = "H1"
+
+[parts.hole_2]
+name = "M3 mounting hole"
+kind = "mounting-hole"
+build = "carrier"
+part = "m3-mounting-hole"
+ref = "H2"
+
+[parts.hole_3]
+name = "M3 mounting hole"
+kind = "mounting-hole"
+build = "carrier"
+part = "m3-mounting-hole"
+ref = "H3"
+
+[parts.hole_4]
+name = "M3 mounting hole"
+kind = "mounting-hole"
+build = "carrier"
+part = "m3-mounting-hole"
+ref = "H4"
 
 # Motor power straight from the pack; never from the XIAO's battery pads.
 [[rails]]
@@ -130,9 +270,30 @@ name = "VBAT"
 from = "pack.+"
 to = ["buck.IN+", "drv_left.VMOT", "drv_right.VMOT"]
 
+# A continuation: same name, no `from` — these loads join the VBAT rail above.
+[[rails]]
+name = "VBAT"
+build = "carrier"
+to = ["bulk_left.+", "bulk_right.+", "sense_top.A"]
+
 [[rails]]
 name = "5V"
+build = "harness"
 from = "buck.OUT+"
+to = ["mcu.5V"]
+
+# On the carrier a B5819W sits between the buck and the XIAO 5V pad, so a
+# USB-powered XIAO cannot back-feed the buck.
+[[rails]]
+name = "BUCK_5V"
+build = "carrier"
+from = "buck.OUT+"
+to = ["buck_diode.A"]
+
+[[rails]]
+name = "XIAO_5V"
+build = "carrier"
+from = "buck_diode.K"
 to = ["mcu.5V"]
 
 # nSLEEP and nRESET are tied high, and M0/M1 strapped high for 1/8 microstep
@@ -153,10 +314,52 @@ to = [
     "drv_right.M1",
 ]
 
+# WIRING.md keeps the harness's common ground in prose; the carrier draws it.
+# M2 to GND is the 1/8-microstep strap; AD0 to GND sets the MPU6050 to 0x68.
+[[rails]]
+name = "GND"
+build = "carrier"
+from = "pack.-"
+to = [
+    "buck.IN-",
+    "buck.OUT-",
+    "mcu.GND",
+    "imu.GND",
+    "imu.AD0",
+    "drv_left.GND",
+    "drv_left.M2",
+    "drv_right.GND",
+    "drv_right.M2",
+    "bulk_left.-",
+    "bulk_right.-",
+    "sense_bottom.B",
+    "sense_filter.B",
+]
+
+# `pins` wires each named driver pin to the same-named pin on the load, one net
+# each, named by `net` with {pin} replaced. Only the carrier reads them; the
+# power diagram still draws one edge per load.
 [[outputs]]
 from = "drv_left"
 to = ["stepper_left"]
+pins = ["A1", "A2", "B1", "B2"]
+net = "MOTL_{pin}"
 
 [[outputs]]
 from = "drv_right"
 to = ["stepper_right"]
+pins = ["A1", "A2", "B1", "B2"]
+net = "MOTR_{pin}"
+
+# Carrier net names, where they differ from the role or rail name.
+[net_names]
+PIN_IMU_SDA = "IMU_SDA"
+PIN_IMU_SCL = "IMU_SCL"
+PIN_IMU_INT = "IMU_INT"
+PIN_STEP_LEFT = "STEP_L"
+PIN_DIR_LEFT = "DIR_L"
+PIN_STEP_RIGHT = "STEP_R"
+PIN_DIR_RIGHT = "DIR_R"
+PIN_MOTOR_NENABLE = "NENABLE"
+PIN_PACK_SENSE = "PACK_SENSE"
+3V3 = "+3V3"

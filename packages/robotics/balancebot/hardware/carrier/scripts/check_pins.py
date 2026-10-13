@@ -37,6 +37,7 @@ ROLE_NETS = {
     "PIN_DIR_LEFT": "DIR_L",
     "PIN_DIR_RIGHT": "DIR_R",
     "PIN_MOTOR_NENABLE": "NENABLE",
+    "PIN_PACK_SENSE": "PACK_SENSE",
 }
 
 

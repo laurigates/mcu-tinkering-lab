@@ -146,6 +146,7 @@ class BalancebotConventionTest(unittest.TestCase):
                 "PIN_STATUS_LED": 25,
                 "PIN_BATT_ADC": 29,
                 "PIN_BATT_ADC_ENABLE": 19,
+                "PIN_PACK_SENSE": 26,
             },
         )
 
