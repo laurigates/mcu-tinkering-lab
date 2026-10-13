@@ -1,3 +1,10 @@
+---
+paths:
+  - '**/sdkconfig*'
+  - '**/idf_component.yml'
+  - '**/dependencies.lock'
+  - '**/*i2c*'
+---
 # ESP-IDF Cannot Link the Legacy and New I2C Drivers Into One Binary — Ever
 
 ESP-IDF 5.x ships two I2C driver generations: the legacy `driver/i2c.h`

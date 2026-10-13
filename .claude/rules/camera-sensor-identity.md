@@ -1,3 +1,10 @@
+---
+paths:
+  - '**/camera*'
+  - '**/*cam*/**'
+  - '**/frame_dump.*'
+  - '**/scene_change.*'
+---
 # Read the Sensor PID Before Reasoning About Any Camera Register
 
 The `esp32-camera` component binds a **different driver per sensor**, and those

@@ -1,3 +1,20 @@
+---
+paths:
+  - '**/docs/**/*.typ'
+  - '**/docs/auto/**'
+  - 'tools/typst/**'
+  - 'docs/schematics/**'
+  - 'tools/hardware/**'
+  - '**/hardware.toml'
+  - '**/pin_config.h'
+  - '**/main/planner_task.h'
+  - '**/main/plan_activity.h'
+  - '.github/workflows/build-guide-check.yml'
+  - '.github/workflows/schematics-check.yml'
+  - 'tools/check-typst-docs.py'
+  - '.claude/skills/build-guide/**'
+  - 'docs/decisions/ADR-021-*'
+---
 # The Build-Guide Drift Guard: What May Feed It, and How to Verify a Change to It
 
 `build-guide-check.yml` recompiles every `**/docs/build-guide.typ`, regenerates

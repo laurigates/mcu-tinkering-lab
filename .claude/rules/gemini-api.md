@@ -1,3 +1,11 @@
+---
+paths:
+  - '**/*gemini*'
+  - '**/*tts*'
+  - '**/prompt_builder.*'
+  - '**/*_backend.*'
+  - '.claude/skills/gemini-tts-voice/**'
+---
 # Gemini API: Model-ID / thinkingConfig / Token-Budget Drift, and Prompted TTS Style
 
 The Google Gemini API (`generativelanguage.googleapis.com`) is called from

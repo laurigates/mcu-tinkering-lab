@@ -1,3 +1,14 @@
+---
+paths:
+  - '**/*audio*'
+  - '**/*i2s*'
+  - '**/mic_*'
+  - 'docs/zt-703s/**'
+  - 'docs/reference/**'
+  - '**/WIRING.md'
+  - '**/hardware.toml'
+  - 'packages/robocar/bringup/**'
+---
 # A Working Circuit Is Not a Correctly Connected One
 
 A chip whose **GND is not connected still runs.** It finds a return path through

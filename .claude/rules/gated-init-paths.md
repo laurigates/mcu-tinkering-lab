@@ -1,3 +1,11 @@
+---
+paths:
+  - 'packages/robocar/unified/main/**'
+  - 'packages/robocar/unified/test/**'
+  - '**/*pca9685*'
+  - '**/*i2c*'
+  - '.claude/skills/esp32-debugging/**'
+---
 # A Code Path Gated on Peripheral Presence Is Unrun Until the Peripheral Is Fitted
 
 `init_hardware()` in robocar-unified returns early when the I2C bus does not

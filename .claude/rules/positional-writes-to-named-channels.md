@@ -1,3 +1,10 @@
+---
+paths:
+  - '**/*controller*.{c,h}'
+  - '**/pin_config.h'
+  - '**/*pca9685*'
+  - 'packages/robocar/unified/test/**'
+---
 # A Value Array Written to a Run of Named Channels Must Be Indexed by Name
 
 The PCA9685 can write a run of consecutive channels in one transaction, so this

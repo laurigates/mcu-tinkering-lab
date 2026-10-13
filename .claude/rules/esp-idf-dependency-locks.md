@@ -1,3 +1,14 @@
+---
+paths:
+  - '**/idf_component.yml'
+  - '**/dependencies.lock'
+  - 'tools/refresh-idf-locks.py'
+  - 'tools/test_refresh_idf_locks.py'
+  - '.github/workflows/refresh-idf-locks.yml'
+  - '.github/workflows/_ci-build-esp32.yml'
+  - '.github/workflows/build.yml'
+  - '.github/project-matrix.json'
+---
 # Tracked ESP-IDF `dependencies.lock` Files and How They Get Updated
 
 The root `.gitignore` ignores `dependencies.lock`, so most ESP-IDF projects here
