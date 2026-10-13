@@ -112,6 +112,52 @@ build-guide: gen-pin-defs gen-pinouts
     done
 
 ##########
+# Carrier PCB (hardware/carrier/, KiCad 10)
+##########
+
+carrier_dir := "hardware/carrier"
+carrier_pcb := carrier_dir / "balancebot-carrier/balancebot-carrier.kicad_pcb"
+carrier_sch := carrier_dir / "balancebot-carrier/balancebot-carrier.kicad_sch"
+carrier_out := carrier_dir / "balancebot-carrier/output"
+kicad_python := env("KICAD_PYTHON", "/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/Current/bin/python3")
+
+# Regenerate the socket-mount XIAO footprint and symbol from Seeed's DIP ones
+[group: "carrier"]
+carrier-lib:
+    python3 {{carrier_dir}}/scripts/derive_xiao_socket.py
+
+# Rewrites the .kicad_pcb from scratch. Freerouting does not route the same
+# way twice, so commit the board you checked, not a re-run of it.
+#
+# Place, autoroute (Freerouting) and pour the carrier board from its schematic
+[group: "carrier"]
+carrier-board:
+    {{kicad_python}} {{carrier_dir}}/scripts/build_board.py
+    {{kicad_python}} {{carrier_dir}}/scripts/route_board.py
+
+# ERC, DRC with schematic parity, and the pin_config.h cross-check
+[group: "carrier"]
+carrier-check:
+    mkdir -p {{carrier_out}}
+    kicad-cli sch erc --severity-all --exit-code-violations -o {{carrier_out}}/erc.rpt {{carrier_sch}}
+    kicad-cli pcb drc --severity-all --schematic-parity --exit-code-violations -o {{carrier_out}}/drc.rpt {{carrier_pcb}}
+    python3 {{carrier_dir}}/scripts/check_pins.py
+
+# Gerbers and drill files for JLCPCB, zipped (run carrier-check first)
+[group: "carrier"]
+carrier-fab: carrier-check
+    #!/usr/bin/env bash
+    set -euo pipefail
+    fab={{carrier_out}}/fab
+    rm -rf "${fab:?}" && mkdir -p "$fab"
+    kicad-cli pcb export gerbers --check-zones \
+        --layers F.Cu,B.Cu,F.Paste,B.Paste,F.Silkscreen,B.Silkscreen,F.Mask,B.Mask,Edge.Cuts \
+        -o "$fab" {{carrier_pcb}}
+    kicad-cli pcb export drill --excellon-separate-th --generate-map --map-format gerberx2 -o "$fab/" {{carrier_pcb}}
+    (cd "$fab" && zip -q -r ../balancebot-carrier-fab.zip .)
+    echo "wrote {{carrier_out}}/balancebot-carrier-fab.zip"
+
+##########
 # Info
 ##########
 
