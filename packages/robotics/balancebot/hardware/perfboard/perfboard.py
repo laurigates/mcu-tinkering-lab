@@ -2,7 +2,8 @@
 
 The carrier schematic (../carrier/) is the source of truth for parts and nets.
 This script places each part on a 2.54 mm hole grid, plans point-to-point wires
-on the solder side, checks the result, and writes:
+on the solder side, maze-routes each one through the channels between holes,
+checks the result, and writes:
 
 - perfboard.svg  component side (left) and the mirrored solder side (right)
 - perfboard.md   the wire list, one line per connection, hole to hole
@@ -16,7 +17,9 @@ through-hole equivalents here (SWAPS); their pin numbers stay the schematic's.
 """
 
 import argparse
+import heapq
 import math
+import random
 import re
 import subprocess
 import sys
@@ -344,7 +347,151 @@ def number_wires(nets, wires):
     return numbered
 
 
-def svg(parts, numbered):
+# Maze routing runs on a half-pitch grid: even coordinates are holes, odd ones
+# the channels between them. A wire leaves its hole by a half-pitch stub, runs
+# in channels, and never passes over any other hole. Within one build step two
+# wires may cross but never share a channel; a bend cannot sit on a crossing.
+# Costs in half-pitch steps. Swept on this board, a crossing cost of 60 gives
+# 18 crossings against 25 at 12, for 3 % more wire.
+STEP_COST, BEND_COST, CROSS_COST = 1, 4, 60
+ORDER_TRIES = 24  # wire orders tried per step; the cheapest result is kept
+DIRS = {"E": (1, 0), "W": (-1, 0), "S": (0, 1), "N": (0, -1)}
+AXIS = {"E": "H", "W": "H", "S": "V", "N": "V"}
+BACK = {"E": "W", "W": "E", "S": "N", "N": "S"}
+
+
+def route_wire(start, goal, used, stubs):
+    """(cost, path) of the cheapest channel route from hole `start` to hole
+    `goal`, or None if there is none.
+
+    `used` maps a channel node to the axes ("H", "V") already run through it,
+    `stubs` maps a hole to the directions its earlier wires leave by.
+    """
+    gx, gy = 2 * COLS - 2, 2 * ROWS - 2
+    s, g = (2 * start[0], 2 * start[1]), (2 * goal[0], 2 * goal[1])
+    heap = [(0, 0, s, "")]  # cost, tie-break, node, direction arrived in
+    best, prev, tie = {(s, ""): 0}, {}, 0
+    while heap:
+        cost, _, node, came = heapq.heappop(heap)
+        if node == g:
+            path, key = [node], (node, came)
+            while key in prev:
+                key = prev[key]
+                path.append(key[0])
+            return cost, path[::-1]
+        if cost > best[(node, came)]:
+            continue
+        for d, (dx, dy) in DIRS.items():
+            if came and d == BACK[came]:
+                continue
+            nxt = (node[0] + dx, node[1] + dy)
+            if not (0 <= nxt[0] <= gx and 0 <= nxt[1] <= gy):
+                continue
+            if node == s:
+                if d in stubs.get(s, ()):
+                    continue
+            else:
+                axes = {AXIS[came], AXIS[d]}
+                if used.get(node, set()) & axes or (len(axes) == 2 and used.get(node)):
+                    continue
+            step = STEP_COST + (BEND_COST if came and d != came else 0)
+            if nxt[0] % 2 == 0 and nxt[1] % 2 == 0:  # a hole
+                if nxt != g or BACK[d] in stubs.get(g, ()):
+                    continue
+            elif used.get(nxt):
+                step += CROSS_COST
+            key = (nxt, d)
+            if cost + step < best.get(key, math.inf):
+                best[key] = cost + step
+                prev[key] = (node, came)
+                tie += 1
+                heapq.heappush(heap, (cost + step, tie, nxt, d))
+    return None
+
+
+def route_step(wires):
+    """Route one step's wires in the given order; a wire that finds no path
+    moves to the front and the step starts over. Returns (total cost, routes)."""
+    order = list(wires)
+    for _ in range(len(order) + 1):
+        used, stubs, routes, total = {}, {}, {}, 0
+        for w in order:
+            found = route_wire(w[4][0], w[5][0], used, stubs)
+            if found is None:
+                order.remove(w)
+                order.insert(0, w)
+                break
+            cost, path = found
+            total += cost
+            routes[w[0]] = path
+            for a, b in ((path[0], path[1]), (path[-1], path[-2])):
+                d = next(k for k, v in DIRS.items() if (a[0] + v[0], a[1] + v[1]) == b)
+                stubs.setdefault(a, set()).add(d)
+            for i in range(1, len(path) - 1):
+                axes = {
+                    "H" if path[i - 1][1] == path[i][1] else "V",
+                    "H" if path[i][1] == path[i + 1][1] else "V",
+                }
+                used.setdefault(path[i], set()).update(axes)
+        else:
+            return total, routes
+    sys.exit(f"cannot route wires {[w[0] for w in wires]} without sharing a channel")
+
+
+def route_wires(numbered, tries=ORDER_TRIES):
+    """Route each step in several wire orders and keep the cheapest. Shortest
+    first is tried first; the rest are seeded shuffles, so a run is repeatable."""
+    routes = {}
+    for step in range(len(STEPS)):
+        wires = sorted(
+            (w for w in numbered if w[1] == step),
+            key=lambda w: (
+                abs(w[4][0][0] - w[5][0][0]) + abs(w[4][0][1] - w[5][0][1]),
+                w[0],
+            ),
+        )
+        rng = random.Random(step)
+        orders = [wires] + [rng.sample(wires, len(wires)) for _ in range(tries - 1)]
+        routes.update(min((route_step(o) for o in orders), key=lambda r: r[0])[1])
+    return routes
+
+
+def check_routes(numbered, routes):
+    """Independent of the router: re-walk each path against the routing rules."""
+    errors = []
+    for step in range(len(STEPS)):
+        seen = {}  # half-pitch edge -> wire number
+        visits = {}  # channel node -> [(wire number, bends there)]
+        for n, st, _, _, (ha, _), (hb, _) in numbered:
+            if st != step:
+                continue
+            path = routes.get(n)
+            if not path:
+                errors.append(f"wire {n} has no route")
+                continue
+            if path[0] != (2 * ha[0], 2 * ha[1]) or path[-1] != (2 * hb[0], 2 * hb[1]):
+                errors.append(f"wire {n} does not run between its own holes")
+            for a, b in zip(path, path[1:]):
+                if abs(a[0] - b[0]) + abs(a[1] - b[1]) != 1:
+                    errors.append(f"wire {n} jumps from {a} to {b}")
+                edge = frozenset((a, b))
+                if edge in seen:
+                    errors.append(f"wires {seen[edge]} and {n} share a channel at {a}")
+                seen[edge] = n
+            for a, p, b in zip(path, path[1:], path[2:]):
+                if p[0] % 2 == 0 and p[1] % 2 == 0:
+                    errors.append(
+                        f"wire {n} passes over hole {hole_name(p[0] // 2, p[1] // 2)}"
+                    )
+                bend = (a[0] == p[0]) != (p[0] == b[0])
+                visits.setdefault(p, []).append((n, bend))
+        for p, v in visits.items():
+            if len(v) > 1 and any(bend for _, bend in v):
+                errors.append(f"wires {[n for n, _ in v]} meet at a bend at {p}")
+    return errors
+
+
+def svg(parts, numbered, routes):
     s = 17  # px per hole
     w, h = COLS * s, ROWS * s
     head = 74  # panel title, legend, column letters
@@ -421,9 +568,25 @@ def svg(parts, numbered):
                     f'<text x="{min(xa, xb) + 3}" y="{Y(r0) + 10}" fill="#4a5a78" '
                     f'stroke="white" stroke-width="3" paint-order="stroke">{p.ref} {p.value}</text>'
                 )
-        active = {(ha) for *_, (ha, _), (hb, _) in wires} | {
-            hb for *_, (_, _), (hb, _) in wires
-        }
+
+        def corners(path):
+            """A route's ends and bends: the points its polyline needs."""
+            keep = [path[0]]
+            for a, p, b in zip(path, path[1:], path[2:]):
+                if (a[0] == p[0]) != (p[0] == b[0]):
+                    keep.append(p)
+            return keep + [path[-1]]
+
+        # Wires first, pads over them, so each wire visibly ends on its pad.
+        for n, _, net, colour, _, _ in wires:
+            pts = " ".join(f"{X(x / 2):g},{Y(y / 2):g}" for x, y in corners(routes[n]))
+            width_ = 3 if net in HEAVY else 2
+            for stroke, sw in (("white", width_ + 4), (colour, width_)):
+                out.append(
+                    f'<polyline points="{pts}" fill="none" stroke="{stroke}" '
+                    f'stroke-width="{sw}" stroke-linecap="round" stroke-linejoin="round"/>'
+                )
+        active = {ha for *_, (ha, _), _ in wires} | {hb for *_, (hb, _) in wires}
         for p in parts.values():
             for num, hole in p.pads.items():
                 c, r = hole
@@ -439,28 +602,27 @@ def svg(parts, numbered):
                     )
                 else:
                     out.append(f'<circle cx="{X(c)}" cy="{Y(r)}" r="4" fill="{fill}"/>')
-        for n, _, net, colour, (ha, _), (hb, _) in wires:
-            x1, y1, x2, y2 = X(ha[0]), Y(ha[1]), X(hb[0]), Y(hb[1])
-            width_ = 3 if net in HEAVY else 2
-            out.append(
-                f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="white" '
-                f'stroke-width="{width_ + 4}" stroke-linecap="round"/>'
-            )
-            out.append(
-                f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{colour}" '
-                f'stroke-width="{width_}" stroke-linecap="round"/>'
-            )
+        visits = {}
+        for n, *_ in wires:
+            for node in routes[n]:
+                visits.setdefault(node, set()).add(n)
         placed = []
-        for n, _, net, colour, (ha, _), (hb, _) in wires:
-            # Put each number at the first point along its wire that clears the
-            # numbers already placed, so crossing or converging wires keep both.
-            spots = [
+        for n, _, net, colour, _, _ in wires:
+            # Put each number on a straight stretch of its own wire, as near the
+            # middle as it can go while clearing other wires' crossings and the
+            # numbers already placed. Channel intersections come first: there
+            # the label clears every pad.
+            path = routes[n]
+            bends = set(corners(path))
+            mid = (len(path) - 1) / 2
+            spots = sorted(
                 (
-                    X(ha[0]) + (X(hb[0]) - X(ha[0])) * t,
-                    Y(ha[1]) + (Y(hb[1]) - Y(ha[1])) * t,
-                )
-                for t in (0.5, 0.35, 0.65, 0.25, 0.75, 0.15, 0.85)
-            ]
+                    (node[0] % 2 == 0 or node[1] % 2 == 0, abs(i - mid), node)
+                    for i, node in enumerate(path)
+                    if node not in bends and visits[node] == {n}
+                ),
+            ) or [(True, 0, path[len(path) // 2])]
+            spots = [(X(x / 2), Y(y / 2)) for *_, (x, y) in spots]
 
             def clearance(pt):
                 return min((math.dist(pt, q) for q in placed), default=99)
@@ -499,7 +661,7 @@ def svg(parts, numbered):
     return "\n".join(out) + "\n"
 
 
-def wire_list(parts, numbered):
+def wire_list(parts, numbered, routes):
     lines = [
         "# Balancebot perfboard wire list",
         "",
@@ -508,6 +670,8 @@ def wire_list(parts, numbered):
         f"Board: {COLS} × {ROWS} holes, columns A–{chr(ord('A') + COLS - 1)}, rows 1–{ROWS}, "
         "named as seen from the **component side** (flip the drawing, not the names, on the solder side).",
         "Wires are numbered as in `perfboard.svg`, one drawing panel per step.",
+        "Each wire's drawn route runs between the holes, never over one, and its length is "
+        "measured along that route.",
         "Heavy nets (VBAT, GND, motor coils) need 20 AWG or heavier; everything else 26–30 AWG.",
         "Neighbouring holes (length 1) can be a solder bridge instead of a wire.",
         "",
@@ -533,7 +697,7 @@ def wire_list(parts, numbered):
         for n, st, net, _, (ha, la), (hb, lb) in numbered:
             if st != step:
                 continue
-            length = abs(ha[0] - hb[0]) + abs(ha[1] - hb[1])
+            length = (len(routes[n]) - 1) // 2  # half-pitch steps to holes
             gauge = "20 AWG" if net in HEAVY else "26–30 AWG"
             lines.append(
                 f"| ☐ | {n} | {net} | {gauge} | {la} ({hole_name(*ha)}) | {lb} ({hole_name(*hb)}) | {length} |"
@@ -557,9 +721,14 @@ def main():
         print("\n".join("FAIL " + e for e in errors))
         sys.exit(1)
     numbered = number_wires(nets, wires)
+    routes = route_wires(numbered)
+    errors = check_routes(numbered, routes)
+    if errors:
+        print("\n".join("FAIL " + e for e in errors))
+        sys.exit(1)
     outputs = {
-        HERE / "perfboard.svg": svg(parts, numbered),
-        HERE / "perfboard.md": wire_list(parts, numbered),
+        HERE / "perfboard.svg": svg(parts, numbered, routes),
+        HERE / "perfboard.md": wire_list(parts, numbered, routes),
     }
     if args.check:
         stale = [
