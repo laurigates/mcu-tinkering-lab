@@ -33,7 +33,8 @@ ORIGIN = (100.0, 100.0)
 BOARD_W, BOARD_H = 90.0, 62.0
 
 # ref: (x_mm, y_mm, rotation_deg) relative to ORIGIN. Footprint anchors are the
-# library's own (pad 1 for the Pololu and JST parts, centre for the XIAO).
+# library's own (pad 1 for the Pololu and JST parts, centre for the XIAO and the
+# SMD passives).
 PLACEMENT = {
     "U1": (45.0, 14.0, 90),  # XIAO, USB-C toward the top edge
     "A1": (14.0, 21.0, 0),  # left DRV8825, motor column toward the left edge
@@ -45,13 +46,13 @@ PLACEMENT = {
     # bottom edge with the pins 13.6 mm inboard.
     "J1": (22.0, 48.1, 180),
     "J2": (60.0, 56.0, 0),  # LM2596 module
-    "D1": (66.0, 50.0, 0),  # 1N5819, buck -> XIAO 5V
-    "C1": (8.0, 44.0, 0),  # VMOT bulk, left driver
-    "C2": (76.0, 14.0, 0),  # VMOT bulk, right driver
-    "R1": (31.5, 36.0, 90),  # nENABLE pull-up, beside A1's EN pin
-    "R2": (57.0, 4.0, 0),  # pack divider top
-    "R3": (57.0, 9.0, 0),  # pack divider bottom
-    "C3": (59.0, 14.5, 0),  # pack divider filter
+    "D1": (71.0, 50.0, 0),  # B5819W, buck -> XIAO 5V
+    "C1": (9.75, 44.0, 0),  # VMOT bulk, left driver
+    "C2": (77.75, 14.0, 0),  # VMOT bulk, right driver
+    "R1": (31.5, 31.0, 90),  # nENABLE pull-up, beside A1's EN pin
+    "R2": (62.0, 4.0, 0),  # pack divider top
+    "R3": (62.0, 9.0, 0),  # pack divider bottom
+    "C3": (61.5, 14.5, 0),  # pack divider filter
     "H1": (4.0, 4.0, 0),
     "H2": (86.0, 4.0, 0),
     "H3": (4.0, 58.0, 0),
@@ -157,6 +158,15 @@ def main():
         fp.SetReference(ref)
         fp.SetValue(comp.findtext("value"))
         fp.SetPath(pcbnew.KIID_PATH("/" + comp.findtext("tstamps")))
+        # Custom symbol fields (LCSC) go onto the footprint for the BOM and DRC
+        # parity. SetField() creates them visible on F.Silkscreen, so hide them.
+        for field in comp.iter("field"):
+            name, text = field.get("name"), field.text
+            if name in ("Footprint", "Datasheet", "Description") or not text:
+                continue
+            fp.SetField(name, text)
+            fp.GetField(name).SetLayer(pcbnew.F_Fab)
+            fp.GetField(name).SetVisible(False)
         x, y, rot = PLACEMENT[ref]
         fp.SetPosition(pcbnew.VECTOR2I(mm(ORIGIN[0] + x), mm(ORIGIN[1] + y)))
         fp.SetOrientationDegrees(rot)
