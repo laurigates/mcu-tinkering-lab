@@ -1,3 +1,7 @@
+---
+paths:
+  - '**/sdkconfig*'
+---
 # ESP-IDF sdkconfig Management
 
 ## How sdkconfig Works

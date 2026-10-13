@@ -1,3 +1,19 @@
+---
+paths:
+  - '**/justfile'
+  - 'tools/*.just'
+  - 'docker-compose.yml'
+  - '**/partitions.csv'
+  - '.github/project-matrix.json'
+  - '.github/workflows/build.yml'
+  - '.github/workflows/_ci-build-*.yml'
+  - '.github/workflows/test.yml'
+  - 'tools/check-flash-recipes.py'
+  - 'tools/check-component-extra-paths.py'
+  - 'tools/scaffold/**'
+  - 'tools/esp32s3-*.sh'
+  - 'tools/lib/otadata-predicate.sh'
+---
 # Containerized ESP-IDF Builds
 
 ## Architecture

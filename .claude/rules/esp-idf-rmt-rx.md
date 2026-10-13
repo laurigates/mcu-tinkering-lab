@@ -1,3 +1,8 @@
+---
+paths:
+  - '**/ultrasonic*'
+  - '**/*rmt*'
+---
 # ESP-IDF v5.4 RMT RX: Three Hardware-Register Constraints (and a Fallback That Hides Them)
 
 The RMT RX peripheral (used here for HC-SR04 ultrasonic echo timing) has three

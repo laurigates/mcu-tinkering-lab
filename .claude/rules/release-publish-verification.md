@@ -1,3 +1,12 @@
+---
+paths:
+  - '.github/workflows/build-firmware.yml'
+  - 'docs/flasher/**'
+  - '**/flasher.json'
+  - '**/partitions.csv'
+  - 'tools/generate-flasher-manifests.sh'
+  - 'tools/check-app-partition-fit.sh'
+---
 # The Release Pipeline Reported Success for Months While Publishing Nothing
 
 `build-firmware.yml` is the only path by which firmware reaches a human or a

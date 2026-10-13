@@ -1,3 +1,8 @@
+---
+paths:
+  - 'docs/schematics/**'
+  - 'docs/decisions/ADR-021-*'
+---
 # Schematic Layout: What Is Hand-Authored, and What a Symbol Change Touches
 
 Placement of components in `docs/schematics/circuits/*.py` is hand-authored on

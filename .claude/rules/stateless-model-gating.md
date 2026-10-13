@@ -1,3 +1,10 @@
+---
+paths:
+  - '**/*gemini*'
+  - '**/prompt_builder.*'
+  - 'packages/robocar/unified/main/{speech,voice,scene_change,ambient,dialogue,plan,planner,mic}*'
+  - 'packages/robocar/unified/test/**'
+---
 # Gating a Stateless Model: Withhold the Capability, Don't Word the Instruction Harder
 
 Every `generateContent` call from this repo is **stateless** — one request, one

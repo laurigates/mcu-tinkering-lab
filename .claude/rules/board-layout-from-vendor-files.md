@@ -1,3 +1,14 @@
+---
+paths:
+  - '**/WIRING.md'
+  - '**/docs/**/*.typ'
+  - 'docs/reference/**'
+  - 'docs/schematics/**'
+  - 'tools/breakout-pinout.py'
+  - '**/hardware.toml'
+  - 'packages/**/hardware/**'
+  - 'docs/decisions/ADR-021-*'
+---
 # A Breakout's Physical Pin Order Comes From the Vendor's Board File
 
 Any document that tells somebody where to solder makes a claim about *physical*

@@ -1,3 +1,8 @@
+---
+paths:
+  - '**/docs/**'
+  - '*.md'
+---
 # Document Management
 
 Rules for organizing and managing project documentation.

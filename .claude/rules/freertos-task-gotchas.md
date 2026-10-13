@@ -1,3 +1,7 @@
+---
+paths:
+  - 'packages/**/*.{c,h,cpp}'
+---
 # FreeRTOS Task Gotchas on ESP-IDF: Yield-on-Overrun and TLS Stack Sizing
 
 Two independent task-authoring traps found bringing up the robocar-unified

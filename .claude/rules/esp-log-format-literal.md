@@ -1,3 +1,7 @@
+---
+paths:
+  - 'packages/**/*.{c,h,cpp}'
+---
 # ESP_LOG Format Argument Must Be a String Literal
 
 ## The Rule

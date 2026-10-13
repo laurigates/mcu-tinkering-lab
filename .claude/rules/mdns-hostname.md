@@ -1,3 +1,10 @@
+---
+paths:
+  - 'packages/**/*wifi*'
+  - 'packages/**/main/main.{c,cpp}'
+  - 'packages/**/main/CMakeLists.txt'
+  - '**/sdkconfig.defaults'
+---
 # mDNS Hostname Configuration
 
 ## Every WiFi Project Must Have mDNS
