@@ -8,7 +8,9 @@ map and the pin cross-check (`just balancebot::carrier-check`) apply unchanged.
 - [`perfboard.svg`](perfboard.svg): the component side, then one mirrored
   solder-side panel per build step (power, logic power, motor coils, signals).
   Each panel shows only that step's wires, coloured per net with a legend, and
-  numbered as in the wire list.
+  numbered as in the wire list. Wires are maze-routed along the channels
+  between holes, so no wire is drawn over a pad it does not connect to, and no
+  two wires in a step share a channel.
 - [`perfboard.md`](perfboard.md): the wire list. Tick each line off as you
   solder it.
 
@@ -69,3 +71,19 @@ parts share a hole, a pad falls off the board, a tall part sits under a raised
 module, or the wires leave any net split or join two nets. That last check is a
 union-find over the generated wire list, separate from the code that plans the
 wires.
+
+### Routing
+
+Each wire is routed on a half-pitch grid. Holes sit on even coordinates and the
+channels between them on odd ones. A wire leaves its pad by a half-pitch stub
+and then stays in the channels. The router is Dijkstra with costs for length,
+bends and crossings (`STEP_COST`, `BEND_COST`, `CROSS_COST`). It routes each
+step in `ORDER_TRIES` wire orders (shortest-first, then seeded shuffles) and
+keeps the cheapest, so a run is repeatable. A separate `check_routes` re-walks
+every path and fails if a wire jumps, ends on the wrong hole, passes over a
+hole, shares a channel with another wire in its step, or turns where another
+wire runs. Wires in different steps are not checked against each other: each
+panel is drawn on its own, and insulated wires may cross on the board.
+
+Wire-list lengths are measured along the route, so a wire between two holes in
+one row is 3, not 2: it goes around the hole between them.
