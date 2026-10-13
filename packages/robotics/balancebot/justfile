@@ -167,6 +167,20 @@ carrier-fab: carrier-check
     python3 {{carrier_dir}}/scripts/jlc_assembly.py "$asm/bom.csv" "$asm/pos.csv" "$asm"
 
 ##########
+# Perfboard prototype (hardware/perfboard/)
+##########
+
+# Lay the carrier circuit out on a 50 x 70 mm perfboard: drawing + wire list
+[group: "carrier"]
+perfboard:
+    python3 hardware/perfboard/perfboard.py
+
+# Fail if the perfboard drawing or wire list is stale, or the layout breaks
+[group: "carrier"]
+perfboard-check:
+    python3 hardware/perfboard/perfboard.py --check
+
+##########
 # Info
 ##########
 
