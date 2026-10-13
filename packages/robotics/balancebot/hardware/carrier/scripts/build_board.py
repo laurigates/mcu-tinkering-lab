@@ -98,9 +98,10 @@ def export_netlist():
     return ET.parse(out).getroot()
 
 
-# One reader for every load: pcbnew.FootprintLoad() looks the plugin up on each
-# call, and that SWIG wrapper intermittently comes back untyped
-# ("SwigPyObject has no attribute FootprintLoad") partway through a board.
+# One reader for every load. pcbnew.FootprintLoad() works as well: the untyped
+# SwigPyObject errors once blamed on it came from board.Remove() (see main() and
+# .claude/rules/kicad-scripting.md), and 200 FootprintLoad() calls without it
+# all return FOOTPRINT.
 SEXPR_IO = pcbnew.PCB_IO_KICAD_SEXPR()
 
 
