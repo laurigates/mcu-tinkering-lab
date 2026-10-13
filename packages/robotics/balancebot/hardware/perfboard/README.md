@@ -5,8 +5,10 @@ board (18 × 24 holes), for building a prototype before ordering boards. It is
 the same circuit, nets read from the carrier schematic, so the firmware pin
 map and the pin cross-check (`just balancebot::carrier-check`) apply unchanged.
 
-- [`perfboard.svg`](perfboard.svg): component side on the left, the mirrored
-  solder side with every wire on the right.
+- [`perfboard.svg`](perfboard.svg): the component side, then one mirrored
+  solder-side panel per build step (power, logic power, motor coils, signals).
+  Each panel shows only that step's wires, coloured per net with a legend, and
+  numbered as in the wire list.
 - [`perfboard.md`](perfboard.md): the wire list. Tick each line off as you
   solder it.
 
@@ -36,9 +38,10 @@ are not.
 3. **D1:** the cathode band goes on the square pad, K23.
 4. **C1, C2:** the + lead (longer) goes on the square pad.
 5. **Headers and pigtail** along the bottom edge.
-6. **Wires**, from `perfboard.md`. Use 20 AWG or heavier for every VBAT, GND
-   and motor-coil line (drawn thick), and 26–30 AWG for the rest. A length-1
-   line can be a solder bridge.
+6. **Wires**, one step at a time: `perfboard.md` lists them in the same four
+   steps and numbers as the drawing, with the gauge for each. Heavy nets
+   (VBAT, GND, motor coils) need 20 AWG or heavier and are drawn thicker. A
+   length-1 wire can be a solder bridge.
 7. **Check before power:** continuity on every GND pin, and no continuity
    between VBAT, 3V3 and GND. Then plug in the LM2596 only after setting it to
    5.0–5.3 V on the bench.
