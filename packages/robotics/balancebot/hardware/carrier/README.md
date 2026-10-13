@@ -105,6 +105,69 @@ board fails here.
 
 ## Ordering
 
-JLCPCB standard 2-layer, 1.6 mm FR-4, 1 oz copper. Upload
-`output/balancebot-carrier-fab.zip`. Minimums on this board: 0.3 mm track,
+The board options and form labels below are from JLCPCB's order page as it was
+when this was written; if the page differs, follow the page and check the
+detected size and layer count.
+
+1. **Settle the pre-order checks** above (#748): XT30 polarity, DRV8825 rows,
+   GY-521 header.
+2. **Start from the committed board.** Opening the project in KiCad and saving
+   rewrites the `.kicad_pcb`. `git status` must show nothing under
+   `hardware/carrier/`; `git restore` the board if KiCad changed it and you did
+   not mean to.
+3. **Generate the files:**
+
+   ```sh
+   just balancebot::carrier-fab
+   ```
+
+   It runs `carrier-check` (ERC, DRC with schematic parity, the pin cross-check)
+   first and stops if any fails. Outputs:
+
+   | File | For |
+   |---|---|
+   | `output/balancebot-carrier-fab.zip` | The board: Gerbers and drill files |
+   | `output/assembly/bom-jlc.csv` | Assembly only: the seven SMD parts with LCSC numbers |
+   | `output/assembly/cpl-jlc.csv` | Assembly only: their positions and rotations |
+
+4. **Upload the zip** at jlcpcb.com (Order now). It should detect 2 layers and
+   90 × 62 mm; stop if it does not. Then:
+
+   | Option | Choose |
+   |---|---|
+   | Base material | FR-4 |
+   | Layers | 2 |
+   | Quantity | 5 (the minimum) |
+   | Thickness | 1.6 mm |
+   | Surface finish | HASL, or lead-free HASL |
+   | Outer copper | 1 oz (the track widths assume it) |
+   | Mark on PCB / order number | JLCPCB prints one by default; remove it for a fee, or leave it |
+
+   Check the outline, the four M3 holes and the "+"/"−" beside the XT30 in the
+   Gerber preview.
+
+5. **Choose who solders the seven SMD parts** (R1–R3, C1–C3, D1):
+
+   - **JLCPCB**: turn on *PCB Assembly*, *Economic*, top side. Upload
+     `bom-jlc.csv` and `cpl-jlc.csv` when asked. All seven should match; C1/C2
+     (C2836437) are an Extended part and add one feeder fee. In the placement
+     preview, check C1, C2 and D1's polarity as described in
+     [Assembly notes](#assembly-notes) before confirming.
+   - **By hand**: leave *PCB Assembly* off and buy the parts listed in
+     [Assembly notes](#assembly-notes).
+
+6. **Buy the through-hole parts**, which you solder either way. LCSC orders can
+   usually ship with the JLCPCB order:
+
+   | Qty | Part |
+   |---|---|
+   | 2 | 1×7 female header, 2.54 mm (XIAO) |
+   | 5 | 1×8 female header, 2.54 mm (four for the DRV8825s, one for the GY-521) |
+   | 1 | AMASS XT30PW-M, horizontal PCB male |
+   | 3 | JST-XH B4B-XH-A, with mating 4-pin housings and crimps |
+   | 4 | M3 standoffs and screws |
+
+7. **Check out.** Choose shipping and pay.
+
+Minimums on this board, for the fab's capability check: 0.3 mm track,
 0.6/0.3 mm via, 0.2 mm annular ring, 1.0 mm silkscreen text.
