@@ -16,6 +16,7 @@ through-hole equivalents here (SWAPS); their pin numbers stay the schematic's.
 """
 
 import argparse
+import math
 import re
 import subprocess
 import sys
@@ -277,90 +278,228 @@ def check_wires(parts, nets, wires):
     return errors
 
 
-POWER = {"VBAT", "GND"} | {
+# Build steps, one solder-side panel each. Every net belongs to exactly one;
+# within a panel, nets take the categorical palette's slots in this order.
+STEPS = [
+    ("Power", "VBAT, GND and the 5 V feed", ["VBAT", "GND", "BUCK_5V", "XIAO_5V"]),
+    ("Logic power", "3V3 straps and the shared nENABLE", ["+3V3", "NENABLE"]),
+    (
+        "Motor coils",
+        "driver outputs to the motor headers",
+        [f"MOT{s}_{c}" for s in "LR" for c in ("A1", "A2", "B1", "B2")],
+    ),
+    (
+        "Signals",
+        "XIAO to drivers, IMU and the pack divider",
+        [
+            "STEP_L",
+            "DIR_L",
+            "STEP_R",
+            "DIR_R",
+            "IMU_SDA",
+            "IMU_SCL",
+            "IMU_INT",
+            "PACK_SENSE",
+        ],
+    ),
+]
+# Thick wire (20 AWG or heavier) for these nets.
+HEAVY = {"VBAT", "GND"} | {
     f"MOT{s}_{c}" for s in "LR" for c in ("A1", "A2", "B1", "B2")
 }
-WIRE_COLOUR = {
-    "VBAT": "#d62728",
-    "GND": "#222222",
-    "+3V3": "#ff7f0e",
-    "BUCK_5V": "#e377c2",
-    "XIAO_5V": "#e377c2",
-}
+# Categorical slots 1-8 of the dataviz reference palette, light mode. Checked
+# with its validator against a white surface: CVD and normal-vision separation
+# pass; slots 3-5 are below 3:1 contrast, so every wire also carries a number
+# and every panel a legend.
+PALETTE = [
+    "#2a78d6",
+    "#eb6834",
+    "#1baf7a",
+    "#eda100",
+    "#e87ba4",
+    "#008300",
+    "#6250d6",
+    "#e34948",
+]
+INK, MUTED, GRID = "#1f1f1f", "#6b6b6b", "#d9d9d9"
 
 
-def svg(parts, wires):
-    s = 18  # px per hole
-    m = 30
-    top = 70  # room above the grid for the title and parts overhanging row 1
+def number_wires(nets, wires):
+    """Group the planned wires by build step and number them 1..N in that order."""
+    grouped = {n for _, _, ns in STEPS for n in ns}
+    missing, extra = set(nets) - grouped, grouped - set(nets)
+    if missing or extra:
+        sys.exit(
+            f"STEPS out of step with the schematic: missing {sorted(missing)}, unknown {sorted(extra)}"
+        )
+    by_net = {}
+    for w in wires:
+        by_net.setdefault(w[0], []).append(w)
+    numbered, n = [], 0
+    for step, (_, _, step_nets) in enumerate(STEPS):
+        for slot, net in enumerate(step_nets):
+            for _, a, b in by_net[net]:
+                n += 1
+                numbered.append((n, step, net, PALETTE[slot], a, b))
+    return numbered
+
+
+def svg(parts, numbered):
+    s = 17  # px per hole
     w, h = COLS * s, ROWS * s
-    gap = 60
+    head = 74  # panel title, legend, column letters
+    pad_x, gap_x, gap_y, margin = 24, 46, 30, 20
+    pw, ph = w + pad_x, h + head
+    ncols = 3
+    panels = 1 + len(STEPS)
+    nrows = -(-panels // ncols)
+    width = margin * 2 + ncols * pw + (ncols - 1) * gap_x
+    height = margin * 2 + nrows * ph + (nrows - 1) * gap_y
     out = [
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{2 * w + gap + 2 * m}" height="{h + top + m}" '
-        f'font-family="monospace" font-size="9">',
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
+        f'font-family="Helvetica, Arial, sans-serif" font-size="10" fill="{INK}">',
         '<rect width="100%" height="100%" fill="white"/>',
     ]
+    net_of_pin = {}
+    for _, _, net, colour, (ha, la), (hb, lb) in numbered:
+        net_of_pin[ha], net_of_pin[hb] = (net, colour), (net, colour)
 
-    def view(x0, mirror, title):
-        X = (
-            (lambda c: x0 + (COLS - 1 - c) * s + s / 2)
-            if mirror
-            else (lambda c: x0 + c * s + s / 2)
-        )
-        Y = lambda r: top + r * s + s / 2  # noqa: E731
+    def panel(index, title, subtitle, mirror, wires, legend):
+        col, row = index % ncols, index // ncols
+        x0 = margin + col * (pw + gap_x) + (pad_x if mirror else 0)
+        y0 = margin + row * (ph + gap_y)
+        top = y0 + head
+
+        def X(c):
+            return x0 + ((COLS - 1 - c) if mirror else c) * s + s / 2
+
+        def Y(r):
+            return top + r * s + s / 2
+
         out.append(
-            f'<text x="{x0}" y="16" font-size="12" font-weight="bold">{title}</text>'
+            f'<text x="{x0}" y="{y0 + 12}" font-size="13" font-weight="bold">{title}</text>'
         )
+        out.append(f'<text x="{x0}" y="{y0 + 27}" fill="{MUTED}">{subtitle}</text>')
+        lx, ly = x0, y0 + 44
+        for net, colour in legend:
+            label_w = 14 + 6.2 * len(net) + 14
+            if lx + label_w > x0 + w:
+                lx, ly = x0, ly + 14
+            out.append(
+                f'<line x1="{lx}" y1="{ly - 3}" x2="{lx + 12}" y2="{ly - 3}" stroke="{colour}" '
+                f'stroke-width="{3 if net in HEAVY else 2}" stroke-linecap="round"/>'
+            )
+            out.append(f'<text x="{lx + 16}" y="{ly}">{net}</text>')
+            lx += label_w
         out.append(
-            f'<rect x="{x0}" y="{top}" width="{w}" height="{h}" fill="#f4ecd8" stroke="#999"/>'
+            f'<rect x="{x0}" y="{top}" width="{w}" height="{h}" fill="white" stroke="{GRID}"/>'
         )
         for c in range(COLS):
-            out.append(f'<text x="{X(c) - 3}" y="{top - 3}">{chr(ord("A") + c)}</text>')
+            out.append(
+                f'<text x="{X(c)}" y="{top - 4}" text-anchor="middle" fill="{MUTED}">{chr(ord("A") + c)}</text>'
+            )
         for r in range(ROWS):
-            lx = x0 + w + 3 if not mirror else x0 - 16
-            out.append(f'<text x="{lx}" y="{Y(r) + 3}">{r + 1}</text>')
+            nx = x0 - 4 if mirror else x0 + w + 4
+            anchor = "end" if mirror else "start"
+            out.append(
+                f'<text x="{nx}" y="{Y(r) + 3}" text-anchor="{anchor}" fill="{MUTED}">{r + 1}</text>'
+            )
             for c in range(COLS):
-                out.append(f'<circle cx="{X(c)}" cy="{Y(r)}" r="2" fill="#c9b27c"/>')
+                out.append(f'<circle cx="{X(c)}" cy="{Y(r)}" r="1.6" fill="{GRID}"/>')
         if not mirror:
             for p in sorted(parts.values(), key=lambda p: p.ref in RAISED):
                 c0, r0, c1, r1 = p.body
-                xa, xb = X(c0) - s / 2 + s / 2, X(c1) - s / 2 + s / 2
-                fill = "none" if p.ref in RAISED else "#dfe9f5"
-                dash = ' stroke-dasharray="4 2"' if p.ref in RAISED else ""
+                xa, xb = X(c0), X(c1)
+                raised = p.ref in RAISED
+                fill = "none" if raised else "#eef3fa"
+                dash = ' stroke-dasharray="4 2"' if raised else ""
                 out.append(
                     f'<rect x="{min(xa, xb)}" y="{Y(r0)}" width="{abs(xb - xa)}" height="{Y(r1) - Y(r0)}" '
-                    f'fill="{fill}" stroke="#336" stroke-width="1"{dash}/>'
+                    f'fill="{fill}" stroke="#4a5a78" stroke-width="1"{dash}/>'
                 )
                 out.append(
-                    f'<text x="{min(xa, xb) + 2}" y="{Y(r0) + 9}" fill="#336">{p.ref} {p.value}</text>'
+                    f'<text x="{min(xa, xb) + 3}" y="{Y(r0) + 10}" fill="#4a5a78" '
+                    f'stroke="white" stroke-width="3" paint-order="stroke">{p.ref} {p.value}</text>'
                 )
+        active = {(ha) for *_, (ha, _), (hb, _) in wires} | {
+            hb for *_, (_, _), (hb, _) in wires
+        }
         for p in parts.values():
-            for num, (c, r) in p.pads.items():
-                shape = "rect" if num == "1" else "circle"
-                if shape == "rect":
+            for num, hole in p.pads.items():
+                c, r = hole
+                if mirror and hole in active:
+                    fill = net_of_pin[hole][1]
+                elif mirror:
+                    fill = "#cfcfcf"
+                else:
+                    fill = "#b87333"
+                if num == "1":
                     out.append(
-                        f'<rect x="{X(c) - 4}" y="{Y(r) - 4}" width="8" height="8" fill="#b87333"/>'
+                        f'<rect x="{X(c) - 4}" y="{Y(r) - 4}" width="8" height="8" fill="{fill}"/>'
                     )
                 else:
-                    out.append(
-                        f'<circle cx="{X(c)}" cy="{Y(r)}" r="4" fill="#b87333"/>'
-                    )
-        if mirror:
-            for name, (ha, _), (hb, _) in wires:
-                colour = WIRE_COLOUR.get(name, "#1f77b4")
-                width = 3 if name in POWER else 1.6
-                out.append(
-                    f'<line x1="{X(ha[0])}" y1="{Y(ha[1])}" x2="{X(hb[0])}" y2="{Y(hb[1])}" '
-                    f'stroke="{colour}" stroke-width="{width}" stroke-linecap="round" opacity="0.85"/>'
+                    out.append(f'<circle cx="{X(c)}" cy="{Y(r)}" r="4" fill="{fill}"/>')
+        for n, _, net, colour, (ha, _), (hb, _) in wires:
+            x1, y1, x2, y2 = X(ha[0]), Y(ha[1]), X(hb[0]), Y(hb[1])
+            width_ = 3 if net in HEAVY else 2
+            out.append(
+                f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="white" '
+                f'stroke-width="{width_ + 4}" stroke-linecap="round"/>'
+            )
+            out.append(
+                f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{colour}" '
+                f'stroke-width="{width_}" stroke-linecap="round"/>'
+            )
+        placed = []
+        for n, _, net, colour, (ha, _), (hb, _) in wires:
+            # Put each number at the first point along its wire that clears the
+            # numbers already placed, so crossing or converging wires keep both.
+            spots = [
+                (
+                    X(ha[0]) + (X(hb[0]) - X(ha[0])) * t,
+                    Y(ha[1]) + (Y(hb[1]) - Y(ha[1])) * t,
                 )
+                for t in (0.5, 0.35, 0.65, 0.25, 0.75, 0.15, 0.85)
+            ]
 
-    view(m, False, "Component side (parts)")
-    view(m + w + gap, True, "Solder side (mirrored: wires)")
+            def clearance(pt):
+                return min((math.dist(pt, q) for q in placed), default=99)
+
+            clear = [pt for pt in spots if clearance(pt) >= 15]
+            mx, my = clear[0] if clear else max(spots, key=clearance)
+            placed.append((mx, my))
+            out.append(
+                f'<circle cx="{mx}" cy="{my}" r="7" fill="white" stroke="{colour}" stroke-width="1.5"/>'
+            )
+            out.append(
+                f'<text x="{mx}" y="{my + 3}" text-anchor="middle" font-size="8.5" font-weight="bold">{n}</text>'
+            )
+
+    panel(
+        0,
+        "Component side",
+        "parts as placed; dashed = module raised on its socket",
+        False,
+        [],
+        [],
+    )
+    for step, (title, subtitle, step_nets) in enumerate(STEPS):
+        wires = [w for w in numbered if w[1] == step]
+        first, last = wires[0][0], wires[-1][0]
+        legend = [(net, PALETTE[i]) for i, net in enumerate(step_nets)]
+        panel(
+            step + 1,
+            f"Step {step + 1} · {title} (wires {first}–{last})",
+            f"solder side, mirrored · {subtitle}",
+            True,
+            wires,
+            legend,
+        )
     out.append("</svg>")
     return "\n".join(out) + "\n"
 
 
-def wire_list(parts, wires):
+def wire_list(parts, numbered):
     lines = [
         "# Balancebot perfboard wire list",
         "",
@@ -368,7 +507,8 @@ def wire_list(parts, wires):
         "",
         f"Board: {COLS} × {ROWS} holes, columns A–{chr(ord('A') + COLS - 1)}, rows 1–{ROWS}, "
         "named as seen from the **component side** (flip the drawing, not the names, on the solder side).",
-        "Thick lines (VBAT, GND, motor coils) need 20 AWG or heavier; everything else 26–30 AWG.",
+        "Wires are numbered as in `perfboard.svg`, one drawing panel per step.",
+        "Heavy nets (VBAT, GND, motor coils) need 20 AWG or heavier; everything else 26–30 AWG.",
         "Neighbouring holes (length 1) can be a solder bridge instead of a wire.",
         "",
         "## Parts",
@@ -380,18 +520,24 @@ def wire_list(parts, wires):
         lines.append(
             f"| {p.ref} | {p.value} | {hole_name(*p.pads['1'])} | `{p.fpid.split(':')[1]}` |"
         )
-    lines += [
-        "",
-        "## Wires",
-        "",
-        "| ✓ | Net | From | To | Length (holes) |",
-        "|---|---|---|---|---|",
-    ]
-    for name, (ha, la), (hb, lb) in wires:
-        length = abs(ha[0] - hb[0]) + abs(ha[1] - hb[1])
-        lines.append(
-            f"| ☐ | {name} | {la} ({hole_name(*ha)}) | {lb} ({hole_name(*hb)}) | {length} |"
-        )
+    for step, (title, subtitle, _) in enumerate(STEPS):
+        lines += [
+            "",
+            f"## Step {step + 1}: {title}",
+            "",
+            f"{subtitle[0].upper()}{subtitle[1:]}.",
+            "",
+            "| ✓ | # | Net | Gauge | From | To | Length (holes) |",
+            "|---|---|---|---|---|---|---|",
+        ]
+        for n, st, net, _, (ha, la), (hb, lb) in numbered:
+            if st != step:
+                continue
+            length = abs(ha[0] - hb[0]) + abs(ha[1] - hb[1])
+            gauge = "20 AWG" if net in HEAVY else "26–30 AWG"
+            lines.append(
+                f"| ☐ | {n} | {net} | {gauge} | {la} ({hole_name(*ha)}) | {lb} ({hole_name(*hb)}) | {length} |"
+            )
     return "\n".join(lines) + "\n"
 
 
@@ -410,9 +556,10 @@ def main():
     if errors:
         print("\n".join("FAIL " + e for e in errors))
         sys.exit(1)
+    numbered = number_wires(nets, wires)
     outputs = {
-        HERE / "perfboard.svg": svg(parts, wires),
-        HERE / "perfboard.md": wire_list(parts, wires),
+        HERE / "perfboard.svg": svg(parts, numbered),
+        HERE / "perfboard.md": wire_list(parts, numbered),
     }
     if args.check:
         stale = [
