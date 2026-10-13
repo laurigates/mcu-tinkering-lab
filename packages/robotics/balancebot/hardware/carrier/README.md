@@ -1,8 +1,9 @@
 # Balancebot carrier PCB
 
-A 90 × 62 mm, 2-layer, all-through-hole carrier that replaces the hand-wired
-harness in [`WIRING.md`](../../WIRING.md). Every module sits in a socket or
-plugs into a connector, so any of them can be swapped without desoldering.
+A 90 × 62 mm, 2-layer carrier that replaces the hand-wired harness in
+[`WIRING.md`](../../WIRING.md). Every module sits in a socket or plugs into a
+connector, so any of them can be swapped without desoldering. The passives are
+SMD on the top side; the sockets and connectors are through-hole.
 
 KiCad 10 project: [`balancebot-carrier/`](balancebot-carrier/). The schematic is
 the source of truth for parts and nets; the board is generated from it by the
@@ -18,10 +19,10 @@ scripts in [`scripts/`](scripts/).
 | J1 | AMASS XT30PW-M | 3S pack (through its BMS) |
 | J2 | JST-XH 4-pin | LM2596 module: IN+, IN−, OUT+, OUT− |
 | J4, J5 | JST-XH 4-pin | Motor coils A1, A2, B1, B2 |
-| C1, C2 | 100 µF 25 V electrolytic, 8 mm | VMOT bulk at each driver |
-| R1 | 10 kΩ | nENABLE pull-up to 3V3 (motors off until firmware drives it low) |
-| D1 | 1N5819 | LM2596 output → XIAO 5V pad, so USB cannot back-feed the buck |
-| R2, R3, C3 | 100 kΩ, 27 kΩ, 100 nF | Pack voltage divider into D0 (GPIO26, ADC0) |
+| C1, C2 | 100 µF 35 V SMD electrolytic, 6.3 × 7.7 mm | VMOT bulk at each driver |
+| R1 | 10 kΩ, 0805 | nENABLE pull-up to 3V3 (motors off until firmware drives it low) |
+| D1 | B5819W (SMD 1N5819), SOD-123 | LM2596 output → XIAO 5V pad, so USB cannot back-feed the buck |
+| R2, R3, C3 | 100 kΩ, 27 kΩ, 100 nF, 0805 | Pack voltage divider into D0 (GPIO26, ADC0) |
 | H1–H4 | M3 | Mounting holes on a 82 × 54 mm rectangle |
 
 The DRV8825 straps are on the board: M0 and M1 to 3V3 and M2 to GND (1/8
@@ -48,6 +49,20 @@ the Gerbers, or open the board in KiCad):
    module's silkscreen before ordering.
 
 ## Assembly notes
+
+The SMD passives use KiCad's hand-solder 0805 pads, and each symbol carries an
+LCSC part number, so the same board works both ways:
+
+- **JLCPCB assembly**: `carrier-fab` writes `output/assembly/bom-jlc.csv` and
+  `cpl-jlc.csv` with only the seven SMD parts. Upload them with the Gerber zip
+  (Economic PCBA, top side). Everything else is hand-soldered afterwards. All
+  parts are JLC Basic except C1/C2 (C2836437, Extended: one feeder fee).
+  JLC's rotation convention differs from KiCad's for some packages, so check
+  the polarity of C1, C2 and D1 in JLC's placement preview: C1/C2 "+" on the
+  pad marked "+" on the silkscreen, D1's cathode bar on the left (pad 1,
+  XIAO 5V side). Correct the rotation there if the preview shows one flipped.
+- **By hand**: skip the two CSVs. Any 1 A / 40 V Schottky in SOD-123 and any
+  100 µF ≥ 25 V 6.3 mm SMD electrolytic fit.
 
 - Set the LM2596 to 5.0–5.3 V on the bench **before** plugging it into J2. D1
   drops about 0.3 V, so the XIAO's 5V pad sees roughly 4.7–5.0 V.

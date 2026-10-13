@@ -143,7 +143,8 @@ carrier-check:
     kicad-cli pcb drc --severity-all --schematic-parity --exit-code-violations -o {{carrier_out}}/drc.rpt {{carrier_pcb}}
     python3 {{carrier_dir}}/scripts/check_pins.py
 
-# Gerbers and drill files for JLCPCB, zipped (run carrier-check first)
+# Gerbers and drill files for JLCPCB, zipped, plus the BOM and CPL for its
+# assembly service (SMD passives only; skip them to hand-solder)
 [group: "carrier"]
 carrier-fab: carrier-check
     #!/usr/bin/env bash
@@ -156,6 +157,14 @@ carrier-fab: carrier-check
     kicad-cli pcb export drill --excellon-separate-th --generate-map --map-format gerberx2 -o "$fab/" {{carrier_pcb}}
     (cd "$fab" && zip -q -r ../balancebot-carrier-fab.zip .)
     echo "wrote {{carrier_out}}/balancebot-carrier-fab.zip"
+    asm={{carrier_out}}/assembly
+    rm -rf "${asm:?}" && mkdir -p "$asm"
+    kicad-cli sch export bom --fields 'Value,Reference,Footprint,LCSC' \
+        --labels 'Comment,Designator,Footprint,LCSC' --group-by 'Value,Footprint,LCSC' \
+        --ref-range-delimiter '' --exclude-dnp -o "$asm/bom.csv" {{carrier_sch}}
+    kicad-cli pcb export pos --format csv --units mm --side front --smd-only \
+        -o "$asm/pos.csv" {{carrier_pcb}}
+    python3 {{carrier_dir}}/scripts/jlc_assembly.py "$asm/bom.csv" "$asm/pos.csv" "$asm"
 
 ##########
 # Info

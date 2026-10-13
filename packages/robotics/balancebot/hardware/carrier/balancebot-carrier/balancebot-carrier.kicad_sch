@@ -5196,7 +5196,7 @@
 				)
 			)
 		)
-		(property "Value" "100uF 25V"
+		(property "Value" "100uF 35V"
 			(at 379.73 163.83 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5206,7 +5206,18 @@
 				)
 			)
 		)
-		(property "Footprint" "Capacitor_THT:CP_Radial_D8.0mm_P3.50mm"
+		(property "Footprint" "Capacitor_SMD:CP_Elec_6.3x7.7"
+			(at 379.73 160.02 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC" "C2836437"
 			(at 379.73 160.02 0)
 			(hide yes)
 			(show_name no)
@@ -5736,7 +5747,18 @@
 				)
 			)
 		)
-		(property "Footprint" "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal"
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+			(at 149.86 149.86 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC" "C149504"
 			(at 149.86 149.86 0)
 			(hide yes)
 			(show_name no)
@@ -5814,7 +5836,18 @@
 				)
 			)
 		)
-		(property "Footprint" "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal"
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+			(at 149.86 180.34 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC" "C17593"
 			(at 149.86 180.34 0)
 			(hide yes)
 			(show_name no)
@@ -5958,7 +5991,7 @@
 				)
 			)
 		)
-		(property "Value" "1N5819"
+		(property "Value" "B5819W"
 			(at 229.87 163.83 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5968,7 +6001,18 @@
 				)
 			)
 		)
-		(property "Footprint" "Diode_THT:D_DO-41_SOD81_P10.16mm_Horizontal"
+		(property "Footprint" "Diode_SMD:D_SOD-123"
+			(at 229.87 160.02 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC" "C8598"
 			(at 229.87 160.02 0)
 			(hide yes)
 			(show_name no)
@@ -6472,7 +6516,18 @@
 				)
 			)
 		)
-		(property "Footprint" "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal"
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+			(at 100.33 160.02 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC" "C17414"
 			(at 100.33 160.02 0)
 			(hide yes)
 			(show_name no)
@@ -7034,7 +7089,18 @@
 				)
 			)
 		)
-		(property "Footprint" "Capacitor_THT:C_Disc_D5.0mm_W2.5mm_P5.00mm"
+		(property "Footprint" "Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder"
+			(at 180.34 180.34 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC" "C49678"
 			(at 180.34 180.34 0)
 			(hide yes)
 			(show_name no)
@@ -7522,7 +7588,7 @@
 				)
 			)
 		)
-		(property "Value" "100uF 25V"
+		(property "Value" "100uF 35V"
 			(at 350.52 163.83 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7532,7 +7598,18 @@
 				)
 			)
 		)
-		(property "Footprint" "Capacitor_THT:CP_Radial_D8.0mm_P3.50mm"
+		(property "Footprint" "Capacitor_SMD:CP_Elec_6.3x7.7"
+			(at 350.52 160.02 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC" "C2836437"
 			(at 350.52 160.02 0)
 			(hide yes)
 			(show_name no)
