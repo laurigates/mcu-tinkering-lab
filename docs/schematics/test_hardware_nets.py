@@ -150,3 +150,151 @@ def test_robocar_unified_fails_to_render_a_net_it_does_not_draw(model):
     extra = Net(role="UART0_TX_PIN", part="amp", pin="GAIN", note="")
     with pytest.raises(HardwareError, match="UART0_TX_PIN"):
         mod.draw(dataclasses.replace(model, nets=(*model.nets, extra)))
+
+
+# --- Fan-out and driver outputs: balancebot (#738) ------------------------------
+# balancebot's shared nENABLE is one role wired to three part pins, and its
+# coil wires are [[outputs]] pin lists rather than MCU nets. Both used to be
+# transcribed into the circuit.
+
+BALANCEBOT = FsPath(__file__).resolve().parents[2] / "packages/robotics/balancebot"
+
+
+@pytest.fixture(scope="module")
+def bb_model():
+    return join(BALANCEBOT)
+
+
+@pytest.fixture
+def bb_drawn():
+    """A placed XIAO RP2350, both drivers, both steppers and the pull-up."""
+    from components import drv8825, stepper_nema17, xiao_rp2350
+
+    d = schemdraw.Drawing(show=False)
+    xiao = d.add(xiao_rp2350(layout="physical"))
+    pullup = d.add(schemdraw.elements.Resistor().at((5, 0)))
+    pullup.absanchors["B"] = pullup.absanchors["start"]
+    pullup.absanchors["A"] = pullup.absanchors["end"]
+    parts = {
+        "drv_left": d.add(drv8825().at((10, 0))),
+        "drv_right": d.add(drv8825().at((10, -10))),
+        "stepper_left": d.add(stepper_nema17().at((20, 0))),
+        "stepper_right": d.add(stepper_nema17().at((20, -10))),
+        "pullup": pullup,
+    }
+    return xiao, parts
+
+
+def test_fanout_gives_the_pad_and_every_part_pin_of_the_role(bb_model, bb_drawn):
+    xiao, parts = bb_drawn
+    nets = JoinedNets(bb_model, xiao, parts)
+    mcu, ends = nets.fanout("PIN_MOTOR_NENABLE")
+    assert mcu == xiao.absanchors[gpio_anchor(bb_model.roles["PIN_MOTOR_NENABLE"])]
+    assert ends == {
+        "drv_left.nENABLE": parts["drv_left"].absanchors["nENABLE"],
+        "drv_right.nENABLE": parts["drv_right"].absanchors["nENABLE"],
+        "pullup.B": parts["pullup"].absanchors["B"],
+    }
+
+
+def test_ends_refuses_a_fanned_out_role_and_names_fanout(bb_model, bb_drawn):
+    xiao, parts = bb_drawn
+    nets = JoinedNets(bb_model, xiao, parts)
+    with pytest.raises(HardwareError, match="fanout"):
+        nets.ends("PIN_MOTOR_NENABLE")
+
+
+def test_fanout_to_an_undrawn_part_is_an_error(bb_model, bb_drawn):
+    xiao, parts = bb_drawn
+    del parts["pullup"]
+    nets = JoinedNets(bb_model, xiao, parts)
+    with pytest.raises(HardwareError, match="'pullup'"):
+        nets.fanout("PIN_MOTOR_NENABLE")
+
+
+def test_a_fanout_counts_as_drawn_and_cannot_be_drawn_twice(bb_model, bb_drawn):
+    xiao, parts = bb_drawn
+    nets = JoinedNets(bb_model, xiao, parts)
+    nets.fanout("PIN_MOTOR_NENABLE")
+    with pytest.raises(HardwareError, match="twice"):
+        nets.fanout("PIN_MOTOR_NENABLE")
+    with pytest.raises(HardwareError) as err:
+        nets.check_all_drawn()
+    assert "PIN_MOTOR_NENABLE" not in str(err.value)
+
+
+def test_output_ends_pairs_each_driver_pin_with_the_same_pin_on_its_load(
+    bb_model, bb_drawn
+):
+    xiao, parts = bb_drawn
+    nets = JoinedNets(bb_model, xiao, parts)
+    pairs = nets.output_ends()
+    assert len(pairs) == 8, "two drivers x four coil pins"
+    assert (
+        parts["drv_left"].absanchors["A1"],
+        parts["stepper_left"].absanchors["A1"],
+    ) in pairs
+    assert (
+        parts["drv_right"].absanchors["B2"],
+        parts["stepper_right"].absanchors["B2"],
+    ) in pairs
+
+
+def test_output_ends_to_an_undrawn_load_is_an_error(bb_model, bb_drawn):
+    xiao, parts = bb_drawn
+    del parts["stepper_right"]
+    nets = JoinedNets(bb_model, xiao, parts)
+    with pytest.raises(HardwareError, match="'stepper_right'"):
+        nets.output_ends()
+
+
+def test_balancebot_fails_to_render_a_net_it_does_not_draw(bb_model):
+    from render import ROOT, load_circuit
+
+    mod = load_circuit(ROOT / "circuits" / "balancebot.py")
+    # D1 (GPIO27) is a real header pad balancebot leaves free.
+    roles = {**bb_model.roles, "PIN_SPARE": 27}
+    extra = Net(role="PIN_SPARE", part="imu", pin="SDA", note="")
+    with pytest.raises(HardwareError, match="PIN_SPARE"):
+        mod.draw(
+            dataclasses.replace(bb_model, roles=roles, nets=(*bb_model.nets, extra))
+        )
+
+
+def test_a_renumbered_balancebot_role_moves_its_wire(bb_model):
+    # DIR_RIGHT moved from D6 to D1 in pin_config.h: the render follows the
+    # header with nothing in the circuit edited.
+    from render import ROOT, load_circuit
+    from routing import Path as Wire
+
+    mod = load_circuit(ROOT / "circuits" / "balancebot.py")
+
+    def wire_ends(model):
+        d = mod.draw(model)
+        return {
+            (round(e.polyline[0][0], 3), round(e.polyline[0][1], 3))
+            for e in d.elements
+            if isinstance(e, Wire)
+        }
+
+    moved = wire_ends(
+        dataclasses.replace(bb_model, roles={**bb_model.roles, "PIN_DIR_RIGHT": 27})
+    )
+    assert moved != wire_ends(bb_model)
+
+
+def test_balancebot_tags_the_driver_straps_from_the_rails(bb_model):
+    # nSLEEP/nRESET/M0/M1 on 3V3 per hardware.toml (#738: the old drawing
+    # wired a VDD pin the Pololu-layout carrier does not have). Taking M1 off
+    # every rail must fail the render rather than leave a stale tag.
+    from hardware import Endpoint
+    from render import ROOT, load_circuit
+
+    mod = load_circuit(ROOT / "circuits" / "balancebot.py")
+    gone = Endpoint("drv_left", "M1")
+    rails = tuple(
+        dataclasses.replace(r, loads=tuple(e for e in r.loads if e != gone))
+        for r in bb_model.rails
+    )
+    with pytest.raises(HardwareError, match=r"drv_left\.M1"):
+        mod.draw(dataclasses.replace(bb_model, rails=rails))

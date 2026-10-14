@@ -194,7 +194,8 @@ router.finish()
   A multi-endpoint bus (e.g. one GPIO driving a vertical trunk that fans out
   to several chips' pins) is a T-junction, not a point-to-point net, and
   stays hand-drawn with `elm.Wire(...)` — see the nENABLE trunk in
-  `circuits/balancebot.py` for an example. Colour it with
+  `circuits/balancebot.py` for an example, whose ends come from
+  `nets.fanout("PIN_MOTOR_NENABLE")`. Colour it with
   `net_color("<class>")` and `.finish()` dots its junctions.
 - **Tuning**: `Router(d, grid=0.25, clearance=0.3, stub=0.75,
   turn_penalty=4.0, overlap_penalty=6.0, tag_penalty=20.0, label_penalty=20.0)` —
@@ -300,7 +301,7 @@ the project's `WIRING.md`). Keep the schematic and that document in sync when
 pins change.
 
 A project with a `hardware.toml` (ADR-021) does not transcribe its MCU wiring.
-`robocar_unified.py` loads the join live at render time and asks
+`robocar_unified.py` and `balancebot.py` load the join live at render time and ask
 `hardware_nets.JoinedNets` for each net by pin role —
 `router.wire(*nets.ends("I2S_BCLK_PIN"), net="i2s")` — so the XIAO pad comes
 from `pin_config.h` and the board reference, and the part pin from the
@@ -313,7 +314,9 @@ Power tags follow the same split: `nets.rail("pwm", "VCC")` gives the label
 (`+3V3`) from `[[rails]]`, the circuit keeps the tag's anchor and direction, and
 `nets.check_all_tagged()` fails the render for a rail pin on a drawn part that
 has no tag. `SUGGESTED_CAPS` keeps its `rail` field for display;
-`test_power_tags.py` holds it to the join.
+`test_power_tags.py` holds it to the join. A role wired to several part pins
+(balancebot's shared nENABLE) comes back whole from `nets.fanout(role)`, and a
+driver's `[[outputs]]` pin lists as wire pairs from `nets.output_ends()`.
 
 ## Freshness check
 

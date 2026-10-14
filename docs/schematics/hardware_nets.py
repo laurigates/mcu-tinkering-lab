@@ -19,6 +19,10 @@ added to hardware.toml cannot ship a schematic that lacks it.
 Power tags work the same way (#679): ``rail()`` gives the label a tag on a
 part pin carries, from ``[[rails]]``, and ``check_all_tagged()`` fails the
 render for any rail endpoint on a drawn part that no tag was asked about.
+
+A role wired to several part pins (balancebot's shared nENABLE) comes back
+whole from ``fanout()``, and a driver's ``[[outputs]]`` pin lists as wire
+pairs from ``output_ends()`` (#738).
 """
 
 from __future__ import annotations
@@ -59,18 +63,37 @@ class JoinedNets:
         self._drawn: set[str] = set()
         self._tagged: set[Endpoint] = set()
 
-    def _net(self, role: str) -> Net:
+    def _nets(self, role: str) -> list[Net]:
         nets = [n for n in self.model.nets if n.role == role]
         if not nets:
             raise HardwareError(f"{role}: no [[nets]] entry in hardware.toml")
+        if role in self._drawn:
+            raise HardwareError(f"{role}: drawn twice")
+        return nets
+
+    def _net(self, role: str) -> Net:
+        nets = self._nets(role)
         if len(nets) > 1:
             raise HardwareError(
                 f"{role}: fans out to {[f'{n.part}.{n.pin}' for n in nets]}; "
-                "JoinedNets draws one wire per role"
+                "draw it with fanout()"
             )
-        if role in self._drawn:
-            raise HardwareError(f"{role}: drawn twice")
         return nets[0]
+
+    def _pin(self, element_of: str, part: str, pin: str) -> Point:
+        """Where drawn part ``part``'s pin ``pin`` is; ``element_of`` prefixes errors."""
+        element = self.parts.get(part)
+        if element is None:
+            raise HardwareError(
+                f"{element_of}: hardware.toml wires it to part {part!r}, "
+                "which the drawing did not pass in"
+            )
+        if pin not in element.absanchors:
+            raise HardwareError(
+                f"{element_of}: hardware.toml wires it to {part}.{pin}, "
+                f"and the drawn {self.model.parts[part].name} has no such pin"
+            )
+        return element.absanchors[pin]
 
     def pad(self, role: str) -> Point:
         """The MCU header pad ``role``'s GPIO lands on."""
@@ -89,20 +112,40 @@ class JoinedNets:
     def ends(self, role: str) -> tuple[Point, Point]:
         """Both ends of ``role``'s net: the MCU pad and the part pin it is wired to."""
         net = self._net(role)
-        element = self.parts.get(net.part)
-        if element is None:
-            raise HardwareError(
-                f"{role}: hardware.toml wires it to part {net.part!r}, "
-                "which the drawing did not pass in"
-            )
-        if net.pin not in element.absanchors:
-            raise HardwareError(
-                f"{role}: hardware.toml wires it to {net.part}.{net.pin}, "
-                f"and the drawn {self.model.parts[net.part].name} has no such pin"
-            )
+        part = self._pin(role, net.part, net.pin)
         mcu = self.pad(role)
         self._drawn.add(role)
-        return mcu, element.absanchors[net.pin]
+        return mcu, part
+
+    def fanout(self, role: str) -> tuple[Point, dict[str, Point]]:
+        """The MCU pad of ``role`` and every part pin it is wired to.
+
+        The part pins are keyed ``"part.pin"``. Which trunk joins them is the
+        circuit's drawing; that they are all on the net is the join's.
+        """
+        ends = {
+            f"{n.part}.{n.pin}": self._pin(role, n.part, n.pin)
+            for n in self._nets(role)
+        }
+        mcu = self.pad(role)
+        self._drawn.add(role)
+        return mcu, ends
+
+    def output_ends(self) -> list[tuple[Point, Point]]:
+        """One (driver pin, load pin) pair per ``[[outputs]]`` pin, every load.
+
+        All of them at once, so a pin added to an output list cannot be left
+        out of the drawing.
+        """
+        return [
+            (
+                self._pin(f"{out.part} output {pin}", out.part, pin),
+                self._pin(f"{out.part} output {pin}", load, pin),
+            )
+            for out in self.model.outputs
+            for load in out.loads
+            for pin in out.pins
+        ]
 
     def start(self, role: str) -> Point:
         """The MCU end of a net whose far end the circuit draws by hand."""

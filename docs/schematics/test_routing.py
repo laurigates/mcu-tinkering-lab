@@ -336,16 +336,26 @@ def test_overlap_penalty_is_load_bearing(monkeypatch):
     # a real circuit with parallel neighbours must route differently at 6
     # than at 60.
     #
-    # The circuit is balancebot, not robocar_unified: since #495 draws the
-    # robocar's boards physically, that drawing routes with no tight pair
-    # even in authored order, so it has no neighbour for the penalty to push
-    # and routes identically at 6 and 60 (it still differs between 0 and 6).
-    # balancebot keeps two tight pairs and responds. A circuit edit can move
-    # this again — re-check which drawing has parallel runs (#463).
-    low = _route_circuit_with_overlap_penalty(monkeypatch, "balancebot", 6.0)
-    high = _route_circuit_with_overlap_penalty(monkeypatch, "balancebot", 60.0)
-    assert len(low) == len(high)
-    assert low != high, "overlap_penalty 6 and 60 routed identical geometry"
+    # Which drawing has parallel neighbours moves with circuit edits (#463):
+    # it was balancebot until #738 redrew it with none, after robocar_unified
+    # lost its own to #495. So every real circuit is checked, and only one
+    # that still has a tight pair at the default has to respond; a circuit
+    # with none has nothing for the penalty to push. When no circuit has one,
+    # test_parallel_neighbour_is_pushed_a_lattice_row_further_away below is
+    # what still shows the penalty moving a neighbour.
+    from metrics import tight_parallel_pairs
+    from render import circuit_files
+
+    grid = Router.__init__.__kwdefaults__["grid"]
+    for path in circuit_files([]):
+        low = _route_circuit_with_overlap_penalty(monkeypatch, path.stem, 6.0)
+        if not tight_parallel_pairs(low, grid):
+            continue
+        high = _route_circuit_with_overlap_penalty(monkeypatch, path.stem, 60.0)
+        assert len(low) == len(high)
+        assert low != high, (
+            f"{path.stem}: overlap_penalty 6 and 60 routed identical geometry"
+        )
 
 
 def test_parallel_neighbour_is_pushed_a_lattice_row_further_away():
