@@ -1,0 +1,9 @@
+# Unplated M3 mounting hole. The library symbol is out of the BOM.
+[part]
+name = "M3 mounting hole"
+source = "KiCad 10.0.6 library"
+symbol = "Mechanical:MountingHole"
+footprint = "MountingHole:MountingHole_3.2mm_M3"
+value = "M3"
+
+[pins]

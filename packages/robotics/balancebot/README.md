@@ -15,6 +15,10 @@ Design docs: [PRD-012](../../../docs/requirements/PRD-012-balancebot.md) ·
 [ADR-026](../../../docs/decisions/ADR-026-balancebot-lqr-live-switch.md) ·
 [WIRING.md](WIRING.md)
 
+A carrier PCB replaces the hand-wired harness: see
+[`hardware/carrier/README.md`](hardware/carrier/README.md) for what is on it,
+how it is generated from `hardware.toml`, and how to order it.
+
 ## Printable build guide
 
 [`docs/build-guide.typ`](docs/build-guide.typ) → [PDF](docs/build-guide.pdf):

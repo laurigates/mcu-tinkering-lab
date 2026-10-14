@@ -237,7 +237,7 @@ class CompletenessTest(ViewTest):
         self.assertIn("BEEP_PIN", {n.role for n in self.join(broken, CARRIER).nets})
 
     def test_an_undrawn_entry_in_both_views_clashes_with_the_carrier_net(self):
-        # E11's control: drop the harness filter and the carrier view fails.
+        # Drop the harness filter and the carrier view fails.
         broken = SIDECAR.replace(
             'why = "only the carrier has the capacitor"\nbuild = "harness"',
             'why = "only the carrier has the capacitor"',

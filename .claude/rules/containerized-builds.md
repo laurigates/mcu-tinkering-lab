@@ -65,6 +65,27 @@ Standard ESP-IDF projects import `tools/esp32-idf.just` to get shared containeri
 
 ESPHome projects import `tools/esphome.just` for standard recipes (install, config, validate, compile, upload, wireless, logs, monitor, dashboard, clean, status, dev).
 
+### `tools/kicad.just` — Shared KiCad carrier-PCB recipes
+
+A project with a carrier PCB (`hardware/carrier/board.toml`) imports
+`tools/kicad.just` and defines the public recipes over its private ones, as
+`packages/robotics/balancebot/justfile` does. Not containerized: the KiCad-free
+recipes need only `python3`, the rest the locally installed KiCad 10.0.6
+(ADR-027). Each recipe takes the repo-relative project path and `cd`s to the
+repo root. Variables carry a `_kicad_` prefix so they cannot collide with this
+file's other imports.
+
+| Symbol | Purpose |
+|--------|---------|
+| `_carrier-lib` | Private — regenerate the derived XIAO socket parts (`kicad.derive_xiao`); KiCad-free |
+| `_carrier-schematic project` | Private — write the `.kicad_sch` and library tables from `hardware.toml`; KiCad-free |
+| `_carrier-board project` | Private — place the board from scratch (KiCad's bundled Python) |
+| `_carrier-route project` | Private — Freerouting, then the GND pour (needs java >= 25 and the 2.5.0 jar) |
+| `_carrier-check project` | Private — ERC, DRC parity, netlist parity, board check, then the check stamp (`kicad-cli`) |
+| `_carrier-fab project` | Private — Gerbers, drill, BOM and CPL (`kicad-cli`) |
+| `_perfboard project` / `_perfboard-check project` | Private — the project's perfboard layout (reads the schematic through `kicad-cli`) |
+| `_kicad_python` | KiCad's bundled Python; override with `KICAD_PYTHON` |
+
 ### Usage Patterns
 
 ```just

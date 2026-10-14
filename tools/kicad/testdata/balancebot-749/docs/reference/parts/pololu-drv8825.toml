@@ -1,0 +1,29 @@
+# DRV8825 on a Pololu-layout carrier, socketed in two 1x8 female headers.
+[part]
+name = "DRV8825 stepper driver carrier (Pololu layout)"
+source = "KiCad 10.0.6 library symbol and footprint; not yet checked against the fitted carrier (#748)"
+symbol = "Driver_Motor:Pololu_Breakout_DRV8825"
+footprint = "Module:Pololu_Breakout-16_15.2x20.3mm"
+no_connect = ["FAULT"]
+
+# hardware.toml pin name (the carrier's silkscreen) -> symbol pin number(s).
+# KiCad names 9, 13 and 14 ~{EN}, ~{RST} and ~{SLP}.
+[pins]
+GND = [1, 7]
+FAULT = 2
+A2 = 3
+A1 = 4
+B1 = 5
+B2 = 6
+VMOT = 8
+nENABLE = 9
+M0 = 10
+M1 = 11
+M2 = 12
+nRESET = 13
+nSLEEP = 14
+STEP = 15
+DIR = 16
+
+[perfboard]
+height = "raised"

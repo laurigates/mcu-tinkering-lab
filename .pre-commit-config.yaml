@@ -141,6 +141,18 @@ repos:
         files: '(^tools/hardware/|hardware\.toml$|main/[^/]+\.h$|src/pin_config\.h$|^packages/.*\.md$|^docs/reference/boards/)'
         pass_filenames: false
 
+      # Only the carrier gates that regenerating fixes correctly without KiCad:
+      # test.yml ("Test Suite") runs pre-commit and auto-fix.yml watches it, so
+      # a gate here is one a cloud fixer may "fix". The board check and the
+      # check stamp need KiCad to fix honestly; they run in carrier-check.yml
+      # only (ADR-027).
+      - id: kicad-carrier
+        name: tools/kicad tests, and the generated carrier schematic matches hardware.toml
+        entry: env PYTHONPATH=tools sh -c 'python3 -m unittest discover -s tools/kicad -t tools && python3 -m kicad.schematic --check'
+        language: system
+        files: '(^tools/kicad/|^tools/hardware/|hardware\.toml$|src/pin_config\.h$|main/[^/]+\.h$|^docs/reference/(boards|parts)/|/hardware/(carrier|perfboard)/)'
+        pass_filenames: false
+
       - id: check-doc-facts
         name: Hand-written docs agree with the firmware
         entry: python3 tools/check-doc-facts.py

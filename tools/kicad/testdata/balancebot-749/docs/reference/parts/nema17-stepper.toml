@@ -1,0 +1,16 @@
+# Bipolar NEMA17, off-board, on a JST-XH 4-pin lead.
+[part]
+name = "NEMA17 stepper on JST-XH 4"
+source = "coil order is this repo's cable convention (#749 carrier)"
+symbol = "Connector_Generic:Conn_01x04"
+footprint = "Connector_JST:JST_XH_B4B-XH-A_1x04_P2.50mm_Vertical"
+
+[pins]
+A1 = 1
+A2 = 2
+B1 = 3
+B2 = 4
+
+[perfboard]
+footprint = "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical"
+height = "tall"

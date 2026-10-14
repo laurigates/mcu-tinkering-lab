@@ -1,0 +1,13 @@
+# 0805 ceramic capacitor, hand-solderable pads. Value and LCSC number per instance.
+[part]
+name = "Capacitor, 0805"
+source = "KiCad 10.0.6 library"
+symbol = "Device:C"
+footprint = "Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder"
+
+[pins]
+A = 1
+B = 2
+
+[perfboard]
+footprint = "Capacitor_THT:C_Disc_D5.0mm_W2.5mm_P2.50mm"

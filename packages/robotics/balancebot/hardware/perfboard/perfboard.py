@@ -31,8 +31,9 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 CARRIER = HERE.parent / "carrier" / "balancebot-carrier"
 SCH = CARRIER / "balancebot-carrier.kicad_sch"
+REPO = HERE.parents[4]
 KICAD_FP = Path("/Applications/KiCad/KiCad.app/Contents/SharedSupport/footprints")
-PROJECT_FP = {"Seeed_XIAO": CARRIER / "lib" / "Seeed_XIAO.pretty"}
+PROJECT_FP = {"Seeed_XIAO": REPO / "tools/kicad/lib/seeed-xiao/Seeed_XIAO.pretty"}
 PITCH = 2.54
 
 # A 50 x 70 mm proto board: columns A..R, rows 1..24, component side up,

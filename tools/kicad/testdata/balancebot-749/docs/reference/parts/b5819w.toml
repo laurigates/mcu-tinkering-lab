@@ -1,0 +1,16 @@
+# B5819W Schottky, SOD-123 (the SMD 1N5819).
+[part]
+name = "B5819W Schottky diode"
+source = "KiCad 10.0.6 library"
+symbol = "Device:D_Schottky"
+footprint = "Diode_SMD:D_SOD-123"
+value = "B5819W"
+lcsc = "C8598"
+
+[pins]
+K = 1
+A = 2
+
+[perfboard]
+footprint = "Diode_THT:D_DO-41_SOD81_P2.54mm_Vertical_AnodeUp"
+value = "1N5819"

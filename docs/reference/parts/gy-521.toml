@@ -1,0 +1,23 @@
+# GY-521 MPU6050 breakout in a 1x8 female header, lying flat over the board.
+[part]
+name = "GY-521 MPU6050 breakout"
+source = "pin order from memory, not a vendor file: read it off the module before ordering (#748)"
+symbol = "Connector_Generic:Conn_01x08"
+footprint = "Connector_PinSocket_2.54mm:PinSocket_1x08_P2.54mm_Vertical"
+no_connect = ["XDA", "XCL"]
+
+[pins]
+VCC = 1
+GND = 2
+SCL = 3
+SDA = 4
+XDA = 5
+XCL = 6
+AD0 = 7
+INT = 8
+
+[perfboard]
+height = "raised"
+# 21 x 16 mm module, header along the long edge; in holes from pin 1 before
+# rotation (pins run along +y, the module extends 6.3 holes along +x).
+body = [-0.6, -0.6, 5.7, 7.6]

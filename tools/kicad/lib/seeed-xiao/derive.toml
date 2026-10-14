@@ -1,0 +1,13 @@
+# Socket-mount footprints and symbols derived from Seeed's DIP ones.
+#
+# Each [[socket]] keeps the vendor footprint's through-hole pads numbered
+# pads[0]..pads[1] (inclusive) and drops its Edge.Cuts cutout, the bottom pads
+# along it and the SMD castellations; the symbol gets the matching pin cut.
+# Regenerate with `just balancebot::carrier-lib`
+# (PYTHONPATH=tools python3 -m kicad.derive_xiao); CI runs it with --check.
+
+[[socket]]
+vendor_footprint = "XIAO-RP2350-DIP"
+vendor_symbol = "XIAO-RP2350-DIP"
+derived = "XIAO-RP2350-Socket"
+pads = [1, 14]

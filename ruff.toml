@@ -16,6 +16,12 @@ exclude = [
     ".esphome/",
 ]
 
+# tools/kicad/pcb/ runs only under KiCad's bundled Python 3.9, which CI does not
+# have: keep pyupgrade from rewriting it to 3.10+ syntax (UP045's `X | None`).
+# tools/kicad/test_pcb_py39.py checks the files and this entry.
+[per-file-target-version]
+"tools/kicad/pcb/**" = "py39"
+
 [lint]
 # Simulation subproject uses line-length = 100 in its own pyproject.toml;
 # when ruff runs from repo root, this override keeps them in sync.

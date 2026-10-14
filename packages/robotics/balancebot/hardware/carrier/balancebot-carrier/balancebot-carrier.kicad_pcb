@@ -161,7 +161,7 @@
 				)
 			)
 		)
-		(path "/67c2b8e0-6af7-45e8-9f22-aebcb5456678")
+		(path "/c4d0c49a-acec-53fa-b526-4637fc14535b")
 		(attr smd)
 		(duplicate_pad_numbers_are_jumpers no)
 		(fp_line
@@ -308,7 +308,7 @@
 				)
 			)
 		)
-		(path "/91379271-b682-4abf-bf00-e58a4d68bd83")
+		(path "/6f6c06b6-642e-5ffe-8201-96a8cf0b8230")
 		(attr through_hole)
 		(duplicate_pad_numbers_are_jumpers no)
 		(fp_line
@@ -631,7 +631,7 @@
 				)
 			)
 		)
-		(path "/8a650eef-b6b3-45ad-a3c0-5c180af3e801")
+		(path "/99c200e7-648c-5900-a446-cab560ae3d10")
 		(attr smd)
 		(duplicate_pad_numbers_are_jumpers no)
 		(fp_line
@@ -770,7 +770,7 @@
 				)
 			)
 		)
-		(path "/8751ef43-dc11-4c24-a2da-ee6a78b3e53c")
+		(path "/5c733e52-0b61-5793-9755-4792b125be5a")
 		(attr smd)
 		(duplicate_pad_numbers_are_jumpers no)
 		(fp_line
@@ -1265,7 +1265,7 @@
 				)
 			)
 		)
-		(path "/33afa180-1e06-40ec-9d95-434a42353ed3")
+		(path "/72d3db03-dd48-57d0-870c-ea79d29dad62")
 		(attr smd)
 		(duplicate_pad_numbers_are_jumpers no)
 		(fp_line
@@ -1701,7 +1701,7 @@
 				)
 			)
 		)
-		(path "/1829d33f-c2ac-4389-b5a3-1694750847ad")
+		(path "/541945c8-ed8e-59ba-8a31-3423c2e16e15")
 		(attr through_hole)
 		(duplicate_pad_numbers_are_jumpers no)
 		(fp_line
@@ -1993,7 +1993,7 @@
 				)
 			)
 		)
-		(path "/6fc7145b-4428-42ad-9b34-0b358cffdc96")
+		(path "/343a4f5d-bd90-5cab-a069-6346e754edfc")
 		(attr through_hole)
 		(duplicate_pad_numbers_are_jumpers no)
 		(fp_line
@@ -2286,7 +2286,7 @@
 				)
 			)
 		)
-		(path "/53aacae8-5dfe-4152-b843-48d90aa5e8f9")
+		(path "/e04d8c23-c4cf-5d66-afb5-b129678a210f")
 		(attr exclude_from_pos_files exclude_from_bom)
 		(duplicate_pad_numbers_are_jumpers no)
 		(fp_circle
@@ -2405,7 +2405,7 @@
 				)
 			)
 		)
-		(path "/a2e54354-61ea-4317-a398-736b7d8ad0a9")
+		(path "/ad6d293c-dfe1-5229-9a3b-851731f44621")
 		(attr smd)
 		(duplicate_pad_numbers_are_jumpers no)
 		(fp_line
@@ -2564,7 +2564,7 @@
 				)
 			)
 		)
-		(path "/5e1ce085-a8da-438c-b268-0b1cbb2708d8")
+		(path "/c58c10e5-11c8-5e46-a185-0630fd0dbcf2")
 		(attr smd)
 		(duplicate_pad_numbers_are_jumpers no)
 		(fp_line
@@ -2704,7 +2704,7 @@
 				)
 			)
 		)
-		(path "/20a0dcd1-042d-48dc-8534-f1bacfe91eb9")
+		(path "/9f3fb60c-6e92-59d7-9299-4f680d4a7683")
 		(attr through_hole)
 		(duplicate_pad_numbers_are_jumpers no)
 		(fp_line
@@ -3138,7 +3138,7 @@
 				)
 			)
 		)
-		(path "/6d381139-04b3-4694-9d3d-d9d63d716f4c")
+		(path "/ed7d05ce-386b-57da-9bc4-784627ed220a")
 		(attr smd)
 		(duplicate_pad_numbers_are_jumpers no)
 		(fp_line
@@ -3415,7 +3415,7 @@
 				)
 			)
 		)
-		(path "/07047e10-a072-4297-81ce-d27a245298e9")
+		(path "/deac426d-e346-546d-b18d-c55cae8bf7d4")
 		(attr through_hole)
 		(duplicate_pad_numbers_are_jumpers no)
 		(fp_line
@@ -3839,7 +3839,7 @@
 				)
 			)
 		)
-		(path "/2eef0c7a-6088-40d1-9eaa-9ddc08bd27b0")
+		(path "/e65bea60-21cc-53e0-9e6c-ca6205977c30")
 		(attr exclude_from_pos_files exclude_from_bom)
 		(duplicate_pad_numbers_are_jumpers no)
 		(fp_circle
@@ -3947,7 +3947,7 @@
 				)
 			)
 		)
-		(path "/e9fa1c7b-68f3-4369-8ddb-297f806781fa")
+		(path "/778b159f-3e59-5c94-9846-6cc41d64deb3")
 		(attr exclude_from_pos_files exclude_from_bom)
 		(duplicate_pad_numbers_are_jumpers no)
 		(fp_circle
@@ -4046,7 +4046,7 @@
 				)
 			)
 		)
-		(path "/b2de05bf-9ed4-4730-8aeb-cae4e998164f")
+		(path "/e83c79e2-f7af-5a03-94f5-3d04b07371dd")
 		(attr through_hole)
 		(duplicate_pad_numbers_are_jumpers no)
 		(fp_line
@@ -4469,7 +4469,7 @@
 				)
 			)
 		)
-		(path "/96462823-02f3-4e70-a310-7afb7d16c799")
+		(path "/348d3a63-7c76-595c-b621-805d61af233d")
 		(attr through_hole)
 		(duplicate_pad_numbers_are_jumpers no)
 		(fp_line
@@ -4762,7 +4762,7 @@
 				)
 			)
 		)
-		(path "/a6a90f70-c8a1-4838-aa6b-7bb79eb91276")
+		(path "/71e23303-2889-5fee-ba6b-8b973b06cf11")
 		(attr exclude_from_pos_files exclude_from_bom)
 		(duplicate_pad_numbers_are_jumpers no)
 		(fp_circle
@@ -4881,7 +4881,7 @@
 				)
 			)
 		)
-		(path "/dbc0b6f5-46ee-4381-b3e3-9624780be8d5")
+		(path "/46535397-ad8c-5d94-b2d3-dc1ac3328575")
 		(attr smd)
 		(duplicate_pad_numbers_are_jumpers no)
 		(fp_line

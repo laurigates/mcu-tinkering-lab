@@ -1,0 +1,14 @@
+# Seeed XIAO RP2350 in two 1x7 female headers on a carrier PCB.
+[part]
+name = "Seeed XIAO RP2350, socketed"
+source = "Seeed-Studio/OSHW-XIAO-Series @ cc7f3bb (MIT), XIAO-RP2350-DIP cut to its 14 header pads by python3 -m kicad.derive_xiao"
+symbol = "Seeed_XIAO:XIAO-RP2350-Socket"
+footprint = "Seeed_XIAO:XIAO-RP2350-Socket"
+# Symbol pin numbers follow the board page's Side/Pos, counter-clockwise like a
+# DIP: L pos n is pin n, R pos n is pin 2N+1-n (N pads per side). An unused GPIO
+# pad is a no-connect without being listed (a spare I/O); a power pad (5V, GND,
+# 3V3) must be on a rail.
+pin_numbers = "board-dip-ccw"
+
+[perfboard]
+height = "raised"

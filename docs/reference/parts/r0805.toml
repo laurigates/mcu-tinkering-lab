@@ -1,0 +1,13 @@
+# 0805 resistor, hand-solderable pads. Value and LCSC number per instance.
+[part]
+name = "Resistor, 0805"
+source = "KiCad 10.0.6 library"
+symbol = "Device:R"
+footprint = "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+
+[pins]
+A = 1
+B = 2
+
+[perfboard]
+footprint = "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P2.54mm_Vertical"
