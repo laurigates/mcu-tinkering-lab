@@ -106,6 +106,10 @@ jobs:
             echo "::error::The check stamp does not vouch for the committed schematic, board and join. Run 'just <project>::carrier-check' locally (KiCad 10.0.6) and commit the stamp it writes; never edit the stamp or the .kicad_pcb by hand."
             exit 1
           fi
-      # Added with the shared perfboard generator (issue #750, PR C):
-      # - name: Perfboard drawing and wire list are up to date
-      #   run: python3 -m kicad.perfboard --check
+
+      - name: Perfboard drawing and wire list are up to date
+        run: |
+          if ! python3 -m kicad.perfboard --check; then
+            echo "::error::A perfboard drawing or wire list is stale, or its layout breaks a check. Run 'just <project>::perfboard' locally and commit perfboard.svg and perfboard.md."
+            exit 1
+          fi

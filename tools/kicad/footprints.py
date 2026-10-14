@@ -167,36 +167,11 @@ def _arc_extent(s, m, e) -> list[tuple[float, float]]:
     return out
 
 
-def perfboard_courtyard(text: str, where: object = "footprint") -> tuple:
-    """perfboard.py's own reading of the F.CrtYd box (perfboard.py:96-107), verbatim.
-
-    It differs from `courtyard` on some footprints, because it matches from any
-    `(fp_...` up to the next F.CrtYd layer (so an earlier silkscreen or fab
-    graphic's points are counted) and reads a circle as its centre and one rim
-    point. It is kept, not fixed, so the perfboard drawing stays byte-identical
-    when the generator moves onto this module (issue #750 PR C); the parts it
-    places today are drawn with this box.
-    """
-    xs, ys = [], []
-    for block in re.findall(
-        r"\(fp_(?:line|rect|circle|arc|poly)(.*?)\(layer \"F\.CrtYd\"\)", text, re.S
-    ):
-        for x, y in re.findall(
-            r"\((?:start|end|center|mid|xy) ([-\d.]+) ([-\d.]+)\)", block
-        ):
-            xs.append(float(x))
-            ys.append(float(y))
-    if not xs:
-        raise KicadError(f"{where}: no F.CrtYd courtyard")
-    return min(xs), min(ys), max(xs), max(ys)
-
-
 def thru_hole_pads(path: Path) -> tuple[dict[str, tuple[float, float]], tuple]:
-    """(pin number -> (x, y) of its first through-hole pad, perfboard's F.CrtYd box).
+    """(pin number -> (x, y) of its first through-hole pad, the F.CrtYd box).
 
-    The perfboard generator's reading, verbatim (perfboard.py:86-106), so its
-    drawing stays byte-identical when it moves onto this module. The box is
-    `perfboard_courtyard`, not `courtyard`; see there for where they differ.
+    The perfboard generator's reading: only numbered through-hole pads count,
+    and the box is `courtyard`'s, so a part's drawn body is its true courtyard.
     """
     text = path.read_text()
     pads = {}
@@ -206,4 +181,4 @@ def thru_hole_pads(path: Path) -> tuple[dict[str, tuple[float, float]], tuple]:
         pads.setdefault(m.group(1), (float(m.group(2)), float(m.group(3))))
     if not pads:
         raise KicadError(f"{path}: no through-hole pads")
-    return pads, perfboard_courtyard(text, path)
+    return pads, courtyard(text, path)

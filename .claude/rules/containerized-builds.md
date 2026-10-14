@@ -83,7 +83,7 @@ file's other imports.
 | `_carrier-route project` | Private — Freerouting, then the GND pour (needs java >= 25 and the 2.5.0 jar) |
 | `_carrier-check project` | Private — ERC, DRC parity, netlist parity, board check, then the check stamp (`kicad-cli`) |
 | `_carrier-fab project` | Private — Gerbers, drill, BOM and CPL (`kicad-cli`) |
-| `_perfboard project` / `_perfboard-check project` | Private — the project's perfboard layout (reads the schematic through `kicad-cli`) |
+| `_perfboard project` / `_perfboard-check project` | Private — the project's perfboard drawing and wire list from `hardware/perfboard/perfboard.toml` (`kicad.perfboard`); KiCad-free |
 | `_kicad_python` | KiCad's bundled Python; override with `KICAD_PYTHON` |
 
 ### Usage Patterns

@@ -9,10 +9,10 @@
 # Provides private recipes; the project defines the public ones, as with pico.just:
 #   _carrier-lib, _carrier-schematic, _carrier-board, _carrier-route, _carrier-check,
 #   _carrier-fab, _perfboard, _perfboard-check
-# KiCad-free: _carrier-lib, _carrier-schematic.
-# Need KiCad 10.0.6: _carrier-check, _carrier-fab, _perfboard, _perfboard-check
-# (kicad-cli), _carrier-board, _carrier-route (KiCad's bundled Python;
-# _carrier-route also java >= 25 and the Freerouting 2.5.0 jar, $FREEROUTING_JAR).
+# KiCad-free: _carrier-lib, _carrier-schematic, _perfboard, _perfboard-check.
+# Need KiCad 10.0.6: _carrier-check, _carrier-fab (kicad-cli), _carrier-board,
+# _carrier-route (KiCad's bundled Python; _carrier-route also java >= 25 and the
+# Freerouting 2.5.0 jar, $FREEROUTING_JAR).
 #
 # Variable names carry a _kicad_ prefix so they cannot collide with pico.just's
 # or esp32*.just's (container_cmd, compose_file, tools_dir, _detected_*).
@@ -41,10 +41,10 @@ _carrier-check project:
 _carrier-fab project:
     cd {{_kicad_repo}} && PYTHONPATH=tools python3 -m kicad.fab {{project}}
 
-# The project's own perfboard.py until the shared generator lands (issue #750
-# PR C); it reads the carrier schematic through kicad-cli.
+# The project's hardware/perfboard/perfboard.toml, laid out from the carrier
+# netlist and the vendored footprints.
 _perfboard project:
-    cd {{_kicad_repo}} && python3 {{project}}/hardware/perfboard/perfboard.py
+    cd {{_kicad_repo}} && PYTHONPATH=tools python3 -m kicad.perfboard {{project}}
 
 _perfboard-check project:
-    cd {{_kicad_repo}} && python3 {{project}}/hardware/perfboard/perfboard.py --check
+    cd {{_kicad_repo}} && PYTHONPATH=tools python3 -m kicad.perfboard --check {{project}}

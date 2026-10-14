@@ -2,7 +2,8 @@
 
 Mutations run on a temp copy of the subtree; the committed files are only read.
 The installed-KiCad comparisons run against temp roots, so the suite needs no
-KiCad.
+KiCad. A temp root is a git work tree: the referenced set includes the swap
+footprints of git-tracked perfboard.toml files.
 
     python3 -m unittest discover -s tools/kicad -t tools
 """
@@ -13,6 +14,7 @@ import contextlib
 import io
 import re
 import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -24,6 +26,7 @@ LIB = REPO_ROOT / "tools/kicad/lib"
 STOCK = REPO_ROOT / vendor.STOCK_REL
 SEEED = REPO_ROOT / vendor.SEEED_REL
 PARTS = REPO_ROOT / "docs/reference/parts"
+PERFBOARD_TOML = "packages/robotics/balancebot/hardware/perfboard/perfboard.toml"
 # sha256 of Seeed-Studio/OSHW-XIAO-Series LICENSE at cc7f3bb (MIT).
 SEEED_LICENSE_SHA256 = (
     "df584ae476b849794bd8462e8c5ea8f33c0fbca400acb83688a331731a30207b"
@@ -33,6 +36,10 @@ UPSTREAM_LICENSE_SHA256 = (
     "45d2bce75e5a4208f5afb01b8fb2c406e700371c4fe2b5f5cd5c443d46db4d8f"
 )
 FOOTPRINT = "footprints/Resistor_SMD.pretty/R_0805_2012Metric_Pad1.20x1.40mm_HandSolder.kicad_mod"
+
+
+def git(root: Path, *args: str) -> None:
+    subprocess.run(["git", *args], cwd=root, check=True, capture_output=True)
 
 
 class CommittedSubtreeTests(unittest.TestCase):
@@ -129,6 +136,7 @@ class MutationTests(unittest.TestCase):
         self.root = Path(self.tmp.name)
         shutil.copytree(LIB, self.root / "tools/kicad/lib")
         shutil.copytree(PARTS, self.root / "docs/reference/parts")
+        git(self.root, "init", "-q")
         self.stock = self.root / vendor.STOCK_REL
         self.seeed = self.root / vendor.SEEED_REL
         self.assertEqual(vendor.check(self.root), [])
@@ -229,6 +237,24 @@ class MutationTests(unittest.TestCase):
             ["symbol Device:L: referenced but not vendored"],
         )
 
+    def test_perfboard_swap_footprint_is_referenced(self):
+        # A [swaps.REF] footprint in a tracked perfboard.toml must be vendored:
+        # the perfboard generator reads vendored footprints only.
+        toml = self.root / "packages/robotics/demo/hardware/perfboard/perfboard.toml"
+        toml.parent.mkdir(parents=True)
+        swap = "Connector_PinHeader_2.54mm:PinHeader_1x09_P2.54mm_Vertical"
+        toml.write_text(
+            (REPO_ROOT / PERFBOARD_TOML).read_text()
+            + f'\n[swaps.J2]\nfootprint = "{swap}"\n'
+        )
+        # Untracked, it is not a project yet (control).
+        self.assertNotIn(swap, vendor.referenced(self.root).footprints)
+        git(self.root, "add", str(toml))
+        self.assertIn(swap, vendor.referenced(self.root).footprints)
+        self.assertEqual(
+            vendor.check(self.root), [f"footprint {swap}: referenced but not vendored"]
+        )
+
     def test_vendored_but_not_referenced(self):
         want = vendor.referenced()
         want = vendor.Referenced(want.symbols - {"Device:R"}, want.footprints)
@@ -281,6 +307,7 @@ class InstalledTests(unittest.TestCase):
         self.root = base / "repo"
         shutil.copytree(LIB, self.root / "tools/kicad/lib")
         shutil.copytree(PARTS, self.root / "docs/reference/parts")
+        git(self.root, "init", "-q")
         self.stock = self.root / vendor.STOCK_REL
 
     def drift(self):

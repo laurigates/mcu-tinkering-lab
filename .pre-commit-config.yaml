@@ -147,8 +147,8 @@ repos:
       # check stamp need KiCad to fix honestly; they run in carrier-check.yml
       # only (ADR-027).
       - id: kicad-carrier
-        name: tools/kicad tests, and the generated carrier schematic matches hardware.toml
-        entry: env PYTHONPATH=tools sh -c 'python3 -m unittest discover -s tools/kicad -t tools && python3 -m kicad.schematic --check'
+        name: tools/kicad tests, and the generated carrier schematic and perfboard match hardware.toml
+        entry: env PYTHONPATH=tools sh -c 'python3 -m unittest discover -s tools/kicad -t tools && python3 -m kicad.schematic --check && python3 -m kicad.perfboard --check'
         language: system
         files: '(^tools/kicad/|^tools/hardware/|hardware\.toml$|src/pin_config\.h$|main/[^/]+\.h$|^docs/reference/(boards|parts)/|/hardware/(carrier|perfboard)/)'
         pass_filenames: false

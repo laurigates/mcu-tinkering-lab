@@ -66,14 +66,16 @@ class FootprintTests(unittest.TestCase):
             with self.subTest(fpid=fpid):
                 self.assertEqual(footprints.parse(fp(fpid)).courtyard, box)
 
-    def test_perfboard_courtyard_is_perfboards_own_reading(self):
-        # Pinned, wrong values: the perfboard drawing was made with them, and
-        # PR C's byte-identity gate needs them unchanged (see the docstring).
+    def test_thru_hole_pads_box_is_the_true_courtyard(self):
+        # The perfboard footprints a regex reading of F.CrtYd got wrong: a
+        # silkscreen or fab point before the courtyard leaked in (the socket's
+        # x 12.59, the diode's x -1.75), or a circle read as its centre and
+        # one rim point (the capacitor's +/-4.08).
         cases = {
-            "Capacitor_THT:CP_Radial_D8.0mm_P2.50mm": (-3.159698, -4.08, 5.5, 4.08),
-            "Seeed_XIAO:XIAO-RP2350-Socket": (-10.42, -8.9, 12.591012, 8.89),
+            "Capacitor_THT:CP_Radial_D8.0mm_P2.50mm": (-3.0, -4.25, 5.5, 4.25),
+            "Seeed_XIAO:XIAO-RP2350-Socket": (-10.42, -8.88, 10.54, 8.87),
             "Diode_THT:D_DO-41_SOD81_P2.54mm_Vertical_AnodeUp": (
-                -1.750635,
+                -1.6,
                 -1.6,
                 3.89,
                 1.6,
@@ -82,6 +84,7 @@ class FootprintTests(unittest.TestCase):
         for fpid, box in cases.items():
             with self.subTest(fpid=fpid):
                 self.assertEqual(footprints.thru_hole_pads(fp(fpid))[1], box)
+                self.assertEqual(footprints.parse(fp(fpid)).courtyard, box)
 
     def test_courtyard_of_an_arc_includes_its_bulge(self):
         # A half circle of radius 2 about (0, 0), from (2, 0) through (0, 2) to

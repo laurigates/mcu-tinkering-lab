@@ -1,0 +1,64 @@
+# Perfboard layout of the balancebot carrier, for tools/kicad's perfboard
+# generator: parts and nets from hardware.toml (carrier build), through-hole
+# stand-ins and heights from the parts registry, the rest here.
+#
+#   just balancebot::perfboard          # regenerate perfboard.svg and perfboard.md
+#   just balancebot::perfboard-check    # fail if they are stale or the layout breaks
+
+[board]
+title = "Balancebot perfboard"   # the wire list's heading: "<title> wire list"
+cols = 18                        # 50 x 70 mm: columns A..R, rows 1..24
+rows = 24                        # component side up, robot forward = row 1
+
+[wires]
+heavy_class = "power"            # a net class in ../carrier/board.toml
+heavy_label = "VBAT, GND, motor coils"
+heavy_gauge = "20 AWG"
+light_gauge = "26–30 AWG"
+
+# ref = [column, row, rotation_deg]: 0-based hole of the footprint anchor
+# (pad 1 for most parts, centre for the XIAO).
+[placement]
+# Top band: XIAO with USB-C overhanging the top edge, GY-521 flat to its right
+# (J3 pin 1 at the right end, module extending down).
+U1 = [3, 3, 90]
+J3 = [15, 0, 270]
+# Middle band: both drivers unrotated, so both VMOT pins (pin 8) sit at the
+# bottom of their motor columns, next to the bulk caps.
+A1 = [1, 9, 0]
+A2 = [11, 9, 0]
+# Between the drivers: pull-up and the pack divider (low parts).
+R1 = [7, 10, 0]
+R2 = [8, 12, 0]
+R3 = [8, 14, 0]
+C3 = [8, 16, 0]
+# Bottom band: bulk caps under each VMOT, then connectors on the edge.
+C1 = [2, 19, 0]
+C2 = [11, 19, 0]
+J2 = [5, 21, 90]
+D1 = [10, 22, 0]
+J4 = [1, 23, 90]
+J1 = [7, 23, 90]
+J5 = [13, 23, 90]
+
+# Build steps, one solder-side panel each. Every net belongs to exactly one;
+# within a step, nets take the palette's slots in this order (at most 8).
+[[steps]]
+title = "Power"
+subtitle = "VBAT, GND and the 5 V feed"
+nets = ["VBAT", "GND", "BUCK_5V", "XIAO_5V"]
+
+[[steps]]
+title = "Logic power"
+subtitle = "3V3 straps and the shared nENABLE"
+nets = ["+3V3", "NENABLE"]
+
+[[steps]]
+title = "Motor coils"
+subtitle = "driver outputs to the motor headers"
+nets = ["MOTL_A1", "MOTL_A2", "MOTL_B1", "MOTL_B2", "MOTR_A1", "MOTR_A2", "MOTR_B1", "MOTR_B2"]
+
+[[steps]]
+title = "Signals"
+subtitle = "XIAO to drivers, IMU and the pack divider"
+nets = ["STEP_L", "DIR_L", "STEP_R", "DIR_R", "IMU_SDA", "IMU_SCL", "IMU_INT", "PACK_SENSE"]
