@@ -159,9 +159,9 @@ why = "switches the XIAO's onboard battery-sense divider, not brought out to a h
 name = "3S 18650 pack + BMS"
 kind = "battery"
 note = "9.0–12.6 V"
-part = "battery-xt30"
+part = "battery-jst-xh2"
 ref = "J1"
-value = "XT30 pack in"
+value = "JST-XH pack in"
 
 [parts.buck]
 name = "LM2596 5 V buck"
@@ -267,7 +267,7 @@ ref = "H4"
 # Motor power straight from the pack; never from the XIAO's battery pads.
 [[rails]]
 name = "VBAT"
-from = "pack.+"
+from = "pack.BAT+"
 to = ["buck.IN+", "drv_left.VMOT", "drv_right.VMOT"]
 
 # A continuation: same name, no `from` — these loads join the VBAT rail above.
@@ -319,7 +319,7 @@ to = [
 [[rails]]
 name = "GND"
 build = "carrier"
-from = "pack.-"
+from = "pack.BAT-"
 to = [
     "buck.IN-",
     "buck.OUT-",

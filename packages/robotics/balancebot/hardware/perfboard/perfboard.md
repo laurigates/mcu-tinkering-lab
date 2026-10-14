@@ -18,7 +18,7 @@ Neighbouring holes (length 1) can be a solder bridge instead of a wire.
 | C2 | 100uF 35V | L20 | `CP_Radial_D8.0mm_P2.50mm` |
 | C3 | 100nF | I17 | `C_Disc_D5.0mm_W2.5mm_P2.50mm` |
 | D1 | 1N5819 | K23 | `D_DO-41_SOD81_P2.54mm_Vertical_AnodeUp` |
-| J1 | XT30 pigtail | H24 | `PinHeader_1x02_P2.54mm_Vertical` |
+| J1 | JST-XH pack lead | H24 | `PinHeader_1x02_P2.54mm_Vertical` |
 | J2 | LM2596 module | F22 | `PinHeader_1x04_P2.54mm_Vertical` |
 | J3 | GY-521 MPU6050 | P1 | `PinSocket_1x08_P2.54mm_Vertical` |
 | J4 | Motor left | B24 | `PinHeader_1x04_P2.54mm_Vertical` |
@@ -34,29 +34,29 @@ VBAT, GND and the 5 V feed.
 
 | ✓ | # | Net | Gauge | From | To | Length (holes) |
 |---|---|---|---|---|---|---|
-| ☐ | 1 | VBAT | 20 AWG | A1.8 (B17) | C1.1 (C20) | 6 |
+| ☐ | 1 | VBAT | 20 AWG | A1.8 (B17) | C1.1 (C20) | 4 |
 | ☐ | 2 | VBAT | 20 AWG | C1.1 (C20) | J2.1 (F22) | 5 |
-| ☐ | 3 | VBAT | 20 AWG | J2.1 (F22) | J1.2 (I24) | 6 |
-| ☐ | 4 | VBAT | 20 AWG | J1.2 (I24) | C2.1 (L20) | 8 |
+| ☐ | 3 | VBAT | 20 AWG | J2.1 (F22) | J1.1 (H24) | 4 |
+| ☐ | 4 | VBAT | 20 AWG | J1.1 (H24) | C2.1 (L20) | 8 |
 | ☐ | 5 | VBAT | 20 AWG | C2.1 (L20) | A2.8 (L17) | 4 |
-| ☐ | 6 | VBAT | 20 AWG | A2.8 (L17) | R2.1 (I13) | 13 |
+| ☐ | 6 | VBAT | 20 AWG | A2.8 (L17) | R2.1 (I13) | 9 |
 | ☐ | 7 | GND | 20 AWG | A1.1 (B10) | A1.7 (B16) | 7 |
 | ☐ | 8 | GND | 20 AWG | A1.7 (B16) | C1.2 (D20) | 6 |
-| ☐ | 9 | GND | 20 AWG | C1.2 (D20) | J2.2 (G22) | 5 |
+| ☐ | 9 | GND | 20 AWG | C1.2 (D20) | J2.2 (G22) | 6 |
 | ☐ | 10 | GND | 20 AWG | J2.2 (G22) | J2.4 (I22) | 3 |
-| ☐ | 11 | GND | 20 AWG | J2.2 (G22) | J1.1 (H24) | 3 |
+| ☐ | 11 | GND | 20 AWG | J2.4 (I22) | J1.2 (I24) | 3 |
 | ☐ | 12 | GND | 20 AWG | J2.4 (I22) | C2.2 (M20) | 6 |
 | ☐ | 13 | GND | 20 AWG | C2.2 (M20) | A2.7 (L16) | 5 |
 | ☐ | 14 | GND | 20 AWG | A2.7 (L16) | C3.2 (J17) | 3 |
 | ☐ | 15 | GND | 20 AWG | C3.2 (J17) | R3.2 (J15) | 3 |
-| ☐ | 16 | GND | 20 AWG | R3.2 (J15) | A1.12 (G14) | 4 |
+| ☐ | 16 | GND | 20 AWG | R3.2 (J15) | A1.12 (G14) | 8 |
 | ☐ | 17 | GND | 20 AWG | A2.7 (L16) | A2.1 (L10) | 7 |
 | ☐ | 18 | GND | 20 AWG | A2.7 (L16) | A2.12 (Q14) | 7 |
-| ☐ | 19 | GND | 20 AWG | A2.1 (L10) | J3.7 (J1) | 12 |
+| ☐ | 19 | GND | 20 AWG | A2.1 (L10) | J3.7 (J1) | 11 |
 | ☐ | 20 | GND | 20 AWG | J3.7 (J1) | U1.13 (G2) | 4 |
-| ☐ | 21 | GND | 20 AWG | J3.7 (J1) | J3.2 (O1) | 6 |
-| ☐ | 22 | BUCK_5V | 26–30 AWG | D1.2 (L23) | J2.3 (H22) | 5 |
-| ☐ | 23 | XIAO_5V | 26–30 AWG | D1.1 (K23) | U1.14 (G1) | 29 |
+| ☐ | 21 | GND | 20 AWG | J3.7 (J1) | J3.2 (O1) | 9 |
+| ☐ | 22 | BUCK_5V | 26–30 AWG | D1.2 (L23) | J2.3 (H22) | 12 |
+| ☐ | 23 | XIAO_5V | 26–30 AWG | D1.1 (K23) | U1.14 (G1) | 40 |
 
 ## Step 2: Logic power
 

@@ -1,0 +1,17 @@
+# Battery pack on a JST-XH 2-pin lead.
+[part]
+name = "Battery input, JST-XH 2"
+source = "pin order is this repo's cable convention, as for the LM2596 lead: BAT+ on pad 1 (the square pad); the carrier prints + and - beside the pads"
+symbol = "Connector_Generic:Conn_01x02"
+footprint = "Connector_JST:JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical"
+
+# Not "+"/"-": the JST-XH footprint prints no polarity, so the registry's
+# polarity tripwire has nothing to prove them against. The polarity is the
+# cable's, set by the carrier's silkscreen (board.toml [silk] texts).
+[pins]
+"BAT+" = 1
+"BAT-" = 2
+
+[perfboard]
+footprint = "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical"
+value = "JST-XH pack lead"

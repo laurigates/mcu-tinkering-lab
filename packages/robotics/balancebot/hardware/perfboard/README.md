@@ -25,7 +25,7 @@ are not.
 
 | Ref | On the PCB | On the perfboard |
 |---|---|---|
-| J1 | XT30PW-M soldered in | XT30 on a short **20 AWG** pigtail, soldered into H24 (GND) and I24 (VBAT). 16 AWG XT30 leads will not fit 1 mm holes |
+| J1 | JST-XH 2-pin (2.5 mm) | Plain 1×2 2.54 mm male header for the pack's JST-XH lead, same pin order |
 | J2, J4, J5 | JST-XH (2.5 mm) | Plain 1×4 2.54 mm male headers, same pin order |
 | C1, C2 | 6.3 mm SMD electrolytic | 8 mm radial, 2.5 mm leads, ≥ 25 V |
 | C3, R1–R3 | 0805 SMD | Ceramic disc; resistors stood upright |
@@ -41,7 +41,7 @@ are not.
    drivers, not under them.
 3. **D1:** the cathode band goes on the square pad, K23.
 4. **C1, C2:** the + lead (longer) goes on the square pad.
-5. **Headers and pigtail** along the bottom edge.
+5. **Headers** along the bottom edge.
 6. **Wires**, one step at a time: `perfboard.md` lists them in the same four
    steps and numbers as the drawing, with the gauge for each. Heavy nets
    (VBAT, GND, motor coils) need 20 AWG or heavier and are drawn thicker. A
@@ -58,7 +58,7 @@ are not.
   and the right-motor wires cross to J5. That keeps both VMOT pins at the
   bottom (B17 and L17), each three holes above its bulk cap's + pad (C20, L20).
 - The three pin orders still to confirm before the PCB order (#748) matter here
-  too: XT30 polarity, the DRV8825 rows and the GY-521 header.
+  too: battery lead polarity, the DRV8825 rows and the GY-521 header.
 
 ## Regenerate
 
