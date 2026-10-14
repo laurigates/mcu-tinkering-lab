@@ -1,0 +1,111 @@
+name: KiCad Carrier Up-to-Date Check
+# `just kicad::check` in CI (CI does not run `just`; its commands are spelled out).
+# KiCad-free by design (ADR-027): ERC, DRC and routing stay local
+# (`just <project>::carrier-check`), which writes the check stamp this job verifies.
+# Not watched by auto-fix.yml (it watches "Test Suite"): a cloud fixer has no KiCad.
+#
+# The trigger paths are every input of the carrier: the join's inputs
+# (hardware.toml, the pin headers, the board pages), the parts registry, the
+# committed carrier and perfboard files, and the tools that read them.
+# tools/kicad's tests import tools/hardware; ruff.toml sets the Python 3.9
+# target that test_pcb_py39 checks pcb/ against.
+
+on:
+  push:
+    branches: [main, develop, 'claude/**']
+    paths:
+      - 'packages/**/hardware.toml'
+      - 'packages/**/src/pin_config.h'
+      - 'packages/**/main/*.h'
+      - 'packages/**/hardware/carrier/**'
+      - 'packages/**/hardware/perfboard/**'
+      - 'docs/reference/boards/*.md'
+      - 'docs/reference/parts/**'
+      - 'tools/hardware/**'
+      - 'tools/kicad/**'
+      - 'tools/kicad.just'
+      - 'ruff.toml'
+      - '.github/workflows/carrier-check.yml'
+  pull_request:
+    # No branches: filter — a PR stacked on a non-default base must get the
+    # same check as one targeting main/develop. See issue #487.
+    paths:
+      - 'packages/**/hardware.toml'
+      - 'packages/**/src/pin_config.h'
+      - 'packages/**/main/*.h'
+      - 'packages/**/hardware/carrier/**'
+      - 'packages/**/hardware/perfboard/**'
+      - 'docs/reference/boards/*.md'
+      - 'docs/reference/parts/**'
+      - 'tools/hardware/**'
+      - 'tools/kicad/**'
+      - 'tools/kicad.just'
+      - 'ruff.toml'
+      - '.github/workflows/carrier-check.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  carrier-up-to-date:
+    name: Verify generated carrier files match the hardware join
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: tools
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      # tools/kicad is stdlib-only but needs tomllib (3.11+); no KiCad.
+      - uses: actions/setup-python@v6.3.0
+        with:
+          python-version: '3.11.17'
+
+      - name: tools/kicad unit tests
+        run: |
+          if ! python3 -m unittest discover -s tools/kicad -t tools; then
+            echo "::error::tools/kicad unit tests failed. Reproduce with 'just kicad::test'."
+            exit 1
+          fi
+
+      - name: Vendored library matches MANIFEST.tsv
+        run: |
+          if ! python3 -m kicad.vendor --check; then
+            echo "::error::A vendored library file is off its MANIFEST.tsv pin, unlisted, or unreferenced; each FAIL line above names its fix. kicad-stock is rebuilt with 'just kicad::vendor', never by hand."
+            exit 1
+          fi
+
+      - name: Derived XIAO socket is up to date
+        run: |
+          if ! python3 -m kicad.derive_xiao --check; then
+            echo "::error::The derived XIAO socket parts are stale. Run 'just kicad::gen' locally and commit the result."
+            exit 1
+          fi
+
+      - name: Schematic and library tables regenerate byte-identical
+        run: |
+          if ! python3 -m kicad.schematic --check; then
+            echo "::error::A carrier schematic or library table no longer matches hardware.toml. Run 'just <project>::carrier-schematic', then 'just <project>::carrier-check' (KiCad 10.0.6) to refresh the stamp, and commit both."
+            exit 1
+          fi
+
+      - name: Committed board pads, values and paths match the join
+        run: |
+          if ! python3 -m kicad.boardcheck; then
+            echo "::error::A committed carrier board no longer matches the join. Re-place and route it with 'just <project>::carrier-board', then run 'just <project>::carrier-check'; never hand-edit the .kicad_pcb."
+            exit 1
+          fi
+
+      - name: Check stamp matches the committed schematic, board and join
+        run: |
+          if ! python3 -m kicad.stamp; then
+            echo "::error::The check stamp does not vouch for the committed schematic, board and join. Run 'just <project>::carrier-check' locally (KiCad 10.0.6) and commit the stamp it writes; never edit the stamp or the .kicad_pcb by hand."
+            exit 1
+          fi
+      # Added with the shared perfboard generator (issue #750, PR C):
+      # - name: Perfboard drawing and wire list are up to date
+      #   run: python3 -m kicad.perfboard --check
