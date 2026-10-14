@@ -35,7 +35,7 @@ are not.
 ## Build order
 
 1. **Sockets first:** 2 × 1×7 female headers for the XIAO (columns A and G,
-   rows 1–7), 4 × 1×8 for the DRV8825s, 1 × 1×8 for the GY-521 (row 1, I–P).
+   rows 1–7), 4 × 1×8 for the DRV8825s, 1 × 1×8 for the GY-521 (row 7, I–P).
    Fit the modules while soldering the sockets so the rows stay parallel.
 2. **Low parts** in the middle column: R1, R2, R3, C3. They sit between the
    drivers, not under them.
@@ -52,8 +52,9 @@ are not.
 
 ## Things a perfboard changes
 
-- **The GY-521 lies flat on its socket**, over the area to the right of the
-  XIAO, with its X arrow toward row 1 (forward). Nothing is under it.
+- **The GY-521 lies flat on its socket**, component side up, over the area to
+  the right of the XIAO. The socket is on row 7 with VCC at I7, so the module
+  extends toward row 1 and its X arrow points forward. Nothing is under it.
 - **A2 faces the same way as A1**, so its motor pins are on its left (column L)
   and the right-motor wires cross to J5. That keeps both VMOT pins at the
   bottom (B17 and L17), each three holes above its bulk cap's + pad (C20, L20).
