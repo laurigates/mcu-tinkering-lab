@@ -146,11 +146,15 @@ class JoinedNets:
         outs = [o for o in self.model.outputs if o.pins and part in (None, o.part)]
         if part is not None and not outs:
             raise HardwareError(f"{part!r}: no [[outputs]] pins in hardware.toml")
+        # One driver may have several [[outputs]] entries; drawing it once
+        # covers them all, so the guard is per driver per call, not per entry.
+        drivers = dict.fromkeys(o.part for o in outs)
+        twice = [d for d in drivers if d in self._drawn_outputs]
+        if twice:
+            raise HardwareError(f"{', '.join(twice)} outputs: drawn twice")
+        self._drawn_outputs.update(drivers)
         pairs = []
         for out in outs:
-            if out.part in self._drawn_outputs:
-                raise HardwareError(f"{out.part} outputs: drawn twice")
-            self._drawn_outputs.add(out.part)
             pairs += [
                 (
                     self._pin(f"{out.part} output {pin}", out.part, pin),

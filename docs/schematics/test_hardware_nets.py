@@ -478,6 +478,42 @@ def test_output_ends_twice_is_an_error(model, motors_drawn):
         nets.output_ends("motor_driver")
 
 
+def test_output_ends_of_a_driver_with_two_outputs_entries_draws_both(
+    model, motors_drawn
+):
+    # The join accepts two [[outputs]] entries from one `part`; drawing the
+    # driver once covers both, and neither counts as a double-draw.
+    xiao, parts = motors_drawn
+    (tb_out,) = [o for o in model.outputs if o.part == "motor_driver"]
+    split = tuple(
+        dataclasses.replace(
+            tb_out,
+            loads=(load,),
+            pins=tuple(tb_out.load_pins[load]),
+            load_pins={load: tb_out.load_pins[load]},
+        )
+        for load in ("motor_right", "motor_left")  # entry order = drawn order
+    )
+    others = tuple(o for o in model.outputs if o.part != "motor_driver")
+    nets = JoinedNets(
+        dataclasses.replace(model, nets=(), bus_nets=(), outputs=(*split, *others)),
+        xiao,
+        parts,
+    )
+    tb = parts["motor_driver"].absanchors
+    right, left = parts["motor_right"].absanchors, parts["motor_left"].absanchors
+    assert nets.output_ends("motor_driver") == [
+        (tb["A01"], right["1"]),
+        (tb["A02"], right["2"]),
+        (tb["B01"], left["1"]),
+        (tb["B02"], left["2"]),
+    ]
+    with pytest.raises(HardwareError, match="motor_driver.*twice"):
+        nets.output_ends("motor_driver")
+    nets.output_ends("amp")
+    nets.check_all_drawn()
+
+
 def test_check_names_an_output_the_drawing_left_out(model, motors_drawn):
     xiao, parts = motors_drawn
     nets = JoinedNets(dataclasses.replace(model, nets=()), xiao, parts)
