@@ -111,6 +111,8 @@ class BalancebotTests(unittest.TestCase):
         self.assertIn("CC-BY-SA 4.0", libtables.descr("Device"))
         self.assertIn("10.0.6", libtables.descr("Device"))
         self.assertIn("MIT", libtables.descr("Seeed_XIAO"))
+        for board in ("RP2350", "ESP32-S3"):
+            self.assertIn(board, libtables.descr("Seeed_XIAO"))
 
 
 if __name__ == "__main__":
