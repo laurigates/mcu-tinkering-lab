@@ -140,7 +140,7 @@ def main(argv: list[str] | None = None, repo_root: Path = REPO_ROOT) -> int:
             if names:
                 print(
                     f"FAIL: {paths._display(project, repo_root)}: stale: {names}; "
-                    f"run just {Path(project).resolve().name}::perfboard"
+                    f"run just {paths.just_module(project, repo_root)}::perfboard"
                 )
                 failed = True
             else:
