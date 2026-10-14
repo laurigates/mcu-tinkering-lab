@@ -26,10 +26,9 @@ A1 = [14.0, 21.0, 0]     # left DRV8825, motor column toward the left edge
 A2 = [76.0, 38.78, 180]  # right DRV8825, motor column toward the right edge
 J4 = [5.0, 24.0, 270]    # left motor
 J5 = [85.0, 36.0, 90]    # right motor
-J3 = [36.11, 33.0, 90]   # GY-521 socket; the module lies flat over the centre
-# XT30 mating face is the body end away from the pins; 180 deg puts it at the
-# bottom edge with the pins 13.6 mm inboard.
-J1 = [22.0, 48.1, 180]
+J3 = [36.11, 47.0, 90]   # GY-521 socket at the rear edge of its box; the module lies flat,
+                         # component side up, VCC on pin 1 (left), X arrow toward FWD
+J1 = [20.0, 55.5, 0]     # battery, JST-XH 2: BAT+ on pad 1 (left)
 J2 = [60.0, 56.0, 0]     # LM2596 module
 D1 = [71.0, 50.0, 0]     # B5819W, buck -> XIAO 5V
 C1 = [9.75, 44.0, 0]     # VMOT bulk, left driver
@@ -45,10 +44,10 @@ H4 = [86.0, 58.0, 0]
 
 [silk]
 # Reference designators that sit on the board edge and carry no assembly
-# information (the holes are self-evident; J1 is labelled by its own +/-).
+# information (the holes are self-evident; J1 is labelled by the +/- texts below).
 hidden_refs = ["H1", "H2", "H3", "H4", "J1"]
 # Moved off the library default where it lands on a neighbour's silkscreen.
-ref_positions = { J3 = [57.0, 33.0] }
+ref_positions = { J3 = [57.0, 47.0] }
 # Seeed's reference text is below KiCad's minimum silkscreen height.
 ref_sizes = { U1 = 1.0 }
 # Where the GY-521 lies flat on its socket (21 x 16 mm), so nothing tall goes under it.
@@ -56,7 +55,9 @@ rects = [[34.5, 31.5, 55.5, 48.5]]
 texts = [
     { text = "balancebot carrier", at = [45.0, 52.0], size = 1.0 },
     { text = "FWD ^", at = [45.0, 28.0], size = 1.2 },
-    { text = "GY-521: X arrow to FWD", at = [45.0, 45.0], size = 1.0 },
+    { text = "GY-521: X arrow to FWD", at = [45.0, 30.0], size = 1.0 },
+    { text = "+", at = [20.0, 51.5], size = 1.2 },
+    { text = "-", at = [22.5, 51.5], size = 1.2 },
 ]
 
 # Freerouting width classes, in this order. `nets` are net names or fnmatch

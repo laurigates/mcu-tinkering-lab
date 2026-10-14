@@ -19,10 +19,11 @@ light_gauge = "26–30 AWG"
 # ref = [column, row, rotation_deg]: 0-based hole of the footprint anchor
 # (pad 1 for most parts, centre for the XIAO).
 [placement]
-# Top band: XIAO with USB-C overhanging the top edge, GY-521 flat to its right
-# (J3 pin 1 at the right end, module extending down).
+# Top band: XIAO with USB-C overhanging the top edge, GY-521 flat to its right,
+# component side up. J3 is on row 7 with pin 1 (VCC) at the left end and the
+# module extending up toward row 1, so its X arrow points forward and Z up.
 U1 = [3, 3, 90]
-J3 = [15, 0, 270]
+J3 = [8, 6, 90]
 # Middle band: both drivers unrotated, so both VMOT pins (pin 8) sit at the
 # bottom of their motor columns, next to the bulk caps.
 A1 = [1, 9, 0]

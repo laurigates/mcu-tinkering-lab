@@ -291,8 +291,8 @@ class MutationTests(unittest.TestCase):
                 "body = [1, 2, 3]",
                 "body must be 4 numbers",
             ),
-            'source = "pin order': (
-                'lcsc = "17414"\nsource = "pin order',
+            'source = "': (
+                'lcsc = "17414"\nsource = "',
                 "lcsc '17414'",
             ),
         }
