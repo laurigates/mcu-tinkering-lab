@@ -39,6 +39,9 @@ Modules, one responsibility each:
 - `jlc`         CLI: kicad-cli's BOM and CPL cut to JLCPCB's assembly format
 - `vendor`      CLI: pin, compare and rebuild the vendored library subtrees
 - `derive_xiao` CLI: the socket XIAO parts derived from Seeed's DIP ones
+- `perfboard`   CLI (a subpackage): a carrier laid out on a pad-per-hole
+                perfboard, drawing and wire list, from the netlist and
+                `hardware/perfboard/perfboard.toml`
 - `testfixture` for the unit tests: the frozen balancebot inputs behind
                 #749's netlist export (`testdata/balancebot-749/`)
 

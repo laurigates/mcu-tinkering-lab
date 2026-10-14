@@ -5,7 +5,8 @@ schematic and `testdata/balancebot-carrier.net.json` is that export
 normalised. The tests that compare a built netlist with them build it from
 `testdata/balancebot-749/`, a frozen copy of the inputs it came from:
 hardware.toml, pin_config.h, board.toml, the hand-kept `.kicad_pro`, the XIAO
-RP2350 board page and the parts registry. They do not read the live project, so a legitimate balancebot
+RP2350 board page and the parts registry, plus the perfboard.toml the
+perfboard tests lay out. They do not read the live project, so a legitimate balancebot
 edit (a pin moved in pin_config.h, a part added) leaves the unit suite green
 once `just balancebot::carrier-schematic` has regenerated the schematic. The
 live project is checked by `kicad.schematic --check` (the committed schematic

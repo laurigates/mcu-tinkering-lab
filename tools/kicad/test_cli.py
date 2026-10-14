@@ -38,6 +38,7 @@ PROJECT_CLIS: tuple[str, ...] = (
     "fab",
     "netlist",
     "parity",
+    "perfboard",
     "schematic",
     "stamp",
 )
@@ -72,6 +73,14 @@ def cli_modules(path, prefix: str) -> set[str]:
         if hasattr(importlib.import_module(name), "main"):
             found.add(mod.name.removeprefix(prefix))
     return found
+
+
+def cli_main(name: str):
+    """`kicad.<name>`'s main(); a package's is in its `__main__`."""
+    module = importlib.import_module(f"kicad.{name}")
+    if hasattr(module, "__path__"):
+        module = importlib.import_module(f"kicad.{name}.__main__")
+    return module.main
 
 
 def git(root: Path, *args: str) -> None:
@@ -110,7 +119,7 @@ class EmptyRepoTests(unittest.TestCase):
         self.assertEqual(found, set(PROJECT_CLIS) | set(REPO_CLIS) | set(FILE_CLIS))
 
     def test_cli_scan_descends_into_subpackages(self):
-        # Control for the scan above: a CLI in a subpackage (perfboard/, PR C),
+        # Control for the scan above: a CLI in a subpackage (like perfboard/),
         # as a module or as the package's __main__, must be found.
         files = {
             "fakecli/__init__.py": "",
@@ -140,11 +149,7 @@ class EmptyRepoTests(unittest.TestCase):
 
     def test_project_clis_fail_on_zero_projects(self):
         for name in (*PROJECT_CLIS, "demo"):
-            main = (
-                demo_main
-                if name == "demo"
-                else importlib.import_module(f"kicad.{name}").main
-            )
+            main = demo_main if name == "demo" else cli_main(name)
             with self.subTest(cli=name):
                 code, out = run(main, [], self.root)
                 self.assertEqual(code, 1)
@@ -155,7 +160,7 @@ class EmptyRepoTests(unittest.TestCase):
 
     def test_repo_clis_fail_on_an_empty_repo(self):
         for name in REPO_CLIS:
-            main = importlib.import_module(f"kicad.{name}").main
+            main = cli_main(name)
             with self.subTest(cli=name):
                 code, out = run(main, REPO_CLI_ARGS[name], self.root)
                 self.assertEqual(code, 1)
@@ -163,7 +168,7 @@ class EmptyRepoTests(unittest.TestCase):
 
     def test_file_clis_fail_without_files(self):
         for name in FILE_CLIS:
-            main = importlib.import_module(f"kicad.{name}").main
+            main = cli_main(name)
             with self.subTest(cli=name):
                 out = io.StringIO()
                 with contextlib.redirect_stdout(out):
@@ -186,6 +191,18 @@ class TrackedProjectTests(unittest.TestCase):
         self.board = paths.carrier_dir(self.project) / "board.toml"
         self.board.parent.mkdir(parents=True)
         self.board.write_text(BOARD_TOML)
+
+    def test_marker_selects_the_project_kind(self):
+        # A perfboard project is found by its perfboard.toml, two levels down,
+        # and a carrier's board.toml does not make it one.
+        marker = "hardware/perfboard/perfboard.toml"
+        git(self.root, "add", str(self.board))
+        self.assertEqual(paths.tracked_projects(self.root, marker), [])
+        toml = self.project / marker
+        toml.parent.mkdir(parents=True)
+        toml.write_text("")
+        git(self.root, "add", str(toml))
+        self.assertEqual(paths.tracked_projects(self.root, marker), [self.project])
 
     def test_untracked_board_toml_is_not_a_project(self):
         self.assertEqual(paths.tracked_projects(self.root), [])

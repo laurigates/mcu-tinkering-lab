@@ -2,8 +2,10 @@
 
 The [carrier PCB](../carrier/) laid out on a 50 × 70 mm pad-per-hole proto
 board (18 × 24 holes), for building a prototype before ordering boards. It is
-the same circuit, nets read from the carrier schematic, so the firmware pin
-map and the pin cross-check (`just balancebot::carrier-check`) apply unchanged.
+the same circuit: parts and nets come from the carrier netlist that
+`hardware.toml` and the [parts registry](../../../../../docs/reference/parts/)
+give (the one the carrier schematic is written from), so the firmware pin map
+applies unchanged.
 
 - [`perfboard.svg`](perfboard.svg): the component side, then one mirrored
   solder-side panel per build step (power, logic power, motor coils, signals).
@@ -65,12 +67,25 @@ just balancebot::perfboard          # rewrite perfboard.svg and perfboard.md
 just balancebot::perfboard-check    # fail if they are stale or the layout breaks
 ```
 
-`perfboard.py` reads pad offsets and courtyards from the KiCad footprint files,
-places parts from its `PLACEMENT` table, and refuses to write anything if two
-parts share a hole, a pad falls off the board, a tall part sits under a raised
-module, or the wires leave any net split or join two nets. That last check is a
-union-find over the generated wire list, separate from the code that plans the
-wires.
+Both run the shared generator in
+[`tools/kicad/perfboard/`](../../../../../tools/kicad/perfboard/)
+(`python3 -m kicad.perfboard`). It needs no KiCad, and CI runs the check
+(`carrier-check.yml`). What it reads:
+
+- [`perfboard.toml`](perfboard.toml): board size, where each part sits, the four
+  build steps and their nets, and the wire gauges;
+- the parts registry's `[perfboard]` tables: each part's through-hole stand-in
+  and its value, and whether it is raised on a socket or tall
+  (the "Differences from the PCB" table above);
+- the carrier's [`board.toml`](../carrier/board.toml): the heavy nets are its
+  `power` net class;
+- pad offsets and courtyards from the vendored KiCad footprint files
+  (`tools/kicad/lib/`), never typed in.
+
+It refuses to write anything if two parts share a hole, a pad falls off the
+board, a tall part sits under a raised module, or the wires leave any net
+split or join two nets. That last check is a union-find over the generated
+wire list, separate from the code that plans the wires.
 
 ### Routing
 

@@ -9,21 +9,22 @@ default:
     @just --list
 
 # The socket XIAO parts first, then each tracked project's schematic and
-# library tables.
+# library tables, then each tracked perfboard's drawing and wire list.
 #
 # Write every derived and generated carrier file
 [group: "build"]
 gen:
     cd ../.. && PYTHONPATH=tools python3 -m kicad.derive_xiao
     cd ../.. && PYTHONPATH=tools python3 -m kicad.schematic
+    cd ../.. && PYTHONPATH=tools python3 -m kicad.perfboard
 
 # Run the tools/kicad unit tests (stdlib unittest; no KiCad needed)
 [group: "test"]
 test:
     cd ../.. && python3 -m unittest discover -s tools/kicad -t tools
 
-# Vendored bytes, derived XIAO parts, schematic, board pads and the check
-# stamp: what a machine without KiCad can verify.
+# Vendored bytes, derived XIAO parts, schematic, board pads, the check stamp
+# and the perfboard drawing and wire list: what a machine without KiCad can verify.
 #
 # Every KiCad-free carrier gate, for every tracked project
 [group: "test"]
@@ -33,6 +34,7 @@ check: test
     cd ../.. && PYTHONPATH=tools python3 -m kicad.schematic --check
     cd ../.. && PYTHONPATH=tools python3 -m kicad.boardcheck
     cd ../.. && PYTHONPATH=tools python3 -m kicad.stamp
+    cd ../.. && PYTHONPATH=tools python3 -m kicad.perfboard --check
 
 # Covers every symbol and footprint the parts registry and the schematic
 # writer use.

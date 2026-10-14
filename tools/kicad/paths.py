@@ -2,7 +2,8 @@
 
 A carrier project is a project directory with a git-tracked
 `hardware/carrier/board.toml`; the KiCad project sits beside it in
-`hardware/carrier/<[project] name>/`.
+`hardware/carrier/<[project] name>/`. A perfboard project has a git-tracked
+`hardware/perfboard/perfboard.toml` (`kicad.perfboard`).
 
 Every per-project CLI in tools/kicad takes project directories as arguments
 and, given none, runs on every tracked carrier project. It prints how many it
@@ -24,6 +25,8 @@ from .errors import KicadError
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BOARD_TOML = "board.toml"
+# The git-tracked file that makes a directory a project, relative to it.
+CARRIER_MARKER = f"hardware/carrier/{BOARD_TOML}"
 
 # board.toml's tables. Their contents are validated where they are
 # read; this rejects a misspelt table name, which would otherwise be ignored.
@@ -86,12 +89,15 @@ def kicad_project_dir(project: Path) -> Path:
     return carrier_dir(project) / load_board_config(project).name
 
 
-def tracked_projects(repo_root: Path = REPO_ROOT) -> list[Path]:
-    """Projects with a git-tracked hardware/carrier/board.toml, sorted.
+def tracked_projects(
+    repo_root: Path = REPO_ROOT, marker: str = CARRIER_MARKER
+) -> list[Path]:
+    """Projects with a git-tracked `marker` (default hardware/carrier/board.toml), sorted.
 
-    Tracked only (`--cached`): a board.toml that is not added yet is not a
+    Tracked only (`--cached`): a marker file that is not added yet is not a
     project, and a CLI run on no projects fails rather than passes.
     """
+    depth = len(Path(marker).parts)
     listed = subprocess.run(
         [
             "git",
@@ -99,7 +105,7 @@ def tracked_projects(repo_root: Path = REPO_ROOT) -> list[Path]:
             "-z",
             "--cached",
             "--",
-            f":(glob)packages/**/hardware/carrier/{BOARD_TOML}",
+            f":(glob)packages/**/{marker}",
         ],
         cwd=repo_root,
         capture_output=True,
@@ -117,7 +123,7 @@ def tracked_projects(repo_root: Path = REPO_ROOT) -> list[Path]:
         path = repo_root / rel
         # --cached lists a tracked file that was deleted from the working tree.
         if path.is_file():
-            found.add(path.parent.parent.parent)
+            found.add(path.parents[depth - 1])
     return sorted(found)
 
 
@@ -137,18 +143,22 @@ def add_project_args(parser: argparse.ArgumentParser) -> None:
 
 
 def select_projects(
-    projects: list[Path], allow_none: bool, repo_root: Path = REPO_ROOT
+    projects: list[Path],
+    allow_none: bool,
+    repo_root: Path = REPO_ROOT,
+    marker: str = CARRIER_MARKER,
 ) -> list[Path]:
     """The projects to process; prints `N project(s): ...`.
 
-    Raises KicadError when there are none and `allow_none` is false.
+    With no `projects`, every project with a git-tracked `marker`. Raises
+    KicadError when there are none and `allow_none` is false.
     """
-    chosen = list(projects) or tracked_projects(repo_root)
+    chosen = list(projects) or tracked_projects(repo_root, marker)
     shown = " ".join(_display(p, repo_root) for p in chosen)
     print(f"{len(chosen)} project(s): {shown}".rstrip())
     if not chosen and not allow_none:
         raise KicadError(
-            f"0 project(s): no git-tracked packages/**/hardware/carrier/{BOARD_TOML} "
+            f"0 project(s): no git-tracked packages/**/{marker} "
             f"under {repo_root}; pass a project directory, or --allow-none"
         )
     return chosen

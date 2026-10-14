@@ -168,14 +168,15 @@ def _arc_extent(s, m, e) -> list[tuple[float, float]]:
 
 
 def perfboard_courtyard(text: str, where: object = "footprint") -> tuple:
-    """perfboard.py's own reading of the F.CrtYd box (perfboard.py:96-107), verbatim.
+    """The perfboard generator's reading of the F.CrtYd box, verbatim from the
+    project script it replaced (balancebot's perfboard.py at fb24b28, :96-107).
 
     It differs from `courtyard` on some footprints, because it matches from any
     `(fp_...` up to the next F.CrtYd layer (so an earlier silkscreen or fab
     graphic's points are counted) and reads a circle as its centre and one rim
-    point. It is kept, not fixed, so the perfboard drawing stays byte-identical
-    when the generator moves onto this module (issue #750 PR C); the parts it
-    places today are drawn with this box.
+    point. It is kept, not fixed, so the shared generator (`kicad.perfboard`)
+    reproduced the committed drawing byte for byte; the parts it places today
+    are drawn with this box.
     """
     xs, ys = [], []
     for block in re.findall(
@@ -194,8 +195,8 @@ def perfboard_courtyard(text: str, where: object = "footprint") -> tuple:
 def thru_hole_pads(path: Path) -> tuple[dict[str, tuple[float, float]], tuple]:
     """(pin number -> (x, y) of its first through-hole pad, perfboard's F.CrtYd box).
 
-    The perfboard generator's reading, verbatim (perfboard.py:86-106), so its
-    drawing stays byte-identical when it moves onto this module. The box is
+    The perfboard generator's reading, verbatim from the script it replaced
+    (perfboard.py:86-106 at fb24b28), so its drawing stayed byte-identical. The box is
     `perfboard_courtyard`, not `courtyard`; see there for where they differ.
     """
     text = path.read_text()

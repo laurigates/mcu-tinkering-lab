@@ -67,8 +67,8 @@ class FootprintTests(unittest.TestCase):
                 self.assertEqual(footprints.parse(fp(fpid)).courtyard, box)
 
     def test_perfboard_courtyard_is_perfboards_own_reading(self):
-        # Pinned, wrong values: the perfboard drawing was made with them, and
-        # PR C's byte-identity gate needs them unchanged (see the docstring).
+        # Pinned, wrong values: the committed perfboard drawing was made with
+        # them, so changing them changes kicad.perfboard's output (see the docstring).
         cases = {
             "Capacitor_THT:CP_Radial_D8.0mm_P2.50mm": (-3.159698, -4.08, 5.5, 4.08),
             "Seeed_XIAO:XIAO-RP2350-Socket": (-10.42, -8.9, 12.591012, 8.89),
