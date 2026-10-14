@@ -10,6 +10,7 @@ which netlist, layout and DRC all agree with a reversed part.
 
 from __future__ import annotations
 
+import dataclasses
 import math
 import re
 import shutil
@@ -146,6 +147,20 @@ class PinMapTests(unittest.TestCase):
             path.write_text(mirrored, encoding="utf-8")
             with self.assertRaisesRegex(KicadError, "names pin"):
                 registry.pin_map(self.spec, parse_board_table(path), self.pins)
+
+    def test_top_or_bottom_row_fails_naming_the_remedy(self):
+        # board-dip-ccw numbers an L/R DIP; a T/B row has no place in it (#766).
+        # parse_board_table admits only L/R today, so the row is built directly:
+        # the guard is for a Board from any other reader.
+        board = parse_board_table(XIAO_BOARD)
+        top = dataclasses.replace(board.pins[0], name="VO+", side="T", pos=1)
+        board = dataclasses.replace(board, pins=(*board.pins, top))
+        with self.assertRaisesRegex(
+            KicadError,
+            r"seeed-xiao-rp2350-socket\.toml.*pin VO\+ is on side 'T'.*"
+            r"board-dip-ccw.*explicit \[pins\]",
+        ):
+            registry.pin_map(self.spec, board, self.pins)
 
     def test_needs_a_board(self):
         with self.assertRaisesRegex(KicadError, "needs a board page"):

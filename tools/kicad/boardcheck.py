@@ -112,9 +112,13 @@ def check(
     nl: netlist.Netlist,
     ns: uuid.UUID,
     vendored: Path = library.VENDORED,
+    *,
+    module: str,
 ) -> list[str]:
-    """Differences between a board's footprints and the netlist; [] when equal."""
-    module = nl.project.name
+    """Differences between a board's footprints and the netlist; [] when equal.
+
+    `module` is the project's just module (`paths.just_module`), for the hint.
+    """
     tail = f"; {hint(module)}"
     want_net = {node: name for name, nodes in nl.nets.items() for node in nodes}
     nc_net = {node: name for name, node in netlist.unconnected(nl, vendored).items()}
@@ -380,18 +384,21 @@ def main(argv: list[str] | None = None, repo_root: Path = REPO_ROOT) -> int:
     try:
         for project in paths.select_projects(args.projects, args.allow_none, repo_root):
             cfg = paths.load_board_config(project)
+            module = paths.just_module(project, repo_root)
             nl = netlist.build(project, repo_root, vendored)
             ns = schematic.namespace(schematic.project_key(project, repo_root))
             pcb = board_path(project)
             if not pcb.is_file():
-                raise KicadError(f"{pcb}: no board; {hint(project.resolve().name)}")
+                raise KicadError(f"{pcb}: no board; {hint(module)}")
             text = pcb.read_text(encoding="utf-8")
             if args.relink:
                 text, n = relink(text, ns)
                 if n:
                     pcb.write_text(text, encoding="utf-8")
                 print(f"relinked {n} footprint path(s) in {pcb.name}")
-            errors = validate_config(cfg, nl) + check(text, nl, ns, vendored)
+            errors = validate_config(cfg, nl) + check(
+                text, nl, ns, vendored, module=module
+            )
             for e in errors:
                 print(f"FAIL: {e}")
             if errors:

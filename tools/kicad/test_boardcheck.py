@@ -105,7 +105,7 @@ def board(**override) -> str:
 
 class CheckTests(unittest.TestCase):
     def errors(self, text: str) -> list[str]:
-        return boardcheck.check(text, NL, NS)
+        return boardcheck.check(text, NL, NS, module="demo")
 
     def fails(self, text: str, msg: str) -> None:
         errors = self.errors(text)
@@ -209,7 +209,7 @@ class RelinkTests(unittest.TestCase):
                 "/old-c1",
             ),
         )
-        self.assertEqual(len(boardcheck.check(stale, NL, NS)), 2)
+        self.assertEqual(len(boardcheck.check(stale, NL, NS, module="demo")), 2)
         text, n = boardcheck.relink(stale, NS)
         self.assertEqual(n, 2)
         self.assertEqual(text, board())
@@ -221,7 +221,7 @@ class RelinkTests(unittest.TestCase):
         self.assertEqual(len(changed), 2)
         self.assertTrue(all(b.startswith('\t\t(path "/') for _, b in changed))
         self.assertEqual(boardcheck.relink(text, NS), (text, 0))
-        self.assertEqual(boardcheck.check(text, NL, NS), [])
+        self.assertEqual(boardcheck.check(text, NL, NS, module="demo"), [])
 
 
 class ConfigTests(unittest.TestCase):

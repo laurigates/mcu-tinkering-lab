@@ -135,7 +135,6 @@ def main(argv: list[str] | None = None, repo_root: Path = REPO_ROOT) -> int:
     failed = False
     try:
         for project in paths.select_projects(args.projects, args.allow_none, repo_root):
-            module = project.resolve().name
             if args.write:
                 print(f"wrote {write(project).name}")
                 continue
@@ -145,7 +144,9 @@ def main(argv: list[str] | None = None, repo_root: Path = REPO_ROOT) -> int:
             name = files(project)[0].name
             if errors:
                 failed = True
-                print(f"STAMP FAIL: {name}: {hint(module)}")
+                print(
+                    f"STAMP FAIL: {name}: {hint(paths.just_module(project, repo_root))}"
+                )
             else:
                 print(f"OK: {name} vouches for the committed schematic, board and join")
     except KicadError as e:

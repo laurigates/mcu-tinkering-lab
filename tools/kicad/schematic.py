@@ -516,7 +516,6 @@ def main(argv: list[str] | None = None, repo_root: Path = REPO_ROOT) -> int:
     failed = False
     try:
         for project in paths.select_projects(args.projects, args.allow_none, repo_root):
-            module = project.resolve().name
             files = outputs(project, repo_root)
             stale = [
                 p
@@ -530,7 +529,7 @@ def main(argv: list[str] | None = None, repo_root: Path = REPO_ROOT) -> int:
                     print(f"FAIL: {e}")
                 if stale:
                     print(
-                        f"FAIL: stale: {shown}; run `just {module}::carrier-schematic` "
+                        f"FAIL: stale: {shown}; run `just {paths.just_module(project, repo_root)}::carrier-schematic` "
                         "(the schematic is generated from hardware.toml; do not edit it)"
                     )
                 if errors or stale:
