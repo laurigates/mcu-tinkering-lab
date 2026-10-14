@@ -14,7 +14,9 @@ the CARRIER view, `join(project_dir, view=CARRIER)`, for the carrier PCB.
 `hardware.layout` reads the board-facts layer on its own: each board's
 physical header layout, for drawings meant to be wired from (#495).
 `hardware.pinout` draws those layouts as the build guide's pinout images,
-labelled from the join (#629).
+labelled from the join (#629). A breakout page can also record its headers' pad
+centres (`board_pad_centres`), which `hardware.padcheck` re-derives from the
+vendor's board file on demand (#750).
 """
 
 from .board import Board, BoardPin, parse_board_table
@@ -26,7 +28,15 @@ from .header import (
     parse_defines,
     roles_from_defines,
 )
-from .layout import ModuleLayout, Pad, board_layout, parse_layout
+from .layout import (
+    ModuleLayout,
+    Pad,
+    PadCentre,
+    board_layout,
+    board_pad_centres,
+    parse_layout,
+    parse_pad_centres,
+)
 from .model import (
     CARRIER,
     HARNESS,
@@ -60,14 +70,17 @@ __all__ = [
     "Net",
     "Output",
     "Pad",
+    "PadCentre",
     "Part",
     "Rail",
     "Undrawn",
     "board_layout",
+    "board_pad_centres",
     "channels_from_defines",
     "join",
     "parse_board_table",
-    "parse_layout",
     "parse_defines",
+    "parse_layout",
+    "parse_pad_centres",
     "roles_from_defines",
 ]
