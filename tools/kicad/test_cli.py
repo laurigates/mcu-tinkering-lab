@@ -30,7 +30,9 @@ from kicad.errors import KicadError
 # Modules whose main() takes project directories (paths.add_project_args).
 PROJECT_CLIS: tuple[str, ...] = (
     "boardcheck",
+    "boardinput",
     "check",
+    "fab",
     "netlist",
     "parity",
     "schematic",
@@ -41,6 +43,9 @@ PROJECT_CLIS: tuple[str, ...] = (
 # derive.toml files; neither has projects.
 REPO_CLIS = ("vendor", "derive_xiao")
 REPO_CLI_ARGS = {"vendor": ["--check"], "derive_xiao": ["--check"]}
+# Modules whose main() takes file arguments, not projects; without them each
+# must exit 1. (`jlc` cuts a BOM/CPL pair; kicad.fab calls it per project.)
+FILE_CLIS = ("jlc",)
 
 BOARD_TOML = '[project]\nname = "demo-carrier"\n'
 
@@ -83,7 +88,7 @@ class EmptyRepoTests(unittest.TestCase):
                 continue
             if hasattr(importlib.import_module(f"kicad.{mod.name}"), "main"):
                 found.add(mod.name)
-        self.assertEqual(found, set(PROJECT_CLIS) | set(REPO_CLIS))
+        self.assertEqual(found, set(PROJECT_CLIS) | set(REPO_CLIS) | set(FILE_CLIS))
 
     def test_project_clis_fail_on_zero_projects(self):
         for name in (*PROJECT_CLIS, "demo"):
@@ -107,6 +112,16 @@ class EmptyRepoTests(unittest.TestCase):
                 code, out = run(main, REPO_CLI_ARGS[name], self.root)
                 self.assertEqual(code, 1)
                 self.assertIn("FAIL:", out)
+
+    def test_file_clis_fail_without_files(self):
+        for name in FILE_CLIS:
+            main = importlib.import_module(f"kicad.{name}").main
+            with self.subTest(cli=name):
+                out = io.StringIO()
+                with contextlib.redirect_stdout(out):
+                    code = main([])
+                self.assertEqual(code, 1)
+                self.assertIn("FAIL:", out.getvalue())
 
     def test_not_a_git_work_tree(self):
         with tempfile.TemporaryDirectory() as tmp, self.assertRaises(KicadError):

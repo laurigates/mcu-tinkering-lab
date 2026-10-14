@@ -3,9 +3,10 @@
 # registry (docs/reference/parts/); this file says where each part sits, how
 # wide each net's tracks are, and what goes on the silkscreen.
 #
-# `python3 -m kicad.boardcheck` validates every table against the netlist. The
-# board scripts in scripts/ still carry their own copy of these numbers until
-# they move to tools/kicad/pcb/ and read this file (issue #750).
+# `python3 -m kicad.boardcheck` validates every table against the netlist.
+# `python3 -m kicad.boardinput` turns this file and the netlist into the JSON
+# the pcbnew scripts in tools/kicad/pcb/ place and route from
+# (`just balancebot::carrier-board`).
 
 [project]
 name = "balancebot-carrier"          # the KiCad project directory and file stem here

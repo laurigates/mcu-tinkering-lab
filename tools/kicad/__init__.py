@@ -32,8 +32,18 @@ Modules, one responsibility each:
                 verified KiCad-free in CI
 - `check`       CLI (local, kicad-cli): every local carrier gate in order,
                 ending in `stamp --write`
+- `boardinput`  CLI: the JSON the pcbnew scripts read (netlist, placement,
+                silkscreen, net classes, pour), from the join and board.toml
+- `fab`         CLI (local, kicad-cli): gerbers, drill files and their zip,
+                BOM and CPL, then `jlc`
+- `jlc`         CLI: kicad-cli's BOM and CPL cut to JLCPCB's assembly format
 - `vendor`      CLI: pin, compare and rebuild the vendored library subtrees
 - `derive_xiao` CLI: the socket XIAO parts derived from Seeed's DIP ones
+
+`pcb/` is not part of the package: `build_board.py` (place, assign nets,
+silkscreen), `route_board.py` (Freerouting, then the pour) and `dsn.py` (the
+DSN net-class rewrite) run as scripts under KiCad's bundled Python 3.9, read
+`boardinput`'s JSON, and import nothing from here (test_pcb_py39 pins that).
 
 Import nothing here: `python3 -m kicad.<module>` must not pay for, or fail on,
 modules it does not use.

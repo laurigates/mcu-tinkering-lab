@@ -1,0 +1,48 @@
+# tools/kicad — KiCad carrier boards generated from the hardware join (issue #750).
+#
+# Recipes cd to the repo root first, as tools/hardware/justfile's do: the
+# CLIs take repo-relative project paths. Per-project recipes
+# (carrier-schematic, carrier-check, carrier-board, carrier-fab) live in each
+# project's justfile, through tools/kicad.just.
+
+default:
+    @just --list
+
+# The socket XIAO parts first, then each tracked project's schematic and
+# library tables.
+#
+# Write every derived and generated carrier file
+[group: "build"]
+gen:
+    cd ../.. && PYTHONPATH=tools python3 -m kicad.derive_xiao
+    cd ../.. && PYTHONPATH=tools python3 -m kicad.schematic
+
+# Run the tools/kicad unit tests (stdlib unittest; no KiCad needed)
+[group: "test"]
+test:
+    cd ../.. && python3 -m unittest discover -s tools/kicad -t tools
+
+# Vendored bytes, derived XIAO parts, schematic, board pads and the check
+# stamp: what a machine without KiCad can verify.
+#
+# Every KiCad-free carrier gate, for every tracked project
+[group: "test"]
+check: test
+    cd ../.. && PYTHONPATH=tools python3 -m kicad.vendor --check
+    cd ../.. && PYTHONPATH=tools python3 -m kicad.derive_xiao --check
+    cd ../.. && PYTHONPATH=tools python3 -m kicad.schematic --check
+    cd ../.. && PYTHONPATH=tools python3 -m kicad.boardcheck
+    cd ../.. && PYTHONPATH=tools python3 -m kicad.stamp
+
+# Covers every symbol and footprint the parts registry and the schematic
+# writer use.
+#
+# Rebuild tools/kicad/lib/kicad-stock/ and its MANIFEST.tsv from the installed KiCad
+[group: "library"]
+vendor:
+    cd ../.. && PYTHONPATH=tools python3 -m kicad.vendor --update
+
+# Report where the vendored library differs from the installed KiCad (informational)
+[group: "library"]
+vendor-check:
+    cd ../.. && PYTHONPATH=tools python3 -m kicad.vendor --check-installed
