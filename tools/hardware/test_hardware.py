@@ -146,6 +146,7 @@ class BalancebotConventionTest(unittest.TestCase):
                 "PIN_STATUS_LED": 25,
                 "PIN_BATT_ADC": 29,
                 "PIN_BATT_ADC_ENABLE": 19,
+                "PIN_PACK_SENSE": 26,
             },
         )
 
@@ -485,6 +486,14 @@ class JoinTest(unittest.TestCase):
         self.assertEqual(
             self.join(self.make(sidecar=sidecar)).parts["led"].board, "board.md"
         )
+
+    def test_a_sidecar_without_carrier_keys_joins_with_them_empty(self):
+        # The #750 keys are all optional: robocar's sidecar has none of them.
+        model = self.join(self.make())
+        led = model.parts["led"]
+        self.assertEqual((led.part, led.ref, led.value, led.lcsc, led.build), ("",) * 5)
+        self.assertEqual((model.view, model.net_names), ("harness", {}))
+        self.assertEqual((model.mcu_part, model.mcu_ref), ("", ""))
 
     def test_a_part_board_that_does_not_exist_fails(self):
         sidecar = SIDECAR.replace('kind = "led"', 'kind = "led"\nboard = "nope.md"')

@@ -79,7 +79,7 @@ graph TD
 
 | Pin | GPIO | Macro | Wired to | Notes |
 |-----|------|-------|----------|-------|
-| D0 | GPIO26 | — | *unassigned* |  |
+| D0 | GPIO26 | `PIN_PACK_SENSE` | — | only the carrier PCB has the pack divider (R2/R3/C3); the hand-wired harness leaves D0 free |
 | D1 | GPIO27 | — | *unassigned* |  |
 | D2 | GPIO28 | — | *unassigned* |  |
 | D3 | GPIO5 | `PIN_IMU_INT` | GY-521 MPU6050 INT | Data-ready, active high, push-pull; no internal pull (RP2350-E9) |
@@ -95,8 +95,10 @@ graph TD
 
 The power pads are not in the table: **3V3** feeds the MPU6050 VCC, the
 DRV8825 nSLEEP/nRESET/M0/M1 straps (see below) and the nENABLE pull-up; **5V**
-takes the buck converter's output; **GND** is the common ground. D0–D2
-(GPIO26–28) are spare and ADC-capable.
+takes the buck converter's output; **GND** is the common ground. D0
+(GPIO26, `PIN_PACK_SENSE`) carries the carrier PCB's pack-voltage divider
+(R2/R3/C3); the hand-wired harness leaves it free, and the firmware does not
+read it yet (#747). D1–D2 (GPIO27–28) are spare and ADC-capable.
 
 The GY-521 MPU6050 breakout has an onboard 3.3 V regulator and works fed
 from 3V3 directly (bypassing the regulator) — INT is push-pull 3.3 V,

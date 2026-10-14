@@ -6,9 +6,10 @@
 
 Stdlib only (Python 3.11+ for tomllib), so every consumer — the drift guard's
 system python3, a justfile recipe, a pre-commit hook — can import it with
-nothing installed. Two emitters: `tools/typst/generate-pin-defs.py` (the build
+nothing installed. Three emitters: `tools/typst/generate-pin-defs.py` (the build
 guide's Typst bindings) and `hardware.docs` (the marked tables and power
-diagram in WIRING.md).
+diagram in WIRING.md) read the default HARNESS view; `tools/kicad` (#750) reads
+the CARRIER view, `join(project_dir, view=CARRIER)`, for the carrier PCB.
 
 `hardware.layout` reads the board-facts layer on its own: each board's
 physical header layout, for drawings meant to be wired from (#495).
@@ -27,7 +28,10 @@ from .header import (
 )
 from .layout import ModuleLayout, Pad, board_layout, parse_layout
 from .model import (
+    CARRIER,
+    HARNESS,
     MCU,
+    VIEWS,
     ChannelNet,
     Endpoint,
     HardwareModel,
@@ -40,9 +44,12 @@ from .model import (
 )
 
 __all__ = [
+    "CARRIER",
     "CHANNEL_CONVENTIONS",
     "CONVENTIONS",
+    "HARNESS",
     "MCU",
+    "VIEWS",
     "Board",
     "BoardPin",
     "ChannelNet",

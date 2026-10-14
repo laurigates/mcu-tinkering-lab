@@ -5,7 +5,7 @@
 <rect x="240.1" y="31.2" width="132.1" height="178.0" rx="6" fill="#eef4ee" stroke="#1f2933" stroke-width="1.5"/>
 <circle cx="251.1" cy="54.2" r="5.5" fill="#2f6fb0" stroke="#1f2933" stroke-width="1" data-anchor="D0" data-side="L" data-pos="1"/>
 <text x="262.6" y="54.2" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933">D0</text>
-<text x="234.1" y="54.2" font-size="9" text-anchor="end" dominant-baseline="central" fill="#1f2933">GPIO26</text>
+<text x="234.1" y="54.2" font-size="9" text-anchor="end" dominant-baseline="central" fill="#1f2933">GPIO26 · PIN_PACK_SENSE (not wired)</text>
 <circle cx="251.1" cy="76.2" r="5.5" fill="#2f6fb0" stroke="#1f2933" stroke-width="1" data-anchor="D1" data-side="L" data-pos="2"/>
 <text x="262.6" y="76.2" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933">D1</text>
 <text x="234.1" y="76.2" font-size="9" text-anchor="end" dominant-baseline="central" fill="#1f2933">GPIO27</text>
