@@ -29,7 +29,7 @@ STOCK_DESCR = (
 )
 # Project libraries (library.NICKNAME_DIRS): their own source and licence.
 PROJECT_DESCR = {
-    "Seeed_XIAO": f"Seeed XIAO RP2350, from Seeed-Studio/OSHW-XIAO-Series @ {SEEED_TAG} (MIT)",
+    "Seeed_XIAO": f"Seeed XIAO RP2350 and ESP32-S3, from Seeed-Studio/OSHW-XIAO-Series @ {SEEED_TAG} (MIT)",
 }
 
 

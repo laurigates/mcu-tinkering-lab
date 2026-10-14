@@ -8,5 +8,5 @@
   (lib (name "Module")(type "KiCad")(uri "${KIPRJMOD}/../../../../../../tools/kicad/lib/kicad-stock/footprints/Module.pretty")(options "")(descr "KiCad 10.0.6 Module library, vendored subset (CC-BY-SA 4.0, tools/kicad/lib/kicad-stock/LICENSE.md)"))
   (lib (name "MountingHole")(type "KiCad")(uri "${KIPRJMOD}/../../../../../../tools/kicad/lib/kicad-stock/footprints/MountingHole.pretty")(options "")(descr "KiCad 10.0.6 MountingHole library, vendored subset (CC-BY-SA 4.0, tools/kicad/lib/kicad-stock/LICENSE.md)"))
   (lib (name "Resistor_SMD")(type "KiCad")(uri "${KIPRJMOD}/../../../../../../tools/kicad/lib/kicad-stock/footprints/Resistor_SMD.pretty")(options "")(descr "KiCad 10.0.6 Resistor_SMD library, vendored subset (CC-BY-SA 4.0, tools/kicad/lib/kicad-stock/LICENSE.md)"))
-  (lib (name "Seeed_XIAO")(type "KiCad")(uri "${KIPRJMOD}/../../../../../../tools/kicad/lib/seeed-xiao/Seeed_XIAO.pretty")(options "")(descr "Seeed XIAO RP2350, from Seeed-Studio/OSHW-XIAO-Series @ cc7f3bb (MIT)"))
+  (lib (name "Seeed_XIAO")(type "KiCad")(uri "${KIPRJMOD}/../../../../../../tools/kicad/lib/seeed-xiao/Seeed_XIAO.pretty")(options "")(descr "Seeed XIAO RP2350 and ESP32-S3, from Seeed-Studio/OSHW-XIAO-Series @ cc7f3bb (MIT)"))
 )

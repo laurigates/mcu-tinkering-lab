@@ -85,7 +85,7 @@ class CommittedSubtreeTests(unittest.TestCase):
             self.assertEqual(vendor.main(["--check"]), 0)
         self.assertIn("10 symbols, 15 footprints, 21 files pinned", out.getvalue())
         self.assertIn(
-            "seeed-xiao: 4 files pinned at OSHW-XIAO-Series cc7f3bb", out.getvalue()
+            "seeed-xiao: 6 files pinned at OSHW-XIAO-Series cc7f3bb", out.getvalue()
         )
 
 
@@ -113,6 +113,8 @@ class SeeedSubtreeTests(unittest.TestCase):
                     "MANIFEST.tsv",
                     "README.md",
                     "Seeed_XIAO.kicad_sym",
+                    "Seeed_XIAO.pretty/XIAO-ESP32-S3-DIP.kicad_mod",
+                    "Seeed_XIAO.pretty/XIAO-ESP32-S3-Socket.kicad_mod",
                     "Seeed_XIAO.pretty/XIAO-RP2350-DIP.kicad_mod",
                     "Seeed_XIAO.pretty/XIAO-RP2350-Socket.kicad_mod",
                     "derive.toml",
