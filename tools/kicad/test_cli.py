@@ -250,5 +250,70 @@ class TrackedProjectTests(unittest.TestCase):
             paths.load_board_config(self.project)
 
 
+class JustModuleTests(unittest.TestCase):
+    """A hint names the root justfile's module, not the project directory (#766)."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+
+    def justfile(self, text: str) -> None:
+        (self.root / "justfile").write_text(text)
+
+    def test_module_name_differs_from_directory(self):
+        self.justfile(
+            "mod robocar 'packages/robocar/docs'\n"
+            "mod robocar-unified 'packages/robocar/unified'\n"
+        )
+        project = self.root / "packages/robocar/unified"
+        self.assertEqual(paths.just_module(project, self.root), "robocar-unified")
+
+    def test_mod_forms(self):
+        self.justfile(
+            '[group: "x"]\n'
+            'mod a "packages/a"\n'
+            "mod? b 'packages/b/'\n"
+            "mod c 'packages/c/justfile'\n"
+            "mod d\n"
+            "mod f 'packages/f/mod.just'\n"
+            "# mod e 'packages/e'\n"
+        )
+        for name, rel in (
+            ("a", "packages/a"),
+            ("b", "packages/b"),
+            ("c", "packages/c"),
+            ("d", "d"),
+            ("f", "packages/f"),
+        ):
+            with self.subTest(name=name):
+                self.assertEqual(paths.just_module(self.root / rel, self.root), name)
+        for rel in ("packages/e", "packages"):
+            with (
+                self.subTest(rel=rel),
+                self.assertRaisesRegex(KicadError, "no `mod` line"),
+            ):
+                paths.just_module(self.root / rel, self.root)
+
+    def test_no_mod_line_fails(self):
+        self.justfile("mod other 'packages/other'\n")
+        with self.assertRaisesRegex(KicadError, r"no `mod` line.*packages/demo"):
+            paths.just_module(self.root / "packages/demo", self.root)
+
+    def test_no_justfile_fails(self):
+        with self.assertRaisesRegex(KicadError, "justfile"):
+            paths.just_module(self.root / "packages/demo", self.root)
+
+    def test_repo_justfile(self):
+        self.assertEqual(
+            paths.just_module(paths.REPO_ROOT / "packages/robocar/unified"),
+            "robocar-unified",
+        )
+        self.assertEqual(
+            paths.just_module(paths.REPO_ROOT / "packages/robotics/balancebot"),
+            "balancebot",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

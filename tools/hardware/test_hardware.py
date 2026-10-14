@@ -471,6 +471,40 @@ class JoinTest(unittest.TestCase):
         with self.assertRaisesRegex(HardwareError, "listed twice"):
             self.join(self.make(sidecar=sidecar))
 
+    def test_two_roles_on_one_gpio_fail_naming_both_and_the_gpio(self):
+        # #722: a pin conflict is a wiring error, so the join reports it
+        # rather than leaving it to surface as a router failure. The second
+        # role is excused, so the conflict alone can be what fails.
+        header = HEADER_H + "#define PIEZO_PIN GPIO_NUM_1\n"
+        sidecar = SIDECAR + '\n[[undrawn]]\nrole = "PIEZO_PIN"\nwhy = "test"\n'
+        with self.assertRaises(HardwareError) as ctx:
+            self.join(self.make(sidecar=sidecar, header=header))
+        message = str(ctx.exception)
+        self.assertIn("LED_PIN", message)
+        self.assertIn("PIEZO_PIN", message)
+        self.assertIn("GPIO1", message)
+
+    def test_a_macro_naming_another_role_is_an_alias_not_a_second_role(self):
+        # The allowance for a pin meant to share: write it as the other
+        # role's name, which no convention reads as a second GPIO.
+        header = HEADER_H + "#define STATUS_PIN LED_PIN\n"
+        model = self.join(self.make(header=header))
+        self.assertNotIn("STATUS_PIN", model.roles)
+
+    def test_two_roles_onto_one_pad_of_a_part_fail(self):
+        # Two GPIOs driving one pin is a short between them; one role on two
+        # pins (a fan-out) stays allowed.
+        sidecar = SIDECAR.replace("[[undrawn]]", "[[nets]]").replace(
+            'why = "test"', 'to = "led.A"'
+        )
+        self.assertEqual(sidecar.count("[[nets]]"), 2)
+        with self.assertRaises(HardwareError) as ctx:
+            self.join(self.make(sidecar=sidecar))
+        message = str(ctx.exception)
+        self.assertIn("led.A", message)
+        self.assertIn("LED_PIN", message)
+        self.assertIn("BEEP_PIN", message)
+
     def test_the_same_role_excused_twice_fails(self):
         sidecar = SIDECAR + '\n[[undrawn]]\nrole = "BEEP_PIN"\nwhy = "again"\n'
         with self.assertRaisesRegex(HardwareError, "excused twice"):
@@ -888,6 +922,26 @@ class RobocarUnifiedJoinTest(unittest.TestCase):
             )
             with self.assertRaisesRegex(HardwareError, "UART0_TX_PIN"):
                 join(proj, repo_root=REPO_ROOT)
+
+    def test_moving_the_piezo_onto_the_ultrasonic_trigger_fails(self):
+        # #722's repro: PIEZO_PIN GPIO_NUM_2 -> GPIO_NUM_3, ULTRASONIC_TRIG_PIN's
+        # pin. Every generator used to accept it; the router failed later.
+        header = (UNIFIED / "main/pin_config.h").read_text(encoding="utf-8")
+        moved = header.replace(
+            "#define PIEZO_PIN GPIO_NUM_2", "#define PIEZO_PIN GPIO_NUM_3"
+        )
+        self.assertNotEqual(moved, header)
+        with tempfile.TemporaryDirectory() as tmp:
+            proj = Path(tmp) / "unified"
+            shutil.copytree(UNIFIED / "main", proj / "main")
+            shutil.copy(UNIFIED / "hardware.toml", proj / "hardware.toml")
+            (proj / "main/pin_config.h").write_text(moved, encoding="utf-8")
+            with self.assertRaises(HardwareError) as ctx:
+                join(proj, repo_root=REPO_ROOT)
+        message = str(ctx.exception)
+        self.assertIn("PIEZO_PIN", message)
+        self.assertIn("ULTRASONIC_TRIG_PIN", message)
+        self.assertIn("GPIO3", message)
 
     def test_i2s_lands_on_the_amp_via_d8_d9_d10(self):
         nets = {n.role: (n.part, n.pin) for n in self.model.nets}

@@ -96,6 +96,8 @@ class CliTests(unittest.TestCase):
         (carrier / "board.toml").write_text('[project]\nname = "demo-carrier"\n')
         (self.kicad_dir / "demo-carrier.kicad_sch").write_bytes(SCH)
         (self.kicad_dir / "demo-carrier.kicad_pcb").write_bytes(PCB)
+        self.justfile = Path(self.tmp.name) / "justfile"
+        self.justfile.write_text("mod demo 'packages/demo'\n")
 
     def run_main(self) -> tuple[int, str]:
         out = io.StringIO()
@@ -109,6 +111,13 @@ class CliTests(unittest.TestCase):
         self.assertIn("demo-carrier.check.json: missing", out)
         self.assertIn("just demo::carrier-check", out)
         self.assertIn("do not edit it or the .kicad_pcb by hand", out)
+
+    def test_hint_names_the_just_module_not_the_directory(self):
+        self.justfile.write_text("mod robocar-unified 'packages/demo'\n")
+        code, out = self.run_main()
+        self.assertEqual(code, 1)
+        self.assertIn("just robocar-unified::carrier-check", out)
+        self.assertNotIn("demo::", out)
 
     def test_stamp_that_is_not_json(self):
         (self.kicad_dir / "demo-carrier.check.json").write_text("{")

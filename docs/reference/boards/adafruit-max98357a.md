@@ -63,11 +63,17 @@ Read from Adafruit's Eagle board file, not from a photo
 (`.claude/rules/board-layout-from-vendor-files.md`):
 [`adafruit/Adafruit-MAX98357-I2S-Amp-Breakout`](https://github.com/adafruit/Adafruit-MAX98357-I2S-Amp-Breakout),
 `Adafruit MAX98357 Breakout.brd` (the mono board, not the stereo rev B) at commit
-`9766975c856c6a5733eaf53b4d94109ffd9aa33e`, elements `JP1` (header) and `X1`
+`c7cf21b4a83affb8bd0ee4fb8251d5b266d964ff`, elements `JP1` (header) and `X1`
 (terminal block).
 
+Adafruit publishes the design under
+[CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/) (`license.txt` at
+the pinned commit). The pin is the default-branch head when the licence was
+checked, not the commit that added `license.txt`; its `.brd` blob is identical
+to the one this page was first read from.
+
 ```sh
-gh api "repos/adafruit/Adafruit-MAX98357-I2S-Amp-Breakout/contents/Adafruit%20MAX98357%20Breakout.brd" --jq '.content' | base64 -d > /tmp/max98357.brd
+gh api "repos/adafruit/Adafruit-MAX98357-I2S-Amp-Breakout/contents/Adafruit%20MAX98357%20Breakout.brd?ref=c7cf21b4a83affb8bd0ee4fb8251d5b266d964ff" --jq '.content' | base64 -d > /tmp/max98357.brd
 python3 tools/breakout-pinout.py /tmp/max98357.brd --element JP1 --element X1
 ```
 
