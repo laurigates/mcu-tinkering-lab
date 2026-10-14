@@ -1,17 +1,24 @@
 """Tests for tools/hardware/padcheck.py — the pad-centre re-derivation check (#750).
 
 Offline: the network fetch and the breakout-pinout.py run are the recipe's job
-(`just hardware::pad-centres-check`); these cover what it compares.
+(`just hardware::pad-centres-check`); these cover what it compares, and that a
+failed fetch or run (mocked) ends in one `error:` line rather than a traceback.
 
     python3 -m unittest discover -s tools/hardware -t tools
 """
 
 from __future__ import annotations
 
+import contextlib
+import email.message
+import io
+import subprocess
 import tempfile
 import textwrap
 import unittest
+import urllib.error
 from pathlib import Path
+from unittest import mock
 
 from hardware import HardwareError
 from hardware.layout import BOARDS_DIR
@@ -19,6 +26,7 @@ from hardware.padcheck import (
     centre_pages,
     diff,
     expected_centres,
+    main,
     raw_url,
     source,
     table,
@@ -159,6 +167,71 @@ class SourceTest(unittest.TestCase):
 class CentrePagesTest(unittest.TestCase):
     def test_the_four_robocar_breakouts_are_the_pages_with_centres(self):
         self.assertEqual(tuple(p.stem for p in centre_pages()), BREAKOUTS)
+
+
+class OfflineTest(unittest.TestCase):
+    """A fetch or parser failure is a one-line `error:` exit, not a traceback."""
+
+    def run_main(self, argv: list[str]) -> tuple[int, str, str]:
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = main(argv)
+        return code, out.getvalue(), err.getvalue()
+
+    def assert_one_error_line(self, argv: list[str], needle: str) -> None:
+        code, _, err = self.run_main(argv)
+        self.assertEqual(code, 1)
+        lines = err.splitlines()
+        self.assertEqual(len(lines), 1, err)
+        self.assertTrue(lines[0].startswith("error: "), err)
+        self.assertIn(needle, lines[0])
+
+    def test_network_failures(self):
+        url = raw_url(source(BOARDS_DIR / f"{BREAKOUTS[0]}.md"))
+        failures = {
+            "URLError": urllib.error.URLError("nodename nor servname provided"),
+            "HTTPError": urllib.error.HTTPError(
+                url, 404, "Not Found", email.message.Message(), None
+            ),
+            "timeout": TimeoutError("timed out"),
+        }
+        for name, exc in failures.items():
+            for argv in (["--print", BREAKOUTS[0]], []):
+                with (
+                    self.subTest(failure=name, argv=argv),
+                    mock.patch(
+                        "hardware.padcheck.urllib.request.urlopen", side_effect=exc
+                    ),
+                ):
+                    self.assert_one_error_line(argv, "could not fetch")
+
+    def test_parser_that_cannot_start(self):
+        resp = mock.MagicMock()
+        resp.__enter__.return_value.read.return_value = b"<eagle/>"
+        with (
+            mock.patch("hardware.padcheck.urllib.request.urlopen", return_value=resp),
+            mock.patch(
+                "hardware.padcheck.subprocess.run",
+                side_effect=FileNotFoundError(2, "No such file or directory"),
+            ),
+        ):
+            self.assert_one_error_line(
+                ["--print", BREAKOUTS[0]], "could not run breakout-pinout.py"
+            )
+
+    def test_parser_that_times_out(self):
+        resp = mock.MagicMock()
+        resp.__enter__.return_value.read.return_value = b"<eagle/>"
+        with (
+            mock.patch("hardware.padcheck.urllib.request.urlopen", return_value=resp),
+            mock.patch(
+                "hardware.padcheck.subprocess.run",
+                side_effect=subprocess.TimeoutExpired("breakout-pinout.py", 60),
+            ),
+        ):
+            self.assert_one_error_line(
+                ["--print", BREAKOUTS[0]], "could not run breakout-pinout.py"
+            )
 
 
 if __name__ == "__main__":

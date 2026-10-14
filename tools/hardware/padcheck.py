@@ -159,8 +159,12 @@ def derive(path: Path) -> Centres:
     # from outside it, so nothing in the download can be imported.
     with tempfile.TemporaryDirectory() as tmp:
         brd = Path(tmp) / "board.brd"
-        with urllib.request.urlopen(raw_url(src), timeout=60) as resp:
-            brd.write_bytes(resp.read())
+        url = raw_url(src)
+        try:
+            with urllib.request.urlopen(url, timeout=60) as resp:
+                brd.write_bytes(resp.read())
+        except OSError as err:  # URLError, HTTPError and timeouts are OSErrors
+            raise HardwareError(f"{path}: could not fetch {url}: {err}") from err
         args = [
             sys.executable,
             "-I",
@@ -172,7 +176,14 @@ def derive(path: Path) -> Centres:
         ]
         for element in sorted(elements):
             args += ["--element", element]
-        run = subprocess.run(args, capture_output=True, text=True, check=False)
+        try:
+            run = subprocess.run(
+                args, capture_output=True, text=True, check=False, timeout=120
+            )
+        except (OSError, subprocess.TimeoutExpired) as err:
+            raise HardwareError(
+                f"{path}: could not run breakout-pinout.py: {err}"
+            ) from err
     if run.returncode != 0:
         raise HardwareError(f"{path}: breakout-pinout.py failed: {run.stderr.strip()}")
     return expected_centres(json.loads(run.stdout), elements)
