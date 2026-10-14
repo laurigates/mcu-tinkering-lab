@@ -15,6 +15,7 @@ import copy
 import json
 import os
 import unittest
+import uuid
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from unittest import mock
@@ -31,6 +32,7 @@ from kicad import (
 from kicad.errors import KicadError
 
 ROOT, PROJECT = testfixture.shared()
+U1_UUID = "4fca1c60-d738-5efa-89ff-a0502ae7fc74"  # uuid5(ns, "fp/U1")
 EXPORT = Path(__file__).resolve().parent / "testdata/balancebot-carrier.xml"
 KEYS = {
     "pcb",
@@ -44,7 +46,16 @@ KEYS = {
     "signal",
     "pour",
 }
-COMPONENT_KEYS = {"ref", "value", "footprint", "fp_dir", "path", "fields", "at"}
+COMPONENT_KEYS = {
+    "ref",
+    "value",
+    "footprint",
+    "fp_dir",
+    "path",
+    "uuid",
+    "fields",
+    "at",
+}
 
 
 class BalancebotTests(unittest.TestCase):
@@ -96,6 +107,18 @@ class BalancebotTests(unittest.TestCase):
         self.assertEqual(u1["path"], "/5c733e52-0b61-5793-9755-4792b125be5a")
         r1 = next(c for c in comps if c["ref"] == "R1")
         self.assertEqual(r1["fields"], [["LCSC", "C17414"]])
+
+    def test_footprint_uuids(self):
+        # build_board.py sets these, so a rebuild orders the board, and the DSN
+        # export that follows its footprint order, the same way (#763).
+        comps = self.spec["components"]
+        for c in comps:
+            with self.subTest(ref=c["ref"]):
+                self.assertEqual(c["uuid"], str(uuid.uuid5(self.ns, f"fp/{c['ref']}")))
+                self.assertNotEqual(f"/{c['uuid']}", c["path"])
+        self.assertEqual(len({c["uuid"] for c in comps}), len(comps))
+        u1 = next(c for c in comps if c["ref"] == "U1")
+        self.assertEqual(u1["uuid"], U1_UUID)
 
     def test_nets_are_kicads(self):
         names = [n["name"] for n in self.spec["nets"]]

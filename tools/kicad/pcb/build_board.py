@@ -8,8 +8,8 @@ Run with KiCad's bundled Python (3.9; it provides ``pcbnew``):
 join's carrier netlist and the project's ``hardware/carrier/board.toml``;
 ``just <project>::carrier-board`` runs both, then route_board.py. This script
 decides nothing: parts, footprints (always the vendored copies), symbol paths,
-nets (KiCad's ``unconnected-(...)`` net for each no-connect pin included),
-placement and silkscreen all come from the JSON.
+footprint UUIDs, nets (KiCad's ``unconnected-(...)`` net for each no-connect
+pin included), placement and silkscreen all come from the JSON.
 
 It rewrites the board from scratch, so routing (route_board.py) must run after
 it. Python 3.9 and the stdlib plus ``pcbnew`` only; it imports nothing from
@@ -79,6 +79,9 @@ def place(board, spec):
         fp.SetReference(ref)
         fp.SetValue(comp["value"])
         fp.SetPath(pcbnew.KIID_PATH(comp["path"]))
+        # KiCad saves footprints, and exports the DSN, in UUID order; a fixed
+        # UUID makes every run order them the same (#763).
+        fp.SetUuid(pcbnew.KIID(comp["uuid"]))
         # Custom symbol fields (LCSC) go onto the footprint for the BOM and DRC
         # parity. SetField() creates them visible on F.Silkscreen, so hide them.
         for name, text in comp["fields"]:

@@ -50,11 +50,17 @@ differ (`INPUTSDA`, `0SDA`, …) and are not printed anywhere.
 Read from Adafruit's Eagle board file, not from a photo
 (`.claude/rules/board-layout-from-vendor-files.md`):
 [`adafruit/Adafruit-TCA9548A-I2C-Multiplexer-PCB`](https://github.com/adafruit/Adafruit-TCA9548A-I2C-Multiplexer-PCB),
-`Adafruit TCA9548A.brd` at commit `69a8a154e26bbce3330d477eec245a2e783ca863`,
+`Adafruit TCA9548A.brd` at commit `c5bdfe4c8e860cee7400539d6e45a235da7afcd2`,
 elements `JP3` (left) and `JP1` (right).
 
+Adafruit publishes the design under
+[CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/) (`license.txt` at
+the pinned commit). The pin is the default-branch head when the licence was
+checked, not the commit that added `license.txt`; its `.brd` blob is identical
+to the one this page was first read from.
+
 ```sh
-gh api "repos/adafruit/Adafruit-TCA9548A-I2C-Multiplexer-PCB/contents/Adafruit%20TCA9548A.brd" --jq '.content' | base64 -d > /tmp/tca9548a.brd
+gh api "repos/adafruit/Adafruit-TCA9548A-I2C-Multiplexer-PCB/contents/Adafruit%20TCA9548A.brd?ref=c5bdfe4c8e860cee7400539d6e45a235da7afcd2" --jq '.content' | base64 -d > /tmp/tca9548a.brd
 python3 tools/breakout-pinout.py /tmp/tca9548a.brd --element JP1 --element JP3
 ```
 
