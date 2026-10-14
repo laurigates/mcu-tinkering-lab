@@ -542,6 +542,10 @@ class RealDataTest(unittest.TestCase):
                         len(kept(data.get("channel_nets", []), view)),
                     )
                     self.assertEqual(
+                        len(model.bus_nets),
+                        len(kept(data.get("bus_nets", []), view)),
+                    )
+                    self.assertEqual(
                         [u.role for u in model.undrawn],
                         [t["role"] for t in kept(data.get("undrawn", []), view)],
                     )

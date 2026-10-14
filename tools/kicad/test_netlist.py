@@ -15,6 +15,7 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import re
 import tempfile
 import unittest
 import xml.etree.ElementTree as ET
@@ -22,6 +23,7 @@ from pathlib import Path
 
 from kicad import netlist, testfixture
 from kicad.errors import KicadError
+from kicad.paths import REPO_ROOT
 
 ROOT, PROJECT = testfixture.shared()
 TESTDATA = Path(__file__).resolve().parent / "testdata"
@@ -215,6 +217,226 @@ class MutationTests(unittest.TestCase):
     def test_join_errors_become_kicad_errors(self):
         self.edit(self.toml, 'role = "PIN_IMU_SDA"', 'role = "PIN_IMU_SDAX"')
         self.fails("PIN_IMU_SDAX")
+
+
+# --- Mux channel buses (#768) ---------------------------------------------------
+# A stand-in project on the frozen tree's XIAO and registry: robocar-unified's
+# own I2C and TCA9548A channel macros, a mux on a 1x8 socket and three 2-pin
+# loads. The carrier view of the real project cannot build yet (#750 step 2), so
+# this is where `kicad.netlist` meets [[bus_nets]].
+
+UNIFIED_HEADER = REPO_ROOT / "packages/robocar/unified/main/pin_config.h"
+
+MUX_PARTS = {
+    "test-mux": """\
+[part]
+name = "Test I2C mux"
+source = "test stand-in (#768)"
+symbol = "Connector_Generic:Conn_01x08"
+footprint = "Connector_PinSocket_2.54mm:PinSocket_1x08_P2.54mm_Vertical"
+
+[pins]
+SDA = 1
+SCL = 2
+SD0 = 3
+SC0 = 4
+SD1 = 5
+SC1 = 6
+SD2 = 7
+SC2 = 8
+""",
+    "test-i2c-load": """\
+[part]
+name = "Test I2C load"
+source = "test stand-in (#768)"
+symbol = "Connector_Generic:Conn_01x02"
+footprint = "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical"
+
+[pins]
+SDA = 1
+SCL = 2
+""",
+    "test-power": """\
+[part]
+name = "Test power lead"
+source = "test stand-in (#768)"
+symbol = "Connector_Generic:Conn_01x04"
+footprint = "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical"
+no_connect = ["NC"]
+
+[pins]
+"5V" = 1
+GND = 2
+"3V3" = 3
+NC = 4
+""",
+}
+
+MUX_SIDECAR = """\
+[source]
+convention = "robocar"
+header = "main/pin_config.h"
+board = "docs/reference/boards/xiao-rp2350.md"
+part = "seeed-xiao-rp2350-socket"
+ref = "U1"
+
+[parts.mux]
+name = "TCA9548A"
+kind = "i2c-mux"
+part = "test-mux"
+ref = "J1"
+
+[parts.pwm]
+name = "PCA9685"
+kind = "pwm-driver"
+part = "test-i2c-load"
+ref = "J2"
+
+[parts.oled]
+name = "SSD1306"
+kind = "display"
+part = "test-i2c-load"
+ref = "J3"
+
+[parts.expander]
+name = "MCP23017"
+kind = "gpio-expander"
+part = "test-i2c-load"
+ref = "J4"
+
+[parts.power]
+name = "Power lead"
+kind = "connector"
+part = "test-power"
+ref = "J5"
+
+[[nets]]
+role = "I2C_SDA_PIN"
+to = "mux.SDA"
+
+[[nets]]
+role = "I2C_SCL_PIN"
+to = "mux.SCL"
+
+[[bus_nets]]
+role = "I2C_BUS_CHANNEL_PCA9685"
+from = "mux"
+to = "pwm"
+
+[[bus_nets]]
+role = "I2C_BUS_CHANNEL_OLED"
+from = "mux"
+to = "oled"
+
+[[bus_nets]]
+role = "I2C_BUS_CHANNEL_MCP23017"
+from = "mux"
+to = "expander"
+
+[[rails]]
+name = "5V"
+from = "mcu.5V"
+to = ["power.5V"]
+
+[[rails]]
+name = "GND"
+from = "mcu.GND"
+to = ["power.GND"]
+
+[[rails]]
+name = "3V3"
+from = "mcu.3V3"
+to = ["power.3V3"]
+"""
+
+
+class BusNetTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        testfixture.materialise(self.root)
+        for slug, text in MUX_PARTS.items():
+            (self.root / f"docs/reference/parts/{slug}.toml").write_text(
+                text, encoding="utf-8"
+            )
+        self.project = self.root / "packages/test/muxed"
+        (self.project / "main").mkdir(parents=True)
+        # The real header's I2C and mux-channel macros, extracted, not retyped.
+        wanted = re.compile(r"#define (I2C_SDA_PIN|I2C_SCL_PIN|I2C_BUS_CHANNEL_\w+) ")
+        text = UNIFIED_HEADER.read_text(encoding="utf-8")
+        lines = [line for line in text.splitlines() if wanted.match(line)]
+        self.assertEqual(len(lines), 5, lines)
+        self.header = self.project / "main/pin_config.h"
+        self.header.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        self.toml = self.project / "hardware.toml"
+        self.toml.write_text(MUX_SIDECAR, encoding="utf-8")
+
+    def build(self) -> netlist.Netlist:
+        return netlist.build(self.project, self.root)
+
+    def buses(self, nl: netlist.Netlist) -> dict[str, tuple[tuple[str, str], ...]]:
+        return {k: v for k, v in nl.nets.items() if "BUS_CHANNEL" in k}
+
+    def test_each_mux_channel_is_an_sda_and_an_scl_net(self):
+        self.assertEqual(
+            self.buses(self.build()),
+            {
+                "I2C_BUS_CHANNEL_MCP23017_SCL": (("J1", "8"), ("J4", "2")),
+                "I2C_BUS_CHANNEL_MCP23017_SDA": (("J1", "7"), ("J4", "1")),
+                "I2C_BUS_CHANNEL_OLED_SCL": (("J1", "6"), ("J3", "2")),
+                "I2C_BUS_CHANNEL_OLED_SDA": (("J1", "5"), ("J3", "1")),
+                "I2C_BUS_CHANNEL_PCA9685_SCL": (("J1", "4"), ("J2", "2")),
+                "I2C_BUS_CHANNEL_PCA9685_SDA": (("J1", "3"), ("J2", "1")),
+            },
+        )
+
+    def test_the_upstream_bus_stays_an_mcu_net(self):
+        nl = self.build()
+        self.assertIn(("J1", "1"), nl.nets["I2C_SDA_PIN"])
+        self.assertIn(("J1", "2"), nl.nets["I2C_SCL_PIN"])
+
+    def test_a_renumbered_channel_moves_its_nets(self):
+        # pin_config.h swaps the OLED and the expander between channels 1 and 2.
+        swap = {"OLED": "2", "MCP23017": "1"}
+        text = re.sub(
+            r"(I2C_BUS_CHANNEL_(OLED|MCP23017)) \d",
+            lambda m: f"{m.group(1)} {swap[m.group(2)]}",
+            self.header.read_text(encoding="utf-8"),
+        )
+        self.header.write_text(text, encoding="utf-8")
+        nets = self.buses(self.build())
+        self.assertEqual(nets["I2C_BUS_CHANNEL_OLED_SDA"], (("J1", "7"), ("J3", "1")))
+        self.assertEqual(
+            nets["I2C_BUS_CHANNEL_MCP23017_SCL"], (("J1", "6"), ("J4", "2"))
+        )
+
+    def test_net_names_rename_both_lines(self):
+        with self.toml.open("a", encoding="utf-8") as f:
+            f.write('\n[net_names]\nI2C_BUS_CHANNEL_OLED = "OLED"\n')
+        nl = self.build()
+        self.assertNotIn("I2C_BUS_CHANNEL_OLED_SDA", nl.nets)
+        self.assertEqual(nl.nets["OLED_SDA"], (("J1", "5"), ("J3", "1")))
+        self.assertEqual(nl.nets["OLED_SCL"], (("J1", "6"), ("J3", "2")))
+
+    def test_a_dropped_bus_net_leaves_its_pins_unconnected(self):
+        text = self.toml.read_text(encoding="utf-8")
+        entry = (
+            '[[bus_nets]]\nrole = "I2C_BUS_CHANNEL_OLED"\nfrom = "mux"\nto = "oled"\n'
+        )
+        self.assertEqual(text.count(entry), 1)
+        self.toml.write_text(text.replace(entry, ""), encoding="utf-8")
+        with self.assertRaisesRegex(KicadError, r"J1\.5 \(SD1\) unconnected"):
+            self.build()
+
+    def test_a_bus_pin_missing_from_the_registry_fails(self):
+        mux = self.root / "docs/reference/parts/test-mux.toml"
+        mux.write_text(
+            mux.read_text(encoding="utf-8").replace("SC2 = 8", "XX = 8"),
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(KicadError, r"mux\.SC2: test-mux\.toml has no pin"):
+            self.build()
 
 
 if __name__ == "__main__":

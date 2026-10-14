@@ -192,6 +192,29 @@ from = "pwm"
 to = "motor_driver.PWMB"
 note = "Left motor speed, PWM 0-4095"
 
+# --- TCA9548A channels (#768) -----------------------------------------------
+# Each `role` is an `I2C_BUS_CHANNEL_*` macro in main/pin_config.h, the channel
+# the firmware selects before talking to that part. Channel n is the mux's
+# SDn/SCn pad pair, wired to the part's SDA/SCL; tools/hardware/ fails if a pad
+# is missing from a board page, if two roles share a channel, or if a pin is on
+# two buses.
+
+[[bus_nets]]
+role = "I2C_BUS_CHANNEL_PCA9685"
+from = "mux"
+to = "pwm"
+
+[[bus_nets]]
+role = "I2C_BUS_CHANNEL_OLED"
+from = "mux"
+to = "oled"
+
+[[bus_nets]]
+role = "I2C_BUS_CHANNEL_MCP23017"
+from = "mux"
+to = "expander"
+note = "optional: the firmware boots without the board fitted"
+
 [[undrawn]]
 role = "MIC_PDM_CLK_PIN"
 why = "wired to the PDM microphone on the Sense expansion board, not brought out to a header"

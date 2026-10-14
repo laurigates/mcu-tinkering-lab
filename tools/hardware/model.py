@@ -27,6 +27,12 @@ is rejected so a `gpio = 5` cannot slip in beside one:
     to   = "motor_driver.PWMA"
     note = "speed"              # optional
 
+    [[bus_nets]]                # an I2C mux channel to a load (#768)
+    role = "I2C_BUS_CHANNEL_OLED"  # a bus channel role in `header`
+    from = "mux"                # the mux part; channel n is its SDn/SCn pair
+    to   = "oled"               # the load part; SDn -> SDA, SCn -> SCL
+    note = "display"            # optional
+
     [[undrawn]]                 # a pin role deliberately on no drawn net
     role = "MIC_PDM_CLK_PIN"
     why  = "internal to the Sense module"
@@ -60,6 +66,17 @@ a channel and an MCU net), are errors; one channel to several pins is a fan-out.
 `[[nets]]` stays MCU-only, so every consumer that reads it as GPIO wiring still
 can.
 
+A `[[bus_nets]]` role is a bus channel role (`header.BUS_CONVENTIONS`), the
+multiplexer channel the firmware selects for that load, resolved to its number
+from the header. Each entry is two lines: the mux's `SD<n>` pad to the load's
+`SDA`, and `SC<n>` to `SCL`; where a part has a `board` page those pads must be
+on it. Two wired roles on one channel are an error, as is a pin on two nets of
+any kind (a load on two channels, a bus pin that is also an MCU or channel
+net); one channel to several loads is a fan-out. Like channel roles, bus
+channel roles are not required to be wired. In the carrier view the lines are
+named `<name>_SDA` and `<name>_SCL`, where `<name>` is the role or its
+`[net_names]` entry.
+
 `[[undrawn]]` is an array of tables rather than ADR-021's `undrawn = [...]`
 key: written after a `[[nets]]` block, that key would belong to the last net.
 
@@ -75,8 +92,8 @@ reads as a role.
 
 Two builds read one file (#750): the hand-wired **harness** the docs describe,
 and the **carrier** PCB `tools/kicad` generates. An entry in `[parts]`,
-`[[nets]]`, `[[channel_nets]]`, `[[undrawn]]`, `[[rails]]` or `[[outputs]]`
-may carry `build = "harness"` or `build = "carrier"`; with no `build` it is in
+`[[nets]]`, `[[channel_nets]]`, `[[bus_nets]]`, `[[undrawn]]`, `[[rails]]` or
+`[[outputs]]` may carry `build = "harness"` or `build = "carrier"`; with no `build` it is in
 both. `join(..., view=)` keeps the entries of one view and runs every check
 above on those alone, so completeness, shorts and the signal/rail clash are
 per view. The default view is the harness: WIRING.md, the pinouts and
@@ -134,7 +151,12 @@ from typing import Any
 
 from .board import Board, BoardPin, parse_board_table
 from .errors import HardwareError
-from .header import channels_from_defines, parse_defines, roles_from_defines
+from .header import (
+    bus_channels_from_defines,
+    channels_from_defines,
+    parse_defines,
+    roles_from_defines,
+)
 from .layout import parse_layout
 
 SIDECAR = "hardware.toml"
@@ -146,6 +168,7 @@ _KEYS = {
         "parts",
         "nets",
         "channel_nets",
+        "bus_nets",
         "undrawn",
         "rails",
         "outputs",
@@ -155,6 +178,7 @@ _KEYS = {
     "part": {"name", "kind", "note", "board", "build", "part", "ref", "value", "lcsc"},
     "net": {"role", "to", "note", "build"},
     "channel_net": {"role", "from", "to", "note", "build"},
+    "bus_net": {"role", "from", "to", "note", "build"},
     "undrawn": {"role", "why", "build"},
     "rail": {"name", "from", "to", "build"},
     "output": {"from", "to", "pins", "net", "build"},
@@ -165,6 +189,9 @@ MCU = "mcu"  # the reserved part id a rail endpoint uses for the MCU board
 
 _REF = re.compile(r"[A-Z]+[0-9]+")
 _LCSC = re.compile(r"C[0-9]+")
+# An I2C mux channel n is the pad pair SDn/SCn; each joins the load pin named
+# here, which is also the suffix of the line's carrier net name (#768).
+I2C_LINES = (("SD", "SDA"), ("SC", "SCL"))
 # KiCad reads `D[0..1]`, `{A B}`, `~{EN}`, `X/Y` and spaces as bus or markup.
 _NET_NAME = re.compile(r"[A-Za-z0-9_+\-.]+")
 
@@ -199,6 +226,20 @@ class ChannelNet:
     part: str
     pin: str
     note: str
+
+
+@dataclass(frozen=True)
+class BusNet:
+    role: str  # a bus channel role: "I2C_BUS_CHANNEL_OLED"
+    channel: int  # its number, from the header
+    source: str  # the mux part id: "mux"
+    part: str  # the load part id: "oled"
+    note: str
+
+    @property
+    def wires(self) -> tuple[tuple[str, str], ...]:
+        """(mux pad, load pin) per line: (("SD1", "SDA"), ("SC1", "SCL"))."""
+        return tuple((f"{pad}{self.channel}", pin) for pad, pin in I2C_LINES)
 
 
 @dataclass(frozen=True)
@@ -248,6 +289,8 @@ class HardwareModel:
     net_names: dict[str, str] = field(default_factory=dict)  # [net_names] as read
     mcu_part: str = ""  # [source] part: the MCU's docs/reference/parts/ slug
     mcu_ref: str = ""  # [source] ref: the MCU's reference designator
+    bus_channels: dict[str, int] = field(default_factory=dict)  # mux channel role -> n
+    bus_nets: tuple[BusNet, ...] = ()
 
     def pin_for(self, role: str) -> BoardPin | None:
         """The header pad a role lands on, or None if its GPIO is not broken out."""
@@ -394,6 +437,7 @@ def _power(
     no_part: NoPart,
     nets: list[Net],
     channel_nets: list[ChannelNet],
+    bus_nets: list[BusNet],
     roles: dict[str, int],
     board: Board,
     repo_root: Path,
@@ -413,6 +457,11 @@ def _power(
     for c in channel_nets:
         signal[c.part, c.pin] = c.role
         signal[c.source, str(c.channel)] = c.role
+    # So is each line of a bus net: the mux's channel pad and the load's pin.
+    for b in bus_nets:
+        for pad, pin in b.wires:
+            signal[b.source, pad] = b.role
+            signal[b.part, pin] = b.role
 
     def endpoint(where: str, value: Any) -> Endpoint:
         part, dot, pin = (
@@ -584,6 +633,78 @@ def _channel_nets(
     return result
 
 
+def _bus_nets(
+    entries: Entries,
+    parts: dict[str, Part],
+    no_part: NoPart,
+    nets: list[Net],
+    channel_nets: list[ChannelNet],
+    bus_channels: dict[str, int],
+    defines: dict[str, str],
+    header: Path,
+    repo_root: Path,
+) -> list[BusNet]:
+    """[[bus_nets]], checked against the header, the parts and their boards."""
+    pads: dict[str, set[str]] = {}
+    for key, part in parts.items():
+        if part.board:
+            pads[key] = {p.name for p in parse_layout(repo_root / part.board).pads}
+    # Which net already holds each part pin: an MCU net, a channel net (both
+    # ends), or a bus line added below.
+    taken: dict[tuple[str, str], str] = {(n.part, n.pin): n.role for n in nets}
+    for c in channel_nets:
+        taken[c.part, c.pin] = c.role
+        taken[c.source, str(c.channel)] = c.role
+    on_channel: dict[tuple[str, int], str] = {}
+    result: list[BusNet] = []
+    for where, table in entries:
+        role = _require(where, table, "role")
+        if role not in bus_channels:
+            what = "is not a bus channel role" if role in defines else "is not defined"
+            raise HardwareError(f"{where}: role {role!r} {what} in {header.name}")
+        channel = bus_channels[role]
+        source = _require(where, table, "from")
+        load = _require(where, table, "to")
+        if "." in load:
+            raise HardwareError(
+                f"{where}: 'to' must be a part id (its SDA and SCL are wired), "
+                f"got {load!r}"
+            )
+        for key in (source, load):
+            if key not in parts:
+                raise no_part(where, key)
+        if load == source:
+            raise HardwareError(f"{where}: {role} runs from {source} to its own pins")
+        if any(b.role == role and b.part == load for b in result):
+            raise HardwareError(f"{where}: {role} -> {load} is listed twice")
+        other = on_channel.setdefault((source, channel), role)
+        if other != role:
+            raise HardwareError(
+                f"{where}: channel {channel} of {source} is wired as both {other} and "
+                f"{role}; {header.name} gives them the same number"
+            )
+        bus = BusNet(role, channel, source, load, table.get("note", ""))
+        for pad, pin in bus.wires:
+            for key, name in ((source, pad), (load, pin)):
+                if key in pads and name not in pads[key]:
+                    page = Path(parts[key].board).name
+                    if key == source:
+                        raise HardwareError(
+                            f"{where}: {role} is channel {channel}, and {page} has "
+                            f"no pad named {name!r}"
+                        )
+                    raise HardwareError(
+                        f"{where}: {key}.{name}: {page} has no pad named {name!r}"
+                    )
+                held = taken.setdefault((key, name), role)
+                if held != role:
+                    raise HardwareError(
+                        f"{where}: {key}.{name} is on both {held} and {role}"
+                    )
+        result.append(bus)
+    return result
+
+
 def _read_net_names(sidecar: Path, data: dict[str, Any]) -> dict[str, str]:
     """[net_names], with each value checked as a net name (in every view)."""
     names = data.get("net_names", {})
@@ -604,18 +725,25 @@ def _net_names(
     names: dict[str, str],
     nets: list[Net],
     channel_nets: list[ChannelNet],
+    bus_nets: list[BusNet],
     rails: tuple[Rail, ...],
     outputs: tuple[Output, ...],
 ) -> None:
     """Carrier view: every [net_names] key is used, and no two nets share a name."""
     roles = [*dict.fromkeys([n.role for n in nets] + [c.role for c in channel_nets])]
+    buses = [*dict.fromkeys(b.role for b in bus_nets)]
     for key in names:
-        if key not in roles and all(r.name != key for r in rails):
+        if key not in roles and key not in buses and all(r.name != key for r in rails):
             raise HardwareError(
                 f"{sidecar} [net_names] {key}: neither a role on a net nor a rail "
                 f"in the {CARRIER} view"
             )
     claims = [(names.get(r, r), f"role {r}") for r in roles]
+    claims += [
+        (f"{names.get(b, b)}_{line}", f"bus {b} {line}")
+        for b in buses
+        for _, line in I2C_LINES
+    ]
     claims += [(names.get(r.name, r.name), f"rail {r.name}") for r in rails]
     claims += [
         (o.net.format(pin=p), f"output {o.part}.{p}") for o in outputs for p in o.pins
@@ -700,6 +828,7 @@ def join(
     net_entries = entries("nets", "net")
     undrawn_entries = entries("undrawn", "undrawn")
     channel_entries = entries("channel_nets", "channel_net")
+    bus_entries = entries("bus_nets", "bus_net")
     rail_entries = entries("rails", "rail", _rail_name)
     output_entries = entries("outputs", "output", _output_pins)
     net_names = _read_net_names(sidecar, data)
@@ -709,6 +838,11 @@ def join(
     channels = (
         channels_from_defines(parse_defines([header]), convention)
         if channel_entries
+        else {}
+    )
+    bus_channels = (
+        bus_channels_from_defines(parse_defines([header]), convention)
+        if bus_entries
         else {}
     )
 
@@ -823,6 +957,18 @@ def join(
         repo_root,
     )
 
+    bus_nets = _bus_nets(
+        bus_entries,
+        parts,
+        no_part,
+        nets,
+        channel_nets,
+        bus_channels,
+        defines,
+        header,
+        repo_root,
+    )
+
     board = parse_board_table(board_path)
     mcu = source.get("mcu", "MCU")
     if not isinstance(mcu, str) or not mcu:
@@ -835,12 +981,13 @@ def join(
         no_part,
         nets,
         channel_nets,
+        bus_nets,
         roles,
         board,
         repo_root,
     )
     if view == CARRIER:
-        _net_names(sidecar, net_names, nets, channel_nets, rails, outputs)
+        _net_names(sidecar, net_names, nets, channel_nets, bus_nets, rails, outputs)
 
     return HardwareModel(
         project_dir=project_dir,
@@ -861,4 +1008,6 @@ def join(
         net_names=net_names,
         mcu_part=mcu_part,
         mcu_ref=mcu_ref,
+        bus_channels=bus_channels,
+        bus_nets=tuple(bus_nets),
     )

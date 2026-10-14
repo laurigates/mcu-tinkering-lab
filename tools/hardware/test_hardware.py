@@ -899,6 +899,231 @@ class ChannelNetTest(unittest.TestCase):
                 self.channels(lambda s, p=pin: s + rail.format(p))
 
 
+MUX_MD = """\
+    # Test I2C multiplexer
+
+    | Pin | Side | Pos | Header | Notes |
+    |-----|------|-----|--------|-------|
+    | VIN | L | 1 | J1.1 | |
+    | SDA | L | 2 | J1.2 | Upstream |
+    | SCL | L | 3 | J1.3 | Upstream |
+    | SD0 | R | 1 | J2.1 | |
+    | SC0 | R | 2 | J2.2 | |
+    | SD1 | R | 3 | J2.3 | |
+    | SC1 | R | 4 | J2.4 | |
+    """
+
+SCREEN_MD = """\
+    # Test I2C screen
+
+    | Pin | Side | Pos | Header | Notes |
+    |-----|------|-----|--------|-------|
+    | VCC | L | 1 | J1.1 | |
+    | SDA | L | 2 | J1.2 | |
+    | SCL | L | 3 | J1.3 | |
+    """
+
+BUS_HEADER = (
+    HEADER_H
+    + """\
+    #define I2C_BUS_CHANNEL_SCREEN 0
+    #define I2C_BUS_CHANNEL_PROBE 1
+    #define SCREEN_ADDR 0x3C
+    #define LAMP_CHANNEL 0
+    """
+)
+
+BUSES = """
+[parts.mux]
+name = "I2C mux"
+kind = "i2c-mux"
+board = "mux.md"
+
+[parts.screen]
+name = "Screen"
+kind = "display"
+board = "screen.md"
+
+[parts.probe]
+name = "Probe"
+kind = "sensor"
+
+[[bus_nets]]
+role = "I2C_BUS_CHANNEL_SCREEN"
+from = "mux"
+to = "screen"
+note = "display"
+
+[[bus_nets]]
+role = "I2C_BUS_CHANNEL_PROBE"
+from = "mux"
+to = "probe"
+"""
+
+EXCUSED = '[[undrawn]]\n    role = "BEEP_PIN"\n    why = "test"'
+
+
+class BusNetTest(unittest.TestCase):
+    """[[bus_nets]] (#768): an I2C mux channel's SDn/SCn pair to a load's SDA/SCL."""
+
+    def make(self, sidecar: str, header: str = BUS_HEADER) -> Path:
+        proj = JoinTest.make(self, sidecar=sidecar, header=header)
+        write(proj.parent / "mux.md", MUX_MD)
+        write(proj.parent / "screen.md", SCREEN_MD)
+        return proj
+
+    join = JoinTest.join
+
+    def buses(self, edit=lambda s: s, header: str = BUS_HEADER, view: str = "harness"):
+        proj = self.make(edit(SIDECAR + BUSES), header=header)
+        return join(proj, repo_root=proj.parent, view=view)
+
+    def test_bus_channel_roles_come_from_the_header_by_name_and_value(self):
+        model = self.buses()
+        self.assertEqual(
+            model.bus_channels,
+            {"I2C_BUS_CHANNEL_SCREEN": 0, "I2C_BUS_CHANNEL_PROBE": 1},
+        )
+        # A PWM-driver channel and an address are not mux channels.
+        self.assertNotIn("LAMP_CHANNEL", model.bus_channels)
+        self.assertNotIn("SCREEN_ADDR", model.bus_channels)
+
+    def test_a_bus_net_resolves_to_its_channel_and_both_pads_of_each_line(self):
+        screen, probe = self.buses().bus_nets
+        self.assertEqual(
+            (screen.role, screen.channel, screen.source, screen.part, screen.note),
+            ("I2C_BUS_CHANNEL_SCREEN", 0, "mux", "screen", "display"),
+        )
+        self.assertEqual(screen.wires, (("SD0", "SDA"), ("SC0", "SCL")))
+        self.assertEqual(probe.wires, (("SD1", "SDA"), ("SC1", "SCL")))
+
+    def test_bus_nets_leave_the_mcu_and_channel_nets_alone(self):
+        model = self.buses()
+        self.assertEqual([n.role for n in model.nets], ["LED_PIN"])
+        self.assertEqual(model.channel_nets, ())
+
+    def test_a_pin_role_is_not_a_bus_channel_role(self):
+        with self.assertRaisesRegex(HardwareError, "LED_PIN.*not a bus channel role"):
+            self.buses(lambda s: s.replace('"I2C_BUS_CHANNEL_PROBE"', '"LED_PIN"'))
+
+    def test_an_undefined_bus_channel_role_fails(self):
+        typo = '"I2C_BUS_CHANNEL_PRBOE"'
+        with self.assertRaisesRegex(HardwareError, "PRBOE.*not defined"):
+            self.buses(lambda s: s.replace('"I2C_BUS_CHANNEL_PROBE"', typo))
+
+    def test_a_channel_number_in_the_sidecar_is_rejected(self):
+        with self.assertRaisesRegex(HardwareError, "channel"):
+            self.buses(lambda s: s.replace('note = "display"', "channel = 0"))
+
+    def test_the_channel_pair_must_be_pads_on_the_muxs_board(self):
+        header = BUS_HEADER.replace("CHANNEL_PROBE 1", "CHANNEL_PROBE 5")
+        with self.assertRaisesRegex(
+            HardwareError, "PROBE is channel 5.*mux.md has no pad named 'SD5'"
+        ):
+            self.buses(header=header)
+
+    def test_the_load_needs_sda_and_scl_on_its_board(self):
+        proj = self.make(SIDECAR + BUSES)
+        write(
+            proj.parent / "screen.md",
+            SCREEN_MD.replace("    | SCL | L | 3 | J1.3 | |\n", ""),
+        )
+        with self.assertRaisesRegex(HardwareError, "screen.SCL.*no pad named 'SCL'"):
+            self.join(proj)
+
+    def test_two_wired_roles_on_one_mux_channel_fail(self):
+        header = BUS_HEADER.replace("CHANNEL_PROBE 1", "CHANNEL_PROBE 0")
+        with self.assertRaisesRegex(
+            HardwareError, "channel 0 of mux.*CHANNEL_SCREEN.*CHANNEL_PROBE"
+        ):
+            self.buses(header=header)
+
+    def test_one_channel_to_two_loads_is_a_fan_out(self):
+        extra = (
+            '\n[[bus_nets]]\nrole = "I2C_BUS_CHANNEL_PROBE"\nfrom = "mux"\nto = "led"\n'
+        )
+        buses = self.buses(lambda s: s + extra).bus_nets
+        self.assertEqual(
+            [b.part for b in buses if b.role == "I2C_BUS_CHANNEL_PROBE"],
+            ["probe", "led"],
+        )
+
+    def test_the_same_bus_net_twice_fails(self):
+        extra = '\n[[bus_nets]]\nrole = "I2C_BUS_CHANNEL_PROBE"\nfrom = "mux"\nto = "probe"\n'
+        with self.assertRaisesRegex(HardwareError, "listed twice"):
+            self.buses(lambda s: s + extra)
+
+    def test_a_load_on_two_channels_fails(self):
+        # Its SDA would join channel 0 to channel 1, which the mux isolates.
+        with self.assertRaisesRegex(
+            HardwareError, "screen.SDA.*CHANNEL_SCREEN.*CHANNEL_PROBE"
+        ):
+            self.buses(lambda s: s.replace('to = "probe"', 'to = "screen"'))
+
+    def test_a_load_on_a_bus_and_an_mcu_net_fails(self):
+        def edit(s: str) -> str:
+            net = '\n[[nets]]\nrole = "BEEP_PIN"\nto = "screen.SDA"\n'
+            return s.replace(EXCUSED, "") + net
+
+        with self.assertRaisesRegex(HardwareError, "screen.SDA.*BEEP_PIN.*SCREEN"):
+            self.buses(edit)
+
+    def test_an_mcu_net_onto_a_channel_pad_fails(self):
+        def edit(s: str) -> str:
+            net = '\n[[nets]]\nrole = "BEEP_PIN"\nto = "mux.SC1"\n'
+            return s.replace(EXCUSED, "") + net
+
+        with self.assertRaisesRegex(HardwareError, "mux.SC1.*BEEP_PIN.*PROBE"):
+            self.buses(edit)
+
+    def test_a_rail_on_a_bus_pin_fails(self):
+        rail = '\n[[rails]]\nname = "3V3"\nfrom = "mcu.5V"\nto = ["{}"]\n'
+        for pin, role in (
+            ("screen.SCL", "I2C_BUS_CHANNEL_SCREEN"),
+            ("mux.SD1", "I2C_BUS_CHANNEL_PROBE"),
+        ):
+            with (
+                self.subTest(pin=pin),
+                self.assertRaisesRegex(HardwareError, f"{pin}.*{role}"),
+            ):
+                self.buses(lambda s, p=pin: s + rail.format(p))
+
+    def test_a_bus_net_to_its_own_mux_fails(self):
+        with self.assertRaisesRegex(HardwareError, "mux.*its own"):
+            self.buses(lambda s: s.replace('to = "probe"', 'to = "mux"'))
+
+    def test_a_bus_net_to_an_undeclared_part_fails(self):
+        with self.assertRaisesRegex(HardwareError, "part 'prbe' is not declared"):
+            self.buses(lambda s: s.replace('to = "probe"', 'to = "prbe"'))
+
+    def test_to_is_one_part_id_not_a_pin(self):
+        with self.assertRaisesRegex(HardwareError, "'to' must be a part id"):
+            self.buses(lambda s: s.replace('to = "probe"', 'to = "probe.SDA"'))
+
+    def test_a_sidecar_without_bus_nets_needs_no_bus_convention(self):
+        with mock.patch.dict(hardware.header.BUS_CONVENTIONS, clear=True):
+            model = self.join(self.make(SIDECAR))
+            self.assertEqual((model.bus_channels, model.bus_nets), ({}, ()))
+            with self.assertRaisesRegex(HardwareError, "no bus-channel convention"):
+                self.buses()
+
+    def test_a_bus_role_is_a_carrier_net_names_key(self):
+        names = '\n[net_names]\nI2C_BUS_CHANNEL_SCREEN = "SCREEN"\n'
+        model = self.buses(lambda s: s + names, view="carrier")
+        self.assertEqual(model.net_names, {"I2C_BUS_CHANNEL_SCREEN": "SCREEN"})
+
+    def test_a_carrier_net_name_cannot_collide_with_a_bus_line(self):
+        # The bus's SDA line is <name>_SDA; another net renamed onto it would
+        # join two nets through the name alone.
+        names = (
+            '\n[net_names]\nI2C_BUS_CHANNEL_SCREEN = "SCREEN"\nLED_PIN = "SCREEN_SDA"\n'
+        )
+        with self.assertRaisesRegex(
+            HardwareError, "'SCREEN_SDA'.*role LED_PIN.*I2C_BUS_CHANNEL_SCREEN SDA"
+        ):
+            self.buses(lambda s: s + names, view="carrier")
+
+
 class RobocarUnifiedJoinTest(unittest.TestCase):
     """The committed sidecar resolves against the committed header and board."""
 
@@ -1009,6 +1234,21 @@ class RobocarUnifiedJoinTest(unittest.TestCase):
         }
         self.assertEqual(len(claimed), 6)
         self.assertEqual(claimed, joined)
+
+    def test_every_mux_channel_the_firmware_selects_is_on_a_bus_net(self):
+        # pin_config.h:39-41: the TCA9548A's three channels, each to the part
+        # the firmware selects it for (#768): six wires in all.
+        self.assertEqual(
+            {b.role: (b.source, b.channel, b.part) for b in self.model.bus_nets},
+            {
+                "I2C_BUS_CHANNEL_PCA9685": ("mux", 0, "pwm"),
+                "I2C_BUS_CHANNEL_OLED": ("mux", 1, "oled"),
+                "I2C_BUS_CHANNEL_MCP23017": ("mux", 2, "expander"),
+            },
+        )
+        roles = {b.role for b in self.model.bus_nets}
+        self.assertEqual(set(self.model.bus_channels), roles)
+        self.assertEqual(len([w for b in self.model.bus_nets for w in b.wires]), 6)
 
     def test_headers_are_pin_config_then_the_planner_headers(self):
         rel = [p.relative_to(UNIFIED).as_posix() for p in self.model.headers]
