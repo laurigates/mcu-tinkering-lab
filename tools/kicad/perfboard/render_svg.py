@@ -26,6 +26,40 @@ PALETTE = [
     "#e34948",
 ]
 INK, MUTED, GRID = "#1f1f1f", "#6b6b6b", "#d9d9d9"
+PART_INK = "#4a5a78"  # part outlines and their labels
+FONT = 10  # px, the drawing's default font size
+# Text box estimate: Helvetica averages about 0.55 em per character; 0.62 em
+# over-estimates it, so a box built from this covers the drawn text.
+CHAR_EM = 0.62
+ASCENT, DESCENT = 0.8, 0.25  # em above and below the baseline, generous
+LETTERS_DY = 4  # the column letters' baseline, px above the hole grid
+NUMBERS_DX = 4  # the row numbers' anchor, px beside the hole grid
+
+
+def text_box(x, y, text, anchor="start", size=FONT):
+    """(x0, y0, x1, y1): a box that covers `text` drawn with baseline at (x, y)."""
+    width = CHAR_EM * size * len(text)
+    left = {"start": x, "middle": x - width / 2, "end": x - width}[anchor]
+    return left, y - ASCENT * size, left + width, y + DESCENT * size
+
+
+def label_at(body_left, body_top, text, grid_top, grid_right):
+    """Baseline (x, y) of a part's label on the component side.
+
+    Inside the body's top-left corner while the body's top edge is on the hole
+    grid. A body that reaches above the grid (a module's courtyard at row 1)
+    would put it on the column letters, so that label goes above the letter
+    row instead; the component panel has no legend, so the band is free.
+    Either way a label that would run into the row numbers to the right of
+    the grid is pulled left to end before them.
+    """
+    if body_top < grid_top:
+        letters_top = text_box(0, grid_top - LETTERS_DY, "A")[1]
+        y = letters_top - 2 - DESCENT * FONT
+    else:
+        y = body_top + 10
+    right = text_box(body_left + 3, y, text)[2]
+    return body_left + 3 - max(0, right - (grid_right + NUMBERS_DX - 1)), y
 
 
 def svg(parts, numbered, routes, board: Board, steps, raised, heavy):
@@ -80,10 +114,10 @@ def svg(parts, numbered, routes, board: Board, steps, raised, heavy):
         )
         for c in range(board.cols):
             out.append(
-                f'<text x="{X(c)}" y="{top - 4}" text-anchor="middle" fill="{MUTED}">{col_name(c)}</text>'
+                f'<text x="{X(c)}" y="{top - LETTERS_DY}" text-anchor="middle" fill="{MUTED}">{col_name(c)}</text>'
             )
         for r in range(board.rows):
-            nx = x0 - 4 if mirror else x0 + w + 4
+            nx = x0 - NUMBERS_DX if mirror else x0 + w + NUMBERS_DX
             anchor = "end" if mirror else "start"
             out.append(
                 f'<text x="{nx}" y="{Y(r) + 3}" text-anchor="{anchor}" fill="{MUTED}">{r + 1}</text>'
@@ -99,11 +133,13 @@ def svg(parts, numbered, routes, board: Board, steps, raised, heavy):
                 dash = ' stroke-dasharray="4 2"' if is_raised else ""
                 out.append(
                     f'<rect x="{min(xa, xb)}" y="{Y(r0)}" width="{abs(xb - xa)}" height="{Y(r1) - Y(r0)}" '
-                    f'fill="{fill}" stroke="#4a5a78" stroke-width="1"{dash}/>'
+                    f'fill="{fill}" stroke="{PART_INK}" stroke-width="1"{dash}/>'
                 )
+                label = f"{p.ref} {p.value}"
+                lx, ly = label_at(min(xa, xb), Y(r0), label, top, x0 + w)
                 out.append(
-                    f'<text x="{min(xa, xb) + 3}" y="{Y(r0) + 10}" fill="#4a5a78" '
-                    f'stroke="white" stroke-width="3" paint-order="stroke">{p.ref} {p.value}</text>'
+                    f'<text x="{lx}" y="{ly}" fill="{PART_INK}" '
+                    f'stroke="white" stroke-width="3" paint-order="stroke">{label}</text>'
                 )
 
         def corners(path):

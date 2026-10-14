@@ -47,8 +47,10 @@ carrier against it without KiCad installed.
 4. **KiCad-free CI** (`carrier-check.yml`): the `tools/kicad` unit tests, the
    vendored library's hashes, regenerate-and-diff of the schematic and library
    tables, a board parity check (`kicad.boardcheck`: footprints, values, LCSC
-   numbers, paths and every pad's net against the join) and the check stamp.
-   ERC, DRC and Freerouting run locally. `just <project>::carrier-check` runs
+   numbers, paths and every pad's net against the join), the check stamp, and
+   regenerate-and-diff of each perfboard layout's drawing and wire list
+   (`kicad.perfboard --check`, which also fails a layout that breaks its
+   placement, wiring or routing checks). ERC, DRC and Freerouting run locally. `just <project>::carrier-check` runs
    ERC, DRC with schematic parity, netlist parity and the board check, and
    only when all pass writes the stamp CI verifies.
 5. **A vendored library subset** under `tools/kicad/lib/`: the KiCad 10.0.6
@@ -147,9 +149,11 @@ no KiCad.
   KiCad could only green those two by hand-editing the board or the stamp.
   For the same reason the unit tests in the `kicad-carrier` hook never compare
   a live carrier with #749's netlist export: they build from a frozen copy of
-  the balancebot inputs (`tools/kicad/testfixture.py`). After a legitimate pin
-  move, `just <project>::carrier-schematic` turns the hook green; CI's stamp
-  step stays red until `carrier-check` has run locally.
+  the balancebot inputs (`tools/kicad/testfixture.py`). The unit suite still
+  holds the committed schematic and perfboard files equal to their generators'
+  output, so after a legitimate pin move the hook goes green once both
+  `just <project>::carrier-schematic` and `just <project>::perfboard` have
+  run; CI's stamp step stays red until `carrier-check` has run locally.
 
 ## Related
 
@@ -183,6 +187,7 @@ Module map (`tools/kicad`; the package docstring has the full list):
 | `boardinput`, `pcb/` | JSON for the pcbnew scripts; place, route, DSN rewrite |
 | `fab`, `jlc` | Gerbers, drill, BOM and CPL; JLCPCB's assembly format |
 | `vendor`, `derive_xiao` | the pinned library subtrees; the socket XIAO parts |
+| `perfboard/` | KiCad-free: the carrier netlist laid out on a perfboard (`hardware/perfboard/perfboard.toml`): drawing and wire list; `--check` |
 
 Per project: `hardware/carrier/board.toml` (KiCad project name, placement,
 silkscreen, net classes, pour) and the generated KiCad project beside it.

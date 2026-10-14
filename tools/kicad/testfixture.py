@@ -7,11 +7,13 @@ normalised. The tests that compare a built netlist with them build it from
 hardware.toml, pin_config.h, board.toml, the hand-kept `.kicad_pro`, the XIAO
 RP2350 board page and the parts registry, plus the perfboard.toml the
 perfboard tests lay out. They do not read the live project, so a legitimate balancebot
-edit (a pin moved in pin_config.h, a part added) leaves the unit suite green
-once `just balancebot::carrier-schematic` has regenerated the schematic. The
-live project is checked by `kicad.schematic --check` (the committed schematic
-is the writer's output) and by the check stamp (`kicad.stamp`: KiCad's own
-export of that schematic is the join's netlist).
+edit (a pin moved in pin_config.h, a part added) does not fail them. A few
+tests do read it, as `--check` does: the committed schematic and the committed
+perfboard.svg and perfboard.md must be what the generators write. So after
+such an edit the unit suite, and the kicad-carrier hook, pass once both
+`just balancebot::carrier-schematic` and `just balancebot::perfboard` have run.
+The check stamp (`kicad.stamp`: KiCad's own export of that schematic is the
+join's netlist) also checks the live project, in CI only.
 
 `hardware.toml` and `pin_config.h` carry a `.frozen` suffix, so nothing that
 scans the repo for those names (the tools/hardware real-data tests, CI path

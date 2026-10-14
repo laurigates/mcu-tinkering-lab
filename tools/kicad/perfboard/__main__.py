@@ -22,7 +22,7 @@ from ..errors import KicadError
 from ..paths import REPO_ROOT
 from . import config, place, render_svg, route, wires, wirelist
 
-MARKER = f"hardware/perfboard/{config.FILENAME}"
+MARKER = config.MARKER
 OUTPUTS = ("perfboard.svg", "perfboard.md")
 
 
@@ -35,7 +35,10 @@ class Layout:
 
 
 def heavy_nets(
-    project: Path, cfg: config.PerfboardConfig, nl: netlist.Netlist
+    project: Path,
+    cfg: config.PerfboardConfig,
+    nl: netlist.Netlist,
+    repo_root: Path = REPO_ROOT,
 ) -> frozenset[str]:
     """The nets of the carrier board.toml net class `[wires] heavy_class` names."""
     board = paths.load_board_config(project)
@@ -45,7 +48,7 @@ def heavy_nets(
     names = [c.get("name") for c in board.data.get("net_classes", [])]
     raise KicadError(
         f"{cfg.path} [wires] heavy_class {cfg.heavy_class!r} is not a [[net_classes]] "
-        f"name in {board.path} ({names})"
+        f"name in {paths._display(board.path, repo_root)} ({names})"
     )
 
 
@@ -53,9 +56,11 @@ def generate(
     project: Path, repo_root: Path = REPO_ROOT, vendored: Path = library.VENDORED
 ) -> Layout:
     """The perfboard files of `project`; raises KicadError, one line per failed check."""
-    cfg = config.load(config.perfboard_dir(project) / config.FILENAME)
+    toml = config.perfboard_dir(project) / config.FILENAME
+    # Errors name the file repo-relative, as the other kicad CLIs do.
+    cfg = config.load(toml, Path(paths._display(toml, repo_root)))
     nl = netlist.build(project, repo_root, vendored)
-    heavy = heavy_nets(project, cfg, nl)
+    heavy = heavy_nets(project, cfg, nl, repo_root)
     skip = cfg.skip | place.pinless(nl)
     specs = {c.registry: registry.load(c.registry, repo_root) for c in nl.comps}
     parts, raised, tall = place.build_parts(

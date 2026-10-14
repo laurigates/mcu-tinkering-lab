@@ -13,6 +13,7 @@ import contextlib
 import io
 import re
 import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -157,6 +158,8 @@ class CliTests(unittest.TestCase):
         shutil.copytree(
             REPO_ROOT / "docs/reference/parts", self.root / "docs/reference/parts"
         )
+        # A git work tree: vendor.check lists git-tracked perfboard.toml files.
+        subprocess.run(["git", "init", "-q"], cwd=self.root, check=True)
         self.seeed = self.root / "tools/kicad/lib/seeed-xiao"
         self.socket = self.seeed / SOCKET_FP.relative_to(SEEED)
         self.assertEqual(vendor.check(self.root), [])

@@ -17,8 +17,8 @@
     U1 = [3, 3, 90]
 
     [swaps.J1]                       # optional; overrides the registry's [perfboard]
-    footprint = "Lib:Name"
-    value = "XT30 pigtail"
+    footprint = "Lib:Name"           # vendored, with a through-hole pad for
+    value = "XT30 pigtail"           # every netlist pin of J1
 
     [[steps]]                        # one solder-side panel each, in order
     title = "Power"
@@ -43,6 +43,8 @@ from .grid import Board
 from .render_svg import PALETTE
 
 FILENAME = "perfboard.toml"
+# The git-tracked file that makes a directory a perfboard project, relative to it.
+MARKER = f"hardware/perfboard/{FILENAME}"
 TOP_KEYS = frozenset({"skip", "board", "wires", "placement", "swaps", "steps"})
 BOARD_KEYS = frozenset({"title", "cols", "rows"})
 WIRES_KEYS = frozenset({"heavy_class", "heavy_label", "heavy_gauge", "light_gauge"})
@@ -88,14 +90,20 @@ def perfboard_dir(project: Path) -> Path:
     return project / "hardware" / "perfboard"
 
 
-def load(path: Path) -> PerfboardConfig:
+def load(path: Path, shown: Path | None = None) -> PerfboardConfig:
+    """Read and validate `path`.
+
+    `shown` is the path errors name and `PerfboardConfig.path` keeps (the CLI
+    passes it repo-relative); default `path`.
+    """
+    shown = shown or path
     try:
         data = tomllib.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
-        raise KicadError(f"{path}: no {FILENAME}") from None
+        raise KicadError(f"{shown}: no {FILENAME}") from None
     except tomllib.TOMLDecodeError as e:
-        raise KicadError(f"{path}: {e}") from None
-    return parse(data, path)
+        raise KicadError(f"{shown}: {e}") from None
+    return parse(data, shown)
 
 
 def parse(data: dict[str, Any], path: Path) -> PerfboardConfig:

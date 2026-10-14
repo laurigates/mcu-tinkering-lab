@@ -105,7 +105,7 @@ class ConfigTests(unittest.TestCase):
                 BASE.replace("U1 = [3, 3, 90]", "U1 = [3, 3, 45]"),
                 r"\[placement\] U1: expected \[column, row, rotation\]",
             ),
-            "missing [wires]": (
+            "misspelt [wires]": (
                 BASE.replace("[wires]", "[wirez]"),
                 r"unknown key\(s\) \['wirez'\]",
             ),
@@ -118,6 +118,14 @@ class ConfigTests(unittest.TestCase):
         for name, (text, msg) in cases.items():
             with self.subTest(case=name), self.assertRaisesRegex(KicadError, msg):
                 config_from(text)
+
+    def test_missing_tables(self):
+        for table in ("board", "wires", "placement"):
+            with self.subTest(table=table):
+                data = tomllib.loads(BASE)
+                del data[table]
+                with self.assertRaisesRegex(KicadError, rf"\[{table}\] is required"):
+                    config.parse(data, Path("perfboard.toml"))
 
     def test_every_net_in_a_step(self):
         *_, nets = Inputs.layout()
@@ -227,9 +235,38 @@ class PlacementTests(unittest.TestCase):
         self.assertNotIn("R3", {ref for nodes in nets.values() for ref, _ in nodes})
 
     def test_unknown_swap_or_skip(self):
-        cfg = dataclasses.replace(Inputs.cfg, swaps={"Q7": config.Swap("", "x")})
-        with self.assertRaisesRegex(KicadError, r"not in the netlist: \['Q7'\]"):
+        unknown = {
+            "swap": dataclasses.replace(Inputs.cfg, swaps={"Q7": config.Swap("", "x")}),
+            "skip": dataclasses.replace(Inputs.cfg, skip=frozenset({"Q8"})),
+        }
+        for kind, cfg in unknown.items():
+            ref = "Q7" if kind == "swap" else "Q8"
+            with (
+                self.subTest(kind=kind),
+                self.assertRaisesRegex(KicadError, rf"not in the netlist: \['{ref}'\]"),
+            ):
+                Inputs.layout(cfg)
+
+    def test_swap_footprint_must_cover_the_netlist_pins(self):
+        # J2 (the buck module) has 4 pins on nets; a 2-pin header cannot hold it.
+        swap = config.Swap(
+            "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical", ""
+        )
+        cfg = dataclasses.replace(Inputs.cfg, swaps={"J2": swap})
+        with self.assertRaisesRegex(
+            KicadError,
+            r"perfboard\.toml \[swaps\.J2\]: footprint Connector_PinHeader_2\.54mm:"
+            r"PinHeader_1x02_P2\.54mm_Vertical has no through-hole pad for J2's "
+            r"netlist pin\(s\) \['3', '4'\]",
+        ):
             Inputs.layout(cfg)
+
+    def test_netlist_pins_include_no_connects(self):
+        pins = place.netlist_pins(Inputs.nl)
+        self.assertEqual(pins["J2"], {"1", "2", "3", "4"})
+        for ref, pin in Inputs.nl.no_connect:
+            with self.subTest(node=f"{ref}.{pin}"):
+                self.assertIn(pin, pins[ref])
 
 
 class WireTests(unittest.TestCase):
@@ -328,6 +365,45 @@ class GenerateTests(unittest.TestCase):
                 "run just balancebot::perfboard",
                 out,
             )
+
+
+class CliErrorTests(unittest.TestCase):
+    """A bad perfboard.toml is a FAIL line naming it repo-relative; exit 1, no traceback."""
+
+    def run_cli(self, extra: str):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            project = testfixture.materialise(root)
+            toml = config.perfboard_dir(project) / config.FILENAME
+            toml.write_text(toml.read_text() + extra)
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                code = cli.main([str(project)], repo_root=root)
+        return code, out.getvalue()
+
+    def test_swap_footprint_short_of_pads(self):
+        code, out = self.run_cli(
+            "\n[swaps.J2]\nfootprint = "
+            '"Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical"\n'
+        )
+        self.assertEqual(code, 1)
+        self.assertIn(
+            "FAIL: packages/robotics/balancebot/hardware/perfboard/perfboard.toml "
+            "[swaps.J2]: footprint Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_"
+            "Vertical has no through-hole pad for J2's netlist pin(s) ['3', '4']\n",
+            out,
+        )
+        self.assertNotIn("Traceback", out)
+
+    def test_config_error_names_the_file_repo_relative(self):
+        code, out = self.run_cli("\n[swaps.J2]\ncolour = 1\n")
+        self.assertEqual(code, 1)
+        self.assertIn(
+            "FAIL: packages/robotics/balancebot/hardware/perfboard/perfboard.toml "
+            "[swaps.J2]: unknown key(s) ['colour']",
+            out,
+        )
+        self.assertNotIn(tempfile.gettempdir(), out)
 
 
 class LiveProjectTests(unittest.TestCase):

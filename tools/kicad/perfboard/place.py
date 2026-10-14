@@ -51,8 +51,12 @@ def build_parts(
     """(parts by ref in netlist order, raised refs, tall refs).
 
     `specs` maps a registry slug to its entry; `footprint_file` resolves a
-    footprint id to its `.kicad_mod`.
+    footprint id to its `.kicad_mod`. Each part's perfboard footprint must have
+    a through-hole pad for every netlist pin of its ref, on a net or not
+    connected: the registry checks its own `[perfboard]` footprint so, and a
+    `[swaps.REF]` footprint replaces it.
     """
+    pins = netlist_pins(nl)
     parts = {}
     raised, tall = set(), set()
     for comp in nl.comps:
@@ -66,6 +70,17 @@ def build_parts(
         fpid = (swap and swap.footprint) or pb.footprint
         value = (swap and swap.value) or pb.value or comp.value
         pads_mm, crt = footprints.thru_hole_pads(footprint_file(fpid))
+        missing = sorted(pins.get(ref, set()) - set(pads_mm), key=_pin_key)
+        if missing:
+            where = (
+                f"{cfg.path} [swaps.{ref}]"
+                if swap and swap.footprint
+                else f"{ref}: registry {comp.registry} [perfboard]"
+            )
+            raise KicadError(
+                f"{where}: footprint {fpid} has no through-hole pad for "
+                f"{ref}'s netlist pin(s) {missing}"
+            )
         if "1" not in pads_mm:
             # The wire list gives each part's pin-1 hole; the drawing squares it.
             raise KicadError(
@@ -105,6 +120,18 @@ def build_parts(
             f"{cfg.path}: [swaps] or skip name refs not in the netlist: {sorted(unknown)}"
         )
     return parts, frozenset(raised), frozenset(tall)
+
+
+def netlist_pins(nl: Netlist) -> dict[str, set[str]]:
+    """Every pin of each ref in the netlist: on a net or not connected."""
+    pins: dict[str, set[str]] = {}
+    for ref, pin in [*(n for nodes in nl.nets.values() for n in nodes), *nl.no_connect]:
+        pins.setdefault(ref, set()).add(pin)
+    return pins
+
+
+def _pin_key(pin: str) -> tuple[int, str]:
+    return (int(pin), pin) if pin.isdigit() else (1 << 30, pin)
 
 
 def nets_of(nl: Netlist, skip: frozenset[str]) -> dict[str, list[tuple[str, str]]]:

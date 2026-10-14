@@ -19,7 +19,8 @@ vendor file that differs from its pin only when given `--update-vendor`.
 and fails on a mismatch, a file the manifest does not list, a listed file that is missing,
 a derived (`extends`) symbol, or any difference between the vendored set and
 the referenced set: what the parts registry (docs/reference/parts/) names,
-plus the schematic writer's power flag. The project library tables point KiCad at these same
+the `[swaps.REF]` footprints of every git-tracked perfboard.toml, plus the
+schematic writer's power flag. The project library tables point KiCad at these same
 files, so a hand edit here would agree with everything generated from it;
 the manifest is what catches it.
 
@@ -41,9 +42,10 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import library, registry, symbols
+from . import library, paths, registry, symbols
 from .errors import KicadError
 from .paths import REPO_ROOT
+from .perfboard import config as perfboard_config
 
 TAG = "10.0.6"
 STOCK_REL = Path("tools/kicad/lib/kicad-stock")
@@ -96,15 +98,27 @@ def referenced(repo_root: Path = REPO_ROOT) -> Referenced:
     """The stock (non-project) library ids the carriers use.
 
     Every parts-registry entry's `symbol`, `footprint` and `[perfboard]
-    footprint`, plus WRITER_SYMBOLS.
+    footprint`, the `[swaps.REF] footprint`s of every git-tracked
+    perfboard.toml, plus WRITER_SYMBOLS.
     """
     specs = registry.load_all(repo_root)
     syms = {s.symbol for s in specs} | WRITER_SYMBOLS
     fps = {s.footprint for s in specs} | {s.perfboard.footprint for s in specs}
+    fps |= swap_footprints(repo_root)
     return Referenced(
         frozenset(i for i in syms if _stock(i)),
         frozenset(i for i in fps if _stock(i)),
     )
+
+
+def swap_footprints(repo_root: Path = REPO_ROOT) -> set[str]:
+    """The `[swaps.REF] footprint`s of every git-tracked perfboard.toml."""
+    found = set()
+    for project in paths.tracked_projects(repo_root, perfboard_config.MARKER):
+        path = perfboard_config.perfboard_dir(project) / perfboard_config.FILENAME
+        cfg = perfboard_config.load(path, Path(paths._display(path, repo_root)))
+        found |= {s.footprint for s in cfg.swaps.values() if s.footprint}
+    return found
 
 
 def _stock(lib_id: str) -> bool:
