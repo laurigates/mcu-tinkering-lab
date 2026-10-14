@@ -64,14 +64,19 @@ reverse-polarity protected; the side-header `V+` pins are not.
 Read from Adafruit's Eagle board file, not from a photo
 (`.claude/rules/board-layout-from-vendor-files.md`):
 [`adafruit/Adafruit-16-Channel-PWM-Servo-Driver-PCB`](https://github.com/adafruit/Adafruit-16-Channel-PWM-Servo-Driver-PCB),
-`Adafruit PCA9685 rev C.brd` at commit `3f2962d03ee324b70561d8659f56315ee437f437`,
+`Adafruit PCA9685 rev C.brd` at commit `32578c83a5ba2946249b80b1aa1fb18ae4e61e7d`,
 elements `JP3`/`JP4` (side headers), `J1` (terminal) and `JP1`, `JP2`, `JP5`,
 `JP6` (servo columns). The channel numbers are the silkscreen above each column;
 the board file's nets for the `PWM` row are generic (`N$9`), so read the printed
 `silk[top]` label beside each pad rather than the net.
 
+Adafruit publishes the design under
+[CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/) (`license.txt` at
+the pinned commit). The pin is the first commit carrying that file; its `.brd`
+blob is the one this page was first read from.
+
 ```sh
-gh api "repos/adafruit/Adafruit-16-Channel-PWM-Servo-Driver-PCB/contents/Adafruit%20PCA9685%20rev%20C.brd" --jq '.content' | base64 -d > /tmp/pca9685.brd
+gh api "repos/adafruit/Adafruit-16-Channel-PWM-Servo-Driver-PCB/contents/Adafruit%20PCA9685%20rev%20C.brd?ref=32578c83a5ba2946249b80b1aa1fb18ae4e61e7d" --jq '.content' | base64 -d > /tmp/pca9685.brd
 python3 tools/breakout-pinout.py /tmp/pca9685.brd --element JP1 --element JP2 --element JP3 --element JP4 --element JP5 --element JP6 --element J1
 ```
 
