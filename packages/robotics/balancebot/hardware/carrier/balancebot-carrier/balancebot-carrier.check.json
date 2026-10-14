@@ -1,0 +1,518 @@
+{
+ "board_sha256": "9aebe428f656112651982dfd1b1e7a95ca7a237010ee7a718936b78c24b1af91",
+ "kicad_cli_version": "10.0.6",
+ "netlist": {
+  "components": {
+   "A1": {
+    "footprint": "Module:Pololu_Breakout-16_15.2x20.3mm",
+    "in_bom": true,
+    "lcsc": "",
+    "lib_id": "Driver_Motor:Pololu_Breakout_DRV8825",
+    "value": "DRV8825 left"
+   },
+   "A2": {
+    "footprint": "Module:Pololu_Breakout-16_15.2x20.3mm",
+    "in_bom": true,
+    "lcsc": "",
+    "lib_id": "Driver_Motor:Pololu_Breakout_DRV8825",
+    "value": "DRV8825 right"
+   },
+   "C1": {
+    "footprint": "Capacitor_SMD:CP_Elec_6.3x7.7",
+    "in_bom": true,
+    "lcsc": "C2836437",
+    "lib_id": "Device:C_Polarized",
+    "value": "100uF 35V"
+   },
+   "C2": {
+    "footprint": "Capacitor_SMD:CP_Elec_6.3x7.7",
+    "in_bom": true,
+    "lcsc": "C2836437",
+    "lib_id": "Device:C_Polarized",
+    "value": "100uF 35V"
+   },
+   "C3": {
+    "footprint": "Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder",
+    "in_bom": true,
+    "lcsc": "C49678",
+    "lib_id": "Device:C",
+    "value": "100nF"
+   },
+   "D1": {
+    "footprint": "Diode_SMD:D_SOD-123",
+    "in_bom": true,
+    "lcsc": "C8598",
+    "lib_id": "Device:D_Schottky",
+    "value": "B5819W"
+   },
+   "H1": {
+    "footprint": "MountingHole:MountingHole_3.2mm_M3",
+    "in_bom": false,
+    "lcsc": "",
+    "lib_id": "Mechanical:MountingHole",
+    "value": "M3"
+   },
+   "H2": {
+    "footprint": "MountingHole:MountingHole_3.2mm_M3",
+    "in_bom": false,
+    "lcsc": "",
+    "lib_id": "Mechanical:MountingHole",
+    "value": "M3"
+   },
+   "H3": {
+    "footprint": "MountingHole:MountingHole_3.2mm_M3",
+    "in_bom": false,
+    "lcsc": "",
+    "lib_id": "Mechanical:MountingHole",
+    "value": "M3"
+   },
+   "H4": {
+    "footprint": "MountingHole:MountingHole_3.2mm_M3",
+    "in_bom": false,
+    "lcsc": "",
+    "lib_id": "Mechanical:MountingHole",
+    "value": "M3"
+   },
+   "J1": {
+    "footprint": "Connector_AMASS:AMASS_XT30PW-M_1x02_P2.50mm_Horizontal",
+    "in_bom": true,
+    "lcsc": "",
+    "lib_id": "Connector_Generic:Conn_01x02",
+    "value": "XT30 pack in"
+   },
+   "J2": {
+    "footprint": "Connector_JST:JST_XH_B4B-XH-A_1x04_P2.50mm_Vertical",
+    "in_bom": true,
+    "lcsc": "",
+    "lib_id": "Connector_Generic:Conn_01x04",
+    "value": "LM2596 module"
+   },
+   "J3": {
+    "footprint": "Connector_PinSocket_2.54mm:PinSocket_1x08_P2.54mm_Vertical",
+    "in_bom": true,
+    "lcsc": "",
+    "lib_id": "Connector_Generic:Conn_01x08",
+    "value": "GY-521 MPU6050"
+   },
+   "J4": {
+    "footprint": "Connector_JST:JST_XH_B4B-XH-A_1x04_P2.50mm_Vertical",
+    "in_bom": true,
+    "lcsc": "",
+    "lib_id": "Connector_Generic:Conn_01x04",
+    "value": "Motor left"
+   },
+   "J5": {
+    "footprint": "Connector_JST:JST_XH_B4B-XH-A_1x04_P2.50mm_Vertical",
+    "in_bom": true,
+    "lcsc": "",
+    "lib_id": "Connector_Generic:Conn_01x04",
+    "value": "Motor right"
+   },
+   "R1": {
+    "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
+    "in_bom": true,
+    "lcsc": "C17414",
+    "lib_id": "Device:R",
+    "value": "10k"
+   },
+   "R2": {
+    "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
+    "in_bom": true,
+    "lcsc": "C149504",
+    "lib_id": "Device:R",
+    "value": "100k"
+   },
+   "R3": {
+    "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
+    "in_bom": true,
+    "lcsc": "C17593",
+    "lib_id": "Device:R",
+    "value": "27k"
+   },
+   "U1": {
+    "footprint": "Seeed_XIAO:XIAO-RP2350-Socket",
+    "in_bom": true,
+    "lcsc": "",
+    "lib_id": "Seeed_XIAO:XIAO-RP2350-Socket",
+    "value": "XIAO RP2350"
+   }
+  },
+  "nets": {
+   "+3V3": [
+    [
+     "A1",
+     "10"
+    ],
+    [
+     "A1",
+     "11"
+    ],
+    [
+     "A1",
+     "13"
+    ],
+    [
+     "A1",
+     "14"
+    ],
+    [
+     "A2",
+     "10"
+    ],
+    [
+     "A2",
+     "11"
+    ],
+    [
+     "A2",
+     "13"
+    ],
+    [
+     "A2",
+     "14"
+    ],
+    [
+     "J3",
+     "1"
+    ],
+    [
+     "R1",
+     "1"
+    ],
+    [
+     "U1",
+     "12"
+    ]
+   ],
+   "BUCK_5V": [
+    [
+     "D1",
+     "2"
+    ],
+    [
+     "J2",
+     "3"
+    ]
+   ],
+   "DIR_L": [
+    [
+     "A1",
+     "16"
+    ],
+    [
+     "U1",
+     "10"
+    ]
+   ],
+   "DIR_R": [
+    [
+     "A2",
+     "16"
+    ],
+    [
+     "U1",
+     "7"
+    ]
+   ],
+   "GND": [
+    [
+     "A1",
+     "1"
+    ],
+    [
+     "A1",
+     "12"
+    ],
+    [
+     "A1",
+     "7"
+    ],
+    [
+     "A2",
+     "1"
+    ],
+    [
+     "A2",
+     "12"
+    ],
+    [
+     "A2",
+     "7"
+    ],
+    [
+     "C1",
+     "2"
+    ],
+    [
+     "C2",
+     "2"
+    ],
+    [
+     "C3",
+     "2"
+    ],
+    [
+     "J1",
+     "1"
+    ],
+    [
+     "J2",
+     "2"
+    ],
+    [
+     "J2",
+     "4"
+    ],
+    [
+     "J3",
+     "2"
+    ],
+    [
+     "J3",
+     "7"
+    ],
+    [
+     "R3",
+     "2"
+    ],
+    [
+     "U1",
+     "13"
+    ]
+   ],
+   "IMU_INT": [
+    [
+     "J3",
+     "8"
+    ],
+    [
+     "U1",
+     "4"
+    ]
+   ],
+   "IMU_SCL": [
+    [
+     "J3",
+     "3"
+    ],
+    [
+     "U1",
+     "6"
+    ]
+   ],
+   "IMU_SDA": [
+    [
+     "J3",
+     "4"
+    ],
+    [
+     "U1",
+     "5"
+    ]
+   ],
+   "MOTL_A1": [
+    [
+     "A1",
+     "4"
+    ],
+    [
+     "J4",
+     "1"
+    ]
+   ],
+   "MOTL_A2": [
+    [
+     "A1",
+     "3"
+    ],
+    [
+     "J4",
+     "2"
+    ]
+   ],
+   "MOTL_B1": [
+    [
+     "A1",
+     "5"
+    ],
+    [
+     "J4",
+     "3"
+    ]
+   ],
+   "MOTL_B2": [
+    [
+     "A1",
+     "6"
+    ],
+    [
+     "J4",
+     "4"
+    ]
+   ],
+   "MOTR_A1": [
+    [
+     "A2",
+     "4"
+    ],
+    [
+     "J5",
+     "1"
+    ]
+   ],
+   "MOTR_A2": [
+    [
+     "A2",
+     "3"
+    ],
+    [
+     "J5",
+     "2"
+    ]
+   ],
+   "MOTR_B1": [
+    [
+     "A2",
+     "5"
+    ],
+    [
+     "J5",
+     "3"
+    ]
+   ],
+   "MOTR_B2": [
+    [
+     "A2",
+     "6"
+    ],
+    [
+     "J5",
+     "4"
+    ]
+   ],
+   "NENABLE": [
+    [
+     "A1",
+     "9"
+    ],
+    [
+     "A2",
+     "9"
+    ],
+    [
+     "R1",
+     "2"
+    ],
+    [
+     "U1",
+     "8"
+    ]
+   ],
+   "PACK_SENSE": [
+    [
+     "C3",
+     "1"
+    ],
+    [
+     "R2",
+     "2"
+    ],
+    [
+     "R3",
+     "1"
+    ],
+    [
+     "U1",
+     "1"
+    ]
+   ],
+   "STEP_L": [
+    [
+     "A1",
+     "15"
+    ],
+    [
+     "U1",
+     "9"
+    ]
+   ],
+   "STEP_R": [
+    [
+     "A2",
+     "15"
+    ],
+    [
+     "U1",
+     "11"
+    ]
+   ],
+   "VBAT": [
+    [
+     "A1",
+     "8"
+    ],
+    [
+     "A2",
+     "8"
+    ],
+    [
+     "C1",
+     "1"
+    ],
+    [
+     "C2",
+     "1"
+    ],
+    [
+     "J1",
+     "2"
+    ],
+    [
+     "J2",
+     "1"
+    ],
+    [
+     "R2",
+     "1"
+    ]
+   ],
+   "XIAO_5V": [
+    [
+     "D1",
+     "1"
+    ],
+    [
+     "U1",
+     "14"
+    ]
+   ]
+  },
+  "unconnected": {
+   "unconnected-(A1-~{FLT}-Pad2)": [
+    "A1",
+    "2"
+   ],
+   "unconnected-(A2-~{FLT}-Pad2)": [
+    "A2",
+    "2"
+   ],
+   "unconnected-(J3-Pin_5-Pad5)": [
+    "J3",
+    "5"
+   ],
+   "unconnected-(J3-Pin_6-Pad6)": [
+    "J3",
+    "6"
+   ],
+   "unconnected-(U1-D1-Pad2)": [
+    "U1",
+    "2"
+   ],
+   "unconnected-(U1-D2-Pad3)": [
+    "U1",
+    "3"
+   ]
+  }
+ },
+ "schematic_sha256": "9a79c6e3e3c4f4c2f59677a7bc27e9757603b9730f31bf5b84d290024aed0181"
+}

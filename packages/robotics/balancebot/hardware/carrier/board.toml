@@ -1,9 +1,92 @@
 # Carrier PCB layout for tools/kicad: everything the netlist does not say.
 # Parts, footprints and nets come from ../../hardware.toml and the parts
-# registry (docs/reference/parts/). For now this file only names the KiCad
-# project; placement, net classes and silkscreen follow with the board tooling
-# (issue #750).
+# registry (docs/reference/parts/); this file says where each part sits, how
+# wide each net's tracks are, and what goes on the silkscreen.
+#
+# `python3 -m kicad.boardcheck` validates every table against the netlist. The
+# board scripts in scripts/ still carry their own copy of these numbers until
+# they move to tools/kicad/pcb/ and read this file (issue #750).
 
 [project]
 name = "balancebot-carrier"          # the KiCad project directory and file stem here
 paper = "A3"
+
+# Board outline: a rectangle, origin at its top-left corner. Robot forward is -y.
+[outline]
+origin = [100.0, 100.0]
+size = [90.0, 62.0]
+
+# ref = [x_mm, y_mm, rotation_deg], relative to the origin. Footprint anchors are
+# the library's own (pad 1 for the Pololu and JST parts, centre for the XIAO and
+# the SMD passives).
+[placement]
+U1 = [45.0, 14.0, 90]    # XIAO, USB-C toward the top edge
+A1 = [14.0, 21.0, 0]     # left DRV8825, motor column toward the left edge
+A2 = [76.0, 38.78, 180]  # right DRV8825, motor column toward the right edge
+J4 = [5.0, 24.0, 270]    # left motor
+J5 = [85.0, 36.0, 90]    # right motor
+J3 = [36.11, 33.0, 90]   # GY-521 socket; the module lies flat over the centre
+# XT30 mating face is the body end away from the pins; 180 deg puts it at the
+# bottom edge with the pins 13.6 mm inboard.
+J1 = [22.0, 48.1, 180]
+J2 = [60.0, 56.0, 0]     # LM2596 module
+D1 = [71.0, 50.0, 0]     # B5819W, buck -> XIAO 5V
+C1 = [9.75, 44.0, 0]     # VMOT bulk, left driver
+C2 = [77.75, 14.0, 0]    # VMOT bulk, right driver
+R1 = [31.5, 31.0, 90]    # nENABLE pull-up, beside A1's EN pin
+R2 = [62.0, 4.0, 0]      # pack divider top
+R3 = [62.0, 9.0, 0]      # pack divider bottom
+C3 = [61.5, 14.5, 0]     # pack divider filter
+H1 = [4.0, 4.0, 0]
+H2 = [86.0, 4.0, 0]
+H3 = [4.0, 58.0, 0]
+H4 = [86.0, 58.0, 0]
+
+[silk]
+# Reference designators that sit on the board edge and carry no assembly
+# information (the holes are self-evident; J1 is labelled by its own +/-).
+hidden_refs = ["H1", "H2", "H3", "H4", "J1"]
+# Moved off the library default where it lands on a neighbour's silkscreen.
+ref_positions = { J3 = [57.0, 33.0] }
+# Seeed's reference text is below KiCad's minimum silkscreen height.
+ref_sizes = { U1 = 1.0 }
+# Where the GY-521 lies flat on its socket (21 x 16 mm), so nothing tall goes under it.
+rects = [[34.5, 31.5, 55.5, 48.5]]
+texts = [
+    { text = "balancebot carrier", at = [45.0, 52.0], size = 1.0 },
+    { text = "FWD ^", at = [45.0, 28.0], size = 1.2 },
+    { text = "GY-521: X arrow to FWD", at = [45.0, 45.0], size = 1.0 },
+]
+
+# Freerouting width classes, in this order. `nets` are net names or fnmatch
+# patterns over them; every pattern must match, and no net may be in two classes.
+[[net_classes]]
+name = "power"
+nets = ["VBAT", "GND", "MOT?_*"]
+track_um = 1000
+clearance_um = 300
+via_um = [1000, 500]
+
+[[net_classes]]
+name = "logic_power"
+nets = ["+3V3", "BUCK_5V", "XIAO_5V"]
+track_um = 500
+clearance_um = 250
+via_um = [800, 400]
+
+# Every net not in a class above. Its via must be the .kicad_pro Default class's.
+[signal]
+track_um = 300
+clearance_um = 250
+via_um = [600, 300]
+
+# A copper pour on both layers after routing. The .kicad_dru lets a thermal
+# resolve to one spoke because route_board first checks every pad of this net
+# has a routed track.
+[pour]
+net = "GND"
+layers = ["F.Cu", "B.Cu"]
+clearance_mm = 0.4
+min_thickness_mm = 0.25
+thermal_gap_mm = 0.3
+spoke_mm = 0.35

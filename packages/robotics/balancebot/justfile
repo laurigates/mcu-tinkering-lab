@@ -135,13 +135,16 @@ carrier-board:
     {{kicad_python}} {{carrier_dir}}/scripts/build_board.py
     {{kicad_python}} {{carrier_dir}}/scripts/route_board.py
 
-# ERC, DRC with schematic parity, and the pin_config.h cross-check
+# Write the carrier schematic and library tables from hardware.toml
+[group: "carrier"]
+carrier-schematic:
+    cd ../../.. && PYTHONPATH=tools python3 -m kicad.schematic {{project_dir}}
+
+# ERC, DRC with schematic parity, netlist parity with hardware.toml, board nets,
+# library drift; writes the check stamp CI verifies
 [group: "carrier"]
 carrier-check:
-    mkdir -p {{carrier_out}}
-    kicad-cli sch erc --severity-all --exit-code-violations -o {{carrier_out}}/erc.rpt {{carrier_sch}}
-    kicad-cli pcb drc --severity-all --schematic-parity --exit-code-violations -o {{carrier_out}}/drc.rpt {{carrier_pcb}}
-    python3 {{carrier_dir}}/scripts/check_pins.py
+    cd ../../.. && PYTHONPATH=tools python3 -m kicad.check {{project_dir}}
 
 # Gerbers and drill files for JLCPCB, zipped, plus the BOM and CPL for its
 # assembly service (SMD passives only; skip them to hand-solder)

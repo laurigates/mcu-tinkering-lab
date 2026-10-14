@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import os
 import re
 import shutil
 import subprocess
@@ -261,6 +262,9 @@ def check(repo_root: Path = REPO_ROOT, want: Referenced | None = None) -> list[s
 
 
 def kicad_cli() -> str | None:
+    """$KICAD_CLI if set, else `kicad-cli` on the PATH, else the macOS bundle's."""
+    if os.environ.get("KICAD_CLI"):
+        return shutil.which(os.environ["KICAD_CLI"]) or os.environ["KICAD_CLI"]
     found = shutil.which("kicad-cli")
     mac = library.MAC_ROOT.parent / "MacOS" / "kicad-cli"
     return found or (str(mac) if mac.is_file() else None)

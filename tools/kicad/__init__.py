@@ -22,6 +22,16 @@ Modules, one responsibility each:
                 registry; KiCad's no-connect net names
 - `parity`      CLI (local, kicad-cli): the committed schematic's netlist
                 against the join's
+- `schematic`   CLI: the carrier `.kicad_sch` and library tables, written from
+                the netlist; `--check` fails when they are stale
+- `libtables`   the project sym-lib-table / fp-lib-table, every nickname
+                pointed at the vendored copy
+- `boardcheck`  CLI: the committed `.kicad_pcb` footprints and pad nets against
+                the join, and board.toml against the netlist; `--relink`
+- `stamp`       CLI: the check stamp; `--write` locally after every gate,
+                verified KiCad-free in CI
+- `check`       CLI (local, kicad-cli): every local carrier gate in order,
+                ending in `stamp --write`
 - `vendor`      CLI: pin, compare and rebuild the vendored library subtrees
 - `derive_xiao` CLI: the socket XIAO parts derived from Seeed's DIP ones
 
