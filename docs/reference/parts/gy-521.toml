@@ -1,7 +1,7 @@
 # GY-521 MPU6050 breakout in a 1x8 female header, lying flat over the board.
 [part]
 name = "GY-521 MPU6050 breakout"
-source = "pin order from memory, not a vendor file: read it off the module before ordering (#748)"
+source = "the fitted module's silkscreen, read 2026-10-14 (#748); no vendor file"
 symbol = "Connector_Generic:Conn_01x08"
 footprint = "Connector_PinSocket_2.54mm:PinSocket_1x08_P2.54mm_Vertical"
 no_connect = ["XDA", "XCL"]
