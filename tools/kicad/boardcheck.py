@@ -193,7 +193,7 @@ def relink(board_text: str, ns: uuid.UUID) -> tuple[str, int]:
     return "".join(out), changed
 
 
-# board.toml (spec §6). Validated here, against the netlist, so CI rejects a bad
+# board.toml (ADR-027). Validated here, against the netlist, so CI rejects a bad
 # layout file without KiCad; the board scripts read the same tables.
 TABLE_KEYS = {
     "outline": {"origin", "size"},

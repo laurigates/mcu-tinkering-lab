@@ -36,7 +36,11 @@ changes a carrier's schematic or board, and commit the stamp it writes. The
 unit tests use synthetic boards and stamps and never read the committed board
 or stamp, so the `kicad-carrier` pre-commit hook (which `auto-fix.yml` can act
 on) never asks for a board edit; `carrier-check.yml` checks those, and only a
-local KiCad run can fix them. See the `carrier-pcb` skill and ADR-027.
+local KiCad run can fix them. Tests checked against #749's netlist export
+build from a frozen copy of the balancebot inputs (`tools/kicad/testfixture.py`),
+not the live project, so a legitimate pin move needs only
+`just <project>::carrier-schematic` for the hook to pass. See the `carrier-pcb`
+skill and ADR-027.
 
 ## C/C++ Firmware
 

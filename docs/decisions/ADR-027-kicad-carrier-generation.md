@@ -145,6 +145,11 @@ no KiCad.
 - `boardcheck` and the stamp stay out of pre-commit. `test.yml` runs
   pre-commit and `auto-fix.yml` acts on its failures, and a fixer without
   KiCad could only green those two by hand-editing the board or the stamp.
+  For the same reason the unit tests in the `kicad-carrier` hook never compare
+  a live carrier with #749's netlist export: they build from a frozen copy of
+  the balancebot inputs (`tools/kicad/testfixture.py`). After a legitimate pin
+  move, `just <project>::carrier-schematic` turns the hook green; CI's stamp
+  step stays red until `carrier-check` has run locally.
 
 ## Related
 

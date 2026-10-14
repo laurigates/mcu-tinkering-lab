@@ -1,10 +1,11 @@
-"""Tests for the carrier netlist built from the hardware join (spec §3.2, §5).
+"""Tests for the carrier netlist built from the hardware join (ADR-027).
 
-The balancebot netlist must equal `testdata/balancebot-carrier.net.json`,
-which is `parity.normalise` of KiCad's own netlist export of the #749
-schematic (`testdata/balancebot-carrier.xml`). Mutations run on a temp copy of
-the project, its board page and the parts registry; the committed files are
-only read.
+The netlist built from the frozen balancebot inputs (`kicad.testfixture`) must
+equal `testdata/balancebot-carrier.net.json`, which is `parity.normalise` of
+KiCad's own netlist export of the #749 schematic
+(`testdata/balancebot-carrier.xml`). The live project is not read here: its
+drift is `kicad.schematic --check`'s and the check stamp's job. Mutations run
+on a temp copy of the frozen inputs.
 
     python3 -m unittest discover -s tools/kicad -t tools
 """
@@ -14,18 +15,15 @@ from __future__ import annotations
 import contextlib
 import io
 import json
-import shutil
 import tempfile
 import unittest
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-from kicad import netlist
+from kicad import netlist, testfixture
 from kicad.errors import KicadError
-from kicad.paths import REPO_ROOT
 
-PROJECT_REL = Path("packages/robotics/balancebot")
-PROJECT = REPO_ROOT / PROJECT_REL
+ROOT, PROJECT = testfixture.shared()
 TESTDATA = Path(__file__).resolve().parent / "testdata"
 FIXTURE = TESTDATA / "balancebot-carrier.net.json"
 EXPORT = TESTDATA / "balancebot-carrier.xml"
@@ -38,7 +36,7 @@ def fixture() -> dict:
 class BalancebotTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.nl = netlist.build(PROJECT)
+        cls.nl = netlist.build(PROJECT, ROOT)
 
     def test_equals_the_749_export(self):
         self.assertEqual(netlist.as_dict(self.nl), fixture())
@@ -77,7 +75,7 @@ class BalancebotTests(unittest.TestCase):
     def test_cli(self):
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
-            self.assertEqual(netlist.main([str(PROJECT)]), 0)
+            self.assertEqual(netlist.main([str(PROJECT)], ROOT), 0)
         self.assertIn("19 components, 22 nets, 6 no-connects", out.getvalue())
         self.assertIn("unconnected-(A1-~{FLT}-Pad2): A1.2", out.getvalue())
 
@@ -90,7 +88,7 @@ class NamingTests(unittest.TestCase):
             for n in root.find("nets")
             if n.get("name").startswith("unconnected-")
         )
-        nl = netlist.build(PROJECT)
+        nl = netlist.build(PROJECT, ROOT)
         self.assertEqual(sorted(netlist.unconnected(nl)), kicad)
         self.assertEqual(
             netlist.nc_net_name("A1", "~{FLT}", "2"), "unconnected-(A1-~{FLT}-Pad2)"
@@ -110,19 +108,13 @@ class NamingTests(unittest.TestCase):
 
 
 class MutationTests(unittest.TestCase):
-    """A temp copy of the repo pieces the join reads; each edit must change or fail the build."""
+    """A temp copy of the frozen inputs; each edit must change or fail the build."""
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
-        shutil.copytree(PROJECT / "src", self.root / PROJECT_REL / "src")
-        shutil.copy2(
-            PROJECT / "hardware.toml", self.root / PROJECT_REL / "hardware.toml"
-        )
-        for rel in ("docs/reference/boards", "docs/reference/parts"):
-            shutil.copytree(REPO_ROOT / rel, self.root / rel)
-        self.project = self.root / PROJECT_REL
+        self.project = testfixture.materialise(self.root)
         self.toml = self.project / "hardware.toml"
         self.header = self.project / "src/pin_config.h"
 

@@ -19,7 +19,7 @@ to `[]`).
 The schematic is not hand-editable: a GUI edit is exactly what `--check`
 reports. Layout is deterministic, not pretty; the readable drawing of the
 circuit is the docs schematic (ADR-023). Every UUID is uuid5 under a namespace
-keyed by the project's carrier directory (spec §4.6), so a change to one part's
+keyed by the project's carrier directory, so a change to one part's
 pins changes only that part's lines.
 """
 
@@ -333,7 +333,7 @@ def render(
     paper: str = "A3",
     vendored: Path = library.VENDORED,
 ) -> str:
-    """The `.kicad_sch` text of `nl`; `key` is the uuid namespace key (§4.6)."""
+    """The `.kicad_sch` text of `nl`; `key` is the uuid namespace key (`project_key`)."""
     return _render(nl, project_name, key, paper, vendored)[0]
 
 

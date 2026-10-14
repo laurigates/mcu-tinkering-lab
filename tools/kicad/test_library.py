@@ -1,4 +1,4 @@
-"""Tests for the library resolver (spec §3.4).
+"""Tests for the library resolver (kicad.library).
 
 Hermetic: the installed-KiCad steps run against temp trees passed in as
 `search_roots`, `env` and `bases`, so the suite behaves the same on a Mac with

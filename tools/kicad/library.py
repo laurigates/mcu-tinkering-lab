@@ -1,6 +1,6 @@
 """Where a symbol library or a footprint file comes from.
 
-Lookup order (spec §3.4):
+Lookup order:
 
 1. The vendored copy in `tools/kicad/lib/`: a project library named in
    NICKNAME_DIRS, else the KiCad 10.0.6 subset in `kicad-stock/`.

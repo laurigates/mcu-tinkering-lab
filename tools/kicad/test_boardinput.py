@@ -1,7 +1,8 @@
-"""Tests for the board input the pcbnew scripts read (spec §6).
+"""Tests for the board input the pcbnew scripts read (ADR-027).
 
-Built from the real balancebot netlist and board.toml; board.toml mutations
-run on a deep copy of its parsed data, so nothing is written. KiCad's own
+Built from the frozen balancebot inputs (`kicad.testfixture`: hardware.toml,
+pin_config.h and board.toml as they were for #749), not the live project;
+board.toml mutations run on a deep copy of its parsed data. KiCad's own
 netlist export of the #749 schematic (`testdata/balancebot-carrier.xml`) is
 the oracle for the net names, the `unconnected-(...)` ones included.
 
@@ -18,11 +19,18 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from unittest import mock
 
-from kicad import boardcheck, boardinput, library, netlist, paths, schematic
+from kicad import (
+    boardcheck,
+    boardinput,
+    library,
+    netlist,
+    paths,
+    schematic,
+    testfixture,
+)
 from kicad.errors import KicadError
-from kicad.paths import REPO_ROOT
 
-PROJECT = REPO_ROOT / "packages/robotics/balancebot"
+ROOT, PROJECT = testfixture.shared()
 EXPORT = Path(__file__).resolve().parent / "testdata/balancebot-carrier.xml"
 KEYS = {
     "pcb",
@@ -43,10 +51,10 @@ class BalancebotTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.cfg = paths.load_board_config(PROJECT)
-        cls.nl = netlist.build(PROJECT)
-        cls.ns = schematic.namespace(schematic.project_key(PROJECT))
+        cls.nl = netlist.build(PROJECT, ROOT)
+        cls.ns = schematic.namespace(schematic.project_key(PROJECT, ROOT))
         cls.kicad_dir = paths.carrier_dir(PROJECT) / cls.cfg.name
-        cls.spec = boardinput.build(PROJECT)
+        cls.spec = boardinput.build(PROJECT, ROOT)
         cls.export = [n.get("name") for n in ET.parse(EXPORT).getroot().iter("net")]
 
     def assemble(self, data):

@@ -5,12 +5,34 @@
 
 The fixture `testdata/balancebot-carrier.dsn` is `pcbnew.ExportSpecctraDSN` of
 the unrouted balancebot board that `kicad.boardinput` + `pcb/build_board.py`
-place (line 1, which carries the output path, normalised). The golden
-`balancebot-carrier.rewritten.dsn` is what `rewrite_dsn` in the balancebot
-`route_board.py` wrote from it before the script moved to tools/kicad, with
-its hard-coded classes. Here the classes come from board.toml through
-`kicad.boardinput`, so the test also pins that board.toml says what the
-script's constants said.
+place, which is what `pcb/route_board.py` exports before it rewrites the
+classes; line 1, which carries the output path, is normalised to
+`(pcb carrier.dsn`. The golden `balancebot-carrier.rewritten.dsn` is what
+`rewrite_dsn` in the balancebot `route_board.py` (as of fb24b28, before the
+script moved to tools/kicad, with its hard-coded classes) writes from that
+fixture. Here the classes come from the frozen board.toml
+(`kicad.testfixture`) through `kicad.boardinput`, so the test also pins that
+board.toml says what the script's constants said.
+
+The component and pad order of the export follows the board's footprint
+order, which KiCad sets from each footprint's UUID; build_board.py creates
+them fresh, so every placement run orders the same content differently.
+
+To refresh both files, in a scratch clone whose balancebot inputs equal
+`testdata/balancebot-749/` (`.frozen` suffixes dropped), with $KICAD_PYTHON
+being KiCad's bundled python3 and `pcb` the scratch board path:
+
+    PYTHONPATH=tools python3 -m kicad.boardinput packages/robotics/balancebot
+    $KICAD_PYTHON tools/kicad/pcb/build_board.py packages/robotics/balancebot/hardware/carrier/output/board-input.json
+    $KICAD_PYTHON -c 'import pcbnew, sys; sys.exit(not pcbnew.ExportSpecctraDSN(pcbnew.LoadBoard(sys.argv[1]), sys.argv[2]))' "$pcb" raw.dsn
+
+then replace line 1 of raw.dsn with `(pcb carrier.dsn` to get the fixture,
+and run `rewrite_dsn` from
+`git show fb24b28:packages/robotics/balancebot/hardware/carrier/scripts/route_board.py`
+(the constants and the two functions above `gnd_zone`; the module imports
+pcbnew, so lift them out) on the fixture to get the golden. Check that the
+lifted function still reproduces the previous golden from the previous
+fixture before replacing either.
 
     python3 -m unittest discover -s tools/kicad -t tools
 """
@@ -22,12 +44,11 @@ import importlib.util
 import unittest
 from pathlib import Path
 
-from kicad import boardinput
-from kicad.paths import REPO_ROOT
+from kicad import boardinput, testfixture
 
 HERE = Path(__file__).resolve().parent
 TESTDATA = HERE / "testdata"
-PROJECT = REPO_ROOT / "packages/robotics/balancebot"
+ROOT, PROJECT = testfixture.shared()
 
 
 def load_dsn():
@@ -43,7 +64,7 @@ dsn = load_dsn()
 class RewriteTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        spec = boardinput.build(PROJECT)
+        spec = boardinput.build(PROJECT, ROOT)
         cls.classes = spec["classes"]
         cls.signal = spec["signal"]
         cls.fixture = (TESTDATA / "balancebot-carrier.dsn").read_text()

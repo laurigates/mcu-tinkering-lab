@@ -3,7 +3,7 @@
 Every library nickname the project uses gets an entry, the stock KiCad ones
 included, each a `${KIPRJMOD}`-relative path to the vendored copy in
 `tools/kicad/lib/`. A project-table entry wins over KiCad's global table of
-the same nickname (spec §3.3), so local ERC and DRC read the same bytes
+the same nickname (ADR-027), so local ERC and DRC read the same bytes
 MANIFEST.tsv pins and CI checks, and an update of the installed KiCad library
 cannot turn `carrier-check` red. The cost: inside these projects the GUI's
 chooser lists only the vendored subset for those nicknames.

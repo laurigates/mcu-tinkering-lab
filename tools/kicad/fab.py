@@ -150,7 +150,13 @@ def fab(project: Path, cli: str) -> Path:
             str(pcb),
         ]
     )
-    jlc.write(asm / "bom.csv", asm / "pos.csv", asm)
+    try:
+        jlc.write(asm / "bom.csv", asm / "pos.csv", asm)
+    except KeyError as e:
+        raise KicadError(
+            f"{asm}: column {e} missing from bom.csv or pos.csv "
+            "(kicad-cli's export columns changed?)"
+        ) from None
     return out
 
 

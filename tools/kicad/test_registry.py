@@ -1,4 +1,4 @@
-"""Tests for the parts registry, docs/reference/parts/ (spec §2).
+"""Tests for the parts registry, docs/reference/parts/ (format: its README.md).
 
 Every committed entry must validate against the vendored library. Each
 mutation runs on a temp copy of one entry and must fail naming its cause; the

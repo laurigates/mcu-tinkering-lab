@@ -1,10 +1,16 @@
-"""Tests for the schematic writer (spec §4, §11.1).
+"""Tests for the schematic writer (ADR-027).
 
 The geometry checks parse the written text back: every wire runs 2.54 mm from a
 pin point to its label, and no point of the sheet joins two nets. They share
 the writer's pin transform, so a sign error there would pass them; the check
 stamp (`kicad.stamp`) is what catches that, because KiCad itself must read the
 committed schematic and produce the join's netlist.
+
+The writer is exercised on the frozen balancebot inputs (`kicad.testfixture`).
+The live project is read only by `LiveProjectTests`, whose checks hold after
+any balancebot edit once `just balancebot::carrier-schematic` has run: the
+committed files equal the writer's output (as `kicad.schematic --check`), and
+no point of its sheet joins two nets.
 
     python3 -m unittest discover -s tools/kicad -t tools
 """
@@ -16,43 +22,19 @@ import dataclasses
 import io
 import json
 import re
-import shutil
 import tempfile
 import unittest
 import uuid
 from pathlib import Path
 
-from kicad import netlist, paths, schematic, sexpr, symbols
+from kicad import netlist, paths, schematic, sexpr, symbols, testfixture
 from kicad.errors import KicadError
 from kicad.paths import REPO_ROOT
 
-PROJECT_REL = Path("packages/robotics/balancebot")
-PROJECT = REPO_ROOT / PROJECT_REL
+ROOT, PROJECT = testfixture.shared()
+LIVE = REPO_ROOT / testfixture.PROJECT_REL
 KEY = "packages/robotics/balancebot/hardware/carrier"
-COMMITTED = PROJECT / "hardware/carrier/balancebot-carrier/balancebot-carrier.kicad_sch"
 _XY = r"(-?[\d.]+) (-?[\d.]+)"
-
-
-def copy_repo(root: Path) -> Path:
-    """The repo pieces `kicad.schematic` reads, under `root`; returns the project.
-
-    The vendored library is a symlink, so the generated library-table paths
-    have the committed depth.
-    """
-    project = root / PROJECT_REL
-    shutil.copytree(PROJECT / "src", project / "src")
-    shutil.copy2(PROJECT / "hardware.toml", project / "hardware.toml")
-    carrier = paths.carrier_dir(PROJECT)
-    shutil.copytree(
-        carrier,
-        paths.carrier_dir(project),
-        ignore=shutil.ignore_patterns("output", "scripts", "*.kicad_prl"),
-    )
-    for rel in ("docs/reference/boards", "docs/reference/parts"):
-        shutil.copytree(REPO_ROOT / rel, root / rel)
-    (root / "tools/kicad").mkdir(parents=True)
-    (root / "tools/kicad/lib").symlink_to(REPO_ROOT / "tools/kicad/lib")
-    return project
 
 
 def parse(text: str) -> dict:
@@ -85,20 +67,23 @@ def parse(text: str) -> dict:
     return {"wires": wires, "labels": labels, "ncs": ncs, "symbols": syms}
 
 
-class BalancebotTests(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.nl = netlist.build(PROJECT)
-        cls.text = schematic.render(cls.nl, "balancebot-carrier", KEY)
-        cls.sheet = parse(cls.text)
+def joined_points(sheet: dict) -> dict:
+    """Points of the sheet where two different nets (or a no-connect) meet."""
+    net_at: dict[tuple[float, float], set[str]] = {}
+    label_net = {at: name for name, at, _ in sheet["labels"]}
+    for a, b in sheet["wires"]:
+        for point in (a, b):
+            net_at.setdefault(point, set()).add(label_net[b])
+    for i, point in enumerate(sheet["ncs"]):
+        net_at.setdefault(point, set()).add(f"no-connect {i}")
+    return {p: n for p, n in net_at.items() if len(n) > 1}
 
-    def test_deterministic(self):
-        self.assertEqual(
-            schematic.render(self.nl, "balancebot-carrier", KEY), self.text
-        )
+
+class LiveProjectTests(unittest.TestCase):
+    """Invariants of the live balancebot carrier that a regenerated schematic keeps."""
 
     def test_committed_schematic_is_current(self):
-        files = schematic.outputs(PROJECT)
+        files = schematic.outputs(LIVE)
         for path, text in files.items():
             with self.subTest(path=path.name):
                 self.assertEqual(
@@ -106,6 +91,26 @@ class BalancebotTests(unittest.TestCase):
                     text,
                     "run `just balancebot::carrier-schematic`",
                 )
+
+    def test_no_point_joins_two_nets(self):
+        cfg = paths.load_board_config(LIVE)
+        text = schematic.render(
+            netlist.build(LIVE), cfg.name, schematic.project_key(LIVE), cfg.paper
+        )
+        self.assertEqual(joined_points(parse(text)), {})
+
+
+class BalancebotTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.nl = netlist.build(PROJECT, ROOT)
+        cls.text = schematic.render(cls.nl, "balancebot-carrier", KEY)
+        cls.sheet = parse(cls.text)
+
+    def test_deterministic(self):
+        self.assertEqual(
+            schematic.render(self.nl, "balancebot-carrier", KEY), self.text
+        )
 
     def test_counts(self):
         syms = self.sheet["symbols"]
@@ -138,15 +143,7 @@ class BalancebotTests(unittest.TestCase):
             self.assertIn(nc, pin_points)
 
     def test_no_point_joins_two_nets(self):
-        net_at: dict[tuple[float, float], set[str]] = {}
-        label_net = {at: name for name, at, _ in self.sheet["labels"]}
-        for a, b in self.sheet["wires"]:
-            for point in (a, b):
-                net_at.setdefault(point, set()).add(label_net[b])
-        for i, point in enumerate(self.sheet["ncs"]):
-            net_at.setdefault(point, set()).add(f"no-connect {i}")
-        joined = {p: n for p, n in net_at.items() if len(n) > 1}
-        self.assertEqual(joined, {})
+        self.assertEqual(joined_points(self.sheet), {})
 
     def test_labels_name_the_netlist_nets(self):
         names = {name for name, _, _ in self.sheet["labels"]}
@@ -160,7 +157,8 @@ class BalancebotTests(unittest.TestCase):
         self.assertEqual(
             str(uuid.uuid5(ns, "sym/U1")), "5c733e52-0b61-5793-9755-4792b125be5a"
         )
-        self.assertEqual(schematic.project_key(PROJECT), KEY)
+        self.assertEqual(schematic.project_key(LIVE), KEY)
+        self.assertEqual(schematic.project_key(PROJECT, ROOT), KEY)
 
     def test_instance_flags_follow_the_library(self):
         h1 = next(s for s in self.sheet["symbols"] if s[0] == "H1")[3]
@@ -229,14 +227,16 @@ class BalancebotTests(unittest.TestCase):
 
 
 class CliTests(unittest.TestCase):
-    """`--check` on a temp copy of the repo pieces it reads."""
+    """`--check` on a temp copy of the frozen inputs, written once by the writer."""
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
-        self.project = copy_repo(self.root)
+        self.project = testfixture.materialise(self.root)
         self.kicad_dir = paths.carrier_dir(self.project) / "balancebot-carrier"
+        code, out = self.run_main()
+        self.assertEqual(code, 0, out)
 
     def run_main(self, *argv: str) -> tuple[int, str]:
         out = io.StringIO()

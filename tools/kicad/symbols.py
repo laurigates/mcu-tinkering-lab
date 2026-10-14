@@ -7,8 +7,8 @@ graphics and pins: unit 0 is shared by every unit, style 1 is the normal body
 and style 2 the De Morgan alternate.
 
 The schematic writer places `(unit 1)(body_style 1)` only, so `pins()` and
-`extent()` read units 0-1 and styles 0-1 and nothing else (spec §2.1,
-"Supported symbols only"); the registry rejects a symbol that has more.
+`extent()` read units 0-1 and styles 0-1 and nothing else; the registry
+rejects a symbol that has more.
 """
 
 from __future__ import annotations
@@ -216,7 +216,7 @@ def flags(block: str) -> dict[str, bool]:
 
 
 def embed(block: str, lib_id: str) -> str:
-    """A library block as a schematic `lib_symbols` entry (spec §4.2).
+    """A library block as a schematic `lib_symbols` entry.
 
     One more tab on every line, the top block renamed to `"Lib:Name"` (sub-unit
     names stay), blank lines dropped. Byte-identical to KiCad's own embedding.

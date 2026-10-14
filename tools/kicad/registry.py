@@ -1,4 +1,4 @@
-"""The parts registry: `docs/reference/parts/<slug>.toml` (spec §2).
+"""The parts registry: `docs/reference/parts/<slug>.toml` (format: its README.md).
 
 A `hardware.toml` part names its registry entry with `part = "<slug>"`. The
 entry maps the pin names hardware.toml uses (a breakout's silkscreen names) to
@@ -70,7 +70,7 @@ PART_KEYS = frozenset(
 PERFBOARD_KEYS = frozenset({"footprint", "value", "height", "body"})
 HEIGHTS = ("low", "raised", "tall")
 PIN_NUMBERINGS = ("board-dip-ccw",)
-# Symbols whose polarity is in the graphic, not in a pin name (spec §2.1).
+# Symbols whose polarity is in the graphic, not in a pin name.
 # C_Polarized's pins are unnamed; its "+" mark is drawn on pin 1's side, which
 # test_registry checks against the vendored symbol.
 CONVENTIONS: dict[str, dict[str, str]] = {"Device:C_Polarized": {"+": "1", "-": "2"}}

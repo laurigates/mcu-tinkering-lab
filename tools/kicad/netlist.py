@@ -19,7 +19,7 @@ else raises, so a dropped wire cannot become a quietly open pin. A power pad
 (5V, GND, 3V3) is never implied floating: every socket pin is `passive`, so
 ERC cannot see an unpowered XIAO.
 
-The ordering is KiCad's for balancebot (spec §3.2): components by natural
+The ordering is KiCad's for balancebot: components by natural
 reference, nets by name, nodes by natural reference then pin as a plain string.
 A no-connect pin's net in KiCad is `nc_net_name()`.
 """

@@ -82,7 +82,7 @@ SEEED_TREE = Subtree(
 )
 SUBTREES = (STOCK_TREE, SEEED_TREE)
 
-# The schematic writer's power flag (spec §4.4): referenced by no registry entry.
+# The schematic writer's power flag: referenced by no registry entry.
 WRITER_SYMBOLS = frozenset({"power:PWR_FLAG"})
 
 

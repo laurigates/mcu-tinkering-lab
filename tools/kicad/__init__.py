@@ -39,6 +39,8 @@ Modules, one responsibility each:
 - `jlc`         CLI: kicad-cli's BOM and CPL cut to JLCPCB's assembly format
 - `vendor`      CLI: pin, compare and rebuild the vendored library subtrees
 - `derive_xiao` CLI: the socket XIAO parts derived from Seeed's DIP ones
+- `testfixture` for the unit tests: the frozen balancebot inputs behind
+                #749's netlist export (`testdata/balancebot-749/`)
 
 `pcb/` is not part of the package: `build_board.py` (place, assign nets,
 silkscreen), `route_board.py` (Freerouting, then the pour) and `dsn.py` (the

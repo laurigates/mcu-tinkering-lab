@@ -3,7 +3,8 @@
 The inputs are balancebot's own `kicad-cli sch export bom` / `pcb export pos`
 rows (the connector and module rows trimmed), and the expected outputs are
 what jlc_assembly.py wrote from them before it moved to tools/kicad: 6 BOM
-lines and 7 placements, U1 dropped because it has no LCSC number.
+lines and 7 placements, U1 dropped because it has no LCSC number. `FabTests`
+runs `kicad.fab` with kicad-cli's exports replaced by the same rows.
 
     python3 -m unittest discover -s tools/kicad -t tools
 """
@@ -15,8 +16,9 @@ import io
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
-from kicad import jlc
+from kicad import fab, jlc
 from kicad.errors import KicadError
 
 R0805 = "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
@@ -128,6 +130,51 @@ class JlcTests(unittest.TestCase):
         code, out = self.quiet(jlc.main, [str(b), str(p), str(self.dir)])
         self.assertEqual(code, 1)
         self.assertIn("column 'LCSC' missing", out)
+
+
+class FabTests(unittest.TestCase):
+    """`kicad.fab` on a temp project, with kicad-cli replaced by canned exports."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.project = Path(tmp.name) / "demo"
+        kicad_dir = self.project / "hardware/carrier/demo-carrier"
+        kicad_dir.mkdir(parents=True)
+        (self.project / "hardware/carrier/board.toml").write_text(
+            '[project]\nname = "demo-carrier"\n'
+        )
+        for suffix in (".kicad_pcb", ".kicad_sch"):
+            (kicad_dir / f"demo-carrier{suffix}").touch()
+        self.asm = kicad_dir / "output/assembly"
+
+    def fab(self, bom: str) -> tuple[int, str]:
+        def run(argv):
+            out = Path(argv[argv.index("-o") + 1])
+            if argv[1:4] == ["sch", "export", "bom"]:
+                out.write_text(bom)
+            elif argv[1:4] == ["pcb", "export", "pos"]:
+                out.write_text(POS)
+
+        with (
+            mock.patch.object(fab, "kicad_cli", return_value="kicad-cli"),
+            mock.patch.object(fab, "run", side_effect=run),
+            contextlib.redirect_stdout(io.StringIO()) as out,
+        ):
+            code = fab.main([str(self.project)])
+        return code, out.getvalue()
+
+    def test_writes_the_jlc_files(self):
+        code, out = self.fab(BOM)
+        self.assertEqual(code, 0, out)
+        self.assertEqual((self.asm / "bom-jlc.csv").read_bytes(), BOM_JLC.encode())
+        self.assertEqual((self.asm / "cpl-jlc.csv").read_bytes(), CPL_JLC.encode())
+
+    def test_missing_column_fails(self):
+        code, out = self.fab(BOM.replace('"LCSC"', '"Part"', 1))
+        self.assertEqual(code, 1, out)
+        self.assertIn("FAIL: ", out)
+        self.assertIn("column 'LCSC' missing from bom.csv or pos.csv", out)
 
 
 if __name__ == "__main__":

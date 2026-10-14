@@ -25,7 +25,7 @@ from .errors import KicadError
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BOARD_TOML = "board.toml"
 
-# board.toml's tables (spec §6). Their contents are validated where they are
+# board.toml's tables. Their contents are validated where they are
 # read; this rejects a misspelt table name, which would otherwise be ignored.
 BOARD_TABLES = frozenset(
     {"project", "outline", "placement", "silk", "net_classes", "signal", "pour"}

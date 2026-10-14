@@ -1,9 +1,11 @@
-"""Tests for netlist parity (spec §5 item 1), with no KiCad.
+"""Tests for netlist parity (ADR-027), with no KiCad.
 
 `testdata/balancebot-carrier.xml` is `kicad-cli sch export netlist --format
 kicadxml` (KiCad 10.0.6) of #749's committed balancebot-carrier.kicad_sch, with
 `<source>` made repo-relative and the export `<date>` blanked. The `kicad.parity`
-CLI runs that export itself; here it is replaced by the fixture.
+CLI runs that export itself; here it is replaced by the fixture, and the join
+side is built from the frozen inputs that export came from
+(`kicad.testfixture`), not from the live project.
 
     python3 -m unittest discover -s tools/kicad -t tools
 """
@@ -18,11 +20,10 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from unittest import mock
 
-from kicad import netlist, parity
+from kicad import netlist, parity, testfixture
 from kicad.errors import KicadError
-from kicad.paths import REPO_ROOT
 
-PROJECT = REPO_ROOT / "packages/robotics/balancebot"
+ROOT, PROJECT = testfixture.shared()
 TESTDATA = Path(__file__).resolve().parent / "testdata"
 EXPORT = TESTDATA / "balancebot-carrier.xml"
 
@@ -44,7 +45,7 @@ def comp(root: ET.Element, ref: str) -> ET.Element:
 class CompareTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.nl = netlist.build(PROJECT)
+        cls.nl = netlist.build(PROJECT, ROOT)
 
     def test_the_749_export_matches_the_join(self):
         self.assertEqual(parity.compare(self.nl, export()), [])
@@ -54,7 +55,7 @@ class CompareTests(unittest.TestCase):
         self.assertEqual(parity.normalise(export()), want)
 
     def test_swapped_step_and_dir(self):
-        """E9: STEP_L and DIR_L swapped at the XIAO."""
+        """STEP_L and DIR_L swapped at the XIAO."""
         root = export()
         step = [n for n in net(root, "STEP_L") if n.get("ref") == "U1"][0]
         dirn = [n for n in net(root, "DIR_L") if n.get("ref") == "U1"][0]
@@ -162,7 +163,7 @@ class CliTests(unittest.TestCase):
             mock.patch.object(parity, "export", return_value=root),
             contextlib.redirect_stdout(out),
         ):
-            code = parity.main([str(PROJECT)])
+            code = parity.main([str(PROJECT)], ROOT)
         return code, out.getvalue()
 
     def test_clean(self):

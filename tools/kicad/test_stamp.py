@@ -1,8 +1,8 @@
-"""Tests for the check stamp (spec §5.5).
+"""Tests for the check stamp (ADR-027, "The check stamp").
 
 Synthetic stamps and files only: the committed stamp is refreshed by a local
-KiCad run, so CI's `python3 -m kicad.stamp` step checks it, not this suite
-(spec §9).
+KiCad run, so CI's `python3 -m kicad.stamp` step (`carrier-check.yml`)
+checks it, not this suite.
 
     python3 -m unittest discover -s tools/kicad -t tools
 """

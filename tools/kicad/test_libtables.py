@@ -1,4 +1,4 @@
-"""Tests for the generated project library tables (spec §3.3).
+"""Tests for the generated project library tables (kicad.libtables).
 
 python3 -m unittest discover -s tools/kicad -t tools
 """

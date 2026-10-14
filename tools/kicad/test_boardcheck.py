@@ -1,8 +1,9 @@
-"""Tests for the KiCad-free board check and relink (spec §5 items 3-5, §6).
+"""Tests for the KiCad-free board check and relink (ADR-027).
 
 Synthetic boards only: the suite never reads the committed .kicad_pcb, which
-only a local KiCad run can refresh (spec §9; `carrier-check.yml` runs the CLI
-on it). board.toml validation uses the real balancebot netlist and board.toml.
+only a local KiCad run can refresh (`carrier-check.yml` runs the CLI on it).
+board.toml validation uses the frozen balancebot netlist and board.toml
+(`kicad.testfixture`), not the live project.
 
     python3 -m unittest discover -s tools/kicad -t tools
 """
@@ -15,12 +16,11 @@ import unittest
 import uuid
 from pathlib import Path
 
-from kicad import boardcheck, netlist, paths
+from kicad import boardcheck, netlist, paths, testfixture
 from kicad.errors import KicadError
-from kicad.paths import REPO_ROOT
 
 NS = uuid.uuid5(uuid.NAMESPACE_URL, "mcu-tinkering-lab/kicad/test")
-PROJECT = REPO_ROOT / "packages/robotics/balancebot"
+ROOT, PROJECT = testfixture.shared()
 
 
 def comp(
@@ -227,7 +227,7 @@ class RelinkTests(unittest.TestCase):
 class ConfigTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.nl = netlist.build(PROJECT)
+        cls.nl = netlist.build(PROJECT, ROOT)
         cls.cfg = paths.load_board_config(PROJECT)
 
     def with_data(self, edit) -> paths.BoardConfig:
