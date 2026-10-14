@@ -22,9 +22,9 @@ render for any rail endpoint on a drawn part that no tag was asked about.
 
 A role wired to several part pins (balancebot's shared nENABLE) comes back
 whole from ``fanout()``, and a driver's ``[[outputs]]`` pin lists as wire
-pairs from ``output_ends()`` (#738). An I2C mux channel's ``[[bus_nets]]``
-lines come from ``bus_ends()`` (#768), and ``check_all_drawn()`` covers them
-too.
+pairs from ``output_ends()`` (#738), each driver pin on the load pin its
+``load_pins`` names (#769). An I2C mux channel's ``[[bus_nets]]`` lines
+come from ``bus_ends()`` (#768). ``check_all_drawn()`` covers both.
 """
 
 from __future__ import annotations
@@ -63,6 +63,7 @@ class JoinedNets:
         self.mcu = mcu
         self.parts = parts
         self._drawn: set[str] = set()
+        self._drawn_outputs: set[str] = set()  # driver part ids
         self._tagged: set[Endpoint] = set()
 
     def _nets(self, role: str) -> list[Net]:
@@ -133,21 +134,31 @@ class JoinedNets:
         self._drawn.add(role)
         return mcu, ends
 
-    def output_ends(self) -> list[tuple[Point, Point]]:
-        """One (driver pin, load pin) pair per ``[[outputs]]`` pin, every load.
+    def output_ends(self, part: str | None = None) -> list[tuple[Point, Point]]:
+        """One (driver pin, load pin) pair per ``[[outputs]]`` wire.
 
-        All of them at once, so a pin added to an output list cannot be left
-        out of the drawing.
+        A driver pin lands on the load pin ``load_pins`` maps it to, or on the
+        pin of the same name (#769). With no ``part``, every driver's at once;
+        with one, that driver's alone, and ``check_all_drawn()`` then fails for
+        a driver whose wires were never asked for. Either way a pin added to
+        an output list cannot be left out of the drawing.
         """
-        return [
-            (
-                self._pin(f"{out.part} output {pin}", out.part, pin),
-                self._pin(f"{out.part} output {pin}", load, pin),
-            )
-            for out in self.model.outputs
-            for load in out.loads
-            for pin in out.pins
-        ]
+        outs = [o for o in self.model.outputs if o.pins and part in (None, o.part)]
+        if part is not None and not outs:
+            raise HardwareError(f"{part!r}: no [[outputs]] pins in hardware.toml")
+        pairs = []
+        for out in outs:
+            if out.part in self._drawn_outputs:
+                raise HardwareError(f"{out.part} outputs: drawn twice")
+            self._drawn_outputs.add(out.part)
+            pairs += [
+                (
+                    self._pin(f"{out.part} output {pin}", out.part, pin),
+                    self._pin(f"{out.part} output {pin}", load, load_pin),
+                )
+                for pin, load, load_pin in out.wires
+            ]
+        return pairs
 
     def bus_ends(
         self, role: str, anchors: dict[str, str] | None = None
@@ -202,6 +213,11 @@ class JoinedNets:
             f"{b.role} -> {b.part}"
             for b in self.model.bus_nets
             if b.role not in self._drawn
+        ]
+        missing += [
+            f"{o.part} outputs -> {', '.join(o.loads)}"
+            for o in self.model.outputs
+            if o.pins and o.part not in self._drawn_outputs
         ]
         if missing:
             listed = ", ".join(missing)

@@ -46,7 +46,7 @@ def _only_i2s(model, **changes):
     """``model`` reduced to its three I2S nets, with ``changes`` applied."""
     nets = tuple(n for n in model.nets if n.part == "amp")
     assert len(nets) == 3, "robocar-unified's join should wire three amp pins"
-    return dataclasses.replace(model, nets=nets, bus_nets=(), **changes)
+    return dataclasses.replace(model, nets=nets, bus_nets=(), outputs=(), **changes)
 
 
 def test_ends_are_the_pad_the_role_lands_on_and_the_part_pin_the_join_names(
@@ -410,3 +410,106 @@ def test_robocar_unified_fails_to_render_a_bus_it_does_not_draw(model):
     extra = BusNet("I2C_BUS_CHANNEL_SPARE", 3, "mux", "oled", "")
     with pytest.raises(HardwareError, match="I2C_BUS_CHANNEL_SPARE"):
         mod.draw(dataclasses.replace(model, bus_nets=(*model.bus_nets, extra)))
+
+
+# --- One driver, two loads: robocar-unified's motors (#769) ---------------------
+# The TB6612FNG's A pair drives the right motor and its B pair the left, each on
+# the motor's own terminals 1 and 2: [[outputs]] load_pins, read by
+# output_ends() instead of four hand-written wires.
+
+
+@pytest.fixture
+def motors_drawn():
+    """A placed XIAO, the TB6612FNG, the amplifier and three two-terminal loads."""
+    from components import tb6612fng
+
+    d = schemdraw.Drawing(show=False)
+    xiao = d.add(xiao_esp32s3_sense(layout="physical"))
+    parts = {
+        "motor_driver": d.add(tb6612fng(layout="physical").at((10, 0))),
+        "amp": d.add(max98357a(layout="physical").at((30, 0))),
+    }
+    for key, at, ends in (
+        ("motor_right", (0, 0), ("1", "2")),
+        ("motor_left", (0, -5), ("1", "2")),
+        ("speaker", (30, 10), ("-", "+")),
+    ):
+        load = d.add(schemdraw.elements.Motor().at(at))
+        load.absanchors[ends[0]] = load.absanchors["start"]
+        load.absanchors[ends[1]] = load.absanchors["end"]
+        parts[key] = load
+    return xiao, parts
+
+
+def test_output_ends_follow_load_pins_to_each_motor(model, motors_drawn):
+    xiao, parts = motors_drawn
+    nets = JoinedNets(model, xiao, parts)
+    tb = parts["motor_driver"].absanchors
+    right, left = parts["motor_right"].absanchors, parts["motor_left"].absanchors
+    assert nets.output_ends("motor_driver") == [
+        (tb["A01"], right["1"]),
+        (tb["A02"], right["2"]),
+        (tb["B01"], left["1"]),
+        (tb["B02"], left["2"]),
+    ]
+
+
+def test_output_ends_of_the_amplifier_land_on_the_speaker_by_polarity(
+    model, motors_drawn
+):
+    xiao, parts = motors_drawn
+    nets = JoinedNets(model, xiao, parts)
+    amp, spk = parts["amp"].absanchors, parts["speaker"].absanchors
+    assert nets.output_ends("amp") == [(amp["VO-"], spk["-"]), (amp["VO+"], spk["+"])]
+
+
+def test_output_ends_of_a_part_that_drives_nothing_is_an_error(model, motors_drawn):
+    xiao, parts = motors_drawn
+    nets = JoinedNets(model, xiao, parts)
+    with pytest.raises(HardwareError, match="'mux'.*no \\[\\[outputs\\]\\] pins"):
+        nets.output_ends("mux")
+
+
+def test_output_ends_twice_is_an_error(model, motors_drawn):
+    xiao, parts = motors_drawn
+    nets = JoinedNets(model, xiao, parts)
+    nets.output_ends("motor_driver")
+    with pytest.raises(HardwareError, match="motor_driver.*twice"):
+        nets.output_ends("motor_driver")
+
+
+def test_check_names_an_output_the_drawing_left_out(model, motors_drawn):
+    xiao, parts = motors_drawn
+    nets = JoinedNets(dataclasses.replace(model, nets=()), xiao, parts)
+    nets.output_ends("motor_driver")
+    with pytest.raises(HardwareError) as err:
+        nets.check_all_drawn()
+    assert "amp outputs" in str(err.value)
+    assert "motor_driver" not in str(err.value)
+
+
+def test_robocar_unified_draws_the_motors_from_the_join(model):
+    # Swapping which motor channel A drives moves the motor leads, with
+    # nothing in the circuit edited.
+    from render import ROOT, load_circuit
+    from routing import Path as Wire
+
+    mod = load_circuit(ROOT / "circuits" / "robocar_unified.py")
+
+    def wire_ends(model):
+        return {
+            tuple(round(c, 3) for c in (*e.polyline[0], *e.polyline[-1]))
+            for e in mod.draw(model).elements
+            if isinstance(e, Wire)
+        }
+
+    (motors,) = [o for o in model.outputs if o.part == "motor_driver"]
+    swapped = dataclasses.replace(
+        motors,
+        load_pins={
+            "motor_left": motors.load_pins["motor_right"],
+            "motor_right": motors.load_pins["motor_left"],
+        },
+    )
+    outputs = tuple(swapped if o is motors else o for o in model.outputs)
+    assert wire_ends(dataclasses.replace(model, outputs=outputs)) != wire_ends(model)

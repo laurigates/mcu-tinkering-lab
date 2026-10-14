@@ -254,6 +254,12 @@ def draw(model: HardwareModel | None = None) -> schemdraw.Drawing:
         .at((tb_left - 3.5, tb["B01"].y))
         .label("Left motor", loc="top", ofst=0.3)
     )
+    # Each motor's terminals 1 and 2, the load pins hardware.toml's
+    # [[outputs]] maps the driver's A and B pairs onto (#769).
+    for key, motor in (("motor_right", motor_r), ("motor_left", motor_l)):
+        motor.absanchors["1"] = motor.absanchors["start"]
+        motor.absanchors["2"] = motor.absanchors["end"]
+        parts[key] = motor
 
     # Mux ch1 → SSD1306 OLED. Explicit .right() locks orientation — without
     # it, the OLED inherits the previous element's "up" direction and gets
@@ -350,6 +356,9 @@ def draw(model: HardwareModel | None = None) -> schemdraw.Drawing:
         .at((amp.center.x, amp["VO-"].y + 1.5))
         .label("8 Ω  2-3 W", loc="bot", ofst=0.4)
     )
+    spk.absanchors["-"] = spk.absanchors["in1"]
+    spk.absanchors["+"] = spk.absanchors["in2"]
+    parts["speaker"] = spk
 
     # Piezo buzzer on PIEZO_PIN (D1) — a small branch through a resistor to
     # ground, leaving the XIAO's left edge. Placed before routing: the
@@ -469,10 +478,10 @@ def draw(model: HardwareModel | None = None) -> schemdraw.Drawing:
     for macro, pin in MOTOR_LINES:
         router.wire(pca[channel(macro)], tb[pin], net="pwm")
 
-    router.wire(tb["A01"], motor_r.start, net="load")
-    router.wire(tb["A02"], motor_r.end, net="load")
-    router.wire(tb["B01"], motor_l.start, net="load")
-    router.wire(tb["B02"], motor_l.end, net="load")
+    # Motor leads: which driver pin reaches which motor terminal is the
+    # join's ([[outputs]] load_pins).
+    for ends in nets.output_ends("motor_driver"):
+        router.wire(*ends, net="load")
 
     # STBY direct from MCU GPIO1 (D0) to the gap in the control row.
     router.wire(*nets.ends("MOTOR_STBY_PIN"), net="signal")
@@ -489,14 +498,14 @@ def draw(model: HardwareModel | None = None) -> schemdraw.Drawing:
     router.wire(*nets.ends("I2S_LRCLK_PIN"), net="i2s")
     router.wire(*nets.ends("I2S_DIN_PIN"), net="i2s")
 
-    # Every MCU net and mux channel bus in hardware.toml has now been drawn,
-    # or this fails the render naming the one that was not.
+    for ends in nets.output_ends("amp"):
+        router.wire(*ends, net="load")
+
+    # Every MCU net, mux channel bus and driver output in hardware.toml has
+    # now been drawn, or this fails the render naming the one that was not.
     nets.check_all_drawn()
     # Likewise every drawn part pin hardware.toml puts on a rail has a tag.
     nets.check_all_tagged()
-
-    router.wire(amp["VO-"], spk.in1, net="load")
-    router.wire(amp["VO+"], spk.in2, net="load")
 
     # === Local stubs (servo/LED and spare-GPIO arrows) stay hand-drawn —
     # these aren't point-to-point nets between two components, so the router

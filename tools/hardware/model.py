@@ -119,9 +119,22 @@ on every entry in every view, so a typo in a carrier-only entry still fails.
     pins = ["A1", "A2"]         # driver pin p goes to pin p of every load
     net  = "MOTL_{pin}"         # one net per pin; `{pin}` is the only field
 
+    [[outputs]]                 # one driver, two loads on separate pins (#769)
+    from = "motor_driver"
+    to   = ["motor_left", "motor_right"]
+    pins = ["A01", "A02", "B01", "B02"]
+    net  = "MOT_{pin}"
+    load_pins.motor_right = { A01 = "1", A02 = "2" }  # driver pin = load pin
+    load_pins.motor_left  = { B01 = "1", B02 = "2" }
+
     [net_names]                 # carrier net name, where it is not the role's
     PIN_STEP_LEFT = "STEP_L"    # key: a pin or channel role on a net, or a rail
     3V3 = "+3V3"
+
+With `load_pins`, each load gets only the driver pins its table names, on the
+load pin given; every load in `to` needs a table, every driver pin must reach a
+load, and two driver pins on one load pin are a short. Without it, driver pin p
+goes to pin p of every load.
 
 A part outside the view is dropped, and an in-view entry that names it fails.
 Within a view, the `[[rails]]` entries of one name form one rail: exactly one
@@ -176,7 +189,7 @@ _KEYS = {
     "bus_net": {"role", "from", "to", "note", "build"},
     "undrawn": {"role", "why", "build"},
     "rail": {"name", "from", "to", "build"},
-    "output": {"from", "to", "pins", "net", "build"},
+    "output": {"from", "to", "pins", "net", "load_pins", "build"},
 }
 HARNESS, CARRIER = "harness", "carrier"
 VIEWS = (HARNESS, CARRIER)
@@ -260,8 +273,22 @@ class Rail:
 class Output:
     part: str
     loads: tuple[str, ...]  # part ids
-    pins: tuple[str, ...] = ()  # driver pin p goes to pin p of every load
+    pins: tuple[str, ...] = ()  # the driver pins, one net each
     net: str = ""  # net-name template: "MOTL_{pin}"; "" when `pins` is empty
+    # load -> {driver pin: load pin}; empty: pin p goes to pin p of every load
+    load_pins: dict[str, dict[str, str]] = field(default_factory=dict)
+
+    @property
+    def wires(self) -> tuple[tuple[str, str, str], ...]:
+        """(driver pin, load, load pin) per wire, in `pins` order, then `loads`."""
+        if not self.load_pins:
+            return tuple((p, load, p) for p in self.pins for load in self.loads)
+        return tuple(
+            (p, load, self.load_pins[load][p])
+            for p in self.pins
+            for load in self.loads
+            if p in self.load_pins[load]
+        )
 
 
 @dataclass(frozen=True)
@@ -352,14 +379,20 @@ def _net_name(where: str, name: str) -> str:
     return name
 
 
-def _output_pins(where: str, table: dict[str, Any]) -> tuple[tuple[str, ...], str]:
-    """An output's `pins` and `net` template, checked on their own."""
+def _output_pins(
+    where: str, table: dict[str, Any]
+) -> tuple[tuple[str, ...], str, dict[str, dict[str, str]]]:
+    """An output's `pins`, `net` template and `load_pins`, checked on their own."""
     if "pins" not in table:
         if "net" in table:
             raise HardwareError(
                 f"{where}: 'net' names the nets of 'pins', and has none"
             )
-        return (), ""
+        if "load_pins" in table:
+            raise HardwareError(
+                f"{where}: 'load_pins' maps the driver pins of 'pins', and has none"
+            )
+        return (), "", {}
     pins = table["pins"]
     if (
         not isinstance(pins, list)
@@ -394,7 +427,47 @@ def _output_pins(where: str, table: dict[str, Any]) -> tuple[tuple[str, ...], st
         )
     for p in pins:
         _net_name(f"{where} net", net.format(pin=p))
-    return tuple(pins), net
+    return tuple(pins), net, _load_pins(where, table, pins)
+
+
+def _load_pins(
+    where: str, table: dict[str, Any], pins: list[str]
+) -> dict[str, dict[str, str]]:
+    """`load_pins`: per load, which driver pin lands on which of its pins (#769)."""
+    if "load_pins" not in table:
+        return {}
+    value = table["load_pins"]
+    if not isinstance(value, dict) or not all(
+        isinstance(m, dict) and all(isinstance(v, str) and v for v in m.values())
+        for m in value.values()
+    ):
+        raise HardwareError(
+            f"{where}: 'load_pins' must map each load to a table of "
+            f'driver pin = "load pin", got {value!r}'
+        )
+    loads = table.get("to")
+    if isinstance(loads, list) and set(value) != set(loads):
+        raise HardwareError(
+            f"{where}: 'load_pins' must name each load in 'to' exactly once: "
+            f"'to' has {sorted(map(str, loads))}, 'load_pins' {sorted(value)}"
+        )
+    for load, mapping in value.items():
+        lands: dict[str, str] = {}
+        for driver_pin, load_pin in mapping.items():
+            if driver_pin not in pins:
+                raise HardwareError(
+                    f"{where}: load_pins.{load}: {driver_pin} is not in 'pins' {pins}"
+                )
+            if load_pin in lands:
+                raise HardwareError(
+                    f"{where}: load_pins.{load}: {lands[load_pin]} and {driver_pin} "
+                    f"both go to {load}.{load_pin} — that is a short"
+                )
+            lands[load_pin] = driver_pin
+    unused = [p for p in pins if all(p not in m for m in value.values())]
+    if unused:
+        raise HardwareError(f"{where}: load_pins: driver pin(s) {unused} reach no load")
+    return {load: dict(mapping) for load, mapping in value.items()}
 
 
 def _entries(
@@ -532,19 +605,21 @@ def _power(
         dupes = sorted({k for k in load_ids if load_ids.count(k) > 1})
         if dupes:
             raise HardwareError(f"{where}: {dupes} listed twice")
-        pins, net = _output_pins(where, table)
-        for key in (source, *load_ids):
-            for pin in pins:
-                if (key, pin) in signal:
-                    raise HardwareError(
-                        f"{where}: {key}.{pin} is also the signal net "
-                        f"{signal[key, pin]}"
-                    )
-                if Endpoint(key, pin) in on_rail:
-                    raise HardwareError(
-                        f"{where}: {key}.{pin} is also rail {on_rail[Endpoint(key, pin)]}"
-                    )
-        outputs.append(Output(part=source, loads=tuple(load_ids), pins=pins, net=net))
+        pins, net, load_pins = _output_pins(where, table)
+        out = Output(
+            part=source, loads=tuple(load_ids), pins=pins, net=net, load_pins=load_pins
+        )
+        ends = [(source, p) for p in pins] + [(load, p) for _, load, p in out.wires]
+        for key, pin in ends:
+            if (key, pin) in signal:
+                raise HardwareError(
+                    f"{where}: {key}.{pin} is also the signal net {signal[key, pin]}"
+                )
+            if Endpoint(key, pin) in on_rail:
+                raise HardwareError(
+                    f"{where}: {key}.{pin} is also rail {on_rail[Endpoint(key, pin)]}"
+                )
+        outputs.append(out)
 
     return tuple(rails), tuple(outputs)
 

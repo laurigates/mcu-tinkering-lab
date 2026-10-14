@@ -316,8 +316,11 @@ Power tags follow the same split: `nets.rail("pwm", "VCC")` gives the label
 has no tag. `SUGGESTED_CAPS` keeps its `rail` field for display;
 `test_power_tags.py` holds it to the join. A role wired to several part pins
 (balancebot's shared nENABLE) comes back whole from `nets.fanout(role)`, and a
-driver's `[[outputs]]` pin lists as wire pairs from `nets.output_ends()`. An
-I2C mux channel's `[[bus_nets]]` entry gives its SDA and SCL wire pairs from
+driver's `[[outputs]]` pin lists as wire pairs from `nets.output_ends()`, each
+driver pin on the load pin its `load_pins` table names. `nets.output_ends(part)`
+gives one driver's pairs, so a circuit can route them where it chooses;
+`check_all_drawn()` then fails for a driver whose wires were never asked for.
+An I2C mux channel's `[[bus_nets]]` entry gives its SDA and SCL wire pairs from
 `nets.bus_ends(role)`, with an `anchors` map where the drawing picks one of a
 board's repeated pads (`{"pwm.SDA": "SDA.R4"}`); `check_all_drawn()` covers
 these too.

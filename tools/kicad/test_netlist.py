@@ -428,5 +428,168 @@ class BusNetTests(unittest.TestCase):
             self.build()
 
 
+# --- One driver, two loads on separate pins (#769) -------------------------------
+# robocar-unified's TB6612FNG drives the right motor from A01/A02 and the left
+# from B01/B02 (sparkfun-tb6612fng.md), and both motors use one 2-pin connector
+# entry. A stand-in project on the frozen tree's XIAO and registry, since the
+# real project's carrier view cannot build yet (#750 step 2).
+
+LOAD_PIN_PARTS = {
+    "test-motor-driver": """\
+[part]
+name = "Test motor driver outputs"
+source = "test stand-in (#769)"
+symbol = "Connector_Generic:Conn_01x04"
+footprint = "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical"
+
+[pins]
+A01 = 1
+A02 = 2
+B01 = 3
+B02 = 4
+""",
+    "test-motor": """\
+[part]
+name = "Test DC motor lead"
+source = "test stand-in (#769)"
+symbol = "Connector_Generic:Conn_01x02"
+footprint = "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical"
+
+[pins]
+"1" = 1
+"2" = 2
+""",
+    "test-power": """\
+[part]
+name = "Test power lead"
+source = "test stand-in (#769)"
+symbol = "Connector_Generic:Conn_01x04"
+footprint = "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical"
+no_connect = ["NC"]
+
+[pins]
+"5V" = 1
+GND = 2
+"3V3" = 3
+NC = 4
+""",
+}
+
+LOAD_PIN_SIDECAR = """\
+[source]
+convention = "robocar"
+header = "main/pin_config.h"
+board = "docs/reference/boards/xiao-rp2350.md"
+part = "seeed-xiao-rp2350-socket"
+ref = "U1"
+
+[parts.motor_driver]
+name = "TB6612FNG"
+kind = "motor-driver"
+part = "test-motor-driver"
+ref = "J1"
+
+[parts.motor_left]
+name = "Left motor"
+kind = "dc-motor"
+part = "test-motor"
+ref = "J2"
+
+[parts.motor_right]
+name = "Right motor"
+kind = "dc-motor"
+part = "test-motor"
+ref = "J3"
+
+[parts.power]
+name = "Power lead"
+kind = "connector"
+part = "test-power"
+ref = "J4"
+
+[[rails]]
+name = "5V"
+from = "mcu.5V"
+to = ["power.5V"]
+
+[[rails]]
+name = "GND"
+from = "mcu.GND"
+to = ["power.GND"]
+
+[[rails]]
+name = "3V3"
+from = "mcu.3V3"
+to = ["power.3V3"]
+
+[[outputs]]
+from = "motor_driver"
+to = ["motor_left", "motor_right"]
+pins = ["A01", "A02", "B01", "B02"]
+net = "MOT_{pin}"
+load_pins.motor_right = { A01 = "1", A02 = "2" }
+load_pins.motor_left = { B01 = "1", B02 = "2" }
+"""
+
+
+class LoadPinTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        testfixture.materialise(self.root)
+        for slug, text in LOAD_PIN_PARTS.items():
+            (self.root / f"docs/reference/parts/{slug}.toml").write_text(
+                text, encoding="utf-8"
+            )
+        self.project = self.root / "packages/test/motors"
+        (self.project / "main").mkdir(parents=True)
+        (self.project / "main/pin_config.h").write_text(
+            "// no pin roles\n", encoding="utf-8"
+        )
+        self.toml = self.project / "hardware.toml"
+        self.toml.write_text(LOAD_PIN_SIDECAR, encoding="utf-8")
+
+    def build(self) -> netlist.Netlist:
+        return netlist.build(self.project, self.root)
+
+    def test_each_motor_is_on_its_own_pair_of_nets(self):
+        nets = {k: v for k, v in self.build().nets.items() if k.startswith("MOT_")}
+        self.assertEqual(
+            nets,
+            {
+                "MOT_A01": (("J1", "1"), ("J3", "1")),
+                "MOT_A02": (("J1", "2"), ("J3", "2")),
+                "MOT_B01": (("J1", "3"), ("J2", "1")),
+                "MOT_B02": (("J1", "4"), ("J2", "2")),
+            },
+        )
+
+    def test_without_load_pins_a_load_needs_the_drivers_pin_names(self):
+        # Pin p to pin p of every load: the motor connector has no pin A01.
+        text = self.toml.read_text(encoding="utf-8")
+        mapping = (
+            'load_pins.motor_right = { A01 = "1", A02 = "2" }\n'
+            'load_pins.motor_left = { B01 = "1", B02 = "2" }\n'
+        )
+        self.assertEqual(text.count(mapping), 1)
+        self.toml.write_text(text.replace(mapping, ""), encoding="utf-8")
+        with self.assertRaisesRegex(
+            KicadError, r"motor_left\.A01: test-motor\.toml has no pin 'A01'"
+        ):
+            self.build()
+
+    def test_a_load_pin_missing_from_the_registry_fails(self):
+        text = self.toml.read_text(encoding="utf-8")
+        self.toml.write_text(
+            text.replace('{ B01 = "1", B02 = "2" }', '{ B01 = "1", B02 = "3" }'),
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(
+            KicadError, r"motor_left\.3: test-motor\.toml has no pin '3'"
+        ):
+            self.build()
+
+
 if __name__ == "__main__":
     unittest.main()

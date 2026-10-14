@@ -14,7 +14,7 @@ reference designator and symbol pin number. The nets it emits:
   `<name>` is the role or its `[net_names]` entry;
 - each rail, named by `[net_names]` or else the rail name;
 - each output pin: `net.format(pin=p)` joining the driver's pin p to pin p of
-  every load.
+  every load, or with `load_pins` to the load pin each load maps p to (#769).
 
 Every symbol pin must then be on a net or allowed to float: listed under the
 entry's `no_connect`, or a spare GPIO pad of a `pin_numbers` part. Anything
@@ -214,8 +214,9 @@ def build(
         for pin in out.pins:
             what = f"output {out.part}.{pin}"
             members = nodes(what, out.part, pin)
-            for load in out.loads:
-                members += nodes(what, load, pin)
+            for driver_pin, load, load_pin in out.wires:
+                if driver_pin == pin:
+                    members += nodes(what, load, load_pin)
             add(out.net.format(pin=pin), what, members)
 
     owner: dict[tuple[str, str], str] = {}

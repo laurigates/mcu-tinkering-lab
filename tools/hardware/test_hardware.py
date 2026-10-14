@@ -1196,6 +1196,20 @@ class RobocarUnifiedJoinTest(unittest.TestCase):
         self.assertEqual(set(self.model.bus_channels), roles)
         self.assertEqual(len([w for b in self.model.bus_nets for w in b.wires]), 6)
 
+    def test_each_motor_takes_its_own_driver_channel(self):
+        # sparkfun-tb6612fng.md: channel A (A01/A02) is the right motor, B the
+        # left. Without load_pins both motors would share all four nets (#769).
+        (motors,) = [o for o in self.model.outputs if o.part == "motor_driver"]
+        self.assertEqual(
+            motors.wires,
+            (
+                ("A01", "motor_right", "1"),
+                ("A02", "motor_right", "2"),
+                ("B01", "motor_left", "1"),
+                ("B02", "motor_left", "2"),
+            ),
+        )
+
     def test_headers_are_pin_config_then_the_planner_headers(self):
         rel = [p.relative_to(UNIFIED).as_posix() for p in self.model.headers]
         self.assertEqual(

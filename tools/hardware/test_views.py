@@ -362,6 +362,99 @@ class OutputPinsTest(ViewTest):
         self.raises(r"drv.A2 is also the signal net LED_PIN", broken)
 
 
+# One driver, two loads on separate pins (#769): drv's A pair to motor's 1/2,
+# its B pair to motor2's 1/2.
+TWO_LOADS = SIDECAR.replace(
+    '[[outputs]]\nfrom = "drv"\nto = ["motor"]\npins = ["A1", "A2"]\nnet = "M_{pin}"\n',
+    """[[outputs]]
+from = "drv"
+to = ["motor", "motor2"]
+pins = ["A1", "A2", "B1", "B2"]
+net = "M_{pin}"
+load_pins.motor = { A1 = "1", A2 = "2" }
+load_pins.motor2 = { B1 = "1", B2 = "2" }
+""",
+).replace(
+    "[parts.cap]",
+    '[parts.motor2]\nname = "Motor 2"\nkind = "motor"\nref = "M2"\n\n[parts.cap]',
+)
+
+
+class LoadPinsTest(ViewTest):
+    def test_two_loads_take_separate_driver_pins(self):
+        (out,) = self.join(TWO_LOADS, CARRIER).outputs
+        self.assertEqual(
+            out.wires,
+            (
+                ("A1", "motor", "1"),
+                ("A2", "motor", "2"),
+                ("B1", "motor2", "1"),
+                ("B2", "motor2", "2"),
+            ),
+        )
+
+    def test_without_load_pins_each_load_takes_every_pin_by_name(self):
+        (out,) = self.join(view=CARRIER).outputs
+        self.assertEqual(out.wires, (("A1", "motor", "A1"), ("A2", "motor", "A2")))
+
+    def test_load_pins_without_pins_fail(self):
+        broken = TWO_LOADS.replace(
+            'pins = ["A1", "A2", "B1", "B2"]\nnet = "M_{pin}"\n', ""
+        )
+        self.raises("'load_pins' maps the driver pins of 'pins', and has none", broken)
+
+    def test_load_pins_must_name_every_load_and_no_other(self):
+        missing = TWO_LOADS.replace('load_pins.motor2 = { B1 = "1", B2 = "2" }\n', "")
+        self.raises(r"'load_pins' must name each load in 'to'.*motor2", missing)
+        extra = TWO_LOADS + ""
+        extra = extra.replace(
+            'load_pins.motor2 = { B1 = "1", B2 = "2" }\n',
+            'load_pins.motor2 = { B1 = "1", B2 = "2" }\nload_pins.lamp = { A1 = "1" }\n',
+        )
+        self.raises(r"'load_pins' must name each load in 'to'.*lamp", extra)
+
+    def test_a_mapped_driver_pin_must_be_in_pins(self):
+        broken = TWO_LOADS.replace('{ B1 = "1", B2 = "2" }', '{ B1 = "1", B3 = "2" }')
+        self.raises(r"load_pins.motor2: B3 is not in 'pins'", broken)
+
+    def test_a_driver_pin_on_no_load_fails(self):
+        broken = TWO_LOADS.replace('{ B1 = "1", B2 = "2" }', '{ B1 = "1" }')
+        self.raises(r"load_pins: driver pin\(s\) \['B2'\] reach no load", broken)
+
+    def test_two_driver_pins_on_one_load_pin_are_a_short(self):
+        broken = TWO_LOADS.replace('{ B1 = "1", B2 = "2" }', '{ B1 = "1", B2 = "1" }')
+        self.raises(r"load_pins.motor2: B1 and B2 both go to motor2.1", broken)
+
+    def test_load_pins_of_the_wrong_shape_fail(self):
+        for value in (
+            '"A1"',
+            '{ motor = "1" }',
+            "{ motor = { A1 = 1 } }",
+            '{ motor = { A1 = "" } }',
+        ):
+            broken = TWO_LOADS.replace(
+                'load_pins.motor = { A1 = "1", A2 = "2" }\nload_pins.motor2 = { B1 = "1", B2 = "2" }\n',
+                f"load_pins = {value}\n",
+            )
+            with self.subTest(value=value):
+                self.raises("load_pins", broken)
+
+    def test_a_mapped_load_pin_on_a_rail_fails(self):
+        broken = TWO_LOADS.replace(
+            'to = ["led.K", "cap.-"]', 'to = ["led.K", "cap.-", "motor2.2"]'
+        )
+        self.raises(r"\[\[outputs\]\] #1: motor2.2 is also rail GND", broken, CARRIER)
+        # The driver pin's own name on the load is not one it is wired to.
+        fine = TWO_LOADS.replace(
+            'to = ["led.K", "cap.-"]', 'to = ["led.K", "cap.-", "motor2.B2"]'
+        )
+        self.assertEqual(len(self.join(fine, CARRIER).outputs), 1)
+
+    def test_net_names_cover_every_driver_pin(self):
+        clash = TWO_LOADS.replace('LED_PIN = "LED"', 'LED_PIN = "M_B2"')
+        self.raises(r"'M_B2' is used by role LED_PIN and output drv.B2", clash, CARRIER)
+
+
 class PartKeysTest(ViewTest):
     def test_the_carrier_keys_are_kept(self):
         model = self.join(view=CARRIER)
