@@ -30,9 +30,10 @@ from kicad.errors import KicadError
 # Modules whose main() takes project directories (paths.add_project_args).
 PROJECT_CLIS: tuple[str, ...] = ()
 # Modules whose main() works on the repo as a whole; with an empty repo root
-# each must exit 1. `vendor` checks tools/kicad/lib/, which has no projects.
-REPO_CLIS = ("vendor",)
-REPO_CLI_ARGS = {"vendor": ["--check"]}
+# each must exit 1. `vendor` checks tools/kicad/lib/ and `derive_xiao` reads its
+# derive.toml files; neither has projects.
+REPO_CLIS = ("vendor", "derive_xiao")
+REPO_CLI_ARGS = {"vendor": ["--check"], "derive_xiao": ["--check"]}
 
 BOARD_TOML = '[project]\nname = "demo-carrier"\n'
 

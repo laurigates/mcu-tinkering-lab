@@ -9,8 +9,13 @@ footprints the carriers reference (CC-BY-SA 4.0, see its LICENSE.md). Symbol
 libraries are extracted subsets: the source library's header, then each used
 top-level symbol block unchanged, then `)`. Footprints are byte copies.
 
-`--check` recomputes every file's sha256 against MANIFEST.tsv and fails on a
-mismatch, a file the manifest does not list, a listed file that is missing,
+`tools/kicad/lib/seeed-xiao/` holds the Seeed Studio XIAO parts (MIT, see its
+LICENSE): the vendor DIP footprint and symbol at OSHW-XIAO-Series `cc7f3bb`, and
+the socket parts `kicad.derive_xiao` derives from them. It has its own
+MANIFEST.tsv, which `derive_xiao` rewrites when it regenerates.
+
+`--check` recomputes every file's sha256 against its subtree's MANIFEST.tsv
+and fails on a mismatch, a file the manifest does not list, a listed file that is missing,
 a derived (`extends`) symbol, or any difference between the vendored set and
 the referenced set. The project library tables point KiCad at these same
 files, so a hand edit here would agree with everything generated from it;
@@ -39,11 +44,40 @@ from .paths import REPO_ROOT
 
 TAG = "10.0.6"
 STOCK_REL = Path("tools/kicad/lib/kicad-stock")
+SEEED_TAG = "cc7f3bb"
+SEEED_REL = Path("tools/kicad/lib/seeed-xiao")
 MANIFEST = "MANIFEST.tsv"
 LICENSE = "LICENSE.md"
 README = "README.md"
 # Hand-written, not vendored: present, but neither hashed nor counted as orphans.
 UNPINNED = frozenset({MANIFEST, README})
+
+
+@dataclass(frozen=True)
+class Subtree:
+    """A vendored directory pinned by its own MANIFEST.tsv.
+
+    `tag` is the upstream revision every file in it comes from (or, for a
+    derived file, is derived from); `license` is the upstream licence file;
+    `regen` is the command that rewrites its files and manifest.
+    """
+
+    rel: Path
+    tag: str
+    license: str
+    unpinned: frozenset[str]
+    regen: str
+
+
+STOCK_TREE = Subtree(STOCK_REL, TAG, LICENSE, UNPINNED, "just kicad::vendor")
+SEEED_TREE = Subtree(
+    SEEED_REL,
+    SEEED_TAG,
+    "LICENSE",
+    UNPINNED | {"derive.toml"},
+    "PYTHONPATH=tools python3 -m kicad.derive_xiao",
+)
+SUBTREES = (STOCK_TREE, SEEED_TREE)
 
 # What the carriers reference from the KiCad library, and so what is vendored.
 # The parts registry (docs/reference/parts/, PR B wave 3) becomes the source of
@@ -117,13 +151,35 @@ def subtree_files(subtree: Path) -> list[str]:
     )
 
 
-def render_manifest(subtree: Path, tag: str = TAG) -> str:
+def render_manifest(
+    subtree: Path, tag: str = TAG, unpinned: frozenset[str] = UNPINNED
+) -> str:
     lines = [
         f"{rel}\t{sha256(subtree / rel)}\t{tag}"
         for rel in subtree_files(subtree)
-        if rel not in UNPINNED
+        if rel not in unpinned
     ]
     return "".join(line + "\n" for line in lines)
+
+
+def subtree_at(path: Path, repo_root: Path = REPO_ROOT) -> Subtree:
+    """The pinned subtree whose directory is `path`."""
+    for tree in SUBTREES:
+        if (repo_root / tree.rel).resolve() == path.resolve():
+            return tree
+    raise KicadError(
+        f"{path}: not a vendored subtree ({[str(t.rel) for t in SUBTREES]})"
+    )
+
+
+def write_manifest(repo_root: Path, tree: Subtree) -> str:
+    """Rewrite `tree`'s MANIFEST.tsv from the files on disk; returns a summary line."""
+    subtree = repo_root / tree.rel
+    text = render_manifest(subtree, tree.tag, tree.unpinned)
+    (subtree / MANIFEST).write_text(text, encoding="utf-8")
+    return (
+        f"wrote {tree.rel / MANIFEST}: {text.count(chr(10))} files pinned at {tree.tag}"
+    )
 
 
 def read_manifest(path: Path) -> dict[str, tuple[str, str]]:
@@ -163,39 +219,41 @@ def vendored_ids(subtree: Path) -> Referenced:
     return Referenced(frozenset(syms), frozenset(fps))
 
 
-def check(repo_root: Path = REPO_ROOT, want: Referenced | None = None) -> list[str]:
-    """Problems with the vendored subtree; [] when it is pinned and complete."""
-    subtree = repo_root / STOCK_REL
+def check_pinned(repo_root: Path, tree: Subtree) -> tuple[list[str], bool]:
+    """(problems, manifest readable) for one subtree's licence, README and hashes."""
+    subtree = repo_root / tree.rel
     if not subtree.is_dir():
-        return [f"{subtree}: no vendored library; run `just kicad::vendor`"]
+        return [f"{subtree}: no vendored library; run `{tree.regen}`"], False
     errors = []
-    for name in (LICENSE, README):
+    for name in (tree.license, README):
         if not (subtree / name).is_file():
             errors.append(f"{subtree / name}: missing")
+    if not (subtree / MANIFEST).is_file():
+        return [*errors, f"{subtree / MANIFEST}: missing; run `{tree.regen}`"], False
     try:
         manifest = read_manifest(subtree / MANIFEST)
     except KicadError as e:
-        return [*errors, str(e)]
-    on_disk = [rel for rel in subtree_files(subtree) if rel not in UNPINNED]
+        return [*errors, str(e)], False
+    on_disk = [rel for rel in subtree_files(subtree) if rel not in tree.unpinned]
     for rel in on_disk:
         if rel not in manifest:
-            errors.append(f"{STOCK_REL / rel}: not in {MANIFEST} (orphan file)")
+            errors.append(f"{tree.rel / rel}: not in {MANIFEST} (orphan file)")
     for rel, (digest, tag) in manifest.items():
         path = subtree / rel
         if not path.is_file():
-            errors.append(f"{STOCK_REL / rel}: listed in {MANIFEST} but missing")
+            errors.append(f"{tree.rel / rel}: listed in {MANIFEST} but missing")
             continue
-        if tag != TAG:
+        if tag != tree.tag:
             errors.append(
-                f"{STOCK_REL / rel}: {MANIFEST} tag {tag!r}, expected {TAG!r}"
+                f"{tree.rel / rel}: {MANIFEST} tag {tag!r}, expected {tree.tag!r}"
             )
         actual = sha256(path)
         if actual != digest:
             errors.append(
-                f"{STOCK_REL / rel}: sha256 {actual} does not match {MANIFEST} ({digest}); "
-                "vendored files are never hand-edited: run `just kicad::vendor`"
+                f"{tree.rel / rel}: sha256 {actual} does not match {MANIFEST} ({digest}); "
+                f"vendored files are never hand-edited: run `{tree.regen}`"
             )
-    for lib in sorted((subtree / "symbols").glob("*.kicad_sym")):
+    for lib in sorted(subtree.rglob("*.kicad_sym")):
         text = lib.read_text(encoding="utf-8")
         try:
             symbols.header(text)
@@ -203,6 +261,21 @@ def check(repo_root: Path = REPO_ROOT, want: Referenced | None = None) -> list[s
                 symbols.find(text, name, str(lib.relative_to(repo_root)))
         except KicadError as e:
             errors.append(str(e))
+    return errors, True
+
+
+def check(repo_root: Path = REPO_ROOT, want: Referenced | None = None) -> list[str]:
+    """Problems with the vendored subtrees; [] when they are pinned and complete."""
+    errors = []
+    stock_ok = False
+    for tree in SUBTREES:
+        tree_errors, readable = check_pinned(repo_root, tree)
+        errors += tree_errors
+        if tree is STOCK_TREE:
+            stock_ok = readable
+    if not stock_ok:
+        return errors
+    subtree = repo_root / STOCK_REL
     want = referenced(repo_root) if want is None else want
     have = vendored_ids(subtree)
     for kind in ("symbols", "footprints"):
@@ -346,6 +419,8 @@ def main(argv: list[str] | None = None, repo_root: Path = REPO_ROOT) -> int:
                 f"OK: {STOCK_REL}: {len(have.symbols)} symbols, {len(have.footprints)} "
                 f"footprints, {n} files pinned at KiCad {TAG}"
             )
+            n = len(read_manifest(repo_root / SEEED_REL / MANIFEST))
+            print(f"OK: {SEEED_REL}: {n} files pinned at OSHW-XIAO-Series {SEEED_TAG}")
             return 0
         version = installed_version()
         if args.check_installed:

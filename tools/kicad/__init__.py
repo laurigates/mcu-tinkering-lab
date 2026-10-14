@@ -16,7 +16,8 @@ Modules, one responsibility each:
                 copy first, the installed KiCad only for `vendor`
 - `symbols`     a symbol's pins, flags and extent, and its `lib_symbols` embedding
 - `footprints`  a footprint's pads, courtyard and attributes
-- `vendor`      CLI: pin, compare and rebuild the vendored library subset
+- `vendor`      CLI: pin, compare and rebuild the vendored library subtrees
+- `derive_xiao` CLI: the socket XIAO parts derived from Seeed's DIP ones
 
 Import nothing here: `python3 -m kicad.<module>` must not pay for, or fail on,
 modules it does not use.

@@ -124,7 +124,7 @@ kicad_python := env("KICAD_PYTHON", "/Applications/KiCad/KiCad.app/Contents/Fram
 # Regenerate the socket-mount XIAO footprint and symbol from Seeed's DIP ones
 [group: "carrier"]
 carrier-lib:
-    python3 {{carrier_dir}}/scripts/derive_xiao_socket.py
+    cd ../../.. && PYTHONPATH=tools python3 -m kicad.derive_xiao
 
 # Rewrites the .kicad_pcb from scratch. Freerouting does not route the same
 # way twice, so commit the board you checked, not a re-run of it.

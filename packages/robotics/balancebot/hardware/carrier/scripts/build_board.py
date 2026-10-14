@@ -26,7 +26,12 @@ KICAD_FP = os.environ.get(
     "KICAD_FOOTPRINT_DIR",
     "/Applications/KiCad/KiCad.app/Contents/SharedSupport/footprints",
 )
-PROJECT_LIBS = {"Seeed_XIAO": os.path.join(PRJ, "lib", "Seeed_XIAO.pretty")}
+REPO = os.path.abspath(os.path.join(HERE, "..", "..", "..", "..", "..", ".."))
+PROJECT_LIBS = {
+    "Seeed_XIAO": os.path.join(
+        REPO, "tools", "kicad", "lib", "seeed-xiao", "Seeed_XIAO.pretty"
+    )
+}
 
 # Board: 90 x 62 mm, origin at the top-left corner. Robot forward is -y (up).
 ORIGIN = (100.0, 100.0)

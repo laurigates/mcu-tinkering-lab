@@ -96,7 +96,8 @@ board fails here.
   from the schematic's netlist.
 - **The XIAO footprint** is derived from Seeed's `XIAO-RP2350-DIP`
   ([OSHW-XIAO-Series @ cc7f3bb](https://github.com/Seeed-Studio/OSHW-XIAO-Series),
-  MIT), which is kept unmodified in `lib/`. The DIP version mills a cutout under
+  MIT), which is kept unmodified in
+  [`tools/kicad/lib/seeed-xiao/`](../../../../../tools/kicad/lib/seeed-xiao/). The DIP version mills a cutout under
   the module and plates holes for its bottom pads; a socketed XIAO needs
   neither.
 - **`balancebot-carrier.kicad_dru`** lets a GND thermal relief resolve to one

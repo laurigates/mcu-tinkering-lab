@@ -39,9 +39,9 @@ out of the board. DRC reports it only indirectly, as `copper_edge_clearance`
 against pads 15–24.
 
 **Check:** `grep -c 'Edge.Cuts' <footprint>.kicad_mod` before using a vendor
-footprint on a different board. `hardware/carrier/scripts/derive_xiao_socket.py`
-derives a 14-pad socket footprint and the matching symbol, and leaves Seeed's
-files unmodified.
+footprint on a different board. `tools/kicad/derive_xiao.py`, driven by
+`tools/kicad/lib/seeed-xiao/derive.toml`, derives a 14-pad socket footprint and
+the matching symbol, and leaves Seeed's files unmodified.
 
 ## 3. Pad 1 is not "+", and the silkscreen says so
 

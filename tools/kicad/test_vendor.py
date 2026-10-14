@@ -19,7 +19,13 @@ from pathlib import Path
 from kicad import symbols, vendor
 from kicad.paths import REPO_ROOT
 
+LIB = REPO_ROOT / "tools/kicad/lib"
 STOCK = REPO_ROOT / vendor.STOCK_REL
+SEEED = REPO_ROOT / vendor.SEEED_REL
+# sha256 of Seeed-Studio/OSHW-XIAO-Series LICENSE at cc7f3bb (MIT).
+SEEED_LICENSE_SHA256 = (
+    "df584ae476b849794bd8462e8c5ea8f33c0fbca400acb83688a331731a30207b"
+)
 # sha256 of kicad-symbols and kicad-footprints 10.0.6 LICENSE.md (identical files).
 UPSTREAM_LICENSE_SHA256 = (
     "45d2bce75e5a4208f5afb01b8fb2c406e700371c4fe2b5f5cd5c443d46db4d8f"
@@ -69,6 +75,47 @@ class CommittedSubtreeTests(unittest.TestCase):
         with contextlib.redirect_stdout(out):
             self.assertEqual(vendor.main(["--check"]), 0)
         self.assertIn("10 symbols, 15 footprints, 21 files pinned", out.getvalue())
+        self.assertIn(
+            "seeed-xiao: 4 files pinned at OSHW-XIAO-Series cc7f3bb", out.getvalue()
+        )
+
+
+class SeeedSubtreeTests(unittest.TestCase):
+    def test_pinned(self):
+        self.assertEqual(vendor.check_pinned(REPO_ROOT, vendor.SEEED_TREE), ([], True))
+
+    def test_licence_readme_and_derive_toml_are_present(self):
+        self.assertEqual(vendor.sha256(SEEED / "LICENSE"), SEEED_LICENSE_SHA256)
+        readme = (SEEED / "README.md").read_text()
+        for needle in ("cc7f3bb", "MIT", "derived", "kicad.derive_xiao"):
+            self.assertIn(needle, readme)
+        self.assertTrue((SEEED / "derive.toml").is_file())
+
+    def test_manifest_is_reproducible(self):
+        self.assertEqual(
+            vendor.render_manifest(SEEED, vendor.SEEED_TAG, vendor.SEEED_TREE.unpinned),
+            (SEEED / "MANIFEST.tsv").read_text(),
+        )
+        self.assertEqual(
+            vendor.subtree_files(SEEED),
+            sorted(
+                [
+                    "LICENSE",
+                    "MANIFEST.tsv",
+                    "README.md",
+                    "Seeed_XIAO.kicad_sym",
+                    "Seeed_XIAO.pretty/XIAO-RP2350-DIP.kicad_mod",
+                    "Seeed_XIAO.pretty/XIAO-RP2350-Socket.kicad_mod",
+                    "derive.toml",
+                ]
+            ),
+        )
+
+    def test_subtree_at(self):
+        self.assertIs(vendor.subtree_at(SEEED), vendor.SEEED_TREE)
+        self.assertIs(vendor.subtree_at(STOCK), vendor.STOCK_TREE)
+        with self.assertRaisesRegex(Exception, "not a vendored subtree"):
+            vendor.subtree_at(LIB)
 
 
 class MutationTests(unittest.TestCase):
@@ -78,8 +125,9 @@ class MutationTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
+        shutil.copytree(LIB, self.root / "tools/kicad/lib")
         self.stock = self.root / vendor.STOCK_REL
-        shutil.copytree(STOCK, self.stock)
+        self.seeed = self.root / vendor.SEEED_REL
         self.assertEqual(vendor.check(self.root), [])
 
     def errors(self):
@@ -97,6 +145,31 @@ class MutationTests(unittest.TestCase):
         with contextlib.redirect_stdout(out):
             self.assertEqual(vendor.main(["--check"], repo_root=self.root), 1)
         self.assertIn("FAIL:", out.getvalue())
+
+    def test_flipped_byte_in_the_seeed_subtree_fails(self):
+        path = self.seeed / "Seeed_XIAO.pretty/XIAO-RP2350-DIP.kicad_mod"
+        data = bytearray(path.read_bytes())
+        data[100] ^= 0x01
+        path.write_bytes(bytes(data))
+        self.assertRegex(
+            self.errors(),
+            r"seeed-xiao/Seeed_XIAO\.pretty/XIAO-RP2350-DIP\.kicad_mod: sha256 .* "
+            r"does not match MANIFEST\.tsv.*kicad\.derive_xiao",
+        )
+
+    def test_seeed_orphan_missing_licence_and_wrong_tag(self):
+        (self.seeed / "Seeed_XIAO.pretty/XIAO-X.kicad_mod").write_text("(footprint)")
+        (self.seeed / "LICENSE").unlink()
+        manifest = self.seeed / "MANIFEST.tsv"
+        manifest.write_text(manifest.read_text().replace("\tcc7f3bb\n", "\tdeadbee\n"))
+        errors = self.errors()
+        self.assertIn("XIAO-X.kicad_mod: not in MANIFEST.tsv (orphan file)", errors)
+        self.assertIn("seeed-xiao/LICENSE: missing", errors)
+        self.assertIn("tag 'deadbee', expected 'cc7f3bb'", errors)
+
+    def test_no_seeed_subtree(self):
+        shutil.rmtree(self.seeed)
+        self.assertRegex(self.errors(), "seeed-xiao: no vendored library")
 
     def test_edited_licence_fails(self):
         with (self.stock / "LICENSE.md").open("a") as f:
@@ -184,8 +257,8 @@ class InstalledTests(unittest.TestCase):
         shutil.copytree(STOCK / "symbols", self.sym_root)
         shutil.copytree(STOCK / "footprints", self.fp_root)
         self.root = base / "repo"
+        shutil.copytree(LIB, self.root / "tools/kicad/lib")
         self.stock = self.root / vendor.STOCK_REL
-        shutil.copytree(STOCK, self.stock)
 
     def drift(self):
         return vendor.check_installed(self.root, [self.sym_root], [self.fp_root])
