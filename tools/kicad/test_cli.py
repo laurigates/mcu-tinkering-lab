@@ -5,8 +5,9 @@ A per-project CLI run with no project argument processes every git-tracked
 `0 project(s)` and exit 1, unless given `--allow-none`; otherwise a renamed or
 not-yet-added board.toml turns every gate into a silent pass.
 
-A new CLI module must be listed in PROJECT_CLIS or REPO_CLIS below:
-`test_every_cli_is_listed` fails until it is.
+A new CLI module, in `kicad` or any subpackage of it, must be listed in
+PROJECT_CLIS, REPO_CLIS or FILE_CLIS below: `test_every_cli_is_listed` fails
+until it is.
 
     python3 -m unittest discover -s tools/kicad -t tools
 """
@@ -16,9 +17,11 @@ from __future__ import annotations
 import argparse
 import contextlib
 import importlib
+import importlib.util
 import io
 import pkgutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -48,6 +51,27 @@ REPO_CLI_ARGS = {"vendor": ["--check"], "derive_xiao": ["--check"]}
 FILE_CLIS = ("jlc",)
 
 BOARD_TOML = '[project]\nname = "demo-carrier"\n'
+
+
+def cli_modules(path, prefix: str) -> set[str]:
+    """Dotted names (without `prefix`) of every module with a main(), at any depth.
+
+    A package counts as a CLI when its `__main__` has a main() (`python3 -m
+    kicad.perfboard`); test modules are skipped at every level. `pcb/` has no
+    __init__.py, so it is not a package: its scripts run under KiCad's Python
+    and are guarded by test_pcb_py39.
+    """
+    found = set()
+    for mod in pkgutil.walk_packages(path, prefix):
+        leaf = mod.name.rsplit(".", 1)[-1]
+        if leaf.startswith("test_") or leaf == "__main__":
+            continue  # a __main__ is counted as its package
+        name = f"{mod.name}.__main__" if mod.ispkg else mod.name
+        if mod.ispkg and importlib.util.find_spec(name) is None:
+            continue
+        if hasattr(importlib.import_module(name), "main"):
+            found.add(mod.name.removeprefix(prefix))
+    return found
 
 
 def git(root: Path, *args: str) -> None:
@@ -82,13 +106,37 @@ class EmptyRepoTests(unittest.TestCase):
         git(self.root, "init", "-q")
 
     def test_every_cli_is_listed(self):
-        found = set()
-        for mod in pkgutil.iter_modules(kicad.__path__):
-            if mod.name.startswith("test_") or mod.ispkg:
-                continue
-            if hasattr(importlib.import_module(f"kicad.{mod.name}"), "main"):
-                found.add(mod.name)
+        found = cli_modules(kicad.__path__, "kicad.")
         self.assertEqual(found, set(PROJECT_CLIS) | set(REPO_CLIS) | set(FILE_CLIS))
+
+    def test_cli_scan_descends_into_subpackages(self):
+        # Control for the scan above: a CLI in a subpackage (perfboard/, PR C),
+        # as a module or as the package's __main__, must be found.
+        files = {
+            "fakecli/__init__.py": "",
+            "fakecli/top.py": "def main(): pass\n",
+            "fakecli/helper.py": "X = 1\n",
+            "fakecli/test_top.py": "def main(): pass\n",
+            "fakecli/sub/__init__.py": "",
+            "fakecli/sub/tool.py": "def main(): pass\n",
+            "fakecli/sub/test_tool.py": "def main(): pass\n",
+            "fakecli/runnable/__init__.py": "",
+            "fakecli/runnable/__main__.py": "def main(): pass\n",
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            for rel, text in files.items():
+                path = Path(tmp) / rel
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(text)
+            sys.path.insert(0, tmp)
+            try:
+                pkg = importlib.import_module("fakecli")
+                found = cli_modules(pkg.__path__, "fakecli.")
+            finally:
+                sys.path.remove(tmp)
+                for name in [m for m in sys.modules if m.split(".")[0] == "fakecli"]:
+                    del sys.modules[name]
+        self.assertEqual(found, {"top", "sub.tool", "runnable"})
 
     def test_project_clis_fail_on_zero_projects(self):
         for name in (*PROJECT_CLIS, "demo"):

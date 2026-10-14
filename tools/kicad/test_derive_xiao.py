@@ -189,6 +189,98 @@ class CliTests(unittest.TestCase):
         self.assertEqual(vendor.check(self.root), [])
         self.assertEqual(run(["--check"], self.root)[0], 0)
 
+    def _edit(self, rel: str, old: str, new: str) -> Path:
+        path = self.seeed / rel
+        text = path.read_text(encoding="utf-8")
+        self.assertIn(old, text)
+        path.write_text(text.replace(old, new, 1), encoding="utf-8")
+        return path
+
+    def test_refuses_to_pin_an_edited_vendor_file(self):
+        # A hand edit to each vendor-origin file: regenerating must not re-pin
+        # it (vendor --check would then pass), and must write nothing.
+        edits = {
+            "Seeed_XIAO.pretty/XIAO-RP2350-DIP.kicad_mod": ("(layer", "(layer  "),
+            "LICENSE": ("MIT License", "MIT Licence"),
+            # The vendor symbol block, not the derived one.
+            "Seeed_XIAO.kicad_sym": (
+                '(symbol "XIAO-RP2350-DIP"',
+                '(symbol "XIAO-RP2350-DIP"\n\t\t(exclude_from_sim yes)',
+            ),
+        }
+        manifest = self.seeed / "MANIFEST.tsv"
+        for rel, (old, new) in edits.items():
+            with self.subTest(rel=rel):
+                path = self.seeed / rel
+                original = path.read_bytes()
+                pinned = manifest.read_bytes()
+                socket = self.socket.read_bytes()
+                self._edit(rel, old, new)
+                edited = path.read_bytes()
+                code, out = run([], self.root)
+                self.assertEqual(code, 1, out)
+                self.assertIn(f"{rel}: differs from its MANIFEST.tsv pin", out)
+                self.assertIn("--update-vendor", out)
+                self.assertIn("FAIL: wrote nothing", out)
+                self.assertEqual(manifest.read_bytes(), pinned)
+                self.assertEqual(path.read_bytes(), edited)
+                self.assertEqual(self.socket.read_bytes(), socket)
+                self.assertRegex(
+                    "\n".join(vendor.check(self.root)), rf"{re.escape(rel)}: sha256"
+                )
+                path.write_bytes(original)
+
+    def test_regenerates_over_an_edited_derived_symbol(self):
+        # Only the derived block is off: regenerating restores the pinned bytes.
+        self._edit(
+            "Seeed_XIAO.kicad_sym",
+            '(symbol "XIAO-RP2350-Socket"',
+            '(symbol "XIAO-RP2350-Socket"\n\t\t(exclude_from_sim yes)',
+        )
+        code, out = run([], self.root)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(
+            (self.seeed / "Seeed_XIAO.kicad_sym").read_bytes(), SYM_LIB.read_bytes()
+        )
+        self.assertEqual(
+            (self.seeed / "MANIFEST.tsv").read_bytes(),
+            (SEEED / "MANIFEST.tsv").read_bytes(),
+        )
+
+    def test_update_vendor_repins_a_revendored_file(self):
+        self._edit("Seeed_XIAO.pretty/XIAO-RP2350-DIP.kicad_mod", "(layer", "(layer  ")
+        code, out = run(["--update-vendor"], self.root)
+        self.assertEqual(code, 0, out)
+        self.assertIn("wrote tools/kicad/lib/seeed-xiao/MANIFEST.tsv", out)
+        self.assertEqual(vendor.check(self.root), [])
+
+    def test_a_new_vendor_file_needs_update_vendor(self):
+        manifest = self.seeed / "MANIFEST.tsv"
+        manifest.write_text(
+            "".join(
+                line + "\n"
+                for line in manifest.read_text().splitlines()
+                if not line.startswith("LICENSE\t")
+            )
+        )
+        code, out = run([], self.root)
+        self.assertEqual(code, 1, out)
+        self.assertIn(
+            "LICENSE: not in MANIFEST.tsv; pin a newly vendored file with "
+            "--update-vendor",
+            out,
+        )
+        manifest.unlink()
+        code, out = run([], self.root)
+        self.assertEqual(code, 1, out)
+        self.assertIn("a first pin needs --update-vendor", out)
+        self.assertEqual(run(["--update-vendor"], self.root)[0], 0)
+        self.assertEqual(vendor.check(self.root), [])
+
+    def test_check_and_update_vendor_are_exclusive(self):
+        with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
+            run(["--check", "--update-vendor"], self.root)
+
     def test_reads_only_the_vendored_copy(self):
         (self.seeed / DIP_FP.relative_to(SEEED)).unlink()
         code, out = run(["--check"], self.root)

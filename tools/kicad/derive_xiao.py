@@ -2,6 +2,7 @@
 
     PYTHONPATH=tools python3 -m kicad.derive_xiao           # regenerate
     PYTHONPATH=tools python3 -m kicad.derive_xiao --check   # CI: fail if stale
+    PYTHONPATH=tools python3 -m kicad.derive_xiao --update-vendor  # after re-vendoring
 
 Seeed's DIP footprints are for soldering a XIAO flat onto a host board: they
 carry an Edge.Cuts cutout under the module and plated holes for the bottom pads
@@ -22,11 +23,18 @@ order, then the derived symbols in `derive.toml` order. Regenerating also
 rewrites the subtree's MANIFEST.tsv (`kicad.vendor`), so `vendor --check` pins
 the derived bytes; `--check` regenerates in memory and byte-compares, writing
 nothing. Every library read is from the vendored copy (`vendored_only`).
+
+Regenerating refuses, and writes nothing, when a vendor file (the licence, a
+vendor footprint, a vendor symbol block) differs from its MANIFEST.tsv pin:
+rewriting the manifest from disk would pin that edit, and `vendor --check`
+would stop seeing it. `--update-vendor` re-pins them; it is for after
+re-vendoring from upstream, and for pinning a newly vendored part.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import re
 import sys
 import tomllib
@@ -38,6 +46,7 @@ from .errors import KicadError
 from .paths import REPO_ROOT
 
 DERIVE_TOML = "derive.toml"
+UPDATE_VENDOR = "--update-vendor"
 SOCKET_KEYS = frozenset({"vendor_footprint", "vendor_symbol", "derived", "pads"})
 _NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*")
 
@@ -221,6 +230,88 @@ def render(nick: str, vendored: Path = library.VENDORED) -> dict[Path, str]:
     return out
 
 
+def file_kinds(nick: str, subtree: Path) -> dict[str, str]:
+    """Subtree-relative path -> "vendor", "derived" or "mixed", from derive.toml.
+
+    "vendor" files are upstream bytes (the licence, each vendor footprint);
+    "derived" files are written only by this module; the symbol library is
+    "mixed": its vendor blocks are upstream bytes, its derived blocks are ours.
+    """
+    sockets = load_config(subtree / DERIVE_TOML)
+    kinds = {vendor.SEEED_TREE.license: "vendor", f"{nick}.kicad_sym": "mixed"}
+    for s in sockets:
+        kinds[f"{nick}.pretty/{s.vendor_footprint}.kicad_mod"] = "vendor"
+        kinds[f"{nick}.pretty/{s.derived}.kicad_mod"] = "derived"
+    return kinds
+
+
+def mismatch_hint(rel: str, subtree: Path) -> str:
+    """What to do when `rel` (subtree-relative) is off its MANIFEST.tsv pin."""
+    regen = "PYTHONPATH=tools python3 -m kicad.derive_xiao"
+    restore = (
+        f"restore it to the upstream bytes ({vendor.SEEED_TAG}); only after "
+        f"re-vendoring it from upstream, re-pin with `{regen} {UPDATE_VENDOR}`"
+    )
+    nick = next(
+        (n for n, d in library.NICKNAME_DIRS.items() if d.name == subtree.name), None
+    )
+    try:
+        kind = file_kinds(nick, subtree).get(rel) if nick else None
+    except KicadError:
+        kind = None
+    if kind == "derived":
+        return f"a derived file, never hand-edited: run `{regen}`"
+    if kind == "vendor":
+        return f"a vendor file, never hand-edited: {restore}"
+    if kind == "mixed":
+        return (
+            f"holds vendor and derived symbols, never hand-edited: `{regen}` "
+            f"regenerates the derived ones; for a vendor symbol, {restore}"
+        )
+    return f"never hand-edited: run `{regen}`, or {restore}"
+
+
+def vendor_pin_errors(nick: str, subtree: Path, rendered: dict[Path, str]) -> list[str]:
+    """Why regenerating would re-pin edited vendor bytes; [] when it is safe.
+
+    Regenerating rewrites MANIFEST.tsv from the files on disk, so it must not
+    run over a vendor file that no longer matches its pin: that would pin the
+    edit, and `vendor --check` would stop seeing it. A vendor file must equal its
+    pin. The mixed symbol library may differ only in its derived blocks, which
+    is the case when the regenerated library (`rendered`) equals the pin again.
+    """
+    try:
+        manifest = vendor.read_manifest(subtree / vendor.MANIFEST)
+    except KicadError as e:
+        return [f"{e}; a first pin needs {UPDATE_VENDOR}"]
+    errors = []
+    for rel, kind in sorted(file_kinds(nick, subtree).items()):
+        if kind == "derived":
+            continue
+        path = subtree / rel
+        pin = manifest.get(rel, (None, None))[0]
+        if pin is None:
+            errors.append(
+                f"{path}: not in {vendor.MANIFEST}; pin a newly vendored file with "
+                f"{UPDATE_VENDOR}"
+            )
+            continue
+        if path.is_file() and vendor.sha256(path) == pin:
+            continue
+        regenerated = rendered.get(path)
+        if (
+            kind == "mixed"
+            and regenerated is not None
+            and hashlib.sha256(regenerated.encode("utf-8")).hexdigest() == pin
+        ):
+            continue  # only a derived block was off; regenerating restores the pin
+        errors.append(
+            f"{path}: differs from its {vendor.MANIFEST} pin, and regenerating would "
+            f"pin the edit; {mismatch_hint(rel, subtree)}"
+        )
+    return errors
+
+
 def _rel(path: Path, repo_root: Path) -> str:
     try:
         return path.relative_to(repo_root).as_posix()
@@ -232,10 +323,16 @@ def main(argv: list[str] | None = None, repo_root: Path = REPO_ROOT) -> int:
     parser = argparse.ArgumentParser(
         prog="kicad.derive_xiao", description=__doc__.split("\n")[0]
     )
-    parser.add_argument(
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
         "--check",
         action="store_true",
         help="fail if a derived file differs from its regeneration; write nothing",
+    )
+    mode.add_argument(
+        UPDATE_VENDOR,
+        action="store_true",
+        help="also re-pin vendor files that differ from MANIFEST.tsv (after re-vendoring)",
     )
     args = parser.parse_args(argv)
     vendored = repo_root / library.VENDORED.relative_to(REPO_ROOT)
@@ -245,9 +342,21 @@ def main(argv: list[str] | None = None, repo_root: Path = REPO_ROOT) -> int:
             raise KicadError(
                 f"no vendored library under {vendored} has a {DERIVE_TOML}"
             )
+        rendered = {nick: render(nick, vendored) for nick, _ in libs}
+        if not args.check and not args.update_vendor:
+            errors = [
+                e
+                for nick, subtree in libs
+                for e in vendor_pin_errors(nick, subtree, rendered[nick])
+            ]
+            if errors:
+                for e in errors:
+                    print(f"FAIL: {e}")
+                print("FAIL: wrote nothing")
+                return 1
         stale = []
         for nick, subtree in libs:
-            for path, text in render(nick, vendored).items():
+            for path, text in rendered[nick].items():
                 rel = _rel(path, repo_root)
                 current = path.read_text(encoding="utf-8") if path.is_file() else None
                 if current == text:

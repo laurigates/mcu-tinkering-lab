@@ -12,7 +12,8 @@ top-level symbol block unchanged, then `)`. Footprints are byte copies.
 `tools/kicad/lib/seeed-xiao/` holds the Seeed Studio XIAO parts (MIT, see its
 LICENSE): the vendor DIP footprint and symbol at OSHW-XIAO-Series `cc7f3bb`, and
 the socket parts `kicad.derive_xiao` derives from them. It has its own
-MANIFEST.tsv, which `derive_xiao` rewrites when it regenerates.
+MANIFEST.tsv, which `derive_xiao` rewrites when it regenerates; it re-pins a
+vendor file that differs from its pin only when given `--update-vendor`.
 
 `--check` recomputes every file's sha256 against its subtree's MANIFEST.tsv
 and fails on a mismatch, a file the manifest does not list, a listed file that is missing,
@@ -223,7 +224,7 @@ def check_pinned(repo_root: Path, tree: Subtree) -> tuple[list[str], bool]:
         if actual != digest:
             errors.append(
                 f"{tree.rel / rel}: sha256 {actual} does not match {MANIFEST} ({digest}); "
-                f"vendored files are never hand-edited: run `{tree.regen}`"
+                + _mismatch_hint(tree, rel, subtree)
             )
     for lib in sorted(subtree.rglob("*.kicad_sym")):
         text = lib.read_text(encoding="utf-8")
@@ -234,6 +235,16 @@ def check_pinned(repo_root: Path, tree: Subtree) -> tuple[list[str], bool]:
         except KicadError as e:
             errors.append(str(e))
     return errors, True
+
+
+def _mismatch_hint(tree: Subtree, rel: str, subtree: Path) -> str:
+    """The fix for a file off its pin. The Seeed subtree mixes vendor and derived
+    files, and `derive_xiao` only regenerates the derived ones."""
+    if tree is SEEED_TREE:
+        from . import derive_xiao  # derive_xiao imports this module
+
+        return derive_xiao.mismatch_hint(rel, subtree)
+    return f"vendored files are never hand-edited: run `{tree.regen}`"
 
 
 def check(repo_root: Path = REPO_ROOT, want: Referenced | None = None) -> list[str]:

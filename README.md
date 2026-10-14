@@ -57,8 +57,10 @@ Most projects have a README in their directory.
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
-
-MIT, except [`tools/kicad/lib/kicad-stock/`](tools/kicad/lib/kicad-stock/): a
-subset of the KiCad libraries under CC-BY-SA 4.0, see its
-[LICENSE.md](tools/kicad/lib/kicad-stock/LICENSE.md).
+MIT ([LICENSE](LICENSE)), except the two vendored KiCad libraries under
+`tools/kicad/lib/`, which keep their upstream licences:
+[`kicad-stock/`](tools/kicad/lib/kicad-stock/) is a subset of the KiCad
+libraries under CC-BY-SA 4.0 with KiCad's design exception
+([LICENSE.md](tools/kicad/lib/kicad-stock/LICENSE.md)), and
+[`seeed-xiao/`](tools/kicad/lib/seeed-xiao/) is Seeed Studio's, under their MIT
+licence ([LICENSE](tools/kicad/lib/seeed-xiao/LICENSE)).

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+import re
 import shutil
 import tempfile
 import unittest
@@ -153,11 +154,30 @@ class MutationTests(unittest.TestCase):
         data = bytearray(path.read_bytes())
         data[100] ^= 0x01
         path.write_bytes(bytes(data))
+        errors = self.errors()
+        # A vendor file: regenerating is not the fix (it refuses), so the hint
+        # says restore, and names --update-vendor only for re-vendoring.
         self.assertRegex(
-            self.errors(),
+            errors,
             r"seeed-xiao/Seeed_XIAO\.pretty/XIAO-RP2350-DIP\.kicad_mod: sha256 .* "
-            r"does not match MANIFEST\.tsv.*kicad\.derive_xiao",
+            r"does not match MANIFEST\.tsv.*a vendor file.*restore it to the upstream "
+            r"bytes \(cc7f3bb\).*--update-vendor",
         )
+        self.assertNotIn("run `PYTHONPATH=tools python3 -m kicad.derive_xiao`", errors)
+
+    def test_seeed_hint_names_the_file_kind(self):
+        seeed_files = {
+            "Seeed_XIAO.pretty/XIAO-RP2350-Socket.kicad_mod": "a derived file",
+            "Seeed_XIAO.kicad_sym": "holds vendor and derived symbols",
+            "LICENSE": "a vendor file",
+        }
+        for rel, needle in seeed_files.items():
+            with self.subTest(rel=rel):
+                path = self.seeed / rel
+                original = path.read_bytes()
+                path.write_bytes(original + b"\n")
+                self.assertRegex(self.errors(), rf"{re.escape(rel)}: sha256 .*{needle}")
+                path.write_bytes(original)
 
     def test_seeed_orphan_missing_licence_and_wrong_tag(self):
         (self.seeed / "Seeed_XIAO.pretty/XIAO-X.kicad_mod").write_text("(footprint)")

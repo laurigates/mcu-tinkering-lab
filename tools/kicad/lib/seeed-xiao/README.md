@@ -33,9 +33,16 @@ does not match it or that it does not list. The derived parts are regenerated
 from the vendor parts and `derive.toml`, which also rewrites `MANIFEST.tsv`:
 
 ```sh
-PYTHONPATH=tools python3 -m kicad.derive_xiao           # regenerate
-PYTHONPATH=tools python3 -m kicad.derive_xiao --check   # CI: fail if stale
+PYTHONPATH=tools python3 -m kicad.derive_xiao                  # regenerate
+PYTHONPATH=tools python3 -m kicad.derive_xiao --check          # CI: fail if stale
+PYTHONPATH=tools python3 -m kicad.derive_xiao --update-vendor  # after re-vendoring
 ```
 
+Regenerating re-pins only the derived parts. It refuses, and writes nothing,
+when a vendor file (`LICENSE`, a vendor footprint, a vendor symbol block)
+differs from its pin, because re-pinning would hide the edit from
+`vendor --check`: restore the upstream bytes instead.
+
 To vendor another XIAO, copy its upstream footprint and symbol block here
-(converting line endings to LF), add a `[[socket]]` table, and regenerate.
+(converting line endings to LF), add a `[[socket]]` table, and run
+`derive_xiao --update-vendor`, which pins the new vendor files as well.
