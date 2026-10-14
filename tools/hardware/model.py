@@ -85,6 +85,11 @@ Every pin role in `header` must be on a `[[nets]]` entry or listed under
 covers pin roles only: channel roles (`*_CHANNEL`) are not required to be wired,
 since some, such as `MOTOR_FIRST_CHANNEL`, are aliases the firmware reads.
 
+Two pin roles in `header` on one GPIO, and two roles onto one part pin, are
+errors (#722): each is two signals shorted together. A pin meant to answer to
+two names is written as an alias, `#define B_PIN A_PIN`, which no convention
+reads as a role.
+
 Two builds read one file (#750): the hand-wired **harness** the docs describe,
 and the **carrier** PCB `tools/kicad` generates. An entry in `[parts]`,
 `[[nets]]`, `[[channel_nets]]`, `[[bus_nets]]`, `[[undrawn]]`, `[[rails]]` or
@@ -871,6 +876,18 @@ def join(
 
     defines = parse_defines(headers)
     roles = roles_from_defines(parse_defines([header]), convention)
+    # Two roles on one GPIO is a wiring conflict (#722). A pin meant to serve
+    # two names is written as an alias (`#define B_PIN A_PIN`), which no
+    # convention reads as a role, so it never reaches this check.
+    by_gpio: dict[int, str] = {}
+    for role, gpio in roles.items():
+        if gpio in by_gpio:
+            raise HardwareError(
+                f"{header}: {by_gpio[gpio]} and {role} both resolve to GPIO{gpio}. "
+                f"Give one of them another pin, or define it as the other's name "
+                f"if they are meant to share it"
+            )
+        by_gpio[gpio] = role
 
     def resolve(where: str, role: str) -> str:
         if role not in roles:
@@ -973,6 +990,12 @@ def join(
             raise no_part(where, part)
         if any(n.role == role and n.part == part and n.pin == pin for n in nets):
             raise HardwareError(f"{where}: {role} -> {part}.{pin} is listed twice")
+        # Two roles onto one pin shorts their GPIOs together (#722).
+        other = next((n.role for n in nets if (n.part, n.pin) == (part, pin)), None)
+        if other is not None:
+            raise HardwareError(
+                f"{where}: {part}.{pin} is driven by both {other} and {role}"
+            )
         nets.append(Net(role=role, part=part, pin=pin, note=table.get("note", "")))
 
     wired = {n.role for n in nets}

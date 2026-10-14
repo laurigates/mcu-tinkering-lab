@@ -10,6 +10,7 @@ which netlist, layout and DRC all agree with a reversed part.
 
 from __future__ import annotations
 
+import dataclasses
 import math
 import re
 import shutil
@@ -25,6 +26,7 @@ from kicad.paths import REPO_ROOT
 
 PARTS = REPO_ROOT / registry.REGISTRY_REL
 XIAO_BOARD = REPO_ROOT / "docs/reference/boards/xiao-rp2350.md"
+XIAO_S3_BOARD = REPO_ROOT / "docs/reference/boards/xiao-esp32s3.md"
 
 # Two units: the writer places unit 1 only, so unit 2's pin would get no stub.
 DUAL = """\
@@ -146,6 +148,33 @@ class PinMapTests(unittest.TestCase):
             path.write_text(mirrored, encoding="utf-8")
             with self.assertRaisesRegex(KicadError, "names pin"):
                 registry.pin_map(self.spec, parse_board_table(path), self.pins)
+
+    def test_esp32s3_socket_board_dip_ccw(self):
+        spec = registry.load("seeed-xiao-esp32s3-socket")
+        self.assertEqual((spec.pin_numbers, spec.pins), ("board-dip-ccw", {}))
+        self.assertEqual(spec.symbol, "Seeed_XIAO:XIAO-ESP32-S3-Socket")
+        self.assertEqual(spec.footprint, "Seeed_XIAO:XIAO-ESP32-S3-Socket")
+        pins = symbols.pins(symbols.load(spec.symbol))
+        mapping = registry.pin_map(spec, parse_board_table(XIAO_S3_BOARD), pins)
+        self.assertEqual(mapping["5V"], ("14",))
+        self.assertEqual(mapping["GND"], ("13",))
+        self.assertEqual(mapping["3V3"], ("12",))
+        self.assertEqual(mapping["D0"], ("1",))
+        self.assertEqual(mapping["D10"], ("11",))
+
+    def test_top_or_bottom_row_fails_naming_the_remedy(self):
+        # board-dip-ccw numbers an L/R DIP; a T/B row has no place in it (#766).
+        # parse_board_table admits only L/R today, so the row is built directly:
+        # the guard is for a Board from any other reader.
+        board = parse_board_table(XIAO_BOARD)
+        top = dataclasses.replace(board.pins[0], name="VO+", side="T", pos=1)
+        board = dataclasses.replace(board, pins=(*board.pins, top))
+        with self.assertRaisesRegex(
+            KicadError,
+            r"seeed-xiao-rp2350-socket\.toml.*pin VO\+ is on side 'T'.*"
+            r"board-dip-ccw.*explicit \[pins\]",
+        ):
+            registry.pin_map(self.spec, board, self.pins)
 
     def test_needs_a_board(self):
         with self.assertRaisesRegex(KicadError, "needs a board page"):
@@ -291,8 +320,8 @@ class MutationTests(unittest.TestCase):
                 "body = [1, 2, 3]",
                 "body must be 4 numbers",
             ),
-            'source = "pin order': (
-                'lcsc = "17414"\nsource = "pin order',
+            'source = "': (
+                'lcsc = "17414"\nsource = "',
                 "lcsc '17414'",
             ),
         }

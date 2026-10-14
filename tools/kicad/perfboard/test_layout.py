@@ -324,6 +324,8 @@ class GenerateTests(unittest.TestCase):
         # passes, and an edited file fails it naming the project's recipe.
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
+            # A module name that is not the directory name (#766).
+            (root / "justfile").write_text("mod bb 'packages/robotics/balancebot'\n")
             out_dir = config.perfboard_dir(root / "packages/robotics/balancebot")
             out_dir.mkdir(parents=True)
             layout = cli.Layout(
@@ -362,7 +364,7 @@ class GenerateTests(unittest.TestCase):
             self.assertEqual(code, 1)
             self.assertIn(
                 "packages/robotics/balancebot: stale: ['perfboard.md']; "
-                "run just balancebot::perfboard",
+                "run just bb::perfboard",
                 out,
             )
 

@@ -147,12 +147,23 @@ class MutationTests(unittest.TestCase):
         self.assertNotEqual(netlist.as_dict(self.build()), fixture())
 
     def test_same_pin_on_two_nets(self):
+        # Two roles onto one pin is now the join's error (#722), so this
+        # reaches the netlist's own check through what the join lets past:
+        # one load driven by two drivers' outputs.
+        self.edit(
+            self.toml,
+            'to = ["stepper_right"]',
+            'to = ["stepper_right", "stepper_left"]',
+        )
+        self.fails(r"J4\.1 is on net 'MOTL_A1' and net 'MOTR_A1'")
+
+    def test_two_roles_on_one_pin_fail_in_the_join(self):
         self.edit(
             self.toml,
             '[[nets]]\nrole = "PIN_IMU_INT"\n',
             '[[nets]]\nrole = "PIN_IMU_INT"\nto = "imu.SDA"\n\n[[nets]]\nrole = "PIN_IMU_INT"\n',
         )
-        self.fails(r"J3\.4 is on net 'IMU_INT' and net 'IMU_SDA'")
+        self.fails(r"imu\.SDA is driven by both PIN_IMU_SDA and PIN_IMU_INT")
 
     def test_part_without_ref(self):
         self.edit(self.toml, 'part = "gy-521"\nref = "J3"\n', 'part = "gy-521"\n')

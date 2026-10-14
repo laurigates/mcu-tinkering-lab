@@ -51,6 +51,8 @@ def materialise(root: Path) -> Path:
         path.rename(path.with_name(path.name.removesuffix(SUFFIX)))
     (root / "tools/kicad").mkdir(parents=True, exist_ok=True)
     (root / "tools/kicad/lib").symlink_to(REPO_ROOT / "tools/kicad/lib")
+    # Hints name the project's root-justfile module (`paths.just_module`).
+    (root / "justfile").write_text(f"mod balancebot '{PROJECT_REL.as_posix()}'\n")
     return root / PROJECT_REL
 
 

@@ -51,6 +51,17 @@ gen:
 test:
     cd ../.. && python3 -m unittest discover -s tools/hardware -t tools
 
+# The pad centres a breakout page records (docs/reference/boards/, #750) are
+# re-derived from the vendor's .brd at the commit the page pins: fetched from
+# GitHub, run through tools/breakout-pinout.py --json, y negated into KiCad's
+# convention, and diffed. Local only: it needs the network, and CI stays
+# offline (ADR-027) and reads only the recorded table.
+#
+# Re-fetch each breakout's board file and diff its recorded pad centres (network)
+[group: "test"]
+pad-centres-check:
+    cd ../.. && PYTHONPATH=tools python3 -m hardware.padcheck
+
 # Fail if any generated Markdown block is stale — what CI runs (hardware-check.yml)
 [group: "test"]
 check: test

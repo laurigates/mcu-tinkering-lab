@@ -1,12 +1,11 @@
 (fp_lib_table
   (version 7)
   (lib (name "Capacitor_SMD")(type "KiCad")(uri "${KIPRJMOD}/../../../../../../tools/kicad/lib/kicad-stock/footprints/Capacitor_SMD.pretty")(options "")(descr "KiCad 10.0.6 Capacitor_SMD library, vendored subset (CC-BY-SA 4.0, tools/kicad/lib/kicad-stock/LICENSE.md)"))
-  (lib (name "Connector_AMASS")(type "KiCad")(uri "${KIPRJMOD}/../../../../../../tools/kicad/lib/kicad-stock/footprints/Connector_AMASS.pretty")(options "")(descr "KiCad 10.0.6 Connector_AMASS library, vendored subset (CC-BY-SA 4.0, tools/kicad/lib/kicad-stock/LICENSE.md)"))
   (lib (name "Connector_JST")(type "KiCad")(uri "${KIPRJMOD}/../../../../../../tools/kicad/lib/kicad-stock/footprints/Connector_JST.pretty")(options "")(descr "KiCad 10.0.6 Connector_JST library, vendored subset (CC-BY-SA 4.0, tools/kicad/lib/kicad-stock/LICENSE.md)"))
   (lib (name "Connector_PinSocket_2.54mm")(type "KiCad")(uri "${KIPRJMOD}/../../../../../../tools/kicad/lib/kicad-stock/footprints/Connector_PinSocket_2.54mm.pretty")(options "")(descr "KiCad 10.0.6 Connector_PinSocket_2.54mm library, vendored subset (CC-BY-SA 4.0, tools/kicad/lib/kicad-stock/LICENSE.md)"))
   (lib (name "Diode_SMD")(type "KiCad")(uri "${KIPRJMOD}/../../../../../../tools/kicad/lib/kicad-stock/footprints/Diode_SMD.pretty")(options "")(descr "KiCad 10.0.6 Diode_SMD library, vendored subset (CC-BY-SA 4.0, tools/kicad/lib/kicad-stock/LICENSE.md)"))
   (lib (name "Module")(type "KiCad")(uri "${KIPRJMOD}/../../../../../../tools/kicad/lib/kicad-stock/footprints/Module.pretty")(options "")(descr "KiCad 10.0.6 Module library, vendored subset (CC-BY-SA 4.0, tools/kicad/lib/kicad-stock/LICENSE.md)"))
   (lib (name "MountingHole")(type "KiCad")(uri "${KIPRJMOD}/../../../../../../tools/kicad/lib/kicad-stock/footprints/MountingHole.pretty")(options "")(descr "KiCad 10.0.6 MountingHole library, vendored subset (CC-BY-SA 4.0, tools/kicad/lib/kicad-stock/LICENSE.md)"))
   (lib (name "Resistor_SMD")(type "KiCad")(uri "${KIPRJMOD}/../../../../../../tools/kicad/lib/kicad-stock/footprints/Resistor_SMD.pretty")(options "")(descr "KiCad 10.0.6 Resistor_SMD library, vendored subset (CC-BY-SA 4.0, tools/kicad/lib/kicad-stock/LICENSE.md)"))
-  (lib (name "Seeed_XIAO")(type "KiCad")(uri "${KIPRJMOD}/../../../../../../tools/kicad/lib/seeed-xiao/Seeed_XIAO.pretty")(options "")(descr "Seeed XIAO RP2350, from Seeed-Studio/OSHW-XIAO-Series @ cc7f3bb (MIT)"))
+  (lib (name "Seeed_XIAO")(type "KiCad")(uri "${KIPRJMOD}/../../../../../../tools/kicad/lib/seeed-xiao/Seeed_XIAO.pretty")(options "")(descr "Seeed XIAO RP2350 and ESP32-S3, from Seeed-Studio/OSHW-XIAO-Series @ cc7f3bb (MIT)"))
 )
