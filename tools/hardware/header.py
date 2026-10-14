@@ -9,7 +9,9 @@ spells that binding is its pin-macro convention, and the repo has three:
 
 A *channel role* is the same idea one hop out: a PWM-driver output bound to a
 channel number (`#define SERVO_PAN_CHANNEL 6`), spelled per convention in
-`CHANNEL_CONVENTIONS` (#666).
+`CHANNEL_CONVENTIONS` (#666). A *bus channel role* is an I2C multiplexer's
+downstream channel (`#define I2C_BUS_CHANNEL_OLED 1`), in `BUS_CONVENTIONS`
+(#768).
 
 `robocar` and `balancebot` are implemented. `gamepad-synth` is named here so
 the next project to adopt a hardware.toml extends this table rather than
@@ -53,6 +55,15 @@ CONVENTIONS: dict[str, tuple[re.Pattern[str], re.Pattern[str]]] = {
 # a multiplexer channel and does not end in `_CHANNEL`, so it is not one.
 CHANNEL_CONVENTIONS: dict[str, tuple[re.Pattern[str], re.Pattern[str]]] = {
     "robocar": (re.compile(r"\w+_CHANNEL"), re.compile(r"(\d+)")),
+}
+
+# Convention name -> (name pattern, value pattern) for a *bus channel role*: a
+# downstream channel of an I2C multiplexer (`#define I2C_BUS_CHANNEL_OLED 1`),
+# which a `[[bus_nets]]` entry wires as a pair of nets (#768). The value's
+# group 1 is the channel number. `CHANNEL_CONVENTIONS` cannot match these names,
+# since they do not end in `_CHANNEL`.
+BUS_CONVENTIONS: dict[str, tuple[re.Pattern[str], re.Pattern[str]]] = {
+    "robocar": (re.compile(r"I2C_BUS_CHANNEL_\w+"), re.compile(r"(\d+)")),
 }
 
 
@@ -100,12 +111,28 @@ def roles_from_defines(defines: dict[str, str], convention: str) -> dict[str, in
 
 def channels_from_defines(defines: dict[str, str], convention: str) -> dict[str, int]:
     """Return channel role -> channel number for every PWM-driver output macro."""
-    if convention not in CHANNEL_CONVENTIONS:
+    return _numbered(defines, convention, CHANNEL_CONVENTIONS, "channel")
+
+
+def bus_channels_from_defines(
+    defines: dict[str, str], convention: str
+) -> dict[str, int]:
+    """Return bus channel role -> channel number for every I2C-mux channel macro."""
+    return _numbered(defines, convention, BUS_CONVENTIONS, "bus-channel")
+
+
+def _numbered(
+    defines: dict[str, str],
+    convention: str,
+    conventions: dict[str, tuple[re.Pattern[str], re.Pattern[str]]],
+    what: str,
+) -> dict[str, int]:
+    if convention not in conventions:
         raise HardwareError(
-            f"pin-macro convention {convention!r} has no channel convention; "
-            f"implemented: {sorted(CHANNEL_CONVENTIONS)}"
+            f"pin-macro convention {convention!r} has no {what} convention; "
+            f"implemented: {sorted(conventions)}"
         )
-    name_re, value_re = CHANNEL_CONVENTIONS[convention]
+    name_re, value_re = conventions[convention]
     channels: dict[str, int] = {}
     for name, value in defines.items():
         m = value_re.fullmatch(value)

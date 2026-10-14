@@ -46,7 +46,7 @@ def _only_i2s(model, **changes):
     """``model`` reduced to its three I2S nets, with ``changes`` applied."""
     nets = tuple(n for n in model.nets if n.part == "amp")
     assert len(nets) == 3, "robocar-unified's join should wire three amp pins"
-    return dataclasses.replace(model, nets=nets, **changes)
+    return dataclasses.replace(model, nets=nets, bus_nets=(), **changes)
 
 
 def test_ends_are_the_pad_the_role_lands_on_and_the_part_pin_the_join_names(
@@ -298,3 +298,115 @@ def test_balancebot_tags_the_driver_straps_from_the_rails(bb_model):
     )
     with pytest.raises(HardwareError, match=r"drv_left\.M1"):
         mod.draw(dataclasses.replace(bb_model, rails=rails))
+
+
+# --- Mux channel buses: robocar-unified (#768) ---------------------------------
+# The TCA9548A's downstream SDn/SCn pairs used to be hand-drawn by channel macro;
+# [[bus_nets]] now says which part each channel reaches.
+
+
+@pytest.fixture
+def mux_drawn():
+    """A placed XIAO, the TCA9548A, the PCA9685 and the OLED."""
+    from components import pca9685, ssd1306_oled, tca9548a
+
+    d = schemdraw.Drawing(show=False)
+    xiao = d.add(xiao_esp32s3_sense(layout="physical"))
+    parts = {
+        "mux": d.add(tca9548a(layout="physical").at((10, 0))),
+        "pwm": d.add(pca9685(layout="physical").at((30, 0))),
+        "oled": d.add(ssd1306_oled().at((10, -20))),
+    }
+    return xiao, parts
+
+
+def test_bus_ends_pair_each_channel_pad_with_the_loads_sda_and_scl(model, mux_drawn):
+    xiao, parts = mux_drawn
+    nets = JoinedNets(model, xiao, parts)
+    n = model.bus_channels["I2C_BUS_CHANNEL_OLED"]
+    mux, oled = parts["mux"].absanchors, parts["oled"].absanchors
+    assert nets.bus_ends("I2C_BUS_CHANNEL_OLED") == [
+        (mux[f"SD{n}"], oled["SDA"]),
+        (mux[f"SC{n}"], oled["SCL"]),
+    ]
+
+
+def test_a_renumbered_mux_channel_moves_the_mux_end(model, mux_drawn):
+    xiao, parts = mux_drawn
+    buses = tuple(
+        dataclasses.replace(b, channel=5) if b.role == "I2C_BUS_CHANNEL_OLED" else b
+        for b in model.bus_nets
+    )
+    nets = JoinedNets(dataclasses.replace(model, bus_nets=buses), xiao, parts)
+    (sda, _), (scl, _) = nets.bus_ends("I2C_BUS_CHANNEL_OLED")
+    assert (sda, scl) == (
+        parts["mux"].absanchors["SD5"],
+        parts["mux"].absanchors["SC5"],
+    )
+
+
+def test_bus_ends_takes_the_drawings_anchor_for_a_repeated_pad(model, mux_drawn):
+    # The PCA9685 has SDA on both side headers; the drawing picks the right one.
+    xiao, parts = mux_drawn
+    nets = JoinedNets(model, xiao, parts)
+    anchors = {"pwm.SDA": "SDA.R4", "pwm.SCL": "SCL.R3"}
+    (_, sda), (_, scl) = nets.bus_ends("I2C_BUS_CHANNEL_PCA9685", anchors)
+    assert (sda, scl) == (
+        parts["pwm"].absanchors["SDA.R4"],
+        parts["pwm"].absanchors["SCL.R3"],
+    )
+
+
+def test_an_anchor_on_another_pin_is_an_error(model, mux_drawn):
+    # SCL.R3 for the SDA line would wire channel 0's data to the clock pad.
+    xiao, parts = mux_drawn
+    nets = JoinedNets(model, xiao, parts)
+    with pytest.raises(HardwareError, match=r"SCL\.R3.*pwm\.SDA"):
+        nets.bus_ends(
+            "I2C_BUS_CHANNEL_PCA9685", {"pwm.SDA": "SCL.R3", "pwm.SCL": "SCL.R3"}
+        )
+
+
+def test_an_anchor_for_a_pin_off_the_bus_is_an_error(model, mux_drawn):
+    xiao, parts = mux_drawn
+    nets = JoinedNets(model, xiao, parts)
+    with pytest.raises(HardwareError, match=r"oled\.SDA"):
+        nets.bus_ends("I2C_BUS_CHANNEL_PCA9685", {"oled.SDA": "SDA"})
+
+
+def test_a_bus_role_with_no_entry_is_an_error(model, mux_drawn):
+    xiao, parts = mux_drawn
+    nets = JoinedNets(model, xiao, parts)
+    with pytest.raises(HardwareError, match="I2C_BUS_CHANNEL_CAMERA.*bus_nets"):
+        nets.bus_ends("I2C_BUS_CHANNEL_CAMERA")
+
+
+def test_a_bus_drawn_twice_is_an_error(model, mux_drawn):
+    xiao, parts = mux_drawn
+    nets = JoinedNets(model, xiao, parts)
+    nets.bus_ends("I2C_BUS_CHANNEL_OLED")
+    with pytest.raises(HardwareError, match="twice"):
+        nets.bus_ends("I2C_BUS_CHANNEL_OLED")
+
+
+def test_check_names_a_bus_the_drawing_left_out(model, mux_drawn):
+    xiao, parts = mux_drawn
+    only = tuple(b for b in model.bus_nets if b.part in ("oled", "pwm"))
+    nets = JoinedNets(dataclasses.replace(model, nets=(), bus_nets=only), xiao, parts)
+    nets.bus_ends("I2C_BUS_CHANNEL_OLED")
+    with pytest.raises(HardwareError) as err:
+        nets.check_all_drawn()
+    assert "I2C_BUS_CHANNEL_PCA9685 -> pwm" in str(err.value)
+    assert "OLED" not in str(err.value)
+
+
+def test_robocar_unified_fails_to_render_a_bus_it_does_not_draw(model):
+    # A [[bus_nets]] entry for a channel the circuit never draws must stop the
+    # render, as an MCU net does.
+    from hardware import BusNet
+    from render import ROOT, load_circuit
+
+    mod = load_circuit(ROOT / "circuits" / "robocar_unified.py")
+    extra = BusNet("I2C_BUS_CHANNEL_SPARE", 3, "mux", "oled", "")
+    with pytest.raises(HardwareError, match="I2C_BUS_CHANNEL_SPARE"):
+        mod.draw(dataclasses.replace(model, bus_nets=(*model.bus_nets, extra)))

@@ -175,10 +175,10 @@ def draw(model: HardwareModel | None = None) -> schemdraw.Drawing:
         """A numeric ``#define`` from the project's headers (``0x40`` included)."""
         return int(model.defines[macro], 0)
 
-    # A PCA9685 channel's pad is named by its number, a mux channel's pair by
-    # its digit. Both come from the firmware, not from this file: a renumbered
-    # channel in pin_config.h moves the wire to the new pad instead of leaving
-    # the drawing on the old one.
+    # A PCA9685 channel's pad is named by its number, which comes from the
+    # firmware, not from this file: a renumbered channel in pin_config.h moves
+    # the wire to the new pad instead of leaving the drawing on the old one.
+    # The mux channels' pad pairs come from the join (nets.bus_ends).
     def channel(macro: str) -> str:
         return str(value(macro))
 
@@ -457,9 +457,11 @@ def draw(model: HardwareModel | None = None) -> schemdraw.Drawing:
     router.wire(*nets.ends("I2C_SCL_PIN"), net="i2c")
 
     # Mux ch0 (bottom of its left edge) → the PCA9685's right-edge header.
-    ch_pca = channel("I2C_BUS_CHANNEL_PCA9685")
-    router.wire(mux[f"SD{ch_pca}"], pca["SDA.R4"], net="i2c")
-    router.wire(mux[f"SC{ch_pca}"], pca["SCL.R3"], net="i2c")
+    # The channel and the part it reaches are the join's ([[bus_nets]]); which
+    # of the PCA9685's two identical side headers takes them is the drawing's.
+    pca_header = {"pwm.SDA": "SDA.R4", "pwm.SCL": "SCL.R3"}
+    for ends in nets.bus_ends("I2C_BUS_CHANNEL_PCA9685", pca_header):
+        router.wire(*ends, net="i2c")
 
     # PCA9685 channel pads → TB6612FNG control row. The driver's right edge
     # runs PWMA, AIN2, AIN1, STBY, BIN1, BIN2, PWMB top to bottom, and the
@@ -475,13 +477,9 @@ def draw(model: HardwareModel | None = None) -> schemdraw.Drawing:
     # STBY direct from MCU GPIO1 (D0) to the gap in the control row.
     router.wire(*nets.ends("MOTOR_STBY_PIN"), net="signal")
 
-    ch_oled = channel("I2C_BUS_CHANNEL_OLED")
-    router.wire(mux[f"SD{ch_oled}"], oled.SDA, net="i2c")
-    router.wire(mux[f"SC{ch_oled}"], oled.SCL, net="i2c")
-
-    ch_mcp = channel("I2C_BUS_CHANNEL_MCP23017")
-    router.wire(mux[f"SD{ch_mcp}"], mcp.SDA, net="i2c")
-    router.wire(mux[f"SC{ch_mcp}"], mcp.SCL, net="i2c")
+    for role in ("I2C_BUS_CHANNEL_OLED", "I2C_BUS_CHANNEL_MCP23017"):
+        for ends in nets.bus_ends(role):
+            router.wire(*ends, net="i2c")
 
     router.wire(*nets.ends("ULTRASONIC_TRIG_PIN"), net="sensor")
     router.wire(*nets.ends("ULTRASONIC_ECHO_PIN"), net="sensor")
@@ -491,8 +489,8 @@ def draw(model: HardwareModel | None = None) -> schemdraw.Drawing:
     router.wire(*nets.ends("I2S_LRCLK_PIN"), net="i2s")
     router.wire(*nets.ends("I2S_DIN_PIN"), net="i2s")
 
-    # Every MCU net in hardware.toml has now been drawn, or this fails the
-    # render naming the one that was not.
+    # Every MCU net and mux channel bus in hardware.toml has now been drawn,
+    # or this fails the render naming the one that was not.
     nets.check_all_drawn()
     # Likewise every drawn part pin hardware.toml puts on a rail has a tag.
     nets.check_all_tagged()

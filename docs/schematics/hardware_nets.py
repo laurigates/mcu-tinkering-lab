@@ -22,7 +22,9 @@ render for any rail endpoint on a drawn part that no tag was asked about.
 
 A role wired to several part pins (balancebot's shared nENABLE) comes back
 whole from ``fanout()``, and a driver's ``[[outputs]]`` pin lists as wire
-pairs from ``output_ends()`` (#738).
+pairs from ``output_ends()`` (#738). An I2C mux channel's ``[[bus_nets]]``
+lines come from ``bus_ends()`` (#768), and ``check_all_drawn()`` covers them
+too.
 """
 
 from __future__ import annotations
@@ -147,6 +149,42 @@ class JoinedNets:
             for pin in out.pins
         ]
 
+    def bus_ends(
+        self, role: str, anchors: dict[str, str] | None = None
+    ) -> list[tuple[Point, Point]]:
+        """One (mux pad, load pin) pair per line of ``role``'s ``[[bus_nets]]``.
+
+        SDA first, then SCL, for each load in file order. ``anchors`` maps a
+        load pin (``"pwm.SDA"``) to the drawn element's anchor where the board
+        repeats the pad (``"SDA.R4"``); the anchor must name the same pin.
+        """
+        buses = [b for b in self.model.bus_nets if b.role == role]
+        if not buses:
+            raise HardwareError(f"{role}: no [[bus_nets]] entry in hardware.toml")
+        if role in self._drawn:
+            raise HardwareError(f"{role}: drawn twice")
+        anchors = anchors or {}
+        on_bus = {f"{b.part}.{pin}" for b in buses for _, pin in b.wires}
+        stray = sorted(set(anchors) - on_bus)
+        if stray:
+            raise HardwareError(f"{role}: anchors for pins not on this bus: {stray}")
+        pairs = []
+        for bus in buses:
+            for pad, pin in bus.wires:
+                anchor = anchors.get(f"{bus.part}.{pin}", pin)
+                if anchor.split(".")[0] != pin:
+                    raise HardwareError(
+                        f"{role}: anchor {anchor!r} for {bus.part}.{pin} is another pin"
+                    )
+                pairs.append(
+                    (
+                        self._pin(role, bus.source, pad),
+                        self._pin(role, bus.part, anchor),
+                    )
+                )
+        self._drawn.add(role)
+        return pairs
+
     def start(self, role: str) -> Point:
         """The MCU end of a net whose far end the circuit draws by hand."""
         self._net(role)
@@ -156,9 +194,17 @@ class JoinedNets:
 
     def check_all_drawn(self) -> None:
         """Fail if the join declares a net the drawing never consumed."""
-        missing = [n for n in self.model.nets if n.role not in self._drawn]
+        missing = [
+            f"{n.role} -> {n.part}.{n.pin}"
+            for n in self.model.nets
+            if n.role not in self._drawn
+        ] + [
+            f"{b.role} -> {b.part}"
+            for b in self.model.bus_nets
+            if b.role not in self._drawn
+        ]
         if missing:
-            listed = ", ".join(f"{n.role} -> {n.part}.{n.pin}" for n in missing)
+            listed = ", ".join(missing)
             raise HardwareError(
                 f"hardware.toml declares net(s) the schematic does not draw: {listed}"
             )

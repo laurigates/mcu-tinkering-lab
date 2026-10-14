@@ -208,6 +208,18 @@ hardcodes coordinates (`.at((5.75, …))`, `esp.center.x + 4.5`) against symbol
 sizes declared in `components.py` (`size=(3, 5)`) — so a symbol resize can leave
 `test_wire_avoids_obstacle_placed_between_pins` passing while asserting nothing.
 
+### Later addition: mux channel buses (#768)
+
+The same rule extends past the MCU to an I2C multiplexer's downstream channels.
+A `[[bus_nets]]` entry names a bus channel role (`I2C_BUS_CHANNEL_OLED`, from
+`pin_config.h`), the mux part and the load part; the join resolves the channel
+number from the header and wires the mux's `SD<n>`/`SC<n>` pads to the load's
+`SDA`/`SCL`. So the sidecar still holds no channel number, and the carrier
+netlist (`tools/kicad`, ADR-027) and the schematic both read the channel buses
+from the join instead of a hand-drawn wire per pad. The schematic still chooses
+which pad a wire lands on where a board repeats one, such as the PCA9685's two
+identical side headers. The format and its checks are in `tools/hardware/model.py`.
+
 ## Related
 
 - [ADR-013](ADR-013-single-board-xiao-esp32s3.md) — the XIAO consolidation whose

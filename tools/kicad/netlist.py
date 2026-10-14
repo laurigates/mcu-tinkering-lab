@@ -9,6 +9,9 @@ reference designator and symbol pin number. The nets it emits:
 - each signal role: the MCU pad its GPIO lands on, plus every `[[nets]]` load,
   named by `[net_names]` or else the role;
 - each `[[channel_nets]]` role: the driver pad named by the channel number;
+- each `[[bus_nets]]` role: two nets, the mux's `SD<n>` with every load's `SDA`
+  and `SC<n>` with every `SCL`, named `<name>_SDA` / `<name>_SCL` where
+  `<name>` is the role or its `[net_names]` entry;
 - each rail, named by `[net_names]` or else the rail name;
 - each output pin: `net.format(pin=p)` joining the driver's pin p to pin p of
   every load.
@@ -192,6 +195,12 @@ def build(
         what = f"channel role {cn.role}"
         add(names.get(cn.role, cn.role), what, nodes(what, cn.source, str(cn.channel)))
         add(names.get(cn.role, cn.role), what, nodes(what, cn.part, cn.pin))
+    for bus in model.bus_nets:
+        for pad, pin in bus.wires:
+            what = f"bus role {bus.role} {pin}"
+            name = f"{names.get(bus.role, bus.role)}_{pin}"
+            add(name, what, nodes(what, bus.source, pad))
+            add(name, what, nodes(what, bus.part, pin))
     for rail in model.rails:
         what = f"rail {rail.name}"
         for ep in (rail.source, *rail.loads):

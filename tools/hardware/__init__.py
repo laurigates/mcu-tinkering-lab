@@ -20,8 +20,10 @@ labelled from the join (#629).
 from .board import Board, BoardPin, parse_board_table
 from .errors import HardwareError
 from .header import (
+    BUS_CONVENTIONS,
     CHANNEL_CONVENTIONS,
     CONVENTIONS,
+    bus_channels_from_defines,
     channels_from_defines,
     parse_defines,
     roles_from_defines,
@@ -32,6 +34,7 @@ from .model import (
     HARNESS,
     MCU,
     VIEWS,
+    BusNet,
     ChannelNet,
     Endpoint,
     HardwareModel,
@@ -44,6 +47,7 @@ from .model import (
 )
 
 __all__ = [
+    "BUS_CONVENTIONS",
     "CARRIER",
     "CHANNEL_CONVENTIONS",
     "CONVENTIONS",
@@ -52,6 +56,7 @@ __all__ = [
     "VIEWS",
     "Board",
     "BoardPin",
+    "BusNet",
     "ChannelNet",
     "Endpoint",
     "HardwareError",
@@ -64,6 +69,7 @@ __all__ = [
     "Rail",
     "Undrawn",
     "board_layout",
+    "bus_channels_from_defines",
     "channels_from_defines",
     "join",
     "parse_board_table",

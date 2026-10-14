@@ -305,8 +305,8 @@ A project with a `hardware.toml` (ADR-021) does not transcribe its MCU wiring.
 `hardware_nets.JoinedNets` for each net by pin role —
 `router.wire(*nets.ends("I2S_BCLK_PIN"), net="i2s")` — so the XIAO pad comes
 from `pin_config.h` and the board reference, and the part pin from the
-`[[nets]]` entry. Chip addresses, the PWM frequency and the PCA9685 and mux
-channel numbers in its labels come from the same headers. Placement, net order
+`[[nets]]` entry. Chip addresses, the PWM frequency and the PCA9685 channel
+numbers in its labels come from the same headers. Placement, net order
 and net colour stay in the circuit. After the last MCU wire,
 `nets.check_all_drawn()` fails the render for any `[[nets]]` entry the drawing
 left out, so a net added to `hardware.toml` cannot ship a schematic without it.
@@ -316,7 +316,11 @@ Power tags follow the same split: `nets.rail("pwm", "VCC")` gives the label
 has no tag. `SUGGESTED_CAPS` keeps its `rail` field for display;
 `test_power_tags.py` holds it to the join. A role wired to several part pins
 (balancebot's shared nENABLE) comes back whole from `nets.fanout(role)`, and a
-driver's `[[outputs]]` pin lists as wire pairs from `nets.output_ends()`.
+driver's `[[outputs]]` pin lists as wire pairs from `nets.output_ends()`. An
+I2C mux channel's `[[bus_nets]]` entry gives its SDA and SCL wire pairs from
+`nets.bus_ends(role)`, with an `anchors` map where the drawing picks one of a
+board's repeated pads (`{"pwm.SDA": "SDA.R4"}`); `check_all_drawn()` covers
+these too.
 
 ## Freshness check
 
