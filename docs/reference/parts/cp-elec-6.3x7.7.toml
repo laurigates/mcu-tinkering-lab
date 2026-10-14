@@ -1,0 +1,14 @@
+# Aluminium electrolytic, 6.3 x 7.7 mm SMD can. Value and LCSC number per instance.
+[part]
+name = "Electrolytic capacitor, 6.3 x 7.7 mm SMD"
+source = "KiCad 10.0.6 library"
+symbol = "Device:C_Polarized"
+footprint = "Capacitor_SMD:CP_Elec_6.3x7.7"
+
+[pins]
+"+" = 1
+"-" = 2
+
+[perfboard]
+footprint = "Capacitor_THT:CP_Radial_D8.0mm_P2.50mm"
+height = "tall"

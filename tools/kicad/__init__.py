@@ -15,7 +15,13 @@ Modules, one responsibility each:
 - `library`     where a symbol library or footprint file is found: the vendored
                 copy first, the installed KiCad only for `vendor`
 - `symbols`     a symbol's pins, flags and extent, and its `lib_symbols` embedding
-- `footprints`  a footprint's pads, courtyard and attributes
+- `footprints`  a footprint's pads, courtyard, attributes and user text
+- `registry`    the parts registry (docs/reference/parts/): pin maps, checked
+                against the vendored library, polarity included
+- `netlist`     CLI: the carrier netlist, from the join's carrier view and the
+                registry; KiCad's no-connect net names
+- `parity`      CLI (local, kicad-cli): the committed schematic's netlist
+                against the join's
 - `vendor`      CLI: pin, compare and rebuild the vendored library subtrees
 - `derive_xiao` CLI: the socket XIAO parts derived from Seeed's DIP ones
 

@@ -22,6 +22,7 @@ from kicad.paths import REPO_ROOT
 LIB = REPO_ROOT / "tools/kicad/lib"
 STOCK = REPO_ROOT / vendor.STOCK_REL
 SEEED = REPO_ROOT / vendor.SEEED_REL
+PARTS = REPO_ROOT / "docs/reference/parts"
 # sha256 of Seeed-Studio/OSHW-XIAO-Series LICENSE at cc7f3bb (MIT).
 SEEED_LICENSE_SHA256 = (
     "df584ae476b849794bd8462e8c5ea8f33c0fbca400acb83688a331731a30207b"
@@ -126,6 +127,7 @@ class MutationTests(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
         shutil.copytree(LIB, self.root / "tools/kicad/lib")
+        shutil.copytree(PARTS, self.root / "docs/reference/parts")
         self.stock = self.root / vendor.STOCK_REL
         self.seeed = self.root / vendor.SEEED_REL
         self.assertEqual(vendor.check(self.root), [])
@@ -258,6 +260,7 @@ class InstalledTests(unittest.TestCase):
         shutil.copytree(STOCK / "footprints", self.fp_root)
         self.root = base / "repo"
         shutil.copytree(LIB, self.root / "tools/kicad/lib")
+        shutil.copytree(PARTS, self.root / "docs/reference/parts")
         self.stock = self.root / vendor.STOCK_REL
 
     def drift(self):

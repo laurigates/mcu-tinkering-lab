@@ -1,0 +1,9 @@
+# Carrier PCB layout for tools/kicad: everything the netlist does not say.
+# Parts, footprints and nets come from ../../hardware.toml and the parts
+# registry (docs/reference/parts/). For now this file only names the KiCad
+# project; placement, net classes and silkscreen follow with the board tooling
+# (issue #750).
+
+[project]
+name = "balancebot-carrier"          # the KiCad project directory and file stem here
+paper = "A3"

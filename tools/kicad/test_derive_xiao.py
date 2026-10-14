@@ -147,13 +147,16 @@ class DeriveTests(unittest.TestCase):
 
 
 class CliTests(unittest.TestCase):
-    """`main` on a temp copy of tools/kicad/lib."""
+    """`main` on a temp copy of tools/kicad/lib and the parts registry."""
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
         shutil.copytree(LIB, self.root / "tools/kicad/lib")
+        shutil.copytree(
+            REPO_ROOT / "docs/reference/parts", self.root / "docs/reference/parts"
+        )
         self.seeed = self.root / "tools/kicad/lib/seeed-xiao"
         self.socket = self.seeed / SOCKET_FP.relative_to(SEEED)
         self.assertEqual(vendor.check(self.root), [])

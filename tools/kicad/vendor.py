@@ -17,7 +17,8 @@ MANIFEST.tsv, which `derive_xiao` rewrites when it regenerates.
 `--check` recomputes every file's sha256 against its subtree's MANIFEST.tsv
 and fails on a mismatch, a file the manifest does not list, a listed file that is missing,
 a derived (`extends`) symbol, or any difference between the vendored set and
-the referenced set. The project library tables point KiCad at these same
+the referenced set: what the parts registry (docs/reference/parts/) names,
+plus the schematic writer's power flag. The project library tables point KiCad at these same
 files, so a hand edit here would agree with everything generated from it;
 the manifest is what catches it.
 
@@ -38,7 +39,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import library, symbols
+from . import library, registry, symbols
 from .errors import KicadError
 from .paths import REPO_ROOT
 
@@ -79,44 +80,8 @@ SEEED_TREE = Subtree(
 )
 SUBTREES = (STOCK_TREE, SEEED_TREE)
 
-# What the carriers reference from the KiCad library, and so what is vendored.
-# The parts registry (docs/reference/parts/, PR B wave 3) becomes the source of
-# this set: each entry's `symbol`, `footprint` and `[perfboard] footprint`, plus
-# the schematic writer's power flag. Until it lands, the set is spelled here.
-REFERENCED_SYMBOLS = frozenset(
-    {
-        "Connector_Generic:Conn_01x02",
-        "Connector_Generic:Conn_01x04",
-        "Connector_Generic:Conn_01x08",
-        "Device:C",
-        "Device:C_Polarized",
-        "Device:D_Schottky",
-        "Device:R",
-        "Driver_Motor:Pololu_Breakout_DRV8825",
-        "Mechanical:MountingHole",
-        "power:PWR_FLAG",
-    }
-)
-REFERENCED_FOOTPRINTS = frozenset(
-    {
-        "Module:Pololu_Breakout-16_15.2x20.3mm",
-        "Connector_AMASS:AMASS_XT30PW-M_1x02_P2.50mm_Horizontal",
-        "Connector_JST:JST_XH_B4B-XH-A_1x04_P2.50mm_Vertical",
-        "Connector_PinSocket_2.54mm:PinSocket_1x08_P2.54mm_Vertical",
-        "Capacitor_SMD:CP_Elec_6.3x7.7",
-        "Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder",
-        "Diode_SMD:D_SOD-123",
-        "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
-        "MountingHole:MountingHole_3.2mm_M3",
-        # Perfboard through-hole stand-ins.
-        "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical",
-        "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical",
-        "Capacitor_THT:CP_Radial_D8.0mm_P2.50mm",
-        "Capacitor_THT:C_Disc_D5.0mm_W2.5mm_P2.50mm",
-        "Diode_THT:D_DO-41_SOD81_P2.54mm_Vertical_AnodeUp",
-        "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P2.54mm_Vertical",
-    }
-)
+# The schematic writer's power flag (spec §4.4): referenced by no registry entry.
+WRITER_SYMBOLS = frozenset({"power:PWR_FLAG"})
 
 
 @dataclass(frozen=True)
@@ -126,11 +91,17 @@ class Referenced:
 
 
 def referenced(repo_root: Path = REPO_ROOT) -> Referenced:
-    """The stock (non-project) library ids the carriers use."""
-    del repo_root  # read from the parts registry once it exists (see above)
+    """The stock (non-project) library ids the carriers use.
+
+    Every parts-registry entry's `symbol`, `footprint` and `[perfboard]
+    footprint`, plus WRITER_SYMBOLS.
+    """
+    specs = registry.load_all(repo_root)
+    syms = {s.symbol for s in specs} | WRITER_SYMBOLS
+    fps = {s.footprint for s in specs} | {s.perfboard.footprint for s in specs}
     return Referenced(
-        frozenset(i for i in REFERENCED_SYMBOLS if _stock(i)),
-        frozenset(i for i in REFERENCED_FOOTPRINTS if _stock(i)),
+        frozenset(i for i in syms if _stock(i)),
+        frozenset(i for i in fps if _stock(i)),
     )
 
 

@@ -12,7 +12,8 @@ docs/
 ├── prompts/              # Product Requirement Prompts + implementation plans
 ├── reference/
 │   ├── boards/           # Board profiles (ESP32 variants, STM32, Orange Pi, etc.)
-│   └── datasheets/       # Vendor datasheets for components
+│   ├── datasheets/       # Vendor datasheets for components
+│   └── parts/            # Parts registry: hardware.toml pin names -> KiCad symbol pins
 ├── schematics/           # Text-defined circuit schematics (Schemdraw)
 ├── thinkpack/            # ThinkPack user guides
 ├── flasher/              # Browser-based ESP Web Tools firmware flasher (GitHub Pages)

@@ -60,6 +60,21 @@ def parse(path: Path) -> Footprint:
     return Footprint(name=name, pads=pads, courtyard=courtyard(text, path), attr=attr)
 
 
+def user_texts(path: Path) -> list[tuple[str, float, float]]:
+    """(text, x, y) of every `(fp_text user "...")`, on any layer, in file order.
+
+    The parts registry reads the "+"/"-" and "K"/"A" marks among them to prove a
+    polarised part's pin map against the footprint's own silkscreen.
+    """
+    text = path.read_text(encoding="utf-8")
+    return [
+        (sexpr.unquote(m.group(1)), float(m.group(2)), float(m.group(3)))
+        for m in re.finditer(
+            r'\(fp_text user "((?:[^"\\]|\\.)*)"\s*\(at (-?[\d.]+) (-?[\d.]+)', text
+        )
+    ]
+
+
 def courtyard(
     text: str, where: object = "footprint"
 ) -> tuple[float, float, float, float]:

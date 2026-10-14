@@ -28,7 +28,7 @@ from kicad import paths
 from kicad.errors import KicadError
 
 # Modules whose main() takes project directories (paths.add_project_args).
-PROJECT_CLIS: tuple[str, ...] = ()
+PROJECT_CLIS: tuple[str, ...] = ("netlist", "parity")
 # Modules whose main() works on the repo as a whole; with an empty repo root
 # each must exit 1. `vendor` checks tools/kicad/lib/ and `derive_xiao` reads its
 # derive.toml files; neither has projects.
