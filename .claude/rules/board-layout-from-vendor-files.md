@@ -7,6 +7,7 @@ paths:
   - 'tools/breakout-pinout.py'
   - '**/hardware.toml'
   - 'packages/**/hardware/**'
+  - 'tools/kicad/**'
   - 'docs/decisions/ADR-021-*'
 ---
 # A Breakout's Physical Pin Order Comes From the Vendor's Board File

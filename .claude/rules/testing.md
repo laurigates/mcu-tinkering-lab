@@ -20,6 +20,24 @@ just schematics::metrics   # per-circuit routing metrics; compare against the pi
 Run both after touching `docs/schematics/` (`components.py`, `routing.py`,
 `circuits/*.py`). See [`schematic-layout.md`](schematic-layout.md).
 
+## KiCad Carriers
+
+```bash
+just kicad::test                  # tools/kicad unit tests (stdlib unittest; no KiCad)
+just kicad::check                 # what carrier-check.yml runs in CI, KiCad-free
+just <project>::carrier-check     # local, KiCad 10.0.6: ERC, DRC parity, netlist parity,
+                                  # board check, then the check stamp CI verifies
+just <project>::perfboard-check   # the perfboard drawing and wire list are current
+```
+
+Run `kicad::test` after touching `tools/kicad/`, the parts registry or a
+`hardware.toml` with carrier entries. Run `carrier-check` after anything that
+changes a carrier's schematic or board, and commit the stamp it writes. The
+unit tests use synthetic boards and stamps and never read the committed board
+or stamp, so the `kicad-carrier` pre-commit hook (which `auto-fix.yml` can act
+on) never asks for a board edit; `carrier-check.yml` checks those, and only a
+local KiCad run can fix them. See the `carrier-pcb` skill and ADR-027.
+
 ## C/C++ Firmware
 
 - Static analysis via `cppcheck` (run in CI)

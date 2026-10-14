@@ -1,4 +1,4 @@
-# Shared KiCad carrier-PCB recipes (tools/kicad, issue #750).
+# Shared KiCad carrier-PCB recipes (tools/kicad, ADR-027).
 # Import from a project justfile:  import '../../../tools/kicad.just'
 #
 # Every recipe takes the repo-relative project path as its argument; the

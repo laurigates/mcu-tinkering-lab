@@ -28,6 +28,12 @@ core 0 (soft):                    USB CDC CLI + CSV telemetry + LED + battery
 - core0 → core1: `pico_util` queue of `balance_cmd_t` (see `src/ipc.h`)
 - core1 → core0: seqlock'd `balance_snapshot_t`
 - `src/pin_config.h` is the pin-map source of truth (mirror: `WIRING.md`)
+- **Carrier PCB** (`hardware/carrier/`): its schematic is generated from
+  `hardware.toml` and the parts registry by `tools/kicad` (ADR-027); the board
+  is placed and routed from the same netlist and `board.toml`. Recipes:
+  `just balancebot::carrier-schematic`, `carrier-check` (KiCad 10.0.6; writes
+  the check stamp CI verifies), `carrier-board`, `carrier-fab`. See the
+  `carrier-pcb` skill and `hardware/carrier/README.md`.
 
 ## Build / test
 
@@ -71,3 +77,8 @@ way. `param_store.c` only moves `param_record.c`'s bytes to and from flash.
   fields at the end and bump `PARAM_VERSION` with a migration and a test.
 - Don't move the param store to the last flash sector — UF2 downloads
   erase it (picotool RP2350-E10 workaround block).
+- Don't edit `balancebot-carrier.kicad_sch` in KiCad; change `hardware.toml`
+  or the parts registry (`docs/reference/parts/`) and run
+  `just balancebot::carrier-schematic`. Don't hand-edit the `.kicad_pcb` or
+  `balancebot-carrier.check.json` either: re-place with `carrier-board`, then
+  `carrier-check` rewrites the stamp.

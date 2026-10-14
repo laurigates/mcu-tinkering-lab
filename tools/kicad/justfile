@@ -1,4 +1,4 @@
-# tools/kicad — KiCad carrier boards generated from the hardware join (issue #750).
+# tools/kicad — KiCad carrier boards generated from the hardware join (ADR-027).
 #
 # Recipes cd to the repo root first, as tools/hardware/justfile's do: the
 # CLIs take repo-relative project paths. Per-project recipes

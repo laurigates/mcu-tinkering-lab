@@ -5,7 +5,7 @@ source = "KiCad 10.0.6 footprint; its silkscreen prints - beside pad 1 and + bes
 symbol = "Connector_Generic:Conn_01x02"
 footprint = "Connector_AMASS:AMASS_XT30PW-M_1x02_P2.50mm_Horizontal"
 
-# Pad 1 is "-" (.claude/rules/kicad-scripting.md, trap 3). tools/kicad/registry.py
+# Pad 1 is "-" (the carrier-pcb skill, trap 3). tools/kicad/registry.py
 # checks this against the footprint's own + and - text.
 [pins]
 "-" = 1

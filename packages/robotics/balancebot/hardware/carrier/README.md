@@ -5,9 +5,13 @@ A 90 × 62 mm, 2-layer carrier that replaces the hand-wired harness in
 connector, so any of them can be swapped without desoldering. The passives are
 SMD on the top side; the sockets and connectors are through-hole.
 
-KiCad 10 project: [`balancebot-carrier/`](balancebot-carrier/). The schematic is
-the source of truth for parts and nets; the board is generated from it by the
-scripts in [`scripts/`](scripts/).
+KiCad 10 project: [`balancebot-carrier/`](balancebot-carrier/). Its schematic is
+generated from [`hardware.toml`](../../hardware.toml) and the parts registry
+([`docs/reference/parts/`](../../../../../docs/reference/parts/)) by `tools/kicad`
+([ADR-027](../../../../../docs/decisions/ADR-027-kicad-carrier-generation.md)):
+never edit `balancebot-carrier.kicad_sch` in KiCad; change `hardware.toml` or a
+registry entry and regenerate. The board is placed and routed from the same
+netlist and [`board.toml`](board.toml) (placement, silkscreen, net classes, pour).
 
 ## What is on it
 
@@ -74,32 +78,40 @@ LCSC part number, so the same board works both ways:
 ## Regenerate and check
 
 ```sh
-just balancebot::carrier-lib     # socket XIAO footprint + symbol from Seeed's DIP ones
-just balancebot::carrier-board   # place, autoroute (Freerouting), pour GND
-just balancebot::carrier-check   # ERC, DRC + schematic parity, pin_config.h cross-check
-just balancebot::carrier-fab     # Gerbers + drill files → output/balancebot-carrier-fab.zip
+just balancebot::carrier-schematic  # schematic + library tables from hardware.toml (no KiCad)
+just balancebot::carrier-board      # place from scratch, autoroute (Freerouting), pour GND
+just balancebot::carrier-check      # ERC, DRC + schematic parity, netlist parity, board check,
+                                    # then the check stamp CI verifies
+just balancebot::carrier-fab        # Gerbers + drill files → output/balancebot-carrier-fab.zip
+just balancebot::carrier-lib        # socket XIAO footprint + symbol from Seeed's DIP ones
 ```
 
-`carrier-board` needs KiCad 10 (its bundled Python provides `pcbnew`) and the
-Freerouting 2.5.0 jar at `~/.cache/freerouting/` (or `FREEROUTING_JAR`).
-Freerouting does not route the same way twice, so a re-run gives a different,
-equally checked board: commit the board you checked.
+`carrier-check` and `carrier-fab` need KiCad 10.0.6 (`kicad-cli`).
+`carrier-board` also needs KiCad's bundled Python (it provides `pcbnew`), Java
+25 or later, and the Freerouting 2.5.0 jar at
+`~/.cache/freerouting/freerouting-2.5.0.jar` (or `FREEROUTING_JAR`). Freerouting
+does not route the same way twice, so a re-run gives a different, equally
+checked board: commit the board you checked.
 
-`carrier-check` fails if a role in `src/pin_config.h` lands on a different
-carrier net than the one this board gives it. It reads the pad for each role
-through the hardware join (ADR-021), so renumbering a pin without rewiring the
-board fails here.
+`carrier-check` fails if the committed schematic or board no longer matches the
+join (ADR-021): `kicad.parity` compares KiCad's own netlist of the schematic
+with the join's, and `kicad.boardcheck` compares every board pad's net, value,
+LCSC number and footprint path with it. So renumbering a pin in
+`src/pin_config.h` without regenerating and re-routing fails here. Only when
+every gate passes does it write `balancebot-carrier.check.json`, which records
+the hashes of the files it checked; CI (`carrier-check.yml`, no KiCad) fails
+when the committed files differ from it.
 
 ### Why the board is built by script
 
-- **Placement** is the table in `scripts/build_board.py`; parts and nets come
-  from the schematic's netlist.
+- **Placement** is the table in [`board.toml`](board.toml); parts and nets come
+  from the netlist `tools/kicad` builds from `hardware.toml`.
 - **The XIAO footprint** is derived from Seeed's `XIAO-RP2350-DIP`
   ([OSHW-XIAO-Series @ cc7f3bb](https://github.com/Seeed-Studio/OSHW-XIAO-Series),
   MIT), which is kept unmodified in
-  [`tools/kicad/lib/seeed-xiao/`](../../../../../tools/kicad/lib/seeed-xiao/). The DIP version mills a cutout under
-  the module and plates holes for its bottom pads; a socketed XIAO needs
-  neither.
+  [`tools/kicad/lib/seeed-xiao/`](../../../../../tools/kicad/lib/seeed-xiao/),
+  by `tools/kicad/derive_xiao.py`. The DIP version mills a cutout under the
+  module and plates holes for its bottom pads; a socketed XIAO needs neither.
 - **`balancebot-carrier.kicad_dru`** lets a GND thermal relief resolve to one
   spoke. `route_board.py` refuses to pour unless every GND pad also has a routed
   track, so the spoke is never the only connection.
@@ -122,8 +134,8 @@ detected size and layer count.
    just balancebot::carrier-fab
    ```
 
-   It runs `carrier-check` (ERC, DRC with schematic parity, the pin cross-check)
-   first and stops if any fails. Outputs:
+   It runs `carrier-check` (ERC, DRC with schematic parity, netlist parity,
+   the board check) first and stops if any fails. Outputs:
 
    | File | For |
    |---|---|

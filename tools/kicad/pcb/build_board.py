@@ -31,7 +31,7 @@ def mm(v):
 
 # One reader for every load. pcbnew.FootprintLoad() works as well: the untyped
 # SwigPyObject errors once blamed on it came from board.Remove() (see build()
-# and .claude/rules/kicad-scripting.md), and 200 FootprintLoad() calls without
+# and the carrier-pcb skill, trap 1), and 200 FootprintLoad() calls without
 # it all return FOOTPRINT.
 SEXPR_IO = pcbnew.PCB_IO_KICAD_SEXPR()
 

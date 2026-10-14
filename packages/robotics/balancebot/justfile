@@ -113,7 +113,7 @@ build-guide: gen-pin-defs gen-pinouts
     done
 
 ##########
-# Carrier PCB (hardware/carrier/, KiCad 10) — tools/kicad, issue #750
+# Carrier PCB (hardware/carrier/, KiCad 10) — tools/kicad, ADR-027
 ##########
 
 # Regenerate the socket-mount XIAO footprint and symbol from Seeed's DIP ones
