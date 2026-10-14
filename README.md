@@ -58,3 +58,7 @@ Most projects have a README in their directory.
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+MIT, except [`tools/kicad/lib/kicad-stock/`](tools/kicad/lib/kicad-stock/): a
+subset of the KiCad libraries under CC-BY-SA 4.0, see its
+[LICENSE.md](tools/kicad/lib/kicad-stock/LICENSE.md).

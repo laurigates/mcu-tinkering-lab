@@ -1,0 +1,246 @@
+"""Tests for the vendored KiCad library subset and `kicad.vendor`.
+
+Mutations run on a temp copy of the subtree; the committed files are only read.
+The installed-KiCad comparisons run against temp roots, so the suite needs no
+KiCad.
+
+    python3 -m unittest discover -s tools/kicad -t tools
+"""
+
+from __future__ import annotations
+
+import contextlib
+import io
+import shutil
+import tempfile
+import unittest
+from pathlib import Path
+
+from kicad import symbols, vendor
+from kicad.paths import REPO_ROOT
+
+STOCK = REPO_ROOT / vendor.STOCK_REL
+# sha256 of kicad-symbols and kicad-footprints 10.0.6 LICENSE.md (identical files).
+UPSTREAM_LICENSE_SHA256 = (
+    "45d2bce75e5a4208f5afb01b8fb2c406e700371c4fe2b5f5cd5c443d46db4d8f"
+)
+FOOTPRINT = "footprints/Resistor_SMD.pretty/R_0805_2012Metric_Pad1.20x1.40mm_HandSolder.kicad_mod"
+
+
+class CommittedSubtreeTests(unittest.TestCase):
+    def test_check_passes(self):
+        self.assertEqual(vendor.check(), [])
+
+    def test_vendored_set_is_the_referenced_set(self):
+        want, have = vendor.referenced(), vendor.vendored_ids(STOCK)
+        self.assertEqual(have.symbols, want.symbols)
+        self.assertEqual(have.footprints, want.footprints)
+        self.assertIn("power:PWR_FLAG", have.symbols)
+        self.assertEqual((len(have.symbols), len(have.footprints)), (10, 15))
+
+    def test_licence_and_readme(self):
+        self.assertEqual(vendor.sha256(STOCK / "LICENSE.md"), UPSTREAM_LICENSE_SHA256)
+        readme = (STOCK / "README.md").read_text()
+        for needle in (
+            "10.0.6",
+            "KiCad Libraries contributors",
+            "unchanged",
+            "just kicad::vendor",
+        ):
+            self.assertIn(needle, readme)
+        self.assertIn("LICENSE.md\t", (STOCK / "MANIFEST.tsv").read_text())
+
+    def test_subset_libraries_have_no_extends(self):
+        for lib in sorted((STOCK / "symbols").glob("*.kicad_sym")):
+            text = lib.read_text()
+            self.assertNotIn("(extends ", text, lib.name)
+            self.assertTrue(
+                symbols.header(text).startswith("(kicad_symbol_lib\n"), lib.name
+            )
+            self.assertTrue(text.endswith("\n)\n"), lib.name)
+
+    def test_manifest_is_reproducible(self):
+        self.assertEqual(
+            vendor.render_manifest(STOCK), (STOCK / "MANIFEST.tsv").read_text()
+        )
+
+    def test_main_check(self):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(vendor.main(["--check"]), 0)
+        self.assertIn("10 symbols, 15 footprints, 21 files pinned", out.getvalue())
+
+
+class MutationTests(unittest.TestCase):
+    """Each mutation of a temp copy must make `--check` fail, naming the cause."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.stock = self.root / vendor.STOCK_REL
+        shutil.copytree(STOCK, self.stock)
+        self.assertEqual(vendor.check(self.root), [])
+
+    def errors(self):
+        return "\n".join(vendor.check(self.root))
+
+    def test_flipped_byte_fails_on_the_manifest_hash(self):
+        path = self.stock / FOOTPRINT
+        data = bytearray(path.read_bytes())
+        data[100] ^= 0x01
+        path.write_bytes(bytes(data))
+        self.assertRegex(
+            self.errors(), r"R_0805_.*sha256 .* does not match MANIFEST\.tsv"
+        )
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(vendor.main(["--check"], repo_root=self.root), 1)
+        self.assertIn("FAIL:", out.getvalue())
+
+    def test_edited_licence_fails(self):
+        with (self.stock / "LICENSE.md").open("a") as f:
+            f.write("extra terms\n")
+        self.assertRegex(self.errors(), r"LICENSE\.md: sha256")
+
+    def test_missing_licence_or_readme(self):
+        (self.stock / "README.md").unlink()
+        (self.stock / "LICENSE.md").unlink()
+        errors = self.errors()
+        self.assertIn("README.md: missing", errors)
+        self.assertIn("LICENSE.md: missing", errors)
+
+    def test_orphan_file(self):
+        (self.stock / "footprints/Resistor_SMD.pretty/R_0402.kicad_mod").write_text(
+            "(footprint)"
+        )
+        errors = self.errors()
+        self.assertIn("R_0402.kicad_mod: not in MANIFEST.tsv (orphan file)", errors)
+        self.assertIn(
+            "footprint Resistor_SMD:R_0402: vendored but not referenced", errors
+        )
+
+    def test_missing_file(self):
+        (self.stock / FOOTPRINT).unlink()
+        errors = self.errors()
+        self.assertIn("listed in MANIFEST.tsv but missing", errors)
+        self.assertIn("referenced but not vendored", errors)
+
+    def test_referenced_but_not_vendored(self):
+        want = vendor.referenced()
+        want = vendor.Referenced(want.symbols | {"Device:L"}, want.footprints)
+        self.assertEqual(
+            vendor.check(self.root, want),
+            ["symbol Device:L: referenced but not vendored"],
+        )
+
+    def test_vendored_but_not_referenced(self):
+        want = vendor.referenced()
+        want = vendor.Referenced(want.symbols - {"Device:R"}, want.footprints)
+        self.assertEqual(
+            vendor.check(self.root, want),
+            ["symbol Device:R: vendored but not referenced"],
+        )
+
+    def test_unsorted_or_malformed_manifest(self):
+        manifest = self.stock / "MANIFEST.tsv"
+        lines = manifest.read_text().splitlines(keepends=True)
+        manifest.write_text("".join(reversed(lines)))
+        self.assertIn("not sorted", self.errors())
+        manifest.write_text("LICENSE.md abc 10.0.6\n")
+        self.assertIn("expected 'path<TAB>sha256<TAB>tag'", self.errors())
+
+    def test_wrong_tag(self):
+        manifest = self.stock / "MANIFEST.tsv"
+        manifest.write_text(manifest.read_text().replace("\t10.0.6\n", "\t9.0.0\n", 1))
+        self.assertIn("tag '9.0.0', expected '10.0.6'", self.errors())
+
+    def test_extends_symbol_is_rejected(self):
+        # A derived symbol fails even when the manifest is regenerated to match.
+        lib = self.stock / "symbols/Device.kicad_sym"
+        text = lib.read_text()
+        lib.write_text(
+            text[: text.rindex(")")]
+            + '\t(symbol "R_Small"\n\t\t(extends "R")\n\t)\n)\n'
+        )
+        (self.stock / "MANIFEST.tsv").write_text(vendor.render_manifest(self.stock))
+        self.assertIn("uses (extends ...)", self.errors())
+
+    def test_no_subtree(self):
+        shutil.rmtree(self.stock)
+        self.assertRegex(self.errors(), "no vendored library")
+
+
+class InstalledTests(unittest.TestCase):
+    """`--check-installed` and `--update` against a fake installed KiCad."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        base = Path(self.tmp.name)
+        # The vendored subset is itself a valid installed layout.
+        self.sym_root = base / "installed/symbols"
+        self.fp_root = base / "installed/footprints"
+        shutil.copytree(STOCK / "symbols", self.sym_root)
+        shutil.copytree(STOCK / "footprints", self.fp_root)
+        self.root = base / "repo"
+        self.stock = self.root / vendor.STOCK_REL
+        shutil.copytree(STOCK, self.stock)
+
+    def drift(self):
+        return vendor.check_installed(self.root, [self.sym_root], [self.fp_root])
+
+    def test_identical_install_has_no_drift(self):
+        self.assertEqual(self.drift(), [])
+
+    def test_changed_footprint_is_drift(self):
+        path = self.fp_root / FOOTPRINT.removeprefix("footprints/")
+        path.write_text(path.read_text().replace("(size 1.2 1.4)", "(size 1.3 1.4)"))
+        self.assertEqual(
+            [d.split(":")[0] + ":" + d.split(":")[1] for d in self.drift()],
+            ["footprint Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"],
+        )
+
+    def test_changed_symbol_block_and_header_are_drift(self):
+        lib = self.sym_root / "Device.kicad_sym"
+        text = lib.read_text()
+        text = text.replace("(version 20251024)", "(version 20261231)")
+        text = text.replace(
+            "(pin passive line\n\t\t\t\t(at 0 3.81 270)",
+            "(pin input line\n\t\t\t\t(at 0 3.81 270)",
+            1,
+        )
+        lib.write_text(text)
+        drift = self.drift()
+        self.assertIn("header differs", drift[0])
+        self.assertTrue(
+            any(d.startswith("symbol Device:") and "differs" in d for d in drift[1:])
+        )
+
+    def test_missing_from_install_is_drift(self):
+        (self.sym_root / "power.kicad_sym").unlink()
+        self.assertIn("'power': not in any installed KiCad", self.drift()[0])
+
+    def test_update_reproduces_the_committed_subtree(self):
+        shutil.rmtree(self.stock / "symbols")
+        shutil.rmtree(self.stock / "footprints")
+        (self.stock / "MANIFEST.tsv").unlink()
+        # Extra parts in the install are not copied.
+        (self.fp_root / "Extra.pretty").mkdir()
+        (self.fp_root / "Extra.pretty/X.kicad_mod").write_text("(footprint)")
+        vendor.update(self.root, [self.sym_root], [self.fp_root])
+        for rel in vendor.subtree_files(STOCK):
+            self.assertEqual(
+                (self.stock / rel).read_bytes(), (STOCK / rel).read_bytes(), rel
+            )
+        self.assertEqual(vendor.subtree_files(self.stock), vendor.subtree_files(STOCK))
+        self.assertEqual(vendor.check(self.root), [])
+
+    def test_update_needs_the_licence(self):
+        (self.stock / "LICENSE.md").unlink()
+        with self.assertRaisesRegex(Exception, "LICENSE.md: missing"):
+            vendor.update(self.root, [self.sym_root], [self.fp_root])
+
+
+if __name__ == "__main__":
+    unittest.main()
