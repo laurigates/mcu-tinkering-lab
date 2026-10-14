@@ -20,6 +20,8 @@ Files use a flat `category--component-name.md` convention:
 | `power--` | Voltage regulators, converters |
 | `radio--` | LoRa, WiFi, BLE transceivers |
 | `led--` | Addressable/smart LEDs |
+| `sensor--` | Distance, motion and environmental sensors |
+| `io--` | GPIO / I/O expanders |
 
 ## Components
 
@@ -36,7 +38,7 @@ Files use a flat `category--component-name.md` convention:
 
 ### Peripherals
 - [OV2640](camera--ov2640.md) — 2MP CMOS image sensor
-- [SSD1306](display--ssd1306.md) — 128x64 OLED controller
+- [SSD1306](display--ssd1306.md) — 128x64 OLED controller; also the 0.91-inch 128x32 module on robocar-unified
 - [PCA9685](driver--pca9685.md) — 16-ch 12-bit PWM/servo driver
 - [TB6612FNG](driver--tb6612fng.md) — Dual DC motor driver
 - [SG90](actuator--sg90.md) — 9g micro servo
@@ -47,3 +49,5 @@ Files use a flat `category--component-name.md` convention:
 - [XL6009](power--xl6009.md) — DC-DC boost converter
 - [SX1276](radio--sx1276.md) — LoRa transceiver
 - [WS2812B](led--ws2812b.md) — Addressable RGB LED
+- [MCP23017](io--mcp23017.md) — 16-bit I2C GPIO expander (robocar-unified, optional; CJMCU-2317 breakout)
+- [RCWL-1601](sensor--rcwl-1601.md) — Ultrasonic rangefinder, 3–5.5 V, HC-SR04 compatible (robocar-unified obstacle reflex)
