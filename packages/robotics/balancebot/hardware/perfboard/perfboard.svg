@@ -477,14 +477,14 @@
 <circle cx="283.5" cy="493.5" r="1.6" fill="#d9d9d9"/>
 <circle cx="300.5" cy="493.5" r="1.6" fill="#d9d9d9"/>
 <circle cx="317.5" cy="493.5" r="1.6" fill="#d9d9d9"/>
-<rect x="41.35241496062992" y="398.1929133858268" width="57.95860866141732" height="54.61417322834643" fill="#eef3fa" stroke="#4a5a78" stroke-width="1"/>
-<text x="44.35241496062992" y="408.1929133858268" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">C1 100uF 35V</text>
-<rect x="194.35241496062994" y="398.1929133858268" width="57.95860866141729" height="54.61417322834643" fill="#eef3fa" stroke="#4a5a78" stroke-width="1"/>
-<text x="197.35241496062994" y="408.1929133858268" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">C2 100uF 35V</text>
+<rect x="42.42125984251969" y="397.0551181102362" width="56.889763779527556" height="56.889763779527584" fill="#eef3fa" stroke="#4a5a78" stroke-width="1"/>
+<text x="45.42125984251969" y="407.0551181102362" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">C1 100uF 35V</text>
+<rect x="195.4212598425197" y="397.0551181102362" width="56.88976377952753" height="56.889763779527584" fill="#eef3fa" stroke="#4a5a78" stroke-width="1"/>
+<text x="198.4212598425197" y="407.0551181102362" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">C2 100uF 35V</text>
 <rect x="154.46062992125985" y="364.46062992125985" width="36.81102362204726" height="20.078740157480297" fill="#eef3fa" stroke="#4a5a78" stroke-width="1"/>
 <text x="157.46062992125985" y="374.46062992125985" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">C3 100nF</text>
-<rect x="186.78315157480313" y="465.7913385826772" width="37.752281496063006" height="21.417322834645574" fill="#eef3fa" stroke="#4a5a78" stroke-width="1"/>
-<text x="189.78315157480313" y="475.7913385826772" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">D1 1N5819</text>
+<rect x="187.79133858267716" y="465.7913385826772" width="36.74409448818898" height="21.417322834645574" fill="#eef3fa" stroke="#4a5a78" stroke-width="1"/>
+<text x="190.79133858267716" y="475.7913385826772" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">D1 1N5819</text>
 <rect x="135.65354330708664" y="481.6535433070866" width="40.75984251968504" height="23.69291338582684" fill="#eef3fa" stroke="#4a5a78" stroke-width="1"/>
 <text x="138.65354330708664" y="491.6535433070866" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">J1 XT30 pigtail</text>
 <rect x="101.65354330708662" y="447.6535433070866" width="74.69291338582677" height="23.69291338582684" fill="#eef3fa" stroke="#4a5a78" stroke-width="1"/>
@@ -505,8 +505,8 @@
 <text x="208.25984251968504" y="255.3267716535433" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">A2 DRV8825 right</text>
 <rect x="154.3" y="92.3" width="139.39999999999998" height="107.10000000000001" fill="none" stroke="#4a5a78" stroke-width="1" stroke-dasharray="4 2"/>
 <text x="157.3" y="102.3" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">J3 GY-521 MPU6050</text>
-<rect x="19.933070866141733" y="69.2294472440945" width="119.06692913385827" height="154.01071023622046" fill="none" stroke="#4a5a78" stroke-width="1" stroke-dasharray="4 2"/>
-<text x="22.933070866141733" y="79.2294472440945" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">U1 XIAO RP2350</text>
+<rect x="20.06692913385826" y="82.95669291338584" width="118.79921259842521" height="140.28346456692913" fill="none" stroke="#4a5a78" stroke-width="1" stroke-dasharray="4 2"/>
+<text x="23.06692913385826" y="92.95669291338584" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">U1 XIAO RP2350</text>
 <rect x="41.5" y="251.5" width="8" height="8" fill="#b87333"/>
 <circle cx="45.5" cy="272.5" r="4" fill="#b87333"/>
 <circle cx="45.5" cy="289.5" r="4" fill="#b87333"/>

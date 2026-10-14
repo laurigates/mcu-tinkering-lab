@@ -151,6 +151,27 @@ class PlacementTests(unittest.TestCase):
             place.check_placement(parts, Inputs.cfg.board, raised, tall), []
         )
 
+    def test_bodies_are_the_true_courtyard(self):
+        # Hole units: the placement hole plus the F.CrtYd box / 2.54, rotated.
+        parts, *_ = Inputs.layout()
+        cases = {
+            # CP_Radial_D8.0mm at (2, 19, 0): a circle of radius 4.25 about (1.25, 0).
+            "C1": (2 - 3.0 / 2.54, 19 - 4.25 / 2.54, 2 + 5.5 / 2.54, 19 + 4.25 / 2.54),
+            # D_DO-41 vertical at (10, 22, 0): (-1.6, -1.6, 3.89, 1.6) mm.
+            "D1": (10 - 1.6 / 2.54, 22 - 1.6 / 2.54, 10 + 3.89 / 2.54, 22 + 1.6 / 2.54),
+            # XIAO socket at (3, 3, 90): (x, y) -> (y, -x) on (-10.42, -8.88, 10.54, 8.87).
+            "U1": (
+                3 - 8.88 / 2.54,
+                3 - 10.54 / 2.54,
+                3 + 8.87 / 2.54,
+                3 + 10.42 / 2.54,
+            ),
+        }
+        for ref, box in cases.items():
+            with self.subTest(ref=ref):
+                for got, want in zip(parts[ref].body, box, strict=True):
+                    self.assertAlmostEqual(got, want, places=9)
+
     def check(self, cfg):
         parts, raised, tall, _ = Inputs.layout(cfg)
         return place.check_placement(parts, cfg.board, raised, tall)
