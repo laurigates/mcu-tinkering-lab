@@ -465,16 +465,27 @@ def hc_sr04p() -> elm.Ic:
     )
 
 
-def xiao_rp2350() -> elm.Ic:
+def xiao_rp2350(layout: str = "schematic") -> elm.Ic:
     """Seeed XIAO RP2350 — RP2350 in the XIAO form factor.
 
-    Left side carries the power rails (facing outward). Right side lists the
-    side-header GPIOs in the order they connect to peripherals top-to-bottom:
-    MPU6050 I2C + INT at the top, then the two DRV8825 STEP/DIR pairs and the
-    shared nENABLE below. Pin labels show the XIAO ``Dn`` silkscreen numbers.
+    ``layout="physical"``: all 14 side-header pads, 7 per side, read from
+    ``docs/reference/boards/xiao-rp2350.md``. USB-C at the top: D0-D6 down the
+    left, 5V/GND/3V3 then D10-D7 down the right. GPIO pads are labelled and
+    anchored by their firmware name (``GPIO5``) with the ``Dn`` silkscreen
+    outside, so a circuit can look a pad up by pin role (#738).
 
-    Source of truth: packages/robotics/balancebot/src/pin_config.h
+    ``layout="schematic"``: left side carries the power rails (facing
+    outward); the right side lists balancebot's GPIOs in the order they
+    connect to peripherals top-to-bottom. It is not the board's pinout.
     """
+    _check_layout(layout)
+    if layout == "physical":
+        return physical_module(
+            board_layout("xiao-rp2350"),
+            name=_gpio_label,
+            number=_silkscreen_if_gpio,
+            anchor=_gpio_label,
+        )
     return elm.Ic(
         pins=[
             # Left (bottom → top): power rails facing outward
@@ -495,42 +506,64 @@ def xiao_rp2350() -> elm.Ic:
     )
 
 
-def mpu6050() -> elm.Ic:
+def mpu6050(facing: str = "L") -> elm.Ic:
     """GY-521 MPU6050 6-axis IMU breakout.
 
-    All pins on the left so they face the MCU when the breakout is drawn to
-    the right of it — wires don't cross the chip body. Bottom→top ordered so
-    SCL sits above SDA, matching the XIAO's right-side I2C order (no bus
-    crossing). The breakout's onboard regulator is bypassed by feeding VCC
-    from 3V3 directly (see WIRING.md).
+    ``facing="L"``: all pins on the left so they face the MCU when the
+    breakout is drawn to the right of it — wires don't cross the chip body.
+    Bottom→top ordered so SCL sits above SDA, matching a right-side I2C order
+    on the MCU (no bus crossing).
+
+    ``facing="R"``: for a breakout drawn to the left of the MCU. The signal
+    pins face right, INT above SDA above SCL to meet the physical XIAO's
+    D3/D4/D5 head-on, and VCC/GND face outward on the left so their tags
+    stay out of the gap. Pin order here is a drawing choice, not the board's.
+
+    The breakout's onboard regulator is bypassed by feeding VCC from 3V3
+    directly (see WIRING.md).
     """
-    return elm.Ic(
-        pins=[
+    if facing == "R":
+        pins = [
+            elm.IcPin(name="SCL", side="R"),
+            elm.IcPin(name="SDA", side="R"),
+            elm.IcPin(name="INT", side="R"),
+            elm.IcPin(name="GND", side="L"),
+            elm.IcPin(name="VCC", side="L"),
+        ]
+    elif facing == "L":
+        pins = [
             elm.IcPin(name="GND", side="L"),
             elm.IcPin(name="VCC", side="L"),
             elm.IcPin(name="INT", side="L"),
             elm.IcPin(name="SDA", side="L"),
             elm.IcPin(name="SCL", side="L"),
-        ],
-        size=(3.5, 4),
-    )
+        ]
+    else:
+        raise ValueError(f"facing must be 'L' or 'R', got {facing!r}")
+    # Facing right, 3 high spaces the signal pins 1.0 apart: the physical
+    # XIAO's pad pitch, so the three wires run straight across.
+    return elm.Ic(pins=pins, size=(3.5, 3 if facing == "R" else 4))
 
 
 def drv8825() -> elm.Ic:
-    """DRV8825 stepper driver carrier (Pololu / generic breakout).
+    """DRV8825 stepper driver on a Pololu-layout carrier.
 
-    Control + power on the left (facing the MCU); the two bipolar coil-output
-    pairs on the right (facing the stepper). ``VMOT`` is the motor supply
-    (battery), ``VDD`` the 3.3 V logic rail. ``nENABLE`` is active-low with an
-    external 10 kΩ pull-up. Coil pins are ordered to align with
-    :func:`stepper_nema17` when placed at the same y-center.
+    Pin names are the carrier's silkscreen, as hardware.toml and the
+    ``pololu-drv8825`` parts-registry entry use them. The carrier has no logic
+    supply pin: ``nSLEEP`` and ``nRESET`` are strapped high and ``M0``-``M2``
+    set the microstep (#738).
+
+    Control on the left facing the MCU, the two bipolar coil-output pairs on
+    the right facing the stepper, ordered to align with
+    :func:`stepper_nema17` when placed at the same y-center. Every supply and
+    strap pin is on the top edge (``VMOT``, then the four high straps) and
+    every ground on the bottom, so their tags lead away from the wires. The
+    order is chosen for the drawing, not the carrier.
     """
+    top = ("VMOT", "nSLEEP", "nRESET", "M0", "M1")
     return elm.Ic(
         pins=[
-            # Left (bottom → top): power, enable, direction, step
-            elm.IcPin(name="GND", side="L"),
-            elm.IcPin(name="VDD", side="L"),
-            elm.IcPin(name="VMOT", side="L"),
+            # Left (bottom → top): control
             elm.IcPin(name="nENABLE", side="L"),
             elm.IcPin(name="DIR", side="L"),
             elm.IcPin(name="STEP", side="L"),
@@ -539,8 +572,19 @@ def drv8825() -> elm.Ic:
             elm.IcPin(name="B1", side="R"),
             elm.IcPin(name="A2", side="R"),
             elm.IcPin(name="A1", side="R"),
+            # Top (left → right), kept in the middle of the edge so the
+            # upright labels clear STEP and A1.
+            *(
+                elm.IcPin(name=n, side="T", pos=0.2 + 0.15 * i, rotation=90)
+                for i, n in enumerate(top)
+            ),
+            elm.IcPin(name="M2", side="B", pos=0.4, rotation=90),
+            elm.IcPin(name="GND", side="B", pos=0.6, rotation=90),
         ],
-        size=(4, 6),
+        # 1.0 of edge padding spaces the four coil pins 1.0 apart, the
+        # stepper's own pitch.
+        size=(6, 5),
+        edgepadH=1.0,
     )
 
 

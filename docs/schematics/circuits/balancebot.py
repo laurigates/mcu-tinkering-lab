@@ -1,157 +1,230 @@
 """Balancebot — self-balancing robot wiring schematic.
 
 Seeed XIAO RP2350 driving two DRV8825 stepper carriers (one per wheel) and a
-GY-521 MPU6050 IMU over I2C:
-  - I2C1 (GPIO6/7) + INT (GPIO5) → MPU6050
-  - GPIO2/GPIO4 → left DRV8825 STEP/DIR
-  - GPIO3/GPIO0 → right DRV8825 STEP/DIR
-  - GPIO1 → shared nENABLE (active-low, external 10 kΩ pull-up to 3V3)
+GY-521 MPU6050 IMU over I2C, with the drivers' shared nENABLE held high by a
+10 kΩ pull-up so they stay disabled while the XIAO boots.
 
-Power: 2–3S LiPo → both DRV8825 VMOT (+100 µF each) and a 5 V buck → XIAO 5V.
-3V3 feeds MPU6050 VCC, both DRV8825 VDD, and the nENABLE pull-up.
+Power: a 3S pack feeds both DRV8825 VMOT pins and a 5 V buck into the XIAO's
+5V pad. The XIAO's 3V3 feeds the MPU6050, the pull-up, and each carrier's
+nSLEEP/nRESET and M0/M1 straps; M2 goes to ground for 1/8 microstep. The
+Pololu-layout carrier has no logic-supply pin (#738).
 
-Source of truth: packages/robotics/balancebot/src/pin_config.h and WIRING.md
+The XIAO is drawn physically from docs/reference/boards/xiao-rp2350.md, and
+every MCU wire, pin label, power-tag rail and coil wire is read from the
+hardware join (#738, ADR-021) at render time: packages/robotics/balancebot/
+hardware.toml says which part pin each pin role is wired to, src/pin_config.h
+which GPIO the role is, and the board reference which header pad that GPIO
+is. Placement, net order, net colour and the nENABLE trunk's shape stay
+hand-authored here.
 """
+
+import sys
+from pathlib import Path
 
 import schemdraw
 import schemdraw.elements as elm
-
 from components import (
     drv8825,
     mpu6050,
     stepper_nema17,
     xiao_rp2350,
 )
+from hardware_nets import JoinedNets
 from routing import Router, net_color
 
+_REPO = Path(__file__).resolve().parents[3]
+if str(_REPO / "tools") not in sys.path:
+    sys.path.insert(0, str(_REPO / "tools"))
+from hardware import HardwareModel, join  # noqa: E402
 
-def draw() -> schemdraw.Drawing:
+PROJECT = _REPO / "packages/robotics/balancebot"
+
+# Carrier pins strapped to a rail, left to right along the symbol's top edge.
+# Which rail each is on comes from hardware.toml; M2's ground does not, since
+# the harness keeps its common ground in WIRING.md's prose.
+STRAPS = ("nSLEEP", "nRESET", "M0", "M1")
+
+
+def _tag(
+    d, pin, direction: str, length: float, kind: str, label: str = "", loc: str = "top"
+) -> None:
+    """A power or ground tag on ``pin``, leading ``direction`` for ``length``."""
+    line = getattr(elm.Line(), direction)(length).at(pin)
+    d.add(line.color(net_color("power" if kind == "power" else "ground")))
+    if kind == "power":
+        d.add(elm.Vdd().label(label, loc=loc).color(net_color("power")))
+    else:
+        d.add(elm.Ground().color(net_color("ground")))
+
+
+def _straps(d, nets: JoinedNets, part: str, drv: elm.Element) -> None:
+    """Tie each run of same-rail strap pins to one bar and one tag, above."""
+    reach = 0.5
+    runs: list[tuple[str, list[str]]] = []
+    for pin in STRAPS:
+        rail = nets.rail(part, pin)
+        if runs and runs[-1][0] == rail:
+            runs[-1][1].append(pin)
+        else:
+            runs.append((rail, [pin]))
+    color = net_color("power")
+    for rail, pins in runs:
+        ends = [drv.absanchors[p] for p in pins]
+        y = ends[0][1] + reach
+        for x, py in ends:
+            d.add(elm.Line().at((x, py)).to((x, y)).color(color))
+        if len(ends) > 1:
+            d.add(elm.Line().at((ends[0][0], y)).to((ends[-1][0], y)).color(color))
+        d.add(elm.Vdd().up().at((ends[-1][0], y)).label(rail, loc="right").color(color))
+
+
+def _fanout_trunk(d, mcu, ends: dict, x: float, color: str) -> None:
+    """A vertical trunk at ``x`` joining the MCU pad to every part pin of a net.
+
+    Split at every tap, so each T is three wire ends at one point and the
+    router dots it.
+    """
+    taps = [*ends.values(), mcu]
+    ys = sorted({round(y, 6) for _, y in taps})
+    for lo, hi in zip(ys, ys[1:]):
+        d.add(elm.Line().at((x, lo)).to((x, hi)).color(color))
+    for px, py in taps:
+        if abs(px - x) > 1e-6:
+            d.add(elm.Line().at((px, py)).to((x, py)).color(color))
+
+
+def draw(model: HardwareModel | None = None) -> schemdraw.Drawing:
+    """Draw the schematic from ``model``, by default balancebot's live join.
+
+    Taking the model as an argument lets a test hand in a join with one net
+    added, and see the render refuse it.
+    """
+    if model is None:
+        model = join(PROJECT)
+
     d = schemdraw.Drawing(show=False)
     d.config(unit=2.0, fontsize=11)
 
     # === Components first, so every net below routes with full obstacle
     # awareness (the auto-router only avoids components already placed). ===
-    # MCU on the left; peripherals stacked on the right.
-    xiao = d.add(xiao_rp2350().label("XIAO RP2350", loc="bot", ofst=0.4))
+    #
+    # The XIAO's I2C and INT pads are on its left edge (D3-D5) and its power,
+    # STEP/DIR and nENABLE pads on the right, so the IMU sits to the left and
+    # the drivers stack to the right.
+    xiao = d.add(
+        xiao_rp2350(layout="physical")
+        .right()
+        .label("XIAO RP2350\n(USB-C at top)", loc="bot", ofst=0.4)
+    )
+    parts: dict[str, elm.Element] = {}
+    nets = JoinedNets(model, xiao, parts)
 
-    # MPU6050 up-and-right so its I2C+INT pins face the XIAO's top GPIOs. The
-    # peripherals sit well to the right so the middle gap has room for the
-    # shared-nENABLE trunk, its pull-up, and the driver power tags.
-    mpu = d.add(
-        mpu6050()
-        .at((xiao.center.x + 13, xiao.center.y + 6))
+    parts["imu"] = imu = d.add(
+        mpu6050(facing="R")
+        .at((xiao.center.x - 9, nets.pad("PIN_IMU_SDA")[1]))
         .anchor("center")
         .label("GY-521 MPU6050\n0x68", loc="bot", ofst=0.4)
     )
 
-    # Two DRV8825 carriers below the IMU, one per wheel.
-    drv_l = d.add(
+    # The left driver on top, beside the XIAO's D9/D8 STEP/DIR pads; the
+    # right driver below, so DIR_RIGHT (D6, on the XIAO's left edge) can pass
+    # under the module instead of over the I2C wires.
+    drv_x = xiao.center.x + 13
+    parts["drv_left"] = drv_l = d.add(
         drv8825()
-        .at((xiao.center.x + 13, xiao.center.y - 1))
+        .at((drv_x, xiao.center.y - 0.6))
         .anchor("center")
-        .label("DRV8825 (left)\n1/8 µstep", loc="bot", ofst=0.4)
+        .label("DRV8825 (left)\n1/8 µstep", loc="bot", ofst=1.4)
     )
-    drv_r = d.add(
+    parts["drv_right"] = drv_r = d.add(
         drv8825()
-        .at((xiao.center.x + 13, xiao.center.y - 10))
+        .at((drv_x, xiao.center.y - 11))
         .anchor("center")
-        .label("DRV8825 (right)\n1/8 µstep", loc="bot", ofst=0.4)
+        .label("DRV8825 (right)\n1/8 µstep", loc="bot", ofst=1.4)
     )
 
     # Steppers to the right of each driver, coil pins aligned for straight runs.
-    step_l = d.add(
-        stepper_nema17()
-        .right()
-        .at((drv_l.center.x + 6, drv_l.center.y))
-        .anchor("center")
-        .label("Left NEMA17", loc="bot", ofst=0.4)
-    )
-    step_r = d.add(
-        stepper_nema17()
-        .right()
-        .at((drv_r.center.x + 6, drv_r.center.y))
-        .anchor("center")
-        .label("Right NEMA17", loc="bot", ofst=0.4)
-    )
+    for side, drv in (("left", drv_l), ("right", drv_r)):
+        parts[f"stepper_{side}"] = d.add(
+            stepper_nema17()
+            .right()
+            .at((drv.center.x + 7.5, drv.center.y))
+            .anchor("center")
+            .label(f"{side.capitalize()} NEMA17", loc="bot", ofst=0.4)
+        )
 
-    # === Local stubs (power tags, nENABLE bus) before routing, so their
+    # The shared nENABLE trunk runs down the gap between the XIAO and the
+    # drivers. The pull-up stands beside it under the XIAO, clear of every
+    # STEP/DIR row; its B end is the net, its A end the rail.
+    nen_x = xiao.center.x + 5.0
+    pullup = d.add(
+        elm.Resistor()
+        .up()
+        .at((nen_x - 2.0, xiao.center.y - 7.5))
+        .label("10 kΩ", loc="bot")
+    )
+    pullup.absanchors["B"] = pullup.absanchors["start"]
+    pullup.absanchors["A"] = pullup.absanchors["end"]
+    parts["pullup"] = pullup
+
+    # === Local stubs (power tags, nENABLE trunk) before routing, so their
     # footprint — e.g. a GND tag protruding from a chip's side — is a known
     # obstacle to every net below. Placed after routing, the router can't
     # see them and a wire can end up drawn right through one. ===
 
-    # Shared nENABLE trunk: GPIO1 → vertical bus → both nENABLE pins, with
-    # the 10 kΩ pull-up to 3V3 tapping the top of the bus. This is a
-    # multi-endpoint bus (a T-junction fan-out), not a point-to-point net,
-    # so it stays hand-drawn — the router only handles two-terminal wires.
-    nen_x = xiao.center.x + 4.0
-    top = (nen_x, drv_l.nENABLE.y)
-    bot = (nen_x, drv_r.nENABLE.y)
-    d.add(elm.Wire("-").at(top).to(bot).color(net_color("signal")))  # vertical bus
-    d.add(elm.Wire("-").at(top).to(drv_l.nENABLE).color(net_color("signal")))
-    d.add(elm.Wire("-").at(bot).to(drv_r.nENABLE).color(net_color("signal")))
+    # Shared nENABLE: one role, three part pins. A multi-endpoint bus (a
+    # T-junction fan-out), so it stays hand-drawn — the router only handles
+    # two-terminal wires — but every end of it comes from the join.
+    _fanout_trunk(d, *nets.fanout("PIN_MOTOR_NENABLE"), nen_x, net_color("signal"))
     d.add(
-        elm.Wire("-|")
-        .at(xiao.GPIO1)
-        .to((nen_x, xiao.GPIO1.y))
-        .color(net_color("signal"))
+        elm.Vdd()
+        .up()
+        .at(pullup.end)
+        .label(nets.rail("pullup", "A"), loc="right")
+        .color(net_color("power"))
     )
-    # Pull-up above the bus — lifted clear of the I2C wires before the +3V3 tag.
-    # Its lead is still the nENABLE net, so it takes the bus colour: the
-    # junction at ``top`` joins it, and a dot must join a single class.
-    d.add(elm.Line().up(1.5).at(top).color(net_color("signal")))
-    # Both labels sit right of the pull-up (#641). On the left, "10 kΩ"
-    # covered GPIO5's stub point; above its tag, "+3V3" lay across the I2C
-    # nets' row. The router then routed round them, from 2 crossings to 8.
-    d.add(elm.Resistor().up().label("10 kΩ", loc="bot"))
-    d.add(elm.Vdd().label("+3V3", loc="right").color(net_color("power")))
 
-    # Power rails.
-    # XIAO: 3V3 logic, 5V from the buck converter, common ground — left side.
-    d.add(elm.Line().left(0.5).at(xiao["3V3"]).color(net_color("power")))
-    d.add(elm.Vdd().label("+3V3").color(net_color("power")))
-    d.add(elm.Line().left(0.5).at(xiao["5V"]).color(net_color("power")))
-    d.add(elm.Vdd().label("+5V buck").color(net_color("power")))
-    d.add(elm.Line().left(0.5).at(xiao.GND).color(net_color("ground")))
-    d.add(elm.Ground().color(net_color("ground")))
+    # XIAO 5V / GND / 3V3 sit together at the top of its right edge.
+    _tag(d, xiao["5V"], "right", 0.75, "power", nets.rail("mcu", "5V"))
+    _tag(d, xiao["GND"], "right", 1.5, "ground")
+    _tag(d, xiao["3V3"], "right", 0.75, "power", nets.rail("mcu", "3V3"))
 
-    # MPU6050: 3V3 + ground on its left, below the signal wires. The label
-    # sits beside its tag: above it, "+3V3" reached the INT row and that
-    # net's stub ran through the text (#641).
-    d.add(elm.Line().left(1.0).at(mpu.VCC).color(net_color("power")))
-    d.add(elm.Vdd().label("+3V3", loc="right").color(net_color("power")))
-    d.add(elm.Line().left(1.0).at(mpu.GND).color(net_color("ground")))
-    d.add(elm.Ground().color(net_color("ground")))
+    # MPU6050 power on its outward (left) side.
+    _tag(d, imu.VCC, "left", 1.0, "power", nets.rail("imu", "VCC"))
+    _tag(d, imu.GND, "left", 1.0, "ground")
 
-    # DRV8825 carriers: VDD = 3V3 logic, VMOT = battery motor supply
-    # (+100 µF electrolytic close to the pins), GND common.
-    for drv in (drv_l, drv_r):
-        d.add(elm.Line().left(1.0).at(drv.VDD).color(net_color("power")))
-        d.add(elm.Vdd().label("+3V3").color(net_color("power")))
-        d.add(elm.Line().left(1.0).at(drv.VMOT).color(net_color("power")))
-        d.add(elm.Vdd().label("+VMOT").color(net_color("power")))
-        d.add(elm.Line().left(1.0).at(drv.GND).color(net_color("ground")))
-        d.add(elm.Ground().color(net_color("ground")))
+    # DRV8825 carriers: VMOT up to the pack rail, the nSLEEP/nRESET and
+    # microstep straps beside it, M2 and GND down. The 100 µF bulk capacitor
+    # across VMOT/GND is in WIRING.md, not here.
+    for part, drv in (("drv_left", drv_l), ("drv_right", drv_r)):
+        _tag(d, drv.VMOT, "up", 0.5, "power", nets.rail(part, "VMOT"), loc="left")
+        _straps(d, nets, part, drv)
+        _tag(d, drv.M2, "down", 0.5, "ground")
+        _tag(d, drv.GND, "down", 0.5, "ground")
 
     # === Nets: auto-routed orthogonal, obstacle-avoiding wires. ===
     router = Router(d)
 
-    # I2C + INT: XIAO top GPIOs → MPU6050.
-    router.wire(xiao.GPIO7, mpu.SCL, net="i2c")
-    router.wire(xiao.GPIO6, mpu.SDA, net="i2c")
-    router.wire(xiao.GPIO5, mpu.INT, net="sensor")
+    # I2C + INT: XIAO left-edge pads → MPU6050.
+    router.wire(*nets.ends("PIN_IMU_SCL"), net="i2c")
+    router.wire(*nets.ends("PIN_IMU_SDA"), net="i2c")
+    router.wire(*nets.ends("PIN_IMU_INT"), net="sensor")
 
     # STEP / DIR to each driver.
-    router.wire(xiao.GPIO2, drv_l.STEP, net="signal")
-    router.wire(xiao.GPIO4, drv_l.DIR, net="signal")
-    router.wire(xiao.GPIO3, drv_r.STEP, net="signal")
-    router.wire(xiao.GPIO0, drv_r.DIR, net="signal")
+    router.wire(*nets.ends("PIN_STEP_LEFT"), net="signal")
+    router.wire(*nets.ends("PIN_DIR_LEFT"), net="signal")
+    router.wire(*nets.ends("PIN_STEP_RIGHT"), net="signal")
+    router.wire(*nets.ends("PIN_DIR_RIGHT"), net="signal")
 
-    # Coil pairs: each DRV8825 right side → its stepper.
-    for drv, step in ((drv_l, step_l), (drv_r, step_r)):
-        router.wire(drv.A1, step.A1, net="load")
-        router.wire(drv.A2, step.A2, net="load")
-        router.wire(drv.B1, step.B1, net="load")
-        router.wire(drv.B2, step.B2, net="load")
+    # Coil pairs: each DRV8825 right side → its stepper, from [[outputs]].
+    for start, end in nets.output_ends():
+        router.wire(start, end, net="load")
+
+    # Every MCU net in hardware.toml has now been drawn, or this fails the
+    # render naming the one that was not.
+    nets.check_all_drawn()
+    # Likewise every drawn part pin hardware.toml puts on a rail has a tag.
+    nets.check_all_tagged()
 
     # Every net is routed; draw them all here. The nENABLE trunk and power
     # stubs are already in the drawing, so finish() hops and dots them too.
@@ -161,9 +234,6 @@ def draw() -> schemdraw.Drawing:
 
 
 if __name__ == "__main__":
-    import sys
-    from pathlib import Path
-
     out = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("balancebot.svg")
     draw().save(str(out))
     print(f"wrote {out}")

@@ -151,7 +151,7 @@ why = "switches the XIAO's onboard battery-sense divider, not brought out to a h
 # --- Power --------------------------------------------------------------------
 # The supply side of the join, emitted as WIRING.md's power diagram. Voltages
 # beyond the rail names, the 100 µF bulk capacitors and the common ground stay
-# in WIRING.md's prose. Rail assignments match docs/schematics/circuits/balancebot.py.
+# in WIRING.md's prose. docs/schematics/circuits/balancebot.py tags its power pins from these.
 # The carrier PCB adds its own: the bulk capacitors and the divider on VBAT, the
 # B5819W that splits 5V into BUCK_5V and XIAO_5V, and GND.
 
