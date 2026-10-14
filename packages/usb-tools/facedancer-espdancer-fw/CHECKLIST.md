@@ -72,7 +72,7 @@ echoes the `HELLO` handshake. No USB emulation yet.
       this port excludes** — supplied them in `raw_usb.c` as a faithful port of
       TinyUSB 0.19.0 (`OSAL_SPINLOCK_DEF` + `osal_spin_lock/unlock` from
       `osal_none.h`; `usbd_int_set` toggles `dcd_int_enable`/`_disable`). See
-      ADR-0006 (resolved risk) `[new]`
+      ADR-0006 (resolved risk) and STATUS.md `[new]`
 - [x] Remove `espressif/esp_tinyusb` dep from `main/idf_component.yml` — done
       during scaffolding (`dependencies: {}`); pulling it would compile
       `usbd.c` and strongly define `dcd_event_handler`, colliding with ours `[new]`

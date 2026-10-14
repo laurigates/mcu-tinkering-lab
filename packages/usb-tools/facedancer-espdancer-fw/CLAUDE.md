@@ -76,7 +76,7 @@ Controlling PC ──WiFi SoftAP──▶ ESP32-S3 ──USB-C──▶ Target h
 ### Components
 
 | Component | Purpose | Status |
-|-----------|---------|--------|
+| ----------- | --------- | -------- |
 | `status_led` | WS2812 RMT (non-DMA) — emulator-state indicator | Lifted |
 | `log_udp` | WiFi SoftAP "espdancer-log" + UDP log broadcast | Lifted (SSID renamed) |
 | `usb_rpc` | TCP server + framed-TLV dispatcher (this firmware's host iface) | New (stub) |
@@ -111,9 +111,16 @@ after TinyUSB init. `status_led` uses `with_dma = false` +
 
 ## Documentation
 
-- `CHECKLIST.md` — working backlog, milestone-gated (start here)
-- `docs/adrs/` — ADRs 0001–0005 (target, DCD-not-HID, WiFi control channel,
-  build variants, single-writer pump)
+- `STATUS.md` — narrative snapshot of where the project stands (read once to
+  get oriented; updated each milestone)
+- `CHECKLIST.md` — working backlog, milestone-gated (task-level source of truth)
+- `docs/architecture.md` — system-level design overview (ties the ADRs + RPC
+  into one picture)
+- `docs/raw-usb-design.md` — Milestone 1 component design (primitive surface,
+  endpoint table, control-transfer state machine, event mapping)
+- `docs/adrs/` — ADRs 0001–0006 (target, DCD-not-HID, WiFi control channel,
+  build variants, single-writer pump, **DCD-only TinyUSB port [resolves 0002,
+  carries the `usbd_spin_*` maintenance obligation]**)
 - `docs/rpc-protocol.md` — host↔device wire contract
 
 ## Shared tooling
