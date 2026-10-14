@@ -1,7 +1,7 @@
 # DRV8825 on a Pololu-layout carrier, socketed in two 1x8 female headers.
 [part]
 name = "DRV8825 stepper driver carrier (Pololu layout)"
-source = "KiCad 10.0.6 library symbol and footprint; not yet checked against the fitted carrier (#748)"
+source = "KiCad 10.0.6 library symbol and footprint; matches the fitted HW-216 carrier's bottom silkscreen, read 2026-10-14 (#748)"
 symbol = "Driver_Motor:Pololu_Breakout_DRV8825"
 footprint = "Module:Pololu_Breakout-16_15.2x20.3mm"
 no_connect = ["FAULT"]

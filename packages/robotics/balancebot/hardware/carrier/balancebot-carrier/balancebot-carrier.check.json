@@ -1,5 +1,5 @@
 {
- "board_sha256": "9aebe428f656112651982dfd1b1e7a95ca7a237010ee7a718936b78c24b1af91",
+ "board_sha256": "c1c33d9dc0a7d28ebf5f622b86fc9f323a7ea337432d7be1b9c00b331b47a660",
  "kicad_cli_version": "10.0.6",
  "netlist": {
   "components": {
@@ -74,11 +74,11 @@
     "value": "M3"
    },
    "J1": {
-    "footprint": "Connector_AMASS:AMASS_XT30PW-M_1x02_P2.50mm_Horizontal",
+    "footprint": "Connector_JST:JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical",
     "in_bom": true,
     "lcsc": "",
     "lib_id": "Connector_Generic:Conn_01x02",
-    "value": "XT30 pack in"
+    "value": "JST-XH pack in"
    },
    "J2": {
     "footprint": "Connector_JST:JST_XH_B4B-XH-A_1x04_P2.50mm_Vertical",
@@ -253,7 +253,7 @@
     ],
     [
      "J1",
-     "1"
+     "2"
     ],
     [
      "J2",
@@ -465,7 +465,7 @@
     ],
     [
      "J1",
-     "2"
+     "1"
     ],
     [
      "J2",
@@ -514,5 +514,5 @@
    ]
   }
  },
- "schematic_sha256": "9a79c6e3e3c4f4c2f59677a7bc27e9757603b9730f31bf5b84d290024aed0181"
+ "schematic_sha256": "e0c61838897e1c27d79780cd182c0df5a150dfce0638a7ea05949a3cd95c330f"
 }

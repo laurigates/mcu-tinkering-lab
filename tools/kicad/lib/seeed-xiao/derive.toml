@@ -11,3 +11,11 @@ vendor_footprint = "XIAO-RP2350-DIP"
 vendor_symbol = "XIAO-RP2350-DIP"
 derived = "XIAO-RP2350-Socket"
 pads = [1, 14]
+
+# Seeed ships no XIAO-ESP32-S3-DIP symbol; the SMD symbol numbers the same 14
+# header pins (pins 15-25 are the bottom pads the socket drops).
+[[socket]]
+vendor_footprint = "XIAO-ESP32-S3-DIP"
+vendor_symbol = "XIAO-ESP32-S3-SMD"
+derived = "XIAO-ESP32-S3-Socket"
+pads = [1, 14]

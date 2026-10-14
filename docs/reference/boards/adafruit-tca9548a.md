@@ -45,16 +45,65 @@ differ (`INPUTSDA`, `0SDA`, …) and are not printed anywhere.
 | SC2 | R | 11 | JP1.2 | Channel 2 |
 | SD2 | R | 12 | JP1.1 | Channel 2 |
 
+## Pad centres
+
+Every pad of every header the layout table cites (`Header` is element.pad),
+from `tools/breakout-pinout.py --json` on the board file named under Source.
+Millimetres, to 0.01 mm, from the board file's own origin, with Eagle's y
+negated into KiCad's convention: +y runs down the page, so a pad higher in the
+view above has the smaller y.
+
+`board_pad_centres` in
+[`tools/hardware/layout.py`](../../../tools/hardware/layout.py) reads this
+table. `just hardware::pad-centres-check` re-fetches the board file at the
+pinned commit and fails on any difference; it needs the network, so it runs
+locally and not in CI. Regenerate the rows with
+`PYTHONPATH=tools python3 -m hardware.padcheck --print adafruit-tca9548a` rather than
+editing them.
+
+| Header | X (mm) | Y (mm) |
+|--------|--------|--------|
+| JP1.12 | 16.51 | -29.21 |
+| JP1.11 | 16.51 | -26.67 |
+| JP1.10 | 16.51 | -24.13 |
+| JP1.9 | 16.51 | -21.59 |
+| JP1.8 | 16.51 | -19.05 |
+| JP1.7 | 16.51 | -16.51 |
+| JP1.6 | 16.51 | -13.97 |
+| JP1.5 | 16.51 | -11.43 |
+| JP1.4 | 16.51 | -8.89 |
+| JP1.3 | 16.51 | -6.35 |
+| JP1.2 | 16.51 | -3.81 |
+| JP1.1 | 16.51 | -1.27 |
+| JP3.1 | 1.27 | -29.21 |
+| JP3.2 | 1.27 | -26.67 |
+| JP3.3 | 1.27 | -24.13 |
+| JP3.4 | 1.27 | -21.59 |
+| JP3.5 | 1.27 | -19.05 |
+| JP3.6 | 1.27 | -16.51 |
+| JP3.7 | 1.27 | -13.97 |
+| JP3.8 | 1.27 | -11.43 |
+| JP3.9 | 1.27 | -8.89 |
+| JP3.10 | 1.27 | -6.35 |
+| JP3.11 | 1.27 | -3.81 |
+| JP3.12 | 1.27 | -1.27 |
+
 ## Source
 
 Read from Adafruit's Eagle board file, not from a photo
 (`.claude/rules/board-layout-from-vendor-files.md`):
 [`adafruit/Adafruit-TCA9548A-I2C-Multiplexer-PCB`](https://github.com/adafruit/Adafruit-TCA9548A-I2C-Multiplexer-PCB),
-`Adafruit TCA9548A.brd` at commit `69a8a154e26bbce3330d477eec245a2e783ca863`,
+`Adafruit TCA9548A.brd` at commit `c5bdfe4c8e860cee7400539d6e45a235da7afcd2`,
 elements `JP3` (left) and `JP1` (right).
 
+Adafruit publishes the design under
+[CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/) (`license.txt` at
+the pinned commit). The pin is the default-branch head when the licence was
+checked, not the commit that added `license.txt`; its `.brd` blob is identical
+to the one this page was first read from.
+
 ```sh
-gh api "repos/adafruit/Adafruit-TCA9548A-I2C-Multiplexer-PCB/contents/Adafruit%20TCA9548A.brd" --jq '.content' | base64 -d > /tmp/tca9548a.brd
+gh api "repos/adafruit/Adafruit-TCA9548A-I2C-Multiplexer-PCB/contents/Adafruit%20TCA9548A.brd?ref=c5bdfe4c8e860cee7400539d6e45a235da7afcd2" --jq '.content' | base64 -d > /tmp/tca9548a.brd
 python3 tools/breakout-pinout.py /tmp/tca9548a.brd --element JP1 --element JP3
 ```
 

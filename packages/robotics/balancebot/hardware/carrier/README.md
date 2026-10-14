@@ -19,8 +19,8 @@ netlist and [`board.toml`](board.toml) (placement, silkscreen, net classes, pour
 |---|---|---|
 | U1 | Seeed XIAO RP2350, in two 1×7 female headers | USB-C toward the top edge |
 | A1, A2 | Pololu-format DRV8825 carriers, in 1×8 female headers | Left / right stepper |
-| J3 | GY-521 (MPU6050), in a 1×8 female header | Lies flat over the outlined area |
-| J1 | AMASS XT30PW-M | 3S pack (through its BMS) |
+| J3 | GY-521 (MPU6050), in a 1×8 female header | Lies flat, component side up, over the outlined area; the header is on its rear edge |
+| J1 | JST-XH 2-pin (B2B-XH-A) | 3S pack (through its BMS); BAT+ on pad 1, marked "+" |
 | J2 | JST-XH 4-pin | LM2596 module: IN+, IN−, OUT+, OUT− |
 | J4, J5 | JST-XH 4-pin | Motor coils A1, A2, B1, B2 |
 | C1, C2 | 100 µF 35 V SMD electrolytic, 6.3 × 7.7 mm | VMOT bulk at each driver |
@@ -42,15 +42,18 @@ These come from library footprints and from memory, not from your parts. Hold
 each part against the board render (`just balancebot::carrier-fab`, then open
 the Gerbers, or open the board in KiCad):
 
-1. **XT30 polarity.** KiCad's footprint puts "−" on pad 1 and "+" on pad 2; the
-   board's silkscreen follows it. Check that the + and − moulded into your XT30
-   body match the silkscreen when the connector sits in its outline.
+1. **Battery lead polarity.** JST-XH has no polarity of its own: the board
+   prints "+" over pad 1 (BAT+, the square pad) and "−" over pad 2. Crimp the
+   pack lead to match. JST-XH is rated 3 A, which leaves little headroom with
+   both steppers drawing at once.
 2. **DRV8825 pin order.** The footprint is the Pololu layout: one row GND, FAULT,
    A2, A1, B1, B2, GND, VMOT; the other EN, M0, M1, M2, RST, SLP, STEP, DIR.
-   Unbranded carriers usually copy it, but check yours.
-3. **GY-521 pin order.** Assumed VCC, GND, SCL, SDA, XDA, XCL, AD0, INT with
-   pin 1 at the left end of J3. This one is from memory; read it off your
-   module's silkscreen before ordering.
+   Confirmed 2026-10-14 against the HW-216 carriers on hand (labels on the
+   bottom: EN faces VMOT, DIR faces GND).
+3. **GY-521 pin order.** VCC, GND, SCL, SDA, XDA, XCL, AD0, INT, with pin 1 at
+   the left end of J3. Confirmed 2026-10-14 against the module on hand. With J3
+   on the rear edge of its outline and the module component side up, VCC lands
+   on pin 1 and the X arrow points to FWD.
 
 ## Assembly notes
 
@@ -70,8 +73,10 @@ LCSC part number, so the same board works both ways:
 
 - Set the LM2596 to 5.0–5.3 V on the bench **before** plugging it into J2. D1
   drops about 0.3 V, so the XIAO's 5V pad sees roughly 4.7–5.0 V.
-- Mount the GY-521 flat with its X arrow toward the board's FWD mark; the
-  firmware computes pitch from X and Z. The carrier must sit at axle height for
+- Mount the GY-521 flat, component side up, on straight pins pushed down into
+  J3, so the module covers the outlined area in front of the header and its X
+  arrow points to the board's FWD mark; the firmware computes pitch from X and
+  Z (Z up). The carrier must sit at axle height for
   the IMU placement the build guide describes.
 - Set each DRV8825's Vref before connecting motors, as in the build guide.
 
@@ -122,8 +127,8 @@ The board options and form labels below are from JLCPCB's order page as it was
 when this was written; if the page differs, follow the page and check the
 detected size and layer count.
 
-1. **Settle the pre-order checks** above (#748): XT30 polarity, DRV8825 rows,
-   GY-521 header.
+1. **Settle the pre-order checks** above (#748): battery lead polarity,
+   DRV8825 rows, GY-521 header.
 2. **Start from the committed board.** Opening the project in KiCad and saving
    rewrites the `.kicad_pcb`. `git status` must show nothing under
    `hardware/carrier/`; `git restore` the board if KiCad changed it and you did
@@ -156,7 +161,7 @@ detected size and layer count.
    | Outer copper | 1 oz (the track widths assume it) |
    | Mark on PCB / order number | JLCPCB prints one by default; remove it for a fee, or leave it |
 
-   Check the outline, the four M3 holes and the "+"/"−" beside the XT30 in the
+   Check the outline, the four M3 holes and the "+"/"−" beside J1 in the
    Gerber preview.
 
 5. **Choose who solders the seven SMD parts** (R1–R3, C1–C3, D1):
@@ -176,7 +181,7 @@ detected size and layer count.
    |---|---|
    | 2 | 1×7 female header, 2.54 mm (XIAO) |
    | 5 | 1×8 female header, 2.54 mm (four for the DRV8825s, one for the GY-521) |
-   | 1 | AMASS XT30PW-M, horizontal PCB male |
+   | 1 | JST-XH B2B-XH-A, with a mating 2-pin housing and crimps (battery) |
    | 3 | JST-XH B4B-XH-A, with mating 4-pin housings and crimps |
    | 4 | M3 standoffs and screws |
 

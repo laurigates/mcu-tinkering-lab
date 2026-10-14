@@ -10,13 +10,16 @@ board.toml validation uses the frozen balancebot netlist and board.toml
 
 from __future__ import annotations
 
+import contextlib
 import copy
+import io
+import tempfile
 import tomllib
 import unittest
 import uuid
 from pathlib import Path
 
-from kicad import boardcheck, netlist, paths, testfixture
+from kicad import boardcheck, library, netlist, paths, schematic, testfixture
 from kicad.errors import KicadError
 
 NS = uuid.uuid5(uuid.NAMESPACE_URL, "mcu-tinkering-lab/kicad/test")
@@ -105,7 +108,7 @@ def board(**override) -> str:
 
 class CheckTests(unittest.TestCase):
     def errors(self, text: str) -> list[str]:
-        return boardcheck.check(text, NL, NS)
+        return boardcheck.check(text, NL, NS, module="demo")
 
     def fails(self, text: str, msg: str) -> None:
         errors = self.errors(text)
@@ -209,7 +212,7 @@ class RelinkTests(unittest.TestCase):
                 "/old-c1",
             ),
         )
-        self.assertEqual(len(boardcheck.check(stale, NL, NS)), 2)
+        self.assertEqual(len(boardcheck.check(stale, NL, NS, module="demo")), 2)
         text, n = boardcheck.relink(stale, NS)
         self.assertEqual(n, 2)
         self.assertEqual(text, board())
@@ -221,7 +224,7 @@ class RelinkTests(unittest.TestCase):
         self.assertEqual(len(changed), 2)
         self.assertTrue(all(b.startswith('\t\t(path "/') for _, b in changed))
         self.assertEqual(boardcheck.relink(text, NS), (text, 0))
-        self.assertEqual(boardcheck.check(text, NL, NS), [])
+        self.assertEqual(boardcheck.check(text, NL, NS, module="demo"), [])
 
 
 class ConfigTests(unittest.TestCase):
@@ -303,6 +306,74 @@ class ConfigTests(unittest.TestCase):
         text = board().replace('\t\t(path "', '\t\t(pathx "', 1)
         with self.assertRaisesRegex(KicadError, "0 \\(path"):
             boardcheck.relink(text, NS)
+
+
+class MainTests(unittest.TestCase):
+    """The CLI names the just module only when it prints a hint (#776)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory(prefix="kicad-boardcheck-")
+        cls.root = Path(cls.tmp.name)
+        cls.project = testfixture.materialise(cls.root)
+        vendored = cls.root / library.VENDORED.relative_to(paths.REPO_ROOT)
+        nl = netlist.build(cls.project, cls.root, vendored)
+        ns = schematic.namespace(schematic.project_key(cls.project, cls.root))
+        net = {node: name for name, nodes in nl.nets.items() for node in nodes}
+        net |= {node: name for name, node in netlist.unconnected(nl, vendored).items()}
+        fps = []
+        for c in nl.comps:
+            pads = [
+                (num, name) for (ref, num), name in sorted(net.items()) if ref == c.ref
+            ]
+            fps.append(
+                footprint(
+                    c.ref,
+                    c.footprint,
+                    c.value,
+                    c.lcsc,
+                    pads,
+                    boardcheck.symbol_path(ns, c.ref),
+                )
+            )
+        cls.good = "(kicad_pcb\n\t(version 20260206)\n" + "\n".join(fps) + "\n)\n"
+        cls.pcb = boardcheck.board_path(cls.project)
+        cls.pcb.parent.mkdir(parents=True, exist_ok=True)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.tmp.cleanup()
+
+    def run_main(self, justfile: str | None, text: str) -> tuple[int, str]:
+        jf = self.root / "justfile"
+        if justfile is None:
+            jf.unlink(missing_ok=True)
+        else:
+            jf.write_text(justfile)
+        self.pcb.write_text(text, encoding="utf-8")
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = boardcheck.main([str(self.project)], repo_root=self.root)
+        return code, out.getvalue()
+
+    def test_passing_board_with_the_module_named_unlike_the_directory(self):
+        code, out = self.run_main("mod bb 'packages/robotics/balancebot'\n", self.good)
+        self.assertEqual(code, 0, out)
+        self.assertIn("OK: balancebot-carrier.kicad_pcb", out)
+
+    def test_failing_board_hint_names_the_module_not_the_directory(self):
+        bad = self.good.replace('(property "Value" "', '(property "Value" "x', 1)
+        code, out = self.run_main("mod bb 'packages/robotics/balancebot'\n", bad)
+        self.assertEqual(code, 1, out)
+        self.assertIn("just bb::carrier-board", out)
+        self.assertNotIn("balancebot::", out)
+
+    def test_passing_board_needs_no_mod_line(self):
+        for justfile in ("mod other 'packages/other'\n", None):
+            with self.subTest(justfile=justfile):
+                code, out = self.run_main(justfile, self.good)
+                self.assertEqual(code, 0, out)
+                self.assertIn("OK: balancebot-carrier.kicad_pcb", out)
 
 
 if __name__ == "__main__":

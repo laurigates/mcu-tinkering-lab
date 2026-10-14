@@ -18,6 +18,10 @@ projects' library tables point the `Seeed_XIAO` nickname at this directory.
 | `Seeed_XIAO.kicad_sym`, symbol `XIAO-RP2350-DIP` | vendor: the header lines and the `XIAO-RP2350-DIP` block of upstream `Seeed_Studio_XIAO_Series.kicad_sym`, unchanged apart from CRLF to LF |
 | `Seeed_XIAO.kicad_sym`, symbol `XIAO-RP2350-Socket` | derived from the DIP symbol: pins 15-24 removed, footprint `Seeed_XIAO:XIAO-RP2350-Socket` |
 | `Seeed_XIAO.pretty/XIAO-RP2350-Socket.kicad_mod` | derived from the DIP footprint: through-hole pads 1-14 only, no Edge.Cuts cutout, no castellations |
+| `Seeed_XIAO.pretty/XIAO-ESP32-S3-DIP.kicad_mod` | vendor: upstream `XIAO-ESP32-S3-DIP.kicad_mod`, unchanged apart from CRLF to LF and a final newline (upstream has none; the repo's end-of-file-fixer hook adds it) |
+| `Seeed_XIAO.kicad_sym`, symbol `XIAO-ESP32-S3-SMD` | vendor: the `XIAO-ESP32-S3-SMD` block of upstream `Seeed_Studio_XIAO_Series.kicad_sym`, unchanged apart from CRLF to LF. Seeed ships no `XIAO-ESP32-S3-DIP` symbol; the SMD one numbers the same 14 header pins |
+| `Seeed_XIAO.kicad_sym`, symbol `XIAO-ESP32-S3-Socket` | derived from the SMD symbol: pins 15-25 removed, footprint `Seeed_XIAO:XIAO-ESP32-S3-Socket` |
+| `Seeed_XIAO.pretty/XIAO-ESP32-S3-Socket.kicad_mod` | derived from the DIP footprint: through-hole pads 1-14 only, no castellations (the upstream footprint has no Edge.Cuts); the pads sit at the same centres as `XIAO-RP2350-Socket` |
 | `derive.toml` | which sockets are derived from which vendor parts, and the pads they keep |
 
 Seeed's DIP footprint is for soldering the XIAO flat onto a host board: it mills

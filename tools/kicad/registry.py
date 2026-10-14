@@ -451,6 +451,12 @@ def pin_map(
             raise KicadError(
                 f"{board.path}: pin {p.name} has no Side/Pos for {spec.pin_numbers}"
             )
+        if p.side not in sides:
+            raise KicadError(
+                f"{spec.path}: pin {p.name} is on side {p.side!r} of {board.path.name}; "
+                f"pin_numbers = {spec.pin_numbers!r} numbers only L/R rows; "
+                "give the entry explicit [pins] instead"
+            )
         sides[p.side].append(p.pos)
     n = len(sides["L"])
     for side, got in sides.items():

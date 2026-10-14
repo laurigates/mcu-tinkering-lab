@@ -89,6 +89,42 @@ def kicad_project_dir(project: Path) -> Path:
     return carrier_dir(project) / load_board_config(project).name
 
 
+# A root-justfile module declaration: `mod name`, `mod? name 'path'`.
+_JUSTFILES = frozenset({"justfile", ".justfile", "Justfile", ".Justfile"})
+_MOD = re.compile(r"""mod\??\s+([A-Za-z_][A-Za-z0-9_-]*)(?:\s+(['"])(.+?)\2)?\s*""")
+
+
+def just_module(project: Path, repo_root: Path = REPO_ROOT) -> str:
+    """The root justfile's module name for `project`, for `just <module>::` hints.
+
+    Read from the `mod` lines, never the directory name: packages/robocar/unified
+    is `mod robocar-unified`. A `mod` path may name the module's justfile rather
+    than its directory; with no path, the module is the directory `name`.
+    """
+    justfile = repo_root / "justfile"
+    try:
+        lines = justfile.read_text(encoding="utf-8").splitlines()
+    except FileNotFoundError:
+        raise KicadError(
+            f"{justfile}: no root justfile to name the just module"
+        ) from None
+    want = project.resolve()
+    for line in lines:
+        m = _MOD.fullmatch(line.strip())
+        if not m:
+            continue
+        name, _, rel = m.groups()
+        target = repo_root / (rel or name)
+        if target.name in _JUSTFILES or target.suffix == ".just":
+            target = target.parent
+        if target.resolve() == want:
+            return name
+    raise KicadError(
+        f"{justfile}: no `mod` line for {_display(project, repo_root)}; "
+        f"add `mod <name> '{_display(project, repo_root)}'`"
+    )
+
+
 def tracked_projects(
     repo_root: Path = REPO_ROOT, marker: str = CARRIER_MARKER
 ) -> list[Path]:

@@ -32,6 +32,7 @@ second would silently replace the first — so a repeated name is anchored as
 
 from __future__ import annotations
 
+import re
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
@@ -153,12 +154,115 @@ def parse_layout(path: Path) -> ModuleLayout:
     return ModuleLayout(path=path, pads=pads)
 
 
-def board_layout(slug: str) -> ModuleLayout:
-    """The layout in `docs/reference/boards/<slug>.md`."""
+def _board_path(slug: str) -> Path:
     path = BOARDS_DIR / f"{slug}.md"
     if not path.is_file():
         raise HardwareError(
             f"no board reference {path.relative_to(REPO_ROOT)} "
             f"(looked in {BOARDS_DIR.relative_to(REPO_ROOT)})"
         )
-    return parse_layout(path)
+    return path
+
+
+def board_layout(slug: str) -> ModuleLayout:
+    """The layout in `docs/reference/boards/<slug>.md`."""
+    return parse_layout(_board_path(slug))
+
+
+# --- Pad centres -------------------------------------------------------------
+#
+# A breakout page can also carry where each pad of its headers physically is,
+# for a carrier footprint to be generated from (#750). The table is
+# `| Header | X (mm) | Y (mm) |`, one row per pad of every header (vendor
+# element) the layout table's `Header` column cites — all of its pads, not only
+# the ones the layout lists. Coordinates are `tools/breakout-pinout.py --json`
+# with Eagle's y negated into KiCad's y-down convention, in the board file's
+# own origin, to 0.01 mm. `hardware.padcheck` re-derives them from the vendor
+# file; this only reads them.
+
+_NUMBER = re.compile(r"-?\d+(?:\.\d+)?")
+
+
+@dataclass(frozen=True)
+class PadCentre:
+    element: str  # the vendor's element: JP1
+    pad: str  # the vendor's pad name within it: 8
+    x: float  # mm, board-file origin
+    y: float  # mm, KiCad convention: +y is down the page
+
+
+def _is_centres(header: list[str]) -> bool:
+    lowered = [h.lower() for h in header]
+    return lowered[0] == "header" and "x (mm)" in lowered and "y (mm)" in lowered
+
+
+def _layout_headers(path: Path, tables: list[list[list[str]]]) -> set[tuple[str, str]]:
+    """(element, pad) of every `Header` cell in the breakout layout table."""
+    layout = [t for t in tables if _is_layout(t[0]) and not _is_mapping(t[0])]
+    if len(layout) != 1:
+        raise HardwareError(
+            f"{path}: pad centres need exactly one breakout layout table "
+            f"with a Header column; found {len(layout)}"
+        )
+    header, *rows = layout[0]
+    col = _column(header, "header")
+    if col is None:
+        raise HardwareError(f"{path}: the layout table has no Header column")
+    return {_split_header(path, row[col]) for row in rows if col < len(row)}
+
+
+def _split_header(path: Path, cell: str) -> tuple[str, str]:
+    element, dot, pad = cell.rpartition(".")
+    if not dot or not element or not pad:
+        raise HardwareError(f"{path}: header {cell!r} is not <element>.<pad>")
+    return element, pad
+
+
+def parse_pad_centres(path: Path) -> dict[str, tuple[PadCentre, ...]]:
+    """Each header's pad centres from the board reference at `path`, by element."""
+    tables = _tables(path.read_text(encoding="utf-8"))
+    found = [t for t in tables if _is_centres(t[0])]
+    if len(found) != 1:
+        raise HardwareError(
+            f"{path}: no pad-centre table (| Header | X (mm) | Y (mm) |)"
+            if not found
+            else f"{path}: {len(found)} pad-centre tables; expected exactly one"
+        )
+    header, *rows = found[0]
+    x_col, y_col = _column(header, "x (mm)"), _column(header, "y (mm)")
+
+    centres: dict[str, list[PadCentre]] = {}
+    seen: set[tuple[str, str]] = set()
+    for row in rows:
+        element, pad = _split_header(path, row[0])
+        cells = {
+            "X": row[x_col] if x_col < len(row) else "",
+            "Y": row[y_col] if y_col < len(row) else "",
+        }
+        for axis, raw in cells.items():
+            if not _NUMBER.fullmatch(raw):
+                raise HardwareError(
+                    f"{path}: {row[0]}: {axis} {raw!r} is not a number in mm"
+                )
+        if (element, pad) in seen:
+            raise HardwareError(f"{path}: {row[0]} has a centre twice")
+        seen.add((element, pad))
+        centres.setdefault(element, []).append(
+            PadCentre(element, pad, float(cells["X"]), float(cells["Y"]))
+        )
+
+    cited = _layout_headers(path, tables)
+    missing = sorted(f"{e}.{p}" for e, p in cited - seen)
+    if missing:
+        raise HardwareError(f"{path}: {', '.join(missing)}: no pad centre recorded")
+    stray = sorted(set(centres) - {e for e, _ in cited})
+    if stray:
+        raise HardwareError(
+            f"{path}: {', '.join(stray)}: not a header the layout table names"
+        )
+    return {element: tuple(pads) for element, pads in centres.items()}
+
+
+def board_pad_centres(slug: str) -> dict[str, tuple[PadCentre, ...]]:
+    """The pad centres in `docs/reference/boards/<slug>.md`."""
+    return parse_pad_centres(_board_path(slug))

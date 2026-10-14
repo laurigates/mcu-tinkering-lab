@@ -4449,7 +4449,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "XT30 pack in"
+		(property "Value" "JST-XH pack in"
 			(at 175.26 92.71 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -4460,7 +4460,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Connector_AMASS:AMASS_XT30PW-M_1x02_P2.50mm_Horizontal"
+		(property "Footprint" "Connector_JST:JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical"
 			(at 180.34 86.36 0)
 			(hide yes)
 			(show_name no)
@@ -4518,7 +4518,7 @@
 		)
 		(uuid "c270bc60-564a-583e-a04d-f8e3a3f37ed3")
 	)
-	(global_label "GND"
+	(global_label "VBAT"
 		(shape bidirectional)
 		(at 172.72 86.36 180)
 		(effects
@@ -4550,7 +4550,7 @@
 		)
 		(uuid "353af363-f397-557d-95ad-9df658f92712")
 	)
-	(global_label "VBAT"
+	(global_label "GND"
 		(shape bidirectional)
 		(at 172.72 88.9 180)
 		(effects
