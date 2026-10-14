@@ -48,7 +48,8 @@ every net, as a spare I/O. A power pad (5V, GND, 3V3) must be on a rail.
 ## Where a pin order comes from
 
 `source` must say where the pin order came from: a vendor board file, the KiCad
-library, or memory plus the issue that tracks checking it (`gy-521` cites #748).
+library, the fitted part's silkscreen (`gy-521`), or memory plus the issue that
+tracks checking it.
 A recalled pin order reads exactly like a checked one. For a breakout, take it
 from the vendor's board file, as
 [`.claude/rules/board-layout-from-vendor-files.md`](../../../.claude/rules/board-layout-from-vendor-files.md)

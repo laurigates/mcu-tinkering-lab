@@ -15,8 +15,10 @@ fixture. Here the classes come from the frozen board.toml
 board.toml says what the script's constants said.
 
 The component and pad order of the export follows the board's footprint
-order, which KiCad sets from each footprint's UUID; build_board.py creates
-them fresh, so every placement run orders the same content differently.
+order, which KiCad sets from each footprint's UUID; build_board.py takes those
+from the board input (uuid5 of the carrier directory and `fp/<ref>`), so every
+placement run exports the same file. `test_build_board` (local, KiCad's Python)
+builds the frozen balancebot twice and holds both exports equal to the fixture.
 
 To refresh both files, in a scratch clone whose balancebot inputs equal
 `testdata/balancebot-749/` (`.frozen` suffixes dropped), with $KICAD_PYTHON

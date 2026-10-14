@@ -12,7 +12,8 @@ registry and board.toml. This writes it to
 - `origin`, `size`: board.toml `[outline]`;
 - `components`: per netlist component, in reference order, its value,
   footprint id, vendored footprint directory, the path of its symbol in the
-  generated schematic (`/<uuid5 sym/REF>`), its custom fields (LCSC) and its
+  generated schematic (`/<uuid5 sym/REF>`), the footprint's own UUID
+  (`uuid5 fp/REF`, see `footprint_uuid`), its custom fields (LCSC) and its
   board.toml `[placement]`;
 - `nets`: every netlist net, plus one single-pad net per no-connect pin named
   as KiCad names it (`unconnected-(<ref>-<pin name>-Pad<n>)`); without those,
@@ -57,6 +58,15 @@ def input_path(project: Path) -> Path:
     return paths.carrier_dir(project) / OUTPUT / FILENAME
 
 
+def footprint_uuid(ns: uuid.UUID, ref: str) -> str:
+    """The UUID build_board.py gives footprint `ref`: uuid5 under the carrier's namespace.
+
+    KiCad saves a board's footprints in UUID order and its Specctra DSN export
+    follows it, so a UUID KiCad draws afresh reorders every placement run (#763).
+    """
+    return str(uuid.uuid5(ns, f"fp/{ref}"))
+
+
 def assemble(
     cfg: paths.BoardConfig,
     nl: netlist.Netlist,
@@ -82,6 +92,7 @@ def assemble(
                 library.footprint_file(c.footprint, vendored=vendored).parent
             ),
             "path": boardcheck.symbol_path(ns, c.ref),
+            "uuid": footprint_uuid(ns, c.ref),
             "fields": [list(f) for f in c.fields],
             "at": list(placement[c.ref]),
         }

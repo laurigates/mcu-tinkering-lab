@@ -29,17 +29,51 @@ its two pads carry the vendor's net names, `VO-` and `VO+`.
 | GND | B | 6 | JP1.2 | |
 | Vin | B | 7 | JP1.1 | 2.5–5.5 V |
 
+## Pad centres
+
+Every pad of every header the layout table cites (`Header` is element.pad),
+from `tools/breakout-pinout.py --json` on the board file named under Source.
+Millimetres, to 0.01 mm, from the board file's own origin, with Eagle's y
+negated into KiCad's convention: +y runs down the page, so a pad higher in the
+view above has the smaller y.
+
+`board_pad_centres` in
+[`tools/hardware/layout.py`](../../../tools/hardware/layout.py) reads this
+table. `just hardware::pad-centres-check` re-fetches the board file at the
+pinned commit and fails on any difference; it needs the network, so it runs
+locally and not in CI. Regenerate the rows with
+`PYTHONPATH=tools python3 -m hardware.padcheck --print adafruit-max98357a` rather than
+editing them.
+
+| Header | X (mm) | Y (mm) |
+|--------|--------|--------|
+| JP1.7 | 1.27 | -2.54 |
+| JP1.6 | 3.81 | -2.54 |
+| JP1.5 | 6.35 | -2.54 |
+| JP1.4 | 8.89 | -2.54 |
+| JP1.3 | 11.43 | -2.54 |
+| JP1.2 | 13.97 | -2.54 |
+| JP1.1 | 16.51 | -2.54 |
+| X1.1 | 7.09 | -15.49 |
+| X1.2 | 10.59 | -15.49 |
+
 ## Source
 
 Read from Adafruit's Eagle board file, not from a photo
 (`.claude/rules/board-layout-from-vendor-files.md`):
 [`adafruit/Adafruit-MAX98357-I2S-Amp-Breakout`](https://github.com/adafruit/Adafruit-MAX98357-I2S-Amp-Breakout),
 `Adafruit MAX98357 Breakout.brd` (the mono board, not the stereo rev B) at commit
-`9766975c856c6a5733eaf53b4d94109ffd9aa33e`, elements `JP1` (header) and `X1`
+`c7cf21b4a83affb8bd0ee4fb8251d5b266d964ff`, elements `JP1` (header) and `X1`
 (terminal block).
 
+Adafruit publishes the design under
+[CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/) (`license.txt` at
+the pinned commit). The pin is the default-branch head when the licence was
+checked, not the commit that added `license.txt`; its `.brd` blob is identical
+to the one this page was first read from.
+
 ```sh
-gh api "repos/adafruit/Adafruit-MAX98357-I2S-Amp-Breakout/contents/Adafruit%20MAX98357%20Breakout.brd" --jq '.content' | base64 -d > /tmp/max98357.brd
+gh api "repos/adafruit/Adafruit-MAX98357-I2S-Amp-Breakout/contents/Adafruit%20MAX98357%20Breakout.brd?ref=c7cf21b4a83affb8bd0ee4fb8251d5b266d964ff" --jq '.content' | base64 -d > /tmp/max98357.brd
 python3 tools/breakout-pinout.py /tmp/max98357.brd --element JP1 --element X1
 ```
 

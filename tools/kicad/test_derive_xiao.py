@@ -18,7 +18,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from kicad import derive_xiao, library, symbols, vendor
+from kicad import derive_xiao, footprints, library, symbols, vendor
 from kicad.errors import KicadError
 from kicad.paths import REPO_ROOT
 
@@ -29,6 +29,12 @@ DIP_FP = SEEED / "Seeed_XIAO.pretty/XIAO-RP2350-DIP.kicad_mod"
 SYM_LIB = SEEED / "Seeed_XIAO.kicad_sym"
 RP2350 = derive_xiao.Socket(
     "XIAO-RP2350-DIP", "XIAO-RP2350-DIP", "XIAO-RP2350-Socket", 1, 14
+)
+S3_SOCKET_FP = SEEED / "Seeed_XIAO.pretty/XIAO-ESP32-S3-Socket.kicad_mod"
+S3_DIP_FP = SEEED / "Seeed_XIAO.pretty/XIAO-ESP32-S3-DIP.kicad_mod"
+# Seeed ships no XIAO-ESP32-S3-DIP symbol; the SMD one numbers the same 14 header pins.
+S3 = derive_xiao.Socket(
+    "XIAO-ESP32-S3-DIP", "XIAO-ESP32-S3-SMD", "XIAO-ESP32-S3-Socket", 1, 14
 )
 
 
@@ -48,8 +54,9 @@ def pad_numbers(text: str) -> list[tuple[int, str]]:
 class CommittedLibraryTests(unittest.TestCase):
     def test_reproduces_the_committed_files_byte_for_byte(self):
         out = derive_xiao.render("Seeed_XIAO")
-        self.assertEqual(sorted(out), sorted([SOCKET_FP, SYM_LIB]))
+        self.assertEqual(sorted(out), sorted([SOCKET_FP, S3_SOCKET_FP, SYM_LIB]))
         self.assertEqual(out[SOCKET_FP], SOCKET_FP.read_text(encoding="utf-8"))
+        self.assertEqual(out[S3_SOCKET_FP], S3_SOCKET_FP.read_text(encoding="utf-8"))
         self.assertEqual(out[SYM_LIB], SYM_LIB.read_text(encoding="utf-8"))
 
     def test_main_check_passes(self):
@@ -58,7 +65,7 @@ class CommittedLibraryTests(unittest.TestCase):
         self.assertNotIn("wrote", out)
 
     def test_config(self):
-        self.assertEqual(derive_xiao.load_config(SEEED / "derive.toml"), [RP2350])
+        self.assertEqual(derive_xiao.load_config(SEEED / "derive.toml"), [RP2350, S3])
         self.assertEqual(derive_xiao.libraries(), [("Seeed_XIAO", SEEED)])
 
     def test_socket_footprint_is_the_cut(self):
@@ -72,7 +79,15 @@ class CommittedLibraryTests(unittest.TestCase):
 
     def test_symbol_library_keeps_the_vendor_block(self):
         blocks = symbols.blocks(SYM_LIB.read_text(encoding="utf-8"))
-        self.assertEqual(list(blocks), ["XIAO-RP2350-DIP", "XIAO-RP2350-Socket"])
+        self.assertEqual(
+            list(blocks),
+            [
+                "XIAO-ESP32-S3-SMD",
+                "XIAO-RP2350-DIP",
+                "XIAO-RP2350-Socket",
+                "XIAO-ESP32-S3-Socket",
+            ],
+        )
         socket = blocks["XIAO-RP2350-Socket"]
         self.assertIn('(property "Footprint" "Seeed_XIAO:XIAO-RP2350-Socket"', socket)
         numbers = sorted(int(n) for n in re.findall(r'\(number "(\d+)"', socket))
@@ -81,6 +96,32 @@ class CommittedLibraryTests(unittest.TestCase):
             int(n) for n in re.findall(r'\(number "(\d+)"', blocks["XIAO-RP2350-DIP"])
         )
         self.assertEqual(dip, list(range(1, 25)))
+
+    def test_s3_socket_pads_sit_at_the_rp2350_socket_centres(self):
+        # The XIAO form factor fixes the 14 header pads; a carrier laid out for
+        # one socket takes the other.
+        text = S3_SOCKET_FP.read_text(encoding="utf-8")
+        self.assertNotIn("Edge.Cuts", text)
+        self.assertTrue(text.startswith('(footprint "XIAO-ESP32-S3-Socket"\n'))
+        self.assertEqual(pad_numbers(text), [(n, "thru_hole") for n in range(1, 15)])
+        s3 = footprints.parse(S3_SOCKET_FP).pads
+        rp = footprints.parse(SOCKET_FP).pads
+        self.assertEqual(
+            {n: (p.x, p.y) for n, p in s3.items()},
+            {n: (p.x, p.y) for n, p in rp.items()},
+        )
+        self.assertIn((1, "smd"), pad_numbers(S3_DIP_FP.read_text(encoding="utf-8")))
+
+    def test_s3_socket_symbol(self):
+        blocks = symbols.blocks(SYM_LIB.read_text(encoding="utf-8"))
+        socket = blocks["XIAO-ESP32-S3-Socket"]
+        self.assertIn('(property "Footprint" "Seeed_XIAO:XIAO-ESP32-S3-Socket"', socket)
+        self.assertNotIn("XIAO-ESP32-S3-SMD", socket)
+        pins = {p.number: p.name for p in symbols.pins(socket)}
+        self.assertEqual(sorted(pins, key=int), [str(n) for n in range(1, 15)])
+        self.assertEqual(
+            (pins["12"], pins["13"], pins["14"]), ("3V3_OUT", "GND", "VBUS")
+        )
 
 
 class DeriveTests(unittest.TestCase):
@@ -204,6 +245,7 @@ class CliTests(unittest.TestCase):
         # it (vendor --check would then pass), and must write nothing.
         edits = {
             "Seeed_XIAO.pretty/XIAO-RP2350-DIP.kicad_mod": ("(layer", "(layer  "),
+            "Seeed_XIAO.pretty/XIAO-ESP32-S3-DIP.kicad_mod": ("(layer", "(layer  "),
             "LICENSE": ("MIT License", "MIT Licence"),
             # The vendor symbol block, not the derived one.
             "Seeed_XIAO.kicad_sym": (

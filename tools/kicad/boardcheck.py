@@ -30,9 +30,11 @@ from __future__ import annotations
 
 import argparse
 import fnmatch
+import functools
 import re
 import sys
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -112,10 +114,14 @@ def check(
     nl: netlist.Netlist,
     ns: uuid.UUID,
     vendored: Path = library.VENDORED,
+    *,
+    module: str | Callable[[], str],
 ) -> list[str]:
-    """Differences between a board's footprints and the netlist; [] when equal."""
-    module = nl.project.name
-    tail = f"; {hint(module)}"
+    """Differences between a board's footprints and the netlist; [] when equal.
+
+    `module` is the project's just module (`paths.just_module`), for the hint,
+    or a function returning it, called only when there is a difference.
+    """
     want_net = {node: name for name, nodes in nl.nets.items() for node in nodes}
     nc_net = {node: name for name, node in netlist.unconnected(nl, vendored).items()}
     comps = {c.ref: c for c in nl.comps}
@@ -125,27 +131,25 @@ def check(
         fp = parse_footprint(block)
         ref = fp.ref
         if ref in seen:
-            errors.append(f"{ref}: on the board twice{tail}")
+            errors.append(f"{ref}: on the board twice")
             continue
         seen.add(ref)
         comp = comps.get(ref)
         if comp is None:
-            errors.append(f"{ref}: on the board, not in the netlist{tail}")
+            errors.append(f"{ref}: on the board, not in the netlist")
             continue
         if fp.fpid != comp.footprint:
             errors.append(
-                f"{ref}: footprint {fp.fpid!r}, netlist says {comp.footprint!r}{tail}"
+                f"{ref}: footprint {fp.fpid!r}, netlist says {comp.footprint!r}"
             )
         if fp.value != comp.value:
-            errors.append(
-                f"{ref}: value {fp.value!r}, netlist says {comp.value!r}{tail}"
-            )
+            errors.append(f"{ref}: value {fp.value!r}, netlist says {comp.value!r}")
         if fp.lcsc != comp.lcsc:
-            errors.append(f"{ref}: LCSC {fp.lcsc!r}, netlist says {comp.lcsc!r}{tail}")
+            errors.append(f"{ref}: LCSC {fp.lcsc!r}, netlist says {comp.lcsc!r}")
         want_path = symbol_path(ns, ref)
         if fp.path != want_path:
             errors.append(
-                f"{ref}: path {fp.path!r}, the schematic symbol is {want_path!r}{tail}"
+                f"{ref}: path {fp.path!r}, the schematic symbol is {want_path!r}"
             )
         for num in sorted(fp.pads, key=_pad_key):
             if not num:
@@ -155,22 +159,23 @@ def check(
                 if node in want_net:
                     if got != want_net[node]:
                         errors.append(
-                            f"{ref}.{num}: pad on {got!r}, netlist says {want_net[node]!r}{tail}"
+                            f"{ref}.{num}: pad on {got!r}, netlist says {want_net[node]!r}"
                         )
                 elif node in nc_net:
                     if got != nc_net[node]:
                         errors.append(
                             f"{ref}.{num}: no-connect pad on {got!r}, KiCad names its net "
-                            f"{nc_net[node]!r}{tail}"
+                            f"{nc_net[node]!r}"
                         )
                 elif got:
-                    errors.append(
-                        f"{ref}.{num}: pad on {got!r}, netlist has no net{tail}"
-                    )
+                    errors.append(f"{ref}.{num}: pad on {got!r}, netlist has no net")
     for ref in comps:
         if ref not in seen:
-            errors.append(f"{ref}: in the netlist, not on the board{tail}")
-    return errors
+            errors.append(f"{ref}: in the netlist, not on the board")
+    if not errors:
+        return []
+    tail = f"; {hint(module() if callable(module) else module)}"
+    return [e + tail for e in errors]
 
 
 def relink(board_text: str, ns: uuid.UUID) -> tuple[str, int]:
@@ -380,18 +385,21 @@ def main(argv: list[str] | None = None, repo_root: Path = REPO_ROOT) -> int:
     try:
         for project in paths.select_projects(args.projects, args.allow_none, repo_root):
             cfg = paths.load_board_config(project)
+            module = functools.partial(paths.just_module, project, repo_root)
             nl = netlist.build(project, repo_root, vendored)
             ns = schematic.namespace(schematic.project_key(project, repo_root))
             pcb = board_path(project)
             if not pcb.is_file():
-                raise KicadError(f"{pcb}: no board; {hint(project.resolve().name)}")
+                raise KicadError(f"{pcb}: no board; {hint(module())}")
             text = pcb.read_text(encoding="utf-8")
             if args.relink:
                 text, n = relink(text, ns)
                 if n:
                     pcb.write_text(text, encoding="utf-8")
                 print(f"relinked {n} footprint path(s) in {pcb.name}")
-            errors = validate_config(cfg, nl) + check(text, nl, ns, vendored)
+            errors = validate_config(cfg, nl) + check(
+                text, nl, ns, vendored, module=module
+            )
             for e in errors:
                 print(f"FAIL: {e}")
             if errors:
