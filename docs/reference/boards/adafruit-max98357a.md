@@ -29,6 +29,34 @@ its two pads carry the vendor's net names, `VO-` and `VO+`.
 | GND | B | 6 | JP1.2 | |
 | Vin | B | 7 | JP1.1 | 2.5–5.5 V |
 
+## Pad centres
+
+Every pad of every header the layout table cites (`Header` is element.pad),
+from `tools/breakout-pinout.py --json` on the board file named under Source.
+Millimetres, to 0.01 mm, from the board file's own origin, with Eagle's y
+negated into KiCad's convention: +y runs down the page, so a pad higher in the
+view above has the smaller y.
+
+`board_pad_centres` in
+[`tools/hardware/layout.py`](../../../tools/hardware/layout.py) reads this
+table. `just hardware::pad-centres-check` re-fetches the board file at the
+pinned commit and fails on any difference; it needs the network, so it runs
+locally and not in CI. Regenerate the rows with
+`PYTHONPATH=tools python3 -m hardware.padcheck --print adafruit-max98357a` rather than
+editing them.
+
+| Header | X (mm) | Y (mm) |
+|--------|--------|--------|
+| JP1.7 | 1.27 | -2.54 |
+| JP1.6 | 3.81 | -2.54 |
+| JP1.5 | 6.35 | -2.54 |
+| JP1.4 | 8.89 | -2.54 |
+| JP1.3 | 11.43 | -2.54 |
+| JP1.2 | 13.97 | -2.54 |
+| JP1.1 | 16.51 | -2.54 |
+| X1.1 | 7.09 | -15.49 |
+| X1.2 | 10.59 | -15.49 |
+
 ## Source
 
 Read from Adafruit's Eagle board file, not from a photo

@@ -38,6 +38,41 @@ the outputs with a zero (`A01`), not a letter O.
 | PWMB | R | 7 | JP2.7 | Channel B speed |
 | GND | R | 8 | JP2.8 | |
 
+## Pad centres
+
+Every pad of every header the layout table cites (`Header` is element.pad),
+from `tools/breakout-pinout.py --json` on the board file named under Source.
+Millimetres, to 0.01 mm, from the board file's own origin, with Eagle's y
+negated into KiCad's convention: +y runs down the page, so a pad higher in the
+view above has the smaller y.
+
+`board_pad_centres` in
+[`tools/hardware/layout.py`](../../../tools/hardware/layout.py) reads this
+table. `just hardware::pad-centres-check` re-fetches the board file at the
+pinned commit and fails on any difference; it needs the network, so it runs
+locally and not in CI. Regenerate the rows with
+`PYTHONPATH=tools python3 -m hardware.padcheck --print sparkfun-tb6612fng` rather than
+editing them.
+
+| Header | X (mm) | Y (mm) |
+|--------|--------|--------|
+| JP1.8 | 2.54 | -19.05 |
+| JP1.7 | 2.54 | -16.51 |
+| JP1.6 | 2.54 | -13.97 |
+| JP1.5 | 2.54 | -11.43 |
+| JP1.4 | 2.54 | -8.89 |
+| JP1.3 | 2.54 | -6.35 |
+| JP1.2 | 2.54 | -3.81 |
+| JP1.1 | 2.54 | -1.27 |
+| JP2.1 | 17.78 | -19.05 |
+| JP2.2 | 17.78 | -16.51 |
+| JP2.3 | 17.78 | -13.97 |
+| JP2.4 | 17.78 | -11.43 |
+| JP2.5 | 17.78 | -8.89 |
+| JP2.6 | 17.78 | -6.35 |
+| JP2.7 | 17.78 | -3.81 |
+| JP2.8 | 17.78 | -1.27 |
+
 ## Source
 
 Read from SparkFun's Eagle board file, not from a photo
