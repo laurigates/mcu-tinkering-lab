@@ -40,8 +40,9 @@ Read from Adafruit's Eagle board file, not from a photo
 
 Adafruit publishes the design under
 [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/) (`license.txt` at
-the pinned commit). The pin is the first commit carrying that file; its `.brd`
-blob is the one this page was first read from.
+the pinned commit). The pin is the default-branch head when the licence was
+checked, not the commit that added `license.txt`; its `.brd` blob is identical
+to the one this page was first read from.
 
 ```sh
 gh api "repos/adafruit/Adafruit-MAX98357-I2S-Amp-Breakout/contents/Adafruit%20MAX98357%20Breakout.brd?ref=c7cf21b4a83affb8bd0ee4fb8251d5b266d964ff" --jq '.content' | base64 -d > /tmp/max98357.brd

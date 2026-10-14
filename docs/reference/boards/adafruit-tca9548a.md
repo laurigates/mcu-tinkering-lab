@@ -55,8 +55,9 @@ elements `JP3` (left) and `JP1` (right).
 
 Adafruit publishes the design under
 [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/) (`license.txt` at
-the pinned commit). The pin is the first commit carrying that file; its `.brd`
-blob is the one this page was first read from.
+the pinned commit). The pin is the default-branch head when the licence was
+checked, not the commit that added `license.txt`; its `.brd` blob is identical
+to the one this page was first read from.
 
 ```sh
 gh api "repos/adafruit/Adafruit-TCA9548A-I2C-Multiplexer-PCB/contents/Adafruit%20TCA9548A.brd?ref=c5bdfe4c8e860cee7400539d6e45a235da7afcd2" --jq '.content' | base64 -d > /tmp/tca9548a.brd

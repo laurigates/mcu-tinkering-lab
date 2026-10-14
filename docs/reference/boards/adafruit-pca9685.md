@@ -72,8 +72,9 @@ the board file's nets for the `PWM` row are generic (`N$9`), so read the printed
 
 Adafruit publishes the design under
 [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/) (`license.txt` at
-the pinned commit). The pin is the first commit carrying that file; its `.brd`
-blob is the one this page was first read from.
+the pinned commit). The pin is the default-branch head when the licence was
+checked, not the commit that added `license.txt`; its `.brd` blob is identical
+to the one this page was first read from.
 
 ```sh
 gh api "repos/adafruit/Adafruit-16-Channel-PWM-Servo-Driver-PCB/contents/Adafruit%20PCA9685%20rev%20C.brd?ref=32578c83a5ba2946249b80b1aa1fb18ae4e61e7d" --jq '.content' | base64 -d > /tmp/pca9685.brd
