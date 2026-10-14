@@ -8,9 +8,11 @@ footprint's UUID from the board input (uuid5 of the carrier directory and
 placement runs export byte-identical DSN, which also equals
 `testdata/balancebot-carrier.dsn` (line 1, the output path, normalised).
 
-They need KiCad's bundled Python ($KICAD_PYTHON, else the macOS bundle's, as in
-tools/kicad.just) and skip without it, so CI, which has no KiCad, skips them;
-run them locally after touching `pcb/build_board.py` or the board input. The
+They need KiCad 10.0.6's bundled Python ($KICAD_PYTHON, else the macOS
+bundle's, as in tools/kicad.just) and skip without it, or when its pcbnew
+reports another version (the fixture is 10.0.6's export), so CI, which has no
+KiCad, and a machine with another KiCad skip them; run them locally after
+touching `pcb/build_board.py` or the board input. The
 input is the frozen balancebot (`kicad.testfixture`), not the live project.
 
     python3 -m unittest discover -s tools/kicad -t tools
@@ -43,6 +45,25 @@ EXPORT = (
 )
 
 
+def skip_reason(python: str) -> str | None:
+    """Why RepeatTests cannot run under `python`, or None when its pcbnew is 10.0.6."""
+    need = f"needs KiCad {KICAD_VERSION}'s bundled Python ($KICAD_PYTHON or {MACOS_PYTHON})"
+    if not Path(python).is_file():
+        return f"{need}; {python} is absent"
+    done = subprocess.run(
+        [python, "-c", "import pcbnew; print(pcbnew.Version())"],
+        capture_output=True,
+        text=True,
+    )
+    lines = done.stdout.strip().splitlines()
+    if done.returncode != 0 or not lines:
+        return f"{need}; {python} has no pcbnew: {done.stderr.strip()[-200:]}"
+    found = lines[-1].strip()
+    if found != KICAD_VERSION:
+        return f"{need}; found {found} at {python}"
+    return None
+
+
 def run(argv: list[str]) -> str:
     done = subprocess.run(argv, capture_output=True, text=True)
     if done.returncode != 0:
@@ -71,10 +92,10 @@ def place_and_export(spec: dict, scratch: Path) -> tuple[str, str]:
     return version.splitlines()[-1], normalise(out.read_text())
 
 
-@unittest.skipUnless(
-    Path(KICAD_PYTHON).is_file(),
-    f"needs KiCad {KICAD_VERSION}'s bundled Python ($KICAD_PYTHON or {MACOS_PYTHON})",
-)
+SKIP = skip_reason(KICAD_PYTHON)
+
+
+@unittest.skipIf(SKIP is not None, SKIP or "")
 class RepeatTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -95,6 +116,62 @@ class RepeatTests(unittest.TestCase):
 
     def test_export_equals_the_fixture(self):
         self.assertEqual(self.exports[0][1], FIXTURE.read_text())
+
+
+class SkipTests(unittest.TestCase):
+    """RepeatTests skips unless $KICAD_PYTHON's pcbnew is exactly KiCad 10.0.6."""
+
+    def stub(self, scratch: Path, version: str) -> tuple[Path, Path]:
+        """An executable stand-in for KiCad's Python that reports `version`."""
+        mark = scratch / "stub-ran"
+        stub = scratch / "python3"
+        stub.write_text(f"#!/bin/sh\ntouch '{mark}'\necho '{version}'\n")
+        stub.chmod(0o755)
+        self.assertTrue(os.access(stub, os.X_OK), "the stub must be executable")
+        return stub, mark
+
+    def test_another_version_skips_naming_both(self):
+        with tempfile.TemporaryDirectory(prefix="kicad-skip-") as tmp:
+            stub, mark = self.stub(Path(tmp), "9.0.1")
+            reason = skip_reason(str(stub))
+            self.assertTrue(mark.exists(), "the stub, not a real KiCad, answered")
+        self.assertIsNotNone(reason)
+        self.assertIn("9.0.1", reason)
+        self.assertIn(KICAD_VERSION, reason)
+
+    def test_the_pinned_version_runs(self):
+        with tempfile.TemporaryDirectory(prefix="kicad-skip-") as tmp:
+            stub, mark = self.stub(Path(tmp), KICAD_VERSION)
+            self.assertIsNone(skip_reason(str(stub)))
+            self.assertTrue(mark.exists())
+
+    def test_missing_python_skips(self):
+        reason = skip_reason("/nonexistent/kicad/python3")
+        self.assertIsNotNone(reason)
+        self.assertIn(KICAD_VERSION, reason)
+
+    def test_module_skips_under_another_version(self):
+        """$KICAD_PYTHON reaches the decorator: the whole module passes, RepeatTests skipped."""
+        with tempfile.TemporaryDirectory(prefix="kicad-skip-") as tmp:
+            stub, mark = self.stub(Path(tmp), "9.0.1")
+            env = dict(os.environ, KICAD_PYTHON=str(stub), PYTHONPATH=str(HERE.parent))
+            done = subprocess.run(
+                [
+                    "python3",
+                    "-m",
+                    "unittest",
+                    "-v",
+                    "kicad.test_build_board.RepeatTests",
+                ],
+                capture_output=True,
+                text=True,
+                env=env,
+                cwd=HERE.parent.parent,
+            )
+            self.assertTrue(mark.exists(), "the stub, not a real KiCad, answered")
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertIn("skipped", done.stderr)
+        self.assertIn("found 9.0.1", done.stderr)
 
 
 if __name__ == "__main__":
