@@ -290,6 +290,93 @@ class ConfigTests(unittest.TestCase):
         self.fails(lambda d: d["silk"]["hidden_refs"].append("H9"), "hidden_refs: 'H9'")
         self.fails(lambda d: d["silk"]["texts"].append({"text": "x"}), "[silk] texts")
 
+    def test_keepouts(self):
+        band = {"name": "cut band", "rect": [40.0, 0.0, 43.0, 62.0]}
+        ok = self.with_data(lambda d: d.update(keepouts=[band]))
+        self.assertEqual(boardcheck.validate_config(ok, self.nl), [])
+        self.fails(
+            lambda d: d.update(keepouts=[{**band, "rect": [40, 0, 43, 63]}]),
+            "[keepouts] 'cut band': rect [40, 0, 43, 63] is not inside [outline]",
+        )
+        self.fails(
+            lambda d: d.update(keepouts=[{**band, "rect": [43, 0, 40, 62]}]),
+            "[keepouts] 'cut band': rect must be [x0, y0, x1, y1]",
+        )
+        self.fails(
+            lambda d: d.update(keepouts=[{**band, "layer": "F.Cu"}]),
+            "[keepouts]: unknown key(s) ['layer']",
+        )
+        self.fails(
+            lambda d: d.update(keepouts=[{"rect": band["rect"]}]),
+            "[keepouts] needs a name",
+        )
+        self.fails(
+            lambda d: d.update(keepouts=[band, band]),
+            "[keepouts] names repeat",
+        )
+
+    def test_cut_lines(self):
+        line = [41.5, 0.5, 41.5, 61.5]
+        ok = self.with_data(lambda d: d["silk"].update(cut_lines=[line]))
+        self.assertEqual(boardcheck.validate_config(ok, self.nl), [])
+        self.fails(
+            lambda d: d["silk"].update(cut_lines=[[41.5, 0.5, 41.5]]),
+            "[silk] cut_lines: [41.5, 0.5, 41.5] must be [x0, y0, x1, y1]",
+        )
+        self.fails(
+            lambda d: d["silk"].update(cut_lines=[[41.5, 1, 41.5, 1]]),
+            "[silk] cut_lines: [41.5, 1, 41.5, 1] has no length",
+        )
+        self.fails(
+            lambda d: d["silk"].update(cut_lines=[[41.5, 0.5, 41.5, 70]]),
+            "[silk] cut_lines: [41.5, 0.5, 41.5, 70] is not inside [outline]",
+        )
+
+    def test_pour_regions(self):
+        def regions(d, rs):
+            del d["pour"]["net"]
+            d["pour"]["regions"] = rs
+
+        gnd = {"net": "GND", "rect": [0, 0, 40, 62]}
+        other = {"net": "+3V3", "rect": [43, 0, 90, 62]}
+        ok = self.with_data(lambda d: regions(d, [gnd, other]))
+        self.assertEqual(boardcheck.validate_config(ok, self.nl), [])
+        self.fails(
+            lambda d: d["pour"].update(regions=[gnd]),
+            "[pour] takes net or regions, not both",
+        )
+        self.fails(
+            lambda d: d["pour"].pop("net"), "[pour] needs net or regions"
+        )
+        self.fails(
+            lambda d: regions(d, [{**gnd, "net": "AGND"}]),
+            "[pour] regions: net 'AGND' is not in the netlist",
+        )
+        self.fails(
+            lambda d: regions(d, [gnd, {**other, "rect": [39, 0, 90, 62]}]),
+            "[pour] regions: [0, 0, 40, 62] and [39, 0, 90, 62] overlap",
+        )
+        self.fails(
+            lambda d: regions(d, [{**gnd, "rect": [0, 0, 40, 70]}]),
+            "[pour] regions: rect [0, 0, 40, 70] is not inside [outline]",
+        )
+        self.fails(
+            lambda d: regions(d, [{**gnd, "layer": "F.Cu"}]),
+            "[pour] regions: unknown key(s) ['layer']",
+        )
+        self.fails(lambda d: regions(d, []), "[pour] regions must be a non-empty list")
+
+    def test_pour_regions_of_the_net_and_whole_board(self):
+        self.assertEqual(
+            boardcheck.pour_regions(self.cfg.data["pour"]), [("GND", None)]
+        )
+        self.assertEqual(
+            boardcheck.pour_regions(
+                {"regions": [{"net": "GND", "rect": [0, 0, 1, 1]}]}
+            ),
+            [("GND", [0, 0, 1, 1])],
+        )
+
     def test_unknown_and_missing_keys(self):
         self.fails(
             lambda d: d["pour"].update(clearence_mm=1),
@@ -306,6 +393,102 @@ class ConfigTests(unittest.TestCase):
         text = board().replace('\t\t(path "', '\t\t(pathx "', 1)
         with self.assertRaisesRegex(KicadError, "0 \\(path"):
             boardcheck.relink(text, NS)
+
+
+ORIGIN = (100.0, 100.0)
+BAND = {"name": "cut band", "rect": [40.0, 0.0, 43.0, 62.0]}  # x 140..143 absolute
+
+
+def segment(x1, y1, x2, y2, width=0.3, layer="F.Cu", net="A") -> str:
+    return (
+        f"\t(segment\n\t\t(start {x1} {y1})\n\t\t(end {x2} {y2})\n"
+        f'\t\t(width {width})\n\t\t(layer "{layer}")\n\t\t(net "{net}")\n\t)'
+    )
+
+
+def via(x, y, size=0.6, net="A") -> str:
+    return (
+        f"\t(via\n\t\t(at {x} {y})\n\t\t(size {size})\n\t\t(drill 0.3)\n"
+        f'\t\t(layers "F.Cu" "B.Cu")\n\t\t(net "{net}")\n\t)'
+    )
+
+
+def arc(start, mid, end, width=0.3, net="A") -> str:
+    return (
+        f"\t(arc\n\t\t(start {start[0]} {start[1]})\n\t\t(mid {mid[0]} {mid[1]})\n"
+        f"\t\t(end {end[0]} {end[1]})\n\t\t(width {width})\n"
+        f'\t\t(layer "B.Cu")\n\t\t(net "{net}")\n\t)'
+    )
+
+
+def zone(points, layer="F.Cu", net="GND") -> str:
+    pts = " ".join(f"(xy {x} {y})" for x, y in points)
+    return (
+        f'\t(zone\n\t\t(net "{net}")\n\t\t(layer "{layer}")\n'
+        f"\t\t(polygon\n\t\t\t(pts\n\t\t\t\t(xy 100 100) (xy 190 100) (xy 190 162) (xy 100 162)\n\t\t\t)\n\t\t)\n"
+        f'\t\t(filled_polygon\n\t\t\t(layer "{layer}")\n\t\t\t(pts\n\t\t\t\t{pts}\n\t\t\t)\n\t\t)\n\t)'
+    )
+
+
+def keepout_errors(*items: str) -> list[str]:
+    text = "(kicad_pcb\n\t(version 20260206)\n" + "\n".join(items) + "\n)\n"
+    return boardcheck.keepout_copper(text, [BAND], ORIGIN)
+
+
+class KeepoutCopperTests(unittest.TestCase):
+    """Tracks, vias and pour fill against board.toml [[keepouts]] (#750)."""
+
+    def test_clear_board(self):
+        self.assertEqual(
+            keepout_errors(
+                segment(110, 120, 139.8, 120),  # edge at 139.95, band from 140
+                segment(143.2, 110, 160, 110),
+                via(139.6, 130),  # radius 0.3: reaches 139.9
+                arc((150, 120), (152, 122), (150, 124)),
+                # Pour stopping exactly on the band's edge touches, not enters.
+                zone([(100, 100), (140, 100), (140, 162), (100, 162)]),
+            ),
+            [],
+        )
+
+    def test_segment_crossing_the_band(self):
+        errors = keepout_errors(segment(130, 120, 150, 120, net="SDA"))
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("segment on 'SDA'", errors[0])
+        self.assertIn("'cut band'", errors[0])
+        self.assertIn("(30, 20)-(50, 20)", errors[0])  # relative to the origin
+
+    def test_segment_whose_width_reaches_in(self):
+        self.assertEqual(len(keepout_errors(segment(110, 120, 139.9, 120))), 1)
+
+    def test_segment_inside_without_an_end_inside(self):
+        # Runs along the band, both ends beyond it: no end point is inside.
+        self.assertEqual(len(keepout_errors(segment(141.5, 90, 141.5, 170))), 1)
+
+    def test_via_in_the_band(self):
+        errors = keepout_errors(via(141, 130))
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("via on 'A'", errors[0])
+
+    def test_arc_bulging_into_the_band(self):
+        errors = keepout_errors(arc((138, 120), (141, 125), (138, 130)))
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("arc", errors[0])
+
+    def test_pour_into_the_band(self):
+        errors = keepout_errors(zone([(100, 100), (141, 100), (141, 162), (100, 162)]))
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("pour on 'GND' (F.Cu)", errors[0])
+
+    def test_pour_around_the_band_with_no_vertex_inside(self):
+        errors = keepout_errors(zone([(100, 90), (190, 90), (190, 170), (100, 170)]))
+        self.assertEqual(len(errors), 1, errors)
+
+    def test_non_copper_zone_layer_is_ignored(self):
+        self.assertEqual(
+            keepout_errors(zone([(100, 90), (190, 90), (190, 170)], layer="F.Mask")),
+            [],
+        )
 
 
 class MainTests(unittest.TestCase):
@@ -367,6 +550,25 @@ class MainTests(unittest.TestCase):
         self.assertEqual(code, 1, out)
         self.assertIn("just bb::carrier-board", out)
         self.assertNotIn("balancebot::", out)
+
+    def test_copper_in_a_keepout_fails(self):
+        toml = paths.carrier_dir(self.project) / paths.BOARD_TOML
+        kept = toml.read_text(encoding="utf-8")
+        self.addCleanup(toml.write_text, kept, encoding="utf-8")
+        toml.write_text(
+            kept + '\n[[keepouts]]\nname = "band"\nrect = [40.0, 0.0, 43.0, 62.0]\n',
+            encoding="utf-8",
+        )
+        justfile = "mod bb 'packages/robotics/balancebot'\n"
+        code, out = self.run_main(justfile, self.good)
+        self.assertEqual(code, 0, out)
+        bad = self.good.replace(
+            "\n)\n", "\n" + segment(130, 120, 150, 120, net="GND") + "\n)\n"
+        )
+        code, out = self.run_main(justfile, bad)
+        self.assertEqual(code, 1, out)
+        self.assertIn("keepout 'band'", out)
+        self.assertIn("just bb::carrier-board", out)
 
     def test_passing_board_needs_no_mod_line(self):
         for justfile in ("mod other 'packages/other'\n", None):

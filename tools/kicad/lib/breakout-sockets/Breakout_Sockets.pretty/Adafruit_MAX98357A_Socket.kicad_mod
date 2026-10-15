@@ -5,7 +5,7 @@
 	(descr "Socket for the adafruit-max98357a breakout (docs/reference/boards/adafruit-max98357a.md), pads: 1=JP1.1, 2=JP1.2, 3=JP1.3, 4=JP1.4, 5=JP1.5, 6=JP1.6, 7=JP1.7")
 	(tags "socket breakout 2.54mm")
 	(property "Reference" "REF**"
-		(at -15.24 -2.77 0)
+		(at -17.01 -17.76 0)
 		(layer "F.SilkS")
 		(effects
 			(font
@@ -15,7 +15,7 @@
 		)
 	)
 	(property "Value" "Adafruit_MAX98357A_Socket"
-		(at -15.24 2.77 0)
+		(at -17.01 3.79 0)
 		(layer "F.Fab")
 		(effects
 			(font
@@ -37,8 +37,18 @@
 		(layer "F.SilkS")
 	)
 	(fp_rect
-		(start -17.01 -1.77)
-		(end 1.77 1.77)
+		(start -16.51 -16.51)
+		(end 1.27 2.54)
+		(stroke
+			(width 0.1)
+			(type solid)
+		)
+		(fill no)
+		(layer "F.Fab")
+	)
+	(fp_rect
+		(start -17.01 -16.76)
+		(end 1.77 2.79)
 		(stroke
 			(width 0.05)
 			(type solid)

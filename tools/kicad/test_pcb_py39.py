@@ -26,7 +26,7 @@ from kicad.paths import REPO_ROOT
 
 PCB = Path(__file__).resolve().parent / "pcb"
 ALLOWED = frozenset(
-    {"fnmatch", "json", "os", "re", "shutil", "subprocess", "sys", "tempfile"}
+    {"fnmatch", "json", "math", "os", "re", "shutil", "subprocess", "sys", "tempfile"}
     | {"pcbnew", "dsn", "__future__"}
 )
 

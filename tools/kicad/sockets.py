@@ -21,8 +21,17 @@ position is its page centre minus pad 1's, with no further flip.
 
 Pad 1 copies the vendored `PinSocket_1x08_P2.54mm_Vertical` pad 1 (rect),
 every other pad its pad 2 (circle): the same copper and drill as a stock
-2.54 mm socket strip. The F.CrtYd and F.SilkS rectangles enclose the pad
-centres at PinSocket's own margins (COURTYARD_MARGIN, SILK_MARGIN).
+2.54 mm socket strip. The F.SilkS rectangle encloses the pad centres at
+PinSocket's own margin (SILK_MARGIN).
+
+The breakout itself sits above the carrier on its headers and overhangs
+them, so each socket also names the module's `outline`, the vendor board
+file's Dimension layer in the page's coordinates. It is drawn on F.Fab, and
+the F.CrtYd rectangle is the box over the pad centres at PinSocket's courtyard
+margin (COURTYARD_MARGIN) and the outline at MODULE_MARGIN: KiCad's courtyard
+check then keeps other parts out from under the module. The outline's size
+must equal the page's "the outline W × H mm", and every socketed pad must lie
+inside it.
 
 The footprints are written to `Breakout_Sockets.pretty/` with no other
 input, so `--check` regenerates in memory and byte-compares, writing nothing.
@@ -53,7 +62,10 @@ TEMPLATE = "Connector_PinSocket_2.54mm:PinSocket_1x08_P2.54mm_Vertical"
 # (test_sockets checks the courtyard one against the vendored footprint).
 COURTYARD_MARGIN = 1.77
 SILK_MARGIN = 1.33
-SOCKET_KEYS = frozenset({"name", "board", "pads"})
+# Courtyard clearance around the module outline (IPC-7351's nominal 0.25 mm).
+MODULE_MARGIN = 0.25
+SOCKET_KEYS = frozenset({"name", "board", "pads", "outline"})
+_PAGE_OUTLINE = re.compile(r"the outline\s+([\d.]+) × ([\d.]+) mm")
 _NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*")
 _PAD = re.compile(r"[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)?")
 
@@ -65,6 +77,7 @@ class Socket:
     name: str
     board: str
     pads: tuple[str, ...]
+    outline: tuple[float, float, float, float]  # x0, y0, x1, y1, page coordinates
 
 
 def load_config(path: Path) -> list[Socket]:
@@ -102,7 +115,20 @@ def load_config(path: Path) -> list[Socket]:
                 f"{where}: pads must be a non-empty list of 'ELEMENT' or "
                 f"'ELEMENT.PAD', got {pads!r}"
             )
-        out.append(Socket(t["name"], t["board"], tuple(pads)))
+        outline = t["outline"]
+        if (
+            not isinstance(outline, list)
+            or len(outline) != 4
+            or not all(
+                isinstance(v, (int, float)) and not isinstance(v, bool) for v in outline
+            )
+            or not (outline[0] < outline[2] and outline[1] < outline[3])
+        ):
+            raise KicadError(
+                f"{where}: outline must be [x0, y0, x1, y1] with x0 < x1 and y0 < y1, "
+                f"got {outline!r}"
+            )
+        out.append(Socket(t["name"], t["board"], tuple(pads), tuple(outline)))
     names = [s.name for s in out]
     dupes = sorted({x for x in names if names.count(x) > 1})
     if dupes:
@@ -136,11 +162,33 @@ def resolve(socket: Socket, page: Path) -> list[tuple[str, float, float]]:
                     f"{socket.name}: {entry}: {page} records no centre for that pad"
                 )
         out += [(f"{c.element}.{c.pad}", c.x, c.y) for c in found]
+    x0, y0, x1, y1 = socket.outline
+    outside = [label for label, x, y in out if not (x0 <= x <= x1 and y0 <= y <= y1)]
+    if outside:
+        raise KicadError(
+            f"{socket.name}: {', '.join(outside)} outside the outline "
+            f"{list(socket.outline)}"
+        )
     labels = [label for label, _, _ in out]
     dupes = sorted({x for x in labels if labels.count(x) > 1})
     if dupes:
         raise KicadError(f"{socket.name}: {', '.join(dupes)} listed twice")
     return out
+
+
+def check_outline(socket: Socket, page: Path) -> None:
+    """Raise unless the outline's size is the page's "the outline W × H mm"."""
+    m = _PAGE_OUTLINE.search(page.read_text(encoding="utf-8"))
+    if not m:
+        raise KicadError(f"{socket.name}: {page} states no 'the outline W × H mm'")
+    want = float(m.group(1)), float(m.group(2))
+    x0, y0, x1, y1 = socket.outline
+    got = x1 - x0, y1 - y0
+    if any(abs(g - w) > 0.005 for g, w in zip(got, want, strict=True)):
+        raise KicadError(
+            f"{socket.name}: outline {list(socket.outline)} is {fmt(got[0])} × "
+            f"{fmt(got[1])} mm, {page.name} says {fmt(want[0])} × {fmt(want[1])} mm"
+        )
 
 
 def fmt(v: float) -> str:
@@ -193,6 +241,18 @@ def render_footprint(
     xs = [x for _, x, _ in rel]
     ys = [y for _, _, y in rel]
     left, top, right, bottom = min(xs), min(ys), max(xs), max(ys)
+    ox0, oy0, ox1, oy1 = (
+        socket.outline[0] - x0,
+        socket.outline[1] - y0,
+        socket.outline[2] - x0,
+        socket.outline[3] - y0,
+    )
+    crt = (
+        min(left - COURTYARD_MARGIN, ox0 - MODULE_MARGIN),
+        min(top - COURTYARD_MARGIN, oy0 - MODULE_MARGIN),
+        max(right + COURTYARD_MARGIN, ox1 + MODULE_MARGIN),
+        max(bottom + COURTYARD_MARGIN, oy1 + MODULE_MARGIN),
+    )
     order = ", ".join(f"{n}={label}" for n, (label, _, _) in enumerate(rel, 1))
     items = [
         "(version 20260206)",
@@ -201,8 +261,8 @@ def render_footprint(
         f'(descr "Socket for the {socket.board} breakout '
         f'(docs/reference/boards/{socket.board}.md), pads: {order}")',
         '(tags "socket breakout 2.54mm")',
-        _property("Reference", "REF**", left, top - COURTYARD_MARGIN - 1, "F.SilkS"),
-        _property("Value", socket.name, left, bottom + COURTYARD_MARGIN + 1, "F.Fab"),
+        _property("Reference", "REF**", crt[0], crt[1] - 1, "F.SilkS"),
+        _property("Value", socket.name, crt[0], crt[3] + 1, "F.Fab"),
         "(attr through_hole)",
         "(duplicate_pad_numbers_are_jumpers no)",
         _rect(
@@ -213,14 +273,8 @@ def render_footprint(
             "0.12",
             "F.SilkS",
         ),
-        _rect(
-            left - COURTYARD_MARGIN,
-            top - COURTYARD_MARGIN,
-            right + COURTYARD_MARGIN,
-            bottom + COURTYARD_MARGIN,
-            "0.05",
-            "F.CrtYd",
-        ),
+        _rect(ox0, oy0, ox1, oy1, "0.1", "F.Fab"),
+        _rect(*crt, "0.05", "F.CrtYd"),
     ]
     for n, (_, x, y) in enumerate(rel, 1):
         items.append(_pad(rect_pad if n == 1 else circle_pad, n, x, y))
@@ -247,6 +301,7 @@ def render(repo_root: Path = REPO_ROOT) -> dict[Path, str]:
         page = repo_root / BOARDS_REL / f"{s.board}.md"
         if not page.is_file():
             raise KicadError(f"{s.name}: no board page {page}")
+        check_outline(s, page)
         out[pretty(repo_root) / f"{s.name}.kicad_mod"] = render_footprint(
             s, resolve(s, page), template
         )

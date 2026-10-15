@@ -7,9 +7,11 @@ Run with KiCad's bundled Python (3.9) after build_board.py:
 ``just <project>::carrier-board`` writes the JSON (``python3 -m
 kicad.boardinput``) and runs both scripts. Steps: export Specctra DSN, rewrite
 its single net class into board.toml's width classes (dsn.py), run Freerouting
-headless, import the session, check every pad of the pour net has a routed
-track, then add the board.toml ``[pour]`` zone on each of its layers and fill
-them.
+headless, import the session, check every pad of each pour net has a routed
+track, then add a zone per board.toml ``[pour]`` region on each of its layers
+and fill them. A region's ``rect`` (relative to the outline origin) is its zone
+outline; a null ``rect`` is the whole board. Keepouts are already rule areas
+on the board (build_board.py), so the export and the fill respect them.
 
 Freerouting does not route the same way twice: commit the board that passed
 ``just <project>::carrier-check``, not a re-run of it. Needs java >= 25 and the
@@ -24,13 +26,29 @@ import sys
 import pcbnew
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import dsn  # noqa: E402
+import dsn
 
 
-def pour_zone(board, layer, pour):
-    net = board.FindNet(pour["net"])
+def region_box(board, origin, rect):
+    """(left, top, right, bottom) of a pour region in board units."""
+    if rect is None:
+        box = board.GetBoardEdgesBoundingBox()
+        return box.GetLeft(), box.GetTop(), box.GetRight(), box.GetBottom()
+    x0, y0 = origin
+    return tuple(
+        pcbnew.FromMM(v)
+        for v in (x0 + rect[0], y0 + rect[1], x0 + rect[2], y0 + rect[3])
+    )
+
+
+def pour_zone(board, layer, pour, net_name, box, priority):
+    net = board.FindNet(net_name)
     zone = pcbnew.ZONE(board)
     zone.SetLayer(layer)
+    # Regions may share an edge (two rectangles of one net around a corner),
+    # and KiCad's DRC reports touching zones of equal priority as intersecting.
+    # Region n gets priority n; a single region keeps KiCad's default, 0.
+    zone.SetAssignedPriority(priority)
     zone.SetNetCode(net.GetNetCode())
     zone.SetLocalClearance(pcbnew.FromMM(pour["clearance_mm"]))
     zone.SetMinThickness(pcbnew.FromMM(pour["min_thickness_mm"]))
@@ -40,15 +58,10 @@ def pour_zone(board, layer, pour):
     # was reported as a starved thermal at the defaults).
     zone.SetThermalReliefGap(pcbnew.FromMM(pour["thermal_gap_mm"]))
     zone.SetThermalReliefSpokeWidth(pcbnew.FromMM(pour["spoke_mm"]))
-    box = board.GetBoardEdgesBoundingBox()
+    left, top, right, bottom = box
     outline = zone.Outline()
     outline.NewOutline()
-    for x, y in (
-        (box.GetLeft(), box.GetTop()),
-        (box.GetRight(), box.GetTop()),
-        (box.GetRight(), box.GetBottom()),
-        (box.GetLeft(), box.GetBottom()),
-    ):
+    for x, y in ((left, top), (right, top), (right, bottom), (left, bottom)):
         outline.Append(x, y)
     board.Add(zone)
     return zone
@@ -74,8 +87,10 @@ def route(spec):
     board = pcbnew.LoadBoard(pcb)
     if len(board.GetTracks()):
         sys.exit("board already has tracks; run build_board.py first")
-    if board.FindNet(pour["net"]) is None:
-        sys.exit(f"[pour] net {pour['net']!r} is not on the board")
+    regions = pour["regions"]
+    for region in regions:
+        if board.FindNet(region["net"]) is None:
+            sys.exit(f"[pour] net {region['net']!r} is not on the board")
     layers = pour_layers(board, pour)
     if not pcbnew.ExportSpecctraDSN(board, dsn_path):
         sys.exit("DSN export failed")
@@ -110,24 +125,36 @@ def route(spec):
         sys.exit("SES import failed")
 
     # The project's .kicad_dru lets a pour thermal resolve to one spoke on the
-    # premise that every pad of the pour net also has a routed track. Enforce
+    # premise that every pad of a pour net also has a routed track. Enforce
     # the premise.
-    tracks = [t for t in board.GetTracks() if t.GetNetname() == pour["net"]]
-    bare = [
-        f"{fp.GetReference()}:{pad.GetNumber()}"
-        for fp in board.GetFootprints()
-        for pad in fp.Pads()
-        if pad.GetNetname() == pour["net"]
-        and not any(
-            pad.HitTest(t.GetStart()) or pad.HitTest(t.GetEnd()) for t in tracks
-        )
-    ]
-    if bare:
-        sys.exit(
-            f"{pour['net']} pads with no routed track (the .kicad_dru rule needs one): {bare}"
-        )
+    for net in sorted({r["net"] for r in regions}):
+        tracks = [t for t in board.GetTracks() if t.GetNetname() == net]
+        bare = [
+            f"{fp.GetReference()}:{pad.GetNumber()}"
+            for fp in board.GetFootprints()
+            for pad in fp.Pads()
+            if pad.GetNetname() == net
+            and not any(
+                pad.HitTest(t.GetStart()) or pad.HitTest(t.GetEnd()) for t in tracks
+            )
+        ]
+        if bare:
+            sys.exit(
+                f"{net} pads with no routed track (the .kicad_dru rule needs one): {bare}"
+            )
 
-    zones = [pour_zone(board, layer, pour) for layer in layers]
+    zones = [
+        pour_zone(
+            board,
+            layer,
+            pour,
+            r["net"],
+            region_box(board, spec["origin"], r["rect"]),
+            n,
+        )
+        for n, r in enumerate(regions)
+        for layer in layers
+    ]
     pcbnew.ZONE_FILLER(board).Fill(zones)
     board.Save(pcb)
     return len(board.GetTracks())

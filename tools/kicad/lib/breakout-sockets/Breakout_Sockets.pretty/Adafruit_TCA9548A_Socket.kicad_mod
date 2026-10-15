@@ -5,7 +5,7 @@
 	(descr "Socket for the adafruit-tca9548a breakout (docs/reference/boards/adafruit-tca9548a.md), pads: 1=JP3.1, 2=JP3.2, 3=JP3.3, 4=JP3.4, 5=JP3.5, 6=JP3.6, 7=JP3.7, 8=JP3.8, 9=JP3.9, 10=JP3.10, 11=JP3.11, 12=JP3.12, 13=JP1.1, 14=JP1.2, 15=JP1.3, 16=JP1.4, 17=JP1.5, 18=JP1.6, 19=JP1.7, 20=JP1.8, 21=JP1.9, 22=JP1.10, 23=JP1.11, 24=JP1.12")
 	(tags "socket breakout 2.54mm")
 	(property "Reference" "REF**"
-		(at 0 -2.77 0)
+		(at -1.77 -2.77 0)
 		(layer "F.SilkS")
 		(effects
 			(font
@@ -15,7 +15,7 @@
 		)
 	)
 	(property "Value" "Adafruit_TCA9548A_Socket"
-		(at 0 30.71 0)
+		(at -1.77 30.71 0)
 		(layer "F.Fab")
 		(effects
 			(font
@@ -35,6 +35,16 @@
 		)
 		(fill no)
 		(layer "F.SilkS")
+	)
+	(fp_rect
+		(start -1.27 -1.27)
+		(end 16.51 29.21)
+		(stroke
+			(width 0.1)
+			(type solid)
+		)
+		(fill no)
+		(layer "F.Fab")
 	)
 	(fp_rect
 		(start -1.77 -1.77)

@@ -21,7 +21,11 @@ registry and board.toml. This writes it to
   by name, which is the order of KiCad's own netlist export;
 - `silk`: board.toml `[silk]`, defaults filled in;
 - `classes`: board.toml `[[net_classes]]` with `nets` expanded to net names
-  (per pattern in order, matches in name order); `signal`, `pour`: as written;
+  (per pattern in order, matches in name order); `signal`: as written;
+- `pour`: board.toml `[pour]` with its net(s) as `regions`, `[{net, rect}]`;
+  a single-net `[pour]` is one region with `rect` null, the whole board;
+- `keepouts`: board.toml `[[keepouts]]`, `[{name, rect}]`, rects relative to
+  the origin; rule areas with no copper (tracks, vias, pads, pour);
 - `freerouting_jar`: $FREEROUTING_JAR, else ~/.cache/freerouting/freerouting-2.5.0.jar.
 
 board.toml is validated against the netlist first (`boardcheck.validate_config`,
@@ -51,6 +55,7 @@ SILK_DEFAULTS: dict[str, Any] = {
     "ref_sizes": {},
     "rects": [],
     "texts": [],
+    "cut_lines": [],
 }
 
 
@@ -128,7 +133,14 @@ def assemble(
         "silk": {**SILK_DEFAULTS, **data.get("silk", {})},
         "classes": classes,
         "signal": dict(data["signal"]),
-        "pour": dict(data["pour"]),
+        "pour": {
+            **{k: v for k, v in data["pour"].items() if k not in ("net", "regions")},
+            "regions": [
+                {"net": net, "rect": rect}
+                for net, rect in boardcheck.pour_regions(data["pour"])
+            ],
+        },
+        "keepouts": [dict(k) for k in data.get("keepouts", [])],
     }
 
 

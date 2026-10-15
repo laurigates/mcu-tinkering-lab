@@ -45,6 +45,7 @@ KEYS = {
     "classes",
     "signal",
     "pour",
+    "keepouts",
 }
 COMPONENT_KEYS = {
     "ref",
@@ -145,7 +146,14 @@ class BalancebotTests(unittest.TestCase):
         )
         self.assertEqual(self.spec["classes"][0]["via_um"], [1000, 500])
         self.assertEqual(self.spec["signal"]["via_um"], [600, 300])
-        self.assertEqual(self.spec["pour"]["net"], "GND")
+        # A single-net [pour] is one region over the whole board (rect None).
+        self.assertEqual(
+            self.spec["pour"]["regions"], [{"net": "GND", "rect": None}]
+        )
+        self.assertNotIn("net", self.spec["pour"])
+        self.assertEqual(self.spec["pour"]["layers"], ["F.Cu", "B.Cu"])
+        self.assertEqual(self.spec["keepouts"], [])
+        self.assertEqual(self.spec["silk"]["cut_lines"], [])
 
     def test_placement_missing(self):
         data = copy.deepcopy(self.cfg.data)
@@ -166,6 +174,27 @@ class BalancebotTests(unittest.TestCase):
         data["net_classes"][1]["nets"].append("VMOT*")
         with self.assertRaisesRegex(KicadError, "'VMOT\\*' matches no net"):
             self.assemble(data)
+
+    def test_keepouts_cut_lines_and_pour_regions(self):
+        data = copy.deepcopy(self.cfg.data)
+        band = {"name": "cut band", "rect": [40.0, 0.0, 43.0, 62.0]}
+        data["keepouts"] = [band]
+        data["silk"]["cut_lines"] = [[41.5, 0.5, 41.5, 61.5]]
+        del data["pour"]["net"]
+        data["pour"]["regions"] = [
+            {"net": "GND", "rect": [0, 0, 40, 62]},
+            {"net": "+3V3", "rect": [43, 0, 90, 62]},
+        ]
+        spec = self.assemble(data)
+        self.assertEqual(spec["keepouts"], [band])
+        self.assertEqual(spec["silk"]["cut_lines"], [[41.5, 0.5, 41.5, 61.5]])
+        self.assertEqual(
+            spec["pour"]["regions"],
+            [
+                {"net": "GND", "rect": [0, 0, 40, 62]},
+                {"net": "+3V3", "rect": [43, 0, 90, 62]},
+            ],
+        )
 
     def test_silk_defaults(self):
         data = copy.deepcopy(self.cfg.data)
