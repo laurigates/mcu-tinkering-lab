@@ -19,8 +19,9 @@ import unittest
 from pathlib import Path
 
 from hardware import parse_board_table
+from hardware.board import _tables
 
-from kicad import footprints, library, registry, sexpr, symbols
+from kicad import footprints, library, registry, sexpr, sockets, symbols
 from kicad.errors import KicadError
 from kicad.paths import REPO_ROOT
 
@@ -82,6 +83,59 @@ class CommittedRegistryTests(unittest.TestCase):
         self.assertEqual(hole.pins, {})
         xiao = registry.load("seeed-xiao-rp2350-socket")
         self.assertEqual((xiao.pin_numbers, xiao.pins), ("board-dip-ccw", {}))
+
+    def test_breakout_socket_pins_are_named_as_the_board_page_names_them(self):
+        """Socket pad n carries the board page's name for the n-th socketed header pad.
+
+        The pad order is sockets.toml's (via sockets.resolve), the names are the
+        page's layout table, so neither is retyped here.
+        """
+        config = sockets.load_config(
+            library.VENDORED / "breakout-sockets" / sockets.CONFIG
+        )
+        by_footprint = {f"{sockets.NICK}:{s.name}": s for s in config}
+        checked = []
+        for spec in registry.load_all():
+            socket = by_footprint.get(spec.footprint)
+            if socket is None:
+                continue
+            page = REPO_ROOT / sockets.BOARDS_REL / f"{socket.board}.md"
+            layout = [
+                t
+                for t in _tables(page.read_text())
+                if "Header" in t[0] and "Side" in t[0]
+            ]
+            self.assertEqual(len(layout), 1, page)
+            head, *rows = layout[0]
+            name_of = {row[head.index("Header")]: row[0] for row in rows}
+            want = {
+                str(n): name_of[label]
+                for n, (label, _, _) in enumerate(sockets.resolve(socket, page), 1)
+            }
+            got = {n: name for name, nums in spec.pins.items() for n in nums}
+            with self.subTest(slug=spec.slug):
+                self.assertEqual(got, want)
+            checked.append(spec.slug)
+        self.assertEqual(
+            sorted(checked),
+            [
+                "adafruit-max98357a-socket",
+                "adafruit-pca9685-socket",
+                "adafruit-tca9548a-socket",
+                "sparkfun-tb6612fng-socket",
+            ],
+        )
+
+    def test_the_robocar_carrier_entries(self):
+        idc = registry.load("idc-2x07-xiao-cable")
+        self.assertEqual(idc.pins["5V"], ("1", "2"))
+        self.assertEqual(idc.pins["GND"], ("3", "4", "7", "11"))
+        self.assertEqual(idc.lcsc, "")
+        ldo = registry.load("ams1117-3.3")
+        self.assertEqual((ldo.value, ldo.lcsc), ("AMS1117-3.3", "C6186"))
+        mux = registry.load("adafruit-tca9548a-socket")
+        for wired in ("RST", "SD0", "SC0", "SD1", "SC1", "SD3", "SC3", "SD4", "SC4"):
+            self.assertNotIn(wired, mux.no_connect)
 
     def test_every_entry_says_where_its_pin_order_came_from(self):
         for spec in registry.load_all():

@@ -1,0 +1,53 @@
+# Adafruit TCA9548A 1-to-8 I2C multiplexer, socketed in two 1x12 female headers.
+[part]
+name = "Adafruit TCA9548A I2C multiplexer, socketed"
+source = "docs/reference/boards/adafruit-tca9548a.md (Adafruit's Eagle board file, elements JP3 and JP1); footprint pad n is the n-th pad of the Breakout_Sockets config (JP3.1-12, then JP1.1-12)"
+symbol = "Connector_Generic:Conn_01x24"
+footprint = "Breakout_Sockets:Adafruit_TCA9548A_Socket"
+# A0-A2 are pulled down on the breakout (address 0x70). Channel 2 is the
+# MCP23017 expander, which stays on the harness, off the carrier. Channels 5-7
+# are unused. Channels 0 (PCA9685), 1 (OLED), 3 and 4 (rangefinders) and RST
+# are wired on the carrier.
+no_connect = [
+    "A0",
+    "A1",
+    "A2",
+    "SD2",
+    "SC2",
+    "SD5",
+    "SC5",
+    "SD6",
+    "SC6",
+    "SD7",
+    "SC7",
+]
+
+# Board-page pin name -> socket pad. Pads 1-12 are JP3.1-12, 13-24 JP1.1-12.
+[pins]
+VIN = 1
+GND = 2
+SDA = 3
+SCL = 4
+RST = 5
+A0 = 6
+A1 = 7
+A2 = 8
+SD0 = 9
+SC0 = 10
+SD1 = 11
+SC1 = 12
+SD2 = 13
+SC2 = 14
+SD3 = 15
+SC3 = 16
+SD4 = 17
+SC4 = 18
+SD5 = 19
+SC5 = 20
+SD6 = 21
+SC6 = 22
+SD7 = 23
+SC7 = 24
+
+[perfboard]
+height = "raised"

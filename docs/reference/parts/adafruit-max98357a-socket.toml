@@ -1,0 +1,21 @@
+# Adafruit MAX98357A I2S amplifier, socketed on its 7-pin header. The speaker
+# terminal X1 is wired, not socketed.
+[part]
+name = "Adafruit MAX98357A I2S amplifier, socketed"
+source = "docs/reference/boards/adafruit-max98357a.md (Adafruit's Eagle board file, element JP1); footprint pad n is JP1.n (Breakout_Sockets config)"
+symbol = "Connector_Generic:Conn_01x07"
+footprint = "Breakout_Sockets:Adafruit_MAX98357A_Socket"
+# Both may float by design: SD floating mixes (L+R)/2, GAIN floating is 9 dB.
+no_connect = ["SD", "GAIN"]
+
+[pins]
+Vin = 1
+GND = 2
+SD = 3
+GAIN = 4
+DIN = 5
+BCLK = 6
+LRC = 7
+
+[perfboard]
+height = "raised"
