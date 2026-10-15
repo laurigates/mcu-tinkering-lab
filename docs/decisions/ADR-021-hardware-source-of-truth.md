@@ -220,6 +220,22 @@ from the join instead of a hand-drawn wire per pad. The schematic still chooses
 which pad a wire lands on where a board repeats one, such as the PCA9685's two
 identical side headers. The format and its checks are in `tools/hardware/model.py`.
 
+### Later addition: a cable between two carrier boards (#750)
+
+robocar-unified's carrier is two boards: a head board with the XIAO on the
+pan-tilt, and the main board, joined by a ribbon cable. A `[[cables]]` entry
+(`build = "carrier"` only) names one parts-registry entry for both connectors,
+`head_ref` and `main_ref`, with `[pins]` keyed by the MCU's pad names, so the
+two ends cannot disagree about which conductor carries which pad. The carrier
+netlist splits every MCU net at the cable: `HEAD_<name>` runs from the MCU pad
+to the head connector, and the net keeps its name on the main board from the
+main connector to the loads. Rails crossing the cable split the same way
+(`HEAD_5V`, `HEAD_GND`). An MCU pad on a net that the cable does not carry
+fails. `head_no_connect` lists MCU pads left unconnected on the head, power
+pads included. The harness view never holds a cable, so WIRING.md and the
+other harness outputs are unchanged. The format and its checks are in
+`tools/hardware/model.py` and `tools/kicad/netlist.py`.
+
 ## Related
 
 - [ADR-013](ADR-013-single-board-xiao-esp32s3.md) — the XIAO consolidation whose
