@@ -98,7 +98,9 @@ robocar-unified module is on its [board page](../boards/ssd1306-091in-128x32.md)
 - **The bus already runs at the controller's limit.** `I2C_MASTER_FREQ_HZ` is
   400 kHz; the SSD1306's minimum clock cycle is 2.5 µs with a 300 ns rise-time
   ceiling (DS Table 13-6, p. 54), so the pull-ups on the mux channel must meet
-  that rise time.
+  that rise time. The TCA9548A breakout provides none on its downstream
+  channels (Adafruit's board file: R1/R2 pull up the upstream bus only), so
+  they come from the display module or the carrier.
 - **ACK can be weak.** The ITO track resistance and the SDA pull-up form a
   divider, so the ACK may not reach a valid logic low (DS §8.1.5 b, p. 19).
   `robocar-bringup` probes for an ACK before initialising, so a panel that does
