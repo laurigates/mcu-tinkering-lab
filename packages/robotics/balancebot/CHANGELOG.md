@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.1.5](https://github.com/laurigates/mcu-tinkering-lab/compare/balancebot-v0.1.4...balancebot-v0.1.5) (2026-10-15)
+
+
+### Features
+
+* **balancebot:** carrier PCB (KiCad 10), generated and checked against the firmware pin map ([#749](https://github.com/laurigates/mcu-tinkering-lab/issues/749)) ([fe563c7](https://github.com/laurigates/mcu-tinkering-lab/commit/fe563c721934cf0c3eb1a61bdc9eb73ee1a485be))
+* **balancebot:** maze-route the perfboard wires between holes ([#757](https://github.com/laurigates/mcu-tinkering-lab/issues/757)) ([fb24b28](https://github.com/laurigates/mcu-tinkering-lab/commit/fb24b28b5dde154b06aa9ced38d03eb3597c26a7))
+* **balancebot:** perfboard prototype layout of the carrier ([#754](https://github.com/laurigates/mcu-tinkering-lab/issues/754)) ([0227f28](https://github.com/laurigates/mcu-tinkering-lab/commit/0227f28325d6b7cf3f71f64a4d920381cf0f6864))
+* **balancebot:** readable perfboard wiring, one panel per build step ([#755](https://github.com/laurigates/mcu-tinkering-lab/issues/755)) ([bdfdc0e](https://github.com/laurigates/mcu-tinkering-lab/commit/bdfdc0e052b4d2da5673585dfe18a366dbcacc45))
+* **balancebot:** SMD passives on the carrier, with JLCPCB assembly files ([#753](https://github.com/laurigates/mcu-tinkering-lab/issues/753)) ([8d18cd8](https://github.com/laurigates/mcu-tinkering-lab/commit/8d18cd8d5edfb3363eb064db7e034e028e65fb47))
+* **hardware:** harness and carrier views of hardware.toml ([#758](https://github.com/laurigates/mcu-tinkering-lab/issues/758)) ([1dcaaeb](https://github.com/laurigates/mcu-tinkering-lab/commit/1dcaaeb28671f3ce5df67161a630562e3fb46b63))
+* **kicad:** generate the balancebot carrier schematic from the hardware join ([#759](https://github.com/laurigates/mcu-tinkering-lab/issues/759)) ([3c469fc](https://github.com/laurigates/mcu-tinkering-lab/commit/3c469fcfa19c11294b4f28474b4c9abd3a32d1b2))
+* **kicad:** XIAO ESP32-S3 socket in the Seeed library and parts registry ([#774](https://github.com/laurigates/mcu-tinkering-lab/issues/774)) ([5353949](https://github.com/laurigates/mcu-tinkering-lab/commit/53539499e19f3cfa12b4d280857a7be976499755)), closes [#767](https://github.com/laurigates/mcu-tinkering-lab/issues/767)
+* **schematics:** draw balancebot from the hardware join ([#765](https://github.com/laurigates/mcu-tinkering-lab/issues/765)) ([f867ac0](https://github.com/laurigates/mcu-tinkering-lab/commit/f867ac00e741d6264b69fa77fd058459fcbb6fd8)), closes [#738](https://github.com/laurigates/mcu-tinkering-lab/issues/738)
+
+
+### Bug Fixes
+
+* **balancebot:** seat the GY-521 right side up and take the pack on JST-XH ([#770](https://github.com/laurigates/mcu-tinkering-lab/issues/770)) ([6d4aaa6](https://github.com/laurigates/mcu-tinkering-lab/commit/6d4aaa68c4afe858d13c91bc9a3656a40d1a6a02))
+
+
+### Documentation
+
+* **balancebot:** lock motor power to a 3S 18650 pack with a BMS ([#744](https://github.com/laurigates/mcu-tinkering-lab/issues/744)) ([67f3767](https://github.com/laurigates/mcu-tinkering-lab/commit/67f3767103f0f9dc7c02d6c9585cd73b9f1b9d3c)), closes [#739](https://github.com/laurigates/mcu-tinkering-lab/issues/739)
+* **balancebot:** step-by-step JLCPCB ordering for the carrier ([#756](https://github.com/laurigates/mcu-tinkering-lab/issues/756)) ([8d9c49b](https://github.com/laurigates/mcu-tinkering-lab/commit/8d9c49b94020ff18bfcbfb167e3e286c96681f25))
+* **rules:** add KiCad scripting traps, correct the FootprintLoad blame ([#751](https://github.com/laurigates/mcu-tinkering-lab/issues/751)) ([3ac3f7d](https://github.com/laurigates/mcu-tinkering-lab/commit/3ac3f7d95121777ecd6c5089f896dbec8737665f))
+
 ## [0.1.4](https://github.com/laurigates/mcu-tinkering-lab/compare/balancebot-v0.1.3...balancebot-v0.1.4) (2026-10-12)
 
 
