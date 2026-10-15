@@ -602,5 +602,58 @@ class LoadPinTests(unittest.TestCase):
             self.build()
 
 
+# --- Board pages on carrier parts (#750 step 2) -----------------------------------
+# robocar-unified's breakouts name a `board` page that documents a module's
+# headers, not a GPIO pin map. Only a `pin_numbers` entry reads its page; a
+# breakout's [pins] come from the registry, so its page must not be parsed.
+
+BREAKOUT_PAGE = "docs/reference/boards/adafruit-tca9548a.md"
+
+
+class BoardPageTests(unittest.TestCase):
+    def setUp(self):
+        BusNetTests.setUp(self)  # the same stand-in project, without its tests
+
+    def add_board(self, part: str, page: str) -> None:
+        text = self.toml.read_text(encoding="utf-8")
+        old = f"[parts.{part}]\n"
+        self.assertEqual(text.count(old), 1, old)
+        self.toml.write_text(
+            text.replace(old, f'{old}board = "{page}"\n'), encoding="utf-8"
+        )
+
+    def test_a_breakout_board_page_is_not_parsed(self):
+        before = netlist.as_dict(netlist.build(self.project, self.root))
+        self.copy_page()
+        self.add_board("mux", BREAKOUT_PAGE)
+        after = netlist.as_dict(netlist.build(self.project, self.root))
+        self.assertEqual(after, before)
+
+    def copy_page(self) -> None:
+        dest = self.root / BREAKOUT_PAGE
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(
+            (REPO_ROOT / BREAKOUT_PAGE).read_text(encoding="utf-8"), encoding="utf-8"
+        )
+
+    def test_a_pin_numbers_part_on_a_breakout_page_is_a_fail_line(self):
+        # The join accepts the page (it has a physical layout); the pin_numbers
+        # mapping needs a GPIO pin table, which a breakout page does not have.
+        self.copy_page()
+        with self.toml.open("a", encoding="utf-8") as f:
+            f.write(
+                '\n[parts.spare]\nname = "Spare XIAO"\nkind = "mcu"\n'
+                'part = "seeed-xiao-rp2350-socket"\nref = "U2"\n'
+                f'board = "{BREAKOUT_PAGE}"\n'
+            )
+        msg = r"adafruit-tca9548a\.md: no pin-mapping table"
+        with self.assertRaisesRegex(KicadError, msg):
+            netlist.build(self.project, self.root)
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(netlist.main([str(self.project)], self.root), 1)
+        self.assertRegex(out.getvalue(), rf"(?m)^FAIL: .*{msg}")
+
+
 if __name__ == "__main__":
     unittest.main()

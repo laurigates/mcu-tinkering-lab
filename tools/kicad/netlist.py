@@ -138,7 +138,14 @@ def build(
             raise KicadError(
                 f"{sidecar} [parts.{key}]: the carrier needs `part` and `ref`"
             )
-        board = parse_board_table(repo_root / part.board) if part.board else None
+        # Only a pin_numbers entry maps through its page's GPIO pin table; a
+        # breakout's page (TB6612FNG, PCA9685, ...) documents headers and has none.
+        board = None
+        if part.board and spec_of(part.part).pin_numbers:
+            try:
+                board = parse_board_table(repo_root / part.board)
+            except HardwareError as e:
+                raise KicadError(f"{sidecar} [parts.{key}]: {e}") from None
         entries.append(
             (key, part.part, part.ref, part.value, part.lcsc, part.name, board)
         )
