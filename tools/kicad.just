@@ -22,6 +22,7 @@ _kicad_python := env("KICAD_PYTHON", "/Applications/KiCad/KiCad.app/Contents/Fra
 
 _carrier-lib:
     cd {{_kicad_repo}} && PYTHONPATH=tools python3 -m kicad.derive_xiao
+    cd {{_kicad_repo}} && PYTHONPATH=tools python3 -m kicad.sockets
 
 _carrier-schematic project:
     cd {{_kicad_repo}} && PYTHONPATH=tools python3 -m kicad.schematic {{project}}
