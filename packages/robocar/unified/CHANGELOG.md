@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.2.11](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.10...robocar-unified-v0.2.11) (2026-10-15)
+
+
+### Features
+
+* **hardware:** I2C mux channel buses as a join construct ([#777](https://github.com/laurigates/mcu-tinkering-lab/issues/777)) ([4f27793](https://github.com/laurigates/mcu-tinkering-lab/commit/4f277934a5ed263dd2ce85ccddd4b52aa58a83da)), closes [#768](https://github.com/laurigates/mcu-tinkering-lab/issues/768)
+* **hardware:** per-load pin mapping for [[outputs]] ([#778](https://github.com/laurigates/mcu-tinkering-lab/issues/778)) ([0f2c177](https://github.com/laurigates/mcu-tinkering-lab/commit/0f2c17747cf3f1f128874d00d77b8b0cd9123c92))
+* **robocar-unified:** carrier view and schematic ([#793](https://github.com/laurigates/mcu-tinkering-lab/issues/793)) ([0964d36](https://github.com/laurigates/mcu-tinkering-lab/commit/0964d3654684ef5c0714bcb9f7ff3138594a427a))
+* **robocar-unified:** combined head and main outline and placement ([#794](https://github.com/laurigates/mcu-tinkering-lab/issues/794)) ([de101d9](https://github.com/laurigates/mcu-tinkering-lab/commit/de101d93d854c342dde47ebc4962e84d388c47ca))
+* **robocar-unified:** front and rear I2C rangefinders ([#790](https://github.com/laurigates/mcu-tinkering-lab/issues/790)) ([57c3c99](https://github.com/laurigates/mcu-tinkering-lab/commit/57c3c99ae241957fcf3b24a58fe060ae5dafce27))
+
+
+### Bug Fixes
+
+* **robocar-unified:** fit the head board to the 30 mm pan-tilt cradle ([#795](https://github.com/laurigates/mcu-tinkering-lab/issues/795)) ([7a7042f](https://github.com/laurigates/mcu-tinkering-lab/commit/7a7042fd95a551f5ab46cb2d439cfa64ab831426))
+
 ## [0.2.10](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.9...robocar-unified-v0.2.10) (2026-10-12)
 
 
