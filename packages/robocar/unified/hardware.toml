@@ -315,10 +315,20 @@ to = [
 from = "pwm"
 to = ["servos", "led_left", "led_right"]
 
+# Channel A drives the right motor and channel B the left
+# (docs/reference/boards/sparkfun-tb6612fng.md); each motor's two terminals are
+# 1 and 2, so one driver feeds both loads on separate pins (#769).
 [[outputs]]
 from = "motor_driver"
 to = ["motor_left", "motor_right"]
+pins = ["A01", "A02", "B01", "B02"]
+net = "MOT_{pin}"
+load_pins.motor_right = { A01 = "1", A02 = "2" }
+load_pins.motor_left = { B01 = "1", B02 = "2" }
 
 [[outputs]]
 from = "amp"
 to = ["speaker"]
+pins = ["VO-", "VO+"]
+net = "SPK_{pin}"
+load_pins.speaker = { "VO-" = "-", "VO+" = "+" }
