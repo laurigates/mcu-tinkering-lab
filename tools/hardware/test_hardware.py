@@ -1124,6 +1124,102 @@ class BusNetTest(unittest.TestCase):
             self.buses(lambda s: s + names, view="carrier")
 
 
+CABLE = """
+[[cables]]
+part = "test-cable"
+head_ref = "J1"
+main_ref = "J2"
+head_no_connect = ["D1"]
+build = "carrier"
+"""
+
+
+class CableTest(unittest.TestCase):
+    """[[cables]] (#750): one carrier, two boards joined by a cable."""
+
+    make = JoinTest.make
+
+    def cables(self, edit=lambda s: s, view: str = "carrier"):
+        proj = self.make(sidecar=edit(SIDECAR + CABLE))
+        return join(proj, repo_root=proj.parent, view=view)
+
+    def test_the_carrier_view_reads_the_cable(self):
+        (cable,) = self.cables().cables
+        self.assertEqual(
+            (cable.part, cable.head_ref, cable.main_ref, cable.head_no_connect),
+            ("test-cable", "J1", "J2", ("D1",)),
+        )
+
+    def test_head_no_connect_is_optional(self):
+        model = self.cables(lambda s: s.replace('head_no_connect = ["D1"]\n', ""))
+        self.assertEqual(model.cables[0].head_no_connect, ())
+
+    def test_the_harness_view_has_no_cables(self):
+        self.assertEqual(self.cables(view="harness").cables, ())
+
+    def test_a_cable_must_be_carrier_only(self):
+        for build in ('build = "harness"\n', ""):
+            for view in ("harness", "carrier"):
+                with (
+                    self.subTest(build=build, view=view),
+                    self.assertRaisesRegex(HardwareError, 'build = "carrier"'),
+                ):
+                    self.cables(
+                        lambda s, b=build: s.replace('build = "carrier"\n', b), view
+                    )
+
+    def test_an_unknown_cable_key_fails(self):
+        with self.assertRaisesRegex(HardwareError, r"unknown key\(s\) \['pins'\]"):
+            self.cables(lambda s: s + 'pins = ["D0"]\n')
+
+    def test_a_cable_needs_a_registry_part(self):
+        with self.assertRaisesRegex(HardwareError, "missing or non-string 'part'"):
+            self.cables(lambda s: s.replace('part = "test-cable"\n', ""))
+
+    def test_cable_refs_are_reference_designators(self):
+        with self.assertRaisesRegex(HardwareError, "head_ref 'J-1' does not match"):
+            self.cables(lambda s: s.replace('head_ref = "J1"', 'head_ref = "J-1"'))
+
+    def test_the_two_ends_need_two_refs(self):
+        with self.assertRaisesRegex(
+            HardwareError, "head_ref and main_ref are both 'J1'"
+        ):
+            self.cables(lambda s: s.replace('main_ref = "J2"', 'main_ref = "J1"'))
+
+    def test_a_cable_ref_cannot_be_a_parts_ref(self):
+        def edit(s: str) -> str:
+            return s.replace('kind = "led"', 'kind = "led"\nref = "J2"')
+
+        with self.assertRaisesRegex(
+            HardwareError, r"ref 'J2' is used by \[parts.led\] and \[\[cables\]\] #1"
+        ):
+            self.cables(edit)
+
+    def test_one_cable_per_carrier(self):
+        second = CABLE.replace('"J1"', '"J3"').replace('"J2"', '"J4"')
+        with self.assertRaisesRegex(HardwareError, r"#2: one \[\[cables\]\] entry"):
+            self.cables(lambda s: s + second)
+
+    def test_head_no_connect_must_be_pads_on_the_board(self):
+        with self.assertRaisesRegex(HardwareError, "board.md has no pad named 'D9'"):
+            self.cables(lambda s: s.replace('["D1"]', '["D9"]'))
+
+    def test_head_no_connect_lists_a_pad_once(self):
+        with self.assertRaisesRegex(
+            HardwareError, r"head_no_connect lists \['D1'\] twice"
+        ):
+            self.cables(lambda s: s.replace('["D1"]', '["D1", "D1"]'))
+
+    def test_a_head_no_connect_pad_on_a_net_fails(self):
+        # D0 is LED_PIN's pad: leaving it unconnected on the head cuts that net.
+        with self.assertRaisesRegex(HardwareError, "mcu.D0.*role LED_PIN"):
+            self.cables(lambda s: s.replace('["D1"]', '["D0"]'))
+
+    def test_a_head_no_connect_pad_on_a_rail_fails(self):
+        with self.assertRaisesRegex(HardwareError, "mcu.5V.*rail 5V"):
+            self.cables(lambda s: s.replace('["D1"]', '["5V"]') + POWER)
+
+
 class RobocarUnifiedJoinTest(unittest.TestCase):
     """The committed sidecar resolves against the committed header and board."""
 

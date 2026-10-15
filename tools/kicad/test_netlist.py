@@ -602,6 +602,225 @@ class LoadPinTests(unittest.TestCase):
             self.build()
 
 
+# --- A cable between the head board and the main board (#750) --------------------
+# robocar-unified's XIAO ESP32-S3 rides on the pan-tilt head and reaches the main
+# board through a ribbon cable. A stand-in project: the real S3 socket entry and
+# board page, the real header's I2C and UART0 macros, and an 8-way cable whose
+# [pins] are keyed by the XIAO's pad names.
+
+S3_SOCKET = "seeed-xiao-esp32s3-socket"
+S3_BOARD = "docs/reference/boards/xiao-esp32s3.md"
+
+CABLE_PARTS = {
+    "test-cable": """\
+[part]
+name = "Test head cable"
+source = "test stand-in (#750)"
+symbol = "Connector_Generic:Conn_01x08"
+footprint = "Connector_PinSocket_2.54mm:PinSocket_1x08_P2.54mm_Vertical"
+
+[pins]
+D4 = 1
+GND = [2, 6, 7]
+D5 = 3
+"5V" = [4, 5, 8]
+""",
+    "test-i2c-load": MUX_PARTS["test-i2c-load"],
+    "test-lead": """\
+[part]
+name = "Test power lead"
+source = "test stand-in (#750)"
+symbol = "Connector_Generic:Conn_01x02"
+footprint = "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical"
+
+[pins]
+"5V" = 1
+GND = 2
+""",
+}
+
+CABLE_SIDECAR = f"""\
+[source]
+convention = "robocar"
+header = "main/pin_config.h"
+board = "{S3_BOARD}"
+part = "{S3_SOCKET}"
+ref = "U1"
+
+[parts.sensor]
+name = "I2C sensor"
+kind = "sensor"
+part = "test-i2c-load"
+ref = "J3"
+
+[parts.power]
+name = "Power lead"
+kind = "connector"
+part = "test-lead"
+ref = "J4"
+
+[[nets]]
+role = "I2C_SDA_PIN"
+to = "sensor.SDA"
+
+[[nets]]
+role = "I2C_SCL_PIN"
+to = "sensor.SCL"
+
+[[undrawn]]
+role = "UART0_TX_PIN"
+why = "stays on the head"
+
+[[undrawn]]
+role = "UART0_RX_PIN"
+why = "stays on the head"
+
+[[rails]]
+name = "5V"
+from = "power.5V"
+to = ["mcu.5V"]
+
+[[rails]]
+name = "GND"
+from = "power.GND"
+to = ["mcu.GND"]
+
+[[cables]]
+part = "test-cable"
+head_ref = "J1"
+main_ref = "J2"
+head_no_connect = ["3V3", "D6", "D7"]
+build = "carrier"
+"""
+
+
+class CableTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        testfixture.materialise(self.root)
+        for rel in (S3_BOARD, f"docs/reference/parts/{S3_SOCKET}.toml"):
+            (self.root / rel).write_bytes((REPO_ROOT / rel).read_bytes())
+        for slug, text in CABLE_PARTS.items():
+            self.registry(slug).write_text(text, encoding="utf-8")
+        self.project = self.root / "packages/test/headed"
+        (self.project / "main").mkdir(parents=True)
+        # The real header's I2C and UART0 macros, extracted, not retyped.
+        wanted = re.compile(
+            r"#define (I2C_SDA_PIN|I2C_SCL_PIN|UART0_TX_PIN|UART0_RX_PIN) "
+        )
+        text = UNIFIED_HEADER.read_text(encoding="utf-8")
+        lines = [line for line in text.splitlines() if wanted.match(line)]
+        self.assertEqual(len(lines), 4, lines)
+        (self.project / "main/pin_config.h").write_text(
+            "\n".join(lines) + "\n", encoding="utf-8"
+        )
+        self.toml = self.project / "hardware.toml"
+        self.toml.write_text(CABLE_SIDECAR, encoding="utf-8")
+
+    def registry(self, slug: str) -> Path:
+        return self.root / f"docs/reference/parts/{slug}.toml"
+
+    def edit(self, path: Path, old: str, new: str) -> None:
+        text = path.read_text(encoding="utf-8")
+        self.assertEqual(text.count(old), 1, old)
+        path.write_text(text.replace(old, new), encoding="utf-8")
+
+    def build(self) -> netlist.Netlist:
+        return netlist.build(self.project, self.root)
+
+    def fails(self, msg: str) -> None:
+        with self.assertRaisesRegex(KicadError, msg):
+            self.build()
+
+    def test_each_carried_signal_is_a_head_net_and_a_main_net(self):
+        nets = self.build().nets
+        # XIAO D4 is socket pin 5 and D5 pin 6; the cable carries them on pins 1, 3.
+        self.assertEqual(nets["HEAD_I2C_SDA_PIN"], (("J1", "1"), ("U1", "5")))
+        self.assertEqual(nets["I2C_SDA_PIN"], (("J2", "1"), ("J3", "1")))
+        self.assertEqual(nets["HEAD_I2C_SCL_PIN"], (("J1", "3"), ("U1", "6")))
+        self.assertEqual(nets["I2C_SCL_PIN"], (("J2", "3"), ("J3", "2")))
+
+    def test_rails_split_at_the_cable(self):
+        nets = self.build().nets
+        self.assertEqual(
+            nets["HEAD_5V"], (("J1", "4"), ("J1", "5"), ("J1", "8"), ("U1", "14"))
+        )
+        self.assertEqual(
+            nets["5V"], (("J2", "4"), ("J2", "5"), ("J2", "8"), ("J4", "1"))
+        )
+        self.assertEqual(
+            nets["HEAD_GND"], (("J1", "2"), ("J1", "6"), ("J1", "7"), ("U1", "13"))
+        )
+        self.assertEqual(
+            nets["GND"], (("J2", "2"), ("J2", "6"), ("J2", "7"), ("J4", "2"))
+        )
+
+    def test_no_net_runs_from_the_mcu_to_the_main_board(self):
+        nl = self.build()
+        for name, members in nl.nets.items():
+            refs = {r for r, _ in members}
+            with self.subTest(net=name):
+                self.assertFalse({"U1"} & refs and refs & {"J2", "J3", "J4"})
+
+    def test_both_ends_are_one_registry_entry(self):
+        comps = {c.ref: c for c in self.build().comps}
+        self.assertEqual(comps["J1"].registry, "test-cable")
+        self.assertEqual(comps["J2"].registry, "test-cable")
+        self.assertEqual(comps["J1"].lib_id, comps["J2"].lib_id)
+        self.assertEqual(comps["J1"].value, "Test head cable")
+
+    def test_net_names_rename_both_halves(self):
+        with self.toml.open("a", encoding="utf-8") as f:
+            f.write('\n[net_names]\nI2C_SDA_PIN = "SDA"\n5V = "+5V"\n')
+        nets = self.build().nets
+        self.assertEqual(nets["HEAD_SDA"], (("J1", "1"), ("U1", "5")))
+        self.assertEqual(nets["SDA"], (("J2", "1"), ("J3", "1")))
+        self.assertIn("HEAD_+5V", nets)
+        self.assertIn("+5V", nets)
+
+    def test_head_no_connect_lets_a_power_pad_float(self):
+        nl = self.build()
+        self.assertIn(("U1", "12"), nl.no_connect)  # 3V3
+        self.edit(self.toml, '["3V3", "D6", "D7"]', '["D6", "D7"]')
+        self.fails(r"U1\.12 \(3V3\) is a power pad and is on no rail")
+
+    def test_an_uncarried_role_fails(self):
+        # The cable carries D4 and D5; move SCL to D8 (GPIO7), which it does not.
+        self.edit(
+            self.project / "main/pin_config.h",
+            "#define I2C_SCL_PIN GPIO_NUM_6 ",
+            "#define I2C_SCL_PIN GPIO_NUM_7 ",
+        )
+        self.fails(
+            r"role I2C_SCL_PIN is on U1 pad D8, which cable J1-J2 \(test-cable\) "
+            r"does not carry"
+        )
+
+    def test_an_uncarried_rail_pad_fails(self):
+        self.edit(self.registry("test-cable"), '"5V" = [4, 5, 8]', "D8 = [4, 5, 8]")
+        self.fails(r"rail 5V is on U1 pad 5V, which cable J1-J2 .* does not carry")
+
+    def test_a_cable_pin_on_no_source_pad_fails(self):
+        self.edit(self.registry("test-cable"), "D5 = 3", "SCL = 3")
+        self.fails(r"test-cable\.toml \[pins\] 'SCL' is not a pad of xiao-esp32s3\.md")
+
+    def test_a_carried_pad_cannot_stay_unconnected_on_the_head(self):
+        self.edit(self.registry("test-cable"), "D5 = 3", "D5 = 3\nD7 = 5")
+        self.edit(self.registry("test-cable"), '"5V" = [4, 5, 8]', '"5V" = [4, 8]')
+        self.fails(r"head_no_connect \['D7'\]: test-cable\.toml carries")
+
+    def test_a_carried_pad_on_no_net_leaves_its_cable_pins_open(self):
+        self.edit(self.registry("test-cable"), "D5 = 3", "D5 = 3\nD0 = 5")
+        self.edit(self.registry("test-cable"), '"5V" = [4, 5, 8]', '"5V" = [4, 8]')
+        self.fails(r"J1\.5 \(D0\) unconnected, not declared")
+
+    def test_an_unknown_cable_entry_fails(self):
+        self.edit(self.toml, 'part = "test-cable"', 'part = "test-cabel"')
+        self.fails("no parts-registry entry 'test-cabel'")
+
+
 # --- Board pages on carrier parts (#750 step 2) -----------------------------------
 # robocar-unified's breakouts name a `board` page that documents a module's
 # headers, not a GPIO pin map. Only a `pin_numbers` entry reads its page; a
