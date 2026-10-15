@@ -1100,6 +1100,48 @@ class BusNetTest(unittest.TestCase):
         with self.assertRaisesRegex(HardwareError, "'to' must be a part id"):
             self.buses(lambda s: s.replace('to = "probe"', 'to = "probe.SDA"'))
 
+    # A pull-up is a load on one line of a channel (#750): a resistor's pin,
+    # named `to = "part.PIN"`, with `line` saying which of SDA/SCL it joins.
+    PULL_UPS = (
+        '\n[parts.pull_sda]\nname = "10k"\nkind = "resistor"\n'
+        '\n[parts.pull_scl]\nname = "10k"\nkind = "resistor"\n'
+        '\n[[bus_nets]]\nrole = "I2C_BUS_CHANNEL_PROBE"\nfrom = "mux"\n'
+        'to = "pull_sda.B"\nline = "SDA"\n'
+        '\n[[bus_nets]]\nrole = "I2C_BUS_CHANNEL_PROBE"\nfrom = "mux"\n'
+        'to = "pull_scl.B"\nline = "SCL"\n'
+    )
+
+    def test_a_one_line_load_joins_only_its_line(self):
+        buses = self.buses(lambda s: s + self.PULL_UPS).bus_nets
+        sda, scl = [b for b in buses if b.part.startswith("pull_")]
+        self.assertEqual((sda.part, sda.wires), ("pull_sda", (("SD1", "B"),)))
+        self.assertEqual(sda.lines, (("SDA", "SD1", "B"),))
+        self.assertEqual(scl.lines, (("SCL", "SC1", "B"),))
+        # A whole-part load still names both lines by the load's pin.
+        (probe,) = [b for b in buses if b.part == "probe"]
+        self.assertEqual(probe.lines, (("SDA", "SD1", "SDA"), ("SCL", "SC1", "SCL")))
+
+    def test_a_one_line_load_needs_a_pin(self):
+        with self.assertRaisesRegex(HardwareError, "with 'line'.*'part.PIN'"):
+            self.buses(
+                lambda s: s + self.PULL_UPS.replace('"pull_sda.B"', '"pull_sda"')
+            )
+
+    def test_line_is_sda_or_scl(self):
+        with self.assertRaisesRegex(HardwareError, "'line' must be one of"):
+            self.buses(lambda s: s + self.PULL_UPS.replace('"SCL"', '"SCK"'))
+
+    def test_a_one_line_load_pin_on_two_channels_fails(self):
+        # The same resistor pin on channel 0 too would join the two channels.
+        also = (
+            '\n[[bus_nets]]\nrole = "I2C_BUS_CHANNEL_SCREEN"\nfrom = "mux"\n'
+            'to = "pull_sda.B"\nline = "SDA"\n'
+        )
+        with self.assertRaisesRegex(
+            HardwareError, "pull_sda.B is on both I2C_BUS_CHANNEL_PROBE"
+        ):
+            self.buses(lambda s: s + self.PULL_UPS + also)
+
     def test_a_sidecar_without_bus_nets_needs_no_bus_convention(self):
         with mock.patch.dict(hardware.header.BUS_CONVENTIONS, clear=True):
             model = self.join(self.make(SIDECAR))

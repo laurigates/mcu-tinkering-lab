@@ -222,8 +222,8 @@ class MutationTests(unittest.TestCase):
 # --- Mux channel buses (#768) ---------------------------------------------------
 # A stand-in project on the frozen tree's XIAO and registry: robocar-unified's
 # own I2C and TCA9548A channel macros, a mux on a 1x8 socket and three 2-pin
-# loads. The carrier view of the real project cannot build yet (#750 step 2), so
-# this is where `kicad.netlist` meets [[bus_nets]].
+# loads. A stand-in rather than the real project, so a change to its
+# hardware.toml cannot move these cases.
 
 UNIFIED_HEADER = REPO_ROOT / "packages/robocar/unified/main/pin_config.h"
 
@@ -421,6 +421,31 @@ class BusNetTests(unittest.TestCase):
         self.assertEqual(nl.nets["OLED_SDA"], (("J1", "5"), ("J3", "1")))
         self.assertEqual(nl.nets["OLED_SCL"], (("J1", "6"), ("J3", "2")))
 
+    def test_a_one_line_load_joins_the_net_named_for_its_line(self):
+        # A pull-up per line (#750): the resistor's pin B joins the channel's
+        # <name>_SDA / _SCL, named by the line, not by the resistor's pin.
+        parts = "".join(
+            f'\n[parts.pull_{x}]\nname = "10k"\nkind = "resistor"\n'
+            f'part = "r0805"\nref = "R{n}"\nvalue = "10k"\n'
+            for n, x in ((1, "sda"), (2, "scl"))
+        )
+        buses = "".join(
+            f'\n[[bus_nets]]\nrole = "I2C_BUS_CHANNEL_OLED"\nfrom = "mux"\n'
+            f'to = "pull_{x.lower()}.B"\nline = "{x}"\n'
+            for x in ("SDA", "SCL")
+        )
+        rail = '\n[[rails]]\nname = "3V3"\nto = ["pull_sda.A", "pull_scl.A"]\n'
+        with self.toml.open("a", encoding="utf-8") as f:
+            f.write(parts + buses + rail)
+        nets = self.buses(self.build())
+        self.assertEqual(
+            nets["I2C_BUS_CHANNEL_OLED_SDA"], (("J1", "5"), ("J3", "1"), ("R1", "2"))
+        )
+        self.assertEqual(
+            nets["I2C_BUS_CHANNEL_OLED_SCL"], (("J1", "6"), ("J3", "2"), ("R2", "2"))
+        )
+        self.assertNotIn("I2C_BUS_CHANNEL_OLED_B", nets)
+
     def test_a_dropped_bus_net_leaves_its_pins_unconnected(self):
         text = self.toml.read_text(encoding="utf-8")
         entry = (
@@ -444,8 +469,8 @@ class BusNetTests(unittest.TestCase):
 # --- One driver, two loads on separate pins (#769) -------------------------------
 # robocar-unified's TB6612FNG drives the right motor from A01/A02 and the left
 # from B01/B02 (sparkfun-tb6612fng.md), and both motors use one 2-pin connector
-# entry. A stand-in project on the frozen tree's XIAO and registry, since the
-# real project's carrier view cannot build yet (#750 step 2).
+# entry. A stand-in project on the frozen tree's XIAO and registry, so a change
+# to the real project's hardware.toml cannot move these cases.
 
 LOAD_PIN_PARTS = {
     "test-motor-driver": """\
