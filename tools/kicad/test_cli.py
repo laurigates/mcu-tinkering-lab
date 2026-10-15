@@ -43,10 +43,14 @@ PROJECT_CLIS: tuple[str, ...] = (
     "stamp",
 )
 # Modules whose main() works on the repo as a whole; with an empty repo root
-# each must exit 1. `vendor` checks tools/kicad/lib/ and `derive_xiao` reads its
-# derive.toml files; neither has projects.
-REPO_CLIS = ("vendor", "derive_xiao")
-REPO_CLI_ARGS = {"vendor": ["--check"], "derive_xiao": ["--check"]}
+# each must exit 1. `vendor` checks tools/kicad/lib/, `derive_xiao` reads its
+# derive.toml files and `sockets` its sockets.toml; none has projects.
+REPO_CLIS = ("vendor", "derive_xiao", "sockets")
+REPO_CLI_ARGS = {
+    "vendor": ["--check"],
+    "derive_xiao": ["--check"],
+    "sockets": ["--check"],
+}
 # Modules whose main() takes file arguments, not projects; without them each
 # must exit 1. (`jlc` cuts a BOM/CPL pair; kicad.fab calls it per project.)
 FILE_CLIS = ("jlc",)

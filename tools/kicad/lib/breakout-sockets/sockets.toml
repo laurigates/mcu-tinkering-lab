@@ -1,0 +1,35 @@
+# Socket footprints for breakout boards, generated from the pad centres their
+# board pages record (docs/reference/boards/<board>.md, `## Pad centres`).
+#
+# Each [[socket]] names the footprint, the board page slug, and the pads to
+# socket, in footprint pad order: an element ("JP1") stands for all of its pads
+# in pad-number order, an element.pad ("JP6.10") for that one pad. Footprint
+# pad n is the n-th pad listed, which is what a parts-registry entry's [pins]
+# names. Regenerate with `just kicad::gen`
+# (PYTHONPATH=tools python3 -m kicad.sockets); CI runs it with --check.
+
+# Both 8-pin rows: JP1.1-8 are pads 1-8, JP2.1-8 are pads 9-16.
+[[socket]]
+name = "SparkFun_TB6612FNG_Socket"
+board = "sparkfun-tb6612fng"
+pads = ["JP1", "JP2"]
+
+# The 7-pin header; the speaker terminal X1 is wired, not socketed.
+[[socket]]
+name = "Adafruit_MAX98357A_Socket"
+board = "adafruit-max98357a"
+pads = ["JP1"]
+
+# The left row JP3.1-12 is pads 1-12, the right row JP1.1-12 pads 13-24.
+[[socket]]
+name = "Adafruit_TCA9548A_Socket"
+board = "adafruit-tca9548a"
+pads = ["JP3", "JP1"]
+
+# The left side header JP3 (pads 1-6), then the PWM row of servo channels
+# 8-13 in channel order (pads 7-12). The V+ and GND rows, JP4 and the
+# terminal block are not socketed.
+[[socket]]
+name = "Adafruit_PCA9685_Socket"
+board = "adafruit-pca9685"
+pads = ["JP3", "JP6.10", "JP6.7", "JP6.4", "JP6.1", "JP5.10", "JP5.7"]

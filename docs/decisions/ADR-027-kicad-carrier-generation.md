@@ -186,7 +186,7 @@ Module map (`tools/kicad`; the package docstring has the full list):
 | `boardcheck`, `stamp` | KiCad-free board parity and stamp verification (CI) |
 | `boardinput`, `pcb/` | JSON for the pcbnew scripts; place, route, DSN rewrite |
 | `fab`, `jlc` | Gerbers, drill, BOM and CPL; JLCPCB's assembly format |
-| `vendor`, `derive_xiao` | the pinned library subtrees; the socket XIAO parts |
+| `vendor`, `derive_xiao`, `sockets` | the pinned library subtrees; the socket XIAO parts; the breakout socket footprints |
 | `perfboard/` | KiCad-free: the carrier netlist laid out on a perfboard (`hardware/perfboard/perfboard.toml`): drawing and wire list; `--check` |
 
 Per project: `hardware/carrier/board.toml` (KiCad project name, placement,
