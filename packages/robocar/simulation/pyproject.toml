@@ -34,9 +34,9 @@ requires-python = ">=3.12"
 dependencies = [
     # Core simulation framework with 3D visualization
     "spatialmath-python==1.1.18",
-    "genesis-world==1.4.3",
+    "genesis-world==1.4.4",
     # Scientific computing
-    "numpy==2.5.3",
+    "numpy==2.5.4",
     "scipy==1.18.1",
     "matplotlib==3.11.2",
     "pandas==3.0.6",
@@ -52,7 +52,7 @@ dependencies = [
     # 3D graphics and visualization
     "trimesh==5.1.1",
     # Physics simulation
-    "pymunk==7.3.0",
+    "pymunk==7.3.1",
     # Configuration and utilities
     "pyyaml==6.0.3",
     "toml==0.10.2",
@@ -77,7 +77,7 @@ dev = [
     # An unpinned resolve reddened every PR with no commit to explain it
     # (issue #515). Bump deliberately, verifying `uv run ty check src/`
     # still passes, rather than dropping the pin.
-    "ty==0.0.85",
+    "ty==0.0.86",
     "types-PyYAML",
     "types-toml",
 

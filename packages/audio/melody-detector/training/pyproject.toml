@@ -11,33 +11,33 @@ version = "0.1.0"
 description = "Synthetic dataset, training, and ESP-PPQ quantization pipeline for the melody-detector ROI classifier"
 readme = "README.md"
 license = {text = "MIT"}
-requires-python = "==3.12.15"
+requires-python = "==3.15.0"
 
 dependencies = [
-    "numpy==2.4.4",
-    "pillow==12.2.0",
+    "numpy==2.5.4",
+    "pillow==12.3.0",
     "albumentations==2.0.8",
-    "click==8.3.3",
+    "click==8.5.0",
 ]
 
 [project.optional-dependencies]
 train = [
-    "torch==2.11.0",
-    "torchvision==0.26.0",
+    "torch==2.14.1",
+    "torchvision==0.29.1",
 ]
 quantize = [
     # B4 — pinned at slice time once the ESP-PPQ install path is exercised
     "esp-ppq",
-    "onnx==1.17.0",
-    "onnxruntime==1.25.1",
+    "onnx==1.23.2",
+    "onnxruntime==1.31.0",
 ]
 dev = [
-    "pytest==9.0.3",
+    "pytest==9.1.1",
     "pytest-cov==7.1.0",
-    "ruff==0.15.12",
+    "ruff==0.17.0",
     "ty",
-    "onnx==1.17.0",
-    "onnxscript==0.7.0",
+    "onnx==1.23.2",
+    "onnxscript==0.7.2",
 ]
 
 [project.scripts]
