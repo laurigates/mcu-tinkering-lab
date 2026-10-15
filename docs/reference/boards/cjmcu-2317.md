@@ -134,9 +134,10 @@ a carrier is ordered:
    fitted, the carrier must hold RESET high.
 5. **I2C pull-ups.** Check whether the two 10 kΩ parts sit on SDA/SCL to VCC.
    The TCA9548A breakout has no pull-ups on its downstream channels: in
-   Adafruit's board file R1/R2 pull up the upstream SDA/SCL only, and every
-   `nSDA`/`nSCL` net joins just the chip and the header pad
-   ([`adafruit-tca9548a.md`](adafruit-tca9548a.md)). If these two parts are not
+   Adafruit's `Adafruit TCA9548A.brd` at commit `c5bdfe4c` (the file
+   [`adafruit-tca9548a.md`](adafruit-tca9548a.md) is drawn from), R1/R2 pull
+   up the upstream SDA/SCL only, and every `nSDA`/`nSCL` net joins just the
+   chip and the header pad. If these two parts are not
    SDA/SCL pull-ups, the carrier must pull channel 2 up.
 6. **Decoupling.** Confirm the unmarked part is a capacitor across VDD/VSS. If
    so, the optional C6 in `WIRING.md` is redundant.
