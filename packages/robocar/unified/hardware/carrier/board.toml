@@ -1,0 +1,102 @@
+# Carrier PCB layout for tools/kicad: everything the netlist does not say.
+# Parts, footprints and nets come from ../../hardware.toml and the parts
+# registry (docs/reference/parts/); this file says where each part sits, how
+# wide each net's tracks are, and what goes on the silkscreen.
+#
+# PROVISIONAL (#750 step 2). The outline and placement below are a plain
+# row-by-row packing of the courtyards, written only so the carrier gates
+# (kicad.boardcheck, the check stamp) have a placed, routed board to check
+# the schematic against. They are not a layout: the head/main split, the
+# breakouts' real outlines (a socket's courtyard is its headers only), the
+# connectors' edge positions and the mounting holes are the placement work
+# that replaces this file's [outline] and [placement] wholesale. Do not
+# order this board.
+#
+# `python3 -m kicad.boardcheck` validates every table against the netlist.
+# `python3 -m kicad.boardinput` turns this file and the netlist into the JSON
+# the pcbnew scripts in tools/kicad/pcb/ place and route from.
+
+[project]
+name = "robocar-unified-carrier"     # the KiCad project directory and file stem here
+paper = "A3"
+
+# Board outline: a rectangle, origin at its top-left corner.
+[outline]
+origin = [100.0, 100.0]
+size = [166.0, 102.0]
+
+# ref = [x_mm, y_mm, rotation_deg], relative to the origin; each footprint's
+# own anchor. Provisional: rows of courtyards 6 mm apart (see the header).
+[placement]
+A1 = [6.77, 24.55, 0]     # TB6612FNG socket
+A2 = [31.55, 19.47, 0]    # PCA9685 socket
+A3 = [89.35, 6.77, 0]     # TCA9548A socket
+A4 = [129.37, 6.77, 0]    # MAX98357A socket
+U1 = [147.57, 13.9, 0]    # XIAO ESP32-S3 Sense (head board)
+J1 = [8.68, 48.08, 0]     # IDC 2x7, main end
+J2 = [24.58, 48.08, 0]    # IDC 2x7, head end
+J3 = [46.45, 56.08, 0]    # XT30 pack in
+J4 = [60.05, 45.33, 0]    # LM2596 lead
+U2 = [80.9, 46.08, 0]     # AMS1117-3.3
+C7 = [93.94, 44.13, 0]    # LDO input
+C8 = [105.22, 44.13, 0]    # LDO output
+J5 = [7.95, 77.77, 0]     # motor left
+J6 = [22.35, 77.77, 0]    # motor right
+J7 = [36.75, 77.77, 0]    # RCWL-1601 front
+J8 = [56.15, 77.77, 0]    # RCWL-1601 rear
+J9 = [75.55, 77.77, 0]    # SSD1306
+J10 = [94.95, 77.77, 0]   # piezo
+C1 = [11.15, 92.17, 0]    # PCA9685 V+ bulk
+C2 = [29.45, 92.17, 0]    # TB6612FNG VM bulk
+C3 = [47.75, 92.17, 0]    # MAX98357A Vin bulk
+C4 = [61.78, 88.65, 0]
+C5 = [71.54, 88.65, 0]
+R1 = [81.27, 88.62, 0]
+R2 = [90.97, 88.62, 0]
+R3 = [100.67, 88.62, 0]
+R4 = [110.37, 88.62, 0]
+R5 = [120.07, 88.62, 0]
+R6 = [129.77, 88.62, 0]
+R7 = [139.47, 88.62, 0]
+R8 = [149.17, 88.62, 0]
+R9 = [158.87, 88.62, 0]
+
+[silk]
+# Seeed's reference text is below KiCad's minimum silkscreen height.
+ref_sizes = { U1 = 1.0 }
+texts = [
+    { text = "robocar-unified carrier: PROVISIONAL placement, do not order", at = [83.0, 99.0], size = 1.2 },
+]
+
+# Freerouting width classes, in this order. `nets` are net names or fnmatch
+# patterns over them; every pattern must match, and no net may be in two classes.
+[[net_classes]]
+name = "power"
+nets = ["VBAT", "GND", "+5V", "HEAD_+5V", "HEAD_GND", "MOT_*"]
+track_um = 1000
+clearance_um = 300
+via_um = [1000, 500]
+
+[[net_classes]]
+name = "logic_power"
+nets = ["+3V3"]
+track_um = 500
+clearance_um = 250
+via_um = [800, 400]
+
+# Every net not in a class above. Its via must be the .kicad_pro Default class's.
+[signal]
+track_um = 300
+clearance_um = 200
+via_um = [600, 300]
+
+# A copper pour on both layers after routing. The .kicad_dru lets a thermal
+# resolve to one spoke because route_board first checks every pad of this net
+# has a routed track.
+[pour]
+net = "GND"
+layers = ["F.Cu", "B.Cu"]
+clearance_mm = 0.4
+min_thickness_mm = 0.25
+thermal_gap_mm = 0.3
+spoke_mm = 0.35

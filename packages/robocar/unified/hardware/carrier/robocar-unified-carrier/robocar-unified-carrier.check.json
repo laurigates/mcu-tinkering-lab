@@ -1,0 +1,959 @@
+{
+ "board_sha256": "d7c43242a1b4d0c61d18c4afd3ae6d9ec9bd18db3b1b230374af0ba27bb5e900",
+ "kicad_cli_version": "10.0.6",
+ "netlist": {
+  "components": {
+   "A1": {
+    "footprint": "Breakout_Sockets:SparkFun_TB6612FNG_Socket",
+    "in_bom": true,
+    "lcsc": "",
+    "lib_id": "Connector_Generic:Conn_01x16",
+    "value": "TB6612FNG"
+   },
+   "A2": {
+    "footprint": "Breakout_Sockets:Adafruit_PCA9685_Socket",
+    "in_bom": true,
+    "lcsc": "",
+    "lib_id": "Connector_Generic:Conn_01x12",
+    "value": "PCA9685"
+   },
+   "A3": {
+    "footprint": "Breakout_Sockets:Adafruit_TCA9548A_Socket",
+    "in_bom": true,
+    "lcsc": "",
+    "lib_id": "Connector_Generic:Conn_01x24",
+    "value": "TCA9548A"
+   },
+   "A4": {
+    "footprint": "Breakout_Sockets:Adafruit_MAX98357A_Socket",
+    "in_bom": true,
+    "lcsc": "",
+    "lib_id": "Connector_Generic:Conn_01x07",
+    "value": "MAX98357A"
+   },
+   "C1": {
+    "footprint": "Capacitor_SMD:CP_Elec_8x10.5",
+    "in_bom": true,
+    "lcsc": "C5162348",
+    "lib_id": "Device:C_Polarized",
+    "value": "470uF 16V"
+   },
+   "C2": {
+    "footprint": "Capacitor_SMD:CP_Elec_8x10.5",
+    "in_bom": true,
+    "lcsc": "C5162348",
+    "lib_id": "Device:C_Polarized",
+    "value": "470uF 16V"
+   },
+   "C3": {
+    "footprint": "Capacitor_SMD:CP_Elec_8x10.5",
+    "in_bom": true,
+    "lcsc": "C5162348",
+    "lib_id": "Device:C_Polarized",
+    "value": "470uF 16V"
+   },
+   "C4": {
+    "footprint": "Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder",
+    "in_bom": true,
+    "lcsc": "C49678",
+    "lib_id": "Device:C",
+    "value": "100nF"
+   },
+   "C5": {
+    "footprint": "Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder",
+    "in_bom": true,
+    "lcsc": "C49678",
+    "lib_id": "Device:C",
+    "value": "100nF"
+   },
+   "C7": {
+    "footprint": "Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B_HandSolder",
+    "in_bom": true,
+    "lcsc": "C8020",
+    "lib_id": "Device:C_Polarized",
+    "value": "22uF 16V"
+   },
+   "C8": {
+    "footprint": "Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B_HandSolder",
+    "in_bom": true,
+    "lcsc": "C8020",
+    "lib_id": "Device:C_Polarized",
+    "value": "22uF 16V"
+   },
+   "J1": {
+    "footprint": "Connector_IDC:IDC-Header_2x07_P2.54mm_Vertical",
+    "in_bom": true,
+    "lcsc": "",
+    "lib_id": "Connector_Generic:Conn_02x07_Odd_Even",
+    "value": "IDC 2x7 head cable"
+   },
+   "J10": {
+    "footprint": "Connector_JST:JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical",
+    "in_bom": true,
+    "lcsc": "",
+    "lib_id": "Device:Buzzer",
+    "value": "Piezo"
+   },
+   "J2": {
+    "footprint": "Connector_IDC:IDC-Header_2x07_P2.54mm_Vertical",
+    "in_bom": true,
+    "lcsc": "",
+    "lib_id": "Connector_Generic:Conn_02x07_Odd_Even",
+    "value": "IDC 2x7 head cable"
+   },
+   "J3": {
+    "footprint": "Connector_AMASS:AMASS_XT30PW-M_1x02_P2.50mm_Horizontal",
+    "in_bom": true,
+    "lcsc": "",
+    "lib_id": "Connector_Generic:Conn_01x02",
+    "value": "XT30 pack in"
+   },
+   "J4": {
+    "footprint": "Connector_JST:JST_XH_B4B-XH-A_1x04_P2.50mm_Vertical",
+    "in_bom": true,
+    "lcsc": "",
+    "lib_id": "Connector_Generic:Conn_01x04",
+    "value": "LM2596 module"
+   },
+   "J5": {
+    "footprint": "Connector_JST:JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical",
+    "in_bom": true,
+    "lcsc": "",
+    "lib_id": "Connector_Generic:Conn_01x02",
+    "value": "Motor left"
+   },
+   "J6": {
+    "footprint": "Connector_JST:JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical",
+    "in_bom": true,
+    "lcsc": "",
+    "lib_id": "Connector_Generic:Conn_01x02",
+    "value": "Motor right"
+   },
+   "J7": {
+    "footprint": "Connector_JST:JST_XH_B4B-XH-A_1x04_P2.50mm_Vertical",
+    "in_bom": true,
+    "lcsc": "",
+    "lib_id": "Connector_Generic:Conn_01x04",
+    "value": "RCWL-1601 front"
+   },
+   "J8": {
+    "footprint": "Connector_JST:JST_XH_B4B-XH-A_1x04_P2.50mm_Vertical",
+    "in_bom": true,
+    "lcsc": "",
+    "lib_id": "Connector_Generic:Conn_01x04",
+    "value": "RCWL-1601 rear"
+   },
+   "J9": {
+    "footprint": "Connector_JST:JST_XH_B4B-XH-A_1x04_P2.50mm_Vertical",
+    "in_bom": true,
+    "lcsc": "",
+    "lib_id": "Connector_Generic:Conn_01x04",
+    "value": "SSD1306 0.91in"
+   },
+   "R1": {
+    "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
+    "in_bom": true,
+    "lcsc": "C17408",
+    "lib_id": "Device:R",
+    "value": "100"
+   },
+   "R2": {
+    "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
+    "in_bom": true,
+    "lcsc": "C17414",
+    "lib_id": "Device:R",
+    "value": "10k"
+   },
+   "R3": {
+    "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
+    "in_bom": true,
+    "lcsc": "C17414",
+    "lib_id": "Device:R",
+    "value": "10k"
+   },
+   "R4": {
+    "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
+    "in_bom": true,
+    "lcsc": "C17414",
+    "lib_id": "Device:R",
+    "value": "10k"
+   },
+   "R5": {
+    "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
+    "in_bom": true,
+    "lcsc": "C17414",
+    "lib_id": "Device:R",
+    "value": "10k"
+   },
+   "R6": {
+    "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
+    "in_bom": true,
+    "lcsc": "C17414",
+    "lib_id": "Device:R",
+    "value": "10k"
+   },
+   "R7": {
+    "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
+    "in_bom": true,
+    "lcsc": "C17414",
+    "lib_id": "Device:R",
+    "value": "10k"
+   },
+   "R8": {
+    "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
+    "in_bom": true,
+    "lcsc": "C17414",
+    "lib_id": "Device:R",
+    "value": "10k"
+   },
+   "R9": {
+    "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
+    "in_bom": true,
+    "lcsc": "C17414",
+    "lib_id": "Device:R",
+    "value": "10k"
+   },
+   "U1": {
+    "footprint": "Seeed_XIAO:XIAO-ESP32-S3-Socket",
+    "in_bom": true,
+    "lcsc": "",
+    "lib_id": "Seeed_XIAO:XIAO-ESP32-S3-Socket",
+    "value": "XIAO ESP32-S3 Sense"
+   },
+   "U2": {
+    "footprint": "Package_TO_SOT_SMD:SOT-223-3_TabPin2",
+    "in_bom": true,
+    "lcsc": "C6186",
+    "lib_id": "Regulator_Linear:AP1117-15",
+    "value": "AMS1117-3.3"
+   }
+  },
+  "nets": {
+   "+3V3": [
+    [
+     "A1",
+     "7"
+    ],
+    [
+     "A2",
+     "2"
+    ],
+    [
+     "A3",
+     "1"
+    ],
+    [
+     "C4",
+     "1"
+    ],
+    [
+     "C5",
+     "1"
+    ],
+    [
+     "C8",
+     "1"
+    ],
+    [
+     "J7",
+     "1"
+    ],
+    [
+     "J8",
+     "1"
+    ],
+    [
+     "J9",
+     "2"
+    ],
+    [
+     "R2",
+     "1"
+    ],
+    [
+     "R3",
+     "1"
+    ],
+    [
+     "R4",
+     "1"
+    ],
+    [
+     "R5",
+     "1"
+    ],
+    [
+     "R6",
+     "1"
+    ],
+    [
+     "R7",
+     "1"
+    ],
+    [
+     "R8",
+     "1"
+    ],
+    [
+     "R9",
+     "1"
+    ],
+    [
+     "U2",
+     "2"
+    ]
+   ],
+   "+5V": [
+    [
+     "A1",
+     "8"
+    ],
+    [
+     "A2",
+     "1"
+    ],
+    [
+     "A4",
+     "1"
+    ],
+    [
+     "A4",
+     "3"
+    ],
+    [
+     "C1",
+     "1"
+    ],
+    [
+     "C2",
+     "1"
+    ],
+    [
+     "C3",
+     "1"
+    ],
+    [
+     "C7",
+     "1"
+    ],
+    [
+     "J1",
+     "1"
+    ],
+    [
+     "J1",
+     "2"
+    ],
+    [
+     "J4",
+     "3"
+    ],
+    [
+     "U2",
+     "3"
+    ]
+   ],
+   "AIN1": [
+    [
+     "A1",
+     "11"
+    ],
+    [
+     "A2",
+     "9"
+    ]
+   ],
+   "AIN2": [
+    [
+     "A1",
+     "10"
+    ],
+    [
+     "A2",
+     "8"
+    ]
+   ],
+   "BIN1": [
+    [
+     "A1",
+     "13"
+    ],
+    [
+     "A2",
+     "10"
+    ]
+   ],
+   "BIN2": [
+    [
+     "A1",
+     "14"
+    ],
+    [
+     "A2",
+     "11"
+    ]
+   ],
+   "CH0_SCL": [
+    [
+     "A2",
+     "4"
+    ],
+    [
+     "A3",
+     "10"
+    ],
+    [
+     "R3",
+     "2"
+    ]
+   ],
+   "CH0_SDA": [
+    [
+     "A2",
+     "3"
+    ],
+    [
+     "A3",
+     "9"
+    ],
+    [
+     "R2",
+     "2"
+    ]
+   ],
+   "CH1_SCL": [
+    [
+     "A3",
+     "12"
+    ],
+    [
+     "J9",
+     "3"
+    ],
+    [
+     "R5",
+     "2"
+    ]
+   ],
+   "CH1_SDA": [
+    [
+     "A3",
+     "11"
+    ],
+    [
+     "J9",
+     "4"
+    ],
+    [
+     "R4",
+     "2"
+    ]
+   ],
+   "CH3_SCL": [
+    [
+     "A3",
+     "16"
+    ],
+    [
+     "J7",
+     "2"
+    ],
+    [
+     "R7",
+     "2"
+    ]
+   ],
+   "CH3_SDA": [
+    [
+     "A3",
+     "15"
+    ],
+    [
+     "J7",
+     "3"
+    ],
+    [
+     "R6",
+     "2"
+    ]
+   ],
+   "CH4_SCL": [
+    [
+     "A3",
+     "18"
+    ],
+    [
+     "J8",
+     "2"
+    ],
+    [
+     "R9",
+     "2"
+    ]
+   ],
+   "CH4_SDA": [
+    [
+     "A3",
+     "17"
+    ],
+    [
+     "J8",
+     "3"
+    ],
+    [
+     "R8",
+     "2"
+    ]
+   ],
+   "GND": [
+    [
+     "A1",
+     "1"
+    ],
+    [
+     "A1",
+     "16"
+    ],
+    [
+     "A1",
+     "6"
+    ],
+    [
+     "A2",
+     "6"
+    ],
+    [
+     "A3",
+     "2"
+    ],
+    [
+     "A4",
+     "2"
+    ],
+    [
+     "A4",
+     "4"
+    ],
+    [
+     "C1",
+     "2"
+    ],
+    [
+     "C2",
+     "2"
+    ],
+    [
+     "C3",
+     "2"
+    ],
+    [
+     "C4",
+     "2"
+    ],
+    [
+     "C5",
+     "2"
+    ],
+    [
+     "C7",
+     "2"
+    ],
+    [
+     "C8",
+     "2"
+    ],
+    [
+     "J1",
+     "11"
+    ],
+    [
+     "J1",
+     "3"
+    ],
+    [
+     "J1",
+     "4"
+    ],
+    [
+     "J1",
+     "7"
+    ],
+    [
+     "J3",
+     "1"
+    ],
+    [
+     "J4",
+     "2"
+    ],
+    [
+     "J4",
+     "4"
+    ],
+    [
+     "J7",
+     "4"
+    ],
+    [
+     "J8",
+     "4"
+    ],
+    [
+     "J9",
+     "1"
+    ],
+    [
+     "J10",
+     "2"
+    ],
+    [
+     "U2",
+     "1"
+    ]
+   ],
+   "HEAD_+5V": [
+    [
+     "J2",
+     "1"
+    ],
+    [
+     "J2",
+     "2"
+    ],
+    [
+     "U1",
+     "14"
+    ]
+   ],
+   "HEAD_GND": [
+    [
+     "J2",
+     "11"
+    ],
+    [
+     "J2",
+     "3"
+    ],
+    [
+     "J2",
+     "4"
+    ],
+    [
+     "J2",
+     "7"
+    ],
+    [
+     "U1",
+     "13"
+    ]
+   ],
+   "HEAD_I2C_SCL": [
+    [
+     "J2",
+     "6"
+    ],
+    [
+     "U1",
+     "6"
+    ]
+   ],
+   "HEAD_I2C_SDA": [
+    [
+     "J2",
+     "5"
+    ],
+    [
+     "U1",
+     "5"
+    ]
+   ],
+   "HEAD_I2S_BCLK": [
+    [
+     "J2",
+     "8"
+    ],
+    [
+     "U1",
+     "9"
+    ]
+   ],
+   "HEAD_I2S_DIN": [
+    [
+     "J2",
+     "10"
+    ],
+    [
+     "U1",
+     "11"
+    ]
+   ],
+   "HEAD_I2S_LRCLK": [
+    [
+     "J2",
+     "9"
+    ],
+    [
+     "U1",
+     "10"
+    ]
+   ],
+   "HEAD_MOTOR_STBY": [
+    [
+     "J2",
+     "12"
+    ],
+    [
+     "U1",
+     "1"
+    ]
+   ],
+   "HEAD_MUX_RST": [
+    [
+     "J2",
+     "14"
+    ],
+    [
+     "U1",
+     "3"
+    ]
+   ],
+   "HEAD_PIEZO": [
+    [
+     "J2",
+     "13"
+    ],
+    [
+     "U1",
+     "2"
+    ]
+   ],
+   "I2C_SCL": [
+    [
+     "A3",
+     "4"
+    ],
+    [
+     "J1",
+     "6"
+    ]
+   ],
+   "I2C_SDA": [
+    [
+     "A3",
+     "3"
+    ],
+    [
+     "J1",
+     "5"
+    ]
+   ],
+   "I2S_BCLK": [
+    [
+     "A4",
+     "6"
+    ],
+    [
+     "J1",
+     "8"
+    ]
+   ],
+   "I2S_DIN": [
+    [
+     "A4",
+     "5"
+    ],
+    [
+     "J1",
+     "10"
+    ]
+   ],
+   "I2S_LRCLK": [
+    [
+     "A4",
+     "7"
+    ],
+    [
+     "J1",
+     "9"
+    ]
+   ],
+   "MOTOR_STBY": [
+    [
+     "A1",
+     "12"
+    ],
+    [
+     "J1",
+     "12"
+    ]
+   ],
+   "MOT_A01": [
+    [
+     "A1",
+     "5"
+    ],
+    [
+     "J6",
+     "1"
+    ]
+   ],
+   "MOT_A02": [
+    [
+     "A1",
+     "4"
+    ],
+    [
+     "J6",
+     "2"
+    ]
+   ],
+   "MOT_B01": [
+    [
+     "A1",
+     "2"
+    ],
+    [
+     "J5",
+     "1"
+    ]
+   ],
+   "MOT_B02": [
+    [
+     "A1",
+     "3"
+    ],
+    [
+     "J5",
+     "2"
+    ]
+   ],
+   "MUX_RST": [
+    [
+     "A3",
+     "5"
+    ],
+    [
+     "J1",
+     "14"
+    ]
+   ],
+   "PIEZO": [
+    [
+     "J1",
+     "13"
+    ],
+    [
+     "R1",
+     "1"
+    ]
+   ],
+   "PIEZO_DRV": [
+    [
+     "J10",
+     "1"
+    ],
+    [
+     "R1",
+     "2"
+    ]
+   ],
+   "PWMA": [
+    [
+     "A1",
+     "9"
+    ],
+    [
+     "A2",
+     "7"
+    ]
+   ],
+   "PWMB": [
+    [
+     "A1",
+     "15"
+    ],
+    [
+     "A2",
+     "12"
+    ]
+   ],
+   "VBAT": [
+    [
+     "J3",
+     "2"
+    ],
+    [
+     "J4",
+     "1"
+    ]
+   ]
+  },
+  "unconnected": {
+   "unconnected-(A2-Pin_5-Pad5)": [
+    "A2",
+    "5"
+   ],
+   "unconnected-(A3-Pin_13-Pad13)": [
+    "A3",
+    "13"
+   ],
+   "unconnected-(A3-Pin_14-Pad14)": [
+    "A3",
+    "14"
+   ],
+   "unconnected-(A3-Pin_19-Pad19)": [
+    "A3",
+    "19"
+   ],
+   "unconnected-(A3-Pin_20-Pad20)": [
+    "A3",
+    "20"
+   ],
+   "unconnected-(A3-Pin_21-Pad21)": [
+    "A3",
+    "21"
+   ],
+   "unconnected-(A3-Pin_22-Pad22)": [
+    "A3",
+    "22"
+   ],
+   "unconnected-(A3-Pin_23-Pad23)": [
+    "A3",
+    "23"
+   ],
+   "unconnected-(A3-Pin_24-Pad24)": [
+    "A3",
+    "24"
+   ],
+   "unconnected-(A3-Pin_6-Pad6)": [
+    "A3",
+    "6"
+   ],
+   "unconnected-(A3-Pin_7-Pad7)": [
+    "A3",
+    "7"
+   ],
+   "unconnected-(A3-Pin_8-Pad8)": [
+    "A3",
+    "8"
+   ],
+   "unconnected-(U1-3V3_OUT-Pad12)": [
+    "U1",
+    "12"
+   ],
+   "unconnected-(U1-D3-Pad4)": [
+    "U1",
+    "4"
+   ],
+   "unconnected-(U1-D6-Pad7)": [
+    "U1",
+    "7"
+   ],
+   "unconnected-(U1-D7-Pad8)": [
+    "U1",
+    "8"
+   ]
+  }
+ },
+ "schematic_sha256": "62a4500324c856d7071e0dca27527ee185510cdb0b552e3b36ad225be0e23e18"
+}

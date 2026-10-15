@@ -2,6 +2,7 @@
 # Run `just --list` to see available recipes
 
 import '../../../tools/esp32-idf.just'
+import '../../../tools/kicad.just'
 
 project_dir := "packages/robocar/unified"
 bin_name := "robocar-unified"
@@ -310,3 +311,25 @@ live-probe-models:
 [group: "test"]
 live-probe-test:
     cd tools/live-probe && uv sync --quiet && uv run pytest -q
+
+##########
+# Carrier PCB (hardware/carrier/, KiCad 10) — tools/kicad, ADR-027
+##########
+
+# Write the carrier schematic and library tables from hardware.toml
+[group: "carrier"]
+carrier-schematic: (_carrier-schematic project_dir)
+
+# Rewrites the .kicad_pcb from scratch. Freerouting does not route the same
+# way twice, so commit the board you checked, not a re-run of it. The
+# placement in hardware/carrier/board.toml is provisional (#750).
+#
+# Place, autoroute (Freerouting) and pour the carrier board
+[group: "carrier"]
+carrier-board: (_carrier-board project_dir) (_carrier-route project_dir)
+
+# Writes the check stamp CI verifies, only when every gate passes.
+#
+# ERC, DRC with schematic parity, netlist parity with hardware.toml, board nets, library drift
+[group: "carrier"]
+carrier-check: (_carrier-check project_dir)
