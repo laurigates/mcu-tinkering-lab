@@ -33,6 +33,12 @@ is rejected so a `gpio = 5` cannot slip in beside one:
     to   = "oled"               # the load part; SDn -> SDA, SCn -> SCL
     note = "display"            # optional
 
+    [[bus_nets]]                # a load on one line of a channel (#750)
+    role = "I2C_BUS_CHANNEL_OLED"
+    from = "mux"
+    to   = "pull_sd1.B"         # 'part.PIN': the one pin on that line
+    line = "SDA"                # SD1 -> pull_sd1.B; SC1 is untouched
+
     [[undrawn]]                 # a pin role deliberately on no drawn net
     role = "MIC_PDM_CLK_PIN"
     why  = "internal to the Sense module"
@@ -72,7 +78,9 @@ from the header. Each entry is two lines: the mux's `SD<n>` pad to the load's
 `SDA`, and `SC<n>` to `SCL`; where a part has a `board` page those pads must be
 on it. Two wired roles on one channel are an error, as is a pin on two nets of
 any kind (a load on two channels, a bus pin that is also an MCU or channel
-net); one channel to several loads is a fan-out. Like channel roles, bus
+net); one channel to several loads is a fan-out. A load on one line, such
+as a pull-up resistor, names its pin as `to = "part.PIN"` and the line it
+joins as `line = "SDA"` or `"SCL"`. Like channel roles, bus
 channel roles are not required to be wired. In the carrier view the lines are
 named `<name>_SDA` and `<name>_SCL`, where `<name>` is the role or its
 `[net_names]` entry.
@@ -208,7 +216,7 @@ _KEYS = {
     "part": {"name", "kind", "note", "board", "build", "part", "ref", "value", "lcsc"},
     "net": {"role", "to", "note", "build"},
     "channel_net": {"role", "from", "to", "note", "build"},
-    "bus_net": {"role", "from", "to", "note", "build"},
+    "bus_net": {"role", "from", "to", "line", "note", "build"},
     "undrawn": {"role", "why", "build"},
     "rail": {"name", "from", "to", "build"},
     "output": {"from", "to", "pins", "net", "load_pins", "build"},
@@ -266,11 +274,27 @@ class BusNet:
     source: str  # the mux part id: "mux"
     part: str  # the load part id: "oled"
     note: str
+    # A one-line load (#750): its pin, on the line named; "" for both lines.
+    line: str = ""  # "SDA" or "SCL"
+    pin: str = ""  # the load's pin on that line: "B"
+
+    @property
+    def lines(self) -> tuple[tuple[str, str, str], ...]:
+        """(line, mux pad, load pin) per line it joins: (("SDA", "SD1", "SDA"), ...).
+
+        A whole-part load joins both lines on its own SDA and SCL; a one-line
+        load joins only `line`, on `pin`.
+        """
+        return tuple(
+            (line, f"{pad}{self.channel}", self.pin or line)
+            for pad, line in I2C_LINES
+            if not self.line or line == self.line
+        )
 
     @property
     def wires(self) -> tuple[tuple[str, str], ...]:
         """(mux pad, load pin) per line: (("SD1", "SDA"), ("SC1", "SCL"))."""
-        return tuple((f"{pad}{self.channel}", pin) for pad, pin in I2C_LINES)
+        return tuple((pad, pin) for _, pad, pin in self.lines)
 
 
 @dataclass(frozen=True)
@@ -769,25 +793,42 @@ def _bus_nets(
         channel = bus_channels[role]
         source = _require(where, table, "from")
         load = _require(where, table, "to")
-        if "." in load:
+        line = table.get("line", "")
+        pin = ""
+        if line:
+            lines = [name for _, name in I2C_LINES]
+            if line not in lines:
+                raise HardwareError(
+                    f"{where}: 'line' must be one of {lines}, got {line!r}"
+                )
+            load, dot, pin = load.partition(".")
+            if not dot or not load or not pin:
+                raise HardwareError(
+                    f"{where}: with 'line', 'to' must be 'part.PIN' (the one pin "
+                    f"on {line}), got {table['to']!r}"
+                )
+        elif "." in load:
             raise HardwareError(
                 f"{where}: 'to' must be a part id (its SDA and SCL are wired), "
-                f"got {load!r}"
+                f"got {load!r}; a load on one line takes 'part.PIN' and 'line'"
             )
         for key in (source, load):
             if key not in parts:
                 raise no_part(where, key)
         if load == source:
             raise HardwareError(f"{where}: {role} runs from {source} to its own pins")
-        if any(b.role == role and b.part == load for b in result):
-            raise HardwareError(f"{where}: {role} -> {load} is listed twice")
+        if any(
+            b.role == role and b.part == load and b.line == line and b.pin == pin
+            for b in result
+        ):
+            raise HardwareError(f"{where}: {role} -> {table['to']} is listed twice")
         other = on_channel.setdefault((source, channel), role)
         if other != role:
             raise HardwareError(
                 f"{where}: channel {channel} of {source} is wired as both {other} and "
                 f"{role}; {header.name} gives them the same number"
             )
-        bus = BusNet(role, channel, source, load, table.get("note", ""))
+        bus = BusNet(role, channel, source, load, table.get("note", ""), line, pin)
         for pad, pin in bus.wires:
             for key, name in ((source, pad), (load, pin)):
                 if key in pads and name not in pads[key]:

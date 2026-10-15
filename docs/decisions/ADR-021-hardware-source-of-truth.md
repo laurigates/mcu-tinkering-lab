@@ -220,6 +220,10 @@ from the join instead of a hand-drawn wire per pad. The schematic still chooses
 which pad a wire lands on where a board repeats one, such as the PCA9685's two
 identical side headers. The format and its checks are in `tools/hardware/model.py`.
 
+A load on one line only, such as a channel's pull-up resistor (#750), is a
+`[[bus_nets]]` entry with `to = "part.PIN"` and `line = "SDA"` or `"SCL"`: the
+pin joins that line's net and nothing else.
+
 ### Later addition: a cable between two carrier boards (#750)
 
 robocar-unified's carrier is two boards: a head board with the XIAO on the

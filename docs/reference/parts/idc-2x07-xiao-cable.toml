@@ -7,6 +7,7 @@ name = "IDC 2x7 cable, XIAO ESP32-S3 head to main board"
 source = "this repo's cable convention (#750): 5 V on pins 1-2, a GND beside SCL and beside BCLK; pad names from docs/reference/boards/xiao-esp32s3.md, signals from packages/robocar/unified/main/pin_config.h"
 symbol = "Connector_Generic:Conn_02x07_Odd_Even"
 footprint = "Connector_IDC:IDC-Header_2x07_P2.54mm_Vertical"
+value = "IDC 2x7 head cable"
 
 # XIAO pad -> IDC pin; the comment is the robocar signal on that pad.
 [pins]

@@ -1,0 +1,10 @@
+# Solid tantalum capacitor, EIA 3528-21 (case B). Value and LCSC number per instance.
+[part]
+name = "Tantalum capacitor, EIA 3528 (case B)"
+source = "KiCad 10.0.6 library"
+symbol = "Device:C_Polarized"
+footprint = "Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B_HandSolder"
+
+[pins]
+"+" = 1
+"-" = 2
