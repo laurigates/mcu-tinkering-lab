@@ -26,9 +26,12 @@ board = "docs/reference/boards/xiao-esp32s3.md"
 mcu = "XIAO ESP32-S3 Sense"
 
 # `board` names a part's physical-layout page (read from the vendor's board
-# file); tools/hardware/pinout.py draws each one for the build guide (#629).
-# The HC-SR04P, the MCP23017 and the SSD1306 have no page until the fitted
-# modules are identified (#662), so they carry no `board` and are not drawn.
+# file where one is published); tools/hardware/pinout.py draws each one for the
+# build guide (#629). The MCP23017 and the SSD1306 have no page until the
+# fitted modules are identified (#662), so they carry no `board` and are not
+# drawn. The rangefinders were identified as RCWL-1601s (#662); no board file
+# is published for that module, so its page is read from the listing's
+# silkscreen photos and is not yet bench-verified (see the page's checklist).
 
 [parts.mux]
 name = "TCA9548A"
@@ -46,9 +49,18 @@ name = "TB6612FNG"
 kind = "motor-driver"
 board = "docs/reference/boards/sparkfun-tb6612fng.md"
 
-[parts.ranger]
-name = "HC-SR04P"
+# Both in I2C mode (10 kΩ on R4, R5 empty) at the fixed address 0x57, each
+# alone on its own mux channel (#782). The board page names the pins by their
+# I2C-mode function; the silkscreen still prints Trig/Echo.
+[parts.ranger_front]
+name = "RCWL-1601 (front)"
 kind = "ultrasonic"
+board = "docs/reference/boards/rcwl-1601.md"
+
+[parts.ranger_rear]
+name = "RCWL-1601 (rear)"
+kind = "ultrasonic"
+board = "docs/reference/boards/rcwl-1601.md"
 
 [parts.buzzer]
 name = "Piezo buzzer"
@@ -74,14 +86,9 @@ to = "motor_driver.STBY"
 note = "HIGH = motors enabled; the six control lines come from the PCA9685"
 
 [[nets]]
-role = "ULTRASONIC_TRIG_PIN"
-to = "ranger.TRIG"
-note = "3.3 V output; a 10 µs pulse triggers a measurement"
-
-[[nets]]
-role = "ULTRASONIC_ECHO_PIN"
-to = "ranger.ECHO"
-note = "3.3 V input; pulse width encodes distance (RMT RX)"
+role = "TCA9548A_RST_PIN"
+to = "mux.RST"
+note = "Active-low mux reset, pulsed after repeated failed channel selects; the breakout pulls it up"
 
 [[nets]]
 role = "PIEZO_PIN"
@@ -215,6 +222,18 @@ from = "mux"
 to = "expander"
 note = "optional: the firmware boots without the board fitted"
 
+[[bus_nets]]
+role = "I2C_BUS_CHANNEL_RANGER_FRONT"
+from = "mux"
+to = "ranger_front"
+note = "RCWL-1601 at 0x57, alone on its channel; no pull-ups on the module"
+
+[[bus_nets]]
+role = "I2C_BUS_CHANNEL_RANGER_REAR"
+from = "mux"
+to = "ranger_rear"
+note = "RCWL-1601 at 0x57, alone on its channel; no pull-ups on the module"
+
 [[undrawn]]
 role = "MIC_PDM_CLK_PIN"
 why = "wired to the PDM microphone on the Sense expansion board, not brought out to a header"
@@ -306,7 +325,8 @@ to = [
     "motor_driver.VCC",
     "pwm.VCC",
     "mux.VIN",
-    "ranger.VCC",
+    "ranger_front.VCC",
+    "ranger_rear.VCC",
     "oled.VCC",
     "expander.VCC",
 ]

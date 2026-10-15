@@ -324,7 +324,12 @@ def part_labels(
 
 
 def pinouts(model: HardwareModel, repo_root: Path = REPO_ROOT) -> list[Pinout]:
-    """The MCU board, then every part with a board reference, in hardware.toml order."""
+    """The MCU board, then every part with a board reference, in hardware.toml order.
+
+    One image per board page. Parts that share a page (two of the same
+    rangefinder, #782) share its image when their pads carry the same labels;
+    if they differ, one picture cannot be true of both, and that is an error.
+    """
     mcu = parse_layout(model.board.path)
     result = [
         Pinout(
@@ -334,25 +339,28 @@ def pinouts(model: HardwareModel, repo_root: Path = REPO_ROOT) -> list[Pinout]:
             labels=mcu_labels(model, mcu),
         )
     ]
+    owner = {result[0].slug: "[source] board"}
     for key, part in model.parts.items():
         if not part.board:
             continue
         path = repo_root / part.board
         layout = parse_layout(path)
-        result.append(
-            Pinout(
-                slug=path.stem,
-                title=_title(path),
-                layout=layout,
-                labels=part_labels(model, key, layout),
+        pinout = Pinout(
+            slug=path.stem,
+            title=_title(path),
+            layout=layout,
+            labels=part_labels(model, key, layout),
+        )
+        drawn = next((p for p in result if p.slug == pinout.slug), None)
+        if drawn is None:
+            result.append(pinout)
+            owner[pinout.slug] = f"[parts.{key}]"
+        elif drawn.labels != pinout.labels:
+            raise HardwareError(
+                f"{model.project_dir}: board {pinout.slug!r} is named by "
+                f"{owner[pinout.slug]} and [parts.{key}], whose pads are labelled "
+                "differently; one image cannot show both"
             )
-        )
-    slugs = [p.slug for p in result]
-    dupes = sorted({s for s in slugs if slugs.count(s) > 1})
-    if dupes:
-        raise HardwareError(
-            f"{model.project_dir}: board(s) {dupes} named by more than one part"
-        )
     return result
 
 

@@ -48,7 +48,7 @@ bursty network and vision work.
 The control system is *hierarchical*: a slow *planner* (Core 1) calls
 Google's Gemini Robotics-ER to emit structured goals, and a fast *reactive
 executor* (\~30 Hz, Core 0) drives the robot smoothly toward those goals while
-an ultrasonic sensor provides an independent obstacle reflex. The planner is not
+a front ultrasonic rangefinder provides an independent obstacle reflex. The planner is not
 on a fixed schedule: the board boots *dormant* and asks Gemini only when
 something happened, backing off #(PLANNER_LOOP_PERIOD_MS / 1000) s #sym.arrow
 #(PLANNER_LOOP_PERIOD_MS * PLAN_LADDER_TOP_MULTIPLIER / 1000) s when nothing does.
@@ -56,7 +56,7 @@ something happened, backing off #(PLANNER_LOOP_PERIOD_MS / 1000) s #sym.arrow
 #grid(columns: (1fr, 1fr), column-gutter: 12pt,
   callout("Core 0 — real-time")[
     Reactive executor (visual servo, heading hold, motor PWM), peripheral I/O,
-    command console, and the ultrasonic obstacle reflex.
+    command console, and the front rangefinder's obstacle reflex.
   ],
   callout("Core 1 — bursty I/O", kind: "purple")[
     Planner (Gemini calls), OV3660 camera DMA, audio, WiFi / MQTT / OTA.
@@ -83,7 +83,9 @@ something happened, backing off #(PLANNER_LOOP_PERIOD_MS / 1000) s #sym.arrow
   ([1], [MCP23017 GPIO expander], [Breakout, address 0x20 — optional]),
   ([1], [MAX98357A I²S class-D amplifier], [Mono, for voice output]),
   ([1], [Speaker], [4–8 Ω, 2–3 W]),
-  ([1], [Ultrasonic rangefinder], [*3.3 V variant*: HC-SR04P / RCWL-1601 / US-100]),
+  ([2], [RCWL-1601 ultrasonic rangefinder], [Front + rear; I²C mode: 10 kΩ on R4, R5 empty]),
+  ([2], [10 kΩ chip resistor], [For R4 on each rangefinder; size it to the pad]),
+  ([4], [10 kΩ resistor], [I²C pull-ups to 3.3 V on mux ch3 and ch4, see §4.4]),
   ([2], [RGB LED], [Common-anode]),
   ([2], [SG90 micro servo], [Pan / tilt]),
   ([2], [DC gear motor + wheel], [\~3–6 V hobby motors]),
@@ -102,10 +104,11 @@ Soldering iron + solder, wire strippers, small screwdriver set, multimeter
 (for verifying 5 V rail and continuity), a USB-C cable, and a computer with
 Docker (for the containerized firmware build).
 
-#callout("Sensor voltage — read this", kind: "warn")[
-  The ultrasonic sensor *must be a 3.3 V-compatible module* (HC-SR04P, not the
-  classic 5 V HC-SR04). The XIAO's GPIOs are not 5 V-tolerant — a 5 V ECHO line
-  can damage the board.
+#callout("Rangefinder mode — read this", kind: "warn")[
+  The RCWL-1601s ship in trigger/echo mode. Before wiring, solder a *10 kΩ
+  resistor on `R4`* (`IIC`) on each and leave `R5` (`UART`) empty: the module
+  then answers on I²C at #RANGER_ADDR. Without it the module never answers and
+  the `sonar` bring-up check reports it absent. Run them from 3.3 V.
 ]
 
 = 3 · System Architecture
@@ -117,10 +120,11 @@ Docker (for the containerized firmware build).
 
 Everything on the I²C bus hangs off the *TCA9548A multiplexer* — the ESP32-S3
 never talks to the PCA9685 or OLED directly. This lets devices that would
-otherwise share addresses coexist, and keeps the two 400 kHz devices on
-separate channels. The ESP32-S3 itself drives only five groups of signals directly:
-I²C (GPIO#I2C_SDA_PIN/#I2C_SCL_PIN), the motor-enable STBY line (GPIO#MOTOR_STBY_PIN),
-the buzzer (GPIO#PIEZO_PIN), the ultrasonic sensor (GPIO#ULTRIG_PIN/#ULECHO_PIN),
+otherwise share addresses coexist — the two rangefinders both answer at
+#RANGER_ADDR — and keeps the two 400 kHz devices on separate channels. The
+ESP32-S3 itself drives only five groups of signals directly: I²C
+(GPIO#I2C_SDA_PIN/#I2C_SCL_PIN) and the multiplexer's reset (GPIO#MUX_RST_PIN),
+the motor-enable STBY line (GPIO#MOTOR_STBY_PIN), the buzzer (GPIO#PIEZO_PIN),
 and *I²S audio* (GPIO#I2S_BCLK_PIN/#I2S_LRCLK_PIN/#I2S_DIN_PIN) to the
 MAX98357A amplifier.
 
@@ -135,8 +139,8 @@ Sense module and do not conflict.
   ([XIAO Pin], [GPIO], [Function], [Notes]),
   ([D0], [GPIO#MOTOR_STBY_PIN], [TB6612FNG STBY], [HIGH = motors enabled]),
   ([D1], [GPIO#PIEZO_PIN], [Piezo buzzer], [LEDC PWM · 100 Ω in series]),
-  ([D2], [GPIO#ULTRIG_PIN], [Ultrasonic TRIG], [10 µs pulse output]),
-  ([D3], [GPIO#ULECHO_PIN], [Ultrasonic ECHO], [Pulse width in (RMT RX)]),
+  ([D2], [GPIO#MUX_RST_PIN], [TCA9548A RST], [Active low; pulsed to free a stuck bus]),
+  ([D3], [—], [_spare_], [Free since the rangefinders moved to I²C]),
   ([D4], [GPIO#I2C_SDA_PIN], [*I²C SDA*], [to TCA9548A]),
   ([D5], [GPIO#I2C_SCL_PIN], [*I²C SCL*], [to TCA9548A]),
   ([D6], [GPIO#UART0_TX_PIN], [UART0 TX], [Spare · ROM boot log at reset]),
@@ -148,11 +152,11 @@ Sense module and do not conflict.
 )
 I²C runs at *#(I2C_FREQ_HZ / 1000) kHz*.
 
-#callout("Two spare pads: D6/D7", kind: "warn")[
-  D6/D7 (GPIO#UART0_TX_PIN/#UART0_RX_PIN, UART0) are the only free header pads.
-  The ROM bootloader prints its boot log on GPIO#UART0_TX_PIN at every reset,
-  so anything wired to D6 sees that traffic. Beyond those two, digital I/O goes
-  through the MCP23017 on TCA9548A channel 2.
+#callout("Three spare pads: D3, D6/D7", kind: "warn")[
+  D3 and D6/D7 (GPIO#UART0_TX_PIN/#UART0_RX_PIN, UART0) are the only free
+  header pads. The ROM bootloader prints its boot log on GPIO#UART0_TX_PIN at
+  every reset, so anything wired to D6 sees that traffic. Beyond those, digital
+  I/O goes through the MCP23017 on TCA9548A channel 2.
 ]
 
 == 4.2 · I²C topology (TCA9548A @ #TCA9548A_ADDR)
@@ -165,7 +169,9 @@ The MCP23017 on ch2 is optional — the firmware boots fine without it.
   ([ch0], [PCA9685 PWM driver (motors, servos, LEDs)], [#PCA9685_ADDR @ #PCA9685_FREQ_HZ Hz]),
   ([ch1], [SSD1306 OLED display (#OLED_WIDTH×#OLED_HEIGHT)], [#OLED_ADDR]),
   ([ch2], [MCP23017 GPIO expander (optional)], [#MCP23017_ADDR]),
-  ([ch3–7], [_reserved — IMU / ToF / future sensors_], [—]),
+  ([ch#TCA_CH_RANGER_FRONT], [RCWL-1601 rangefinder, front (fixed)], [#RANGER_ADDR]),
+  ([ch#TCA_CH_RANGER_REAR], [RCWL-1601 rangefinder, rear], [#RANGER_ADDR]),
+  ([ch5–7], [_reserved — IMU / ToF / future sensors_], [—]),
   aligns: (center, left, center),
 )
 
@@ -208,18 +214,27 @@ fitted track at 50, 100 and 125 Hz and buzz at 200, so this sits one rung below
 the highest rate that worked. Raise it for steadier LEDs, lower it for happier
 servos; `servo freq <hz>` retunes it live, without a reflash.]
 
-== 4.4 · Ultrasonic rangefinder
+== 4.4 · Ultrasonic rangefinders (2× RCWL-1601, I²C)
+Both modules run in I²C mode at #RANGER_ADDR, each alone on its own TCA9548A
+channel: the address is fixed, and the module "doesn't like to share the I²C
+bus" (Adafruit \#4742). In I²C mode the header's `Trig` pin is SCL and `Echo`
+is SDA.
+
 #htable(
-  (auto, auto, auto, 1fr),
-  ([Signal], [Pin], [Voltage], [Function]),
-  ([TRIG], [GPIO#ULTRIG_PIN (D2)], [3.3 V], [10 µs pulse triggers a measurement]),
-  ([ECHO], [GPIO#ULECHO_PIN (D3)], [3.3 V], [Pulse width encodes distance (RMT RX)]),
-  ([VCC], [3.3 V], [3.3 V], [*3.3 V variant only*]),
-  ([GND], [any GND], [—], [Shared ground]),
-  aligns: (center, center, center, left),
+  (auto, 1fr, 1fr),
+  ([Pin], [Front (ch#TCA_CH_RANGER_FRONT)], [Rear (ch#TCA_CH_RANGER_REAR)]),
+  ([VCC], [3.3 V], [3.3 V]),
+  ([SCL (`Trig`)], [TCA9548A SC#TCA_CH_RANGER_FRONT], [TCA9548A SC#TCA_CH_RANGER_REAR]),
+  ([SDA (`Echo`)], [TCA9548A SD#TCA_CH_RANGER_FRONT], [TCA9548A SD#TCA_CH_RANGER_REAR]),
+  ([GND], [any GND], [any GND]),
+  aligns: (center, left, left),
 )
-The sensor samples at \~20 Hz. *Obstacle reflex:* if distance < 15 cm, the
-executor immediately stops and reverses, independent of planner goals.
+*Fit 10 kΩ pull-ups to 3.3 V on all four lines* (SC/SD of both channels): the
+modules have none, and the TCA9548A breakout has none on its downstream
+channels either. A reading takes \~120 ms, so each sensor reports about every 150 ms; the
+firmware never holds the bus while one converts. *Obstacle reflex:* if the
+front distance drops below 15 cm, the executor brakes, independent of planner
+goals. The rear sensor is reported in telemetry only.
 
 == 4.5 · Audio output (MAX98357A I²S amplifier)
 The robot speaks through a mono I²S class-D amplifier. Audio is #(AUDIO_SAMPLE_RATE_HZ / 1000) kHz 16-bit
@@ -257,9 +272,11 @@ signal from the XIAO or from a PCA9685 channel and are labelled with it; gold
 pads are power, the I²C chain between boards (see §4.2), or unused. The drawings
 are not to scale.
 
-The MCP23017, SSD1306 and HC-SR04P modules are not drawn: no vendor board file
+The MCP23017 and SSD1306 modules are not drawn: no vendor board file
 identifies the fitted modules, so their header order is unknown here (issue \#662).
-Read the order off each module's own silkscreen.
+Read the order off each module's own silkscreen. The RCWL-1601 is drawn, but
+from the listing's photos — no board file is published for it — and is not
+yet checked with a meter.
 
 #figure(
   image("auto/pinouts/xiao-esp32s3.svg"),
@@ -293,6 +310,13 @@ Read the order off each module's own silkscreen.
     bottom.],
 )
 
+#figure(
+  image("auto/pinouts/rcwl-1601.svg"),
+  caption: [RCWL-1601, transducers facing you, the header on the bottom edge;
+    front and rear are the same board. Read from the listing's silkscreen
+    photos, not a board file — confirm `Gnd` and `Vcc` with a meter first.],
+)
+
 = 5 · Power
 
 #grid(columns: (1.15fr, 1fr), column-gutter: 14pt,
@@ -312,7 +336,7 @@ Read the order off each module's own silkscreen.
   audio and random resets are all plausible low-battery symptoms; measure the
   pack before diagnosing anything else on this rail.
 
-  The 3.3 V logic for the OLED, ultrasonic sensor, TCA9548A, MCP23017, and
+  The 3.3 V logic for the OLED, both rangefinders, TCA9548A, MCP23017, and
   the *VCC* pins of the TB6612FNG and PCA9685 comes from the XIAO's 3V3 pin.
   Those two VCC pins are logic supplies, not power inputs: both parts set their
   input-high threshold at 0.7 × their own VCC, so on 5 V it is 3.5 V — above
@@ -371,16 +395,18 @@ regulator, which cannot output more than the 8.4 V pack it steps down.
   The adjustable module spans 1.2–37 V and arrives set to anything; above 5.5 V
   damages the amplifier and the XIAO's regulator input. Only then run the 5 V
   and shared GND rails.
-+ *Place the XIAO* and bring out I²C (GPIO#I2C_SDA_PIN/#I2C_SCL_PIN), STBY (GPIO#MOTOR_STBY_PIN), buzzer (GPIO#PIEZO_PIN),
-  ultrasonic pins (GPIO#ULTRIG_PIN/#ULECHO_PIN), and I²S (GPIO#I2S_BCLK_PIN/#I2S_LRCLK_PIN/#I2S_DIN_PIN).
++ *Place the XIAO* and bring out I²C (GPIO#I2C_SDA_PIN/#I2C_SCL_PIN), the mux reset (GPIO#MUX_RST_PIN), STBY (GPIO#MOTOR_STBY_PIN), buzzer (GPIO#PIEZO_PIN),
+  and I²S (GPIO#I2S_BCLK_PIN/#I2S_LRCLK_PIN/#I2S_DIN_PIN).
 + *Wire the I²C chain:* XIAO SDA/SCL → TCA9548A → PCA9685 (ch0), OLED (ch1),
-  and optionally MCP23017 (ch2). Pull-ups on the breakouts are usually sufficient.
+  and optionally MCP23017 (ch2); XIAO D2 → TCA9548A RST. Pull-ups on the
+  breakouts are usually sufficient.
 + *Wire the motor driver:* PCA9685 ch8–13 → TB6612FNG inputs; STBY → GPIO#MOTOR_STBY_PIN\;
   motor outputs → the two DC motors; VM → 5 V, VCC → 3V3. The PCA9685 likewise
   takes V+ from 5 V and VCC from 3V3.
 + *Add servos* (PCA9685 ch6/7) and *RGB LEDs* (ch0–5, common-anode).
-+ *Add the buzzer* on GPIO#PIEZO_PIN through the 100 Ω resistor, and the ultrasonic
-  sensor on GPIO#ULTRIG_PIN/#ULECHO_PIN (3.3 V power).
++ *Add the buzzer* on GPIO#PIEZO_PIN through the 100 Ω resistor.
++ *Add the rangefinders* (R4 fitted, see §2): front on TCA9548A
+  ch#TCA_CH_RANGER_FRONT, rear on ch#TCA_CH_RANGER_REAR, 3.3 V power (§4.4).
 + *Wire the audio path:* MAX98357A BCLK/LRC/DIN → GPIO#I2S_BCLK_PIN/#I2S_LRCLK_PIN/#I2S_DIN_PIN, Vin → 5 V with
   C3 (470 µF) at Vin, speaker → amp output. Fit C1 at the PCA9685's V+ and C2 at
   the TB6612FNG's VM the same way. Leave SD_MODE floating for (L+R)/2.
@@ -456,7 +482,7 @@ Work through these after first flash, watching the serial monitor:
   ([☐], [Buzzer], [Audible startup tone]),
   ([☐], [Servos], [Pan/tilt center, then sweep within limits]),
   ([☐], [Motors], [Both wheels drive forward and reverse; STBY HIGH]),
-  ([☐], [Ultrasonic], [Distance readings track a hand moving closer/away]),
+  ([☐], [Ultrasonic], [Bring-up `sonar`: #RANGER_ADDR answers on ch#TCA_CH_RANGER_FRONT and ch#TCA_CH_RANGER_REAR; readings track a hand]),
   ([☐], [Reflex], [Car stops/reverses when an obstacle is < 15 cm]),
   ([☐], [Audio / TTS], [Robot speaks startup message; speech queues without blocking motion]),
   ([☐], [Microphone], [`mic` reports frames arriving, not `gate: DEAF`; `listen` answers a spoken question]),
@@ -477,7 +503,7 @@ Work through these after first flash, watching the serial monitor:
   ([Motors don't move], [STBY (GPIO#MOTOR_STBY_PIN) not HIGH, VM not on 5 V, or VCC on 5 V instead of 3V3 (STBY's threshold then sits above what a 3.3 V GPIO drives). Confirm TB6612FNG power and enable line.]),
   ([Servos jitter or buzz], [Shared noisy rail: keep servo power on 5 V with common ground. A servo that BUZZES and holds against a stop is the PWM frame rate, not the rail — these SG90s track at 50–125 Hz and stall at 200. `servo freq <hz>` retunes it live.]),
   ([Board won't flash], [Force download mode: hold BOOT, tap RESET, release BOOT.]),
-  ([Damaged ECHO / no distance], [Used a 5 V HC-SR04. Replace with a 3.3 V module (HC-SR04P).]),
+  ([Rangefinder never answers], [Still in trigger/echo mode: fit 10 kΩ on R4, leave R5 empty. Or SCL/SDA swapped — in I²C mode `Trig` is SCL.]),
   ([No audio / distorted speech], [Weak MAX98357A supply. Fit ≥470 µF bulk cap at Vin, or use a separate 5 V feed. Check I2S wiring on GPIO#I2S_BCLK_PIN – #I2S_DIN_PIN.]),
   aligns: (left, left),
 )

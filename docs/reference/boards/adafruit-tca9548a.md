@@ -45,6 +45,18 @@ differ (`INPUTSDA`, `0SDA`, …) and are not printed anywhere.
 | SC2 | R | 11 | JP1.2 | Channel 2 |
 | SD2 | R | 12 | JP1.1 | Channel 2 |
 
+## Pull-ups
+
+Read from the same board file (`<signal>` contact lists), not from a photo:
+
+- `RST` is pulled up: `R6`, 10 kΩ, between the `RESET` net (U1 pad 3, `JP3.5`)
+  and `VCC`. A controller driving it must drive high, or release it.
+- The upstream `SDA`/`SCL` pull-ups are `R1`/`R2`, 10 kΩ to `VCC`, each
+  through a solder jumper (`SDAPU`, `SCLPU`).
+- The downstream channels have **no** pull-ups: each `nSDA`/`nSCL` net joins
+  only U1 and its header pad. A device on a channel must carry its own, or the
+  carrier must add them.
+
 ## Pad centres
 
 Every pad of every header the layout table cites (`Header` is element.pad),

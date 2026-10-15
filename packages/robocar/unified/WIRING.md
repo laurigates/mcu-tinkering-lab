@@ -19,8 +19,8 @@ The XIAO exposes only 11 GPIOs on its headers. Camera pins are internal to the S
 |-----|------|-------|----------|-------|
 | D0 | GPIO1 | `MOTOR_STBY_PIN` | TB6612FNG STBY | HIGH = motors enabled; the six control lines come from the PCA9685 |
 | D1 | GPIO2 | `PIEZO_PIN` | Piezo buzzer + | LEDC PWM, through a series resistor; the other leg to GND |
-| D2 | GPIO3 | `ULTRASONIC_TRIG_PIN` | HC-SR04P TRIG | 3.3 V output; a 10 µs pulse triggers a measurement |
-| D3 | GPIO4 | `ULTRASONIC_ECHO_PIN` | HC-SR04P ECHO | 3.3 V input; pulse width encodes distance (RMT RX) |
+| D2 | GPIO3 | `TCA9548A_RST_PIN` | TCA9548A RST | Active-low mux reset, pulsed after repeated failed channel selects; the breakout pulls it up |
+| D3 | GPIO4 | — | *unassigned* |  |
 | D4 | GPIO5 | `I2C_SDA_PIN` | TCA9548A SDA | Every I2C device sits behind the mux |
 | D5 | GPIO6 | `I2C_SCL_PIN` | TCA9548A SCL |  |
 | D6 | GPIO43 | `UART0_TX_PIN` | — | UART0 TX, spare: the serial console is USB-Serial-JTAG on the USB-C connector, not this pad. The ROM bootloader prints its boot log here at every reset |
@@ -31,10 +31,11 @@ The XIAO exposes only 11 GPIOs on its headers. Camera pins are internal to the S
 
 <!-- END GENERATED -->
 
-> **Two spare pads: D6/D7 (GPIO43/44, UART0).** Nothing uses them. The ROM
-> bootloader prints its boot log on GPIO43 at every reset, so anything wired to
-> D6 sees that traffic. Beyond those two, digital I/O goes through the MCP23017
-> on TCA9548A channel 2.
+> **Three spare pads: D3 (GPIO4) and D6/D7 (GPIO43/44, UART0).** Nothing uses
+> them; D3 was the ultrasonic ECHO until the rangefinders moved to I2C (#782).
+> The ROM bootloader prints its boot log on GPIO43 at every reset, so anything
+> wired to D6 sees that traffic. Beyond those, digital I/O goes through the
+> MCP23017 on TCA9548A channel 2.
 
 I2C runs at **400 kHz**.
 
@@ -48,7 +49,25 @@ device — nothing talks to the primary bus directly.
 | ch0 | PCA9685 PWM driver (motors, servos, LEDs) | 0x40 @ 100 Hz |
 | ch1 | SSD1306 OLED display (128x64) | 0x3C |
 | ch2 | MCP23017 GPIO expander — **optional**, firmware boots without it | 0x20 |
-| ch3-7 | *reserved* (IMU / ToF / future sensors) | — |
+| ch3 | RCWL-1601 rangefinder, front (fixed) | 0x57 |
+| ch4 | RCWL-1601 rangefinder, rear | 0x57 |
+| ch5-7 | *reserved* (IMU / ToF / future sensors) | — |
+
+The multiplexer's own pins from the XIAO. `RST` is active low: the firmware
+pulses it after several channel selects fail in a row, which deselects every
+channel and frees the upstream bus from a segment held low (see the
+rangefinder section).
+
+<!-- BEGIN GENERATED: signals:mux -->
+<!-- Generated from hardware.toml, main/pin_config.h and the board reference by `just hardware::gen` — edit those, not this block. -->
+
+| Signal | Pin | Function |
+|--------|-----|----------|
+| SDA | GPIO5 (D4) | Every I2C device sits behind the mux |
+| SCL | GPIO6 (D5) |  |
+| RST | GPIO3 (D2) | Active-low mux reset, pulsed after repeated failed channel selects; the breakout pulls it up |
+
+<!-- END GENERATED -->
 
 ## PCA9685 channel map (0x40, 100 Hz)
 
@@ -109,7 +128,8 @@ graph TD
     pwm["PCA9685"]
     amp["MAX98357A"]
     mux["TCA9548A"]
-    ranger["HC-SR04P"]
+    ranger_front["RCWL-1601 (front)"]
+    ranger_rear["RCWL-1601 (rear)"]
     oled["SSD1306 OLED"]
     expander["MCP23017<br/>optional"]
     buzzer["Piezo buzzer"]
@@ -127,12 +147,12 @@ graph TD
     mcu -->|"3V3 → VCC"| motor_driver
     mcu -->|"3V3 → VCC"| pwm
     mcu -->|"3V3 → VIN"| mux
-    mcu -->|"3V3 → VCC"| ranger
+    mcu -->|"3V3 → VCC"| ranger_front
+    mcu -->|"3V3 → VCC"| ranger_rear
     mcu -->|"3V3 → VCC"| oled
     mcu -->|"3V3 → VCC"| expander
-    mcu -.->|"GPIO5 (D4) → SDA<br/>GPIO6 (D5) → SCL"| mux
+    mcu -.->|"GPIO5 (D4) → SDA<br/>GPIO6 (D5) → SCL<br/>GPIO3 (D2) → RST"| mux
     mcu -.->|"GPIO1 (D0) → STBY"| motor_driver
-    mcu -.->|"GPIO3 (D2) → TRIG<br/>GPIO4 (D3) → ECHO"| ranger
     mcu -.->|"GPIO2 (D1) → +"| buzzer
     mcu -.->|"GPIO7 (D8) → BCLK<br/>GPIO8 (D9) → LRC<br/>GPIO9 (D10) → DIN"| amp
     pwm --> servos
@@ -350,28 +370,46 @@ comment at the allocation site in `main/mic_pdm.c`.
 
 Use the `mic` console command to tell a dead microphone from a quiet room.
 
-## Ultrasonic rangefinder
+## Ultrasonic rangefinders (2x RCWL-1601, I2C)
 
-A 3.3 V-compatible ultrasonic sensor (HC-SR04P, RCWL-1601, or US-100) provides distance readings for the reactive controller's obstacle reflex.
+Two RCWL-1601 modules, one fixed at the front and one at the rear, feed the
+reactive controller. The front one drives the obstacle reflex: if its smoothed
+distance drops below 15 cm the executor brakes, independent of planner goals.
+The rear one is reported in telemetry only. Module facts and sources:
+[`rcwl-1601.md`](../../../docs/reference/boards/rcwl-1601.md) (pins and mode
+pads) and
+[`sensor--rcwl-1601.md`](../../../docs/reference/datasheets/sensor--rcwl-1601.md)
+(the I2C protocol).
 
-<!-- BEGIN GENERATED: signals:ranger -->
-<!-- Generated from hardware.toml, main/pin_config.h and the board reference by `just hardware::gen` — edit those, not this block. -->
+**Both run in I2C mode: fit a 10 kΩ resistor on `R4` (`IIC`) and leave `R5`
+(`UART`) empty.** The modules ship in trigger/echo mode with both pads empty.
+In I2C mode the header's `Trig` pin is SCL and `Echo` is SDA; the silkscreen
+still prints the GPIO-mode names.
 
-| Signal | Pin | Function |
-|--------|-----|----------|
-| TRIG | GPIO3 (D2) | 3.3 V output; a 10 µs pulse triggers a measurement |
-| ECHO | GPIO4 (D3) | 3.3 V input; pulse width encodes distance (RMT RX) |
+| Pin | Front (ch3) | Rear (ch4) |
+|-----|-------------|------------|
+| VCC | 3.3 V | 3.3 V |
+| SCL (`Trig`) | TCA9548A SC3 | TCA9548A SC4 |
+| SDA (`Echo`) | TCA9548A SD3 | TCA9548A SD4 |
+| GND | any GND | any GND |
 
-<!-- END GENERATED -->
-
-Power pins:
-
-| Signal | Pin | Function |
-|--------|-----|----------|
-| VCC | 3.3 V | **Must be 3.3 V variant** (HC-SR04P, not HC-SR04) |
-| GND | any GND | Shared ground |
-
-The sensor samples at ~20 Hz. Obstacle reflex: if distance < 15 cm, the executor immediately stops and reverses, independent of planner goals. The specific module will be confirmed on first wiring; if a different 3.3 V sensor is used, change `name` under `[parts.ranger]` in `hardware.toml` and regenerate. Keep the `ranger` key: the `signals:ranger` marker above names it.
+- **Each module has a mux channel to itself.** Both answer at 0x57, which
+  cannot be changed, and Adafruit's I2C-mode RCWL-1601 (#4742) "doesn't like
+  to share the I2C bus".
+- **Fit pull-ups on SC3, SD3, SC4 and SD4: nothing else provides them.** The
+  modules have none (Adafruit #4742: "there's no built-in pullup resistors"),
+  and neither does the TCA9548A breakout on its downstream channels — its board
+  file puts resistors on the upstream pair only (see
+  [`adafruit-tca9548a.md`](../../../docs/reference/boards/adafruit-tca9548a.md)).
+  10 kΩ to 3.3 V on each line matches the value the breakout uses upstream.
+  Channels 0–2 work without them because those breakouts carry their own.
+- **A reading takes ~120 ms.** The firmware triggers, releases the bus, and
+  reads three bytes on a later loop tick, so each sensor delivers a reading
+  roughly every 150 ms. The wait is not settled by any datasheet; the board
+  page lists the bench measurement that would shorten it.
+- **Bring-up:** `robocar-bringup`'s `sonar` check reports whether 0x57 answers
+  on channels 3 and 4, then five readings from each. A module that does not
+  answer is unplugged or still in GPIO mode (`R4` not fitted).
 
 ## Flashing
 

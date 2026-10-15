@@ -1244,9 +1244,10 @@ class RobocarUnifiedJoinTest(unittest.TestCase):
             with self.assertRaisesRegex(HardwareError, "UART0_TX_PIN"):
                 join(proj, repo_root=REPO_ROOT)
 
-    def test_moving_the_piezo_onto_the_ultrasonic_trigger_fails(self):
-        # #722's repro: PIEZO_PIN GPIO_NUM_2 -> GPIO_NUM_3, ULTRASONIC_TRIG_PIN's
-        # pin. Every generator used to accept it; the router failed later.
+    def test_moving_the_piezo_onto_the_mux_reset_fails(self):
+        # #722's repro: PIEZO_PIN GPIO_NUM_2 -> GPIO_NUM_3, which is now
+        # TCA9548A_RST_PIN's pin (#782; it was the ultrasonic trigger's). Every
+        # generator used to accept it; the router failed later.
         header = (UNIFIED / "main/pin_config.h").read_text(encoding="utf-8")
         moved = header.replace(
             "#define PIEZO_PIN GPIO_NUM_2", "#define PIEZO_PIN GPIO_NUM_3"
@@ -1261,7 +1262,7 @@ class RobocarUnifiedJoinTest(unittest.TestCase):
                 join(proj, repo_root=REPO_ROOT)
         message = str(ctx.exception)
         self.assertIn("PIEZO_PIN", message)
-        self.assertIn("ULTRASONIC_TRIG_PIN", message)
+        self.assertIn("TCA9548A_RST_PIN", message)
         self.assertIn("GPIO3", message)
 
     def test_i2s_lands_on_the_amp_via_d8_d9_d10(self):
@@ -1332,19 +1333,22 @@ class RobocarUnifiedJoinTest(unittest.TestCase):
         self.assertEqual(claimed, joined)
 
     def test_every_mux_channel_the_firmware_selects_is_on_a_bus_net(self):
-        # pin_config.h:39-41: the TCA9548A's three channels, each to the part
-        # the firmware selects it for (#768): six wires in all.
+        # pin_config.h: the TCA9548A's five channels, each to the part the
+        # firmware selects it for (#768, #782): ten wires in all. The two
+        # rangefinders share an address, so each has a channel to itself.
         self.assertEqual(
             {b.role: (b.source, b.channel, b.part) for b in self.model.bus_nets},
             {
                 "I2C_BUS_CHANNEL_PCA9685": ("mux", 0, "pwm"),
                 "I2C_BUS_CHANNEL_OLED": ("mux", 1, "oled"),
                 "I2C_BUS_CHANNEL_MCP23017": ("mux", 2, "expander"),
+                "I2C_BUS_CHANNEL_RANGER_FRONT": ("mux", 3, "ranger_front"),
+                "I2C_BUS_CHANNEL_RANGER_REAR": ("mux", 4, "ranger_rear"),
             },
         )
         roles = {b.role for b in self.model.bus_nets}
         self.assertEqual(set(self.model.bus_channels), roles)
-        self.assertEqual(len([w for b in self.model.bus_nets for w in b.wires]), 6)
+        self.assertEqual(len([w for b in self.model.bus_nets for w in b.wires]), 10)
 
     def test_each_motor_takes_its_own_driver_channel(self):
         # sparkfun-tb6612fng.md: channel A (A01/A02) is the right motor, B the
