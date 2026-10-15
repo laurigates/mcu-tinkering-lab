@@ -4,13 +4,13 @@
 datasheet for the module, or for the ranging chip fitted to it, was found from
 the maker; the facts below come from the sources listed under
 [Datasheets & References](#datasheets--references), each cited where used.
-**Used in:** robocar-unified — the obstacle reflex in
-`packages/robocar/unified/main/reactive_controller.c`, driver in
-`main/ultrasonic.c`, which today drives the module in GPIO mode (TRIG on GPIO3 /
-XIAO D2, ECHO on GPIO4 / XIAO D3). The robot is moving to two rangefinders,
-front and rear, both in I2C mode (see [I2C mode](#i2c-mode)). The repo's
-`hardware.toml` still calls this part `HC-SR04P`. Physical header
-layout: [`../boards/rcwl-1601.md`](../boards/rcwl-1601.md).
+**Used in:** robocar-unified — two of them, front and rear, both in I2C mode
+(see [I2C mode](#i2c-mode)) on TCA9548A channels 3 and 4. The front one drives
+the obstacle reflex in `packages/robocar/unified/main/reactive_controller.c`;
+the driver is `main/ultrasonic.c` over the two-phase read in
+`main/ultrasonic_core.c`, which waits `ULTRASONIC_CONVERSION_MS` (120 ms) between
+trigger and read. Physical header layout:
+[`../boards/rcwl-1601.md`](../boards/rcwl-1601.md).
 
 ## Which chip is on it
 
@@ -123,8 +123,8 @@ it; none of these sources is a datasheet for the RCWL-9600.
 
 ## GPIO-mode timing (historical)
 
-These facts describe the trigger/echo interface that `main/ultrasonic.c`
-drives today. They no longer apply once the module runs in I2C mode, and are
+These facts describe the trigger/echo interface `main/ultrasonic.c` drove
+before the move to I2C (#782). They do not apply in I2C mode, and are
 kept for reference and for a board left in GPIO mode.
 
 From the CS100A manual — the chip the module claims compatibility with:

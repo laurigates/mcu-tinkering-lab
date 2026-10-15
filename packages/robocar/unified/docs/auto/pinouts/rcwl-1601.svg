@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="112.55mm" height="40.91mm" viewBox="0 0 450.2 163.7" font-family="DejaVu Sans Mono">
+<title>RCWL-1601 Ultrasonic Rangefinder (EC Buying listing, 3–5 V)</title>
+<rect x="0" y="0" width="450.2" height="163.7" fill="#ffffff"/>
+<text x="12.0" y="19.2" font-size="12" text-anchor="start" dominant-baseline="central" fill="#1f2933">RCWL-1601 Ultrasonic Rangefinder (EC Buying listing, 3–5 V)</text>
+<rect x="12.0" y="31.2" width="112.0" height="92.1" rx="6" fill="#eef4ee" stroke="#1f2933" stroke-width="1.5"/>
+<circle cx="35.0" cy="112.3" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="VCC" data-side="B" data-pos="1"/>
+<text x="35.0" y="100.8" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933" transform="rotate(-90 35.0 100.8)">VCC</text>
+<circle cx="57.0" cy="112.3" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="SCL" data-side="B" data-pos="2"/>
+<text x="57.0" y="100.8" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933" transform="rotate(-90 57.0 100.8)">SCL</text>
+<circle cx="79.0" cy="112.3" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="SDA" data-side="B" data-pos="3"/>
+<text x="79.0" y="100.8" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933" transform="rotate(-90 79.0 100.8)">SDA</text>
+<circle cx="101.0" cy="112.3" r="5.5" fill="#d4a72c" stroke="#1f2933" stroke-width="1" data-anchor="GND" data-side="B" data-pos="4"/>
+<text x="101.0" y="100.8" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933" transform="rotate(-90 101.0 100.8)">GND</text>
+<text x="12.0" y="134.9" font-size="8" text-anchor="start" dominant-baseline="central" fill="#5b6770">Pads from docs/reference/boards/rcwl-1601.md</text>
+<text x="12.0" y="146.1" font-size="8" text-anchor="start" dominant-baseline="central" fill="#5b6770">Component side up · pad order exact · not to scale</text>
+</svg>

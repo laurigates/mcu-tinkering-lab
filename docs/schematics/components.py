@@ -452,17 +452,15 @@ def ssd1306_oled() -> elm.Ic:
     )
 
 
-def hc_sr04p() -> elm.Ic:
-    """HC-SR04P / RCWL-1601 3.3V-compatible ultrasonic rangefinder."""
-    return elm.Ic(
-        pins=[
-            elm.IcPin(name="GND", side="L"),
-            elm.IcPin(name="ECHO", side="L"),
-            elm.IcPin(name="TRIG", side="L"),
-            elm.IcPin(name="VCC", side="L"),
-        ],
-        size=(3.5, 3),
-    )
+def rcwl1601() -> elm.Ic:
+    """RCWL-1601 ultrasonic rangefinder, drawn from its board page.
+
+    ``docs/reference/boards/rcwl-1601.md``: one 4-pin header on the bottom edge,
+    VCC, SCL, SDA, GND left to right with the transducers facing the viewer.
+    The pins carry their I2C-mode names (robocar-unified fits R4, #782); the
+    silkscreen also prints the GPIO-mode Trig/Echo.
+    """
+    return physical_module(board_layout("rcwl-1601"))
 
 
 def xiao_rp2350(layout: str = "schematic") -> elm.Ic:

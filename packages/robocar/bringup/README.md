@@ -134,7 +134,7 @@ In order. The order is load-bearing — see the header comment in `main/checks.c
 | `servos` | Pan ±30°, tilt ±20°, one axis at a time at the board's 100 Hz frame rate, then centre and release |
 | `motors` | **Drives the wheels.** Four pulses: left fwd, left rev, right fwd, right rev |
 | `mcp23017` | Expander on channel 2, pin 0 written and read back |
-| `sonar` | Five HC-SR04 readings; reports the count and the median |
+| `sonar` | Both RCWL-1601s in I2C mode: whether 0x57 answers on mux channel 3 (front) and 4 (rear), then five readings each; reports the count and the median per sensor |
 | `amp` | A locally generated tone through the MAX98357A — see below |
 | `mic` | PDM microphone peak and RMS, and whether any frames arrive at all |
 

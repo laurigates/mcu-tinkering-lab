@@ -76,6 +76,21 @@ target_link_libraries(test_ultrasonic_stub PRIVATE Threads::Threads m)
 add_test(NAME ultrasonic_stub COMMAND test_ultrasonic_stub)
 
 # -----------------------------------------------------------------------------
+# RCWL-1601 two-phase I2C read sequencing (issue #782)
+#
+# ultrasonic_core.c is the state machine the firmware runs, compiled unmodified
+# against a recording fake bus: trigger and read on separate calls with the
+# conversion wait between them, pacing on the failure path, and zero /
+# out-of-range readings reported as errors rather than clamped.
+# -----------------------------------------------------------------------------
+add_executable(test_ultrasonic_core
+    "${MAIN_SRC_DIR}/ultrasonic_core.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_ultrasonic_core.c"
+)
+target_link_libraries(test_ultrasonic_core PRIVATE m)
+add_test(NAME ultrasonic_core COMMAND test_ultrasonic_core)
+
+# -----------------------------------------------------------------------------
 # reactive_controller decision logic (Phase 5, gate G2, issue #226)
 # -----------------------------------------------------------------------------
 add_executable(test_reactive_controller
@@ -475,6 +490,9 @@ add_test(NAME activity_trace COMMAND test_activity_trace)
 # i2c_bus_select_channel() gate rather than by poking their statics. The case
 # worth pinning is the one that would lie: a rate whose window stopped advancing
 # because the traffic stopped must read 0, not the last value it remembers.
+# The same gate resets the TCA9548A after I2C_BUS_MUX_RESET_AFTER_FAILURES
+# consecutive failed selects (issue #782); the test records the RESET pin's
+# levels and the low time through recording gpio / esp_rom_delay_us stubs.
 # -----------------------------------------------------------------------------
 add_executable(test_i2c_bus_stats
     "${MAIN_SRC_DIR}/i2c_bus.c"

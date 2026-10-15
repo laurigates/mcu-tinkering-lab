@@ -10,7 +10,9 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <driver/gpio.h>
 #include <esp_log.h>
+#include <esp_rom_sys.h>
 #include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
@@ -51,6 +53,10 @@ static bool s_initialized = false;
 
 static uint32_t s_ops;
 static uint32_t s_failed;
+static uint32_t s_mux_resets;
+/* Failed channel-selects since the last good one (or the last mux reset).
+ * Touched only with the bus mutex held, so it needs no lock of its own. */
+static uint32_t s_select_fail_streak;
 static uint32_t s_per_channel[8];
 static uint32_t s_window_start_ms;
 static uint32_t s_window_ops;
@@ -103,6 +109,7 @@ void i2c_bus_stats_get(i2c_bus_stats_t *out)
 
     out->ops = s_ops;
     out->failed = s_failed;
+    out->mux_resets = s_mux_resets;
     memcpy(out->per_channel, s_per_channel, sizeof(out->per_channel));
     out->peak_hz = s_peak_hz;
     out->elapsed_ms = now - s_since_ms;
@@ -120,6 +127,7 @@ void i2c_bus_stats_reset(void)
 {
     s_ops = 0u;
     s_failed = 0u;
+    s_mux_resets = 0u;
     memset(s_per_channel, 0, sizeof(s_per_channel));
     s_window_start_ms = 0u;
     s_window_ops = 0u;
@@ -139,10 +147,10 @@ void i2c_bus_stats_report(void)
     const uint32_t mean_tenths =
         (st.elapsed_ms > 0u) ? (uint32_t)(((uint64_t)st.ops * 10000u) / st.elapsed_ms) : 0u;
 
-    printf("  i2c: %u ops in %us (mean %u.%u/s, now %u/s, peak %u/s), %u failed\n",
+    printf("  i2c: %u ops in %us (mean %u.%u/s, now %u/s, peak %u/s), %u failed, %u mux resets\n",
            (unsigned)st.ops, (unsigned)secs, (unsigned)(mean_tenths / 10u),
            (unsigned)(mean_tenths % 10u), (unsigned)st.hz, (unsigned)st.peak_hz,
-           (unsigned)st.failed);
+           (unsigned)st.failed, (unsigned)st.mux_resets);
 
     printf("       per channel:");
     bool any = false;
@@ -253,6 +261,23 @@ esp_err_t i2c_bus_init(void)
         return ESP_ERR_NO_MEM;
     }
 
+    // TCA9548A RESET: an output resting high. The level is set before the pin
+    // becomes an output so it never glitches low and resets the mux at boot.
+    gpio_set_level(TCA9548A_RST_PIN, 1);
+    const gpio_config_t rst_conf = {
+        .pin_bit_mask = (1ULL << TCA9548A_RST_PIN),
+        .mode = GPIO_MODE_OUTPUT,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE,
+    };
+    ret = gpio_config(&rst_conf);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "TCA9548A RESET pin config failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+    gpio_set_level(TCA9548A_RST_PIN, 1);
+
     // Initialize TCA9548A multiplexer
     ret = tca9548_init_desc(&s_tca9548, TCA9548A_ADDR, I2C_NUM_0, I2C_SDA_PIN, I2C_SCL_PIN);
     if (ret != ESP_OK) {
@@ -336,11 +361,38 @@ esp_err_t i2c_bus_select_channel(uint8_t channel)
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Channel select failed: %s", esp_err_to_name(ret));
         s_failed++;
+        /* A stuck segment fails every select from here on, whichever task asks.
+         * Reset the mux while still holding the bus, so no transaction is cut. */
+        if (++s_select_fail_streak >= I2C_BUS_MUX_RESET_AFTER_FAILURES) {
+            ESP_LOGW(TAG, "%u channel selects failed in a row — resetting the TCA9548A",
+                     (unsigned)s_select_fail_streak);
+            i2c_bus_reset_mux();
+        }
         xSemaphoreGiveRecursive(s_bus_mutex);
         return ret;
     }
 
+    s_select_fail_streak = 0u;
     note_op(channel);
+    return ESP_OK;
+}
+
+esp_err_t i2c_bus_reset_mux(void)
+{
+    if (!s_initialized) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    /* Recursive, so i2c_bus_select_channel() can call this with the bus held. */
+    if (xSemaphoreTakeRecursive(s_bus_mutex, pdMS_TO_TICKS(5000)) != pdTRUE) {
+        ESP_LOGE(TAG, "Bus mutex timeout (mux reset)");
+        return ESP_ERR_TIMEOUT;
+    }
+    gpio_set_level(TCA9548A_RST_PIN, 0);
+    esp_rom_delay_us(TCA9548A_RST_PULSE_US);
+    gpio_set_level(TCA9548A_RST_PIN, 1);
+    s_mux_resets++;
+    s_select_fail_streak = 0u;
+    xSemaphoreGiveRecursive(s_bus_mutex);
     return ESP_OK;
 }
 

@@ -366,7 +366,9 @@ class BusNetTests(unittest.TestCase):
         wanted = re.compile(r"#define (I2C_SDA_PIN|I2C_SCL_PIN|I2C_BUS_CHANNEL_\w+) ")
         text = UNIFIED_HEADER.read_text(encoding="utf-8")
         lines = [line for line in text.splitlines() if wanted.match(line)]
-        self.assertEqual(len(lines), 5, lines)
+        # SDA, SCL and five mux channels (#782 added the two rangefinders').
+        # MUX_SIDECAR wires three of them; a bus channel role need not be wired.
+        self.assertEqual(len(lines), 7, lines)
         self.header = self.project / "main/pin_config.h"
         self.header.write_text("\n".join(lines) + "\n", encoding="utf-8")
         self.toml = self.project / "hardware.toml"

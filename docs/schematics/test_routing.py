@@ -18,8 +18,8 @@ from schemdraw.segments import SegmentText
 sys.path.insert(0, str(FsPath(__file__).parent))
 sys.path.insert(0, str(FsPath(__file__).parent / "circuits"))
 
-from components import esp32_s3_zero, max98357a  # noqa: E402
-from routing import Path, Router, _BBox  # noqa: E402
+from components import esp32_s3_zero, max98357a
+from routing import Path, Router, _BBox
 
 
 def _segments_are_orthogonal(points):
@@ -1390,11 +1390,15 @@ def test_robocar_unified_tight_parallel_pairs_drop_below_baseline(real_circuit):
     # motor-driver lines are drawn individually instead of as one trunk, so
     # the wire is longer (217.14 before) while the crossings fell from 23.
     # The chosen ordering (shortest-first) crosses 11 times.
+    # Re-measured for #782, which adds five wires (two RCWL-1601 bus pairs on
+    # mux ch3/ch4 and the mux's RST) and drops two (the GPIO-mode TRIG/ECHO):
+    # authored order 355.64 units, 13 crossings, 0 tight pairs; the chosen
+    # ordering crosses 9 times at the same length.
     m = real_circuit("robocar_unified").metrics
     assert m.tight_parallel == 0, f"{m.tight_parallel} tight pairs (baseline 0)"
     assert m.collinear_overlaps == 0
     assert m.crossings <= 15
-    assert m.total_length <= 298.8345 + 1e-6
+    assert m.total_length <= 355.6437 + 1e-6
 
 
 # Label boxes (#681). schemdraw's SegmentText.get_bbox ignores rotation and
@@ -1786,8 +1790,12 @@ def test_robocar_unified_near_parallel_length_drops_below_baseline(real_circuit)
     # the speaker leads). The pass leaves only the speaker leads' 0.71: the
     # pair is the last segment of one lead and the whole of the other, both
     # hanging off pins, so neither has an interior segment to move.
+    # Re-measured for #782, which adds the mux's RST wire from XIAO D2: it
+    # runs down the same corridor as the XIAO -> mux I2C pair, and the pair
+    # can no longer separate without going tight against it, so 5.5 units of
+    # that pair are back two rows apart (6.205667 in all).
     m = real_circuit("robocar_unified").metrics
-    assert m.near_parallel <= 0.705667 + 1e-6, f"{m.near_parallel} (baseline 21.26)"
+    assert m.near_parallel <= 6.205667 + 1e-6, f"{m.near_parallel} (baseline 21.26)"
 
 
 def test_finish_leaves_occupancy_matching_the_drawn_wires(real_circuits):

@@ -13,6 +13,9 @@
 #let TCA_CH_PCA9685 = 0
 #let TCA_CH_OLED = 1
 #let TCA_CH_MCP23017 = 2
+#let TCA_CH_RANGER_FRONT = 3
+#let TCA_CH_RANGER_REAR = 4
+#let MUX_RST_PIN = 3
 // ── PCA9685 PWM Driver ──
 #let PCA9685_ADDR = "0x40"
 #let PCA9685_FREQ_HZ = 100
@@ -41,9 +44,8 @@
 #let OLED_ADDR = "0x3C"
 #let OLED_WIDTH = 128
 #let OLED_HEIGHT = 64
-// ── Ultrasonic Rangefinder ──
-#let ULTRIG_PIN = 3
-#let ULECHO_PIN = 4
+// ── RCWL-1601 Rangefinders ──
+#let RANGER_ADDR = "0x57"
 // ── Piezo Buzzer ──
 #let PIEZO_PIN = 2
 // ── UART0 header pads ──

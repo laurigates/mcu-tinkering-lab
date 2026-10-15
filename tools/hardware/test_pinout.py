@@ -265,11 +265,38 @@ class LabelsFromJoinTest(unittest.TestCase):
 
     def test_the_mcu_and_every_part_with_a_board_are_drawn(self):
         slugs = [p.slug for p in pinouts(self.model)]
-        expected = [self.model.board.path.stem] + [
-            Path(p.board).stem for p in self.model.parts.values() if p.board
-        ]
+        # One image per board: two parts on one board page share it.
+        expected = list(
+            dict.fromkeys(
+                [self.model.board.path.stem]
+                + [Path(p.board).stem for p in self.model.parts.values() if p.board]
+            )
+        )
         self.assertEqual(slugs, expected)
         self.assertIn("xiao-esp32s3", slugs)
+
+    def test_parts_on_one_board_page_share_one_image(self):
+        # The front and rear rangefinders are both RCWL-1601s (#782). Their
+        # pads carry the same labels, so one picture is true of both.
+        boards = [
+            Path(p.board).stem
+            for k, p in self.model.parts.items()
+            if k in ("ranger_front", "ranger_rear")
+        ]
+        self.assertEqual(boards, ["rcwl-1601", "rcwl-1601"])
+        slugs = [p.slug for p in pinouts(self.model)]
+        self.assertEqual(slugs.count("rcwl-1601"), 1)
+
+    def test_parts_on_one_board_page_with_different_labels_fail(self):
+        # One image cannot show two different wirings; the join must say so
+        # rather than draw whichever part came first.
+        model = self.model
+        extra = type(model.nets[0])(
+            role="PIEZO_PIN", part="ranger_rear", pin="SDA", note=""
+        )
+        broken = dataclasses.replace(model, nets=(*model.nets, extra))
+        with self.assertRaisesRegex(HardwareError, "ranger_front.*ranger_rear"):
+            pinouts(broken)
 
 
 class CommittedImagesTest(unittest.TestCase):
