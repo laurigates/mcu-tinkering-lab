@@ -8,8 +8,8 @@
  *     it is the channel every later result is reported on. A sweep whose
  *     indicator is broken reports nothing and looks like a dead board.
  *   - `i2c-mux` gates everything behind the multiplexer. If it does not answer,
- *     six later checks SKIP rather than each rediscovering the same fault and
- *     sounding six failures for one missing wire.
+ *     seven later checks SKIP rather than each rediscovering the same fault and
+ *     sounding seven failures for one missing wire.
  *   - `oled` runs early, straight after the scan, so the remaining checks can
  *     be displayed live on it while they run.
  *   - `mic` runs last, after `amp`. The two sit centimetres apart, so measuring
@@ -31,6 +31,7 @@
 #include "esp_flash.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "gpio_expander.h"
@@ -46,8 +47,12 @@
 
 static const char *TAG = "checks";
 
-/** Ultrasonic readings taken per sweep. Odd, so the median needs no averaging. */
+/** Readings taken per rangefinder per sweep. Odd, so the median needs no averaging. */
 #define SONAR_SAMPLES 5
+
+/** Longest wait for one reading: a full trigger-convert-read cycle is just over
+ *  ULTRASONIC_CONVERSION_MS, so three of them is a dead sensor, not a slow one. */
+#define SONAR_READ_TIMEOUT_MS (3 * ULTRASONIC_CONVERSION_MS)
 
 /** Per-motor pulse. Short and slow on purpose — see check_motors(). */
 #define MOTOR_PULSE_MS 220
@@ -149,7 +154,7 @@ static check_result_t check_buzzer(void)
 /* -------------------------------------------------------------------------- */
 
 /**
- * The multiplexer, and the gate for six later checks.
+ * The multiplexer, and the gate for seven later checks.
  *
  * i2c_bus_init() also brings up the PCA9685 on channel 0, so a failure here is
  * ambiguous between the two parts — which is why the scan below runs next and
@@ -447,7 +452,7 @@ static check_result_t check_mcp23017(void)
 }
 
 /* -------------------------------------------------------------------------- */
-/* Direct-GPIO peripherals                                                      */
+/* Rangefinders (behind the multiplexer), then direct-GPIO peripherals          */
 /* -------------------------------------------------------------------------- */
 
 static int cmp_u16(const void *a, const void *b)
@@ -457,43 +462,120 @@ static int cmp_u16(const void *a, const void *b)
     return (x > y) - (x < y);
 }
 
+/** Does anything ACK RCWL1601_I2C_ADDR on mux channel @p channel? */
+static bool sonar_probe(uint8_t channel)
+{
+    if (i2c_bus_select_channel(channel) != ESP_OK) {
+        return false;
+    }
+    i2c_dev_t dev = {0};
+    dev.port = I2C_NUM_0;
+    dev.addr = RCWL1601_I2C_ADDR;
+    dev.cfg.sda_io_num = I2C_SDA_PIN;
+    dev.cfg.scl_io_num = I2C_SCL_PIN;
+    dev.cfg.master.clk_speed = I2C_MASTER_FREQ_HZ;
+    const bool present = (i2c_dev_probe(&dev, I2C_DEV_WRITE) == ESP_OK);
+    i2c_bus_release();
+    return present;
+}
+
+/** One reading, driving the robot's own two-phase cycle until it completes. */
+static ultrasonic_result_t sonar_read(ultrasonic_id_t id, uint16_t *cm)
+{
+    const int64_t start_us = esp_timer_get_time();
+    for (;;) {
+        const uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000);
+        const ultrasonic_result_t res = ultrasonic_poll(id, now_ms, cm);
+        if (res != ULTRASONIC_PENDING) {
+            return res;
+        }
+        if (esp_timer_get_time() - start_us > (int64_t)SONAR_READ_TIMEOUT_MS * 1000) {
+            *cm = ULTRASONIC_DIST_ERROR;
+            return ULTRASONIC_ERROR;
+        }
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+}
+
+/** What one rangefinder did: whether it answered, and its good readings. */
+typedef struct {
+    bool present;
+    size_t n;
+    uint16_t median;
+} sonar_sweep_t;
+
+static sonar_sweep_t sonar_sweep(ultrasonic_id_t id)
+{
+    sonar_sweep_t s = {.present = sonar_probe(ultrasonic_channel(id))};
+    if (!s.present) {
+        return s;
+    }
+    uint16_t good[SONAR_SAMPLES];
+    for (int i = 0; i < SONAR_SAMPLES; i++) {
+        uint16_t cm = ULTRASONIC_DIST_ERROR;
+        if (sonar_read(id, &cm) == ULTRASONIC_READY) {
+            good[s.n++] = cm;
+        }
+    }
+    if (s.n > 0) {
+        qsort(good, s.n, sizeof(good[0]), cmp_u16);
+        s.median = good[s.n / 2];
+    }
+    ESP_LOGI(TAG, "  sonar %s ch%u: %s, %u/%d reads, median %u cm", ultrasonic_name(id),
+             (unsigned)ultrasonic_channel(id), s.present ? "answers" : "absent", (unsigned)s.n,
+             SONAR_SAMPLES, (unsigned)s.median);
+    return s;
+}
+
+/** "F3 5/5 42cm", "R4 none" or "R4 0/5": one sensor's part of the detail line. */
+static int sonar_detail(char *out, size_t size, char tag, ultrasonic_id_t id,
+                        const sonar_sweep_t *s)
+{
+    const unsigned ch = ultrasonic_channel(id);
+    if (!s->present) {
+        return snprintf(out, size, "%c%u none", tag, ch);
+    }
+    if (s->n == 0) {
+        return snprintf(out, size, "%c%u 0/%d", tag, ch, SONAR_SAMPLES);
+    }
+    return snprintf(out, size, "%c%u %u/%d %ucm", tag, ch, (unsigned)s->n, SONAR_SAMPLES,
+                    (unsigned)s->median);
+}
+
 /**
- * Take several readings and report the median plus the success count.
+ * Both RCWL-1601s, in I2C mode at 0x57 on their own mux channels (front 3,
+ * rear 4): first whether 0x57 answers there at all, then several readings each.
  *
- * A single reading proves almost nothing here: an unfitted sensor times out,
- * and a fitted one aimed at open space ALSO times out, so one failed read is
- * not evidence of a fault. The count separates "nothing is connected" (0 of 5)
- * from "connected but out of range" and from a flaky solder joint (3 of 5),
- * which look identical from any one measurement.
+ * The two questions are separate on purpose. A module still in GPIO mode (R4
+ * not fitted) or not plugged in does not ACK, which says "wiring or mode
+ * resistor"; one that ACKs but returns no reading says "fitted, but aimed at
+ * open space or failing". The reading count then separates a flaky joint (3
+ * of 5) from either, which no single measurement can.
  */
 static check_result_t check_ultrasonic(void)
 {
+    if (!i2c_bus_is_ready()) {
+        return result(CHECK_SKIP, "bus down");
+    }
     if (ultrasonic_init() != ESP_OK) {
         return result(CHECK_FAIL, "ultrasonic_init failed");
     }
 
-    uint16_t good[SONAR_SAMPLES];
-    size_t n = 0;
+    const sonar_sweep_t front = sonar_sweep(ULTRASONIC_FRONT);
+    const sonar_sweep_t rear = sonar_sweep(ULTRASONIC_REAR);
 
-    for (int i = 0; i < SONAR_SAMPLES; i++) {
-        uint16_t cm = 0;
-        if (ultrasonic_measure(&cm) == ESP_OK && cm != ULTRASONIC_DIST_ERROR) {
-            good[n++] = cm;
-        }
-        vTaskDelay(pdMS_TO_TICKS(80));
-    }
+    char f[CHECK_DETAIL_MAX / 2];
+    char r[CHECK_DETAIL_MAX / 2];
+    sonar_detail(f, sizeof(f), 'F', ULTRASONIC_FRONT, &front);
+    sonar_detail(r, sizeof(r), 'R', ULTRASONIC_REAR, &rear);
 
-    if (n == 0) {
-        return result(CHECK_SKIP, "0/%d reads - unfitted or open space", SONAR_SAMPLES);
+    if (!front.present && !rear.present) {
+        return result(CHECK_SKIP, "no 0x%02X on ch%u/ch%u - R4 fitted?", RCWL1601_I2C_ADDR,
+                      (unsigned)ultrasonic_channel(ULTRASONIC_FRONT),
+                      (unsigned)ultrasonic_channel(ULTRASONIC_REAR));
     }
-    qsort(good, n, sizeof(good[0]), cmp_u16);
-    const uint16_t median = good[n / 2];
-
-    if (n < SONAR_SAMPLES) {
-        return result(CHECK_WARN, "%u/%d reads med %ucm", (unsigned)n, SONAR_SAMPLES,
-                      (unsigned)median);
-    }
-    return result(CHECK_PASS, "%u/%d reads med %ucm", (unsigned)n, SONAR_SAMPLES, (unsigned)median);
+    const bool full = front.n == SONAR_SAMPLES && rear.n == SONAR_SAMPLES;
+    return result(full ? CHECK_PASS : CHECK_WARN, "%s %s", f, r);
 }
 
 /**

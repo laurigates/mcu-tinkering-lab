@@ -5,9 +5,11 @@
  * Runs as a FreeRTOS task pinned to Core 0 (motor-critical core, matching
  * motor_task and peripheral_task).  Every 33 ms the executor:
  *
- *   1. Reads the ultrasonic rangefinder.
- *   2. If obstacle < STOP_THRESHOLD_CM, latches a safety stop (overrides any
- *      planner goal until the obstacle clears).
+ *   1. Polls the front and rear RCWL-1601 rangefinders (non-blocking: a read
+ *      completes over several ticks, see ultrasonic.h).
+ *   2. If the front obstacle < STOP_THRESHOLD_CM, latches a safety stop
+ *      (overrides any planner goal until the obstacle clears). The rear
+ *      sensor is reported in telemetry only.
  *   3. Otherwise reads the current goal from goal_state and drives the motors
  *      toward it using a simple skid-steer mix (GOAL_KIND_DRIVE) or a
  *      proportional visual-servo (GOAL_KIND_TRACK).
@@ -69,16 +71,22 @@ extern "C" {
 #endif
 
 /**
- * Smoothing window for the running-mean distance filter.
- * 3 samples at 30 Hz gives ~100 ms of lag — enough to reject single-spike
- * glitches without delaying the obstacle reflex meaningfully.
+ * Smoothing window for the front sensor's running-mean distance filter, in
+ * readings (not ticks — only a completed read enters the filter).
+ *
+ * In I2C mode a reading arrives about every ULTRASONIC_CONVERSION_MS plus one
+ * loop period (~150 ms), so 3 readings is ~450 ms of lag before a sudden
+ * obstacle fully reaches the mean. That is the cost of keeping the GPIO-era
+ * filter; shortening ULTRASONIC_CONVERSION_MS once it is measured on the bench
+ * shortens it proportionally.
  */
 #define ULTRASONIC_SMOOTH_N 3U
 
 /**
- * Consecutive failed rangefinder reads before the sensor is declared down.
- * 5 reads at 30 Hz is ~165 ms — long enough that a single missed echo (common,
- * and already absorbed by the smoothing filter) does not raise a false alarm.
+ * Consecutive failed rangefinder reads before a sensor is declared down.
+ * Counted per sensor, over completed reads only: 5 reads is ~0.6–0.8 s, long
+ * enough that a single bad reading (absorbed by the smoothing filter) does not
+ * raise a false alarm.
  */
 #define ULTRASONIC_FAIL_STREAK 5U
 
@@ -226,7 +234,7 @@ const char *reactive_head_mode_name(reactive_head_mode_t mode);
  * task; the values are copied under a brief critical section.
  */
 typedef struct {
-    uint16_t distance_cm;      /**< Latest smoothed ultrasonic reading.         */
+    uint16_t distance_cm;      /**< Front sensor, smoothed; drives the reflex.  */
     bool reflex_active;        /**< True when obstacle reflex has latched stop.  */
     uint32_t loop_hz;          /**< Measured loop rate over the last second.     */
     uint32_t stack_high_water; /**< Stack headroom from uxTaskGetStackHighWaterMark. */
@@ -238,6 +246,12 @@ typedef struct {
     bool sensor_failed;
     /** What the executor did with the pan/tilt head on the last tick. */
     reactive_head_mode_t head_mode;
+    /** Rear sensor's latest reading in cm, unsmoothed; ULTRASONIC_DIST_ERROR
+     *  until the first reading and after any failed one. Not part of the
+     *  reflex. */
+    uint16_t distance_rear_cm;
+    /** The rear sensor's counterpart of sensor_failed. */
+    bool rear_failed;
 } reactive_telemetry_t;
 
 /* =========================================================================
@@ -247,8 +261,10 @@ typedef struct {
 /**
  * @brief Initialise the reactive controller and spawn the executor task.
  *
- * Calls ultrasonic_init() internally.  goal_state_init() must have been called
- * before this function.
+ * Calls ultrasonic_init() internally. A rangefinder failure is not fatal: the
+ * executor runs without them, and telemetry reports both sensors as failed
+ * once ULTRASONIC_FAIL_STREAK reads have failed. goal_state_init() must have
+ * been called before this function.
  *
  * Idempotent — a second call returns ESP_OK without creating a second task.
  *

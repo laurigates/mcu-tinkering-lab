@@ -17,6 +17,27 @@
 #include "pin_config.h"
 
 /**
+ * Consecutive failed channel-selects before the TCA9548A is reset.
+ *
+ * A device that locks up its segment holding SDA low (Adafruit #4742 says the
+ * RCWL-1601 can) makes every following mux write fail, whichever task issues
+ * it. One failure is noise; several in a row with no success between them is a
+ * stuck bus. At the executor's 30 Hz plus the motor and LED writers, five is
+ * well under a second of lost traffic.
+ */
+#define I2C_BUS_MUX_RESET_AFTER_FAILURES 5u
+
+/**
+ * How long TCA9548A_RST_PIN is held low, in µs.
+ *
+ * TI's minimum is t_W(L) = 6 ns (TCA9548A datasheet SCPS207H §5.7, "Pulse
+ * duration, RESET low"; t_REC(STA) = 0 ns, so the bus may be used at once
+ * after). 10 µs is three orders of margin, enough that the breakout's RESET
+ * pull-up and the wiring capacitance cannot round the pulse away.
+ */
+#define TCA9548A_RST_PULSE_US 10u
+
+/**
  * @brief Initialize the I2C bus, TCA9548A multiplexer, and PCA9685
  *
  * Sets up I2C master on the configured SDA/SCL pins, initializes the
@@ -47,6 +68,7 @@ bool i2c_bus_is_ready(void);
 typedef struct {
     uint32_t ops;            /**< Successful bus acquisitions. */
     uint32_t failed;         /**< Mux-select failures and mutex timeouts. */
+    uint32_t mux_resets;     /**< TCA9548A RESET pulses (i2c_bus_reset_mux()). */
     uint32_t per_channel[8]; /**< Ops per TCA9548A channel. */
     uint32_t hz;             /**< Recent rate; 0 when the bus has gone quiet. */
     uint32_t peak_hz;        /**< Highest windowed rate seen. */
@@ -107,6 +129,22 @@ esp_err_t i2c_bus_select_channel(uint8_t channel);
  * @return ESP_OK on success
  */
 esp_err_t i2c_bus_release(void);
+
+/**
+ * @brief Pulse the TCA9548A's active-low RESET (TCA9548A_RST_PIN).
+ *
+ * The mux resets its state machine and deselects every channel, which
+ * disconnects a downstream segment stuck low from the upstream bus (TCA9548A
+ * datasheet §7.4.1). The next i2c_bus_select_channel() re-selects as usual.
+ *
+ * Called by i2c_bus_select_channel() after I2C_BUS_MUX_RESET_AFTER_FAILURES
+ * consecutive failed selections; callable directly too. Takes the bus mutex, so
+ * it never cuts a transaction short.
+ *
+ * @return ESP_OK, ESP_ERR_INVALID_STATE before i2c_bus_init(), or
+ *         ESP_ERR_TIMEOUT if the bus mutex could not be taken.
+ */
+esp_err_t i2c_bus_reset_mux(void);
 
 /**
  * @brief Get the PCA9685 device handle

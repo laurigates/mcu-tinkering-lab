@@ -17,7 +17,8 @@ Core affinity is load-bearing — do not change without understanding the trade-
   - `motor_task` — low-level PWM driver for motors and servos
   - `peripheral_task` — I2C devices (OLED, LEDs), buzzer
   - `command_task` — serial console command dispatch
-  - `ultrasonic` driver — distance reflex at ~20 Hz sampling
+  - `ultrasonic` driver — front and rear RCWL-1601 over I2C, polled by the
+    executor; a reading completes every ~150 ms, the front one drives the reflex
 
 - **Core 1** (bursty, I/O-bound):
   - `planner_task` — captures frames on a schedule, calls Gemini Robotics-ER, writes `goal_state`
@@ -36,7 +37,14 @@ All I2C devices hang off a **TCA9548A multiplexer** on GPIO5/6. Don't talk to de
 - ch0: PCA9685 (motors, servos, LEDs)
 - ch1: SSD1306 OLED
 - ch2: MCP23017 GPIO expander (optional — 16 generic GPIOs via `gpio_expander.c`, no roles assigned yet; firmware boots fine without the board fitted)
-- ch3-7: reserved
+- ch3: RCWL-1601 rangefinder, front (0x57, I2C mode)
+- ch4: RCWL-1601 rangefinder, rear (0x57, I2C mode)
+- ch5-7: reserved
+
+The mux's active-low RESET is on XIAO D2 (`TCA9548A_RST_PIN`).
+`i2c_bus_select_channel()` pulses it after `I2C_BUS_MUX_RESET_AFTER_FAILURES`
+consecutive failed selects, which deselects every channel and frees the
+upstream bus from a segment held low; `trace` counts the resets.
 
 The MCP23017 (1953W breakout, address 0x20) is exercised from the serial console with `gpio`, `gpio mode <pin> in|up|out`, `gpio set <pin> 0|1`, `gpio get <pin>`.
 

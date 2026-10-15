@@ -5,9 +5,11 @@
  * Exercises the one-tick executor via reactive_controller_tick_for_test(),
  * which reactive_controller.c exposes under REACTIVE_CONTROLLER_HOST_TEST=1.
  * Motor commands are captured by motor_controller_stub.c; distance readings
- * are injected via ultrasonic_test_set_distance(); goals are written via
- * goal_state_write(). Each test primes the smoothing filter with three
- * "clear" readings before probing behaviour so the running mean stabilises.
+ * are injected per sensor via ultrasonic_test_set_distance(); goals are written
+ * via goal_state_write(). Each test primes the front sensor's smoothing filter
+ * with three readings before probing behaviour so the running mean stabilises.
+ * The host stub returns a reading on every poll, so one tick is one reading;
+ * the target's read takes several ticks (test_ultrasonic_core.c pins that).
  */
 
 #include "goal_state.h"
@@ -94,14 +96,15 @@ static void setup(void)
      * wheel-only behaviour, which is exactly what a board without a working
      * pan/tilt head must keep doing. Head tests re-reset with servos present. */
     servo_stub_reset(false);
-    ultrasonic_test_set_distance(100); /* "clear" default */
-    reactive_controller_init();        /* clears smoothing buffer + manual lease */
+    ultrasonic_test_set_distance(ULTRASONIC_FRONT, 100); /* "clear" default */
+    ultrasonic_test_set_distance(ULTRASONIC_REAR, 100);
+    reactive_controller_init(); /* clears smoothing buffer + manual lease */
 }
 
-/** Prime the 3-sample running-mean distance filter at @p cm. */
+/** Prime the front sensor's 3-sample running-mean filter at @p cm. */
 static void prime_distance(uint16_t cm)
 {
-    ultrasonic_test_set_distance(cm);
+    ultrasonic_test_set_distance(ULTRASONIC_FRONT, cm);
     for (int i = 0; i < 3; i++) {
         reactive_controller_tick_for_test();
     }
@@ -696,6 +699,106 @@ static void test_drive_heading_folds_head_pan(void)
 }
 
 /* =========================================================================
+ * Front and rear rangefinders (issue #782)
+ * ========================================================================= */
+
+static const goal_t k_drive_ahead = {
+    .kind = GOAL_KIND_DRIVE,
+    .params.drive = {.heading_deg = 0, .distance_cm = 200, .speed_pct = 80},
+};
+
+/* The rear reading reaches telemetry, unsmoothed, beside the front one. */
+static void test_rear_reading_reaches_telemetry(void)
+{
+    setup();
+    ultrasonic_test_set_distance(ULTRASONIC_REAR, 55);
+    prime_distance(120);
+
+    reactive_telemetry_t t = {0};
+    reactive_controller_get_telemetry(&t);
+    ASSERT(t.distance_cm == 120);
+    ASSERT(t.distance_rear_cm == 55);
+    ASSERT(!t.rear_failed);
+    ASSERT(!t.sensor_failed);
+}
+
+/* Only the front sensor drives the reflex: something close behind the robot
+ * must not stop it driving forward. */
+static void test_rear_obstacle_does_not_trip_the_reflex(void)
+{
+    setup();
+    ASSERT(goal_state_write(&k_drive_ahead, 1500) == ESP_OK);
+    ultrasonic_test_set_distance(ULTRASONIC_REAR, 5);
+    prime_distance(100);
+
+    reactive_telemetry_t t = {0};
+    reactive_controller_get_telemetry(&t);
+    ASSERT(!t.reflex_active);
+    ASSERT(motor_stub_get_last_call() == MOTOR_CALL_DRIVE);
+}
+
+/* And the front sensor still does, whatever the rear reads. */
+static void test_front_obstacle_trips_the_reflex(void)
+{
+    setup();
+    ASSERT(goal_state_write(&k_drive_ahead, 1500) == ESP_OK);
+    ultrasonic_test_set_distance(ULTRASONIC_REAR, 300);
+    prime_distance(8);
+
+    reactive_telemetry_t t = {0};
+    reactive_controller_get_telemetry(&t);
+    ASSERT(t.reflex_active);
+    ASSERT(motor_stub_get_last_call() == MOTOR_CALL_BRAKE);
+}
+
+/* A run of failed front reads is reported, without dragging the rear with it,
+ * and clears on the next good reading. */
+static void test_front_failure_streak_is_reported_per_sensor(void)
+{
+    setup();
+    prime_distance(100);
+    ultrasonic_test_set_distance(ULTRASONIC_FRONT, ULTRASONIC_DIST_ERROR);
+
+    reactive_telemetry_t t = {0};
+    for (unsigned i = 0; i + 1 < ULTRASONIC_FAIL_STREAK; i++) {
+        reactive_controller_tick_for_test();
+    }
+    reactive_controller_get_telemetry(&t);
+    ASSERT(!t.sensor_failed); /* one short of the streak */
+
+    reactive_controller_tick_for_test();
+    reactive_controller_get_telemetry(&t);
+    ASSERT(t.sensor_failed);
+    ASSERT(!t.rear_failed);
+    ASSERT(t.distance_rear_cm == 100);
+
+    ultrasonic_test_set_distance(ULTRASONIC_FRONT, 90);
+    reactive_controller_tick_for_test();
+    reactive_controller_get_telemetry(&t);
+    ASSERT(!t.sensor_failed);
+}
+
+/* The rear's failures are its own: the front, and the reflex, are unaffected. */
+static void test_rear_failure_streak_is_reported_per_sensor(void)
+{
+    setup();
+    ASSERT(goal_state_write(&k_drive_ahead, 1500) == ESP_OK);
+    ultrasonic_test_set_distance(ULTRASONIC_REAR, ULTRASONIC_DIST_ERROR);
+    prime_distance(100);
+    for (unsigned i = 0; i < ULTRASONIC_FAIL_STREAK; i++) {
+        reactive_controller_tick_for_test();
+    }
+
+    reactive_telemetry_t t = {0};
+    reactive_controller_get_telemetry(&t);
+    ASSERT(t.rear_failed);
+    ASSERT(!t.sensor_failed);
+    /* A failed read is no reading, never a stale or clamped one. */
+    ASSERT(t.distance_rear_cm == ULTRASONIC_DIST_ERROR);
+    ASSERT(motor_stub_get_last_call() == MOTOR_CALL_DRIVE);
+}
+
+/* =========================================================================
  * Main
  * ========================================================================= */
 
@@ -727,6 +830,13 @@ int main(void)
     test_run("console_head_hold_is_a_lease", test_console_head_hold_is_a_lease);
     test_run("external_head_lease_writes_nothing", test_external_head_lease_writes_nothing);
     test_run("drive_heading_folds_head_pan", test_drive_heading_folds_head_pan);
+    test_run("rear_reading_reaches_telemetry", test_rear_reading_reaches_telemetry);
+    test_run("rear_obstacle_does_not_trip_the_reflex", test_rear_obstacle_does_not_trip_the_reflex);
+    test_run("front_obstacle_trips_the_reflex", test_front_obstacle_trips_the_reflex);
+    test_run("front_failure_streak_is_reported_per_sensor",
+             test_front_failure_streak_is_reported_per_sensor);
+    test_run("rear_failure_streak_is_reported_per_sensor",
+             test_rear_failure_streak_is_reported_per_sensor);
 
     printf("\n=== Results ===\n");
     printf("Passed: %d / %d\n", test_pass, test_count);

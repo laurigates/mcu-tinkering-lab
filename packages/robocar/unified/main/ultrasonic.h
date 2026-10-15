@@ -1,31 +1,33 @@
 /**
  * @file ultrasonic.h
- * @brief HC-SR04P / RCWL-1601 / US-100 ultrasonic rangefinder driver.
+ * @brief Front and rear RCWL-1601 rangefinders over I2C, one per mux channel.
  *
- * Uses the ESP-IDF v5.4 RMT RX peripheral to capture the echo pulse width
- * without busy-waiting.  Falls back to a GPIO + esp_timer polling loop when
- * RMT initialisation fails (e.g., all RMT channels are already claimed).
- *
- * Pin assignment (defined in pin_config.h):
- *   ULTRASONIC_TRIG_PIN  — GPIO3  (output, 10 µs trigger pulse)
- *   ULTRASONIC_ECHO_PIN  — GPIO4  (input,  RMT RX captures pulse width)
+ * Both modules run in I2C mode at RCWL1601_I2C_ADDR, each alone on its own
+ * TCA9548A channel (I2C_BUS_CHANNEL_RANGER_FRONT / _REAR in pin_config.h). The
+ * read is the non-blocking two-phase cycle in ultrasonic_core.h: trigger and
+ * release the bus, then on a later poll, once ULTRASONIC_CONVERSION_MS has
+ * passed, read three bytes and release. The bus is never held across a
+ * conversion, so PCA9685 writes are never blocked behind one.
  *
  * Threading
  * ---------
- * ultrasonic_measure() is NOT reentrant — the reactive controller is the only
- * caller and invokes it from a single task.  No internal mutex is used; callers
- * must not call from multiple tasks simultaneously.
+ * ultrasonic_poll() is NOT reentrant per sensor — the reactive controller is
+ * the only caller in the robot firmware and polls from a single task. The bus
+ * itself is serialised by i2c_bus_select_channel().
  *
  * Host-test build
  * ---------------
- * Compile with -DULTRASONIC_HOST_TEST=1 to replace the ESP-IDF hardware calls
- * with thin stubs.  The stub makes ultrasonic_measure() return the value set by
- * ultrasonic_test_set_distance().
+ * Compile with -DULTRASONIC_HOST_TEST=1 to replace the I2C calls with a stub
+ * per sensor: ultrasonic_poll() returns, on every call, the value last set by
+ * ultrasonic_test_set_distance() for that sensor. The two-phase sequencing is
+ * tested on the real state machine in test_ultrasonic_core.c.
  */
 
 #pragma once
 
 #include <stdint.h>
+
+#include "ultrasonic_core.h"
 
 #ifndef ULTRASONIC_HOST_TEST
 #include "esp_err.h"
@@ -43,60 +45,44 @@ typedef int esp_err_t;
 extern "C" {
 #endif
 
-/** Sentinel value written to *distance_cm on timeout or error. */
-#define ULTRASONIC_DIST_ERROR UINT16_MAX
-
-/** Maximum reliable sensing range (HC-SR04P: ~4 m; rounded to 400 cm). */
-#define ULTRASONIC_MAX_RANGE_CM 400U
-
-/** Timeout waiting for the echo pulse, µs (40 ms covers 6 m round-trip). */
-#define ULTRASONIC_ECHO_TIMEOUT_US 40000U
+/** Which rangefinder. */
+typedef enum {
+    ULTRASONIC_FRONT = 0, /**< Fixed, facing forward; drives the obstacle reflex. */
+    ULTRASONIC_REAR,      /**< Facing backward; telemetry only.                  */
+    ULTRASONIC_COUNT,
+} ultrasonic_id_t;
 
 /**
- * RMT RX idle threshold, in ms.
+ * @brief Prepare both rangefinders.
  *
- * Reception completes only after this much line-idle following the last edge,
- * so it is added to every measurement's latency — and it must exceed the
- * longest echo we care about (400 cm ≈ 23.2 ms) or a long echo gets truncated
- * mid-pulse. 25 ms satisfies both and stays under the 32.767 ms hardware cap
- * documented in .claude/rules/esp-idf-rmt-rx.md.
+ * Needs the I2C bus up (i2c_bus_init()). Does not probe the sensors: an absent
+ * one shows up as ULTRASONIC_ERROR from ultrasonic_poll(), paced like a working
+ * one, so a robot with one or no rangefinder fitted still boots and drives.
  *
- * Consequence worth knowing: a no-echo measurement blocks for roughly
- * ULTRASONIC_ECHO_TIMEOUT_US + this, which is longer than the reactive
- * executor's 33 ms period. The executor's overrun guard keeps IDLE fed, but the
- * loop rate does drop while the sensor is unanswered.
- */
-#define ULTRASONIC_RMT_IDLE_MS 25U
-
-/**
- * @brief Initialise the ultrasonic driver.
- *
- * Configures TRIG as a GPIO output and attempts to claim an RMT RX channel for
- * ECHO.  If RMT is unavailable the driver falls back to GPIO polling and logs a
- * warning.  Call once at boot before ultrasonic_measure().
- *
- * @return ESP_OK on success.
+ * @return ESP_OK, or ESP_ERR_INVALID_STATE if the I2C bus is not up.
  */
 esp_err_t ultrasonic_init(void);
 
 /**
- * @brief Trigger a single ranging measurement.
+ * @brief Advance one rangefinder's read cycle by at most one bus operation.
  *
- * Sends the 10 µs TRIG pulse and waits for the ECHO response.  Blocks for up
- * to ULTRASONIC_ECHO_TIMEOUT_US µs (≈40 ms).
- *
- * @param[out] distance_cm  Distance in centimetres.  Set to
- *                          ULTRASONIC_DIST_ERROR on timeout or hardware fault.
- * @return  ESP_OK on a valid reading, ESP_FAIL on timeout or error.
+ * @param id           Which sensor.
+ * @param now_ms       Monotonic milliseconds; may wrap.
+ * @param[out] distance_cm  Written on READY (centimetres) and ERROR
+ *                          (ULTRASONIC_DIST_ERROR); untouched on PENDING.
+ * @return ULTRASONIC_READY with a fresh reading, ULTRASONIC_PENDING when there
+ *         is nothing new, ULTRASONIC_ERROR on a bus error, a zero or an
+ *         out-of-range reading, an unknown id, or before ultrasonic_init().
  */
-esp_err_t ultrasonic_measure(uint16_t *distance_cm);
+ultrasonic_result_t ultrasonic_poll(ultrasonic_id_t id, uint32_t now_ms, uint16_t *distance_cm);
 
-/**
- * @brief Tear down the RMT channel and GPIO config.
- *
- * Optional — mainly useful for unit tests that need a clean reset between
- * cases.
- */
+/** @brief The TCA9548A channel a sensor sits on (pin_config.h). */
+uint8_t ultrasonic_channel(ultrasonic_id_t id);
+
+/** @brief "front" or "rear", for logs and the console. */
+const char *ultrasonic_name(ultrasonic_id_t id);
+
+/** @brief Release the I2C device descriptor. Optional; mainly for tests. */
 esp_err_t ultrasonic_deinit(void);
 
 /* =========================================================================
@@ -104,13 +90,13 @@ esp_err_t ultrasonic_deinit(void);
  * ========================================================================= */
 
 /**
- * @brief Inject a distance reading for the next ultrasonic_measure() call.
+ * @brief Inject the reading a sensor returns.
  *
- * On-target: no-op (the real RMT reading always wins).
- * Host-test (ULTRASONIC_HOST_TEST=1): stores value returned by the next
- * ultrasonic_measure() call.  ULTRASONIC_DIST_ERROR simulates a timeout.
+ * On-target: no-op. Host-test (ULTRASONIC_HOST_TEST=1): every later
+ * ultrasonic_poll() for @p id returns READY with @p cm, or ERROR when @p cm is
+ * ULTRASONIC_DIST_ERROR.
  */
-void ultrasonic_test_set_distance(uint16_t cm);
+void ultrasonic_test_set_distance(ultrasonic_id_t id, uint16_t cm);
 
 #ifdef __cplusplus
 }

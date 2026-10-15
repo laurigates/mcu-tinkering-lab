@@ -40,6 +40,7 @@ idf_component_register(
         "voice_persona.c"
         "dialogue_style.c"
         "ultrasonic.c"
+        "ultrasonic_core.c"
         "head_aim.c"
         "reactive_controller.c"
         "planner_task.c"

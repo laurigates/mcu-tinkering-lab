@@ -146,6 +146,65 @@ esp_err_t i2c_dev_write_reg(const i2c_dev_t *dev, uint8_t reg, const void *out_d
     return ESP_OK;
 }
 
+/* ---- TCA9548A RESET line ------------------------------------------------ */
+/*                                                                              */
+/* Every level written to TCA9548A_RST_PIN, in order, and the delay requested   */
+/* while it was low. Other pins are ignored: i2c_bus.c drives no other GPIO.    */
+
+#define MAX_RST_EVENTS 64
+
+static int s_rst_levels[MAX_RST_EVENTS];
+static size_t s_rst_count;
+static bool s_rst_configured_output;
+static uint32_t s_rst_low_us; /* delay requested while the line was last low */
+static bool s_rst_is_low;
+
+esp_err_t gpio_config(const gpio_config_t *cfg)
+{
+    if (cfg != NULL && (cfg->pin_bit_mask & (1ULL << TCA9548A_RST_PIN)) != 0u &&
+        cfg->mode == GPIO_MODE_OUTPUT) {
+        s_rst_configured_output = true;
+    }
+    return ESP_OK;
+}
+
+esp_err_t gpio_set_level(gpio_num_t pin, uint32_t level)
+{
+    if (pin == TCA9548A_RST_PIN && s_rst_count < MAX_RST_EVENTS) {
+        s_rst_levels[s_rst_count++] = (int)level;
+        s_rst_is_low = (level == 0u);
+        if (s_rst_is_low) {
+            s_rst_low_us = 0u;
+        }
+    }
+    return ESP_OK;
+}
+
+void esp_rom_delay_us(uint32_t us)
+{
+    if (s_rst_is_low) {
+        s_rst_low_us += us;
+    }
+}
+
+/** Low-going pulses written to RESET since the record was cleared. */
+static unsigned rst_pulses(void)
+{
+    unsigned pulses = 0;
+    for (size_t i = 0; i + 1 < s_rst_count; i++) {
+        if (s_rst_levels[i] == 0 && s_rst_levels[i + 1] == 1) {
+            pulses++;
+        }
+    }
+    return pulses;
+}
+
+static void rst_clear(void)
+{
+    s_rst_count = 0;
+    s_rst_low_us = 0u;
+}
+
 /* ---- harness ------------------------------------------------------------ */
 
 static int s_failures;
@@ -296,11 +355,98 @@ static void test_counters_survive_the_uint32_millisecond_wrap(void)
     CHECK(st.hz == 0u, "staleness must still be detected across the wrap, got %u", (unsigned)st.hz);
 }
 
+/* ---- mux reset (issue #782) --------------------------------------------- */
+/*                                                                              */
+/* A rangefinder that "gets confused by other commands and can lock up the      */
+/* bus" (Adafruit #4742) holds SDA low through the mux, and from then on every  */
+/* channel-select fails. The TCA9548A's RESET deselects every channel, which     */
+/* cuts the stuck segment off the upstream bus. The counter lives in the select  */
+/* gate because that is where a lock-up shows, whichever task hits it first.    */
+
+/** `n` failed selections in a row, through the real gate. */
+static void failed_ops(unsigned n)
+{
+    s_mux_result = ESP_FAIL;
+    for (unsigned i = 0; i < n; i++) {
+        do_op(3);
+    }
+    s_mux_result = ESP_OK;
+}
+
+static void test_init_drives_reset_high_as_an_output(void)
+{
+    /* i2c_bus_init() ran in the first test; it must leave RESET an output, high,
+     * and must not have pulsed it on the way. */
+    CHECK(s_rst_configured_output, "RESET must be configured as an output at init");
+    CHECK(s_rst_count >= 1u && s_rst_levels[s_rst_count - 1] == 1, "RESET must rest high");
+    CHECK(rst_pulses() == 0u, "init must not reset the mux, got %u pulses", rst_pulses());
+}
+
+static void test_fewer_than_n_failures_do_not_reset(void)
+{
+    i2c_bus_stats_reset();
+    rst_clear();
+    failed_ops(I2C_BUS_MUX_RESET_AFTER_FAILURES - 1u);
+    CHECK(rst_pulses() == 0u, "%u failures must not reset, got %u pulses",
+          (unsigned)(I2C_BUS_MUX_RESET_AFTER_FAILURES - 1u), rst_pulses());
+    /* Clear the streak so the next case starts from zero. */
+    do_op(3);
+}
+
+static void test_n_consecutive_failures_pulse_reset_once(void)
+{
+    i2c_bus_stats_reset();
+    rst_clear();
+    failed_ops(I2C_BUS_MUX_RESET_AFTER_FAILURES);
+    CHECK(rst_pulses() == 1u, "N failures must pulse RESET once, got %u", rst_pulses());
+    CHECK(s_rst_low_us >= TCA9548A_RST_PULSE_US, "RESET held low %u us, need %u",
+          (unsigned)s_rst_low_us, (unsigned)TCA9548A_RST_PULSE_US);
+    CHECK(s_rst_levels[s_rst_count - 1] == 1, "RESET must be released high afterwards");
+
+    i2c_bus_stats_t st;
+    i2c_bus_stats_get(&st);
+    CHECK(st.mux_resets == 1u, "the reset must be counted, got %u", (unsigned)st.mux_resets);
+
+    /* The streak restarts after a reset: N more failures, one more pulse — not
+     * one pulse per failure from here on. */
+    rst_clear();
+    failed_ops(I2C_BUS_MUX_RESET_AFTER_FAILURES - 1u);
+    CHECK(rst_pulses() == 0u, "the streak must restart after a reset, got %u", rst_pulses());
+    failed_ops(1u);
+    CHECK(rst_pulses() == 1u, "the next N failures reset again, got %u", rst_pulses());
+    do_op(3);
+}
+
+static void test_a_success_breaks_the_streak(void)
+{
+    i2c_bus_stats_reset();
+    rst_clear();
+    failed_ops(I2C_BUS_MUX_RESET_AFTER_FAILURES - 1u);
+    do_op(3); /* one good selection */
+    failed_ops(I2C_BUS_MUX_RESET_AFTER_FAILURES - 1u);
+    CHECK(rst_pulses() == 0u, "failures that are not consecutive must not reset, got %u",
+          rst_pulses());
+    do_op(3);
+}
+
+static void test_reset_mux_can_be_called_directly(void)
+{
+    rst_clear();
+    CHECK(i2c_bus_reset_mux() == ESP_OK, "a direct reset should succeed");
+    CHECK(rst_pulses() == 1u, "a direct reset is one pulse, got %u", rst_pulses());
+    CHECK(s_rst_low_us >= TCA9548A_RST_PULSE_US, "held low %u us", (unsigned)s_rst_low_us);
+}
+
 int main(void)
 {
     printf("test_i2c_bus_stats\n");
 
     test_ops_are_counted_per_channel();
+    test_init_drives_reset_high_as_an_output();
+    test_fewer_than_n_failures_do_not_reset();
+    test_n_consecutive_failures_pulse_reset_once();
+    test_a_success_breaks_the_streak();
+    test_reset_mux_can_be_called_directly();
     test_a_failed_selection_counts_as_a_failure_not_an_op();
     test_the_rate_reflects_the_windows_real_length();
     test_a_stale_rate_reads_as_zero();
