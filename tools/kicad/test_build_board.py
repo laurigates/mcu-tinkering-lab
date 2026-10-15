@@ -192,6 +192,12 @@ class BackSideTests(unittest.TestCase):
             if comp["ref"] == "R2":
                 cls.at = comp["at"]
                 comp["at"] = [*comp["at"], "back"]
+        # A reference position on a back-side part is where the label lands.
+        cls.ref_at = [cls.at[0] + 3.0, cls.at[1] + 4.0]
+        spec["silk"] = dict(
+            spec["silk"],
+            ref_positions=dict(spec["silk"]["ref_positions"], R2=cls.ref_at),
+        )
         with tempfile.TemporaryDirectory(prefix="kicad-back-") as tmp:
             _, cls.dsn = place_and_export(spec, Path(tmp))
             cls.pcb = (Path(tmp) / "carrier.kicad_pcb").read_text()
@@ -215,6 +221,12 @@ class BackSideTests(unittest.TestCase):
         self.assertIn('(layer "B.Cu")', head)
         at = f"(at {100 + x:g} {100 + y:g}" + (f" {rot:g})" if rot else ")")
         self.assertIn(at, head)
+
+    def test_reference_position_is_not_mirrored_by_the_flip(self):
+        # KiCad stores a field's position relative to its footprint.
+        dx = self.ref_at[0] - self.at[0]
+        dy = self.ref_at[1] - self.at[1]
+        self.assertIn(f'(property "Reference" "R2"\n\t\t\t(at {dx:g} {dy:g} ', self.pcb)
 
     def test_every_other_part_stays_on_the_front(self):
         backs = [line for line in self.dsn.splitlines() if " back " in line]

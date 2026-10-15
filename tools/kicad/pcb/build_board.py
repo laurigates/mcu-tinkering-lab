@@ -160,6 +160,15 @@ def place(board, spec):
         x, y, rot = comp["at"][:3]
         fp.SetPosition(pcbnew.VECTOR2I(mm(origin[0] + x), mm(origin[1] + y)))
         fp.SetOrientationDegrees(rot)
+        board.Add(fp)
+        if comp["at"][3:] == ["back"]:
+            # KiCad's own flip, about the anchor; with the rotation then set as
+            # seen from the top, the footprint ends up mirrored top to bottom.
+            # Flip() before Add() segfaults: it needs the board's layer stack.
+            # The silk below comes after it, or the flip would mirror a
+            # reference position too.
+            fp.Flip(fp.GetPosition(), pcbnew.FLIP_DIRECTION_LEFT_RIGHT)
+            fp.SetOrientationDegrees(rot)
         if ref in hidden:
             fp.Reference().SetVisible(False)
         if ref in silk["ref_positions"]:
@@ -171,13 +180,6 @@ def place(board, spec):
             size = mm(silk["ref_sizes"][ref])
             fp.Reference().SetTextSize(pcbnew.VECTOR2I(size, size))
             fp.Reference().SetTextThickness(int(size * 0.15))
-        board.Add(fp)
-        if comp["at"][3:] == ["back"]:
-            # Mirror about the anchor, as KiCad's own flip does, then set the
-            # rotation as seen from the top. Flip() before Add() segfaults:
-            # it needs the board's layer stack.
-            fp.Flip(fp.GetPosition(), pcbnew.FLIP_DIRECTION_LEFT_RIGHT)
-            fp.SetOrientationDegrees(rot)
         footprints[ref] = fp
     return footprints
 
