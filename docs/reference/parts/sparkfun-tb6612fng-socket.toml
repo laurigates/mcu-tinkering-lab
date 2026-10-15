@@ -1,0 +1,28 @@
+# SparkFun TB6612FNG dual motor driver (ROB-14451), socketed in two 1x8 female
+# headers placed at the breakout's own pad centres.
+[part]
+name = "SparkFun TB6612FNG motor driver, socketed"
+source = "docs/reference/boards/sparkfun-tb6612fng.md (SparkFun's Eagle board file at 1b71b6b, elements JP1 and JP2); footprint pad n is the n-th pad of the Breakout_Sockets config (JP1.1-8, then JP2.1-8)"
+symbol = "Connector_Generic:Conn_01x16"
+footprint = "Breakout_Sockets:SparkFun_TB6612FNG_Socket"
+
+# Board-page pin name -> socket pad. Pads 1-8 are JP1.1-8, 9-16 JP2.1-8.
+# The outputs print a zero (A01), not a letter O, as on the board page.
+[pins]
+GND = [1, 6, 16]
+B01 = 2
+B02 = 3
+A02 = 4
+A01 = 5
+VCC = 7
+VM = 8
+PWMA = 9
+AIN2 = 10
+AIN1 = 11
+STBY = 12
+BIN1 = 13
+BIN2 = 14
+PWMB = 15
+
+[perfboard]
+height = "raised"

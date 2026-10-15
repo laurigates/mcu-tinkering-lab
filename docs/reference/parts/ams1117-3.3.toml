@@ -1,0 +1,15 @@
+# AMS1117-3.3 LDO, SOT-223: the main board's own 3V3 rail (#750).
+# KiCad's AMS1117-3.3 symbol is a derived (`extends`) symbol, which the vendored
+# subset rejects; it extends AP1117-15, whose pins and footprint it shares.
+[part]
+name = "AMS1117-3.3 LDO regulator"
+source = "KiCad 10.0.6 library: Regulator_Linear:AP1117-15 (GND = 1, VO = 2, VI = 3; AMS1117-3.3 extends it) and Package_TO_SOT_SMD:SOT-223-3_TabPin2 (the tab is pad 2, VO)"
+symbol = "Regulator_Linear:AP1117-15"
+footprint = "Package_TO_SOT_SMD:SOT-223-3_TabPin2"
+value = "AMS1117-3.3"
+lcsc = "C6186"
+
+[pins]
+GND = 1
+VO = 2
+VI = 3

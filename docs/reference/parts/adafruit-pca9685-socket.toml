@@ -1,0 +1,30 @@
+# Adafruit PCA9685 16-channel PWM driver, socketed on its left side header and
+# the PWM pads of servo channels 8-13 (the TB6612FNG control block).
+[part]
+name = "Adafruit PCA9685 PWM driver, socketed"
+source = "docs/reference/boards/adafruit-pca9685.md (Adafruit's Eagle board file); footprint pad n is the n-th pad of the Breakout_Sockets config (JP3.1-6, then JP6.10, JP6.7, JP6.4, JP6.1, JP5.10, JP5.7)"
+symbol = "Connector_Generic:Conn_01x12"
+footprint = "Breakout_Sockets:Adafruit_PCA9685_Socket"
+# Output enable is pulled low on the breakout, so the outputs stay enabled.
+no_connect = ["OE"]
+
+# Board-page pin name -> socket pad. Pads 1-6 are JP3.1-6; pads 7-12 are the
+# PWM pads of channels 8-13, named by channel number as the board page and
+# [[channel_nets]] name them. This "V+" is the side header's JP3.1, not the
+# reverse-protected terminal block J1, which is not socketed.
+[pins]
+"V+" = 1
+VCC = 2
+SDA = 3
+SCL = 4
+OE = 5
+GND = 6
+"8" = 7
+"9" = 8
+"10" = 9
+"11" = 10
+"12" = 11
+"13" = 12
+
+[perfboard]
+height = "raised"
