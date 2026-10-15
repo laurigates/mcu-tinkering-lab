@@ -5,7 +5,7 @@
 	(descr "Socket for the sparkfun-tb6612fng breakout (docs/reference/boards/sparkfun-tb6612fng.md), pads: 1=JP1.1, 2=JP1.2, 3=JP1.3, 4=JP1.4, 5=JP1.5, 6=JP1.6, 7=JP1.7, 8=JP1.8, 9=JP2.1, 10=JP2.2, 11=JP2.3, 12=JP2.4, 13=JP2.5, 14=JP2.6, 15=JP2.7, 16=JP2.8")
 	(tags "socket breakout 2.54mm")
 	(property "Reference" "REF**"
-		(at 0 -20.55 0)
+		(at -2.79 -20.55 0)
 		(layer "F.SilkS")
 		(effects
 			(font
@@ -15,7 +15,7 @@
 		)
 	)
 	(property "Value" "SparkFun_TB6612FNG_Socket"
-		(at 0 2.77 0)
+		(at -2.79 2.77 0)
 		(layer "F.Fab")
 		(effects
 			(font
@@ -37,8 +37,18 @@
 		(layer "F.SilkS")
 	)
 	(fp_rect
-		(start -1.77 -19.55)
-		(end 17.01 1.77)
+		(start -2.54 -19.05)
+		(end 17.78 1.27)
+		(stroke
+			(width 0.1)
+			(type solid)
+		)
+		(fill no)
+		(layer "F.Fab")
+	)
+	(fp_rect
+		(start -2.79 -19.55)
+		(end 18.03 1.77)
 		(stroke
 			(width 0.05)
 			(type solid)

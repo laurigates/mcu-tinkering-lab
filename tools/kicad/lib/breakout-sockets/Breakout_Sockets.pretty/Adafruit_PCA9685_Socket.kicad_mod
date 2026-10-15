@@ -5,7 +5,7 @@
 	(descr "Socket for the adafruit-pca9685 breakout (docs/reference/boards/adafruit-pca9685.md), pads: 1=JP3.1, 2=JP3.2, 3=JP3.3, 4=JP3.4, 5=JP3.5, 6=JP3.6, 7=JP6.10, 8=JP6.7, 9=JP6.4, 10=JP6.1, 11=JP5.10, 12=JP5.7")
 	(tags "socket breakout 2.54mm")
 	(property "Reference" "REF**"
-		(at 0 -15.47 0)
+		(at -2.155 -20.173 0)
 		(layer "F.SilkS")
 		(effects
 			(font
@@ -15,7 +15,7 @@
 		)
 	)
 	(property "Value" "Adafruit_PCA9685_Socket"
-		(at 0 2.77 0)
+		(at -2.155 7.727 0)
 		(layer "F.Fab")
 		(effects
 			(font
@@ -37,8 +37,18 @@
 		(layer "F.SilkS")
 	)
 	(fp_rect
-		(start -1.77 -14.47)
-		(end 50.03 1.77)
+		(start -1.905 -18.923)
+		(end 60.325 6.477)
+		(stroke
+			(width 0.1)
+			(type solid)
+		)
+		(fill no)
+		(layer "F.Fab")
+	)
+	(fp_rect
+		(start -2.155 -19.173)
+		(end 60.575 6.727)
 		(stroke
 			(width 0.05)
 			(type solid)

@@ -2,6 +2,7 @@
   (version 7)
   (lib (name "Connector_Generic")(type "KiCad")(uri "${KIPRJMOD}/../../../../../../tools/kicad/lib/kicad-stock/symbols/Connector_Generic.kicad_sym")(options "")(descr "KiCad 10.0.6 Connector_Generic library, vendored subset (CC-BY-SA 4.0, tools/kicad/lib/kicad-stock/LICENSE.md)"))
   (lib (name "Device")(type "KiCad")(uri "${KIPRJMOD}/../../../../../../tools/kicad/lib/kicad-stock/symbols/Device.kicad_sym")(options "")(descr "KiCad 10.0.6 Device library, vendored subset (CC-BY-SA 4.0, tools/kicad/lib/kicad-stock/LICENSE.md)"))
+  (lib (name "Mechanical")(type "KiCad")(uri "${KIPRJMOD}/../../../../../../tools/kicad/lib/kicad-stock/symbols/Mechanical.kicad_sym")(options "")(descr "KiCad 10.0.6 Mechanical library, vendored subset (CC-BY-SA 4.0, tools/kicad/lib/kicad-stock/LICENSE.md)"))
   (lib (name "Regulator_Linear")(type "KiCad")(uri "${KIPRJMOD}/../../../../../../tools/kicad/lib/kicad-stock/symbols/Regulator_Linear.kicad_sym")(options "")(descr "KiCad 10.0.6 Regulator_Linear library, vendored subset (CC-BY-SA 4.0, tools/kicad/lib/kicad-stock/LICENSE.md)"))
   (lib (name "Seeed_XIAO")(type "KiCad")(uri "${KIPRJMOD}/../../../../../../tools/kicad/lib/seeed-xiao/Seeed_XIAO.kicad_sym")(options "")(descr "Seeed XIAO RP2350 and ESP32-S3, from Seeed-Studio/OSHW-XIAO-Series @ cc7f3bb (MIT)"))
   (lib (name "power")(type "KiCad")(uri "${KIPRJMOD}/../../../../../../tools/kicad/lib/kicad-stock/symbols/power.kicad_sym")(options "")(descr "KiCad 10.0.6 power library, vendored subset (CC-BY-SA 4.0, tools/kicad/lib/kicad-stock/LICENSE.md)"))

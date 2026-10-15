@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+import re
 import shutil
 import tempfile
 import tomllib
@@ -59,6 +60,26 @@ def expected_centres(board: str, pads: list[str]) -> list[tuple[float, float]]:
             out += [(c.x, c.y) for c in found if c.pad == pad]
         else:
             out += [(c.x, c.y) for c in sorted(found, key=lambda c: int(c.pad))]
+    return out
+
+
+def page_outline_size(page: Path) -> tuple[float, float]:
+    """The "the outline W × H mm" a board page states in its prose."""
+    m = re.search(r"the outline\s+([\d.]+) × ([\d.]+) mm", page.read_text())
+    assert m, f"{page}: no outline size"
+    return float(m.group(1)), float(m.group(2))
+
+
+def fab_rects(text: str) -> list[tuple[float, float, float, float]]:
+    """(x0, y0, x1, y1) of each fp_rect on F.Fab."""
+    out = []
+    for m in re.finditer(
+        r"\(fp_rect\s*\(start (\S+) (\S+)\)\s*\(end (\S+) (\S+)\)(.*?)\(layer \"([^\"]+)\"\)",
+        text,
+        re.S,
+    ):
+        if m.group(6) == "F.Fab":
+            out.append(tuple(float(m.group(i)) for i in range(1, 5)))
     return out
 
 
@@ -123,11 +144,38 @@ class CommittedFootprintTests(unittest.TestCase):
                 px = [p.x for p in fp.pads.values()]
                 py = [p.y for p in fp.pads.values()]
                 xmin, ymin, xmax, ymax = fp.courtyard
-                self.assertAlmostEqual(xmin, min(px) - margin)
-                self.assertAlmostEqual(ymin, min(py) - margin)
-                self.assertAlmostEqual(xmax, max(px) + margin)
-                self.assertAlmostEqual(ymax, max(py) + margin)
+                # The courtyard is the box over the headers' margin and the
+                # module outline's (test_module_outline_...), so it is at
+                # least the headers' own.
+                self.assertLessEqual(xmin, min(px) - margin + 1e-9)
+                self.assertLessEqual(ymin, min(py) - margin + 1e-9)
+                self.assertGreaterEqual(xmax, max(px) + margin - 1e-9)
+                self.assertGreaterEqual(ymax, max(py) + margin - 1e-9)
                 self.assertIn('(layer "F.SilkS")', path.read_text())
+
+    def test_module_outline_is_the_pages_and_the_courtyard_covers_it(self):
+        # The breakout sits above the carrier on its headers, so its whole
+        # board, not only the headers, must stay clear of other parts (#750).
+        for s in self.config:
+            with self.subTest(socket=s["name"]):
+                page = BOARDS / f"{s['board']}.md"
+                w, h = page_outline_size(page)
+                x0, y0, x1, y1 = s["outline"]
+                self.assertAlmostEqual(x1 - x0, w, places=2)
+                self.assertAlmostEqual(y1 - y0, h, places=2)
+                px, py = expected_centres(s["board"], s["pads"])[0]
+                path = PRETTY / f"{s['name']}.kicad_mod"
+                fab = fab_rects(path.read_text())
+                want = (x0 - px, y0 - py, x1 - px, y1 - py)
+                self.assertEqual(len(fab), 1, fab)
+                for got, exp in zip(fab[0], want, strict=True):
+                    self.assertAlmostEqual(got, exp, places=4)
+                cx0, cy0, cx1, cy1 = footprints.parse(path).courtyard
+                m = sockets.MODULE_MARGIN
+                self.assertLessEqual(cx0, want[0] - m + 1e-9)
+                self.assertLessEqual(cy0, want[1] - m + 1e-9)
+                self.assertGreaterEqual(cx1, want[2] + m - 1e-9)
+                self.assertGreaterEqual(cy1, want[3] + m - 1e-9)
 
     def test_render_is_byte_stable(self):
         first = sockets.render(REPO_ROOT)
@@ -172,12 +220,23 @@ class ConfigTests(unittest.TestCase):
     def test_valid(self):
         got = self.load(
             '[[socket]]\nname = "A_Socket"\nboard = "b"\npads = ["JP1", "JP2.3"]\n'
+            "outline = [0, -10, 20, 0]\n"
         )
-        self.assertEqual(got, [sockets.Socket("A_Socket", "b", ("JP1", "JP2.3"))])
+        self.assertEqual(
+            got,
+            [sockets.Socket("A_Socket", "b", ("JP1", "JP2.3"), (0, -10, 20, 0))],
+        )
 
     def test_rejects(self):
+        ok = "outline = [0, -1, 1, 0]\n"
         cases = {
-            "unknown key": '[[socket]]\nname = "A"\nboard = "b"\npads = ["JP1"]\nx = 1\n',
+            "unknown key": '[[socket]]\nname = "A"\nboard = "b"\npads = ["JP1"]\nx = 1\n'
+            + ok,
+            "no outline": '[[socket]]\nname = "A"\nboard = "b"\npads = ["JP1"]\n',
+            "outline not 4 numbers": '[[socket]]\nname = "A"\nboard = "b"\npads = ["JP1"]\n'
+            "outline = [0, 1, 2]\n",
+            "outline inverted": '[[socket]]\nname = "A"\nboard = "b"\npads = ["JP1"]\n'
+            "outline = [2, 0, 0, -1]\n",
             "missing key": '[[socket]]\nname = "A"\nboard = "b"\n',
             "bad name": '[[socket]]\nname = "a b"\nboard = "b"\npads = ["JP1"]\n',
             "empty pads": '[[socket]]\nname = "A"\nboard = "b"\npads = []\n',
@@ -251,6 +310,26 @@ class MutationTests(unittest.TestCase):
                 self.assertIn("FAIL:", out)
                 self.assertIn(bad.strip('"'), out)
         config.write_text(text)
+
+    def test_outline_disagreeing_with_the_page_fails(self):
+        config = self.subtree / sockets.CONFIG
+        text = config.read_text()
+        target = "outline = [0, -30.48, 17.78, 0]"
+        self.assertEqual(text.count(target), 1)
+        config.write_text(text.replace(target, "outline = [0, -30.48, 17.5, 0]"))
+        code, out = run(["--check"], self.root)
+        self.assertEqual(code, 1, out)
+        self.assertIn("Adafruit_TCA9548A_Socket", out)
+        self.assertIn("17.78", out)
+
+    def test_pad_outside_the_outline_fails(self):
+        config = self.subtree / sockets.CONFIG
+        text = config.read_text()
+        target = "outline = [0, -30.48, 17.78, 0]"
+        config.write_text(text.replace(target, "outline = [5, -30.48, 22.78, 0]"))
+        code, out = run(["--check"], self.root)
+        self.assertEqual(code, 1, out)
+        self.assertIn("outside the outline", out)
 
     def test_duplicate_pad_fails(self):
         config = self.subtree / sockets.CONFIG

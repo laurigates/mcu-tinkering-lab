@@ -190,6 +190,10 @@ Module map (`tools/kicad`; the package docstring has the full list):
 | `perfboard/` | KiCad-free: the carrier netlist laid out on a perfboard (`hardware/perfboard/perfboard.toml`): drawing and wire list; `--check` |
 
 Per project: `hardware/carrier/board.toml` (KiCad project name, placement,
-silkscreen, net classes, pour) and the generated KiCad project beside it.
+silkscreen and cut lines, net classes, pour regions, copper keepouts) and the
+generated KiCad project beside it. A keepout is a rule area with no copper of
+any kind, given to DRC and Freerouting by the pcbnew scripts and checked
+KiCad-free by `boardcheck`; one PCB carrying two boards that are sawn apart
+after delivery (robocar-unified, #750) separates them with one.
 Recipes come from `tools/kicad.just` (`carrier-schematic`, `carrier-board`,
 `carrier-check`, `carrier-fab`); `just kicad::check` runs what CI runs.

@@ -3,14 +3,20 @@
 # registry (docs/reference/parts/); this file says where each part sits, how
 # wide each net's tracks are, and what goes on the silkscreen.
 #
-# PROVISIONAL (#750 step 2). The outline and placement below are a plain
-# row-by-row packing of the courtyards, written only so the carrier gates
-# (kicad.boardcheck, the check stamp) have a placed, routed board to check
-# the schematic against. They are not a layout: the head/main split, the
-# breakouts' real outlines (a socket's courtyard is its headers only), the
-# connectors' edge positions and the mounting holes are the placement work
-# that replaces this file's [outline] and [placement] wholesale. Do not
-# order this board.
+# PROVISIONAL (#750 step 2): DO NOT ORDER THIS BOARD. One PCB carries two
+# boards: the main board (chassis plate) and, in the top-right corner, the head
+# board (pan-tilt cradle), separated by a 3 mm copper-free band under a
+# silkscreen saw line. JLCPCB sees one rectangular design with no V-cuts, tabs
+# or mouse bites; Lauri saws the head off after delivery.
+#
+# Every dimension below is Claude's proposal, not a measurement, and each one
+# says what to measure. Correct it, then re-run
+# `just robocar-unified::carrier-board` and `just robocar-unified::carrier-check`.
+# The tracks are Freerouting's, kept only so the carrier gates have a routed
+# board to check; nobody has reviewed them.
+#
+# Coordinates: millimetres from the outline's top-left corner, x right, y down.
+# The top edge is the robot's front, the bottom edge its rear.
 #
 # `python3 -m kicad.boardcheck` validates every table against the netlist.
 # `python3 -m kicad.boardinput` turns this file and the netlist into the JSON
@@ -18,54 +24,105 @@
 
 [project]
 name = "robocar-unified-carrier"     # the KiCad project directory and file stem here
-paper = "A3"
+# The schematic writer grows the sheet until the drawing fits; this carrier's
+# needs A2, so the sheet is named as the generated file has it.
+paper = "A2"
 
-# Board outline: a rectangle, origin at its top-left corner.
+# One rectangle for both boards. PROVISIONAL: 100 x 100 mm keeps the order in
+# JLCPCB's smallest price band. Measure the 2WD chassis plate's usable area
+# between its wheels and standoffs. The main board is this outline minus the
+# head corner, so a smaller plate shrinks the outline, not the head.
 [outline]
 origin = [100.0, 100.0]
-size = [166.0, 102.0]
+size = [100.0, 100.0]
+
+# The saw band between the head board (x 70-100, y 0-34) and the main board:
+# no copper of any kind. build_board.py makes each rectangle a KiCad rule area,
+# so DRC, the zone fill and Freerouting keep out, and kicad.boardcheck checks
+# the committed copper against it. 3 mm leaves about 1 mm of bare board on each
+# side of a hacksaw kerf.
+[[keepouts]]
+name = "head cut band, vertical"
+rect = [67.0, 0.0, 70.0, 37.0]
+
+[[keepouts]]
+name = "head cut band, horizontal"
+rect = [67.0, 34.0, 100.0, 37.0]
 
 # ref = [x_mm, y_mm, rotation_deg], relative to the origin; each footprint's
-# own anchor. Provisional: rows of courtyards 6 mm apart (see the header).
+# own anchor (pad 1 for the sockets and connectors). A breakout socket's
+# courtyard is its module's outline, so no part sits under a module.
 [placement]
-A1 = [6.77, 24.55, 0]     # TB6612FNG socket
-A2 = [31.55, 19.47, 0]    # PCA9685 socket
-A3 = [89.35, 6.77, 0]     # TCA9548A socket
-A4 = [129.37, 6.77, 0]    # MAX98357A socket
-U1 = [147.57, 13.9, 0]    # XIAO ESP32-S3 Sense (head board)
-J1 = [8.68, 48.08, 0]     # IDC 2x7, main end
-J2 = [24.58, 48.08, 0]    # IDC 2x7, head end
-J3 = [46.45, 56.08, 0]    # XT30 pack in
-J4 = [60.05, 45.33, 0]    # LM2596 lead
-U2 = [80.9, 46.08, 0]     # AMS1117-3.3
-C7 = [93.94, 44.13, 0]    # LDO input
-C8 = [105.22, 44.13, 0]    # LDO output
-J5 = [7.95, 77.77, 0]     # motor left
-J6 = [22.35, 77.77, 0]    # motor right
-J7 = [36.75, 77.77, 0]    # RCWL-1601 front
-J8 = [56.15, 77.77, 0]    # RCWL-1601 rear
-J9 = [75.55, 77.77, 0]    # SSD1306
-J10 = [94.95, 77.77, 0]   # piezo
-C1 = [11.15, 92.17, 0]    # PCA9685 V+ bulk
-C2 = [29.45, 92.17, 0]    # TB6612FNG VM bulk
-C3 = [47.75, 92.17, 0]    # MAX98357A Vin bulk
-C4 = [61.78, 88.65, 0]
-C5 = [71.54, 88.65, 0]
-R1 = [81.27, 88.62, 0]
-R2 = [90.97, 88.62, 0]
-R3 = [100.67, 88.62, 0]
-R4 = [110.37, 88.62, 0]
-R5 = [120.07, 88.62, 0]
-R6 = [129.77, 88.62, 0]
-R7 = [139.47, 88.62, 0]
-R8 = [149.17, 88.62, 0]
-R9 = [158.87, 88.62, 0]
+# Head board, x 70-100, y 0-34. PROVISIONAL: 30 x 34 mm, wider than the planned
+# 24 x 32 because J2's shrouded 2x7 header is 26.4 mm long and lies across the
+# board. Measure the pan-tilt top cradle's back plate (width, height) and where
+# its two M2 screws can pass.
+U1 = [85.0, 12.5, 90]     # XIAO ESP32-S3 Sense socket; USB-C at the head's top edge
+J2 = [77.4, 29.5, 90]     # IDC 2x7, head end, lying along the bottom edge, so the
+                          # ribbon folds down toward the pan axis
+H5 = [73.0, 11.0, 0]      # M2 through the cradle, PROVISIONAL: 24 mm apart
+H6 = [97.0, 11.0, 0]
+# Main board: everything outside the head corner and the band. M3 holes at its
+# corners, PROVISIONAL: check them against the 2WD chassis plate's holes, or
+# drill the plate to match.
+H1 = [4.0, 4.0, 0]
+H2 = [63.0, 4.0, 0]       # the main board's top-right corner, beside the band
+H3 = [4.0, 96.0, 0]
+H4 = [96.0, 96.0, 0]
+J1 = [58.0, 14.0, 0]      # IDC 2x7, main end, beside the band: the pan-tilt end.
+                          # Measure the ribbon length the full pan and tilt travel needs
+# Front strip: the front rangefinder, the OLED and the 3V3 regulator.
+J7 = [12.0, 4.0, 0]       # RCWL-1601 front, at the front edge
+J9 = [4.0, 13.0, 0]       # SSD1306 OLED lead, front-left corner
+U2 = [12.0, 24.0, 0]      # AMS1117-3.3
+C7 = [6.0, 32.0, 0]       # LDO input
+C8 = [13.0, 32.0, 0]      # LDO output
+A3 = [32.0, 4.0, 0]       # TCA9548A socket
+C5 = [27.0, 3.5, 0]       # TCA9548A VIN decoupling, beside its VIN pin
+# The mux channel pull-ups in a row under the TCA9548A: ch0 and ch1 (left
+# header) on the left, ch3 and ch4 (right header) on the right.
+R2 = [21.0, 36.5, 90]
+R3 = [24.5, 36.5, 90]
+R4 = [28.0, 36.5, 90]
+R5 = [31.5, 36.5, 90]
+R6 = [38.5, 36.5, 90]
+R7 = [42.0, 36.5, 90]
+R8 = [45.5, 36.5, 90]
+R9 = [49.0, 36.5, 90]
+# Middle: the motor driver at the left edge, the PCA9685 beside it.
+A1 = [3.5, 62.0, 0]       # TB6612FNG socket; motor outputs on its left header
+J5 = [4.0, 69.0, 0]       # left motor, left edge
+J6 = [93.0, 48.0, 0]      # right motor, right edge
+C2 = [16.0, 70.0, 0]      # TB6612FNG VM bulk
+A2 = [25.0, 59.0, 0]      # PCA9685 socket; servo columns on the module face the rear
+C4 = [24.0, 68.0, 90]     # PCA9685 VCC decoupling
+C1 = [32.0, 72.0, 0]      # PCA9685 V+ bulk
+A4 = [97.0, 84.0, 0]      # MAX98357A socket, right side; the speaker lead leaves the module
+C3 = [72.0, 80.0, 0]      # MAX98357A Vin bulk
+# Rear edge: power in, the buck lead, the rear rangefinder and the piezo.
+J3 = [13.0, 86.0, 180]    # XT30 pack in, mating face to the rear edge
+J4 = [27.0, 95.0, 0]      # LM2596 lead
+J8 = [43.0, 95.0, 0]      # RCWL-1601 rear, at the rear edge
+J10 = [58.0, 95.0, 0]     # piezo
+R1 = [59.0, 88.0, 0]      # piezo series resistor
 
 [silk]
+hidden_refs = ["H1", "H2", "H3", "H4", "H5", "H6"]
 # Seeed's reference text is below KiCad's minimum silkscreen height.
 ref_sizes = { U1 = 1.0 }
+# Off the board edge and out from under neighbours.
+ref_positions = { A1 = [11.0, 52.0], J7 = [18.0, 9.3], J3 = [15.5, 81.5] }
+# The saw line, on both faces, along the middle of the keepout band; each gets
+# a "CUT" label inside the band.
+cut_lines = [
+    [68.5, 0.5, 68.5, 35.5],
+    [68.5, 35.5, 99.5, 35.5],
+]
 texts = [
-    { text = "robocar-unified carrier: PROVISIONAL placement, do not order", at = [83.0, 99.0], size = 1.2 },
+    { text = "robocar-unified carrier", at = [55.0, 80.0], size = 1.2 },
+    { text = "PROVISIONAL: do not order", at = [55.0, 82.5], size = 1.2 },
+    { text = "FRONT ^", at = [54.0, 4.0], size = 1.2 },
+    { text = "HEAD", at = [73.5, 20.0], size = 1.2 },
 ]
 
 # Freerouting width classes, in this order. `nets` are net names or fnmatch
@@ -85,17 +142,26 @@ clearance_um = 250
 via_um = [800, 400]
 
 # Every net not in a class above. Its via must be the .kicad_pro Default class's.
+# 200 um clearance, the .kicad_pro Default's, because Freerouting left
+# sub-minimum necking between 2.54 mm-pitch pads at 250 (#793).
 [signal]
 track_um = 300
 clearance_um = 200
 via_um = [600, 300]
 
-# A copper pour on both layers after routing. The .kicad_dru lets a thermal
-# resolve to one spoke because route_board first checks every pad of this net
-# has a routed track.
+# A copper pour on both layers after routing, one region per ground: the head's
+# ground arrives through the ribbon as HEAD_GND, a different net from the main
+# board's GND. The regions stop at the cut band; the keepouts would clear the
+# fill from it anyway. The .kicad_dru lets a thermal on either net resolve to
+# one spoke because route_board first checks every pad of both has a routed
+# track.
 [pour]
-net = "GND"
 layers = ["F.Cu", "B.Cu"]
+regions = [
+    { net = "GND", rect = [0.0, 0.0, 67.0, 100.0] },
+    { net = "GND", rect = [67.0, 37.0, 100.0, 100.0] },
+    { net = "HEAD_GND", rect = [70.0, 0.0, 100.0, 34.0] },
+]
 clearance_mm = 0.4
 min_thickness_mm = 0.25
 thermal_gap_mm = 0.3

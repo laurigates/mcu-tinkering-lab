@@ -1,5 +1,5 @@
 {
- "board_sha256": "d7c43242a1b4d0c61d18c4afd3ae6d9ec9bd18db3b1b230374af0ba27bb5e900",
+ "board_sha256": "6238e424c9bdec18c72a38dd3477544f9a0e444193ae58807a756c38ee30e147",
  "kicad_cli_version": "10.0.6",
  "netlist": {
   "components": {
@@ -79,6 +79,48 @@
     "lcsc": "C8020",
     "lib_id": "Device:C_Polarized",
     "value": "22uF 16V"
+   },
+   "H1": {
+    "footprint": "MountingHole:MountingHole_3.2mm_M3",
+    "in_bom": false,
+    "lcsc": "",
+    "lib_id": "Mechanical:MountingHole",
+    "value": "M3"
+   },
+   "H2": {
+    "footprint": "MountingHole:MountingHole_3.2mm_M3",
+    "in_bom": false,
+    "lcsc": "",
+    "lib_id": "Mechanical:MountingHole",
+    "value": "M3"
+   },
+   "H3": {
+    "footprint": "MountingHole:MountingHole_3.2mm_M3",
+    "in_bom": false,
+    "lcsc": "",
+    "lib_id": "Mechanical:MountingHole",
+    "value": "M3"
+   },
+   "H4": {
+    "footprint": "MountingHole:MountingHole_3.2mm_M3",
+    "in_bom": false,
+    "lcsc": "",
+    "lib_id": "Mechanical:MountingHole",
+    "value": "M3"
+   },
+   "H5": {
+    "footprint": "MountingHole:MountingHole_2.2mm_M2",
+    "in_bom": false,
+    "lcsc": "",
+    "lib_id": "Mechanical:MountingHole",
+    "value": "M2"
+   },
+   "H6": {
+    "footprint": "MountingHole:MountingHole_2.2mm_M2",
+    "in_bom": false,
+    "lcsc": "",
+    "lib_id": "Mechanical:MountingHole",
+    "value": "M2"
    },
    "J1": {
     "footprint": "Connector_IDC:IDC-Header_2x07_P2.54mm_Vertical",
@@ -955,5 +997,5 @@
    ]
   }
  },
- "schematic_sha256": "62a4500324c856d7071e0dca27527ee185510cdb0b552e3b36ad225be0e23e18"
+ "schematic_sha256": "bb80a60028004023581a39d939b1088c095c9d8dbfb9d69136bdfaeae6868fd9"
 }

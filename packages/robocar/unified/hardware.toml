@@ -616,6 +616,52 @@ ref = "R9"
 value = "10k"
 lcsc = "C17414"
 
+# Main board to the 2WD chassis plate. Positions are provisional, in
+# hardware/carrier/board.toml.
+[parts.hole_main_1]
+name = "M3 mounting hole, main board"
+kind = "mounting-hole"
+build = "carrier"
+part = "m3-mounting-hole"
+ref = "H1"
+
+[parts.hole_main_2]
+name = "M3 mounting hole, main board"
+kind = "mounting-hole"
+build = "carrier"
+part = "m3-mounting-hole"
+ref = "H2"
+
+[parts.hole_main_3]
+name = "M3 mounting hole, main board"
+kind = "mounting-hole"
+build = "carrier"
+part = "m3-mounting-hole"
+ref = "H3"
+
+[parts.hole_main_4]
+name = "M3 mounting hole, main board"
+kind = "mounting-hole"
+build = "carrier"
+part = "m3-mounting-hole"
+ref = "H4"
+
+# Head board through the pan-tilt kit's top cradle (#750). Positions are
+# provisional, in hardware/carrier/board.toml.
+[parts.hole_head_1]
+name = "M2 mounting hole, head board"
+kind = "mounting-hole"
+build = "carrier"
+part = "m2-mounting-hole"
+ref = "H5"
+
+[parts.hole_head_2]
+name = "M2 mounting hole, head board"
+kind = "mounting-hole"
+build = "carrier"
+part = "m2-mounting-hole"
+ref = "H6"
+
 # Each pull-up is a load on one line of its channel: pin B on SDn or SCn, pin A
 # on 3V3. The channel number is still the header's.
 [[bus_nets]]

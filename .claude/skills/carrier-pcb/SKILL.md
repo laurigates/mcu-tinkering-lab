@@ -24,8 +24,11 @@ several traps below are version-specific: after a KiCad upgrade, re-run
   and `lib/` (the vendored, pinned library subset)
 - `tools/kicad.just`: the per-project recipes; `tools/kicad/justfile`: `just kicad::*`
 - `docs/reference/parts/`: the parts registry
-- `packages/robotics/balancebot/hardware/carrier/`: the one carrier so far;
+- `packages/robotics/balancebot/hardware/carrier/`: the first carrier;
   `board.toml` holds placement, silkscreen, net classes and the pour
+- `packages/robocar/unified/hardware/carrier/`: head and main boards on one PCB,
+  split by a `[[keepouts]]` band under a `[silk] cut_lines` saw line, with a
+  `[pour]` region per ground net (`GND`, `HEAD_GND`)
 - `.github/workflows/carrier-check.yml` (CI) and the `kicad-carrier` pre-commit hook
 
 ## Workflow
