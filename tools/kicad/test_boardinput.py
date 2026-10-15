@@ -147,9 +147,7 @@ class BalancebotTests(unittest.TestCase):
         self.assertEqual(self.spec["classes"][0]["via_um"], [1000, 500])
         self.assertEqual(self.spec["signal"]["via_um"], [600, 300])
         # A single-net [pour] is one region over the whole board (rect None).
-        self.assertEqual(
-            self.spec["pour"]["regions"], [{"net": "GND", "rect": None}]
-        )
+        self.assertEqual(self.spec["pour"]["regions"], [{"net": "GND", "rect": None}])
         self.assertNotIn("net", self.spec["pour"])
         self.assertEqual(self.spec["pour"]["layers"], ["F.Cu", "B.Cu"])
         self.assertEqual(self.spec["keepouts"], [])

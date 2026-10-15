@@ -345,9 +345,7 @@ class ConfigTests(unittest.TestCase):
             lambda d: d["pour"].update(regions=[gnd]),
             "[pour] takes net or regions, not both",
         )
-        self.fails(
-            lambda d: d["pour"].pop("net"), "[pour] needs net or regions"
-        )
+        self.fails(lambda d: d["pour"].pop("net"), "[pour] needs net or regions")
         self.fails(
             lambda d: regions(d, [{**gnd, "net": "AGND"}]),
             "[pour] regions: net 'AGND' is not in the netlist",

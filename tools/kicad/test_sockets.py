@@ -228,7 +228,7 @@ class ConfigTests(unittest.TestCase):
         )
 
     def test_rejects(self):
-        ok = 'outline = [0, -1, 1, 0]\n'
+        ok = "outline = [0, -1, 1, 0]\n"
         cases = {
             "unknown key": '[[socket]]\nname = "A"\nboard = "b"\npads = ["JP1"]\nx = 1\n'
             + ok,

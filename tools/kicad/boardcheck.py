@@ -518,7 +518,11 @@ def _clip(a: Point, b: Point, r: tuple[float, float, float, float]) -> bool:
 def _point_segment(p: Point, a: Point, b: Point) -> float:
     dx, dy = b[0] - a[0], b[1] - a[1]
     n = dx * dx + dy * dy
-    t = 0.0 if n == 0 else max(0.0, min(1.0, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / n))
+    t = (
+        0.0
+        if n == 0
+        else max(0.0, min(1.0, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / n))
+    )
     return math.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dy)
 
 
@@ -577,7 +581,10 @@ def _arc_points(s: Point, m: Point, e: Point, n: int = 32) -> list[Point]:
     if (am - a0) % (2 * math.pi) > sweep:  # m is not on the counter-clockwise way
         sweep -= 2 * math.pi
     return [
-        (ux + radius * math.cos(a0 + sweep * i / n), uy + radius * math.sin(a0 + sweep * i / n))
+        (
+            ux + radius * math.cos(a0 + sweep * i / n),
+            uy + radius * math.sin(a0 + sweep * i / n),
+        )
         for i in range(n + 1)
     ]
 
@@ -622,7 +629,12 @@ def keepout_copper(
     boxes = [
         (
             k["name"],
-            (ox + k["rect"][0] + t, oy + k["rect"][1] + t, ox + k["rect"][2] - t, oy + k["rect"][3] - t),
+            (
+                ox + k["rect"][0] + t,
+                oy + k["rect"][1] + t,
+                ox + k["rect"][2] - t,
+                oy + k["rect"][3] - t,
+            ),
         )
         for k in keepouts
     ]
