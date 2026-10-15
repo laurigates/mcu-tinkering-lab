@@ -157,7 +157,7 @@ def place(board, spec):
             fp.SetField(name, text)
             fp.GetField(name).SetLayer(pcbnew.F_Fab)
             fp.GetField(name).SetVisible(False)
-        x, y, rot = comp["at"]
+        x, y, rot = comp["at"][:3]
         fp.SetPosition(pcbnew.VECTOR2I(mm(origin[0] + x), mm(origin[1] + y)))
         fp.SetOrientationDegrees(rot)
         if ref in hidden:
@@ -172,6 +172,12 @@ def place(board, spec):
             fp.Reference().SetTextSize(pcbnew.VECTOR2I(size, size))
             fp.Reference().SetTextThickness(int(size * 0.15))
         board.Add(fp)
+        if comp["at"][3:] == ["back"]:
+            # Mirror about the anchor, as KiCad's own flip does, then set the
+            # rotation as seen from the top. Flip() before Add() segfaults:
+            # it needs the board's layer stack.
+            fp.Flip(fp.GetPosition(), pcbnew.FLIP_DIRECTION_LEFT_RIGHT)
+            fp.SetOrientationDegrees(rot)
         footprints[ref] = fp
     return footprints
 

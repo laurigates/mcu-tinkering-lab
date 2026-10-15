@@ -177,6 +177,50 @@ class KeepoutTests(unittest.TestCase):
         self.assertEqual(self.pcb.count('(gr_text "CUT"'), 2)
 
 
+@unittest.skipIf(SKIP is not None, SKIP or "")
+class BackSideTests(unittest.TestCase):
+    """A placement's fourth element "back" mounts the footprint on B.Cu (#750).
+
+    robocar-unified's head carries the IDC ribbon header on the back face.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        root, project = testfixture.shared()
+        spec = boardinput.build(project, root)
+        for comp in spec["components"]:
+            if comp["ref"] == "R2":
+                cls.at = comp["at"]
+                comp["at"] = [*comp["at"], "back"]
+        with tempfile.TemporaryDirectory(prefix="kicad-back-") as tmp:
+            _, cls.dsn = place_and_export(spec, Path(tmp))
+            cls.pcb = (Path(tmp) / "carrier.kicad_pcb").read_text()
+
+    def test_dsn_places_it_on_the_back_at_the_same_point(self):
+        # Specctra gives a back-side part's rotation as seen from below, so only
+        # the side and the point are compared here.
+        x, y, _ = self.at
+        origin = 100.0  # the frozen balancebot outline's origin, both axes
+        self.assertIn(
+            f"(place R2 {round((origin + x) * 1000)} {-round((origin + y) * 1000)} back ",
+            self.dsn,
+        )
+
+    def test_board_footprint_is_on_b_cu_with_the_given_rotation(self):
+        x, y, rot = self.at
+        start = self.pcb.rindex(
+            "\n\t(footprint ", 0, self.pcb.index('"Reference" "R2"')
+        )
+        head = self.pcb[start : self.pcb.index('"Reference" "R2"')]
+        self.assertIn('(layer "B.Cu")', head)
+        at = f"(at {100 + x:g} {100 + y:g}" + (f" {rot:g})" if rot else ")")
+        self.assertIn(at, head)
+
+    def test_every_other_part_stays_on_the_front(self):
+        backs = [line for line in self.dsn.splitlines() if " back " in line]
+        self.assertEqual(len(backs), 1, backs)
+
+
 class SkipTests(unittest.TestCase):
     """RepeatTests skips unless $KICAD_PYTHON's pcbnew is exactly KiCad 10.0.6."""
 

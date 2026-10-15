@@ -264,6 +264,16 @@ class ConfigTests(unittest.TestCase):
             "R2 must be [x_mm, y_mm, rotation_deg]",
         )
 
+    def test_placement_side(self):
+        def back(d):
+            d["placement"]["R2"] = [*d["placement"]["R2"], "back"]
+
+        self.assertEqual(boardcheck.validate_config(self.with_data(back), self.nl), [])
+        self.fails(
+            lambda d: d["placement"].update(R2=[0, 0, 0, "bottom"]),
+            'R2 must be [x_mm, y_mm, rotation_deg] or [x_mm, y_mm, rotation_deg, "back"]',
+        )
+
     def test_net_classes(self):
         self.fails(
             lambda d: d["net_classes"][0]["nets"].append("NOPE*"),

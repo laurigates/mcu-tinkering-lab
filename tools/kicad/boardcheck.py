@@ -402,9 +402,11 @@ def validate_config(cfg: paths.BoardConfig, nl: netlist.Netlist) -> list[str]:
         size = outline["size"]
     placement = data["placement"]
     for ref, at in placement.items():
-        if not _numbers(at, 3):
+        side_ok = isinstance(at, list) and (len(at) == 3 or at[3:] == ["back"])
+        if not side_ok or not _numbers(at[:3], 3):
             errors.append(
                 f"{where}: [placement] {ref} must be [x_mm, y_mm, rotation_deg]"
+                ' or [x_mm, y_mm, rotation_deg, "back"]'
             )
     for ref in sorted(refs - set(placement), key=netlist.ref_key):
         errors.append(f"{where}: [placement] has no entry for {ref}")
