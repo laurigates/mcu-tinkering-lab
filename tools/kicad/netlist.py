@@ -11,10 +11,20 @@ reference designator and symbol pin number. The nets it emits:
 - each `[[channel_nets]]` role: the driver pad named by the channel number;
 - each `[[bus_nets]]` role: two nets, the mux's `SD<n>` with every load's `SDA`
   and `SC<n>` with every `SCL`, named `<name>_SDA` / `<name>_SCL` where
-  `<name>` is the role or its `[net_names]` entry;
+  `<name>` is the role or its `[net_names]` entry; a one-line load (a pull-up's
+  `to = "part.PIN"`, `line = "SDA"`) joins only that line's net;
 - each rail, named by `[net_names]` or else the rail name;
 - each output pin: `net.format(pin=p)` joining the driver's pin p to pin p of
   every load, or with `load_pins` to the load pin each load maps p to (#769).
+
+With a `[[cables]]` entry (#750) the MCU sits on a head board and reaches the
+main board through a cable: two connectors, `head_ref` and `main_ref`, on one
+registry entry whose `[pins]` are keyed by MCU pad name. Every MCU end above,
+role or rail, is split at the cable: `HEAD_<name>` joins the MCU pad to the
+head connector's pin(s) for that pad, and the net `<name>` takes the main
+connector's pin(s) in the pad's place. An MCU pad on a net that the cable does
+not carry raises, as does a cable pin named for no pad of the MCU's board page.
+The cable's `head_no_connect` pads may float, power pads included.
 
 Every symbol pin must then be on a net or allowed to float: listed under the
 entry's `no_connect`, or a spare GPIO pad of a `pin_numbers` part. Anything
@@ -43,6 +53,8 @@ from .errors import KicadError
 from .paths import REPO_ROOT
 
 _REF = re.compile(r"(#?[A-Z]+)(\d+)")
+# The two ends of a [[cables]] entry, as keys of the placed parts.
+HEAD, MAIN = "cable.head", "cable.main"
 
 
 @dataclass(frozen=True)
@@ -133,12 +145,24 @@ def build(
         )
     placed: dict[str, _Placed] = {}
     entries = [(MCU, model.mcu_part, model.mcu_ref, "", "", model.mcu, model.board)]
+    cable = model.cables[0] if model.cables else None
+    if cable is not None:
+        name = spec_of(cable.part).name
+        entries.append((HEAD, cable.part, cable.head_ref, "", "", name, None))
+        entries.append((MAIN, cable.part, cable.main_ref, "", "", name, None))
     for key, part in model.parts.items():
         if not part.part or not part.ref:
             raise KicadError(
                 f"{sidecar} [parts.{key}]: the carrier needs `part` and `ref`"
             )
-        board = parse_board_table(repo_root / part.board) if part.board else None
+        # Only a pin_numbers entry maps through its page's GPIO pin table; a
+        # breakout's page (TB6612FNG, PCA9685, ...) documents headers and has none.
+        board = None
+        if part.board and spec_of(part.part).pin_numbers:
+            try:
+                board = parse_board_table(repo_root / part.board)
+            except HardwareError as e:
+                raise KicadError(f"{sidecar} [parts.{key}]: {e}") from None
         entries.append(
             (key, part.part, part.ref, part.value, part.lcsc, part.name, board)
         )
@@ -171,6 +195,23 @@ def build(
             )
         return [(p.comp.ref, n) for n in p.by_name[pin]]
 
+    if cable is not None:
+        carried = placed[HEAD].by_name
+        cable_file = placed[HEAD].spec.path.name
+        stray = [pad for pad in carried if pad not in model.board.by_name]
+        if stray:
+            raise KicadError(
+                f"{sidecar} [[cables]]: {cable_file} [pins] {stray[0]!r} is not a pad "
+                f"of {model.board.path.name}; a cable's [pins] are keyed by the MCU's "
+                "pad names"
+            )
+        both = [pad for pad in cable.head_no_connect if pad in carried]
+        if both:
+            raise KicadError(
+                f"{sidecar} [[cables]]: head_no_connect {both}: {cable_file} carries "
+                "them to the main board"
+            )
+
     groups: dict[str, tuple[str, list[tuple[str, str]]]] = {}  # name -> (what, nodes)
 
     def add(name: str, what: str, members: list[tuple[str, str]]) -> None:
@@ -179,6 +220,20 @@ def build(
                 f"{sidecar}: net name {name!r} is used by {groups[name][0]} and {what}"
             )
         groups.setdefault(name, (what, []))[1].extend(members)
+
+    def mcu_nodes(what: str, name: str, pad: str) -> list[tuple[str, str]]:
+        """The nodes net `name` gets for MCU pad `pad`; with a cable, the main end."""
+        if cable is None:
+            return nodes(what, MCU, pad)
+        if pad not in placed[HEAD].by_name:
+            raise KicadError(
+                f"{sidecar}: {what} is on {model.mcu_ref} pad {pad}, which cable "
+                f"{cable.head_ref}-{cable.main_ref} ({cable.part}) does not carry; "
+                f"add {pad} to {placed[HEAD].spec.path.name} [pins]"
+            )
+        head = nodes(what, MCU, pad) + nodes(what, HEAD, pad)
+        add(f"HEAD_{name}", f"head of {what}", head)
+        return nodes(what, MAIN, pad)
 
     names = model.net_names
     for net in model.nets:
@@ -189,22 +244,27 @@ def build(
                 f"header pad of {model.board.path.name}, so the carrier cannot wire it"
             )
         what = f"role {net.role}"
-        add(names.get(net.role, net.role), what, nodes(what, MCU, pad.name))
+        name = names.get(net.role, net.role)
+        add(name, what, mcu_nodes(what, name, pad.name))
         add(names.get(net.role, net.role), what, nodes(what, net.part, net.pin))
     for cn in model.channel_nets:
         what = f"channel role {cn.role}"
         add(names.get(cn.role, cn.role), what, nodes(what, cn.source, str(cn.channel)))
         add(names.get(cn.role, cn.role), what, nodes(what, cn.part, cn.pin))
     for bus in model.bus_nets:
-        for pad, pin in bus.wires:
-            what = f"bus role {bus.role} {pin}"
-            name = f"{names.get(bus.role, bus.role)}_{pin}"
+        for line, pad, pin in bus.lines:
+            what = f"bus role {bus.role} {line}"
+            name = f"{names.get(bus.role, bus.role)}_{line}"
             add(name, what, nodes(what, bus.source, pad))
             add(name, what, nodes(what, bus.part, pin))
     for rail in model.rails:
         what = f"rail {rail.name}"
+        name = names.get(rail.name, rail.name)
         for ep in (rail.source, *rail.loads):
-            add(names.get(rail.name, rail.name), what, nodes(what, ep.part, ep.pin))
+            if ep.part == MCU:
+                add(name, what, mcu_nodes(what, name, ep.pin))
+            else:
+                add(name, what, nodes(what, ep.part, ep.pin))
     for out in model.outputs:
         if not out.pins:
             raise KicadError(
@@ -246,7 +306,11 @@ def build(
                 continue
             if node in no_connect:
                 continue  # a stacked pin number
-            if registry.may_float(p.spec, p.board, name):
+            # A cable's head_no_connect pads stay open on the head, power pads too.
+            head_open = (
+                p.key == MCU and cable is not None and name in cable.head_no_connect
+            )
+            if head_open or registry.may_float(p.spec, p.board, name):
                 no_connect.append(node)
             elif p.spec.pin_numbers:
                 raise KicadError(

@@ -9,7 +9,12 @@ join's carrier netlist and the project's ``hardware/carrier/board.toml``;
 ``just <project>::carrier-board`` runs both, then route_board.py. This script
 decides nothing: parts, footprints (always the vendored copies), symbol paths,
 footprint UUIDs, nets (KiCad's ``unconnected-(...)`` net for each no-connect
-pin included), placement and silkscreen all come from the JSON.
+pin included), placement, silkscreen and keepouts all come from the JSON.
+
+Each keepout becomes a KiCad rule area on every copper layer that allows no
+tracks, vias, pads, footprints or zone fill, so DRC, the zone filler and
+Freerouting (through the Specctra export) all see it. Each silkscreen cut line
+is drawn on both silkscreen layers with a "CUT" label beside it.
 
 It rewrites the board from scratch, so routing (route_board.py) must run after
 it. Python 3.9 and the stdlib plus ``pcbnew`` only; it imports nothing from
@@ -17,6 +22,7 @@ tools/kicad (see tools/kicad/test_pcb_py39.py).
 """
 
 import json
+import math
 import os
 import shutil
 import sys
@@ -67,6 +73,67 @@ def silk_text(board, origin, text, x, y, size=1.0):
     board.Add(t)
 
 
+# A cut line's "CUT" label sits this far from the line, on its left-hand side.
+CUT_LABEL_OFFSET = 1.0
+CUT_LABEL_SIZE = 1.0
+CUT_LINE_WIDTH = 0.15
+
+
+def keepout(board, origin, k):
+    """A rule area over board.toml keepout `k`: no copper of any kind inside."""
+    x0, y0 = origin
+    zone = pcbnew.ZONE(board)
+    zone.SetIsRuleArea(True)
+    zone.SetDoNotAllowTracks(True)
+    zone.SetDoNotAllowVias(True)
+    zone.SetDoNotAllowPads(True)
+    zone.SetDoNotAllowFootprints(True)
+    zone.SetDoNotAllowZoneFills(True)
+    zone.SetLayerSet(pcbnew.LSET.AllCuMask(board.GetCopperLayerCount()))
+    zone.SetZoneName(k["name"])
+    rx0, ry0, rx1, ry1 = k["rect"]
+    outline = zone.Outline()
+    outline.NewOutline()
+    for x, y in ((rx0, ry0), (rx1, ry0), (rx1, ry1), (rx0, ry1)):
+        outline.Append(mm(x0 + x), mm(y0 + y))
+    board.Add(zone)
+
+
+def cut_line(board, origin, line):
+    """The saw line on F.SilkS and B.SilkS, each with a "CUT" label beside it."""
+    x0, y0 = origin
+    ax, ay, bx, by = line
+    dx, dy = bx - ax, by - ay
+    length = math.hypot(dx, dy)
+    # Readable text: an angle in (-90, 90]; KiCad angles run counter-clockwise
+    # with y down.
+    angle = -math.degrees(math.atan2(dy, dx))
+    if angle <= -90:
+        angle += 180
+    elif angle > 90:
+        angle -= 180
+    nx, ny = dy / length, -dx / length
+    mx = (ax + bx) / 2 + nx * CUT_LABEL_OFFSET
+    my = (ay + by) / 2 + ny * CUT_LABEL_OFFSET
+    for layer, mirrored in ((pcbnew.F_SilkS, False), (pcbnew.B_SilkS, True)):
+        shape = pcbnew.PCB_SHAPE(board)
+        shape.SetShape(pcbnew.SHAPE_T_SEGMENT)
+        shape.SetStart(pcbnew.VECTOR2I(mm(x0 + ax), mm(y0 + ay)))
+        shape.SetEnd(pcbnew.VECTOR2I(mm(x0 + bx), mm(y0 + by)))
+        shape.SetLayer(layer)
+        shape.SetWidth(mm(CUT_LINE_WIDTH))
+        board.Add(shape)
+        t = pcbnew.PCB_TEXT(board)
+        t.SetText("CUT")
+        t.SetPosition(pcbnew.VECTOR2I(mm(x0 + mx), mm(y0 + my)))
+        t.SetLayer(layer)
+        t.SetTextSize(pcbnew.VECTOR2I(mm(CUT_LABEL_SIZE), mm(CUT_LABEL_SIZE)))
+        t.SetTextThickness(mm(0.16))
+        t.SetTextAngleDegrees(angle)
+        t.SetMirrored(mirrored)
+        board.Add(t)
+
+
 def place(board, spec):
     """Load, annotate and place every component; ref -> footprint."""
     origin = spec["origin"]
@@ -90,7 +157,7 @@ def place(board, spec):
             fp.SetField(name, text)
             fp.GetField(name).SetLayer(pcbnew.F_Fab)
             fp.GetField(name).SetVisible(False)
-        x, y, rot = comp["at"]
+        x, y, rot = comp["at"][:3]
         fp.SetPosition(pcbnew.VECTOR2I(mm(origin[0] + x), mm(origin[1] + y)))
         fp.SetOrientationDegrees(rot)
         if ref in hidden:
@@ -105,6 +172,12 @@ def place(board, spec):
             fp.Reference().SetTextSize(pcbnew.VECTOR2I(size, size))
             fp.Reference().SetTextThickness(int(size * 0.15))
         board.Add(fp)
+        if comp["at"][3:] == ["back"]:
+            # Mirror about the anchor, as KiCad's own flip does, then set the
+            # rotation as seen from the top. Flip() before Add() segfaults:
+            # it needs the board's layer stack.
+            fp.Flip(fp.GetPosition(), pcbnew.FLIP_DIRECTION_LEFT_RIGHT)
+            fp.SetOrientationDegrees(rot)
         footprints[ref] = fp
     return footprints
 
@@ -159,6 +232,10 @@ def build(spec):
         for text in spec["silk"]["texts"]:
             x, y = text["at"]
             silk_text(board, origin, text["text"], x, y, text["size"])
+        for line in spec["silk"]["cut_lines"]:
+            cut_line(board, origin, line)
+        for k in spec["keepouts"]:
+            keepout(board, origin, k)
         save(board, spec["pcb"])
     finally:
         shutil.rmtree(scratch)

@@ -118,6 +118,109 @@ class RepeatTests(unittest.TestCase):
         self.assertEqual(self.exports[0][1], FIXTURE.read_text())
 
 
+@unittest.skipIf(SKIP is not None, SKIP or "")
+class KeepoutTests(unittest.TestCase):
+    """A board.toml keepout reaches the board as a rule area and Freerouting's DSN (#750).
+
+    The frozen balancebot input with one keepout band and one cut line added;
+    the board is never routed here, so the placement overlapping the band is
+    irrelevant.
+    """
+
+    BAND = {"name": "cut band", "rect": [40.0, 0.0, 43.0, 62.0]}
+
+    @classmethod
+    def setUpClass(cls):
+        root, project = testfixture.shared()
+        spec = boardinput.build(project, root)
+        spec["keepouts"] = [cls.BAND]
+        spec["silk"] = dict(spec["silk"], cut_lines=[[41.5, 0.5, 41.5, 61.5]])
+        with tempfile.TemporaryDirectory(prefix="kicad-keepout-") as tmp:
+            _, cls.dsn = place_and_export(spec, Path(tmp))
+            cls.pcb = (Path(tmp) / "carrier.kicad_pcb").read_text()
+
+    def test_rule_area_on_every_copper_layer(self):
+        start = self.pcb.rindex("\n\t(zone\n", 0, self.pcb.index('(name "cut band")'))
+        zone = self.pcb[start : self.pcb.index("\n\t)\n", start)]
+        for needle in (
+            '(layers "F.Cu" "B.Cu")',
+            "(tracks not_allowed)",
+            "(vias not_allowed)",
+            "(pads not_allowed)",
+            "(copperpour not_allowed)",
+            "(footprints not_allowed)",
+            "(xy 140 100) (xy 143 100) (xy 143 162) (xy 140 162)",
+        ):
+            self.assertIn(needle, zone)
+
+    def test_dsn_carries_the_keepout_on_both_layers(self):
+        # Specctra coordinates are um with y up; the band is x 140..143 mm. The
+        # export names it "", and a structure `keepout` bars wires and vias.
+        structure = self.dsn[: self.dsn.index("  (placement")]
+        for layer in ("F.Cu", "B.Cu"):
+            with self.subTest(layer=layer):
+                self.assertIn(
+                    f'(keepout "" (polygon {layer} 0  140000 -100000  143000 -100000'
+                    "  143000 -162000  140000 -162000",
+                    structure,
+                )
+
+    def test_cut_line_and_label_on_both_silkscreens(self):
+        for layer in ("F.SilkS", "B.SilkS"):
+            with self.subTest(layer=layer):
+                self.assertIn(
+                    f"(start 141.5 100.5)\n\t\t(end 141.5 161.5)\n\t\t(stroke\n"
+                    f"\t\t\t(width 0.15)\n\t\t\t(type default)\n\t\t)\n"
+                    f'\t\t(layer "{layer}")',
+                    self.pcb,
+                )
+        self.assertEqual(self.pcb.count('(gr_text "CUT"'), 2)
+
+
+@unittest.skipIf(SKIP is not None, SKIP or "")
+class BackSideTests(unittest.TestCase):
+    """A placement's fourth element "back" mounts the footprint on B.Cu (#750).
+
+    robocar-unified's head carries the IDC ribbon header on the back face.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        root, project = testfixture.shared()
+        spec = boardinput.build(project, root)
+        for comp in spec["components"]:
+            if comp["ref"] == "R2":
+                cls.at = comp["at"]
+                comp["at"] = [*comp["at"], "back"]
+        with tempfile.TemporaryDirectory(prefix="kicad-back-") as tmp:
+            _, cls.dsn = place_and_export(spec, Path(tmp))
+            cls.pcb = (Path(tmp) / "carrier.kicad_pcb").read_text()
+
+    def test_dsn_places_it_on_the_back_at_the_same_point(self):
+        # Specctra gives a back-side part's rotation as seen from below, so only
+        # the side and the point are compared here.
+        x, y, _ = self.at
+        origin = 100.0  # the frozen balancebot outline's origin, both axes
+        self.assertIn(
+            f"(place R2 {round((origin + x) * 1000)} {-round((origin + y) * 1000)} back ",
+            self.dsn,
+        )
+
+    def test_board_footprint_is_on_b_cu_with_the_given_rotation(self):
+        x, y, rot = self.at
+        start = self.pcb.rindex(
+            "\n\t(footprint ", 0, self.pcb.index('"Reference" "R2"')
+        )
+        head = self.pcb[start : self.pcb.index('"Reference" "R2"')]
+        self.assertIn('(layer "B.Cu")', head)
+        at = f"(at {100 + x:g} {100 + y:g}" + (f" {rot:g})" if rot else ")")
+        self.assertIn(at, head)
+
+    def test_every_other_part_stays_on_the_front(self):
+        backs = [line for line in self.dsn.splitlines() if " back " in line]
+        self.assertEqual(len(backs), 1, backs)
+
+
 class SkipTests(unittest.TestCase):
     """RepeatTests skips unless $KICAD_PYTHON's pcbnew is exactly KiCad 10.0.6."""
 

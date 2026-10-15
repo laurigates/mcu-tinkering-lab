@@ -68,6 +68,9 @@ ROBOCAR_EXTRACT = [
     ("TCA9548A Multiplexer", "I2C_BUS_CHANNEL_PCA9685",   "TCA_CH_PCA9685", None),
     ("TCA9548A Multiplexer", "I2C_BUS_CHANNEL_OLED",      "TCA_CH_OLED",    None),
     ("TCA9548A Multiplexer", "I2C_BUS_CHANNEL_MCP23017",  "TCA_CH_MCP23017", None),
+    ("TCA9548A Multiplexer", "I2C_BUS_CHANNEL_RANGER_FRONT", "TCA_CH_RANGER_FRONT", None),
+    ("TCA9548A Multiplexer", "I2C_BUS_CHANNEL_RANGER_REAR",  "TCA_CH_RANGER_REAR",  None),
+    ("TCA9548A Multiplexer", "TCA9548A_RST_PIN",          "MUX_RST_PIN",    None),
 
     # ── PCA9685 PWM Driver ──
     ("PCA9685 PWM Driver", "PCA9685_ADDR",    "PCA9685_ADDR",    "hex_str"),
@@ -104,9 +107,8 @@ ROBOCAR_EXTRACT = [
     ("SSD1306 OLED", "OLED_WIDTH",    "OLED_WIDTH",  None),
     ("SSD1306 OLED", "OLED_HEIGHT",   "OLED_HEIGHT", None),
 
-    # ── Ultrasonic Rangefinder ──
-    ("Ultrasonic Rangefinder", "ULTRASONIC_TRIG_PIN", "ULTRIG_PIN", None),
-    ("Ultrasonic Rangefinder", "ULTRASONIC_ECHO_PIN", "ULECHO_PIN", None),
+    # ── RCWL-1601 Rangefinders (I2C mode, behind the mux) ──
+    ("RCWL-1601 Rangefinders", "RCWL1601_I2C_ADDR", "RANGER_ADDR", "hex_str"),
 
     # ── Piezo Buzzer ──
     ("Piezo Buzzer", "PIEZO_PIN", "PIEZO_PIN", None),

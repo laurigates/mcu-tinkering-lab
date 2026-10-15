@@ -8,8 +8,9 @@ Everything runs on one **XIAO ESP32-S3 Sense** (ESP32-S3 + 8 MB PSRAM, with the
 Sense expansion board's OV3660 camera and PDM microphone). All I2C peripherals
 hang off a TCA9548A multiplexer: a PCA9685 drives the motors, pan/tilt servos
 and status LEDs, with an SSD1306 OLED and an optional MCP23017 expander on their
-own channels. Off the headers directly: a TB6612FNG motor driver's enable line,
-a piezo buzzer, a 3.3 V ultrasonic rangefinder, and I2S to a MAX98357A amplifier
+own channels, and two RCWL-1601 ultrasonic rangefinders (front and rear) in I2C
+mode on channels 3 and 4. Off the headers directly: a TB6612FNG motor driver's
+enable line, a piezo buzzer, the mux's reset, and I2S to a MAX98357A amplifier
 for the robot's voice.
 
 Pin assignments, channel maps, power and the wiring schematic are in
@@ -38,7 +39,7 @@ The recipe pins the Typst version and the two determinism flags that
 
 Implements a hierarchical AI controller: a **slow planner** (Core 1) that calls Gemini Robotics-ER to emit structured goals, and a **fast reactive executor** (~30 Hz, Core 0) that drives the robot smoothly toward those goals. See [ADR-016](../../docs/decisions/ADR-016-hierarchical-ai-controller.md) for the detailed design.
 
-- **Core 0**: reactive executor (visual servo, heading hold, motor PWM), motor control, peripheral I/O, command console, obstacle reflex via ultrasonic sensor
+- **Core 0**: reactive executor (visual servo, heading hold, motor PWM), motor control, peripheral I/O, command console, obstacle reflex via the front rangefinder
 - **Core 1**: planner task (Gemini calls), camera capture, audio playback and voice turns, WiFi / MQTT / OTA
 
 **The planner does not poll on a fixed schedule.** The board boots *dormant* and
@@ -83,7 +84,8 @@ OTA is enabled (`CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y`) and configured to pul
 - `main/plan_activity.c/.h` — the evidence ladder deciding whether a request is made at all (ADR-022)
 - `main/plan_budget.c/.h` — per-boot request/token fuse at the `gemini_backend_plan()` choke point
 - `main/reactive_controller.c/.h` — visual servo, heading hold, motor output (~30 Hz)
-- `main/ultrasonic.c/.h` — distance measurement and reflex (~20 Hz sampling)
+- `main/ultrasonic.c/.h`, `main/ultrasonic_core.c/.h` — front and rear RCWL-1601
+  over I2C; a non-blocking trigger/read cycle, one reading per ~150 ms per sensor
 - `main/goal_state.c/.h` — shared planner-executor state (mutex-protected)
 - `main/motor_controller.c/.h` — low-level motor PWM (called only by executor)
 - `main/audio_player.c/.h`, `main/speech_queue.c/.h` — TTS playback ring and the speech path (ADR-019)

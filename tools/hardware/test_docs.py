@@ -626,7 +626,7 @@ class RobocarUnifiedDocsTest(unittest.TestCase):
 
     def test_wiring_carries_every_expected_block(self):
         text = (UNIFIED / "WIRING.md").read_text(encoding="utf-8")
-        for name in ("pin-table", "signals:amp", "signals:ranger", "power-diagram"):
+        for name in ("pin-table", "signals:amp", "signals:mux", "power-diagram"):
             self.assertIn(BEGIN(name), text)
 
     def test_the_power_diagram_carries_no_hand_typed_gpio(self):
@@ -664,18 +664,13 @@ class RobocarUnifiedDocsTest(unittest.TestCase):
         proj = self.copy_project()
         header = proj / "main/pin_config.h"
         text = header.read_text(encoding="utf-8")
-        # Swap the two ultrasonic pins: both stay on header pads, so the join
-        # still resolves and only the documents disagree.
-        text = text.replace(
-            "ULTRASONIC_TRIG_PIN GPIO_NUM_3", "ULTRASONIC_TRIG_PIN GPIO_NUM_X"
+        # Move the mux reset to the spare D3: it stays on a header pad, so the
+        # join still resolves and only the documents disagree.
+        moved = text.replace(
+            "TCA9548A_RST_PIN GPIO_NUM_3", "TCA9548A_RST_PIN GPIO_NUM_4"
         )
-        text = text.replace(
-            "ULTRASONIC_ECHO_PIN GPIO_NUM_4", "ULTRASONIC_ECHO_PIN GPIO_NUM_3"
-        )
-        text = text.replace(
-            "ULTRASONIC_TRIG_PIN GPIO_NUM_X", "ULTRASONIC_TRIG_PIN GPIO_NUM_4"
-        )
-        header.write_text(text, encoding="utf-8")
+        self.assertNotEqual(moved, text)
+        header.write_text(moved, encoding="utf-8")
         self.assertEqual(
             [p.name for p, _ in check_project(proj, repo_root=REPO_ROOT)], ["WIRING.md"]
         )
@@ -683,7 +678,7 @@ class RobocarUnifiedDocsTest(unittest.TestCase):
             self.assertEqual(main([str(proj)], repo_root=REPO_ROOT), 0)
         self.assertEqual(check_project(proj, repo_root=REPO_ROOT), [])
         self.assertIn(
-            "| TRIG | GPIO4 (D3) |", (proj / "WIRING.md").read_text(encoding="utf-8")
+            "| RST | GPIO4 (D3) |", (proj / "WIRING.md").read_text(encoding="utf-8")
         )
 
     def test_a_pin_change_reaches_the_power_diagram(self):

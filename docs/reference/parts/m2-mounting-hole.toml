@@ -1,0 +1,9 @@
+# Unplated M2 mounting hole. The library symbol is out of the BOM.
+[part]
+name = "M2 mounting hole"
+source = "KiCad 10.0.6 library"
+symbol = "Mechanical:MountingHole"
+footprint = "MountingHole:MountingHole_2.2mm_M2"
+value = "M2"
+
+[pins]

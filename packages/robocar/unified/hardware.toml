@@ -6,6 +6,14 @@
 # silently disagree with the firmware about WHICH pin — only about which part a
 # pin is wired to, which is the fact the header cannot express.
 #
+# Two builds read this file. Entries with no `build` key are in both.
+#   build = "harness"  only the hand-wired harness
+#   build = "carrier"  only the carrier PCB (hardware/carrier/, issue #750)
+# The docs generators — WIRING.md, pin_defs.typ, the pinouts and the docs
+# schematic — read the harness view, `join()`'s default. The carrier is one
+# KiCad project with two boards: the head, holding the XIAO, and the main
+# board, joined by a 2x7 IDC ribbon ([[cables]] below).
+#
 # Regenerate everything that reads it — docs/auto/pin_defs.typ and the marked
 # tables and power diagram in WIRING.md — with `just hardware::gen`;
 # `just hardware::check` fails if any of them is stale.
@@ -24,40 +32,83 @@ board = "docs/reference/boards/xiao-esp32s3.md"
 # The MCU node's name in the WIRING.md power diagram; rails reach its pads as
 # `mcu.<pad>`, checked against `board`.
 mcu = "XIAO ESP32-S3 Sense"
+# The XIAO on the carrier's head board: a parts-registry entry and its
+# reference designator.
+part = "seeed-xiao-esp32s3-socket"
+ref = "U1"
 
 # `board` names a part's physical-layout page (read from the vendor's board
-# file); tools/hardware/pinout.py draws each one for the build guide (#629).
-# The HC-SR04P, the MCP23017 and the SSD1306 have no page until the fitted
-# modules are identified (#662), so they carry no `board` and are not drawn.
+# file where one is published); tools/hardware/pinout.py draws each one for the
+# build guide (#629). The MCP23017 and the SSD1306 have no page until the
+# fitted modules are identified (#662), so they carry no `board` and are not
+# drawn. The rangefinders were identified as RCWL-1601s (#662); no board file
+# is published for that module, so its page is read from the listing's
+# silkscreen photos and is not yet bench-verified (see the page's checklist).
+#
+# `part` names the parts-registry entry (docs/reference/parts/) that maps a
+# part's pin names to KiCad symbol pins; `ref`, `value` and `lcsc` are the
+# carrier PCB's reference designator, value text and JLCPCB part number. The
+# breakouts are socketed on their own headers; the off-board parts plug into
+# connectors.
 
 [parts.mux]
 name = "TCA9548A"
 kind = "i2c-mux"
 board = "docs/reference/boards/adafruit-tca9548a.md"
+part = "adafruit-tca9548a-socket"
+ref = "A3"
+value = "TCA9548A"
 
 # Behind the mux on channel I2C_BUS_CHANNEL_PCA9685, so no MCU net lands on it.
 [parts.pwm]
 name = "PCA9685"
 kind = "pwm-driver"
 board = "docs/reference/boards/adafruit-pca9685.md"
+part = "adafruit-pca9685-socket"
+ref = "A2"
+value = "PCA9685"
 
 [parts.motor_driver]
 name = "TB6612FNG"
 kind = "motor-driver"
 board = "docs/reference/boards/sparkfun-tb6612fng.md"
+part = "sparkfun-tb6612fng-socket"
+ref = "A1"
+value = "TB6612FNG"
 
-[parts.ranger]
-name = "HC-SR04P"
+# Both in I2C mode (10 kΩ on R4, R5 empty) at the fixed address 0x57, each
+# alone on its own mux channel (#782). The board page names the pins by their
+# I2C-mode function; the silkscreen still prints Trig/Echo.
+[parts.ranger_front]
+name = "RCWL-1601 (front)"
 kind = "ultrasonic"
+board = "docs/reference/boards/rcwl-1601.md"
+part = "rcwl-1601-i2c-cable"
+ref = "J7"
+value = "RCWL-1601 front"
+
+[parts.ranger_rear]
+name = "RCWL-1601 (rear)"
+kind = "ultrasonic"
+board = "docs/reference/boards/rcwl-1601.md"
+part = "rcwl-1601-i2c-cable"
+ref = "J8"
+value = "RCWL-1601 rear"
 
 [parts.buzzer]
 name = "Piezo buzzer"
 kind = "piezo"
+part = "piezo-jst-xh2"
+ref = "J10"
+value = "Piezo"
 
 [parts.amp]
 name = "MAX98357A"
 kind = "i2s-amp"
 board = "docs/reference/boards/adafruit-max98357a.md"
+part = "adafruit-max98357a-socket"
+ref = "A4"
+value = "MAX98357A"
 
 [[nets]]
 role = "I2C_SDA_PIN"
@@ -74,19 +125,22 @@ to = "motor_driver.STBY"
 note = "HIGH = motors enabled; the six control lines come from the PCA9685"
 
 [[nets]]
-role = "ULTRASONIC_TRIG_PIN"
-to = "ranger.TRIG"
-note = "3.3 V output; a 10 µs pulse triggers a measurement"
-
-[[nets]]
-role = "ULTRASONIC_ECHO_PIN"
-to = "ranger.ECHO"
-note = "3.3 V input; pulse width encodes distance (RMT RX)"
+role = "TCA9548A_RST_PIN"
+to = "mux.RST"
+note = "Active-low mux reset, pulsed after repeated failed channel selects; the breakout pulls it up"
 
 [[nets]]
 role = "PIEZO_PIN"
 to = "buzzer.+"
+build = "harness"
 note = "LEDC PWM, through a series resistor; the other leg to GND"
+
+# On the carrier the series resistor is R1; the PIEZO_DRV rail joins it to the buzzer.
+[[nets]]
+role = "PIEZO_PIN"
+to = "piezo_r.A"
+build = "carrier"
+note = "LEDC PWM into the 100 Ω series resistor"
 
 [[nets]]
 role = "I2S_BCLK_PIN"
@@ -104,6 +158,9 @@ to = "amp.DIN"
 note = "Serial audio data"
 
 # --- PCA9685 outputs (#666) -------------------------------------------------
+# The LED and servo channels are harness-only: on the carrier the servos and
+# LEDs plug into the PCA9685's own 3-pin columns, so only the six TB6612FNG
+# channels (8-13) are socketed and wired.
 # The same rule as above, one hop further out: every `role` is a `*_CHANNEL`
 # macro in main/pin_config.h, so the channel number lives there and nowhere
 # here. tools/hardware/ fails if a role does not resolve, if its channel is not
@@ -117,42 +174,50 @@ note = "Serial audio data"
 [[channel_nets]]
 role = "LED_LEFT_R_CHANNEL"
 from = "pwm"
+build = "harness"
 to = "led_left.R"
 
 [[channel_nets]]
 role = "LED_LEFT_G_CHANNEL"
 from = "pwm"
+build = "harness"
 to = "led_left.G"
 
 [[channel_nets]]
 role = "LED_LEFT_B_CHANNEL"
 from = "pwm"
+build = "harness"
 to = "led_left.B"
 
 [[channel_nets]]
 role = "LED_RIGHT_R_CHANNEL"
 from = "pwm"
+build = "harness"
 to = "led_right.R"
 
 [[channel_nets]]
 role = "LED_RIGHT_G_CHANNEL"
 from = "pwm"
+build = "harness"
 to = "led_right.G"
 
 [[channel_nets]]
 role = "LED_RIGHT_B_CHANNEL"
 from = "pwm"
+build = "harness"
 to = "led_right.B"
 
 [[channel_nets]]
 role = "SERVO_PAN_CHANNEL"
 from = "pwm"
+build = "harness"
 to = "servos.PAN"
 note = "Signal lead of the pan servo"
 
 [[channel_nets]]
 role = "SERVO_TILT_CHANNEL"
 from = "pwm"
+build = "harness"
 to = "servos.TILT"
 note = "Signal lead of the tilt servo"
 
@@ -213,7 +278,20 @@ to = "oled"
 role = "I2C_BUS_CHANNEL_MCP23017"
 from = "mux"
 to = "expander"
+build = "harness"
 note = "optional: the firmware boots without the board fitted"
+
+[[bus_nets]]
+role = "I2C_BUS_CHANNEL_RANGER_FRONT"
+from = "mux"
+to = "ranger_front"
+note = "RCWL-1601 at 0x57, alone on its channel; no pull-ups on the module"
+
+[[bus_nets]]
+role = "I2C_BUS_CHANNEL_RANGER_REAR"
+from = "mux"
+to = "ranger_rear"
+note = "RCWL-1601 at 0x57, alone on its channel; no pull-ups on the module"
 
 [[undrawn]]
 role = "MIC_PDM_CLK_PIN"
@@ -243,48 +321,69 @@ why = "UART0 RX, spare: the serial console is USB-Serial-JTAG on the USB-C conne
 name = "2x 18650 in series"
 kind = "battery"
 note = "7.4 V nominal, 8.4 V charged"
+part = "battery-xt30"
+ref = "J3"
+value = "XT30 pack in"
 
 [parts.buck]
 name = "LM2596 buck module"
 kind = "buck-regulator"
 note = "adjust to 5.0 V before connecting a load"
+part = "lm2596-buck-module"
+ref = "J4"
+value = "LM2596 module"
 
 [parts.oled]
 name = "SSD1306 OLED"
 kind = "display"
+part = "ssd1306-091-cable"
+ref = "J9"
+value = "SSD1306 0.91in"
 
 [parts.expander]
 name = "MCP23017"
 kind = "gpio-expander"
 note = "optional"
+# Stays off the carrier until the CJMCU-2317 module is checked (#662).
+build = "harness"
 
 [parts.servos]
 name = "SG90 servos"
 kind = "servo"
 note = "pan, tilt"
+build = "harness"
 
 [parts.motor_left]
 name = "Left motor"
 kind = "dc-motor"
+part = "dc-motor-jst-xh2"
+ref = "J5"
+value = "Motor left"
 
 [parts.motor_right]
 name = "Right motor"
 kind = "dc-motor"
+part = "dc-motor-jst-xh2"
+ref = "J6"
+value = "Motor right"
 
 [parts.led_left]
 name = "Left RGB LED"
 kind = "rgb-led"
 note = "common-anode"
+build = "harness"
 
 [parts.led_right]
 name = "Right RGB LED"
 kind = "rgb-led"
 note = "common-anode"
+build = "harness"
 
 [parts.speaker]
 name = "Speaker"
 kind = "speaker"
 note = "4–8 Ω"
+build = "harness"
 
 [[rails]]
 name = "VBAT"
@@ -299,21 +398,27 @@ to = ["mcu.5V", "motor_driver.VM", "pwm.V+", "amp.Vin"]
 
 # Logic supplies. TB6612FNG and PCA9685 VCC set their input thresholds from
 # their own supply, so they must sit on the XIAO's 3.3 V, never on 5V above.
+# The carrier's main board makes its own 3V3 with an LDO instead (below).
 [[rails]]
 name = "3V3"
+build = "harness"
 from = "mcu.3V3"
 to = [
     "motor_driver.VCC",
     "pwm.VCC",
     "mux.VIN",
-    "ranger.VCC",
+    "ranger_front.VCC",
+    "ranger_rear.VCC",
     "oled.VCC",
     "expander.VCC",
 ]
 
+# Harness-only: on the carrier the servos and LEDs plug into the PCA9685's own
+# 3-pin columns, which are not socketed.
 [[outputs]]
 from = "pwm"
 to = ["servos", "led_left", "led_right"]
+build = "harness"
 
 # Channel A drives the right motor and channel B the left
 # (docs/reference/boards/sparkfun-tb6612fng.md); each motor's two terminals are
@@ -326,9 +431,384 @@ net = "MOT_{pin}"
 load_pins.motor_right = { A01 = "1", A02 = "2" }
 load_pins.motor_left = { B01 = "1", B02 = "2" }
 
+# Harness-only: the speaker stays on the amplifier's own X1 terminal.
 [[outputs]]
 from = "amp"
 to = ["speaker"]
+build = "harness"
 pins = ["VO-", "VO+"]
 net = "SPK_{pin}"
 load_pins.speaker = { "VO-" = "-", "VO+" = "+" }
+
+# --- Carrier PCB (#750) -------------------------------------------------------
+# Everything below is `build = "carrier"`: the parts no breakout carries, the
+# cable between the head and main boards, and the rails the carrier draws that
+# WIRING.md leaves to prose (GND) or that differ from the harness (3V3).
+
+# The XIAO sits on the head board, on the pan-tilt head; a 2x7 IDC ribbon takes
+# its I2C, STBY, piezo, I2S and MUX_RST lines, 5V and GND to the main board.
+# docs/reference/parts/idc-2x07-xiao-cable.toml gives the pin order. Every
+# other XIAO pad stays open on the head: 3V3 (the main board makes its own,
+# below), D3 (free since the rangefinders moved to I2C, #790), and D6/D7
+# (UART0, spare: their roles are [[undrawn]] above, in both views).
+[[cables]]
+part = "idc-2x07-xiao-cable"
+head_ref = "J2"
+main_ref = "J1"
+head_no_connect = ["3V3", "D3", "D6", "D7"]
+build = "carrier"
+
+[parts.ldo]
+name = "AMS1117-3.3 LDO, main-board 3V3"
+kind = "regulator"
+build = "carrier"
+part = "ams1117-3.3"
+ref = "U2"
+
+# Bulk capacitors C1-C5 are WIRING.md's § Suggested capacitors. Its C6 decouples
+# the MCP23017, which stays on the harness, so the carrier has no C6.
+[parts.bulk_pwm]
+name = "470 µF 16 V bulk capacitor, PCA9685 V+"
+kind = "capacitor"
+build = "carrier"
+part = "cp-elec-8x10.5"
+ref = "C1"
+value = "470uF 16V"
+lcsc = "C5162348"
+
+[parts.bulk_motor]
+name = "470 µF 16 V bulk capacitor, TB6612FNG VM"
+kind = "capacitor"
+build = "carrier"
+part = "cp-elec-8x10.5"
+ref = "C2"
+value = "470uF 16V"
+lcsc = "C5162348"
+
+[parts.bulk_amp]
+name = "470 µF 16 V bulk capacitor, MAX98357A Vin"
+kind = "capacitor"
+build = "carrier"
+part = "cp-elec-8x10.5"
+ref = "C3"
+value = "470uF 16V"
+lcsc = "C5162348"
+
+[parts.decouple_pwm]
+name = "100 nF decoupling, PCA9685 VCC"
+kind = "capacitor"
+build = "carrier"
+part = "c0805"
+ref = "C4"
+value = "100nF"
+lcsc = "C49678"
+
+[parts.decouple_mux]
+name = "100 nF decoupling, TCA9548A VIN"
+kind = "capacitor"
+build = "carrier"
+part = "c0805"
+ref = "C5"
+value = "100nF"
+lcsc = "C49678"
+
+# AMS1117 datasheet, Application Hints § Stability: the output capacitor is part
+# of the frequency compensation, and 22 µF solid tantalum ensures stability for
+# all operating conditions. It names no input value; 22 µF there too.
+[parts.ldo_in]
+name = "22 µF tantalum, LDO input"
+kind = "capacitor"
+build = "carrier"
+part = "cp-tantalum-3528"
+ref = "C7"
+value = "22uF 16V"
+lcsc = "C8020"
+
+[parts.ldo_out]
+name = "22 µF tantalum, LDO output"
+kind = "capacitor"
+build = "carrier"
+part = "cp-tantalum-3528"
+ref = "C8"
+value = "22uF 16V"
+lcsc = "C8020"
+
+[parts.piezo_r]
+name = "100 Ω piezo series resistor"
+kind = "resistor"
+build = "carrier"
+part = "r0805"
+ref = "R1"
+value = "100"
+lcsc = "C17408"
+
+# The TCA9548A breakout pulls up only its upstream SDA/SCL; every downstream
+# channel needs its own pull-ups, 10 kΩ to the carrier's 3V3 (#750).
+[parts.pull_ch0_sda]
+name = "10 kΩ pull-up, mux channel 0 SDA"
+kind = "resistor"
+build = "carrier"
+part = "r0805"
+ref = "R2"
+value = "10k"
+lcsc = "C17414"
+
+[parts.pull_ch0_scl]
+name = "10 kΩ pull-up, mux channel 0 SCL"
+kind = "resistor"
+build = "carrier"
+part = "r0805"
+ref = "R3"
+value = "10k"
+lcsc = "C17414"
+
+[parts.pull_ch1_sda]
+name = "10 kΩ pull-up, mux channel 1 SDA"
+kind = "resistor"
+build = "carrier"
+part = "r0805"
+ref = "R4"
+value = "10k"
+lcsc = "C17414"
+
+[parts.pull_ch1_scl]
+name = "10 kΩ pull-up, mux channel 1 SCL"
+kind = "resistor"
+build = "carrier"
+part = "r0805"
+ref = "R5"
+value = "10k"
+lcsc = "C17414"
+
+[parts.pull_ch3_sda]
+name = "10 kΩ pull-up, mux channel 3 SDA"
+kind = "resistor"
+build = "carrier"
+part = "r0805"
+ref = "R6"
+value = "10k"
+lcsc = "C17414"
+
+[parts.pull_ch3_scl]
+name = "10 kΩ pull-up, mux channel 3 SCL"
+kind = "resistor"
+build = "carrier"
+part = "r0805"
+ref = "R7"
+value = "10k"
+lcsc = "C17414"
+
+[parts.pull_ch4_sda]
+name = "10 kΩ pull-up, mux channel 4 SDA"
+kind = "resistor"
+build = "carrier"
+part = "r0805"
+ref = "R8"
+value = "10k"
+lcsc = "C17414"
+
+[parts.pull_ch4_scl]
+name = "10 kΩ pull-up, mux channel 4 SCL"
+kind = "resistor"
+build = "carrier"
+part = "r0805"
+ref = "R9"
+value = "10k"
+lcsc = "C17414"
+
+# Main board to the 2WD chassis plate. Positions are provisional, in
+# hardware/carrier/board.toml.
+[parts.hole_main_1]
+name = "M3 mounting hole, main board"
+kind = "mounting-hole"
+build = "carrier"
+part = "m3-mounting-hole"
+ref = "H1"
+
+[parts.hole_main_2]
+name = "M3 mounting hole, main board"
+kind = "mounting-hole"
+build = "carrier"
+part = "m3-mounting-hole"
+ref = "H2"
+
+[parts.hole_main_3]
+name = "M3 mounting hole, main board"
+kind = "mounting-hole"
+build = "carrier"
+part = "m3-mounting-hole"
+ref = "H3"
+
+[parts.hole_main_4]
+name = "M3 mounting hole, main board"
+kind = "mounting-hole"
+build = "carrier"
+part = "m3-mounting-hole"
+ref = "H4"
+
+# Head board through the pan-tilt kit's top cradle (#750). Positions are
+# provisional, in hardware/carrier/board.toml.
+[parts.hole_head_1]
+name = "M2 mounting hole, head board"
+kind = "mounting-hole"
+build = "carrier"
+part = "m2-mounting-hole"
+ref = "H5"
+
+[parts.hole_head_2]
+name = "M2 mounting hole, head board"
+kind = "mounting-hole"
+build = "carrier"
+part = "m2-mounting-hole"
+ref = "H6"
+
+# Each pull-up is a load on one line of its channel: pin B on SDn or SCn, pin A
+# on 3V3. The channel number is still the header's.
+[[bus_nets]]
+role = "I2C_BUS_CHANNEL_PCA9685"
+from = "mux"
+to = "pull_ch0_sda.B"
+line = "SDA"
+build = "carrier"
+
+[[bus_nets]]
+role = "I2C_BUS_CHANNEL_PCA9685"
+from = "mux"
+to = "pull_ch0_scl.B"
+line = "SCL"
+build = "carrier"
+
+[[bus_nets]]
+role = "I2C_BUS_CHANNEL_OLED"
+from = "mux"
+to = "pull_ch1_sda.B"
+line = "SDA"
+build = "carrier"
+
+[[bus_nets]]
+role = "I2C_BUS_CHANNEL_OLED"
+from = "mux"
+to = "pull_ch1_scl.B"
+line = "SCL"
+build = "carrier"
+
+[[bus_nets]]
+role = "I2C_BUS_CHANNEL_RANGER_FRONT"
+from = "mux"
+to = "pull_ch3_sda.B"
+line = "SDA"
+build = "carrier"
+
+[[bus_nets]]
+role = "I2C_BUS_CHANNEL_RANGER_FRONT"
+from = "mux"
+to = "pull_ch3_scl.B"
+line = "SCL"
+build = "carrier"
+
+[[bus_nets]]
+role = "I2C_BUS_CHANNEL_RANGER_REAR"
+from = "mux"
+to = "pull_ch4_sda.B"
+line = "SDA"
+build = "carrier"
+
+[[bus_nets]]
+role = "I2C_BUS_CHANNEL_RANGER_REAR"
+from = "mux"
+to = "pull_ch4_scl.B"
+line = "SCL"
+build = "carrier"
+
+# A continuation of 5V: the bulk capacitors, the LDO's input, and the
+# MAX98357A's SD_MODE strapped to its VDD (left channel; the firmware sends the
+# same sample on both).
+[[rails]]
+name = "5V"
+build = "carrier"
+to = ["bulk_pwm.+", "bulk_motor.+", "bulk_amp.+", "ldo.VI", "ldo_in.+", "amp.SD"]
+
+# The main board's own 3V3, from the LDO; the XIAO's 3V3 pad stays open on the
+# head. The loads are the harness rail's above, less the MCP23017.
+[[rails]]
+name = "3V3"
+build = "carrier"
+from = "ldo.VO"
+to = [
+    "motor_driver.VCC",
+    "pwm.VCC",
+    "mux.VIN",
+    "ranger_front.VCC",
+    "ranger_rear.VCC",
+    "oled.VCC",
+    "ldo_out.+",
+    "decouple_pwm.A",
+    "decouple_mux.A",
+    "pull_ch0_sda.A",
+    "pull_ch0_scl.A",
+    "pull_ch1_sda.A",
+    "pull_ch1_scl.A",
+    "pull_ch3_sda.A",
+    "pull_ch3_scl.A",
+    "pull_ch4_sda.A",
+    "pull_ch4_scl.A",
+]
+
+# The series resistor's far end to the buzzer.
+[[rails]]
+name = "PIEZO_DRV"
+build = "carrier"
+from = "piezo_r.B"
+to = ["buzzer.+"]
+
+# WIRING.md keeps the harness's common ground in prose; the carrier draws it.
+# GAIN_SLOT to GND sets the MAX98357A to 12 dB.
+[[rails]]
+name = "GND"
+build = "carrier"
+from = "pack.-"
+to = [
+    "buck.IN-",
+    "buck.OUT-",
+    "mcu.GND",
+    "motor_driver.GND",
+    "pwm.GND",
+    "mux.GND",
+    "amp.GND",
+    "amp.GAIN",
+    "ranger_front.GND",
+    "ranger_rear.GND",
+    "oled.GND",
+    "buzzer.-",
+    "ldo.GND",
+    "bulk_pwm.-",
+    "bulk_motor.-",
+    "bulk_amp.-",
+    "decouple_pwm.B",
+    "decouple_mux.B",
+    "ldo_in.-",
+    "ldo_out.-",
+]
+
+# Carrier net names, where they differ from the role or rail name.
+[net_names]
+I2C_SDA_PIN = "I2C_SDA"
+I2C_SCL_PIN = "I2C_SCL"
+MOTOR_STBY_PIN = "MOTOR_STBY"
+TCA9548A_RST_PIN = "MUX_RST"
+PIEZO_PIN = "PIEZO"
+I2S_BCLK_PIN = "I2S_BCLK"
+I2S_LRCLK_PIN = "I2S_LRCLK"
+I2S_DIN_PIN = "I2S_DIN"
+MOTOR_RIGHT_PWM_CHANNEL = "PWMA"
+MOTOR_RIGHT_IN2_CHANNEL = "AIN2"
+MOTOR_RIGHT_IN1_CHANNEL = "AIN1"
+MOTOR_LEFT_IN1_CHANNEL = "BIN1"
+MOTOR_LEFT_IN2_CHANNEL = "BIN2"
+MOTOR_LEFT_PWM_CHANNEL = "PWMB"
+I2C_BUS_CHANNEL_PCA9685 = "CH0"
+I2C_BUS_CHANNEL_OLED = "CH1"
+I2C_BUS_CHANNEL_RANGER_FRONT = "CH3"
+I2C_BUS_CHANNEL_RANGER_REAR = "CH4"
+5V = "+5V"
+3V3 = "+3V3"

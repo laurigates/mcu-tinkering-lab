@@ -4,7 +4,8 @@ XIAO ESP32-S3 Sense driving everything via an I2C multiplexer:
   - TCA9548A ch0 → PCA9685 → 2x RGB LEDs, 2x SG90 servos, TB6612FNG → motors
   - TCA9548A ch1 → SSD1306 OLED
   - TCA9548A ch2 → MCP23017 GPIO expander (optional; no roles assigned yet)
-Direct GPIO: STBY (motor enable), piezo, ultrasonic TRIG/ECHO,
+  - TCA9548A ch3 / ch4 → RCWL-1601 rangefinders, front / rear, in I2C mode
+Direct GPIO: STBY (motor enable), piezo, the mux's active-low RST,
 and I2S (D8-D10) → MAX98357A → speaker for the robot's voice (ADR-019).
 On-module, drawn dashed: the Sense board's PDM microphone (GPIO42/41).
 Standalone between a rail tag and ground: the suggested capacitors C1-C6
@@ -15,8 +16,10 @@ XIAO, TCA9548A, PCA9685, TB6612FNG and MAX98357A show every pad of their real
 headers, on the real edge, in the real order, as seen from the component side,
 read from docs/reference/boards/. None of them is rotated or mirrored — that
 would draw a board nobody can hold — so placement works around the boards'
-own pin order rather than choosing it. The SSD1306, HC-SR04P and MCP23017
-keep schematic symbols: no vendor board file identifies the modules fitted.
+own pin order rather than choosing it. The two RCWL-1601s are drawn from their
+board page too, which was read from the listing's photos rather than a vendor
+board file (none is published). The SSD1306 and MCP23017 keep schematic
+symbols: no vendor board file identifies the modules fitted.
 
 Every MCU wire and every pin label is read from the hardware join (#462,
 ADR-021) at render time: packages/robocar/unified/hardware.toml says which part
@@ -31,13 +34,12 @@ from typing import NamedTuple
 
 import schemdraw
 import schemdraw.elements as elm
-
 from components import (
-    hc_sr04p,
     max98357a,
     mcp23017,
     pca9685,
     pdm_microphone,
+    rcwl1601,
     ssd1306_oled,
     tb6612fng,
     tca9548a,
@@ -326,15 +328,23 @@ def draw(model: HardwareModel | None = None) -> schemdraw.Drawing:
             .color("gray")
         )
 
-    # Ultrasonic left of the XIAO, level with its TRIG pad (D2 today).
-    us = parts["ranger"] = d.add(
-        hc_sr04p()
-        .right()
-        .reverse()
-        .at((xiao.center.x - 11, nets.pad("ULTRASONIC_TRIG_PIN")[1]))
-        .anchor("TRIG")
-        .label("HC-SR04P\nultrasonic", loc="bot", ofst=0.4)
-    )
+    # The two rangefinders right of the mux, header edge down, so mux ch3 and
+    # ch4 (on its right edge) climb into their SCL/SDA pins from below. Rear
+    # nearer the mux: ch4 sits above ch3 on that edge, so the nearer board
+    # takes it and the two buses nest instead of crossing.
+    rangers = {}
+    for key, dx, where in (("ranger_rear", 9, "rear"), ("ranger_front", 16, "front")):
+        rangers[key] = parts[key] = d.add(
+            rcwl1601()
+            .right()
+            .at((mux.center.x + dx, mux.center.y + 3))
+            .anchor("center")
+            .label(
+                f"RCWL-1601 ({where})\n0x{value('RCWL1601_I2C_ADDR'):02X}, I2C mode",
+                loc="top",
+                ofst=0.4,
+            )
+        )
 
     # MAX98357A above-right: its header is the bottom edge, so the I2S trio
     # leaves the XIAO's right edge and climbs into it from below. The speaker
@@ -406,8 +416,10 @@ def draw(model: HardwareModel | None = None) -> schemdraw.Drawing:
     # and that net's stub ran through it (#641).
     _tag(d, oled.VCC, "left", 1.0, "power", nets.rail("oled", "VCC"), loc="right")
     _tag(d, oled.GND, "left", 1.0, "ground")
-    _tag(d, us.VCC, "right", 1.0, "power", nets.rail("ranger", "VCC"))
-    _tag(d, us.GND, "right", 1.0, "ground")
+    # Rangefinder power on the bottom header, beside the bus pins it frames.
+    for key, us in rangers.items():
+        _tag(d, us.VCC, "down", 0.5, "power", nets.rail(key, "VCC"), loc="left")
+        _tag(d, us.GND, "down", 0.5, "ground")
     _tag(d, mcp.VCC, "left", 1.0, "power", nets.rail("expander", "VCC"))
     _tag(d, mcp.GND, "left", 1.0, "ground")
 
@@ -490,8 +502,12 @@ def draw(model: HardwareModel | None = None) -> schemdraw.Drawing:
         for ends in nets.bus_ends(role):
             router.wire(*ends, net="i2c")
 
-    router.wire(*nets.ends("ULTRASONIC_TRIG_PIN"), net="sensor")
-    router.wire(*nets.ends("ULTRASONIC_ECHO_PIN"), net="sensor")
+    for role in ("I2C_BUS_CHANNEL_RANGER_FRONT", "I2C_BUS_CHANNEL_RANGER_REAR"):
+        for ends in nets.bus_ends(role):
+            router.wire(*ends, net="i2c")
+
+    # The mux's RESET: XIAO D2 to RST on the mux's left edge.
+    router.wire(*nets.ends("TCA9548A_RST_PIN"), net="signal")
 
     # I2S bus → amplifier. 24 kHz mono, matching Gemini TTS's native rate.
     router.wire(*nets.ends("I2S_BCLK_PIN"), net="i2s")

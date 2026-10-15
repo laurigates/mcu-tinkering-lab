@@ -1100,6 +1100,48 @@ class BusNetTest(unittest.TestCase):
         with self.assertRaisesRegex(HardwareError, "'to' must be a part id"):
             self.buses(lambda s: s.replace('to = "probe"', 'to = "probe.SDA"'))
 
+    # A pull-up is a load on one line of a channel (#750): a resistor's pin,
+    # named `to = "part.PIN"`, with `line` saying which of SDA/SCL it joins.
+    PULL_UPS = (
+        '\n[parts.pull_sda]\nname = "10k"\nkind = "resistor"\n'
+        '\n[parts.pull_scl]\nname = "10k"\nkind = "resistor"\n'
+        '\n[[bus_nets]]\nrole = "I2C_BUS_CHANNEL_PROBE"\nfrom = "mux"\n'
+        'to = "pull_sda.B"\nline = "SDA"\n'
+        '\n[[bus_nets]]\nrole = "I2C_BUS_CHANNEL_PROBE"\nfrom = "mux"\n'
+        'to = "pull_scl.B"\nline = "SCL"\n'
+    )
+
+    def test_a_one_line_load_joins_only_its_line(self):
+        buses = self.buses(lambda s: s + self.PULL_UPS).bus_nets
+        sda, scl = [b for b in buses if b.part.startswith("pull_")]
+        self.assertEqual((sda.part, sda.wires), ("pull_sda", (("SD1", "B"),)))
+        self.assertEqual(sda.lines, (("SDA", "SD1", "B"),))
+        self.assertEqual(scl.lines, (("SCL", "SC1", "B"),))
+        # A whole-part load still names both lines by the load's pin.
+        (probe,) = [b for b in buses if b.part == "probe"]
+        self.assertEqual(probe.lines, (("SDA", "SD1", "SDA"), ("SCL", "SC1", "SCL")))
+
+    def test_a_one_line_load_needs_a_pin(self):
+        with self.assertRaisesRegex(HardwareError, "with 'line'.*'part.PIN'"):
+            self.buses(
+                lambda s: s + self.PULL_UPS.replace('"pull_sda.B"', '"pull_sda"')
+            )
+
+    def test_line_is_sda_or_scl(self):
+        with self.assertRaisesRegex(HardwareError, "'line' must be one of"):
+            self.buses(lambda s: s + self.PULL_UPS.replace('"SCL"', '"SCK"'))
+
+    def test_a_one_line_load_pin_on_two_channels_fails(self):
+        # The same resistor pin on channel 0 too would join the two channels.
+        also = (
+            '\n[[bus_nets]]\nrole = "I2C_BUS_CHANNEL_SCREEN"\nfrom = "mux"\n'
+            'to = "pull_sda.B"\nline = "SDA"\n'
+        )
+        with self.assertRaisesRegex(
+            HardwareError, "pull_sda.B is on both I2C_BUS_CHANNEL_PROBE"
+        ):
+            self.buses(lambda s: s + self.PULL_UPS + also)
+
     def test_a_sidecar_without_bus_nets_needs_no_bus_convention(self):
         with mock.patch.dict(hardware.header.BUS_CONVENTIONS, clear=True):
             model = self.join(self.make(SIDECAR))
@@ -1122,6 +1164,102 @@ class BusNetTest(unittest.TestCase):
             HardwareError, "'SCREEN_SDA'.*role LED_PIN.*I2C_BUS_CHANNEL_SCREEN SDA"
         ):
             self.buses(lambda s: s + names, view="carrier")
+
+
+CABLE = """
+[[cables]]
+part = "test-cable"
+head_ref = "J1"
+main_ref = "J2"
+head_no_connect = ["D1"]
+build = "carrier"
+"""
+
+
+class CableTest(unittest.TestCase):
+    """[[cables]] (#750): one carrier, two boards joined by a cable."""
+
+    make = JoinTest.make
+
+    def cables(self, edit=lambda s: s, view: str = "carrier"):
+        proj = self.make(sidecar=edit(SIDECAR + CABLE))
+        return join(proj, repo_root=proj.parent, view=view)
+
+    def test_the_carrier_view_reads_the_cable(self):
+        (cable,) = self.cables().cables
+        self.assertEqual(
+            (cable.part, cable.head_ref, cable.main_ref, cable.head_no_connect),
+            ("test-cable", "J1", "J2", ("D1",)),
+        )
+
+    def test_head_no_connect_is_optional(self):
+        model = self.cables(lambda s: s.replace('head_no_connect = ["D1"]\n', ""))
+        self.assertEqual(model.cables[0].head_no_connect, ())
+
+    def test_the_harness_view_has_no_cables(self):
+        self.assertEqual(self.cables(view="harness").cables, ())
+
+    def test_a_cable_must_be_carrier_only(self):
+        for build in ('build = "harness"\n', ""):
+            for view in ("harness", "carrier"):
+                with (
+                    self.subTest(build=build, view=view),
+                    self.assertRaisesRegex(HardwareError, 'build = "carrier"'),
+                ):
+                    self.cables(
+                        lambda s, b=build: s.replace('build = "carrier"\n', b), view
+                    )
+
+    def test_an_unknown_cable_key_fails(self):
+        with self.assertRaisesRegex(HardwareError, r"unknown key\(s\) \['pins'\]"):
+            self.cables(lambda s: s + 'pins = ["D0"]\n')
+
+    def test_a_cable_needs_a_registry_part(self):
+        with self.assertRaisesRegex(HardwareError, "missing or non-string 'part'"):
+            self.cables(lambda s: s.replace('part = "test-cable"\n', ""))
+
+    def test_cable_refs_are_reference_designators(self):
+        with self.assertRaisesRegex(HardwareError, "head_ref 'J-1' does not match"):
+            self.cables(lambda s: s.replace('head_ref = "J1"', 'head_ref = "J-1"'))
+
+    def test_the_two_ends_need_two_refs(self):
+        with self.assertRaisesRegex(
+            HardwareError, "head_ref and main_ref are both 'J1'"
+        ):
+            self.cables(lambda s: s.replace('main_ref = "J2"', 'main_ref = "J1"'))
+
+    def test_a_cable_ref_cannot_be_a_parts_ref(self):
+        def edit(s: str) -> str:
+            return s.replace('kind = "led"', 'kind = "led"\nref = "J2"')
+
+        with self.assertRaisesRegex(
+            HardwareError, r"ref 'J2' is used by \[parts.led\] and \[\[cables\]\] #1"
+        ):
+            self.cables(edit)
+
+    def test_one_cable_per_carrier(self):
+        second = CABLE.replace('"J1"', '"J3"').replace('"J2"', '"J4"')
+        with self.assertRaisesRegex(HardwareError, r"#2: one \[\[cables\]\] entry"):
+            self.cables(lambda s: s + second)
+
+    def test_head_no_connect_must_be_pads_on_the_board(self):
+        with self.assertRaisesRegex(HardwareError, "board.md has no pad named 'D9'"):
+            self.cables(lambda s: s.replace('["D1"]', '["D9"]'))
+
+    def test_head_no_connect_lists_a_pad_once(self):
+        with self.assertRaisesRegex(
+            HardwareError, r"head_no_connect lists \['D1'\] twice"
+        ):
+            self.cables(lambda s: s.replace('["D1"]', '["D1", "D1"]'))
+
+    def test_a_head_no_connect_pad_on_a_net_fails(self):
+        # D0 is LED_PIN's pad: leaving it unconnected on the head cuts that net.
+        with self.assertRaisesRegex(HardwareError, "mcu.D0.*role LED_PIN"):
+            self.cables(lambda s: s.replace('["D1"]', '["D0"]'))
+
+    def test_a_head_no_connect_pad_on_a_rail_fails(self):
+        with self.assertRaisesRegex(HardwareError, "mcu.5V.*rail 5V"):
+            self.cables(lambda s: s.replace('["D1"]', '["5V"]') + POWER)
 
 
 class RobocarUnifiedJoinTest(unittest.TestCase):
@@ -1148,9 +1286,10 @@ class RobocarUnifiedJoinTest(unittest.TestCase):
             with self.assertRaisesRegex(HardwareError, "UART0_TX_PIN"):
                 join(proj, repo_root=REPO_ROOT)
 
-    def test_moving_the_piezo_onto_the_ultrasonic_trigger_fails(self):
-        # #722's repro: PIEZO_PIN GPIO_NUM_2 -> GPIO_NUM_3, ULTRASONIC_TRIG_PIN's
-        # pin. Every generator used to accept it; the router failed later.
+    def test_moving_the_piezo_onto_the_mux_reset_fails(self):
+        # #722's repro: PIEZO_PIN GPIO_NUM_2 -> GPIO_NUM_3, which is now
+        # TCA9548A_RST_PIN's pin (#782; it was the ultrasonic trigger's). Every
+        # generator used to accept it; the router failed later.
         header = (UNIFIED / "main/pin_config.h").read_text(encoding="utf-8")
         moved = header.replace(
             "#define PIEZO_PIN GPIO_NUM_2", "#define PIEZO_PIN GPIO_NUM_3"
@@ -1165,7 +1304,7 @@ class RobocarUnifiedJoinTest(unittest.TestCase):
                 join(proj, repo_root=REPO_ROOT)
         message = str(ctx.exception)
         self.assertIn("PIEZO_PIN", message)
-        self.assertIn("ULTRASONIC_TRIG_PIN", message)
+        self.assertIn("TCA9548A_RST_PIN", message)
         self.assertIn("GPIO3", message)
 
     def test_i2s_lands_on_the_amp_via_d8_d9_d10(self):
@@ -1236,19 +1375,22 @@ class RobocarUnifiedJoinTest(unittest.TestCase):
         self.assertEqual(claimed, joined)
 
     def test_every_mux_channel_the_firmware_selects_is_on_a_bus_net(self):
-        # pin_config.h:39-41: the TCA9548A's three channels, each to the part
-        # the firmware selects it for (#768): six wires in all.
+        # pin_config.h: the TCA9548A's five channels, each to the part the
+        # firmware selects it for (#768, #782): ten wires in all. The two
+        # rangefinders share an address, so each has a channel to itself.
         self.assertEqual(
             {b.role: (b.source, b.channel, b.part) for b in self.model.bus_nets},
             {
                 "I2C_BUS_CHANNEL_PCA9685": ("mux", 0, "pwm"),
                 "I2C_BUS_CHANNEL_OLED": ("mux", 1, "oled"),
                 "I2C_BUS_CHANNEL_MCP23017": ("mux", 2, "expander"),
+                "I2C_BUS_CHANNEL_RANGER_FRONT": ("mux", 3, "ranger_front"),
+                "I2C_BUS_CHANNEL_RANGER_REAR": ("mux", 4, "ranger_rear"),
             },
         )
         roles = {b.role for b in self.model.bus_nets}
         self.assertEqual(set(self.model.bus_channels), roles)
-        self.assertEqual(len([w for b in self.model.bus_nets for w in b.wires]), 6)
+        self.assertEqual(len([w for b in self.model.bus_nets for w in b.wires]), 10)
 
     def test_each_motor_takes_its_own_driver_channel(self):
         # sparkfun-tb6612fng.md: channel A (A01/A02) is the right motor, B the

@@ -73,6 +73,21 @@ this is a script rather than a note.
 - An **unbranded clone with no published files**. Most clone the reference
   layout exactly, but "most" is not evidence — ask for the silkscreen order or
   a photo of the specific board, and say in the document which one it is.
+  When the photo is a purchase listing, take the photos from the listing
+  itself, not from a search for the part name (#779):
+
+  ```sh
+  curl -sIL -A 'Mozilla/5.0' https://a.aliexpress.com/_<code> | grep -i '^location'   # short link → item id
+  curl -sL -A 'Mozilla/5.0' https://www.aliexpress.com/item/<id>.html -o /tmp/item.html
+  grep -oE 'og:title" content="[^"]*' /tmp/item.html                    # what the listing sells
+  grep -oE '"imagePathList":\[[^]]*\]' /tmp/item.html                   # every gallery photo
+  magick <photo>.webp -resize 800x800 <photo>.png                       # .jpg/.png URLs serve WebP
+  ```
+
+  The listing title can name a different part from the repo: #662's
+  "HC-SR04P" was an RCWL-1601, and its "1953W" expander was a CJMCU-2317.
+  A page built this way stays marked *read from listing photos, not
+  continuity-checked* until someone checks the fitted board.
 - **KiCad** projects: `.kicad_pcb` is s-expressions, not XML. The script does
   not read them.
 - The MCU board's own header order, which belongs in

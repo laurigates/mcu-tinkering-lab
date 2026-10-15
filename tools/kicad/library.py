@@ -26,7 +26,10 @@ from .paths import REPO_ROOT
 VENDORED = REPO_ROOT / "tools/kicad/lib"
 STOCK = VENDORED / "kicad-stock"
 # Project-specific libraries, each in its own vendored subtree.
-NICKNAME_DIRS = {"Seeed_XIAO": VENDORED / "seeed-xiao"}
+NICKNAME_DIRS = {
+    "Seeed_XIAO": VENDORED / "seeed-xiao",
+    "Breakout_Sockets": VENDORED / "breakout-sockets",
+}
 
 MAC_ROOT = Path("/Applications/KiCad/KiCad.app/Contents/SharedSupport")
 LINUX_ROOT = Path("/usr/share/kicad")

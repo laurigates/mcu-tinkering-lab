@@ -86,6 +86,13 @@ jobs:
             exit 1
           fi
 
+      - name: Breakout socket footprints match the board pages
+        run: |
+          if ! python3 -m kicad.sockets --check; then
+            echo "::error::A breakout socket footprint no longer matches sockets.toml and the board pages' pad centres. Run 'just kicad::gen' locally and commit the result."
+            exit 1
+          fi
+
       - name: Schematic and library tables regenerate byte-identical
         run: |
           if ! python3 -m kicad.schematic --check; then

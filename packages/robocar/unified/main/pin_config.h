@@ -6,13 +6,14 @@
  *   D4/D5 (GPIO5/6)  = I2C SDA/SCL to TCA9548A
  *   D0 (GPIO1)       = TB6612FNG STBY (motor enable)
  *   D1 (GPIO2)       = Piezo buzzer
- *   D2-D3 (GPIO3-4)  = Ultrasonic TRIG/ECHO
+ *   D2 (GPIO3)       = TCA9548A RESET (active low)
+ *   D3 (GPIO4)       = unused (the rangefinders moved to I2C)
  *   D6/D7 (GPIO43/44)= UART0 TX/RX, spare (console is USB-C)
  *   D8-D10 (GPIO7-9) = I2S to MAX98357A (BCLK/LRCLK/DIN)
  *
- * Two spare pads remain: D6/D7 (GPIO43/44, UART0). The ROM bootloader prints
- * its boot log on GPIO43 at every reset, so anything wired to D6 sees that
- * traffic. Beyond those two, digital I/O goes through the MCP23017 on
+ * Three spare pads remain: D3 (GPIO4) and D6/D7 (GPIO43/44, UART0). The ROM
+ * bootloader prints its boot log on GPIO43 at every reset, so anything wired to
+ * D6 sees that traffic. Beyond those, digital I/O goes through the MCP23017 on
  * TCA9548A ch2.
  *
  * Camera uses internal GPIOs on the Sense module — no conflict with D0-D10.
@@ -35,11 +36,19 @@
 // ========================================
 #define TCA9548A_ADDR 0x70  // Default address (A0=A1=A2=GND)
 
+// Active-low RESET, XIAO D2. Configured as an output driven high at
+// i2c_bus_init(); i2c_bus_reset_mux() pulses it low to free a stuck segment.
+// The breakout pulls RESET up, which also holds GPIO3 (a strapping pin, sampled
+// only for JTAG source selection when that eFuse is burned) high across reset.
+#define TCA9548A_RST_PIN GPIO_NUM_3  // XIAO D2
+
 // TCA9548A channel assignments
-#define I2C_BUS_CHANNEL_PCA9685 0   // Channel 0: PCA9685 PWM driver
-#define I2C_BUS_CHANNEL_OLED 1      // Channel 1: SSD1306 OLED display
-#define I2C_BUS_CHANNEL_MCP23017 2  // Channel 2: MCP23017 GPIO expander
-// Channels 3-7: reserved for future sensors (IMU, ToF, etc.)
+#define I2C_BUS_CHANNEL_PCA9685 0       // Channel 0: PCA9685 PWM driver
+#define I2C_BUS_CHANNEL_OLED 1          // Channel 1: SSD1306 OLED display
+#define I2C_BUS_CHANNEL_MCP23017 2      // Channel 2: MCP23017 GPIO expander
+#define I2C_BUS_CHANNEL_RANGER_FRONT 3  // Channel 3: front RCWL-1601 (fixed)
+#define I2C_BUS_CHANNEL_RANGER_REAR 4   // Channel 4: rear RCWL-1601
+// Channels 5-7: reserved for future sensors (IMU, ToF, etc.)
 
 // ========================================
 // PCA9685 PWM Driver (via TCA9548A ch0)
@@ -130,12 +139,13 @@
 #define OLED_HEIGHT 64
 
 // ========================================
-// Ultrasonic Rangefinder (HC-SR04P / RCWL-1601 / US-100)
-// 3.3 V-compatible sensor on XIAO D2/D3 (formerly "spare" headers).
-// ECHO is captured via RMT RX at 1 µs resolution; TRIG is a plain GPIO output.
+// RCWL-1601 Ultrasonic Rangefinders, front and rear (via TCA9548A ch3 / ch4)
+// Both run in I2C mode: 10 kΩ fitted on R4 (IIC), R5 empty. The address is
+// fixed, so the two cannot share a segment, and the module "doesn't like to
+// share the I2C bus" (Adafruit #4742) — each has a mux channel to itself. It
+// has no pull-ups of its own. See docs/reference/boards/rcwl-1601.md.
 // ========================================
-#define ULTRASONIC_TRIG_PIN GPIO_NUM_3  // XIAO D2 — 10 µs trigger pulse (output)
-#define ULTRASONIC_ECHO_PIN GPIO_NUM_4  // XIAO D3 — echo pulse width (RMT RX input)
+#define RCWL1601_I2C_ADDR 0x57  // 7-bit, fixed
 
 // ========================================
 // Piezo Buzzer

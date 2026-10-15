@@ -31,7 +31,16 @@ CARRIER_MARKER = f"hardware/carrier/{BOARD_TOML}"
 # board.toml's tables. Their contents are validated where they are
 # read; this rejects a misspelt table name, which would otherwise be ignored.
 BOARD_TABLES = frozenset(
-    {"project", "outline", "placement", "silk", "net_classes", "signal", "pour"}
+    {
+        "project",
+        "outline",
+        "placement",
+        "silk",
+        "net_classes",
+        "signal",
+        "pour",
+        "keepouts",
+    }
 )
 PROJECT_KEYS = frozenset({"name", "paper"})
 _NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*")

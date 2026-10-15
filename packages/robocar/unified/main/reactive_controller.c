@@ -39,9 +39,9 @@
  *
  * Obstacle reflex
  * ---------------
- * If smoothed distance < STOP_THRESHOLD_CM, motors are stopped and
- * reflex_active is latched.  The latch clears automatically once distance
- * exceeds STOP_THRESHOLD_CM again; no planner intervention is required.
+ * If the front sensor's smoothed distance < STOP_THRESHOLD_CM, motors are
+ * stopped and reflex_active is latched. The rear sensor never trips it.  The latch clears
+ * automatically once distance exceeds STOP_THRESHOLD_CM again; no planner intervention is required.
  * The reflex is logged once on entry and once on exit to avoid log spam.
  * The head keeps aiming through a reflex — it cannot hit anything.
  *
@@ -53,6 +53,7 @@
 #include "reactive_controller.h"
 
 #include <stdlib.h>
+#include <string.h>
 
 #include "goal_state.h"
 #include "head_aim.h"
@@ -386,6 +387,98 @@ static void execute_goal(const goal_t *goal, bool fresh, reactive_head_mode_t he
     }
 }
 
+/* -------------------------------------------------------------------------
+ * Rangefinders — front (reflex) and rear (telemetry)
+ * -------------------------------------------------------------------------
+ * A read completes over several ticks, so only READY and ERROR results move
+ * anything here; PENDING ticks leave every field as it was.
+ */
+
+typedef struct {
+    uint16_t buf[ULTRASONIC_SMOOTH_N]; /**< Front readings, running mean.   */
+    uint8_t idx;
+    bool full;
+    uint16_t front_cm; /**< Smoothed front distance; drives the reflex.     */
+    uint16_t rear_cm;  /**< Latest rear reading, or ULTRASONIC_DIST_ERROR.  */
+    uint32_t streak[ULTRASONIC_COUNT];
+    bool failed[ULTRASONIC_COUNT];
+} rangers_t;
+
+/** Executor-private. Touched only by the executor tick and init. */
+static rangers_t s_rangers;
+
+static void rangers_reset(rangers_t *r)
+{
+    memset(r, 0, sizeof(*r));
+    /* Before the first reading the path reads as clear, the same value a
+     * failed reading feeds the filter. */
+    r->front_cm = ULTRASONIC_MAX_RANGE_CM;
+    r->rear_cm = ULTRASONIC_DIST_ERROR;
+}
+
+static uint16_t rangers_smooth(rangers_t *r, uint16_t raw)
+{
+    /* Treat error values as max range so a single bad reading does not
+     * erroneously trigger the reflex. */
+    const uint16_t clamped = (raw == ULTRASONIC_DIST_ERROR) ? ULTRASONIC_MAX_RANGE_CM : raw;
+
+    r->buf[r->idx] = clamped;
+    r->idx = (uint8_t)((r->idx + 1u) % ULTRASONIC_SMOOTH_N);
+    if (r->idx == 0u) {
+        r->full = true;
+    }
+    const uint8_t n = r->full ? (uint8_t)ULTRASONIC_SMOOTH_N : r->idx;
+    uint32_t sum = 0;
+    for (uint8_t i = 0; i < n; i++) {
+        sum += r->buf[i];
+    }
+    return (uint16_t)(sum / n);
+}
+
+/**
+ * Poll both sensors once.
+ *
+ * A single failed read is deliberately treated as "max range" by the filter,
+ * so one bad reading cannot trip the reflex. That hides *sustained* failure,
+ * though: a dead sensor then reads as a permanently clear path. The streak
+ * makes it visible in telemetry.
+ *
+ * @return Bitmask, bit (1 << id) set for each sensor whose failed flag changed
+ *         on this call, so the caller can log the transition once.
+ */
+static uint8_t rangers_tick(rangers_t *r, uint32_t now_ms)
+{
+    uint8_t changed = 0;
+    for (int i = 0; i < (int)ULTRASONIC_COUNT; i++) {
+        uint16_t cm = ULTRASONIC_DIST_ERROR;
+        const ultrasonic_result_t res = ultrasonic_poll((ultrasonic_id_t)i, now_ms, &cm);
+        if (res == ULTRASONIC_PENDING) {
+            continue;
+        }
+        const bool ok = (res == ULTRASONIC_READY);
+        if (i == ULTRASONIC_FRONT) {
+            r->front_cm = rangers_smooth(r, ok ? cm : ULTRASONIC_DIST_ERROR);
+        } else {
+            r->rear_cm = ok ? cm : ULTRASONIC_DIST_ERROR;
+        }
+
+        const bool was_failed = r->failed[i];
+        if (ok) {
+            r->streak[i] = 0;
+            r->failed[i] = false;
+        } else if (r->streak[i] < ULTRASONIC_FAIL_STREAK) {
+            r->streak[i]++;
+            if (r->streak[i] == ULTRASONIC_FAIL_STREAK) {
+                r->failed[i] = true;
+            }
+        }
+        if (r->failed[i] != was_failed) {
+            changed |= (uint8_t)(1u << i);
+        }
+    }
+    return changed;
+}
+
 #ifndef REACTIVE_CONTROLLER_HOST_TEST
 
 #include <math.h>
@@ -418,6 +511,8 @@ static reactive_telemetry_t s_telemetry = {
     .manual_active = false,
     .sensor_failed = false,
     .head_mode = REACTIVE_HEAD_UNAVAILABLE,
+    .distance_rear_cm = ULTRASONIC_DIST_ERROR,
+    .rear_failed = false,
 };
 
 /* Manual override lease — written by any task, read by the executor. */
@@ -430,33 +525,6 @@ static int64_t s_manual_expiry_us = 0;
 static portMUX_TYPE s_head_mux = portMUX_INITIALIZER_UNLOCKED;
 static head_lease_t s_head_lease = {.kind = HEAD_LEASE_NONE};
 static int64_t s_head_expiry_us = 0;
-
-/* -------------------------------------------------------------------------
- * Running-mean distance filter
- * ---------------------------------------------------------------------- */
-
-static uint16_t s_dist_buf[ULTRASONIC_SMOOTH_N];
-static uint8_t s_dist_idx = 0;
-static bool s_dist_buf_full = false;
-
-static uint16_t smooth_distance(uint16_t raw)
-{
-    /* Treat error values as max range so a single bad reading does not
-     * erroneously trigger the reflex. */
-    uint16_t clamped = (raw == ULTRASONIC_DIST_ERROR) ? ULTRASONIC_MAX_RANGE_CM : raw;
-
-    s_dist_buf[s_dist_idx] = clamped;
-    s_dist_idx = (s_dist_idx + 1) % ULTRASONIC_SMOOTH_N;
-    if (s_dist_idx == 0)
-        s_dist_buf_full = true;
-
-    uint8_t n = s_dist_buf_full ? ULTRASONIC_SMOOTH_N : s_dist_idx;
-    uint32_t sum = 0;
-    for (uint8_t i = 0; i < n; i++) {
-        sum += s_dist_buf[i];
-    }
-    return (uint16_t)(sum / n);
-}
 
 /* -------------------------------------------------------------------------
  * Executor task
@@ -481,35 +549,24 @@ static void reactive_task(void *arg)
     /* Stack HWM report interval */
     int64_t hwm_last_report = esp_timer_get_time();
 
-    uint32_t fail_streak = 0;
-    bool sensor_failed = false;
-
     while (s_running) {
-        /* ---- 1. Measure distance ----
-         * A single failed read is deliberately treated as "max range" by
-         * smooth_distance(), so one missed echo cannot trip the reflex. That
-         * hides *sustained* failure, though: a dead sensor then reads as a
-         * permanently clear path. Count the streak so the condition is at
-         * least visible in the log and in telemetry. */
-        uint16_t raw_dist = ULTRASONIC_DIST_ERROR;
-        if (ultrasonic_measure(&raw_dist) != ESP_OK || raw_dist == ULTRASONIC_DIST_ERROR) {
-            if (fail_streak < ULTRASONIC_FAIL_STREAK) {
-                fail_streak++;
-                if (fail_streak == ULTRASONIC_FAIL_STREAK && !sensor_failed) {
-                    sensor_failed = true;
-                    ESP_LOGW(TAG,
-                             "Rangefinder has failed %u reads in a row — obstacle reflex is blind",
-                             (unsigned)ULTRASONIC_FAIL_STREAK);
-                }
+        /* ---- 1. Rangefinders ----
+         * Non-blocking: each poll is at most one short I2C transaction, and a
+         * reading completes over several ticks (ultrasonic_core.h). */
+        const uint8_t changed = rangers_tick(&s_rangers, (uint32_t)(esp_timer_get_time() / 1000));
+        for (int i = 0; i < (int)ULTRASONIC_COUNT; i++) {
+            if ((changed & (1u << i)) == 0u) {
+                continue;
             }
-        } else {
-            if (sensor_failed) {
-                ESP_LOGI(TAG, "Rangefinder recovered");
+            if (s_rangers.failed[i]) {
+                ESP_LOGW(TAG, "%s rangefinder has failed %u reads in a row%s",
+                         ultrasonic_name((ultrasonic_id_t)i), (unsigned)ULTRASONIC_FAIL_STREAK,
+                         (i == ULTRASONIC_FRONT) ? " — obstacle reflex is blind" : "");
+            } else {
+                ESP_LOGI(TAG, "%s rangefinder recovered", ultrasonic_name((ultrasonic_id_t)i));
             }
-            fail_streak = 0;
-            sensor_failed = false;
         }
-        uint16_t dist = smooth_distance(raw_dist);
+        const uint16_t dist = s_rangers.front_cm;
 
         /* ---- 2. Obstacle reflex ---- */
         bool reflex = (dist < STOP_THRESHOLD_CM);
@@ -608,15 +665,17 @@ static void reactive_task(void *arg)
         }
         s_telemetry.stack_high_water = hwm;
         s_telemetry.manual_active = manual_active && !reflex;
-        s_telemetry.sensor_failed = sensor_failed;
+        s_telemetry.sensor_failed = s_rangers.failed[ULTRASONIC_FRONT];
         s_telemetry.head_mode = head_mode;
+        s_telemetry.distance_rear_cm = s_rangers.rear_cm;
+        s_telemetry.rear_failed = s_rangers.failed[ULTRASONIC_REAR];
         portEXIT_CRITICAL(&s_telem_mux);
 
         /* ---- 8. Wait for next period ----
          * xTaskDelayUntil() returns pdFALSE without blocking when the loop body
-         * already overran the period — e.g. the ultrasonic GPIO poll fallback
-         * busy-waits out its full echo timeout (40 ms > 33 ms) on a board with
-         * no sensor fitted, or with the sensor aimed at open space. A
+         * already overran the period — e.g. an I2C transaction that runs to its
+         * timeout on a stuck bus (the guard was written for the GPIO-mode
+         * rangefinder's 40 ms busy-wait, which is gone). A
          * non-blocking return means this Core-0 task never yields, starving
          * IDLE0 and tripping the task watchdog. Guarantee at least a one-tick
          * yield when we have fallen behind, and resync so we don't then fire a
@@ -648,16 +707,16 @@ esp_err_t reactive_controller_init(void)
         return ESP_OK; /* idempotent */
     }
 
-    esp_err_t ret = ultrasonic_init();
+    /* Not fatal: without the executor nothing drives the motors at all, so a
+     * missing or unreachable rangefinder must cost the reflex, not the robot.
+     * Every poll then fails, and telemetry reports both sensors as failed. */
+    const esp_err_t ret = ultrasonic_init();
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "ultrasonic_init failed: %s", esp_err_to_name(ret));
-        return ret;
+        ESP_LOGW(TAG, "ultrasonic_init failed (%s) — running without rangefinders",
+                 esp_err_to_name(ret));
     }
 
-    /* Reset smoothing buffer */
-    memset(s_dist_buf, 0, sizeof(s_dist_buf));
-    s_dist_idx = 0;
-    s_dist_buf_full = false;
+    rangers_reset(&s_rangers);
     head_aim_reset(&s_head_aim);
 
     s_running = true;
@@ -837,25 +896,6 @@ static uint32_t s_head_ticks_left = 0;
 /* Host clock: one tick = one loop period. */
 static uint32_t s_ticks = 0;
 
-/* --- Smoothing buffer (same logic as target) --- */
-static uint16_t s_dist_buf[ULTRASONIC_SMOOTH_N];
-static uint8_t s_dist_idx = 0;
-static bool s_dist_buf_full = false;
-
-static uint16_t smooth_distance(uint16_t raw)
-{
-    uint16_t clamped = (raw == ULTRASONIC_DIST_ERROR) ? ULTRASONIC_MAX_RANGE_CM : raw;
-    s_dist_buf[s_dist_idx] = clamped;
-    s_dist_idx = (s_dist_idx + 1) % ULTRASONIC_SMOOTH_N;
-    if (s_dist_idx == 0)
-        s_dist_buf_full = true;
-    uint8_t n = s_dist_buf_full ? ULTRASONIC_SMOOTH_N : s_dist_idx;
-    uint32_t sum = 0;
-    for (uint8_t i = 0; i < n; i++)
-        sum += s_dist_buf[i];
-    return (uint16_t)(sum / n);
-}
-
 static uint32_t ms_to_ticks(uint32_t ms)
 {
     return (ms + REACTIVE_LOOP_PERIOD_MS - 1) / REACTIVE_LOOP_PERIOD_MS;
@@ -936,9 +976,8 @@ esp_err_t reactive_controller_head_release(void)
  */
 void reactive_controller_tick_for_test(void)
 {
-    uint16_t raw_dist = ULTRASONIC_DIST_ERROR;
-    ultrasonic_measure(&raw_dist);
-    uint16_t dist = smooth_distance(raw_dist);
+    (void)rangers_tick(&s_rangers, s_ticks * REACTIVE_LOOP_PERIOD_MS);
+    const uint16_t dist = s_rangers.front_cm;
 
     const bool reflex = (dist < STOP_THRESHOLD_CM);
 
@@ -981,6 +1020,9 @@ void reactive_controller_tick_for_test(void)
     s_telemetry.reflex_active = reflex;
     s_telemetry.manual_active = manual_active && !reflex;
     s_telemetry.head_mode = head_mode;
+    s_telemetry.sensor_failed = s_rangers.failed[ULTRASONIC_FRONT];
+    s_telemetry.distance_rear_cm = s_rangers.rear_cm;
+    s_telemetry.rear_failed = s_rangers.failed[ULTRASONIC_REAR];
     s_ticks++;
 }
 
@@ -988,9 +1030,7 @@ esp_err_t reactive_controller_init(void)
 {
     if (s_running)
         return ESP_OK;
-    memset(s_dist_buf, 0, sizeof(s_dist_buf));
-    s_dist_idx = 0;
-    s_dist_buf_full = false;
+    rangers_reset(&s_rangers);
     s_manual_ticks_left = 0;
     s_manual_cmd = REACTIVE_MANUAL_STOP;
     s_head_lease.kind = HEAD_LEASE_NONE;

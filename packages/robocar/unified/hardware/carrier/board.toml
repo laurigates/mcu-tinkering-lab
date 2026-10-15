@@ -1,0 +1,175 @@
+# Carrier PCB layout for tools/kicad: everything the netlist does not say.
+# Parts, footprints and nets come from ../../hardware.toml and the parts
+# registry (docs/reference/parts/); this file says where each part sits, how
+# wide each net's tracks are, and what goes on the silkscreen.
+#
+# PROVISIONAL (#750 step 2): DO NOT ORDER THIS BOARD. One PCB carries two
+# boards: the main board (chassis plate) and, in the top-right corner, the head
+# board (pan-tilt cradle), separated by a 3 mm copper-free band under a
+# silkscreen saw line. JLCPCB sees one rectangular design with no V-cuts, tabs
+# or mouse bites; Lauri saws the head off after delivery.
+#
+# Every dimension below is Claude's proposal, not a measurement, and each one
+# says what to measure. Correct it, then re-run
+# `just robocar-unified::carrier-board` and `just robocar-unified::carrier-check`.
+# The tracks are Freerouting's, kept only so the carrier gates have a routed
+# board to check; nobody has reviewed them.
+#
+# Coordinates: millimetres from the outline's top-left corner, x right, y down.
+# The top edge is the robot's front, the bottom edge its rear.
+#
+# `python3 -m kicad.boardcheck` validates every table against the netlist.
+# `python3 -m kicad.boardinput` turns this file and the netlist into the JSON
+# the pcbnew scripts in tools/kicad/pcb/ place and route from.
+
+[project]
+name = "robocar-unified-carrier"     # the KiCad project directory and file stem here
+# The schematic writer grows the sheet until the drawing fits; this carrier's
+# needs A2, so the sheet is named as the generated file has it.
+paper = "A2"
+
+# One rectangle for both boards. PROVISIONAL: 100 x 100 mm keeps the order in
+# JLCPCB's smallest price band. Measure the 2WD chassis plate's usable area
+# between its wheels and standoffs. The main board is this outline minus the
+# head corner, so a smaller plate shrinks the outline, not the head.
+[outline]
+origin = [100.0, 100.0]
+size = [100.0, 100.0]
+
+# The saw band between the head board (copper x 72-100, y 0-37) and the main
+# board: no copper of any kind. build_board.py makes each rectangle a KiCad rule
+# area, so DRC, the zone fill and Freerouting keep out, and kicad.boardcheck
+# checks the committed copper against it. 3 mm leaves about 1 mm of bare board
+# on each side of a hacksaw kerf. PROVISIONAL: measure your saw's kerf.
+[[keepouts]]
+name = "head cut band, vertical"
+rect = [69.0, 0.0, 72.0, 40.0]
+
+[[keepouts]]
+name = "head cut band, horizontal"
+rect = [69.0, 37.0, 100.0, 40.0]
+
+# ref = [x_mm, y_mm, rotation_deg], or [x_mm, y_mm, rotation_deg, "back"] for a
+# part on the back face (rotation as seen from the top), relative to the
+# origin; each footprint's
+# own anchor (pad 1 for the sockets and connectors). A breakout socket's
+# courtyard is its module's outline, so no part sits under a module.
+[placement]
+# Head board: copper x 72-100, y 0-37; sawn on the lines at x 70.5 and
+# y 38.5, so the head is 29.5 mm wide (x), 0.25 mm per side inside the
+# cradle's measured 30.0 mm inner width (Lauri, 2026-10-15). File a sawn edge
+# back to the line if the cut wanders. The M2 holes sit above the XIAO, either
+# side of its USB-C, and the IDC header is on the back face (Lauri, 2026-10-15).
+# PROVISIONAL: the 38.5 mm height; measure the cradle's inner height and where
+# its two M2 screws pass.
+H5 = [75.0, 3.5, 0]       # M2 through the cradle, PROVISIONAL: 22 mm apart,
+H6 = [97.0, 3.5, 0]       # 18 mm clear between their courtyards for the USB-C plug
+U1 = [85.0, 17.0, 90]     # XIAO ESP32-S3 Sense socket; USB-C toward the top edge
+J2 = [93.64, 31.9, 90, "back"]  # IDC 2x7, head end, on the back face, under the
+                          # XIAO's lower end with its pads clear of U1's courtyard;
+                          # flipped, so pad 1 is the right-hand end.
+                          # PROVISIONAL: check the ribbon folds toward the pan axis
+# Main board: everything outside the head corner and the band. M3 holes at its
+# corners, PROVISIONAL: check them against the 2WD chassis plate's holes, or
+# drill the plate to match.
+H1 = [4.0, 4.0, 0]
+H2 = [63.0, 4.0, 0]       # the main board's top-right corner, beside the band
+H3 = [4.0, 96.0, 0]
+H4 = [96.0, 96.0, 0]
+J1 = [58.0, 14.0, 0]      # IDC 2x7, main end, beside the band: the pan-tilt end.
+                          # Measure the ribbon length the full pan and tilt travel needs
+# Front strip: the front rangefinder, the OLED and the 3V3 regulator.
+J7 = [12.0, 4.0, 0]       # RCWL-1601 front, at the front edge
+J9 = [4.0, 13.0, 0]       # SSD1306 OLED lead, front-left corner
+U2 = [12.0, 24.0, 0]      # AMS1117-3.3
+C7 = [6.0, 32.0, 0]       # LDO input
+C8 = [13.0, 32.0, 0]      # LDO output
+A3 = [32.0, 4.0, 0]       # TCA9548A socket
+C5 = [27.0, 3.5, 0]       # TCA9548A VIN decoupling, beside its VIN pin
+# The mux channel pull-ups in a row under the TCA9548A: ch0 and ch1 (left
+# header) on the left, ch3 and ch4 (right header) on the right.
+R2 = [21.0, 36.5, 90]
+R3 = [24.5, 36.5, 90]
+R4 = [28.0, 36.5, 90]
+R5 = [31.5, 36.5, 90]
+R6 = [38.5, 36.5, 90]
+R7 = [42.0, 36.5, 90]
+R8 = [45.5, 36.5, 90]
+R9 = [49.0, 36.5, 90]
+# Middle: the motor driver at the left edge, the PCA9685 beside it.
+A1 = [3.5, 62.0, 0]       # TB6612FNG socket; motor outputs on its left header
+J5 = [4.0, 69.0, 0]       # left motor, left edge
+J6 = [93.0, 48.0, 0]      # right motor, right edge
+C2 = [16.0, 70.0, 0]      # TB6612FNG VM bulk
+A2 = [25.0, 60.0, 0]      # PCA9685 socket; servo columns on the module face the rear
+C4 = [24.0, 69.0, 90]     # PCA9685 VCC decoupling
+C1 = [32.0, 72.0, 0]      # PCA9685 V+ bulk
+A4 = [97.0, 84.0, 0]      # MAX98357A socket, right side; the speaker lead leaves the module
+C3 = [72.0, 80.0, 0]      # MAX98357A Vin bulk
+# Rear edge: power in, the buck lead, the rear rangefinder and the piezo.
+J3 = [13.0, 86.0, 180]    # XT30 pack in, mating face to the rear edge
+J4 = [27.0, 95.0, 0]      # LM2596 lead
+J8 = [43.0, 95.0, 0]      # RCWL-1601 rear, at the rear edge
+J10 = [58.0, 95.0, 0]     # piezo
+R1 = [59.0, 88.0, 0]      # piezo series resistor
+
+[silk]
+hidden_refs = ["H1", "H2", "H3", "H4", "H5", "H6"]
+# Seeed's reference text is below KiCad's minimum silkscreen height.
+ref_sizes = { U1 = 1.0 }
+# Off the board edge and out from under neighbours.
+ref_positions = { A1 = [11.0, 52.0], J7 = [18.0, 9.3], J3 = [15.5, 81.5], J2 = [86.0, 36.4], C4 = [22.3, 67.6] }
+# The saw line, on both faces, along the middle of the keepout band; each gets
+# a "CUT" label inside the band.
+cut_lines = [
+    [70.5, 0.5, 70.5, 38.5],
+    [70.5, 38.5, 99.5, 38.5],
+]
+texts = [
+    { text = "robocar-unified carrier", at = [55.0, 80.0], size = 1.2 },
+    { text = "PROVISIONAL: do not order", at = [55.0, 82.5], size = 1.2 },
+    { text = "FRONT ^", at = [54.0, 4.0], size = 1.2 },
+    { text = "HEAD", at = [74.0, 35.0], size = 1.2 },
+]
+
+# Freerouting width classes, in this order. `nets` are net names or fnmatch
+# patterns over them; every pattern must match, and no net may be in two classes.
+[[net_classes]]
+name = "power"
+nets = ["VBAT", "GND", "+5V", "HEAD_+5V", "HEAD_GND", "MOT_*"]
+track_um = 1000
+clearance_um = 300
+via_um = [1000, 500]
+
+[[net_classes]]
+name = "logic_power"
+nets = ["+3V3"]
+track_um = 500
+clearance_um = 250
+via_um = [800, 400]
+
+# Every net not in a class above. Its via must be the .kicad_pro Default class's.
+# 200 um clearance, the .kicad_pro Default's, because Freerouting left
+# sub-minimum necking between 2.54 mm-pitch pads at 250 (#793).
+[signal]
+track_um = 300
+clearance_um = 200
+via_um = [600, 300]
+
+# A copper pour on both layers after routing, one region per ground: the head's
+# ground arrives through the ribbon as HEAD_GND, a different net from the main
+# board's GND. The regions stop at the cut band; the keepouts would clear the
+# fill from it anyway. The .kicad_dru lets a thermal on either net resolve to
+# one spoke because route_board first checks every pad of both has a routed
+# track.
+[pour]
+layers = ["F.Cu", "B.Cu"]
+regions = [
+    { net = "GND", rect = [0.0, 0.0, 69.0, 100.0] },
+    { net = "GND", rect = [69.0, 40.0, 100.0, 100.0] },
+    { net = "HEAD_GND", rect = [72.0, 0.0, 100.0, 37.0] },
+]
+clearance_mm = 0.4
+min_thickness_mm = 0.25
+thermal_gap_mm = 0.3
+spoke_mm = 0.35

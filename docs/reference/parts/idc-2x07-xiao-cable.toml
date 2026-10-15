@@ -1,0 +1,23 @@
+# 14-way IDC ribbon between robocar-unified's head board (the XIAO ESP32-S3)
+# and its main board. One entry serves both ends ([[cables]], ADR-021): [pins]
+# is keyed by the XIAO's pad names, so the two connectors cannot disagree.
+# Through-hole, so no LCSC number (jlc.py places SMD parts only).
+[part]
+name = "IDC 2x7 cable, XIAO ESP32-S3 head to main board"
+source = "this repo's cable convention (#750): 5 V on pins 1-2, a GND beside SCL and beside BCLK; pad names from docs/reference/boards/xiao-esp32s3.md, signals from packages/robocar/unified/main/pin_config.h"
+symbol = "Connector_Generic:Conn_02x07_Odd_Even"
+footprint = "Connector_IDC:IDC-Header_2x07_P2.54mm_Vertical"
+value = "IDC 2x7 head cable"
+
+# XIAO pad -> IDC pin; the comment is the robocar signal on that pad.
+[pins]
+"5V" = [1, 2]
+GND = [3, 4, 7, 11]
+D4 = 5   # I2C SDA
+D5 = 6   # I2C SCL
+D8 = 8   # I2S BCLK
+D9 = 9   # I2S LRC
+D10 = 10 # I2S DIN
+D0 = 12  # TB6612FNG STBY
+D1 = 13  # piezo
+D2 = 14  # TCA9548A RST (MUX_RST)
