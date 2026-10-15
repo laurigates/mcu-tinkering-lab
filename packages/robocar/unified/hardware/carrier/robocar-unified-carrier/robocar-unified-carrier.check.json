@@ -1,5 +1,5 @@
 {
- "board_sha256": "e74c67147d64676873e97af6d9efddf4fd14f5f50baa871d6484dd8723fe77cd",
+ "board_sha256": "f17c376a89a1a4cd31f39d54257c054a98f66c2b8587de6ae552a14ae51d8c32",
  "kicad_cli_version": "10.0.6",
  "netlist": {
   "components": {
@@ -123,7 +123,7 @@
     "value": "M2"
    },
    "J1": {
-    "footprint": "Connector_IDC:IDC-Header_2x07_P2.54mm_Vertical",
+    "footprint": "Connector_PinHeader_2.54mm:PinHeader_2x07_P2.54mm_Vertical",
     "in_bom": true,
     "lcsc": "",
     "lib_id": "Connector_Generic:Conn_02x07_Odd_Even",
@@ -137,7 +137,7 @@
     "value": "Piezo"
    },
    "J2": {
-    "footprint": "Connector_IDC:IDC-Header_2x07_P2.54mm_Vertical",
+    "footprint": "Connector_PinHeader_2.54mm:PinHeader_2x07_P2.54mm_Vertical",
     "in_bom": true,
     "lcsc": "",
     "lib_id": "Connector_Generic:Conn_02x07_Odd_Even",
@@ -997,5 +997,5 @@
    ]
   }
  },
- "schematic_sha256": "bb80a60028004023581a39d939b1088c095c9d8dbfb9d69136bdfaeae6868fd9"
+ "schematic_sha256": "be46acb557a67e9025ce526d77ba32e6ead6817dddfab87373f682ad30facc73"
 }

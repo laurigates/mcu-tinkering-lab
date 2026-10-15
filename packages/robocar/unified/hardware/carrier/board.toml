@@ -36,18 +36,35 @@ paper = "A2"
 origin = [100.0, 100.0]
 size = [100.0, 100.0]
 
-# The saw band between the head board (copper x 72-100, y 0-37) and the main
+# The saw band between the head board (copper x 72-100, y 0-28) and the main
 # board: no copper of any kind. build_board.py makes each rectangle a KiCad rule
 # area, so DRC, the zone fill and Freerouting keep out, and kicad.boardcheck
 # checks the committed copper against it. 3 mm leaves about 1 mm of bare board
 # on each side of a hacksaw kerf. PROVISIONAL: measure your saw's kerf.
 [[keepouts]]
 name = "head cut band, vertical"
-rect = [69.0, 0.0, 72.0, 40.0]
+rect = [69.0, 0.0, 72.0, 31.0]
 
 [[keepouts]]
 name = "head cut band, horizontal"
-rect = [69.0, 37.0, 100.0, 40.0]
+rect = [69.0, 28.0, 100.0, 31.0]
+
+# KiCad's copper-to-edge clearance (0.5 mm, .kicad_pro) as rule areas along
+# the outline: Freerouting keeps only its class clearance from the board
+# boundary, and on the 28 mm head it routed tracks onto the edge. Not along the
+# bottom edge, where J3's courtyard reaches the outline and a rule area would
+# refuse the footprint.
+[[keepouts]]
+name = "edge clearance, top"
+rect = [0.0, 0.0, 100.0, 0.5]
+
+[[keepouts]]
+name = "edge clearance, left"
+rect = [0.0, 0.0, 0.5, 100.0]
+
+[[keepouts]]
+name = "edge clearance, right"
+rect = [99.5, 0.0, 100.0, 100.0]
 
 # ref = [x_mm, y_mm, rotation_deg], or [x_mm, y_mm, rotation_deg, "back"] for a
 # part on the back face (rotation as seen from the top), relative to the
@@ -55,20 +72,21 @@ rect = [69.0, 37.0, 100.0, 40.0]
 # own anchor (pad 1 for the sockets and connectors). A breakout socket's
 # courtyard is its module's outline, so no part sits under a module.
 [placement]
-# Head board: copper x 72-100, y 0-37; sawn on the lines at x 70.5 and
-# y 38.5, so the head is 29.5 mm wide (x), 0.25 mm per side inside the
-# cradle's measured 30.0 mm inner width (Lauri, 2026-10-15). File a sawn edge
-# back to the line if the cut wanders. The M2 holes sit above the XIAO, either
-# side of its USB-C, and the IDC header is on the back face (Lauri, 2026-10-15).
-# PROVISIONAL: the 38.5 mm height; measure the cradle's inner height and where
-# its two M2 screws pass.
-H5 = [75.0, 3.5, 0]       # M2 through the cradle, PROVISIONAL: 22 mm apart,
-H6 = [97.0, 3.5, 0]       # 18 mm clear between their courtyards for the USB-C plug
-U1 = [85.0, 17.0, 90]     # XIAO ESP32-S3 Sense socket; USB-C toward the top edge
-J2 = [93.64, 31.9, 90, "back"]  # IDC 2x7, head end, on the back face, under the
-                          # XIAO's lower end with its pads clear of U1's courtyard;
-                          # flipped, so pad 1 is the right-hand end.
-                          # PROVISIONAL: check the ribbon folds toward the pan axis
+# Head board: copper x 72-100, y 0-28; sawn on the lines at x 70.5 and
+# y 29.5, so the head is 29.5 x 29.5 mm, 0.25 mm per side inside the cradle's
+# measured 30.0 x 30.0 mm inner width and height (Lauri, 2026-10-15). File a
+# sawn edge back to its line if the cut wanders. Lauri's layout: J2 is an
+# unshrouded 2x7 header on the back face beside the XIAO, and the M2 holes are
+# in the two bottom corners. PROVISIONAL: the M2 positions; measure where the
+# cradle's two screws pass.
+U1 = [90.0, 12.45, 90]    # XIAO ESP32-S3 Sense socket; USB-C at the top edge, its
+                          # silk outline 0.4 mm inside it
+J2 = [74.27, 18.02, 0, "back"]  # 2x7 pin header, head end, on the back face left
+                          # of the XIAO; flipped, so pad 1 is its bottom-left pad
+                          # and the header runs up from it. PROVISIONAL: check
+                          # the ribbon's run toward the pan axis
+H5 = [75.0, 25.45, 0]     # M2 through the cradle, PROVISIONAL: 22 mm apart; the
+H6 = [97.0, 25.45, 0]     # bottom corners leave 0.05 mm between H6 and U1
 # Main board: everything outside the head corner and the band. M3 holes at its
 # corners, PROVISIONAL: check them against the 2WD chassis plate's holes, or
 # drill the plate to match.
@@ -101,8 +119,8 @@ A1 = [3.5, 62.0, 0]       # TB6612FNG socket; motor outputs on its left header
 J5 = [4.0, 69.0, 0]       # left motor, left edge
 J6 = [93.0, 48.0, 0]      # right motor, right edge
 C2 = [16.0, 70.0, 0]      # TB6612FNG VM bulk
-A2 = [25.0, 60.0, 0]      # PCA9685 socket; servo columns on the module face the rear
-C4 = [24.0, 69.0, 90]     # PCA9685 VCC decoupling
+A2 = [25.0, 59.0, 0]      # PCA9685 socket; servo columns on the module face the rear
+C4 = [24.0, 68.0, 90]     # PCA9685 VCC decoupling
 C1 = [32.0, 72.0, 0]      # PCA9685 V+ bulk
 A4 = [97.0, 84.0, 0]      # MAX98357A socket, right side; the speaker lead leaves the module
 C3 = [72.0, 80.0, 0]      # MAX98357A Vin bulk
@@ -118,32 +136,34 @@ hidden_refs = ["H1", "H2", "H3", "H4", "H5", "H6"]
 # Seeed's reference text is below KiCad's minimum silkscreen height.
 ref_sizes = { U1 = 1.0 }
 # Off the board edge and out from under neighbours.
-ref_positions = { A1 = [11.0, 52.0], J7 = [18.0, 9.3], J3 = [15.5, 81.5], J2 = [86.0, 36.4], C4 = [22.3, 67.6] }
+ref_positions = { A1 = [11.0, 52.0], J7 = [18.0, 9.3], J3 = [15.5, 81.5], J2 = [75.5, 21.0] }
 # The saw line, on both faces, along the middle of the keepout band; each gets
 # a "CUT" label inside the band.
 cut_lines = [
-    [70.5, 0.5, 70.5, 38.5],
-    [70.5, 38.5, 99.5, 38.5],
+    [70.5, 0.5, 70.5, 29.5],
+    [70.5, 29.5, 99.5, 29.5],
 ]
 texts = [
     { text = "robocar-unified carrier", at = [55.0, 80.0], size = 1.2 },
     { text = "PROVISIONAL: do not order", at = [55.0, 82.5], size = 1.2 },
     { text = "FRONT ^", at = [54.0, 4.0], size = 1.2 },
-    { text = "HEAD", at = [74.0, 35.0], size = 1.2 },
+    { text = "HEAD", at = [86.0, 25.5], size = 1.2 },
 ]
 
 # Freerouting width classes, in this order. `nets` are net names or fnmatch
 # patterns over them; every pattern must match, and no net may be in two classes.
 [[net_classes]]
 name = "power"
-nets = ["VBAT", "GND", "+5V", "HEAD_+5V", "HEAD_GND", "MOT_*"]
+nets = ["VBAT", "GND", "+5V", "MOT_*"]
 track_um = 1000
 clearance_um = 300
 via_um = [1000, 500]
 
+# The head's rails: the XIAO and its camera draw well under 1 A, and 1 mm
+# tracks do not fit between the 28 mm head's pads.
 [[net_classes]]
 name = "logic_power"
-nets = ["+3V3"]
+nets = ["+3V3", "HEAD_+5V", "HEAD_GND"]
 track_um = 500
 clearance_um = 250
 via_um = [800, 400]
@@ -166,8 +186,8 @@ via_um = [600, 300]
 layers = ["F.Cu", "B.Cu"]
 regions = [
     { net = "GND", rect = [0.0, 0.0, 69.0, 100.0] },
-    { net = "GND", rect = [69.0, 40.0, 100.0, 100.0] },
-    { net = "HEAD_GND", rect = [72.0, 0.0, 100.0, 37.0] },
+    { net = "GND", rect = [69.0, 31.0, 100.0, 100.0] },
+    { net = "HEAD_GND", rect = [72.0, 0.0, 100.0, 28.0] },
 ]
 clearance_mm = 0.4
 min_thickness_mm = 0.25
