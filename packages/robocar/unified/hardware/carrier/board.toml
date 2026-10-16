@@ -145,8 +145,8 @@ U2 = [50.0, 14.0, 0]      # AMS1117-3.3
 J14 = [56.5, 14.0, 90]    # GND post beside the AMS1117
 C7 = [48.0, 27.5, 0]      # LDO input
 C8 = [54.5, 27.5, 0]      # LDO output
-J1 = [64.5, 11.0, 0]      # ribbon, main end, beside the head column. Measure the
-                          # ribbon length the full pan and tilt travel needs
+J1 = [64.5, 11.0, 0]      # ribbon, main end, beside the head column; a 10-15 cm
+                          # ribbon reaches the head (Lauri, 2026-10-16)
 J15 = [64.5, 27.5, 0]     # UART0 TX tap: GND, TX; the ROM boot log, 115200 baud
 # The PCA9685 across the board; servo columns on the module face the rear.
 A2 = [5.0, 52.5, 0]

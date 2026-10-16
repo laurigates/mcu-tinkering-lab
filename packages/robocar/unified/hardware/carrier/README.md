@@ -134,18 +134,18 @@ re-check.
    servo. On head 2 (header on the front) also fit the XIAO in its socket and
    push the plug onto J16: the XIAO's edge is 0.58 mm from the header body, the
    plug is wider than the header and stands about as tall as the socketed
-   XIAO, so it may touch the XIAO or only leave toward the bottom edge.
-2. **Ribbon length** for the full pan and tilt travel, from J1 beside the head
-   column.
-3. **OLED pin order** (J9) against the fitted module: it was read from listing
+   XIAO, so it may touch the XIAO or only leave toward the bottom edge. This
+   can wait for the plugs: it does not block ordering, because heads 1 and 3
+   do not depend on it and head 2 is the variant being tried.
+2. **OLED pin order** (J9) against the fitted module: it was read from listing
    photos, not continuity-checked. Check each RCWL-1601 has 10 kΩ on R4 (I2C
    mode) and R5 empty.
-4. **Hold each fitted breakout against the board render** (TB6612FNG,
+3. **Hold each fitted breakout against the board render** (TB6612FNG,
    PCA9685, TCA9548A, MAX98357A): headers on the footprints, outline inside its
    courtyard.
-5. **Polarity** of the XT30 pack lead (J3 pad 1 is "−", next to the silkscreen
+4. **Polarity** of the XT30 pack lead (J3 pad 1 is "−", next to the silkscreen
    "−"), the LM2596 lead (J4 pin 1 IN+), and the buzzer (BZ1 "+" on pad 1).
-6. **Saw kerf against the bands.** A blade wider than about 1 mm leaves no bare
+5. **Saw kerf against the bands.** A blade wider than about 1 mm leaves no bare
    margin beside the cut line in a 3 mm band.
 
 ## Assembly notes
@@ -230,9 +230,9 @@ Not until the pre-order checks are done and the PROVISIONAL text is gone from
    | 2 | 1×8 female header (TB6612FNG) |
    | 2 | 1×12 female header (TCA9548A) |
    | 1 | 1×7 female header (MAX98357A) |
-   | 1 | 1×6 female header, plus six single female sockets from a breakaway strip for the channel 8–13 PWM pins (PCA9685; how those pins reach the carrier is pre-order check 4) |
+   | 1 | 1×6 female header, plus six single female sockets from a breakaway strip for the channel 8–13 PWM pins (PCA9685; how those pins reach the carrier is pre-order check 3) |
    | 2 | 2×7 pin header, 2.0 mm pitch (J1 and the fitted head's J2, J16 or J17) |
-   | 2 | 2×7 IDC plug (female, 2.0 mm pitch), and 14-way flat ribbon at 1.0 mm pitch |
+   | 2 | 2×7 IDC plug (female, 2.0 mm pitch), and 14-way flat ribbon at 1.0 mm pitch, 10–15 cm per cable (Lauri, 2026-10-16) |
    | 2 | 1×4 pin header (J11, J12) |
    | 3 | 1×2 pin header (J13, J14, J15) |
    | 1 | XT30 PCB socket (XT30PW-M) |
