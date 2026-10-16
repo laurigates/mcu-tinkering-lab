@@ -28,6 +28,7 @@ several traps below are version-specific: after a KiCad upgrade, re-run
   `board.toml` holds placement, silkscreen, net classes and the pour
 - `packages/robocar/unified/hardware/carrier/`: head and main boards on one PCB,
   split by a `[[keepouts]]` band under a `[silk] cut_lines` saw line, with a
+  `[[cutouts]]` relief hole at the saw line's inside corner, and a
   `[pour]` region per ground net (`GND`, `HEAD_GND`); its head IDC header sits
   on the back face (`[placement]` entry `[x, y, rot, "back"]`, mirrored about
   its anchor, so the pads run the other way)

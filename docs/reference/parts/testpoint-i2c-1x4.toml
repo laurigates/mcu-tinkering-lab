@@ -1,0 +1,16 @@
+# robocar-unified's I2C test header (J12): a 1x4 pin header on the main board
+# for a logic analyser on the upstream I2C bus and the mux reset, on the main
+# board's side of the head ribbon. Through-hole, hand-soldered, so no LCSC
+# number.
+[part]
+name = "I2C test header, 1x4 pin header"
+source = "KiCad 10.0.6 library (Conn_01x04, PinHeader_1x04_P2.54mm_Vertical); the pin order, GND on pin 1, is this repo's test-header convention (Lauri, 2026-10-16; #750)"
+symbol = "Connector_Generic:Conn_01x04"
+footprint = "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical"
+value = "Test: GND SDA SCL RST"
+
+[pins]
+GND = 1
+SDA = 2
+SCL = 3
+RST = 4
