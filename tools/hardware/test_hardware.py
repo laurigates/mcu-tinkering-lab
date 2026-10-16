@@ -1261,6 +1261,64 @@ class CableTest(unittest.TestCase):
         with self.assertRaisesRegex(HardwareError, "mcu.5V.*rail 5V"):
             self.cables(lambda s: s.replace('["D1"]', '["5V"]') + POWER)
 
+    # spare_heads (#750): more head boards on the one carrier.
+    SPARES = (
+        'spare_heads = [{ mcu_ref = "U3", head_ref = "J16" }, '
+        '{ mcu_ref = "U4", head_ref = "J17" }]\n'
+    )
+
+    def spares(self, spares: str = SPARES):
+        return self.cables(lambda s: s + spares)
+
+    def test_spare_heads_are_read_in_order(self):
+        (cable,) = self.spares().cables
+        self.assertEqual(
+            [(s.mcu_ref, s.head_ref) for s in cable.spare_heads],
+            [("U3", "J16"), ("U4", "J17")],
+        )
+
+    def test_spare_heads_are_optional(self):
+        self.assertEqual(self.cables().cables[0].spare_heads, ())
+
+    def test_a_spare_head_needs_exactly_two_refs(self):
+        for bad in (
+            '{ mcu_ref = "U3" }',
+            '{ mcu_ref = "U3", head_ref = "J16", main_ref = "J18" }',
+            '"U3"',
+        ):
+            with (
+                self.subTest(bad=bad),
+                self.assertRaisesRegex(
+                    HardwareError, "spare_heads #1: needs exactly mcu_ref and head_ref"
+                ),
+            ):
+                self.spares(f"spare_heads = [{bad}]\n")
+
+    def test_spare_heads_must_be_a_list(self):
+        with self.assertRaisesRegex(HardwareError, "spare_heads must be a list"):
+            self.spares('spare_heads = { mcu_ref = "U3", head_ref = "J16" }\n')
+
+    def test_a_spare_head_ref_is_a_reference_designator(self):
+        with self.assertRaisesRegex(HardwareError, "mcu_ref 'U-3' does not match"):
+            self.spares('spare_heads = [{ mcu_ref = "U-3", head_ref = "J16" }]\n')
+
+    def test_a_spare_head_ref_cannot_repeat_any_ref(self):
+        for spares, ref in (
+            ('[{ mcu_ref = "U3", head_ref = "J1" }]', "J1"),  # the first head
+            ('[{ mcu_ref = "U3", head_ref = "J2" }]', "J2"),  # the main end
+            (
+                '[{ mcu_ref = "U3", head_ref = "J16" }, '
+                '{ mcu_ref = "U3", head_ref = "J17" }]',
+                "U3",
+            ),  # another spare
+            ('[{ mcu_ref = "U3", head_ref = "U3" }]', "U3"),  # its own pair
+        ):
+            with (
+                self.subTest(spares=spares),
+                self.assertRaisesRegex(HardwareError, f"ref '{ref}' is used by"),
+            ):
+                self.spares(f"spare_heads = {spares}\n")
+
 
 class RobocarUnifiedJoinTest(unittest.TestCase):
     """The committed sidecar resolves against the committed header and board."""
@@ -1271,10 +1329,13 @@ class RobocarUnifiedJoinTest(unittest.TestCase):
 
     def test_dropping_an_undrawn_entry_from_the_committed_sidecar_fails(self):
         # The completeness gate (#460) holds on the real project, not only on
-        # the synthetic one: UART0_TX_PIN is excused only by this entry.
+        # the synthetic one: in the harness view UART0_TX_PIN is excused only by
+        # this entry (the carrier wires it to the UART0 tap).
         text = (UNIFIED / "hardware.toml").read_text(encoding="utf-8")
         entry = re.search(
-            r'\[\[undrawn\]\]\nrole = "UART0_TX_PIN"\nwhy = "[^"\n]*"\n\n?', text
+            r'\[\[undrawn\]\]\nrole = "UART0_TX_PIN"\nbuild = "harness"\n'
+            r'why = "[^"\n]*"\n\n?',
+            text,
         )
         self.assertIsNotNone(entry)
         with tempfile.TemporaryDirectory() as tmp:

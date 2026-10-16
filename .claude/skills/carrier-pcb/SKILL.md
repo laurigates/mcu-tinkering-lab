@@ -26,11 +26,13 @@ several traps below are version-specific: after a KiCad upgrade, re-run
 - `docs/reference/parts/`: the parts registry
 - `packages/robotics/balancebot/hardware/carrier/`: the first carrier;
   `board.toml` holds placement, silkscreen, net classes and the pour
-- `packages/robocar/unified/hardware/carrier/`: head and main boards on one PCB,
-  split by a `[[keepouts]]` band under a `[silk] cut_lines` saw line, with a
-  `[pour]` region per ground net (`GND`, `HEAD_GND`); its head IDC header sits
-  on the back face (`[placement]` entry `[x, y, rot, "back"]`, mirrored about
-  its anchor, so the pads run the other way)
+- `packages/robocar/unified/hardware/carrier/`: a main board and three head
+  boards on one PCB, split by `[[keepouts]]` bands under `[silk] cut_lines` saw
+  lines, with a `[pour]` region per ground net (`GND`, `HEAD_GND`,
+  `HEAD2_GND`, `HEAD3_GND`). The spare heads come from `[[cables]]
+  spare_heads` (ADR-021). Two head IDC headers sit on the back face
+  (`[placement]` entry `[x, y, rot, "back"]`, mirrored about its anchor, so the
+  pads run the other way: at rotation 90 they run toward -x)
 - `.github/workflows/carrier-check.yml` (CI) and the `kicad-carrier` pre-commit hook
 
 ## Workflow

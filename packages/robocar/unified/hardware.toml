@@ -43,7 +43,8 @@ ref = "U1"
 # fitted modules are identified (#662), so they carry no `board` and are not
 # drawn. The rangefinders were identified as RCWL-1601s (#662); no board file
 # is published for that module, so its page is read from the listing's
-# silkscreen photos and is not yet bench-verified (see the page's checklist).
+# silkscreen photos. Lauri verified its pin order on the fitted modules on
+# 2026-10-16; the page's checklist lists what is still unverified.
 #
 # `part` names the parts-registry entry (docs/reference/parts/) that maps a
 # part's pin names to KiCad symbol pins; `ref`, `value` and `lcsc` are the
@@ -95,12 +96,14 @@ part = "rcwl-1601-i2c-cable"
 ref = "J8"
 value = "RCWL-1601 rear"
 
+# On the carrier a 12 mm board-mount buzzer, soldered straight to the main board
+# (Lauri, 2026-10-16).
 [parts.buzzer]
 name = "Piezo buzzer"
 kind = "piezo"
-part = "piezo-jst-xh2"
-ref = "J10"
-value = "Piezo"
+part = "piezo-buzzer-12mm"
+ref = "BZ1"
+value = "Buzzer 12mm"
 
 [parts.amp]
 name = "MAX98357A"
@@ -301,8 +304,11 @@ why = "wired to the PDM microphone on the Sense expansion board, not brought out
 role = "MIC_PDM_DATA_PIN"
 why = "wired to the PDM microphone on the Sense expansion board, not brought out to a header"
 
+# Harness-only: on the carrier the ribbon takes D6 to the main board's UART0
+# tap, J15 (below).
 [[undrawn]]
 role = "UART0_TX_PIN"
+build = "harness"
 why = "UART0 TX, spare: the serial console is USB-Serial-JTAG on the USB-C connector, not this pad. The ROM bootloader prints its boot log here at every reset"
 
 [[undrawn]]
@@ -446,17 +452,98 @@ load_pins.speaker = { "VO-" = "-", "VO+" = "+" }
 # WIRING.md leaves to prose (GND) or that differ from the harness (3V3).
 
 # The XIAO sits on the head board, on the pan-tilt head; a 2x7 IDC ribbon takes
-# its I2C, STBY, piezo, I2S and MUX_RST lines, 5V and GND to the main board.
-# docs/reference/parts/idc-2x07-xiao-cable.toml gives the pin order. Every
-# other XIAO pad stays open on the head: 3V3 (the main board makes its own,
-# below), D3 (free since the rangefinders moved to I2C, #790), and D6/D7
-# (UART0, spare: their roles are [[undrawn]] above, in both views).
+# its I2C, STBY, piezo, I2S and MUX_RST lines, UART0 TX, 5V and GND to the main
+# board. docs/reference/parts/idc-2x07-xiao-cable.toml gives the pin order,
+# which survives the unkeyed plug going in rotated. Every other XIAO pad stays
+# open on the head: 3V3 (the main board makes its own, below), D3 (free since
+# the rangefinders moved to I2C, #790), and D7 (UART0 RX, spare: its role is
+# [[undrawn]] above, in both views).
+#
+# The PCB carries three head boards, three ways of mounting the ribbon header
+# for Lauri to try in the cradle (2026-10-16); the main board has one end, J1.
+# Head 1 is [source] ref U1 with J2; the spare heads are U3 with J16 (head 2)
+# and U4 with J17 (head 3), each a copy of the XIAO socket and of the head
+# connector, on nets HEAD2_* and HEAD3_*. Only one head is fitted with the XIAO
+# at a time.
 [[cables]]
 part = "idc-2x07-xiao-cable"
 head_ref = "J2"
 main_ref = "J1"
-head_no_connect = ["3V3", "D3", "D6", "D7"]
+head_no_connect = ["3V3", "D3", "D7"]
+spare_heads = [
+    { mcu_ref = "U3", head_ref = "J16" },
+    { mcu_ref = "U4", head_ref = "J17" },
+]
 build = "carrier"
+
+# UART0 TX on a main-board test header: the ROM bootloader prints its boot log
+# on GPIO43 (D6) at every reset, 115200 baud, with no firmware change. A
+# USB-serial adapter's RX and GND clip on here; nothing on the carrier drives
+# or loads the line.
+[parts.uart_tap]
+name = "UART0 TX tap"
+kind = "test-header"
+build = "carrier"
+part = "uart0-tap-1x2"
+ref = "J15"
+
+[[nets]]
+role = "UART0_TX_PIN"
+to = "uart_tap.TX"
+build = "carrier"
+note = "ROM boot log, 115200 baud"
+
+# Main-board test headers (Lauri, 2026-10-16): through-hole pin headers for
+# meter probes, a logic analyser and scope ground clips.
+[parts.tp_power]
+name = "Supply test header"
+kind = "test-header"
+build = "carrier"
+part = "testpoint-power-1x4"
+ref = "J11"
+
+[parts.tp_i2c]
+name = "I2C and mux reset test header"
+kind = "test-header"
+build = "carrier"
+part = "testpoint-i2c-1x4"
+ref = "J12"
+
+[parts.gnd_post_amp]
+name = "Ground post beside the MAX98357A"
+kind = "test-header"
+build = "carrier"
+part = "gnd-post-1x2"
+ref = "J13"
+
+[parts.gnd_post_ldo]
+name = "Ground post beside the LDO"
+kind = "test-header"
+build = "carrier"
+part = "gnd-post-1x2"
+ref = "J14"
+
+# The upstream I2C bus and the mux reset, on the main board's side of the
+# ribbon: each role fans out to its J12 pin as well as to the mux.
+[[nets]]
+role = "I2C_SDA_PIN"
+to = "tp_i2c.SDA"
+build = "carrier"
+
+[[nets]]
+role = "I2C_SCL_PIN"
+to = "tp_i2c.SCL"
+build = "carrier"
+
+[[nets]]
+role = "TCA9548A_RST_PIN"
+to = "tp_i2c.RST"
+build = "carrier"
+
+[[rails]]
+name = "VBAT"
+build = "carrier"
+to = ["tp_power.VBAT"]
 
 [parts.ldo]
 name = "AMS1117-3.3 LDO, main-board 3V3"
@@ -467,6 +554,12 @@ ref = "U2"
 
 # Bulk capacitors C1-C5 are WIRING.md's § Suggested capacitors. Its C6 decouples
 # the MCP23017, which stays on the harness, so the carrier has no C6.
+#
+# C1-C3 are C96179, CS1C471M-CRF10 (470 uF 16 V, 8 x 10.5 mm SMD). They were
+# C5162348, the same part number from another LCSC listing, which JLCPCB's
+# assembly library does not carry and LCSC had 70 of. Checked 2026-10-16 through
+# JLCPCB's parts search: C5162348 not found; C96179 Extended, 24,687 in stock.
+# JLCPCB has no Basic 470 uF part, so one Extended feeder fee either way.
 [parts.bulk_pwm]
 name = "470 µF 16 V bulk capacitor, PCA9685 V+"
 kind = "capacitor"
@@ -474,7 +567,7 @@ build = "carrier"
 part = "cp-elec-8x10.5"
 ref = "C1"
 value = "470uF 16V"
-lcsc = "C5162348"
+lcsc = "C96179"
 
 [parts.bulk_motor]
 name = "470 µF 16 V bulk capacitor, TB6612FNG VM"
@@ -483,7 +576,7 @@ build = "carrier"
 part = "cp-elec-8x10.5"
 ref = "C2"
 value = "470uF 16V"
-lcsc = "C5162348"
+lcsc = "C96179"
 
 [parts.bulk_amp]
 name = "470 µF 16 V bulk capacitor, MAX98357A Vin"
@@ -492,7 +585,7 @@ build = "carrier"
 part = "cp-elec-8x10.5"
 ref = "C3"
 value = "470uF 16V"
-lcsc = "C5162348"
+lcsc = "C96179"
 
 [parts.decouple_pwm]
 name = "100 nF decoupling, PCA9685 VCC"
@@ -662,6 +755,35 @@ build = "carrier"
 part = "m2-mounting-hole"
 ref = "H6"
 
+# The same two holes on head 2 (H7, H8) and head 3 (H9, H10).
+[parts.hole_head2_1]
+name = "M2 mounting hole, head board 2"
+kind = "mounting-hole"
+build = "carrier"
+part = "m2-mounting-hole"
+ref = "H7"
+
+[parts.hole_head2_2]
+name = "M2 mounting hole, head board 2"
+kind = "mounting-hole"
+build = "carrier"
+part = "m2-mounting-hole"
+ref = "H8"
+
+[parts.hole_head3_1]
+name = "M2 mounting hole, head board 3"
+kind = "mounting-hole"
+build = "carrier"
+part = "m2-mounting-hole"
+ref = "H9"
+
+[parts.hole_head3_2]
+name = "M2 mounting hole, head board 3"
+kind = "mounting-hole"
+build = "carrier"
+part = "m2-mounting-hole"
+ref = "H10"
+
 # Each pull-up is a load on one line of its channel: pin B on SDn or SCn, pin A
 # on 3V3. The channel number is still the header's.
 [[bus_nets]]
@@ -726,7 +848,15 @@ build = "carrier"
 [[rails]]
 name = "5V"
 build = "carrier"
-to = ["bulk_pwm.+", "bulk_motor.+", "bulk_amp.+", "ldo.VI", "ldo_in.+", "amp.SD"]
+to = [
+    "bulk_pwm.+",
+    "bulk_motor.+",
+    "bulk_amp.+",
+    "ldo.VI",
+    "ldo_in.+",
+    "amp.SD",
+    "tp_power.5V",
+]
 
 # The main board's own 3V3, from the LDO; the XIAO's 3V3 pad stays open on the
 # head. The loads are the harness rail's above, less the MCP23017.
@@ -752,6 +882,7 @@ to = [
     "pull_ch3_scl.A",
     "pull_ch4_sda.A",
     "pull_ch4_scl.A",
+    "tp_power.3V3",
 ]
 
 # The series resistor's far end to the buzzer.
@@ -788,6 +919,11 @@ to = [
     "decouple_mux.B",
     "ldo_in.-",
     "ldo_out.-",
+    "uart_tap.GND",
+    "tp_power.GND",
+    "tp_i2c.GND",
+    "gnd_post_amp.GND",
+    "gnd_post_ldo.GND",
 ]
 
 # Carrier net names, where they differ from the role or rail name.
@@ -796,6 +932,7 @@ I2C_SDA_PIN = "I2C_SDA"
 I2C_SCL_PIN = "I2C_SCL"
 MOTOR_STBY_PIN = "MOTOR_STBY"
 TCA9548A_RST_PIN = "MUX_RST"
+UART0_TX_PIN = "UART0_TX"
 PIEZO_PIN = "PIEZO"
 I2S_BCLK_PIN = "I2S_BCLK"
 I2S_LRCLK_PIN = "I2S_LRCLK"

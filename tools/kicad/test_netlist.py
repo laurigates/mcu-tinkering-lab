@@ -833,6 +833,22 @@ class CableTests(unittest.TestCase):
         self.edit(self.registry("test-cable"), "D5 = 3", "SCL = 3")
         self.fails(r"test-cable\.toml \[pins\] 'SCL' is not a pad of xiao-esp32s3\.md")
 
+    def test_a_no_connect_cable_pin_is_open_at_both_ends(self):
+        # A spare conductor: named for no XIAO pad, listed under no_connect.
+        cable = self.registry("test-cable")
+        self.edit(cable, '"5V" = [4, 5, 8]', '"5V" = [4, 8]\nNC = 5')
+        self.edit(cable, 'footprint = "', 'no_connect = ["NC"]\nfootprint = "')
+        nl = self.build()
+        self.assertIn(("J1", "5"), nl.no_connect)
+        self.assertIn(("J2", "5"), nl.no_connect)
+        self.assertNotIn(("J1", "5"), nl.nets["HEAD_5V"])
+
+    def test_an_unlisted_spare_cable_pin_fails(self):
+        self.edit(
+            self.registry("test-cable"), '"5V" = [4, 5, 8]', '"5V" = [4, 8]\nNC = 5'
+        )
+        self.fails(r"test-cable\.toml \[pins\] 'NC' is not a pad of xiao-esp32s3\.md")
+
     def test_a_carried_pad_cannot_stay_unconnected_on_the_head(self):
         self.edit(self.registry("test-cable"), "D5 = 3", "D5 = 3\nD7 = 5")
         self.edit(self.registry("test-cable"), '"5V" = [4, 5, 8]', '"5V" = [4, 8]')
@@ -846,6 +862,70 @@ class CableTests(unittest.TestCase):
     def test_an_unknown_cable_entry_fails(self):
         self.edit(self.toml, 'part = "test-cable"', 'part = "test-cabel"')
         self.fails("no parts-registry entry 'test-cabel'")
+
+    # spare_heads (#750): more head boards, each its own MCU copy and connector.
+    def add_spares(self) -> None:
+        self.edit(
+            self.toml,
+            'build = "carrier"\n',
+            'spare_heads = [{ mcu_ref = "U3", head_ref = "J16" }, '
+            '{ mcu_ref = "U4", head_ref = "J17" }]\nbuild = "carrier"\n',
+        )
+
+    def test_each_spare_head_gets_its_own_head_nets(self):
+        self.add_spares()
+        nets = self.build().nets
+        self.assertEqual(nets["HEAD_I2C_SDA_PIN"], (("J1", "1"), ("U1", "5")))
+        self.assertEqual(nets["HEAD2_I2C_SDA_PIN"], (("J16", "1"), ("U3", "5")))
+        self.assertEqual(nets["HEAD3_I2C_SDA_PIN"], (("J17", "1"), ("U4", "5")))
+        self.assertEqual(
+            nets["HEAD2_5V"],
+            (("J16", "4"), ("J16", "5"), ("J16", "8"), ("U3", "14")),
+        )
+        self.assertEqual(
+            nets["HEAD3_GND"],
+            (("J17", "2"), ("J17", "6"), ("J17", "7"), ("U4", "13")),
+        )
+
+    def test_the_main_end_is_still_the_only_main_end(self):
+        without = self.build().nets
+        self.add_spares()
+        nets = self.build().nets
+        for name, members in without.items():
+            if not name.startswith("HEAD"):
+                with self.subTest(net=name):
+                    self.assertEqual(nets[name], members)
+        self.assertEqual(
+            sorted(n for n in nets if n not in without),
+            sorted(
+                f"HEAD{k}_{n}"
+                for k in (2, 3)
+                for n in ("5V", "GND", "I2C_SDA_PIN", "I2C_SCL_PIN")
+            ),
+        )
+
+    def test_no_net_runs_from_a_spare_head_to_another_board(self):
+        self.add_spares()
+        boards = ({"U1", "J1"}, {"U3", "J16"}, {"U4", "J17"}, {"J2", "J3", "J4"})
+        for name, members in self.build().nets.items():
+            refs = {r for r, _ in members}
+            with self.subTest(net=name):
+                self.assertEqual(sum(1 for b in boards if refs & b), 1)
+
+    def test_spare_heads_are_copies_of_the_mcu_and_the_head_connector(self):
+        self.add_spares()
+        comps = {c.ref: c for c in self.build().comps}
+        for mcu, head in (("U3", "J16"), ("U4", "J17")):
+            with self.subTest(mcu=mcu):
+                self.assertEqual(comps[mcu].registry, S3_SOCKET)
+                self.assertEqual(comps[mcu].value, comps["U1"].value)
+                self.assertEqual(comps[head].registry, "test-cable")
+
+    def test_head_no_connect_applies_to_every_copy(self):
+        self.add_spares()
+        nl = self.build()
+        for ref in ("U1", "U3", "U4"):
+            self.assertIn((ref, "12"), nl.no_connect)  # 3V3
 
 
 # --- Board pages on carrier parts (#750 step 2) -----------------------------------

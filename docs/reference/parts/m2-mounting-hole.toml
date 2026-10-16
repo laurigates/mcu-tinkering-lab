@@ -1,9 +1,14 @@
 # Unplated M2 mounting hole. The library symbol is out of the BOM.
+# The ISO 7380 footprint's courtyard is the button head's 3.5 mm diameter plus
+# margin (radius 2.0 mm, against 2.5 mm for the plain M2 hole). On
+# robocar-unified's head boards the XIAO socket sits 0.26 mm from that courtyard
+# between the two holes, so fit M2 button-head screws (ISO 7380) or any other
+# head of 3.5 mm diameter or less; a larger head lands on the XIAO.
 [part]
-name = "M2 mounting hole"
-source = "KiCad 10.0.6 library"
+name = "M2 mounting hole, button head"
+source = "KiCad 10.0.6 library (MountingHole_2.2mm_M2_ISO7380: 2.2 mm hole, courtyard for an ISO 7380 head, 3.5 mm)"
 symbol = "Mechanical:MountingHole"
-footprint = "MountingHole:MountingHole_2.2mm_M2"
+footprint = "MountingHole:MountingHole_2.2mm_M2_ISO7380"
 value = "M2"
 
 [pins]

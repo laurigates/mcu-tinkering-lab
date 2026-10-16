@@ -23,8 +23,15 @@ registry entry whose `[pins]` are keyed by MCU pad name. Every MCU end above,
 role or rail, is split at the cable: `HEAD_<name>` joins the MCU pad to the
 head connector's pin(s) for that pad, and the net `<name>` takes the main
 connector's pin(s) in the pad's place. An MCU pad on a net that the cable does
-not carry raises, as does a cable pin named for no pad of the MCU's board page.
-The cable's `head_no_connect` pads may float, power pads included.
+not carry raises, as does a cable pin named for no pad of the MCU's board page,
+unless the entry lists it under `no_connect`: a spare conductor, open at both
+ends. The cable's `head_no_connect` pads may float, power pads included.
+
+Each of the cable's `spare_heads` is another head board wired the same way: a
+copy of the MCU socket (`mcu_ref`) and of the head connector (`head_ref`),
+joined pad for pad by `HEAD<k>_<name>`, k = 2, 3, ... in file order. The main
+board keeps one end, `main_ref`; the spare heads reach it only by moving the
+ribbon. `head_no_connect` and the power-pad rule apply to every MCU copy.
 
 Every symbol pin must then be on a net or allowed to float: listed under the
 entry's `no_connect`, or a spare GPIO pad of a `pin_numbers` part. Anything
@@ -146,10 +153,29 @@ def build(
     placed: dict[str, _Placed] = {}
     entries = [(MCU, model.mcu_part, model.mcu_ref, "", "", model.mcu, model.board)]
     cable = model.cables[0] if model.cables else None
+    # (net prefix, MCU copy key, head connector key) for each head board.
+    heads: list[tuple[str, str, str]] = []
     if cable is not None:
         name = spec_of(cable.part).name
         entries.append((HEAD, cable.part, cable.head_ref, "", "", name, None))
         entries.append((MAIN, cable.part, cable.main_ref, "", "", name, None))
+        heads.append(("HEAD", MCU, HEAD))
+        for k, spare in enumerate(cable.spare_heads, 2):
+            mcu_key, head_key = f"{MCU}.head{k}", f"{HEAD}{k}"
+            heads.append((f"HEAD{k}", mcu_key, head_key))
+            entries.append(
+                (
+                    mcu_key,
+                    model.mcu_part,
+                    spare.mcu_ref,
+                    "",
+                    "",
+                    model.mcu,
+                    model.board,
+                )
+            )
+            entries.append((head_key, cable.part, spare.head_ref, "", "", name, None))
+    mcu_copies = {mcu_key for _, mcu_key, _ in heads} or {MCU}
     for key, part in model.parts.items():
         if not part.part or not part.ref:
             raise KicadError(
@@ -198,7 +224,13 @@ def build(
     if cable is not None:
         carried = placed[HEAD].by_name
         cable_file = placed[HEAD].spec.path.name
-        stray = [pad for pad in carried if pad not in model.board.by_name]
+        # A pin under the entry's no_connect (a spare conductor) is no pad.
+        spare = placed[HEAD].spec.no_connect
+        stray = [
+            pad
+            for pad in carried
+            if pad not in model.board.by_name and pad not in spare
+        ]
         if stray:
             raise KicadError(
                 f"{sidecar} [[cables]]: {cable_file} [pins] {stray[0]!r} is not a pad "
@@ -231,8 +263,9 @@ def build(
                 f"{cable.head_ref}-{cable.main_ref} ({cable.part}) does not carry; "
                 f"add {pad} to {placed[HEAD].spec.path.name} [pins]"
             )
-        head = nodes(what, MCU, pad) + nodes(what, HEAD, pad)
-        add(f"HEAD_{name}", f"head of {what}", head)
+        for prefix, mcu_key, head_key in heads:
+            head = nodes(what, mcu_key, pad) + nodes(what, head_key, pad)
+            add(f"{prefix}_{name}", f"{prefix.lower()} of {what}", head)
         return nodes(what, MAIN, pad)
 
     names = model.net_names
@@ -306,9 +339,11 @@ def build(
                 continue
             if node in no_connect:
                 continue  # a stacked pin number
-            # A cable's head_no_connect pads stay open on the head, power pads too.
+            # A cable's head_no_connect pads stay open on every head, power pads too.
             head_open = (
-                p.key == MCU and cable is not None and name in cable.head_no_connect
+                p.key in mcu_copies
+                and cable is not None
+                and name in cable.head_no_connect
             )
             if head_open or registry.may_float(p.spec, p.board, name):
                 no_connect.append(node)

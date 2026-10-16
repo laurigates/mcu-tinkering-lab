@@ -1,5 +1,5 @@
 {
- "board_sha256": "e35edead73115505d75c3650c045a2570906432db5b094451847190d1b6670ad",
+ "board_sha256": "54be2d892327782eb81f8cf0550de97a919c357408597522f738ec7c82e6a345",
  "kicad_cli_version": "10.0.6",
  "netlist": {
   "components": {
@@ -31,24 +31,31 @@
     "lib_id": "Connector_Generic:Conn_01x07",
     "value": "MAX98357A"
    },
+   "BZ1": {
+    "footprint": "Buzzer_Beeper:Buzzer_12x9.5RM7.6",
+    "in_bom": true,
+    "lcsc": "",
+    "lib_id": "Device:Buzzer",
+    "value": "Buzzer 12mm"
+   },
    "C1": {
     "footprint": "Capacitor_SMD:CP_Elec_8x10.5",
     "in_bom": true,
-    "lcsc": "C5162348",
+    "lcsc": "C96179",
     "lib_id": "Device:C_Polarized",
     "value": "470uF 16V"
    },
    "C2": {
     "footprint": "Capacitor_SMD:CP_Elec_8x10.5",
     "in_bom": true,
-    "lcsc": "C5162348",
+    "lcsc": "C96179",
     "lib_id": "Device:C_Polarized",
     "value": "470uF 16V"
    },
    "C3": {
     "footprint": "Capacitor_SMD:CP_Elec_8x10.5",
     "in_bom": true,
-    "lcsc": "C5162348",
+    "lcsc": "C96179",
     "lib_id": "Device:C_Polarized",
     "value": "470uF 16V"
    },
@@ -87,6 +94,13 @@
     "lib_id": "Mechanical:MountingHole",
     "value": "M3"
    },
+   "H10": {
+    "footprint": "MountingHole:MountingHole_2.2mm_M2_ISO7380",
+    "in_bom": false,
+    "lcsc": "",
+    "lib_id": "Mechanical:MountingHole",
+    "value": "M2"
+   },
    "H2": {
     "footprint": "MountingHole:MountingHole_3.2mm_M3",
     "in_bom": false,
@@ -109,35 +123,98 @@
     "value": "M3"
    },
    "H5": {
-    "footprint": "MountingHole:MountingHole_2.2mm_M2",
+    "footprint": "MountingHole:MountingHole_2.2mm_M2_ISO7380",
     "in_bom": false,
     "lcsc": "",
     "lib_id": "Mechanical:MountingHole",
     "value": "M2"
    },
    "H6": {
-    "footprint": "MountingHole:MountingHole_2.2mm_M2",
+    "footprint": "MountingHole:MountingHole_2.2mm_M2_ISO7380",
+    "in_bom": false,
+    "lcsc": "",
+    "lib_id": "Mechanical:MountingHole",
+    "value": "M2"
+   },
+   "H7": {
+    "footprint": "MountingHole:MountingHole_2.2mm_M2_ISO7380",
+    "in_bom": false,
+    "lcsc": "",
+    "lib_id": "Mechanical:MountingHole",
+    "value": "M2"
+   },
+   "H8": {
+    "footprint": "MountingHole:MountingHole_2.2mm_M2_ISO7380",
+    "in_bom": false,
+    "lcsc": "",
+    "lib_id": "Mechanical:MountingHole",
+    "value": "M2"
+   },
+   "H9": {
+    "footprint": "MountingHole:MountingHole_2.2mm_M2_ISO7380",
     "in_bom": false,
     "lcsc": "",
     "lib_id": "Mechanical:MountingHole",
     "value": "M2"
    },
    "J1": {
-    "footprint": "Connector_PinHeader_2.54mm:PinHeader_2x07_P2.54mm_Vertical",
+    "footprint": "Connector_PinHeader_2.00mm:PinHeader_2x07_P2.00mm_Vertical",
     "in_bom": true,
     "lcsc": "",
     "lib_id": "Connector_Generic:Conn_02x07_Odd_Even",
     "value": "IDC 2x7 head cable"
    },
-   "J10": {
-    "footprint": "Connector_JST:JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical",
+   "J11": {
+    "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical",
     "in_bom": true,
     "lcsc": "",
-    "lib_id": "Device:Buzzer",
-    "value": "Piezo"
+    "lib_id": "Connector_Generic:Conn_01x04",
+    "value": "Test: 3V3 5V GND VBAT"
+   },
+   "J12": {
+    "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical",
+    "in_bom": true,
+    "lcsc": "",
+    "lib_id": "Connector_Generic:Conn_01x04",
+    "value": "Test: GND SDA SCL RST"
+   },
+   "J13": {
+    "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical",
+    "in_bom": true,
+    "lcsc": "",
+    "lib_id": "Connector_Generic:Conn_01x02",
+    "value": "GND post"
+   },
+   "J14": {
+    "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical",
+    "in_bom": true,
+    "lcsc": "",
+    "lib_id": "Connector_Generic:Conn_01x02",
+    "value": "GND post"
+   },
+   "J15": {
+    "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical",
+    "in_bom": true,
+    "lcsc": "",
+    "lib_id": "Connector_Generic:Conn_01x02",
+    "value": "UART0 TX tap"
+   },
+   "J16": {
+    "footprint": "Connector_PinHeader_2.00mm:PinHeader_2x07_P2.00mm_Vertical",
+    "in_bom": true,
+    "lcsc": "",
+    "lib_id": "Connector_Generic:Conn_02x07_Odd_Even",
+    "value": "IDC 2x7 head cable"
+   },
+   "J17": {
+    "footprint": "Connector_PinHeader_2.00mm:PinHeader_2x07_P2.00mm_Vertical",
+    "in_bom": true,
+    "lcsc": "",
+    "lib_id": "Connector_Generic:Conn_02x07_Odd_Even",
+    "value": "IDC 2x7 head cable"
    },
    "J2": {
-    "footprint": "Connector_PinHeader_2.54mm:PinHeader_2x07_P2.54mm_Vertical",
+    "footprint": "Connector_PinHeader_2.00mm:PinHeader_2x07_P2.00mm_Vertical",
     "in_bom": true,
     "lcsc": "",
     "lib_id": "Connector_Generic:Conn_02x07_Odd_Even",
@@ -268,6 +345,20 @@
     "lcsc": "C6186",
     "lib_id": "Regulator_Linear:AP1117-15",
     "value": "AMS1117-3.3"
+   },
+   "U3": {
+    "footprint": "Seeed_XIAO:XIAO-ESP32-S3-Socket",
+    "in_bom": true,
+    "lcsc": "",
+    "lib_id": "Seeed_XIAO:XIAO-ESP32-S3-Socket",
+    "value": "XIAO ESP32-S3 Sense"
+   },
+   "U4": {
+    "footprint": "Seeed_XIAO:XIAO-ESP32-S3-Socket",
+    "in_bom": true,
+    "lcsc": "",
+    "lib_id": "Seeed_XIAO:XIAO-ESP32-S3-Socket",
+    "value": "XIAO ESP32-S3 Sense"
    }
   },
   "nets": {
@@ -307,6 +398,10 @@
     [
      "J9",
      "2"
+    ],
+    [
+     "J11",
+     "1"
     ],
     [
      "R2",
@@ -384,11 +479,15 @@
     ],
     [
      "J1",
-     "2"
+     "14"
     ],
     [
      "J4",
      "3"
+    ],
+    [
+     "J11",
+     "2"
     ],
     [
      "U2",
@@ -577,6 +676,10 @@
      "4"
     ],
     [
+     "BZ1",
+     "2"
+    ],
+    [
      "C1",
      "2"
     ],
@@ -606,19 +709,11 @@
     ],
     [
      "J1",
-     "11"
+     "13"
     ],
     [
      "J1",
-     "3"
-    ],
-    [
-     "J1",
-     "4"
-    ],
-    [
-     "J1",
-     "7"
+     "2"
     ],
     [
      "J3",
@@ -645,12 +740,272 @@
      "1"
     ],
     [
-     "J10",
+     "J11",
+     "3"
+    ],
+    [
+     "J12",
+     "1"
+    ],
+    [
+     "J13",
+     "1"
+    ],
+    [
+     "J13",
      "2"
+    ],
+    [
+     "J14",
+     "1"
+    ],
+    [
+     "J14",
+     "2"
+    ],
+    [
+     "J15",
+     "1"
     ],
     [
      "U2",
      "1"
+    ]
+   ],
+   "HEAD2_+5V": [
+    [
+     "J16",
+     "1"
+    ],
+    [
+     "J16",
+     "14"
+    ],
+    [
+     "U3",
+     "14"
+    ]
+   ],
+   "HEAD2_GND": [
+    [
+     "J16",
+     "13"
+    ],
+    [
+     "J16",
+     "2"
+    ],
+    [
+     "U3",
+     "13"
+    ]
+   ],
+   "HEAD2_I2C_SCL": [
+    [
+     "J16",
+     "5"
+    ],
+    [
+     "U3",
+     "6"
+    ]
+   ],
+   "HEAD2_I2C_SDA": [
+    [
+     "J16",
+     "10"
+    ],
+    [
+     "U3",
+     "5"
+    ]
+   ],
+   "HEAD2_I2S_BCLK": [
+    [
+     "J16",
+     "3"
+    ],
+    [
+     "U3",
+     "9"
+    ]
+   ],
+   "HEAD2_I2S_DIN": [
+    [
+     "J16",
+     "7"
+    ],
+    [
+     "U3",
+     "11"
+    ]
+   ],
+   "HEAD2_I2S_LRCLK": [
+    [
+     "J16",
+     "12"
+    ],
+    [
+     "U3",
+     "10"
+    ]
+   ],
+   "HEAD2_MOTOR_STBY": [
+    [
+     "J16",
+     "4"
+    ],
+    [
+     "U3",
+     "1"
+    ]
+   ],
+   "HEAD2_MUX_RST": [
+    [
+     "J16",
+     "11"
+    ],
+    [
+     "U3",
+     "3"
+    ]
+   ],
+   "HEAD2_PIEZO": [
+    [
+     "J16",
+     "8"
+    ],
+    [
+     "U3",
+     "2"
+    ]
+   ],
+   "HEAD2_UART0_TX": [
+    [
+     "J16",
+     "6"
+    ],
+    [
+     "U3",
+     "7"
+    ]
+   ],
+   "HEAD3_+5V": [
+    [
+     "J17",
+     "1"
+    ],
+    [
+     "J17",
+     "14"
+    ],
+    [
+     "U4",
+     "14"
+    ]
+   ],
+   "HEAD3_GND": [
+    [
+     "J17",
+     "13"
+    ],
+    [
+     "J17",
+     "2"
+    ],
+    [
+     "U4",
+     "13"
+    ]
+   ],
+   "HEAD3_I2C_SCL": [
+    [
+     "J17",
+     "5"
+    ],
+    [
+     "U4",
+     "6"
+    ]
+   ],
+   "HEAD3_I2C_SDA": [
+    [
+     "J17",
+     "10"
+    ],
+    [
+     "U4",
+     "5"
+    ]
+   ],
+   "HEAD3_I2S_BCLK": [
+    [
+     "J17",
+     "3"
+    ],
+    [
+     "U4",
+     "9"
+    ]
+   ],
+   "HEAD3_I2S_DIN": [
+    [
+     "J17",
+     "7"
+    ],
+    [
+     "U4",
+     "11"
+    ]
+   ],
+   "HEAD3_I2S_LRCLK": [
+    [
+     "J17",
+     "12"
+    ],
+    [
+     "U4",
+     "10"
+    ]
+   ],
+   "HEAD3_MOTOR_STBY": [
+    [
+     "J17",
+     "4"
+    ],
+    [
+     "U4",
+     "1"
+    ]
+   ],
+   "HEAD3_MUX_RST": [
+    [
+     "J17",
+     "11"
+    ],
+    [
+     "U4",
+     "3"
+    ]
+   ],
+   "HEAD3_PIEZO": [
+    [
+     "J17",
+     "8"
+    ],
+    [
+     "U4",
+     "2"
+    ]
+   ],
+   "HEAD3_UART0_TX": [
+    [
+     "J17",
+     "6"
+    ],
+    [
+     "U4",
+     "7"
     ]
    ],
    "HEAD_+5V": [
@@ -660,7 +1015,7 @@
     ],
     [
      "J2",
-     "2"
+     "14"
     ],
     [
      "U1",
@@ -670,19 +1025,11 @@
    "HEAD_GND": [
     [
      "J2",
-     "11"
+     "13"
     ],
     [
      "J2",
-     "3"
-    ],
-    [
-     "J2",
-     "4"
-    ],
-    [
-     "J2",
-     "7"
+     "2"
     ],
     [
      "U1",
@@ -692,7 +1039,7 @@
    "HEAD_I2C_SCL": [
     [
      "J2",
-     "6"
+     "5"
     ],
     [
      "U1",
@@ -702,7 +1049,7 @@
    "HEAD_I2C_SDA": [
     [
      "J2",
-     "5"
+     "10"
     ],
     [
      "U1",
@@ -712,7 +1059,7 @@
    "HEAD_I2S_BCLK": [
     [
      "J2",
-     "8"
+     "3"
     ],
     [
      "U1",
@@ -722,7 +1069,7 @@
    "HEAD_I2S_DIN": [
     [
      "J2",
-     "10"
+     "7"
     ],
     [
      "U1",
@@ -732,7 +1079,7 @@
    "HEAD_I2S_LRCLK": [
     [
      "J2",
-     "9"
+     "12"
     ],
     [
      "U1",
@@ -742,7 +1089,7 @@
    "HEAD_MOTOR_STBY": [
     [
      "J2",
-     "12"
+     "4"
     ],
     [
      "U1",
@@ -752,7 +1099,7 @@
    "HEAD_MUX_RST": [
     [
      "J2",
-     "14"
+     "11"
     ],
     [
      "U1",
@@ -762,11 +1109,21 @@
    "HEAD_PIEZO": [
     [
      "J2",
-     "13"
+     "8"
     ],
     [
      "U1",
      "2"
+    ]
+   ],
+   "HEAD_UART0_TX": [
+    [
+     "J2",
+     "6"
+    ],
+    [
+     "U1",
+     "7"
     ]
    ],
    "I2C_SCL": [
@@ -776,7 +1133,11 @@
     ],
     [
      "J1",
-     "6"
+     "5"
+    ],
+    [
+     "J12",
+     "3"
     ]
    ],
    "I2C_SDA": [
@@ -786,7 +1147,11 @@
     ],
     [
      "J1",
-     "5"
+     "10"
+    ],
+    [
+     "J12",
+     "2"
     ]
    ],
    "I2S_BCLK": [
@@ -796,7 +1161,7 @@
     ],
     [
      "J1",
-     "8"
+     "3"
     ]
    ],
    "I2S_DIN": [
@@ -806,7 +1171,7 @@
     ],
     [
      "J1",
-     "10"
+     "7"
     ]
    ],
    "I2S_LRCLK": [
@@ -816,7 +1181,7 @@
     ],
     [
      "J1",
-     "9"
+     "12"
     ]
    ],
    "MOTOR_STBY": [
@@ -826,7 +1191,7 @@
     ],
     [
      "J1",
-     "12"
+     "4"
     ]
    ],
    "MOT_A01": [
@@ -876,13 +1241,17 @@
     ],
     [
      "J1",
-     "14"
+     "11"
+    ],
+    [
+     "J12",
+     "4"
     ]
    ],
    "PIEZO": [
     [
      "J1",
-     "13"
+     "8"
     ],
     [
      "R1",
@@ -891,7 +1260,7 @@
    ],
    "PIEZO_DRV": [
     [
-     "J10",
+     "BZ1",
      "1"
     ],
     [
@@ -919,6 +1288,16 @@
      "12"
     ]
    ],
+   "UART0_TX": [
+    [
+     "J1",
+     "6"
+    ],
+    [
+     "J15",
+     "2"
+    ]
+   ],
    "VBAT": [
     [
      "J3",
@@ -927,6 +1306,10 @@
     [
      "J4",
      "1"
+    ],
+    [
+     "J11",
+     "4"
     ]
    ]
   },
@@ -979,6 +1362,22 @@
     "A3",
     "8"
    ],
+   "unconnected-(J1-Pin_9-Pad9)": [
+    "J1",
+    "9"
+   ],
+   "unconnected-(J16-Pin_9-Pad9)": [
+    "J16",
+    "9"
+   ],
+   "unconnected-(J17-Pin_9-Pad9)": [
+    "J17",
+    "9"
+   ],
+   "unconnected-(J2-Pin_9-Pad9)": [
+    "J2",
+    "9"
+   ],
    "unconnected-(U1-3V3_OUT-Pad12)": [
     "U1",
     "12"
@@ -987,15 +1386,35 @@
     "U1",
     "4"
    ],
-   "unconnected-(U1-D6-Pad7)": [
-    "U1",
-    "7"
-   ],
    "unconnected-(U1-D7-Pad8)": [
     "U1",
+    "8"
+   ],
+   "unconnected-(U3-3V3_OUT-Pad12)": [
+    "U3",
+    "12"
+   ],
+   "unconnected-(U3-D3-Pad4)": [
+    "U3",
+    "4"
+   ],
+   "unconnected-(U3-D7-Pad8)": [
+    "U3",
+    "8"
+   ],
+   "unconnected-(U4-3V3_OUT-Pad12)": [
+    "U4",
+    "12"
+   ],
+   "unconnected-(U4-D3-Pad4)": [
+    "U4",
+    "4"
+   ],
+   "unconnected-(U4-D7-Pad8)": [
+    "U4",
     "8"
    ]
   }
  },
- "schematic_sha256": "be46acb557a67e9025ce526d77ba32e6ead6817dddfab87373f682ad30facc73"
+ "schematic_sha256": "a2e796796cfa9bffa167adb17c27ff5e4d98074134af962449b1c8c484b4d2f7"
 }

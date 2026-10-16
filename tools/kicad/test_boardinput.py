@@ -46,6 +46,7 @@ KEYS = {
     "signal",
     "pour",
     "keepouts",
+    "cutouts",
 }
 COMPONENT_KEYS = {
     "ref",
@@ -151,6 +152,7 @@ class BalancebotTests(unittest.TestCase):
         self.assertNotIn("net", self.spec["pour"])
         self.assertEqual(self.spec["pour"]["layers"], ["F.Cu", "B.Cu"])
         self.assertEqual(self.spec["keepouts"], [])
+        self.assertEqual(self.spec["cutouts"], [])
         self.assertEqual(self.spec["silk"]["cut_lines"], [])
 
     def test_placement_missing(self):
@@ -177,6 +179,8 @@ class BalancebotTests(unittest.TestCase):
         data = copy.deepcopy(self.cfg.data)
         band = {"name": "cut band", "rect": [40.0, 0.0, 43.0, 62.0]}
         data["keepouts"] = [band]
+        hole = {"name": "relief", "center": [41.5, 61.0], "diameter": 1.0}
+        data["cutouts"] = [hole]
         data["silk"]["cut_lines"] = [[41.5, 0.5, 41.5, 61.5]]
         del data["pour"]["net"]
         data["pour"]["regions"] = [
@@ -185,6 +189,7 @@ class BalancebotTests(unittest.TestCase):
         ]
         spec = self.assemble(data)
         self.assertEqual(spec["keepouts"], [band])
+        self.assertEqual(spec["cutouts"], [hole])
         self.assertEqual(spec["silk"]["cut_lines"], [[41.5, 0.5, 41.5, 61.5]])
         self.assertEqual(
             spec["pour"]["regions"],
