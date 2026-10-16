@@ -77,16 +77,18 @@ rect = [99.5, 0.0, 100.0, 100.0]
 # measured 30.0 x 30.0 mm inner width and height (Lauri, 2026-10-15). File a
 # sawn edge back to its line if the cut wanders. Lauri's layout: J2 is an
 # unshrouded 2x7 header on the back face beside the XIAO, and the M2 holes are
-# in the two bottom corners. PROVISIONAL: the M2 positions; measure where the
-# cradle's two screws pass.
-U1 = [90.0, 12.45, 90]    # XIAO ESP32-S3 Sense socket; USB-C at the top edge, its
-                          # silk outline 0.4 mm inside it
-J2 = [74.27, 18.02, 0, "back"]  # 2x7 pin header, head end, on the back face left
+# in the two top corners, where the cradle has room to drill for M2 heat-set
+# inserts (Lauri, 2026-10-16). PROVISIONAL: drill the cradle to match the holes,
+# or correct their positions here.
+U1 = [90.0, 16.2, 90]     # XIAO ESP32-S3 Sense socket; USB-C toward the top edge,
+                          # between the two M2 holes
+J2 = [74.27, 22.62, 0, "back"]  # 2x7 pin header, head end, on the back face left
                           # of the XIAO; flipped, so pad 1 is its bottom-left pad
                           # and the header runs up from it. PROVISIONAL: check
                           # the ribbon's run toward the pan axis
-H5 = [75.0, 25.45, 0]     # M2 through the cradle, PROVISIONAL: 22 mm apart; the
-H6 = [97.0, 25.45, 0]     # bottom corners leave 0.05 mm between H6 and U1
+H5 = [74.5, 3.05, 0]      # M2 through the cradle into a heat-set insert,
+H6 = [97.0, 3.05, 0]      # PROVISIONAL: 22.5 mm apart, as near the corners as the
+                          # edge keepout and the cut band allow
 # Main board: everything outside the head corner and the band. M3 holes at its
 # corners, PROVISIONAL: check them against the 2WD chassis plate's holes, or
 # drill the plate to match.
@@ -136,7 +138,7 @@ hidden_refs = ["H1", "H2", "H3", "H4", "H5", "H6"]
 # Seeed's reference text is below KiCad's minimum silkscreen height.
 ref_sizes = { U1 = 1.0 }
 # Off the board edge and out from under neighbours.
-ref_positions = { A1 = [11.0, 52.0], J7 = [18.0, 9.3], J3 = [15.5, 81.5], J2 = [75.5, 21.0] }
+ref_positions = { A1 = [11.0, 52.0], J7 = [18.0, 9.3], J3 = [15.5, 81.5], J2 = [75.5, 25.8] }
 # The saw line, on both faces, along the middle of the keepout band; each gets
 # a "CUT" label inside the band.
 cut_lines = [
@@ -147,7 +149,7 @@ texts = [
     { text = "robocar-unified carrier", at = [55.0, 80.0], size = 1.2 },
     { text = "PROVISIONAL: do not order", at = [55.0, 82.5], size = 1.2 },
     { text = "FRONT ^", at = [54.0, 4.0], size = 1.2 },
-    { text = "HEAD", at = [86.0, 25.5], size = 1.2 },
+    { text = "HEAD", at = [82.5, 2.5], size = 1.2 },
 ]
 
 # Freerouting width classes, in this order. `nets` are net names or fnmatch
