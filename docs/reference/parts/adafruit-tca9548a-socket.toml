@@ -4,16 +4,13 @@ name = "Adafruit TCA9548A I2C multiplexer, socketed"
 source = "docs/reference/boards/adafruit-tca9548a.md (Adafruit's Eagle board file, elements JP3 and JP1); footprint pad n is the n-th pad of the Breakout_Sockets config (JP3.1-12, then JP1.1-12)"
 symbol = "Connector_Generic:Conn_01x24"
 footprint = "Breakout_Sockets:Adafruit_TCA9548A_Socket"
-# A0-A2 are pulled down on the breakout (address 0x70). Channel 2 is the
-# MCP23017 expander, which stays on the harness, off the carrier. Channels 5-7
-# are unused. Channels 0 (PCA9685), 1 (OLED), 3 and 4 (rangefinders) and RST
-# are wired on the carrier.
+# A0-A2 are pulled down on the breakout (address 0x70). Channels 5-7 are
+# unused. Channels 0 (PCA9685), 1 (OLED), 2 (MCP23017), 3 and 4
+# (rangefinders) and RST are wired on the carrier.
 no_connect = [
     "A0",
     "A1",
     "A2",
-    "SD2",
-    "SC2",
     "SD5",
     "SC5",
     "SD6",

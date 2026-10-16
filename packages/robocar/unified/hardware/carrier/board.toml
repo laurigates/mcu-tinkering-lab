@@ -120,16 +120,20 @@ H2 = [65.0, 4.0, 0]
 H3 = [4.0, 96.0, 0]
 H4 = [65.0, 96.0, 0]
 # Front row: both rangefinders side by side over the TCA9548A's channel 3 and 4
-# pads, then the OLED.
+# pads, then the ribbon's main end and the UART0 tap beside it. The ribbon
+# leaves over the front edge toward the head; a 10-15 cm ribbon reaches it
+# (Lauri, 2026-10-16).
 J7 = [11.0, 4.0, 0]       # RCWL-1601 front
 J8 = [25.0, 4.0, 0]       # RCWL-1601 rear
-J9 = [39.0, 4.0, 0]       # SSD1306 OLED lead
+J1 = [37.5, 6.0, 90]      # ribbon, main end
+J15 = [53.0, 2.3, 0]      # UART0 TX tap: GND, TX; the ROM boot log, 115200 baud
 # The TCA9548A turned so its channel 3/4 header faces the rangefinders and its
-# upstream and channel 0/1 header faces the PCA9685.
+# upstream and channel 0/1/2 header faces the PCA9685 and the expander.
 A3 = [2.5, 26.0, 90]
 C5 = [3.5, 30.5, 0]       # TCA9548A VIN decoupling, below its VIN pin
 # The mux channel pull-ups in a row under the TCA9548A: ch0 and ch1, then ch3
-# and ch4.
+# and ch4. Channel 2's pair sits under the test headers, on its way to the
+# expander (Freerouting necked tracks between the row's pads at a 2.5 mm pitch).
 R2 = [9.0, 30.0, 90]
 R3 = [12.0, 30.0, 90]
 R4 = [15.0, 30.0, 90]
@@ -138,42 +142,51 @@ R6 = [22.0, 30.0, 90]
 R7 = [25.0, 30.0, 90]
 R8 = [28.0, 30.0, 90]
 R9 = [31.0, 30.0, 90]
-# Test headers, the 3V3 regulator and the ribbon's main end, right of the mux.
-J11 = [36.0, 11.0, 0]     # supply: 3V3, 5V, GND, VBAT; VBAT's only neighbour is GND
-J12 = [36.0, 22.5, 0]     # I2C SDA/SCL and MUX_RST, main side of the ribbon
-U2 = [50.0, 14.0, 0]      # AMS1117-3.3
-J14 = [56.5, 14.0, 90]    # GND post beside the AMS1117
-C7 = [48.0, 27.5, 0]      # LDO input
-C8 = [54.5, 27.5, 0]      # LDO output
-J1 = [64.5, 11.0, 0]      # ribbon, main end, beside the head column; a 10-15 cm
-                          # ribbon reaches the head (Lauri, 2026-10-16)
-J15 = [64.5, 27.5, 0]     # UART0 TX tap: GND, TX; the ROM boot log, 115200 baud
+R10 = [34.4, 33.3, 0]     # ch2 SDA
+R11 = [38.4, 33.3, 0]     # ch2 SCL
+# Test headers right of the mux.
+J11 = [34.0, 11.0, 0]     # supply: 3V3, 5V, GND, VBAT; VBAT's only neighbour is GND
+J12 = [34.0, 22.5, 0]     # I2C SDA/SCL and MUX_RST, main side of the ribbon
+# The MCP23017 module (CJMCU-2317) in sockets under all 30 holes, turned 180
+# degrees: its single column (I2C and supply) faces the mux and its GPIO double
+# column faces the right edge. The mirror header J18 copies that double column
+# beside it, turned the same way, so its rows and columns sit in the module's
+# own order: column A (GPA, the outer column) at the edge, row 1 (GND/3V3) at
+# the bottom.
+A5 = [60.7, 32.7, 180]
+J18 = [67.0, 32.7, 180]
 # The PCA9685 across the board; servo columns on the module face the rear.
-A2 = [5.0, 52.5, 0]
-C4 = [1.6, 50.0, 90]      # PCA9685 VCC decoupling, beside its VCC pin
+A2 = [5.0, 53.8, 0]
+C4 = [1.6, 51.3, 90]      # PCA9685 VCC decoupling, beside its VCC pin
 # The motor driver with both motor connectors beside its motor outputs, its
-# bulk capacitor and the PCA9685's to its right, the amplifier at the right.
-J6 = [3.5, 66.5, 90]      # right motor (channel A)
-J5 = [3.5, 75.5, 90]      # left motor (channel B)
-A1 = [10.5, 80.0, 0]      # TB6612FNG socket
-C2 = [35.0, 64.6, 0]      # TB6612FNG VM bulk
-C1 = [35.0, 74.5, 0]      # PCA9685 V+ bulk
+# bulk capacitor and the PCA9685's to its right, then the 3V3 regulator, the
+# amplifier at the right.
+J6 = [3.5, 67.1, 90]      # right motor (channel A)
+J5 = [3.5, 76.1, 90]      # left motor (channel B)
+A1 = [10.5, 80.6, 0]      # TB6612FNG socket
+C2 = [35.0, 65.2, 0]      # TB6612FNG VM bulk
+C1 = [35.0, 75.1, 0]      # PCA9685 V+ bulk
+C7 = [45.6, 63.4, 0]      # LDO input
+U2 = [45.6, 70.6, 90]     # AMS1117-3.3
+C8 = [45.6, 77.0, 0]      # LDO output
+J14 = [44.0, 81.2, 90]    # GND post beside the AMS1117
 A4 = [67.0, 79.0, 0]      # MAX98357A socket; the speaker lead leaves the module
-# Rear row: power in and the buck lead together, the amplifier's bulk, its
-# ground post, the buzzer and its resistor.
+# Rear row: power in and the buck lead together, the OLED lead, the
+# amplifier's bulk and its ground post, the buzzer and its resistor.
 J3 = [12.5, 86.3, 180]    # XT30 pack in, mating face to the rear edge
 J4 = [26.0, 95.0, 0]      # LM2596 lead
-C3 = [40.0, 87.5, 0]      # MAX98357A Vin bulk
-J13 = [40.0, 96.0, 90]    # GND post below C3
+J9 = [25.3, 85.4, 0]      # SSD1306 OLED lead
+C3 = [42.0, 87.5, 0]      # MAX98357A Vin bulk
+J13 = [50.5, 85.3, 90]    # GND post beside the MAX98357A, above the buzzer
 R1 = [46.5, 96.0, 0]      # buzzer series resistor
 BZ1 = [51.0, 93.6, 0]     # 12 mm buzzer, soldered to the board
 
 [silk]
 hidden_refs = ["H1", "H2", "H3", "H4", "H5", "H6", "H7", "H8", "H9", "H10"]
 # Seeed's reference text is below KiCad's minimum silkscreen height.
-ref_sizes = { U1 = 1.0, U3 = 1.0, U4 = 1.0, R2 = 0.8, R3 = 0.8, R4 = 0.8, R5 = 0.8, R6 = 0.8, R7 = 0.8, R8 = 0.8, R9 = 0.8 }
+ref_sizes = { U1 = 1.0, U3 = 1.0, U4 = 1.0, R2 = 0.8, R3 = 0.8, R4 = 0.8, R5 = 0.8, R6 = 0.8, R7 = 0.8, R8 = 0.8, R9 = 0.8, R10 = 0.8, R11 = 0.8 }
 # Off the board edge and out from under neighbours.
-ref_positions = { A2 = [35.0, 45.0], A3 = [16.0, 18.0],C4 = [1.6, 53.4], C1 = [35.0, 79.9], J5 = [3.5, 79.3], J6 = [3.5, 60.3], J7 = [14.75, 8.45], J8 = [28.75, 8.45], J9 = [42.75, 8.45], J12 = [36.0, 32.7], J16 = [95.5, 61.0], J14 = [61.4, 14.0], R2 = [9.0, 32.9], R3 = [12.0, 32.9], R4 = [15.0, 32.9], R5 = [18.0, 32.9], R6 = [22.0, 32.9], R7 = [25.0, 32.9], R8 = [28.0, 32.9], R9 = [31.0, 32.9] }
+ref_positions = { A2 = [40.0, 46.3], A3 = [16.0, 18.0], A5 = [51.0, 20.0], C4 = [1.6, 54.7], C1 = [35.0, 80.5], J5 = [3.5, 79.9], J6 = [3.5, 60.9], J7 = [14.75, 8.45], J8 = [28.75, 8.45], J9 = [29.05, 89.85], J12 = [29.3, 23.0], J16 = [95.5, 61.0], J18 = [65.7, 36.6], BZ1 = [62.6, 88.6], C3 = [42.0, 87.5], C8 = [41.7, 77.0], J1 = [43.5, 1.5], J15 = [60.1, 2.3], R2 = [9.0, 32.9], R3 = [12.0, 32.9], R4 = [15.0, 32.9], R5 = [18.0, 32.9], R6 = [22.0, 32.9], R7 = [25.0, 32.9], R8 = [28.0, 32.9], R9 = [31.0, 32.9], R10 = [34.4, 35.5], R11 = [38.4, 35.5] }
 # The saw lines, on both faces; each gets a "CUT" label on its left-hand side,
 # so each runs in the direction that puts the label in the waste.
 cut_lines = [
@@ -184,27 +197,34 @@ cut_lines = [
     [70.5, 70.5, 99.5, 70.5],
 ]
 texts = [
-    { text = "robocar-unified", at = [28.0, 84.0], size = 1.0 },
-    { text = "carrier", at = [28.0, 85.8], size = 1.0 },
-    { text = "PROVISIONAL:", at = [28.0, 87.8], size = 1.0 },
-    { text = "do not order", at = [28.0, 89.6], size = 1.0 },
-    { text = "FRONT ^", at = [55.5, 4.0], size = 1.2 },
+    { text = "robocar-unified", at = [22.0, 43.6], size = 1.0 },
+    { text = "carrier", at = [22.0, 45.4], size = 1.0 },
+    { text = "PROVISIONAL:", at = [22.0, 47.4], size = 1.0 },
+    { text = "do not order", at = [22.0, 49.2], size = 1.0 },
+    { text = "FRONT ^", at = [22.0, 51.6], size = 1.2 },
     { text = "HEAD 1", at = [75.0, 26.0], size = 0.8 },
     { text = "HEAD 2", at = [75.0, 61.0], size = 0.8 },
     { text = "HEAD 3", at = [74.4, 96.0], size = 0.8 },
     # Test header net names, one beside each pin (2.54 mm pitch).
-    { text = "+3V3", at = [39.6, 11.0], size = 1.0 },
-    { text = "+5V", at = [39.6, 13.54], size = 1.0 },
-    { text = "GND", at = [39.6, 16.08], size = 1.0 },
-    { text = "VBAT", at = [39.6, 18.62], size = 1.0 },
-    { text = "GND", at = [39.6, 22.5], size = 1.0 },
-    { text = "SDA", at = [39.6, 25.04], size = 1.0 },
-    { text = "SCL", at = [39.6, 27.58], size = 1.0 },
-    { text = "MUX_RST", at = [40.8, 30.12], size = 1.0 },
-    { text = "GND", at = [60.9, 27.5], size = 1.0 },
-    { text = "U0TX", at = [60.6, 30.04], size = 1.0 },
-    { text = "GND", at = [57.77, 16.3], size = 1.0 },
-    { text = "GND", at = [41.27, 98.6], size = 1.0 },
+    { text = "+3V3", at = [37.6, 11.0], size = 1.0 },
+    { text = "+5V", at = [37.6, 13.54], size = 1.0 },
+    { text = "GND", at = [37.6, 16.08], size = 1.0 },
+    { text = "VBAT", at = [37.6, 18.62], size = 1.0 },
+    { text = "GND", at = [37.6, 22.5], size = 1.0 },
+    { text = "SDA", at = [37.6, 25.04], size = 1.0 },
+    { text = "SCL", at = [37.6, 27.58], size = 1.0 },
+    { text = "MUX_RST", at = [38.4, 30.12], size = 0.8 },
+    { text = "GND", at = [56.4, 2.3], size = 1.0 },
+    { text = "U0TX", at = [56.9, 4.84], size = 1.0 },
+    { text = "GND", at = [49.6, 81.2], size = 1.0 },
+    { text = "GND", at = [56.2, 85.3], size = 1.0 },
+    # The GPIO mirror header J18: column letters over the top (row 10) end,
+    # row 1's supply pins under the bottom end. A is the MCP23017's port A,
+    # the module's outer column; B its port B.
+    { text = "B", at = [64.46, 7.9], size = 0.8 },
+    { text = "A", at = [67.0, 7.9], size = 0.8 },
+    { text = "3V3", at = [64.46, 35.0], size = 0.8 },
+    { text = "GND", at = [67.0, 35.0], size = 0.8 },
 ]
 
 # Freerouting width classes, in this order. `nets` are net names or fnmatch

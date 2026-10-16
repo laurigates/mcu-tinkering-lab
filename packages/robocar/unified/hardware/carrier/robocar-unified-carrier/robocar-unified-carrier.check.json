@@ -1,5 +1,5 @@
 {
- "board_sha256": "54be2d892327782eb81f8cf0550de97a919c357408597522f738ec7c82e6a345",
+ "board_sha256": "8366f9e0ac6c46c5895df5d4b028a8657122f0f730bd11f2a878b18606c56552",
  "kicad_cli_version": "10.0.6",
  "netlist": {
   "components": {
@@ -30,6 +30,13 @@
     "lcsc": "",
     "lib_id": "Connector_Generic:Conn_01x07",
     "value": "MAX98357A"
+   },
+   "A5": {
+    "footprint": "Breakout_Sockets:CJMCU_2317_Socket",
+    "in_bom": true,
+    "lcsc": "",
+    "lib_id": "Connector_Generic:Conn_01x30",
+    "value": "CJMCU-2317"
    },
    "BZ1": {
     "footprint": "Buzzer_Beeper:Buzzer_12x9.5RM7.6",
@@ -213,6 +220,13 @@
     "lib_id": "Connector_Generic:Conn_02x07_Odd_Even",
     "value": "IDC 2x7 head cable"
    },
+   "J18": {
+    "footprint": "Connector_PinHeader_2.54mm:PinHeader_2x10_P2.54mm_Vertical",
+    "in_bom": true,
+    "lcsc": "",
+    "lib_id": "Connector_Generic:Conn_02x10_Odd_Even",
+    "value": "GPIO A/B"
+   },
    "J2": {
     "footprint": "Connector_PinHeader_2.00mm:PinHeader_2x07_P2.00mm_Vertical",
     "in_bom": true,
@@ -275,6 +289,20 @@
     "lcsc": "C17408",
     "lib_id": "Device:R",
     "value": "100"
+   },
+   "R10": {
+    "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
+    "in_bom": true,
+    "lcsc": "C17414",
+    "lib_id": "Device:R",
+    "value": "10k"
+   },
+   "R11": {
+    "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
+    "in_bom": true,
+    "lcsc": "C17414",
+    "lib_id": "Device:R",
+    "value": "10k"
    },
    "R2": {
     "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
@@ -376,6 +404,18 @@
      "1"
     ],
     [
+     "A5",
+     "11"
+    ],
+    [
+     "A5",
+     "24"
+    ],
+    [
+     "A5",
+     "30"
+    ],
+    [
      "C4",
      "1"
     ],
@@ -402,6 +442,10 @@
     [
      "J11",
      "1"
+    ],
+    [
+     "J18",
+     "2"
     ],
     [
      "R2",
@@ -433,6 +477,14 @@
     ],
     [
      "R9",
+     "1"
+    ],
+    [
+     "R10",
+     "1"
+    ],
+    [
+     "R11",
      "1"
     ],
     [
@@ -590,6 +642,34 @@
      "2"
     ]
    ],
+   "CH2_SCL": [
+    [
+     "A3",
+     "14"
+    ],
+    [
+     "A5",
+     "28"
+    ],
+    [
+     "R11",
+     "2"
+    ]
+   ],
+   "CH2_SDA": [
+    [
+     "A3",
+     "13"
+    ],
+    [
+     "A5",
+     "27"
+    ],
+    [
+     "R10",
+     "2"
+    ]
+   ],
    "CH3_SCL": [
     [
      "A3",
@@ -646,6 +726,186 @@
      "2"
     ]
    ],
+   "EXP_GPA0": [
+    [
+     "A5",
+     "3"
+    ],
+    [
+     "J18",
+     "5"
+    ]
+   ],
+   "EXP_GPA1": [
+    [
+     "A5",
+     "4"
+    ],
+    [
+     "J18",
+     "7"
+    ]
+   ],
+   "EXP_GPA2": [
+    [
+     "A5",
+     "5"
+    ],
+    [
+     "J18",
+     "9"
+    ]
+   ],
+   "EXP_GPA3": [
+    [
+     "A5",
+     "6"
+    ],
+    [
+     "J18",
+     "11"
+    ]
+   ],
+   "EXP_GPA4": [
+    [
+     "A5",
+     "7"
+    ],
+    [
+     "J18",
+     "13"
+    ]
+   ],
+   "EXP_GPA5": [
+    [
+     "A5",
+     "8"
+    ],
+    [
+     "J18",
+     "15"
+    ]
+   ],
+   "EXP_GPA6": [
+    [
+     "A5",
+     "9"
+    ],
+    [
+     "J18",
+     "17"
+    ]
+   ],
+   "EXP_GPA7": [
+    [
+     "A5",
+     "10"
+    ],
+    [
+     "J18",
+     "19"
+    ]
+   ],
+   "EXP_GPB0": [
+    [
+     "A5",
+     "13"
+    ],
+    [
+     "J18",
+     "6"
+    ]
+   ],
+   "EXP_GPB1": [
+    [
+     "A5",
+     "14"
+    ],
+    [
+     "J18",
+     "8"
+    ]
+   ],
+   "EXP_GPB2": [
+    [
+     "A5",
+     "15"
+    ],
+    [
+     "J18",
+     "10"
+    ]
+   ],
+   "EXP_GPB3": [
+    [
+     "A5",
+     "16"
+    ],
+    [
+     "J18",
+     "12"
+    ]
+   ],
+   "EXP_GPB4": [
+    [
+     "A5",
+     "17"
+    ],
+    [
+     "J18",
+     "14"
+    ]
+   ],
+   "EXP_GPB5": [
+    [
+     "A5",
+     "18"
+    ],
+    [
+     "J18",
+     "16"
+    ]
+   ],
+   "EXP_GPB6": [
+    [
+     "A5",
+     "19"
+    ],
+    [
+     "J18",
+     "18"
+    ]
+   ],
+   "EXP_GPB7": [
+    [
+     "A5",
+     "20"
+    ],
+    [
+     "J18",
+     "20"
+    ]
+   ],
+   "EXP_INTA": [
+    [
+     "A5",
+     "2"
+    ],
+    [
+     "J18",
+     "3"
+    ]
+   ],
+   "EXP_INTB": [
+    [
+     "A5",
+     "12"
+    ],
+    [
+     "J18",
+     "4"
+    ]
+   ],
    "GND": [
     [
      "A1",
@@ -674,6 +934,26 @@
     [
      "A4",
      "4"
+    ],
+    [
+     "A5",
+     "1"
+    ],
+    [
+     "A5",
+     "21"
+    ],
+    [
+     "A5",
+     "22"
+    ],
+    [
+     "A5",
+     "23"
+    ],
+    [
+     "A5",
+     "29"
     ],
     [
      "BZ1",
@@ -765,6 +1045,10 @@
     ],
     [
      "J15",
+     "1"
+    ],
+    [
+     "J18",
      "1"
     ],
     [
@@ -1318,14 +1602,6 @@
     "A2",
     "5"
    ],
-   "unconnected-(A3-Pin_13-Pad13)": [
-    "A3",
-    "13"
-   ],
-   "unconnected-(A3-Pin_14-Pad14)": [
-    "A3",
-    "14"
-   ],
    "unconnected-(A3-Pin_19-Pad19)": [
     "A3",
     "19"
@@ -1361,6 +1637,14 @@
    "unconnected-(A3-Pin_8-Pad8)": [
     "A3",
     "8"
+   ],
+   "unconnected-(A5-Pin_25-Pad25)": [
+    "A5",
+    "25"
+   ],
+   "unconnected-(A5-Pin_26-Pad26)": [
+    "A5",
+    "26"
    ],
    "unconnected-(J1-Pin_9-Pad9)": [
     "J1",
@@ -1416,5 +1700,5 @@
    ]
   }
  },
- "schematic_sha256": "a2e796796cfa9bffa167adb17c27ff5e4d98074134af962449b1c8c484b4d2f7"
+ "schematic_sha256": "9b77764f252b4302d9d25675fe405947d67e5a623ebeb0df756190ded07efcee"
 }
