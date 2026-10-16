@@ -139,11 +139,12 @@ leg cracks into the main board at the corner. Saw it.
 1. **Buy a jeweller's saw frame with fine blades** (or a coping saw with a fine
    blade).
 2. **Clamp the board** flat, the band just past the bench edge.
-3. **Cut in the waste band, along the silk line.** Each leg ends in the 2 mm
-   relief hole at the inside corner, so the blade turns in the hole instead of
-   binding in the corner.
-4. **Sand the head to 29.5 × 29.5 mm** on sandpaper on a flat surface, checking
-   with calipers. The cradle's inner width is 30.0 mm.
+3. **Cut in the waste band, on the main-board side of the silk line.** The
+   line is the head's 29.5 mm edge, so a blade on it takes half its kerf off the
+   head. Each leg ends in the 2 mm relief hole at the inside corner, so the
+   blade turns in the hole instead of binding in the corner.
+4. **Sand the head back to the line, 29.5 × 29.5 mm,** on sandpaper on a flat
+   surface, checking with calipers. The cradle's inner size is 30.0 × 30.0 mm.
 
 FR-4 dust contains glass fibre: wet-sand, and wear a mask.
 
@@ -185,7 +186,7 @@ Not until the pre-order checks are done and the PROVISIONAL text is gone from
 4. **Assembly (optional):** *PCB Assembly*, *Economic*, top side, with the two
    CSVs. C1–C3 (C96179) and C7–C8 (C8020) are Extended parts, so two feeder
    fees; the rest are Basic. JLCPCB's stock and part status were checked on
-   2026-10-16 (the commit that set C96179 records the figures). **Check
+   2026-10-16 (the comment on C1–C3 in `hardware.toml` records the figures). **Check
    polarity in the placement preview** before confirming: the CPL carries
    KiCad's rotations, and a community rotation table
    ([JLCKicadTools `cpl_rotations_db.csv`](https://github.com/matthewlai/JLCKicadTools/blob/master/jlc_kicad_tools/cpl_rotations_db.csv))
