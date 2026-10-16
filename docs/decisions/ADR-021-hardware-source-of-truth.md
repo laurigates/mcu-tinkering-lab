@@ -237,7 +237,17 @@ main connector to the loads. Rails crossing the cable split the same way
 (`HEAD_5V`, `HEAD_GND`). An MCU pad on a net that the cable does not carry
 fails. `head_no_connect` lists MCU pads left unconnected on the head, power
 pads included. The harness view never holds a cable, so WIRING.md and the
-other harness outputs are unchanged. The format and its checks are in
+other harness outputs are unchanged.
+
+A cable may also list `spare_heads`, more head boards on the same PCB, each a
+`mcu_ref` and a `head_ref` (Lauri, 2026-10-16: three head variants to try in
+the cradle). The netlist gives each its own copy of the MCU socket and of the
+head connector, joined pad for pad by `HEAD2_<name>`, `HEAD3_<name>`, and so
+on; the main board keeps its single end, so a spare head reaches it only when
+the ribbon is moved to it. `head_no_connect` and the rule that every MCU power
+pad is on a rail apply to each copy. The schematic draws a spare head like the
+first, and DRC parity, the board check and the stamp cover its parts. The
+format and its checks are in
 `tools/hardware/model.py` and `tools/kicad/netlist.py`.
 
 ## Related

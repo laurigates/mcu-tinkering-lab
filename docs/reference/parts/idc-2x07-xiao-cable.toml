@@ -1,11 +1,17 @@
 # 14-way IDC ribbon between robocar-unified's head board (the XIAO ESP32-S3)
 # and its main board. One entry serves both ends ([[cables]], ADR-021): [pins]
-# is keyed by the XIAO's pad names, so the two connectors cannot disagree.
+# is keyed by the XIAO's pad names, so the connectors cannot disagree. It serves
+# every head end too: the main end J1 and each head variant's header.
 # Through-hole, so no LCSC number (jlc.py places SMD parts only).
-# An unshrouded pin header, not a shrouded IDC box header: the head board must
-# fit a 30 x 30 mm pan-tilt cradle (Lauri, 2026-10-15), and the box header's
-# 26.5 mm courtyard does not fit beside the XIAO. The ribbon's IDC plug is
-# unkeyed on it, so both ends carry a pin-1 mark on the silkscreen.
+# An unshrouded 2.0 mm-pitch pin header, not a shrouded IDC box header or a
+# 2.54 mm header: the head board must fit a 30 x 30 mm pan-tilt cradle (Lauri,
+# 2026-10-15), whose sides have clips sticking out, so the header sits at the
+# head's top or bottom edge, never at a side (Lauri, 2026-10-16). A 2x7 at
+# 2.0 mm is 14 x 4 mm and fits across that edge beside the XIAO; the 2.54 mm one
+# is 17.8 x 5.1 mm. The mating plug is a 2.0 mm-pitch 2x7 IDC socket on 1.0 mm-
+# pitch flat ribbon (a dual-row 2.0 mm IDC takes ribbon at half its pitch). The
+# plug is unkeyed on an unshrouded header, so every end carries a pin-1 mark on
+# the silkscreen.
 #
 # Reversal-safe (Lauri, 2026-10-16). With no shroud the plug also fits rotated
 # 180 degrees, which takes pin n to pin 15 - n. The order below makes that
@@ -26,9 +32,9 @@
 # firmware change. Pin 9 is unconnected at both ends.
 [part]
 name = "IDC 2x7 cable, XIAO ESP32-S3 head to main board"
-source = "this repo's reversal-safe cable convention (Lauri, 2026-10-16; #750): pin n and pin 15 - n carry the same supply, or two XIAO outputs, or SDA and SCL, or TX and NC; pad names from docs/reference/boards/xiao-esp32s3.md, signals from packages/robocar/unified/main/pin_config.h"
+source = "KiCad 10.0.6 library PinHeader_2x07_P2.00mm_Vertical (odd pins in one row, even in the other, pad 1 square) for a 2.0 mm 2x7 IDC plug on 1.0 mm-pitch ribbon; pin order: this repo's reversal-safe cable convention (Lauri, 2026-10-16; #750): pin n and pin 15 - n carry the same supply, or two XIAO outputs, or SDA and SCL, or TX and NC; pad names from docs/reference/boards/xiao-esp32s3.md, signals from packages/robocar/unified/main/pin_config.h"
 symbol = "Connector_Generic:Conn_02x07_Odd_Even"
-footprint = "Connector_PinHeader_2.54mm:PinHeader_2x07_P2.54mm_Vertical"
+footprint = "Connector_PinHeader_2.00mm:PinHeader_2x07_P2.00mm_Vertical"
 value = "IDC 2x7 head cable"
 no_connect = ["NC"]
 

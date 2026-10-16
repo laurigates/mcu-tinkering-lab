@@ -43,7 +43,8 @@ ref = "U1"
 # fitted modules are identified (#662), so they carry no `board` and are not
 # drawn. The rangefinders were identified as RCWL-1601s (#662); no board file
 # is published for that module, so its page is read from the listing's
-# silkscreen photos and is not yet bench-verified (see the page's checklist).
+# silkscreen photos. Lauri verified its pin order on the fitted modules on
+# 2026-10-16; the page's checklist lists what is still unverified.
 #
 # `part` names the parts-registry entry (docs/reference/parts/) that maps a
 # part's pin names to KiCad symbol pins; `ref`, `value` and `lcsc` are the
@@ -95,12 +96,14 @@ part = "rcwl-1601-i2c-cable"
 ref = "J8"
 value = "RCWL-1601 rear"
 
+# On the carrier a 12 mm board-mount buzzer, soldered straight to the main board
+# (Lauri, 2026-10-16).
 [parts.buzzer]
 name = "Piezo buzzer"
 kind = "piezo"
-part = "piezo-jst-xh2"
-ref = "J10"
-value = "Piezo"
+part = "piezo-buzzer-12mm"
+ref = "BZ1"
+value = "Buzzer 12mm"
 
 [parts.amp]
 name = "MAX98357A"
@@ -455,11 +458,22 @@ load_pins.speaker = { "VO-" = "-", "VO+" = "+" }
 # open on the head: 3V3 (the main board makes its own, below), D3 (free since
 # the rangefinders moved to I2C, #790), and D7 (UART0 RX, spare: its role is
 # [[undrawn]] above, in both views).
+#
+# The PCB carries three head boards, three ways of mounting the ribbon header
+# for Lauri to try in the cradle (2026-10-16); the main board has one end, J1.
+# Head 1 is [source] ref U1 with J2; the spare heads are U3 with J16 (head 2)
+# and U4 with J17 (head 3), each a copy of the XIAO socket and of the head
+# connector, on nets HEAD2_* and HEAD3_*. Only one head is fitted with the XIAO
+# at a time.
 [[cables]]
 part = "idc-2x07-xiao-cable"
 head_ref = "J2"
 main_ref = "J1"
 head_no_connect = ["3V3", "D3", "D7"]
+spare_heads = [
+    { mcu_ref = "U3", head_ref = "J16" },
+    { mcu_ref = "U4", head_ref = "J17" },
+]
 build = "carrier"
 
 # UART0 TX on a main-board test header: the ROM bootloader prints its boot log
@@ -740,6 +754,35 @@ kind = "mounting-hole"
 build = "carrier"
 part = "m2-mounting-hole"
 ref = "H6"
+
+# The same two holes on head 2 (H7, H8) and head 3 (H9, H10).
+[parts.hole_head2_1]
+name = "M2 mounting hole, head board 2"
+kind = "mounting-hole"
+build = "carrier"
+part = "m2-mounting-hole"
+ref = "H7"
+
+[parts.hole_head2_2]
+name = "M2 mounting hole, head board 2"
+kind = "mounting-hole"
+build = "carrier"
+part = "m2-mounting-hole"
+ref = "H8"
+
+[parts.hole_head3_1]
+name = "M2 mounting hole, head board 3"
+kind = "mounting-hole"
+build = "carrier"
+part = "m2-mounting-hole"
+ref = "H9"
+
+[parts.hole_head3_2]
+name = "M2 mounting hole, head board 3"
+kind = "mounting-hole"
+build = "carrier"
+part = "m2-mounting-hole"
+ref = "H10"
 
 # Each pull-up is a load on one line of its channel: pin B on SDn or SCn, pin A
 # on 3V3. The channel number is still the header's.
