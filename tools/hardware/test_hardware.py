@@ -1271,10 +1271,13 @@ class RobocarUnifiedJoinTest(unittest.TestCase):
 
     def test_dropping_an_undrawn_entry_from_the_committed_sidecar_fails(self):
         # The completeness gate (#460) holds on the real project, not only on
-        # the synthetic one: UART0_TX_PIN is excused only by this entry.
+        # the synthetic one: in the harness view UART0_TX_PIN is excused only by
+        # this entry (the carrier wires it to the UART0 tap).
         text = (UNIFIED / "hardware.toml").read_text(encoding="utf-8")
         entry = re.search(
-            r'\[\[undrawn\]\]\nrole = "UART0_TX_PIN"\nwhy = "[^"\n]*"\n\n?', text
+            r'\[\[undrawn\]\]\nrole = "UART0_TX_PIN"\nbuild = "harness"\n'
+            r'why = "[^"\n]*"\n\n?',
+            text,
         )
         self.assertIsNotNone(entry)
         with tempfile.TemporaryDirectory() as tmp:

@@ -23,8 +23,9 @@ registry entry whose `[pins]` are keyed by MCU pad name. Every MCU end above,
 role or rail, is split at the cable: `HEAD_<name>` joins the MCU pad to the
 head connector's pin(s) for that pad, and the net `<name>` takes the main
 connector's pin(s) in the pad's place. An MCU pad on a net that the cable does
-not carry raises, as does a cable pin named for no pad of the MCU's board page.
-The cable's `head_no_connect` pads may float, power pads included.
+not carry raises, as does a cable pin named for no pad of the MCU's board page,
+unless the entry lists it under `no_connect`: a spare conductor, open at both
+ends. The cable's `head_no_connect` pads may float, power pads included.
 
 Every symbol pin must then be on a net or allowed to float: listed under the
 entry's `no_connect`, or a spare GPIO pad of a `pin_numbers` part. Anything
@@ -198,7 +199,13 @@ def build(
     if cable is not None:
         carried = placed[HEAD].by_name
         cable_file = placed[HEAD].spec.path.name
-        stray = [pad for pad in carried if pad not in model.board.by_name]
+        # A pin under the entry's no_connect (a spare conductor) is no pad.
+        spare = placed[HEAD].spec.no_connect
+        stray = [
+            pad
+            for pad in carried
+            if pad not in model.board.by_name and pad not in spare
+        ]
         if stray:
             raise KicadError(
                 f"{sidecar} [[cables]]: {cable_file} [pins] {stray[0]!r} is not a pad "

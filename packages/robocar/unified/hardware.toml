@@ -301,8 +301,11 @@ why = "wired to the PDM microphone on the Sense expansion board, not brought out
 role = "MIC_PDM_DATA_PIN"
 why = "wired to the PDM microphone on the Sense expansion board, not brought out to a header"
 
+# Harness-only: on the carrier the ribbon takes D6 to the main board's UART0
+# tap, J15 (below).
 [[undrawn]]
 role = "UART0_TX_PIN"
+build = "harness"
 why = "UART0 TX, spare: the serial console is USB-Serial-JTAG on the USB-C connector, not this pad. The ROM bootloader prints its boot log here at every reset"
 
 [[undrawn]]
@@ -446,17 +449,35 @@ load_pins.speaker = { "VO-" = "-", "VO+" = "+" }
 # WIRING.md leaves to prose (GND) or that differ from the harness (3V3).
 
 # The XIAO sits on the head board, on the pan-tilt head; a 2x7 IDC ribbon takes
-# its I2C, STBY, piezo, I2S and MUX_RST lines, 5V and GND to the main board.
-# docs/reference/parts/idc-2x07-xiao-cable.toml gives the pin order. Every
-# other XIAO pad stays open on the head: 3V3 (the main board makes its own,
-# below), D3 (free since the rangefinders moved to I2C, #790), and D6/D7
-# (UART0, spare: their roles are [[undrawn]] above, in both views).
+# its I2C, STBY, piezo, I2S and MUX_RST lines, UART0 TX, 5V and GND to the main
+# board. docs/reference/parts/idc-2x07-xiao-cable.toml gives the pin order,
+# which survives the unkeyed plug going in rotated. Every other XIAO pad stays
+# open on the head: 3V3 (the main board makes its own, below), D3 (free since
+# the rangefinders moved to I2C, #790), and D7 (UART0 RX, spare: its role is
+# [[undrawn]] above, in both views).
 [[cables]]
 part = "idc-2x07-xiao-cable"
 head_ref = "J2"
 main_ref = "J1"
-head_no_connect = ["3V3", "D3", "D6", "D7"]
+head_no_connect = ["3V3", "D3", "D7"]
 build = "carrier"
+
+# UART0 TX on a main-board test header: the ROM bootloader prints its boot log
+# on GPIO43 (D6) at every reset, 115200 baud, with no firmware change. A
+# USB-serial adapter's RX and GND clip on here; nothing on the carrier drives
+# or loads the line.
+[parts.uart_tap]
+name = "UART0 TX tap"
+kind = "test-header"
+build = "carrier"
+part = "uart0-tap-1x2"
+ref = "J15"
+
+[[nets]]
+role = "UART0_TX_PIN"
+to = "uart_tap.TX"
+build = "carrier"
+note = "ROM boot log, 115200 baud"
 
 [parts.ldo]
 name = "AMS1117-3.3 LDO, main-board 3V3"
@@ -788,6 +809,7 @@ to = [
     "decouple_mux.B",
     "ldo_in.-",
     "ldo_out.-",
+    "uart_tap.GND",
 ]
 
 # Carrier net names, where they differ from the role or rail name.
@@ -796,6 +818,7 @@ I2C_SDA_PIN = "I2C_SDA"
 I2C_SCL_PIN = "I2C_SCL"
 MOTOR_STBY_PIN = "MOTOR_STBY"
 TCA9548A_RST_PIN = "MUX_RST"
+UART0_TX_PIN = "UART0_TX"
 PIEZO_PIN = "PIEZO"
 I2S_BCLK_PIN = "I2S_BCLK"
 I2S_LRCLK_PIN = "I2S_LRCLK"
