@@ -53,6 +53,7 @@ from .model import (
     Output,
     Part,
     Rail,
+    SpareHead,
     Undrawn,
     join,
 )
@@ -80,6 +81,7 @@ __all__ = [
     "PadCentre",
     "Part",
     "Rail",
+    "SpareHead",
     "Undrawn",
     "board_layout",
     "board_pad_centres",
