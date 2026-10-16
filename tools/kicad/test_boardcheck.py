@@ -325,6 +325,39 @@ class ConfigTests(unittest.TestCase):
             "[keepouts] names repeat",
         )
 
+    def test_cutouts(self):
+        hole = {"name": "relief", "center": [41.5, 30.0], "diameter": 2.0}
+        ok = self.with_data(lambda d: d.update(cutouts=[hole]))
+        self.assertEqual(boardcheck.validate_config(ok, self.nl), [])
+        self.fails(
+            lambda d: d.update(cutouts=[{**hole, "center": [0.9, 30.0]}]),
+            "[cutouts] 'relief': circle at [0.9, 30.0], diameter 2.0, is not inside",
+        )
+        self.fails(
+            lambda d: d.update(cutouts=[{**hole, "center": [41.5, 61.0]}]),
+            "[cutouts] 'relief': circle at [41.5, 61.0], diameter 2.0, is not inside",
+        )
+        self.fails(
+            lambda d: d.update(cutouts=[{**hole, "diameter": 0}]),
+            "[cutouts] 'relief': needs center = [x, y] and diameter > 0",
+        )
+        self.fails(
+            lambda d: d.update(cutouts=[{**hole, "center": [41.5]}]),
+            "[cutouts] 'relief': needs center = [x, y] and diameter > 0",
+        )
+        self.fails(
+            lambda d: d.update(cutouts=[{**hole, "rect": [0, 0, 1, 1]}]),
+            "[cutouts]: unknown key(s) ['rect']",
+        )
+        self.fails(
+            lambda d: d.update(cutouts=[{"center": [41.5, 30.0], "diameter": 2.0}]),
+            "[cutouts] needs a name",
+        )
+        self.fails(
+            lambda d: d.update(cutouts=[hole, hole]),
+            "[cutouts] names repeat",
+        )
+
     def test_cut_lines(self):
         line = [41.5, 0.5, 41.5, 61.5]
         ok = self.with_data(lambda d: d["silk"].update(cut_lines=[line]))

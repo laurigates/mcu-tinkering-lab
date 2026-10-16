@@ -26,6 +26,8 @@ registry and board.toml. This writes it to
   a single-net `[pour]` is one region with `rect` null, the whole board;
 - `keepouts`: board.toml `[[keepouts]]`, `[{name, rect}]`, rects relative to
   the origin; rule areas with no copper (tracks, vias, pads, pour);
+- `cutouts`: board.toml `[[cutouts]]`, `[{name, center, diameter}]`, centres
+  relative to the origin; holes milled through the board, drawn on Edge.Cuts;
 - `freerouting_jar`: $FREEROUTING_JAR, else ~/.cache/freerouting/freerouting-2.5.0.jar.
 
 board.toml is validated against the netlist first (`boardcheck.validate_config`,
@@ -141,6 +143,7 @@ def assemble(
             ],
         },
         "keepouts": [dict(k) for k in data.get("keepouts", [])],
+        "cutouts": [dict(c) for c in data.get("cutouts", [])],
     }
 
 
