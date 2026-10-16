@@ -1,5 +1,5 @@
 {
- "board_sha256": "6aae0754e27a1c795c00bbe5a80f11b777e7f0d9d04a513113a6fc6ded5d7050",
+ "board_sha256": "48485f984d5e41e2fb08fe06135b7856ba760e41d626560ab5b5b4827773b665",
  "kicad_cli_version": "10.0.6",
  "netlist": {
   "components": {
@@ -34,21 +34,21 @@
    "C1": {
     "footprint": "Capacitor_SMD:CP_Elec_8x10.5",
     "in_bom": true,
-    "lcsc": "C5162348",
+    "lcsc": "C96179",
     "lib_id": "Device:C_Polarized",
     "value": "470uF 16V"
    },
    "C2": {
     "footprint": "Capacitor_SMD:CP_Elec_8x10.5",
     "in_bom": true,
-    "lcsc": "C5162348",
+    "lcsc": "C96179",
     "lib_id": "Device:C_Polarized",
     "value": "470uF 16V"
    },
    "C3": {
     "footprint": "Capacitor_SMD:CP_Elec_8x10.5",
     "in_bom": true,
-    "lcsc": "C5162348",
+    "lcsc": "C96179",
     "lib_id": "Device:C_Polarized",
     "value": "470uF 16V"
    },
@@ -1092,5 +1092,5 @@
    ]
   }
  },
- "schematic_sha256": "d345b328d674e5e8eace67194078dda60ab94731c838322a226597eb426a33a6"
+ "schematic_sha256": "2f9614febeaec343a71a006c3fcb013e38a734f1ff07b0bac0d031045e393318"
 }

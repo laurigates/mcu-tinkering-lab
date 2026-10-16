@@ -333,3 +333,10 @@ carrier-board: (_carrier-board project_dir) (_carrier-route project_dir)
 # ERC, DRC with schematic parity, netlist parity with hardware.toml, board nets, library drift
 [group: "carrier"]
 carrier-check: (_carrier-check project_dir)
+
+# The BOM and CPL cover the SMD parts only; skip them to hand-solder. The
+# board is PROVISIONAL (#750): see hardware/carrier/README.md before ordering.
+#
+# Gerbers and drill files for JLCPCB, zipped, plus the BOM and CPL for its assembly service
+[group: "carrier"]
+carrier-fab: carrier-check (_carrier-fab project_dir)
