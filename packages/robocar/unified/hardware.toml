@@ -43,7 +43,8 @@ ref = "U1"
 # fitted modules are identified (#662), so they carry no `board` and are not
 # drawn. The rangefinders were identified as RCWL-1601s (#662); no board file
 # is published for that module, so its page is read from the listing's
-# silkscreen photos and is not yet bench-verified (see the page's checklist).
+# silkscreen photos. Lauri verified its pin order on the fitted modules on
+# 2026-10-16; the page's checklist lists what is still unverified.
 #
 # `part` names the parts-registry entry (docs/reference/parts/) that maps a
 # part's pin names to KiCad symbol pins; `ref`, `value` and `lcsc` are the

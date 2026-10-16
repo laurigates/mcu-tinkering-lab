@@ -1,7 +1,7 @@
 # RCWL-1601 ultrasonic rangefinder in I2C mode, on a JST-XH 4-pin lead.
 [part]
 name = "RCWL-1601 rangefinder (I2C mode) on JST-XH 4"
-source = "pin order follows the module's header, docs/reference/boards/rcwl-1601.md (Vcc, Trig/SCL, Echo/SDA, Gnd), on a straight cable"
+source = "pin order follows the module's header, docs/reference/boards/rcwl-1601.md (Vcc, Trig/SCL, Echo/SDA, Gnd), verified by Lauri on the fitted modules 2026-10-16, on a straight cable"
 symbol = "Connector_Generic:Conn_01x04"
 footprint = "Connector_JST:JST_XH_B4B-XH-A_1x04_P2.50mm_Vertical"
 
