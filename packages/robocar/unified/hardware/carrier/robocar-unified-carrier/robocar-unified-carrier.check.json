@@ -1,5 +1,5 @@
 {
- "board_sha256": "e35edead73115505d75c3650c045a2570906432db5b094451847190d1b6670ad",
+ "board_sha256": "6aae0754e27a1c795c00bbe5a80f11b777e7f0d9d04a513113a6fc6ded5d7050",
  "kicad_cli_version": "10.0.6",
  "netlist": {
   "components": {
@@ -135,6 +135,41 @@
     "lcsc": "",
     "lib_id": "Device:Buzzer",
     "value": "Piezo"
+   },
+   "J11": {
+    "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical",
+    "in_bom": true,
+    "lcsc": "",
+    "lib_id": "Connector_Generic:Conn_01x04",
+    "value": "Test: 3V3 5V GND VBAT"
+   },
+   "J12": {
+    "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical",
+    "in_bom": true,
+    "lcsc": "",
+    "lib_id": "Connector_Generic:Conn_01x04",
+    "value": "Test: GND SDA SCL RST"
+   },
+   "J13": {
+    "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical",
+    "in_bom": true,
+    "lcsc": "",
+    "lib_id": "Connector_Generic:Conn_01x02",
+    "value": "GND post"
+   },
+   "J14": {
+    "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical",
+    "in_bom": true,
+    "lcsc": "",
+    "lib_id": "Connector_Generic:Conn_01x02",
+    "value": "GND post"
+   },
+   "J15": {
+    "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical",
+    "in_bom": true,
+    "lcsc": "",
+    "lib_id": "Connector_Generic:Conn_01x02",
+    "value": "UART0 TX tap"
    },
    "J2": {
     "footprint": "Connector_PinHeader_2.54mm:PinHeader_2x07_P2.54mm_Vertical",
@@ -309,6 +344,10 @@
      "2"
     ],
     [
+     "J11",
+     "1"
+    ],
+    [
      "R2",
      "1"
     ],
@@ -384,11 +423,15 @@
     ],
     [
      "J1",
-     "2"
+     "14"
     ],
     [
      "J4",
      "3"
+    ],
+    [
+     "J11",
+     "2"
     ],
     [
      "U2",
@@ -606,19 +649,11 @@
     ],
     [
      "J1",
-     "11"
+     "13"
     ],
     [
      "J1",
-     "3"
-    ],
-    [
-     "J1",
-     "4"
-    ],
-    [
-     "J1",
-     "7"
+     "2"
     ],
     [
      "J3",
@@ -649,6 +684,34 @@
      "2"
     ],
     [
+     "J11",
+     "3"
+    ],
+    [
+     "J12",
+     "1"
+    ],
+    [
+     "J13",
+     "1"
+    ],
+    [
+     "J13",
+     "2"
+    ],
+    [
+     "J14",
+     "1"
+    ],
+    [
+     "J14",
+     "2"
+    ],
+    [
+     "J15",
+     "1"
+    ],
+    [
      "U2",
      "1"
     ]
@@ -660,7 +723,7 @@
     ],
     [
      "J2",
-     "2"
+     "14"
     ],
     [
      "U1",
@@ -670,19 +733,11 @@
    "HEAD_GND": [
     [
      "J2",
-     "11"
+     "13"
     ],
     [
      "J2",
-     "3"
-    ],
-    [
-     "J2",
-     "4"
-    ],
-    [
-     "J2",
-     "7"
+     "2"
     ],
     [
      "U1",
@@ -692,7 +747,7 @@
    "HEAD_I2C_SCL": [
     [
      "J2",
-     "6"
+     "5"
     ],
     [
      "U1",
@@ -702,7 +757,7 @@
    "HEAD_I2C_SDA": [
     [
      "J2",
-     "5"
+     "10"
     ],
     [
      "U1",
@@ -712,7 +767,7 @@
    "HEAD_I2S_BCLK": [
     [
      "J2",
-     "8"
+     "3"
     ],
     [
      "U1",
@@ -722,7 +777,7 @@
    "HEAD_I2S_DIN": [
     [
      "J2",
-     "10"
+     "7"
     ],
     [
      "U1",
@@ -732,7 +787,7 @@
    "HEAD_I2S_LRCLK": [
     [
      "J2",
-     "9"
+     "12"
     ],
     [
      "U1",
@@ -742,7 +797,7 @@
    "HEAD_MOTOR_STBY": [
     [
      "J2",
-     "12"
+     "4"
     ],
     [
      "U1",
@@ -752,7 +807,7 @@
    "HEAD_MUX_RST": [
     [
      "J2",
-     "14"
+     "11"
     ],
     [
      "U1",
@@ -762,11 +817,21 @@
    "HEAD_PIEZO": [
     [
      "J2",
-     "13"
+     "8"
     ],
     [
      "U1",
      "2"
+    ]
+   ],
+   "HEAD_UART0_TX": [
+    [
+     "J2",
+     "6"
+    ],
+    [
+     "U1",
+     "7"
     ]
    ],
    "I2C_SCL": [
@@ -776,7 +841,11 @@
     ],
     [
      "J1",
-     "6"
+     "5"
+    ],
+    [
+     "J12",
+     "3"
     ]
    ],
    "I2C_SDA": [
@@ -786,7 +855,11 @@
     ],
     [
      "J1",
-     "5"
+     "10"
+    ],
+    [
+     "J12",
+     "2"
     ]
    ],
    "I2S_BCLK": [
@@ -796,7 +869,7 @@
     ],
     [
      "J1",
-     "8"
+     "3"
     ]
    ],
    "I2S_DIN": [
@@ -806,7 +879,7 @@
     ],
     [
      "J1",
-     "10"
+     "7"
     ]
    ],
    "I2S_LRCLK": [
@@ -816,7 +889,7 @@
     ],
     [
      "J1",
-     "9"
+     "12"
     ]
    ],
    "MOTOR_STBY": [
@@ -826,7 +899,7 @@
     ],
     [
      "J1",
-     "12"
+     "4"
     ]
    ],
    "MOT_A01": [
@@ -876,13 +949,17 @@
     ],
     [
      "J1",
-     "14"
+     "11"
+    ],
+    [
+     "J12",
+     "4"
     ]
    ],
    "PIEZO": [
     [
      "J1",
-     "13"
+     "8"
     ],
     [
      "R1",
@@ -919,6 +996,16 @@
      "12"
     ]
    ],
+   "UART0_TX": [
+    [
+     "J1",
+     "6"
+    ],
+    [
+     "J15",
+     "2"
+    ]
+   ],
    "VBAT": [
     [
      "J3",
@@ -927,6 +1014,10 @@
     [
      "J4",
      "1"
+    ],
+    [
+     "J11",
+     "4"
     ]
    ]
   },
@@ -979,6 +1070,14 @@
     "A3",
     "8"
    ],
+   "unconnected-(J1-Pin_9-Pad9)": [
+    "J1",
+    "9"
+   ],
+   "unconnected-(J2-Pin_9-Pad9)": [
+    "J2",
+    "9"
+   ],
    "unconnected-(U1-3V3_OUT-Pad12)": [
     "U1",
     "12"
@@ -987,15 +1086,11 @@
     "U1",
     "4"
    ],
-   "unconnected-(U1-D6-Pad7)": [
-    "U1",
-    "7"
-   ],
    "unconnected-(U1-D7-Pad8)": [
     "U1",
     "8"
    ]
   }
  },
- "schematic_sha256": "be46acb557a67e9025ce526d77ba32e6ead6817dddfab87373f682ad30facc73"
+ "schematic_sha256": "d345b328d674e5e8eace67194078dda60ab94731c838322a226597eb426a33a6"
 }

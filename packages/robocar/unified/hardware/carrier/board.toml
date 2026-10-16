@@ -49,6 +49,17 @@ rect = [69.0, 0.0, 72.0, 31.0]
 name = "head cut band, horizontal"
 rect = [69.0, 28.0, 100.0, 31.0]
 
+# A 2 mm relief hole at the saw line's inside corner (Lauri, 2026-10-16): the
+# two cuts end in it, so the blade turns in the hole instead of binding and
+# cracking the corner. Centred on the corner, (70.5, 29.5), it lies wholly
+# inside the band (x 69.5-71.5, y 28.5-30.5), so it takes no copper from
+# either board; it leaves a 1 mm quarter-round notch in the head's lower-left
+# corner, where nothing is mounted.
+[[cutouts]]
+name = "saw relief"
+center = [70.5, 29.5]
+diameter = 2.0
+
 # KiCad's copper-to-edge clearance (0.5 mm, .kicad_pro) as rule areas along
 # the outline: Freerouting keeps only its class clearance from the board
 # boundary, and on the 28 mm head it routed tracks onto the edge. Not along the
@@ -132,25 +143,48 @@ J4 = [27.0, 95.0, 0]      # LM2596 lead
 J8 = [43.0, 95.0, 0]      # RCWL-1601 rear, at the rear edge
 J10 = [58.0, 95.0, 0]     # piezo
 R1 = [59.0, 88.0, 0]      # piezo series resistor
-J15 = [64.0, 67.5, 0]     # UART0 TX tap: GND, TX
+# Test headers (Lauri, 2026-10-16), through-hole pin headers. The spare
+# centre above the PCA9685 is under its module (A2's courtyard), so the supply,
+# I2C headers sit in a row below it, the UART0 tap below J1, net names on the silkscreen to
+# their right; the ground posts sit beside the parts they serve.
+J11 = [42.0, 67.5, 0]     # supply: 3V3, 5V, GND, VBAT; VBAT's only neighbour is GND
+J12 = [52.0, 67.5, 0]     # I2C SDA/SCL and MUX_RST, main side of the ribbon
+J15 = [64.5, 33.5, 0]     # UART0 TX tap: GND, TX; the ROM boot log, 115200 baud.
+                          # Below J1, a short run from its pin 6
+J13 = [82.0, 90.0, 90]    # GND post below the MAX98357A and C3
+J14 = [18.5, 24.0, 90]    # GND post beside the AMS1117 (U2)
 
 [silk]
 hidden_refs = ["H1", "H2", "H3", "H4", "H5", "H6"]
 # Seeed's reference text is below KiCad's minimum silkscreen height.
 ref_sizes = { U1 = 1.0 }
 # Off the board edge and out from under neighbours.
-ref_positions = { A1 = [11.0, 52.0], J7 = [18.0, 9.3], J3 = [15.5, 81.5], J2 = [75.5, 25.8] }
+ref_positions = { A1 = [11.0, 52.0], J7 = [18.0, 9.3], J3 = [15.5, 81.5], J2 = [75.5, 25.8], J13 = [79.8, 90.0], J14 = [19.77, 20.5] }
 # The saw line, on both faces, along the middle of the keepout band; each gets
-# a "CUT" label inside the band.
+# a "CUT" label inside the band. Both stop 0.5 mm short of the relief hole
+# (Edge.Cuts), the silkscreen-to-edge clearance.
 cut_lines = [
-    [70.5, 0.5, 70.5, 29.5],
-    [70.5, 29.5, 99.5, 29.5],
+    [70.5, 0.5, 70.5, 28.0],
+    [72.0, 29.5, 99.5, 29.5],
 ]
 texts = [
     { text = "robocar-unified carrier", at = [55.0, 80.0], size = 1.2 },
     { text = "PROVISIONAL: do not order", at = [55.0, 82.5], size = 1.2 },
     { text = "FRONT ^", at = [54.0, 4.0], size = 1.2 },
     { text = "HEAD", at = [82.5, 2.5], size = 1.2 },
+    # Test header net names, one beside each pin (2.54 mm pitch).
+    { text = "+3V3", at = [45.6, 67.5], size = 1.0 },
+    { text = "+5V", at = [45.6, 70.04], size = 1.0 },
+    { text = "GND", at = [45.6, 72.58], size = 1.0 },
+    { text = "VBAT", at = [45.6, 75.12], size = 1.0 },
+    { text = "GND", at = [56.8, 67.5], size = 1.0 },
+    { text = "SDA", at = [56.8, 70.04], size = 1.0 },
+    { text = "SCL", at = [56.8, 72.58], size = 1.0 },
+    { text = "MUX_RST", at = [56.8, 75.12], size = 1.0 },
+    { text = "GND", at = [68.1, 33.5], size = 1.0 },
+    { text = "U0TX", at = [68.4, 36.04], size = 1.0 },
+    { text = "GND", at = [83.27, 92.3], size = 1.0 },
+    { text = "GND", at = [19.77, 26.3], size = 1.0 },
 ]
 
 # Freerouting width classes, in this order. `nets` are net names or fnmatch

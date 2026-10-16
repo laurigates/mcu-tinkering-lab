@@ -1,0 +1,16 @@
+# robocar-unified's supply test header (J11): a 1x4 pin header on the main
+# board for meter probes. VBAT is on an end pin with GND as its only
+# neighbour, so a probe slipping off VBAT can reach ground but never a logic
+# rail. Through-hole, hand-soldered, so no LCSC number.
+[part]
+name = "Supply test header, 1x4 pin header"
+source = "KiCad 10.0.6 library (Conn_01x04, PinHeader_1x04_P2.54mm_Vertical); the pin order is this repo's test-header convention (Lauri, 2026-10-16; #750)"
+symbol = "Connector_Generic:Conn_01x04"
+footprint = "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical"
+value = "Test: 3V3 5V GND VBAT"
+
+[pins]
+"3V3" = 1
+"5V" = 2
+GND = 3
+VBAT = 4

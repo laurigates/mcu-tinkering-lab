@@ -479,6 +479,58 @@ to = "uart_tap.TX"
 build = "carrier"
 note = "ROM boot log, 115200 baud"
 
+# Main-board test headers (Lauri, 2026-10-16): through-hole pin headers for
+# meter probes, a logic analyser and scope ground clips.
+[parts.tp_power]
+name = "Supply test header"
+kind = "test-header"
+build = "carrier"
+part = "testpoint-power-1x4"
+ref = "J11"
+
+[parts.tp_i2c]
+name = "I2C and mux reset test header"
+kind = "test-header"
+build = "carrier"
+part = "testpoint-i2c-1x4"
+ref = "J12"
+
+[parts.gnd_post_amp]
+name = "Ground post beside the MAX98357A"
+kind = "test-header"
+build = "carrier"
+part = "gnd-post-1x2"
+ref = "J13"
+
+[parts.gnd_post_ldo]
+name = "Ground post beside the LDO"
+kind = "test-header"
+build = "carrier"
+part = "gnd-post-1x2"
+ref = "J14"
+
+# The upstream I2C bus and the mux reset, on the main board's side of the
+# ribbon: each role fans out to its J12 pin as well as to the mux.
+[[nets]]
+role = "I2C_SDA_PIN"
+to = "tp_i2c.SDA"
+build = "carrier"
+
+[[nets]]
+role = "I2C_SCL_PIN"
+to = "tp_i2c.SCL"
+build = "carrier"
+
+[[nets]]
+role = "TCA9548A_RST_PIN"
+to = "tp_i2c.RST"
+build = "carrier"
+
+[[rails]]
+name = "VBAT"
+build = "carrier"
+to = ["tp_power.VBAT"]
+
 [parts.ldo]
 name = "AMS1117-3.3 LDO, main-board 3V3"
 kind = "regulator"
@@ -747,7 +799,15 @@ build = "carrier"
 [[rails]]
 name = "5V"
 build = "carrier"
-to = ["bulk_pwm.+", "bulk_motor.+", "bulk_amp.+", "ldo.VI", "ldo_in.+", "amp.SD"]
+to = [
+    "bulk_pwm.+",
+    "bulk_motor.+",
+    "bulk_amp.+",
+    "ldo.VI",
+    "ldo_in.+",
+    "amp.SD",
+    "tp_power.5V",
+]
 
 # The main board's own 3V3, from the LDO; the XIAO's 3V3 pad stays open on the
 # head. The loads are the harness rail's above, less the MCP23017.
@@ -773,6 +833,7 @@ to = [
     "pull_ch3_scl.A",
     "pull_ch4_sda.A",
     "pull_ch4_scl.A",
+    "tp_power.3V3",
 ]
 
 # The series resistor's far end to the buzzer.
@@ -810,6 +871,10 @@ to = [
     "ldo_in.-",
     "ldo_out.-",
     "uart_tap.GND",
+    "tp_power.GND",
+    "tp_i2c.GND",
+    "gnd_post_amp.GND",
+    "gnd_post_ldo.GND",
 ]
 
 # Carrier net names, where they differ from the role or rail name.

@@ -1,0 +1,12 @@
+# A ground post for a scope probe's ground clip: a 1x2 pin header with both
+# pins on GND, so the clip has two pins to grip. Through-hole, hand-soldered,
+# so no LCSC number.
+[part]
+name = "Ground post, 1x2 pin header"
+source = "KiCad 10.0.6 library (Conn_01x02, PinHeader_1x02_P2.54mm_Vertical); both pins GND (#750)"
+symbol = "Connector_Generic:Conn_01x02"
+footprint = "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical"
+value = "GND post"
+
+[pins]
+GND = [1, 2]
