@@ -3,6 +3,7 @@
 *-backups/
 fp-info-cache
 _autosave-*
+.history/
 *.lck
 output/
 # kicad-mcp-pro scratch state
