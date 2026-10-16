@@ -33,8 +33,9 @@ paper = "A2"
 
 # One rectangle for all four pieces. 100 x 100 mm keeps the order in JLCPCB's
 # smallest price band (Lauri: stay within it). The main board is x 0-70.5, about
-# 70 x 100 mm after sawing; PROVISIONAL: measure the 2WD chassis plate's usable
-# area between its wheels and standoffs.
+# 70 x 100 mm after sawing. No ready-made chassis plate constrains it, and hole
+# placement has no hard requirement (Lauri, 2026-10-16): the chassis is drilled
+# to match the board.
 [outline]
 origin = [100.0, 100.0]
 size = [100.0, 100.0]
@@ -112,8 +113,8 @@ J17 = [92.75, 75.0, 90, "back"]
 H9 = [74.5, 73.55, 0]
 H10 = [97.0, 73.55, 0]
 
-# Main board, x 0.5-69. M3 holes at its corners, PROVISIONAL: check them
-# against the 2WD chassis plate's holes, or drill the plate to match.
+# Main board, x 0.5-69. M3 holes at its corners; the chassis is drilled to
+# match them (no hard requirement on placement, Lauri, 2026-10-16).
 H1 = [4.0, 4.0, 0]
 H2 = [65.0, 4.0, 0]
 H3 = [4.0, 96.0, 0]

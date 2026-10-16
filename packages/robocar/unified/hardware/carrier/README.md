@@ -7,7 +7,7 @@
 One 100 × 100 mm, 2-layer PCB that carries four pieces and replaces the
 hand-wired harness in [`WIRING.md`](../../WIRING.md):
 
-- the **main board**, x 0–70.5 mm, on the 2WD chassis plate: the motor driver,
+- the **main board**, x 0–70.5 mm, screwed to the chassis (no ready-made plate; the chassis is drilled to match H1–H4): the motor driver,
   the PWM driver, the I2C mux, the amplifier, the 3V3 regulator, the power and
   peripheral connectors, the buzzer and the test headers;
 - three **head boards** in a column on its right, each 29.5 × 29.5 mm, for the
@@ -61,7 +61,7 @@ top side; everything else is through-hole.
 | J9 | JST-XH 4-pin | main | SSD1306 0.91" OLED: GND, VCC, SCL, SDA |
 | BZ1 | 12 mm buzzer, 7.6 mm pin pitch | main | Soldered to the board; + on pad 1, beside the silkscreen "+" |
 | J11–J15 | 1×4 and 1×2 pin headers | main | Test headers, see [Debug headers](#debug-headers) |
-| H1–H4 | M3 holes | main | Chassis plate |
+| H1–H4 | M3 holes | main | Chassis (drilled to match) |
 
 The per-part values, LCSC numbers and the reasons for each are in
 [`hardware.toml`](../../hardware.toml); the pin orders are in the registry entries
@@ -135,22 +135,17 @@ re-check.
    push the plug onto J16: the XIAO's edge is 0.58 mm from the header body, the
    plug is wider than the header and stands about as tall as the socketed
    XIAO, so it may touch the XIAO or only leave toward the bottom edge.
-2. **Chassis plate.** Measure the plate's usable area and its M3 holes; the
-   main board's outline and H1–H4 are proposals.
-3. **Ribbon length** for the full pan and tilt travel, from J1 beside the head
+2. **Ribbon length** for the full pan and tilt travel, from J1 beside the head
    column.
-4. **OLED pin order** (J9) against the fitted module: it was read from listing
+3. **OLED pin order** (J9) against the fitted module: it was read from listing
    photos, not continuity-checked. Check each RCWL-1601 has 10 kΩ on R4 (I2C
    mode) and R5 empty.
-5. **Measure the buzzer's resistance** across its pins: a piezo reads open
-   (megohms); a magnetic buzzer reads about 16–42 Ω. Report it before relying on
-   the 100 Ω series resistor and the GPIO drive, which assume a piezo.
-6. **Hold each fitted breakout against the board render** (TB6612FNG,
+4. **Hold each fitted breakout against the board render** (TB6612FNG,
    PCA9685, TCA9548A, MAX98357A): headers on the footprints, outline inside its
    courtyard.
-7. **Polarity** of the XT30 pack lead (J3 pad 1 is "−", next to the silkscreen
+5. **Polarity** of the XT30 pack lead (J3 pad 1 is "−", next to the silkscreen
    "−"), the LM2596 lead (J4 pin 1 IN+), and the buzzer (BZ1 "+" on pad 1).
-8. **Saw kerf against the bands.** A blade wider than about 1 mm leaves no bare
+6. **Saw kerf against the bands.** A blade wider than about 1 mm leaves no bare
    margin beside the cut line in a 3 mm band.
 
 ## Assembly notes
@@ -235,7 +230,7 @@ Not until the pre-order checks are done and the PROVISIONAL text is gone from
    | 2 | 1×8 female header (TB6612FNG) |
    | 2 | 1×12 female header (TCA9548A) |
    | 1 | 1×7 female header (MAX98357A) |
-   | 1 | 1×6 female header, plus six single female sockets from a breakaway strip for the channel 8–13 PWM pins (PCA9685; how those pins reach the carrier is pre-order check 6) |
+   | 1 | 1×6 female header, plus six single female sockets from a breakaway strip for the channel 8–13 PWM pins (PCA9685; how those pins reach the carrier is pre-order check 4) |
    | 2 | 2×7 pin header, 2.0 mm pitch (J1 and the fitted head's J2, J16 or J17) |
    | 2 | 2×7 IDC plug (female, 2.0 mm pitch), and 14-way flat ribbon at 1.0 mm pitch |
    | 2 | 1×4 pin header (J11, J12) |
@@ -244,5 +239,5 @@ Not until the pre-order checks are done and the PROVISIONAL text is gone from
    | 2 | JST-XH 2-pin (B2B-XH-A), with housings and crimps (two motors) |
    | 1 | 12 mm board-mount buzzer, 7.6 mm pin pitch (BZ1) |
    | 4 | JST-XH 4-pin (B4B-XH-A), with housings and crimps (LM2596, two RCWL-1601, OLED) |
-   | 4 | M3 screws and standoffs (chassis plate) |
+   | 4 | M3 screws and standoffs (chassis) |
    | 2 | M2 button-head screws, ISO 7380 (or any head of 3.5 mm diameter or less), and 2 M2 heat-set inserts (cradle) |
