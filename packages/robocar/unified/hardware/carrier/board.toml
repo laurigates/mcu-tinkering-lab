@@ -120,9 +120,11 @@ H2 = [65.0, 4.0, 0]
 H3 = [4.0, 96.0, 0]
 H4 = [65.0, 96.0, 0]
 # Front row: both rangefinders side by side over the TCA9548A's channel 3 and 4
-# pads, then the ribbon's main end and the UART0 tap beside it. The ribbon
-# leaves over the front edge toward the head; a 10-15 cm ribbon reaches it
-# (Lauri, 2026-10-16).
+# pads, then the ribbon's main end and the UART0 tap beside it. J1's pins
+# now sit 21-33 mm in from the main board's right edge (the x 70.5 saw line),
+# about 22 mm further than its old spot beside the head column. Lauri's
+# "a 10-15 cm ribbon reaches the head" (2026-10-16) was said of that old spot;
+# confirm it still reaches from here.
 J7 = [11.0, 4.0, 0]       # RCWL-1601 front
 J8 = [25.0, 4.0, 0]       # RCWL-1601 rear
 J1 = [37.5, 6.0, 90]      # ribbon, main end
@@ -186,7 +188,7 @@ hidden_refs = ["H1", "H2", "H3", "H4", "H5", "H6", "H7", "H8", "H9", "H10"]
 # Seeed's reference text is below KiCad's minimum silkscreen height.
 ref_sizes = { U1 = 1.0, U3 = 1.0, U4 = 1.0, R2 = 0.8, R3 = 0.8, R4 = 0.8, R5 = 0.8, R6 = 0.8, R7 = 0.8, R8 = 0.8, R9 = 0.8, R10 = 0.8, R11 = 0.8 }
 # Off the board edge and out from under neighbours.
-ref_positions = { A2 = [40.0, 46.3], A3 = [16.0, 18.0], A5 = [51.0, 20.0], C4 = [1.6, 54.7], C1 = [35.0, 80.5], J5 = [3.5, 79.9], J6 = [3.5, 60.9], J7 = [14.75, 8.45], J8 = [28.75, 8.45], J9 = [29.05, 89.85], J12 = [29.3, 23.0], J16 = [95.5, 61.0], J18 = [65.7, 36.6], BZ1 = [62.6, 88.6], C3 = [42.0, 87.5], C8 = [41.7, 77.0], J1 = [43.5, 1.5], J15 = [60.1, 2.3], R2 = [9.0, 32.9], R3 = [12.0, 32.9], R4 = [15.0, 32.9], R5 = [18.0, 32.9], R6 = [22.0, 32.9], R7 = [25.0, 32.9], R8 = [28.0, 32.9], R9 = [31.0, 32.9], R10 = [34.4, 35.5], R11 = [38.4, 35.5] }
+ref_positions = { A2 = [40.0, 46.3], A3 = [16.0, 18.0], A5 = [51.8, 38.2], C4 = [1.6, 54.7], C1 = [35.0, 80.5], J5 = [3.5, 79.9], J6 = [3.5, 60.9], J7 = [14.75, 8.45], J8 = [28.75, 8.45], J9 = [29.05, 89.85], J12 = [29.3, 23.0], J16 = [95.5, 61.0], J18 = [65.7, 36.6], BZ1 = [62.6, 88.6], C3 = [42.0, 87.5], C8 = [41.7, 77.0], J1 = [43.5, 1.5], J15 = [60.1, 2.3], R2 = [9.0, 32.9], R3 = [12.0, 32.9], R4 = [15.0, 32.9], R5 = [18.0, 32.9], R6 = [22.0, 32.9], R7 = [25.0, 32.9], R8 = [28.0, 32.9], R9 = [31.0, 32.9], R10 = [34.4, 35.5], R11 = [38.4, 35.5] }
 # The saw lines, on both faces; each gets a "CUT" label on its left-hand side,
 # so each runs in the direction that puts the label in the waste.
 cut_lines = [
@@ -225,6 +227,40 @@ texts = [
     { text = "A", at = [67.0, 7.9], size = 0.8 },
     { text = "3V3", at = [64.46, 35.0], size = 0.8 },
     { text = "GND", at = [67.0, 35.0], size = 0.8 },
+    # J18 has no room for row labels: its silk outline is 0.67 mm from the
+    # board edge on one side and 1.1 mm from A5's header on the other. Its rows
+    # line up with A5's, whose row labels follow.
+    #
+    # A5, the CJMCU-2317: it also fits face down (flipped top to bottom), which
+    # puts its VCC on GND and SDA and A2 on 3V3. Its own labels are on its back
+    # only, and the square pad hides under the header, so the carrier says
+    # which face goes up, and names every hole inside the socket outline,
+    # visible with the headers fitted. Viewed from the chip side, as here:
+    # single-column pin names beside that column, and each double-column row
+    # as "inner outer" (port B, port A) beside the double column. Row 1 is at
+    # the bottom (the module is turned 180 degrees).
+    { text = "CHIP SIDE UP", at = [51.8, 35.5], size = 0.8 },
+    { text = "LABELS FACE DOWN", at = [51.8, 36.9], size = 0.8 },
+    { text = "A2", at = [45.9, 32.7], size = 0.8 },
+    { text = "A1", at = [45.9, 30.16], size = 0.8 },
+    { text = "A0", at = [45.9, 27.62], size = 0.8 },
+    { text = "RST", at = [45.9, 25.08], size = 0.8 },
+    { text = "NC", at = [45.9, 22.54], size = 0.8 },
+    { text = "NC", at = [45.9, 20.0], size = 0.8 },
+    { text = "SDA", at = [45.9, 17.46], size = 0.8 },
+    { text = "SCL", at = [45.9, 14.92], size = 0.8 },
+    { text = "GND", at = [45.9, 12.38], size = 0.8 },
+    { text = "VCC", at = [45.9, 9.84], size = 0.8 },
+    { text = "VCC GND", at = [53.2, 32.7], size = 0.8 },
+    { text = "INTB INTA", at = [53.2, 30.16], size = 0.8 },
+    { text = "B0 A0", at = [53.2, 27.62], size = 0.8 },
+    { text = "B1 A1", at = [53.2, 25.08], size = 0.8 },
+    { text = "B2 A2", at = [53.2, 22.54], size = 0.8 },
+    { text = "B3 A3", at = [53.2, 20.0], size = 0.8 },
+    { text = "B4 A4", at = [53.2, 17.46], size = 0.8 },
+    { text = "B5 A5", at = [53.2, 14.92], size = 0.8 },
+    { text = "B6 A6", at = [53.2, 12.38], size = 0.8 },
+    { text = "B7 A7", at = [53.2, 9.84], size = 0.8 },
 ]
 
 # Freerouting width classes, in this order. `nets` are net names or fnmatch
