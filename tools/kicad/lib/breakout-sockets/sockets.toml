@@ -11,6 +11,11 @@
 # size against the page's "the outline W × H mm" and that every socketed pad
 # lies inside it; the footprint draws it on F.Fab and its courtyard covers it,
 # because the module sits above the carrier and overhangs its headers.
+#
+# A page with no recorded pad centres (no vendor board file) cannot give
+# `pads`; the table lists the positions instead, `pad_xy = [[x, y], ...]` in
+# footprint pad order and the same y-down millimetres as `outline`, with a
+# comment saying who measured them.
 # Regenerate with `just kicad::gen`
 # (PYTHONPATH=tools python3 -m kicad.sockets); CI runs it with --check.
 

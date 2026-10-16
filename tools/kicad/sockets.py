@@ -33,6 +33,11 @@ check then keeps other parts out from under the module. The outline's size
 must equal the page's "the outline W × H mm", and every socketed pad must lie
 inside it.
 
+A breakout whose page records no pad centres (no vendor board file, such as
+the CJMCU-2317) lists them instead: `pad_xy` replaces `pads` with each pad's
+[x, y] in footprint pad order, in the same y-down millimetres as `outline`.
+The table's comment and the board page say where the numbers came from.
+
 The footprints are written to `Breakout_Sockets.pretty/` with no other
 input, so `--check` regenerates in memory and byte-compares, writing nothing.
 Regenerating also deletes a footprint the config no longer names and rewrites
@@ -64,7 +69,9 @@ COURTYARD_MARGIN = 1.77
 SILK_MARGIN = 1.33
 # Courtyard clearance around the module outline (IPC-7351's nominal 0.25 mm).
 MODULE_MARGIN = 0.25
-SOCKET_KEYS = frozenset({"name", "board", "pads", "outline"})
+SOCKET_KEYS = frozenset({"name", "board", "outline"})
+# Exactly one: page pad centres by element, or listed positions.
+PAD_KEYS = frozenset({"pads", "pad_xy"})
 _PAGE_OUTLINE = re.compile(r"the outline\s+([\d.]+) × ([\d.]+) mm")
 _NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*")
 _PAD = re.compile(r"[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)?")
@@ -76,8 +83,9 @@ class Socket:
 
     name: str
     board: str
-    pads: tuple[str, ...]
+    pads: tuple[str, ...]  # () when pad_xy lists the positions
     outline: tuple[float, float, float, float]  # x0, y0, x1, y1, page coordinates
+    pad_xy: tuple[tuple[float, float], ...] = ()
 
 
 def load_config(path: Path) -> list[Socket]:
@@ -95,18 +103,20 @@ def load_config(path: Path) -> list[Socket]:
     out = []
     for n, t in enumerate(tables, 1):
         where = f"{path}: [[socket]] #{n}"
-        unknown = sorted(set(t) - SOCKET_KEYS)
+        unknown = sorted(set(t) - SOCKET_KEYS - PAD_KEYS)
         missing = sorted(SOCKET_KEYS - set(t))
         if unknown or missing:
             raise KicadError(
                 f"{where}: unknown key(s) {unknown}, missing key(s) {missing}; "
-                f"expected {sorted(SOCKET_KEYS)}"
+                f"expected {sorted(SOCKET_KEYS)} and one of {sorted(PAD_KEYS)}"
             )
+        if len(PAD_KEYS & set(t)) != 1:
+            raise KicadError(f"{where}: give exactly one of {sorted(PAD_KEYS)}")
         for key in ("name", "board"):
             if not isinstance(t[key], str) or not _NAME.fullmatch(t[key]):
                 raise KicadError(f"{where}: {key} must be a name, got {t[key]!r}")
-        pads = t["pads"]
-        if (
+        pads = t.get("pads", [])
+        if "pads" in t and (
             not isinstance(pads, list)
             or not pads
             or not all(isinstance(p, str) and _PAD.fullmatch(p) for p in pads)
@@ -115,20 +125,39 @@ def load_config(path: Path) -> list[Socket]:
                 f"{where}: pads must be a non-empty list of 'ELEMENT' or "
                 f"'ELEMENT.PAD', got {pads!r}"
             )
+        pad_xy = t.get("pad_xy", [])
+        if "pad_xy" in t and (
+            not isinstance(pad_xy, list)
+            or not pad_xy
+            or not all(
+                isinstance(xy, list) and len(xy) == 2 and all(map(_number, xy))
+                for xy in pad_xy
+            )
+        ):
+            raise KicadError(
+                f"{where}: pad_xy must be a non-empty list of [x, y] in mm, "
+                f"got {pad_xy!r}"
+            )
         outline = t["outline"]
         if (
             not isinstance(outline, list)
             or len(outline) != 4
-            or not all(
-                isinstance(v, (int, float)) and not isinstance(v, bool) for v in outline
-            )
+            or not all(map(_number, outline))
             or not (outline[0] < outline[2] and outline[1] < outline[3])
         ):
             raise KicadError(
                 f"{where}: outline must be [x0, y0, x1, y1] with x0 < x1 and y0 < y1, "
                 f"got {outline!r}"
             )
-        out.append(Socket(t["name"], t["board"], tuple(pads), tuple(outline)))
+        out.append(
+            Socket(
+                t["name"],
+                t["board"],
+                tuple(pads),
+                tuple(outline),
+                tuple(tuple(xy) for xy in pad_xy),
+            )
+        )
     names = [s.name for s in out]
     dupes = sorted({x for x in names if names.count(x) > 1})
     if dupes:
@@ -136,12 +165,24 @@ def load_config(path: Path) -> list[Socket]:
     return out
 
 
+def _number(v: object) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+
 def _pad_key(pad: str) -> tuple[int, int | str]:
     return (0, int(pad)) if pad.isdigit() else (1, pad)
 
 
 def resolve(socket: Socket, page: Path) -> list[tuple[str, float, float]]:
-    """(element.pad, x, y) of each socketed pad, in footprint pad order."""
+    """(element.pad, x, y) of each socketed pad, in footprint pad order.
+
+    A socket with `pad_xy` labels its pads by their listed position and reads
+    nothing from `page`.
+    """
+    if socket.pad_xy:
+        return _checked(
+            socket, [(f"[{fmt(x)}, {fmt(y)}]", x, y) for x, y in socket.pad_xy]
+        )
     try:
         centres = parse_pad_centres(page)
     except (HardwareError, OSError) as e:
@@ -162,6 +203,13 @@ def resolve(socket: Socket, page: Path) -> list[tuple[str, float, float]]:
                     f"{socket.name}: {entry}: {page} records no centre for that pad"
                 )
         out += [(f"{c.element}.{c.pad}", c.x, c.y) for c in found]
+    return _checked(socket, out)
+
+
+def _checked(
+    socket: Socket, out: list[tuple[str, float, float]]
+) -> list[tuple[str, float, float]]:
+    """`out`, once every pad is inside the outline and listed once."""
     x0, y0, x1, y1 = socket.outline
     outside = [label for label, x, y in out if not (x0 <= x <= x1 and y0 <= y <= y1)]
     if outside:
@@ -253,7 +301,11 @@ def render_footprint(
         max(right + COURTYARD_MARGIN, ox1 + MODULE_MARGIN),
         max(bottom + COURTYARD_MARGIN, oy1 + MODULE_MARGIN),
     )
-    order = ", ".join(f"{n}={label}" for n, (label, _, _) in enumerate(rel, 1))
+    order = (
+        "positions listed in sockets.toml"
+        if socket.pad_xy
+        else ", ".join(f"{n}={label}" for n, (label, _, _) in enumerate(rel, 1))
+    )
     items = [
         "(version 20260206)",
         '(generator "kicad.sockets")',

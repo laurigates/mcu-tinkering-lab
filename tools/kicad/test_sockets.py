@@ -1,7 +1,8 @@
 """Tests for `kicad.sockets`: breakout socket footprints from recorded pad centres.
 
 Positions are checked against the board pages read independently of the
-module under test. Mutations run on a temp copy of tools/kicad/lib and
+module under test, or, for a socket whose page records no pad centres,
+against the `pad_xy` coordinates its sockets.toml table lists. Mutations run on a temp copy of tools/kicad/lib and
 docs/reference/boards; the committed files are only read.
 
     python3 -m unittest discover -s tools/kicad -t tools
@@ -63,6 +64,13 @@ def expected_centres(board: str, pads: list[str]) -> list[tuple[float, float]]:
     return out
 
 
+def expected_socket_centres(socket: dict) -> list[tuple[float, float]]:
+    """A config table's pad centres in footprint order: listed, or the page's."""
+    if "pad_xy" in socket:
+        return [tuple(xy) for xy in socket["pad_xy"]]
+    return expected_centres(socket["board"], socket["pads"])
+
+
 def page_outline_size(page: Path) -> tuple[float, float]:
     """The "the outline W × H mm" a board page states in its prose."""
     m = re.search(r"the outline\s+([\d.]+) × ([\d.]+) mm", page.read_text())
@@ -101,7 +109,7 @@ class CommittedFootprintTests(unittest.TestCase):
     def test_pads_sit_on_the_pages_recorded_centres(self):
         for s in self.config:
             with self.subTest(socket=s["name"]):
-                want = expected_centres(s["board"], s["pads"])
+                want = expected_socket_centres(s)
                 fp = footprints.parse(PRETTY / f"{s['name']}.kicad_mod")
                 x0, y0 = want[0]
                 for n, (x, y) in enumerate(want, 1):
@@ -163,7 +171,7 @@ class CommittedFootprintTests(unittest.TestCase):
                 x0, y0, x1, y1 = s["outline"]
                 self.assertAlmostEqual(x1 - x0, w, places=2)
                 self.assertAlmostEqual(y1 - y0, h, places=2)
-                px, py = expected_centres(s["board"], s["pads"])[0]
+                px, py = expected_socket_centres(s)[0]
                 path = PRETTY / f"{s['name']}.kicad_mod"
                 fab = fab_rects(path.read_text())
                 want = (x0 - px, y0 - py, x1 - px, y1 - py)
@@ -227,6 +235,16 @@ class ConfigTests(unittest.TestCase):
             [sockets.Socket("A_Socket", "b", ("JP1", "JP2.3"), (0, -10, 20, 0))],
         )
 
+    def test_valid_explicit_pad_positions(self):
+        got = self.load(
+            '[[socket]]\nname = "A_Socket"\nboard = "b"\n'
+            "pad_xy = [[0, 0], [2.54, 0]]\noutline = [-1, -1, 4, 1]\n"
+        )
+        self.assertEqual(
+            got,
+            [sockets.Socket("A_Socket", "b", (), (-1, -1, 4, 1), ((0, 0), (2.54, 0)))],
+        )
+
     def test_rejects(self):
         ok = "outline = [0, -1, 1, 0]\n"
         cases = {
@@ -242,6 +260,13 @@ class ConfigTests(unittest.TestCase):
             "empty pads": '[[socket]]\nname = "A"\nboard = "b"\npads = []\n',
             "pads not strings": '[[socket]]\nname = "A"\nboard = "b"\npads = [1]\n',
             "no tables": "other = 1\n",
+            "pads and pad_xy": '[[socket]]\nname = "A"\nboard = "b"\npads = ["JP1"]\n'
+            "pad_xy = [[0, 0]]\n" + ok,
+            "pad_xy empty": '[[socket]]\nname = "A"\nboard = "b"\npad_xy = []\n' + ok,
+            "pad_xy not pairs": '[[socket]]\nname = "A"\nboard = "b"\n'
+            "pad_xy = [[0, 0, 1]]\n" + ok,
+            "pad_xy not numbers": '[[socket]]\nname = "A"\nboard = "b"\n'
+            'pad_xy = [["0", 0]]\n' + ok,
             "duplicate name": (
                 '[[socket]]\nname = "A"\nboard = "b"\npads = ["JP1"]\n'
                 '[[socket]]\nname = "A"\nboard = "c"\npads = ["JP1"]\n'
@@ -330,6 +355,41 @@ class MutationTests(unittest.TestCase):
         code, out = run(["--check"], self.root)
         self.assertEqual(code, 1, out)
         self.assertIn("outside the outline", out)
+
+    def add_explicit_socket(self, pad_xy: str) -> Path:
+        """Append a `pad_xy` socket on the MAX98357A page; its footprint path."""
+        config = self.subtree / sockets.CONFIG
+        config.write_text(
+            config.read_text()
+            + '\n[[socket]]\nname = "Listed_Socket"\nboard = "adafruit-max98357a"\n'
+            f"pad_xy = {pad_xy}\noutline = [-1, -1, 16.78, 18.05]\n"
+        )
+        return self.pretty / "Listed_Socket.kicad_mod"
+
+    def test_explicit_pads_render_at_their_listed_positions(self):
+        path = self.add_explicit_socket("[[2.54, 2.54], [2.54, 5.08], [17.78 , 5.08]]")
+        code, out = run([], self.root)
+        self.assertEqual(code, 1, out)  # the third pad is outside the outline
+        self.assertIn("outside the outline", out)
+        config = self.subtree / sockets.CONFIG
+        config.write_text(config.read_text().replace("[17.78 , 5.08]", "[15.24, 5.08]"))
+        code, out = run([], self.root)
+        self.assertEqual(code, 0, out)
+        fp = footprints.parse(path)
+        got = {n: (p.x, p.y) for n, p in fp.pads.items()}
+        self.assertEqual(got, {"1": (0, 0), "2": (0, 2.54), "3": (12.7, 2.54)})
+        self.assertIn("positions listed in sockets.toml", path.read_text())
+        self.assertEqual(run(["--check"], self.root)[0], 0)
+        config.write_text(config.read_text().replace("[15.24, 5.08]", "[15.24, 5.1]"))
+        code, out = run(["--check"], self.root)
+        self.assertEqual(code, 1, out)
+        self.assertIn("Listed_Socket.kicad_mod: stale", out)
+
+    def test_explicit_pad_listed_twice_fails(self):
+        self.add_explicit_socket("[[0, 0], [2.54, 0], [0, 0]]")
+        code, out = run(["--check"], self.root)
+        self.assertEqual(code, 1, out)
+        self.assertIn("Listed_Socket: [0, 0] listed twice", out)
 
     def test_duplicate_pad_fails(self):
         config = self.subtree / sockets.CONFIG
