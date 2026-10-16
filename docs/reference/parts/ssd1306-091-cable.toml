@@ -1,7 +1,7 @@
 # 0.91-inch 128x32 SSD1306 OLED module on a JST-XH 4-pin lead.
 [part]
 name = "SSD1306 0.91-inch OLED on JST-XH 4"
-source = "pin order follows the module's header, docs/reference/boards/ssd1306-091in-128x32.md (header pad 1 GND, the square pad; 2 VCC; 3 SCL, printed SCK; 4 SDA; read from listing photos, not bench-verified), on a straight cable"
+source = "pin order follows the module's header, docs/reference/boards/ssd1306-091in-128x32.md (header pad 1 GND, the square pad; 2 VCC; 3 SCL, printed SCK; 4 SDA; read from listing photos, pin order verified by Lauri on the fitted module 2026-10-16), on a straight cable"
 symbol = "Connector_Generic:Conn_01x04"
 footprint = "Connector_JST:JST_XH_B4B-XH-A_1x04_P2.50mm_Vertical"
 
