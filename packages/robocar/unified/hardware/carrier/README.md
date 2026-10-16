@@ -83,7 +83,7 @@ stay spare.
 | 3 | U4, J17, H9, H10 | Back face, top edge, between the holes | Below the holes | The ribbon leaving over the top, if the bottom edge is blocked |
 
 The holes use KiCad's ISO 7380 M2 footprint, whose courtyard is a 3.5 mm button
-head: on heads 1 and 2 the XIAO socket sits 0.27 mm from it on each side. Fit
+head: on heads 1 and 2 the XIAO socket sits 0.26 mm from it on each side. Fit
 M2 button-head screws (ISO 7380) or another head no larger than 3.5 mm.
 
 Each head's spare copy of the XIAO socket is wired to its own header (nets
@@ -131,7 +131,10 @@ re-check.
 
 1. **The header behind or in front of the head.** For each head you mean to
    use, check the IDC plug and the ribbon's bend clear the cradle and the pan
-   servo.
+   servo. On head 2 (header on the front) also fit the XIAO in its socket and
+   push the plug onto J16: the XIAO's edge is 0.58 mm from the header body, the
+   plug is wider than the header and stands about as tall as the socketed
+   XIAO, so it may touch the XIAO or only leave toward the bottom edge.
 2. **Chassis plate.** Measure the plate's usable area and its M3 holes; the
    main board's outline and H1–H4 are proposals.
 3. **Ribbon length** for the full pan and tilt travel, from J1 beside the head
@@ -232,7 +235,7 @@ Not until the pre-order checks are done and the PROVISIONAL text is gone from
    | 2 | 1×8 female header (TB6612FNG) |
    | 2 | 1×12 female header (TCA9548A) |
    | 1 | 1×7 female header (MAX98357A) |
-   | 1 | 1×6 female header, plus six single female sockets from a breakaway strip for the channel 8–13 PWM pins (PCA9685; how those pins reach the carrier is pre-order check 7) |
+   | 1 | 1×6 female header, plus six single female sockets from a breakaway strip for the channel 8–13 PWM pins (PCA9685; how those pins reach the carrier is pre-order check 6) |
    | 2 | 2×7 pin header, 2.0 mm pitch (J1 and the fitted head's J2, J16 or J17) |
    | 2 | 2×7 IDC plug (female, 2.0 mm pitch), and 14-way flat ribbon at 1.0 mm pitch |
    | 2 | 1×4 pin header (J11, J12) |

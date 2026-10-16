@@ -91,7 +91,7 @@ rect = [99.5, 0.0, 100.0, 100.0]
 # Head boards. All three: the XIAO socket with its USB-C toward the head's top
 # edge (Lauri confirmed the camera then faces forward), and two M2 holes in the
 # top corners at the #799 positions, 22.5 mm apart (Lauri confirmed them,
-# 2026-10-16). The holes' ISO 7380 footprint leaves 18.5 mm between their
+# 2026-10-16). The holes' ISO 7380 footprint leaves 18.4 mm between their
 # courtyards, so the XIAO (17.88 mm) fits between them; fit M2 button heads.
 # PROVISIONAL: drill the cradle to match the holes.
 #
