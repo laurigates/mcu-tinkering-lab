@@ -1,0 +1,33 @@
+# A 2x10 male pin header that repeats the CJMCU-2317's double column in the
+# same physical order, so jumpers can reach the expander's GPIOs while the
+# module sits in its socket. Odd pins (the column marked "A") mirror the
+# module's outer column, even pins (marked "B") its inner column.
+# Through-hole, hand-soldered, so no LCSC number.
+[part]
+name = "MCP23017 GPIO mirror header, 2x10 pin header"
+source = "KiCad 10.0.6 library (Conn_02x10_Odd_Even, PinHeader_2x10_P2.54mm_Vertical); rows follow the CJMCU-2317's double column (docs/reference/boards/cjmcu-2317.md, outer/inner verified by Lauri 2026-10-16): row 1 GND/3V3, row 2 INTA/INTB, rows 3-10 GPAn/GPBn (Lauri, 2026-10-16)"
+symbol = "Connector_Generic:Conn_02x10_Odd_Even"
+footprint = "Connector_PinHeader_2.54mm:PinHeader_2x10_P2.54mm_Vertical"
+value = "GPIO A/B"
+
+[pins]
+GND = 1
+"3V3" = 2
+INTA = 3
+INTB = 4
+GPA0 = 5
+GPB0 = 6
+GPA1 = 7
+GPB1 = 8
+GPA2 = 9
+GPB2 = 10
+GPA3 = 11
+GPB3 = 12
+GPA4 = 13
+GPB4 = 14
+GPA5 = 15
+GPB5 = 16
+GPA6 = 17
+GPB6 = 18
+GPA7 = 19
+GPB7 = 20

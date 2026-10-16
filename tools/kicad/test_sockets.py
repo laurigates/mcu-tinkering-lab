@@ -40,6 +40,7 @@ EXPECTED_COUNTS = {
     "Adafruit_MAX98357A_Socket": 7,
     "Adafruit_TCA9548A_Socket": 24,
     "Adafruit_PCA9685_Socket": 12,
+    "CJMCU_2317_Socket": 30,
 }
 
 
@@ -184,6 +185,22 @@ class CommittedFootprintTests(unittest.TestCase):
                 self.assertLessEqual(cy0, want[1] - m + 1e-9)
                 self.assertGreaterEqual(cx1, want[2] + m - 1e-9)
                 self.assertGreaterEqual(cy1, want[3] + m - 1e-9)
+
+    def test_cjmcu_2317_columns_are_lauris_measurement(self):
+        # Lauri, 2026-10-16: the outer column one 2.54 mm pitch outside the
+        # inner one, the single column 15.24 mm (6 pitches) from the inner one,
+        # rows at 2.54 mm. Pads 1-10 outer, 11-20 inner, 21-30 single, each
+        # top to bottom.
+        fp = footprints.parse(PRETTY / "CJMCU_2317_Socket.kicad_mod")
+        for row in range(10):
+            outer = fp.pads[str(1 + row)]
+            inner = fp.pads[str(11 + row)]
+            single = fp.pads[str(21 + row)]
+            with self.subTest(row=row + 1):
+                self.assertAlmostEqual(inner.x - outer.x, 2.54, places=6)
+                self.assertAlmostEqual(single.x - inner.x, 15.24, places=6)
+                for pad in (outer, inner, single):
+                    self.assertAlmostEqual(pad.y, 2.54 * row, places=6)
 
     def test_render_is_byte_stable(self):
         first = sockets.render(REPO_ROOT)

@@ -1,0 +1,45 @@
+# CJMCU-2317 MCP23017 GPIO expander breakout, socketed by all 30 holes: a 1x10
+# female header under each of its three columns, so the module plugs in
+# firmly and every pin reaches the carrier.
+[part]
+name = "CJMCU-2317 MCP23017 GPIO expander, socketed"
+source = "docs/reference/boards/cjmcu-2317.md: pin names read from the listing's back-face silkscreen; the hole positions and the inner/outer column assignment measured by Lauri on the fitted module, 2026-10-16. Footprint pad n is the n-th position the Breakout_Sockets config lists (pads 1-10 outer column, 11-20 inner, 21-30 single, each top to bottom)"
+symbol = "Connector_Generic:Conn_01x30"
+footprint = "Breakout_Sockets:CJMCU_2317_Socket"
+# Pins 5 and 6 of the single column are NC on the MCP23017 (SO and CS on the
+# MCP23S17).
+no_connect = ["NC"]
+
+# Board-page pin name -> socket pad. VCC and GND each appear twice: row 1 of
+# the double column and the bottom of the single column.
+[pins]
+GND = [1, 29]
+INTA = 2
+GPA0 = 3
+GPA1 = 4
+GPA2 = 5
+GPA3 = 6
+GPA4 = 7
+GPA5 = 8
+GPA6 = 9
+GPA7 = 10
+VCC = [11, 30]
+INTB = 12
+GPB0 = 13
+GPB1 = 14
+GPB2 = 15
+GPB3 = 16
+GPB4 = 17
+GPB5 = 18
+GPB6 = 19
+GPB7 = 20
+A2 = 21
+A1 = 22
+A0 = 23
+RESET = 24
+NC = [25, 26]
+SDA = 27
+SCL = 28
+
+[perfboard]
+height = "raised"
