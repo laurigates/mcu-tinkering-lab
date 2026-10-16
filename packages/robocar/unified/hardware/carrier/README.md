@@ -44,7 +44,7 @@ top side; everything else is through-hole.
 | U1, U3, U4 | XIAO ESP32-S3 Sense socket, two 1×7 female headers | heads 1, 2, 3 | USB-C toward the head's top edge; fit one XIAO |
 | J2, J16, J17 | 2×7 pin header, 2.0 mm, unshrouded | heads 1, 2, 3 | The head end of the ribbon; see [The three heads](#the-three-heads) |
 | H5–H10 | M2 holes, 2.2 mm, ISO 7380 courtyard | heads 1, 2, 3 | Through the cradle into heat-set inserts; M2 button heads only |
-| J1 | 2×7 pin header, 2.0 mm, unshrouded | main | The main end of the ribbon, beside the head column |
+| J1 | 2×7 pin header, 2.0 mm, unshrouded | main | The main end of the ribbon, in the front row; its pins are 21–33 mm in from the main board's right edge. Lauri's 10–15 cm ribbon length was for J1's earlier spot beside the head column, so check it still reaches |
 | A1 | SparkFun TB6612FNG, in 2 × 1×8 female headers | main | Motor outputs on its left header |
 | A2 | Adafruit PCA9685, in female headers on its JP3 side header and its channel 8–13 PWM pins | main | Motor control lines; servo and LED columns stay on the module |
 | A3 | Adafruit TCA9548A, in 2 × 1×12 female headers | main | Every I2C device sits behind it |
@@ -113,6 +113,9 @@ single column (I2C and supply) faces the mux, its double column of GPIOs faces
 the right edge. Hole positions and which column is which are Lauri's
 measurement of the fitted module (2026-10-16), recorded on
 [its board page](../../../../../docs/reference/boards/cjmcu-2317.md).
+It fits upside down too, which shorts 3V3: fit it chip side up (see
+[Assembly notes](#assembly-notes)). The silkscreen inside its socket outline
+names every hole, and "CHIP SIDE UP" is printed below it.
 
 - **Address 0x20, hard-strapped.** A0, A1 and A2 go straight to GND, which is
   `MCP23017_ADDR` in [`main/pin_config.h`](../../main/pin_config.h). A direct
@@ -176,6 +179,9 @@ re-check.
    PCA9685, TCA9548A, MAX98357A, CJMCU-2317): headers on the footprints,
    outline inside its courtyard. The CJMCU-2317's outline (about 21 × 26 mm)
    is an estimate from a listing photo; its hole positions are measured.
+   With the module seated, push a 2.54 mm jumper housing onto J18's column B
+   (the column next to the module): by the estimated outline the module's
+   edge is about 0.9 mm from the housing, so a larger module stops it.
 4. **Polarity** of the XT30 pack lead (J3 pad 1 is "−", next to the silkscreen
    "−"), the LM2596 lead (J4 pin 1 IN+), and the buzzer (BZ1 "+" on pad 1).
 5. **Saw kerf against the bands.** A blade wider than about 1 mm leaves no bare
@@ -186,9 +192,27 @@ re-check.
    parts are SDA/SCL pull-ups. The carrier's direct ties win either way; the
    check says whether a tie fights a module pull-up (0.33 mA each at 10 kΩ)
    and whether channel 2 ends up with two pull-ups in parallel (about 5 kΩ).
+   Also check the unmarked part beside the chip is a capacitor across VDD and
+   VSS (board page check 6). The carrier fits no decoupling capacitor of its
+   own (WIRING.md's C6) and relies on that part: decoupling belongs at the
+   chip, and a carrier capacitor would sit beyond a socket contact and the
+   module's traces, beside the AMS1117's 22 µF output capacitor on the same
+   rail. If the part is not a capacitor, add a 100 nF 0805 at A5's
+   single-column VCC before ordering.
 
 ## Assembly notes
 
+- **The CJMCU-2317 goes in chip side up.** Solder its male pins so they leave
+  the board on the side away from the chip: the chip faces up, away from the
+  carrier, and the printed pin labels on the module's back face the carrier.
+  Upside down (flipped top to bottom) it still fits the socket, with its rows
+  reversed, and that puts its VCC on GND and SDA and A2 on 3V3: the 3V3 rail
+  then feeds through the MCP23017's protection diodes. Before seating it,
+  compare the carrier's silkscreen inside A5 ("VCC GND" at the end nearest
+  J18's "3V3 GND", "A2" … "VCC" beside the single column) with the labels on
+  the module's back. The silkscreen shows the chip side, so the back's labels
+  read mirrored left to right, but row by row they must match: the
+  `VCC/GND` row at the "VCC GND" end.
 - **Set the LM2596 to 5.0 V on the bench before connecting it to J4.** The
   module's output is adjustable and arrives set to whatever the factory left.
 - **The heat-set inserts go in the cradle, not the PCB.** H5–H10 are plain
