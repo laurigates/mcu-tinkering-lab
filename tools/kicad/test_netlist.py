@@ -833,6 +833,20 @@ class CableTests(unittest.TestCase):
         self.edit(self.registry("test-cable"), "D5 = 3", "SCL = 3")
         self.fails(r"test-cable\.toml \[pins\] 'SCL' is not a pad of xiao-esp32s3\.md")
 
+    def test_a_no_connect_cable_pin_is_open_at_both_ends(self):
+        # A spare conductor: named for no XIAO pad, listed under no_connect.
+        cable = self.registry("test-cable")
+        self.edit(cable, '"5V" = [4, 5, 8]', '"5V" = [4, 8]\nNC = 5')
+        self.edit(cable, 'footprint = "', 'no_connect = ["NC"]\nfootprint = "')
+        nl = self.build()
+        self.assertIn(("J1", "5"), nl.no_connect)
+        self.assertIn(("J2", "5"), nl.no_connect)
+        self.assertNotIn(("J1", "5"), nl.nets["HEAD_5V"])
+
+    def test_an_unlisted_spare_cable_pin_fails(self):
+        self.edit(self.registry("test-cable"), '"5V" = [4, 5, 8]', '"5V" = [4, 8]\nNC = 5')
+        self.fails(r"test-cable\.toml \[pins\] 'NC' is not a pad of xiao-esp32s3\.md")
+
     def test_a_carried_pad_cannot_stay_unconnected_on_the_head(self):
         self.edit(self.registry("test-cable"), "D5 = 3", "D5 = 3\nD7 = 5")
         self.edit(self.registry("test-cable"), '"5V" = [4, 5, 8]', '"5V" = [4, 8]')

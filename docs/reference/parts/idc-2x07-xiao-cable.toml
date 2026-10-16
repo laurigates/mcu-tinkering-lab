@@ -6,22 +6,43 @@
 # fit a 30 x 30 mm pan-tilt cradle (Lauri, 2026-10-15), and the box header's
 # 26.5 mm courtyard does not fit beside the XIAO. The ribbon's IDC plug is
 # unkeyed on it, so both ends carry a pin-1 mark on the silkscreen.
+#
+# Reversal-safe (Lauri, 2026-10-16). With no shroud the plug also fits rotated
+# 180 degrees, which takes pin n to pin 15 - n. The order below makes that
+# harmless: the pairs (n, 15 - n) are
+#   (1, 14)  5V    / 5V        (2, 13)  GND   / GND
+#   (3, 12)  BCLK  / LRC       (4, 11)  STBY  / MUX_RST
+#   (5, 10)  SCL   / SDA       (6, 9)   U0TX  / NC
+#   (7, 8)   DIN   / PIEZO
+# so the supplies land on themselves, every other signal except I2C is a XIAO
+# output driving a main-board input and swaps with another such pair, I2C
+# swaps with itself, and UART0 TX lands on the unconnected pin 9. A reversed
+# plug does not work, and damages nothing. The earlier order put 5 V on XIAO
+# GPIOs when reversed. Two GND conductors instead of four: the head (XIAO and
+# camera) draws well under 1 A.
+#
+# Pin 6 carries D6 (UART0 TX, GPIO43) to the main board's J15 test header,
+# where the ROM bootloader's boot log can be read at 115200 baud with no
+# firmware change. Pin 9 is unconnected at both ends.
 [part]
 name = "IDC 2x7 cable, XIAO ESP32-S3 head to main board"
-source = "this repo's cable convention (#750): 5 V on pins 1-2, a GND beside SCL and beside BCLK; pad names from docs/reference/boards/xiao-esp32s3.md, signals from packages/robocar/unified/main/pin_config.h"
+source = "this repo's reversal-safe cable convention (Lauri, 2026-10-16; #750): pin n and pin 15 - n carry the same supply, or two XIAO outputs, or SDA and SCL, or TX and NC; pad names from docs/reference/boards/xiao-esp32s3.md, signals from packages/robocar/unified/main/pin_config.h"
 symbol = "Connector_Generic:Conn_02x07_Odd_Even"
 footprint = "Connector_PinHeader_2.54mm:PinHeader_2x07_P2.54mm_Vertical"
 value = "IDC 2x7 head cable"
+no_connect = ["NC"]
 
 # XIAO pad -> IDC pin; the comment is the robocar signal on that pad.
 [pins]
-"5V" = [1, 2]
-GND = [3, 4, 7, 11]
-D4 = 5   # I2C SDA
-D5 = 6   # I2C SCL
-D8 = 8   # I2S BCLK
-D9 = 9   # I2S LRC
-D10 = 10 # I2S DIN
-D0 = 12  # TB6612FNG STBY
-D1 = 13  # piezo
-D2 = 14  # TCA9548A RST (MUX_RST)
+"5V" = [1, 14]
+GND = [2, 13]
+D8 = 3   # I2S BCLK
+D0 = 4   # TB6612FNG STBY
+D5 = 5   # I2C SCL
+D6 = 6   # UART0 TX
+D10 = 7  # I2S DIN
+D1 = 8   # piezo
+NC = 9   # no connection at either end
+D4 = 10  # I2C SDA
+D2 = 11  # TCA9548A RST (MUX_RST)
+D9 = 12  # I2S LRC

@@ -128,8 +128,23 @@ class CommittedRegistryTests(unittest.TestCase):
 
     def test_the_robocar_carrier_entries(self):
         idc = registry.load("idc-2x07-xiao-cable")
-        self.assertEqual(idc.pins["5V"], ("1", "2"))
-        self.assertEqual(idc.pins["GND"], ("3", "4", "7", "11"))
+        self.assertEqual(idc.pins["5V"], ("1", "14"))
+        self.assertEqual(idc.pins["GND"], ("2", "13"))
+        self.assertEqual(idc.no_connect, ("NC",))
+        # Reversal-safe: a plug rotated 180 degrees takes pin n to 15 - n, and
+        # each such pair is one supply, two XIAO outputs, I2C, or TX and NC.
+        by_pin = {n: name for name, nums in idc.pins.items() for n in nums}
+        outputs = {"D0", "D1", "D2", "D8", "D9", "D10"}
+        for n in range(1, 8):
+            pair = {by_pin[str(n)], by_pin[str(15 - n)]}
+            with self.subTest(pins=(n, 15 - n)):
+                self.assertTrue(
+                    len(pair) == 1
+                    or pair <= outputs
+                    or pair == {"D4", "D5"}
+                    or pair == {"D6", "NC"},
+                    pair,
+                )
         self.assertEqual(idc.lcsc, "")
         ldo = registry.load("ams1117-3.3")
         self.assertEqual((ldo.value, ldo.lcsc), ("AMS1117-3.3", "C6186"))

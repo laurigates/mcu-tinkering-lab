@@ -1,0 +1,13 @@
+# robocar-unified's UART0 tap (J15): a 1x2 pin header on the main board for a
+# USB-serial adapter's ground and RX lead. Through-hole, hand-soldered, so no
+# LCSC number.
+[part]
+name = "UART0 tap, 1x2 pin header"
+source = "KiCad 10.0.6 library (Conn_01x02, PinHeader_1x02_P2.54mm_Vertical); the pin order, GND on pin 1, is this repo's test-header convention (#750)"
+symbol = "Connector_Generic:Conn_01x02"
+footprint = "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical"
+value = "UART0 TX tap"
+
+[pins]
+GND = 1
+TX = 2
