@@ -540,6 +540,12 @@ ref = "U2"
 
 # Bulk capacitors C1-C5 are WIRING.md's § Suggested capacitors. Its C6 decouples
 # the MCP23017, which stays on the harness, so the carrier has no C6.
+#
+# C1-C3 are C96179, CS1C471M-CRF10 (470 uF 16 V, 8 x 10.5 mm SMD). They were
+# C5162348, the same part number from another LCSC listing, which JLCPCB's
+# assembly library does not carry and LCSC had 70 of. Checked 2026-10-16 through
+# JLCPCB's parts search: C5162348 not found; C96179 Extended, 24,687 in stock.
+# JLCPCB has no Basic 470 uF part, so one Extended feeder fee either way.
 [parts.bulk_pwm]
 name = "470 µF 16 V bulk capacitor, PCA9685 V+"
 kind = "capacitor"
@@ -547,7 +553,7 @@ build = "carrier"
 part = "cp-elec-8x10.5"
 ref = "C1"
 value = "470uF 16V"
-lcsc = "C5162348"
+lcsc = "C96179"
 
 [parts.bulk_motor]
 name = "470 µF 16 V bulk capacitor, TB6612FNG VM"
@@ -556,7 +562,7 @@ build = "carrier"
 part = "cp-elec-8x10.5"
 ref = "C2"
 value = "470uF 16V"
-lcsc = "C5162348"
+lcsc = "C96179"
 
 [parts.bulk_amp]
 name = "470 µF 16 V bulk capacitor, MAX98357A Vin"
@@ -565,7 +571,7 @@ build = "carrier"
 part = "cp-elec-8x10.5"
 ref = "C3"
 value = "470uF 16V"
-lcsc = "C5162348"
+lcsc = "C96179"
 
 [parts.decouple_pwm]
 name = "100 nF decoupling, PCA9685 VCC"
