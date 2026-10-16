@@ -1,0 +1,15 @@
+# A 12 mm board-mount buzzer, 7.6 mm pin pitch, soldered straight to the board
+# (Lauri's buzzers, 2026-10-16). Through-hole, hand-soldered, so no LCSC number.
+# Whether a fitted one is a piezo or a magnetic buzzer is a bench measurement:
+# a piezo reads open (megohms) across its pins, a magnetic one about 16-42 ohm,
+# and the 100 ohm series resistor on robocar-unified's carrier assumes a piezo.
+[part]
+name = "Buzzer, 12 mm, 7.6 mm pin pitch"
+source = "KiCad 10.0.6 library: Device:Buzzer names pin 1 + and pin 2 -; Buzzer_Beeper:Buzzer_12x9.5RM7.6 prints + beside pad 1 (#750)"
+symbol = "Device:Buzzer"
+footprint = "Buzzer_Beeper:Buzzer_12x9.5RM7.6"
+value = "Buzzer 12mm"
+
+[pins]
+"+" = 1
+"-" = 2
