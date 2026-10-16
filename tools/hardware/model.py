@@ -149,13 +149,20 @@ on every entry in every view, so a typo in a carrier-only entry still fails.
     head_ref = "J1"             # the connector beside the MCU
     main_ref = "J2"             # the connector on the main board; same entry
     head_no_connect = ["3V3"]   # optional: MCU pads left unconnected on the head
+    spare_heads = [             # optional: more head boards, each with its own
+        { mcu_ref = "U3", head_ref = "J16" },  # MCU copy and head connector
+    ]
     build    = "carrier"        # required: a cable exists only on the carrier
 
 A `[[cables]]` entry (#750) splits the carrier into a head board, holding the
 MCU, and the main board. The join checks its keys and refs (two refs, unique
 among all refs, in every view), allows one cable per carrier, and requires each
 `head_no_connect` pad to be a pad of `[source] board` on no net and no rail.
-The harness view never holds a cable. `tools/kicad/netlist.py` reads the
+`spare_heads` adds head boards to the same carrier, each built another way
+(#750): a table of exactly `mcu_ref` and `head_ref`, two refs unique among all
+refs. The netlist gives each spare head its own copy of the MCU socket and of
+the head connector, wired like the first head; the main board keeps one end,
+`main_ref`. The harness view never holds a cable. `tools/kicad/netlist.py` reads the
 registry entry and does the rest: it splits every MCU net at the cable and
 rejects an MCU pad on a net the cable does not carry. A role that stays on the
 head goes under `[[undrawn]]`.
@@ -220,7 +227,14 @@ _KEYS = {
     "undrawn": {"role", "why", "build"},
     "rail": {"name", "from", "to", "build"},
     "output": {"from", "to", "pins", "net", "load_pins", "build"},
-    "cable": {"part", "head_ref", "main_ref", "head_no_connect", "build"},
+    "cable": {
+        "part",
+        "head_ref",
+        "main_ref",
+        "head_no_connect",
+        "spare_heads",
+        "build",
+    },
 }
 HARNESS, CARRIER = "harness", "carrier"
 VIEWS = (HARNESS, CARRIER)
@@ -339,6 +353,14 @@ class Output:
 
 
 @dataclass(frozen=True)
+class SpareHead:
+    """One more head board on a cable: a copy of the MCU and of the head connector."""
+
+    mcu_ref: str  # the MCU copy's reference designator: "U3"
+    head_ref: str  # its head connector's: "J16"
+
+
+@dataclass(frozen=True)
 class Cable:
     """A cable between the carrier's two boards: the MCU's head and the main board."""
 
@@ -346,6 +368,7 @@ class Cable:
     head_ref: str  # the connector beside the MCU: "J1"
     main_ref: str  # the connector on the main board: "J2"
     head_no_connect: tuple[str, ...] = ()  # MCU pads left unconnected on the head
+    spare_heads: tuple[SpareHead, ...] = ()  # more head boards, wired like the first
 
 
 @dataclass(frozen=True)
@@ -871,11 +894,31 @@ def _cable(where: str, table: dict[str, Any]) -> Cable:
     dupes = sorted({p for p in pads if pads.count(p) > 1})
     if dupes:
         raise HardwareError(f"{where}: head_no_connect lists {dupes} twice")
+    spares = table.get("spare_heads", [])
+    if not isinstance(spares, list):
+        raise HardwareError(
+            f"{where}: spare_heads must be a list of mcu_ref/head_ref tables, "
+            f"got {spares!r}"
+        )
+    spare_heads = []
+    for i, spare in enumerate(spares, 1):
+        at = f"{where} spare_heads #{i}"
+        if not isinstance(spare, dict) or set(spare) != {"mcu_ref", "head_ref"}:
+            raise HardwareError(
+                f"{at}: needs exactly mcu_ref and head_ref, got {spare!r}"
+            )
+        spare_heads.append(
+            SpareHead(
+                mcu_ref=_optional(at, spare, "mcu_ref", _REF),
+                head_ref=_optional(at, spare, "head_ref", _REF),
+            )
+        )
     return Cable(
         part=_require(where, table, "part"),
         head_ref=head_ref,
         main_ref=main_ref,
         head_no_connect=tuple(pads),
+        spare_heads=tuple(spare_heads),
     )
 
 
@@ -1108,7 +1151,8 @@ def join(
     cables = [_cable(where, table) for where, table in cable_entries]
     for (where, _), cable in zip(cable_entries, cables, strict=True):
         label = where.removeprefix(f"{sidecar} ")
-        for ref in (cable.head_ref, cable.main_ref):
+        spare_refs = [r for s in cable.spare_heads for r in (s.mcu_ref, s.head_ref)]
+        for ref in (cable.head_ref, cable.main_ref, *spare_refs):
             if ref in refs:
                 raise HardwareError(
                     f"{sidecar}: ref {ref!r} is used by {refs[ref]} and {label}"
