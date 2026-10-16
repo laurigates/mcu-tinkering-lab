@@ -178,6 +178,47 @@ class KeepoutTests(unittest.TestCase):
 
 
 @unittest.skipIf(SKIP is not None, SKIP or "")
+class CutoutTests(unittest.TestCase):
+    """A board.toml cutout is an Edge.Cuts circle and a keepout in the DSN (#750).
+
+    The frozen balancebot input with one 2 mm cutout added; never routed.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        root, project = testfixture.shared()
+        spec = boardinput.build(project, root)
+        spec["cutouts"] = [{"name": "relief", "center": [41.5, 30.0], "diameter": 2.0}]
+        with tempfile.TemporaryDirectory(prefix="kicad-cutout-") as tmp:
+            _, cls.dsn = place_and_export(spec, Path(tmp))
+            cls.pcb = (Path(tmp) / "carrier.kicad_pcb").read_text()
+
+    def test_circle_on_edge_cuts(self):
+        self.assertEqual(self.pcb.count("(gr_circle"), 1)
+        start = self.pcb.index("(gr_circle")
+        circle = self.pcb[start : self.pcb.index("(uuid", start)]
+        for needle in ("(center 141.5 130)", "(end 142.5 130)", '(layer "Edge.Cuts")'):
+            self.assertIn(needle, circle)
+
+    def test_dsn_keeps_the_outline_and_keeps_routing_out_of_the_hole(self):
+        # Specctra um, y up: the boundary stays the outline rectangle, and the
+        # hole is a keepout polygon on every signal layer around (141.5, 130) mm.
+        structure = self.dsn[: self.dsn.index("  (placement")]
+        self.assertIn(
+            "(path pcb 0  190000 -162000  100000 -162000  100000 -100000  190000 -100000",
+            structure,
+        )
+        start = structure.index('(keepout "" (polygon signal 0 ')
+        body = structure[start : structure.index(")", start)].split("signal 0", 1)[1]
+        xy = [int(v) for v in body.split()]
+        points = list(zip(xy[0::2], xy[1::2], strict=True))
+        self.assertGreater(len(points), 8)
+        for x, y in points:
+            r = ((x - 141500) ** 2 + (y + 130000) ** 2) ** 0.5
+            self.assertTrue(990 <= r <= 1010, (x, y, r))
+
+
+@unittest.skipIf(SKIP is not None, SKIP or "")
 class BackSideTests(unittest.TestCase):
     """A placement's fourth element "back" mounts the footprint on B.Cu (#750).
 

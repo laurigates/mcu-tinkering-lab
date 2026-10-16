@@ -15,7 +15,7 @@ Reference, Value and LCSC properties, its `(path ...)`, and every pad's
   is on a named net (unnumbered pads, mounting holes and shells, are skipped).
 
 It also validates board.toml against the netlist (placement, silkscreen, net
-classes, pour, keepouts), so a bad board.toml fails CI without KiCad.
+classes, pour, keepouts, cutouts), so a bad board.toml fails CI without KiCad.
 
 Copper connectivity is DRC's job, locally, and the check stamp (`kicad.stamp`)
 pins the board bytes DRC passed. Copper is read for one thing: no track, arc,
@@ -218,6 +218,7 @@ TABLE_KEYS = {
     "net_classes": {"name", "nets", "track_um", "clearance_um", "via_um"},
     "signal": {"track_um", "clearance_um", "via_um"},
     "keepouts": {"name", "rect"},
+    "cutouts": {"name", "center", "diameter"},
     "pour": {
         "net",
         "regions",
@@ -230,7 +231,7 @@ TABLE_KEYS = {
 }
 TEXT_KEYS = {"text", "at", "size"}
 REGION_KEYS = {"net", "rect"}
-LIST_TABLES = ("net_classes", "keepouts")
+LIST_TABLES = ("net_classes", "keepouts", "cutouts")
 REQUIRED = ("outline", "placement", "net_classes", "signal", "pour")
 
 
@@ -290,6 +291,36 @@ def _validate_keepouts(where: str, data: dict[str, Any], size: Any) -> list[str]
             )
     if len(set(names)) != len(names):
         errors.append(f"{where}: [keepouts] names repeat: {names}")
+    return errors
+
+
+def _validate_cutouts(where: str, data: dict[str, Any], size: Any) -> list[str]:
+    """[[cutouts]]: named circles, each wholly inside the outline."""
+    errors = []
+    names = []
+    for c in data.get("cutouts", []):
+        name = c.get("name")
+        if not isinstance(name, str) or not name:
+            errors.append(f"{where}: [cutouts] needs a name for each circle")
+            continue
+        names.append(name)
+        center, diameter = c.get("center"), c.get("diameter")
+        if not _numbers(center, 2) or not _positive(diameter):
+            errors.append(
+                f"{where}: [cutouts] {name!r}: needs center = [x, y] and diameter > 0"
+            )
+            continue
+        # Strictly inside: a circle touching the outline would open it.
+        r = diameter / 2
+        if size is not None and not all(
+            r < c < extent - r for c, extent in zip(center, size, strict=True)
+        ):
+            errors.append(
+                f"{where}: [cutouts] {name!r}: circle at {center}, diameter "
+                f"{diameter}, is not inside [outline]"
+            )
+    if len(set(names)) != len(names):
+        errors.append(f"{where}: [cutouts] names repeat: {names}")
     return errors
 
 
@@ -437,6 +468,7 @@ def validate_config(cfg: paths.BoardConfig, nl: netlist.Netlist) -> list[str]:
                 f"{where}: [silk] cut_lines: {line!r} is not inside [outline]"
             )
     errors += _validate_keepouts(where, data, size)
+    errors += _validate_cutouts(where, data, size)
     for text in silk.get("texts", []):
         if (
             not isinstance(text, dict)

@@ -9,12 +9,13 @@ join's carrier netlist and the project's ``hardware/carrier/board.toml``;
 ``just <project>::carrier-board`` runs both, then route_board.py. This script
 decides nothing: parts, footprints (always the vendored copies), symbol paths,
 footprint UUIDs, nets (KiCad's ``unconnected-(...)`` net for each no-connect
-pin included), placement, silkscreen and keepouts all come from the JSON.
+pin included), placement, silkscreen, keepouts and cutouts all come from the JSON.
 
 Each keepout becomes a KiCad rule area on every copper layer that allows no
 tracks, vias, pads, footprints or zone fill, so DRC, the zone filler and
 Freerouting (through the Specctra export) all see it. Each silkscreen cut line
-is drawn on both silkscreen layers with a "CUT" label beside it.
+is drawn on both silkscreen layers with a "CUT" label beside it. Each cutout
+is a circle on Edge.Cuts inside the outline: a hole milled through the board.
 
 It rewrites the board from scratch, so routing (route_board.py) must run after
 it. Python 3.9 and the stdlib plus ``pcbnew`` only; it imports nothing from
@@ -97,6 +98,19 @@ def keepout(board, origin, k):
     for x, y in ((rx0, ry0), (rx1, ry0), (rx1, ry1), (rx0, ry1)):
         outline.Append(mm(x0 + x), mm(y0 + y))
     board.Add(zone)
+
+
+def cutout(board, origin, c):
+    """A circular hole through the board: board.toml cutout `c` on Edge.Cuts."""
+    x0, y0 = origin
+    cx, cy = c["center"]
+    shape = pcbnew.PCB_SHAPE(board)
+    shape.SetShape(pcbnew.SHAPE_T_CIRCLE)
+    shape.SetCenter(pcbnew.VECTOR2I(mm(x0 + cx), mm(y0 + cy)))
+    shape.SetEnd(pcbnew.VECTOR2I(mm(x0 + cx + c["diameter"] / 2), mm(y0 + cy)))
+    shape.SetLayer(pcbnew.Edge_Cuts)
+    shape.SetWidth(mm(0.1))
+    board.Add(shape)
 
 
 def cut_line(board, origin, line):
@@ -227,6 +241,8 @@ def build(spec):
     try:
         board = pcbnew.NewBoard(os.path.join(scratch, "carrier.kicad_pcb"))
         rect(board, origin, 0, 0, width, height, pcbnew.Edge_Cuts, 0.1)
+        for c in spec["cutouts"]:
+            cutout(board, origin, c)
         for x1, y1, x2, y2 in spec["silk"]["rects"]:
             rect(board, origin, x1, y1, x2, y2, pcbnew.F_SilkS, 0.15)
         footprints = place(board, spec)
