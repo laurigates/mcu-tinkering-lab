@@ -11,6 +11,11 @@
 # size against the page's "the outline W × H mm" and that every socketed pad
 # lies inside it; the footprint draws it on F.Fab and its courtyard covers it,
 # because the module sits above the carrier and overhangs its headers.
+#
+# A page with no recorded pad centres (no vendor board file) cannot give
+# `pads`; the table lists the positions instead, `pad_xy = [[x, y], ...]` in
+# footprint pad order and the same y-down millimetres as `outline`, with a
+# comment saying who measured them.
 # Regenerate with `just kicad::gen`
 # (PYTHONPATH=tools python3 -m kicad.sockets); CI runs it with --check.
 
@@ -43,3 +48,21 @@ name = "Adafruit_PCA9685_Socket"
 board = "adafruit-pca9685"
 pads = ["JP3", "JP6.10", "JP6.7", "JP6.4", "JP6.1", "JP5.10", "JP5.7"]
 outline = [-1.905, -18.923, 60.325, 6.477]
+
+# All 30 holes, in three columns from the component side: pads 1-10 the outer
+# column (GND, INTA, GPA0-7), 11-20 the inner column (VCC, INTB, GPB0-7), 21-30
+# the single column (A2, A1, A0, RESET, NC, NC, SDA, SCL, GND, VCC), each top to
+# bottom. No board file is published, so the page records no pad centres; these
+# positions are Lauri's measurement on the fitted module (2026-10-16): rows
+# 2.54 mm apart, the inner column 2.54 mm from the outer, the single column
+# 15.24 mm from the inner. The outline is the page's estimate from a photo,
+# centred on the holes.
+[[socket]]
+name = "CJMCU_2317_Socket"
+board = "cjmcu-2317"
+pad_xy = [
+    [0, 0], [0, 2.54], [0, 5.08], [0, 7.62], [0, 10.16], [0, 12.7], [0, 15.24], [0, 17.78], [0, 20.32], [0, 22.86],
+    [2.54, 0], [2.54, 2.54], [2.54, 5.08], [2.54, 7.62], [2.54, 10.16], [2.54, 12.7], [2.54, 15.24], [2.54, 17.78], [2.54, 20.32], [2.54, 22.86],
+    [17.78, 0], [17.78, 2.54], [17.78, 5.08], [17.78, 7.62], [17.78, 10.16], [17.78, 12.7], [17.78, 15.24], [17.78, 17.78], [17.78, 20.32], [17.78, 22.86],
+]
+outline = [-1.61, -1.57, 19.39, 24.43]

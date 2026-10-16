@@ -60,6 +60,32 @@ def text(slug: str) -> str:
     return (PARTS / f"{slug}.toml").read_text(encoding="utf-8")
 
 
+# The x of each layout-table `Row`, per board page, for the `pad_xy` sockets
+# whose page has no recorded pad centres; `Pos` n sits at y 2.54 (n - 1).
+# CJMCU-2317: Lauri's measurement (2026-10-16), the inner column one 2.54 mm
+# pitch in from the outer, the single column 15.24 mm past the inner.
+_ROW_X = {
+    "cjmcu-2317": {"outer": 0.0, "inner": 2.54, "single": 2.54 + 15.24},
+}
+
+
+def _listed_names(
+    board: str, head: list[str], rows: list[list[str]]
+) -> dict[str, str] | None:
+    """A Row/Pos layout table's pin names, keyed by the label
+    `sockets.resolve` gives a `pad_xy` pad, "[x, y]"; None for a board with no
+    `_ROW_X` entry."""
+    row_x = _ROW_X.get(board)
+    if row_x is None:
+        return None
+    out = {}
+    for row in rows:
+        x = row_x[row[head.index("Row")]]
+        y = 2.54 * (int(row[head.index("Pos")]) - 1)
+        out[f"[{sockets.fmt(x)}, {sockets.fmt(y)}]"] = row[0]
+    return out
+
+
 class CommittedRegistryTests(unittest.TestCase):
     def test_every_entry_validates(self):
         specs = registry.load_all()
@@ -103,11 +129,21 @@ class CommittedRegistryTests(unittest.TestCase):
             layout = [
                 t
                 for t in _tables(page.read_text())
-                if "Header" in t[0] and "Side" in t[0]
+                if "Side" in t[0] and ("Header" in t[0] or "Row" in t[0])
             ]
             self.assertEqual(len(layout), 1, page)
             head, *rows = layout[0]
-            name_of = {row[head.index("Header")]: row[0] for row in rows}
+            if socket.pad_xy:
+                name_of = _listed_names(socket.board, head, rows)
+                if name_of is None:
+                    with self.subTest(slug=spec.slug):
+                        self.fail(
+                            f"{socket.board}: a pad_xy socket; give the x of each "
+                            "layout-table Row in _ROW_X to check its pin names"
+                        )
+                    continue
+            else:
+                name_of = {row[head.index("Header")]: row[0] for row in rows}
             want = {
                 str(n): name_of[label]
                 for n, (label, _, _) in enumerate(sockets.resolve(socket, page), 1)
@@ -122,6 +158,7 @@ class CommittedRegistryTests(unittest.TestCase):
                 "adafruit-max98357a-socket",
                 "adafruit-pca9685-socket",
                 "adafruit-tca9548a-socket",
+                "cjmcu-2317-socket",
                 "sparkfun-tb6612fng-socket",
             ],
         )

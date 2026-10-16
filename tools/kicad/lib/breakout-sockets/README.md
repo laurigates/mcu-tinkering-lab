@@ -17,10 +17,12 @@ breakout's board page records (`docs/reference/boards/<board>.md`,
 Each footprint's `descr` repeats its pad order. Pad 1 is the origin and keeps
 PinSocket's square pad; the others are PinSocket's round pad. Pad positions are
 the page's centres minus pad 1's: the page is already in KiCad's y-down
-convention. F.CrtYd and F.SilkS are rectangles around the pad centres at
-PinSocket's margins (1.77 mm and 1.33 mm). They bound the socketed pads, not
-the breakout's outline, so placement has to keep clear of the rest of the
-breakout by hand.
+convention. A board with no vendor board file, and so no recorded centres,
+lists its positions in `sockets.toml` as `pad_xy` instead. F.SilkS is a
+rectangle around the pad centres at PinSocket's margin (1.33 mm). F.CrtYd
+covers both the pads at PinSocket's margin (1.77 mm) and the breakout's
+`outline` at 0.25 mm, so the courtyard check keeps other parts out from under
+the module.
 
 ## Maintenance
 

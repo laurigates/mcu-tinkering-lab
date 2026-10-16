@@ -284,6 +284,14 @@ to = "expander"
 build = "harness"
 note = "optional: the firmware boots without the board fitted"
 
+# On the carrier the expander's socket is wired whether or not a module is
+# fitted, with its own channel-2 pull-ups (R10, R11, below).
+[[bus_nets]]
+role = "I2C_BUS_CHANNEL_MCP23017"
+from = "mux"
+to = "expander"
+build = "carrier"
+
 [[bus_nets]]
 role = "I2C_BUS_CHANNEL_RANGER_FRONT"
 from = "mux"
@@ -346,12 +354,17 @@ part = "ssd1306-091-cable"
 ref = "J9"
 value = "SSD1306 0.91in"
 
+# A CJMCU-2317 module. On the carrier it sits in sockets under all 30 of its
+# holes (the hole positions Lauri measured, 2026-10-16), and a 2x10 header
+# (exp_header, below) repeats its GPIO column. No `board` key: the layout model
+# cannot draw its double column (docs/reference/boards/cjmcu-2317.md).
 [parts.expander]
 name = "MCP23017"
 kind = "gpio-expander"
 note = "optional"
-# Stays off the carrier until the CJMCU-2317 module is checked (#662).
-build = "harness"
+part = "cjmcu-2317-socket"
+ref = "A5"
+value = "CJMCU-2317"
 
 [parts.servos]
 name = "SG90 servos"
@@ -493,6 +506,42 @@ to = "uart_tap.TX"
 build = "carrier"
 note = "ROM boot log, 115200 baud"
 
+# The expander's GPIOs on a 2x10 pin header beside its socket, in the module's
+# own double-column order (Lauri, 2026-10-16): column A (odd pins) the outer
+# column, GND, INTA, GPA0-7; column B (even pins) the inner, 3V3, INTB, GPB0-7.
+[parts.exp_header]
+name = "MCP23017 GPIO mirror header"
+kind = "pin-header"
+build = "carrier"
+part = "mcp23017-mirror-header-2x10"
+ref = "J18"
+
+[[outputs]]
+from = "expander"
+to = ["exp_header"]
+build = "carrier"
+pins = [
+    "INTA",
+    "INTB",
+    "GPA0",
+    "GPA1",
+    "GPA2",
+    "GPA3",
+    "GPA4",
+    "GPA5",
+    "GPA6",
+    "GPA7",
+    "GPB0",
+    "GPB1",
+    "GPB2",
+    "GPB3",
+    "GPB4",
+    "GPB5",
+    "GPB6",
+    "GPB7",
+]
+net = "EXP_{pin}"
+
 # Main-board test headers (Lauri, 2026-10-16): through-hole pin headers for
 # meter probes, a logic analyser and scope ground clips.
 [parts.tp_power]
@@ -553,7 +602,8 @@ part = "ams1117-3.3"
 ref = "U2"
 
 # Bulk capacitors C1-C5 are WIRING.md's § Suggested capacitors. Its C6 decouples
-# the MCP23017, which stays on the harness, so the carrier has no C6.
+# the MCP23017; the carrier fits none, because the CJMCU-2317 carries a
+# capacitor-like part beside the chip (unverified, the board page's check 6).
 #
 # C1-C3 are C96179, CS1C471M-CRF10 (470 uF 16 V, 8 x 10.5 mm SMD). They were
 # C5162348, the same part number from another LCSC listing, which JLCPCB's
@@ -670,6 +720,24 @@ kind = "resistor"
 build = "carrier"
 part = "r0805"
 ref = "R5"
+value = "10k"
+lcsc = "C17414"
+
+[parts.pull_ch2_sda]
+name = "10 kΩ pull-up, mux channel 2 SDA"
+kind = "resistor"
+build = "carrier"
+part = "r0805"
+ref = "R10"
+value = "10k"
+lcsc = "C17414"
+
+[parts.pull_ch2_scl]
+name = "10 kΩ pull-up, mux channel 2 SCL"
+kind = "resistor"
+build = "carrier"
+part = "r0805"
+ref = "R11"
 value = "10k"
 lcsc = "C17414"
 
@@ -815,6 +883,20 @@ line = "SCL"
 build = "carrier"
 
 [[bus_nets]]
+role = "I2C_BUS_CHANNEL_MCP23017"
+from = "mux"
+to = "pull_ch2_sda.B"
+line = "SDA"
+build = "carrier"
+
+[[bus_nets]]
+role = "I2C_BUS_CHANNEL_MCP23017"
+from = "mux"
+to = "pull_ch2_scl.B"
+line = "SCL"
+build = "carrier"
+
+[[bus_nets]]
 role = "I2C_BUS_CHANNEL_RANGER_FRONT"
 from = "mux"
 to = "pull_ch3_sda.B"
@@ -859,7 +941,8 @@ to = [
 ]
 
 # The main board's own 3V3, from the LDO; the XIAO's 3V3 pad stays open on the
-# head. The loads are the harness rail's above, less the MCP23017.
+# head. The loads are the harness rail's above and the carrier's own. The
+# MCP23017's RESET is tied straight to 3V3 (active low: always running).
 [[rails]]
 name = "3V3"
 build = "carrier"
@@ -871,6 +954,9 @@ to = [
     "ranger_front.VCC",
     "ranger_rear.VCC",
     "oled.VCC",
+    "expander.VCC",
+    "expander.RESET",
+    "exp_header.3V3",
     "ldo_out.+",
     "decouple_pwm.A",
     "decouple_mux.A",
@@ -878,6 +964,8 @@ to = [
     "pull_ch0_scl.A",
     "pull_ch1_sda.A",
     "pull_ch1_scl.A",
+    "pull_ch2_sda.A",
+    "pull_ch2_scl.A",
     "pull_ch3_sda.A",
     "pull_ch3_scl.A",
     "pull_ch4_sda.A",
@@ -893,7 +981,9 @@ from = "piezo_r.B"
 to = ["buzzer.+"]
 
 # WIRING.md keeps the harness's common ground in prose; the carrier draws it.
-# GAIN_SLOT to GND sets the MAX98357A to 12 dB.
+# GAIN_SLOT to GND sets the MAX98357A to 12 dB. The MCP23017's A0-A2 go
+# straight to GND, so it answers at 0x20 (MCP23017_ADDR) whatever the module's
+# own bias on those pins.
 [[rails]]
 name = "GND"
 build = "carrier"
@@ -910,6 +1000,11 @@ to = [
     "ranger_front.GND",
     "ranger_rear.GND",
     "oled.GND",
+    "expander.GND",
+    "expander.A0",
+    "expander.A1",
+    "expander.A2",
+    "exp_header.GND",
     "buzzer.-",
     "ldo.GND",
     "bulk_pwm.-",
@@ -945,6 +1040,7 @@ MOTOR_LEFT_IN2_CHANNEL = "BIN2"
 MOTOR_LEFT_PWM_CHANNEL = "PWMB"
 I2C_BUS_CHANNEL_PCA9685 = "CH0"
 I2C_BUS_CHANNEL_OLED = "CH1"
+I2C_BUS_CHANNEL_MCP23017 = "CH2"
 I2C_BUS_CHANNEL_RANGER_FRONT = "CH3"
 I2C_BUS_CHANNEL_RANGER_REAR = "CH4"
 5V = "+5V"

@@ -12,11 +12,14 @@ silicon see [`io--mcp23017.md`](../datasheets/io--mcp23017.md).
 | Seller | TENSTAR ROBOT, AliExpress item **1005008592833333**, <https://www.aliexpress.com/item/1005008592833333.html> |
 | Also called | "1953W" in #662. That marking appears on none of the six listing photos. |
 
-> **Not bench-verified.** Every position on this page comes from the
-> listing's six product photos. Nothing was read from a board file or checked
-> with a continuity meter. `.claude/rules/board-layout-from-vendor-files.md`
-> does not count photos as authoritative. CJMCU publishes no board file, and
-> no schematic for this board turned up online. Do the checks under
+> **Partly bench-verified.** The pin order was read from the listing's six
+> product photos. Lauri checked the hole geometry and which column of the
+> double row is inner and which outer on the fitted module on 2026-10-16
+> (see [Pitch and outline](#pitch-and-outline)). The outline, the on-board
+> parts and their roles are still read from photos only.
+> `.claude/rules/board-layout-from-vendor-files.md` does not count photos as
+> authoritative. CJMCU publishes no board file, and no schematic for this
+> board turned up online. Do the open checks under
 > [Check on the physical board](#check-on-the-physical-board) before a carrier
 > is ordered.
 
@@ -40,12 +43,13 @@ also agrees with the chip: with the pin-1 dot at the lower left, A0–A2 and
 RESET (SSOP pins 15–18) sit at the chip's top right, and VDD/VSS/SCL/SDA
 (pins 9–13) at its bottom right.
 
-**Inner vs outer is a reading-order assumption.** On the back face each row
-reads `label, inner hole, outer hole`, so this page maps the first name to the
-inner hole and the second to the outer one. Under that reading the outer
-column (board edge) holds GND, INTA and GPA0–7, and the inner column holds
-VCC, INTB and GPB0–7. The photos cannot resolve the traces on either face
-well enough to confirm it.
+**Inner vs outer, verified by Lauri on 2026-10-16.** In every row of the
+double column the first-named signal is on the inner hole and the
+second-named on the outer one: row 1 is VCC inner and GND outer, row 2 INTB
+inner and INTA outer, and rows 3–10 GPBn inner and GPAn outer. The outer
+column (board edge) therefore holds GND, INTA and GPA0–7, and the inner
+column holds VCC, INTB and GPB0–7. This is the reading this page assumed from
+the back-face silkscreen before the check.
 
 `Side`/`Pos` follow [`tools/hardware/layout.py`](../../../tools/hardware/layout.py):
 `L`/`R` edge, `Pos 1` at the top. `Row` says which column a left-edge pad is in.
@@ -53,12 +57,15 @@ well enough to confirm it.
 positions are therefore deliberate: `parse_layout` rejects this table with a
 "claimed by both" error and does not draw a wrong picture. Do not add a `board =`
 key for this page to `hardware.toml` until the layout model can represent an
-inner row and the order has been checked on a board.
+inner row. The order is now checked on a board, but `parse_layout` still has
+no inner row, so the caveat stands for that reason alone. The carrier socket
+takes its pad positions from `tools/kicad/lib/breakout-sockets/sockets.toml`
+(`pad_xy`) instead of from this table.
 
 | Pin | Side | Pos | Row | Silkscreen (back) | Notes |
 |-----|------|-----|-----|-------------------|-------|
-| GND | L | 1 | outer | `VCC/GND` | Assumed. Check that it beeps to R9 |
-| VCC | L | 1 | inner | `VCC/GND` | Assumed. Check that it beeps to R10 |
+| GND | L | 1 | outer | `VCC/GND` | Verified (Lauri, 2026-10-16) |
+| VCC | L | 1 | inner | `VCC/GND` | Verified (Lauri, 2026-10-16) |
 | INTA | L | 2 | outer | `ITB/ITA` | Interrupt, PORTA |
 | INTB | L | 2 | inner | `ITB/ITA` | Interrupt, PORTB |
 | GPA0 | L | 3 | outer | `B0/A0` | Driver pin 0 |
@@ -90,13 +97,24 @@ inner row and the order has been checked on a board.
 
 ### Pitch and outline
 
-- **Pitch.** 2.54 mm is assumed, not measured. The listing ships two
-  10-pin male header strips (photos 1–3 and 6). The inner and outer columns
-  sit one row pitch apart in photos 1 and 5. Two 10-pin strips fill only 20 of
-  the 30 holes.
-- **Outline.** Scaled against a 2.54 mm pitch, photo 1 gives roughly
-  21 × 26 mm. That figure comes from a hand-held photo and is not a
-  dimension to place against.
+Measured by Lauri on the fitted module, 2026-10-16:
+
+- **Row pitch** 2.54 mm in all three columns.
+- **Outer to inner column** one pitch, 2.54 mm, centre to centre.
+- **Inner to single column** 15.24 mm (6 pitches), centre to centre.
+
+So, from the component side with the outer column's row-1 hole (GND) at the
+origin, +x to the right and +y down: the outer column is at x 0, the inner at
+x 2.54 and the single column at x 17.78, and row *n* of each is at
+y 2.54 × (*n* − 1), 0 to 22.86. The carrier socket
+(`CJMCU_2317_Socket`) lists exactly these positions.
+
+- **Outline, estimated, not measured:** the outline 21 × 26 mm, scaled from
+  hand-held photo 1 against the 2.54 mm pitch. The socket footprint centres
+  it on the holes for its courtyard. It is not a dimension to place against
+  without checking the module against the board render.
+- The listing ships two 10-pin male header strips (photos 1–3 and 6), which
+  fill only 20 of the 30 holes.
 - **Bottom corners.** In photo 1 the two bottom-corner holes (outer `B7/A7`
   and `VCC`) look slightly different from the rest. They may be square pin-1
   pads, or it may be lighting. Not confirmed.
@@ -123,16 +141,20 @@ a carrier is ordered:
 1. **Identity.** Confirm the fitted module is this one: `CJMCU-2317` on the
    component face and an `MCP23017` (not `MCP23S17`) SSOP. #662 called it
    "1953W". Find out where that marking is, or whether it is a different board.
-2. **Inner vs outer.** Check whether the left-column row-1 holes beep to the
-   right column's `GND` (R9) or `VCC` (R10). Then check whether the outer or
-   the inner row-3 hole goes to SSOP pin 21 (GPA0) or pin 1 (GPB0).
-   Correct the `Row` column if it is the other way round.
-3. **Address pins.** Measure each of A0, A1 and A2 to VCC and to GND. If they read
-   about 10 kΩ to VCC, the module answers at 0x27 unless the carrier ties them
-   to GND. If they float, the carrier must tie them (DS20001952D p. 11).
-4. **RESET.** Confirm a pull-up to VCC (about 10 kΩ expected). If none is
-   fitted, the carrier must hold RESET high.
+2. **Inner vs outer.** Done: verified by Lauri, 2026-10-16 (first-named
+   signal on the inner hole).
+3. **Address pins.** Measure each of A0, A1 and A2 to VCC and to GND. The
+   robocar-unified carrier ties all three straight to GND, which sets 0x20
+   whatever the module does; a 10 kΩ pull-up on the module would then draw
+   0.33 mA per pin and nothing else. On a harness the bias decides the
+   address: about 10 kΩ to VCC means 0x27, floating means the harness must tie
+   them (DS20001952D p. 11).
+4. **RESET.** Confirm a pull-up to VCC (about 10 kΩ expected). The carrier
+   ties RESET straight to 3V3; on a harness, if none is fitted, the wiring
+   must hold RESET high.
 5. **I2C pull-ups.** Check whether the two 10 kΩ parts sit on SDA/SCL to VCC.
+   The carrier fits its own 10 kΩ pull-ups on channel 2; if the module has
+   them too, the pair is about 5 kΩ per line.
    The TCA9548A breakout has no pull-ups on its downstream channels: in
    Adafruit's `Adafruit TCA9548A.brd` at commit `c5bdfe4c` (the file
    [`adafruit-tca9548a.md`](adafruit-tca9548a.md) is drawn from), R1/R2 pull
@@ -141,12 +163,16 @@ a carrier is ordered:
    SDA/SCL pull-ups, the carrier must pull channel 2 up.
 6. **Decoupling.** Confirm the unmarked part is a capacitor across VDD/VSS. If
    so, the optional C6 in `WIRING.md` is redundant.
-7. **Pitch and outline.** Measure the header pitch, the inner-to-outer column
-   spacing, the board outline and the hole diameters.
+7. **Pitch and outline.** The pitch and both column spacings are done
+   (Lauri, 2026-10-16). Still open: the board outline and the hole
+   diameters. Hold the module against the carrier render to check the
+   outline sits inside the socket's courtyard.
 
 ## Source
 
-The order was read from the six photos on AliExpress listing
+The hole geometry and the inner/outer assignment are Lauri's measurement on
+the fitted module, 2026-10-16. The order was read from the six photos on
+AliExpress listing
 1005008592833333 (TENSTAR ROBOT, retrieved 2026-10-14). Photos 3, 4 and 6 show the
 back-face silkscreen. Photos 1, 2, 5 and 6 show the component face and the chip
 marking. No vendor board file or schematic was found, so `tools/breakout-pinout.py`

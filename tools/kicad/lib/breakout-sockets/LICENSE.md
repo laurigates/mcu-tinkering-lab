@@ -20,6 +20,10 @@ board file, as recorded in the breakout's page under `docs/reference/boards/`
 Changes: only the socketed header pads are kept, translated so that pad 1 is
 the origin, and renumbered in the order `sockets.toml` lists them.
 
+`CJMCU_2317_Socket` has no vendor board file: its pad positions are this
+repo's own measurement of the module (Lauri, 2026-10-16, recorded in
+`docs/reference/boards/cjmcu-2317.md`) and carry no third-party licence.
+
 ## Pad shape, drill and courtyard margin: the KiCad library
 
 Each pad copies pad 1 (rect) or pad 2 (circle) of
