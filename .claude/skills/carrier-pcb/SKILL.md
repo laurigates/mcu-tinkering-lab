@@ -130,6 +130,32 @@ several traps below are version-specific: after a KiCad upgrade, re-run
     socket's pins are all `passive`, and implied no-connects cover GPIO pads
     only, so `netlist` requires every power pad to be on a rail.
 
+### Found laying out the robocar-unified carrier (#750)
+
+20. **A module socket can accept the module upside down.** Asymmetric column
+    spacing rules out a rotated or left-right-mirrored module, but a top-bottom
+    flip (component side down) keeps every column on its x and reverses the
+    rows. On the CJMCU-2317 that puts its VCC on GND and 3V3 into its I/O
+    pins. Every check passes, because the error is in the person fitting the
+    module. Any socket for a module labelled on one face needs a
+    silkscreen orientation mark and pin names beside the pads (#803).
+21. **A back-face footprint in KiCad 10:** `FOOTPRINT.Flip()` segfaults before
+    `board.Add()`, and `FLIP_DIRECTION_LEFT_RIGHT` followed by
+    `SetOrientationDegrees(rot)` mirrors the footprint's *local y* about its
+    anchor, so the pads run the other way from pad 1. Set reference and silk
+    positions after the flip, or the flip mirrors them too.
+    `build_board.py` does it in that order.
+22. **Freerouting does not honour KiCad's copper-to-edge clearance.** It keeps
+    only its class clearance from the boundary, so on a tight board it routes
+    tracks inside `.kicad_pro`'s 0.5 mm `min_copper_edge_clearance` and DRC
+    fails. Line the outline with 0.5 mm `[[keepouts]]`, leaving out any edge a
+    courtyard reaches, because a keepout also refuses footprints.
+23. **Check a fit against the stock footprint's courtyard, not the part's
+    size.** `MountingHole_2.2mm_M2` has a 5 mm courtyard, so a XIAO socket did
+    not fit between two holes that an M2 screw head clears;
+    `MountingHole_2.2mm_M2_ISO7380` (4 mm) did. Read the courtyard from the
+    vendored `.kicad_mod` before promising a layout.
+
 ## Verify the gate can fail
 
 Before trusting a carrier gate, mutate a scratch copy and watch it fail (move
