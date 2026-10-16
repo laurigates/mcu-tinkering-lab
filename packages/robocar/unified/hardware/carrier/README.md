@@ -4,19 +4,23 @@
 > The silkscreen says so too, and [`board.toml`](board.toml) marks every
 > unmeasured dimension (#750).
 
-One 100 × 100 mm, 2-layer PCB that carries two boards and replaces the
+One 100 × 100 mm, 2-layer PCB that carries four pieces and replaces the
 hand-wired harness in [`WIRING.md`](../../WIRING.md):
 
-- the **main board**, on the 2WD chassis plate: the motor driver, the PWM
-  driver, the I2C mux, the amplifier, the 3V3 regulator, the power and
-  peripheral connectors, and the test headers;
-- the **head board**, in the top-right corner, in the pan-tilt kit's top
-  cradle: the XIAO ESP32-S3 Sense and the head end of the ribbon.
+- the **main board**, x 0–70.5 mm, on the 2WD chassis plate: the motor driver,
+  the PWM driver, the I2C mux, the amplifier, the 3V3 regulator, the power and
+  peripheral connectors, the buzzer and the test headers;
+- three **head boards** in a column on its right, each 29.5 × 29.5 mm, for the
+  pan-tilt kit's top cradle: a XIAO ESP32-S3 Sense socket and the head end of
+  the ribbon. They differ only in where the ribbon header sits (see
+  [The three heads](#the-three-heads)); fit the XIAO to the one that suits the
+  cradle.
 
-A 3 mm copper-free band under a silkscreen saw line ("CUT", on both faces)
-separates them. JLCPCB makes one rectangle with no V-cuts, tabs or slots; the
-head is sawn off after delivery (see [Separating the head](#separating-the-head)).
-A 2 × 7 IDC ribbon joins the two boards.
+Copper-free bands of 3 mm or more under silkscreen saw lines ("CUT", on both
+faces) separate the pieces. JLCPCB makes one rectangle with no V-cuts, tabs or
+slots; the pieces are sawn apart after delivery (see
+[Separating the pieces](#separating-the-pieces)). A 2 × 7, 2.0 mm-pitch IDC
+ribbon joins the main board to the fitted head.
 
 KiCad 10 project: [`robocar-unified-carrier/`](robocar-unified-carrier/). Its
 schematic is generated from [`hardware.toml`](../../hardware.toml) and the parts
@@ -24,7 +28,7 @@ registry ([`docs/reference/parts/`](../../../../../docs/reference/parts/)) by
 `tools/kicad`
 ([ADR-027](../../../../../docs/decisions/ADR-027-kicad-carrier-generation.md));
 the board is placed and routed from the same netlist and
-[`board.toml`](board.toml), which holds every position, the band and the
+[`board.toml`](board.toml), which holds every position, the bands and the
 silkscreen. Never edit the `.kicad_sch` or `.kicad_pcb` in KiCad; change those
 files and regenerate (see [Regenerate and check](#regenerate-and-check)).
 
@@ -36,10 +40,10 @@ top side; everything else is through-hole.
 
 | Ref | Part | Board | Notes |
 |---|---|---|---|
-| U1 | XIAO ESP32-S3 Sense, in two 1×7 female headers | head | USB-C toward the top edge, between the M2 holes |
-| J2 | 2×7 pin header, unshrouded | head, **back face** | The head end of the ribbon |
-| H5, H6 | M2 holes, 2.2 mm | head | Through the cradle into heat-set inserts |
-| J1 | 2×7 pin header, unshrouded | main | The main end of the ribbon, beside the band |
+| U1, U3, U4 | XIAO ESP32-S3 Sense socket, two 1×7 female headers | heads 1, 2, 3 | USB-C toward the head's top edge; fit one XIAO |
+| J2, J16, J17 | 2×7 pin header, 2.0 mm, unshrouded | heads 1, 2, 3 | The head end of the ribbon; see [The three heads](#the-three-heads) |
+| H5–H10 | M2 holes, 2.2 mm, ISO 7380 courtyard | heads 1, 2, 3 | Through the cradle into heat-set inserts; M2 button heads only |
+| J1 | 2×7 pin header, 2.0 mm, unshrouded | main | The main end of the ribbon, beside the head column |
 | A1 | SparkFun TB6612FNG, in 2 × 1×8 female headers | main | Motor outputs on its left header |
 | A2 | Adafruit PCA9685, in female headers on its JP3 side header and its channel 8–13 PWM pins | main | Motor control lines; servo and LED columns stay on the module |
 | A3 | Adafruit TCA9548A, in 2 × 1×12 female headers | main | Every I2C device sits behind it |
@@ -48,14 +52,14 @@ top side; everything else is through-hole.
 | C1–C3 | 470 µF 16 V electrolytic, 8 × 10.5 mm | main | Bulk at the PCA9685 V+, TB6612FNG VM and MAX98357A Vin |
 | C4, C5 | 100 nF, 0805 | main | PCA9685 VCC, TCA9548A VIN |
 | C7, C8 | 22 µF 16 V tantalum, 3528 | main | AMS1117 input and output |
-| R1 | 100 Ω, 0805 | main | Piezo series resistor |
+| R1 | 100 Ω, 0805 | main | Buzzer series resistor |
 | R2–R9 | 10 kΩ, 0805 | main | Pull-ups on mux channels 0, 1, 3 and 4 |
 | J3 | XT30 (AMASS XT30PW-M) | main | Pack in; pad 1 is "−" |
 | J4 | JST-XH 4-pin | main | LM2596 module: IN+, IN−, OUT+, OUT− |
-| J5, J6 | JST-XH 2-pin | main | Left and right motor |
-| J7, J8 | JST-XH 4-pin | main | RCWL-1601 front and rear, I2C mode: VCC, SCL, SDA, GND |
+| J5, J6 | JST-XH 2-pin | main | Left and right motor, side by side at A1's motor outputs |
+| J7, J8 | JST-XH 4-pin | main | RCWL-1601 front and rear, I2C mode: VCC, SCL, SDA, GND; side by side at the front edge |
 | J9 | JST-XH 4-pin | main | SSD1306 0.91" OLED: GND, VCC, SCL, SDA |
-| J10 | JST-XH 2-pin | main | Piezo: + on pin 1 |
+| BZ1 | 12 mm buzzer, 7.6 mm pin pitch | main | Soldered to the board; + on pad 1, beside the silkscreen "+" |
 | J11–J15 | 1×4 and 1×2 pin headers | main | Test headers, see [Debug headers](#debug-headers) |
 | H1–H4 | M3 holes | main | Chassis plate |
 
@@ -63,16 +67,40 @@ The per-part values, LCSC numbers and the reasons for each are in
 [`hardware.toml`](../../hardware.toml); the pin orders are in the registry entries
 it names.
 
+## The three heads
+
+All three have the same outline, the same two M2 holes in the top corners
+(22.5 mm apart, the positions Lauri confirmed on 2026-10-16), and the XIAO with
+its USB-C toward the top edge, which points the Sense camera forward. The
+cradle's sides carry clips, so the header sits at the top or the bottom edge,
+never at a side (Lauri, 2026-10-16). Only one head gets a XIAO; the other two
+stay spare.
+
+| Head | Refs | Header | XIAO | For |
+|---|---|---|---|---|
+| 1 | U1, J2, H5, H6 | Back face, bottom edge | Between the holes, above the header | The plug and ribbon behind the head, leaving the bottom edge |
+| 2 | U3, J16, H7, H8 | Front face, bottom edge | Between the holes, above the header | The plug in front, below the camera, if nothing behind the head clears it |
+| 3 | U4, J17, H9, H10 | Back face, top edge, between the holes | Below the holes | The ribbon leaving over the top, if the bottom edge is blocked |
+
+The holes use KiCad's ISO 7380 M2 footprint, whose courtyard is a 3.5 mm button
+head: on heads 1 and 2 the XIAO socket sits 0.27 mm from it on each side. Fit
+M2 button-head screws (ISO 7380) or another head no larger than 3.5 mm.
+
+Each head's spare copy of the XIAO socket is wired to its own header (nets
+`HEAD2_*`, `HEAD3_*`); the main board has a single end, J1. Moving the ribbon
+to another head moves the robot to it.
+
 ## The ribbon survives a reversed plug
 
-The headers are unshrouded, so the IDC plug fits either way round, which takes
+The headers are unshrouded 2.0 mm-pitch pin headers, mated by a 2.0 mm IDC plug
+on 1.0 mm-pitch flat ribbon. The plug fits either way round, which takes
 pin *n* to pin 15 − *n*. The pinout in
 [`idc-2x07-xiao-cable.toml`](../../../../../docs/reference/parts/idc-2x07-xiao-cable.toml)
 pairs each pin with one it can safely swap with: 5 V lands on 5 V, GND on GND,
 SDA on SCL, UART0 TX on the unconnected pin 9, and every other XIAO output on
 another main-board input. **A reversed plug damages nothing and does not work.**
-If the robot is dead after reassembly, check the plug orientation first: both
-ends print a pin-1 mark.
+If the robot is dead after reassembly, check the plug orientation first: every
+header prints a pin-1 mark.
 
 ## Debug headers
 
@@ -101,49 +129,51 @@ Each is a measurement or a part in hand that no file in this repo can settle.
 Correct [`board.toml`](board.toml) or the registry entry, then regenerate and
 re-check.
 
-1. **Cradle M2 holes.** H5 and H6 are 22.5 mm apart in the head's top corners.
-   Drill the cradle to match, or measure where it has room and move them.
-2. **J2 and the plug behind the head.** J2 is on the back face; check that the
-   IDC plug and the ribbon's bend clear the cradle and the pan servo.
-3. **Camera orientation.** With U1's USB-C toward the head's top edge, check the
-   Sense camera faces forward when the head is in the cradle.
-4. **Chassis plate.** Measure the plate's usable area and its M3 holes; the
-   outline and H1–H4 are proposals.
-5. **Ribbon length** for the full pan and tilt travel, from J1 beside the band.
-6. **RCWL-1601 and OLED pin orders** (J7, J8, J9) against the fitted modules:
-   both were read from listing photos, not continuity-checked. Check each
-   RCWL-1601 has 10 kΩ on R4 (I2C mode) and R5 empty.
-7. **Hold each fitted breakout against the board render** (TB6612FNG,
+1. **The header behind or in front of the head.** For each head you mean to
+   use, check the IDC plug and the ribbon's bend clear the cradle and the pan
+   servo.
+2. **Chassis plate.** Measure the plate's usable area and its M3 holes; the
+   main board's outline and H1–H4 are proposals.
+3. **Ribbon length** for the full pan and tilt travel, from J1 beside the head
+   column.
+4. **OLED pin order** (J9) against the fitted module: it was read from listing
+   photos, not continuity-checked. Check each RCWL-1601 has 10 kΩ on R4 (I2C
+   mode) and R5 empty.
+5. **Measure the buzzer's resistance** across its pins: a piezo reads open
+   (megohms); a magnetic buzzer reads about 16–42 Ω. Report it before relying on
+   the 100 Ω series resistor and the GPIO drive, which assume a piezo.
+6. **Hold each fitted breakout against the board render** (TB6612FNG,
    PCA9685, TCA9548A, MAX98357A): headers on the footprints, outline inside its
    courtyard.
-8. **Polarity** of the XT30 pack lead (J3 pad 1 is "−", next to the silkscreen
-   "−"), the LM2596 lead (J4 pin 1 IN+), and the piezo lead (J10 pin 1 +).
-9. **Saw kerf against the band.** The band is 3 mm with the cut line in the
-   middle; a blade wider than about 1 mm leaves no bare margin.
+7. **Polarity** of the XT30 pack lead (J3 pad 1 is "−", next to the silkscreen
+   "−"), the LM2596 lead (J4 pin 1 IN+), and the buzzer (BZ1 "+" on pad 1).
+8. **Saw kerf against the bands.** A blade wider than about 1 mm leaves no bare
+   margin beside the cut line in a 3 mm band.
 
 ## Assembly notes
 
 - **Set the LM2596 to 5.0 V on the bench before connecting it to J4.** The
   module's output is adjustable and arrives set to whatever the factory left.
-- **The heat-set inserts go in the cradle, not the PCB.** H5 and H6 are plain
-  2.2 mm clearance holes for M2 screws.
+- **The heat-set inserts go in the cradle, not the PCB.** H5–H10 are plain
+  2.2 mm clearance holes for M2 button-head screws.
 - The SMD parts carry LCSC numbers, so JLCPCB can place them (see
   [Ordering](#ordering)); by hand, any 470 µF ≥ 16 V 8 × 10.5 mm SMD
   electrolytic and 22 µF ≥ 16 V 3528 tantalum fit.
 
-## Separating the head
+## Separating the pieces
 
-Score-and-snap cannot make this cut: the line is L-shaped, and a snap along one
-leg cracks into the main board at the corner. Saw it.
+Every cut is straight across the board or across the head column, so no cut
+ends in an inside corner and none needs a relief hole.
 
 1. **Buy a jeweller's saw frame with fine blades** (or a coping saw with a fine
    blade).
-2. **Clamp the board** flat, the band just past the bench edge.
-3. **Cut in the waste band, on the main-board side of the silk line.** The
-   line is the head's 29.5 mm edge, so a blade on it takes half its kerf off the
-   head. Each leg ends in the 2 mm relief hole at the inside corner, so the
-   blade turns in the hole instead of binding in the corner.
-4. **Sand the head back to the line, 29.5 × 29.5 mm,** on sandpaper on a flat
+2. **Clamp the board** flat, the cut line just past the bench edge.
+3. **Cut the head column off** along the vertical line at x 70.5, in the band
+   on the main board's side of the line, the full 100 mm.
+4. **Cut the column into its three heads** along the four horizontal lines.
+   Each head's lines are its own edges; keep the kerf in the waste strips
+   between heads (y 29.5–35.25 and 64.75–70.5), where the "CUT" labels are.
+5. **Sand each head back to its lines, 29.5 × 29.5 mm,** on sandpaper on a flat
    surface, checking with calipers. The cradle's inner size is 30.0 × 30.0 mm.
 
 FR-4 dust contains glass fibre: wet-sand, and wear a mask.
@@ -181,8 +211,8 @@ Not until the pre-order checks are done and the PROVISIONAL text is gone from
 
 3. **Upload the zip** at jlcpcb.com. It should detect 2 layers and
    100 × 100 mm. FR-4, 1.6 mm, 1 oz copper (the track widths assume it), HASL.
-   In the Gerber preview check the outline, the relief hole at the band's
-   inside corner, both "CUT" lines, and J2's outline on the bottom silkscreen.
+   In the Gerber preview check the outline, the five "CUT" lines, and J2's
+   and J17's outlines on the bottom silkscreen.
 4. **Assembly (optional):** *PCB Assembly*, *Economic*, top side, with the two
    CSVs. C1–C3 (C96179) and C7–C8 (C8020) are Extended parts, so two feeder
    fees; the rest are Basic. JLCPCB's stock and part status were checked on
@@ -198,17 +228,18 @@ Not until the pre-order checks are done and the PROVISIONAL text is gone from
 
    | Qty | Part |
    |---|---|
-   | 2 | 1×7 female header, 2.54 mm (XIAO) |
+   | 2 | 1×7 female header, 2.54 mm (XIAO, for the one head fitted) |
    | 2 | 1×8 female header (TB6612FNG) |
    | 2 | 1×12 female header (TCA9548A) |
    | 1 | 1×7 female header (MAX98357A) |
    | 1 | 1×6 female header, plus six single female sockets from a breakaway strip for the channel 8–13 PWM pins (PCA9685; how those pins reach the carrier is pre-order check 7) |
-   | 2 | 2×7 pin header, 2.54 mm (J1, J2) |
-   | 2 | 2×7 IDC plug (female, 2.54 mm), and 14-way 1.27 mm ribbon |
+   | 2 | 2×7 pin header, 2.0 mm pitch (J1 and the fitted head's J2, J16 or J17) |
+   | 2 | 2×7 IDC plug (female, 2.0 mm pitch), and 14-way flat ribbon at 1.0 mm pitch |
    | 2 | 1×4 pin header (J11, J12) |
    | 3 | 1×2 pin header (J13, J14, J15) |
    | 1 | XT30 PCB socket (XT30PW-M) |
-   | 3 | JST-XH 2-pin (B2B-XH-A), with housings and crimps (two motors, piezo) |
+   | 2 | JST-XH 2-pin (B2B-XH-A), with housings and crimps (two motors) |
+   | 1 | 12 mm board-mount buzzer, 7.6 mm pin pitch (BZ1) |
    | 4 | JST-XH 4-pin (B4B-XH-A), with housings and crimps (LM2596, two RCWL-1601, OLED) |
    | 4 | M3 screws and standoffs (chassis plate) |
-   | 2 | M2 screws, and 2 M2 heat-set inserts (cradle) |
+   | 2 | M2 button-head screws, ISO 7380 (or any head of 3.5 mm diameter or less), and 2 M2 heat-set inserts (cradle) |
