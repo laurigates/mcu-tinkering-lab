@@ -3,11 +3,14 @@
 # registry (docs/reference/parts/); this file says where each part sits, how
 # wide each net's tracks are, and what goes on the silkscreen.
 #
-# PROVISIONAL (#750 step 2): DO NOT ORDER THIS BOARD. One PCB carries two
-# boards: the main board (chassis plate) and, in the top-right corner, the head
-# board (pan-tilt cradle), separated by a 3 mm copper-free band under a
-# silkscreen saw line. JLCPCB sees one rectangular design with no V-cuts, tabs
-# or mouse bites; Lauri saws the head off after delivery.
+# PROVISIONAL (#750 step 2): DO NOT ORDER THIS BOARD. One PCB carries four
+# pieces: the main board (chassis plate), a plain rectangle on the left, and a
+# column of three head boards (pan-tilt cradle) on the right, each a different
+# way of mounting the ribbon header (Lauri, 2026-10-16). 3 mm or wider
+# copper-free bands under silkscreen saw lines separate them. JLCPCB sees one
+# rectangular design with no V-cuts, tabs or mouse bites; Lauri saws the pieces
+# apart after delivery. Every cut runs straight across the board or the head
+# column, so no cut has an inside corner and no relief hole is needed.
 #
 # Every dimension below is Claude's proposal, not a measurement, and each one
 # says what to measure. Correct it, then re-run
@@ -28,43 +31,45 @@ name = "robocar-unified-carrier"     # the KiCad project directory and file stem
 # needs A2, so the sheet is named as the generated file has it.
 paper = "A2"
 
-# One rectangle for both boards. PROVISIONAL: 100 x 100 mm keeps the order in
-# JLCPCB's smallest price band. Measure the 2WD chassis plate's usable area
-# between its wheels and standoffs. The main board is this outline minus the
-# head corner, so a smaller plate shrinks the outline, not the head.
+# One rectangle for all four pieces. 100 x 100 mm keeps the order in JLCPCB's
+# smallest price band (Lauri: stay within it). The main board is x 0-70.5, about
+# 70 x 100 mm after sawing; PROVISIONAL: measure the 2WD chassis plate's usable
+# area between its wheels and standoffs.
 [outline]
 origin = [100.0, 100.0]
 size = [100.0, 100.0]
 
-# The saw band between the head board (copper x 72-100, y 0-28) and the main
-# board: no copper of any kind. build_board.py makes each rectangle a KiCad rule
-# area, so DRC, the zone fill and Freerouting keep out, and kicad.boardcheck
-# checks the committed copper against it. 3 mm leaves about 1 mm of bare board
-# on each side of a hacksaw kerf. PROVISIONAL: measure your saw's kerf.
+# The saw bands: no copper of any kind. build_board.py makes each rectangle a
+# KiCad rule area, so DRC, the zone fill and Freerouting keep out, and
+# kicad.boardcheck checks the committed copper against it.
+#
+# Each head is a 29.5 x 29.5 mm square after sawing, 0.25 mm per side inside
+# the cradle's 30.0 x 30.0 mm (Lauri, 2026-10-15). Head k's square starts at
+# x 70.5 and y 0, 35.25 or 70.5; its copper is the 28 x 28 mm from x 72 and
+# that y: a 1.5 mm band inside the left and bottom cuts, a 0.5 mm edge keepout
+# along its top and right edges. The waste strips between heads (y 29.5-35.25
+# and 64.75-70.5) take the saw kerf.
 [[keepouts]]
-name = "head cut band, vertical"
-rect = [69.0, 0.0, 72.0, 31.0]
+name = "head column cut band, vertical"
+rect = [69.0, 0.0, 72.0, 100.0]
 
 [[keepouts]]
-name = "head cut band, horizontal"
-rect = [69.0, 28.0, 100.0, 31.0]
+name = "head 1 / head 2 cut band"
+rect = [72.0, 28.0, 99.5, 35.75]
 
-# A 2 mm relief hole at the saw line's inside corner (Lauri, 2026-10-16): the
-# two cuts end in it, so the blade turns in the hole instead of binding and
-# cracking the corner. Centred on the corner, (70.5, 29.5), it lies wholly
-# inside the band (x 69.5-71.5, y 28.5-30.5), so it takes no copper from
-# either board; it leaves a 1 mm quarter-round notch in the head's lower-left
-# corner, where nothing is mounted.
-[[cutouts]]
-name = "saw relief"
-center = [70.5, 29.5]
-diameter = 2.0
+[[keepouts]]
+name = "head 2 / head 3 cut band"
+rect = [72.0, 63.25, 99.5, 71.0]
+
+[[keepouts]]
+name = "head 3 bottom band"
+rect = [72.0, 98.5, 99.5, 100.0]
 
 # KiCad's copper-to-edge clearance (0.5 mm, .kicad_pro) as rule areas along
 # the outline: Freerouting keeps only its class clearance from the board
-# boundary, and on the 28 mm head it routed tracks onto the edge. Not along the
-# bottom edge, where J3's courtyard reaches the outline and a rule area would
-# refuse the footprint.
+# boundary, and on the 28 mm heads it routed tracks onto the edge. Not along the
+# main board's bottom edge, where J3's courtyard reaches the outline and a rule
+# area would refuse the footprint.
 [[keepouts]]
 name = "edge clearance, top"
 rect = [0.0, 0.0, 100.0, 0.5]
@@ -79,112 +84,126 @@ rect = [99.5, 0.0, 100.0, 100.0]
 
 # ref = [x_mm, y_mm, rotation_deg], or [x_mm, y_mm, rotation_deg, "back"] for a
 # part on the back face (rotation as seen from the top), relative to the
-# origin; each footprint's
-# own anchor (pad 1 for the sockets and connectors). A breakout socket's
-# courtyard is its module's outline, so no part sits under a module.
+# origin; each footprint's own anchor (pad 1 for the sockets and connectors). A
+# breakout socket's courtyard is its module's outline, so no part sits under a
+# module.
 [placement]
-# Head board: copper x 72-100, y 0-28; sawn on the lines at x 70.5 and
-# y 29.5, so the head is 29.5 x 29.5 mm, 0.25 mm per side inside the cradle's
-# measured 30.0 x 30.0 mm inner width and height (Lauri, 2026-10-15). File a
-# sawn edge back to its line if the cut wanders. Lauri's layout: J2 is an
-# unshrouded 2x7 header on the back face beside the XIAO, and the M2 holes are
-# in the two top corners, where the cradle has room to drill for M2 heat-set
-# inserts (Lauri, 2026-10-16). PROVISIONAL: drill the cradle to match the holes,
-# or correct their positions here.
-U1 = [90.0, 16.2, 90]     # XIAO ESP32-S3 Sense socket; USB-C toward the top edge,
-                          # between the two M2 holes
-J2 = [74.27, 22.62, 0, "back"]  # 2x7 pin header, head end, on the back face left
-                          # of the XIAO; flipped, so pad 1 is its bottom-left pad
-                          # and the header runs up from it. PROVISIONAL: check
-                          # the ribbon's run toward the pan axis
-H5 = [74.5, 3.05, 0]      # M2 through the cradle into a heat-set insert,
-H6 = [97.0, 3.05, 0]      # PROVISIONAL: 22.5 mm apart, as near the corners as the
-                          # edge keepout and the cut band allow
-# Main board: everything outside the head corner and the band. M3 holes at its
-# corners, PROVISIONAL: check them against the 2WD chassis plate's holes, or
-# drill the plate to match.
+# Head boards. All three: the XIAO socket with its USB-C toward the head's top
+# edge (Lauri confirmed the camera then faces forward), and two M2 holes in the
+# top corners at the #799 positions, 22.5 mm apart (Lauri confirmed them,
+# 2026-10-16). The holes' ISO 7380 footprint leaves 18.5 mm between their
+# courtyards, so the XIAO (17.88 mm) fits between them; fit M2 button heads.
+# PROVISIONAL: drill the cradle to match the holes.
+#
+# Head 1: the ribbon header on the back face at the bottom, the XIAO above it.
+U1 = [85.75, 12.7, 90]
+J2 = [91.75, 26.0, 90, "back"]
+H5 = [74.5, 3.05, 0]
+H6 = [97.0, 3.05, 0]
+# Head 2: the header on the front face at the bottom, the XIAO above it.
+U3 = [85.75, 47.6, 90]
+J16 = [79.75, 61.65, 90]
+H7 = [74.5, 38.3, 0]
+H8 = [97.0, 38.3, 0]
+# Head 3: the header on the back face at the top, between the M2 holes; the
+# XIAO below it, where #799 had it.
+U4 = [85.75, 88.0, 90]
+J17 = [92.75, 75.0, 90, "back"]
+H9 = [74.5, 73.55, 0]
+H10 = [97.0, 73.55, 0]
+
+# Main board, x 0.5-69. M3 holes at its corners, PROVISIONAL: check them
+# against the 2WD chassis plate's holes, or drill the plate to match.
 H1 = [4.0, 4.0, 0]
-H2 = [63.0, 4.0, 0]       # the main board's top-right corner, beside the band
+H2 = [65.0, 4.0, 0]
 H3 = [4.0, 96.0, 0]
-H4 = [96.0, 96.0, 0]
-J1 = [58.0, 14.0, 0]      # IDC 2x7, main end, beside the band: the pan-tilt end.
-                          # Measure the ribbon length the full pan and tilt travel needs
-# Front strip: the front rangefinder, the OLED and the 3V3 regulator.
-J7 = [12.0, 4.0, 0]       # RCWL-1601 front, at the front edge
-J9 = [4.0, 13.0, 0]       # SSD1306 OLED lead, front-left corner
-U2 = [12.0, 24.0, 0]      # AMS1117-3.3
-C7 = [6.0, 32.0, 0]       # LDO input
-C8 = [13.0, 32.0, 0]      # LDO output
-A3 = [32.0, 4.0, 0]       # TCA9548A socket
-C5 = [27.0, 3.5, 0]       # TCA9548A VIN decoupling, beside its VIN pin
-# The mux channel pull-ups in a row under the TCA9548A: ch0 and ch1 (left
-# header) on the left, ch3 and ch4 (right header) on the right.
-R2 = [21.0, 36.5, 90]
-R3 = [24.5, 36.5, 90]
-R4 = [28.0, 36.5, 90]
-R5 = [31.5, 36.5, 90]
-R6 = [38.5, 36.5, 90]
-R7 = [42.0, 36.5, 90]
-R8 = [45.5, 36.5, 90]
-R9 = [49.0, 36.5, 90]
-# Middle: the motor driver at the left edge, the PCA9685 beside it.
-A1 = [3.5, 62.0, 0]       # TB6612FNG socket; motor outputs on its left header
-J5 = [4.0, 69.0, 0]       # left motor, left edge
-J6 = [93.0, 48.0, 0]      # right motor, right edge
-C2 = [16.0, 70.0, 0]      # TB6612FNG VM bulk
-A2 = [25.0, 59.0, 0]      # PCA9685 socket; servo columns on the module face the rear
-C4 = [24.0, 68.0, 90]     # PCA9685 VCC decoupling
-C1 = [32.0, 72.0, 0]      # PCA9685 V+ bulk
-A4 = [97.0, 84.0, 0]      # MAX98357A socket, right side; the speaker lead leaves the module
-C3 = [72.0, 80.0, 0]      # MAX98357A Vin bulk
-# Rear edge: power in, the buck lead, the rear rangefinder and the piezo.
-J3 = [13.0, 86.0, 180]    # XT30 pack in, mating face to the rear edge
-J4 = [27.0, 95.0, 0]      # LM2596 lead
-J8 = [43.0, 95.0, 0]      # RCWL-1601 rear, at the rear edge
-J10 = [58.0, 95.0, 0]     # piezo
-R1 = [59.0, 88.0, 0]      # piezo series resistor
-# Test headers (Lauri, 2026-10-16), through-hole pin headers. The spare
-# centre above the PCA9685 is under its module (A2's courtyard), so the supply,
-# I2C headers sit in a row below it, the UART0 tap below J1, net names on the silkscreen to
-# their right; the ground posts sit beside the parts they serve.
-J11 = [42.0, 67.5, 0]     # supply: 3V3, 5V, GND, VBAT; VBAT's only neighbour is GND
-J12 = [52.0, 67.5, 0]     # I2C SDA/SCL and MUX_RST, main side of the ribbon
-J15 = [64.5, 33.5, 0]     # UART0 TX tap: GND, TX; the ROM boot log, 115200 baud.
-                          # Below J1, a short run from its pin 6
-J13 = [82.0, 90.0, 90]    # GND post below the MAX98357A and C3
-J14 = [18.5, 24.0, 90]    # GND post beside the AMS1117 (U2)
+H4 = [65.0, 96.0, 0]
+# Front row: both rangefinders side by side over the TCA9548A's channel 3 and 4
+# pads, then the OLED.
+J7 = [11.0, 4.0, 0]       # RCWL-1601 front
+J8 = [25.0, 4.0, 0]       # RCWL-1601 rear
+J9 = [39.0, 4.0, 0]       # SSD1306 OLED lead
+# The TCA9548A turned so its channel 3/4 header faces the rangefinders and its
+# upstream and channel 0/1 header faces the PCA9685.
+A3 = [2.5, 26.0, 90]
+C5 = [3.5, 30.5, 0]       # TCA9548A VIN decoupling, below its VIN pin
+# The mux channel pull-ups in a row under the TCA9548A: ch0 and ch1, then ch3
+# and ch4.
+R2 = [9.0, 30.0, 90]
+R3 = [12.0, 30.0, 90]
+R4 = [15.0, 30.0, 90]
+R5 = [18.0, 30.0, 90]
+R6 = [22.0, 30.0, 90]
+R7 = [25.0, 30.0, 90]
+R8 = [28.0, 30.0, 90]
+R9 = [31.0, 30.0, 90]
+# Test headers, the 3V3 regulator and the ribbon's main end, right of the mux.
+J11 = [36.0, 11.0, 0]     # supply: 3V3, 5V, GND, VBAT; VBAT's only neighbour is GND
+J12 = [36.0, 22.5, 0]     # I2C SDA/SCL and MUX_RST, main side of the ribbon
+U2 = [50.0, 14.0, 0]      # AMS1117-3.3
+J14 = [56.5, 14.0, 90]    # GND post beside the AMS1117
+C7 = [48.0, 27.5, 0]      # LDO input
+C8 = [54.5, 27.5, 0]      # LDO output
+J1 = [64.5, 11.0, 0]      # ribbon, main end, beside the head column. Measure the
+                          # ribbon length the full pan and tilt travel needs
+J15 = [64.5, 27.5, 0]     # UART0 TX tap: GND, TX; the ROM boot log, 115200 baud
+# The PCA9685 across the board; servo columns on the module face the rear.
+A2 = [5.0, 52.5, 0]
+C4 = [1.6, 50.0, 90]      # PCA9685 VCC decoupling, beside its VCC pin
+# The motor driver with both motor connectors beside its motor outputs, its
+# bulk capacitor and the PCA9685's to its right, the amplifier at the right.
+J6 = [3.5, 66.5, 90]      # right motor (channel A)
+J5 = [3.5, 75.5, 90]      # left motor (channel B)
+A1 = [10.5, 80.0, 0]      # TB6612FNG socket
+C2 = [35.0, 64.6, 0]      # TB6612FNG VM bulk
+C1 = [35.0, 74.5, 0]      # PCA9685 V+ bulk
+A4 = [67.0, 79.0, 0]      # MAX98357A socket; the speaker lead leaves the module
+# Rear row: power in and the buck lead together, the amplifier's bulk, its
+# ground post, the buzzer and its resistor.
+J3 = [12.5, 86.3, 180]    # XT30 pack in, mating face to the rear edge
+J4 = [26.0, 95.0, 0]      # LM2596 lead
+C3 = [40.0, 87.5, 0]      # MAX98357A Vin bulk
+J13 = [40.0, 96.0, 90]    # GND post below C3
+R1 = [46.5, 96.0, 0]      # buzzer series resistor
+BZ1 = [51.0, 93.6, 0]     # 12 mm buzzer, soldered to the board
 
 [silk]
-hidden_refs = ["H1", "H2", "H3", "H4", "H5", "H6"]
+hidden_refs = ["H1", "H2", "H3", "H4", "H5", "H6", "H7", "H8", "H9", "H10"]
 # Seeed's reference text is below KiCad's minimum silkscreen height.
-ref_sizes = { U1 = 1.0 }
+ref_sizes = { U1 = 1.0, U3 = 1.0, U4 = 1.0, R2 = 0.8, R3 = 0.8, R4 = 0.8, R5 = 0.8, R6 = 0.8, R7 = 0.8, R8 = 0.8, R9 = 0.8 }
 # Off the board edge and out from under neighbours.
-ref_positions = { A1 = [11.0, 52.0], J7 = [18.0, 9.3], J3 = [15.5, 81.5], J2 = [75.5, 25.8], J13 = [79.8, 90.0], J14 = [19.77, 20.5] }
-# The saw line, on both faces, along the middle of the keepout band; each gets
-# a "CUT" label inside the band. Both stop 0.5 mm short of the relief hole
-# (Edge.Cuts), the silkscreen-to-edge clearance.
+ref_positions = { A2 = [35.0, 45.0], A3 = [16.0, 18.0],C4 = [1.6, 53.4], C1 = [35.0, 79.9], J5 = [3.5, 79.3], J6 = [3.5, 60.3], J7 = [14.75, 8.45], J8 = [28.75, 8.45], J9 = [42.75, 8.45], J12 = [36.0, 32.7], J16 = [95.5, 61.0], J14 = [61.4, 14.0], R2 = [9.0, 32.9], R3 = [12.0, 32.9], R4 = [15.0, 32.9], R5 = [18.0, 32.9], R6 = [22.0, 32.9], R7 = [25.0, 32.9], R8 = [28.0, 32.9], R9 = [31.0, 32.9] }
+# The saw lines, on both faces; each gets a "CUT" label on its left-hand side,
+# so each runs in the direction that puts the label in the waste.
 cut_lines = [
-    [70.5, 0.5, 70.5, 28.0],
-    [72.0, 29.5, 99.5, 29.5],
+    [70.5, 99.5, 70.5, 0.5],
+    [99.5, 29.5, 70.5, 29.5],
+    [70.5, 35.25, 99.5, 35.25],
+    [99.5, 64.75, 70.5, 64.75],
+    [70.5, 70.5, 99.5, 70.5],
 ]
 texts = [
-    { text = "robocar-unified carrier", at = [55.0, 80.0], size = 1.2 },
-    { text = "PROVISIONAL: do not order", at = [55.0, 82.5], size = 1.2 },
-    { text = "FRONT ^", at = [54.0, 4.0], size = 1.2 },
-    { text = "HEAD", at = [82.5, 2.5], size = 1.2 },
+    { text = "robocar-unified", at = [28.0, 84.0], size = 1.0 },
+    { text = "carrier", at = [28.0, 85.8], size = 1.0 },
+    { text = "PROVISIONAL:", at = [28.0, 87.8], size = 1.0 },
+    { text = "do not order", at = [28.0, 89.6], size = 1.0 },
+    { text = "FRONT ^", at = [55.5, 4.0], size = 1.2 },
+    { text = "HEAD 1", at = [75.0, 26.0], size = 0.8 },
+    { text = "HEAD 2", at = [75.0, 61.0], size = 0.8 },
+    { text = "HEAD 3", at = [74.4, 96.0], size = 0.8 },
     # Test header net names, one beside each pin (2.54 mm pitch).
-    { text = "+3V3", at = [45.6, 67.5], size = 1.0 },
-    { text = "+5V", at = [45.6, 70.04], size = 1.0 },
-    { text = "GND", at = [45.6, 72.58], size = 1.0 },
-    { text = "VBAT", at = [45.6, 75.12], size = 1.0 },
-    { text = "GND", at = [56.8, 67.5], size = 1.0 },
-    { text = "SDA", at = [56.8, 70.04], size = 1.0 },
-    { text = "SCL", at = [56.8, 72.58], size = 1.0 },
-    { text = "MUX_RST", at = [56.8, 75.12], size = 1.0 },
-    { text = "GND", at = [68.1, 33.5], size = 1.0 },
-    { text = "U0TX", at = [68.4, 36.04], size = 1.0 },
-    { text = "GND", at = [83.27, 92.3], size = 1.0 },
-    { text = "GND", at = [19.77, 26.3], size = 1.0 },
+    { text = "+3V3", at = [39.6, 11.0], size = 1.0 },
+    { text = "+5V", at = [39.6, 13.54], size = 1.0 },
+    { text = "GND", at = [39.6, 16.08], size = 1.0 },
+    { text = "VBAT", at = [39.6, 18.62], size = 1.0 },
+    { text = "GND", at = [39.6, 22.5], size = 1.0 },
+    { text = "SDA", at = [39.6, 25.04], size = 1.0 },
+    { text = "SCL", at = [39.6, 27.58], size = 1.0 },
+    { text = "MUX_RST", at = [40.8, 30.12], size = 1.0 },
+    { text = "GND", at = [60.9, 27.5], size = 1.0 },
+    { text = "U0TX", at = [60.6, 30.04], size = 1.0 },
+    { text = "GND", at = [57.77, 16.3], size = 1.0 },
+    { text = "GND", at = [41.27, 98.6], size = 1.0 },
 ]
 
 # Freerouting width classes, in this order. `nets` are net names or fnmatch
@@ -196,11 +215,11 @@ track_um = 1000
 clearance_um = 300
 via_um = [1000, 500]
 
-# The head's rails: the XIAO and its camera draw well under 1 A, and 1 mm
+# The heads' rails: the XIAO and its camera draw well under 1 A, and 1 mm
 # tracks do not fit between the 28 mm head's pads.
 [[net_classes]]
 name = "logic_power"
-nets = ["+3V3", "HEAD_+5V", "HEAD_GND"]
+nets = ["+3V3", "HEAD*_+5V", "HEAD*_GND"]
 track_um = 500
 clearance_um = 250
 via_um = [800, 400]
@@ -213,18 +232,19 @@ track_um = 300
 clearance_um = 200
 via_um = [600, 300]
 
-# A copper pour on both layers after routing, one region per ground: the head's
-# ground arrives through the ribbon as HEAD_GND, a different net from the main
-# board's GND. The regions stop at the cut band; the keepouts would clear the
-# fill from it anyway. The .kicad_dru lets a thermal on either net resolve to
-# one spoke because route_board first checks every pad of both has a routed
-# track.
+# A copper pour on both layers after routing, one region per ground: each
+# head's ground arrives through the ribbon as HEAD_GND, HEAD2_GND or HEAD3_GND,
+# a different net from the main board's GND. The regions stop at the cut bands;
+# the keepouts would clear the fill from them anyway. The .kicad_dru lets a
+# thermal on any of these nets resolve to one spoke because route_board first
+# checks every pad of each has a routed track.
 [pour]
 layers = ["F.Cu", "B.Cu"]
 regions = [
     { net = "GND", rect = [0.0, 0.0, 69.0, 100.0] },
-    { net = "GND", rect = [69.0, 31.0, 100.0, 100.0] },
     { net = "HEAD_GND", rect = [72.0, 0.0, 100.0, 28.0] },
+    { net = "HEAD2_GND", rect = [72.0, 35.25, 100.0, 63.25] },
+    { net = "HEAD3_GND", rect = [72.0, 70.5, 100.0, 98.5] },
 ]
 clearance_mm = 0.4
 min_thickness_mm = 0.25
