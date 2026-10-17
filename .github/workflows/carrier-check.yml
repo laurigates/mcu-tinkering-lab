@@ -63,7 +63,7 @@ jobs:
       # tools/kicad is stdlib-only but needs tomllib (3.11+); no KiCad.
       - uses: actions/setup-python@v6.3.0
         with:
-          python-version: '3.11.17'
+          python-version: '3.15.0'
 
       - name: tools/kicad unit tests
         run: |
