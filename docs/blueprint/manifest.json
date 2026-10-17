@@ -149,5 +149,11 @@
         "Classified workspace role as standalone (no ancestor or descendant blueprints found)"
       ]
     }
-  ]
+  ],
+  "id_registry": {
+    "last_prd": 0,
+    "last_prp": 0,
+    "documents": {},
+    "github_issues": {}
+  }
 }
