@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.6](https://github.com/laurigates/mcu-tinkering-lab/compare/balancebot-v0.1.5...balancebot-v0.1.6) (2026-10-17)
+
+
+### Miscellaneous
+
+* **carrier:** ignore KiCad local history folders ([#806](https://github.com/laurigates/mcu-tinkering-lab/issues/806)) ([547bf40](https://github.com/laurigates/mcu-tinkering-lab/commit/547bf40eb17c7c23f850ca31a1a8121711fd0d21))
+
 ## [0.1.5](https://github.com/laurigates/mcu-tinkering-lab/compare/balancebot-v0.1.4...balancebot-v0.1.5) (2026-10-15)
 
 

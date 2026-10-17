@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.2.12](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.11...robocar-unified-v0.2.12) (2026-10-17)
+
+
+### Features
+
+* **robocar-unified:** carrier pre-order changes and three-head panel ([#802](https://github.com/laurigates/mcu-tinkering-lab/issues/802)) ([d5bfad7](https://github.com/laurigates/mcu-tinkering-lab/commit/d5bfad7b4d188be0a364b74487a97de7e515c079))
+* **robocar-unified:** MCP23017 socket and GPIO mirror header on the carrier ([#803](https://github.com/laurigates/mcu-tinkering-lab/issues/803)) ([8722001](https://github.com/laurigates/mcu-tinkering-lab/commit/8722001af4771ab01487086a613760b5e704ff7e))
+
+
+### Bug Fixes
+
+* **robocar-unified:** fit the head board to the 30 x 30 mm cradle ([#797](https://github.com/laurigates/mcu-tinkering-lab/issues/797)) ([01dde2c](https://github.com/laurigates/mcu-tinkering-lab/commit/01dde2c67d40aa8eb11716adb203fad8840d5d05))
+
+
+### Miscellaneous
+
+* **carrier:** ignore KiCad local history folders ([#806](https://github.com/laurigates/mcu-tinkering-lab/issues/806)) ([547bf40](https://github.com/laurigates/mcu-tinkering-lab/commit/547bf40eb17c7c23f850ca31a1a8121711fd0d21))
+
 ## [0.2.11](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.10...robocar-unified-v0.2.11) (2026-10-15)
 
 
