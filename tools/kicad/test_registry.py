@@ -367,8 +367,8 @@ class MutationTests(unittest.TestCase):
     def test_unvendored_symbol(self):
         self.fails(
             "r0805",
-            text("r0805").replace('"Device:R"', '"Device:L"'),
-            "no symbol 'L'|not vendored",
+            text("r0805").replace('"Device:R"', '"Device:LED"'),
+            "no symbol 'LED'|not vendored",
         )
 
     def test_unvendored_footprint(self):

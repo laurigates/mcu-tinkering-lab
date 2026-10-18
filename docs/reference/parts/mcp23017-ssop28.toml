@@ -1,0 +1,42 @@
+# MCP23017 16-bit I/O expander as a bare chip, SSOP-28: the integrated
+# carrier's expander. KiCad's MCP23017x-x-SS symbol is derived (`extends`),
+# which the vendored subset rejects; it extends MCP23017x-x-SO, whose pin
+# numbers the SSOP shares (only the package differs). Pin names follow the
+# cjmcu-2317-socket entry (VCC, GND, SCL), so the GPIO mirror header's
+# [[outputs]] read the same.
+[part]
+name = "MCP23017 I/O expander, SSOP-28"
+source = "KiCad 10.0.6 library: Interface_Expansion:MCP23017x-x-SO (MCP23017x-x-SS extends it) and Package_SO:SSOP-28_5.3x10.2mm_P0.65mm; Microchip DS20001952 gives the SOIC and SSOP one pinout"
+symbol = "Interface_Expansion:MCP23017x-x-SO"
+footprint = "Package_SO:SSOP-28_5.3x10.2mm_P0.65mm"
+value = "MCP23017-E/SS"
+no_connect = ["NC"]
+
+[pins]
+GPB0 = 1
+GPB1 = 2
+GPB2 = 3
+GPB3 = 4
+GPB4 = 5
+GPB5 = 6
+GPB6 = 7
+GPB7 = 8
+VCC = 9
+GND = 10
+NC = [11, 14]
+SCL = 12
+SDA = 13
+A0 = 15
+A1 = 16
+A2 = 17
+RESET = 18
+INTB = 19
+INTA = 20
+GPA0 = 21
+GPA1 = 22
+GPA2 = 23
+GPA3 = 24
+GPA4 = 25
+GPA5 = 26
+GPA6 = 27
+GPA7 = 28

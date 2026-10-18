@@ -1,0 +1,17 @@
+# The integrated robocar-unified carrier: schematic only, no board yet.
+#
+# tools/kicad writes the schematic from ../../hardware.toml and the parts
+# registry. `stage = "schematic"` tells the board gates (boardcheck, the check
+# stamp, the local check's DRC) that there is no .kicad_pcb to check yet.
+#
+# To lay the board out: add [outline], [placement], [net_classes], [signal],
+# [pour] and [silk] as in ../../../unified/hardware/carrier/board.toml, drop
+# `stage`, then run `just robocar-unified-integrated::carrier-board` and
+# `::carrier-check` with KiCad 10.0.6. Until then, `just
+# robocar-unified-integrated::compare` gives the courtyard areas against the
+# socketed carrier.
+
+[project]
+name = "robocar-unified-integrated-carrier"
+paper = "A2"
+stage = "schematic"

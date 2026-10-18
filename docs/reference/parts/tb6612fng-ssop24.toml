@@ -1,0 +1,29 @@
+# TB6612FNG dual H-bridge as a bare chip, SSOP-24: the integrated carrier's
+# motor driver. Pin names follow the sparkfun-tb6612fng-socket entry (A01, not
+# AO1), so [[outputs]] and the motor nets read the same; the paired output and
+# supply pins are joined here, as on the breakout. The logic ground (GND) and
+# the two power grounds (PGND1, PGND2) keep the chip's names.
+[part]
+name = "TB6612FNG motor driver, SSOP-24"
+source = "KiCad 10.0.6 library: Driver_Motor:TB6612FNG (the hidden duplicates of AO1, AO2, BO1, BO2, PGND1 and PGND2 are the stacked pins) and Package_SO:SSOP-24_5.3x8.2mm_P0.65mm"
+symbol = "Driver_Motor:TB6612FNG"
+footprint = "Package_SO:SSOP-24_5.3x8.2mm_P0.65mm"
+value = "TB6612FNG"
+
+[pins]
+A01 = [1, 2]
+A02 = [5, 6]
+B02 = [7, 8]
+B01 = [11, 12]
+GND = 18
+PGND1 = [3, 4]
+PGND2 = [9, 10]
+VM = [13, 14, 24]
+PWMB = 15
+BIN2 = 16
+BIN1 = 17
+STBY = 19
+VCC = 20
+AIN1 = 21
+AIN2 = 22
+PWMA = 23

@@ -1,0 +1,38 @@
+# Robocar Unified, integrated carrier: the robocar-unified carrier PCB with the
+# breakout chips and the buck converter on the board (hardware only; the
+# firmware is packages/robocar/unified's).
+# Run `just --list` to see available recipes
+
+import '../../../tools/kicad.just'
+
+project_dir := "packages/robocar/unified-integrated"
+socketed_dir := "packages/robocar/unified"
+
+default:
+    @just --list
+
+##########
+# Carrier PCB (hardware/carrier/, KiCad 10) — tools/kicad, ADR-027
+##########
+
+# Write the carrier schematic and library tables from hardware.toml
+[group: "carrier"]
+carrier-schematic: (_carrier-schematic project_dir)
+
+# Needs [outline], [placement] and the other layout tables in
+# hardware/carrier/board.toml first; it has none yet (stage = "schematic").
+#
+# Place, autoroute (Freerouting) and pour the carrier board
+[group: "carrier"]
+carrier-board: (_carrier-board project_dir) (_carrier-route project_dir)
+
+# At stage = "schematic": ERC and netlist parity only; no DRC, board check or stamp.
+#
+# ERC, netlist parity with hardware.toml and library drift (KiCad 10.0.6)
+[group: "carrier"]
+carrier-check: (_carrier-check project_dir)
+
+# Courtyard areas of both carriers' parts, and the main-board parts only one has (KiCad-free)
+[group: "carrier"]
+compare:
+    cd {{_kicad_repo}} && PYTHONPATH=tools python3 -m kicad.area {{socketed_dir}} {{project_dir}}

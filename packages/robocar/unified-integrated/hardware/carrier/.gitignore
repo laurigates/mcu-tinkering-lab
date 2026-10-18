@@ -1,0 +1,10 @@
+# KiCad per-user state, backups and generated reports
+*.kicad_prl
+*-backups/
+fp-info-cache
+_autosave-*
+.history/
+*.lck
+output/
+# kicad-mcp-pro scratch state
+.kicad-mcp/

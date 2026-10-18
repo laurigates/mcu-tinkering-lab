@@ -1,0 +1,24 @@
+# MAX98357A I2S class-D amplifier as a bare chip, TQFN-16 with exposed pad: the
+# integrated carrier's amplifier. Pin names follow the adafruit-max98357a-socket
+# entry (Vin, SD, GAIN, LRC); the exposed pad is PAD (17), wired to ground with
+# GND (3, 11 and 15). VO+ and VO- are OUTP and OUTN, the harness view's names.
+[part]
+name = "MAX98357A I2S amplifier, TQFN-16"
+source = "KiCad 10.0.6 library: Audio:MAX98357A (VDD 7 and 8, GND 3, 11 and 15, exposed pad 17) and Package_DFN_QFN:TQFN-16-1EP_3x3mm_P0.5mm_EP1.23x1.23mm"
+symbol = "Audio:MAX98357A"
+footprint = "Package_DFN_QFN:TQFN-16-1EP_3x3mm_P0.5mm_EP1.23x1.23mm"
+value = "MAX98357AETE+"
+no_connect = ["NC"]
+
+[pins]
+DIN = 1
+GAIN = 2
+GND = [3, 11, 15]
+PAD = 17
+SD = 4
+NC = [5, 6, 12, 13]
+Vin = [7, 8]
+"VO+" = 9
+"VO-" = 10
+LRC = 14
+BCLK = 16

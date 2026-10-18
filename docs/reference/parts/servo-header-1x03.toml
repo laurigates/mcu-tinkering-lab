@@ -1,0 +1,13 @@
+# Hobby-servo header, 1x03 at 2.54 mm: one per servo on the integrated
+# carrier, where the socketed carrier plugs the servos into the PCA9685
+# breakout's own 3-pin columns.
+[part]
+name = "Servo header, 1x03"
+source = "the PCA9685 breakout's column order (docs/reference/boards/adafruit-pca9685.md: PWM nearest the chip, then V+, then GND), so a servo lead plugs in the same way round on both carriers"
+symbol = "Connector_Generic:Conn_01x03"
+footprint = "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical"
+
+[pins]
+PWM = 1
+"V+" = 2
+GND = 3

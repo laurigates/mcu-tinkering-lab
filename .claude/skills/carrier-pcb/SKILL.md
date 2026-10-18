@@ -33,6 +33,11 @@ several traps below are version-specific: after a KiCad upgrade, re-run
   spare_heads` (ADR-021). Two head IDC headers sit on the back face
   (`[placement]` entry `[x, y, rot, "back"]`, mirrored about its anchor, so the
   pads run the other way: at rotation 90 they run toward -x)
+- `packages/robocar/unified-integrated/hardware/carrier/`: the same carrier with
+  the breakout chips and a buck converter on the board, at `stage = "schematic"`
+  in `board.toml` (no board yet: boardcheck, the stamp and the local DRC skip
+  it). `just robocar-unified-integrated::compare` runs `kicad.area`, the
+  courtyard-area comparison against the socketed carrier
 - `.github/workflows/carrier-check.yml` (CI) and the `kicad-carrier` pre-commit hook
 
 ## Workflow

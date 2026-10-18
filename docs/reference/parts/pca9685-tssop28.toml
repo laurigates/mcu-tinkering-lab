@@ -1,0 +1,42 @@
+# PCA9685 16-channel PWM driver as a bare chip, TSSOP-28: the integrated
+# carrier's PWM driver. Channel n is pin name "n", as on the
+# adafruit-pca9685-socket entry, so [[channel_nets]] read the same; VDD keeps
+# the breakout's name VCC. Every channel is wired on the integrated carrier
+# (LEDs 0-5, servos 6-7, motor driver 8-13) except 14 and 15.
+[part]
+name = "PCA9685 PWM driver, TSSOP-28"
+source = "KiCad 10.0.6 library: Driver_LED:PCA9685PW and Package_SO:TSSOP-28_4.4x9.7mm_P0.65mm (LEDn is pin n+6 for n < 8, n+7 above)"
+symbol = "Driver_LED:PCA9685PW"
+footprint = "Package_SO:TSSOP-28_4.4x9.7mm_P0.65mm"
+value = "PCA9685PW"
+no_connect = ["14", "15"]
+
+[pins]
+A0 = 1
+A1 = 2
+A2 = 3
+A3 = 4
+A4 = 5
+"0" = 6
+"1" = 7
+"2" = 8
+"3" = 9
+"4" = 10
+"5" = 11
+"6" = 12
+"7" = 13
+GND = 14
+"8" = 15
+"9" = 16
+"10" = 17
+"11" = 18
+"12" = 19
+"13" = 20
+"14" = 21
+"15" = 22
+OE = 23
+A5 = 24
+EXTCLK = 25
+SCL = 26
+SDA = 27
+VCC = 28
