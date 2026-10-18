@@ -1,17 +1,220 @@
-# The integrated robocar-unified carrier: schematic only, no board yet.
+# Carrier PCB layout for the integrated robocar-unified carrier: everything
+# the netlist does not say. Parts, footprints and nets come from
+# ../../hardware.toml and the parts registry; this file says where each part
+# sits, how wide each net's tracks are, and what goes on the silkscreen.
 #
-# tools/kicad writes the schematic from ../../hardware.toml and the parts
-# registry. `stage = "schematic"` tells the board gates (boardcheck, the check
-# stamp, the local check's DRC) that there is no .kicad_pcb to check yet.
+# PROVISIONAL: DO NOT ORDER THIS BOARD. It exists to compare with the socketed
+# carrier (../../../unified/hardware/carrier/board.toml), whose layout rules it
+# follows: one rectangular PCB holding the main board (x 0-64.5, the chassis
+# plate) and one head board (x 64.5-94, y 0-29.5, the 29.5 mm square for the
+# pan-tilt cradle), split by a copper-free saw band, no V-cuts or tabs. The
+# area below the head is waste. The main board is 64.5 x 76 mm after sawing;
+# the socketed carrier's is about 70.5 x 100 mm.
 #
-# To lay the board out: add [outline], [placement], [net_classes], [signal],
-# [pour] and [silk] as in ../../../unified/hardware/carrier/board.toml, drop
-# `stage`, then run `just robocar-unified-integrated::carrier-board` and
-# `::carrier-check` with KiCad 10.0.6. Until then, `just
-# robocar-unified-integrated::compare` gives the courtyard areas against the
-# socketed carrier.
+# Every position is Claude's proposal, checked only by the carrier gates
+# (DRC, parity, board check). The tracks are Freerouting's; nobody has
+# reviewed them. Regenerate with `just robocar-unified-integrated::carrier-board`
+# and check with `::carrier-check` (KiCad 10.0.6; `just kicad::setup`).
+#
+# Coordinates: millimetres from the outline's top-left corner, x right, y down.
+# The top edge is the robot's front.
 
 [project]
 name = "robocar-unified-integrated-carrier"
 paper = "A2"
-stage = "schematic"
+
+[outline]
+origin = [100.0, 100.0]
+size = [94.0, 76.0]
+
+# The saw bands and the waste below the head: no copper. KiCad's 0.5 mm
+# copper-to-edge clearance as rule areas, since Freerouting ignores it; not
+# where J3's courtyard reaches the bottom edge (a rule area also refuses
+# footprints).
+[[keepouts]]
+name = "head column cut band, vertical"
+rect = [63.0, 0.0, 66.0, 76.0]
+
+[[keepouts]]
+name = "waste below the head"
+rect = [66.0, 28.0, 94.0, 76.0]
+
+[[keepouts]]
+name = "edge clearance, top"
+rect = [0.0, 0.0, 94.0, 0.5]
+
+[[keepouts]]
+name = "edge clearance, left"
+rect = [0.0, 0.0, 0.5, 76.0]
+
+[[keepouts]]
+name = "edge clearance, bottom left of J3"
+rect = [0.0, 75.5, 8.0, 76.0]
+
+[[keepouts]]
+name = "edge clearance, bottom right of J3"
+rect = [23.0, 75.5, 63.0, 76.0]
+
+[[keepouts]]
+name = "edge clearance, right"
+rect = [93.5, 0.0, 94.0, 28.0]
+
+# ref = [x_mm, y_mm, rotation_deg], each footprint's own anchor.
+[placement]
+# Head: the XIAO with its USB-C toward the top edge, the ribbon header below it
+# on the front face, M2 holes in the top corners (the socketed carrier's head 2).
+U1 = [79.75, 12.35, 90]
+J2 = [73.75, 26.4, 90]
+H5 = [68.5, 3.05, 0]
+H6 = [91.0, 3.05, 0]
+# Main board, front row: M3 corner holes, both rangefinders, the ribbon's main
+# end and the UART0 tap.
+H1 = [4.0, 4.0, 0]
+H2 = [59.0, 4.0, 0]
+J7 = [11.0, 3.6, 0]
+J8 = [25.0, 3.6, 0]
+J1 = [38.5, 6.0, 90]
+J15 = [54.0, 10.0, 90]
+# Mux and pull-ups
+U5 = [17.0, 14.0, 0]
+C5 = [22.0, 15.5, 90]
+R14 = [24.0, 11.0, 90]
+R15 = [26.3, 11.0, 90]
+R16 = [28.6, 11.0, 90]
+R2 = [10.0, 22.5, 90]
+R3 = [12.3, 22.5, 90]
+R4 = [14.6, 22.5, 90]
+R5 = [16.9, 22.5, 90]
+R10 = [19.2, 22.5, 90]
+R11 = [21.5, 22.5, 90]
+R6 = [23.8, 22.5, 90]
+R7 = [26.1, 22.5, 90]
+R8 = [28.4, 22.5, 90]
+R9 = [30.7, 22.5, 90]
+J11 = [32.0, 10.5, 0]
+J12 = [36.0, 10.5, 0]
+# Expander and mirror header
+U9 = [47.0, 25.0, 0]
+C6 = [40.5, 27.0, 90]
+J18 = [57.0, 14.0, 0]
+# Motors
+J6 = [3.5, 27.0, 90]
+J5 = [3.5, 38.0, 90]
+U7 = [15.0, 33.0, 0]
+C15 = [22.0, 31.0, 90]
+C16 = [22.0, 35.5, 90]
+C2 = [30.5, 33.0, 0]
+# PWM driver, LEDs and servos
+U6 = [24.0, 46.0, 0]
+C4 = [29.5, 42.5, 90]
+R17 = [15.0, 41.0, 0]
+R18 = [15.0, 43.1, 0]
+R19 = [15.0, 45.2, 0]
+R20 = [15.0, 47.3, 0]
+R21 = [15.0, 49.4, 0]
+R22 = [15.0, 51.5, 0]
+R23 = [15.0, 53.6, 0]
+R24 = [15.0, 55.7, 0]
+J20 = [2.5, 44.0, 0]
+J21 = [6.3, 44.0, 0]
+J22 = [2.5, 53.0, 0]
+J23 = [6.3, 53.0, 0]
+C1 = [30.5, 55.7, 0]
+FB1 = [38.3, 56.5, 90]
+# Amplifier, buzzer, OLED
+U8 = [48.0, 49.0, 0]
+C17 = [52.5, 49, 90]
+C18 = [48.0, 45.3, 0]
+C3 = [46.0, 56.5, 0]
+J19 = [59.5, 55.5, 270]
+J13 = [53.3, 40.5, 0]
+BZ1 = [41.0, 38.0, 0]
+R1 = [53.0, 33, 90]
+J9 = [59.5, 42.0, 270]
+# Power along the rear: the XT30 pack input, the buck converter laid out as TI
+# draws it (SW straight into L1, input capacitors beside VIN, the bootstrap
+# capacitor along VBST's side to the switch node at L1), the feedback divider,
+# then the LDO.
+J3 = [13.0, 62.3, 180]
+U10 = [30.0, 63.0, 90]
+C11 = [33.0, 64.5, 270]
+C9 = [35.3, 64.5, 270]
+C10 = [37.6, 64.5, 270]
+C12 = [27.2, 63.0, 270]
+L1 = [30.0, 69.9, 270]
+C13 = [35.3, 71.8, 0]
+C14 = [35.3, 74.0, 0]
+R12 = [42.2, 64.5, 90]
+R13 = [39.9, 64.5, 90]
+U2 = [50.0, 67.0, 0]
+C7 = [50.0, 73.6, 0]
+C8 = [58.5, 63.5, 0]
+J14 = [40.0, 10.5, 0]
+H3 = [4.0, 72.0, 0]
+H4 = [59.0, 72.0, 0]
+
+[silk]
+hidden_refs = ["H1", "H2", "H3", "H4", "H5", "H6"]
+ref_sizes = { U1 = 1.0, C3 = 0.8, C4 = 0.8, C5 = 0.8, C8 = 0.8, C9 = 0.8, C10 = 0.8, C11 = 0.8, C12 = 0.8, C13 = 0.8, C14 = 0.8, C18 = 0.8, FB1 = 0.8, L1 = 0.8, R2 = 0.8, R3 = 0.8, R4 = 0.8, R5 = 0.8, R6 = 0.8, R7 = 0.8, R8 = 0.8, R9 = 0.8, R10 = 0.8, R11 = 0.8, R12 = 0.8, R13 = 0.8, R14 = 0.8, R15 = 0.8, R16 = 0.8, R17 = 0.8, R18 = 0.8, R19 = 0.8, R20 = 0.8, R21 = 0.8, R22 = 0.8, R23 = 0.8, R24 = 0.8, U10 = 0.8 }
+ref_positions = { C4 = [31.6, 42.5], C5 = [23.9, 16.7], FB1 = [38.3, 53.2], C8 = [58.5, 66.0], C3 = [46.0, 61.8], C18 = [44.6, 45.4], U8 = [44.3, 49.6], BZ1 = [44.8, 38.0], J18 = [53.6, 13.0], J20 = [2.5, 41.6], J21 = [6.3, 41.6], J22 = [2.5, 63.2], J23 = [6.3, 63.2], J6 = [3.5, 20.6], J5 = [3.5, 31.6], J7 = [14.75, 8.4], J8 = [28.75, 8.4], C13 = [38.6, 71.8], C14 = [38.6, 74.0], L1 = [30.0, 69.9], C11 = [33.0, 61.7], C9 = [35.3, 61.7], C10 = [37.6, 61.7], R13 = [39.9, 67.4], R12 = [42.2, 67.4], C12 = [25.0, 64.1], U10 = [25.2, 60.9], R14 = [24.0, 14.3], R15 = [26.3, 14.3], R16 = [28.6, 14.3], R2 = [10, 25.3], R3 = [12.3, 25.3], R4 = [14.6, 25.3], R5 = [16.9, 25.3], R10 = [19.2, 25.3], R11 = [21.5, 25.3], R6 = [23.8, 25.3], R7 = [26.1, 25.3], R8 = [28.4, 25.3], R9 = [30.7, 25.3], R17 = [11.4, 41.0], R18 = [11.4, 43.1], R19 = [11.4, 45.2], R20 = [11.4, 47.3], R21 = [11.4, 49.4], R22 = [11.4, 51.5], R23 = [11.4, 53.6], R24 = [11.4, 55.7] }
+cut_lines = [
+    [64.5, 75.5, 64.5, 0.5],
+    [93.5, 29.5, 64.5, 29.5],
+]
+texts = [
+    { text = "robocar-unified", at = [34.5, 46.3], size = 0.8 },
+    { text = "integrated", at = [34.5, 47.7], size = 0.8 },
+    { text = "PROVISIONAL", at = [34.5, 49.1], size = 0.8 },
+    { text = "FRONT ^", at = [47.0, 9.5], size = 1.0 },
+    { text = "HEAD", at = [90.5, 26.5], size = 0.8 },
+]
+
+# Freerouting width classes. One width per net, so each class is the widest
+# track every pin on its nets accepts: the TPS563201's SOT-23-6 pads (0.6 mm at
+# 0.95 mm) take 0.8 mm, the TB6612FNG's SSOP-24 pads (0.4 mm at 0.65 mm) 0.45 mm,
+# and the MAX98357A's TQFN pads (0.25 mm at 0.5 mm) the 0.25 mm signal width,
+# which is why the amplifier has its own AMP_5V net behind FB1. GND is poured on
+# both layers, so its routed tracks only need to reach every pad.
+[[net_classes]]
+name = "input_power"
+nets = ["VBAT", "BUCK_SW"]
+track_um = 800
+clearance_um = 200
+via_um = [1000, 500]
+
+[[net_classes]]
+name = "motor_power"
+nets = ["+5V", "MOT_*"]
+track_um = 450
+clearance_um = 200
+via_um = [800, 400]
+
+[[net_classes]]
+name = "head_power"
+nets = ["HEAD_+5V", "HEAD_GND"]
+track_um = 500
+clearance_um = 200
+via_um = [800, 400]
+
+[[net_classes]]
+name = "logic_power"
+nets = ["+3V3"]
+track_um = 350
+clearance_um = 200
+via_um = [600, 300]
+
+[signal]
+track_um = 250
+clearance_um = 200
+via_um = [600, 300]
+
+[pour]
+layers = ["F.Cu", "B.Cu"]
+regions = [
+    { net = "GND", rect = [0.0, 0.0, 63.0, 76.0] },
+    { net = "HEAD_GND", rect = [66.0, 0.0, 94.0, 28.0] },
+]
+clearance_mm = 0.3
+min_thickness_mm = 0.25
+thermal_gap_mm = 0.3
+spoke_mm = 0.35

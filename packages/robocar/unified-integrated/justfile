@@ -19,16 +19,17 @@ default:
 [group: "carrier"]
 carrier-schematic: (_carrier-schematic project_dir)
 
-# Needs [outline], [placement] and the other layout tables in
-# hardware/carrier/board.toml first; it has none yet (stage = "schematic").
+# Rewrites the .kicad_pcb from scratch. Freerouting does not route the same
+# way twice, so commit the board you checked, not a re-run of it. The
+# placement in hardware/carrier/board.toml is provisional.
 #
 # Place, autoroute (Freerouting) and pour the carrier board
 [group: "carrier"]
 carrier-board: (_carrier-board project_dir) (_carrier-route project_dir)
 
-# At stage = "schematic": ERC and netlist parity only; no DRC, board check or stamp.
+# Writes the check stamp CI verifies, only when every gate passes.
 #
-# ERC, netlist parity with hardware.toml and library drift (KiCad 10.0.6)
+# ERC, DRC with schematic parity, netlist parity with hardware.toml, board nets, library drift
 [group: "carrier"]
 carrier-check: (_carrier-check project_dir)
 

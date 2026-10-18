@@ -10,6 +10,7 @@
 #   passives each breakout carried that the circuit still needs: decoupling,
 #   the mux's upstream pull-ups and reset pull-up, the PCA9685's output series
 #   resistors on the servo and LED channels.
+# - The MAX98357A takes 5V through a ferrite bead (FB1) as its own net, AMP_5V.
 # - The LM2596 module and its lead (J4) are a TPS563201 buck converter (U10)
 #   on the board, 3 A like the module, with its inductor, capacitors and
 #   feedback divider.
@@ -277,6 +278,17 @@ kind = "resistor"
 part = "r0805"
 ref = "R24"
 value = "220"
+
+# The amplifier's own supply, AMP_5V, through a ferrite bead from 5V: it keeps
+# the class-D switching off the motor and logic rail, and it lets the autorouter
+# give 5V tracks wider than the MAX98357A's 0.5 mm-pitch pins allow (one width
+# per net).
+[parts.amp_fb]
+name = "Ferrite bead, MAX98357A supply"
+kind = "ferrite-bead"
+part = "ferrite-bead-0805"
+ref = "FB1"
+value = "600R@100MHz 2A"
 
 # --- Off-board loads that plugged into the breakouts ------------------------
 
@@ -862,7 +874,7 @@ from = "buck.VFB"
 to = ["buck_fb_top.B", "buck_fb_bot.A"]
 
 # The buck's output. The servo headers' V+ is this rail, as the PCA9685
-# breakout's V+ was.
+# breakout's V+ was; the amplifier takes it through FB1 (AMP_5V, above).
 [[rails]]
 name = "5V"
 from = "buck_l.2"
@@ -873,19 +885,22 @@ to = [
     "mcu.5V",
     "motor_driver.VM",
     "motor_vm_c.A",
-    "amp.Vin",
-    "amp.SD",
-    "amp_c10u.A",
-    "amp_c100n.A",
+    "amp_fb.1",
     "servo_pan.V+",
     "servo_tilt.V+",
     "bulk_pwm.+",
     "bulk_motor.+",
-    "bulk_amp.+",
     "ldo.VI",
     "ldo_in.+",
     "tp_power.5V",
 ]
+
+# SD_MODE strapped to the amplifier's VDD (left channel), as on the socketed
+# carrier.
+[[rails]]
+name = "AMP_5V"
+from = "amp_fb.2"
+to = ["amp.Vin", "amp.SD", "amp_c10u.A", "amp_c100n.A", "bulk_amp.+"]
 
 [[rails]]
 name = "3V3"

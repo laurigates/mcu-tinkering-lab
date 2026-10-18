@@ -5,10 +5,10 @@ no breakout modules and no buck module. It exists to compare the two approaches.
 The firmware, the pin header (`../unified/main/pin_config.h`) and the head board
 are robocar-unified's, unchanged. There is no firmware here.
 
-> **Schematic only.** `hardware/carrier/board.toml` has `stage = "schematic"`: there
-> is no board layout yet. The schematic passes ERC and netlist parity with KiCad
-> 10.0.6 (`just robocar-unified-integrated::carrier-check`). Do not order anything
-> from this directory.
+> **PROVISIONAL: do not order.** The board is placed by hand, routed by Freerouting
+> and passes every carrier gate with KiCad 10.0.6 (ERC, DRC with schematic parity,
+> netlist parity, the board check and its stamp), but nobody has reviewed the
+> layout or the tracks, and the open items under [Design notes](#design-notes) stand.
 
 ## What changes
 
@@ -17,7 +17,7 @@ are robocar-unified's, unchanged. There is no firmware here.
 | A3 Adafruit TCA9548A breakout | U5 TCA9548APWR (TSSOP-24), C5, upstream I2C pull-ups R14/R15, RESET pull-up R16 |
 | A2 Adafruit PCA9685 breakout | U6 PCA9685PW (TSSOP-28), C4; 220 Ω series R17-R24 on the LED and servo channels |
 | A1 SparkFun TB6612FNG breakout | U7 TB6612FNG (SSOP-24), C15 (VCC), C16 (VM) |
-| A4 Adafruit MAX98357A breakout | U8 MAX98357AETE+ (TQFN-16), C17, C18 |
+| A4 Adafruit MAX98357A breakout | U8 MAX98357AETE+ (TQFN-16), C17, C18, ferrite bead FB1 on its supply |
 | A5 CJMCU-2317 (MCP23017) module | U9 MCP23017-E/SS (SSOP-28), C6 |
 | J4 lead to an LM2596 module | U10 TPS563201 (SOT-23-6, 3 A), L1 3.3 µH, C9-C14, feedback R12/R13 |
 | Servos and LEDs on the PCA9685 breakout's 3-pin columns | J20/J21 servo headers, J22/J23 RGB LED headers |
@@ -30,6 +30,21 @@ mounting holes. Net names are the socketed carrier's, so the two netlists compar
 by name.
 
 ## Footprint comparison
+
+The laid-out boards, as sawn apart:
+
+| Main board | Socketed | Integrated |
+|---|---|---|
+| Size | about 70.5 x 100 mm | 64.5 x 76 mm |
+| Area | about 7050 mm² | 4902 mm² (−30 %) |
+
+The head board is the same 29.5 mm square on both. The integrated main board keeps
+the socketed one's layout habits (connectors along the front and rear edges, M3
+holes in the corners, 0.5 mm edge keepouts), so the difference is the chips, not a
+tighter layout style. Its parts' courtyards fill half of it; the socketed board's
+fill three quarters.
+
+The parts alone:
 
 ```bash
 just robocar-unified-integrated::compare
@@ -44,10 +59,10 @@ placement leaves. As of this commit:
 
 | Main board | Socketed | Integrated |
 |---|---|---|
-| Parts | 39 | 69 |
-| Courtyard area | 5357 mm² | 2441 mm² (−54 %) |
-| SMD / through-hole parts | 19 / 20 | 50 / 19 |
-| Pads | 200 | 300 |
+| Parts | 39 | 70 |
+| Courtyard area | 5357 mm² | 2447 mm² (−54 %) |
+| SMD / through-hole parts | 19 / 20 | 51 / 19 |
+| Pads | 200 | 302 |
 
 Where the area goes:
 
@@ -55,18 +70,13 @@ Where the area goes:
   connectors, the three 470 µF electrolytics, the 2x10 GPIO mirror header and the
   M3 holes' surroundings, none of which shrink.
 - The five breakout sockets and the buck lead take 3687 mm²; the PCA9685 breakout
-  alone is 63 x 26 mm (1625 mm²). Their replacements, 36 parts, take 771 mm²: the
-  six chips 356 mm², the buck's inductor 46 mm², 24 0805 passives 172 mm², and the
-  new servo, LED and speaker connectors 197 mm².
+  alone is 63 x 26 mm (1625 mm²). Their replacements, 37 parts, take 778 mm²: the
+  six chips 356 mm², the buck's inductor 46 mm², 25 0805 passives and the ferrite
+  bead 179 mm², and the new servo, LED and speaker connectors 197 mm².
 - The socketed carrier's buck converter is off the board: the LM2596 module (about
   43 x 21 mm) sits on the chassis at the end of J4's lead. The integrated buck
   (U10, L1, six capacitors, two resistors) adds about 120 mm² of courtyard to the
   board and removes the module.
-
-The socketed main board is about 70 x 100 mm after sawing, so its courtyards fill
-about 76 % of it. At that packing the integrated parts would fit about 3200 mm²,
-around 57 x 57 mm, but a board laid out with the same connector rows along the
-front and rear edges will not pack that tightly. The layout is the real answer.
 
 Other differences the numbers do not show:
 
@@ -98,6 +108,11 @@ The circuit choices that are not a copy of a breakout:
 - **PCA9685 outputs.** The Adafruit breakout has a 220 Ω resistor on every output;
   they are kept only on the channels that leave the board (LEDs, servos). The six
   motor-driver channels go straight to the TB6612FNG.
+- **Amplifier supply.** The MAX98357A takes 5 V through a ferrite bead (FB1) as
+  its own net, AMP_5V, with SD_MODE, its decoupling and its 470 µF bulk capacitor.
+  It keeps the class-D switching off the motor and logic rail, and it is what lets
+  5 V have tracks wider than the amplifier's pins allow (below). Choose a bead
+  rated for at least 2 A.
 - **RGB LEDs.** Common anode on 3V3, the PCA9685's own supply, so an output driven
   high leaves no forward voltage across the LED. The LEDs' resistors are on this
   board (R17-R22).
@@ -106,20 +121,52 @@ The circuit choices that are not a copy of a breakout:
   the inductor, 220 Ω, 56.2 kΩ, 10 µF and 22 µF ceramics still need parts chosen
   against JLCPCB's stock.
 
+## Layout
+
+`hardware/carrier/board.toml` holds the placement, the net classes, the pour and
+the silkscreen. The buck converter follows TI's layout order: SW straight into L1,
+the input capacitors beside VIN, the bootstrap capacitor along VBST's side to the
+switch node at L1, the feedback divider next to them.
+
+Freerouting gives each net one track width, so a net class is the widest track every
+pin on its nets accepts:
+
+| Class | Nets | Track | Limited by |
+|---|---|---|---|
+| input_power | VBAT, BUCK_SW | 0.8 mm | TPS563201 pads, 0.6 mm at 0.95 mm pitch |
+| motor_power | +5V, MOT_* | 0.45 mm | TB6612FNG pads, 0.4 mm at 0.65 mm pitch |
+| head_power | HEAD_+5V, HEAD_GND | 0.5 mm | |
+| logic_power | +3V3 | 0.35 mm | |
+| signal | everything else | 0.25 mm | MAX98357A pads, 0.25 mm at 0.5 mm pitch |
+
+GND is poured on both layers (HEAD_GND on the head), so its 0.25 mm tracks only
+need to reach every pad. The 0.45 mm 5 V and motor tracks carry the motors' stall
+current only briefly; widen the 5 V trunk from L1 to C2 and the TB6612FNG by hand,
+or pour it, before ordering. Freerouting necks tracks down to 0.15 mm at some
+fine-pitch pads, so the `.kicad_pro` sets a 0.15 mm minimum track width (JLCPCB's
+two-layer minimum is 0.127 mm).
+
+```bash
+just kicad::setup                                 # KiCad 10.0.6, Freerouting, Java 25
+just robocar-unified-integrated::carrier-board    # place, route, pour
+just robocar-unified-integrated::carrier-check    # every gate, then the stamp
+```
+
 ## Files
 
 | Path | What it is |
 |---|---|
 | [`hardware.toml`](hardware.toml) | Parts and nets; the join's input. Pin roles come from `../unified/main/pin_config.h` |
-| `hardware/carrier/board.toml` | KiCad project name, paper size, `stage = "schematic"` |
-| `hardware/carrier/robocar-unified-integrated-carrier/` | The KiCad project. The `.kicad_sch` and both library tables are generated; the `.kicad_pro` is hand-kept, copied from the socketed carrier's, with one ERC change (below) |
+| `hardware/carrier/board.toml` | Placement, keepouts, net classes, pour, silkscreen |
+| `hardware/carrier/robocar-unified-integrated-carrier/` | The KiCad project. The `.kicad_sch` and both library tables are generated, the `.kicad_pcb` comes from `carrier-board`, and `.check.json` is the stamp `carrier-check` writes; the `.kicad_pro` is hand-kept, copied from the socketed carrier's, with the ERC change below and a 0.15 mm minimum track |
 | `docs/reference/parts/*-tssop24.toml` and siblings | Registry entries for the bare chips, the inductor and the new connectors |
 
 The `.kicad_pro` sets ERC's pin-conflict matrix to OK for an "Unspecified" pin
 against any pin type but No-connect. KiCad's MAX98357A symbol types its exposed pad
 (pin 17) Unspecified, so tying it to GND otherwise fails ERC (`--severity-all`)
-against the ground net's power-input, passive and input pins. It is the only Unspecified pin in the vendored library, so
-the change covers that pad and nothing else. An ERC exclusion would be narrower
+against the ground net's power-input, passive and input pins. It is the only
+Unspecified pin in the vendored library, so the change covers that pad and nothing
+else. An ERC exclusion would be narrower
 still, but KiCad matches one only against its own serialisation of the marker,
 which `kicad-cli` cannot write.
 
@@ -130,10 +177,10 @@ what `hardware.toml` generates. Change `hardware.toml` and run:
 just robocar-unified-integrated::carrier-schematic
 ```
 
-## Next steps
+## Before ordering
 
-Lay out the board: add `[outline]`, `[placement]`, `[net_classes]`, `[signal]`,
-`[pour]` and `[silk]` to `board.toml` (the socketed carrier's
-`../unified/hardware/carrier/board.toml` is the template), remove `stage`, and run
-`carrier-board` then `carrier-check`. Keep the buck's input capacitors, switch node
-and inductor tight, and give the TB6612FNG's VM and PGND pins short, wide copper.
+- Review the placement and Freerouting's tracks; widen or pour the 5 V trunk.
+- Check the buck's capacitor values and the inductor's saturation current against
+  the TPS563201 datasheet and the motors' stall current.
+- Choose LCSC parts for the new chips, the inductor, the ferrite bead and the new
+  passive values.
