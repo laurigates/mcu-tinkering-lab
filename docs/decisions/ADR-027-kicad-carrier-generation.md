@@ -198,4 +198,33 @@ apart after delivery (robocar-unified, #750) separates them with one. A cutout i
 a circle on Edge.Cuts, a hole milled through the board; KiCad's Specctra export
 gives it to Freerouting as a keepout.
 Recipes come from `tools/kicad.just` (`carrier-schematic`, `carrier-board`,
-`carrier-check`, `carrier-fab`); `just kicad::check` runs what CI runs.
+`carrier-board-checked`, `carrier-check`, `carrier-review`, `carrier-fab`);
+`just kicad::check` runs what CI runs.
+
+### Addendum (2026-10, PR #807): layout quality is not a gate result
+
+The integrated robocar carrier (#807) passed every gate with one GND via on its
+main board. A +5V pour on F.Cu above GND had cut F.Cu GND into islands around
+every chip in the power half, and their ground pads reached the B.Cu plane
+through 0.19–0.25 mm tracks. ERC, DRC, parity and the stamp check what is
+connected; nothing checked how well. An adversarial review against the
+datasheets found it, with power-stage problems no gate can see. What changed:
+
+- **`board.toml [fanout]`**: after routing, route_board.py puts a via, on a
+  stub, beside every SMD pad of the listed poured nets wherever it clears. The
+  route fails when a `required` pad (a power path's) finds no room. Fanout runs
+  after Freerouting, not before as keepouts: pre-placed vias boxed in enough
+  pads that Freerouting abandoned whole nets.
+- **`board.toml [[tracks]]`**: fixed polylines (a power trunk, a regulator's
+  ground to its input capacitor, an exposed pad's ground ties), walled off from
+  Freerouting by DSN keepouts. Freerouting 2.5.0 drops the DSN's wiring.
+- **No power pour above ground on a two-layer carrier.** Power travels in fixed
+  tracks and routed tracks; both layers stay ground.
+- **KiCad-free gates in `boardcheck`**: a pour region stays 1.0 mm from every
+  hand-saw cut line, and silkscreen text is at least 0.8 mm tall.
+- **A review step before `carrier-fab`**: `just <project>::carrier-review`
+  prints the layout metrics, the `pcb-reviewer` agent
+  (`.claude/agents/pcb-reviewer.md`) runs the adversarial review, and
+  `.claude/rules/power-stage-checklist.md` lists the regulator checks.
+  `carrier-board-checked` loops place, route and check, since Freerouting does
+  not route the same way twice.

@@ -360,7 +360,17 @@ class ConfigTests(unittest.TestCase):
 
     def test_cut_lines(self):
         line = [41.5, 0.5, 41.5, 61.5]
-        ok = self.with_data(lambda d: d["silk"].update(cut_lines=[line]))
+
+        def cut(d):
+            # a carrier's pour stops short of its cut lines (see below)
+            del d["pour"]["net"]
+            d["pour"]["regions"] = [
+                {"net": "GND", "rect": [0, 0, 40.5, 62]},
+                {"net": "GND", "rect": [42.5, 0, 90, 62]},
+            ]
+            d["silk"].update(cut_lines=[line])
+
+        ok = self.with_data(cut)
         self.assertEqual(boardcheck.validate_config(ok, self.nl), [])
         self.fails(
             lambda d: d["silk"].update(cut_lines=[[41.5, 0.5, 41.5]]),
@@ -406,6 +416,44 @@ class ConfigTests(unittest.TestCase):
             "[pour] regions: unknown key(s) ['layer']",
         )
         self.fails(lambda d: regions(d, []), "[pour] regions must be a non-empty list")
+
+    def test_pour_regions_clear_the_cut_lines(self):
+        """A pour stops 1 mm short of every hand-saw cut line, so the saw (and
+        the flex of sawing) cannot bridge its copper to the next piece's."""
+
+        def setup(d, rect, line):
+            del d["pour"]["net"]
+            d["pour"]["regions"] = [{"net": "GND", "rect": rect}]
+            d.setdefault("silk", {})["cut_lines"] = [line]
+
+        ok = self.with_data(lambda d: setup(d, [0, 0, 40, 62], [41, 0.5, 41, 61]))
+        self.assertEqual(boardcheck.validate_config(ok, self.nl), [])
+        self.fails(
+            lambda d: setup(d, [0, 0, 40, 62], [40.5, 0.5, 40.5, 61]),
+            "[pour] regions: [0, 0, 40, 62] is 0.5 mm from cut line "
+            "[40.5, 0.5, 40.5, 61]; keep 1.0 mm",
+        )
+        # a whole-board [pour] (net, no regions) meets every cut line
+        self.fails(
+            lambda d: d.setdefault("silk", {}).update(cut_lines=[[41, 0.5, 41, 61]]),
+            "[pour] regions: None is 0.0 mm from cut line [41, 0.5, 41, 61]",
+        )
+
+    def test_silk_text_height_floor(self):
+        """JLCPCB prints 1.0 mm text legibly; 0.8 mm is the floor where a label
+        will not fit at 1.0, and nothing goes below it."""
+        self.fails(
+            lambda d: d.setdefault("silk", {}).update(
+                ref_sizes={next(iter(d["placement"])): 0.6}
+            ),
+            "is 0.6 mm tall; the floor is 0.8 mm",
+        )
+        self.fails(
+            lambda d: d.setdefault("silk", {}).update(
+                texts=[{"text": "X", "at": [5, 5], "size": 0.7}]
+            ),
+            "[silk] texts: 'X' is 0.7 mm tall; the floor is 0.8 mm",
+        )
 
     def test_pour_region_layers_and_priority(self):
         """A region may name its own layers, and overlap one on a shared layer

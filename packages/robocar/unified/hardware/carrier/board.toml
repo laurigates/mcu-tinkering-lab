@@ -291,7 +291,8 @@ via_um = [600, 300]
 
 # A copper pour on both layers after routing, one region per ground: each
 # head's ground arrives through the ribbon as HEAD_GND, HEAD2_GND or HEAD3_GND,
-# a different net from the main board's GND. The regions stop at the cut bands;
+# a different net from the main board's GND. The regions stop 1 mm short of
+# each cut line (boardcheck holds them to it);
 # the keepouts would clear the fill from them anyway. The .kicad_dru lets a
 # thermal on any of these nets resolve to one spoke because route_board first
 # checks every pad of each has a routed track.
@@ -300,8 +301,8 @@ layers = ["F.Cu", "B.Cu"]
 regions = [
     { net = "GND", rect = [0.0, 0.0, 69.0, 100.0] },
     { net = "HEAD_GND", rect = [72.0, 0.0, 100.0, 28.0] },
-    { net = "HEAD2_GND", rect = [72.0, 35.25, 100.0, 63.25] },
-    { net = "HEAD3_GND", rect = [72.0, 70.5, 100.0, 98.5] },
+    { net = "HEAD2_GND", rect = [72.0, 36.25, 100.0, 63.25] },
+    { net = "HEAD3_GND", rect = [72.0, 71.5, 100.0, 98.5] },
 ]
 clearance_mm = 0.4
 min_thickness_mm = 0.25

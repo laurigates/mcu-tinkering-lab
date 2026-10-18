@@ -82,6 +82,8 @@ file's other imports.
 | `_carrier-board project` | Private — place the board from scratch (KiCad's bundled Python) |
 | `_carrier-route project` | Private — Freerouting, then the GND pour (needs java >= 25 and the 2.5.0 jar) |
 | `_carrier-check project` | Private — ERC, DRC parity, netlist parity, board check, then the check stamp (`kicad-cli`) |
+| `_carrier-board-checked project tries` | Private — place, route and check in a loop until every gate passes (default 5 tries) |
+| `_carrier-review project` | Private — the routed board's layout metrics for a pre-fab review (`pcb/review.py`); reports, does not gate |
 | `_carrier-fab project` | Private — Gerbers, drill, BOM and CPL (`kicad-cli`) |
 | `_perfboard project` / `_perfboard-check project` | Private — the project's perfboard drawing and wire list from `hardware/perfboard/perfboard.toml` (`kicad.perfboard`); KiCad-free |
 | `_kicad_python` | KiCad's bundled Python; override with `KICAD_PYTHON` |

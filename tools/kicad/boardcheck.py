@@ -241,6 +241,14 @@ TABLE_KEYS = {
 }
 TEXT_KEYS = {"text", "at", "size"}
 REGION_KEYS = {"net", "rect", "layers", "priority"}
+# How far a pour stops short of a [silk] cut line: the hand saw's kerf and the
+# board's flex while sawing must not reach copper (the integrated carrier's
+# pre-fab review found GND fill at 0.0 mm).
+CUT_CLEARANCE_MM = 1.0
+# JLCPCB's legible silkscreen is 1.0 mm tall; 0.8 mm is the floor where a
+# label does not fit at 1.0 (build_board.py keeps the stroke at 0.16 mm or
+# more at any size).
+SILK_MIN_MM = 0.8
 LIST_TABLES = ("net_classes", "keepouts", "cutouts", "tracks")
 REQUIRED = ("outline", "placement", "net_classes", "signal", "pour")
 
@@ -468,6 +476,36 @@ def _validate_tracks(
     return errors
 
 
+def _validate_cut_clearance(where: str, data: dict[str, Any], size: Any) -> list[str]:
+    """Each [pour] region stops CUT_CLEARANCE_MM short of every [silk] cut line."""
+    lines = [
+        tuple(line)
+        for line in data.get("silk", {}).get("cut_lines", [])
+        if _numbers(line, 4)
+    ]
+    pour = data.get("pour", {})
+    if not lines or not isinstance(pour, dict) or not _numbers(size, 2):
+        return []
+    errors = []
+    try:
+        regions = pour_region_specs(pour)
+    except (KeyError, TypeError):
+        return []  # _validate_pour reports a malformed [pour]
+    for region in regions:
+        rect = region.get("rect")
+        box = [0.0, 0.0, size[0], size[1]] if rect is None else rect
+        if not _numbers(box, 4):
+            continue
+        for line in lines:
+            d = _segment_rect(line[:2], line[2:], tuple(box))
+            if d < CUT_CLEARANCE_MM - 1e-9:
+                errors.append(
+                    f"{where}: [pour] regions: {rect!r} is {d:.1f} mm from cut line "
+                    f"{list(line)!r}; keep {CUT_CLEARANCE_MM} mm"
+                )
+    return errors
+
+
 FANOUT_DEFAULTS = {
     "track_um": 300,
     "reach_mm": 2.0,
@@ -621,6 +659,20 @@ def validate_config(cfg: paths.BoardConfig, nl: netlist.Netlist) -> list[str]:
             errors.append(
                 f"{where}: [silk] cut_lines: {line!r} is not inside [outline]"
             )
+    for key in ("ref_sizes",):
+        for ref, v in silk.get(key, {}).items():
+            if _positive(v) and v < SILK_MIN_MM:
+                errors.append(
+                    f"{where}: [silk] {key}: {ref} is {v} mm tall; the floor is {SILK_MIN_MM} mm"
+                )
+    for text in silk.get("texts", []):
+        if isinstance(text, dict) and _positive(text.get("size")):
+            if text["size"] < SILK_MIN_MM:
+                errors.append(
+                    f"{where}: [silk] texts: {text.get('text')!r} is {text['size']} mm "
+                    f"tall; the floor is {SILK_MIN_MM} mm"
+                )
+    errors += _validate_cut_clearance(where, data, size)
     errors += _validate_keepouts(where, data, size)
     errors += _validate_cutouts(where, data, size)
     errors += _validate_tracks(where, data, nl, size)

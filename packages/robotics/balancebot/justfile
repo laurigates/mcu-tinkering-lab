@@ -141,6 +141,20 @@ carrier-route: (_carrier-route project_dir)
 [group: "carrier"]
 carrier-check: (_carrier-check project_dir)
 
+# Freerouting does not route the same way twice; commit the board it stops on.
+#
+# Place, route and check until every gate passes (up to `tries` runs)
+[group: "carrier"]
+carrier-board-checked tries="5": (_carrier-board-checked project_dir tries)
+
+# Vias per poured net, ground pads without one, pour islands, narrowest power
+# tracks, decoupling distances, cut-line clearances, silkscreen size. Reports;
+# does not gate.
+#
+# Layout metrics for a pre-fab review; run before carrier-fab
+[group: "carrier"]
+carrier-review: (_carrier-review project_dir)
+
 # The BOM and CPL cover the SMD passives only; skip them to hand-solder.
 #
 # Gerbers and drill files for JLCPCB, zipped, plus the BOM and CPL for its assembly service
