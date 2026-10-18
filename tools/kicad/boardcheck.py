@@ -755,6 +755,9 @@ def main(argv: list[str] | None = None, repo_root: Path = REPO_ROOT) -> int:
     try:
         for project in paths.select_projects(args.projects, args.allow_none, repo_root):
             cfg = paths.load_board_config(project)
+            if not cfg.has_board:
+                print(paths.skip_line(project, repo_root))
+                continue
             module = functools.partial(paths.just_module, project, repo_root)
             nl = netlist.build(project, repo_root, vendored)
             ns = schematic.namespace(schematic.project_key(project, repo_root))
