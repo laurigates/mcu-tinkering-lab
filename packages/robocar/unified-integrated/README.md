@@ -2,8 +2,8 @@
 
 The [robocar-unified](../unified/) carrier PCB with the chips on the board itself:
 no breakout modules and no buck module. It exists to compare the two approaches.
-The firmware, the pin header (`../unified/main/pin_config.h`) and the head board
-are robocar-unified's, unchanged. There is no firmware here.
+The firmware, the pin header (`../unified/main/pin_config.h`) and the three head
+boards are robocar-unified's, unchanged. There is no firmware here.
 
 > **PROVISIONAL: do not order.** The board is placed by hand, routed by Freerouting
 > and passes every carrier gate with KiCad 10.0.6 (ERC, DRC with schematic parity,
@@ -23,11 +23,10 @@ are robocar-unified's, unchanged. There is no firmware here.
 | C1-C3 470 µF electrolytics (8 x 10.5 mm) | C1-C3 22 µF tantalums (3528), [below](#bulk-capacitors) |
 | Servos and LEDs on the PCA9685 breakout's 3-pin columns | J20/J21 servo headers, J22/J23 RGB LED headers |
 | Speaker on the MAX98357A breakout's screw terminal | J19 JST-XH 2 |
-| Three head boards (two spares) | One head board |
 
 Everything else keeps its reference, value and role: the connectors, the test
-headers, the LDO, the mux channel pull-ups, the buzzer and the
-mounting holes. Net names are the socketed carrier's, so the two netlists compare
+headers, the LDO, the mux channel pull-ups, the buzzer, the mounting holes and
+the three head boards (U1/J2, and the spares U3/J16 and U4/J17). Net names are the socketed carrier's, so the two netlists compare
 by name.
 
 ## Footprint comparison
@@ -39,7 +38,15 @@ The laid-out boards, as sawn apart:
 | Size | about 70.5 x 100 mm | 64.5 x 76 mm |
 | Area | about 7050 mm² | 4902 mm² (−30 %) |
 
-The head board is the same 29.5 mm square on both. The integrated main board keeps
+| Whole PCB | Socketed | Integrated |
+|---|---|---|
+| Outline | 100 x 100 mm | 94 x 100 mm |
+
+Both PCBs carry the same three head boards, the 29.5 mm square for the pan-tilt
+cradle, in a column on the right: the integrated column is the socketed one moved
+6 mm left. The integrated main board ends at y 76, so the strip below it
+(64.5 x 24 mm) is waste; the outline stays 100 mm tall for the heads. Saw on the
+waste side of the y 76 line: J3's courtyard ends 0.1 mm short of it. The integrated main board keeps
 the socketed one's layout habits (connectors along the front and rear edges, M3
 holes in the corners, 0.5 mm edge keepouts), so the difference is the chips, not a
 tighter layout style. Its parts' courtyards fill half of it; the socketed board's
@@ -153,7 +160,7 @@ pin on its nets accepts:
 |---|---|---|---|
 | input_power | VBAT, BUCK_SW | 0.8 mm | TPS563201 pads, 0.6 mm at 0.95 mm pitch |
 | motor_power | +5V, MOT_* | 0.45 mm | TB6612FNG pads, 0.4 mm at 0.65 mm pitch |
-| head_power | HEAD_+5V, HEAD_GND | 0.5 mm | |
+| head_power | HEAD*_+5V, HEAD*_GND | 0.5 mm | |
 | logic_power | +3V3 | 0.35 mm | |
 | signal | everything else | 0.25 mm | MAX98357A pads, 0.25 mm at 0.5 mm pitch |
 

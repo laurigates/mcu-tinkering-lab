@@ -5,11 +5,12 @@
 #
 # PROVISIONAL: DO NOT ORDER THIS BOARD. It exists to compare with the socketed
 # carrier (../../../unified/hardware/carrier/board.toml), whose layout rules it
-# follows: one rectangular PCB holding the main board (x 0-64.5, the chassis
-# plate) and one head board (x 64.5-94, y 0-29.5, the 29.5 mm square for the
-# pan-tilt cradle), split by a copper-free saw band, no V-cuts or tabs. The
-# area below the head is waste. The main board is 64.5 x 76 mm after sawing;
-# the socketed carrier's is about 70.5 x 100 mm.
+# follows: one rectangular PCB holding the main board (x 0-64.5, y 0-76, the
+# chassis plate) and the socketed carrier's three head boards (x 64.5-94, each
+# the 29.5 mm square for the pan-tilt cradle), split by copper-free saw bands,
+# no V-cuts or tabs. The head column is the socketed carrier's, 6 mm to the
+# left. The strip below the main board (y 76-100) is waste. The main board is
+# 64.5 x 76 mm after sawing; the socketed carrier's is about 70.5 x 100 mm.
 #
 # Every position is Claude's proposal, checked only by the carrier gates
 # (DRC, parity, board check). The tracks are Freerouting's; nobody has
@@ -25,19 +26,31 @@ paper = "A2"
 
 [outline]
 origin = [100.0, 100.0]
-size = [94.0, 76.0]
+size = [94.0, 100.0]
 
-# The saw bands and the waste below the head: no copper. KiCad's 0.5 mm
+# The saw bands and the waste below the main board: no copper. KiCad's 0.5 mm
 # copper-to-edge clearance as rule areas, since Freerouting ignores it; not
-# where J3's courtyard reaches the bottom edge (a rule area also refuses
-# footprints).
+# where J3's courtyard reaches the main board's bottom edge (a rule area also
+# refuses footprints; the courtyard ends at y 75.9).
 [[keepouts]]
 name = "head column cut band, vertical"
-rect = [63.0, 0.0, 66.0, 76.0]
+rect = [63.0, 0.0, 66.0, 100.0]
 
 [[keepouts]]
-name = "waste below the head"
-rect = [66.0, 28.0, 94.0, 76.0]
+name = "head 1 / head 2 cut band"
+rect = [66.0, 28.0, 93.5, 35.75]
+
+[[keepouts]]
+name = "head 2 / head 3 cut band"
+rect = [66.0, 63.25, 93.5, 71.0]
+
+[[keepouts]]
+name = "head 3 bottom band"
+rect = [66.0, 98.5, 93.5, 100.0]
+
+[[keepouts]]
+name = "waste below the main board"
+rect = [0.0, 76.0, 63.0, 100.0]
 
 [[keepouts]]
 name = "edge clearance, top"
@@ -57,16 +70,28 @@ rect = [23.0, 75.5, 63.0, 76.0]
 
 [[keepouts]]
 name = "edge clearance, right"
-rect = [93.5, 0.0, 94.0, 28.0]
+rect = [93.5, 0.0, 94.0, 100.0]
 
 # ref = [x_mm, y_mm, rotation_deg], each footprint's own anchor.
 [placement]
-# Head: the XIAO with its USB-C toward the top edge, the ribbon header below it
-# on the front face, M2 holes in the top corners (the socketed carrier's head 2).
-U1 = [79.75, 12.35, 90]
-J2 = [73.75, 26.4, 90]
+# The heads, as on the socketed carrier (its x less 6 mm): the XIAO with its
+# USB-C toward the top edge, M2 holes in the top corners.
+# Head 1: the ribbon header on the back face at the bottom, the XIAO above it.
+U1 = [79.75, 12.7, 90]
+J2 = [85.75, 26.0, 90, "back"]
 H5 = [68.5, 3.05, 0]
 H6 = [91.0, 3.05, 0]
+# Head 2: the header on the front face at the bottom, the XIAO above it.
+U3 = [79.75, 47.6, 90]
+J16 = [73.75, 61.65, 90]
+H7 = [68.5, 38.3, 0]
+H8 = [91.0, 38.3, 0]
+# Head 3: the header on the back face at the top, between the M2 holes; the
+# XIAO below it.
+U4 = [79.75, 88.0, 90]
+J17 = [86.75, 75.0, 90, "back"]
+H9 = [68.5, 73.55, 0]
+H10 = [91.0, 73.55, 0]
 # Main board, front row: M3 corner holes, both rangefinders, the ribbon's main
 # end and the UART0 tap.
 H1 = [4.0, 4.0, 0]
@@ -155,19 +180,25 @@ H3 = [4.0, 72.0, 0]
 H4 = [59.0, 72.0, 0]
 
 [silk]
-hidden_refs = ["H1", "H2", "H3", "H4", "H5", "H6"]
-ref_sizes = { U1 = 1.0, C1 = 0.8, C2 = 0.8, C3 = 0.8, C4 = 0.8, C5 = 0.8, C8 = 0.8, C9 = 0.8, C10 = 0.8, C11 = 0.8, C12 = 0.8, C13 = 0.8, C14 = 0.8, C15 = 0.8, C16 = 0.8, C19 = 0.8, C18 = 0.8, FB1 = 0.8, L1 = 0.8, R2 = 0.8, R3 = 0.8, R4 = 0.8, R5 = 0.8, R6 = 0.8, R7 = 0.8, R8 = 0.8, R9 = 0.8, R10 = 0.8, R11 = 0.8, R12 = 0.8, R13 = 0.8, R14 = 0.8, R15 = 0.8, R16 = 0.8, R17 = 0.8, R18 = 0.8, R19 = 0.8, R20 = 0.8, R21 = 0.8, R22 = 0.8, R23 = 0.8, R24 = 0.8, U10 = 0.8 }
-ref_positions = { C1 = [9.8, 32.7], C15 = [23.4, 46.5], C16 = [21.6, 53.7], C2 = [27.0, 51.5], C19 = [31.3, 51.9], C4 = [28.9, 29.5], C5 = [23.9, 16.7], FB1 = [38.3, 53.2], C8 = [58.5, 66.0], C3 = [50.3, 54.0], C18 = [44.6, 45.4], U8 = [44.3, 49.6], BZ1 = [44.8, 38.0], J18 = [53.6, 13.0], J20 = [2.5, 20.4], J21 = [6.3, 20.4], J22 = [2.5, 30.8], J23 = [6.3, 30.8], J6 = [8.6, 49.0], J5 = [8.6, 58.0], J7 = [14.75, 8.4], J8 = [28.75, 8.4], C13 = [38.6, 71.8], C14 = [38.6, 74.0], L1 = [30.0, 69.9], C11 = [33.0, 61.7], C9 = [35.3, 61.7], C10 = [37.6, 61.7], R13 = [39.9, 67.4], R12 = [42.2, 67.4], C12 = [25.0, 64.1], U10 = [25.2, 60.9], R14 = [24.0, 14.3], R15 = [26.3, 14.3], R16 = [28.6, 14.3], R2 = [10, 25.3], R3 = [12.3, 25.3], R4 = [14.6, 25.3], R5 = [16.9, 25.3], R10 = [19.2, 25.3], R11 = [21.5, 25.3], R6 = [23.8, 25.3], R7 = [26.1, 25.3], R8 = [28.4, 25.3], R9 = [30.7, 25.3], R17 = [16.4, 27.5], R18 = [16.4, 29.6], R19 = [16.4, 31.7], R20 = [16.4, 33.8], R21 = [16.4, 35.9], R22 = [16.4, 38.0], R23 = [16.4, 40.1], R24 = [16.4, 42.2] }
+hidden_refs = ["H1", "H2", "H3", "H4", "H5", "H6", "H7", "H8", "H9", "H10"]
+ref_sizes = { U1 = 1.0, U3 = 1.0, U4 = 1.0, C1 = 0.8, C2 = 0.8, C3 = 0.8, C4 = 0.8, C5 = 0.8, C8 = 0.8, C9 = 0.8, C10 = 0.8, C11 = 0.8, C12 = 0.8, C13 = 0.8, C14 = 0.8, C15 = 0.8, C16 = 0.8, C19 = 0.8, C18 = 0.8, FB1 = 0.8, L1 = 0.8, R2 = 0.8, R3 = 0.8, R4 = 0.8, R5 = 0.8, R6 = 0.8, R7 = 0.8, R8 = 0.8, R9 = 0.8, R10 = 0.8, R11 = 0.8, R12 = 0.8, R13 = 0.8, R14 = 0.8, R15 = 0.8, R16 = 0.8, R17 = 0.8, R18 = 0.8, R19 = 0.8, R20 = 0.8, R21 = 0.8, R22 = 0.8, R23 = 0.8, R24 = 0.8, U10 = 0.8 }
+ref_positions = { J16 = [89.5, 61.0], C1 = [9.8, 32.7], C15 = [23.4, 46.5], C16 = [21.6, 53.7], C2 = [27.0, 51.5], C19 = [31.3, 51.9], C4 = [28.9, 29.5], C5 = [23.9, 16.7], FB1 = [38.3, 53.2], C8 = [58.5, 66.0], C3 = [50.3, 54.0], C18 = [44.6, 45.4], U8 = [44.3, 49.6], BZ1 = [44.8, 38.0], J18 = [53.6, 13.0], J20 = [2.5, 20.4], J21 = [6.3, 20.4], J22 = [2.5, 30.8], J23 = [6.3, 30.8], J6 = [8.6, 49.0], J5 = [8.6, 58.0], J7 = [14.75, 8.4], J8 = [28.75, 8.4], C13 = [38.6, 71.8], C14 = [38.6, 74.0], L1 = [30.0, 69.9], C11 = [33.0, 61.7], C9 = [35.3, 61.7], C10 = [37.6, 61.7], R13 = [39.9, 67.4], R12 = [42.2, 67.4], C12 = [25.0, 64.1], U10 = [25.2, 60.9], R14 = [24.0, 14.3], R15 = [26.3, 14.3], R16 = [28.6, 14.3], R2 = [10, 25.3], R3 = [12.3, 25.3], R4 = [14.6, 25.3], R5 = [16.9, 25.3], R10 = [19.2, 25.3], R11 = [21.5, 25.3], R6 = [23.8, 25.3], R7 = [26.1, 25.3], R8 = [28.4, 25.3], R9 = [30.7, 25.3], R17 = [16.4, 27.5], R18 = [16.4, 29.6], R19 = [16.4, 31.7], R20 = [16.4, 33.8], R21 = [16.4, 35.9], R22 = [16.4, 38.0], R23 = [16.4, 40.1], R24 = [16.4, 42.2] }
 cut_lines = [
-    [64.5, 75.5, 64.5, 0.5],
+    [64.5, 99.5, 64.5, 0.5],
+    [64.5, 76.0, 0.5, 76.0],
     [93.5, 29.5, 64.5, 29.5],
+    [64.5, 35.25, 93.5, 35.25],
+    [93.5, 64.75, 64.5, 64.75],
+    [64.5, 70.5, 93.5, 70.5],
 ]
 texts = [
     { text = "robocar-unified", at = [34.5, 46.3], size = 0.8 },
     { text = "integrated", at = [34.5, 47.7], size = 0.8 },
     { text = "PROVISIONAL", at = [34.5, 49.1], size = 0.8 },
     { text = "FRONT ^", at = [47.0, 9.5], size = 1.0 },
-    { text = "HEAD", at = [90.5, 26.5], size = 0.8 },
+    { text = "HEAD 1", at = [69.0, 26.0], size = 0.8 },
+    { text = "HEAD 2", at = [69.0, 61.0], size = 0.8 },
+    { text = "HEAD 3", at = [68.4, 96.0], size = 0.8 },
 ]
 
 # The 5V trunk, laid down before routing (build_board.py locks it, so
@@ -221,7 +252,7 @@ via_um = [800, 400]
 
 [[net_classes]]
 name = "head_power"
-nets = ["HEAD_+5V", "HEAD_GND"]
+nets = ["HEAD*_+5V", "HEAD*_GND"]
 track_um = 500
 clearance_um = 200
 via_um = [800, 400]
@@ -238,9 +269,10 @@ track_um = 250
 clearance_um = 200
 via_um = [600, 300]
 
-# GND on both layers of the main board, HEAD_GND on the head. On F.Cu a 5V
-# pour over the power half of the main board, above GND in priority, so KiCad
-# fills it first and GND around it: it carries the buck's output from L1 to the
+# GND on both layers of the main board, each head's own ground (HEAD_GND,
+# HEAD2_GND, HEAD3_GND) on its head. On F.Cu a 5V pour over the power half of
+# the main board, above GND in priority, so KiCad fills it first and GND
+# around it: it carries the buck's output from L1 to the
 # motor driver, the servo bulk, the amplifier's ferrite and the LDO, which the
 # 0.45 mm tracks alone (the TB6612FNG's pitch) could not.
 [pour]
@@ -248,6 +280,8 @@ layers = ["F.Cu", "B.Cu"]
 regions = [
     { net = "GND", rect = [0.0, 0.0, 63.0, 76.0], priority = 0 },
     { net = "HEAD_GND", rect = [66.0, 0.0, 94.0, 28.0], priority = 1 },
+    { net = "HEAD2_GND", rect = [66.0, 35.25, 94.0, 63.25], priority = 1 },
+    { net = "HEAD3_GND", rect = [66.0, 70.5, 94.0, 98.5], priority = 1 },
     { net = "+5V", rect = [8.5, 26.0, 53.0, 75.5], layers = ["F.Cu"], priority = 2 },
 ]
 clearance_mm = 0.3

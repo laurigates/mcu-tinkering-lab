@@ -16,8 +16,9 @@
 #   feedback divider.
 # - The servos, the RGB LEDs and the speaker plug into the board (J19-J23),
 #   where the socketed carrier uses the breakouts' own columns and terminal.
-# - One head board, not three: the head is the same in both variants, so the
-#   spare heads would only add to both sides of the comparison.
+# - The same three head boards as the socketed carrier (U1/J2, and the spares
+#   U3/J16 and U4/J17 on nets HEAD2_* and HEAD3_*), so both PCBs carry the
+#   same set of parts outside the main board.
 #
 # Every other part keeps its reference and its role: the connectors, test
 # headers, bulk capacitors, LDO, pull-ups, buzzer and mounting holes. No entry
@@ -625,14 +626,46 @@ kind = "mounting-hole"
 part = "m2-mounting-hole"
 ref = "H6"
 
-# --- The head board and its ribbon -------------------------------------------
+# The same two holes on head 2 (H7, H8) and head 3 (H9, H10).
+[parts.hole_head2_1]
+name = "M2 mounting hole, head board 2"
+kind = "mounting-hole"
+part = "m2-mounting-hole"
+ref = "H7"
+
+[parts.hole_head2_2]
+name = "M2 mounting hole, head board 2"
+kind = "mounting-hole"
+part = "m2-mounting-hole"
+ref = "H8"
+
+[parts.hole_head3_1]
+name = "M2 mounting hole, head board 3"
+kind = "mounting-hole"
+part = "m2-mounting-hole"
+ref = "H9"
+
+[parts.hole_head3_2]
+name = "M2 mounting hole, head board 3"
+kind = "mounting-hole"
+part = "m2-mounting-hole"
+ref = "H10"
+
+# --- The head boards and the ribbon ------------------------------------------
 # As on the socketed carrier: the XIAO on the head, a 2x7 IDC ribbon to the
-# main board's J1. 3V3, D3 and D7 stay open on the head.
+# main board's J1. 3V3, D3 and D7 stay open on the head. Three heads, three
+# ways of mounting the ribbon header (the socketed carrier's, 2026-10-16):
+# head 1 is U1 with J2, the spares U3 with J16 (head 2) and U4 with J17
+# (head 3), on nets HEAD2_* and HEAD3_*. Only one is fitted at a time.
 [[cables]]
 part = "idc-2x07-xiao-cable"
 head_ref = "J2"
 main_ref = "J1"
 head_no_connect = ["3V3", "D3", "D7"]
+spare_heads = [
+    { mcu_ref = "U3", head_ref = "J16" },
+    { mcu_ref = "U4", head_ref = "J17" },
+]
 build = "carrier"
 
 # --- MCU signals --------------------------------------------------------------
