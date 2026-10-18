@@ -96,6 +96,32 @@
 #define MQTT_RETAIN_STATUS true
 
 // ========================================
+// UART0 log mirror (issue #798)
+// ========================================
+// Every ESP_LOG line is also written to UART0 TX (XIAO D6, GPIO43), which the
+// carrier routes to test header J15: the application log on a wire that keeps
+// working off the tether and does not drop bytes when a USB host stops
+// reading. The console itself stays on USB-Serial-JTAG. See log_mirror.h.
+// 0 compiles the mirror out; J15 then carries only the ROM boot log.
+#define LOG_MIRROR_UART0_ENABLED 1
+// The ROM bootloader's own rate on the same pin, so one adapter setting reads
+// the boot log and the application log in a single capture.
+#define LOG_MIRROR_UART0_BAUD 115200
+// Queue between the logging tasks and the UART, in PSRAM. 16 kB is ~1.4 s of
+// wire time at 115200 8N1 — room for the boot burst. A line that does not fit
+// is dropped and counted rather than waited for.
+#define LOG_MIRROR_QUEUE_BYTES (16 * 1024)
+// The hook formats each line into a buffer of this size on the CALLING task's
+// stack (every task that logs pays for it), so it is kept small; a longer
+// line reaches J15 cut, ending in "...". The USB console still gets it whole.
+#define LOG_MIRROR_LINE_MAX 192
+// The drain task only copies queued lines into the UART driver. Lowest
+// priority above idle: the mirror must never compete with what it reports.
+#define LOG_MIRROR_TASK_STACK_SIZE 3072
+#define LOG_MIRROR_TASK_PRIORITY 1
+#define LOG_MIRROR_TASK_CORE 1
+
+// ========================================
 // OTA Configuration
 // ========================================
 #define OTA_ENABLED 1

@@ -317,7 +317,7 @@ why = "wired to the PDM microphone on the Sense expansion board, not brought out
 [[undrawn]]
 role = "UART0_TX_PIN"
 build = "harness"
-why = "UART0 TX, spare: the serial console is USB-Serial-JTAG on the USB-C connector, not this pad. The ROM bootloader prints its boot log here at every reset"
+why = "UART0 TX, log output: the ROM bootloader prints its boot log here at every reset, then the firmware mirrors every ESP_LOG line here at 115200 8N1 (log_mirror.c). The serial console is USB-Serial-JTAG on the USB-C connector, not this pad"
 
 [[undrawn]]
 role = "UART0_RX_PIN"
@@ -492,7 +492,8 @@ spare_heads = [
 build = "carrier"
 
 # UART0 TX on a main-board test header: the ROM bootloader prints its boot log
-# on GPIO43 (D6) at every reset, 115200 baud, with no firmware change. A
+# on GPIO43 (D6) at every reset, 115200 baud, and the firmware then mirrors its
+# ESP_LOG output there at the same rate (log_mirror.c, issue #798). A
 # USB-serial adapter's RX and GND clip on here; nothing on the carrier drives
 # or loads the line.
 [parts.uart_tap]

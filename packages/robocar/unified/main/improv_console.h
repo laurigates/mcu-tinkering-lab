@@ -13,8 +13,10 @@
  *     reply.
  *
  * The shared improv-wifi component defaults to writing UART0, which on the
- * XIAO is D6/D7 — not the console, and not initialised. improv_console_write()
- * is the writer this project hands it instead.
+ * XIAO is D6/D7 — not the console. UART0 TX is driven by the log mirror
+ * (log_mirror.c), so with the default writer Improv replies would land on J15
+ * among the log lines and never reach the browser. improv_console_write() is
+ * the writer this project hands it instead.
  */
 
 #ifndef IMPROV_CONSOLE_H

@@ -1,6 +1,8 @@
 idf_component_register(
     SRCS
         "main.c"
+        "log_mirror.c"
+        "log_mirror_core.c"
         "i2c_bus.c"
         "pca9685_phase.c"
         "gpio_expander.c"
