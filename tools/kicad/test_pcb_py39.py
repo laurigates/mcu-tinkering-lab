@@ -87,7 +87,7 @@ class PcbScriptTests(unittest.TestCase):
         files = sorted(PCB.glob("*.py"))
         self.assertEqual(
             [f.name for f in files],
-            ["build_board.py", "dsn.py", "fanout.py", "route_board.py"],
+            ["build_board.py", "dsn.py", "fanout.py", "review.py", "route_board.py"],
         )
         for f in files:
             with self.subTest(file=f.name):

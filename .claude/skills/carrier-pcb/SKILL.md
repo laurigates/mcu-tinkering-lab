@@ -58,8 +58,16 @@ several traps below are version-specific: after a KiCad upgrade, re-run
    netlist parity with the join, the board check, then the check stamp.
 4. If the board check fails, the board is stale: `just <p>::carrier-board`
    re-places and re-routes it from scratch. Re-run `carrier-check` and commit
-   that board with its stamp.
-5. `just <p>::carrier-fab` (runs `carrier-check` first): Gerbers, drill, BOM
+   that board with its stamp. `just <p>::carrier-board-checked` does both in a
+   loop and stops at the first run that passes every gate (Freerouting does not
+   route the same way twice).
+5. Before fabrication: `just <p>::carrier-review` prints the layout metrics the
+   gates do not check (vias per poured net, ground pads without one, pour
+   islands, narrowest power tracks, decoupling distances, cut-line clearances,
+   silkscreen size). Then run the `pcb-reviewer` agent
+   (`.claude/agents/pcb-reviewer.md`) for an adversarial review against the
+   datasheets, and `.claude/rules/power-stage-checklist.md` for any regulator.
+6. `just <p>::carrier-fab` (runs `carrier-check` first): Gerbers, drill, BOM
    and CPL. `just kicad::check` runs what CI runs.
 
 ## Adding a registry entry
@@ -68,7 +76,10 @@ several traps below are version-specific: after a KiCad upgrade, re-run
   KiCad library, or memory plus the issue tracking its check). A recalled pin
   order reads exactly like a checked one.
 - The symbol and footprint must be vendored: add them, then `just kicad::vendor`
-  (rebuilds `tools/kicad/lib/kicad-stock/` from the installed KiCad).
+  (rebuilds `tools/kicad/lib/kicad-stock/` from the installed KiCad). Then run
+  the whole `just kicad::test`, not the module you touched: `test_vendor` pins
+  the subset's symbol and footprint counts, and a partial run let a vendored
+  polyfuse reach CI with stale counts.
 - **Polarity tripwire.** Every "+"/"−" (and "K"/"A") must be proved by the
   symbol's pin names, the footprint's silkscreen, or `registry.CONVENTIONS`.
   An unproved one fails, because a reversed part agrees with every other check
@@ -214,6 +225,20 @@ several traps below are version-specific: after a KiCad upgrade, re-run
     section's grounds reached the B.Cu plane through 0.19-0.25 mm tracks and
     one via, with ERC, DRC, parity and the stamp all green. `[fanout]` adds the
     vias; `required` turns a missing one on a power path into a failure.
+    After any `[fanout]` or `[[tracks]]` change, read Freerouting's
+    "Auto-routing stage completed ... (N unrouted" line, not just DRC: when it
+    gives up on GND, change the netlist (`in_pad`, a tie track whose first pad
+    leaves it), not the keepouts.
+30. **Do not commit while a KiCad or Freerouting job uses the working tree.**
+    pre-commit stashes the unstaged files for the length of its hooks, so a
+    `carrier-board` run reading `board.toml` mid-commit gets the committed copy:
+    one route here placed a single fanout via and failed for no reason in the
+    design. Commit after the run, or from a separate worktree.
+31. **A pour across a hand-saw cut line is copper the saw bridges.**
+    boardcheck fails a `[pour]` region within 1.0 mm of a `[silk] cut_lines`
+    line (a whole-board pour meets every line) and silkscreen text under
+    0.8 mm. JLCPCB prints 1.0 mm tall, 0.15 mm stroke legibly; build_board.py
+    keeps reference strokes at 0.16 mm or more.
 
 ## Verify the gate can fail
 

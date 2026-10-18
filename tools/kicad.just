@@ -8,11 +8,12 @@
 #
 # Provides private recipes; the project defines the public ones, as with pico.just:
 #   _carrier-lib, _carrier-schematic, _carrier-board, _carrier-route, _carrier-check,
-#   _carrier-fab, _perfboard, _perfboard-check
+#   _carrier-board-checked, _carrier-review, _carrier-fab, _perfboard, _perfboard-check
 # KiCad-free: _carrier-lib, _carrier-schematic, _perfboard, _perfboard-check.
 # Need KiCad 10.0.6: _carrier-check, _carrier-fab (kicad-cli), _carrier-board,
-# _carrier-route (KiCad's bundled Python; _carrier-route also java >= 25 and the
-# Freerouting 2.5.0 jar, $FREEROUTING_JAR). `just kicad::setup` installs all three.
+# _carrier-route, _carrier-review (KiCad's bundled Python; _carrier-route and
+# _carrier-board-checked also java >= 25 and the Freerouting 2.5.0 jar,
+# $FREEROUTING_JAR). `just kicad::setup` installs all three.
 #
 # Variable names carry a _kicad_ prefix so they cannot collide with pico.just's
 # or esp32*.just's (container_cmd, compose_file, tools_dir, _detected_*).
@@ -43,6 +44,34 @@ _carrier-route project:
 
 _carrier-check project:
     cd {{_kicad_repo}} && PYTHONPATH=tools python3 -m kicad.check {{project}}
+
+# Place, route and check, again until every gate passes or `tries` runs out:
+# Freerouting does not route the same way twice, and a run can leave a
+# connection unrouted, a track necked or a required fanout via without room.
+# Stops at the first passing run, whose stamp carrier-check has written.
+_carrier-board-checked project tries="5":
+    #!/usr/bin/env bash
+    set -uo pipefail
+    cd {{_kicad_repo}}
+    input={{project}}/hardware/carrier/output/board-input.json
+    for i in $(seq 1 {{tries}}); do
+        echo "== attempt $i of {{tries}}"
+        PYTHONPATH=tools python3 -m kicad.boardinput {{project}} \
+            && {{_kicad_python}} tools/kicad/pcb/build_board.py "$input" \
+            && PATH="{{_kicad_java_path}}:$PATH" {{_kicad_python}} tools/kicad/pcb/route_board.py "$input" \
+            && PYTHONPATH=tools python3 -m kicad.check {{project}} \
+            && exit 0
+    done
+    echo "no passing board in {{tries}} attempt(s)" >&2
+    exit 1
+
+# The routed board's layout metrics a pre-fab review reads (vias per poured
+# net, SMD ground pads without one, pour islands, narrowest power tracks,
+# decoupling distances, cut-line clearances, silkscreen size). Reports; does
+# not gate.
+_carrier-review project:
+    cd {{_kicad_repo}} && PYTHONPATH=tools python3 -m kicad.boardinput {{project}}
+    cd {{_kicad_repo}} && {{_kicad_python}} tools/kicad/pcb/review.py {{project}}/hardware/carrier/output/board-input.json
 
 _carrier-fab project:
     cd {{_kicad_repo}} && PYTHONPATH=tools python3 -m kicad.fab {{project}}
