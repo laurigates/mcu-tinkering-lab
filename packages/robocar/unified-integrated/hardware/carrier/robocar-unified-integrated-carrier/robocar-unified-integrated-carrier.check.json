@@ -1,5 +1,5 @@
 {
- "board_sha256": "c8fc33732d45f0c5ea965f554bbc0d91e9637d91bb66dbe5f5cef1c5b97b7b15",
+ "board_sha256": "f26246fe658a7730a4ba8ada1d5191d5169ecf61df29703d6277f16db3f83187",
  "kicad_cli_version": "10.0.6",
  "netlist": {
   "components": {
@@ -94,6 +94,13 @@
     "lib_id": "Device:C_Polarized",
     "value": "22uF 16V"
    },
+   "C20": {
+    "footprint": "Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder",
+    "in_bom": true,
+    "lcsc": "",
+    "lib_id": "Device:C",
+    "value": "22uF 16V"
+   },
    "C3": {
     "footprint": "Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B_HandSolder",
     "in_bom": true,
@@ -142,6 +149,13 @@
     "lcsc": "",
     "lib_id": "Device:C",
     "value": "10uF 25V"
+   },
+   "F1": {
+    "footprint": "Fuse:Fuse_1812_4532Metric_Pad1.30x3.40mm_HandSolder",
+    "in_bom": true,
+    "lcsc": "",
+    "lib_id": "Device:Polyfuse",
+    "value": "3A hold 16V"
    },
    "FB1": {
     "footprint": "Inductor_SMD:L_0805_2012Metric_Pad1.05x1.20mm_HandSolder",
@@ -372,7 +386,7 @@
     "in_bom": true,
     "lcsc": "",
     "lib_id": "Device:L",
-    "value": "3.3uH"
+    "value": "4.7uH"
    },
    "R1": {
     "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
@@ -442,14 +456,14 @@
     "in_bom": true,
     "lcsc": "",
     "lib_id": "Device:R",
-    "value": "220"
+    "value": "47"
    },
    "R19": {
     "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
     "in_bom": true,
     "lcsc": "",
     "lib_id": "Device:R",
-    "value": "220"
+    "value": "47"
    },
    "R2": {
     "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
@@ -470,14 +484,14 @@
     "in_bom": true,
     "lcsc": "",
     "lib_id": "Device:R",
-    "value": "220"
+    "value": "47"
    },
    "R22": {
     "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
     "in_bom": true,
     "lcsc": "",
     "lib_id": "Device:R",
-    "value": "220"
+    "value": "47"
    },
    "R23": {
     "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
@@ -492,6 +506,20 @@
     "lcsc": "",
     "lib_id": "Device:R",
     "value": "220"
+   },
+   "R25": {
+    "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
+    "in_bom": true,
+    "lcsc": "",
+    "lib_id": "Device:R",
+    "value": "100k"
+   },
+   "R26": {
+    "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
+    "in_bom": true,
+    "lcsc": "",
+    "lib_id": "Device:R",
+    "value": "30k"
    },
    "R3": {
     "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
@@ -554,7 +582,7 @@
     "in_bom": true,
     "lcsc": "",
     "lib_id": "Regulator_Switching:TPS562200",
-    "value": "TPS563201"
+    "value": "TPS563208"
    },
    "U2": {
     "footprint": "Package_TO_SOT_SMD:SOT-223-3_TabPin2",
@@ -766,6 +794,10 @@
      "1"
     ],
     [
+     "C20",
+     "1"
+    ],
+    [
      "FB1",
      "1"
     ],
@@ -892,6 +924,20 @@
     [
      "U10",
      "6"
+    ]
+   ],
+   "BUCK_EN": [
+    [
+     "R25",
+     "2"
+    ],
+    [
+     "R26",
+     "1"
+    ],
+    [
+     "U10",
+     "5"
     ]
    ],
    "BUCK_FB": [
@@ -1320,6 +1366,10 @@
      "2"
     ],
     [
+     "C20",
+     "2"
+    ],
+    [
      "J1",
      "13"
     ],
@@ -1385,6 +1435,10 @@
     ],
     [
      "R13",
+     "2"
+    ],
+    [
+     "R26",
      "2"
     ],
     [
@@ -2068,6 +2122,16 @@
      "3"
     ]
    ],
+   "PACK_IN": [
+    [
+     "F1",
+     "1"
+    ],
+    [
+     "J3",
+     "2"
+    ]
+   ],
    "PIEZO": [
     [
      "J1",
@@ -2256,7 +2320,7 @@
      "1"
     ],
     [
-     "J3",
+     "F1",
      "2"
     ],
     [
@@ -2264,12 +2328,12 @@
      "4"
     ],
     [
-     "U10",
-     "3"
+     "R25",
+     "1"
     ],
     [
      "U10",
-     "5"
+     "3"
     ]
    ]
   },
@@ -2384,5 +2448,5 @@
    ]
   }
  },
- "schematic_sha256": "552f3be6b29d419357d9d1a5c8978b9e2a83585b5139343d1ede94860d4bcd17"
+ "schematic_sha256": "baf38546e8d857e21626aca378b778e0c6b869aab785ad99514bb912335df297"
 }

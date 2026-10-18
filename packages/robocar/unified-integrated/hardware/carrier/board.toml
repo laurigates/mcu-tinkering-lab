@@ -38,11 +38,11 @@ rect = [63.0, 0.0, 66.0, 100.0]
 
 [[keepouts]]
 name = "head 1 / head 2 cut band"
-rect = [66.0, 28.0, 93.5, 35.75]
+rect = [66.0, 28.0, 93.5, 36.25]
 
 [[keepouts]]
 name = "head 2 / head 3 cut band"
-rect = [66.0, 63.25, 93.5, 71.0]
+rect = [66.0, 63.25, 93.5, 71.5]
 
 [[keepouts]]
 name = "head 3 bottom band"
@@ -145,8 +145,16 @@ J21 = [6.3, 23.0, 0]
 J22 = [2.5, 33.5, 0]
 J23 = [6.3, 33.5, 0]
 C1 = [9.8, 36.0, 90]
-FB1 = [38.3, 56.5, 90]
-C19 = [31.3, 56.0, 0]
+FB1 = [41.3, 54.0, 0]
+C19 = [31.8, 53.0, 0]
+# The EN divider (VBAT cutoff) and the feedback divider in a block above U10,
+# each beside its pin: R26 at EN, R13 at VFB, their GND pads on fanout vias.
+R25 = [28.6, 57.6, 0]
+R26 = [28.6, 59.6, 180]
+R12 = [33.0, 57.6, 180]
+R13 = [33.0, 59.6, 0]
+# The pack fuse between the XT30 and VBAT.
+F1 = [18.5, 57.2, 0]
 # Amplifier, buzzer, OLED
 U8 = [48.0, 49.0, 0]
 C17 = [52.5, 49, 90]
@@ -168,21 +176,20 @@ C9 = [35.3, 64.5, 90]
 C10 = [37.6, 64.5, 90]
 C12 = [27.2, 63.0, 270]
 L1 = [30.0, 69.9, 270]
-C13 = [35.3, 71.8, 0]
-C14 = [35.3, 74.0, 0]
-R12 = [42.2, 64.5, 90]
-R13 = [39.9, 64.5, 90]
+C13 = [35.3, 67.8, 0]
+C14 = [35.3, 70.0, 0]
+C20 = [35.3, 72.2, 0]
 U2 = [50.0, 67.0, 0]
-C7 = [50.0, 73.6, 0]
-C8 = [58.5, 63.5, 0]
+C7 = [42.5, 68.5, 90]
+C8 = [51.0, 61.6, 0]
 J14 = [40.0, 10.5, 0]
 H3 = [4.0, 72.0, 0]
 H4 = [59.0, 72.0, 0]
 
 [silk]
 hidden_refs = ["H1", "H2", "H3", "H4", "H5", "H6", "H7", "H8", "H9", "H10"]
-ref_sizes = { U1 = 1.0, U3 = 1.0, U4 = 1.0, C1 = 0.8, C2 = 0.8, C3 = 0.8, C4 = 0.8, C5 = 0.8, C8 = 0.8, C9 = 0.8, C10 = 0.8, C11 = 0.8, C12 = 0.8, C13 = 0.8, C14 = 0.8, C15 = 0.8, C16 = 0.8, C19 = 0.8, C18 = 0.8, FB1 = 0.8, L1 = 0.8, R2 = 0.8, R3 = 0.8, R4 = 0.8, R5 = 0.8, R6 = 0.8, R7 = 0.8, R8 = 0.8, R9 = 0.8, R10 = 0.8, R11 = 0.8, R12 = 0.8, R13 = 0.8, R14 = 0.8, R15 = 0.8, R16 = 0.8, R17 = 0.8, R18 = 0.8, R19 = 0.8, R20 = 0.8, R21 = 0.8, R22 = 0.8, R23 = 0.8, R24 = 0.8, U10 = 0.8 }
-ref_positions = { J16 = [89.5, 61.0], C1 = [9.8, 32.7], C15 = [23.4, 46.5], C16 = [21.6, 53.7], C2 = [27.0, 51.5], C19 = [31.3, 51.9], C4 = [28.9, 29.5], C5 = [23.9, 16.7], FB1 = [38.3, 53.2], C8 = [58.5, 66.0], C3 = [50.3, 54.0], C18 = [44.6, 45.4], U8 = [44.3, 49.6], BZ1 = [44.8, 38.0], J18 = [53.6, 13.0], J20 = [2.5, 20.4], J21 = [6.3, 20.4], J22 = [2.5, 30.8], J23 = [6.3, 30.8], J6 = [8.6, 49.0], J5 = [8.6, 58.0], J7 = [14.75, 8.4], J8 = [28.75, 8.4], C13 = [38.6, 71.8], C14 = [38.6, 74.0], L1 = [30.0, 69.9], C11 = [33.0, 61.7], C9 = [35.3, 61.7], C10 = [37.6, 61.7], R13 = [39.9, 67.4], R12 = [42.2, 67.4], C12 = [25.0, 64.1], U10 = [25.2, 60.9], R14 = [24.0, 14.3], R15 = [26.3, 14.3], R16 = [28.6, 14.3], R2 = [10, 25.3], R3 = [12.3, 25.3], R4 = [14.6, 25.3], R5 = [16.9, 25.3], R10 = [19.2, 25.3], R11 = [21.5, 25.3], R6 = [23.8, 25.3], R7 = [26.1, 25.3], R8 = [28.4, 25.3], R9 = [30.7, 25.3], R17 = [16.4, 27.5], R18 = [16.4, 29.6], R19 = [16.4, 31.7], R20 = [16.4, 33.8], R21 = [16.4, 35.9], R22 = [16.4, 38.0], R23 = [16.4, 40.1], R24 = [16.4, 42.2] }
+ref_sizes = { U1 = 1.0, U3 = 1.0, U4 = 1.0, C1 = 1.0, C2 = 1.0, C3 = 1.0, C4 = 1.0, C5 = 1.0, C8 = 1.0, C9 = 0.8, C10 = 0.8, C11 = 0.8, C12 = 1.0, C13 = 1.0, C14 = 1.0, C15 = 1.0, C16 = 1.0, C19 = 1.0, C18 = 1.0, FB1 = 1.0, L1 = 1.0, R2 = 1.0, R3 = 1.0, R4 = 1.0, R5 = 1.0, R6 = 1.0, R7 = 1.0, R8 = 1.0, R9 = 1.0, R10 = 1.0, R11 = 1.0, R12 = 1.0, R13 = 1.0, R14 = 1.0, R15 = 1.0, R16 = 1.0, R17 = 1.0, R18 = 1.0, R19 = 1.0, R20 = 1.0, R21 = 1.0, R22 = 1.0, R23 = 1.0, R24 = 1.0, U10 = 1.0 }
+ref_positions = { J16 = [89.5, 61.0], C1 = [9.8, 32.7], C15 = [23.4, 46.5], C16 = [21.6, 54.2], C2 = [24.6, 47.4], C19 = [31.8, 48.6], C4 = [28.9, 29.5], C5 = [23.9, 16.7], FB1 = [41.3, 52.4], C8 = [55.4, 61.6], C3 = [50.3, 54.0], C18 = [44.6, 45.4], U8 = [44.3, 49.6], BZ1 = [44.8, 38.0], J18 = [53.6, 13.0], J20 = [2.5, 20.4], J21 = [6.3, 20.4], J22 = [2.5, 30.8], J23 = [6.3, 30.8], J6 = [8.6, 49.0], J5 = [8.6, 58.0], J7 = [14.75, 8.4], J8 = [28.75, 8.4], C13 = [38.6, 67.8], C14 = [38.6, 70.0], C20 = [38.6, 72.2], L1 = [30.0, 69.9], C11 = [33.0, 61.75], C9 = [35.3, 61.75], C10 = [37.6, 61.75], R13 = [36.6, 59.6], R12 = [36.6, 57.6], C12 = [25.0, 64.1], U10 = [24.9, 66.9], R14 = [24.0, 14.3], R15 = [26.3, 14.3], R16 = [28.6, 14.3], R2 = [10, 25.3], R3 = [12.3, 25.3], R4 = [14.6, 25.3], R5 = [16.9, 25.3], R10 = [19.2, 25.7], R11 = [21.5, 25.7], R6 = [23.8, 25.3], R7 = [26.1, 25.3], R8 = [28.4, 25.3], R9 = [30.7, 25.3], R17 = [16.4, 27.5], R18 = [16.4, 29.6], R19 = [16.4, 31.7], R20 = [16.4, 33.8], R21 = [16.4, 35.9], R22 = [16.4, 38.0], R23 = [16.4, 40.1], R24 = [16.4, 42.2] , R25 = [25.4, 57.6], R26 = [25.4, 59.6], C7 = [42.5, 65.0], U2 = [50.0, 71.6]}
 cut_lines = [
     [64.5, 99.5, 64.5, 0.5],
     [64.5, 76.0, 0.5, 76.0],
@@ -192,12 +199,12 @@ cut_lines = [
     [64.5, 70.5, 93.5, 70.5],
 ]
 texts = [
-    { text = "robocar-unified", at = [34.5, 46.3], size = 0.8 },
-    { text = "integrated", at = [34.5, 47.7], size = 0.8 },
-    { text = "PROVISIONAL", at = [34.5, 49.1], size = 0.8 },
+    { text = "robocar-unified", at = [32.5, 42.0], size = 1.0 },
+    { text = "integrated", at = [32.5, 43.6], size = 1.0 },
+    { text = "PROVISIONAL", at = [32.5, 45.2], size = 1.0 },
     { text = "FRONT ^", at = [47.0, 9.5], size = 1.0 },
-    { text = "HEAD 1", at = [69.0, 26.0], size = 0.8 },
-    { text = "HEAD 2", at = [69.0, 61.0], size = 0.8 },
+    { text = "HEAD 1", at = [69.0, 26.0], size = 1.0 },
+    { text = "HEAD 2", at = [69.0, 61.0], size = 1.0 },
     { text = "HEAD 3", at = [68.4, 96.0], size = 0.8 },
 ]
 
@@ -209,8 +216,8 @@ texts = [
 # edge, not on its centre: route_board.py walls the trunk off from Freerouting
 # with DSN keepouts flush with its ends, and a keepout over a pad centre leaves
 # that pad unroutable; L1's pad, under the first point, leaves Freerouting's
-# netlist, the trunk being its connection. The pour joins the trunk; the last
-# millimetres to C16 and the VM pins are routed 0.45 mm tracks.
+# netlist, the trunk being its connection. The last millimetres to C16 and
+# the VM pins, and 5V everywhere else, are routed 0.45 mm tracks.
 [[tracks]]
 name = "5V trunk"
 net = "+5V"
@@ -229,6 +236,39 @@ net = "GND"
 layer = "F.Cu"
 width_mm = 0.4
 points = [[29.05, 63.6], [29.05, 63.0], [32.5, 63.0]]
+
+# The MAX98357A's GND pins (3, 11, 15) and GAIN_SLOT (2, strapped to GND for
+# 12 dB) each tied straight across to the exposed pad, whose in-pad fanout via
+# takes them to the B.Cu plane: at 0.5 mm pitch there is no room for a via
+# beside a pin. Pin 2 must be tied too: the pin 3 track's keepout boxes it in,
+# and Freerouting then abandons the whole GND net (carrier-pcb skill trap 28).
+[[tracks]]
+name = "U8 GAIN_SLOT pin 2"
+net = "GND"
+layer = "F.Cu"
+width_mm = 0.25
+points = [[46.8, 48.75], [47.5, 48.75]]
+
+[[tracks]]
+name = "U8 GND pin 3"
+net = "GND"
+layer = "F.Cu"
+width_mm = 0.25
+points = [[46.8, 49.25], [47.5, 49.25]]
+
+[[tracks]]
+name = "U8 GND pin 11"
+net = "GND"
+layer = "F.Cu"
+width_mm = 0.25
+points = [[49.2, 48.75], [48.5, 48.75]]
+
+[[tracks]]
+name = "U8 GND pin 15"
+net = "GND"
+layer = "F.Cu"
+width_mm = 0.25
+points = [[47.75, 47.8], [47.75, 48.5]]
 
 # Freerouting width classes. One width per net, so each class is the widest
 # track every pin on its nets accepts: the TPS563201's SOT-23-6 pads (0.6 mm at
@@ -270,21 +310,40 @@ clearance_um = 200
 via_um = [600, 300]
 
 # GND on both layers of the main board, each head's own ground (HEAD_GND,
-# HEAD2_GND, HEAD3_GND) on its head. On F.Cu a 5V pour over the power half of
-# the main board, above GND in priority, so KiCad fills it first and GND
-# around it: it carries the buck's output from L1 to the
-# motor driver, the servo bulk, the amplifier's ferrite and the LDO, which the
-# 0.45 mm tracks alone (the TB6612FNG's pitch) could not.
+# HEAD2_GND, HEAD3_GND) on its head. Each region stops 1 mm short of a cut
+# line. There is no 5V pour: on F.Cu it cut GND into islands around every chip
+# in the power half (the pre-fab review's B1); the trunk carries 5V instead.
 [pour]
 layers = ["F.Cu", "B.Cu"]
 regions = [
-    { net = "GND", rect = [0.0, 0.0, 63.0, 76.0], priority = 0 },
-    { net = "HEAD_GND", rect = [66.0, 0.0, 94.0, 28.0], priority = 1 },
-    { net = "HEAD2_GND", rect = [66.0, 35.25, 94.0, 63.25], priority = 1 },
-    { net = "HEAD3_GND", rect = [66.0, 70.5, 94.0, 98.5], priority = 1 },
-    { net = "+5V", rect = [8.5, 26.0, 53.0, 75.5], layers = ["F.Cu"], priority = 2 },
+    { net = "GND", rect = [0.0, 0.0, 63.0, 75.0] },
+    { net = "HEAD_GND", rect = [66.0, 0.0, 94.0, 28.0] },
+    { net = "HEAD2_GND", rect = [66.0, 36.25, 94.0, 63.25] },
+    { net = "HEAD3_GND", rect = [66.0, 71.5, 94.0, 98.5] },
 ]
 clearance_mm = 0.3
 min_thickness_mm = 0.25
 thermal_gap_mm = 0.3
 spoke_mm = 0.35
+
+# A via beside every SMD pad of a poured net, added after routing wherever
+# there is room: Freerouting adds a via only where a track changes layer, so
+# without these an SMD ground pad reaches the B.Cu plane only through whatever
+# thin track it was routed with. The MAX98357A's exposed pad takes its via in
+# the pad. `required` is every pad on a power path: the buck's input and output
+# capacitors and its GND pin and feedback ground, the motor driver's PGND and
+# its VM capacitors, the amplifier's supply capacitors, the LDO and its
+# capacitors. route_board.py fails if one of those finds no room; a logic
+# chip's ground pin or strap without one keeps its routed track.
+[fanout]
+nets = ["GND", "HEAD_GND", "HEAD2_GND", "HEAD3_GND"]
+via_um = [600, 300]
+track_um = 400
+reach_mm = 2.5
+in_pad = ["U8:17"]
+required = [
+    "U10:1", "C9:2", "C10:2", "C11:2", "C13:2", "C14:2", "C20:2", "C19:2", "R13:2",
+    "U7:3", "U7:4", "U7:9", "U7:10", "C16:2", "C2:2", "C1:2",
+    "C3:2", "C17:2", "C18:2",
+    "U2:1", "C7:2", "C8:2",
+]

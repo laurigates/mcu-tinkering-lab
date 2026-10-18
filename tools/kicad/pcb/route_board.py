@@ -142,8 +142,9 @@ def fanout(board, fan, clearance):
     through-hole pad of any net, by `clearance` on both layers, keep out of the
     rule areas and 0.5 mm in from the board edge; its stub must clear every
     item of another net on the pad's layer. A pad counts as having a via when
-    one is inside it, or a chain of its net's tracks joins it to a via or to a
-    pad with a via inside (an exposed pad's ground pins, the buck's GND pin). A candidate pointing away from the
+    one is inside it, or a chain of fixed tracks and fanout stubs of its net,
+    through any pads of its net on the way, joins it to a via (an exposed pad's ground pins, the buck's
+    GND pin through C11's). A candidate pointing away from the
     pad's own part is tried first. Returns (vias added, the pads that found no
     place).
     """
@@ -201,6 +202,8 @@ def fanout(board, fan, clearance):
             return False
         return clear(pcbnew.SHAPE_CIRCLE(at, r), copper, netcode, x, y, True)
 
+    stub_ids = set()
+
     def add_via(x, y, net):
         via = pcbnew.PCB_VIA(board)
         via.SetViaType(pcbnew.VIATYPE_THROUGH)
@@ -222,43 +225,51 @@ def fanout(board, fan, clearance):
         ]
 
     def has_via(pad):
-        # A via inside the pad, or a chain of the pad's own net's tracks from
-        # the pad to a via or to a pad with a via inside (an exposed pad).
+        # A via inside the pad, or a chain of the pad's own net's tracks (and
+        # the pads they pass through) from the pad to a via.
         netcode = pad.GetNetCode()
         vias = vias_of(netcode)
-        if any(pad.HitTest(v.GetPosition()) for v in vias):
-            return True
-        holders = [
-            p
-            for p in pads
-            if p.GetNetCode() == netcode
-            and p is not pad
-            and any(p.HitTest(v.GetPosition()) for v in vias)
-        ]
+        same = [p for p in pads if p.GetNetCode() == netcode]
+        # board.toml's fixed tracks and the stubs added here, not Freerouting's
+        # tracks: through those every pad of the net reaches some via
         tracks = [
             t
             for t in obstacles
-            if t.GetClass() == "PCB_TRACK" and t.GetNetCode() == netcode
+            if t.GetClass() == "PCB_TRACK"
+            and t.GetNetCode() == netcode
+            and (t.IsLocked() or id(t) in stub_ids)
         ]
-        ends = [t.GetStart() for t in tracks if pad.HitTest(t.GetStart())]
-        ends += [t.GetEnd() for t in tracks if pad.HitTest(t.GetEnd())]
-        seen, todo = set(), [(e.x, e.y) for e in ends]
+        seen_pads, todo = set(), [pad]
         while todo:
-            x, y = todo.pop()
-            if (x, y) in seen:
+            node = todo.pop()
+            if id(node) in seen_pads:
                 continue
-            seen.add((x, y))
-            at = pcbnew.VECTOR2I(x, y)
-            if any(v.GetPosition() == at for v in vias):
+            seen_pads.add(id(node))
+            if any(node.HitTest(v.GetPosition()) for v in vias):
                 return True
-            if any(h.HitTest(at) for h in holders):
-                return True
-            for t in tracks:
-                a, b = t.GetStart(), t.GetEnd()
-                if (a.x, a.y) == (x, y):
-                    todo.append((b.x, b.y))
-                elif (b.x, b.y) == (x, y):
-                    todo.append((a.x, a.y))
+            # walk each track chain leaving this pad
+            ends = [
+                b
+                for t in tracks
+                for a, b in ((t.GetStart(), t.GetEnd()), (t.GetEnd(), t.GetStart()))
+                if node.HitTest(a)
+            ]
+            seen = set()
+            while ends:
+                at = ends.pop()
+                key = (at.x, at.y)
+                if key in seen:
+                    continue
+                seen.add(key)
+                if any(v.GetPosition() == at for v in vias):
+                    return True
+                todo += [q for q in same if q.HitTest(at)]
+                for t in tracks:
+                    a, b = t.GetStart(), t.GetEnd()
+                    if (a.x, a.y) == key:
+                        ends.append(b)
+                    elif (b.x, b.y) == key:
+                        ends.append(a)
         return False
 
     added, failed = 0, []
@@ -319,6 +330,7 @@ def fanout(board, fan, clearance):
             track.SetNet(pad.GetNet())
             board.Add(track)
             obstacles.append(track)
+            stub_ids.add(id(track))
             added += 1
             placed = True
             break
@@ -405,6 +417,19 @@ def route(spec):
         sys.exit("Freerouting wrote no session file")
     if not pcbnew.ImportSpecctraSES(board, ses_path):
         sys.exit("SES import failed")
+
+    # Freerouting necks a track to half its width to reach a fine-pitch pad,
+    # often below the board's minimum (0.125 mm against 0.15 mm, over a few
+    # hundredths of a millimetre). Widen those to the minimum; DRC still
+    # checks the clearance that leaves.
+    min_width = board.GetDesignSettings().m_TrackMinWidth
+    widened = 0
+    for t in board.GetTracks():
+        if t.GetClass() == "PCB_TRACK" and t.GetWidth() < min_width:
+            t.SetWidth(min_width)
+            widened += 1
+    if widened:
+        print(f"widened {widened} necked track(s) to {pcbnew.ToMM(min_width)} mm")
 
     # Vias beside the poured nets' SMD pads, so the pour on the other layer
     # reaches them: Freerouting adds a via only where a track changes layer.

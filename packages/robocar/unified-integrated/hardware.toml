@@ -77,25 +77,64 @@ ref = "U9"
 
 # --- 5 V buck converter (replaces the LM2596 module) ------------------------
 # TI SLVSD90B Table 7-2 for 5 V: R1 54.9 kΩ over R2 10 kΩ (VFB 0.768 V, so
-# 4.98 V), L 3.3 µH, and 20-68 µF of low-ESR output capacitance (C13, C14).
-# D-CAP2's stability depends on the L x Cout double pole, so no low-ESR bulk
-# capacitor may sit on 5V: the bulk capacitors there (C1, C2, C3 below) are
-# MnO2 tantalums, whose ~1 Ω ESR keeps them out of the loop, and the input
-# side carries the electrolytic bulk (C19). EN has an internal pull-down and
-# must be pulled high; its limit is VIN's, so it is tied to VBAT (8.4 V on a
-# charged 2S pack). 100 nF bootstrap, as TI requires.
+# 4.98 V), L 3.3-4.7 µH, and 20-68 µF of low-ESR output capacitance (C13,
+# C14, C20). The TPS563208, not the TPS563201: the same pins and table, but
+# forced-continuous, so it sinks current as well as sourcing it. A motor that
+# brakes or reverses pushes energy back into 5V through the TB6612FNG's body
+# diodes, and a pulse-skipping converter would leave it to charge the rail.
+# D-CAP2's stability rests on the L x Cout double pole, so no large low-ESR
+# bulk capacitor sits on 5V: the bulk capacitors there (C1, C2, C3 below) are
+# MnO2 tantalums, whose ~1.5 Ω ESR damps rather than moves that pole (it puts
+# them in parallel with the ceramics near 18 kHz: bench-check a 0.2-2 A load
+# step), and the input side carries the electrolytic bulk (C19).
+#
+# The buck needs VIN >= VOUT / 0.75 (SLVSD90B 7.2.2.4, the 75 % maximum duty
+# cycle): 6.7 V, 3.3 V per cell. Below that 5V sags with the pack. EN goes
+# through a divider (R25/R26) so the converter stops drawing from a flat
+# pack: EN rises at 1.38-1.47 V typical (Figure 5-4, 1.6 V maximum) and falls
+# at 1.05-1.2 V (Figure 5-3), so 100 kΩ over 30 kΩ turns it on at about 6.2 V
+# (6.9 V at the 1.6 V limit) and off at about 4.9 V. It is a coarse cutoff
+# with no specified falling threshold; a pack BMS is the real protection.
+# 100 nF bootstrap, as TI requires.
 [parts.buck]
-name = "TPS563201 buck converter"
+name = "TPS563208 buck converter"
 kind = "buck-regulator"
-part = "tps563201-sot23-6"
+part = "tps563208-sot23-6"
 ref = "U10"
 
+# 4.7 µH ±20 % (Bourns SRN6045TA-4R7M: DCR 26 mΩ, Irms 4.5 A, Isat 6.8 A):
+# the 3.3 µH part is ±30 %, which can fall below Table 7-2's 3.3 µH minimum.
+# Peak current at the 5.1 A maximum current limit is about 5.5 A.
 [parts.buck_l]
-name = "3.3 µH power inductor, buck output"
+name = "4.7 µH power inductor, buck output"
 kind = "inductor"
 part = "inductor-srn6045"
 ref = "L1"
-value = "3.3uH"
+value = "4.7uH"
+
+[parts.buck_en_top]
+name = "100 kΩ EN divider, top (VBAT)"
+kind = "resistor"
+part = "r0805"
+ref = "R25"
+value = "100k"
+
+[parts.buck_en_bot]
+name = "30 kΩ EN divider, bottom"
+kind = "resistor"
+part = "r0805"
+ref = "R26"
+value = "30k"
+
+# A resettable fuse between the XT30 and everything else: a short on VBAT
+# (the 0.8 mm track to the test header, the buck input) otherwise has the
+# pack's full fault current behind it.
+[parts.fuse_in]
+name = "3 A hold PTC fuse, pack input"
+kind = "fuse"
+part = "polyfuse-1812"
+ref = "F1"
+value = "3A hold 16V"
 
 [parts.buck_cin1]
 name = "10 µF buck input"
@@ -151,6 +190,15 @@ name = "22 µF buck output"
 kind = "capacitor"
 part = "c0805"
 ref = "C14"
+value = "22uF 16V"
+
+# A third 22 µF: an 0805 at 5 V bias keeps roughly half its rating, and two
+# alone can fall under Table 7-2's 20 µF minimum. Three stay inside 20-68 µF.
+[parts.buck_cout3]
+name = "22 µF buck output"
+kind = "capacitor"
+part = "c0805"
+ref = "C20"
 value = "22uF 16V"
 
 [parts.buck_fb_top]
@@ -236,7 +284,10 @@ lcsc = "C17414"
 
 # The PCA9685 breakout's 220 Ω series resistor on every output, kept on the
 # channels that leave the board (LEDs and servos). The six motor-driver
-# channels stay on the board and go straight to the TB6612FNG.
+# channels stay on the board and go straight to the TB6612FNG. Green and blue
+# take 47 Ω instead: the anode is 3V3 and their forward voltage is 2.9-3.2 V,
+# which leaves next to nothing across 220 Ω (about 4-6 mA through 47 Ω; red
+# keeps 220 Ω, about 6 mA at 2 V).
 [parts.res_led_l_r]
 name = "220 Ω series, left LED red"
 kind = "resistor"
@@ -245,18 +296,18 @@ ref = "R17"
 value = "220"
 
 [parts.res_led_l_g]
-name = "220 Ω series, left LED green"
+name = "47 Ω series, left LED green"
 kind = "resistor"
 part = "r0805"
 ref = "R18"
-value = "220"
+value = "47"
 
 [parts.res_led_l_b]
-name = "220 Ω series, left LED blue"
+name = "47 Ω series, left LED blue"
 kind = "resistor"
 part = "r0805"
 ref = "R19"
-value = "220"
+value = "47"
 
 [parts.res_led_r_r]
 name = "220 Ω series, right LED red"
@@ -266,18 +317,18 @@ ref = "R20"
 value = "220"
 
 [parts.res_led_r_g]
-name = "220 Ω series, right LED green"
+name = "47 Ω series, right LED green"
 kind = "resistor"
 part = "r0805"
 ref = "R21"
-value = "220"
+value = "47"
 
 [parts.res_led_r_b]
-name = "220 Ω series, right LED blue"
+name = "47 Ω series, right LED blue"
 kind = "resistor"
 part = "r0805"
 ref = "R22"
-value = "220"
+value = "47"
 
 [parts.res_servo_pan]
 name = "220 Ω series, pan servo signal"
@@ -906,11 +957,16 @@ line = "SCL"
 # --- Power --------------------------------------------------------------------
 
 [[rails]]
-name = "VBAT"
+name = "PACK_IN"
 from = "pack.+"
+to = ["fuse_in.1"]
+
+[[rails]]
+name = "VBAT"
+from = "fuse_in.2"
 to = [
     "buck.VIN",
-    "buck.EN",
+    "buck_en_top.A",
     "bulk_in.+",
     "buck_cin1.A",
     "buck_cin2.A",
@@ -929,6 +985,11 @@ from = "buck.VBST"
 to = ["buck_boot.A"]
 
 [[rails]]
+name = "BUCK_EN"
+from = "buck.EN"
+to = ["buck_en_top.B", "buck_en_bot.A"]
+
+[[rails]]
 name = "BUCK_FB"
 from = "buck.VFB"
 to = ["buck_fb_top.B", "buck_fb_bot.A"]
@@ -941,6 +1002,7 @@ from = "buck_l.2"
 to = [
     "buck_cout1.A",
     "buck_cout2.A",
+    "buck_cout3.A",
     "buck_fb_top.A",
     "mcu.5V",
     "motor_driver.VM",
@@ -1059,6 +1121,8 @@ to = [
     "buck_cin_hf.B",
     "buck_cout1.B",
     "buck_cout2.B",
+    "buck_cout3.B",
+    "buck_en_bot.B",
     "buck_fb_bot.B",
     "motor_driver.GND",
     "motor_driver.PGND1",
