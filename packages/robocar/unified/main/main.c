@@ -46,6 +46,7 @@
 #include "improv_console.h"
 #include "improv_wifi.h"
 #include "led_controller.h"
+#include "log_mirror.h"
 #include "mdns.h"
 #include "mic_dump.h"
 #include "mic_pdm.h"
@@ -2135,7 +2136,17 @@ static esp_err_t create_tasks(void)
 // ========================================
 void app_main(void)
 {
+    /* First, so the banner and every boot phase after it reach J15 (UART0 TX)
+     * as well as the USB console (issue #798). It needs only PSRAM, which the
+     * startup code has already brought up. Non-fatal: without it the log
+     * stays on USB alone, as it always has. */
+    const esp_err_t mirror_ret = log_mirror_init();
+
     ESP_LOGI(TAG, "=== Robocar Unified (XIAO ESP32-S3 Sense) ===");
+    if (mirror_ret != ESP_OK) {
+        ESP_LOGW(TAG, "UART0 log mirror unavailable (%s) — log on USB only",
+                 esp_err_to_name(mirror_ret));
+    }
     ESP_LOGI(TAG, "Firmware version: %s", esp_app_get_description()->version);
 
     ESP_ERROR_CHECK(init_nvs());

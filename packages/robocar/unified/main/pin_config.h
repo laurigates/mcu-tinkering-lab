@@ -8,13 +8,15 @@
  *   D1 (GPIO2)       = Piezo buzzer
  *   D2 (GPIO3)       = TCA9548A RESET (active low)
  *   D3 (GPIO4)       = unused (the rangefinders moved to I2C)
- *   D6/D7 (GPIO43/44)= UART0 TX/RX, spare (console is USB-C)
+ *   D6 (GPIO43)      = UART0 TX: log mirror to carrier J15 (console is USB-C)
+ *   D7 (GPIO44)      = UART0 RX, unused
  *   D8-D10 (GPIO7-9) = I2S to MAX98357A (BCLK/LRCLK/DIN)
  *
- * Three spare pads remain: D3 (GPIO4) and D6/D7 (GPIO43/44, UART0). The ROM
- * bootloader prints its boot log on GPIO43 at every reset, so anything wired to
- * D6 sees that traffic. Beyond those, digital I/O goes through the MCP23017 on
- * TCA9548A ch2.
+ * Two spare pads remain: D3 (GPIO4) and D7 (GPIO44, UART0 RX). D6 (GPIO43)
+ * carries the ROM bootloader's boot log at every reset and, from app_main on,
+ * a copy of every ESP_LOG line (log_mirror.c, issue #798), so it is an output
+ * now and not free for a peripheral. Beyond those, digital I/O goes through the
+ * MCP23017 on TCA9548A ch2.
  *
  * Camera uses internal GPIOs on the Sense module — no conflict with D0-D10.
  */
@@ -157,16 +159,25 @@
 // ========================================
 // UART0 header pads (XIAO D6/D7)
 //
-// Spare: nothing is wired to these. The serial console is the ESP32-S3's
-// USB-Serial-JTAG on the USB-C connector (CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG),
-// which uses the internal USB pins, not D6/D7 — the XIAO has no USB-UART
-// bridge. They are defined so the hardware join (tools/hardware/, ADR-021) and
-// the documents generated from it name these pads from the header rather than
-// from a hand-typed GPIO number. No firmware code reads them.
+// The serial console is the ESP32-S3's USB-Serial-JTAG on the USB-C connector
+// (CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG), which uses the internal USB pins, not
+// D6/D7 — the XIAO has no USB-UART bridge.
 //
-// Before wiring a peripheral to D6: the ROM bootloader prints its boot log on
-// GPIO43 at every reset, and the improv-wifi component writes its replies to
-// UART_NUM_0 (issue #644).
+// D6 is UART0 TX and is driven: the ROM bootloader prints its boot log there
+// at every reset, and log_mirror.c then installs the UART0 driver TX-only and
+// copies every ESP_LOG line to it at LOG_MIRROR_UART0_BAUD (config.h, issue
+// #798). The carrier's ribbon takes it to test header J15. Console input,
+// command replies and Improv packets stay on USB.
+//
+// D7 is UART0 RX and is not used: log_mirror.c leaves it unclaimed
+// (UART_PIN_NO_CHANGE) with the RX interrupt off, and the carrier does not
+// wire it. Both are defined so the hardware join (tools/hardware/, ADR-021)
+// and the documents generated from it name these pads from the header rather
+// than from a hand-typed GPIO number.
+//
+// The improv-wifi component's default writer is UART_NUM_0 too (issue #644);
+// main.c always hands it improv_console_write() instead, so Improv replies
+// never reach D6.
 // ========================================
 #define UART0_TX_PIN GPIO_NUM_43  // XIAO D6
 #define UART0_RX_PIN GPIO_NUM_44  // XIAO D7

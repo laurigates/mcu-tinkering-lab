@@ -31,11 +31,13 @@ The XIAO exposes only 11 GPIOs on its headers. Camera pins are internal to the S
 
 <!-- END GENERATED -->
 
-> **Three spare pads: D3 (GPIO4) and D6/D7 (GPIO43/44, UART0).** Nothing uses
+> **Two spare pads: D3 (GPIO4) and D7 (GPIO44, UART0 RX).** Nothing uses
 > them; D3 was the ultrasonic ECHO until the rangefinders moved to I2C (#782).
-> The ROM bootloader prints its boot log on GPIO43 at every reset, so anything
-> wired to D6 sees that traffic. Beyond those, digital I/O goes through the
-> MCP23017 on TCA9548A channel 2.
+> D6 (GPIO43, UART0 TX) is an output, not a spare: the ROM bootloader prints its
+> boot log there at every reset, and the firmware then mirrors every `ESP_LOG`
+> line to it at 115200 8N1 (`main/log_mirror.c`, #798). A USB-serial adapter's
+> RX on D6 (J15 on the carrier) reads both. Beyond those, digital I/O goes
+> through the MCP23017 on TCA9548A channel 2.
 
 I2C runs at **400 kHz**.
 

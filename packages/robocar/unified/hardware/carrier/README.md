@@ -154,11 +154,17 @@ Through-hole pin headers on the main board, each pin's net printed beside it.
 **The UART0 tap.** The ribbon carries the XIAO's D6 (GPIO43, UART0 TX) to J15.
 The ESP32-S3 ROM bootloader prints its boot messages there at every reset, at
 115200 baud, with no firmware change: reset reasons and boot mode, readable
-when the USB-C console is unavailable. The application's logs go to the
-USB-Serial-JTAG console on the USB-C connector, not to UART0 (see
-[`main/pin_config.h`](../../main/pin_config.h)), so J15 shows them only if the
-firmware is changed to mirror its logs there. Nothing on the carrier drives or
-loads the line.
+when the USB-C console is unavailable. From the start of `app_main` the
+firmware then mirrors every `ESP_LOG` line there too, at the same 115200 8N1
+([`main/log_mirror.c`](../../main/log_mirror.c), issue #798), so one adapter
+setting reads the boot log and the application log in a single capture. The
+console itself stays on the USB-Serial-JTAG on the USB-C connector: command
+input, command replies, the `snap`/`mic dump` frames and Improv packets go
+there only, because they are written to stdout rather than logged. The mirror
+is best effort: a line that does not fit its queue is dropped and counted, and
+J15 shows `[log_mirror: N line(s) dropped]` where it happened; a line longer
+than `LOG_MIRROR_LINE_MAX` arrives cut, ending in `...`. Nothing on the carrier
+drives or loads the line.
 
 ## Pre-order checks still owed (Lauri)
 

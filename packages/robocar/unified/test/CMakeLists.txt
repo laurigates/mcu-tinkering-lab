@@ -738,3 +738,18 @@ foreach(_variant credentials_loader credentials_loader_no_mqtt)
     add_test(NAME ${_variant} COMMAND test_${_variant})
 endforeach()
 target_compile_definitions(test_credentials_loader_no_mqtt PRIVATE CREDENTIALS_FIXTURE_NO_MQTT=1)
+
+# -----------------------------------------------------------------------------
+# log_mirror_core (issue #798 — the application log mirrored to UART0 / J15)
+#
+# Pure C, no ESP-IDF dependency. Renders one ESP_LOG line into the vprintf
+# hook's fixed stack buffer with LF -> CRLF expansion. Pins that the result
+# never runs past the buffer, that a cut line is marked and still ends a line,
+# and that an existing CRLF is not doubled — the cases a log line long enough
+# to overflow the buffer would reach only rarely on a bench.
+# -----------------------------------------------------------------------------
+add_executable(test_log_mirror_core
+    "${MAIN_SRC_DIR}/log_mirror_core.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_log_mirror_core.c"
+)
+add_test(NAME log_mirror_core COMMAND test_log_mirror_core)
