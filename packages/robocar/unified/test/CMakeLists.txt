@@ -106,6 +106,26 @@ target_link_libraries(test_reactive_controller PRIVATE Threads::Threads m)
 add_test(NAME reactive_controller COMMAND test_reactive_controller)
 
 # -----------------------------------------------------------------------------
+# Obstacle-to-brake latency over the real I2C read cycle (issue #791)
+#
+# The executor and ultrasonic_core.c compiled unmodified; the suite supplies
+# ultrasonic.h itself over a fake bus (in place of ultrasonic.c's host stub,
+# which returns a reading every poll), so the reflex sees readings at the
+# firmware's real pace and the worst case is measured, not assumed.
+# -----------------------------------------------------------------------------
+add_executable(test_reflex_latency
+    "${MAIN_SRC_DIR}/goal_state.c"
+    "${MAIN_SRC_DIR}/ultrasonic_core.c"
+    "${MAIN_SRC_DIR}/head_aim.c"
+    "${MAIN_SRC_DIR}/reactive_controller.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/motor_controller_stub.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/servo_controller_stub.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_reflex_latency.c"
+)
+target_link_libraries(test_reflex_latency PRIVATE Threads::Threads m)
+add_test(NAME reflex_latency COMMAND test_reflex_latency)
+
+# -----------------------------------------------------------------------------
 # head_aim — pan/tilt aiming for track goals (issue #511)
 #
 # Pure C, compiled unmodified. The executor integration (servo writes, the

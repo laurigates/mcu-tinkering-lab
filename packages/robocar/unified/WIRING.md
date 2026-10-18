@@ -391,8 +391,9 @@ Use the `mic` console command to tell a dead microphone from a quiet room.
 ## Ultrasonic rangefinders (2x RCWL-1601, I2C)
 
 Two RCWL-1601 modules, one fixed at the front and one at the rear, feed the
-reactive controller. The front one drives the obstacle reflex: if its smoothed
-distance drops below 15 cm the executor brakes, independent of planner goals.
+reactive controller. The front one drives the obstacle reflex: if one reading
+drops below 15 cm the executor brakes, independent of planner goals, and it
+releases once the running mean is back above it.
 The rear one is reported in telemetry only. Module facts and sources:
 [`rcwl-1601.md`](../../../docs/reference/boards/rcwl-1601.md) (pins and mode
 pads) and

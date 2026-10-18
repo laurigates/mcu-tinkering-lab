@@ -39,9 +39,13 @@
  *
  * Obstacle reflex
  * ---------------
- * If the front sensor's smoothed distance < STOP_THRESHOLD_CM, motors are
- * stopped and reflex_active is latched. The rear sensor never trips it.  The latch clears
- * automatically once distance exceeds STOP_THRESHOLD_CM again; no planner intervention is required.
+ * If a single front reading < STOP_THRESHOLD_CM, motors are braked and
+ * reflex_active is latched. The rear sensor never trips it. The latch clears
+ * automatically once the latest reading and the running mean are both back at
+ * or above STOP_THRESHOLD_CM; no planner intervention is required. Tripping on
+ * one reading rather than on the mean is what keeps the I2C read's ~165 ms
+ * cadence from multiplying into the reaction time (issue #791); the bound is
+ * REACTIVE_REFLEX_WORST_CASE_MS in reactive_controller.h.
  * The reflex is logged once on entry and once on exit to avoid log spam.
  * The head keeps aiming through a reflex — it cannot hit anything.
  *
@@ -398,8 +402,9 @@ typedef struct {
     uint16_t buf[ULTRASONIC_SMOOTH_N]; /**< Front readings, running mean.   */
     uint8_t idx;
     bool full;
-    uint16_t front_cm; /**< Smoothed front distance; drives the reflex.     */
-    uint16_t rear_cm;  /**< Latest rear reading, or ULTRASONIC_DIST_ERROR.  */
+    uint16_t front_cm;      /**< Smoothed front distance; releases the reflex. */
+    uint16_t front_last_cm; /**< Latest front reading (error = max); trips it. */
+    uint16_t rear_cm;       /**< Latest rear reading, or ULTRASONIC_DIST_ERROR.  */
     uint32_t streak[ULTRASONIC_COUNT];
     bool failed[ULTRASONIC_COUNT];
 } rangers_t;
@@ -413,6 +418,7 @@ static void rangers_reset(rangers_t *r)
     /* Before the first reading the path reads as clear, the same value a
      * failed reading feeds the filter. */
     r->front_cm = ULTRASONIC_MAX_RANGE_CM;
+    r->front_last_cm = ULTRASONIC_MAX_RANGE_CM;
     r->rear_cm = ULTRASONIC_DIST_ERROR;
 }
 
@@ -433,6 +439,20 @@ static uint16_t rangers_smooth(rangers_t *r, uint16_t raw)
         sum += r->buf[i];
     }
     return (uint16_t)(sum / n);
+}
+
+/**
+ * Whether the obstacle reflex holds the wheels.
+ *
+ * Trips on the latest front reading alone, so the reflex fires on the first
+ * reading that sees the obstacle instead of waiting ULTRASONIC_SMOOTH_N
+ * readings for the mean to follow. Releases only when the mean agrees, so a
+ * close reading still in the filter keeps the brake on. A failed read counts as
+ * max range in both, so it can neither trip nor hold the reflex.
+ */
+static bool rangers_reflex(const rangers_t *r)
+{
+    return r->front_last_cm < STOP_THRESHOLD_CM || r->front_cm < STOP_THRESHOLD_CM;
 }
 
 /**
@@ -458,6 +478,7 @@ static uint8_t rangers_tick(rangers_t *r, uint32_t now_ms)
         const bool ok = (res == ULTRASONIC_READY);
         if (i == ULTRASONIC_FRONT) {
             r->front_cm = rangers_smooth(r, ok ? cm : ULTRASONIC_DIST_ERROR);
+            r->front_last_cm = ok ? cm : ULTRASONIC_MAX_RANGE_CM;
         } else {
             r->rear_cm = ok ? cm : ULTRASONIC_DIST_ERROR;
         }
@@ -569,13 +590,14 @@ static void reactive_task(void *arg)
         const uint16_t dist = s_rangers.front_cm;
 
         /* ---- 2. Obstacle reflex ---- */
-        bool reflex = (dist < STOP_THRESHOLD_CM);
+        const bool reflex = rangers_reflex(&s_rangers);
 
         if (reflex && !reflex_was_active) {
-            ESP_LOGW(TAG, "Obstacle reflex ACTIVE — distance %u cm (threshold %u cm)", dist,
-                     STOP_THRESHOLD_CM);
+            ESP_LOGW(TAG, "Obstacle reflex ACTIVE — reading %u cm, mean %u cm (threshold %u cm)",
+                     s_rangers.front_last_cm, dist, STOP_THRESHOLD_CM);
         } else if (!reflex && reflex_was_active) {
-            ESP_LOGI(TAG, "Obstacle reflex CLEARED — distance %u cm", dist);
+            ESP_LOGI(TAG, "Obstacle reflex CLEARED — reading %u cm, mean %u cm",
+                     s_rangers.front_last_cm, dist);
         }
         reflex_was_active = reflex;
 
@@ -979,7 +1001,7 @@ void reactive_controller_tick_for_test(void)
     (void)rangers_tick(&s_rangers, s_ticks * REACTIVE_LOOP_PERIOD_MS);
     const uint16_t dist = s_rangers.front_cm;
 
-    const bool reflex = (dist < STOP_THRESHOLD_CM);
+    const bool reflex = rangers_reflex(&s_rangers);
 
     const bool manual_active = (s_manual_ticks_left > 0);
     if (manual_active) {
