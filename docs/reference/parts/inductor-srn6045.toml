@@ -1,0 +1,11 @@
+# Shielded power inductor, Bourns SRN6045TA (6.0 x 6.0 x 4.5 mm). Value per
+# instance.
+[part]
+name = "Power inductor, Bourns SRN6045TA"
+source = "KiCad 10.0.6 library"
+symbol = "Device:L"
+footprint = "Inductor_SMD:L_Bourns_SRN6045TA"
+
+[pins]
+"1" = 1
+"2" = 2

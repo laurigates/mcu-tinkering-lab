@@ -407,6 +407,140 @@ class ConfigTests(unittest.TestCase):
         )
         self.fails(lambda d: regions(d, []), "[pour] regions must be a non-empty list")
 
+    def test_pour_region_layers_and_priority(self):
+        """A region may name its own layers, and overlap one on a shared layer
+        when both carry different priorities (a power pour over GND)."""
+
+        def regions(d, rs):
+            del d["pour"]["net"]
+            d["pour"]["regions"] = rs
+
+        gnd = {"net": "GND", "rect": [0, 0, 90, 62]}
+        top = {"net": "+3V3", "rect": [10, 10, 40, 40], "layers": ["F.Cu"]}
+        ok = self.with_data(
+            lambda d: regions(d, [{**gnd, "priority": 0}, {**top, "priority": 1}])
+        )
+        self.assertEqual(boardcheck.validate_config(ok, self.nl), [])
+        apart = self.with_data(
+            lambda d: regions(
+                d, [{**gnd, "layers": ["B.Cu"]}, {**top, "layers": ["F.Cu"]}]
+            )
+        )
+        self.assertEqual(boardcheck.validate_config(apart, self.nl), [])
+        self.fails(
+            lambda d: regions(d, [gnd, top]),
+            "[pour] regions: [0, 0, 90, 62] and [10, 10, 40, 40] overlap on F.Cu",
+        )
+        self.fails(
+            lambda d: regions(d, [{**gnd, "priority": 1}, {**top, "priority": 1}]),
+            "[pour] regions: [0, 0, 90, 62] and [10, 10, 40, 40] overlap on F.Cu",
+        )
+        self.fails(
+            lambda d: regions(d, [{**top, "layers": ["In1.Cu"]}]),
+            "[pour] regions: layers ['In1.Cu'] are not in [pour] layers",
+        )
+        self.fails(
+            lambda d: regions(d, [{**top, "layers": []}]),
+            "[pour] regions: layers must be a non-empty list",
+        )
+        self.fails(
+            lambda d: regions(d, [{**top, "priority": -1}]),
+            "[pour] regions: priority must be an integer >= 0, got -1",
+        )
+
+    def test_fanout(self):
+        """[fanout]: a via beside every SMD pad of a poured net, after routing."""
+        ref, pin = self.nl.nets["GND"][0]
+        fan = {
+            "nets": ["GND"],
+            "via_um": [600, 300],
+            "track_um": 300,
+            "reach_mm": 2.0,
+            "in_pad": [f"{ref}:{pin}"],
+            "exempt": [],
+            "required": [f"{ref}:{pin}"],
+        }
+        ok = self.with_data(lambda d: d.update(fanout=fan))
+        self.assertEqual(boardcheck.validate_config(ok, self.nl), [])
+        self.fails(
+            lambda d: d.update(fanout={**fan, "nets": ["AGND"]}),
+            "[fanout] net 'AGND' is not in the netlist",
+        )
+        self.fails(
+            lambda d: d.update(fanout={**fan, "nets": []}),
+            "[fanout] nets must be a non-empty list",
+        )
+        self.fails(
+            lambda d: d.update(fanout={**fan, "via_um": [300, 300]}),
+            "[fanout] via_um must be [diameter, drill] with diameter > drill > 0",
+        )
+        self.fails(
+            lambda d: d.update(fanout={**fan, "track_um": 0}),
+            "[fanout] track_um must be > 0",
+        )
+        self.fails(
+            lambda d: d.update(fanout={**fan, "reach_mm": -1}),
+            "[fanout] reach_mm must be > 0",
+        )
+        self.fails(
+            lambda d: d.update(fanout={**fan, "in_pad": ["Q99:1"]}),
+            "[fanout] in_pad 'Q99:1' is not a pad of a [fanout] net",
+        )
+        self.fails(
+            lambda d: d.update(fanout={**fan, "exempt": ["nonsense"]}),
+            "[fanout] exempt 'nonsense' is not a pad of a [fanout] net",
+        )
+        self.fails(
+            lambda d: d.update(fanout={**fan, "required": ["Q99:2"]}),
+            "[fanout] required 'Q99:2' is not a pad of a [fanout] net",
+        )
+        self.fails(
+            lambda d: d.update(fanout={**fan, "stitch": True}),
+            "[fanout]: unknown key(s) ['stitch']",
+        )
+
+    def test_tracks(self):
+        """[[tracks]]: pre-routed tracks (a power trunk) Freerouting keeps."""
+        trunk = {
+            "name": "trunk",
+            "net": "GND",
+            "layer": "F.Cu",
+            "width_mm": 1.5,
+            "points": [[5, 5], [5, 30], [30, 30]],
+        }
+        ok = self.with_data(lambda d: d.update(tracks=[trunk]))
+        self.assertEqual(boardcheck.validate_config(ok, self.nl), [])
+        self.fails(
+            lambda d: d.update(tracks=[{**trunk, "net": "AGND"}]),
+            "[[tracks]] 'trunk': net 'AGND' is not in the netlist",
+        )
+        self.fails(
+            lambda d: d.update(tracks=[{**trunk, "layer": "In1.Cu"}]),
+            "[[tracks]] 'trunk': layer must be F.Cu or B.Cu, got 'In1.Cu'",
+        )
+        self.fails(
+            lambda d: d.update(tracks=[{**trunk, "width_mm": 0}]),
+            "[[tracks]] 'trunk': width_mm must be > 0",
+        )
+        self.fails(
+            lambda d: d.update(tracks=[{**trunk, "points": [[5, 5]]}]),
+            "[[tracks]] 'trunk': points must be two or more [x, y]",
+        )
+        self.fails(
+            lambda d: d.update(tracks=[{**trunk, "points": [[5, 5], [5, 99]]}]),
+            "[[tracks]] 'trunk': point [5, 99] is not inside [outline]",
+        )
+        self.fails(
+            lambda d: d.update(
+                tracks=[trunk], keepouts=[{"name": "band", "rect": [20, 28, 22, 32]}]
+            ),
+            "[[tracks]] 'trunk': [5, 30] to [30, 30] enters keepout 'band'",
+        )
+        self.fails(
+            lambda d: d.update(tracks=[{**trunk, "colour": "red"}]),
+            "[tracks]: unknown key(s) ['colour']",
+        )
+
     def test_pour_regions_of_the_net_and_whole_board(self):
         self.assertEqual(
             boardcheck.pour_regions(self.cfg.data["pour"]), [("GND", None)]

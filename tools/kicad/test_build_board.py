@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import tempfile
 import unittest
@@ -74,10 +75,20 @@ def run(argv: list[str]) -> str:
 
 
 def normalise(dsn: str) -> str:
-    """The export with line 1, which carries the output path, as the fixture has it."""
+    """The export with line 1, which carries the output path, as the fixture has it.
+
+    A distribution build of 10.0.6 also names its package in `host_version`
+    (Ubuntu's: "10.0.6-10.0.6~ubuntu24.04.1"); that suffix is cut back to the
+    fixture's "10.0.6". Another version stays as it is and fails the comparison.
+    """
     first, rest = dsn.split("\n", 1)
     if not first.startswith("(pcb "):
         raise AssertionError(f"DSN line 1 is {first!r}, not '(pcb <path>'")
+    rest = re.sub(
+        rf'\(host_version "{re.escape(KICAD_VERSION)}-[^"]*"\)',
+        f'(host_version "{KICAD_VERSION}")',
+        rest,
+    )
     return "(pcb carrier.dsn\n" + rest
 
 

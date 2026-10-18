@@ -45,6 +45,8 @@ KEYS = {
     "classes",
     "signal",
     "pour",
+    "tracks",
+    "fanout",
     "keepouts",
     "cutouts",
 }
@@ -197,6 +199,62 @@ class BalancebotTests(unittest.TestCase):
                 {"net": "GND", "rect": [0, 0, 40, 62]},
                 {"net": "+3V3", "rect": [43, 0, 90, 62]},
             ],
+        )
+
+    def test_pour_region_layers_and_priority_pass_through(self):
+        data = copy.deepcopy(self.cfg.data)
+        del data["pour"]["net"]
+        data["pour"]["regions"] = [
+            {"net": "GND", "rect": [0, 0, 90, 62], "priority": 0},
+            {
+                "net": "+3V3",
+                "rect": [10, 10, 40, 40],
+                "layers": ["F.Cu"],
+                "priority": 1,
+            },
+        ]
+        self.assertEqual(
+            self.assemble(data)["pour"]["regions"],
+            [
+                {"net": "GND", "rect": [0, 0, 90, 62], "priority": 0},
+                {
+                    "net": "+3V3",
+                    "rect": [10, 10, 40, 40],
+                    "layers": ["F.Cu"],
+                    "priority": 1,
+                },
+            ],
+        )
+
+    def test_tracks_pass_through(self):
+        data = copy.deepcopy(self.cfg.data)
+        self.assertEqual(self.assemble(data)["tracks"], [])
+        trunk = {
+            "name": "trunk",
+            "net": "GND",
+            "layer": "F.Cu",
+            "width_mm": 1.5,
+            "points": [[5, 5], [5, 30]],
+        }
+        data["tracks"] = [trunk]
+        self.assertEqual(self.assemble(data)["tracks"], [trunk])
+
+    def test_fanout_pass_through(self):
+        data = copy.deepcopy(self.cfg.data)
+        self.assertIsNone(self.assemble(data)["fanout"])
+        fan = {"nets": ["GND"], "via_um": [600, 300]}
+        data["fanout"] = fan
+        self.assertEqual(
+            self.assemble(data)["fanout"],
+            {
+                "nets": ["GND"],
+                "via_um": [600, 300],
+                "track_um": 300,
+                "reach_mm": 2.0,
+                "in_pad": [],
+                "exempt": [],
+                "required": [],
+            },
         )
 
     def test_silk_defaults(self):

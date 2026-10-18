@@ -18,6 +18,9 @@ stops at the first failure and names the report:
 6. `kicad.boardcheck`: board pads, values and paths equal the join's;
 7. `kicad.stamp --write`: the stamp CI verifies.
 
+A carrier at `stage = "schematic"` (board.toml) has no board yet: it stops
+after step 5, with no DRC, board check or stamp.
+
 Reports go to `<carrier>/<name>/output/` (git-ignored).
 """
 
@@ -117,7 +120,7 @@ def _step(name: str, fn: Callable[[], int]) -> bool:
 
 
 def check_project(project: Path, repo_root: Path = REPO_ROOT) -> bool:
-    """Every local gate for one project; True when all passed and the stamp is written."""
+    """Every local gate for one project; True when all passed (and, with a board, the stamp is written)."""
     arg = [str(project)]
     cfg = paths.load_board_config(project)
     kicad_dir = paths.carrier_dir(project) / cfg.name
@@ -138,27 +141,33 @@ def check_project(project: Path, repo_root: Path = REPO_ROOT) -> bool:
         print(f"   WARNING: {d}")
     cli = kicad_cli()
     reports.mkdir(parents=True, exist_ok=True)
-    for name, errors, report in (
-        ("ERC", lambda: erc(cli, sch, reports / "erc.rpt"), reports / "erc.rpt"),
-        (
-            "DRC --schematic-parity",
-            lambda: drc(cli, pcb, sch, reports / "drc.rpt"),
-            reports / "drc.rpt",
-        ),
-    ):
+    gates = [("ERC", lambda: erc(cli, sch, reports / "erc.rpt"), reports / "erc.rpt")]
+    if cfg.has_board:
+        gates.append(
+            (
+                "DRC --schematic-parity",
+                lambda: drc(cli, pcb, sch, reports / "drc.rpt"),
+                reports / "drc.rpt",
+            )
+        )
+    for name, errors, report in gates:
         found = errors()
         print(f"== {name}: {'FAIL' if found else 'ok'} ({report})")
         for e in found:
             print("   " + e.replace("\n", "\n   "))
         if found:
             return False
-    for name, fn in (
-        ("parity", lambda: parity.main(arg, repo_root)),
-        ("boardcheck", lambda: boardcheck.main(arg, repo_root)),
-        ("stamp --write", lambda: stamp.main([*arg, "--write"], repo_root)),
-    ):
+    steps = [("parity", lambda: parity.main(arg, repo_root))]
+    if cfg.has_board:
+        steps += [
+            ("boardcheck", lambda: boardcheck.main(arg, repo_root)),
+            ("stamp --write", lambda: stamp.main([*arg, "--write"], repo_root)),
+        ]
+    for name, fn in steps:
         if not _step(name, fn):
             return False
+    if not cfg.has_board:
+        print(paths.skip_line(project, repo_root) + ": no DRC, board check or stamp")
     return True
 
 
@@ -173,7 +182,10 @@ def main(argv: list[str] | None = None, repo_root: Path = REPO_ROOT) -> int:
             if not check_project(project, repo_root):
                 print(f"FAIL: {project}: carrier check stopped at the step above")
                 return 1
-            print(f"OK: {project}: every carrier gate passed; stamp written")
+            if paths.load_board_config(project).has_board:
+                print(f"OK: {project}: every carrier gate passed; stamp written")
+            else:
+                print(f"OK: {project}: every schematic gate passed")
     except KicadError as e:
         print(f"FAIL: {e}")
         return 1

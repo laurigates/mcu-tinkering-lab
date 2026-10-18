@@ -1,0 +1,37 @@
+# TCA9548A I2C switch as a bare chip, TSSOP-24: the integrated carrier's mux
+# (packages/robocar/unified-integrated). The socketed carrier's
+# adafruit-tca9548a-socket names its pins by the breakout's silkscreen; this
+# entry keeps those names (VIN, RST) so the two hardware.toml files read alike.
+[part]
+name = "TCA9548A I2C switch, TSSOP-24"
+source = "KiCad 10.0.6 library: Interface_Expansion:TCA9548APWR and Package_SO:TSSOP-24_4.4x7.8mm_P0.65mm; pin functions checked against TI SCPS207 Pin Functions (PW package)"
+symbol = "Interface_Expansion:TCA9548APWR"
+footprint = "Package_SO:TSSOP-24_4.4x7.8mm_P0.65mm"
+value = "TCA9548APWR"
+no_connect = ["SD5", "SC5", "SD6", "SC6", "SD7", "SC7"]
+
+[pins]
+A0 = 1
+A1 = 2
+RST = 3
+SD0 = 4
+SC0 = 5
+SD1 = 6
+SC1 = 7
+SD2 = 8
+SC2 = 9
+SD3 = 10
+SC3 = 11
+GND = 12
+SD4 = 13
+SC4 = 14
+SD5 = 15
+SC5 = 16
+SD6 = 17
+SC6 = 18
+SD7 = 19
+SC7 = 20
+A2 = 21
+SCL = 22
+SDA = 23
+VIN = 24

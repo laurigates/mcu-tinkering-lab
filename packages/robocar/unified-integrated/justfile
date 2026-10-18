@@ -1,0 +1,46 @@
+# Robocar Unified, integrated carrier: the robocar-unified carrier PCB with the
+# breakout chips and the buck converter on the board (hardware only; the
+# firmware is packages/robocar/unified's).
+# Run `just --list` to see available recipes
+
+import '../../../tools/kicad.just'
+
+project_dir := "packages/robocar/unified-integrated"
+socketed_dir := "packages/robocar/unified"
+
+default:
+    @just --list
+
+##########
+# Carrier PCB (hardware/carrier/, KiCad 10) — tools/kicad, ADR-027
+##########
+
+# Write the carrier schematic and library tables from hardware.toml
+[group: "carrier"]
+carrier-schematic: (_carrier-schematic project_dir)
+
+# Rewrites the .kicad_pcb from scratch. Freerouting does not route the same
+# way twice, so commit the board you checked, not a re-run of it. The
+# placement in hardware/carrier/board.toml is provisional.
+#
+# Place, autoroute (Freerouting) and pour the carrier board
+[group: "carrier"]
+carrier-board: (_carrier-board project_dir) (_carrier-route project_dir)
+
+# Writes the check stamp CI verifies, only when every gate passes.
+#
+# ERC, DRC with schematic parity, netlist parity with hardware.toml, board nets, library drift
+[group: "carrier"]
+carrier-check: (_carrier-check project_dir)
+
+# The BOM and CPL cover the parts with an LCSC number only; skip them to
+# hand-solder. Runs carrier-check first, so it exports only a checked board.
+#
+# Gerbers and drill files for JLCPCB, zipped, plus the BOM and CPL for its assembly service
+[group: "carrier"]
+carrier-fab: carrier-check (_carrier-fab project_dir)
+
+# Courtyard areas of both carriers' parts, and the main-board parts only one has (KiCad-free)
+[group: "carrier"]
+compare:
+    cd {{_kicad_repo}} && PYTHONPATH=tools python3 -m kicad.area {{socketed_dir}} {{project_dir}}

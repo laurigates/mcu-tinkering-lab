@@ -14,6 +14,7 @@ from __future__ import annotations
 import dataclasses
 import io
 import shutil
+import subprocess
 import tempfile
 import textwrap
 import unittest
@@ -29,6 +30,7 @@ from hardware.pinout import (
     main,
     mcu_labels,
     part_labels,
+    pinout_projects,
     pinouts,
     regenerate,
     render_svg,
@@ -359,6 +361,29 @@ class CommittedImagesTest(unittest.TestCase):
         shutil.rmtree(proj / OUT_DIR)
         regenerate(proj)
         self.assertFalse((proj / OUT_DIR).exists())
+
+
+class DiscoveryTest(unittest.TestCase):
+    """With no project argument, only projects whose documents embed a pinout.
+
+    The same rule as build-guide-check.yml: a project with a hardware.toml and
+    no Typst document that references auto/pinouts/ gets no images.
+    """
+
+    def test_only_projects_whose_documents_embed_a_pinout(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            for name, typ in (
+                ("guide", '#image("auto/pinouts/xiao-esp32s3.svg")\n'),
+                ("plain", "= No pinout here\n"),
+                ("nodocs", None),
+            ):
+                proj = root / "packages" / name
+                write(proj / "hardware.toml", "")
+                if typ is not None:
+                    write(proj / "docs/build-guide.typ", typ)
+            self.assertEqual(pinout_projects(root), [root / "packages/guide"])
 
 
 if __name__ == "__main__":

@@ -33,6 +33,19 @@ several traps below are version-specific: after a KiCad upgrade, re-run
   spare_heads` (ADR-021). Two head IDC headers sit on the back face
   (`[placement]` entry `[x, y, rot, "back"]`, mirrored about its anchor, so the
   pads run the other way: at rotation 90 they run toward -x)
+- `packages/robocar/unified-integrated/hardware/carrier/`: the same carrier with
+  the breakout chips and a buck converter on the board, for comparison.
+  `just robocar-unified-integrated::compare` runs `kicad.area`, the
+  courtyard-area comparison against the socketed carrier. A carrier with no
+  board yet takes `stage = "schematic"` in `board.toml`: boardcheck, the stamp
+  and the local DRC skip it. It also shows the layout features the router
+  does not provide: `[[tracks]]` (fixed tracks build_board.py lays down
+  locked, here a 1.5 mm 5V trunk, the buck's GND and an exposed pad's ground
+  ties), `[fanout]` (a via beside every SMD pad of a poured net, added after
+  routing; `required` pads fail the route without one) and `[pour]` regions
+  with their own `layers` and `priority`
+- `just kicad::setup` (`tools/kicad/setup.sh`): KiCad 10.0.6 on Ubuntu 24.04,
+  Freerouting 2.5.0 and a Java 25 JRE in `~/.cache/freerouting`
 - `.github/workflows/carrier-check.yml` (CI) and the `kicad-carrier` pre-commit hook
 
 ## Workflow
@@ -105,7 +118,9 @@ several traps below are version-specific: after a KiCad upgrade, re-run
     in `tools/kicad/pcb/` read JSON; `test_pcb_py39` parses them as 3.9.
 11. **Freerouting 2.5.0 needs Java 25 or later** (class file version 69); mise
     `temurin-17` cannot run it. The jar is `$FREEROUTING_JAR`, else
-    `~/.cache/freerouting/freerouting-2.5.0.jar`.
+    `~/.cache/freerouting/freerouting-2.5.0.jar`. `just kicad::setup` installs
+    a Temurin 25 JRE in `~/.cache/freerouting/jre`, and `_carrier-route` puts
+    it first on the PATH.
 12. **ERC needs a PWR_FLAG** on every net with a `power_in` pin and no driver.
     The writer adds one.
 13. **The KiCad GUI rewrites `.kicad_pro` `top_level_sheets` to `[]`.**
@@ -155,6 +170,50 @@ several traps below are version-specific: after a KiCad upgrade, re-run
     not fit between two holes that an M2 screw head clears;
     `MountingHole_2.2mm_M2_ISO7380` (4 mm) did. Read the courtyard from the
     vendored `.kicad_mod` before promising a layout.
+
+### Found laying out the integrated robocar carrier
+
+24. **Freerouting gives each net one track width**, so a net class can be no
+    wider than the narrowest pin pitch on any of its nets allows: 0.25 mm at a
+    0.5 mm-pitch TQFN, 0.45 mm at 0.65 mm-pitch SSOP. A power net that reaches a
+    fine-pitch pin caps the whole rail; give that chip its own net (the
+    integrated carrier's AMP_5V behind a ferrite bead) rather than thinning
+    the rail. Freerouting also necks tracks below the class width at fine-pitch
+    pads, so such a board needs a smaller `min_track_width` than 0.2 mm.
+25. **`kicad-cli` cannot write an ERC exclusion.** KiCad matches an exclusion
+    only against its own serialisation of the marker, and a hand-built key
+    (`pin_to_pin|x|y|uuid|uuid|...`) loads as a separate excluded marker while
+    the real one still fails. For a symbol's pin-type quirk, change the
+    project's ERC `pin_map` instead, and check that no other pin has that type.
+26. **The KiCad PPA keeps only the newest 10.0.x**, but Launchpad still serves
+    superseded builds under the PPA's `+files/` URL; `tools/kicad/setup.sh`
+    pins 10.0.6's packages by sha256.
+27. **Freerouting 2.5.0 drops a DSN's `(wiring ...)` section**, fixed and
+    protected wires included, and routes other nets straight through a
+    `[[tracks]]` track. route_board.py walls each segment off with a DSN
+    `keepout`, flush with the polyline's ends so the end pads' centres stay
+    reachable (a keepout over a pad centre leaves that pad unroutable), and
+    drops the pad under each track's first point from the DSN netlist
+    (`dsn.drop_pins`): the track already joins it to the pad under its last
+    point, and both ends must sit on pads of the track's net.
+28. **One boxed-in pad can make Freerouting abandon a whole net.** A keepout
+    that took U10's GND pin's only F.Cu way out left 30-50 GND connections
+    unrouted across the board, deterministically, though every other pad had
+    room and B.Cu was free. Bisect by editing the DSN (`output/carrier.dsn`)
+    and running the jar on copies; dropping one pin from the net is the
+    quickest test of a suspect. The fix was a `[[tracks]]` entry for that pin.
+    The same happens to a pad a new keepout boxes in: a fixed track between
+    fine-pitch pins can enclose its neighbour (the MAX98357A's GAIN_SLOT pin
+    beside a GND tie), and fanout vias placed before routing, as keepouts,
+    boxed in enough pads that GND, +3V3 and BUCK_SW all collapsed. Hence
+    `[fanout]` runs after routing, and an exposed pad inside a ring of pins
+    leaves the netlist (`in_pad`): Freerouting cannot reach it.
+29. **A poured net's SMD pads need vias, and no gate notices.** Freerouting
+    adds a via only where a track changes layer, and a pour on the pads' layer
+    can be cut into islands (here by a +5V pour above GND), so a whole power
+    section's grounds reached the B.Cu plane through 0.19-0.25 mm tracks and
+    one via, with ERC, DRC, parity and the stamp all green. `[fanout]` adds the
+    vias; `required` turns a missing one on a power path into a failure.
 
 ## Verify the gate can fail
 

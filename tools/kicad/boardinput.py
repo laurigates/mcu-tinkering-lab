@@ -22,8 +22,11 @@ registry and board.toml. This writes it to
 - `silk`: board.toml `[silk]`, defaults filled in;
 - `classes`: board.toml `[[net_classes]]` with `nets` expanded to net names
   (per pattern in order, matches in name order); `signal`: as written;
-- `pour`: board.toml `[pour]` with its net(s) as `regions`, `[{net, rect}]`;
+- `pour`: board.toml `[pour]` with its net(s) as `regions`, `[{net, rect}]`,
+  each with its own `layers` and `priority` where board.toml sets them;
   a single-net `[pour]` is one region with `rect` null, the whole board;
+- `tracks`: board.toml `[[tracks]]`, `[{name, net, layer, width_mm, points}]`,
+  points relative to the origin; pre-routed tracks, laid down locked;
 - `keepouts`: board.toml `[[keepouts]]`, `[{name, rect}]`, rects relative to
   the origin; rule areas with no copper (tracks, vias, pads, pour);
 - `cutouts`: board.toml `[[cutouts]]`, `[{name, center, diameter}]`, centres
@@ -137,11 +140,10 @@ def assemble(
         "signal": dict(data["signal"]),
         "pour": {
             **{k: v for k, v in data["pour"].items() if k not in ("net", "regions")},
-            "regions": [
-                {"net": net, "rect": rect}
-                for net, rect in boardcheck.pour_regions(data["pour"])
-            ],
+            "regions": boardcheck.pour_region_specs(data["pour"]),
         },
+        "tracks": [dict(tr) for tr in data.get("tracks", [])],
+        "fanout": boardcheck.fanout_spec(data),
         "keepouts": [dict(k) for k in data.get("keepouts", [])],
         "cutouts": [dict(c) for c in data.get("cutouts", [])],
     }

@@ -21,8 +21,9 @@ default:
 # pin change then needs this one recipe, and schematics-check.yml and
 # build-guide-check.yml find nothing stale. `schematics::render-all` re-renders
 # every circuit and recompiles each project whose documents embed one. Any
-# other project with a hardware.toml gets its own `build-guide` afterwards,
-# because pin_defs.typ and the pinout images reach its PDF without a schematic.
+# other project with a hardware.toml and Typst documents gets its own
+# `build-guide` afterwards, because pin_defs.typ and the pinout images reach its
+# PDF without a schematic. A project with no `docs/*.typ` is skipped.
 # This needs uv and cairo (see docs/schematics/justfile) and mise's pinned Typst.
 #
 # Regenerate everything emitted from the join, for every project with a hardware.toml
@@ -31,7 +32,12 @@ gen:
     #!/usr/bin/env bash
     set -euo pipefail
     cd ../..
-    tomls=$(git ls-files --cached --others --exclude-standard ':(glob)packages/**/hardware.toml')
+    # Only projects with Typst documents: pin_defs.typ and the build-guide
+    # recompile exist for them (a hardware-only project has neither).
+    tomls=""
+    for toml in $(git ls-files --cached --others --exclude-standard ':(glob)packages/**/hardware.toml'); do
+        if compgen -G "$(dirname "$toml")/docs/*.typ" >/dev/null; then tomls="$tomls $toml"; fi
+    done
     for toml in $tomls; do
         python3 tools/typst/generate-pin-defs.py "$(dirname "$toml")"
     done

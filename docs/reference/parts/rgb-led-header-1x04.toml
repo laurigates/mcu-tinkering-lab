@@ -1,0 +1,14 @@
+# Common-anode RGB LED lead on a 1x04 header at 2.54 mm: one per LED on the
+# integrated carrier, where the socketed carrier wires the LEDs to the PCA9685
+# breakout's columns.
+[part]
+name = "RGB LED header, 1x04, common anode"
+source = "this repo's cable convention: the common anode on pin 1, then R, G, B"
+symbol = "Connector_Generic:Conn_01x04"
+footprint = "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical"
+
+[pins]
+ANODE = 1
+R = 2
+G = 3
+B = 4

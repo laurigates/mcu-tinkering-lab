@@ -20,6 +20,10 @@ repos:
         args: ['--unsafe']  # Allow custom YAML tags
       - id: check-added-large-files
         args: ['--maxkb=500']
+        # A routed carrier board with its copper pour filled is about 1 MB
+        # (tools/kicad, ADR-027); robocar-unified's grew past the limit after
+        # it was added.
+        exclude: '\.kicad_pcb$'
       - id: check-merge-conflict
       - id: check-case-conflict
       - id: mixed-line-ending

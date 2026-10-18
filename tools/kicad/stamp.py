@@ -135,6 +135,9 @@ def main(argv: list[str] | None = None, repo_root: Path = REPO_ROOT) -> int:
     failed = False
     try:
         for project in paths.select_projects(args.projects, args.allow_none, repo_root):
+            if not paths.load_board_config(project).has_board:
+                print(paths.skip_line(project, repo_root))
+                continue
             if args.write:
                 print(f"wrote {write(project).name}")
                 continue

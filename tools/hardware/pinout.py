@@ -30,8 +30,9 @@ Usage, from the repo root:
 Images go to `<project>/docs/auto/pinouts/<board-slug>.svg`; any other `.svg`
 in that directory is removed, so a board taken out of hardware.toml does not
 leave a stale picture behind. `--check` writes nothing and exits 1 if any image
-is stale, missing or orphaned. With no project, every git-tracked
-`packages/**/hardware.toml` is processed.
+is stale, missing or orphaned. With no project, every project with a
+git-tracked `packages/**/hardware.toml` and a `docs/*.typ` that embeds
+`auto/pinouts/` is processed (`pinout_projects`), as build-guide-check.yml does.
 """
 
 from __future__ import annotations
@@ -412,6 +413,22 @@ def write_project(project_dir: Path, repo_root: Path = REPO_ROOT) -> list[str]:
     return report
 
 
+def pinout_projects(repo_root: Path = REPO_ROOT) -> list[Path]:
+    """Projects with a hardware.toml and a `docs/*.typ` that embeds `auto/pinouts/`.
+
+    build-guide-check.yml regenerates the images for exactly these; a project
+    whose documents embed none (or that has no documents) gets no images.
+    """
+    return [
+        project
+        for project in _tracked_projects(repo_root)
+        if any(
+            "auto/pinouts/" in typ.read_text(encoding="utf-8")
+            for typ in sorted((project / "docs").glob("*.typ"))
+        )
+    ]
+
+
 def main(argv: list[str] | None = None, repo_root: Path = REPO_ROOT) -> int:
     parser = argparse.ArgumentParser(
         prog="hardware.pinout", description=__doc__.split("\n")[0]
@@ -421,7 +438,7 @@ def main(argv: list[str] | None = None, repo_root: Path = REPO_ROOT) -> int:
     )
     parser.add_argument("projects", nargs="*", type=Path)
     args = parser.parse_args(argv)
-    projects = args.projects or _tracked_projects(repo_root)
+    projects = args.projects or pinout_projects(repo_root)
 
     problems = 0
     for project in projects:

@@ -41,9 +41,16 @@ BOARD_TABLES = frozenset(
         "pour",
         "keepouts",
         "cutouts",
+        "tracks",
+        "fanout",
     }
 )
-PROJECT_KEYS = frozenset({"name", "paper"})
+PROJECT_KEYS = frozenset({"name", "paper", "stage"})
+# How far a carrier has got. A "schematic" carrier has no board yet: the board
+# gates (boardcheck, the stamp, the KiCad check's DRC) skip it and say so. The
+# default, "board", is every other carrier, and a missing board fails it.
+STAGE_SCHEMATIC, STAGE_BOARD = "schematic", "board"
+STAGES = (STAGE_SCHEMATIC, STAGE_BOARD)
 _NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*")
 
 
@@ -52,13 +59,18 @@ class BoardConfig:
     """A project's hardware/carrier/board.toml.
 
     `name` is the KiCad project directory and file stem; `data` is the whole
-    file, for the modules that read its other tables.
+    file, for the modules that read its other tables; `stage` is one of STAGES.
     """
 
     path: Path
     name: str
     paper: str
     data: dict[str, Any]
+    stage: str = STAGE_BOARD
+
+    @property
+    def has_board(self) -> bool:
+        return self.stage == STAGE_BOARD
 
 
 def carrier_dir(project: Path) -> Path:
@@ -92,7 +104,20 @@ def load_board_config(project: Path) -> BoardConfig:
     paper = proj.get("paper", "A3")
     if not isinstance(paper, str) or not paper:
         raise KicadError(f"{path}: [project] paper must be a string, got {paper!r}")
-    return BoardConfig(path=path, name=name, paper=paper, data=data)
+    stage = proj.get("stage", STAGE_BOARD)
+    if stage not in STAGES:
+        raise KicadError(
+            f"{path}: [project] stage must be one of {list(STAGES)}, got {stage!r}"
+        )
+    return BoardConfig(path=path, name=name, paper=paper, data=data, stage=stage)
+
+
+def skip_line(project: Path, repo_root: Path = REPO_ROOT) -> str:
+    """What a board gate prints for a carrier with no board yet."""
+    return (
+        f'SKIP: {_display(project, repo_root)}: stage = "{STAGE_SCHEMATIC}", '
+        "no board yet"
+    )
 
 
 def kicad_project_dir(project: Path) -> Path:

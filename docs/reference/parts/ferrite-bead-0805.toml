@@ -1,0 +1,10 @@
+# Ferrite bead, 0805. Value per instance.
+[part]
+name = "Ferrite bead, 0805"
+source = "KiCad 10.0.6 library"
+symbol = "Device:FerriteBead"
+footprint = "Inductor_SMD:L_0805_2012Metric_Pad1.05x1.20mm_HandSolder"
+
+[pins]
+"1" = 1
+"2" = 2

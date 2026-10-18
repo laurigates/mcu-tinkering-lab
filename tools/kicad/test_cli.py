@@ -32,6 +32,7 @@ from kicad.errors import KicadError
 
 # Modules whose main() takes project directories (paths.add_project_args).
 PROJECT_CLIS: tuple[str, ...] = (
+    "area",
     "boardcheck",
     "boardinput",
     "check",
@@ -231,6 +232,8 @@ class TrackedProjectTests(unittest.TestCase):
     def test_board_config(self):
         cfg = paths.load_board_config(self.project)
         self.assertEqual((cfg.name, cfg.paper), ("demo-carrier", "A3"))
+        self.assertEqual(cfg.stage, paths.STAGE_BOARD)
+        self.assertTrue(cfg.has_board)
         self.assertEqual(
             paths.kicad_project_dir(self.project), self.board.parent / "demo-carrier"
         )
@@ -242,6 +245,7 @@ class TrackedProjectTests(unittest.TestCase):
             "[outline]\n": r"\[project\] is required",
             "[project]\nname = 'a/b'\n": "file stem",
             "[project]\nname = 'x'\npaper = 3\n": "paper",
+            "[project]\nname = 'x'\nstage = 'routed'\n": "stage",
             "[project\n": "board.toml",
         }
         for text, msg in cases.items():
@@ -252,6 +256,46 @@ class TrackedProjectTests(unittest.TestCase):
         self.board.unlink()
         with self.assertRaisesRegex(KicadError, "no board.toml"):
             paths.load_board_config(self.project)
+
+
+class SchematicStageTests(unittest.TestCase):
+    """A carrier at `stage = "schematic"` has no board yet, and says so.
+
+    The board gates (boardcheck, the stamp) skip it with a line naming the
+    stage instead of failing on the missing .kicad_pcb; a carrier at the
+    default stage with no board still fails.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.project = self.root / "packages/robotics/demo"
+        self.board = paths.carrier_dir(self.project) / paths.BOARD_TOML
+        self.board.parent.mkdir(parents=True)
+        (self.root / "justfile").write_text("mod demo 'packages/robotics/demo'\n")
+
+    def test_stage_schematic_has_no_board(self):
+        self.board.write_text(BOARD_TOML + 'stage = "schematic"\n')
+        cfg = paths.load_board_config(self.project)
+        self.assertEqual(cfg.stage, paths.STAGE_SCHEMATIC)
+        self.assertFalse(cfg.has_board)
+
+    def test_board_gates_skip_a_schematic_stage_carrier(self):
+        self.board.write_text(BOARD_TOML + 'stage = "schematic"\n')
+        for name in ("boardcheck", "stamp"):
+            with self.subTest(cli=name):
+                code, out = run(cli_main(name), [str(self.project)], self.root)
+                self.assertEqual(code, 0, out)
+                self.assertIn('SKIP: packages/robotics/demo: stage = "schematic"', out)
+
+    def test_board_gates_fail_a_board_stage_carrier_without_a_board(self):
+        self.board.write_text(BOARD_TOML)
+        for name in ("boardcheck", "stamp"):
+            with self.subTest(cli=name):
+                code, out = run(cli_main(name), [str(self.project)], self.root)
+                self.assertEqual(code, 1, out)
+                self.assertNotIn("SKIP", out)
 
 
 class JustModuleTests(unittest.TestCase):

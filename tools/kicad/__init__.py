@@ -32,6 +32,9 @@ Modules, one responsibility each:
                 verified KiCad-free in CI
 - `check`       CLI (local, kicad-cli): every local carrier gate in order,
                 ending in `stamp --write`
+- `area`        CLI: each part's courtyard area, grouped into main board, head
+                and mechanical; given two projects, the main-board parts only
+                one has
 - `boardinput`  CLI: the JSON the pcbnew scripts read (netlist, placement,
                 silkscreen, net classes, pour), from the join and board.toml
 - `fab`         CLI (local, kicad-cli): gerbers, drill files and their zip,

@@ -12,13 +12,18 @@
 # KiCad-free: _carrier-lib, _carrier-schematic, _perfboard, _perfboard-check.
 # Need KiCad 10.0.6: _carrier-check, _carrier-fab (kicad-cli), _carrier-board,
 # _carrier-route (KiCad's bundled Python; _carrier-route also java >= 25 and the
-# Freerouting 2.5.0 jar, $FREEROUTING_JAR).
+# Freerouting 2.5.0 jar, $FREEROUTING_JAR). `just kicad::setup` installs all three.
 #
 # Variable names carry a _kicad_ prefix so they cannot collide with pico.just's
 # or esp32*.just's (container_cmd, compose_file, tools_dir, _detected_*).
 
 _kicad_repo := source_directory() / ".."
-_kicad_python := env("KICAD_PYTHON", "/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/Current/bin/python3")
+# KiCad's Python (it carries pcbnew): the macOS bundle's, else the system one,
+# where the Linux packages install pcbnew.
+_kicad_python := env("KICAD_PYTHON", if os() == "macos" { "/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/Current/bin/python3" } else { "/usr/bin/python3" })
+# Freerouting needs Java 25 or later; `just kicad::setup` installs a JRE here,
+# and route_board.py runs the first `java` on the PATH.
+_kicad_java_path := env("HOME", "") / ".cache/freerouting/jre/bin"
 
 _carrier-lib:
     cd {{_kicad_repo}} && PYTHONPATH=tools python3 -m kicad.derive_xiao
@@ -34,7 +39,7 @@ _carrier-board project:
 
 _carrier-route project:
     cd {{_kicad_repo}} && PYTHONPATH=tools python3 -m kicad.boardinput {{project}}
-    cd {{_kicad_repo}} && {{_kicad_python}} tools/kicad/pcb/route_board.py {{project}}/hardware/carrier/output/board-input.json
+    cd {{_kicad_repo}} && PATH="{{_kicad_java_path}}:$PATH" {{_kicad_python}} tools/kicad/pcb/route_board.py {{project}}/hardware/carrier/output/board-input.json
 
 _carrier-check project:
     cd {{_kicad_repo}} && PYTHONPATH=tools python3 -m kicad.check {{project}}
