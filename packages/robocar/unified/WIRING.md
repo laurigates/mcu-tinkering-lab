@@ -219,6 +219,24 @@ audio, and eventually random resets. **A distorted voice is a plausible
 low-battery indication on this robot.** Measure the pack before diagnosing
 anything else on this rail.
 
+Nothing on the robot stops the discharge either. The LM2596 has an ON/OFF pin
+(TI SNVS124G, § 6), but the common module ties it to ground on its own board,
+so the regulator keeps drawing as the cells fall past their safe minimum. **Use
+a pack with a BMS**: its cell undervoltage cutoff is the only thing that ends
+the discharge. The carrier adds a 3 A hold PTC fuse (F1) at the pack input for
+a short, not for a flat pack.
+
+### The 5 V current budget
+
+The LM2596's current limit is 3.4 A minimum over temperature (SNVS124G,
+§ 7.9). Every 5 V load shares it: both motors through the TB6612FNG, the
+servos, the amplifier's peaks and the XIAO. The physics simulation assumes
+about 1.7 A per stalled motor, so two stalls alone reach the limit, and past it
+the regulator folds back and the rail sags into the symptoms above. That figure
+is an assumption: **measure each motor's stall current** at 5 V before relying
+on the budget. If two stalls do exceed it, cap and ramp the motor PWM duty in
+firmware.
+
 ### Star-wire the rail; do not daisy-chain
 
 Every 5V load in the diagram takes its own feed from the regulator's output
@@ -401,7 +419,9 @@ still prints the GPIO-mode names.
   and neither does the TCA9548A breakout on its downstream channels — its board
   file puts resistors on the upstream pair only (see
   [`adafruit-tca9548a.md`](../../../docs/reference/boards/adafruit-tca9548a.md)).
-  10 kΩ to 3.3 V on each line matches the value the breakout uses upstream.
+  2.2 kΩ to 3.3 V on each line: at 400 kHz the bus must rise within 300 ns,
+  and 10 kΩ manages that only below about 35 pF, which a sensor lead can
+  exceed. The carrier fits 2.2 kΩ on every channel (#810).
   Channels 0–2 work without them because those breakouts carry their own.
 - **A reading takes ~120 ms.** The firmware triggers, releases the bus, and
   reads three bytes on a later loop tick, so each sensor delivers a reading

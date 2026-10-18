@@ -49,14 +49,20 @@ size = [100.0, 100.0]
 # x 70.5 and y 0, 35.25 or 70.5; its copper is the 28 x 28 mm from x 72 and
 # that y: a 1.5 mm band inside the left and bottom cuts, a 0.5 mm edge keepout
 # along its top and right edges. The waste strips between heads (y 29.5-35.25
-# and 64.75-70.5) take the saw kerf.
+# and 64.75-70.5) take the saw kerf. Head 2's top band reaches 1 mm past its
+# cut (#810). Head 3's stops 0.5 mm past the y 70.5 cut, the .kicad_pro
+# copper-to-edge clearance, and a HEAD3_MOTOR_STBY track runs 0.73 mm from the
+# cut: at 0.75 mm or more Freerouting could not route HEAD3_PIEZO past J17 (8
+# attempts out of 8), and J17 cannot move down, where its pads would sit under
+# U4's silkscreen. The saw runs in the waste strip, so that track is 0.73 mm
+# from the sanded edge, as far as a track sits from the outline elsewhere.
 [[keepouts]]
 name = "head column cut band, vertical"
 rect = [69.0, 0.0, 72.0, 100.0]
 
 [[keepouts]]
 name = "head 1 / head 2 cut band"
-rect = [72.0, 28.0, 99.5, 35.75]
+rect = [72.0, 28.0, 99.5, 36.25]
 
 [[keepouts]]
 name = "head 2 / head 3 cut band"
@@ -176,6 +182,7 @@ A4 = [67.0, 79.0, 0]      # MAX98357A socket; the speaker lead leaves the module
 # Rear row: power in and the buck lead together, the OLED lead, the
 # amplifier's bulk and its ground post, the buzzer and its resistor.
 J3 = [12.5, 86.3, 180]    # XT30 pack in, mating face to the rear edge
+F1 = [4.2, 85.8, 90]      # pack-input PTC fuse, beside the XT30, between J5 and H3
 J4 = [26.0, 95.0, 0]      # LM2596 lead
 J9 = [25.3, 85.4, 0]      # SSD1306 OLED lead
 C3 = [42.0, 87.5, 0]      # MAX98357A Vin bulk
@@ -185,8 +192,13 @@ BZ1 = [51.0, 93.6, 0]     # 12 mm buzzer, soldered to the board
 
 [silk]
 hidden_refs = ["H1", "H2", "H3", "H4", "H5", "H6", "H7", "H8", "H9", "H10"]
-# Seeed's reference text is below KiCad's minimum silkscreen height.
-ref_sizes = { U1 = 1.0, U3 = 1.0, U4 = 1.0, R2 = 0.8, R3 = 0.8, R4 = 0.8, R5 = 0.8, R6 = 0.8, R7 = 0.8, R8 = 0.8, R9 = 0.8, R10 = 0.8, R11 = 0.8 }
+# Seeed's reference text is below KiCad's minimum silkscreen height. Text is
+# 1.0 mm tall, JLCPCB's legible minimum, except where 1.0 mm does not fit
+# (#810): MUX_RST beside J12's pads, J18's column and row labels against its
+# outline, HEAD 3 against U4's, and the CJMCU-2317 pin names inside its
+# socket outline. Those stay at 0.8 mm,
+# boardcheck's floor; build_board.py gives every stroke 0.16 mm or more.
+ref_sizes = { U1 = 1.0, U3 = 1.0, U4 = 1.0, R2 = 1.0, R3 = 1.0, R4 = 1.0, R5 = 1.0, R6 = 1.0, R7 = 1.0, R8 = 1.0, R9 = 1.0, R10 = 1.0, R11 = 1.0 }
 # Off the board edge and out from under neighbours.
 ref_positions = { A2 = [40.0, 46.3], A3 = [16.0, 18.0], A5 = [51.8, 38.2], C4 = [1.6, 54.7], C1 = [35.0, 80.5], J5 = [3.5, 79.9], J6 = [3.5, 60.9], J7 = [14.75, 8.45], J8 = [28.75, 8.45], J9 = [29.05, 89.85], J12 = [29.3, 23.0], J16 = [95.5, 61.0], J18 = [65.7, 36.6], BZ1 = [62.6, 88.6], C3 = [42.0, 87.5], C8 = [41.7, 77.0], J1 = [43.5, 1.5], J15 = [60.1, 2.3], R2 = [9.0, 32.9], R3 = [12.0, 32.9], R4 = [15.0, 32.9], R5 = [18.0, 32.9], R6 = [22.0, 32.9], R7 = [25.0, 32.9], R8 = [28.0, 32.9], R9 = [31.0, 32.9], R10 = [34.4, 35.5], R11 = [38.4, 35.5] }
 # The saw lines, on both faces; each gets a "CUT" label on its left-hand side,
@@ -204,8 +216,8 @@ texts = [
     { text = "PROVISIONAL:", at = [22.0, 47.4], size = 1.0 },
     { text = "do not order", at = [22.0, 49.2], size = 1.0 },
     { text = "FRONT ^", at = [22.0, 51.6], size = 1.2 },
-    { text = "HEAD 1", at = [75.0, 26.0], size = 0.8 },
-    { text = "HEAD 2", at = [75.0, 61.0], size = 0.8 },
+    { text = "HEAD 1", at = [75.0, 26.0], size = 1.0 },
+    { text = "HEAD 2", at = [75.0, 61.0], size = 1.0 },
     { text = "HEAD 3", at = [74.4, 96.0], size = 0.8 },
     # Test header net names, one beside each pin (2.54 mm pitch).
     { text = "+3V3", at = [37.6, 11.0], size = 1.0 },
@@ -267,7 +279,7 @@ texts = [
 # patterns over them; every pattern must match, and no net may be in two classes.
 [[net_classes]]
 name = "power"
-nets = ["VBAT", "GND", "+5V", "MOT_*"]
+nets = ["PACK_IN", "VBAT", "GND", "+5V", "MOT_*"]
 track_um = 1000
 clearance_um = 300
 via_um = [1000, 500]
@@ -308,3 +320,17 @@ clearance_mm = 0.4
 min_thickness_mm = 0.25
 thermal_gap_mm = 0.3
 spoke_mm = 0.35
+
+# A via beside every SMD pad of a poured net, added after routing where there
+# is room (#810): Freerouting adds a via only where a track changes layer, so
+# the committed board reached B.Cu's GND from its SMD ground pads through one
+# via in all. `required` is every SMD ground pad on a power path: the three
+# 470 uF bulk capacitors (C1 PCA9685 V+, C2 TB6612FNG VM, C3 MAX98357A Vin),
+# the decoupling C4 and C5, and the AMS1117 with its input and output
+# capacitors. route_board.py fails the route if one of those finds no room.
+[fanout]
+nets = ["GND"]
+via_um = [600, 300]
+track_um = 400
+reach_mm = 2.5
+required = ["C1:2", "C2:2", "C3:2", "C4:2", "C5:2", "C7:2", "C8:2", "U2:1"]

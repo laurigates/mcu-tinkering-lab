@@ -404,8 +404,10 @@ kind = "speaker"
 note = "4–8 Ω"
 build = "harness"
 
+# On the carrier the pack reaches VBAT through the fuse F1 instead (below).
 [[rails]]
 name = "VBAT"
+build = "harness"
 from = "pack.+"
 to = ["buck.IN+"]
 
@@ -589,10 +591,34 @@ role = "TCA9548A_RST_PIN"
 to = "tp_i2c.RST"
 build = "carrier"
 
+# A resettable fuse between the XT30 and everything else (#810): a short on
+# VBAT (the 1 mm track to the LM2596 lead, the test header J11) otherwise has
+# the pack's full fault current behind it. 3 A hold covers the LM2596's 3 A
+# output at 5 V, about 2.3 A in at 7.4 V; it trips at 5-6 A. 16 V rated, above
+# the 8.4 V of a charged 2S pack (the 6 V and 8 V parts are not). Values from
+# JLCPCB's listing for C883162 (BSMD1812-300-16V, Extended, checked 2026-10-18);
+# the datasheet's hold-current derating with temperature is unread, so a warm
+# robot near the LM2596's full load may trip it first.
+[parts.fuse_in]
+name = "3 A hold PTC fuse, pack input"
+kind = "fuse"
+build = "carrier"
+part = "polyfuse-1812"
+ref = "F1"
+value = "3A hold 16V"
+lcsc = "C883162"
+
+[[rails]]
+name = "PACK_IN"
+build = "carrier"
+from = "pack.+"
+to = ["fuse_in.1"]
+
 [[rails]]
 name = "VBAT"
 build = "carrier"
-to = ["tp_power.VBAT"]
+from = "fuse_in.2"
+to = ["buck.IN+", "tp_power.VBAT"]
 
 [parts.ldo]
 name = "AMS1117-3.3 LDO, main-board 3V3"
@@ -686,96 +712,103 @@ value = "100"
 lcsc = "C17408"
 
 # The TCA9548A breakout pulls up only its upstream SDA/SCL; every downstream
-# channel needs its own pull-ups, 10 kΩ to the carrier's 3V3 (#750).
+# channel needs its own pull-ups to the carrier's 3V3 (#750). 2.2 kΩ, not 10 kΩ
+# (#810): the bus runs at 400 kHz, where Fast-mode allows a 300 ns rise time,
+# and t_r = 0.8473 x R x C_bus (NXP UM10204 § 7.1). 10 kΩ meets that only below
+# about 35 pF, which a rangefinder lead alone can exceed; 2.2 kΩ allows about
+# 160 pF. The low end is the 3 mA a Fast-mode device must sink at 0.4 V:
+# (3.3 - 0.4) V / 3 mA = 970 Ω. With a module's own 10 kΩ in parallel (the
+# CJMCU-2317, possibly the OLED) a channel is about 1.8 kΩ, 1.8 mA. C17520 is a
+# JLCPCB Basic part (checked 2026-10-18).
 [parts.pull_ch0_sda]
-name = "10 kΩ pull-up, mux channel 0 SDA"
+name = "2.2 kΩ pull-up, mux channel 0 SDA"
 kind = "resistor"
 build = "carrier"
 part = "r0805"
 ref = "R2"
-value = "10k"
-lcsc = "C17414"
+value = "2.2k"
+lcsc = "C17520"
 
 [parts.pull_ch0_scl]
-name = "10 kΩ pull-up, mux channel 0 SCL"
+name = "2.2 kΩ pull-up, mux channel 0 SCL"
 kind = "resistor"
 build = "carrier"
 part = "r0805"
 ref = "R3"
-value = "10k"
-lcsc = "C17414"
+value = "2.2k"
+lcsc = "C17520"
 
 [parts.pull_ch1_sda]
-name = "10 kΩ pull-up, mux channel 1 SDA"
+name = "2.2 kΩ pull-up, mux channel 1 SDA"
 kind = "resistor"
 build = "carrier"
 part = "r0805"
 ref = "R4"
-value = "10k"
-lcsc = "C17414"
+value = "2.2k"
+lcsc = "C17520"
 
 [parts.pull_ch1_scl]
-name = "10 kΩ pull-up, mux channel 1 SCL"
+name = "2.2 kΩ pull-up, mux channel 1 SCL"
 kind = "resistor"
 build = "carrier"
 part = "r0805"
 ref = "R5"
-value = "10k"
-lcsc = "C17414"
+value = "2.2k"
+lcsc = "C17520"
 
 [parts.pull_ch2_sda]
-name = "10 kΩ pull-up, mux channel 2 SDA"
+name = "2.2 kΩ pull-up, mux channel 2 SDA"
 kind = "resistor"
 build = "carrier"
 part = "r0805"
 ref = "R10"
-value = "10k"
-lcsc = "C17414"
+value = "2.2k"
+lcsc = "C17520"
 
 [parts.pull_ch2_scl]
-name = "10 kΩ pull-up, mux channel 2 SCL"
+name = "2.2 kΩ pull-up, mux channel 2 SCL"
 kind = "resistor"
 build = "carrier"
 part = "r0805"
 ref = "R11"
-value = "10k"
-lcsc = "C17414"
+value = "2.2k"
+lcsc = "C17520"
 
 [parts.pull_ch3_sda]
-name = "10 kΩ pull-up, mux channel 3 SDA"
+name = "2.2 kΩ pull-up, mux channel 3 SDA"
 kind = "resistor"
 build = "carrier"
 part = "r0805"
 ref = "R6"
-value = "10k"
-lcsc = "C17414"
+value = "2.2k"
+lcsc = "C17520"
 
 [parts.pull_ch3_scl]
-name = "10 kΩ pull-up, mux channel 3 SCL"
+name = "2.2 kΩ pull-up, mux channel 3 SCL"
 kind = "resistor"
 build = "carrier"
 part = "r0805"
 ref = "R7"
-value = "10k"
-lcsc = "C17414"
+value = "2.2k"
+lcsc = "C17520"
 
 [parts.pull_ch4_sda]
-name = "10 kΩ pull-up, mux channel 4 SDA"
+name = "2.2 kΩ pull-up, mux channel 4 SDA"
 kind = "resistor"
 build = "carrier"
 part = "r0805"
 ref = "R8"
-value = "10k"
-lcsc = "C17414"
+value = "2.2k"
+lcsc = "C17520"
 
 [parts.pull_ch4_scl]
-name = "10 kΩ pull-up, mux channel 4 SCL"
+name = "2.2 kΩ pull-up, mux channel 4 SCL"
 kind = "resistor"
 build = "carrier"
 part = "r0805"
 ref = "R9"
-value = "10k"
-lcsc = "C17414"
+value = "2.2k"
+lcsc = "C17520"
 
 # Main board to the 2WD chassis plate. Positions are provisional, in
 # hardware/carrier/board.toml.
