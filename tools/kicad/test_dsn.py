@@ -131,5 +131,93 @@ class RewriteTests(unittest.TestCase):
         self.assertEqual(dsn.via_name([1000, 500]), "Via[0-1]_1000:500_um")
 
 
+class TrackKeepoutTests(unittest.TestCase):
+    """Freerouting 2.5.0 drops a DSN's `wiring` section, fixed wires included,
+    and routes through them; a [[tracks]] trunk reaches it as keepouts."""
+
+    TEXT = '  (structure\n    (via "Via[0-1]_600:300_um")\n  )\n'
+    TRUNK = {
+        "name": "trunk",
+        "net": "+5V",
+        "layer": "F.Cu",
+        "width_mm": 1.0,
+        "points": [[10.0, 5.0], [20.0, 5.0]],
+    }
+
+    def test_a_segment_is_a_keepout_on_its_layer(self):
+        out = dsn.track_keepouts(self.TEXT, [self.TRUNK], [100.0, 100.0], 200)
+        # half-width 500 um + 200 um margin to each side, flush with both ends:
+        # a track ending inside a pad leaves the pad's centre to the router
+        self.assertIn(
+            '    (keepout "" (polygon F.Cu 0  110000 -104300  120000 -104300'
+            "  120000 -105700  110000 -105700  110000 -104300))\n"
+            '    (via "Via[0-1]_600:300_um")',
+            out,
+        )
+
+    def test_every_segment_of_a_polyline(self):
+        trunk = dict(self.TRUNK, points=[[0, 0], [10, 0], [10, 10]], layer="B.Cu")
+        out = dsn.track_keepouts(self.TEXT, [trunk], [0, 0], 0)
+        self.assertEqual(out.count('(keepout "" (polygon B.Cu 0'), 2)
+
+    def test_interior_corners_are_covered(self):
+        trunk = dict(self.TRUNK, points=[[0, 0], [10, 0], [10, 10]], width_mm=2.0)
+        out = dsn.track_keepouts(self.TEXT, [trunk], [0, 0], 0)
+        # the first segment runs on past the corner by the half-width, the
+        # second starts that far before it; the polyline's own ends are flush
+        self.assertIn("(polygon F.Cu 0  0 1000  11000 1000  11000 -1000  0 -1000", out)
+        self.assertIn(
+            "(polygon F.Cu 0  11000 1000  11000 -10000  9000 -10000  9000 1000", out
+        )
+
+    def test_no_tracks_leaves_the_text(self):
+        self.assertEqual(dsn.track_keepouts(self.TEXT, [], [0, 0], 200), self.TEXT)
+
+    def test_needs_the_structure_via_line(self):
+        with self.assertRaisesRegex(dsn.DsnError, "no structure"):
+            dsn.track_keepouts("(pcb x)", [self.TRUNK], [0, 0], 0)
+
+
+class DropPinsTests(unittest.TestCase):
+    """A pad a [[tracks]] entry already joins to its net leaves the netlist
+    Freerouting routes, or Freerouting routes it again around the keepouts."""
+
+    TEXT = (
+        "  (network\n"
+        "    (net +5V\n"
+        "      (pins J1-1 L1-2 U7-13\n"
+        "        C2-1 C13-1)\n"
+        "    )\n"
+        '    (net "SPK_VO-"\n'
+        "      (pins J19-2 U8-10)\n"
+        "    )\n"
+        "    (net GND\n"
+        "      (pins U10-1 U10-11 C11-2)\n"
+        "    )\n"
+    )
+
+    def test_drops_the_pin_from_its_net(self):
+        out = dsn.drop_pins(self.TEXT, [("+5V", "L1-2"), ("GND", "U10-1")])
+        self.assertIn("(pins J1-1 U7-13\n        C2-1 C13-1)", out)
+        # a prefix of another pin (U10-1 of U10-11) is not that pin
+        self.assertIn("(pins U10-11 C11-2)", out)
+
+    def test_the_last_pin_of_a_line(self):
+        out = dsn.drop_pins(self.TEXT, [("+5V", "U7-13")])
+        self.assertIn("(pins J1-1 L1-2\n        C2-1 C13-1)", out)
+
+    def test_a_quoted_net(self):
+        out = dsn.drop_pins(self.TEXT, [("SPK_VO-", "U8-10")])
+        self.assertIn("(pins J19-2)", out)
+
+    def test_only_that_net(self):
+        with self.assertRaisesRegex(dsn.DsnError, "C11-2 is not a pin of net '\\+5V'"):
+            dsn.drop_pins(self.TEXT, [("+5V", "C11-2")])
+
+    def test_an_unknown_net(self):
+        with self.assertRaisesRegex(dsn.DsnError, "no net 'VBAT'"):
+            dsn.drop_pins(self.TEXT, [("VBAT", "U10-3")])
+
+
 if __name__ == "__main__":
     unittest.main()

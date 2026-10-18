@@ -38,7 +38,10 @@ several traps below are version-specific: after a KiCad upgrade, re-run
   `just robocar-unified-integrated::compare` runs `kicad.area`, the
   courtyard-area comparison against the socketed carrier. A carrier with no
   board yet takes `stage = "schematic"` in `board.toml`: boardcheck, the stamp
-  and the local DRC skip it
+  and the local DRC skip it. It also shows the two layout features the router
+  does not provide: `[[tracks]]` (fixed tracks build_board.py lays down
+  locked, here a 1.5 mm 5V trunk and the buck's GND) and `[pour]` regions with
+  their own `layers` and `priority` (a +5V pour on F.Cu above GND)
 - `just kicad::setup` (`tools/kicad/setup.sh`): KiCad 10.0.6 on Ubuntu 24.04,
   Freerouting 2.5.0 and a Java 25 JRE in `~/.cache/freerouting`
 - `.github/workflows/carrier-check.yml` (CI) and the `kicad-carrier` pre-commit hook
@@ -183,6 +186,20 @@ several traps below are version-specific: after a KiCad upgrade, re-run
 26. **The KiCad PPA keeps only the newest 10.0.x**, but Launchpad still serves
     superseded builds under the PPA's `+files/` URL; `tools/kicad/setup.sh`
     pins 10.0.6's packages by sha256.
+27. **Freerouting 2.5.0 drops a DSN's `(wiring ...)` section**, fixed and
+    protected wires included, and routes other nets straight through a
+    `[[tracks]]` track. route_board.py walls each segment off with a DSN
+    `keepout`, flush with the polyline's ends so the end pads' centres stay
+    reachable (a keepout over a pad centre leaves that pad unroutable), and
+    drops the pad under each track's first point from the DSN netlist
+    (`dsn.drop_pins`): the track already joins it to the pad under its last
+    point, and both ends must sit on pads of the track's net.
+28. **One boxed-in pad can make Freerouting abandon a whole net.** A keepout
+    that took U10's GND pin's only F.Cu way out left 30-50 GND connections
+    unrouted across the board, deterministically, though every other pad had
+    room and B.Cu was free. Bisect by editing the DSN (`output/carrier.dsn`)
+    and running the jar on copies; dropping one pin from the net is the
+    quickest test of a suspect. The fix was a `[[tracks]]` entry for that pin.
 
 ## Verify the gate can fail
 

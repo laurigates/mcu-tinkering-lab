@@ -7,10 +7,15 @@ Run with KiCad's bundled Python (3.9) after build_board.py:
 ``just <project>::carrier-board`` writes the JSON (``python3 -m
 kicad.boardinput``) and runs both scripts. Steps: export Specctra DSN, rewrite
 its single net class into board.toml's width classes (dsn.py), run Freerouting
-headless, import the session, check every pad of each pour net has a routed
-track, then add a zone per board.toml ``[pour]`` region on each of its layers
-and fill them. A region's ``rect`` (relative to the outline origin) is its zone
-outline; a null ``rect`` is the whole board. Keepouts are already rule areas
+headless (each board.toml ``[[tracks]]`` segment a keepout in the DSN, since
+Freerouting drops the exported wires, and the pad under each track's first
+point out of its netlist, since the track already joins it to the pad under
+its last point), import the session, check every pad of
+each pour net has a routed track, then add a zone per board.toml ``[pour]``
+region on each of its layers
+(the region's own ``layers``, else every ``[pour]`` layer) and fill them. A
+region's ``rect`` (relative to the outline origin) is its zone outline; a null
+``rect`` is the whole board. Keepouts are already rule areas
 on the board (build_board.py), so the export and the fill respect them.
 
 Freerouting does not route the same way twice: commit the board that passed
@@ -77,6 +82,44 @@ def pour_layers(board, pour):
     return layers
 
 
+def end_pad(board, origin, tr, point):
+    """The pad of `tr`'s net and layer under `point`, else exit."""
+    at = pcbnew.VECTOR2I(
+        pcbnew.FromMM(origin[0] + point[0]), pcbnew.FromMM(origin[1] + point[1])
+    )
+    layer = board.GetLayerID(tr["layer"])
+    for fp in board.GetFootprints():
+        for pad in fp.Pads():
+            if (
+                pad.GetNetname() == tr["net"]
+                and pad.IsOnLayer(layer)
+                and pad.HitTest(at)
+            ):
+                return pad
+    sys.exit(
+        f"[[tracks]] {tr['name']!r}: {point} is on no {tr['net']} pad on {tr['layer']}"
+    )
+
+
+def track_pins(board, origin, tracks):
+    """(net, "REF-PAD") of the pad under each track's first point.
+
+    Both ends must be on a pad of the track's net. The first pad leaves
+    Freerouting's netlist (dsn.drop_pins): the track joins it to the last.
+    """
+    pins = []
+    for tr in tracks:
+        first = end_pad(board, origin, tr, tr["points"][0])
+        last = end_pad(board, origin, tr, tr["points"][-1])
+        if first.GetParentFootprint() is last.GetParentFootprint() and (
+            first.GetNumber() == last.GetNumber()
+        ):
+            sys.exit(f"[[tracks]] {tr['name']!r} starts and ends on one pad")
+        ref = first.GetParentFootprint().GetReference()
+        pins.append((tr["net"], f"{ref}-{first.GetNumber()}"))
+    return pins
+
+
 def route(spec):
     pcb = spec["pcb"]
     out = spec["out_dir"]
@@ -85,7 +128,9 @@ def route(spec):
     dsn_path = os.path.join(out, "carrier.dsn")
     ses_path = os.path.join(out, "carrier.ses")
     board = pcbnew.LoadBoard(pcb)
-    if len(board.GetTracks()):
+    # build_board.py lays down board.toml [[tracks]] locked; anything else is a
+    # previous route.
+    if any(not t.IsLocked() for t in board.GetTracks()):
         sys.exit("board already has tracks; run build_board.py first")
     regions = pour["regions"]
     for region in regions:
@@ -97,6 +142,11 @@ def route(spec):
     with open(dsn_path) as f:
         try:
             text = dsn.rewrite(f.read(), spec["classes"], spec["signal"])
+            # Freerouting ignores the exported [[tracks]] wires; keep it off them.
+            margin = max(c["clearance_um"] for c in [*spec["classes"], spec["signal"]])
+            tracks = spec.get("tracks", [])
+            text = dsn.track_keepouts(text, tracks, spec["origin"], margin)
+            text = dsn.drop_pins(text, track_pins(board, spec["origin"], tracks))
         except dsn.DsnError as e:
             sys.exit(f"DSN rewrite: {e}")
     with open(dsn_path, "w") as f:
@@ -143,6 +193,8 @@ def route(spec):
                 f"{net} pads with no routed track (the .kicad_dru rule needs one): {bare}"
             )
 
+    # A region pours on its own `layers` if it names them, else on every
+    # [pour] layer, at its own `priority` if it sets one, else at its index.
     zones = [
         pour_zone(
             board,
@@ -150,10 +202,12 @@ def route(spec):
             pour,
             r["net"],
             region_box(board, spec["origin"], r["rect"]),
-            n,
+            r.get("priority", n),
         )
         for n, r in enumerate(regions)
-        for layer in layers
+        for layer in (
+            pour_layers(board, {"layers": r["layers"]}) if "layers" in r else layers
+        )
     ]
     pcbnew.ZONE_FILLER(board).Fill(zones)
     board.Save(pcb)

@@ -9,13 +9,16 @@ join's carrier netlist and the project's ``hardware/carrier/board.toml``;
 ``just <project>::carrier-board`` runs both, then route_board.py. This script
 decides nothing: parts, footprints (always the vendored copies), symbol paths,
 footprint UUIDs, nets (KiCad's ``unconnected-(...)`` net for each no-connect
-pin included), placement, silkscreen, keepouts and cutouts all come from the JSON.
+pin included), placement, silkscreen, keepouts, cutouts and pre-routed tracks
+all come from the JSON.
 
 Each keepout becomes a KiCad rule area on every copper layer that allows no
 tracks, vias, pads, footprints or zone fill, so DRC, the zone filler and
 Freerouting (through the Specctra export) all see it. Each silkscreen cut line
 is drawn on both silkscreen layers with a "CUT" label beside it. Each cutout
 is a circle on Edge.Cuts inside the outline: a hole milled through the board.
+Each board.toml [[tracks]] entry is laid down as locked segments, which the
+Specctra export marks protected, so Freerouting keeps them.
 
 It rewrites the board from scratch, so routing (route_board.py) must run after
 it. Python 3.9 and the stdlib plus ``pcbnew`` only; it imports nothing from
@@ -98,6 +101,26 @@ def keepout(board, origin, k):
     for x, y in ((rx0, ry0), (rx1, ry0), (rx1, ry1), (rx0, ry1)):
         outline.Append(mm(x0 + x), mm(y0 + y))
     board.Add(zone)
+
+
+def fixed_track(board, origin, tr):
+    """board.toml [[tracks]] entry `tr`, as locked segments: Freerouting keeps
+    a locked track (the DSN marks it protected) and routes around it."""
+    x0, y0 = origin
+    net = board.FindNet(tr["net"])
+    if net is None:
+        sys.exit(f"[[tracks]] {tr['name']!r}: net {tr['net']!r} is not on the board")
+    layer = board.GetLayerID(tr["layer"])
+    pts = tr["points"]
+    for (ax, ay), (bx, by) in zip(pts, pts[1:]):
+        seg = pcbnew.PCB_TRACK(board)
+        seg.SetStart(pcbnew.VECTOR2I(mm(x0 + ax), mm(y0 + ay)))
+        seg.SetEnd(pcbnew.VECTOR2I(mm(x0 + bx), mm(y0 + by)))
+        seg.SetWidth(mm(tr["width_mm"]))
+        seg.SetLayer(layer)
+        seg.SetNet(net)
+        seg.SetLocked(True)
+        board.Add(seg)
 
 
 def cutout(board, origin, c):
@@ -254,6 +277,8 @@ def build(spec):
             cut_line(board, origin, line)
         for k in spec["keepouts"]:
             keepout(board, origin, k)
+        for tr in spec.get("tracks", []):
+            fixed_track(board, origin, tr)
         save(board, spec["pcb"])
     finally:
         shutil.rmtree(scratch)

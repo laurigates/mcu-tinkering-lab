@@ -218,6 +218,7 @@ TABLE_KEYS = {
     "net_classes": {"name", "nets", "track_um", "clearance_um", "via_um"},
     "signal": {"track_um", "clearance_um", "via_um"},
     "keepouts": {"name", "rect"},
+    "tracks": {"name", "net", "layer", "width_mm", "points"},
     "cutouts": {"name", "center", "diameter"},
     "pour": {
         "net",
@@ -230,8 +231,8 @@ TABLE_KEYS = {
     },
 }
 TEXT_KEYS = {"text", "at", "size"}
-REGION_KEYS = {"net", "rect"}
-LIST_TABLES = ("net_classes", "keepouts", "cutouts")
+REGION_KEYS = {"net", "rect", "layers", "priority"}
+LIST_TABLES = ("net_classes", "keepouts", "cutouts", "tracks")
 REQUIRED = ("outline", "placement", "net_classes", "signal", "pour")
 
 
@@ -266,9 +267,24 @@ def _overlap(a: list[float], b: list[float]) -> bool:
 
 def pour_regions(pour: dict[str, Any]) -> list[tuple[str, list[float] | None]]:
     """(net, rect) per pour region; a single-net [pour] is (net, None): the whole board."""
-    if "regions" in pour:
-        return [(r["net"], list(r["rect"])) for r in pour["regions"]]
-    return [(pour["net"], None)]
+    return [(r["net"], r["rect"]) for r in pour_region_specs(pour)]
+
+
+def pour_region_specs(pour: dict[str, Any]) -> list[dict[str, Any]]:
+    """Each pour region as {net, rect} plus its own `layers` and `priority` if set.
+
+    A single-net [pour] is one region with rect None, the whole board.
+    """
+    if "regions" not in pour:
+        return [{"net": pour["net"], "rect": None}]
+    out = []
+    for r in pour["regions"]:
+        spec = {"net": r["net"], "rect": list(r["rect"])}
+        for key in ("layers", "priority"):
+            if key in r:
+                spec[key] = list(r[key]) if key == "layers" else r[key]
+        out.append(spec)
+    return out
 
 
 def _validate_keepouts(where: str, data: dict[str, Any], size: Any) -> list[str]:
@@ -339,7 +355,8 @@ def _validate_pour(
     regions = pour["regions"]
     if not isinstance(regions, list) or not regions:
         return [f"{where}: [pour] regions must be a non-empty list"]
-    rects = []
+    board_layers = pour.get("layers", [])
+    placed = []  # (rect, layers, priority)
     for r in regions:
         if not isinstance(r, dict):
             errors.append(f"{where}: [pour] regions: {r!r} must be {{net, rect}}")
@@ -362,12 +379,83 @@ def _validate_pour(
             errors.append(
                 f"{where}: [pour] regions: rect {rect} is not inside [outline]"
             )
-        else:
-            rects.append(rect)
-    for i, a in enumerate(rects):
-        for b in rects[i + 1 :]:
-            if _overlap(a, b):
-                errors.append(f"{where}: [pour] regions: {a} and {b} overlap")
+            continue
+        layers = r.get("layers", board_layers)
+        if not isinstance(layers, list) or not layers:
+            errors.append(f"{where}: [pour] regions: layers must be a non-empty list")
+            continue
+        stray = [layer for layer in layers if layer not in board_layers]
+        if stray:
+            errors.append(
+                f"{where}: [pour] regions: layers {stray} are not in [pour] layers"
+            )
+            continue
+        priority = r.get("priority")
+        if priority is not None and (
+            not isinstance(priority, int) or isinstance(priority, bool) or priority < 0
+        ):
+            errors.append(
+                f"{where}: [pour] regions: priority must be an integer >= 0, "
+                f"got {priority!r}"
+            )
+            continue
+        if _rect(rect):
+            placed.append((rect, layers, priority))
+    # Two regions on a shared layer may overlap only when both carry different
+    # priorities: KiCad fills the higher one first and the lower around it.
+    for i, (a, la, pa) in enumerate(placed):
+        for b, lb, pb in placed[i + 1 :]:
+            shared = [layer for layer in la if layer in lb]
+            ranked = pa is not None and pb is not None and pa != pb
+            if shared and not ranked and _overlap(a, b):
+                errors.append(
+                    f"{where}: [pour] regions: {a} and {b} overlap on {shared[0]}"
+                )
+    return errors
+
+
+TRACK_LAYERS = ("F.Cu", "B.Cu")
+
+
+def _validate_tracks(
+    where: str, data: dict[str, Any], nl: netlist.Netlist, size: Any
+) -> list[str]:
+    """[[tracks]]: pre-routed tracks, each a polyline on one copper layer.
+
+    build_board.py lays them down locked, Freerouting routes around them, and
+    the zone fill joins them. A track may not enter a keepout.
+    """
+    errors = []
+    for tr in data.get("tracks", []):
+        name = tr.get("name")
+        at = f"{where}: [[tracks]] {name!r}"
+        if not isinstance(name, str) or not name:
+            errors.append(f"{where}: [[tracks]] needs a name")
+            continue
+        if tr.get("net") not in nl.nets:
+            errors.append(f"{at}: net {tr.get('net')!r} is not in the netlist")
+        if tr.get("layer") not in TRACK_LAYERS:
+            errors.append(f"{at}: layer must be F.Cu or B.Cu, got {tr.get('layer')!r}")
+        width = tr.get("width_mm")
+        if not _positive(width):
+            errors.append(f"{at}: width_mm must be > 0")
+            continue
+        pts = tr.get("points")
+        if (
+            not isinstance(pts, list)
+            or len(pts) < 2
+            or not all(_numbers(p, 2) for p in pts)
+        ):
+            errors.append(f"{at}: points must be two or more [x, y]")
+            continue
+        outside = [p for p in pts if size is not None and not _inside(p + p, size)]
+        if outside:
+            errors.append(f"{at}: point {outside[0]} is not inside [outline]")
+            continue
+        for a, b in zip(pts, pts[1:]):
+            for k in data.get("keepouts", []):
+                if _segment_rect(tuple(a), tuple(b), tuple(k["rect"])) < width / 2:
+                    errors.append(f"{at}: {a} to {b} enters keepout {k['name']!r}")
     return errors
 
 
@@ -469,6 +557,7 @@ def validate_config(cfg: paths.BoardConfig, nl: netlist.Netlist) -> list[str]:
             )
     errors += _validate_keepouts(where, data, size)
     errors += _validate_cutouts(where, data, size)
+    errors += _validate_tracks(where, data, nl, size)
     for text in silk.get("texts", []):
         if (
             not isinstance(text, dict)

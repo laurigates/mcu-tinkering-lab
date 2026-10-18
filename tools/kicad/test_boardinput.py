@@ -45,6 +45,7 @@ KEYS = {
     "classes",
     "signal",
     "pour",
+    "tracks",
     "keepouts",
     "cutouts",
 }
@@ -198,6 +199,44 @@ class BalancebotTests(unittest.TestCase):
                 {"net": "+3V3", "rect": [43, 0, 90, 62]},
             ],
         )
+
+    def test_pour_region_layers_and_priority_pass_through(self):
+        data = copy.deepcopy(self.cfg.data)
+        del data["pour"]["net"]
+        data["pour"]["regions"] = [
+            {"net": "GND", "rect": [0, 0, 90, 62], "priority": 0},
+            {
+                "net": "+3V3",
+                "rect": [10, 10, 40, 40],
+                "layers": ["F.Cu"],
+                "priority": 1,
+            },
+        ]
+        self.assertEqual(
+            self.assemble(data)["pour"]["regions"],
+            [
+                {"net": "GND", "rect": [0, 0, 90, 62], "priority": 0},
+                {
+                    "net": "+3V3",
+                    "rect": [10, 10, 40, 40],
+                    "layers": ["F.Cu"],
+                    "priority": 1,
+                },
+            ],
+        )
+
+    def test_tracks_pass_through(self):
+        data = copy.deepcopy(self.cfg.data)
+        self.assertEqual(self.assemble(data)["tracks"], [])
+        trunk = {
+            "name": "trunk",
+            "net": "GND",
+            "layer": "F.Cu",
+            "width_mm": 1.5,
+            "points": [[5, 5], [5, 30]],
+        }
+        data["tracks"] = [trunk]
+        self.assertEqual(self.assemble(data)["tracks"], [trunk])
 
     def test_silk_defaults(self):
         data = copy.deepcopy(self.cfg.data)
