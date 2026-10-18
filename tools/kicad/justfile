@@ -20,6 +20,14 @@ gen:
     cd ../.. && PYTHONPATH=tools python3 -m kicad.schematic
     cd ../.. && PYTHONPATH=tools python3 -m kicad.perfboard
 
+# Freerouting 2.5.0 and a Java 25 JRE to ~/.cache/freerouting; KiCad 10.0.6 on
+# Ubuntu 24.04 (sudo), else where to get it. Pass --no-kicad to skip KiCad.
+#
+# Install KiCad 10.0.6, Freerouting and its JRE for the local carrier recipes
+[group: "setup"]
+setup *args:
+    cd ../.. && tools/kicad/setup.sh {{args}}
+
 # Run the tools/kicad unit tests (stdlib unittest; no KiCad needed)
 [group: "test"]
 test:

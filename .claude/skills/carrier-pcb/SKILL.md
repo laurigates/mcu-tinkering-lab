@@ -34,10 +34,13 @@ several traps below are version-specific: after a KiCad upgrade, re-run
   (`[placement]` entry `[x, y, rot, "back"]`, mirrored about its anchor, so the
   pads run the other way: at rotation 90 they run toward -x)
 - `packages/robocar/unified-integrated/hardware/carrier/`: the same carrier with
-  the breakout chips and a buck converter on the board, at `stage = "schematic"`
-  in `board.toml` (no board yet: boardcheck, the stamp and the local DRC skip
-  it). `just robocar-unified-integrated::compare` runs `kicad.area`, the
-  courtyard-area comparison against the socketed carrier
+  the breakout chips and a buck converter on the board, for comparison.
+  `just robocar-unified-integrated::compare` runs `kicad.area`, the
+  courtyard-area comparison against the socketed carrier. A carrier with no
+  board yet takes `stage = "schematic"` in `board.toml`: boardcheck, the stamp
+  and the local DRC skip it
+- `just kicad::setup` (`tools/kicad/setup.sh`): KiCad 10.0.6 on Ubuntu 24.04,
+  Freerouting 2.5.0 and a Java 25 JRE in `~/.cache/freerouting`
 - `.github/workflows/carrier-check.yml` (CI) and the `kicad-carrier` pre-commit hook
 
 ## Workflow
@@ -110,7 +113,9 @@ several traps below are version-specific: after a KiCad upgrade, re-run
     in `tools/kicad/pcb/` read JSON; `test_pcb_py39` parses them as 3.9.
 11. **Freerouting 2.5.0 needs Java 25 or later** (class file version 69); mise
     `temurin-17` cannot run it. The jar is `$FREEROUTING_JAR`, else
-    `~/.cache/freerouting/freerouting-2.5.0.jar`.
+    `~/.cache/freerouting/freerouting-2.5.0.jar`. `just kicad::setup` installs
+    a Temurin 25 JRE in `~/.cache/freerouting/jre`, and `_carrier-route` puts
+    it first on the PATH.
 12. **ERC needs a PWR_FLAG** on every net with a `power_in` pin and no driver.
     The writer adds one.
 13. **The KiCad GUI rewrites `.kicad_pro` `top_level_sheets` to `[]`.**
@@ -160,6 +165,24 @@ several traps below are version-specific: after a KiCad upgrade, re-run
     not fit between two holes that an M2 screw head clears;
     `MountingHole_2.2mm_M2_ISO7380` (4 mm) did. Read the courtyard from the
     vendored `.kicad_mod` before promising a layout.
+
+### Found laying out the integrated robocar carrier
+
+24. **Freerouting gives each net one track width**, so a net class can be no
+    wider than the narrowest pin pitch on any of its nets allows: 0.25 mm at a
+    0.5 mm-pitch TQFN, 0.45 mm at 0.65 mm-pitch SSOP. A power net that reaches a
+    fine-pitch pin caps the whole rail; give that chip its own net (the
+    integrated carrier's AMP_5V behind a ferrite bead) rather than thinning
+    the rail. Freerouting also necks tracks below the class width at fine-pitch
+    pads, so such a board needs a smaller `min_track_width` than 0.2 mm.
+25. **`kicad-cli` cannot write an ERC exclusion.** KiCad matches an exclusion
+    only against its own serialisation of the marker, and a hand-built key
+    (`pin_to_pin|x|y|uuid|uuid|...`) loads as a separate excluded marker while
+    the real one still fails. For a symbol's pin-type quirk, change the
+    project's ERC `pin_map` instead, and check that no other pin has that type.
+26. **The KiCad PPA keeps only the newest 10.0.x**, but Launchpad still serves
+    superseded builds under the PPA's `+files/` URL; `tools/kicad/setup.sh`
+    pins 10.0.6's packages by sha256.
 
 ## Verify the gate can fail
 
