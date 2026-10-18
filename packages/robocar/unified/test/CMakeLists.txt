@@ -91,6 +91,19 @@ target_link_libraries(test_ultrasonic_core PRIVATE m)
 add_test(NAME ultrasonic_core COMMAND test_ultrasonic_core)
 
 # -----------------------------------------------------------------------------
+# MCP23017 pin/mode validation (issue #781)
+#
+# gpio_expander_core.c is the check gpio_expander_set_mode() runs before it
+# touches the bus: GPA7 and GPB7 (pins 7 and 15) are output-only on the Rev D
+# part, so input and pull-up modes there are refused rather than written.
+# -----------------------------------------------------------------------------
+add_executable(test_gpio_expander_core
+    "${MAIN_SRC_DIR}/gpio_expander_core.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_gpio_expander_core.c"
+)
+add_test(NAME gpio_expander_core COMMAND test_gpio_expander_core)
+
+# -----------------------------------------------------------------------------
 # reactive_controller decision logic (Phase 5, gate G2, issue #226)
 # -----------------------------------------------------------------------------
 add_executable(test_reactive_controller

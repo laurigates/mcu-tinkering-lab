@@ -176,7 +176,9 @@ static uint16_t s_pwm_freq_hz = PCA9685_FREQ_HZ;
  * 100 kHz, the PCA9685 and MCP23017 1 MHz — so without this the bus runs at
  * three different speeds depending on which device was addressed last.
  * I2C_MASTER_FREQ_HZ (400 kHz) is the fastest rate every part here is rated
- * for: the TCA9548A is a Fast-mode part, the other two are Fm+. It had sat in
+ * for: the TCA9548A is a Fast-mode part, the PCA9685 is Fm+, and the MCP23017
+ * lists 100 kHz, 400 kHz and 1.7 MHz only (DS20001952D) — no Fm+ 1 MHz step,
+ * so its driver's 1 MHz default is not one of its rated speeds. It had sat in
  * pin_config.h unread since the first commit.
  *
  * Under i2cdev 1.x this also fixed a real cost. cfg_equal() compared

@@ -541,7 +541,8 @@ static void handle_periph_cmd(const char *buf)
 // ========================================
 // GPIO expander console commands (bench testing)
 //   gpio                     - 16-pin port dump
-//   gpio mode <pin> in|up|out - set direction (up = input with pullup)
+//   gpio mode <pin> in|up|out - set direction (up = input with pullup);
+//                              pins 7 and 15 (GPA7/GPB7) are output-only
 //   gpio set <pin> 0|1       - drive an output pin
 //   gpio get <pin>           - read one pin
 // ========================================
@@ -1066,8 +1067,13 @@ static void handle_gpio_cmd(const char *buf)
             return;
         }
         ret = gpio_expander_set_mode((uint8_t)pin, mode);
-        if (ret == ESP_OK)
+        if (ret == ESP_OK) {
             printf("gpio: pin %u mode=%s\n", pin, arg);
+        } else if (ret == ESP_ERR_NOT_SUPPORTED) {
+            printf("gpio: pin %u (%s) is output-only on the MCP23017 — use out\n", pin,
+                   pin == 7 ? "GPA7" : "GPB7");
+            return;
+        }
     } else if (n == 3 && strcmp(op, "set") == 0) {
         ret = gpio_expander_write((uint8_t)pin, arg[0] != '0');
         if (ret == ESP_OK)

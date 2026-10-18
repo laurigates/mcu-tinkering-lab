@@ -4,6 +4,7 @@ idf_component_register(
         "i2c_bus.c"
         "pca9685_phase.c"
         "gpio_expander.c"
+        "gpio_expander_core.c"
         "motor_controller.c"
         "led_controller.c"
         "servo_controller.c"

@@ -43,7 +43,7 @@ All I2C devices hang off a **TCA9548A multiplexer** on GPIO5/6. Don't talk to de
 
 - ch0: PCA9685 (motors, servos, LEDs)
 - ch1: SSD1306 OLED
-- ch2: MCP23017 GPIO expander (optional — 16 generic GPIOs via `gpio_expander.c`, no roles assigned yet; firmware boots fine without the board fitted)
+- ch2: MCP23017 GPIO expander (optional — 16 generic GPIOs via `gpio_expander.c`, no roles assigned yet, GPA7/GPB7 output-only; firmware boots fine without the board fitted)
 - ch3: RCWL-1601 rangefinder, front (0x57, I2C mode)
 - ch4: RCWL-1601 rangefinder, rear (0x57, I2C mode)
 - ch5-7: reserved
@@ -54,6 +54,7 @@ consecutive failed selects, which deselects every channel and frees the
 upstream bus from a segment held low; `trace` counts the resets.
 
 The MCP23017 (1953W breakout, address 0x20) is exercised from the serial console with `gpio`, `gpio mode <pin> in|up|out`, `gpio set <pin> 0|1`, `gpio get <pin>`.
+Pins 7 (GPA7) and 15 (GPB7) are **output-only** on the Rev D part (DS20001952D p. 11, § 3.5.1 note): init sets them to outputs driven low, and `gpio mode 7|15 in|up` is refused with a message saying so (`ESP_ERR_NOT_SUPPORTED` from `gpio_expander_set_mode()`). The check is `gpio_expander_core.c`, pinned by `test_gpio_expander_core.c`.
 
 **Every peripheral above is non-fatal, and that did not always hold.** `init_hardware()` degraded gracefully when the I2C bus was absent — a bare board booted to the console — but once the bus answered, a failure in the expander, motors, LEDs, servos or buzzer aborted the boot. That is how PR #498's servo bug presented: a reboot loop with the console unreachable, i.e. the outcome every other non-fatal phase exists to prevent, and the one state in which nothing can be diagnosed. Since issue #500 the phase returns `void` and logs each failure, and `self_report` reads all four peripherals back through their live accessors so the facts line names which one is missing:
 
