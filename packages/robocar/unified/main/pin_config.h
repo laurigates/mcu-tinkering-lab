@@ -137,10 +137,14 @@
 
 // ========================================
 // SSD1306 OLED Display (via TCA9548A ch1)
+// 0.91-inch 128x32 module (docs/reference/boards/ssd1306-091in-128x32.md).
+// The height is the panel's, not the controller's: a driver derives its text
+// rows, multiplex ratio (A8h) and COM pin layout (DAh) from it, so a 64-row init
+// cannot be sent to this 32-row glass (issue #780).
 // ========================================
-#define OLED_I2C_ADDR 0x3C  // SSD1306 default address
+#define OLED_I2C_ADDR 0x3C  // SSD1306 default; 0x3C vs 0x3D unconfirmed until a bench scan
 #define OLED_WIDTH 128
-#define OLED_HEIGHT 64
+#define OLED_HEIGHT 32
 
 // ========================================
 // RCWL-1601 Ultrasonic Rangefinders, front and rear (via TCA9548A ch3 / ch4)

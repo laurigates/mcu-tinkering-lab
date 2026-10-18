@@ -49,7 +49,7 @@ device — nothing talks to the primary bus directly.
 | Channel | Device | Address |
 |---------|--------|---------|
 | ch0 | PCA9685 PWM driver (motors, servos, LEDs) | 0x40 @ 100 Hz |
-| ch1 | SSD1306 OLED display (128x64) | 0x3C |
+| ch1 | SSD1306 OLED display (0.91-inch, 128x32) | 0x3C |
 | ch2 | MCP23017 GPIO expander — **optional**, firmware boots without it | 0x20 |
 | ch3 | RCWL-1601 rangefinder, front (fixed) | 0x57 |
 | ch4 | RCWL-1601 rangefinder, rear | 0x57 |

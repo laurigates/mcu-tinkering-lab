@@ -63,6 +63,15 @@ static const char *TAG = "bringup";
 /** Rows of the OLED given to the rolling result list (0 = header, last = tally). */
 #define OLED_LIST_ROWS (OLED_ROWS - 2)
 
+/** First row of the done screen's failure list (0 = header, 1 = tally). */
+#define OLED_DONE_FAIL_ROW 2
+
+/* Both screens are laid out from OLED_ROWS, which oled.h derives from the panel
+ * height — 4 rows on the fitted 128x32 panel. Every row index below is computed
+ * against it, so these are the only layout assumptions to hold. */
+_Static_assert(OLED_LIST_ROWS >= 1, "bringup: the progress screen needs a result row");
+_Static_assert(OLED_DONE_FAIL_ROW < OLED_ROWS, "bringup: the done screen needs a failure row");
+
 /** Heartbeat once the sweep is done, so a finished board is distinguishable
  *  from a crashed one at a glance. */
 #define IDLE_BLINK_PERIOD_MS 2000
@@ -112,7 +121,8 @@ static cue_t status_cue(check_status_t s)
  * Redraw the OLED: header, the most recent results, and a running tally.
  *
  * Shows the TAIL of the list rather than the head. Thirteen checks do not fit
- * six rows, and the interesting one is almost always the check that just ran —
+ * OLED_LIST_ROWS rows (two on the 128x32 panel), and the interesting one is
+ * almost always the check that just ran —
  * scrolling off the top costs nothing because the serial table has the rest,
  * while scrolling off the bottom would hide the live one.
  */
@@ -226,22 +236,29 @@ void app_main(void)
         char line[OLED_COLS + 1];
         oled_clear();
         oled_text(0, 0, "BRINGUP DONE");
-        snprintf(line, sizeof(line), "PASS %d  WARN %d", pass, warn);
-        oled_text(0, 2, line);
-        snprintf(line, sizeof(line), "SKIP %d  FAIL %d", skip, fail);
-        oled_text(0, 3, line);
+        snprintf(line, sizeof(line), "P%d W%d S%d F%d", pass, warn, skip, fail);
+        oled_text(0, 1, line);
 
         /* Name the failures explicitly. A count tells you to go and read the
-         * serial log; a name lets you pick the iron back up without moving. */
-        uint8_t row = 5;
-        for (size_t i = 0; i < g_check_count && row < OLED_ROWS; i++) {
-            if (s_results[i].status == CHECK_FAIL) {
-                snprintf(line, sizeof(line), "FAIL %s", g_checks[i].name);
-                oled_text(0, row++, line);
+         * serial log; a name lets you pick the iron back up without moving.
+         * When they outnumber the rows left, the last row says how many more
+         * there are rather than dropping them silently. */
+        const int fail_rows = OLED_ROWS - OLED_DONE_FAIL_ROW;
+        int shown = 0;
+        for (size_t i = 0; i < g_check_count && shown < fail_rows; i++) {
+            if (s_results[i].status != CHECK_FAIL) {
+                continue;
             }
+            if (shown == fail_rows - 1 && fail > fail_rows) {
+                snprintf(line, sizeof(line), "+%d MORE FAILED", fail - shown);
+            } else {
+                snprintf(line, sizeof(line), "FAIL %s", g_checks[i].name);
+            }
+            oled_text(0, (uint8_t)(OLED_DONE_FAIL_ROW + shown), line);
+            shown++;
         }
         if (fail == 0) {
-            oled_text(0, 5, row == 5 ? "NOTHING FAILED" : "");
+            oled_text(0, OLED_DONE_FAIL_ROW, "NOTHING FAILED");
         }
         oled_flush();
     }
