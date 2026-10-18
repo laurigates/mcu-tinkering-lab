@@ -306,7 +306,8 @@ static void run_wheel_exercise(void)
     vTaskDelay(pdMS_TO_TICKS(hold_ms / 2));
     reactive_telemetry_t tele = {0};
     if (reactive_controller_get_telemetry(&tele) == ESP_OK && tele.reflex_active) {
-        ESP_LOGW(TAG, "wheel exercise: obstacle reflex active at %u cm — wheels held stopped",
+        ESP_LOGW(TAG,
+                 "wheel exercise: obstacle reflex active (front mean %u cm) — wheels held stopped",
                  (unsigned)tele.distance_cm);
     }
     vTaskDelay(pdMS_TO_TICKS(hold_ms - hold_ms / 2));

@@ -268,7 +268,10 @@ const char *reactive_head_mode_name(reactive_head_mode_t mode);
  * task; the values are copied under a brief critical section.
  */
 typedef struct {
-    uint16_t distance_cm;      /**< Front sensor, smoothed; drives the reflex.  */
+    /** Front sensor, running mean of ULTRASONIC_SMOOTH_N readings. Gates the
+     *  reflex release only: the trip uses the latest reading, so this can read
+     *  >= STOP_THRESHOLD_CM while reflex_active is true (issue #791). */
+    uint16_t distance_cm;
     bool reflex_active;        /**< True when obstacle reflex has latched stop.  */
     uint32_t loop_hz;          /**< Measured loop rate over the last second.     */
     uint32_t stack_high_water; /**< Stack headroom from uxTaskGetStackHighWaterMark. */
