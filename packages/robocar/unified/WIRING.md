@@ -23,7 +23,7 @@ The XIAO exposes only 11 GPIOs on its headers. Camera pins are internal to the S
 | D3 | GPIO4 | — | *unassigned* |  |
 | D4 | GPIO5 | `I2C_SDA_PIN` | TCA9548A SDA | Every I2C device sits behind the mux |
 | D5 | GPIO6 | `I2C_SCL_PIN` | TCA9548A SCL |  |
-| D6 | GPIO43 | `UART0_TX_PIN` | — | UART0 TX, spare: the serial console is USB-Serial-JTAG on the USB-C connector, not this pad. The ROM bootloader prints its boot log here at every reset |
+| D6 | GPIO43 | `UART0_TX_PIN` | — | UART0 TX, log output: the ROM bootloader prints its boot log here at every reset, then the firmware mirrors every ESP_LOG line here at 115200 8N1 (log_mirror.c). The serial console is USB-Serial-JTAG on the USB-C connector, not this pad |
 | D7 | GPIO44 | `UART0_RX_PIN` | — | UART0 RX, spare: the serial console is USB-Serial-JTAG on the USB-C connector, not this pad |
 | D8 | GPIO7 | `I2S_BCLK_PIN` | MAX98357A BCLK | Bit clock |
 | D9 | GPIO8 | `I2S_LRCLK_PIN` | MAX98357A LRC | Word select / left-right clock |

@@ -165,15 +165,28 @@ static void test_truncation_counts_kept_newlines(void)
     ASSERT(strcmp(p.buf, "\r\n\r\n\r\n\r\n\r\n" LOG_MIRROR_TRUNC_MARK) == 0);
 }
 
+/* A cut landing just before an existing CRLF keeps neither byte of it. */
+static void test_truncation_before_existing_crlf(void)
+{
+    padded_t p;
+    pad_init(&p);
+    const size_t cap = 8; /* body budget 7 - 5 = 2: the cut falls before the CR */
+    size_t n = render(p.buf, cap, "ab\r\ncdefgh");
+    ASSERT(n <= cap - 1);
+    ASSERT(guard_intact(&p, cap));
+    ASSERT(strcmp(p.buf, "ab" LOG_MIRROR_TRUNC_MARK) == 0);
+}
+
 /* A cut landing inside an existing CRLF drops the whole pair rather than
- * keeping a lone CR in front of the marker or overrunning the buffer. */
+ * keeping a lone CR in front of the marker, which would make a terminal
+ * overwrite the start of the line with the marker. */
 static void test_truncation_through_existing_crlf(void)
 {
     padded_t p;
     pad_init(&p);
-    const size_t cap = 8;
+    const size_t cap = 9; /* body budget 8 - 5 = 3: the cut falls between CR and LF */
     size_t n = render(p.buf, cap, "ab\r\ncdefgh");
-    ASSERT(n <= cap - 1);
+    ASSERT(n == 7);
     ASSERT(guard_intact(&p, cap));
     ASSERT(strcmp(p.buf, "ab" LOG_MIRROR_TRUNC_MARK) == 0);
 }
@@ -230,6 +243,7 @@ int main(void)
     test_run("expansion_overflow_truncates", test_expansion_overflow_truncates);
     test_run("long_line_truncated_and_bounded", test_long_line_truncated_and_bounded);
     test_run("truncation_counts_kept_newlines", test_truncation_counts_kept_newlines);
+    test_run("truncation_before_existing_crlf", test_truncation_before_existing_crlf);
     test_run("truncation_through_existing_crlf", test_truncation_through_existing_crlf);
     test_run("min_cap", test_min_cap);
     test_run("rejects_bad_inputs", test_rejects_bad_inputs);
