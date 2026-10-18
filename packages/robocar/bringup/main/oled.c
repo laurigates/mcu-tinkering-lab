@@ -18,6 +18,16 @@ static const char *TAG = "oled";
 #define OLED_PAGES (OLED_HEIGHT / 8)
 #define OLED_FB_BYTES (OLED_WIDTH * OLED_PAGES)
 
+/* oled_text() indexes the framebuffer by text row; one row is one page. */
+_Static_assert(OLED_ROWS == OLED_PAGES, "oled: a text row must be exactly one GDDRAM page");
+_Static_assert(OLED_COLS * 6 <= OLED_WIDTH, "oled: OLED_COLS cells overrun a page");
+
+/* Panel-dependent init values (SSD1306 Table 9-1; UG-2832HSWEG02 §4.4):
+ * multiplex ratio = rows - 1, and the COM pin layout the panel's rows are bonded
+ * to — sequential (02h) for the 128x32 glass, alternative (12h) for 128x64. */
+#define SSD1306_MUX_RATIO (OLED_HEIGHT - 1)
+#define SSD1306_COM_PINS (OLED_HEIGHT == 32 ? 0x02 : 0x12)
+
 /** SSD1306 I2C framing: the first byte of every transfer selects the stream. */
 #define SSD1306_CTRL_CMD 0x00
 #define SSD1306_CTRL_DATA 0x40
@@ -165,22 +175,22 @@ esp_err_t oled_init(void)
     }
 
     static const uint8_t init_seq[] = {
-        0xAE,       /* display off */
-        0xD5, 0x80, /* clock divide / oscillator frequency */
-        0xA8, 0x3F, /* multiplex ratio = 63 (64-row panel) */
-        0xD3, 0x00, /* display offset = 0 */
-        0x40,       /* start line = 0 */
-        0x8D, 0x14, /* charge pump on (panel has no external Vcc) */
-        0x20, 0x00, /* horizontal addressing mode */
-        0xA1,       /* segment remap: column 127 -> SEG0 */
-        0xC8,       /* COM scan direction remapped */
-        0xDA, 0x12, /* COM pins: alternative, no left/right remap */
-        0x81, 0x7F, /* contrast */
-        0xD9, 0xF1, /* pre-charge period */
-        0xDB, 0x40, /* VCOMH deselect level */
-        0xA4,       /* resume from RAM (not all-pixels-on) */
-        0xA6,       /* normal, not inverted */
-        0xAF,       /* display on */
+        0xAE,                    /* display off */
+        0xD5, 0x80,              /* clock divide / oscillator frequency */
+        0xA8, SSD1306_MUX_RATIO, /* multiplex ratio = rows - 1 */
+        0xD3, 0x00,              /* display offset = 0 */
+        0x40,                    /* start line = 0 */
+        0x8D, 0x14,              /* charge pump on (panel has no external Vcc) */
+        0x20, 0x00,              /* horizontal addressing mode */
+        0xA1,                    /* segment remap: column 127 -> SEG0 */
+        0xC8,                    /* COM scan direction remapped */
+        0xDA, SSD1306_COM_PINS,  /* COM pins: per panel, no left/right remap */
+        0x81, 0x7F,              /* contrast */
+        0xD9, 0xF1,              /* pre-charge period */
+        0xDB, 0x40,              /* VCOMH deselect level */
+        0xA4,                    /* resume from RAM (not all-pixels-on) */
+        0xA6,                    /* normal, not inverted */
+        0xAF,                    /* display on */
     };
 
     err = send_cmds(init_seq, sizeof(init_seq));

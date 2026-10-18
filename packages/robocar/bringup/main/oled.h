@@ -17,7 +17,8 @@
  * transfer. Going through i2cdev like every other device on this board keeps
  * that ordering in one place instead of racing a second I2C master abstraction.
  *
- * Text only, uppercase, 5x7 glyphs in a 6x8 cell: 21 columns by 8 rows. A
+ * Text only, uppercase, 5x7 glyphs in a 6x8 cell: 21 columns by OLED_HEIGHT / 8
+ * rows — 4 on the fitted 0.91-inch 128x32 panel, 8 on a 128x64 one. A
  * proportional font or a graphics layer would be a nicer screen and a worse
  * bringup tool — the failure mode to avoid is a rendering bug that reads as a
  * hardware fault.
@@ -29,13 +30,24 @@
 #include <stdint.h>
 
 #include "esp_err.h"
+#include "pin_config.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+/* The panel geometry lives in pin_config.h, and everything below is derived
+ * from OLED_HEIGHT: the text rows here, the framebuffer size and the A8h/DAh
+ * init values in oled.c. Deriving them is the point — a hard-coded row count
+ * that outlives a height change makes oled_text() write past the framebuffer
+ * (issue #780). Only the two SSD1306 panel heights the init sequence knows how
+ * to configure are accepted. */
+_Static_assert(OLED_HEIGHT == 32 || OLED_HEIGHT == 64,
+               "oled: OLED_HEIGHT must be 32 or 64 (the A8h/DAh values in oled.c)");
+_Static_assert(OLED_WIDTH == 128, "oled: the SSD1306 has 128 segment columns");
+
 #define OLED_COLS 21
-#define OLED_ROWS 8
+#define OLED_ROWS (OLED_HEIGHT / 8)
 
 /**
  * @brief Probe for the panel and, if present, initialise and blank it.

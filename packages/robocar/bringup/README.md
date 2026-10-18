@@ -110,7 +110,10 @@ rather than a solid colour, because a solid LED and a hung board look identical.
 
 The best untethered indicator on the board: it names *which* check failed rather
 than just that one did. Shows a rolling list while the sweep runs, then a summary
-with the failing check names.
+with the failing check names. The fitted panel is the 0.91-inch 128x32 module, so
+that is four text rows: a header, the tally, and two rows for the latest results
+(or the failures, with `+N MORE FAILED` when they do not fit). The row count and
+the panel's init values follow `OLED_HEIGHT` in `unified`'s `pin_config.h`.
 
 ### Over serial
 
