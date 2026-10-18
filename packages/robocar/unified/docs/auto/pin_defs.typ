@@ -43,7 +43,7 @@
 // ── SSD1306 OLED ──
 #let OLED_ADDR = "0x3C"
 #let OLED_WIDTH = 128
-#let OLED_HEIGHT = 64
+#let OLED_HEIGHT = 32
 // ── RCWL-1601 Rangefinders ──
 #let RANGER_ADDR = "0x57"
 // ── Piezo Buzzer ──
