@@ -33,6 +33,13 @@ carrier-board: (_carrier-board project_dir) (_carrier-route project_dir)
 [group: "carrier"]
 carrier-check: (_carrier-check project_dir)
 
+# The BOM and CPL cover the parts with an LCSC number only; skip them to
+# hand-solder. Runs carrier-check first, so it exports only a checked board.
+#
+# Gerbers and drill files for JLCPCB, zipped, plus the BOM and CPL for its assembly service
+[group: "carrier"]
+carrier-fab: carrier-check (_carrier-fab project_dir)
+
 # Courtyard areas of both carriers' parts, and the main-board parts only one has (KiCad-free)
 [group: "carrier"]
 compare:
