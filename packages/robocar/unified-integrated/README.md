@@ -6,9 +6,9 @@ The firmware, the pin header (`../unified/main/pin_config.h`) and the head board
 are robocar-unified's, unchanged. There is no firmware here.
 
 > **Schematic only.** `hardware/carrier/board.toml` has `stage = "schematic"`: there
-> is no board layout yet, and no KiCad tool has checked the schematic (ERC needs a
-> local KiCad 10.0.6; see [Next steps](#next-steps)). Do not order anything from
-> this directory.
+> is no board layout yet. The schematic passes ERC and netlist parity with KiCad
+> 10.0.6 (`just robocar-unified-integrated::carrier-check`). Do not order anything
+> from this directory.
 
 ## What changes
 
@@ -112,8 +112,16 @@ The circuit choices that are not a copy of a breakout:
 |---|---|
 | [`hardware.toml`](hardware.toml) | Parts and nets; the join's input. Pin roles come from `../unified/main/pin_config.h` |
 | `hardware/carrier/board.toml` | KiCad project name, paper size, `stage = "schematic"` |
-| `hardware/carrier/robocar-unified-integrated-carrier/` | The KiCad project. The `.kicad_sch` and both library tables are generated; the `.kicad_pro` is hand-kept, copied from the socketed carrier's |
+| `hardware/carrier/robocar-unified-integrated-carrier/` | The KiCad project. The `.kicad_sch` and both library tables are generated; the `.kicad_pro` is hand-kept, copied from the socketed carrier's, with one ERC change (below) |
 | `docs/reference/parts/*-tssop24.toml` and siblings | Registry entries for the bare chips, the inductor and the new connectors |
+
+The `.kicad_pro` sets ERC's pin-conflict matrix to OK for an "Unspecified" pin
+against any pin type but No-connect. KiCad's MAX98357A symbol types its exposed pad
+(pin 17) Unspecified, so tying it to GND otherwise fails ERC (`--severity-all`)
+against the ground net's power-input, passive and input pins. It is the only Unspecified pin in the vendored library, so
+the change covers that pad and nothing else. An ERC exclusion would be narrower
+still, but KiCad matches one only against its own serialisation of the marker,
+which `kicad-cli` cannot write.
 
 Never edit the schematic in KiCad: `just kicad::check` fails on any difference from
 what `hardware.toml` generates. Change `hardware.toml` and run:
@@ -124,15 +132,8 @@ just robocar-unified-integrated::carrier-schematic
 
 ## Next steps
 
-1. With KiCad 10.0.6 installed: `just robocar-unified-integrated::carrier-check`
-   runs ERC and netlist parity (no DRC or stamp at this stage), and
-   `just kicad::vendor-check` confirms the newly vendored symbols and footprints
-   match the installed library byte for byte. They were taken from KiCad's
-   `kicad-symbols` and `kicad-footprints` repositories at tag 10.0.6, not from an
-   installed KiCad.
-2. Lay out the board: add `[outline]`, `[placement]`, `[net_classes]`, `[signal]`,
-   `[pour]` and `[silk]` to `board.toml` (the socketed carrier's
-   `../unified/hardware/carrier/board.toml` is the template), remove `stage`, and run
-   `carrier-board` then `carrier-check`. Keep the buck's input capacitors, switch
-   node and inductor tight, and give the TB6612FNG's VM and PGND pins short, wide
-   copper.
+Lay out the board: add `[outline]`, `[placement]`, `[net_classes]`, `[signal]`,
+`[pour]` and `[silk]` to `board.toml` (the socketed carrier's
+`../unified/hardware/carrier/board.toml` is the template), remove `stage`, and run
+`carrier-board` then `carrier-check`. Keep the buck's input capacitors, switch node
+and inductor tight, and give the TB6612FNG's VM and PGND pins short, wide copper.
