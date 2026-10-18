@@ -46,6 +46,7 @@ KEYS = {
     "signal",
     "pour",
     "tracks",
+    "fanout",
     "keepouts",
     "cutouts",
 }
@@ -237,6 +238,24 @@ class BalancebotTests(unittest.TestCase):
         }
         data["tracks"] = [trunk]
         self.assertEqual(self.assemble(data)["tracks"], [trunk])
+
+    def test_fanout_pass_through(self):
+        data = copy.deepcopy(self.cfg.data)
+        self.assertIsNone(self.assemble(data)["fanout"])
+        fan = {"nets": ["GND"], "via_um": [600, 300]}
+        data["fanout"] = fan
+        self.assertEqual(
+            self.assemble(data)["fanout"],
+            {
+                "nets": ["GND"],
+                "via_um": [600, 300],
+                "track_um": 300,
+                "reach_mm": 2.0,
+                "in_pad": [],
+                "exempt": [],
+                "required": [],
+            },
+        )
 
     def test_silk_defaults(self):
         data = copy.deepcopy(self.cfg.data)

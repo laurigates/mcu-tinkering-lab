@@ -38,10 +38,12 @@ several traps below are version-specific: after a KiCad upgrade, re-run
   `just robocar-unified-integrated::compare` runs `kicad.area`, the
   courtyard-area comparison against the socketed carrier. A carrier with no
   board yet takes `stage = "schematic"` in `board.toml`: boardcheck, the stamp
-  and the local DRC skip it. It also shows the two layout features the router
+  and the local DRC skip it. It also shows the layout features the router
   does not provide: `[[tracks]]` (fixed tracks build_board.py lays down
-  locked, here a 1.5 mm 5V trunk and the buck's GND) and `[pour]` regions with
-  their own `layers` and `priority` (a +5V pour on F.Cu above GND)
+  locked, here a 1.5 mm 5V trunk, the buck's GND and an exposed pad's ground
+  ties), `[fanout]` (a via beside every SMD pad of a poured net, added after
+  routing; `required` pads fail the route without one) and `[pour]` regions
+  with their own `layers` and `priority`
 - `just kicad::setup` (`tools/kicad/setup.sh`): KiCad 10.0.6 on Ubuntu 24.04,
   Freerouting 2.5.0 and a Java 25 JRE in `~/.cache/freerouting`
 - `.github/workflows/carrier-check.yml` (CI) and the `kicad-carrier` pre-commit hook
@@ -200,6 +202,18 @@ several traps below are version-specific: after a KiCad upgrade, re-run
     room and B.Cu was free. Bisect by editing the DSN (`output/carrier.dsn`)
     and running the jar on copies; dropping one pin from the net is the
     quickest test of a suspect. The fix was a `[[tracks]]` entry for that pin.
+    The same happens to a pad a new keepout boxes in: a fixed track between
+    fine-pitch pins can enclose its neighbour (the MAX98357A's GAIN_SLOT pin
+    beside a GND tie), and fanout vias placed before routing, as keepouts,
+    boxed in enough pads that GND, +3V3 and BUCK_SW all collapsed. Hence
+    `[fanout]` runs after routing, and an exposed pad inside a ring of pins
+    leaves the netlist (`in_pad`): Freerouting cannot reach it.
+29. **A poured net's SMD pads need vias, and no gate notices.** Freerouting
+    adds a via only where a track changes layer, and a pour on the pads' layer
+    can be cut into islands (here by a +5V pour above GND), so a whole power
+    section's grounds reached the B.Cu plane through 0.19-0.25 mm tracks and
+    one via, with ERC, DRC, parity and the stamp all green. `[fanout]` adds the
+    vias; `required` turns a missing one on a power path into a failure.
 
 ## Verify the gate can fail
 

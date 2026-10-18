@@ -216,7 +216,7 @@ def place(board, spec):
         if ref in silk["ref_sizes"]:
             size = mm(silk["ref_sizes"][ref])
             fp.Reference().SetTextSize(pcbnew.VECTOR2I(size, size))
-            fp.Reference().SetTextThickness(int(size * 0.15))
+            fp.Reference().SetTextThickness(max(mm(0.16), int(size * 0.15)))
         footprints[ref] = fp
     return footprints
 

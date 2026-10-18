@@ -1,0 +1,22 @@
+# TPS563208 3 A synchronous buck converter, SOT-23-6: the integrated carrier's
+# 5 V supply. The forced-continuous (FCCM) sibling of the TPS563201: same
+# pins, same Table 7-2 component values, but its low-side FET stays on through
+# zero inductor current, so the converter sinks current as well as sourcing it
+# (a motor braking into the 5 V rail) and switches at a fixed frequency at
+# light load. KiCad's TPS563208 symbol is derived (`extends`), which the
+# vendored subset rejects; it extends TPS562200, whose pins and footprint it
+# shares.
+[part]
+name = "TPS563208 buck converter, SOT-23-6"
+source = "KiCad 10.0.6 library: Regulator_Switching:TPS562200 (TPS563208 extends it; GND 1, SW 2, VIN 3, VFB 4, EN 5, VBST 6) and Package_TO_SOT_SMD:SOT-23-6; pin order checked against TI SLVSD90B Table 4-1, which covers both devices"
+symbol = "Regulator_Switching:TPS562200"
+footprint = "Package_TO_SOT_SMD:SOT-23-6"
+value = "TPS563208"
+
+[pins]
+GND = 1
+SW = 2
+VIN = 3
+VFB = 4
+EN = 5
+VBST = 6

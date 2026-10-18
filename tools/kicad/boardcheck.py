@@ -219,6 +219,15 @@ TABLE_KEYS = {
     "signal": {"track_um", "clearance_um", "via_um"},
     "keepouts": {"name", "rect"},
     "tracks": {"name", "net", "layer", "width_mm", "points"},
+    "fanout": {
+        "nets",
+        "via_um",
+        "track_um",
+        "reach_mm",
+        "in_pad",
+        "exempt",
+        "required",
+    },
     "cutouts": {"name", "center", "diameter"},
     "pour": {
         "net",
@@ -459,6 +468,63 @@ def _validate_tracks(
     return errors
 
 
+FANOUT_DEFAULTS = {
+    "track_um": 300,
+    "reach_mm": 2.0,
+    "in_pad": [],
+    "exempt": [],
+    "required": [],
+}
+
+
+def fanout_spec(data: dict[str, Any]) -> dict[str, Any] | None:
+    """[fanout] with its defaults filled in, or None when the table is absent."""
+    fan = data.get("fanout")
+    if fan is None:
+        return None
+    return {**FANOUT_DEFAULTS, **fan}
+
+
+def _validate_fanout(
+    where: str, data: dict[str, Any], nl: netlist.Netlist
+) -> list[str]:
+    """[fanout]: route_board.py puts a via beside every SMD pad of these nets.
+
+    A poured net's SMD pads reach the other layer's pour only through a via;
+    Freerouting adds none where a track joins the pads on one layer, and a
+    pour on that layer can leave them on an island. The vias go in after
+    routing, where there is room: a `required` pad (on a power path) fails the
+    route without one, any other keeps its routed track. `in_pad` pads (an
+    exposed pad) take their via inside the pad; `exempt` pads take none.
+    """
+    fan = data.get("fanout")
+    if fan is None:
+        return []
+    at = f"{where}: [fanout]"
+    errors = []
+    nets = fan.get("nets")
+    if not isinstance(nets, list) or not nets:
+        return [f"{at} nets must be a non-empty list"]
+    for net in nets:
+        if net not in nl.nets:
+            errors.append(f"{at} net {net!r} is not in the netlist")
+    via = fan.get("via_um")
+    if not (_numbers(via, 2) and via[0] > via[1] > 0):
+        errors.append(
+            f"{at} via_um must be [diameter, drill] with diameter > drill > 0"
+        )
+    spec = fanout_spec(data)
+    for key in ("track_um", "reach_mm"):
+        if not _positive(spec[key]):
+            errors.append(f"{at} {key} must be > 0")
+    pads = {f"{ref}:{pin}" for net in nets for ref, pin in nl.nets.get(net, ())}
+    for key in ("in_pad", "exempt", "required"):
+        for pad in spec[key]:
+            if pad not in pads:
+                errors.append(f"{at} {key} {pad!r} is not a pad of a [fanout] net")
+    return errors
+
+
 def expand_classes(
     cfg: paths.BoardConfig, nl: netlist.Netlist
 ) -> list[tuple[str, list[str]]]:
@@ -558,6 +624,7 @@ def validate_config(cfg: paths.BoardConfig, nl: netlist.Netlist) -> list[str]:
     errors += _validate_keepouts(where, data, size)
     errors += _validate_cutouts(where, data, size)
     errors += _validate_tracks(where, data, nl, size)
+    errors += _validate_fanout(where, data, nl)
     for text in silk.get("texts", []):
         if (
             not isinstance(text, dict)

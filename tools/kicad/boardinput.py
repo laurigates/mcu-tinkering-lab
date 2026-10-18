@@ -143,6 +143,7 @@ def assemble(
             "regions": boardcheck.pour_region_specs(data["pour"]),
         },
         "tracks": [dict(tr) for tr in data.get("tracks", [])],
+        "fanout": boardcheck.fanout_spec(data),
         "keepouts": [dict(k) for k in data.get("keepouts", [])],
         "cutouts": [dict(c) for c in data.get("cutouts", [])],
     }
