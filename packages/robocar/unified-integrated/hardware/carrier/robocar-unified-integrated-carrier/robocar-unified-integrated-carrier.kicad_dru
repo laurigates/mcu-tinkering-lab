@@ -1,9 +1,10 @@
 (version 1)
 
-# Every pad of a poured net (GND on the main board, HEAD_GND on the head board)
-# is also routed with a track (route_board.py checks this before pouring), so a
-# thermal relief is a second connection, not the only one. Between fine-pitch
+# Every pad of a poured net (GND on the main board, HEAD_GND on the head board,
+# +5V on the main board's F.Cu) is also routed with a track (route_board.py
+# checks this before pouring), so a thermal relief is a second connection, not
+# the only one. Between fine-pitch
 # chip pins the routed tracks can leave room for a single spoke.
 (rule "Pour thermals may resolve to one spoke"
-	(condition "A.Type == 'Pad' && (A.NetName == 'GND' || A.NetName == 'HEAD_GND')")
+	(condition "A.Type == 'Pad' && (A.NetName == 'GND' || A.NetName == 'HEAD_GND' || A.NetName == '+5V')")
 	(constraint min_resolved_spokes 1))

@@ -75,13 +75,14 @@ part = "mcp23017-ssop28"
 ref = "U9"
 
 # --- 5 V buck converter (replaces the LM2596 module) ------------------------
-# TI SLVSD90B: VFB is 0.768 V (Electrical Characteristics), so
-# 56.2 kΩ over 10 kΩ gives 5.08 V; the datasheet's 5 V efficiency curve
-# (Figure 5-13) uses 3.3 µH. EN has an internal pull-down and must be pulled
-# high; its 17 V limit is the same as VIN's, so it is tied to VBAT (8.4 V on a
-# charged 2S pack). The capacitor values are TI's usual D-CAP2 set (10 µF in,
-# 2 x 22 µF out, 100 nF bootstrap); check them against the datasheet's
-# Application section before ordering.
+# TI SLVSD90B Table 7-2 for 5 V: R1 54.9 kΩ over R2 10 kΩ (VFB 0.768 V, so
+# 4.98 V), L 3.3 µH, and 20-68 µF of low-ESR output capacitance (C13, C14).
+# D-CAP2's stability depends on the L x Cout double pole, so no low-ESR bulk
+# capacitor may sit on 5V: the bulk capacitors there (C1, C2, C3 below) are
+# MnO2 tantalums, whose ~1 Ω ESR keeps them out of the loop, and the input
+# side carries the electrolytic bulk (C19). EN has an internal pull-down and
+# must be pulled high; its limit is VIN's, so it is tied to VBAT (8.4 V on a
+# charged 2S pack). 100 nF bootstrap, as TI requires.
 [parts.buck]
 name = "TPS563201 buck converter"
 kind = "buck-regulator"
@@ -108,6 +109,18 @@ kind = "capacitor"
 part = "c0805"
 ref = "C10"
 value = "10uF 25V"
+
+# The input's bulk capacitor. On VBAT, where it does not touch the buck's loop,
+# and an aluminium electrolytic for its ESR: it damps the ringing between the
+# battery leads' inductance and the ceramic input capacitors when the XT30 is
+# plugged in, which a polymer or MnO2 tantalum would not (and a tantalum takes
+# that surge badly).
+[parts.bulk_in]
+name = "100 µF 25 V bulk capacitor, buck input"
+kind = "capacitor"
+part = "cp-elec-6.3x7.7"
+ref = "C19"
+value = "100uF 25V"
 
 [parts.buck_cin_hf]
 name = "100 nF buck input, beside VIN"
@@ -140,11 +153,11 @@ ref = "C14"
 value = "22uF 16V"
 
 [parts.buck_fb_top]
-name = "56.2 kΩ feedback divider, top"
+name = "54.9 kΩ feedback divider, top"
 kind = "resistor"
 part = "r0805"
 ref = "R12"
-value = "56.2k"
+value = "54.9k"
 
 [parts.buck_fb_bot]
 name = "10 kΩ feedback divider, bottom"
@@ -329,7 +342,7 @@ ref = "J23"
 
 # --- Unchanged from the socketed carrier -------------------------------------
 # References, values and LCSC numbers as in ../unified/hardware.toml, which
-# carries the reasons.
+# carries the reasons, except the bulk capacitors C1-C3 (their own comment).
 
 [parts.ranger_front]
 name = "RCWL-1601 (front)"
@@ -431,29 +444,35 @@ kind = "regulator"
 part = "ams1117-3.3"
 ref = "U2"
 
+# The socketed carrier's 470 µF electrolytics (WIRING.md § Suggested
+# capacitors) made up for an LM2596 module at the end of a lead; here the buck
+# is millimetres away, and TI caps the low-ESR capacitance on its output
+# (above). These are the LDO's 22 µF tantalum, part for part: their ESR keeps
+# them out of the buck's loop, and on AMP_5V it damps FB1 against C17, a
+# ferrite and a ceramic alone being a resonant LC.
 [parts.bulk_pwm]
-name = "470 µF 16 V bulk capacitor, servo V+"
+name = "22 µF tantalum, servo V+"
 kind = "capacitor"
-part = "cp-elec-8x10.5"
+part = "cp-tantalum-3528"
 ref = "C1"
-value = "470uF 16V"
-lcsc = "C96179"
+value = "22uF 16V"
+lcsc = "C8020"
 
 [parts.bulk_motor]
-name = "470 µF 16 V bulk capacitor, TB6612FNG VM"
+name = "22 µF tantalum, TB6612FNG VM"
 kind = "capacitor"
-part = "cp-elec-8x10.5"
+part = "cp-tantalum-3528"
 ref = "C2"
-value = "470uF 16V"
-lcsc = "C96179"
+value = "22uF 16V"
+lcsc = "C8020"
 
 [parts.bulk_amp]
-name = "470 µF 16 V bulk capacitor, MAX98357A Vin"
+name = "22 µF tantalum, MAX98357A Vin"
 kind = "capacitor"
-part = "cp-elec-8x10.5"
+part = "cp-tantalum-3528"
 ref = "C3"
-value = "470uF 16V"
-lcsc = "C96179"
+value = "22uF 16V"
+lcsc = "C8020"
 
 [parts.decouple_pwm]
 name = "100 nF decoupling, PCA9685 VDD"
@@ -856,7 +875,15 @@ line = "SCL"
 [[rails]]
 name = "VBAT"
 from = "pack.+"
-to = ["buck.VIN", "buck.EN", "buck_cin1.A", "buck_cin2.A", "buck_cin_hf.A", "tp_power.VBAT"]
+to = [
+    "buck.VIN",
+    "buck.EN",
+    "bulk_in.+",
+    "buck_cin1.A",
+    "buck_cin2.A",
+    "buck_cin_hf.A",
+    "tp_power.VBAT",
+]
 
 [[rails]]
 name = "BUCK_SW"
@@ -993,6 +1020,7 @@ from = "pack.-"
 to = [
     "mcu.GND",
     "buck.GND",
+    "bulk_in.-",
     "buck_cin1.B",
     "buck_cin2.B",
     "buck_cin_hf.B",

@@ -19,13 +19,14 @@ are robocar-unified's, unchanged. There is no firmware here.
 | A1 SparkFun TB6612FNG breakout | U7 TB6612FNG (SSOP-24), C15 (VCC), C16 (VM) |
 | A4 Adafruit MAX98357A breakout | U8 MAX98357AETE+ (TQFN-16), C17, C18, ferrite bead FB1 on its supply |
 | A5 CJMCU-2317 (MCP23017) module | U9 MCP23017-E/SS (SSOP-28), C6 |
-| J4 lead to an LM2596 module | U10 TPS563201 (SOT-23-6, 3 A), L1 3.3 µH, C9-C14, feedback R12/R13 |
+| J4 lead to an LM2596 module | U10 TPS563201 (SOT-23-6, 3 A), L1 3.3 µH, C9-C14, feedback R12/R13, input bulk C19 |
+| C1-C3 470 µF electrolytics (8 x 10.5 mm) | C1-C3 22 µF tantalums (3528), [below](#bulk-capacitors) |
 | Servos and LEDs on the PCA9685 breakout's 3-pin columns | J20/J21 servo headers, J22/J23 RGB LED headers |
 | Speaker on the MAX98357A breakout's screw terminal | J19 JST-XH 2 |
 | Three head boards (two spares) | One head board |
 
 Everything else keeps its reference, value and role: the connectors, the test
-headers, the bulk capacitors, the LDO, the mux channel pull-ups, the buzzer and the
+headers, the LDO, the mux channel pull-ups, the buzzer and the
 mounting holes. Net names are the socketed carrier's, so the two netlists compare
 by name.
 
@@ -59,24 +60,26 @@ placement leaves. As of this commit:
 
 | Main board | Socketed | Integrated |
 |---|---|---|
-| Parts | 39 | 70 |
-| Courtyard area | 5357 mm² | 2447 mm² (−54 %) |
-| SMD / through-hole parts | 19 / 20 | 51 / 19 |
-| Pads | 200 | 302 |
+| Parts | 39 | 71 |
+| Courtyard area | 5357 mm² | 2234 mm² (−58 %) |
+| SMD / through-hole parts | 19 / 20 | 52 / 19 |
+| Pads | 200 | 304 |
 
 Where the area goes:
 
-- The 33 parts the two main boards share take 1670 mm². Most of it is the
-  connectors, the three 470 µF electrolytics, the 2x10 GPIO mirror header and the
-  M3 holes' surroundings, none of which shrink.
+- The 30 parts the two main boards share take 1337 mm². Most of it is the
+  connectors, the 2x10 GPIO mirror header and the M3 holes' surroundings, none of
+  which shrink.
 - The five breakout sockets and the buck lead take 3687 mm²; the PCA9685 breakout
-  alone is 63 x 26 mm (1625 mm²). Their replacements, 37 parts, take 778 mm²: the
-  six chips 356 mm², the buck's inductor 46 mm², 25 0805 passives and the ferrite
-  bead 179 mm², and the new servo, LED and speaker connectors 197 mm².
+  alone is 63 x 26 mm (1625 mm²). Their replacements, 38 parts, take 845 mm²: the
+  six chips 356 mm², the buck's inductor 46 mm² and input bulk capacitor 67 mm²,
+  25 0805 passives and the ferrite bead 179 mm², and the new servo, LED and
+  speaker connectors 197 mm².
+- The three 470 µF electrolytics (332 mm²) became 22 µF tantalums (52 mm²).
 - The socketed carrier's buck converter is off the board: the LM2596 module (about
   43 x 21 mm) sits on the chassis at the end of J4's lead. The integrated buck
-  (U10, L1, six capacitors, two resistors) adds about 120 mm² of courtyard to the
-  board and removes the module.
+  (U10, L1, seven capacitors, two resistors) adds about 190 mm² of courtyard to
+  the board and removes the module.
 
 Other differences the numbers do not show:
 
@@ -88,19 +91,33 @@ Other differences the numbers do not show:
   (supply and I2C test headers) are unchanged; there is no test point on the
   motor-driver inputs or the I2S lines.
 - **Height.** The breakouts sat on sockets, about 10-15 mm above the board. The
-  tallest integrated parts are the 470 µF electrolytics (10.5 mm) and the headers.
+  tallest integrated parts are the headers and the XT30; C19 is 7.7 mm.
 
 ## Design notes
 
 The circuit choices that are not a copy of a breakout:
 
 - **Buck converter.** TPS563201: 4.5-17 V in, 3 A out, matching the LM2596
-  module's rating. From TI SLVSD90B: VFB 0.768 V, so 56.2 kΩ over 10 kΩ gives
-  5.08 V; the 5 V efficiency curve uses 3.3 µH. EN is tied to VBAT (EN and VIN
-  share the 17 V limit). The input and output capacitors (2 x 10 µF, 100 nF,
-  2 x 22 µF) are TI's usual D-CAP2 values; **check them against the datasheet's
-  application section** before laying out, along with the inductor's saturation
-  current against the motors' stall current.
+  module's rating. TI SLVSD90B Table 7-2 for 5 V: R1 54.9 kΩ over R2 10 kΩ (VFB
+  0.768 V, so 4.98 V), L 3.3 µH, and 20-68 µF of output capacitance (C13, C14,
+  2 x 22 µF 0805). EN is tied to VBAT (EN and VIN share the 17 V limit). Check
+  the inductor's saturation current against the motors' stall current, and the
+  22 µF ceramics' capacitance at 5 V bias, which an 0805 can halve.
+- **Bulk capacitors.** D-CAP2 regulates on the output ripple, and its stability
+  rests on the L x Cout double pole; TI bounds Cout at 68 µF of low-ESR
+  capacitance. The socketed carrier's three 470 µF electrolytics made up for an
+  LM2596 module at the end of a lead; next to this buck, a low-ESR polymer of the
+  same value would sit inside the loop and could make it unstable, and so could
+  the electrolytics. C1-C3 are 22 µF MnO2 tantalums (3528, the LDO's part): their
+  ESR, around 1 Ω, keeps them out of the loop while they still feed the servo,
+  motor and amplifier current steps, and on AMP_5V it damps FB1 against C17, a
+  ferrite and a ceramic alone being a resonant LC. The input side has no such
+  limit, so C19 (100 µF 25 V, 6.3 x 7.7 mm) is an aluminium electrolytic on VBAT:
+  its ESR damps the ringing of the battery lead's inductance against the ceramic
+  input capacitors when the XT30 is plugged in, which a polymer would not, and a
+  tantalum takes that surge badly. The motors' stall current now draws on the
+  buck's 3 A and C2 rather than a 470 µF reservoir; check for brown-outs on the
+  bench.
 - **Strapping.** Mux, PWM driver and expander address pins go straight to GND
   (0x70, 0x40, 0x20, as `pin_config.h` expects). The PCA9685's OE and EXTCLK go to
   GND, the MCP23017's RESET to 3V3. The MAX98357A keeps the socketed carrier's
@@ -117,16 +134,17 @@ The circuit choices that are not a copy of a breakout:
   high leaves no forward voltage across the LED. The LEDs' resistors are on this
   board (R17-R22).
 - **LCSC numbers** are set only where the socketed carrier already checked them
-  (10 kΩ, 100 Ω, 100 nF, the 470 µF and 22 µF capacitors, the LDO). The new chips,
-  the inductor, 220 Ω, 56.2 kΩ, 10 µF and 22 µF ceramics still need parts chosen
+  (10 kΩ, 100 Ω, 100 nF, the 22 µF tantalums, the LDO). The new chips, the
+  inductor, C19, 220 Ω, 54.9 kΩ, 10 µF and 22 µF ceramics still need parts chosen
   against JLCPCB's stock.
 
 ## Layout
 
-`hardware/carrier/board.toml` holds the placement, the net classes, the pour and
-the silkscreen. The buck converter follows TI's layout order: SW straight into L1,
-the input capacitors beside VIN, the bootstrap capacitor along VBST's side to the
-switch node at L1, the feedback divider next to them.
+`hardware/carrier/board.toml` holds the placement, the fixed tracks, the net
+classes, the pour and the silkscreen. The buck converter follows TI's layout
+order: SW straight into L1, the input capacitors beside VIN with their GND pads
+facing U10's GND pin, the bootstrap capacitor along VBST's side to the switch
+node at L1, the feedback divider next to them.
 
 Freerouting gives each net one track width, so a net class is the widest track every
 pin on its nets accepts:
@@ -139,10 +157,19 @@ pin on its nets accepts:
 | logic_power | +3V3 | 0.35 mm | |
 | signal | everything else | 0.25 mm | MAX98357A pads, 0.25 mm at 0.5 mm pitch |
 
-GND is poured on both layers (HEAD_GND on the head), so its 0.25 mm tracks only
-need to reach every pad. The 0.45 mm 5 V and motor tracks carry the motors' stall
-current only briefly; widen the 5 V trunk from L1 to C2 and the TB6612FNG by hand,
-or pour it, before ordering. Freerouting necks tracks down to 0.15 mm at some
+Two tracks are laid down before routing (`[[tracks]]`, locked on the board):
+
+- **5V trunk**, 1.5 mm on F.Cu from L1's output pad west and north to C2, beside
+  the TB6612FNG's VM pins and C16.
+- **Buck GND**, 0.4 mm from U10's GND pin, under the package between its pin
+  rows, to input capacitor C11's GND pad: the input loop, TI's first layout rule.
+
+5 V is also poured on F.Cu over most of the main board (x 8.5-53, y 26-75.5),
+above GND, which keeps B.Cu (and the rest of F.Cu). The trunk sits inside the
+pour, so the pour cannot break into islands between L1 and the motor driver, and
+the pour fills one body around it. GND's 0.25 mm tracks only need to reach every
+pad, since the B.Cu plane joins them; the routed 0.45 mm 5 V tracks are the last
+millimetres into fine-pitch pins. Freerouting necks tracks down to 0.15 mm at some
 fine-pitch pads, so the `.kicad_pro` sets a 0.15 mm minimum track width (JLCPCB's
 two-layer minimum is 0.127 mm).
 
@@ -179,8 +206,9 @@ just robocar-unified-integrated::carrier-schematic
 
 ## Before ordering
 
-- Review the placement and Freerouting's tracks; widen or pour the 5 V trunk.
-- Check the buck's capacitor values and the inductor's saturation current against
-  the TPS563201 datasheet and the motors' stall current.
+- Review the placement and Freerouting's tracks.
+- Check the inductor's saturation current against the motors' stall current, the
+  output ceramics' capacitance at 5 V bias, and on the bench that the 22 µF
+  tantalums hold 5 V through a motor stall.
 - Choose LCSC parts for the new chips, the inductor, the ferrite bead and the new
   passive values.

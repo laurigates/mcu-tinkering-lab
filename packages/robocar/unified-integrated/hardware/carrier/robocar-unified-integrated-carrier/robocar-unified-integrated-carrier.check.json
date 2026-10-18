@@ -1,5 +1,5 @@
 {
- "board_sha256": "7a03ece44787a1d809f6cde301437dcaf70fd25042339f5f0d5ec59788686d20",
+ "board_sha256": "34d839f93d4af3142a2b845a4ab1e4b82d1a713ff259297e7fd3003a2843461a",
  "kicad_cli_version": "10.0.6",
  "netlist": {
   "components": {
@@ -11,11 +11,11 @@
     "value": "Buzzer 12mm"
    },
    "C1": {
-    "footprint": "Capacitor_SMD:CP_Elec_8x10.5",
+    "footprint": "Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B_HandSolder",
     "in_bom": true,
-    "lcsc": "C96179",
+    "lcsc": "C8020",
     "lib_id": "Device:C_Polarized",
-    "value": "470uF 16V"
+    "value": "22uF 16V"
    },
    "C10": {
     "footprint": "Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder",
@@ -80,19 +80,26 @@
     "lib_id": "Device:C",
     "value": "100nF"
    },
-   "C2": {
-    "footprint": "Capacitor_SMD:CP_Elec_8x10.5",
+   "C19": {
+    "footprint": "Capacitor_SMD:CP_Elec_6.3x7.7",
     "in_bom": true,
-    "lcsc": "C96179",
+    "lcsc": "",
     "lib_id": "Device:C_Polarized",
-    "value": "470uF 16V"
+    "value": "100uF 25V"
+   },
+   "C2": {
+    "footprint": "Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B_HandSolder",
+    "in_bom": true,
+    "lcsc": "C8020",
+    "lib_id": "Device:C_Polarized",
+    "value": "22uF 16V"
    },
    "C3": {
-    "footprint": "Capacitor_SMD:CP_Elec_8x10.5",
+    "footprint": "Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B_HandSolder",
     "in_bom": true,
-    "lcsc": "C96179",
+    "lcsc": "C8020",
     "lib_id": "Device:C_Polarized",
-    "value": "470uF 16V"
+    "value": "22uF 16V"
    },
    "C4": {
     "footprint": "Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder",
@@ -351,7 +358,7 @@
     "in_bom": true,
     "lcsc": "",
     "lib_id": "Device:R",
-    "value": "56.2k"
+    "value": "54.9k"
    },
    "R13": {
     "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
@@ -1253,6 +1260,10 @@
      "2"
     ],
     [
+     "C19",
+     "2"
+    ],
+    [
      "J1",
      "13"
     ],
@@ -1949,6 +1960,10 @@
      "1"
     ],
     [
+     "C19",
+     "1"
+    ],
+    [
      "J3",
      "2"
     ],
@@ -2045,5 +2060,5 @@
    ]
   }
  },
- "schematic_sha256": "b9741177cf21ed6b45f0d5e9b83f448b30b3258bba70a43f85e37b00729e0caf"
+ "schematic_sha256": "fd996f8d40f05de4ea4581c6c8ae1d69c68aa6e8394a0a80adaaae93033b46d0"
 }
