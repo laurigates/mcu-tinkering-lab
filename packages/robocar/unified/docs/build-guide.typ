@@ -229,9 +229,10 @@ is SDA.
   ([GND], [any GND], [any GND]),
   aligns: (center, left, left),
 )
-*Fit 10 kΩ pull-ups to 3.3 V on all four lines* (SC/SD of both channels): the
+*Fit 2.2 kΩ pull-ups to 3.3 V on all four lines* (SC/SD of both channels): the
 modules have none, and the TCA9548A breakout has none on its downstream
-channels either. A reading takes \~120 ms, so each sensor reports about every 150 ms; the
+channels either. 10 kΩ is too weak for the 400 kHz bus once a sensor lead adds
+its capacitance. A reading takes \~120 ms, so each sensor reports about every 150 ms; the
 firmware never holds the bus while one converts. *Obstacle reflex:* if the
 front distance drops below 15 cm, the executor brakes, independent of planner
 goals. The rear sensor is reported in telemetry only.

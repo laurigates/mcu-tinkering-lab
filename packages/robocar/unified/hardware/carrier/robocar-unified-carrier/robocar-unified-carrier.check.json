@@ -1,5 +1,5 @@
 {
- "board_sha256": "3618eacee9531ac588d0e82e99efc5a02a7cad11cc18a7e8cd2fbd464ac5266f",
+ "board_sha256": "8d72b0a35cd09af988bc72892077616ab92d42a1b62e03c2c85fd3bf86e989c5",
  "kicad_cli_version": "10.0.6",
  "netlist": {
   "components": {
@@ -93,6 +93,13 @@
     "lcsc": "C8020",
     "lib_id": "Device:C_Polarized",
     "value": "22uF 16V"
+   },
+   "F1": {
+    "footprint": "Fuse:Fuse_1812_4532Metric_Pad1.30x3.40mm_HandSolder",
+    "in_bom": true,
+    "lcsc": "C883162",
+    "lib_id": "Device:Polyfuse",
+    "value": "3A hold 16V"
    },
    "H1": {
     "footprint": "MountingHole:MountingHole_3.2mm_M3",
@@ -293,72 +300,72 @@
    "R10": {
     "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
     "in_bom": true,
-    "lcsc": "C17414",
+    "lcsc": "C17520",
     "lib_id": "Device:R",
-    "value": "10k"
+    "value": "2.2k"
    },
    "R11": {
     "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
     "in_bom": true,
-    "lcsc": "C17414",
+    "lcsc": "C17520",
     "lib_id": "Device:R",
-    "value": "10k"
+    "value": "2.2k"
    },
    "R2": {
     "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
     "in_bom": true,
-    "lcsc": "C17414",
+    "lcsc": "C17520",
     "lib_id": "Device:R",
-    "value": "10k"
+    "value": "2.2k"
    },
    "R3": {
     "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
     "in_bom": true,
-    "lcsc": "C17414",
+    "lcsc": "C17520",
     "lib_id": "Device:R",
-    "value": "10k"
+    "value": "2.2k"
    },
    "R4": {
     "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
     "in_bom": true,
-    "lcsc": "C17414",
+    "lcsc": "C17520",
     "lib_id": "Device:R",
-    "value": "10k"
+    "value": "2.2k"
    },
    "R5": {
     "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
     "in_bom": true,
-    "lcsc": "C17414",
+    "lcsc": "C17520",
     "lib_id": "Device:R",
-    "value": "10k"
+    "value": "2.2k"
    },
    "R6": {
     "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
     "in_bom": true,
-    "lcsc": "C17414",
+    "lcsc": "C17520",
     "lib_id": "Device:R",
-    "value": "10k"
+    "value": "2.2k"
    },
    "R7": {
     "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
     "in_bom": true,
-    "lcsc": "C17414",
+    "lcsc": "C17520",
     "lib_id": "Device:R",
-    "value": "10k"
+    "value": "2.2k"
    },
    "R8": {
     "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
     "in_bom": true,
-    "lcsc": "C17414",
+    "lcsc": "C17520",
     "lib_id": "Device:R",
-    "value": "10k"
+    "value": "2.2k"
    },
    "R9": {
     "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
     "in_bom": true,
-    "lcsc": "C17414",
+    "lcsc": "C17520",
     "lib_id": "Device:R",
-    "value": "10k"
+    "value": "2.2k"
    },
    "U1": {
     "footprint": "Seeed_XIAO:XIAO-ESP32-S3-Socket",
@@ -1532,6 +1539,16 @@
      "4"
     ]
    ],
+   "PACK_IN": [
+    [
+     "F1",
+     "1"
+    ],
+    [
+     "J3",
+     "2"
+    ]
+   ],
    "PIEZO": [
     [
      "J1",
@@ -1584,7 +1601,7 @@
    ],
    "VBAT": [
     [
-     "J3",
+     "F1",
      "2"
     ],
     [
@@ -1700,5 +1717,5 @@
    ]
   }
  },
- "schematic_sha256": "9b77764f252b4302d9d25675fe405947d67e5a623ebeb0df756190ded07efcee"
+ "schematic_sha256": "4e621debb6b49441f3358494c20c31772646184c4974b076d637fc345c1e00e9"
 }

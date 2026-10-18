@@ -153,8 +153,8 @@ a carrier is ordered:
    ties RESET straight to 3V3; on a harness, if none is fitted, the wiring
    must hold RESET high.
 5. **I2C pull-ups.** Check whether the two 10 kΩ parts sit on SDA/SCL to VCC.
-   The carrier fits its own 10 kΩ pull-ups on channel 2; if the module has
-   them too, the pair is about 5 kΩ per line.
+   The carrier fits its own 2.2 kΩ pull-ups on channel 2; if the module has
+   them too, the pair is about 1.8 kΩ per line.
    The TCA9548A breakout has no pull-ups on its downstream channels: in
    Adafruit's `Adafruit TCA9548A.brd` at commit `c5bdfe4c` (the file
    [`adafruit-tca9548a.md`](adafruit-tca9548a.md) is drawn from), R1/R2 pull

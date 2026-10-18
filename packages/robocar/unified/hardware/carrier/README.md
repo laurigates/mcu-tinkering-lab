@@ -56,7 +56,8 @@ top side; everything else is through-hole.
 | C4, C5 | 100 nF, 0805 | main | PCA9685 VCC, TCA9548A VIN |
 | C7, C8 | 22 µF 16 V tantalum, 3528 | main | AMS1117 input and output |
 | R1 | 100 Ω, 0805 | main | Buzzer series resistor |
-| R2–R11 | 10 kΩ, 0805 | main | Pull-ups on mux channels 0–4 (R10, R11 on channel 2) |
+| R2–R11 | 2.2 kΩ, 0805 | main | Pull-ups on mux channels 0–4 (R10, R11 on channel 2); see [Pre-fab review](#pre-fab-review-810) |
+| F1 | 3 A hold PTC fuse, 16 V, 1812 | main | Between J3 and everything else, beside J3 |
 | J3 | XT30 (AMASS XT30PW-M) | main | Pack in; pad 1 is "−" |
 | J4 | JST-XH 4-pin | main | LM2596 module: IN+, IN−, OUT+, OUT− |
 | J5, J6 | JST-XH 2-pin | main | Left and right motor, side by side at A1's motor outputs |
@@ -191,7 +192,8 @@ re-check.
    what A0–A2 and RESET are tied to on the module, and whether its two 10 kΩ
    parts are SDA/SCL pull-ups. The carrier's direct ties win either way; the
    check says whether a tie fights a module pull-up (0.33 mA each at 10 kΩ)
-   and whether channel 2 ends up with two pull-ups in parallel (about 5 kΩ).
+   and whether channel 2 ends up with two pull-ups in parallel (about 1.8 kΩ
+   with R10 and R11 at 2.2 kΩ, which still sinks under 2 mA).
    Also check the unmarked part beside the chip is a capacitor across VDD and
    VSS (board page check 6). The carrier fits no decoupling capacitor of its
    own (WIRING.md's C6) and relies on that part: decoupling belongs at the
@@ -199,6 +201,25 @@ re-check.
    module's traces, beside the AMS1117's 22 µF output capacitor on the same
    rail. If the part is not a capacitor, add a 100 nF 0805 at A5's
    single-column VCC before ordering.
+
+## Pre-fab review (#810)
+
+The integrated carrier's adversarial review (#807) found problems every gate
+passed. Each was checked against this carrier; `just robocar-unified::carrier-review`
+prints the layout figures quoted here.
+
+| # | Finding | Here |
+|---|---|---|
+| 1 | SMD ground pads reach the B.Cu plane only through thin tracks | **Fixed.** The committed board had one GND via. `[fanout]` in [`board.toml`](board.toml) adds a via beside every SMD GND pad and fails the route if C1–C5, C7, C8 or U2's GND pin gets none |
+| 2 | Copper and parts close to the saw cuts | **Fixed for copper:** pours stop 1 mm short of each cut (#811), and head 2's top band now reaches 1 mm past its cut. One track, HEAD3_MOTOR_STBY, stays 0.73 mm from the y 70.5 cut: a wider band there left HEAD3_PIEZO unroutable past J17, and J17 has no room to move. That is above the board's 0.5 mm copper-to-edge clearance, and the saw runs in the waste strip. **Parts:** every SMD part is on the main board, at least 20 mm from a cut. The through-hole parts within 2 mm of a cut are H7 (1.0 mm, an M2 hole the cradle fixes), J17 (1.5 mm), J16 (1.6 mm), and A4 and J18 (1.7 mm, socket headers); flex cracks SMD ceramics, and none of these is one |
+| 3 | Silkscreen under 1.0 mm | **Fixed where it fits:** R2–R11 and the HEAD 1 and HEAD 2 labels are now 1.0 mm. MUX_RST, J18's labels, HEAD 3 and the CJMCU-2317 pin names inside its socket stay at 0.8 mm: at 1.0 mm DRC finds them overlapping a neighbour's outline or pads. Strokes are 0.16 mm or more |
+| 4 | I2C pull-ups too weak for 400 kHz | **Fixed on the channels:** R2–R11 go from 10 kΩ to 2.2 kΩ (the reasoning is on them in `hardware.toml`). **Upstream** of the mux the only pull-ups are the TCA9548A breakout's 10 kΩ, across the 10–15 cm ribbon: probe SDA and SCL on J12 with a scope at the first power-up. If the 30–70 % rise time is over 300 ns, set `I2C_MASTER_FREQ_HZ` to 100 kHz (1000 ns allowed) |
+| 5 | No fuse on the pack input | **Fixed:** F1, a 3 A hold, 16 V PTC beside J3, ahead of the LM2596 lead and J11's VBAT pin |
+| 6 | No low-battery cutoff | **Not fixed on the carrier.** The LM2596's ON/OFF pin (pin 5) turns it off above about 1.3 V (TI SNVS124G, § 6), but the common module ties it to ground on its own board, and J4 carries only IN and OUT. Use a pack with a BMS, whose cell undervoltage cutoff ends the discharge; WIRING.md says so |
+| 7 | Buck dropout | **Nothing to build.** WIRING.md's figure stands: the LM2596 needs about 1.25 V of headroom at 3 A (SNVS124G, Figure 7-6), so 5 V sags below about 6.3 V of pack |
+| 8 | RGB green and blue nearly dark | **Not applicable.** The LEDs are harness parts on the PCA9685's own 3-pin columns, not on the carrier. Their common anode goes to the column's V+ (5 V), so 5 V less a 3.0 V forward drop across the breakout's 220 Ω gives about 9 mA. Check brightness on the bench |
+| 9 | Decoupling far from its pins | **Kept.** C4 is 3.6 mm from the PCA9685's VCC pin and C5 4.5 mm from the TCA9548A's VIN, both measured to the socket pin: the breakouts carry their own decoupling at the chip. C1–C3 sit beside the V+, VM and Vin pins they serve, and C7 and C8 beside U2 |
+| 10 | The 5 V current budget | **Documented, not measured.** The LM2596's current limit is 3.4 A minimum over temperature (SNVS124G, § 7.9). Two stalled motors at the simulation's 1.7 A each reach it before the servos, head and amplifier are counted. Measure the real motors' stall current; WIRING.md records the budget |
 
 ## Assembly notes
 
@@ -275,9 +296,10 @@ Not until the pre-order checks are done and the PROVISIONAL text is gone from
    In the Gerber preview check the outline, the five "CUT" lines, and J2's
    and J17's outlines on the bottom silkscreen.
 4. **Assembly (optional):** *PCB Assembly*, *Economic*, top side, with the two
-   CSVs. C1–C3 (C96179) and C7–C8 (C8020) are Extended parts, so two feeder
-   fees; the rest are Basic. JLCPCB's stock and part status were checked on
-   2026-10-16 (the comment on C1–C3 in `hardware.toml` records the figures). **Check
+   CSVs. C1–C3 (C96179), C7–C8 (C8020) and F1 (C883162) are Extended parts,
+   so three feeder fees; the rest are Basic. JLCPCB's stock and part status
+   were checked on 2026-10-16, F1 and the 2.2 kΩ pull-ups (C17520) on
+   2026-10-18 (the comments in `hardware.toml` record the figures). **Check
    polarity in the placement preview** before confirming: the CPL carries
    KiCad's rotations, and a community rotation table
    ([JLCKicadTools `cpl_rotations_db.csv`](https://github.com/matthewlai/JLCKicadTools/blob/master/jlc_kicad_tools/cpl_rotations_db.csv))
