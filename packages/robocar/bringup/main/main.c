@@ -250,7 +250,10 @@ void app_main(void)
                 continue;
             }
             if (shown == fail_rows - 1 && fail > fail_rows) {
-                snprintf(line, sizeof(line), "+%d MORE FAILED", fail - shown);
+                /* Clamped so GCC can bound the digits (-Wformat-truncation);
+                 * the check table holds far fewer than 999 checks. */
+                const int more = (fail - shown > 999) ? 999 : fail - shown;
+                snprintf(line, sizeof(line), "+%d MORE FAILED", more);
             } else {
                 snprintf(line, sizeof(line), "FAIL %s", g_checks[i].name);
             }
