@@ -6,7 +6,7 @@
 # hide — a bringup sweep that passes against last month's pinout — is precisely
 # what this project exists to catch.
 #
-# All ten shared files depend only on pin_config.h plus ESP-IDF and i2cdev; none
+# Every shared file depends only on pin_config.h plus ESP-IDF and i2cdev; none
 # of them reaches for WiFi, HTTP, cJSON or credentials. That is what makes this
 # separable at all, and it is worth preserving: if a driver here ever needs a
 # network header, it belongs on the robot side of the line, not in this list.
@@ -24,6 +24,7 @@ idf_component_register(
         "${UNIFIED_MAIN}/i2c_bus.c"
         "${UNIFIED_MAIN}/pca9685_phase.c"
         "${UNIFIED_MAIN}/gpio_expander.c"
+        "${UNIFIED_MAIN}/gpio_expander_core.c"
         "${UNIFIED_MAIN}/motor_controller.c"
         "${UNIFIED_MAIN}/led_controller.c"
         "${UNIFIED_MAIN}/servo_controller.c"
