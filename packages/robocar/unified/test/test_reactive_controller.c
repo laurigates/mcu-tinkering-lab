@@ -751,6 +751,27 @@ static void test_front_obstacle_trips_the_reflex(void)
     ASSERT(motor_stub_get_last_call() == MOTOR_CALL_BRAKE);
 }
 
+/* One reading below the threshold is enough to brake (issue #791): the mean of
+ * the last ULTRASONIC_SMOOTH_N readings is still far above it, and waiting for
+ * it cost ~500 ms at the I2C read's pace. test_reflex_latency.c pins the
+ * resulting worst case over the real read cycle. */
+static void test_single_short_reading_trips_the_reflex(void)
+{
+    setup();
+    ASSERT(goal_state_write(&k_drive_ahead, 1500) == ESP_OK);
+    prime_distance(100);
+    ASSERT(motor_stub_get_last_call() == MOTOR_CALL_DRIVE);
+
+    ultrasonic_test_set_distance(ULTRASONIC_FRONT, 8);
+    reactive_controller_tick_for_test();
+
+    reactive_telemetry_t t = {0};
+    reactive_controller_get_telemetry(&t);
+    ASSERT(t.distance_cm >= STOP_THRESHOLD_CM); /* the mean has not followed */
+    ASSERT(t.reflex_active);
+    ASSERT(motor_stub_get_last_call() == MOTOR_CALL_BRAKE);
+}
+
 /* A run of failed front reads is reported, without dragging the rear with it,
  * and clears on the next good reading. */
 static void test_front_failure_streak_is_reported_per_sensor(void)
@@ -833,6 +854,7 @@ int main(void)
     test_run("rear_reading_reaches_telemetry", test_rear_reading_reaches_telemetry);
     test_run("rear_obstacle_does_not_trip_the_reflex", test_rear_obstacle_does_not_trip_the_reflex);
     test_run("front_obstacle_trips_the_reflex", test_front_obstacle_trips_the_reflex);
+    test_run("single_short_reading_trips_the_reflex", test_single_short_reading_trips_the_reflex);
     test_run("front_failure_streak_is_reported_per_sensor",
              test_front_failure_streak_is_reported_per_sensor);
     test_run("rear_failure_streak_is_reported_per_sensor",

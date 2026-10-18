@@ -7,7 +7,7 @@
  *
  *   1. Polls the front and rear RCWL-1601 rangefinders (non-blocking: a read
  *      completes over several ticks, see ultrasonic.h).
- *   2. If the front obstacle < STOP_THRESHOLD_CM, latches a safety stop
+ *   2. If a front reading < STOP_THRESHOLD_CM, latches a safety stop
  *      (overrides any planner goal until the obstacle clears). The rear
  *      sensor is reported in telemetry only.
  *   3. Otherwise reads the current goal from goal_state and drives the motors
@@ -30,6 +30,8 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+
+#include "ultrasonic_core.h"
 
 #ifndef REACTIVE_CONTROLLER_HOST_TEST
 #include "esp_err.h"
@@ -74,13 +76,45 @@ extern "C" {
  * Smoothing window for the front sensor's running-mean distance filter, in
  * readings (not ticks — only a completed read enters the filter).
  *
- * In I2C mode a reading arrives about every ULTRASONIC_CONVERSION_MS plus one
- * loop period (~150 ms), so 3 readings is ~450 ms of lag before a sudden
- * obstacle fully reaches the mean. That is the cost of keeping the GPIO-era
- * filter; shortening ULTRASONIC_CONVERSION_MS once it is measured on the bench
- * shortens it proportionally.
+ * The mean governs only the reflex's *release* and the distance in telemetry;
+ * it does not delay the trip. See "Obstacle reflex timing" below for why.
  */
 #define ULTRASONIC_SMOOTH_N 3U
+
+/**
+ * Obstacle reflex timing (issue #791)
+ * -----------------------------------
+ * The reflex trips on the first front reading below STOP_THRESHOLD_CM, and
+ * releases only once that latest reading AND the running mean are both at or
+ * above it. Tripping on the mean instead cost ULTRASONIC_SMOOTH_N readings: in
+ * I2C mode a reading completes only every ~165 ms, so a sudden obstacle took
+ * ~500 ms to pull a 3-reading mean under 15 cm.
+ *
+ * The cost is a false trip: one spurious short reading brakes for one reading
+ * period (~165 ms) until the next clear one, because the mean never fell. That
+ * errs toward stopping, which is the side a reflex should err on. A failed read
+ * still enters the filter as max range and never trips it.
+ *
+ * Worst case from an obstacle appearing to the brake, with
+ * C = ceil(ULTRASONIC_CONVERSION_MS / REACTIVE_LOOP_PERIOD_MS):
+ *
+ *     REACTIVE_REFLEX_WORST_CASE_MS = (2*C + 1) * REACTIVE_LOOP_PERIOD_MS
+ *
+ * The obstacle appears just after a trigger ranged the clear path; that
+ * cycle's read, C ticks later, is still clear; the next trigger is one tick
+ * after the read, and its read C ticks later trips the reflex on the same tick.
+ * With the unmeasured 120 ms wait, C = 4 and the bound is 9 * 33 = 297 ms —
+ * still well above the GPIO driver's ~100 ms. Shortening
+ * ULTRASONIC_CONVERSION_MS once the bench measurement in
+ * docs/reference/datasheets/sensor--rcwl-1601.md settles it brings the bound
+ * down with it (a 33 ms wait gives C = 1 and 99 ms). This is the nominal 30 Hz
+ * loop; a late tick adds its lateness. test_reflex_latency.c measures the bound
+ * over the real ultrasonic_core.c read cycle and fails if it drifts from this.
+ */
+#define REACTIVE_REFLEX_CONVERSION_TICKS \
+    ((ULTRASONIC_CONVERSION_MS + REACTIVE_LOOP_PERIOD_MS - 1U) / REACTIVE_LOOP_PERIOD_MS)
+#define REACTIVE_REFLEX_WORST_CASE_MS \
+    ((2U * REACTIVE_REFLEX_CONVERSION_TICKS + 1U) * REACTIVE_LOOP_PERIOD_MS)
 
 /**
  * Consecutive failed rangefinder reads before a sensor is declared down.
