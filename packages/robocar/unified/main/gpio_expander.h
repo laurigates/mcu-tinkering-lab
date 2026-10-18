@@ -3,7 +3,11 @@
  * @brief MCP23017 16-bit GPIO expander via TCA9548A channel 2
  *
  * Generic GPIO expansion — no pins are pre-assigned to a role. Direction
- * is configurable per pin at runtime. The device is optional: if no
+ * is configurable per pin at runtime, except GPA7 (pin 7) and GPB7 (pin 15),
+ * which are output-only on the MCP23017 Rev D (DS20001952D p. 1, p. 11,
+ * § 3.5.1 note): init makes them outputs driven low, and input or pull-up
+ * modes on them are refused with ESP_ERR_NOT_SUPPORTED. The device is
+ * optional: if no
  * MCP23017 responds at init, the module marks itself unavailable and all
  * pin operations return ESP_ERR_INVALID_STATE without touching the bus.
  *
@@ -18,21 +22,15 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-/**
- * @brief Pin direction
- */
-typedef enum {
-    GPIO_EXPANDER_OUTPUT = 0,
-    GPIO_EXPANDER_INPUT,         //!< High-impedance input
-    GPIO_EXPANDER_INPUT_PULLUP,  //!< Input with internal 100k pullup
-} gpio_expander_mode_t;
+#include "gpio_expander_core.h"  // gpio_expander_mode_t, output-only pin check
 
 /**
  * @brief Initialize the MCP23017 GPIO expander
  *
- * Probes the device on its TCA9548A channel. All pins default to inputs
- * (the chip's power-on state). A missing device is not an error — the
- * module logs a warning and reports unavailable.
+ * Probes the device on its TCA9548A channel. Pins 0-6 and 8-14 stay inputs
+ * (the chip's power-on state); the output-only pins 7 and 15 are set to
+ * outputs driven low. A missing device is not an error — the module logs a
+ * warning and reports unavailable.
  *
  * Requires i2c_bus_init() to have run first.
  *
@@ -50,7 +48,9 @@ bool gpio_expander_available(void);
  *
  * @param pin Pin number (0-15)
  * @param mode Direction (output, input, input with pullup)
- * @return ESP_OK on success
+ * @return ESP_OK on success, ESP_ERR_NOT_SUPPORTED for input or pull-up on
+ *         the output-only pins 7 (GPA7) and 15 (GPB7), ESP_ERR_INVALID_ARG
+ *         for a pin past 15 or an unknown mode
  */
 esp_err_t gpio_expander_set_mode(uint8_t pin, gpio_expander_mode_t mode);
 

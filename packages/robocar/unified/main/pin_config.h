@@ -127,7 +127,9 @@
 // ========================================
 // MCP23017 GPIO Expander (via TCA9548A ch2)
 // 16 extra GPIOs (pins 0-7 = PORTA, 8-15 = PORTB). No role assigned yet —
-// generic expansion, direction configurable per pin at runtime.
+// generic expansion, direction configurable per pin at runtime, except GPA7
+// (pin 7) and GPB7 (pin 15): output-only on the MCP23017 Rev D (DS20001952D
+// p. 11), so init drives them low as outputs and refuses in/up on them.
 // ========================================
 #define MCP23017_ADDR 0x20  // Default address (A0=A1=A2=GND)
 
