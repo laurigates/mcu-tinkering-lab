@@ -10,6 +10,7 @@ source = "KiCad 10.0.6 library: Interface_Expansion:MCP23017x-x-SO (MCP23017x-x-
 symbol = "Interface_Expansion:MCP23017x-x-SO"
 footprint = "Package_SO:SSOP-28_5.3x10.2mm_P0.65mm"
 value = "MCP23017-E/SS"
+lcsc = "C506653"
 no_connect = ["NC"]
 
 [pins]

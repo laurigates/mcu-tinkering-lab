@@ -9,6 +9,7 @@ source = "KiCad 10.0.6 library: Driver_Motor:TB6612FNG (the hidden duplicates of
 symbol = "Driver_Motor:TB6612FNG"
 footprint = "Package_SO:SSOP-24_5.3x8.2mm_P0.65mm"
 value = "TB6612FNG"
+lcsc = "C88224"
 
 [pins]
 A01 = [1, 2]

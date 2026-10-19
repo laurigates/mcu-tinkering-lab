@@ -5,6 +5,7 @@ name = "Power inductor, Bourns SRN6045TA"
 source = "KiCad 10.0.6 library"
 symbol = "Device:L"
 footprint = "Inductor_SMD:L_Bourns_SRN6045TA"
+lcsc = "C2044594"
 
 [pins]
 "1" = 1

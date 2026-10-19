@@ -12,6 +12,7 @@ source = "KiCad 10.0.6 library: Regulator_Switching:TPS562200 (TPS563208 extends
 symbol = "Regulator_Switching:TPS562200"
 footprint = "Package_TO_SOT_SMD:SOT-23-6"
 value = "TPS563208"
+lcsc = "C468250"
 
 [pins]
 GND = 1

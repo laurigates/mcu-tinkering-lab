@@ -53,8 +53,9 @@ REPO_CLI_ARGS = {
     "sockets": ["--check"],
 }
 # Modules whose main() takes file arguments, not projects; without them each
-# must exit 1. (`jlc` cuts a BOM/CPL pair; kicad.fab calls it per project.)
-FILE_CLIS = ("jlc",)
+# must exit 1. (`jlc` cuts a BOM/CPL pair; kicad.fab calls it per project.
+# `lcsc_rotation` takes an LCSC number and a footprint, or --check.)
+FILE_CLIS = ("jlc", "lcsc_rotation")
 
 BOARD_TOML = '[project]\nname = "demo-carrier"\n'
 

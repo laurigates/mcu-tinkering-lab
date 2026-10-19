@@ -8,6 +8,7 @@ source = "KiCad 10.0.6 library: Audio:MAX98357A (VDD 7 and 8, GND 3, 11 and 15, 
 symbol = "Audio:MAX98357A"
 footprint = "Package_DFN_QFN:TQFN-16-1EP_3x3mm_P0.5mm_EP1.23x1.23mm"
 value = "MAX98357AETE+"
+lcsc = "C910544"
 no_connect = ["NC"]
 
 [pins]

@@ -68,7 +68,9 @@ several traps below are version-specific: after a KiCad upgrade, re-run
    (`.claude/agents/pcb-reviewer.md`) for an adversarial review against the
    datasheets, and `.claude/rules/power-stage-checklist.md` for any regulator.
 6. `just <p>::carrier-fab` (runs `carrier-check` first): Gerbers, drill, BOM
-   and CPL. `just kicad::check` runs what CI runs.
+   and CPL. `just kicad::check` runs what CI runs. The CPL adds each LCSC
+   part's checked rotation offset (trap 32); a new LCSC number needs an entry
+   in `docs/reference/jlcpcb-rotations.toml` first.
 
 ## Adding a registry entry
 
@@ -239,6 +241,25 @@ several traps below are version-specific: after a KiCad upgrade, re-run
     line (a whole-board pour meets every line) and silkscreen text under
     0.8 mm. JLCPCB prints 1.0 mm tall, 0.15 mm stroke legibly; build_board.py
     keeps reference strokes at 0.16 mm or more.
+
+### Found preparing JLCPCB assembly (#808)
+
+32. **JLCPCB rotates by LCSC's footprint, not KiCad's.** Its pick-and-place
+    puts each part down as LCSC's (EasyEDA) footprint draws it, and LCSC draws
+    most TSSOP, SSOP, QFN and SOT-23-6 parts with pin 1 bottom-left, where
+    KiCad's are top-left: KiCad's rotation passed straight through puts the
+    chip 90 degrees off, and the SOT-223 LDO 180. ERC, DRC, parity and the
+    stamp all pass. The offset belongs to the LCSC number, not the footprint:
+    LCSC draws the PCA9685PW with pin 1 top-left (offset 0) and the
+    TCA9548APWR on the same TSSOP bottom-left (270). `kicad.jlc` adds the
+    offset from `docs/reference/jlcpcb-rotations.toml` and fails on an LCSC
+    number without one; `python3 -m kicad.lcsc_rotation <C...> <Lib:Fp>`
+    derives an entry by turning LCSC's pads onto KiCad's, `--check` re-derives
+    them all (network). Pad numbers prove pin 1 lands on pin 1, not which end
+    LCSC marks "+": read its silkscreen for polarised two-pad parts.
+33. **EasyEDA's component API refuses a browser User-Agent** with an HTML
+    error page under HTTP 200 and Python's default with a 403; curl's is
+    served. `lcsc_rotation.fetch` sends curl's.
 
 ## Verify the gate can fail
 
