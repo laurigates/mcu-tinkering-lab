@@ -15,6 +15,7 @@ static const char *TAG = "gpio_expander";
 
 static mcp23x17_t s_mcp23017;
 static bool s_available = false;
+static uint8_t s_addr = 0;  // the address that answered at init
 
 // Select the expander's TCA9548A channel and run one driver call while
 // holding the bus mutex. Returns ESP_ERR_INVALID_STATE when no device
@@ -51,15 +52,17 @@ static esp_err_t drive_output_only_pins_low_locked(void)
     return ESP_OK;
 }
 
-esp_err_t gpio_expander_init(void)
+/* Try one address: a descriptor, the bus clock, and an IODIR read on the
+ * expander's channel. When the chip answers, *found is set, the descriptor is
+ * kept and GPA7/GPB7 are driven low as outputs (*drive_ret says whether that
+ * worked). When the read fails, the descriptor is freed and the error left in
+ * *no_answer. A non-ESP_OK return is a bus or driver fault, for the caller to
+ * pass on. */
+static esp_err_t probe_at(uint8_t addr, bool *found, uint16_t *iodir, esp_err_t *drive_ret,
+                          esp_err_t *no_answer)
 {
-    if (s_available) {
-        ESP_LOGW(TAG, "Already initialized");
-        return ESP_OK;
-    }
-
-    esp_err_t ret =
-        mcp23x17_init_desc(&s_mcp23017, MCP23017_ADDR, I2C_NUM_0, I2C_SDA_PIN, I2C_SCL_PIN);
+    *found = false;
+    esp_err_t ret = mcp23x17_init_desc(&s_mcp23017, addr, I2C_NUM_0, I2C_SDA_PIN, I2C_SCL_PIN);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "MCP23017 init_desc failed: %s", esp_err_to_name(ret));
         return ret;
@@ -71,37 +74,75 @@ esp_err_t gpio_expander_init(void)
      * pin_bus_clock(). */
     s_mcp23017.cfg.master.clk_speed = I2C_MASTER_FREQ_HZ;
 
-    // Probe: read the IODIR registers. A missing board is expected — the
-    // expander is optional hardware, so absence downgrades to a warning.
     ret = i2c_bus_select_channel(I2C_BUS_CHANNEL_MCP23017);
     if (ret != ESP_OK) {
         mcp23x17_free_desc(&s_mcp23017);
         return ret;
     }
-
-    uint16_t mode = 0;
-    ret = mcp23x17_port_get_mode(&s_mcp23017, &mode);
-    esp_err_t drive_ret = ESP_OK;
+    ret = mcp23x17_port_get_mode(&s_mcp23017, iodir);
     if (ret == ESP_OK)
-        drive_ret = drive_output_only_pins_low_locked();
+        *drive_ret = drive_output_only_pins_low_locked();
     i2c_bus_release();
 
     if (ret != ESP_OK) {
-        ESP_LOGW(TAG, "No MCP23017 at 0x%02X on TCA9548A ch%d (%s) — expander unavailable",
-                 MCP23017_ADDR, I2C_BUS_CHANNEL_MCP23017, esp_err_to_name(ret));
+        *no_answer = ret;
         mcp23x17_free_desc(&s_mcp23017);
         return ESP_OK;
     }
-
-    s_available = true;
-    ESP_LOGI(TAG, "MCP23017 initialized at 0x%02X on TCA9548A ch%d (IODIR at probe=0x%04X)",
-             MCP23017_ADDR, I2C_BUS_CHANNEL_MCP23017, mode);
-    if (drive_ret == ESP_OK)
-        ESP_LOGI(TAG, "GPA7/GPB7 are output-only: set to outputs, driven low");
-    else
-        ESP_LOGW(TAG, "Could not set output-only GPA7/GPB7 to outputs (%s) — left as inputs",
-                 esp_err_to_name(drive_ret));
+    *found = true;
     return ESP_OK;
+}
+
+esp_err_t gpio_expander_init(void)
+{
+    if (s_available) {
+        ESP_LOGW(TAG, "Already initialized");
+        return ESP_OK;
+    }
+
+    /* MCP23017_ADDR first, then the rest of 0x20-0x27: the carriers strap
+     * A0-A2 to GND, but a CJMCU-2317 on a harness biases them through its own
+     * resistor array, possibly high (0x27, #781). A missing board is expected:
+     * the expander is optional hardware, so absence downgrades to a warning. */
+    uint8_t order[GPIO_EXPANDER_ADDR_COUNT];
+    size_t n = gpio_expander_probe_order(MCP23017_ADDR, order);
+    esp_err_t no_answer = ESP_ERR_NOT_FOUND;
+    for (size_t i = 0; i < n; i++) {
+        bool found = false;
+        uint16_t iodir = 0;
+        esp_err_t drive_ret = ESP_OK;
+        esp_err_t ret = probe_at(order[i], &found, &iodir, &drive_ret, &no_answer);
+        if (ret != ESP_OK)
+            return ret;
+        if (!found)
+            continue;
+
+        s_available = true;
+        s_addr = order[i];
+        ESP_LOGI(TAG, "MCP23017 initialized at 0x%02X on TCA9548A ch%d (IODIR at probe=0x%04X)",
+                 s_addr, I2C_BUS_CHANNEL_MCP23017, iodir);
+        if (s_addr != MCP23017_ADDR)
+            ESP_LOGW(TAG,
+                     "MCP23017 answered at 0x%02X, not MCP23017_ADDR 0x%02X: its A0-A2 are "
+                     "not all low; strap them or set MCP23017_ADDR",
+                     s_addr, MCP23017_ADDR);
+        if (drive_ret == ESP_OK)
+            ESP_LOGI(TAG, "GPA7/GPB7 are output-only: set to outputs, driven low");
+        else
+            ESP_LOGW(TAG, "Could not set output-only GPA7/GPB7 to outputs (%s) — left as inputs",
+                     esp_err_to_name(drive_ret));
+        return ESP_OK;
+    }
+
+    ESP_LOGW(TAG, "No MCP23017 at 0x%02X-0x%02X on TCA9548A ch%d (%s) — expander unavailable",
+             GPIO_EXPANDER_ADDR_BASE, GPIO_EXPANDER_ADDR_BASE + GPIO_EXPANDER_ADDR_COUNT - 1,
+             I2C_BUS_CHANNEL_MCP23017, esp_err_to_name(no_answer));
+    return ESP_OK;
+}
+
+uint8_t gpio_expander_address(void)
+{
+    return s_available ? s_addr : 0;
 }
 
 bool gpio_expander_available(void)

@@ -132,8 +132,11 @@
 // generic expansion, direction configurable per pin at runtime, except GPA7
 // (pin 7) and GPB7 (pin 15): output-only on the MCP23017 Rev D (DS20001952D
 // p. 11), so init drives them low as outputs and refuses in/up on them.
+// The address is A0-A2 (0x20-0x27). Both carriers tie them to GND; a module
+// on a harness biases them itself (#781), so init tries this address first,
+// then the rest of 0x20-0x27, and warns if another one answers.
 // ========================================
-#define MCP23017_ADDR 0x20  // Default address (A0=A1=A2=GND)
+#define MCP23017_ADDR 0x20  // A0=A1=A2=GND, as both carriers strap them
 
 // ========================================
 // SSD1306 OLED Display (via TCA9548A ch1)

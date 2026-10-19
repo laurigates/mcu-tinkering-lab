@@ -148,7 +148,10 @@ a carrier is ordered:
    whatever the module does; a 10 kΩ pull-up on the module would then draw
    0.33 mA per pin and nothing else. On a harness the bias decides the
    address: about 10 kΩ to VCC means 0x27, floating means the harness must tie
-   them (DS20001952D p. 11).
+   them (DS20001952D p. 11). The firmware copes with a biased module: after
+   `MCP23017_ADDR` (0x20) it tries the rest of 0x20–0x27 and logs
+   `MCP23017 answered at 0x27, not MCP23017_ADDR 0x20` (#781). That log line
+   is this measurement, read over the console. Floating pins still need tying.
 4. **RESET.** Confirm a pull-up to VCC (about 10 kΩ expected). The carrier
    ties RESET straight to 3V3; on a harness, if none is fitted, the wiring
    must hold RESET high.

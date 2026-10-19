@@ -428,7 +428,7 @@ static check_result_t check_mcp23017(void)
         return result(CHECK_SKIP, "bus down");
     }
     if (gpio_expander_init() != ESP_OK || !gpio_expander_available()) {
-        return result(CHECK_SKIP, "no mcp23017 on ch%d", I2C_BUS_CHANNEL_MCP23017);
+        return result(CHECK_SKIP, "no mcp23017 0x20-27 ch%d", I2C_BUS_CHANNEL_MCP23017);
     }
 
     /* Drive pin 0 both ways and read the latch back. This proves the I2C path
@@ -448,7 +448,7 @@ static check_result_t check_mcp23017(void)
         }
     }
     gpio_expander_set_mode(0, GPIO_EXPANDER_INPUT);
-    return result(CHECK_PASS, "0x%02X pin0 loopback ok", MCP23017_ADDR);
+    return result(CHECK_PASS, "0x%02X pin0 loopback ok", gpio_expander_address());
 }
 
 /* -------------------------------------------------------------------------- */

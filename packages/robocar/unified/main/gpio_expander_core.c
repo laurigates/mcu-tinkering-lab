@@ -28,3 +28,18 @@ gpio_expander_check_t gpio_expander_check_mode(uint8_t pin, gpio_expander_mode_t
             return GPIO_EXPANDER_CHECK_BAD_MODE;
     }
 }
+
+size_t gpio_expander_probe_order(uint8_t preferred, uint8_t out[GPIO_EXPANDER_ADDR_COUNT])
+{
+    size_t n = 0;
+    bool in_range = preferred >= GPIO_EXPANDER_ADDR_BASE &&
+                    preferred < GPIO_EXPANDER_ADDR_BASE + GPIO_EXPANDER_ADDR_COUNT;
+    if (in_range)
+        out[n++] = preferred;
+    for (uint8_t i = 0; i < GPIO_EXPANDER_ADDR_COUNT; i++) {
+        uint8_t addr = (uint8_t)(GPIO_EXPANDER_ADDR_BASE + i);
+        if (!in_range || addr != preferred)
+            out[n++] = addr;
+    }
+    return n;
+}
