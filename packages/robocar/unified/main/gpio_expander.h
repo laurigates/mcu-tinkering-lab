@@ -27,7 +27,10 @@
 /**
  * @brief Initialize the MCP23017 GPIO expander
  *
- * Probes the device on its TCA9548A channel. Pins 0-6 and 8-14 stay inputs
+ * Probes the device on its TCA9548A channel: MCP23017_ADDR first, then the
+ * rest of 0x20-0x27, keeping the first that answers and warning when that is
+ * not MCP23017_ADDR (a module whose A0-A2 are not tied low, #781). Pins 0-6
+ * and 8-14 stay inputs
  * (the chip's power-on state); the output-only pins 7 and 15 are set to
  * outputs driven low. A missing device is not an error — the module logs a
  * warning and reports unavailable.
@@ -42,6 +45,11 @@ esp_err_t gpio_expander_init(void);
  * @brief Whether an MCP23017 was detected at init
  */
 bool gpio_expander_available(void);
+
+/**
+ * @brief The address the MCP23017 answered at, 0x20-0x27; 0 when unavailable
+ */
+uint8_t gpio_expander_address(void);
 
 /**
  * @brief Configure a pin's direction

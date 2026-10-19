@@ -10,6 +10,7 @@
 #pragma once
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -32,6 +33,10 @@ typedef enum {
  *  (DS20001952D p. 1, p. 11, § 3.5.1 note), so input and pull-up modes are
  *  refused on them. */
 #define GPIO_EXPANDER_OUTPUT_ONLY_MASK 0x8080u
+
+/** A0-A2 set the address within 0x20-0x27 (DS20001952D p. 11). */
+#define GPIO_EXPANDER_ADDR_BASE 0x20u
+#define GPIO_EXPANDER_ADDR_COUNT 8u
 
 /**
  * @brief Outcome of validating a pin/mode pair
@@ -58,6 +63,20 @@ bool gpio_expander_pin_output_only(uint8_t pin);
  * @return GPIO_EXPANDER_CHECK_OK, or why the pair is refused
  */
 gpio_expander_check_t gpio_expander_check_mode(uint8_t pin, gpio_expander_mode_t mode);
+
+/**
+ * @brief The addresses to probe for the MCP23017, in order
+ *
+ * The carriers tie A0-A2 to GND (0x20); a CJMCU-2317 module on a harness
+ * biases them through its own resistor array, possibly high (0x27, #781).
+ * `preferred` (MCP23017_ADDR) comes first when it is in 0x20-0x27, then the
+ * rest of the range in ascending order, each address once.
+ *
+ * @param preferred The configured address
+ * @param[out] out Receives GPIO_EXPANDER_ADDR_COUNT addresses
+ * @return Number of addresses written (GPIO_EXPANDER_ADDR_COUNT)
+ */
+size_t gpio_expander_probe_order(uint8_t preferred, uint8_t out[GPIO_EXPANDER_ADDR_COUNT]);
 
 #ifdef __cplusplus
 }
