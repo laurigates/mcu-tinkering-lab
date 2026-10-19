@@ -170,20 +170,21 @@ connectors (J5-J9, J19), the ribbon header (J1), the servo and LED headers
 the buzzer (BZ1), and on the heads the XIAO sockets (U1, U3, U4) and their
 ribbon headers (J2, J16, J17). All are 2.5 mm pitch or wider.
 
-### Cost (estimate, not a quote)
+### Cost
 
-| | 2 assembled (5 PCBs) | 5 assembled (5 PCBs) |
-|---|---|---|
-| Parts, at JLCPCB's listed unit prices | about $23 | about $57 |
-| Extended part loading, 12 x $3 | $36 | $36 |
-| PCB, 94 x 100 mm, 2 layers | about $2-5 | about $2-5 |
-| Assembly setup and stencil (economic) | about $10 | about $10 |
-| **Total before shipping** | **about $71-74** | **about $105-108** |
+The order is five PCBs, the minimum, of which 2 or 5 can be assembled. At
+94 x 100 mm and two layers the PCB falls under JLCPCB's under-10 x 10 cm
+promotion, and coupons and other offers stack with it, so the fees change from
+order to order; only the live quote under [Before ordering](#before-ordering)
+gives the price. The part prices are fixed:
 
-The chips are most of the parts cost: PCA9685 $3.33, MCP23017 $1.77,
-MAX98357A $1.32, TB6612FNG $1.15, TCA9548A $0.81. JLCPCB adds solder-joint
-charges and attrition parts on top, so treat these as a floor until the live
-quote is recorded under [Before ordering](#before-ordering).
+- **Parts:** about $11.50 per board at JLCPCB's listed unit prices
+  (2026-10-19). The chips are most of it: PCA9685 $3.33, MCP23017 $1.77,
+  MAX98357A $1.32, TB6612FNG $1.15, TCA9548A $0.81. Attrition parts come on
+  top.
+- **Extended parts:** 12 BOM lines, each with a per-order loading fee unless an
+  offer waives it: the six chips, L1, F1, FB1, C19, the tantalums (C8020) and
+  R12. The other 11 lines are Basic.
 
 ## Design notes
 
