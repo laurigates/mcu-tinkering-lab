@@ -32,7 +32,9 @@ by name.
 
 ## Footprint comparison
 
-The laid-out boards, as sawn apart:
+The laid-out boards, as cut apart (by hand-saw kerf or the mouse-bite slots,
+[below](#panel-mouse-bites): the line between the main board and the heads
+takes about 1 mm from each, so the main board is 63.5 mm wide once separated):
 
 | Main board | Socketed | Integrated |
 |---|---|---|
@@ -46,8 +48,9 @@ The laid-out boards, as sawn apart:
 Both PCBs carry the same three head boards, the 29.5 mm square for the pan-tilt
 cradle, in a column on the right: the integrated column is the socketed one moved
 6 mm left. The integrated main board ends at y 76, so the strip below it
-(64.5 x 24 mm) is waste; the outline stays 100 mm tall for the heads. Saw on the
-waste side of the y 76 line: J3's courtyard ends 0.1 mm short of it. The integrated main board keeps
+(64.5 x 24 mm) is waste; the outline stays 100 mm tall for the heads. J3's
+courtyard ends 0.1 mm short of the y 76 line, so its slot lies wholly on the
+waste side. The integrated main board keeps
 the socketed one's layout habits (connectors along the front and rear edges, M3
 holes in the corners, 0.5 mm edge keepouts), so the difference is the chips, not a
 tighter layout style. Its parts' courtyards fill half of it; the socketed board's
@@ -185,6 +188,38 @@ gives the price. The part prices are fixed:
 - **Extended parts:** 12 BOM lines, each with a per-order loading fee unless an
   offer waives it: the six chips, L1, F1, FB1, C19, the tantalums (C8020) and
   R12. The other 11 lines are Basic.
+
+## Panel: mouse bites
+
+The main board and the three heads share one 94 x 100 mm PCB. Instead of
+hand-sawing along silkscreen lines, this carrier uses `board.toml [panel]
+mode = "mousebites"` (#809, `tools/kicad/panel.py`, ADR-027's addendum):
+
+- **Slots:** every cut line is a 2 mm routed slot on Edge.Cuts, eight slots in
+  all, inside the copper-free bands. Each slot sits on the waste side of its
+  line. The exception is the line between the main board and the heads, whose
+  slot is centred.
+- **Tabs:** 14 tabs (MB1-MB14) hold the pieces together. Each is 5 mm long
+  with two rows of five 0.6 mm non-plated holes at 0.95 mm, per JLCPCB's
+  mouse-bite guide. They sit at both ends of every line, at y 50 on the
+  vertical line (the middle of head 2), and at x 32 on the main board's bottom
+  line, clear of the XT30.
+- **Separating:** snap each piece off along its hole rows, then file the nubs.
+
+| Piece | Held by tabs at |
+|---|---|
+| Main board | y 3 (to head 1) and y 50 (to head 2) on its right edge; x 3, 32 and 61 on its bottom edge (to the waste) |
+| Head 1 | y 3 (to the main board); both ends of its bottom line |
+| Head 2 | y 50 (to the main board); both ends of its top and bottom lines |
+| Head 3 | y 97 (to the waste below the main board); both ends of its top line |
+
+Hand-sawing still works on this board: the slots only shorten the cuts. To
+build it the old way, set `mode = "saw"` (or delete `[panel]`) and run
+`carrier-board-checked`. The board passes every gate in both modes; only the
+mouse-bite board is committed.
+
+**Quotes:** not taken yet. Record the bare and assembled prices for both modes
+here; JLCPCB may count the separate outlines as more than one design.
 
 ## Design notes
 
@@ -347,4 +382,5 @@ board) found the ground vias missing and the issues fixed above. Still open:
 - Get a live JLCPCB quote for 2 and 5 assembled boards (upload the zip, the
   BOM and the CPL), check the placement preview part by part against
   [the rotation table](#placement-rotation), and record the quote here.
-- Saw on the waste side of each cut line.
+- Quote the bare and assembled board in both panel modes (below) and record
+  the four prices under [Panel: mouse bites](#panel-mouse-bites).

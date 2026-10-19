@@ -122,6 +122,10 @@ def mouse_bite_tab(board, origin, tab, hole_mm):
     """A board-only footprint of non-plated holes: one mouse-bite tab."""
     x0, y0 = origin
     fp = pcbnew.FOOTPRINT(board)
+    # A named, library-less id: with an empty one KiCad's Specctra export names
+    # the image "", Freerouting writes it back unquoted, and the session import
+    # fails. No library nickname, so DRC's library check skips it.
+    fp.SetFPID(pcbnew.LIB_ID("", "MouseBites"))
     fp.SetReference(tab["name"])
     fp.SetValue("MouseBites")
     fp.SetAttributes(
