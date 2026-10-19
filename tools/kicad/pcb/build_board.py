@@ -20,6 +20,12 @@ is a circle on Edge.Cuts inside the outline: a hole milled through the board.
 Each board.toml [[tracks]] entry is laid down as locked segments, which the
 Specctra export marks protected, so Freerouting keeps them.
 
+With a mouse-bite panel (board.toml ``[panel] mode = "mousebites"``, #809) the
+cut lines are not drawn: each slot is a rectangle on Edge.Cuts, milled out, and
+each tab a board-only footprint (MB1, MB2, ...) of non-plated holes, which go to
+the drill file. A tab's ``clear`` rectangle is cut out of every keepout rule
+area it overlaps: a rule area that forbids pads forbids a non-plated hole too.
+
 It rewrites the board from scratch, so routing (route_board.py) must run after
 it. Python 3.9 and the stdlib plus ``pcbnew`` only; it imports nothing from
 tools/kicad (see tools/kicad/test_pcb_py39.py).
@@ -83,8 +89,9 @@ CUT_LABEL_SIZE = 1.0
 CUT_LINE_WIDTH = 0.15
 
 
-def keepout(board, origin, k):
-    """A rule area over board.toml keepout `k`: no copper of any kind inside."""
+def keepout(board, origin, k, clears=()):
+    """A rule area over board.toml keepout `k`: no copper of any kind inside,
+    less each mouse-bite tab's `clears` rectangle."""
     x0, y0 = origin
     zone = pcbnew.ZONE(board)
     zone.SetIsRuleArea(True)
@@ -100,7 +107,44 @@ def keepout(board, origin, k):
     outline.NewOutline()
     for x, y in ((rx0, ry0), (rx1, ry0), (rx1, ry1), (rx0, ry1)):
         outline.Append(mm(x0 + x), mm(y0 + y))
+    for cx0, cy0, cx1, cy1 in clears:
+        if cx0 >= rx1 or rx0 >= cx1 or cy0 >= ry1 or ry0 >= cy1:
+            continue
+        cut = pcbnew.SHAPE_POLY_SET()
+        cut.NewOutline()
+        for x, y in ((cx0, cy0), (cx1, cy0), (cx1, cy1), (cx0, cy1)):
+            cut.Append(mm(x0 + x), mm(y0 + y))
+        outline.BooleanSubtract(cut)
     board.Add(zone)
+
+
+def mouse_bite_tab(board, origin, tab, hole_mm):
+    """A board-only footprint of non-plated holes: one mouse-bite tab."""
+    x0, y0 = origin
+    fp = pcbnew.FOOTPRINT(board)
+    fp.SetReference(tab["name"])
+    fp.SetValue("MouseBites")
+    fp.SetAttributes(
+        pcbnew.FP_BOARD_ONLY
+        | pcbnew.FP_EXCLUDE_FROM_BOM
+        | pcbnew.FP_EXCLUDE_FROM_POS_FILES
+    )
+    fp.SetUuid(pcbnew.KIID(tab["uuid"]))
+    ax, ay = tab["at"]
+    fp.SetPosition(pcbnew.VECTOR2I(mm(x0 + ax), mm(y0 + ay)))
+    board.Add(fp)
+    fp.Reference().SetVisible(False)
+    fp.Value().SetVisible(False)
+    for hx, hy in tab["holes"]:
+        pad = pcbnew.PAD(fp)
+        pad.SetAttribute(pcbnew.PAD_ATTRIB_NPTH)
+        pad.SetShape(pcbnew.PAD_SHAPE_CIRCLE)
+        pad.SetSize(pcbnew.VECTOR2I(mm(hole_mm), mm(hole_mm)))
+        pad.SetDrillSize(pcbnew.VECTOR2I(mm(hole_mm), mm(hole_mm)))
+        pad.SetLayerSet(pcbnew.PAD.UnplatedHoleMask())
+        pad.SetNumber("")
+        fp.Add(pad)
+        pad.SetPosition(pcbnew.VECTOR2I(mm(x0 + hx), mm(y0 + hy)))
 
 
 def fixed_track(board, origin, tr):
@@ -266,6 +310,9 @@ def build(spec):
         rect(board, origin, 0, 0, width, height, pcbnew.Edge_Cuts, 0.1)
         for c in spec["cutouts"]:
             cutout(board, origin, c)
+        panel = spec.get("panel")
+        for x1, y1, x2, y2 in panel["slots"] if panel else ():
+            rect(board, origin, x1, y1, x2, y2, pcbnew.Edge_Cuts, 0.1)
         for x1, y1, x2, y2 in spec["silk"]["rects"]:
             rect(board, origin, x1, y1, x2, y2, pcbnew.F_SilkS, 0.15)
         footprints = place(board, spec)
@@ -273,10 +320,15 @@ def build(spec):
         for text in spec["silk"]["texts"]:
             x, y = text["at"]
             silk_text(board, origin, text["text"], x, y, text["size"])
-        for line in spec["silk"]["cut_lines"]:
-            cut_line(board, origin, line)
+        if panel:
+            for tab in panel["tabs"]:
+                mouse_bite_tab(board, origin, tab, panel["hole_mm"])
+        else:
+            for line in spec["silk"]["cut_lines"]:
+                cut_line(board, origin, line)
+        clears = [tab["clear"] for tab in panel["tabs"]] if panel else []
         for k in spec["keepouts"]:
-            keepout(board, origin, k)
+            keepout(board, origin, k, clears)
         for tr in spec.get("tracks", []):
             fixed_track(board, origin, tr)
         save(board, spec["pcb"])

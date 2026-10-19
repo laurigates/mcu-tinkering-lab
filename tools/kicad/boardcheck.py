@@ -44,7 +44,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from . import library, netlist, paths, schematic, sexpr
+from . import library, netlist, panel, paths, schematic, sexpr
 from .errors import KicadError
 from .paths import REPO_ROOT
 
@@ -121,11 +121,13 @@ def check(
     vendored: Path = library.VENDORED,
     *,
     module: str | Callable[[], str],
+    skip: frozenset[str] = frozenset(),
 ) -> list[str]:
     """Differences between a board's footprints and the netlist; [] when equal.
 
     `module` is the project's just module (`paths.just_module`), for the hint,
     or a function returning it, called only when there is a difference.
+    `skip` names board-only footprints checked elsewhere (the panel's tabs).
     """
     want_net = {node: name for name, nodes in nl.nets.items() for node in nodes}
     nc_net = {node: name for name, node in netlist.unconnected(nl, vendored).items()}
@@ -135,6 +137,8 @@ def check(
     for _, _, block in footprint_blocks(board_text):
         fp = parse_footprint(block)
         ref = fp.ref
+        if ref in skip:
+            continue
         if ref in seen:
             errors.append(f"{ref}: on the board twice")
             continue
@@ -324,6 +328,17 @@ def _validate_keepouts(where: str, data: dict[str, Any], size: Any) -> list[str]
             )
     if len(set(names)) != len(names):
         errors.append(f"{where}: [keepouts] names repeat: {names}")
+    return errors
+
+
+def _validate_panel(where: str, data: dict[str, Any]) -> list[str]:
+    """[panel] (#809): its values, then the slots and tabs it makes."""
+    errors = panel.validate(where, data)
+    if not errors:
+        try:
+            panel.build(data)
+        except ValueError as e:
+            errors = [f"{where}: [panel] {line}" for line in str(e).splitlines()]
     return errors
 
 
@@ -674,6 +689,7 @@ def validate_config(cfg: paths.BoardConfig, nl: netlist.Netlist) -> list[str]:
                 )
     errors += _validate_cut_clearance(where, data, size)
     errors += _validate_keepouts(where, data, size)
+    errors += _validate_panel(where, data)
     errors += _validate_cutouts(where, data, size)
     errors += _validate_tracks(where, data, nl, size)
     errors += _validate_fanout(where, data, nl)
@@ -933,6 +949,96 @@ def keepout_copper(
     return errors
 
 
+# How far a hole or slot corner on the board may sit from where board.toml puts it.
+PANEL_TOLERANCE_MM = 0.002
+
+
+def panel_board(board_text: str, data: dict[str, Any]) -> list[str]:
+    """The board's mouse-bite tabs and Edge.Cuts slots against board.toml `[panel]`.
+
+    Each tab is a board-only footprint (MB1, MB2, ...) of non-plated holes; each
+    slot an Edge.Cuts rectangle inside the outline. In saw mode there must be
+    neither. [] when they match; positions relative to the outline origin.
+    """
+    want = panel.build(data)
+    ox, oy = data["outline"]["origin"]
+    w, h = data["outline"]["size"]
+    tol = PANEL_TOLERANCE_MM
+    errors = []
+
+    def rel(x: float, y: float) -> Point:
+        return (round(x - ox, 4), round(y - oy, 4))
+
+    got_tabs: dict[str, list[Point]] = {}
+    got_drill: set[float] = set()
+    for _, _, block in footprint_blocks(board_text):
+        fp = parse_footprint(block)
+        if not re.fullmatch(rf"{panel.FOOTPRINT_PREFIX}\d+", fp.ref):
+            continue
+        at = sexpr.atoms(sexpr.child(block, "at") or "(at 0 0)")
+        fx, fy = float(at[0]), float(at[1])
+        if len(at) > 2 and float(at[2]) % 360:
+            errors.append(
+                f"{fp.ref}: rotated {at[2]} degrees; tabs are placed unrotated"
+            )
+        attr = sexpr.child(block, "attr")
+        if attr is None or "board_only" not in sexpr.atoms(attr):
+            errors.append(f"{fp.ref}: not board-only, so not a mouse-bite tab")
+        holes = got_tabs.setdefault(fp.ref, [])
+        for c in sexpr.children(block):
+            if sexpr.head(c)[0] != "pad":
+                continue
+            kinds = sexpr.atoms(c)
+            pat = sexpr.atoms(sexpr.child(c, "at") or "(at 0 0)")
+            drill = sexpr.child(c, "drill")
+            if kinds[:1] != ["np_thru_hole"] or drill is None:
+                errors.append(f"{fp.ref}: a pad that is not a non-plated hole")
+                continue
+            got_drill.add(round(float(sexpr.atoms(drill)[0]), 4))
+            holes.append(rel(fx + float(pat[0]), fy + float(pat[1])))
+    want_tabs = {t.name: t.holes for t in want.tabs} if want else {}
+    for name in sorted(set(got_tabs) | set(want_tabs), key=netlist.ref_key):
+        if name not in want_tabs:
+            errors.append(f"{name}: a mouse-bite tab on the board, none in [panel]")
+        elif name not in got_tabs:
+            errors.append(f"{name}: a mouse-bite tab in [panel], not on the board")
+        else:
+            a, b = sorted(got_tabs[name]), sorted(want_tabs[name])
+            if len(a) != len(b) or any(
+                abs(p[0] - q[0]) > tol or abs(p[1] - q[1]) > tol for p, q in zip(a, b)
+            ):
+                errors.append(f"{name}: holes {a}, [panel] says {list(b)}")
+    if want and got_drill - {round(want.hole_mm, 4)}:
+        errors.append(
+            f"mouse-bite drill {sorted(got_drill)}, [panel] says {want.hole_mm}"
+        )
+
+    got_slots = []
+    for _, block in sexpr.top_level_blocks(board_text, "\t"):
+        if sexpr.head(block)[0] != "gr_rect":
+            continue
+        layer = sexpr.child(block, "layer")
+        if layer is None or sexpr.head(layer)[1] != "Edge.Cuts":
+            continue
+        (x0, y0), (x1, y1) = _xy(block, "start"), _xy(block, "end")
+        a, b = rel(min(x0, x1), min(y0, y1)), rel(max(x0, x1), max(y0, y1))
+        r = (*a, *b)
+        if all(abs(v - u) <= tol for v, u in zip(r, (0.0, 0.0, w, h))):
+            continue  # the outline
+        got_slots.append(r)
+    want_slots = sorted(want.slots) if want else []
+    got_slots.sort()
+    if len(got_slots) != len(want_slots) or any(
+        any(abs(v - u) > tol for v, u in zip(g, s))
+        for g, s in zip(got_slots, want_slots)
+    ):
+        errors.append(
+            f"Edge.Cuts slots {[list(r) for r in got_slots]}, [panel] says "
+            f"{[list(r) for r in want_slots]}"
+        )
+    return errors
+
+
 def _fmt(v: float) -> str:
     s = f"{round(v, 4):.4f}".rstrip("0").rstrip(".")
     return "0" if s in ("-0", "") else s
@@ -979,7 +1085,13 @@ def main(argv: list[str] | None = None, repo_root: Path = REPO_ROOT) -> int:
                     pcb.write_text(text, encoding="utf-8")
                 print(f"relinked {n} footprint path(s) in {pcb.name}")
             errors = validate_config(cfg, nl)
-            errors += check(text, nl, ns, vendored, module=module)
+            tabs = panel.build(cfg.data) if not errors else None
+            skip = frozenset(t.name for t in tabs.tabs) if tabs else frozenset()
+            errors += check(text, nl, ns, vendored, module=module, skip=skip)
+            if not errors:
+                errors += [
+                    f"{e}; {hint(module())}" for e in panel_board(text, cfg.data)
+                ]
             if not errors:
                 copper = keepout_copper(
                     text, cfg.data.get("keepouts", []), cfg.data["outline"]["origin"]

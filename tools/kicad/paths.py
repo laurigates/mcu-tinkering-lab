@@ -43,6 +43,7 @@ BOARD_TABLES = frozenset(
         "cutouts",
         "tracks",
         "fanout",
+        "panel",
     }
 )
 PROJECT_KEYS = frozenset({"name", "paper", "stage"})
