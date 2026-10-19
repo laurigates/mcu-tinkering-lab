@@ -214,9 +214,15 @@ mode = "mousebites"` (#809, `tools/kicad/panel.py`, ADR-027's addendum):
 | Head 3 | y 97 (to the waste below the main board); both ends of its top line |
 
 Hand-sawing still works on this board: the slots only shorten the cuts. To
-build it the old way, set `mode = "saw"` (or delete `[panel]`) and run
-`carrier-board-checked`. The board passes every gate in both modes; only the
-mouse-bite board is committed.
+build it the old way, set `mode = "saw"` (or delete `[panel]`), put head 3's
+band keepout back to y 71.5 (`board.toml` says why it moved) and run
+`carrier-board-checked`. Both modes have passed every gate: the saw board as
+committed in 965effd, the mouse-bite board as committed now. Each route took a
+few attempts, since Freerouting does not route the same way twice.
+
+The mouse-bite board's outputs, checked after `carrier-fab`: 140 holes of
+0.6 mm in the NPTH drill file (14 tabs x 10), eight slots on Edge.Cuts, and no
+tab in the position file or the CPL.
 
 **Quotes:** not taken yet. Record the bare and assembled prices for both modes
 here; JLCPCB may count the separate outlines as more than one design.

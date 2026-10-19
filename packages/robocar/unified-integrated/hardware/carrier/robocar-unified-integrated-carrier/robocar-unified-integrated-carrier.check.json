@@ -1,5 +1,5 @@
 {
- "board_sha256": "1a64951e95406e977ba5ec2a2501c65d1cfa2203068c734b1b536e2e8dcaca06",
+ "board_sha256": "b6268993194b5dedc7ce0fec8f212fdbcd9b07556a11bd3c230fc22fad8ec7ed",
  "kicad_cli_version": "10.0.6",
  "netlist": {
   "components": {
