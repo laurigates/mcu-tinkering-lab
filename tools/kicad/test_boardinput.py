@@ -49,6 +49,7 @@ KEYS = {
     "fanout",
     "keepouts",
     "cutouts",
+    "panel",
 }
 COMPONENT_KEYS = {
     "ref",
@@ -89,6 +90,9 @@ class BalancebotTests(unittest.TestCase):
         self.assertEqual(
             (self.spec["origin"], self.spec["size"]), ([100.0, 100.0], [90.0, 62.0])
         )
+
+    def test_saw_panel_is_null(self):
+        self.assertIsNone(self.spec["panel"])
 
     def test_components(self):
         comps = self.spec["components"]

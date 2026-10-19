@@ -31,6 +31,9 @@ registry and board.toml. This writes it to
   the origin; rule areas with no copper (tracks, vias, pads, pour);
 - `cutouts`: board.toml `[[cutouts]]`, `[{name, center, diameter}]`, centres
   relative to the origin; holes milled through the board, drawn on Edge.Cuts;
+- `panel`: null in saw mode; with `[panel] mode = "mousebites"`, `kicad.panel`'s
+  slots (Edge.Cuts rectangles), its tabs (`name`, `at`, `holes`, `clear`, and
+  the footprint `uuid`) and `hole_mm`, all relative to the origin;
 - `freerouting_jar`: $FREEROUTING_JAR, else ~/.cache/freerouting/freerouting-2.5.0.jar.
 
 board.toml is validated against the netlist first (`boardcheck.validate_config`,
@@ -47,7 +50,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from . import boardcheck, library, netlist, paths, schematic
+from . import boardcheck, library, netlist, panel, paths, schematic
 from .errors import KicadError
 from .paths import REPO_ROOT
 
@@ -128,6 +131,10 @@ def assemble(
         )
     ]
     pcb = kicad_dir / f"{cfg.name}.kicad_pcb"
+    panel_spec = panel.as_json(panel.build(data))
+    if panel_spec is not None:
+        for tab in panel_spec["tabs"]:
+            tab["uuid"] = footprint_uuid(ns, tab["name"])
     return {
         "pcb": str(pcb.resolve()),
         "out_dir": str((kicad_dir / OUTPUT).resolve()),
@@ -146,6 +153,7 @@ def assemble(
         "fanout": boardcheck.fanout_spec(data),
         "keepouts": [dict(k) for k in data.get("keepouts", [])],
         "cutouts": [dict(c) for c in data.get("cutouts", [])],
+        "panel": panel_spec,
     }
 
 
