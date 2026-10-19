@@ -228,3 +228,39 @@ datasheets found it, with power-stage problems no gate can see. What changed:
   `.claude/rules/power-stage-checklist.md` lists the regulator checks.
   `carrier-board-checked` loops place, route and check, since Freerouting does
   not route the same way twice.
+
+### Addendum (2026-10, #809): mouse-bite panels as an option
+
+A carrier with several boards on one PCB was split by hand along silkscreen saw
+lines over copper-free bands. That needs no fabrication feature, but the edges
+come out rough, flex while sawing cracks parts near a cut, and a part on the
+board can sit 0.06 mm from the line. `board.toml [panel] mode = "mousebites"`
+adds routed separation instead; `"saw"`, the default, is unchanged.
+
+- **Geometry, KiCad-free** (`kicad.panel`): each `[silk] cut_lines` line becomes
+  2 mm Edge.Cuts slots on its waste side (the side the "CUT" label sits on;
+  `[[panel.lines]] offset_mm` centres a line between two boards), stopping at
+  any cut line it meets. Tabs sit at both ends and every `max_span_mm` (50 mm)
+  or where `tabs` lists them. Each tab has two rows of five 0.6 mm non-plated
+  holes at 0.95 mm, on the slot's edges. These are the values from JLCPCB's
+  mouse-bite guide. #809 proposed 0.5 mm holes at 0.75 mm, which leaves a
+  0.25 mm web, under JLCPCB's 0.3 mm minimum.
+- **Only inside the keepout bands.** Every slot and hole must lie inside
+  `[[keepouts]]`, so routing, the pours and DRC's copper-to-edge clearance hold
+  without new rules. build_board.py cuts each tab's area out of the rule areas,
+  because a rule area that forbids pads also forbids a non-plated hole.
+- **Holes go in the drill file, not on Edge.Cuts.** Each tab is a board-only
+  footprint (MB1, MB2, ...) of NPTH pads, excluded from the BOM and position
+  files. DRC's schematic parity ignores board-only footprints. JLCPCB mills
+  Edge.Cuts with a cutter far wider than 0.6 mm.
+- **Checked.** `boardcheck` compares the board's tabs and Edge.Cuts slots with
+  `board.toml`, so a panel edit without a re-route fails CI. The stamp pins
+  the board as before.
+
+Trade-off: mouse bites give clean breakaway edges and suit JLCPCB assembly,
+where a part near a sawn edge is at risk. JLCPCB may count separate outlines
+as several designs: a panel fee on assembly orders, and handling that varies for
+bare boards. The robocar integrated carrier, which is meant for assembly, uses
+mouse bites; the socketed carrier and balancebot stay on saw lines. The live
+quotes for both modes are recorded, when taken, in the integrated carrier's
+README.

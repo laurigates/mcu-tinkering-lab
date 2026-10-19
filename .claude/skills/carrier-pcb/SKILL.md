@@ -43,7 +43,10 @@ several traps below are version-specific: after a KiCad upgrade, re-run
   locked, here a 1.5 mm 5V trunk, the buck's GND and an exposed pad's ground
   ties), `[fanout]` (a via beside every SMD pad of a poured net, added after
   routing; `required` pads fail the route without one) and `[pour]` regions
-  with their own `layers` and `priority`
+  with their own `layers` and `priority`. It is also the mouse-bite carrier:
+  `[panel] mode = "mousebites"` (#809, `kicad.panel`) turns the cut lines into
+  Edge.Cuts slots and board-only MB<n> footprints of NPTH holes, all inside
+  the keepout bands; `boardcheck` compares both with board.toml
 - `just kicad::setup` (`tools/kicad/setup.sh`): KiCad 10.0.6 on Ubuntu 24.04,
   Freerouting 2.5.0 and a Java 25 JRE in `~/.cache/freerouting`
 - `.github/workflows/carrier-check.yml` (CI) and the `kicad-carrier` pre-commit hook
@@ -241,6 +244,22 @@ several traps below are version-specific: after a KiCad upgrade, re-run
     line (a whole-board pour meets every line) and silkscreen text under
     0.8 mm. JLCPCB prints 1.0 mm tall, 0.15 mm stroke legibly; build_board.py
     keeps reference strokes at 0.16 mm or more.
+
+### Found adding mouse-bite panels (#809)
+
+34. **A keepout rule area refuses a non-plated hole.** KiCad counts an NPTH pad
+    as a pad, so mouse-bite holes inside a copper keepout band fail DRC
+    (`items_not_allowed`). build_board.py subtracts each tab's area from the
+    rule areas (`SHAPE_POLY_SET.BooleanSubtract`) rather than relaxing the
+    bands, which still keep every real part's pads out.
+35. **A board-only footprint is invisible to schematic parity** and needs no
+    library: an id with no library nickname raises no `lib_footprint_issues`.
+    That is what makes the tabs footprints at all; boardcheck identifies them
+    by their MB<n> reference and checks them against `[panel]` itself. The id
+    must still have a name: with an empty one KiCad exports the DSN image as
+    `""`, Freerouting writes `(component ` back with no name, and
+    `ImportSpecctraSES` returns False after a complete route (every attempt
+    reads "SES import failed"). build_board.py uses `LIB_ID("", "MouseBites")`.
 
 ### Found preparing JLCPCB assembly (#808)
 
