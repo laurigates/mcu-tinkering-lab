@@ -1,0 +1,221 @@
+# JLCPCB placement rotation, per LCSC part.
+#
+# JLCPCB's assembly line places each part as LCSC's own (EasyEDA) footprint
+# draws it, not as KiCad's does. Where the two put pin 1 in different places,
+# the CPL rotation is KiCad's plus `rotation` (degrees, counter-clockwise, as
+# KiCad's position file counts them). The offset belongs to the LCSC number,
+# not to the KiCad footprint: LCSC draws the PCA9685PW with pin 1 top-left and
+# the TCA9548APWR with pin 1 bottom-left, both on TSSOP.
+#
+# kicad.jlc writes cpl-jlc.csv with these, and fails on any placed LCSC number
+# missing here, or listed with a different KiCad footprint: an unchecked offset
+# is a part soldered at 90 or 180 degrees, which no gate before JLCPCB's
+# preview sees. test_jlc holds every LCSC number a tracked hardware.toml or the
+# parts registry uses to an entry here.
+#
+# Each entry was derived by `kicad.lcsc_rotation`: it fetches LCSC's footprint,
+# turns it by 0, 90, 180 and 270 degrees, and keeps the turn that lands every
+# numbered KiCad pad on the LCSC pad of the same number (`max_err_mm` is the
+# worst pad-centre distance left; hand-solder pads are longer, hence the
+# 0.2-0.4 mm on the two-pad parts). Matching pad numbers proves pin 1 lands on
+# pin 1; for the polarised parts the LCSC footprint's own marks were also read
+# (2026-10-19): the "+" and the band or chamfered corners sit at pad 1 on the
+# tantalum and both electrolytics, the cathode bar at pad 1 on the SOD-123,
+# as KiCad has them.
+#
+#   PYTHONPATH=tools python3 -m kicad.lcsc_rotation C130026 Package_SO:TSSOP-24_4.4x7.8mm_P0.65mm
+#   PYTHONPATH=tools python3 -m kicad.lcsc_rotation --check   # re-derive every entry (network)
+#
+# lcsc_footprint is LCSC's package name, for reading; checked is the date.
+
+# --- Chips --------------------------------------------------------------------
+
+[C130026] # TCA9548APWR
+footprint = "Package_SO:TSSOP-24_4.4x7.8mm_P0.65mm"
+lcsc_footprint = "TSSOP-24_L7.8-W4.4-P0.65-LS6.4-BL"
+rotation = 270
+max_err_mm = 0.16
+checked = "2026-10-19"
+
+[C2678753] # PCA9685PW,118
+footprint = "Package_SO:TSSOP-28_4.4x9.7mm_P0.65mm"
+lcsc_footprint = "TSSOP-28_L9.7-W4.4-P0.65-LS6.4-TL"
+rotation = 0
+max_err_mm = 0.34
+checked = "2026-10-19"
+
+[C88224] # TB6612FNG(O,C,8,EL)
+footprint = "Package_SO:SSOP-24_5.3x8.2mm_P0.65mm"
+lcsc_footprint = "SSOP-24_L8.4-W5.8-P0.65-LS7.8-BL"
+rotation = 270
+max_err_mm = 0.01
+checked = "2026-10-19"
+
+[C910544] # MAX98357AETE+T
+footprint = "Package_DFN_QFN:TQFN-16-1EP_3x3mm_P0.5mm_EP1.23x1.23mm"
+lcsc_footprint = "TQFN-16_L3.0-W3.0-P0.50-BL-EP1.5"
+rotation = 270
+max_err_mm = 0.06
+checked = "2026-10-19"
+
+[C506653] # MCP23017-E/SS
+footprint = "Package_SO:SSOP-28_5.3x10.2mm_P0.65mm"
+lcsc_footprint = "SSOP-28_L10.2-W5.3-P0.65-LS7.8-BL"
+rotation = 270
+max_err_mm = 0.05
+checked = "2026-10-19"
+
+[C468250] # TPS563208DDCR
+footprint = "Package_TO_SOT_SMD:SOT-23-6"
+lcsc_footprint = "TSOT-23-6_L2.9-W1.6-P0.95-LS2.8-BL"
+rotation = 270
+max_err_mm = 0.06
+checked = "2026-10-19"
+
+[C6186] # AMS1117-3.3
+footprint = "Package_TO_SOT_SMD:SOT-223-3_TabPin2"
+lcsc_footprint = "SOT-223-3_L6.5-W3.4-P2.30-LS7.0-BR"
+rotation = 180
+max_err_mm = 0.0
+checked = "2026-10-19"
+
+[C8598] # B5819W
+footprint = "Diode_SMD:D_SOD-123"
+lcsc_footprint = "SOD-123_L2.7-W1.6-LS3.7-RD-1"
+rotation = 0
+max_err_mm = 0.05
+checked = "2026-10-19"
+
+# --- Inductors, fuses, ferrite beads ------------------------------------------
+
+[C2044594] # SRN6045TA-4R7M
+footprint = "Inductor_SMD:L_Bourns_SRN6045TA"
+lcsc_footprint = "IND-SMD_L6.0-W6.0"
+rotation = 0
+max_err_mm = 0.43
+checked = "2026-10-19"
+
+[C883162] # BSMD1812-300-16V
+footprint = "Fuse:Fuse_1812_4532Metric_Pad1.30x3.40mm_HandSolder"
+lcsc_footprint = "F1812"
+rotation = 0
+max_err_mm = 0.37
+checked = "2026-10-19"
+
+[C85840] # BLM21PG221SN1D
+footprint = "Inductor_SMD:L_0805_2012Metric_Pad1.05x1.20mm_HandSolder"
+lcsc_footprint = "L0805"
+rotation = 0
+max_err_mm = 0.18
+checked = "2026-10-19"
+
+# --- Polarised capacitors -----------------------------------------------------
+
+[C8020] # TAJB226K016RNJ, 22 uF 16 V tantalum
+footprint = "Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B_HandSolder"
+lcsc_footprint = "CASE-B_3528"
+rotation = 0
+max_err_mm = 0.23
+checked = "2026-10-19"
+
+[C2836437] # 100 uF 35 V electrolytic, 6.3 x 7.7 mm
+footprint = "Capacitor_SMD:CP_Elec_6.3x7.7"
+lcsc_footprint = "CAP-SMD_BD6.3-L6.6-W6.6-LS7.6-FD-1"
+rotation = 0
+max_err_mm = 0.03
+checked = "2026-10-19"
+
+[C96179] # CS1C471M-CRF10, 470 uF 16 V electrolytic, 8 x 10.5 mm
+footprint = "Capacitor_SMD:CP_Elec_8x10.5"
+lcsc_footprint = "CAP-SMD_BD8.0-L8.3-W8.3-FD"
+rotation = 0
+max_err_mm = 0.43
+checked = "2026-10-19"
+
+# --- 0805 capacitors ----------------------------------------------------------
+
+[C49678] # 100 nF 50 V X7R
+footprint = "Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder"
+lcsc_footprint = "C0805"
+rotation = 0
+max_err_mm = 0.04
+checked = "2026-10-19"
+
+[C15850] # 10 uF 25 V X5R
+footprint = "Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder"
+lcsc_footprint = "C0805"
+rotation = 0
+max_err_mm = 0.04
+checked = "2026-10-19"
+
+[C45783] # 22 uF 25 V X5R
+footprint = "Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder"
+lcsc_footprint = "C0805"
+rotation = 0
+max_err_mm = 0.04
+checked = "2026-10-19"
+
+# --- 0805 resistors -----------------------------------------------------------
+
+[C17714] # 47 R
+footprint = "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+lcsc_footprint = "R0805"
+rotation = 0
+max_err_mm = 0.0
+checked = "2026-10-19"
+
+[C17408] # 100 R
+footprint = "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+lcsc_footprint = "R0805"
+rotation = 0
+max_err_mm = 0.0
+checked = "2026-10-19"
+
+[C17557] # 220 R
+footprint = "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+lcsc_footprint = "R0805"
+rotation = 0
+max_err_mm = 0.0
+checked = "2026-10-19"
+
+[C17520] # 2.2 k
+footprint = "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+lcsc_footprint = "R0805"
+rotation = 0
+max_err_mm = 0.0
+checked = "2026-10-19"
+
+[C17414] # 10 k
+footprint = "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+lcsc_footprint = "R0805"
+rotation = 0
+max_err_mm = 0.0
+checked = "2026-10-19"
+
+[C17593] # 27 k
+footprint = "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+lcsc_footprint = "R0805"
+rotation = 0
+max_err_mm = 0.0
+checked = "2026-10-19"
+
+[C17621] # 30 k
+footprint = "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+lcsc_footprint = "R0805"
+rotation = 0
+max_err_mm = 0.0
+checked = "2026-10-19"
+
+[C17747] # 54.9 k
+footprint = "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+lcsc_footprint = "R0805"
+rotation = 0
+max_err_mm = 0.0
+checked = "2026-10-19"
+
+[C149504] # 100 k
+footprint = "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+lcsc_footprint = "R0805"
+rotation = 0
+max_err_mm = 0.0
+checked = "2026-10-19"

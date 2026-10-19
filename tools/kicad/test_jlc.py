@@ -18,8 +18,9 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from kicad import fab, jlc
+from kicad import fab, jlc, registry
 from kicad.errors import KicadError
+from kicad.paths import REPO_ROOT
 
 R0805 = "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
 C0805 = "Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder"
@@ -73,6 +74,37 @@ CPL_JLC = "\r\n".join(
 )
 
 
+TSSOP24 = "Package_SO:TSSOP-24_4.4x7.8mm_P0.65mm"
+SOT223 = "Package_TO_SOT_SMD:SOT-223-3_TabPin2"
+# A turned chip and a turned regulator beside BOM's parts, rows as kicad-cli
+# writes them.
+BOM_TURNED = (
+    BOM
+    + f'"TCA9548APWR","U5","{TSSOP24}","C130026"\n'
+    + f'"AMS1117-3.3","U2","{SOT223}","C6186"\n'
+)
+POS_TURNED = (
+    POS
+    + '"U5","TCA9548APWR","TSSOP-24_4.4x7.8mm_P0.65mm",117.0,-114.0,90.000000,top\n'
+    + '"U2","AMS1117-3.3","SOT-223-3_TabPin2",150.0,-167.0,270.000000,top\n'
+)
+
+
+def rotations_for(bom: str, **turns: int) -> dict[str, jlc.Rotation]:
+    """An entry for every LCSC row in `bom`: 0 unless `turns` names it."""
+    import csv
+
+    rows = csv.DictReader(io.StringIO(bom))
+    return {
+        r["LCSC"]: jlc.Rotation(r["Footprint"], turns.get(r["LCSC"], 0))
+        for r in rows
+        if r["LCSC"]
+    }
+
+
+ROTATIONS = rotations_for(BOM)
+
+
 class JlcTests(unittest.TestCase):
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
@@ -92,11 +124,37 @@ class JlcTests(unittest.TestCase):
 
     def test_current_behaviour(self):
         b, p = self.write()
-        counts, out = self.quiet(jlc.write, b, p, self.dir)
+        counts, out = self.quiet(jlc.write, b, p, self.dir, ROTATIONS)
         self.assertEqual(counts, (6, 7))
         self.assertIn("wrote 6 BOM lines, 7 placements", out)
         self.assertEqual((self.dir / "bom-jlc.csv").read_bytes(), BOM_JLC.encode())
         self.assertEqual((self.dir / "cpl-jlc.csv").read_bytes(), CPL_JLC.encode())
+
+    def test_rotation_offset_added(self):
+        b, p = self.write(BOM_TURNED, POS_TURNED)
+        turns = rotations_for(BOM_TURNED, C130026=270, C6186=180)
+        counts, _ = self.quiet(jlc.write, b, p, self.dir, turns)
+        self.assertEqual(counts, (8, 9))
+        cpl = (self.dir / "cpl-jlc.csv").read_text().splitlines()
+        # KiCad 90 + 270 wraps to 0; 270 + 180 wraps to 90; offset 0 unchanged
+        self.assertIn("U5,117.0000mm,-114.0000mm,Top,0", cpl)
+        self.assertIn("U2,150.0000mm,-167.0000mm,Top,90", cpl)
+        self.assertIn("R1,131.5000mm,-131.0000mm,Top,90", cpl)
+
+    def test_unchecked_lcsc_fails(self):
+        b, p = self.write(BOM_TURNED, POS_TURNED)
+        with self.assertRaisesRegex(
+            KicadError, r"no checked JLCPCB rotation for C130026 \(U5\)"
+        ):
+            self.quiet(jlc.write, b, p, self.dir, ROTATIONS)
+        self.assertFalse((self.dir / "cpl-jlc.csv").exists())
+
+    def test_rotation_checked_for_another_footprint_fails(self):
+        b, p = self.write(BOM_TURNED, POS_TURNED)
+        turns = rotations_for(BOM_TURNED, C130026=270, C6186=180)
+        turns["C6186"] = jlc.Rotation("Package_TO_SOT_SMD:SOT-223-3", 180)
+        with self.assertRaisesRegex(KicadError, r"C6186 \(U2\).*SOT-223-3_TabPin2"):
+            self.quiet(jlc.write, b, p, self.dir, turns)
 
     def test_cli(self):
         b, p = self.write()
@@ -130,6 +188,52 @@ class JlcTests(unittest.TestCase):
         code, out = self.quiet(jlc.main, [str(b), str(p), str(self.dir)])
         self.assertEqual(code, 1)
         self.assertIn("column 'LCSC' missing", out)
+
+
+class RotationTableTests(unittest.TestCase):
+    """docs/reference/jlcpcb-rotations.toml, the table fab reads."""
+
+    def test_loads(self):
+        table = jlc.load_rotations()
+        self.assertEqual(table["C130026"].rotation, 270)
+        self.assertEqual(table["C6186"].footprint, SOT223)
+
+    def test_covers_every_lcsc_number_in_use(self):
+        """Every LCSC number a tracked hardware.toml or registry entry names has
+        a checked rotation for the footprint it is placed with."""
+        import tomllib
+
+        table = jlc.load_rotations()
+        used: dict[str, set[str]] = {}
+        for slug in registry.slugs():
+            spec = registry.load(slug)
+            if spec.lcsc:
+                used.setdefault(spec.lcsc, set()).add(spec.footprint)
+        for path in sorted(REPO_ROOT.glob("packages/*/*/hardware.toml")):
+            parts = tomllib.loads(path.read_text()).get("parts", {})
+            for part in parts.values():
+                if part.get("lcsc") and part.get("part"):
+                    fp = registry.load(part["part"]).footprint
+                    used.setdefault(part["lcsc"], set()).add(fp)
+        self.assertTrue(used)
+        for lcsc, fps in sorted(used.items()):
+            with self.subTest(lcsc=lcsc):
+                self.assertIn(lcsc, table)
+                self.assertEqual(fps, {table[lcsc].footprint})
+
+    def test_rejects_bad_entries(self):
+        cases = {
+            '[C1]\nfootprint = "A:B"\nrotation = 45\n': "rotation 45",
+            "[C1]\nrotation = 90\n": "footprint",
+            '[X1]\nfootprint = "A:B"\nrotation = 0\n': "not an LCSC number",
+            '[C1]\nfootprint = "A:B"\nrotation = 0\nfoo = 1\n': "foo",
+        }
+        for text, msg in cases.items():
+            with self.subTest(msg=msg), tempfile.TemporaryDirectory() as d:
+                path = Path(d) / "r.toml"
+                path.write_text(text)
+                with self.assertRaisesRegex(KicadError, msg):
+                    jlc.load_rotations(path)
 
 
 class FabTests(unittest.TestCase):

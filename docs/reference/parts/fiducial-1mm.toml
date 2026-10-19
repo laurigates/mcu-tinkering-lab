@@ -1,0 +1,11 @@
+# Fiducial for JLCPCB assembly: 1 mm bare copper in a 2 mm solder mask
+# opening. No pins and no BOM line (the footprint is exclude_from_bom), so it
+# never reaches bom-jlc.csv or cpl-jlc.csv.
+[part]
+name = "Fiducial, 1 mm copper, 2 mm mask opening"
+source = "KiCad 10.0.6 library"
+symbol = "Mechanical:Fiducial"
+footprint = "Fiducial:Fiducial_1mm_Mask2mm"
+value = "Fiducial"
+
+[pins]

@@ -8,6 +8,7 @@ source = "KiCad 10.0.6 library: Interface_Expansion:TCA9548APWR and Package_SO:T
 symbol = "Interface_Expansion:TCA9548APWR"
 footprint = "Package_SO:TSSOP-24_4.4x7.8mm_P0.65mm"
 value = "TCA9548APWR"
+lcsc = "C130026"
 no_connect = ["SD5", "SC5", "SD6", "SC6", "SD7", "SC7"]
 
 [pins]
