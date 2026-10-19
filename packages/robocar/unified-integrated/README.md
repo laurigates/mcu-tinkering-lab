@@ -101,6 +101,90 @@ Other differences the numbers do not show:
 - **Height.** The breakouts sat on sockets, about 10-15 mm above the board. The
   tallest integrated parts are the headers and the XT30; C19 is 7.7 mm.
 
+## JLCPCB assembly
+
+Every SMD part on the front carries an LCSC number (#808), so JLCPCB can
+assemble the whole main board. `just robocar-unified-integrated::carrier-fab`
+writes `output/assembly/bom-jlc.csv` and `cpl-jlc.csv`: 23 BOM lines, 56
+placements, one per SMD part. The chips and the inductor take their number
+from their registry entry (`docs/reference/parts/`), the passives from
+`hardware.toml`.
+
+| Ref | Part | LCSC | Library |
+|---|---|---|---|
+| U5 | TCA9548APWR | C130026 | Extended |
+| U6 | PCA9685PW,118 | C2678753 | Extended |
+| U7 | TB6612FNG (SSOP-24, 5.3 mm) | C88224 | Extended |
+| U8 | MAX98357AETE+T | C910544 | Extended |
+| U9 | MCP23017-E/SS | C506653 | Extended |
+| U10 | TPS563208DDCR | C468250 | Extended |
+| U2 | AMS1117-3.3 | C6186 | Basic |
+| L1 | Bourns SRN6045TA-4R7M | C2044594 | Extended |
+| F1 | BSMD1812-300-16V, 3 A hold, 16 V | C883162 | Extended |
+| FB1 | Murata BLM21PG221SN1D, 220 Ω, 2 A, 45 mΩ | C85840 | Extended |
+| C19 | 100 µF 35 V electrolytic, 6.3 x 7.7 mm | C2836437 | Extended |
+| C1-C3, C7, C8 | 22 µF 16 V tantalum, 3528 | C8020 | Extended |
+| C13, C14, C20 | 22 µF 25 V X5R 0805 | C45783 | Basic |
+| C9, C10, C16, C17 | 10 µF 25 V X5R 0805 | C15850 | Basic |
+| C4-C6, C11, C12, C15, C18 | 100 nF 50 V X7R 0805 | C49678 | Basic |
+| R2-R11, R14, R15 | 2.2 kΩ 0805 | C17520 | Basic |
+| R13, R16 | 10 kΩ | C17414 | Basic |
+| R12 | 54.9 kΩ | C17747 | Extended |
+| R25 | 100 kΩ | C149504 | Basic |
+| R26 | 30 kΩ | C17621 | Basic |
+| R17, R20, R23, R24 | 220 Ω | C17557 | Basic |
+| R18, R19, R21, R22 | 47 Ω | C17714 | Basic |
+| R1 | 100 Ω | C17408 | Basic |
+
+Stock and library type are JLCPCB's listing on 2026-10-19. The thinnest stock
+is the inductor (179) and the MCP23017 (424); check both before ordering. 54.9 kΩ
+has no Basic part; it stays, as TI's Table 7-2 value, at one Extended fee.
+
+### Placement rotation
+
+JLCPCB places each part as LCSC's own footprint draws it, and LCSC draws most of
+these chips with pin 1 bottom-left where KiCad has it top-left.
+[`docs/reference/jlcpcb-rotations.toml`](../../../docs/reference/jlcpcb-rotations.toml)
+holds the offset per LCSC number, derived by `kicad.lcsc_rotation` from LCSC's
+footprint pad by pad, and `kicad.jlc` adds it to KiCad's rotation in
+`cpl-jlc.csv`: 270° for U5, U7, U8, U9 and U10, 180° for U2, 0° for U6
+(the PCA9685PW's LCSC footprint has pin 1 top-left) and for every two-pad part.
+Without it the CPL would have put five chips at 90° and the LDO at 180°.
+`carrier-fab` fails on a placed LCSC number with no checked offset. JLCPCB's
+preview is still the last check: compare each chip's pin-1 dot with the
+silkscreen before paying.
+
+### Fiducials
+
+Three fiducials, FID1-FID3 (1 mm copper, 2 mm mask opening), sit on the main
+board in an asymmetric triangle: top-left (3.5, 9.5), top-right (60.5, 10.0)
+and bottom-left (3.5, 66.5), each 2 mm clear of every courtyard. JLCPCB does not
+require them for a board this size; they let the machine correct for board
+stretch, which the 0.5 mm-pitch TQFN is least tolerant of.
+
+### What is still hand-soldered
+
+The through-hole parts: the XT30 (J3), the motor, speaker, rangefinder and OLED
+connectors (J5-J9, J19), the ribbon header (J1), the servo and LED headers
+(J20-J23), the test and ground headers (J11-J15), the GPIO mirror header (J18),
+the buzzer (BZ1), and on the heads the XIAO sockets (U1, U3, U4) and their
+ribbon headers (J2, J16, J17). All are 2.5 mm pitch or wider.
+
+### Cost (estimate, not a quote)
+
+| | 2 assembled (5 PCBs) | 5 assembled (5 PCBs) |
+|---|---|---|
+| Parts, at JLCPCB's listed unit prices | about $23 | about $57 |
+| Extended part loading, 12 x $3 | $36 | $36 |
+| PCB, 94 x 100 mm, 2 layers | about $2-5 | about $2-5 |
+| Assembly setup and stencil (economic) | about $10 | about $10 |
+| **Total before shipping** | **about $71-74** | **about $105-108** |
+
+The chips are most of the parts cost: PCA9685 $3.33, MCP23017 $1.77,
+MAX98357A $1.32, TB6612FNG $1.15, TCA9548A $0.81. JLCPCB adds solder-joint
+charges and attrition parts on top, so treat these as a floor until the live
+quote is recorded under [Before ordering](#before-ordering).
+
 ## Design notes
 
 The circuit choices that are not a copy of a breakout:
@@ -169,10 +253,12 @@ The circuit choices that are not a copy of a breakout:
   board (R17-R22): 220 Ω on red (about 6 mA at 2 V), 47 Ω on green and blue,
   whose 2.9-3.2 V forward voltage leaves next to nothing across 220 Ω from 3V3
   (about 4-6 mA through 47 Ω).
-- **LCSC numbers** are set only where the socketed carrier already checked them
-  (10 kΩ, 100 Ω, 100 nF, the 22 µF tantalums, the LDO). The new chips, the
-  inductor, the PTC, C19, 47 Ω, 220 Ω, 30 kΩ, 54.9 kΩ, 100 kΩ, 10 µF and 22 µF
-  ceramics still need parts chosen against JLCPCB's stock.
+- **I2C pull-ups** are 2.2 kΩ, upstream (R14/R15) and on every mux channel
+  (R2-R11), as on the socketed carrier since #810: at 400 kHz, Fast-mode's
+  300 ns rise time allows 10 kΩ only below about 35 pF of bus. RESET's R16
+  stays 10 kΩ.
+- **LCSC numbers** are set on every SMD part: see
+  [JLCPCB assembly](#jlcpcb-assembly).
 
 ## Layout
 
@@ -230,6 +316,7 @@ just robocar-unified-integrated::carrier-check    # every gate, then the stamp
 | `hardware/carrier/board.toml` | Placement, keepouts, fixed tracks, net classes, pour, fanout, silkscreen |
 | `hardware/carrier/robocar-unified-integrated-carrier/` | The KiCad project. The `.kicad_sch` and both library tables are generated, the `.kicad_pcb` comes from `carrier-board`, and `.check.json` is the stamp `carrier-check` writes; the `.kicad_pro` is hand-kept, copied from the socketed carrier's, with the ERC change below and a 0.15 mm minimum track |
 | `docs/reference/parts/*-tssop24.toml` and siblings | Registry entries for the bare chips, the inductor and the new connectors |
+| `docs/reference/jlcpcb-rotations.toml` | JLCPCB's placement offset for every LCSC number, read by `carrier-fab` |
 
 The `.kicad_pro` sets ERC's pin-conflict matrix to OK for an "Unspecified" pin
 against any pin type but No-connect. KiCad's MAX98357A symbol types its exposed pad
@@ -256,8 +343,7 @@ board) found the ground vias missing and the issues fixed above. Still open:
   minimum current limit (see the current budget above).
 - Bench-test a 0.2-2 A load step on 5 V with the tantalums fitted.
 - Confirm whether the pack has a BMS; the EN divider is only a coarse cutoff.
-- Choose LCSC parts for the new chips, the inductor, the ferrite bead (low DCR,
-  at least 2 A), the PTC and the new passive values.
-- I2C runs at 400 kHz on 10 kΩ pull-ups (R14/R15, as on the socketed carrier),
-  whose rise time exceeds Fast-mode's 300 ns; fit 2.2-4.7 kΩ or run at 100 kHz.
+- Get a live JLCPCB quote for 2 and 5 assembled boards (upload the zip, the
+  BOM and the CPL), check the placement preview part by part against
+  [the rotation table](#placement-rotation), and record the quote here.
 - Saw on the waste side of each cut line.
