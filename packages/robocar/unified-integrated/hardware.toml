@@ -11,7 +11,7 @@
 #   the mux's upstream pull-ups and reset pull-up, the PCA9685's output series
 #   resistors on the servo and LED channels.
 # - The MAX98357A takes 5V through a ferrite bead (FB1) as its own net, AMP_5V.
-# - The LM2596 module and its lead (J4) are a TPS563201 buck converter (U10)
+# - The LM2596 module and its lead (J4) are a TPS563208 buck converter (U10)
 #   on the board, 3 A like the module, with its inductor, capacitors and
 #   feedback divider.
 # - The servos, the RGB LEDs and the speaker plug into the board (J19-J23),
@@ -25,6 +25,15 @@
 # carries `build`, except the cable, so the harness view is this carrier
 # without its ribbon. Nothing generates documentation from that view: the
 # project has no WIRING.md and no build guide.
+#
+# Every SMD part has an LCSC number (#808), on its registry entry for the
+# chips and the inductor, here for the passives, so JLCPCB can assemble the
+# whole front side; only the through-hole connectors, sockets and headers are
+# left to solder. Passives are JLCPCB Basic parts where one exists (stock and
+# library type checked 2026-10-19); each Extended part costs a loading fee per
+# order. Every LCSC number has a checked placement rotation in
+# docs/reference/jlcpcb-rotations.toml. Three fiducials (FID1-FID3) mark the
+# main board for the pick-and-place camera.
 
 [source]
 convention = "robocar"
@@ -118,6 +127,7 @@ kind = "resistor"
 part = "r0805"
 ref = "R25"
 value = "100k"
+lcsc = "C149504"
 
 [parts.buck_en_bot]
 name = "30 kΩ EN divider, bottom"
@@ -125,16 +135,20 @@ kind = "resistor"
 part = "r0805"
 ref = "R26"
 value = "30k"
+lcsc = "C17621"
 
 # A resettable fuse between the XT30 and everything else: a short on VBAT
 # (the 0.8 mm track to the test header, the buck input) otherwise has the
-# pack's full fault current behind it.
+# pack's full fault current behind it. C883162 (BSMD1812-300-16V), the
+# socketed carrier's part and its reasoning: 3 A hold, 16 V against a charged
+# 2S pack's 8.4 V.
 [parts.fuse_in]
 name = "3 A hold PTC fuse, pack input"
 kind = "fuse"
 part = "polyfuse-1812"
 ref = "F1"
 value = "3A hold 16V"
+lcsc = "C883162"
 
 [parts.buck_cin1]
 name = "10 µF buck input"
@@ -142,6 +156,7 @@ kind = "capacitor"
 part = "c0805"
 ref = "C9"
 value = "10uF 25V"
+lcsc = "C15850"
 
 [parts.buck_cin2]
 name = "10 µF buck input"
@@ -149,18 +164,21 @@ kind = "capacitor"
 part = "c0805"
 ref = "C10"
 value = "10uF 25V"
+lcsc = "C15850"
 
 # The input's bulk capacitor. On VBAT, where it does not touch the buck's loop,
 # and an aluminium electrolytic for its ESR: it damps the ringing between the
 # battery leads' inductance and the ceramic input capacitors when the XT30 is
 # plugged in, which a polymer or MnO2 tantalum would not (and a tantalum takes
-# that surge badly).
+# that surge badly). C2836437 (100 µF 35 V, 6.3 x 7.7 mm), the balancebot's
+# input capacitor: 35 V costs nothing over 25 V in this case size.
 [parts.bulk_in]
-name = "100 µF 25 V bulk capacitor, buck input"
+name = "100 µF 35 V bulk capacitor, buck input"
 kind = "capacitor"
 part = "cp-elec-6.3x7.7"
 ref = "C19"
-value = "100uF 25V"
+value = "100uF 35V"
+lcsc = "C2836437"
 
 [parts.buck_cin_hf]
 name = "100 nF buck input, beside VIN"
@@ -183,23 +201,29 @@ name = "22 µF buck output"
 kind = "capacitor"
 part = "c0805"
 ref = "C13"
-value = "22uF 16V"
+value = "22uF 25V"
+lcsc = "C45783"
 
 [parts.buck_cout2]
 name = "22 µF buck output"
 kind = "capacitor"
 part = "c0805"
 ref = "C14"
-value = "22uF 16V"
+value = "22uF 25V"
+lcsc = "C45783"
 
 # A third 22 µF: an 0805 at 5 V bias keeps roughly half its rating, and two
 # alone can fall under Table 7-2's 20 µF minimum. Three stay inside 20-68 µF.
+# All three are C45783 (Samsung CL21A226MAQNNNE, 22 µF 25 V X5R), a JLCPCB
+# Basic part; its DC-bias curve is unread, so the "about half at 5 V" is the
+# 0805 rule of thumb, not this part's figure.
 [parts.buck_cout3]
 name = "22 µF buck output"
 kind = "capacitor"
 part = "c0805"
 ref = "C20"
-value = "22uF 16V"
+value = "22uF 25V"
+lcsc = "C45783"
 
 [parts.buck_fb_top]
 name = "54.9 kΩ feedback divider, top"
@@ -207,6 +231,7 @@ kind = "resistor"
 part = "r0805"
 ref = "R12"
 value = "54.9k"
+lcsc = "C17747"
 
 [parts.buck_fb_bot]
 name = "10 kΩ feedback divider, bottom"
@@ -240,6 +265,7 @@ kind = "capacitor"
 part = "c0805"
 ref = "C16"
 value = "10uF 25V"
+lcsc = "C15850"
 
 [parts.amp_c10u]
 name = "10 µF ceramic, MAX98357A VDD"
@@ -247,6 +273,7 @@ kind = "capacitor"
 part = "c0805"
 ref = "C17"
 value = "10uF 25V"
+lcsc = "C15850"
 
 [parts.amp_c100n]
 name = "100 nF decoupling, MAX98357A VDD"
@@ -257,22 +284,25 @@ value = "100nF"
 lcsc = "C49678"
 
 # The XIAO has no I2C pull-ups; the TCA9548A breakout pulled up its upstream
-# SDA and SCL, and its RESET.
+# SDA and SCL, and its RESET. 2.2 kΩ, not the breakout's 10 kΩ, for the
+# 400 kHz rise time (the socketed carrier's reasoning, #810): the upstream bus
+# carries the XIAO, the mux, the PCA9685 and the MCP23017. R16 (RESET) stays
+# 10 kΩ.
 [parts.pull_up_sda]
-name = "10 kΩ pull-up, upstream I2C SDA"
+name = "2.2 kΩ pull-up, upstream I2C SDA"
 kind = "resistor"
 part = "r0805"
 ref = "R14"
-value = "10k"
-lcsc = "C17414"
+value = "2.2k"
+lcsc = "C17520"
 
 [parts.pull_up_scl]
-name = "10 kΩ pull-up, upstream I2C SCL"
+name = "2.2 kΩ pull-up, upstream I2C SCL"
 kind = "resistor"
 part = "r0805"
 ref = "R15"
-value = "10k"
-lcsc = "C17414"
+value = "2.2k"
+lcsc = "C17520"
 
 [parts.pull_rst]
 name = "10 kΩ pull-up, TCA9548A RESET"
@@ -294,6 +324,7 @@ kind = "resistor"
 part = "r0805"
 ref = "R17"
 value = "220"
+lcsc = "C17557"
 
 [parts.res_led_l_g]
 name = "47 Ω series, left LED green"
@@ -301,6 +332,7 @@ kind = "resistor"
 part = "r0805"
 ref = "R18"
 value = "47"
+lcsc = "C17714"
 
 [parts.res_led_l_b]
 name = "47 Ω series, left LED blue"
@@ -308,6 +340,7 @@ kind = "resistor"
 part = "r0805"
 ref = "R19"
 value = "47"
+lcsc = "C17714"
 
 [parts.res_led_r_r]
 name = "220 Ω series, right LED red"
@@ -315,6 +348,7 @@ kind = "resistor"
 part = "r0805"
 ref = "R20"
 value = "220"
+lcsc = "C17557"
 
 [parts.res_led_r_g]
 name = "47 Ω series, right LED green"
@@ -322,6 +356,7 @@ kind = "resistor"
 part = "r0805"
 ref = "R21"
 value = "47"
+lcsc = "C17714"
 
 [parts.res_led_r_b]
 name = "47 Ω series, right LED blue"
@@ -329,6 +364,7 @@ kind = "resistor"
 part = "r0805"
 ref = "R22"
 value = "47"
+lcsc = "C17714"
 
 [parts.res_servo_pan]
 name = "220 Ω series, pan servo signal"
@@ -336,6 +372,7 @@ kind = "resistor"
 part = "r0805"
 ref = "R23"
 value = "220"
+lcsc = "C17557"
 
 [parts.res_servo_tilt]
 name = "220 Ω series, tilt servo signal"
@@ -343,17 +380,20 @@ kind = "resistor"
 part = "r0805"
 ref = "R24"
 value = "220"
+lcsc = "C17557"
 
 # The amplifier's own supply, AMP_5V, through a ferrite bead from 5V: it keeps
 # the class-D switching off the motor and logic rail, and it lets the autorouter
 # give 5V tracks wider than the MAX98357A's 0.5 mm-pitch pins allow (one width
-# per net).
+# per net). Murata BLM21PG221SN1D (C85840): 220 Ω at 100 MHz, 2 A, 45 mΩ DCR
+# (JLCPCB's listing, 2026-10-19). The amplifier's 1 A peaks drop about 45 mV.
 [parts.amp_fb]
 name = "Ferrite bead, MAX98357A supply"
 kind = "ferrite-bead"
 part = "ferrite-bead-0805"
 ref = "FB1"
-value = "600R@100MHz 2A"
+value = "220R@100MHz 2A"
+lcsc = "C85840"
 
 # --- Off-board loads that plugged into the breakouts ------------------------
 
@@ -558,87 +598,87 @@ ref = "C8"
 value = "22uF 16V"
 lcsc = "C8020"
 
-# Every downstream mux channel has its own 10 kΩ pull-ups to 3V3, as on the
-# socketed carrier.
+# Every downstream mux channel has its own 2.2 kΩ pull-ups to 3V3, as on the
+# socketed carrier (#810: the 400 kHz rise time over a rangefinder lead).
 [parts.pull_ch0_sda]
-name = "10 kΩ pull-up, mux channel 0 SDA"
+name = "2.2 kΩ pull-up, mux channel 0 SDA"
 kind = "resistor"
 part = "r0805"
 ref = "R2"
-value = "10k"
-lcsc = "C17414"
+value = "2.2k"
+lcsc = "C17520"
 
 [parts.pull_ch0_scl]
-name = "10 kΩ pull-up, mux channel 0 SCL"
+name = "2.2 kΩ pull-up, mux channel 0 SCL"
 kind = "resistor"
 part = "r0805"
 ref = "R3"
-value = "10k"
-lcsc = "C17414"
+value = "2.2k"
+lcsc = "C17520"
 
 [parts.pull_ch1_sda]
-name = "10 kΩ pull-up, mux channel 1 SDA"
+name = "2.2 kΩ pull-up, mux channel 1 SDA"
 kind = "resistor"
 part = "r0805"
 ref = "R4"
-value = "10k"
-lcsc = "C17414"
+value = "2.2k"
+lcsc = "C17520"
 
 [parts.pull_ch1_scl]
-name = "10 kΩ pull-up, mux channel 1 SCL"
+name = "2.2 kΩ pull-up, mux channel 1 SCL"
 kind = "resistor"
 part = "r0805"
 ref = "R5"
-value = "10k"
-lcsc = "C17414"
+value = "2.2k"
+lcsc = "C17520"
 
 [parts.pull_ch2_sda]
-name = "10 kΩ pull-up, mux channel 2 SDA"
+name = "2.2 kΩ pull-up, mux channel 2 SDA"
 kind = "resistor"
 part = "r0805"
 ref = "R10"
-value = "10k"
-lcsc = "C17414"
+value = "2.2k"
+lcsc = "C17520"
 
 [parts.pull_ch2_scl]
-name = "10 kΩ pull-up, mux channel 2 SCL"
+name = "2.2 kΩ pull-up, mux channel 2 SCL"
 kind = "resistor"
 part = "r0805"
 ref = "R11"
-value = "10k"
-lcsc = "C17414"
+value = "2.2k"
+lcsc = "C17520"
 
 [parts.pull_ch3_sda]
-name = "10 kΩ pull-up, mux channel 3 SDA"
+name = "2.2 kΩ pull-up, mux channel 3 SDA"
 kind = "resistor"
 part = "r0805"
 ref = "R6"
-value = "10k"
-lcsc = "C17414"
+value = "2.2k"
+lcsc = "C17520"
 
 [parts.pull_ch3_scl]
-name = "10 kΩ pull-up, mux channel 3 SCL"
+name = "2.2 kΩ pull-up, mux channel 3 SCL"
 kind = "resistor"
 part = "r0805"
 ref = "R7"
-value = "10k"
-lcsc = "C17414"
+value = "2.2k"
+lcsc = "C17520"
 
 [parts.pull_ch4_sda]
-name = "10 kΩ pull-up, mux channel 4 SDA"
+name = "2.2 kΩ pull-up, mux channel 4 SDA"
 kind = "resistor"
 part = "r0805"
 ref = "R8"
-value = "10k"
-lcsc = "C17414"
+value = "2.2k"
+lcsc = "C17520"
 
 [parts.pull_ch4_scl]
-name = "10 kΩ pull-up, mux channel 4 SCL"
+name = "2.2 kΩ pull-up, mux channel 4 SCL"
 kind = "resistor"
 part = "r0805"
 ref = "R9"
-value = "10k"
-lcsc = "C17414"
+value = "2.2k"
+lcsc = "C17520"
 
 # Mounting holes: M3 at the main board's corners, M2 on the head.
 [parts.hole_main_1]
@@ -676,6 +716,27 @@ name = "M2 mounting hole, head board"
 kind = "mounting-hole"
 part = "m2-mounting-hole"
 ref = "H6"
+
+# Fiducials for JLCPCB assembly, three on the main board in an asymmetric
+# triangle (top-left, top-right, bottom-left), each at least 2 mm from every
+# courtyard and 3.5 mm from the board edge. No nets, no BOM line.
+[parts.fiducial_1]
+name = "Fiducial, main board top-left"
+kind = "fiducial"
+part = "fiducial-1mm"
+ref = "FID1"
+
+[parts.fiducial_2]
+name = "Fiducial, main board top-right"
+kind = "fiducial"
+part = "fiducial-1mm"
+ref = "FID2"
+
+[parts.fiducial_3]
+name = "Fiducial, main board bottom-left"
+kind = "fiducial"
+part = "fiducial-1mm"
+ref = "FID3"
 
 # The same two holes on head 2 (H7, H8) and head 3 (H9, H10).
 [parts.hole_head2_1]
