@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.2.12](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.11...robocar-unified-v0.2.12) (2026-10-19)
+
+
+### Features
+
+* **kicad:** pre-fab review tooling and layout-quality gates ([#811](https://github.com/laurigates/mcu-tinkering-lab/issues/811)) ([81f5ff7](https://github.com/laurigates/mcu-tinkering-lab/commit/81f5ff7769ac8900baf8253f9430294f43cc43b2))
+* **robocar-unified:** backport the integrated carrier's pre-fab review fixes ([#812](https://github.com/laurigates/mcu-tinkering-lab/issues/812)) ([56634fd](https://github.com/laurigates/mcu-tinkering-lab/commit/56634fdd06828a18ecef2ea45e96ed3493faf64b))
+* **robocar-unified:** carrier pre-order changes and three-head panel ([#802](https://github.com/laurigates/mcu-tinkering-lab/issues/802)) ([d5bfad7](https://github.com/laurigates/mcu-tinkering-lab/commit/d5bfad7b4d188be0a364b74487a97de7e515c079))
+* **robocar-unified:** MCP23017 socket and GPIO mirror header on the carrier ([#803](https://github.com/laurigates/mcu-tinkering-lab/issues/803)) ([8722001](https://github.com/laurigates/mcu-tinkering-lab/commit/8722001af4771ab01487086a613760b5e704ff7e))
+* **robocar-unified:** mirror the application log to UART0 on J15 ([69e8deb](https://github.com/laurigates/mcu-tinkering-lab/commit/69e8deb428520470293cfdb0024fd2f3b788d037))
+
+
+### Bug Fixes
+
+* **robocar-unified:** describe telemetry distance_cm as the release mean ([e4a6904](https://github.com/laurigates/mcu-tinkering-lab/commit/e4a6904e304eb65d132a5fc645b877c92f378f87))
+* **robocar-unified:** drive the 0.91-inch OLED as 128x32, not 128x64 ([8dfb4df](https://github.com/laurigates/mcu-tinkering-lab/commit/8dfb4df2800f2ac73d5eed84238dc7f04caea600))
+* **robocar-unified:** fit the head board to the 30 x 30 mm cradle ([#797](https://github.com/laurigates/mcu-tinkering-lab/issues/797)) ([01dde2c](https://github.com/laurigates/mcu-tinkering-lab/commit/01dde2c67d40aa8eb11716adb203fad8840d5d05))
+* **robocar-unified:** regenerate the D6 pin row and test the lone-CR truncation guard ([15ec9b4](https://github.com/laurigates/mcu-tinkering-lab/commit/15ec9b4e8bd1874c497ece6f97ee5037762289de))
+* **robocar-unified:** treat MCP23017 GPA7/GPB7 as output-only ([49c5627](https://github.com/laurigates/mcu-tinkering-lab/commit/49c5627a40af41541eb25acff2771db94d27ce31))
+* **robocar-unified:** trip the obstacle reflex on a single front reading ([5fa151b](https://github.com/laurigates/mcu-tinkering-lab/commit/5fa151bb43bda3f4f05baeb6c93ccc3d9f0bb9fa))
+
+
+### Documentation
+
+* **robocar-unified:** re-render the schematic for the 128x32 OLED ([da66656](https://github.com/laurigates/mcu-tinkering-lab/commit/da66656d7a5a149efcf52f5728f96fe4465027f3))
+* **robocar-unified:** regenerate pin_defs.typ and build guide for 128x32 OLED ([bd8cb43](https://github.com/laurigates/mcu-tinkering-lab/commit/bd8cb43149b232484290caedce730c1ba1c4aba5))
+
+
+### Miscellaneous
+
+* **carrier:** ignore KiCad local history folders ([#806](https://github.com/laurigates/mcu-tinkering-lab/issues/806)) ([547bf40](https://github.com/laurigates/mcu-tinkering-lab/commit/547bf40eb17c7c23f850ca31a1a8121711fd0d21))
+
 ## [0.2.11](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.10...robocar-unified-v0.2.11) (2026-10-15)
 
 
