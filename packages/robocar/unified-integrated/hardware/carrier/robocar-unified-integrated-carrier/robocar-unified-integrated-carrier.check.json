@@ -1,6 +1,6 @@
 {
- "board_sha256": "b6268993194b5dedc7ce0fec8f212fdbcd9b07556a11bd3c230fc22fad8ec7ed",
- "kicad_cli_version": "10.0.6",
+ "board_sha256": "83cbc6ff818cda825806ec9bb4a5b718b51caf2f6db5e4c9995cd0941c969247",
+ "kicad_cli_version": "10.0.7",
  "netlist": {
   "components": {
    "BZ1": {
@@ -100,6 +100,13 @@
     "lcsc": "C45783",
     "lib_id": "Device:C",
     "value": "22uF 25V"
+   },
+   "C21": {
+    "footprint": "Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder",
+    "in_bom": true,
+    "lcsc": "C15850",
+    "lib_id": "Device:C",
+    "value": "10uF 25V"
    },
    "C3": {
     "footprint": "Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B_HandSolder",
@@ -538,9 +545,9 @@
    "R26": {
     "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
     "in_bom": true,
-    "lcsc": "C17621",
+    "lcsc": "C4360",
     "lib_id": "Device:R",
-    "value": "30k"
+    "value": "36k"
    },
    "R3": {
     "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
@@ -816,6 +823,10 @@
     ],
     [
      "C20",
+     "1"
+    ],
+    [
+     "C21",
      "1"
     ],
     [
@@ -1388,6 +1399,10 @@
     ],
     [
      "C20",
+     "2"
+    ],
+    [
+     "C21",
      "2"
     ],
     [
@@ -2469,5 +2484,5 @@
    ]
   }
  },
- "schematic_sha256": "8a594af0ee9e8c4018b7958781b937e9ba270710623aaeeaa6c201b4741635b8"
+ "schematic_sha256": "5d2cd88f1ab3caf53477a61602201371c499e724b83a9eb05eeac86e9739d8c9"
 }
