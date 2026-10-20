@@ -231,6 +231,7 @@ TABLE_KEYS = {
         "in_pad",
         "exempt",
         "required",
+        "own",
     },
     "cutouts": {"name", "center", "diameter"},
     "pour": {
@@ -527,6 +528,7 @@ FANOUT_DEFAULTS = {
     "in_pad": [],
     "exempt": [],
     "required": [],
+    "own": [],
 }
 
 
@@ -548,7 +550,10 @@ def _validate_fanout(
     pour on that layer can leave them on an island. The vias go in after
     routing, where there is room: a `required` pad (on a power path) fails the
     route without one, any other keeps its routed track. `in_pad` pads (an
-    exposed pad) take their via inside the pad; `exempt` pads take none.
+    exposed pad) take their via inside the pad; `exempt` pads take none. An
+    `own` pad takes a via of its own even where a chain of fixed tracks already
+    reaches one (a regulator's GND pin, whose fixed track to its input
+    capacitor would otherwise satisfy it).
     """
     fan = data.get("fanout")
     if fan is None:
@@ -571,7 +576,7 @@ def _validate_fanout(
         if not _positive(spec[key]):
             errors.append(f"{at} {key} must be > 0")
     pads = {f"{ref}:{pin}" for net in nets for ref, pin in nl.nets.get(net, ())}
-    for key in ("in_pad", "exempt", "required"):
+    for key in ("in_pad", "exempt", "required", "own"):
         for pad in spec[key]:
             if pad not in pads:
                 errors.append(f"{at} {key} {pad!r} is not a pad of a [fanout] net")

@@ -137,7 +137,8 @@ def fanout(board, fan, clearance):
     every pad with tracks, so a via is a second connection, to the other
     layer's pour, wherever there is room for one. A pad already within `reach_mm`
     of a via of its net keeps that one; an `in_pad` pad (an exposed pad) takes
-    its via at its centre; an `exempt` pad takes none. Each candidate from
+    its via at its centre; an `exempt` pad takes none; an `own` pad takes a via
+    of its own whatever chain already reaches one. Each candidate from
     fanout.py must clear every item of another net, and every via and
     through-hole pad of any net, by `clearance` on both layers, keep out of the
     rule areas and 0.5 mm in from the board edge; its stub must clear every
@@ -164,6 +165,7 @@ def fanout(board, fan, clearance):
     rule_areas = [z for z in board.Zones() if z.GetIsRuleArea()]
     in_pad = set(fan["in_pad"])
     exempt = set(fan["exempt"])
+    own = set(fan["own"])
     nets = set(fan["nets"])
 
     pads = [p for fp in board.GetFootprints() for p in fp.Pads()]
@@ -298,7 +300,11 @@ def fanout(board, fan, clearance):
                 add_via(cx, cy, pad.GetNet())
                 added += 1
             continue
-        if has_via(pad):
+        if name in own:
+            # its own via: one inside the pad, or one already stubbed from it
+            if any(box.Contains(v.GetPosition()) for v in vias_of(netcode)):
+                continue
+        elif has_via(pad):
             continue
         layer = pcbnew.F_Cu if pad.IsOnLayer(pcbnew.F_Cu) else pcbnew.B_Cu
         placed = False

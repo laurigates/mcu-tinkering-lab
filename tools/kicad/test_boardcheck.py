@@ -543,6 +543,10 @@ class ConfigTests(unittest.TestCase):
             "[fanout] required 'Q99:2' is not a pad of a [fanout] net",
         )
         self.fails(
+            lambda d: d.update(fanout={**fan, "own": ["Q99:3"]}),
+            "[fanout] own 'Q99:3' is not a pad of a [fanout] net",
+        )
+        self.fails(
             lambda d: d.update(fanout={**fan, "stitch": True}),
             "[fanout]: unknown key(s) ['stitch']",
         )
