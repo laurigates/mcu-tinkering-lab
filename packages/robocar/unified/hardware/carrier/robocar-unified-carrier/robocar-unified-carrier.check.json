@@ -1,6 +1,6 @@
 {
- "board_sha256": "8d72b0a35cd09af988bc72892077616ab92d42a1b62e03c2c85fd3bf86e989c5",
- "kicad_cli_version": "10.0.6",
+ "board_sha256": "6d3cb0a0bb2aab635705a20437431450d39ba53afe90833f30dab2e6f597c889",
+ "kicad_cli_version": "10.0.7",
  "netlist": {
   "components": {
    "A1": {
@@ -80,6 +80,13 @@
     "lib_id": "Device:C",
     "value": "100nF"
    },
+   "C6": {
+    "footprint": "Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder",
+    "in_bom": true,
+    "lcsc": "C49678",
+    "lib_id": "Device:C",
+    "value": "100nF"
+   },
    "C7": {
     "footprint": "Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B_HandSolder",
     "in_bom": true,
@@ -94,12 +101,19 @@
     "lib_id": "Device:C_Polarized",
     "value": "22uF 16V"
    },
+   "D1": {
+    "footprint": "Diode_SMD:D_SOD-123",
+    "in_bom": true,
+    "lcsc": "C8598",
+    "lib_id": "Device:D_Schottky",
+    "value": "B5819W"
+   },
    "F1": {
     "footprint": "Fuse:Fuse_1812_4532Metric_Pad1.30x3.40mm_HandSolder",
     "in_bom": true,
-    "lcsc": "C883162",
+    "lcsc": "C47263807",
     "lib_id": "Device:Polyfuse",
-    "value": "3A hold 16V"
+    "value": "4A hold 16V"
    },
    "H1": {
     "footprint": "MountingHole:MountingHole_3.2mm_M3",
@@ -249,7 +263,7 @@
     "value": "XT30 pack in"
    },
    "J4": {
-    "footprint": "Connector_JST:JST_XH_B4B-XH-A_1x04_P2.50mm_Vertical",
+    "footprint": "Connector_JST:JST_VH_B4P-VH_1x04_P3.96mm_Vertical",
     "in_bom": true,
     "lcsc": "",
     "lib_id": "Connector_Generic:Conn_01x04",
@@ -305,6 +319,20 @@
     "value": "2.2k"
    },
    "R11": {
+    "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
+    "in_bom": true,
+    "lcsc": "C17520",
+    "lib_id": "Device:R",
+    "value": "2.2k"
+   },
+   "R12": {
+    "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
+    "in_bom": true,
+    "lcsc": "C17520",
+    "lib_id": "Device:R",
+    "value": "2.2k"
+   },
+   "R13": {
     "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
     "in_bom": true,
     "lcsc": "C17520",
@@ -431,6 +459,10 @@
      "1"
     ],
     [
+     "C6",
+     "1"
+    ],
+    [
      "C8",
      "1"
     ],
@@ -495,6 +527,14 @@
      "1"
     ],
     [
+     "R12",
+     "1"
+    ],
+    [
+     "R13",
+     "1"
+    ],
+    [
      "U2",
      "2"
     ]
@@ -533,12 +573,8 @@
      "1"
     ],
     [
-     "J1",
-     "1"
-    ],
-    [
-     "J1",
-     "14"
+     "D1",
+     "2"
     ],
     [
      "J4",
@@ -987,6 +1023,10 @@
      "2"
     ],
     [
+     "C6",
+     "2"
+    ],
+    [
      "C7",
      "2"
     ],
@@ -1061,20 +1101,6 @@
     [
      "U2",
      "1"
-    ]
-   ],
-   "HEAD2_+5V": [
-    [
-     "J16",
-     "1"
-    ],
-    [
-     "J16",
-     "14"
-    ],
-    [
-     "U3",
-     "14"
     ]
    ],
    "HEAD2_GND": [
@@ -1181,17 +1207,17 @@
      "7"
     ]
    ],
-   "HEAD3_+5V": [
+   "HEAD2_XIAO_5V": [
     [
-     "J17",
+     "J16",
      "1"
     ],
     [
-     "J17",
+     "J16",
      "14"
     ],
     [
-     "U4",
+     "U3",
      "14"
     ]
    ],
@@ -1299,17 +1325,17 @@
      "7"
     ]
    ],
-   "HEAD_+5V": [
+   "HEAD3_XIAO_5V": [
     [
-     "J2",
+     "J17",
      "1"
     ],
     [
-     "J2",
+     "J17",
      "14"
     ],
     [
-     "U1",
+     "U4",
      "14"
     ]
    ],
@@ -1417,6 +1443,20 @@
      "7"
     ]
    ],
+   "HEAD_XIAO_5V": [
+    [
+     "J2",
+     "1"
+    ],
+    [
+     "J2",
+     "14"
+    ],
+    [
+     "U1",
+     "14"
+    ]
+   ],
    "I2C_SCL": [
     [
      "A3",
@@ -1429,6 +1469,10 @@
     [
      "J12",
      "3"
+    ],
+    [
+     "R13",
+     "2"
     ]
    ],
    "I2C_SDA": [
@@ -1442,6 +1486,10 @@
     ],
     [
      "J12",
+     "2"
+    ],
+    [
+     "R12",
      "2"
     ]
    ],
@@ -1612,6 +1660,20 @@
      "J11",
      "4"
     ]
+   ],
+   "XIAO_5V": [
+    [
+     "D1",
+     "1"
+    ],
+    [
+     "J1",
+     "1"
+    ],
+    [
+     "J1",
+     "14"
+    ]
    ]
   },
   "unconnected": {
@@ -1717,5 +1779,5 @@
    ]
   }
  },
- "schematic_sha256": "4e621debb6b49441f3358494c20c31772646184c4974b076d637fc345c1e00e9"
+ "schematic_sha256": "52568c71c6b0cb0f63a7867d4896395272678f619bd57785c7df8c860213f0ff"
 }
