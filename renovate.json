@@ -23,6 +23,15 @@
       "matchFileNames": ["packages/robocar/simulation/**"],
       "matchPackageNames": ["/^pillow$/i"],
       "allowedVersions": "<12"
+    },
+    {
+      "description": "Only patch bumps for the actions/setup-python python-version input (github-actions manager, depType uses-with, depName python, packageName actions/python-versions). A new Python minor can lack wheels for torch and other deps, so moving to one is a deliberate change, not a Renovate PR (#796).",
+      "matchManagers": ["github-actions"],
+      "matchDepTypes": ["uses-with"],
+      "matchDepNames": ["python"],
+      "matchPackageNames": ["actions/python-versions"],
+      "matchUpdateTypes": ["minor", "major"],
+      "enabled": false
     }
   ],
   "pre-commit": {
