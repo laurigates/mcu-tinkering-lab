@@ -331,6 +331,16 @@ layer = "F.Cu"
 width_mm = 0.8
 points = [[27.2, 64.3], [27.2, 66.3], [27.75, 66.9]]
 
+# The TB6612FNG's small-signal GND (pin 18) to C16's GND pad, which has a
+# fanout via: with C15 turned, the pin lost its pour contact and reached
+# ground through 0.19 mm of routed track (fourth pre-fab layout review, N1).
+[[tracks]]
+name = "U7 GND pin 18"
+net = "GND"
+layer = "F.Cu"
+width_mm = 0.3
+points = [[19.2, 49.32], [20.5, 49.32], [21.2, 49.8]]
+
 # The buck's ground: U10's GND pin to its input capacitor's, under the package
 # between the two pin rows, TI's first layout rule (the input loop, VIN pin
 # to capacitor to GND pin, as small as it goes). Laid down rather than routed:
@@ -408,14 +418,16 @@ track_um = 800
 clearance_um = 200
 via_um = [1000, 500]
 
-# +5V keeps the 0.45 mm track MOT_* has (the TB6612FNG's pins cap both) but
-# takes a 1.0/0.5 mm via: one via still carries VM1, both servos and the head
-# cable (second pre-fab layout review, S2). route_board.py grows any smaller
-# via Freerouting picks to its class's size, and DRC checks the fit.
+# +5V at 0.8 mm with 1.0/0.5 mm vias. At the 0.45 mm the TB6612FNG's pins
+# were thought to cap it at, the servo and head feed necked to 0.337 mm and
+# shared one path (fourth pre-fab layout review, F1); Freerouting necks the
+# last millimetre into a fine-pitch pin instead (0.40 mm at U7's VM pins).
+# route_board.py grows any smaller via Freerouting picks to its class's size,
+# and DRC checks the fit (second review, S2).
 [[net_classes]]
 name = "five_volt"
 nets = ["+5V"]
-track_um = 450
+track_um = 800
 clearance_um = 200
 via_um = [1000, 500]
 
