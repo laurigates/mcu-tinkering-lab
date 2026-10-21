@@ -42,7 +42,8 @@ several traps below are version-specific: after a KiCad upgrade, re-run
   does not provide: `[[tracks]]` (fixed tracks build_board.py lays down
   locked, here a 1.5 mm 5V trunk, the buck's GND and an exposed pad's ground
   ties), `[fanout]` (a via beside every SMD pad of a poured net, added after
-  routing; `required` pads fail the route without one) and `[pour]` regions
+  routing; `required` pads fail the route without one; an `own` pad takes a
+  via of its own even when a fixed-track chain already reaches one) and `[pour]` regions
   with their own `layers` and `priority`. It is also the mouse-bite carrier:
   `[panel] mode = "mousebites"` (#809, `kicad.panel`) turns the cut lines into
   Edge.Cuts slots and board-only MB<n> footprints of NPTH holes, all inside

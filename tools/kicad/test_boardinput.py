@@ -258,6 +258,7 @@ class BalancebotTests(unittest.TestCase):
                 "in_pad": [],
                 "exempt": [],
                 "required": [],
+                "own": [],
             },
         )
 

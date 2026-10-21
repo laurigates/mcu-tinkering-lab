@@ -100,10 +100,15 @@ ref = "U9"
 # The buck needs VIN >= VOUT / 0.75 (SLVSD90B 7.2.2.4, the 75 % maximum duty
 # cycle): 6.7 V, 3.3 V per cell. Below that 5V sags with the pack. EN goes
 # through a divider (R25/R26) so the converter stops drawing from a flat
-# pack: EN rises at 1.38-1.47 V typical (Figure 5-4, 1.6 V maximum) and falls
-# at 1.05-1.2 V (Figure 5-3), so 100 kΩ over 30 kΩ turns it on at about 6.2 V
-# (6.9 V at the 1.6 V limit) and off at about 4.9 V. It is a coarse cutoff
-# with no specified falling threshold; a pack BMS is the real protection.
+# pack. EN has its own resistance to GND (REN 600-2400 kΩ, 1500 typical,
+# Table 5.5) in parallel with R26, and rises at 1.38-1.47 V typical (Figure
+# 5-4, VENH 1.6 V maximum) and falls at 1.05-1.2 V (Figure 5-3). 100 kΩ over
+# 36 kΩ turns it on at about 5.5 V typical and is guaranteed on by 6.3 V
+# (1.6 V across 36 kΩ || 600 kΩ), under the 6.7 V where the buck regulates;
+# 30 kΩ guaranteed it only by 7.2 V, so a part-charged pack might not start
+# the robot (pre-fab layout review, m6). It falls at about 4.0-4.6 V: a
+# coarse cutoff with no specified falling threshold. The pack's external 2S
+# BMS is the undervoltage protection.
 # 100 nF bootstrap, as TI requires.
 [parts.buck]
 name = "TPS563208 buck converter"
@@ -130,12 +135,12 @@ value = "100k"
 lcsc = "C149504"
 
 [parts.buck_en_bot]
-name = "30 kΩ EN divider, bottom"
+name = "36 kΩ EN divider, bottom"
 kind = "resistor"
 part = "r0805"
 ref = "R26"
-value = "30k"
-lcsc = "C17621"
+value = "36k"
+lcsc = "C4360"
 
 # A resettable fuse between the XT30 and everything else: a short on VBAT
 # (the 0.8 mm track to the test header, the buck input) otherwise has the
@@ -264,6 +269,16 @@ name = "10 µF ceramic, TB6612FNG VM"
 kind = "capacitor"
 part = "c0805"
 ref = "C16"
+value = "10uF 25V"
+lcsc = "C15850"
+
+# VM1 (pin 24) is at the other end of the package from VM2/VM3 (pins 13/14),
+# 11.6 mm of track from C16: its own 10 µF beside it (pre-fab layout review, m3).
+[parts.motor_vm1_c]
+name = "10 µF ceramic, TB6612FNG VM1"
+kind = "capacitor"
+part = "c0805"
+ref = "C21"
 value = "10uF 25V"
 lcsc = "C15850"
 
@@ -1068,6 +1083,7 @@ to = [
     "mcu.5V",
     "motor_driver.VM",
     "motor_vm_c.A",
+    "motor_vm1_c.A",
     "amp_fb.1",
     "servo_pan.V+",
     "servo_tilt.V+",
@@ -1190,6 +1206,7 @@ to = [
     "motor_driver.PGND2",
     "motor_vcc_c.B",
     "motor_vm_c.B",
+    "motor_vm1_c.B",
     "pwm.GND",
     "pwm.A0",
     "pwm.A1",
