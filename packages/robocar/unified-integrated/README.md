@@ -330,7 +330,7 @@ pin on its nets accepts:
 | Class | Nets | Track | Limited by |
 |---|---|---|---|
 | input_power | PACK_IN, VBAT, BUCK_SW | 0.8 mm | TPS563208 pads, 0.6 mm at 0.95 mm pitch |
-| five_volt | +5V | 0.8 mm, 1.0/0.5 mm vias | none: Freerouting necks the last millimetre into the TB6612FNG's 0.4 mm pins |
+| five_volt | +5V | 0.8 mm, 1.0/0.5 mm vias | none: the 0.8 mm track lands on the TB6612FNG's 0.4 mm pins, 0.202 mm from their neighbours |
 | motor_power | MOT_* | 0.45 mm | TB6612FNG pads |
 | head_power | HEAD*_+5V, HEAD*_GND | 0.5 mm | |
 | logic_power | +3V3 | 0.35 mm | |
@@ -406,10 +406,10 @@ just robocar-unified-integrated::carrier-schematic
 
 ## Before ordering
 
-Three adversarial pre-fabrication reviews (`pcb-reviewer`, against the
+Five adversarial pre-fabrication reviews (`pcb-reviewer`, against the
 datasheets and the routed board) have run. The first found the ground vias
-missing and the issues fixed above; the second, of the placement and tracks,
-and the third, of that fix, found the power paths below. Each is fixed in
+missing and the issues fixed above; the later four, of the placement and
+tracks and of each round of fixes, found the power paths below. Each is fixed in
 `board.toml`, `hardware.toml` or `tools/kicad` and measured on the routed board
 with layer-aware scripts (copper path length, vias, narrowest track):
 
@@ -440,9 +440,10 @@ Freerouting `(via_at_smd off)`, a fanout via now clears its own net's SMD pads
 (U7:4's had landed in U7:3), and a route fails on any via left inside an SMD
 pad but `[fanout] in_pad`.
 
-Not changed: Freerouting still necks +5V to 0.6 mm in places and to 0.40 mm
-at U7's VM pins. VBAT necks to 0.6 mm over
-about 8 mm beside its input via (B.Cu at y 69.4, under L1, and 1 mm on F.Cu):
+Not changed: Freerouting still necks +5V to 0.6 mm in places; at U7's VM pins
+(13, 14, 24) the 0.8 mm track lands on the pins and ends 0.202 mm from the
+signal pins 15 and 23. VBAT necks to 0.6 mm over about 14 mm beside its input
+via (13.4 mm on B.Cu at y 69.4, under L1, and 0.7 mm on F.Cu), about 11 mΩ:
 by IPC-2221 about 26 °C warmer at 2.5 A, an estimate, not a measurement. R13's
 ground goes to its own via on the B.Cu plane, not straight to U10's GND pin.
 The amplifier's exposed-pad via stays open, not filled and capped (a paid
@@ -453,8 +454,12 @@ the tab at x 32's nearest hole: cut that tab, do not snap it.
 
 Still open:
 
-- Run the `pcb-reviewer` agent on this board (a fourth pass, of the third
-  review's fixes).
+- The fifth review found no blocker. Open from it: widening +5V to 0.8 mm
+  split the GND pour in the top half, so the servos' ground (J20:3, J21:3)
+  returns through one 0.25 mm track, about 15 mΩ to C20 against 3.8 mΩ
+  before, and a 641 mm² top-left pour area reaches the main plane only
+  through routed tracks; U6:14 (the PCA9685's VSS) lost its pour contact and
+  via.
 - Measure the drive motors' stall current at 5 V against the buck's 3.3 A
   minimum current limit (see the current budget above).
 - Bench-test a 0.2-2 A load step on 5 V with the tantalums fitted.
