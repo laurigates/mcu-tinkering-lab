@@ -47,12 +47,17 @@ Modules, one responsibility each:
 - `perfboard`   CLI (a subpackage): a carrier laid out on a pad-per-hole
                 perfboard, drawing and wire list, from the netlist and
                 `hardware/perfboard/perfboard.toml`
+- `measure`     CLI: layer-aware copper measurements over `pcb/dump.py`'s
+                JSON (path, cuts, vias in pads, hole clearance, plane
+                connectivity, resistance); `resistance` alone needs numpy and
+                scipy, imported only when it runs
 - `testfixture` for the unit tests: the frozen balancebot inputs behind
                 #749's netlist export (`testdata/balancebot-749/`)
 
 `pcb/` is not part of the package: `build_board.py` (place, assign nets,
-silkscreen), `route_board.py` (Freerouting, then the pour) and `dsn.py` (the
-DSN net-class rewrite) run as scripts under KiCad's bundled Python 3.9, read
+silkscreen), `route_board.py` (Freerouting, then the pour), `dsn.py` (the
+DSN net-class rewrite), `review.py` and `dump.py` (the copper as JSON for
+`measure`) run as scripts under KiCad's bundled Python 3.9, read
 `boardinput`'s JSON, and import nothing from here (test_pcb_py39 pins that).
 
 Import nothing here: `python3 -m kicad.<module>` must not pay for, or fail on,

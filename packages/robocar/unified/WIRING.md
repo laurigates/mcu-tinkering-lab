@@ -225,7 +225,7 @@ Nothing on the robot stops the discharge either. The LM2596 has an ON/OFF pin
 (TI SNVS124G, § 6), but the common module ties it to ground on its own board,
 so the regulator keeps drawing as the cells fall past their safe minimum. **Use
 a pack with a BMS**: its cell undervoltage cutoff is the only thing that ends
-the discharge. The carrier adds a 3 A hold PTC fuse (F1) at the pack input for
+the discharge. The carrier adds a 4 A hold PTC fuse (F1) at the pack input for
 a short, not for a flat pack.
 
 ### The 5 V current budget

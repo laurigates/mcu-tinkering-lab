@@ -1,0 +1,18 @@
+# BZT52C15 15 V zener, SOD-123: a P-MOSFET's gate-source clamp (cathode to
+# the source, anode to the gate).
+[part]
+name = "BZT52C15 15 V zener diode, SOD-123"
+source = "KiCad 10.0.6 library (Device:D_Zener: K 1, A 2; Diode_SMD:D_SOD-123 draws the cathode bar at pad 1); agrees with JSCJ BZT52C2V4-BZT52C43 datasheet Rev. 2.1 page 1, 'The marking bar indicates the cathode'"
+symbol = "Device:D_Zener"
+footprint = "Diode_SMD:D_SOD-123"
+value = "BZT52C15"
+lcsc = "C2104"
+
+[pins]
+K = 1
+A = 2
+
+# 1N4744A is the 15 V, 1 W DO-41 zener; the band is the cathode.
+[perfboard]
+footprint = "Diode_THT:D_DO-41_SOD81_P2.54mm_Vertical_AnodeUp"
+value = "1N4744A"

@@ -1,6 +1,6 @@
 {
- "board_sha256": "b6268993194b5dedc7ce0fec8f212fdbcd9b07556a11bd3c230fc22fad8ec7ed",
- "kicad_cli_version": "10.0.6",
+ "board_sha256": "5019308fd8ff7d87008aeeccbcc263064cdccb5cd5004506bd644f1f1f38f986",
+ "kicad_cli_version": "10.0.7",
  "netlist": {
   "components": {
    "BZ1": {
@@ -20,16 +20,16 @@
    "C10": {
     "footprint": "Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder",
     "in_bom": true,
-    "lcsc": "C15850",
+    "lcsc": "C49678",
     "lib_id": "Device:C",
-    "value": "10uF 25V"
+    "value": "100nF"
    },
    "C11": {
     "footprint": "Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder",
     "in_bom": true,
-    "lcsc": "C49678",
+    "lcsc": "C15850",
     "lib_id": "Device:C",
-    "value": "100nF"
+    "value": "10uF 25V"
    },
    "C12": {
     "footprint": "Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder",
@@ -101,6 +101,13 @@
     "lib_id": "Device:C",
     "value": "22uF 25V"
    },
+   "C21": {
+    "footprint": "Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder",
+    "in_bom": true,
+    "lcsc": "C15850",
+    "lib_id": "Device:C",
+    "value": "10uF 25V"
+   },
    "C3": {
     "footprint": "Capacitor_Tantalum_SMD:CP_EIA-3528-21_Kemet-B_HandSolder",
     "in_bom": true,
@@ -149,6 +156,13 @@
     "lcsc": "C15850",
     "lib_id": "Device:C",
     "value": "10uF 25V"
+   },
+   "D1": {
+    "footprint": "Diode_SMD:D_SOD-123",
+    "in_bom": true,
+    "lcsc": "C8598",
+    "lib_id": "Device:D_Schottky",
+    "value": "B5819W"
    },
    "F1": {
     "footprint": "Fuse:Fuse_1812_4532Metric_Pad1.30x3.40mm_HandSolder",
@@ -433,9 +447,9 @@
    "R12": {
     "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
     "in_bom": true,
-    "lcsc": "C17747",
+    "lcsc": "C17756",
     "lib_id": "Device:R",
-    "value": "54.9k"
+    "value": "56k"
    },
    "R13": {
     "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
@@ -538,9 +552,9 @@
    "R26": {
     "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
     "in_bom": true,
-    "lcsc": "C17621",
+    "lcsc": "C4360",
     "lib_id": "Device:R",
-    "value": "30k"
+    "value": "36k"
    },
    "R3": {
     "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
@@ -819,16 +833,16 @@
      "1"
     ],
     [
+     "C21",
+     "1"
+    ],
+    [
+     "D1",
+     "2"
+    ],
+    [
      "FB1",
      "1"
-    ],
-    [
-     "J1",
-     "1"
-    ],
-    [
-     "J1",
-     "14"
     ],
     [
      "J11",
@@ -1391,6 +1405,10 @@
      "2"
     ],
     [
+     "C21",
+     "2"
+    ],
+    [
      "J1",
      "13"
     ],
@@ -1579,20 +1597,6 @@
      "1"
     ]
    ],
-   "HEAD2_+5V": [
-    [
-     "J16",
-     "1"
-    ],
-    [
-     "J16",
-     "14"
-    ],
-    [
-     "U3",
-     "14"
-    ]
-   ],
    "HEAD2_GND": [
     [
      "J16",
@@ -1697,17 +1701,17 @@
      "7"
     ]
    ],
-   "HEAD3_+5V": [
+   "HEAD2_XIAO_5V": [
     [
-     "J17",
+     "J16",
      "1"
     ],
     [
-     "J17",
+     "J16",
      "14"
     ],
     [
-     "U4",
+     "U3",
      "14"
     ]
    ],
@@ -1815,17 +1819,17 @@
      "7"
     ]
    ],
-   "HEAD_+5V": [
+   "HEAD3_XIAO_5V": [
     [
-     "J2",
+     "J17",
      "1"
     ],
     [
-     "J2",
+     "J17",
      "14"
     ],
     [
-     "U1",
+     "U4",
      "14"
     ]
    ],
@@ -1931,6 +1935,20 @@
     [
      "U1",
      "7"
+    ]
+   ],
+   "HEAD_XIAO_5V": [
+    [
+     "J2",
+     "1"
+    ],
+    [
+     "J2",
+     "14"
+    ],
+    [
+     "U1",
+     "14"
     ]
    ],
    "I2C_SCL": [
@@ -2356,6 +2374,20 @@
      "U10",
      "3"
     ]
+   ],
+   "XIAO_5V": [
+    [
+     "D1",
+     "1"
+    ],
+    [
+     "J1",
+     "1"
+    ],
+    [
+     "J1",
+     "14"
+    ]
    ]
   },
   "unconnected": {
@@ -2469,5 +2501,5 @@
    ]
   }
  },
- "schematic_sha256": "8a594af0ee9e8c4018b7958781b937e9ba270710623aaeeaa6c201b4741635b8"
+ "schematic_sha256": "f9a39826109fead372528b7d6e4b836e5d7e515338f5783b78434499824b3b8c"
 }

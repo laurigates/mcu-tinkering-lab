@@ -1,0 +1,21 @@
+# LM2596 buck module, off-board, on a JST VH 4-pin lead (3.96 mm pitch).
+# The same pin order as lm2596-buck-module (the JST-XH 4 lead); the larger
+# contact carries the 5 V output at motor-stall current. JST's VH sheet rates
+# the contact 10 A AC/DC on AWG #16, for AWG #22 to #16 (SVH-21T-P1.1 crimp:
+# AWG 22-18; SVH-41T-P1.1: AWG 20-16). The header is B4P-VH, LCSC C160317
+# (through-hole, hand-soldered, so no LCSC number here).
+[part]
+name = "LM2596 buck module on JST VH 4"
+source = "pin order is this repo's cable convention (#749 carrier), as lm2596-buck-module; footprint pad n is circuit n of the B4P-VH header (KiCad 10.0.6 library)"
+symbol = "Connector_Generic:Conn_01x04"
+footprint = "Connector_JST:JST_VH_B4P-VH_1x04_P3.96mm_Vertical"
+
+[pins]
+"IN+" = 1
+"IN-" = 2
+"OUT+" = 3
+"OUT-" = 4
+
+[perfboard]
+footprint = "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical"
+height = "tall"

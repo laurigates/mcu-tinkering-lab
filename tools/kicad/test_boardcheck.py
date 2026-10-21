@@ -325,6 +325,27 @@ class ConfigTests(unittest.TestCase):
             "[keepouts] names repeat",
         )
 
+    def test_route_keepouts(self):
+        area = {"name": "under FB", "layer": "B.Cu", "rect": [10.0, 10.0, 14.0, 13.0]}
+        ok = self.with_data(lambda d: d.update(route_keepouts=[area]))
+        self.assertEqual(boardcheck.validate_config(ok, self.nl), [])
+        self.fails(
+            lambda d: d.update(route_keepouts=[{**area, "layer": "In1.Cu"}]),
+            "[route_keepouts] 'under FB': layer must be F.Cu or B.Cu",
+        )
+        self.fails(
+            lambda d: d.update(route_keepouts=[{**area, "rect": [14, 10, 10, 13]}]),
+            "[route_keepouts] 'under FB': rect must be [x0, y0, x1, y1]",
+        )
+        self.fails(
+            lambda d: d.update(route_keepouts=[{**area, "rect": [10, 10, 14, 63]}]),
+            "is not inside [outline]",
+        )
+        self.fails(
+            lambda d: d.update(route_keepouts=[area, area]),
+            "[route_keepouts] names repeat",
+        )
+
     def test_cutouts(self):
         hole = {"name": "relief", "center": [41.5, 30.0], "diameter": 2.0}
         ok = self.with_data(lambda d: d.update(cutouts=[hole]))
@@ -496,6 +517,35 @@ class ConfigTests(unittest.TestCase):
             "[pour] regions: priority must be an integer >= 0, got -1",
         )
 
+    def test_pour_stitch(self):
+        st = {
+            "pitch_mm": 6.0,
+            "via_um": [600, 300],
+            "exclude": [[34.5, 31.5, 55.5, 48.5]],
+        }
+        ok = self.with_data(lambda d: d["pour"].update(stitch=st))
+        self.assertEqual(boardcheck.validate_config(ok, self.nl), [])
+        self.fails(
+            lambda d: d["pour"].update(stitch={**st, "pitch_mm": 0}),
+            "[pour] stitch: pitch_mm must be a number > 0, got 0",
+        )
+        self.fails(
+            lambda d: d["pour"].update(stitch={**st, "via_um": [300, 600]}),
+            "[pour] stitch: via_um must be [diameter, drill] with diameter > drill > 0",
+        )
+        self.fails(
+            lambda d: d["pour"].update(stitch={**st, "exclude": [[0, 0, 91, 10]]}),
+            "[pour] stitch: exclude [0, 0, 91, 10] is not inside [outline]",
+        )
+        self.fails(
+            lambda d: d["pour"].update(stitch={**st, "grid": 5}),
+            "[pour] stitch: unknown key(s) ['grid']",
+        )
+        self.fails(
+            lambda d: d["pour"].update(stitch=6.0),
+            "[pour] stitch must be a table",
+        )
+
     def test_fanout(self):
         """[fanout]: a via beside every SMD pad of a poured net, after routing."""
         ref, pin = self.nl.nets["GND"][0]
@@ -541,6 +591,10 @@ class ConfigTests(unittest.TestCase):
         self.fails(
             lambda d: d.update(fanout={**fan, "required": ["Q99:2"]}),
             "[fanout] required 'Q99:2' is not a pad of a [fanout] net",
+        )
+        self.fails(
+            lambda d: d.update(fanout={**fan, "own": ["Q99:3"]}),
+            "[fanout] own 'Q99:3' is not a pad of a [fanout] net",
         )
         self.fails(
             lambda d: d.update(fanout={**fan, "stitch": True}),

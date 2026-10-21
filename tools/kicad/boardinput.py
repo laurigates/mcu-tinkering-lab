@@ -152,6 +152,7 @@ def assemble(
         "tracks": [dict(tr) for tr in data.get("tracks", [])],
         "fanout": boardcheck.fanout_spec(data),
         "keepouts": [dict(k) for k in data.get("keepouts", [])],
+        "route_keepouts": [dict(k) for k in data.get("route_keepouts", [])],
         "cutouts": [dict(c) for c in data.get("cutouts", [])],
         "panel": panel_spec,
     }

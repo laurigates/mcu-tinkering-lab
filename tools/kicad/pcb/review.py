@@ -2,7 +2,7 @@
 
 Run with KiCad's bundled Python (3.9) after route_board.py:
 
-    $KICAD_PYTHON tools/kicad/pcb/review.py <board-input.json>
+    $KICAD_PYTHON tools/kicad/pcb/review.py <board-input.json> [--dump <out.json>]
 
 ``just <project>::carrier-review`` writes the JSON (``python3 -m
 kicad.boardinput``) and runs it. It reads the committed ``.kicad_pcb`` and
@@ -19,7 +19,16 @@ prints, without failing on any of it:
 - for each [silk] cut line, the nearest copper (pad, track, via, zone fill) and
   courtyard, flagged inside ``CUT_MM``;
 - the smallest silkscreen text height and stroke, flagged under JLCPCB's
-  1.0 mm / 0.15 mm.
+  1.0 mm / 0.15 mm, and the thinnest silkscreen line or shape (footprint
+  drawings and the board's), flagged under 0.15 mm.
+
+``--dump`` also writes the board's copper as JSON (``dump.py``, from the board
+already loaded), and the recipe then prints the plane-connectivity section
+from it with ``python3 -m kicad.measure <out.json> plane --review``: per
+poured net, the pieces of pour that vias and through-hole pads alone do not
+join, flagged when more than one is 5 mm2 or larger. That geometry lives in
+``kicad.measure`` (stdlib, Python 3.11), not here: KiCad's Python has no
+polygon library, and one implementation serves both reports.
 
 The integrated robocar carrier passed every gate with one GND via on its main
 board (the carrier-pcb skill, trap 29): the gates check what is connected, not
@@ -30,6 +39,7 @@ import json
 import math
 import sys
 
+import dump
 import pcbnew
 
 REACH_MM = 2.5
@@ -90,8 +100,10 @@ def farads(value):
         return None
 
 
-def review(spec):
+def review(spec, dump_to=None):
     board = pcbnew.LoadBoard(spec["pcb"])
+    if dump_to:
+        print(dump.write(board, spec, spec["pcb"], dump_to))
     ox, oy = spec["origin"]
     pads = [p for fp in board.GetFootprints() for p in fp.Pads()]
     tracks = [t for t in board.GetTracks() if t.GetClass() == "PCB_TRACK"]
@@ -238,14 +250,47 @@ def review(spec):
         if small:
             print(f"   under {SILK_H_MM} mm: {', '.join(small)}")
         flags += w[1] < SILK_W_MM - 1e-6
+    # Lines and shapes: the footprints' own drawing (polarity marks included)
+    # and the board's, against the same stroke minimum.
+    print(f"== silkscreen lines (JLCPCB: {SILK_W_MM} mm stroke)")
+    shapes = [
+        (mm(g.GetWidth()), fp.GetReference())
+        for fp in board.GetFootprints()
+        for g in fp.GraphicalItems()
+        if g.GetClass() == "PCB_SHAPE"
+        and g.GetLayer() in (pcbnew.F_SilkS, pcbnew.B_SilkS)
+        and g.GetWidth() > 0
+    ]
+    shapes += [
+        (mm(d.GetWidth()), "board")
+        for d in board.GetDrawings()
+        if d.GetClass() == "PCB_SHAPE"
+        and d.GetLayer() in (pcbnew.F_SilkS, pcbnew.B_SilkS)
+        and d.GetWidth() > 0
+    ]
+    if shapes:
+        w = min(shapes)
+        thin = sorted({n for ww, n in shapes if ww < SILK_W_MM - 1e-6})
+        print(f"   thinnest stroke {w[0]:.3f} mm ({w[1]})")
+        if thin:
+            print(f"   under {SILK_W_MM} mm: {', '.join(thin)}")
+        flags += bool(thin)
     print(f"== {flags} flag(s); this report does not gate (carrier-check does)")
 
 
 def main(argv):
-    if len(argv) != 2:
+    args = list(argv[1:])
+    dump_to = None
+    if "--dump" in args:
+        i = args.index("--dump")
+        if i + 1 >= len(args):
+            sys.exit(__doc__)
+        dump_to = args[i + 1]
+        del args[i : i + 2]
+    if len(args) != 1:
         sys.exit(__doc__)
-    with open(argv[1]) as f:
-        review(json.load(f))
+    with open(args[0]) as f:
+        review(json.load(f), dump_to)
 
 
 if __name__ == "__main__":
