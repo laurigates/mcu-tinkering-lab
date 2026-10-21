@@ -17,6 +17,12 @@
       "description": "Keep gitleaks in lockstep across scripts/install_pkgs.sh (github-releases) and .pre-commit-config.yaml (pre-commit manager).",
       "matchDepNames": ["gitleaks/gitleaks"],
       "groupName": "gitleaks"
+    },
+    {
+      "description": "Hold Pillow below 12 in the robocar simulation: genesis-world -> moviepy requires pillow<12, so a 12.x pin makes the dependency set unsatisfiable (#732). Drop once moviepy allows Pillow 12.",
+      "matchFileNames": ["packages/robocar/simulation/**"],
+      "matchPackageNames": ["/^pillow$/i"],
+      "allowedVersions": "<12"
     }
   ],
   "pre-commit": {
