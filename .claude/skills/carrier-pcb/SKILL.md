@@ -190,13 +190,15 @@ several traps below are version-specific: after a KiCad upgrade, re-run
 
 ### Found laying out the integrated robocar carrier
 
-24. **Freerouting gives each net one track width**, so a net class can be no
-    wider than the narrowest pin pitch on any of its nets allows: 0.25 mm at a
-    0.5 mm-pitch TQFN, 0.45 mm at 0.65 mm-pitch SSOP. A power net that reaches a
-    fine-pitch pin caps the whole rail; give that chip its own net (the
-    integrated carrier's AMP_5V behind a ferrite bead) rather than thinning
-    the rail. Freerouting also necks tracks below the class width at fine-pitch
-    pads, so such a board needs a smaller `min_track_width` than 0.2 mm.
+24. **Freerouting gives each net one track width, and necks it into a
+    fine-pitch pin.** A power net reaching an SSOP's 0.4 mm pins does not cap
+    the rail: the integrated carrier's +5V routes at 0.8 mm and necks to
+    0.40 mm in the last millimetre at the TB6612FNG's VM pins. At 0.45 mm,
+    the width once assumed to be the cap, its servo and head feed necked to
+    0.337 mm instead. A 0.5 mm-pitch TQFN's 0.25 mm pads are another matter:
+    the integrated carrier gives the MAX98357A its own AMP_5V net behind a
+    ferrite bead. Necking goes below 0.2 mm, so such a board needs a smaller
+    `min_track_width`.
 25. **`kicad-cli` cannot write an ERC exclusion.** KiCad matches an exclusion
     only against its own serialisation of the marker, and a hand-built key
     (`pin_to_pin|x|y|uuid|uuid|...`) loads as a separate excluded marker while

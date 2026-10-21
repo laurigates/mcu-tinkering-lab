@@ -390,9 +390,12 @@ def grow_vias(board, spec):
 
 
 def vias_in_pads(board, spec):
-    """Routed vias whose hole is inside an SMD pad, where it drains the pad's
-    paste at reflow. Only an `[fanout] in_pad` pad (an exposed pad) may hold
-    one; the DSN also tells Freerouting `(via_at_smd off)`."""
+    """Vias whose copper overlaps an SMD pad: inside it the hole drains the
+    pad's paste at reflow, and a ring over its edge leaves the pad no mask web
+    and takes paste too. DRC does not see either on the pad's own net. Only an
+    `[fanout] in_pad` pad (an exposed pad) may hold one; the DSN also tells
+    Freerouting `(via_at_smd off)`. A grown via can reach a pad its hole does
+    not (fourth pre-fab layout review, F4), so the ring is what is tested."""
     in_pad = set((spec.get("fanout") or {}).get("in_pad", []))
     smd = [
         p
@@ -404,17 +407,17 @@ def vias_in_pads(board, spec):
     for v in board.GetTracks():
         if v.GetClass() != "PCB_VIA":
             continue
-        hole = pcbnew.SHAPE_CIRCLE(v.GetPosition(), v.GetDrillValue() // 2)
+        ring = pcbnew.SHAPE_CIRCLE(v.GetPosition(), v.GetWidth(pcbnew.F_Cu) // 2)
         for p in smd:
             name = f"{p.GetParentFootprint().GetReference()}:{p.GetNumber()}"
             if name in in_pad:
                 continue
             if any(
-                p.IsOnLayer(layer) and p.GetEffectiveShape(layer).Collide(hole, 0)
+                p.IsOnLayer(layer) and p.GetEffectiveShape(layer).Collide(ring, 0)
                 for layer in (pcbnew.F_Cu, pcbnew.B_Cu)
             ):
                 problems.append(
-                    f"{v.GetNetname()} via at {_via_where(v, spec)} is inside SMD pad {name}"
+                    f"{v.GetNetname()} via at {_via_where(v, spec)} overlaps SMD pad {name}"
                 )
                 break
     return problems
@@ -544,6 +547,13 @@ def route(spec):
     if failed:
         print(
             f"fanout: no room for a via beside {', '.join(failed)}; routed track only"
+        )
+    # fanout's vias take [fanout] via_um; a net whose class asks for more
+    # gets them grown too, and DRC checks the fit
+    grown = grow_vias(board, spec)
+    if grown:
+        print(
+            f"grew {len(grown)} fanout via(s) to their class's size: {', '.join(grown)}"
         )
     # after fanout, so it covers Freerouting's vias and fanout's alike
     bad = vias_in_pads(board, spec)
