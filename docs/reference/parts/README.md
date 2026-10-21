@@ -77,8 +77,8 @@ in the unit tests and in CI:
 - a `[pins]` name that is also a symbol pin's name maps to that pin;
 - the symbol has one unit and no De Morgan body, and no hidden `power_in` pins;
 - every `no_connect` name is a pin, and a `no_connect`-type symbol pin is listed;
-- **polarity**: every `"+"`/`"-"`, and `"K"`/`"A"` on a part with a `"K"`, is
-  proved. The proof is the symbol's own pin name (`D_Schottky` names K and A),
+- **polarity**: every `"+"`/`"-"`, `"K"`/`"A"` on a part with a `"K"`, and
+  `"G"`/`"D"`/`"S"` on a part with all three (a MOSFET), is proved. The proof is the symbol's own pin name (`D_Schottky` names K and A),
   the footprint's silkscreen (the XT30 prints "−" beside pad 1), or a pinned
   convention in `registry.CONVENTIONS` (`C_Polarized` pin 1 is "+"). An
   unproved pin fails. A reversed electrolytic or diode would otherwise agree

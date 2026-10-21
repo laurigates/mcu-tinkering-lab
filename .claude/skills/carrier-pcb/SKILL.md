@@ -25,7 +25,9 @@ several traps below are version-specific: after a KiCad upgrade, re-run
 - `tools/kicad.just`: the per-project recipes; `tools/kicad/justfile`: `just kicad::*`
 - `docs/reference/parts/`: the parts registry
 - `packages/robotics/balancebot/hardware/carrier/`: the first carrier;
-  `board.toml` holds placement, silkscreen, net classes and the pour
+  `board.toml` holds placement, silkscreen, net classes and the pour, VBAT as
+  fixed `[[tracks]]` with no via, `[fanout]` and `[pour] stitch` vias, and a
+  `.kicad_dru` rule that keeps the pour off the mounting holes
 - `packages/robocar/unified/hardware/carrier/`: a main board and three head
   boards on one PCB, split by `[[keepouts]]` bands under `[silk] cut_lines` saw
   lines, with a `[pour]` region per ground net (`GND`, `HEAD_GND`,
@@ -309,6 +311,24 @@ several traps below are version-specific: after a KiCad upgrade, re-run
     F.Cu track it only crosses reported "no via" for a path through a via, and
     that claim reached the README. Measure per layer, with vias and
     through-hole pads as the only joins between layers.
+
+### Found in the balancebot carrier's pre-order review
+
+41. **KiCad's stock footprints draw their silkscreen at 0.12 mm** (some 0.10
+    or 0.127 mm), under JLCPCB's 0.15 mm minimum, polarity marks included (an
+    electrolytic's "+", a SOD-123's cathode bar). `carrier-review` measured
+    only text strokes, so it reported 0.15 mm over 0.10 mm lines. build_board.py
+    now widens every footprint silkscreen stroke under 0.15 mm to it
+    (`pcb/silk.py`), which changes each carrier's silkscreen the next time it
+    is rebuilt, and `carrier-review` reports the thinnest line.
+42. **A fanout via placed small and grown afterwards can land on its own
+    pad.** route_board.py grows a `[fanout]` via to its net class's size after
+    placing it; placed at 0.6 mm, C3's grew to 1.0 mm over C3's own GND pad and
+    the route failed the via-in-pad check. Give `[fanout] via_um` the class's
+    via size. For pour islands that no SMD pad reaches (the space between a
+    socketed module's pin rows), `[pour] stitch = { pitch_mm, via_um,
+    exclude }` adds a via at each grid point where every pour layer's fill
+    holds it (`pcb/stitch.py`).
 
 ## Verify the gate can fail
 

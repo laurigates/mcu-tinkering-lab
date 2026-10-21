@@ -198,6 +198,11 @@ class CommittedRegistryTests(unittest.TestCase):
         self.assertEqual(registry.polarised(registry.load("r0805")), [])
         self.assertEqual(registry.polarised(registry.load("b5819w")), ["K", "A"])
         self.assertEqual(registry.polarised(registry.load("battery-xt30")), ["+", "-"])
+        self.assertEqual(
+            registry.polarised(registry.load("zxmp4a16g")), ["G", "D", "S"]
+        )
+        # an RGB LED's "G" is green, not a gate
+        self.assertEqual(registry.polarised(registry.load("rgb-led-header-1x04")), [])
 
     def test_c_polarized_convention_matches_the_symbol_graphic(self):
         """CONVENTIONS' "+" pin is the pin nearest the "+" drawn in the symbol."""
@@ -481,6 +486,31 @@ class MutationTests(unittest.TestCase):
             body,
             r"Device:C_Polarized's '\+' is pin 1 \(registry.CONVENTIONS\)",
         )
+
+    def test_swapped_mosfet_fails_on_the_pin_name_rule(self):
+        """Drain and source swapped: the body diode conducts and every net check agrees."""
+        body = text("zxmp4a16g").replace("D = 2\nS = 3", "D = 3\nS = 2")
+        self.assertNotEqual(body, text("zxmp4a16g"))
+        self.fails(
+            "zxmp4a16g",
+            body,
+            r"'D' maps to \['3'\], but Transistor_FET:ZXMP4A16G names pin\(s\) \['2'\] 'D'",
+        )
+
+    def test_transistor_with_no_proof_fails(self):
+        body = """\
+[part]
+name = "Transistor on a header"
+source = "test"
+symbol = "Connector_Generic:Conn_01x03"
+footprint = "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical"
+
+[pins]
+G = 1
+D = 2
+S = 3
+"""
+        self.fails("transistor-header", body, r"'G': polarity unproven")
 
     def test_polarised_entry_with_no_proof_fails(self):
         body = """\

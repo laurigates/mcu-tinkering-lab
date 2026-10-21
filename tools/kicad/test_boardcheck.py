@@ -517,6 +517,35 @@ class ConfigTests(unittest.TestCase):
             "[pour] regions: priority must be an integer >= 0, got -1",
         )
 
+    def test_pour_stitch(self):
+        st = {
+            "pitch_mm": 6.0,
+            "via_um": [600, 300],
+            "exclude": [[34.5, 31.5, 55.5, 48.5]],
+        }
+        ok = self.with_data(lambda d: d["pour"].update(stitch=st))
+        self.assertEqual(boardcheck.validate_config(ok, self.nl), [])
+        self.fails(
+            lambda d: d["pour"].update(stitch={**st, "pitch_mm": 0}),
+            "[pour] stitch: pitch_mm must be a number > 0, got 0",
+        )
+        self.fails(
+            lambda d: d["pour"].update(stitch={**st, "via_um": [300, 600]}),
+            "[pour] stitch: via_um must be [diameter, drill] with diameter > drill > 0",
+        )
+        self.fails(
+            lambda d: d["pour"].update(stitch={**st, "exclude": [[0, 0, 91, 10]]}),
+            "[pour] stitch: exclude [0, 0, 91, 10] is not inside [outline]",
+        )
+        self.fails(
+            lambda d: d["pour"].update(stitch={**st, "grid": 5}),
+            "[pour] stitch: unknown key(s) ['grid']",
+        )
+        self.fails(
+            lambda d: d["pour"].update(stitch=6.0),
+            "[pour] stitch must be a table",
+        )
+
     def test_fanout(self):
         """[fanout]: a via beside every SMD pad of a poured net, after routing."""
         ref, pin = self.nl.nets["GND"][0]

@@ -1,0 +1,19 @@
+# ZXMP4A16G, 40 V P-channel MOSFET, SOT-223: a reverse-polarity switch in a
+# pack's positive lead (drain to the pack, source to the load, gate to GND).
+[part]
+name = "ZXMP4A16G P-channel MOSFET, SOT-223"
+source = "KiCad 10.0.6 library (Transistor_FET:ZXMP4A16G: G 1, D 2, S 3, the tab pad numbered 2); agrees with Diodes DS33584 Rev. 6-2 page 1, 'Pin Out - Top View': G, D, S, tab D"
+symbol = "Transistor_FET:ZXMP4A16G"
+footprint = "Package_TO_SOT_SMD:SOT-223-3_TabPin2"
+value = "ZXMP4A16G"
+lcsc = "C141324"
+
+[pins]
+G = 1
+D = 2
+S = 3
+
+# A TO-220 P-FET has the same G, D, S order on 2.54 mm pins (IRF9540N, IRF4905).
+[perfboard]
+footprint = "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical"
+value = "TO-220 P-FET (G D S)"

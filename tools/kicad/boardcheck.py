@@ -243,10 +243,12 @@ TABLE_KEYS = {
         "min_thickness_mm",
         "thermal_gap_mm",
         "spoke_mm",
+        "stitch",
     },
 }
 TEXT_KEYS = {"text", "at", "size"}
 REGION_KEYS = {"net", "rect", "layers", "priority"}
+STITCH_KEYS = {"pitch_mm", "via_um", "exclude"}
 # How far a pour stops short of a [silk] cut line: the hand saw's kerf and the
 # board's flex while sawing must not reach copper (the integrated carrier's
 # pre-fab review found GND fill at 0.0 mm).
@@ -404,10 +406,45 @@ def _validate_cutouts(where: str, data: dict[str, Any], size: Any) -> list[str]:
     return errors
 
 
+def _validate_stitch(where: str, pour: dict[str, Any], size: Any) -> list[str]:
+    """[pour] stitch = { pitch_mm, via_um = [diameter, drill], exclude = [rects] }."""
+    if "stitch" not in pour:
+        return []
+    st = pour["stitch"]
+    at = f"{where}: [pour] stitch"
+    if not isinstance(st, dict):
+        return [f"{at} must be a table {{pitch_mm, via_um, exclude}}"]
+    errors = []
+    unknown = sorted(set(st) - STITCH_KEYS)
+    if unknown:
+        errors.append(f"{at}: unknown key(s) {unknown}")
+    if not _positive(st.get("pitch_mm")):
+        errors.append(
+            f"{at}: pitch_mm must be a number > 0, got {st.get('pitch_mm')!r}"
+        )
+    via = st.get("via_um")
+    if not (_numbers(via, 2) and via[0] > via[1] > 0):
+        errors.append(
+            f"{at}: via_um must be [diameter, drill] with diameter > drill > 0"
+        )
+    exclude = st.get("exclude", [])
+    if not isinstance(exclude, list):
+        errors.append(f"{at}: exclude must be a list of [x0, y0, x1, y1]")
+        exclude = []
+    for rect in exclude:
+        if not _rect(rect):
+            errors.append(
+                f"{at}: exclude {rect!r} must be [x0, y0, x1, y1], x0 < x1 and y0 < y1"
+            )
+        elif size is not None and not _inside(rect, size):
+            errors.append(f"{at}: exclude {rect} is not inside [outline]")
+    return errors
+
+
 def _validate_pour(
     where: str, pour: dict[str, Any], nl: netlist.Netlist, size: Any
 ) -> list[str]:
-    errors = []
+    errors = _validate_stitch(where, pour, size)
     if "net" in pour and "regions" in pour:
         return [f"{where}: [pour] takes net or regions, not both"]
     if "net" not in pour and "regions" not in pour:
