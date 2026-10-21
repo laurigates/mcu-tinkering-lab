@@ -24,6 +24,7 @@
 
 #include "command_executor.h"
 #include "esp_log.h"
+#include "esp_mac.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/timers.h"

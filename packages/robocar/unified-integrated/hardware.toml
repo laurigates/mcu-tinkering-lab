@@ -281,6 +281,19 @@ lcsc = "C15850"
 
 # VM1 (pin 24) is at the other end of the package from VM2/VM3 (pins 13/14),
 # 11.6 mm of track from C16: its own 10 µF beside it (pre-fab layout review, m3).
+# The XIAO's 5V pad is its USB-C VBUS (docs/reference/boards/xiao-esp32s3.md;
+# Seeed asks for a diode between an external supply and it). Without one, a
+# USB cable on the head's XIAO and the buck feed each other: the PC's port
+# carries motor and servo current, or the buck back-drives the PC. A B5819W
+# from 5V to the ribbon's 5V conductors, as the balancebot carrier's D1: USB
+# then reverse-biases it, and the XIAO sees 5V less about 0.4 V (pre-fab
+# review of the socketed carrier, BL-2).
+[parts.xiao_diode]
+name = "B5819W Schottky, 5V to the XIAO's 5V pad"
+kind = "diode"
+part = "b5819w"
+ref = "D1"
+
 [parts.motor_vm1_c]
 name = "10 µF ceramic, TB6612FNG VM1"
 kind = "capacitor"
@@ -1087,7 +1100,7 @@ to = [
     "buck_cout2.A",
     "buck_cout3.A",
     "buck_fb_top.A",
-    "mcu.5V",
+    "xiao_diode.A",
     "motor_driver.VM",
     "motor_vm_c.A",
     "motor_vm1_c.A",
@@ -1100,6 +1113,12 @@ to = [
     "ldo_in.+",
     "tp_power.5V",
 ]
+
+# The ribbon's 5V, behind D1 (above).
+[[rails]]
+name = "XIAO_5V"
+from = "xiao_diode.K"
+to = ["mcu.5V"]
 
 # SD_MODE strapped to the amplifier's VDD (left channel), as on the socketed
 # carrier.
