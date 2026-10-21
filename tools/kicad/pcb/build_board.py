@@ -14,7 +14,9 @@ all come from the JSON.
 
 Each keepout becomes a KiCad rule area on every copper layer that allows no
 tracks, vias, pads, footprints or zone fill, so DRC, the zone filler and
-Freerouting (through the Specctra export) all see it. Each silkscreen cut line
+Freerouting (through the Specctra export) all see it. Each footprint's
+silkscreen strokes under JLCPCB's 0.15 mm minimum (KiCad's stock footprints
+draw 0.12 mm, polarity marks included) are widened to it (silk.py). Each silkscreen cut line
 is drawn on both silkscreen layers with a "CUT" label beside it. Each cutout
 is a circle on Edge.Cuts inside the outline: a hole milled through the board.
 Each board.toml [[tracks]] entry is laid down as locked segments, which the
@@ -27,8 +29,8 @@ the drill file. A tab's ``clear`` rectangle is cut out of every keepout rule
 area it overlaps: a rule area that forbids pads forbids a non-plated hole too.
 
 It rewrites the board from scratch, so routing (route_board.py) must run after
-it. Python 3.9 and the stdlib plus ``pcbnew`` only; it imports nothing from
-tools/kicad (see tools/kicad/test_pcb_py39.py).
+it. Python 3.9 and the stdlib plus ``pcbnew`` and its sibling ``silk`` only; it
+imports nothing from tools/kicad (see tools/kicad/test_pcb_py39.py).
 """
 
 import json
@@ -39,6 +41,9 @@ import sys
 import tempfile
 
 import pcbnew
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import silk
 
 
 def mm(v):
@@ -59,6 +64,29 @@ def load_footprint(comp):
         sys.exit(f"footprint {comp['footprint']} not found in {comp['fp_dir']}")
     fp.SetFPID(pcbnew.LIB_ID(lib, name))
     return fp
+
+
+def widen_silk(fp):
+    """Each silkscreen line, shape and text of a footprint at the 0.15 mm floor.
+
+    Returns how many items were widened.
+    """
+    layers = (pcbnew.F_SilkS, pcbnew.B_SilkS)
+    n = 0
+    for item in [*fp.GraphicalItems(), fp.Reference(), fp.Value()]:
+        if item.GetLayer() not in layers:
+            continue
+        if item.GetClass() == "PCB_SHAPE":
+            w = item.GetWidth()
+            if silk.widened(w) != w:
+                item.SetWidth(silk.widened(w))
+                n += 1
+        elif hasattr(item, "GetTextThickness"):
+            w = item.GetTextThickness()
+            if silk.widened(w) != w:
+                item.SetTextThickness(silk.widened(w))
+                n += 1
+    return n
 
 
 def rect(board, origin, x1, y1, x2, y2, layer, width):
@@ -228,6 +256,7 @@ def place(board, spec):
     for comp in spec["components"]:
         ref = comp["ref"]
         fp = load_footprint(comp)
+        widen_silk(fp)
         fp.SetReference(ref)
         fp.SetValue(comp["value"])
         fp.SetPath(pcbnew.KIID_PATH(comp["path"]))

@@ -14,7 +14,8 @@ its last point; and each [fanout] in_pad pad, whose in-pad via joins it to the
 pour), import the session, add the [fanout] vias, check every pad of
 each pour net has a routed track, then add a zone per board.toml ``[pour]``
 region on each of its layers
-(the region's own ``layers``, else every ``[pour]`` layer) and fill them. A
+(the region's own ``layers``, else every ``[pour]`` layer) and fill them, then
+add ``[pour] stitch`` vias where the fill takes them and fill again. A
 region's ``rect`` (relative to the outline origin) is its zone outline; a null
 ``rect`` is the whole board. Keepouts are already rule areas
 on the board (build_board.py), so the export and the fill respect them.
@@ -34,6 +35,7 @@ import pcbnew
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import dsn
 import fanout as fanout_geom
+import stitch as stitch_geom
 
 
 def region_box(board, origin, rect):
@@ -444,6 +446,67 @@ def in_pad_pins(board, fan):
     return pins
 
 
+def stitch(board, spec, zones):
+    """A via of each pour net at each [pour] stitch grid point where that net's
+    fill holds the whole via, plus the pour clearance, on every layer the net
+    pours on, and no other via or hole is within that reach. Returns how many.
+
+    The fill already stands the pour's clearance off every other net's copper,
+    so a via inside it keeps that clearance too; DRC checks the result.
+    """
+    st = spec["pour"].get("stitch")
+    if not st:
+        return 0
+    x0, y0 = spec["origin"]
+    width, height = spec["size"]
+    d_um, drill_um = st["via_um"]
+    radius = d_um / 2000.0 + spec["pour"]["clearance_mm"]
+    fills = {}
+    for z in zones:
+        for layer in z.GetLayerSet().Seq():
+            fills.setdefault(z.GetNetname(), {}).setdefault(layer, []).append(
+                z.GetFilledPolysList(layer)
+            )
+    holes = [
+        (v.GetPosition(), v.GetWidth(pcbnew.F_Cu) / 2)
+        for v in board.GetTracks()
+        if v.GetClass() == "PCB_VIA"
+    ]
+    holes += [
+        (p.GetPosition(), max(p.GetSizeX(), p.GetSizeY()) / 2)
+        for fp in board.GetFootprints()
+        for p in fp.Pads()
+        if p.GetDrillSizeX() > 0
+    ]
+    added = 0
+    for x, y in stitch_geom.grid(width, height, st["pitch_mm"], st.get("exclude", [])):
+        at = pcbnew.VECTOR2I(pcbnew.FromMM(x0 + x), pcbnew.FromMM(y0 + y))
+        reach = pcbnew.FromMM(radius)
+        if any(
+            (at.x - c.x) ** 2 + (at.y - c.y) ** 2 < (reach + r) ** 2 for c, r in holes
+        ):
+            continue
+        ring = [
+            pcbnew.VECTOR2I(pcbnew.FromMM(x0 + px), pcbnew.FromMM(y0 + py))
+            for px, py in stitch_geom.ring(x, y, radius)
+        ]
+        for net, layers in sorted(fills.items()):
+            if all(
+                all(any(f.Contains(pt) for f in polys) for pt in ring)
+                for polys in layers.values()
+            ):
+                via = pcbnew.PCB_VIA(board)
+                via.SetPosition(at)
+                via.SetWidth(pcbnew.FromMM(d_um / 1000.0))
+                via.SetDrill(pcbnew.FromMM(drill_um / 1000.0))
+                via.SetNet(board.FindNet(net))
+                board.Add(via)
+                holes.append((at, pcbnew.FromMM(d_um / 2000.0)))
+                added += 1
+                break
+    return added
+
+
 def route(spec):
     pcb = spec["pcb"]
     out = spec["out_dir"]
@@ -596,6 +659,13 @@ def route(spec):
         )
     ]
     pcbnew.ZONE_FILLER(board).Fill(zones)
+    added = stitch(board, spec, zones)
+    if added:
+        bad = vias_in_pads(board, spec)
+        if bad:
+            sys.exit("stitching vias inside SMD pads:\n  " + "\n  ".join(bad))
+        pcbnew.ZONE_FILLER(board).Fill(zones)
+        print(f"stitch: added {added} vias")
     board.Save(pcb)
     return len(board.GetTracks())
 
