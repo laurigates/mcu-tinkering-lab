@@ -409,6 +409,27 @@ layer = "F.Cu"
 width_mm = 1.0
 points = [[66.3, 86.55], [66.3, 80.6], [67.0, 79.9], [67.0, 79.0]]
 
+# The pack input, 2 mm on F.Cu with no via, as on the integrated carrier
+# (pre-order review: routed at 1.0 mm, with two 0.75 mm VBAT segments, while
+# F1 only guarantees a trip at 8 A). PACK_IN leaves J3's "+" pad down and
+# runs under the XT30's body, below its pins, to F1's pack-side pad; VBAT
+# leaves F1's other pad along the corridor between A1's GND pins and J3's
+# pads (0.55 mm from each) to the LM2596 lead's IN+ (J4:1). J11's VBAT pin
+# stays routed from there.
+[[tracks]]
+name = "pack input, J3 + to F1"
+net = "PACK_IN"
+layer = "F.Cu"
+width_mm = 2.0
+points = [[17.5, 86.3], [17.5, 91.0], [4.2, 91.0], [4.2, 88.025]]
+
+[[tracks]]
+name = "VBAT, F1 to J4 IN+"
+net = "VBAT"
+layer = "F.Cu"
+width_mm = 2.0
+points = [[4.2, 83.575], [4.2, 83.0], [24.7, 83.0], [24.7, 94.4]]
+
 # C3's GND pad to the ground post J13 beside it: J13's through-hole pad joins
 # both layers' GND pour, which is what a fanout via would do. [fanout]'s
 # candidate for C3:2 landed on the pad's corner (the via-in-pad check fails
@@ -446,6 +467,19 @@ net = "HEAD3_GND"
 layer = "F.Cu"
 width_mm = 0.5
 points = [[92.75, 73.0], [95.0, 73.0], [95.0, 81.3], [93.37, 82.92]]
+
+# Room for C2's required GND fanout via, west of its GND pad where the
+# committed board had it (28.9, 65.2). With the 2 mm VBAT corridor fixed, 5 of
+# 8 routes left no place for it within reach (carrier-pcb trap 38).
+[[route_keepouts]]
+name = "C2 GND fanout via, F.Cu"
+layer = "F.Cu"
+rect = [28.0, 64.3, 29.8, 66.1]
+
+[[route_keepouts]]
+name = "C2 GND fanout via, B.Cu"
+layer = "B.Cu"
+rect = [28.0, 64.3, 29.8, 66.1]
 
 # Freerouting width classes, in this order. `nets` are net names or fnmatch
 # patterns over them; every pattern must match, and no net may be in two classes.

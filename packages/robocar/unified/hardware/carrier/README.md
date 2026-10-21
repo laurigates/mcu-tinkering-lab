@@ -244,7 +244,8 @@ through-hole pads join the layers).
 | SF-1 | Every 5V path to the motors, servos and head changed layer through one 1.0/0.5 mm via, the LDO and amplifier through another | Via (42.35, 63.40) alone joined J4 to A1:8, A2:1, C1, C2, C7, J11 and J1; via (49.46, 73.75) to U2 and A4; via (36.41, 89.59) to C3. J4:3 to A1:8 76.2 mm, to A2:1 85.0 mm, to U2:3 30.7 mm, to A4:1 49.1 mm (0.6 mm at the narrowest) | A fixed F.Cu trunk ([`board.toml`](board.toml) `[[tracks]]`), no via: J4:3 to C1 to C2 at 1.5 mm, C2 to A1:8 at 2.0 mm, on to A2:1 at 1.5 mm; the LDO and amplifier branch at 1.0 mm from C2 by C7, U2:3, A4:3 and A4:1 to C3. J4:3 to A1:8 74.4 mm, to A2:1 79.9 mm, to U2:3 63.8 mm, to A4:1 85.2 mm, all 0 vias. The +5V vias left (4) are on the routed feed to D1 and J11 |
 | SF-2 | The LM2596 lead was a JST XH, 3 A per contact on AWG 22 (JST XH sheet), under up to about 3.4 A on OUT+ with both motors stalled | XH 4, 2.5 mm | JST VH 4 (B4P-VH, 3.96 mm): 10 A AC/DC on AWG 16, wire AWG 22–16 (JST VH sheet, LCSC C160317's datasheet). Same pin order, registry `lm2596-buck-module-vh4` |
 | SF-3 | The TB6612FNG, MAX98357A and TCA9548A fit their sockets turned 180°, which puts a supply on GND | No pin names at the sockets | 1.0 mm names inside each outline: A1 "VM", "PWMA" (pads 8, 9) and "GND" (pads 1, 16); A4 "Vin", "LRC" (pads 1, 7); A3 "VIN", "SC7" (pads 1, 24) |
-| SF-4 | F1 derated below the load: BSMD1812-300-16V holds 2.55 A at 40 °C and 2.28 A at 50 °C (BHFUSE BSMD1812 datasheet, Thermal Derating Chart) against 2.4–3.1 A into the LM2596 at full load | 3 A hold, 6 A trip, C883162 | BSMD1812-400-16V, C47263807 (Extended, 15,582 in stock on 2026-10-21): 4 A hold, 8 A trip, 16 V; 3.48 A at 40 °C, 3.16 A at 50 °C. Same 1812 footprint, JLCPCB rotation 0 |
+| SF-4 | F1 derated below the load: BSMD1812-300-16V holds 2.55 A at 40 °C and 2.28 A at 50 °C (BHFUSE BSMD1812 datasheet, Thermal Derating Chart) against 2.4–3.1 A into the LM2596 at full load | 3 A hold, 6 A trip, C883162 | BSMD1812-400-16V, C47263807 (Extended, 15,582 in stock on 2026-10-21): 4 A hold, 8 A trip, 16 V; 3.48 A at 40 °C, 3.16 A at 50 °C. Same 1812 footprint, JLCPCB rotation 0. At 50 °C the 3.1 A full load leaves 2 % below the 3.16 A hold, so a hot robot at full load can trip it; not changed |
+| SF-4 (tracks) | F1 guarantees a trip only at 8 A, but PACK_IN and VBAT were routed at 1.0 mm. IPC-2221 puts 1.0 mm of external 1 oz copper at about +32 °C at 4 A and about +155 °C at 8 A (estimates) | PACK_IN J3:2 to F1:1 16.1 mm at 1.0 mm; VBAT F1:2 to J4:1 30.3 mm, 0.75 mm at the narrowest (two segments, 7.2 mm); 0 vias each | Fixed F.Cu `[[tracks]]` at 2.0 mm, no via: PACK_IN from J3:2 down and under the XT30, below its pins, to F1:1 (21.0 mm of centreline); VBAT from F1:2 between A1's GND pins and J3's pads (0.55 mm from each) to J4:1 (32.5 mm). J11's VBAT pin stays on the routed 1.0 mm B.Cu feed from J4:1 (85.7 mm, 1 via), which carries only a meter probe |
 | SF-5 | Four claims in the #810 table did not reproduce | C1–C3 "beside" their pins (41.4, 22.7 and 44.1 mm of track); J17 "1.5 mm" from a cut; strokes "0.16 mm or more"; the CPL "carries KiCad's rotations" | C3 moved beside A4's Vin, 6.9 mm of track. C1 and C2 cannot sit beside their pins (no room); the table now gives their trunk distances, 52.1 and 36.8 mm with no via. J17 0.96 mm, strokes 0.15 mm, and the ordering step, corrected above and below |
 | SF-6 | Silkscreen under JLCPCB's 0.15 mm, polarity marks too small | Footprint lines 0.10–0.127 mm; the CJMCU-2317 warning at 0.8 mm | Footprint lines widened to 0.15 mm by build_board.py; "+" at 1.0 mm beside C1, C2, C3, C7 and C8 pad 1; "CHIP SIDE UP / LABELS FACE DOWN" at 1.0 mm |
 | SF-7 | Off-board leads had no pin names | — | 1.0 mm: J7, J8 "V C D G"; J9 "G V C D"; J4 "I+ I- O+ O-", and "SET LM2596 TO 5.0V FIRST" beside J4 |
@@ -255,11 +256,13 @@ through-hole pads join the layers).
 The repo has no do-not-fit convention: every carrier part is in the BOM and
 CPL, so R12, R13 and C6 are fitted.
 
-`carrier-review` on the committed board reports five flags: C3:2 has no via
-(its fixed track to J13's through-hole pad does that job), C4, C5 and C6 are
-3.6, 4.5 and 5.5 mm from their modules' pins (each module decouples at its
-chip), and a head 3 track is 0.71 mm from the y 70.5 cut (row 2 above).
-The stitching and fanout raised the main board's GND vias from 11 to 86.
+`carrier-review` on the committed board reports four flags: C4, C5 and C6
+are 3.6, 4.5 and 5.5 mm from their modules' pins (each module decouples at its
+chip), and a head 3 track is 0.71 mm from the y 70.5 cut (row 2 above). C3:2
+has no fanout via; its fixed track to J13's through-hole pad does that job.
+The stitching and fanout raised the main board's GND vias from 11 to 69 (86
+before the 2 mm pack-input tracks; the stitching grid finds fewer points where
+both layers' pour holds a via).
 
 ## Assembly notes
 
