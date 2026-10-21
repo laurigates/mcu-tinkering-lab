@@ -509,7 +509,9 @@ def route(spec):
 
     grown = grow_vias(board, spec)
     if grown:
-        print(f"grew {len(grown)} via(s) to their class's size (DRC checks the fit): {', '.join(grown)}")
+        print(
+            f"grew {len(grown)} via(s) to their class's size (DRC checks the fit): {', '.join(grown)}"
+        )
 
     # Freerouting necks a track to half its width to reach a fine-pitch pad,
     # often below the board's minimum (0.125 mm against 0.15 mm, over a few

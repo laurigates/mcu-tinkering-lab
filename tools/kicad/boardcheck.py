@@ -333,9 +333,7 @@ def _validate_keepouts(where: str, data: dict[str, Any], size: Any) -> list[str]
     return errors
 
 
-def _validate_route_keepouts(
-    where: str, data: dict[str, Any], size: Any
-) -> list[str]:
+def _validate_route_keepouts(where: str, data: dict[str, Any], size: Any) -> list[str]:
     """[[route_keepouts]]: rectangles Freerouting may not route through, on one
     copper layer. Unlike [[keepouts]] they put no rule area on the board, so
     footprints and the pour may still go there (route_board.py, dsn.py)."""

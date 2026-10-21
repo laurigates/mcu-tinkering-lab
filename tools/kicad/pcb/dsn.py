@@ -182,8 +182,12 @@ def rect_keepouts(text, keepouts, origin):
     ox, oy = origin
     lines = []
     for k in keepouts:
-        x0, y0, x1, y1 = ((ox + k["rect"][0]) * 1000, (oy + k["rect"][1]) * 1000,
-                          (ox + k["rect"][2]) * 1000, (oy + k["rect"][3]) * 1000)
+        x0, y0, x1, y1 = (
+            (ox + k["rect"][0]) * 1000,
+            (oy + k["rect"][1]) * 1000,
+            (ox + k["rect"][2]) * 1000,
+            (oy + k["rect"][3]) * 1000,
+        )
         corners = [(x0, y0), (x1, y0), (x1, y1), (x0, y1), (x0, y0)]
         coords = "  ".join("%d %d" % (round(x), -round(y)) for x, y in corners)
         lines.append('    (keepout "" (polygon %s 0  %s))' % (k["layer"], coords))
