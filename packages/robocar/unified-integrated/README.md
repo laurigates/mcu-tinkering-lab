@@ -256,7 +256,7 @@ The circuit choices that are not a copy of a breakout:
 - **Pack voltage.** The converter's maximum duty cycle is 75 % (SLVSD90B
   7.2.2.4), so 5 V needs VIN ≥ 6.7 V, 3.3 V per cell; below that 5 V sags with
   the pack. EN goes through a 100 kΩ / 36 kΩ divider (R25/R26), with EN's own
-  resistance to GND (600-2400 kΩ, Table 5.5) in parallel with R26: EN rises at
+  resistance to GND (600-2400 kΩ, SLVSD90B 5.5) in parallel with R26: EN rises at
   1.38-1.47 V typical (VENH 1.6 V maximum) and falls at 1.05-1.2 V, so the buck
   turns on at about 5.5 V typical, is guaranteed on by 6.3 V, and turns off at
   about 4.0-4.6 V. With 30 kΩ the guarantee was 7.2 V, so a part-charged pack
