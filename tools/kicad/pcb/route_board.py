@@ -306,7 +306,8 @@ def fanout(board, fan, clearance):
                 added += 1
             continue
         if name in own:
-            # its own via: one inside the pad, or one already stubbed from it
+            # its own via: one inside the pad's bounding box counts; a stub
+            # from an earlier fanout run does not, so run fanout once per board
             if any(box.Contains(v.GetPosition()) for v in vias_of(netcode)):
                 continue
         elif has_via(pad):
@@ -375,7 +376,12 @@ def grow_vias(board, spec):
     ]
     via_of = {}
     for cls in spec["classes"]:
-        for n in dsn.expand(cls["nets"], names, f"class {cls['name']!r}"):
+        try:
+            nets = dsn.expand(cls["nets"], names, f"class {cls['name']!r}")
+        except dsn.DsnError as e:
+            # after Freerouting: report it as the DSN rewrite does, not as a traceback
+            sys.exit(f"grow_vias: {e}")
+        for n in nets:
             via_of[n] = cls["via_um"]
     grown = []
     for v in board.GetTracks():
