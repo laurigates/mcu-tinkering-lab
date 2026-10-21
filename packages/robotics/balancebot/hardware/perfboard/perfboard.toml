@@ -41,11 +41,12 @@ D1 = [10, 22, 0]
 J4 = [1, 23, 90]
 J1 = [7, 23, 90]
 J5 = [13, 23, 90]
-# Pack input protection, above J2: F1 (PTC), then Q1 (P-FET, G D S) and its
-# gate resistor R4.
+# Pack input protection, above J2: F1 (PTC), then Q1 (P-FET, G D S), its
+# gate resistor R4; its gate-source zener D2 stands above Q1.
 F1 = [7, 18, 270]
 Q1 = [5, 17, 0]
 R4 = [9, 19, 90]
+D2 = [5, 15, 90]
 
 # The PCB's 1812 PTC has no through-hole twin in the registry.
 [swaps.F1]
@@ -56,7 +57,7 @@ value = "radial PTC, 3 A hold"
 # within a step, nets take the palette's slots in this order (at most 8).
 [[steps]]
 title = "Pack input"
-subtitle = "J1 through F1 and the reverse-polarity FET Q1"
+subtitle = "J1 through F1 and the reverse-polarity FET Q1, with its gate zener D2"
 nets = ["PACK_IN", "PACK_FUSED", "PFET_GATE"]
 
 [[steps]]

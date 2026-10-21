@@ -31,7 +31,8 @@ J3 = [36.11, 47.0, 90]   # GY-521 socket at the rear edge of its box; the module
 J1 = [22.5, 55.5, 180]   # battery, JST-XH 2: BAT+ on pad 1 (right, toward F1)
 F1 = [29.5, 55.5, 0]     # 3 A hold PTC, pack input
 Q1 = [38.0, 55.5, 180]   # reverse-polarity P-MOSFET: tab (drain) toward F1, S/D/G pins east
-R4 = [45.0, 58.5, 0]     # Q1 gate to GND
+R4 = [45.0, 59.0, 0]     # Q1 gate to GND, below D2
+D2 = [44.0, 55.5, 270]   # Q1 gate-source zener: cathode (pad 1) north on VBAT, anode south to R4
 J2 = [60.0, 56.0, 0]     # LM2596 module
 D1 = [71.0, 50.0, 0]     # B5819W, buck -> XIAO 5V
 C1 = [9.75, 44.0, 0]     # VMOT bulk, left driver
@@ -50,7 +51,7 @@ H4 = [86.0, 58.0, 0]
 # information (the holes are self-evident; J1 is labelled by the +/- texts below).
 hidden_refs = ["H1", "H2", "H3", "H4", "J1"]
 # Moved off the library default where it lands on a neighbour's silkscreen.
-ref_positions = { J3 = [57.0, 47.0], J4 = [5.0, 19.8], J2 = [72.5, 57.0] }
+ref_positions = { J3 = [57.0, 47.0], J4 = [5.0, 19.8], J2 = [72.5, 57.0], R4 = [48.6, 59.0] }
 # Seeed's reference text is below KiCad's minimum silkscreen height.
 ref_sizes = { U1 = 1.0 }
 # Where the GY-521 lies flat on its socket (21 x 16 mm), so nothing tall goes under it.
@@ -119,6 +120,32 @@ net = "PACK_FUSED"
 layer = "F.Cu"
 width_mm = 1.0
 points = [[34.85, 55.5], [41.15, 55.5]]
+
+# D2 clamps Q1's gate to its source: its cathode pad sits on the VBAT east
+# track's edge, its anode beside Q1's gate pin, and all of PFET_GATE is fixed.
+# With D2's anode tied straight down to R4, the keepout walling that track
+# boxed in R4's gate pad and Freerouting left Q1's gate unrouted on every run
+# (trap 28).
+[[tracks]]
+name = "D2 cathode to Q1 source"
+net = "VBAT"
+layer = "F.Cu"
+width_mm = 0.5
+points = [[44.0, 53.85], [41.15, 53.2]]
+
+[[tracks]]
+name = "D2 anode to Q1 gate"
+net = "PFET_GATE"
+layer = "F.Cu"
+width_mm = 0.5
+points = [[44.0, 57.15], [41.15, 57.8]]
+
+[[tracks]]
+name = "Q1 gate to R4"
+net = "PFET_GATE"
+layer = "F.Cu"
+width_mm = 0.5
+points = [[41.15, 57.8], [42.35, 59.0], [44.0, 59.0]]
 
 # VBAT, all on F.Cu and with no via (pre-order review N2). Routed, it reached
 # A2's VMOT, C2 and R2 through 30 mm of B.Cu, which also cut the B.Cu GND

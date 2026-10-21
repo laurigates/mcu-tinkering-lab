@@ -193,7 +193,8 @@ value = "Motor right"
 # The 16 V part in the same family (C883162, the integrated robocar carrier's)
 # leaves 3.4 V over a full 3S pack's 12.6 V; the 24 V one leaves 11.4 V, for the
 # overshoot of hot-plugging a pack into 200 uF of bulk capacitance, and fits the
-# same 1812 pads.
+# same 1812 pads. That overshoot can exceed Q1's +-20 V VGSS, so D2 clamps Q1's
+# gate (below).
 #
 # Q1, a P-MOSFET high-side switch: drain to F1 (the pack side), source to VBAT,
 # gate to GND through R4. Plugged in the right way the body diode conducts
@@ -202,13 +203,26 @@ value = "Motor right"
 # so nothing on the board sees the reversed pack. ZXMP4A16G (C141324), Diodes
 # DS33584 Rev. 6-2: VDSS -40 V, VGSS +-20 V, RDS(on) max 60 mohm at VGS -10 V
 # and ID -3.8 A, ID -4.6 A continuous on 25 x 25 mm of 1 oz copper (RthJA
-# 62.5 C/W, note 6), VGS(th) -1.0 V min. Against a 3S pack: |VGS| reaches
-# 12.6 V, 7.4 V under the 20 V rating, so there is no gate zener. At the PTC's
-# 3 A hold it dissipates at most 0.54 W (60 mohm, 25 C), about a 34 C rise at
-# the datasheet's RthJA; the carrier's copper around the SOT-223 is smaller
-# than its 25 x 25 mm test board, so the rise will be higher. The robot's real
-# pack current is not measured yet (#747). At the BMS's 9 V cutoff |VGS| is
-# still 9 V, well past the -4.5 V the 100 mohm RDS(on) rating is given at.
+# 62.5 C/W, note 6), VGS(th) -1.0 V min. At the PTC's 3 A hold it dissipates
+# at most 0.54 W (60 mohm, 25 C), about a 34 C rise at the datasheet's RthJA;
+# the carrier's copper around the SOT-223 is smaller than its 25 x 25 mm test
+# board, so the rise will be higher. The robot's real pack current is not
+# measured yet (#747).
+#
+# D2, a gate-source zener: cathode to Q1's source (VBAT), anode to the gate
+# (PFET_GATE), so R4 limits its current. A steady 3S pack puts |VGS| at the
+# pack voltage, at most 12.6 V, but the hot-plug overshoot F1 is rated for
+# lands on the source while R4 holds the gate at GND, and above 20 V that
+# exceeds VGSS. BZT52C15 (C2104), JSCJ datasheet Rev. 2.1 page 2: VZ 13.8-15.6 V
+# at IZT 5 mA, ZZT 30 ohm, IR 0.1 uA at VR 10.5 V, temperature coefficient
+# 9.2-13 mV/C. Its 13.8 V minimum sits above a full pack, so it does not
+# conduct in use and |VGS| follows the pack: 9.0-12.6 V over the BMS's range,
+# and 8.2 V at the DRV8825's minimum supply (TI SLVSA73F, section 1), past the
+# -4.5 V that DS33584's 100 mohm RDS(on) maximum is given at and near the
+# -10 V of its 60 mohm one. In an overshoot it clamps |VGS| to 15.6 V at 5 mA
+# (R4 passes 0.8 mA at a 24 V spike), about 16.9 V at a 125 C junction: at
+# least 3 V under VGSS. A 12 V part (VZ 11.4-12.7 V) would conduct on a full
+# pack.
 #
 # Power-stage checklist (.claude/rules/power-stage-checklist.md) for this
 # input stage: 1-2 (dropout, low-battery cutoff) and 4-7 belong to the LM2596
@@ -238,6 +252,13 @@ part = "r0805"
 ref = "R4"
 value = "10k"
 lcsc = "C17414"
+
+[parts.rp_zener]
+name = "BZT52C15 gate-source zener for Q1"
+kind = "diode"
+build = "carrier"
+part = "bzt52c15"
+ref = "D2"
 
 [parts.bulk_left]
 name = "100 µF 35 V bulk capacitor, left driver"
@@ -349,13 +370,13 @@ to = ["buck.IN+", "drv_left.VMOT", "drv_right.VMOT"]
 name = "PFET_GATE"
 build = "carrier"
 from = "rp_fet.G"
-to = ["rp_gate.A"]
+to = ["rp_gate.A", "rp_zener.A"]
 
 # A continuation: same name, no `from` — these loads join the VBAT rail above.
 [[rails]]
 name = "VBAT"
 build = "carrier"
-to = ["bulk_left.+", "bulk_right.+", "sense_top.A"]
+to = ["bulk_left.+", "bulk_right.+", "sense_top.A", "rp_zener.K"]
 
 [[rails]]
 name = "5V"
