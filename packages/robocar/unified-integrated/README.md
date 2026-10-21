@@ -245,8 +245,9 @@ The circuit choices that are not a copy of a breakout:
   would leave that to charge the rail (whose absolute maximum, at the
   MAX98357A, is 6 V). For 5 V: R12 56 kΩ over R13 10 kΩ (TI's R1 and R2,
   whose Table 7-2 gives 54.9 kΩ for 4.98 V). VFB is 0.768 V (749-787 mV), so
-  5V is 5.07 V (4.94-5.19 V): at the trunk's far end it stays at or above the
-  TB6612FNG's VM >= 5 V row, 1.0 A per channel rather than 0.4 A, and under
+  5V is 5.07 V (4.94-5.19 V). At typical VFB, less the trunk's roughly 50 mV
+  at 2 A, VM stays in the TB6612FNG's VM >= 5 V row (1.0 A per channel); at
+  VFB's minimum, 4.94 V, it falls in the 0.4 A row. Either way it stays under
   the MAX98357A's 5.5 V. The 5 V and 6.5 V rows share L1 and Cout. L1 4.7 µH ±20 % (Bourns SRN6045TA-4R7M: Isat 6.8 A, Irms 4.5 A,
   above the 5.5 A peak at the 5.1 A maximum current limit), since the 3.3 µH
   part is ±30 % and can fall below the table's 3.3 µH minimum; 3 x 22 µF 0805
@@ -417,19 +418,19 @@ with layer-aware scripts (copper path length, vias, narrowest track):
 | B1: output capacitors not on L1 | L1 to C13: 75.1 mm, 2 vias, 0.45 mm | 4.6 mm, no via, 1 mm |
 | B1: feedback sense | R12 on the amplifier branch | its own 0.25 mm track from C20, 26.9 mm, no load current |
 | B2: pack input | J3 to F1 0.25 mm | 3.5 mm at 2 mm |
-| M1: 5 V through one 0.8/0.4 mm via | LDO 67.6 mm, FB1 45.2 mm, 2 vias each; VM1 and the servos through the same via | LDO 19.0 mm, FB1 31.6 mm, 1 mm, no via; VM1 38.4 mm and the servos 66.7 mm at 0.45 mm, no via; the head cable through one 1.0/0.5 mm via |
-| M2: U10's GND pin had no via | nearest 4.3 mm, through C11 | its own, 0.95 mm away (`[fanout] own`) |
+| M1: 5 V through one 0.8/0.4 mm via | LDO 67.6 mm, FB1 45.2 mm, 2 vias each; VM1 and the servos through the same via | LDO 19.0 mm, FB1 31.6 mm, 1 mm, no via; VM1 38.4 mm at 0.45 mm, no via; the servos 66.7 mm, no via, but necked to 0.337 mm over 20 mm along the left edge; the head cable (115.8 mm, one 1.0/0.5 mm via) now runs on from the servo headers through that neck: about 124 mΩ from L1 against 93 mΩ before (an estimate) |
+| M2: U10's GND pin had no via | nearest 4.3 mm, through C11 | its own, 0.92 mm away (`[fanout] own`) |
 | m1: C18 to the amplifier's VDD | 18.4 mm, 2 vias | 2.2 mm |
 | m2: C5 / C6 to their VCC pins | 9.5 mm / 11.7 mm, 2 vias | 4.9 mm / 3.0 mm |
 | m3: no capacitor at VM1 | C16, 11.6 mm away | C21, 2.0 mm |
 | m5, S8: pour to the mouse-bite holes | 0.25 mm | 0.70 mm, every pour |
 | m6: EN guaranteed on | 7.2 V | 6.3 V (R26 36 kΩ) |
 | S1: VBAT into the buck | one 0.6/0.3 mm via (input_power asks 1.0/0.5) | every VBAT via 1.0/0.5 mm |
-| S3: vias inside SMD pads | 20 (fanout's and Freerouting's) | none but the exposed pad's |
+| S3: vias inside SMD pads | 7 holes in 6 pads (U5:1, U6:4, U6:25, U7:3, U7:4, U7:10) | none but the exposed pad's |
 | S4: VBAT under the feedback divider | 0.94 mm² over R12's FB pad | kept off B.Cu there (`[[route_keepouts]]`) |
-| S5: 5 V setpoint | 4.98 V, under the TB6612FNG's VM >= 5 V row | 5.07 V (R12 56 kΩ) |
+| S5: 5 V setpoint | 4.98 V typical | 5.07 V typical (R12 56 kΩ); 4.94 V at VFB's minimum |
 | S6: input capacitor nearest VIN | 100 nF | 10 µF (C11 and C10 swapped) |
-| S7: C15's GND to U7's GND pin | 20.6 mm | 5.4 mm |
+| S7: C15's GND to U7's GND pin | 20.6 mm | 5.4 mm, but U7:18 lost its pour contact: its ground is now that track alone (about 1 mA) |
 
 How S1 and S3 were fixed, since a gate now holds both: Freerouting treats
 every via in the DSN as available to every net and drops to the 0.6/0.3 mm
@@ -439,8 +440,9 @@ Freerouting `(via_at_smd off)`, a fanout via now clears its own net's SMD pads
 (U7:4's had landed in U7:3), and a route fails on any via left inside an SMD
 pad but `[fanout] in_pad`.
 
-Not changed: +5V's routed tracks stay 0.45 mm, because Freerouting gives a
-net one width and the TB6612FNG's pins cap it. VBAT necks to 0.6 mm over
+Not changed: +5V's routed tracks are 0.45 mm at most, because Freerouting
+gives a net one width and the TB6612FNG's pins cap it, and they neck below it
+(0.337 mm on the servo and head feed). VBAT necks to 0.6 mm over
 about 8 mm beside its input via (B.Cu at y 69.4, under L1, and 1 mm on F.Cu):
 by IPC-2221 about 26 °C warmer at 2.5 A, an estimate, not a measurement. R13's
 ground goes to its own via on the B.Cu plane, not straight to U10's GND pin.
