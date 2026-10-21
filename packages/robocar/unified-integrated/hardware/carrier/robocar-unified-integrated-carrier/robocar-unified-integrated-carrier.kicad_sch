@@ -8183,7 +8183,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "10uF 25V"
+		(property "Value" "100nF"
 			(at 495.808 41.91 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8227,7 +8227,7 @@
 				)
 			)
 		)
-		(property "LCSC" "C15850"
+		(property "LCSC" "C49678"
 			(at 497.84 35.56 0)
 			(hide yes)
 			(show_name no)
@@ -8339,7 +8339,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "100nF"
+		(property "Value" "10uF 25V"
 			(at 541.528 41.91 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8383,7 +8383,7 @@
 				)
 			)
 		)
-		(property "LCSC" "C49678"
+		(property "LCSC" "C15850"
 			(at 543.56 35.56 0)
 			(hide yes)
 			(show_name no)
@@ -19017,7 +19017,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "54.9k"
+		(property "Value" "56k"
 			(at 131.064 173.99 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -19061,7 +19061,7 @@
 				)
 			)
 		)
-		(property "LCSC" "C17747"
+		(property "LCSC" "C17756"
 			(at 132.08 167.64 0)
 			(hide yes)
 			(show_name no)

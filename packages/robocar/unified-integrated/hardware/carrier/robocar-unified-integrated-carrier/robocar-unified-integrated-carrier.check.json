@@ -1,5 +1,5 @@
 {
- "board_sha256": "83cbc6ff818cda825806ec9bb4a5b718b51caf2f6db5e4c9995cd0941c969247",
+ "board_sha256": "0388fd2526ec8ce3c784340692285f9e40cc12cdd193c62642c87572bc9b1959",
  "kicad_cli_version": "10.0.7",
  "netlist": {
   "components": {
@@ -20,16 +20,16 @@
    "C10": {
     "footprint": "Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder",
     "in_bom": true,
-    "lcsc": "C15850",
+    "lcsc": "C49678",
     "lib_id": "Device:C",
-    "value": "10uF 25V"
+    "value": "100nF"
    },
    "C11": {
     "footprint": "Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder",
     "in_bom": true,
-    "lcsc": "C49678",
+    "lcsc": "C15850",
     "lib_id": "Device:C",
-    "value": "100nF"
+    "value": "10uF 25V"
    },
    "C12": {
     "footprint": "Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder",
@@ -440,9 +440,9 @@
    "R12": {
     "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
     "in_bom": true,
-    "lcsc": "C17747",
+    "lcsc": "C17756",
     "lib_id": "Device:R",
-    "value": "54.9k"
+    "value": "56k"
    },
    "R13": {
     "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
@@ -2484,5 +2484,5 @@
    ]
   }
  },
- "schematic_sha256": "5d2cd88f1ab3caf53477a61602201371c499e724b83a9eb05eeac86e9739d8c9"
+ "schematic_sha256": "1d5019c91717733013c15b2b1a6eb33f8742911005abbc8363f2b555901f7cf4"
 }

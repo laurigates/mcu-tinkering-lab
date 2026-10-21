@@ -86,7 +86,11 @@ ref = "U9"
 
 # --- 5 V buck converter (replaces the LM2596 module) ------------------------
 # TI SLVSD90B Table 7-2 for 5 V: R1 54.9 kΩ over R2 10 kΩ (VFB 0.768 V, so
-# 4.98 V), L 3.3-4.7 µH, and 20-68 µF of low-ESR output capacitance (C13,
+# 4.98 V). R12 is 56 kΩ instead: 5.07 V typical, 4.94-5.19 V over VFB's
+# 749-787 mV, so 5V stays at or above the TB6612FNG's VM >= 5 V operating row
+# (1.0 A per channel; 0.4 A below 5 V) after the trunk's drop, and under the
+# MAX98357A's 5.5 V. The 5 V and 6.5 V rows share L and Cout (second pre-fab
+# layout review, S5). L 3.3-4.7 µH, and 20-68 µF of low-ESR output capacitance (C13,
 # C14, C20). The TPS563208, not the TPS563201: the same pins and table, but
 # forced-continuous, so it sinks current as well as sourcing it. A motor that
 # brakes or reverses pushes energy back into 5V through the TB6612FNG's body
@@ -163,11 +167,14 @@ ref = "C9"
 value = "10uF 25V"
 lcsc = "C15850"
 
+# C11, beside VIN, is a 10 µF: TI asks for over 10 µF of ceramic as the
+# decoupling capacitor (SLVSD90B 7.2.2.4), and the 100 nF is optional, so the
+# 10 µF takes the tightest loop (second pre-fab layout review, S6).
 [parts.buck_cin2]
-name = "10 µF buck input"
+name = "10 µF buck input, beside VIN"
 kind = "capacitor"
 part = "c0805"
-ref = "C10"
+ref = "C11"
 value = "10uF 25V"
 lcsc = "C15850"
 
@@ -186,10 +193,10 @@ value = "100uF 35V"
 lcsc = "C2836437"
 
 [parts.buck_cin_hf]
-name = "100 nF buck input, beside VIN"
+name = "100 nF buck input"
 kind = "capacitor"
 part = "c0805"
-ref = "C11"
+ref = "C10"
 value = "100nF"
 lcsc = "C49678"
 
@@ -231,12 +238,12 @@ value = "22uF 25V"
 lcsc = "C45783"
 
 [parts.buck_fb_top]
-name = "54.9 kΩ feedback divider, top"
+name = "56 kΩ feedback divider, top"
 kind = "resistor"
 part = "r0805"
 ref = "R12"
-value = "54.9k"
-lcsc = "C17747"
+value = "56k"
+lcsc = "C17756"
 
 [parts.buck_fb_bot]
 name = "10 kΩ feedback divider, bottom"
