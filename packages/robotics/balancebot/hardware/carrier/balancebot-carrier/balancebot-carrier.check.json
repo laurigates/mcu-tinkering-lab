@@ -1,6 +1,6 @@
 {
- "board_sha256": "c1c33d9dc0a7d28ebf5f622b86fc9f323a7ea337432d7be1b9c00b331b47a660",
- "kicad_cli_version": "10.0.6",
+ "board_sha256": "b2d67e740acadb6371d0c8428295b848dda23d148007737533eec75f31369dec",
+ "kicad_cli_version": "10.0.7",
  "netlist": {
   "components": {
    "A1": {
@@ -44,6 +44,13 @@
     "lcsc": "C8598",
     "lib_id": "Device:D_Schottky",
     "value": "B5819W"
+   },
+   "F1": {
+    "footprint": "Fuse:Fuse_1812_4532Metric_Pad1.30x3.40mm_HandSolder",
+    "in_bom": true,
+    "lcsc": "C7500481",
+    "lib_id": "Device:Polyfuse",
+    "value": "3A hold 24V"
    },
    "H1": {
     "footprint": "MountingHole:MountingHole_3.2mm_M3",
@@ -108,6 +115,13 @@
     "lib_id": "Connector_Generic:Conn_01x04",
     "value": "Motor right"
    },
+   "Q1": {
+    "footprint": "Package_TO_SOT_SMD:SOT-223-3_TabPin2",
+    "in_bom": true,
+    "lcsc": "C141324",
+    "lib_id": "Transistor_FET:ZXMP4A16G",
+    "value": "ZXMP4A16G"
+   },
    "R1": {
     "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
     "in_bom": true,
@@ -128,6 +142,13 @@
     "lcsc": "C17593",
     "lib_id": "Device:R",
     "value": "27k"
+   },
+   "R4": {
+    "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
+    "in_bom": true,
+    "lcsc": "C17414",
+    "lib_id": "Device:R",
+    "value": "10k"
    },
    "U1": {
     "footprint": "Seeed_XIAO:XIAO-RP2350-Socket",
@@ -276,6 +297,10 @@
      "2"
     ],
     [
+     "R4",
+     "2"
+    ],
+    [
      "U1",
      "13"
     ]
@@ -408,6 +433,26 @@
      "8"
     ]
    ],
+   "PACK_FUSED": [
+    [
+     "F1",
+     "2"
+    ],
+    [
+     "Q1",
+     "2"
+    ]
+   ],
+   "PACK_IN": [
+    [
+     "F1",
+     "1"
+    ],
+    [
+     "J1",
+     "1"
+    ]
+   ],
    "PACK_SENSE": [
     [
      "C3",
@@ -423,6 +468,16 @@
     ],
     [
      "U1",
+     "1"
+    ]
+   ],
+   "PFET_GATE": [
+    [
+     "Q1",
+     "1"
+    ],
+    [
+     "R4",
      "1"
     ]
    ],
@@ -464,12 +519,12 @@
      "1"
     ],
     [
-     "J1",
+     "J2",
      "1"
     ],
     [
-     "J2",
-     "1"
+     "Q1",
+     "3"
     ],
     [
      "R2",
@@ -514,5 +569,5 @@
    ]
   }
  },
- "schematic_sha256": "e0c61838897e1c27d79780cd182c0df5a150dfce0638a7ea05949a3cd95c330f"
+ "schematic_sha256": "dbac228ebc0676e355e832cab7fd803ea27220bb2306783737e11fd77c974731"
 }

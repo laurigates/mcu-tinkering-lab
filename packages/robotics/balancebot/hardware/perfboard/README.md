@@ -8,7 +8,8 @@ give (the one the carrier schematic is written from), so the firmware pin map
 applies unchanged.
 
 - [`perfboard.svg`](perfboard.svg): the component side, then one mirrored
-  solder-side panel per build step (power, logic power, motor coils, signals).
+  solder-side panel per build step (pack input, power, logic power, motor
+  coils, signals).
   Each panel shows only that step's wires, coloured per net with a legend, and
   numbered as in the wire list. Wires are maze-routed along the channels
   between holes, so no wire is drawn over a pad it does not connect to, and no
@@ -30,6 +31,9 @@ are not.
 | C1, C2 | 6.3 mm SMD electrolytic | 8 mm radial, 2.5 mm leads, ≥ 25 V |
 | C3, R1–R3 | 0805 SMD | Ceramic disc; resistors stood upright |
 | D1 | B5819W (SOD-123) | 1N5819, the same diode in DO-41, stood upright |
+| F1 | 3 A hold PTC, 1812 SMD | Radial PTC, 3 A hold, ≥ 16 V, leads bent to 2.54 mm |
+| Q1 | ZXMP4A16G (SOT-223) | A TO-220 P-FET with the same G, D, S pin order and VGS ≥ ±20 V (IRF9540N, IRF4905) |
+| R4 | 0805 SMD | Resistor stood upright |
 | H1–H4 | M3 holes | Use the proto board's own corner holes |
 
 ## Build order
@@ -38,13 +42,14 @@ are not.
    rows 1–7), 4 × 1×8 for the DRV8825s, 1 × 1×8 for the GY-521 (row 7, I–P).
    Fit the modules while soldering the sockets so the rows stay parallel.
 2. **Low parts** in the middle column: R1, R2, R3, C3. They sit between the
-   drivers, not under them.
+   drivers, not under them. Then the pack input below A1: Q1 in column F
+   (G at F18, D at F19, S at F20), F1 at H19–H20 and R4 at J19–J20.
 3. **D1:** the cathode band goes on the square pad, K23.
 4. **C1, C2:** the + lead (longer) goes on the square pad.
 5. **Headers** along the bottom edge.
-6. **Wires**, one step at a time: `perfboard.md` lists them in the same four
+6. **Wires**, one step at a time: `perfboard.md` lists them in the same five
    steps and numbers as the drawing, with the gauge for each. Heavy nets
-   (VBAT, GND, motor coils) need 20 AWG or heavier and are drawn thicker. A
+   (the pack input, VBAT, GND, motor coils) need 20 AWG or heavier and are drawn thicker. A
    length-1 wire can be a solder bridge.
 7. **Check before power:** continuity on every GND pin, and no continuity
    between VBAT, 3V3 and GND. Then plug in the LM2596 only after setting it to

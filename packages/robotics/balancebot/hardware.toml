@@ -184,6 +184,61 @@ part = "nema17-stepper"
 ref = "J5"
 value = "Motor right"
 
+# Pack input protection, carrier only: J1's BAT+ through F1 and Q1 to VBAT.
+#
+# F1, a 3 A hold PTC, limits a short anywhere on VBAT (the drivers' VMOT, the
+# buck lead, the divider) to the pack's fault current for its trip time.
+# BSMD1812-300-24V (C7500481), BHFUSE datasheet: Ihold 3.00 A, Itrip 6.00 A at
+# 25 C, Vmax 24 V, Imax 40 A, R1max 0.060 ohm; Ihold derates to 2.55 A at 40 C.
+# The 16 V part in the same family (C883162, the integrated robocar carrier's)
+# leaves 3.4 V over a full 3S pack's 12.6 V; the 24 V one leaves 11.4 V, for the
+# overshoot of hot-plugging a pack into 200 uF of bulk capacitance, and fits the
+# same 1812 pads.
+#
+# Q1, a P-MOSFET high-side switch: drain to F1 (the pack side), source to VBAT,
+# gate to GND through R4. Plugged in the right way the body diode conducts
+# first, the gate sits 12.6 V below the source and the channel turns on;
+# reversed, the gate is above the source and the body diode is reverse-biased,
+# so nothing on the board sees the reversed pack. ZXMP4A16G (C141324), Diodes
+# DS33584 Rev. 6-2: VDSS -40 V, VGSS +-20 V, RDS(on) max 60 mohm at VGS -10 V
+# and ID -3.8 A, ID -4.6 A continuous on 25 x 25 mm of 1 oz copper (RthJA
+# 62.5 C/W, note 6), VGS(th) -1.0 V min. Against a 3S pack: |VGS| reaches
+# 12.6 V, 7.4 V under the 20 V rating, so there is no gate zener. At the PTC's
+# 3 A hold it dissipates at most 0.54 W (60 mohm, 25 C), about a 34 C rise at
+# the datasheet's RthJA; the carrier's copper around the SOT-223 is smaller
+# than its 25 x 25 mm test board, so the rise will be higher. The robot's real
+# pack current is not measured yet (#747). At the BMS's 9 V cutoff |VGS| is
+# still 9 V, well past the -4.5 V the 100 mohm RDS(on) rating is given at.
+#
+# Power-stage checklist (.claude/rules/power-stage-checklist.md) for this
+# input stage: 1-2 (dropout, low-battery cutoff) and 4-7 belong to the LM2596
+# module, off the board; 3 (input protection) is F1 and Q1 above; 8 (layout)
+# is the fixed 1.5 mm PACK_IN and PACK_FUSED tracks in board.toml.
+[parts.fuse_in]
+name = "3 A hold PTC fuse, pack input"
+kind = "fuse"
+build = "carrier"
+part = "polyfuse-1812"
+ref = "F1"
+value = "3A hold 24V"
+lcsc = "C7500481"
+
+[parts.rp_fet]
+name = "ZXMP4A16G reverse-polarity P-MOSFET"
+kind = "mosfet"
+build = "carrier"
+part = "zxmp4a16g"
+ref = "Q1"
+
+[parts.rp_gate]
+name = "10 kΩ gate resistor to GND"
+kind = "resistor"
+build = "carrier"
+part = "r0805"
+ref = "R4"
+value = "10k"
+lcsc = "C17414"
+
 [parts.bulk_left]
 name = "100 µF 35 V bulk capacitor, left driver"
 kind = "capacitor"
@@ -265,10 +320,36 @@ part = "m3-mounting-hole"
 ref = "H4"
 
 # Motor power straight from the pack; never from the XIAO's battery pads.
+# The harness wires the pack to VBAT; the carrier puts F1 and Q1 between them.
 [[rails]]
 name = "VBAT"
+build = "harness"
 from = "pack.BAT+"
 to = ["buck.IN+", "drv_left.VMOT", "drv_right.VMOT"]
+
+[[rails]]
+name = "PACK_IN"
+build = "carrier"
+from = "pack.BAT+"
+to = ["fuse_in.1"]
+
+[[rails]]
+name = "PACK_FUSED"
+build = "carrier"
+from = "fuse_in.2"
+to = ["rp_fet.D"]
+
+[[rails]]
+name = "VBAT"
+build = "carrier"
+from = "rp_fet.S"
+to = ["buck.IN+", "drv_left.VMOT", "drv_right.VMOT"]
+
+[[rails]]
+name = "PFET_GATE"
+build = "carrier"
+from = "rp_fet.G"
+to = ["rp_gate.A"]
 
 # A continuation: same name, no `from` — these loads join the VBAT rail above.
 [[rails]]
@@ -334,6 +415,7 @@ to = [
     "bulk_right.-",
     "sense_bottom.B",
     "sense_filter.B",
+    "rp_gate.B",
 ]
 
 # `pins` wires each named driver pin to the same-named pin on the load, one net

@@ -6,3 +6,11 @@
 (rule "GND thermals may resolve to one spoke"
 	(condition "A.Type == 'Pad' && A.NetName == 'GND'")
 	(constraint min_resolved_spokes 1))
+
+# The GND pour stays 1.9 mm off each M3 hole's edge, 3.5 mm from its centre:
+# outside an M3 washer, so a screw head or standoff never sits on the pour's
+# edge (pre-order review N6: the fill reached 0.25 mm from the holes).
+(rule "pour clear of the mounting holes"
+	(condition "A.Type == 'Zone' && B.Reference == 'H*'")
+	(constraint hole_clearance (min 1.9mm))
+	(constraint clearance (min 1.9mm)))

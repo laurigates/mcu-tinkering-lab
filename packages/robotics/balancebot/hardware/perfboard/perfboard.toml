@@ -41,9 +41,24 @@ D1 = [10, 22, 0]
 J4 = [1, 23, 90]
 J1 = [7, 23, 90]
 J5 = [13, 23, 90]
+# Pack input protection, above J2: F1 (PTC), then Q1 (P-FET, G D S) and its
+# gate resistor R4.
+F1 = [7, 18, 270]
+Q1 = [5, 17, 0]
+R4 = [9, 19, 90]
+
+# The PCB's 1812 PTC has no through-hole twin in the registry.
+[swaps.F1]
+footprint = "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P2.54mm_Vertical"
+value = "radial PTC, 3 A hold"
 
 # Build steps, one solder-side panel each. Every net belongs to exactly one;
 # within a step, nets take the palette's slots in this order (at most 8).
+[[steps]]
+title = "Pack input"
+subtitle = "J1 through F1 and the reverse-polarity FET Q1"
+nets = ["PACK_IN", "PACK_FUSED", "PFET_GATE"]
+
 [[steps]]
 title = "Power"
 subtitle = "VBAT, GND and the 5 V feed"

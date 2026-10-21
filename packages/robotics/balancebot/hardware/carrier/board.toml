@@ -28,7 +28,10 @@ J4 = [5.0, 24.0, 270]    # left motor
 J5 = [85.0, 36.0, 90]    # right motor
 J3 = [36.11, 47.0, 90]   # GY-521 socket at the rear edge of its box; the module lies flat,
                          # component side up, VCC on pin 1 (left), X arrow toward FWD
-J1 = [20.0, 55.5, 0]     # battery, JST-XH 2: BAT+ on pad 1 (left)
+J1 = [22.5, 55.5, 180]   # battery, JST-XH 2: BAT+ on pad 1 (right, toward F1)
+F1 = [29.5, 55.5, 0]     # 3 A hold PTC, pack input
+Q1 = [38.0, 55.5, 180]   # reverse-polarity P-MOSFET: tab (drain) toward F1, S/D/G pins east
+R4 = [45.0, 58.5, 0]     # Q1 gate to GND
 J2 = [60.0, 56.0, 0]     # LM2596 module
 D1 = [71.0, 50.0, 0]     # B5819W, buck -> XIAO 5V
 C1 = [9.75, 44.0, 0]     # VMOT bulk, left driver
@@ -36,7 +39,7 @@ C2 = [77.75, 14.0, 0]    # VMOT bulk, right driver
 R1 = [31.5, 31.0, 90]    # nENABLE pull-up, beside A1's EN pin
 R2 = [62.0, 4.0, 0]      # pack divider top
 R3 = [62.0, 9.0, 0]      # pack divider bottom
-C3 = [61.5, 14.5, 0]     # pack divider filter
+C3 = [34.0, 6.38, 180]   # pack divider filter at the ADC pin: its PACK_SENSE pad 2.3 mm from U1:1
 H1 = [4.0, 4.0, 0]
 H2 = [86.0, 4.0, 0]
 H3 = [4.0, 58.0, 0]
@@ -47,24 +50,137 @@ H4 = [86.0, 58.0, 0]
 # information (the holes are self-evident; J1 is labelled by the +/- texts below).
 hidden_refs = ["H1", "H2", "H3", "H4", "J1"]
 # Moved off the library default where it lands on a neighbour's silkscreen.
-ref_positions = { J3 = [57.0, 47.0] }
+ref_positions = { J3 = [57.0, 47.0], J4 = [5.0, 19.8], J2 = [72.5, 57.0] }
 # Seeed's reference text is below KiCad's minimum silkscreen height.
 ref_sizes = { U1 = 1.0 }
 # Where the GY-521 lies flat on its socket (21 x 16 mm), so nothing tall goes under it.
 rects = [[34.5, 31.5, 55.5, 48.5]]
 texts = [
-    { text = "balancebot carrier", at = [45.0, 52.0], size = 1.0 },
+    { text = "balancebot carrier", at = [48.0, 60.8], size = 1.0 },
     { text = "FWD ^", at = [45.0, 28.0], size = 1.2 },
     { text = "GY-521: X arrow to FWD", at = [45.0, 30.0], size = 1.0 },
-    { text = "+", at = [20.0, 51.5], size = 1.2 },
-    { text = "-", at = [22.5, 51.5], size = 1.2 },
+    { text = "+", at = [22.5, 59.6], size = 1.2 },
+    { text = "-", at = [20.0, 59.6], size = 1.2 },
+    # A Pololu-format driver fits its socket turned 180 degrees (two 1x8 rows
+    # 12.7 mm apart): mark the VMOT, EN and DIR ends to match the module's own
+    # pin labels (pre-order review S1).
+    { text = "VMOT", at = [9.0, 37.4], size = 1.0 },
+    { text = "EN", at = [26.7, 41.2], size = 1.0 },
+    { text = "DIR", at = [26.7, 18.6], size = 1.0 },
+    { text = "VMOT", at = [76.0, 18.6], size = 1.0 },
+    { text = "EN", at = [63.3, 18.6], size = 1.0 },
+    { text = "DIR", at = [63.3, 41.2], size = 1.0 },
+    # The buck lead's pins (registry lm2596-buck-module: IN+, IN-, OUT+, OUT-)
+    # and the motor coils (nema17-stepper: A1, A2, B1, B2), by their pads (S3).
+    { text = "IN+", at = [60.0, 52.3], size = 1.0 },
+    { text = "-", at = [62.5, 52.3], size = 1.0 },
+    { text = "5V", at = [65.0, 52.3], size = 1.0 },
+    { text = "-", at = [67.5, 52.3], size = 1.0 },
+    { text = "A1", at = [9.6, 24.0], size = 1.0 },
+    { text = "A2", at = [9.6, 26.5], size = 1.0 },
+    { text = "B1", at = [9.6, 29.0], size = 1.0 },
+    { text = "B2", at = [9.6, 31.5], size = 1.0 },
+    { text = "A1", at = [79.8, 36.0], size = 1.0 },
+    { text = "A2", at = [79.8, 33.5], size = 1.0 },
+    { text = "B1", at = [79.8, 31.0], size = 1.0 },
+    { text = "B2", at = [79.8, 28.5], size = 1.0 },
+    # Polarity beside the polarised SMD parts, larger than their footprints'
+    # own marks (S2): C1's and C2's "+" (pad 1), D1's cathode (pad 1, XIAO 5V).
+    { text = "+", at = [3.8, 44.0], size = 1.2 },
+    { text = "+", at = [71.8, 14.0], size = 1.2 },
+    { text = "K", at = [67.4, 50.0], size = 1.2 },
+]
+
+# Fixed tracks: build_board.py lays them down locked; route_board.py walls
+# them off from Freerouting and drops the pad under each first point from its
+# netlist, since the track already joins it to the pad under the last.
+#
+# The pack input, J1's BAT+ to F1 to Q1's drain tab, at 1.5 mm.
+[[tracks]]
+name = "pack input"
+net = "PACK_IN"
+layer = "F.Cu"
+width_mm = 1.5
+points = [[22.5, 55.5], [27.275, 55.5]]
+
+[[tracks]]
+name = "F1 to Q1's drain"
+net = "PACK_FUSED"
+layer = "F.Cu"
+width_mm = 1.5
+points = [[31.725, 55.5], [34.85, 55.5]]
+
+# Q1's drain tab to its drain pin, under the package between G and S: both
+# are pad 2, and with the track above walling the tab in, Freerouting left
+# the pair unrouted.
+[[tracks]]
+name = "Q1 drain tab to pin"
+net = "PACK_FUSED"
+layer = "F.Cu"
+width_mm = 1.0
+points = [[34.85, 55.5], [41.15, 55.5]]
+
+# VBAT, all on F.Cu and with no via (pre-order review N2). Routed, it reached
+# A2's VMOT, C2 and R2 through 30 mm of B.Cu, which also cut the B.Cu GND
+# plane, and one 1.0/0.5 mm via; a re-route with Q1 still put one via in
+# series between Q1 and J2, and another before C1. The chain: C1's + pad to
+# A1's VMOT, A1's VMOT to Q1's source above J1 and F1, Q1's source to the
+# buck lead's IN+ pad (J2:1); on the right, A2's VMOT and the divider top (R2)
+# onto C2's + pad, and the trunk from there round the east edge, outside J5
+# and the motor tracks, and under J2 to the same IN+ pad.
+[[tracks]]
+name = "C1 to A1 VMOT"
+net = "VBAT"
+layer = "F.Cu"
+width_mm = 1.5
+points = [[7.05, 44.0], [7.05, 42.0], [10.27, 38.78], [14.0, 38.78]]
+
+[[tracks]]
+name = "VBAT west, A1 VMOT to Q1"
+net = "VBAT"
+layer = "F.Cu"
+width_mm = 1.5
+points = [
+    [14.0, 38.78], [16.6, 41.38], [16.6, 45.1], [22.0, 50.5], [41.15, 50.5],
+    [41.15, 53.2],
+]
+
+[[tracks]]
+name = "VBAT east, Q1 to J2"
+net = "VBAT"
+layer = "F.Cu"
+width_mm = 1.5
+points = [[41.15, 53.2], [57.2, 53.2], [60.0, 56.0]]
+
+[[tracks]]
+name = "A2 VMOT to C2"
+net = "VBAT"
+layer = "F.Cu"
+width_mm = 1.5
+points = [[76.0, 21.0], [76.0, 19.4], [75.05, 18.45], [75.05, 14.0]]
+
+[[tracks]]
+name = "R2 to C2"
+net = "VBAT"
+layer = "F.Cu"
+width_mm = 1.0
+points = [[61.0, 4.0], [61.0, 2.3], [73.0, 2.3], [75.05, 4.35], [75.05, 14.0]]
+
+[[tracks]]
+name = "VBAT trunk, C2 to J2"
+net = "VBAT"
+layer = "F.Cu"
+width_mm = 1.5
+points = [
+    [75.05, 14.0], [75.05, 9.0], [88.6, 9.0], [88.6, 52.0], [74.6, 52.0],
+    [74.6, 60.6], [60.0, 60.6], [60.0, 56.0],
 ]
 
 # Freerouting width classes, in this order. `nets` are net names or fnmatch
 # patterns over them; every pattern must match, and no net may be in two classes.
 [[net_classes]]
 name = "power"
-nets = ["VBAT", "GND", "MOT?_*"]
+nets = ["PACK_IN", "PACK_FUSED", "VBAT", "GND", "MOT?_*"]
 track_um = 1000
 clearance_um = 300
 via_um = [1000, 500]
@@ -84,7 +200,14 @@ via_um = [600, 300]
 
 # A copper pour on both layers after routing. The .kicad_dru lets a thermal
 # resolve to one spoke because route_board first checks every pad of this net
-# has a routed track.
+# has a routed track. It also keeps the pour 1.9 mm off each M3 hole, 3.5 mm
+# from its centre, an M3 washer's radius (pre-order review N6).
+#
+# Stitching vias (N5): routed, the board had three GND vias, and three pour
+# islands reached the rest of the ground through one thermal spoke each
+# (F.Cu between each driver's pin rows, B.Cu under the GY-521). A via goes at
+# each 5 mm grid point where both layers' fill holds it, under the GY-521's
+# outline too: the module sits on J3's socket, above the board.
 [pour]
 net = "GND"
 layers = ["F.Cu", "B.Cu"]
@@ -92,3 +215,15 @@ clearance_mm = 0.4
 min_thickness_mm = 0.25
 thermal_gap_mm = 0.3
 spoke_mm = 0.35
+stitch = { pitch_mm = 5.0, via_um = [600, 300] }
+
+# A via beside each SMD GND pad, so the bulk capacitors' and the divider's
+# grounds reach the B.Cu plane directly (N5); the bulk capacitors' are
+# required. They are the power class's 1.0/0.5 mm: placed at 0.6/0.3 and
+# grown afterwards, C3's landed on its own pad.
+[fanout]
+nets = ["GND"]
+via_um = [1000, 500]
+track_um = 500
+reach_mm = 2.5
+required = ["C1:2", "C2:2"]

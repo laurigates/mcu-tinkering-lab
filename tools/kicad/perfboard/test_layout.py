@@ -413,7 +413,7 @@ class LiveProjectTests(unittest.TestCase):
 
     def test_committed_files_are_current(self):
         layout = cli.generate(LIVE)
-        self.assertEqual((layout.parts, layout.wires, layout.nets), (15, 54, 22))
+        self.assertEqual((layout.parts, layout.wires, layout.nets), (18, 58, 25))
         for path, text in layout.outputs.items():
             with self.subTest(path=path.name):
                 self.assertEqual(
