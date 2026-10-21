@@ -81,6 +81,19 @@ several traps below are version-specific: after a KiCad upgrade, re-run
    script once reported "no via" on a path through two. Then run the
    `pcb-reviewer` agent (`.claude/agents/pcb-reviewer.md`) for an adversarial
    review against the datasheets, and `.claude/rules/power-stage-checklist.md` for any regulator.
+   Run it as a loop:
+   - Verify each finding against the board before acting on it: the review is
+     model output, and its numbers can be wrong.
+   - Fix in `board.toml`, `hardware.toml` or `tools/kicad`, re-route
+     (`carrier-board-checked`), then re-measure with `just <p>::carrier-measure
+     <subcommand>` where it exists (`path`, `cuts`, `vias-in-pads`, `plane`,
+     `resistance`, `clearance-to-holes`); add `--ref <git-ref>` for the before
+     side of the table.
+   - Write the README's before/after table only from measurement output.
+   - Re-run the reviewer on the fixed board. On the integrated carrier every
+     fix round introduced a regression the next pass found: a 0.6/0.3 mm VBAT
+     via after walling off F.Cu, a neck shared by the servo and head feeds,
+     and a split top-half GND after widening +5V.
 6. `just <p>::carrier-fab` (runs `carrier-check` first): Gerbers, drill, BOM
    and CPL. `just kicad::check` runs what CI runs. The CPL adds each LCSC
    part's checked rotation offset (trap 32); a new LCSC number needs an entry
