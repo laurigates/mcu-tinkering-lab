@@ -222,6 +222,7 @@ TABLE_KEYS = {
     "net_classes": {"name", "nets", "track_um", "clearance_um", "via_um"},
     "signal": {"track_um", "clearance_um", "via_um"},
     "keepouts": {"name", "rect"},
+    "route_keepouts": {"name", "layer", "rect"},
     "tracks": {"name", "net", "layer", "width_mm", "points"},
     "fanout": {
         "nets",
@@ -254,7 +255,7 @@ CUT_CLEARANCE_MM = 1.0
 # label does not fit at 1.0 (build_board.py keeps the stroke at 0.16 mm or
 # more at any size).
 SILK_MIN_MM = 0.8
-LIST_TABLES = ("net_classes", "keepouts", "cutouts", "tracks")
+LIST_TABLES = ("net_classes", "keepouts", "route_keepouts", "cutouts", "tracks")
 REQUIRED = ("outline", "placement", "net_classes", "signal", "pour")
 
 
@@ -329,6 +330,36 @@ def _validate_keepouts(where: str, data: dict[str, Any], size: Any) -> list[str]
             )
     if len(set(names)) != len(names):
         errors.append(f"{where}: [keepouts] names repeat: {names}")
+    return errors
+
+
+def _validate_route_keepouts(where: str, data: dict[str, Any], size: Any) -> list[str]:
+    """[[route_keepouts]]: rectangles Freerouting may not route through, on one
+    copper layer. Unlike [[keepouts]] they put no rule area on the board, so
+    footprints and the pour may still go there (route_board.py, dsn.py)."""
+    errors = []
+    names = []
+    for k in data.get("route_keepouts", []):
+        name = k.get("name")
+        if not isinstance(name, str) or not name:
+            errors.append(f"{where}: [route_keepouts] needs a name for each rectangle")
+            continue
+        names.append(name)
+        if k.get("layer") not in ("F.Cu", "B.Cu"):
+            errors.append(
+                f"{where}: [route_keepouts] {name!r}: layer must be F.Cu or B.Cu"
+            )
+        if not _rect(k.get("rect")):
+            errors.append(
+                f"{where}: [route_keepouts] {name!r}: rect must be [x0, y0, x1, y1], "
+                "x0 < x1 and y0 < y1"
+            )
+        elif size is not None and not _inside(k["rect"], size):
+            errors.append(
+                f"{where}: [route_keepouts] {name!r}: rect {k['rect']} is not inside [outline]"
+            )
+    if len(set(names)) != len(names):
+        errors.append(f"{where}: [route_keepouts] names repeat: {names}")
     return errors
 
 
@@ -694,6 +725,7 @@ def validate_config(cfg: paths.BoardConfig, nl: netlist.Netlist) -> list[str]:
                 )
     errors += _validate_cut_clearance(where, data, size)
     errors += _validate_keepouts(where, data, size)
+    errors += _validate_route_keepouts(where, data, size)
     errors += _validate_panel(where, data)
     errors += _validate_cutouts(where, data, size)
     errors += _validate_tracks(where, data, nl, size)

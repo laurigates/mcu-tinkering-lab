@@ -190,13 +190,18 @@ several traps below are version-specific: after a KiCad upgrade, re-run
 
 ### Found laying out the integrated robocar carrier
 
-24. **Freerouting gives each net one track width**, so a net class can be no
-    wider than the narrowest pin pitch on any of its nets allows: 0.25 mm at a
-    0.5 mm-pitch TQFN, 0.45 mm at 0.65 mm-pitch SSOP. A power net that reaches a
-    fine-pitch pin caps the whole rail; give that chip its own net (the
-    integrated carrier's AMP_5V behind a ferrite bead) rather than thinning
-    the rail. Freerouting also necks tracks below the class width at fine-pitch
-    pads, so such a board needs a smaller `min_track_width` than 0.2 mm.
+24. **Freerouting gives each net one track width, and necks it into a
+    fine-pitch pin.** A power net reaching an SSOP's 0.4 mm pins does not cap
+    the rail: the integrated carrier's +5V routes at 0.8 mm and lands on the
+    TB6612FNG's VM pins at full width, 0.202 mm from the signal pins beside
+    them (DRC's minimum is 0.2 mm). At 0.45 mm,
+    the width once assumed to be the cap, its servo and head feed necked to
+    0.337 mm instead. A 0.5 mm-pitch TQFN's 0.25 mm pads are another matter:
+    the integrated carrier gives the MAX98357A its own AMP_5V net behind a
+    ferrite bead. Necking goes below 0.2 mm, so such a board needs a smaller
+    `min_track_width`. A wider class also re-cuts the pour: at 0.8 mm the
+    +5V runs split the integrated carrier's top-half GND, so re-check the pour
+    islands (`carrier-review`) after any class change.
 25. **`kicad-cli` cannot write an ERC exclusion.** KiCad matches an exclusion
     only against its own serialisation of the marker, and a hand-built key
     (`pin_to_pin|x|y|uuid|uuid|...`) loads as a separate excluded marker while
@@ -280,6 +285,30 @@ several traps below are version-specific: after a KiCad upgrade, re-run
 33. **EasyEDA's component API refuses a browser User-Agent** with an HTML
     error page under HTTP 200 and Python's default with a 403; curl's is
     served. `lcsc_rotation.fetch` sends curl's.
+
+### Found in the integrated carrier's layout reviews
+
+36. **Freerouting ignores a class's `use_via` where it does not fit.** Every
+    via padstack in the DSN is open to every net, and it drops to the 0.6/0.3
+    mm signal via, deterministically, at the same spot on every run; removing
+    that via from the structure's `(via ...)` list changes nothing. Moving
+    parts to make room did not help either. `route_board.py` grows each
+    undersized via to its class's size and lets DRC judge the fit.
+37. **A fanout via can land in a neighbouring pin's pad of its own net.**
+    Same-net SMD pads were no obstacle, so U7:4's diagonal candidate sat
+    inside U7:3, where the hole drains paste at reflow. Fanout vias now clear
+    every pad but their own, and the route fails on any via inside an SMD pad
+    but an `in_pad`, checked after fanout so both kinds are covered.
+38. **Freerouting routes "redundant" GND tracks across the board** (it does
+    not know the pour), and they block a via or a power track where you need
+    it. `[[route_keepouts]]` (one layer, router-only, no rule area) moves them.
+39. **On macOS each Freerouting run steals the focus** unless the JVM runs
+    with `-Djava.awt.headless=true -Dapple.awt.UIElement=true`, even with its
+    GUI off.
+40. **A path script that ignores layers lies.** Joining a B.Cu track end to an
+    F.Cu track it only crosses reported "no via" for a path through a via, and
+    that claim reached the README. Measure per layer, with vias and
+    through-hole pads as the only joins between layers.
 
 ## Verify the gate can fail
 

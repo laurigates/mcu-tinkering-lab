@@ -213,12 +213,12 @@ rotation = 0
 max_err_mm = 0.0
 checked = "2026-10-20"
 
-[C17747] # 54.9 k
+[C17756] # 56 k
 footprint = "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
 lcsc_footprint = "R0805"
 rotation = 0
 max_err_mm = 0.0
-checked = "2026-10-19"
+checked = "2026-10-21"
 
 [C149504] # 100 k
 footprint = "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"

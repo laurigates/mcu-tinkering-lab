@@ -48,6 +48,7 @@ KEYS = {
     "tracks",
     "fanout",
     "keepouts",
+    "route_keepouts",
     "cutouts",
     "panel",
 }

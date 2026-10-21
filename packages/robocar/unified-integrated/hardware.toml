@@ -86,7 +86,11 @@ ref = "U9"
 
 # --- 5 V buck converter (replaces the LM2596 module) ------------------------
 # TI SLVSD90B Table 7-2 for 5 V: R1 54.9 kΩ over R2 10 kΩ (VFB 0.768 V, so
-# 4.98 V), L 3.3-4.7 µH, and 20-68 µF of low-ESR output capacitance (C13,
+# 4.98 V). R12 is 56 kΩ instead: 5.07 V typical, 4.94-5.19 V over VFB's
+# 749-787 mV. At typical VFB, less the trunk's roughly 50 mV at 2 A, VM stays
+# in the TB6612FNG's VM >= 5 V operating row (1.0 A per channel; 0.4 A below
+# 5 V); at VFB's minimum it does not. It stays under the MAX98357A's 5.5 V. The 5 V and 6.5 V rows share L and Cout (second pre-fab
+# layout review, S5). L 3.3-4.7 µH, and 20-68 µF of low-ESR output capacitance (C13,
 # C14, C20). The TPS563208, not the TPS563201: the same pins and table, but
 # forced-continuous, so it sinks current as well as sourcing it. A motor that
 # brakes or reverses pushes energy back into 5V through the TB6612FNG's body
@@ -101,7 +105,7 @@ ref = "U9"
 # cycle): 6.7 V, 3.3 V per cell. Below that 5V sags with the pack. EN goes
 # through a divider (R25/R26) so the converter stops drawing from a flat
 # pack. EN has its own resistance to GND (REN 600-2400 kΩ, 1500 typical,
-# Table 5.5) in parallel with R26, and rises at 1.38-1.47 V typical (Figure
+# SLVSD90B 5.5) in parallel with R26, and rises at 1.38-1.47 V typical (Figure
 # 5-4, VENH 1.6 V maximum) and falls at 1.05-1.2 V (Figure 5-3). 100 kΩ over
 # 36 kΩ turns it on at about 5.5 V typical and is guaranteed on by 6.3 V
 # (1.6 V across 36 kΩ || 600 kΩ), under the 6.7 V where the buck regulates;
@@ -163,11 +167,14 @@ ref = "C9"
 value = "10uF 25V"
 lcsc = "C15850"
 
+# C11, beside VIN, is a 10 µF: TI asks for over 10 µF of ceramic as the
+# decoupling capacitor (SLVSD90B 7.2.2.4), and the 100 nF is optional, so the
+# 10 µF takes the tightest loop (second pre-fab layout review, S6).
 [parts.buck_cin2]
-name = "10 µF buck input"
+name = "10 µF buck input, beside VIN"
 kind = "capacitor"
 part = "c0805"
-ref = "C10"
+ref = "C11"
 value = "10uF 25V"
 lcsc = "C15850"
 
@@ -186,10 +193,10 @@ value = "100uF 35V"
 lcsc = "C2836437"
 
 [parts.buck_cin_hf]
-name = "100 nF buck input, beside VIN"
+name = "100 nF buck input"
 kind = "capacitor"
 part = "c0805"
-ref = "C11"
+ref = "C10"
 value = "100nF"
 lcsc = "C49678"
 
@@ -231,12 +238,12 @@ value = "22uF 25V"
 lcsc = "C45783"
 
 [parts.buck_fb_top]
-name = "54.9 kΩ feedback divider, top"
+name = "56 kΩ feedback divider, top"
 kind = "resistor"
 part = "r0805"
 ref = "R12"
-value = "54.9k"
-lcsc = "C17747"
+value = "56k"
+lcsc = "C17756"
 
 [parts.buck_fb_bot]
 name = "10 kΩ feedback divider, bottom"
@@ -274,6 +281,19 @@ lcsc = "C15850"
 
 # VM1 (pin 24) is at the other end of the package from VM2/VM3 (pins 13/14),
 # 11.6 mm of track from C16: its own 10 µF beside it (pre-fab layout review, m3).
+# The XIAO's 5V pad is its USB-C VBUS (docs/reference/boards/xiao-esp32s3.md;
+# Seeed asks for a diode between an external supply and it). Without one, a
+# USB cable on the head's XIAO and the buck feed each other: the PC's port
+# carries motor and servo current, or the buck back-drives the PC. A B5819W
+# from 5V to the ribbon's 5V conductors, as the balancebot carrier's D1: USB
+# then reverse-biases it, and the XIAO sees 5V less about 0.4 V (pre-fab
+# review of the socketed carrier, BL-2).
+[parts.xiao_diode]
+name = "B5819W Schottky, 5V to the XIAO's 5V pad"
+kind = "diode"
+part = "b5819w"
+ref = "D1"
+
 [parts.motor_vm1_c]
 name = "10 µF ceramic, TB6612FNG VM1"
 kind = "capacitor"
@@ -1080,7 +1100,7 @@ to = [
     "buck_cout2.A",
     "buck_cout3.A",
     "buck_fb_top.A",
-    "mcu.5V",
+    "xiao_diode.A",
     "motor_driver.VM",
     "motor_vm_c.A",
     "motor_vm1_c.A",
@@ -1093,6 +1113,12 @@ to = [
     "ldo_in.+",
     "tp_power.5V",
 ]
+
+# The ribbon's 5V, behind D1 (above).
+[[rails]]
+name = "XIAO_5V"
+from = "xiao_diode.K"
+to = ["mcu.5V"]
 
 # SD_MODE strapped to the amplifier's VDD (left channel), as on the socketed
 # carrier.

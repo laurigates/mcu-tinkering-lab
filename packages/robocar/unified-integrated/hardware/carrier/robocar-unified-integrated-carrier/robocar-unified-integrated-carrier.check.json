@@ -1,5 +1,5 @@
 {
- "board_sha256": "83cbc6ff818cda825806ec9bb4a5b718b51caf2f6db5e4c9995cd0941c969247",
+ "board_sha256": "5019308fd8ff7d87008aeeccbcc263064cdccb5cd5004506bd644f1f1f38f986",
  "kicad_cli_version": "10.0.7",
  "netlist": {
   "components": {
@@ -20,16 +20,16 @@
    "C10": {
     "footprint": "Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder",
     "in_bom": true,
-    "lcsc": "C15850",
+    "lcsc": "C49678",
     "lib_id": "Device:C",
-    "value": "10uF 25V"
+    "value": "100nF"
    },
    "C11": {
     "footprint": "Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder",
     "in_bom": true,
-    "lcsc": "C49678",
+    "lcsc": "C15850",
     "lib_id": "Device:C",
-    "value": "100nF"
+    "value": "10uF 25V"
    },
    "C12": {
     "footprint": "Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder",
@@ -156,6 +156,13 @@
     "lcsc": "C15850",
     "lib_id": "Device:C",
     "value": "10uF 25V"
+   },
+   "D1": {
+    "footprint": "Diode_SMD:D_SOD-123",
+    "in_bom": true,
+    "lcsc": "C8598",
+    "lib_id": "Device:D_Schottky",
+    "value": "B5819W"
    },
    "F1": {
     "footprint": "Fuse:Fuse_1812_4532Metric_Pad1.30x3.40mm_HandSolder",
@@ -440,9 +447,9 @@
    "R12": {
     "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
     "in_bom": true,
-    "lcsc": "C17747",
+    "lcsc": "C17756",
     "lib_id": "Device:R",
-    "value": "54.9k"
+    "value": "56k"
    },
    "R13": {
     "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
@@ -830,16 +837,12 @@
      "1"
     ],
     [
+     "D1",
+     "2"
+    ],
+    [
      "FB1",
      "1"
-    ],
-    [
-     "J1",
-     "1"
-    ],
-    [
-     "J1",
-     "14"
     ],
     [
      "J11",
@@ -1594,20 +1597,6 @@
      "1"
     ]
    ],
-   "HEAD2_+5V": [
-    [
-     "J16",
-     "1"
-    ],
-    [
-     "J16",
-     "14"
-    ],
-    [
-     "U3",
-     "14"
-    ]
-   ],
    "HEAD2_GND": [
     [
      "J16",
@@ -1712,17 +1701,17 @@
      "7"
     ]
    ],
-   "HEAD3_+5V": [
+   "HEAD2_XIAO_5V": [
     [
-     "J17",
+     "J16",
      "1"
     ],
     [
-     "J17",
+     "J16",
      "14"
     ],
     [
-     "U4",
+     "U3",
      "14"
     ]
    ],
@@ -1830,17 +1819,17 @@
      "7"
     ]
    ],
-   "HEAD_+5V": [
+   "HEAD3_XIAO_5V": [
     [
-     "J2",
+     "J17",
      "1"
     ],
     [
-     "J2",
+     "J17",
      "14"
     ],
     [
-     "U1",
+     "U4",
      "14"
     ]
    ],
@@ -1946,6 +1935,20 @@
     [
      "U1",
      "7"
+    ]
+   ],
+   "HEAD_XIAO_5V": [
+    [
+     "J2",
+     "1"
+    ],
+    [
+     "J2",
+     "14"
+    ],
+    [
+     "U1",
+     "14"
     ]
    ],
    "I2C_SCL": [
@@ -2371,6 +2374,20 @@
      "U10",
      "3"
     ]
+   ],
+   "XIAO_5V": [
+    [
+     "D1",
+     "1"
+    ],
+    [
+     "J1",
+     "1"
+    ],
+    [
+     "J1",
+     "14"
+    ]
    ]
   },
   "unconnected": {
@@ -2484,5 +2501,5 @@
    ]
   }
  },
- "schematic_sha256": "5d2cd88f1ab3caf53477a61602201371c499e724b83a9eb05eeac86e9739d8c9"
+ "schematic_sha256": "f9a39826109fead372528b7d6e4b836e5d7e515338f5783b78434499824b3b8c"
 }
