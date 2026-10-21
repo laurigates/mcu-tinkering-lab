@@ -321,8 +321,7 @@ live-probe-test:
 carrier-schematic: (_carrier-schematic project_dir)
 
 # Rewrites the .kicad_pcb from scratch. Freerouting does not route the same
-# way twice, so commit the board you checked, not a re-run of it. The
-# placement in hardware/carrier/board.toml is provisional (#750).
+# way twice, so commit the board you checked, not a re-run of it.
 #
 # Place, autoroute (Freerouting) and pour the carrier board
 [group: "carrier"]
@@ -355,8 +354,8 @@ carrier-review: (_carrier-review project_dir)
 [group: "carrier"]
 carrier-measure *args: (_carrier-measure project_dir args)
 
-# The BOM and CPL cover the SMD parts only; skip them to hand-solder. The
-# board is PROVISIONAL (#750): see hardware/carrier/README.md before ordering.
+# The BOM and CPL cover the SMD parts only; skip them to hand-solder. See
+# hardware/carrier/README.md § Ordering, and its bench checks, before paying.
 #
 # Gerbers and drill files for JLCPCB, zipped, plus the BOM and CPL for its assembly service
 [group: "carrier"]

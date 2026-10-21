@@ -19,7 +19,8 @@ prints, without failing on any of it:
 - for each [silk] cut line, the nearest copper (pad, track, via, zone fill) and
   courtyard, flagged inside ``CUT_MM``;
 - the smallest silkscreen text height and stroke, flagged under JLCPCB's
-  1.0 mm / 0.15 mm.
+  1.0 mm / 0.15 mm, and the thinnest silkscreen line or shape (footprint
+  drawings and the board's), flagged under 0.15 mm.
 
 ``--dump`` also writes the board's copper as JSON (``dump.py``, from the board
 already loaded), and the recipe then prints the plane-connectivity section
@@ -249,6 +250,31 @@ def review(spec, dump_to=None):
         if small:
             print(f"   under {SILK_H_MM} mm: {', '.join(small)}")
         flags += w[1] < SILK_W_MM - 1e-6
+    # Lines and shapes: the footprints' own drawing (polarity marks included)
+    # and the board's, against the same stroke minimum.
+    print(f"== silkscreen lines (JLCPCB: {SILK_W_MM} mm stroke)")
+    shapes = [
+        (mm(g.GetWidth()), fp.GetReference())
+        for fp in board.GetFootprints()
+        for g in fp.GraphicalItems()
+        if g.GetClass() == "PCB_SHAPE"
+        and g.GetLayer() in (pcbnew.F_SilkS, pcbnew.B_SilkS)
+        and g.GetWidth() > 0
+    ]
+    shapes += [
+        (mm(d.GetWidth()), "board")
+        for d in board.GetDrawings()
+        if d.GetClass() == "PCB_SHAPE"
+        and d.GetLayer() in (pcbnew.F_SilkS, pcbnew.B_SilkS)
+        and d.GetWidth() > 0
+    ]
+    if shapes:
+        w = min(shapes)
+        thin = sorted({n for ww, n in shapes if ww < SILK_W_MM - 1e-6})
+        print(f"   thinnest stroke {w[0]:.3f} mm ({w[1]})")
+        if thin:
+            print(f"   under {SILK_W_MM} mm: {', '.join(thin)}")
+        flags += bool(thin)
     print(f"== {flags} flag(s); this report does not gate (carrier-check does)")
 
 

@@ -178,6 +178,34 @@ class TrackKeepoutTests(unittest.TestCase):
             dsn.track_keepouts("(pcb x)", [self.TRUNK], [0, 0], 0)
 
 
+class RectKeepoutTests(unittest.TestCase):
+    """[[route_keepouts]] bind Freerouting on one layer and nothing else."""
+
+    TEXT = '  (structure\n    (via "Via[0-1]_600:300_um")\n  )\n'
+
+    def test_a_rect_is_a_keepout_on_its_layer(self):
+        area = {"name": "under FB", "layer": "B.Cu", "rect": [1.0, 2.0, 3.0, 5.0]}
+        out = dsn.rect_keepouts(self.TEXT, [area], [100.0, 100.0])
+        self.assertIn(
+            '    (keepout "" (polygon B.Cu 0  101000 -102000  103000 -102000'
+            "  103000 -105000  101000 -105000  101000 -102000))\n"
+            '    (via "Via[0-1]_600:300_um")',
+            out,
+        )
+
+    def test_none_leaves_the_text(self):
+        self.assertEqual(dsn.rect_keepouts(self.TEXT, [], [0, 0]), self.TEXT)
+
+    def test_no_via_at_smd_goes_in_the_structure_once(self):
+        out = dsn.no_via_at_smd(self.TEXT)
+        self.assertIn('    (control (via_at_smd off))\n    (via "', out)
+        self.assertEqual(dsn.no_via_at_smd(out), out)
+
+    def test_no_via_at_smd_needs_the_structure_via_line(self):
+        with self.assertRaisesRegex(dsn.DsnError, "no structure"):
+            dsn.no_via_at_smd("(pcb x)")
+
+
 class DropPinsTests(unittest.TestCase):
     """A pad a [[tracks]] entry already joins to its net leaves the netlist
     Freerouting routes, or Freerouting routes it again around the keepouts."""

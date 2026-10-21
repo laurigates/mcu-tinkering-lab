@@ -26,8 +26,8 @@ the KiCad symbol's pin numbers, and names the symbol and footprint:
 `load` parses and type-checks an entry; `validate` checks it against the
 vendored library: every symbol pin mapped exactly once and a pad of the
 footprint, a supported (single-unit, no De Morgan, no hidden power) symbol, and
-the polarity tripwire. A polarised pin ("+"/"-", or "K"/"A" on a part with a
-"K") must be proved by the symbol's own pin name, by the footprint's silkscreen
+the polarity tripwire. A polarised pin ("+"/"-", "K"/"A" on a part with a
+"K", or "G"/"D"/"S" on a part with all three) must be proved by the symbol's own pin name, by the footprint's silkscreen
 text, or by a pinned convention for the symbol (CONVENTIONS); an unproved one
 fails rather than being skipped, because a reversed electrolytic or diode
 agrees with every other check (netlist, board, DRC) built from the same mistake.
@@ -391,13 +391,19 @@ def _polarity(spec: PartSpec, sym_pins: list[symbols.Pin], fp_path: Path) -> Non
 
 
 def polarised(spec: PartSpec) -> list[str]:
-    """The pin names the tripwire must prove: "+" and "-", and "K" and "A" with a "K".
+    """The pin names the tripwire must prove: "+" and "-", "K" and "A" with a
+    "K", and a transistor's "G", "D" and "S" when it has all three.
 
-    An "A" without a "K" is a resistor's or capacitor's A/B, not an anode.
+    An "A" without a "K" is a resistor's or capacitor's A/B, not an anode. A
+    MOSFET fitted with drain and source swapped conducts through its body diode
+    and still agrees with the netlist, the board and DRC. A "G" alone is an
+    RGB LED's green.
     """
     keys = [k for k in ("+", "-") if k in spec.pins]
     if "K" in spec.pins:
         keys += [k for k in ("K", "A") if k in spec.pins]
+    if {"G", "D", "S"} <= set(spec.pins):
+        keys += ["G", "D", "S"]
     return keys
 
 

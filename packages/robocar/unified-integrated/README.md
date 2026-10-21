@@ -6,9 +6,10 @@ The firmware, the pin header (`../unified/main/pin_config.h`) and the three head
 boards are robocar-unified's, unchanged. There is no firmware here.
 
 > **PROVISIONAL: do not order.** The board is placed by hand, routed by Freerouting
-> and passes every carrier gate with KiCad 10.0.6 (ERC, DRC with schematic parity,
-> netlist parity, the board check and its stamp), but nobody has reviewed the
-> layout or the tracks, and the open items under [Design notes](#design-notes) stand.
+> and passes every carrier gate (ERC, DRC with schematic parity, netlist parity,
+> the board check and its stamp). One adversarial layout review has been run and
+> its findings fixed (see [Before ordering](#before-ordering)); the fixed board
+> has not been reviewed again, and the bench items there stand.
 
 ## What changes
 
@@ -71,21 +72,21 @@ placement leaves. As of this commit:
 
 | Main board | Socketed | Integrated |
 |---|---|---|
-| Parts | 39 | 75 |
-| Courtyard area | 5357 mm² | 2280 mm² (−57 %) |
-| SMD / through-hole parts | 19 / 20 | 56 / 19 |
-| Pads | 200 | 312 |
+| Parts | 40 | 77 |
+| Courtyard area | 5381 mm² | 2298 mm² (−57 %) |
+| SMD / through-hole parts | 20 / 20 | 58 / 19 |
+| Pads | 202 | 316 |
 
 Where the area goes:
 
-- The 30 parts the two main boards share take 1337 mm². Most of it is the
+- The 31 parts the two main boards share take 1362 mm². Most of it is the
   connectors, the 2x10 GPIO mirror header and the M3 holes' surroundings, none of
   which shrink.
 - The five breakout sockets and the buck lead take 3687 mm²; the PCA9685 breakout
-  alone is 63 x 26 mm (1625 mm²). Their replacements, 42 parts, take about 890 mm²:
+  alone is 63 x 26 mm (1625 mm²). Their replacements, 46 parts, take 936 mm²:
   the six chips 356 mm², the buck's inductor 46 mm² and input bulk capacitor
-  67 mm², 28 0805 passives and the ferrite bead about 200 mm², the input fuse,
-  and the new servo, LED and speaker connectors 197 mm².
+  67 mm², 29 0805 passives and the ferrite bead 208 mm², the tantalums 52 mm²,
+  D1 11 mm², and the new servo, LED and speaker connectors 197 mm².
 - The three 470 µF electrolytics (332 mm²) became 22 µF tantalums (52 mm²).
 - The socketed carrier's buck converter is off the board: the LM2596 module (about
   43 x 21 mm) sits on the chassis at the end of J4's lead. The integrated buck
@@ -108,7 +109,7 @@ Other differences the numbers do not show:
 
 Every SMD part on the front carries an LCSC number (#808), so JLCPCB can
 assemble the whole main board. `just robocar-unified-integrated::carrier-fab`
-writes `output/assembly/bom-jlc.csv` and `cpl-jlc.csv`: 23 BOM lines, 56
+writes `output/assembly/bom-jlc.csv` and `cpl-jlc.csv`: 24 BOM lines, 58
 placements, one per SMD part. The chips and the inductor take their number
 from their registry entry (`docs/reference/parts/`), the passives from
 `hardware.toml`.
@@ -124,24 +125,27 @@ from their registry entry (`docs/reference/parts/`), the passives from
 | U2 | AMS1117-3.3 | C6186 | Basic |
 | L1 | Bourns SRN6045TA-4R7M | C2044594 | Extended |
 | F1 | BSMD1812-300-16V, 3 A hold, 16 V | C883162 | Extended |
+| D1 | B5819W Schottky, SOD-123 | C8598 | not checked |
 | FB1 | Murata BLM21PG221SN1D, 220 Ω, 2 A, 45 mΩ | C85840 | Extended |
 | C19 | 100 µF 35 V electrolytic, 6.3 x 7.7 mm | C2836437 | Extended |
 | C1-C3, C7, C8 | 22 µF 16 V tantalum, 3528 | C8020 | Extended |
 | C13, C14, C20 | 22 µF 25 V X5R 0805 | C45783 | Basic |
-| C9, C10, C16, C17 | 10 µF 25 V X5R 0805 | C15850 | Basic |
-| C4-C6, C11, C12, C15, C18 | 100 nF 50 V X7R 0805 | C49678 | Basic |
+| C9, C11, C16, C17, C21 | 10 µF 25 V X5R 0805 | C15850 | Basic |
+| C4-C6, C10, C12, C15, C18 | 100 nF 50 V X7R 0805 | C49678 | Basic |
 | R2-R11, R14, R15 | 2.2 kΩ 0805 | C17520 | Basic |
 | R13, R16 | 10 kΩ | C17414 | Basic |
-| R12 | 54.9 kΩ | C17747 | Extended |
+| R12 | 56 kΩ | C17756 | Extended |
 | R25 | 100 kΩ | C149504 | Basic |
-| R26 | 30 kΩ | C17621 | Basic |
+| R26 | 36 kΩ | C4360 | Extended |
 | R17, R20, R23, R24 | 220 Ω | C17557 | Basic |
 | R18, R19, R21, R22 | 47 Ω | C17714 | Basic |
 | R1 | 100 Ω | C17408 | Basic |
 
 Stock and library type are JLCPCB's listing on 2026-10-19. The thinnest stock
-is the inductor (179) and the MCP23017 (424); check both before ordering. 54.9 kΩ
-has no Basic part; it stays, as TI's Table 7-2 value, at one Extended fee.
+is the inductor (179) and the MCP23017 (424); check both before ordering. 56 kΩ
+(R12, see Buck converter) has no Basic part and costs one Extended fee, as TI's
+54.9 kΩ did; so does 36 kΩ (R26, see Pack voltage), 93,700 in stock on
+2026-10-21. JLCPCB lists no 56.2 kΩ.
 
 ### Placement rotation
 
@@ -185,9 +189,9 @@ gives the price. The part prices are fixed:
   (2026-10-19). The chips are most of it: PCA9685 $3.33, MCP23017 $1.77,
   MAX98357A $1.32, TB6612FNG $1.15, TCA9548A $0.81. Attrition parts come on
   top.
-- **Extended parts:** 12 BOM lines, each with a per-order loading fee unless an
-  offer waives it: the six chips, L1, F1, FB1, C19, the tantalums (C8020) and
-  R12. The other 11 lines are Basic.
+- **Extended parts:** 13 BOM lines, each with a per-order loading fee unless an
+  offer waives it: the six chips, L1, F1, FB1, C19, the tantalums (C8020), R12
+  and R26. The other 10 lines are Basic.
 
 ## Panel: mouse bites
 
@@ -204,7 +208,10 @@ mode = "mousebites"` (#809, `tools/kicad/panel.py`, ADR-027's addendum):
   mouse-bite guide. They sit at both ends of every line, at y 50 on the
   vertical line (the middle of head 2), and at x 32 on the main board's bottom
   line, clear of the XT30.
-- **Separating:** snap each piece off along its hole rows, then file the nubs.
+- **Separating:** cut each tab with a saw or a rotary cutting disc beside its
+  hole row, then file the nubs; snapping also works where nothing sits near a
+  tab. Cut, do not snap, the main board's bottom tab at x 32: it is about 3 mm
+  from L1 and C20. Cutting FR-4 makes glass-fibre dust; cut wet or with a mask.
 
 | Piece | Held by tabs at |
 |---|---|
@@ -237,20 +244,29 @@ The circuit choices that are not a copy of a breakout:
   sinks current as well as sourcing it: a motor that brakes or reverses pushes
   energy back into 5 V through the TB6612FNG, and a pulse-skipping converter
   would leave that to charge the rail (whose absolute maximum, at the
-  MAX98357A, is 6 V). For 5 V: R1 54.9 kΩ over R2 10 kΩ (VFB 0.768 V, so
-  4.98 V); L1 4.7 µH ±20 % (Bourns SRN6045TA-4R7M: Isat 6.8 A, Irms 4.5 A,
+  MAX98357A, is 6 V). For 5 V: R12 56 kΩ over R13 10 kΩ (TI's R1 and R2,
+  whose Table 7-2 gives 54.9 kΩ for 4.98 V). VFB is 0.768 V (749-787 mV), so
+  5V is 5.07 V (4.94-5.19 V). At typical VFB, less the trunk's roughly 50 mV
+  at 2 A, VM stays in the TB6612FNG's VM >= 5 V row (1.0 A per channel); at
+  VFB's minimum, 4.94 V, it falls in the 0.4 A row. Either way it stays under
+  the MAX98357A's 5.5 V. The 5 V and 6.5 V rows share L1 and Cout. L1 4.7 µH ±20 % (Bourns SRN6045TA-4R7M: Isat 6.8 A, Irms 4.5 A,
   above the 5.5 A peak at the 5.1 A maximum current limit), since the 3.3 µH
   part is ±30 % and can fall below the table's 3.3 µH minimum; 3 x 22 µF 0805
   out (C13, C14, C20), since an 0805 keeps roughly half its capacitance at
   5 V and two can fall under the table's 20 µF minimum.
 - **Pack voltage.** The converter's maximum duty cycle is 75 % (SLVSD90B
   7.2.2.4), so 5 V needs VIN ≥ 6.7 V, 3.3 V per cell; below that 5 V sags with
-  the pack. EN goes through a 100 kΩ / 30 kΩ divider (R25/R26): EN rises at
-  1.38-1.47 V typical (1.6 V maximum) and falls at 1.05-1.2 V, so the buck turns
-  on at about 6.2 V (6.9 V at the limit) and off at about 4.9 V, and stops
-  draining a flat pack. It is coarse, with no specified falling threshold; a
-  pack BMS is the real protection. F1, a 3 A hold PTC at the XT30, limits a
-  short on VBAT.
+  the pack. EN goes through a 100 kΩ / 36 kΩ divider (R25/R26), with EN's own
+  resistance to GND (600-2400 kΩ, SLVSD90B 5.5) in parallel with R26: EN rises at
+  1.38-1.47 V typical (VENH 1.6 V maximum) and falls at 1.05-1.2 V, so the buck
+  turns on at about 5.5 V typical, is guaranteed on by 6.3 V, and turns off at
+  about 4.0-4.6 V, below TI's 4.5 V minimum recommended input (SLVSD90B 5.3),
+  so between about 4.0 and 4.5 V the buck runs outside its specified range
+  until it stops. With 30 kΩ the guarantee was 7.2 V, so a part-charged pack
+  could fail to start it. The cutoff is coarse, with no specified falling
+  threshold: the pack carries an external 2S protection board (BMS) for its
+  cells' undervoltage, overcurrent and short protection, and is charged with
+  a 2S charger. F1, a 3 A hold PTC at the XT30, limits a short on VBAT.
 - **5 V current budget.** Nothing in the repo names the drive motors; the
   simulation assumes 3 Ω windings and a 2 A stall (`../simulation/config/
   robot_config.yaml`), which is about 1.7 A each at 5 V. Two stalled motors
@@ -272,7 +288,7 @@ The circuit choices that are not a copy of a breakout:
   than move it. That is probably benign but outside TI's table: bench-test a
   0.2-2 A load step before trusting it. On AMP_5V the tantalum damps FB1
   against C17, a ferrite and a ceramic alone being a resonant LC. The input side has no such
-  limit, so C19 (100 µF 25 V, 6.3 x 7.7 mm) is an aluminium electrolytic on VBAT:
+  limit, so C19 (100 µF 35 V, 6.3 x 7.7 mm) is an aluminium electrolytic on VBAT:
   its ESR damps the ringing of the battery lead's inductance against the ceramic
   input capacitors when the XT30 is plugged in, which a polymer would not, and a
   tantalum takes that surge badly. The motors' stall current now draws on the
@@ -306,32 +322,45 @@ The circuit choices that are not a copy of a breakout:
 
 `hardware/carrier/board.toml` holds the placement, the fixed tracks, the net
 classes, the pour and the silkscreen. The buck converter follows TI's layout
-order: SW straight into L1, the input capacitors beside VIN with their GND pads
-facing U10's GND pin, the bootstrap capacitor along VBST's side to the switch
-node at L1, the feedback divider next to them.
+order: SW straight into L1, the input capacitors beside VIN, the output
+capacitors on L1's output pad, the bootstrap capacitor along VBST's side and
+straight down to the switch node at L1, the feedback divider beside FB with
+its own sense track from the output capacitors.
 
 Freerouting gives each net one track width, so a net class is the widest track every
 pin on its nets accepts:
 
 | Class | Nets | Track | Limited by |
 |---|---|---|---|
-| input_power | VBAT, BUCK_SW | 0.8 mm | TPS563201 pads, 0.6 mm at 0.95 mm pitch |
-| motor_power | +5V, MOT_* | 0.45 mm | TB6612FNG pads, 0.4 mm at 0.65 mm pitch |
-| head_power | HEAD*_+5V, HEAD*_GND | 0.5 mm | |
+| input_power | PACK_IN, VBAT, BUCK_SW | 0.8 mm | TPS563208 pads, 0.6 mm at 0.95 mm pitch |
+| five_volt | +5V, XIAO_5V | 0.8 mm, 1.0/0.5 mm vias | none: the 0.8 mm track lands on the TB6612FNG's 0.4 mm pins, 0.202 mm from their neighbours |
+| motor_power | MOT_* | 0.45 mm | TB6612FNG pads |
+| head_power | HEAD*_XIAO_5V, HEAD*_GND | 0.5 mm | |
 | logic_power | +3V3 | 0.35 mm | |
 | signal | everything else | 0.25 mm | MAX98357A pads, 0.25 mm at 0.5 mm pitch |
 
 Tracks laid down before routing (`[[tracks]]`, locked on the board):
 
+- **Pack input**, 2 mm from the XT30 to F1: it carries the whole robot's
+  current.
+- **Buck output node**, C13 to C14 to C20 to L1's output pad (1 mm, then 2 mm):
+  the output capacitors on the inductor, which every 5 V load hangs off.
 - **5V trunk**, 1.5 mm on F.Cu from L1's output pad west and north to C2, beside
   the TB6612FNG's VM pins and C16.
+- **East 5V branch**, 1 mm from C20 to C7, then on to the LDO (U2) and up to
+  the amplifier's ferrite (FB1).
+- **5V sense**, 0.25 mm from C20 to the feedback divider's top (R12), east of
+  the input capacitors, carrying no load current.
+- **Bootstrap to switch node**, C12 straight down into L1, which leaves U10's
+  GND pin room for a via of its own (`[fanout] own`).
 - **Buck GND**, 0.4 mm from U10's GND pin, under the package between its pin
   rows, to input capacitor C11's GND pad: the input loop, TI's first layout rule.
 - **U8 ground ties**, from the MAX98357A's GND pins (3, 11, 15) and GAIN_SLOT
   (2) straight across to its exposed pad.
 
 GND is poured on both layers of the main board (each head's ground on its
-head), and each region stops 1 mm short of a cut line. There is no 5 V pour:
+head), and each region stops 1 mm short of a cut line (on the vertical line,
+1 mm short of its centred mouse-bite slot). There is no 5 V pour:
 the first layout poured 5 V on F.Cu above GND, which cut F.Cu GND into islands
 around every chip in the power half and left their ground pads joined to the
 B.Cu plane only through 0.19-0.25 mm tracks (the board had one GND via). Now
@@ -340,7 +369,9 @@ poured net after routing, outward from its part, wherever it clears
 everything; the exposed pad takes its via in the pad. `route_board.py` fails
 if a `required` pad (the buck, the motor driver's PGND and VM capacitors, the
 amplifier's and the LDO's capacitors) finds no room; a logic chip's ground
-pin or strap without one keeps its routed track. Freerouting necks tracks down to 0.15 mm at some
+pin or strap without one keeps its routed track. An `own` pad (U10's GND pin)
+takes a via of its own even though its fixed track already reaches C11's.
+Freerouting necks tracks down to 0.15 mm at some
 fine-pitch pads, so the `.kicad_pro` sets a 0.15 mm minimum track width (JLCPCB's
 two-layer minimum is 0.127 mm).
 
@@ -378,13 +409,68 @@ just robocar-unified-integrated::carrier-schematic
 
 ## Before ordering
 
-A pre-fabrication review (adversarial, against the datasheets and the routed
-board) found the ground vias missing and the issues fixed above. Still open:
+Five adversarial pre-fabrication reviews (`pcb-reviewer`, against the
+datasheets and the routed board) have run. The first found the ground vias
+missing and the issues fixed above; the later four, of the placement and
+tracks and of each round of fixes, found the power paths below. Each is fixed in
+`board.toml`, `hardware.toml` or `tools/kicad` and measured on the routed board
+with layer-aware scripts (copper path length, vias, narrowest track):
 
+| Finding | Before | After |
+|---|---|---|
+| B1: output capacitors not on L1 | L1 to C13: 75.1 mm, 2 vias, 0.45 mm | 4.6 mm, no via, 1 mm |
+| B1: feedback sense | R12 on the amplifier branch | its own 0.25 mm track from C20, 26.9 mm, no load current |
+| B2: pack input | J3 to F1 0.25 mm | 3.5 mm at 2 mm |
+| M1: 5 V through one 0.8/0.4 mm via | LDO 67.6 mm, FB1 45.2 mm, 2 vias each; VM1 and the servos through the same via | LDO 19.0 mm, FB1 31.6 mm, 1 mm, no via; VM1 34.5 mm, 0.6 mm at its narrowest, no via; the servos 67.4 mm, 0.6 mm at their narrowest, through one 1.0/0.5 mm via; the head cable 87.8 mm to D1 (0.6 mm at its narrowest, one 1.0/0.5 mm via), then 8.3 mm at 0.8 mm to J1. Estimated DC resistance from L1: to D1 52 mΩ (head 124 at the 0.45 mm class), servos 38 mΩ (65), VM1 16 mΩ (25) |
+| M2: U10's GND pin had no via | nearest 4.3 mm, through C11 | its own, 0.92 mm away (`[fanout] own`) |
+| m1: C18 to the amplifier's VDD | 18.4 mm, 2 vias | 2.2 mm |
+| m2: C5 / C6 to their VCC pins | 9.5 mm / 11.7 mm, 2 vias | 4.9 mm / 1.9 mm |
+| m3: no capacitor at VM1 | C16, 11.6 mm away | C21, 1.9 mm |
+| m5, S8: pour to the mouse-bite holes | 0.25 mm | 0.70 mm, every pour |
+| m6: EN guaranteed on | 7.2 V | 6.3 V (R26 36 kΩ) |
+| S1: VBAT into the buck | one 0.6/0.3 mm via (input_power asks 1.0/0.5) | every VBAT via 1.0/0.5 mm |
+| S3: vias inside SMD pads | 7 holes in 6 pads (U5:1, U6:4, U6:25, U7:3, U7:4, U7:10) | none but the exposed pad's |
+| S4: VBAT under the feedback divider | 0.94 mm² over R12's FB pad | kept off B.Cu there (`[[route_keepouts]]`) |
+| S5: 5 V setpoint | 4.98 V typical | 5.07 V typical (R12 56 kΩ); 4.94 V at VFB's minimum |
+| S6: input capacitor nearest VIN | 100 nF | 10 µF (C11 and C10 swapped) |
+| BL-2 (socketed carrier's review): the XIAO's 5V pad, its USB-C VBUS, on +5V with no diode | USB and the buck feed each other | D1 (B5819W) from +5V to a new XIAO_5V net on the ribbon's 5V conductors, as the balancebot carrier's D1 |
+| S7: C15's GND to U7's GND pin | 20.6 mm | U7:18 to C16's GND pad and via on a fixed 0.3 mm track, 2.1 mm |
+
+How S1 and S3 were fixed, since a gate now holds both: Freerouting treats
+every via in the DSN as available to every net and drops to the 0.6/0.3 mm
+signal via where a class's does not fit, so `route_board.py` grows each
+undersized via to its class's size and DRC checks the fit. It also tells
+Freerouting `(via_at_smd off)`, a fanout via now clears its own net's SMD pads
+(U7:4's had landed in U7:3), and a route fails on any via left inside an SMD
+pad but `[fanout] in_pad`.
+
+Not changed: Freerouting still necks +5V to 0.6 mm in places; at U7's VM pins
+(13, 14, 24) the 0.8 mm track lands on the pins and ends 0.202 mm from the
+signal pins 15 and 23. VBAT necks to 0.6 mm over about 14 mm beside its input
+via (13.4 mm on B.Cu at y 69.4, under L1, and 0.7 mm on F.Cu), about 11 mΩ:
+by IPC-2221 about 26 °C warmer at 2.5 A, an estimate, not a measurement. R13's
+ground goes to its own via on the B.Cu plane, not straight to U10's GND pin.
+The amplifier's exposed-pad via stays open, not filled and capped (a paid
+option on two layers; the MAX98357A dissipates about 0.2 W and its GND pins
+also tie to the pad, so voids under it cost little). The 1 mm east 5 V branch
+runs 1 mm above the main board's bottom edge from x 34 to x 42.5, 0.74 mm from
+the tab at x 32's nearest hole: cut that tab, do not snap it.
+
+Still open:
+
+- The fifth review found no blocker. Still open from it, on the route
+  with D1: the servos' ground (J20:3, J21:3) sits on an 85 mm² pour piece
+  joined to the main plane only by routed tracks, about 14 mΩ to C20 against
+  3.8 mΩ before widening +5V (an estimate). The 641 mm² top-left piece it
+  also found now joins the main plane, and U6:14 has its via again.
+- F1 (3 A hold) derates to about 2.55 A at 40 °C and 2.28 A at 50 °C
+  (BSMD1812 datasheet), under the 2.4-3.1 A input at a 3 A load; the socketed
+  carrier's review proposes the BSMD1812-400 (4 A hold).
 - Measure the drive motors' stall current at 5 V against the buck's 3.3 A
   minimum current limit (see the current budget above).
 - Bench-test a 0.2-2 A load step on 5 V with the tantalums fitted.
-- Confirm whether the pack has a BMS; the EN divider is only a coarse cutoff.
+- Fit the pack's 2S protection board (BMS) and charge it with a 2S charger.
+- Check the stock of R12 (C17756), the inductor and the MCP23017.
 - Get a live JLCPCB quote for 2 and 5 assembled boards (upload the zip, the
   BOM and the CPL), check the placement preview part by part against
   [the rotation table](#placement-rotation), and record the quote here.

@@ -48,6 +48,7 @@ KEYS = {
     "tracks",
     "fanout",
     "keepouts",
+    "route_keepouts",
     "cutouts",
     "panel",
 }
@@ -258,6 +259,7 @@ class BalancebotTests(unittest.TestCase):
                 "in_pad": [],
                 "exempt": [],
                 "required": [],
+                "own": [],
             },
         )
 

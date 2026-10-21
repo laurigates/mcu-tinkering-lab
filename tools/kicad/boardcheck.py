@@ -222,6 +222,7 @@ TABLE_KEYS = {
     "net_classes": {"name", "nets", "track_um", "clearance_um", "via_um"},
     "signal": {"track_um", "clearance_um", "via_um"},
     "keepouts": {"name", "rect"},
+    "route_keepouts": {"name", "layer", "rect"},
     "tracks": {"name", "net", "layer", "width_mm", "points"},
     "fanout": {
         "nets",
@@ -231,6 +232,7 @@ TABLE_KEYS = {
         "in_pad",
         "exempt",
         "required",
+        "own",
     },
     "cutouts": {"name", "center", "diameter"},
     "pour": {
@@ -241,10 +243,12 @@ TABLE_KEYS = {
         "min_thickness_mm",
         "thermal_gap_mm",
         "spoke_mm",
+        "stitch",
     },
 }
 TEXT_KEYS = {"text", "at", "size"}
 REGION_KEYS = {"net", "rect", "layers", "priority"}
+STITCH_KEYS = {"pitch_mm", "via_um", "exclude"}
 # How far a pour stops short of a [silk] cut line: the hand saw's kerf and the
 # board's flex while sawing must not reach copper (the integrated carrier's
 # pre-fab review found GND fill at 0.0 mm).
@@ -253,7 +257,7 @@ CUT_CLEARANCE_MM = 1.0
 # label does not fit at 1.0 (build_board.py keeps the stroke at 0.16 mm or
 # more at any size).
 SILK_MIN_MM = 0.8
-LIST_TABLES = ("net_classes", "keepouts", "cutouts", "tracks")
+LIST_TABLES = ("net_classes", "keepouts", "route_keepouts", "cutouts", "tracks")
 REQUIRED = ("outline", "placement", "net_classes", "signal", "pour")
 
 
@@ -331,6 +335,36 @@ def _validate_keepouts(where: str, data: dict[str, Any], size: Any) -> list[str]
     return errors
 
 
+def _validate_route_keepouts(where: str, data: dict[str, Any], size: Any) -> list[str]:
+    """[[route_keepouts]]: rectangles Freerouting may not route through, on one
+    copper layer. Unlike [[keepouts]] they put no rule area on the board, so
+    footprints and the pour may still go there (route_board.py, dsn.py)."""
+    errors = []
+    names = []
+    for k in data.get("route_keepouts", []):
+        name = k.get("name")
+        if not isinstance(name, str) or not name:
+            errors.append(f"{where}: [route_keepouts] needs a name for each rectangle")
+            continue
+        names.append(name)
+        if k.get("layer") not in ("F.Cu", "B.Cu"):
+            errors.append(
+                f"{where}: [route_keepouts] {name!r}: layer must be F.Cu or B.Cu"
+            )
+        if not _rect(k.get("rect")):
+            errors.append(
+                f"{where}: [route_keepouts] {name!r}: rect must be [x0, y0, x1, y1], "
+                "x0 < x1 and y0 < y1"
+            )
+        elif size is not None and not _inside(k["rect"], size):
+            errors.append(
+                f"{where}: [route_keepouts] {name!r}: rect {k['rect']} is not inside [outline]"
+            )
+    if len(set(names)) != len(names):
+        errors.append(f"{where}: [route_keepouts] names repeat: {names}")
+    return errors
+
+
 def _validate_panel(where: str, data: dict[str, Any]) -> list[str]:
     """[panel] (#809): its values, then the slots and tabs it makes."""
     errors = panel.validate(where, data)
@@ -372,10 +406,45 @@ def _validate_cutouts(where: str, data: dict[str, Any], size: Any) -> list[str]:
     return errors
 
 
+def _validate_stitch(where: str, pour: dict[str, Any], size: Any) -> list[str]:
+    """[pour] stitch = { pitch_mm, via_um = [diameter, drill], exclude = [rects] }."""
+    if "stitch" not in pour:
+        return []
+    st = pour["stitch"]
+    at = f"{where}: [pour] stitch"
+    if not isinstance(st, dict):
+        return [f"{at} must be a table {{pitch_mm, via_um, exclude}}"]
+    errors = []
+    unknown = sorted(set(st) - STITCH_KEYS)
+    if unknown:
+        errors.append(f"{at}: unknown key(s) {unknown}")
+    if not _positive(st.get("pitch_mm")):
+        errors.append(
+            f"{at}: pitch_mm must be a number > 0, got {st.get('pitch_mm')!r}"
+        )
+    via = st.get("via_um")
+    if not (_numbers(via, 2) and via[0] > via[1] > 0):
+        errors.append(
+            f"{at}: via_um must be [diameter, drill] with diameter > drill > 0"
+        )
+    exclude = st.get("exclude", [])
+    if not isinstance(exclude, list):
+        errors.append(f"{at}: exclude must be a list of [x0, y0, x1, y1]")
+        exclude = []
+    for rect in exclude:
+        if not _rect(rect):
+            errors.append(
+                f"{at}: exclude {rect!r} must be [x0, y0, x1, y1], x0 < x1 and y0 < y1"
+            )
+        elif size is not None and not _inside(rect, size):
+            errors.append(f"{at}: exclude {rect} is not inside [outline]")
+    return errors
+
+
 def _validate_pour(
     where: str, pour: dict[str, Any], nl: netlist.Netlist, size: Any
 ) -> list[str]:
-    errors = []
+    errors = _validate_stitch(where, pour, size)
     if "net" in pour and "regions" in pour:
         return [f"{where}: [pour] takes net or regions, not both"]
     if "net" not in pour and "regions" not in pour:
@@ -527,6 +596,7 @@ FANOUT_DEFAULTS = {
     "in_pad": [],
     "exempt": [],
     "required": [],
+    "own": [],
 }
 
 
@@ -548,7 +618,10 @@ def _validate_fanout(
     pour on that layer can leave them on an island. The vias go in after
     routing, where there is room: a `required` pad (on a power path) fails the
     route without one, any other keeps its routed track. `in_pad` pads (an
-    exposed pad) take their via inside the pad; `exempt` pads take none.
+    exposed pad) take their via inside the pad; `exempt` pads take none. An
+    `own` pad takes a via of its own even where a chain of fixed tracks already
+    reaches one (a regulator's GND pin, whose fixed track to its input
+    capacitor would otherwise satisfy it).
     """
     fan = data.get("fanout")
     if fan is None:
@@ -571,7 +644,7 @@ def _validate_fanout(
         if not _positive(spec[key]):
             errors.append(f"{at} {key} must be > 0")
     pads = {f"{ref}:{pin}" for net in nets for ref, pin in nl.nets.get(net, ())}
-    for key in ("in_pad", "exempt", "required"):
+    for key in ("in_pad", "exempt", "required", "own"):
         for pad in spec[key]:
             if pad not in pads:
                 errors.append(f"{at} {key} {pad!r} is not a pad of a [fanout] net")
@@ -689,6 +762,7 @@ def validate_config(cfg: paths.BoardConfig, nl: netlist.Netlist) -> list[str]:
                 )
     errors += _validate_cut_clearance(where, data, size)
     errors += _validate_keepouts(where, data, size)
+    errors += _validate_route_keepouts(where, data, size)
     errors += _validate_panel(where, data)
     errors += _validate_cutouts(where, data, size)
     errors += _validate_tracks(where, data, nl, size)

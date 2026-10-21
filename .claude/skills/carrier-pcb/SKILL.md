@@ -25,7 +25,9 @@ several traps below are version-specific: after a KiCad upgrade, re-run
 - `tools/kicad.just`: the per-project recipes; `tools/kicad/justfile`: `just kicad::*`
 - `docs/reference/parts/`: the parts registry
 - `packages/robotics/balancebot/hardware/carrier/`: the first carrier;
-  `board.toml` holds placement, silkscreen, net classes and the pour
+  `board.toml` holds placement, silkscreen, net classes and the pour, VBAT as
+  fixed `[[tracks]]` with no via, `[fanout]` and `[pour] stitch` vias, and a
+  `.kicad_dru` rule that keeps the pour off the mounting holes
 - `packages/robocar/unified/hardware/carrier/`: a main board and three head
   boards on one PCB, split by `[[keepouts]]` bands under `[silk] cut_lines` saw
   lines, with a `[pour]` region per ground net (`GND`, `HEAD_GND`,
@@ -42,7 +44,8 @@ several traps below are version-specific: after a KiCad upgrade, re-run
   does not provide: `[[tracks]]` (fixed tracks build_board.py lays down
   locked, here a 1.5 mm 5V trunk, the buck's GND and an exposed pad's ground
   ties), `[fanout]` (a via beside every SMD pad of a poured net, added after
-  routing; `required` pads fail the route without one) and `[pour]` regions
+  routing; `required` pads fail the route without one; an `own` pad takes a
+  via of its own even when a fixed-track chain already reaches one) and `[pour]` regions
   with their own `layers` and `priority`. It is also the mouse-bite carrier:
   `[panel] mode = "mousebites"` (#809, `kicad.panel`) turns the cut lines into
   Edge.Cuts slots and board-only MB<n> footprints of NPTH holes, all inside
@@ -197,13 +200,18 @@ several traps below are version-specific: after a KiCad upgrade, re-run
 
 ### Found laying out the integrated robocar carrier
 
-24. **Freerouting gives each net one track width**, so a net class can be no
-    wider than the narrowest pin pitch on any of its nets allows: 0.25 mm at a
-    0.5 mm-pitch TQFN, 0.45 mm at 0.65 mm-pitch SSOP. A power net that reaches a
-    fine-pitch pin caps the whole rail; give that chip its own net (the
-    integrated carrier's AMP_5V behind a ferrite bead) rather than thinning
-    the rail. Freerouting also necks tracks below the class width at fine-pitch
-    pads, so such a board needs a smaller `min_track_width` than 0.2 mm.
+24. **Freerouting gives each net one track width, and necks it into a
+    fine-pitch pin.** A power net reaching an SSOP's 0.4 mm pins does not cap
+    the rail: the integrated carrier's +5V routes at 0.8 mm and lands on the
+    TB6612FNG's VM pins at full width, 0.202 mm from the signal pins beside
+    them (DRC's minimum is 0.2 mm). At 0.45 mm,
+    the width once assumed to be the cap, its servo and head feed necked to
+    0.337 mm instead. A 0.5 mm-pitch TQFN's 0.25 mm pads are another matter:
+    the integrated carrier gives the MAX98357A its own AMP_5V net behind a
+    ferrite bead. Necking goes below 0.2 mm, so such a board needs a smaller
+    `min_track_width`. A wider class also re-cuts the pour: at 0.8 mm the
+    +5V runs split the integrated carrier's top-half GND, so re-check the pour
+    islands (`carrier-review`) after any class change.
 25. **`kicad-cli` cannot write an ERC exclusion.** KiCad matches an exclusion
     only against its own serialisation of the marker, and a hand-built key
     (`pin_to_pin|x|y|uuid|uuid|...`) loads as a separate excluded marker while
@@ -287,6 +295,48 @@ several traps below are version-specific: after a KiCad upgrade, re-run
 33. **EasyEDA's component API refuses a browser User-Agent** with an HTML
     error page under HTTP 200 and Python's default with a 403; curl's is
     served. `lcsc_rotation.fetch` sends curl's.
+
+### Found in the integrated carrier's layout reviews
+
+36. **Freerouting ignores a class's `use_via` where it does not fit.** Every
+    via padstack in the DSN is open to every net, and it drops to the 0.6/0.3
+    mm signal via, deterministically, at the same spot on every run; removing
+    that via from the structure's `(via ...)` list changes nothing. Moving
+    parts to make room did not help either. `route_board.py` grows each
+    undersized via to its class's size and lets DRC judge the fit.
+37. **A fanout via can land in a neighbouring pin's pad of its own net.**
+    Same-net SMD pads were no obstacle, so U7:4's diagonal candidate sat
+    inside U7:3, where the hole drains paste at reflow. Fanout vias now clear
+    every pad but their own, and the route fails on any via inside an SMD pad
+    but an `in_pad`, checked after fanout so both kinds are covered.
+38. **Freerouting routes "redundant" GND tracks across the board** (it does
+    not know the pour), and they block a via or a power track where you need
+    it. `[[route_keepouts]]` (one layer, router-only, no rule area) moves them.
+39. **On macOS each Freerouting run steals the focus** unless the JVM runs
+    with `-Djava.awt.headless=true -Dapple.awt.UIElement=true`, even with its
+    GUI off.
+40. **A path script that ignores layers lies.** Joining a B.Cu track end to an
+    F.Cu track it only crosses reported "no via" for a path through a via, and
+    that claim reached the README. Measure per layer, with vias and
+    through-hole pads as the only joins between layers.
+
+### Found in the balancebot carrier's pre-order review
+
+41. **KiCad's stock footprints draw their silkscreen at 0.12 mm** (some 0.10
+    or 0.127 mm), under JLCPCB's 0.15 mm minimum, polarity marks included (an
+    electrolytic's "+", a SOD-123's cathode bar). `carrier-review` measured
+    only text strokes, so it reported 0.15 mm over 0.10 mm lines. build_board.py
+    now widens every footprint silkscreen stroke under 0.15 mm to it
+    (`pcb/silk.py`), which changes each carrier's silkscreen the next time it
+    is rebuilt, and `carrier-review` reports the thinnest line.
+42. **A fanout via placed small and grown afterwards can land on its own
+    pad.** route_board.py grows a `[fanout]` via to its net class's size after
+    placing it; placed at 0.6 mm, C3's grew to 1.0 mm over C3's own GND pad and
+    the route failed the via-in-pad check. Give `[fanout] via_um` the class's
+    via size. For pour islands that no SMD pad reaches (the space between a
+    socketed module's pin rows), `[pour] stitch = { pitch_mm, via_um,
+    exclude }` adds a via at each grid point where every pour layer's fill
+    holds it (`pcb/stitch.py`).
 
 ## Verify the gate can fail
 
