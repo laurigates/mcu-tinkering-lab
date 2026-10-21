@@ -74,8 +74,10 @@ several traps below are version-specific: after a KiCad upgrade, re-run
    - Verify each finding against the board before acting on it: the review is
      model output, and its numbers can be wrong.
    - Fix in `board.toml`, `hardware.toml` or `tools/kicad`, re-route
-     (`carrier-board-checked`), then re-measure (`just <p>::carrier-measure
-     --ref <git-ref>` where it exists).
+     (`carrier-board-checked`), then re-measure with `just <p>::carrier-measure
+     <subcommand>` where it exists (`path`, `cuts`, `vias-in-pads`, `plane`,
+     `resistance`, `clearance-to-holes`); add `--ref <git-ref>` for the before
+     side of the table.
    - Write the README's before/after table only from measurement output.
    - Re-run the reviewer on the fixed board. On the integrated carrier every
      fix round introduced a regression the next pass found: a 0.6/0.3 mm VBAT

@@ -36,10 +36,14 @@ your final message.
 3. Run the gates yourself and read every warning, not just the pass line:
    `kicad-cli pcb drc --severity-all --schematic-parity` and
    `kicad-cli sch erc --severity-all` on the project's KiCad files.
-4. Run `just <project>::carrier-measure` where the project has it (path
-   widths, vias, cuts, via-in-pad, plane and resistance per current path;
-   `--ref <git-ref>` gives the before/after of a change). Prefer it to a
-   scratch script.
+4. Run `just <project>::carrier-measure <subcommand>` where the project has
+   it. The subcommands are `path NET A:pad B:pad` (length, vias, narrowest
+   track), `cuts NET A:pad` (single vias whose removal disconnects pads),
+   `vias-in-pads`, `clearance-to-holes`, `plane` (poured-net components joined
+   only by tracks) and `resistance NET A:pad B:pad` (an estimate). With no
+   subcommand it prints its usage and exits 2. `--ref <git-ref>` measures the
+   board as committed at that ref, so a before/after is two runs. Prefer it to
+   a scratch script.
 5. Script pcbnew (`/usr/bin/python3`, or `$KICAD_PYTHON`) for anything those
    do not cover: a connectivity graph from pads, tracks, vias and fill
    islands; the narrowest point on a current path; a cut set between a
