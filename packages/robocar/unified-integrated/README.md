@@ -412,16 +412,17 @@ narrowest track), before and after:
 | B1: output capacitors not on L1 | L1 to C13: 75.1 mm, 2 vias, 0.45 mm | 4.6 mm, no via, 1-2 mm (C20: 1.8 mm) |
 | B1: feedback sense | R12 on the amplifier branch | its own 0.25 mm track from C20, 25.5 mm, no load current |
 | B2: pack input | J3 to F1 0.25 mm | 2 mm |
-| M1: 5 V through one via | LDO 67.6 mm, FB1 45.2 mm, each through 2 vias | 19.0 mm and 32.4 mm, 1 mm, no via; servos and VM1 reach L1 with no via |
+| M1: 5 V through one via | LDO 67.6 mm, FB1 45.2 mm, each through 2 vias | 19.0 mm and 32.4 mm, 1 mm, no via; VM1, the servos, the head cable, J11 and C1 still share one 0.8/0.4 mm via at (21.98, 53.25) |
 | M2: U10's GND pin had no via | nearest 4.3 mm, through C11 | its own, 0.9 mm away (`[fanout] own`) |
-| m1: C18 to the amplifier's VDD | 18.4 mm, 2 vias | 2.2 mm |
-| m2: C5 / C6 to their VCC pins | 9.5 mm / 11.7 mm, 2 vias | 5.0 mm / 3.0 mm |
+| m1: C18 to the amplifier's VDD | 18.4 mm, 2 vias | 2.7 mm |
+| m2: C5 / C6 to their VCC pins | 9.5 mm / 11.7 mm, 2 vias | 4.9 mm / 3.0 mm |
 | m3: no capacitor at VM1 | C16, 11.6 mm away | C21, 2.0 mm |
-| m5: pour to the mouse-bite holes | 0.25 mm | 1 mm short of the slot |
+| m5: pour to the mouse-bite holes | 0.25 mm | main board 0.70 mm; the head pours still 0.25 mm |
 | m6: EN guaranteed on | 7.2 V | 6.3 V (R26 36 kΩ) |
 
 Not changed: the servos' 5 V is still a routed 0.45 mm track (73 mm from L1),
-because Freerouting gives +5V one width and the TB6612FNG's pins cap it; R13's
+because Freerouting gives +5V one width and the TB6612FNG's pins cap it, and
+with VM1 and the head cable it still goes through one 0.8/0.4 mm via; R13's
 ground goes to its own via on the B.Cu plane, not straight to U10's GND pin;
 the amplifier's exposed-pad via stays open, not filled and capped (a paid
 option on two layers; the MAX98357A dissipates about 0.2 W and its GND pins
@@ -431,7 +432,15 @@ tab at x 32: cut that tab, do not snap it.
 
 Still open:
 
-- Re-run the `pcb-reviewer` agent on this board.
+- A second `pcb-reviewer` pass on this board found no blocker, and these
+  to fix before an assembled order: VBAT into the buck now passes one
+  0.6/0.3 mm via at (37.74, 67.90), smaller than its class's 1.0/0.5, and its
+  B.Cu track runs under the feedback divider; the shared 5 V via above;
+  Freerouting's vias inside six fine-pitch GND pads (U5:1, U6:4, U6:25, U7:3,
+  U7:10), where paste can wick; C15's GND pad 20.6 mm of copper from U7's
+  GND pin; the head pours' 0.25 mm to the mouse-bite holes; and, on parts,
+  the 10 µF input capacitors farther from VIN than the 100 nF one, and 5 V set
+  at 4.98 V, under the TB6612FNG's 5 V row (1.0 A; 0.4 A below 5 V).
 - Measure the drive motors' stall current at 5 V against the buck's 3.3 A
   minimum current limit (see the current budget above).
 - Bench-test a 0.2-2 A load step on 5 V with the tantalums fitted.
