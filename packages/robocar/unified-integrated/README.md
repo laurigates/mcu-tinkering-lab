@@ -72,21 +72,21 @@ placement leaves. As of this commit:
 
 | Main board | Socketed | Integrated |
 |---|---|---|
-| Parts | 39 | 75 |
-| Courtyard area | 5357 mm² | 2280 mm² (−57 %) |
-| SMD / through-hole parts | 19 / 20 | 56 / 19 |
-| Pads | 200 | 312 |
+| Parts | 40 | 77 |
+| Courtyard area | 5381 mm² | 2298 mm² (−57 %) |
+| SMD / through-hole parts | 20 / 20 | 58 / 19 |
+| Pads | 202 | 316 |
 
 Where the area goes:
 
-- The 30 parts the two main boards share take 1337 mm². Most of it is the
+- The 31 parts the two main boards share take 1362 mm². Most of it is the
   connectors, the 2x10 GPIO mirror header and the M3 holes' surroundings, none of
   which shrink.
 - The five breakout sockets and the buck lead take 3687 mm²; the PCA9685 breakout
-  alone is 63 x 26 mm (1625 mm²). Their replacements, 42 parts, take about 890 mm²:
+  alone is 63 x 26 mm (1625 mm²). Their replacements, 46 parts, take 936 mm²:
   the six chips 356 mm², the buck's inductor 46 mm² and input bulk capacitor
-  67 mm², 28 0805 passives and the ferrite bead about 200 mm², the input fuse,
-  and the new servo, LED and speaker connectors 197 mm².
+  67 mm², 29 0805 passives and the ferrite bead 208 mm², the tantalums 52 mm²,
+  D1 11 mm², and the new servo, LED and speaker connectors 197 mm².
 - The three 470 µF electrolytics (332 mm²) became 22 µF tantalums (52 mm²).
 - The socketed carrier's buck converter is off the board: the LM2596 module (about
   43 x 21 mm) sits on the chassis at the end of J4's lead. The integrated buck
@@ -260,7 +260,9 @@ The circuit choices that are not a copy of a breakout:
   resistance to GND (600-2400 kΩ, SLVSD90B 5.5) in parallel with R26: EN rises at
   1.38-1.47 V typical (VENH 1.6 V maximum) and falls at 1.05-1.2 V, so the buck
   turns on at about 5.5 V typical, is guaranteed on by 6.3 V, and turns off at
-  about 4.0-4.6 V. With 30 kΩ the guarantee was 7.2 V, so a part-charged pack
+  about 4.0-4.6 V, below TI's 4.5 V minimum recommended input (SLVSD90B 5.3),
+  so between about 4.0 and 4.5 V the buck runs outside its specified range
+  until it stops. With 30 kΩ the guarantee was 7.2 V, so a part-charged pack
   could fail to start it. The cutoff is coarse, with no specified falling
   threshold: the pack carries an external 2S protection board (BMS) for its
   cells' undervoltage, overcurrent and short protection, and is charged with
@@ -331,7 +333,7 @@ pin on its nets accepts:
 | Class | Nets | Track | Limited by |
 |---|---|---|---|
 | input_power | PACK_IN, VBAT, BUCK_SW | 0.8 mm | TPS563208 pads, 0.6 mm at 0.95 mm pitch |
-| five_volt | +5V | 0.8 mm, 1.0/0.5 mm vias | none: the 0.8 mm track lands on the TB6612FNG's 0.4 mm pins, 0.202 mm from their neighbours |
+| five_volt | +5V, XIAO_5V | 0.8 mm, 1.0/0.5 mm vias | none: the 0.8 mm track lands on the TB6612FNG's 0.4 mm pins, 0.202 mm from their neighbours |
 | motor_power | MOT_* | 0.45 mm | TB6612FNG pads |
 | head_power | HEAD*_XIAO_5V, HEAD*_GND | 0.5 mm | |
 | logic_power | +3V3 | 0.35 mm | |
