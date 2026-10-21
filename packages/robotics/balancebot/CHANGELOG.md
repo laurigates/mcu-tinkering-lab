@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.7](https://github.com/laurigates/mcu-tinkering-lab/compare/balancebot-v0.1.6...balancebot-v0.1.7) (2026-10-21)
+
+
+### Features
+
+* **kicad:** add carrier-measure, layer-aware copper measurements ([#821](https://github.com/laurigates/mcu-tinkering-lab/issues/821)) ([2eba373](https://github.com/laurigates/mcu-tinkering-lab/commit/2eba37357a09f2d4e06df132a2847d46c3ab4f15))
+
+
+### Bug Fixes
+
+* **balancebot:** pre-order carrier fixes, reverse-polarity input, stitching vias ([#822](https://github.com/laurigates/mcu-tinkering-lab/issues/822)) ([684bb7d](https://github.com/laurigates/mcu-tinkering-lab/commit/684bb7de95200f9f0c1eb6250d30ea61f83995d5))
+
 ## [0.1.6](https://github.com/laurigates/mcu-tinkering-lab/compare/balancebot-v0.1.5...balancebot-v0.1.6) (2026-10-19)
 
 

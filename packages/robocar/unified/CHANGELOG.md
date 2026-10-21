@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.2.13](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.12...robocar-unified-v0.2.13) (2026-10-21)
+
+
+### Features
+
+* **kicad:** add carrier-measure, layer-aware copper measurements ([#821](https://github.com/laurigates/mcu-tinkering-lab/issues/821)) ([2eba373](https://github.com/laurigates/mcu-tinkering-lab/commit/2eba37357a09f2d4e06df132a2847d46c3ab4f15))
+
+
+### Bug Fixes
+
+* **robocar-unified:** pre-order fixes to the carrier PCB ([#823](https://github.com/laurigates/mcu-tinkering-lab/issues/823)) ([9735477](https://github.com/laurigates/mcu-tinkering-lab/commit/9735477d27699487567f9ae5000655530041262a))
+* **robocar-unified:** probe the MCP23017 across 0x20-0x27 when MCP23017_ADDR is silent ([8c56cd4](https://github.com/laurigates/mcu-tinkering-lab/commit/8c56cd479428a56ad9478481f0402bb69c736df1)), closes [#781](https://github.com/laurigates/mcu-tinkering-lab/issues/781)
+
 ## [0.2.12](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.11...robocar-unified-v0.2.12) (2026-10-19)
 
 
