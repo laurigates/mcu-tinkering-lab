@@ -281,6 +281,30 @@ several traps below are version-specific: after a KiCad upgrade, re-run
     error page under HTTP 200 and Python's default with a 403; curl's is
     served. `lcsc_rotation.fetch` sends curl's.
 
+### Found in the integrated carrier's layout reviews
+
+36. **Freerouting ignores a class's `use_via` where it does not fit.** Every
+    via padstack in the DSN is open to every net, and it drops to the 0.6/0.3
+    mm signal via, deterministically, at the same spot on every run; removing
+    that via from the structure's `(via ...)` list changes nothing. Moving
+    parts to make room did not help either. `route_board.py` grows each
+    undersized via to its class's size and lets DRC judge the fit.
+37. **A fanout via can land in a neighbouring pin's pad of its own net.**
+    Same-net SMD pads were no obstacle, so U7:4's diagonal candidate sat
+    inside U7:3, where the hole drains paste at reflow. Fanout vias now clear
+    every pad but their own, and the route fails on any via inside an SMD pad
+    but an `in_pad`, checked after fanout so both kinds are covered.
+38. **Freerouting routes "redundant" GND tracks across the board** (it does
+    not know the pour), and they block a via or a power track where you need
+    it. `[[route_keepouts]]` (one layer, router-only, no rule area) moves them.
+39. **On macOS each Freerouting run steals the focus** unless the JVM runs
+    with `-Djava.awt.headless=true -Dapple.awt.UIElement=true`, even with its
+    GUI off.
+40. **A path script that ignores layers lies.** Joining a B.Cu track end to an
+    F.Cu track it only crosses reported "no via" for a path through a via, and
+    that claim reached the README. Measure per layer, with vias and
+    through-hole pads as the only joins between layers.
+
 ## Verify the gate can fail
 
 Before trusting a carrier gate, mutate a scratch copy and watch it fail (move

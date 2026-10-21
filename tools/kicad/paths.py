@@ -40,6 +40,7 @@ BOARD_TABLES = frozenset(
         "signal",
         "pour",
         "keepouts",
+        "route_keepouts",
         "cutouts",
         "tracks",
         "fanout",

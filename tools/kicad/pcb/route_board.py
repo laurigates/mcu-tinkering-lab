@@ -171,19 +171,22 @@ def fanout(board, fan, clearance):
     pads = [p for fp in board.GetFootprints() for p in fp.Pads()]
     obstacles = pads + list(board.GetTracks())
 
-    def blocks(item, netcode, through):
-        # Whether `item` must be cleared by a new via (through) or stub.
+    def blocks(item, netcode, through, own):
+        # Whether `item` must be cleared by a new via (through) or stub. A via
+        # clears every pad but its own, its own net's SMD pads included: in a
+        # neighbouring pin's pad the hole drains that pin's paste at reflow
+        # (U7:4's via landed in U7:3; second pre-fab layout review, S3).
         if item.GetNetCode() != netcode:
             return True
         if not through:
             return False
         if item.GetClass() == "PCB_VIA":
             return True
-        return item.GetClass() == "PAD" and item.HasHole()
+        return item.GetClass() == "PAD" and item is not own
 
-    def clear(shape, layers, netcode, x, y, through):
+    def clear(shape, layers, netcode, x, y, through, own=None):
         for item in obstacles:
-            if not blocks(item, netcode, through):
+            if not blocks(item, netcode, through, own):
                 continue
             if not _bbox_near(item, x, y, reach + via_d + clearance):
                 continue
@@ -194,7 +197,7 @@ def fanout(board, fan, clearance):
                     return False
         return True
 
-    def via_fits(x, y, netcode):
+    def via_fits(x, y, netcode, own):
         if not (edge.GetLeft() + inset <= x <= edge.GetRight() - inset):
             return False
         if not (edge.GetTop() + inset <= y <= edge.GetBottom() - inset):
@@ -202,7 +205,7 @@ def fanout(board, fan, clearance):
         at = pcbnew.VECTOR2I(int(x), int(y))
         if any(z.Outline().Collide(at, r) for z in rule_areas):
             return False
-        return clear(pcbnew.SHAPE_CIRCLE(at, r), copper, netcode, x, y, True)
+        return clear(pcbnew.SHAPE_CIRCLE(at, r), copper, netcode, x, y, True, own)
 
     stub_ids = set()
 
@@ -320,7 +323,7 @@ def fanout(board, fan, clearance):
             step,
             prefer=(cx - part.x, cy - part.y),
         ):
-            if not via_fits(x, y, netcode):
+            if not via_fits(x, y, netcode, pad):
                 continue
             stub = pcbnew.SHAPE_SEGMENT(
                 pad.GetPosition(), pcbnew.VECTOR2I(int(x), int(y)), width
@@ -343,6 +346,78 @@ def fanout(board, fan, clearance):
         if not placed:
             failed.append(name)
     return added, failed
+
+
+def _via_where(v, spec):
+    at = v.GetPosition()
+    return (
+        f"({pcbnew.ToMM(at.x) - spec['origin'][0]:.2f}, "
+        f"{pcbnew.ToMM(at.y) - spec['origin'][1]:.2f})"
+    )
+
+
+def grow_vias(board, spec):
+    """Each routed via smaller than its net class's `via_um`, grown to it.
+
+    Freerouting treats every via padstack in the DSN as available to every net
+    and drops to the smallest where the class's does not fit where it wants
+    it: the integrated carrier's buck input took a 0.6/0.3 mm via against
+    input_power's 1.0/0.5 mm, deterministically, on every route. Growing it
+    in place is checked by DRC, so a via that does not fit fails the route's
+    check rather than shipping undersized. Returns where each one was.
+    """
+    names = [
+        n.GetNetname()
+        for n in board.GetNetInfo().NetsByNetcode().values()
+        if n.GetNetname()
+    ]
+    via_of = {}
+    for cls in spec["classes"]:
+        for n in dsn.expand(cls["nets"], names, f"class {cls['name']!r}"):
+            via_of[n] = cls["via_um"]
+    grown = []
+    for v in board.GetTracks():
+        if v.GetClass() != "PCB_VIA" or v.GetNetname() not in via_of:
+            continue
+        want_d, want_drill = (pcbnew.FromMM(u / 1000.0) for u in via_of[v.GetNetname()])
+        # GetDrillValue: a routed via's own drill is -1 ("the net class's"),
+        # which resolves to the board's Default class
+        if v.GetWidth(pcbnew.F_Cu) < want_d - 1 or v.GetDrillValue() < want_drill - 1:
+            grown.append(f"{v.GetNetname()} {_via_where(v, spec)}")
+            v.SetWidth(want_d)
+            v.SetDrill(want_drill)
+    return grown
+
+
+def vias_in_pads(board, spec):
+    """Routed vias whose hole is inside an SMD pad, where it drains the pad's
+    paste at reflow. Only an `[fanout] in_pad` pad (an exposed pad) may hold
+    one; the DSN also tells Freerouting `(via_at_smd off)`."""
+    in_pad = set((spec.get("fanout") or {}).get("in_pad", []))
+    smd = [
+        p
+        for fp in board.GetFootprints()
+        for p in fp.Pads()
+        if p.GetAttribute() == pcbnew.PAD_ATTRIB_SMD
+    ]
+    problems = []
+    for v in board.GetTracks():
+        if v.GetClass() != "PCB_VIA":
+            continue
+        hole = pcbnew.SHAPE_CIRCLE(v.GetPosition(), v.GetDrillValue() // 2)
+        for p in smd:
+            name = f"{p.GetParentFootprint().GetReference()}:{p.GetNumber()}"
+            if name in in_pad:
+                continue
+            if any(
+                p.IsOnLayer(layer) and p.GetEffectiveShape(layer).Collide(hole, 0)
+                for layer in (pcbnew.F_Cu, pcbnew.B_Cu)
+            ):
+                problems.append(
+                    f"{v.GetNetname()} via at {_via_where(v, spec)} is inside SMD pad {name}"
+                )
+                break
+    return problems
 
 
 def in_pad_pins(board, fan):
@@ -393,6 +468,10 @@ def route(spec):
             margin = max(c["clearance_um"] for c in [*spec["classes"], spec["signal"]])
             tracks = spec.get("tracks", [])
             text = dsn.track_keepouts(text, tracks, spec["origin"], margin)
+            text = dsn.rect_keepouts(
+                text, spec.get("route_keepouts", []), spec["origin"]
+            )
+            text = dsn.no_via_at_smd(text)
             pins = track_pins(board, spec["origin"], tracks) + in_pad_pins(
                 board, spec.get("fanout")
             )
@@ -407,6 +486,10 @@ def route(spec):
     subprocess.run(
         [
             "java",
+            # no window, no Dock icon: on macOS a JVM otherwise takes the
+            # focus each run, though Freerouting's GUI is off
+            "-Djava.awt.headless=true",
+            "-Dapple.awt.UIElement=true",
             "-jar",
             spec["freerouting_jar"],
             "-de",
@@ -423,6 +506,10 @@ def route(spec):
         sys.exit("Freerouting wrote no session file")
     if not pcbnew.ImportSpecctraSES(board, ses_path):
         sys.exit("SES import failed")
+
+    grown = grow_vias(board, spec)
+    if grown:
+        print(f"grew {len(grown)} via(s) to their class's size (DRC checks the fit): {', '.join(grown)}")
 
     # Freerouting necks a track to half its width to reach a fine-pitch pad,
     # often below the board's minimum (0.125 mm against 0.15 mm, over a few
@@ -456,6 +543,10 @@ def route(spec):
         print(
             f"fanout: no room for a via beside {', '.join(failed)}; routed track only"
         )
+    # after fanout, so it covers Freerouting's vias and fanout's alike
+    bad = vias_in_pads(board, spec)
+    if bad:
+        sys.exit("vias inside SMD pads:\n  " + "\n  ".join(bad))
 
     # The project's .kicad_dru lets a pour thermal resolve to one spoke on the
     # premise that every pad of a pour net also has a routed track. Enforce

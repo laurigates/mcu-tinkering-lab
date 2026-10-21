@@ -325,6 +325,27 @@ class ConfigTests(unittest.TestCase):
             "[keepouts] names repeat",
         )
 
+    def test_route_keepouts(self):
+        area = {"name": "under FB", "layer": "B.Cu", "rect": [10.0, 10.0, 14.0, 13.0]}
+        ok = self.with_data(lambda d: d.update(route_keepouts=[area]))
+        self.assertEqual(boardcheck.validate_config(ok, self.nl), [])
+        self.fails(
+            lambda d: d.update(route_keepouts=[{**area, "layer": "In1.Cu"}]),
+            "[route_keepouts] 'under FB': layer must be F.Cu or B.Cu",
+        )
+        self.fails(
+            lambda d: d.update(route_keepouts=[{**area, "rect": [14, 10, 10, 13]}]),
+            "[route_keepouts] 'under FB': rect must be [x0, y0, x1, y1]",
+        )
+        self.fails(
+            lambda d: d.update(route_keepouts=[{**area, "rect": [10, 10, 14, 63]}]),
+            "is not inside [outline]",
+        )
+        self.fails(
+            lambda d: d.update(route_keepouts=[area, area]),
+            "[route_keepouts] names repeat",
+        )
+
     def test_cutouts(self):
         hole = {"name": "relief", "center": [41.5, 30.0], "diameter": 2.0}
         ok = self.with_data(lambda d: d.update(cutouts=[hole]))

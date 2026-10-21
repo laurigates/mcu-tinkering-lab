@@ -167,6 +167,43 @@ def track_keepouts(text, tracks, origin, margin_um):
     return text[: anchor + 1] + "\n".join(lines) + text[anchor:]
 
 
+def rect_keepouts(text, keepouts, origin):
+    """`text` with a keepout on its one layer over each [[route_keepouts]] rect.
+
+    These bind Freerouting only: the board gets no rule area, so footprints and
+    the pour may still go there. Coordinates are the DSN's um with y negated;
+    they go before the structure's `(via ...)`.
+    """
+    if not keepouts:
+        return text
+    anchor = text.find('\n    (via "')
+    if anchor < 0:
+        raise DsnError("DSN has no structure (via ...) line to add keepouts before")
+    ox, oy = origin
+    lines = []
+    for k in keepouts:
+        x0, y0, x1, y1 = ((ox + k["rect"][0]) * 1000, (oy + k["rect"][1]) * 1000,
+                          (ox + k["rect"][2]) * 1000, (oy + k["rect"][3]) * 1000)
+        corners = [(x0, y0), (x1, y0), (x1, y1), (x0, y1), (x0, y0)]
+        coords = "  ".join("%d %d" % (round(x), -round(y)) for x, y in corners)
+        lines.append('    (keepout "" (polygon %s 0  %s))' % (k["layer"], coords))
+    return text[: anchor + 1] + "\n".join(lines) + text[anchor:]
+
+
+def no_via_at_smd(text):
+    """`text` with `(control (via_at_smd off))` in its structure.
+
+    Without it Freerouting may drop a via inside an SMD pad, where the hole
+    drains the pad's paste at reflow.
+    """
+    if "(via_at_smd" in text:
+        return text
+    anchor = text.find('\n    (via "')
+    if anchor < 0:
+        raise DsnError("DSN has no structure (via ...) line to add a control before")
+    return text[: anchor + 1] + "    (control (via_at_smd off))" + text[anchor:]
+
+
 def drop_pins(text, pins):
     """`text` with each `(net, "REF-PAD")` of `pins` left out of that net.
 
