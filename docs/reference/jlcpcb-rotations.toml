@@ -86,6 +86,15 @@ rotation = 0
 max_err_mm = 0.05
 checked = "2026-10-19"
 
+# LCSC's footprint draws its double cathode bar beside pad 1, as KiCad does
+# (read 2026-10-21).
+[C2104] # BZT52C15 (JSCJ)
+footprint = "Diode_SMD:D_SOD-123"
+lcsc_footprint = "SOD-123_L2.8-W1.8-LS3.7-RD"
+rotation = 0
+max_err_mm = 0.04
+checked = "2026-10-21"
+
 # --- Inductors, fuses, ferrite beads ------------------------------------------
 
 [C2044594] # SRN6045TA-4R7M

@@ -24,6 +24,7 @@ netlist and [`board.toml`](board.toml) (placement, silkscreen, net classes, pour
 | F1 | 3 A hold PTC, 1812 (BSMD1812-300-24V) | Pack input: limits a short on VBAT |
 | Q1 | ZXMP4A16G P-MOSFET, SOT-223 | Reverse-polarity switch: drain (tab) to F1, source to VBAT |
 | R4 | 10 kΩ, 0805 | Q1's gate to GND |
+| D2 | BZT52C15 15 V zener, SOD-123 | Q1's gate to source: cathode to VBAT, anode to the gate |
 | J2 | JST-XH 4-pin | LM2596 module: IN+, IN−, OUT+, OUT− |
 | J4, J5 | JST-XH 4-pin | Motor coils A1, A2, B1, B2 |
 | C1, C2 | 100 µF 35 V SMD electrolytic, 6.3 × 7.7 mm | VMOT bulk at each driver |
@@ -41,7 +42,8 @@ pack. Firmware does not read it yet.
 
 ### Pack input protection
 
-J1's BAT+ reaches VBAT through F1 and Q1; the hand-wired harness has neither.
+J1's BAT+ reaches VBAT through F1 and Q1, with D2 clamping Q1's gate; the
+hand-wired harness has none of them.
 The values below are from the datasheets, not measured on this board.
 
 - **Q1** is a P-MOSFET high-side switch: drain to F1, source to VBAT, gate to
@@ -49,20 +51,44 @@ The values below are from the datasheets, not measured on this board.
   first, the gate sits up to 12.6 V below the source and the channel turns on.
   Reversed, the gate is above the source and the body diode is reverse-biased,
   so nothing downstream sees the reversed pack. ZXMP4A16G (Diodes DS33584
-  Rev. 6-2): VDSS −40 V, VGSS ±20 V, RDS(on) ≤ 60 mΩ at VGS −10 V. A full 3S
-  pack puts |VGS| at 12.6 V, 7.4 V under the rating, so there is no gate
-  zener. At F1's 3 A hold current Q1 dissipates up to 0.54 W, about a 34 °C
-  rise at the datasheet's 62.5 °C/W (25 × 25 mm of 1 oz copper; the board
-  gives it less). The robot's real pack current is not measured yet.
+  Rev. 6-2): VDSS −40 V, VGSS ±20 V, RDS(on) ≤ 60 mΩ at VGS −10 V and
+  ≤ 100 mΩ at −4.5 V. At F1's 3 A hold current Q1 dissipates up to 0.54 W,
+  about a 34 °C rise at the datasheet's 62.5 °C/W (25 × 25 mm of 1 oz copper;
+  the board gives it less). The robot's real pack current is not measured yet.
+- **D2** clamps Q1's gate. A steady pack puts |VGS| at the pack voltage, at
+  most 12.6 V, but a hot-plug overshoot lands on Q1's source while R4 holds
+  the gate at GND, and above 20 V it would exceed VGSS. D2 is a BZT52C15
+  (C2104; JSCJ datasheet Rev. 2.1: VZ 13.8–15.6 V at 5 mA, IR ≤ 0.1 µA at
+  10.5 V, +9.2 to +13 mV/°C), cathode to VBAT, anode to the gate, with R4
+  limiting its current (0.8 mA at a 24 V spike). Its 13.8 V minimum is above
+  a full pack, so it does not conduct in use and |VGS| follows the pack:
+  9.0–12.6 V over the BMS's range, 8.2 V at the DRV8825's minimum supply, all
+  past the −4.5 V that the 100 mΩ maximum is given at. In an overshoot it
+  holds |VGS| at 15.6 V or less at 25 °C, about 16.9 V at 125 °C. A 12 V
+  zener (11.4–12.7 V) would conduct on a full pack.
 - **F1** is a 3 A hold, 6 A trip PTC (BSMD1812-300-24V, BHFUSE datasheet;
   Ihold falls to 2.55 A at 40 °C). It is the 24 V part of the family the
   integrated robocar carrier uses at 16 V: 16 V leaves 3.4 V over a full 3S
   pack, 24 V leaves 11.4 V for a hot-plug overshoot into 200 µF of bulk
-  capacitance.
+  capacitance. An undamped plug-in rings to twice the pack, 25.2 V; the bulk
+  capacitors' ESR (600 mΩ each at 100 kHz, KNSCHA RVE) damps it fully for
+  lead inductance under about 8 µH, so the real overshoot should be much
+  smaller (an estimate; not measured).
+- **Hot-plug inrush** (an estimate, not measured): with the two capacitors'
+  ESR in parallel (0.3 Ω), F1 (12 mΩ) and an assumed 0.1 Ω for the pack and
+  its lead, plugging in a full pack peaks near 30 A and decays with a time
+  constant of about 80 µs (0.4 Ω × 200 µF). Q1's body diode carries it until
+  R4 pulls the gate down (R4 × Ciss ≈ 10 µs, DS33584 Ciss 1007 pF), and the
+  current stays above the datasheet's 21 A pulsed source current (ISM, a
+  repetitive rating at 5 % duty) for about 30 µs. That is one pulse per
+  plug-in of about 1 mJ in the diode, and the ESR is higher at the pulse's
+  frequency than at 100 kHz, which lowers the peak, so the board has no
+  inrush limiter. A scope on VBAT and the pack current at plug-in would
+  settle it.
 - **Power-stage checklist** (`.claude/rules/power-stage-checklist.md`): items
   1–2 and 4–7 (dropout, low-battery cutoff, sink capability, current limit,
   capacitance, inductor) belong to the off-board LM2596 module; 3 (input
-  protection) is F1 and Q1; 8 (layout) is the fixed 1.5 mm PACK_IN, PACK_FUSED
+  protection) is F1, Q1 and D2; 8 (layout) is the fixed 1.5 mm PACK_IN, PACK_FUSED
   and VBAT tracks in [`board.toml`](board.toml).
 - **Low-battery cutoff.** The DRV8825 runs from 8.2 V (TI SLVSA73F, section 1),
   and the pack's BMS cuts off lower than that. Firmware should stop the motors
@@ -71,9 +97,11 @@ The values below are from the datasheets, not measured on this board.
 ### VBAT and ground
 
 VBAT is laid down as fixed F.Cu tracks, 1.5 mm wide except the 1.0 mm feed to
-the divider (R2), with no via: Q1's source to A1's VMOT and C1, to the buck
-lead's IN+ (J2), and from there round the east edge to C2 and A2's VMOT
-(129 mm from Q1's source to A2's VMOT). GND is poured on both layers, with a
+the divider (R2) and the 0.5 mm tie to D2's cathode, with no via: Q1's source
+to A1's VMOT and C1, to the buck lead's IN+ (J2), and from there round the
+east edge to C2 and A2's VMOT. Measured on the routed board, the path from
+Q1's source pad to A2's VMOT pad is 130.8 mm of 1.5 mm F.Cu track centreline,
+pad centre to pad centre, with no via and no VBAT copper on B.Cu. GND is poured on both layers, with a
 via beside each SMD ground pad and stitching vias on a 5 mm grid wherever both
 layers' pour holds one (120 GND vias). The pour stays 3.5 mm from each M3
 hole's centre.
@@ -112,16 +140,17 @@ KiCad's hand-solder pads, and each symbol still carries an LCSC part number,
 so JLCPCB assembly remains possible:
 
 - **JLCPCB assembly**: `carrier-fab` writes `output/assembly/bom-jlc.csv` and
-  `cpl-jlc.csv` with only the ten SMD parts. Upload them with the Gerber zip
+  `cpl-jlc.csv` with only the eleven SMD parts. Upload them with the Gerber zip
   (Economic PCBA, top side). Everything else is hand-soldered afterwards.
-  C1/C2 (C2836437), F1 (C7500481) and Q1 (C141324) are JLC Extended parts
-  (a feeder fee each); the rest are Basic.
+  C1/C2 (C2836437), D2 (C2104), F1 (C7500481) and Q1 (C141324) are JLC
+  Extended parts (a feeder fee each); the rest are Basic.
   JLC's rotation convention differs from KiCad's for some packages, so check
-  the polarity of C1, C2 and D1 in JLC's placement preview: C1/C2 "+" on the
-  pad marked "+" on the silkscreen, D1's cathode bar on the left (pad 1,
-  XIAO 5V side). Correct the rotation there if the preview shows one flipped.
+  the polarity of C1, C2, D1 and D2 in JLC's placement preview: C1/C2 "+" on
+  the pad marked "+" on the silkscreen, D1's cathode bar on the left (pad 1,
+  XIAO 5V side), D2's at the top (pad 1, on the VBAT track). Correct the rotation there if the preview shows one flipped.
 - **By hand**: skip the two CSVs. Any 1 A / 40 V Schottky in SOD-123 and any
-  100 µF ≥ 25 V 6.3 mm SMD electrolytic fit. Solder Q1's tab (its drain)
+  100 µF ≥ 25 V 6.3 mm SMD electrolytic fit; D2 needs a 15 V zener in
+  SOD-123 (BZT52C15 or MMSZ5245B), cathode bar toward the VBAT track. Solder Q1's tab (its drain)
   as well as its three pins.
 
 - Set the LM2596 to 5.0–5.3 V on the bench **before** plugging it into J2. D1
@@ -198,7 +227,7 @@ detected size and layer count.
    | File | For |
    |---|---|
    | `output/balancebot-carrier-fab.zip` | The board: Gerbers and drill files |
-   | `output/assembly/bom-jlc.csv` | Assembly only: the ten SMD parts with LCSC numbers |
+   | `output/assembly/bom-jlc.csv` | Assembly only: the eleven SMD parts with LCSC numbers |
    | `output/assembly/cpl-jlc.csv` | Assembly only: their positions and rotations |
 
 4. **Upload the zip** at jlcpcb.com (Order now). It should detect 2 layers and
@@ -217,12 +246,13 @@ detected size and layer count.
    Check the outline, the four M3 holes and the "+"/"−" beside J1 in the
    Gerber preview.
 
-5. **Choose who solders the ten SMD parts** (R1–R4, C1–C3, D1, F1, Q1):
+5. **Choose who solders the eleven SMD parts** (R1–R4, C1–C3, D1, D2, F1,
+   Q1):
 
    - **JLCPCB**: turn on *PCB Assembly*, *Economic*, top side. Upload
-     `bom-jlc.csv` and `cpl-jlc.csv` when asked. All ten should match; C1/C2,
-     F1 and Q1 are Extended parts and add a feeder fee each. In the placement
-     preview, check C1, C2 and D1's polarity, and Q1's tab, as described in
+     `bom-jlc.csv` and `cpl-jlc.csv` when asked. All eleven should match; C1/C2,
+     D2, F1 and Q1 are Extended parts and add a feeder fee each. In the placement
+     preview, check C1, C2, D1 and D2's polarity, and Q1's tab, as described in
      [Assembly notes](#assembly-notes) before confirming.
    - **By hand**: leave *PCB Assembly* off and buy the parts listed in
      [Assembly notes](#assembly-notes).

@@ -1,5 +1,5 @@
 {
- "board_sha256": "b2d67e740acadb6371d0c8428295b848dda23d148007737533eec75f31369dec",
+ "board_sha256": "a829256435fb5549d48278cc5c31b021edee75a5f362d4d359f039539934cb1c",
  "kicad_cli_version": "10.0.7",
  "netlist": {
   "components": {
@@ -44,6 +44,13 @@
     "lcsc": "C8598",
     "lib_id": "Device:D_Schottky",
     "value": "B5819W"
+   },
+   "D2": {
+    "footprint": "Diode_SMD:D_SOD-123",
+    "in_bom": true,
+    "lcsc": "C2104",
+    "lib_id": "Device:D_Zener",
+    "value": "BZT52C15"
    },
    "F1": {
     "footprint": "Fuse:Fuse_1812_4532Metric_Pad1.30x3.40mm_HandSolder",
@@ -473,6 +480,10 @@
    ],
    "PFET_GATE": [
     [
+     "D2",
+     "2"
+    ],
+    [
      "Q1",
      "1"
     ],
@@ -516,6 +527,10 @@
     ],
     [
      "C2",
+     "1"
+    ],
+    [
+     "D2",
      "1"
     ],
     [
@@ -569,5 +584,5 @@
    ]
   }
  },
- "schematic_sha256": "dbac228ebc0676e355e832cab7fd803ea27220bb2306783737e11fd77c974731"
+ "schematic_sha256": "387e02f1ff5d99a946572114d1d794dc506d5b173bca39aa55a16c99e65b81e7"
 }
