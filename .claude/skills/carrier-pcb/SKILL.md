@@ -67,9 +67,15 @@ several traps below are version-specific: after a KiCad upgrade, re-run
 5. Before fabrication: `just <p>::carrier-review` prints the layout metrics the
    gates do not check (vias per poured net, ground pads without one, pour
    islands, narrowest power tracks, decoupling distances, cut-line clearances,
-   silkscreen size). Then run the `pcb-reviewer` agent
-   (`.claude/agents/pcb-reviewer.md`) for an adversarial review against the
-   datasheets, and `.claude/rules/power-stage-checklist.md` for any regulator.
+   silkscreen size, pour pieces only tracks join to the plane).
+   `just <p>::carrier-measure <path|cuts|vias-in-pads|clearance-to-holes|plane|resistance>`
+   measures per layer, joining layers only at vias and through-hole pads
+   (`kicad.measure` over `pcb/dump.py`'s JSON; `--json`, and `--ref <rev>` for
+   the board at another commit, read by `git show`). Numbers in a README or PR
+   come from its output, not a scratch script or a hand copy: a layer-blind
+   script once reported "no via" on a path through two. Then run the
+   `pcb-reviewer` agent (`.claude/agents/pcb-reviewer.md`) for an adversarial
+   review against the datasheets, and `.claude/rules/power-stage-checklist.md` for any regulator.
 6. `just <p>::carrier-fab` (runs `carrier-check` first): Gerbers, drill, BOM
    and CPL. `just kicad::check` runs what CI runs. The CPL adds each LCSC
    part's checked rotation offset (trap 32); a new LCSC number needs an entry

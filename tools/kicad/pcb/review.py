@@ -2,7 +2,7 @@
 
 Run with KiCad's bundled Python (3.9) after route_board.py:
 
-    $KICAD_PYTHON tools/kicad/pcb/review.py <board-input.json>
+    $KICAD_PYTHON tools/kicad/pcb/review.py <board-input.json> [--dump <out.json>]
 
 ``just <project>::carrier-review`` writes the JSON (``python3 -m
 kicad.boardinput``) and runs it. It reads the committed ``.kicad_pcb`` and
@@ -21,6 +21,14 @@ prints, without failing on any of it:
 - the smallest silkscreen text height and stroke, flagged under JLCPCB's
   1.0 mm / 0.15 mm.
 
+``--dump`` also writes the board's copper as JSON (``dump.py``, from the board
+already loaded), and the recipe then prints the plane-connectivity section
+from it with ``python3 -m kicad.measure <out.json> plane --review``: per
+poured net, the pieces of pour that vias and through-hole pads alone do not
+join, flagged when more than one is 5 mm2 or larger. That geometry lives in
+``kicad.measure`` (stdlib, Python 3.11), not here: KiCad's Python has no
+polygon library, and one implementation serves both reports.
+
 The integrated robocar carrier passed every gate with one GND via on its main
 board (the carrier-pcb skill, trap 29): the gates check what is connected, not
 how well. This is the "how well", for a person or a reviewing agent to read.
@@ -30,6 +38,7 @@ import json
 import math
 import sys
 
+import dump
 import pcbnew
 
 REACH_MM = 2.5
@@ -90,8 +99,10 @@ def farads(value):
         return None
 
 
-def review(spec):
+def review(spec, dump_to=None):
     board = pcbnew.LoadBoard(spec["pcb"])
+    if dump_to:
+        print(dump.write(board, spec, spec["pcb"], dump_to))
     ox, oy = spec["origin"]
     pads = [p for fp in board.GetFootprints() for p in fp.Pads()]
     tracks = [t for t in board.GetTracks() if t.GetClass() == "PCB_TRACK"]
@@ -242,10 +253,18 @@ def review(spec):
 
 
 def main(argv):
-    if len(argv) != 2:
+    args = list(argv[1:])
+    dump_to = None
+    if "--dump" in args:
+        i = args.index("--dump")
+        if i + 1 >= len(args):
+            sys.exit(__doc__)
+        dump_to = args[i + 1]
+        del args[i : i + 2]
+    if len(args) != 1:
         sys.exit(__doc__)
-    with open(argv[1]) as f:
-        review(json.load(f))
+    with open(args[0]) as f:
+        review(json.load(f), dump_to)
 
 
 if __name__ == "__main__":

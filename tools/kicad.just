@@ -8,10 +8,12 @@
 #
 # Provides private recipes; the project defines the public ones, as with pico.just:
 #   _carrier-lib, _carrier-schematic, _carrier-board, _carrier-route, _carrier-check,
-#   _carrier-board-checked, _carrier-review, _carrier-fab, _perfboard, _perfboard-check
+#   _carrier-board-checked, _carrier-review, _carrier-measure, _carrier-fab,
+#   _perfboard, _perfboard-check
 # KiCad-free: _carrier-lib, _carrier-schematic, _perfboard, _perfboard-check.
 # Need KiCad 10.0.6: _carrier-check, _carrier-fab (kicad-cli), _carrier-board,
-# _carrier-route, _carrier-review (KiCad's bundled Python; _carrier-route and
+# _carrier-route, _carrier-review, _carrier-measure (KiCad's bundled Python;
+# _carrier-measure's `resistance` also uv, for numpy and scipy; _carrier-route and
 # _carrier-board-checked also java >= 25 and the Freerouting 2.5.0 jar,
 # $FREEROUTING_JAR). `just kicad::setup` installs all three.
 #
@@ -69,9 +71,63 @@ _carrier-board-checked project tries="5":
 # net, SMD ground pads without one, pour islands, narrowest power tracks,
 # decoupling distances, cut-line clearances, silkscreen size). Reports; does
 # not gate.
+# Ends with kicad.measure's plane connectivity: pour pieces that vias and
+# through-hole pads alone do not join.
 _carrier-review project:
     cd {{_kicad_repo}} && PYTHONPATH=tools python3 -m kicad.boardinput {{project}}
-    cd {{_kicad_repo}} && {{_kicad_python}} tools/kicad/pcb/review.py {{project}}/hardware/carrier/output/board-input.json
+    cd {{_kicad_repo}} && {{_kicad_python}} tools/kicad/pcb/review.py {{project}}/hardware/carrier/output/board-input.json --dump {{project}}/hardware/carrier/output/measure.json
+    cd {{_kicad_repo}} && PYTHONPATH=tools python3 -m kicad.measure {{project}}/hardware/carrier/output/measure.json plane --review
+
+# Layer-aware copper measurements (kicad.measure; pcb/dump.py writes the JSON):
+# path NET A:pad B:pad, cuts NET A:pad, vias-in-pads, clearance-to-holes,
+# plane, resistance NET A:pad B:pad; --json for JSON. `--ref <git-ref>`
+# measures the board as committed at that ref, read with `git show` (never a
+# checkout: the clone may be shared), placed with today's board.toml origin.
+# `resistance` runs under `uv run --with numpy --with scipy`; the rest is
+# stdlib, as in every other kicad recipe.
+[positional-arguments]
+_carrier-measure project *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd {{_kicad_repo}}
+    project="$1"
+    # The public recipe passes its *args as one word; split it again.
+    read -ra words <<< "${*:2}"
+    ref=""
+    argv=()
+    i=0
+    while [ "$i" -lt "${#words[@]}" ]; do
+        w="${words[$i]}"
+        case "$w" in
+            --ref) ref="${words[$((i + 1))]:-}"; i=$((i + 2)); continue ;;
+            --ref=*) ref="${w#--ref=}" ;;
+            *) argv+=("$w") ;;
+        esac
+        i=$((i + 1))
+    done
+    if [ "${#argv[@]}" -eq 0 ]; then
+        echo "usage: carrier-measure <path|cuts|vias-in-pads|clearance-to-holes|plane|resistance> [args] [--json] [--ref <git-ref>]" >&2
+        exit 2
+    fi
+    out="$project/hardware/carrier/output"
+    PYTHONPATH=tools python3 -m kicad.boardinput "$project" >&2
+    pcb=()
+    dumped="$out/measure.json"
+    if [ -n "$ref" ]; then
+        tmp="$(mktemp -d)"
+        trap 'rm -rf "$tmp"' EXIT
+        rel="$(python3 -c 'import json, os, sys; print(os.path.relpath(json.load(open(sys.argv[1]))["pcb"]))' "$out/board-input.json")"
+        git show "$ref:$rel" > "$tmp/board.kicad_pcb"
+        pcb=(--pcb "$tmp/board.kicad_pcb")
+        dumped="$tmp/measure.json"
+        echo "measuring $rel at $ref" >&2
+    fi
+    {{_kicad_python}} tools/kicad/pcb/dump.py "$out/board-input.json" "$dumped" ${pcb[@]+"${pcb[@]}"} >&2
+    if [ "${argv[0]}" = resistance ]; then
+        PYTHONPATH=tools uv run --quiet --no-project --python '>=3.11' --with numpy==2.5.4 --with scipy==1.18.1 python -m kicad.measure "$dumped" "${argv[@]}"
+    else
+        PYTHONPATH=tools python3 -m kicad.measure "$dumped" "${argv[@]}"
+    fi
 
 _carrier-fab project:
     cd {{_kicad_repo}} && PYTHONPATH=tools python3 -m kicad.fab {{project}}

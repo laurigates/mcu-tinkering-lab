@@ -155,6 +155,13 @@ carrier-board-checked tries="5": (_carrier-board-checked project_dir tries)
 [group: "carrier"]
 carrier-review: (_carrier-review project_dir)
 
+# path, cuts, vias-in-pads, clearance-to-holes, plane, resistance; --json,
+# --ref <a git ref>. README and PR numbers come from here, not a scratch script.
+#
+# Layer-aware copper measurements of the routed board
+[group: "carrier"]
+carrier-measure *args: (_carrier-measure project_dir args)
+
 # The BOM and CPL cover the SMD passives only; skip them to hand-solder.
 #
 # Gerbers and drill files for JLCPCB, zipped, plus the BOM and CPL for its assembly service
