@@ -71,7 +71,9 @@ several traps below are version-specific: after a KiCad upgrade, re-run
    `just <p>::carrier-measure <path|cuts|vias-in-pads|clearance-to-holes|plane|resistance>`
    measures per layer, joining layers only at vias and through-hole pads
    (`kicad.measure` over `pcb/dump.py`'s JSON; `--json`, and `--ref <rev>` for
-   the board at another commit, read by `git show`). Numbers in a README or PR
+   the board at another commit, read by `git show`; its printed coordinates,
+   the `[fanout] in_pad` exemptions and the poured-net list still come from
+   today's `board.toml`). Numbers in a README or PR
    come from its output, not a scratch script or a hand copy: a layer-blind
    script once reported "no via" on a path through two. Then run the
    `pcb-reviewer` agent (`.claude/agents/pcb-reviewer.md`) for an adversarial
