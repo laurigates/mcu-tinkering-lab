@@ -28,6 +28,9 @@ static const char *TAG = "imu";
 /* Shake detection threshold in g */
 #define SHAKE_THRESHOLD_G 1.5f
 
+/* i2c_master_transmit/receive take the timeout in ms, not FreeRTOS ticks */
+#define IMU_I2C_TIMEOUT_MS 100
+
 static i2c_master_bus_handle_t s_bus;
 static i2c_master_dev_handle_t s_dev;
 
@@ -44,17 +47,17 @@ static float s_prev_az = 1.0f; /* assume resting upright */
 static esp_err_t write_reg(uint8_t reg, uint8_t val)
 {
     uint8_t buf[2] = {reg, val};
-    return i2c_master_transmit(s_dev, buf, sizeof(buf), pdMS_TO_TICKS(100));
+    return i2c_master_transmit(s_dev, buf, sizeof(buf), IMU_I2C_TIMEOUT_MS);
 }
 
 /** Read `len` bytes starting at `reg` into `out`. */
 static esp_err_t read_regs(uint8_t reg, uint8_t *out, size_t len)
 {
-    esp_err_t ret = i2c_master_transmit(s_dev, &reg, 1, pdMS_TO_TICKS(100));
+    esp_err_t ret = i2c_master_transmit(s_dev, &reg, 1, IMU_I2C_TIMEOUT_MS);
     if (ret != ESP_OK) {
         return ret;
     }
-    return i2c_master_receive(s_dev, out, len, pdMS_TO_TICKS(100));
+    return i2c_master_receive(s_dev, out, len, IMU_I2C_TIMEOUT_MS);
 }
 
 /* ------------------------------------------------------------------ */
