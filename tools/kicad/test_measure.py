@@ -17,9 +17,10 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import math
 import tempfile
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
 from unittest import mock
@@ -55,6 +56,37 @@ def pad(ref, num, net, at, size=(1.0, 1.0), layers=("F.Cu",), tht=False, drill=0
 
 def track(net, layer, a, b, width=0.25):
     return {"net": net, "layer": layer, "width": width, "a": list(a), "b": list(b)}
+
+
+def arc_track(net, layer, a, mid, b, width=0.25):
+    return {**track(net, layer, a, b, width), "mid": list(mid)}
+
+
+def all_on_front(b):
+    """The same board with every piece of copper moved to F.Cu."""
+    b = json.loads(json.dumps(b))
+    for t in b["tracks"]:
+        t["layer"] = "F.Cu"
+    for p in b["pads"]:
+        p["shapes"] = {"F.Cu": [s for ss in p["shapes"].values() for s in ss]}
+        p["layers"] = ["F.Cu"]
+    return b
+
+
+def tht_join():
+    """A:1 (F.Cu) -> F.Cu track -> J1:1 (through-hole) -> B.Cu track -> B:1
+    (B.Cu): no via, so only the through-hole pad joins the layers."""
+    return board(
+        tracks=[
+            track("N", "F.Cu", (0, 0), (5, 0), 1.0),
+            track("N", "B.Cu", (5, 0), (10, 0), 1.0),
+        ],
+        pads=[
+            pad("A", "1", "N", (0, 0)),
+            pad("J1", "1", "N", (5, 0), (1.6, 1.6), ("F.Cu", "B.Cu"), True, 0.8),
+            pad("B", "1", "N", (10, 0), layers=("B.Cu",)),
+        ],
+    )
 
 
 def via(net, at, size=0.6, drill=0.3):
@@ -154,6 +186,68 @@ class PathTests(unittest.TestCase):
     def test_a_pad_on_another_net_is_refused(self):
         with self.assertRaises(KicadError):
             measure.path(through_via(), "OTHER", "A:1", "B:1")
+
+    def test_only_a_through_hole_pad_joins_the_layers(self):
+        r = measure.path(tht_join(), "N", "A:1", "B:1")
+        self.assertTrue(r["connected"])
+        self.assertEqual(r["vias"], 0)
+        self.assertEqual(r["layers"], ["B.Cu", "F.Cu"])
+        self.assertIn("pad J1:1", r["hops"])
+
+    def test_pads_joined_by_a_via_alone_have_no_tracks(self):
+        r = measure.path(via_between_pads(), "N", "A:1", "B:1")
+        self.assertTrue(r["connected"])
+        self.assertEqual((r["tracks"], r["vias"]), (0, 1))
+        self.assertIsNone(r["narrowest_mm"])
+
+
+def via_between_pads():
+    """Two pads joined by one via that touches both, and no track."""
+    return board(
+        vias=[via("N", (0.6, 0))],
+        pads=[pad("A", "1", "N", (0, 0)), pad("B", "1", "N", (1.2, 0))],
+    )
+
+
+class ArcTests(unittest.TestCase):
+    """An arc track is its circle: length from the radius and sweep, copper
+    along the curve rather than along the chords through `mid`."""
+
+    S2 = math.sqrt(0.5)
+
+    def test_a_semicircle_is_pi_r_long(self):
+        for mid in ((5, 5), (5, -5)):
+            t = arc_track("N", "F.Cu", (0, 0), mid, (10, 0))
+            self.assertAlmostEqual(measure.track_length(t), 5 * math.pi, places=6)
+
+    def test_a_three_quarter_arc_sweeps_the_long_way(self):
+        # (5, 0) round through 135 degrees to (0, -5): 270 degrees of R 5
+        t = arc_track("N", "F.Cu", (5, 0), (-5 * self.S2, 5 * self.S2), (0, -5))
+        self.assertAlmostEqual(measure.track_length(t), 7.5 * math.pi, places=6)
+        for p in measure.track_points(t):
+            self.assertAlmostEqual(math.hypot(*p), 5.0, places=6)
+
+    def test_a_collinear_mid_is_a_straight_track(self):
+        t = arc_track("N", "F.Cu", (0, 0), (5, 0), (10, 0))
+        self.assertEqual(measure.track_points(t), [(0, 0), (10, 0)])
+        self.assertAlmostEqual(measure.track_length(t), 10.0)
+
+    def test_path_length_follows_the_arc(self):
+        b = board(
+            tracks=[arc_track("N", "F.Cu", (0, 0), (5, 5), (10, 0))],
+            pads=[pad("A", "1", "N", (0, 0)), pad("B", "1", "N", (10, 0))],
+        )
+        r = measure.path(b, "N", "A:1", "B:1")
+        self.assertAlmostEqual(r["length_mm"], round(5 * math.pi, 2))
+
+    def test_a_pad_on_the_curve_away_from_mid_touches_the_arc(self):
+        # at 45 degrees on the semicircle, 1.46 mm from the chords through mid
+        at = (5 + 5 * self.S2, 5 * self.S2)
+        b = board(
+            tracks=[arc_track("N", "F.Cu", (0, 0), (5, 5), (10, 0))],
+            pads=[pad("A", "1", "N", (0, 0)), pad("B", "1", "N", at, (0.2, 0.2))],
+        )
+        self.assertTrue(measure.path(b, "N", "A:1", "B:1")["connected"])
 
 
 class LayerBlindTests(unittest.TestCase):
@@ -286,6 +380,23 @@ class PlaneTests(unittest.TestCase):
         self.assertEqual(rows[-1]["listed"], 1)
         self.assertFalse(rows[-1]["flag"])
 
+    def test_an_smd_pad_does_not_join_the_plane(self):
+        # a B.Cu SMD pad bridging the gap between the two pieces
+        b = self.split()
+        b["pads"].append(pad("U1", "1", "GND", (15, 0), (12, 1), ("B.Cu",)))
+        rows = measure.plane(b)
+        self.assertEqual(rows[-1]["components"], 2)
+        statuses = [r["status"] for r in rows if r["kind"] == "plane"]
+        self.assertEqual(statuses, ["main", "tracks-only"])
+
+    def test_a_via_in_a_hole_in_the_pour_does_not_touch_it(self):
+        z = zone("GND", "B.Cu", rect(0, 0, 10, 10))
+        z["islands"][0]["holes"] = [rect(0, 0, 2, 2)]
+        b = board(zones=[z], vias=[via("GND", (0, 0))])
+        self.assertEqual(measure.plane(b)[-1]["components"], 2)
+        b["vias"] = [via("GND", (3, 0))]  # the control: on the copper
+        self.assertEqual(measure.plane(b)[-1]["components"], 1)
+
     def test_region_area_subtracts_holes(self):
         r = measure.Region(
             tuple(map(tuple, rect(0, 0, 10, 10))),
@@ -317,9 +428,38 @@ class ResistanceTests(unittest.TestCase):
         expect = 9 / 0.25 * measure.RHO_CU / measure.CU_1OZ_M * 1e3
         self.assertAlmostEqual(r["milliohm"], expect, delta=0.03 * expect)
 
+    def test_diagonal_copper_reads_high(self):
+        # 0.25 mm at 45 degrees: about 14 % over the ideal 36 squares
+        d = 10 * math.sqrt(0.5)
+        b = board(
+            tracks=[track("N", "F.Cu", (0, 0), (d, d), 0.25)],
+            pads=[pad("A", "1", "N", (0, 0)), pad("B", "1", "N", (d, d))],
+        )
+        r = measure.resistance(b, "N", "A:1", "B:1")
+        ideal = 9 / 0.25 * measure.RHO_CU / measure.CU_1OZ_M * 1e3
+        self.assertGreater(r["milliohm"], 1.05 * ideal)
+        self.assertLess(r["milliohm"], 1.25 * ideal)
+
+    def test_a_via_adds_its_barrel(self):
+        # 1 mm tracks either side of a 0.3 mm via: 9 squares plus the barrel
+        b = through_via()
+        for t in b["tracks"]:
+            t["width"] = 1.0
+        r = measure.resistance(b, "N", "A:1", "B:1")
+        barrel = measure.RHO_CU * measure.BOARD_M / (math.pi * 0.3e-3 * 25e-6)
+        expect = (9 * measure.RHO_CU / measure.CU_1OZ_M + barrel) * 1e3
+        self.assertAlmostEqual(r["milliohm"], expect, delta=0.05 * expect)
+
+    def test_a_through_hole_pad_joins_the_layers(self):
+        r = measure.resistance(tht_join(), "N", "A:1", "B:1")
+        self.assertTrue(r["connected"])
+
     def test_crossing_layers_without_a_via_are_open(self):
         r = measure.resistance(crossing(), "N", "A:1", "B:1")
         self.assertFalse(r["connected"])
+        # the control: the same copper on one layer does join at the crossing
+        r = measure.resistance(all_on_front(crossing()), "N", "A:1", "B:1")
+        self.assertTrue(r["connected"])
 
 
 class CliTests(unittest.TestCase):
@@ -355,6 +495,41 @@ class CliTests(unittest.TestCase):
         out = self.run_cli(PlaneTests().split(), "plane", "--review")
         self.assertIn("1 plane flag(s)", out)
         self.assertIn("does not gate", out)
+
+    def test_a_path_with_no_tracks_prints(self):
+        out = self.run_cli(via_between_pads(), "path", "N", "A:1", "B:1")
+        self.assertIn("0 tracks, 1 via, narrowest -, no tracks", out)
+
+    def exit_code(self, b, *args):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp) / "b.json"
+            p.write_text(json.dumps(b), encoding="utf-8")
+            out, err = StringIO(), StringIO()
+            with redirect_stdout(out), redirect_stderr(err):
+                try:
+                    code = measure.main([str(p), *args])
+                except SystemExit as e:
+                    code = e.code
+            return code, out.getvalue() + err.getvalue()
+
+    def test_a_raster_must_be_positive(self):
+        for raster in ("0", "-0.05", "nan"):
+            code, out = self.exit_code(
+                through_via(), "resistance", "N", "A:1", "B:1", "--raster", raster
+            )
+            self.assertEqual(code, 2, raster)
+            self.assertIn("greater than 0", out)
+
+    def test_a_malformed_dump_fails_with_a_message(self):
+        code, out = self.exit_code({"pads": []}, "plane")
+        self.assertEqual(code, 1)
+        self.assertIn("FAIL:", out)
+        self.assertIn("not a pcb/dump.py dump", out)
+
+    def test_review_and_json_are_refused_together(self):
+        code, out = self.exit_code(PlaneTests().split(), "plane", "--review", "--json")
+        self.assertEqual(code, 2)
+        self.assertIn("--review", out)
 
 
 if __name__ == "__main__":

@@ -53,7 +53,9 @@ PLATING_M = 25e-6
 BOARD_M = 1.6e-3
 PLANE_MIN_MM2 = 5.0  # plane components smaller than this are not reported
 # resistance's cell size: a 0.25 mm track at 0.1 mm rasterises 2 or 3 cells
-# wide and reads 26 % high; at 0.05 mm it is within 1 % (test_measure).
+# wide and reads 26 % high; at 0.05 mm an axis-aligned one is within 1 %.
+# Diagonal copper reads higher, as cells join only edge to edge: a 0.25 mm
+# track at 45 degrees reads about 14 % high at 0.05 mm (test_measure).
 RASTER_MM = 0.05
 
 Pt = tuple[float, float]
@@ -271,16 +273,58 @@ def pad_name(p: dict) -> str:
     return f"{p['ref']}:{p['num']}"
 
 
+def arc(a: Pt, mid: Pt, b: Pt):
+    """The circle through an arc's three points: (centre, radius, start angle,
+    signed sweep), or None when the points are collinear (a straight track)."""
+    (ax, ay), (mx, my), (bx, by) = a, mid, b
+    d = 2 * (ax * (my - by) + mx * (by - ay) + bx * (ay - my))
+    if abs(d) < 1e-12:
+        return None
+    a2, m2, b2 = ax * ax + ay * ay, mx * mx + my * my, bx * bx + by * by
+    cx = (a2 * (my - by) + m2 * (by - ay) + b2 * (ay - my)) / d
+    cy = (a2 * (bx - mx) + m2 * (ax - bx) + b2 * (mx - ax)) / d
+    r = math.hypot(ax - cx, ay - cy)
+    t0 = math.atan2(ay - cy, ax - cx)
+    tau = 2 * math.pi
+    to_b = (math.atan2(by - cy, bx - cx) - t0) % tau
+    to_mid = (math.atan2(my - cy, mx - cx) - t0) % tau
+    sweep = to_b if to_mid <= to_b else to_b - tau
+    return (cx, cy), r, t0, sweep
+
+
+ARC_SAGITTA_MM = 0.002  # an arc's chords stay within this of the true arc
+
+
+def track_points(t: dict) -> list[Pt]:
+    """A track's centreline: its two ends, or an arc as chords whose sagitta
+    is at most ARC_SAGITTA_MM."""
+    a, b = tuple(t["a"]), tuple(t["b"])
+    c = arc(a, tuple(t["mid"]), b) if "mid" in t else None
+    if c is None:
+        return [a, b]
+    (cx, cy), r, t0, sweep = c
+    step = 2 * math.acos(max(-1.0, 1 - ARC_SAGITTA_MM / r))
+    n = max(2, math.ceil(abs(sweep) / step))
+    inner = [
+        (cx + r * math.cos(t0 + sweep * i / n), cy + r * math.sin(t0 + sweep * i / n))
+        for i in range(1, n)
+    ]
+    return [a, *inner, b]
+
+
 def track_shapes(t: dict):
-    pts = [t["a"], t["mid"], t["b"]] if "mid" in t else [t["a"], t["b"]]
     r = t["width"] / 2
-    for a, b in itertools.pairwise(pts):
-        yield Capsule(tuple(a), tuple(b), r)
+    for a, b in itertools.pairwise(track_points(t)):
+        yield Capsule(a, b, r)
 
 
 def track_length(t: dict) -> float:
-    pts = [t["a"], t["mid"], t["b"]] if "mid" in t else [t["a"], t["b"]]
-    return sum(math.dist(a, b) for a, b in itertools.pairwise(pts))
+    """Centreline length; an arc's comes from its circle, not from chords."""
+    a, b = tuple(t["a"]), tuple(t["b"])
+    c = arc(a, tuple(t["mid"]), b) if "mid" in t else None
+    if c is None:
+        return math.dist(a, b)
+    return c[1] * abs(c[3])
 
 
 def via_layers(v: dict):
@@ -626,7 +670,8 @@ def resistance(
     `res_mm` with sheet resistance rho / 35 um between neighbours; each via
     and plated hole joins the layers through its barrel (rho * 1.6 mm over a
     25 um wall); each end pad's cells are shorted together. The raster
-    under-resolves tracks narrower than about five cells (RASTER_MM).
+    under-resolves tracks narrower than about five cells and reads diagonal
+    tracks high (RASTER_MM).
     """
     try:
         import numpy as np
@@ -788,9 +833,11 @@ def text(r: dict) -> str:
         if not r["connected"]:
             return f"{head}: no routed path (tracks, vias, pads; the pour is left out)"
         v = r["vias"]
+        w = r["narrowest_mm"]
+        narrow = "narrowest -, no tracks" if w is None else f"narrowest {w:.3f} mm"
         return (
             f"{head}: {r['length_mm']:.2f} mm of track over {r['tracks']} tracks, "
-            f"{v} via{'s' * (v != 1)}, narrowest {r['narrowest_mm']:.3f} mm, "
+            f"{v} via{'s' * (v != 1)}, {narrow}, "
             f"layers {'+'.join(r['layers']) or '-'}"
         )
     if k == "cut":
@@ -863,7 +910,7 @@ def main(argv: list[str] | None = None) -> int:
             s.add_argument("--hops", action="store_true", help="list each hop")
         else:
             s.add_argument(
-                "--raster", type=float, default=RASTER_MM, help="cell size, mm"
+                "--raster", type=positive_mm, default=RASTER_MM, help="cell size, mm"
             )
     s = sub.add_parser("cuts", parents=[common])
     s.add_argument("net")
@@ -878,11 +925,23 @@ def main(argv: list[str] | None = None) -> int:
         print(f"FAIL: expected <dump.json> <subcommand> [args]\n{__doc__}")
         return 1
     args = ap.parse_args(argv)
+    if args.cmd == "plane" and args.review and args.json:
+        ap.error("plane: --review prints carrier-review's text; drop it for --json")
     try:
         return run(args)
     except (KicadError, OSError, ValueError) as e:
         print(f"FAIL: {e}")
         return 1
+    except KeyError as e:
+        print(f"FAIL: {args.dump} is not a pcb/dump.py dump: no key {e}")
+        return 1
+
+
+def positive_mm(s: str) -> float:
+    v = float(s)
+    if not v > 0:
+        raise argparse.ArgumentTypeError(f"must be greater than 0 mm, got {s}")
+    return v
 
 
 def run(args) -> int:

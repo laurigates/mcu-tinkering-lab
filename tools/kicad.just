@@ -82,7 +82,8 @@ _carrier-review project:
 # path NET A:pad B:pad, cuts NET A:pad, vias-in-pads, clearance-to-holes,
 # plane, resistance NET A:pad B:pad; --json for JSON. `--ref <git-ref>`
 # measures the board as committed at that ref, read with `git show` (never a
-# checkout: the clone may be shared), placed with today's board.toml origin.
+# checkout: the clone may be shared), placed with today's board.toml origin
+# and filtered with today's [fanout] in_pad and [pour] regions.
 # `resistance` runs under `uv run --with numpy --with scipy`; the rest is
 # stdlib, as in every other kicad recipe.
 [positional-arguments]
@@ -99,12 +100,17 @@ _carrier-measure project *args:
     while [ "$i" -lt "${#words[@]}" ]; do
         w="${words[$i]}"
         case "$w" in
-            --ref) ref="${words[$((i + 1))]:-}"; i=$((i + 2)); continue ;;
-            --ref=*) ref="${w#--ref=}" ;;
+            --ref) ref="${words[$((i + 1))]:-}"; i=$((i + 2)); has_ref=1; continue ;;
+            --ref=*) ref="${w#--ref=}"; has_ref=1 ;;
             *) argv+=("$w") ;;
         esac
         i=$((i + 1))
     done
+    # A missing value would otherwise measure the working-tree board.
+    if [ -n "${has_ref:-}" ] && { [ -z "$ref" ] || [ "${ref#-}" != "$ref" ]; }; then
+        echo "carrier-measure: --ref needs a git ref (e.g. --ref HEAD~1), got '${ref}'" >&2
+        exit 2
+    fi
     if [ "${#argv[@]}" -eq 0 ]; then
         echo "usage: carrier-measure <path|cuts|vias-in-pads|clearance-to-holes|plane|resistance> [args] [--json] [--ref <git-ref>]" >&2
         exit 2
