@@ -75,7 +75,7 @@ the divider (R2), with no via: Q1's source to A1's VMOT and C1, to the buck
 lead's IN+ (J2), and from there round the east edge to C2 and A2's VMOT
 (129 mm from Q1's source to A2's VMOT). GND is poured on both layers, with a
 via beside each SMD ground pad and stitching vias on a 5 mm grid wherever both
-layers' pour holds one (118 GND vias). The pour stays 3.5 mm from each M3
+layers' pour holds one (120 GND vias). The pour stays 3.5 mm from each M3
 hole's centre.
 
 ## Check before ordering
