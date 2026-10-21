@@ -6,7 +6,7 @@ targets py311 with `fixable = ["ALL"]` (pyupgrade's UP045 would rewrite
 
 - it parses with `ast.parse(..., feature_version=(3, 9))` (no `match`);
 - it imports only the stdlib modules KiCad's Python has and the scripts use,
-  `pcbnew`, and its siblings `dsn`, `fanout`, `silk` and `stitch` (no `tomllib`, nothing from tools/kicad or
+  `pcbnew`, and its siblings `dsn`, `dump`, `fanout`, `silk` and `stitch` (no `tomllib`, nothing from tools/kicad or
   tools/hardware);
 - an annotation using `|` needs `from __future__ import annotations`;
 - `pcb/` has no `__init__.py`, so it stays a directory of scripts;
@@ -27,7 +27,7 @@ from kicad.paths import REPO_ROOT
 PCB = Path(__file__).resolve().parent / "pcb"
 ALLOWED = frozenset(
     {"fnmatch", "json", "math", "os", "re", "shutil", "subprocess", "sys", "tempfile"}
-    | {"pcbnew", "dsn", "fanout", "silk", "stitch", "__future__"}
+    | {"pcbnew", "dsn", "dump", "fanout", "silk", "stitch", "__future__"}
 )
 
 
@@ -90,6 +90,7 @@ class PcbScriptTests(unittest.TestCase):
             [
                 "build_board.py",
                 "dsn.py",
+                "dump.py",
                 "fanout.py",
                 "review.py",
                 "route_board.py",
