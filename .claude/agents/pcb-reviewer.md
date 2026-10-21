@@ -36,10 +36,22 @@ your final message.
 3. Run the gates yourself and read every warning, not just the pass line:
    `kicad-cli pcb drc --severity-all --schematic-parity` and
    `kicad-cli sch erc --severity-all` on the project's KiCad files.
-4. Script pcbnew (`/usr/bin/python3`, or `$KICAD_PYTHON`) for anything the
-   report does not cover: a connectivity graph from pads, tracks, vias and
-   fill islands; the narrowest point on a current path; a cut set between a
-   regulator's ground pin and the battery return.
+4. Run `just <project>::carrier-measure` where the project has it (path
+   widths, vias, cuts, via-in-pad, plane and resistance per current path;
+   `--ref <git-ref>` gives the before/after of a change). Prefer it to a
+   scratch script.
+5. Script pcbnew (`/usr/bin/python3`, or `$KICAD_PYTHON`) for anything those
+   do not cover: a connectivity graph from pads, tracks, vias and fill
+   islands; the narrowest point on a current path; a cut set between a
+   regulator's ground pin and the battery return. Record each scratch
+   script's path in the report so the numbers can be re-run.
+
+## Measure layer-aware
+
+Copper joins only on the same layer. Vias and THT pads are the only joins
+between F.Cu and B.Cu. A layer-blind script once reported "no via" on a path
+that ran through one, and the claim reached the README. Build the
+connectivity graph per layer, then add the via and THT edges.
 
 ## What to attack
 
@@ -63,6 +75,14 @@ your final message.
    - Track widths actually present, measured.
    - Vias at every layer change on a power path.
    - Ground returns from each regulator and driver to the battery.
+   - Routed via sizes against the net class. Freerouting falls back to the
+     smallest via in the DSN; `route_board.py` now grows them, so a
+     power via below its class is a regression.
+   - Vias whose annular ring overlaps any SMD pad, same net included.
+   - After any net-class width change, the pour: find GND components that
+     reach the main plane only through routed tracks. Widening +5V to
+     0.8 mm split the integrated carrier's top-half GND and left the servo
+     ground on one 0.25 mm track; the island count did not show it.
    - Ferrite bead DCR and rating.
    - LDO dissipation.
    - The current over the ribbon cable.
@@ -90,7 +110,11 @@ your final message.
    - Parts at the edges.
    - Component heights.
 8. **Claims.** Check every statement in the README and the `hardware.toml`
-   comments that the board or the datasheets contradict.
+   comments that the board or the datasheets contradict. Re-measure every
+   number in the README's "Before ordering" before/after table against the
+   routed board, and rank a number that does not reproduce high. Earlier
+   passes found 0.45 mm claimed where the board had 0.337 mm, "20" in-pad
+   vias where it had 7, and an 8 mm VBAT neck that measured 14 mm.
 
 ## Report
 
@@ -98,13 +122,18 @@ your final message.
   then one paragraph.
 - **Findings, most severe first:**
   - BLOCKER: the board will not work or will be damaged.
-  - MAJOR: likely malfunction or a reliability problem.
-  - MINOR: should fix.
-  - NIT.
+  - SHOULD FIX: likely malfunction, a reliability problem, or a claim the
+    board contradicts.
+  - NOTE: worth knowing; no change needed to order.
 
-  Each finding has an id, a title, CONFIRMED or SUSPECT, the evidence, the
-  consequence and a concrete fix (a value, a part or a geometry change).
-- **Checked and found OK:** a short list, so the reader knows what was covered.
+  Each finding has an id, a title, CONFIRMED or SUSPECT, the evidence, a
+  number (width, length, count, current, temperature rise), the consequence
+  and a concrete fix: the `board.toml` or `hardware.toml` entry to change and
+  its new value, or the part to swap.
+- **Checked and fine:** a short list, so the reader knows what was covered.
+- **Could not verify:** what you did not measure or could not settle, and
+  what would settle it.
+- **Scripts:** the paths of any scratch scripts behind the numbers.
 - **Open questions for the owner:** for example a motor's stall current,
   whether the pack has a BMS, assembly or hand-soldering, saw or mouse-bites.
 
