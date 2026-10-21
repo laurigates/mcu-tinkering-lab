@@ -118,6 +118,13 @@ rotation = 0
 max_err_mm = 0.37
 checked = "2026-10-21"
 
+[C47263807] # BSMD1812-400-16V
+footprint = "Fuse:Fuse_1812_4532Metric_Pad1.30x3.40mm_HandSolder"
+lcsc_footprint = "F1812"
+rotation = 0
+max_err_mm = 0.37
+checked = "2026-10-21"
+
 [C141324] # ZXMP4A16GTA
 footprint = "Package_TO_SOT_SMD:SOT-223-3_TabPin2"
 lcsc_footprint = "SOT-223-4_L6.5-W3.5-P2.30-LS7.0-BR"

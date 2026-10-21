@@ -339,11 +339,14 @@ part = "battery-xt30"
 ref = "J3"
 value = "XT30 pack in"
 
+# On a JST VH 4 lead (3.96 mm): its contact is rated 10 A on AWG #16 (JST's VH
+# sheet), against up to about 3.4 A on OUT+ with both motors stalled (pre-fab
+# review SF-2). The XH 4 it replaced is rated 3 A.
 [parts.buck]
 name = "LM2596 buck module"
 kind = "buck-regulator"
 note = "adjust to 5.0 V before connecting a load"
-part = "lm2596-buck-module"
+part = "lm2596-buck-module-vh4"
 ref = "J4"
 value = "LM2596 module"
 
@@ -412,10 +415,19 @@ from = "pack.+"
 to = ["buck.IN+"]
 
 # Star-wired: each load takes its own feed from the regulator's output terminal.
+# On the carrier the XIAO's 5V pad takes its feed through D1 instead (XIAO_5V,
+# below).
 [[rails]]
 name = "5V"
+build = "harness"
 from = "buck.OUT+"
 to = ["mcu.5V", "motor_driver.VM", "pwm.V+", "amp.Vin"]
+
+[[rails]]
+name = "5V"
+build = "carrier"
+from = "buck.OUT+"
+to = ["motor_driver.VM", "pwm.V+", "amp.Vin"]
 
 # Logic supplies. TB6612FNG and PCA9685 VCC set their input thresholds from
 # their own supply, so they must sit on the XIAO's 3.3 V, never on 5V above.
@@ -594,20 +606,23 @@ build = "carrier"
 
 # A resettable fuse between the XT30 and everything else (#810): a short on
 # VBAT (the 1 mm track to the LM2596 lead, the test header J11) otherwise has
-# the pack's full fault current behind it. 3 A hold covers the LM2596's 3 A
-# output at 5 V, about 2.3 A in at 7.4 V; it trips at 5-6 A. 16 V rated, above
-# the 8.4 V of a charged 2S pack (the 6 V and 8 V parts are not). Values from
-# JLCPCB's listing for C883162 (BSMD1812-300-16V, Extended, checked 2026-10-18);
-# the datasheet's hold-current derating with temperature is unread, so a warm
-# robot near the LM2596's full load may trip it first.
+# the pack's full fault current behind it. BSMD1812-400-16V (BHFUSE BSMD1812
+# datasheet, Revision 2025): 4 A hold and 8 A trip at 25 C (Itrip is the
+# current it is guaranteed to trip at), 16 V maximum, above the 8.4 V of a
+# charged 2S pack (the 6 V and 12 V parts are not). Its Thermal Derating Chart
+# gives 3.48 A hold at 40 C and 3.16 A at 50 C, against 2.4-3.1 A into the
+# LM2596 at full load (5 V at 3 A out of a 7.4-6.3 V pack). The -300 it
+# replaces (pre-fab review SF-4) derated to 2.55 A at 40 C and 2.28 A at 50 C,
+# under that load. C47263807, Extended, 15,582 in stock (JLCPCB parts search,
+# 2026-10-21). The pack's own 2S BMS ends a short sooner.
 [parts.fuse_in]
-name = "3 A hold PTC fuse, pack input"
+name = "4 A hold PTC fuse, pack input"
 kind = "fuse"
 build = "carrier"
 part = "polyfuse-1812"
 ref = "F1"
-value = "3A hold 16V"
-lcsc = "C883162"
+value = "4A hold 16V"
+lcsc = "C47263807"
 
 [[rails]]
 name = "PACK_IN"
@@ -629,8 +644,9 @@ part = "ams1117-3.3"
 ref = "U2"
 
 # Bulk capacitors C1-C5 are WIRING.md's § Suggested capacitors. Its C6 decouples
-# the MCP23017; the carrier fits none, because the CJMCU-2317 carries a
-# capacitor-like part beside the chip (unverified, the board page's check 6).
+# the MCP23017: the carrier fits one beside the CJMCU-2317's socket (below),
+# whether or not the part beside the chip is a capacitor (the board page's
+# check 6; pre-fab review N-9).
 #
 # C1-C3 are C96179, CS1C471M-CRF10 (470 uF 16 V, 8 x 10.5 mm SMD). They were
 # C5162348, the same part number from another LCSC listing, which JLCPCB's
@@ -702,6 +718,18 @@ part = "cp-tantalum-3528"
 ref = "C8"
 value = "22uF 16V"
 lcsc = "C8020"
+
+# WIRING.md's C6, fitted (pre-fab review N-9): the CJMCU-2317's part beside
+# the chip is unverified as a capacitor. The repo has no DNP convention (every
+# carrier part is fitted), and a second 100 nF on the 3V3 rail is harmless.
+[parts.decouple_exp]
+name = "100 nF decoupling, MCP23017 VCC"
+kind = "capacitor"
+build = "carrier"
+part = "c0805"
+ref = "C6"
+value = "100nF"
+lcsc = "C49678"
 
 [parts.piezo_r]
 name = "100 Ω piezo series resistor"
@@ -810,6 +838,60 @@ part = "r0805"
 ref = "R9"
 value = "2.2k"
 lcsc = "C17520"
+
+# Pull-ups on the upstream bus, beside the TCA9548A (pre-fab review N-4). The
+# breakout's own are 10 kOhm, and the bus runs from the XIAO through 10-15 cm
+# of ribbon, J1 and about 55-78 mm of track: with them alone the 30-70 % rise
+# time at 400 kHz can exceed Fast-mode's 300 ns (see the channel pull-ups
+# above). 2.2 kOhm in parallel with 10 kOhm is 1.8 kOhm, 1.8 mA at 0.4 V, within
+# the 3 mA a Fast-mode device sinks. Fitted: the repo has no DNP convention.
+[parts.pull_up_sda]
+name = "2.2 kΩ pull-up, upstream I2C SDA"
+kind = "resistor"
+build = "carrier"
+part = "r0805"
+ref = "R12"
+value = "2.2k"
+lcsc = "C17520"
+
+[parts.pull_up_scl]
+name = "2.2 kΩ pull-up, upstream I2C SCL"
+kind = "resistor"
+build = "carrier"
+part = "r0805"
+ref = "R13"
+value = "2.2k"
+lcsc = "C17520"
+
+[[nets]]
+role = "I2C_SDA_PIN"
+to = "pull_up_sda.B"
+build = "carrier"
+
+[[nets]]
+role = "I2C_SCL_PIN"
+to = "pull_up_scl.B"
+build = "carrier"
+
+# The XIAO's 5V pad is its USB-C VBUS (docs/reference/boards/xiao-esp32s3.md;
+# Seeed asks for a diode between an external supply and it). Without one, a
+# USB cable on the head's XIAO and the LM2596 feed each other through the
+# ribbon: the PC's port carries motor and servo current, or the buck
+# back-drives the PC. A B5819W (1 A) from 5V to the ribbon's 5V conductors, as
+# on the integrated carrier: USB then reverse-biases it, and the XIAO sees 5V
+# less about 0.4 V (pre-fab review BL-2). Beside J1.
+[parts.xiao_diode]
+name = "B5819W Schottky, 5V to the XIAO's 5V pad"
+kind = "diode"
+build = "carrier"
+part = "b5819w"
+ref = "D1"
+
+[[rails]]
+name = "XIAO_5V"
+build = "carrier"
+from = "xiao_diode.K"
+to = ["mcu.5V"]
 
 # Main board to the 2WD chassis plate. Positions are provisional, in
 # hardware/carrier/board.toml.
@@ -972,6 +1054,7 @@ to = [
     "ldo_in.+",
     "amp.SD",
     "tp_power.5V",
+    "xiao_diode.A",
 ]
 
 # The main board's own 3V3, from the LDO; the XIAO's 3V3 pad stays open on the
@@ -1004,6 +1087,9 @@ to = [
     "pull_ch3_scl.A",
     "pull_ch4_sda.A",
     "pull_ch4_scl.A",
+    "pull_up_sda.A",
+    "pull_up_scl.A",
+    "decouple_exp.A",
     "tp_power.3V3",
 ]
 
@@ -1046,6 +1132,7 @@ to = [
     "bulk_amp.-",
     "decouple_pwm.B",
     "decouple_mux.B",
+    "decouple_exp.B",
     "ldo_in.-",
     "ldo_out.-",
     "uart_tap.GND",
