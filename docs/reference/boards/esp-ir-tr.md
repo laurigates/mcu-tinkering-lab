@@ -110,6 +110,11 @@ level) so OTA has room for two images. The flash variant decides that limit.
 - **IR range is limited.** A single LED, and on similar boards the module itself
   partly shadows it. A Home Assistant forum user reported poor spread on this
   board. Aim it at the fan's receiver.
+- **The jumper cap is fitted in the listing photos.** It shorts `IO0` to
+  `GND` (pins 5–6, confirmed by Lauri), so with the cap on, the board enters
+  the ROM bootloader at every power-up and the firmware never runs (GPIO0 is a
+  strapping pin; ESP8285 datasheet §2, note 1). Remove the cap for normal use.
+  Keep it off the board in service, or park it on one pin only.
 - **One title, several boards.** Listings for "ESP_IR_TR" and "ESP8285 IR
   transceiver" mix this board with the ESP8266MOD and ESP32 boards in the table
   above. Pins and power differ between them.
@@ -125,7 +130,8 @@ package; no `hardware.toml` names this page.
 **The header order (GND, 5V, RX, TX, IO0, GND from the corner) was read by
 Lauri off the fitted board on 2026-10-22.** The blue ESP8266MOD board in the
 same listing prints the same order (`GND 5V RX TX IO0 GND`, listing photo 2),
-which supports it. Nothing else here has been checked on the fitted board. The
+which supports it. Lauri also confirmed that the jumper cap shorts `IO0` to
+`GND`. Nothing else here has been checked on the fitted board. The
 IR GPIOs come from the Tasmota community template. The parts and dimensions
 were read from the AliExpress listing photos and the Tasmota device photo;
 neither a vendor board file nor a schematic is published. The listing photos
