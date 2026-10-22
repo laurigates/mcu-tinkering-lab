@@ -158,3 +158,48 @@ def test_no_interference_for_a_part_inside():
 def test_unknown_case_key_is_refused():
     with pytest.raises(Exception, match="unknown key"):
         case.Params.from_toml({"wal": 2.0})
+
+
+def test_every_boss_and_the_lid_lip_keep_the_minimum_wall():
+    for _, clear, boss in case.BOLTS.values():
+        assert (boss - clear) / 2 >= case.MIN_WALL
+    with pytest.raises(Exception, match="under"):
+        case.Params.from_toml({"wall": 1.2})
+
+
+def test_a_boss_tangent_to_the_lip_is_grown_so_the_lid_meshes():
+    """H2-like hole whose pillar would touch the lip's inner face exactly."""
+    from build123d import Mesher
+
+    f = frame(piece())
+    inner = f.p.wall + 0.3 + case.MIN_WALL
+    boss = case.BOLTS[3.2][2] / 2
+    # Board x that puts the pillar's outer surface on the lip's inner face.
+    x_case = f.length - inner - boss
+    hole_x = x_case - f.off + f.piece.region.x0
+    f = frame(piece(holes=[Hole("H2", hole_x, 4, 3.2)]))
+    _, lid = case.box(f)
+    Mesher().add_shape(lid)  # raises "3mf mesh is invalid" when tangent
+
+
+def test_thickness_probe_reads_a_known_plate():
+    """Control for the wall gate: a 0.5 mm plate must read as 0.5 mm."""
+    from enclosure import thickness
+
+    plate = Box(20, 20, 0.5, align=A)
+    assert thickness.thinnest(plate).mm == pytest.approx(0.5, abs=0.02)
+
+
+def test_a_lid_window_over_a_pillar_keeps_the_minimum_wall():
+    """Head 1's camera window once cut a pillar's edge down to 0.15 mm."""
+    from enclosure import thickness
+
+    # Head 1's case: the window (courtyard - 1 mm margin) ends 0.15 mm past the
+    # pillar's bore. H5 at board (4, 4) -> case x 6.5, bore edge 7.7, so a
+    # courtyard from board x 6.35 puts the window edge at case x 7.85.
+    tall = Part(
+        "U1", "fp", "top", Rect(6.35, 2, 30, 30), above=15.0, height_source="test"
+    )
+    f = frame(piece(parts=[tall], holes=[Hole("H5", 4, 4, 2.2)], lid_windows=["U1"]))
+    _, lid = case.box(f)
+    assert thickness.thinnest(lid).mm >= case.MIN_WALL - 0.05
