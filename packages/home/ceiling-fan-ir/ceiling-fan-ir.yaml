@@ -1,9 +1,9 @@
 # Ceiling fan IR controller — ESP_IR_TR (ESP-01M / ESP8285)
 # Board: docs/reference/boards/esp-ir-tr.md
 #
-# Stage 1: verify the codes. The receiver logs every NEC frame from the
-# fan's remote; one button per known code sends it. Fan and light entities
-# follow once the logged codes match the table in README.md.
+# Stage 2: Home Assistant sees a fan (on/off, 5 speeds, direction) and a
+# light mode select. State is assumed — IR is one-way — and kept in step with
+# the physical remote by decoding its presses on the on-board receiver.
 #
 # Kept lean for 1 MB flash: no web_server, no captive_portal, so OTA has room
 # for two images.
@@ -11,6 +11,11 @@
 esphome:
   name: ceiling-fan-ir
   friendly_name: "Ceiling Fan IR"
+  # After everything has restored: from here on, state changes transmit.
+  on_boot:
+    priority: -100
+    then:
+      - globals.set: {id: ready, value: "true"}
 
 esp8266:
   board: esp8285
@@ -29,66 +34,186 @@ wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
 
+# The fan's state as last sent to it (or seen from its remote). The fan's
+# on_state compares against these and transmits only what differs, so a state
+# change that came from the remote — mirrored here first — sends nothing back.
+globals:
+  - id: ready
+    type: bool
+    initial_value: "false"
+  - id: sent_on
+    type: bool
+    initial_value: "false"
+  - id: sent_speed
+    type: int
+    initial_value: "0"
+  - id: sent_reverse
+    type: bool
+    initial_value: "false"
+  # millis() of the last transmission; the receiver hears the board's own LED.
+  - id: last_tx_ms
+    type: uint32_t
+    initial_value: "0"
+
+# Codes logged from the fan's remote on 2026-10-22; address 0x5941 for all.
+# Power on 0xFA05, off 0xF50A; speeds 1-5 0xAE51 0xBB44 0xAF50 0xB34C 0xBF40;
+# reverse (toggle) 0xB24D; light (cycles Off > Cool > Neutral > Warm) 0xBA45;
+# dim down 0xFE01, dim up 0xF20D; timer 0xBE41.
+script:
+  - id: send
+    mode: queued
+    max_runs: 8
+    parameters:
+      command: int
+    then:
+      - lambda: id(last_tx_ms) = millis();
+      - remote_transmitter.transmit_nec:
+          address: 0x5941
+          command: !lambda return command;
+      # Gap between frames so the fan sees separate presses.
+      - delay: 150ms
+
 # VS838 receiver output idles high, hence inverted.
 remote_receiver:
   pin:
     number: GPIO14
     inverted: true
   dump: nec
+  on_nec:
+    then:
+      - lambda: |-
+          if (x.address != 0x5941) return;
+          // Ignore our own transmission reflected into the receiver. Reverse
+          // and light are toggles, so an echo would flip them back.
+          if (millis() - id(last_tx_ms) < 400) return;
+
+          if (x.command == 0xBA45) {
+            auto *light = id(light_mode);
+            size_t next = (light->active_index().value_or(0) + 1) % light->size();
+            light->publish_state(next);
+            return;
+          }
+
+          static const uint16_t SPEEDS[] = {0xAE51, 0xBB44, 0xAF50, 0xB34C, 0xBF40};
+          auto *f = id(ceiling_fan);
+          bool on = f->state;
+          int speed = f->speed;
+          bool reverse = f->direction == fan::FanDirection::REVERSE;
+
+          if (x.command == 0xFA05) {
+            on = true;
+          } else if (x.command == 0xF50A) {
+            on = false;
+          } else if (x.command == 0xB24D) {
+            reverse = !reverse;
+          } else {
+            int found = 0;
+            for (int i = 0; i < 5; i++)
+              if (x.command == SPEEDS[i]) found = i + 1;
+            if (found == 0) return;  // dim, timer: no tracked state
+            if (!on) return;         // the fan ignores speed codes while off
+            speed = found;
+          }
+
+          id(sent_on) = on;
+          id(sent_speed) = speed;
+          id(sent_reverse) = reverse;
+          f->state = on;
+          f->speed = speed;
+          f->direction = reverse ? fan::FanDirection::REVERSE : fan::FanDirection::FORWARD;
+          f->publish_state();
 
 remote_transmitter:
   pin: GPIO4
   carrier_duty_percent: 50%
 
-# Codes from the 2018 IRremoteESP8266 sketch (MSB-first, sendNEC(0x829A....)),
-# bit-reversed per byte into ESPHome's standard NEC order. Every command
-# passes the NEC inverse-byte check.
+fan:
+  - platform: template
+    id: ceiling_fan
+    name: "Fan"
+    speed_count: 5
+    has_direction: true
+    restore_mode: RESTORE_DEFAULT_OFF
+    on_state:
+      - lambda: |-
+          static const uint16_t SPEEDS[] = {0xAE51, 0xBB44, 0xAF50, 0xB34C, 0xBF40};
+          auto *f = id(ceiling_fan);
+          bool reverse = f->direction == fan::FanDirection::REVERSE;
+
+          // The state restored at boot is taken as the fan's actual state;
+          // re-sending it after a reboot could switch on a fan that is off.
+          if (!id(ready)) {
+            id(sent_on) = f->state;
+            id(sent_speed) = f->speed;
+            id(sent_reverse) = reverse;
+            return;
+          }
+
+          bool turned_on = f->state && !id(sent_on);
+          if (f->state != id(sent_on)) {
+            id(send).execute(f->state ? 0xFA05 : 0xF50A);
+            id(sent_on) = f->state;
+          }
+          // Speed codes do nothing while the fan is off, so they go after
+          // Power On and are held back while off. Sent on every power-on
+          // too, as the speed the fan resumes at is not known.
+          if (f->state && f->speed >= 1 && f->speed <= 5 &&
+              (turned_on || f->speed != id(sent_speed))) {
+            id(send).execute(SPEEDS[f->speed - 1]);
+            id(sent_speed) = f->speed;
+          }
+          if (reverse != id(sent_reverse)) {
+            id(send).execute(0xB24D);
+            id(sent_reverse) = reverse;
+          }
+
+select:
+  - platform: template
+    id: light_mode
+    name: "Light"
+    # Order is the light button's cycle, starting from off.
+    options:
+      - "Off"
+      - "Cool (5000 K)"
+      - "Neutral (4000 K)"
+      - "Warm (3000 K)"
+    initial_option: "Off"
+    optimistic: true
+    restore_value: true
+    # Runs before the new option is published, so active_index() is still
+    # the current mode: press the light button until the cycle reaches x.
+    set_action:
+      - lambda: |-
+          auto *light = id(light_mode);
+          size_t from = light->active_index().value_or(0);
+          size_t to = light->index_of(x.c_str()).value_or(from);
+          size_t presses = (to + light->size() - from) % light->size();
+          for (size_t i = 0; i < presses; i++)
+            id(send).execute(0xBA45);
+
 button:
-  - platform: template
-    name: "Power On"
-    on_press:
-      - remote_transmitter.transmit_nec: {address: 0x5941, command: 0xFA05}
-  - platform: template
-    name: "Power Off"
-    on_press:
-      - remote_transmitter.transmit_nec: {address: 0x5941, command: 0xF50A}
-  - platform: template
-    name: "Speed 1"
-    on_press:
-      - remote_transmitter.transmit_nec: {address: 0x5941, command: 0xAE51}
-  - platform: template
-    name: "Speed 2"
-    on_press:
-      - remote_transmitter.transmit_nec: {address: 0x5941, command: 0xBB44}
-  - platform: template
-    name: "Speed 3"
-    on_press:
-      - remote_transmitter.transmit_nec: {address: 0x5941, command: 0xAF50}
-  - platform: template
-    name: "Speed 4"
-    on_press:
-      - remote_transmitter.transmit_nec: {address: 0x5941, command: 0xB34C}
-  - platform: template
-    name: "Speed 5"
-    on_press:
-      - remote_transmitter.transmit_nec: {address: 0x5941, command: 0xBF40}
-  - platform: template
-    name: "Light Power"
-    on_press:
-      - remote_transmitter.transmit_nec: {address: 0x5941, command: 0xBA45}
   - platform: template
     name: "Light Dim Down"
     on_press:
-      - remote_transmitter.transmit_nec: {address: 0x5941, command: 0xFE01}
+      - script.execute: {id: send, command: 0xFE01}
   - platform: template
     name: "Light Dim Up"
     on_press:
-      - remote_transmitter.transmit_nec: {address: 0x5941, command: 0xF20D}
-  - platform: template
-    name: "Reverse"
-    on_press:
-      - remote_transmitter.transmit_nec: {address: 0x5941, command: 0xB24D}
+      - script.execute: {id: send, command: 0xF20D}
   - platform: template
     name: "Timer"
     on_press:
-      - remote_transmitter.transmit_nec: {address: 0x5941, command: 0xBE41}
+      - script.execute: {id: send, command: 0xBE41}
+  # Re-align the assumed state with the fan after it drifted (someone used
+  # the remote out of the receiver's sight): marks fan and light off without
+  # sending anything. Turn both off with the remote, then press this.
+  - platform: template
+    name: "Resync: Mark All Off"
+    entity_category: config
+    on_press:
+      - lambda: |-
+          id(sent_on) = false;
+          auto *f = id(ceiling_fan);
+          f->state = false;
+          f->publish_state();
+          id(light_mode).publish_state((size_t) 0);
