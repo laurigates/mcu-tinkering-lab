@@ -25,9 +25,13 @@
     subtitle = "VBAT, GND and the 5 V feed"
     nets = ["VBAT", "GND"]           # at most len(PALETTE) = 8: one colour each
 
+    [continuity]                     # optional: rails continuity.md checks
+    isolated = ["VBAT", "GND"]       # pairwise for no short before power-up
+
 `load` checks keys and types and what needs no netlist: a step's net count
-against the palette, a net in two steps, rotations. `check_steps` and the
-placement checks in `place` compare it with the netlist.
+against the palette, a net in two steps, rotations. `check_steps`,
+`check_isolated` and the placement checks in `place` compare it with the
+netlist.
 """
 
 from __future__ import annotations
@@ -45,11 +49,14 @@ from .render_svg import PALETTE
 FILENAME = "perfboard.toml"
 # The git-tracked file that makes a directory a perfboard project, relative to it.
 MARKER = f"hardware/perfboard/{FILENAME}"
-TOP_KEYS = frozenset({"skip", "board", "wires", "placement", "swaps", "steps"})
+TOP_KEYS = frozenset(
+    {"skip", "board", "wires", "placement", "swaps", "steps", "continuity"}
+)
 BOARD_KEYS = frozenset({"title", "cols", "rows"})
 WIRES_KEYS = frozenset({"heavy_class", "heavy_label", "heavy_gauge", "light_gauge"})
 SWAP_KEYS = frozenset({"footprint", "value"})
 STEP_KEYS = frozenset({"title", "subtitle", "nets"})
+CONTINUITY_KEYS = frozenset({"isolated"})
 ROTATIONS = (0, 90, 180, 270)
 
 
@@ -80,6 +87,7 @@ class PerfboardConfig:
     steps: tuple[Step, ...]
     swaps: dict[str, Swap]
     skip: frozenset[str]
+    isolated: tuple[str, ...] = ()  # rails that must not beep to each other
 
     @property
     def board(self) -> Board:
@@ -126,6 +134,7 @@ def parse(data: dict[str, Any], path: Path) -> PerfboardConfig:
         steps=_steps(path, data.get("steps")),
         swaps=_swaps(path, data.get("swaps", {})),
         skip=_skip(path, data.get("skip", [])),
+        isolated=_isolated(path, data.get("continuity", {})),
     )
 
 
@@ -138,6 +147,14 @@ def check_steps(cfg: PerfboardConfig, nets: dict) -> list[str]:
             f"{cfg.path} [[steps]] out of step with the netlist: "
             f"missing {sorted(missing)}, unknown {sorted(extra)}"
         ]
+    return []
+
+
+def check_isolated(cfg: PerfboardConfig, nets: dict) -> list[str]:
+    """Every `[continuity] isolated` rail is a net of the netlist."""
+    unknown = [n for n in cfg.isolated if n not in nets]
+    if unknown:
+        return [f"{cfg.path} [continuity] isolated: not a net: {unknown}"]
     return []
 
 
@@ -259,3 +276,14 @@ def _skip(path: Path, skip: Any) -> frozenset[str]:
     if not isinstance(skip, list) or not all(isinstance(r, str) and r for r in skip):
         raise KicadError(f"{path}: skip must be a list of references, got {skip!r}")
     return frozenset(skip)
+
+
+def _isolated(path: Path, table: Any) -> tuple[str, ...]:
+    _keys(path, "[continuity]", table, CONTINUITY_KEYS)
+    nets = table.get("isolated", [])
+    where = f"{path} [continuity] isolated"
+    if not isinstance(nets, list) or not all(isinstance(n, str) and n for n in nets):
+        raise KicadError(f"{where}: expected a list of net names, got {nets!r}")
+    if len(nets) == 1 or len(set(nets)) != len(nets):
+        raise KicadError(f"{where}: needs two or more distinct nets, got {nets!r}")
+    return tuple(nets)

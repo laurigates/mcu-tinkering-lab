@@ -117,6 +117,6 @@ jobs:
       - name: Perfboard drawing and wire list are up to date
         run: |
           if ! python3 -m kicad.perfboard --check; then
-            echo "::error::A perfboard drawing or wire list is stale, or its layout breaks a check. Run 'just <project>::perfboard' locally and commit perfboard.svg and perfboard.md."
+            echo "::error::A perfboard output is stale, or its layout breaks a check. Run 'just <project>::perfboard' locally and commit the files it writes (perfboard.svg, perfboard-print.svg, perfboard.md, continuity.md)."
             exit 1
           fi

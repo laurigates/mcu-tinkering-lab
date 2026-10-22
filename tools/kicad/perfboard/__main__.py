@@ -1,4 +1,4 @@
-"""Lay a carrier out on a perfboard: perfboard.svg and perfboard.md.
+"""Lay a carrier out on a perfboard: its drawing, 1:1 print, wire list and checklist.
 
     PYTHONPATH=tools python3 -m kicad.perfboard [project ...] [--check] [--allow-none]
 
@@ -20,10 +20,19 @@ from pathlib import Path
 from .. import boardcheck, library, netlist, paths, registry
 from ..errors import KicadError
 from ..paths import REPO_ROOT
-from . import config, place, render_svg, route, wires, wirelist
+from . import (
+    config,
+    continuity,
+    place,
+    render_print,
+    render_svg,
+    route,
+    wires,
+    wirelist,
+)
 
 MARKER = config.MARKER
-OUTPUTS = ("perfboard.svg", "perfboard.md")
+OUTPUTS = ("perfboard.svg", "perfboard-print.svg", "perfboard.md", "continuity.md")
 
 
 @dataclass(frozen=True)
@@ -78,6 +87,7 @@ def generate(
     planned = wires.plan_wires(parts, nets)
     errors += wires.check_wires(parts, nets, planned)
     errors += config.check_steps(cfg, nets)
+    errors += config.check_isolated(cfg, nets)
     if errors:
         raise KicadError("\n".join(errors))
     numbered = wires.number_wires(nets, planned, cfg.steps)
@@ -88,7 +98,9 @@ def generate(
     out_dir = config.perfboard_dir(project)
     texts = (
         render_svg.svg(parts, numbered, routes, board, cfg.steps, raised, heavy),
+        render_print.svg(parts, numbered, routes, board, raised, heavy, cfg.title),
         wirelist.wire_list(parts, numbered, routes, cfg, heavy),
+        continuity.checklist(parts, nets, cfg),
     )
     return Layout(
         outputs={out_dir / name: t for name, t in zip(OUTPUTS, texts, strict=True)},
