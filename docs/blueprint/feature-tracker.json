@@ -5,7 +5,8 @@
     "docs/requirements/PRD-001-ai-robot-car-system.md",
     "docs/requirements/PRD-002-esp32cam-vision-ai-backend.md",
     "docs/requirements/PRD-003-robot-physics-simulation.md",
-    "docs/requirements/PRD-011-melody-detector.md"
+    "docs/requirements/PRD-011-melody-detector.md",
+    "docs/requirements/PRD-013-rapid-hardware-prototyping.md"
   ],
   "last_synced_at": "2026-07-12T00:00:00Z",
   "features": [
@@ -160,12 +161,44 @@
       "status": "planned",
       "priority": "P3",
       "notes": "Gemini Robotics-ER 1.6 oracle benchmark"
+    },
+    {
+      "id": "FR-020",
+      "name": "1:1 printable perfboard drawing",
+      "prd": "PRD-013",
+      "status": "planned",
+      "priority": "P1",
+      "notes": "perfboard-print.svg: mm-true, corner marks, 50 mm scale bar"
+    },
+    {
+      "id": "FR-021",
+      "name": "Perfboard continuity checklist",
+      "prd": "PRD-013",
+      "status": "planned",
+      "priority": "P1",
+      "notes": "continuity.md from the netlist; rail isolation pairs"
+    },
+    {
+      "id": "FR-022",
+      "name": "Copper-foil test board",
+      "prd": "PRD-013",
+      "status": "planned",
+      "priority": "P2",
+      "notes": "Portrait 2 knife-cut single-layer test board; bench results go in PRD-013"
+    },
+    {
+      "id": "FR-023",
+      "name": "Stripboard mode for the perfboard generator",
+      "prd": "PRD-013",
+      "status": "planned",
+      "priority": "P3",
+      "notes": "Strip router, pen-plotted track-cut map, breadboard preset"
     }
   ],
   "summary": {
-    "total": 19,
+    "total": 23,
     "active": 13,
-    "planned": 6,
+    "planned": 10,
     "in_progress": 0,
     "blocked": 0
   }

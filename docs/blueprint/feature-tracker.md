@@ -25,6 +25,10 @@
 | FR-017 | Melody detector firmware (CV + ESP-DL + I2S) | PRD-011 | planned | P2 | XIAO ESP32-S3 Sense + MAX98357A; ROI classifier with INT8 CNN |
 | FR-018 | Melody detector training pipeline | PRD-011 | planned | P2 | PyTorch + ESP-PPQ; programmatic + diffusion synthetic data |
 | FR-019 | Melody detector validation harness | PRD-011 | planned | P3 | Gemini Robotics-ER 1.6 oracle benchmark |
+| FR-020 | 1:1 printable perfboard drawing | PRD-013 | planned | P1 | perfboard-print.svg: mm-true, corner marks, 50 mm scale bar |
+| FR-021 | Perfboard continuity checklist | PRD-013 | planned | P1 | continuity.md from the netlist; rail isolation pairs |
+| FR-022 | Copper-foil test board | PRD-013 | planned | P2 | Portrait 2 knife-cut single-layer test board; bench results go in PRD-013 |
+| FR-023 | Stripboard mode for the perfboard generator | PRD-013 | planned | P3 | Strip router, pen-plotted track-cut map, breadboard preset |
 
 ## Status Key
 

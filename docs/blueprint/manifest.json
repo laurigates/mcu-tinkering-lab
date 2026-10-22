@@ -34,7 +34,8 @@
       "docs/requirements/PRD-001-ai-robot-car-system.md",
       "docs/requirements/PRD-002-esp32cam-vision-ai-backend.md",
       "docs/requirements/PRD-003-robot-physics-simulation.md",
-      "docs/requirements/PRD-011-melody-detector.md"
+      "docs/requirements/PRD-011-melody-detector.md",
+      "docs/requirements/PRD-013-rapid-hardware-prototyping.md"
     ],
     "sync_targets": [
       "docs/blueprint/feature-tracker.md"
