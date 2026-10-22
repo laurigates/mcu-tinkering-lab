@@ -5,6 +5,8 @@ The SVG's width and height are in mm and its user unit is 1 mm, so a print at
 
 - the hole-grid outline as a cut line, for kiss-cutting a placement sticker;
 - a crosshair on each corner hole, to line the print up with a real board.
+  Its arms stop inside the cut line's corner, half a pitch away, so the two
+  marks cannot be read as one; the note names the crosshairs' spacing.
 
 The solder side also has every wire, coloured as in `perfboard.svg`, but no
 numbers: they do not fit at 2.54 mm. The page has two 50 mm scale bars, one
@@ -22,12 +24,13 @@ from .grid import PITCH, Board, col_name
 from .render_svg import GRID, INK, MUTED, PART_INK
 
 MARGIN = 10  # page edge to content, mm
-HEAD = 31  # title, note and scale bar above the panels, mm
+HEAD = 34  # title, notes and scale bar above the panels, mm
 LABEL = 5  # the band for column letters and row numbers, mm
 GAP = 12  # between the two panels, besides their labels, mm
 PAGE = 190  # widest content that fits A4 portrait with its margins, mm
 SCALE_BAR = 50  # mm
 VBAR = 8  # the band right of the panels for the down bar, mm
+ARM = 1.0  # a corner crosshair's arm, mm: inside the cut line's corner (PITCH / 2)
 CUT = "#e00000"
 COPPER = "#b87333"
 
@@ -60,8 +63,11 @@ def svg(parts, numbered, routes, board: Board, raised, heavy, title):
         "Print at 100 % (no fit to page): both bars must measure 50 mm.</text>",
         f'<text x="{MARGIN}" y="{MARGIN + 11.5}" font-size="2.5" fill="{MUTED}">'
         "Red: the hole-grid outline, a cut line. Wire numbers: perfboard.svg.</text>",
+        f'<text x="{MARGIN}" y="{MARGIN + 15}" font-size="2.5" fill="{MUTED}">'
+        f"Crosshairs: corner hole centres, {mm((board.cols - 1) * PITCH)} mm across, "
+        f"{mm((board.rows - 1) * PITCH)} mm down.</text>",
     ]
-    bx, by = MARGIN, MARGIN + 17
+    bx, by = MARGIN, MARGIN + 20
     out.append(
         f'<line class="scale" data-axis="across" x1="{bx}" y1="{by}" '
         f'x2="{bx + SCALE_BAR}" y2="{by}" stroke="{INK}" stroke-width="0.3"/>'
@@ -178,8 +184,8 @@ def svg(parts, numbered, routes, board: Board, raised, heavy, title):
         ):
             x, y = X(c), Y(r)
             out.append(
-                f'<path class="corner" d="M{mm(x - 1.6)} {mm(y)}H{mm(x + 1.6)}'
-                f'M{mm(x)} {mm(y - 1.6)}V{mm(y + 1.6)}" stroke="{INK}" stroke-width="0.1"/>'
+                f'<path class="corner" d="M{mm(x - ARM)} {mm(y)}H{mm(x + ARM)}'
+                f'M{mm(x)} {mm(y - ARM)}V{mm(y + ARM)}" stroke="{INK}" stroke-width="0.1"/>'
             )
         out.append(
             f'<rect class="cut" x="{mm(x0)}" y="{mm(y0)}" width="{mm(bw)}" '

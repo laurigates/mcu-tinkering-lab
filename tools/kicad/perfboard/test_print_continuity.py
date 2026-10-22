@@ -22,7 +22,7 @@ from pathlib import Path
 from kicad import library, netlist, registry, testfixture
 from kicad.errors import KicadError
 from kicad.perfboard import __main__ as cli
-from kicad.perfboard import config, continuity, place
+from kicad.perfboard import config, continuity, place, render_print
 from kicad.perfboard.grid import PITCH, hole_name
 
 ROOT, PROJECT = testfixture.shared()
@@ -121,10 +121,19 @@ class PrintTests(unittest.TestCase):
         }
         marks = set()
         for path in self.groups["component"].findall("s:path[@class='corner']", NS):
-            # "M{x-1.6} {y}H{x+1.6}M{x} {y-1.6}V{y+1.6}": the second move is the centre
+            # "M{x-ARM} {y}H{x+ARM}M{x} {y-ARM}V{y+ARM}": the second move is the centre
             x, y = re.findall(r"M([\d.]+) ([\d.]+)", path.get("d"))[1]
-            marks.add((round(float(x), 3), round(float(y) + 1.6, 3)))
+            marks.add((round(float(x), 3), round(float(y) + render_print.ARM, 3)))
         self.assertEqual(marks, corners)
+        # Arms that reached the cut line's corner (half a pitch out) made the
+        # cross and the corner read as one mark: measured, the crosses then
+        # seemed 60.96 mm apart (the outline) instead of 58.42 mm.
+        self.assertLess(render_print.ARM, PITCH / 2)
+
+    def test_note_names_the_crosshair_spacing(self):
+        text = "".join(self.root.itertext())
+        self.assertIn(f"{(CFG.cols - 1) * PITCH:.2f} mm across", text)
+        self.assertIn(f"{(CFG.rows - 1) * PITCH:.2f} mm down", text)
 
     def test_scale_bars_are_50_mm_across_and_down(self):
         bars = {
