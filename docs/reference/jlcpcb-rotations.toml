@@ -132,6 +132,18 @@ rotation = 180
 max_err_mm = 0.0
 checked = "2026-10-21"
 
+# KiCad numbers the drain pad and its fingers 5, one pad centred on the
+# drain, where LCSC numbers the fingers 5-8 and the drain pad 8, so the match
+# takes the pins and KiCad's pad 5 against LCSC's 8 (`5=8`): the pins alone
+# are collinear and cannot tell a turn from a mirror.
+[C264098] # DMP3013SFV-7
+footprint = "Package_SON:Diodes_PowerDI3333-8"
+lcsc_footprint = "POWERPAK-1212-8_L3.1-W3.1-P0.65-LS3.3-BL"
+rotation = 270
+pads = ["1", "2", "3", "4", "5=8"]
+max_err_mm = 0.04
+checked = "2026-10-22"
+
 [C85840] # BLM21PG221SN1D
 footprint = "Inductor_SMD:L_0805_2012Metric_Pad1.05x1.20mm_HandSolder"
 lcsc_footprint = "L0805"

@@ -1,6 +1,6 @@
 """Derive a part's JLCPCB rotation offset from LCSC's own footprint.
 
-    PYTHONPATH=tools python3 -m kicad.lcsc_rotation <C123> <Lib:Footprint>
+    PYTHONPATH=tools python3 -m kicad.lcsc_rotation <C123> <Lib:Footprint> [--pads 1,2,5=8]
     PYTHONPATH=tools python3 -m kicad.lcsc_rotation --check
 
 JLCPCB places each part as LCSC's (EasyEDA) footprint draws it. This fetches
@@ -10,6 +10,15 @@ footprint on the LCSC pad of the same number: the offset kicad.jlc adds to
 KiCad's rotation. It fails when no turn lands every pad within `TOLERANCE_MM`,
 which means the two footprints are not the same package (or number their pins
 differently), and the part needs a look by hand.
+
+`--pads` matches only the listed KiCad pad numbers, for a package whose two
+footprints number one pad differently: KiCad's PowerDI3333-8 draws the drain
+pad and its fingers as one pad 5, centred on the drain, where LCSC numbers the
+fingers 5-8 and the drain pad 8, so LCSC's pad 5 is a corner finger. `K=L`
+matches KiCad's pad K against LCSC's pad L (`--pads 1,2,3,4,5=8`). The pads
+must not all lie on one line: one pin row cannot tell a turn from a mirror,
+and one pad matches every turn. The entry records `pads`, and `--check`
+matches the same pads.
 
 The first form prints an entry for docs/reference/jlcpcb-rotations.toml;
 `--check` re-derives every entry there and reports any that disagree. Both
@@ -81,9 +90,59 @@ def _centred(pads: Pads, numbers: list[str]) -> dict[str, tuple[float, float]]:
     return {n: (pads[n][0] - cx, cy - pads[n][1]) for n in numbers}
 
 
-def derive(lcsc_pads: Pads, kicad: Pads) -> tuple[int, float]:
+def _selected(pads: tuple[str, ...], kicad: Pads, lcsc_pads: Pads) -> tuple[Pads, Pads]:
+    """The KiCad and LCSC pads `pads` names, both keyed by KiCad number."""
+    pairs = []
+    for spec in pads:
+        kicad_num, sep, lcsc_num = spec.partition("=")
+        if sep and not (kicad_num and lcsc_num):
+            raise KicadError(f"pad map {spec!r}: expected KICAD=LCSC")
+        pairs.append((kicad_num, lcsc_num if sep else kicad_num))
+    unknown = sorted({k for k, _ in pairs} - set(kicad))
+    if unknown:
+        raise KicadError(f"pads {unknown} are not pads of the KiCad footprint")
+    if len(pairs) < 2:
+        raise KicadError(f"pads {list(pads)}: match at least 2 pads, not on one line")
+    if _collinear([kicad[k] for k, _ in pairs]):
+        raise KicadError(
+            f"pads {list(pads)} are collinear: they cannot tell a turn from a "
+            "mirror; add a pad off their line (KICAD=LCSC maps a pad LCSC "
+            "numbers differently)"
+        )
+    absent = sorted(n for _, n in pairs if n not in lcsc_pads)
+    if absent:
+        raise KicadError(f"LCSC pads {absent} are not on LCSC's footprint")
+    return {k: kicad[k] for k, _ in pairs}, {k: lcsc_pads[n] for k, n in pairs}
+
+
+def _collinear(points: list[tuple[float, float]], tol_mm: float = 0.01) -> bool:
+    """Whether every point lies within `tol_mm` of the line through the two
+    farthest apart."""
+    a, b = max(
+        ((p, q) for p in points for q in points),
+        key=lambda pq: math.dist(pq[0], pq[1]),
+    )
+    span = math.dist(a, b)
+    if span < tol_mm:
+        return True
+    return all(
+        abs((b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0])) / span
+        <= tol_mm
+        for p in points
+    )
+
+
+def derive(
+    lcsc_pads: Pads, kicad: Pads, pads: tuple[str, ...] | None = None
+) -> tuple[int, float]:
     """(offset, worst pad error mm): LCSC's footprint turned counter-clockwise
-    by `offset` lies on KiCad's at rotation 0."""
+    by `offset` lies on KiCad's at rotation 0. `pads`, if given, are the KiCad
+    pad numbers to match, the rest left out; `K=L` matches KiCad's pad K
+    against LCSC's pad L. They must not all lie on one line: collinear pads
+    cannot tell a turn from a mirror (a footprint mirrored about x matched on
+    one pin row as 180 degrees), and one pad matches every turn."""
+    if pads is not None:
+        kicad, lcsc_pads = _selected(pads, kicad, lcsc_pads)
     missing = sorted(set(kicad) - set(lcsc_pads))
     if missing:
         raise KicadError(f"KiCad pads {missing} have no LCSC pad of that number")
@@ -107,15 +166,17 @@ def derive(lcsc_pads: Pads, kicad: Pads) -> tuple[int, float]:
     return best
 
 
-def entry(lcsc: str, fpid: str) -> str:
+def entry(lcsc: str, fpid: str, pads: tuple[str, ...] | None = None) -> str:
     """A TOML entry for the rotation table."""
     record = fetch(lcsc)
-    turn, err = derive(easyeda_pads(record), kicad_pads(fpid))
+    turn, err = derive(easyeda_pads(record), kicad_pads(fpid), pads)
+    listed = "" if pads is None else f"pads = {json.dumps(list(pads))}\n"
     return (
         f"[{lcsc}] # {record['result'].get('title', '')}\n"
         f'footprint = "{fpid}"\n'
         f'lcsc_footprint = "{easyeda_package(record)}"\n'
         f"rotation = {turn}\n"
+        f"{listed}"
         f"max_err_mm = {round(err, 2)}\n"
         f'checked = "{date.today().isoformat()}"\n'
     )
@@ -127,7 +188,7 @@ def check() -> list[str]:
     for lcsc, rot in sorted(jlc.load_rotations().items()):
         try:
             record = fetch(lcsc)
-            turn, _ = derive(easyeda_pads(record), kicad_pads(rot.footprint))
+            turn, _ = derive(easyeda_pads(record), kicad_pads(rot.footprint), rot.pads)
         except KicadError as e:
             problems.append(f"{lcsc}: {e}")
             continue
@@ -148,10 +209,17 @@ def main(argv: list[str] | None = None) -> int:
             if not problems:
                 print("every JLCPCB rotation matches LCSC's footprint")
             return 1 if problems else 0
-        if len(args) != 2:
-            print(f"FAIL: expected <C123> <Lib:Footprint> or --check\n{__doc__}")
+        pads = None
+        if len(args) == 4 and args[2] == "--pads":
+            pads = tuple(n for n in args[3].split(",") if n)
+            args = args[:2]
+        if len(args) != 2 or pads == ():
+            print(
+                "FAIL: expected <C123> <Lib:Footprint> [--pads 1,2,5=8] or --check"
+                f"\n{__doc__}"
+            )
             return 1
-        print(entry(*args), end="")
+        print(entry(args[0], args[1], pads), end="")
     except KicadError as e:
         print(f"FAIL: {e}")
         return 1

@@ -197,6 +197,15 @@ class RotationTableTests(unittest.TestCase):
         table = jlc.load_rotations()
         self.assertEqual(table["C130026"].rotation, 270)
         self.assertEqual(table["C6186"].footprint, SOT223)
+        self.assertIsNone(table["C130026"].pads)
+
+    def test_pads_loads_as_a_tuple(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "r.toml"
+            path.write_text(
+                '[C1]\nfootprint = "A:B"\nrotation = 270\npads = ["1", "4"]\n'
+            )
+            self.assertEqual(jlc.load_rotations(path)["C1"].pads, ("1", "4"))
 
     def test_covers_every_lcsc_number_in_use(self):
         """Every LCSC number a tracked hardware.toml or registry entry names has
@@ -227,6 +236,8 @@ class RotationTableTests(unittest.TestCase):
             "[C1]\nrotation = 90\n": "footprint",
             '[X1]\nfootprint = "A:B"\nrotation = 0\n': "not an LCSC number",
             '[C1]\nfootprint = "A:B"\nrotation = 0\nfoo = 1\n': "foo",
+            '[C1]\nfootprint = "A:B"\nrotation = 0\npads = [1, 2]\n': "pads must be",
+            '[C1]\nfootprint = "A:B"\nrotation = 0\npads = []\n': "pads must be",
         }
         for text, msg in cases.items():
             with self.subTest(msg=msg), tempfile.TemporaryDirectory() as d:

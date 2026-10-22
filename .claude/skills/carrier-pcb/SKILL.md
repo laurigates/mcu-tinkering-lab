@@ -352,6 +352,28 @@ several traps below are version-specific: after a KiCad upgrade, re-run
     exclude }` adds a via at each grid point where every pour layer's fill
     holds it (`pcb/stitch.py`).
 
+### Found in the integrated carrier's sixth layout review
+
+43. **A 0.4 mm fanout stub cannot leave a 0.25 mm pin at 0.5 mm pitch.** The
+    stub starts at the pad's centre, so its end cap alone came 0.175 mm from
+    the next pin on every ray, and the MAX98357A's GND pins never took a via.
+    `fanout.stub_width` caps the stub at the pad's narrow side.
+44. **Reserving room for a fanout via can collapse the route.** A
+    `[[route_keepouts]]` square for U5:12's via took that pin's exits, and
+    Freerouting left 33-49 GND connections unrouted (trap 28 again). A
+    reservation must leave the pad itself reachable; when it cannot, the via
+    is not worth the route.
+45. **A stitching grid joins only pour the other layer's main plane
+    overlaps.** A piece enclosed by tracks on both layers stays tracks-only:
+    at 2.5 mm pitch, 237 stitching vias joined none of three such pieces.
+    `carrier-measure plane` tells them apart; only the route can fix them.
+46. **LCSC can number a package's pads differently from KiCad.** KiCad's
+    PowerDI3333-8 draws the drain and its fingers as one pad 5; LCSC numbers
+    the fingers 5-8 and the drain pad 8, and `lcsc_rotation` found no turn.
+    Derive it on chosen pads with a map, `--pads 1,2,3,4,5=8`; the entry
+    records `pads`. The pins alone would not do: collinear pads cannot tell a
+    turn from a mirror, so `--pads` refuses them.
+
 ## Verify the gate can fail
 
 Before trusting a carrier gate, mutate a scratch copy and watch it fail (move

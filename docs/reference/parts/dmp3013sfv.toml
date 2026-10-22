@@ -1,0 +1,16 @@
+# DMP3013SFV, 30 V P-channel MOSFET, PowerDI3333-8: a reverse-polarity switch
+# in a pack's positive lead (drain to the pack, source to the load, gate to
+# GND) where the current is too high for the SOT-223 ZXMP4A16G: 17 mohm max at
+# VGS -4.5 V (Diodes DS40141 Rev. 5-2, Electrical Characteristics).
+[part]
+name = "DMP3013SFV P-channel MOSFET, PowerDI3333-8"
+source = "KiCad 10.0.6 library (Transistor_FET:DMP3013SFV: S 1-3, G 4, D 5, the drain pad and its fingers numbered 5; Package_SON:Diodes_PowerDI3333-8); agrees with Diodes DS40141 Rev. 5-2 page 1, 'Bottom View': S S S G on one side, D on the other, pin 1 a source"
+symbol = "Transistor_FET:DMP3013SFV"
+footprint = "Package_SON:Diodes_PowerDI3333-8"
+value = "DMP3013SFV"
+lcsc = "C264098"
+
+[pins]
+S = [1, 2, 3]
+G = 4
+D = 5

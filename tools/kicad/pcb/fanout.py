@@ -27,6 +27,17 @@ def edge_distance(half_w, half_h, dx, dy):
     return min(tx, ty)
 
 
+def stub_width(track, half_w, half_h):
+    """The stub's width: `track`, but no wider than the pad's narrow side.
+
+    The stub starts at the pad's centre, so its round end cap is as wide as
+    the stub: a 0.4 mm stub from a 0.25 mm TQFN pad at 0.5 mm pitch comes
+    within 0.175 mm of the next pin before it has left its own pad, on every
+    ray. No wider than the pad, it adds nothing beside the pad.
+    """
+    return min(track, 2 * min(half_w, half_h))
+
+
 def candidates(cx, cy, half_w, half_h, via_r, gap, reach, step, prefer=(0.0, 0.0)):
     """(x, y) via centres around the box centred on (cx, cy), nearest first."""
     px, py = prefer

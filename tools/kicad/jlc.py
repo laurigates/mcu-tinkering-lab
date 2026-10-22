@@ -32,7 +32,7 @@ from .paths import REPO_ROOT
 
 ROTATIONS = REPO_ROOT / "docs/reference/jlcpcb-rotations.toml"
 ROTATION_KEYS = frozenset(
-    {"footprint", "rotation", "lcsc_footprint", "max_err_mm", "checked"}
+    {"footprint", "rotation", "pads", "lcsc_footprint", "max_err_mm", "checked"}
 )
 _LCSC = re.compile(r"C[0-9]+")
 
@@ -41,6 +41,8 @@ _LCSC = re.compile(r"C[0-9]+")
 class Rotation:
     footprint: str  # the KiCad footprint the offset was checked against
     rotation: int  # degrees counter-clockwise, added to KiCad's
+    # the KiCad pad numbers the offset was matched on; None: every pad
+    pads: tuple[str, ...] | None = None
 
 
 def load_rotations(path: Path = ROTATIONS) -> dict[str, Rotation]:
@@ -62,7 +64,16 @@ def load_rotations(path: Path = ROTATIONS) -> dict[str, Rotation]:
             raise KicadError(f"{where}: footprint must be a Lib:Name string")
         if rotation not in (0, 90, 180, 270) or isinstance(rotation, bool):
             raise KicadError(f"{where}: rotation {rotation!r}, not 0/90/180/270")
-        table[lcsc] = Rotation(footprint, rotation)
+        pads = entry.get("pads")
+        if pads is not None and (
+            not isinstance(pads, list)
+            or not pads
+            or not all(isinstance(n, str) and n for n in pads)
+        ):
+            raise KicadError(f"{where}: pads must be a non-empty list of pad numbers")
+        table[lcsc] = Rotation(
+            footprint, rotation, None if pads is None else tuple(pads)
+        )
     return table
 
 
