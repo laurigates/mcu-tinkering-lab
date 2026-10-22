@@ -8,8 +8,8 @@
 # follows: one rectangular PCB holding the main board (x 0-64.5, y 0-76, the
 # chassis plate) and the socketed carrier's three head boards (x 64.5-94, each
 # the 29.5 mm square for the pan-tilt cradle), split along copper-free bands.
-# The bands carry mouse-bite slots and tabs ([panel] below, #809), not saw
-# lines. The head column is the socketed carrier's, 6 mm to the
+# The bands sit under hand-saw lines ([panel] mode = "saw" below; the
+# mouse-bite slots and tabs of #809 are kept as an option there). The head column is the socketed carrier's, 6 mm to the
 # left. The strip below the main board (y 76-100) is waste. The main board is
 # 64.5 x 76 mm after sawing; the socketed carrier's is about 70.5 x 100 mm.
 #
@@ -47,7 +47,10 @@ name = "head 2 / head 3 cut band"
 # mouse-bite [panel]), and 0.5 mm is KiCad's copper-to-edge clearance. The
 # extra 0.5 mm is the corridor between this band and J17's top pin row, which
 # head 3's signals share; at 71.5 Freerouting left one of them unrouted on
-# every attempt. A hand-sawn board (mode = "saw") wants it back at 71.5.
+# every attempt. A hand-sawn board would want it back at 71.5, but with the
+# keepouts under H9 and H10 (below) HEAD3_PIEZO then stays unrouted (5 of 5
+# routes), so it stays at 71.0: saw on the waste side of the y 70.5 line and
+# file to it (README, Panel).
 rect = [66.0, 63.25, 93.5, 71.0]
 
 [[keepouts]]
@@ -144,7 +147,9 @@ C2 = [24.6, 51.5, 90]
 # PWM driver, LEDs and servos
 U6 = [21.4, 34.0, 0]
 C4 = [27.0, 29.5, 90]
-R17 = [13.4, 27.5, 180]
+# 0.6 mm north of the column pitch: the servo-ground tie runs between it
+# and R18 (seventh pre-fab layout review, SF2).
+R17 = [13.4, 26.9, 180]
 R18 = [13.4, 29.6, 180]
 R19 = [13.4, 31.7, 180]
 R20 = [13.4, 33.8, 180]
@@ -219,7 +224,7 @@ FID3 = [3.5, 66.5, 0]
 [silk]
 hidden_refs = ["H1", "H2", "H3", "H4", "H5", "H6", "H7", "H8", "H9", "H10", "FID1", "FID2", "FID3"]
 ref_sizes = { U1 = 1.0, U3 = 1.0, U4 = 1.0, C1 = 1.0, C2 = 1.0, C3 = 1.0, C4 = 1.0, C5 = 1.0, C8 = 1.0, C9 = 0.8, C10 = 0.8, C11 = 0.8, C12 = 1.0, C13 = 1.0, C14 = 1.0, C15 = 1.0, C16 = 1.0, C19 = 1.0, C18 = 1.0, C21 = 1.0, FB1 = 1.0, L1 = 1.0, R2 = 1.0, R3 = 1.0, R4 = 1.0, R5 = 1.0, R6 = 1.0, R7 = 1.0, R8 = 1.0, R9 = 1.0, R10 = 1.0, R11 = 1.0, R12 = 1.0, R13 = 1.0, R14 = 1.0, R15 = 1.0, R16 = 1.0, R17 = 1.0, R18 = 1.0, R19 = 1.0, R20 = 1.0, R21 = 1.0, R22 = 1.0, R23 = 1.0, R24 = 1.0, U10 = 1.0 }
-ref_positions = { J9 = [57.7, 45.75], J19 = [57.7, 56.75], J16 = [89.5, 61.0], C1 = [9.8, 32.7], C15 = [23.4, 46.5], C16 = [21.6, 54.2], C2 = [24.6, 47.4], C19 = [31.8, 48.6], C4 = [28.9, 29.5], C5 = [23.9, 16.7], FB1 = [41.3, 52.4], C8 = [55.4, 61.6], C3 = [46.0, 56.6], C18 = [51.9, 53.2], C21 = [23.0, 43.4], D1 = [49.7, 10.0], C6 = [38.4, 27.0], U8 = [44.3, 49.6], BZ1 = [44.8, 38.0], J18 = [53.6, 13.0], J20 = [2.5, 20.4], J21 = [6.3, 20.4], J22 = [2.5, 30.8], J23 = [6.3, 30.8], J6 = [8.6, 49.0], J5 = [4.0, 62.2], R27 = [9.6, 54.1], Q1 = [13.0, 54.6], J7 = [14.75, 8.4], J8 = [28.75, 8.4], C13 = [38.6, 67.8], C14 = [38.6, 70.0], C20 = [38.6, 72.2], L1 = [30.0, 69.9], C11 = [33.0, 61.75], C9 = [35.3, 61.75], C10 = [37.9, 61.75], R13 = [36.6, 59.6], R12 = [36.6, 57.6], C12 = [25.0, 64.1], U10 = [24.9, 66.9], R14 = [24.0, 14.3], R15 = [26.3, 14.3], R16 = [28.6, 14.3], R2 = [10, 25.3], R3 = [12.3, 25.3], R4 = [14.6, 25.3], R5 = [16.9, 25.3], R10 = [19.2, 25.7], R11 = [21.5, 25.7], R6 = [23.8, 25.3], R7 = [26.1, 25.3], R8 = [28.4, 25.3], R9 = [30.7, 25.3], R17 = [16.4, 27.5], R18 = [16.4, 29.6], R19 = [16.4, 31.7], R20 = [16.4, 33.8], R21 = [16.4, 35.9], R22 = [16.4, 38.0], R23 = [16.4, 40.1], R24 = [16.4, 42.2] , R25 = [25.4, 57.6], R26 = [25.4, 59.6], C7 = [42.5, 65.0], U2 = [50.0, 71.6]}
+ref_positions = { J9 = [57.7, 45.75], J19 = [57.7, 56.75], J16 = [89.5, 61.0], C1 = [9.8, 32.7], C15 = [23.4, 46.5], C16 = [21.6, 54.2], C2 = [24.6, 47.4], C19 = [31.8, 48.6], C4 = [28.9, 29.5], C5 = [23.9, 16.7], FB1 = [41.3, 52.4], C8 = [55.4, 61.6], C3 = [46.0, 56.6], C18 = [51.9, 53.2], C21 = [23.0, 43.4], D1 = [49.7, 10.0], C6 = [38.4, 27.0], U8 = [44.3, 49.6], BZ1 = [44.8, 38.0], J18 = [53.6, 13.0], J20 = [2.5, 20.4], J21 = [6.3, 20.4], J22 = [2.5, 30.8], J23 = [6.3, 30.8], J6 = [8.6, 49.0], J5 = [4.0, 62.2], R27 = [9.6, 54.1], Q1 = [13.0, 54.6], J7 = [14.75, 8.4], J8 = [28.75, 8.4], C13 = [38.6, 67.8], C14 = [38.6, 70.0], C20 = [38.6, 72.2], L1 = [30.0, 69.9], C11 = [33.0, 61.75], C9 = [35.3, 61.75], C10 = [37.9, 61.75], R13 = [36.6, 59.6], R12 = [36.6, 57.6], C12 = [25.0, 64.1], U10 = [24.9, 66.9], R14 = [24.0, 14.3], R15 = [26.3, 14.3], R16 = [28.6, 14.3], R2 = [10, 25.3], R3 = [12.3, 25.2], R4 = [14.6, 25.2], R5 = [16.9, 25.3], R10 = [19.2, 25.7], R11 = [21.5, 25.7], R6 = [23.8, 25.3], R7 = [26.1, 25.3], R8 = [28.4, 25.3], R9 = [30.7, 25.3], R17 = [10.0, 27.4], R18 = [16.4, 29.6], R19 = [16.4, 31.7], R20 = [16.4, 33.8], R21 = [16.4, 35.9], R22 = [16.4, 38.0], R23 = [16.4, 40.1], R24 = [16.4, 42.2] , R25 = [25.4, 57.6], R26 = [25.4, 59.6], C7 = [42.5, 65.0], U2 = [50.0, 71.6]}
 cut_lines = [
     [64.5, 99.5, 64.5, 0.5],
     [64.5, 76.0, 0.5, 76.0],
@@ -384,6 +389,22 @@ layer = "F.Cu"
 width_mm = 0.3
 points = [[19.2, 49.32], [20.5, 49.32], [21.2, 49.8]]
 
+# The servos' ground (J21:3, and through the routed J20:3 and C1's GND pad,
+# all in one pour piece) to U6's GND pins 1-5, 0.8 mm through the gap R17
+# leaves above R18. A second tie from J20:3 to J21:3 walled F.Cu off from x
+# 1.7 to 18.5 and +3V3 lost 24 connections. Routed,
+# that piece reached the plane only through a 0.25 mm F.Cu track (seventh
+# pre-fab layout review, SF2; the sixth review's N1). U6:1's neighbours are
+# GND as well, so the track may land on the pin at full width. It starts on
+# U6:1 so that pin leaves Freerouting's netlist: ending on it, the track's
+# keepout boxed the pin in and GND lost 15 connections (trap 28).
+[[tracks]]
+name = "servo GND to U6"
+net = "GND"
+layer = "F.Cu"
+width_mm = 0.8
+points = [[18.537, 29.775], [18.537, 28.25], [6.3, 28.25]]
+
 # The buck's ground: U10's GND pin to its input capacitor's, under the package
 # between the two pin rows, TI's first layout rule (the input loop, VIN pin
 # to capacitor to GND pin, as small as it goes). Laid down rather than routed:
@@ -465,10 +486,13 @@ rect = [30.4, 56.3, 35.2, 62.6]
 # on B.Cu along y 67.3, under that spot, which left no room to grow its via to
 # input_power's 1.0/0.5 mm; this keeps the GND run clear (second pre-fab
 # layout review, S1).
+# Its bottom edge stops at y 68.65: at 68.8 it was 0.18 mm from an 0.8 mm
+# VBAT track at y 69.38, under the 0.2 mm clearance, and Freerouting necked
+# that 10.3 mm run under L1 to 0.6 mm (seventh pre-fab layout review, SF1).
 [[route_keepouts]]
 name = "below VBAT's input via"
 layer = "B.Cu"
-rect = [36.5, 67.4, 39.4, 68.8]
+rect = [36.5, 67.4, 39.4, 68.65]
 
 # Keep Freerouting's tracks out from under the M2 ISO7380 heads (about 3.5 mm
 # across) at head 3's holes: HEAD3_MOTOR_STBY ran 0.563 mm from H10's hole and
@@ -618,6 +642,11 @@ required = [
     "U8:3",
 ]
 
+# Hand-sawn (mode = "saw", seventh pre-fab layout review): one outline, which
+# JLCPCB counts as one design, cut apart along the silkscreen cut lines. Saw on
+# each line's waste side and file to the line: HEAD3_I2C_SDA is 0.79 mm from
+# the y 70.5 line (README, Panel). The lines below are the mouse-bite option:
+#
 # Mouse-bite panel (#809, tools/kicad/panel.py): each cut line becomes 2 mm
 # Edge.Cuts slots, broken by 5 mm tabs of two rows of five 0.6 mm non-plated
 # holes at 0.95 mm (JLCPCB's mouse-bite guide), inside the copper-free bands
@@ -630,7 +659,7 @@ required = [
 # The main board's bottom line gets a tab at each end and one at x 32, clear of
 # the XT30 (J3, x 8-23), whose courtyard reaches the line.
 [panel]
-mode = "mousebites"
+mode = "saw"
 
 [[panel.lines]]
 line = [64.5, 99.5, 64.5, 0.5]
