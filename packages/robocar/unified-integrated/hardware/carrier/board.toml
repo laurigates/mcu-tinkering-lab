@@ -167,7 +167,7 @@ R12 = [33.0, 57.6, 180]
 R13 = [33.0, 59.6, 0]
 # The pack fuse between Q1 and VBAT.
 F1 = [18.5, 57.2, 0]
-# Reverse-polarity P-FET between the XT30 and F1 (third pre-fab layout review,
+# Reverse-polarity P-FET between the XT30 and F1 (sixth pre-fab layout review,
 # N9), in the space between U7 and the XT30: drain pad south toward the XT30's
 # + pin, source pads north, in a row that runs east into F1; its gate resistor
 # R27 to the west.
@@ -250,7 +250,7 @@ layer = "F.Cu"
 width_mm = 1.2
 points = [[17.2, 61.0], [16.4, 59.75], [14.4, 59.75], [13.3, 59.2]]
 
-# Q1's source pads tied along their row, then 1.5 mm into F1 (third pre-fab
+# Q1's source pads tied along their row, then 1.5 mm into F1 (sixth pre-fab
 # layout review, N9). One entry per pad pair: the pad under each first point
 # leaves Freerouting's netlist, and a keepout over a pad centre would leave
 # that pad unroutable (carrier-pcb skill trap 27).
@@ -472,7 +472,7 @@ rect = [36.5, 67.4, 39.4, 68.8]
 
 # Keep Freerouting's tracks out from under the M2 ISO7380 heads (about 3.5 mm
 # across) at head 3's holes: HEAD3_MOTOR_STBY ran 0.563 mm from H10's hole and
-# HEAD3_UART0_TX 0.640 mm from H9's (third pre-fab layout review, N7). A
+# HEAD3_UART0_TX 0.640 mm from H9's (sixth pre-fab layout review, N7). A
 # 2 mm radius square, router-only: HEAD3_GND's pour still fills there.
 [[route_keepouts]]
 name = "under H9's screw head, F.Cu"
@@ -495,7 +495,7 @@ layer = "B.Cu"
 rect = [89.0, 71.55, 93.0, 75.55]
 
 # B.Cu under the 5V trunk's north-south run stays GND, so the trunk's return
-# current has the plane under it (third pre-fab layout review, S4: a B.Cu VBAT
+# current has the plane under it (sixth pre-fab layout review, S4: a B.Cu VBAT
 # track ran under it at x 24.76 from y 55.8 to 69.1). The gap at y 56.4-58.4
 # lets VBAT cross under it from F1's output pad, which sits at y 57.2.
 [[route_keepouts]]
@@ -580,9 +580,10 @@ min_thickness_mm = 0.25
 thermal_gap_mm = 0.3
 spoke_mm = 0.35
 # A via at each 5 mm grid point where every pour layer's fill holds one, for
-# pieces of pour that tracks alone joined to the plane: the 141.7 mm2 piece at
-# J7:4 and the 85.3 mm2 servo-ground piece at J20:3/J21:3 (third pre-fab
-# layout review, S4 and N1).
+# pieces of pour that tracks alone joined to the plane (sixth pre-fab layout
+# review, S4 and N1). It joined the 141.7 mm2 piece at J7:4; it cannot join a
+# piece enclosed by tracks on both layers, as the servo-ground piece at
+# J20:3/J21:3 is (a 2.5 mm grid joined nothing more).
 stitch = { pitch_mm = 5.0, via_um = [600, 300] }
 
 # A via beside every SMD pad of a poured net, added after routing wherever
@@ -604,7 +605,7 @@ in_pad = ["U8:17"]
 # satisfy it; it takes its own beside the pin as well (TI rule 1). U8's GND
 # pin 3, tied to the exposed pad, likewise: with only the exposed pad's via,
 # that one 0.6/0.3 mm via was the sole plane connection of U8's pins 2, 3, 11,
-# 15 and 17 (third pre-fab layout review, S3: `carrier-measure cuts GND J3:1`).
+# 15 and 17 (sixth pre-fab layout review, S3: `carrier-measure cuts GND J3:1`).
 # Pin 3's via goes out west-north-west, past pin 2 (GND too) and clear of pin
 # 4. A tie from pin 11 east to C17's GND pad was tried first: it boxed in
 # SPK_VO- at pin 10 on every route.

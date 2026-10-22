@@ -159,7 +159,7 @@ ref = "F1"
 value = "3A hold 16V"
 lcsc = "C883162"
 
-# Reverse-polarity protection at the pack input (third pre-fab layout review,
+# Reverse-polarity protection at the pack input (sixth pre-fab layout review,
 # N9), as on the balancebot carrier: XT30 + -> Q1 -> F1 -> VBAT. Q1 is a
 # P-MOSFET high-side switch, drain to the XT30 (PACK_IN), source to F1
 # (PACK_RP), gate to GND through R27. Plugged in the right way its body diode
