@@ -1,0 +1,27 @@
+# 3D-printed case for the integrated robocar carrier's main board: `just
+# enclosure::gen packages/robocar/unified-integrated` (tools/enclosure, the
+# enclosure-cad skill). The heads are the socketed carrier's; their case is in
+# ../../unified/hardware/enclosure/enclosure.toml.
+#
+# Heights come from KiCad's STEP export where a 3D model exists; the parts
+# below have none, so their heights are ESTIMATES from each `source`.
+
+# The main board after sawing (x 0-64.5, y 0-76 on the panel).
+[[pieces]]
+name = "main"
+region = [0.0, 0.0, 64.5, 76.0]
+quantity = 1
+# Ribbon to the head (J1), pack (J3), motors (J5, J6), rangefinders (J7, J8),
+# J9 and J19 on the east edge, servos (J20) and LEDs (J22) on the west edge.
+openings = ["J1", "J3", "J5", "J6", "J7", "J8", "J9", "J19", "J20", "J22"]
+
+[heights]
+J3 = { above = 8.0, source = "estimate: AMASS XT30PW-M horizontal body" }
+F1 = { above = 2.0, source = "estimate: 1812 PTC, BSMD1812 body under 2 mm" }
+U8 = { above = 0.8, source = "estimate: MAX98357A TQFN-16 3 x 3 x 0.75 mm package" }
+FID1 = { above = 0.0, source = "fiducial: copper only" }
+FID2 = { above = 0.0, source = "fiducial: copper only" }
+FID3 = { above = 0.0, source = "fiducial: copper only" }
+U1 = { above = 26.0, source = "estimate: XIAO ESP32-S3 Sense on a head, not on this piece" }
+U3 = { above = 26.0, source = "estimate: XIAO ESP32-S3 Sense on a head, not on this piece" }
+U4 = { above = 26.0, source = "estimate: XIAO ESP32-S3 Sense on a head, not on this piece" }

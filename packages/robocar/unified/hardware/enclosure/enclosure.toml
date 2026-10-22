@@ -1,0 +1,42 @@
+# 3D-printed cases for the socketed robocar carrier: `just enclosure::gen
+# packages/robocar/unified` (tools/enclosure, the enclosure-cad skill).
+#
+# Positions, courtyards and holes come from the committed .kicad_pcb; heights
+# from KiCad's STEP export where a 3D model exists. The parts below have no
+# model, so their heights are ESTIMATES from the stack in each `source`:
+# measure the fitted board and correct them before a second print.
+#
+# Stack constants: 2.54 mm female header 8.5 mm, male header plastic 2.5 mm,
+# breakout PCB 1.6 mm (common values, not measured here).
+
+# The main board after sawing (x 0-70.5 on the panel; the saw takes about
+# 1 mm, so the case's 0.5 mm gap each side still holds it).
+[[pieces]]
+name = "main"
+region = [0.0, 0.0, 70.5, 100.0]
+quantity = 1
+# Pack (J3), buck lead (J4), motors (J5, J6), rangefinders (J7, J8), the head
+# ribbon (J1), servos and LEDs on the PCA9685's columns (A2), speaker (A4).
+openings = ["J1", "J3", "J4", "J5", "J6", "J7", "J8", "A2", "A4"]
+
+# Head 1 (U1 with J2 on the back face): the one fitted to the cradle. Its
+# ribbon plug is under the board, so the standoffs clear header plus plug.
+[[pieces]]
+name = "head1"
+region = [70.5, 0.0, 100.0, 29.5]
+quantity = 1
+openings = ["U1", "J2"]
+lid_windows = ["U1"]  # the camera looks up through the lid
+
+[heights]
+A1 = { above = 14.0, source = "estimate: SparkFun TB6612FNG breakout in female headers, 8.5 + 2.5 + 1.6 + ~1.4 parts" }
+A2 = { above = 21.5, source = "estimate: Adafruit PCA9685 in female headers, 8.5 + 2.5 + 1.6 + ~8.5 servo column headers" }
+A3 = { above = 14.0, source = "estimate: Adafruit TCA9548A in female headers, 8.5 + 2.5 + 1.6 + ~1.4 parts" }
+A4 = { above = 21.0, source = "estimate: Adafruit MAX98357A in female headers, 8.5 + 2.5 + 1.6 + ~8 terminal block" }
+A5 = { above = 14.0, source = "estimate: CJMCU-2317 in female headers, 8.5 + 2.5 + 1.6 + ~1.4 parts" }
+J3 = { above = 8.0, source = "estimate: AMASS XT30PW-M horizontal body" }
+J4 = { above = 12.0, source = "estimate: JST VH B4P-VH vertical header" }
+F1 = { above = 2.0, source = "estimate: 1812 PTC, BSMD1812 body under 2 mm" }
+U1 = { above = 26.0, source = "estimate: XIAO ESP32-S3 Sense in 1x7 female headers, 8.5 + 2.5 + 15 (Seeed: 21 x 17.8 x 15 mm with the camera board)" }
+U3 = { above = 26.0, source = "estimate: XIAO ESP32-S3 Sense, as U1" }
+U4 = { above = 26.0, source = "estimate: XIAO ESP32-S3 Sense, as U1" }
