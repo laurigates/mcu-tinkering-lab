@@ -7,8 +7,10 @@ The SVG's width and height are in mm and its user unit is 1 mm, so a print at
 - a crosshair on each corner hole, to line the print up with a real board.
 
 The solder side also has every wire, coloured as in `perfboard.svg`, but no
-numbers: they do not fit at 2.54 mm. The page has a 50 mm scale bar, so the
-printer's scaling can be checked with a ruler.
+numbers: they do not fit at 2.54 mm. The page has two 50 mm scale bars, one
+across and one down, so the printer's scaling can be checked with a ruler on
+both axes: an inkjet's paper feed (down) can be off while its print head
+(across) is exact.
 
 Elements carry ids and data attributes the tests read: the panels are
 `<g id="component">` and `<g id="solder">`, a pad is `data-pad="REF.pin"`.
@@ -25,6 +27,7 @@ LABEL = 5  # the band for column letters and row numbers, mm
 GAP = 12  # between the two panels, besides their labels, mm
 PAGE = 190  # widest content that fits A4 portrait with its margins, mm
 SCALE_BAR = 50  # mm
+VBAR = 8  # the band right of the panels for the down bar, mm
 CUT = "#e00000"
 COPPER = "#b87333"
 
@@ -40,11 +43,11 @@ def svg(parts, numbered, routes, board: Board, raised, heavy, title):
     comp = (MARGIN + LABEL, MARGIN + HEAD)
     if side_by_side:
         sold = (comp[0] + bw + LABEL + GAP, comp[1])
-        width = sold[0] + bw + LABEL + MARGIN
+        width = sold[0] + bw + LABEL + VBAR + MARGIN
         height = comp[1] + bh + MARGIN
     else:
         sold = (comp[0], comp[1] + bh + GAP + LABEL)
-        width = comp[0] + bw + LABEL + MARGIN
+        width = comp[0] + bw + LABEL + VBAR + MARGIN
         height = sold[1] + bh + MARGIN
     out = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{mm(width)}mm" '
@@ -54,14 +57,14 @@ def svg(parts, numbered, routes, board: Board, raised, heavy, title):
         f'<text x="{MARGIN}" y="{MARGIN + 4}" font-size="4" font-weight="bold">'
         f"{title}, 1:1</text>",
         f'<text x="{MARGIN}" y="{MARGIN + 8}" font-size="2.5" fill="{MUTED}">'
-        "Print at 100 % (no fit to page): the bar must measure 50 mm.</text>",
+        "Print at 100 % (no fit to page): both bars must measure 50 mm.</text>",
         f'<text x="{MARGIN}" y="{MARGIN + 11.5}" font-size="2.5" fill="{MUTED}">'
         "Red: the hole-grid outline, a cut line. Wire numbers: perfboard.svg.</text>",
     ]
     bx, by = MARGIN, MARGIN + 17
     out.append(
-        f'<line class="scale" x1="{bx}" y1="{by}" x2="{bx + SCALE_BAR}" y2="{by}" '
-        f'stroke="{INK}" stroke-width="0.3"/>'
+        f'<line class="scale" data-axis="across" x1="{bx}" y1="{by}" '
+        f'x2="{bx + SCALE_BAR}" y2="{by}" stroke="{INK}" stroke-width="0.3"/>'
     )
     for t in range(0, SCALE_BAR + 1, 10):
         out.append(
@@ -70,6 +73,21 @@ def svg(parts, numbered, routes, board: Board, raised, heavy, title):
         )
     out.append(
         f'<text x="{bx + SCALE_BAR + 2}" y="{by + 1}" font-size="2.5">{SCALE_BAR} mm</text>'
+    )
+    # The down bar, in the band right of the panels, from the panels' top edge.
+    vx, vy = width - MARGIN - VBAR / 2, comp[1]
+    out.append(
+        f'<line class="scale" data-axis="down" x1="{mm(vx)}" y1="{vy}" '
+        f'x2="{mm(vx)}" y2="{vy + SCALE_BAR}" stroke="{INK}" stroke-width="0.3"/>'
+    )
+    for t in range(0, SCALE_BAR + 1, 10):
+        out.append(
+            f'<line x1="{mm(vx - 1.5)}" y1="{vy + t}" x2="{mm(vx + 1.5)}" y2="{vy + t}" '
+            f'stroke="{INK}" stroke-width="0.2"/>'
+        )
+    out.append(
+        f'<text x="{mm(vx)}" y="{vy + SCALE_BAR + 4}" font-size="2.5" '
+        f'text-anchor="middle">{SCALE_BAR} mm</text>'
     )
     net_colour = {}
     for _, _, _, colour, (ha, _), (hb, _) in numbered:

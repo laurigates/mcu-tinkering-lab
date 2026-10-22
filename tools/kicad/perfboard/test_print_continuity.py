@@ -126,9 +126,18 @@ class PrintTests(unittest.TestCase):
             marks.add((round(float(x), 3), round(float(y) + 1.6, 3)))
         self.assertEqual(marks, corners)
 
-    def test_scale_bar_is_50_mm(self):
-        bar = self.root.find("s:line[@class='scale']", NS)
-        self.assertEqual(float(bar.get("x2")) - float(bar.get("x1")), 50)
+    def test_scale_bars_are_50_mm_across_and_down(self):
+        bars = {
+            b.get("data-axis"): [float(b.get(k)) for k in ("x1", "y1", "x2", "y2")]
+            for b in self.root.findall("s:line[@class='scale']", NS)
+        }
+        self.assertEqual(set(bars), {"across", "down"})
+        x1, y1, x2, y2 = bars["across"]
+        self.assertEqual((x2 - x1, y2 - y1), (50, 0))
+        x1, y1, x2, y2 = bars["down"]
+        self.assertEqual((x2 - x1, y2 - y1), (0, 50))
+        width = float(self.root.get("width")[:-2])
+        self.assertLess(x1, width - 2, "the down bar sits on the page")
 
     def test_every_wire_is_drawn(self):
         wires = self.groups["solder"].findall("s:polyline[@class='wire']", NS)

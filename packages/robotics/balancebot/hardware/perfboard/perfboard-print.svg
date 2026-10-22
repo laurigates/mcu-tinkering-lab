@@ -1,9 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="138.44mm" height="111.96mm" viewBox="0 0 138.44 111.96" font-family="Helvetica, Arial, sans-serif" fill="#1f1f1f">
+<svg xmlns="http://www.w3.org/2000/svg" width="146.44mm" height="111.96mm" viewBox="0 0 146.44 111.96" font-family="Helvetica, Arial, sans-serif" fill="#1f1f1f">
 <rect width="100%" height="100%" fill="white"/>
 <text x="10" y="14" font-size="4" font-weight="bold">Balancebot perfboard, 1:1</text>
-<text x="10" y="18" font-size="2.5" fill="#6b6b6b">Print at 100 % (no fit to page): the bar must measure 50 mm.</text>
+<text x="10" y="18" font-size="2.5" fill="#6b6b6b">Print at 100 % (no fit to page): both bars must measure 50 mm.</text>
 <text x="10" y="21.5" font-size="2.5" fill="#6b6b6b">Red: the hole-grid outline, a cut line. Wire numbers: perfboard.svg.</text>
-<line class="scale" x1="10" y1="27" x2="60" y2="27" stroke="#1f1f1f" stroke-width="0.3"/>
+<line class="scale" data-axis="across" x1="10" y1="27" x2="60" y2="27" stroke="#1f1f1f" stroke-width="0.3"/>
 <line x1="10" y1="25.5" x2="10" y2="28.5" stroke="#1f1f1f" stroke-width="0.2"/>
 <line x1="20" y1="25.5" x2="20" y2="28.5" stroke="#1f1f1f" stroke-width="0.2"/>
 <line x1="30" y1="25.5" x2="30" y2="28.5" stroke="#1f1f1f" stroke-width="0.2"/>
@@ -11,6 +11,14 @@
 <line x1="50" y1="25.5" x2="50" y2="28.5" stroke="#1f1f1f" stroke-width="0.2"/>
 <line x1="60" y1="25.5" x2="60" y2="28.5" stroke="#1f1f1f" stroke-width="0.2"/>
 <text x="62" y="28" font-size="2.5">50 mm</text>
+<line class="scale" data-axis="down" x1="132.44" y1="41" x2="132.44" y2="91" stroke="#1f1f1f" stroke-width="0.3"/>
+<line x1="130.94" y1="41" x2="133.94" y2="41" stroke="#1f1f1f" stroke-width="0.2"/>
+<line x1="130.94" y1="51" x2="133.94" y2="51" stroke="#1f1f1f" stroke-width="0.2"/>
+<line x1="130.94" y1="61" x2="133.94" y2="61" stroke="#1f1f1f" stroke-width="0.2"/>
+<line x1="130.94" y1="71" x2="133.94" y2="71" stroke="#1f1f1f" stroke-width="0.2"/>
+<line x1="130.94" y1="81" x2="133.94" y2="81" stroke="#1f1f1f" stroke-width="0.2"/>
+<line x1="130.94" y1="91" x2="133.94" y2="91" stroke="#1f1f1f" stroke-width="0.2"/>
+<text x="132.44" y="95" font-size="2.5" text-anchor="middle">50 mm</text>
 <g id="component">
 <text x="15" y="35" font-size="2.5" font-weight="bold">Component side</text>
 <text x="16.27" y="40" font-size="1.5" text-anchor="middle" fill="#6b6b6b">A</text>
