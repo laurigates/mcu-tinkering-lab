@@ -24,6 +24,8 @@ SCRIPT = Path(__file__).with_name("foil-test-board.py")
 SPEC = importlib.util.spec_from_file_location("foil_test_board", SCRIPT)
 assert SPEC and SPEC.loader
 FTB = importlib.util.module_from_spec(SPEC)
+# Registered before exec: @dataclass resolves its module through sys.modules.
+sys.modules[SPEC.name] = FTB
 SPEC.loader.exec_module(FTB)
 NS = "{http://www.w3.org/2000/svg}"
 EPS = 1e-6
