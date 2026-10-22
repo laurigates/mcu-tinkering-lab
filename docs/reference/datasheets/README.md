@@ -35,6 +35,7 @@ Files use a flat `category--component-name.md` convention:
 - [ESP32](mcu--esp32.md) — Dual-core LX6, WiFi + BT (Heltec, ESP32-CAM)
 - [ESP32-S3](mcu--esp32-s3.md) — Dual-core LX7, WiFi + BLE 5 (Waveshare S3-Zero)
 - [RP2350](mcu--rp2350.md) — Dual Cortex-M33/Hazard3, PIO, no radio (XIAO RP2350)
+- [ESP8285](mcu--esp8285.md) — ESP8266 core with 1–2 MB flash in package, NRND (ESP_IR_TR IR transceiver)
 
 ### Peripherals
 - [OV2640](camera--ov2640.md) — 2MP CMOS image sensor
