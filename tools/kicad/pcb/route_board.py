@@ -143,7 +143,8 @@ def fanout(board, fan, clearance):
     of its own whatever chain already reaches one. Each candidate from
     fanout.py must clear every item of another net, and every via and
     through-hole pad of any net, by `clearance` on both layers, keep out of the
-    rule areas and 0.5 mm in from the board edge; its stub must clear every
+    rule areas and 0.5 mm in from the board edge; its stub (`track_um` wide,
+    or the pad's narrow side if that is less) must clear every
     item of another net on the pad's layer. A pad counts as having a via when
     one is inside it, or a chain of fixed tracks and fanout stubs of its net,
     through any pads of its net on the way, joins it to a via (an exposed pad's ground pins, the buck's
@@ -315,6 +316,9 @@ def fanout(board, fan, clearance):
         layer = pcbnew.F_Cu if pad.IsOnLayer(pcbnew.F_Cu) else pcbnew.B_Cu
         placed = False
         part = pad.GetParentFootprint().GetPosition()
+        # no wider than the pad: a fine-pitch pad's neighbours are closer
+        # than a full-width stub's end cap allows
+        w = int(fanout_geom.stub_width(width, box.GetWidth() / 2, box.GetHeight() / 2))
         for x, y in fanout_geom.candidates(
             cx,
             cy,
@@ -329,7 +333,7 @@ def fanout(board, fan, clearance):
             if not via_fits(x, y, netcode, pad):
                 continue
             stub = pcbnew.SHAPE_SEGMENT(
-                pad.GetPosition(), pcbnew.VECTOR2I(int(x), int(y)), width
+                pad.GetPosition(), pcbnew.VECTOR2I(int(x), int(y)), w
             )
             if not clear(stub, (layer,), netcode, x, y, False):
                 continue
@@ -337,7 +341,7 @@ def fanout(board, fan, clearance):
             track = pcbnew.PCB_TRACK(board)
             track.SetStart(pad.GetPosition())
             track.SetEnd(pcbnew.VECTOR2I(int(x), int(y)))
-            track.SetWidth(width)
+            track.SetWidth(w)
             track.SetLayer(layer)
             track.SetNet(pad.GetNet())
             board.Add(track)

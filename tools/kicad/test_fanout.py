@@ -35,6 +35,18 @@ class EdgeDistanceTests(unittest.TestCase):
         self.assertAlmostEqual(fanout.edge_distance(1.0, 0.5, s, s), 0.5 / s)
 
 
+class StubWidthTests(unittest.TestCase):
+    def test_capped_at_the_pads_narrow_side(self):
+        # a 0.4 mm stub from a 0.25 x 0.82 mm TQFN pad at 0.5 mm pitch: its
+        # end cap alone reaches 0.175 mm from the next pin, under 0.2 mm
+        self.assertAlmostEqual(fanout.stub_width(0.4, 0.41, 0.125), 0.25)
+        self.assertAlmostEqual(fanout.stub_width(0.4, 0.125, 0.41), 0.25)
+
+    def test_track_width_when_the_pad_is_wider(self):
+        self.assertEqual(fanout.stub_width(0.4, 0.6, 0.725), 0.4)
+        self.assertEqual(fanout.stub_width(0.4, 0.74, 0.2), 0.4)
+
+
 class CandidateTests(unittest.TestCase):
     def test_nearest_ring_first_in_ray_order(self):
         c = fanout.candidates(10.0, 20.0, 1.0, 0.5, 0.3, 0.2, 2.0, 0.25)
