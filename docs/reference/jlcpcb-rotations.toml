@@ -132,6 +132,18 @@ rotation = 180
 max_err_mm = 0.0
 checked = "2026-10-21"
 
+# Matched on the pins only: KiCad numbers the drain pad and its fingers 5, one
+# pad centred on the drain, where LCSC numbers the fingers 5-8. In the same
+# turn LCSC's drain pad (8) lands 0.06 mm from KiCad's pad 5 centre along the
+# pin axis' normal, on the side away from the pins (read 2026-10-22).
+[C264098] # DMP3013SFV-7
+footprint = "Package_SON:Diodes_PowerDI3333-8"
+lcsc_footprint = "POWERPAK-1212-8_L3.1-W3.1-P0.65-LS3.3-BL"
+rotation = 270
+pads = ["1", "2", "3", "4"]
+max_err_mm = 0.0
+checked = "2026-10-22"
+
 [C85840] # BLM21PG221SN1D
 footprint = "Inductor_SMD:L_0805_2012Metric_Pad1.05x1.20mm_HandSolder"
 lcsc_footprint = "L0805"
