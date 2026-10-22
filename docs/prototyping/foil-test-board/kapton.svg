@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="110mm" height="80mm" viewBox="0 0 110 80" font-family="Helvetica, Arial, sans-serif">
+<title>Copper-foil test board: Kapton cut</title>
+<g transform="translate(10 10)">
+<path class="cut" data-name="spare patch 1" d="M76.5 30L80.5 30L80.5 32.6L76.5 32.6Z" fill="none" stroke="#e00000" stroke-width="0.1"/>
+<path class="cut" data-name="spare patch 2" d="M81 30L85 30L85 32.6L81 32.6Z" fill="none" stroke="#e00000" stroke-width="0.1"/>
+<path class="cut" data-name="spare patch 3" d="M85.5 30L89.5 30L89.5 32.6L85.5 32.6Z" fill="none" stroke="#e00000" stroke-width="0.1"/>
+</g>
+</svg>
