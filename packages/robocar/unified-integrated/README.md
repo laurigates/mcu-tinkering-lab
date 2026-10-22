@@ -33,8 +33,8 @@ by name.
 
 ## Footprint comparison
 
-The laid-out boards, as cut apart (by hand-saw kerf or the mouse-bite slots,
-[below](#panel-mouse-bites): the line between the main board and the heads
+The laid-out boards, as cut apart (by hand saw, [below](#panel-hand-saw):
+the line between the main board and the heads
 takes about 1 mm from each, so the main board is 63.5 mm wide once separated):
 
 | Main board | Socketed | Integrated |
@@ -50,8 +50,8 @@ Both PCBs carry the same three head boards, the 29.5 mm square for the pan-tilt
 cradle, in a column on the right: the integrated column is the socketed one moved
 6 mm left. The integrated main board ends at y 76, so the strip below it
 (64.5 x 24 mm) is waste; the outline stays 100 mm tall for the heads. J3's
-courtyard ends 0.1 mm short of the y 76 line, so its slot lies wholly on the
-waste side. The integrated main board keeps
+courtyard ends 0.06 mm short of the y 76 line (`carrier-review`): saw that
+line on the waste side. The integrated main board keeps
 the socketed one's layout habits (connectors along the front and rear edges, M3
 holes in the corners, 0.5 mm edge keepouts), so the difference is the chips, not a
 tighter layout style. Its parts' courtyards fill half of it; the socketed board's
@@ -179,6 +179,12 @@ connectors (J5-J9, J19), the ribbon header (J1), the servo and LED headers
 the buzzer (BZ1), and on the heads the XIAO sockets (U1, U3, U4) and their
 ribbon headers (J2, J16, J17). All are 2.5 mm pitch or wider.
 
+After soldering the XT30 (J3), inspect it for solder bridges: the unfused
+pack input (PACK_IN, the 1.2 mm track from J3's + pin to Q1) runs between
+J3's GND pin and F1's pad 1 at close to the board's 0.2 mm minimum
+clearance, and a bridge there shorts the pack ahead of F1. Moving Q1 and F1
+to open the gap does not fit: F1 would land on the 5V trunk.
+
 ### Cost
 
 The order is five PCBs, the minimum, of which 2 or 5 can be assembled. The
@@ -187,13 +193,11 @@ JLCPCB counts the pieces of one file as separate designs "as long as it can be
 separated, no matter by v-cut, millings, or drill holes", and says it will
 "usually charge more for this"
 ([Different Design in Your PCB Files](https://jlcpcb.com/help/article/different-design-in-your-pcb-files)).
-The mouse-bite panel (slots and drilled tabs, [below](#panel-mouse-bites))
-holds four such pieces. The same page treats designs inside one outline with
-no v-cut lines, tabs or milling slots, separated by the customer, as one
-design, which is what the hand-saw variant (`mode = "saw"`) is. Both variants'
-fab outputs exist to be quoted side by side; no price has been seen for either,
-and coupons and other offers change it from order to order. The part prices
-are fixed:
+The same page treats designs inside one outline with no v-cut lines, tabs or
+milling slots, separated by the customer, as one design: that is this board,
+cut apart by hand ([below](#panel-hand-saw)). A mouse-bite panel of the same
+four pieces would count as four. No price has been seen, and coupons and
+other offers change it from order to order. The part prices are fixed:
 
 - **Parts:** about $11.50 per board at JLCPCB's listed unit prices
   (2026-10-19), plus Q1 at $1.23 (2026-10-22). The chips are most of it: PCA9685 $3.33, MCP23017 $1.77,
@@ -204,55 +208,35 @@ are fixed:
   R12 and R26. The other 11 lines are Basic, D1 included (JLCPCB's parts
   search, 2026-10-22).
 
-## Panel: mouse bites
+## Panel: hand-saw
 
-The main board and the three heads share one 94 x 100 mm PCB. Instead of
-hand-sawing along silkscreen lines, this carrier uses `board.toml [panel]
-mode = "mousebites"` (#809, `tools/kicad/panel.py`, ADR-027's addendum):
+The main board and the three heads share one 94 x 100 mm PCB with a single
+outline, cut apart by hand after delivery: `board.toml [panel] mode = "saw"`.
+JLCPCB counts one outline with no slots, tabs or v-cuts as one design
+([Cost](#cost)). The six cut lines are silkscreen (`[silk] cut_lines`), each
+inside a copper-free keepout band.
 
-- **Slots:** every cut line is a 2 mm routed slot on Edge.Cuts, eight slots in
-  all, inside the copper-free bands. Each slot sits on the waste side of its
-  line. The exception is the line between the main board and the heads, whose
-  slot is centred.
-- **Tabs:** 14 tabs (MB1-MB14) hold the pieces together. Each is 5 mm long
-  with two rows of five 0.6 mm non-plated holes at 0.95 mm, per JLCPCB's
-  mouse-bite guide. They sit at both ends of every line, at y 50 on the
-  vertical line (the middle of head 2), and at x 32 on the main board's bottom
-  line, clear of the XT30.
-- **Separating:** cut each tab with a saw or a rotary cutting disc beside its
-  hole row, then file the nubs; snapping also works where nothing sits near a
-  tab. Cut, do not snap, the main board's bottom tab at x 32: it is about 3 mm
-  from L1 and C20. Cutting FR-4 makes glass-fibre dust; cut wet or with a mask.
+**Saw on the waste side of each line, then file to the line.** On the y 70.5
+line (head 2 above, head 3 below) the nearest copper is HEAD3_I2C_SDA, 0.79 mm
+from the line; on every other line it is 1.00 mm or more (`carrier-review`).
+A saw kerf of about 1 mm centred on the y 70.5 line would leave about 0.3 mm of
+board over that track. The y 76 line under the main board passes 0.06 mm from
+J3's courtyard (the XT30 body), so saw that one on the waste side too. Cutting
+FR-4 makes glass-fibre dust; cut wet or with a mask.
 
-| Piece | Held by tabs at |
-|---|---|
-| Main board | y 3 (to head 1) and y 50 (to head 2) on its right edge; x 3, 32 and 61 on its bottom edge (to the waste) |
-| Head 1 | y 3 (to the main board); both ends of its bottom line |
-| Head 2 | y 50 (to the main board); both ends of its top and bottom lines |
-| Head 3 | y 97 (to the waste below the main board); both ends of its top line |
+Head 3's band keepout ends at y 71.0, not the 71.5 a saw kerf would want: at
+71.5, with the keepouts under head 3's screw heads (H9, H10), HEAD3_PIEZO (J17:8
+to U4:2) stayed unrouted on 5 of 5 routes.
 
-Hand-sawing still works on this board: the slots only shorten the cuts. To
-build it the old way, set `mode = "saw"` (or delete `[panel]`), put head 3's
-band keepout back to y 71.5 (`board.toml` says why it moved) and run
-`carrier-board-checked`. With the keepouts under head 3's screw heads
-(H9, H10) that no longer routes: HEAD3_PIEZO (J17:8 to U4:2) stayed unrouted
-on 5 of 5 attempts, so a hand-sawn head 3 needs room found first. Before
-those keepouts both modes passed every gate: the saw board as
-committed in 965effd, the mouse-bite board as committed now. Each route took a
-few attempts, since Freerouting does not route the same way twice.
+The board's outputs, checked after `carrier-fab`: 10 non-plated holes (the
+mounting holes), a 4-segment outline, no slots.
 
-The mouse-bite board's outputs, checked after `carrier-fab`: 140 holes of
-0.6 mm in the NPTH drill file (14 tabs x 10), eight slots on Edge.Cuts, and no
-tab in the position file or the CPL.
+The mouse-bite panel (#809, `tools/kicad/panel.py`) is still in `board.toml`
+as `[[panel.lines]]`: `mode = "mousebites"` turns the cut lines into 2 mm
+Edge.Cuts slots and 14 tabs of 0.6 mm non-plated holes. It was this board's
+mode until the seventh review; JLCPCB would count that panel as four designs.
 
-**Quotes:** not taken yet. Record the bare and assembled prices for both modes
-here: JLCPCB counts pieces separable by milling or drilled holes as separate
-designs ([Cost](#cost)), and the hand-saw variant is one outline. The saw
-variant's Gerber zip, BOM and CPL were regenerated from this board's
-`board.toml` with only `mode = "saw"` changed, for the quote, and are not
-committed: the saw board has no slots and 10 non-plated holes (the mounting
-holes) against the mouse-bite board's eight slots and 150; the BOM and CPL
-are the same.
+**Quotes:** not taken yet. Record the bare and assembled prices here.
 
 ## Design notes
 
@@ -383,6 +367,10 @@ Tracks laid down before routing (`[[tracks]]`, locked on the board):
   the whole robot's current. `carrier-measure path`/`resistance`: J3:2 to
   Q1:5 3.48 mm, ~1.53 mΩ; Q1:1 to F1:1 2.30 mm, ~0.53 mΩ.
 - **Q1's gate**, 0.3 mm to R27.
+- **Servo ground**, 0.8 mm on F.Cu from U6's GND pin 1 to the servo header
+  J21:3, between R17 and R18 (R17 sits 0.6 mm north of the column pitch to
+  make the gap). Routed, the servos' ground reached the plane through one
+  0.25 mm track (seventh review, SF2).
 - **Buck output node**, C13 to C14 to C20 to L1's output pad (1 mm, then 2 mm):
   the output capacitors on the inductor, which every 5 V load hangs off.
 - **5V trunk**, 1.5 mm on F.Cu from L1's output pad west and north to C2, beside
@@ -401,8 +389,8 @@ Tracks laid down before routing (`[[tracks]]`, locked on the board):
   only way to the plane.
 
 GND is poured on both layers of the main board (each head's ground on its
-head), and each region stops 1 mm short of a cut line (on the vertical line,
-1 mm short of its centred mouse-bite slot). There is no 5 V pour:
+head), and each region stops 1 mm or more short of a cut line (2.0 mm on the
+vertical line, where it once cleared a centred mouse-bite slot). There is no 5 V pour:
 the first layout poured 5 V on F.Cu above GND, which cut F.Cu GND into islands
 around every chip in the power half and left their ground pads joined to the
 B.Cu plane only through 0.19-0.25 mm tracks (the board had one GND via). Now
@@ -459,13 +447,15 @@ just robocar-unified-integrated::carrier-schematic
 
 ## Before ordering
 
-Six adversarial pre-fabrication reviews (`pcb-reviewer`, against the
+Seven adversarial pre-fabrication reviews (`pcb-reviewer`, against the
 datasheets and the routed board) have run. The first found the ground vias
 missing and the issues fixed above; the later ones, of the placement and
-tracks and of each round of fixes, found the power paths below. The rows
-from the sixth review (S1-S4, N1, N7, N9 at the end) are measured with
-`carrier-measure` and `carrier-review`, before with `--ref origin/main` at
-the commit before this round. Each is fixed in
+tracks and of each round of fixes, found the power paths below. Every "After"
+cell is `carrier-measure` or `carrier-review` output on the board as committed
+now. The sixth and seventh reviews' rows (from S1 on, at the end) take their
+"Before" from the board before the sixth review's fixes (origin/main at
+83905f69), and the seventh's SF rows from the board the seventh review read.
+Each is fixed in
 `board.toml`, `hardware.toml` or `tools/kicad` and measured on the routed board
 with layer-aware scripts (copper path length, vias, narrowest track):
 
@@ -473,13 +463,13 @@ with layer-aware scripts (copper path length, vias, narrowest track):
 |---|---|---|
 | B1: output capacitors not on L1 | L1 to C13: 75.1 mm, 2 vias, 0.45 mm | 4.6 mm, no via, 1 mm |
 | B1: feedback sense | R12 on the amplifier branch | its own 0.25 mm track from C20, 26.9 mm, no load current |
-| B2: pack input | J3 to F1 0.25 mm | 3.5 mm at 2 mm |
-| M1: 5 V through one 0.8/0.4 mm via | LDO 67.6 mm, FB1 45.2 mm, 2 vias each; VM1 and the servos through the same via | LDO 19.0 mm, FB1 31.6 mm, 1 mm, no via; VM1 34.5 mm, 0.6 mm at its narrowest, no via; the servos 67.4 mm, 0.6 mm at their narrowest, through one 1.0/0.5 mm via; the head cable 87.8 mm to D1 (0.6 mm at its narrowest, one 1.0/0.5 mm via), then 8.3 mm at 0.8 mm to J1. DC resistance: see the S4f row |
+| B2: pack input | J3 to F1 0.25 mm | J3:2 to Q1:5 3.48 mm at 1.2 mm, Q1:1 to F1:1 2.30 mm at 1.5 mm (N9) |
+| M1: 5 V through one 0.8/0.4 mm via | LDO 67.6 mm, FB1 45.2 mm, 2 vias each; VM1 and the servos through the same via | LDO (U2:3) 19.02 mm, FB1 31.57 mm, 1 mm, no via; VM1 (U7:24) 42.49 mm, 0.6 mm at its narrowest, no via; the servos (J20:2, J21:2) 63.20 / 59.40 mm, 0.6 mm at their narrowest, one via each; D1 (the head cable) 113.40 mm, 0.48 mm at its narrowest, 3 vias. DC resistance: see the S4f row |
 | M2: U10's GND pin had no via | nearest 4.3 mm, through C11 | its own, 0.92 mm away (`[fanout] own`) |
 | m1: C18 to the amplifier's VDD | 18.4 mm, 2 vias | 2.2 mm |
-| m2: C5 / C6 to their VCC pins | 9.5 mm / 11.7 mm, 2 vias | 4.9 mm / 1.9 mm |
-| m3: no capacitor at VM1 | C16, 11.6 mm away | C21, 1.9 mm |
-| m5, S8: pour to the mouse-bite holes | 0.25 mm | 0.70 mm, every pour |
+| m2: C5 / C6 to their VCC pins | 9.5 mm / 11.7 mm, 2 vias | 4.93 mm / 2.99 mm, no via |
+| m3: no capacitor at VM1 | C16, 11.6 mm away | C21, 1.57 mm |
+| m5, S8: pour to the mouse-bite holes | 0.25 mm | 0.70 mm, every pour, while the board was a mouse-bite panel; now hand-sawn, with no holes |
 | m6: EN guaranteed on | 7.2 V | 6.3 V (R26 36 kΩ) |
 | S1: VBAT into the buck | one 0.6/0.3 mm via (input_power asks 1.0/0.5) | every VBAT via 1.0/0.5 mm |
 | S3: vias inside SMD pads | 7 holes in 6 pads (U5:1, U6:4, U6:25, U7:3, U7:4, U7:10) | none but the exposed pad's |
@@ -487,14 +477,16 @@ with layer-aware scripts (copper path length, vias, narrowest track):
 | S5: 5 V setpoint | 4.98 V typical | 5.07 V typical (R12 56 kΩ); 4.94 V at VFB's minimum |
 | S6: input capacitor nearest VIN | 100 nF | 10 µF (C11 and C10 swapped) |
 | BL-2 (socketed carrier's review): the XIAO's 5V pad, its USB-C VBUS, on +5V with no diode | USB and the buck feed each other | D1 (B5819W) from +5V to a new XIAO_5V net on the ribbon's 5V conductors, as the balancebot carrier's D1 |
-| S7: C15's GND to U7's GND pin | 20.6 mm | U7:18 to C16's GND pad and via on a fixed 0.3 mm track, 2.1 mm |
+| S7: C15's GND to U7's GND pin | 20.6 mm | U7:18 to C16's GND pad and via on a fixed 0.3 mm track, 2.15 mm |
 | S1: silkscreen lines under JLCPCB's 0.15 mm | thinnest 0.100 mm, 83 parts under 0.15 mm (`carrier-review`); Gerber apertures 0.100/0.120/0.127 mm | thinnest 0.150 mm; F.Silkscreen apertures 0.150, 0.160, 0.504 mm (`pcb/silk.py`, rebuilt) |
 | S3: U8's ground to the plane | `cuts GND J3:1`: the via at (48.00, 49.00) alone cuts U8:2, 3, 11, 15, 17 | `cuts: none`; U8:3 takes its own via |
-| S4a: top-left GND piece | 141.7 mm² tracks-only piece at J7:4; U5:12 no via within 2.5 mm | J7:4 on the main plane (`plane`); two tracks-only pieces with no through-hole pad remain (76.0 and 49.4 mm²), and U5:12 still has no via (below) |
+| S4a: top-left GND piece | 141.7 mm² tracks-only piece at J7:4; U5:12 no via within 2.5 mm | J7:4 and J11:3 on the main plane (`plane`); one tracks-only piece with no through-hole pad remains, 23.0 mm² at x 11.9-20.1, y 8.6-17.9, and U5:12 still has no via (below) |
 | S4b: B.Cu under the 5 V trunk | VBAT ran under it on B.Cu, x 24.76, y 55.79-69.05 | kept GND by `[[route_keepouts]]`; VBAT crosses under it once, at y 57.02 |
-| S4d: VBAT, F1:2 to U10:3 (`path`, `resistance`) | 39.98 mm, 2 vias, 0.600 mm narrowest, ~28.2 mΩ | 37.09 mm, 2 vias, 0.600 mm narrowest, ~26.4 mΩ |
-| S4f: DC resistance from L1:2 (`resistance`) | D1 ~50.0 mΩ, J20:2 ~36.3, J21:2 ~34.0, U7:24 (VM1) ~15.9 | D1 ~52.5 mΩ, J20:2 ~34.6, J21:2 ~32.4, U7:24 ~19.8 (now through one via, 40.96 mm) |
-| N1: servo GND piece (J20:3, J21:3) | 85.3 mm² tracks-only | 84.3 mm² tracks-only: not fixed (below) |
+| S4d: VBAT, F1:2 to U10:3 (`path`, `resistance`) | 39.98 mm, 2 vias, 0.600 mm narrowest, ~28.2 mΩ | 37.92 mm, 2 vias, 0.600 mm narrowest, ~24.2 mΩ (SF1) |
+| S4f: DC resistance from L1:2 (`resistance`) | D1 ~50.0 mΩ, J20:2 ~36.3, J21:2 ~34.0, U7:24 (VM1) ~15.9 | D1 ~67.5 mΩ (113.40 mm, 3 vias), J20:2 ~34.1, J21:2 ~32.1, U7:24 ~20.6 (42.49 mm, no via, necked to 0.6 mm) |
+| N1, SF2: servo GND piece (J20:3, J21:3, C1:2) | 85.3 mm² tracks-only, joined through one 0.25 mm F.Cu track; J20:3 ~12.50 mΩ from J3:1 on the board the seventh review read | J21:3 tied to U6's GND pin 1 by a fixed 0.8 mm F.Cu track; J20:3 ~2.64 mΩ, J21:3 ~2.84, C1:2 ~5.84 from J3:1; a 13.5 mm² piece at x 7.3-11.9, y 22.7-35.5 is still tracks-only |
+| SF1: VBAT under L1 | 0.6 mm on B.Cu, (27.38, 69.38) to (37.71, 69.38) | that run 0.8 mm: the router keepout beside VBAT's input via stood 0.18 mm from an 0.8 mm track; 0.6 mm left near the input via (S4d) |
+| N-a: J11:3 (test-header GND) to J3:1 | ~11.06 mΩ on the board the seventh review read (`resistance`) | ~3.48 mΩ, J11:3 on the main plane |
 | N7: copper under head 3's M2 screw heads | H10 0.563 mm to HEAD3_MOTOR_STBY, H9 0.640 mm to HEAD3_UART0_TX (`clearance-to-holes`) | nearest copper to each is HEAD3_GND pour at 0.250 mm; no track within the 4 mm router keepout square round either |
 | N9: reverse-polarity protection | none | Q1 DMP3013SFV between the XT30 and F1, gate to GND through R27 ([Design notes](#design-notes)) |
 
@@ -509,28 +501,28 @@ pad but `[fanout] in_pad`.
 Not changed: Freerouting still necks +5V to 0.6 mm in places; at U7's VM pins
 (13, 14, 24) the 0.8 mm track lands on the pins and ends 0.202 mm from the
 signal pins 15 and 23. VBAT still necks to 0.6 mm on its way to the input
-capacitors (S4d above: 0.600 mm narrowest, ~26.4 mΩ from F1:2 to U10:3, a
-`resistance` estimate, not a measurement), the run on B.Cu at y 69.4 under L1
-included. R13's
+capacitors (S4d above: 0.600 mm narrowest, ~24.2 mΩ from F1:2 to U10:3, a
+`resistance` estimate, not a measurement), on F.Cu beside its input via; the
+run under L1 is 0.8 mm. R13's
 ground goes to its own via on the B.Cu plane, not straight to U10's GND pin.
 The amplifier's exposed-pad via stays open, not filled and capped (a paid
 option on two layers; the MAX98357A dissipates about 0.2 W and its GND pins
 also tie to the pad, so voids under it cost little). The 1 mm east 5 V branch
-runs 1 mm above the main board's bottom edge from x 34 to x 42.5, 0.74 mm from
-the tab at x 32's nearest hole: cut that tab, do not snap it.
+runs 1.00 mm from the y 76 saw line (`carrier-review`), from x 34 to x 42.5:
+saw that line on the waste side.
 
 Still open:
 
-- From the sixth review, not fixed on this route (`carrier-measure plane`):
-  the servos' ground (J20:3, J21:3) sits on an 84.3 mm² piece of pour that
-  only tracks join to the main plane, ~12.5 mΩ from J3:1 (`resistance`), and
-  two top-left pieces with no through-hole pad (76.0 mm² at x 20.4-31.1,
-  y 11.3-23.0; 49.4 mm² at x 18.4-31.1, y 7.6-17.9) likewise. Each is
-  enclosed by tracks on both layers: a 2.5 mm stitching grid (237 vias)
-  joined none of them. Keeping B.Cu clear beside the servo headers, or
-  reserving room for U5:12's via, made Freerouting leave connections
-  unrouted or required fanout vias without room. `carrier-review` lists
-  U5:12, U6:14 and U9:10 with no via within 2.5 mm.
+- Two small pieces of GND pour are still joined to the main plane only by
+  tracks (`carrier-measure plane`): 23.0 mm² at x 11.9-20.1, y 8.6-17.9 and
+  13.5 mm² at x 7.3-11.9, y 22.7-35.5. Reserving room for U5:12's via made
+  Freerouting leave connections unrouted; `carrier-review` lists U5:12 with
+  no via within 2.5 mm.
+- The +5V route to D1 (the head cable) grew from 91.72 mm, 1 via, ~52.5 mΩ
+  to 113.40 mm, 3 vias, 0.48 mm at its narrowest, ~67.5 mΩ, and VM1 (U7:24)
+  from ~19.8 to ~20.6 mΩ, necked to 0.6 mm: the servo-ground tie (SF2) walls
+  F.Cu from x 6.3 to 18.5 at y 28.25, and every signal crossing it takes
+  B.Cu. Four further routes of the same board.toml gave the same paths.
 - F1 (3 A hold) derates to about 2.55 A at 40 °C and 2.28 A at 50 °C
   (BSMD1812 datasheet), under the 2.4-3.1 A input at a 3 A load; the socketed
   carrier's review proposes the BSMD1812-400 (4 A hold).
@@ -542,5 +534,5 @@ Still open:
 - Get a live JLCPCB quote for 2 and 5 assembled boards (upload the zip, the
   BOM and the CPL), check the placement preview part by part against
   [the rotation table](#placement-rotation), and record the quote here.
-- Quote the bare and assembled board in both panel modes (below) and record
-  the four prices under [Panel: mouse bites](#panel-mouse-bites).
+- Quote the bare and assembled board (hand-sawn, one design) and record the
+  prices under [Panel: hand-saw](#panel-hand-saw).
