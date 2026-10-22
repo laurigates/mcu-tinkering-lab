@@ -9,7 +9,7 @@ paths:
 
 Carrier PCBs are generated from `hardware.toml` by `tools/kicad`
 ([ADR-027](../../docs/decisions/ADR-027-kicad-carrier-generation.md)). The
-workflow, the parts registry and 42 traps that read as success are in
+workflow, the parts registry and 46 traps that read as success are in
 the `carrier-pcb` skill (`.claude/skills/carrier-pcb/`). Three matter at edit time:
 
 1. **Never call `board.Remove()` in a pcbnew script.** Every later pcbnew call
