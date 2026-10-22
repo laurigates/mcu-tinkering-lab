@@ -234,6 +234,12 @@
     "yaml_file": "esp32-wireguard-ha.yaml"
   },
   {
+    "system": "esphome",
+    "project": "ceiling-fan-ir",
+    "path": "home/ceiling-fan-ir",
+    "yaml_file": "ceiling-fan-ir.yaml"
+  },
+  {
     "system": "pico",
     "project": "balancebot",
     "path": "robotics/balancebot",

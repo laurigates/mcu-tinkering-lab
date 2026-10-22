@@ -49,6 +49,8 @@ mcu-tinkering-lab/
 │   │   ├── it-troubleshooter/      # IT troubleshooting assistant
 │   │   ├── wifitest/               # WiFi AP test firmware
 │   │   └── wireguard-ha/           # WireGuard + Home Assistant (ESPHome)
+│   ├── home/                       # Home automation
+│   │   └── ceiling-fan-ir/         # IR ceiling-fan controller (ESPHome, ESP8285)
 │   ├── sensors/                    # Sensor firmware
 │   │   └── presence-detector/      # 24 GHz mmWave presence sensor (ESPHome)
 │   ├── robotics/                   # Motion-control robotics (Pico SDK)
