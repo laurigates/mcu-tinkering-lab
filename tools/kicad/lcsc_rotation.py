@@ -94,10 +94,10 @@ def _selected(pads: tuple[str, ...], kicad: Pads, lcsc_pads: Pads) -> tuple[Pads
     """The KiCad and LCSC pads `pads` names, both keyed by KiCad number."""
     pairs = []
     for spec in pads:
-        k, sep, l = spec.partition("=")
-        if sep and not (k and l):
+        kicad_num, sep, lcsc_num = spec.partition("=")
+        if sep and not (kicad_num and lcsc_num):
             raise KicadError(f"pad map {spec!r}: expected KICAD=LCSC")
-        pairs.append((k, l if sep else k))
+        pairs.append((kicad_num, lcsc_num if sep else kicad_num))
     unknown = sorted({k for k, _ in pairs} - set(kicad))
     if unknown:
         raise KicadError(f"pads {unknown} are not pads of the KiCad footprint")
@@ -109,10 +109,10 @@ def _selected(pads: tuple[str, ...], kicad: Pads, lcsc_pads: Pads) -> tuple[Pads
             "mirror; add a pad off their line (KICAD=LCSC maps a pad LCSC "
             "numbers differently)"
         )
-    absent = sorted(l for _, l in pairs if l not in lcsc_pads)
+    absent = sorted(n for _, n in pairs if n not in lcsc_pads)
     if absent:
         raise KicadError(f"LCSC pads {absent} are not on LCSC's footprint")
-    return {k: kicad[k] for k, _ in pairs}, {k: lcsc_pads[l] for k, l in pairs}
+    return {k: kicad[k] for k, _ in pairs}, {k: lcsc_pads[n] for k, n in pairs}
 
 
 def _collinear(points: list[tuple[float, float]], tol_mm: float = 0.01) -> bool:
