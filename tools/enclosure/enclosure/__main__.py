@@ -18,10 +18,12 @@ from pathlib import Path
 from build123d import Align, Box, Mesher, Pos, export_step, export_stl, import_step
 from kicad.paths import REPO_ROOT
 
-from . import board, case
+from . import board, case, thickness
 
 # Density, g/cm³, for a mass estimate only; quotes are priced by the fab.
 DENSITY = {"PLA": 1.24, "resin": 1.15, "PA12": 1.01}
+# Tessellation and sampling shave a little off a nominal wall.
+WALL_TOLERANCE = 0.05
 
 
 def write(part, stem: Path) -> None:
@@ -60,6 +62,10 @@ def generate(project: Path, check: bool = True) -> list[dict]:
         write(base, out / f"{piece.name}-box-base")
         write(lid, out / f"{piece.name}-box-lid")
         export_step(base + lid, str(out / f"{piece.name}-box.step"))
+        walls = {
+            n: thickness.thinnest(s)
+            for n, s in (("tray", tray), ("box-base", base), ("box-lid", lid))
+        }
         for style, solids in (("tray", [tray]), ("box", [base, lid])):
             bb = (
                 solids[0] if len(solids) == 1 else solids[0] + solids[1]
@@ -83,6 +89,14 @@ def generate(project: Path, check: bool = True) -> list[dict]:
                     "tallest": f"{piece.tallest.ref} {piece.tallest.above:.1f} mm ({piece.tallest.height_source})",
                     "clash_mm3": {
                         k: round(v, 3) for k, v in clash.items() if k.startswith(style)
+                    },
+                    "thinnest_wall_mm": {
+                        k: round(v.mm, 2)
+                        for k, v in walls.items()
+                        if k.startswith(style)
+                    },
+                    "thinnest_at": {
+                        k: v.where for k, v in walls.items() if k.startswith(style)
                     },
                     "files": [
                         str((out / f"{piece.name}-{n}.stl").relative_to(REPO_ROOT))
@@ -116,14 +130,23 @@ def main(argv: list[str] | None = None) -> int:
             continue
         for r in rows:
             clash = sum(r["clash_mm3"].values())
-            flag = "OK" if clash < 0.01 else f"CLASH {r['clash_mm3']}"
+            thin = {
+                k: v
+                for k, v in r["thinnest_wall_mm"].items()
+                if v < case.MIN_WALL - WALL_TOLERANCE
+            }
+            flag = "OK"
+            if clash >= 0.01:
+                flag = f"CLASH {r['clash_mm3']}"
+            elif thin:
+                flag = f"THIN {thin} mm at {[r['thinnest_at'][k] for k in thin]}"
             print(
                 f"{r['project']} {r['piece']} {r['style']} x{r['quantity']}: "
                 f"{r['size_mm'][0]} x {r['size_mm'][1]} x {r['size_mm'][2]} mm, "
                 f"{r['volume_cm3']} cm³, standoff {r['standoff_mm']}, "
                 f"headroom {r['headroom_mm']}, tallest {r['tallest']}; {flag}"
             )
-            bad += clash >= 0.01
+            bad += clash >= 0.01 or bool(thin)
     return 1 if bad else 0
 
 

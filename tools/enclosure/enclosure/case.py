@@ -19,9 +19,15 @@ from .board import Part as BoardPart
 A = (Align.MIN, Align.MIN, Align.MIN)
 C = (Align.CENTER, Align.CENTER, Align.MIN)
 
+# Thinnest wall any feature may have. JLC3DP's upload page asks for walls over
+# 1.2 mm, but its quote still flagged "Thin walls detected" on lids whose
+# thinnest wall measured 1.6 mm, so the margin is wider than the page says.
+MIN_WALL = 2.0
+
 # Bolt clearance and boss diameter by PCB hole: an M3 board (3.2 mm hole) and
-# an M2 board (2.2 mm hole). ISO 273 medium clearance; boss = 2.2 x clearance.
-BOLTS = {3.2: ("M3", 3.4, 7.0), 2.2: ("M2", 2.4, 5.0)}
+# an M2 board (2.2 mm hole). ISO 273 medium clearance; each boss leaves
+# MIN_WALL or more round its bore.
+BOLTS = {3.2: ("M3", 3.4, 7.4), 2.2: ("M2", 2.4, 6.4)}
 
 
 @dataclass(frozen=True)
@@ -42,7 +48,13 @@ class Params:
         unknown = set(data) - set(cls.__dataclass_fields__)
         if unknown:
             raise EnclosureError(f"[case]: unknown key(s) {sorted(unknown)}")
-        return cls(**{k: float(v) for k, v in data.items()})
+        params = cls(**{k: float(v) for k, v in data.items()})
+        for name in ("wall", "floor", "lid"):
+            if getattr(params, name) < MIN_WALL:
+                raise EnclosureError(
+                    f"[case] {name} = {getattr(params, name)} is under {MIN_WALL} mm"
+                )
+        return params
 
 
 @dataclass
@@ -125,11 +137,25 @@ def _shell(f: Frame, height: float) -> Part:
     return outer - inner
 
 
+def _untangent(f: Frame, x: float, y: float, r: float, inset: float) -> float:
+    """A boss radius that is not tangent to the faces `inset` in from the outline.
+
+    A cylinder touching a plane along a line meshes into an invalid 3MF
+    (robocar main lid: H2's pillar met the lip's inner face exactly). Within
+    0.05 mm of tangency, grow the boss 0.1 mm so the two solids overlap.
+    """
+    for d in (x - inset, f.length - inset - x, y - inset, f.width - inset - y):
+        if abs(d - r) < 0.05:
+            return r + 0.1
+    return r
+
+
 def _standoffs(f: Frame, body: Part) -> Part:
     for h in f.piece.holes:
         _, _, boss = _bolt(h.drill)
         x, y = f.xy(h.x, h.y)
-        body += Pos(x, y, 0) * Cylinder(boss / 2, f.z_board, align=C)
+        r = _untangent(f, x, y, boss / 2, f.p.wall)
+        body += Pos(x, y, 0) * Cylinder(r, f.z_board, align=C)
     return body
 
 
@@ -207,9 +233,11 @@ def box(f: Frame) -> tuple[Part, Part]:
     ring = Pos(p.wall + t, p.wall + t, wall_top - lip_h) * Box(
         f.length - 2 * (p.wall + t), f.width - 2 * (p.wall + t), lip_h, align=A
     )
-    ring -= Pos(p.wall + t + 1.2, p.wall + t + 1.2, wall_top - lip_h - 1) * Box(
-        f.length - 2 * (p.wall + t + 1.2),
-        f.width - 2 * (p.wall + t + 1.2),
+    ring -= Pos(
+        p.wall + t + MIN_WALL, p.wall + t + MIN_WALL, wall_top - lip_h - 1
+    ) * Box(
+        f.length - 2 * (p.wall + t + MIN_WALL),
+        f.width - 2 * (p.wall + t + MIN_WALL),
         lip_h + 2,
         align=A,
     )
@@ -227,14 +255,33 @@ def box(f: Frame) -> tuple[Part, Part]:
         ]
         z0 = f.z_top + (max(under) + 0.5 if under else 0.0)
         if z0 < wall_top:
-            lid += Pos(x, y, z0) * Cylinder(boss / 2, wall_top - z0, align=C)
+            r = _untangent(f, x, y, boss / 2, p.wall + t + MIN_WALL)
+            r = _untangent(f, x, y, r, p.wall + t)
+            lid += Pos(x, y, z0) * Cylinder(r, wall_top - z0, align=C)
     for ref in f.piece.lid_windows:
         part = next(q for q in f.piece.parts if q.ref == ref)
         x, y, w, h = f.rect(part.courtyard)
         m = p.opening_margin
-        lid -= Pos(x - m, y - m, wall_top - lip_h - 1) * Box(
-            w + 2 * m, h + 2 * m, lip_h + p.lid + 2, align=A
-        )
+        # Clip the window to inside the locating lip: a window that cuts into
+        # the lip leaves a fin thinner than any printer holds (0.15 mm on
+        # head 1, found by the thickness check, not by JLC3DP).
+        inner = p.wall + t + MIN_WALL
+        x0, y0 = max(x - m, inner), max(y - m, inner)
+        x1 = min(x + w + m, f.length - inner)
+        y1 = min(y + h + m, f.width - inner)
+        if x1 > x0 and y1 > y0:
+            cut = Pos(x0, y0, wall_top - lip_h - 1) * Box(
+                x1 - x0, y1 - y0, lip_h + p.lid + 2, align=A
+            )
+            # Notch the window round each bolt pillar, keeping MIN_WALL of lid
+            # about it: a window through a pillar's edge left a 0.15 mm wall.
+            for hole in f.piece.holes:
+                hx, hy = f.xy(hole.x, hole.y)
+                keep = _bolt(hole.drill)[2] / 2 + MIN_WALL
+                cut -= Pos(hx, hy, wall_top - lip_h - 2) * Cylinder(
+                    keep, lip_h + p.lid + 4, align=C
+                )
+            lid -= cut
     lid = _bores(f, lid, wall_top + p.lid)
     return base, lid
 
