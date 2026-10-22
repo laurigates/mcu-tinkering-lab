@@ -96,6 +96,24 @@ class DeriveTests(unittest.TestCase):
         with self.assertRaisesRegex(KicadError, "not the same package"):
             lcsc_rotation.derive(wider, kicad)
 
+    def test_pads_subset_ignores_a_pad_drawn_differently(self):
+        """PowerDI3333-8: KiCad numbers the drain pad and its fingers 5, one
+        pad centred on the drain; LCSC numbers the fingers 5-8, so its pad 5 is
+        a corner finger. Matching the pins alone still finds the turn."""
+        kicad = {"1": (-1.5, -0.975), "2": (-1.5, -0.325), "3": (-1.5, 0.325)}
+        kicad |= {"4": (-1.5, 0.975), "5": (0.455, 0.0)}
+        lcsc = turned(kicad, 270)
+        lcsc["5"] = (lcsc["5"][0] + 1.0, lcsc["5"][1] - 0.6)  # a corner finger
+        with self.assertRaisesRegex(KicadError, "not the same package"):
+            lcsc_rotation.derive(lcsc, kicad)
+        got, err = lcsc_rotation.derive(lcsc, kicad, pads=("1", "2", "3", "4"))
+        self.assertEqual(got, 270)
+        self.assertLess(err, 0.001)
+
+    def test_pads_subset_must_be_kicad_pads(self):
+        with self.assertRaisesRegex(KicadError, r"pads \['9'\]"):
+            lcsc_rotation.derive({"1": (0, 0)}, {"1": (0, 0)}, pads=("1", "9"))
+
     def test_unnumbered_pads_skipped(self):
         rec = record({"1": (-1, 0), "2": (1, 0)})
         rec["result"]["packageDetail"]["dataStr"]["shape"].append(
@@ -120,6 +138,30 @@ class CliTests(unittest.TestCase):
         self.assertIn(f'footprint = "{TSSOP24}"\n', out)
         self.assertIn('lcsc_footprint = "TSSOP-24-BL"\n', out)
         self.assertIn("rotation = 270\n", out)
+
+    def test_entry_with_pads(self):
+        kicad = lcsc_rotation.kicad_pads(TSSOP24)
+        rec = record(turned(kicad, 270))
+        with mock.patch.object(lcsc_rotation, "fetch", return_value=rec):
+            code, out = self.run_main(["C130026", TSSOP24, "--pads", "1,24"])
+        self.assertEqual(code, 0, out)
+        self.assertIn("rotation = 270\n", out)
+        self.assertIn('pads = ["1", "24"]\n', out)
+
+    def test_check_matches_only_an_entrys_pads(self):
+        from kicad import jlc
+
+        table = {"C9": jlc.Rotation("A:B", 270, ("1", "2", "3", "4"))}
+        kicad = {"1": (-1.5, -0.975), "2": (-1.5, -0.325), "3": (-1.5, 0.325)}
+        kicad |= {"4": (-1.5, 0.975), "5": (0.455, 0.0)}
+        lcsc = turned(kicad, 270)
+        lcsc["5"] = (lcsc["5"][0] + 1.0, lcsc["5"][1] - 0.6)
+        with (
+            mock.patch.object(jlc, "load_rotations", return_value=table),
+            mock.patch.object(lcsc_rotation, "fetch", return_value=record(lcsc)),
+            mock.patch.object(lcsc_rotation, "kicad_pads", return_value=kicad),
+        ):
+            self.assertEqual(lcsc_rotation.check(), [])
 
     def test_check_reports_disagreement(self):
         def fake(lcsc):
