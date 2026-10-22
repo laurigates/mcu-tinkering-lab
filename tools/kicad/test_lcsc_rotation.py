@@ -96,19 +96,49 @@ class DeriveTests(unittest.TestCase):
         with self.assertRaisesRegex(KicadError, "not the same package"):
             lcsc_rotation.derive(wider, kicad)
 
-    def test_pads_subset_ignores_a_pad_drawn_differently(self):
+    def test_pads_subset_of_one_pad_fails(self):
+        """One pad matches every turn: derive returned (0, 0.0) whatever the
+        true offset."""
+        kicad = {"1": (-1.5, -0.975), "2": (-1.5, -0.325), "5": (0.455, 0.0)}
+        with self.assertRaisesRegex(KicadError, "at least 2"):
+            lcsc_rotation.derive(turned(kicad, 270), kicad, pads=("1",))
+
+    def test_collinear_pads_fail(self):
+        """Pads on one line cannot tell a turn from a mirror: a footprint
+        mirrored about x, matched on pins 1-4, came back as 180 with no
+        error."""
+        kicad = {"1": (-1.5, -0.975), "2": (-1.5, -0.325), "3": (-1.5, 0.325)}
+        kicad |= {"4": (-1.5, 0.975), "5": (0.455, 0.0)}
+        mirrored = {n: (x, -y) for n, (x, y) in kicad.items()}
+        with self.assertRaisesRegex(KicadError, "collinear"):
+            lcsc_rotation.derive(mirrored, kicad, pads=("1", "2", "3", "4"))
+
+    def test_pad_map_matches_an_off_row_pad(self):
         """PowerDI3333-8: KiCad numbers the drain pad and its fingers 5, one
         pad centred on the drain; LCSC numbers the fingers 5-8, so its pad 5 is
-        a corner finger. Matching the pins alone still finds the turn."""
+        a corner finger and the all-pads match fails. `5=8` matches KiCad's
+        pad 5 against LCSC's pad 8, the drain pad, so the match is not
+        collinear and a mirror fails."""
         kicad = {"1": (-1.5, -0.975), "2": (-1.5, -0.325), "3": (-1.5, 0.325)}
         kicad |= {"4": (-1.5, 0.975), "5": (0.455, 0.0)}
         lcsc = turned(kicad, 270)
+        lcsc["8"] = lcsc["5"]
         lcsc["5"] = (lcsc["5"][0] + 1.0, lcsc["5"][1] - 0.6)  # a corner finger
         with self.assertRaisesRegex(KicadError, "not the same package"):
             lcsc_rotation.derive(lcsc, kicad)
-        got, err = lcsc_rotation.derive(lcsc, kicad, pads=("1", "2", "3", "4"))
+        pads = ("1", "2", "3", "4", "5=8")
+        got, err = lcsc_rotation.derive(lcsc, kicad, pads=pads)
         self.assertEqual(got, 270)
         self.assertLess(err, 0.001)
+        mirrored = {n: (x, -y) for n, (x, y) in lcsc.items()}
+        with self.assertRaisesRegex(KicadError, "not the same package"):
+            lcsc_rotation.derive(mirrored, kicad, pads=pads)
+
+    def test_pad_map_needs_both_numbers(self):
+        with self.assertRaisesRegex(KicadError, "pad map"):
+            lcsc_rotation.derive(
+                {"1": (0, 0)}, {"1": (0, 0), "2": (1, 1)}, pads=("1", "2=")
+            )
 
     def test_pads_subset_must_be_kicad_pads(self):
         with self.assertRaisesRegex(KicadError, r"pads \['9'\]"):
@@ -143,18 +173,19 @@ class CliTests(unittest.TestCase):
         kicad = lcsc_rotation.kicad_pads(TSSOP24)
         rec = record(turned(kicad, 270))
         with mock.patch.object(lcsc_rotation, "fetch", return_value=rec):
-            code, out = self.run_main(["C130026", TSSOP24, "--pads", "1,24"])
+            code, out = self.run_main(["C130026", TSSOP24, "--pads", "1,12,24"])
         self.assertEqual(code, 0, out)
         self.assertIn("rotation = 270\n", out)
-        self.assertIn('pads = ["1", "24"]\n', out)
+        self.assertIn('pads = ["1", "12", "24"]\n', out)
 
     def test_check_matches_only_an_entrys_pads(self):
         from kicad import jlc
 
-        table = {"C9": jlc.Rotation("A:B", 270, ("1", "2", "3", "4"))}
+        table = {"C9": jlc.Rotation("A:B", 270, ("1", "2", "3", "4", "5=8"))}
         kicad = {"1": (-1.5, -0.975), "2": (-1.5, -0.325), "3": (-1.5, 0.325)}
         kicad |= {"4": (-1.5, 0.975), "5": (0.455, 0.0)}
         lcsc = turned(kicad, 270)
+        lcsc["8"] = lcsc["5"]
         lcsc["5"] = (lcsc["5"][0] + 1.0, lcsc["5"][1] - 0.6)
         with (
             mock.patch.object(jlc, "load_rotations", return_value=table),

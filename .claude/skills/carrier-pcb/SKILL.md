@@ -368,8 +368,10 @@ several traps below are version-specific: after a KiCad upgrade, re-run
     `carrier-measure plane` tells them apart; only the route can fix them.
 46. **LCSC can number a package's pads differently from KiCad.** KiCad's
     PowerDI3333-8 draws the drain and its fingers as one pad 5; LCSC numbers
-    the fingers 5-8, and `lcsc_rotation` found no turn. Derive the offset on
-    the pins alone (`--pads 1,2,3,4`); the entry records `pads`.
+    the fingers 5-8 and the drain pad 8, and `lcsc_rotation` found no turn.
+    Derive it on chosen pads with a map, `--pads 1,2,3,4,5=8`; the entry
+    records `pads`. The pins alone would not do: collinear pads cannot tell a
+    turn from a mirror, so `--pads` refuses them.
 
 ## Verify the gate can fail
 

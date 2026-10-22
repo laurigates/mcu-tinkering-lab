@@ -1,6 +1,6 @@
 """Derive a part's JLCPCB rotation offset from LCSC's own footprint.
 
-    PYTHONPATH=tools python3 -m kicad.lcsc_rotation <C123> <Lib:Footprint> [--pads 1,2,3]
+    PYTHONPATH=tools python3 -m kicad.lcsc_rotation <C123> <Lib:Footprint> [--pads 1,2,5=8]
     PYTHONPATH=tools python3 -m kicad.lcsc_rotation --check
 
 JLCPCB places each part as LCSC's (EasyEDA) footprint draws it. This fetches
@@ -14,9 +14,11 @@ differently), and the part needs a look by hand.
 `--pads` matches only the listed KiCad pad numbers, for a package whose two
 footprints number one pad differently: KiCad's PowerDI3333-8 draws the drain
 pad and its fingers as one pad 5, centred on the drain, where LCSC numbers the
-fingers 5-8, so LCSC's pad 5 is a corner finger. The entry records `pads`, and
-`--check` matches the same pads. Choose pads that fix the turn (the pins of
-two sides, not one symmetric pair).
+fingers 5-8 and the drain pad 8, so LCSC's pad 5 is a corner finger. `K=L`
+matches KiCad's pad K against LCSC's pad L (`--pads 1,2,3,4,5=8`). The pads
+must not all lie on one line: one pin row cannot tell a turn from a mirror,
+and one pad matches every turn. The entry records `pads`, and `--check`
+matches the same pads.
 
 The first form prints an entry for docs/reference/jlcpcb-rotations.toml;
 `--check` re-derives every entry there and reports any that disagree. Both
@@ -88,17 +90,59 @@ def _centred(pads: Pads, numbers: list[str]) -> dict[str, tuple[float, float]]:
     return {n: (pads[n][0] - cx, cy - pads[n][1]) for n in numbers}
 
 
+def _selected(pads: tuple[str, ...], kicad: Pads, lcsc_pads: Pads) -> tuple[Pads, Pads]:
+    """The KiCad and LCSC pads `pads` names, both keyed by KiCad number."""
+    pairs = []
+    for spec in pads:
+        k, sep, l = spec.partition("=")
+        if sep and not (k and l):
+            raise KicadError(f"pad map {spec!r}: expected KICAD=LCSC")
+        pairs.append((k, l if sep else k))
+    unknown = sorted({k for k, _ in pairs} - set(kicad))
+    if unknown:
+        raise KicadError(f"pads {unknown} are not pads of the KiCad footprint")
+    if len(pairs) < 2:
+        raise KicadError(f"pads {list(pads)}: match at least 2 pads, not on one line")
+    if _collinear([kicad[k] for k, _ in pairs]):
+        raise KicadError(
+            f"pads {list(pads)} are collinear: they cannot tell a turn from a "
+            "mirror; add a pad off their line (KICAD=LCSC maps a pad LCSC "
+            "numbers differently)"
+        )
+    absent = sorted(l for _, l in pairs if l not in lcsc_pads)
+    if absent:
+        raise KicadError(f"LCSC pads {absent} are not on LCSC's footprint")
+    return {k: kicad[k] for k, _ in pairs}, {k: lcsc_pads[l] for k, l in pairs}
+
+
+def _collinear(points: list[tuple[float, float]], tol_mm: float = 0.01) -> bool:
+    """Whether every point lies within `tol_mm` of the line through the two
+    farthest apart."""
+    a, b = max(
+        ((p, q) for p in points for q in points),
+        key=lambda pq: math.dist(pq[0], pq[1]),
+    )
+    span = math.dist(a, b)
+    if span < tol_mm:
+        return True
+    return all(
+        abs((b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0])) / span
+        <= tol_mm
+        for p in points
+    )
+
+
 def derive(
     lcsc_pads: Pads, kicad: Pads, pads: tuple[str, ...] | None = None
 ) -> tuple[int, float]:
     """(offset, worst pad error mm): LCSC's footprint turned counter-clockwise
     by `offset` lies on KiCad's at rotation 0. `pads`, if given, are the KiCad
-    pad numbers to match; the rest are left out."""
+    pad numbers to match, the rest left out; `K=L` matches KiCad's pad K
+    against LCSC's pad L. They must not all lie on one line: collinear pads
+    cannot tell a turn from a mirror (a footprint mirrored about x matched on
+    one pin row as 180 degrees), and one pad matches every turn."""
     if pads is not None:
-        unknown = sorted(set(pads) - set(kicad))
-        if unknown:
-            raise KicadError(f"pads {unknown} are not pads of the KiCad footprint")
-        kicad = {n: kicad[n] for n in pads}
+        kicad, lcsc_pads = _selected(pads, kicad, lcsc_pads)
     missing = sorted(set(kicad) - set(lcsc_pads))
     if missing:
         raise KicadError(f"KiCad pads {missing} have no LCSC pad of that number")
@@ -171,7 +215,7 @@ def main(argv: list[str] | None = None) -> int:
             args = args[:2]
         if len(args) != 2 or pads == ():
             print(
-                "FAIL: expected <C123> <Lib:Footprint> [--pads 1,2,3] or --check"
+                "FAIL: expected <C123> <Lib:Footprint> [--pads 1,2,5=8] or --check"
                 f"\n{__doc__}"
             )
             return 1
