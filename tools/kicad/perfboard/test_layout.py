@@ -3,7 +3,7 @@
 Placement and wire checks run on the frozen balancebot inputs
 (`kicad.testfixture`, with the frozen perfboard.toml), each mutated in memory
 the way a layout edit could break it. `LiveProjectTests` reads the live
-project: the committed perfboard.svg and perfboard.md must be what
+project: the committed perfboard outputs must be what
 `kicad.perfboard` writes (as `--check`); regenerable without KiCad, so it may
 run in pre-commit.
 

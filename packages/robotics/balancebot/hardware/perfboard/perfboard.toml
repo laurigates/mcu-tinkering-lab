@@ -2,7 +2,7 @@
 # generator: parts and nets from hardware.toml (carrier build), through-hole
 # stand-ins and heights from the parts registry, the rest here.
 #
-#   just balancebot::perfboard          # regenerate perfboard.svg and perfboard.md
+#   just balancebot::perfboard          # regenerate the drawings, wire list and checklist
 #   just balancebot::perfboard-check    # fail if they are stale or the layout breaks
 
 [board]
@@ -79,3 +79,8 @@ nets = ["MOTL_A1", "MOTL_A2", "MOTL_B1", "MOTL_B2", "MOTR_A1", "MOTR_A2", "MOTR_
 title = "Signals"
 subtitle = "XIAO to drivers, IMU and the pack divider"
 nets = ["STEP_L", "DIR_L", "STEP_R", "DIR_R", "IMU_SDA", "IMU_SCL", "IMU_INT", "PACK_SENSE"]
+
+# Rails continuity.md checks pairwise for a short before first power-up. Not
+# BUCK_5V: D1 (a Schottky) joins it to XIAO_5V, and a meter can beep through it.
+[continuity]
+isolated = ["VBAT", "XIAO_5V", "+3V3", "GND"]

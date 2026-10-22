@@ -14,8 +14,15 @@ applies unchanged.
   numbered as in the wire list. Wires are maze-routed along the channels
   between holes, so no wire is drawn over a pad it does not connect to, and no
   two wires in a step share a channel.
+- [`perfboard-print.svg`](perfboard-print.svg): both sides at 1:1, in
+  millimetres, for printing at 100 %. Check the 50 mm bar with a ruler first.
+  The red hole-grid outline is a cut line for a placement sticker, and the
+  crosshairs sit on the four corner holes, so the print lines up with the
+  board. Wire numbers are only in `perfboard.svg`; they do not fit at 2.54 mm.
 - [`perfboard.md`](perfboard.md): the wire list. Tick each line off as you
   solder it.
+- [`continuity.md`](continuity.md): what must beep after each step, and the
+  rail pairs that must not before first power-up.
 
 Holes are named from the **component side**: columns A–R left to right, rows
 1–24 top to bottom, with robot forward toward row 1. The solder-side drawing is
@@ -53,9 +60,10 @@ are not.
    steps and numbers as the drawing, with the gauge for each. Heavy nets
    (the pack input, VBAT, GND, motor coils) need 20 AWG or heavier and are drawn thicker. A
    length-1 wire can be a solder bridge.
-7. **Check before power:** continuity on every GND pin, and no continuity
-   between VBAT, 3V3 and GND. Then plug in the LM2596 only after setting it to
-   5.0–5.3 V on the bench.
+7. **Check before power:** work through `continuity.md`, which lists every
+   net's pads and the rail pairs (VBAT, XIAO_5V, +3V3, GND) that must read
+   open. Then plug in the LM2596 only after setting it to 5.0–5.3 V on the
+   bench.
 
 ## Things a perfboard changes
 
@@ -71,7 +79,7 @@ are not.
 ## Regenerate
 
 ```sh
-just balancebot::perfboard          # rewrite perfboard.svg and perfboard.md
+just balancebot::perfboard          # rewrite the drawings, wire list and checklist
 just balancebot::perfboard-check    # fail if they are stale or the layout breaks
 ```
 
@@ -80,8 +88,9 @@ Both run the shared generator in
 (`python3 -m kicad.perfboard`). It needs no KiCad, and CI runs the check
 (`carrier-check.yml`). What it reads:
 
-- [`perfboard.toml`](perfboard.toml): board size, where each part sits, the four
-  build steps and their nets, and the wire gauges;
+- [`perfboard.toml`](perfboard.toml): board size, where each part sits, the
+  build steps and their nets, the wire gauges, and the rails the checklist
+  pairs;
 - the parts registry's `[perfboard]` tables: each part's through-hole stand-in
   and its value, and whether it is raised on a socket or tall
   (the "Differences from the PCB" table above);
