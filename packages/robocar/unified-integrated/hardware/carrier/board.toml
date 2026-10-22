@@ -165,8 +165,14 @@ R25 = [28.6, 57.6, 0]
 R26 = [28.6, 59.6, 180]
 R12 = [33.0, 57.6, 180]
 R13 = [33.0, 59.6, 0]
-# The pack fuse between the XT30 and VBAT.
+# The pack fuse between Q1 and VBAT.
 F1 = [18.5, 57.2, 0]
+# Reverse-polarity P-FET between the XT30 and F1 (third pre-fab layout review,
+# N9), in the space between U7 and the XT30: drain pad south toward the XT30's
+# + pin, source pads north, in a row that runs east into F1; its gate resistor
+# R27 to the west.
+Q1 = [13.0, 57.5, 270]
+R27 = [9.6, 57.0, 270]
 # Amplifier, buzzer, OLED
 U8 = [48.0, 49.0, 0]
 C17 = [52.5, 49, 90]
@@ -213,7 +219,7 @@ FID3 = [3.5, 66.5, 0]
 [silk]
 hidden_refs = ["H1", "H2", "H3", "H4", "H5", "H6", "H7", "H8", "H9", "H10", "FID1", "FID2", "FID3"]
 ref_sizes = { U1 = 1.0, U3 = 1.0, U4 = 1.0, C1 = 1.0, C2 = 1.0, C3 = 1.0, C4 = 1.0, C5 = 1.0, C8 = 1.0, C9 = 0.8, C10 = 0.8, C11 = 0.8, C12 = 1.0, C13 = 1.0, C14 = 1.0, C15 = 1.0, C16 = 1.0, C19 = 1.0, C18 = 1.0, C21 = 1.0, FB1 = 1.0, L1 = 1.0, R2 = 1.0, R3 = 1.0, R4 = 1.0, R5 = 1.0, R6 = 1.0, R7 = 1.0, R8 = 1.0, R9 = 1.0, R10 = 1.0, R11 = 1.0, R12 = 1.0, R13 = 1.0, R14 = 1.0, R15 = 1.0, R16 = 1.0, R17 = 1.0, R18 = 1.0, R19 = 1.0, R20 = 1.0, R21 = 1.0, R22 = 1.0, R23 = 1.0, R24 = 1.0, U10 = 1.0 }
-ref_positions = { J9 = [57.7, 45.75], J19 = [57.7, 56.75], J16 = [89.5, 61.0], C1 = [9.8, 32.7], C15 = [23.4, 46.5], C16 = [21.6, 54.2], C2 = [24.6, 47.4], C19 = [31.8, 48.6], C4 = [28.9, 29.5], C5 = [23.9, 16.7], FB1 = [41.3, 52.4], C8 = [55.4, 61.6], C3 = [46.0, 56.6], C18 = [51.9, 53.2], C21 = [23.0, 43.4], D1 = [49.7, 10.0], C6 = [38.4, 27.0], U8 = [44.3, 49.6], BZ1 = [44.8, 38.0], J18 = [53.6, 13.0], J20 = [2.5, 20.4], J21 = [6.3, 20.4], J22 = [2.5, 30.8], J23 = [6.3, 30.8], J6 = [8.6, 49.0], J5 = [8.6, 58.0], J7 = [14.75, 8.4], J8 = [28.75, 8.4], C13 = [38.6, 67.8], C14 = [38.6, 70.0], C20 = [38.6, 72.2], L1 = [30.0, 69.9], C11 = [33.0, 61.75], C9 = [35.3, 61.75], C10 = [37.9, 61.75], R13 = [36.6, 59.6], R12 = [36.6, 57.6], C12 = [25.0, 64.1], U10 = [24.9, 66.9], R14 = [24.0, 14.3], R15 = [26.3, 14.3], R16 = [28.6, 14.3], R2 = [10, 25.3], R3 = [12.3, 25.3], R4 = [14.6, 25.3], R5 = [16.9, 25.3], R10 = [19.2, 25.7], R11 = [21.5, 25.7], R6 = [23.8, 25.3], R7 = [26.1, 25.3], R8 = [28.4, 25.3], R9 = [30.7, 25.3], R17 = [16.4, 27.5], R18 = [16.4, 29.6], R19 = [16.4, 31.7], R20 = [16.4, 33.8], R21 = [16.4, 35.9], R22 = [16.4, 38.0], R23 = [16.4, 40.1], R24 = [16.4, 42.2] , R25 = [25.4, 57.6], R26 = [25.4, 59.6], C7 = [42.5, 65.0], U2 = [50.0, 71.6]}
+ref_positions = { J9 = [57.7, 45.75], J19 = [57.7, 56.75], J16 = [89.5, 61.0], C1 = [9.8, 32.7], C15 = [23.4, 46.5], C16 = [21.6, 54.2], C2 = [24.6, 47.4], C19 = [31.8, 48.6], C4 = [28.9, 29.5], C5 = [23.9, 16.7], FB1 = [41.3, 52.4], C8 = [55.4, 61.6], C3 = [46.0, 56.6], C18 = [51.9, 53.2], C21 = [23.0, 43.4], D1 = [49.7, 10.0], C6 = [38.4, 27.0], U8 = [44.3, 49.6], BZ1 = [44.8, 38.0], J18 = [53.6, 13.0], J20 = [2.5, 20.4], J21 = [6.3, 20.4], J22 = [2.5, 30.8], J23 = [6.3, 30.8], J6 = [8.6, 49.0], J5 = [4.0, 62.2], R27 = [9.6, 54.1], Q1 = [13.0, 54.6], J7 = [14.75, 8.4], J8 = [28.75, 8.4], C13 = [38.6, 67.8], C14 = [38.6, 70.0], C20 = [38.6, 72.2], L1 = [30.0, 69.9], C11 = [33.0, 61.75], C9 = [35.3, 61.75], C10 = [37.9, 61.75], R13 = [36.6, 59.6], R12 = [36.6, 57.6], C12 = [25.0, 64.1], U10 = [24.9, 66.9], R14 = [24.0, 14.3], R15 = [26.3, 14.3], R16 = [28.6, 14.3], R2 = [10, 25.3], R3 = [12.3, 25.3], R4 = [14.6, 25.3], R5 = [16.9, 25.3], R10 = [19.2, 25.7], R11 = [21.5, 25.7], R6 = [23.8, 25.3], R7 = [26.1, 25.3], R8 = [28.4, 25.3], R9 = [30.7, 25.3], R17 = [16.4, 27.5], R18 = [16.4, 29.6], R19 = [16.4, 31.7], R20 = [16.4, 33.8], R21 = [16.4, 35.9], R22 = [16.4, 38.0], R23 = [16.4, 40.1], R24 = [16.4, 42.2] , R25 = [25.4, 57.6], R26 = [25.4, 59.6], C7 = [42.5, 65.0], U2 = [50.0, 71.6]}
 cut_lines = [
     [64.5, 99.5, 64.5, 0.5],
     [64.5, 76.0, 0.5, 76.0],
@@ -232,15 +238,49 @@ texts = [
     { text = "HEAD 3", at = [68.4, 96.0], size = 0.8 },
 ]
 
-# The pack input, XT30 to the fuse: 2 mm, because it carries every amp the
-# robot draws (pre-fab layout review, B2: as a 0.25 mm signal track it would
-# heat by about 65 C at 2 A and could fuse before F1 trips).
+# The pack input, XT30 to Q1's drain pad: 1.2 mm, because it carries every amp
+# the robot draws (pre-fab layout review, B2: as a 0.25 mm signal track it
+# would heat by about 65 C at 2 A and could fuse before F1 trips). It runs
+# through the 1.65 mm slot between F1's pad 1 and the XT30's GND pin (a 3.5 mm
+# rounded square), so 1.2 mm is the widest track that keeps 0.2 mm from both.
 [[tracks]]
 name = "pack input"
 net = "PACK_IN"
 layer = "F.Cu"
-width_mm = 2.0
-points = [[17.6, 61.4], [16.3, 58.2]]
+width_mm = 1.2
+points = [[17.2, 61.0], [16.4, 59.75], [14.4, 59.75], [13.3, 59.2]]
+
+# Q1's source pads tied along their row, then 1.5 mm into F1 (third pre-fab
+# layout review, N9). One entry per pad pair: the pad under each first point
+# leaves Freerouting's netlist, and a keepout over a pad centre would leave
+# that pad unroutable (carrier-pcb skill trap 27).
+[[tracks]]
+name = "Q1 source, pin 3 to 2"
+net = "PACK_RP"
+layer = "F.Cu"
+width_mm = 0.4
+points = [[12.675, 56.0], [13.325, 56.0]]
+
+[[tracks]]
+name = "Q1 source, pin 2 to 1"
+net = "PACK_RP"
+layer = "F.Cu"
+width_mm = 0.4
+points = [[13.325, 56.0], [13.975, 56.0]]
+
+[[tracks]]
+name = "Q1 source to F1"
+net = "PACK_RP"
+layer = "F.Cu"
+width_mm = 1.5
+points = [[13.975, 56.0], [16.275, 56.0]]
+
+[[tracks]]
+name = "Q1 gate to R27"
+net = "PFET_GATE"
+layer = "F.Cu"
+width_mm = 0.3
+points = [[12.025, 56.0], [9.6, 56.0]]
 
 # The buck's output node. Each [[tracks]] entry joins the pad under its first
 # point to the pad under its last, and the first leaves Freerouting's netlist
@@ -271,8 +311,9 @@ width_mm = 2.0
 points = [[34.0, 72.2], [32.2, 72.2]]
 
 # The 5V trunk, laid down before routing (build_board.py locks it, so
-# Freerouting keeps it and routes around it): 1.5 mm on F.Cu, over the solid
-# GND of B.Cu, from L1's output pad west under the buck, north past the XT30
+# Freerouting keeps it and routes around it): 1.5 mm on F.Cu, over B.Cu kept
+# GND by [[route_keepouts]] below (VBAT crosses under it once, at y 57.0),
+# from L1's output pad west under the buck, north past the XT30
 # and under the PCA9685, north past C4, then west along the TB6612FNG's VM side
 # to C2's + pad, beside C16 and the VM pins. Both ends stop just inside a pad
 # edge, not on its centre: route_board.py walls the trunk off from Freerouting
@@ -388,6 +429,28 @@ layer = "F.Cu"
 width_mm = 0.25
 points = [[47.75, 47.8], [47.75, 48.5]]
 
+# Room for U8's GND pin 3's own via ([fanout] own, S3), west of the pin,
+# kept free of Freerouting's tracks: [fanout] runs after routing and takes
+# whatever space is left. The square holds the 0.6 mm via plus 0.2 mm
+# clearance and stops short of every pad centre.
+[[route_keepouts]]
+name = "U8:3's via, F.Cu"
+layer = "F.Cu"
+rect = [45.15, 48.75, 46.1, 49.75]
+
+[[route_keepouts]]
+name = "U8:3's via, B.Cu"
+layer = "B.Cu"
+rect = [45.15, 48.75, 46.1, 49.75]
+
+# U8's exposed-pad via goes in after routing ([fanout] in_pad) and the pad
+# leaves Freerouting's netlist, so the router does not know it is there: a
+# B.Cu CH1_SDA track ran 0.075 mm from it. Keep B.Cu under the pad clear.
+[[route_keepouts]]
+name = "under U8's exposed-pad via"
+layer = "B.Cu"
+rect = [47.2, 48.2, 48.8, 49.8]
+
 # Bind Freerouting only (no rule area: the pour still fills there). B.Cu
 # under the feedback divider and FB pin stays clear of other nets, so VBAT's
 # bottom-layer run cannot pass under the high-impedance FB node (TI SLVSD90B
@@ -407,6 +470,44 @@ name = "below VBAT's input via"
 layer = "B.Cu"
 rect = [36.5, 67.4, 39.4, 68.8]
 
+# Keep Freerouting's tracks out from under the M2 ISO7380 heads (about 3.5 mm
+# across) at head 3's holes: HEAD3_MOTOR_STBY ran 0.563 mm from H10's hole and
+# HEAD3_UART0_TX 0.640 mm from H9's (third pre-fab layout review, N7). A
+# 2 mm radius square, router-only: HEAD3_GND's pour still fills there.
+[[route_keepouts]]
+name = "under H9's screw head, F.Cu"
+layer = "F.Cu"
+rect = [66.5, 71.55, 70.5, 75.55]
+
+[[route_keepouts]]
+name = "under H9's screw head, B.Cu"
+layer = "B.Cu"
+rect = [66.5, 71.55, 70.5, 75.55]
+
+[[route_keepouts]]
+name = "under H10's screw head, F.Cu"
+layer = "F.Cu"
+rect = [89.0, 71.55, 93.0, 75.55]
+
+[[route_keepouts]]
+name = "under H10's screw head, B.Cu"
+layer = "B.Cu"
+rect = [89.0, 71.55, 93.0, 75.55]
+
+# B.Cu under the 5V trunk's north-south run stays GND, so the trunk's return
+# current has the plane under it (third pre-fab layout review, S4: a B.Cu VBAT
+# track ran under it at x 24.76 from y 55.8 to 69.1). The gap at y 56.4-58.4
+# lets VBAT cross under it from F1's output pad, which sits at y 57.2.
+[[route_keepouts]]
+name = "under the 5V trunk, north of VBAT's crossing"
+layer = "B.Cu"
+rect = [23.6, 53.0, 25.6, 56.4]
+
+[[route_keepouts]]
+name = "under the 5V trunk, south of VBAT's crossing"
+layer = "B.Cu"
+rect = [23.6, 58.4, 25.6, 73.0]
+
 # Freerouting width classes. One width per net, so each class is the widest
 # track every pin on its nets accepts: the TPS563208's SOT-23-6 pads (0.6 mm at
 # 0.95 mm) take 0.8 mm, the TB6612FNG's SSOP-24 pads (0.4 mm at 0.65 mm) 0.45 mm,
@@ -415,7 +516,7 @@ rect = [36.5, 67.4, 39.4, 68.8]
 # both layers, so its routed tracks only need to reach every pad.
 [[net_classes]]
 name = "input_power"
-nets = ["PACK_IN", "VBAT", "BUCK_SW"]
+nets = ["PACK_IN", "PACK_RP", "VBAT", "BUCK_SW"]
 track_um = 800
 clearance_um = 200
 via_um = [1000, 500]
@@ -478,6 +579,11 @@ clearance_mm = 0.3
 min_thickness_mm = 0.25
 thermal_gap_mm = 0.3
 spoke_mm = 0.35
+# A via at each 5 mm grid point where every pour layer's fill holds one, for
+# pieces of pour that tracks alone joined to the plane: the 141.7 mm2 piece at
+# J7:4 and the 85.3 mm2 servo-ground piece at J20:3/J21:3 (third pre-fab
+# layout review, S4 and N1).
+stitch = { pitch_mm = 5.0, via_um = [600, 300] }
 
 # A via beside every SMD pad of a poured net, added after routing wherever
 # there is room: Freerouting adds a via only where a track changes layer, so
@@ -495,13 +601,20 @@ track_um = 400
 reach_mm = 2.5
 in_pad = ["U8:17"]
 # U10's GND pin reaches C11's via through its fixed track, which would
-# satisfy it; it takes its own beside the pin as well (TI rule 1).
-own = ["U10:1"]
+# satisfy it; it takes its own beside the pin as well (TI rule 1). U8's GND
+# pin 3, tied to the exposed pad, likewise: with only the exposed pad's via,
+# that one 0.6/0.3 mm via was the sole plane connection of U8's pins 2, 3, 11,
+# 15 and 17 (third pre-fab layout review, S3: `carrier-measure cuts GND J3:1`).
+# Pin 3's via goes out west-north-west, past pin 2 (GND too) and clear of pin
+# 4. A tie from pin 11 east to C17's GND pad was tried first: it boxed in
+# SPK_VO- at pin 10 on every route.
+own = ["U10:1", "U8:3"]
 required = [
     "U10:1", "C9:2", "C10:2", "C11:2", "C13:2", "C14:2", "C20:2", "C19:2", "R13:2",
     "U7:3", "U7:4", "U7:9", "U7:10", "C15:2", "C16:2", "C21:2", "C2:2", "C1:2",
     "C3:2", "C17:2", "C18:2",
     "U2:1", "C7:2", "C8:2",
+    "U8:3",
 ]
 
 # Mouse-bite panel (#809, tools/kicad/panel.py): each cut line becomes 2 mm

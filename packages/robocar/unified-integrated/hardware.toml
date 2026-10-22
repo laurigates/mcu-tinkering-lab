@@ -101,8 +101,8 @@ ref = "U9"
 # them in parallel with the ceramics near 18 kHz: bench-check a 0.2-2 A load
 # step), and the input side carries the electrolytic bulk (C19).
 #
-# The buck needs VIN >= VOUT / 0.75 (SLVSD90B 7.2.2.4, the 75 % maximum duty
-# cycle): 6.7 V, 3.3 V per cell. Below that 5V sags with the pack. EN goes
+# The buck needs VIN >= VOUT / 0.75 (SLVSD90B §7.3, the 75 % maximum
+# recommended duty cycle): 6.7 V, 3.3 V per cell. Below that 5V sags with the pack. EN goes
 # through a divider (R25/R26) so the converter stops drawing from a flat
 # pack. EN has its own resistance to GND (REN 600-2400 kΩ, 1500 typical,
 # SLVSD90B 5.5) in parallel with R26, and rises at 1.38-1.47 V typical (Figure
@@ -158,6 +158,56 @@ part = "polyfuse-1812"
 ref = "F1"
 value = "3A hold 16V"
 lcsc = "C883162"
+
+# Reverse-polarity protection at the pack input (third pre-fab layout review,
+# N9), as on the balancebot carrier: XT30 + -> Q1 -> F1 -> VBAT. Q1 is a
+# P-MOSFET high-side switch, drain to the XT30 (PACK_IN), source to F1
+# (PACK_RP), gate to GND through R27. Plugged in the right way its body diode
+# conducts first, the gate sits the pack's voltage below the source and the
+# channel turns on; reversed, the gate is above the source and the body diode
+# is reverse-biased, so nothing on the board sees the reversed pack. Q1 sits
+# before F1 here, where balancebot's sits after it: the two are in series and
+# carry the same current either way, and the order keeps PACK_IN, PACK_RP and
+# VBAT running one way across the board.
+#
+# Sized for this board, not balancebot's: about 2.5-3 A on VBAT near the end
+# of discharge, and up to about 5.5 A while the buck sits in its current
+# limit. DMP3013SFV (C264098), Diodes DS40141 Rev. 5-2: VDSS -30 V, VGSS
+# +-25 V, RDS(on) max 9.5 mohm at VGS -10 V and 17 mohm at -4.5 V (11 typ),
+# VGS(th) -1.0 to -3.0 V, ID -12 A at TA 25 C on 1 in2 of 2 oz copper (note 6,
+# RthJA 65 C/W), RthJA 134 C/W on the minimum pad layout (note 5). At 3 A it
+# dissipates at most 0.15 W (17 mohm), about 20 C over ambient at the
+# minimum-pad 134 C/W; at 5.5 A, 0.51 W, about 69 C: a fault the buck's
+# hiccup ends, not a running point. The SOT-223 ZXMP4A16G balancebot uses
+# would dissipate 0.9 W at 3 A (100 mohm at -4.5 V).
+#
+# |VGS| follows the pack: 8.4 V charged, 6.7 V where the buck stops
+# regulating, about 4.0-4.6 V where EN turns it off (below). RDS(on) is
+# specified down to -4.5 V; between 4.5 V and the cutoff it is only bounded by
+# VGS(th) max -3.0 V, so the last few hundred millivolts of a flat pack run on
+# an unspecified, higher resistance (not measured). No gate zener, unlike
+# balancebot's: a 2S pack's undamped hot-plug ring reaches at most twice
+# 8.4 V, 16.8 V, under the 25 V VGSS (balancebot's 3S ring reaches 25.2 V
+# against a 20 V part). The gate is ESD-protected (DS40141 page 1).
+#
+# Power-stage checklist (.claude/rules/power-stage-checklist.md) for the input
+# stage: 3 (input protection) is F1 and Q1; 11 (input path) is the fixed
+# tracks in board.toml, PACK_IN 1.2 mm over 3.48 mm and PACK_RP 1.5 mm over
+# 2.30 mm, no via (`carrier-measure path`; about 1.5 and 0.5 mohm by
+# `carrier-measure resistance`, estimates). The rest belong to the buck above.
+[parts.rp_fet]
+name = "DMP3013SFV reverse-polarity P-MOSFET"
+kind = "mosfet"
+part = "dmp3013sfv"
+ref = "Q1"
+
+[parts.rp_gate]
+name = "10 kΩ gate resistor to GND"
+kind = "resistor"
+part = "r0805"
+ref = "R27"
+value = "10k"
+lcsc = "C17414"
 
 [parts.buck_cin1]
 name = "10 µF buck input"
@@ -1055,7 +1105,17 @@ line = "SCL"
 [[rails]]
 name = "PACK_IN"
 from = "pack.+"
+to = ["rp_fet.D"]
+
+[[rails]]
+name = "PACK_RP"
+from = "rp_fet.S"
 to = ["fuse_in.1"]
+
+[[rails]]
+name = "PFET_GATE"
+from = "rp_fet.G"
+to = ["rp_gate.A"]
 
 [[rails]]
 name = "VBAT"
@@ -1226,6 +1286,7 @@ to = [
     "buck_cout2.B",
     "buck_cout3.B",
     "buck_en_bot.B",
+    "rp_gate.B",
     "buck_fb_bot.B",
     "motor_driver.GND",
     "motor_driver.PGND1",
