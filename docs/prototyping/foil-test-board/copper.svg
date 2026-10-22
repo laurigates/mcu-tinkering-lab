@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="110mm" height="80mm" viewBox="0 0 110 80" font-family="Helvetica, Arial, sans-serif">
+<title>Copper-foil test board: copper cut</title>
+<g transform="translate(10 10)">
+<path class="cut" data-name="board outline" d="M0 0L70 0L70 60L0 60Z" fill="none" stroke="#e00000" stroke-width="0.1"/>
+<path class="cut" data-name="width 0.6" d="M4.5 3.5L7.5 3.5L7.5 4.7L28.5 4.7L28.5 3.5L31.5 3.5L31.5 6.5L28.5 6.5L28.5 5.3L7.5 5.3L7.5 6.5L4.5 6.5Z" fill="none" stroke="#e00000" stroke-width="0.1"/>
+<path class="cut" data-name="width 0.8" d="M4.5 8.5L7.5 8.5L7.5 9.6L28.5 9.6L28.5 8.5L31.5 8.5L31.5 11.5L28.5 11.5L28.5 10.4L7.5 10.4L7.5 11.5L4.5 11.5Z" fill="none" stroke="#e00000" stroke-width="0.1"/>
+<path class="cut" data-name="width 1" d="M4.5 13.5L7.5 13.5L7.5 14.5L28.5 14.5L28.5 13.5L31.5 13.5L31.5 16.5L28.5 16.5L28.5 15.5L7.5 15.5L7.5 16.5L4.5 16.5Z" fill="none" stroke="#e00000" stroke-width="0.1"/>
+<path class="cut" data-name="width 1.27" d="M4.5 18.5L7.5 18.5L7.5 19.365L28.5 19.365L28.5 18.5L31.5 18.5L31.5 21.5L28.5 21.5L28.5 20.635L7.5 20.635L7.5 21.5L4.5 21.5Z" fill="none" stroke="#e00000" stroke-width="0.1"/>
+<path class="cut" data-name="width 1.5" d="M4.5 23.5L7.5 23.5L7.5 24.25L28.5 24.25L28.5 23.5L31.5 23.5L31.5 26.5L28.5 26.5L28.5 25.75L7.5 25.75L7.5 26.5L4.5 26.5Z" fill="none" stroke="#e00000" stroke-width="0.1"/>
+<path class="cut" data-name="width 2" d="M4.5 28.5L7.5 28.5L7.5 29L28.5 29L28.5 28.5L31.5 28.5L31.5 31.5L28.5 31.5L28.5 31L7.5 31L7.5 31.5L4.5 31.5Z" fill="none" stroke="#e00000" stroke-width="0.1"/>
+<path class="cut" data-name="gap 0.4 upper" d="M40 4L64 4L64 5L40 5Z" fill="none" stroke="#e00000" stroke-width="0.1"/>
+<path class="cut" data-name="gap 0.4 lower" d="M40 5.4L64 5.4L64 6.4L40 6.4Z" fill="none" stroke="#e00000" stroke-width="0.1"/>
+<path class="cut" data-name="gap 0.6 upper" d="M40 10L64 10L64 11L40 11Z" fill="none" stroke="#e00000" stroke-width="0.1"/>
+<path class="cut" data-name="gap 0.6 lower" d="M40 11.6L64 11.6L64 12.6L40 12.6Z" fill="none" stroke="#e00000" stroke-width="0.1"/>
+<path class="cut" data-name="gap 0.8 upper" d="M40 16L64 16L64 17L40 17Z" fill="none" stroke="#e00000" stroke-width="0.1"/>
+<path class="cut" data-name="gap 0.8 lower" d="M40 17.8L64 17.8L64 18.8L40 18.8Z" fill="none" stroke="#e00000" stroke-width="0.1"/>
+<path class="cut" data-name="gap 1 upper" d="M40 22L64 22L64 23L40 23Z" fill="none" stroke="#e00000" stroke-width="0.1"/>
+<path class="cut" data-name="gap 1 lower" d="M40 24L64 24L64 25L40 25Z" fill="none" stroke="#e00000" stroke-width="0.1"/>
+<path class="cut" data-name="gap 1.27 upper" d="M40 28L64 28L64 29L40 29Z" fill="none" stroke="#e00000" stroke-width="0.1"/>
+<path class="cut" data-name="gap 1.27 lower" d="M40 30.27L64 30.27L64 31.27L40 31.27Z" fill="none" stroke="#e00000" stroke-width="0.1"/>
+<path class="cut" data-name="corner 90" d="M4 37.4L11.6 37.4L11.6 45L12.4 45L12.4 36.6L4 36.6Z" fill="none" stroke="#e00000" stroke-width="0.1"/>
+<path class="cut" data-name="corner 45" d="M14 37.4L19.834 37.4L21.6 39.166L21.6 45L22.4 45L22.4 38.834L20.166 36.6L14 36.6Z" fill="none" stroke="#e00000" stroke-width="0.1"/>
+<path class="cut" data-name="corner fillet" d="M24 36.6H30A2.4 2.4 0 0 1 32.4 39V45H31.6V39A1.6 1.6 0 0 0 30 37.4H24Z" fill="none" stroke="#e00000" stroke-width="0.1"/>
+<path class="cut" data-name="socket pin 1" d="M40.5 38.4L41.5 38.4L41.5 40.3L40.5 40.3Z" fill="none" stroke="#e00000" stroke-width="0.1"/>
+<path class="cut" data-name="socket pin 2" d="M43.04 41.7L44.04 41.7L44.04 43.6L43.04 43.6Z" fill="none" stroke="#e00000" stroke-width="0.1"/>
+<path class="cut" data-name="socket pin 3" d="M45.58 38.4L46.58 38.4L46.58 40.3L45.58 40.3Z" fill="none" stroke="#e00000" stroke-width="0.1"/>
+<path class="cut" data-name="socket pin 4" d="M48.12 41.7L49.12 41.7L49.12 43.6L48.12 43.6Z" fill="none" stroke="#e00000" stroke-width="0.1"/>
+<path class="cut" data-name="socket pin 5" d="M50.66 38.4L51.66 38.4L51.66 40.3L50.66 40.3Z" fill="none" stroke="#e00000" stroke-width="0.1"/>
+<path class="cut" data-name="socket pin 6" d="M53.2 41.7L54.2 41.7L54.2 43.6L53.2 43.6Z" fill="none" stroke="#e00000" stroke-width="0.1"/>
+<path class="cut" data-name="socket pin 7" d="M55.74 38.4L56.74 38.4L56.74 40.3L55.74 40.3Z" fill="none" stroke="#e00000" stroke-width="0.1"/>
+<path class="cut" data-name="socket pin 8" d="M58.28 41.7L59.28 41.7L59.28 43.6L58.28 43.6Z" fill="none" stroke="#e00000" stroke-width="0.1"/>
+<path class="cut" data-name="power 3 mm" d="M3.5 50.5L8.5 50.5L8.5 51.5L35.5 51.5L35.5 50.5L40.5 50.5L40.5 55.5L35.5 55.5L35.5 54.5L8.5 54.5L8.5 55.5L3.5 55.5Z" fill="none" stroke="#e00000" stroke-width="0.1"/>
+<path class="cut" data-name="crossover through" d="M44.75 51.25L47.25 51.25L47.25 52L64.75 52L64.75 51.25L67.25 51.25L67.25 53.75L64.75 53.75L64.75 53L47.25 53L47.25 53.75L44.75 53.75Z" fill="none" stroke="#e00000" stroke-width="0.1"/>
+<path class="cut" data-name="crossover upper" d="M55 45.5L57 45.5L57 47.5L56.5 47.5L56.5 49L57 49L57 51L55 51L55 49L55.5 49L55.5 47.5L55 47.5Z" fill="none" stroke="#e00000" stroke-width="0.1"/>
+<path class="cut" data-name="crossover lower" d="M55 54L57 54L57 56L56.5 56L56.5 57.5L57 57.5L57 59.5L55 59.5L55 57.5L55.5 57.5L55.5 56L55 56Z" fill="none" stroke="#e00000" stroke-width="0.1"/>
+<path class="cut" data-name="spare bridge 1" d="M78 4L79 4L79 11L78 11Z" fill="none" stroke="#e00000" stroke-width="0.1"/>
+<path class="cut" data-name="spare bridge 2" d="M82 4L83 4L83 11L82 11Z" fill="none" stroke="#e00000" stroke-width="0.1"/>
+<path class="cut" data-name="spare bridge 3" d="M86 4L87 4L87 11L86 11Z" fill="none" stroke="#e00000" stroke-width="0.1"/>
+</g>
+</svg>

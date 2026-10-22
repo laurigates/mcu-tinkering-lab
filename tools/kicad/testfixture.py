@@ -9,7 +9,7 @@ RP2350 board page and the parts registry, plus the perfboard.toml the
 perfboard tests lay out. They do not read the live project, so a legitimate balancebot
 edit (a pin moved in pin_config.h, a part added) does not fail them. A few
 tests do read it, as `--check` does: the committed schematic and the committed
-perfboard.svg and perfboard.md must be what the generators write. So after
+perfboard outputs must be what the generators write. So after
 such an edit the unit suite, and the kicad-carrier hook, pass once both
 `just balancebot::carrier-schematic` and `just balancebot::perfboard` have run.
 The check stamp (`kicad.stamp`: KiCad's own export of that schematic is the

@@ -1,0 +1,8 @@
+# ESPHome secrets — never commit (contains WiFi creds, API key, OTA password)
+secrets.yaml
+
+# ESPHome build artifacts
+.esphome/
+*.bin
+*.elf
+*.map

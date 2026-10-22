@@ -97,7 +97,8 @@ several traps below are version-specific: after a KiCad upgrade, re-run
 6. `just <p>::carrier-fab` (runs `carrier-check` first): Gerbers, drill, BOM
    and CPL. `just kicad::check` runs what CI runs. The CPL adds each LCSC
    part's checked rotation offset (trap 32); a new LCSC number needs an entry
-   in `docs/reference/jlcpcb-rotations.toml` first.
+   in `docs/reference/jlcpcb-rotations.toml` first. Quoting and ordering the
+   result: the `jlcpcb-order` skill.
 
 ## Adding a registry entry
 
