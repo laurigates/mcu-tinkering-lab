@@ -144,9 +144,7 @@ def check() -> list[str]:
     for lcsc, rot in sorted(jlc.load_rotations().items()):
         try:
             record = fetch(lcsc)
-            turn, _ = derive(
-                easyeda_pads(record), kicad_pads(rot.footprint), rot.pads
-            )
+            turn, _ = derive(easyeda_pads(record), kicad_pads(rot.footprint), rot.pads)
         except KicadError as e:
             problems.append(f"{lcsc}: {e}")
             continue
