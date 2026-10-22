@@ -1,0 +1,21 @@
+[project]
+name = "enclosure"
+version = "0.1.0"
+description = "3D-printable cases for the KiCad carriers, generated with build123d from board.toml"
+requires-python = "==3.14.8"
+dependencies = [
+    "build123d==0.13.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest==9.1.1",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# lib3mf (build123d's 3MF writer) trips Python 3.14's ctypes _pack_ warning.
+filterwarnings = ["ignore:Due to '_pack_':DeprecationWarning"]

@@ -1,0 +1,20 @@
+# 3D-printable cases for the KiCad carriers (build123d). See the enclosure-cad
+# skill. Run from the repo root as `just enclosure::<recipe>`.
+#
+# Needs uv; `gen` and the board tests also need KiCad's kicad-cli (STEP export).
+
+_root := source_directory() / "../.."
+_run := "cd " + source_directory() + " && PYTHONPATH=" + _root + "/tools:" + source_directory() + " uv run --quiet"
+
+# Unit and board tests (pytest)
+test:
+    {{_run}} pytest -q
+
+# Generate tray and box for a project, e.g. packages/robotics/balancebot
+gen +projects:
+    {{_run}} python -m enclosure {{ prepend(_root + "/", projects) }}
+
+# Isometric SVG + PNG of every generated case STEP for a project
+render project:
+    {{_run}} python -m enclosure.render {{_root}}/{{project}}/hardware/enclosure/output/*-tray.step {{_root}}/{{project}}/hardware/enclosure/output/*-box.step
+    for s in {{_root}}/{{project}}/hardware/enclosure/output/*.svg; do rsvg-convert -w 900 -b white "$s" -o "${s%.svg}.png"; done
