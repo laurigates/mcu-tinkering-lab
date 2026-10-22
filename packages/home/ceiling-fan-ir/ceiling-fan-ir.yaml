@@ -1,0 +1,94 @@
+# Ceiling fan IR controller — ESP_IR_TR (ESP-01M / ESP8285)
+# Board: docs/reference/boards/esp-ir-tr.md
+#
+# Stage 1: verify the codes. The receiver logs every NEC frame from the
+# fan's remote; one button per known code sends it. Fan and light entities
+# follow once the logged codes match the table in README.md.
+#
+# Kept lean for 1 MB flash: no web_server, no captive_portal, so OTA has room
+# for two images.
+
+esphome:
+  name: ceiling-fan-ir
+  friendly_name: "Ceiling Fan IR"
+
+esp8266:
+  board: esp8285
+
+logger:
+
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+# VS838 receiver output idles high, hence inverted.
+remote_receiver:
+  pin:
+    number: GPIO14
+    inverted: true
+  dump: nec
+
+remote_transmitter:
+  pin: GPIO4
+  carrier_duty_percent: 50%
+
+# Codes from the 2018 IRremoteESP8266 sketch (MSB-first, sendNEC(0x829A....)),
+# bit-reversed per byte into ESPHome's standard NEC order. Every command
+# passes the NEC inverse-byte check.
+button:
+  - platform: template
+    name: "Power On"
+    on_press:
+      - remote_transmitter.transmit_nec: {address: 0x5941, command: 0xFA05}
+  - platform: template
+    name: "Power Off"
+    on_press:
+      - remote_transmitter.transmit_nec: {address: 0x5941, command: 0xF50A}
+  - platform: template
+    name: "Speed 1"
+    on_press:
+      - remote_transmitter.transmit_nec: {address: 0x5941, command: 0xAE51}
+  - platform: template
+    name: "Speed 2"
+    on_press:
+      - remote_transmitter.transmit_nec: {address: 0x5941, command: 0xBB44}
+  - platform: template
+    name: "Speed 3"
+    on_press:
+      - remote_transmitter.transmit_nec: {address: 0x5941, command: 0xAF50}
+  - platform: template
+    name: "Speed 4"
+    on_press:
+      - remote_transmitter.transmit_nec: {address: 0x5941, command: 0xB34C}
+  - platform: template
+    name: "Speed 5"
+    on_press:
+      - remote_transmitter.transmit_nec: {address: 0x5941, command: 0xBF40}
+  - platform: template
+    name: "Light Power"
+    on_press:
+      - remote_transmitter.transmit_nec: {address: 0x5941, command: 0xBA45}
+  - platform: template
+    name: "Light Dim Down"
+    on_press:
+      - remote_transmitter.transmit_nec: {address: 0x5941, command: 0xFE01}
+  - platform: template
+    name: "Light Dim Up"
+    on_press:
+      - remote_transmitter.transmit_nec: {address: 0x5941, command: 0xF20D}
+  - platform: template
+    name: "Reverse"
+    on_press:
+      - remote_transmitter.transmit_nec: {address: 0x5941, command: 0xB24D}
+  - platform: template
+    name: "Timer"
+    on_press:
+      - remote_transmitter.transmit_nec: {address: 0x5941, command: 0xBE41}

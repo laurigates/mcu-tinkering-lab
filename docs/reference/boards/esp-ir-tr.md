@@ -122,8 +122,9 @@ level) so OTA has room for two images. The flash variant decides that limit.
 ## In This Repository
 
 Planned as the IR controller for the ceiling fan (Pepeo Bayu 122 cm
-DC, IR remote), replacing a 2018 D1 mini + IRremoteESP8266 sketch. Not yet a
-package; no `hardware.toml` names this page.
+DC, IR remote) in [`packages/home/ceiling-fan-ir`](../../../packages/home/ceiling-fan-ir/),
+replacing a 2018 D1 mini + IRremoteESP8266 sketch. It is an ESPHome project,
+so no `hardware.toml` names this page.
 
 ## Source
 
