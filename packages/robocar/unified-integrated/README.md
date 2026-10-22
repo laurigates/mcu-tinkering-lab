@@ -221,8 +221,12 @@ line (head 2 above, head 3 below) the nearest copper is HEAD3_I2C_SDA, 0.79 mm
 from the line; on every other line it is 1.00 mm or more (`carrier-review`).
 A saw kerf of about 1 mm centred on the y 70.5 line would leave about 0.3 mm of
 board over that track. The y 76 line under the main board passes 0.06 mm from
-J3's courtyard (the XT30 body), so saw that one on the waste side too. Cutting
-FR-4 makes glass-fibre dust; cut wet or with a mask.
+J3's courtyard (the XT30 body), so saw that one on the waste side too. The
+x 64.5 line between the main board and the heads has no waste strip: the two
+share it, so saw on the line and the kerf comes out of both (about 1 mm each,
+[Footprint comparison](#footprint-comparison)). Check a cut head against the
+cradle's 30 x 30 mm square before relying on the fit. Cutting FR-4 makes
+glass-fibre dust; cut wet or with a mask.
 
 Head 3's band keepout ends at y 71.0, not the 71.5 a saw kerf would want: at
 71.5, with the keepouts under head 3's screw heads (H9, H10), HEAD3_PIEZO (J17:8
@@ -481,7 +485,7 @@ with layer-aware scripts (copper path length, vias, narrowest track):
 | S1: silkscreen lines under JLCPCB's 0.15 mm | thinnest 0.100 mm, 83 parts under 0.15 mm (`carrier-review`); Gerber apertures 0.100/0.120/0.127 mm | thinnest 0.150 mm; F.Silkscreen apertures 0.150, 0.160, 0.504 mm (`pcb/silk.py`, rebuilt) |
 | S3: U8's ground to the plane | `cuts GND J3:1`: the via at (48.00, 49.00) alone cuts U8:2, 3, 11, 15, 17 | `cuts: none`; U8:3 takes its own via |
 | S4a: top-left GND piece | 141.7 mm² tracks-only piece at J7:4; U5:12 no via within 2.5 mm | J7:4 and J11:3 on the main plane (`plane`); one tracks-only piece with no through-hole pad remains, 23.0 mm² at x 11.9-20.1, y 8.6-17.9, and U5:12 still has no via (below) |
-| S4b: B.Cu under the 5 V trunk | VBAT ran under it on B.Cu, x 24.76, y 55.79-69.05 | kept GND by `[[route_keepouts]]`; VBAT crosses under it once, at y 57.02 |
+| S4b: B.Cu under the 5 V trunk | VBAT ran under it on B.Cu, x 24.76, y 55.79-69.05 | kept GND by `[[route_keepouts]]`; VBAT crosses under it once, at y 57.40, and a second VBAT B.Cu run, (24.36, 51.38) to (21.91, 53.83), passes under the +5V branch just past the trunk's end |
 | S4d: VBAT, F1:2 to U10:3 (`path`, `resistance`) | 39.98 mm, 2 vias, 0.600 mm narrowest, ~28.2 mΩ | 37.92 mm, 2 vias, 0.600 mm narrowest, ~24.2 mΩ (SF1) |
 | S4f: DC resistance from L1:2 (`resistance`) | D1 ~50.0 mΩ, J20:2 ~36.3, J21:2 ~34.0, U7:24 (VM1) ~15.9 | D1 ~67.5 mΩ (113.40 mm, 3 vias), J20:2 ~34.1, J21:2 ~32.1, U7:24 ~20.6 (42.49 mm, no via, necked to 0.6 mm) |
 | N1, SF2: servo GND piece (J20:3, J21:3, C1:2) | 85.3 mm² tracks-only, joined through one 0.25 mm F.Cu track; J20:3 ~12.50 mΩ from J3:1 on the board the seventh review read | J21:3 tied to U6's GND pin 1 by a fixed 0.8 mm F.Cu track; J20:3 ~2.64 mΩ, J21:3 ~2.84, C1:2 ~5.84 from J3:1; a 13.5 mm² piece at x 7.3-11.9, y 22.7-35.5 is still tracks-only |
@@ -520,9 +524,17 @@ Still open:
   no via within 2.5 mm.
 - The +5V route to D1 (the head cable) grew from 91.72 mm, 1 via, ~52.5 mΩ
   to 113.40 mm, 3 vias, 0.48 mm at its narrowest, ~67.5 mΩ, and VM1 (U7:24)
-  from ~19.8 to ~20.6 mΩ, necked to 0.6 mm: the servo-ground tie (SF2) walls
-  F.Cu from x 6.3 to 18.5 at y 28.25, and every signal crossing it takes
-  B.Cu. Four further routes of the same board.toml gave the same paths.
+  from ~19.8 to ~20.6 mΩ, necked to 0.6 mm. On the board the seventh review
+  read, +5V reached D1 along an F.Cu corridor at x 32; on this route that
+  corridor holds VBAT's 0.6 mm branch to the J11 test header, (32.00, 51.38)
+  to (32.00, 23.54), and +5V detours west through J21:2 and onto B.Cu. The
+  re-route after the servo-ground tie (SF2) produced it; the tie does not
+  block the corridor itself. Four further routes of the same board.toml gave
+  the same paths. The eighth review also found every +5V load west of the
+  trunk (both motors, both servos, D1) behind one 0.6 x 3.1 mm F.Cu track,
+  (21.60, 52.08) to (18.50, 52.08), against the five_volt class's 0.8 mm;
+  pinning it as a fixed 0.8 mm track needs a re-route and was left for a
+  later round.
 - F1 (3 A hold) derates to about 2.55 A at 40 °C and 2.28 A at 50 °C
   (BSMD1812 datasheet), under the 2.4-3.1 A input at a 3 A load; the socketed
   carrier's review proposes the BSMD1812-400 (4 A hold).

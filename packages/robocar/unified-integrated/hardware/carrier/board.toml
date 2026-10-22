@@ -645,7 +645,9 @@ required = [
 # Hand-sawn (mode = "saw", seventh pre-fab layout review): one outline, which
 # JLCPCB counts as one design, cut apart along the silkscreen cut lines. Saw on
 # each line's waste side and file to the line: HEAD3_I2C_SDA is 0.79 mm from
-# the y 70.5 line (README, Panel). The lines below are the mouse-bite option:
+# the y 70.5 line (README, Panel). The x 64.5 line has no waste strip (main
+# board and heads share it), so that one is sawn on the line. The lines below
+# are the mouse-bite option:
 #
 # Mouse-bite panel (#809, tools/kicad/panel.py): each cut line becomes 2 mm
 # Edge.Cuts slots, broken by 5 mm tabs of two rows of five 0.6 mm non-plated
