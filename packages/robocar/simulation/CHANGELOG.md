@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.8](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-simulation-v0.1.7...robocar-simulation-v0.1.8) (2026-10-21)
+
+
+### Bug Fixes
+
+* **robocar-sim:** hold Pillow below 12 in requirements.txt and Renovate ([d4d200b](https://github.com/laurigates/mcu-tinkering-lab/commit/d4d200bc5f2b1b04e38fd2a5118106e5098e0b4f)), closes [#732](https://github.com/laurigates/mcu-tinkering-lab/issues/732)
+
 ## [0.1.7](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-simulation-v0.1.6...robocar-simulation-v0.1.7) (2026-10-12)
 
 
