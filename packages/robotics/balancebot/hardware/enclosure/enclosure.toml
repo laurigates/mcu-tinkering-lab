@@ -1,0 +1,26 @@
+# 3D-printed case for the balancebot carrier: `just enclosure::gen
+# packages/robotics/balancebot` (tools/enclosure, the enclosure-cad skill).
+#
+# Positions, courtyards and the M3 holes come from the committed .kicad_pcb;
+# heights come from KiCad's STEP export where a 3D model exists. The parts
+# below have no model in KiCad 10's library (or sit under a module the STEP
+# does not show), so their heights are ESTIMATES from the stack named in each
+# `source`: measure the fitted board and correct them before a second print.
+#
+# Stack constants used: 2.54 mm female header 8.5 mm tall, male header
+# plastic 2.5 mm, module PCB 1.6 mm (the common values, not measured here).
+
+[[pieces]]
+name = "carrier"
+region = [0.0, 0.0, 90.0, 62.0]
+quantity = 1
+# Cables leave beside the motor (J4, J5), battery (J1) and buck (J2) leads,
+# and the XIAO's USB-C faces the top edge.
+openings = ["J1", "J2", "J4", "J5", "U1"]
+
+[heights]
+A1 = { above = 22.0, source = "estimate: DRV8825 carrier in 1x8 female headers, 8.5 + 2.5 + 1.6 + ~9 mm stick-on heatsink" }
+A2 = { above = 22.0, source = "estimate: DRV8825 carrier in 1x8 female headers, 8.5 + 2.5 + 1.6 + ~9 mm stick-on heatsink" }
+U1 = { above = 15.5, source = "estimate: XIAO RP2350 in 1x7 female headers, 8.5 + 2.5 + 1.2 PCB + 3.2 USB-C" }
+J3 = { above = 14.0, source = "estimate: GY-521 flat on its 1x8 female header, 8.5 + 2.5 + 1.6 + ~1.4 parts" }
+F1 = { above = 2.0, source = "estimate: 1812 PTC, BSMD1812 body under 2 mm" }
