@@ -35,7 +35,7 @@ are different products and none of this page applies to them:
 | IR receiver | `VS838`-marked 38 kHz demodulating receiver, `IR_RX` | Listing photos 5 and Tasmota photo |
 | IR transmitter | One clear 5 mm IR LED, `IR_TX`, switched by transistor `Q1` | Listing photo 5, Tasmota photo |
 | Regulator | AMS1117-3.3 (`U2`, SOT-223) | Tasmota photo marking `AMS1117 3.3` |
-| Header | 4 pins plus a 2-pin header with a jumper cap; labels not legible | Listing photo 5 |
+| Header | One 6-pin row: GND, 5V, RX, TX, IO0, GND from the corner; jumper cap on the last two | Lauri, fitted board; listing photo 5 |
 | USB | None, flash through a 3.3 V USB-serial adapter | Listing photos |
 | Dimensions | 24 × 24 mm board; module stands 18 mm wide, 15 mm above the board | Listing photo 5 dimension arrows |
 | Mounting | One hole, front corner | Listing photo 5 |
@@ -46,36 +46,38 @@ The board exposes no GPIO header of its own; the GPIOs that matter are the
 ones wired to the IR parts. The IR pins are from the
 [Tasmota template](https://templates.blakadder.com/ESP_IR_TR.html)
 (`"GPIO":[0,0,0,0,1056,0,0,0,0,0,1088,0,0,0]`: IRsend on GPIO4, IRrecv on
-GPIO14). The header rows are what an ESP-01M IR board needs to be flashable,
-**not** read from this board: the photos show four header pins whose labels
-cannot be read, so the names and the order are open (see the checklist).
-No `Side`/`Pos` is claimed for that reason.
+GPIO14). The header is one 6-pin row. Lauri read its order off the fitted
+board on 2026-10-22, starting at the pin nearest the board corner. `Hdr` is that
+position. The GPIO behind each header pin is the ESP-01M's, not measured.
+`Side`/`Pos` stay unset until the edge and viewing orientation are recorded.
+The parser allows each pin name once, so both GND pads share one row.
 
-| Pin | GPIO | Default Function | Alternate Functions | Notes |
-|-----|------|------------------|---------------------|-------|
-| IR_TX | GPIO4 | IR LED, via `Q1` | — | Tasmota template. Drive polarity through `Q1` unverified |
-| IR_RX | GPIO14 | 38 kHz receiver output | HSPI_CLK | Tasmota template. Receiver output idles high, so ESPHome needs `inverted: true` |
-| TX | GPIO1 | UART0 TX | — | Presumed on the header; not legible |
-| RX | GPIO3 | UART0 RX | — | Presumed on the header; not legible |
-| IO0 | GPIO0 | Boot mode, strapping | SPI_CS2 | Presumed on the 2-pin jumper to GND; jumper fitted = download mode |
-| VCC | — | Supply in | — | Presumed 5 V into the AMS1117; see Power |
-| GND | — | Ground | — | |
+| Pin | Hdr | GPIO | Default Function | Alternate Functions | Notes |
+|-----|-----|------|------------------|---------------------|-------|
+| GND | 1, 6 | — | Ground | — | Pin 1 is at the board corner |
+| 5V | 2 | — | Supply in | — | Into the AMS1117-3.3; see Power |
+| RX | 3 | GPIO3 | UART0 RX | — | Board's RX: connect the adapter's TX here |
+| TX | 4 | GPIO1 | UART0 TX | — | Board's TX: connect the adapter's RX here |
+| IO0 | 5 | GPIO0 | Boot mode, strapping | SPI_CS2 | Jumper to pin 6 (GND) = download mode |
+| IR_TX | — | GPIO4 | IR LED, via `Q1` | — | On-board. Tasmota template; drive polarity through `Q1` unverified |
+| IR_RX | — | GPIO14 | 38 kHz receiver output | HSPI_CLK | On-board. Tasmota template; output idles high, so ESPHome needs `inverted: true` |
 
 ## Power
 
-The board carries an AMS1117-3.3 regulator, so its supply pin presumably feeds
-that regulator and expects about 5 V, as most resellers state. The search
-summary of the AliExpress listing quoted 3.0–3.6 V instead. Measure which
-header pin goes to the AMS1117 input and which to its 3.3 V output before
-connecting anything. Resellers also warn there is **no reverse-polarity
-protection**.
+Supply 5 V on header pin 2 (`5V`). The board carries an AMS1117-3.3 regulator
+for the ESP-01M, which fits the silkscreen and what most resellers state. The
+3.0–3.6 V quoted in a search summary of the AliExpress listing doesn't match
+this board. The header has no 3.3 V pin. Resellers warn there is **no
+reverse-polarity protection**, and GND is at both ends of the row, so a
+connector put on backwards puts 5 V on IO0.
 
 ## Flashing
 
-1. Fit the jumper (presumed `IO0`–`GND`) to hold GPIO0 low at power-up.
-2. Connect a **3.3 V-logic** USB-serial adapter: adapter TX to board RX,
-   adapter RX to board TX, GND to GND. Power from the adapter's 5 V pin if the
-   header's supply pin is confirmed to feed the AMS1117.
+1. Fit the jumper across header pins 5–6 (`IO0`–`GND`) to hold GPIO0 low at power-up.
+2. Connect a USB-serial adapter with **3.3 V logic**: adapter TX to pin 3
+   (`RX`), adapter RX to pin 4 (`TX`), GND to pin 1, and the adapter's 5 V to
+   pin 2. This assumes the labels name the board's own side of the UART, the
+   usual convention. If esptool gets no response, swap TX and RX.
 3. Check you're talking to the right chip: `esptool.py chip_id` should name an
    `ESP8285` variant; `esptool.py flash_id` gives the flash size.
 4. Flash, remove the jumper, power-cycle.
@@ -120,20 +122,23 @@ package; no `hardware.toml` names this page.
 
 ## Source
 
-**Nothing on this page has been checked on the fitted board.** The IR GPIOs
-come from the Tasmota community template; the parts, dimensions and header
-count were read from the AliExpress listing's photos and the Tasmota device
-photo, not from a vendor board file or schematic (none is published). The
-listing photos are of a product line, not of Lauri's `V1.1` unit.
-`.claude/rules/board-layout-from-vendor-files.md` covers why a photo is weak
-evidence for header order, which is why no order is claimed.
+**The header order (GND, 5V, RX, TX, IO0, GND from the corner) was read by
+Lauri off the fitted board on 2026-10-22.** The blue ESP8266MOD board in the
+same listing prints the same order (`GND 5V RX TX IO0 GND`, listing photo 2),
+which supports it. Nothing else here has been checked on the fitted board. The
+IR GPIOs come from the Tasmota community template. The parts and dimensions
+were read from the AliExpress listing photos and the Tasmota device photo;
+neither a vendor board file nor a schematic is published. The listing photos
+show a product line, not Lauri's `V1.1` unit.
 
 ## Check on the physical board
 
-- [ ] Silkscreen on both faces: `ESP_IR_TR_V1.1`, header labels, jumper label.
-      Photograph both faces and record the header order here.
-- [ ] Which header pin feeds the AMS1117 input (5 V) and which carries 3.3 V.
-- [ ] The 2-pin jumper is `IO0`–`GND`.
+- [x] Header order GND, 5V, RX, TX, IO0, GND from the corner: Lauri,
+      2026-10-22.
+- [ ] Which edge the header is on, viewed component side up with the module
+      at the back, so `Side`/`Pos` can be added.
+- [ ] Pin 2 (`5V`) goes to the AMS1117 input, and the ESP-01M sees 3.3 V.
+- [ ] With the jumper across pins 5–6, the board boots into download mode.
 - [ ] `esptool.py chip_id` names an ESP8285 variant; `flash_id` gives 1 or 2 MB.
 - [ ] `remote_receiver` on GPIO14 with `inverted: true` logs NEC codes from
       the fan's remote.
