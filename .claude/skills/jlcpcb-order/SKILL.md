@@ -169,12 +169,16 @@ Cases come from `just enclosure::gen` (the `enclosure-cad` skill), which must
 exit 0 first. Quote in JLCONE (Products → Mechanical Services → "JLC3DP - 3D
 Printing" → Get Instant Quote); items land in the same cart under a JLC3DP
 tab. The trays of 2026-10-23 were quoted in Chrome
-(`https://jlc3dp.com/3d-printing-quote`); the notes below come from that run
-and are not yet re-checked in the app.
+(`https://jlc3dp.com/3d-printing-quote`), the boxes in JLCONE; the product
+description and volume checks held in both.
 
-- **Upload one STL at a time.** A multi-file selection registered nothing, and
-  a quote page holds at most 10 models; a further file is dropped without a
-  message.
+- **In JLCONE, select every STL at once** (Cmd+A in the file picker): all 8
+  box parts loaded in one go on 2026-10-23. In Chrome a multi-file selection
+  registered nothing, so there upload one at a time. A quote page holds at most
+  10 models; a further file is dropped without a message.
+- The "Total Price" can lag the line prices while models load (it read €7.10
+  against €12.86 of lines until Batch Edit was saved); check it against their
+  sum before saving.
 - The quoted volume should equal `report.json`'s `volume_cm3`; a mismatch means
   a stale STL.
 - **Save to Cart needs a product description per item** ("Please select
