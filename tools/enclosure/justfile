@@ -18,3 +18,10 @@ gen +projects:
 render project:
     {{_run}} python -m enclosure.render {{_root}}/{{project}}/hardware/enclosure/output/*-tray.step {{_root}}/{{project}}/hardware/enclosure/output/*-box.step
     for s in {{_root}}/{{project}}/hardware/enclosure/output/*.svg; do rsvg-convert -w 900 -b white "$s" -o "${s%.svg}.png"; done
+
+# Assembled renders: the populated board (KiCad GLB) seated in each case,
+# rendered headless in Blender. Writes <piece>-{tray,box}-assembly.png.
+assembly project:
+    {{_run}} python -m enclosure.assembly {{_root}}/{{project}}
+    for j in {{_root}}/{{project}}/hardware/enclosure/output/*-assembly.json; do /Applications/Blender.app/Contents/MacOS/Blender -b --python-exit-code 1 -P {{source_directory()}}/blender/render_assembly.py -- "$j" > /dev/null || exit 1; done
+    ls {{_root}}/{{project}}/hardware/enclosure/output/*-assembly.png
