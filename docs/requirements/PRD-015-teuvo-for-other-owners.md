@@ -156,7 +156,11 @@ says.
 ### FR-033: Per-device identity
 
 The firmware derives a device id from the base MAC, for example the last 3
-bytes in hex. It can be overridden over serial. It sets:
+bytes in hex. It can be overridden over serial. When a broker username is
+set, it is the device id: the topic root is taken from it, and an override that
+differs from it is refused. Otherwise every publish would be silently denied
+while MQTT reports connected. `mqtt auth` prints the topic root the username
+implies. The id sets:
 
 - MQTT client id `teuvo-<id>`;
 - topic root `teuvo/<id>/` for status, commands, logs and PRD-014's upgrade
@@ -184,11 +188,17 @@ sends is then informational. The Mosquitto ACL:
 
   Pattern lines apply to every user, so the `concierge` user's write on
   `teuvo/concierge/status` comes from the first one.
-- **`user concierge`:** `topic write teuvo/+/upgrade/facts` and
-  `topic read teuvo/+/upgrade/request`.
+- **`user concierge`:** `topic write teuvo/+/upgrade/facts`,
+  `topic read teuvo/+/upgrade/request` and `topic read teuvo/+/status`. The
+  status grant lets PRD-014 FR-025 republish a robot's facts when it comes
+  online.
 - **`user ci-notify`**, the credential for `build-firmware.yml`'s notify step:
   `topic write robocar-unified/ota/notify`.
-- **Lauri's user:** `topic write teuvo/+/commands` and `topic read teuvo/#`.
+- **Lauri's users**, one per client program (for example `lauri-cli` for
+  `mosquitto_pub`, `lauri-watch` for `mosquitto_sub`), each with
+  `topic write teuvo/+/commands` and `topic read teuvo/#`. Under
+  `use_username_as_clientid` a username holds one connection at a time, so a
+  second program on the same user would disconnect the first.
 
 The ACL grants the `robocar/*` aliases nothing, so it goes live in the release
 that drops them.

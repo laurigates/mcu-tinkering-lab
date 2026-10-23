@@ -94,14 +94,16 @@ sequenceDiagram
     participant L as Lauri (phone)
     participant S as Stripe
     participant G as GitHub Actions
+    participant B as Broker
     P->>T: "Teuvo, could you have a gripper?"
-    T->>C: teuvo/<id>/upgrade/request {req_id, summary, category}
-    C-->>T: PUBACK
+    T->>B: teuvo/<id>/upgrade/request {req_id, summary, category} (QoS 1)
+    B-->>T: PUBACK
     T->>P: template: "I passed the wish to Lauri"
+    B->>C: request (persistent session)
     C->>L: summary text to edit or approve
     L->>C: approve text
-    C->>T: facts {code K7Q2, state QUOTED, fee 40}
-    T->>P: template line with the fee and the code
+    C->>T: facts {code K7Q2, req_id, category, state QUOTED, fee 40}
+    T->>P: at the next voice turn, the template line with the fee and the code
     P->>S: pays on the order page (Payment Link)
     S-->>C: paid (Lauri in Phase 1, signed webhook in Phase 2)
     C->>P: contract confirmation e-mail (KSL 6:13)
@@ -125,6 +127,12 @@ exits: EXPIRED, WITHDRAWN, REFUNDED, FAILED
 - **Who may set `PAID` and `BUILD_PAID`.** Only two writers: Lauri's
   authenticated action and, from Phase 2, a verified Stripe webhook (FR-027).
   Nothing the person says to Teuvo can set them.
+- **`AWAITING_PAYMENT`, `APPROVED` and `PLANNING`.** The concierge sets
+  `AWAITING_PAYMENT` when the order page first serves the order's Payment
+  Link. It sets `APPROVED` when the run's `teuvo-planning` deployment is
+  approved, and `PLANNING` when the Claude job starts. A run whose deployment
+  Lauri rejects, or that times out waiting, returns the order to `PAID`, and it
+  is not re-dispatched until Lauri asks.
 - **`PAYMENT_CLAIMED`.** The concierge sets it when the payer returns through
   the Payment Link's `after_completion` redirect. It lets Teuvo say "thank you,
   Lauri will confirm" without claiming the money has arrived. Nothing said to
@@ -164,11 +172,18 @@ device publishes `{req_id, device_id, category, summary, lang}` to
   request addressed to Teuvo. It never volunteers or suggests a paid upgrade.
   The instruction also asks it to leave out names; Lauri's text approval
   (FR-026) is the control, this is only a first filter.
-- **No delivery promise from the model.** The device appends a fixed sentence,
-  "Välitin toiveen Laurille" ("I passed the wish to Lauri"), only after the
-  request's PUBACK arrives. Without one within 10 s it appends "En saanut
-  viestiä perille" ("I couldn't get the message through"). Without MQTT, the
-  sentinel is not offered and Teuvo says the desk is closed right now.
+- **No delivery promise from the model.** The prompt offers `__REQUEST__`
+  only while MQTT is connected and `teuvo/concierge/status` is `online`;
+  otherwise Teuvo says the desk is closed right now. The concierge's MQTT
+  session is persistent (clean session off, client id `concierge`, QoS 1
+  subscription), so the broker queues requests while it restarts. A broker
+  PUBACK means only that the broker accepted the request. The device appends a
+  fixed sentence, "Välitin toiveen Laurille" ("I passed the wish to Lauri"),
+  after that PUBACK. Without one within 10 s it appends "En saanut viestiä
+  perille" ("I couldn't get the message through").
+  `CONFIG_MQTT_OUTBOX_EXPIRED_TIMEOUT_MS=8000` (with
+  `CONFIG_MQTT_USE_CUSTOM_CONFIG=y`) stops esp-mqtt from delivering a request
+  after the timeout has said it failed.
 - **Probe first.** Probe the reply format live, with an audio part, on
   `gemini-flash-latest` before building on it. It is a moving alias
   (`.claude/rules/gemini-api.md` §1), so re-probe after it moves. Function
@@ -184,8 +199,9 @@ device publishes `{req_id, device_id, category, summary, lang}` to
 The concierge publishes a UTF-8 JSON document to
 `teuvo/<device_id>/upgrade/facts`, at QoS 1 and not retained. It holds at most
 4 open orders, paid states first, then newest. For each order it carries the
-code, the state (an enum), the fee or quote in whole euros, and a pre-rendered
-Finnish ETA phrase. The concierge refuses to publish more than 900 bytes.
+code, the category (the FR-026 enum), the `req_id` it answers, the state (an
+enum), the fee or quote in whole euros, and a pre-rendered Finnish ETA
+phrase. The concierge refuses to publish more than 900 bytes.
 
 The firmware subscribes through `mqtt_logger_subscribe()`. Its callback gains
 `total_data_len` and `current_data_offset`, so a fragment check like
@@ -196,7 +212,8 @@ validates the document against a fixed schema.
 - **Fail closed.** The concierge keeps `seq` in SQLite, so it never repeats
   across restarts. It republishes the facts every 10 minutes with freshly
   rendered ETA phrases, and at once when the robot's status topic reports it
-  online. It also holds a retained `teuvo/concierge/status` of `online`, with a
+  online (it reads `teuvo/+/status`, PRD-015 FR-033). It also holds a retained
+  `teuvo/concierge/status` of `online`, with a
   retained Last Will of `offline`, and publishes `offline` itself on a clean
   stop. The robot counts a document as new when its `seq` differs from the last
   one it accepted. It treats the facts as absent:
@@ -207,10 +224,17 @@ validates the document against a fixed schema.
   OTA, facts and status take 3 of the 4 subscribe slots. With no facts, Teuvo
   says he will ask Lauri and never guesses.
 - **The model sees order codes only.** The facts sentence in the voice-turn
-  prompt lists the open order codes, never a fee, a state or an ETA phrase.
-  When an order comes up, the model emits `__ORDER__ <code>`. In such a reply
-  the device drops all model text and speaks only the template sentence for
-  that order's state, rendered from the facts. Examples:
+  prompt lists each open code with its category, never a fee, a state or an
+  ETA phrase. If two open orders share a category, the model asks for the code
+  instead of choosing. When an order comes up, the model emits
+  `__ORDER__ <code>`. In such a reply the device drops all model text and
+  speaks only the template sentence for that order's state, rendered from the
+  facts. When the facts first name a `req_id` this robot published, the device
+  speaks that order's template at the next voice turn; that is how the
+  requester learns the code and the fee. Conversation history
+  (`voice_history_record()`) stores an `__ORDER__` turn as the bare
+  `__ORDER__ <code>` line, never the spoken template, so no fee, state or ETA
+  reaches a later prompt. Examples:
   - `QUOTED`, `AWAITING_PAYMENT`: the fee, and a pointer to the sticker.
     "Tilauksen K7Q2 suunnittelu maksaa 40 euroa." ("Planning order K7Q2 costs
     40 euros.")
@@ -218,14 +242,23 @@ validates the document against a fixed schema.
     Lauri will still confirm the payment.")
   - Later states: the ETA phrase.
 - **A second layer on every other reply.** While the desk is on, every other
-  reply loses any sentence that contains a digit, a Finnish number word
-  (yksi/kaksi/kolm/neljä/viisi/kuusi/seitsem/kahdeks/yhdeks/kymmen/sata/tuhat),
-  a money stem (hint-/hinn-, maks-, rah-, euro, €, sentti, palkkio, kallis,
-  halpa, ilmai-, veloit-, lasku-, kustann-), a weekday or month stem, or an
-  order-state stem (tilau-, kuitta-, vahvist-). If nothing is left, Teuvo says
-  a fixed "Kysyn Laurilta" ("I'll ask Lauri"). This also strips numbers from
-  ordinary conversation while the desk is on, which is the price of the desk.
-  Host tests include a paraphrase corpus.
+  reply loses any sentence that contains:
+  - a digit;
+  - a Finnish number word in any case, including the gradated stems
+    (yksi/yhde-/yhtä, kaksi/kahde-/kahta, kolm-, neljä-, viisi/viide-,
+    kuusi/kuude-, seitsem-, kahdeks-, yhdeks-, kymmen-, sata/sada-,
+    tuhat/tuhanne-);
+  - a money word (hint-/hinn-, maks-, rah-, euro, €, sentti, palkkio,
+    kallis/kallii-, halpa/halva-, ilmai-, veloit-, lasku-, kustann-);
+  - a time word (huome-, viiko-/viikk-, kuukau-, weekday and month stems);
+  - an order-state word (tilau-; tilaa, tilasi, tilannut, tilattu, tilataan;
+    kuitta-/kuitat-/kuitan-; vahvist-).
+
+  Matching is on word starts. The paraphrase corpus holds gradated and
+  inflected forms of every stem, and common words the stems must not catch
+  (kuitenkin, tilanne, ensin). If nothing is left, Teuvo says a fixed "Kysyn
+  Laurilta" ("I'll ask Lauri"). This also strips numbers from ordinary
+  conversation while the desk is on, which is the price of the desk.
 - **Teuvo never reads PR text.** Only enums, numbers and the pre-rendered ETA
   phrase reach the device, so a PR cannot steer him.
 - **Before any of this, four truncations are fixed:**
@@ -262,8 +295,10 @@ ruff and ty. It runs on Lauri's home server. Its jobs:
   `GET /pulls?head=…:teuvo/plan-<code>`.
   - A run cancelled while its order is `APPROVED` or `PLANNING` returns the
     order to `PAID`.
-  - A run that concluded without a PR counts as `FAILED`, because the SDK exits
-    0 on a permission denial (reusable-auto-fix.yml).
+  - A run that started the Claude job and concluded without a PR counts as
+    `FAILED`, because the SDK exits 0 on a permission denial
+    (reusable-auto-fix.yml). A rejected or timed-out deployment does not
+    (see `APPROVED` above).
 - **Facts and status.** It publishes the facts and status for FR-025.
 - **The order page.** It serves the page for FR-030 behind a short-link host,
   such as a Cloudflare Tunnel, since the home server is presumably behind NAT.
@@ -279,8 +314,10 @@ Secrets:
   the Checkout Session with this key rather than trusting a webhook payload.
 - **The public surface.** The order page, the withdrawal and lost-link forms
   and the webhook receiver run in a separate process. It holds the webhook
-  signing secret (`whsec_…`) and read-only access to a projection of open
-  orders: code, quote, Payment Link URL and token hash. It holds no Stripe API,
+  signing secret (`whsec_…`) and read-only access to a projection the
+  concierge writes. The projection covers every open order and every order
+  still inside its 14-day withdrawal period: code, state, quote, Payment Link
+  URL, token hash, paid date, hosted invoice URL and PR URL. It holds no Stripe API,
   GitHub or mail credential. It enqueues verified webhook events and form
   submissions. Rate limits key on `CF-Connecting-IP`, since every request
   arrives through the tunnel.
@@ -294,8 +331,19 @@ Secrets:
   workflow, and lets the holder re-run past runs. So every workflow that runs
   Claude or spends gets a job-level `if:` that exits when
   `github.triggering_actor` is the App's bot, which also covers re-runs. That
-  covers `auto-fix.yml`, `auto-resolve-conflicts.yml`, `claude.yml`,
-  `claude-code-review.yml` and `security-secrets.yml`. A re-run uses the
+  covers:
+  - `auto-fix.yml`, whose guard also tests
+    `github.event.workflow_run.triggering_actor.login`, because a failed
+    `test.yml` run that the App dispatched or re-ran also starts it;
+  - `auto-resolve-conflicts.yml`, `claude.yml`, `claude-code-review.yml` and
+    `security-secrets.yml`;
+  - `build-firmware.yml`, whose dispatch redeploys the web flasher and the OTA
+    manifest from any tag. It also interpolates `inputs.release_tag` into
+    `run:` (`build-firmware.yml:217`, `:462`, `:485`), which would turn Actions:
+    write into its `contents: write` token. That input moves to an `env:`
+    variable in the same change.
+
+  A re-run uses the
   original run's workflow file and is allowed for 30 days, so these guards land
   at least 30 days before the App is created.
 - **Mail.** An SMTP or mail-API credential, used only by the concierge.

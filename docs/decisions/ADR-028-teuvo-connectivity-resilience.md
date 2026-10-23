@@ -90,8 +90,10 @@ provisioning stacks.
   versioned NVS blob: SSID (≤32), PSK (≤64), flags (hidden, open-allowed,
   SAE-only, `home`), BSSID and channel hint, last RSSI, last-success boot
   counter, failure count, and source (improv, console, qr). First boot migrates
-  the legacy `wifi_config` pair as an entry with the `home` flag set, because
-  MQTT already runs on that network.
+  the legacy `wifi_config` pair or, when NVS holds none, the compile-time WiFi
+  credentials from `credentials.h` (developer builds), as one entry with the
+  `home` flag set, because MQTT already runs on that network. A migration
+  marker in the blob keeps this a one-time step.
 - Selection runs an all-channel scan, intersects it with the list, and ranks by
   RSSI plus recency minus a failure penalty. It then connects with a BSSID and
   channel hint. Reasons 15/202/204 mark a credential as suspect; 201/210/211
@@ -124,6 +126,13 @@ provisioning stacks.
 - MQTT follows the link instead (§6). The client starts on every `GOT_IP` whose
   entry has the `home` flag, and stops with `esp_mqtt_client_stop()` on every
   `WIFI_EVENT_STA_DISCONNECTED`, before another network is joined.
+- `mqtt_logger_init()` creates the client at boot without starting it, so OTA
+  and the upgrade desk register their subscriptions whichever network comes
+  first; start and stop only toggle the connection. `esp_mqtt_client_stop()`
+  dispatches no `MQTT_EVENT_DISCONNECTED`, so the logger clears its connected
+  flag itself on stop and runs the same disconnect path.
+  `CONFIG_MQTT_SKIP_PUBLISH_IF_DISCONNECTED=y`, so nothing queues in esp-mqtt's
+  outbox while the client is stopped.
 - Improv re-arms when the link has been down for more than a set time, and
   disarms on reconnect.
 - The planner, voice turns and TTS skip their request while there is no link,
@@ -336,7 +345,9 @@ In order. Each step lands with host tests where the logic is pure C.
 1. FR-039: runtime Gemini credential (§3), which fixes the key-drop bug.
    Issue #845.
 2. FR-038: services armed on link-up, a non-blocking connect, and requests
-   skipped offline (§2). Issue #846.
+   skipped offline (§2). Until FR-037 lands, the single stored network counts
+   as `home`, so MQTT starts only on it and stops on every disconnect.
+   Issue #846.
 3. FR-037: the network list, all-channel scan, console commands and the `home`
    flag (§1, §4). Issue #848.
 4. FR-040: offline clips and the help request (§5). Issue #849.

@@ -315,7 +315,7 @@
       "prd": "ADR-028",
       "status": "planned",
       "priority": "P0",
-      "notes": "Non-blocking connect; MQTT, OTA and rollback-confirm on GOT_IP; Improv re-arm; skip requests offline"
+      "notes": "Non-blocking connect; OTA and rollback-confirm on first GOT_IP; MQTT only on home GOT_IP, stopped on disconnect; Improv re-arm; skip requests offline"
     },
     {
       "id": "FR-039",

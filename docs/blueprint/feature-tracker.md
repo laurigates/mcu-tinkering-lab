@@ -43,7 +43,7 @@
 | FR-035 | Owner onboarding and notices | PRD-015 | planned | P3 | Adults only, privacy, AI disclosure, WiFi setup, reset |
 | FR-036 | Open-hardware build pack | PRD-015 | planned | P3 | Route A: build guide, BOM, fab files, own-key setup guide |
 | FR-037 | Teuvo network list with scan-and-pick | ADR-028 | planned | P1 | Up to 8 networks in NVS; all-channel scan; serial wifi commands; home flag gates MQTT |
-| FR-038 | Network services armed on link-up | ADR-028 | planned | P0 | Non-blocking connect; MQTT, OTA and rollback-confirm on GOT_IP; Improv re-arm; skip requests offline |
+| FR-038 | Network services armed on link-up | ADR-028 | planned | P0 | Non-blocking connect; OTA and rollback-confirm on first GOT_IP; MQTT only on home GOT_IP, stopped on disconnect; Improv re-arm; skip requests offline |
 | FR-039 | Runtime Gemini credential in NVS | ADR-028 | planned | P0 | gemini auth; fixes key dropped after Improv; 402/403 handling |
 | FR-040 | Offline voice clips and help request | ADR-028 | planned | P1 | Pre-rendered ADPCM persona lines embedded in the app image |
 | FR-041 | WiFi join from a QR code | ADR-028 | planned | P2 | quirc on JPEG luma; both WIFI: dialects; QR entries never home; console confirmation while a known network is reachable |
