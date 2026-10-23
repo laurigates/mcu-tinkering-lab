@@ -27,6 +27,7 @@ region = [70.5, 0.0, 100.0, 29.5]
 quantity = 1
 openings = ["U1", "J2"]
 lid_windows = ["U1"]  # the camera looks up through the lid
+mount = "none"  # held by the cradle's M2 screws, not chassis tabs
 
 [heights]
 A1 = { above = 14.0, source = "estimate: SparkFun TB6612FNG breakout in female headers, 8.5 + 2.5 + 1.6 + ~1.4 parts" }

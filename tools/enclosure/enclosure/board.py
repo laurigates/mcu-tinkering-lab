@@ -82,6 +82,7 @@ class Piece:
     parts: list[Part]
     openings: list[str] = field(default_factory=list)
     lid_windows: list[str] = field(default_factory=list)
+    mount_tabs: bool = True  # False for a piece held some other way (the cradle)
 
     @property
     def tallest(self) -> Part:
@@ -290,6 +291,7 @@ def load_pieces(project: Path, step: Path) -> list[Piece]:
                 parts=inside,
                 openings=list(spec.get("openings", [])),
                 lid_windows=list(spec.get("lid_windows", [])),
+                mount_tabs=spec.get("mount", "tabs") == "tabs",
             )
         )
     return pieces

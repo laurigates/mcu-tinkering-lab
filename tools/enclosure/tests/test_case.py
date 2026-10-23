@@ -44,7 +44,7 @@ def frame(p: Piece) -> case.Frame:
 def test_tray_outline_is_region_plus_wall_and_gap():
     f = frame(piece())
     bb = case.tray(f).bounding_box()
-    assert bb.size.X == pytest.approx(60 + 2 * (2.0 + 0.5))
+    assert bb.size.X == pytest.approx(60 + 2 * (2.0 + 0.5) + 2 * f.p.tab)  # tabs
     assert bb.size.Y == pytest.approx(40 + 2 * (2.0 + 0.5))
     assert bb.size.Z == pytest.approx(f.z_top + 3.0)
 
@@ -58,14 +58,28 @@ def test_board_y_is_flipped_into_case_y():
     assert y == pytest.approx(40 - 4 + 2.5)
 
 
-def test_bolt_bore_goes_through_each_standoff():
+def test_each_standoff_has_a_blind_pilot_for_its_screw():
     f = frame(piece())
     tray = case.tray(f)
     for h in f.piece.holes:
         x, y = f.xy(h.x, h.y)
-        assert not tray.is_inside(Vector(x, y, 1.0)), "bore missing through the floor"
-        # The boss wall beside the bore is solid.
-        assert tray.is_inside(Vector(x + 2.5, y, f.z_board - 0.5))
+        assert not tray.is_inside(Vector(x, y, f.z_board - 0.5)), "no pilot hole"
+        assert tray.is_inside(Vector(x, y, case.SKIN / 2)), (
+            "pilot runs through the floor"
+        )
+        assert tray.is_inside(Vector(x + 2.5, y, f.z_board - 0.5)), "boss wall missing"
+
+
+def test_chassis_tabs_with_holes_unless_the_piece_opts_out():
+    f = frame(piece())
+    tray = case.tray(f)
+    bb = tray.bounding_box()
+    assert bb.size.X == pytest.approx(f.length + 2 * f.p.tab)
+    assert not tray.is_inside(Vector(-f.p.tab / 2, f.width / 2, f.p.floor / 2))
+    assert tray.is_inside(Vector(-f.p.tab / 2 + 4, f.width / 2, f.p.floor / 2))
+    p = piece()
+    p.mount_tabs = False
+    assert case.tray(frame(p)).bounding_box().size.X == pytest.approx(f.length)
 
 
 def test_standoff_clears_the_deepest_back_side_part():
@@ -89,20 +103,40 @@ def test_opening_lands_on_the_nearest_edge():
     assert tray.is_inside(Vector(west_wall_x, y, z)), "opening cut in the wrong wall"
 
 
-def test_lid_pillar_stops_above_a_part_under_it():
-    # A tall part whose courtyard covers H1: the pillar must not reach it.
-    tall = Part(
-        "U1",
-        "fp",
-        "top",
-        Rect(0, 0, 12, 12),
-        above=15.0,
-        height_source="enclosure.toml: test",
-    )
-    f = frame(piece(parts=[tall]))
+def test_the_lid_has_nothing_reaching_down_to_the_board():
+    f = frame(piece())
     _, lid = case.box(f)
-    x, y = f.xy(4, 4)
-    assert not lid.is_inside(Vector(x + 2.0, y, f.z_top + 5.0))
+    wall_top = f.z_top + f.headroom + f.p.lid_clearance
+    assert lid.bounding_box().min.Z >= wall_top - 3.0 - 1e-6  # the lip only
+
+
+def test_lid_screws_go_into_corner_bosses_clear_of_the_board_screws():
+    f = frame(piece())
+    base, _ = case.box(f)
+    # H1 (4, 4) and H2 (56, 36) are under two of the four corner bosses.
+    screwed = 0
+    for x, y, z in case._lid_bosses(f):
+        wall_top = f.z_top + f.headroom + f.p.lid_clearance
+        assert base.is_inside(Vector(x + 2.0, y, wall_top - 1.0)), "boss missing"
+        assert not base.is_inside(Vector(x, y, wall_top - 1.0)), "pilot missing"
+        bx, by = x - f.off, 40 - (y - f.off)
+        if any(abs(h.x - bx) < 6 and abs(h.y - by) < 6 for h in f.piece.holes):
+            screwed += 1
+            assert z >= f.z_top + case.SCREW_HEAD[1], "boss sits on a board screw head"
+    assert screwed == 2
+
+
+def test_box_window_is_closed_above_the_plug():
+    edge = Part(
+        "J1", "fp", "top", Rect(55, 15, 59.5, 25), above=8.0, height_source="test"
+    )
+    f = frame(piece(parts=[edge], openings=["J1"]))
+    base, _ = case.box(f)
+    _, y = f.xy(0, 20)
+    x = f.length - 1.0
+    wall_top = f.z_top + f.headroom + f.p.lid_clearance
+    assert not base.is_inside(Vector(x, y, f.z_top + 8.0)), "window too low"
+    assert base.is_inside(Vector(x, y, wall_top - 1.0)), "window open to the top"
 
 
 def test_lid_window_opens_over_the_part():
@@ -161,25 +195,22 @@ def test_unknown_case_key_is_refused():
 
 
 def test_every_boss_and_the_lid_lip_keep_the_minimum_wall():
-    for _, clear, boss in case.BOLTS.values():
-        assert (boss - clear) / 2 >= case.MIN_WALL
+    for _, pilot, boss in case.SCREWS.values():
+        assert (boss - pilot) / 2 >= case.MIN_WALL - 1e-9
+    assert (case.LID_BOSS - case.LID_PILOT) / 2 >= case.MIN_WALL - 1e-9
     with pytest.raises(Exception, match="under"):
         case.Params.from_toml({"wall": 1.2})
 
 
-def test_a_boss_tangent_to_the_lip_is_grown_so_the_lid_meshes():
-    """H2-like hole whose pillar would touch the lip's inner face exactly."""
+def test_a_standoff_tangent_to_the_wall_is_grown_so_the_base_meshes():
+    """A standoff whose surface would touch the wall's inner face exactly."""
     from build123d import Mesher
 
     f = frame(piece())
-    inner = f.p.wall + 0.3 + case.MIN_WALL
-    boss = case.BOLTS[3.2][2] / 2
-    # Board x that puts the pillar's outer surface on the lip's inner face.
-    x_case = f.length - inner - boss
-    hole_x = x_case - f.off + f.piece.region.x0
-    f = frame(piece(holes=[Hole("H2", hole_x, 4, 3.2)]))
-    _, lid = case.box(f)
-    Mesher().add_shape(lid)  # raises "3mf mesh is invalid" when tangent
+    boss = case.SCREWS[3.2][2] / 2
+    hole_x = f.p.wall + boss - f.off  # case x = wall + r: tangent to the west wall
+    f = frame(piece(holes=[Hole("H1", hole_x, 20, 3.2)]))
+    Mesher().add_shape(case.tray(f))  # raises "3mf mesh is invalid" when tangent
 
 
 def test_thickness_probe_reads_a_known_plate():
@@ -190,16 +221,32 @@ def test_thickness_probe_reads_a_known_plate():
     assert thickness.thinnest(plate).mm == pytest.approx(0.5, abs=0.02)
 
 
-def test_a_lid_window_over_a_pillar_keeps_the_minimum_wall():
-    """Head 1's camera window once cut a pillar's edge down to 0.15 mm."""
+def test_a_lid_window_reaching_a_corner_keeps_the_minimum_wall():
+    """Head 1's camera window once left a 0.15 mm fin; a window running into a
+    corner must leave MIN_WALL round the lid screw and inside the lip."""
     from enclosure import thickness
 
-    # Head 1's case: the window (courtyard - 1 mm margin) ends 0.15 mm past the
-    # pillar's bore. H5 at board (4, 4) -> case x 6.5, bore edge 7.7, so a
-    # courtyard from board x 6.35 puts the window edge at case x 7.85.
-    tall = Part(
-        "U1", "fp", "top", Rect(6.35, 2, 30, 30), above=15.0, height_source="test"
-    )
-    f = frame(piece(parts=[tall], holes=[Hole("H5", 4, 4, 2.2)], lid_windows=["U1"]))
+    tall = Part("U1", "fp", "top", Rect(0, 0, 30, 30), above=15.0, height_source="test")
+    f = frame(piece(parts=[tall], lid_windows=["U1"]))
     _, lid = case.box(f)
     assert thickness.thinnest(lid).mm >= case.MIN_WALL - 0.05
+
+
+def test_a_corner_boss_too_short_for_a_screw_is_dropped():
+    """A part filling a corner up to just under the lid leaves no room for a
+    boss there; the lid keeps the other three."""
+    corner = Part(
+        "U1", "fp", "top", Rect(0, 0, 14, 14), above=20.0, height_source="test"
+    )
+    low = Part(
+        "U2", "fp", "top", Rect(20, 10, 40, 30), above=19.0, height_source="test"
+    )
+    f = frame(piece(parts=[corner, low], holes=[]))
+    _, lid = case.box(f)
+    wall_top = f.z_top + f.headroom + f.p.lid_clearance
+    drilled = [
+        (x, y)
+        for x, y, _ in case._lid_bosses(f)
+        if not lid.is_inside(Vector(x, y, wall_top + f.p.lid / 2))
+    ]
+    assert len(drilled) == 3, drilled
