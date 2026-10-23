@@ -141,7 +141,18 @@ VAT is recomputed on the discounted amount was not checked.
 
 ## 5. Coupons
 
-- **One coupon per order**, chosen in the cart's Coupons panel.
+- **One coupon per order**, chosen in the cart's Coupons panel (picking one
+  deselects the other) and again in the payment step after Submit Order.
+- **A coupon only discounts its own category:** PCB, SMT (PCBA), 3DP, Stencil,
+  or ALL (the New User Shipping coupon, on shipping over €13.35). A €26.70 PCB
+  coupon took €5.34 off an order whose PCBs cost €5.34.
+- **Splitting a cart into two orders buys a second coupon.** On 2026-10-23 the
+  carriers (order A, €43.00, 1.46 kg) and the integrated board (order B,
+  €79.21, 0.90 kg) cost €61.26 + €88.79 with one €8.90 coupon each, against
+  €147.21 together with the €17.80 PCBA coupon. Order B over €88.99 would
+  take the €17.80 one itself. The cart's ticked lines are what it prices, so
+  tick each order's lines to read its shipping and eligible coupons; each
+  parcel under €150 also pays EU duty and a carrier handling fee (§ 4).
 - **The cart changes the selection by itself:** after a reload it picked
   "PCBA $10 - EasyEDA" and once "PCB $10 - EasyEDA" over the larger JLCONE
   PCBA $20, and with JLC3DP items in the cart a €8.90 3D-printing coupon. Re-check the panel
