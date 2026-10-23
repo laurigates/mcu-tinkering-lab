@@ -89,9 +89,16 @@ in the order), and against JLCPCB's own increment for more assembled boards
 (2 → 5 on the integrated carrier: +€29.73, `jlcpcb-order` § 4). Add 25.5 %
 VAT to the JLCPCB figures first.
 
+Report two AliExpress figures: the **cash** spent, and the **consumed**
+cost, each line's price and shipping times need ÷ units bought. Listings sell
+in packs (100 resistors, 10 chips), so the gap between them is stock left
+over. Leftover chips only have value if another build uses them.
+
 2026-10-23, both robocar carriers ×5: JLCPCB assembly €124.97 − €17.80
-coupon = €107.17 ex VAT, about €134.50 with it, against €153.48 of
-AliExpress parts with VAT and shipping.
+coupon = €107.17 ex VAT, about €134.50 with it. AliExpress: €150.20 cash,
+€98.09 consumed, leaving 15 chips (TCA9548A, TPS563208, DMP3013 ×5 each),
+270 other passives and 700 resistors worth €52.11 at the price paid. Five
+of the eight chips were bought with no spare.
 
 Write the result to `tmp/quotes/aliexpress-bom-<date>.csv`: BOM line, need,
 listing id, variant, price, shipping, delivery days, and what is already owned.
