@@ -128,6 +128,28 @@ zip's sha256 prefix; BOM and CPL paths), plus summary rows for merchandise,
 shipping, coupon and subtotal. Then tell Lauri the total, the coupon and
 shipping to re-check at checkout, and anything still open on a board.
 
+## 7. 3D-printed cases (JLC3DP)
+
+Cases come from `just enclosure::gen` (the `enclosure-cad` skill), which must
+exit 0 first. Quote at `https://jlc3dp.com/3d-printing-quote`, signed in to
+the same account; items land in the same cart under a JLC3DP tab.
+
+- **Upload one STL at a time.** A multi-file selection registered nothing, and
+  a quote page holds at most 10 models; a further file is dropped without a
+  message.
+- The quoted volume should equal `report.json`'s `volume_cm3`; a mismatch means
+  a stale STL.
+- **Save to Cart needs a product description per item** ("Please select
+  product desc"): Batch Edit → Product Desc → "Enclosure, Block, Plate,
+  Cylinder" → "Plastic Enclosure - HS Code 392690". Batch Edit also holds the
+  material choice (SLA resins, MJF/SLS nylon, FDM, metal) that the per-item
+  editor would not open.
+- The "Printing risk / Thin walls detected" flag is a heuristic: trust the
+  enclosure gate's measurement, and say which flag remains.
+- **The cases ride the PCB parcel**: four trays added €0.03 to DHL (1.54 →
+  1.78 kg). The cart then offered "New User 3D Printing" coupons (€8.90); still
+  one coupon per order, so re-select the larger PCBA one.
+
 ## Other fabs (for comparison)
 
 Quoted the same day for the integrated carrier (5 PCBs, 2 assembled):
