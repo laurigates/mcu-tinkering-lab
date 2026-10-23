@@ -21,7 +21,7 @@ from build123d import Align, Box, Pos, export_stl
 from kicad import paths
 from kicad.paths import REPO_ROOT
 
-from . import board, case
+from . import board, case, modules
 
 A = (Align.MIN,) * 3
 
@@ -95,6 +95,8 @@ def scenes(project: Path) -> list[Path]:
             "tray": str(out / f"{piece.name}-tray.stl"),
             "box_base": str(out / f"{piece.name}-box-base.stl"),
             "box_lid": str(out / f"{piece.name}-box-lid.stl"),
+            # Look-alikes of those parts, for the product renders.
+            "modules": modules.specs(project, piece, f, cfg.get("heights", {})),
             "lid_bottom_z": wall_top,
             "size": [f.length, f.width, wall_top + params.lid],
         }

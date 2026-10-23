@@ -87,6 +87,36 @@ z 0 (the STEP's frame). Scale ×1000 and apply the clash check's offset.
 - Blender 5's boolean solvers are `FLOAT`, `EXACT`, `MANIFOLD`; `FAST` is gone.
 - `read_factory_settings` deletes materials made before it: make them after.
 
+## Product renders and photos (`enclosure.product`, `blender/render_product.py`)
+
+```sh
+just enclosure::product <project> [view-id ...]   # output/product/: 7 views per piece
+just enclosure::photo <project> --style studio    # Fibo 2.0 on popos, per plate
+```
+
+Views per piece: bare carrier (sockets only), breakouts fitted, empty tray,
+board in tray, empty box with lid lifted, board in box with lid lifted,
+closed box. Each gives `<id>.png` (transparent, shadow catcher),
+`<id>-plate.png` (flattened, **no text**: the edit model's source; a caption in
+the image would be "kept") and `<id>-captioned.png`, plus `captions.md` and
+`contact-sheet.png`. Titles come from `[[pieces]] title` in `enclosure.toml`.
+
+- **The breakouts are look-alikes**, not KiCad models: `modules.toml` maps each
+  footprint to a kind (PCB colour, chip, heatsink, USB-C, camera, terminal,
+  servo headers), placed from the footprint's pads and F.Fab outline by
+  `enclosure/modules.py`. A plain socket footprint (balancebot J3, the GY-521)
+  names its `module` and `outline` in `enclosure.toml [heights]`. Sizes are
+  typical package sizes and colours the common retail boards, not measured.
+  The clash and wall gates never see them.
+- **Perspective framing needs a lens shift.** The bounding-box centre does not
+  project to the frame centre; without `shift_x/y` from the projected bounds
+  every view sits low.
+- **Fibo 2.0 is CC BY-NC 4.0**: the photos are non-commercial only. The graph
+  is the lab's reference (comfyui-nodes `fibo2` skill): `TextEncodeFibo2`
+  emits the latent, euler/simple 8 steps cfg 1, width/height 0. Each
+  instruction spells out what must not change (shape, layout, colours,
+  camera); styles `studio`, `workbench`, `dark` live in `enclosure/product.py`.
+
 ## Pricing
 
 JLC3DP (9600 resin, white) priced every tray at €0.58–1.76 and a box at

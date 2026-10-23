@@ -1,0 +1,128 @@
+# Look-alike models of the parts KiCad has no 3D model for, for the product
+# renders (`just enclosure::product`, enclosure/modules.py,
+# blender/render_product.py). Visual only: the clash and wall gates use the
+# enclosure.toml heights, never these.
+#
+# Where things go comes from the placed footprint: its F.Fab outline (the
+# breakout's own Dimension layer for the Breakout_Sockets footprints) and its
+# pads. A part whose footprint has no outline names one in enclosure.toml
+# (`outline`, board millimetres), and a footprint shared by several modules
+# names its kind there too (`module`).
+#
+# A feature sits on the module PCB. `xy` is footprint-local millimetres
+# (KiCad's y-down); `at` is a fraction of the outline (0..1 along x, then y),
+# for kinds whose outline is not the footprint's. `size` is [x, y, height] mm;
+# `z` lifts it above the PCB top. Sizes are datasheet-typical package sizes,
+# colours are the common retail boards: neither is measured here.
+
+[footprints]
+"Module:Pololu_Breakout-16_15.2x20.3mm" = { kind = "drv8825" }
+"Seeed_XIAO:XIAO-RP2350-Socket" = { kind = "xiao-rp2350" }
+"Seeed_XIAO:XIAO-ESP32-S3-Socket" = { kind = "xiao-esp32s3-sense" }
+"Breakout_Sockets:SparkFun_TB6612FNG_Socket" = { kind = "tb6612fng" }
+"Breakout_Sockets:Adafruit_PCA9685_Socket" = { kind = "pca9685" }
+"Breakout_Sockets:Adafruit_TCA9548A_Socket" = { kind = "tca9548a" }
+"Breakout_Sockets:Adafruit_MAX98357A_Socket" = { kind = "max98357a" }
+"Breakout_Sockets:CJMCU_2317_Socket" = { kind = "cjmcu-2317" }
+"Connector_AMASS:AMASS_XT30PW-M_1x02_P2.50mm_Horizontal" = { kind = "xt30" }
+"Connector_JST:JST_VH_B4P-VH_1x04_P3.96mm_Vertical" = { kind = "jst-vh" }
+"Fuse:Fuse_1812_4532Metric_Pad1.30x3.40mm_HandSolder" = { kind = "ptc-1812" }
+# KiCad's own model already draws this socket strip: no second one.
+"Connector_PinSocket_2.54mm:PinSocket_1x08_P2.54mm_Vertical" = { sockets = false }
+
+# --- Breakouts: a PCB on male headers in female sockets -------------------
+
+[kinds.drv8825]
+label = "DRV8825 stepper driver"
+pcb = [0.62, 0.08, 0.07]  # the red StepStick clone, the common retail board
+features = [
+  { what = "heatsink", at = [0.5, 0.5], size = [9.0, 9.0, 9.0] },
+  { what = "trimpot", at = [0.5, 0.1], size = [3.2, 3.2, 1.6] },
+]
+
+[kinds.xiao-rp2350]
+label = "Seeed XIAO RP2350"
+pcb = [0.05, 0.05, 0.07]
+pcb_thickness = 1.2
+features = [
+  { what = "chip", xy = [-1.5, 0.0], size = [7.0, 7.0, 0.9] },
+  # Pad 1 is at +x, so the USB end is too; the receptacle overhangs ~1 mm.
+  { what = "usb-c", xy = [8.4, 0.0], size = [7.4, 9.0, 3.2] },
+]
+
+[kinds.xiao-esp32s3-sense]
+label = "Seeed XIAO ESP32-S3 Sense"
+pcb = [0.05, 0.05, 0.07]
+pcb_thickness = 1.2
+features = [
+  { what = "shield", xy = [-2.5, 0.0], size = [12.5, 12.0, 1.6] },
+  { what = "usb-c", xy = [8.4, 0.0], size = [7.4, 9.0, 3.2] },
+  # Seeed: 21 x 17.8 x 15 mm with the camera board stacked on top.
+  { what = "connector", xy = [-6.0, 0.0], size = [3.0, 9.0, 7.0] },
+  { what = "board", xy = [0.0, 0.0], size = [20.96, 17.78, 1.2], z = 7.0 },
+  { what = "camera", xy = [-2.0, 0.0], size = [8.5, 8.5, 5.5], z = 8.2 },
+]
+
+[kinds.tb6612fng]
+label = "SparkFun TB6612FNG motor driver"
+pcb = [0.65, 0.07, 0.07]
+features = [
+  { what = "chip", xy = [7.62, -8.89], size = [5.6, 7.8, 1.5] },
+]
+
+[kinds.pca9685]
+label = "Adafruit PCA9685 16-channel PWM driver"
+pcb = [0.04, 0.12, 0.42]
+features = [
+  { what = "chip", xy = [29.2, -7.0], size = [9.7, 4.4, 1.2] },
+  { what = "terminal", xy = [29.2, -15.0], size = [10.2, 7.6, 8.5] },
+  # Sixteen 3-pin servo columns in four groups of four; the PWM row is y 0.
+  { what = "header", xy = [11.43, 2.54], cols = 4, rows = 3, size = [10.16, 7.62, 8.5] },
+  { what = "header", xy = [24.13, 2.54], cols = 4, rows = 3, size = [10.16, 7.62, 8.5] },
+  { what = "header", xy = [36.83, 2.54], cols = 4, rows = 3, size = [10.16, 7.62, 8.5] },
+  { what = "header", xy = [49.53, 2.54], cols = 4, rows = 3, size = [10.16, 7.62, 8.5] },
+]
+
+[kinds.tca9548a]
+label = "Adafruit TCA9548A I2C multiplexer"
+pcb = [0.04, 0.12, 0.42]
+features = [
+  { what = "chip", at = [0.5, 0.5], size = [4.4, 7.8, 1.2] },
+]
+
+[kinds.max98357a]
+label = "Adafruit MAX98357A I2S amplifier"
+pcb = [0.04, 0.12, 0.42]
+features = [
+  { what = "chip", xy = [-7.62, -6.0], size = [3.0, 3.0, 0.9] },
+  { what = "terminal", xy = [-7.62, -13.0], size = [7.2, 7.6, 8.0] },
+]
+
+[kinds.cjmcu-2317]
+label = "CJMCU-2317 (MCP23017) GPIO expander"
+pcb = [0.04, 0.12, 0.42]
+features = [
+  { what = "chip", xy = [10.16, 11.43], size = [7.5, 17.9, 2.4] },
+]
+
+[kinds.gy-521]
+label = "GY-521 (MPU-6050) IMU"
+pcb = [0.06, 0.2, 0.55]
+features = [
+  { what = "chip", at = [0.5, 0.45], size = [4.0, 4.0, 0.9] },
+  { what = "chip", at = [0.25, 0.7], size = [2.9, 1.6, 1.1] },
+]
+
+# --- Plain bodies: a block filling the outline up to the part's height ----
+
+[kinds.xt30]
+label = "XT30 battery connector"
+body = [0.95, 0.72, 0.08]
+
+[kinds.jst-vh]
+label = "JST VH power header"
+body = [0.93, 0.9, 0.8]
+
+[kinds.ptc-1812]
+label = "1812 PTC fuse"
+body = [0.85, 0.72, 0.25]

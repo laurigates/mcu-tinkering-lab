@@ -76,7 +76,10 @@ def import_board(scene):
             continue
         mod = o.modifiers.new("piece", "BOOLEAN")
         mod.operation = "INTERSECT"
-        mod.solver = "FLOAT"  # Blender 5: FLOAT, EXACT or MANIFOLD
+        # Blender 5: FLOAT, EXACT or MANIFOLD. FLOAT drops the substrate of
+        # the robocar head piece (copper and silk float in the air); EXACT
+        # keeps it.
+        mod.solver = "EXACT"
         mod.object = cutter
     return root
 
