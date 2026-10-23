@@ -6,7 +6,9 @@
     "docs/requirements/PRD-002-esp32cam-vision-ai-backend.md",
     "docs/requirements/PRD-003-robot-physics-simulation.md",
     "docs/requirements/PRD-011-melody-detector.md",
-    "docs/requirements/PRD-013-rapid-hardware-prototyping.md"
+    "docs/requirements/PRD-013-rapid-hardware-prototyping.md",
+    "docs/requirements/PRD-014-teuvo-sponsored-upgrades.md",
+    "docs/requirements/PRD-015-teuvo-for-other-owners.md"
   ],
   "last_synced_at": "2026-07-12T00:00:00Z",
   "features": [
@@ -193,12 +195,164 @@
       "status": "planned",
       "priority": "P3",
       "notes": "Strip router, pen-plotted track-cut map, breadboard preset"
+    },
+    {
+      "id": "FR-024",
+      "name": "Teuvo upgrade-request capture in the voice turn",
+      "prd": "PRD-014",
+      "status": "planned",
+      "priority": "P2",
+      "notes": "__REQUEST__ sentinel + summary to teuvo/<id>/upgrade/request; desk off by default"
+    },
+    {
+      "id": "FR-025",
+      "name": "Order facts downlink and gated phrasing",
+      "prd": "PRD-014",
+      "status": "planned",
+      "priority": "P2",
+      "notes": "Retained facts JSON; fail closed; payment-claim screen; prompt truncation fixes first"
+    },
+    {
+      "id": "FR-026",
+      "name": "Teuvo concierge service",
+      "prd": "PRD-014",
+      "status": "planned",
+      "priority": "P2",
+      "notes": "packages/robocar/concierge: order state, fee table, phone gate, dispatch, order page"
+    },
+    {
+      "id": "FR-027",
+      "name": "Upgrade payment rail",
+      "prd": "PRD-014",
+      "status": "planned",
+      "priority": "P2",
+      "notes": "Stripe sandbox, then per-order Payment Link; PAID only by Lauri or a verified webhook"
+    },
+    {
+      "id": "FR-028",
+      "name": "Gated planning workflow",
+      "prd": "PRD-014",
+      "status": "planned",
+      "priority": "P2",
+      "notes": "teuvo-plan.yml: environment approval, API-key billing, path guard, draft PR"
+    },
+    {
+      "id": "FR-029",
+      "name": "Upgrade-plan template",
+      "prd": "PRD-014",
+      "status": "planned",
+      "priority": "P2",
+      "notes": "packages/robocar/upgrades/<code>-<slug>/: parts, cost.csv, gate table, renders"
+    },
+    {
+      "id": "FR-030",
+      "name": "Upgrade link hand-off",
+      "prd": "PRD-014",
+      "status": "planned",
+      "priority": "P3",
+      "notes": "Printed per-robot QR sticker + spoken order code; OLED QR later"
+    },
+    {
+      "id": "FR-031",
+      "name": "Lead-time calibration",
+      "prd": "PRD-014",
+      "status": "planned",
+      "priority": "P3",
+      "notes": "lead-times.csv of real order dates; quoted bands until then"
+    },
+    {
+      "id": "FR-032",
+      "name": "Persona overlay in NVS",
+      "prd": "PRD-015",
+      "status": "planned",
+      "priority": "P2",
+      "notes": "Name (nom + gen), preset personality, voice; prompt-budget host test"
+    },
+    {
+      "id": "FR-033",
+      "name": "Per-device identity",
+      "prd": "PRD-015",
+      "status": "planned",
+      "priority": "P2",
+      "notes": "MQTT client id, topic root and mDNS from the device id"
+    },
+    {
+      "id": "FR-034",
+      "name": "Teuvo backend (Gemini proxy)",
+      "prd": "PRD-015",
+      "status": "planned",
+      "priority": "P3",
+      "notes": "Paid key server-side; per-device token, monthly cap, kill switch, model remap"
+    },
+    {
+      "id": "FR-035",
+      "name": "Owner onboarding and notices",
+      "prd": "PRD-015",
+      "status": "planned",
+      "priority": "P3",
+      "notes": "Adults only, privacy, AI disclosure, WiFi setup, reset"
+    },
+    {
+      "id": "FR-036",
+      "name": "Open-hardware build pack",
+      "prd": "PRD-015",
+      "status": "planned",
+      "priority": "P3",
+      "notes": "Route A: build guide, BOM, fab files, own-key setup guide"
+    },
+    {
+      "id": "FR-037",
+      "name": "Teuvo network list with scan-and-pick",
+      "prd": "ADR-028",
+      "status": "planned",
+      "priority": "P1",
+      "notes": "Up to 8 networks in NVS; all-channel scan; serial wifi commands"
+    },
+    {
+      "id": "FR-038",
+      "name": "Network services armed on link-up",
+      "prd": "ADR-028",
+      "status": "planned",
+      "priority": "P0",
+      "notes": "MQTT, OTA and rollback-confirm on GOT_IP; Improv re-arm; skip requests offline"
+    },
+    {
+      "id": "FR-039",
+      "name": "Runtime Gemini credential in NVS",
+      "prd": "ADR-028",
+      "status": "planned",
+      "priority": "P0",
+      "notes": "gemini auth; fixes key dropped after Improv; 402/403 handling"
+    },
+    {
+      "id": "FR-040",
+      "name": "Offline voice clips and help request",
+      "prd": "ADR-028",
+      "status": "planned",
+      "priority": "P1",
+      "notes": "Pre-rendered ADPCM persona lines embedded in the app image"
+    },
+    {
+      "id": "FR-041",
+      "name": "WiFi join from a QR code",
+      "prd": "ADR-028",
+      "status": "planned",
+      "priority": "P2",
+      "notes": "quirc on JPEG luma; both WIFI: dialects; offline-only acceptance policy"
+    },
+    {
+      "id": "FR-042",
+      "name": "WiFi hunt game",
+      "prd": "ADR-028",
+      "status": "planned",
+      "priority": "P3",
+      "notes": "Opt-in, supervised: QR sweep, known-AP RSSI climb, ask for help"
     }
   ],
   "summary": {
-    "total": 23,
+    "total": 42,
     "active": 13,
-    "planned": 10,
+    "planned": 29,
     "in_progress": 0,
     "blocked": 0
   }

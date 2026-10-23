@@ -29,6 +29,25 @@
 | FR-021 | Perfboard continuity checklist | PRD-013 | planned | P1 | continuity.md from the netlist; rail isolation pairs |
 | FR-022 | Copper-foil test board | PRD-013 | planned | P2 | Portrait 2 knife-cut single-layer test board; bench results go in PRD-013 |
 | FR-023 | Stripboard mode for the perfboard generator | PRD-013 | planned | P3 | Strip router, pen-plotted track-cut map, breadboard preset |
+| FR-024 | Teuvo upgrade-request capture in the voice turn | PRD-014 | planned | P2 | __REQUEST__ sentinel + summary to teuvo/<id>/upgrade/request; desk off by default |
+| FR-025 | Order facts downlink and gated phrasing | PRD-014 | planned | P2 | Retained facts JSON; fail closed; payment-claim screen; prompt truncation fixes first |
+| FR-026 | Teuvo concierge service | PRD-014 | planned | P2 | packages/robocar/concierge: order state, fee table, phone gate, dispatch, order page |
+| FR-027 | Upgrade payment rail | PRD-014 | planned | P2 | Stripe sandbox, then per-order Payment Link; PAID only by Lauri or a verified webhook |
+| FR-028 | Gated planning workflow | PRD-014 | planned | P2 | teuvo-plan.yml: environment approval, API-key billing, path guard, draft PR |
+| FR-029 | Upgrade-plan template | PRD-014 | planned | P2 | packages/robocar/upgrades/<code>-<slug>/: parts, cost.csv, gate table, renders |
+| FR-030 | Upgrade link hand-off | PRD-014 | planned | P3 | Printed per-robot QR sticker + spoken order code; OLED QR later |
+| FR-031 | Lead-time calibration | PRD-014 | planned | P3 | lead-times.csv of real order dates; quoted bands until then |
+| FR-032 | Persona overlay in NVS | PRD-015 | planned | P2 | Name (nom + gen), preset personality, voice; prompt-budget host test |
+| FR-033 | Per-device identity | PRD-015 | planned | P2 | MQTT client id, topic root and mDNS from the device id |
+| FR-034 | Teuvo backend (Gemini proxy) | PRD-015 | planned | P3 | Paid key server-side; per-device token, monthly cap, kill switch, model remap |
+| FR-035 | Owner onboarding and notices | PRD-015 | planned | P3 | Adults only, privacy, AI disclosure, WiFi setup, reset |
+| FR-036 | Open-hardware build pack | PRD-015 | planned | P3 | Route A: build guide, BOM, fab files, own-key setup guide |
+| FR-037 | Teuvo network list with scan-and-pick | ADR-028 | planned | P1 | Up to 8 networks in NVS; all-channel scan; serial wifi commands |
+| FR-038 | Network services armed on link-up | ADR-028 | planned | P0 | MQTT, OTA and rollback-confirm on GOT_IP; Improv re-arm; skip requests offline |
+| FR-039 | Runtime Gemini credential in NVS | ADR-028 | planned | P0 | gemini auth; fixes key dropped after Improv; 402/403 handling |
+| FR-040 | Offline voice clips and help request | ADR-028 | planned | P1 | Pre-rendered ADPCM persona lines embedded in the app image |
+| FR-041 | WiFi join from a QR code | ADR-028 | planned | P2 | quirc on JPEG luma; both WIFI: dialects; offline-only acceptance policy |
+| FR-042 | WiFi hunt game | ADR-028 | planned | P3 | Opt-in, supervised: QR sweep, known-AP RSSI climb, ask for help |
 
 ## Status Key
 
