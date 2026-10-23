@@ -4,7 +4,7 @@
 spatialmath-python==1.1.18
 
 # Scientific computing
-numpy==2.5.3
+numpy==2.5.4
 scipy==1.18.1
 matplotlib==3.11.2
 pandas==3.0.6
@@ -27,7 +27,7 @@ trimesh==5.1.1
 # pyvista>=0.38.0  # Reduced for compatibility
 
 # Physics simulation
-pymunk==7.3.0
+pymunk==7.3.1
 
 # Configuration and utilities
 pyyaml==6.0.3

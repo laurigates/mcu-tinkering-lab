@@ -2,9 +2,9 @@
 name = "robocar-live-probe"
 version = "0.1.0"
 description = "Workstation probe of the Gemini Live API for robocar-unified real-time conversation (issue #619)"
-requires-python = "==3.14.8"
+requires-python = "==3.15.0"
 dependencies = [
-    "google-genai==2.28.0",
+    "google-genai==2.29.0",
 ]
 
 [dependency-groups]
