@@ -112,6 +112,33 @@ a Preferred filter. On 2026-10-22 there was no Basic tantalum above 10 µF, no
 Basic aluminium electrolytic, PTC fuse or power inductor, and one Basic 2 A
 ferrite (C14709, 0603).
 
+### VAT, duty and shipping appear only at checkout
+
+**Every price before checkout excludes VAT.** The cart and quote pages show
+none; the checkout summary adds it as "Customs duties & taxes". Compare
+JLCPCB with a VAT-inclusive shop (AliExpress shows "Price includes VAT") only
+after adding it. On 2026-10-23 the cart of €109.35 merchandise checked out as:
+
+| Shipping (checkout, 1.78 kg) | Ship | VAT | Duty + fee | Grand total |
+|---|---|---|---|---|
+| IOSS DHL Express, 2–4 days | €32.29 | €36.12 | at delivery, see below | €177.76 |
+| IOSS FedEx Express, 5–8 days | €44.33 | €39.19 | at delivery | €192.87 |
+| IOSS UPS Express Saver, 3–6 days | €39.37 | €37.93 | at delivery | €186.65 |
+| DDP DHL Express, 2–4 days | €32.78 | €39.29 | €8.96 duty + €7.36 disbursement | €197.74 |
+| FCA, own freight account | — | buyer's | buyer's | — |
+
+The VAT is 25.5 % (Finland) of goods plus shipping: €36.12 = 0.255 ×
+(€109.35 + €32.29). Global Standard Direct Line was not offered at 1.78 kg.
+
+**Since 1 July 2026 the EU charges customs duty on parcels under €150**
+(JLCPCB's checkout note). IOSS options prepay only the VAT; the carrier
+collects the duty and its own disbursement fee at delivery, so the IOSS
+grand total understates the cost. DDP prepays all of it. Pick between them
+on the delivered total, not the grand total.
+
+Coupons are applied in the payment step, after Submit Order. Whether the
+VAT is recomputed on the discounted amount was not checked.
+
 ## 5. Coupons
 
 - **One coupon per order**, chosen in the cart's Coupons panel.
@@ -131,8 +158,10 @@ There is no cart export. Write `tmp/quotes/jlcpcb-cart-<date>.csv`: one row
 per cart line (JLC reference as shown, truncated if the page truncates it;
 quantity; build time; EUR price; the commit each board came from; the fab
 zip's sha256 prefix; BOM and CPL paths), plus summary rows for merchandise,
-shipping, coupon and subtotal. Then tell Lauri the total, the coupon and
-shipping to re-check at checkout, and anything still open on a board.
+shipping, coupon and subtotal, and a row for the checkout's VAT once it has
+been read. Then tell Lauri the total (saying whether it includes VAT), the
+coupon and shipping to re-check at checkout, and anything still open on a
+board.
 
 ## 7. 3D-printed cases (JLC3DP)
 
