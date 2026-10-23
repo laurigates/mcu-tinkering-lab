@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.8](https://github.com/laurigates/mcu-tinkering-lab/compare/balancebot-v0.1.7...balancebot-v0.1.8) (2026-10-23)
+
+
+### Features
+
+* **enclosure:** case configs for the balancebot and robocar carriers ([31a423f](https://github.com/laurigates/mcu-tinkering-lab/commit/31a423f0495682a1d73b1e7aa171093e06ff98b6))
+* **kicad:** perfboard 1:1 print and continuity checklist ([#828](https://github.com/laurigates/mcu-tinkering-lab/issues/828)) ([b8ba591](https://github.com/laurigates/mcu-tinkering-lab/commit/b8ba591d6d50aeeb9ab565ab6263af550c5b018f))
+
 ## [0.1.7](https://github.com/laurigates/mcu-tinkering-lab/compare/balancebot-v0.1.6...balancebot-v0.1.7) (2026-10-21)
 
 
