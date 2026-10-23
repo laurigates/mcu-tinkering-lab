@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.15](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.14...robocar-unified-v0.2.15) (2026-10-23)
+
+
+### Features
+
+* **enclosure:** captioned product renders with breakout look-alikes, and Fibo 2.0 photos ([#842](https://github.com/laurigates/mcu-tinkering-lab/issues/842)) ([ee435fe](https://github.com/laurigates/mcu-tinkering-lab/commit/ee435fe55b687a2d7ab104b652da3872b19d77d1))
+
 ## [0.2.14](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.13...robocar-unified-v0.2.14) (2026-10-23)
 
 
