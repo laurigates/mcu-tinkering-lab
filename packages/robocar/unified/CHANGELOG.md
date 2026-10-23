@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.14](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.13...robocar-unified-v0.2.14) (2026-10-23)
+
+
+### Features
+
+* **enclosure:** case configs for the balancebot and robocar carriers ([31a423f](https://github.com/laurigates/mcu-tinkering-lab/commit/31a423f0495682a1d73b1e7aa171093e06ff98b6))
+* **enclosure:** screw-mounted board, corner-boss lid, closed cable windows ([e33ae4e](https://github.com/laurigates/mcu-tinkering-lab/commit/e33ae4e174422db0a9565706ed58b512e39540da))
+
 ## [0.2.13](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.12...robocar-unified-v0.2.13) (2026-10-21)
 
 
