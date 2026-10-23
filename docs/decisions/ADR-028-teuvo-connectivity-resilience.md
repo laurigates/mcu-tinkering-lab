@@ -332,16 +332,16 @@ In order. Each step lands with host tests where the logic is pure C.
    has no Finnish. Check streaming on `:streamGenerateContent?alt=sse`, whether
    the `<style>: <text>` prefix is spoken now that 3.8 reads input as a verbatim
    transcript, the delivery tags and the output format. Then migrate
-   `gemini_tts.c`. Issue #TBD-tts.
+   `gemini_tts.c`. Issue #844.
 1. FR-039: runtime Gemini credential (§3), which fixes the key-drop bug.
-   Issue #TBD-key.
+   Issue #845.
 2. FR-038: services armed on link-up, a non-blocking connect, and requests
-   skipped offline (§2). Issue #TBD-arm.
+   skipped offline (§2). Issue #846.
 3. FR-037: the network list, all-channel scan, console commands and the `home`
-   flag (§1, §4). Issue #TBD-netlist.
-4. FR-040: offline clips and the help request (§5). Issue #TBD-offline.
+   flag (§1, §4). Issue #848.
+4. FR-040: offline clips and the help request (§5). Issue #849.
 5. FR-041: QR join (§6). Bench first: quirc decode time and read distance at
-   QVGA and VGA on the OV3660, with Android and iPhone codes. Issue #TBD-qr.
+   QVGA and VGA on the OV3660, with Android and iPhone codes. Issue #850.
 6. FR-042: the hunt (§7), after the steps above have run on the bench.
 
 ## Related

@@ -518,17 +518,20 @@ Teuvo says Lauri will tell when the build is done.
 | 1 | Live Stripe, KSL texts and confirmation e-mail, invoices, FR-029 docs-only, FR-030 sticker | real, planning fee only | Lauri: approve text, mark paid, approve run, every purchase |
 | 2 | Webhook-confirmed payment, schematic-stage variants, FR-031 calibration; build quotes and `BUILD_PAID` only once the build-fee question is settled | real | Lauri: approve text, approve run, `LAYOUT`, every purchase |
 
+Phase 0 issues: #853 (device: FR-024, FR-025), #854 (concierge: FR-026, FR-027),
+#855 (workflow and guards: FR-028, FR-029).
+
 Prerequisites:
 
-- **Per-device identity** (PRD-015 FR-033): the `teuvo/<device_id>/` topics,
+- **Per-device identity** (PRD-015 FR-033, #851): the `teuvo/<device_id>/` topics,
   the ACL and the client id.
-- **From ADR-028:** the runtime Gemini credential (FR-039), services armed on
-  link-up (FR-038), the network list with its `home` flag and the connectivity
-  state of §4 (FR-037).
-- **The TTS model migration** (FR-043). `gemini-3.1-flash-tts-preview` has a
+- **From ADR-028:** the runtime Gemini credential (FR-039, #845), services
+  armed on link-up (FR-038, #846), the network list with its `home` flag and
+  the connectivity state of §4 (FR-037, #848).
+- **The TTS model migration** (FR-043, #844). `gemini-3.1-flash-tts-preview` has a
   listed earliest shutdown of 2026-11-17 (ai.google.dev deprecations,
   2026-10-22).
-- **The four truncation fixes** under FR-025.
+- **The four truncation fixes** under FR-025 (#847).
 - **MQTT broker credentials** on the robot, with `allow_anonymous false` and
   the ACL on the broker. Before that switch:
   - give `build-firmware.yml`'s notify step the `ci-notify` broker credential

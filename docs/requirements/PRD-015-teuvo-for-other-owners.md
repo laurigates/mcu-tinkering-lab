@@ -330,7 +330,7 @@ This is not scheduled. Each item would be done before a first unit is sold:
 
 | Phase | Scope |
 |---|---|
-| 1 | FR-033 identity, FR-032 overlay with the prompt-budget test, ADR-028 FR-039 key slot: Lauri runs two Teuvos |
+| 1 | FR-033 identity (#851), FR-032 overlay (#852) with the prompt-budget test (#847), ADR-028 FR-039 key slot (#845): Lauri runs two Teuvos |
 | 2 | FR-036 build pack (route A), FR-035 notices |
 | 3 | If route B: per-robot capped projects first; FR-034 proxy only past about five robots, after a week of measured usage |
 | 4 | Route C, only after the checklist is costed and accepted |
