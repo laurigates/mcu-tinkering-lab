@@ -8,7 +8,8 @@
     "docs/requirements/PRD-011-melody-detector.md",
     "docs/requirements/PRD-013-rapid-hardware-prototyping.md",
     "docs/requirements/PRD-014-teuvo-sponsored-upgrades.md",
-    "docs/requirements/PRD-015-teuvo-for-other-owners.md"
+    "docs/requirements/PRD-015-teuvo-for-other-owners.md",
+    "docs/decisions/ADR-028-teuvo-connectivity-resilience.md"
   ],
   "last_synced_at": "2026-07-12T00:00:00Z",
   "features": [
@@ -306,7 +307,7 @@
       "prd": "ADR-028",
       "status": "planned",
       "priority": "P1",
-      "notes": "Up to 8 networks in NVS; all-channel scan; serial wifi commands"
+      "notes": "Up to 8 networks in NVS; all-channel scan; serial wifi commands; home flag gates MQTT"
     },
     {
       "id": "FR-038",
@@ -314,7 +315,7 @@
       "prd": "ADR-028",
       "status": "planned",
       "priority": "P0",
-      "notes": "MQTT, OTA and rollback-confirm on GOT_IP; Improv re-arm; skip requests offline"
+      "notes": "Non-blocking connect; MQTT, OTA and rollback-confirm on GOT_IP; Improv re-arm; skip requests offline"
     },
     {
       "id": "FR-039",
@@ -347,12 +348,20 @@
       "status": "planned",
       "priority": "P3",
       "notes": "Opt-in, supervised: QR sweep, known-AP RSSI climb, ask for help"
+    },
+    {
+      "id": "FR-043",
+      "name": "TTS migration off gemini-3.1-flash-tts-preview",
+      "prd": "ADR-028",
+      "status": "planned",
+      "priority": "P0",
+      "notes": "Earliest shutdown 2026-11-17; probe gemini-3.8-flash-tts (Finnish; not Flash-Lite) for streaming and style prefix"
     }
   ],
   "summary": {
-    "total": 42,
+    "total": 43,
     "active": 13,
-    "planned": 29,
+    "planned": 30,
     "in_progress": 0,
     "blocked": 0
   }

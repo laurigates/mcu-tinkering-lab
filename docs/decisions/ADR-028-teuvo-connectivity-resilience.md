@@ -20,6 +20,8 @@ so its `WIFI_CONNECT_AP_BY_SIGNAL` sort has no effect (`wifi_manager.c:182-190`;
 ESP-IDF v5.4 Wi-Fi guide). The threshold `WIFI_AUTH_WPA_WPA2_PSK` rejects open,
 WEP, WPA1 and OWE networks (`wifi_manager.c:185`), while the loader still says
 an empty password means an open network (`credentials_loader.c:177-180`).
+`wifi_connect()` blocks `app_main` until it connects or its fast retries fail.
+The executor and console start only after that (`wifi_manager.c:199-213`).
 
 **Services armed once, at boot.**
 - Improv starts only if WiFi is down at the end of `init_network()`
@@ -64,7 +66,11 @@ link is back.
 - Nothing decodes a QR code or reads text on the device.
 - The 960 KB `spiffs` partition is allocated but unused (`partitions.csv:18`).
   The app image is 1.34 MB of a 3.5 MB OTA slot (v0.2.13).
-- The 128x32 OLED is wired but has no driver (`config.h:158`, issue #780).
+- The 128x32 OLED is wired (`config.h:158`), but `robocar-unified` has no OLED
+  code. `robocar/bringup/main/oled.c` drives the same panel; #780 tracks its
+  geometry.
+- MQTT is plaintext to a bare private IP (`config.h:82`), and the broker
+  credentials travel in the CONNECT packet.
 
 The owner's notes ask for Teuvo to remember several networks, say when he is
 disconnected and ask for help, join from a WiFi QR code, and, as play, hunt
@@ -82,9 +88,9 @@ provisioning stacks.
 - A new pure-C `wifi_netlist_core.{c,h}`, host-tested under the shared-core
   pattern (`.claude/rules/testing.md`). It holds up to 8 entries in one
   versioned NVS blob: SSID (≤32), PSK (≤64), flags (hidden, open-allowed,
-  SAE-only), BSSID and channel hint, last RSSI, last-success boot counter,
-  failure count, and source (improv, console, qr). First boot migrates the
-  legacy `wifi_config` pair.
+  SAE-only, `home`), BSSID and channel hint, last RSSI, last-success boot
+  counter, failure count, and source (improv, console, qr). First boot migrates
+  the legacy `wifi_config` pair.
 - Selection runs an all-channel scan, intersects it with the list, and ranks by
   RSSI plus recency minus a failure penalty. It then connects with a BSSID and
   channel hint. Reasons 15/202/204 mark a credential as suspect; 201/210/211
@@ -93,33 +99,48 @@ provisioning stacks.
   copy to flash on every switch. The app list is the one store.
 - The WPA2 minimum stays. An open network is joined only if its entry carries
   the owner's explicit open-allowed flag.
-- The serial console gets `wifi list|add|forget|scan`. It is serial-only, like
-  `mqtt auth`, so a password never travels over MQTT.
+- The serial console gets `wifi list|add|forget|scan|home`. It is serial-only,
+  like `mqtt auth`, so a password never travels over MQTT. The `home` flag is
+  set only here (§6).
 - A phone hotspot is an ordinary entry. The docs say it must be 2.4 GHz.
-- The 32-character SSID and 64-hex-digit PSK edge cases are fixed: the buffers
-  become 33/65 (`credentials_loader.h:17-18`, `wifi_manager.c:192-193`).
+- The 32-character SSID and 64-hex-digit PSK edge cases are fixed:
+  `credentials_t` and the NVS read buffers become 33/65
+  (`credentials_loader.h:17-18`, `credentials_loader.c:38-45`). `wifi_connect`
+  copies the full 32/64 bytes into `sta.ssid`/`sta.password` without the `- 1`
+  (`wifi_manager.c:192-193`); those fields need no NUL at full length.
 
 ### 2. Arm network services on link-up, not at boot
 
-- MQTT and OTA, including the rollback-confirm timer, start on the first
-  `IP_EVENT_STA_GOT_IP`, whenever that happens.
+- Connecting becomes a state machine driven by WiFi events. `app_main` and the
+  Improv callback never block on it, so the console and executor start at once.
+- Errors from `set_mode`, `set_config` and `start` are logged, not
+  `ESP_ERROR_CHECK`ed, so a failed Improv attempt cannot reboot the board.
+- The reconnect timer (`wifi_manager.c:52-64`) stops before any scan, because a
+  scan started during a connect fails with `ESP_ERR_WIFI_STATE`.
+- On the first `IP_EVENT_STA_GOT_IP`, whenever it happens, OTA starts,
+  including the rollback-confirm timer, and MQTT starts on `home` networks
+  (§6).
 - Improv re-arms when the link has been down for more than a set time, and
   disarms on reconnect.
 - The planner, voice turns and TTS skip their request while there is no link,
   so offline time does not spend the per-boot fuses.
 - `improv-wifi` gets 0x02 *current state*, error code 0x03 and real device info.
-  Scan (0x04) follows later. All four consumers build, because CI does not
-  build consumers on a component-only change (#670).
+  Scan (0x04) follows later. CI rebuilds every project that lists
+  `components/improv-wifi` in `extra_paths`: seven, per
+  `.github/project-matrix.json`, since #670 was fixed. CI compiles the protocol
+  but never runs it, so bench-test Improv on `robocar-unified` and on at least
+  one other consumer.
 
 ### 3. Hold the Gemini credential in NVS
 
-A serial-only `gemini auth <key>` / `gemini auth clear` command stores the key
-in its own NVS namespace. It is modelled on `mqtt auth`, with the same
-redaction and presence-only reporting. The key loads from NVS, then
-`credentials.h`, whatever the WiFi source. The same slot later holds a proxy
-device token (PRD-015 FR-034). `gemini_http.c` handles HTTP 402 (prepay balance
-exhausted) and 403 (key blocked or unrestricted) separately from other
-failures, so Teuvo can say which one it is.
+- A serial-only `gemini auth <key>` / `gemini auth clear` command stores the
+  key in its own NVS namespace. It is modelled on `mqtt auth`, with the same
+  redaction and presence-only reporting.
+- The key loads from NVS, then `credentials.h`, whatever the WiFi source.
+- The same slot later holds a proxy device token (PRD-015 FR-034).
+- `gemini_http.c` handles HTTP 402 (prepay balance exhausted) and 403 (key
+  blocked or unrestricted) separately from other failures, so Teuvo can say
+  which one it is.
 
 ### 4. Make connectivity a stated fact
 
@@ -131,41 +152,60 @@ reads the same as an API error.
 
 ### 5. Give Teuvo a small offline voice
 
-- 8–12 persona lines are pre-rendered through the same Gemini TTS voice and
-  style by a local `just` recipe. Examples: "I seem to have lost the network",
-  "show me the WiFi QR code", "connected, thank you", "my key is not working".
-  They are stored as 24 kHz IMA-ADPCM, at about 12 kB/s, so 40–60 s is about
-  0.5–0.7 MB.
-- The clips are **embedded in the app image** (`EMBED_FILES`), not written to
-  the `spiffs` partition. OTA updates only the app partition, and there is room
-  for them (1.34 of 3.5 MB used). Clips in `spiffs` would never update.
-- Lines are name-free, so a renamed Teuvo (PRD-015 FR-032) can reuse them.
-  Finnish comes first; English is an open question.
-- Playback goes through `audio_player`, like live TTS. A help request plays
-  when the state is `NO_KNOWN_NETWORK` or `AUTH_FAILED`. It needs the VAD to
-  hear someone nearby, is rate-limited, and comes with a buzzer motif and an
-  amber LED.
+- **The lines.** 8–12 persona lines are pre-rendered through Gemini TTS by a
+  local `just` recipe. Examples: "I seem to have lost the network", "show me
+  the WiFi QR code", "connected, thank you", "my key is not working", "my
+  credit has run out". They are stored as 24 kHz IMA-ADPCM, at about 12 kB/s,
+  so 40–60 s is about 0.5–0.7 MB. The render uses the migrated TTS request
+  (FR-043).
+- **Where they live.** The default set is **embedded in the app image**
+  (`EMBED_FILES`). OTA updates only the app partition, and there is room for
+  them (1.34 of 3.5 MB used).
+- **Voice and style.** Lines are name-free, but each clip fixes the voice and
+  style it was rendered in. The embedded set uses the default persona and
+  voice. A robot whose owner picks another voice or preset (PRD-015 FR-032)
+  plays the default set until it has its own. That set is rendered on the
+  device while online, into the unused `spiffs` partition (about 80 s of
+  IMA-ADPCM). A header naming the persona and voice is checked at playback
+  before the set is preferred.
+- **When they play.** Playback goes through `audio_player`, like live TTS. A
+  help request plays in `NO_KNOWN_NETWORK` or `AUTH_FAILED`. It needs the VAD
+  to hear someone nearby, is rate-limited, and comes with a buzzer motif and an
+  amber LED. The key and credit lines play once on entering `NO_KEY` or
+  `NO_CREDIT` (§3, §4).
 
 ### 6. Join from a WiFi QR code shown to the camera
 
-- Decoding uses `espressif/quirc` 1.2.0 (ISC). Its input is a full-scale luma
-  plane taken from the JPEG frames the camera already produces. The camera is
-  never reconfigured to GRAYSCALE, which would need a deinit and init and would
-  disturb the planner.
-- *QR mode* raises the frame size to VGA, inside the 64 KB JPEG buffer, which
-  the bench must confirm. It is entered from the console, or by itself in
+- **Decoding.** It uses `espressif/quirc` 1.2.0 (ISC). Its input is a
+  full-scale luma plane taken from the JPEG frames the camera already produces.
+  The camera is never reconfigured to GRAYSCALE, which would need a deinit and
+  init and would disturb the planner.
+- **QR mode.** It raises the frame size to VGA, inside the 64 KB JPEG buffer,
+  which the bench must confirm. It is entered from the console, or by itself in
   `NO_KNOWN_NETWORK`.
-- A pure-C `wifi_qr_core` parser accepts both dialects:
-  - ZXing/Android: backslash escapes, `T:SAE` from Android;
-  - the WPA3 spec v3.5 §7.1: percent-encoding, `R:`, `I:`, `K:`, `T` absent.
-- Policy:
-  - QR codes are accepted only while no known network is reachable, or after a
-    console or voice confirmation, because anyone holding a QR could move the
-    robot to their AP;
-  - WEP is refused;
-  - an open network is refused unless the owner allowlisted it;
-  - each scanned credential gets at most 2 attempts;
-  - an entry is saved only after `GOT_IP`, as Improv does today.
+- **The parser.** A pure-C `wifi_qr_core` parser accepts both dialects:
+  - ZXing/Android: backslash escapes, `T:WPA`/`T:SAE`/`T:WEP`/`T:nopass`,
+    fields in any order;
+  - the WPA3 spec v3.5 §7.1: `T:WPA` for every password network (SAE or PSK;
+    no other value is defined), `T` absent only for an open or Enhanced Open
+    network, percent-encoding, `R:` (Transition Disable), `I:`, `K:`, unknown
+    fields ignored.
+
+  A host test pins how a code with no `T` is classified (open under both
+  dialects), including one that still carries `P:`.
+- **Policy.**
+  - A QR-joined entry is saved with source `qr` and without the `home` flag.
+  - MQTT, which sends the broker credential in plaintext, starts only on an
+    entry whose `home` flag was set over serial. On any other network only TLS
+    services run: Gemini and the HTTPS OTA manifest. Otherwise an AP that gives
+    itself the broker's address would receive the credential, and could then
+    send the full command set. Lift this only once MQTT runs over TLS with a
+    pinned broker certificate.
+  - While a known network is reachable, a QR is accepted only after a console
+    confirmation. A voice confirmation never authorises a join.
+  - WEP is refused. An open network is refused unless the owner allowlisted it.
+  - Each scanned credential gets at most 2 attempts.
+  - An entry is saved only after `GOT_IP`, as Improv does today.
 
 ### 7. The WiFi hunt is opt-in play, built last
 
@@ -177,43 +217,60 @@ more than a set time. It has three moves:
 - asking people for help with the offline clips.
 
 Indoor RSSI noise is about 4 dB, and a ±1 dB local mean needs about 5 m of
-travel at 2.4 GHz (Blum & Hafner 2015; Lee 1985). So the hunt is a game and a
-way back toward a remembered AP, not a router finder.
+travel at 2.4 GHz (Blum & Hafner 2015; Lee 1985). The robot also has no
+encoders, IMU or odometry. So the hunt is a game and RSSI-guided wandering back
+toward a remembered AP, not a router finder.
 
 Limits:
 - no open networks unless allowlisted;
 - no guessing or brute force; no WPS PIN; no MAC cloning; no captive-portal
   automation;
 - at most 2 attempts per credential;
-- time- and distance-boxed, and on a supervised single-level floor only, since
-  there is no cliff sensor.
+- time-boxed, with a cap on total drive time at a fixed low speed, since
+  distance cannot be measured;
+- it stops on the obstacle reflex, and runs on a supervised single-level floor
+  only, since there is no cliff sensor.
 
 Reading a handwritten password needs Gemini, because no OCR runs on the
 ESP32-S3 (PP-OCRv6 is ESP32-P4 only). So it works only once online, for example
-through a phone hotspot. It must be started by the owner, use a paid-tier key
-(the unpaid tier's terms forbid sending sensitive data), and have the network
-owner's consent.
+through a phone hotspot. It must be started by the owner, use a paid-tier key,
+and have the network owner's consent. *Interpretation:* a WiFi password is the
+network owner's secret. Outside the EEA, the unpaid Gemini terms say not to
+submit sensitive information. In the EEA the paid data terms also cover unpaid
+quota, but any unit made available to someone else must be on Paid Services
+anyway.
 
 ### 8. Deferred
 
 - **BLE provisioning** (`network_provisioning` Security2 with a per-robot PoP
-  sticker). It is the only phone path that also works on iOS. Revisit it for
-  PRD-015 after measuring NimBLE's internal-RAM cost.
-- **SoftAP captive portal.** It needs AMPDU off on the S3, which costs STA
-  throughput (esp-idf#13508).
-- **A built-in SIM modem.** Only D3 and D7 are free, so there is no RTS/CTS.
-  The carrier and the 2x7 ribbon do not route those pads. The 5 V LM2596 rail
-  is already at its limit with two motors stalled. Real-time 24 kHz PCM TTS
-  needs about 0.6 Mbit/s (estimate), which rules out LTE-M and 0.5 Mbit/s
-  Finnish device plans.
+  sticker). It is the only verified iPhone provisioning path that needs neither
+  a camera QR nor a pre-known hotspot. iOS 18's Passwords app can show a
+  network QR code, but its payload is unverified, so the §6 bench test includes
+  an iPhone-generated code. Revisit BLE for PRD-015 after measuring NimBLE's
+  internal-RAM cost.
+- **SoftAP captive portal.** It adds an HTTP server and DNS hijack. SoftAP
+  visibility on the S3 is an open upstream issue (esp-idf#13508, where RF
+  causes are discussed). The repo's `wifitest` turns AMPDU off as an
+  unverified workaround, which would cost STA throughput. Bench it before
+  relying on it.
+- **A built-in SIM modem.**
+  - The hardware is not ready. Only D3 and D7 are free, so there is no RTS/CTS,
+    and the carrier and the 2x7 ribbon do not route those pads. The 5 V LM2596
+    rail is at its limit with two motors stalled (estimate; the stall current
+    is simulated, not measured).
+  - The bandwidth may not be there. Real-time 24 kHz PCM TTS needs about
+    0.6 Mbit/s once SSE overhead is counted (estimate; about 0.51 Mbit/s of
+    bare base64). That rules out LTE-M. On 0.5 Mbit/s Finnish device plans,
+    lines longer than about 6 s would underrun unless the 1 s pre-roll grows
+    (estimate; measure the bytes per utterance first).
   - Until then, a phone hotspot or a pocket LTE router is the untethered path,
     as a list entry.
   - If a modem ever comes: an A7670E-class Cat-1 module, LTE-only
     (`AT+CNMP=38`), at 921600 baud or more, with its own 3.8 V 2 A buck from
     VBAT, through a carrier revision.
-  - Re-evaluate if TTS moves to the 3.8 TTS models' 8 kHz µ-law output on the
-    Interactions API, which needs roughly a sixth of the downlink (Gemini
-    speech-generation docs, 2026-10-12).
+  - Re-evaluate if TTS moves to `gemini-3.8-flash-tts`'s 8 kHz µ-law output on
+    the Interactions API, which needs roughly a sixth of the downlink (Gemini
+    speech-generation docs, 2026-10-12). Flash-Lite TTS has no Finnish.
 
 ## Alternatives Considered
 
@@ -221,10 +278,10 @@ owner's consent.
 |---|---|
 | Third-party multi-AP component (`thorrak/esp_wifi_config`, `embedblocks/wifi-manager`) | Single-maintainer, pre-1.0, brings SoftAP/REST/BLE stacks that overlap Improv; one needs IDF ≥5.5 |
 | Switch the camera to GRAYSCALE for QR | Needs `esp_camera_reconfigure()` (deinit + init), which disrupts the planner's JPEG stream |
-| Offline clips in the `spiffs` partition | Not covered by OTA; clips would freeze at the first flash |
+| Default offline clips only in the `spiffs` partition | Not covered by OTA; the default set would freeze at the first flash. `spiffs` holds only on-device re-renders (§5) |
 | On-device OCR for written passwords | No OCR model runs on the ESP32-S3 |
 | Joining any open network when lost | Unsafe and possibly against the network owner's terms; kept behind an explicit allowlist |
-| SoftAP or BLE now | AMPDU conflict; unmeasured RAM on an already tight heap |
+| SoftAP or BLE now | Unverified S3 SoftAP visibility issue; unmeasured RAM on an already tight heap |
 | SIM modem now | Pins, ribbon, power budget and TTS bandwidth all need a hardware revision; hotspot covers the use case |
 
 ## Consequences
@@ -232,22 +289,29 @@ owner's consent.
 **Positive**
 - Teuvo survives a move between home, a phone hotspot and a second site
   without a reflash.
-- A robot that boots offline, or loses its link mid-uptime, recovers MQTT, OTA
-  and provisioning on its own. An OTA image is no longer rolled back because
-  its first boot was offline.
+- A robot that boots offline, or loses its link mid-uptime, recovers OTA, MQTT
+  (on `home` networks) and provisioning on its own.
+- An OTA image whose first boot is offline is no longer rolled back, provided
+  it gets a link before its next reset. An image that is reset before it ever
+  connects still rolls back, which keeps the safety net against images that
+  break networking.
+- Boot no longer waits on WiFi, so the console and the reflex are up at once.
 - Teuvo can say he is lost and what would help, in character, with no network.
 - The key survives Improv and OTA. Every PRD-015 unit needs this.
 - Selection, the QR parser and the store are pure C and pinned by host tests.
 
 **Negative**
 - `wifi_manager.c` stops matching the canonical pattern in the `wifi-sta-setup`
-  skill. The skill is updated in the same change.
+  skill. The skill is updated in the same change, including its esp-idf#13508
+  note.
 - An all-channel scan adds about 1.5 s to each connect attempt (estimate).
-- Committed clip assets go stale when the voice or style changes, and they are
-  re-rendered by hand.
-- A shown QR code is a way to move the robot onto another network. TLS with
-  the certificate bundle still protects Gemini traffic, but MQTT is plaintext
-  (`config.h:82`). The QR policy above is the mitigation.
+- Committed clip assets go stale when the default voice or style changes, and
+  they are re-rendered by hand.
+- On a network without the `home` flag, MQTT logging, status and remote
+  commands are off.
+- A shown QR code is still a way to move the robot onto another network. TLS
+  with the certificate bundle protects Gemini and OTA traffic. The `home` rule
+  keeps the plaintext MQTT credential off such networks.
 - Secrets in NVS stay plaintext until NVS encryption is enabled. That is
   irreversible eFuse work, decided under PRD-015.
 
@@ -255,16 +319,22 @@ owner's consent.
 
 In order. Each step lands with host tests where the logic is pure C.
 
-1. FR-039: runtime Gemini credential (§3), which fixes the key-drop bug. Issue
-   #TBD-key.
-2. FR-038: services armed on link-up, and requests skipped offline (§2).
-   Issue #TBD-arm.
-3. FR-037: the network list, all-channel scan and console commands (§1, §4).
-   Issue #TBD-netlist.
+0. FR-043: the TTS migration off `gemini-3.1-flash-tts-preview`, whose earliest
+   shutdown is 2026-11-17. Probe `gemini-3.8-flash-tts`, not Flash-Lite, which
+   has no Finnish. Check streaming on `:streamGenerateContent?alt=sse`, whether
+   the `<style>: <text>` prefix is spoken now that 3.8 reads input as a verbatim
+   transcript, the delivery tags and the output format. Then migrate
+   `gemini_tts.c`. Issue #TBD-tts.
+1. FR-039: runtime Gemini credential (§3), which fixes the key-drop bug.
+   Issue #TBD-key.
+2. FR-038: services armed on link-up, a non-blocking connect, and requests
+   skipped offline (§2). Issue #TBD-arm.
+3. FR-037: the network list, all-channel scan, console commands and the `home`
+   flag (§1, §4). Issue #TBD-netlist.
 4. FR-040: offline clips and the help request (§5). Issue #TBD-offline.
 5. FR-041: QR join (§6). Bench first: quirc decode time and read distance at
-   QVGA and VGA on the OV3660. Issue #TBD-qr.
-6. FR-042: the hunt (§7), after the five above have run on the bench.
+   QVGA and VGA on the OV3660, with Android and iPhone codes. Issue #TBD-qr.
+6. FR-042: the hunt (§7), after the steps above have run on the bench.
 
 ## Related
 

@@ -37,7 +37,8 @@
       "docs/requirements/PRD-011-melody-detector.md",
       "docs/requirements/PRD-013-rapid-hardware-prototyping.md",
       "docs/requirements/PRD-014-teuvo-sponsored-upgrades.md",
-      "docs/requirements/PRD-015-teuvo-for-other-owners.md"
+      "docs/requirements/PRD-015-teuvo-for-other-owners.md",
+      "docs/decisions/ADR-028-teuvo-connectivity-resilience.md"
     ],
     "sync_targets": [
       "docs/blueprint/feature-tracker.md"
