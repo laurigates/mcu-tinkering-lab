@@ -40,27 +40,32 @@ are a calibration, not a quote: JLCPCB changes them.
 - Copy the zip, `bom-jlc.csv` and `cpl-jlc.csv` to a short path (and keep a
   copy in the repo's git-ignored `tmp/quotes/`: `/tmp` is cleared).
 
-## 2. Where to order: JLCONE first
+## 2. Where to order: the JLCONE app, not Chrome
 
-The JLCONE desktop app (`/Applications/JLCONE.app`, bundle `com.jlcpcb.www`)
-shares the account and cart with the web, and gave one PCB per order a
-special offer (€3.56 → €1.78); a second PCB in the same cart stayed at
-€3.56. Set currency in its gear menu (Settings → Currency → EUR → Save).
+**Use the JLCONE desktop app (`/Applications/JLCONE.app`, bundle
+`com.jlcpcb.www`) for every quote, cart check and coupon, PCB and JLC3DP
+alike.** Lauri's standing instruction. The app shares the account and cart
+with the web, and gave one PCB per order a special offer (€3.56 → €1.78); a
+second PCB in the same cart stayed at €3.56. Set currency in its gear menu
+(Settings → Currency → EUR → Save).
 
-Driving it with computer-use: the app is granted at full tier. The upload
-buttons open a native file picker; press Cmd+Shift+G, type the absolute path,
-Return, then Open.
+Driving it with computer-use: `request_access` for `com.jlcpcb.www` (granted
+at full tier). Pages open as tabs inside the app; the cart is the cart icon,
+other services are under Products (JLC3DP: Products → Mechanical Services →
+"JLC3DP - 3D Printing"). The upload buttons open a native file picker; press
+Cmd+Shift+G, type the absolute path, Return, then Open.
 
-Driving the web with the Chrome extension: `file_upload` works on the Gerber
-input. The PCBA BOM and CPL inputs are hidden; tag them first
+Fall back to the web in Chrome only when Lauri asks for it. There the
+`file_upload` tool works on the Gerber input; the PCBA BOM and CPL inputs are
+hidden, so tag them first
 (`document.querySelectorAll('input[type=file]').forEach((e,i)=>e.setAttribute('data-claude-file',i))`)
 and `find` them by that attribute.
 
 **The web session expires mid-flow, and Save to Cart then silently does
 nothing.** The header shows "Sign In" instead of "My Account". Two quotes were
-lost that way. After every Save to Cart, open the cart
-(`https://cart.jlcpcb.com/shopcart/cart/`) and confirm the line is there.
-Signing in is Lauri's step, never the agent's.
+lost that way in Chrome. After every Save to Cart, in either app or browser,
+open the cart and confirm the line is there. Signing in is Lauri's step,
+never the agent's.
 
 ## 3. The quote, step by step
 
@@ -112,7 +117,8 @@ ferrite (C14709, 0603).
 - **One coupon per order**, chosen in the cart's Coupons panel.
 - **The cart changes the selection by itself:** after a reload it picked
   "PCBA $10 - EasyEDA" and once "PCB $10 - EasyEDA" over the larger JLCONE
-  PCBA $20. Re-check the panel immediately before checkout.
+  PCBA $20, and with JLC3DP items in the cart a €8.90 3D-printing coupon. Re-check the panel
+  immediately before checkout.
 - JLCONE PCBA $20 (€17.78) needs over €88.91 excluding freight, counted over
   the whole cart; its 30 days start when claimed (Coupon Center → PCBA → Get
   Coupon). Claim it only when the order will cross the threshold.
@@ -131,8 +137,11 @@ shipping to re-check at checkout, and anything still open on a board.
 ## 7. 3D-printed cases (JLC3DP)
 
 Cases come from `just enclosure::gen` (the `enclosure-cad` skill), which must
-exit 0 first. Quote at `https://jlc3dp.com/3d-printing-quote`, signed in to
-the same account; items land in the same cart under a JLC3DP tab.
+exit 0 first. Quote in JLCONE (Products → Mechanical Services → "JLC3DP - 3D
+Printing" → Get Instant Quote); items land in the same cart under a JLC3DP
+tab. The trays of 2026-10-23 were quoted in Chrome
+(`https://jlc3dp.com/3d-printing-quote`); the notes below come from that run
+and are not yet re-checked in the app.
 
 - **Upload one STL at a time.** A multi-file selection registered nothing, and
   a quote page holds at most 10 models; a further file is dropped without a
