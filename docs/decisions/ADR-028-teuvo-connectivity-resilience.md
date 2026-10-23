@@ -90,7 +90,8 @@ provisioning stacks.
   versioned NVS blob: SSID (≤32), PSK (≤64), flags (hidden, open-allowed,
   SAE-only, `home`), BSSID and channel hint, last RSSI, last-success boot
   counter, failure count, and source (improv, console, qr). First boot migrates
-  the legacy `wifi_config` pair.
+  the legacy `wifi_config` pair as an entry with the `home` flag set, because
+  MQTT already runs on that network.
 - Selection runs an all-channel scan, intersects it with the list, and ranks by
   RSSI plus recency minus a failure penalty. It then connects with a BSSID and
   channel hint. Reasons 15/202/204 mark a credential as suspect; 201/210/211
@@ -100,8 +101,9 @@ provisioning stacks.
 - The WPA2 minimum stays. An open network is joined only if its entry carries
   the owner's explicit open-allowed flag.
 - The serial console gets `wifi list|add|forget|scan|home`. It is serial-only,
-  like `mqtt auth`, so a password never travels over MQTT. The `home` flag is
-  set only here (§6).
+  like `mqtt auth`, so a password never travels over MQTT. Apart from the
+  migration, the `home` flag is set only here (§6). Entries saved through
+  Improv or QR join never get it.
 - A phone hotspot is an ordinary entry. The docs say it must be 2.4 GHz.
 - The 32-character SSID and 64-hex-digit PSK edge cases are fixed:
   `credentials_t` and the NVS read buffers become 33/65
@@ -117,9 +119,11 @@ provisioning stacks.
   `ESP_ERROR_CHECK`ed, so a failed Improv attempt cannot reboot the board.
 - The reconnect timer (`wifi_manager.c:52-64`) stops before any scan, because a
   scan started during a connect fails with `ESP_ERR_WIFI_STATE`.
-- On the first `IP_EVENT_STA_GOT_IP`, whenever it happens, OTA starts,
-  including the rollback-confirm timer, and MQTT starts on `home` networks
-  (§6).
+- On the first `IP_EVENT_STA_GOT_IP` of a boot, on any network, OTA starts,
+  including the rollback-confirm timer.
+- MQTT follows the link instead (§6). The client starts on every `GOT_IP` whose
+  entry has the `home` flag, and stops with `esp_mqtt_client_stop()` on every
+  `WIFI_EVENT_STA_DISCONNECTED`, before another network is joined.
 - Improv re-arms when the link has been down for more than a set time, and
   disarms on reconnect.
 - The planner, voice turns and TTS skip their request while there is no link,
@@ -195,11 +199,15 @@ reads the same as an API error.
   dialects), including one that still carries `P:`.
 - **Policy.**
   - A QR-joined entry is saved with source `qr` and without the `home` flag.
-  - MQTT, which sends the broker credential in plaintext, starts only on an
-    entry whose `home` flag was set over serial. On any other network only TLS
-    services run: Gemini and the HTTPS OTA manifest. Otherwise an AP that gives
-    itself the broker's address would receive the credential, and could then
-    send the full command set. Lift this only once MQTT runs over TLS with a
+  - MQTT, which sends the broker credential in plaintext, runs only while the
+    robot is associated with an entry whose `home` flag is set (§2). esp-mqtt
+    reconnects every 5 s on its own (`mqtt_logger.c:150`), so stopping the
+    client on every disconnect is what keeps it from sending CONNECT on another
+    network. On any other network only TLS services run: Gemini and the HTTPS
+    OTA manifest. Otherwise an AP that gives itself the broker's address would
+    receive the credential, and could then send the full command set. A host
+    test pins the start/stop decision for the sequences home→hotspot,
+    hotspot→home and qr→home. Lift this only once MQTT runs over TLS with a
     pinned broker certificate.
   - While a known network is reachable, a QR is accepted only after a console
     confirmation. A voice confirmation never authorises a join.

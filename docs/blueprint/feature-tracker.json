@@ -211,7 +211,7 @@
       "prd": "PRD-014",
       "status": "planned",
       "priority": "P2",
-      "notes": "Retained facts JSON; fail closed; payment-claim screen; prompt truncation fixes first"
+      "notes": "Facts JSON with seq and concierge status LWT; model sees codes only; __ORDER__ templates; sentence filter; truncation fixes first"
     },
     {
       "id": "FR-026",
@@ -235,7 +235,7 @@
       "prd": "PRD-014",
       "status": "planned",
       "priority": "P2",
-      "notes": "teuvo-plan.yml: environment approval, API-key billing, path guard, draft PR"
+      "notes": "teuvo-plan.yml: environment approval on main, OIDC federation, path-scoped Claude job + fixed PR job, draft PR"
     },
     {
       "id": "FR-029",
@@ -339,7 +339,7 @@
       "prd": "ADR-028",
       "status": "planned",
       "priority": "P2",
-      "notes": "quirc on JPEG luma; both WIFI: dialects; offline-only acceptance policy"
+      "notes": "quirc on JPEG luma; both WIFI: dialects; QR entries never home; console confirmation while a known network is reachable"
     },
     {
       "id": "FR-042",

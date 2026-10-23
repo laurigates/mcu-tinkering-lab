@@ -171,13 +171,27 @@ in the same commit.
 
 The broker ACL gives one broker user per robot, named by its device id, and
 uses `%u`, never `%c`. With `%c`, any credential could claim another robot's
-client id and subtree.
-- **Each robot writes** `teuvo/%u/status`, `teuvo/%u/logs`,
-  `teuvo/%u/ota/status` and `teuvo/%u/upgrade/request`.
-- **Each robot reads** `teuvo/%u/commands`, `teuvo/%u/upgrade/facts` and the
-  OTA notify topic.
-- **Only the `concierge` user** writes `teuvo/+/upgrade/facts`.
-- **Only Lauri's user** writes `teuvo/+/commands`.
+subtree. The broker sets `use_username_as_clientid true`, so no credential can
+take another robot's client id either. The `teuvo-<id>` client id the firmware
+sends is then informational. The Mosquitto ACL:
+
+- **Every robot**, as pattern lines with `%u` = device id:
+  - `pattern write teuvo/%u/status`, `teuvo/%u/logs/#` (the firmware publishes
+    to `<log_topic>/<level>`), `teuvo/%u/ota/status` and
+    `teuvo/%u/upgrade/request`;
+  - `pattern read teuvo/%u/commands`, `teuvo/%u/upgrade/facts`,
+    `teuvo/concierge/status` and `robocar-unified/ota/notify`.
+
+  Pattern lines apply to every user, so the `concierge` user's write on
+  `teuvo/concierge/status` comes from the first one.
+- **`user concierge`:** `topic write teuvo/+/upgrade/facts` and
+  `topic read teuvo/+/upgrade/request`.
+- **`user ci-notify`**, the credential for `build-firmware.yml`'s notify step:
+  `topic write robocar-unified/ota/notify`.
+- **Lauri's user:** `topic write teuvo/+/commands` and `topic read teuvo/#`.
+
+The ACL grants the `robocar/*` aliases nothing, so it goes live in the release
+that drops them.
 
 ### FR-034: Teuvo backend (Gemini proxy)
 
@@ -248,8 +262,13 @@ These are one printed card plus a setup page. They state:
   `voice vad off persist` stops only spontaneous voice turns; the planner still
   sends camera frames.
 - **Connecting** (ADR-028).
-  - For a gifted unit (route B), Lauri adds the owner's home network (with the
-    `home` flag) and phone hotspot with `wifi add` before handover.
+  - For a gifted unit (route B), Lauri adds the owner's home network and phone
+    hotspot with `wifi add` before handover, **without** the `home` flag, and
+    runs `mqtt auth clear`. The compiled-in broker address is on Lauri's LAN and
+    means nothing on the owner's network, and `home` marks only a network where
+    the configured broker lives (ADR-028 §6). A gifted unit runs no MQTT unless
+    a broker is set up for that household, or MQTT runs over TLS (Route C item
+    2).
   - A builder (route A) uses Improv from a desktop Chromium browser.
   - Android's share-WiFi QR code works with QR join (ADR-028 §6). The iOS 18
     code is listed only after a bench test confirms its payload.

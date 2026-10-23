@@ -30,10 +30,10 @@
 | FR-022 | Copper-foil test board | PRD-013 | planned | P2 | Portrait 2 knife-cut single-layer test board; bench results go in PRD-013 |
 | FR-023 | Stripboard mode for the perfboard generator | PRD-013 | planned | P3 | Strip router, pen-plotted track-cut map, breadboard preset |
 | FR-024 | Teuvo upgrade-request capture in the voice turn | PRD-014 | planned | P2 | __REQUEST__ sentinel + summary to teuvo/<id>/upgrade/request; desk off by default |
-| FR-025 | Order facts downlink and gated phrasing | PRD-014 | planned | P2 | Retained facts JSON; fail closed; payment-claim screen; prompt truncation fixes first |
+| FR-025 | Order facts downlink and gated phrasing | PRD-014 | planned | P2 | Facts JSON with seq and concierge status LWT; model sees codes only; __ORDER__ templates; sentence filter; truncation fixes first |
 | FR-026 | Teuvo concierge service | PRD-014 | planned | P2 | packages/robocar/concierge: order state, fee table, phone gate, dispatch, order page |
 | FR-027 | Upgrade payment rail | PRD-014 | planned | P2 | Stripe sandbox, then per-order Payment Link; PAID only by Lauri or a verified webhook |
-| FR-028 | Gated planning workflow | PRD-014 | planned | P2 | teuvo-plan.yml: environment approval, API-key billing, path guard, draft PR |
+| FR-028 | Gated planning workflow | PRD-014 | planned | P2 | teuvo-plan.yml: environment approval on main, OIDC federation, path-scoped Claude job + fixed PR job, draft PR |
 | FR-029 | Upgrade-plan template | PRD-014 | planned | P2 | packages/robocar/upgrades/<code>-<slug>/: parts, cost.csv, gate table, renders |
 | FR-030 | Upgrade link hand-off | PRD-014 | planned | P3 | Printed per-robot QR sticker + spoken order code; OLED QR later |
 | FR-031 | Lead-time calibration | PRD-014 | planned | P3 | lead-times.csv of real order dates; quoted bands until then |
@@ -46,7 +46,7 @@
 | FR-038 | Network services armed on link-up | ADR-028 | planned | P0 | Non-blocking connect; MQTT, OTA and rollback-confirm on GOT_IP; Improv re-arm; skip requests offline |
 | FR-039 | Runtime Gemini credential in NVS | ADR-028 | planned | P0 | gemini auth; fixes key dropped after Improv; 402/403 handling |
 | FR-040 | Offline voice clips and help request | ADR-028 | planned | P1 | Pre-rendered ADPCM persona lines embedded in the app image |
-| FR-041 | WiFi join from a QR code | ADR-028 | planned | P2 | quirc on JPEG luma; both WIFI: dialects; offline-only acceptance policy |
+| FR-041 | WiFi join from a QR code | ADR-028 | planned | P2 | quirc on JPEG luma; both WIFI: dialects; QR entries never home; console confirmation while a known network is reachable |
 | FR-042 | WiFi hunt game | ADR-028 | planned | P3 | Opt-in, supervised: QR sweep, known-AP RSSI climb, ask for help |
 | FR-043 | TTS migration off gemini-3.1-flash-tts-preview | ADR-028 | planned | P0 | Earliest shutdown 2026-11-17; probe gemini-3.8-flash-tts (Finnish; not Flash-Lite) for streaming and style prefix |
 
