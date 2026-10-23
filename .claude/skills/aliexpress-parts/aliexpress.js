@@ -99,3 +99,33 @@ window.__scan = async (q, re, filter, n = 6) => {
   for (const x of hits) out.push((x.tr ? '[' + x.tr + '] ' : '') + (await window.__item(x.pid, filter, 8)));
   return out;
 };
+
+// --- Add to cart (only when Lauri asks; run on an /item/<id>.html page) ---
+// 1. Capture the page's own cart.add request: install the hook, then click
+//    "Add to cart" once by hand or with
+//    [...document.querySelectorAll('button')].find((b) => b.innerText.trim() === 'Add to cart').click()
+window.__cap = [];
+const __origAdd = window.lib.mtop.request.bind(window.lib.mtop);
+window.lib.mtop.request = function (p, ...r) {
+  if (p.api === 'mtop.aliexpress.trade.cart.add') window.__cap.push(JSON.parse(JSON.stringify(p)));
+  return __origAdd(p, ...r);
+};
+// 2. After the click: window.__cartReq = window.__cap[0];
+
+// One variant, matched by name to exactly one skuId. Call it a few lines at a
+// time, seconds apart: 25 rapid adds brought up a slider CAPTCHA (SKILL.md trap 7).
+window.__add = async (pid, re, qty = 1) => {
+  const R = (await window.__pdp(pid)).data.result;
+  const names = {};
+  for (const p of R.SKU.skuProperties)
+    for (const v of p.skuPropertyValues) names[p.skuPropertyId + ':' + v.propertyValueIdLong] = v.propertyValueDisplayName;
+  const hits = R.SKU.skuPaths.filter((s) => s.salable)
+    .map((s) => ({ sku: s.skuIdStr, attr: s.path.split(';').map((x) => names[x] || x).join('/') }))
+    .filter((x) => !re || new RegExp(re, 'i').test(x.attr));
+  if (hits.length !== 1) return `${pid} SKIPPED: ${hits.length} matches`;
+  const svc = (R.SHIPPING.deliveryLayoutInfo || [])[0]?.bizData?.deliveryOptionCode;
+  const p = JSON.parse(JSON.stringify(window.__cartReq));
+  p.data.addItems = JSON.stringify([{ itemId: String(pid), skuId: hits[0].sku, fulfillmentservice: svc, quantity: qty, attributes: { carAdditionalInfo: '{}', sourceType: '' } }]);
+  const res = await window.lib.mtop.request(p);
+  return `${pid} ${hits[0].attr} x${qty}: ${res.ret[0].split('::')[0]}`;
+};
