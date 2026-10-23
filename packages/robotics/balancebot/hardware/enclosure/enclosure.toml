@@ -12,6 +12,7 @@
 
 [[pieces]]
 name = "carrier"
+title = "Balancebot carrier"  # product-render captions
 region = [0.0, 0.0, 90.0, 62.0]
 quantity = 1
 # Cables leave beside the motor (J4, J5), battery (J1) and buck (J2) leads,
@@ -22,5 +23,7 @@ openings = ["J1", "J2", "J4", "J5", "U1"]
 A1 = { above = 22.0, source = "estimate: DRV8825 carrier in 1x8 female headers, 8.5 + 2.5 + 1.6 + ~9 mm stick-on heatsink" }
 A2 = { above = 22.0, source = "estimate: DRV8825 carrier in 1x8 female headers, 8.5 + 2.5 + 1.6 + ~9 mm stick-on heatsink" }
 U1 = { above = 15.5, source = "estimate: XIAO RP2350 in 1x7 female headers, 8.5 + 2.5 + 1.2 PCB + 3.2 USB-C" }
-J3 = { above = 14.0, source = "estimate: GY-521 flat on its 1x8 female header, 8.5 + 2.5 + 1.6 + ~1.4 parts" }
+# J3's footprint is a plain 1x8 socket: the render's GY-521 takes its kind and
+# outline (board.toml's GY-521 silk rect) from here.
+J3 = { above = 14.0, source = "estimate: GY-521 flat on its 1x8 female header, 8.5 + 2.5 + 1.6 + ~1.4 parts", module = "gy-521", outline = [34.5, 31.5, 55.5, 48.5] }
 F1 = { above = 2.0, source = "estimate: 1812 PTC, BSMD1812 body under 2 mm" }

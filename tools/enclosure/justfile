@@ -25,3 +25,19 @@ assembly project:
     {{_run}} python -m enclosure.assembly {{_root}}/{{project}}
     for j in {{_root}}/{{project}}/hardware/enclosure/output/*-assembly.json; do /Applications/Blender.app/Contents/MacOS/Blender -b --python-exit-code 1 -P {{source_directory()}}/blender/render_assembly.py -- "$j" > /dev/null || exit 1; done
     ls {{_root}}/{{project}}/hardware/enclosure/output/*-assembly.png
+
+# Product renders: bare carrier, breakouts fitted (modules.toml look-alikes),
+# each case empty and with the board in it. Writes output/product/: <id>.png
+# (transparent), <id>-plate.png (the image-edit source), <id>-captioned.png,
+# captions.md and contact-sheet.png. Pass view ids to re-render only those.
+product project *views:
+    {{_run}} python -m enclosure.assembly {{_root}}/{{project}} > /dev/null
+    {{_run}} python -m enclosure.product job {{project}}
+    /Applications/Blender.app/Contents/MacOS/Blender -b --python-exit-code 1 -P {{source_directory()}}/blender/render_product.py -- {{_root}}/{{project}}/hardware/enclosure/output/product/product.json {{views}} > /dev/null
+    {{_run}} python -m enclosure.product finish {{project}}
+
+# Product photos from the plates with Fibo 2.0 on popos's ComfyUI (CC BY-NC:
+# non-commercial use only), e.g. `just enclosure::photo packages/robocar/unified
+# --style workbench --only unified-main-board`. Styles: studio, workbench, dark.
+photo project *args:
+    cd {{_root}} && python3 tools/enclosure/enclosure/photo.py {{project}} {{args}}

@@ -13,6 +13,7 @@
 # 1 mm, so the case's 0.5 mm gap each side still holds it).
 [[pieces]]
 name = "main"
+title = "Robocar main board"  # product-render captions
 region = [0.0, 0.0, 70.5, 100.0]
 quantity = 1
 # Pack (J3), buck lead (J4), motors (J5, J6), rangefinders (J7, J8), the head
@@ -23,6 +24,7 @@ openings = ["J1", "J3", "J4", "J5", "J6", "J7", "J8", "A2", "A4"]
 # ribbon plug is under the board, so the standoffs clear header plus plug.
 [[pieces]]
 name = "head1"
+title = "Robocar camera head"  # product-render captions
 region = [70.5, 0.0, 100.0, 29.5]
 quantity = 1
 openings = ["U1", "J2"]
