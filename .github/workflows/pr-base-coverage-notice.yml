@@ -21,8 +21,13 @@ on:
   pull_request:
     types: [opened, reopened, edited]
 
+# A title/body-only `edited` run skips its job (see the job's `if:`), so it
+# gets a group of its own, keyed on the run id. In the PR's shared group it
+# would cancel a queued or running opened/reopened/base-change run and then
+# post nothing itself, leaving a stacked PR without its notice. Runs that do
+# report the base share the group, and the newest one wins.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}-${{ (github.event.action == 'edited' && github.event.changes.base == null) && github.run_id || 'base' }}
   cancel-in-progress: true
 
 permissions:
