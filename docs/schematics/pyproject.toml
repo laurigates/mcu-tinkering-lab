@@ -2,7 +2,7 @@
 name = "mcu-tinkering-lab-schematics"
 version = "0.1.0"
 description = "Text-defined circuit schematics for MCU Tinkering Lab projects"
-requires-python = "==3.14.8"
+requires-python = ">=3.11"
 dependencies = [
     "schemdraw==0.23",
     "cairosvg==2.9.0",
