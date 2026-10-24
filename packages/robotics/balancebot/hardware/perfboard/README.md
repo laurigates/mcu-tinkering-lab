@@ -11,9 +11,10 @@ applies unchanged.
   solder-side panel per build step (pack input, power, logic power, motor
   coils, signals).
   Each panel shows only that step's wires, coloured per net with a legend, and
-  numbered as in the wire list. Wires are maze-routed along the channels
-  between holes, so no wire is drawn over a pad it does not connect to, and no
-  two wires in a step share a channel.
+  numbered as in the wire list. Wires run straight over free holes where they
+  can and slip between holes where pads are in the way; no wire is drawn over
+  a pad, and no two wires in a step share a segment. A dot off a pad is a
+  splice: a free hole where wire ends of one net meet.
 - [`perfboard-print.svg`](perfboard-print.svg): both sides at 1:1, in
   millimetres, for printing at 100 %. Check the 50 mm bar with a ruler first.
   The red hole-grid outline is a cut line for a placement sticker, and the
@@ -106,16 +107,34 @@ wire list, separate from the code that plans the wires.
 
 ### Routing
 
-Each wire is routed on a half-pitch grid. Holes sit on even coordinates and the
-channels between them on odd ones. A wire leaves its pad by a half-pitch stub
-and then stays in the channels. The router is Dijkstra with costs for length,
-bends and crossings (`STEP_COST`, `BEND_COST`, `CROSS_COST`). It routes each
-step in `ORDER_TRIES` wire orders (shortest-first, then seeded shuffles) and
-keeps the cheapest, so a run is repeatable. A separate `check_routes` re-walks
-every path and fails if a wire jumps, ends on the wrong hole, passes over a
-hole, shares a channel with another wire in its step, or turns where another
-wire runs. Wires in different steps are not checked against each other: each
-panel is drawn on its own, and insulated wires may cross on the board.
+The rules are the ones a hand-wired pad-per-hole board follows
+(`tools/kicad/perfboard/route.py`):
 
-Wire-list lengths are measured along the route, so a wire between two holes in
-one row is 3, not 2: it goes around the hole between them.
+- **Over free holes.** A wire runs along a row or column of holes, lying over
+  free ones, or in the gap between two holes where pads are in the way. It
+  never lies over a pad, a joint or along a bus: those are soldered.
+- **Shared holes.** A hole takes at most `[wires] conductors` (default 3)
+  conductors, a pin counting as one: pin and wire end through the hole
+  together, or two ends, with one more lapped on the pad. So a pad takes two
+  wire ends and a free hole three.
+- **Steiner trees, not pin-to-pin.** A net grows from its first pin (or its
+  bus): the cheapest next pin joins any joint of the tree with room, or
+  splices into one of the net's own wires at a free hole it lies over.
+- **Buses for rails.** `[[buses]]` in `perfboard.toml` lays a bare tinned
+  wire straight along a row or column, soldered at every hole. Pads of its
+  net under it join it there; other pins wire to its nearest hole. Use one for
+  a ground or supply rail whose pins line up; it may not run over another
+  net's pad.
+- **Insulated crossings.** Wires may cross, and lie over wires of earlier
+  steps; none ends in a hole another wire lies over. Within a step, for a
+  readable panel, no two wires share a segment and none bends on another.
+
+The router is Dijkstra on a half-pitch grid (holes on even coordinates, gaps
+on odd), with costs for length, bends, crossings and splices. It routes each
+step in `ORDER_TRIES` net orders (the step's own, then seeded shuffles) and
+keeps the cheapest, so a run is repeatable. A separate `check_routes`
+re-walks every path against the rules above, and `check_wires` re-checks the
+connectivity by union-find.
+
+Wire-list lengths are measured along the route, in holes; a detour through
+the gaps can give a half.

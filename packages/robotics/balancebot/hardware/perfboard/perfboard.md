@@ -4,7 +4,9 @@
 
 Board: 18 × 24 holes, columns A–R, rows 1–24, named as seen from the **component side** (flip the drawing, not the names, on the solder side).
 Wires are numbered as in `perfboard.svg`, one drawing panel per step.
-Each wire's drawn route runs between the holes, never over one, and its length is measured along that route.
+Each wire's drawn route runs along the holes, over free ones only, or between them; its length is measured along that route.
+A hole takes at most 3 conductors, a pin counting as one: a wire end goes through the hole beside the pin or another end, or is lapped on the pad. A *splice* is a free hole where wire ends of one net meet.
+A *bus* is bare tinned wire laid straight along its holes and soldered at every one; pads under it join it there.
 Heavy nets (VBAT, GND, motor coils) need 20 AWG or heavier; everything else 26–30 AWG.
 Neighbouring holes (length 1) can be a solder bridge instead of a wire.
 
@@ -50,30 +52,35 @@ VBAT, GND and the 5 V feed.
 | ✓ | # | Net | Gauge | From | To | Length (holes) |
 |---|---|---|---|---|---|---|
 | ☐ | 5 | VBAT | 20 AWG | A1.8 (B17) | C1.1 (C20) | 4 |
-| ☐ | 6 | VBAT | 20 AWG | C1.1 (C20) | Q1.3 (F20) | 4 |
-| ☐ | 7 | VBAT | 20 AWG | Q1.3 (F20) | J2.1 (F22) | 3 |
+| ☐ | 6 | VBAT | 20 AWG | C1.1 (C20) | J2.1 (F22) | 5 |
+| ☐ | 7 | VBAT | 20 AWG | J2.1 (F22) | Q1.3 (F20) | 2 |
 | ☐ | 8 | VBAT | 20 AWG | Q1.3 (F20) | D2.1 (F16) | 5 |
-| ☐ | 9 | VBAT | 20 AWG | D2.1 (F16) | R2.1 (I13) | 7 |
-| ☐ | 10 | VBAT | 20 AWG | Q1.3 (F20) | C2.1 (L20) | 7 |
-| ☐ | 11 | VBAT | 20 AWG | C2.1 (L20) | A2.8 (L17) | 7 |
+| ☐ | 9 | VBAT | 20 AWG | D2.1 (F16) | R2.1 (I13) | 6 |
+| ☐ | 10 | VBAT | 20 AWG | R2.1 (I13) | A2.8 (L17) | 7 |
+| ☐ | 11 | VBAT | 20 AWG | A2.8 (L17) | C2.1 (L20) | 3 |
 | ☐ | 12 | GND | 20 AWG | A1.1 (B10) | A1.7 (B16) | 7 |
-| ☐ | 13 | GND | 20 AWG | A1.7 (B16) | C1.2 (D20) | 8 |
-| ☐ | 14 | GND | 20 AWG | C1.2 (D20) | J2.2 (G22) | 5 |
-| ☐ | 15 | GND | 20 AWG | J2.2 (G22) | J2.4 (I22) | 3 |
-| ☐ | 16 | GND | 20 AWG | J2.4 (I22) | J1.2 (I24) | 3 |
-| ☐ | 17 | GND | 20 AWG | J2.4 (I22) | R4.2 (J19) | 4 |
-| ☐ | 18 | GND | 20 AWG | R4.2 (J19) | C3.2 (J17) | 3 |
-| ☐ | 19 | GND | 20 AWG | C3.2 (J17) | R3.2 (J15) | 3 |
-| ☐ | 20 | GND | 20 AWG | C3.2 (J17) | A2.7 (L16) | 3 |
-| ☐ | 21 | GND | 20 AWG | R3.2 (J15) | A1.12 (G14) | 4 |
-| ☐ | 22 | GND | 20 AWG | R4.2 (J19) | C2.2 (M20) | 4 |
-| ☐ | 23 | GND | 20 AWG | A2.7 (L16) | A2.1 (L10) | 7 |
-| ☐ | 24 | GND | 20 AWG | A2.1 (L10) | J3.2 (J7) | 13 |
-| ☐ | 25 | GND | 20 AWG | J3.2 (J7) | J3.7 (O7) | 6 |
-| ☐ | 26 | GND | 20 AWG | A2.7 (L16) | A2.12 (Q14) | 7 |
-| ☐ | 27 | GND | 20 AWG | J3.2 (J7) | U1.13 (G2) | 8 |
-| ☐ | 28 | BUCK_5V | 26–30 AWG | D1.2 (L23) | J2.3 (H22) | 5 |
-| ☐ | 29 | XIAO_5V | 26–30 AWG | D1.1 (K23) | U1.14 (G1) | 40 |
+| ☐ | 13 | GND | 20 AWG | A1.7 (B16) | splice (D17) | 3 |
+| ☐ | 14 | GND | 20 AWG | splice (D17) | C1.2 (D20) | 3 |
+| ☐ | 15 | GND | 20 AWG | C1.2 (D20) | J2.2 (G22) | 5 |
+| ☐ | 16 | GND | 20 AWG | J2.2 (G22) | J2.4 (I22) | 3 |
+| ☐ | 17 | GND | 20 AWG | J2.4 (I22) | J1.2 (I24) | 3 |
+| ☐ | 18 | GND | 20 AWG | splice (D17) | A1.12 (G14) | 6 |
+| ☐ | 19 | GND | 20 AWG | A1.12 (G14) | R3.2 (J15) | 4 |
+| ☐ | 20 | GND | 20 AWG | R3.2 (J15) | splice (J16) | 1 |
+| ☐ | 21 | GND | 20 AWG | splice (J16) | C3.2 (J17) | 1 |
+| ☐ | 22 | GND | 20 AWG | C3.2 (J17) | R4.2 (J19) | 2 |
+| ☐ | 23 | GND | 20 AWG | splice (J16) | A2.7 (L16) | 2 |
+| ☐ | 24 | GND | 20 AWG | A2.7 (L16) | splice (M16) | 1 |
+| ☐ | 25 | GND | 20 AWG | splice (M16) | C2.2 (M20) | 4 |
+| ☐ | 26 | GND | 20 AWG | splice (M16) | splice (M14) | 2 |
+| ☐ | 27 | GND | 20 AWG | splice (M14) | A2.12 (Q14) | 4 |
+| ☐ | 28 | GND | 20 AWG | splice (M14) | A2.1 (L10) | 5 |
+| ☐ | 29 | GND | 20 AWG | A2.1 (L10) | splice (L8) | 2 |
+| ☐ | 30 | GND | 20 AWG | splice (L8) | J3.7 (O7) | 4 |
+| ☐ | 31 | GND | 20 AWG | splice (L8) | J3.2 (J7) | 3 |
+| ☐ | 32 | GND | 20 AWG | J3.2 (J7) | U1.13 (G2) | 8 |
+| ☐ | 33 | BUCK_5V | 26–30 AWG | D1.2 (L23) | J2.3 (H22) | 6 |
+| ☐ | 34 | XIAO_5V | 26–30 AWG | D1.1 (K23) | U1.14 (G1) | 26 |
 
 ## Step 3: Logic power
 
@@ -81,19 +88,20 @@ VBAT, GND and the 5 V feed.
 
 | ✓ | # | Net | Gauge | From | To | Length (holes) |
 |---|---|---|---|---|---|---|
-| ☐ | 30 | +3V3 | 26–30 AWG | A1.10 (G16) | A1.11 (G15) | 1 |
-| ☐ | 31 | +3V3 | 26–30 AWG | A1.11 (G15) | A1.13 (G13) | 3 |
-| ☐ | 32 | +3V3 | 26–30 AWG | A1.13 (G13) | A1.14 (G12) | 1 |
-| ☐ | 33 | +3V3 | 26–30 AWG | A1.14 (G12) | R1.1 (H11) | 4 |
-| ☐ | 34 | +3V3 | 26–30 AWG | R1.1 (H11) | J3.1 (I7) | 5 |
-| ☐ | 35 | +3V3 | 26–30 AWG | J3.1 (I7) | U1.12 (G3) | 6 |
-| ☐ | 36 | +3V3 | 26–30 AWG | A1.10 (G16) | A2.10 (Q16) | 17 |
-| ☐ | 37 | +3V3 | 26–30 AWG | A2.10 (Q16) | A2.11 (Q15) | 1 |
-| ☐ | 38 | +3V3 | 26–30 AWG | A2.11 (Q15) | A2.13 (Q13) | 3 |
-| ☐ | 39 | +3V3 | 26–30 AWG | A2.13 (Q13) | A2.14 (Q12) | 1 |
-| ☐ | 40 | NENABLE | 26–30 AWG | A1.9 (G17) | R1.2 (I11) | 8 |
-| ☐ | 41 | NENABLE | 26–30 AWG | R1.2 (I11) | U1.8 (G7) | 17 |
-| ☐ | 42 | NENABLE | 26–30 AWG | A1.9 (G17) | A2.9 (Q17) | 11 |
+| ☐ | 35 | +3V3 | 26–30 AWG | A1.10 (G16) | A1.11 (G15) | 1 |
+| ☐ | 36 | +3V3 | 26–30 AWG | A1.11 (G15) | A1.13 (G13) | 3 |
+| ☐ | 37 | +3V3 | 26–30 AWG | A1.13 (G13) | A1.14 (G12) | 1 |
+| ☐ | 38 | +3V3 | 26–30 AWG | A1.14 (G12) | R1.1 (H11) | 2 |
+| ☐ | 39 | +3V3 | 26–30 AWG | R1.1 (H11) | splice (H9) | 2 |
+| ☐ | 40 | +3V3 | 26–30 AWG | splice (H9) | J3.1 (I7) | 3 |
+| ☐ | 41 | +3V3 | 26–30 AWG | J3.1 (I7) | U1.12 (G3) | 6 |
+| ☐ | 42 | +3V3 | 26–30 AWG | splice (H9) | A2.14 (Q12) | 12 |
+| ☐ | 43 | +3V3 | 26–30 AWG | A2.14 (Q12) | A2.13 (Q13) | 1 |
+| ☐ | 44 | +3V3 | 26–30 AWG | A2.13 (Q13) | A2.11 (Q15) | 3 |
+| ☐ | 45 | +3V3 | 26–30 AWG | A2.11 (Q15) | A2.10 (Q16) | 1 |
+| ☐ | 46 | NENABLE | 26–30 AWG | A1.9 (G17) | R1.2 (I11) | 8 |
+| ☐ | 47 | NENABLE | 26–30 AWG | R1.2 (I11) | U1.8 (G7) | 6 |
+| ☐ | 48 | NENABLE | 26–30 AWG | A1.9 (G17) | A2.9 (Q17) | 11 |
 
 ## Step 4: Motor coils
 
@@ -101,14 +109,14 @@ Driver outputs to the motor headers.
 
 | ✓ | # | Net | Gauge | From | To | Length (holes) |
 |---|---|---|---|---|---|---|
-| ☐ | 43 | MOTL_A1 | 20 AWG | A1.4 (B13) | J4.1 (B24) | 12 |
-| ☐ | 44 | MOTL_A2 | 20 AWG | A1.3 (B12) | J4.2 (C24) | 14 |
-| ☐ | 45 | MOTL_B1 | 20 AWG | A1.5 (B14) | J4.3 (D24) | 12 |
-| ☐ | 46 | MOTL_B2 | 20 AWG | A1.6 (B15) | J4.4 (E24) | 12 |
-| ☐ | 47 | MOTR_A1 | 20 AWG | A2.4 (L13) | J5.1 (N24) | 17 |
-| ☐ | 48 | MOTR_A2 | 20 AWG | A2.3 (L12) | J5.2 (O24) | 15 |
-| ☐ | 49 | MOTR_B1 | 20 AWG | A2.5 (L14) | J5.3 (P24) | 24 |
-| ☐ | 50 | MOTR_B2 | 20 AWG | A2.6 (L15) | J5.4 (Q24) | 30 |
+| ☐ | 49 | MOTL_A1 | 20 AWG | A1.4 (B13) | J4.1 (B24) | 12 |
+| ☐ | 50 | MOTL_A2 | 20 AWG | A1.3 (B12) | J4.2 (C24) | 15 |
+| ☐ | 51 | MOTL_B1 | 20 AWG | A1.5 (B14) | J4.3 (D24) | 12 |
+| ☐ | 52 | MOTL_B2 | 20 AWG | A1.6 (B15) | J4.4 (E24) | 12 |
+| ☐ | 53 | MOTR_A1 | 20 AWG | A2.4 (L13) | J5.1 (N24) | 13 |
+| ☐ | 54 | MOTR_A2 | 20 AWG | A2.3 (L12) | J5.2 (O24) | 15 |
+| ☐ | 55 | MOTR_B1 | 20 AWG | A2.5 (L14) | J5.3 (P24) | 14 |
+| ☐ | 56 | MOTR_B2 | 20 AWG | A2.6 (L15) | J5.4 (Q24) | 14 |
 
 ## Step 5: Signals
 
@@ -116,13 +124,13 @@ XIAO to drivers, IMU and the pack divider.
 
 | ✓ | # | Net | Gauge | From | To | Length (holes) |
 |---|---|---|---|---|---|---|
-| ☐ | 51 | STEP_L | 26–30 AWG | A1.15 (G11) | U1.9 (G6) | 6 |
-| ☐ | 52 | DIR_L | 26–30 AWG | A1.16 (G10) | U1.10 (G5) | 6 |
-| ☐ | 53 | STEP_R | 26–30 AWG | A2.15 (Q11) | U1.11 (G4) | 18 |
-| ☐ | 54 | DIR_R | 26–30 AWG | A2.16 (Q10) | U1.7 (A7) | 22 |
-| ☐ | 55 | IMU_SDA | 26–30 AWG | J3.4 (L7) | U1.5 (A5) | 14 |
-| ☐ | 56 | IMU_SCL | 26–30 AWG | J3.3 (K7) | U1.6 (A6) | 12 |
-| ☐ | 57 | IMU_INT | 26–30 AWG | J3.8 (P7) | U1.4 (A4) | 21 |
-| ☐ | 58 | PACK_SENSE | 26–30 AWG | C3.1 (I17) | R3.1 (I15) | 3 |
-| ☐ | 59 | PACK_SENSE | 26–30 AWG | R3.1 (I15) | R2.2 (J13) | 3 |
-| ☐ | 60 | PACK_SENSE | 26–30 AWG | R2.2 (J13) | U1.1 (A1) | 36 |
+| ☐ | 57 | STEP_L | 26–30 AWG | A1.15 (G11) | U1.9 (G6) | 6 |
+| ☐ | 58 | DIR_L | 26–30 AWG | A1.16 (G10) | U1.10 (G5) | 6 |
+| ☐ | 59 | STEP_R | 26–30 AWG | A2.15 (Q11) | U1.11 (G4) | 18 |
+| ☐ | 60 | DIR_R | 26–30 AWG | A2.16 (Q10) | U1.7 (A7) | 19 |
+| ☐ | 61 | IMU_SDA | 26–30 AWG | J3.4 (L7) | U1.5 (A5) | 13 |
+| ☐ | 62 | IMU_SCL | 26–30 AWG | J3.3 (K7) | U1.6 (A6) | 11 |
+| ☐ | 63 | IMU_INT | 26–30 AWG | J3.8 (P7) | U1.4 (A4) | 18 |
+| ☐ | 64 | PACK_SENSE | 26–30 AWG | C3.1 (I17) | R3.1 (I15) | 2 |
+| ☐ | 65 | PACK_SENSE | 26–30 AWG | R3.1 (I15) | R2.2 (J13) | 3 |
+| ☐ | 66 | PACK_SENSE | 26–30 AWG | R2.2 (J13) | U1.1 (A1) | 21 |

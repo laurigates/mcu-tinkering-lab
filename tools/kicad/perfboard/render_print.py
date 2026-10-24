@@ -22,6 +22,7 @@ from __future__ import annotations
 
 from .grid import PITCH, Board, col_name
 from .render_svg import GRID, INK, MUTED, PART_INK
+from .route import is_bus
 
 MARGIN = 10  # page edge to content, mm
 HEAD = 34  # title, notes and scale bar above the panels, mm
@@ -96,8 +97,13 @@ def svg(parts, numbered, routes, board: Board, raised, heavy, title):
         f'text-anchor="middle">{SCALE_BAR} mm</text>'
     )
     net_colour = {}
-    for _, _, _, colour, (ha, _), (hb, _) in numbered:
+    for w in numbered:
+        _, _, _, colour, (ha, _), (hb, _) = w
         net_colour[ha] = net_colour[hb] = colour
+        if is_bus(w):
+            for x, y in routes[w[0]][::2]:
+                net_colour[(x // 2, y // 2)] = colour
+    pad_holes = {h for p in parts.values() for h in p.pads.values()}
 
     def panel(gid, origin, mirror, caption):
         x0, y0 = origin
@@ -141,13 +147,21 @@ def svg(parts, numbered, routes, board: Board, raised, heavy, title):
                     f'stroke-width="0.15"{dash}/>'
                 )
         else:
-            for n, _, net, colour, _, _ in numbered:
+            for w in numbered:
+                n, _, net, colour, _, _ = w
                 pts = " ".join(f"{mm(X(x / 2))},{mm(Y(y / 2))}" for x, y in routes[n])
+                width = (0.6 if net in heavy else 0.35) * (2 if is_bus(w) else 1)
                 out.append(
                     f'<polyline class="wire" points="{pts}" fill="none" stroke="{colour}" '
-                    f'stroke-width="{0.6 if net in heavy else 0.35}" '
+                    f'stroke-width="{width:g}" '
                     'stroke-linecap="round" stroke-linejoin="round"/>'
                 )
+            for (c, r), colour in sorted(net_colour.items()):
+                if (c, r) not in pad_holes:  # a splice or a bus end
+                    out.append(
+                        f'<circle class="joint" cx="{mm(X(c))}" cy="{mm(Y(r))}" '
+                        f'r="0.6" fill="{colour}"/>'
+                    )
         for p in sorted(parts.values(), key=lambda p: p.ref):
             for num, hole in sorted(p.pads.items()):
                 c, r = hole

@@ -18,14 +18,14 @@ import io
 import tempfile
 import tomllib
 import unittest
-from unittest import mock
 from pathlib import Path
+from unittest import mock
 
 from kicad import library, netlist, registry, testfixture
 from kicad.errors import KicadError
 from kicad.paths import REPO_ROOT
 from kicad.perfboard import __main__ as cli
-from kicad.perfboard import config, place, wires
+from kicad.perfboard import config, place, route, wires
 
 ROOT, PROJECT = testfixture.shared()
 LIVE = REPO_ROOT / testfixture.PROJECT_REL
@@ -114,10 +114,43 @@ class ConfigTests(unittest.TestCase):
                 r"\[swaps.J1\]: unknown key",
             ),
             "skip not a list": ('skip = "H1"\n' + BASE, "skip must be a list"),
+            "two conductors per hole": (
+                BASE.replace("[wires]", "[wires]\nconductors = 2"),
+                "conductors must be an integer of 3 or more, got 2",
+            ),
+            "diagonal bus": (
+                BASE + '\n[[buses]]\nnet = "GND"\nfrom = "A1"\nto = "C3"\n',
+                "from and to must be two holes of one row or column",
+            ),
+            "bus hole name": (
+                BASE + '\n[[buses]]\nnet = "GND"\nfrom = "a1"\nto = "C1"\n',
+                r"\[\[buses\]\] #1: 'a1' is not a hole name",
+            ),
+            "unknown bus key": (
+                BASE + '\n[[buses]]\nnet = "GND"\nfrom = "A1"\nto = "C1"\nwidth = 1\n',
+                r"\[\[buses\]\] #1: unknown key\(s\) \['width'\]",
+            ),
         }
         for name, (text, msg) in cases.items():
             with self.subTest(case=name), self.assertRaisesRegex(KicadError, msg):
                 config_from(text)
+
+    def test_buses_and_conductors(self):
+        self.assertEqual((Inputs.cfg.conductors, Inputs.cfg.buses), (3, {}))
+        cfg = config_from(
+            BASE.replace("[wires]", "[wires]\nconductors = 4")
+            + '\n[[buses]]\nnet = "GND"\nfrom = "B21"\nto = "Q21"\n'
+            + '\n[[buses]]\nnet = "GND"\nfrom = "AB2"\nto = "AB9"\n'
+        )
+        self.assertEqual(cfg.conductors, 4)
+        self.assertEqual(cfg.buses, {"GND": (((1, 20), (16, 20)), ((27, 1), (27, 8)))})
+        *_, nets = Inputs.layout()
+        self.assertEqual(config.check_buses(cfg, nets), [])
+        bogus = dataclasses.replace(cfg, buses={"GNDD": cfg.buses["GND"]})
+        self.assertEqual(
+            config.check_buses(bogus, nets),
+            ["perfboard.toml [[buses]]: not a net: ['GNDD']"],
+        )
 
     def test_missing_tables(self):
         for table in ("board", "wires", "placement"):
@@ -273,24 +306,44 @@ class WireTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.parts, _, _, cls.nets = Inputs.layout()
-        cls.wires = wires.plan_wires(cls.parts, cls.nets)
+        cfg = Inputs.cfg
+        cls.wires = route.plan(cls.parts, cls.nets, cfg.steps, cfg.board)
 
-    def test_plan_is_a_spanning_tree_per_net(self):
-        self.assertEqual(len(self.wires), 54)
-        self.assertEqual(len(self.wires), sum(len(n) - 1 for n in self.nets.values()))
+    def test_plan_is_a_tree_per_net(self):
+        # Each splice is one more node of its net's tree, so one more wire.
+        for net, nodes in self.nets.items():
+            with self.subTest(net=net):
+                mine = [w for w in self.wires if w[0] == net]
+                splices = {
+                    h for _, a, b, _ in mine for h, lab in (a, b) if lab == "splice"
+                }
+                self.assertEqual(len(mine), len(nodes) - 1 + len(splices))
         self.assertEqual(wires.check_wires(self.parts, self.nets, self.wires), [])
 
+    def test_routes_pass_the_check(self):
+        numbered, routes = wires.number_wires(self.nets, self.wires, Inputs.cfg.steps)
+        errors = route.check_routes(numbered, routes, self.parts, self.nets)
+        self.assertEqual(errors, [])
+
     def test_dropped_wire(self):
-        planned = [w for w in self.wires if w[0] != "+3V3"]
-        planned += [w for w in self.wires if w[0] == "+3V3"][1:]
+        i = next(
+            i
+            for i, w in enumerate(self.wires)
+            if w[0] == "+3V3" and "splice" not in (w[1][1], w[2][1])
+        )
+        planned = self.wires[:i] + self.wires[i + 1 :]
         errors = wires.check_wires(self.parts, self.nets, planned)
         self.assertEqual(errors, ["net +3V3 is split into 2 groups"])
 
     def test_wire_end_on_another_net(self):
         i = next(i for i, w in enumerate(self.wires) if w[0] == "BUCK_5V")
-        name, a, (_, label) = self.wires[i]
+        name, a, (_, label), path = self.wires[i]
         other = self.parts["A1"].pads["10"]  # A1.M0, on +3V3
-        planned = [*self.wires[:i], (name, a, (other, label)), *self.wires[i + 1 :]]
+        planned = [
+            *self.wires[:i],
+            (name, a, (other, label), path),
+            *self.wires[i + 1 :],
+        ]
         errors = wires.check_wires(self.parts, self.nets, planned)
         self.assertTrue(
             any("are joined" in e and "BUCK_5V" in e for e in errors), errors
@@ -298,8 +351,9 @@ class WireTests(unittest.TestCase):
         self.assertIn(f"wire end {label} lands on G16 owned by A1.10", errors)
 
     def test_numbering_follows_the_steps(self):
-        numbered = wires.number_wires(self.nets, self.wires, Inputs.cfg.steps)
-        self.assertEqual([w[0] for w in numbered], list(range(1, 55)))
+        numbered, routes = wires.number_wires(self.nets, self.wires, Inputs.cfg.steps)
+        self.assertEqual([w[0] for w in numbered], list(range(1, len(self.wires) + 1)))
+        self.assertEqual(sorted(routes), [w[0] for w in numbered])
         steps = [w[1] for w in numbered]
         self.assertEqual(steps, sorted(steps))
         first = numbered[0]
@@ -413,7 +467,7 @@ class LiveProjectTests(unittest.TestCase):
 
     def test_committed_files_are_current(self):
         layout = cli.generate(LIVE)
-        self.assertEqual((layout.parts, layout.wires, layout.nets), (19, 60, 25))
+        self.assertEqual((layout.parts, layout.wires, layout.nets), (19, 66, 25))
         for path, text in layout.outputs.items():
             with self.subTest(path=path.name):
                 self.assertEqual(

@@ -12,6 +12,12 @@
     heavy_label = "VBAT, GND, motor coils"
     heavy_gauge = "20 AWG"
     light_gauge = "26–30 AWG"
+    conductors = 3                   # optional: per hole, a pin counting one
+
+    [[buses]]                        # optional: a bare tinned wire along a row
+    net = "GND"                      # or column, soldered at every hole; pads
+    from = "B21"                     # of its net under it join it, other pins
+    to = "Q21"                       # wire to its nearest hole
 
     [placement]                      # ref = [column, row, rotation_deg]
     U1 = [3, 3, 90]
@@ -37,23 +43,26 @@ netlist.
 from __future__ import annotations
 
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from .. import library
 from ..errors import KicadError
-from .grid import Board
+from .grid import Board, parse_hole
 from .render_svg import PALETTE
 
 FILENAME = "perfboard.toml"
 # The git-tracked file that makes a directory a perfboard project, relative to it.
 MARKER = f"hardware/perfboard/{FILENAME}"
 TOP_KEYS = frozenset(
-    {"skip", "board", "wires", "placement", "swaps", "steps", "continuity"}
+    {"skip", "board", "wires", "buses", "placement", "swaps", "steps", "continuity"}
 )
 BOARD_KEYS = frozenset({"title", "cols", "rows"})
-WIRES_KEYS = frozenset({"heavy_class", "heavy_label", "heavy_gauge", "light_gauge"})
+WIRES_KEYS = frozenset(
+    {"heavy_class", "heavy_label", "heavy_gauge", "light_gauge", "conductors"}
+)
+BUS_KEYS = frozenset({"net", "from", "to"})
 SWAP_KEYS = frozenset({"footprint", "value"})
 STEP_KEYS = frozenset({"title", "subtitle", "nets"})
 CONTINUITY_KEYS = frozenset({"isolated"})
@@ -88,6 +97,8 @@ class PerfboardConfig:
     swaps: dict[str, Swap]
     skip: frozenset[str]
     isolated: tuple[str, ...] = ()  # rails that must not beep to each other
+    conductors: int = 3  # per hole, 3 or more: a pin, a bus and each wire end count one
+    buses: dict = field(default_factory=dict)  # net -> ((hole, hole), ...)
 
     @property
     def board(self) -> Board:
@@ -135,6 +146,8 @@ def parse(data: dict[str, Any], path: Path) -> PerfboardConfig:
         swaps=_swaps(path, data.get("swaps", {})),
         skip=_skip(path, data.get("skip", [])),
         isolated=_isolated(path, data.get("continuity", {})),
+        conductors=_conductors(f"{path} [wires]", wires),
+        buses=_buses(path, data.get("buses", [])),
     )
 
 
@@ -155,6 +168,14 @@ def check_isolated(cfg: PerfboardConfig, nets: dict) -> list[str]:
     unknown = [n for n in cfg.isolated if n not in nets]
     if unknown:
         return [f"{cfg.path} [continuity] isolated: not a net: {unknown}"]
+    return []
+
+
+def check_buses(cfg: PerfboardConfig, nets: dict) -> list[str]:
+    """Every `[[buses]]` net is a net of the netlist."""
+    unknown = sorted(n for n in cfg.buses or {} if n not in nets)
+    if unknown:
+        return [f"{cfg.path} [[buses]]: not a net: {unknown}"]
     return []
 
 
@@ -287,3 +308,37 @@ def _isolated(path: Path, table: Any) -> tuple[str, ...]:
     if len(nets) == 1 or len(set(nets)) != len(nets):
         raise KicadError(f"{where}: needs two or more distinct nets, got {nets!r}")
     return tuple(nets)
+
+
+def _conductors(where: str, wires: dict[str, Any]) -> int:
+    value = wires.get("conductors", 3)
+    # Fewer than 3 leaves a pin room for one wire end and a free hole for two:
+    # no joint could branch, and a net of three pins could not be wired.
+    if not _int(value) or value < 3:
+        raise KicadError(
+            f"{where}: conductors must be an integer of 3 or more, got {value!r}"
+        )
+    return value
+
+
+def _buses(path: Path, buses: Any) -> dict:
+    if not isinstance(buses, list):
+        raise KicadError(f"{path}: [[buses]] must be an array of tables")
+    out: dict = {}
+    for i, bus in enumerate(buses, 1):
+        where = f"{path} [[buses]] #{i}"
+        _keys(path, f"[[buses]] #{i}", bus, BUS_KEYS)
+        net = _string(where, bus, "net")
+        try:
+            a, b = (
+                parse_hole(_string(where, bus, "from")),
+                parse_hole(_string(where, bus, "to")),
+            )
+        except KicadError as e:
+            raise KicadError(f"{where}: {e}") from None
+        if a[0] != b[0] and a[1] != b[1] or a == b:
+            raise KicadError(
+                f"{where}: from and to must be two holes of one row or column"
+            )
+        out.setdefault(net, []).append((a, b))
+    return {net: tuple(ends) for net, ends in out.items()}
