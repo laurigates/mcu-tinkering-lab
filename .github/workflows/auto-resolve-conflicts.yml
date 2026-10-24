@@ -15,7 +15,15 @@ on:
 jobs:
   resolve-conflicts:
     uses: laurigates/.github/.github/workflows/reusable-auto-resolve-conflicts.yml@main
+    # App token for the push: GitHub starts no CI for a push made with
+    # GITHUB_TOKEN, so a resolved head would never be built.
+    # skip-release-please: fix-release-conflicts.yml owns the release-please
+    # PR; both run on push to main, and this one would close that PR without
+    # retriggering release-please.
     with:
       pr_number: ${{ inputs.pr_number || '' }}
+      app-id: ${{ vars.RELEASE_PLEASE_CLIENT_ID }}
+      skip-release-please: true
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      APP_PRIVATE_KEY: ${{ secrets.RELEASE_PLEASE_PRIVATE_KEY }}
