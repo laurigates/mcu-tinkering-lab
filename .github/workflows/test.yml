@@ -16,15 +16,11 @@ on:
     # No branches: filter — a PR stacked on a non-default base (e.g. another
     # open PR's branch) must get the same suite as one targeting main/develop,
     # or it looks green while nothing ran. See issue #487.
-    paths:
-      - 'packages/**'
-      - '.github/workflows/test.yml'
-      - '.pre-commit-config.yaml'
-      - '.clang-format'
-      - '.gitleaks.toml'
-      - 'tools/**'
-      - 'docker-compose.yml'
-      - 'Dockerfile'
+    #
+    # No paths: filter either. detect-changes gates every job below, so a PR
+    # outside those paths runs only detect-changes and Test Summary. Test
+    # Summary then reports on every PR, which a required status check needs:
+    # a check that never reports blocks the merge.
   workflow_dispatch:
 
 concurrency:
@@ -283,9 +279,13 @@ jobs:
           echo "- C/C++ Linting: ${{ needs.lint-c.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Format Check: ${{ needs.format-check.result }}" >> $GITHUB_STEP_SUMMARY
 
-          # Fail only on actual failures, not skips
+          # Fail only on actual failures, not skips. lint-c is advisory and
+          # stays out. detect-changes is in: when it fails every gated job is
+          # skipped, and skips alone would pass.
           for result in \
+            "${{ needs.detect-changes.result }}" \
             "${{ needs.code-quality.result }}" \
+            "${{ needs.test-python-simulation.result }}" \
             "${{ needs.test-live-probe.result }}" \
             "${{ needs.format-check.result }}"; do
             if [ "$result" = "failure" ]; then
