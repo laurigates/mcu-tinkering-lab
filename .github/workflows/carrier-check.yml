@@ -19,6 +19,7 @@ on:
       - 'packages/**/main/*.h'
       - 'packages/**/hardware/carrier/**'
       - 'packages/**/hardware/perfboard/**'
+      - 'packages/**/docs/perfboard-steps.typ'
       - 'docs/reference/boards/*.md'
       - 'docs/reference/parts/**'
       - 'tools/hardware/**'
@@ -35,6 +36,7 @@ on:
       - 'packages/**/main/*.h'
       - 'packages/**/hardware/carrier/**'
       - 'packages/**/hardware/perfboard/**'
+      - 'packages/**/docs/perfboard-steps.typ'
       - 'docs/reference/boards/*.md'
       - 'docs/reference/parts/**'
       - 'tools/hardware/**'
@@ -117,6 +119,6 @@ jobs:
       - name: Perfboard drawing and wire list are up to date
         run: |
           if ! python3 -m kicad.perfboard --check; then
-            echo "::error::A perfboard output is stale, or its layout breaks a check. Run 'just <project>::perfboard' locally and commit the files it writes (perfboard.svg, perfboard-print.svg, perfboard.md, continuity.md)."
+            echo "::error::A perfboard output is stale, or its layout breaks a check. Run 'just <project>::perfboard' locally and commit the files it writes (perfboard.svg, perfboard-print.svg, perfboard.md, continuity.md, docs/perfboard-steps.typ and its PDF)."
             exit 1
           fi

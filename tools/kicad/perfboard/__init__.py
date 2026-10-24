@@ -9,12 +9,15 @@ are one circuit. Each part is placed on a 2.54 mm hole grid, each net becomes
 a tree of wires on the solder side, routed over free holes (and between holes
 where pads are in the way) with splices and optional bare buses, the result is
 checked, and four files are written
-beside perfboard.toml:
+beside perfboard.toml, and a fifth to the project's docs/:
 
 - perfboard.svg        the component side, then one mirrored solder-side panel per build step
 - perfboard-print.svg  both sides at 1:1 in mm, with a cut line and corner marks, for printing
 - perfboard.md         the wire list, one line per connection, hole to hole
 - continuity.md        what must beep after each step, and which rails must not
+- docs/perfboard-steps.typ  the printable step guide: one A4 page per step, its
+                       panel cropped from perfboard.svg beside its wires and checks;
+                       `just <project>::build-guide` compiles its committed PDF
 
 No KiCad is needed: pad offsets and courtyards are read from the vendored
 footprints (`tools/kicad/lib/`).
@@ -37,8 +40,8 @@ footprint and value. A part with no pins (a mounting hole) is skipped.
 Modules: `config` (perfboard.toml), `grid` (hole geometry and names), `place`
 (parts on the grid and their checks), `wires` (the plan's union-find check,
 numbering by step), `route` (the hole router and its independent
-check), `render_svg`, `render_print`, `wirelist`, `continuity`, `__main__` (the
-CLI).
+check), `render_svg`, `render_print`, `wirelist`, `continuity`, `render_guide`,
+`__main__` (the CLI).
 
 Import nothing here: `python3 -m kicad.perfboard` loads `__main__` itself.
 """

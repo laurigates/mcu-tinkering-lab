@@ -52,14 +52,25 @@ def wire_list(parts, numbered, routes, cfg: PerfboardConfig, heavy):
             "| ✓ | # | Net | Gauge | From | To | Length (holes) |",
             "|---|---|---|---|---|---|---|",
         ]
-        for n, st_, net, _, (ha, la), (hb, lb) in numbered:
-            if st_ != step:
-                continue
-            length = (len(routes[n]) - 1) / 2  # half-pitch steps to holes
-            gauge = cfg.heavy_gauge if net in heavy else cfg.light_gauge
-            if la == lb == bus_label(net):
-                gauge = f"bare, {gauge}"
-            lines.append(
-                f"| ☐ | {n} | {net} | {gauge} | {la} ({hole_name(*ha)}) | {lb} ({hole_name(*hb)}) | {length:g} |"
-            )
+        for row in step_rows(numbered, routes, cfg, heavy, step):
+            lines.append("| ☐ | " + " | ".join(map(str, row)) + " |")
     return "\n".join(lines) + "\n"
+
+
+def step_rows(numbered, routes, cfg: PerfboardConfig, heavy, step):
+    """Step `step`'s wires: (number, net, gauge, from, to, length in holes)."""
+    for n, st_, net, _, (ha, la), (hb, lb) in numbered:
+        if st_ != step:
+            continue
+        length = (len(routes[n]) - 1) / 2  # half-pitch steps to holes
+        gauge = cfg.heavy_gauge if net in heavy else cfg.light_gauge
+        if la == lb == bus_label(net):
+            gauge = f"bare, {gauge}"
+        yield (
+            n,
+            net,
+            gauge,
+            f"{la} ({hole_name(*ha)})",
+            f"{lb} ({hole_name(*hb)})",
+            f"{length:g}",
+        )

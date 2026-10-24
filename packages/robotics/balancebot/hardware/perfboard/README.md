@@ -24,6 +24,11 @@ applies unchanged.
   solder it.
 - [`continuity.md`](continuity.md): what must beep after each step, and the
   rail pairs that must not before first power-up.
+- [`docs/perfboard-steps.pdf`](../../docs/perfboard-steps.pdf): the one to
+  print for the build. One landscape A4 page per step, each with that step's
+  panel from `perfboard.svg` beside its numbered wire list and the continuity
+  checks to run once it is soldered, then the rail pairs before power-up. Its
+  source, `docs/perfboard-steps.typ`, is generated with the rest.
 
 Holes are named from the **component side**: columns A–R left to right, rows
 1–24 top to bottom, with robot forward toward row 1. The solder-side drawing is
@@ -80,14 +85,16 @@ are not.
 ## Regenerate
 
 ```sh
-just balancebot::perfboard          # rewrite the drawings, wire list and checklist
+just balancebot::perfboard          # rewrite the drawings, wire list, checklist and step guide PDF
 just balancebot::perfboard-check    # fail if they are stale or the layout breaks
 ```
 
 Both run the shared generator in
 [`tools/kicad/perfboard/`](../../../../../tools/kicad/perfboard/)
 (`python3 -m kicad.perfboard`). It needs no KiCad, and CI runs the check
-(`carrier-check.yml`). What it reads:
+(`carrier-check.yml`). The recipe then compiles the step guide's PDF with the
+pinned Typst (`build-guide`), which `build-guide-check.yml` holds the committed
+PDF to. What it reads:
 
 - [`perfboard.toml`](perfboard.toml): board size, where each part sits, the
   build steps and their nets, the wire gauges, and the rails the checklist

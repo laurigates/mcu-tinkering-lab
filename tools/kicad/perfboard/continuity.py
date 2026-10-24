@@ -38,10 +38,8 @@ def checklist(parts, nets, cfg: PerfboardConfig):
             "| ✓ | Net | Probe on | Must beep to |",
             "|---|---|---|---|",
         ]
-        for net in st.nets:
-            first, *rest = nets[net]
-            targets = ", ".join(pad(parts, n) for n in rest)
-            lines.append(f"| ☐ | {net} | {pad(parts, first)} | {targets} |")
+        for row in beep_rows(parts, nets, st):
+            lines.append("| ☐ | " + " | ".join(row) + " |")
     if cfg.isolated:
         lines += [
             "",
@@ -55,8 +53,19 @@ def checklist(parts, nets, cfg: PerfboardConfig):
             "| ✓ | Rail | Rail | Probe on | And on |",
             "|---|---|---|---|---|",
         ]
-        for a, b in combinations(cfg.isolated, 2):
-            lines.append(
-                f"| ☐ | {a} | {b} | {pad(parts, nets[a][0])} | {pad(parts, nets[b][0])} |"
-            )
+        for row in isolated_rows(parts, nets, cfg):
+            lines.append("| ☐ | " + " | ".join(row) + " |")
     return "\n".join(lines) + "\n"
+
+
+def beep_rows(parts, nets, step):
+    """One row per net of `step`: (net, probe pad, every other pad)."""
+    for net in step.nets:
+        first, *rest = nets[net]
+        yield net, pad(parts, first), ", ".join(pad(parts, n) for n in rest)
+
+
+def isolated_rows(parts, nets, cfg: PerfboardConfig):
+    """One row per pair of isolated rails: (rail, rail, probe pad, probe pad)."""
+    for a, b in combinations(cfg.isolated, 2):
+        yield a, b, pad(parts, nets[a][0]), pad(parts, nets[b][0])

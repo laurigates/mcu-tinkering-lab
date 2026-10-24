@@ -168,9 +168,12 @@ carrier-measure *args: (_carrier-measure project_dir args)
 [group: "carrier"]
 carrier-fab: carrier-check (_carrier-fab project_dir)
 
-# Lay the carrier circuit out on a 50 x 70 mm perfboard: drawing + wire list
+# The step guide it writes (docs/perfboard-steps.typ) is a docs/ Typst
+# document, so build-guide recompiles its committed PDF with the pinned CLI.
+#
+# Lay the carrier circuit out on a 50 x 70 mm perfboard: drawing, wire list, printable step guide
 [group: "carrier"]
-perfboard: (_perfboard project_dir)
+perfboard: (_perfboard project_dir) build-guide
 
 # Fail if the perfboard drawing or wire list is stale, or the layout breaks
 [group: "carrier"]

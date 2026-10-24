@@ -63,17 +63,46 @@ def label_at(body_left, body_top, text, grid_top, grid_right):
     return body_left + 3 - max(0, right - (grid_right + NUMBERS_DX - 1)), y
 
 
+S = 17  # px per hole
+HEAD = 74  # panel title, subtitle, legend, column letters
+TITLES = 30  # the title and subtitle's share of HEAD; the legend starts below it
+PAD_X, GAP_X, GAP_Y, MARGIN = 24, 46, 30, 20
+NCOLS = 3
+
+
+def size(board: Board, steps):
+    """(width, height) of the drawing in px."""
+    pw, ph = board.cols * S + PAD_X, board.rows * S + HEAD
+    nrows = -(-(1 + len(steps)) // NCOLS)
+    return (
+        MARGIN * 2 + NCOLS * pw + (NCOLS - 1) * GAP_X,
+        MARGIN * 2 + nrows * ph + (nrows - 1) * GAP_Y,
+    )
+
+
+def cell(index, board: Board):
+    """(x, y, width, height) of panel `index`'s cell: 0 the component side, then the steps."""
+    pw, ph = board.cols * S + PAD_X, board.rows * S + HEAD
+    col, row = index % NCOLS, index // NCOLS
+    return MARGIN + col * (pw + GAP_X), MARGIN + row * (ph + GAP_Y), pw, ph
+
+
+def body(index, board: Board):
+    """Panel `index`'s cell below its title and subtitle: its legend, letters and grid.
+
+    A subtitle can run on past its cell into the next one, so a crop of one
+    panel (the step guide's) starts below the titles; everything else drawn
+    for the panel stays inside its cell.
+    """
+    x, y, w, h = cell(index, board)
+    return x, y + TITLES, w, h - TITLES
+
+
 def svg(parts, numbered, routes, board: Board, steps, raised, heavy):
-    s = 17  # px per hole
+    s = S
     w, h = board.cols * s, board.rows * s
-    head = 74  # panel title, legend, column letters
-    pad_x, gap_x, gap_y, margin = 24, 46, 30, 20
-    pw, ph = w + pad_x, h + head
-    ncols = 3
-    panels = 1 + len(steps)
-    nrows = -(-panels // ncols)
-    width = margin * 2 + ncols * pw + (ncols - 1) * gap_x
-    height = margin * 2 + nrows * ph + (nrows - 1) * gap_y
+    head, pad_x = HEAD, PAD_X
+    width, height = size(board, steps)
     out = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
         f'font-family="Helvetica, Arial, sans-serif" font-size="10" fill="{INK}">',
@@ -81,9 +110,10 @@ def svg(parts, numbered, routes, board: Board, steps, raised, heavy):
     ]
 
     def panel(index, title, subtitle, mirror, wires, legend):
-        col, row = index % ncols, index // ncols
-        x0 = margin + col * (pw + gap_x) + (pad_x if mirror else 0)
-        y0 = margin + row * (ph + gap_y)
+        # One group per panel: the step guide embeds a page's panel alone.
+        out.append(f'<g id="panel-{index}">')
+        x0, y0, _, _ = cell(index, board)
+        x0 += pad_x if mirror else 0
         top = y0 + head
 
         def X(c):
@@ -219,6 +249,7 @@ def svg(parts, numbered, routes, board: Board, steps, raised, heavy):
             out.append(
                 f'<text x="{mx}" y="{my + 3}" text-anchor="middle" font-size="8.5" font-weight="bold">{n}</text>'
             )
+        out.append("</g>")
 
     panel(
         0,
