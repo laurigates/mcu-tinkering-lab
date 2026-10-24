@@ -1,8 +1,8 @@
 name: Non-Default Base CI Notice
 
 # Cheap, always-on companion to the base-branch filters on test.yml, build.yml,
-# schematics-check.yml and build-guide-check.yml. Those still gate their
-# pull_request trigger on paths:, and a few other workflows
+# schematics-check.yml and build-guide-check.yml. The last three still gate
+# their pull_request trigger on paths:, and a few other workflows
 # (build-python-simulation.yml, test-melody-train.yml, security-secrets.yml)
 # still gate on `branches: [main, develop]` too — so a PR stacked on another
 # PR's branch can still run less CI than one targeting main/develop, with no
@@ -12,9 +12,14 @@ name: Non-Default Base CI Notice
 # No paths: filter (must fire regardless of which files changed) and no
 # branches: filter on the trigger itself (it exists to report the base, so it
 # must run for every base).
+#
+# No synchronize either: a push does not change the base. The base changes
+# only at open/reopen or through an `edited` event that carries
+# `changes.base`, so the job skips `edited` events that only touched the title
+# or body.
 on:
   pull_request:
-    types: [opened, reopened, synchronize, edited]
+    types: [opened, reopened, edited]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
@@ -27,6 +32,7 @@ permissions:
 jobs:
   notice:
     name: Flag non-default PR base
+    if: github.event.action != 'edited' || github.event.changes.base != null
     runs-on: ubuntu-latest
     steps:
       # No continue-on-error here: neither ruleset on this repo
