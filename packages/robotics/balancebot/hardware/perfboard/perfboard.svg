@@ -1,5 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1122" height="1034" font-family="Helvetica, Arial, sans-serif" font-size="10" fill="#1f1f1f">
 <rect width="100%" height="100%" fill="white"/>
+<g id="panel-0">
 <text x="20" y="32" font-size="13" font-weight="bold">Component side</text>
 <text x="20" y="47" fill="#6b6b6b">parts as placed; dashed = module raised on its socket</text>
 <rect x="20" y="94" width="306" height="408" fill="white" stroke="#d9d9d9"/>
@@ -606,6 +607,8 @@
 <circle cx="130.5" cy="136.5" r="4" fill="#b87333"/>
 <circle cx="130.5" cy="119.5" r="4" fill="#b87333"/>
 <circle cx="130.5" cy="102.5" r="4" fill="#b87333"/>
+</g>
+<g id="panel-1">
 <text x="420" y="32" font-size="13" font-weight="bold">Step 1 · Pack input (wires 1–4)</text>
 <text x="420" y="47" fill="#6b6b6b">solder side, mirrored · J1 through F1 and the reverse-polarity FET Q1, with its gate zener D2</text>
 <line x1="420" y1="61" x2="432" y2="61" stroke="#2a78d6" stroke-width="3" stroke-linecap="round"/>
@@ -1196,6 +1199,8 @@
 <text x="624.0" y="369.0" text-anchor="middle" font-size="8.5" font-weight="bold">3</text>
 <circle cx="590.0" cy="400.0" r="7" fill="white" stroke="#1baf7a" stroke-width="1.5"/>
 <text x="590.0" y="403.0" text-anchor="middle" font-size="8.5" font-weight="bold">4</text>
+</g>
+<g id="panel-2">
 <text x="796" y="32" font-size="13" font-weight="bold">Step 2 · Power (wires 5–34)</text>
 <text x="796" y="47" fill="#6b6b6b">solder side, mirrored · VBAT, GND and the 5 V feed</text>
 <line x1="796" y1="61" x2="808" y2="61" stroke="#2a78d6" stroke-width="3" stroke-linecap="round"/>
@@ -1897,6 +1902,8 @@
 <text x="949.0" y="454.0" text-anchor="middle" font-size="8.5" font-weight="bold">33</text>
 <circle cx="932.0" cy="264.0" r="7" fill="white" stroke="#eda100" stroke-width="1.5"/>
 <text x="932.0" y="267.0" text-anchor="middle" font-size="8.5" font-weight="bold">34</text>
+</g>
+<g id="panel-3">
 <text x="44" y="544" font-size="13" font-weight="bold">Step 3 · Logic power (wires 35–48)</text>
 <text x="44" y="559" fill="#6b6b6b">solder side, mirrored · 3V3 straps and the shared nENABLE</text>
 <line x1="44" y1="573" x2="56" y2="573" stroke="#2a78d6" stroke-width="2" stroke-linecap="round"/>
@@ -2526,6 +2533,8 @@
 <text x="205.5" y="736.5" text-anchor="middle" font-size="8.5" font-weight="bold">47</text>
 <circle cx="163.0" cy="895.0" r="7" fill="white" stroke="#eb6834" stroke-width="1.5"/>
 <text x="163.0" y="898.0" text-anchor="middle" font-size="8.5" font-weight="bold">48</text>
+</g>
+<g id="panel-4">
 <text x="420" y="544" font-size="13" font-weight="bold">Step 4 · Motor coils (wires 49–56)</text>
 <text x="420" y="559" fill="#6b6b6b">solder side, mirrored · driver outputs to the motor headers</text>
 <line x1="420" y1="573" x2="432" y2="573" stroke="#2a78d6" stroke-width="3" stroke-linecap="round"/>
@@ -3142,6 +3151,8 @@
 <text x="471.0" y="847.0" text-anchor="middle" font-size="8.5" font-weight="bold">55</text>
 <circle cx="454.0" cy="895.0" r="7" fill="white" stroke="#e34948" stroke-width="1.5"/>
 <text x="454.0" y="898.0" text-anchor="middle" font-size="8.5" font-weight="bold">56</text>
+</g>
+<g id="panel-5">
 <text x="796" y="544" font-size="13" font-weight="bold">Step 5 · Signals (wires 57–66)</text>
 <text x="796" y="559" fill="#6b6b6b">solder side, mirrored · XIAO to drivers, IMU and the pack divider</text>
 <line x1="796" y1="573" x2="808" y2="573" stroke="#2a78d6" stroke-width="2" stroke-linecap="round"/>
@@ -3766,4 +3777,5 @@
 <text x="949.0" y="830.0" text-anchor="middle" font-size="8.5" font-weight="bold">65</text>
 <circle cx="1051.0" cy="810.0" r="7" fill="white" stroke="#e34948" stroke-width="1.5"/>
 <text x="1051.0" y="813.0" text-anchor="middle" font-size="8.5" font-weight="bold">66</text>
+</g>
 </svg>

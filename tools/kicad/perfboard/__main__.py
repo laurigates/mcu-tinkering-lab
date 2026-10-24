@@ -1,4 +1,4 @@
-"""Lay a carrier out on a perfboard: its drawing, 1:1 print, wire list and checklist.
+"""Lay a carrier out on a perfboard: its drawing, 1:1 print, wire list, checklist and step guide.
 
     PYTHONPATH=tools python3 -m kicad.perfboard [project ...] [--check] [--allow-none]
 
@@ -24,6 +24,7 @@ from . import (
     config,
     continuity,
     place,
+    render_guide,
     render_print,
     render_svg,
     route,
@@ -33,11 +34,13 @@ from . import (
 
 MARKER = config.MARKER
 OUTPUTS = ("perfboard.svg", "perfboard-print.svg", "perfboard.md", "continuity.md")
+# The step guide goes to docs/, beside the build guide, where its PDF is compiled.
+GUIDE_DIR = "docs"
 
 
 @dataclass(frozen=True)
 class Layout:
-    outputs: dict[Path, str]  # path -> text, in OUTPUTS order
+    outputs: dict[Path, str]  # path -> text, in OUTPUTS order, then the step guide
     parts: int
     wires: int
     nets: int
@@ -102,8 +105,13 @@ def generate(
         wirelist.wire_list(parts, numbered, routes, cfg, heavy),
         continuity.checklist(parts, nets, cfg),
     )
+    outputs = {out_dir / name: t for name, t in zip(OUTPUTS, texts, strict=True)}
+    guide_dir = project / GUIDE_DIR
+    outputs[guide_dir / render_guide.FILENAME] = render_guide.guide(
+        parts, nets, numbered, routes, cfg, heavy, guide_dir, out_dir / OUTPUTS[0]
+    )
     return Layout(
-        outputs={out_dir / name: t for name, t in zip(OUTPUTS, texts, strict=True)},
+        outputs=outputs,
         parts=len(parts),
         wires=len(planned),
         nets=len(nets),
@@ -159,6 +167,7 @@ def main(argv: list[str] | None = None, repo_root: Path = REPO_ROOT) -> int:
                 print(f"perfboard up to date: {summary}")
             continue
         for path, text in layout.outputs.items():
+            path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(text, encoding="utf-8")
         print(f"wrote {summary}")
     return 1 if failed else 0

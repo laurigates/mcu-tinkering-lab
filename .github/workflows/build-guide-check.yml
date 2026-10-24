@@ -16,6 +16,7 @@ on:
       - 'tools/hardware/**'
       - 'tools/typst/**'
       - 'docs/schematics/images/**'
+      - '**/hardware/perfboard/perfboard.svg'
       - '.github/workflows/build-guide-check.yml'
   pull_request:
     # No branches: filter — a PR stacked on a non-default base (e.g. another
@@ -34,6 +35,7 @@ on:
       - 'tools/hardware/**'
       - 'tools/typst/**'
       - 'docs/schematics/images/**'
+      - '**/hardware/perfboard/perfboard.svg'
       - '.github/workflows/build-guide-check.yml'
   workflow_dispatch:
 
