@@ -86,7 +86,9 @@ def sweep(mod, pans=PAN_SWEEP, tilts=TILT_SWEEP) -> dict:
 def _enclosure_thickness():
     """tools/enclosure's wall gate, loaded by path: one implementation, and the
     package itself pins Python 3.14.8, which not every machine has."""
-    path = Path(__file__).resolve().parents[6] / "tools/enclosure/enclosure/thickness.py"
+    path = (
+        Path(__file__).resolve().parents[6] / "tools/enclosure/enclosure/thickness.py"
+    )
     spec = importlib.util.spec_from_file_location("enclosure_thickness", path)
     mod = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = mod  # dataclass() looks its module up there
