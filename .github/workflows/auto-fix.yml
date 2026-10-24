@@ -52,7 +52,11 @@ jobs:
 
           echo "Dispatched ${DISPATCHED} auto-fix run(s)"
 
-  # Gather context and delegate to reusable auto-fix workflow
+  # Gather context and delegate to reusable auto-fix workflow.
+  # A failed run started by a bot (Renovate, release-please, an App-token
+  # push) is skipped here: claude-code-action refuses bot actors anyway, so
+  # without this gate each one became a red auto-fix run. A human push onto a
+  # bot's branch makes the actor that human, so it still gets auto-fix.
   gather-context:
     name: Gather failure context
     runs-on: ubuntu-latest
@@ -60,6 +64,7 @@ jobs:
       (github.event_name == 'workflow_dispatch' && inputs.pr_number != 'all') ||
       (
         github.event_name == 'workflow_run' &&
+        github.event.workflow_run.actor.type != 'Bot' &&
         github.event.workflow_run.conclusion == 'failure' &&
         !startsWith(github.event.workflow_run.head_commit.message, 'fix(auto):')
       )
