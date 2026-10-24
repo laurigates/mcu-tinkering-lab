@@ -7,7 +7,7 @@ With no project, every project with a git-tracked
 the committed files differ from what would be written. Either way nothing is
 written, and the run fails, when the layout breaks a check: a pad off the
 board or two in one hole, overlapping bodies, a net split or two joined, or a
-route that jumps, passes over a hole or shares a channel. KiCad-free.
+route that jumps, lies over a pad or joint, shares a segment, or overfills a hole. KiCad-free.
 """
 
 from __future__ import annotations
@@ -27,8 +27,8 @@ from . import (
     render_print,
     render_svg,
     route,
-    wires,
     wirelist,
+    wires,
 )
 
 MARKER = config.MARKER
@@ -84,15 +84,15 @@ def generate(
     nets = place.nets_of(nl, skip)
     board = cfg.board
     errors = place.check_placement(parts, board, raised, tall)
-    planned = wires.plan_wires(parts, nets)
-    errors += wires.check_wires(parts, nets, planned)
     errors += config.check_steps(cfg, nets)
     errors += config.check_isolated(cfg, nets)
+    errors += config.check_buses(cfg, nets)
     if errors:
         raise KicadError("\n".join(errors))
-    numbered = wires.number_wires(nets, planned, cfg.steps)
-    routes = route.route_wires(numbered, len(cfg.steps), board)
-    errors = route.check_routes(numbered, routes, len(cfg.steps))
+    planned = route.plan(parts, nets, cfg.steps, board, cfg.buses, cfg.conductors)
+    numbered, routes = wires.number_wires(nets, planned, cfg.steps)
+    errors = wires.check_wires(parts, nets, planned)
+    errors += route.check_routes(numbered, routes, parts, nets, cfg.conductors)
     if errors:
         raise KicadError("\n".join(errors))
     out_dir = config.perfboard_dir(project)

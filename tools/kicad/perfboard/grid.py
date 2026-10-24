@@ -45,6 +45,18 @@ def col_name(c):
     return name
 
 
+def parse_hole(name):
+    """ "A1" -> (0, 0), "AB12" -> (27, 11); the inverse of hole_name."""
+    letters = name.rstrip("0123456789")
+    digits = name[len(letters) :]
+    if not letters.isalpha() or not letters.isupper() or not digits or int(digits) < 1:
+        raise KicadError(f"{name!r} is not a hole name such as B12")
+    c = 0
+    for ch in letters:
+        c = c * 26 + ord(ch) - ord("A") + 1
+    return c - 1, int(digits) - 1
+
+
 def hole_name(c, r):
     return f"{col_name(c)}{r + 1}"
 

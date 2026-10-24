@@ -10,6 +10,7 @@ from __future__ import annotations
 import math
 
 from .grid import Board, col_name
+from .route import is_bus
 
 # Categorical slots 1-8 of the dataviz reference palette, light mode. Checked
 # with its validator against a white surface: CVD and normal-vision separation
@@ -78,9 +79,6 @@ def svg(parts, numbered, routes, board: Board, steps, raised, heavy):
         f'font-family="Helvetica, Arial, sans-serif" font-size="10" fill="{INK}">',
         '<rect width="100%" height="100%" fill="white"/>',
     ]
-    net_of_pin = {}
-    for _, _, net, colour, (ha, la), (hb, lb) in numbered:
-        net_of_pin[ha], net_of_pin[hb] = (net, colour), (net, colour)
 
     def panel(index, title, subtitle, mirror, wires, legend):
         col, row = index % ncols, index // ncols
@@ -151,20 +149,32 @@ def svg(parts, numbered, routes, board: Board, steps, raised, heavy):
             return keep + [path[-1]]
 
         # Wires first, pads over them, so each wire visibly ends on its pad.
-        for n, _, net, colour, _, _ in wires:
+        # A bus is bare: a wide pale band with its net's colour down the middle.
+        active = {}
+        for wire in wires:
+            n, _, net, colour, a, b = wire
             pts = " ".join(f"{X(x / 2):g},{Y(y / 2):g}" for x, y in corners(routes[n]))
             width_ = 3 if net in heavy else 2
-            for stroke, sw in (("white", width_ + 4), (colour, width_)):
+            strokes = [("white", width_ + 4), (colour, width_)]
+            if is_bus(wire):
+                strokes.insert(1, ("#c9c9c9", width_ + 4))
+                for x, y in routes[n][::2]:
+                    active[(x // 2, y // 2)] = colour
+            for stroke, sw in strokes:
                 out.append(
                     f'<polyline points="{pts}" fill="none" stroke="{stroke}" '
                     f'stroke-width="{sw}" stroke-linecap="round" stroke-linejoin="round"/>'
                 )
-        active = {ha for *_, (ha, _), _ in wires} | {hb for *_, (hb, _) in wires}
+            active[a[0]] = active[b[0]] = colour
+        pad_holes = {h for p in parts.values() for h in p.pads.values()}
+        for (c, r), colour in sorted(active.items()):
+            if (c, r) not in pad_holes:  # a splice or a bus end: wire ends meet
+                out.append(f'<circle cx="{X(c)}" cy="{Y(r)}" r="3" fill="{colour}"/>')
         for p in parts.values():
             for num, hole in p.pads.items():
                 c, r = hole
                 if mirror and hole in active:
-                    fill = net_of_pin[hole][1]
+                    fill = active[hole]
                 elif mirror:
                     fill = "#cfcfcf"
                 else:
@@ -183,8 +193,8 @@ def svg(parts, numbered, routes, board: Board, steps, raised, heavy):
         for n, _, net, colour, _, _ in wires:
             # Put each number on a straight stretch of its own wire, as near the
             # middle as it can go while clearing other wires' crossings and the
-            # numbers already placed. Channel intersections come first: there
-            # the label clears every pad.
+            # numbers already placed. Gap crossings come first: there the label
+            # clears every pad.
             path = routes[n]
             bends = set(corners(path))
             mid = (len(path) - 1) / 2

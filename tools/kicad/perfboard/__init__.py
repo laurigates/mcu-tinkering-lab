@@ -6,8 +6,9 @@ A perfboard project has a git-tracked `hardware/perfboard/perfboard.toml`. Its
 parts and nets are the carrier netlist (`kicad.netlist`: hardware.toml's
 carrier view plus the parts registry), so the perfboard and the carrier PCB
 are one circuit. Each part is placed on a 2.54 mm hole grid, each net becomes
-point-to-point wires on the solder side, every wire is maze-routed through the
-channels between holes, the result is checked, and four files are written
+a tree of wires on the solder side, routed over free holes (and between holes
+where pads are in the way) with splices and optional bare buses, the result is
+checked, and four files are written
 beside perfboard.toml:
 
 - perfboard.svg        the component side, then one mirrored solder-side panel per build step
@@ -21,6 +22,7 @@ footprints (`tools/kicad/lib/`).
 Where each fact comes from:
 
 - perfboard.toml: board size and title, placement, build steps, wire gauges,
+  conductors per hole, buses,
   optional per-ref `[swaps.REF]` footprint/value and `skip` overrides, and the
   `[continuity] isolated` rails;
 - the parts registry `[perfboard]` table: the through-hole stand-in footprint
@@ -33,8 +35,8 @@ Override precedence: perfboard.toml, then the registry, then the netlist's
 footprint and value. A part with no pins (a mounting hole) is skipped.
 
 Modules: `config` (perfboard.toml), `grid` (hole geometry and names), `place`
-(parts on the grid and their checks), `wires` (wire plan, its union-find
-check, numbering by step), `route` (the channel router and its independent
+(parts on the grid and their checks), `wires` (the plan's union-find check,
+numbering by step), `route` (the hole router and its independent
 check), `render_svg`, `render_print`, `wirelist`, `continuity`, `__main__` (the
 CLI).
 
