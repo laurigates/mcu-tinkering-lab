@@ -82,6 +82,12 @@ TAB_CLR = 0.2  # each face of a tab in its groove
 HORN_CLR = 0.15  # horn in its pocket: a light press, nylon gives
 SLIT = 0.8  # slots that free a flexure inside one part (> 0.6 so it does not fuse)
 RUN = 0.4  # running gap between parts that move against each other
+# Axial float each horn has in its pocket, both ways from nominal. The horn's
+# height above the tabs (C - F plus the spline) is a paper figure: with this
+# slack a servo up to 1 mm taller or shorter above its tabs still assembles and
+# still drives through the full arm thickness. Once C - F is calipered, drop it
+# to 0.3 to take out the float (see README "Measure first").
+HORN_SLACK = 1.0
 
 # ---------------------------------------------------------------------------
 # Horn envelope (common/fixtures.horn): hub 7 x 4 from 0.5 above the case,
@@ -95,13 +101,26 @@ HORN_ARM_BOT = HORN_TOP - HORN_ARM_T  # 2.9
 # Base and pan
 # ---------------------------------------------------------------------------
 FLOOR_T = 3.0
-PAN_BASE_Z = FLOOR_T + 0.5  # pan servo hangs on its tabs, 0.5 above the floor
+PAN_BASE_Z = FLOOR_T + 0.5  # pan servo bottom; it hangs on its tabs
+FLOOR_RECESS = 1.5  # the floor under the case drops 1.5: 2.0 below the case, so F
+# (below-tab depth) can be up to 2 mm longer before the servo bottoms
 Z_PAN_TOP = PAN_BASE_Z + SERVO.height  # case top, servo frame z 0
 Z_TAB_UNDER = PAN_BASE_Z + SERVO.tab_underside
 POCKET_WALL = 2.1
-YOKE_B = Z_PAN_TOP + HORN_ARM_BOT  # yoke underside = horn arm underside
-YOKE_T = YOKE_B + HORN_ARM_T + 1.6  # 1.6 floor over the horn pocket
-RING_TOP = YOKE_B - 0.3  # thrust face
+# The yoke's height is set by the base ring, not by the horn: it rests on the
+# ring's top (0.1 gap at nominal, so the gate sees two parts) and the fingers
+# catch 0.2 under the lip, all printed-part dimensions. The horn floats
+# HORN_SLACK either way in its pocket, so the servo's C and C - F do not enter
+# the snap stack. The pan servo is held down by its own tab hooks in the base.
+YOKE_B = Z_PAN_TOP + HORN_ARM_BOT - HORN_SLACK  # yoke underside
+YOKE_T = YOKE_B + HORN_ARM_T + 2 * HORN_SLACK + 1.6  # 1.6 floor over the pocket
+RING_TOP = YOKE_B - 0.1  # thrust face
+# Pan servo tab hooks (four flat cantilevers rising from the floor beside the
+# tab overhangs, noses over the tab tops)
+HOOK_T = 1.8  # beam thickness, flexes outward in Y
+HOOK_NOSE = 1.0  # how far the nose reaches over the tab
+HOOK_GAP = 0.3  # tab top to the nose's catch face
+END_PILLAR_Y = 5.5  # the tab-rest pillars stop here, 0.8 short of the hooks
 
 _cx = SHAFT_FROM_END - SERVO.length / 2
 _tab_corner = math.hypot(_cx - SERVO.tab_span / 2, SERVO.width / 2)
@@ -132,15 +151,20 @@ EAR_T = FLOOR_T
 CHEEK_IN = 14.0  # cradle cheeks' inner faces, |y|; the board edge is at 14.75
 CHEEK_T = 3.6
 CHEEK_OUT = CHEEK_IN + CHEEK_T
+# the -Y cheek carries the horn pocket, deepened by HORN_SLACK each way
+CHEEK_T_N = CHEEK_T + 2 * HORN_SLACK
+CHEEK_OUT_N = CHEEK_IN + CHEEK_T_N
 GROOVE_FLOOR = fx.HEAD_SIZE / 2 + 0.35  # board edge groove bottom, |y|
-TILT_TOP_Y = -CHEEK_OUT - HORN_ARM_BOT  # tilt servo case top (servo z 0), world y
+TILT_TOP_Y = -CHEEK_OUT_N - (HORN_ARM_BOT - HORN_SLACK)  # tilt servo case top, world y
 ARM_IN = CHEEK_OUT + RUN  # yoke +Y arm inner face
 ARM_T = 3.0  # springs out ~4.5 mm to let the cradle's pivot stub in (PA11)
 STUB_IN = 2.5  # pivot stub's engagement in the arm
 ARM_OUT = ARM_IN + ARM_T
 PIVOT_D = 6.0
 PIVOT_HOLE = PIVOT_D + 0.4
-PEG_D, PEG_TIP_D = 1.9, 1.3  # pegs into the head's 2.2 mm M2 holes
+PEG_D = 1.9  # pegs into the head's 2.2 mm M2 holes
+PEG_TIP_X = 1.5  # peg reach into the 1.6 board, from its back face
+PEG_TIP_H = 1.0  # height left at the peg tip under its lead-in ramp
 
 # The tilt axis in the head's board frame: midway between the XIAO stack's front
 # and the J2 keep-out's back, so the head's swept radius is smallest; at the
@@ -251,31 +275,43 @@ def slide_cradle(spec: fx.ServoSpec, side_w: float = 2.4) -> Part:
         tab_lo - TAB_CLR - end_t, tab_hi + TAB_CLR + end_t, back, -w2 - CLR, led0, lip1
     )
     cradle = blocks[0] + blocks[1] + rail
-    # flexure finger: free the lower block's ledge from its end wall
-    f_lo, f_hi = tab_lo - TAB_CLR, body_lo - CLR
-    cradle -= box(f_lo - SLIT, f_lo, -w2 + 2.0, front + 1, led0 - 0.1, g0)
-    # ... and from the rail side so it is a beam rooted at the back
+    # A flexure finger in EACH block's ledge, so both tabs are boxed in (back
+    # rail behind, nose in front) and the servo cannot pivot about one tab
+    # under its own reaction torque. The 0.8 slit is cut on the finger's side
+    # of the end wall's face, so wall and finger are 0.8 apart everywhere
+    # (cut inside the wall, the two met along a zero-width line and fused).
     nose_y0 = w2 + TAB_CLR
-    # nose: a vertical catch face behind the tab, a flat top, a lead-in ramp in front
-    h = 0.8
-    nose = prism_yz(
-        [
-            (nose_y0, g0 - 0.01),
-            (nose_y0, g0 + h),
-            (nose_y0 + side_w - 0.9, g0 + h),
-            (nose_y0 + side_w, g0 - 0.01),
-        ],
-        f_lo + 0.3,
-        f_hi - 0.3,
-    )
-    cradle += nose
+    h = 0.8  # nose height into the groove
+    for wall, free in (
+        (tab_lo - TAB_CLR, body_lo - CLR),  # lower block (away from the shaft)
+        (tab_hi + TAB_CLR, body_hi + CLR),  # upper block (shaft end)
+    ):
+        d = 1 if free > wall else -1
+        s1 = wall + d * SLIT
+        cradle -= box(wall, s1, -w2 + 2.0, front + 1, led0 - 0.1, g0)
+        # nose: a vertical catch face in front of the tab, a flat top, a
+        # lead-in ramp at the open end that the tab pushes the finger down by
+        nose = prism_yz(
+            [
+                (nose_y0, g0 - 0.01),
+                (nose_y0, g0 + h),
+                (nose_y0 + side_w - 0.9, g0 + h),
+                (nose_y0 + side_w, g0 - 0.01),
+            ],
+            min(s1 + d * 0.3, free - d * 0.3),
+            max(s1 + d * 0.3, free - d * 0.3),
+        )
+        cradle += nose
     return cradle
 
 
-def horn_pocket(kind: str, clr: float = HORN_CLR, through: float = 0.0) -> Part:
+def horn_pocket(
+    kind: str, clr: float = HORN_CLR, through: float = 0.0, slack: float = 0.0
+) -> Part:
     """Pocket for a stock horn in the servo frame, from the arm's underside up to
-    the horn top, plus an optional screw hole on the axis to ``through`` mm."""
-    z0, z1 = HORN_ARM_BOT - 0.01, HORN_TOP
+    the horn top (each extended by ``slack``), plus an optional screw hole on
+    the axis to ``through`` mm past the pocket's floor."""
+    z0, z1 = HORN_ARM_BOT - slack - 0.01, HORN_TOP + slack
     p = cyl_z(3.5 + clr, z0, z1)
     if kind == "single":
         p += box(-clr, 20 + clr, -2.75 - clr, 2.75 + clr, z0, z1)
@@ -285,7 +321,7 @@ def horn_pocket(kind: str, clr: float = HORN_CLR, through: float = 0.0) -> Part:
     else:
         raise ValueError(kind)
     if through:
-        p += cyl_z(2.25, z0, HORN_TOP + through)
+        p += cyl_z(2.25, z0, z1 + through)
     return p
 
 
@@ -309,19 +345,22 @@ def make_base() -> Part:
         RING_RL, RING_RL - 0.8, 1.0, align=(CEN, CEN, MIN)
     )
     ring -= cyl_z(RING_RI, FLOOR_T - 1, RING_TOP + 1)
-    # pan servo pocket walls: the tabs rest on their tops
+    # pan servo pocket: side walls along the case locate it in Y, end pillars
+    # carry the tabs (and locate it in X), four hooks clip over the tab tops
     x0 = SHAFT_FROM_END - SERVO.length - CLR
     x1 = SHAFT_FROM_END + CLR
     w = SERVO.width / 2 + CLR
-    walls = box(
-        x0 - POCKET_WALL,
-        x1 + POCKET_WALL,
-        -w - POCKET_WALL,
-        w + POCKET_WALL,
-        FLOOR_T - 0.01,
-        Z_TAB_UNDER,
+    walls = None
+    for s in (1, -1):
+        sw = box(x0, x1, s * w, s * (w + POCKET_WALL), FLOOR_T - 0.01, Z_TAB_UNDER)
+        walls = sw if walls is None else walls + sw
+    walls += box(
+        x0 - POCKET_WALL, x0, -END_PILLAR_Y, END_PILLAR_Y, FLOOR_T - 0.01, Z_TAB_UNDER
     )
-    walls -= box(x0, x1, -w, w, FLOOR_T - 1, Z_TAB_UNDER + 1)
+    walls += box(
+        x1, x1 + POCKET_WALL, -END_PILLAR_Y, END_PILLAR_Y, FLOOR_T - 0.01, Z_TAB_UNDER
+    )
+    walls += pan_tab_hooks(x0, x1, w)
     # flat-faced boss round the lead exit, so the slot is cut through flat walls
     boss = box(-RING_RG - 1.0, -RING_RI + 0.5, -5.0, 5.0, 0, PAN_BASE_Z + 12.0)
     boss -= cyl_z(RING_RI, FLOOR_T - 1, RING_TOP)
@@ -331,9 +370,40 @@ def make_base() -> Part:
     base -= box(-RING_RL - 2, x0 + 0.5, -2.6, 2.6, FLOOR_T, boot_z1)
     # ... and the rear pocket wall slotted to the top, so the boot drops past it
     base -= box(x0 - POCKET_WALL - 1, x0 + 0.5, -2.6, 2.6, FLOOR_T, Z_TAB_UNDER + 1)
+    # floor recess under the case: 2.0 below it, for a longer-than-paper F
+    base -= box(x0, x1, -w, w, FLOOR_T - FLOOR_RECESS, FLOOR_T + 0.5)
     # lighten the floor inside the pocket (finger access to push the servo up)
     base -= cyl_z(4.0, -1, FLOOR_T + 1, -5.0, 0)
     return base
+
+
+def pan_tab_hooks(x0: float, x1: float, w: float) -> Part:
+    """Four flat hooks rising from the floor beside the pan servo's tab
+    overhangs. The tab's edge pushes each nose out on its 45 degree ramp, and
+    the flat catch face then sits HOOK_GAP over the tab's top. Each beam is
+    clear of the side walls by SLIT in X and of the end pillars in Y."""
+    cx = SHAFT_FROM_END - SERVO.length / 2
+    tab_lo, tab_hi = cx - SERVO.tab_span / 2, cx + SERVO.tab_span / 2
+    zc = Z_TAB_UNDER + TAB_T + HOOK_GAP  # catch face
+    spans = [(tab_lo + 0.45, x0 - SLIT), (x1 + SLIT, tab_hi - 0.45)]
+    hooks = None
+    for xa, xb in spans:
+        for s in (1, -1):
+            y0 = w  # beam inner face, 0.3 off the tab's side
+            pts = [
+                (y0, FLOOR_T - 0.01),
+                (y0 + HOOK_T, FLOOR_T - 0.01),
+                (y0 + HOOK_T, zc + 2.5),
+                (y0, zc + 2.5),
+                (y0 - HOOK_NOSE, zc + 1.5),
+                (y0 - HOOK_NOSE, zc),
+                (y0, zc),
+            ]
+            if s < 0:
+                pts = [(-y, z) for y, z in pts][::-1]
+            hk = prism_yz(pts, xa, xb)
+            hooks = hk if hooks is None else hooks + hk
+    return hooks
 
 
 def _finger(angle: float) -> Part:
@@ -375,7 +445,7 @@ def make_yoke() -> Part:
     clip -= box(-0.45, 0.45, ly - 4.7, ly - 2.9, YOKE_B - 1, YOKE_T + 1)
     plate += clip
     # pan horn pocket from below, screw access from above
-    plate -= Pos(0, 0, Z_PAN_TOP) * horn_pocket("cross", through=3.0)
+    plate -= Pos(0, 0, Z_PAN_TOP) * horn_pocket("cross", through=3.0, slack=HORN_SLACK)
     yoke = plate
     for a in FINGER_ANGLES:
         yoke += _finger(a)
@@ -402,8 +472,10 @@ def _cradle_board() -> Part:
     x0, x1 = -3.0, AX + 5.5
     zb = -1.5
     c = None
+    j2_ymin = fx.J2_CENTRE_YZ[0] - fx.J2_KEEPOUT[1] / 2  # -15.5
     for s in (1, -1):
-        cheek = box(x0, x1, s * CHEEK_IN, s * CHEEK_OUT, zb, fx.HEAD_SIZE)
+        out = CHEEK_OUT if s > 0 else CHEEK_OUT_N
+        cheek = box(x0, x1, s * CHEEK_IN, s * out, zb, fx.HEAD_SIZE)
         # board-edge groove, open at the top
         cheek -= box(
             -0.15, t + 0.15, s * (CHEEK_IN - 1), s * GROOVE_FLOOR, 0, fx.HEAD_SIZE + 1
@@ -411,23 +483,33 @@ def _cradle_board() -> Part:
         if s < 0:
             # horn arm points down: extend the -Y cheek to cover it
             cheek += box(
-                AX - 4.8, AX + 4.8, s * CHEEK_IN, s * CHEEK_OUT, AZ - 22.2, zb + 0.01
+                AX - 4.8, AX + 4.8, s * CHEEK_IN, s * out, AZ - 22.2, zb + 0.01
             )
-            # clear the J2 plug behind the board's lower -Y corner
-            cheek -= box(x0 - 1, -0.15, -CHEEK_IN + 0.01, -GROOVE_FLOOR, zb - 1, 8.5)
+            # clear the J2 plug behind the board's lower -Y corner: the whole
+            # keep-out (to y -15.5) plus 0.15, and up to the board's back face
+            cheek -= box(x0 - 1, 0.1, -CHEEK_IN + 0.01, j2_ymin - 0.15, zb - 1, 8.5)
         c = cheek if c is None else c + cheek
     c += box(-3.0, -0.2, -CHEEK_IN - 0.01, CHEEK_IN + 0.01, 8.0, 11.0)  # back bar
     c += box(t + 0.15, t + 2.6, -CHEEK_IN - 0.01, CHEEK_IN + 0.01, zb, 3.5)  # front bar
     # latch tongues with pegs into the M2 holes
     for y, z in fx.HEAD_HOLES_YZ:
         c += box(-1.8, -0.2, y - 2.0, y + 2.0, 10.99, z + 2.0)
-        # peg with a conical tip: the board's bottom edge pushes it back
-        c += cyl_x(PEG_D / 2, -0.21, 0.6, y, z)
-        c += (
-            Pos(0.6 - 0.01, y, z)
-            * Rot(0, 90, 0)
-            * Cone(PEG_D / 2, PEG_TIP_D / 2, t - 0.7, align=(CEN, CEN, MIN))
+        # peg: its top is a lead-in ramp falling toward +X (into the board),
+        # so the falling board's back bottom edge cams the tongue back; the
+        # lower half stays round and holds the board down in its hole
+        r = PEG_D / 2
+        peg = cyl_x(r, -0.21, PEG_TIP_X, y, z)
+        ramp_cut = Pos(0, y, 0) * prism_xz(
+            [
+                (-0.2, z + r),
+                (PEG_TIP_X, z - r + PEG_TIP_H),
+                (PEG_TIP_X + 1, z - r + PEG_TIP_H),
+                (PEG_TIP_X + 1, z + r + 1),
+                (-0.2, z + r + 1),
+            ],
+            PEG_D + 1,
         )
+        c += peg - ramp_cut
     return c
 
 
@@ -435,7 +517,9 @@ def make_cradle() -> Part:
     c = HEAD_LOC * _cradle_board()
     tl = tilt_servo_loc()
     # single-arm horn pointing down, pressed into the -Y cheek's outer face
-    c -= tl * Rot(0, 0, 180) * horn_pocket("single", through=CHEEK_T)
+    c -= (
+        tl * Rot(0, 0, 180) * horn_pocket("single", through=CHEEK_T_N, slack=HORN_SLACK)
+    )
     # pivot stub on the +Y cheek, running in the yoke arm's hole
     stub_end = ARM_IN + STUB_IN
     c += cyl_y(PIVOT_D / 2, CHEEK_OUT - 0.01, stub_end - 0.5, 0, Z_TILT)

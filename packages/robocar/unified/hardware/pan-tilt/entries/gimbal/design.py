@@ -12,8 +12,13 @@ Design intent, in order:
    computed from that sweep, not guessed.
 4. The pan thrust and the side-mounted tilt servo's overturning moment go into
    a thin-section 6705ZZ ball bearing around the pan horn, not the servo shaft.
-   The tilt side opposite the servo runs in an MR128ZZ, so the tilt servo's
-   output shaft is not a cantilever.
+   The yoke is clamped to the bearing's inner race by a printed keeper, and the
+   horn's trimmed arms float axially in the keeper's cross slot, so the pan
+   servo carries torque only. The tilt side opposite the servo runs in an
+   MR128ZZ, so the tilt servo's output shaft is not a cantilever.
+5. The IDC ribbon and the servo leads have a modelled path: a shelf and a
+   gutter on the yoke, a post on the tower, tie slots on all three, and
+   ``ribbon_spans()`` sizes the two free spans.
 
 Head 1 is mounted upside down (rotated 180 degrees about the camera axis,
 ``HEAD_FLIPPED``): the J2 ribbon plug then sits behind the board's top edge
@@ -71,8 +76,9 @@ SERVO = fx.MG90D  # tab span E, below-tab depth F, shaft offset: see README
 PUPIL_BEHIND_STACK_FRONT = 2.0
 HEAD_FLIPPED = True
 
-FIT = 0.3  # radial/side clearance of a servo case in its window (MJF +-0.3)
-FIT_END = 0.15  # servo case ends (both servos): keeps >= 1.1 mm beside the tab pilots
+FIT = 0.3  # case side clearance: a 12.6 window takes TowerPro's 12.2 headline
+FIT_END = 0.35  # case end clearance: a 23.3 window takes TowerPro's 22.8 headline
+FIT_TAB = 0.6  # tab-span cavity: 31.5 + 1.2 = 32.7 takes even the SG90's 32.3
 GAP = 0.5  # running clearance between parts that move relative to each other
 SWEEP_MARGIN = 1.0  # the head/cradle proxy is grown by this before cutting
 TILT_CUT = 46.0  # the yoke clears the head over +-this (check sweeps +-45)
@@ -85,11 +91,18 @@ PB_INNER_RACE_OD = 27.6  # land on the inner race stays inside this
 TB_ID, TB_OD, TB_W = 8.0, 12.0, 3.5
 
 WALL = 2.0
-PILOT = 1.8  # self-tapping pilot for the servos' own ~2 mm screws (modelled)
-SCREW_CORE = 1.7  # stand-in diameter of a self-tapper's shank in its pilot
+# Servo tab holes and the keeper screws are TAPPED M2 (drill Ø1.6, tap M2x0.4)
+# and take M2 machine screws. A tap cuts the thread out of the web beside the
+# case window instead of pushing it radially as a self-tapper does.
+PILOT = 1.6
+SCREW_CORE = 1.55  # stand-in: an M2 machine screw's minor diameter
 INSERT_HOLE = 3.2  # M2 x 3 heat-set insert (OD 3.5 knurl) in PA12
-PAN_SERVO_LIFT = 0.5  # pan servo base above the chassis plate
+PAN_SERVO_LIFT = 2.0  # pan servo base above the chassis plate (F + 2 mm still clears)
 CHASSIS_FLANGE_T = 3.0
+CHASSIS_PLATE_T = 3.0  # acrylic 2WD plate, a stand-in in assembly()
+# Head screws: the driver reaches the M2 button heads from the front along
+# their axes. A Ø3 hex-driver shaft (1.3 mm hex) plus 0.3 mm all round.
+HEAD_DRIVER_D = 3.6
 M3_HOLES = [(-20.0, 16.0), (-20.0, -16.0), (15.0, 16.0), (15.0, -16.0)]  # world xy
 
 # Panned centre of mass behind the lens; derived by panned_com() below and
@@ -155,17 +168,44 @@ OUTRIGGER_PLATE_Y0 = OUTRIGGER_PLATE_Y1 - 3.0
 # --------------------------------------------------------------------------
 # Pan stage heights (world z). Pan servo shaft on the pan axis, body back.
 # --------------------------------------------------------------------------
+# The pan coupling is torque-only. A stock cross horn, its arms cut to
+# HORN_TRIM_R, sits on the pan spline under its own centre screw. The arm
+# stubs float in a cross slot through the KEEPER, a printed ring screwed under
+# the yoke's spigot that also clamps the 6705ZZ's inner race against the
+# yoke's land. Yoke + bearing + keeper are one bench subassembly, so the
+# bearing alone locates the yoke and the servo shaft carries only torque.
 ZS = PAN_SERVO_LIFT + SERVO.height  # pan servo case top
-Z_CHAMBER = ZS + 0.3  # horn chamber floor (horn hub starts 0.5 above the case)
+Z_CHAMBER = ZS  # chamber floor flush with the case top (inside r 14.3)
+CASE_TOP_CLEAR = ZS + 0.5  # the case pocket's roof, outside the chamber
+HORN_ARM_Z0 = ZS + 2.9  # fixture horn arm 2.9..4.5 above the case
 Z_HORN_TOP = ZS + 4.5
-Z_LIP0 = ZS + 5.0
-Z_SEAT0 = Z_LIP0 + WALL
+KEY_FLOAT = 1.0  # axial float of the horn in the keeper, each way
+HORN_TRIM_R = 10.0  # cross horn arms cut to this radius (flush cutters)
+KEY_FIT = 0.15  # arm stub to slot wall, per side (file to a sliding fit)
+Z_KEEPER0 = HORN_ARM_Z0 - KEY_FLOAT
+Z_SEAT0 = Z_HORN_TOP + KEY_FLOAT  # keeper top = inner race bottom
 Z_TOWER_TOP = Z_SEAT0 + PB_W  # bearing top flush with the tower top
+SPIGOT_SHORT = 0.2  # spigot is shorter than the race, so the keeper clamps it
 Z_LAND_TOP = Z_TOWER_TOP + GAP
 FLANGE_T = 4.0
 Z_FLANGE_TOP = Z_LAND_TOP + FLANGE_T
 TOWER_R = PB_OD / 2 + 2.8
-CHAMBER_R = 16.0 + 0.8  # cross horn arms 16 mm
+CHAMBER_R = PB_INNER_RACE_OD / 2 + 0.5  # 14.3: clear of the turning inner race
+KEEPER_R = PB_INNER_RACE_OD / 2 - 0.5  # 13.3: bears on the inner race only
+KEEPER_SCREW_R = 10.3  # 4 x M2 x 8, tapped into the spigot, at 45 degrees
+SEAT_R = PB_OD / 2 + 0.2  # seat bore, with three crush ribs
+CRUSH = 0.15  # ribs' interference with the 6705ZZ's OD, per side
+
+# Cable path (world, about the pan axis). The ribbon is tied to a shelf on the
+# yoke's rear edge, hangs in a pan service loop and is tied again to a post on
+# the tower's rear. The tilt servo's lead runs in a gutter round the yoke's
+# rim from the +Y arm to the same shelf.
+SHELF_R0, SHELF_R1, SHELF_HW = 19.3, 26.0, 10.5
+SHELF_T = 2.5  # shelf top this far above the land, below the flange top
+POST_X0, POST_X1, POST_HW = -31.0, -28.0, 10.5
+RIBBON_W, RIBBON_T = 14.0, 1.2  # 14-way 1.0 mm pitch IDC ribbon
+GUTTER_A0, GUTTER_A1 = 100.0, 148.0  # degrees about +Z, from +X: ends before the shelf
+GUTTER_R = (19.3, 20.8, 24.3, 25.8)  # inner wall, channel, outer wall: 1.5 / 3.5 / 1.5
 
 
 def _box(x0, x1, y0, y1, z0, z1) -> Part:
@@ -204,7 +244,11 @@ BRIDGE_X0, BRIDGE_X1 = (
     BOARD_FRONT_X + 2.0,
     BOARD_FRONT_X + 4.5,
 )  # 0.7 past the screw heads
-CHEEK_TAB_Z = (-8.0, 6.0) if HOLE_Z < 0 else (-6.0, 8.0)
+# The bridges and inner cheeks stop short of the head screws' driver line
+# (HEAD_DRIVER_D about each hole axis, + 0.35), so a driver reaches both
+# button heads from the front along their axes.
+_DRV_EDGE = abs(HOLE_Z) - HEAD_DRIVER_D / 2 - 0.35  # 7.5 for the flipped head
+CHEEK_TAB_Z = (-_DRV_EDGE, 6.0) if HOLE_Z < 0 else (-6.0, _DRV_EDGE)
 
 
 def head_proxy_boxes(m: float = 0.0) -> list[tuple]:
@@ -386,8 +430,12 @@ def build_cradle() -> Part:
         ((y_out_n - OUTER_T, y_out_n), (-(CHEEK_IN + IDLER_CHEEK_T), -CHEEK_IN)),
     ]:
         outer = _box(x_back - PLATE_T, BRIDGE_X1, ya, yb, zc0, zc1)
-        bridge = _box(BRIDGE_X0, BRIDGE_X1, min(ya, yi0), max(yb, yi1), zc0, zc1)
-        inner = _box(BRIDGE_X0, 0, yi0, yi1, *CHEEK_TAB_Z) + _cyl_y(8.0, yi0, yi1)
+        # bridges span the cheeks' z only: clear of the head screws' driver line
+        bridge = _box(BRIDGE_X0, BRIDGE_X1, min(ya, yi0), max(yb, yi1), *CHEEK_TAB_Z)
+        # the pivot boss is trimmed to the cheek's z, clear of the driver line
+        inner = _box(BRIDGE_X0, 0, yi0, yi1, *CHEEK_TAB_Z) + (
+            _cyl_y(8.0, yi0, yi1) & _box(-9, 9, yi0, yi1, CHEEK_TAB_Z[0], 9.0)
+        )
         c = c + outer + bridge + inner
     # the bridges must not reach into the stack: trim to |y| >= CHEEK_IN
     c = c - _box(BRIDGE_X0 - 1, 9, -CHEEK_IN, CHEEK_IN, -20, 20)
@@ -408,17 +456,56 @@ def build_cradle() -> Part:
     # -Y: MR128ZZ pocket from the outer face, 2 mm lip with a clearance hole
     c = c - _cyl_y(TB_OD / 2, IDLER_FACE_Y - 1, IDLER_FACE_Y + TB_W)
     c = c - _cyl_y(4.9, IDLER_FACE_Y, -CHEEK_IN + 1)
+    # driver channels: from the button heads forward, clear through the cradle
+    for h in HOLES:
+        c = c - Pos(BOARD_FRONT_X + 1.3, h.Y, h.Z) * (
+            Rot(0, 90, 0) * Cylinder(HEAD_DRIVER_D / 2, 40.0, align=(CEN, CEN, MIN))
+        )
     return c
 
 
 HORN_SCREW_D = (10.0, 16.0)  # single-arm horn holes used, from the axis (estimate)
-CROSS_SCREW_R = 9.0  # cross horn holes used, from the axis (estimate)
+
+
+def cable_features_world() -> Part:
+    """Ribbon shelf and tilt-lead gutter on the yoke, world frame at pan 0."""
+    zl0 = Z_LAND_TOP
+    shelf_top = zl0 + SHELF_T
+    # shelf: above the land it joins the flange; below it stays clear of the
+    # tower's cylinder (r 18.8) by 0.5
+    shelf = _box(-SHELF_R1, -TOWER_R + 1.0, -SHELF_HW, SHELF_HW, zl0, shelf_top)
+    shelf += _box(-SHELF_R1, -SHELF_R0, -SHELF_HW, SHELF_HW, zl0 - 1.5, zl0)
+    for sy in (-1, 1):  # cable-tie slots either side of the 14 mm ribbon
+        shelf -= _box(
+            -SHELF_R1 + 1.5,
+            -SHELF_R1 + 4.5,
+            sy * 8.25 - 0.75,
+            sy * 8.25 + 0.75,
+            zl0 - 2,
+            shelf_top + 1,
+        )
+    # The gutter is straight, so its walls are planar: its inner face stays
+    # 19.3 from the pan axis along its whole length (tower cylinder r 18.8).
+    # Local frame: u along the gutter, v outward, centred on the mid angle.
+    ri, rc, ro, rx = GUTTER_R
+    zg0 = zl0 - 5.0
+    am = (GUTTER_A0 + GUTTER_A1) / 2
+    hu = ri * math.tan(math.radians((GUTTER_A1 - GUTTER_A0) / 2))
+    g = _box(-hu, hu, ri, rx, zg0, zg0 + 1.5)  # floor
+    g += _box(-hu, hu, ri, rc, zg0, zl0 + 2.0)  # inner wall
+    g += _box(-hu, hu, TOWER_R - 1.0, rc, zl0, zl0 + 2.0)  # ties it to the flange
+    g += _box(-hu, hu, ro, rx, zg0, zg0 + 4.5)  # outer wall
+    # one tie slot through the floor near the start (lead + outer wall)
+    g -= _box(-hu + 2.0, -hu + 5.0, rc + 0.3, rc + 1.8, zg0 - 1, zg0 + 3)
+    g = Rot(0, 0, am - 90.0) * g
+    return shelf + g
 
 
 def build_yoke() -> Part:
     zl = W
     px = -PAN_AXIS_BEHIND_LENS
-    spigot = _cyl_z(PB_ID / 2 - 0.05, zl(Z_HORN_TOP), zl(Z_TOWER_TOP), x=px)
+    # spigot through the 6705ZZ bore, 0.2 short of the race so the keeper clamps
+    spigot = _cyl_z(PB_ID / 2 - 0.05, zl(Z_SEAT0 + SPIGOT_SHORT), zl(Z_TOWER_TOP), x=px)
     land = _cyl_z(PB_INNER_RACE_OD / 2 - 0.3, zl(Z_TOWER_TOP), zl(Z_LAND_TOP), x=px)
     zf0, zf1 = zl(Z_LAND_TOP), zl(Z_FLANGE_TOP)
     flange = _cyl_z(TOWER_R, zf0, zf1, x=px)
@@ -434,7 +521,8 @@ def build_yoke() -> Part:
         zf0,
         zf1 + 6.0,
     )
-    y = spigot + land + flange + arm_p + arm_n + upright + gusset
+    cable = Pos(px, 0, -lens_height()) * cable_features_world()
+    y = spigot + land + flange + arm_p + arm_n + upright + gusset + cable
     # tilt servo window (case + FIT), its tab pilots
     x_lo = -SERVO.width / 2 - FIT
     z_lo = SERVO.shaft_from_end - SERVO.length - FIT_END
@@ -448,16 +536,16 @@ def build_yoke() -> Part:
     )
     for xs, _, _ in fx.servo_tab_holes(SERVO):
         y = y - _cyl_y(PILOT / 2, UPRIGHT_Y0 - 5, UPRIGHT_Y1 + 1, x=0, z=xs)
-    # pan: centre-screw access through the axis, cross-horn pilots through
-    y = y - _cyl_z(3.0, zl(Z_HORN_TOP) - 1, zf1 + 7, x=px)
+    # pan: centre-screw access on the axis; tapped holes for the keeper screws
+    y = y - _cyl_z(3.0, zl(Z_SEAT0) - 1, zf1 + 7, x=px)
     for k in range(4):
-        a = math.radians(90 * k)
+        a = math.radians(45 + 90 * k)
         y = y - _cyl_z(
             PILOT / 2,
-            zl(Z_HORN_TOP) - 1,
-            zf1 + 7,
-            x=px + CROSS_SCREW_R * math.cos(a),
-            y=CROSS_SCREW_R * math.sin(a),
+            zl(Z_SEAT0) - 1,
+            zl(Z_SEAT0) + 6.0,
+            x=px + KEEPER_SCREW_R * math.cos(a),
+            y=KEEPER_SCREW_R * math.sin(a),
         )
     # outrigger foot pilots
     for x in OUTRIGGER_SCREW_X:
@@ -495,20 +583,53 @@ def build_outrigger() -> Part:
     return o
 
 
+def _cross(r: float, w: float, z0: float, z1: float) -> Part:
+    """Two crossed bars, half-length r and width w, along X and Y."""
+    return _box(-r, r, -w / 2, w / 2, z0, z1) + _box(-w / 2, w / 2, -r, r, z0, z1)
+
+
+ARM_W = 5.0  # fixture cross-horn arm width
+
+
+def build_keeper() -> Part:
+    """Printed ring under the yoke's spigot (world, about the pan axis): clamps
+    the 6705ZZ inner race against the yoke's land, and keys the trimmed cross
+    horn's arm stubs in a through cross slot that lets them float axially."""
+    k = _cyl_z(KEEPER_R, Z_KEEPER0, Z_SEAT0)
+    k = k - _cross(
+        HORN_TRIM_R + KEY_FIT + 0.15, ARM_W + 2 * KEY_FIT, Z_KEEPER0 - 1, Z_SEAT0 + 1
+    )
+    k = k - _cyl_z(3.5 + 0.5, Z_KEEPER0 - 1, Z_SEAT0 + 1)  # horn hub
+    for kk in range(4):
+        a = math.radians(45 + 90 * kk)
+        k = k - _cyl_z(
+            1.2,
+            Z_KEEPER0 - 1,
+            Z_SEAT0 + 1,
+            x=KEEPER_SCREW_R * math.cos(a),
+            y=KEEPER_SCREW_R * math.sin(a),
+        )
+    return k
+
+
 def build_tower() -> Part:
     """Stationary: chassis flange, servo box (tabs screw up into the ledge),
-    horn chamber, 6705ZZ seat. Built in world coordinates about the pan axis."""
+    horn chamber, 6705ZZ seat with crush ribs, ribbon post. World coordinates
+    about the pan axis."""
     s = SERVO
     cx = s.shaft_from_end - s.length / 2  # case centre, servo x (= world x)
     half_tab = s.tab_span / 2
-    tab_x0, tab_x1 = cx - half_tab - FIT, cx + half_tab + FIT
+    tab_x0, tab_x1 = cx - half_tab - FIT_TAB, cx + half_tab + FIT_TAB
     box_x0, box_x1 = tab_x0 - WALL, tab_x1 + WALL
     hw = s.width / 2 + FIT
     tab_top = ZS - (s.height - s.tab_underside) + s.tab_thickness
-    body = _box(box_x0, box_x1, -hw - WALL, hw + WALL, 0, Z_CHAMBER)
+    body = _box(box_x0, box_x1, -hw - WALL, hw + WALL, 0, CASE_TOP_CLEAR + 2.0)
     cyl = _cyl_z(TOWER_R, tab_top, Z_TOWER_TOP)
     flange = _box(-25.0, 19.0, -20.0, 20.0, 0, CHASSIS_FLANGE_T)
-    t = body + cyl + flange
+    # ribbon post at the rear, on a tongue of the flange
+    tongue = _box(POST_X0, -24.0, -POST_HW, POST_HW, 0, CHASSIS_FLANGE_T)
+    post = _box(POST_X0, POST_X1, -POST_HW, POST_HW, 0, Z_LAND_TOP - 3.0)
+    t = body + cyl + flange + tongue + post
     # tab-span cavity open at the bottom, case cavity above the ledge
     t = t - _box(tab_x0, tab_x1, -hw, hw, -1, tab_top)
     t = t - _box(
@@ -517,21 +638,38 @@ def build_tower() -> Part:
         -hw,
         hw,
         tab_top - 1,
-        Z_CHAMBER + 0.01,
+        CASE_TOP_CLEAR,
     )
-    t = t - _cyl_z(CHAMBER_R, Z_CHAMBER, Z_LIP0)
-    t = t - _cyl_z(PB_ID / 2 + 1.0, Z_LIP0 - 0.01, Z_SEAT0 + 0.01)
-    t = t - _cyl_z(PB_OD / 2, Z_SEAT0, Z_TOWER_TOP + 1)
+    t = t - _cyl_z(CHAMBER_R, Z_CHAMBER, Z_SEAT0 + 0.01)
+    seat = _cyl_z(SEAT_R, Z_SEAT0, Z_TOWER_TOP + 1)
+    for kk in range(3):  # crush ribs, 0.15 interference on the 32.0 OD
+        a = math.radians(90 + 120 * kk)
+        rc = PB_OD / 2 - CRUSH + 0.8
+        seat = seat - _cyl_z(
+            0.8, Z_SEAT0 - 1, Z_TOWER_TOP + 2, x=rc * math.cos(a), y=rc * math.sin(a)
+        )
+    t = t - seat
     # lead exit slot at the -X end, open to the bottom
     boot_x0 = s.shaft_from_end - s.length - 6.0 - 1.0
     t = t - _box(boot_x0 - 5, tab_x0 + 0.5, -3.0, 3.0, -1, ZS - s.height + 10.0)
-    # tab pilots, from below
+    # tab holes, tapped M2 from below
     for x, _, z in fx.servo_tab_holes(s):
         t = t - _cyl_z(
             PILOT / 2, tab_top - 0.01, min(tab_top + 6.5, Z_CHAMBER + 0.5), x=x
         )
     for x, y in M3_HOLES:
         t = t - _cyl_z(1.7, -1, CHASSIS_FLANGE_T + 1, x=x, y=y)
+    # cable-tie slots through the post (along X), either side of the ribbon
+    for z in (12.0, Z_LAND_TOP - 8.0):
+        for sy in (-1, 1):
+            t = t - _box(
+                POST_X0 - 1,
+                POST_X1 + 1,
+                sy * 8.25 - 0.75,
+                sy * 8.25 + 0.75,
+                z - 1.5,
+                z + 1.5,
+            )
     return t
 
 
@@ -597,14 +735,40 @@ def pan_servo_world() -> list[Part]:
 
 
 def pan_horn_world() -> list[Part]:
+    """Stock cross horn, arms cut to HORN_TRIM_R, bored on the spline, and its
+    centre screw (head on the hub)."""
     h = Pos(0, 0, ZS) * bored_horn("cross")
-    screws = []
+    h = h & _cyl_z(HORN_TRIM_R, ZS - 1, ZS + 10)
+    centre = _cyl_z(2.2, Z_HORN_TOP, Z_HORN_TOP + 1.4)  # pan head, ~Ø4.4 x 1.4
+    return [h, centre]
+
+
+def keeper_screws_world() -> list[Part]:
+    """4 x M2 x 8 button head up through the keeper into the spigot."""
+    out = []
     for k in range(4):
-        a = math.radians(90 * k)
-        x, y = CROSS_SCREW_R * math.cos(a), CROSS_SCREW_R * math.sin(a)
-        screws.append(_cyl_z(SCREW_CORE / 2, Z_HORN_TOP, Z_HORN_TOP + 5.0, x=x, y=y))
-        screws.append(_cyl_z(1.6, Z_HORN_TOP - 1.6 - 1.2, Z_HORN_TOP - 1.6, x=x, y=y))
-    return [h] + screws
+        a = math.radians(45 + 90 * k)
+        x, y = KEEPER_SCREW_R * math.cos(a), KEEPER_SCREW_R * math.sin(a)
+        out.append(_cyl_z(SCREW_CORE / 2, Z_KEEPER0, Z_KEEPER0 + 8.0, x=x, y=y))
+        out.append(_cyl_z(1.75, Z_KEEPER0 - 1.3, Z_KEEPER0, x=x, y=y))
+    return out
+
+
+def chassis_plate_world() -> Part:
+    """The acrylic 2WD plate the tower stands on (a stand-in, not printed)."""
+    return _box(-45.0, 45.0, -45.0, 45.0, -CHASSIS_PLATE_T, 0.0)
+
+
+def ribbon_clamped_world() -> tuple[Part, Part]:
+    """The two tied-down stretches of the IDC ribbon: on the yoke's shelf
+    (pans) and on the tower's post (stationary). Pan 0."""
+    shelf_top = Z_LAND_TOP + SHELF_T
+    hw = RIBBON_W / 2
+    on_shelf = _box(
+        -SHELF_R1, -SHELF_R1 + 6.0, -hw, hw, shelf_top, shelf_top + RIBBON_T
+    )
+    on_post = _box(POST_X0 - RIBBON_T, POST_X0, -hw, hw, 8.0, Z_LAND_TOP - 4.0)
+    return on_shelf, on_post
 
 
 def pan_bearing_world() -> Part:
@@ -635,6 +799,7 @@ def _built() -> dict:
         "yoke": build_yoke(),
         "outrigger": build_outrigger(),
         "tower": build_tower(),
+        "keeper": build_keeper(),
     }
 
 
@@ -647,6 +812,7 @@ def printed_parts() -> dict[str, Part]:
         "yoke": w * b["yoke"],
         "outrigger": w * b["outrigger"],
         "cradle": w * b["cradle"],
+        "keeper": b["keeper"],
     }
 
 
@@ -655,6 +821,7 @@ COLOURS = {
     "yoke": "#b54a68",
     "outrigger": "#d9822b",
     "cradle": "#3a7ca5",
+    "keeper": "#7a7a7a",
 }
 
 
@@ -673,7 +840,10 @@ def assembly(pan_deg: float, tilt_deg: float) -> list[Body]:
     out = [
         Body("tower", b["tower"], "tower", printed=True, colour=COLOURS["tower"]),
         Body("pan_bearing", pan_bearing_world(), "tower"),
+        Body("chassis_plate", chassis_plate_world(), "tower"),
     ]
+    rib_shelf, rib_post = ribbon_clamped_world()
+    out += [Body("ribbon_post", rib_post, "tower")]
     out += [
         Body(f"chassis_screw{i}", s, "tower")
         for i, s in enumerate(chassis_screws_world())
@@ -687,6 +857,16 @@ def assembly(pan_deg: float, tilt_deg: float) -> list[Body]:
         for i, s in enumerate(pan_horn_world())
     ]
     out += [Body("yoke", P(b["yoke"]), "yoke", printed=True, colour=COLOURS["yoke"])]
+    out += [
+        Body(
+            "keeper", pan * b["keeper"], "yoke", printed=True, colour=COLOURS["keeper"]
+        )
+    ]
+    out += [
+        Body(f"keeper_screw{i}", pan * s, "yoke")
+        for i, s in enumerate(keeper_screws_world())
+    ]
+    out += [Body("ribbon_shelf", pan * rib_shelf, "yoke")]
     out += [
         Body(f"tilt_servo{i}" if i else "tilt_servo", P(s), "tilt_servo")
         for i, s in enumerate(tilt_servo_bodies())
@@ -748,6 +928,13 @@ def panned_com() -> tuple[Vector, float]:
     for name in ("yoke", "outrigger", "cradle"):
         p = b[name]
         items.append((p.volume * DENSITY_PA12, p.center()))
+    k = b["keeper"]
+    items.append(
+        (
+            k.volume * DENSITY_PA12,
+            k.center() - Vector(PAN_AXIS_BEHIND_LENS, 0, lens_height()),
+        )
+    )
     items.append((M_SERVO, (TILT_SERVO_LOC * fx.servo(SERVO, cable=False)).center()))
     items.append((M_HORN, Vector(-6, CHEEK_IN + HORN_CHEEK_T - 1, 0)))
     items.append((M_HORN, Vector(-PAN_AXIS_BEHIND_LENS, 0, W(ZS + 3))))
@@ -789,6 +976,32 @@ def tilting_com() -> tuple[Vector, float]:
     return sum((v * w for w, v in items), Vector(0, 0, 0)) * (1 / m), m
 
 
+def ribbon_spans() -> dict:
+    """Chord lengths of the ribbon's two free spans over the full sweep.
+
+    Tilt span: from the back of the IDC plug (12 mm behind the board: 6 mm
+    header + 6 mm plug, fixture J2) to where the ribbon is tied on the yoke's
+    shelf. Pan span: from the shelf's rear edge to the top tie on the
+    tower's post. A free span must be at least its longest chord, plus a
+    bend allowance; the difference to the shortest chord is the slack that
+    has to have somewhere to go."""
+    lh = lens_height()
+    shelf_top = Z_LAND_TOP + SHELF_T + RIBBON_T / 2
+    plug = hp(-12.0, fx.J2_CENTRE_YZ[0], fx.J2_CENTRE_YZ[1])
+    tie = Vector(-SHELF_R1 + 6.0 - PAN_AXIS_BEHIND_LENS, 0, shelf_top - lh)
+    tilt = []
+    for a in np.arange(-45.0, 45.01, 5.0):
+        q = (Rot(0, -a, 0) * Pos(plug)).position
+        tilt.append((float(a), (q - tie).length))
+    edge = Vector(-SHELF_R1, 0, shelf_top)
+    post = Vector(POST_X0, 0, Z_LAND_TOP - 8.0)
+    pan = []
+    for a in np.arange(-90.0, 90.01, 15.0):
+        q = (Rot(0, 0, a) * Pos(edge)).position
+        pan.append((float(a), (q - post).length))
+    return {"tilt": tilt, "pan": pan}
+
+
 def main() -> None:
     out = HERE / "output"
     out.mkdir(exist_ok=True)
@@ -810,6 +1023,10 @@ def main() -> None:
         f"pan axis at x {-PAN_AXIS_BEHIND_LENS:.2f}: CoM offset x {c.X + PAN_AXIS_BEHIND_LENS:+.2f}, y {c.Y:+.2f} mm"
     )
     print(f"tilting mass {tm:.1f} g, CoM from tilt axis x {tc.X:.2f} z {tc.Z:.2f} mm")
+    sp = ribbon_spans()
+    for k in ("tilt", "pan"):
+        ls = [v for _, v in sp[k]]
+        print(f"ribbon {k} span chord: {min(ls):.1f} .. {max(ls):.1f} mm")
     if abs(c.X + PAN_AXIS_BEHIND_LENS) > 0.5:
         print("WARNING: set PAN_AXIS_BEHIND_LENS to", round(-c.X, 1))
 

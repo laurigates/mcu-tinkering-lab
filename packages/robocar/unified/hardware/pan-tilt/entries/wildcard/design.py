@@ -11,11 +11,12 @@ are screwed into a fixed base, side by side, and only the head turns:
   hub, and the hub runs in two 6801ZZ ball bearings in the base. The pan servo's
   spline sees only the tooth force, never the head's weight or tipping moment.
 * **Tilt** goes up the pan axis. The hub is hollow (a 4.4 mm square bore) and a
-  square plunger slides in it. At the bottom the plunger carries a grooved
-  collar; a fork on the tilt servo's horn holds two steel dowels in that groove,
-  like the shift fork on a gearbox collar or a helicopter's swashplate. The
-  collar can turn freely under the dowels, so panning never moves the tilt, and
-  the tilt servo stays where it is. At the top a bracket on the plunger pushes a
+  square plunger slides in it. At the bottom the plunger is screwed into a
+  grooved collar; a lever on the tilt servo's horn holds one steel dowel in that
+  groove, like the shift fork on a gearbox collar. The collar turns freely over
+  the dowel, so panning never moves the tilt, and the tilt servo stays where it
+  is. (Revision 2: the lever replaced a two-sided fork that could not be
+  assembled; see INSPECTION.md, "Revision".) At the top a bracket on the plunger pushes a
   short link to a crank on the head cradle. The cradle swings on two M3 pivots
   in the turret's cheeks, so the head is carried on both sides and no servo
   shaft carries it.
@@ -45,6 +46,7 @@ import numpy as np
 from build123d import (
     Align,
     Box,
+    Cone,
     Cylinder,
     Face,
     Location,
@@ -86,26 +88,36 @@ AXIS_X = 0.0
 AXIS_Z = 8.0
 HEAD_Y = -6.5
 
-# Gears: 1:1 so the firmware's pan angle is the turret's angle (sign flipped:
-# set the pan channel's direction in the console, `servo` command).
+# Gears: 1:1, but the turret turns the opposite way to the pan servo. The
+# console has no invert option: servo_controller.c must negate the pan angle
+# (and look up the tilt angle, tilt_to_servo()) before it writes the PCA9685.
 GEAR_M = 1.25
 GEAR_Z = 20
-GEAR_FACE = 5.0
-GEAR_BACKLASH = 0.15  # tooth thinning at the pitch circle, mm of arc
+GEAR_FACE = 5.0  # the pinion
+TURRET_GEAR_FACE = 7.0  # the turret gear: 1 mm wider than the pinion each side
+PINION_Z_CLEAR = 1.5  # pinion to the deck below and to the hood above
+GEAR_BACKLASH = 0.3  # tooth thinning at the pitch circle, mm of arc (both gears)
+# The pan servo is pushed against a printed datum face on its -Y side (toward
+# the turret) by a jack screw through the +Y wall; DATUM_GAP is the nominal
+# gap between the case and that face.
+DATUM_GAP = 0.05
+HOOD_T = 1.5  # gear hood: top plate and skirt
 
 # Stock parts.
 BRG_D, BRG_OD, BRG_W = 12.0, 21.0, 5.0  # 6801ZZ (12 x 21 x 5), two of them
+HUB_D = 11.85  # under the 12.0 bore: sand to a slide fit, then retaining compound
 BRG_INNER_R = 7.0  # inner ring shoulder radius the hub boss bears on
 ECLIP_GROOVE_D = 9.0  # DIN 6799 size 9 E-clip on the 12 mm hub
 ECLIP_GROOVE_W = 1.1
 ECLIP_OD, ECLIP_T = 17.0, 0.9
 PLUNGER_SQ = 4.0  # square plunger section
 SQ_FIT = 0.2  # per side, plunger in the hub's square bore
-DOWEL_D, DOWEL_L = 3.0, 6.0  # 2x ISO 2338 3m6 x 6 steel dowels (fork pins)
-PIVOT_DOWEL_D = 4.0  # 4 x 12 dowel: the fork's far-side pivot
-HORN_TRIM_R = (
-    9.0  # double horn, both arms cut to 9 mm: the -X dowel presses in past the tip
-)
+DOWEL_D, DOWEL_L = 3.0, 8.0  # 1x ISO 2338 3m6 x 8 steel dowel (the lever's pin)
+HORN_TRIM_R = 8.0  # double horn, both arms cut to 8 mm: clears the dowel boss
+# Head board standoff: the XIAO's through-hole socket pins stand 1-2 mm proud
+# of the board's back face, so the cradle's back plate sits STANDOFF behind it
+# and the board rests on four pads (two M2 bosses, two plain pads).
+STANDOFF = 2.0
 
 # ---------------------------------------------------------------------------
 MIN, CEN, MAX = Align.MIN, Align.CENTER, Align.MAX
@@ -134,6 +146,8 @@ FORK_PLATE_T = 3.0
 PAN_Y = GEAR_M * GEAR_Z  # 1:1, so centre distance = m z
 
 FLOOR_T = 2.5
+PIT_Y1 = 16.3  # floor pit's +Y edge (collar insertion), short of the datum wall
+JACK_Z = 12.0  # height of the pan servo's jack screw
 EAR_W = 9.0
 WALL_T = 2.5
 DECK_T = 2.0
@@ -236,11 +250,21 @@ def _layout() -> dict:
     L["lip"] = (L["brg1"][1], L["brg1"][1] + 1.5)
     L["brg2"] = (L["lip"][1], L["lip"][1] + BRG_W)
     L["housing_top"] = L["brg2"][1]
+    # turret gear: its height is set by the thrust boss on the inner ring
     L["gear_z0"] = L["housing_top"] + 0.5
-    L["gear_z1"] = L["gear_z0"] + GEAR_FACE
-    L["pan_top"] = L["gear_z0"] - 4.5  # the servo-frame z of the pan servo
+    L["gear_z1"] = L["gear_z0"] + TURRET_GEAR_FACE
+    # pinion: its height comes from the pan servo's stack (lintel, F, C, horn
+    # seat), all unmeasured, so it gets PINION_Z_CLEAR above and below and sits
+    # inside the wider turret gear's face with 1 mm to spare each side
+    L["pinion_z0"] = L["housing_top"] + PINION_Z_CLEAR
+    L["pinion_z1"] = L["pinion_z0"] + GEAR_FACE
+    L["pan_top"] = L["pinion_z0"] - 4.5  # the servo-frame z of the pan servo
     L["deck"] = (L["housing_top"] - DECK_T, L["housing_top"])
-    L["floor_z0"] = L["gear_z1"] + 0.5  # turret floor, clears the pinion top
+    L["hood"] = (
+        L["pinion_z1"] + PINION_Z_CLEAR,
+        L["pinion_z1"] + PINION_Z_CLEAR + HOOD_T,
+    )
+    L["floor_z0"] = max(L["hood"][1], L["gear_z1"]) + 0.8  # turret floor over the hood
     L["floor_z1"] = L["floor_z0"] + 2.5
     # J2 keep-out's lowest point over +-TILT_MAX, from the head frame
     jx0 = -fx.J2_KEEPOUT[0] - AXIS_X
@@ -350,41 +374,74 @@ def bracket_part(dz: float = 0.0) -> Part:
     return b
 
 
+COLLAR_SOCKET = 3.5  # depth of the rod's square socket in the collar's top
+COLLAR_CBORE = 1.5  # counterbore for the M2 pan head under the collar
+
+
+def rod_bottom(dz: float = 0.0) -> float:
+    return _layout()["collar_z0"] + dz + COLLAR_HALF - COLLAR_SOCKET
+
+
 def plunger_part(dz: float = 0.0) -> Part:
-    L = _layout()
-    zc = L["collar_z0"] + dz
+    """The square rod. It goes DOWN through the hub from above, after the
+    turret, into the collar's socket; screws at both ends."""
     rod_top = link_low_pin(0.0) + dz - LINK_END_R - GAP - 5.0 + 4.0  # into the socket
+    z0 = rod_bottom(dz)
     s = PLUNGER_SQ
-    rod = _box(-s / 2, s / 2, -s / 2, s / 2, zc - COLLAR_HALF, rod_top)
-    core = _cyl_z(COLLAR_CORE_R, zc - COLLAR_HALF, zc + COLLAR_HALF)
-    f1 = _cyl_z(COLLAR_R, zc - COLLAR_HALF, zc - GROOVE_W / 2)
-    f2 = _cyl_z(COLLAR_R, zc + GROOVE_W / 2, zc + COLLAR_HALF)
-    p = rod + core + f1 + f2
+    p = _box(-s / 2, s / 2, -s / 2, s / 2, z0, rod_top)
     p -= _cyl_z(0.8, rod_top - 5, rod_top + 0.1)  # M2 pilot for the bracket screw
+    p -= _cyl_z(0.8, z0 - 0.1, z0 + 5.0)  # M2 pilot for the collar screw
     return p
+
+
+def collar_part(dz: float = 0.0) -> Part:
+    """Grooved collar. Slides in sideways (along -Y) over the lever's dowel from
+    below, through the floor pit; the rod then drops into its socket."""
+    zc = _layout()["collar_z0"] + dz
+    z0, z1 = zc - COLLAR_HALF, zc + COLLAR_HALF
+    core = _cyl_z(COLLAR_CORE_R, z0, z1)
+    f1 = _cyl_z(COLLAR_R, z0, zc - GROOVE_W / 2)
+    f2 = _cyl_z(COLLAR_R, zc + GROOVE_W / 2, z1)
+    c = core + f1 + f2
+    sq = PLUNGER_SQ + 2 * 0.1
+    c -= _box(-sq / 2, sq / 2, -sq / 2, sq / 2, z1 - COLLAR_SOCKET, z1 + 1)
+    c -= _cyl_z(1.1, z0 - 1, z1)  # M2 clearance
+    c -= _cyl_z(2.1, z0 - 1, z0 + COLLAR_CBORE)  # pan-head counterbore
+    return c
+
+
+# Head-frame (y, z) of the two plain rest pads: outboard of the XIAO's socket
+# rows (y 0.5 +- 7.62) and above J2's keep-out (z < 7.5).
+PADS_YZ = [(12.5, 13.0), (-12.5, 13.0)]
 
 
 def cradle_part() -> Part:
     """In the HEAD frame (board back face x 0, bottom edge z 0)."""
     hs = fx.HEAD_SIZE / 2
     arm0, arm1 = hs + 0.5, hs + 3.0
-    back = _box(-3.0, 0.0, -arm1, arm1, 8.0, fx.HEAD_SIZE)
+    xb1 = -STANDOFF  # the back plate's front face, clear of the THT pins
+    xb0 = xb1 - 3.0
+    back = _box(xb0, xb1, -arm1, arm1, 8.0, fx.HEAD_SIZE)
     c = back
+    for y, z in PADS_YZ:  # plain rest pads, clear of both XIAO pin rows
+        c += _cyl_x(2.0, xb0, 0.0, y, z)
     for sgn in (1, -1):
         ya, yb = sorted((sgn * arm0, sgn * arm1))
-        c += _box(-3.0, AXIS_X + 4.0, ya, yb, AXIS_Z - 4.0, fx.HEAD_SIZE)
+        c += _box(xb0, AXIS_X + 4.0, ya, yb, AXIS_Z - 4.0, fx.HEAD_SIZE)
         boss_a, boss_b = sorted((sgn * arm0, sgn * (arm1 + 1.5)))
         c += _cyl_y(4.0, boss_a, boss_b, AXIS_X, AXIS_Z)
-    # board screw bosses (M2 heat-set inserts from the board side)
+    # board screw bosses: R3 in the plate, R2.6 standoffs in front of it (the
+    # +Y socket row's top pin is 3.7 mm from the hole), M2 inserts from behind
     for y, z in fx.HEAD_HOLES_YZ:
-        c += _cyl_x(3.0, -5.5, 0.0, y, z)
+        c += _cyl_x(3.0, -5.5, xb1, y, z) + _cyl_x(2.6, xb1 - 0.1, 0.0, y, z)
     # crank, behind the board in the plunger's plane, outside J2's band
     yc = (Y_CRANK[0] - HEAD_Y, Y_CRANK[1] - HEAD_Y)
     c += _slot_y(*yc, -3.0 + 2.0, AXIS_Z + 1.0, AXIS_X - CRANK_R, AXIS_Z, 3.0)
-    c += _box(-3.0, -1.0, *yc, AXIS_Z - 2.0, 10.0)
+    c += _box(xb0, -1.0, *yc, AXIS_Z - 2.0, 10.0)
     # holes
     for y, z in fx.HEAD_HOLES_YZ:
-        c -= _cyl_x(1.6, -4.0, 0.1, y, z)  # M2 insert, 3.2 bore
+        c -= _cyl_x(1.6, -5.6, xb1, y, z)  # M2 insert, 3.2 bore, from the back
+        c -= _cyl_x(1.1, xb1 - 0.1, 0.1, y, z)  # M2 clearance through the standoff
     for sgn in (1, -1):
         outer = sgn * (arm1 + 1.5)
         ya, yb = sorted((outer + sgn * 1.0, outer - sgn * 5.0))
@@ -401,9 +458,9 @@ def turret_part() -> Part:
     L = _layout()
     xa, za = L["xa"], L["za"]
     z0f, z1f = L["floor_z0"], L["floor_z1"]
-    hub = _cyl_z(BRG_D / 2, L["hub_z0"], L["gear_z0"])
+    hub = _cyl_z(HUB_D / 2, L["hub_z0"], L["gear_z0"])
     boss = _cyl_z(BRG_INNER_R, L["housing_top"] + 0.0, L["gear_z0"])
-    g = Pos(0, 0, L["gear_z0"]) * Rot(0, 0, 90) * gear()
+    g = Pos(0, 0, L["gear_z0"]) * Rot(0, 0, 90) * gear(face=TURRET_GEAR_FACE)
     neck = _cyl_z(10.5, L["gear_z1"], z0f + 0.1)
     plate = _box(
         -6.0,
@@ -451,29 +508,95 @@ def pinion_part() -> Part:
             * Pos(7.0, 0, 0)
             * Cylinder(0.8, 3.5 * 2, align=(CEN, CEN, CEN))
         )
-    return Pos(0, PAN_Y, L["gear_z0"]) * g
+    return Pos(0, PAN_Y, L["pinion_z0"]) * g
 
 
-def fork_part() -> Part:
+LEVER_X0 = TILT_CASE_TOP_X + 4.5  # the lever plate's back face, on the horn's top
+LEVER_BOSS_X0 = LEVER_X0 - 2.0  # dowel boss behind the plate, past the cut arm tip
+DOWEL_X0 = LEVER_X0 + FORK_PLATE_T + 3.0 - DOWEL_L  # dowel tip 3 mm into the groove
+
+
+def lever_part() -> Part:
+    """One plate on the tilt horn, one dowel in the collar groove. No far side:
+    the spline carries the (small) plunger force, nothing is coaxial with it."""
     L = _layout()
     zc = L["collar_z0"]
     ys = TILT_SHAFT_Y
-    xh0 = TILT_CASE_TOP_X + 4.5  # on the horn's top face
+    xh0 = LEVER_X0
     xh1 = xh0 + FORK_PLATE_T
-    xf0 = -xh1
-    xf1 = xf0 + FORK_PLATE_T
-    bar_end = ys - 6.0  # the -Y end, past the crossbar
+    bar_end = ys - 6.0
     f = _slot_x(xh0, xh1, bar_end, zc, 0.0, zc, 3.5)
-    f += _slot_x(xf0, xf1, bar_end, zc, 0.0, zc, 3.5)
-    f += _cyl_x(4.5, xf0, xf1 + 1.5, ys, zc)  # far pivot boss
-    f += _cyl_x(2.5, xh0 + 0.5, xf1 - 0.5, bar_end, zc)  # crossbar
+    f += _cyl_x(2.6, LEVER_BOSS_X0, xh0 + 0.1, 0.0, zc)  # dowel boss
     f -= _cyl_x(2.3, xh0 - 1, xh1 + 1, ys, zc)  # horn screw head and driver
-    f -= _cyl_x(PIVOT_DOWEL_D / 2 + 0.15, xf0 - 1, xf1 + 2, ys, zc)  # pivot journal
-    for x0, x1 in ((xh0 - 1, xh1 + 1), (xf0 - 1, xf1 + 1)):
-        f -= _cyl_x(DOWEL_D / 2 - 0.05, x0, x1, 0.0, zc)  # dowel press fit
+    f -= _cyl_x(DOWEL_D / 2 - 0.05, LEVER_BOSS_X0 - 1, xh1 + 1, 0.0, zc)  # press fit
     for dy in (-6.0, 6.0):  # two M2 self-tappers into the trimmed horn's arms
         f -= _cyl_x(1.15, xh0 - 0.1, xh1 + 0.1, ys + dy, zc)
     return f
+
+
+HOOD_R = 15.0  # inner radius of the hood's skirt, about the pinion axis
+HOOD_SCREWS = [(16.0, 14.5), (-16.5, 14.5)]  # M2 into bosses under the deck
+
+
+def hood_part() -> Part:
+    """Fixed guard over the pinion and the mesh. The turret gear is below its
+    top plate; the turret plate sweeps over it."""
+    L = _layout()
+    top = L["housing_top"]
+    h0, h1 = L["hood"]
+    # lid: over the pinion and the mesh point (0, 12.5), clear of the turret
+    # neck (R10.5); squared off at y 10 so its edge has no knife-edge cusps
+    lid = _cyl_z(HOOD_R + HOOD_T, h0, h1, 0, PAN_Y) - _cyl_z(11.5, h0 - 1, h1 + 1)
+    lid -= _box(-30, 30, PAN_Y - 30, 10.0, h0 - 1, h1 + 1)
+    skirt = _cyl_z(HOOD_R + HOOD_T, top, h1, 0, PAN_Y) - _cyl_z(
+        HOOD_R, top - 1, h1 + 1, 0, PAN_Y
+    )
+    # open where the turret gear (tip R13.6) runs through: a sector about the
+    # pinion axis, so the skirt's ends are radial. Inner corners at y 12.8,
+    # 1.4 mm or more off the gear's tips.
+    th = math.acos((PAN_Y - 12.8) / HOOD_R)
+    R = 40.0
+    tri = Wire.make_polygon(
+        [
+            (0, PAN_Y, 0),
+            (-R * math.sin(th), PAN_Y - R * math.cos(th), 0),
+            (R * math.sin(th), PAN_Y - R * math.cos(th), 0),
+        ],
+        close=True,
+    )
+    sector = Pos(0, 0, top - 1) * extrude(Face(tri), h1 - top + 2)
+    assert sector.bounding_box().min.Z >= top - 1.01  # extruded upward
+    skirt -= sector
+    # Each end gets a straight 3 mm block along the skirt's tangent. A curved
+    # wall measured square off its end face reads as a sliver near the outer
+    # edge (the ray leaves the curve tangentially); a straight end does not.
+    rm = HOOD_R + HOOD_T / 2
+    for sgn in (1, -1):
+        phi = -math.pi / 2 + sgn * th  # end angle about the pinion axis
+        ang = math.degrees(phi) + 90.0 * sgn  # tangent, pointing into the skirt
+        blk = Box(3.0, HOOD_T + 0.2, h1 - top, align=(MIN, CEN, MIN))
+        skirt += (
+            Location((rm * math.cos(phi), PAN_Y + rm * math.sin(phi), top), (0, 0, ang))
+            * blk
+        )
+    # 0.3 mm chamfer on the skirt's outer bottom edge (seats on the deck past
+    # an MJF edge bead)
+    cone = Pos(0, PAN_Y, top) * Cone(
+        HOOD_R + HOOD_T - 0.3, HOOD_R + HOOD_T, 0.3, align=(CEN, CEN, MIN)
+    )
+    skirt -= _cyl_z(HOOD_R + HOOD_T + 1, top - 0.01, top + 0.3, 0, PAN_Y) - cone
+    h = lid + skirt
+    for x, y in HOOD_SCREWS:
+        ear = _cyl_z(3.0, top, top + 2.5, x, y)
+        # bar from the ear to the skirt, toward the pinion axis
+        ang = math.degrees(math.atan2(PAN_Y - y, -x))
+        d = math.hypot(x, PAN_Y - y)
+        bar = Location((x, y, top), (0, 0, ang)) * Box(
+            d - HOOD_R - 0.5, 4.0, 2.5, align=(MIN, CEN, MIN)
+        )
+        h += ear + bar
+        h -= _cyl_z(1.1, top - 1, top + 3, x, y)
+    return h
 
 
 def base_part() -> Part:
@@ -540,6 +663,18 @@ def base_part() -> Part:
     )
     for hx, _, _ in fx.servo_tab_holes(SERVO):
         b -= _cyl_z(0.8, tab_z - 6.0, tab_z + 0.1, hx, PAN_Y)
+    # Y datum: the gear centre distance is the turret axis to this face, plus
+    # half the case width. A jack screw through the +Y wall holds the case on it.
+    dy1 = PAN_Y - SERVO.width / 2 - DATUM_GAP
+    b += _box(
+        pc - SERVO.length / 2 + 1.0,
+        pc + SERVO.length / 2 - 1.0,
+        dy1 - 2.0,
+        dy1,
+        0,
+        tab_z - 1.0,
+    )
+    b -= _cyl_y(0.8, y1 - WALL_T - 0.1, y1 + 0.1, pc, JACK_Z)
     # tilt servo: bulkhead with an open-topped window, deck opening above it
     bx1 = TILT_CASE_TOP_X - (SERVO.height - SERVO.tab_underside)
     bx0 = bx1 - 3.0
@@ -549,21 +684,42 @@ def base_part() -> Part:
     bulk = _box(bx0, bx1, y0 + WALL_T, TILT_SHAFT_Y + tab_half + 6.0, 0, zc + tw + 4.0)
     bulk -= _box(bx0 - 1, bx1 + 1, yb0, yb1, zc - tw, top)
     b += bulk
-    b -= _box(bx0 - 21.0, bx1 + 6.0, y0 + WALL_T, yb1 + 7.0, L["deck"][0] - 1, top + 1)
+    # deck opening over the whole case (to its top end at x -15) so the servo
+    # drops straight in, with a notch for the spline; stays off the housing
+    b -= _box(
+        bx0 - 21.0,
+        TILT_CASE_TOP_X + FIT + 0.3,
+        y0 + WALL_T,
+        yb1 + 7.0,
+        L["deck"][0] - 1,
+        top + 1,
+    )
+    b -= _box(
+        TILT_CASE_TOP_X,
+        TILT_CASE_TOP_X + 4.6,
+        TILT_SHAFT_Y - 3.0,
+        TILT_SHAFT_Y + 3.0,
+        L["deck"][0] - 1,
+        top + 1,
+    )
     for hx, _, _ in fx.servo_tab_holes(SERVO):
         # servo frame x -> world -y
         b -= _cyl_x(0.8, bx1 - 7.0, bx1 + 0.1, TILT_SHAFT_Y - hx, zc)
-    # fork pit in the floor (collar, fork ends and horn tips run below z 2.5)
-    b -= _box(-14.5, 14.5, y0 + WALL_T, 10.0, -1, FLOOR_T + 0.01)
-    # far fork pivot pillar, 4 mm dowel pressed in from outside
-    px0 = -(TILT_CASE_TOP_X + 4.5) + 1.5 + GAP
-    b += _box(px0, x1, TILT_SHAFT_Y - 5.0, TILT_SHAFT_Y + 5.0, 0, zc + 5.0)
-    b -= _cyl_x(PIVOT_DOWEL_D / 2 - 0.05, px0 - 1, x1 + 1, TILT_SHAFT_Y, zc)
-    # +X service window (fork, dowels, tilt servo screws) and a driver hole
+    # floor pit: the lever's ends run below z 2.5, and the collar comes up
+    # through it at y +9 and slides -Y onto the dowel
+    b -= _box(-14.5, 14.5, y0 + WALL_T, PIT_Y1, -1, FLOOR_T + 0.01)
+    # +X service window (tilt servo's +Y tab screw), a driver hole for its -Y
+    # tab screw and one on the spline axis for the horn screw
     b -= _box(
         x1 - WALL_T - 1, x1 + 1, TILT_SHAFT_Y + 6.0, PAN_Y - 8.0, 3.0, L["deck"][0] - 1
     )
-    b -= _cyl_x(2.5, x1 - WALL_T - 1, x1 + 1, TILT_SHAFT_Y + 8.15 - 0.0 - 16.3, zc)
+    tab_ys = [TILT_SHAFT_Y - hx for hx, _, _ in fx.servo_tab_holes(SERVO)]
+    b -= _cyl_x(2.5, x1 - WALL_T - 1, x1 + 1, min(tab_ys), zc)
+    b -= _cyl_x(3.0, x1 - WALL_T - 1, x1 + 1, TILT_SHAFT_Y, zc)
+    # bosses under the deck for the hood's two M2 screws
+    for hx_, hy_ in HOOD_SCREWS:
+        b += _cyl_z(2.75, top - 7.5, top, hx_, hy_)
+        b -= _cyl_z(0.8, top - 6.0, top + 0.1, hx_, hy_)
     # lead exits (both servo leads, out of the -X wall)
     b -= _box(x0 - 1, x0 + WALL_T + 1, -4.0, PAN_Y + 4.0, FLOOR_T, FLOOR_T + 7.0)
     # chassis holes, 3.4 for M3
@@ -582,8 +738,10 @@ def _built() -> dict:
         "link": link_part(0.0),
         "bracket": bracket_part(0.0),
         "plunger": plunger_part(0.0),
-        "fork": fork_part(),
+        "collar": collar_part(0.0),
+        "lever": lever_part(),
         "pinion": pinion_part(),
+        "hood": hood_part(),
     }
 
 
@@ -601,8 +759,10 @@ COLOURS = {
     "link": "#3a7ca5",
     "bracket": "#3a7ca5",
     "plunger": "#7a9e3d",
-    "fork": "#b54a68",
+    "collar": "#7a9e3d",
+    "lever": "#b54a68",
     "pinion": "#8a6bbf",
+    "hood": "#4a4a50",
 }
 
 
@@ -616,15 +776,14 @@ def _stand_ins_static() -> list[Body]:
     for i, (z0, z1) in enumerate((L["brg1"], L["brg2"])):
         ring = _cyl_z(BRG_OD / 2, z0, z1) - _cyl_z(BRG_D / 2, z0 - 1, z1 + 1)
         out.append(Body(f"bearing{i + 1}", ring, "base"))
-    # 4 mm pivot dowel through the pillar into the fork (fork turns on it)
-    xf0 = -(TILT_CASE_TOP_X + 4.5 + FORK_PLATE_T)
-    out.append(
-        Body(
-            "pivot_dowel",
-            _cyl_x(PIVOT_DOWEL_D / 2, xf0, xf0 + 12.0, TILT_SHAFT_Y, L["collar_z0"]),
-            "base",
-        )
+    # pan servo jack screw, M2 x 6 pan head through the +Y wall; tip DATUM_GAP
+    # off the case nominally (it is turned in until the case sits on the datum)
+    pc = -SERVO.length / 2 + SERVO.shaft_from_end
+    yc = PAN_Y + SERVO.width / 2 + DATUM_GAP
+    js = _cyl_y(1.0, yc, yc + 6.0, pc, JACK_Z) + _cyl_y(
+        1.9, yc + 6.0, yc + 7.3, pc, JACK_Z
     )
+    out.append(Body("jack_screw", js, "base"))
     return out
 
 
@@ -671,6 +830,17 @@ def assembly(pan_deg: float, tilt_deg: float) -> list[Body]:
         ECLIP_GROOVE_D / 2, g0 - 1, g0 + 2
     )
     out.append(Body("eclip", pan * clip, "turret"))
+    # gear hood (fixed, but its own group so the gate tests it against the base
+    # and the servos as well as the moving parts) and its two M2 x 8 screws,
+    # which self-tap into the base's pilots like every other screw here, so they
+    # ride in the base's group
+    out.append(Body("hood", b["hood"], "hood", printed=True, colour=COLOURS["hood"]))
+    for i, (hx, hy) in enumerate(HOOD_SCREWS):
+        top = L["housing_top"]
+        hs_ = _cyl_z(1.0, top + 2.5 - 8.0, top + 2.5, hx, hy) + _cyl_z(
+            1.9, top + 2.5, top + 3.8, hx, hy
+        )
+        out.append(Body(f"hood_screw{i + 1}", hs_, "base"))
     # cradle + head
     out.append(
         Body(
@@ -732,9 +902,21 @@ def assembly(pan_deg: float, tilt_deg: float) -> list[Body]:
         1.75, Y_LINK[0] - 1.3, Y_LINK[0], L["px"], pz
     )
     out.append(Body("bracket_screw", pan * ps, "plunger"))
-    # fork group: fork, trimmed horn, two dowels
     out.append(
-        Body("fork", fr * b["fork"], "fork", printed=True, colour=COLOURS["fork"])
+        Body(
+            "collar",
+            pan * collar_part(dz),
+            "plunger",
+            printed=True,
+            colour=COLOURS["collar"],
+        )
+    )
+    z0c = L["collar_z0"] + dz - COLLAR_HALF + COLLAR_CBORE
+    cs2 = _cyl_z(1.0, z0c, z0c + 6.0) + _cyl_z(1.9, z0c - 1.3, z0c)
+    out.append(Body("collar_screw", pan * cs2, "plunger"))
+    # lever group: lever, trimmed horn, one dowel
+    out.append(
+        Body("lever", fr * b["lever"], "fork", printed=True, colour=COLOURS["lever"])
     )
     out.append(
         Body(
@@ -745,14 +927,13 @@ def assembly(pan_deg: float, tilt_deg: float) -> list[Body]:
         )
     )
     zc = L["collar_z0"]
-    xh1 = TILT_CASE_TOP_X + 4.5 + FORK_PLATE_T
-    for name, xa_ in (
-        ("dowel_h", xh1 - FORK_PLATE_T),
-        ("dowel_f", -xh1 + FORK_PLATE_T - DOWEL_L),
-    ):
-        out.append(
-            Body(name, fr * _cyl_x(DOWEL_D / 2, xa_, xa_ + DOWEL_L, 0.0, zc), "fork")
+    out.append(
+        Body(
+            "dowel",
+            fr * _cyl_x(DOWEL_D / 2, DOWEL_X0, DOWEL_X0 + DOWEL_L, 0.0, zc),
+            "fork",
         )
+    )
     return out
 
 
