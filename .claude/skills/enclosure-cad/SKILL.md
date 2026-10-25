@@ -45,11 +45,14 @@ just enclosure::assembly <project>   # Blender renders: the populated board in e
    per model-less part) must be empty within the piece.
 2. **Wall thickness**: rays cast inward from 20 000 surface points
    (`enclosure/thickness.py`, fixed seed); any part under `MIN_WALL` (2.0 mm)
-   fails, with the point printed.
+   fails, with the point printed. The 64 thinnest readings are each checked
+   against a ring of points round them on the same face; one under half the
+   ring's median is a graze along a tessellated facet, not a wall (a pan-tilt
+   yoke read 0.01 mm where it is 1.0). tools/mechanism uses this same gate.
 
 Both have controls in the suite (a part through the wall must clash; a 0.5 mm
-plate must read 0.5 mm), and every geometry fix has a test that fails on the
-pre-fix code.
+plate must read 0.5 mm; a 0.15 mm fin must still read 0.15 mm), and every
+geometry fix has a test that fails on the pre-fix code.
 
 ## Traps
 
@@ -75,6 +78,16 @@ pre-fix code.
 7. **A blind hole's skin counts as a wall.** It is `SKIN = MIN_WALL`.
 8. **`kicad-cli` writes non-ASCII to stderr**; decode as UTF-8 with
    `errors="replace"`, or `subprocess` fails under an ASCII locale.
+9. **Python 3.14.8 is not downloadable everywhere.** uv has no build of it in
+   the cloud sessions, so `uv run` here fails before any test. The suite runs
+   on 3.13 (`PYTHONPATH=..:. python -m pytest` from `tools/enclosure`, in a
+   venv with build123d 0.13.0, trimesh, rtree and pytest); `gen` and the board
+   tests also need `kicad-cli`.
+10. **Blender is not only the macOS app.** `bpy` 5.2.3 installs from PyPI on
+   Python 3.13 and renders headless: Cycles on CPU about 7 s for 800×600 at 32
+   samples, EEVEE about 46 s through software GL. The recipes below still call
+   `/Applications/Blender.app`; porting them means running the scripts under
+   that interpreter with `import bpy`, not `blender -b -P`.
 
 ## Renders (`enclosure.assembly` + `blender/render_assembly.py`)
 
