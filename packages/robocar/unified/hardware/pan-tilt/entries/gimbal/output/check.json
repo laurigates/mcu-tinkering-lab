@@ -1,0 +1,67 @@
+{
+  "entry": "gimbal",
+  "parts": {
+    "tower": {
+      "volume_cm3": 16.878,
+      "bbox_mm": [
+        44.0,
+        40.0,
+        40.0
+      ],
+      "thinnest_mm": 1.1,
+      "thinnest_at": [
+        -16.75,
+        0.04,
+        23.88
+      ],
+      "valid": true
+    },
+    "yoke": {
+      "volume_cm3": 10.425,
+      "bbox_mm": [
+        37.6,
+        51.2,
+        54.5
+      ],
+      "thinnest_mm": 1.1,
+      "thinnest_at": [
+        8.49,
+        22.9,
+        59.73
+      ],
+      "valid": true
+    },
+    "outrigger": {
+      "volume_cm3": 2.486,
+      "bbox_mm": [
+        19.0,
+        16.2,
+        39.0
+      ],
+      "thinnest_mm": 2.2,
+      "thinnest_at": [
+        14.51,
+        -25.6,
+        47.16
+      ],
+      "valid": true
+    },
+    "cradle": {
+      "volume_cm3": 5.299,
+      "bbox_mm": [
+        37.2,
+        35.5,
+        21.2
+      ],
+      "thinnest_mm": 1.6,
+      "thinnest_at": [
+        -11.9,
+        15.35,
+        78.87
+      ],
+      "valid": true
+    }
+  },
+  "clashes": {},
+  "excused": []
+}

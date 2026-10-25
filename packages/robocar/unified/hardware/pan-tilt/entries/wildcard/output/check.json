@@ -1,0 +1,130 @@
+{
+  "entry": "wildcard",
+  "parts": {
+    "base": {
+      "volume_cm3": 35.013,
+      "bbox_mm": [
+        84.0,
+        61.3,
+        35.3
+      ],
+      "thinnest_mm": 1.05,
+      "thinnest_at": [
+        -16.9,
+        24.98,
+        18.87
+      ],
+      "valid": true
+    },
+    "turret": {
+      "volume_cm3": 7.855,
+      "bbox_mm": [
+        33.1,
+        45.5,
+        46.4
+      ],
+      "thinnest_mm": 1.32,
+      "thinnest_at": [
+        4.84,
+        5.97,
+        35.85
+      ],
+      "valid": true
+    },
+    "cradle": {
+      "volume_cm3": 3.156,
+      "bbox_mm": [
+        16.0,
+        38.5,
+        25.5
+      ],
+      "thinnest_mm": 1.0,
+      "thinnest_at": [
+        8.5,
+        -20.84,
+        61.77
+      ],
+      "valid": true
+    },
+    "link": {
+      "volume_cm3": 0.153,
+      "bbox_mm": [
+        5.0,
+        2.5,
+        15.0
+      ],
+      "thinnest_mm": 1.35,
+      "thinnest_at": [
+        2.15,
+        2.46,
+        64.24
+      ],
+      "valid": true
+    },
+    "bracket": {
+      "volume_cm3": 0.328,
+      "bbox_mm": [
+        9.0,
+        9.0,
+        11.0
+      ],
+      "thinnest_mm": 1.0,
+      "thinnest_at": [
+        0.12,
+        -1.14,
+        48.76
+      ],
+      "valid": true
+    },
+    "plunger": {
+      "volume_cm3": 1.179,
+      "bbox_mm": [
+        14.0,
+        14.0,
+        40.1
+      ],
+      "thinnest_mm": 1.2,
+      "thinnest_at": [
+        -2.0,
+        -0.0,
+        43.2
+      ],
+      "valid": true
+    },
+    "fork": {
+      "volume_cm3": 1.178,
+      "bbox_mm": [
+        22.5,
+        24.0,
+        9.0
+      ],
+      "thinnest_mm": 1.2,
+      "thinnest_at": [
+        -8.68,
+        -11.0,
+        7.39
+      ],
+      "valid": true
+    },
+    "pinion": {
+      "volume_cm3": 2.244,
+      "bbox_mm": [
+        26.9,
+        26.9,
+        5.0
+      ],
+      "thinnest_mm": 1.35,
+      "thinnest_at": [
+        1.67,
+        11.54,
+        38.69
+      ],
+      "valid": true
+    }
+  },
+  "clashes": {},
+  "excused": [
+    "pan_horn / pan_servo",
+    "tilt_horn / tilt_servo"
+  ]
+}
