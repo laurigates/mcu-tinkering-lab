@@ -30,7 +30,8 @@ PALETTE = ["#d9822b", "#3a7ca5", "#7a9e3d", "#b54a68", "#8a6bbf", "#c9b037", "#4
 STANDIN = "#7fa7d6"  # servos, horns, head, screws: pale blue, translucent
 SIZE = (1200, 1000)
 EXPLODE_MM = 28.0  # radial push per body from the assembly centre
-LIFT_MM = 22.0  # extra lift per group, in stacking order
+LIFT_MM = 22.0  # extra lift per group, in stacking order...
+LIFT_SPAN = 1.0  # ...capped so all lifts add up to this many assembly heights
 
 # (name, pan, tilt, camera azimuth, elevation) — azimuth 0 looks from +X (the
 # front, where the camera points), 90 from +Y (the robot's left).
@@ -80,12 +81,14 @@ def _add(p, mesh, colour, printed):
         p.add_mesh(mesh.extract_feature_edges(40), color="#2b2b2b", line_width=1)
 
 
-def _shoot(p, path: Path, azim: float, elev: float, title: str) -> None:
+def _shoot(
+    p, path: Path, azim: float, elev: float, title: str, zoom: float = 1.15
+) -> None:
     p.camera_position = "yz"
     p.camera.azimuth = azim
     p.camera.elevation = elev
     p.reset_camera()
-    p.camera.zoom(1.15)
+    p.camera.zoom(zoom)
     p.add_text(title, position="upper_left", font_size=11, color="#333333")
     p.screenshot(str(path))
     p.close()
@@ -100,12 +103,14 @@ def _explode(bodies, meshes):
     rank = {
         g: i for i, g in enumerate(sorted(groups, key=lambda g: np.mean(groups[g])))
     }
+    height = max(m.bounds[5] for m in meshes) - min(m.bounds[4] for m in meshes)
+    lift = min(LIFT_MM, LIFT_SPAN * height / max(len(rank) - 1, 1))
     out = []
     for b, m in zip(bodies, meshes, strict=True):
         d = np.array(m.center) - centre
         n = np.linalg.norm(d)
         push = d / n * EXPLODE_MM if n > 1e-6 else np.zeros(3)
-        out.append(m.translate(push + (0, 0, rank[b.group] * LIFT_MM), inplace=False))
+        out.append(m.translate(push + (0, 0, rank[b.group] * lift), inplace=False))
     return out
 
 
@@ -143,6 +148,7 @@ def main(argv: list[str]) -> int:
             azim,
             elev,
             f"{entry.name}: exploded, {name}",
+            zoom=0.9,  # the lifted stack is tall; leave the top part in frame
         )
 
     parts = mod.printed_parts()

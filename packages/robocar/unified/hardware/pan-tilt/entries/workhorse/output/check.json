@@ -2,22 +2,22 @@
   "entry": "workhorse",
   "parts": {
     "base": {
-      "volume_cm3": 9.303,
+      "volume_cm3": 14.187,
       "bbox_mm": [
-        35.4,
-        42.0,
+        46.5,
+        45.0,
         23.8
       ],
       "thinnest_mm": 1.1,
       "thinnest_at": [
-        -16.9,
-        -0.0,
-        22.36
+        16.9,
+        -0.01,
+        21.27
       ],
       "valid": true
     },
     "yoke": {
-      "volume_cm3": 26.655,
+      "volume_cm3": 26.705,
       "bbox_mm": [
         46.0,
         59.1,
@@ -25,14 +25,14 @@
       ],
       "thinnest_mm": 1.1,
       "thinnest_at": [
-        8.3,
+        8.73,
         21.5,
-        65.37
+        65.79
       ],
       "valid": true
     },
     "cradle": {
-      "volume_cm3": 9.777,
+      "volume_cm3": 8.973,
       "bbox_mm": [
         34.0,
         43.5,
@@ -41,23 +41,23 @@
       "thinnest_mm": 1.2,
       "thinnest_at": [
         -5.2,
-        -11.45,
-        68.98
+        -12.56,
+        71.16
       ],
       "valid": true
     },
     "brow_bracket": {
-      "volume_cm3": 3.709,
+      "volume_cm3": 3.338,
       "bbox_mm": [
         4.0,
         30.6,
-        56.8
+        52.3
       ],
-      "thinnest_mm": 1.3,
+      "thinnest_mm": 1.2,
       "thinnest_at": [
-        -12.87,
-        -7.49,
-        88.2
+        -12.46,
+        14.1,
+        71.46
       ],
       "valid": true
     },

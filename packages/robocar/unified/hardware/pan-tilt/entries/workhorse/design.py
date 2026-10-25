@@ -34,6 +34,7 @@ from build123d import (
     Cylinder,
     Part,
     Pos,
+    Polygon,
     RegularPolygon,
     Rot,
     export_step,
@@ -109,22 +110,55 @@ CHEEK_N = (Y_ARM_N - BOSS - 0.5 - 6.0, Y_ARM_N - BOSS - 0.5)
 CHEEK_TOP_P = ZT + MG90D.width / 2 + FIT + 3.2
 CHEEK_TOP_N = ZT + 8.0
 PLATE_X = (-32.0, 14.0)
-RIBBON_SLOT = (
-    -29.0,
-    -26.0,
-    fx.J2_CENTRE_YZ[0] - 8.5,
-    fx.J2_CENTRE_YZ[0] + 8.5,
-)  # x0 x1 y0 y1
 
-# Base
-BASE_X = (-23.0, 12.4)
+# Ribbon (14-way, 1.0 mm pitch for J2's 2.0 mm IDC: 14 mm wide, ~1 mm thick).
+# It drops through a slot in the yoke plate close behind the pan axis, flat
+# face toward the axis, folds 45 deg just above the flange into an edgewise
+# run, wraps round the base's round rear (the drum) toward +Y and leaves
+# forward along the base's +Y side. See README "Ribbon path".
+RIBBON_W = 14.0
+RIBBON_R = 16.4  # drop plane's distance behind the pan axis
+RIBBON_SLOT = (-(RIBBON_R + 1.2), -(RIBBON_R - 1.2), -8.0, 8.0)  # x0 x1 y0 y1
+RIBBON_TIE = (-21.2, -19.8, -1.5, 1.5)  # cable-tie slot behind a 2.2 mm bar
+
+# Base. The pan servo is turned shaft-rearward (body and lead forward) so the
+# base's rear end is a drum of radius DRUM_R round the pan axis: the ribbon's
+# drop can then sit 16 mm from the axis instead of 27.5 and never crosses the
+# base in the +/-90 sweep.
+BASE_X = (-12.4, 23.0)
 BASE_Y = 9.0
-FLANGE_Y = 21.0
-MOUNT_HOLES = [(x, y) for x in (-15.3, 4.7) for y in (-17.0, 17.0)]  # M3, 20 x 34 mm
+DRUM_R = 12.4
+FLANGE_X = (-23.5, 23.0)
+FLANGE_Y = 22.5
+GUIDE_R = (20.0, 22.0)  # ribbon guide fence round the rear 120 deg
+GUIDE_HALF_DEG = 56.0  # arc, plus a 2.5 mm straight tangent tail at each end
+GUIDE_TAIL = 2.5
+GUIDE_TOP = 19.0
+MOUNT_HOLES = [(x, y) for x in (-19.0, 16.0) for y in (-18.5, 18.5)]  # M3, 35 x 37 mm
 
 # Pivot hardware (stand-ins): M3 x 14 socket head, 4/3.1 brass tube sleeve 7.0 long
 SLEEVE_L = 7.0
 SCREW_L = 14.0
+
+# Tilt horn arm screws: PB2 x 4 pan head (DIN 7981 ST2.2: head 4.0 x 1.6),
+# driven from INSIDE the cradle through a 2.2 clearance hole and tapping into
+# the horn's own arm holes (drilled to 1.6). The head sits in a 1 mm
+# counterbore on the +Y arm's inner face, the tip ends flush with the horn's
+# servo-side face, so nothing stands in the 1 mm arm-to-cheek gap.
+HORN_SCREW_R = (11.0, 17.5)  # hole radii on the single horn (measure yours)
+PB2_HEAD = (4.0, 1.6)  # diameter, height
+PB2_CBORE = 1.0
+PAN_HORN_SCREW_R = 14.0  # double horn, driven up into the yoke
+
+# XIAO socket pin tails on head 1's back face: relief pocket in the back plate
+SOCKET_ROW_Y = (fx.XIAO_CENTRE_YZ[0] - 7.62, fx.XIAO_CENTRE_YZ[0] + 7.62)
+SOCKET_ROW_Z = (fx.XIAO_CENTRE_YZ[1] - 7.62, fx.XIAO_CENTRE_YZ[1] + 7.62)
+TAIL_R = 1.3  # pin tail + solder fillet radius, plus tolerance
+RELIEF_D = 2.5  # pocket depth into the 5 mm back plate
+
+# Brow bracket screws (M2 x 6) into blind pilots in the back plate
+BROW_SCREW_YZ = [(-12.0, 18.0), (12.0, 18.0)]
+BROW_BRACKET_Z0 = 14.5  # clear of the tilt horn screw heads below
 
 # Eyebrows: SG90 shaft forward, long axis vertical, shaft near the bottom
 BROW_CASE_X = 8.1  # SG90 case top, head x
@@ -176,7 +210,7 @@ def head_to_world(x, z):
 HEAD_LOC = Pos(-AXIS_IN_HEAD[0], 0, ZT - AXIS_IN_HEAD[1])
 
 # servo frame -> world, at rest
-PAN_LOC = Pos(0, 0, PAN_TOP)
+PAN_LOC = Pos(0, 0, PAN_TOP) * Rot(Z=180)  # shaft rearward of the case centre
 TILT_LOC = Pos(0, Y_CASE, ZT) * Rot(X=90)  # shaft points -Y, body outboard (+Y)
 BROW_LOCS = [
     HEAD_LOC * Pos(BROW_CASE_X, s * BROW_Y, BROW_SHAFT_Z) * Rot(Y=90) for s in (1, -1)
@@ -188,25 +222,68 @@ def _servo_body_x(spec):
     return spec.shaft_from_end - spec.length, spec.shaft_from_end
 
 
+def wedge(phi0, phi1, z0, z1, r=80.0) -> Part:
+    """A sector of the XY plane from angle phi0 to phi1 (deg, from +X, CCW)."""
+    n = max(2, int(abs(phi1 - phi0) // 15) + 1)
+    pts = [(0.0, 0.0)] + [
+        (
+            r * math.cos(math.radians(phi0 + (phi1 - phi0) * i / n)),
+            r * math.sin(math.radians(phi0 + (phi1 - phi0) * i / n)),
+        )
+        for i in range(n + 1)
+    ]
+    return Pos(0, 0, z0) * extrude(Polygon(*pts, align=None), amount=z1 - z0)
+
+
+def ring(r0, r1, phi0, phi1, z0, z1) -> Part:
+    return (cyl_z(0, 0, r1, z0, z1) - cyl_z(0, 0, r0, z0 - 1, z1 + 1)) & wedge(
+        phi0, phi1, z0 - 1, z1 + 1
+    )
+
+
 # --- printed parts (world pose, pan 0 tilt 0) --------------------------------
 def base() -> Part:
     s = MG90D
-    flange = box(BASE_X[0], BASE_X[1], -FLANGE_Y, FLANGE_Y, 0, FLOOR)
-    block = box(BASE_X[0], BASE_X[1], -BASE_Y, BASE_Y, 0, PAN_TAB_Z)
-    p = flange + block
+    flange = box(FLANGE_X[0], FLANGE_X[1], -FLANGE_Y, FLANGE_Y, 0, FLOOR)
+    # body: flat sides from where they meet the drum, round rear (the drum)
+    xr = -math.sqrt(DRUM_R**2 - BASE_Y**2)
+    block = box(xr, BASE_X[1], -BASE_Y, BASE_Y, 0, PAN_TAB_Z)
+    drum = cyl_z(0, 0, DRUM_R, 0, PAN_TAB_Z) & box(
+        -DRUM_R - 1, 0, -DRUM_R - 1, DRUM_R + 1, -1, PAN_TAB_Z + 1
+    )
+    # flat on the -Y side where the open pocket meets it (no knife edge there;
+    # the ribbon never wraps this part, see _ribbon_wrap)
+    drum -= box(xr, 1, -DRUM_R - 1, -BASE_Y, -1, PAN_TAB_Z + 1)
+    fence = ring(
+        GUIDE_R[0], GUIDE_R[1], 180 - GUIDE_HALF_DEG, 180 + GUIDE_HALF_DEG, 0, GUIDE_TOP
+    )
+    # straight tails: a radial end on a faceted arc reads as a sliver to the
+    # ray gate, and the tails keep the ribbon's edge off a sharp corner
+    for sgn in (1, -1):
+        y0, y1 = sorted((0.0, sgn * GUIDE_TAIL))
+        tail = box(GUIDE_R[0], GUIDE_R[1], y0, y1, 0, GUIDE_TOP)
+        fence += Rot(Z=180 + sgn * GUIDE_HALF_DEG) * tail
+    # the +Y side carries on flat and tangent from the drum, so the ribbon's
+    # edgewise run leaves it smoothly and lies along it to the front
+    side = box(-0.5, BASE_X[1], BASE_Y - 0.01, DRUM_R, 0, PAN_TAB_Z)
+    p = flange + block + drum + side + fence
+    # servo turned 180 deg: case spans world x -shaft_from_end .. length - that
     bx0, bx1 = _servo_body_x(s)
+    wx0, wx1 = -bx1, -bx0
     # The pocket is open on the -Y side: the servo slides in sideways (+Y) with
     # its tabs gliding over the rim, so the lead's root never has to pass a
     # wall. Both tab pilots sit in the full-width end walls.
-    p -= box(bx0 - FIT, bx1 + FIT, -BASE_Y - 1, s.width / 2 + FIT, FLOOR, PAN_TAB_Z + 1)
-    # lead exit: a slot through the -X end wall, open to the -Y side and down
-    # through the floor, so the lead drops through a chassis hole or runs back
     p -= box(
-        BASE_X[0] - 1, bx0, -BASE_Y - 1, 2.75, FLOOR - 0.01, FLOOR + PAN_GAP + 10.0
+        wx0 - FIT, wx1 + FIT, -FLANGE_Y - 1, s.width / 2 + FIT, FLOOR, PAN_TAB_Z + 1
     )
-    p -= box(BASE_X[0] - 1, bx0, -2.75, 2.75, -1, FLOOR + 1)
+    # lead exit: a slot through the +X end wall, open to the -Y side and down
+    # through the floor, so the lead drops through a chassis hole or runs forward
+    p -= box(
+        wx1, BASE_X[1] + 1, -BASE_Y - 1, 2.75, FLOOR - 0.01, FLOOR + PAN_GAP + 10.0
+    )
+    p -= box(wx1, BASE_X[1] + 1, -2.75, 2.75, -1, FLOOR + 1)
     for x, _, _ in fx.servo_tab_holes(s):
-        p -= cyl_z(x, 0, PILOT_SERVO / 2, PAN_TAB_Z - 7.0, PAN_TAB_Z + 1)
+        p -= cyl_z(-x, 0, PILOT_SERVO / 2, PAN_TAB_Z - 7.0, PAN_TAB_Z + 1)
     for x, y in MOUNT_HOLES:
         p -= cyl_z(x, y, CLEAR_M3 / 2, -1, FLOOR + 1)
     return p
@@ -239,7 +316,7 @@ def yoke() -> Part:
     hz = PAN_TOP
     p -= Pos(0, 0, hz) * _horn_pocket("double", 90, PLATE_Z0 - hz - 1, 4.5 + 0.2)
     p -= cyl_z(0, 0, 2.8, PLATE_Z0 - 1, PLATE_Z1 + 1)  # horn screw / screwdriver access
-    for y in (-14.0, 14.0):  # horn arm screws, driven up through the horn's holes
+    for y in (-PAN_HORN_SCREW_R, PAN_HORN_SCREW_R):  # driven up through the horn
         p -= cyl_z(0, y, PILOT_SERVO / 2, PLATE_Z0 - 1, PLATE_Z1 - 1.5)
     # tilt servo window in the +Y cheek (closed: the servo goes in from outside)
     p -= box(
@@ -254,9 +331,10 @@ def yoke() -> Part:
         p -= cyl_y(x, ZT, PILOT_SERVO / 2, CHEEK_P[1] - 7.0, CHEEK_P[1] + 1)
     # -Y cheek: plain bearing for the brass sleeve
     p -= cyl_y(0, ZT, BORE / 2, CHEEK_N[0] - 1, CHEEK_N[1] + 1)
-    # ribbon slot + the bar behind it takes a cable tie (strain relief)
-    x0, x1, y0, y1 = RIBBON_SLOT
-    p -= box(x0, x1, y0, y1, PLATE_Z0 - 1, PLATE_Z1 + 1)
+    # ribbon slot close behind the pan axis; a cable tie through the small slot
+    # behind it clamps the ribbon to the 2.2 mm bar between them
+    for x0, x1, y0, y1 in (RIBBON_SLOT, RIBBON_TIE):
+        p -= box(x0, x1, y0, y1, PLATE_Z0 - 1, PLATE_Z1 + 1)
     # tilt-servo lead tie slots at the +Y cheek's rear foot
     for y in (CHEEK_P[0] - 4.0, CHEEK_P[0] - 9.0):
         p -= box(-29.5, -27.0, y - 1.0, y + 1.0, PLATE_Z0 - 1, PLATE_Z1 + 1)
@@ -278,16 +356,28 @@ def cradle() -> Part:
     # head-1 M2 holes: self-tapping pilots straight through the back plate
     for y, z in fx.HEAD_HOLES_YZ:
         p -= cyl_x(y, z, PILOT_M2 / 2, -BACK_T - 1, 1)
-    # brow bracket screws, blind from behind, 0.6 mm short of the board
-    for y in (-11.25, 11.25):
-        p -= cyl_x(y, 16.0, PILOT_M2 / 2, -BACK_T - 1, -1.2)
+    # relief under the XIAO sockets' pin tails and fillets: the board bears on
+    # the plate only outside the two rows and along the top band by the screws
+    p -= box(
+        -RELIEF_D,
+        1,
+        SOCKET_ROW_Y[0] - TAIL_R,
+        SOCKET_ROW_Y[1] + TAIL_R,
+        BACK_Z0 - 1,
+        SOCKET_ROW_Z[1] + TAIL_R,
+    )
+    # brow bracket screws (M2 x 6), blind from behind, stopping 1.2 mm short of
+    # the board; the screw tip ends at x -2
+    for y, z in BROW_SCREW_YZ:
+        p -= cyl_x(y, z, PILOT_M2 / 2, -BACK_T - 1, -1.2)
     # tilt horn (single arm pointing rearward) in a pocket on the +Y arm face
     # horn frame: servo z axis = -Y; its flat top lies HORN_ARM_Z0+1.6 inboard of the case
     horn_cut = _horn_pocket("single", 180, 2.9 - 0.2, 4.5 + 0.2)
     p -= Pos(ax, Y_ARM_P + HORN_ARM_Z0, az) * Rot(X=90) * horn_cut
     p -= cyl_y(ax, az, 2.8, ARM_IN - 1, Y_ARM_P + 1)  # horn screw head + spline end
-    for r in (10.0, 16.0):  # horn arm screws (from the horn side)
-        p -= cyl_y(ax - r, az, PILOT_SERVO / 2, ARM_IN - 1, Y_ARM_P + 1)
+    for r in HORN_SCREW_R:  # horn arm screws, driven from inside the cradle
+        p -= cyl_y(ax - r, az, CLEAR_M2 / 2 - 0.05, ARM_IN - 1, Y_ARM_P + 1)
+        p -= cyl_y(ax - r, az, PB2_HEAD[0] / 2 + 0.2, ARM_IN - 1, ARM_IN + PB2_CBORE)
     # -Y pivot: M3 clearance through boss and arm, M3 nut in a hex pocket inside
     p -= cyl_y(ax, az, CLEAR_M3 / 2, Y_ARM_N - BOSS - 1, -ARM_IN + 1)
     nut = Rot(X=90) * extrude(RegularPolygon(NUT_AF / math.sqrt(3), 6), amount=3.0)
@@ -301,7 +391,7 @@ def brow_bracket() -> Part:
     s = SG90
     bx0, bx1 = _servo_body_x(s)  # servo x; servo +X maps to head -Z
     zt = BROW_SHAFT_Z - (bx0 - 6.0) + FIT + 2.5  # above the lead notch
-    p = box(x0, x1, -15.3, 15.3, 10.0, zt)
+    p = box(x0, x1, -15.3, 15.3, BROW_BRACKET_Z0, zt)
     # stay clear of the cradle's back plate (x -5..0) and the J2 keep-out
     for sy in (1, -1):
         y = sy * BROW_Y
@@ -326,13 +416,12 @@ def brow_bracket() -> Part:
         )
         hx = max(h[0] for h in fx.servo_tab_holes(s))  # the lower tab
         p -= cyl_x(y, BROW_SHAFT_Z - hx, PILOT_SERVO / 2, x1 - 6.0, x1 + 1)
-    for y in (-11.25, 11.25):
-        p -= cyl_x(y, 16.0, CLEAR_M2 / 2, x0 - 1, x1 + 1)
-        p -= cyl_x(
-            y, 16.0, 2.1, x0 - 1, x0 + 1.0
-        )  # 1 mm counterbore: M2x8 stops short of the board
+    for y, z in BROW_SCREW_YZ:
+        p -= cyl_x(y, z, CLEAR_M2 / 2, x0 - 1, x1 + 1)
+        # 1 mm counterbore: the M2 x 6 head seats at x0 + 1, its tip at x0 + 7
+        p -= cyl_x(y, z, 2.1, x0 - 1, x0 + 1.0)
     # lighten the middle between the screws
-    p -= box(x0 - 1, x1 + 1, -5.0, 5.0, 13.0, 26.0)
+    p -= box(x0 - 1, x1 + 1, -5.0, 5.0, 17.5, 26.0)
     return HEAD_LOC * p
 
 
@@ -391,6 +480,51 @@ def _pivot_hw() -> tuple[Part, Part]:
     return sleeve, screw
 
 
+def _tilt_horn_screws() -> Part:
+    """PB2 x 4 pan heads on the +Y arm's inner face (head frame -> world)."""
+    ax, az = AXIS_IN_HEAD
+    seat = ARM_IN + PB2_CBORE
+    heads = [
+        cyl_y(ax - r, az, PB2_HEAD[0] / 2, seat - PB2_HEAD[1], seat)
+        for r in HORN_SCREW_R
+    ]
+    return HEAD_LOC * (heads[0] + heads[1])
+
+
+def _pan_horn_screws() -> Part:
+    """PB2 heads under the double horn's arms, driven up into the yoke."""
+    z1 = PAN_TOP + HORN_ARM_Z0
+    a, b = (
+        cyl_z(0, y, PB2_HEAD[0] / 2, z1 - PB2_HEAD[1], z1)
+        for y in (-PAN_HORN_SCREW_R, PAN_HORN_SCREW_R)
+    )
+    return a + b
+
+
+def _ribbon_drop() -> Part:
+    """The ribbon from the yoke slot down to its 45 deg fold, flat face to the
+    axis, two layers thick at the fold, plus 0.5 mm all round (pan group)."""
+    t = 2.0
+    return box(
+        -(RIBBON_R + t / 2),
+        -(RIBBON_R - t / 2),
+        -RIBBON_W / 2 - 0.5,
+        RIBBON_W / 2 + 0.5,
+        FLOOR + 0.5,
+        PLATE_Z0,
+    )
+
+
+def _ribbon_wrap() -> Part:
+    """Where the edgewise run can lie: against the drum from the fence's -Y end
+    round to +Y, then forward along the base's +Y side (static keep-out)."""
+    z0, z1 = FLOOR, FLOOR + RIBBON_W + 0.5
+    r0, r1 = DRUM_R + 0.1, DRUM_R + 1.6
+    wrap = ring(r0, r1, 90, 180 + GUIDE_HALF_DEG, z0, z1)
+    run = box(0, BASE_X[1] + 10, r0, r1, z0, z1)
+    return wrap + run
+
+
 def assembly(pan_deg: float = 0.0, tilt_deg: float = 0.0) -> list[Body]:
     pan = Rot(Z=pan_deg)
     tilt = pan * Pos(0, 0, ZT) * Rot(Y=-tilt_deg) * Pos(0, 0, -ZT)  # +tilt = nose up
@@ -431,6 +565,10 @@ def assembly(pan_deg: float = 0.0, tilt_deg: float = 0.0) -> list[Body]:
     out += [
         Body("pivot_sleeve", tilt * sleeve, "tilt"),
         Body("pivot_screw", tilt * screw, "tilt"),
+        Body("tilt_horn_screws", tilt * c("ths", _tilt_horn_screws), "tilt"),
+        Body("pan_horn_screws", pan * c("phs", _pan_horn_screws), "pan"),
+        Body("ribbon_drop", pan * c("rd", _ribbon_drop), "pan"),
+        Body("ribbon_wrap", c("rw", _ribbon_wrap), "base"),
     ]
     if EYEBROWS:
         out.append(

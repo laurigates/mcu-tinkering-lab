@@ -190,3 +190,33 @@ My probe scripts are in
   heights.
 - `probe2.py`: checks screwdriver access to the head screws and the board's
   insertion path.
+
+## Revision (designer, 2026-10-25)
+
+Everything below was re-checked with the inspector's scripts (`margin.py`) and
+with `probe_rev.py` and `margin_split.py`, which sit beside them in the same
+scratchpad folder. `common.check` gives **zero clashes and zero excuses** over
+pan ±90 × tilt ±45, and `assembly()` now includes the chassis plate, the
+keeper, the keeper screws and the two tied-down ribbon stretches. Lens height
+is unchanged at 76.5 mm. The panned CoM is 0.24 mm from the pan axis in X.
+
+| Issue | What changed | Evidence now |
+|---|---|---|
+| **B1** head screws cannot be driven | The bridges and inner cheeks stop 0.35 mm above a Ø3.6 driver envelope on each screw axis (`HEAD_DRIVER_D`, `CHEEK_TAB_Z` = −7.5). A Ø3.6 channel runs forward through the cradle on each axis. The pivot boss is trimmed to the cheek bottom. | Ø2.0, Ø3.0 and Ø3.5 rods along both screw axes cut **0.00 mm³** of the cradle. In the assembled pose they also cut 0.00 of the yoke, outrigger and tilt servo. The XIAO stack allows a shaft up to Ø3.7 on the −Y screw. The cradle's thinnest wall is now 1.5 mm, under the MR128ZZ pocket. |
+| **B2** cross horn cannot be installed or screwed on | Pan coupling redesigned. The cross horn's arms are cut to Ø20 (`HORN_TRIM_R`), and the horn goes on the spline from above through the open bearing seat (chamber Ø28.6), with its centre screw driven from above. The horn has no arm screws. A new printed **keeper** ring (Ø26.6) bolts under the yoke's spigot with 4 × M2 × 8, from below, **on the bench**. Its through cross slot takes the arm stubs, and the slot walls carry the torque. I used a trimmed cross horn rather than the disc horn: a disc gives the pocket walls no flat to push on, so its torque would go back through screws. | A Ø20.4 disc lowered down the pan axis cuts 0.00 mm³ of the tower, and so does a Ø5 driver to the centre screw. Nothing is screwed from below once the tower is assembled. |
+| **M1** pan axial over-constraint | The keeper clamps the 6705ZZ's inner race against the yoke's land. The spigot is 0.2 mm short of the race width (`SPIGOT_SHORT`) so the clamp lands on the race. The horn floats **±1.0 mm** axially in the keeper's slot (`KEY_FLOAT`). Yoke, bearing and keeper are one subassembly, and the outer race sits in a seat with three crush ribs (0.15 mm interference). The bearing locates the yoke axially and carries the moment. The servo shaft sees torque only. | Arms at 33.4–35.0, slot 32.4–36.0 (world z). The residual risk, an outer race retained only by the crush fit (plus optional CA), is listed in the README. |
+| **M2** windows fitted to the smaller figure | `FIT_END` 0.15 → **0.35** (window 23.3), `FIT` stays 0.3 (12.6), and a new `FIT_TAB` 0.6 (tab cavity **32.7**, which takes the SG90's 32.3). The pocket roof now sits 0.5 mm above the case top (`CASE_TOP_CLEAR`). | `margin.py big` (22.8 × 12.2): **0 poses with a clash** (was 3.8 / 1.8 mm³). `margin.py tallF`: 0. At ±0.25 only the tabs overlap (26 mm³ per servo, the margin growing each tab into its own ledge; the case body is 0.00, per `margin_split.py`). At ±0.5 the case is 13.0 wide against a 12.6 window, which is beyond the fit clearance by construction. |
+| **M3** 1.1 mm web beside self-tapped pilots | All 12 M2 holes are **tapped** (Ø1.6 drill, M2 × 0.4 tap) for M2 machine screws: tab screws M2 × 8, keeper M2 × 8, outrigger M2 × 6. A tap removes material, so nothing pushes the web sideways. With the larger end clearance the web is now **1.0 mm**. That web is set by the servo's drawing (hole centre 2.15 mm from the case end), so no mount gets more. The servo case is 0.35 mm away and stops the web bulging. Nuts on the far side do not fit: an M2 nut beside the case end would sit inside the case. The tilt upright's 3 mm gives 7 threads for a screw whose only job is to stop pull-out, since the window takes the torque reaction. | The gate reads 1.0 mm on the tower and the yoke, both at a tab hole. The README asks for a printed coupon before ordering the set. |
+| **M4** pan servo 0.5 mm above the plate, unchecked | `PAN_SERVO_LIFT` 0.5 → **2.0**. The lowered bearing seat keeps the lens at 76.5. `assembly()` has a `chassis_plate` stand-in (group `tower`). | `margin.py tallF` (F + 1) passes with the plate present. Up to F + 2.0 clears. |
+| **M5** ribbon and leads not modelled or guided | The yoke gets a **ribbon shelf** on its rear edge (2 tie slots) and a straight **lead gutter** under its rim from the tilt servo (100°) toward the shelf (148°), with a tie slot. The tower gets a **ribbon post** at the rear (2 × 2 tie slots), which is the strain relief before the carrier. The tied-down stretches on the shelf and post are bodies in `assembly()`. `ribbon_spans()` prints each free span's chord over the full sweep. | Clash gate: ribbon_shelf and ribbon_post clash with nothing. Tilt span chord 18.7–70.1 mm over ±45° (28.6–63.6 over ±30°), so leave 80 mm. Pan span chord 12.2–42.0 mm over ±90°, so leave 60 mm. At ±90° a taut pan chord passes 1.1 mm outside the tower cylinder and above the box, flange and M3 heads. The swept head clears the shelf top by ≥ 9 mm. The free spans themselves are still not swept: a flexible ribbon has no single shape to check. |
+
+Minor items:
+
+- The tie slots, the gutter and the post were fitted to MJF's 1.0 mm. A
+  curved gutter first read 0.14–0.26 mm at its end faces. That reading is the
+  ray gate's tangent effect on a convex wall's end, but the gutter is straight
+  now, so the gate has nothing to argue about.
+- The README now states the firmware pan offset needed for the 18° spline step
+  and the horn-slot backlash (about ±1°, file the slot to fit).
+- The price rate is still unverified and the README says so.
+- The eyebrows remain out of scope.

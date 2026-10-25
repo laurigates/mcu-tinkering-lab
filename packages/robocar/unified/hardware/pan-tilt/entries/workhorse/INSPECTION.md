@@ -208,3 +208,103 @@ entry. They live in the session scratchpad, not in the repo.
   - an M2 x 8 that reaches the PCB;
   - a flat back plate on the XIAO socket tails.
 - The ribbon's path through the pan sweep is the largest open risk.
+
+## Revision (designer, 2026-10-25)
+
+All four major issues were fixed in `design.py`. `python design.py`, then
+`common.check` (exit 0, **zero clashes** over pan ±90 and tilt ±45, the same
+four spline excuses and no new ones) and `common.render` were re-run.
+`output/check.json` and the renders are current. I also re-ran a probe of
+every pair at pan/tilt (0,0), (60,30), (-90,-45) and (90,45), same group
+included. Only the intended interfaces overlap: the splines in their hubs,
+the horns in their pockets, and the board on the cradle.
+
+### Tilt horn arm screws in the cheek gap: fixed
+
+- The screws are now driven **from inside the cradle**. `cradle()` has Ø2.2
+  clearance holes through the +Y arm, with Ø4.4 x 1.0 counterbores on the
+  inner face.
+- They are PB2 x 4 pan heads (Ø4.0 x 1.6). Each taps into the single horn's
+  arm hole, drilled to 1.6. The tip ends flush with the horn's servo-side face
+  at `Y_ARM_P`, so nothing stands in the 1.0 mm gap. Boss to arm face, the
+  cradle is 43.5 mm between cheeks 45.0 mm apart, with 0.5 mm of pivot end
+  play and the 1.0 mm gap, as designed.
+- Hole radii moved from 10/16 to **11/17.5**
+  (`HORN_SCREW_R`). At r 10 the two counterbores left a 0.6 mm web. At r 11
+  the PH0 shaft clears the back plate and the -Y arm by 0.5 mm when driven
+  along Y from the -Y side, on the bench at step 5.
+- The heads are modelled as `tilt_horn_screws` (tilt group), so the sweep now
+  checks them against the yoke and the tilt servo: no clash. The pan horn's
+  heads are modelled too (`pan_horn_screws`), against the pan servo: no clash.
+- The brow bracket would have hit the r 11 head. Its bottom edge moved from
+  head z 10 to 14.5 (`BROW_BRACKET_Z0`), and the probe confirms it clears the
+  head by 0.5 mm.
+
+### Brow-bracket screw reaching the PCB: fixed
+
+- The BOM, README and code comment now say **M2 x 6**. The head seats at head
+  x -8, so the tip ends at x -2, 0.8 mm short of the 1.2 mm pilot floor.
+- The screws moved from y ±11.25, z 16 to **y ±12, z 18** (`BROW_SCREW_YZ`),
+  in both the cradle pilots and the bracket holes. This keeps them 1.7 mm
+  clear of the new socket relief pocket, and clear of the horn screw heads.
+
+### Back plate on the XIAO socket pin tails: fixed
+
+- `cradle()` cuts a **2.5 mm deep relief pocket** into the back plate's board
+  face. It spans y -8.4..9.4 and runs from below the plate's bottom edge up to
+  z 25.7 (`SOCKET_ROW_Y/Z` ± `TAIL_R` 1.3).
+- The board now bears only on the two side strips outside the rows
+  (|y| > 9.4 to the board edge) and on the top band around the M2 screws.
+- The thinnest wall there is about 1.1 mm, at the pocket's corner next to each
+  M2 board-screw pilot. The ray gate reports the cradle at 1.2 mm.
+- The README lists the row positions and the tail height as things to measure.
+
+### Ribbon through the pan sweep: fixed by design, still unproven on the bench
+
+- **Pan servo turned shaft-rearward** (`PAN_LOC` gains `Rot(Z=180)`). The case
+  and lead now point forward, and the lead exits through the front wall. That
+  lets the base's rear end be a **drum** of r 12.4 round the pan axis.
+- **Ribbon slot** moved from x -27.5 to **16.4 mm behind the axis**. It is
+  now 15 mm wide across Y, so the ribbon's flat face faces the axis, with a
+  cable-tie slot and a 2.2 mm bar behind it.
+- In the ±90° sweep the slot never passes over the base. Its sideways travel
+  at ±60° is 16 mm instead of 27 mm.
+- **Designed path**:
+  1. The ribbon drops vertically.
+  2. Just above the flange, a taped 45° fold turns it into an edgewise run.
+  3. The run wraps round the drum toward +Y.
+  4. It leaves tangentially along a new flat +Y side of the base and goes
+     forward toward J1.
+- Pan changes only the length lying on the drum: 7-34 mm over ±60°, and
+  0-41 mm over ±90°. There is no twist and no corner.
+- A 2 mm, 19 mm tall **fence** at r 20-22 round the rear 112°, with straight
+  tangent tails, keeps the ribbon on the flange. It leaves the -Y side open,
+  because the pan servo slides in from there.
+- **Modelled**: `ribbon_drop` (pan group, 2 mm thick for the fold's two
+  layers, 15 mm wide, from the flange to the plate) and `ribbon_wrap` (base
+  group, the wrapped band and the forward run). Both are in the sweep, with
+  zero clashes and no excuses.
+- **Length**: the README now gives a budget of about 160 mm plus the run to
+  J1, and asks for a **20-25 cm** ribbon.
+- **Mounting** changed to 35 x 37 mm (x -19/+16, y ±18.5). The README says to
+  keep the +Y side clear for the ribbon's run.
+- **Still open**: the keep-outs are rigid. Whether the real ribbon slides
+  along the drum when pushed (panning toward -) rather than bowing against the
+  fence needs a bench check with `servo exercise`. This is listed in the
+  README's risks.
+
+### Minor points also addressed
+
+- The README now says to drill the horn holes: 2.2 mm for the double horn,
+  1.6 mm for the single.
+- It says to put the tilt horn's centre screw in the hub from inside the
+  cradle at step 5.
+- It specifies a PB2/M2 x 6 brow horn screw.
+- It routes the tilt and brow servo leads with the ribbon.
+
+### Not changed
+
+- `FIT` stays at 0.3 per side; see the README's measurement table.
+- The 1.1 mm tab-pilot ligaments on the base and yoke are unchanged. They are
+  mirrored on the base, which is the same geometry.
+- The pan stage still rides on the pan spline alone.

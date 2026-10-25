@@ -20,6 +20,8 @@ Printed parts (world pose at pan 0 / tilt 0; print orientation in README):
     brow_l    left eyebrow (+Y), on the SG90 single-arm horn
     brow_r    right eyebrow (-Y)
     ear_cap   Robby-style ear plate, press-fits the pod end (print 2)
+    keeper    slides into the base behind the pan pocket, carries the rear tab
+              pilot; its slot lets the pan servo's lead boot drop in
 
 World frame (common/fixtures.py): +X forward, +Y left, +Z up, mm; z 0 is the
 top of the acrylic chassis plate. Pan axis = world Z through x 0, y 0. Tilt
@@ -77,7 +79,13 @@ SG90 = dataclasses.replace(
     tab_underside=15.9,  # estimate: sets the forehead plate's inner face
     shaft_from_end=6.0,  # estimate
 )
-CASE_CLR = 0.3  # each side, servo case in a pocket or window
+# Case clearance, each side. Width is generous: MJF holes print undersize and
+# a servo 0.25 mm over its published width must still drop in. Length is held
+# to 0.4 because the tab pilots sit just past the case ends (the pilot web is
+# tab_span / 2 - tab_hole_inset - PILOT_M2 / 2 - length / 2 - CASE_CLR_L, 1.0
+# mm on the MG90D), and the tab screws, not the pocket, locate the servo there.
+CASE_CLR_W = 0.5
+CASE_CLR_L = 0.4
 PILOT_M2 = 1.5  # self-tapping pilot, servo tab screws (2 mm screws in PA12/resin)
 PILOT_M3 = 2.5  # self-tapping M3 pivot screw in PA12
 CLEAR_M2 = 2.3
@@ -106,12 +114,14 @@ ARM_OUT = 19.5  # +Y arm outer face = tilt horn arm underside
 TILT_CASE_Y = ARM_OUT + HORN_ARM_Z0  # tilt servo case top, 22.4
 BULK_Y0 = TILT_CASE_Y + 1.6  # +Y bulkhead inner face, 24.0
 BULK_Y1 = TILT_CASE_Y + (MG90D.height - MG90D.tab_underside) - MG90D.tab_thickness
-POD_Y1 = 54.0  # pod open ends, |y|
-POD_HX = MG90D.width / 2 + 0.4  # pod interior half-width
+POD_Y1 = 56.0  # pod open ends, |y|: 2.5 mm past an MG90D F of 20.8 + the cap rim
+POD_HX = MG90D.width / 2 + CASE_CLR_W  # pod interior half-width
 WALL = 2.0
+POD_TOP_T = 6.0  # pod roof: the forehead's M2 screws thread 5.9 mm into it
 POD_Z_TOP_IN = (
     MG90D.shaft_from_end - MG90D.length / 2 + MG90D.tab_span / 2 + 0.55
 )  # interior top (rel axis), clears the upper tab
+POD_TOP = POD_Z_TOP_IN + POD_TOP_T  # pod roof top, rel axis (17.0)
 CHEEK_Y0 = -24.0  # -Y cheek inner face = bearing inner face
 BEARING = (3.0, 7.0, 3.0)  # 683ZZ: id, od, width
 LIP_BORE = 6.0  # holds the outer race, passes the screw head and shim
@@ -152,6 +162,7 @@ COLOURS = {
     "brow_l": "#c3c7cc",  # SLM AlSi10Mg, polished: chrome brows
     "brow_r": "#c3c7cc",
     "ear_cap": "#c9dde3",  # 8001 translucent resin: Robby's lit ears
+    "keeper": "#2e3033",  # MJF PA12S-HP, black, with the base
 }
 
 
@@ -210,8 +221,8 @@ def _tab_pilots(spec) -> list[float]:
 
 def make_base() -> Part:
     s = MG90D
-    x0 = s.shaft_from_end - s.length - CASE_CLR
-    x1 = s.shaft_from_end + CASE_CLR
+    x0 = s.shaft_from_end - s.length - CASE_CLR_L
+    x1 = s.shaft_from_end + CASE_CLR_L
     tab0 = MOUNT_CX - s.tab_span / 2
     tab1 = MOUNT_CX + s.tab_span / 2
     plinth = box(tab0 - 2.55, tab1 + 2.45, -8.7, 8.7, 0, LEDGE_Z)
@@ -220,10 +231,16 @@ def make_base() -> Part:
     flange = box(fl_x0, fl_x1, -MOUNT_DY / 2 - 5, MOUNT_DY / 2 + 5, 0, 3.0)
     flange = flange.fillet(4.0, flange.edges().filter_by(Axis.Z))
     b = plinth + flange
-    b -= box(x0, x1, -s.width / 2 - CASE_CLR, s.width / 2 + CASE_CLR, BASE_FLOOR, 99)
+    b -= box(
+        x0, x1, -s.width / 2 - CASE_CLR_W, s.width / 2 + CASE_CLR_W, BASE_FLOOR, 99
+    )
     # lead window: the boot leaves the -X end low, the JR plug threads through
     b -= box(tab0 - 4, x0 + 0.1, -4.5, 4.5, 6.5, 13.0)
-    for x in _tab_pilots(s):
+    # keeper slot: open at the top and the rear so the lead boot can drop
+    # straight down behind the pocket while the servo is lowered in. The rear
+    # tab's pilot is in the keeper that refills the slot afterwards (B3).
+    b -= _keeper_slot(KEEPER_CLR)
+    for x in _tab_pilots(s)[1:]:  # front tab only; the rear one is in the keeper
         b -= cyl_z(x, 0, LEDGE_Z - 7, LEDGE_Z + 1, PILOT_M2 / 2)
     for sx in (-1, 1):
         for sy in (-1, 1):
@@ -235,14 +252,64 @@ def make_base() -> Part:
     return b
 
 
+KEEPER_HY = 2.4  # keeper slot half width (lead boot 4 mm wide)
+KEEPER_CLR = 0.2  # keeper in its slot, each side
+KEEPER_Z0 = 13.2  # keeper underside: above the lead window
+
+
+def _keeper_slot(grow: float) -> Part:
+    """The rear-tab keeper's envelope (grow=0) or its slot (grow=clearance).
+
+    A vertical block behind the pan pocket plus a rib each side that runs in a
+    groove in the plinth walls, so the keeper slides in from the rear and
+    cannot lift; the rear tab screw then pins it along X.
+    """
+    s = MG90D
+    x0 = s.shaft_from_end - s.length - CASE_CLR_L  # pocket rear end
+    rear = MOUNT_CX - s.tab_span / 2 - 2.55  # plinth rear face
+    if grow > 0:  # the slot: through the rear face, down into the lead window
+        xa, xb, c = rear - 1, x0 + 0.01, 0.0
+        k = box(xa, xb, -KEEPER_HY, KEEPER_HY, 12.9, LEDGE_Z + 1)
+    else:
+        xa, xb, c = rear, x0, KEEPER_CLR
+        k = box(xa, xb, -KEEPER_HY + c, KEEPER_HY - c, KEEPER_Z0, LEDGE_Z)
+    for sy in (-1, 1):
+        y0, y1 = sorted((sy * (KEEPER_HY - 0.5), sy * (KEEPER_HY + 1.0 - c)))
+        k += box(xa, xb, y0, y1, 15.0 + c, 17.0 - c)
+    return k
+
+
+def make_keeper() -> Part:
+    """Rear-tab keeper (world pose): slides into the base from behind."""
+    k = _keeper_slot(0.0)
+    x = _tab_pilots(MG90D)[0]
+    k -= cyl_z(x, 0, LEDGE_Z - 7, LEDGE_Z + 1, PILOT_M2 / 2)
+    return k
+
+
+# Lead route under the frame (pan-frame coordinates, |y| mirrored per side)
+LEAD_SLOT_Y = (29.0, 50.0)  # rear-wall slot, |y|, from the pod floor up 8 mm
+LEAD_HOLE_X = (3.0, 7.0)  # pod-floor hole: passes a JR plug (2.6 x 7.6)
+LEAD_HOLE_Y = (29.0, 46.5)
+LEAD_CHAN_X = (4.0, 9.6)  # underside channel, open below and to the front
+LEAD_CHAN_TOP = 37.4  # channel roof: 1.6 mm under the floor top
+LEAD_DROP_Y = (9.0, 11.2)  # where the bundle leaves the frame, |y|
+LEAD_TIE_X = ((4.0, 5.1), (8.45, 9.55))  # two 1.1 x 3.4 slots for a 2.5 x 1 mm tie
+LEAD_TIE_Y = (11.8, 15.2)
+LEAD_BUNDLE_X = (5.2, 8.4)  # two 3-way servo leads side by side, 3.2 x 2.2
+RIBBON_SLOT_X = (-22.5, -20.0)
+
+
 def make_frame() -> Part:
     """The face frame in the pan frame at pan 0 (world pose)."""
     a = TILT_Z
     z_floor_rel = FLOOR_T - a
-    pod_z0, pod_z1 = FLOOR_T, a + POD_Z_TOP_IN + WALL
+    pod_z0, pod_z1 = FLOOR_T, a + POD_TOP
     hx = POD_HX + WALL
     f = cyl_z(0, 0, FLOOR_U, FLOOR_T, NECK_R)
-    f += box(TILT_X - hx, TILT_X + hx, -POD_Y1, POD_Y1, FLOOR_T - 3.0, FLOOR_T)
+    # the cross plate under the pods is full neck depth: it carries the lead
+    # channels on its underside
+    f += box(TILT_X - hx, TILT_X + hx, -POD_Y1, POD_Y1, FLOOR_U, FLOOR_T)
     # pods, both sides (+Y from the bulkhead, -Y from the cheek)
     f += box(TILT_X - hx, TILT_X + hx, BULK_Y0, POD_Y1, pod_z0, pod_z1)
     f += box(TILT_X - hx, TILT_X + hx, -POD_Y1, CHEEK_Y0, pod_z0, pod_z1)
@@ -260,12 +327,12 @@ def make_frame() -> Part:
     s = MG90D
     sx0, sx1 = s.shaft_from_end - s.length, s.shaft_from_end
     f -= box(
-        TILT_X - s.width / 2 - CASE_CLR,
-        TILT_X + s.width / 2 + CASE_CLR,
+        TILT_X - s.width / 2 - CASE_CLR_W,
+        TILT_X + s.width / 2 + CASE_CLR_W,
         BULK_Y0 - 1,
         BULK_Y1 + 0.01,
-        a + sx0 - CASE_CLR,
-        a + sx1 + CASE_CLR,
+        a + sx0 - CASE_CLR_L,
+        a + sx1 + CASE_CLR_L,
     )
     for zt in _tab_pilots(s):
         f -= cyl_y(TILT_X, a + zt, BULK_Y0 - 0.5, BULK_Y1 + 0.5, PILOT_M2 / 2)
@@ -273,16 +340,44 @@ def make_frame() -> Part:
     _bid, bod, bw = BEARING
     f -= cyl_y(TILT_X, a, CHEEK_Y0 + 0.5, CHEEK_Y0 - bw, bod / 2)
     f -= cyl_y(TILT_X, a, CHEEK_Y0 - bw + 0.01, CHEEK_Y0 - 5.5, LIP_BORE / 2)
-    # lead slots in the rear walls of both pods (tilt servo; brow leads)
+    # Lead route (M3): each brow lead comes down the back of its pod, in
+    # through a low slot in the pod's rear wall, across the pod floor and down
+    # a hole in it; the tilt lead drops from its boot to the same hole. Under
+    # the plate a channel takes the bundle inward into the neck's front
+    # quadrant pocket, where a cable tie through two slots holds it at r ~12
+    # and it drops to the base. Nothing outboard of the tie moves relative to
+    # the frame, so only the drop below the tie flexes with pan.
     for sy in (-1, 1):
-        y0, y1 = sorted((sy * 40.0, sy * 52.0))
-        f -= box(TILT_X - hx - 1, xi0 + 0.01, y0, y1, zi0 - 0.01, a - 17.0)
-    # forehead bosses under the pod tops (2 per pod)
+
+        def ys(a_, b_):
+            return sorted((sy * a_, sy * b_))
+
+        # flat-faced land where the channel crosses the neck ring, so the cut
+        # meets a plane at 90 degrees instead of leaving a knife edge
+        f += box(8.0, 12.0, *ys(22.0, 28.0), FLOOR_U, FLOOR_T)
+        f -= box(
+            TILT_X - hx - 1,
+            xi0 + 0.01,
+            *ys(LEAD_SLOT_Y[0], LEAD_SLOT_Y[1]),
+            zi0 - 0.01,
+            zi0 + 8.0,
+        )
+        f -= box(*LEAD_HOLE_X, *ys(*LEAD_HOLE_Y), FLOOR_U - 1, FLOOR_T + 0.01)
+        f -= box(
+            *LEAD_CHAN_X,
+            *ys(LEAD_DROP_Y[0], LEAD_HOLE_Y[1] + 2.5),
+            FLOOR_U - 1,
+            LEAD_CHAN_TOP,
+        )
+        for tx in LEAD_TIE_X:
+            f -= box(*tx, *ys(*LEAD_TIE_Y), LEAD_CHAN_TOP - 0.1, FLOOR_T + 1)
+    # forehead screw pilots straight down into the 6 mm pod roof (no bosses:
+    # they blocked the tilt servo's way in, B2); 5.9 mm of thread for M2 x 20
     for sy in (-1, 1):
         for bx in (-POST_X, POST_X):
-            yb = sy * POST_Y
-            f += cyl_z(TILT_X + bx, yb, a + 7.0, zi1 + 0.01, 2.2)
-            f -= cyl_z(TILT_X + bx, yb, a + 6.0, pod_z1 + 1, PILOT_M2 / 2 + 0.05)
+            f -= cyl_z(
+                TILT_X + bx, sy * POST_Y, zi1 - 0.5, pod_z1 + 1, PILOT_M2 / 2 + 0.05
+            )
     # pan horn pocket (cross horn) + hub, horn screw holes, centre access
     clr = 0.3
     pocket = box(
@@ -308,10 +403,14 @@ def make_frame() -> Part:
     for px, py in ((12, 0), (-12, 0), (0, 12), (0, -12)):
         f -= cyl_z(px, py, FLOOR_U, FLOOR_T + 1, 1.1)
     # ribbon gate at the back of the neck ring: the 14-way ribbon threads
-    # under this bridge (16 x 2.2 slot), so a tug lands on the frame, not J2
+    # under this bridge (16 x 2.2 slot), so a tug lands on the frame, not J2,
+    # then turns straight down through the floor slot under the bridge. It
+    # leaves the turning stage at r ~21 inside the neck instead of dragging
+    # over the ring's back edge (M4).
     gate = box(-23.5, -19.0, -9.5, 9.5, FLOOR_T - 0.01, FLOOR_T + 4.2)
     gate -= box(-24.0, -18.5, -8.0, 8.0, FLOOR_T - 0.02, FLOOR_T + 2.2)
     f += gate
+    f -= box(*RIBBON_SLOT_X, -8.25, 8.25, FLOOR_U - 1, FLOOR_T + 0.5)
     del z_floor_rel
     return f
 
@@ -323,8 +422,9 @@ def make_eye() -> Part:
         y0, y1 = sorted((sy * ARM_IN, sy * ARM_OUT))
         e += box(PLATE_X0, 16.0, y0, y1, -11.0, BOARD_TOP)
         e += box(15.0, BEZEL_X1, y0, y1, -4.6, 4.6)
-    # bottom bar under the stack, bezel and its struts
-    e += box(10.0, BEZEL_X1, -ARM_OUT, ARM_OUT, -13.0, -11.0)
+    # bottom bar under the bezel only: it starts in front of the lens plane, so
+    # head 1 slides up into the cradle from below past it (B1)
+    e += box(STACK_FRONT + 0.1, BEZEL_X1, -ARM_OUT, ARM_OUT, -13.0, -11.0)
     e += box(10.0, BEZEL_X1, -ARM_OUT, -ARM_IN + 0.01, -13.0, -10.0)
     e += box(10.0, BEZEL_X1, ARM_IN - 0.01, ARM_OUT, -13.0, -10.0)
     e += cyl_x(LENS_YZ[0], 0, BEZEL_X0, BEZEL_X1, BEZEL_R)
@@ -373,8 +473,7 @@ def make_forehead() -> Part:
     xr = FH_X - s.height - 2.0
     x_tab = FH_X - (s.height - s.tab_underside) + s.tab_thickness  # tab top face
     z0, z1 = FH_Z - FH_HZ, FH_Z + FH_HZ
-    pod_top = POD_Z_TOP_IN + WALL
-    POD_HX + WALL
+    pod_top = POD_TOP
     fb = box(xr, xf, -FH_Y, FH_Y, z0, z1)
     for sy in (-1, 1):
         for bx in (-POST_X, POST_X):
@@ -384,13 +483,13 @@ def make_forehead() -> Part:
         fb.edges().filter_by(Axis.Y).filter_by(lambda e: e.center().X > xf - 0.1),
     )
     # open-back cavity for both servos and their leads
-    hz = s.width / 2 + CASE_CLR
+    hz = s.width / 2 + CASE_CLR_W
     fb -= box(xr - 1, x_tab, -LEG_Y0, LEG_Y0, FH_Z - hz, FH_Z + hz)
     # windows for the case above the tabs; blind tab pilots
     for side in (-1, 1):
         loc = brow_servo_loc(side)
-        c0 = s.shaft_from_end - s.length - CASE_CLR
-        c1 = s.shaft_from_end + CASE_CLR
+        c0 = s.shaft_from_end - s.length - CASE_CLR_L
+        c1 = s.shaft_from_end + CASE_CLR_L
         ya, yb = sorted(
             ((loc * Pos(c0, 0, 0)).position.Y, (loc * Pos(c1, 0, 0)).position.Y)
         )
@@ -398,8 +497,9 @@ def make_forehead() -> Part:
         for tx in _tab_pilots(s):
             yy = (loc * Pos(tx, 0, 0)).position.Y
             fb -= cyl_x(yy, FH_Z, x_tab - 0.5, x_tab + 6.0, PILOT_M2 / 2)
-    # four M2 x 20 screws down the posts into the pod-top bosses; the heads
-    # sit on the cavity floor, driven through the top wall's access holes
+    # four M2 x 20 screws down the posts into the 6 mm pod roofs; the heads
+    # sit on the cavity floor (31.1 above the axis), the tips end at 11.1,
+    # 0.65 above the tilt servo's upper tab: 5.9 mm of thread each (M1)
     for sy in (-1, 1):
         for bx in (-POST_X, POST_X):
             fb -= cyl_z(bx, sy * POST_Y, FH_Z - 2.0, z1 + 1, 2.2)
@@ -440,7 +540,7 @@ def make_ear_cap() -> Part:
     """+Y ear cap in pan-frame coordinates (the -Y one is the same part turned)."""
     a = TILT_Z
     hx = POD_HX + WALL
-    z0, z1 = FLOOR_T, a + POD_Z_TOP_IN + WALL
+    z0, z1 = FLOOR_T, a + POD_TOP
     c = box(TILT_X - hx, TILT_X + hx, POD_Y1, POD_Y1 + 2.5, z0 + 0.3, z1)
     c = c.fillet(1.5, c.edges().filter_by(Axis.Y))
     zi0, zi1 = FLOOR_T + 0.15, a + POD_Z_TOP_IN - 0.15
@@ -482,6 +582,68 @@ def pivot_hardware() -> tuple[Part, Part]:
     return bearing, spacer + shim + head + shank
 
 
+# --- Lead and ribbon stand-ins (pan frame, world pose at pan 0) ----------------
+LEAD_T = 1.1  # one flat 3-way servo lead, 3.2 x 1.1
+
+
+def lead_paths(side: int) -> tuple[Part, Part | None]:
+    """(brow lead, tilt lead or None) on one side, as 3.2 x 1.1 flat runs.
+
+    Modelled from each boot to where the bundle leaves the frame, so the gate
+    proves the route is clear of every moving part at every pose. Below the
+    tie the bundle hangs free to the base; that part bends and is not a body.
+    """
+
+    def ys(a_, b_):
+        return sorted((side * a_, side * b_))
+
+    fz = FLOOR_T + 0.1
+    a = TILT_Z
+    cav = a + FH_Z - (SG90.width / 2 + CASE_CLR_W) + 0.1  # forehead cavity floor
+    boot_z0 = a + FH_Z - 2.0  # SG90 boot underside
+    bx0, bx1 = LEAD_BUNDLE_X
+    brow = (
+        box(-1.6, 1.6, *ys(31.2, 32.3), cav, boot_z0 + 0.1)  # down from the boot
+        + box(-10.4, 1.6, *ys(29.6, 32.8), cav, cav + LEAD_T)  # back across the cavity
+        + box(-10.4, -9.3, *ys(29.6, 32.8), fz, cav + LEAD_T)  # down the pod's back
+        + box(-10.4, bx0 + LEAD_T, *ys(29.6, 32.8), fz, fz + LEAD_T)  # pod floor
+    )
+    # down the floor hole, then inward under the plate as a 2-lead bundle
+    bundle = (
+        box(bx0, bx0 + LEAD_T, *ys(29.6, 45.6), 35.0, fz + LEAD_T)
+        + box(bx0, bx1, *ys(LEAD_DROP_Y[0], 45.6), 35.0, 37.2)
+        + box(bx0, bx1, *ys(*LEAD_DROP_Y), FLOOR_U - 1.0, 37.2)
+    )
+    brow += bundle
+    if side < 0:
+        return brow, None
+    # tilt lead: MG90D boot (pod interior, low) straight down, along the floor
+    s = MG90D
+    boot_zb = a + s.shaft_from_end - s.length  # case's lower end, world z
+    boot_y0 = TILT_CASE_Y + s.height - 5.0 - 4.0  # boot's inner face, y
+    tilt = box(-1.6, 1.6, boot_y0 + 0.5, boot_y0 + 1.6, fz, boot_zb - 6.0 + 0.1)
+    tilt += box(-1.6, bx0 + LEAD_T, boot_y0 + 0.5, boot_y0 + 3.7, fz, fz + LEAD_T)
+    return brow, tilt
+
+
+def lead_tie(side: int) -> Part:
+    """The 2.5 mm cable tie's strap where it crosses the floor top."""
+    ya, yb = sorted((side * (LEAD_TIE_Y[0] + 0.2), side * (LEAD_TIE_Y[1] - 0.2)))
+    return box(
+        LEAD_TIE_X[0][0], LEAD_TIE_X[1][1], ya, yb, FLOOR_T + 0.01, FLOOR_T + 1.1
+    )
+
+
+def ribbon_path() -> Part:
+    """The 14-way ribbon from under the gate bridge down through the floor slot
+    to just above the pan servo's rear tab (z 25.3). The tilt loop above it and
+    the pan service loop below it bend and are not bodies."""
+    x0 = RIBBON_SLOT_X[0] + 0.3
+    return box(x0, -18.6, -7.0, 7.0, FLOOR_T + 0.4, FLOOR_T + 1.4) + box(
+        x0, x0 + 1.1, -7.0, 7.0, LEDGE_Z + MG90D.tab_thickness + 0.7, FLOOR_T + 1.4
+    )
+
+
 # --- Assembly -----------------------------------------------------------------
 
 _CACHE: dict[str, Part] = {}
@@ -497,6 +659,7 @@ def _part(name: str) -> Part:
             "brow_l": lambda: T() * brow_servo_loc(1) * make_brow(1),
             "brow_r": lambda: T() * brow_servo_loc(-1) * make_brow(-1),
             "ear_cap": make_ear_cap,
+            "keeper": make_keeper,
         }[name]()
     return _CACHE[name]
 
@@ -512,6 +675,9 @@ def assembly(pan_deg: float, tilt_deg: float, brow_deg: float = 0.0) -> list[Bod
     tl = T() * tilt_servo_loc()
     bodies = [
         Body("base", _part("base"), "base", printed=True, colour=COLOURS["base"]),
+        Body(
+            "keeper", _part("keeper"), "keeper", printed=True, colour=COLOURS["keeper"]
+        ),
         Body(
             "pan_servo",
             Pos(0, 0, PAN_TOP) * fx.servo(MG90D),
@@ -550,6 +716,21 @@ def assembly(pan_deg: float, tilt_deg: float, brow_deg: float = 0.0) -> list[Bod
             allow={"tilt_horn"},
         ),
     ]
+    # the lead and ribbon runs ride the pan stage but are their own group, so
+    # the gate also proves they sit in their channels clear of the frame
+    for side, tag in ((1, "l"), (-1, "r")):
+        brow_run, tilt_run = lead_paths(side)
+        bodies.append(
+            Body(
+                f"lead_brow_{tag}", pan * brow_run, "leads", allow={f"brow_servo_{tag}"}
+            )
+        )
+        if tilt_run is not None:
+            bodies.append(
+                Body("lead_tilt", pan * tilt_run, "leads", allow={"tilt_servo"})
+            )
+        bodies.append(Body(f"lead_tie_{tag}", pan * lead_tie(side), "leads"))
+    bodies.append(Body("ribbon", pan * ribbon_path(), "leads"))
     bearing, stack = pivot_hardware()
     bodies.append(Body("bearing", pan * T() * bearing, "pan", allow={"pivot_stack"}))
     bodies += [
