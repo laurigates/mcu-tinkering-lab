@@ -13,7 +13,7 @@ I changed nothing in this entry except this file and the regenerated `output/`.
 - `python -m common.check entries/snapfit` gives **zero clashes** over pan ±90 ×
   tilt ±45. Its `check.json` is byte-identical in content to the committed
   one. The thinnest walls are 1.79 / 1.51 / 1.50 / 1.60 / 1.60 mm.
-- `python -m common.render entries/snapfit`: the four PNGs regenerate and match
+- `python -m common.quickview entries/snapfit`: the four PNGs regenerate and match
   the description.
 - Excused pairs: only `pan-servo / pan-horn` and `tilt-servo / tilt-horn`, the
   spline inside its hub. That is honest. I found no hidden clash behind them.
@@ -225,7 +225,7 @@ edits to `slide_cradle()`, `_cradle_board()` and the finger/lip constants.
 
 All five major findings are fixed in `design.py`. The gates were re-run:
 `common.check` reports **zero clashes** over pan ±90 × tilt ±45, with the same
-two excused spline pairs, and `common.render` regenerated the four PNGs. All
+two excused spline pairs, and `common.quickview` regenerated the four PNGs. All
 five STLs are now **watertight, single-body** meshes (trimesh). The thinnest
 walls are base 1.50, yoke 1.50, cradle 1.00 (a latch-peg tip, see 2.4) and
 brows 1.60 mm. The volumes are base 20.2, yoke 18.5, cradle 8.6 and brows

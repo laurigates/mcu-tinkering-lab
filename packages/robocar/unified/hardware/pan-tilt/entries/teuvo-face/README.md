@@ -304,10 +304,9 @@ features derived from it.
 ## Gates
 
 ```
-cd packages/robocar/unified/hardware/pan-tilt
-/tmp/claude-0/b123/.venv/bin/python entries/teuvo-face/design.py --brows
-/tmp/claude-0/b123/.venv/bin/python -m common.check entries/teuvo-face    # 0 clashes
-/tmp/claude-0/b123/.venv/bin/python -m common.render entries/teuvo-face
+cd tools/mechanism && uv run python ../../packages/robocar/unified/hardware/pan-tilt/entries/teuvo-face/design.py --brows
+just mechanism::check packages/robocar/unified/hardware/pan-tilt/entries/teuvo-face    # 0 clashes
+just mechanism::showcase packages/robocar/unified/hardware/pan-tilt/entries/teuvo-face
 ```
 
 `check.json` excuses eight interfaces, each deliberate:

@@ -22,7 +22,7 @@ runners-up. The five entries stay in `entries/` unchanged, as the record.
 - `common/check.py`: the clash sweep over pan ±90 × tilt ±45, by groups, with
   every `allow` excuse reported. It also runs the thinnest-wall gate
   (tools/enclosure's ray gate).
-- `common/render.py`: four matplotlib views per entry.
+- `common/quickview.py`: four matplotlib views per entry.
 
 ## The five entries
 
@@ -170,17 +170,17 @@ optional ones about $5.
 
 ## Re-running the gates
 
-From this folder (`hardware/pan-tilt/`), with the build123d venv. Do not use
-`uv run` in tools/enclosure: it pins Python 3.14.8.
+From the repo root, with tools/mechanism (`just mechanism::setup` once):
 
 ```bash
-PY=/tmp/claude-0/b123/.venv/bin/python
-$PY print/design.py              # writes print/<part>.step and .stl (the order files)
-$PY -m common.check print        # print/output/check.json; exit 1 on any clash (~6 min)
-$PY -m common.render print       # print/output/render-*.png
-$PY -m common.check entries/<slug>   # any tournament entry, same gates
-$PY -m common.render entries/<slug>
+just mechanism::build packages/robocar/unified/hardware/pan-tilt/print       # print/<part>.step and .stl (the order files)
+just mechanism::check packages/robocar/unified/hardware/pan-tilt/print       # print/output/check.json; fails on any clash (~6 min)
+just mechanism::showcase packages/robocar/unified/hardware/pan-tilt/print    # print/output/showcase/*.png
+just mechanism::check packages/robocar/unified/hardware/pan-tilt/entries/<slug>   # any tournament entry, same gates
 ```
+
+`python -m common.check|showcase|quickview <dir>` from this folder runs the
+same modules; `common/` puts tools/mechanism on the path.
 
 Entries regenerate their own STL/STEP into `entries/<slug>/output/` with
 `python design.py` (gitignored). Only `print/` commits its STL and STEP files.

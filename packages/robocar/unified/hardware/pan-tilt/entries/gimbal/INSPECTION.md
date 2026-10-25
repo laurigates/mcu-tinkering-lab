@@ -11,7 +11,7 @@ with my own scripts. I did not rely on the README's claims.
 - `python -m common.check entries/gimbal` exits 0 with **zero clashes and zero
   `allow` excuses** over pan ±90 × tilt ±45. The thinnest walls are tower
   1.10, yoke 1.10, outrigger 2.2 and cradle 1.6 mm.
-- `python -m common.render entries/gimbal`: the four PNGs regenerate.
+- `python -m common.quickview entries/gimbal`: the four PNGs regenerate.
 - Each STL is one watertight shell with no internal voids, so MJF powder can
   escape.
 - The "no excuses" claim is honest. `bored_horn()` removes the spline from

@@ -1,7 +1,7 @@
 # Inspection: teuvo-face
 
 Independent re-check, 2026-10-25. I ran `design.py --brows`, `common.check` and
-`common.render` again from `hardware/pan-tilt/`. To test insertion paths and
+`common.quickview` again from `hardware/pan-tilt/`. To test insertion paths and
 fixture sensitivity I also ran probe scripts that import `design.py` and
 `common/` read-only (kept in the session scratchpad, not here). Nothing in
 `common/` or `design.py` was changed.

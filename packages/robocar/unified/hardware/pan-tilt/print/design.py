@@ -1511,9 +1511,9 @@ def assembly(pan_deg: float, tilt_deg: float) -> list[Body]:
             o.allow = {"pan_horn"}
     # Both free spans of the ribbon, taut, each its own group. They are gate
     # proxies, not parts, and matplotlib's per-body depth sort lets a long
-    # translucent strip wash the head out of every view, so common.render
+    # translucent strip wash the head out of every view, so common.quickview
     # leaves them out of the pictures; common.check always has them.
-    if "common.render" not in sys.modules:
+    if "common.quickview" not in sys.modules:
         out += [Body("ribbon_tilt_taut", P(ribbon_tilt_taut(tilt_deg)), "ribbon_tilt")]
         rp = ribbon_pan_taut(pan_deg)
         if rp is not None:

@@ -12,7 +12,7 @@ Yes.
 - `python -m common.check entries/wildcard` gives **zero clashes** over pan
   ±90 and tilt ±45, and the result is byte-identical to the committed
   `output/check.json`.
-- `common.render` writes the 4 PNGs.
+- `common.quickview` writes the 4 PNGs.
 - The two excuses are honest. Each is a stock horn on its own servo's spline
   (`pan_horn / pan_servo`, `tilt_horn / tilt_servo`). Nothing else is excused,
   and the gear mesh has no excuse.

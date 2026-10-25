@@ -213,7 +213,7 @@ entry. They live in the session scratchpad, not in the repo.
 
 All four major issues were fixed in `design.py`. `python design.py`, then
 `common.check` (exit 0, **zero clashes** over pan ±90 and tilt ±45, the same
-four spline excuses and no new ones) and `common.render` were re-run.
+four spline excuses and no new ones) and `common.quickview` were re-run.
 `output/check.json` and the renders are current. I also re-ran a probe of
 every pair at pan/tilt (0,0), (60,30), (-90,-45) and (90,45), same group
 included. Only the intended interfaces overlap: the splines in their hubs,

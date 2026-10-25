@@ -1,0 +1,36 @@
+# Printed mechanisms (build123d): the clash sweep, the wall gate and renders
+# for any directory holding a design.py. See the printed-mechanism skill. Run
+# from the repo root as `just mechanism::<recipe>`.
+
+_root := source_directory() / "../.."
+_run := "cd " + source_directory() + " && PYTHONPATH=" + source_directory() + " uv run --quiet"
+
+# Unit tests (pytest; the render test skips without off-screen VTK)
+test:
+    {{_run}} pytest -q
+
+# Mesa's off-screen GL for headless VTK renders (Debian/Ubuntu), and the venv
+setup:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if ! ldconfig -p | grep -q libOSMesa; then
+        if [ "$(id -u)" = 0 ]; then apt-get install -y -q libosmesa6 || (apt-get update -q && apt-get install -y -q libosmesa6); \
+        else sudo apt-get install -y -q libosmesa6; fi
+    fi
+    cd {{source_directory()}} && uv sync --quiet
+
+# Run each design.py: writes its print files (STEP/STL), e.g. a design dir
+build +designs:
+    for d in {{ prepend(_root + "/", designs) }}; do {{_run}} python "$d/design.py"; done
+
+# Clash sweep over the travel + thinnest wall per printed part, e.g. a design dir
+check +designs:
+    for d in {{ prepend(_root + "/", designs) }}; do {{_run}} python -m mechanism.check "$d" > /dev/null && echo "ok $d" || { echo "FAIL $d (see $d/output/check.json)"; exit 1; }; done
+
+# Depth-buffered VTK renders: assembled, travel poses, exploded, parts
+showcase +designs:
+    for d in {{ prepend(_root + "/", designs) }}; do {{_run}} python -m mechanism.showcase "$d"; done
+
+# Fast matplotlib views while iterating
+quickview +designs:
+    for d in {{ prepend(_root + "/", designs) }}; do {{_run}} python -m mechanism.quickview "$d"; done
