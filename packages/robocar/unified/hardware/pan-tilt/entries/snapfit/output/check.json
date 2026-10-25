@@ -1,0 +1,85 @@
+{
+  "entry": "snapfit",
+  "parts": {
+    "base": {
+      "volume_cm3": 20.765,
+      "bbox_mm": [
+        52.1,
+        73.0,
+        34.6
+      ],
+      "thinnest_mm": 1.79,
+      "thinnest_at": [
+        -22.51,
+        -4.92,
+        6.49
+      ],
+      "valid": true
+    },
+    "yoke": {
+      "volume_cm3": 13.204,
+      "bbox_mm": [
+        64.9,
+        66.3,
+        58.2
+      ],
+      "thinnest_mm": 1.51,
+      "thinnest_at": [
+        -21.39,
+        -14.18,
+        22.4
+      ],
+      "valid": true
+    },
+    "cradle": {
+      "volume_cm3": 7.896,
+      "bbox_mm": [
+        23.1,
+        38.1,
+        76.0
+      ],
+      "thinnest_mm": 1.5,
+      "thinnest_at": [
+        -5.62,
+        -14.37,
+        48.65
+      ],
+      "valid": true
+    },
+    "brow-left": {
+      "volume_cm3": 0.814,
+      "bbox_mm": [
+        6.0,
+        25.7,
+        13.2
+      ],
+      "thinnest_mm": 1.6,
+      "thinnest_at": [
+        1.19,
+        9.01,
+        99.44
+      ],
+      "valid": true
+    },
+    "brow-right": {
+      "volume_cm3": 0.814,
+      "bbox_mm": [
+        6.0,
+        25.7,
+        13.2
+      ],
+      "thinnest_mm": 1.6,
+      "thinnest_at": [
+        1.19,
+        -10.65,
+        90.16
+      ],
+      "valid": true
+    }
+  },
+  "clashes": {},
+  "excused": [
+    "pan-servo / pan-horn",
+    "tilt-servo / tilt-horn"
+  ]
+}
