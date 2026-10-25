@@ -1,0 +1,26 @@
+[project]
+name = "mechanism"
+version = "0.1.0"
+description = "Printed mechanisms in build123d: servo envelopes, a clash sweep over the travel, the wall gate and renders"
+# Not pinned to tools/enclosure's 3.14.8: that interpreter is not downloadable
+# everywhere (uv has no 3.14.8 build in the cloud sessions), and nothing here
+# needs it. The wall gate is loaded from tools/enclosure by path.
+requires-python = ">=3.13"
+dependencies = [
+    "build123d==0.13.0",
+    "matplotlib==3.11.2",
+    "pyvista==0.49.1",
+    "rtree==1.4.1",
+    "trimesh==5.1.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest==9.1.1",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

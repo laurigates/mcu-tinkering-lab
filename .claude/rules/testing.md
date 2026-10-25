@@ -43,6 +43,18 @@ files equal to what their generators write, so after a legitimate pin move run
 both `just <project>::carrier-schematic` and `just <project>::perfboard` before
 the unit suite and the hook pass. See the `carrier-pcb` skill and ADR-027.
 
+## Printed Mechanisms
+
+```bash
+just mechanism::test                  # tools/mechanism: clash sweep, servo envelopes, one render
+just mechanism::check <design dir>    # a design's clash sweep and walls; must exit 0
+```
+
+Run `mechanism::test` after touching `tools/mechanism/` or
+`tools/enclosure/enclosure/thickness.py` (both use that gate; its own tests are
+`tools/enclosure/tests/test_thickness.py`). The render test skips without
+off-screen VTK (`just mechanism::setup`). See the `printed-mechanism` skill.
+
 ## C/C++ Firmware
 
 - Static analysis via `cppcheck` (run in CI)

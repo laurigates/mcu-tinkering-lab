@@ -70,8 +70,8 @@
       ],
       "thinnest_mm": 1.0,
       "thinnest_at": [
-        0.12,
-        -1.14,
+        0.6,
+        1.79,
         53.06
       ],
       "valid": true

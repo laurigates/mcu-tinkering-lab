@@ -327,8 +327,7 @@ All of these are parameters at the top of `design.py`. Change them and rerun
 ## Regenerate
 
 ```sh
-cd packages/robocar/unified/hardware/pan-tilt/entries/workhorse
-/tmp/claude-0/b123/.venv/bin/python design.py           # output/*.step, *.stl
-cd ../.. && /tmp/claude-0/b123/.venv/bin/python -m common.check entries/workhorse
-/tmp/claude-0/b123/.venv/bin/python -m common.render entries/workhorse
+just mechanism::build packages/robocar/unified/hardware/pan-tilt/entries/workhorse   # output/*.step, *.stl
+just mechanism::check packages/robocar/unified/hardware/pan-tilt/entries/workhorse
+just mechanism::showcase packages/robocar/unified/hardware/pan-tilt/entries/workhorse
 ```

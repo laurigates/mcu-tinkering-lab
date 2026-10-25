@@ -319,4 +319,4 @@ shared fixture `common/fixtures.py`.
 - `output/check.json`: `common.check`, with **zero clashes and no excuses**
   over pan ±90 × tilt ±45, including the chassis plate and the tied-down
   ribbon.
-- `output/render-*.png`: `common.render`.
+- `output/render-*.png`: `common.quickview`.

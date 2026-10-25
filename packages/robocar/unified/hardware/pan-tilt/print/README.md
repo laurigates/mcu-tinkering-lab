@@ -141,11 +141,11 @@ and wick a drop of thin CA into each hole after tapping to harden the thread.
 `coupon.stl` has this exact web: break one on the bench before the real
 parts arrive.
 
-`check.json` reports the yoke at **0.01 mm** at (−5.85, 21.0, 47.1). That is
-a ray-cast artefact, not a wall. The point lies on the flange's top rim, at
-r 21.8 from the pan axis, and its inward ray grazes the rim's tessellated
-cylinder. The B-rep has only the flange's cylinder and its top plane there.
-With seeds 2 and 3 the same gate reads 1.00 mm, at the tilt-tab web. The
+The yoke once read **0.01 mm** at (−5.85, 21.0, 47.1): a sample on the
+flange's top rim whose inward ray grazed the rim's tessellated side facet.
+The wall gate now checks each of its thinnest readings against a ring of
+nearby points (tools/enclosure `thickness.py`) and reads the yoke at 1.0 mm,
+the tilt-tab web. The
 cradle's former 1.15 mm insert-to-slot web is gone: the slots now sit 4 mm
 from the inserts, and the cradle's thinnest reading is 1.3 mm: the floor
 of the −Y cheek under the MR128ZZ pocket, now Ø12.4 to carry its crush ribs. The repo's 2.0 mm `MIN_WALL` is a resin-case convention and does
@@ -512,12 +512,12 @@ Rejected:
 
 ## Re-running the gates
 
-From `hardware/pan-tilt/`, with the build123d venv:
+From the repo root, with tools/mechanism (`just mechanism::setup` once):
 
 ```bash
-/tmp/claude-0/b123/.venv/bin/python print/design.py     # STEP + STL into print/
-/tmp/claude-0/b123/.venv/bin/python -m common.check print   # output/check.json, about 6 min
-/tmp/claude-0/b123/.venv/bin/python -m common.render print  # output/render-*.png
+just mechanism::build packages/robocar/unified/hardware/pan-tilt/print      # STEP + STL into print/
+just mechanism::check packages/robocar/unified/hardware/pan-tilt/print      # output/check.json, about 6 min
+just mechanism::showcase packages/robocar/unified/hardware/pan-tilt/print   # output/showcase/*.png
 ```
 
 `BROWS = False` at the top of `design.py` checks the head without the

@@ -1,10 +1,13 @@
-"""Shaded PNGs of an entry's assembly, with matplotlib (no Blender needed).
+"""Quick matplotlib views of a mechanism design (no VTK or Blender needed).
 
-Printed parts in their declared colour, stand-ins grey and translucent. Writes
-``output/render-<view>.png`` per pose for comparison between entries:
-iso at rest, front at rest, and iso at the pan/tilt corner (60, 30).
+matplotlib sorts faces, not pixels, so parts can show through each other; use
+``mechanism.showcase`` for anything somebody else will look at. These run
+anywhere matplotlib does and are the fast look while iterating. Writes
+``<design dir>/output/render-{rest,rest-front,rest-back,corner}.png``: the
+rest pose from three sides and the first showcase pose (a pan/tilt's travel
+corner by default).
 
-Run: ``python -m common.render entries/<slug>`` from hardware/pan-tilt/.
+Run: ``python -m mechanism.quickview <design dir>``.
 """
 
 from __future__ import annotations
@@ -19,16 +22,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
-from common.check import load
+from mechanism.check import DEFAULT_POSES, load, rest
 
 PALETTE = ["#d9822b", "#3a7ca5", "#7a9e3d", "#b54a68", "#8a6bbf", "#c9b037", "#4aa89a"]
 VIEWS = {"iso": (24, -52), "front": (8, 0), "side": (8, -90), "back": (24, 140)}
-POSES = [
-    ("rest", 0, 0, "iso"),
-    ("rest-front", 0, 0, "front"),
-    ("corner", 60, 30, "iso"),
-    ("rest-back", 0, 0, "back"),
-]
 
 
 def _tris(part, tol=0.2):
@@ -79,18 +76,21 @@ def draw(bodies, path: Path, view: str, title: str) -> None:
 
 
 def main(argv: list[str]) -> int:
-    entry = Path(argv[0]).resolve()
-    mod = load(entry)
-    out = entry / "output"
+    design_dir = Path(argv[0]).resolve()
+    mod = load(design_dir)
+    out = design_dir / "output"
     out.mkdir(exist_ok=True)
-    for name, pan, tilt, view in POSES:
-        draw(
-            mod.assembly(pan, tilt),
-            out / f"render-{name}.png",
-            view,
-            f"{entry.name}: pan {pan}°, tilt {tilt}° ({view})",
-        )
-        print(out / f"render-{name}.png")
+    corner = getattr(mod, "SHOWCASE_POSES", DEFAULT_POSES)[0][1]
+    shots = [
+        ("rest", rest(mod), "iso"),
+        ("rest-front", rest(mod), "front"),
+        ("corner", corner, "iso"),
+        ("rest-back", rest(mod), "back"),
+    ]
+    for name, pose, view in shots:
+        path = out / f"render-{name}.png"
+        draw(mod.assembly(*pose), path, view, f"{design_dir.name}: {pose} ({view})")
+        print(path)
     return 0
 
 
