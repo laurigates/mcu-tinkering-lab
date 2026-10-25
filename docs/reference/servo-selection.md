@@ -87,9 +87,19 @@ than a micro servo does.
 The bracket in use is AliExpress item
 [1005006539573065](https://www.aliexpress.com/item/1005006539573065.html),
 listed as "Mg90s SG90 9g Steering Gear Pan Tilt Two Axis PTZ … sg90 bracket
-set". It is a 9 g micro-class bracket. It takes the SG90 (either variant), the
-MG90S and, going by the published case dimensions, the MG90D. It does not take
-an MG996R.
+set". It is a 9 g micro-class bracket. It takes the SG90 (either variant). It
+does not take an MG996R, and **it does not take the MG90D** either, although the
+case dimensions match: Lauri tried (2026-10-24), and the MG90D is too tall. The
+case outline is not the figure that decides it. TowerPro's dimension F (base
+to tab underside) is 19.8 mm on the MG90D against about 15.9 on the SG90 (the
+common SG90 drawing; not measured here): the MG90D reaches about 4 mm deeper
+below its tabs, the likely reason it does not seat (not yet checked against
+the kit itself). Compare F as well as the case and the tab span before calling
+a micro servo a drop-in. The MG90S was not tried; its F is not recorded here.
+
+The printed MG90D harness that replaces the kit, and the four other designs
+it was chosen from, are in
+[`packages/robocar/unified/hardware/pan-tilt/`](../../packages/robocar/unified/hardware/pan-tilt/README.md).
 
 ## What this means for robocar-unified
 
