@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.15](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.14...robocar-unified-v0.2.15) (2026-10-25)
+
+
+### Features
+
+* **enclosure:** captioned product renders with breakout look-alikes, and Fibo 2.0 photos ([#842](https://github.com/laurigates/mcu-tinkering-lab/issues/842)) ([ee435fe](https://github.com/laurigates/mcu-tinkering-lab/commit/ee435fe55b687a2d7ab104b652da3872b19d77d1))
+* **mechanism:** extract the pan-tilt gates into tools/mechanism ([b0383e9](https://github.com/laurigates/mcu-tinkering-lab/commit/b0383e9451180342a3d24ae3995d725b29718286))
+* **robocar-unified:** add five MG90D pan-tilt tournament entries ([2688e31](https://github.com/laurigates/mcu-tinkering-lab/commit/2688e31355e364d03663dcc141430e815ae05d7d))
+* **robocar-unified:** add shared pan-tilt harness fixtures and gates ([218b16a](https://github.com/laurigates/mcu-tinkering-lab/commit/218b16ac9ee938b4e3b442af465da06b5aa99f97))
+* **robocar-unified:** add VTK showcase renders for pan-tilt entries ([f79e85e](https://github.com/laurigates/mcu-tinkering-lab/commit/f79e85e53d15d25c1682eb012bfb60fccc43a9db))
+* **robocar-unified:** pick the gimbal pan-tilt harness for MG90D ([19854d2](https://github.com/laurigates/mcu-tinkering-lab/commit/19854d24cc34a4b355d9575a68d4fbba6904dbd0))
+
 ## [0.2.14](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.13...robocar-unified-v0.2.14) (2026-10-23)
 
 

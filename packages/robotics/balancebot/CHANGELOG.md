@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.9](https://github.com/laurigates/mcu-tinkering-lab/compare/balancebot-v0.1.8...balancebot-v0.1.9) (2026-10-25)
+
+
+### Features
+
+* **enclosure:** captioned product renders with breakout look-alikes, and Fibo 2.0 photos ([#842](https://github.com/laurigates/mcu-tinkering-lab/issues/842)) ([ee435fe](https://github.com/laurigates/mcu-tinkering-lab/commit/ee435fe55b687a2d7ab104b652da3872b19d77d1))
+* **kicad:** printable per-step perfboard build guide ([#858](https://github.com/laurigates/mcu-tinkering-lab/issues/858)) ([eb8f5a4](https://github.com/laurigates/mcu-tinkering-lab/commit/eb8f5a44146f5cab62e1eae7879f027a7d29c6ae))
+* **kicad:** route perfboard wires over free holes with splices and buses ([#857](https://github.com/laurigates/mcu-tinkering-lab/issues/857)) ([9f3693c](https://github.com/laurigates/mcu-tinkering-lab/commit/9f3693cc50f8f7e55960d7f3b6adfa90719eaac0))
+
 ## [0.1.8](https://github.com/laurigates/mcu-tinkering-lab/compare/balancebot-v0.1.7...balancebot-v0.1.8) (2026-10-23)
 
 
