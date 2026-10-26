@@ -3,7 +3,7 @@
 **Status**: proposed
 **Date**: 2026-10-23
 **Source**: conversation 2026-10-23 (four repo-reading and five web research passes, each fact-checked)
-**Confidence**: 7/10 (QR read range and decode time on the OV3660 are unmeasured)
+**Confidence**: 7/10, self-assessed (read from source, none of it run on hardware; unmeasured: QR read range, decode time and heap on the OV3660, and `gemini-3.8-flash-tts` behaviour, FR-043)
 **Related**: [PRD-014](../requirements/PRD-014-teuvo-sponsored-upgrades.md), [PRD-015](../requirements/PRD-015-teuvo-for-other-owners.md)
 
 ---
@@ -93,7 +93,12 @@ provisioning stacks.
   the legacy `wifi_config` pair or, when NVS holds none, the compile-time WiFi
   credentials from `credentials.h` (developer builds), as one entry with the
   `home` flag set, because MQTT already runs on that network. A migration
-  marker in the blob keeps this a one-time step.
+  marker in the blob keeps this a one-time step. Marker and entries land in
+  one `nvs_set_blob` and `nvs_commit`, and the legacy keys stay in place, so an
+  interrupted migration reruns at the next boot. A blob that fails to read, or
+  carries an unknown version, as an OTA rollback to an image with an older
+  blob version produces, is not used; whether the migration then rewrites it
+  is open (Open Questions).
 - Selection runs an all-channel scan, intersects it with the list, and ranks by
   RSSI plus recency minus a failure penalty. It then connects with a BSSID and
   channel hint. Reasons 15/202/204 mark a credential as suspect; 201/210/211
@@ -122,7 +127,9 @@ provisioning stacks.
 - The reconnect timer (`wifi_manager.c:52-64`) stops before any scan, because a
   scan started during a connect fails with `ESP_ERR_WIFI_STATE`.
 - On the first `IP_EVENT_STA_GOT_IP` of a boot, on any network, OTA starts,
-  including the rollback-confirm timer.
+  including the rollback-confirm timer (`OTA_STABILITY_TIMEOUT_MS`, 60 s,
+  `config.h:147`). Time spent joining does not count against it; a reset
+  within 60 s of that first `GOT_IP` still rolls back.
 - MQTT follows the link instead (§6). The client starts on every `GOT_IP` whose
   entry has the `home` flag, and stops with `esp_mqtt_client_stop()` on every
   `WIFI_EVENT_STA_DISCONNECTED`, before another network is joined.
@@ -170,27 +177,35 @@ reads the same as an API error.
   the WiFi QR code", "connected, thank you", "my key is not working", "my
   credit has run out". They are stored as 24 kHz IMA-ADPCM, at about 12 kB/s,
   so 40–60 s is about 0.5–0.7 MB. The render uses the migrated TTS request
-  (FR-043).
+  (FR-043). There is no desk-closed line: with no link no voice turn runs, so
+  nothing can ask for an upgrade, and with a link the voice turn's own reply
+  says the desk is closed (PRD-014 FR-024).
 - **Where they live.** The default set is **embedded in the app image**
   (`EMBED_FILES`). OTA updates only the app partition, and there is room for
   them (1.34 of 3.5 MB used).
 - **Voice and style.** Lines are name-free, but each clip fixes the voice and
   style it was rendered in. The embedded set uses the default persona and
   voice. A robot whose owner picks another voice or preset (PRD-015 FR-032)
-  plays the default set until it has its own. That set is rendered on the
-  device while online, into the unused `spiffs` partition (about 80 s of
-  IMA-ADPCM). A header naming the persona and voice is checked at playback
+  plays the default set until it has its own, so offline it speaks in the
+  default voice. That set is rendered on the device at the first link-up after
+  the voice or preset changes, into the unused `spiffs` partition (about 80 s
+  of IMA-ADPCM). A header naming the persona and voice is checked at playback
   before the set is preferred.
 - **When they play.** Playback goes through `audio_player`, like live TTS. A
   help request plays in `NO_KNOWN_NETWORK` or `AUTH_FAILED`. It needs the VAD
   to hear someone nearby, is rate-limited, and comes with a buzzer motif and an
-  amber LED. The key and credit lines play once on entering `NO_KEY` or
+  amber LED. With the VAD off, only the buzzer and LED signal it (Open
+  Questions). The key and credit lines play once on entering `NO_KEY` or
   `NO_CREDIT` (§3, §4).
 
 ### 6. Join from a WiFi QR code shown to the camera
 
 - **Decoding.** It uses `espressif/quirc` 1.2.0 (ISC). Its input is a
-  full-scale luma plane taken from the JPEG frames the camera already produces.
+  full-scale luma plane taken from the JPEG frames the camera already produces,
+  decoded into quirc's image buffer in PSRAM. At VGA that buffer is about
+  300 KB (640x480 bytes). With the default `QUIRC_MAX_REGIONS`, which the
+  component does not override, quirc's pixel map aliases it, and its flood-fill
+  stack adds about 5 KB (`quirc_resize()`; `h*2/3` entries of 16 bytes).
   The camera is never reconfigured to GRAYSCALE, which would need a deinit and
   init and would disturb the planner.
 - **QR mode.** It raises the frame size to VGA, inside the 64 KB JPEG buffer,
@@ -322,8 +337,8 @@ anyway.
   skill. The skill is updated in the same change, including its esp-idf#13508
   note.
 - An all-channel scan adds about 1.5 s to each connect attempt (estimate).
-- Committed clip assets go stale when the default voice or style changes, and
-  they are re-rendered by hand.
+- Committed clip assets go stale when the default voice or style, or the TTS
+  request (FR-043), changes, and they are re-rendered by hand.
 - On a network without the `home` flag, MQTT logging, status and remote
   commands are off.
 - A shown QR code is still a way to move the robot onto another network. TLS
@@ -334,7 +349,10 @@ anyway.
 
 ## Implementation
 
-In order. Each step lands with host tests where the logic is pure C.
+In order. Each step lands with host tests where the logic is pure C. FR
+numbers continue from PRD-014 and PRD-015, and each step below is one FR. The
+order across all three Teuvo documents, including which PRD-014 and PRD-015
+work waits on which step here, is the sequenced plan in PRD-014 § Phases.
 
 0. FR-043: the TTS migration off `gemini-3.1-flash-tts-preview`, whose earliest
    shutdown is 2026-11-17. Probe `gemini-3.8-flash-tts`, not Flash-Lite, which
@@ -351,9 +369,30 @@ In order. Each step lands with host tests where the logic is pure C.
 3. FR-037: the network list, all-channel scan, console commands and the `home`
    flag (§1, §4). Issue #848.
 4. FR-040: offline clips and the help request (§5). Issue #849.
-5. FR-041: QR join (§6). Bench first: quirc decode time and read distance at
-   QVGA and VGA on the OV3660, with Android and iPhone codes. Issue #850.
+5. FR-041: QR join (§6). Bench first: quirc decode time, read distance and
+   free PSRAM and internal heap during a decode, at QVGA and VGA on the OV3660,
+   with Android and iPhone codes. If VGA does not fit, QR mode stays at QVGA.
+   Issue #850.
 6. FR-042: the hunt (§7), after the steps above have run on the bench.
+
+## Open Questions
+
+- **What happens to a blob the image cannot read?** A failed read or an
+  unknown version (§1) leaves the legacy pair as the only network the image
+  can use. Options: rerun the migration and write the blob, which restores a
+  working list but replaces it with the legacy entry and drops every network
+  added since with `wifi add`, Improv or QR join; or run from the legacy entry
+  in RAM and leave the blob untouched, which keeps the newer list for when a
+  newer image returns but leaves the older image unable to save a network
+  without overwriting it.
+- **What prompts for help when nobody is heard?** The §5 help request needs
+  the VAD to hear someone, so a lone owner with the VAD off, or a quiet room,
+  gets only the buzzer and amber LED. QR mode still starts by itself in
+  `NO_KNOWN_NETWORK`, but the 128x32 OLED has no code to show what to do.
+  Options: keep it VAD-gated, which never plays to an empty room but may never
+  reach the owner; play a short clip on a timer, not VAD-gated, which reaches a
+  lone owner but repeats to an empty room; or rely on the owner card (PRD-015
+  FR-035) plus an OLED prompt, which adds OLED code to `robocar-unified`.
 
 ## Related
 
