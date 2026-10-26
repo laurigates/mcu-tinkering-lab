@@ -2,7 +2,7 @@
 
 **Status**: draft
 **Created**: 2026-10-23
-**Confidence**: 5/10 (the regulatory reading is interpretation, not legal advice; unit costs are estimates)
+**Confidence**: 5/10, self-assessed. What holds it down: the regulatory reading is interpretation, not legal advice; the cost table is list prices with no measured usage (FR-034); no second robot has shared the broker; the billing topology under the Tier-1 cap is unsettled (Open Questions)
 
 ---
 
@@ -79,7 +79,9 @@ says.
    all. *Interpretation:* CRA recital 15 counts monetising through a software
    platform as commercial activity. Selling paid upgrades through Teuvo's
    firmware (PRD-014) could therefore turn gifts into supplies. PRD-014 keeps
-   its desk off by default for that reason.
+   its desk off by default for that reason. Off by default narrows this but is
+   not a safe harbour: shipping the capability may still count, and enabling
+   it on a unit Lauri supplied would (interpretation).
 4. **A toy is out.** *Interpretation:* a named, talking robot leans toward
    "toy" (Toy Safety Regulation 2025/2509 definition; Directive 2009/48/EC
    until 1.8.2030). A toy also brings EN 18031-2 parental control, CRA Annex
@@ -128,7 +130,15 @@ says.
   - a persisted VAD on/off setting.
 
   Offline lines (ADR-028 §5) use the default voice until a matching set has
-  been rendered.
+  been rendered. They are name-free, so a rename needs no new set. A robot
+  with another voice or preset speaks them in the default voice until its own
+  set is rendered (ADR-028 §5); the setup page says so (FR-035).
+
+  The overlay is one versioned NVS blob, written with a single set-and-commit.
+  ESP-IDF NVS keeps a single key's write atomic across power loss, so an
+  interrupted write leaves the old overlay or the new one. A blob with an
+  unknown version is ignored and the compiled-in persona runs; `reset factory`
+  is the recovery.
 - **Name substitution.** Briefs and fallback lines take `{name}` and
   `{name_gen}` placeholders. Finnish inflects the name (Teuvo, Teuvon,
   Teuvolle), so lines are written to need only the nominative and the
@@ -188,6 +198,14 @@ sends is then informational. The Mosquitto ACL:
 
   Pattern lines apply to every user, so the `concierge` user's write on
   `teuvo/concierge/status` comes from the first one.
+
+  On the robot, `commands` is the logger's own command topic
+  (`mqtt_logger.c:516-518`). The other three take 3 of the 4
+  `mqtt_logger_subscribe()` slots (`MQTT_LOGGER_MAX_SUBSCRIPTIONS`,
+  `mqtt_logger.c:41`), so a fifth subscription needs the cap raised. A full
+  table returns `ESP_ERR_NO_MEM`, which `ota_manager.c:111` ignores today.
+  Every caller checks the return, and a host test registers the full set and
+  asserts it fits.
 - **`user concierge`:** `topic write teuvo/+/upgrade/facts`,
   `topic read teuvo/+/upgrade/request` and `topic read teuvo/+/status`. The
   status grant lets PRD-014 FR-025 republish a robot's facts when it comes
@@ -212,7 +230,11 @@ a model change needs an OTA.
 
 The service holds one **paid** Gemini key, on a billing account separate from
 Lauri's personal one. A Tier-1 cap of $250/month pauses every project on its
-billing account.
+billing account. At the reference month below, one billing account passes it
+at 4 robots in 2027 ($308), before the five-robot threshold at which FR-034 is
+built, and at 7 in 2026 ($287), soon after it. The route B fleet account has
+the same limit. The per-device caps the proxy sets add up to less than the
+account cap, so one device cannot pause the rest.
 
 **On the robot.** It calls the proxy instead of
 `generativelanguage.googleapis.com`. All four endpoints already go through
@@ -233,7 +255,9 @@ read-protected eFuse HMAC key, so the secret cannot be copied off the chip.
   Unverified for ER 2;
 - logs usage per device for billing and keeps no request content;
 - returns 402 when a device's cap is reached, and Teuvo plays his credit clip
-  (ADR-028 §3–§5).
+  (ADR-028 §3–§5). The robot treats 402 as `NO_CREDIT` and makes no
+  turn-driven Gemini calls in that state, so a capped device fails closed
+  locally instead of retrying against the proxy.
 
 **Cost per robot, estimated** at list prices on 2026-10-22, before any
 measurement:
@@ -256,7 +280,10 @@ or TTS. They become relevant if #619 moves conversation to Live.
 
 ### FR-035: Owner onboarding and notices
 
-These are one printed card plus a setup page. They state:
+These are one printed card plus a setup page. The card carries the adults-only,
+privacy, AI, people-nearby and mute/reset notices and a pointer to the setup
+page for a robot that has lost its network. The connecting steps live on the
+setup page, written after the ADR-028 §6 bench results. They state:
 
 - **Adults only.** The unit is for adult-only households, and why: the Gemini
   terms.
@@ -285,6 +312,9 @@ These are one printed card plus a setup page. They state:
   - A phone hotspot must be 2.4 GHz, and it is added like any other network.
 - **Mute and reset.** How to mute Teuvo (`voice vad off persist`, or power
   off) and how to factory-reset (`reset factory`).
+- **Offline voice** (setup page). A robot with another voice or preset
+  speaks its offline lines in the default voice until its own set is rendered
+  (FR-032).
 
 ### FR-036: Open-hardware build pack (route A)
 
@@ -345,6 +375,11 @@ This is not scheduled. Each item would be done before a first unit is sold:
 | 3 | If route B: per-robot capped projects first; FR-034 proxy only past about five robots, after a week of measured usage |
 | 4 | Route C, only after the checklist is costed and accepted |
 
+These phases are not independent of the other two documents: the prompt-budget
+test in phase 1 builds against ADR-028's TTS migration (FR-043, #844).
+PRD-014's Phases section holds the sequenced plan across PRD-014, PRD-015 and
+ADR-028.
+
 ## Acceptance Criteria
 
 - [ ] Two robots run on one broker for 24 h with distinct ids, topics and mDNS
@@ -364,13 +399,38 @@ This is not scheduled. Each item would be done before a first unit is sold:
 
 - Will any Teuvo, Lauri's own included, be used where children are present or
   likely to talk to it? The Gemini and Vertex terms decide this before any
-  design does.
+  design does. The options:
+  - an adult-only household as a stated precondition, with the owner
+    attesting to it at handover (route B) or in the setup guide (route A), and
+    a documented refusal when the household does not qualify. This adds a
+    handover step and keeps Gemini;
+  - a non-Gemini or self-hosted backend for households with children. Its
+    terms must permit consumer and under-18 use, which nobody has checked for
+    any provider. It needs a request adapter as well as FR-034's base-URL
+    change, because the other providers' request formats differ, and a second
+    prompt budget and offline voice.
 - Route A only, or also B? With per-robot projects, or the recipient's own
   project? Would route C ever be worth a lab quote?
+- Which billing topology carries route B and the proxy? One fleet account
+  passes the Tier-1 cap at 7 robots in 2026 and 4 in 2027 (FR-034). The
+  options are one billing account per robot (no shared pause, more accounts to
+  run), a fleet account on a higher tier, if that tier's cap is larger (one
+  bill, still one shared cap), or the recipient's own project (no exposure for
+  Lauri, and he is not controller).
 - Is Lauri's own robot on a billed Gemini project today?
+- Does any monetisation stay in the robot firmware? Keeping PRD-014's desk in
+  firmware, off by default, needs a legal opinion on the commercial line
+  (Route C item 9) before it is enabled on a unit Lauri supplied. Moving all of
+  it to the concierge keeps the firmware of gifted units free of it, and
+  changes PRD-014 FR-024's capture in the voice turn.
 - May units given away have eFuses burned for NVS encryption and device
   identity? This is irreversible and limits reflashing through the web flasher.
 - Which presets ship? How many personalities and voices, in which languages?
+  PRD-014's templates and filter stems, the offline clips and FR-032's
+  nominative/genitive names are all Finnish today. A Finnish-only v1, stated on
+  the setup page, needs no new fields. More languages need a `lang` field in
+  the facts and the persona, template and stem sets per language, and offline
+  clips rendered per language.
 - Should units ever ship with 18650 cells?
 
 ## Related Documents
