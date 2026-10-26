@@ -32,6 +32,11 @@
       "matchPackageNames": ["actions/python-versions"],
       "matchUpdateTypes": ["minor", "major"],
       "enabled": false
+    },
+    {
+      "description": "Leave requires-python alone: it is each project's supported-interpreter floor, not a dependency. Pinned to one exact interpreter (#610), it failed every job and machine whose Python differed by a patch, and each Python release reopened the line (#735).",
+      "matchDepTypes": ["requires-python"],
+      "enabled": false
     }
   ],
   "pre-commit": {
