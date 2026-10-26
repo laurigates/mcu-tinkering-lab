@@ -124,7 +124,14 @@ jobs:
         working-directory: packages/robocar/simulation
         run: uv sync --extra dev
 
+      # gitleaks (`--staged`) and check-credentials (`git diff --cached`) read
+      # only staged files, and a CI checkout stages nothing, so here they would
+      # scan nothing and still print Passed. They stay on as local commit
+      # hooks; in CI the gitleaks job in security-secrets.yml scans each PR's
+      # commits.
       - name: Run pre-commit hooks
+        env:
+          SKIP: gitleaks,check-credentials
         run: pre-commit run --all-files --show-diff-on-failure
 
   test-python-simulation:

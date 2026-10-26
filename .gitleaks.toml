@@ -1,6 +1,12 @@
 # Gitleaks configuration for mcu-tinkering-lab
 # Suppresses false positives while maintaining security scanning
 
+# Load gitleaks' built-in rules. A file holding only [[allowlists]] loads zero
+# rules, and every scan then reports "no leaks found" whatever it reads. The
+# canary step in security-secrets.yml fails CI if that happens again.
+[extend]
+useDefault = true
+
 [[allowlists]]
 description = "ESPHome secrets example template - contains dummy values only"
 paths = [
