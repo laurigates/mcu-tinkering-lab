@@ -22,7 +22,7 @@ dependencies = [
 
 [project.optional-dependencies]
 train = [
-    "torch==2.11.0",
+    "torch==2.13.0",
     "torchvision==0.26.0",
 ]
 quantize = [
