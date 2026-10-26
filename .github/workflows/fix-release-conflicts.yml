@@ -10,5 +10,10 @@ on:
 jobs:
   fix-conflicts:
     uses: laurigates/.github/.github/workflows/reusable-fix-release-conflicts.yml@main
+    # App token, the same credentials sync-ai-rules.yml uses. The previous
+    # secrets.MY_RELEASE_PLEASE_TOKEN was never created, so this ran on
+    # GITHUB_TOKEN.
+    with:
+      app-id: ${{ vars.RELEASE_PLEASE_CLIENT_ID }}
     secrets:
-      RELEASE_PLEASE_TOKEN: ${{ secrets.MY_RELEASE_PLEASE_TOKEN }}
+      APP_PRIVATE_KEY: ${{ secrets.RELEASE_PLEASE_PRIVATE_KEY }}
