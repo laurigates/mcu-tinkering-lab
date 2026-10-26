@@ -28,7 +28,7 @@ train = [
 quantize = [
     # B4 — pinned at slice time once the ESP-PPQ install path is exercised
     "esp-ppq",
-    "onnx==1.17.0",
+    "onnx==1.22.0",
     "onnxruntime==1.25.1",
 ]
 dev = [
@@ -36,7 +36,7 @@ dev = [
     "pytest-cov==7.1.0",
     "ruff==0.15.12",
     "ty",
-    "onnx==1.17.0",
+    "onnx==1.22.0",
     "onnxscript==0.7.0",
 ]
 
