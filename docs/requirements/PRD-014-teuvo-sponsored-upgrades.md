@@ -2,7 +2,12 @@
 
 **Status**: draft
 **Created**: 2026-10-23
-**Confidence**: 6/10 (legal points are interpretation, not legal advice; no part of the flow has run)
+**Confidence**: 6/10, self-assessed. Legal points are interpretation, not
+legal advice, and no part of the flow has run. Unverified: that a Payment
+Link's consent checkbox reaches the Checkout Session (Flow), Anthropic's
+reading of intermediation (Constraints), the `__REQUEST__` format on the live
+model (FR-024), the cost of a planning run (FR-028) and every lead time
+(FR-031).
 
 ---
 
@@ -53,12 +58,12 @@ read on 2026-10-23.
 | Private MobilePay may not send or receive money for commercial or business purposes | Lauri's personal MobilePay cannot take these payments; every Vipps MobilePay merchant product needs a Y-tunnus and a business account | MobilePay terms v1.10 §4.4 (20.10.2026); developer.vippsmobilepay.com applying-for-services |
 | A collection from the public with nothing given in return is a *rahankeräys*, which a single private person may not run | The planning fee is sold as a **commissioned design service**: the payer receives the plan. Never called *lahjoitus* (donation). A build fee needs its own consideration (see `BUILD_QUOTED` below) | Rahankeräyslaki 863/2019 §2; Vero guide on pienkeräys (2022) |
 | A standing, priced, public offer very likely counts as business activity (*elinkeinotoiminta*) | Lauri is a trader under KSL chapter 6. He owes pre-contract information, a 14-day withdrawal right, and a withdrawal function reachable for the whole period (6:14 a, in force 19.6.2026). Planning may start inside the withdrawal period only on the consumer's express request and acknowledgement (6:15–6:16). Before planning starts, he confirms each contract on a durable medium with the pre-contract information and that request (6:13) | Vero VH/8236/00.01.00/2024; KSL 38/1978 (Finlex) |
-| No VAT is due while turnover is at most €20,000 in the current and previous year | No VAT on invoices until then; resold parts count toward turnover | Vero VH/1581/00.01.00/2024 |
+| No VAT is due while turnover is at most €20,000 in the current and previous year | No VAT on invoices until then. The threshold counts all of Lauri's business turnover, not only this desk's, and resold parts count toward it | Vero VH/1581/00.01.00/2024 |
 | The repo is public | No names, contact details, invoices or payment references in issues, PRs, dispatch inputs or Actions logs | REST API: `visibility: public` |
 | No direct exhortation to children to buy | Teuvo never pitches upgrades. He answers an explicit request from an adult, and the feature is off unless switched on | UCPD 2005/29/EC Annex I point 28 |
 | Gemini API users must be 18+, and an API client may not be "likely to be accessed by" under-18s | Applies to Teuvo whatever this PRD does; an open question below | Gemini API Additional Terms (2026-03-23) |
 | Developers building products or services "should use API key authentication", and customers offering Claude Code in their services "may not pay for, resell, or intermediate Claude usage on their end users' behalf" | Customer-paid runs bill to a Console organisation, preferably through OIDC federation, otherwise through an API key held only as an environment secret (FR-028). *Interpretation:* whether a run Lauri performs for a paying requester counts as intermediating is open. Confirm with Anthropic sales before Phase 1 | code.claude.com/docs/en/legal-and-compliance |
-| Free and open-source software that its manufacturer monetises can count as supplied "in the course of a commercial activity" | The upgrade desk is **off by default** in every published image and enabled per robot over serial. Payment happens on the payer's phone, never on the robot. This also keeps Teuvo outside RED 3(3)(f), which covers equipment that "enables the holder or user to transfer money" (interpretation) | CRA 2024/2847 recital 15; RED Delegated Reg. 2022/30 Art 1(3) |
+| Free and open-source software that its manufacturer monetises can count as supplied "in the course of a commercial activity" | The upgrade desk is **off by default** in every published image and enabled per robot over serial. *Interpretation:* off by default narrows the commercial-activity reading but does not remove it. Whether enabling the desk for a paying requester makes the published firmware a commercial supply is open (PRD-015 Open Questions), and a legal opinion (PRD-015 Route C item 9) comes before enabling it on a unit Lauri supplied or changing the default. Payment happens on the payer's phone, never on the robot. This also keeps Teuvo outside RED 3(3)(f), which covers equipment that "enables the holder or user to transfer money" (interpretation) | CRA 2024/2847 recital 15; RED Delegated Reg. 2022/30 Art 1(3) |
 
 ## Goals
 
@@ -126,7 +131,11 @@ exits: EXPIRED, WITHDRAWN, REFUNDED, FAILED
 
 - **Who may set `PAID` and `BUILD_PAID`.** Only two writers: Lauri's
   authenticated action and, from Phase 2, a verified Stripe webhook (FR-027).
-  Nothing the person says to Teuvo can set them.
+  Nothing the person says to Teuvo can set them. Every transition is a
+  compare-and-set on the current state in one SQLite transaction, so a webhook
+  that arrives after Lauri's *mark paid* finds `PAID` and changes nothing.
+  `BUILD_PAID` is unreachable while `BUILD_QUOTED` is off; its evidence and
+  consent rules are set with the build-fee question.
 - **`AWAITING_PAYMENT`, `APPROVED` and `PLANNING`.** The concierge sets
   `AWAITING_PAYMENT` when the order page first serves the order's Payment
   Link. It sets `APPROVED` when the run's `teuvo-planning` deployment is
@@ -140,12 +149,19 @@ exits: EXPIRED, WITHDRAWN, REFUNDED, FAILED
 - **Before dispatch.** An order records `consent_at` and
   `confirmation_sent_at`, and dispatch requires both. `consent_at` comes from
   the Stripe session's `consent.terms_of_service = accepted`, whose checkbox
-  carries the KSL 6:15 request and acknowledgement. After it, the concierge
-  e-mails the payer the contract confirmation: the pre-contract information,
-  the request and acknowledgement, the withdrawal notice and the per-order URL.
-- **The exits are terminal.** On `WITHDRAWN` or `REFUNDED`, the concierge
-  cancels any waiting or running planning run for that order. No run outcome
-  moves an order out of an exit.
+  carries the KSL 6:15 request and acknowledgement. Phase 0 checks that the
+  field arrives: a sandbox payment through such a link, then a session
+  retrieve showing `consent.terms_of_service = "accepted"`. If it does not,
+  dispatch stays blocked until consent is captured another way, such as a
+  hosted Checkout Session or a checkbox on the order page. After it, the
+  concierge e-mails the payer the contract confirmation: the pre-contract
+  information, the request and acknowledgement, the withdrawal notice and the
+  per-order URL.
+- **The exits.** `EXPIRED`, `WITHDRAWN` and `REFUNDED` are terminal. On
+  `WITHDRAWN` or `REFUNDED`, the concierge cancels any waiting or running
+  planning run for that order. No run outcome moves an order out of an exit.
+  Which move leaves `FAILED` (Lauri's *mark refunded* to `REFUNDED`, or a
+  re-run back to `PAID`) depends on the Prices open question.
 - **`BUILD_QUOTED` needs its own consideration.** If the build goes into
   Lauri's Teuvo, the quote must say what the payer gets for that fee (for
   example their name on the silkscreen, or the built module); otherwise the fee
@@ -158,12 +174,16 @@ exits: EXPIRED, WITHDRAWN, REFUNDED, FAILED
 
 ## Features
 
+FR numbers continue in PRD-015 (FR-032–FR-036) and ADR-028 (FR-037–FR-043).
+An FR here is a feature area; the testable units are the acceptance criteria
+and the issues under Phases.
+
 ### FR-024: Upgrade-request capture in the voice turn
 
 When the desk is enabled and MQTT is connected, the voice-turn system prompt
 allows a second sentinel next to `__IGNORE__`. MQTT is connected only on a
 `home` network (ADR-028 §6). The reply opens with `__REQUEST__`, then one
-English line `<category> | <summary ≤160 chars>`, then the spoken Finnish
+English line `<category> | <summary ≤160 bytes>`, then the spoken Finnish
 reply. A pure-C splitter in `voice_history.c` style separates the parts. The
 device publishes `{req_id, device_id, category, summary, lang}` to
 `teuvo/<device_id>/upgrade/request` at QoS 1.
@@ -171,7 +191,10 @@ device publishes `{req_id, device_id, category, summary, lang}` to
 - **Explicit requests only.** The model emits the sentinel only for an explicit
   request addressed to Teuvo. It never volunteers or suggests a paid upgrade.
   The instruction also asks it to leave out names; Lauri's text approval
-  (FR-026) is the control, this is only a first filter.
+  (FR-026) is the control, this is only a first filter. The line is untrusted
+  input: the splitter on the device and the concierge each reject a category
+  outside the FR-026 enum or a summary over 160 bytes, with host tests for
+  both.
 - **No delivery promise from the model.** The prompt offers `__REQUEST__`
   only while MQTT is connected and `teuvo/concierge/status` is `online`;
   otherwise Teuvo says the desk is closed right now. The concierge's MQTT
@@ -186,9 +209,11 @@ device publishes `{req_id, device_id, category, summary, lang}` to
   after the timeout has said it failed.
 - **Probe first.** Probe the reply format live, with an audio part, on
   `gemini-flash-latest` before building on it. It is a moving alias
-  (`.claude/rules/gemini-api.md` §1), so re-probe after it moves. Function
-  calling on the voice turn, or Gemini Live input transcription (#619), can
-  replace the sentinel later.
+  (`.claude/rules/gemini-api.md` §1), so re-probe after it moves. A reply that
+  opens with `__REQUEST__` but fails the splitter publishes nothing, and the
+  device speaks only "En saanut viestiä perille", so a format drift fails
+  closed. Function calling on the voice turn, or Gemini Live input
+  transcription (#619), can replace the sentinel later.
 - **Topics.** The topics and the broker ACL come from PRD-015 FR-033. Within
   `teuvo/<id>/upgrade/`, the robot may publish only `request` and read only
   `facts`. Only the concierge may write `facts`. `robocar/commands` is never
@@ -206,17 +231,20 @@ phrase. The concierge refuses to publish more than 900 bytes.
 The firmware subscribes through `mqtt_logger_subscribe()`. Its callback gains
 `total_data_len` and `current_data_offset`, so a fragment check like
 `mqtt_command_extract_line()`'s can see fragments. `mqtt_logger_init()` sets
-`buffer.size` explicitly; the ESP-IDF default is 1024 bytes. The firmware
-validates the document against a fixed schema.
+`buffer.size` explicitly (the ESP-IDF default is 1024 bytes), large enough
+that a 900-byte document with its topic and header arrives in one event. A
+fragmented delivery is dropped and counts as no facts; a host test feeds a
+900-byte document whole and in fragments and asserts both outcomes. The
+firmware validates the document against a fixed schema.
 
 - **Fail closed.** The concierge keeps `seq` in SQLite, so it never repeats
   across restarts. It republishes the facts every 10 minutes with freshly
   rendered ETA phrases, and at once when the robot's status topic reports it
   online (it reads `teuvo/+/status`, PRD-015 FR-033). It also holds a retained
-  `teuvo/concierge/status` of `online`, with a
-  retained Last Will of `offline`, and publishes `offline` itself on a clean
-  stop. The robot counts a document as new when its `seq` differs from the last
-  one it accepted. It treats the facts as absent:
+  `teuvo/concierge/status` of `online`, with a retained Last Will of
+  `offline`, and publishes `offline` itself on a clean stop. The robot counts a
+  document as new when its `seq` differs from the last one it accepted. It
+  treats the facts as absent:
   - until the first delivery after boot or after any MQTT disconnect;
   - while the concierge status is not `online`;
   - when no new `seq` has arrived within 20 minutes on its own uptime clock.
@@ -244,21 +272,24 @@ validates the document against a fixed schema.
 - **A second layer on every other reply.** While the desk is on, every other
   reply loses any sentence that contains:
   - a digit;
-  - a Finnish number word in any case, including the gradated stems
-    (yksi/yhde-/yhtä, kaksi/kahde-/kahta, kolm-, neljä-, viisi/viide-,
-    kuusi/kuude-, seitsem-, kahdeks-, yhdeks-, kymmen-, sata/sada-,
-    tuhat/tuhanne-);
+  - an English number word as a whole word (one to ten, hundred, thousand),
+    or a Finnish one in any case, including the gradated stems (yksi/yhde-/yhtä,
+    kaksi/kahde-/kahta, kolm-, neljä-, viisi/viide-, kuusi/kuude-, seitsem-,
+    kahdeks-, yhdeks-, kymmen-, sata/sada-, tuhat/tuhanne-);
   - a money word (hint-/hinn-, maks-, rah-, euro, €, sentti, palkkio,
     kallis/kallii-, halpa/halva-, ilmai-, veloit-, lasku-, kustann-);
   - a time word (huome-, viiko-/viikk-, kuukau-, weekday and month stems);
   - an order-state word (tilau-; tilaa, tilasi, tilannut, tilattu, tilataan;
     kuitta-/kuitat-/kuitan-; vahvist-).
 
-  Matching is on word starts. The paraphrase corpus holds gradated and
-  inflected forms of every stem, and common words the stems must not catch
-  (kuitenkin, tilanne, ensin). If nothing is left, Teuvo says a fixed "Kysyn
-  Laurilta" ("I'll ask Lauri"). This also strips numbers from ordinary
-  conversation while the desk is on, which is the price of the desk.
+  Finnish stems match on word starts and English number words as whole
+  words, case-insensitive with Ä and Ö folded. The filter is pure C under the
+  shared-core pattern (`.claude/rules/testing.md`), and the paraphrase corpus
+  is committed beside its host test. It holds gradated and inflected forms of
+  every stem, and common words the filter must not catch (kuitenkin, tilanne,
+  ensin, and tentti and tenava for "ten"). If nothing is left, Teuvo says a
+  fixed "Kysyn Laurilta" ("I'll ask Lauri"). This also strips numbers from
+  ordinary conversation while the desk is on, which is the price of the desk.
 - **Teuvo never reads PR text.** Only enums, numbers and the pre-rendered ETA
   phrase reach the device, so a PR cannot steer him.
 - **Before any of this, four truncations are fixed:**
@@ -266,12 +297,16 @@ validates the document against a fixed schema.
   2. the ~190 bytes of TTS text left under the 383-byte style
      (`gemini_tts.c:238-240`);
   3. `s_reply[SPEECH_TEXT_MAX = 320]` (`voice_turn.c:128`), which must hold a
-     sentinel line plus the spoken reply;
+     sentinel line (about 200 bytes with a 160-byte summary) plus the
+     spoken reply. It grows by that line, or the parse gets its own buffer;
+     the splitter strips the line before `speech_queue_post()`, so the speech
+     queue stays at `SPEECH_TEXT_MAX`;
   4. `tele_summary[128]` inside `prompt_text[512]` (`voice_history.c:273-280`),
-     which must hold the facts sentence.
+     which must hold the telemetry summary plus a facts sentence naming 4
+     codes at the longest category name.
 
   The fix includes a host test that budgets every persona string and these four
-  buffers, against the migrated TTS request shape (Prerequisites).
+  buffers, against the migrated TTS request shape (Phases, step 2).
 
 ### FR-026: Concierge service
 
@@ -293,6 +328,12 @@ ruff and ty. It runs on Lauri's home server. Its jobs:
   approved summary, one run at a time. The next order is dispatched only when
   the previous run has concluded. It then polls the run and
   `GET /pulls?head=…:teuvo/plan-<code>`.
+  - The one-run rule is a single SQLite lease row (order code, dispatch time,
+    run id), taken in the transaction that records the dispatch and released
+    when the run concludes. `teuvo-plan.yml` puts the code in its `run-name`,
+    so after a restart the concierge finds a leased order's run in the
+    workflow's run list. A repeat dispatch for a leased order is a no-op, and
+    a lease whose run never appears is released after a timeout.
   - A run cancelled while its order is `APPROVED` or `PLANNING` returns the
     order to `PAID`.
   - A run that started the Claude job and concluded without a PR counts as
@@ -305,22 +346,29 @@ ruff and ty. It runs on Lauri's home server. Its jobs:
 - **Mail.** It sends the contract confirmations and lost-link mail.
 - **Limits.** It caps requests per device per day and planning sessions per
   month, mirroring ADR-022's spend ceiling.
+- **Backup.** The SQLite file holds the order state and `seq`, so it is backed
+  up encrypted, and a restore is tested before Phase 1.
 
 Secrets:
 
 - **Stripe.** The concierge holds a restricted key (`rk_…`) with write on
   Products, Prices and Payment Links and read on Checkout Sessions and Invoices
-  only. Refunds stay in Lauri's Dashboard. Before setting `PAID` it re-fetches
-  the Checkout Session with this key rather than trusting a webhook payload.
+  only. Refunds stay in Lauri's Dashboard. For an order paid through a
+  Payment Link, before setting `PAID` (on Lauri's *mark paid* as on a webhook)
+  it re-fetches the Checkout Session with this key and refuses unless
+  `payment_status` is `paid`.
 - **The public surface.** The order page, the withdrawal and lost-link forms
   and the webhook receiver run in a separate process. It holds the webhook
   signing secret (`whsec_…`) and read-only access to a projection the
   concierge writes. The projection covers every open order and every order
   still inside its 14-day withdrawal period: code, state, quote, Payment Link
-  URL, token hash, paid date, hosted invoice URL and PR URL. It holds no Stripe API,
-  GitHub or mail credential. It enqueues verified webhook events and form
-  submissions. Rate limits key on `CF-Connecting-IP`, since every request
-  arrives through the tunnel.
+  URL, token hash, paid date, hosted invoice URL and PR URL. It holds no
+  Stripe API, GitHub or mail credential. It enqueues verified webhook events
+  and form submissions. Rate limits key on `CF-Connecting-IP`, since every
+  request arrives through the tunnel. The process listens only on localhost,
+  for the tunnel connector, so no direct connection can set that header. The
+  projection holds capability URLs and token hashes and is handled like a
+  secret: owner-only file mode, never logged.
 - **GitHub.** Dispatch uses a dedicated GitHub App installed only on this
   repo, with Actions: write, Pull requests: read and Metadata: read. The
   concierge holds the App's private key and mints a one-hour installation token
@@ -341,11 +389,12 @@ Secrets:
     manifest from any tag. It also interpolates `inputs.release_tag` into
     `run:` (`build-firmware.yml:217`, `:462`, `:485`), which would turn Actions:
     write into its `contents: write` token. That input moves to an `env:`
-    variable in the same change.
+    variable in the same change and is checked against the release-please
+    tag pattern before use. It lands with the guards, so the interpolation is
+    closed before the App exists.
 
-  A re-run uses the
-  original run's workflow file and is allowed for 30 days, so these guards land
-  at least 30 days before the App is created.
+  A re-run uses the original run's workflow file and is allowed for 30 days,
+  so these guards land at least 30 days before the App is created.
 - **Mail.** An SMTP or mail-API credential, used only by the concierge.
 - **The robot** holds only its broker credentials.
 
@@ -369,8 +418,8 @@ Fees (stripe.com/fi/pricing, 2026-10-23):
   won, so a contested and lost dispute costs €40.
 
 On a €50 fee that is €1.00 by card, plus €0.20 for the invoice. MobilePay
-becomes "Vipps" in Finland on 12.1.2027, and the copy on the page and in
-Teuvo's templates changes with it.
+becomes "Vipps" in Finland on 12.1.2027, so the wallet name is one string
+shared by the page copy and Teuvo's templates, changed before that date.
 
 The Vipps MobilePay ePayment API (2.49% + €0.20, HMAC-signed webhooks keyed
 to an order reference) is an option only if a Y-tunnus is registered for
@@ -422,7 +471,9 @@ repo.
   - No tool is listed bare, because a bare name allows every path. A bare
     `Read` could read `/proc/self/environ`, which holds the Claude credential;
     a deny rule `Read(//proc/**)` closes that too.
-  - `--disallowedTools Bash` removes the shell. Without it, Claude Code still
+  - `--disallowedTools Bash WebFetch WebSearch` removes the shell and the web
+    tools, so no tool sends request text to a URL. Without the Bash entry,
+    Claude Code still
     runs its built-in read-only commands (`cat`, `grep`, `find`, read-only
     `git`) with no rule. An allow rule is no better: `Bash(git *)` admits
     `git -c core.fsmonitor=<cmd>` and `git push`, and a `just` rule admits a
@@ -448,7 +499,9 @@ Nothing Claude wrote under `.git/` or `tools/` ever runs with that token.
 PR is reviewed on the subscription OAuth token.
 
 Estimated cost per run on an API key: $3–10 at Opus 5.5 rates, unmeasured.
-Actions minutes are free on a public repo.
+Phase 0 records the cost of every run, and the fee tiers (Open Questions) are
+set from those figures rather than from this estimate. Actions minutes are
+free on a public repo.
 
 ### FR-029: Upgrade-plan template
 
@@ -464,7 +517,9 @@ next firmware release.
      list in `pin_config.h`: D3, D7, TCA9548A ch5–7, PCA9685 ch14–15, and the 16
      role-free MCP23017 pins on ch2 (GPA7/GPB7 output-only; the expander is
      optional);
-  4. the power budget, checked against `.claude/rules/power-stage-checklist.md`;
+  4. the power budget, checked against `.claude/rules/power-stage-checklist.md`.
+     Claude drafts it; Lauri signs it off, as a gate-table row, before
+     `LAYOUT`;
   5. a gate table: KiCad-free CI, local KiCad gates, layout review, physical
      checks still owed;
   6. lead time;
@@ -476,6 +531,11 @@ next firmware release.
   date. That API answers from a cloud container (verified 2026-10-23). A row it
   cannot price, AliExpress lines included, is marked `unpriced`. No total is
   quoted until Lauri prices those rows.
+  - The script takes LCSC numbers only and prices at the board quantity
+    `cost.csv` states. An error, a missing field or a listing URL gives
+    `unpriced`.
+  - The endpoint is the undocumented cart API the `jlcpcb-order` skill calls,
+    so a host test runs the script against a recorded response.
 - **`cost.csv`** has one row per cost, each with source, date and an
   `estimate`/`quote` label:
   - PCBA setup €7.33 and stencil €1.38;
@@ -496,12 +556,20 @@ next firmware release.
     carrier.
   - **Phase 2.** Claude also writes a carrier variant's inputs inside the plan
     directory: `hardware.toml`, and `hardware/carrier/board.toml` at
-    `stage = "schematic"`. `tools/kicad` discovers any git-tracked `board.toml`
-    (`paths.py:1-11`). Job 2 then installs KiCad (`just kicad::setup`, about 4.5
-    minutes, verified in a cloud container on 2026-10-23), generates the
-    schematic and renders it with `kicad-cli sch export svg`, as fixed steps. A
+    `stage = "schematic"`. Job 2 then installs KiCad (`just kicad::setup`,
+    about 4.5 minutes, verified in a cloud container on 2026-10-23), generates
+    the schematic and renders it, as fixed steps. `tools/kicad` finds projects
+    only by a git-tracked `board.toml` (`paths.py`, `tracked_projects()`), and
+    the plan files are untracked until step 4, so each step names the plan
+    directory: `PYTHONPATH=tools python3 -m kicad.schematic <plan dir>`, then
+    `kicad-cli sch export svg --output <plan dir>/renders/` on the generated
+    schematic, which writes `renders/<[project] name>.svg`. A
     schematic-stage carrier has no board, so there is no board render. A Phase
-    2 plan whose `renders/` lacks the schematic SVG counts as `FAILED`.
+    2 plan whose `renders/` lacks that file counts as `FAILED`.
+  - **CI on a plan PR.** Plan PRs are not merged (Non-Goals), so `main`'s
+    tracked carriers do not grow. An open plan PR's branch runs
+    `carrier-check.yml` and `hardware-check.yml` on its variant, and the board
+    gates skip a `stage = "schematic"` carrier.
   - **Limits on a variant.** It may use only parts already in
     `docs/reference/parts/`, symbols already vendored in `tools/kicad/lib`, and
     existing pin roles. A plan that needs a new part, symbol or pin role would
@@ -513,14 +581,16 @@ A `README.md` at the upgrades root holds the template.
 ### FR-030: Link hand-off
 
 - **The sticker.** A printed QR sticker on Teuvo's chassis, about 25 mm, links
-  to the order page. Teuvo speaks only the order code and "katso tarraa
-  selässäni" ("see the sticker on my back").
+  to the order page. Being printed, it is not held to the OLED's version-1
+  limit. Teuvo speaks only the order code, one character at a time, and
+  "katso tarraa selässäni" ("see the sticker on my back").
 - **Before payment.** The page lists no orders. It takes a typed order code,
-  rate-limited, and shows only the quote, the pre-contract information and the
+  rate-limited and case-insensitive, reading I and L as 1 and O as 0
+  (Crockford), and shows only the quote, the pre-contract information and the
   Payment Link. None of these carries personal data.
 - **After payment.** The invoice and the withdrawal function sit behind a
-  per-order URL with a random 128-bit token. The URL reaches the payer three
-  ways:
+  per-order URL with a random 128-bit token, which is never logged. The URL
+  reaches the payer three ways:
   - the Payment Link's `after_completion` redirect opens it;
   - Stripe's post-payment invoice repeats it in
     `invoice_creation.invoice_data.footer`;
@@ -554,9 +624,9 @@ Until enough rows exist, the concierge uses quoted bands:
 
 When Lauri moves an order to `BUILDING`, he sets a `done_week` on it. The
 concierge renders the done phrase only from that field, and the parts phrase
-only from the bands or measurements, for example "osat tulevat ensi viikon
-lopulla" ("the parts come at the end of next week"). Until `done_week` is set,
-Teuvo says Lauri will tell when the build is done.
+only from the bands or measurements, taking a band's later end, for example
+"osat tulevat ensi viikon lopulla" ("the parts come at the end of next week").
+Until `done_week` is set, Teuvo says Lauri will tell when the build is done.
 
 ## Phases
 
@@ -566,84 +636,158 @@ Teuvo says Lauri will tell when the build is done.
 | 1 | Live Stripe, KSL texts and confirmation e-mail, invoices, FR-029 docs-only, FR-030 sticker | real, planning fee only | Lauri: approve text, mark paid, approve run, every purchase |
 | 2 | Webhook-confirmed payment, schematic-stage variants, FR-031 calibration; build quotes and `BUILD_PAID` only once the build-fee question is settled | real | Lauri: approve text, approve run, `LAYOUT`, every purchase |
 
-Phase 0 issues: #853 (device: FR-024, FR-025), #854 (concierge: FR-026, FR-027),
-#855 (workflow and guards: FR-028, FR-029).
+Phase 0 also records, per order, the cost of the run and Lauri's minutes at
+each gate.
 
-Prerequisites:
+Sequence across PRD-014, PRD-015 and ADR-028. The phases above are milestones
+on top of the steps below, and the Phase 0 demo needs steps 1–6. ADR-028
+FR-040–FR-042, PRD-015 FR-032 (#852) and PRD-015 phases 2–4 are not
+prerequisites: FR-025's budget test covers the compiled-in persona strings,
+not the overlay.
 
-- **Per-device identity** (PRD-015 FR-033, #851): the `teuvo/<device_id>/` topics,
-  the ACL and the client id.
-- **From ADR-028:** the runtime Gemini credential (FR-039, #845), services
-  armed on link-up (FR-038, #846), the network list with its `home` flag and
-  the connectivity state of §4 (FR-037, #848).
-- **The TTS model migration** (FR-043, #844). `gemini-3.1-flash-tts-preview` has a
-  listed earliest shutdown of 2026-11-17 (ai.google.dev deprecations,
-  2026-10-22).
-- **The four truncation fixes** under FR-025 (#847).
-- **MQTT broker credentials** on the robot, with `allow_anonymous false` and
-  the ACL on the broker. Before that switch:
-  - give `build-firmware.yml`'s notify step the `ci-notify` broker credential
-    (PRD-015 FR-033). The step is `continue-on-error`, so without it the step
-    would fail silently;
-  - check whether `vars.MQTT_ENABLED` lets GitHub runners publish anonymously
-    to the broker today (`build-firmware.yml:584-632`).
-- **The workflow guards** in FR-026, at least 30 days before the dispatch App
-  exists.
+1. **The workflow guards** in FR-026, with the `build-firmware.yml` input fix
+   (#855, step 1). They depend on nothing else and must be at least 30 days
+   old before the dispatch App is created.
+2. **The TTS model migration** (ADR-028 FR-043, #844).
+   `gemini-3.1-flash-tts-preview` has a listed earliest shutdown of 2026-11-17
+   (ai.google.dev deprecations, 2026-10-22).
+3. **The runtime Gemini credential** (ADR-028 FR-039, #845) and **per-device
+   identity** (PRD-015 FR-033, #851): the `teuvo/<device_id>/` topics, the ACL
+   and the client id.
+4. **Services armed on link-up** (ADR-028 FR-038, #846), then the network list
+   with its `home` flag and the connectivity state of §4 (FR-037, #848).
+5. **The four truncation fixes** under FR-025 (#847), after step 2, because
+   their budget test builds against the migrated TTS request shape.
+6. **MQTT broker credentials** on the robot, with `allow_anonymous false` and
+   the ACL on the broker, after step 3. Before that switch:
+   - give `build-firmware.yml`'s notify step the `ci-notify` broker credential
+     (PRD-015 FR-033). The step is `continue-on-error`, so without it the step
+     would fail silently;
+   - check whether `vars.MQTT_ENABLED` lets GitHub runners publish anonymously
+     to the broker today (`build-firmware.yml:584-632`).
+7. **Phase 0.** #853 (device: FR-024, FR-025) after steps 2–6. #854
+   (concierge: FR-026, FR-027) can be built against the sandbox earlier and
+   needs step 6 for the demo. #855's workflow (FR-028, FR-029) once step 1's
+   guards are 30 days old.
+8. **Phase 1**, after the Phase 0 demo, Anthropic's confirmation or a chosen
+   fallback (Open Questions, Claude billing), the fee tiers and a tested
+   restore (FR-026).
+9. **Phase 2.**
 
 ## Acceptance Criteria
 
-- [ ] Host tests pin the `__REQUEST__`/`__ORDER__` splitter, the sentence
-  filter against a paraphrase corpus, every order template, the facts schema
-  validator, the facts size limit against the MQTT buffer, and the persona and
-  buffer budgets
-- [ ] Phase 0 demo: a spoken request leads to Lauri approving the text, a
-  template quote with the right fee, a sandbox payment, Lauri's run approval, a
-  draft PR under `packages/robocar/upgrades/`, and Teuvo saying the plan is
-  ready. No step is faked on the device side
-- [ ] A run whose Claude job writes, commits or stages a path outside its plan
-  directory fails at the path guard, and no PR is opened
-- [ ] With the concierge stopped, Teuvo says he will ask Lauri and states no
-  order fact, including after a reconnect
-- [ ] Saying "I paid" to Teuvo changes no order state. A delayed payment method
-  never sets `PAID`
-- [ ] A withdrawn or refunded order is never planned, even if its run was
-  already waiting for approval
-- [ ] A payer who has lost the order link can still withdraw online within 14
-  days and receives a durable confirmation
-- [ ] No name, e-mail, phone number or invoice appears in any issue, PR,
-  dispatch input or Actions log produced by the flow
-- [ ] The desk is off in every CI, web-flasher and OTA image, and turns on only
-  through a serial command
+Each criterion names how it is checked (host test, tests, CI, review, or the
+Phase 0 demo by hand) and the Phase 0 issue that carries it.
+
+- [ ] *(host tests, #853)* Host tests pin the `__REQUEST__`/`__ORDER__`
+  splitter, the sentence filter against the committed paraphrase corpus, every
+  order template, the facts schema validator, the facts size limit against the
+  MQTT buffer, and the persona and buffer budgets
+- [ ] *(demo, all three)* Phase 0 demo: a spoken request leads to Lauri
+  approving the text, a template quote with the right fee, a sandbox payment,
+  Lauri's run approval, a draft PR under `packages/robocar/upgrades/`, and
+  Teuvo saying the plan is ready. No step is faked on the device side; the
+  confirmation e-mail is checked by hand, since sandboxes send none (FR-027)
+- [ ] *(CI, #855)* A run whose Claude job writes, commits or stages a path
+  outside its plan directory fails at the path guard, and no PR is opened
+- [ ] *(demo, #853)* With the concierge stopped, Teuvo says he will ask Lauri
+  and states no order fact, including after a reconnect
+- [ ] *(tests and demo, #854)* Saying "I paid" to Teuvo changes no order
+  state. A delayed payment method never sets `PAID`
+- [ ] *(tests, #854)* A withdrawn or refunded order is never planned, even if
+  its run was already waiting for approval
+- [ ] *(demo, #854)* A payer who has lost the order link can still withdraw
+  online within 14 days and receives a durable confirmation
+- [ ] *(review, all three)* No name, e-mail, phone number or invoice appears
+  in any issue, PR, dispatch input or Actions log produced by the flow
+- [ ] *(CI, #853)* The desk is off in every CI, web-flasher and OTA image, and
+  turns on only through a serial command
 
 ## Open Questions
 
 - **Business form.** Toiminimi or company with a Y-tunnus, a light-entrepreneur
   invoicing service, or Stripe as an individual? This decides MobilePay
-  merchant access, bookkeeping and how invoices look.
+  merchant access, bookkeeping and how invoices look. Whether an individual
+  Stripe account in Finland can enable MobilePay is unconfirmed: if it cannot,
+  staying individual makes the Phase 1 link card-only, while a Y-tunnus, or a
+  platform that already holds merchant status, keeps MobilePay.
 - **Prices.** Fee tiers for planning, the hourly build rate, quote expiry and
-  the refund policy if a parts order fails.
+  the refund policy if a parts order fails. Also:
+  - what a `FAILED` run gives the payer: a free re-run, or a refund recorded
+    as `REFUNDED`; either one goes into the terms;
+  - whether the fee carries a reserve for disputes, which cost €40 each when
+    contested and lost;
+  - the monthly caps on requests and planning sessions (FR-026);
+  - which model plans: Opus throughout, or Sonnet with escalation to Opus,
+    which lowers the per-run cost and may lower plan quality.
 - **What the payer receives.** For the planning fee: the plan, plus perhaps
   their name on the PCB silkscreen or a spoken thank-you. For a build fee:
   whose robot the build goes into, and what the payer gets for it.
-  `BUILD_QUOTED` stays off until this is answered.
+  `BUILD_QUOTED` stays off until this is answered, so until then the desk
+  earns only planning fees. Also whether build quotes stay a conditional part
+  of Phase 2, or move to a later phase gated on a written decision, which
+  leaves Phase 2 as webhook payment, schematic variants and calibration.
 - **Claude billing.** Which Console organisation bills the runs? Does
   Anthropic confirm that a paid planning run for a requester is not
-  "intermediating" Claude usage?
+  "intermediating" Claude usage? If it does not, the fallbacks are:
+  - Lauri writes plans himself: FR-028 shrinks to Job 2, and his time per
+    order grows;
+  - an open-weights model on the concierge host: no intermediation question
+    or per-run fee, but lower plan quality and longer runs;
+  - a provider whose terms allow resale: the credential and spend gate in
+    FR-028 change with it.
 - **Hosting.** Is there an always-on home server, and is the Mosquitto broker
   on it reachable from outside? Which short-link domain and mail sender?
+  The alternative is a managed concierge (Cloudflare Workers with D1, or a
+  small VPS) and a hosted broker: NAT, uptime and backups leave the home
+  server, but there is a monthly cost and personal data and secrets move to a
+  third party. Either way: where the encrypted backup (FR-026) lives, what
+  hosting costs, and what uptime a payer can expect.
 - **Phone gate.** Which channel carries the text approval and *mark paid*:
   ntfy, Telegram, or Home Assistant actionable notifications? The run approval
-  stays in GitHub Mobile.
+  stays in GitHub Mobile. Also the fallback while the channel is down, such as
+  a CLI on the concierge host for the same actions, and whether an unanswered
+  text approval expires the request or waits.
+- **When Lauri is away.** Every gate is Lauri. Options:
+  - a deputy for some gates (text approval, *mark paid*), which widens who
+    sees request text and payer data;
+  - approving several requests in one batch, which cuts the interruptions but
+    not the wait;
+  - closing the desk (concierge status `offline`, so Teuvo says it is closed)
+    and letting quotes expire. A paid order cannot expire; it waits or is
+    refunded.
 - **Bank transfer.** Is a bank-transfer rail ever needed? If so, it collects
   the payer's e-mail and the 6:15 consent before showing the IBAN, and e-mails
-  the per-order URL only after Lauri marks the order paid.
+  the per-order URL only after Lauri marks the order paid. Also open: what
+  evidence lets Lauri's *mark paid* set `PAID` without a Checkout Session.
 - **Publicity.** Is it acceptable that approved requests and plans are public
   in this repo, or should plans live in a private repo? That needs a paid
   GitHub plan for environment approvals.
 - **Who talks to Teuvo.** Will people under 18 talk to Teuvo? The Gemini terms
   restrict that independently of this PRD, and UCPD bars pitching to children.
+  Options: an adult-only household as a precondition for enabling the desk,
+  with the owner's attestation at the serial enable step, which adds a step
+  to enabling; or a non-Gemini backend, which needs a request adapter as well
+  as FR-034's base-URL change (PRD-015 Open Questions) and changes the model
+  and its terms for every turn, not only the desk.
 - **Languages.** Finnish only, or English as well? Each language needs its own
-  filter stems and templates.
+  filter stems and templates. Options: v1 Finnish-only, stated on the order
+  page and the setup page (PRD-015 FR-035); or a `lang` field in the facts
+  document with a template bundle and filter stems per language. The request
+  already carries `lang` (FR-024).
+- **Personal data.** The concierge holds payer e-mails, request summaries and
+  device ids, on a robot that records household audio and images. The answers
+  set what the concierge deletes and when, and what the order page says. Each
+  point has its options:
+  - controller and lawful basis: Lauri as sole controller on the contract, or
+    a role shared with an invoicing platform if the business form brings one;
+  - retention: one period for orders, e-mails and backups, or invoices for the
+    bookkeeping-law period and request text and e-mails for a shorter one;
+  - privacy notice: its own page linked from the order page before payment, or
+    part of the pre-contract information;
+  - data-subject requests: answered by hand from e-mail, or through a form
+    beside the lost-link form;
+  - DPIA: a short DPIA, or a recorded screening that finds none is needed.
 
 ## Related Documents
 
