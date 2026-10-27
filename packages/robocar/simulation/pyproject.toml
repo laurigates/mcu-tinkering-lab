@@ -43,7 +43,7 @@ dependencies = [
     # Computer vision and image processing
     "opencv-python==5.0.0.93",
     # Held below 12: genesis-world 1.4.3 -> moviepy requires pillow<12.0.
-    "Pillow==11.3.0",
+    "Pillow==13.0.0",
     # Communication protocols
     "websockets==17.2",
     "asyncio-mqtt==0.16.2",
