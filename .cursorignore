@@ -1,5 +1,3 @@
-.rulesync/
-rulesync.jsonc
 rulesync.local.jsonc
 rulesync.lock
 node_modules/
