@@ -49,11 +49,60 @@ with the web, and gave one PCB per order a special offer (€3.56 → €1.78); 
 second PCB in the same cart stayed at €3.56. Set currency in its gear menu
 (Settings → Currency → EUR → Save).
 
-Driving it with computer-use: `request_access` for `com.jlcpcb.www` (granted
-at full tier). Pages open as tabs inside the app; the cart is the cart icon,
-other services are under Products (JLC3DP: Products → Mechanical Services →
-"JLC3DP - 3D Printing"). The upload buttons open a native file picker; press
-Cmd+Shift+G, type the absolute path, Return, then Open.
+### Drive it over CDP, not by screenshot
+
+JLCONE is Electron 35 with no hardening fuses, and each tab is a `<webview>`
+of the real site. Started with a debug port, every tab is a Chrome DevTools
+Protocol target that [`cdp.mjs`](cdp.mjs) (Node 22+, no dependencies) can
+read, script and upload into from Bash:
+
+```sh
+osascript -e 'quit app "JLCONE"'; open -a JLCONE --args --remote-debugging-port=9222
+node .claude/skills/jlcpcb-order/cdp.mjs targets            # one line per tab
+```
+
+Quitting loses only the open tabs; the cart and quotes live on the account.
+`<match>` below is a substring of the tab's URL.
+
+| Step | Command |
+|---|---|
+| Open a page in a tab | `cdp.mjs nav <match> https://cart.jlcpcb.com/quote` (cart: `/shopcart/cart`) |
+| Upload the Gerber zip | `cdp.mjs upload jlcpcb.com/quote 'input[type=file]' <zip>` |
+| Read the detection | `cdp.mjs eval jlcpcb.com/quote 'document.body.innerText.match(/Detected[^\n]*/)?.[0]'` |
+| PCB Assembly on, then to the BOM step | `eval` `document.querySelector("#smtQuoteRef .switch-btn").click()`, set the options, then click the button whose text is `NEXT` twice (quote page, then the `smt-order` PCB tab) |
+| Upload BOM and CPL | `cdp.mjs upload smt-order 'input[type=file]@0' <bom.csv>`, then `@1` for the CPL; click `Process BOM & CPL` |
+| Read the match | `eval smt-order 'document.body.innerText.replace(/\s+/g," ").match(/Total \d+ parts detected \d+ Parts confirmed/)?.[0]'`; per-line Lib Type is cell 6 of each `tbody tr` |
+| Upload STLs to JLC3DP | `cdp.mjs nav <match> https://jlc3dp.com/3d-printing-quote`, then `upload jlc3dp 'input[type=file]' <stl>...` (one call, all files) |
+| Read the models | `cdp.mjs eval jlc3dp @jlc3dp-models.js` ([`jlc3dp-models.js`](jlc3dp-models.js)): file, size, volume and price per row, and the total |
+| Read the cart and its coupons | `cdp.mjs eval cart.jlcpcb @cart.js` ([`cart.js`](cart.js)): lines in USD and EUR, weight, available and unavailable coupons |
+| Look at the page | `cdp.mjs shot <match> out.png`, then Read the PNG; works with the app in the background |
+| Find an endpoint | `cdp.mjs net <match> 20 '/api/'` while doing the step once by hand or by `eval` click |
+
+`<css>@N` picks the Nth match. **JLCONE vets each navigation**
+(`will-frame-navigate` in its main process): `nav` from jlcpcb.com to
+cart.jlcpcb.com and on to jlc3dp.com worked, but from jlc3dp.com back to
+cart.jlcpcb.com it was cancelled, whether by `nav` or by setting
+`location.href`, and the app hands such URLs to `open-external`. Do the PCB
+work and the cart check before moving a tab to JLC3DP, or open JLC3DP from
+Products in its own tab. `nav` fails after 30 s and prints where the tab is. Observed 2026-10-27 with the integrated
+carrier: the zip was detected as "2 layer board of 100x94mm", matching the
+job file; BOM and CPL matched 25/25; three STLs loaded in one call with
+volumes matching `report.json` (tray 16.3 cm³, base 22.95 + lid 12.57 = box
+35.52) and prices summing to the €4.21 total; `cart.js` read 5 goods over 4
+cart lines. Each upload is also saved under Projects → Quotes. **Read the
+JLC3DP rows one at a time**, as `jlc3dp-models.js` does: a regex over the
+page text paired `main-tray.stl` with the lid's volume. The cart API prices in USD
+(`queryRateList` gives the EUR rate; prices shown in EUR are converted in the
+page). Its coupon query needs the selection's business types and one access
+id per good, which `cart.js` builds the way the cart page does.
+
+Computer-use stays the fallback when the app runs without the port:
+`request_access` for `com.jlcpcb.www` (granted at full tier). Pages open as
+tabs inside the app; the cart is the cart icon, other services are under
+Products (JLC3DP: Products → Mechanical Services → "JLC3DP - 3D Printing").
+The upload buttons open a native file picker; press Cmd+Shift+G, type the
+absolute path, Return, then Open. Right-click → Inspect opens DevTools in any
+tab, for a console when CDP is not set up.
 
 Fall back to the web in Chrome only when Lauri asks for it. There the
 `file_upload` tool works on the Gerber input; the PCBA BOM and CPL inputs are
@@ -64,8 +113,8 @@ and `find` them by that attribute.
 **The web session expires mid-flow, and Save to Cart then silently does
 nothing.** The header shows "Sign In" instead of "My Account". Two quotes were
 lost that way in Chrome. After every Save to Cart, in either app or browser,
-open the cart and confirm the line is there. Signing in is Lauri's step,
-never the agent's.
+confirm the line is there (`cart.js`, or open the cart; `cart.js` returns an
+error when signed out). Signing in is Lauri's step, never the agent's.
 
 ## 3. The quote, step by step
 
@@ -165,8 +214,8 @@ VAT is recomputed on the discounted amount was not checked.
 
 ## 6. Hand-off
 
-There is no cart export. Write `tmp/quotes/jlcpcb-cart-<date>.csv`: one row
-per cart line (JLC reference as shown, truncated if the page truncates it;
+There is no cart export; `cart.js` gives the lines. Write
+`tmp/quotes/jlcpcb-cart-<date>.csv`: one row per cart line (JLC reference;
 quantity; build time; EUR price; the commit each board came from; the fab
 zip's sha256 prefix; BOM and CPL paths), plus summary rows for merchandise,
 shipping, coupon and subtotal, and a row for the checkout's VAT once it has
