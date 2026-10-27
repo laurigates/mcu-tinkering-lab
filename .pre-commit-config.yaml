@@ -108,6 +108,13 @@ repos:
         files: '^tools/(refresh-idf-locks\.py|test_refresh_idf_locks\.py)$'
         pass_filenames: false
 
+      - id: jlc-blog-tests
+        name: jlc-blog unit tests
+        entry: python3 -m unittest tools/test_jlc_blog.py
+        language: system
+        files: '^tools/(jlc-blog\.py|test_jlc_blog\.py)$'
+        pass_filenames: false
+
       - id: foil-test-board
         name: foil test board tests, and its cut files match the generator
         entry: python3 -m unittest tools/test_foil_test_board.py
