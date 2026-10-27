@@ -106,8 +106,9 @@ connectivity graph per layer, then add the via and THT edges.
    - Silkscreen: JLCPCB's standard needs text 1.0 mm tall with a 0.15 mm stroke.
      0.8 mm text is allowed only on a board with `[silk] high_precision = true`,
      whose order selects that option. JLC's CAM deletes silkscreen within
-     0.15 mm of a pad or mask opening without asking, so check polarity marks
-     and pin-1 dots against the mask, not the copper.
+     0.15 mm of a pad or mask opening without asking. The `.kicad_dru` rule
+     gates the gap and `clip_silk` trims footprint lines to it, so check what
+     the trimming left: is each polarity mark and pin-1 dot still there?
    - Exposed-pad vias and paste.
    - Courtyards, and the board-edge and cut-line clearance of copper and parts.
    - Panel size and price tier.

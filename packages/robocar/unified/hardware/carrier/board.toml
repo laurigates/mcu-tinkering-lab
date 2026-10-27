@@ -290,7 +290,7 @@ texts = [
     # TB6612FNG A1: VM (pad 8) and PWMA (pad 9) at one end, GND (pads 1, 16)
     # at the other.
     { text = "VM", at = [12.6, 62.82], size = 1.0 },
-    { text = "PWMA", at = [22.9, 62.82], size = 1.0 },
+    { text = "PWMA", at = [22.7, 62.82], size = 1.0 },  # 0.15 mm off pad 9
     { text = "GND", at = [13.0, 80.6], size = 1.0 },
     { text = "GND", at = [23.0, 80.6], size = 1.0 },
     # MAX98357A A4: Vin (pad 1) and LRC (pad 7), the two ends of its row.

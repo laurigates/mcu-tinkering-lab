@@ -7,11 +7,11 @@
 # (`just <project>::carrier-check`).
 #
 # Provides private recipes; the project defines the public ones, as with pico.just:
-#   _carrier-lib, _carrier-schematic, _carrier-board, _carrier-route, _carrier-check,
+#   _carrier-lib, _carrier-schematic, _carrier-board, _carrier-silk, _carrier-route, _carrier-check,
 #   _carrier-board-checked, _carrier-review, _carrier-measure, _carrier-fab,
 #   _perfboard, _perfboard-check
 # KiCad-free: _carrier-lib, _carrier-schematic, _perfboard, _perfboard-check.
-# Need KiCad 10.0.6: _carrier-check, _carrier-fab (kicad-cli), _carrier-board,
+# Need KiCad 10.0.6: _carrier-check, _carrier-fab (kicad-cli), _carrier-board, _carrier-silk,
 # _carrier-route, _carrier-review, _carrier-measure (KiCad's bundled Python;
 # _carrier-measure's `resistance` also uv, for numpy and scipy; _carrier-route and
 # _carrier-board-checked also java >= 25 and the Freerouting 2.5.0 jar,
@@ -39,6 +39,12 @@ _carrier-schematic project:
 _carrier-board project:
     cd {{_kicad_repo}} && PYTHONPATH=tools python3 -m kicad.boardinput {{project}}
     cd {{_kicad_repo}} && {{_kicad_python}} tools/kicad/pcb/build_board.py {{project}}/hardware/carrier/output/board-input.json
+
+# Silkscreen only, on the routed board: board.toml [silk] positions and sizes,
+# and footprint lines cut 0.15 mm back from pads. The copper is left as it is.
+_carrier-silk project:
+    cd {{_kicad_repo}} && PYTHONPATH=tools python3 -m kicad.boardinput {{project}}
+    cd {{_kicad_repo}} && {{_kicad_python}} tools/kicad/pcb/build_board.py --silk-only {{project}}/hardware/carrier/output/board-input.json
 
 _carrier-route project:
     cd {{_kicad_repo}} && PYTHONPATH=tools python3 -m kicad.boardinput {{project}}

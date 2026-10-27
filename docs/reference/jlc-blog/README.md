@@ -67,11 +67,12 @@ The first group would change a board or an order that is already committed.
 2. **Silkscreen near pads is clipped without notice.** JLC removes silkscreen
    within 0.15 mm of a pad. The carriers set `min_silk_clearance 0`. The fix
    is a `.kicad_dru` rule and a measurement in `review.py`. *(fab A)*
-   **Checked in KiCad 10.0.6:** a `.kicad_dru` rule can neither widen nor
-   narrow this gap. Only the board-wide `min_silk_clearance` sets it, and it
-   applies to silk-to-silk spacing as well. At 0.15 mm, none of the three
-   committed boards has silkscreen near a mask opening, but they have 7, 13
-   and 7 silk-to-silk gaps under 0.15 mm.
+   **Done:** each carrier's `.kicad_dru` rule "silkscreen 0.15 mm clear of
+   pads" moves KiCad's `silk_over_copper` limit 0.15 mm out (measured).
+   It found 43 cases on the robocar boards. `build_board.clip_silk` now
+   cuts footprint lines back from pads. The crowded labels were moved or
+   set to 0.8 mm in `board.toml`, and `carrier-silk` applied both to the
+   routed boards with the copper unchanged (`carrier-pcb` traps 47–49).
 3. **Surface finish.**
    - Since 2026-07-30, OSP is free on 2-layer boards and ENIG is no longer
      free.

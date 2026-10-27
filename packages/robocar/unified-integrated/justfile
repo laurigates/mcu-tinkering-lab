@@ -27,6 +27,10 @@ carrier-schematic: (_carrier-schematic project_dir)
 [group: "carrier"]
 carrier-board: (_carrier-board project_dir) (_carrier-route project_dir)
 
+# Re-apply [silk] and the 0.15 mm pad clipping to the routed board, copper untouched
+[group: "carrier"]
+carrier-silk: (_carrier-silk project_dir)
+
 # Writes the check stamp CI verifies, only when every gate passes.
 #
 # ERC, DRC with schematic parity, netlist parity with hardware.toml, board nets, library drift

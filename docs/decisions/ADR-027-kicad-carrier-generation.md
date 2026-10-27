@@ -223,7 +223,9 @@ datasheets found it, with power-stage problems no gate can see. What changed:
 - **KiCad-free gates in `boardcheck`**: a pour region stays 1.0 mm from every
   hand-saw cut line, and silkscreen text is at least 1.0 mm tall (JLCPCB's
   standard), or 0.8 mm on a board that sets `[silk] high_precision = true`
-  and orders that option.
+  and orders that option. DRC holds silkscreen 0.15 mm off every pad, the
+  gap JLCPCB's CAM clears silently: each carrier's `.kicad_dru` sets it,
+  and `build_board.clip_silk` cuts footprint lines back to it.
 - **A review step before `carrier-fab`**: `just <project>::carrier-review`
   prints the layout metrics, the `pcb-reviewer` agent
   (`.claude/agents/pcb-reviewer.md`) runs the adversarial review, and

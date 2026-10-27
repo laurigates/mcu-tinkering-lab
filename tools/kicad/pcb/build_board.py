@@ -3,6 +3,7 @@
 Run with KiCad's bundled Python (3.9; it provides ``pcbnew``):
 
     $KICAD_PYTHON tools/kicad/pcb/build_board.py <board-input.json>
+    $KICAD_PYTHON tools/kicad/pcb/build_board.py --silk-only <board-input.json>
 
 ``python3 -m kicad.boardinput <project>`` writes the JSON from the hardware
 join's carrier netlist and the project's ``hardware/carrier/board.toml``;
@@ -16,7 +17,9 @@ Each keepout becomes a KiCad rule area on every copper layer that allows no
 tracks, vias, pads, footprints or zone fill, so DRC, the zone filler and
 Freerouting (through the Specctra export) all see it. Each footprint's
 silkscreen strokes under JLCPCB's 0.15 mm minimum (KiCad's stock footprints
-draw 0.12 mm, polarity marks included) are widened to it (silk.py). Each silkscreen cut line
+draw 0.12 mm, polarity marks included) are widened to it (silk.py), and
+their lines are cut back to 0.15 mm from every pad's mask opening, where
+JLCPCB's CAM would delete them (clip_silk). Each silkscreen cut line
 is drawn on both silkscreen layers with a "CUT" label beside it. Each cutout
 is a circle on Edge.Cuts inside the outline: a hole milled through the board.
 Each board.toml [[tracks]] entry is laid down as locked segments, which the
@@ -29,7 +32,8 @@ the drill file. A tab's ``clear`` rectangle is cut out of every keepout rule
 area it overlaps: a rule area that forbids pads forbids a non-plated hole too.
 
 It rewrites the board from scratch, so routing (route_board.py) must run after
-it. Python 3.9 and the stdlib plus ``pcbnew`` and its sibling ``silk`` only; it
+it. ``--silk-only`` instead re-applies the reference positions and sizes and
+the pad clipping to the routed board, leaving its copper as it is. Python 3.9 and the stdlib plus ``pcbnew`` and its sibling ``silk`` only; it
 imports nothing from tools/kicad (see tools/kicad/test_pcb_py39.py).
 """
 
@@ -285,17 +289,116 @@ def place(board, spec):
             fp.SetOrientationDegrees(rot)
         if ref in hidden:
             fp.Reference().SetVisible(False)
-        if ref in silk["ref_positions"]:
-            rx, ry = silk["ref_positions"][ref]
-            fp.Reference().SetPosition(
-                pcbnew.VECTOR2I(mm(origin[0] + rx), mm(origin[1] + ry))
-            )
-        if ref in silk["ref_sizes"]:
-            size = mm(silk["ref_sizes"][ref])
-            fp.Reference().SetTextSize(pcbnew.VECTOR2I(size, size))
-            fp.Reference().SetTextThickness(max(mm(0.16), int(size * 0.15)))
+        ref_silk(fp, ref, silk, origin)
         footprints[ref] = fp
+    # After every footprint is placed: a line is clipped against all the
+    # board's pads, as the XIAO's outline crosses the header J2 under it.
+    for fp in footprints.values():
+        clip_silk(fp, board)
     return footprints
+
+
+def ref_silk(fp, ref, silk_spec, origin):
+    """The reference's board.toml position and size, if it sets them."""
+    if ref in silk_spec["ref_positions"]:
+        rx, ry = silk_spec["ref_positions"][ref]
+        fp.Reference().SetPosition(
+            pcbnew.VECTOR2I(mm(origin[0] + rx), mm(origin[1] + ry))
+        )
+    if ref in silk_spec["ref_sizes"]:
+        size = mm(silk_spec["ref_sizes"][ref])
+        fp.Reference().SetTextSize(pcbnew.VECTOR2I(size, size))
+        fp.Reference().SetTextThickness(max(mm(0.16), int(size * 0.15)))
+
+
+SILK_MASK = ((pcbnew.F_SilkS, pcbnew.F_Mask), (pcbnew.B_SilkS, pcbnew.B_Mask))
+# Marks a footprint clip_silk() edited; kicad.check.SILK_FIELD reads it.
+SILK_FIELD = "Silk"
+
+
+def silk_lines(item):
+    """A footprint silkscreen shape as straight lines, or None if it is curved."""
+    shape = item.GetShape()
+    if shape == pcbnew.SHAPE_T_SEGMENT:
+        a, b = item.GetStart(), item.GetEnd()
+        return [((a.x, a.y), (b.x, b.y))]
+    if shape in (pcbnew.SHAPE_T_RECT, pcbnew.SHAPE_T_POLY):
+        if shape == pcbnew.SHAPE_T_RECT:
+            points = item.GetRectCorners()
+        else:
+            points = item.GetPolyPoints()
+        corners = [(c.x, c.y) for c in points]
+        return list(zip(corners, corners[1:] + corners[:1]))
+    return None
+
+
+def clip_silk(fp, board):
+    """Cut every piece of a footprint's silkscreen lines that JLCPCB would delete.
+
+    Run on a placed footprint (the pads' mask expansion needs the board). A
+    line within silk.clearance() of any board pad's mask opening on its own
+    side, the footprint's or another's, loses that piece; a rectangle or polygon outline is first split into its edges.
+    What is left of the original is drawn as new line segments and the
+    original moves to Cmts.User, not removed (Remove() breaks later SWIG calls,
+    the carrier-pcb skill's trap 1). Arcs and circles are left alone; the DRC
+    rule reports any that come too close. Returns how many shapes were cut.
+    """
+    n = 0
+    for silk_layer, mask_layer in SILK_MASK:
+        box = fp.GetBoundingBox(False)
+        box.Inflate(mm(1))
+        pads = [
+            p
+            for p in board.GetPads()
+            if p.IsOnLayer(mask_layer) and box.Intersects(p.GetBoundingBox())
+        ]
+        if not pads:
+            continue
+        for item in list(fp.GraphicalItems()):
+            if item.GetClass() != "PCB_SHAPE" or item.GetLayer() != silk_layer:
+                continue
+            if item.IsAnyFill():
+                continue
+            lines = silk_lines(item)
+            if lines is None:
+                continue
+            width = item.GetWidth()
+            shapes = [
+                (
+                    p.GetEffectiveShape(mask_layer),
+                    silk.clearance(width, p.GetSolderMaskExpansion(mask_layer)),
+                )
+                for p in pads
+            ]
+
+            def blocked(a, b):
+                seg = pcbnew.SEG(pcbnew.VECTOR2I(*a), pcbnew.VECTOR2I(*b))
+                return any(shape.Collide(seg, gap) for shape, gap in shapes)
+
+            kept = [
+                piece
+                for a, b in lines
+                for piece in silk.clip_segment(a, b, blocked, mm(0.05), mm(0.2))
+            ]
+            if kept == lines:
+                continue
+            n += 1
+            for (ax, ay), (bx, by) in kept:
+                seg = pcbnew.PCB_SHAPE(fp)
+                seg.SetShape(pcbnew.SHAPE_T_SEGMENT)
+                seg.SetStart(pcbnew.VECTOR2I(ax, ay))
+                seg.SetEnd(pcbnew.VECTOR2I(bx, by))
+                seg.SetLayer(silk_layer)
+                seg.SetWidth(width)
+                fp.Add(seg)
+            item.SetLayer(pcbnew.Cmts_User)
+    if n:
+        # KiCad now reports the footprint as differing from its library copy;
+        # kicad.check excuses that for footprints carrying this field.
+        fp.SetField(SILK_FIELD, "clipped 0.15 mm clear of pads (build_board.clip_silk)")
+        fp.GetField(SILK_FIELD).SetLayer(pcbnew.F_Fab)
+        fp.GetField(SILK_FIELD).SetVisible(False)
+    return n
 
 
 def assign_nets(board, spec, footprints):
@@ -370,11 +473,59 @@ def build(spec):
     return len(footprints)
 
 
+def move_texts(board, spec):
+    """Each board.toml [silk] texts entry's position on a loaded board.
+
+    A text is found by its content on F.SilkS; content used more than once
+    ("GND") is left where it is, as nothing says which copy moved.
+    """
+    origin = spec["origin"]
+    wanted = {}
+    for t in spec["silk"]["texts"]:
+        wanted.setdefault(t["text"], []).append(t["at"])
+    found = {}
+    for d in board.GetDrawings():
+        if d.GetClass() == "PCB_TEXT" and d.GetLayer() == pcbnew.F_SilkS:
+            found.setdefault(d.GetText(), []).append(d)
+    for text, ats in wanted.items():
+        items = found.get(text, [])
+        if len(ats) == 1 and len(items) == 1:
+            x, y = ats[0]
+            items[0].SetPosition(pcbnew.VECTOR2I(mm(origin[0] + x), mm(origin[1] + y)))
+
+
+def resilk(spec):
+    """Re-apply reference and text placement and pad clipping to the routed board.
+
+    For a silkscreen-only change (board.toml [silk] ref_positions, ref_sizes
+    or a text's position, or a change to clip_silk) to a board already routed and
+    reviewed: its copper is left exactly as it is, where `build` would need
+    a new Freerouting run. A clipped footprint's moved-aside originals are
+    skipped, so a second run cuts nothing more. Returns how many shapes
+    were cut.
+    """
+    board = pcbnew.LoadBoard(spec["pcb"])
+    by_ref = {fp.GetReference(): fp for fp in board.GetFootprints()}
+    move_texts(board, spec)
+    n = 0
+    for comp in spec["components"]:
+        fp = by_ref[comp["ref"]]
+        ref_silk(fp, comp["ref"], spec["silk"], spec["origin"])
+        n += clip_silk(fp, board)
+    save(board, spec["pcb"])
+    return n
+
+
 def main(argv):
-    if len(argv) != 2:
+    args = [a for a in argv[1:] if a != "--silk-only"]
+    if len(args) != 1:
         sys.exit(__doc__)
-    with open(argv[1]) as f:
+    with open(args[0]) as f:
         spec = json.load(f)
+    if "--silk-only" in argv:
+        n = resilk(spec)
+        print(f"clipped {n} silkscreen shapes, wrote {spec['pcb']}")
+        return
     n = build(spec)
     print(f"placed {n} footprints, wrote {spec['pcb']}")
 

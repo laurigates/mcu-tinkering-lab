@@ -14,3 +14,12 @@
 	(condition "A.Type == 'Zone' && B.Reference == 'H*'")
 	(constraint hole_clearance (min 1.9mm))
 	(constraint clearance (min 1.9mm)))
+
+# JLCPCB's CAM deletes silkscreen within 0.15 mm of a pad's mask opening without
+# asking (character-design-specifications, docs/reference/jlc-blog/). Checked in
+# KiCad 10.0.6: this rule moves silk_over_copper's limit 0.15 mm out from the
+# opening. A (layer ...) clause disables it, and min_silk_clearance only spaces
+# silkscreen from silkscreen.
+(rule "silkscreen 0.15 mm clear of pads"
+	(condition "B.Type == 'Pad'")
+	(constraint silk_clearance (min 0.15mm)))
