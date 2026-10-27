@@ -45,9 +45,14 @@ Use `secrets.yaml` + `secrets.yaml.example`:
 
 wifi_ssid: "your-wifi-ssid"
 wifi_password: "your-wifi-password"
-api_encryption_key: "generate-with-esphome"
-ota_password: "your-ota-password"
+# 32 random bytes, base64: openssl rand -base64 32
+# Also encrypts OTA uploads (`ota: - platform: esphome` with a bare `encryption:`)
+api_encryption_key: "your-generated-api-key-here"
 ```
+
+No `ota_password`: OTA reuses the API key. A config still on
+`ota: password:` is migrated per `.claude/rules/esphome-ota-encryption.md`,
+which covers the device that is already flashed, not only the YAML.
 
 ## Process
 

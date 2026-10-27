@@ -94,7 +94,7 @@ The board has no USB port. Wiring (`just ceiling-fan::pins`):
 | 5–6 | IO0, GND | jumper fitted = flash mode |
 
 ```sh
-just ceiling-fan::config        # creates secrets.yaml; fill in WiFi, API key, OTA password
+just ceiling-fan::config        # creates secrets.yaml; fill in WiFi and API key (OTA reuses it)
 just ceiling-fan::first-flash   # jumper fitted
 # remove the jumper, power-cycle
 just ceiling-fan::logs          # press buttons on the fan's remote
