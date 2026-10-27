@@ -49,11 +49,44 @@ with the web, and gave one PCB per order a special offer (€3.56 → €1.78); 
 second PCB in the same cart stayed at €3.56. Set currency in its gear menu
 (Settings → Currency → EUR → Save).
 
-Driving it with computer-use: `request_access` for `com.jlcpcb.www` (granted
-at full tier). Pages open as tabs inside the app; the cart is the cart icon,
-other services are under Products (JLC3DP: Products → Mechanical Services →
-"JLC3DP - 3D Printing"). The upload buttons open a native file picker; press
-Cmd+Shift+G, type the absolute path, Return, then Open.
+### Drive it over CDP, not by screenshot
+
+JLCONE is Electron 35 with no hardening fuses, and each tab is a `<webview>`
+of the real site. Started with a debug port, every tab is a Chrome DevTools
+Protocol target that [`cdp.mjs`](cdp.mjs) (Node 22+, no dependencies) can
+read, script and upload into from Bash:
+
+```sh
+osascript -e 'quit app "JLCONE"'; open -a JLCONE --args --remote-debugging-port=9222
+node .claude/skills/jlcpcb-order/cdp.mjs targets            # one line per tab
+```
+
+Quitting loses only the open tabs; the cart and quotes live on the account.
+`<match>` below is a substring of the tab's URL.
+
+| Step | Command |
+|---|---|
+| Open a page in a tab | `cdp.mjs nav <match> https://cart.jlcpcb.com/quote` (cart: `/shopcart/cart`) |
+| Upload Gerber, BOM, CPL or STLs | `cdp.mjs upload <match> 'input[type=file]' <path>...`: no file picker; list the inputs first when the page has several |
+| Read what the page says | `cdp.mjs eval <match> 'document.body.innerText.match(/Detected[^\n]*/)?.[0]'` |
+| Read the cart and its coupons | `cdp.mjs eval cart.jlcpcb @cart.js` ([`cart.js`](cart.js)): lines in USD and EUR, weight, available and unavailable coupons |
+| Look at the page | `cdp.mjs shot <match> out.png`, then Read the PNG; works with the app in the background |
+| Find an endpoint | `cdp.mjs net <match> 20 '/api/'` while doing the step once by hand or by `eval` click |
+
+Observed 2026-10-27: an uploaded zip was detected as "2 layer board of
+100x94mm", matching the job file; `cart.js` read 5 goods over 4 cart lines.
+Each upload is also saved under Projects → Quotes. The cart API prices in USD
+(`queryRateList` gives the EUR rate; prices shown in EUR are converted in the
+page). Its coupon query needs the selection's business types and one access
+id per good, which `cart.js` builds the way the cart page does.
+
+Computer-use stays the fallback when the app runs without the port:
+`request_access` for `com.jlcpcb.www` (granted at full tier). Pages open as
+tabs inside the app; the cart is the cart icon, other services are under
+Products (JLC3DP: Products → Mechanical Services → "JLC3DP - 3D Printing").
+The upload buttons open a native file picker; press Cmd+Shift+G, type the
+absolute path, Return, then Open. Right-click → Inspect opens DevTools in any
+tab, for a console when CDP is not set up.
 
 Fall back to the web in Chrome only when Lauri asks for it. There the
 `file_upload` tool works on the Gerber input; the PCBA BOM and CPL inputs are
@@ -64,8 +97,8 @@ and `find` them by that attribute.
 **The web session expires mid-flow, and Save to Cart then silently does
 nothing.** The header shows "Sign In" instead of "My Account". Two quotes were
 lost that way in Chrome. After every Save to Cart, in either app or browser,
-open the cart and confirm the line is there. Signing in is Lauri's step,
-never the agent's.
+confirm the line is there (`cart.js`, or open the cart; `cart.js` returns an
+error when signed out). Signing in is Lauri's step, never the agent's.
 
 ## 3. The quote, step by step
 
@@ -165,8 +198,8 @@ VAT is recomputed on the discounted amount was not checked.
 
 ## 6. Hand-off
 
-There is no cart export. Write `tmp/quotes/jlcpcb-cart-<date>.csv`: one row
-per cart line (JLC reference as shown, truncated if the page truncates it;
+There is no cart export; `cart.js` gives the lines. Write
+`tmp/quotes/jlcpcb-cart-<date>.csv`: one row per cart line (JLC reference;
 quantity; build time; EUR price; the commit each board came from; the fab
 zip's sha256 prefix; BOM and CPL paths), plus summary rows for merchandise,
 shipping, coupon and subtotal, and a row for the checkout's VAT once it has
