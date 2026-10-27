@@ -271,9 +271,11 @@ several traps below are version-specific: after a KiCad upgrade, re-run
     design. Commit after the run, or from a separate worktree.
 31. **A pour across a hand-saw cut line is copper the saw bridges.**
     boardcheck fails a `[pour]` region within 1.0 mm of a `[silk] cut_lines`
-    line (a whole-board pour meets every line) and silkscreen text under
-    0.8 mm. JLCPCB prints 1.0 mm tall, 0.15 mm stroke legibly; build_board.py
-    keeps reference strokes at 0.16 mm or more.
+    line (a whole-board pour meets every line). It also fails silkscreen text
+    under 1.0 mm, JLCPCB's standard minimum. A board whose labels need 0.8 mm
+    sets `[silk] high_precision = true`, and `carrier-fab` then prints an
+    `ORDER:` line to select JLC's paid high-precision silkscreen.
+    build_board.py keeps reference strokes at 0.16 mm or more.
 
 ### Found adding mouse-bite panels (#809)
 

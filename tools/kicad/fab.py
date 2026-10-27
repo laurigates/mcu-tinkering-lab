@@ -15,6 +15,9 @@ just dependency rather than from here. Per project, into the KiCad project's
   and `assembly/pos.csv` (front-side SMD placements);
 - `assembly/bom-jlc.csv` and `assembly/cpl-jlc.csv` (`kicad.jlc`): only the
   parts with an LCSC number, for JLCPCB assembly; skip them to hand-solder.
+
+It also prints the order options the board depends on (`order_notes`), such as
+high-precision silkscreen for text under 1.0 mm.
 """
 
 from __future__ import annotations
@@ -68,6 +71,17 @@ def zip_dir(src: Path, dest: Path) -> None:
                 z.write(f, f.name)
 
 
+def order_notes(cfg: paths.BoardConfig) -> list[str]:
+    """Order-form options the board needs that the upload itself cannot carry."""
+    notes = []
+    if cfg.data.get("silk", {}).get("high_precision") is True:
+        notes.append(
+            "select high-precision silkscreen: [silk] high_precision = true, text "
+            "down to 0.8 mm, which standard silkscreen prints unreadably"
+        )
+    return notes
+
+
 def fab(project: Path, cli: str) -> Path:
     """Write every fab output for one project; the output directory."""
     cfg = paths.load_board_config(project)
@@ -111,6 +125,8 @@ def fab(project: Path, cli: str) -> Path:
     archive = out / f"{cfg.name}-fab.zip"
     zip_dir(gerbers, archive)
     print(f"wrote {archive}")
+    for note in order_notes(cfg):
+        print(f"ORDER: {note}")
     asm = fresh_dir(out / "assembly")
     run(
         [

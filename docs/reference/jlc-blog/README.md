@@ -61,9 +61,17 @@ The first group would change a board or an order that is already committed.
    the paid high-precision option. `boardcheck.SILK_MIN_MM = 0.8`, ADR-027,
    the carrier-pcb trap and `pcb-reviewer` all use 0.8. The integrated carrier
    uses 0.8 mm text. *(fab A)*
+   **Done:** `boardcheck` now requires 1.0 mm; 0.8 mm needs
+   `[silk] high_precision = true`, which both robocar carriers set and
+   `carrier-fab` turns into an `ORDER:` line.
 2. **Silkscreen near pads is clipped without notice.** JLC removes silkscreen
    within 0.15 mm of a pad. The carriers set `min_silk_clearance 0`. The fix
    is a `.kicad_dru` rule and a measurement in `review.py`. *(fab A)*
+   **Checked in KiCad 10.0.6:** a `.kicad_dru` rule can neither widen nor
+   narrow this gap. Only the board-wide `min_silk_clearance` sets it, and it
+   applies to silk-to-silk spacing as well. At 0.15 mm, none of the three
+   committed boards has silkscreen near a mask opening, but they have 7, 13
+   and 7 silk-to-silk gaps under 0.15 mm.
 3. **Surface finish.**
    - Since 2026-07-30, OSP is free on 2-layer boards and ENIG is no longer
      free.

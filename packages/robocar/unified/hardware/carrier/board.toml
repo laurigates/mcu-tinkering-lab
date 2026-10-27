@@ -200,6 +200,10 @@ R1 = [58.4, 95.5, 0]      # buzzer series resistor
 BZ1 = [50.8, 93.6, 180]   # 12 mm buzzer, soldered to the board; "+" toward R1
 
 [silk]
+# The 0.8 mm pin labels on the 2.54 mm headers do not fit at JLCPCB's standard
+# 1.0 mm, so the order selects high-precision silkscreen (0.8 mm, 0.1 mm stroke;
+# docs/reference/jlc-blog/). carrier-fab prints the reminder.
+high_precision = true
 hidden_refs = ["H1", "H2", "H3", "H4", "H5", "H6", "H7", "H8", "H9", "H10"]
 # Seeed's reference text is below KiCad's minimum silkscreen height. Text is
 # 1.0 mm tall, JLCPCB's legible minimum, except where 1.0 mm does not fit

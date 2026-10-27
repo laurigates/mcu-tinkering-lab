@@ -103,8 +103,11 @@ connectivity graph per layer, then add the via and THT edges.
    - How separate grounds join.
 6. **Manufacturability (JLCPCB two-layer).**
    - Track and space, annular rings, drills.
-   - Silkscreen: 1.0 mm tall and 0.15 mm stroke is legible; 0.8 mm is the
-     floor.
+   - Silkscreen: JLCPCB's standard needs text 1.0 mm tall with a 0.15 mm stroke.
+     0.8 mm text is allowed only on a board with `[silk] high_precision = true`,
+     whose order selects that option. JLC's CAM deletes silkscreen within
+     0.15 mm of a pad or mask opening without asking, so check polarity marks
+     and pin-1 dots against the mask, not the copper.
    - Exposed-pad vias and paste.
    - Courtyards, and the board-edge and cut-line clearance of copper and parts.
    - Panel size and price tier.
