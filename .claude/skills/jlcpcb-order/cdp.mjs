@@ -7,7 +7,7 @@
 //   cdp.mjs targets                         list page targets
 //   cdp.mjs eval   <match> <js | @file.js>  evaluate in the page, print JSON
 //   cdp.mjs nav    <match> <url>            navigate and wait for load
-//   cdp.mjs upload <match> <css> <file>...  set files on an <input type=file>
+//   cdp.mjs upload <match> <css>[@N] <file>...  set files on an <input type=file>
 //   cdp.mjs shot   <match> <out.png>        screenshot the page
 //   cdp.mjs net    <match> <seconds> [re]   log API requests and responses
 //
@@ -83,9 +83,12 @@ switch (cmd) {
     const [selector, ...files] = rest;
     if (!files.length) die('usage: cdp.mjs upload <match> <css> <file>...');
     const c = await connect(match);
+    // "<css>@N" picks the Nth match (0-based), for pages with several inputs.
+    const [, css, nth = '0'] = selector.match(/^(.*?)(?:@(\d+))?$/);
     const { root } = await c.send('DOM.getDocument', { depth: 0 });
-    const { nodeId } = await c.send('DOM.querySelector', { nodeId: root.nodeId, selector });
-    if (!nodeId) die(`no element matches ${selector}`);
+    const { nodeIds } = await c.send('DOM.querySelectorAll', { nodeId: root.nodeId, selector: css });
+    const nodeId = nodeIds[Number(nth)];
+    if (!nodeId) die(`${nodeIds.length} element(s) match ${css}; no index ${nth}`);
     await c.send('DOM.setFileInputFiles', { nodeId, files: files.map((f) => resolve(f)) });
     console.log(`set ${files.length} file(s) on ${selector}`);
     c.close();

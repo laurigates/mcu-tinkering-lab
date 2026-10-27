@@ -67,15 +67,25 @@ Quitting loses only the open tabs; the cart and quotes live on the account.
 | Step | Command |
 |---|---|
 | Open a page in a tab | `cdp.mjs nav <match> https://cart.jlcpcb.com/quote` (cart: `/shopcart/cart`) |
-| Upload Gerber, BOM, CPL or STLs | `cdp.mjs upload <match> 'input[type=file]' <path>...`: no file picker; list the inputs first when the page has several |
-| Read what the page says | `cdp.mjs eval <match> 'document.body.innerText.match(/Detected[^\n]*/)?.[0]'` |
+| Upload the Gerber zip | `cdp.mjs upload jlcpcb.com/quote 'input[type=file]' <zip>` |
+| Read the detection | `cdp.mjs eval jlcpcb.com/quote 'document.body.innerText.match(/Detected[^\n]*/)?.[0]'` |
+| PCB Assembly on, then to the BOM step | `eval` `document.querySelector("#smtQuoteRef .switch-btn").click()`, set the options, then click the button whose text is `NEXT` twice (quote page, then the `smt-order` PCB tab) |
+| Upload BOM and CPL | `cdp.mjs upload smt-order 'input[type=file]@0' <bom.csv>`, then `@1` for the CPL; click `Process BOM & CPL` |
+| Read the match | `eval smt-order 'document.body.innerText.replace(/\s+/g," ").match(/Total \d+ parts detected \d+ Parts confirmed/)?.[0]'`; per-line Lib Type is cell 6 of each `tbody tr` |
+| Upload STLs to JLC3DP | `cdp.mjs nav <match> https://jlc3dp.com/3d-printing-quote`, then `upload jlc3dp 'input[type=file]' <stl>...` (one call, all files) |
+| Read the models | `cdp.mjs eval jlc3dp @jlc3dp-models.js` ([`jlc3dp-models.js`](jlc3dp-models.js)): file, size, volume and price per row, and the total |
 | Read the cart and its coupons | `cdp.mjs eval cart.jlcpcb @cart.js` ([`cart.js`](cart.js)): lines in USD and EUR, weight, available and unavailable coupons |
 | Look at the page | `cdp.mjs shot <match> out.png`, then Read the PNG; works with the app in the background |
 | Find an endpoint | `cdp.mjs net <match> 20 '/api/'` while doing the step once by hand or by `eval` click |
 
-Observed 2026-10-27: an uploaded zip was detected as "2 layer board of
-100x94mm", matching the job file; `cart.js` read 5 goods over 4 cart lines.
-Each upload is also saved under Projects → Quotes. The cart API prices in USD
+`<css>@N` picks the Nth match. Observed 2026-10-27 with the integrated
+carrier: the zip was detected as "2 layer board of 100x94mm", matching the
+job file; BOM and CPL matched 25/25; three STLs loaded in one call with
+volumes matching `report.json` (tray 16.3 cm³, base 22.95 + lid 12.57 = box
+35.52) and prices summing to the €4.21 total; `cart.js` read 5 goods over 4
+cart lines. Each upload is also saved under Projects → Quotes. **Read the
+JLC3DP rows one at a time**, as `jlc3dp-models.js` does: a regex over the
+page text paired `main-tray.stl` with the lid's volume. The cart API prices in USD
 (`queryRateList` gives the EUR rate; prices shown in EUR are converted in the
 page). Its coupon query needs the selection's business types and one access
 id per good, which `cart.js` builds the way the cart page does.
