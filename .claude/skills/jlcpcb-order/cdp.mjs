@@ -73,10 +73,13 @@ switch (cmd) {
   case 'nav': {
     const c = await connect(match);
     await c.send('Page.enable');
-    const loaded = new Promise((ok) => c.on((m) => m.method === 'Page.loadEventFired' && ok()));
+    const loaded = new Promise((ok) => c.on((m) => m.method === 'Page.loadEventFired' && ok(true)));
+    const timeout = new Promise((ok) => setTimeout(() => ok(false), 30_000));
     await c.send('Page.navigate', { url: rest[0] });
-    await loaded;
+    const ok = await Promise.race([loaded, timeout]);
+    const at = await evaluate(c, 'location.href');
     c.close();
+    if (!ok) die(`no load event in 30 s; the tab is at ${at}`);
     break;
   }
   case 'upload': {

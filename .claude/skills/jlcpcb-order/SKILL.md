@@ -78,7 +78,13 @@ Quitting loses only the open tabs; the cart and quotes live on the account.
 | Look at the page | `cdp.mjs shot <match> out.png`, then Read the PNG; works with the app in the background |
 | Find an endpoint | `cdp.mjs net <match> 20 '/api/'` while doing the step once by hand or by `eval` click |
 
-`<css>@N` picks the Nth match. Observed 2026-10-27 with the integrated
+`<css>@N` picks the Nth match. **JLCONE vets each navigation**
+(`will-frame-navigate` in its main process): `nav` from jlcpcb.com to
+cart.jlcpcb.com and on to jlc3dp.com worked, but from jlc3dp.com back to
+cart.jlcpcb.com it was cancelled, whether by `nav` or by setting
+`location.href`, and the app hands such URLs to `open-external`. Do the PCB
+work and the cart check before moving a tab to JLC3DP, or open JLC3DP from
+Products in its own tab. `nav` fails after 30 s and prints where the tab is. Observed 2026-10-27 with the integrated
 carrier: the zip was detected as "2 layer board of 100x94mm", matching the
 job file; BOM and CPL matched 25/25; three STLs loaded in one call with
 volumes matching `report.json` (tray 16.3 cm³, base 22.95 + lid 12.57 = box
