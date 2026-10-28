@@ -13,7 +13,10 @@ stops at the first failure and names the report:
    parity issues when it cannot load the schematic, saying so only on stdout
    (`Failed to fetch schematic netlist`). So the schematic must exist beside the
    board, that line must be absent, and the run must report
-   `Found 0 schematic parity issues`;
+   `Found 0 schematic parity issues`. One finding is excused: the
+   `lib_footprint_mismatch` of a footprint whose silkscreen build_board.py cut
+   back from the pads, which it marks with a `Silk` field (`clipped_refs`);
+   KiCad ignores fields when comparing a footprint with its library copy;
 5. `kicad.parity`: KiCad's netlist of the schematic equals the join's;
 6. `kicad.boardcheck`: board pads, values and paths equal the join's;
 7. `kicad.stamp --write`: the stamp CI verifies.
@@ -29,16 +32,20 @@ from __future__ import annotations
 import argparse
 import contextlib
 import io
+import re
 import subprocess
 import sys
 from collections.abc import Callable
 from pathlib import Path
 
-from . import boardcheck, parity, paths, schematic, stamp, vendor
+from . import boardcheck, parity, paths, schematic, sexpr, stamp, vendor
 from .errors import KicadError
 from .paths import REPO_ROOT
 
 FETCH_FAILED = "Failed to fetch schematic netlist"
+# The field build_board.py's clip_silk() puts on each footprint it edits.
+SILK_FIELD = "Silk"
+EXCUSED_FOR_CLIPPED = "lib_footprint_mismatch"
 PARITY_OK = "Found 0 schematic parity issues"
 
 
@@ -54,6 +61,56 @@ def kicad_cli() -> str:
 def run_cli(argv: list[str]) -> tuple[int, str]:
     done = subprocess.run(argv, capture_output=True, text=True)
     return done.returncode, done.stdout + done.stderr
+
+
+def clipped_refs(board_text: str) -> set[str]:
+    """References of the footprints whose silkscreen clip_silk() cut back."""
+    refs = set()
+    for _, _, block in boardcheck.footprint_blocks(board_text):
+        props = {}
+        for c in sexpr.children(block):
+            m = boardcheck._PROP.match(c.strip())
+            if sexpr.head(c)[0] == "property" and m:
+                props[sexpr.unquote(m.group(1))] = sexpr.unquote(m.group(2))
+        if SILK_FIELD in props and "Reference" in props:
+            refs.add(props["Reference"])
+    return refs
+
+
+def unexcused(report: str, clipped: set[str]) -> list[str]:
+    """The DRC report's findings that fail the gate, one string each.
+
+    Every violation counts except a library mismatch of a clipped footprint,
+    and the unconnected-pad and footprint-error counts must be 0. A report
+    without those three counts is itself a finding.
+    """
+    found = []
+    counts = re.findall(
+        r"^\*\* Found (\d+) (DRC violations|unconnected pads|Footprint errors) \*\*$",
+        report,
+        re.M,
+    )
+    if {kind for _, kind in counts} != {
+        "DRC violations",
+        "unconnected pads",
+        "Footprint errors",
+    }:
+        return [
+            "DRC report: missing its violation, unconnected-pad or footprint-error count"
+        ]
+    for n, kind in counts:
+        if kind != "DRC violations" and n != "0":
+            found.append(f"** Found {n} {kind} **")
+    section = report.split("DRC violations **", 1)[1].split("\n** Found", 1)[0]
+    for block in re.split(r"\n(?=\[)", section.strip()):
+        if not block.startswith("["):
+            continue
+        code = block[1 : block.index("]")]
+        refs = set(re.findall(r"\): Footprint (\S+)$", block, re.M))
+        if code == EXCUSED_FOR_CLIPPED and refs and refs <= clipped:
+            continue
+        found.append(block.strip())
+    return found
 
 
 def erc(cli: str, sch: Path, report: Path) -> list[str]:
@@ -99,7 +156,11 @@ def drc(cli: str, pcb: Path, sch: Path, report: Path) -> list[str]:
             f"DRC: {FETCH_FAILED!r}: KiCad did not load the schematic for parity"
         )
     if code != 0:
-        errors.append(f"DRC exit {code}: see {report}")
+        text = report.read_text(encoding="utf-8") if report.is_file() else ""
+        found = unexcused(text, clipped_refs(pcb.read_text(encoding="utf-8")))
+        if found:
+            errors.append(f"DRC exit {code}: see {report}")
+            errors += found
     if PARITY_OK not in out:
         errors.append(f"DRC: output lacks {PARITY_OK!r}")
     if errors:

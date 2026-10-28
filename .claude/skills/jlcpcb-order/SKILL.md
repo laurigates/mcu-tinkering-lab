@@ -122,6 +122,11 @@ error when signed out). Signing in is Lauri's step, never the agent's.
 2. Leave the defaults the README asks for (FR-4, 1.6 mm, HASL, 1 oz,
    Different Design 1). Minimum via 0.3 mm matches the carriers' smallest
    drill; check `grep -E '^T[0-9]+C' output/fab/*.drl`.
+   If `carrier-fab` printed `ORDER: select high-precision silkscreen` (both
+   robocar carriers: `[silk] high_precision = true`, 0.8 mm pin labels), pick
+   the high-precision silkscreen option. Standard silkscreen prints text
+   under 1.0 mm tall unreadably. Record the option's price in § 4 the first
+   time it is quoted.
 3. Open the Gerber viewer and check what the README lists (outline, holes,
    cut lines, polarity marks).
 4. PCB Assembly on → Economic → Top Side → PCBA Qty 5 or 2 (2-of-5 assembles

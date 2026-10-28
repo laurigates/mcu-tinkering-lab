@@ -212,6 +212,7 @@ def relink(board_text: str, ns: uuid.UUID) -> tuple[str, int]:
 TABLE_KEYS = {
     "outline": {"origin", "size"},
     "silk": {
+        "high_precision",
         "hidden_refs",
         "ref_positions",
         "ref_sizes",
@@ -253,10 +254,14 @@ STITCH_KEYS = {"pitch_mm", "via_um", "exclude"}
 # board's flex while sawing must not reach copper (the integrated carrier's
 # pre-fab review found GND fill at 0.0 mm).
 CUT_CLEARANCE_MM = 1.0
-# JLCPCB's legible silkscreen is 1.0 mm tall; 0.8 mm is the floor where a
-# label does not fit at 1.0 (build_board.py keeps the stroke at 0.16 mm or
-# more at any size).
-SILK_MIN_MM = 0.8
+# JLCPCB's standard silkscreen needs text 1.0 mm tall and a 0.15 mm stroke;
+# its capabilities page calls anything smaller unidentifiable. The paid
+# "high-precision characters" option prints 0.8 mm / 0.1 mm, and a board that
+# relies on it says so with [silk] high_precision = true, so the order selects
+# it (character-design-specifications, docs/reference/jlc-blog/).
+# build_board.py keeps the stroke at 0.16 mm or more at any size.
+SILK_MIN_MM = 1.0
+SILK_HIGH_PRECISION_MIN_MM = 0.8
 LIST_TABLES = ("net_classes", "keepouts", "route_keepouts", "cutouts", "tracks")
 REQUIRED = ("outline", "placement", "net_classes", "signal", "pour")
 
@@ -747,18 +752,30 @@ def validate_config(cfg: paths.BoardConfig, nl: netlist.Netlist) -> list[str]:
             errors.append(
                 f"{where}: [silk] cut_lines: {line!r} is not inside [outline]"
             )
-    for key in ("ref_sizes",):
-        for ref, v in silk.get(key, {}).items():
-            if _positive(v) and v < SILK_MIN_MM:
-                errors.append(
-                    f"{where}: [silk] {key}: {ref} is {v} mm tall; the floor is {SILK_MIN_MM} mm"
-                )
+    high_precision = silk.get("high_precision", False)
+    if not isinstance(high_precision, bool):
+        errors.append(
+            f"{where}: [silk] high_precision: {high_precision!r} must be true or false"
+        )
+        high_precision = False
+    floor = SILK_HIGH_PRECISION_MIN_MM if high_precision else SILK_MIN_MM
+    floor_note = (
+        ""
+        if high_precision
+        else f" ({SILK_HIGH_PRECISION_MIN_MM} mm with [silk] high_precision = true)"
+    )
+    for ref, v in silk.get("ref_sizes", {}).items():
+        if _positive(v) and v < floor:
+            errors.append(
+                f"{where}: [silk] ref_sizes: {ref} is {v} mm tall; "
+                f"the floor is {floor} mm{floor_note}"
+            )
     for text in silk.get("texts", []):
         if isinstance(text, dict) and _positive(text.get("size")):
-            if text["size"] < SILK_MIN_MM:
+            if text["size"] < floor:
                 errors.append(
                     f"{where}: [silk] texts: {text.get('text')!r} is {text['size']} mm "
-                    f"tall; the floor is {SILK_MIN_MM} mm"
+                    f"tall; the floor is {floor} mm{floor_note}"
                 )
     errors += _validate_cut_clearance(where, data, size)
     errors += _validate_keepouts(where, data, size)

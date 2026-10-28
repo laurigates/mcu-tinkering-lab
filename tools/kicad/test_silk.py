@@ -78,5 +78,51 @@ class StockFootprintTests(unittest.TestCase):
                     self.assertEqual(silk.widened(round(w * NM)), silk.MIN_STROKE_NM)
 
 
+class ClipTests(unittest.TestCase):
+    """clip_segment: what remains of a silkscreen line once the pieces a pad
+    would make JLCPCB's CAM delete are cut out."""
+
+    STEP = 50_000  # 0.05 mm
+    MIN = 200_000  # 0.2 mm
+
+    def clip(self, a, b, blocked):
+        return silk.clip_segment(a, b, blocked, self.STEP, self.MIN)
+
+    def test_a_line_clear_of_every_pad_is_kept_whole(self):
+        a, b = (0, 0), (2_000_000, 0)
+        self.assertEqual(self.clip(a, b, lambda p, q: False), [(a, b)])
+
+    def test_a_blocked_middle_splits_the_line_in_two(self):
+        # blocked wherever the piece reaches 0.9-1.1 mm
+        def blocked(p, q):
+            lo, hi = sorted((p[0], q[0]))
+            return lo < 1_100_000 and hi > 900_000
+
+        pieces = self.clip((0, 0), (2_000_000, 0), blocked)
+        self.assertEqual(
+            pieces, [((0, 0), (900_000, 0)), ((1_100_000, 0), (2_000_000, 0))]
+        )
+
+    def test_slivers_shorter_than_the_minimum_are_dropped(self):
+        def blocked(p, q):
+            return max(p[0], q[0]) > 150_000
+
+        self.assertEqual(self.clip((0, 0), (2_000_000, 0), blocked), [])
+
+    def test_a_fully_blocked_line_is_removed(self):
+        self.assertEqual(self.clip((0, 0), (1_000_000, 0), lambda p, q: True), [])
+
+    def test_diagonal_and_reversed_lines_keep_their_direction(self):
+        pieces = self.clip((1_000_000, 1_000_000), (0, 0), lambda p, q: False)
+        self.assertEqual(pieces, [((1_000_000, 1_000_000), (0, 0))])
+
+    def test_the_clearance_is_jlcpcbs_and_includes_half_the_stroke(self):
+        self.assertEqual(silk.PAD_CLEARANCE_NM, 150_000)
+        self.assertEqual(
+            silk.clearance(150_000, mask_nm=50_000),
+            150_000 + 75_000 + 50_000 + silk.MARGIN_NM,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -271,9 +271,11 @@ several traps below are version-specific: after a KiCad upgrade, re-run
     design. Commit after the run, or from a separate worktree.
 31. **A pour across a hand-saw cut line is copper the saw bridges.**
     boardcheck fails a `[pour]` region within 1.0 mm of a `[silk] cut_lines`
-    line (a whole-board pour meets every line) and silkscreen text under
-    0.8 mm. JLCPCB prints 1.0 mm tall, 0.15 mm stroke legibly; build_board.py
-    keeps reference strokes at 0.16 mm or more.
+    line (a whole-board pour meets every line). It also fails silkscreen text
+    under 1.0 mm, JLCPCB's standard minimum. A board whose labels need 0.8 mm
+    sets `[silk] high_precision = true`, and `carrier-fab` then prints an
+    `ORDER:` line to select JLC's paid high-precision silkscreen.
+    build_board.py keeps reference strokes at 0.16 mm or more.
 
 ### Found adding mouse-bite panels (#809)
 
@@ -373,6 +375,36 @@ several traps below are version-specific: after a KiCad upgrade, re-run
     Derive it on chosen pads with a map, `--pads 1,2,3,4,5=8`; the entry
     records `pads`. The pins alone would not do: collinear pads cannot tell a
     turn from a mirror, so `--pads` refuses them.
+
+### Found enforcing JLCPCB's silkscreen rules (#877)
+
+47. **JLCPCB deletes silkscreen within 0.15 mm of a pad, and KiCad's defaults
+    pass it.** `silk_over_copper` fires only on actual overlap of the mask
+    opening. The carriers' `.kicad_dru` rule "silkscreen 0.15 mm clear of
+    pads" (`(condition "B.Type == 'Pad'")`, `silk_clearance` 0.15 mm) moves
+    that limit out by 0.15 mm (measured to 0.01 mm in KiCad 10.0.6 and
+    10.0.7). Two lookalikes do nothing. Any `(layer ...)` clause disables the
+    rule, and the board-wide `min_silk_clearance` spaces silkscreen only from
+    silkscreen. Turned on, the rule found 43 deletions on the robocar boards,
+    among them the labels R18-R24 against U6's pins and the XIAO outline
+    over J2.
+48. **Clipping a footprint's silkscreen makes it differ from its library
+    copy.** `build_board.clip_silk` cuts lines back from every pad on the
+    board, its own or another footprint's, and moves each original to
+    Cmts.User; `Remove()` is off-limits (trap 1). Any change of geometry or
+    layer raises `lib_footprint_mismatch`; a stroke width change does not,
+    which is why widening (trap 41) never did. DRC exclusions do not help,
+    because kicad-cli counts excluded findings in its exit code. So
+    `clip_silk` marks each footprint it edits with a hidden `Silk` field,
+    which KiCad does not compare, and `kicad.check` excuses the mismatch only
+    on marked footprints.
+49. **A silkscreen fix need not reroute the board.** `just
+    <project>::carrier-silk` (`build_board.py --silk-only`) re-applies
+    `[silk]` positions, sizes and unique text positions, and clips the
+    footprint lines, on the routed board. Tracks, vias and zones stay byte
+    for byte. A second run clips nothing more, so the `Silk` field appears
+    only on a board that was clipped from its committed state. Re-applying a
+    position also rounds away KiCad's 1 nm drift (−3.900001 → −3.9).
 
 ## Verify the gate can fail
 

@@ -131,6 +131,10 @@ carrier-schematic: (_carrier-schematic project_dir)
 [group: "carrier"]
 carrier-board: (_carrier-board project_dir) (_carrier-route project_dir)
 
+# Re-apply [silk] and the 0.15 mm pad clipping to the routed board, copper untouched
+[group: "carrier"]
+carrier-silk: (_carrier-silk project_dir)
+
 # Autoroute and pour an already-placed board
 [group: "carrier"]
 carrier-route: (_carrier-route project_dir)

@@ -200,6 +200,10 @@ R1 = [58.4, 95.5, 0]      # buzzer series resistor
 BZ1 = [50.8, 93.6, 180]   # 12 mm buzzer, soldered to the board; "+" toward R1
 
 [silk]
+# The 0.8 mm pin labels on the 2.54 mm headers do not fit at JLCPCB's standard
+# 1.0 mm, so the order selects high-precision silkscreen (0.8 mm, 0.1 mm stroke;
+# docs/reference/jlc-blog/). carrier-fab prints the reminder.
+high_precision = true
 hidden_refs = ["H1", "H2", "H3", "H4", "H5", "H6", "H7", "H8", "H9", "H10"]
 # Seeed's reference text is below KiCad's minimum silkscreen height. Text is
 # 1.0 mm tall, JLCPCB's legible minimum, except where 1.0 mm does not fit
@@ -286,7 +290,7 @@ texts = [
     # TB6612FNG A1: VM (pad 8) and PWMA (pad 9) at one end, GND (pads 1, 16)
     # at the other.
     { text = "VM", at = [12.6, 62.82], size = 1.0 },
-    { text = "PWMA", at = [22.9, 62.82], size = 1.0 },
+    { text = "PWMA", at = [22.7, 62.82], size = 1.0 },  # 0.15 mm off pad 9
     { text = "GND", at = [13.0, 80.6], size = 1.0 },
     { text = "GND", at = [23.0, 80.6], size = 1.0 },
     # MAX98357A A4: Vin (pad 1) and LRC (pad 7), the two ends of its row.

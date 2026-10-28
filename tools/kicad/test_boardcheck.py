@@ -461,20 +461,40 @@ class ConfigTests(unittest.TestCase):
         )
 
     def test_silk_text_height_floor(self):
-        """JLCPCB prints 1.0 mm text legibly; 0.8 mm is the floor where a label
-        will not fit at 1.0, and nothing goes below it."""
+        """JLCPCB's standard silkscreen needs 1.0 mm text; its paid
+        high-precision option prints 0.8 mm, and a board declares it."""
         self.fails(
             lambda d: d.setdefault("silk", {}).update(
-                ref_sizes={next(iter(d["placement"])): 0.6}
+                ref_sizes={next(iter(d["placement"])): 0.8}
             ),
-            "is 0.6 mm tall; the floor is 0.8 mm",
+            "is 0.8 mm tall; the floor is 1.0 mm (0.8 mm with [silk] high_precision = true)",
         )
         self.fails(
             lambda d: d.setdefault("silk", {}).update(
-                texts=[{"text": "X", "at": [5, 5], "size": 0.7}]
+                texts=[{"text": "X", "at": [5, 5], "size": 0.9}]
+            ),
+            "[silk] texts: 'X' is 0.9 mm tall; the floor is 1.0 mm",
+        )
+        self.fails(
+            lambda d: d.setdefault("silk", {}).update(
+                high_precision=True, texts=[{"text": "X", "at": [5, 5], "size": 0.7}]
             ),
             "[silk] texts: 'X' is 0.7 mm tall; the floor is 0.8 mm",
         )
+        self.fails(
+            lambda d: d.setdefault("silk", {}).update(high_precision="yes"),
+            "[silk] high_precision: 'yes' must be true or false",
+        )
+
+    def test_silk_high_precision_allows_0_8(self):
+        def edit(d):
+            d.setdefault("silk", {}).update(
+                high_precision=True,
+                ref_sizes={next(iter(d["placement"])): 0.8},
+                texts=[{"text": "X", "at": [5, 5], "size": 0.8}],
+            )
+
+        self.assertEqual(boardcheck.validate_config(self.with_data(edit), self.nl), [])
 
     def test_pour_region_layers_and_priority(self):
         """A region may name its own layers, and overlap one on a shared layer
