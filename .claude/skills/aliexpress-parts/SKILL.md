@@ -27,9 +27,9 @@ Lauri asks; checking out and paying are always Lauri's.
 - **Orders:** the order-list request carries an opaque component tree
   (`params` → `data`, `linkage`, `hierarchy`). Don't rebuild it: hook
   `lib.mtop.request`, click "View orders" once, then replay the captured
-  request with a different `pageIndex` and `pageSize` (50 works). Stop when the
-  body component's `hasMore` is false. 2026-10-23: 4 pages, 203 order lines,
-  May 2017 to Sep 2026.
+  request as one page with `pageSize` 200, and check the body component's
+  `hasMore` is false. 2026-10-30: 187 orders, 203 order lines, May 2017 to
+  Sep 2026.
 - **Search:** the result page's HTML embeds each item as JSON; split on
   `"productId":"` and read `displayTitle`, `salePrice.formattedPrice` and
   `tradeDesc` (units sold). The price is the cheapest variant, often a 1- or
@@ -55,29 +55,36 @@ Lauri asks; checking out and paying are always Lauri's.
    or base64** (`[BLOCKED: Cookie/query string data]`), and truncates long
    strings. Return arrays of short strings, strip `?&=`, and never return raw
    response JSON.
-2. **The order history holds every purchase, not only electronics.** Filter
+2. **Paging the order history drops orders.** Orders placed together shuffle
+   between pages, so a page walk returns some orders twice and skips others,
+   a different set on every run, and still ends with `hasMore` false. On
+   2026-10-30, 50 per page gave 182 unique orders of 187 and 10 per page 173;
+   the missing ones included the SNA-58B crimper, so it read as never bought.
+   Fetch one page large enough to hold everything (200) and check its order
+   ids are unique.
+3. **The order history holds every purchase, not only electronics.** Filter
    by component keywords in the page and report only matching lines; don't
    dump or quote the rest.
-3. **Shipping is per store unless the item is Choice.** Choice items cost
+4. **Shipping is per store unless the item is Choice.** Choice items cost
    €2.99 alone and ship free once Choice items reach €10.00 together
    (2026-10-23). Other stores charge €1.50–7 each: the robocar carriers' BOM
    spread over ten such stores paid €41.73 in shipping on a €153.48 total.
-4. **Search hits are not the part.** Titles stuff neighbouring part numbers
+5. **Search hits are not the part.** Titles stuff neighbouring part numbers
    ("TPS563201 TPS563208", "DMP3013SFV DMP3018SFV"): filter the variant by
    name, and check package and voltage in the variant text.
-5. **Generic passives miss the datasheet numbers the carrier was designed
+6. **Generic passives miss the datasheet numbers the carrier was designed
    to** (`power-stage-checklist.md`). An unbranded 6045 4.7 µH inductor has no
    stated Isat against the integrated carrier's 5.5 A peak, and 1812 PTCs at
    3 A are usually 6 V parts against the 16 V BSMD1812-300-16V.
-6. **Solder paste ships slowly** (24–46 days on 2026-10-23) and wants
+7. **Solder paste ships slowly** (24–46 days on 2026-10-23) and wants
    refrigeration.
-7. **Rapid cart adds trigger a slider CAPTCHA.** 25 adds about 0.6 s apart
+8. **Rapid cart adds trigger a slider CAPTCHA.** 25 adds about 0.6 s apart
    (2026-10-23) ended with one `TIMEOUT::接口超时` and, on the next add, a
    "drag the slider to verify" overlay. Solving it is Lauri's step. Add a few
    lines at a time, several seconds apart, in calls that finish inside the
    tool's 45 s limit. A call that times out keeps running in the page, so
    read the cart before retrying anything, or the retry adds duplicates.
-8. **AliExpress prices include VAT; JLCPCB's exclude it until checkout**
+9. **AliExpress prices include VAT; JLCPCB's exclude it until checkout**
    (`jlcpcb-order` § 4). Compare VAT-inclusive totals.
 
 ## Comparing with JLCPCB PCBA
