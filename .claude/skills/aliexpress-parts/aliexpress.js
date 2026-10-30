@@ -12,8 +12,8 @@ window.lib.mtop.request = function (p, ...r) {
 };
 document.querySelector('.order-more button').click();
 
-// 2. Replay it with any page index and size (50 works).
-window.__page = async (idx, size = 50) => {
+// 2. Replay it with any page index and size.
+window.__page = async (idx, size = 200) => {
   const p = JSON.parse(JSON.stringify(window.__cap.find((c) => c.api === 'mtop.aliexpress.trade.buyer.order.list')));
   const outer = JSON.parse(p.data.params);
   const inner = JSON.parse(outer.data);
@@ -25,11 +25,17 @@ window.__page = async (idx, size = 50) => {
   return await window.lib.mtop.request(p);
 };
 
-// 3. Every order line, until hasMore is false.
+// 3. Every order line in one request. Paging is unstable: orders placed
+//    together shuffle between pages, so a 50-per-page walk returns some twice
+//    and drops others (SKILL.md trap 2). One page of 200 held all 187 orders on
+//    2026-10-30; if hasMore is still true, raise the size rather than paging.
 window.__orders = [];
-for (let idx = 1; idx < 60; idx++) {
-  const d = (await window.__page(idx)).data.data;
+{
+  const d = (await window.__page(1)).data.data;
   const orders = Object.keys(d).filter((k) => k.startsWith('pc_om_list_order_')).map((k) => d[k].fields);
+  const body = d[Object.keys(d).find((k) => k.startsWith('pc_om_list_body'))];
+  if (body && body.fields.hasMore) throw new Error('order list truncated: raise the page size');
+  if (new Set(orders.map((o) => String(o.orderId))).size !== orders.length) throw new Error('duplicate orders in one page');
   for (const o of orders)
     for (const l of o.orderLines || [])
       window.__orders.push({
@@ -38,9 +44,6 @@ for (let idx = 1; idx < 60; idx++) {
           .map((x) => x && x.text).filter((t) => t && !/China/i.test(t)).join(' '),
         price: l.itemPriceText, qty: l.quantity,
       });
-  const body = d[Object.keys(d).find((k) => k.startsWith('pc_om_list_body'))];
-  if (!orders.length || !(body && body.fields.hasMore)) break;
-  await new Promise((r) => setTimeout(r, 400));
 }
 
 // --- Search (any aliexpress.com page) ---
@@ -113,7 +116,7 @@ window.lib.mtop.request = function (p, ...r) {
 // 2. After the click: window.__cartReq = window.__cap[0];
 
 // One variant, matched by name to exactly one skuId. Call it a few lines at a
-// time, seconds apart: 25 rapid adds brought up a slider CAPTCHA (SKILL.md trap 7).
+// time, seconds apart: 25 rapid adds brought up a slider CAPTCHA (SKILL.md trap 8).
 window.__add = async (pid, re, qty = 1) => {
   const R = (await window.__pdp(pid)).data.result;
   const names = {};
