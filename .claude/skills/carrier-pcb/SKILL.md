@@ -98,10 +98,16 @@ several traps below are version-specific: after a KiCad upgrade, re-run
    and CPL. `just kicad::check` runs what CI runs. The CPL adds each LCSC
    part's checked rotation offset (trap 32); a new LCSC number needs an entry
    in `docs/reference/jlcpcb-rotations.toml` first. Quoting and ordering the
-   result: the `jlcpcb-order` skill.
+   result: the `jlcpcb-order` skill, whose § 1 decides which SMD parts
+   JLCPCB places: any part not owned and not sold on AliExpress stays on the
+   PCBA BOM (`.claude/rules/part-sourcing.md`).
 
 ## Adding a registry entry
 
+- **Choose a part that can be bought** before drawing it: owned, placeable by
+  JLCPCB, or sold on AliExpress under its exact part number, and current, not
+  NRND or obsolete (`.claude/rules/part-sourcing.md`). Write the source in the
+  `hardware.toml` comment above the instance.
 - `source` is mandatory: where the pin order came from (vendor board file,
   KiCad library, or memory plus the issue tracking its check). A recalled pin
   order reads exactly like a checked one.

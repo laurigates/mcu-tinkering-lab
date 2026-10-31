@@ -18,6 +18,16 @@ are a calibration, not a quote: JLCPCB changes them.
 
 ## 1. Before uploading
 
+- **Decide who places each SMD part, and check it can be bought**
+  (`.claude/rules/part-sourcing.md`). Run the `aliexpress-parts` skill's
+  sourcing check on `bom-jlc.csv`: a part that is owned, or sold on AliExpress
+  under its exact part number with its rating stated and shipping to Finland,
+  may be hand-soldered. Every other part stays on the PCBA BOM. Economic PCBA
+  places a partial BOM, so a board that is otherwise hand-soldered can still
+  have JLCPCB fit those parts; if it ships bare, add them as an LCSC parts
+  order in the same cart. The balancebot carrier went bare on 2026-10-23 and
+  two of its 11 parts (ZXMP4A16G, BSMD1812-300-24V) had no usable AliExpress
+  listing. Check stock for each LCSC number on the day of the order.
 - **Run `just <p>::carrier-fab` from a clean tree** and read the size and
   layer count from `output/fab/*-job.gbrjob` (`.GeneralSpecs.Size`); the
   upload must detect the same.
