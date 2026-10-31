@@ -25,6 +25,18 @@
       "allowedVersions": "<12"
     },
     {
+      "description": "Hold sphinx below 9.2 in the robocar simulation: sphinx 9.2 requires Python >=3.13 while the simulation's requires-python floor is 3.12, so uv cannot resolve. Drop once the simulation floor moves to 3.13.",
+      "matchFileNames": ["packages/robocar/simulation/**"],
+      "matchPackageNames": ["/^sphinx$/i"],
+      "allowedVersions": "<9.2"
+    },
+    {
+      "description": "Do not bump the espressif/idf base image in the Dockerfile. CI builds firmware with IDF_VERSION v5.4 (.github/workflows/_ci-build-esp32.yml, a plain env value Renovate does not manage), so the dev container has to move together with it as a deliberate ESP-IDF upgrade. docker-compose.yml's mcu-tinkering-lab/esp-idf:v5.4 is a locally built tag and also stays manual.",
+      "matchFileNames": ["Dockerfile"],
+      "matchDepNames": ["espressif/idf"],
+      "enabled": false
+    },
+    {
       "description": "Only patch bumps for the actions/setup-python python-version input (github-actions manager, depType uses-with, depName python, packageName actions/python-versions). A new Python minor can lack wheels for torch and other deps, so moving to one is a deliberate change, not a Renovate PR (#796).",
       "matchManagers": ["github-actions"],
       "matchDepTypes": ["uses-with"],
