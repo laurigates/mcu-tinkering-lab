@@ -68,6 +68,7 @@ order is paid.
 ## Related
 
 - `aliexpress-parts` skill: owned parts, listing checks, the BOM sourcing check
+- `part-substitution` skill: when a part has no source and another must stand in
 - `jlcpcb-order` skill § 1: the sourcing gate before uploading
 - `carrier-pcb` skill: adding a registry entry
 - `power-stage-checklist.md`: the datasheet numbers a substitute must meet
