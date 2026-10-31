@@ -8,6 +8,7 @@ source = "KiCad 10.0.6 library (Conn_01x04, PinHeader_1x04_P2.54mm_Vertical); th
 symbol = "Connector_Generic:Conn_01x04"
 footprint = "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical"
 value = "Test: 3V3 5V GND VBAT"
+buy = "owned:2.54 mm 1x40 male header strips (AliExpress 2025-11, 2025-12, 2026-08)"
 
 [pins]
 "3V3" = 1

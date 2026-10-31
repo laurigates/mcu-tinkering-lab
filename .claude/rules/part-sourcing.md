@@ -10,11 +10,11 @@ A carrier is only as buildable as its least available part. ERC, DRC, parity
 and the board check say nothing about whether a part can be bought, so a board
 can pass every gate and still arrive with footprints nobody can fill.
 
-> 2026-10-30: the balancebot carrier was ordered bare, so its 11 SMD parts were
-> left to hand-sourcing. Two had no usable AliExpress listing: the ZXMP4A16G
+> 2026-10-23: the balancebot carrier was ordered bare, so its 11 SMD parts were
+> left to hand-sourcing. Two had no usable AliExpress listing on 2026-10-30: the ZXMP4A16G
 > P-FET (Q1) is not listed at all, and every 1812 3 A PTC there is unbranded,
 > most with no voltage rating (the design needs the 24 V BSMD1812-300-24V).
-> Q1 became the ZXMP3A16G after a datasheet comparison, and F1 a PTC whose hold
+> Q1 became the ZXMP3A16G after a datasheet comparison on 2026-10-30, and F1 a PTC whose hold
 > and trip currents nobody can state. Both parts were on JLCPCB's assembly BOM
 > with LCSC numbers, and that order would have placed them.
 
@@ -42,12 +42,17 @@ And for every part:
   omits a rating the design depends on (a PTC's voltage and hold current, an
   inductor's saturation current) is not a source for that part
   (`aliexpress-parts` trap 6, `power-stage-checklist.md`).
-- **Write the source down** in the `hardware.toml` comment above the part:
-  owned, LCSC number, or AliExpress listing id and date.
+- **Record the source** as `buy` on the part's registry entry or its
+  `hardware.toml` instance (`aliexpress:<id>`, `lcsc:C<n>`, `owned:<what>`),
+  separate from `lcsc`, which only says JLCPCB can place it. A part in a
+  carrier's BOM with neither fails `kicad.sourcing` in CI
+  (`docs/reference/parts/README.md` § Where a part comes from).
 
 ## Before ordering a board
 
-For each SMD part, decide who places it and check that it can be bought:
+`just kicad::sourcing <project>` lists the parts with an LCSC number and no
+`buy`. Those are the parts only JLCPCB or LCSC can supply. For each SMD part,
+decide who places it and check that it can be bought:
 
 - **JLCPCB places it**: it is on the PCBA BOM with an LCSC number that is in
   stock today.
