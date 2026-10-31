@@ -188,11 +188,15 @@ class OfflineTest(unittest.TestCase):
 
     def test_network_failures(self):
         url = raw_url(source(BOARDS_DIR / f"{BREAKOUTS[0]}.md"))
+        http_error = urllib.error.HTTPError(
+            url, 404, "Not Found", email.message.Message(), None
+        )
+        # Python 3.15 warns when an unclosed HTTPError is collected, and the
+        # warning lands in whichever later test captures stderr when GC runs.
+        self.addCleanup(http_error.close)
         failures = {
             "URLError": urllib.error.URLError("nodename nor servname provided"),
-            "HTTPError": urllib.error.HTTPError(
-                url, 404, "Not Found", email.message.Message(), None
-            ),
+            "HTTPError": http_error,
             "timeout": TimeoutError("timed out"),
         }
         for name, exc in failures.items():
