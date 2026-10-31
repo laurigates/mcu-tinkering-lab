@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.1.10](https://github.com/laurigates/mcu-tinkering-lab/compare/balancebot-v0.1.9...balancebot-v0.1.10) (2026-10-31)
+
+
+### Features
+
+* **kicad:** fail CI on a carrier part with no source ([#885](https://github.com/laurigates/mcu-tinkering-lab/issues/885)) ([800f66a](https://github.com/laurigates/mcu-tinkering-lab/commit/800f66a0eb4e8ffdfa38cafed1384a956785f78b))
+
+
+### Bug Fixes
+
+* **kicad:** enforce JLCPCB's silkscreen rules (1.0 mm text, 0.15 mm off pads) ([#877](https://github.com/laurigates/mcu-tinkering-lab/issues/877)) ([6ae892e](https://github.com/laurigates/mcu-tinkering-lab/commit/6ae892e647795a67e26f4c171969bd885b1b6e4c))
+
+
+### Documentation
+
+* **carrier:** every carrier part needs a source before the board is ordered ([6ceb3fc](https://github.com/laurigates/mcu-tinkering-lab/commit/6ceb3fc7cd5c6bbf5d18766ebb7e21755c864a7b))
+
 ## [0.1.9](https://github.com/laurigates/mcu-tinkering-lab/compare/balancebot-v0.1.8...balancebot-v0.1.9) (2026-10-25)
 
 

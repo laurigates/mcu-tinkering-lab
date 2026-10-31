@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.16](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.15...robocar-unified-v0.2.16) (2026-10-31)
+
+
+### Bug Fixes
+
+* **deps:** update all non-major dependencies ([#892](https://github.com/laurigates/mcu-tinkering-lab/issues/892)) ([ea3870d](https://github.com/laurigates/mcu-tinkering-lab/commit/ea3870d9141b394d3f291504687e428c9a7aa21d))
+* **kicad:** enforce JLCPCB's silkscreen rules (1.0 mm text, 0.15 mm off pads) ([#877](https://github.com/laurigates/mcu-tinkering-lab/issues/877)) ([6ae892e](https://github.com/laurigates/mcu-tinkering-lab/commit/6ae892e647795a67e26f4c171969bd885b1b6e4c))
+
 ## [0.2.15](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.14...robocar-unified-v0.2.15) (2026-10-25)
 
 

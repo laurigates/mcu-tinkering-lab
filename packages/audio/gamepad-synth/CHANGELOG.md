@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.11](https://github.com/laurigates/mcu-tinkering-lab/compare/gamepad-synth-v0.1.10...gamepad-synth-v0.1.11) (2026-10-31)
+
+
+### Bug Fixes
+
+* **deps:** update all non-major dependencies ([#892](https://github.com/laurigates/mcu-tinkering-lab/issues/892)) ([ea3870d](https://github.com/laurigates/mcu-tinkering-lab/commit/ea3870d9141b394d3f291504687e428c9a7aa21d))
+
 ## [0.1.10](https://github.com/laurigates/mcu-tinkering-lab/compare/gamepad-synth-v0.1.9...gamepad-synth-v0.1.10) (2026-10-12)
 
 
