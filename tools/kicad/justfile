@@ -46,6 +46,15 @@ check: test
     cd ../.. && PYTHONPATH=tools python3 -m kicad.boardcheck
     cd ../.. && PYTHONPATH=tools python3 -m kicad.stamp
     cd ../.. && PYTHONPATH=tools python3 -m kicad.perfboard --check
+    cd ../.. && PYTHONPATH=tools python3 -m kicad.sourcing
+
+# Fails on a BOM part with neither an LCSC number nor a `buy` source, and lists
+# the parts only JLCPCB can supply (.claude/rules/part-sourcing.md).
+#
+# Where every carrier part comes from; pass project paths to narrow it
+[group: "test"]
+sourcing *projects:
+    cd ../.. && PYTHONPATH=tools python3 -m kicad.sourcing {{projects}}
 
 # Covers every symbol and footprint the parts registry and the schematic
 # writer use.

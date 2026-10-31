@@ -4,6 +4,7 @@ name = "Battery input, JST-XH 2"
 source = "pin order is this repo's cable convention, as for the LM2596 lead: BAT+ on pad 1 (the square pad); the carrier prints + and - beside the pads"
 symbol = "Connector_Generic:Conn_01x02"
 footprint = "Connector_JST:JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical"
+buy = "aliexpress:1005009919435223"  # JST-XH set: header, housing, crimps
 
 # Not "+"/"-": the JST-XH footprint prints no polarity, so the registry's
 # polarity tripwire has nothing to prove them against. The polarity is the

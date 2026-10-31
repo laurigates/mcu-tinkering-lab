@@ -106,8 +106,10 @@ several traps below are version-specific: after a KiCad upgrade, re-run
 
 - **Choose a part that can be bought** before drawing it: owned, placeable by
   JLCPCB, or sold on AliExpress under its exact part number, and current, not
-  NRND or obsolete (`.claude/rules/part-sourcing.md`). Write the source in the
-  `hardware.toml` comment above the instance.
+  NRND or obsolete (`.claude/rules/part-sourcing.md`). Record it as `buy`
+  (`aliexpress:<id>`, `lcsc:C<n>`, `owned:<what>`) on the entry, or on the
+  instance for a value-specific part; `lcsc` alone means only JLCPCB supplies
+  it. `just kicad::sourcing` fails on a BOM part with neither.
 - `source` is mandatory: where the pin order came from (vendor board file,
   KiCad library, or memory plus the issue tracking its check). A recalled pin
   order reads exactly like a checked one.

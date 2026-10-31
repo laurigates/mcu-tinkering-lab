@@ -9,6 +9,7 @@ source = "KiCad 10.0.6 library (Conn_02x10_Odd_Even, PinHeader_2x10_P2.54mm_Vert
 symbol = "Connector_Generic:Conn_02x10_Odd_Even"
 footprint = "Connector_PinHeader_2.54mm:PinHeader_2x10_P2.54mm_Vertical"
 value = "GPIO A/B"
+buy = "owned:2.54 mm 1x40 male header strips (AliExpress 2025-11, 2025-12, 2026-08)"
 
 [pins]
 GND = 1

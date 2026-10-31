@@ -41,6 +41,7 @@ PROJECT_CLIS: tuple[str, ...] = (
     "parity",
     "perfboard",
     "schematic",
+    "sourcing",
     "stamp",
 )
 # Modules whose main() works on the repo as a whole; with an empty repo root

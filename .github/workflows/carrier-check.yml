@@ -122,3 +122,10 @@ jobs:
             echo "::error::A perfboard output is stale, or its layout breaks a check. Run 'just <project>::perfboard' locally and commit the files it writes (perfboard.svg, perfboard-print.svg, perfboard.md, continuity.md, docs/perfboard-steps.typ and its PDF)."
             exit 1
           fi
+
+      - name: Every carrier part has a source
+        run: |
+          if ! python3 -m kicad.sourcing; then
+            echo "::error::A carrier BOM part has neither an LCSC number nor a buy source. Add 'buy = \"aliexpress:<id>\"', 'lcsc:C<n>' or 'owned:<what>' to its hardware.toml instance or registry entry (.claude/rules/part-sourcing.md)."
+            exit 1
+          fi

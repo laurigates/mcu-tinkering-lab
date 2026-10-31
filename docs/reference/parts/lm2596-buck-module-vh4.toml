@@ -9,6 +9,7 @@ name = "LM2596 buck module on JST VH 4"
 source = "pin order is this repo's cable convention (#749 carrier), as lm2596-buck-module; footprint pad n is circuit n of the B4P-VH header (KiCad 10.0.6 library)"
 symbol = "Connector_Generic:Conn_01x04"
 footprint = "Connector_JST:JST_VH_B4P-VH_1x04_P3.96mm_Vertical"
+buy = "aliexpress:1005009948799238"  # JST VH3.96 2/3/4-pin box
 
 [pins]
 "IN+" = 1

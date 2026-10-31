@@ -4,6 +4,7 @@ name = "Adafruit TCA9548A I2C multiplexer, socketed"
 source = "docs/reference/boards/adafruit-tca9548a.md (Adafruit's Eagle board file, elements JP3 and JP1); footprint pad n is the n-th pad of the Breakout_Sockets config (JP3.1-12, then JP1.1-12)"
 symbol = "Connector_Generic:Conn_01x24"
 footprint = "Breakout_Sockets:Adafruit_TCA9548A_Socket"
+buy = "aliexpress:1000007373786"  # 2.54 mm 1x40 female strips, cut to length
 # A0-A2 are pulled down on the breakout (address 0x70). Channels 5-7 are
 # unused. Channels 0 (PCA9685), 1 (OLED), 2 (MCP23017), 3 and 4
 # (rangefinders) and RST are wired on the carrier.
