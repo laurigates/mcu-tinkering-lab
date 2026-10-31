@@ -116,6 +116,23 @@ test that fails on the pre-fix code.
    samples, EEVEE about 46 s through software GL. The recipes below still call
    `/Applications/Blender.app`; porting them means running the scripts under
    that interpreter with `import bpy`, not `blender -b -P`.
+11. **A stand-in board without `kicad-cli` misleads in three ways** (2026-10-31,
+   #909). The cloud runs that checked the gates replaced the STEP with
+   courtyard blocks.
+   - A back-side part drawn on top of the board clashes with whatever sits
+     over it: hang it under the board.
+   - A slab larger than the board reads as a wall clash once the clip keeps
+     overhangs: use the pieces' regions.
+   - Heights estimated by footprint family are estimates.
+   A stand-in run can say a design is broken; only the real STEP can say it
+   is fine.
+12. **pyvista off-screen `screenshot()` reuses the last image** unless the
+   plotter renders first. Every frame of the first assembly video showed the
+   board at its first pose. `sequence.py` calls `pl.render()` before each frame.
+13. **The assembly gate reads an overlap within 0.25 mm (one voxel) as
+   contact**, so it accepts a 0 mm fit; a lid tab flush against a wall passed
+   (#909 review). Clearances the print needs (`LIP_FIT`) are enforced in the
+   geometry, not left to the gate.
 
 ## Renders (`enclosure.assembly` + `blender/render_assembly.py`)
 
