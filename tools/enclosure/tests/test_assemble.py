@@ -126,3 +126,26 @@ def test_lid_bosses_block_the_board_screws_under_them():
     f = frame(piece())
     assert case.blocked_screws(f, printed_box(f)) == ["H1", "H2"]
     assert case.blocked_screws(f, case.tray(f)) == []
+
+
+def test_a_jack_overhanging_through_a_closed_window_blocks_the_board():
+    # Review of #909: `gen` clipped the board to its outline, so a jack sticking
+    # out through a box window was cut off and the board "lifted" straight out.
+    from enclosure.board import Part, Rect
+
+    jn = Part("JN", "fp", "top", Rect(10, -4.5, 22, 6), above=3.0, height_source="t")
+    js = Part("JS", "fp", "top", Rect(38, 34, 50, 44.5), above=3.0, height_source="t")
+    f = frame(piece(parts=[jn, js], openings=["JN", "JS"], holes=[]))
+    base, _ = case.box(f)
+    r = f.piece.region
+    pcb = Pos(f.off, f.off, f.z_board) * Box(
+        r.width, r.height, f.piece.thickness, align=A
+    )
+    for q in (jn, js):
+        x, y, w, h = f.rect(q.courtyard)
+        pcb += Pos(x, y, f.z_top) * Box(w, h, q.above, align=A)
+    outline = Pos(f.off, f.off, -50) * Box(r.width, r.height, 200, align=A)
+    # The bare outline loses the jacks (the defect), the piece clip keeps them.
+    assert assemble.removal(collider(base, pcb & outline))[1].found
+    clipped = pcb & case.piece_clip(f, [r])
+    assert not assemble.removal(collider(base, clipped))[1].found

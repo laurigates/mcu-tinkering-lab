@@ -62,8 +62,9 @@ def _step(out: Path, stem: str) -> dict | None:
 def _plan_frames(step: dict, count: int) -> list[tuple[float, ...]]:
     if step["found"]:
         return _frames(step["path"], count)
-    # Blocked: rise from the seated pose to the furthest pose found, and hold.
-    d = step["deepest"]
+    # Blocked: rise from the seated pose to where it jams, and hold there,
+    # where its clash points were taken.
+    d = step.get("jam", step["deepest"])
     rise = _frames([[0, 0, 0, 0, 0], d], count // 2)
     return rise + [tuple(d)] * (count - len(rise))
 

@@ -326,3 +326,39 @@ def test_tabs_move_to_the_short_sides_when_windows_fill_the_long_ones():
     p.region = Rect(0, 0, 30, 30)
     _, tabs = case.lid_tabs(frame(p))
     assert {t.side for t in tabs} == {"west", "east"}
+
+
+def test_tab_ends_keep_the_slide_fit_from_the_perpendicular_walls():
+    # Jacks over both quarter points push the tabs to the ends of the wall
+    # (review of #909: they sat flush against the west and east walls).
+    j1 = Part("J1", "fp", "top", Rect(11, 0, 21, 5), above=5.0, height_source="t")
+    j2 = Part("J2", "fp", "top", Rect(39, 0, 49, 5), above=5.0, height_source="t")
+    f = frame(piece(parts=[j1, j2], openings=["J1", "J2"], holes=[]))
+    for t in case.lid_tabs(f)[1]:
+        if t.side in ("north", "south"):
+            lo, hi = t.x - case.TAB_W / 2, t.x + case.TAB_W / 2
+            assert lo >= f.p.wall + case.LIP_FIT - 1e-9, t
+            assert hi <= f.length - f.p.wall - case.LIP_FIT + 1e-9, t
+
+
+def test_windows_below_the_board_do_not_push_the_tabs_away():
+    under = [
+        Part(
+            f"B{i}", "fp", "bottom", Rect(x, 0, x + w, 5), above=0.0, height_source="t"
+        )
+        for i, (x, w) in enumerate(((1, 17), (21, 18), (42, 17)))
+    ]
+    top = Part("U1", "fp", "top", Rect(20, 10, 40, 30), above=10.0, height_source="t")
+    f = frame(piece(parts=under + [top], openings=[q.ref for q in under], holes=[]))
+    assert {t.side for t in case.lid_tabs(f)[1]} == {"north", "south"}
+
+
+def test_the_clip_keeps_an_overhang_and_drops_the_other_pieces():
+    f = frame(piece())
+    clip = case.piece_clip(f, [f.piece.region, Rect(60, 0, 90, 40)])
+    x, y = f.xy(30, -3.0)  # 3 mm past the north edge: through a window
+    assert clip.is_inside(Vector(x, y, f.z_top + 1))
+    x, y = f.xy(61.0, 20)  # just inside the neighbouring piece
+    assert not clip.is_inside(Vector(x, y, f.z_top + 1))
+    x, y = f.xy(59.0, 20)  # still this piece
+    assert clip.is_inside(Vector(x, y, f.z_top + 1))

@@ -271,13 +271,14 @@ def _side_pairs(f: Frame) -> list[tuple[str, str]]:
 
 
 def _window_spans(f: Frame, side: str) -> list[tuple[float, float]]:
-    """Board-coordinate spans along `side` taken by its cable windows."""
+    """Board-coordinate spans along `side` taken by its cable windows above the
+    board (a back-side part's window runs below the board, far under a tab)."""
     r, m = f.piece.region, f.p.opening_margin
     by_ref = {q.ref: q for q in f.piece.parts}
     out = []
     for ref in f.piece.openings:
         c = by_ref[ref].courtyard
-        if _side(r, c) == side:
+        if by_ref[ref].side == "top" and _side(r, c) == side:
             lo, hi = (c.x0, c.x1) if side in ("north", "south") else (c.y0, c.y1)
             out.append((lo - m, hi + m))
     return out
@@ -346,7 +347,10 @@ def _tabs_on(f: Frame, pair: tuple[str, str]) -> tuple[float, list[Tab]]:
     picks = {}
     for side in pair:
         lo_b, hi_b = (r.x0, r.x1) if side in ("north", "south") else (r.y0, r.y1)
-        lo, hi = lo_b - p.gap + TAB_W / 2, hi_b + p.gap - TAB_W / 2
+        # A tab end keeps the slide fit from the perpendicular wall, as the
+        # lip does: flush against it the lid would not go on.
+        lo = lo_b - p.gap + LIP_FIT + TAB_W / 2
+        hi = hi_b + p.gap - LIP_FIT - TAB_W / 2
         windows = _window_spans(f, side)
         cands = []
         u = lo
@@ -472,6 +476,24 @@ def keepout(f: Frame, board_step: Part | None) -> Part | None:
     out = solids[0]
     for s in solids[1:]:
         out += s
+    return out
+
+
+def piece_clip(f: Frame, others: list[Rect]) -> Part:
+    """The volume whose share of the board belongs to this piece: its footprint
+    grown out past the walls, so a connector overhanging the board edge
+    through a window counts, less the footprints of the board's other pieces
+    (sawn off before the board goes in)."""
+    reach = f.off + 10.0
+    r = f.piece.region
+    out = Pos(f.off - reach, f.off - reach, -50) * Box(
+        r.width + 2 * reach, r.height + 2 * reach, 200, align=A
+    )
+    for o in others:
+        if o == r:
+            continue
+        x, y, w, h = f.rect(o)
+        out -= Pos(x, y, -60) * Box(w, h, 220, align=A)
     return out
 
 

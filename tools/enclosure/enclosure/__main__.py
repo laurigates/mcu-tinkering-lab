@@ -19,7 +19,7 @@ import sys
 import tomllib
 from pathlib import Path
 
-from build123d import Align, Box, Mesher, Pos, export_step, export_stl, import_step
+from build123d import Mesher, export_step, export_stl, import_step
 from kicad.paths import REPO_ROOT
 
 from . import assemble, board, case, thickness
@@ -45,7 +45,7 @@ def insertion(moving, fixed, stem: Path) -> dict:
     col = assemble.Collider(fix, mov)
     strategy, p = assemble.removal(col)
     path = assemble.shortcut(col, assemble.simplify(p.path)) if p.found else []
-    clash = p.clash_points
+    clash, jam = p.clash_points, list(p.deepest)
     if not p.found and clash is None:
         # Show where it jams: lift from the furthest pose until it first clashes.
         q = list(p.deepest)
@@ -53,7 +53,7 @@ def insertion(moving, fixed, stem: Path) -> dict:
             q[2] += assemble.PITCH
             pts = col.clashing(tuple(q), "fine")
             if len(pts):
-                clash = pts
+                clash, jam = pts, list(q)
                 break
     mov.export(f"{stem}-moving.stl")
     fix.export(f"{stem}-fixed.stl")
@@ -66,6 +66,8 @@ def insertion(moving, fixed, stem: Path) -> dict:
         # Assembly order: from clear of the case down to seated.
         "path": [[round(v, 4) for v in q] for q in reversed(path)],
         "deepest": [round(v, 4) for v in p.deepest],
+        # Where the part is drawn when it jams: the clash points belong here.
+        "jam": [round(v, 4) for v in jam],
         "clash_points": [] if clash is None else clash[:2000].round(3).tolist(),
     }
     Path(f"{stem}.json").write_text(json.dumps(out) + "\n")
@@ -85,9 +87,7 @@ def generate(project: Path, check: bool = True) -> list[dict]:
     report = []
     for piece in pieces:
         f = case.Frame(piece, params)
-        region_box = Pos(f.off, f.off, -50) * Box(
-            piece.region.width, piece.region.height, 200, align=(Align.MIN,) * 3
-        )
+        region_box = case.piece_clip(f, [q.region for q in pieces])
         keep = case.keepout(f, board_step) if check else None
         tray = case.tray(f)
         base, lid = case.box(f)
@@ -98,7 +98,7 @@ def generate(project: Path, check: bool = True) -> list[dict]:
         }
         fits = {}
         if keep is not None:
-            pcb = keep & region_box  # this piece's board and its parts
+            pcb = keep & region_box  # this piece's board, parts and overhangs
             fits["tray"] = insertion(pcb, tray, out / f"{piece.name}-tray-board")
             fits["box-base"] = insertion(pcb, base, out / f"{piece.name}-box-board")
             fits["box-lid"] = insertion(lid, base + pcb, out / f"{piece.name}-box-lid")
@@ -143,11 +143,15 @@ def generate(project: Path, check: bool = True) -> list[dict]:
                         for k, v in walls.items()
                         if k.startswith(style)
                     },
-                    "insertion": {
-                        k: v["strategy"] if v["found"] else f"BLOCKED ({v['note']})"
-                        for k, v in fits.items()
-                        if k.startswith(style)
-                    },
+                    "insertion": (
+                        {
+                            k: v["strategy"] if v["found"] else f"BLOCKED ({v['note']})"
+                            for k, v in fits.items()
+                            if k.startswith(style)
+                        }
+                        if check
+                        else {style: "not checked (--no-check)"}
+                    ),
                     "blocked_screws": sorted(
                         {r for k, v in screws.items() if k.startswith(style) for r in v}
                     ),
@@ -172,7 +176,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     ap.add_argument("projects", nargs="+", type=Path)
     ap.add_argument(
-        "--no-check", action="store_true", help="skip the interference check"
+        "--no-check",
+        action="store_true",
+        help="skip the board-dependent checks: interference and assembly",
     )
     args = ap.parse_args(argv)
     bad = 0
@@ -192,8 +198,12 @@ def main(argv: list[str] | None = None) -> int:
                 if v < case.MIN_WALL - WALL_TOLERANCE
             }
             stuck = {k: v for k, v in r["insertion"].items() if v.startswith("BLOCKED")}
+            # A search that ran out of poses has not shown the part is blocked.
+            undecided = {k: v for k, v in stuck.items() if "stopped at" in v}
             flag = "OK"
-            if stuck:
+            if undecided:
+                flag = f"ASSEMBLY UNDECIDED (raise MAX_NODES?) {undecided}"
+            elif stuck:
                 flag = f"CANNOT ASSEMBLE {stuck}"
             elif r["blocked_screws"]:
                 flag = f"NO SCREWDRIVER PATH to {r['blocked_screws']}"
