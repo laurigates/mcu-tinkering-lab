@@ -10,11 +10,11 @@ A carrier is only as buildable as its least available part. ERC, DRC, parity
 and the board check say nothing about whether a part can be bought, so a board
 can pass every gate and still arrive with footprints nobody can fill.
 
-> 2026-10-30: the balancebot carrier was ordered bare, so its 11 SMD parts were
-> left to hand-sourcing. Two had no usable AliExpress listing: the ZXMP4A16G
+> 2026-10-23: the balancebot carrier was ordered bare, so its 11 SMD parts were
+> left to hand-sourcing. Two had no usable AliExpress listing on 2026-10-30: the ZXMP4A16G
 > P-FET (Q1) is not listed at all, and every 1812 3 A PTC there is unbranded,
 > most with no voltage rating (the design needs the 24 V BSMD1812-300-24V).
-> Q1 became the ZXMP3A16G after a datasheet comparison, and F1 a PTC whose hold
+> Q1 became the ZXMP3A16G after a datasheet comparison on 2026-10-30, and F1 a PTC whose hold
 > and trip currents nobody can state. Both parts were on JLCPCB's assembly BOM
 > with LCSC numbers, and that order would have placed them.
 
