@@ -120,6 +120,8 @@ on every entry in every view, so a typo in a carrier-only entry still fails.
     ref   = "R2"                # reference designator: letters then digits
     value = "100k"              # KiCad Value; tools/kicad defaults it
     lcsc  = "C149504"           # JLCPCB part number: C then digits
+    buy   = "aliexpress:32901883276"  # hand-assembly source: aliexpress:<id>,
+                                # lcsc:C<digits> or owned:<what>
 
     [[rails]]                   # a continuation: same name, no `from`
     name  = "VBAT"
@@ -220,7 +222,18 @@ _KEYS = {
         "cables",
     },
     "source": {"convention", "header", "extra_headers", "board", "mcu", "part", "ref"},
-    "part": {"name", "kind", "note", "board", "build", "part", "ref", "value", "lcsc"},
+    "part": {
+        "name",
+        "kind",
+        "note",
+        "board",
+        "build",
+        "part",
+        "ref",
+        "value",
+        "lcsc",
+        "buy",
+    },
     "net": {"role", "to", "note", "build"},
     "channel_net": {"role", "from", "to", "note", "build"},
     "bus_net": {"role", "from", "to", "line", "note", "build"},
@@ -242,6 +255,10 @@ MCU = "mcu"  # the reserved part id a rail endpoint uses for the MCU board
 
 _REF = re.compile(r"[A-Z]+[0-9]+")
 _LCSC = re.compile(r"C[0-9]+")
+# Where a part soldered to a carrier is bought for hand assembly
+# (.claude/rules/part-sourcing.md): an AliExpress listing id, an LCSC number
+# ordered as loose parts, or owned stock, named.
+BUY = re.compile(r"aliexpress:[0-9]+|lcsc:C[0-9]+|owned:\S.*")
 # An I2C mux channel n is the pad pair SDn/SCn; each joins the load pin named
 # here, which is also the suffix of the line's carrier net name (#768).
 I2C_LINES = (("SD", "SDA"), ("SC", "SCL"))
@@ -260,6 +277,7 @@ class Part:
     ref: str = ""  # reference designator: "R2"
     value: str = ""  # KiCad Value field; "" leaves it to tools/kicad
     lcsc: str = ""  # JLCPCB part number: "C17414"
+    buy: str = ""  # hand-assembly source, BUY: "aliexpress:1005006127128914"
     build: str = ""  # HARNESS or CARRIER; "" for both views
 
 
@@ -1126,6 +1144,7 @@ def join(
             ref=_optional(where, table, "ref", _REF),
             value=_optional(where, table, "value"),
             lcsc=_optional(where, table, "lcsc", _LCSC),
+            buy=_optional(where, table, "buy", BUY),
             build=table.get("build", ""),
         )
         if in_view:

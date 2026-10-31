@@ -92,7 +92,8 @@ window.__item = async (pid, filter, max = 14) => {
   const b = (R.SHIPPING.deliveryLayoutInfo || [])[0]?.bizData || {};
   const title = ((R.PRODUCT_TITLE && R.PRODUCT_TITLE.text) || '').slice(0, 60);
   const choice = b.choiceFreeShipping === 'yes' ? ' Choice free from ' + b.logisticsComposeThreshold : '';
-  return `${pid} ${title} || ship ${b.formattedAmount || 'NA'}${choice} ${b.deliveryDayMin || ''}-${b.deliveryDayMax || ''}d || ${rows.slice(0, max).join(' ; ')}`.replace(/[?&=]/g, ' ');
+  const unreachable = b.unreachable ? ' DOES NOT SHIP HERE' : '';
+  return `${pid} ${title} || ship ${b.formattedAmount || 'NA'}${choice}${unreachable} ${b.deliveryDayMin || ''}-${b.deliveryDayMax || ''}d || ${rows.slice(0, max).join(' ; ')}`.replace(/[?&=]/g, ' ');
 };
 
 // Search, keep titles matching `re`, price each: one string per candidate.

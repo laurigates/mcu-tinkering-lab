@@ -1,6 +1,6 @@
 ---
 name: aliexpress-parts
-description: Price a carrier's BOM on AliExpress and read Lauri's AliExpress order history for parts already owned, from the browser console instead of screenshots. Use when comparing self-assembly against JLCPCB PCBA, checking what components are on hand, or pricing parts in bulk.
+description: Price a carrier's BOM on AliExpress, check every part can be bought, and read Lauri's AliExpress order history for parts already owned, from the browser console instead of screenshots. Use when choosing parts for a design, before ordering a board with parts left for hand-soldering, comparing self-assembly against JLCPCB PCBA, or checking what is on hand.
 argument-hint: <project or BOM to price>
 allowed-tools: Read, Write, Bash
 ---
@@ -86,6 +86,50 @@ Lauri asks; checking out and paying are always Lauri's.
    read the cart before retrying anything, or the retry adds duplicates.
 9. **AliExpress prices include VAT; JLCPCB's exclude it until checkout**
    (`jlcpcb-order` § 4). Compare VAT-inclusive totals.
+10. **A listing can refuse to ship to Finland.** The product query still
+    returns variants and prices; only `SHIPPING.deliveryLayoutInfo[0].bizData`
+    carries `unreachable: true`, with no fee and no delivery days. `__item`
+    prints `DOES NOT SHIP HERE`. On 2026-10-30 the first 3 A 24 V 1812 PTC
+    found was such a listing.
+11. **The cart page renders ten lines.** The rest load only while the page
+    scrolls slowly, a few hundred pixels at a time; a jump to the bottom shows
+    the ten and then the recommendations. The "View more" there loads
+    recommendations, not cart lines. A line can carry a different product id
+    from the one it was added under (the 230-piece XH kit, added as
+    33009421559, is listed as 1005006604844707), so match lines by title and
+    variant, not id alone. Removing a line takes its trash icon, then the
+    "Remove" button in the dialog that follows.
+
+## Sourcing check: can every part be bought?
+
+Run this when choosing a part for a design and before a board is ordered with
+any part left for hand-soldering (`.claude/rules/part-sourcing.md`). For each
+BOM line, in order:
+
+1. **Owned?** Search the order history, then the "Electronics Purchases"
+   artifact (it also holds the eBay history). A matching line names the part
+   or its exact rating; a kit counts only if the kit's listing names the value.
+2. **Sold here?** `__scan` with the exact part number. A hit counts when:
+   - the title or variant names the exact part number, or, for a passive, the
+     value, package, voltage and current the design needs (trap 5);
+   - the listing ships to Finland (trap 10);
+   - the datasheet numbers the design depends on are stated, or the part is a
+     named manufacturer's part whose datasheet states them (trap 6).
+3. **A substitute?** Only through the `part-substitution` skill: both
+   datasheets read and compared on the design's numbers, and the footprint
+   and pin order checked against the registry entry. On 2026-10-30 the ZXMP3A16G was accepted as a
+   hand-build stand-in for the unlisted ZXMP4A16G, which the design keeps: same SOT-223 pin-out, −30 V against −40 V, 45/70 mΩ against
+   60/100 mΩ (Diodes DS33575 Rev. 6, DS33584 Rev. 6).
+4. **None of these**: the part goes to JLCPCB, on the PCBA BOM or an LCSC
+   parts order (`jlcpcb-order` § 1).
+
+Record each line's answer in the quote CSV: owned, listing id and variant,
+substitute with its reason, or JLCPCB. Write a confirmed source into the
+design as `buy` on the registry entry or `hardware.toml` instance
+(`aliexpress:<id>` or `owned:<what>`; a substitute is a different part and gets
+no `buy` on the original). `just kicad::sourcing <project>` then lists what is
+left to JLCPCB. When the parts are for several boards,
+size each line to the number of PCBs ordered, so the PCBs stay the limit.
 
 ## Comparing with JLCPCB PCBA
 

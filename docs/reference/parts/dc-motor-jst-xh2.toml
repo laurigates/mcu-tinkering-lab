@@ -4,6 +4,7 @@ name = "DC motor on JST-XH 2"
 source = "this repo's cable convention (#750): motor terminal 1 on connector pin 1. A brushed motor has no polarity of its own; swapping the lead reverses its direction"
 symbol = "Connector_Generic:Conn_01x02"
 footprint = "Connector_JST:JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical"
+buy = "aliexpress:1005009919435223"  # JST-XH set: header, housing, crimps
 
 # The terminal names hardware.toml's [[outputs]] load_pins use.
 [pins]

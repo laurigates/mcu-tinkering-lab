@@ -6,6 +6,7 @@ symbol = "Device:D_Schottky"
 footprint = "Diode_SMD:D_SOD-123"
 value = "B5819W"
 lcsc = "C8598"
+buy = "aliexpress:1005006127128914"  # 100 pcs
 
 [pins]
 K = 1
