@@ -30,6 +30,7 @@ import numpy as np
 import trimesh
 
 PITCH = 0.25  # voxel edge, mm
+TOUCH = PITCH  # overlap read as contact: under a print's tolerance (about 0.2 mm)
 SEAT_LIFT = 0.25  # start this far above the seated pose: the part rests on its
 # standoffs, and a lid boss can start 0.5 mm over the board
 STEP_MM = 0.5  # lattice translation step: the board-to-wall gap
@@ -162,6 +163,11 @@ def dilate(g: Grid, cells: int) -> Grid:
     return Grid(g.origin, g.pitch, occ)
 
 
+def erode(g: Grid, cells: int) -> Grid:
+    """The grid shrunk by `cells` in every direction."""
+    return Grid(g.origin, g.pitch, ~dilate(Grid(g.origin, g.pitch, ~g.occ), cells).occ)
+
+
 def surface_points(mesh: trimesh.Trimesh, spacing: float, seed: int = 0) -> np.ndarray:
     """The mesh's vertices plus area-weighted samples about `spacing` apart."""
     count = int(mesh.area / (spacing * spacing)) + 1
@@ -206,13 +212,16 @@ class Collider:
     moving_grid: Grid = field(init=False)
 
     def __post_init__(self) -> None:
-        self.fixed_grid = voxelize(self.fixed)
+        full = voxelize(self.fixed)
         # Within this margin of the fixed bodies, the search defers to the
         # fine check: coarse samples alone miss a shallow graze.
-        self.fixed_near = dilate(
-            self.fixed_grid, int(math.ceil(self.coarse / 2 / PITCH))
-        )
-        self.moving_grid = voxelize(self.moving)
+        self.fixed_near = dilate(full, int(math.ceil(self.coarse / 2 / PITCH)))
+        # Both grids lose their outer cell: a touch within TOUCH is contact,
+        # not a clash. A cell centre decides a cell, so without this a 0.25 mm
+        # gap (a lid boss 0.5 mm over the board, the board lifted 0.25 off its
+        # standoffs) reads as either.
+        self.fixed_grid = erode(full, 1)
+        self.moving_grid = erode(voxelize(self.moving), 1)
         self.pivot = self.moving.bounds.mean(axis=0)
         self.pts = {
             "coarse": (
