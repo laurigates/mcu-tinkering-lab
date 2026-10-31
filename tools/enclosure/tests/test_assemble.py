@@ -1,6 +1,7 @@
 """Assembly gates on synthetic pieces: can the board go in, can the screws be
 driven. The box of 2026-10-23 is the control: printed, it could not take its
-board, because the lid bosses stood over all four corners."""
+board, because the lid bosses stood over all four corners. `printed_box`
+rebuilds it."""
 
 import pytest
 from build123d import Align, Box, Cylinder, Pos
@@ -44,12 +45,47 @@ def test_board_lifts_straight_out_of_the_tray():
     assert p.found and name == "lift"
 
 
+BOSS_R = (2.5 + 2 * case.MIN_WALL) / 2  # the 2026-10-23 lid boss: M3 pilot + walls
+
+
+def printed_box(f):
+    """The 2026-10-23 box base: a lid boss in each wall corner from 0.5 mm over
+    the board (3.1 mm over a board screw's head) up to the lid."""
+    wall_top = f.z_top + f.headroom + f.p.lid_clearance
+    body = case._standoffs(f, case._shell(f, wall_top))
+    c = f.p.wall + BOSS_R - 0.5
+    r = f.piece.region
+    for x, y in (
+        (c, c),
+        (f.length - c, c),
+        (c, f.width - c),
+        (f.length - c, f.width - c),
+    ):
+        bx, by = x - f.off + r.x0, r.y1 - (y - f.off)
+        near = any(
+            abs(h.x - bx) < BOSS_R + 3 and abs(h.y - by) < BOSS_R + 3
+            for h in f.piece.holes
+        )
+        z = f.z_top + (3.1 if near else 0.5)
+        body += Pos(x, y, z) * Cylinder(BOSS_R, wall_top - z, align=C)
+    return body
+
+
 def test_the_printed_box_cannot_take_its_board():
     # Control: the box as printed on 2026-10-23. Every strategy must fail.
     f = frame(piece())
-    base, _ = case.box(f)
-    name, p = assemble.removal(collider(base, slab(f)))
+    name, p = assemble.removal(collider(printed_box(f), slab(f)))
     assert not p.found
+
+
+def test_the_generated_box_takes_its_board_and_lid():
+    f = frame(piece())
+    base, lid = case.box(f)
+    name, p = assemble.removal(collider(base, slab(f)))
+    assert p.found and name == "lift"
+    name, p = assemble.removal(collider(base + slab(f), lid))
+    assert p.found and name == "lift"
+    assert case.blocked_screws(f, base) == []
 
 
 def _one_end_box(f, slot: float):
@@ -57,7 +93,7 @@ def _one_end_box(f, slot: float):
     starting `slot` mm above the board."""
     wall_top = f.z_top + 15
     body = case._shell(f, wall_top)
-    r = case.LID_BOSS / 2
+    r = BOSS_R
     c = f.p.wall + r - 0.5
     for y in (c, f.width - c):
         body += Pos(c, y, f.z_top + slot) * Cylinder(
@@ -88,6 +124,5 @@ def test_no_tilt_gets_under_a_boss_half_a_millimetre_up():
 
 def test_lid_bosses_block_the_board_screws_under_them():
     f = frame(piece())
-    base, _ = case.box(f)
-    assert case.blocked_screws(f, base) == ["H1", "H2"]
+    assert case.blocked_screws(f, printed_box(f)) == ["H1", "H2"]
     assert case.blocked_screws(f, case.tray(f)) == []
