@@ -18,8 +18,10 @@ pre-commit run --files <changed files>   # what CI runs; repeat until clean
   pre-commit one argument holding every path. No hook matches it, every hook
   reports Skipped, and the run exits 0. On 2026-10-31 that passed twice
   before a correct run failed the `hardware-join` hook. Use
-  `git diff --name-only -z | xargs -0 pre-commit run --files`, and read the
-  output: a run where every hook says Skipped checked nothing.
+  `git diff --name-only -z --diff-filter=d HEAD | xargs -0 pre-commit run --files`
+  (`--diff-filter=d` drops deleted paths, and `HEAD` includes staged changes;
+  untracked files still need `git add`), and read the output: a run where every
+  hook says Skipped checked nothing.
 - **A script that edits `sys.path` before importing** needs `# noqa: E402` on
   each import after it. Keep them; do not let a newer ruff's fixer strip them.
 - **Agent-written Python** (workflow designers, generated tools) gets the same
