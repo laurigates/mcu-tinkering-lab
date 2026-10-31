@@ -104,6 +104,30 @@ window.__scan = async (q, re, filter, n = 6) => {
   return out;
 };
 
+// --- Delivered total for chosen cart lines (any aliexpress.com page) ---
+// Renders checkout for exactly these cart ids in a hidden iframe and reads its
+// summary. Nothing is ordered, and the cart's ticks are untouched (SKILL.md
+// trap 13). Cart ids come from a checkout URL's availableProductShopcartIds.
+// Run a few in parallel at most; each takes 5-10 s.
+window.__checkout = async (ids, waitMs = 20000) => {
+  const f = document.createElement('iframe');
+  f.style.cssText = 'width:1200px;height:900px;position:fixed;left:-3000px';
+  f.src = '/p/trade/confirm.html?availableProductShopcartIds=' + ids.join(',') + '&aeOrderFrom=main_shopcart';
+  document.body.appendChild(f);
+  let t = '';
+  for (let i = 0; i < waitMs / 500; i++) {
+    await new Promise((r) => setTimeout(r, 500));
+    try { t = f.contentDocument.body.innerText; if (/\nTotal\n€/.test(t)) break; } catch (e) { /* not loaded yet */ }
+  }
+  f.remove();
+  const g = (re) => (t.match(re) || [])[1] || '';
+  return {
+    lines: ids.length, subtotal: g(/Subtotal\n(€[\d.]+)/), saved: g(/Saved\n(-€[\d.]+)/),
+    shipping: g(/Shipping fee\n(€[\d.]+|Free)/), importGross: g(/Estimated import charges\n(€[\d.]+)/),
+    importReduction: g(/reduction\n(-€[\d.]+)/), total: g(/\nTotal\n(€[\d.]+)/),
+  };
+};
+
 // --- Add to cart (only when Lauri asks; run on an /item/<id>.html page) ---
 // 1. Capture the page's own cart.add request: install the hook, then click
 //    "Add to cart" once by hand or with
