@@ -4,30 +4,30 @@
 spatialmath-python==1.1.18
 
 # Scientific computing
-numpy==2.5.3
+numpy==2.5.4
 scipy==1.18.1
 matplotlib==3.11.2
-pandas==3.0.6
+pandas==3.1.0
 
 # Computer vision and image processing
 opencv-python==5.0.0.93
-# Held below 12: genesis-world -> moviepy requires pillow<12.0 (see pyproject.toml).
+# Held below 12: genesis-world 1.4.5 -> moviepy 2.2.x requires pillow<12.0 (see pyproject.toml).
 Pillow==11.3.0
 
 # Communication protocols
-websockets==17.2
+websockets==17.3
 asyncio-mqtt==0.16.2
 pyserial==3.5
 
 # 3D graphics and visualization
-trimesh==5.1.1
+trimesh==5.2.0
 # genesis-world>=0.2.0  # Disabled due to Python 3.11 compatibility issues
 # swift-sim>=1.0.0  # Replaced with Genesis
 # open3d>=0.15.0  # Not compatible with Python 3.13 yet
 # pyvista>=0.38.0  # Reduced for compatibility
 
 # Physics simulation
-pymunk==7.3.0
+pymunk==7.3.1
 
 # Configuration and utilities
 pyyaml==6.0.3
@@ -35,5 +35,5 @@ toml==0.10.2
 click==8.5.0
 
 # Testing framework
-pytest==9.1.1
-pytest-asyncio==1.4.0
+pytest==9.2.0
+pytest-asyncio==1.4.1
