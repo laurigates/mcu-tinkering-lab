@@ -36,6 +36,7 @@ source = "KiCad 10.0.6 library PinHeader_2x07_P2.00mm_Vertical (odd pins in one 
 symbol = "Connector_Generic:Conn_02x07_Odd_Even"
 footprint = "Connector_PinHeader_2.00mm:PinHeader_2x07_P2.00mm_Vertical"
 value = "IDC 2x7 head cable"
+buy = "aliexpress:1005004439103901"  # 2.0 mm 2x20 male header, cut to 2x7
 no_connect = ["NC"]
 
 # XIAO pad -> IDC pin; the comment is the robocar signal on that pad.

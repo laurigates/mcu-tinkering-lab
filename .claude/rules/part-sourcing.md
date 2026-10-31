@@ -42,12 +42,17 @@ And for every part:
   omits a rating the design depends on (a PTC's voltage and hold current, an
   inductor's saturation current) is not a source for that part
   (`aliexpress-parts` trap 6, `power-stage-checklist.md`).
-- **Write the source down** in the `hardware.toml` comment above the part:
-  owned, LCSC number, or AliExpress listing id and date.
+- **Record the source** as `buy` on the part's registry entry or its
+  `hardware.toml` instance (`aliexpress:<id>`, `lcsc:C<n>`, `owned:<what>`),
+  separate from `lcsc`, which only says JLCPCB can place it. A part in a
+  carrier's BOM with neither fails `kicad.sourcing` in CI
+  (`docs/reference/parts/README.md` § Where a part comes from).
 
 ## Before ordering a board
 
-For each SMD part, decide who places it and check that it can be bought:
+`just kicad::sourcing <project>` lists the parts with an LCSC number and no
+`buy`. Those are the parts only JLCPCB or LCSC can supply. For each SMD part,
+decide who places it and check that it can be bought:
 
 - **JLCPCB places it**: it is on the PCBA BOM with an LCSC number that is in
   stock today.

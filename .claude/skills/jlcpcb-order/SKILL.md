@@ -19,8 +19,10 @@ are a calibration, not a quote: JLCPCB changes them.
 ## 1. Before uploading
 
 - **Decide who places each SMD part, and check it can be bought**
-  (`.claude/rules/part-sourcing.md`). Run the `aliexpress-parts` skill's
-  sourcing check on `bom-jlc.csv`: a part that is owned, or sold on AliExpress
+  (`.claude/rules/part-sourcing.md`). `just kicad::sourcing <project>` lists
+  the parts with an LCSC number and no recorded `buy` source; for those, or to
+  re-check a recorded source, run the `aliexpress-parts` skill's sourcing
+  check. A part that is owned, or sold on AliExpress
   under its exact part number with its rating stated and shipping to Finland,
   may be hand-soldered. Every other part stays on the PCBA BOM. Economic PCBA
   places a partial BOM, so a board that is otherwise hand-soldered can still
