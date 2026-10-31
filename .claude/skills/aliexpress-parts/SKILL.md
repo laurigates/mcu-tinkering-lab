@@ -124,7 +124,11 @@ BOM line, in order:
    parts order (`jlcpcb-order` § 1).
 
 Record each line's answer in the quote CSV: owned, listing id and variant,
-substitute with its reason, or JLCPCB. When the parts are for several boards,
+substitute with its reason, or JLCPCB. Write a confirmed source into the
+design as `buy` on the registry entry or `hardware.toml` instance
+(`aliexpress:<id>` or `owned:<what>`; a substitute is a different part and gets
+no `buy` on the original). `just kicad::sourcing <project>` then lists what is
+left to JLCPCB. When the parts are for several boards,
 size each line to the number of PCBs ordered, so the PCBs stay the limit.
 
 ## Comparing with JLCPCB PCBA

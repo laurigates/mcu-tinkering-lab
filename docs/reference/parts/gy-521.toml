@@ -4,6 +4,7 @@ name = "GY-521 MPU6050 breakout"
 source = "the fitted module's silkscreen, read 2026-10-14 (#748); no vendor file"
 symbol = "Connector_Generic:Conn_01x08"
 footprint = "Connector_PinSocket_2.54mm:PinSocket_1x08_P2.54mm_Vertical"
+buy = "aliexpress:1000007373786"  # 2.54 mm 1x40 female strips, cut to length
 no_connect = ["XDA", "XCL"]
 
 [pins]
