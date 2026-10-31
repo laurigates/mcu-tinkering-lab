@@ -22,8 +22,8 @@ dependencies = [
 
 [project.optional-dependencies]
 train = [
-    "torch==2.11.0",
-    "torchvision==0.26.0",
+    "torch==2.13.0",
+    "torchvision==0.28.0",
 ]
 quantize = [
     # B4 — pinned at slice time once the ESP-PPQ install path is exercised
