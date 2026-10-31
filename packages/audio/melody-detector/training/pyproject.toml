@@ -14,10 +14,10 @@ license = {text = "MIT"}
 requires-python = ">=3.12,<3.13"
 
 dependencies = [
-    "numpy==2.4.4",
+    "numpy==2.5.4",
     "pillow==12.2.0",
     "albumentations==2.0.8",
-    "click==8.3.3",
+    "click==8.5.0",
 ]
 
 [project.optional-dependencies]
@@ -29,15 +29,15 @@ quantize = [
     # B4 — pinned at slice time once the ESP-PPQ install path is exercised
     "esp-ppq",
     "onnx==1.17.0",
-    "onnxruntime==1.25.1",
+    "onnxruntime==1.31.1",
 ]
 dev = [
-    "pytest==9.0.3",
+    "pytest==9.2.0",
     "pytest-cov==7.1.0",
     "ruff==0.15.12",
     "ty",
     "onnx==1.17.0",
-    "onnxscript==0.7.0",
+    "onnxscript==0.7.2",
 ]
 
 [project.scripts]

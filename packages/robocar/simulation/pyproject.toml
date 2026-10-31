@@ -34,25 +34,25 @@ requires-python = ">=3.12"
 dependencies = [
     # Core simulation framework with 3D visualization
     "spatialmath-python==1.1.18",
-    "genesis-world==1.4.3",
+    "genesis-world==1.4.5",
     # Scientific computing
-    "numpy==2.5.3",
+    "numpy==2.5.4",
     "scipy==1.18.1",
     "matplotlib==3.11.2",
-    "pandas==3.0.6",
+    "pandas==3.1.0",
     # Computer vision and image processing
     "opencv-python==5.0.0.93",
     # Held below 12: genesis-world 1.4.3 -> moviepy requires pillow<12.0.
     "Pillow==11.3.0",
     # Communication protocols
-    "websockets==17.2",
+    "websockets==17.3",
     "asyncio-mqtt==0.16.2",
     "pyserial==3.5",
     "httpx==0.28.1",  # Required for AI command processor
     # 3D graphics and visualization
-    "trimesh==5.1.1",
+    "trimesh==5.2.0",
     # Physics simulation
-    "pymunk==7.3.0",
+    "pymunk==7.3.1",
     # Configuration and utilities
     "pyyaml==6.0.3",
     "toml==0.10.2",
@@ -65,24 +65,24 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     # Testing framework
-    "pytest==9.1.1",
-    "pytest-asyncio==1.4.0",
+    "pytest==9.2.0",
+    "pytest-asyncio==1.4.1",
     "pytest-cov==7.1.0",
 
     # Code quality
-    "ruff==0.17.0",
+    "ruff==0.17.3",
     # Pinned: ty is pre-1.0 and its diagnostic set moves between releases
     # (e.g. 0.0.79 added the `redundant-condition` rule and 0.0.78 does not
     # recognise a `# ty: ignore[redundant-condition]` suppression for it).
     # An unpinned resolve reddened every PR with no commit to explain it
     # (issue #515). Bump deliberately, verifying `uv run ty check src/`
     # still passes, rather than dropping the pin.
-    "ty==0.0.85",
+    "ty==0.0.93",
     "types-PyYAML",
     "types-toml",
 
     # Documentation
-    "sphinx==9.1.0",
+    "sphinx==9.2.0",
     "sphinx-rtd-theme==3.1.0",
 ]
 gpu = [
