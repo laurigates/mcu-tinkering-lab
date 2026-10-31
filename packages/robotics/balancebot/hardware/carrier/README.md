@@ -152,6 +152,13 @@ so JLCPCB assembly remains possible:
   100 µF ≥ 25 V 6.3 mm SMD electrolytic fit; D2 needs a 15 V zener in
   SOD-123 (BZT52C15 or MMSZ5245B), cathode bar toward the VBAT track. Solder Q1's tab (its drain)
   as well as its three pins.
+  AliExpress does not sell Q1 or F1 as designed (2026-10-30). The ZXMP3A16G
+  fits Q1's footprint with the same pin-out (G, D, S, tab drain; Diodes
+  DS33575 Rev. 6): VDSS −30 V against −40 V, VGS ±20 V, RDS(on) ≤ 45 mΩ at
+  −10 V and ≤ 70 mΩ at −4.5 V, against 60 and 100 mΩ. AliExpress's 1812
+  "3 A 24 V" PTCs state no hold or trip current, so measure one before
+  fitting it, or buy BSMD1812-300-24V (C7500481) from LCSC. Leaving Q1 and F1
+  on the PCBA BOM avoids both (`.claude/rules/part-sourcing.md`).
 
 - Set the LM2596 to 5.0–5.3 V on the bench **before** plugging it into J2. D1
   drops about 0.3 V, so the XIAO's 5V pad sees roughly 4.7–5.0 V.
