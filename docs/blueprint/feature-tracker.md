@@ -55,7 +55,7 @@
 | FR-047 | Parcel planner minimising cash | PRD-016 | planned | P1 | Pack sizes, owned stock from one-page order history; consumed cost reported |
 | FR-048 | Cost per robot at N with labour | PRD-016 | planned | P1 | Hours in docs/reference/build-times.toml, estimates replaced by measurements |
 | FR-049 | JLCPCB PCBA vs bare PCB plus hand assembly | PRD-016 | planned | P2 | IOSS and DDP both priced |
-| FR-050 | Calibration fixtures against real orders | PRD-016 | planned | P0 | Fails when |predicted - observed| > EUR 1; fitted vs held-out fixtures |
+| FR-050 | Calibration fixtures against real orders | PRD-016 | planned | P0 | Fails when a prediction misses its observed total by more than EUR 1; fitted vs held-out fixtures |
 | FR-051 | Plan table and CSV output | PRD-016 | planned | P2 | tmp/quotes/plan-<date>.csv, one row per line |
 | FR-052 | Rule validity windows | PRD-016 | planned | P2 | Warns outside R1's 2026-07-01..2028-07-01 and the VAT rate |
 
