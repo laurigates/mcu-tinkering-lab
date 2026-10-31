@@ -42,7 +42,9 @@ dependencies = [
     "pandas==3.1.0",
     # Computer vision and image processing
     "opencv-python==5.0.0.93",
-    # Held below 12: genesis-world 1.4.3 -> moviepy requires pillow<12.0.
+    # Held below 12: genesis-world 1.4.5 requires Pillow>11.0 and moviepy>=2.0.0;
+    # moviepy 2.2.x (the only releases allowing Pillow 11) requires pillow<12.0,
+    # and 2.2.1 is the newest moviepy.
     "Pillow==11.3.0",
     # Communication protocols
     "websockets==17.3",
@@ -82,7 +84,7 @@ dev = [
     "types-toml",
 
     # Documentation
-    "sphinx==9.2.0",
+    "sphinx==9.1.1",
     "sphinx-rtd-theme==3.1.0",
 ]
 gpu = [
