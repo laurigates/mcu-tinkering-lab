@@ -379,3 +379,24 @@ def interference(case: Part, keep: Part | None, region_box: Part) -> float:
         return 0.0
     clash = case & (keep & region_box)
     return sum(s.volume for s in clash.solids()) if clash else 0.0
+
+
+def blocked_screws(f: Frame, body: Part) -> list[str]:
+    """The board screws a screwdriver cannot reach once the board is in.
+
+    A pan head (SCREW_HEAD) has to go straight down its hole's axis from the
+    case's top to the board, so a cylinder of the head's diameter from just
+    above the board to past the top must miss the case. A lid boss above a
+    board screw leaves room for the head but not for the screw to get there.
+    """
+    top = body.bounding_box().max.Z
+    out = []
+    for h in f.piece.holes:
+        x, y = f.xy(h.x, h.y)
+        reach = Pos(x, y, f.z_top + 0.1) * Cylinder(
+            SCREW_HEAD[0] / 2, top - f.z_top + 1, align=C
+        )
+        hit = body & reach
+        if hit and sum(s.volume for s in hit.solids()) > 0.01:
+            out.append(h.ref)
+    return out

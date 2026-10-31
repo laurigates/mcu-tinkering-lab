@@ -23,6 +23,7 @@ just enclosure::test                 # pytest: synthetic pieces + the balancebot
 just enclosure::gen <project> ...    # STEP/STL/3MF per piece and style, report.json
 just enclosure::render <project>     # isometric line drawings (SVG/PNG)
 just enclosure::assembly <project>   # Blender renders: the populated board in each case
+just enclosure::sequence <project>   # VTK video of each assembly motion gen found
 ```
 
 ## The design (2026-10-23)
@@ -39,7 +40,7 @@ just enclosure::assembly <project>   # Blender renders: the populated board in e
   (`plug`, 6 mm), with `MIN_WALL` above; the tray's low walls keep open
   notches. A back-side connector's window is below the board.
 
-## The gates `gen` enforces (it exits non-zero on either)
+## The gates `gen` enforces (it exits non-zero on any)
 
 1. **Clash**: case ∩ (board STEP moved into case coordinates + a stand-in box
    per model-less part) must be empty within the piece.
@@ -50,11 +51,31 @@ just enclosure::assembly <project>   # Blender renders: the populated board in e
    ring's median is a graze along a tessellated facet, not a wall (a pan-tilt
    yoke read 0.01 mm where it is 1.0). tools/mechanism uses this same gate.
 
-Both have controls in the suite (a part through the wall must clash; a 0.5 mm
-plate must read 0.5 mm; a 0.15 mm fin must still read 0.15 mm), and every
-geometry fix has a test that fails on the pre-fix code.
+3. **Assembly** (`enclosure/assemble.py`): the board, then the lid, must come
+   out of the case by some chain of lifts, slides and tilts: the reverse of
+   putting it in. A best-first search on voxel grids tries a straight lift,
+   then a tuck in each vertical plane (tilt about y sliding in x, tilt about
+   x sliding in y), so a board that has to go in tilted, one edge under an
+   overhang first, passes. Each found path is re-checked at 0.25 mm with
+   fine samples. "Blocked" means no path on that lattice within 60° of tilt;
+   a found path is a proof. The motion goes to
+   `<piece>-{tray-board,box-board,box-lid}.json` for `sequence`.
+4. **Screwdriver path** (`case.blocked_screws`): a cylinder of the pan
+   head's diameter over each board screw, from the board to the case top,
+   must miss the case.
+
+All have controls in the suite (a part through the wall must clash; a 0.5 mm
+plate must read 0.5 mm; a 0.15 mm fin must still read 0.15 mm; the box as
+printed on 2026-10-23 must fail gates 3 and 4), and every geometry fix has a
+test that fails on the pre-fix code.
 
 ## Traps
+
+0. **A case can pass the clash gate and still not take its board.** The
+   2026-10-23 boxes were printed with a lid boss over each board corner, 0.5
+   to 3.1 mm above the board: the board fits seated but no motion gets it
+   there, and each boss also stood over a board screw. Gates 3 and 4 exist
+   for this.
 
 1. **build123d must stay out of `tools/kicad`.** Its unittest discover runs on
    stdlib-only Python in CI and pre-commit; one import breaks both.
