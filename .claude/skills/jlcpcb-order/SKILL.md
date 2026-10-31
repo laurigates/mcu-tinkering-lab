@@ -190,6 +190,39 @@ collects the duty and its own disbursement fee at delivery, so the IOSS
 grand total understates the cost. DDP prepays all of it. Pick between them
 on the delivered total, not the grand total.
 
+### What an IOSS parcel actually cost at delivery
+
+Order W2026102320533303 (both carriers, the robocar PCBA, nine cases) shipped
+IOSS DHL Express. JLCPCB's commercial invoice declared €43.54 goods + €19.48
+shipping + €16 VAT = €79.02. DHL then billed **€29.00 more before
+releasing it**: €9.00 "Import Export Duties" and €20.00 "Duty Tax
+Processing" (huolintaennakkolasku DCI0029689, 2026-10-29). That is 37 % on top
+of the invoice total.
+
+- **The duty is €3 per goods item.** A goods item is a group of lines with the
+  same tariff code and origin (EU Council Regulation 2026/382, 1 July 2026 to
+  1 July 2028; Tulli). The invoice carried four HS codes: 392690 for eight
+  cases, 950300 "Toys Part" for one case, 853400 for the bare PCB and 902300
+  for the PCBA. €9 is three items. These documents do not show which code went
+  uncharged.
+- **DHL adds €20 when the duty exceeds €5** (DHL customs notice). Two goods
+  items already reach €6, so any parcel that mixes PCBs with a PCBA or cases
+  pays the €20 fee. The DDP DHL quote of 2026-10-23 had a €7.36 disbursement
+  where IOSS DHL charged €20; that comparison is across different carts, so
+  re-quote both before choosing.
+- **Check every case's product description on the commercial invoice, not
+  only in the cart.** rc-main-box-lid (D2026102331500307) is recorded in the
+  cart CSV as "Plastic Enclosure HS 392690" but was declared as "Toys Part"
+  HS 950300. That added a goods item. Whether the cart setting slipped or
+  JLCPCB reclassified the line is unknown.
+- **Delivery waits for Lauri.** DHL emails a payment link
+  (huolinta.dhlexpress.fi) after clearance and holds the parcel until it is
+  paid. A parcel moved to a locker gets a PIN; JLCPCB set a collection
+  deadline nine days after arrival before return. DHL billed 3.000 kg against
+  the invoice's 0.906 kg gross weight, which did not change the fee.
+- Tulli plans a separate handling fee on all non-EU e-commerce imports from
+  November 2026; its amount was not published when this was written.
+
 Coupons are applied in the payment step, after Submit Order. Whether the
 VAT is recomputed on the discounted amount was not checked.
 
@@ -206,7 +239,8 @@ VAT is recomputed on the discounted amount was not checked.
   €147.21 together with the €17.80 PCBA coupon. Order B over €88.99 would
   take the €17.80 one itself. The cart's ticked lines are what it prices, so
   tick each order's lines to read its shipping and eligible coupons; each
-  parcel under €150 also pays EU duty and a carrier handling fee (§ 4).
+  parcel under €150 also pays EU duty and a carrier handling fee (§ 4: €29
+  on the IOSS DHL parcel of 2026-10-29), so a split pays that twice.
 - **The cart changes the selection by itself:** after a reload it picked
   "PCBA $10 - EasyEDA" and once "PCB $10 - EasyEDA" over the larger JLCONE
   PCBA $20, and with JLC3DP items in the cart a €8.90 3D-printing coupon. Re-check the panel
