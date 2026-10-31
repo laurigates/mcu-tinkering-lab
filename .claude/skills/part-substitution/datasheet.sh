@@ -17,6 +17,7 @@ pages="${3:-1}"
 [[ -f "$pdf" ]] || { echo "datasheet.sh: no such file: $pdf" >&2; exit 1; }
 head -c 5 "$pdf" | grep -q '^%PDF' || { echo "datasheet.sh: not a PDF: $pdf" >&2; exit 1; }
 command -v pdftotext >/dev/null || { echo "datasheet.sh: pdftotext missing (brew install poppler)" >&2; exit 1; }
+command -v pdftoppm >/dev/null || { echo "datasheet.sh: pdftoppm missing (brew install poppler)" >&2; exit 1; }
 
 mkdir -p "$out"
 stem="$(basename "${pdf%.*}")"

@@ -117,8 +117,8 @@ BOM line, in order:
      named manufacturer's part whose datasheet states them (trap 6).
 3. **A substitute?** Only through the `part-substitution` skill: both
    datasheets read and compared on the design's numbers, and the footprint
-   and pin order checked against the registry entry. On 2026-10-30 the ZXMP3A16G replaced the unlisted
-   ZXMP4A16G: same SOT-223 pin-out, −30 V against −40 V, 45/70 mΩ against
+   and pin order checked against the registry entry. On 2026-10-30 the ZXMP3A16G was accepted as a
+   hand-build stand-in for the unlisted ZXMP4A16G, which the design keeps: same SOT-223 pin-out, −30 V against −40 V, 45/70 mΩ against
    60/100 mΩ (Diodes DS33575 Rev. 6, DS33584 Rev. 6).
 4. **None of these**: the part goes to JLCPCB, on the PCBA BOM or an LCSC
    parts order (`jlcpcb-order` § 1).
