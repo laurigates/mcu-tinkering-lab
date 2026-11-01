@@ -42,9 +42,10 @@ dependencies = [
     "pandas==3.1.0",
     # Computer vision and image processing
     "opencv-python==5.0.0.93",
-    # Held below 12: genesis-world 1.4.5 requires Pillow>11.0 and moviepy>=2.0.0;
-    # moviepy 2.2.x (the only releases allowing Pillow 11) requires pillow<12.0,
-    # and 2.2.1 is the newest moviepy.
+    # genesis-world -> moviepy 2.2.1 (May 2025, the newest release) caps
+    # pillow<12, but the fixes for Pillow's CVEs are in 12.1.1/12.2.0.
+    # The [tool.uv] override-dependencies entry lifts that cap; keep the two
+    # pins equal (tests/test_pillow_override.py checks).
     "Pillow==13.0.0",
     # Communication protocols
     "websockets==17.3",
@@ -105,6 +106,12 @@ Repository = "https://github.com/esp32-robot/simulation.git"
 [project.scripts]
 esp32-sim = "main:main"
 esp32-robot-sim = "main:main"
+
+[tool.uv]
+# moviepy's master branch already requires only pillow>=9.2.0; drop this once
+# a moviepy release past 2.2.1 lifts the pillow<12 cap. Genesis imports
+# moviepy only to write videos (genesis/utils/tools.py, the pyrender viewer).
+override-dependencies = ["pillow==13.0.0"]
 
 [tool.ruff]
 target-version = "py312"
