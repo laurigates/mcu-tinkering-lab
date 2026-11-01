@@ -24,7 +24,7 @@ and the [ESP-DL deployment reference](../../../../docs/reference/esp-dl-deployme
 ```bash
 just sync           # base deps (numpy, pillow, albumentations, click)
 just sync-train     # adds torch + torchvision (B2)
-just sync-quantize  # adds esp-ppq + onnx + onnxruntime (B4)
+just sync-quantize  # train + quantize: esp-ppq and its onnx<1.20 (B4); no dev tools
 ```
 
 The project uses [`uv`](https://docs.astral.sh/uv/) and pins Python
@@ -81,6 +81,7 @@ silently dropped.
 ```bash
 just test           # pytest
 just test-cov       # with coverage report
+just test-quantize  # quantize tests in the quantize environment (esp-ppq installed)
 just lint           # ruff check
 just format-check   # ruff format --check
 just type-check     # ty check
