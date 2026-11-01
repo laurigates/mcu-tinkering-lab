@@ -18,10 +18,17 @@ sync:
 sync-train:
     uv sync --extra train --extra dev
 
-# Install with quantization extras (esp-ppq + onnx)
+# The quantize extra conflicts with dev (pyproject [tool.uv] conflicts), so
+# this env has no pytest; run its tests with `just test-quantize`.
+# Install with quantization extras (esp-ppq, which brings its own onnx<1.20)
 [group: "setup"]
 sync-quantize:
-    uv sync --extra train --extra quantize --extra dev
+    uv sync --extra train --extra quantize
+
+# Quantization tests, in the quantize environment (esp-ppq installed)
+[group: "quality"]
+test-quantize *args:
+    uv run --exact --extra train --extra quantize --with pytest==9.2.0 pytest tests/test_quantize.py {{args}}
 
 ##########
 # Pipeline

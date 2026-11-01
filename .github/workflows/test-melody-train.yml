@@ -43,8 +43,11 @@ jobs:
       - name: Set up Python
         run: uv python install
 
-      - name: Install dependencies (with quantize extra for full B3+B4 coverage)
-        run: uv sync --extra train --extra dev --extra quantize
+      # The dev and quantize extras conflict (pyproject [tool.uv] conflicts):
+      # dev pins the patched onnx, esp-ppq caps onnx<1.20. Lint, types and the
+      # suite run in the dev environment; the quantize tests in their own step.
+      - name: Install dependencies
+        run: uv sync --extra train --extra dev
 
       - name: Lint (ruff)
         run: uv run ruff check --output-format=github .
@@ -57,3 +60,6 @@ jobs:
 
       - name: Pytest
         run: uv run pytest --cov --cov-report=term-missing
+
+      - name: Pytest (quantize extra, ESP-PPQ end-to-end)
+        run: uv run --exact --extra train --extra quantize --with pytest==9.2.0 pytest tests/test_quantize.py
