@@ -22,7 +22,8 @@ dependencies = [
 
 [project.optional-dependencies]
 train = [
-    "torch==2.15.0",
+    # torchvision pins torch exactly (0.28.0 -> torch==2.13.0); move both together.
+    "torch==2.13.0",
     "torchvision==0.28.0",
 ]
 quantize = [
