@@ -3,8 +3,10 @@
 The board screws down onto short standoffs at its mounting holes: a
 self-tapping screw from above into a blind pilot hole (resin takes a thread
 well; it does not take a heat-set insert). The case itself bolts to the
-chassis through two floor tabs. The box lid screws into four bosses merged
-into the wall corners, so nothing reaches down to the board. Case
+chassis through two floor tabs. The box lid hangs a tab inside each long
+wall near each end, and a screw goes through the wall into each tab from
+outside, so nothing in the base stands over the board: the board drops in
+and every board screw can be driven before the lid goes on. Case
 coordinates: x right, y up (board y flipped), z up from the floor's
 underside; the board's bottom face sits at `z_board`.
 """
@@ -13,7 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from build123d import Align, Box, Cylinder, Part, Pos
+from build123d import Align, Box, Cylinder, Part, Pos, Rot
 
 from .board import EnclosureError, Piece, Rect
 from .board import Part as BoardPart
@@ -35,11 +37,17 @@ SCREWS = {
     2.2: ("M2", 1.6, 1.6 + 2 * MIN_WALL),
 }
 CHASSIS_CLEARANCE = 3.4  # M3, ISO 273 medium: the floor tabs' holes
-LID_PILOT, LID_CLEARANCE = 2.5, 3.4  # M3 self-tapping lid screws
-LID_BOSS = LID_PILOT + 2 * MIN_WALL
+LID_PILOT, LID_CLEARANCE = 2.5, 3.4  # M3 self-tapping lid screws, M3 x 6
 SKIN = MIN_WALL  # material left under a blind pilot hole (the floor, a boss end)
-MIN_THREAD = 4.0  # thread engagement a lid screw needs in its boss
-SCREW_HEAD = (6.0, 2.6)  # M3 pan head: diameter, height, kept clear of the lid bosses
+MIN_THREAD = 4.0  # thread engagement a lid screw needs in its tab
+SCREW_HEAD = (6.0, 2.6)  # M3 pan head: diameter, height, kept clear of the lid tabs
+# A lid tab: TAB_T thick (the screw's thread runs through it, horizontally),
+# TAB_W along the wall, hanging TAB_DROP under the lid. The wall keeps
+# MIN_WALL over its clearance hole, the tab MIN_WALL round its pilot.
+TAB_T = MIN_THREAD
+TAB_W = 8.0
+TAB_DROP = MIN_WALL + LID_CLEARANCE / 2 + LID_PILOT / 2 + MIN_WALL
+LIP_FIT = 0.3  # lip and tab to wall: slide fit
 
 
 @dataclass(frozen=True)
@@ -190,40 +198,6 @@ def _tabs(f: Frame, body: Part) -> Part:
     return body
 
 
-def _lid_bosses(f: Frame) -> list[tuple[float, float, float]]:
-    """(x, y, bottom z) of the four lid-screw bosses in the wall corners.
-
-    Each is pushed 0.5 mm into both walls (a tangent cylinder meshes badly)
-    and starts above whatever is under it: a part's courtyard, or a board
-    screw's head.
-    """
-    p = f.p
-    r = LID_BOSS / 2
-    c = p.wall + r - 0.5
-    out = []
-    for x, y in (
-        (c, c),
-        (f.length - c, c),
-        (c, f.width - c),
-        (f.length - c, f.width - c),
-    ):
-        reg = f.piece.region
-        bx, by = x - f.off + reg.x0, reg.y1 - (y - f.off)  # back to board coords
-        reach = Rect(bx - r, by - r, bx + r, by + r)
-        z = f.z_top + 0.5
-        for q in f.piece.parts:
-            if q.side == "top" and q.courtyard.overlaps(reach):
-                z = max(z, f.z_top + f.above(q) + 0.5)
-        for h in f.piece.holes:
-            if (
-                abs(h.x - bx) < r + SCREW_HEAD[0] / 2
-                and abs(h.y - by) < r + SCREW_HEAD[0] / 2
-            ):
-                z = max(z, f.z_top + SCREW_HEAD[1] + 0.5)
-        out.append((x, y, z))
-    return out
-
-
 def _side(r: Rect, c: Rect) -> str:
     """The piece edge a part's courtyard is nearest to."""
     d = {
@@ -276,6 +250,146 @@ def _openings(f: Frame, body: Part, wall_top: float, closed: bool) -> Part:
     return body
 
 
+@dataclass(frozen=True)
+class Tab:
+    """One lid tab: on a board side, at board coordinate `u` along it, with its
+    pilot's centre (x, y, z) in case coordinates and the wall's outward normal."""
+
+    side: str
+    u: float
+    x: float
+    y: float
+    z: float
+    normal: tuple[float, float]
+
+
+def _side_pairs(f: Frame) -> list[tuple[str, str]]:
+    """Opposite wall pairs for the tabs: the long sides first."""
+    r = f.piece.region
+    ns, we = ("north", "south"), ("west", "east")
+    return [ns, we] if r.width >= r.height else [we, ns]
+
+
+def _window_spans(f: Frame, side: str) -> list[tuple[float, float]]:
+    """Board-coordinate spans along `side` taken by its cable windows above the
+    board (a back-side part's window runs below the board, far under a tab)."""
+    r, m = f.piece.region, f.p.opening_margin
+    by_ref = {q.ref: q for q in f.piece.parts}
+    out = []
+    for ref in f.piece.openings:
+        c = by_ref[ref].courtyard
+        if by_ref[ref].side == "top" and _side(r, c) == side:
+            lo, hi = (c.x0, c.x1) if side in ("north", "south") else (c.y0, c.y1)
+            out.append((lo - m, hi + m))
+    return out
+
+
+def _tab_rect(f: Frame, side: str, u: float) -> Rect:
+    """A tab's plan footprint in board coordinates."""
+    r, g = f.piece.region, f.p.gap
+    a, b = u - TAB_W / 2, u + TAB_W / 2
+    n0, n1 = LIP_FIT - g, LIP_FIT - g + TAB_T  # inward from the board edge
+    return {
+        "north": Rect(a, r.y0 + n0, b, r.y0 + n1),
+        "south": Rect(a, r.y1 - n1, b, r.y1 - n0),
+        "west": Rect(r.x0 + n0, a, r.x0 + n1, b),
+        "east": Rect(r.x1 - n1, a, r.x1 - n0, b),
+    }[side]
+
+
+def _tab_need(f: Frame, side: str, u: float) -> float:
+    """The lowest lid (wall top) at which a tab at `u` clears what is under it:
+    a part's model, or a board screw's head."""
+    reach = _tab_rect(f, side, u)
+    floor = f.z_top + 0.5
+    for q in f.piece.parts:
+        if q.side == "top" and q.courtyard.overlaps(reach):
+            floor = max(floor, f.z_top + f.above(q) + 0.5)
+    k = SCREW_HEAD[0] / 2
+    for h in f.piece.holes:
+        if reach.overlaps(Rect(h.x - k, h.y - k, h.x + k, h.y + k)):
+            floor = max(floor, f.z_top + SCREW_HEAD[1] + 0.5)
+    return floor + TAB_DROP
+
+
+def _pick_pair(cands: list[tuple[float, float]], lo: float, hi: float):
+    """Two candidates (u, need) at the lowest lid that allows a pair at least
+    two tab widths apart: those nearest the quarter points, else the two ends."""
+    q1, q3 = lo + (hi - lo) / 4, lo + 3 * (hi - lo) / 4
+    for level in sorted({n for _, n in cands}):
+        ok = [u for u, n in cands if n <= level]
+        a = min(ok, key=lambda u: abs(u - q1))
+        b = min(ok, key=lambda u: abs(u - q3))
+        if b - a < 2 * TAB_W:
+            a, b = min(ok), max(ok)
+        if b - a >= 2 * TAB_W:
+            return level, (a, b)
+    return None
+
+
+def lid_tabs(f: Frame) -> tuple[float, list[Tab]]:
+    """(wall top, the four lid tabs): two on each long side, placed clear of the
+    cable windows and as low a lid as the parts under them allow; the short
+    sides when the cable windows leave the long ones no room. The box grows
+    taller only when no pair of tab positions clears its parts."""
+    errors = []
+    for pair in _side_pairs(f):
+        try:
+            return _tabs_on(f, pair)
+        except EnclosureError as e:
+            errors.append(str(e))
+    raise EnclosureError("; ".join(errors))
+
+
+def _tabs_on(f: Frame, pair: tuple[str, str]) -> tuple[float, list[Tab]]:
+    p, r = f.p, f.piece.region
+    wall_top = f.z_top + f.headroom + p.lid_clearance
+    picks = {}
+    for side in pair:
+        lo_b, hi_b = (r.x0, r.x1) if side in ("north", "south") else (r.y0, r.y1)
+        # A tab end keeps the slide fit from the perpendicular wall, as the
+        # lip does: flush against it the lid would not go on.
+        lo = lo_b - p.gap + LIP_FIT + TAB_W / 2
+        hi = hi_b + p.gap - LIP_FIT - TAB_W / 2
+        windows = _window_spans(f, side)
+        cands = []
+        u = lo
+        while u <= hi + 1e-9:
+            a, b = u - TAB_W / 2, u + TAB_W / 2
+            if not any(a < w1 and w0 < b for w0, w1 in windows):
+                cands.append((u, max(wall_top, _tab_need(f, side, u))))
+            u += 0.5
+        pick = _pick_pair(cands, lo, hi) if cands else None
+        if pick is None:
+            raise EnclosureError(
+                f"{f.piece.name}: no room for two lid tabs on the {side} wall "
+                "clear of its cable windows"
+            )
+        picks[side] = pick
+    wall_top = max([wall_top] + [lv for lv, _ in picks.values()])
+    z = wall_top - MIN_WALL - LID_CLEARANCE / 2
+    inset = p.wall + LIP_FIT + TAB_T / 2  # outer edge to the pilot's middle
+    tabs = []
+    for side, (_, us) in picks.items():
+        for u in us:
+            if side in ("north", "south"):
+                x, _ = f.xy(u, 0)
+                y = f.width - inset if side == "north" else inset
+                normal = (0.0, 1.0) if side == "north" else (0.0, -1.0)
+            else:
+                _, y = f.xy(0, u)
+                x = inset if side == "west" else f.length - inset
+                normal = (-1.0, 0.0) if side == "west" else (1.0, 0.0)
+            tabs.append(Tab(side, u, x, y, z, normal))
+    return wall_top, tabs
+
+
+def _along_normal(radius: float, length: float, normal) -> Part:
+    """A cylinder centred on the origin with its axis along a wall's normal."""
+    rot = Rot(90, 0, 0) if normal[0] == 0 else Rot(0, 90, 0)
+    return rot * Cylinder(radius, length)
+
+
 def tray(f: Frame) -> Part:
     height = f.z_top + f.p.lip
     body = _standoffs(f, _shell(f, height))
@@ -285,30 +399,21 @@ def tray(f: Frame) -> Part:
 
 def box(f: Frame) -> tuple[Part, Part]:
     """(base, lid). The lid sits on the walls, a lip locates it, and four
-    screws hold it to bosses in the wall corners."""
+    screws through the long walls hold its tabs (`lid_tabs`)."""
     p = f.p
-    wall_top = f.z_top + f.headroom + p.lid_clearance
+    wall_top, tabs = lid_tabs(f)
     base = _standoffs(f, _shell(f, wall_top))
-    # A boss with less than MIN_THREAD over its skin cannot hold a screw (head
-    # 1's camera module fills one corner up to 1.5 mm under the lid): drop it,
-    # and refuse a lid left with fewer than two.
-    bosses = [b for b in _lid_bosses(f) if wall_top - b[2] >= SKIN + MIN_THREAD]
-    if len(bosses) < 2:
-        raise EnclosureError(
-            f"{f.piece.name}: only {len(bosses)} corner can take a lid screw; "
-            "use the tray, or more lid_clearance"
-        )
-    for x, y, z in bosses:
-        base += Pos(x, y, z) * Cylinder(LID_BOSS / 2, wall_top - z, align=C)
-        depth = min(8.0, wall_top - z - SKIN)
-        base -= Pos(x, y, wall_top - depth) * Cylinder(
-            LID_PILOT / 2, depth + 1, align=C
+    for tab in tabs:
+        nx, ny = tab.normal
+        d = TAB_T / 2 + LIP_FIT + p.wall / 2  # pilot's middle to the wall's middle
+        base -= Pos(tab.x + nx * d, tab.y + ny * d, tab.z) * _along_normal(
+            LID_CLEARANCE / 2, p.wall + 2, tab.normal
         )
     base = _openings(f, base, wall_top, closed=True)
     base = _tabs(f, base)
 
     lid = Pos(0, 0, wall_top) * Box(f.length, f.width, p.lid, align=A)
-    t = 0.3  # lip-to-wall slide fit
+    t = LIP_FIT
     lip_h = 3.0
     inner = p.wall + t + MIN_WALL
     ring = Pos(p.wall + t, p.wall + t, wall_top - lip_h) * Box(
@@ -317,17 +422,16 @@ def box(f: Frame) -> tuple[Part, Part]:
     ring -= Pos(inner, inner, wall_top - lip_h - 1) * Box(
         f.length - 2 * inner, f.width - 2 * inner, lip_h + 2, align=A
     )
-    # The lip stops short of each corner boss with a square end: cutting it
-    # round the boss left it tapering to a 0.004 mm point.
-    notch = p.wall + LID_BOSS + t
-    for cx in (0, f.length - notch):
-        for cy in (0, f.width - notch):
-            ring -= Pos(cx, cy, wall_top - lip_h - 1) * Box(
-                notch, notch, lip_h + 2, align=A
-            )
     lid += ring
-    for x, y, _ in bosses:
-        lid -= Pos(x, y, wall_top - 1) * Cylinder(LID_CLEARANCE / 2, p.lid + 2, align=C)
+    for tab in tabs:
+        nx, ny = tab.normal
+        w = (TAB_W, TAB_T) if nx == 0 else (TAB_T, TAB_W)
+        lid += Pos(tab.x, tab.y, wall_top - TAB_DROP) * Box(
+            w[0], w[1], TAB_DROP + 0.01, align=C
+        )
+        lid -= Pos(tab.x, tab.y, tab.z) * _along_normal(
+            LID_PILOT / 2, TAB_T + 2, tab.normal
+        )
     for ref in f.piece.lid_windows:
         part = next(q for q in f.piece.parts if q.ref == ref)
         x, y, w, h = f.rect(part.courtyard)
@@ -342,9 +446,11 @@ def box(f: Frame) -> tuple[Part, Part]:
             cut = Pos(x0, y0, wall_top - lip_h - 1) * Box(
                 x1 - x0, y1 - y0, lip_h + p.lid + 2, align=A
             )
-            for bx, by, _ in bosses:
-                cut -= Pos(bx, by, wall_top - lip_h - 2) * Cylinder(
-                    LID_BOSS / 2 + t + MIN_WALL, lip_h + p.lid + 4, align=C
+            for tab in tabs:
+                w = (TAB_W, TAB_T) if tab.normal[0] == 0 else (TAB_T, TAB_W)
+                grow = 2 * (t + MIN_WALL)
+                cut -= Pos(tab.x, tab.y, wall_top - lip_h - 2) * Box(
+                    w[0] + grow, w[1] + grow, lip_h + p.lid + 4, align=C
                 )
             lid -= cut
     return base, lid
@@ -373,9 +479,48 @@ def keepout(f: Frame, board_step: Part | None) -> Part | None:
     return out
 
 
+def piece_clip(f: Frame, others: list[Rect]) -> Part:
+    """The volume whose share of the board belongs to this piece: its footprint
+    grown out past the walls, so a connector overhanging the board edge
+    through a window counts, less the footprints of the board's other pieces
+    (sawn off before the board goes in)."""
+    reach = f.off + 10.0
+    r = f.piece.region
+    out = Pos(f.off - reach, f.off - reach, -50) * Box(
+        r.width + 2 * reach, r.height + 2 * reach, 200, align=A
+    )
+    for o in others:
+        if o == r:
+            continue
+        x, y, w, h = f.rect(o)
+        out -= Pos(x, y, -60) * Box(w, h, 220, align=A)
+    return out
+
+
 def interference(case: Part, keep: Part | None, region_box: Part) -> float:
     """mm³ of case material inside the keep-out, within this piece's footprint."""
     if keep is None:
         return 0.0
     clash = case & (keep & region_box)
     return sum(s.volume for s in clash.solids()) if clash else 0.0
+
+
+def blocked_screws(f: Frame, body: Part) -> list[str]:
+    """The board screws a screwdriver cannot reach once the board is in.
+
+    A pan head (SCREW_HEAD) has to go straight down its hole's axis from the
+    case's top to the board, so a cylinder of the head's diameter from just
+    above the board to past the top must miss the case. A lid boss above a
+    board screw leaves room for the head but not for the screw to get there.
+    """
+    top = body.bounding_box().max.Z
+    out = []
+    for h in f.piece.holes:
+        x, y = f.xy(h.x, h.y)
+        reach = Pos(x, y, f.z_top + 0.1) * Cylinder(
+            SCREW_HEAD[0] / 2, top - f.z_top + 1, align=C
+        )
+        hit = body & reach
+        if hit and sum(s.volume for s in hit.solids()) > 0.01:
+            out.append(h.ref)
+    return out

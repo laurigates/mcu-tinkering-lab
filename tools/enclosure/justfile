@@ -10,9 +10,18 @@ _run := "cd " + source_directory() + " && PYTHONPATH=" + _root + "/tools:" + sou
 test:
     {{_run}} pytest -q
 
-# Generate tray and box for a project, e.g. packages/robotics/balancebot
+# Generate tray and box for a project, e.g. packages/robotics/balancebot.
+# Fails on a clash, a thin wall, a board that cannot be put in, or a board
+# screw no screwdriver can reach.
 gen +projects:
     {{_run}} python -m enclosure {{ prepend(_root + "/", projects) }}
+
+# Animate the assembly motions `gen` found (board into each case, then the
+# lid): <piece>-<style>-assembly.mp4 and -keys.png. A blocked step stops where
+# the board jams, touching points in red. Needs ffmpeg; headless Linux also
+# needs libosmesa6 (`just mechanism::setup` installs it).
+sequence project:
+    {{_run}} python -m enclosure.sequence {{_root}}/{{project}}
 
 # Isometric SVG + PNG of every generated case STEP for a project
 render project:

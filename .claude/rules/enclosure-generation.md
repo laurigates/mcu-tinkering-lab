@@ -15,5 +15,7 @@ time:
 2. **Read geometry from the board, not from a copy.** Positions and holes come
    from the `.kicad_pcb`, heights from the STEP; only parts with no 3D model
    get an `enclosure.toml` height, with its `source`.
-3. **`just enclosure::gen` must exit 0.** It fails on a clash with the board or
-   a wall under 2.0 mm; JLC3DP's own upload check is not a substitute.
+3. **`just enclosure::gen` must exit 0.** It fails on a clash with the board, a
+   wall under 2.0 mm, a board that no lift or tilt gets into the case, or a
+   board screw no screwdriver can reach; JLC3DP's own upload check is not a
+   substitute. `just enclosure::sequence` animates the motions it found.
