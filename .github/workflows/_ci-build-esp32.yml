@@ -37,6 +37,18 @@ jobs:
         with:
           submodules: recursive
 
+      # `docker load` unpacks the cached multi-GB image tarball into
+      # /var/lib/docker while the tarball is still on disk, so the job briefly
+      # needs about twice the image size on /. The hosted image's free space
+      # varies, and the load ran out of disk on PR #909 (issue #913). Remove
+      # preinstalled toolchains no step here uses before the cache restore.
+      - name: Free runner disk space
+        run: |
+          df -h /
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
+            /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
+          df -h /
+
       # Cache the espressif/idf Docker image as a tarball so subsequent jobs
       # skip the multi-GB `docker pull`. Keyed strictly on IDF_VERSION since
       # the image tag is immutable once published.
@@ -49,7 +61,9 @@ jobs:
 
       - name: Load ESP-IDF Docker image from cache
         if: steps.idf-image-cache.outputs.cache-hit == 'true'
-        run: docker load --input ~/.cache/esp-idf-docker/espressif-idf-${{ env.IDF_VERSION }}.tar
+        run: |
+          docker load --input ~/.cache/esp-idf-docker/espressif-idf-${{ env.IDF_VERSION }}.tar
+          df -h /
 
       - name: Pull and save ESP-IDF Docker image
         if: steps.idf-image-cache.outputs.cache-hit != 'true'
@@ -58,6 +72,7 @@ jobs:
           mkdir -p ~/.cache/esp-idf-docker
           docker save espressif/idf:${{ env.IDF_VERSION }} \
             -o ~/.cache/esp-idf-docker/espressif-idf-${{ env.IDF_VERSION }}.tar
+          df -h /
 
       # Cache IDF Component Manager downloads (~/managed_components inside each
       # project) keyed on the lockfile. Falls back to the latest cache for this
