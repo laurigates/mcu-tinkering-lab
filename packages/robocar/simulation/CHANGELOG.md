@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.10](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-simulation-v0.1.9...robocar-simulation-v0.1.10) (2026-11-01)
+
+
+### Bug Fixes
+
+* **robocar-simulation:** lift moviepy's pillow&lt;12 cap with a uv override ([8fbcfd4](https://github.com/laurigates/mcu-tinkering-lab/commit/8fbcfd43a8a14d394db785002f034d44b6b3af01))
+
 ## [0.1.9](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-simulation-v0.1.8...robocar-simulation-v0.1.9) (2026-11-01)
 
 
