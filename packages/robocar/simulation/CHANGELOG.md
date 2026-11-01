@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.9](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-simulation-v0.1.8...robocar-simulation-v0.1.9) (2026-11-01)
+
+
+### Bug Fixes
+
+* **deps:** update all non-major dependencies ([#892](https://github.com/laurigates/mcu-tinkering-lab/issues/892)) ([ea3870d](https://github.com/laurigates/mcu-tinkering-lab/commit/ea3870d9141b394d3f291504687e428c9a7aa21d))
+* **deps:** update dependency pillow to v13 [security] ([#894](https://github.com/laurigates/mcu-tinkering-lab/issues/894)) ([2265110](https://github.com/laurigates/mcu-tinkering-lab/commit/2265110f7bad415878a847d30d2f8b77fa72c92c))
+* **deps:** update non-major dependencies, keeping melody-train torch paired with torchvision ([#915](https://github.com/laurigates/mcu-tinkering-lab/issues/915)) ([7546117](https://github.com/laurigates/mcu-tinkering-lab/commit/75461174866dcd28960fe5364a23dd5a6b4ec1ff))
+
 ## [0.1.8](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-simulation-v0.1.7...robocar-simulation-v0.1.8) (2026-10-21)
 
 
