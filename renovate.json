@@ -19,12 +19,6 @@
       "groupName": "gitleaks"
     },
     {
-      "description": "Hold Pillow below 12 in the robocar simulation: genesis-world -> moviepy requires pillow<12, so a 12.x pin makes the dependency set unsatisfiable (#732). Drop once moviepy allows Pillow 12.",
-      "matchFileNames": ["packages/robocar/simulation/**"],
-      "matchPackageNames": ["/^pillow$/i"],
-      "allowedVersions": "<12"
-    },
-    {
       "description": "Hold sphinx below 9.2 in the robocar simulation: sphinx 9.2 requires Python >=3.13 while the simulation's requires-python floor is 3.12, so uv cannot resolve. Drop once the simulation floor moves to 3.13.",
       "matchFileNames": ["packages/robocar/simulation/**"],
       "matchPackageNames": ["/^sphinx$/i"],
