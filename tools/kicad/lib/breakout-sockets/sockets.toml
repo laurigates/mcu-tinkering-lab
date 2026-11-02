@@ -34,11 +34,19 @@ pads = ["JP1"]
 outline = [0, -19.05, 17.78, 0]
 
 # The left row JP3.1-12 is pads 1-12, the right row JP1.1-12 pads 13-24.
+# The purple TCA9548A/PCA9548A clone has the same pin order with its rows
+# 17.78 mm apart, one pitch wider than Adafruit's 15.24 mm (the board page's
+# "Wider clone"): its right row sits on JP1 and its left row one pitch outside
+# JP3, so JP3's pads are doubled there with the same numbers. The clone's
+# outline is Lauri's caliper reading (21.8 x 31.2 mm, 2026-11-02), centred on
+# its holes, which is an assumption: the offsets from the holes to its edges
+# were not measured.
 [[socket]]
 name = "Adafruit_TCA9548A_Socket"
 board = "adafruit-tca9548a"
 pads = ["JP3", "JP1"]
 outline = [0, -30.48, 17.78, 0]
+twin = { element = "JP3", offset = [-2.54, 0], outline = [-3.28, -30.84, 18.52, 0.36] }
 
 # The left side header JP3 (pads 1-6), then the PWM row of servo channels
 # 8-13 in channel order (pads 7-12). The V+ and GND rows, JP4 and the
