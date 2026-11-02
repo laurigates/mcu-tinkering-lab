@@ -176,7 +176,7 @@ From the repo root, with tools/mechanism (`just mechanism::setup` once):
 just mechanism::build packages/robocar/unified/hardware/pan-tilt/print       # print/<part>.step and .stl (the order files)
 just mechanism::check packages/robocar/unified/hardware/pan-tilt/print       # print/output/check.json; fails on any clash (~6 min)
 just mechanism::showcase packages/robocar/unified/hardware/pan-tilt/print    # print/output/showcase/*.png
-just mechanism::animate packages/robocar/unified/hardware/pan-tilt/print     # print/output/animation/: sweep GIF, contact sheet, between-pose clashes
+just mechanism::animate packages/robocar/unified/hardware/pan-tilt/print     # print/output/animation/: AV1 sweep video, contact sheet, between-pose clashes
 just mechanism::check packages/robocar/unified/hardware/pan-tilt/entries/<slug>   # any tournament entry, same gates
 ```
 

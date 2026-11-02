@@ -1,5 +1,6 @@
-"""The travel animation: its pose path, the clashes between gate poses, the GIF."""
+"""The travel animation: its pose path, the clashes between gate poses, the video."""
 
+import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -56,7 +57,39 @@ def test_a_clash_between_gate_poses_is_reported_as_missed_by_the_gate():
     assert (c["a"], c["b"]) == ("arm", "post")
 
 
-def test_the_gif_has_one_frame_per_pose(tmp_path: Path):
+def test_holds_give_motion_one_frame_and_stops_longer():
+    step = animate.Frame((15, 0), gate=False, clashes=[])
+    gate = animate.Frame((30, 0), gate=True, clashes=[])
+    hit = animate.Frame((45, 0), gate=False, clashes=[{"a": "x", "b": "y", "mm3": 1.0}])
+    assert animate.hold(step, fps=24) == 1
+    assert animate.hold(gate, fps=24) == round(24 * animate.HOLD_GATE_S)
+    assert animate.hold(hit, fps=24) == round(24 * animate.HOLD_CLASH_S)
+    assert animate.hold(step, fps=24, end=True) == round(24 * animate.HOLD_END_S)
+
+
+def _ffprobe(path: Path, entry: str) -> str:
+    out = subprocess.run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-count_frames",
+            "-show_entries",
+            f"stream={entry}",
+            "-of",
+            "csv=p=0",
+            str(path),
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return out.stdout.strip()
+
+
+def test_the_video_is_av1_with_every_held_frame(tmp_path: Path):
     pv = pytest.importorskip("pyvista")
     try:
         p = pv.Plotter(off_screen=True, window_size=(64, 64))
@@ -64,7 +97,8 @@ def test_the_gif_has_one_frame_per_pose(tmp_path: Path):
         p.close()
     except Exception as e:  # no libOSMesa / EGL
         pytest.skip(f"no off-screen VTK: {e}")
-    from PIL import Image
+    if animate.av1_encoder() is None:
+        pytest.skip("no ffmpeg with an AV1 encoder")
 
     design = tmp_path / "arm"
     design.mkdir()
@@ -79,9 +113,18 @@ def test_the_gif_has_one_frame_per_pose(tmp_path: Path):
         "    post = Rot(0, 0, 45) * Pos(20, 0, 0) * Box(4, 4, 10)\n"
         "    return [Body('arm', arm, 'moving', printed=True), Body('post', post, 'base')]\n"
     )
-    assert animate.main([str(design), "--between", "1", "--size", "160x120"]) == 1
+    # odd width: the encoder needs even dimensions, so the writer pads
+    assert (
+        animate.main(
+            [str(design), "--between", "1", "--size", "161x120", "--fps", "12"]
+        )
+        == 1
+    )
     out = design / "output" / "animation"
-    with Image.open(out / "sweep.gif") as gif:
-        assert gif.n_frames == 3
+    video = out / "sweep.mp4"
+    assert _ffprobe(video, "codec_name") == "av1"
+    # gate+start, clash, gate+end: each held for its longest reason
+    want = 2 * round(12 * animate.HOLD_END_S) + round(12 * animate.HOLD_CLASH_S)
+    assert int(_ffprobe(video, "nb_read_frames")) == want
     assert (out / "sweep-sheet.png").exists()
     assert (out / "sweep.json").exists()
