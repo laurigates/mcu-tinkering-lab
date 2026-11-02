@@ -12,13 +12,19 @@ colours, stand-ins translucent, and on a clash both bodies turned red with
 their common solid drawn opaque and labelled in mm3. Writes
 ``<design dir>/output/animation/``:
 
-- ``sweep.gif``: every frame, holding longer on gate poses and on clashes
+- ``sweep.mp4``: AV1 video of the whole travel at ``--fps``, one frame per
+  pose, held on gate poses, longer on clashes and at both ends
 - ``sweep-sheet.png``: the gate poses alone as a grid (pan across, tilt down
   for a two-joint grid), clashing poses framed red
 - ``sweep.json``: the path, ``gate_clashes`` and ``between_clashes``
 
-Run: ``python -m mechanism.animate <design dir> [--between N] [--size WxH]``;
-exits 1 on any clash, gate pose or between.
+The video is encoded by the system ``ffmpeg`` (raw RGB frames on a pipe,
+streamed as they are rendered), with the first AV1 encoder it has of
+``libsvtav1``, ``libaom-av1`` and ``librav1e``. Debian/Ubuntu's and Homebrew's
+ffmpeg carry SVT-AV1.
+
+Run: ``python -m mechanism.animate <design dir> [--between N] [--size WxH]
+[--fps N]``; exits 1 on any clash, gate pose or between.
 """
 
 from __future__ import annotations
@@ -27,6 +33,8 @@ import argparse
 import itertools
 import json
 import math
+import shutil
+import subprocess
 import sys
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -41,7 +49,9 @@ from mechanism.showcase import STANDIN, VIEWS, colours, mesh
 
 CLASH = "#d62728"
 CLEAR = "#2ca02c"
-MS_STEP, MS_GATE, MS_CLASH = 90, 350, 900  # GIF frame durations
+HOLD_GATE_S, HOLD_CLASH_S, HOLD_END_S = 0.25, 1.0, 1.0  # a step shows one frame
+AV1_ENCODERS = ("libsvtav1", "libaom-av1", "librav1e")
+AV1_CRF = 32  # 0-63, lower is better; flat CAD renders compress well
 THUMB_W = 220
 CAPTION_PX = 15
 
@@ -94,6 +104,63 @@ def iter_frames(mod, at: list[tuple]) -> Iterator[tuple[Frame, list, list]]:
         ov = overlaps(bodies)
         clashes = [{"a": a.name, "b": b.name, "mm3": round(v, 3)} for a, b, _, v in ov]
         yield Frame(pose, pose in gates, clashes), bodies, ov
+
+
+def hold(f: Frame, fps: int, end: bool = False) -> int:
+    """Video frames for one pose: one for motion, held for its longest reason."""
+    secs = max(
+        HOLD_CLASH_S if f.clashes else 0.0,
+        HOLD_GATE_S if f.gate else 0.0,
+        HOLD_END_S if end else 0.0,
+    )
+    return max(1, round(fps * secs))
+
+
+def av1_encoder() -> str | None:
+    """The first AV1 encoder the system ffmpeg has, or None."""
+    if shutil.which("ffmpeg") is None:
+        return None
+    have = subprocess.run(
+        ["ffmpeg", "-hide_banner", "-encoders"], capture_output=True, text=True
+    ).stdout
+    return next((e for e in AV1_ENCODERS if f" {e} " in have), None)
+
+
+class Av1Writer:
+    """Streams RGB frames to ffmpeg; pads to even dimensions for yuv420p."""
+
+    def __init__(self, path_: Path, size: tuple[int, int], fps: int):
+        enc = av1_encoder()
+        if enc is None:
+            raise SystemExit(
+                "animate: needs ffmpeg with an AV1 encoder (one of "
+                + ", ".join(AV1_ENCODERS)
+                + "); apt install ffmpeg / brew install ffmpeg"
+            )
+        self.size = (size[0] + size[0] % 2, size[1] + size[1] % 2)
+        quality = {"libsvtav1": ["-crf", str(AV1_CRF), "-preset", "6"],
+                   "libaom-av1": ["-crf", str(AV1_CRF), "-b:v", "0", "-cpu-used", "6"],
+                   "librav1e": ["-qp", str(AV1_CRF * 4)]}[enc]  # fmt: skip
+        self.proc = subprocess.Popen(
+            ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+             "-f", "rawvideo", "-pix_fmt", "rgb24",
+             "-s", f"{self.size[0]}x{self.size[1]}", "-r", str(fps), "-i", "-",
+             "-c:v", enc, *quality, "-pix_fmt", "yuv420p",
+             "-movflags", "+faststart", str(path_)],
+            stdin=subprocess.PIPE,
+        )  # fmt: skip
+
+    def write(self, img: Image.Image, times: int = 1) -> None:
+        frame = Image.new("RGB", self.size, "white")
+        frame.paste(img.convert("RGB"), (0, 0))
+        data = frame.tobytes()
+        for _ in range(times):
+            self.proc.stdin.write(data)
+
+    def close(self) -> None:
+        self.proc.stdin.close()
+        if self.proc.wait() != 0:
+            raise RuntimeError(f"ffmpeg exited {self.proc.returncode}")
 
 
 def frames(mod, at: list[tuple]) -> list[Frame]:
@@ -228,9 +295,10 @@ def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="python -m mechanism.animate")
     ap.add_argument("design_dir", type=Path)
     ap.add_argument(
-        "--between", type=int, default=2, help="interpolated poses per gate step"
+        "--between", type=int, default=5, help="interpolated poses per gate step"
     )
-    ap.add_argument("--size", default="640x512", help="frame size WxH")
+    ap.add_argument("--fps", type=int, default=24, help="video frame rate")
+    ap.add_argument("--size", default="800x640", help="frame size WxH")
     args = ap.parse_args(argv)
     design_dir = args.design_dir.resolve()
     size = tuple(int(v) for v in args.size.split("x"))
@@ -242,7 +310,8 @@ def main(argv: list[str]) -> int:
     cols, cam = colours(at_rest), _camera(at_rest, size)
     del at_rest
     at = path(mod, args.between)
-    fs, imgs, shots, durations = [], [], [], []
+    fs, shots = [], []
+    video, pending = None, None  # a frame waits one step so the last one is held
     for i, (f, bodies, ov) in enumerate(iter_frames(mod, at), 1):
         kind = "gate pose" if f.gate else "between gate poses"
         status = (
@@ -255,23 +324,18 @@ def main(argv: list[str]) -> int:
         shot = render(bodies, ov, cols, cam, size)
         if f.gate:
             shots.append(shot)
-        imgs.append(caption(shot, title, status, bool(f.clashes)))
-        durations.append(MS_CLASH if f.clashes else MS_GATE if f.gate else MS_STEP)
+        img = caption(shot, title, status, bool(f.clashes))
+        if video is None:
+            video = Av1Writer(out / "sweep.mp4", img.size, args.fps)
+        if pending is not None:
+            video.write(pending[1], hold(pending[0], args.fps, end=i == 2))
+        pending = (f, img)
         fs.append(f)
         print(f"{i}/{len(at)} {pose_label(mod, f.pose)}: {status}", flush=True)
 
-    pal = [
-        im.convert("RGB").quantize(colors=128, method=Image.Quantize.MEDIANCUT)
-        for im in imgs
-    ]
-    pal[0].save(
-        out / "sweep.gif",
-        save_all=True,
-        append_images=pal[1:],
-        duration=durations,
-        loop=0,
-        optimize=True,
-    )
+    video.write(pending[1], hold(pending[0], args.fps, end=True))
+    video.close()
+    (out / "sweep.gif").unlink(missing_ok=True)  # replaced by the video
     sheet(
         mod,
         list(zip([f for f in fs if f.gate], shots, strict=True)),
@@ -279,7 +343,7 @@ def main(argv: list[str]) -> int:
     )
     s = {"entry": design_dir.name, "between": args.between, **summary(mod, fs)}
     (out / "sweep.json").write_text(json.dumps(s, indent=2) + "\n")
-    print(out / "sweep.gif")
+    print(out / "sweep.mp4")
     return 1 if s["gate_clashes"] or s["between_clashes"] else 0
 
 
