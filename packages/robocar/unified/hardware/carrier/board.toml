@@ -140,28 +140,36 @@ J15 = [55.5, 2.3, 0]      # UART0 TX tap: GND, TX; the ROM boot log, 115200 baud
 # The MCP23017's decoupling (WIRING.md's C6) beside the CJMCU-2317's VCC pin.
 C6 = [38.6, 8.6, 0]
 # The TCA9548A turned so its channel 3/4 header faces the rangefinders and its
-# upstream and channel 0/1/2 header faces the PCA9685 and the expander.
-A3 = [2.5, 26.0, 90]
-C5 = [3.5, 30.5, 0]       # TCA9548A VIN decoupling, below its VIN pin
-# Upstream I2C pull-ups below it (pre-fab review N-4).
-R12 = [2.6, 33.1, 0]      # SDA
-R13 = [6.45, 33.1, 0]     # SCL
-# The mux channel pull-ups in a row under the TCA9548A: ch0 and ch1, then ch3
-# and ch4. Channel 2's pair sits under the test headers, on its way to the
-# expander (Freerouting necked tracks between the row's pads at a 2.5 mm pitch).
-R2 = [9.0, 30.0, 90]
-R3 = [12.0, 30.0, 90]
-R4 = [15.0, 30.0, 90]
-R5 = [18.0, 30.0, 90]
-R6 = [22.0, 30.0, 90]
-R7 = [25.0, 30.0, 90]
-R8 = [28.0, 30.0, 90]
-R9 = [31.0, 30.0, 90]
+# upstream and channel 0/1/2 header faces the PCA9685 and the expander. The
+# socket also takes the purple TCA9548A/PCA9548A clone, whose rows are one
+# pitch wider: its upstream row goes in the second row of holes at y 28.04,
+# one pitch toward the rear (Breakout_Sockets twin, Lauri, 2026-11-02). Its
+# 21.8 x 31.2 mm board reaches y 30.25 there, and to x 32.55 along the rows.
+# The socket sits 0.3 mm further forward than before for that row; its
+# silkscreen then needs J7's and J8's labels at 0.8 mm.
+A3 = [2.5, 25.7, 90]
+# One row behind the clone's outline and in front of the PCA9685's courtyard
+# (y 34.58), at a 2.9 mm pitch: the VIN decoupling below its VIN pin, the
+# upstream I2C pull-ups (pre-fab review N-4), then the mux channel pull-ups,
+# ch0 and ch1, then ch3 and ch4. Channel 2's pair sits under the test headers,
+# on its way to the expander (Freerouting necked tracks between the row's pads
+# at a 2.5 mm pitch).
+C5 = [1.7, 32.45, 90]      # TCA9548A VIN decoupling
+R12 = [4.6, 32.45, 90]     # SDA
+R13 = [7.5, 32.45, 90]     # SCL
+R2 = [10.4, 32.45, 90]
+R3 = [13.3, 32.45, 90]
+R4 = [16.2, 32.45, 90]
+R5 = [19.1, 32.45, 90]
+R6 = [22.0, 32.45, 90]
+R7 = [24.9, 32.45, 90]
+R8 = [27.8, 32.45, 90]
+R9 = [30.7, 32.45, 90]
 R10 = [34.4, 33.3, 0]     # ch2 SDA
 R11 = [38.4, 33.3, 0]     # ch2 SCL
-# Test headers right of the mux.
-J11 = [34.0, 11.0, 0]     # supply: 3V3, 5V, GND, VBAT; VBAT's only neighbour is GND
-J12 = [34.0, 22.5, 0]     # I2C SDA/SCL and MUX_RST, main side of the ribbon
+# Test headers right of the mux, clear of the clone's outline (x 32.55).
+J11 = [34.7, 11.0, 0]     # supply: 3V3, 5V, GND, VBAT; VBAT's only neighbour is GND
+J12 = [34.7, 22.5, 0]     # I2C SDA/SCL and MUX_RST, main side of the ribbon
 # The MCP23017 module (CJMCU-2317) in sockets under all 30 holes, turned 180
 # degrees: its single column (I2C and supply) faces the mux and its GPIO double
 # column faces the right edge. The mirror header J18 copies that double column
@@ -207,13 +215,15 @@ high_precision = true
 hidden_refs = ["H1", "H2", "H3", "H4", "H5", "H6", "H7", "H8", "H9", "H10"]
 # Seeed's reference text is below KiCad's minimum silkscreen height. Text is
 # 1.0 mm tall, JLCPCB's legible minimum, except where 1.0 mm does not fit
-# (#810): MUX_RST beside J12's pads, J18's column and row labels against its
-# outline, HEAD 3 against U4's, and the CJMCU-2317 pin names inside its
-# socket outline. Those stay at 0.8 mm,
+# (#810): J18's column and row labels against its
+# outline, HEAD 3 against U4's, the CJMCU-2317 pin names inside its
+# socket outline, J7's and J8's references and pin letters against the
+# TCA9548A socket's silkscreen, the clone's VIN, and the references of the
+# 2.9 mm pull-up row behind it. Those stay at 0.8 mm,
 # boardcheck's floor; build_board.py gives every stroke 0.16 mm or more.
-ref_sizes = { U1 = 1.0, U3 = 1.0, U4 = 1.0, R2 = 1.0, R3 = 1.0, R4 = 1.0, R5 = 1.0, R6 = 1.0, R7 = 1.0, R8 = 1.0, R9 = 1.0, R10 = 1.0, R11 = 1.0 }
+ref_sizes = { J7 = 0.8, J8 = 0.8, U1 = 1.0, U3 = 1.0, U4 = 1.0, C5 = 0.8, R12 = 0.8, R13 = 0.8, R2 = 0.8, R3 = 0.8, R4 = 0.8, R5 = 0.8, R6 = 0.8, R7 = 0.8, R8 = 0.8, R9 = 0.8, R10 = 1.0, R11 = 1.0 }
 # Off the board edge and out from under neighbours.
-ref_positions = { A2 = [40.0, 46.3], A3 = [16.0, 18.0], A5 = [51.8, 38.6], C4 = [1.6, 54.7], C1 = [35.5, 75.1], C2 = [35.5, 65.2], C6 = [35.0, 8.6], C7 = [45.6, 61.0], D1 = [52.4, 7.4], J4 = [40.3, 96.5], J5 = [3.5, 79.9], J6 = [3.5, 60.9], J7 = [6.3, 8.6], J8 = [21.75, 8.6], J9 = [41.0, 87.0], J12 = [29.3, 23.0], J16 = [95.5, 61.0], J18 = [65.7, 36.6], BZ1 = [47.0, 97.0], C3 = [62.6, 86.55], C8 = [49.2, 78.5], J1 = [43.5, 1.5], J11 = [29.3, 14.0], J14 = [44.0, 83.9], J15 = [55.5, 7.4], R12 = [2.6, 35.3], R13 = [6.45, 35.3], R2 = [9.0, 32.9], R3 = [12.0, 32.9], R4 = [15.0, 32.9], R5 = [18.0, 32.9], R6 = [22.0, 32.9], R7 = [25.0, 32.9], R8 = [28.0, 32.9], R9 = [31.0, 32.9], R10 = [34.4, 35.5], R11 = [38.4, 35.5] }
+ref_positions = { A2 = [40.0, 46.3], A3 = [16.0, 18.0], A5 = [51.8, 38.6], C4 = [1.6, 54.7], C1 = [35.5, 75.1], C2 = [35.5, 65.2], C6 = [35.0, 8.6], C7 = [45.6, 61.0], D1 = [52.4, 7.4], J4 = [40.3, 96.5], J5 = [3.5, 79.9], J6 = [3.5, 60.9], J7 = [6.3, 8.5], J8 = [21.75, 8.5], J9 = [41.0, 87.0], J12 = [30.0, 23.0], J16 = [95.5, 61.0], J18 = [65.7, 36.6], BZ1 = [47.0, 97.0], C3 = [62.6, 86.55], C8 = [49.2, 78.5], J1 = [43.5, 1.5], J11 = [30.0, 14.0], J14 = [44.0, 83.9], J15 = [55.5, 7.4], C5 = [1.7, 35.33], R12 = [4.6, 35.33], R13 = [7.5, 35.33], R2 = [10.4, 35.33], R3 = [13.3, 35.33], R4 = [16.2, 35.33], R5 = [19.1, 35.33], R6 = [22.0, 35.33], R7 = [24.9, 35.33], R8 = [27.8, 35.33], R9 = [30.7, 35.33], R10 = [34.4, 35.5], R11 = [38.4, 35.5] }
 # The saw lines, on both faces; each gets a "CUT" label on its left-hand side,
 # so each runs in the direction that puts the label in the waste.
 cut_lines = [
@@ -231,14 +241,14 @@ texts = [
     { text = "HEAD 2", at = [75.0, 61.0], size = 1.0 },
     { text = "HEAD 3", at = [74.4, 96.0], size = 0.8 },
     # Test header net names, one beside each pin (2.54 mm pitch).
-    { text = "+3V3", at = [37.6, 11.0], size = 1.0 },
-    { text = "+5V", at = [37.6, 13.54], size = 1.0 },
-    { text = "GND", at = [37.6, 16.08], size = 1.0 },
-    { text = "VBAT", at = [37.6, 18.62], size = 1.0 },
-    { text = "GND", at = [37.6, 22.5], size = 1.0 },
-    { text = "SDA", at = [37.6, 25.04], size = 1.0 },
-    { text = "SCL", at = [37.6, 27.58], size = 1.0 },
-    { text = "MUX_RST", at = [38.4, 30.12], size = 0.8 },
+    { text = "+3V3", at = [38.3, 11.0], size = 1.0 },
+    { text = "+5V", at = [38.3, 13.54], size = 1.0 },
+    { text = "GND", at = [38.3, 16.08], size = 1.0 },
+    { text = "VBAT", at = [38.3, 18.62], size = 1.0 },
+    { text = "GND", at = [38.3, 22.5], size = 1.0 },
+    { text = "SDA", at = [38.3, 25.04], size = 1.0 },
+    { text = "SCL", at = [38.3, 27.58], size = 1.0 },
+    { text = "RST", at = [38.3, 30.12], size = 1.0 },
     { text = "GND", at = [58.8, 2.3], size = 1.0 },
     { text = "U0TX", at = [59.2, 4.84], size = 1.0 },
     { text = "GND", at = [44.0, 85.6], size = 1.0 },
@@ -296,9 +306,12 @@ texts = [
     # MAX98357A A4: Vin (pad 1) and LRC (pad 7), the two ends of its row.
     { text = "Vin", at = [67.0, 76.9], size = 1.0 },
     { text = "LRC", at = [51.76, 76.9], size = 1.0 },
-    # TCA9548A A3: VIN (pad 1) and SC7 (pad 24), the two pads at its left end.
-    { text = "VIN", at = [3.3, 24.2], size = 1.0 },
-    { text = "SC7", at = [3.3, 12.6], size = 1.0 },
+    # TCA9548A A3: VIN (pad 1) and SC7 (pad 24), the two pads at its left end;
+    # the wider clone's VIN behind pad 1, in the second row.
+    { text = "VIN", at = [3.3, 23.9], size = 1.0 },
+    { text = "SC7", at = [3.3, 12.3], size = 1.0 },
+    # The wider clone's VIN, in the second row of holes behind pad 1.
+    { text = "VIN", at = [2.5, 30.2], size = 0.8 },
     # "+" beside each polarised SMD capacitor's pad 1 (SF-6), C1, C2, C3, C7
     # and C8, larger than the footprints' own marks.
     { text = "+", at = [40.9, 72.9], size = 1.0 },
@@ -309,14 +322,14 @@ texts = [
     # Off-board leads, pin by pin (SF-7), in each registry entry's pin order:
     # J7, J8 rcwl-1601-i2c-cable VCC, SCL, SDA, GND; J9 ssd1306-091-cable GND,
     # VCC, SCL, SDA; J4 lm2596-buck-module-vh4 IN+, IN-, OUT+, OUT-.
-    { text = "V", at = [11.0, 8.6], size = 1.0 },
-    { text = "C", at = [13.5, 8.6], size = 1.0 },
-    { text = "D", at = [16.0, 8.6], size = 1.0 },
-    { text = "G", at = [18.5, 8.6], size = 1.0 },
-    { text = "V", at = [25.0, 8.6], size = 1.0 },
-    { text = "C", at = [27.5, 8.6], size = 1.0 },
-    { text = "D", at = [30.0, 8.6], size = 1.0 },
-    { text = "G", at = [32.5, 8.6], size = 1.0 },
+    { text = "V", at = [11.0, 8.5], size = 0.8 },
+    { text = "C", at = [13.5, 8.5], size = 0.8 },
+    { text = "D", at = [16.0, 8.5], size = 0.8 },
+    { text = "G", at = [18.5, 8.5], size = 0.8 },
+    { text = "V", at = [25.0, 8.5], size = 0.8 },
+    { text = "C", at = [27.5, 8.5], size = 0.8 },
+    { text = "D", at = [30.0, 8.5], size = 0.8 },
+    { text = "G", at = [32.5, 8.5], size = 0.8 },
     { text = "G", at = [31.6, 87.0], size = 1.0 },
     { text = "V", at = [34.1, 87.0], size = 1.0 },
     { text = "C", at = [36.6, 87.0], size = 1.0 },
@@ -484,6 +497,21 @@ rect = [28.0, 64.3, 29.8, 66.1]
 name = "C2 GND fanout via, B.Cu"
 layer = "B.Cu"
 rect = [28.0, 64.3, 29.8, 66.1]
+
+# Room for U2's required GND fanout via, below its pin 1 where the committed
+# board had it (42.62, 75.4). With the pull-up row moved behind the TCA9548A
+# clone's outline (2026-11-02), Freerouting ran CH1_SDA down x 42.7 on B.Cu and
+# the via found no place on every complete route. Clear of the pad (y 74.5)
+# and the 5V trunk (x 41.8), so the pad stays reachable (trap 44).
+[[route_keepouts]]
+name = "U2 GND fanout via, F.Cu"
+layer = "F.Cu"
+rect = [41.85, 74.6, 43.45, 76.2]
+
+[[route_keepouts]]
+name = "U2 GND fanout via, B.Cu"
+layer = "B.Cu"
+rect = [41.85, 74.6, 43.45, 76.2]
 
 # Freerouting width classes, in this order. `nets` are net names or fnmatch
 # patterns over them; every pattern must match, and no net may be in two classes.
