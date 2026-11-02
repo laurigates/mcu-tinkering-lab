@@ -55,6 +55,8 @@ mcu-tinkering-lab/
 │   │   └── presence-detector/      # 24 GHz mmWave presence sensor (ESPHome)
 │   ├── robotics/                   # Motion-control robotics (Pico SDK)
 │   │   └── balancebot/             # Self-balancing robot (XIAO RP2350 + MPU6050 + steppers)
+│   ├── bench/                      # Workbench tools (3D-printed)
+│   │   └── phone-microscope/       # Phone + M12 lens inspection microscope stand (build123d)
 │   ├── games/
 │   │   └── nfc-scavenger-hunt/     # NFC-based scavenger hunt game
 │   └── components/                 # Reusable ESP-IDF components
