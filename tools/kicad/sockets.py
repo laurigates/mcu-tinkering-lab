@@ -38,6 +38,16 @@ the CJMCU-2317) lists them instead: `pad_xy` replaces `pads` with each pad's
 [x, y] in footprint pad order, in the same y-down millimetres as `outline`.
 The table's comment and the board page say where the numbers came from.
 
+A breakout sold in a second, wider form (a clone whose rows sit one pitch
+further apart) takes a `twin` table: `element` names the header that moves,
+`offset` is [dx, dy] from each of its pads to the clone's, and `outline` is the
+clone's board in the same coordinates. Each pad of that element gets a second
+pad at the offset with the same pad number, so either module fits and the
+netlist does not change; `duplicate_pad_numbers_are_jumpers no` makes the
+board join each pair with copper. Its outline must equal the page's "the clone
+outline W × H mm", the moved pads and the rest of the module's pads must lie
+inside it, and the courtyard and F.Fab cover it as they do the first outline.
+
 The footprints are written to `Breakout_Sockets.pretty/` with no other
 input, so `--check` regenerates in memory and byte-compares, writing nothing.
 Regenerating also deletes a footprint the config no longer names and rewrites
@@ -70,11 +80,23 @@ SILK_MARGIN = 1.33
 # Courtyard clearance around the module outline (IPC-7351's nominal 0.25 mm).
 MODULE_MARGIN = 0.25
 SOCKET_KEYS = frozenset({"name", "board", "outline"})
+OPTIONAL_KEYS = frozenset({"twin"})
+TWIN_KEYS = frozenset({"element", "offset", "outline"})
 # Exactly one: page pad centres by element, or listed positions.
 PAD_KEYS = frozenset({"pads", "pad_xy"})
 _PAGE_OUTLINE = re.compile(r"the outline\s+([\d.]+) × ([\d.]+) mm")
+_PAGE_TWIN_OUTLINE = re.compile(r"the clone outline\s+([\d.]+) × ([\d.]+) mm")
 _NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*")
 _PAD = re.compile(r"[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)?")
+
+
+@dataclass(frozen=True)
+class Twin:
+    """A wider clone's header: `element`'s pads again at `offset`."""
+
+    element: str
+    offset: tuple[float, float]
+    outline: tuple[float, float, float, float]
 
 
 @dataclass(frozen=True)
@@ -86,6 +108,7 @@ class Socket:
     pads: tuple[str, ...]  # () when pad_xy lists the positions
     outline: tuple[float, float, float, float]  # x0, y0, x1, y1, page coordinates
     pad_xy: tuple[tuple[float, float], ...] = ()
+    twin: Twin | None = None
 
 
 def load_config(path: Path) -> list[Socket]:
@@ -103,7 +126,7 @@ def load_config(path: Path) -> list[Socket]:
     out = []
     for n, t in enumerate(tables, 1):
         where = f"{path}: [[socket]] #{n}"
-        unknown = sorted(set(t) - SOCKET_KEYS - PAD_KEYS)
+        unknown = sorted(set(t) - SOCKET_KEYS - PAD_KEYS - OPTIONAL_KEYS)
         missing = sorted(SOCKET_KEYS - set(t))
         if unknown or missing:
             raise KicadError(
@@ -138,24 +161,16 @@ def load_config(path: Path) -> list[Socket]:
                 f"{where}: pad_xy must be a non-empty list of [x, y] in mm, "
                 f"got {pad_xy!r}"
             )
-        outline = t["outline"]
-        if (
-            not isinstance(outline, list)
-            or len(outline) != 4
-            or not all(map(_number, outline))
-            or not (outline[0] < outline[2] and outline[1] < outline[3])
-        ):
-            raise KicadError(
-                f"{where}: outline must be [x0, y0, x1, y1] with x0 < x1 and y0 < y1, "
-                f"got {outline!r}"
-            )
+        outline = _outline(t["outline"], where)
+        twin = _twin(t["twin"], pads, where) if "twin" in t else None
         out.append(
             Socket(
                 t["name"],
                 t["board"],
                 tuple(pads),
-                tuple(outline),
+                outline,
                 tuple(tuple(xy) for xy in pad_xy),
+                twin,
             )
         )
     names = [s.name for s in out]
@@ -163,6 +178,40 @@ def load_config(path: Path) -> list[Socket]:
     if dupes:
         raise KicadError(f"{path}: name {dupes} listed more than once")
     return out
+
+
+def _outline(outline: object, where: str) -> tuple[float, float, float, float]:
+    if (
+        not isinstance(outline, list)
+        or len(outline) != 4
+        or not all(map(_number, outline))
+        or not (outline[0] < outline[2] and outline[1] < outline[3])
+    ):
+        raise KicadError(
+            f"{where}: outline must be [x0, y0, x1, y1] with x0 < x1 and y0 < y1, "
+            f"got {outline!r}"
+        )
+    return tuple(outline)
+
+
+def _twin(t: object, pads: list[str], where: str) -> Twin:
+    where = f"{where}: twin"
+    if not isinstance(t, dict) or set(t) != TWIN_KEYS:
+        raise KicadError(f"{where}: expected exactly the keys {sorted(TWIN_KEYS)}")
+    if t["element"] not in pads or "." in t["element"]:
+        raise KicadError(
+            f"{where}: element {t['element']!r} must be one of the socket's whole "
+            f"elements in pads, {pads!r}"
+        )
+    offset = t["offset"]
+    if (
+        not isinstance(offset, list)
+        or len(offset) != 2
+        or not all(map(_number, offset))
+        or offset == [0, 0]
+    ):
+        raise KicadError(f"{where}: offset must be a non-zero [dx, dy] in mm")
+    return Twin(t["element"], tuple(offset), _outline(t["outline"], where))
 
 
 def _number(v: object) -> bool:
@@ -206,6 +255,40 @@ def resolve(socket: Socket, page: Path) -> list[tuple[str, float, float]]:
     return _checked(socket, out)
 
 
+def twin_pads(
+    socket: Socket, pads: list[tuple[str, float, float]]
+) -> list[tuple[int, str, float, float]]:
+    """(pad number, label, x, y) of each clone pad `socket.twin` adds.
+
+    `pads` is `resolve`'s list; a moved pad keeps the number of the pad it
+    doubles. Every clone pad, and every pad the clone keeps, must lie inside
+    the twin outline.
+    """
+    if socket.twin is None:
+        return []
+    tw = socket.twin
+    dx, dy = tw.offset
+    prefix = f"{tw.element}."
+    out = [
+        (n, f"{label}+[{fmt(dx)}, {fmt(dy)}]", x + dx, y + dy)
+        for n, (label, x, y) in enumerate(pads, 1)
+        if label.startswith(prefix)
+    ]
+    kept = [(label, x, y) for label, x, y in pads if not label.startswith(prefix)]
+    x0, y0, x1, y1 = tw.outline
+    outside = [
+        label
+        for label, x, y in kept + [(label, x, y) for _, label, x, y in out]
+        if not (x0 <= x <= x1 and y0 <= y <= y1)
+    ]
+    if outside:
+        raise KicadError(
+            f"{socket.name}: {', '.join(outside)} outside the twin outline "
+            f"{list(tw.outline)}"
+        )
+    return out
+
+
 def _checked(
     socket: Socket, out: list[tuple[str, float, float]]
 ) -> list[tuple[str, float, float]]:
@@ -225,16 +308,40 @@ def _checked(
 
 
 def check_outline(socket: Socket, page: Path) -> None:
-    """Raise unless the outline's size is the page's "the outline W × H mm"."""
-    m = _PAGE_OUTLINE.search(page.read_text(encoding="utf-8"))
+    """Raise unless the outline's size is the page's "the outline W × H mm".
+
+    A twin's outline must likewise be the page's "the clone outline W × H mm".
+    """
+    text = page.read_text(encoding="utf-8")
+    _check_size(socket.name, page, socket.outline, _PAGE_OUTLINE, "the outline", text)
+    if socket.twin:
+        _check_size(
+            socket.name,
+            page,
+            socket.twin.outline,
+            _PAGE_TWIN_OUTLINE,
+            "the clone outline",
+            text,
+        )
+
+
+def _check_size(
+    name: str,
+    page: Path,
+    outline: tuple[float, float, float, float],
+    pattern: re.Pattern[str],
+    phrase: str,
+    text: str,
+) -> None:
+    m = pattern.search(text)
     if not m:
-        raise KicadError(f"{socket.name}: {page} states no 'the outline W × H mm'")
+        raise KicadError(f"{name}: {page} states no '{phrase} W × H mm'")
     want = float(m.group(1)), float(m.group(2))
-    x0, y0, x1, y1 = socket.outline
+    x0, y0, x1, y1 = outline
     got = x1 - x0, y1 - y0
     if any(abs(g - w) > 0.005 for g, w in zip(got, want, strict=True)):
         raise KicadError(
-            f"{socket.name}: outline {list(socket.outline)} is {fmt(got[0])} × "
+            f"{name}: {phrase} {list(outline)} is {fmt(got[0])} × "
             f"{fmt(got[1])} mm, {page.name} says {fmt(want[0])} × {fmt(want[1])} mm"
         )
 
@@ -286,26 +393,27 @@ def render_footprint(
     rect_pad, circle_pad = template_pads(template, TEMPLATE)
     _, x0, y0 = pads[0]
     rel = [(label, x - x0, y - y0) for label, x, y in pads]
-    xs = [x for _, x, _ in rel]
-    ys = [y for _, _, y in rel]
+    twins = [(n, label, x - x0, y - y0) for n, label, x, y in twin_pads(socket, pads)]
+    xs = [x for _, x, _ in rel] + [x for _, _, x, _ in twins]
+    ys = [y for _, _, y in rel] + [y for _, _, _, y in twins]
     left, top, right, bottom = min(xs), min(ys), max(xs), max(ys)
-    ox0, oy0, ox1, oy1 = (
-        socket.outline[0] - x0,
-        socket.outline[1] - y0,
-        socket.outline[2] - x0,
-        socket.outline[3] - y0,
-    )
+    outlines = [socket.outline] + ([socket.twin.outline] if socket.twin else [])
+    fab = [(o[0] - x0, o[1] - y0, o[2] - x0, o[3] - y0) for o in outlines]
     crt = (
-        min(left - COURTYARD_MARGIN, ox0 - MODULE_MARGIN),
-        min(top - COURTYARD_MARGIN, oy0 - MODULE_MARGIN),
-        max(right + COURTYARD_MARGIN, ox1 + MODULE_MARGIN),
-        max(bottom + COURTYARD_MARGIN, oy1 + MODULE_MARGIN),
+        min([left - COURTYARD_MARGIN] + [o[0] - MODULE_MARGIN for o in fab]),
+        min([top - COURTYARD_MARGIN] + [o[1] - MODULE_MARGIN for o in fab]),
+        max([right + COURTYARD_MARGIN] + [o[2] + MODULE_MARGIN for o in fab]),
+        max([bottom + COURTYARD_MARGIN] + [o[3] + MODULE_MARGIN for o in fab]),
     )
     order = (
         "positions listed in sockets.toml"
         if socket.pad_xy
         else ", ".join(f"{n}={label}" for n, (label, _, _) in enumerate(rel, 1))
     )
+    if twins:
+        order += "; the wider clone's " + ", ".join(
+            f"{n}={label}" for n, label, _, _ in twins
+        )
     items = [
         "(version 20260206)",
         '(generator "kicad.sockets")',
@@ -325,11 +433,13 @@ def render_footprint(
             "0.12",
             "F.SilkS",
         ),
-        _rect(ox0, oy0, ox1, oy1, "0.1", "F.Fab"),
+        *(_rect(*o, "0.1", "F.Fab") for o in fab),
         _rect(*crt, "0.05", "F.CrtYd"),
     ]
     for n, (_, x, y) in enumerate(rel, 1):
         items.append(_pad(rect_pad if n == 1 else circle_pad, n, x, y))
+    for n, _, x, y in twins:
+        items.append(_pad(circle_pad, n, x, y))
     items.append("(embedded_fonts no)")
     return f'(footprint "{socket.name}"\n\t' + "\n\t".join(items) + "\n)\n"
 

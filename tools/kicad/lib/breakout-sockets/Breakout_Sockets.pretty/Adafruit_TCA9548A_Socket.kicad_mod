@@ -2,10 +2,10 @@
 	(version 20260206)
 	(generator "kicad.sockets")
 	(layer "F.Cu")
-	(descr "Socket for the adafruit-tca9548a breakout (docs/reference/boards/adafruit-tca9548a.md), pads: 1=JP3.1, 2=JP3.2, 3=JP3.3, 4=JP3.4, 5=JP3.5, 6=JP3.6, 7=JP3.7, 8=JP3.8, 9=JP3.9, 10=JP3.10, 11=JP3.11, 12=JP3.12, 13=JP1.1, 14=JP1.2, 15=JP1.3, 16=JP1.4, 17=JP1.5, 18=JP1.6, 19=JP1.7, 20=JP1.8, 21=JP1.9, 22=JP1.10, 23=JP1.11, 24=JP1.12")
+	(descr "Socket for the adafruit-tca9548a breakout (docs/reference/boards/adafruit-tca9548a.md), pads: 1=JP3.1, 2=JP3.2, 3=JP3.3, 4=JP3.4, 5=JP3.5, 6=JP3.6, 7=JP3.7, 8=JP3.8, 9=JP3.9, 10=JP3.10, 11=JP3.11, 12=JP3.12, 13=JP1.1, 14=JP1.2, 15=JP1.3, 16=JP1.4, 17=JP1.5, 18=JP1.6, 19=JP1.7, 20=JP1.8, 21=JP1.9, 22=JP1.10, 23=JP1.11, 24=JP1.12; the wider clone's 1=JP3.1+[-2.54, 0], 2=JP3.2+[-2.54, 0], 3=JP3.3+[-2.54, 0], 4=JP3.4+[-2.54, 0], 5=JP3.5+[-2.54, 0], 6=JP3.6+[-2.54, 0], 7=JP3.7+[-2.54, 0], 8=JP3.8+[-2.54, 0], 9=JP3.9+[-2.54, 0], 10=JP3.10+[-2.54, 0], 11=JP3.11+[-2.54, 0], 12=JP3.12+[-2.54, 0]")
 	(tags "socket breakout 2.54mm")
 	(property "Reference" "REF**"
-		(at -1.77 -2.77 0)
+		(at -4.8 -2.88 0)
 		(layer "F.SilkS")
 		(effects
 			(font
@@ -15,7 +15,7 @@
 		)
 	)
 	(property "Value" "Adafruit_TCA9548A_Socket"
-		(at -1.77 30.71 0)
+		(at -4.8 30.82 0)
 		(layer "F.Fab")
 		(effects
 			(font
@@ -27,7 +27,7 @@
 	(attr through_hole)
 	(duplicate_pad_numbers_are_jumpers no)
 	(fp_rect
-		(start -1.33 -1.33)
+		(start -3.87 -1.33)
 		(end 16.57 29.27)
 		(stroke
 			(width 0.12)
@@ -47,8 +47,18 @@
 		(layer "F.Fab")
 	)
 	(fp_rect
-		(start -1.77 -1.77)
-		(end 17.01 29.71)
+		(start -4.55 -1.63)
+		(end 17.25 29.57)
+		(stroke
+			(width 0.1)
+			(type solid)
+		)
+		(fill no)
+		(layer "F.Fab")
+	)
+	(fp_rect
+		(start -4.8 -1.88)
+		(end 17.5 29.82)
 		(stroke
 			(width 0.05)
 			(type solid)
@@ -219,6 +229,90 @@
 	)
 	(pad "24" thru_hole circle
 		(at 15.24 0)
+		(size 1.7 1.7)
+		(drill 1)
+		(layers "*.Cu" "*.Mask")
+		(remove_unused_layers no)
+	)
+	(pad "1" thru_hole circle
+		(at -2.54 0)
+		(size 1.7 1.7)
+		(drill 1)
+		(layers "*.Cu" "*.Mask")
+		(remove_unused_layers no)
+	)
+	(pad "2" thru_hole circle
+		(at -2.54 2.54)
+		(size 1.7 1.7)
+		(drill 1)
+		(layers "*.Cu" "*.Mask")
+		(remove_unused_layers no)
+	)
+	(pad "3" thru_hole circle
+		(at -2.54 5.08)
+		(size 1.7 1.7)
+		(drill 1)
+		(layers "*.Cu" "*.Mask")
+		(remove_unused_layers no)
+	)
+	(pad "4" thru_hole circle
+		(at -2.54 7.62)
+		(size 1.7 1.7)
+		(drill 1)
+		(layers "*.Cu" "*.Mask")
+		(remove_unused_layers no)
+	)
+	(pad "5" thru_hole circle
+		(at -2.54 10.16)
+		(size 1.7 1.7)
+		(drill 1)
+		(layers "*.Cu" "*.Mask")
+		(remove_unused_layers no)
+	)
+	(pad "6" thru_hole circle
+		(at -2.54 12.7)
+		(size 1.7 1.7)
+		(drill 1)
+		(layers "*.Cu" "*.Mask")
+		(remove_unused_layers no)
+	)
+	(pad "7" thru_hole circle
+		(at -2.54 15.24)
+		(size 1.7 1.7)
+		(drill 1)
+		(layers "*.Cu" "*.Mask")
+		(remove_unused_layers no)
+	)
+	(pad "8" thru_hole circle
+		(at -2.54 17.78)
+		(size 1.7 1.7)
+		(drill 1)
+		(layers "*.Cu" "*.Mask")
+		(remove_unused_layers no)
+	)
+	(pad "9" thru_hole circle
+		(at -2.54 20.32)
+		(size 1.7 1.7)
+		(drill 1)
+		(layers "*.Cu" "*.Mask")
+		(remove_unused_layers no)
+	)
+	(pad "10" thru_hole circle
+		(at -2.54 22.86)
+		(size 1.7 1.7)
+		(drill 1)
+		(layers "*.Cu" "*.Mask")
+		(remove_unused_layers no)
+	)
+	(pad "11" thru_hole circle
+		(at -2.54 25.4)
+		(size 1.7 1.7)
+		(drill 1)
+		(layers "*.Cu" "*.Mask")
+		(remove_unused_layers no)
+	)
+	(pad "12" thru_hole circle
+		(at -2.54 27.94)
 		(size 1.7 1.7)
 		(drill 1)
 		(layers "*.Cu" "*.Mask")
