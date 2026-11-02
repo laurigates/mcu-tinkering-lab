@@ -18,6 +18,7 @@ just mechanism::setup                 # libosmesa6 for headless VTK, and the ven
 just mechanism::test                  # pytest: clash, servo envelopes, one render
 just mechanism::check <design dir>    # clash sweep + wall per printed part -> output/check.json
 just mechanism::showcase <design dir> # assembled x5, travel poses, exploded x2, parts
+just mechanism::animate <design dir>  # the sweep as a GIF + contact sheet, and clashes between gate poses
 just mechanism::quickview <design dir># matplotlib, while iterating
 ```
 
@@ -35,6 +36,12 @@ A `Body` has a `group`: bodies that move together. Only pairs from different
 groups are clash-tested, and the exploded render lifts whole groups. `allow`
 excuses a named pair for a deliberate interface (a spline in its hub); every
 excuse is listed in `check.json`, so read that list in review.
+
+`check` tests only the `SWEEP` poses. `animate` walks them one joint step at
+a time with `--between` (default 2) interpolated poses per step, runs the same
+clash test at every frame, and writes `output/animation/` (`sweep.gif`,
+`sweep-sheet.png`, `sweep.json`). A clash only between gate poses lands in
+`between_clashes`: either tighten `SWEEP` so the gate sees it, or fix it.
 
 Stand-ins are keep-out envelopes from `mechanism.servos` (MG90D, SG90, horns),
 each dimension with its source and "estimate" where nobody measured. A
