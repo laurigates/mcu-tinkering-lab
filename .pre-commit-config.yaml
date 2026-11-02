@@ -23,8 +23,9 @@ repos:
         # A routed carrier board with its copper pour filled is about 1 MB
         # (tools/kicad, ADR-027); robocar-unified's grew past the limit after
         # it was added. The pan-tilt harness's order files (STEP/STL for
-        # JLC3DP) are committed meshes of the same kind.
-        exclude: '\.kicad_pcb$|/pan-tilt/print/[^/]+\.(stl|step)$'
+        # JLC3DP) are committed meshes of the same kind. A mechanism's
+        # clash-sweep animation (tools/mechanism animate) is 1-3 MB of GIF.
+        exclude: '\.kicad_pcb$|/pan-tilt/print/[^/]+\.(stl|step)$|/output/animation/sweep\.gif$'
       - id: check-merge-conflict
       - id: check-case-conflict
       - id: mixed-line-ending

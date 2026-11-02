@@ -31,6 +31,10 @@ check +designs:
 showcase +designs:
     for d in {{ prepend(_root + "/", designs) }}; do {{_run}} python -m mechanism.showcase "$d"; done
 
+# Animate the clash sweep (gate poses + interpolated steps), e.g. a design dir
+animate +designs:
+    for d in {{ prepend(_root + "/", designs) }}; do {{_run}} python -m mechanism.animate "$d" > /dev/null && echo "ok $d" || echo "CLASH $d (see $d/output/animation/sweep.json)"; done
+
 # Fast matplotlib views while iterating
 quickview +designs:
     for d in {{ prepend(_root + "/", designs) }}; do {{_run}} python -m mechanism.quickview "$d"; done
