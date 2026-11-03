@@ -132,6 +132,14 @@ once; see `.claude/rules/multi-agent-workflows.md` for surviving that.
    checks its thinnest readings against a ring of nearby points; a reading
    under half the ring's median is a graze (`thickness.py`, tested on the
    yoke's own facets).
+6. **A full `animate` run outlasts a cloud background task.** The pan-tilt's
+   `print/` takes about 25 s a pose (16 s of it its own `assembly()`), so its
+   205 poses run 1.5 h alone and over 2 h with three designs in parallel on 4
+   cores. That is past the 2 h limit on a background command, which kills
+   the run at the limit. Launch it detached (`setsid nohup <script> &`), have
+   the script append a line per finished design to a file, and wait on that
+   file. Commit each design's `output/animation/` only once its run has
+   exited: until then `sweep.mp4` is half-written.
 
 ## Related
 
