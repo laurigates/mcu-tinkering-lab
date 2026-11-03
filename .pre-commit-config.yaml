@@ -82,7 +82,7 @@ repos:
       - id: check-credentials
         name: Check for credential files
         entry: >-
-          bash -c 'if git diff --cached --name-only | grep -qE "(credentials\.h|wifi_config\.h|\.key$|\.secret$|\.token$)"; then echo "ERROR - Attempted to commit credential files!"; exit 1; fi'
+          bash -c 'if git diff --cached --name-only --diff-filter=d | grep -qE "(credentials\.h|wifi_config\.h|\.key$|\.secret$|\.token$)"; then echo "ERROR - Attempted to commit credential files!"; exit 1; fi'
         language: system
         pass_filenames: false
         always_run: true
