@@ -1,6 +1,8 @@
 # ADR-007: Shared I2C Protocol Component
 
-**Status**: accepted
+> **Implementation removed (2026-11).** `packages/robocar/components/i2c-protocol/` existed only for the board-to-board link between `robocar-main` and `robocar-camera`. Both were deleted in favour of the single-board `robocar-unified`, which has no inter-board protocol, and the component went with them.
+
+**Status**: superseded by [ADR-013](ADR-013-single-board-xiao-esp32s3.md)
 **Date**: 2026-03-12
 **Source commit**: refactor(i2c): extract shared I2C protocol component (#110, c092847)
 **Confidence**: 9/10

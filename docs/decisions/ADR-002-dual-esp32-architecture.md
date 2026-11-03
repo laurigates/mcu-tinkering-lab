@@ -1,11 +1,14 @@
 ---
 id: ADR-002
 title: Dual ESP32 Architecture for Robot Car (Main Controller + Vision)
-status: accepted
+status: superseded
 created: 2026-03-05
+superseded-by: ADR-013
 ---
 
 # ADR-002: Dual ESP32 Architecture for Robot Car (Main Controller + Vision)
+
+> **Implementation removed (2026-11).** The dual-ESP32 firmware this record describes (`robocar-main`, `robocar-camera`) was deleted in favour of `robocar-unified` ([ADR-013](ADR-013-single-board-xiao-esp32s3.md)). The record is kept for history; the code is in git history before that removal.
 
 ## Context
 

@@ -71,10 +71,13 @@ ESP32 Hardware (Serial/WebSocket)
 
 ## Communication Protocol
 
-The simulation mirrors the **exact I2C message format** used in ESP32 firmware (`robocar-main`):
+The serial framing (`MessageType` + `I2CMessage`: type byte, payload, CRC8) was
+inherited from the retired dual-ESP32 robocar's board-to-board I2C protocol. That
+firmware has been removed; robocar-unified is a single board and speaks no
+inter-board protocol, so the framing is now the simulation's own and is pinned only
+by `tests/test_message_framing.py`.
 
 ```python
-# Python (simulation) — matches ESP32 C firmware byte-for-byte
 class MessageType(Enum):
     MOVE = 0x01
     SERVO = 0x03

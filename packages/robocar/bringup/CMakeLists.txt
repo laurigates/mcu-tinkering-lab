@@ -10,7 +10,6 @@ cmake_minimum_required(VERSION 3.16)
 # Relative paths only, still: absolute ones do not survive the container's
 # /workspace bind mount — see .claude/rules/containerized-builds.md.
 set(EXTRA_COMPONENT_DIRS "${CMAKE_CURRENT_LIST_DIR}/../../components")
-list(APPEND EXTRA_COMPONENT_DIRS "${CMAKE_CURRENT_LIST_DIR}/../components")
 
 # No version.txt and no release-please entry: this firmware is a bench tool, not
 # something that ships or self-updates. It has no OTA path to carry a version to.

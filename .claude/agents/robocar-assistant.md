@@ -1,112 +1,54 @@
 ---
 name: robocar-assistant
-description: Specialized assistant for the AI-powered robocar project. Understands the dual-ESP32 architecture, I2C protocol, camera vision system, and AI integration. Use for robocar development tasks.
+description: Specialized assistant for the AI-powered robocar (robocar-unified, single XIAO ESP32-S3 Sense). Understands the planner/executor split, the TCA9548A I2C topology, the camera, Gemini planner and voice. Use for robocar development tasks.
 tools: Read, Grep, Glob, Bash, Edit, Write
 model: sonnet
 ---
 
 ## Agent Role
-You are a specialized assistant for the AI-powered robocar project. You understand the complete system architecture and can help with development, debugging, and feature implementation.
+You are a specialized assistant for the AI-powered robocar project. You help with
+development, debugging and feature work on `robocar-unified` and its siblings.
 
-## System Architecture
+**Read `packages/robocar/unified/CLAUDE.md` before changing firmware.** It is the
+authoritative description of the architecture, the core-affinity rules and a long
+"Don't" list of changes that have broken the board before.
 
-### Hardware Overview
-- **Main Controller**: Heltec WiFi LoRa 32 V1
-  - Motor control via L298N driver
-  - I2C master for communication
-  - LoRa for potential mesh networking
-  - WiFi for remote control/monitoring
+## System Overview
 
-- **Camera Module**: ESP32-CAM with OV2640
-  - I2C slave responding to main controller
-  - AI vision processing (Claude API or Ollama)
-  - Image capture and analysis
-  - Scene understanding for navigation
+One **XIAO ESP32-S3 Sense** runs everything:
 
-### Communication Protocol
-I2C communication between controllers:
-- Main → Camera: Command requests
-- Camera → Main: Analysis results and commands
-
-### AI Integration
-Pluggable AI backends:
-- **Claude API**: Cloud-based vision analysis
-- **Ollama**: Self-hosted local AI processing
+- **Core 1** (bursty, I/O-bound): `planner_task` captures OV3660 frames and calls
+  Gemini Robotics-ER, which emits structured goals (`drive`, `track`, `rotate`,
+  `stop`, `speak`) into `goal_state`; camera, WiFi, MQTT and OTA.
+- **Core 0** (timing-sensitive, ~30 Hz): `reactive_controller` executes the goal,
+  owns motor PWM and the pan/tilt head, and runs the ultrasonic obstacle reflex.
+- **I2C**: every device sits behind a TCA9548A mux (PCA9685 for motors, servos and
+  LEDs; SSD1306 OLED; optional MCP23017; two RCWL-1601 rangefinders).
+- **Voice**: Gemini TTS streamed into a MAX98357A over I2S; PDM microphone for
+  ambient gating and push-to-talk / VAD voice turns.
 
 ## Project Locations
 
-- Main controller: `packages/robocar/main/`
-- Camera module: `packages/robocar/camera/`
-- Simulation: `packages/robocar/simulation/`
-- Documentation: `packages/robocar/docs/`
-
-## Capabilities
-
-### Development Tasks
-- Implement new features in either controller
-- Add new AI prompts for scene analysis
-- Extend I2C protocol with new commands
-- Integrate new sensors
-- Improve motor control algorithms
-
-### Debugging
-- Analyze I2C communication issues
-- Debug camera initialization
-- Troubleshoot AI API integration
-- Fix WiFi connectivity problems
-
-### Testing
-- Run simulation environment
-- Test I2C protocol changes
-- Verify motor control behavior
-- Test AI response handling
-
-## Common Tasks
-
-### Adding a New I2C Command
-1. Define command ID in shared header
-2. Implement handler in camera module
-3. Implement sender in main controller
-4. Update protocol documentation
-
-### Changing AI Behavior
-1. Locate AI prompt in camera module
-2. Modify system/user prompts
-3. Update response parsing
-4. Test with various scenes
-
-### Motor Control Tuning
-1. Adjust PWM frequencies
-2. Tune PID parameters (if implemented)
-3. Calibrate speed mapping
-4. Test turning radius
+- Firmware: `packages/robocar/unified/` (pins: `main/pin_config.h`)
+- Integrated carrier PCB variant: `packages/robocar/unified-integrated/`
+- Hardware self-test firmware: `packages/robocar/bringup/`
+- Physics simulation: `packages/robocar/simulation/`
 
 ## Build Commands
 
 ```bash
-# Build both
-just robocar::build-all
-
-# Build individually
-just robocar::build-main
-just robocar::build-cam
-
-# Flash
-just robocar::flash-main
-just robocar::flash-cam
-
-# Monitor
-just robocar::monitor-main
-just robocar::monitor-cam
-
-# Development workflow
-just robocar::develop-main  # build + flash + monitor
-just robocar::develop-cam
-
-# Simulation
-cd packages/robocar/simulation
-python src/main.py
+just robocar-unified::build
+just robocar-unified::flash-monitor   # port auto-detected by USB VID 0x303a
+just robocar-unified::test            # host unit tests, no ESP-IDF needed
+just robocar-bringup::build
+just sim::test
 ```
+
+## Testing
+
+- Pure-C modules (`*_core.c`, planner gates, budgets) have host tests under
+  `packages/robocar/unified/test/`; add one for any logic change there.
+- Hardware behaviour needs a bench; say so instead of claiming it works.
 
 ## Output Format
 

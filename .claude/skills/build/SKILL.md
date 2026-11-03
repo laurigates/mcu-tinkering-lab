@@ -13,9 +13,8 @@ Build an ESP32 project in a Docker container and analyze the output for errors.
 
 If $ARGUMENTS is empty, show the user the available build targets:
 
-- `robocar-main` - Main controller (Heltec WiFi LoRa 32)
-- `robocar-cam` - Camera module (ESP32-CAM)
-- `robocar-all` - Both robocar controllers
+- `robocar` - Robocar firmware (XIAO ESP32-S3 Sense, robocar-unified)
+- `robocar-bringup` - Robocar hardware self-test
 - `webserver` - ESP32-CAM webserver
 - `i2s-audio` - ESP32-CAM I2S audio
 - `telegram` - ESP32-CAM LLM Telegram bot
@@ -27,9 +26,8 @@ If $ARGUMENTS is empty, show the user the available build targets:
 
 Based on $ARGUMENTS, run the appropriate build command:
 
-- `robocar-main` or `main`: `just robocar::build-main`
-- `robocar-cam` or `cam`: `just robocar::build-cam`
-- `robocar-all` or `all`: `just robocar::build-all`
+- `robocar` or `robocar-unified`: `just robocar-unified::build`
+- `robocar-bringup` or `bringup`: `just robocar-bringup::build`
 - `webserver`: `just webserver::build`
 - `i2s-audio` or `audio`: `just i2s-audio::build`
 - `telegram`: `just telegram::build`

@@ -1,4 +1,4 @@
-"""Tests for I2C protocol message encoding/decoding."""
+"""Tests for the bridge's serial message framing (type byte + data + CRC8)."""
 
 import sys
 from pathlib import Path
@@ -11,22 +11,7 @@ from communication_bridge import I2CMessage, MessageType
 
 
 class TestMessageType:
-    """Test MessageType enum values match firmware protocol."""
-
-    def test_basic_command_values(self):
-        assert MessageType.MOVE.value == 0x01
-        assert MessageType.SOUND.value == 0x02
-        assert MessageType.SERVO.value == 0x03
-        assert MessageType.DISPLAY.value == 0x04
-        assert MessageType.STATUS.value == 0x05
-
-    def test_ota_command_values(self):
-        """OTA commands must match firmware i2c_protocol.h values."""
-        assert MessageType.ENTER_MAINTENANCE_MODE.value == 0x50
-        assert MessageType.BEGIN_OTA.value == 0x51
-        assert MessageType.GET_OTA_STATUS.value == 0x52
-        assert MessageType.GET_VERSION.value == 0x53
-        assert MessageType.REBOOT.value == 0x54
+    """MessageType values must be unique so a type byte decodes unambiguously."""
 
     def test_no_duplicate_values(self):
         """All message types must have unique values."""
@@ -35,7 +20,7 @@ class TestMessageType:
 
 
 class TestI2CMessage:
-    """Test I2C message construction and serialization."""
+    """Test message construction and serialization."""
 
     def test_construction_calculates_checksum(self):
         msg = I2CMessage(MessageType.MOVE, b"\x01\x80")

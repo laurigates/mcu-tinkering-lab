@@ -20,8 +20,7 @@ Invocation:
 `packages/<domain>/<project-name>`.
 
 The canonical source of truth is
-`packages/robocar/unified/main/wifi_manager.c` (identical to
-`packages/robocar/camera/main/wifi_manager.c`). That project
+`packages/robocar/unified/main/wifi_manager.c`. That project
 runs reliably on XIAO ESP32-S3 Sense in the same environment as every other
 WiFi project in this monorepo, so its configuration is the reference.
 

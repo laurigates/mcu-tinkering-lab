@@ -23,7 +23,7 @@ problem in public channels until a fix has landed on `main`.
 
 When reporting, please include:
 
-- The affected project (e.g. `packages/robocar/main`, `packages/networking/wireguard-ha`).
+- The affected project (e.g. `packages/robocar/unified`, `packages/networking/wireguard-ha`).
 - The commit SHA or release tag you tested against.
 - Reproduction steps or a proof-of-concept, where possible.
 - Your assessment of impact (credential exposure, RCE on the device,
