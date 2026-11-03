@@ -17,7 +17,7 @@ $ARGUMENTS may contain:
 
 ## Available Projects
 
-- `robocar-main` or `main`, `robocar-cam` or `cam`
+- `robocar` or `robocar-unified`, `robocar-bringup`
 - `webserver`, `i2s-audio` or `audio`, `telegram`
 - `kids-audio`, `xbox`, `wifitest`
 
@@ -32,8 +32,8 @@ Ports are auto-detected by `tools/esp32.just`:
 
 Based on $ARGUMENTS:
 
-- `robocar-main`: `just robocar::flash-main`
-- `robocar-cam`: `just robocar::flash-cam`
+- `robocar`: `just robocar-unified::flash`
+- `robocar-bringup`: `just robocar-bringup::flash`
 - `webserver`: `just webserver::flash`
 - `i2s-audio`: `just i2s-audio::flash`
 - `telegram`: `just telegram::flash`
@@ -43,7 +43,7 @@ Based on $ARGUMENTS:
 
 ## ESP32-CAM Note
 
-For ESP32-CAM projects (robocar-cam, webserver, i2s-audio, telegram):
+For ESP32-CAM projects (webserver, i2s-audio, telegram):
 - Remind the user: "Connect GPIO0 to GND before flashing"
 - After successful flash: "Disconnect GPIO0 from GND and reset the device"
 

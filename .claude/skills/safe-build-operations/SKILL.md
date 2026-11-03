@@ -21,9 +21,8 @@ This skill enables safe execution of build system operations with appropriate sa
 ### Build Commands (containerized)
 ```bash
 just build-all
-just robocar::build-all
-just robocar::build-main
-just robocar::build-cam
+just robocar-unified::build
+just robocar-bringup::build
 just webserver::build
 just i2s-audio::build
 just telegram::build
@@ -34,8 +33,8 @@ just wifitest::build
 
 ### Flash Commands (native — ports auto-detected)
 ```bash
-just robocar::flash-main
-just robocar::flash-cam
+just robocar-unified::flash
+just robocar-bringup::flash
 just webserver::flash
 just i2s-audio::flash
 just telegram::flash
@@ -46,8 +45,7 @@ just wifitest::flash
 
 ### Monitor Commands (native)
 ```bash
-just robocar::monitor-main
-just robocar::monitor-cam
+just robocar-unified::monitor
 just webserver::monitor
 just i2s-audio::monitor
 just telegram::monitor
@@ -57,15 +55,14 @@ just xbox::monitor
 ### Clean Commands
 ```bash
 just clean-all
-just robocar::clean-all
+just robocar-unified::clean
 just webserver::clean
 just telegram::clean
 ```
 
 ### Development Workflows (build + flash + monitor)
 ```bash
-just robocar::develop-main
-just robocar::develop-cam
+just robocar-unified::flash-monitor
 just webserver::develop
 just telegram::develop
 ```
@@ -107,12 +104,12 @@ This skill does NOT allow:
 ## Usage Examples
 
 ### Build a project
-"Build the robocar main controller"
-→ `just robocar::build-main`
+"Build the robocar"
+→ `just robocar-unified::build`
 
 ### Flash with specific port
-"Flash the camera to /dev/ttyUSB0"
-→ Remind about GPIO0, then `PORT=/dev/ttyUSB0 just robocar::flash-cam`
+"Flash the webserver to /dev/ttyUSB0"
+→ Remind about GPIO0 (ESP32-CAM), then `PORT=/dev/ttyUSB0 just webserver::flash`
 
 ### Full development workflow
 "I want to work on the telegram bot"

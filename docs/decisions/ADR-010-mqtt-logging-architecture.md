@@ -1,5 +1,7 @@
 # ADR-010: MQTT Logging Architecture
 
+> **Implementation removed (2026-11).** The dual-ESP32 firmware this record describes (`robocar-main`, `robocar-camera`) was deleted in favour of `robocar-unified` ([ADR-013](ADR-013-single-board-xiao-esp32s3.md)). The record is kept for history; the code is in git history before that removal.
+
 **Status**: accepted
 **Date**: 2025-08-13
 **Source commit**: feat: implement comprehensive MQTT logging system (041fdca)

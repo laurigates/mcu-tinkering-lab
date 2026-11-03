@@ -9,7 +9,7 @@ paths:
 # Gemini API: Model-ID / thinkingConfig / Token-Budget Drift, and Prompted TTS Style
 
 The Google Gemini API (`generativelanguage.googleapis.com`) is called from
-several projects here — `robocar/unified`, `robocar/camera`,
+several projects here — `robocar/unified`,
 `camera-vision/gemini-vision`, `thinkpack/brainbox`, `games/nfc-scavenger-hunt`.
 Its request surface **moves under you**: ids get suffixes, config fields get
 renamed, and moving aliases (`*-latest`) repoint to newer model generations with

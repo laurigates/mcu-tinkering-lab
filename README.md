@@ -12,8 +12,8 @@ robot on the RP2350.
 
 Released firmware can be flashed with the
 [web flasher](https://laurigates.github.io/mcu-tinkering-lab/) in Chrome or
-Edge, with no toolchain installed. See the
-[web flasher guide](packages/robocar/docs/docs/WEB_FLASHER.md).
+Edge, with no toolchain installed. Board-specific boot-mode notes are on the
+page itself ([source](docs/flasher/index.html)).
 
 ## Build from source
 
@@ -34,7 +34,7 @@ Build, test and CI details are in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 | Domain | Projects |
 |---|---|
-| [`robocar/`](packages/robocar/docs/README.md) | AI robot car: [single-board firmware](packages/robocar/unified/README.md) (XIAO ESP32-S3 Sense), its bring-up self-test, the earlier dual-board design (Heltec + ESP32-CAM), and a Pymunk simulation |
+| [`robocar/`](packages/robocar/unified/README.md) | AI robot car: [single-board firmware](packages/robocar/unified/README.md) (XIAO ESP32-S3 Sense), its [integrated carrier](packages/robocar/unified-integrated/README.md), [bring-up self-test](packages/robocar/bringup/README.md) and a [Pymunk simulation](packages/robocar/simulation/README.md) |
 | `thinkpack/` | ESP-NOW mesh of companion boxes: brainbox (LLM coordinator), boombox, chatterbox, finderbox, glowbug, mesh-demo |
 | `camera-vision/` | MJPEG webserver, camera + I2S audio, LLM Telegram bot, Gemini object detection |
 | `audio/` | BLE gamepad synth, kids' audio toy, melody detector, RFID audiobook player (ESPHome) |

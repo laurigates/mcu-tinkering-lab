@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       project_path:
-        description: 'Project directory relative to packages/ (e.g. robocar/main)'
+        description: 'Project directory relative to packages/ (e.g. robocar/unified)'
         required: true
         type: string
       target:

@@ -1,9 +1,6 @@
 # MCU Tinkering Lab — Unified Build System
 # Run `just --list` to see available recipes
 
-mod robocar 'packages/robocar/docs'
-mod robocar-main 'packages/robocar/main'
-mod robocar-camera 'packages/robocar/camera'
 mod robocar-unified 'packages/robocar/unified'
 mod robocar-unified-integrated 'packages/robocar/unified-integrated'
 mod robocar-bringup 'packages/robocar/bringup'
@@ -76,8 +73,8 @@ check-environment:
     fi
     echo ""
     echo "Project Structure:"
-    [ -d "packages/robocar/main" ] && [ -d "packages/robocar/camera" ] \
-        && echo "  Robocar projects found" || echo "  Robocar projects missing"
+    [ -d "packages/robocar/unified" ] \
+        && echo "  Robocar project found" || echo "  Robocar project missing"
     [ -d "packages" ] \
         && echo "  packages/ directory found" || echo "  packages/ directory missing"
 
@@ -90,7 +87,7 @@ setup-all: docker-build install-dev-tools
     @echo "Next steps:"
     @echo "  1. just check-environment        # Verify setup"
     @echo "  2. just list-projects             # See available projects"
-    @echo "  3. just robocar::build-all        # Build the robocar"
+    @echo "  3. just robocar-unified::build    # Build the robocar"
 
 # Install development tools and pre-commit hooks
 [group: "setup"]
@@ -222,17 +219,17 @@ format-check-python:
     ruff format --check .
     echo "Python formatting check passed"
 
-# Build robocar projects (use `just <module>::build` for other projects)
+# Build the robocar (use `just <module>::build` for other projects)
 [group: "build"]
 build-all:
-    just robocar::build-all
-    @echo "Robocar projects built. Other projects: just <module>::build"
+    just robocar-unified::build
+    @echo "Robocar built. Other projects: just <module>::build"
 
 # Clean all project builds
 [confirm("Clean all build directories?")]
 [group: "clean"]
 clean-all:
-    just robocar::clean-all
+    just robocar-unified::clean
     @echo "All project builds cleaned"
 
 # List all registered project modules (derived from the mod registry — never drifts)
@@ -252,16 +249,13 @@ info: check-environment
     @echo "MCU Tinkering Lab"
     @echo ""
     @echo "Primary Features:"
-    @echo "  AI-powered autonomous robot car with dual ESP32 architecture"
-    @echo "  Pluggable AI backends (Claude API, Ollama self-hosted)"
-    @echo "  Structured I2C communication protocol between controllers"
-    @echo "  Real-time computer vision and scene analysis"
+    @echo "  AI-powered robot car on a single XIAO ESP32-S3 Sense (robocar-unified)"
+    @echo "  Gemini Robotics-ER vision planning and Gemini TTS voice"
     @echo ""
     @echo "Quick Start:"
-    @echo "  just robocar::info          # Detailed robocar system info"
-    @echo "  just list-projects          # Show all available projects"
-    @echo "  just robocar::build-all     # Build both robocar modules"
-    @echo "  just robocar::develop-main  # Start developing main controller"
+    @echo "  just list-projects            # Show all available projects"
+    @echo "  just robocar-unified::build   # Build the robocar"
+    @echo "  just robocar-unified::flash   # Flash the robocar"
 
 # Same script the monthly refresh-idf-locks.yml workflow runs; see
 # .claude/rules/esp-idf-dependency-locks.md. Discovery uses git on the host,

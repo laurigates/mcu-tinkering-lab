@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Overview
 
-MCU Tinkering Lab is a production-ready embedded systems monorepo for ESP32, STM32, and Arduino platforms. The primary project is an AI-powered dual-ESP32 robot car with computer vision.
+MCU Tinkering Lab is a production-ready embedded systems monorepo for ESP32, STM32, and Arduino platforms. The primary project is an AI-powered robot car on a single XIAO ESP32-S3 Sense (`robocar-unified`).
 
 ## Repository Structure
 
@@ -15,14 +15,11 @@ folder that matches the domain, or create a new domain folder. Drop the
 ```
 mcu-tinkering-lab/
 ├── packages/
-│   ├── robocar/                    # Dual-ESP32 AI robot car system
-│   │   ├── main/                   # Main controller (Heltec WiFi LoRa 32)
-│   │   ├── camera/                 # ESP32-CAM vision (Claude/Ollama/Gemini)
-│   │   ├── unified/                # Single-board XIAO ESP32-S3 Sense consolidation
+│   ├── robocar/                    # AI robot car
+│   │   ├── unified/                # Firmware: single-board XIAO ESP32-S3 Sense
 │   │   ├── unified-integrated/     # Carrier PCB variant with the breakout chips on board (comparison)
-│   │   ├── simulation/             # Python 3.12 physics simulation (Pymunk)
-│   │   ├── docs/                   # Docs and coordination justfile
-│   │   └── components/i2c-protocol/ # Robocar-internal I2C protocol + tests
+│   │   ├── bringup/                # Hardware self-test firmware for the unified build
+│   │   └── simulation/             # Python 3.12 physics simulation (Pymunk)
 │   ├── thinkpack/                  # ESP-NOW mesh of modular companion "boxes"
 │   │   ├── brainbox/               # LLM mesh coordinator (ESP32-S3)
 │   │   ├── boombox/                # Audio playback box
@@ -97,18 +94,10 @@ just --list
 # Build all projects (containerized — no local ESP-IDF needed)
 just build-all
 
-# Build specific robocar components
-just robocar::build-main      # Main controller only
-just robocar::build-cam       # Camera module only
-just robocar::build-all       # Both controllers
-
-# Development workflows (build + flash + monitor)
-just robocar::develop-main    # Main controller
-just robocar::develop-cam     # Camera module
-
-# Flash (PORT=/dev/cu.usbserial-0001 by default)
-PORT=/dev/ttyUSB0 just robocar::flash-main
-PORT=/dev/ttyUSB1 just robocar::flash-cam
+# Robocar (XIAO ESP32-S3 Sense; the port is auto-detected by USB VID)
+just robocar-unified::build
+just robocar-unified::flash-monitor
+just robocar-unified::test    # host unit tests, no ESP-IDF needed
 ```
 
 ### Code Quality
@@ -152,7 +141,7 @@ just setup-all               # Docker images + dev tools
 Use conventional commits: `feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `test:`, `ci:`, `build:`
 
 Examples:
-- `feat: Add WiFi reconnection logic to robocar-main`
+- `feat: Add WiFi reconnection logic to robocar-unified`
 - `fix: Correct UART baud rate for camera communication`
 - `docs: Update hardware connection pinout`
 
@@ -167,8 +156,7 @@ Examples:
 - Each ESP32 project has its own `CMakeLists.txt`, `main/`, and `sdkconfig.defaults`
 - Repo-wide reusable components live in `packages/components/` (improv-wifi,
   ota-github)
-- Domain-local components live in `packages/<domain>/components/` (e.g.
-  `packages/robocar/components/i2c-protocol/`)
+- Domain-local components live in `packages/<domain>/components/`
 
 ### Credentials
 - **Never commit** `credentials.h`, `wifi_config.h`, or files ending in `.key`, `.secret`, `.token`
@@ -177,20 +165,15 @@ Examples:
 
 ## Architecture Notes
 
-### Dual ESP32 Robot Car
-The robot car uses two ESP32 boards connected via UART:
-- **Main Controller** (Heltec WiFi LoRa 32 V1): Motor control via L298N, PCA9685 for LEDs/servos, OLED display, buzzer
-- **Camera** (ESP32-CAM): OV2640 image capture, AI inference (Claude API or Ollama), MQTT telemetry
+### Robot Car (robocar-unified)
+One XIAO ESP32-S3 Sense runs camera capture (OV3660), the Gemini Robotics-ER
+planner, a 30 Hz reactive executor, motors and servos (PCA9685 behind a TCA9548A
+mux), and Gemini TTS voice through a MAX98357A. Architecture, core affinity and
+the rules for changing it are in
+[`packages/robocar/unified/CLAUDE.md`](packages/robocar/unified/CLAUDE.md).
 
-The camera sends single-character movement commands (F/B/L/R/S) and PAN:/TILT: commands over UART to the main controller.
-
-### AI Backend Selection
-AI backends are selected at compile time via `#define`:
-- `USE_CLAUDE_API` — Anthropic Claude API (cloud, higher quality)
-- `USE_OLLAMA` — Ollama (self-hosted, lower latency, no API costs)
-
-### ESP32-CAM Pin Constraints
-GPIO14/15 are used for UART to avoid PSRAM conflicts. The ESP32-CAM has very limited available GPIOs due to camera and PSRAM usage.
+The earlier dual-ESP32 design (Heltec main controller + ESP32-CAM over I2C,
+ADR-002 and ADR-007) has been removed; it remains in git history.
 
 ## CI/CD Workflows
 
@@ -227,5 +210,4 @@ Most workflows delegate to reusable workflows from [`laurigates/.github`](https:
 - `.pre-commit-config.yaml` — Pre-commit hook definitions
 - `.gitleaks.toml` — Secret scanning allowlist
 - `tools/scaffold/new-esp32-project.sh` — New project scaffolding
-- `packages/robocar/docs/` — Robocar coordination justfile and docs
 - `docs/flasher/index.html` — ESP Web Tools browser-based firmware flasher page

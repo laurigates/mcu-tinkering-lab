@@ -207,9 +207,9 @@ static void pin_bus_clock(i2c_dev_t *dev)
 /* per-channel ON register precisely so the edges can be spread instead.       */
 /* Upstream esp-idf-lib exposes no API for it (checked against                 */
 /* UncleRus/esp-idf-lib at the time of writing), so the register bytes are     */
-/* composed here rather than by patching the vendored copy — which is a        */
-/* symlink into robocar/main and would change that firmware too, and would be  */
-/* silently reverted by any future refresh of the library.                     */
+/* composed here rather than by patching the driver, which is a managed        */
+/* component: an edit under managed_components/ is reverted by the next        */
+/* reconfigure.                                                                */
 /*                                                                             */
 /* Note this is headroom, not a fix for an observed fault: the audio           */
 /* distortion that prompted the investigation was resolved by adding bulk      */
