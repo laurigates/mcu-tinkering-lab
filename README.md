@@ -15,6 +15,10 @@ Released firmware can be flashed with the
 Edge, with no toolchain installed. Board-specific boot-mode notes are on the
 page itself ([source](docs/flasher/index.html)).
 
+The [robocar board story](https://laurigates.github.io/mcu-tinkering-lab/robocar/)
+follows the robot car from a 2018 kit to a generated, factory-made carrier
+board ([source](docs/site/robocar/index.html)).
+
 ## Build from source
 
 ESP-IDF builds run in a container, so Docker and

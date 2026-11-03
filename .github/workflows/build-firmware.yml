@@ -199,6 +199,7 @@ jobs:
           sparse-checkout: |
             tools/lib
             tools/check-embedded-build-sha.py
+            docs/site
           sparse-checkout-cone-mode: false
           path: workflow-tools
 
@@ -374,6 +375,10 @@ jobs:
           mkdir -p _site/firmware
           cp docs/flasher/* _site/
           cp -r firmware/* _site/firmware/
+          # Project pages (docs/site/<page>/ -> /<page>/), from the workflow's
+          # own revision like tools/lib above: a workflow_dispatch from main
+          # republishes the current pages alongside the given tag's firmware.
+          cp -r workflow-tools/docs/site/. _site/
           # Expose projects.json at the root so index.html can fetch it
           cp firmware/projects.json _site/projects.json
 
