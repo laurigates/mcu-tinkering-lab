@@ -17,6 +17,7 @@ docs/
 ├── schematics/           # Text-defined circuit schematics (Schemdraw)
 ├── thinkpack/            # ThinkPack user guides
 ├── flasher/              # Browser-based ESP Web Tools firmware flasher (GitHub Pages)
+├── site/                 # Project pages published next to the flasher (GitHub Pages)
 └── blueprint/            # Blueprint manifest + feature tracker (tool-generated)
 ```
 
@@ -45,6 +46,25 @@ melody detector, balancebot.
 See `prompts/` for active/planned implementation prompts: HIL testing,
 host-based unit tests, SLAM, hierarchical AI controller, OTA plan, melody
 detector.
+
+## Project pages (GitHub Pages)
+
+Each folder under `site/` is published at
+`https://laurigates.github.io/mcu-tinkering-lab/<folder>/`, next to the
+flasher. `site/robocar/` is the robocar hardware story: one self-contained
+`index.html` with its images in `img/`. Never add a top-level
+`site/index.html`; it would replace the flasher page.
+
+Pages are published by the `assemble-and-deploy` job of
+`.github/workflows/build-firmware.yml`, which runs on every release. To
+publish an edit without waiting for one, run that workflow from `main` with
+`workflow_dispatch` and the latest release tag; it rebuilds that tag's
+firmware and takes the pages from `main`.
+
+To continue the robocar story, add a chapter `<section>` with five
+`<div class="t" data-l="1..5">` depth variants, keep photos under 500 KB (the
+`check-added-large-files` hook), strip EXIF location data before committing a
+photo, and update the "Status as of" date in the footer.
 
 ## Cross-references
 
