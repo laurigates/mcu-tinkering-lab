@@ -122,7 +122,10 @@ jobs:
       # sim deps installed (local<->CI parity gap, issue #369).
       - name: Sync simulation dev dependencies (for ty pre-commit hook)
         working-directory: packages/robocar/simulation
-        run: uv sync --extra dev
+        # --locked: install the committed uv.lock and fail if pyproject.toml
+        # has moved past it, rather than resolving fresh on every run. A fresh
+        # resolve picked up vtk 9.7.2 before its Linux x86_64 wheels existed.
+        run: uv sync --locked --extra dev
 
       # gitleaks (`--staged`) and check-credentials (`git diff --cached`) read
       # only staged files, and a CI checkout stages nothing, so here they would
@@ -156,12 +159,12 @@ jobs:
 
       - name: Install dependencies
         working-directory: packages/robocar/simulation
-        run: uv sync --extra dev
+        run: uv sync --locked --extra dev  # committed uv.lock; see the ty-hook sync above
 
       - name: Run tests with coverage
         working-directory: packages/robocar/simulation
         run: |
-          uv run pytest tests/ \
+          uv run --locked pytest tests/ \
             --cov=src \
             --cov-report=xml \
             --cov-report=term \
