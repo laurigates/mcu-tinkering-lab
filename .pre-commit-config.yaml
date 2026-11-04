@@ -24,8 +24,10 @@ repos:
         # (tools/kicad, ADR-027); robocar-unified's grew past the limit after
         # it was added. The pan-tilt harness's order files (STEP/STL for
         # JLC3DP) are committed meshes of the same kind. A mechanism's
-        # clash-sweep video (tools/mechanism animate, AV1) is 0.3-1 MB.
-        exclude: '\.kicad_pcb$|/pan-tilt/print/[^/]+\.(stl|step)$|/output/animation/sweep\.mp4$'
+        # clash-sweep video (tools/mechanism animate, AV1) is 0.3-1 MB. A uv.lock
+        # is generated text; the robocar simulation's (genesis-world, torch) is
+        # about 670 kB.
+        exclude: '\.kicad_pcb$|/pan-tilt/print/[^/]+\.(stl|step)$|/output/animation/sweep\.mp4$|(^|/)uv\.lock$'
       - id: check-merge-conflict
       - id: check-case-conflict
       - id: mixed-line-ending
