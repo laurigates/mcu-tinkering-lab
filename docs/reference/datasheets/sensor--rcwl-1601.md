@@ -123,6 +123,18 @@ agree on everything except the conversion wait.
   100 kHz (`I2C_MASTER_FREQ_HZ`). Running the mux and the modules at 100 kHz
   while the PCA9685 and the OLED keep 400 kHz is untested.
 
+  M5Stack's driver for the sibling RCWL-9620 found the same limit on hardware
+  and goes lower (`m5stack/M5Unit-DISTANCE`, `src/unit/unit_RCWL9620.hpp`
+  lines 84–86, default changed in commit 9b6cb12): "At 100 kHz the sensor can
+  drive SDA too late for the next SCL rising edge, and reads fail
+  intermittently (more often through a PaHub). 400 kHz fails (NACK)", so it
+  defaults to 80 kHz. The PaHub is M5Stack's PCA9548A mux, the same part
+  family as the TCA9548A here. Our 5/5 at 100 kHz is too small a sample to
+  rule out that intermittency; 80 kHz has not been tried on this board.
+  The same file waits 150 ms between trigger and read, not 100 (line 195:
+  "Reading after 100 ms often fails with ESP_ERR_TIMEOUT (263), so 150 ms is
+  used"). The firmware waits 120 ms (`ULTRASONIC_CONVERSION_MS`).
+
 **Conversion wait.** Adafruit #4742 says to "wait a few milliseconds". Drivers
 for sibling RCWL I2C modules wait much longer: M5Stack's Unit Sonic library
 (RCWL-9620) calls `delay(120)` between the trigger and the read, and the
