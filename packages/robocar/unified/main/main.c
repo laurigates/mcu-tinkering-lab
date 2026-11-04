@@ -274,7 +274,7 @@ static void dispatch_movement(const char *movement)
  *
  * It goes through reactive_controller_manual() rather than motor_controller.h
  * for the two reasons that API exists, and both are load-bearing here: the
- * executor stays the only writer of motor output (see the "Don't" list in
+ * executor stays the only writer of motor output (see the "Rules" list in
  * CLAUDE.md), and the obstacle reflex still governs. A bench with a wall inside
  * STOP_THRESHOLD_CM will hold the wheels stopped — the correct outcome, and one
  * that is logged rather than silently swallowed, because a diagnostic that
