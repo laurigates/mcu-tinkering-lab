@@ -29,9 +29,14 @@
 // ========================================
 // I2C Bus (to TCA9548A multiplexer)
 // ========================================
-#define I2C_SDA_PIN GPIO_NUM_5     // XIAO D4/SDA
-#define I2C_SCL_PIN GPIO_NUM_6     // XIAO D5/SCL
-#define I2C_MASTER_FREQ_HZ 400000  // 400kHz for fast I2C
+#define I2C_SDA_PIN GPIO_NUM_5  // XIAO D4/SDA
+#define I2C_SCL_PIN GPIO_NUM_6  // XIAO D5/SCL
+// 100 kHz, not 400: the RCWL-1601 rangefinders ACK their address at 400 kHz
+// and then NACK every trigger and read (bringup sweep, 2026-11-04: 0/5 readings
+// each at 400 kHz, 5/5 at 100 kHz). Giving only their handle 100 kHz was not
+// enough, because the mux selects that open and close their channel still ran
+// at 400 kHz; see docs/reference/datasheets/sensor--rcwl-1601.md.
+#define I2C_MASTER_FREQ_HZ 100000
 
 // ========================================
 // TCA9548A I2C Multiplexer
