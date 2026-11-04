@@ -215,5 +215,5 @@ the TTFB gap is the whole reason the streaming endpoint matters.
 
 - `.claude/rules/gemini-api.md` — model-ID / `thinkingLevel` / token-budget drift on the *planner* side
 - `.claude/skills/audio-static-debugging/` — when the audio plays but sounds wrong
-- `packages/robocar/unified/CLAUDE.md` — the speech-is-a-queue-not-a-goal rule
+- `packages/robocar/unified/docs/firmware/voice.md` — the speech-is-a-queue-not-a-goal rule and the rest of the voice design
 - ADR-019 — the original voice design

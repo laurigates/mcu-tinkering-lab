@@ -368,7 +368,7 @@ def build_report(tl: Timeline, model: str, voice: str) -> dict[str, Any]:
         "output_audio_chunks": len(audio),
         "output_audio_seconds": round(audio_s, 3) if audio_s is not None else None,
         # Below 1.0 the stream arrived slower than it plays: a device would need
-        # a preroll gate, exactly like the TTS path (see CLAUDE.md, Voice).
+        # a preroll gate, exactly like the TTS path (see docs/firmware/voice.md).
         "arrival_rtf": round(audio_s / span_s, 2) if audio_s and span_s else None,
         "interrupted": any(e.kind == "interrupted" for e in ev),
         "input_transcription": "".join(

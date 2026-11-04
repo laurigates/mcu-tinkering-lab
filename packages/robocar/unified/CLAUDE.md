@@ -8,7 +8,7 @@ Single-board consolidation of the dual-ESP32 robocar onto a **XIAO ESP32-S3 Sens
 
 ## Architecture
 
-Implements a hierarchical AI controller pattern: a **slow planner** (Core 1, every `PLANNER_LOOP_PERIOD_MS` — 15 s by default, bounded by the Gemini free-tier quota) that emits structured goals, and a **fast reactive executor** (Core 0, ~30 Hz) that drives the robot toward those goals. See [ADR-016](../../docs/decisions/ADR-016-hierarchical-ai-controller.md) for the canonical design.
+Implements a hierarchical AI controller pattern: a **slow planner** (Core 1, every `PLANNER_LOOP_PERIOD_MS` — 15 s by default, bounded by the Gemini free-tier quota) that emits structured goals, and a **fast reactive executor** (Core 0, ~30 Hz) that drives the robot toward those goals. See [ADR-016](../../../docs/decisions/ADR-016-hierarchical-ai-controller.md) for the canonical design.
 
 Core affinity is load-bearing — do not change without understanding the trade-offs:
 
@@ -39,705 +39,22 @@ Tasks communicate via FreeRTOS queues and the shared `goal_state` struct (mutex-
 
 ## I2C topology
 
-All I2C devices hang off a **TCA9548A multiplexer** on GPIO5/6. Don't talk to devices directly on the primary bus — always select the channel first via `i2c_bus.c`. Current channel map in `pin_config.h`:
+All I2C devices sit behind a **TCA9548A multiplexer** on GPIO5/6. Always select the channel through `i2c_bus.c` first: ch0 PCA9685 (motors, servos, LEDs), ch1 SSD1306 OLED, ch2 MCP23017 (optional; GPA7/GPB7 output-only), ch3/ch4 RCWL-1601 front/rear (0x57), ch5–7 reserved. Every peripheral is non-fatal, and the self-report names any that did not initialise. Details: [docs/firmware/i2c-and-motors.md](docs/firmware/i2c-and-motors.md).
 
-- ch0: PCA9685 (motors, servos, LEDs)
-- ch1: SSD1306 OLED
-- ch2: MCP23017 GPIO expander (optional — 16 generic GPIOs via `gpio_expander.c`, no roles assigned yet, GPA7/GPB7 output-only; firmware boots fine without the board fitted)
-- ch3: RCWL-1601 rangefinder, front (0x57, I2C mode)
-- ch4: RCWL-1601 rangefinder, rear (0x57, I2C mode)
-- ch5-7: reserved
+## Subsystem docs
 
-The mux's active-low RESET is on XIAO D2 (`TCA9548A_RST_PIN`).
-`i2c_bus_select_channel()` pulses it after `I2C_BUS_MUX_RESET_AFTER_FAILURES`
-consecutive failed selects, which deselects every channel and frees the
-upstream bus from a segment held low; `trace` counts the resets.
+Each subsystem's design notes, measurements and the reasoning behind the rules below are in `docs/firmware/`. Read the matching doc before changing that subsystem.
 
-The MCP23017 (CJMCU-2317 module or the integrated carrier's chip; `MCP23017_ADDR` 0x20, with init falling back to the first of 0x20–0x27 that answers and logging a warning, #781) is exercised from the serial console with `gpio`, `gpio mode <pin> in|up|out`, `gpio set <pin> 0|1`, `gpio get <pin>`.
-Pins 7 (GPA7) and 15 (GPB7) are **output-only** on the Rev D part (DS20001952D p. 11, § 3.5.1 note): init sets them to outputs driven low, and `gpio mode 7|15 in|up` is refused with a message saying so (`ESP_ERR_NOT_SUPPORTED` from `gpio_expander_set_mode()`). The check is `gpio_expander_core.c`, pinned by `test_gpio_expander_core.c`.
-
-**Every peripheral above is non-fatal, and that did not always hold.** `init_hardware()` degraded gracefully when the I2C bus was absent — a bare board booted to the console — but once the bus answered, a failure in the expander, motors, LEDs, servos or buzzer aborted the boot. That is how PR #498's servo bug presented: a reboot loop with the console unreachable, i.e. the outcome every other non-fatal phase exists to prevent, and the one state in which nothing can be diagnosed. Since issue #500 the phase returns `void` and logs each failure, and `self_report` reads all four peripherals back through their live accessors so the facts line names which one is missing:
-
-```
-i2c_peripherals=ok                          # bus up, everything behind it up
-i2c_peripherals=degraded(motors,servos)     # bus up, these did not initialise
-i2c_peripherals=not-responding              # no bus at all (bare board, or a bus fault)
-buzzer=not-responding                       # separate key: it is a GPIO, not I2C
-```
-
-The spoken fault line stays coarse — one persona phrase covers "no bus" and "motors did not initialise", because from outside the robot the symptom is identical and the persona has no wording for LEDs, servos or the buzzer. The per-peripheral breakdown lives in the logged and MQTT-published facts line, which is where somebody diagnosing a board is actually looking.
-
-## Serial console commands
-
-| Command | Effect |
-| --------- | -------- |
-| `F` `B` `L` `R` `C` `W` `S` | Manual drive / rotate / stop — a ~1 s lease via `reactive_controller_manual()`, still subject to the obstacle reflex |
-| `gpio …` | MCP23017 expander (see above) |
-| `voice …` | Persona / TTS voice switching and auditioning; `voice vary` shows a drawn variation directive, `voice said` the recall ring, `voice quiet`/`budget`/`repeat`/`scene` the gates on speaking, `voice vad on\|off` toggles VAD auto-triggering (on at boot), `voice trigger <band%> <db> <ms>` what starts a VAD turn, `voice endpoint <ms> <db>` when it stops recording, `voice ration <n> <s>`/`turns <n>`/`resume` what voice turns may spend, `voice volume <pct>` the output gain |
-| `snap [n]` | Dump the next `n` planner frames over the console as base64 JPEG — see "Seeing what the camera sends" |
-| `listen [ms]` / `listen clear` | Record and answer a conversational turn (or clear conversational history) |
-| `cam …` | Read live sensor gain/exposure; `cam gainceiling 0-6`, `cam ae -2..2`, `cam brightness -2..2` tune exposure without a reflash |
-| `sound beep\|melody\|alert` | Buzzer |
-| `servo …` | `servo` alone reports readiness, on/off, both angles with the PCA9685 counts, the live travel limits and the PWM frequency; `servo pan\|tilt <deg>` holds one for 30 s through a head lease the executor applies (refused outside its limits), then the executor takes the head back; `servo on\|off` drives or releases both outputs, and runs directly on the console task so `off` works mid-exercise; `servo limit pan\|tilt <min> <max>` sets the live travel limits (boot default pan ±60°, tilt ±30°; not persisted); `servo exercise` shakes then nods between the limits, logging every write; `servo freq <24-1526>` changes the chip-wide prescaler and re-sends both servo pulses at the new period |
-| `led <r> <g> <b>` | Both RGB LEDs |
-| `mic` / `mic dump <n>` | Microphone state and the VAD speech trigger's scores (best since the last `mic`); dump PCM frames — tells a dead mic from a quiet room |
-| `plan …` | The gate on whether the planner makes a request at all — `plan` alone reports cadence, wake scores and spend; `plan on\|off\|wake\|sleep\|resume`, `plan scene\|range\|requests\|tokens <n>` |
-| `trace …` | Camera + endpoint activity counters since boot; `trace led on\|off`, `trace reset` |
-| `mqtt …` | Serial only. `mqtt` alone prints the MQTT command mode (`full`/`read-only`) and where the broker credentials came from; `mqtt auth <user> <pass>` stores them in NVS, `mqtt auth clear` removes them — both applied at the next boot |
-
-### MQTT remote commands
-
-Every command above except `mqtt` is also reachable over MQTT — all of them
-only once broker credentials are configured, see below — for the case the console table
-above already exists for but cannot reach: a board with no serial link
-attached. Publish a plain-text line — the exact same grammar as the console,
-not JSON — to `MQTT_COMMAND_TOPIC` (`robocar/commands`, QoS 1):
-
-```bash
-mosquitto_pub -h <broker> -t robocar/commands -m "plan resume"
-mosquitto_pub -h <broker> -t robocar/commands -m "F"
-```
-
-`mqtt_command.c` (pure C, host-tested in `test/test_mqtt_command.c`) validates
-and classifies the payload before anything acts on it:
-
-- **Movement** — the console's single letters (`F`/`B`/`L`/`R`/`C`/`W`/`S`,
-  case-insensitive) or their word form (`forward`/`backward`/`left`/`right`/
-  `rotate_cw`/`rotate_ccw`/`stop`) — routes through `dispatch_movement()`,
-  the same queue + `motor_control_task` the console uses, so it reaches
-  `reactive_controller_manual()` and stays behind the obstacle reflex.
-  `REACTIVE_MANUAL_TTL_MS` (1 s) still applies: a single MQTT message buys
-  one second of motion, so continuous remote driving means republishing at
-  ~1 Hz, and a dropped connection stops the robot within a second.
-- **Everything else** in the console table above (`plan`, `voice`, `trace`,
-  `mic`, `cam`, `servo`, `led`, `sound`, `gpio`, `snap`, `listen`) — forwarded
-  verbatim to `execute_console_line()`, the exact function the serial console
-  calls, so the two entry points can never disagree about what a command
-  does.
-- **Anything else, and any malformed or oversized payload, is rejected and
-  logged rather than dispatched.** `event->data` is not NUL-terminated, and
-  esp-mqtt can split one message across several `MQTT_EVENT_DATA` callbacks
-  once it exceeds the internal buffer (`event->total_data_len` /
-  `event->current_data_offset`) — a fragment is the topic ("target") already
-  resolved once, with more of the payload still arriving, and dispatching on
-  it would act on a truncated command. `mqtt_command_extract_line()` rejects
-  anything that is not a single, complete, in-bounds (≤63 bytes), printable-
-  ASCII line before `mqtt_command_dispatch()` ever sees it.
-
-**Without broker credentials the topic is read-only** (issue #626). A board
-with no `MQTT_USERNAME`/`MQTT_PASSWORD` connects anonymously, and on an
-anonymous broker anything on the LAN can publish to `robocar/commands` — so in
-that mode only the bare status forms reach a handler: `plan`, `trace`, `mic`,
-`cam`, `servo`, `gpio`, `voice`, `voice said`. Movement, every setting, and
-`snap`/`mic dump`/`listen` (camera frames and raw audio are not status) are
-refused and logged as `MQTT command refused: read-only …`. With both a
-username and a password configured, the full command set above is available.
-
-- **The allow-list is exact whole lines in `mqtt_command.c`**, not prefixes,
-  because the handlers parse loosely — `trace foo` falls through to the report
-  and `voice <slug>` switches the persona and persists it. A console command
-  added later is therefore locked out of read-only mode until somebody adds it
-  to the list on purpose. `test_mqtt_command.c` pins both sides of the list.
-- **Credentials come from NVS first, then `credentials.h`.** `mqtt auth <user>
-  <pass>` on the serial console stores a pair in NVS, `mqtt auth clear` removes
-  it, and `mqtt` alone prints the mode and where the credentials came from.
-  Both apply at the next boot, because the MQTT client is created once. `mqtt`
-  is serial-only by construction — handled in `command_task()` before
-  `execute_console_line()` and absent from `mqtt_command.c`'s prefixes — so an
-  anonymous publisher cannot set the credentials that would lift its own
-  lockout. The console line grew from 32 to 128 bytes for it, and the line is
-  logged as `mqtt ... (redacted)`. The CI and web-flasher stub defines both as
-  empty, so no shipped image carries a credential.
-- **Credentials only help if the broker enforces them.** The firmware sees
-  whether it was given credentials, not whether the broker refuses anonymous
-  clients — give the broker `allow_anonymous false` and an ACL on
-  `robocar/commands`, or a configured robot is as open as an unconfigured one.
-- **The mode is stated twice**: once in the boot log right after NVS init (on
-  every board, WiFi or not), and as `mqtt_commands=full|read-only` at the end
-  of the self-report facts line that `robocar/status` publishes — which is
-  where somebody whose MQTT drive command did nothing will look.
-- **Only a command that will run wakes the planner, and only with full
-  access.** A refused command has no effect at all, and an anonymous client
-  polling `plan` must not hold the planner awake and spending. The wake still
-  happens before dispatch, so `plan sleep` over MQTT is not undone by it.
-- Command output is `printf` to the serial console, as on the console itself,
-  so a status command sent over MQTT does not answer on MQTT; `robocar/status`
-  is the MQTT-side read-back.
-
-**`servo exercise` exists because "the servos are not moving" has five causes
-that look identical from across the room**: no VCC on the PCA9685 (its 3.3 V
-logic supply — a loose VCC lead was the actual cause on the 2026-09 bench), no V+
-(servo power), a failed init, a pulse train outside the servos' frame rate, and a
-dead servo. The exercise travels between the live `servo limit` values, so it
-cannot drive past an end stop somebody has measured. Every step logs the angle, the PCA9685 count written and the bus
-result, so a servo that does not move *while the writes succeed* is a different
-diagnosis from one whose writes are failing — and `servo freq 50` settles the
-frame-rate question without a reflash. That question is now answered for this
-build: `robocar-bringup`'s rate ladder (2026-09-18) showed the SG90s fitted here
-track cleanly at 50, 100 and 125 Hz and **buzz at 200**, so `PCA9685_FREQ_HZ` is
-100 — one rung below the highest rate that worked, because the bench servos were
-unloaded and a loaded one has less timing margin. Note the prescaler is
-chip-wide: changing it moves motors and LEDs too.
-
-**The wheels get the same treatment at boot, from `run_wheel_exercise()` in
-`main.c`.** It drives forward then backward for `MOTOR_EXERCISE_HOLD_MS` (1 s) at
-`MOTOR_EXERCISE_SPEED`, right after the executor comes up, so a drivetrain that
-does not turn over is distinguishable from a silent everything-else before the
-console is reachable. It goes through `reactive_controller_manual()` rather than
-`motor_controller.h` — the executor stays the only writer of motor output, and
-the obstacle reflex still governs, so a bench with a wall inside
-`STOP_THRESHOLD_CM` holds the wheels and logs that it did. **The robot moves on
-every boot**, which is a real hazard on a bench edge or with the wheels on the
-floor; block it or put it on its back if that matters. There is no console
-command for it yet, so re-running one means a reset.
-
-The `sound`/`servo`/`led` commands are the only producers for `peripheral_task`'s queue — without them the task and every `PERIPH_CMD_*` case are unreachable.
-
-## Pan/tilt head: the head leads, the wheels follow
-
-The planner has **no head tool** ([ADR-025](../../docs/decisions/ADR-025-reactive-head-aiming.md), issue #511). `track(box_2d)` stays its only aiming primitive, and the 30 Hz executor decides whether to satisfy it with the head, the wheels, or both. The logic is pure C in `head_aim.c`; `reactive_controller.c` feeds it the live servo pose and limits and writes what it returns.
-
-- **A track box becomes a bearing once per plan.** `planner_task` records the head's pan/tilt when it captures the frame (`goal_t.head_pan_deg`/`head_tilt_deg`), and the executor adds the box centre's offset in that frame (`HEAD_CAMERA_HFOV_DEG`/`VFOV_DEG`). The bearing is latched against `goal_state_read_seq()`'s write sequence, not recomputed from the box every tick: the box describes one frame, and re-reading it from a turned head would add the same offset again forever.
-- **The head leads.** It slews toward the bearing at `HEAD_SLEW_DEG_PER_TICK`, clamped to the live `servo limit` values on every step, and the wheels creep straight at `max_speed_pct` (0 holds position and only looks).
-- **The wheels follow near the limit.** Past `HEAD_PAN_ENGAGE_PCT` of the pan limit on that side the body turns in place at `HEAD_BODY_TURN_SPEED`. Each tick of turning subtracts `HEAD_BODY_YAW_DEG_PER_S` worth of yaw from the bearing, so the head re-centres as the heading catches up and the turn ends inside `HEAD_RECENTRE_DEADBAND_DEG`. While the reflex or a manual lease holds the wheels, the estimate does not advance.
-- **Anything else re-centres.** A stale goal, `stop`, `drive` and `rotate` slew the head back to 0/0.
-- **`drive(heading_deg)` folds in the pan at capture.** The heading is stated in the frame the planner saw, so the body heading is `heading + head_pan_deg` (`head_aim_body_heading()`).
-- **No servos, no aiming.** With `servo_is_initialized()` false, or after `servo off`, a track goal runs the original wheel-only P controller and nothing touches the servo driver. The same fallback applies while a head lease is live.
-- **Writes are suppressed when nothing changed**, and re-sent every `HEAD_REFRESH_INTERVAL_MS`, for the same reason as the motors: a PCA9685 that browned out holds its power-on defaults while the shadow says otherwise.
-
-**Two constants are unmeasured**, and both say so where they are defined: the camera FOV (an error scales where the head points) and the body yaw rate (the only thing that says when a turn has caught up — there is no IMU or odometry). The yaw rate is deliberately set high, so a wrong value ends the turn early rather than spinning past the target; the next plan's frame corrects the residual. Measure both on the bench and pin them.
-
-**Console commands take a head lease**, the counterpart of `reactive_controller_manual()`. `servo pan|tilt` calls `reactive_controller_head_hold()` (30 s, `REACTIVE_HEAD_HOLD_TTL_MS`); `servo exercise` takes `reactive_controller_head_external()` on `peripheral_task` for its duration and releases it after. Only when the executor is not running does `servo pan|tilt` fall back to writing through `peripheral_task`. `servo on|off`, `servo limit` and `servo freq` are unchanged: the executor reads the enable flags and limits live every tick. `servo` alone prints the executor's head mode (`aim`, `turn`, `centre`, `lease`, `unavailable`).
-
-A known race carried over from PR #574: `servo_controller.c` has no lock, so a `servo off` landing inside another task's `servo_set_angle()` can have its release overwritten by that one write. `servo exercise` already had this exposure; the executor adds a second writer, though it writes only on a change or once a second.
-
-**The executor's aiming has not run on hardware.** The servos themselves are now confirmed good: the 2026-09-18 bench found one mechanically binding (not dead) and traced the non-following at 200 Hz to the PWM frame rate, which `PCA9685_FREQ_HZ` = 100 fixes. What remains unexercised is `head_aim` driving them.
-
-## Activity indicators (`activity_trace.c`)
-
-Between two planner lines fifteen seconds apart the robot captures a frame, opens
-TLS, uploads a JPEG, waits on a model and possibly streams back audio. A capture
-that never returns and a request hung for its full timeout look identical from
-the console — and off the tether there is no console at all. So both choke points
-are instrumented: **every** picture comes from `camera_capture()` and **every**
-endpoint call from `gemini_http_post()`, which is why the hooks live there rather
-than at the call sites (a fifth caller then gets traced for free instead of
-silently going dark).
-
-The left LED is the camera, the right is the network:
-
-| LED | Colour | Meaning |
-| --- | --- | --- |
-| left | white | frame captured (brief pulse) |
-| left | red | last capture FAILED — **holds** |
-| right | blue | request in flight — held for as long as it is |
-| right | green | last request returned 200 (brief pulse) |
-| right | yellow | last request was 429 rate-limited — **holds** |
-| right | red | last request failed — **holds** |
-
-**A held blue is the signal worth having**: a request that has not come back,
-otherwise invisible until its timeout expires. Failure colours hold rather than
-pulse so a fault that happened while nobody was watching is still on the robot.
-`trace` totals it all since boot, with mean/max latency per endpoint and — when
-something is wedged — how long the outstanding request has been outstanding.
-
-`trace` also prints the **I2C bus** line, counted in `i2c_bus_select_channel()`
-because that is the single gate every downstream transaction passes through —
-PCA9685 writes, the expander, and anything added later. Instrumenting the
-callers instead would let a new writer go uncounted, which is exactly the case
-worth catching: a peripheral written on a timer is invisible from the console
-and surfaces as a symptom somewhere else on the board. One "op" is one bus
-acquisition (a mux channel-select plus the caller's device traffic), so it is a
-lower bound on wire transactions, never an overcount.
-
-An idle robot should read close to zero. A steady rate with nothing moving means
-something is writing the bus on a timer. The `now` field is **zeroed once its
-window goes stale** rather than reporting the last rate it saw: a remembered
-rate on a silent bus is the one reading this counter exists to rule out.
-
-**A colour is written only when it changes, and re-asserted every
-`LED_REFRESH_INTERVAL_MS` even when it does not.** The suppression keeps a 25 Hz
-task off the shared I2C bus; the re-assertion exists because the shadow it keeps
-is a claim about a chip that cannot be read back. A PCA9685 that browned out or
-was re-seated holds its power-on defaults — all outputs off — while the shadow
-still says the colour is lit, and the states worth seeing are exactly the ones
-that never change on their own: a held red for a failed capture, a held blue for
-a request that never returned, a held yellow for a 429. Without the expiry a
-stale indicator reads as "nothing happening", which is the opposite of what it
-means. A failed write invalidates the shadow rather than being remembered as
-displayed, and `trace led off` still means off — the refresh does not resume
-writing. Pinned by `test_activity_trace.c`, including the uint32 millisecond
-wrap at day 49.
-
-Indicators may never cost the path they measure: the hot paths only stamp a few
-words, all PCA9685 traffic happens on the indicator task (priority 2, below
-everything it observes), LEDs are written only on a colour change, and the
-counter mutex is taken with a 20 ms timeout and the update **dropped** on
-contention. A lost count is a fair price; a stalled planner is not.
-
-## PCA9685 channel layout
-
-All motor direction, motor PWM, servo, and LED outputs go through the PCA9685 — the ESP32-S3 only drives STBY (GPIO1), the buzzer (GPIO2), and I2C. GPIO budget on XIAO headers is tight (11 pins). See the channel table in `main/pin_config.h` before reassigning.
-
-Motor direction uses PCA9685 "full-on" (4096) / "full-off" (0) values on IN1/IN2 channels.
-
-**Channels 8-13 follow the TB6612FNG's control header, not a per-motor order.**
-Read that header top to bottom and it is PWMA, AIN2, AIN1, STBY, BIN1, BIN2,
-PWMB — symmetric about STBY rather than repeated — so assigning 8-13 in that
-order makes the six jumpers run straight across with no crossings, at the cost
-of the A side reading PWM-then-direction and the B side direction-then-PWM. The
-apparent asymmetry in the `#define` list is what buys the symmetry on the bench.
-STBY is not in the block; it is GPIO1, direct from the MCU.
-
-**Stopping and braking are different electrical states.** `motor_stop()` writes
-IN1 = IN2 = low, which the TB6612FNG truth table calls *Stop* — the outputs go
-high-impedance and the robot rolls on inertia. `motor_brake()` writes
-IN1 = IN2 = **high**, shorting the windings. Only the obstacle reflex brakes;
-every other stop in the 30 Hz loop coasts, because the executor stops on every
-iteration it is not driving and a parked robot should not sit with its windings
-shorted for as long as it is powered. `test_motor_controller.c` pins the two
-encodings apart and `test_reactive_controller.c` pins which path uses which —
-both were mutation-checked, since a PWM-only assertion passes against either.
-
-`set_motors()` writes all six in one transaction and therefore places each value
-by **channel** (`MOTOR_CH_SLOT`), never by argument position, with a
-`_Static_assert` that the six are a gap-free block starting at
-`MOTOR_FIRST_CHANNEL`. A positional array would keep compiling after a renumber
-and simply drive the wrong pins — on a motor driver, a wheel that spins when it
-was told to stop. `test_each_value_lands_on_its_own_channel` in
-`test_motor_controller.c` pins the placement; it was mutation-checked by
-reverting to the positional literal, which fails it.
-
-## Bus clock and PWM phase
-
-Two properties of every PCA9685 write, both set in `i2c_bus.c` and neither
-visible at the call site.
-
-**One bus clock for the whole port.** Each esp-idf-lib driver picks its own rate
-in `init_desc()` — TCA9548A 100 kHz, PCA9685 and MCP23017 1 MHz — so without an
-override the bus runs at whichever speed the last-addressed device wanted.
-`pin_bus_clock()` puts all three on `I2C_MASTER_FREQ_HZ` (400 kHz, the fastest
-every part here is rated for; the TCA9548A is the Fast-mode limit). That define
-had sat unread in `pin_config.h` since the first commit.
-
-Under **i2cdev 1.x** this also removed a real cost: `cfg_equal()` compared
-`clk_speed`, so consecutive transactions at different rates made
-`i2c_setup_port()` delete and reinstall the whole I2C driver first — twice per
-motor update, ~30 times a second while driving, because a mux channel-select
-always precedes a device write. **i2cdev 2.0.0 moved to ESP-IDF's bus/device
-API**, which caches a per-device handle carrying its own `scl_speed_hz` on a
-shared bus, so that reinstall is gone by construction. The override stays for
-the first reason only.
-
-**Outputs are phase-staggered.** The vendored driver hardcodes every channel's
-ON count to 0, so all sixteen outputs rose on the same tick of the ~197 Hz
-period — two motor PWMs, two servos and six LED channels switching together.
-`pca9685_phase.c` gives channel *n* an ON offset of *n*/16 of the period and
-composes the LEDn registers itself, because upstream esp-idf-lib has no API for
-it and the vendored copy is a **symlink into `robocar/main`** — patching it
-would change that firmware too and be reverted by any library refresh.
-
-Staggering moves a pulse within the period without changing its width, so
-nothing downstream can tell: a servo decodes pulse width, not position in the
-frame, and the TB6612FNG sees the same duty cycle. Full-on and full-off are
-flag bits rather than counts and deliberately carry **no** phase — on this board
-those are the motor direction pins, and a phase offset there would turn a
-digital level into a ~197 Hz square wave. `test_pca9685_phase.c` pins all of it,
-including the 12-bit wrap at channel 15 where OFF legitimately lands below ON.
-
-This is headroom, not a fix: the audio distortion that prompted the
-investigation was resolved by adding bulk capacitance.
-
-## Where the I2C drivers come from
-
-`pca9685`, `tca9548`, `mcp23x17` and `i2cdev` are **managed components**
-(`main/idf_component.yml`), not vendored source. They used to be a ~95-component
-snapshot of the `UncleRus/esp-idf-lib` monorepo living under `robocar/main` and
-reached from here by symlink; that monorepo is archived, and the library now
-ships as per-component repos under the `esp-idf-lib` org.
-
-**`pca9685` is floored at `'^1.0.8'`, and the floor is load-bearing.** Releases
-up to 1.0.7 index the stack buffer in `pca9685_set_pwm_values()` by the
-*absolute* channel number while sizing it for `channels` entries, so any
-`first_ch > 0` writes past the end — `motor_stop()`'s (8, 6) wrote 32 bytes past
-a 24-byte VLA and double-faulted this board on the first boot with the PCA9685
-fitted. The fix landed upstream as `esp-idf-lib/pca9685#2` and shipped in 1.0.8;
-until then the manifest pointed at a fork branch (issue #526).
-
-Do **not** relax it to `'^1.0.0'` — the resolver could then pick a release with
-the board-crashing bug. `test_pca9685_multi` compiles the resolved driver under
-AddressSanitizer specifically to catch that, and was control-tested against the
-1.0.0 registry source: it aborts with `stack-buffer-overflow ... in
-pca9685_set_pwm_values`.
-
-That test reads the driver from `managed_components/`, which is gitignored, so
-it is **skipped with a `STATUS` message in a fresh checkout** and appears once
-`just robocar-unified::build` has fetched the dependency. No other suite needs
-it. Two declaration-only shims in `test/include/pca9685_decl/` keep the
-remaining targets configuring without a prior firmware build; they are stubs,
-and the firmware build — which uses the real headers — is what catches any
-disagreement.
-
-## AI planner
-
-**Gemini Robotics-ER 2 only** (`gemini-robotics-er-2-preview`; ER 1.6 was shut down at the end of August 2026). The planner calls Gemini to emit function-call goals:
-
-- `drive(heading_deg, distance_cm, speed_pct)` — absolute heading + distance
-- `track(box_2d, max_speed_pct)` — visual servo toward a bounding box
-- `rotate(angle_deg)` — spin in place
-- `stop()` — hold position
-
-- `speak(text)` — say one short sentence aloud, emitted *in addition to* a movement call
-
-The planner runs every `PLANNER_LOOP_PERIOD_MS` (15 s default, set by the Gemini free-tier quota rather than by control preference) on Core 1; the executor drives the goal at ~30 Hz on Core 0. No on-demand inference or blocking on responses — the planner is a background task that constantly updates `goal_state`, and the executor always has something to do.
-
-## The planner does not run unless something is happening
-
-The loop above describes the cadence when the robot is *awake*. It is not awake
-by default, and this is the part to understand before changing anything in
-`planner_task.c`.
-
-The planner used to call Gemini on every 15 s tick, unconditionally and forever —
-240 requests an hour whether or not anything had changed. A board left plugged
-into a laptop overnight ran all night; nothing on the device had any notion that
-it was spending anything. ADR-020's three speech gates were already computing
-almost exactly the evidence needed to know better, but they gate what goes *into*
-a request, not whether one is made: on a quiet cycle the request got cheaper and
-still went out, JPEG and all. [ADR-022](../../docs/decisions/ADR-022-planner-dormancy-and-spend-ceiling.md)
-carries the full argument.
-
-Two mechanisms now sit in front of the call, and they are deliberately different
-kinds of thing.
-
-### `plan_activity` — evidence, with a ladder rather than a switch
-
-A request is made when any of five things is true: the **view** has changed from
-the frame last planned on, the **room** has made a noise
-(`ambient_audio_event()`), the **rangefinder** reading has moved, the robot is
-**in motion**, or somebody typed at the **console**. Otherwise the interval grows
-15 s → 30 → 60 → 120 → 300 and only then stops entirely — five requests over
-about nine minutes.
-
-**The ladder is the design, not a softening of it.** A binary sleep is only as
-good as its wake detector, and this project has already shipped a gate that was
-wrong about its own sensor: `ambient_audio.c` failed *open* with the microphone
-absent and claimed novelty every cycle for a whole boot. The mirror of that
-failure is a robot that never wakes, which reads as bricked and which standing in
-front of it does not fix. The ladder bounds both directions — a deaf detector
-costs 12 requests an hour and recovers by itself, and the symptom is visible in
-the log as a ladder climbing while a person is plainly in the room.
-
-**Dormancy stops the request, not the loop.** Capturing and fingerprinting a
-frame costs CPU and nothing else, so that keeps happening every 15 s while
-dormant. Wake latency is one tick however long it has been asleep.
-
-**It keeps its own scene reference, and must.** `scene_change` measures from the
-frame last *spoken about*; this measures from the frame last *planned on*. The
-two move at different moments, so one field cannot serve both — which is why the
-planner log now carries `scene:` and `still:` side by side. Both share
-`scene_change.c`'s block-mean-minus-frame-mean representation, so the AGC/AEC
-rewriting exposure on a motionless scene does not read as a change.
-
-**Audio evidence is `ambient_audio_event()`, never `ambient_audio_novel()`.**
-`novel()` additionally treats a room never spoken about as new. That is right for
-speech and fatal here: a dormant robot never speaks, so it would never see that
-branch clear and would never go quiet at all.
-
-**The board boots dormant.** The first valid frame becomes the reference rather
-than counting as a change — a first observation cannot be evidence that something
-changed. A board powered on in a still room therefore makes no request at all.
-
-### `plan_budget` — a counter, and the only layer that can be trusted absolutely
-
-Past a per-boot ceiling on requests or tokens the planner is refused regardless
-of what any detector believes. It lives at the `gemini_backend_plan()` choke
-point rather than in the planner loop, for the same reason the `activity_trace`
-hooks live inside `gemini_http_post()`: a future second caller inherits the fuse
-instead of quietly spending outside it.
-
-Charging **fails closed on the parse and open on the network**. A response whose
-`totalTokenCount` cannot be read is charged `PLAN_BUDGET_ASSUMED_TOKENS`, and the
-count of such requests is reported by `plan` — charging zero there is how a spend
-ceiling silently stops being one while every log line still looks healthy. A
-request that never produced a body is counted but charged no tokens, because a
-robot with no network is the one situation where it is provably not spending, and
-phantom tokens would let an outage trip the fuse.
-
-**Tripping is terminal.** No rolling window, no auto-reset: `plan resume`, an
-MQTT command, or a reboot. A fuse that resets itself is not a backstop against
-the unattended board it exists for.
-
-`gemini_parse.c` now keeps the token counts it had been logging into
-`GP_MAYBE_UNUSED` locals, and reads them *before* the branching that can `goto
-done` — so a response that parses as JSON but carries no recognisable
-`functionCall` now reports its cost, which is exactly the response you most want
-the cost of.
-
-### Reading it
-
-```text
-Goal: STOP | latency: 1188 ms | scene: 3/8 | ... | gate: . | still: 1/6 | why: + | step: 2/5 | spent: 41/500 req, 149203 tok
-Idle: no request | still: 0/6 | range: 0/20 cm | loud: 2/12 dB | next in 60000 ms | why: .
-```
-
-`why:` letters combine — `W` woken, `M` moving, `V` view, `A` audio, `R` range;
-`+` a keep-alive fell due with no evidence, `.` holding between rungs, `Z`
-dormant. On an empty desk the sequence should read `+ . . + . . . +` and end at
-`Z`. `Z` while somebody is visibly moving means `plan scene` is too high; a
-ladder that never leaves step 1/5 on an empty desk means it is too low, or the
-camera is noisier than the threshold. Dormant cycles log at DEBUG so an overnight
-run stays quiet; entering dormancy and waking each emit one INFO line.
-
-Every threshold is a console knob and none of them persists to NVS, for the same
-reason `cam gainceiling` and `voice scene` are: whether the robot is sensibly
-frugal or annoyingly asleep is a judgement that needs somebody standing in the
-room. `plan off` restores the original behaviour exactly — a request every tick —
-while leaving the budget fuse in force.
-
-Both modules are pure C with injected clocks, so the whole nine-minute ladder and
-the uint32 millisecond wrap at day 49 run in microseconds:
-
-```bash
-just robocar-unified::test   # + test_plan_activity, test_plan_budget
-```
-
-## Seeing what the camera actually sends
-
-Every claim about image quality here was inference until `frame_dump.c` existed — the sensor registers, the JPEG size and the frames themselves had never been read off a device. Two instruments, and the pairing is the diagnosis:
-
-- **`frame_stats_log()` runs on every planner frame.** It decodes the JPEG at 1/8 scale and logs `luma mean/p5/p50/p95` next to the sensor's **live** `gain`/`exp`/`ceil` registers. Read them together: high gain + maxed exposure + low luma means the sensor is *starved* and the gain ceiling needs raising; low gain + low exposure + low luma means auto-exposure is not converging; low mean with a **high p95** is backlit, not unlit. The cached `sensor_t` status struct cannot answer this — it holds what was last *written*, not what the AEC/AGC loops have since chosen, which is why `camera_read_exposure()` reads the registers over SCCB instead. The same decode also yields the scene fingerprint that gates speech (see the Voice section), which is why it is *returned* rather than acted on here: this file is instrumentation, and what a frame means for the robot's behaviour is the planner's call.
-- **`frame_dump_maybe()` emits the JPEG itself**, base64-framed with a length and CRC32, for the first `FRAME_DUMP_BOOT_FRAMES` frames and on `snap [n]`. These are the exact bytes handed to `gemini_backend_plan()`, dumped while the planner still holds the buffer — no copy, no lifetime question, no chance of showing a different frame from the one the model saw.
-
-```bash
-just robocar-unified::monitor | tee /tmp/robocar.log
-uv run tools/decode-frame-dump.py /tmp/robocar.log /tmp/frames
-```
-
-The monitor is **read-only** and resets the board on attach (`tools/esp32s3-monitor.sh` never writes to the port), so you cannot type `snap` through it — that is why the first frames auto-dump at boot. Use `screen`/`picocom` if you want the command.
-
-The length+CRC are not decoration: the USB-Serial-JTAG console **silently drops** TX bytes once the host stops reading for 50 ms (`TX_FLUSH_TIMEOUT_US`) and reports success anyway. Without the checksum a host hiccup yields a corrupt JPEG that looks exactly like a broken camera.
-
-The dumps come over USB only. They are `printf()` lines, not `ESP_LOG`, so the UART0 mirror below never sees them — which is deliberate: a 20 kB JPEG is ~27 kB of base64, over two seconds of 115200-baud wire time, and would push every log line behind it out of the mirror's queue.
-
-### The log on J15 (UART0 TX)
-
-`log_mirror.c` (issue #798) installs an `esp_log_set_vprintf()` hook as the first thing in `app_main`. Each `ESP_LOG` line still goes to the previous handler — the USB-Serial-JTAG console, unchanged — and a copy goes to UART0 TX on D6 (GPIO43) at `LOG_MIRROR_UART0_BAUD` (115200 8N1, the ROM boot log's own rate), which the carrier routes to test header J15. That is the log on a wire that does not drop bytes when a USB host stops reading, and that is there off the tether. The console stays on USB: `CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG` is untouched, `command_task` still reads stdin from USB, and Improv packets, command replies and the frame/mic dumps — all written to stdout, not logged — never reach UART0. D7 (RX) is not claimed (`UART_PIN_NO_CHANGE`, RX interrupt off).
-
-The hook never waits on the wire. It renders the line into a `LOG_MIRROR_LINE_MAX`-byte buffer on the logging task's stack (`log_mirror_core.c`: LF→CRLF, since no VFS sits between the driver and the pin, and a cut line ends in `...\r\n`), then offers it to a PSRAM NOSPLIT ring buffer with a zero timeout. A full ring drops the line and counts it; a priority-1 drain task on core 1 is the only caller of `uart_write_bytes()`, and prints `[log_mirror: N line(s) dropped]` on J15 when it catches up. It does not ask the UART driver for free space first because `uart_get_tx_buffer_free_size()` in v5.4 subtracts only the item the ISR is sending, not what is queued behind it. `LOG_MIRROR_UART0_ENABLED 0` in `config.h` compiles it out. `test_log_mirror_core.c` pins the rendering (bounded, marked when cut, CRLF not doubled); the rest — the stack cost of the buffer on the smallest-stacked tasks that log, and how many lines a boot burst drops — is bench work on issue #798.
-
-### The sensor is an OV3660, not an OV2640
-
-`camera_pins.h` claimed OV2640 for years and it is **wrong** — the board reports `PID=0x3660`. The first frame this instrument ever dumped is what revealed it, and it inverted the diagnosis:
-
-`set_gainceiling()` means completely different things on the two sensors. On an OV2640 the argument is an enum index (`0` = 2x, the lowest of seven). On an OV3660 the driver writes it as a **raw 10-bit ceiling** into registers `0x3A18`/`0x3A19`, whose power-on default is `0x00F8` = 248 = **15.5x**. `camera_init()` was passing `(gainceiling_t)0`, so on this hardware it was not selecting "2x" — it was clamping the AGC ceiling to **zero gain**. That is why the frames were dark. The call is gone; the driver's own default stands.
-
-The register maps are otherwise incompatible too (OV2640 is 8-bit-addressed and bank-switched, OV3660 is 16-bit-addressed), so `camera_read_exposure()` branches on the PID and returns `false` for anything it does not know rather than reading one sensor's map through another's driver. **Read the PID `camera_init()` logs before reasoning about any sensor register.**
-
-Exposure stays a **runtime knob** (`cam gainceiling N`), not a compile-time constant, because whether a frame is "too dark" is a judgement only a human looking at the room can make and a reflash per trial is far too slow a loop. Its range and units are sensor-dependent — `cam` with no argument prints both.
-
-## Voice (MAX98357A)
-
-The robot speaks through a MAX98357A I2S amplifier on GPIO7/8/9. See [ADR-019](../../docs/decisions/ADR-019-robocar-voice-gemini-tts.md) for the design.
-
-**Speech is a queue, not a goal.** `speak` is deliberately *not* a `goal_kind_t` — it travels via `speech_queue` alongside `goal_state`. Goals are last-write-wins with a TTL that collapses to STOP; applying those semantics to speech would truncate sentences mid-word and make talking and driving mutually exclusive. If you find yourself adding `GOAL_KIND_SPEAK`, read the header comment in `speech_queue.h` first.
-
-The pipeline is two Gemini calls: Robotics-ER decides *what* to say (riding the existing planner call — no extra vision inference), then `gemini-3.1-flash-tts-preview` renders it. Audio is 24 kHz mono PCM, base64 inline, no WAV header — decoded **incrementally** into a PSRAM ring by `base64_stream_feed()` while the player task drains it into I2S, so playback starts before the download finishes. A few seconds of audio is hundreds of kB; it can never be buffered whole.
-
-**Playback does not start at the first byte — it waits for `AUDIO_PREROLL_BYTES`, or for the fetch to finish.** Gemini's TTS stream is frequently *slower* than real time: measured across seven live captures (2026-07), real-time factors were 0.55 / 0.79 / 0.84 / 1.88 / 2.70 / 3.08 / 3.81, and the three below 1.0 were all the same *short* line — a fixed 0.9–2.7 s time-to-first-byte amortised over less audio. Draining on arrival therefore ran the ring dry mid-sentence 12–18 times per utterance. That is not merely a gap: ESP-IDF's I2S TX ISR keeps a `desc_num - 1` deep free-buffer queue and **drops the oldest entry** when it overflows, so after a stall `i2s_channel_write()` is handed the descriptor the DMA is about to transmit and its `memcpy` lands in a buffer being read out — torn samples, i.e. broadband noise. The gate's OR-condition is the important half: a short utterance completes before the threshold and plays from a *complete* buffer, so it cannot underrun at all.
-
-Each utterance logs `first=`/`total=`/`rtf=`. **`rtf` below 1.00 means Gemini generated slower than playback consumes** — expected sometimes, and exactly what the preroll gate absorbs. `first=` drifting up toward `total=` means something reverted to whole-response synthesis. `ring full … dropping` or `i2s_channel_write failed` in the log means the gate is not holding and the ring or preroll needs re-sizing.
-
-The decoder itself is **proven correct against real data**: `main/base64.c` was replayed over seven captured SSE bodies at twelve chunk sizes and produced byte-identical PCM to a reference JSON+base64 decode every time, and the literal `"data"` never occurs outside an audio payload (1096/1096 payloads). If the voice sounds wrong, it is not the decode — look at the ring, the gate, or the amp.
-
-**The TTS call goes to `:streamGenerateContent?alt=sse`, not `:generateContent`.** The non-streaming endpoint synthesises the whole utterance before sending a byte, which left the ring buffer with almost nothing to overlap: measured 6.42 s to first byte versus **1.16 s** streaming, same body and model. The streamed body is a sequence of SSE events each carrying its own `"data"` payload, so the decoder seeks past each closing quote and concatenates all of them — `base64_stream_done()` means "between payloads", not "stream ended". Each utterance logs `first=`/`total=` ms; `first=` drifting up toward `total=` means something reverted to whole-response synthesis.
-
-**Delivery tags are placed by the model, not drawn from a pool.** Gemini performs `[sighs]`, `[laughs]`, `[whispers]`, `[excited]`, `[bored]`, `[gasp]` inline rather than reading them aloud. Unlike openers and shapes — interchangeable by construction, hence random — a tag has to fit the sentence, so the persona's `tag_brief` invites the *generating* model to place them. Everything coming back is filtered against the allow-list in `speech_tags.h` at the single choke point in `speech_queue_post()`: an unrecognised bracketed run is liable to be **spoken aloud**, so the robot would announce its own stage directions. Under ADR-024, tags are encouraged across all speech paths (including character reactions to hardware faults and conversational turns) to give Robocar dramatic agency.
-
-Full API surface, including the multi-speaker config that exists but is unused and why custom/cloned voices are not available here: [`.claude/skills/gemini-tts-voice/`](../../../.claude/skills/gemini-tts-voice/SKILL.md).
-
-**What the robot says varies per utterance; what it *sounds like* does not.** The persona (`voice_persona.c`) fixes the language, voice and register — the parts that must hold for every line. Anything phrase-shaped lives in that persona's `dialogue_pool_t` pools instead, and `dialogue_style.c` draws one opener and one sentence-shape per generated line, appends them to the prompt, and adds the openings of the last few spoken lines as a "do not begin with these" list. This is prompt-side only: no extra API call, no extra latency, a few hundred bytes of rodata.
-
-The trap it exists to prevent: a phrase named in `text_brief` gets used *every single time*. Naming the period construction "Asianlaita on oikeastaan niin, että ..." there made it the opening of practically every spoken line. Put such a phrase in the `openers` pool, where it turns up on its share of lines and the pool can also say "no opener at all". `voice vary` on the console prints a freshly drawn directive so pools can be tuned without waiting out a 15 s planner period per sample.
-
-### The robot remembers what it said, and is rationed on how often it says anything
-
-Every planner request is **stateless** — one image, one prompt, no previous frame and no record of having spoken. So the prompt's "remark only when the scene changes" and "narrating every time would be tiresome" were asking for a judgement the model had no information to make: it arrives as a first-time observer on every call. Pointed at a bench that is not moving, it remarked on the same unmoving thing every 15 s, and the three-word avoid-list let it do so with a fresh opening each time.
-
-Five mechanisms, in the order they act on a cycle:
-
-- **The room must sound different, or the view must have changed** (`ambient_audio.c`, `ambient_listener.c`). The onboard PDM microphone is sampled continuously at ~15 frames/s and reduced to two level-shift-invariant scores: a peak *excursion* above a slowly adapting noise floor (a door slam), and the distance between the room's *spectral shape* and its shape when the robot last spoke (an empty room becoming a room with someone talking in it). Both store their measurements relative to a running mean for the same reason `scene_change` subtracts the frame mean — a mic's own level drifts, so an absolute threshold would track the HVAC. The floor rises at a bounded rate, so a fan that switches on raises the level, is absorbed within seconds, and stops being news *by construction*.
-- **The view must have changed since the robot last spoke** (`scene_change.c`). `frame_stats_log()` already decodes every planner frame to a 40x30 thumbnail; that same decode is reduced to 48 block means, each stored as its deviation from the frame mean, and compared against the frame the robot last remarked on. Subtracting the frame mean is the load-bearing part: the sensor's AGC/AEC rewrites gain and exposure every frame, so an *absolute* comparison would report a scene change every time a cloud passed — the exact false positive that would put the chattering back. Until a frame has decoded, the gate reports **no** change (unless `voice scene 0` has switched it off, which answers true regardless): `!s_current.valid -> false` is checked ahead of the first-impression branch, the same order as `ambient_audio_novel()`, because there is no first impression of a view nobody has seen. In the other order that check was unreachable and a camera whose frames never decoded opened `speak` on every cycle (issue #690). The boot greeting still happens once one frame decodes.
-- **The `speak` tool is withheld, not discouraged** (`speech_budget.c`). A minimum gap (20 s) and a rolling cap (6 per 5 min) decide whether `build_tools()` declares `speak` at all. On a quiet cycle the whole speech half of the prompt — persona brief, variation directive, recall list — is omitted too, so the muted request is also the cheaper one. Withholding beats instructing because there is no wording that makes an unknowable fact ("how long since I last spoke") knowable.
-- **The last few whole utterances go into the prompt** (`dialogue_style.c`, `DIALOGUE_RECALL_SLOTS`). Distinct from the avoid-list, which constrains only the first `DIALOGUE_OPENING_WORDS` words — a model can honour that and still reorder the same sentence forever, which is exactly what it did.
-- **The answer is re-checked on-device.** `dialogue_style_is_repetitive()` scores the candidate against the recall ring (Sørensen–Dice over word sets, ASCII-case- and punctuation-insensitive, so reordering does not evade it) and `planner_task.c` drops it above the threshold. An instruction the model can quietly ignore is not a guarantee.
-
-The first three gate the *tool*; the last two gate the *line*. The three tool gates combine in `build_request_json()` as
-
-```c
-speech_budget_allows(now_ms) && (scene_novel || audio_novel)
-```
-
-and the shape of that expression is the design, not an accident. The budget **rations** — it caps how much the robot may talk at all, so it ANDs, because a ration that evidence can vote down is not a ration. Scene and ambient are **evidence**: they answer one question through two senses, so they OR. Under AND the decisive case fails — a person walks into a still room and speaks, the soundscape changes, the view does not, and the robot is mute exactly when a human has just addressed it, which reads as broken rather than laconic. Under OR the worst case is spending the full ration, six sentences in five minutes, tunable from the console in seconds. [ADR-020](../../docs/decisions/ADR-020-ambient-audio-speech-gate.md) carries the full argument.
-
-**Opening the tool is only half of it — the prompt has to say *why* it opened.** The speech clause used to read "do so only if this frame shows something worth remarking on", which is correct while the only evidence is visual and actively wrong the moment audio can open the gate: on an audio-only cycle the frame shows nothing new *by construction*, so that sentence instructs the model to stay silent in precisely the case the gate just opened for. `build_request_json()` now names the evidence — view changed, room sounds different, or both. This is the same law as the rest of this section: the request is stateless, so anything the model must know has to be put in it.
-
-**But only what the robot knows — the request carries the image and no audio.** The first audio-only clause said "something happened out of frame or behind you. Remark on that". The model had nothing to remark on, so it invented sources: bangs, echoes, moving furniture (issue #618). The clauses in `speech_evidence.c` now say only that the room's sound level or character changed, that the model has no audio and the source is unknown, allow at most a non-specific acknowledgement or question on an audio-only cycle, and forbid naming, describing or guessing a source in both audio cases. `test_speech_evidence.c` pins the wording. Attaching the triggering audio to the planner request would need a probe that `gemini-robotics-er-2-preview` accepts audio input at all.
-
-**And only what the gates compared.** Every clause says "since you last spoke", but both gates also answer novel without comparing anything: on their first impression (nothing spoken about yet this boot), and the scene gate with `voice scene 0`. The clause used to tell the model at boot that the view and the sound had changed since it last spoke, and with the scene gate off every speaking cycle said "The view has changed", including a sound-only change with a motionless view (issue #631). Each gate now has a `*_compared()` accessor (`scene_change_compared()`, `ambient_audio_compared()`), `speech_sense_from_gate()` turns novel + compared into `UNKNOWN`/`SAME`/`CHANGED`, and a sense that did not compare contributes no sentence. So a first-impression cycle gets no evidence clause at all, and a measured sound change with an uncompared view gets the sound clause without the view sentence.
-
-**The scene reference is the frame the robot last spoke about, not the previous frame.** Comparing consecutive frames answers the wrong question: a slow drift never trips a per-frame threshold (the room could change completely while the robot stays silent), and a scene that changed once reads as unchanged on the very next frame — before a word had been said about it. `scene_change_mark_spoken()` moves the reference, and it is called only when a line actually reaches the queue.
-
-The same reasoning applies to the soundscape, and the reference moves at the same instant: `ambient_audio_mark_spoken()` is called beside `scene_change_mark_spoken()`, because both detectors measure "since the robot last spoke" and marking only one leaves the other licensing remarks about evidence already used.
-
-A consequence worth stating plainly: **in a genuinely static, quiet room this robot goes quiet and stays quiet.** That is correct, not broken — which is why `voice` prints every live score and names whichever gate is holding, why `mic` exists to tell a dead microphone from a quiet room, and why the planner logs the whole gate state every cycle:
-
-```text
-Goal: STOP | latency: 1188 ms | scene: 3/8 | loud: 4/12 dB | sound: 2/6 dB | floor: -51 dB | gate: .
-```
-
-`gate:` is the field that makes the OR auditable rather than merely arguable — `-` budget holding, `V` view only, `A` audio only, `VA` both, `.` nothing to say. Count the `A`-only cycles in a 20-minute capture: if they track the building's ventilation, raise `voice loud` / `voice sound`; if they coincide with sentences worth hearing, the OR is doing its job; if `A` never appears at all, the audio gate is dead weight and either the thresholds or the mic gain are wrong. `floor:` is what explains `loud:` — a high floor with no excursion is a noisy but unchanging room, which is a working gate, not a deaf one.
-
-**`gate: A` with `loud: 0/… | sound: 0/…` is the signature of a broken gate, not a quiet one.** The audio gate claiming novelty while both of its own scores read zero means it is asserting a change it never measured. It used to do exactly that whenever the microphone was absent or dead: `mic_pdm_init()` and `ambient_listener_start()` are both non-fatal, so no frame ever arrived, the reference fingerprint never became valid, and `ambient_audio_novel()` returned `true` on every cycle for the whole boot. Downstream that is not a missing feature but a **false claim** — an audio-only opening tells the model the room sounds different since it last spoke, the request is stateless so the model cannot doubt it, and the robot narrates a noisy room that does not exist. The gate now fails **closed** (`!s_current.valid -> false`, ahead of the first-impression branch, mirroring `scene_change.c`), `mark_spoken()` refuses to adopt an unmeasurable reference, and `mic` prints `gate: DEAF` when nothing has ever reached it. Pinned by four host tests in `test_ambient_audio.c`.
-
-Only *generated* lines are screened for repetition. `voice say` is an audition and is meant to repeat on demand; a self-report whose facts have not changed is supposed to read the same.
-
-Output gain is a console knob too — `voice volume <pct>`, boot default `AUDIO_VOLUME_PCT`. It scales the PCM linearly before the DMA, because the MAX98357A has no volume control, and the setter **clamps at 100**: `mono_to_stereo()` casts the scaled sample to `int16`, so an unclamped 200 wraps a full-scale peak to the opposite rail and the output inverts into noise rather than clipping. Percent is amplitude, not loudness — halving it is −6 dB, and an ear reads roughly −10 dB as half as loud, so expect the first guess to be wrong and adjust in the room. Pinned by `test_audio_player.c`.
-
-**Teuvo sounds like a robot because of a filter, not a prompt.** `voice_fx_core.c`
-adds a feedback comb (the metal body) and a soft saturation (the amplifier inside
-him) to every sample on its way to I2S, applied in `audio_player.c`'s drain loop
-before the volume scale. The split is deliberate and was measured, not assumed: a
-sweep of seven `tts_style` directives over one Finnish line (2026-09) moved tempo
-by up to 2.7x and measurably changed timbre, so **pace, weight and rasp are
-promptable and belong in `voice_persona.c`** — but the same sweep asked the model
-in Finnish for a narrow, band-limited "old radio" sound and got audio with *more*
-high-frequency energy than the unprompted control (0.77% vs 0.59% above 4 kHz).
-The medium is not promptable. That is the whole justification for DSP here.
-
-The chain is comb + saturation at **full bandwidth**, with no band-limit, and
-that is a character decision rather than an omission: band-limiting would say
-"you are hearing a 1956 recording *of* Robby", and Teuvo is in the room. Three
-knobs, all integers on the console because `%f` is silently wrong under
-`CONFIG_NEWLIB_NANO_FORMAT` — `voice fx body <tenths of a ms>` (the body size;
-6.5 ms resonates near 154 Hz), `voice fx metal <pct>` (feedback), `voice fx drive
-<pct>`, plus `voice fx on|off`. Like every other knob here they do not persist.
-The chain **boots off** (`VOICE_FX_DEFAULT_ENABLED` in `voice_fx_core.h`), so
-the robot speaks in the plain TTS voice until `voice fx on`.
-
-The `(1-g)` input trim on the comb is load-bearing, not tidiness: a feedback comb
-has DC gain `1/(1-g)`, so an untrimmed one pins at the rail and is a clipper
-wearing a resonator's name — and it still sounds like a robot on a bench, which
-is why `test_voice_fx_core.c` pins it and was mutation-checked by removing it.
-The delay line is cleared at both utterance edges so one sentence does not ring
-through the front of the next.
-
-Prototyping happens on the workstation, not on the board: `just
-robocar-unified::voice-sweep` auditions `tts_style` directives, `voice-fx` a
-chain over one clip, and `voice-voices` all 30 prebuilt voices through one chain.
-All three write WAVs to `tmp/` and loudness-match every arm, because the louder
-of two clips is judged the better one almost regardless of what else changed.
-
-All six thresholds are console knobs (`voice quiet`, `voice budget`, `voice repeat`, `voice scene`, `voice loud`, `voice sound`) for the same reason `cam gainceiling` is: whether the robot is pleasantly laconic or annoyingly mute is a judgement that needs somebody in the room, and a reflash per trial is far too slow a loop. `voice scene` especially has **no defensible compile-time default** — what counts as a changed view depends on the room and the lens, so the shipped 8 is a starting point and the logged `scene:` field is how you replace it with a measured one. They deliberately do **not** persist to NVS — a boot should come up at the documented default, not at whatever last night's experiment left behind. `voice said` prints the recall ring.
-
-Note that **`voice loud 0` and `voice sound 0` mean the opposite of `voice scene 0`**, and the inversion is forced by the operator rather than chosen: `scene` is ANDed into the evidence term, so 0 there means "always novel"; `loud` and `sound` are ORed, so 0 must mean "never contributes". Both readings say *this gate is not participating*. Setting both audio thresholds to 0 restores the pre-microphone behaviour exactly, and `test_ambient_audio.c` pins that as an invariant.
-
-None of this survives a reboot: the rings are `.bss`. Persisting them is worth doing if bench reflashes make the first line after every boot the model's favourite phrasing again.
-
-### Talking back: the push-to-talk voice turn
-
-`listen [seconds]` records from the microphone, sends the clip to Gemini, and speaks the reply through the **existing TTS path unchanged** (`voice_turn.c`). It is the opposite of everything above: the planner's speech is unprompted and gated, a voice turn is asked for and answered on demand. See [ADR-024](../../docs/decisions/ADR-024-conversational-entity-and-multimodal-voice.md) for the roadmap evolving this into a multi-turn, camera-aware conversational entity with digital audio gain and autonomous VAD.
-
-**It runs on a flash model, not Robotics-ER.** Gemini's free-tier quota is per model and the planner already saturates ER's 5 req/min, so answering someone can never cost the robot its ability to plan a movement.
-
-**Multi-turn conversational memory & camera context (`voice_history.c`)**:
-`voice_turn` maintains a rolling buffer of the last 4 conversational turns in PSRAM, retaining alternating `user` / `model` text context while discarding bulky raw audio from prior turns. Old turns expire automatically after 60 seconds of idle time. The current turn attaches both the recorded audio WAV and the latest camera frame JPEG (`camera_capture()`), together with live ultrasonic obstacle telemetry, so Teuvo can converse directly about what he sees and does.
-
-**Digital audio gain**: The PDM MEMS microphone on the XIAO Sense outputs raw signals that are quiet at conversational distance (~-40 dBFS). `audio_clip_normalise()` in `audio_clip.c` applies a 3-pass digital gain & normalisation pipeline (target peak 24000, max gain 128x, noise gate 32) so audio reaching Gemini Flash is clean and loud.
-
-**Hands-free voice engagement (VAD)**:
-`ambient_listener.c` automatically starts a conversational recording when it hears sustained speech. **VAD is on at boot**; `voice vad off` disables it until the next reboot. Gemini Flash filters out background noise by replying with `__IGNORE__` (which suppresses audio playback). When Teuvo speaks, he opens a 7-second active conversation follow-up window where subsequent replies trigger immediately without wake words.
-
-**The trigger is shaped like speech, not like loudness** (issue #617, `speech_trigger.c`). It used to be `ambient_audio`'s broadband loudness excursion, so a door slam, a dropped object or the robot's own motors started a turn as readily as a voice, and VAD was off at boot for that reason. A frame now counts only when at least 65% of its energy lies in 300–3400 Hz (a 300 Hz high-pass cascaded with a 3400 Hz low-pass, two biquads per frame, no FFT) **and** its level is 9 dB above the adaptive floor. The trigger fires once such frames have run for 150 ms, which is three 64 ms frames. In the host tests white noise and a click score about 40% and synthetic voiced speech about 82%. A transient is rejected by the duration. **A steady in-band tone that outlasts 150 ms is not rejected** (a whistle, or the robot's own 1 kHz beep), so the listener breaks the run during the start cue, and a test pins that behaviour so nobody mistakes the duration for a tonality check. `voice trigger <band%> <db> <ms>` tunes all three, not persisted, and 0 drops a check. To tune, speak and then type `mic`: its `speech:` line shows the highest voice-band share and longest run since the previous `mic`, so a band threshold set too high shows up as a near miss rather than as silence. The peak band only counts frames that cleared the floor margin, so a margin set too high reads as band 0%. Each trigger logs `VAD auto-trigger (speech … ms, voice band …%, +… dB …)`.
-
-**A VAD turn keeps the words that triggered it, and stops when the speaker does** (issue #616). It used to beep, settle, flush and then record a fixed 3.5 s — so "Teuvo, what do you see?" triggered on "Teuvo", the flush threw that away, the question landed under the beep, and the model got a sentence tail and answered `__IGNORE__`. Two pure-C modules replace it:
-
-- **`voice_preroll.c`** — a 1.5 s PSRAM ring the listener feeds with every frame it reads, while still holding the mic lock. A VAD turn takes the ring under the same lock as the start of its clip and then reads on from the DMA **without flushing**, so the clip is one unbroken stretch from about a second before the trigger. Frames inside the playback quarantine **empty** the ring rather than being skipped (nothing from before the robot's own voice may be joined to what follows it), a failed read empties it too, and frames overlapping the start cue go in as **silence of the same length**: the piezo sits next to the mic, so a recorded beep would set the clip's peak and pin `audio_clip_normalise()` near 1x. Words spoken over the 320 ms cue are lost; that is the price of keeping the cue. Every turn empties the ring, `listen` included, because the listener reads nothing while a turn holds the lock.
-- **`voice_endpoint.c`** — ends the recording after `silence_ms` (700) below `floor + margin_db` (6 dB), never before `min_ms` (1000) after the cue, and at a 6 s ceiling for the whole clip. The floor is `ambient_audio`'s, frozen for the turn because the listener is locked out, so speech is measured against the room before anyone spoke. The 6 s ceiling keeps the PCM buffer at 192 kB, under the 8 s `listen` worst case the PSRAM budget was sized for. `voice endpoint <ms> <db>` tunes the first two at runtime (not persisted); 0 dB records to the ceiling.
-
-Each VAD turn logs `listen: vad clip=… preroll=… end=silence|max speech=… floor=…`. A short question should read `end=silence` with `clip=` tracking the utterance and `preroll=` near 1500 ms — the whole ring, about a second before the trigger plus the task wake-up and the cue's silence; a shorter `preroll=` means the ring was emptied inside the last 1.5 s, usually by the playback quarantine on a follow-up turn; `end=max` on every turn means the margin is below the room's speech-free level. `listen [seconds]` is unchanged: fixed window, flush after the beep.
-
-**Hands-free turns are rationed, and every voice turn has a spend ceiling** (issue #623, `voice_budget.c`). With VAD on at boot, the listener's 10 s idle cooldown was the only pacing: a room where people talk among themselves could send a `gemini-flash-latest` request with a clip and a JPEG every 10 s, around 360 an hour, most answered `__IGNORE__`, with nothing counting them. Two limits now sit in front of the request, checked when a turn is asked for (so a refused turn makes no beep) and again on the voice-turn task before the beep:
-
-- **A ration on hands-free requests**: 12 per rolling 5 minutes by default, so an unattended talkative room costs at most 144 an hour. `listen` is exempt, because a person asked for it.
-- **A per-boot ceiling on all voice-turn requests**: 200 by default, `listen` included. Like `plan_budget`, it is terminal once tripped. `voice resume` (on the console, or over MQTT when broker credentials are configured) or a reboot reopens it, and nothing reopens it on a timer.
-
-The ration is deliberately **not** `speech_budget`. That module counts *utterances* and is charged only when a line reaches the speech queue, so an `__IGNORE__` reply never charges it, and ignored replies are the traffic that ran unbounded. Its 20 s minimum gap would also refuse every follow-up inside the 7 s conversation window, and sharing one ration would let a chatty planner use up the turns a person needs, or let a conversation silence the planner. A turn that does speak still calls `speech_budget_note()` afterwards, as before. A request is charged when it is attempted, just before the HTTP post, so the ceiling holds even if every reply is unparseable. There is no token ceiling. A voice turn's size is bounded by construction (one clip of at most 8 s, one JPEG, a fixed output cap), so the request count bounds the tokens to within a constant.
-
-`voice` prints the spend: requests against the ceiling, how many were hands-free and how many of those came back `__IGNORE__`, plus ration use and how many triggers it refused. **Ignored close to the hands-free count means `voice trigger` is too permissive**: the robot is waking for talk not addressed to it. A ration refusal counts as a trigger for the listener's cooldown, so a rationed room is refused once per cooldown rather than at 15 Hz, which keeps the `refused` count meaningful. `voice ration <n> <s>` (n=0 or 0 s removes the ration) and `voice turns <n>` (0 disables the ceiling) tune the two at runtime. Neither persists. Both defaults are starting points, not measurements. Pinned by `test_voice_budget.c`, including an hour of a talkative room, an unattended night, and the uint32 millisecond wrap.
-
-**The clip is WAV, and that is measured rather than assumed.** A live probe (2026-07) against `gemini-flash-latest:generateContent` with a 0.5 s tone: `mimeType: "audio/wav"` → 200 and a reply; `mimeType: "audio/pcm"` → **HTTP 400 "Request contains an invalid argument"**, naming no field. So `audio_clip.c` builds a canonical 44-byte header on-device, and `test_audio_clip.c` asserts those 44 bytes byte-for-byte — a field-width or byte-order slip there would otherwise surface only as an opaque 400 from a remote server after a ~170 kB upload. Audio costs ~26 tokens/second, so clip length is bounded by **memory**, not by API cost.
-
-**The free order matters more than it looks.** Raw PCM is released as soon as the WAV copy exists, the WAV as soon as base64 exists, and our base64 copies (clip and camera frame) as soon as the request body has been printed. The body build is the peak: for an 8 s `listen` with a frame at the 64 kB JPEG ceiling it holds both base64 strings plus the body, **~873 kB**; with no frame, ~698 kB. That holds only because `voice_history.c` attaches both strings to the cJSON tree **by reference** and prints into a buffer presized to fit (`VOICE_HISTORY_BODY_HEADROOM`). `cJSON_AddStringToObject` copied each string into the tree, and `cJSON_PrintUnformatted` grows its buffer to twice what it needs at every step, so the same step used to measure ~2.2 MB on the host (~1.7–1.9 MB if the heap extends blocks in place) — while this section claimed ~430 kB (issue #625). The 8 MB PSRAM had room for either; what the smaller figure buys is margin and a ~437 kB largest allocation instead of an ~860 kB one, beside the camera framebuffers and the 512 kB TTS ring. `test_request_body_peak_is_one_copy` in `test_voice_history.c` measures the body step on the host; on the board, the per-turn log prints the upload size, free PSRAM at the turn's start and after the body is built, the boot-wide low-water mark before and after (`low=A->B` — when it moves, `start - B` is the turn's peak) and the largest free block. Reading those on a `listen 8` is a bench step on issue #448. The step-by-step figures are on `AUDIO_CLIP_MAX_BYTES` in `audio_clip.h`.
-
-**A start beep, and then a wait.** The buzzer is GPIO2 — a different peripheral from the I2S amplifier — so `audio_player_is_active()` does not cover it. Without the settle delay and the mic flush, the first fraction of every clip is the robot's own beep, which the model then politely transcribes.
-
-The same blind spot reached the ambient gate (issue #624). The listener keeps reading while the cue sounds — the voice turn takes the mic lock only after it — and fed those frames to `ambient_audio_note()`, so a 1 kHz beep centimetres from the microphone latched both the loudness and the shape sub-gates, and the next planner cycle told the model the room sounded different about a sound the robot had made itself. `ambient_gate_accepts()` now mutes cue frames for the gate the way playback frames are muted, plus `AMBIENT_CUE_HANGOVER_MS_DEFAULT` after the last frame that overlapped the cue (the piezo's ring-down is already inside the flag; the hangover is the room's tail). They count as muted in `mic`, and they move neither the latches nor the floor `voice_endpoint` measures against. The anchor is the last cue frame, not the first frame without it, because a turn holds the mic for seconds after the cue and the first frame the listener reads afterwards must be measured. The pre-roll still treats the cue as silence rather than as quarantine, which is deliberate — see `voice_preroll.c` above. `test_the_start_cue_never_reaches_the_gate` pins it, beside a control that replays the same beep without the flag and must latch.
-
-The post-turn bookkeeping is deliberate in both directions. It **does** call `dialogue_style_note_spoken()` (so the planner does not parrot the answer back), `speech_budget_note()` (the robot just talked; a spontaneous remark three seconds later is the chattering the gap exists to stop) and `ambient_audio_mark_spoken()` (the human's voice armed the audio latch — having answered it, the robot must not then volunteer "I heard something"). It **does not** call `scene_change_mark_spoken()`, because answering a question is not remarking on the view and consuming that evidence would silence an observation not yet made; and it does not screen the reply through `dialogue_style_is_repetitive()`, because a direct answer is allowed to repeat — the same exemption `voice say` and the self-report already have.
-
-**Real-time conversation is being prototyped on the workstation first** (issue #619). Record → `generateContent` → TTS cannot answer within a second or be interrupted; the Gemini Live API (`BidiGenerateContent` over a WebSocket) takes 16 kHz PCM straight from the mic and streams 24 kHz audio back. `just robocar-unified::live-probe` opens one Live session as Teuvo, streams a spoken question at real-time pace, and writes the time from end of speech to first audio byte, the output format and the token usage to `tmp/live-probe/report.json`. Nothing in the firmware uses it yet; [`tools/live-probe/README.md`](tools/live-probe/README.md) carries the measurement design and the documented session limits.
-
-Two hardware consequences worth knowing before touching this:
-
-- **The microSD slot is gone.** GPIO7/8/9 are the Sense expansion board's SPI bus. No alternative pins exist — I2S needs a real peripheral, so it cannot move behind the PCA9685 or MCP23017.
-- **Two header pads are spare: D3 (GPIO4) and D7 (GPIO44, UART0 RX).** D6 (GPIO43, UART0 TX) is not: the ROM bootloader prints its boot log there at every reset, and the firmware then mirrors every `ESP_LOG` line to it (see "The log on J15" above). Beyond those two, digital I/O goes through the MCP23017 on TCA9548A ch2.
-
-Claude and Ollama backends have been removed from this project. If an alternative planner becomes necessary in the future, it should be designed as a clean abstraction, not a resurrection of deleted code. See ADR-016 for the rationale.
-
-## WiFi provisioning
-
-Uses **Improv WiFi Serial** provisioning by default — no credentials compiled in. `CMakeLists.txt` auto-generates a stub `credentials.h` at configure time if one doesn't exist, so CI and the web flasher don't need credentials. For local dev with hardcoded creds, copy `main/credentials.h.example` to `main/credentials.h` (gitignored).
-
-It is the **Serial** variant of Improv (the `improv-wifi` component implements the Improv Serial spec), not BLE. `init_network()` starts it whenever the board has no WiFi connection — including when a stored SSID has gone away — and `command_task` feeds every console byte to the parser, which ignores anything that is not a well-formed Improv packet. Credentials reach NVS only after `wifi_connect()` succeeds with them.
-
-**Both directions ride the USB-Serial-JTAG console, and both bypass its line-ending translation** (`improv_console.c`, issue #644). The shared component writes UART0 by default, which on the XIAO is D6/D7 — not the console, and at the time not initialised — so from the day Improv was wired in (#429, 2026-07) requests arrived over USB and every reply went nowhere. `init_network()` now hands it `improv_console_write()` before `improv_wifi_init()`. That writer holds the stdout and stderr stream locks, switches the VFS TX translation to LF for one `write()` and restores it, because the default LF→CRLF mapping would insert a 0x0D before any 0x0A in a binary packet. It then `fsync()`s, because the non-driver VFS pushes its 64-byte TX FIFO to the host only when it writes a `\n`, so without it a reply's tail waits for the next log line. On the input side `command_task` calls `improv_console_raw_input()`, since the default CR→LF mapping turns a 0x0D in a request — the length byte of any 13-character SSID or password — into 0x0A. `test_improv_wifi.c` pins the component half (which transport a reply takes, one write per packet, a writer set before init surviving it); the console half is ESP-only and can only be checked on a bench, with ESP Web Tools' "Connect to Wi-Fi" flow.
-
-Because the planner is non-fatal, a board with no credentials still boots fully: the executor holds STOP, and the console, provisioning and self-report stay reachable. Do not reintroduce an `ESP_ERROR_CHECK` around the AI init phase — that is exactly what made the documented no-credentials build boot-loop.
-
-NVS stores runtime-provisioned credentials — don't wipe NVS unless you want to re-provision.
-
-## OTA
-
-`ota_manager.c` polls the web-flasher's published manifest — `https://laurigates.github.io/mcu-tinkering-lab/firmware/unified/manifest.json`, generated by `tools/generate-flasher-manifests.sh` on every `build-firmware.yml` release — rather than the GitHub Releases API (issue #539: the API host was wrong, the filename match could never hit, and monorepo release-please tags don't parse as semver; none of that was fixable by configuration alone, and esp_ghota is gone from this project). `version.txt` is the single source of truth for the running version (read at CMake-configure time into `PROJECT_VER`). Release-please manages version bumps — do not edit `version.txt` manually.
-
-A dedicated FreeRTOS task (`OTA_TASK_STACK_SIZE` = 8192, per `.claude/rules/freertos-task-gotchas.md`'s ≥8 KB rule for any task making an HTTPS call) blocks on either the `OTA_CHECK_INTERVAL_MIN` (360 min) periodic timeout or an explicit `xTaskNotifyGive()` — the MQTT check-now nudge on `OTA_MQTT_NOTIFY_TOPIC` (`robocar-unified/ota/notify`, rate-limited to one trigger per 60 s) calls `ota_manager_check_update()`, which wakes the task immediately instead of waiting out the interval. Either wake reason runs the same check: fetch the manifest, compare its `version` against `esp_app_get_description()->version` **numerically** (`ota_version_compare.c` — "0.2.10" is newer than "0.2.9", which a lexical compare gets backwards) and its `buildSha` against the running build's (below), and on a newer remote version resolve the manifest's app-binary part **relative to the manifest's own URL** (never a second hardcoded copy of the Pages path) and hand that URL to `esp_https_ota()`. The app part is identified as whichever `parts[]` entry has the highest `offset` — always the app binary, since bootloader/partition-table/otadata sort below it — so the firmware never needs to know a project's `appBinaryName` from a `flasher.json` it doesn't read.
-
-The `{"status":"downloading"/"rebooting"/"failed"}` publishes on `OTA_MQTT_STATUS_TOPIC` and the 60 s stability timer calling `esp_ota_mark_app_valid_cancel_rollback()` are unchanged from before this rewrite — rollback protection is load-bearing and was never in question.
-
-**Version comparison fails CLOSED.** A NULL, empty, or non-numeric version on either side (manifest or running firmware) returns "no update" and logs it — never guesses. See `ota_version_compare.h` and its host tests (`just robocar-unified::test`).
-
-**The manifest also names the commit the binary was built from, and the firmware knows its own** (issue #627). `build-firmware.yml` rebuilds every flasher-enabled project at the commit of whichever release fired it, so when another project releases, the `robocar-unified.bin` on Pages is rebuilt from a later commit while `version.txt` still names the last robocar-unified release — the same version string over different contents. `tools/generate-flasher-manifests.sh` writes that commit into every manifest as `buildSha` (a top-level field ESP Web Tools ignores), and the project `CMakeLists.txt` compiles the commit it was configured at into `ota_manager.c` as `ROBOCAR_BUILD_SHA` — 40 hex digits, the same with `-dirty` for a tree with uncommitted changes to tracked files, or `unknown` when git could not read the checkout. The boot log prints it beside the version.
-
-`ota_update_decision.c` combines the two, and the SHA never authorises an install on its own:
-
-| Manifest vs running | Result |
+| Doc | Covers |
 |---|---|
-| newer version, valid `buildSha` | install |
-| same version, same SHA | up to date |
-| same version, different SHA | **refused** — installing would put unreleased commits on the robot under a released version's name |
-| same version, running SHA `unknown`/`-dirty` | not installed; nothing to compare against, so a local build is never overwritten by a release of the same version |
-| older version | not installed (no downgrades) |
-| no `buildSha`, or not 40 lowercase hex | **refused**, whatever the version (fail closed) |
-
-The two refusals also publish `{"status":"refused","reason":"sha_mismatch"|"manifest_sha_missing","version":"…"}` on `OTA_MQTT_STATUS_TOPIC`, since a board off the serial cable has no other way to say it. Expect `sha_mismatch` after most releases of *other* projects: the SHA is repo-wide, so it changes even when nothing under `packages/robocar/unified/` did. Pinned by `test_ota_update_decision.c`, mutation-checked by deleting the missing-SHA refusal and by turning the mismatch into "up to date".
-
-Two gates keep the two halves naming the same commit, and both must stay. `build-firmware.yml`'s *Verify manifest build SHA* step requires every manifest's `buildSha` to be the tag checkout's `HEAD`, and — for every `flasher.json` declaring `"embedsBuildSha": true` — requires the published app binary to contain that SHA NUL-terminated (`tools/check-embedded-build-sha.py`; a `-dirty` string contains the SHA as a prefix and is rejected). `_ci-build-esp32.yml` runs the binary half on every PR. The failure they exist for is silent: CI builds run in the `espressif/idf` container as root against a runner-owned checkout, git refuses that as "dubious ownership", and the build still succeeds with `unknown` embedded. The CMake lookup passes `-c safe.directory=*` for exactly this, verified against the v5.4 image (plain `rev-parse` exits 128 there, the safe-directory form returns the SHA).
-
-The commit is read at configure time, like `PROJECT_VER`. A new commit re-runs configure (the git `HEAD` file and branch ref are `CMAKE_CONFIGURE_DEPENDS`); an uncommitted edit after configuring does not add `-dirty` until the next configure. A build from a git worktree inside the container embeds `unknown`, because the worktree's `.git` file points at a host path the container cannot see.
-
-**Unverified on device.** Nothing here has taken a real OTA update on a board — that needs hardware and the published manifest's binary to actually flash and boot, which is bench work.
-
-Partition layout is OTA-capable (see `partitions.csv`) with app rollback enabled.
+| [i2c-and-motors.md](docs/firmware/i2c-and-motors.md) | Mux channel map, non-fatal peripherals and the `i2c_peripherals=` fact, PCA9685 channel layout, coast vs brake, bus clock and PWM phase, the managed I2C drivers and the `pca9685` version floor |
+| [console-and-mqtt.md](docs/firmware/console-and-mqtt.md) | Serial console command table, MQTT remote commands and read-only mode, `servo exercise`, the boot wheel exercise |
+| [head-aiming.md](docs/firmware/head-aiming.md) | How the executor satisfies `track` with the head, the wheels or both; head leases |
+| [activity-trace.md](docs/firmware/activity-trace.md) | LED colour meanings, `trace` counters, the I2C bus counter |
+| [planner.md](docs/firmware/planner.md) | Planner tools, dormancy ladder (`plan_activity`), spend fuse (`plan_budget`), reading the planner log |
+| [camera-and-log.md](docs/firmware/camera-and-log.md) | Frame stats and `snap` dumps, the UART0 log mirror on J15, why the sensor is an OV3660 |
+| [voice.md](docs/firmware/voice.md) | TTS streaming and preroll, personas and dialogue pools, speech gates (scene, ambient audio, budget), voice FX, push-to-talk and VAD voice turns, voice budget, memory peak |
+| [wifi-and-ota.md](docs/firmware/wifi-and-ota.md) | Improv Serial provisioning over USB-Serial-JTAG, OTA manifest polling, the build-SHA install decision |
 
 ## Build & flash
 
@@ -765,77 +82,84 @@ Key settings that matter:
 
 ## Don't
 
-- Don't call `motor_controller.c` directly from anywhere except `reactive_controller.c` — the executor owns motor output. Console/manual movement goes through `reactive_controller_manual()`, which takes a short lease the executor applies *after* the obstacle reflex; a second task writing the PCA9685 directly both fought the 30 Hz executor and bypassed the reflex
-- Don't give `mqtt_command.c` a second, parallel notion of what a command does. It classifies a line and calls exactly two injected callbacks (`movement`, wired to `dispatch_movement()`; `console_line`, wired to `execute_console_line()`) — both already shared with the serial console. Adding logic that calls `motor_controller.c`, a peripheral driver, or a handler directly from `mqtt_command.c` or its callbacks would create a second entry point that can silently diverge from the console's, and for movement specifically would bypass the obstacle reflex the same way a direct `motor_controller.c` call does
-- Don't widen the MQTT read-only allow-list to prefix matches, or add a command to it without reading its handler in `main.c` end to end. Read-only mode is the only thing between an anonymous LAN publisher and the robot (issue #626), and the handlers parse loosely enough that `voice <anything>` switches and persists the persona. Exact whole lines, each pinned in `test_read_only_allows_status_commands`
-- Don't move the `mqtt` console command into `execute_console_line()`, or add `"mqtt"` to `mqtt_command.c`'s forwarded prefixes. It sets the broker credentials, so reaching it over MQTT would let an anonymous publisher unlock itself; `test_credential_command_is_never_reachable` pins it
-- Don't skip `mqtt_command_extract_line()`'s fragmentation check (`current_data_offset != 0 || total_data_len != data_len`) when touching the MQTT command path. `event->data` is a fragment, not the whole payload, once a message exceeds esp-mqtt's buffer — the topic ("target") is resolved once on the first `MQTT_EVENT_DATA` callback, and dispatching on a later fragment acts on a truncated command before the rest of it has arrived
-- Don't drop the idle re-write suppression in `set_motors()`, and don't make it permanent by removing the refresh. `reactive_controller`'s 30 Hz loop calls `motor_stop()` on every iteration it is not driving, so a parked robot re-stated six identical PCA9685 registers 30 times a second — the firmware's only continuous I2C traffic, and what makes the bus go from silent to permanently busy the moment the PCA9685 is fitted. The suppression expires after `MOTOR_REFRESH_INTERVAL_MS` because the cache describes a chip that cannot be read back: a PCA9685 that browned out or was re-seated no longer matches it, and with no expiry nothing would re-assert the true state. Pinned by `test_motor_controller.c`, including the case a bench cannot stage — the uint32 millisecond wrap at day 49, where a signed elapsed comparison either refreshes on every call or never refreshes again
-- Don't make the planner's request unconditional again, and don't "simplify" the ladder into an on/off switch. An idle board went from 240 requests an hour to zero because the request itself is gated; a binary sleep is only as good as its wake detector, and a detector that fails closed is a robot that never wakes. See ADR-022 and the planner-dormancy section above
-- Don't feed `ambient_audio_novel()` to the dormancy gate. It reports a room never spoken about as novel — right for speech, fatal here, because a dormant robot never speaks and so would never see that branch clear. `ambient_audio_event()` exists for exactly this and is the same OR without the first-impression branch
-- Don't re-point `plan_activity`'s scene reference at `scene_change`'s, or fold the two `scene:`/`still:` log fields into one. They measure from different frames — last spoken about, last planned on — and those move at different moments
-- Don't charge zero tokens for a response whose `usageMetadata` could not be read. That is how a spend ceiling silently stops being one: every log line keeps showing a healthy budget while the robot spends all night. `plan_budget_note()` charges the assumed cost and counts that it had to, and `plan` prints the count unconditionally
-- Don't give the budget fuse a rolling window or an auto-reset. It exists for the unattended board, which is precisely the case that must not resume on its own. The same goes for the voice-turn ceiling in `voice_budget.c`
-- Don't ration hands-free turns with `speech_budget`. It counts utterances, so the `__IGNORE__` replies that make up most VAD traffic never charge it, and its 20 s gap would refuse every follow-up in the 7 s conversation window. `voice_budget` counts requests for this reason (issue #623)
-- Don't put `ESP_ERROR_CHECK` or `ESP_RETURN_ON_ERROR` back into the hardware phase. `init_hardware()` returns `void` on purpose (issue #500): a peripheral that would not initialise used to abort the boot, taking the console, WiFi, provisioning and the planner down with it — and a reboot loop removes the very console you would read the fault on. Every driver behind that phase already fails safe (each guards its entry points on `initialized` and returns `ESP_ERR_INVALID_STATE`; the buzzer's tone routines no-op), so a failure costs exactly the function that failed
-- Don't drop a peripheral's `*_is_initialized()` accessor, or let `self_report_collect()` read a cached boot result instead. Those accessors are the only thing standing between a half-populated board and a silent loss of function: the facts line renders `i2c_peripherals=degraded(servos)` from them, and `test_self_report.c` pins the case a bench cannot stage — a live bus with exactly one dead peripheral
-- Don't make `motor_stop()` a short brake, or "unify" it with `motor_brake()`. Low/low is coast and high/high is brake; the reflex wants the second and the 30 Hz idle path wants the first. A test that only checks PWM = 0 passes against either, which is why the stub records which entry point was called
-- Don't let a driver's `init_desc()` pick the bus clock. Each esp-idf-lib driver hardcodes a different one, and i2cdev reinstalls the whole I2C driver whenever consecutive transactions disagree — call `pin_bus_clock()` after every `init_desc()`, including for any device added later
-- Don't change the PCA9685 frequency without re-sending the servo counts — call `servo_set_pwm_frequency()`, never `i2c_bus_pca9685_set_frequency()` directly. The prescaler write leaves every channel's count in place, and a count is a fraction of the period: the 50 Hz centre count (307) replayed at 200 Hz is a ~0.37 ms pulse, which drove both servos into their end stops on the 2026-09-15 bench. `servo_set_pwm_frequency()` releases the enabled outputs, changes the prescaler and re-sends each angle; `test_a_frequency_change_keeps_every_pulse_width` pins it
-- Don't give a full-on or full-off channel a phase offset in `pca9685_phase.c`. Those are flag bits, and on this board they are the motor direction pins: a phase offset converts a steady logic level into a ~197 Hz square wave on IN1/IN2
-- Don't patch the PCA9685 driver in `managed_components/` to add phase support — it is a fetched dependency, so the edit is wiped by the next `idf.py reconfigure`. Phase lives in `pca9685_phase.c`, which is ours
-- Don't lower the `esp-idf-lib/pca9685` floor below `'^1.0.8'`. Releases up to 1.0.7 carry the out-of-bounds write that double-faulted this board. `test_pca9685_multi` catches it under ASan, but only when `managed_components/` is populated
-- Don't "tidy" the motor channels back into a per-motor IN1/IN2/PWM order. They are in the motor driver's pin order on purpose, and that ordering is a claim about **soldered wires** — reordering the `#define`s is a rewiring instruction, not a refactor, and the firmware will follow the new numbers perfectly onto the wrong pins
-- Don't write the pan/tilt servos from anywhere except `reactive_controller.c` and the console lease path (`reactive_controller_head_hold()` for `servo pan|tilt`, `reactive_controller_head_external()` around `servo exercise`). The executor re-asserts the head every refresh interval and aims it at 30 Hz, so a second writer is overwritten within a second and fights the aiming loop meanwhile — the same failure the motors had before `reactive_controller_manual()`
-- Don't add a head-aiming planner tool (`look`, `aim`, a `GOAL_KIND_LOOK`), as was ruled for `speak`. The planner calls every 15 s and sleeps when idle, so it cannot follow a moving target; the 30 Hz executor can. `track` stays the only aiming primitive and the executor chooses head, wheels or both — see ADR-025
-- Don't recompute a track goal's bearing from its box every tick. The box describes one frame and there is no newer frame on the device between plans, so re-reading it from a turned head adds the same offset again and winds the head into its limit. `head_aim` latches the bearing per `goal_state_read_seq()` write
-- Don't drop `goal_t.head_pan_deg`/`head_tilt_deg`, or fill them when the executor acts instead of when `planner_task` captures the frame. The head moves during the seconds a request takes; only the pose at capture puts a box or a drive heading into body coordinates
-- Don't add goal sources outside `planner_task.c` — structured goals keep the two layers decoupled. If a new goal source is needed, it should write `goal_state` the same way the planner does
-- Don't fold speech into `goal_t` — see the Voice section above and `speech_queue.h`
-- Don't put a specific phrase, opener or filler word in a persona's `text_brief` — everything named there is said every time. Phrase-shaped flavour goes in the `openers`/`shapes` pools; see `dialogue_style.h`
-- Don't add a band-limit, ring modulator, bitcrusher or impulse-train "drone" to `voice_fx_core.c`. All four were auditioned and rejected with reasons recorded in that file's header — ring modulation costs intelligibility in a language that contrasts geminates and vowel length, bitcrushing is a 1980s artifact that also injects a DC offset into a BTL class-D voice coil, the drone samples `|x[n]|` at one arbitrary instant per period, and a band-limit changes the character from "Robby in the room" to "a recording of Robby"
-- Don't drop the comb's `(1-g)` input trim, or "simplify" it to a plain `x + g*y[n-D]`. The DC gain becomes `1/(1-g)` and the effect pins at the rail; it still sounds robotic, so nothing on a bench catches it
-- Don't name an *era* in `tts_style` and expect the delivery to follow — "1950s Finnish film" produced flat contemporary Finnish. Name the audible traits instead (enunciation, tempo, `yleiskieli` forms, tapped /r/, held geminates). Note the ceiling: the era's *recording chain* (~100 Hz–5 kHz) is a filter, not a speaking style, and no prompt adds it
-- Don't try to fix repetition by wording the prompt harder ("do not repeat yourself", "only if the scene changed"). Every request is stateless, so those name facts the model cannot check. Withhold the `speak` declaration instead, and re-check the answer against the recall ring — see the Voice section
-- Don't compare scene fingerprints in absolute luma. The AGC/AEC rewrites gain and exposure every frame, so a motionless scene drifts in brightness continuously and an absolute comparison calls that a scene change. `scene_change.c` stores each block relative to the frame mean for exactly this reason; `test_scene_change.c` pins it with a same-scene +80 shift that must score 0
-- Don't threshold absolute microphone level either — it is the same trap in the audio domain, and the adaptive noise floor is the whole point. A room with a fan is not a room where something happened; `ambient_audio.c` measures excursion above a floor that rises at a bounded rate, so a steady sound is absorbed within seconds
-- Don't allocate the PDM RX channel in the same `i2s_new_channel()` call as `audio_player.c`'s TX channel. One call requesting both handles sets `controller->full_duplex = true` (`i2s_common.c:998`), which makes the driver share BCLK/WS and force the mic to slave (`i2s_pdm.c:389,397`) — a 16 kHz microphone clocked off a 24 kHz amplifier, that additionally dies every time the amp powers down for its idle grace. Two separate calls; the comment at the allocation site in `mic_pdm.c` says so at length, and it is there because the merge looks like an obvious simplification
-- Don't open the `speak` tool on audio evidence while leaving the prompt saying "only if this frame shows something". On an audio-only cycle the frame shows nothing new by construction, so the model is being told to stay silent in exactly the case the gate opened for. Name the evidence in the prompt — see the Voice section
-- Don't let an audio clause assert *what* happened or tell the model to remark on it. The planner request has no audio, so "something happened behind you — remark on that" is an instruction to invent a source, and the model complies fluently (issue #618). State that the sound changed and the source is unknown, and forbid naming one; `test_speech_evidence.c` pins it
-- Don't feed `speech_evidence_clause()` a gate's `novel()` alone. `novel()` is also true on a first impression and with `voice scene 0`, where no comparison was made, and "since you last spoke" is then false (issue #631). Pass it through `speech_sense_from_gate()` with the gate's `*_compared()`
-- Don't compare the instantaneous audio frame instead of the latched peak. The mic runs ~200x faster than the planner, so a door slam between two planner cycles would never be observed and the gate would look like a threshold problem rather than a sampling one
-- Don't let a failed microphone read reach the gate. An all-zero frame fingerprints as flat silence, which is a legitimate reading, so a run of broken reads would eventually read as a brand-new soundscape and trigger speech about nothing — the same sentinel-zero trap as an unread camera register. `ambient_listener.c` drops them
-- Don't call `mic_pdm_flush()` at the start of a VAD turn, or offer the listener's frame to the pre-roll after releasing the mic lock. Both break the one property the pre-roll exists for: the DMA's next sample follows the ring's last one, so the triggering words and the rest of the question arrive as one clip (issue #616)
-- Don't send the recorded clip as `audio/pcm`. Gemini rejects it with an HTTP 400 that names no field; it must be WAV-wrapped and sent as `audio/wav`. This is probed, not inferred — see the Voice section, and `test_audio_clip.c` pins the 44 header bytes so the failure is local instead of remote
-- Don't hold the raw PCM, the WAV copy and the base64 string at the same time. Each is released the moment the next exists, which keeps the peak at the request-body build (~873 kB for an 8 s `listen` with a 64 kB frame) rather than the sum of every stage
-- Don't attach the base64 payloads to the request with `cJSON_AddStringToObject`, or print it with `cJSON_PrintUnformatted`. The first copies the 341 kB clip into the tree beside the caller's copy; the second grows its buffer to twice the bytes needed, ~860 kB at the clip's string. Together they took the body step from ~873 kB to ~2.2 MB. `voice_history.c` uses string references and `cJSON_PrintBuffered` presized to the payloads, and `test_request_body_peak_is_one_copy` fails if either reverts
-- Don't run the voice turn on the planner's Robotics-ER model. Quota is per model and the planner already saturates ER's 5 req/min, so a conversation would start costing the robot its ability to plan a movement
-- Don't screen a voice-turn reply through `dialogue_style_is_repetitive()`, and don't call `scene_change_mark_spoken()` after one. A direct answer is allowed to repeat, and answering a question is not remarking on the view — see the Voice section for the full set of rulings
-- Don't log a Gemini error body at DEBUG. A 400 names no field, so the body *is* the diagnosis; hiding it is what made an earlier call site fail opaquely for a whole debugging round
-- Don't record while the amplifier is sounding, and don't stop at the falling edge either — room reverb and the amp's tail outlive `audio_player_is_active()`, so `ambient_capture_allowed()` quarantines a further `AMBIENT_PLAYBACK_HANGOVER_MS`. An LLM listening to its own voice is a feedback loop with a language model in it. The buzzer is outside that quarantine, so the start cue goes through `ambient_gate_accepts()` instead; don't feed `ambient_audio_note()` a frame that has not passed it
-- Don't re-point the scene reference at the previous frame "so it tracks motion". The reference is the frame the robot last *spoke* about; per-frame comparison lets a slow drift change the whole room without ever tripping the threshold, and marks a just-changed scene as stale before anything has been said about it
-- Don't let an undecodable frame update the scene state. Its fingerprint is all-zero, which is indistinguishable from a flat grey frame, so a run of corrupt captures would read as a completely new view and trigger speech about nothing. `scene_change_note()` drops invalid fingerprints — keep the `valid` flag if you touch that struct, and keep `scene_change_novel()`'s `!s_current.valid` check ahead of its first-impression branch (issue #690)
-- Don't screen `voice say` or the self-report through `dialogue_style_is_repetitive()`. An audition is supposed to repeat on demand, and a status report whose facts have not changed is supposed to read the same; suppressing either turns a working command into one that silently does nothing
-- Don't grow `GEMINI_SYSTEM_PROMPT_MAX`, a persona brief, or `DIALOGUE_RECALL_*` without looking at `PLANNER_TASK_STACK_SIZE` — the prompt is assembled in one frame on the planner stack. The recall clause is sized against the room left so the closing "function calls only" instruction cannot be the thing truncated away; keep that reserve if you reorder the clauses
-- Don't move delivery tags into a `dialogue_pool_t` — they're model-placed because they must fit the sentence, and the random pools exist for things that don't. Don't drop the allow-list filter either; unknown tags get read out loud
-- Don't switch the TTS call back to `:generateContent` — it costs ~5 s of perceived latency (see the Voice section)
-- Don't "normalise" the audio path to 16 kHz to match the ThinkPack projects — 24 kHz is Gemini TTS's native rate, and matching it avoids a resampling stage entirely
-- Don't buffer the TTS response whole — it's hundreds of kB and the response buffer is 16 kB. The streaming decoder exists for this reason
-- Don't start playback on the first decoded byte "to cut latency" — that is the bug the preroll gate fixes, and the measured cost was up to 2855 ms of ring dry-out per sentence. If latency needs cutting, lower `AUDIO_PREROLL_BYTES` and watch `rtf=`; don't remove the gate
-- Don't feed `audio_player_write()` the decoder's raw 3-byte quartets — every ring send yields to the higher-priority player, so it preempted the fetch task ~25 000 times a second exactly when it needed to get ahead of real time. Batch first (`TTS_PCM_BATCH_BYTES`)
-- Don't tally `s_written_total` from the caller's `bytes` in `audio_player_write()` — count each successful `ring_send()` beside the send. The two differ by the odd byte held in `s_carry`, which `end_utterance()` then discards, so counting the caller's figure drifts `ring_pending()` +1 per odd-tailed utterance with nothing on the normal path to resync. `audio_player_is_active()` ORs in `ring_pending() > 0`, so it latches true for the rest of the boot and silently mutes the microphone and `listen` — playback still sounds fine, which is why it went unnoticed. Pinned by `test/test_audio_player.c`
-- Don't set `fb_count = 1` on the camera. Capture halts while the app holds the only buffer, so the planner's frame is one full period (15 s) old — the robot plans motion from a stale view, and `grab_mode` is inert below 2 buffers
-- Don't re-add `set_aec_value()` / `set_agc_gain()` alongside `set_exposure_ctrl(1)` / `set_gain_ctrl(1)` — the sensor's own loops rewrite those registers every frame, so the calls do nothing but read like deliberate tuning. `set_agc_gain(s, 0)` is worse than nothing: it writes the *minimum* gain
-- Don't call `set_gainceiling()` with an OV2640-shaped `0..6` — this board is an OV3660, where the argument is a raw 10-bit value and `0` means *no gain at all*. That one line is what made the frames dark. Check the logged PID first
-- Don't read sensor registers without branching on the PID. One sensor's map read through another's driver returns confident, plausible, meaningless numbers — `gain=0 exp=0` looked like a real "auto-exposure isn't converging" diagnosis until the PID was printed
-- Don't flip `set_aec2()` on the strength of web folklore — the vendored driver's setter writes the inverse of its argument while its getter reads the raw bit, so even the direction of the change is unresolved in the source. A/B it against measured luma or leave it
-- Don't add direct GPIO motor control — everything goes through PCA9685 via `motor_controller.c`
-- Don't bypass the TCA9548A — devices on different channels can share addresses (e.g. PCA9685 and OLED would conflict without it)
-- Don't commit `main/credentials.h` — it's gitignored; use the `.example` as template
-- Don't hand-edit `version.txt` — release-please owns it
-- Don't let a matching or differing build SHA start an OTA install, and don't drop `-c safe.directory=*` from the `CMakeLists.txt` git lookup. Only a strictly newer version installs (the SHA qualifies an equal version and refuses a manifest without one), and without the safe-directory flag every CI binary embeds `unknown` while still building green — see the OTA section
-- Don't change camera core pinning without re-verifying motor PWM jitter
-- Don't call `improv_wifi_send_*()` without a writer set, and don't install the usb_serial_jtag driver to send Improv replies. The component's default is UART0, whose TX here carries the log mirror to J15, not the console; driver mode makes console reads block, which stops `command_task`'s 1 Hz Improv announcement. `improv_console_write()` is the transport — see WiFi provisioning
-- Don't call `ESP_LOG` from inside `log_mirror.c`'s vprintf hook or its drain task, and don't make the hook wait on the UART. The hook runs on every task that logs; a log line from inside it re-enters it, and a blocking write throttles the 30 Hz executor to 115200 baud whenever something logs a burst. Drop and count instead, as it does now
-- Don't move the console to UART0 to "simplify" the mirror. `improv_console.c` refuses to compile without `CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG`, ESP Web Tools provisions over the USB-C port, and the mirror exists precisely so the console can stay where it is
-- Don't resurrect `claude_*` or `ollama_*` source files. If a second backend becomes necessary, design an abstraction; old code paths are not a foundation
+One line per rule. Each group's doc has the full reasoning and the tests that hold it.
+
+**Motors, I2C, PCA9685** ([why](docs/firmware/i2c-and-motors.md#dont))
+
+- Don't call `motor_controller.c` from anywhere but `reactive_controller.c`. Console and manual movement go through `reactive_controller_manual()`, a lease applied after the obstacle reflex.
+- Don't add direct GPIO motor control or bypass the TCA9548A; everything goes through the PCA9685 behind the mux.
+- Don't drop `set_motors()`'s idle re-write suppression, or its `MOTOR_REFRESH_INTERVAL_MS` expiry.
+- Don't put `ESP_ERROR_CHECK`/`ESP_RETURN_ON_ERROR` back into the hardware phase; `init_hardware()` returns `void` (#500).
+- Don't drop a peripheral's `*_is_initialized()` accessor, or let `self_report_collect()` read a cached boot result.
+- Don't unify `motor_stop()` (coast, low/low) with `motor_brake()` (brake, high/high); only the reflex brakes.
+- Don't let a driver's `init_desc()` pick the bus clock; call `pin_bus_clock()` after every `init_desc()`.
+- Don't change the PCA9685 frequency except through `servo_set_pwm_frequency()`.
+- Don't give a full-on/full-off channel a phase offset in `pca9685_phase.c`; those are the motor direction pins.
+- Don't patch anything in `managed_components/`, and don't lower the `esp-idf-lib/pca9685` floor below `'^1.0.8'`.
+- Don't reorder the motor channel `#define`s; they follow the TB6612FNG header and describe soldered wires.
+
+**Console and MQTT** ([why](docs/firmware/console-and-mqtt.md#dont))
+
+- Don't give `mqtt_command.c` its own idea of what a command does; it classifies a line and calls `dispatch_movement()` or `execute_console_line()`.
+- Don't make the MQTT read-only allow-list match prefixes, or add a command to it without reading its handler in `main.c` end to end (#626).
+- Don't make `mqtt` reachable over MQTT: keep it out of `execute_console_line()` and out of `mqtt_command.c`'s prefixes.
+- Don't skip `mqtt_command_extract_line()`'s fragmentation check.
+
+**Planner** ([why](docs/firmware/planner.md#dont))
+
+- Don't make the planner request unconditional again, or turn the 15 s → 300 s ladder into an on/off switch (ADR-022).
+- Don't feed `ambient_audio_novel()` to the dormancy gate; it uses `ambient_audio_event()`.
+- Don't point `plan_activity`'s scene reference at `scene_change`'s, or merge the `scene:`/`still:` log fields.
+- Don't charge zero tokens for an unreadable `usageMetadata`; charge `PLAN_BUDGET_ASSUMED_TOKENS`.
+- Don't give the planner or voice-turn budget fuse a rolling window or an auto-reset.
+- Don't add goal sources outside `planner_task.c`.
+- Don't resurrect `claude_*`/`ollama_*` sources; a second backend needs a designed abstraction.
+
+**Pan/tilt head** ([why](docs/firmware/head-aiming.md#dont))
+
+- Don't write the servos from anywhere but `reactive_controller.c` and the console lease path (`reactive_controller_head_hold()`, `reactive_controller_head_external()`).
+- Don't add a head-aiming planner tool; `track` is the only aiming primitive (ADR-025).
+- Don't recompute a track bearing from its box every tick; latch it per `goal_state_read_seq()` write.
+- Don't drop `goal_t.head_pan_deg`/`head_tilt_deg`, or fill them anywhere but at frame capture in `planner_task`.
+
+**Voice** ([why](docs/firmware/voice.md#dont))
+
+- Don't fold speech into `goal_t`; it is a queue (`speech_queue.h`).
+- Don't ration hands-free voice turns with `speech_budget`; `voice_budget` counts requests (#623).
+- Don't name a phrase, opener or filler word in a persona's `text_brief`; use the `openers`/`shapes` pools.
+- Don't add a band-limit, ring modulator, bitcrusher or drone to `voice_fx_core.c`, or drop the comb's `(1-g)` input trim.
+- Don't name an era in `tts_style`; name the audible traits.
+- Don't fix repetition with prompt wording; withhold `speak` and re-check against the recall ring.
+- Don't compare scene fingerprints in absolute luma or threshold absolute mic level; both are relative (frame mean, adaptive floor).
+- Don't allocate the PDM RX channel in the same `i2s_new_channel()` call as the TX channel.
+- Don't open `speak` on audio evidence while the prompt still says "only if this frame shows something"; name the evidence.
+- Don't let an audio clause assert or invite a guess at what made the sound (#618), or feed `speech_evidence_clause()` a bare `novel()`; use `speech_sense_from_gate()` with `*_compared()` (#631).
+- Don't compare the instantaneous audio frame instead of the latched peak, or let a failed mic read reach the gate.
+- Don't call `mic_pdm_flush()` at the start of a VAD turn, or offer a frame to the pre-roll after releasing the mic lock (#616).
+- Don't send the clip as `audio/pcm`; it must be `audio/wav`.
+- Don't hold PCM, WAV and base64 at once, or build the request with `cJSON_AddStringToObject`/`cJSON_PrintUnformatted`.
+- Don't run voice turns on the planner's Robotics-ER model.
+- Don't screen voice-turn replies, `voice say` or the self-report through `dialogue_style_is_repetitive()`, or call `scene_change_mark_spoken()` after a voice turn.
+- Don't log a Gemini error body at DEBUG.
+- Don't record while the amp sounds or inside `AMBIENT_PLAYBACK_HANGOVER_MS` after it; start-cue frames go through `ambient_gate_accepts()`.
+- Don't point the scene reference at the previous frame, or let an undecodable frame update scene state; keep `!s_current.valid` ahead of the first-impression branch (#690).
+- Don't grow `GEMINI_SYSTEM_PROMPT_MAX`, a persona brief or `DIALOGUE_RECALL_*` without checking `PLANNER_TASK_STACK_SIZE`.
+- Don't move delivery tags into a `dialogue_pool_t`, or drop the `speech_tags.h` allow-list filter.
+- Don't switch TTS back to `:generateContent`, resample to 16 kHz, or buffer the response whole.
+- Don't start playback before the `AUDIO_PREROLL_BYTES` gate, or feed `audio_player_write()` unbatched quartets.
+- Don't tally `s_written_total` from the caller's `bytes`; count each successful `ring_send()`.
+
+**Camera and log mirror** ([why](docs/firmware/camera-and-log.md#dont))
+
+- Don't set `fb_count = 1` on the camera.
+- Don't re-add `set_aec_value()`/`set_agc_gain()` beside auto exposure/gain, or call `set_gainceiling()` with OV2640 values; this sensor is an OV3660.
+- Don't read sensor registers without branching on the PID, or flip `set_aec2()` without an A/B against measured luma.
+- Don't change camera core pinning without re-verifying motor PWM jitter.
+- Don't call `ESP_LOG` inside `log_mirror.c`'s hook or drain task, or make the hook wait on the UART.
+- Don't move the console to UART0.
+
+**WiFi, OTA, repo hygiene** ([why](docs/firmware/wifi-and-ota.md#dont))
+
+- Don't commit `main/credentials.h`, and don't hand-edit `version.txt`.
+- Don't let a build SHA start an OTA install (only a strictly newer version installs), and don't drop `-c safe.directory=*` from the `CMakeLists.txt` git lookup.
+- Don't call `improv_wifi_send_*()` without a writer set, or install the usb_serial_jtag driver for Improv replies.
