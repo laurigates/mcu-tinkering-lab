@@ -80,86 +80,86 @@ Key settings that matter:
 - `CONFIG_CAMERA_JPEG_MODE_FRAME_SIZE=65536` (with `_AUTO=n`, `_CUSTOM=y`) — the AUTO default computes `width*height/5`, a hard **15360-byte** ceiling at QVGA. Past it the driver aborts accumulation, queues the truncated frame, finds no EOI marker and retries until a 4 s timeout — surfacing as `Camera capture failed` and a forced STOP, not as a bad image. Any detailed or bright scene exceeds it at quality 15, and raising the AGC gain ceiling makes it worse because noise inflates JPEG size
 - mDNS (`robocar-unified.local`) needs **no** Kconfig switch — it comes from the `espressif/mdns` managed component. There is no `CONFIG_MDNS_ENABLED` symbol; a line setting one is reported as an unknown symbol and silently ignored
 
-## Don't
+## Rules
 
-One line per rule. Each group's doc has the full reasoning and the tests that hold it.
+One line per rule. Each group's doc has the full reasoning and the tests that hold it, under its `## Don't` heading.
 
 **Motors, I2C, PCA9685** ([why](docs/firmware/i2c-and-motors.md#dont))
 
-- Don't call `motor_controller.c` from anywhere but `reactive_controller.c`. Console and manual movement go through `reactive_controller_manual()`, a lease applied after the obstacle reflex.
-- Don't add direct GPIO motor control or bypass the TCA9548A; everything goes through the PCA9685 behind the mux.
-- Don't drop `set_motors()`'s idle re-write suppression, or its `MOTOR_REFRESH_INTERVAL_MS` expiry.
-- Don't put `ESP_ERROR_CHECK`/`ESP_RETURN_ON_ERROR` back into the hardware phase; `init_hardware()` returns `void` (#500).
-- Don't drop a peripheral's `*_is_initialized()` accessor, or let `self_report_collect()` read a cached boot result.
-- Don't unify `motor_stop()` (coast, low/low) with `motor_brake()` (brake, high/high); only the reflex brakes.
-- Don't let a driver's `init_desc()` pick the bus clock; call `pin_bus_clock()` after every `init_desc()`.
-- Don't change the PCA9685 frequency except through `servo_set_pwm_frequency()`.
-- Don't give a full-on/full-off channel a phase offset in `pca9685_phase.c`; those are the motor direction pins.
-- Don't patch anything in `managed_components/`, and don't lower the `esp-idf-lib/pca9685` floor below `'^1.0.8'`.
-- Don't reorder the motor channel `#define`s; they follow the TB6612FNG header and describe soldered wires.
+- Motor output goes through `reactive_controller.c` alone. Console and manual movement use `reactive_controller_manual()`, a lease applied after the obstacle reflex.
+- Every motor, servo and LED output goes through the PCA9685, reached by selecting its TCA9548A channel in `i2c_bus.c`.
+- `set_motors()` skips identical idle re-writes and re-sends after `MOTOR_REFRESH_INTERVAL_MS`; keep both halves.
+- `init_hardware()` returns `void` and logs each peripheral failure, so the boot always reaches the console (#500).
+- Each peripheral keeps its `*_is_initialized()` accessor, and `self_report_collect()` reads it live.
+- `motor_stop()` coasts (low/low) and `motor_brake()` brakes (high/high). Keep them separate; the reflex is the only caller that brakes.
+- Call `pin_bus_clock()` after every driver's `init_desc()`, including for devices added later.
+- Change the PCA9685 frequency through `servo_set_pwm_frequency()`, which re-sends both servo pulses.
+- Full-on and full-off channels (the motor direction pins) keep phase 0 in `pca9685_phase.c`.
+- Driver behaviour we add lives in our own sources, such as `pca9685_phase.c`; `managed_components/` is refetched as-is. Keep the `esp-idf-lib/pca9685` floor at `'^1.0.8'`.
+- The motor channel `#define`s follow the TB6612FNG header order and describe soldered wires; keep that order.
 
 **Console and MQTT** ([why](docs/firmware/console-and-mqtt.md#dont))
 
-- Don't give `mqtt_command.c` its own idea of what a command does; it classifies a line and calls `dispatch_movement()` or `execute_console_line()`.
-- Don't make the MQTT read-only allow-list match prefixes, or add a command to it without reading its handler in `main.c` end to end (#626).
-- Don't make `mqtt` reachable over MQTT: keep it out of `execute_console_line()` and out of `mqtt_command.c`'s prefixes.
-- Don't skip `mqtt_command_extract_line()`'s fragmentation check.
+- `mqtt_command.c` classifies a line and calls `dispatch_movement()` or `execute_console_line()`, the functions the serial console uses. New behaviour goes into those.
+- The MQTT read-only allow-list holds exact whole lines. Add a command only after reading its handler in `main.c` end to end (#626).
+- `mqtt` is serial-only: `command_task()` handles it, outside `execute_console_line()` and `mqtt_command.c`'s prefixes.
+- Every MQTT payload passes through `mqtt_command_extract_line()`, fragmentation check included.
 
 **Planner** ([why](docs/firmware/planner.md#dont))
 
-- Don't make the planner request unconditional again, or turn the 15 s → 300 s ladder into an on/off switch (ADR-022).
-- Don't feed `ambient_audio_novel()` to the dormancy gate; it uses `ambient_audio_event()`.
-- Don't point `plan_activity`'s scene reference at `scene_change`'s, or merge the `scene:`/`still:` log fields.
-- Don't charge zero tokens for an unreadable `usageMetadata`; charge `PLAN_BUDGET_ASSUMED_TOKENS`.
-- Don't give the planner or voice-turn budget fuse a rolling window or an auto-reset.
-- Don't add goal sources outside `planner_task.c`.
-- Don't resurrect `claude_*`/`ollama_*` sources; a second backend needs a designed abstraction.
+- The planner requests only on evidence, backing off 15 s → 300 s before going dormant. Keep the gate and the ladder (ADR-022).
+- The dormancy gate reads `ambient_audio_event()`.
+- `plan_activity` keeps its own scene reference (the frame last planned on), separate from `scene_change`'s (last spoken about), with separate `scene:` and `still:` log fields.
+- A response whose `usageMetadata` cannot be read is charged `PLAN_BUDGET_ASSUMED_TOKENS`.
+- The planner and voice-turn budget fuses stay tripped until `plan resume`/`voice resume` or a reboot.
+- `planner_task.c` is the only goal source; a new source writes `goal_state` the same way.
+- A second AI backend is a newly designed abstraction; the removed `claude_*`/`ollama_*` code stays removed.
 
 **Pan/tilt head** ([why](docs/firmware/head-aiming.md#dont))
 
-- Don't write the servos from anywhere but `reactive_controller.c` and the console lease path (`reactive_controller_head_hold()`, `reactive_controller_head_external()`).
-- Don't add a head-aiming planner tool; `track` is the only aiming primitive (ADR-025).
-- Don't recompute a track bearing from its box every tick; latch it per `goal_state_read_seq()` write.
-- Don't drop `goal_t.head_pan_deg`/`head_tilt_deg`, or fill them anywhere but at frame capture in `planner_task`.
+- Only `reactive_controller.c` and the console lease path (`reactive_controller_head_hold()`, `reactive_controller_head_external()`) write the servos.
+- `track` is the planner's only aiming primitive; the executor chooses head, wheels or both (ADR-025).
+- Latch a track goal's bearing once per `goal_state_read_seq()` write.
+- `planner_task` fills `goal_t.head_pan_deg`/`head_tilt_deg` at frame capture; keep both fields.
 
 **Voice** ([why](docs/firmware/voice.md#dont))
 
-- Don't fold speech into `goal_t`; it is a queue (`speech_queue.h`).
-- Don't ration hands-free voice turns with `speech_budget`; `voice_budget` counts requests (#623).
-- Don't name a phrase, opener or filler word in a persona's `text_brief`; use the `openers`/`shapes` pools.
-- Don't add a band-limit, ring modulator, bitcrusher or drone to `voice_fx_core.c`, or drop the comb's `(1-g)` input trim.
-- Don't name an era in `tts_style`; name the audible traits.
-- Don't fix repetition with prompt wording; withhold `speak` and re-check against the recall ring.
-- Don't compare scene fingerprints in absolute luma or threshold absolute mic level; both are relative (frame mean, adaptive floor).
-- Don't allocate the PDM RX channel in the same `i2s_new_channel()` call as the TX channel.
-- Don't open `speak` on audio evidence while the prompt still says "only if this frame shows something"; name the evidence.
-- Don't let an audio clause assert or invite a guess at what made the sound (#618), or feed `speech_evidence_clause()` a bare `novel()`; use `speech_sense_from_gate()` with `*_compared()` (#631).
-- Don't compare the instantaneous audio frame instead of the latched peak, or let a failed mic read reach the gate.
-- Don't call `mic_pdm_flush()` at the start of a VAD turn, or offer a frame to the pre-roll after releasing the mic lock (#616).
-- Don't send the clip as `audio/pcm`; it must be `audio/wav`.
-- Don't hold PCM, WAV and base64 at once, or build the request with `cJSON_AddStringToObject`/`cJSON_PrintUnformatted`.
-- Don't run voice turns on the planner's Robotics-ER model.
-- Don't screen voice-turn replies, `voice say` or the self-report through `dialogue_style_is_repetitive()`, or call `scene_change_mark_spoken()` after a voice turn.
-- Don't log a Gemini error body at DEBUG.
-- Don't record while the amp sounds or inside `AMBIENT_PLAYBACK_HANGOVER_MS` after it; start-cue frames go through `ambient_gate_accepts()`.
-- Don't point the scene reference at the previous frame, or let an undecodable frame update scene state; keep `!s_current.valid` ahead of the first-impression branch (#690).
-- Don't grow `GEMINI_SYSTEM_PROMPT_MAX`, a persona brief or `DIALOGUE_RECALL_*` without checking `PLANNER_TASK_STACK_SIZE`.
-- Don't move delivery tags into a `dialogue_pool_t`, or drop the `speech_tags.h` allow-list filter.
-- Don't switch TTS back to `:generateContent`, resample to 16 kHz, or buffer the response whole.
-- Don't start playback before the `AUDIO_PREROLL_BYTES` gate, or feed `audio_player_write()` unbatched quartets.
-- Don't tally `s_written_total` from the caller's `bytes`; count each successful `ring_send()`.
+- Speech travels through `speech_queue`, separate from `goal_t`.
+- Hands-free voice turns are rationed by `voice_budget`, which counts requests (#623).
+- Phrase-shaped flavour (openers, fillers) goes in the persona's `openers`/`shapes` pools; `text_brief` describes the register.
+- `voice_fx_core.c` is a full-bandwidth comb plus saturation, and the comb keeps its `(1-g)` input trim.
+- `tts_style` names audible traits (enunciation, tempo, held geminates), not an era.
+- To stop repetition, withhold the `speak` tool and re-check the reply against the recall ring.
+- Scene fingerprints are relative to the frame mean, and mic level is measured against the adaptive floor.
+- The PDM RX channel gets its own `i2s_new_channel()` call.
+- When audio evidence opens `speak`, the prompt names that evidence.
+- Audio clauses say only that the sound changed and its source is unknown (#618), built from `speech_sense_from_gate()` with each gate's `*_compared()` (#631).
+- The audio gate compares the latched peak and receives only successful mic reads.
+- A VAD turn reads on from the DMA without flushing, and the listener offers frames to the pre-roll while it holds the mic lock (#616).
+- The voice clip is WAV-wrapped and sent as `audio/wav`.
+- Each audio stage is freed once the next exists, and the request is built from string references with a presized `cJSON_PrintBuffered`.
+- Voice turns run on a flash model; Robotics-ER belongs to the planner.
+- Voice-turn replies, `voice say` and the self-report bypass `dialogue_style_is_repetitive()`, and a voice turn leaves the scene reference where it is.
+- Gemini error bodies are logged at ERROR.
+- Record only once `ambient_capture_allowed()` clears the amp and its `AMBIENT_PLAYBACK_HANGOVER_MS` tail; start-cue frames pass through `ambient_gate_accepts()`.
+- The scene reference is the frame last spoken about. Only valid fingerprints update it, and `!s_current.valid` is checked before the first-impression branch (#690).
+- Check `PLANNER_TASK_STACK_SIZE` whenever `GEMINI_SYSTEM_PROMPT_MAX`, a persona brief or `DIALOGUE_RECALL_*` grows.
+- The model places delivery tags, and the `speech_tags.h` allow-list filters every one.
+- TTS uses `:streamGenerateContent?alt=sse` at 24 kHz, decoded incrementally into the ring.
+- Playback waits for `AUDIO_PREROLL_BYTES` or the end of the fetch, and PCM is batched (`TTS_PCM_BATCH_BYTES`) before `audio_player_write()`.
+- `s_written_total` counts each successful `ring_send()`.
 
 **Camera and log mirror** ([why](docs/firmware/camera-and-log.md#dont))
 
-- Don't set `fb_count = 1` on the camera.
-- Don't re-add `set_aec_value()`/`set_agc_gain()` beside auto exposure/gain, or call `set_gainceiling()` with OV2640 values; this sensor is an OV3660.
-- Don't read sensor registers without branching on the PID, or flip `set_aec2()` without an A/B against measured luma.
-- Don't change camera core pinning without re-verifying motor PWM jitter.
-- Don't call `ESP_LOG` inside `log_mirror.c`'s hook or drain task, or make the hook wait on the UART.
-- Don't move the console to UART0.
+- The camera keeps `fb_count` at 2 or more.
+- Exposure and gain are left to the sensor's own loops (`set_exposure_ctrl(1)`, `set_gain_ctrl(1)`). The sensor is an OV3660, so `set_gainceiling()` takes a raw 10-bit ceiling.
+- Branch on the logged PID before reading sensor registers, and A/B `set_aec2()` against measured luma before changing it.
+- Re-verify motor PWM jitter whenever camera core pinning changes.
+- `log_mirror.c`'s hook and drain task make no logging calls, and the hook drops and counts a line rather than waiting on the UART.
+- The console stays on USB-Serial-JTAG.
 
 **WiFi, OTA, repo hygiene** ([why](docs/firmware/wifi-and-ota.md#dont))
 
-- Don't commit `main/credentials.h`, and don't hand-edit `version.txt`.
-- Don't let a build SHA start an OTA install (only a strictly newer version installs), and don't drop `-c safe.directory=*` from the `CMakeLists.txt` git lookup.
-- Don't call `improv_wifi_send_*()` without a writer set, or install the usb_serial_jtag driver for Improv replies.
+- `main/credentials.h` stays local (gitignored; start from the `.example`), and release-please owns `version.txt`.
+- OTA installs only a strictly newer version; the build SHA only qualifies an equal version or refuses. Keep `-c safe.directory=*` in the `CMakeLists.txt` git lookup.
+- Set the Improv writer (`improv_console_write()`) before any `improv_wifi_send_*()` call; Improv replies go through the VFS console, without the usb_serial_jtag driver.

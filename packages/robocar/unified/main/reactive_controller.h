@@ -169,7 +169,7 @@ typedef enum {
  * @brief Hand a manual movement command to the executor.
  *
  * The executor remains the only writer of motor output (see the project
- * CLAUDE.md "Don't" list) — callers do not touch motor_controller.h. Two
+ * CLAUDE.md "Rules" list) — callers do not touch motor_controller.h. Two
  * properties follow from routing through here rather than driving the motors
  * directly, and both are the point of this function:
  *
