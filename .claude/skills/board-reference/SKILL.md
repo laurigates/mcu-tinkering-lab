@@ -52,8 +52,12 @@ photo or `esptool.py chip_id`.
 3. **The silicon datasheet PDF.** Download it to `/tmp`, run
    `pdftotext -layout`, and cite each value by section or table
    (`Table 3-4`, `§3.1.3`). Link the PDF in the page; don't commit it.
-4. **Listing photos:** parts markings, header count, dimension arrows.
-5. **Community templates and forum threads:** GPIO assignments that others
+4. **Working driver code on GitHub** for anything the datasheet leaves out:
+   bus clock, waits, init sequence, known failures. Search the chip and its
+   sibling modules too, and cite repo, path and line
+   (`.claude/rules/working-code-as-a-source.md`).
+5. **Listing photos:** parts markings, header count, dimension arrows.
+6. **Community templates and forum threads:** GPIO assignments that others
    confirmed working, and known problems.
 
 Never fill a gap from memory. A value with no source goes in the checklist,
