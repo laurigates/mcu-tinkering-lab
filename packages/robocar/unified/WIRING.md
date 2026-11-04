@@ -39,8 +39,10 @@ The XIAO exposes only 11 GPIOs on its headers. Camera pins are internal to the S
 > RX on D6 (J15 on the carrier) reads both. Beyond those, digital I/O goes
 > through the MCP23017 on TCA9548A channel 2.
 
-I2C runs at **100 kHz**: the RCWL-1601 rangefinders fail every read at 400 kHz
-(`I2C_MASTER_FREQ_HZ` in `main/pin_config.h`).
+I2C runs at **400 kHz**, except the TCA9548A's channel selects and the
+RCWL-1601 rangefinders, which run at **100 kHz**: the rangefinders fail every
+read at 400 kHz, and they see the mux's selects while their channel is open
+(`I2C_MASTER_FREQ_HZ` and `I2C_RANGER_FREQ_HZ` in `main/pin_config.h`).
 
 ## I2C topology (TCA9548A multiplexer @ 0x70)
 

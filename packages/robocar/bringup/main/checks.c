@@ -217,7 +217,10 @@ static check_result_t check_i2c_scan(void)
             dev.addr = addr;
             dev.cfg.sda_io_num = I2C_SDA_PIN;
             dev.cfg.scl_io_num = I2C_SCL_PIN;
-            dev.cfg.master.clk_speed = I2C_MASTER_FREQ_HZ;
+            /* The slow clock on every channel: probing channels 3 and 4 at
+             * 400 kHz puts the rangefinders in the state the sonar check
+             * then reads as a dead sensor (pin_config.h). */
+            dev.cfg.master.clk_speed = I2C_RANGER_FREQ_HZ;
 
             if (i2c_dev_probe(&dev, I2C_DEV_WRITE) != ESP_OK) {
                 continue;
@@ -473,7 +476,7 @@ static bool sonar_probe(uint8_t channel)
     dev.addr = RCWL1601_I2C_ADDR;
     dev.cfg.sda_io_num = I2C_SDA_PIN;
     dev.cfg.scl_io_num = I2C_SCL_PIN;
-    dev.cfg.master.clk_speed = I2C_MASTER_FREQ_HZ;
+    dev.cfg.master.clk_speed = I2C_RANGER_FREQ_HZ;
     const bool present = (i2c_dev_probe(&dev, I2C_DEV_WRITE) == ESP_OK);
     i2c_bus_release();
     return present;

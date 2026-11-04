@@ -170,7 +170,7 @@ void i2c_bus_stats_report(void)
  * the servos are simply being clocked out of spec. */
 static uint16_t s_pwm_freq_hz = PCA9685_FREQ_HZ;
 
-/* Force every device on this port onto one bus clock.
+/* Put a device on a deliberate bus clock instead of its driver's default.
  *
  * Each esp-idf-lib driver picks its own rate in init_desc() — the TCA9548A
  * 100 kHz, the PCA9685 and MCP23017 1 MHz — so without this the bus runs at
@@ -178,9 +178,14 @@ static uint16_t s_pwm_freq_hz = PCA9685_FREQ_HZ;
  * The rated parts would all take 400 kHz: the TCA9548A is a Fast-mode part,
  * the PCA9685 is Fm+, and the MCP23017 lists 100 kHz, 400 kHz and 1.7 MHz only
  * (DS20001952D) — no Fm+ 1 MHz step, so its driver's 1 MHz default is not one
- * of its rated speeds. I2C_MASTER_FREQ_HZ is 100 kHz anyway, because the
- * RCWL-1601 rangefinders fail every transfer past the address at 400 kHz, and
- * they see the mux's own selects while their channel is open (pin_config.h).
+ * of its rated speeds.
+ *
+ * Two clocks are deliberate (pin_config.h). The mux gets I2C_RANGER_FREQ_HZ:
+ * its channel selects pass through to whichever channel is open, so an
+ * RCWL-1601 sees the select that closes its own channel, and the rangefinders
+ * fail every transfer past the address at 400 kHz. Everything else gets
+ * I2C_MASTER_FREQ_HZ, and only talks while its own channel is open, where no
+ * rangefinder is connected.
  *
  * Under i2cdev 1.x this also fixed a real cost. cfg_equal() compared
  * clk_speed, so consecutive transactions at different rates made
@@ -189,13 +194,13 @@ static uint16_t s_pwm_freq_hz = PCA9685_FREQ_HZ;
  * per motor update, ~30 times a second while driving. i2cdev 2.0.0 moved to
  * ESP-IDF's bus/device API, which caches a per-device handle with its own
  * scl_speed_hz on a shared bus, so the reinstall is gone by construction. What
- * remains is the first paragraph: one deliberate bus speed instead of three
+ * remains is the first paragraph: deliberate bus speeds instead of three
  * accidental ones.
  *
  * Call this after the driver's own init_desc(), which sets clk_speed itself. */
-static void pin_bus_clock(i2c_dev_t *dev)
+static void pin_bus_clock(i2c_dev_t *dev, uint32_t clk_hz)
 {
-    dev->cfg.master.clk_speed = I2C_MASTER_FREQ_HZ;
+    dev->cfg.master.clk_speed = clk_hz;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -287,7 +292,7 @@ esp_err_t i2c_bus_init(void)
         ESP_LOGE(TAG, "TCA9548A init_desc failed: %s", esp_err_to_name(ret));
         return ret;
     }
-    pin_bus_clock(&s_tca9548);
+    pin_bus_clock(&s_tca9548, I2C_RANGER_FREQ_HZ); /* its selects reach the rangefinders */
 
     // Disable all channels initially
     ret = tca9548_set_channels(&s_tca9548, 0x00);
@@ -309,7 +314,7 @@ esp_err_t i2c_bus_init(void)
         ESP_LOGE(TAG, "PCA9685 init_desc failed: %s", esp_err_to_name(ret));
         return ret;
     }
-    pin_bus_clock(&s_pca9685);
+    pin_bus_clock(&s_pca9685, I2C_MASTER_FREQ_HZ);
 
     ret = pca9685_init(&s_pca9685);
     if (ret != ESP_OK) {
@@ -335,8 +340,11 @@ esp_err_t i2c_bus_init(void)
     tca9548_set_channels(&s_tca9548, 0x00);
 
     s_initialized = true;
-    ESP_LOGI(TAG, "I2C bus initialized: TCA9548A(0x%02X) + PCA9685(0x%02X), bus %d kHz, PWM %d Hz",
-             TCA9548A_ADDR, PCA9685_ADDR, I2C_MASTER_FREQ_HZ / 1000, PCA9685_FREQ_HZ);
+    ESP_LOGI(TAG,
+             "I2C bus initialized: TCA9548A(0x%02X) + PCA9685(0x%02X), bus %d kHz (mux and "
+             "rangefinders %d kHz), PWM %d Hz",
+             TCA9548A_ADDR, PCA9685_ADDR, I2C_MASTER_FREQ_HZ / 1000, I2C_RANGER_FREQ_HZ / 1000,
+             PCA9685_FREQ_HZ);
     return ESP_OK;
 }
 

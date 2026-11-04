@@ -31,12 +31,17 @@
 // ========================================
 #define I2C_SDA_PIN GPIO_NUM_5  // XIAO D4/SDA
 #define I2C_SCL_PIN GPIO_NUM_6  // XIAO D5/SCL
-// 100 kHz, not 400: the RCWL-1601 rangefinders ACK their address at 400 kHz
-// and then NACK every trigger and read (bringup sweep, 2026-11-04: 0/5 readings
-// each at 400 kHz, 5/5 at 100 kHz). Giving only their handle 100 kHz was not
-// enough, because the mux selects that open and close their channel still ran
-// at 400 kHz; see docs/reference/datasheets/sensor--rcwl-1601.md.
-#define I2C_MASTER_FREQ_HZ 100000
+// Two clocks on one bus. The PCA9685, the OLED and the MCP23017 run at
+// I2C_MASTER_FREQ_HZ. I2C_RANGER_FREQ_HZ is for every transfer an RCWL-1601
+// can see: its own, and the TCA9548A's channel selects, which pass through to
+// whichever channel is open. The rangefinders ACK their address at 400 kHz and
+// then NACK every trigger and read (bringup sweep, 2026-11-04: 0/5 readings
+// each at 400 kHz, 5/5 with the whole bus at 100 kHz). Slowing only their own
+// handle failed, because the mux's 400 kHz selects still reached them. See
+// docs/reference/datasheets/sensor--rcwl-1601.md, which also cites M5Stack
+// running the sibling RCWL-9620 at 80 kHz.
+#define I2C_MASTER_FREQ_HZ 400000
+#define I2C_RANGER_FREQ_HZ 100000
 
 // ========================================
 // TCA9548A I2C Multiplexer

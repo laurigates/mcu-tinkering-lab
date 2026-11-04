@@ -124,7 +124,7 @@ esp_err_t ultrasonic_init(void)
     s_dev.addr = RCWL1601_I2C_ADDR;
     s_dev.cfg.sda_io_num = I2C_SDA_PIN;
     s_dev.cfg.scl_io_num = I2C_SCL_PIN;
-    s_dev.cfg.master.clk_speed = I2C_MASTER_FREQ_HZ;
+    s_dev.cfg.master.clk_speed = I2C_RANGER_FREQ_HZ; /* they fail at 400 kHz (pin_config.h) */
     esp_err_t ret = i2c_dev_create_mutex(&s_dev);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "i2c_dev_create_mutex failed: %s", esp_err_to_name(ret));

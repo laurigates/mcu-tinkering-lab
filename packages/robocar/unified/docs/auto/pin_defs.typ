@@ -7,7 +7,7 @@
 // ── I2C Bus ──
 #let I2C_SDA_PIN = 5
 #let I2C_SCL_PIN = 6
-#let I2C_FREQ_HZ = 100000
+#let I2C_FREQ_HZ = 400000
 // ── TCA9548A Multiplexer ──
 #let TCA9548A_ADDR = "0x70"
 #let TCA_CH_PCA9685 = 0
