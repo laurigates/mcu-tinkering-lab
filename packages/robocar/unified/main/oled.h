@@ -1,10 +1,11 @@
 /**
  * @file oled.h
- * @brief Minimal SSD1306 text renderer for the bringup sweep.
+ * @brief Minimal SSD1306 text renderer, shared by robocar-unified and bringup.
  *
- * The OLED is declared in robocar-unified's pin_config.h and i2c_bus.h — the
- * multiplexer channel and the 0x3C address are both reserved — but no driver in
- * that firmware has ever driven it. This is the first code that does.
+ * The OLED is declared in pin_config.h and i2c_bus.h (the multiplexer channel
+ * and the 0x3C address). It started as the bringup sweep's screen; it lives
+ * here so the robot firmware's status screen (oled_status.c) and the bringup
+ * sweep build the same file (see bringup/main/CMakeLists.txt).
  *
  * It exists because it is the only indicator on the board that can show WHICH
  * check failed without a tether. The buzzer says a check failed; the LEDs say
@@ -78,7 +79,14 @@ void oled_clear(void);
  */
 void oled_text(uint8_t col, uint8_t row, const char *text);
 
-/** Push the framebuffer to the panel. */
+/**
+ * @brief Push the framebuffer to the panel, writing only the pages that differ
+ *        from what was last sent.
+ *
+ * Takes the bus once per changed page (about 3 ms each at 400 kHz), so an
+ * unchanged screen costs no bus time. After a failed page write the next call
+ * resends every page.
+ */
 esp_err_t oled_flush(void);
 
 #ifdef __cplusplus
