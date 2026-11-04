@@ -74,9 +74,12 @@ visible at the call site.
 **One bus clock for the whole port.** Each esp-idf-lib driver picks its own rate
 in `init_desc()` — TCA9548A 100 kHz, PCA9685 and MCP23017 1 MHz — so without an
 override the bus runs at whichever speed the last-addressed device wanted.
-`pin_bus_clock()` puts all three on `I2C_MASTER_FREQ_HZ` (400 kHz, the fastest
-every part here is rated for; the TCA9548A is the Fast-mode limit). That define
-had sat unread in `pin_config.h` since the first commit.
+`pin_bus_clock()` puts all three on `I2C_MASTER_FREQ_HZ`. That is 100 kHz,
+although every rated part here would take 400 kHz (the TCA9548A is the
+Fast-mode limit): the RCWL-1601 rangefinders ACK their address at 400 kHz and
+then NACK every trigger and read, and they see the mux's own selects while their
+channel is open, so a slower handle for them alone does not help
+(`docs/reference/datasheets/sensor--rcwl-1601.md`, measured 2026-11-04).
 
 Under **i2cdev 1.x** this also removed a real cost: `cfg_equal()` compared
 `clk_speed`, so consecutive transactions at different rates made

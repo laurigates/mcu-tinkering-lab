@@ -175,11 +175,12 @@ static uint16_t s_pwm_freq_hz = PCA9685_FREQ_HZ;
  * Each esp-idf-lib driver picks its own rate in init_desc() — the TCA9548A
  * 100 kHz, the PCA9685 and MCP23017 1 MHz — so without this the bus runs at
  * three different speeds depending on which device was addressed last.
- * I2C_MASTER_FREQ_HZ (400 kHz) is the fastest rate every part here is rated
- * for: the TCA9548A is a Fast-mode part, the PCA9685 is Fm+, and the MCP23017
- * lists 100 kHz, 400 kHz and 1.7 MHz only (DS20001952D) — no Fm+ 1 MHz step,
- * so its driver's 1 MHz default is not one of its rated speeds. It had sat in
- * pin_config.h unread since the first commit.
+ * The rated parts would all take 400 kHz: the TCA9548A is a Fast-mode part,
+ * the PCA9685 is Fm+, and the MCP23017 lists 100 kHz, 400 kHz and 1.7 MHz only
+ * (DS20001952D) — no Fm+ 1 MHz step, so its driver's 1 MHz default is not one
+ * of its rated speeds. I2C_MASTER_FREQ_HZ is 100 kHz anyway, because the
+ * RCWL-1601 rangefinders fail every transfer past the address at 400 kHz, and
+ * they see the mux's own selects while their channel is open (pin_config.h).
  *
  * Under i2cdev 1.x this also fixed a real cost. cfg_equal() compared
  * clk_speed, so consecutive transactions at different rates made
@@ -189,7 +190,7 @@ static uint16_t s_pwm_freq_hz = PCA9685_FREQ_HZ;
  * ESP-IDF's bus/device API, which caches a per-device handle with its own
  * scl_speed_hz on a shared bus, so the reinstall is gone by construction. What
  * remains is the first paragraph: one deliberate bus speed instead of three
- * accidental ones, and 400 kHz rather than 1 MHz over jumper wiring.
+ * accidental ones.
  *
  * Call this after the driver's own init_desc(), which sets clk_speed itself. */
 static void pin_bus_clock(i2c_dev_t *dev)

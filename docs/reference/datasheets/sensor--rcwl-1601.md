@@ -110,6 +110,18 @@ agree on everything except the conversion wait.
 - **Bus sharing:** Adafruit #4742: "it doesn't like to share the I2C bus, we
   think it gets confused by other commands and can lock up the bus". Give it
   a bus, or a mux channel, of its own.
+- **Clock: run it at 100 kHz.** None of the sources above states a maximum.
+  Measured on robocar-unified's carrier (2026-11-04, both modules with 10 kΩ
+  on R4, each alone on a TCA9548A channel with 2.2 kΩ pull-ups): at 400 kHz
+  both ACK their address, so a bare probe passes, and then NACK the trigger
+  and the read. The bringup sweep got 0/5 readings from each. At 100 kHz, with
+  nothing else changed, it got 5/5 from both. Giving only the modules' i2cdev
+  handle 100 kHz, with the rest of the bus at 400 kHz, failed again (front not
+  answering, rear 0/5, and the mux NACKing): the TCA9548A passes its own
+  400 kHz select writes through to the channel that is open, so the module
+  still sees 400 kHz traffic. The firmware therefore runs the whole bus at
+  100 kHz (`I2C_MASTER_FREQ_HZ`). Running the mux and the modules at 100 kHz
+  while the PCA9685 and the OLED keep 400 kHz is untested.
 
 **Conversion wait.** Adafruit #4742 says to "wait a few milliseconds". Drivers
 for sibling RCWL I2C modules wait much longer: M5Stack's Unit Sonic library
