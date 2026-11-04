@@ -333,8 +333,33 @@ if(CJSON_FOUND)
     target_link_directories(test_voice_history PRIVATE ${CJSON_LIBRARY_DIRS})
     target_link_libraries(test_voice_history PRIVATE ${CJSON_LIBRARIES} Threads::Threads m)
     add_test(NAME voice_history COMMAND test_voice_history)
+
+    # Every prompt built from a persona reaches the request whole (issue #847),
+    # and the TTS request has the gemini-3.8-flash-tts shape (issue #844).
+    # Compiles the real voice_persona.c table, so its config.h needs a
+    # credentials.h: the fixture is copied in as one, as for the loader below.
+    set(VOICE_PROMPTS_CRED_DIR "${CMAKE_CURRENT_BINARY_DIR}/voice_prompts_cred")
+    configure_file("${CMAKE_CURRENT_SOURCE_DIR}/credentials_fixture.h"
+                   "${VOICE_PROMPTS_CRED_DIR}/credentials.h" COPYONLY)
+    add_executable(test_voice_prompts
+        "${MAIN_SRC_DIR}/voice_history.c"
+        "${MAIN_SRC_DIR}/voice_persona.c"
+        "${MAIN_SRC_DIR}/dialogue_style.c"
+        "${MAIN_SRC_DIR}/speech_tags.c"
+        "${MAIN_SRC_DIR}/tts_request.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/host_shims.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/nvs_shim.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/test_voice_prompts.c"
+    )
+    target_include_directories(test_voice_prompts PRIVATE ${CJSON_INCLUDE_DIRS}
+                               "${VOICE_PROMPTS_CRED_DIR}")
+    target_link_directories(test_voice_prompts PRIVATE ${CJSON_LIBRARY_DIRS})
+    target_link_libraries(test_voice_prompts PRIVATE ${CJSON_LIBRARIES} Threads::Threads m)
+    # The ESP_LOG* shims are no-ops, which leaves TAG unused.
+    target_compile_options(test_voice_prompts PRIVATE -Wno-unused-variable)
+    add_test(NAME voice_prompts COMMAND test_voice_prompts)
 else()
-    message(STATUS "cJSON not found — skipping test_gemini_parse and test_voice_history. Install via `brew install cjson` or `apt install libcjson-dev`.")
+    message(STATUS "cJSON not found — skipping test_gemini_parse, test_voice_history and test_voice_prompts. Install via `brew install cjson` or `apt install libcjson-dev`.")
 endif()
 
 # -----------------------------------------------------------------------------
@@ -506,6 +531,7 @@ add_test(NAME servo_controller COMMAND test_servo_controller)
 # -----------------------------------------------------------------------------
 add_executable(test_activity_trace
     "${MAIN_SRC_DIR}/activity_trace.c"
+    "${MAIN_SRC_DIR}/gemini_key_state.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/host_shims.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/test_activity_trace.c"
 )
@@ -620,6 +646,7 @@ add_test(NAME mqtt_command COMMAND test_mqtt_command)
 # -----------------------------------------------------------------------------
 add_executable(test_self_report
     "${MAIN_SRC_DIR}/self_report.c"
+    "${MAIN_SRC_DIR}/gemini_key_state.c"
     "${MAIN_SRC_DIR}/mqtt_command.c"  # the access-mode rule (issue #626) is shared, not stubbed
     "${CMAKE_CURRENT_SOURCE_DIR}/self_report_stubs.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/test_self_report.c"
@@ -730,6 +757,7 @@ configure_file("${CMAKE_CURRENT_SOURCE_DIR}/credentials_fixture.h"
 foreach(_variant credentials_loader credentials_loader_no_mqtt)
     add_executable(test_${_variant}
         "${CREDENTIALS_LOADER_COPY_DIR}/credentials_loader.c"
+        "${MAIN_SRC_DIR}/gemini_key_state.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/nvs_shim.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/test_credentials_loader.c"
     )
@@ -753,3 +781,17 @@ add_executable(test_log_mirror_core
     "${CMAKE_CURRENT_SOURCE_DIR}/test_log_mirror_core.c"
 )
 add_test(NAME log_mirror_core COMMAND test_log_mirror_core)
+
+# -----------------------------------------------------------------------------
+# net_supervisor_core (issue #846 — network services armed on link-up)
+#
+# Pure C with an injected clock. Pins that a board booted offline starts MQTT
+# and OTA when the link returns, that OTA (and its rollback-confirm timer)
+# starts once per boot, that MQTT follows every edge, and when Improv re-arms,
+# including across the uint32 millisecond wrap.
+# -----------------------------------------------------------------------------
+add_executable(test_net_supervisor_core
+    "${MAIN_SRC_DIR}/net_supervisor_core.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_net_supervisor_core.c"
+)
+add_test(NAME net_supervisor_core COMMAND test_net_supervisor_core)

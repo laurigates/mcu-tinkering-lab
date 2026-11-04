@@ -222,6 +222,31 @@ fail_free_strings_ret:
     return ret;
 }
 
+esp_err_t mqtt_logger_pause(void)
+{
+    if (!s_context.initialized || !s_context.client) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    const esp_err_t err = esp_mqtt_client_stop(s_context.client);
+    s_context.connected = false;
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "esp_mqtt_client_stop failed: %s", esp_err_to_name(err));
+    }
+    return err;
+}
+
+esp_err_t mqtt_logger_resume(void)
+{
+    if (!s_context.initialized || !s_context.client) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    const esp_err_t err = esp_mqtt_client_start(s_context.client);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "esp_mqtt_client_start failed: %s", esp_err_to_name(err));
+    }
+    return err;
+}
+
 esp_err_t mqtt_logger_deinit(void)
 {
     if (!s_context.initialized) {

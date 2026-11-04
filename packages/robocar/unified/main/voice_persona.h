@@ -18,13 +18,13 @@
  * lives in the `dialogue_pool_t` members and is drawn by dialogue_style.c; read
  * that header before adding a phrase here that would then be said every time.
  *
- * How style actually reaches the TTS model: Gemini exposes no style/accent/era
- * parameter — delivery is steered by natural-language prompting, i.e. the
- * documented "Say cheerfully: <text>" form. `tts_style` is that prefix.
- * Verified against the live API (2026-07) that the prefix is *interpreted*, not
- * spoken: swapping a ~40-word directive (12+ s if read aloud) for a 3-word one
- * changed the rendered audio by 0.36 s, while the requested delivery did change
- * the duration. Language comes from speechConfig.languageCode (BCP-47).
+ * How style actually reaches the TTS model: a natural-language directive, not
+ * an enum. On gemini-3.1-flash-tts-preview it was a "Say cheerfully: <text>"
+ * prefix, verified (2026-07) to be interpreted rather than spoken.
+ * gemini-3.8-flash-tts reads the text as a verbatim transcript, so `tts_style`
+ * now goes in the part's `speechMetadata.style` (tts_request.c, issue #844);
+ * that is from the 3.8 docs and not yet probed live. Language comes from
+ * speechConfig.languageCode (BCP-47).
  *
  * Voice names are the Gemini prebuilt set (Kore, Puck, Charon, Aoede, …) and are
  * language-agnostic. The locale-specific Cloud TTS names (fi-FI-Chirp3-HD-*)
@@ -64,7 +64,7 @@ typedef struct {
     const char *label;         /**< Human description for `voice` listing. */
     const char *language_code; /**< BCP-47 for speechConfig.languageCode. */
     const char *voice;         /**< Default Gemini prebuilt voice name. */
-    const char *tts_style;     /**< Delivery directive; prefixed as "<style>: <text>". */
+    const char *tts_style;     /**< Delivery directive; sent as speechMetadata.style. */
     const char *text_brief;    /**< Register/idiom brief for text generation. */
 
     /** Instruction telling the generating model which inline delivery tags it

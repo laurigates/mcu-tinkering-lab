@@ -1,7 +1,8 @@
 /**
  * @file test_credentials_loader.c
  *
- * Pins the MQTT broker-credential loader (issue #639). Its output decides
+ * Pins the MQTT broker-credential loader (issue #639) and the Gemini key
+ * loader (issue #845). Its output decides
  * whether the MQTT command topic may change anything
  * (mqtt_command_access_for_credentials(), pinned in test_mqtt_command.c), so
  * what reaches that decision matters as much as the decision:
@@ -43,15 +44,21 @@
 #define MQTT_USER_KEY "user"
 #define MQTT_PASS_KEY "pass"
 #define WIFI_NS "wifi_config"
+#define GEMINI_NS "gemini_auth"
+#define GEMINI_KEY "key"
 
 #ifdef CREDENTIALS_FIXTURE_NO_MQTT
 #define FALLBACK_USER NULL
 #define FALLBACK_PASS NULL
 #define FALLBACK_SOURCE "none"
+#define FALLBACK_GEMINI NULL
+#define FALLBACK_GEMINI_SOURCE "none"
 #else
 #define FALLBACK_USER "file-user"
 #define FALLBACK_PASS "file-pass"
 #define FALLBACK_SOURCE "credentials.h"
+#define FALLBACK_GEMINI "file-gemini-key"
+#define FALLBACK_GEMINI_SOURCE "credentials.h"
 #endif
 
 static int s_failures;
@@ -341,6 +348,144 @@ static void test_clear_fails_when_nvs_will_not_open(void)
     CHECK(!credentials_nvs_clear_mqtt(), "clear reported success with NVS unavailable");
 }
 
+/* ---- Gemini API key (issue #845) ----------------------------------------- */
+
+static const char *s_want_key;
+static const char *s_want_key_source;
+
+static void check_boot_reads_gemini_key(void)
+{
+    CHECK_STR(get_gemini_api_key(), s_want_key);
+    CHECK_STR(get_gemini_api_key_source(), s_want_key_source);
+    CHECK(nvs_shim_open_handles() == 0, "%d NVS handle(s) left open", nvs_shim_open_handles());
+}
+
+static void expect_gemini_boot(const char *key, const char *source)
+{
+    s_want_key = key;
+    s_want_key_source = source;
+    in_fresh_boot(check_boot_reads_gemini_key);
+}
+
+static void test_gemini_key_falls_back_to_credentials_h(void)
+{
+    expect_gemini_boot(FALLBACK_GEMINI, FALLBACK_GEMINI_SOURCE);
+}
+
+/* The bug: once Improv had written WiFi credentials to NVS, the key was read
+ * from getenv() alone, so a key compiled into credentials.h was dropped. */
+static void test_improv_wifi_does_not_drop_the_gemini_key(void)
+{
+    nvs_shim_put(WIFI_NS, "ssid", "home");
+    nvs_shim_put(WIFI_NS, "password", "secret");
+    expect_gemini_boot(FALLBACK_GEMINI, FALLBACK_GEMINI_SOURCE);
+}
+
+static void test_nvs_gemini_key_wins(void)
+{
+    nvs_shim_put(GEMINI_NS, GEMINI_KEY, "nvs-gemini-key");
+    nvs_shim_put(WIFI_NS, "ssid", "home");
+    nvs_shim_put(WIFI_NS, "password", "secret");
+    expect_gemini_boot("nvs-gemini-key", "nvs");
+}
+
+static void test_a_malformed_nvs_gemini_key_falls_back(void)
+{
+    nvs_shim_put(GEMINI_NS, GEMINI_KEY, "has a space");
+    expect_gemini_boot(FALLBACK_GEMINI, FALLBACK_GEMINI_SOURCE);
+    nvs_shim_put(GEMINI_NS, GEMINI_KEY, "");
+    expect_gemini_boot(FALLBACK_GEMINI, FALLBACK_GEMINI_SOURCE);
+}
+
+static void check_env_key(void)
+{
+    setenv("GEMINI_API_KEY", "env-gemini-key", 1);
+    check_boot_reads_gemini_key();
+}
+
+static void test_environment_key_is_the_last_source(void)
+{
+#ifdef CREDENTIALS_FIXTURE_NO_MQTT
+    s_want_key = "env-gemini-key";
+    s_want_key_source = "env";
+#else
+    s_want_key = "file-gemini-key"; /* credentials.h outranks the environment */
+    s_want_key_source = "credentials.h";
+#endif
+    in_fresh_boot(check_env_key);
+}
+
+/* `gemini auth <key>` applies at once, in the running boot, and survives a
+ * reboot; Improv provisioning afterwards does not touch it. */
+static void check_save_applies_now(void)
+{
+    (void)get_gemini_api_key(); /* loaded before the save, as on a running board */
+    CHECK(credentials_nvs_save_gemini("saved-gemini-key"), "save refused a valid key");
+    CHECK_STR(get_gemini_api_key(), "saved-gemini-key");
+    CHECK_STR(get_gemini_api_key_source(), "nvs");
+    CHECK(credentials_nvs_save_wifi("home", "secret"), "WiFi save failed");
+    CHECK(credentials_reload(), "WiFi reload failed");
+    CHECK_STR(get_gemini_api_key(), "saved-gemini-key");
+}
+
+static void test_saved_gemini_key_applies_now_and_survives(void)
+{
+    in_fresh_boot(check_save_applies_now);
+    /* The child's writes do not reach this process's store, so save here too
+     * and boot again. */
+    CHECK(credentials_nvs_save_gemini("saved-gemini-key"), "save refused a valid key");
+    CHECK_STR(nvs_shim_get(GEMINI_NS, GEMINI_KEY), "saved-gemini-key");
+    expect_gemini_boot("saved-gemini-key", "nvs");
+}
+
+/* A key old enough to be read before a change must still be intact after it:
+ * a request on another task may be sending it. */
+static void check_old_pointer_survives_one_change(void)
+{
+    CHECK(credentials_nvs_save_gemini("first-gemini-key"), "save failed");
+    const char *before = get_gemini_api_key();
+    CHECK(credentials_nvs_save_gemini("second-gemini-key"), "save failed");
+    CHECK_STR(before, "first-gemini-key");
+    CHECK_STR(get_gemini_api_key(), "second-gemini-key");
+}
+
+static void test_a_key_change_never_rewrites_a_key_in_use(void)
+{
+    in_fresh_boot(check_old_pointer_survives_one_change);
+}
+
+static void test_gemini_save_refuses_bad_keys(void)
+{
+    char too_long[MAX_API_KEY_LENGTH + 1];
+    memset(too_long, 'k', sizeof(too_long) - 1);
+    too_long[sizeof(too_long) - 1] = '\0';
+    CHECK(!credentials_nvs_save_gemini(NULL), "saved NULL");
+    CHECK(!credentials_nvs_save_gemini(""), "saved an empty key");
+    CHECK(!credentials_nvs_save_gemini("two words"), "saved a key with a space");
+    CHECK(!credentials_nvs_save_gemini("abc\r\nX-Evil: 1"), "saved a key with CR/LF");
+    CHECK(!credentials_nvs_save_gemini(too_long), "saved an over-long key");
+    too_long[MAX_API_KEY_LENGTH - 1] = '\0';
+    CHECK(credentials_nvs_save_gemini(too_long), "refused the longest key that fits");
+}
+
+static void check_clear_applies_now(void)
+{
+    CHECK(credentials_nvs_save_gemini("saved-gemini-key"), "save failed");
+    CHECK(credentials_nvs_clear_gemini(), "clear failed");
+    CHECK_STR(get_gemini_api_key(), FALLBACK_GEMINI);
+    CHECK_STR(get_gemini_api_key_source(), FALLBACK_GEMINI_SOURCE);
+}
+
+static void test_gemini_clear_falls_back_now(void)
+{
+    nvs_shim_put(WIFI_NS, "ssid", "home");
+    in_fresh_boot(check_clear_applies_now);
+    nvs_shim_put(GEMINI_NS, GEMINI_KEY, "nvs-gemini-key");
+    CHECK(credentials_nvs_clear_gemini(), "clear failed");
+    CHECK_STR(nvs_shim_get(GEMINI_NS, GEMINI_KEY), NULL);
+    CHECK_STR(nvs_shim_get(WIFI_NS, "ssid"), "home"); /* WiFi untouched */
+}
+
 int main(void)
 {
     struct {
@@ -372,6 +517,16 @@ int main(void)
          test_clear_falls_back_to_credentials_h_at_the_next_boot},
         {"clear_succeeds_with_nothing_stored", test_clear_succeeds_with_nothing_stored},
         {"clear_fails_when_nvs_will_not_open", test_clear_fails_when_nvs_will_not_open},
+        {"gemini_key_falls_back_to_credentials_h", test_gemini_key_falls_back_to_credentials_h},
+        {"improv_wifi_does_not_drop_the_gemini_key", test_improv_wifi_does_not_drop_the_gemini_key},
+        {"nvs_gemini_key_wins", test_nvs_gemini_key_wins},
+        {"a_malformed_nvs_gemini_key_falls_back", test_a_malformed_nvs_gemini_key_falls_back},
+        {"environment_key_is_the_last_source", test_environment_key_is_the_last_source},
+        {"saved_gemini_key_applies_now_and_survives",
+         test_saved_gemini_key_applies_now_and_survives},
+        {"a_key_change_never_rewrites_a_key_in_use", test_a_key_change_never_rewrites_a_key_in_use},
+        {"gemini_save_refuses_bad_keys", test_gemini_save_refuses_bad_keys},
+        {"gemini_clear_falls_back_now", test_gemini_clear_falls_back_now},
     };
 #ifdef CREDENTIALS_FIXTURE_NO_MQTT
     printf("credentials.h fixture: no broker credentials (CMake stub shape)\n");

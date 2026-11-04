@@ -314,7 +314,7 @@
       "id": "FR-038",
       "name": "Network services armed on link-up",
       "prd": "ADR-028",
-      "status": "planned",
+      "status": "active",
       "priority": "P0",
       "notes": "Non-blocking connect; OTA and rollback-confirm on first GOT_IP; MQTT only on home GOT_IP, stopped on disconnect; Improv re-arm; skip requests offline"
     },
@@ -322,7 +322,7 @@
       "id": "FR-039",
       "name": "Runtime Gemini credential in NVS",
       "prd": "ADR-028",
-      "status": "planned",
+      "status": "active",
       "priority": "P0",
       "notes": "gemini auth; fixes key dropped after Improv; 402/403 handling"
     },
@@ -354,7 +354,7 @@
       "id": "FR-043",
       "name": "TTS migration off gemini-3.1-flash-tts-preview",
       "prd": "ADR-028",
-      "status": "planned",
+      "status": "active",
       "priority": "P0",
       "notes": "Earliest shutdown 2026-11-17; probe gemini-3.8-flash-tts (Finnish; not Flash-Lite) for streaming and style prefix"
     },

@@ -22,6 +22,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "gemini_key_state.h"
 #include "self_report.h"
 #include "self_report_stubs.h"
 
@@ -163,7 +164,10 @@ static int test_worst_case_fits_the_buffer(void)
      * backwards is what makes a worst-case test pass on a buffer that overflows
      * in the field. */
     g_stub.expander_available = false;
-    g_stub.api_key = "";
+    /* A key the last response called exhausted: "exhausted" is three
+     * characters longer than "absent" (issue #845). */
+    g_stub.api_key = "k";
+    gemini_key_state_note(402);
     /* MAX_SSID_LENGTH - 1 characters, the longest strlcpy will keep. */
     g_stub.ssid = "abcdefghijklmnopqrstuvwxyz01234";
     g_stub.version = "1234567890.1234567890.12345678";
@@ -179,10 +183,54 @@ static int test_worst_case_fits_the_buffer(void)
     /* The tail keys are the ones snprintf drops first, and they are exactly
      * the ones a degraded board most needs to report. */
     CHECK(strstr(facts, "i2c_peripherals=degraded(motors,leds,servos)") != NULL);
-    CHECK(strstr(facts, "gemini_key=absent") != NULL);
+    CHECK(strstr(facts, "gemini_key=exhausted") != NULL);
     CHECK(strstr(facts, "buzzer=not-responding") != NULL);
     /* "read-only" is the longer of the two mode words, and the key is last. */
     CHECK(strstr(facts, "mqtt_commands=read-only") != NULL);
+    return 0;
+}
+
+/**
+ * No key, a key Google rejects and a spent balance all silence the robot, and
+ * need different fixes, so the facts line names which (issue #845). A 429 or a
+ * transport failure says nothing about the key and must not change the word.
+ */
+static int test_key_state_is_reported(void)
+{
+    stub_reset_healthy();
+    char facts[SELF_REPORT_FACTS_MAX];
+    robocar_status_t status;
+
+    g_stub.api_key = "";
+    self_report_collect(&status);
+    self_report_format_facts(&status, facts, sizeof(facts));
+    CHECK(strstr(facts, "gemini_key=absent ") != NULL);
+
+    g_stub.api_key = "k";
+    self_report_collect(&status);
+    self_report_format_facts(&status, facts, sizeof(facts));
+    CHECK(strstr(facts, "gemini_key=present ") != NULL);
+
+    gemini_key_state_note(403);
+    self_report_collect(&status);
+    self_report_format_facts(&status, facts, sizeof(facts));
+    CHECK(strstr(facts, "gemini_key=rejected ") != NULL);
+
+    gemini_key_state_note(429);
+    gemini_key_state_note(0);
+    self_report_collect(&status);
+    self_report_format_facts(&status, facts, sizeof(facts));
+    CHECK(strstr(facts, "gemini_key=rejected ") != NULL);
+
+    gemini_key_state_note(402);
+    self_report_collect(&status);
+    self_report_format_facts(&status, facts, sizeof(facts));
+    CHECK(strstr(facts, "gemini_key=exhausted ") != NULL);
+
+    gemini_key_state_note(200);
+    self_report_collect(&status);
+    self_report_format_facts(&status, facts, sizeof(facts));
+    CHECK(strstr(facts, "gemini_key=present ") != NULL);
     return 0;
 }
 
@@ -249,6 +297,7 @@ int main(void)
         {"buzzer_reported_separately", test_buzzer_reported_separately},
         {"worst_case_fits_the_buffer", test_worst_case_fits_the_buffer},
         {"mqtt_mode_is_reported", test_mqtt_mode_is_reported},
+        {"key_state_is_reported", test_key_state_is_reported},
         {"collect_reads_live_state", test_collect_reads_live_state},
     };
 
