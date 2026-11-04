@@ -561,7 +561,10 @@ static void test_read_only_refuses_unknown_command(void)
  * owner out. */
 static void test_credential_command_is_never_reachable(void)
 {
-    static const char *const lines[] = {"mqtt", "mqtt auth robocar secret", "mqtt auth clear"};
+    /* `gemini` sets the API key (issue #845): a publisher must not read or
+     * replace it any more than the broker credentials. */
+    static const char *const lines[] = {"mqtt",   "mqtt auth robocar secret", "mqtt auth clear",
+                                        "gemini", "gemini auth AIzaFAKEKEY",  "gemini auth clear"};
     recorder_t r;
     for (size_t i = 0; i < sizeof(lines) / sizeof(lines[0]); i++) {
         recorder_reset(&r);

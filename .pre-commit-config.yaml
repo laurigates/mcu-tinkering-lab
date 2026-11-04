@@ -23,8 +23,11 @@ repos:
         # A routed carrier board with its copper pour filled is about 1 MB
         # (tools/kicad, ADR-027); robocar-unified's grew past the limit after
         # it was added. The pan-tilt harness's order files (STEP/STL for
-        # JLC3DP) are committed meshes of the same kind.
-        exclude: '\.kicad_pcb$|/pan-tilt/print/[^/]+\.(stl|step)$'
+        # JLC3DP) are committed meshes of the same kind. A mechanism's
+        # clash-sweep video (tools/mechanism animate, AV1) is 0.3-1 MB. A uv.lock
+        # is generated text; the robocar simulation's (genesis-world, torch) is
+        # about 670 kB.
+        exclude: '\.kicad_pcb$|/pan-tilt/print/[^/]+\.(stl|step)$|/output/animation/sweep\.mp4$|(^|/)uv\.lock$'
       - id: check-merge-conflict
       - id: check-case-conflict
       - id: mixed-line-ending
@@ -81,7 +84,7 @@ repos:
       - id: check-credentials
         name: Check for credential files
         entry: >-
-          bash -c 'if git diff --cached --name-only | grep -qE "(credentials\.h|wifi_config\.h|\.key$|\.secret$|\.token$)"; then echo "ERROR - Attempted to commit credential files!"; exit 1; fi'
+          bash -c 'if git diff --cached --name-only --diff-filter=d | grep -qE "(credentials\.h|wifi_config\.h|\.key$|\.secret$|\.token$)"; then echo "ERROR - Attempted to commit credential files!"; exit 1; fi'
         language: system
         pass_filenames: false
         always_run: true

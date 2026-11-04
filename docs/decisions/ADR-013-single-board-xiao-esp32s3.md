@@ -1,7 +1,7 @@
 ---
 id: ADR-013
 title: Single-Board Robot Car with XIAO ESP32-S3 Sense
-status: proposed
+status: accepted
 created: 2026-04-09
 supersedes: ADR-002
 ---

@@ -92,8 +92,8 @@ ON count to 0, so all sixteen outputs rose on the same tick of the ~197 Hz
 period — two motor PWMs, two servos and six LED channels switching together.
 `pca9685_phase.c` gives channel *n* an ON offset of *n*/16 of the period and
 composes the LEDn registers itself, because upstream esp-idf-lib has no API for
-it and the vendored copy is a **symlink into `robocar/main`** — patching it
-would change that firmware too and be reverted by any library refresh.
+it and the driver is a managed component — an edit under `managed_components/`
+is reverted by the next reconfigure.
 
 Staggering moves a pulse within the period without changing its width, so
 nothing downstream can tell: a servo decodes pulse width, not position in the

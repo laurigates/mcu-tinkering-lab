@@ -42,6 +42,7 @@
 #include "voice_endpoint.h"
 #include "voice_history.h"
 #include "voice_persona.h"
+#include "wifi_manager.h"
 
 static const char *TAG = "voice_turn";
 
@@ -126,7 +127,6 @@ static voice_endpoint_cfg_t s_endpoint_cfg = {
  * half the stack. */
 static char s_response[VOICE_TURN_RESPONSE_BUF_SIZE];
 static char s_reply[SPEECH_TEXT_MAX];
-static char s_sys_prompt[1536];
 
 typedef struct {
     char *buf;
@@ -289,31 +289,18 @@ static char *build_body(const char *b64_wav, const char *b64_jpeg, const reactiv
     const char *name =
         (persona && persona->name && persona->name[0] != '\0') ? persona->name : "Robocar";
 
-    char brief[512];
-    if (persona && persona->text_brief) {
-        if (persona->tag_brief && persona->tag_brief[0] != '\0') {
-            snprintf(brief, sizeof(brief), "%s %s", persona->text_brief, persona->tag_brief);
-        } else {
-            snprintf(brief, sizeof(brief), "%s", persona->text_brief);
-        }
-    } else {
-        snprintf(brief, sizeof(brief), "Be brief.");
+    /* Sized from the persona strings (issue #847): the old 512-byte join cut
+     * fi-1950's brief mid-tag list on every turn. */
+    char *sys_prompt = voice_history_build_system_prompt(name, persona ? persona->text_brief : NULL,
+                                                         persona ? persona->tag_brief : NULL);
+    if (!sys_prompt) {
+        return NULL;
     }
 
-    snprintf(s_sys_prompt, sizeof(s_sys_prompt),
-             "%s\n"
-             "Listen to the audio.\n"
-             "- If someone speaks to you (addresses you as %s or 'robotti', asks you a question, "
-             "or makes a comment directed at you), answer them in ONE short spoken sentence in "
-             "your persona.\n"
-             "- If people are talking in the room and you are idle, you may occasionally chime in "
-             "with a brief, dry witty remark.\n"
-             "- If the audio contains only background noise, coughs, typing, or speech not "
-             "directed at you, reply with '__IGNORE__'.",
-             brief, name);
-
-    return voice_history_build_request_body(name, s_sys_prompt, tele, has_telemetry, b64_jpeg,
-                                            b64_wav, now_ms);
+    char *body = voice_history_build_request_body(name, sys_prompt, tele, has_telemetry, b64_jpeg,
+                                                  b64_wav, now_ms);
+    free(sys_prompt);
+    return body;
 }
 
 static void run_turn(uint32_t window_ms, bool vad)
@@ -324,6 +311,12 @@ static void run_turn(uint32_t window_ms, bool vad)
      * request can sit in the queue while the turn before it spends the last of
      * the ceiling, and that one must not go out. Before the beep, so a refused
      * turn makes no sound. */
+    /* Again on this task: the link can drop while a request waits in the
+     * queue (issue #846). */
+    if (!wifi_is_connected()) {
+        ESP_LOGW(TAG, "listen: no WiFi link — turn skipped");
+        return;
+    }
     const voice_budget_verdict_t verdict = voice_budget_check(t_start, vad);
     if (verdict != VOICE_BUDGET_OK) {
         ESP_LOGW(TAG, "listen: %s turn refused at start — %s", vad ? "hands-free" : "listen",
@@ -602,6 +595,12 @@ static esp_err_t enqueue(const voice_turn_req_t *req)
      * request time for the same reason: no beep, no recording, and an answer
      * the console and the listener can act on. A ration refusal is counted so a
      * room that keeps asking shows up as a number in `voice`. */
+    /* No link, no turn (issue #846): nothing would reach Gemini, and the
+     * per-boot ceiling would still be charged. Before the budget check, so an
+     * offline room is not counted as rationed either. */
+    if (!wifi_is_connected()) {
+        return ESP_ERR_INVALID_STATE;
+    }
     const voice_budget_verdict_t verdict =
         voice_budget_check((uint32_t)(esp_timer_get_time() / 1000), req->vad);
     if (verdict != VOICE_BUDGET_OK) {

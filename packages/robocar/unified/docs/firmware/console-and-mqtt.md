@@ -20,6 +20,7 @@ one-line form of each rule below and links here for the reasoning.
 | `plan …` | The gate on whether the planner makes a request at all — `plan` alone reports cadence, wake scores and spend; `plan on\|off\|wake\|sleep\|resume`, `plan scene\|range\|requests\|tokens <n>` |
 | `trace …` | Camera + endpoint activity counters since boot; `trace led on\|off`, `trace reset` |
 | `mqtt …` | Serial only. `mqtt` alone prints the MQTT command mode (`full`/`read-only`) and where the broker credentials came from; `mqtt auth <user> <pass>` stores them in NVS, `mqtt auth clear` removes them — both applied at the next boot |
+| `gemini …` | Serial only. `gemini` alone prints whether a key is set, where it came from (`nvs`/`credentials.h`/`env`/`none`), its length and what the last response said (`untested`/`ok`/`rejected`/`exhausted`); `gemini auth <key>` stores a key in NVS, `gemini auth clear` removes it — both applied from the next request. The key is never printed or logged (issue #845) |
 
 ### MQTT remote commands
 

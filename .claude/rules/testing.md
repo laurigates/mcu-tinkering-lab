@@ -48,6 +48,7 @@ the unit suite and the hook pass. See the `carrier-pcb` skill and ADR-027.
 ```bash
 just mechanism::test                  # tools/mechanism: clash sweep, servo envelopes, one render
 just mechanism::check <design dir>    # a design's clash sweep and walls; must exit 0
+just mechanism::animate <design dir>  # the same clash test between gate poses, as AV1 video
 ```
 
 Run `mechanism::test` after touching `tools/mechanism/` or

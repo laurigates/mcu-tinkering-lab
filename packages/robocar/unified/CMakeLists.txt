@@ -25,7 +25,6 @@ endif()
 # esp-idf-lib drivers come from the component manager (main/idf_component.yml);
 # this list carries only the monorepo's own shared components.
 set(EXTRA_COMPONENT_DIRS "${CMAKE_CURRENT_LIST_DIR}/../../components")
-list(APPEND EXTRA_COMPONENT_DIRS "${CMAKE_CURRENT_LIST_DIR}/../components")
 
 # Partition table + flash size are configured in sdkconfig.defaults
 # (CONFIG_PARTITION_TABLE_CUSTOM / CONFIG_ESPTOOLPY_FLASHSIZE_8MB). ESP-IDF

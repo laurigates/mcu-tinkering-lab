@@ -16,8 +16,7 @@ $ARGUMENTS may contain:
 
 ## Available Projects
 
-- `robocar-main` or `main` - Main controller development
-- `robocar-cam` or `cam` - Camera module development
+- `robocar` or `robocar-unified` - Robocar firmware (XIAO ESP32-S3 Sense)
 - `webserver` - ESP32-CAM webserver
 - `telegram` - LLM Telegram bot development
 - `i2s-audio` or `audio` - ESP32-CAM audio
@@ -27,8 +26,7 @@ $ARGUMENTS may contain:
 
 Based on project name:
 
-- `robocar-main` or `main`: `just robocar::develop-main`
-- `robocar-cam` or `cam`: `just robocar::develop-cam`
+- `robocar` or `robocar-unified`: `just robocar-unified::build && just robocar-unified::flash-monitor`
 - `webserver`: `just webserver::develop`
 - `telegram`: `just telegram::develop`
 - `i2s-audio`: `just i2s-audio::develop`

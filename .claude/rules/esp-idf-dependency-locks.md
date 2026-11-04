@@ -86,7 +86,7 @@ opened with `GITHUB_TOKEN` does not trigger `pull_request` workflows, so
 
 ```sh
 python3 -m unittest tools/test_refresh_idf_locks.py
-just refresh-idf-locks packages/robocar/camera
+just refresh-idf-locks packages/camera-vision/cam-webserver
 ```
 
 The unit tests run the shipped script against a stub `idf.py`. The second

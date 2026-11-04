@@ -39,6 +39,7 @@
 #include "credentials_validator.h"
 #include "dialogue_style.h"
 #include "frame_dump.h"
+#include "gemini_key_state.h"
 #include "gemini_tts.h"
 #include "goal_state.h"
 #include "gpio_expander.h"
@@ -50,6 +51,7 @@
 #include "mdns.h"
 #include "mic_dump.h"
 #include "mic_pdm.h"
+#include "net_supervisor_core.h"
 /* motor_controller_init() in the hardware phase and motor_is_initialized() in
  * the boot wheel exercise — both reads. Motor *output* is the reactive
  * executor's job, and nothing here writes the motors directly. */
@@ -119,7 +121,8 @@ typedef struct {
 // ========================================
 static QueueHandle_t s_motor_queue;
 static QueueHandle_t s_periph_queue;
-static bool s_improv_active;
+/* Written by the network supervisor task, read by command_task (issue #846). */
+static volatile bool s_improv_active;
 
 /** Map a queued console command onto the executor's manual-override vocabulary. */
 static reactive_manual_cmd_t to_manual_cmd(motor_cmd_type_t type)
@@ -1455,7 +1458,9 @@ static void handle_listen_cmd(const char *buf)
             /* Three quite different causes, and telling them apart matters:
              * a robot mid-sentence is working correctly, a missing microphone is
              * a fault, and an unstarted task means the AI phase did not come up. */
-            if (!mic_pdm_is_ready()) {
+            if (!wifi_is_connected()) {
+                printf("listen: no WiFi link — voice turns wait for the network\n");
+            } else if (!mic_pdm_is_ready()) {
                 printf("listen: no microphone — voice turns unavailable\n");
             } else if (audio_player_is_active()) {
                 printf("listen: the robot is speaking — try again in a moment\n");
@@ -1477,41 +1482,46 @@ static void handle_listen_cmd(const char *buf)
  * is why the byte feed lives inside command_task rather than in a task of its
  * own. Replies go back over the same port through improv_console_write()
  * (issue #644); the component's UART0 default would send them to D6/D7. */
+/* Credentials Improv handed over, waiting for the link to prove them. Written
+ * by command_task (the Improv callback), consumed by the network supervisor;
+ * the flag is published with release/acquire ordering after the buffers. */
+static char s_improv_ssid[33];
+static char s_improv_pass[65];
+static bool s_improv_pending;
+
+/* Non-blocking since issue #846: the callback runs on command_task, inside
+ * the console byte loop, and used to block it for the whole connect attempt.
+ * It now starts the attempt and returns; net_supervisor_task() saves the
+ * credentials on GOT_IP or reports failure once the fast retries are spent. */
 static void on_improv_credentials(const char *ssid, const char *password)
 {
     ESP_LOGI(TAG, "Improv: credentials received for SSID '%s'", ssid ? ssid : "");
     improv_wifi_send_state(IMPROV_STATE_PROVISIONING);
 
-    if (!ssid || strlen(ssid) == 0) {
+    if (!ssid || ssid[0] == '\0' || strlen(ssid) >= sizeof(s_improv_ssid) ||
+        (password && strlen(password) >= sizeof(s_improv_pass))) {
         improv_wifi_send_error(IMPROV_ERROR_INVALID_RPC);
         return;
     }
+    if (__atomic_load_n(&s_improv_pending, __ATOMIC_ACQUIRE)) {
+        ESP_LOGW(TAG, "Improv: an attempt is already in progress");
+        return;
+    }
 
-    if (wifi_connect(ssid, password ? password : "") != ESP_OK) {
-        ESP_LOGW(TAG, "Improv: could not join '%s'", ssid);
+    strlcpy(s_improv_ssid, ssid, sizeof(s_improv_ssid));
+    strlcpy(s_improv_pass, password ? password : "", sizeof(s_improv_pass));
+    if (wifi_connect(s_improv_ssid, s_improv_pass) != ESP_OK) {
         improv_wifi_send_error(IMPROV_ERROR_UNABLE_CONNECT);
         return;
     }
-
-    /* Persist only after the credentials are proven to work, so a typo cannot
-     * overwrite a known-good stored network. */
-    if (!credentials_nvs_save_wifi(ssid, password ? password : "")) {
-        improv_wifi_send_error(IMPROV_ERROR_UNKNOWN);
-        return;
-    }
-    credentials_reload();
-
-    s_improv_active = false;
-    improv_wifi_send_state(IMPROV_STATE_PROVISIONED);
-    improv_wifi_send_provisioned_result(NULL);
-    ESP_LOGI(TAG, "Improv: provisioning complete");
+    __atomic_store_n(&s_improv_pending, true, __ATOMIC_RELEASE);
 }
 
 /**
  * @brief Execute one already-trimmed, multi-word console command line.
  *
  * Shared by the serial console (command_task, below) and the MQTT command
- * topic (mqtt_command_received(), via init_network_services()), so the two
+ * topic (mqtt_command_received(), via start_mqtt_service()), so the two
  * entry points can never diverge on what a command line does. Single-letter
  * movement (F/B/L/R/C/W/S) is handled separately by each caller instead —
  * see command_task()'s buf_pos==1 switch and mqtt_command.c's
@@ -1696,6 +1706,50 @@ static void handle_mqtt_cmd(const char *buf)
     printf("mqtt: usage: mqtt | mqtt auth <user> <pass> | mqtt auth clear\n");
 }
 
+/**
+ * @brief `gemini` — the Gemini API key: where it came from, what the last
+ *        response said about it, and NVS provisioning (issue #845).
+ *
+ * Serial console ONLY, for the same reason as `mqtt`: command_task() calls
+ * this before execute_console_line(), and "gemini" is not in mqtt_command.c's
+ * forwarded prefixes, so no MQTT publisher can read or replace the key. The
+ * line is logged redacted, and the key itself is never printed: only its
+ * source, length and state.
+ *
+ * Unlike `mqtt auth`, a key applies at once: every request reads it fresh.
+ */
+static void handle_gemini_cmd(const char *buf)
+{
+    _Static_assert(CONSOLE_LINE_MAX == 128, "keep the %127s width below in step");
+    char op[8] = {0};
+    char key[CONSOLE_LINE_MAX] = {0};
+    char extra[2] = {0};
+    const int n = sscanf(buf, "gemini %7s %127s %1s", op, key, extra);
+
+    if (n <= 0) {
+        const char *k = get_gemini_api_key();
+        printf("gemini: key=%s (source %s, %u chars) last response=%s\n", k ? "present" : "absent",
+               get_gemini_api_key_source(), k ? (unsigned)strlen(k) : 0u,
+               gemini_key_state_name(gemini_key_state_get()));
+        printf("  usage: gemini auth <key> | gemini auth clear   (applied now; NVS wins over\n");
+        printf("         credentials.h; max %d chars, no spaces)\n", MAX_API_KEY_LENGTH - 1);
+        return;
+    }
+    if (strcmp(op, "auth") == 0 && n == 2 && strcmp(key, "clear") == 0) {
+        printf("gemini: %s (now from %s)\n",
+               credentials_nvs_clear_gemini() ? "NVS key cleared" : "clearing the NVS key FAILED",
+               get_gemini_api_key_source());
+        return;
+    }
+    if (strcmp(op, "auth") == 0 && n == 2) {
+        printf("gemini: %s\n", credentials_nvs_save_gemini(key)
+                                   ? "key saved to NVS — in use from the next request"
+                                   : "saving the key FAILED (too long, a space, or NVS error)");
+        return;
+    }
+    printf("gemini: usage: gemini | gemini auth <key> | gemini auth clear\n");
+}
+
 // ========================================
 // Serial command task (Core 0, priority 5)
 // ========================================
@@ -1745,12 +1799,17 @@ static void command_task(void *pvParameters)
                  * test is looser than the routing one: a mistyped ` mqtt auth`
                  * or `MQTT auth` is not run, but it still carries a password. */
                 const bool is_mqtt_cmd = strncmp(buf, "mqtt", 4) == 0;
+                const bool is_gemini_cmd = strncmp(buf, "gemini", 6) == 0;
                 const char *lead = buf;
                 while (*lead == ' ' || *lead == '\t') {
                     ++lead;
                 }
                 const bool redact = strncasecmp(lead, "mqtt", 4) == 0;
-                ESP_LOGI(TAG, "Serial cmd: %s", redact ? "mqtt ... (redacted)" : buf);
+                const bool redact_key = strncasecmp(lead, "gemini", 6) == 0;
+                ESP_LOGI(TAG, "Serial cmd: %s",
+                         redact       ? "mqtt ... (redacted)"
+                         : redact_key ? "gemini ... (redacted)"
+                                      : buf);
 
                 /* Somebody is at the console, so the robot is not unattended
                  * and the whole premise of dormancy has lapsed. Placed here —
@@ -1798,6 +1857,9 @@ static void command_task(void *pvParameters)
                     /* Serial-only by construction: kept out of
                      * execute_console_line(), which the MQTT topic shares. */
                     handle_mqtt_cmd(buf);
+                } else if (is_gemini_cmd) {
+                    /* Serial-only, like `mqtt`: the key is a credential. */
+                    handle_gemini_cmd(buf);
                 } else {
                     execute_console_line(buf);
                 }
@@ -1903,6 +1965,10 @@ static esp_err_t init_camera(void)
     return camera_init();
 }
 
+/* Set by init_network(), read by net_supervisor_task(). */
+static bool s_have_wifi_credentials;
+static bool s_improv_ready;
+
 static esp_err_t init_network(void)
 {
     ESP_LOGI(TAG, "Phase 3: WiFi + network");
@@ -1912,30 +1978,28 @@ static esp_err_t init_network(void)
      * Improv provisioning (started below) is the expected next step. */
     validate_credentials_at_runtime();
 
-    // Load credentials and connect WiFi
+    /* Start joining and move on: the console, the executor and the reflex come
+     * up while WiFi is still connecting (issue #846). The network supervisor
+     * starts MQTT, OTA and Improv from the link's edges. */
     credentials_t creds = {0};
     load_credentials(&creds);
-    wifi_init();
-    if (creds.credentials_loaded && strlen(creds.wifi_ssid) > 0) {
+    s_have_wifi_credentials = creds.credentials_loaded && creds.wifi_ssid[0] != '\0';
+    if (wifi_init() != ESP_OK) {
+        ESP_LOGE(TAG, "WiFi init failed — continuing offline");
+    } else if (s_have_wifi_credentials) {
         wifi_connect(creds.wifi_ssid, creds.wifi_password);
     }
 
-    /* Start Improv whenever we are not on a network — both for a board that has
-     * never been provisioned and for one whose stored SSID no longer exists.
-     * A firmware built without credentials (CI, the web flasher) has no other
-     * way to be given any, which is the whole point of the protocol. */
-    if (!wifi_is_connected()) {
-        ESP_LOGW(TAG, "No WiFi connection — starting Improv provisioning");
-        improv_wifi_set_writer(improv_console_write);
-        esp_err_t improv_ret = improv_wifi_init(on_improv_credentials);
-        if (improv_ret == ESP_OK) {
-            s_improv_active = true;
-            ESP_LOGI(TAG, "Improv WiFi ready — connect with ESP Web Tools to provision");
-        } else {
-            ESP_LOGE(TAG, "improv_wifi_init failed (%s) — no provisioning path",
-                     esp_err_to_name(improv_ret));
-        }
+    /* The parser is always installed; the supervisor arms it (feeds bytes and
+     * announces) only while there is no link. A firmware built without
+     * credentials (CI, the web flasher) has no other way to be given any. */
+    improv_wifi_set_writer(improv_console_write);
+    const esp_err_t improv_ret = improv_wifi_init(on_improv_credentials);
+    if (improv_ret != ESP_OK) {
+        ESP_LOGE(TAG, "improv_wifi_init failed (%s) — no provisioning path",
+                 esp_err_to_name(improv_ret));
     }
+    s_improv_ready = (improv_ret == ESP_OK);
 
     /* mDNS is a convenience, not a dependency — a failure here must not stop a
      * robot that is otherwise fine from booting. Hostname matches the project
@@ -2029,12 +2093,12 @@ static esp_err_t init_hierarchical_ai(void)
     // required: without the executor nothing drives the motors at all.
     ESP_RETURN_ON_ERROR(reactive_controller_init(), TAG, "reactive_controller_init failed");
 
-    /* planner_task spawns the Gemini planner on Core 1 (requires WiFi + an API
-     * key). Non-fatal by design: a board flashed from the web flasher has no
-     * credentials at all, and panicking here would boot-loop the documented
-     * default configuration. Without a planner the executor simply holds STOP,
-     * which is safe — and the console, Improv provisioning and self-report all
-     * stay reachable so the device can be told what it is missing. */
+    /* planner_task spawns the Gemini planner on Core 1. It starts without WiFi
+     * or a key and idles until both exist (issues #845, #846). Non-fatal by design: a board flashed
+     * from the web flasher has no credentials at all, and panicking here would boot-loop the
+     * documented default configuration. Without a planner the executor simply holds STOP, which is
+     * safe — and the console, Improv provisioning and self-report all stay reachable so the device
+     * can be told what it is missing. */
     esp_err_t planner_ret = planner_task_init();
     if (planner_ret != ESP_OK) {
         ESP_LOGW(TAG, "planner_task_init failed (%s) — AI planner disabled, robot holds STOP",
@@ -2045,20 +2109,15 @@ static esp_err_t init_hierarchical_ai(void)
     return ESP_OK;
 }
 
-/**
- * @brief Start the network-dependent background services.
- *
- * Both are non-fatal and both are skipped without a link: MQTT would only
- * buffer into a queue nothing drains, and the OTA poller needs to reach GitHub.
- */
-static void init_network_services(void)
+#if MQTT_LOGGING_ENABLED
+/** First link-up creates the client; later ones resume it. */
+static void start_mqtt_service(void)
 {
-    if (!wifi_is_connected()) {
-        ESP_LOGW(TAG, "No WiFi — skipping MQTT logging and OTA");
+    static bool s_created;
+    if (s_created) {
+        mqtt_logger_resume();
         return;
     }
-
-#if MQTT_LOGGING_ENABLED
     const mqtt_logger_config_t mqtt_cfg = {
         .broker_uri = MQTT_BROKER_URI,
         .client_id = MQTT_CLIENT_ID,
@@ -2075,29 +2134,116 @@ static void init_network_services(void)
         .min_level = MQTT_MIN_LOG_LEVEL,
         .retain_status = MQTT_RETAIN_STATUS,
     };
-    esp_err_t mqtt_ret = mqtt_logger_init(&mqtt_cfg);
+    const esp_err_t mqtt_ret = mqtt_logger_init(&mqtt_cfg);
     if (mqtt_ret != ESP_OK) {
         ESP_LOGW(TAG, "mqtt_logger_init failed (%s) — remote logging disabled",
                  esp_err_to_name(mqtt_ret));
-    } else {
-        /* app_main() calls create_tasks() before init_network_services(), so
-         * s_motor_queue/s_periph_queue — which mqtt_cmd_movement() and the
-         * console handlers execute_console_line() dispatches into already
-         * exist by the time a command can arrive here. */
-        mqtt_logger_set_command_handler(mqtt_command_received);
+        return;
     }
+    s_created = true;
+    /* create_tasks() runs before the supervisor starts, so the queues the
+     * command handler dispatches into already exist. */
+    mqtt_logger_set_command_handler(mqtt_command_received);
+}
 #endif
 
-#if OTA_ENABLED
-    /* Starting the OTA manager is what arms ota_manager_confirm_valid(). With
-     * CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y an image that is never confirmed
-     * is rolled back on the next boot, so leaving this uncalled would make any
-     * future OTA update silently revert. */
-    esp_err_t ota_ret = ota_manager_init();
-    if (ota_ret != ESP_OK) {
-        ESP_LOGW(TAG, "ota_manager_init failed (%s) — updates disabled", esp_err_to_name(ota_ret));
+/** Improv credentials waiting on the link: save them on GOT_IP, or report
+ *  failure once the fast retries are spent and go back to the stored network. */
+static void settle_improv_attempt(bool link_up, net_supervisor_t *sup)
+{
+    if (!__atomic_load_n(&s_improv_pending, __ATOMIC_ACQUIRE)) {
+        return;
     }
+    if (link_up) {
+        /* Persist only after the credentials are proven to work, so a typo
+         * cannot overwrite a known-good stored network. */
+        if (!credentials_nvs_save_wifi(s_improv_ssid, s_improv_pass)) {
+            improv_wifi_send_error(IMPROV_ERROR_UNKNOWN);
+        } else {
+            credentials_reload();
+            s_have_wifi_credentials = true;
+            net_supervisor_set_credentials(sup, true);
+            improv_wifi_send_state(IMPROV_STATE_PROVISIONED);
+            improv_wifi_send_provisioned_result(NULL);
+            ESP_LOGI(TAG, "Improv: provisioning complete");
+        }
+        __atomic_store_n(&s_improv_pending, false, __ATOMIC_RELEASE);
+    } else if (wifi_connect_failed()) {
+        ESP_LOGW(TAG, "Improv: could not join '%s'", s_improv_ssid);
+        improv_wifi_send_error(IMPROV_ERROR_UNABLE_CONNECT);
+        __atomic_store_n(&s_improv_pending, false, __ATOMIC_RELEASE);
+        credentials_t creds = {0};
+        if (load_credentials(&creds) && creds.wifi_ssid[0] != '\0') {
+            wifi_connect(creds.wifi_ssid, creds.wifi_password);
+        }
+    }
+}
+
+/**
+ * @brief Run the network services from the link's edges (issue #846).
+ *
+ * MQTT and OTA used to start from one check at boot, so a board that booted
+ * offline never got them, and an OTA image whose first boot was offline was
+ * never confirmed and rolled back. net_supervisor_core.c decides; this task
+ * observes the link every NET_SUPERVISOR_PERIOD_MS and carries out what it
+ * returns. Nothing here blocks on WiFi.
+ */
+static void net_supervisor_task(void *arg)
+{
+    (void)arg;
+    net_supervisor_t sup;
+    net_supervisor_init(&sup, s_have_wifi_credentials, (uint32_t)(esp_timer_get_time() / 1000));
+
+    for (;;) {
+        const uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000);
+        const bool link_up = wifi_is_connected();
+
+        settle_improv_attempt(link_up, &sup);
+        const net_actions_t act = net_supervisor_step(&sup, link_up, now_ms);
+
+        if (act.start_ota) {
+#if OTA_ENABLED
+            /* Arms ota_manager_confirm_valid() too. With
+             * CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y an image that is never
+             * confirmed is rolled back on the next boot, so this must run on
+             * the first link-up of every boot, not only on an online boot. */
+            const esp_err_t ota_ret = ota_manager_init();
+            if (ota_ret != ESP_OK) {
+                ESP_LOGW(TAG, "ota_manager_init failed (%s) — updates disabled",
+                         esp_err_to_name(ota_ret));
+            }
 #endif
+        }
+        if (act.start_mqtt) {
+#if MQTT_LOGGING_ENABLED
+            start_mqtt_service();
+#endif
+        }
+        if (act.stop_mqtt) {
+#if MQTT_LOGGING_ENABLED
+            mqtt_logger_pause();
+#endif
+        }
+        if (act.arm_improv && s_improv_ready) {
+            s_improv_active = true;
+            ESP_LOGW(TAG, "No WiFi link — Improv provisioning armed (ESP Web Tools)");
+        }
+        if (act.disarm_improv) {
+            s_improv_active = false;
+            ESP_LOGI(TAG, "WiFi link up — Improv provisioning disarmed");
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(NET_SUPERVISOR_PERIOD_MS));
+    }
+}
+
+static void start_network_supervisor(void)
+{
+    if (xTaskCreatePinnedToCore(net_supervisor_task, "net_sup", NET_SUPERVISOR_TASK_STACK_SIZE,
+                                NULL, NET_SUPERVISOR_TASK_PRIORITY, NULL,
+                                NET_SUPERVISOR_TASK_CORE) != pdPASS) {
+        ESP_LOGE(TAG, "network supervisor task not created — no MQTT, OTA or Improv");
+    }
 }
 
 /* Every other creation site in this firmware checks its result; this one used
@@ -2151,6 +2297,10 @@ void app_main(void)
 
     ESP_ERROR_CHECK(init_nvs());
     init_mqtt_access();
+    /* Load the Gemini key once here, on one task, before the planner, TTS and
+     * voice tasks can race the first load (issue #845). */
+    ESP_LOGI(TAG, "Gemini key: %s (source %s)", get_gemini_api_key() ? "present" : "absent",
+             get_gemini_api_key_source());
 
     /* The hardware phase cannot fail the boot: a missing bus and a peripheral
      * that would not initialise are both logged and carried past, so what came
@@ -2192,7 +2342,7 @@ void app_main(void)
      * gracefully when the motors are absent or the executor never started. */
     run_wheel_exercise();
 
-    init_network_services();
+    start_network_supervisor();
 
     // Spoken self-introduction + status diagnostic (announces once voice-able,
     // re-announces on health change). Non-fatal: a robot that cannot start the

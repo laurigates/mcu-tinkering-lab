@@ -74,6 +74,17 @@ esp_err_t mqtt_logger_init(const mqtt_logger_config_t *config);
 esp_err_t mqtt_logger_deinit(void);
 
 /**
+ * @brief Stop the MQTT client while the WiFi link is down (issue #846).
+ *
+ * Keeps the client, queue and task, so mqtt_logger_resume() reconnects with
+ * the same configuration. Must not be called from the MQTT event task.
+ */
+esp_err_t mqtt_logger_pause(void);
+
+/** @brief Restart a client stopped by mqtt_logger_pause(). */
+esp_err_t mqtt_logger_resume(void);
+
+/**
  * @brief Send a log message via MQTT
  *
  * @param level Log level

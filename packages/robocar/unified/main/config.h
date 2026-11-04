@@ -150,6 +150,14 @@
 #define OTA_HTTP_TIMEOUT_MS 30000
 #define OTA_MAX_RETRY_COUNT 3
 
+// Network supervisor (issue #846): polls the link and starts/stops MQTT, OTA
+// and Improv on its edges. It only calls init/start/stop functions; the TLS
+// work runs on the OTA and MQTT tasks, so it needs no 8 KB TLS stack.
+#define NET_SUPERVISOR_TASK_STACK_SIZE 6144
+#define NET_SUPERVISOR_TASK_PRIORITY 3
+#define NET_SUPERVISOR_TASK_CORE 1
+#define NET_SUPERVISOR_PERIOD_MS 500
+
 // ========================================
 // Feature Flags
 // ========================================

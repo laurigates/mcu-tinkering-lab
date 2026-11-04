@@ -24,6 +24,7 @@
 #ifndef CREDENTIALS_FIXTURE_NO_MQTT
 #define MQTT_USERNAME "file-user"
 #define MQTT_PASSWORD "file-pass"
+#define GEMINI_API_KEY "file-gemini-key"
 #endif
 
 #endif /* ROBOCAR_UNIFIED_HOST_TEST_CREDENTIALS_FIXTURE_H */

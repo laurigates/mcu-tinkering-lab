@@ -1,0 +1,559 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Robocar Board Story</title>
+<meta name="description" content="Eight years of hand-wired robot cars, then a generated, factory-made circuit board, printed cases and a camera mount for Teuvo, built with Claude Code.">
+<meta property="og:title" content="Robocar Board Story">
+<meta property="og:description" content="From a tangle of wires to a factory-made circuit board: the robocar hardware story, at five levels of technical depth.">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://laurigates.github.io/mcu-tinkering-lab/robocar/img/iso-socketed.jpg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=IBM+Plex+Sans:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+body { margin: 0; }
+img { max-width: 100%; }
+[hidden] { display: none !important; }
+/* Layout: one reading column on a pale board-green ground; a solder-mask control bar holds the depth slider, drawn as a copper trace with five pads. */
+:root {
+  --bg: #EEF2EE;
+  --surface: #F9FBF9;
+  --ink: #14201A;
+  --muted: #4B5A52;
+  --line: #C9D5CD;
+  --accent: #8A5A12;
+  --mask: #123528;
+  --mask-ink: #E9F0EB;
+  --mask-muted: #A9C0B3;
+  --gold: #D9A441;
+  --code-bg: #10261F;
+  --code-ink: #E3ECE6;
+  --display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", sans-serif;
+  --body: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0D1813; --surface: #14221B; --ink: #E5EEE8; --muted: #A2B4A9; --line: #263A30;
+    --accent: #E2B04F; --mask: #0A1611; --mask-ink: #E5EEE8; --mask-muted: #93AA9D; --gold: #E2B04F;
+    --code-bg: #08120E; --code-ink: #DCE7E0; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0D1813; --surface: #14221B; --ink: #E5EEE8; --muted: #A2B4A9; --line: #263A30;
+  --accent: #E2B04F; --mask: #0A1611; --mask-ink: #E5EEE8; --mask-muted: #93AA9D; --gold: #E2B04F;
+  --code-bg: #08120E; --code-ink: #DCE7E0; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 17px; line-height: 1.6; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--mask); }
+.wrap { max-width: 760px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.wide { max-width: 1000px; }
+
+/* hero */
+.hero { background: var(--mask); color: var(--mask-ink); }
+.hero .wrap { padding-block: 56px 40px; display: flex; flex-direction: column; gap: 14px; }
+.kicker { font-family: var(--mono); font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--gold); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(34px, 6vw, 56px); line-height: 1.04; margin: 0; text-wrap: balance; letter-spacing: -.01em; }
+.hero p { margin: 0; color: var(--mask-muted); max-width: 60ch; }
+
+/* depth control */
+.depthbar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--mask); color: var(--mask-ink); border-top: 1px solid rgba(255,255,255,.08); box-shadow: 0 6px 18px rgba(0,0,0,.18); }
+.depthbar .wrap { padding-block: 14px 16px; display: grid; gap: 8px; max-width: 1000px; }
+.depthhead { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.depthhead label { font-family: var(--mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--mask-muted); }
+#depth-name { font-family: var(--display); font-weight: 700; font-size: 20px; color: var(--gold); }
+#depth-desc { font-size: 14px; color: var(--mask-muted); }
+.track { position: relative; padding: 6px 0 0; }
+input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 28px; background: transparent; margin: 0; cursor: pointer; }
+input[type=range]::-webkit-slider-runnable-track { height: 4px; background: var(--gold); border-radius: 2px; }
+input[type=range]::-moz-range-track { height: 4px; background: var(--gold); border-radius: 2px; }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 26px; height: 26px; margin-top: -11px; border-radius: 50%; background: var(--mask); border: 6px solid var(--gold); }
+input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--mask); border: 6px solid var(--gold); }
+input[type=range]:focus-visible { outline: 2px solid var(--mask-ink); outline-offset: 4px; border-radius: 4px; }
+.pads { display: grid; grid-template-columns: repeat(5, 1fr); font-family: var(--mono); font-size: 12px; color: var(--mask-muted); }
+.pads button { background: none; border: 0; color: inherit; font: inherit; padding: 4px 0; cursor: pointer; text-align: center; }
+.pads button:first-child { text-align: left; }
+.pads button:last-child { text-align: right; }
+.pads button[aria-pressed="true"] { color: var(--gold); font-weight: 600; }
+.pads button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+/* depth visibility: complete at rest at level 2 via the body attribute */
+.t { display: none; }
+.doc[data-depth="1"] .t[data-l="1"], .doc[data-depth="2"] .t[data-l="2"], .doc[data-depth="3"] .t[data-l="3"],
+.doc[data-depth="4"] .t[data-l="4"], .doc[data-depth="5"] .t[data-l="5"] { display: block; }
+.doc[data-depth="1"] .min3, .doc[data-depth="2"] .min3 { display: none; }
+.doc[data-depth="1"] .min4, .doc[data-depth="2"] .min4, .doc[data-depth="3"] .min4 { display: none; }
+.doc[data-depth="1"] .max2-hide, .doc[data-depth="2"] .max2-hide { display: none; }
+
+/* chapters */
+main { padding-block: 24px 64px; }
+.chapter { padding-block: 40px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 14px; }
+.chapter:last-child { border-bottom: 0; }
+.ref { font-family: var(--mono); font-size: 13px; color: var(--accent); letter-spacing: .04em; }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 4vw, 34px); line-height: 1.12; margin: 0; text-wrap: balance; }
+.t p { margin: 0 0 12px; }
+.t p:last-child { margin-bottom: 0; }
+.t ul { margin: 0 0 12px; padding-left: 20px; }
+code, .mono { font-family: var(--mono); font-size: .9em; }
+.t code { background: color-mix(in srgb, var(--line) 55%, transparent); padding: 1px 5px; border-radius: 4px; }
+pre { margin: 0; background: var(--code-bg); color: var(--code-ink); padding: 18px 20px; border-radius: 10px; font-family: var(--mono); font-size: 14px; line-height: 1.55; overflow-x: auto; }
+pre .k { color: var(--gold); }
+pre .c { color: #8FA89C; }
+figure { margin: 6px 0 0; display: flex; flex-direction: column; gap: 8px; }
+figure img { width: 100%; height: auto; border-radius: 10px; border: 1px solid var(--line); display: block; background: var(--surface); }
+figcaption { font-size: 14px; color: var(--muted); }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.history-pair { align-items: start; }
+.five { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+.five figure img { aspect-ratio: 1; object-fit: contain; background: #F4F4F2; }
+.five figcaption { font-size: 13px; }
+.five .win img { border: 2px solid var(--gold); }
+.table-scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-family: var(--mono); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+td.num, th.num { text-align: right; }
+.timeline { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; border-left: 3px solid var(--gold); }
+.timeline li { padding: 6px 0 14px 18px; position: relative; display: grid; gap: 2px; }
+.timeline li::before { content: ""; position: absolute; left: -9px; top: 12px; width: 15px; height: 15px; border-radius: 50%; background: var(--bg); border: 3px solid var(--gold); }
+.timeline .when { font-family: var(--mono); font-size: 13px; color: var(--accent); }
+.timeline .what { font-weight: 600; }
+.timeline .tech { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+.ref-link { color: inherit; text-decoration: underline; text-decoration-color: var(--gold); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+.ref-link:hover, .ref-link:focus-visible { color: var(--accent); }
+.ref-link:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; border-radius: 3px; }
+#ref-tip { position: fixed; z-index: 30; max-width: min(380px, calc(100vw - 32px)); background: var(--mask); color: var(--mask-ink); font-size: 13px; line-height: 1.45; padding: 8px 11px; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.28); pointer-events: none; overflow-wrap: anywhere; }
+#ref-tip .tip-kind { display: block; font-family: var(--mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--gold); margin-bottom: 2px; }
+.callout { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; }
+.suspects { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.suspects li { padding: 8px 12px; border-left: 3px solid var(--gold); background: var(--bg); font-size: 15px; line-height: 1.4; }
+footer { color: var(--muted); font-size: 14px; }
+footer .wrap { padding-block: 24px 48px; }
+@media (max-width: 640px) {
+  .pair { grid-template-columns: 1fr; }
+  .five { grid-template-columns: repeat(2, 1fr); }
+  .pads { font-size: 11px; }
+  .pads .long { display: none; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .t { animation: fade .25s ease-out; }
+  @keyframes fade { from { opacity: .35; } to { opacity: 1; } }
+}
+</style>
+</head>
+<body>
+
+<div class="doc" id="doc" data-depth="2">
+
+<header class="hero">
+  <div class="wrap">
+    <p class="kicker">mcu-tinkering-lab · robocar · 2018–2026</p>
+    <h1>From a tangle of wires to a factory-made circuit board</h1>
+    <p>After eight years of hand-wired versions, the robot car Teuvo got a factory-made circuit board, printed cases and a camera mount, built with Claude Code. Pick how technical you want the explanation with the slider below; every chapter rewrites itself.</p>
+  </div>
+</header>
+
+<div class="depthbar" role="region" aria-label="Technical depth">
+  <div class="wrap">
+    <div class="depthhead">
+      <label for="depth">Technical depth</label>
+      <span><span id="depth-name">Curious</span> · <span id="depth-desc">Plain language, key terms explained</span></span>
+    </div>
+    <div class="track">
+      <input id="depth" type="range" min="1" max="5" step="1" value="2" aria-valuetext="Curious: plain language, key terms explained">
+    </div>
+    <div class="pads" role="group" aria-label="Choose a level">
+      <button type="button" data-v="1" aria-pressed="false">1 <span class="long">Not technical</span></button>
+      <button type="button" data-v="2" aria-pressed="true">2 <span class="long">Curious</span></button>
+      <button type="button" data-v="3" aria-pressed="false">3 <span class="long">Software</span></button>
+      <button type="button" data-v="4" aria-pressed="false">4 <span class="long">Engineering</span></button>
+      <button type="button" data-v="5" aria-pressed="false">5 <span class="long">Hardware</span></button>
+    </div>
+  </div>
+</div>
+
+<main class="wrap">
+
+<!-- 1 -->
+<section class="chapter" id="history">
+  <p class="ref">01 · Where it started</p>
+  <h2>Eight years of robot cars</h2>
+  <div class="t" data-l="1"><p>The robot car isn’t new. The first one, in 2018, was a kit: a clear plastic frame, four yellow wheels, a small Arduino computer and an ultrasonic sensor that works like a bat’s hearing to avoid walls. Everything was joined with loose, colourful wires.</p><p>Since then it has been taken apart and rebuilt many times, each version a little smarter. The latest one is called Teuvo. He sees through a camera, talks, listens, and uses AI to decide where to drive.</p></div>
+  <div class="t" data-l="2"><p>The project started in 2018 as a kit car: an Arduino Uno, a motor driver board, an ultrasonic distance sensor on a small servo, and jumper wires on a breadboard. Over the years it was rebuilt many times, and in 2025 it got a hand-soldered perfboard version.</p><p>Also in 2025 it gained a camera and AI vision. In April 2026 everything moved onto one thumb-sized computer, and in September it became Teuvo, a robot with a voice and a personality. Every one of those versions was wired by hand.</p></div>
+  <div class="t" data-l="3"><p>Eight years of iterations: an Arduino Uno kit car (2018), many rewirings, a hand-soldered perfboard rebuild (2025), a two-ESP32 design with a camera and cloud vision (2025), then a single XIAO ESP32-S3 Sense running everything (April 2026). Teuvo, the current persona, adds an LLM planner, speech and conversation.</p><p>The hardware never had a design file. Each generation’s wiring lived in hand-written tables, and this autumn’s work is what replaced that.</p></div>
+  <div class="t" data-l="4"><p>2018: Arduino Uno, an L298N motor driver, an HC-SR04 on a servo, a mini breadboard and jumpers on a 4WD acrylic chassis (photo). Many rewirings followed, then a hand-soldered perfboard build in 2025. June 2025, into this monorepo: a Heltec WiFi LoRa 32 main controller and an ESP32-CAM over UART, with Claude or Ollama for vision. April 2026: <code>robocar-unified</code> on one XIAO ESP32-S3 Sense, with a slow Gemini Robotics-ER planner over a 30 Hz reactive executor. September 2026: Teuvo, with multi-turn voice conversation and a metal-body voice effect.</p></div>
+  <div class="t" data-l="5"><p>In-repo milestones: the dual-ESP32 car on 2025-06-28; the single-board firmware in <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/187" target="_blank" rel="noopener" data-tip="Pull request #187 · merged 10 Apr 2026 · Add robocar-unified: single-board ESP32-S3 Sense firmware">#187</a> (2026-04-10); WIRING.md, README and CLAUDE.md in <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/204" target="_blank" rel="noopener" data-tip="Pull request #204 · merged 13 Apr 2026 · docs(robocar-unified): add README, CLAUDE, and WIRING">#204</a>; the schemdraw schematic in <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/263" target="_blank" rel="noopener" data-tip="Pull request #263 · merged 22 Apr 2026 · docs(robocar-unified): add schemdraw schematic">#263</a>; the Typst build guide on 2026-07-13; Teuvo as a conversational entity in <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/567" target="_blank" rel="noopener" data-tip="Pull request #567 · merged 14 Sep 2026 · feat(robocar-unified): conversational entity Teuvo with multi-turn multimodal voice and VAD">#567</a> (2026-09-14). The controller split is <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/docs/decisions/ADR-016-hierarchical-ai-controller.md" target="_blank" rel="noopener" data-tip="ADR-016: Hierarchical AI Controller (Planner + Reactive Executor) · accepted, 2026-04-17">ADR-016</a>; camera DMA is pinned to core 1 so motor PWM on core 0 keeps its timing. The perfboard years survive in a sense: <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/tree/main/tools/kicad" target="_blank" rel="noopener" data-tip="tools/kicad · KiCad carrier boards generated from the hardware join (#750)."><code>tools/kicad</code></a> now generates perfboard layouts and step-by-step build sheets from the carrier netlist (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/760" target="_blank" rel="noopener" data-tip="Pull request #760 · merged 14 Oct 2026 · refactor(kicad): shared perfboard generator with a per-project perfboard.toml">#760</a>, <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/857" target="_blank" rel="noopener" data-tip="Pull request #857 · merged 24 Oct 2026 · feat(kicad): route perfboard wires over free holes with splices and buses">#857</a>, <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/858" target="_blank" rel="noopener" data-tip="Pull request #858 · merged 24 Oct 2026 · feat(kicad): printable per-step perfboard build guide">#858</a>).</p></div>
+  <div class="pair history-pair">
+    <figure>
+      <img src="img/robocar-2018.jpg" alt="The 2018 robot car: a clear acrylic 4WD chassis with yellow wheels, an Arduino Uno, a red L298N motor driver with heatsink, an HC-SR04 ultrasonic sensor on a servo at the front, a mini breadboard and many coloured jumper wires" width="1400" height="1029" loading="lazy">
+      <figcaption>The first version, 2018. Arduino Uno, L298N motor driver, ultrasonic sensor on a servo, and a lot of jumper wire.</figcaption>
+    </figure>
+    <figure>
+      <img src="img/robocar-perfboard.jpg" alt="The 2025 rebuild on the same chassis: hand-soldered perfboards, a holder with two green 18650 cells, a voltage regulator module and a buzzer, still connected by many jumper wires" width="900" height="900" loading="lazy">
+      <figcaption>The 2025 perfboard rebuild on the same chassis: hand-soldered boards, two 18650 cells, a regulator module.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- 2 -->
+<section class="chapter" id="timeline">
+  <p class="ref">02 · Timeline</p>
+  <h2>From an Arduino kit to Teuvo</h2>
+  <div class="t" data-l="1"><p>Most of the eight years went into making the robot smarter. The step this page is about, turning the hand wiring into a proper factory-made board, happened this autumn and took about ten weeks.</p></div>
+  <div class="t" data-l="2"><p>The long run is about the robot getting smarter. The last stretch is about its hardware growing up: a master list of every connection in August and October, then a circuit board, cases and an order.</p></div>
+  <div class="t" data-l="3"><p>Two timelines. The first is the robot’s generations. The second is the ten-week hardware pipeline this page covers, taken from <code>git log</code>: about 80 commits, each stage consuming the one before.</p></div>
+  <div class="t" data-l="4"><p>The second list is from <code>git log</code> over <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/tree/main/tools/hardware" target="_blank" rel="noopener" data-tip="tools/hardware · One hardware source of truth: a board × header × parts join (ADR-021)."><code>tools/hardware</code></a>, <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/tree/main/tools/kicad" target="_blank" rel="noopener" data-tip="tools/kicad · KiCad carrier boards generated from the hardware join (#750)."><code>tools/kicad</code></a>, <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/tree/main/tools/enclosure" target="_blank" rel="noopener" data-tip="tools/enclosure · Folder with 8 entries"><code>tools/enclosure</code></a>, <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/tree/main/tools/mechanism" target="_blank" rel="noopener" data-tip="tools/mechanism · Folder with 6 entries"><code>tools/mechanism</code></a>, the parts registry and the two carrier projects. <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/docs/decisions/ADR-021-hardware-source-of-truth.md" target="_blank" rel="noopener" data-tip="ADR-021: One Hardware Source of Truth — a Board × Header × Parts Join · accepted, 2026-08-19">ADR-021</a> waited six weeks for Teuvo’s voice work; after the join landed on Oct 4, every stage built on the one before.</p></div>
+  <div class="t" data-l="5"><p>References are PR numbers in <code>laurigates/mcu-tinkering-lab</code>. The integrated carrier’s review rounds were <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/812" target="_blank" rel="noopener" data-tip="Pull request #812 · merged 18 Oct 2026 · feat(robocar-unified): backport the integrated carrier&#x27;s pre-fab review fixes">#812</a>, <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/818" target="_blank" rel="noopener" data-tip="Pull request #818 · merged 21 Oct 2026 · fix(robocar-unified-integrated): fix the power paths the layout review found">#818</a>, <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/819" target="_blank" rel="noopener" data-tip="Pull request #819 · merged 21 Oct 2026 · fix(robocar-unified-integrated): fix the second layout review&#x27;s findings">#819</a> and <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/832" target="_blank" rel="noopener" data-tip="Pull request #832 · merged 22 Oct 2026 · fix(robocar-unified-integrated): fix the sixth and seventh pre-fab reviews&#x27; findings">#832</a>; the socketed carrier’s pre-order fixes were <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/823" target="_blank" rel="noopener" data-tip="Pull request #823 · merged 21 Oct 2026 · fix(robocar-unified): pre-order fixes to the carrier PCB">#823</a>.</p></div>
+  <p class="ref">The robot</p>
+  <ol class="timeline">
+    <li><span class="when">2018</span><span class="what">Arduino kit car with an ultrasonic sensor</span><span class="tech min3">Uno · L298N · HC-SR04 · breadboard</span></li>
+    <li><span class="when">2018–2024</span><span class="what">Taken apart and rewired many times</span></li>
+    <li><span class="when">2024</span><span class="what">Another rebuild, now on two lithium cells</span><span class="tech min3">L298N · 2 × 18650</span></li>
+    <li><span class="when">2025</span><span class="what">A hand-soldered perfboard rebuild</span><span class="tech min3">perfboard · 2 × 18650 · regulator module</span></li>
+    <li><span class="when">2025</span><span class="what">Two boards, a camera and AI vision</span><span class="tech min3">Heltec WiFi LoRa 32 + ESP32-CAM · in git from 2025-06-28</span></li>
+    <li><span class="when">Apr 2026</span><span class="what">One thumb-sized computer runs everything, on a hand-soldered perfboard carrier and jumper wires</span><span class="tech min3">XIAO ESP32-S3 Sense · <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/187" target="_blank" rel="noopener" data-tip="Pull request #187 · merged 10 Apr 2026 · Add robocar-unified: single-board ESP32-S3 Sense firmware">#187</a></span></li>
+    <li><span class="when">Sep 2026</span><span class="what">Teuvo: a voice, a personality, conversation</span><span class="tech min3"><a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/567" target="_blank" rel="noopener" data-tip="Pull request #567 · merged 14 Sep 2026 · feat(robocar-unified): conversational entity Teuvo with multi-turn multimodal voice and VAD">#567</a> · Gemini planner and TTS</span></li>
+  </ol>
+  <p class="ref">The hardware, autumn 2026</p>
+  <ol class="timeline">
+    <li><span class="when">Aug 19</span><span class="what">The plan: one master list of every connection</span><span class="tech min3"><a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/docs/decisions/ADR-021-hardware-source-of-truth.md" target="_blank" rel="noopener" data-tip="ADR-021: One Hardware Source of Truth — a Board × Header × Parts Join · accepted, 2026-08-19">ADR-021</a> · <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/464" target="_blank" rel="noopener" data-tip="Pull request #464 · merged 19 Aug 2026 · docs: add ADR-021 for a single hardware source of truth">#464</a></span></li>
+    <li><span class="when">Oct 4–11</span><span class="what">The list starts producing the wiring tables, diagrams and build guide</span><span class="tech min3">tools/hardware · <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/636" target="_blank" rel="noopener" data-tip="Pull request #636 · merged 4 Oct 2026 · feat(hardware): add the board × header × parts join, re-point generate-pin-defs">#636</a> <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/647" target="_blank" rel="noopener" data-tip="Pull request #647 · merged 4 Oct 2026 · feat(hardware): generate the WIRING.md pin tables from the join">#647</a> <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/680" target="_blank" rel="noopener" data-tip="Pull request #680 · merged 4 Oct 2026 · feat(hardware): model power rails in the join and generate the WIRING power diagram">#680</a> <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/731" target="_blank" rel="noopener" data-tip="Pull request #731 · merged 11 Oct 2026 · feat(hardware): make gen re-render the schematic and recompile build guides">#731</a></span></li>
+    <li><span class="when">Oct 13–15</span><span class="what">The list learns to describe a circuit board too</span><span class="tech min3"><a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/docs/decisions/ADR-027-kicad-carrier-generation.md" target="_blank" rel="noopener" data-tip="ADR-027: KiCad Carrier Boards Generated From the Hardware Join · accepted, 2026-10-13">ADR-027</a> · <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/758" target="_blank" rel="noopener" data-tip="Pull request #758 · merged 14 Oct 2026 · feat(hardware): harness and carrier views of hardware.toml">#758</a> <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/759" target="_blank" rel="noopener" data-tip="Pull request #759 · merged 14 Oct 2026 · feat(kicad): generate the balancebot carrier schematic from the hardware join">#759</a> <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/789" target="_blank" rel="noopener" data-tip="Pull request #789 · merged 15 Oct 2026 · feat(parts): registry entries for the robocar carrier">#789</a> <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/793" target="_blank" rel="noopener" data-tip="Pull request #793 · merged 15 Oct 2026 · feat(robocar-unified): carrier view and schematic">#793</a></span></li>
+    <li><span class="when">Oct 16–18</span><span class="what">Board layout, three camera-head pieces, and a second, more integrated design</span><span class="tech min3"><a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/802" target="_blank" rel="noopener" data-tip="Pull request #802 · merged 16 Oct 2026 · feat(robocar-unified): carrier pre-order changes and three-head panel">#802</a> <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/803" target="_blank" rel="noopener" data-tip="Pull request #803 · merged 16 Oct 2026 · feat(robocar-unified): MCP23017 socket and GPIO mirror header on the carrier">#803</a> <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/807" target="_blank" rel="noopener" data-tip="Pull request #807 · merged 18 Oct 2026 · feat(robocar-unified): add integrated carrier variant">#807</a></span></li>
+    <li><span class="when">Oct 18–22</span><span class="what">Review rounds and the files the factory needs</span><span class="tech min3"><a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/811" target="_blank" rel="noopener" data-tip="Pull request #811 · merged 18 Oct 2026 · feat(kicad): pre-fab review tooling and layout-quality gates">#811</a> <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/820" target="_blank" rel="noopener" data-tip="Pull request #820 · merged 21 Oct 2026 · docs(carrier-pcb): encode the adversarial pcb-review loop">#820</a> <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/821" target="_blank" rel="noopener" data-tip="Pull request #821 · merged 21 Oct 2026 · feat(kicad): add carrier-measure, layer-aware copper measurements">#821</a> <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/832" target="_blank" rel="noopener" data-tip="Pull request #832 · merged 22 Oct 2026 · fix(robocar-unified-integrated): fix the sixth and seventh pre-fab reviews&#x27; findings">#832</a> · JLC rotation, fiducials</span></li>
+    <li><span class="when">Oct 22–23</span><span class="what">3D-printed cases, price quotes, the order</span><span class="tech min3">tools/enclosure · jlcpcb-order skill <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/837" target="_blank" rel="noopener" data-tip="Pull request #837 · merged 22 Oct 2026 · docs(skills): add jlcpcb-order, the carrier ordering workflow">#837</a></span></li>
+    <li><span class="when">Oct 24–25</span><span class="what">A design competition for the camera mount</span><span class="tech min3">pan-tilt tournament · tools/mechanism</span></li>
+  </ol>
+</section>
+
+<!-- 3 -->
+<section class="chapter" id="start">
+  <p class="ref">03 · The problem</p>
+  <h2>Is it the code, or is it a wire?</h2>
+  <div class="t" data-l="1"><p>Teuvo lives on a board Lauri soldered by hand, plus a lot of loose wires to five small helper boards. When something stopped working, the first question was always the same: is it the program, or the wiring? With that many wires, finding out could take weeks.</p><p>Every item in the list below actually happened while building Teuvo. None of them is interesting; each one just stalls the project. A factory-made board removes most of them, which leaves time for the fun part: how the robot behaves, what it connects to, and how people play and talk with it.</p></div>
+  <div class="t" data-l="2"><p>Teuvo runs on a thumb-sized computer (a XIAO ESP32-S3) on a hand-soldered perfboard carrier, with plenty of jumper wires out to the add-on boards for motors, servos, sound and sensors.</p><p>The real cost was diagnosing faults. A symptom like “the servos don’t move” or “the speaker hisses” could be the firmware, or any of the hardware causes below, and all of them happened. Each one stalled the project for a long time. On top of that, the notes on which pin goes where were copied into eight documents and drifted apart.</p><p>The hope for a manufactured board: spend the time on robot behaviour, integrations and interactions, and on the long list of ideas and features waiting to be tried, instead of on loose wires.</p></div>
+  <div class="t" data-l="3"><p>A microcontroller on a hand-soldered perfboard carrier, with breakout boards on jumper wires. Hardware faults show up looking exactly like software bugs, and there is no reproducible environment: the board you debug today is not quite the board you had yesterday. A manufactured PCB is the hardware version of moving from hand-configured servers to infrastructure as code.</p><p>The documentation had the classic duplicated-configuration problem too. Pin assignments lived in one C header and were copied by hand into seven other places; a firmware change left the docs wrong, and the one CI check did not even run on firmware-only changes.</p></div>
+  <div class="t" data-l="4"><p>The XIAO ESP32-S3 Sense on a hand-built perfboard carrier, with the five breakouts (motor driver, PWM driver, I²C mux, amplifier, GPIO expander) still on Dupont jumpers. Recorded in the repo from the Teuvo phase: “servos not moving” was a loose PCA9685 VCC lead (the 2026-09 bench, and the reason <code>servo exercise</code> exists, because five causes look identical from across the room); audio distortion was fixed by adding bulk capacitance; the ESP32’s brownout detector is off because motor inrush kept tripping it.</p><p>The docs had their own drift: <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/docs/decisions/ADR-021-hardware-source-of-truth.md" target="_blank" rel="noopener" data-tip="ADR-021: One Hardware Source of Truth — a Board × Header × Parts Join · accepted, 2026-08-19">ADR-021</a> counted seven hand-maintained restatements of <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/packages/robocar/unified/main/pin_config.h" target="_blank" rel="noopener" data-tip="packages/robocar/unified/main/pin_config.h · @file pin_config.h @brief XIAO ESP32-S3 Sense pin definitions for robocar-unified"><code>pin_config.h</code></a>, and the netlist was drawn twice by two tools. The goal of the PCB is to make the hardware a known quantity, so effort goes to behaviour, integrations and interactions.</p></div>
+  <div class="t" data-l="5"><p>XIAO ESP32-S3 Sense on a perfboard carrier with TB6612FNG, PCA9685, TCA9548A, MAX98357A and a CJMCU-2317 on Dupont. Teuvo-phase evidence in the repo: the loose PCA9685 VCC lead (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/packages/robocar/unified/CLAUDE.md" target="_blank" rel="noopener" data-tip="packages/robocar/unified/CLAUDE.md · CLAUDE.md - robocar-unified"><code>packages/robocar/unified/CLAUDE.md</code></a>, servo section); C3, 470 µF at the MAX98357A’s Vin, added after audio distortion (WIRING.md); <code>CONFIG_ESP_BROWNOUT_DET=n</code> for motor inrush, so an undersized rail gives no warning. The method that came out of it is <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/.claude/rules/analog-fault-isolation.md" target="_blank" rel="noopener" data-tip=".claude/rules/analog-fault-isolation.md · A Working Circuit Is Not a Correctly Connected One"><code>.claude/rules/analog-fault-isolation.md</code></a> and the <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/tree/main/.claude/skills/audio-static-debugging" target="_blank" rel="noopener" data-tip=".claude/skills/audio-static-debugging · Debug static, hiss, or noise on embedded I2S audio (ESP32 + MAX98357A / PCM DACs), especially streamed PCM. Measure the signal at each pipeline stage instead of guessing at the amp. Use when audio plays but sounds wrong."><code>audio-static-debugging</code></a> skill: measure each stage, read the datasheet, confirm the instrument can see the effect.</p><p>The carrier answers several of these by construction: a poured ground on two layers, bulk and decoupling capacitors placed by the netlist, a fused pack input, test headers J11–J15 (supply, I²C, ground posts, and UART0 TX carrying the log mirror), and a ribbon pinned so a reversed plug harms nothing. On the docs side, <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/.github/workflows/schematics-check.yml" target="_blank" rel="noopener" data-tip=".github/workflows/schematics-check.yml · GitHub Actions workflow: Schematics Up-to-Date Check"><code>schematics-check.yml</code></a> was path-filtered to <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/tree/main/docs/schematics" target="_blank" rel="noopener" data-tip="docs/schematics · Schematics"><code>docs/schematics/**</code></a>, so a firmware-only pin change never ran it.</p></div>
+  <figure>
+    <img src="img/teuvo-perfboard.jpg" alt="Teuvo today: the 4WD chassis with a cardboard deck carrying the motor driver, PWM driver and other breakout boards, rainbow ribbon jumper wires looping across it, and at the front the XIAO and camera on a small hand-soldered perfboard on the pan-tilt head" width="1400" height="1050" loading="lazy">
+    <figcaption>Teuvo today: breakouts on a cardboard deck, the XIAO and camera on a hand-soldered perfboard on the pan-tilt head, and jumper wires everywhere.</figcaption>
+  </figure>
+  <div class="callout">
+    <p class="ref">Every one of these happened during the Teuvo phase</p>
+    <ul class="suspects">
+      <li>A bug in the code</li>
+      <li>A loose wire that looks connected</li>
+      <li>A cracked solder joint</li>
+      <li>Poor grounding</li>
+      <li>A wire never soldered, unnoticed among all the others</li>
+      <li>A missing bulk capacitor</li>
+      <li>A missing filter capacitor</li>
+      <li>Voltage drop</li>
+      <li>A tiny capacitor knocked off the amplifier board just as new firmware was flashed</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 3 -->
+<section class="chapter" id="join">
+  <p class="ref">04 · The idea</p>
+  <h2>Keep each fact in exactly one place</h2>
+  <div class="t" data-l="1"><p>Think of a recipe. Instead of rewriting it by hand in every cookbook, you keep a few master cards and let a machine print every cookbook from them. If you change a card, every book updates.</p><p>Two of the master cards already existed: one describing the little computer, one describing what the robot’s program expects. The new third card says which physical part each wire goes to.</p></div>
+  <div class="t" data-l="2"><p>Every wiring table was really three facts glued together: what each pin on the little computer is called, what job the robot’s program gives each pin, and which add-on board that pin is wired to.</p><p>The first two were already written down once. The third was new: a file called <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/packages/robocar/unified/hardware.toml" target="_blank" rel="noopener" data-tip="packages/robocar/unified/hardware.toml · Parts and nets around main/pin_config.h — the third layer of ADR-021&#x27;s board × header × parts join (docs/decisions/ADR-021-hardware-source-of-truth.md)."><code>hardware.toml</code></a>. A program combines the three and produces every document, so they can no longer disagree.</p></div>
+  <div class="t" data-l="3"><p>A pin table is a join of three sources: board facts (a reference page per board), project roles (the C header the firmware compiles) and parts and nets (the new <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/packages/robocar/unified/hardware.toml" target="_blank" rel="noopener" data-tip="packages/robocar/unified/hardware.toml · Parts and nets around main/pin_config.h — the third layer of ADR-021&#x27;s board × header × parts join (docs/decisions/ADR-021-hardware-source-of-truth.md)."><code>hardware.toml</code></a>).</p><p><a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/tree/main/tools/hardware" target="_blank" rel="noopener" data-tip="tools/hardware · One hardware source of truth: a board × header × parts join (ADR-021)."><code>tools/hardware</code></a> parses the three and joins them. The header stays canonical. The TOML holds no pin numbers, only role names that must resolve against the header, so it can only be wrong about which part a pin goes to, and that is checkable.</p></div>
+  <div class="t" data-l="4"><p><a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/docs/decisions/ADR-021-hardware-source-of-truth.md" target="_blank" rel="noopener" data-tip="ADR-021: One Hardware Source of Truth — a Board × Header × Parts Join · accepted, 2026-08-19">ADR-021</a> treats the pin table as a three-way join: <b>board facts</b> in <code>docs/reference/boards/&lt;board&gt;.md</code> (D4 ↔ GPIO5, strapping pins), <b>project roles</b> in <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/packages/robocar/unified/main/pin_config.h" target="_blank" rel="noopener" data-tip="packages/robocar/unified/main/pin_config.h · @file pin_config.h @brief XIAO ESP32-S3 Sense pin definitions for robocar-unified"><code>main/pin_config.h</code></a> (canonical, hand-written), and <b>parts and nets</b> in <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/packages/robocar/unified/hardware.toml" target="_blank" rel="noopener" data-tip="packages/robocar/unified/hardware.toml · Parts and nets around main/pin_config.h — the third layer of ADR-021&#x27;s board × header × parts join (docs/decisions/ADR-021-hardware-source-of-truth.md)."><code>hardware.toml</code></a>.</p><p>The header cannot say which part a pin goes to; that missing fact is the only thing the TOML adds. A completeness gate makes every pin either wired or explicitly excused with a reason.</p></div>
+  <div class="t" data-l="5"><p>Three layers: board facts (shared across projects; the XIAO page carries the pad table with Side/Pos), project roles (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/packages/robocar/unified/main/pin_config.h" target="_blank" rel="noopener" data-tip="packages/robocar/unified/main/pin_config.h · @file pin_config.h @brief XIAO ESP32-S3 Sense pin definitions for robocar-unified"><code>pin_config.h</code></a>, plus <code>extra_headers</code> read for <code>#define</code> values only) and parts/nets (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/packages/robocar/unified/hardware.toml" target="_blank" rel="noopener" data-tip="packages/robocar/unified/hardware.toml · Parts and nets around main/pin_config.h — the third layer of ADR-021&#x27;s board × header × parts join (docs/decisions/ADR-021-hardware-source-of-truth.md)."><code>hardware.toml</code></a>). <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/tree/main/tools/hardware" target="_blank" rel="noopener" data-tip="tools/hardware · One hardware source of truth: a board × header × parts join (ADR-021)."><code>tools/hardware</code></a> fails when a role does not resolve, when a role lands on two GPIOs or two roles on one pad, when a rail hits an MCU signal pad, and when a pin is neither on a net nor in <code>undrawn</code> with a <code>why</code> (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/715" target="_blank" rel="noopener" data-tip="Pull request #715 · merged 10 Oct 2026 · feat(hardware): require every pin role to be on a net or undrawn">#715</a>, <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/772" target="_blank" rel="noopener" data-tip="Pull request #772 · merged 14 Oct 2026 · fix(hardware): reject two roles on one GPIO or one part pin in the join">#772</a>, <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/687" target="_blank" rel="noopener" data-tip="Pull request #687 · merged 4 Oct 2026 · fix(hardware): reject a rail on an MCU signal pad and a Mermaid-keyword part id">#687</a>).</p><p>Delivery is marker-block injection for Markdown (<code>&lt;!-- BEGIN GENERATED --&gt;</code>, with <code>--check</code>) and a live import for the schemdraw circuit. Schematic layout stays hand-authored; only labels and net endpoints are generated.</p></div>
+</section>
+
+<!-- 4 -->
+<section class="chapter" id="toml">
+  <p class="ref">05 · The master list</p>
+  <h2>What hardware.toml looks like</h2>
+  <div class="t" data-l="1"><p>It’s a plain text file, a bit like a shopping list with labels. Each entry names a part, such as the sound chip, and says what it connects to. A program checks every entry; if something doesn’t match the robot’s program, it refuses and says why.</p></div>
+  <div class="t" data-l="2"><p>A plain text file listing each part (its name, its label on the board) and each connection (“the bit-clock pin goes to the amplifier’s BCLK input”). Some entries are marked as “circuit board only”, like a safety fuse that the hand-wired version never had. One file describes both versions of the robot.</p></div>
+  <div class="t" data-l="3"><p>A TOML file of parts, nets, power rails, mux channel buses and a cable. A <code>role</code> must be a macro name in the header or the tool fails. A <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/tree/main/.claude/skills/build" target="_blank" rel="noopener" data-tip=".claude/skills/build · Build an ESP32 project (containerized)"><code>build</code></a> key gives two views of one file: <code>harness</code> for the jumper-wired robot and <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/tree/main/packages/robocar/unified/hardware/carrier" target="_blank" rel="noopener" data-tip="packages/robocar/unified/hardware/carrier · robocar-unified carrier PCB"><code>carrier</code></a> for the PCB.</p></div>
+  <div class="t" data-l="4"><p>1,168 lines for the socketed carrier, 1,412 for the integrated one. A part names its registry entry and reference designator; a net names a role and the part pin it lands on. The parts registry carries the KiCad symbol, footprint, LCSC number and the source the pin order was read from. Carrier-only entries (fuses, pull-ups, decoupling, mounting holes) take <code>build = "carrier"</code>, so it is one source, not an overlay.</p></div>
+  <div class="t" data-l="5"><p>Socketed: 16 <code>[[bus_nets]]</code>, 14 <code>[[channel_nets]]</code>, 15 <code>[[nets]]</code>, 4 <code>[[outputs]]</code>, 11 <code>[[rails]]</code>, 4 <code>[[undrawn]]</code>, one <code>[[cables]]</code> (the IDC 2×7 with <code>spare_heads</code> U3/J16 and U4/J17). Registry polarity is a tripwire: every +/− or K/A must be proved by the symbol’s pin names, the footprint’s silkscreen or <code>registry.CONVENTIONS</code>, or the build fails.</p></div>
+  <pre class="min3" aria-label="Excerpt of hardware.toml"><span class="k">[parts.amp]</span>
+name  = "MAX98357A"
+part  = "adafruit-max98357a-socket"
+ref   = "A4"
+
+<span class="k">[[nets]]</span>
+role = "I2S_BCLK_PIN"   <span class="c"># a macro in main/pin_config.h</span>
+to   = "amp.BCLK"
+
+<span class="k">[parts.fuse_in]</span>
+build = "carrier"       <span class="c"># on the PCB only</span>
+part  = "polyfuse-1812"
+lcsc  = "C47263807"</pre>
+</section>
+
+<!-- first job -->
+<section class="chapter" id="firstjob">
+  <p class="ref">06 · Before the circuit board</p>
+  <h2>The master list’s first job was paperwork</h2>
+  <div class="t" data-l="1"><p>At first the master list had a smaller job: producing the paperwork for the hand-wired Teuvo, meaning his wiring tables, diagrams and printed build guide. It described one robot, the one on jumper wires.</p><p>To make a factory board, the list had to describe a second version of the same robot, with extra parts only a circuit board needs, like a safety fuse. So each entry got a tag: “both versions”, “hand-wired only” or “circuit board only”. One list, two robots.</p></div>
+  <div class="t" data-l="2"><p>For its first ten days, from 4 October, <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/packages/robocar/unified/hardware.toml" target="_blank" rel="noopener" data-tip="packages/robocar/unified/hardware.toml · Parts and nets around main/pin_config.h — the third layer of ADR-021&#x27;s board × header × parts join (docs/decisions/ADR-021-hardware-source-of-truth.md)."><code>hardware.toml</code></a> only fed documentation: the wiring tables, the power diagram, the pinout pictures and the pin labels in the build guide. It also brought a new rule: every pin must be either connected or explicitly excused with a reason.</p><p>On 14 October it was extended to describe a circuit board as well, by marking entries as belonging to the hand-wired version, the board version, or both. The balancing robot’s board was the first to use it; the robocar’s followed the next day.</p></div>
+  <div class="t" data-l="3"><p><b>Phase one, Oct 4–11:</b> the join’s only consumers were docs: marker-block tables in WIRING.md, a generated power diagram, pinout PNGs, <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/packages/robocar/unified/docs/auto/pin_defs.typ" target="_blank" rel="noopener" data-tip="packages/robocar/unified/docs/auto/pin_defs.typ"><code>pin_defs.typ</code></a> for the Typst guide and labels in the schemdraw schematic. <code>hardware::gen</code> regenerated all of it.</p><p><b>Phase two, Oct 14:</b> a <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/tree/main/.claude/skills/build" target="_blank" rel="noopener" data-tip=".claude/skills/build · Build an ESP32 project (containerized)"><code>build</code></a> key splits the file into a harness view and a carrier view. <code>join()</code> defaults to the harness view, so no document changed. The file then grew new constructs as the PCB needed them: mux channel buses, per-load outputs, a cable.</p></div>
+  <div class="t" data-l="4"><p><b>Docs only (Oct 4–11):</b> WIRING.md pin tables (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/647" target="_blank" rel="noopener" data-tip="Pull request #647 · merged 4 Oct 2026 · feat(hardware): generate the WIRING.md pin tables from the join">#647</a>), the power diagram from modelled rails (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/680" target="_blank" rel="noopener" data-tip="Pull request #680 · merged 4 Oct 2026 · feat(hardware): model power rails in the join and generate the WIRING power diagram">#680</a>), PCA9685 channel nets for pinout labels (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/695" target="_blank" rel="noopener" data-tip="Pull request #695 · merged 4 Oct 2026 · feat(hardware): model PCA9685 channel nets in the join for pinout labels">#695</a>), board pinout images (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/667" target="_blank" rel="noopener" data-tip="Pull request #667 · merged 4 Oct 2026 · docs(robocar-unified): generate board pinout images for the build guide">#667</a>), and <code>hardware::gen</code> re-rendering the schematic and recompiling the guides (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/731" target="_blank" rel="noopener" data-tip="Pull request #731 · merged 11 Oct 2026 · feat(hardware): make gen re-render the schematic and recompile build guides">#731</a>). Checks added: every role on a net or excused (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/715" target="_blank" rel="noopener" data-tip="Pull request #715 · merged 10 Oct 2026 · feat(hardware): require every pin role to be on a net or undrawn">#715</a>), no rail on an MCU signal pad (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/687" target="_blank" rel="noopener" data-tip="Pull request #687 · merged 4 Oct 2026 · fix(hardware): reject a rail on an MCU signal pad and a Mermaid-keyword part id">#687</a>).</p><p><b>Adapted for KiCad (Oct 14–15):</b> harness and carrier views (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/758" target="_blank" rel="noopener" data-tip="Pull request #758 · merged 14 Oct 2026 · feat(hardware): harness and carrier views of hardware.toml">#758</a>), balancebot carrier schematic from the join (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/759" target="_blank" rel="noopener" data-tip="Pull request #759 · merged 14 Oct 2026 · feat(kicad): generate the balancebot carrier schematic from the hardware join">#759</a>), two roles on one GPIO or part pin rejected (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/772" target="_blank" rel="noopener" data-tip="Pull request #772 · merged 14 Oct 2026 · fix(hardware): reject two roles on one GPIO or one part pin in the join">#772</a>), I²C mux channel buses (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/777" target="_blank" rel="noopener" data-tip="Pull request #777 · merged 14 Oct 2026 · feat(hardware): I2C mux channel buses as a join construct">#777</a>), per-load <code>[[outputs]]</code> (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/778" target="_blank" rel="noopener" data-tip="Pull request #778 · merged 15 Oct 2026 · feat(hardware): per-load pin mapping for [[outputs]]">#778</a>), the cable construct (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/787" target="_blank" rel="noopener" data-tip="Pull request #787 · merged 15 Oct 2026 · feat(hardware): cable construct in the join and netlist">#787</a>), the parts registry (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/789" target="_blank" rel="noopener" data-tip="Pull request #789 · merged 15 Oct 2026 · feat(parts): registry entries for the robocar carrier">#789</a>) and the robocar carrier view (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/793" target="_blank" rel="noopener" data-tip="Pull request #793 · merged 15 Oct 2026 · feat(robocar-unified): carrier view and schematic">#793</a>).</p></div>
+  <div class="t" data-l="5"><p>Pinout drawing reads each part’s board page, built from the vendor’s Eagle file (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/629" target="_blank" rel="noopener" data-tip="Issue #629 · closed · docs(robocar-unified): physical board pinout images in the build guide, generated from vendor files">#629</a>, <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/tools/hardware/pinout.py" target="_blank" rel="noopener" data-tip="tools/hardware/pinout.py · Physical pinout images, drawn from the board references (#629)."><code>tools/hardware/pinout.py</code></a>). Breakout pad centres were recorded in the board pages and re-derived on demand (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/775" target="_blank" rel="noopener" data-tip="Pull request #775 · merged 14 Oct 2026 · feat(hardware): record breakout pad centres and re-derive them on demand">#775</a>), which let <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/tree/main/tools/kicad" target="_blank" rel="noopener" data-tip="tools/kicad · KiCad carrier boards generated from the hardware join (#750)."><code>tools/kicad</code></a> build socket footprints from them (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/788" target="_blank" rel="noopener" data-tip="Pull request #788 · merged 15 Oct 2026 · feat(kicad): breakout socket footprints from recorded pad centres">#788</a>). The <code>[[cables]]</code> entry carries <code>spare_heads</code>, so the two unused head boards get their own <code>HEAD2_*</code>/<code>HEAD3_*</code> nets. Carrier-only entries (fuses, pull-ups, decoupling, holes, test headers) take <code>build = "carrier"</code>, and the perfboard generator reads the same carrier netlist (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/760" target="_blank" rel="noopener" data-tip="Pull request #760 · merged 14 Oct 2026 · refactor(kicad): shared perfboard generator with a per-project perfboard.toml">#760</a>).</p></div>
+</section>
+
+<!-- 5 -->
+<section class="chapter" id="consumers">
+  <p class="ref">07 · What reads it</p>
+  <h2>One file feeds every document and the factory</h2>
+  <div class="t" data-l="1"><p>From that one list, the computer produces the wiring instructions, the printable build guide with its pictures, and the files the factory uses to make the circuit board. If someone changes the list and forgets to regenerate, an automatic check flags it straight away.</p></div>
+  <div class="t" data-l="2"><p>Two kinds of output come from the list. For people: wiring tables, pin diagrams and a printable build guide. For the factory: the circuit drawing, the parts list with order numbers, and the placement file for the assembly robots. The 3D-printed cases are then built from the finished board design.</p></div>
+  <div class="t" data-l="3"><ul><li><b>Harness view → docs:</b> WIRING.md tables and power diagram, pin bindings for the build-guide PDFs, pinout images, the docs schematic SVG. <code>just hardware::gen</code>, gated by <code>hardware::check</code> in CI.</li><li><b>Carrier view → fabrication:</b> the KiCad schematic, the board net check and stamp, the BOM and placement file, a perfboard layout.</li><li><b>Downstream:</b> cases read the committed board file; the pan-tilt reads the head board’s outline.</li></ul></div>
+  <div class="t" data-l="4"><ul><li><b>Harness view:</b> WIRING.md pin tables and power diagram (marker blocks), <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/packages/robocar/unified/docs/auto/pin_defs.typ" target="_blank" rel="noopener" data-tip="packages/robocar/unified/docs/auto/pin_defs.typ"><code>pin_defs.typ</code></a> → build-guide PDFs, board pinout images, the schemdraw SVG. <code>just hardware::gen</code> / <code>::check</code>; CI <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/.github/workflows/hardware-check.yml" target="_blank" rel="noopener" data-tip=".github/workflows/hardware-check.yml · GitHub Actions workflow: Hardware Join Docs Up-to-Date Check"><code>hardware-check.yml</code></a>.</li><li><b>Carrier view:</b> <code>.kicad_sch</code> and library tables, board net check and stamp, <code>bom-jlc.csv</code>/<code>cpl-jlc.csv</code>, perfboard layout and wire list. <code>just &lt;p&gt;::carrier-*</code>; CI <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/.github/workflows/carrier-check.yml" target="_blank" rel="noopener" data-tip=".github/workflows/carrier-check.yml · GitHub Actions workflow: KiCad Carrier Up-to-Date Check"><code>carrier-check.yml</code></a>.</li></ul><p>A pin move in <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/packages/robocar/unified/main/pin_config.h" target="_blank" rel="noopener" data-tip="packages/robocar/unified/main/pin_config.h · @file pin_config.h @brief XIAO ESP32-S3 Sense pin definitions for robocar-unified"><code>pin_config.h</code></a> now shows up as a red check everywhere it matters, instead of a stale PDF.</p></div>
+  <div class="t" data-l="5"><p><code>join()</code> defaults to the harness view, so existing docs consumers read what they read before; <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/tree/main/tools/kicad" target="_blank" rel="noopener" data-tip="tools/kicad · KiCad carrier boards generated from the hardware join (#750)."><code>tools/kicad</code></a> asks for <code>build="carrier"</code>. <code>hardware::gen</code> also re-renders the schemdraw SVG via <code>schematics::render-all</code> and recompiles the Typst guides (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/731" target="_blank" rel="noopener" data-tip="Pull request #731 · merged 11 Oct 2026 · feat(hardware): make gen re-render the schematic and recompile build guides">#731</a>). The BOM’s LCSC numbers come from the registry for ICs and the inductor, and from <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/packages/robocar/unified/hardware.toml" target="_blank" rel="noopener" data-tip="packages/robocar/unified/hardware.toml · Parts and nets around main/pin_config.h — the third layer of ADR-021&#x27;s board × header × parts join (docs/decisions/ADR-021-hardware-source-of-truth.md)."><code>hardware.toml</code></a> for passives. <code>kicad.perfboard --check</code> regenerates and diffs each perfboard drawing and wire list in CI.</p></div>
+</section>
+
+<!-- 6 -->
+<section class="chapter" id="generated">
+  <p class="ref">08 · The circuit board design</p>
+  <h2>The board design is generated, not drawn</h2>
+  <div class="t" data-l="1"><p>Normally an engineer draws a circuit board by hand in design software. Here a program writes the design from the master list, positions the parts from a second short list, and then another program draws all the copper wiring automatically. Nobody edits the result by hand: to change it, you change the list and run it again.</p></div>
+  <div class="t" data-l="2"><p>The free design program KiCad is used for the board, but its files are written by our own small program from the master list. Part positions come from another small file (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/packages/robocar/unified/hardware/carrier/board.toml" target="_blank" rel="noopener" data-tip="packages/robocar/unified/hardware/carrier/board.toml · Carrier PCB layout for tools/kicad:"><code>board.toml</code></a>). An auto-router called Freerouting draws the copper tracks. In the picture, red is copper on the top of the board, blue on the bottom, yellow is the printed text.</p></div>
+  <div class="t" data-l="3"><p>A stdlib-only Python writer emits the <code>.kicad_sch</code> from the carrier view, deterministically: byte-identical output across Python versions, UUIDs derived from content. <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/packages/robocar/unified/hardware/carrier/board.toml" target="_blank" rel="noopener" data-tip="packages/robocar/unified/hardware/carrier/board.toml · Carrier PCB layout for tools/kicad:"><code>board.toml</code></a> holds placement, cut lines, net classes and fixed tracks; pcbnew places and Freerouting routes. A vendored, hash-pinned library subset means local runs and CI read the same bytes. The generated files are treated as build output: never hand-edited.</p></div>
+  <div class="t" data-l="4"><p><a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/docs/decisions/ADR-027-kicad-carrier-generation.md" target="_blank" rel="noopener" data-tip="ADR-027: KiCad Carrier Boards Generated From the Hardware Join · accepted, 2026-10-13">ADR-027</a> extends the join to fabrication. The trigger: the balancebot carrier’s hand-typed netlist and check script both restated the join, and one drifted (a divider wired to a pin the header called spare, while the check passed). Now <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/tools/kicad/schematic.py" target="_blank" rel="noopener" data-tip="tools/kicad/schematic.py · The carrier schematic, written from the netlist: KiCad 10 format, deterministic."><code>schematic.py</code></a> writes the schematic; connections are global labels on pin stubs. Alternatives were rejected on measurements: kicad-sch-api dropped every global label on a round trip; kicad-mcp-pro’s output differed every run. Freerouting never routes the same way twice, so you commit the board you checked.</p></div>
+  <div class="t" data-l="5"><p>UUIDs are uuid5 of the carrier directory and the item; output is byte-identical across Python 3.11, 3.13 and 3.14. pcbnew is confined to <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/tree/main/tools/kicad/pcb" target="_blank" rel="noopener" data-tip="tools/kicad/pcb · Folder with 8 entries"><code>tools/kicad/pcb/</code></a> under KiCad’s bundled Python 3.9, reading a JSON board input built from the netlist and <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/packages/robocar/unified/hardware/carrier/board.toml" target="_blank" rel="noopener" data-tip="packages/robocar/unified/hardware/carrier/board.toml · Carrier PCB layout for tools/kicad:"><code>board.toml</code></a>. The library subset (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/tree/main/tools/kicad/lib" target="_blank" rel="noopener" data-tip="tools/kicad/lib · Folder with 3 entries"><code>tools/kicad/lib/</code></a>, KiCad 10.0.6 stock CC-BY-SA plus Seeed XIAO MIT) is pinned per file in <code>MANIFEST.tsv</code> and shadows the stock nicknames. KiCad 10 matches footprints by reference, not UUID, so DRC with schematic parity reports 0/0/0 without re-routing.</p></div>
+  <figure>
+    <img src="img/socketed-layout.jpg" alt="Board-editor view of the routed socketed carrier: red front copper, blue back copper, yellow silkscreen; main board on the left, three head boards on the right separated by CUT lines" width="1200" height="1200" loading="lazy">
+    <figcaption>The routed socketed carrier, exported from the committed board file. Red: top copper. Blue: bottom copper. Yellow: printed labels.</figcaption>
+  </figure>
+</section>
+
+<!-- 7 -->
+<section class="chapter" id="gates">
+  <p class="ref">09 · Automatic checks</p>
+  <h2>Every change is checked before it counts</h2>
+  <div class="t" data-l="1"><p>Every time anything changes, a set of automatic checks runs, like a spell-checker for electronics. They confirm the drawing and the board agree with the master list. There’s also a sealed “receipt” proving the design software itself looked at the exact files that were saved.</p></div>
+  <div class="t" data-l="2"><p>On the laptop, KiCad itself checks the design: are all connections valid, does the board break any manufacturing rule, does the board match the master list. Only when everything passes does it write a small receipt file. The online checks (which run without KiCad installed) then verify that receipt matches the files.</p></div>
+  <div class="t" data-l="3"><p>Locally, <code>carrier-check</code> runs KiCad’s electrical and design-rule checks, compares KiCad’s netlist with the join’s, and only then writes a stamp: hashes of the committed schematic and board plus the normalised netlist. CI has no KiCad: it runs unit tests, verifies library hashes, regenerates and diffs the schematic, checks the board’s parts and nets, and verifies the stamp. It stops accidental drift, not deliberate forgery.</p></div>
+  <div class="t" data-l="4"><p><b>Local, KiCad 10:</b> ERC, DRC with schematic parity, netlist parity with the join, every pad’s net; then the stamp. <b>CI, no KiCad:</b> <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/tree/main/tools/kicad" target="_blank" rel="noopener" data-tip="tools/kicad · KiCad carrier boards generated from the hardware join (#750)."><code>tools/kicad</code></a> tests, vendored library hashes, schematic regenerate-and-diff, board parity, stamp. The stamp closes two holes: a writer bug plus a regenerated schematic would compare equal to itself, and text-editing a pad’s net would pass a net-only check while the copper still joins the old pads.</p></div>
+  <div class="t" data-l="5"><p><code>&lt;name&gt;.check.json</code> records sha256 of the committed <code>.kicad_sch</code> and <code>.kicad_pcb</code> and KiCad’s own netlist of that schematic, normalised. Only <code>kicad.check</code> writes it, as its last step; <code>kicad.stamp</code> verifies it in CI. Running ERC/DRC in the <code>kicad/kicad:10.0.6</code> container was deferred: 771 MiB compressed, 2.6 GB unpacked, amd64-only for 10.x, no Java for Freerouting. Every gate has a “verify the gate can fail” control in the <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/tree/main/.claude/skills/carrier-pcb" target="_blank" rel="noopener" data-tip=".claude/skills/carrier-pcb · Generate, check and fabricate a project&#x27;s KiCad carrier PCB from hardware.toml with tools/kicad, and the KiCad 10 traps that read as success. Use when adding a part to the parts registry, regenerating or checking a carrier, running Freerouting, or editing tools/kicad."><code>carrier-pcb</code></a> skill.</p></div>
+</section>
+
+<!-- 8 -->
+<section class="chapter" id="socketed">
+  <p class="ref">10 · Version 1 · ordered</p>
+  <h2>The socketed board</h2>
+  <div class="t" data-l="1"><p>The first version keeps the same five helper boards, but instead of loose wires they plug into sockets on one solid circuit board. Any of them can be pulled out and swapped. Along the right side are three small square pieces that get sawn off and mounted in the robot’s moving head; only one is used, the others are spares in different shapes.</p></div>
+  <div class="t" data-l="2"><p>A 10 × 10 cm board. The five add-on boards plug into sockets, so nothing has to be soldered to them. Three small “head” pieces, each 3 × 3 cm, fit the camera mount; they differ only in where the ribbon cable plugs in. The cable is arranged so that plugging it in upside down can’t damage anything; it just won’t work until flipped.</p></div>
+  <div class="t" data-l="3"><p>100 × 100 mm, two layers. Breakouts sit in female headers, so any module can be swapped. Three 29.5 mm head boards share the panel and are sawn apart after delivery; a 2×7 ribbon joins the chosen head to the main board, pinned so a reversed plug is harmless. Only passives and the regulator are surface-mount, so factory assembly was cheap.</p></div>
+  <div class="t" data-l="4"><p>One PCB, four pieces: a 70.5 mm main board with the breakouts socketed, and three 29.5 mm head boards for the pan-tilt cradle (hole spacing confirmed by Lauri on 2026-10-16). One outline with silkscreen saw lines, because JLCPCB charges a mouse-bite panel as several designs. The ribbon pinout pairs each pin with a safe partner: 5 V on 5 V, GND on GND, SDA on SCL. SMD passives and the AMS1117 only: about €24 to assemble five.</p></div>
+  <div class="t" data-l="5"><p>A1 TB6612FNG in 2×1×8 headers; A2 PCA9685 on its JP3 side header and PWM pins 8–13; A3 TCA9548A; A4 MAX98357A; A5 CJMCU-2317 at 0x20 on mux ch2 with a J18 2×10 mirror header. U2 AMS1117-3.3; D1 B5819W between 5V and <code>XIAO_5V</code> (the XIAO’s 5V pad is VBUS); F1 4 A hold PTC at J3 (XT30, pad 1 “−”); C1–C3 470 µF bulk; R2–R13 2.2 kΩ pull-ups on mux ch0–4 and upstream. IDC reversal maps pin n to 15 − n; UART0 TX lands on the unconnected pin 9. Copper-free bands ≥ 3 mm under the cut lines.</p></div>
+  <figure>
+    <img src="img/board-socketed.jpg" alt="Top render of the socketed carrier with empty breakout sockets and three head boards" width="1200" height="1200" loading="lazy">
+    <figcaption>Top view, rendered from the board file. The empty rectangles are where the helper boards plug in.</figcaption>
+  </figure>
+</section>
+
+<!-- 9 -->
+<section class="chapter" id="integrated">
+  <p class="ref">11 · Version 2 · on hold</p>
+  <h2>The integrated board</h2>
+  <div class="t" data-l="1"><p>The second version puts the actual chips straight onto the board instead of plugging in helper boards. It’s smaller and neater, but harder to repair and needs the factory to solder the tiny chips. It’s finished and ready to order, but on hold: the first version gets tested first, and anything learned goes into this one.</p></div>
+  <div class="t" data-l="2"><p>The same circuit, but with bare chips soldered by the factory instead of plug-in boards, plus its own power supply. The main board is 30 % smaller. The trade-off: a broken plug-in board can be swapped in seconds, a broken chip needs rework with special tools. It’s waiting until the first board has been tested.</p></div>
+  <div class="t" data-l="3"><p>Same pin header, same heads, same net names (so the two netlists compare by name), but the breakouts become chips and the external buck module becomes an on-board converter. Main-board area drops 30 %, part count nearly doubles, and everything new is SMD, so JLCPCB assembles it. Deferred until the socketed board has been bench-tested.</p></div>
+  <div class="t" data-l="4"><div class="table-scroll"><table><tr><th>Main board</th><th class="num">Socketed</th><th class="num">Integrated</th></tr><tr><td>Area</td><td class="num">≈ 7050 mm²</td><td class="num">4902 mm² (−30 %)</td></tr><tr><td>Parts</td><td class="num">40</td><td class="num">77</td></tr><tr><td>SMD / through-hole</td><td class="num">20 / 20</td><td class="num">58 / 19</td></tr><tr><td>5 V supply</td><td class="num">LM2596 module</td><td class="num">TPS563208 buck</td></tr><tr><td>Assembly</td><td class="num">passives</td><td class="num">25 BOM lines, 60 parts</td></tr></table></div><p>Passes every gate and seven review rounds; held until the socketed board’s bench test.</p></div>
+  <div class="t" data-l="5"><p>U5 TCA9548APWR (TSSOP-24), U6 PCA9685PW (TSSOP-28) with 220/47 Ω series resistors, U7 TB6612FNG (SSOP-24), U8 MAX98357AETE+ (TQFN-16) behind FB1, U9 MCP23017-E/SS, U10 TPS563208 with L1 4.7 µH (SRN6045TA), EN divider R25/R26 = 100k/36k, Q1 DMP3013SFV reverse-polarity P-FET and F1 3 A PTC. 14 Extended BOM lines; thinnest stock was L1 (179) and the MCP23017 (424) on 2026-10-19. Three fiducials for the 0.5 mm-pitch TQFN. Courtyard area 5381 → 2298 mm² (<code>just robocar-unified-integrated::compare</code>).</p></div>
+  <div class="pair">
+    <figure><img src="img/iso-socketed.jpg" alt="Angled 3D render of the socketed carrier" width="1568" height="956" loading="lazy"><figcaption>Socketed, 100 × 100 mm</figcaption></figure>
+    <figure><img src="img/iso-integrated.jpg" alt="Angled 3D render of the integrated carrier with bare chips, buck inductor and a waste strip below the main board" width="1568" height="956" loading="lazy"><figcaption>Integrated, 94 × 100 mm</figcaption></figure>
+  </div>
+</section>
+
+<!-- 10 -->
+<section class="chapter" id="review">
+  <p class="ref">12 · A second opinion</p>
+  <h2>Passing every check is not the same as being right</h2>
+  <div class="t" data-l="1"><p>The automatic checks only confirm the design matches what we said we wanted. They can’t tell whether what we wanted was a good idea. So a separate AI reviewer, told to be suspicious, compared the design with the chip manufacturers’ manuals. It found real problems, such as a setting that would have slowly drained the battery flat. Each fix was checked, and then the review ran again; this took seven rounds.</p></div>
+  <div class="t" data-l="2"><p>Checks prove the board matches the plan; they don’t prove the plan is good. A separate, deliberately critical AI reviewer read the board against the chips’ datasheets. Examples it caught: the power supply would have drained the battery far too low, and the battery connector’s plus and minus are easy to swap without any check noticing. Every finding was verified before acting on it, because the reviewer can be wrong too.</p></div>
+  <div class="t" data-l="3"><p>Gates check what was declared; a review finds what wasn’t. A read-only <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/.claude/agents/pcb-reviewer.md" target="_blank" rel="noopener" data-tip=".claude/agents/pcb-reviewer.md · Adversarial pre-fabrication review of a KiCad carrier PCB (tools/kicad, ADR-027) against the datasheets and the routed board&#x27;s geometry. Use before `just &lt;project&gt;::carrier-fab` or any order, and after a layout change. Read-only; returns a ranked report as text."><code>pcb-reviewer</code></a> agent reviews the routed board adversarially against datasheets. The loop: verify each finding against the board (it’s model output), fix in the TOML, re-route, re-measure with <code>carrier-measure</code>, review again. On the integrated board every fix round introduced a regression the next round caught.</p></div>
+  <div class="t" data-l="4"><ul><li><b>Buck EN tied to VBAT:</b> would drain a 2S pack to about 1.7 V per cell.</li><li><b>Pulse-skip regulator:</b> cannot sink motor braking energy; swapped for the forced-continuous sibling.</li><li><b>XT30 pad 1 is “−”:</b> reversed, it passes ERC, DRC and every net check.</li><li><b>0.10 mm silkscreen:</b> the board predated the fix by three minutes.</li></ul><p>Seven rounds on the integrated carrier. The power findings became an 11-item checklist rule.</p></div>
+  <div class="t" data-l="5"><p>TPS563201’s 75 % max duty cycle needs 6.7 V for 5 V out, above a 2S pack’s end of discharge → TPS563208 (forced-continuous, sinks). EN divider 100k/36k: guaranteed on by 6.3 V given VENH max 1.6 V and REN min 600 kΩ (SLVSD90B §5.5). VFB min 749 mV puts R12 = 56 kΩ at 4.94 V, the TB6612FNG’s 0.4 A row. The buck input reached its caps through one 0.6/0.3 mm via and a 0.6 mm neck (≈ 26 °C rise at 2.5 A, IPC-2221). README numbers come only from <code>carrier-measure</code>: a layer-blind script once reported “no via” on a path through two.</p></div>
+</section>
+
+<!-- 11 -->
+<section class="chapter" id="cases">
+  <p class="ref">13 · Cases</p>
+  <h2>Cases built from the finished board</h2>
+  <div class="t" data-l="1"><p>Each board piece gets a 3D-printed case, designed by a program that reads the finished circuit board design, so the holes and screw posts always line up. It refuses to produce a case if anything bumps into the board or if any wall is too thin to print.</p></div>
+  <div class="t" data-l="2"><p>A program builds an open tray and a closed box with a lid for each board piece, reading the exact part positions and heights from the board design. Two checks must pass: the case may not collide with the board, and no wall may be thinner than 2 mm. The thin-wall check found three printing problems the first time it ran.</p></div>
+  <div class="t" data-l="3"><p><a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/tree/main/tools/enclosure" target="_blank" rel="noopener" data-tip="tools/enclosure · Folder with 8 entries"><code>tools/enclosure</code></a> (build123d) reads footprint positions and mounting holes from the committed <code>.kicad_pcb</code> and heights from KiCad’s STEP export; only parts without a 3D model get a height in config, with a source. <code>enclosure::gen</code> exits non-zero on a clash or a wall under 2.0 mm. The upload site’s own thin-wall warning is a heuristic, not a substitute.</p></div>
+  <div class="t" data-l="4"><p>Board on short solid standoffs (self-tapping into a blind pilot), lid into four corner bosses, cable windows sized to a mated plug. Gate 1: case ∩ board STEP must be empty. Gate 2: 20,000 inward rays, nothing under 2.0 mm. The breakouts in the renders are look-alikes built from <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/tools/enclosure/modules.toml" target="_blank" rel="noopener" data-tip="tools/enclosure/modules.toml · Look-alike models of the parts KiCad has no 3D model for, for the product renders (`just enclosure::product`, enclosure/modules.py, blender/render_product.py)."><code>tools/enclosure/modules.toml</code></a>, since the vendors publish no 3D models for them (<a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/issues/842" target="_blank" rel="noopener" data-tip="Pull request #842 · merged 23 Oct 2026 · feat(enclosure): captioned product renders with breakout look-alikes, and Fibo 2.0 photos">#842</a>). Ordered as white resin.</p></div>
+  <div class="t" data-l="5"><p>build123d 0.13.0, Python 3.14.8, stdlib <code>kicad.sexpr</code> reader. Pilot holes M3 2.5 mm, M2 1.6 mm, <code>min_standoff</code> 4 mm of thread; a boss with under <code>MIN_THREAD</code> 4 mm is dropped, and fewer than two is an error. The ray gate checks the 64 thinnest readings against a ring of neighbours, so a graze along a tessellated facet (a pan-tilt yoke read 0.01 mm where it is 1.0) isn’t a wall. build123d must never be imported under <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/tree/main/tools/kicad" target="_blank" rel="noopener" data-tip="tools/kicad · KiCad carrier boards generated from the hardware join (#750)."><code>tools/kicad</code></a>, whose tests run on stdlib-only Python.</p></div>
+  <div class="pair">
+    <figure><img src="img/case-main-product.jpg" alt="Render of the main board in its printed box with the lid lifted, the motor driver, PWM driver, mux and other breakouts plugged into their sockets" width="1100" height="825" loading="lazy"><figcaption>Main board in its box, breakouts fitted</figcaption></figure>
+    <figure><img src="img/case-head-product.jpg" alt="Render of head board 1 in its printed tray, with the XIAO and its camera module plugged in" width="1100" height="825" loading="lazy"><figcaption>Head board in its tray, XIAO fitted</figcaption></figure>
+  </div>
+</section>
+
+<!-- 12 -->
+<section class="chapter" id="tournament">
+  <p class="ref">14 · The camera mount</p>
+  <h2>Five designers, one servo, three judges</h2>
+  <div class="t" data-l="1"><p>The camera sits on a small motorised mount that turns left-right and up-down. The stronger motors we wanted didn’t fit the cheap mounts you can buy. So we ran a design competition: five AI designers each got a different style brief, all designs were tested the same way, and three AI judges scored them.</p></div>
+  <div class="t" data-l="2"><p>The camera’s pan-and-tilt mount needed redesigning for sturdier metal-gear servos, which are taller than the usual ones. Five AI designers with deliberately different briefs (simple bracket, snap-together, a robot “face”, a lighthouse, a camera gimbal) each produced a 3D design. The same collision test and wall test checked all five, then three judges scored them.</p></div>
+  <div class="t" data-l="3"><p>A multi-agent workflow: shared fixtures first (servo envelopes, the head board, a clash sweep over the full travel, the wall gate), so all entries were judged against the same geometry. Each parametric build123d design was inspected independently, revised, and scored by three judges. Inspectors found 59 issues in designs whose designers had reported success.</p></div>
+  <div class="t" data-l="4"><p>The TowerPro MG90D stands 19.8 mm below its tabs against the SG90’s ~16, so no kit fits. <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/.claude/workflows/design-tournament.js" target="_blank" rel="noopener" data-tip=".claude/workflows/design-tournament.js"><code>.claude/workflows/design-tournament.js</code></a> ran five designers, inspectors and three judges (36 agents over two runs, one session limit in the middle, resumed from cache). Clash sweep pan ±90° × tilt ±45°. The gimbal won by half a point.</p></div>
+  <div class="t" data-l="5"><p>Fixtures in <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/tree/main/packages/robocar/unified/hardware/pan-tilt/common" target="_blank" rel="noopener" data-tip="packages/robocar/unified/hardware/pan-tilt/common · The pan-tilt tournament&#x27;s shared stand-ins (fixtures.py) and the entry"><code>pan-tilt/common/</code></a>: MG90D and SG90 stand-ins (TowerPro’s A–F dimensions, the rest marked as estimates), stock horns, head 1 with its XIAO stack and J2 ribbon keep-out, world frame +X forward / +Z up / plate top at z 0. <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/tools/kicad/check.py" target="_blank" rel="noopener" data-tip="tools/kicad/check.py · The local carrier gates, in order, ending in the check stamp."><code>check.py</code></a> reports every <code>allow</code> excuse. Barrier results are null-filtered after the first run died on <code>ranking[0][0]</code> when all judges hit the session limit.</p></div>
+  <div class="five">
+    <figure class="win"><img src="img/entry-gimbal.jpg" alt="gimbal entry" width="700" height="700" loading="lazy"><figcaption><b>gimbal</b> · 21.5 / 30</figcaption></figure>
+    <figure><img src="img/entry-workhorse.jpg" alt="workhorse entry" width="700" height="700" loading="lazy"><figcaption>workhorse · 21</figcaption></figure>
+    <figure><img src="img/entry-snapfit.jpg" alt="snapfit entry" width="700" height="700" loading="lazy"><figcaption>snapfit · 20.5</figcaption></figure>
+    <figure><img src="img/entry-teuvo-face.jpg" alt="teuvo-face entry" width="700" height="700" loading="lazy"><figcaption>teuvo-face · 20</figcaption></figure>
+    <figure><img src="img/entry-wildcard.jpg" alt="wildcard entry" width="700" height="700" loading="lazy"><figcaption>wildcard · 14</figcaption></figure>
+  </div>
+</section>
+
+<!-- 13 -->
+<section class="chapter" id="gimbal">
+  <p class="ref">15 · The winner</p>
+  <h2>A camera gimbal on a ring bearing</h2>
+  <div class="t" data-l="1"><p>The winning design tilts the camera around the point where its lens “sees”, so the picture doesn’t shift sideways when it looks up or down. A proper ball bearing carries the weight, so the small motors only do the turning. The judges’ criticisms were fixed, and the best ideas from the other entries, like little eyebrows, were added. It isn’t ordered yet.</p></div>
+  <div class="t" data-l="2"><p>The gimbal tilts around the camera lens itself and carries the load on a ball bearing rather than on the servo. The final version fixes every point the judges marked down, borrows three ideas from the runners-up (including eyebrows from the robot-face entry), and passes the collision test over the full range of motion. About $15 in printed nylon; not ordered yet.</p></div>
+  <div class="t" data-l="3"><p>Tilt axis through the camera’s entrance pupil (no parallax when tilting), pan axis under the centre of mass. A ring bearing takes thrust; the servo only supplies torque. The print version fixes each judge deduction, grafts three ideas from the runners-up, and passes the clash gate over the full travel with the ribbon modelled taut. The gates were then extracted into <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/tree/main/tools/mechanism" target="_blank" rel="noopener" data-tip="tools/mechanism · Folder with 6 entries"><code>tools/mechanism</code></a> for reuse.</p></div>
+  <div class="t" data-l="4"><p>A 6705ZZ ring bearing takes thrust and tipping moment; the cut-down horn floats ±1 mm in a printed keeper, so the pan servo carries torque only; the tilt idler runs in an MR128ZZ. Fixes: a screwed bearing cap, crush ribs against horn backlash, ribs on the uprights, service access down the pan axis. Grafts: wildcard’s undersize-and-sand bearing fit, teuvo-face’s brows and its one-order material sheet. Zero clashes; thinnest wall 1.0 mm; about $15 in MJF PA12.</p></div>
+  <div class="t" data-l="5"><p>Deductions fixed: outer race held only by 0.15 mm crush ribs, ±1° horn-slot backlash, 3 mm uprights loaded in their weak direction, poor service access, ribbon spans sized by chord rather than swept, no brows, lens at 76.5 mm (now 80.3). Two remaining excuses: the keeper ribs’ deliberate crush on the horn, and the ribbon touching itself at its shelf tie. Rejected grafts: workhorse’s brass pivots and drum, snapfit’s <code>HORN_SLACK</code>, wildcard’s twin-bearing hub. The nodal tilt suits <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/docs/decisions/ADR-025-reactive-head-aiming.md" target="_blank" rel="noopener" data-tip="ADR-025: Reactive Head Aiming — The Executor Owns the Pan/Tilt Head · accepted, 2026-09-15">ADR-025</a>’s head-aim bearing maths.</p></div>
+  <figure>
+    <img src="img/gimbal.jpg" alt="Render of the printed gimbal pan-tilt turned 60 degrees and tilted 30 degrees, with eyebrows" width="1100" height="917" loading="lazy">
+    <figcaption>The print version at pan 60°, tilt 30°. Translucent blue shapes stand in for the servos and the head board.</figcaption>
+  </figure>
+</section>
+
+<!-- 14 -->
+<section class="chapter" id="claude">
+  <p class="ref">16 · How Claude was set up</p>
+  <h2>Written-down lessons and repeatable commands</h2>
+  <div class="t" data-l="1"><p>Claude, an AI assistant, wrote most of the programs and ran them. To stop it repeating mistakes, every lesson learned was written into notes it reads automatically next time, and every routine job became a fixed command that always behaves the same way. A separate, more suspicious AI did the reviewing.</p></div>
+  <div class="t" data-l="2"><p>Claude Code did most of the building. Three things kept it reliable: short rules that load automatically when it works on certain files, longer “skills” that describe a whole task and its known pitfalls, and one-line commands for every mechanical step, so Claude, Lauri and the online checks all run exactly the same thing.</p></div>
+  <div class="t" data-l="3"><div class="table-scroll"><table><tr><th>Layer</th><th>Here</th><th>Job</th></tr><tr><td>Rules</td><td>kicad-scripting, enclosure-generation, power-stage-checklist</td><td>Load when a matching path is edited</td></tr><tr><td>Skills</td><td>carrier-pcb, enclosure-cad, printed-mechanism, jlcpcb-order</td><td>A whole workflow and its pitfalls</td></tr><tr><td>Agent</td><td>pcb-reviewer</td><td>Read-only adversarial review</td></tr><tr><td>Workflow</td><td>design-tournament</td><td>Multi-agent fan-out, on request</td></tr><tr><td>Recipes</td><td><code>just</code> commands</td><td>Deterministic, shared with CI</td></tr></table></div></div>
+  <div class="t" data-l="4"><p>Rules are path-scoped and carry three edit-time traps each. Skills carry the workflow and every trap that once passed a check: <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/tree/main/.claude/skills/carrier-pcb" target="_blank" rel="noopener" data-tip=".claude/skills/carrier-pcb · Generate, check and fabricate a project&#x27;s KiCad carrier PCB from hardware.toml with tools/kicad, and the KiCad 10 traps that read as success. Use when adding a part to the parts registry, regenerating or checking a carrier, running Freerouting, or editing tools/kicad."><code>carrier-pcb</code></a> lists 46. The reviewer is a separate agent so it has no stake in the board passing. Judgement goes to the model; anything mechanical goes into a recipe or a gate.</p><pre>just hardware::gen
+just &lt;p&gt;::carrier-schematic
+just &lt;p&gt;::carrier-board-checked   # route until every gate passes
+just &lt;p&gt;::carrier-review · carrier-measure
+just &lt;p&gt;::carrier-fab             # runs carrier-check first
+just enclosure::gen &lt;project&gt;</pre></div>
+  <div class="t" data-l="5"><p><a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/.claude/rules/kicad-scripting.md" target="_blank" rel="noopener" data-tip=".claude/rules/kicad-scripting.md · KiCad Carriers: Use the `carrier-pcb` Skill"><code>.claude/rules/kicad-scripting.md</code></a> (paths <code>packages/**/hardware/**</code>): never <code>board.Remove()</code> in pcbnew (later calls return untyped SwigPyObjects), check polarity against the footprint’s own text, compare netlists never board files. <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/tools/kicad.just" target="_blank" rel="noopener" data-tip="tools/kicad.just · Shared KiCad carrier-PCB recipes (tools/kicad, ADR-027)."><code>tools/kicad.just</code></a> provides the private <code>_carrier-*</code> recipes each project wraps; KiCad-free ones are <code>_carrier-lib</code>, <code>_carrier-schematic</code>, <code>_perfboard</code>. <code>carrier-board-checked tries=5</code> loops place → route → check. <code>carrier-measure --ref &lt;git-ref&gt;</code> measures a past board via <code>git show</code>, never a checkout, because the clone may be shared.</p></div>
+</section>
+
+<!-- 15 -->
+<section class="chapter" id="split">
+  <p class="ref">17 · Who did what</p>
+  <h2>Claude builds and checks; Lauri measures and decides</h2>
+  <div class="t" data-l="1"><p>Claude wrote the programs, ran the checks and even clicked through the factory’s ordering app up to the shopping cart. Lauri measured the real parts with a ruler, made the decisions, and paid. The AI never signs in or pays.</p></div>
+  <div class="t" data-l="2"><p><b>Claude:</b> wrote the tools and tests, ran the checks and reviews, and filled in the factory quote up to the cart. <b>Lauri:</b> measured real hardware (like the camera mount’s screw holes), made the calls (two versions, hold the second, sturdier servos), and checked out and paid.</p></div>
+  <div class="t" data-l="3"><p>Claude wrote <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/tree/main/tools/hardware" target="_blank" rel="noopener" data-tip="tools/hardware · One hardware source of truth: a board × header × parts join (ADR-021)."><code>tools/hardware</code></a>, <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/tree/main/tools/kicad" target="_blank" rel="noopener" data-tip="tools/kicad · KiCad carrier boards generated from the hardware join (#750)."><code>tools/kicad</code></a>, the enclosure and mechanism generators and their tests, ran the gates, reviews and measurements, and drove the ordering app. Lauri supplied bench facts, the decisions and the payment. Where a value is a guess, the repo says so: <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/packages/robocar/unified/hardware/carrier/board.toml" target="_blank" rel="noopener" data-tip="packages/robocar/unified/hardware/carrier/board.toml · Carrier PCB layout for tools/kicad:"><code>board.toml</code></a> marks unmeasured dimensions and the README lists bench checks still owed.</p></div>
+  <div class="t" data-l="4"><p>Bench facts from Lauri: the cradle’s 22.5 mm M2 hole spacing and the header-at-top-or-bottom constraint (2026-10-16), the RCWL-1601 pin order verified on the fitted modules, the ribbon length. Standing instruction: JLCONE before Chrome. Sign-in and payment are never the agent’s steps.</p></div>
+  <div class="t" data-l="5"><p>Registry entries record their pin-order source, so “memory plus the issue tracking its check” is visibly different from a vendor board file. Breakout pinouts come from the vendors’ Eagle <code>.brd</code> files via <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/tools/breakout-pinout.py" target="_blank" rel="noopener" data-tip="tools/breakout-pinout.py · Read a breakout board&#x27;s PHYSICAL pin order out of its vendor Eagle board file."><code>tools/breakout-pinout.py</code></a>, which handles mirrored bottom-layer elements and per-face silkscreen. The RCWL-1601 page was read from listing photos until Lauri’s continuity check.</p></div>
+</section>
+
+<!-- 16 -->
+<section class="chapter" id="ordering">
+  <p class="ref">18 · Ordering</p>
+  <h2>From design files to the factory’s cart</h2>
+  <div class="t" data-l="1"><p>One command packs everything the factory needs: the board drawings, a parts list and a map of where each part goes. Claude then used the factory’s desktop app to upload them, checked the preview, and stopped at the shopping cart for Lauri to pay.</p></div>
+  <div class="t" data-l="2"><p><code>carrier-fab</code> produces the board manufacturing files, a parts list with the factory’s part numbers, and a placement map for its assembly robots. One surprise: the factory’s parts library often draws chips rotated compared with KiCad, so a correction table fixes each rotation. Without it, five chips would have been soldered on the wrong way round.</p></div>
+  <div class="t" data-l="3"><p><code>carrier-fab</code> refuses to export an unchecked board. Outputs: a Gerber/drill zip, <code>bom-jlc.csv</code> and <code>cpl-jlc.csv</code> with a checked rotation offset per LCSC part. Claude drove the JLCONE desktop app through computer use: upload, compare detected size, PCBA, BOM/CPL matching, pin-1 preview, cases at JLC3DP, save, then reopen the cart to confirm. It stops at the cart.</p></div>
+  <div class="t" data-l="4"><p>LCSC draws most of these chips with pin 1 bottom-left where KiCad has top-left; <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/docs/reference/jlcpcb-rotations.toml" target="_blank" rel="noopener" data-tip="docs/reference/jlcpcb-rotations.toml · JLCPCB placement rotation, per LCSC part."><code>docs/reference/jlcpcb-rotations.toml</code></a> holds offsets derived pad by pad, and <code>carrier-fab</code> fails on an LCSC part without one. Before upload: a clean tree and a grep of the Gerber’s silkscreen apertures. In Chrome a session expired mid-flow and Save to Cart silently did nothing, so every save is followed by a cart check. Hand-off is a CSV tying each line to a commit and a zip hash.</p></div>
+  <div class="t" data-l="5"><p>Offsets: 270° for U5, U7, U8, U9, U10 and Q1, 180° for U2, 0° for U6 and two-pad parts. Upload checks: “Detected 2 layer board of W×H” against <code>.GeneralSpecs.Size</code> in the job file; min via 0.3 mm against <code>grep -E '^T[0-9]+C'</code> on the drill file; silkscreen <code>grep -o '%ADD[0-9]*C,0\.1[0-4][0-9]*\*%'</code> must print nothing. Product description “DIY Hobby Circuit Board, HS 902300”; cases “Plastic Enclosure, HS 392690”. JLC3DP quoted volume must equal <code>report.json</code>’s <code>volume_cm3</code>.</p></div>
+</section>
+
+<!-- 17 -->
+<section class="chapter" id="status">
+  <p class="ref">19 · Cost and status</p>
+  <h2>€79.02, paid and in production</h2>
+  <div class="t" data-l="1"><p>The order came to €79.02 including shipping and taxes: five of the first circuit boards with the small parts already soldered on, five boards for a second robot (a balancing robot), and a set of 3D-printed cases. Next: test the board, learn from it, then order the second version and the camera mount.</p></div>
+  <div class="t" data-l="2"><p>Ordered: the socketed robot board (5, with small parts assembled), the balancing-robot board (5), and resin cases. €43.61 for the goods, €19.40 shipping, €16.01 taxes. On hold: the integrated board and the camera mount. Next: saw the board apart, test it on the bench, and fold the lessons into the second version.</p></div>
+  <div class="t" data-l="3"><div class="table-scroll"><table><tr><th>Line</th><th class="num">€</th></tr><tr><td>Merchandise</td><td class="num">43.61</td></tr><tr><td>Shipping</td><td class="num">19.40</td></tr><tr><td>Customs duties &amp; taxes</td><td class="num">16.01</td></tr><tr><td><b>Order total</b></td><td class="num"><b>79.02</b></td></tr></table></div><p>The price lessons: a sawn panel counts as one design while tabbed panels count each piece; specialist parts carry a per-line fee; VAT appears only at checkout; one coupon per order.</p></div>
+  <div class="t" data-l="4"><p>Paid €79.02 (€43.61 + €19.40 shipping + €16.01 duties and taxes), half the €156 cart that still held the integrated board. Price levers: <b>1 vs 4</b> designs (mouse-bites +€10.83 panel), <b>≈ €2.75</b> per Extended BOM line (Preferred parts are fee-free), <b>25.5 %</b> Finnish VAT on goods plus shipping, <b>one</b> coupon per order in its own category. Since 1 July 2026 the EU also charges duty on parcels under €150.</p><p>Next: saw the panel, fit a head in the cradle, bench-test against the owed checks, revise the integrated board, order it with the gimbal.</p></div>
+  <div class="t" data-l="5"><p>€16.01 ≈ 25.5 % × (€43.61 + €19.40) = €16.07, i.e. VAT. On IOSS shipping the carrier collects any EU duty and its disbursement fee at delivery; DDP prepays all of it. Preferred-part status is visible only through the parts API (<code>componentLibraryType</code>, <code>preferredComponentFlag</code>). The cart re-selects coupons by itself after a reload; JLCONE PCBA $20 needs over €88.91 ex freight across the whole cart.</p></div>
+</section>
+
+<!-- 18 -->
+<section class="chapter" id="takeaways">
+  <p class="ref">20 · Takeaways</p>
+  <h2>Three things that carry over to other projects</h2>
+  <div class="t" data-l="1"><ul><li><b>Keep one master copy.</b> If the same fact is written in several places, they will drift apart.</li><li><b>Automatic checks plus a critical reviewer.</b> Checks catch slips; a reviewer catches bad ideas. Double-check the reviewer, too.</li><li><b>Write down every lesson</b> where the next person, or the next AI session, will read it.</li></ul></div>
+  <div class="t" data-l="2"><ul><li><b>One source of truth first.</b> Generating documents from facts that disagree just produces wrong documents faster.</li><li><b>Checks and a reviewer do different jobs.</b> You need both, and the reviewer’s findings get verified before anyone acts on them.</li><li><b>Turn mistakes into notes and tests</b>, so they aren’t repeated.</li></ul></div>
+  <div class="t" data-l="3"><ul><li><b>Single-source the facts before generating anything.</b> <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/docs/decisions/ADR-021-hardware-source-of-truth.md" target="_blank" rel="noopener" data-tip="ADR-021: One Hardware Source of Truth — a Board × Header × Parts Join · accepted, 2026-08-19">ADR-021</a> sat six weeks and then made every later stage fast.</li><li><b>Deterministic gates plus an adversarial reviewer.</b> Treat the reviewer’s output as model output and verify it against the artefact.</li><li><b>Every “looked fine” failure becomes a test, a skill entry or a path-scoped rule.</b></li></ul></div>
+  <div class="t" data-l="4"><ul><li><b>Find the join.</b> Make the facts single-sourced, then generate.</li><li><b>Gates check what was declared; review finds what wasn’t.</b> Verify the reviewer’s numbers with <code>carrier-measure</code>.</li><li><b>Write the trap down</b> where the next run will read it; mechanical work goes into recipes.</li></ul></div>
+  <div class="t" data-l="5"><ul><li><a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/docs/decisions/ADR-021-hardware-source-of-truth.md" target="_blank" rel="noopener" data-tip="ADR-021: One Hardware Source of Truth — a Board × Header × Parts Join · accepted, 2026-08-19">ADR-021</a> and <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/docs/decisions/ADR-027-kicad-carrier-generation.md" target="_blank" rel="noopener" data-tip="ADR-027: KiCad Carrier Boards Generated From the Hardware Join · accepted, 2026-10-13">ADR-027</a> for the design; <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/tree/main/.claude/skills/carrier-pcb" target="_blank" rel="noopener" data-tip=".claude/skills/carrier-pcb · Generate, check and fabricate a project&#x27;s KiCad carrier PCB from hardware.toml with tools/kicad, and the KiCad 10 traps that read as success. Use when adding a part to the parts registry, regenerating or checking a carrier, running Freerouting, or editing tools/kicad."><code>.claude/skills/carrier-pcb</code></a> for the 46 traps; <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/blob/main/.claude/rules/power-stage-checklist.md" target="_blank" rel="noopener" data-tip=".claude/rules/power-stage-checklist.md · A Battery-Powered Power Stage: Check These Against the Datasheet"><code>.claude/rules/power-stage-checklist.md</code></a> for the 11 regulator checks.</li><li>Every gate ships with a control that proves it can fail.</li><li>Numbers in docs come from the command that produced them, never a hand copy.</li></ul></div>
+</section>
+
+</main>
+
+<section class="wrap" aria-label="Why this matters">
+  <div class="callout">
+    <p class="ref">The point of all this</p>
+    <p>Fewer evenings spent hunting a loose wire or a cracked joint, and more spent on what makes Teuvo interesting: how he behaves, what he connects to, and how people interact with him. There is a long list of ideas waiting to be tested and features waiting to be added, and a board that just works is what lets them get a turn.</p>
+  </div>
+</section>
+
+<footer><div class="wrap">Status as of 27 October 2026. Built from the <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab">laurigates/mcu-tinkering-lab</a> repository; the page source is <a class="ref-link" href="https://github.com/laurigates/mcu-tinkering-lab/tree/main/docs/site/robocar"><code>docs/site/robocar</code></a>. Board images are rendered from the committed KiCad files; cases and mechanism renders come from the repo’s generators.</div></footer>
+
+<script>
+(function () {
+  var names = {1: ["Not technical", "Everyday words, no jargon"], 2: ["Curious", "Plain language, key terms explained"], 3: ["Software", "For developers: the ideas, light on electronics"], 4: ["Engineering", "The full story as presented"], 5: ["Hardware", "Part numbers, datasheet values, file paths"]};
+  var range = document.getElementById("depth");
+  var nameEl = document.getElementById("depth-name");
+  var descEl = document.getElementById("depth-desc");
+  var pads = document.querySelectorAll(".pads button");
+  function set(v, persist) {
+    v = Math.min(5, Math.max(1, parseInt(v, 10) || 2));
+    document.getElementById("doc").setAttribute("data-depth", String(v));
+    range.value = String(v);
+    range.setAttribute("aria-valuetext", names[v][0] + ": " + names[v][1]);
+    nameEl.textContent = names[v][0];
+    descEl.textContent = names[v][1];
+    pads.forEach(function (b) { b.setAttribute("aria-pressed", b.dataset.v === String(v) ? "true" : "false"); });
+    if (persist) { try { localStorage.setItem("robocar-depth", String(v)); } catch (e) {} }
+  }
+  var start = 2;
+  var m = /^#depth-([1-5])$/.exec(location.hash);
+  if (m) start = m[1]; else { try { var s = localStorage.getItem("robocar-depth"); if (s) start = s; } catch (e) {} }
+  set(start, false);
+  range.addEventListener("input", function () { set(range.value, true); });
+  pads.forEach(function (b) { b.addEventListener("click", function () { set(b.dataset.v, true); }); });
+  // Hover and focus previews for repo links: the text is baked into data-tip at build time.
+  var tip = document.createElement("div");
+  tip.id = "ref-tip"; tip.setAttribute("role", "tooltip"); tip.hidden = true;
+  document.getElementById("doc").appendChild(tip);
+  var current = null;
+  function showTip(el) {
+    var text = el.getAttribute("data-tip"); if (!text) return;
+    var sep = text.indexOf(" · ");
+    tip.textContent = "";
+    var k = document.createElement("span"); k.className = "tip-kind";
+    k.textContent = sep > 0 ? text.slice(0, sep) : "Repository";
+    tip.appendChild(k);
+    tip.appendChild(document.createTextNode(sep > 0 ? text.slice(sep + 3) : text));
+    tip.hidden = false; current = el; el.setAttribute("aria-describedby", "ref-tip");
+    var r = el.getBoundingClientRect(), t = tip.getBoundingClientRect(), pad = 12;
+    var left = Math.min(Math.max(pad, r.left), window.innerWidth - t.width - pad);
+    var top = r.top - t.height - 8;
+    if (top < 90) top = r.bottom + 8;
+    tip.style.left = left + "px"; tip.style.top = top + "px";
+  }
+  function hideTip() { if (current) current.removeAttribute("aria-describedby"); tip.hidden = true; current = null; }
+  document.addEventListener("pointerover", function (e) { var el = e.target.closest && e.target.closest(".ref-link"); if (el && el !== current) showTip(el); else if (!el && current) hideTip(); });
+  document.addEventListener("focusin", function (e) { var el = e.target.closest && e.target.closest(".ref-link"); if (el) showTip(el); });
+  document.addEventListener("focusout", hideTip);
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") hideTip(); });
+  window.addEventListener("scroll", hideTip, { passive: true });
+  window.addEventListener("hashchange", function () { var mm = /^#depth-([1-5])$/.exec(location.hash); if (mm) set(mm[1], true); });
+})();
+</script>
+</div>
+
+</body>
+</html>

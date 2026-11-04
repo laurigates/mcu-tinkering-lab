@@ -70,7 +70,7 @@ Known PIDs (`managed_components/espressif__esp32-camera/driver/include/sensor.h`
 - **XIAO ESP32-S3 Sense** ships variants; do not assume the OV2640 that most
   blog posts describe. This one is an OV3660.
 - Any project under `packages/` using `esp32-camera` — `robocar/unified`,
-  `robocar/camera`, `camera-vision/*`. The pin header of one is routinely
+  `camera-vision/*`. The pin header of one is routinely
   copied to the next, comment included.
 - Copy-pasted "tuning blocks" from ESP32-CAM examples. They are OV2640-shaped
   by default and silently mean something else on a newer sensor.

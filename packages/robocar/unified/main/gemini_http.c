@@ -12,6 +12,7 @@
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "gemini_key_state.h"
 
 static const char *TAG = "gemini_http";
 
@@ -67,6 +68,19 @@ esp_err_t gemini_http_post(activity_endpoint_t endpoint, const char *url, const 
     }
 
     activity_trace_http_end(endpoint, err, status, elapsed_ms);
+
+    /* Issue #845: a rejected key and a spent balance need different fixes, so
+     * each gets its own line instead of a generic failure. The body (logged by
+     * the caller) carries Google's wording. */
+    gemini_key_state_note(err == ESP_OK ? status : 0);
+    if (err == ESP_OK && status == 402) {
+        ESP_LOGE(TAG, "HTTP 402: Gemini prepaid credit exhausted — top up the account");
+    } else if (err == ESP_OK && (status == 401 || status == 403)) {
+        ESP_LOGE(TAG,
+                 "HTTP %d: Gemini key rejected (invalid, blocked, or not allowed for this API) — "
+                 "set another with `gemini auth <key>`",
+                 status);
+    }
 
     if (err != ESP_OK) {
         /* mbedTLS allocates from INTERNAL RAM in this build, and concurrent

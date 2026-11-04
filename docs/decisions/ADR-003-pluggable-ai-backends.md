@@ -7,6 +7,8 @@ created: 2026-03-05
 
 # ADR-003: Pluggable AI Backends (Claude API vs Ollama Self-Hosted)
 
+> **Implementation removed (2026-11).** The dual-ESP32 firmware this record describes (`robocar-main`, `robocar-camera`) was deleted in favour of `robocar-unified` ([ADR-013](ADR-013-single-board-xiao-esp32s3.md)). The record is kept for history; the code is in git history before that removal.
+
 ## Context
 
 The ESP32-CAM vision system needs an AI model to analyze images and generate navigation

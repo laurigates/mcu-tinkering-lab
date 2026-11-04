@@ -33,9 +33,10 @@ Sources, cited below by short name:
 | RAM | 128 x 64 bit GDDRAM, eight pages PAGE0–PAGE7 | DS §8.7, p. 25 |
 | Operating temperature | −40 to 85 °C | DS §2, p. 6 |
 
-The Heltec WiFi LoRa 32 V1 answers at `0x3C`
-(`packages/robocar/main/main/pin_config_idf.h`, `OLED_I2C_ADDR`) — a repo fact,
-not a datasheet one.
+The Heltec WiFi LoRa 32 V1's onboard OLED answered at `0x3C` (the removed
+`robocar-main` firmware's `OLED_I2C_ADDR`) — a repo fact, not a datasheet one.
+robocar-unified also assumes `0x3C` (`packages/robocar/unified/main/pin_config.h`),
+unconfirmed until a bench scan.
 
 ## Panel variants
 

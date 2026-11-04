@@ -18,6 +18,7 @@ just mechanism::setup                 # libosmesa6 for headless VTK, and the ven
 just mechanism::test                  # pytest: clash, servo envelopes, one render
 just mechanism::check <design dir>    # clash sweep + wall per printed part -> output/check.json
 just mechanism::showcase <design dir> # assembled x5, travel poses, exploded x2, parts
+just mechanism::animate <design dir>  # the sweep as AV1 video + contact sheet, and clashes between gate poses
 just mechanism::quickview <design dir># matplotlib, while iterating
 ```
 
@@ -35,6 +36,14 @@ A `Body` has a `group`: bodies that move together. Only pairs from different
 groups are clash-tested, and the exploded render lifts whole groups. `allow`
 excuses a named pair for a deliberate interface (a spline in its hub); every
 excuse is listed in `check.json`, so read that list in review.
+
+`check` tests only the `SWEEP` poses. `animate` walks them one joint step at
+a time with `--between` (default 5) interpolated poses per step, runs the same
+clash test at every frame, and writes `output/animation/`: `sweep.mp4` (AV1
+through the system ffmpeg), `sweep-sheet.png` and `sweep.json`. A clash only
+between gate poses lands in `between_clashes`: either tighten `SWEEP` so the
+gate sees it, or fix it. Every frame is one `assembly()` call, so a slow
+design is slow here: the pan-tilt's `print/` takes about 25 s a pose.
 
 Stand-ins are keep-out envelopes from `mechanism.servos` (MG90D, SG90, horns),
 each dimension with its source and "estimate" where nobody measured. A
@@ -123,6 +132,14 @@ once; see `.claude/rules/multi-agent-workflows.md` for surviving that.
    checks its thinnest readings against a ring of nearby points; a reading
    under half the ring's median is a graze (`thickness.py`, tested on the
    yoke's own facets).
+6. **A full `animate` run outlasts a cloud background task.** The pan-tilt's
+   `print/` takes about 25 s a pose (16 s of it its own `assembly()`), so its
+   205 poses run 1.5 h alone and over 2 h with three designs in parallel on 4
+   cores. That is past the 2 h limit on a background command, which kills
+   the run at the limit. Launch it detached (`setsid nohup <script> &`), have
+   the script append a line per finished design to a file, and wait on that
+   file. Commit each design's `output/animation/` only once its run has
+   exited: until then `sweep.mp4` is half-written.
 
 ## Related
 

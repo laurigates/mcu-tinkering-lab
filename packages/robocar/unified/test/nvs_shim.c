@@ -17,8 +17,8 @@
 
 #define SHIM_MAX_ENTRIES 16
 #define SHIM_MAX_HANDLES 8
-#define SHIM_NAME_LEN 16 /* NVS_KEY_NAME_MAX_SIZE: 15 characters + NUL */
-#define SHIM_VALUE_LEN 128
+#define SHIM_NAME_LEN 16   /* NVS_KEY_NAME_MAX_SIZE: 15 characters + NUL */
+#define SHIM_VALUE_LEN 256 /* a Gemini key may be up to 255 characters */
 
 typedef struct {
     bool used;
@@ -175,6 +175,24 @@ esp_err_t nvs_set_str(nvs_handle_t handle, const char *key, const char *value)
     }
     s_write_count++;
     store(h->ns, key, value);
+    return ESP_OK;
+}
+
+esp_err_t nvs_erase_key(nvs_handle_t handle, const char *key)
+{
+    const shim_handle_t *h = lookup(handle);
+    if (!h) {
+        return ESP_ERR_NVS_INVALID_HANDLE;
+    }
+    if (h->mode == NVS_READONLY) {
+        return ESP_ERR_NVS_READ_ONLY;
+    }
+    shim_entry_t *e = find(h->ns, key);
+    if (!e) {
+        return ESP_ERR_NVS_NOT_FOUND;
+    }
+    s_write_count++;
+    e->used = false;
     return ESP_OK;
 }
 

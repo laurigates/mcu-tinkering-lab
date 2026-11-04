@@ -9,7 +9,7 @@ paths:
 # Gemini API: Model-ID / thinkingConfig / Token-Budget Drift, and Prompted TTS Style
 
 The Google Gemini API (`generativelanguage.googleapis.com`) is called from
-several projects here — `robocar/unified`, `robocar/camera`,
+several projects here — `robocar/unified`,
 `camera-vision/gemini-vision`, `thinkpack/brainbox`, `games/nfc-scavenger-hunt`.
 Its request surface **moves under you**: ids get suffixes, config fields get
 renamed, and moving aliases (`*-latest`) repoint to newer model generations with
@@ -78,11 +78,14 @@ full rate lengthens the outage. Pace the loop under the cap and back off on 429.
 
 ## 5. TTS delivery style is *prompted*, not a parameter
 
-For speech generation (`gemini-3.1-flash-tts-preview` etc.) there is no
-style/accent/era field. Delivery is steered by prefixing a natural-language
-directive to the text: `"<style directive>: <text to speak>"`. The directive is
-**interpreted, not read aloud** (verified: a ~40-word directive, 12 s if spoken,
-added 0.36 s of audio). Language is `speechConfig.languageCode` (BCP-47 — `fi-FI`
+For speech generation there is no style/accent/era enum; delivery is a
+natural-language directive. On `gemini-3.1-flash-tts-preview` it was a prefix,
+`"<style directive>: <text to speak>"`, **interpreted, not read aloud**
+(verified: a ~40-word directive, 12 s if spoken, added 0.36 s of audio).
+**`gemini-3.8-flash-tts` reads the text as a verbatim transcript**, so the
+prefix would be spoken; the directive goes in the part's
+`speechMetadata.style` and inline tags become `<sighs>`-style angle brackets
+(docs, 2026-11; see the `gemini-tts-voice` skill, issue #844). Language is `speechConfig.languageCode` (BCP-47 — `fi-FI`
 works). The prebuilt voices (`Kore`, `Puck`, `Charon`, …) are **language-agnostic**;
 the locale-specific `fi-FI-Chirp3-HD-*` names are **Cloud TTS**, a different
 product, and **404** on the Gemini `generateContent` endpoint — do not put one in

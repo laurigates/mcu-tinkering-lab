@@ -1,5 +1,7 @@
 # ADR-008: Gemini Robotics-ER 1.5 as Third AI Backend
 
+> **Implementation removed (2026-11).** The dual-ESP32 firmware this record describes (`robocar-main`, `robocar-camera`) was deleted in favour of `robocar-unified` ([ADR-013](ADR-013-single-board-xiao-esp32s3.md)). The record is kept for history; the code is in git history before that removal.
+
 **Status**: accepted
 **Date**: 2026-03-22
 **Source commit**: feat: add Gemini Robotics-ER 1.5 as third AI backend for robocar-camera (#140, 9bc9fa8)

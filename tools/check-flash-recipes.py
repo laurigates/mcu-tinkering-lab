@@ -83,8 +83,8 @@ SIZE_TO_BYTES = {
 # `flash: (_s3-flash bin_name)`, with optional dependencies before the group.
 # Anchored at column 0 because that is where a just recipe header lives, which is
 # also what keeps a COMMENT mentioning the recipe from matching — robocar/unified
-# and robocar/main both explain in prose why they stayed inline, and counting
-# those as consumers would report the exact projects that got this right. Those
+# explains in prose why it stayed inline, and counting
+# it as a consumer would report the exact project that got this right. Those
 # inline recipes are not unchecked: check_flash_recipe_outputs audits them.
 RECIPE_RE = re.compile(
     r"^(?P<name>[a-z0-9][a-z0-9-]*)\s*:[^\n]*?\((?P<shared>_s3-flash|_esp32-flash)\b",

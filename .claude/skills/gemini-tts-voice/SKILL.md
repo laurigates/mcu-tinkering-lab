@@ -8,6 +8,12 @@ allowed-tools: Bash, Read, Grep, Glob, Edit, WebFetch
 
 # Gemini TTS: What the API Offers and What This Repo Uses
 
+> **Model change pending a live probe (issue #844, 2026-11).** The firmware now
+> calls `gemini-3.8-flash-tts`; `gemini-3.1-flash-tts-preview` has a listed
+> shutdown of 2026-11-17. The 3.8 facts in [Gemini 3.8 Flash TTS](#gemini-38-flash-tts-docs-not-yet-probed)
+> come from the docs, read 2026-11-04, and have **not** been run against the
+> live API. The rest of this file was measured on the preview.
+
 Everything below was **verified against the live API** (2026-07) rather than
 read off the docs page, because the docs page and the REST endpoint disagree —
 see [The docs describe a different surface](#the-docs-describe-a-different-surface).
@@ -15,7 +21,7 @@ When a fact here stops holding, re-probe; don't reason from this file's memory
 of the API any more than from your own.
 
 Consumers in this repo: `packages/robocar/unified/main/gemini_tts.c` (the
-request), `voice_persona.c` (the table), `dialogue_style.c` (per-line
+transport), `tts_request.c` (the request body and tag translation), `voice_persona.c` (the table), `dialogue_style.c` (per-line
 variation), `speech_tags.c` (the tag allow-list), `audio_player.c` (playback).
 
 ## Always use the streaming endpoint
@@ -57,8 +63,10 @@ The decoder's `base64_stream_done()` means "between payloads", **not**
 ## Inline delivery tags
 
 The model performs bracketed tags inside the transcript rather than reading them
-aloud. Verified working: `[whispers]`, `[laughs]`, `[sighs]`, `[excited]`,
-`[bored]`, `[gasp]`.
+aloud. Verified working on the preview: `[whispers]`, `[laughs]`, `[sighs]`,
+`[excited]`, `[bored]`, `[gasp]`. The allow-list is now `[whispers]`,
+`[laughs]`, `[sighs]`, `[gasp]`, each of which has a 3.8 angle-bracket form;
+`tts_request.c` translates them at the request (see the 3.8 section).
 
 **Tags are placed by the generating model, not drawn at random.** A tag has to
 fit what is being said — `[laughs]` on a fault report is worse than no tag — and
@@ -104,11 +112,45 @@ listening order, and pace ~5 s between calls for the free-tier RPM.
 
 ## Models
 
-- `gemini-3.1-flash-tts-preview` — current; the **only** one that streams.
+- `gemini-3.8-flash-tts` — what the firmware calls since issue #844. Finnish
+  is listed. Docs facts only; see below.
+- `gemini-3.8-flash-lite-tts` — same schema, **no Finnish** in its language
+  table, so not usable for Teuvo.
+- `gemini-3.1-flash-tts-preview` — legacy preview, listed shutdown 2026-11-17.
+  Everything measured in this file was measured on it.
 - `gemini-2.5-flash-preview-tts`, `gemini-2.5-pro-preview-tts` — non-streaming.
 
-Switching to a 2.5 model for timbre means giving up the 5 s latency win. Weigh
-it deliberately.
+## Gemini 3.8 Flash TTS (docs, not yet probed)
+
+Read 2026-11-04 from the AI Studio speech-generation page, the
+`gemini-3.8-flash-tts` model page and the Cloud migration guide:
+
+- **Text is a verbatim transcript.** "Directions written into the text might
+  be spoken aloud", so the preview's `"<style>: <text>"` prefix is gone. The
+  style goes in the part: `"speech_metadata": {"style": "..."}` on the Gemini
+  API model page, `speechMetadata.style` in the Cloud guide. Proto3 JSON
+  accepts either spelling; `tts_request.c` sends `speechMetadata`.
+- **Tags are angle brackets, in English.** `<sighs>`, `<laugh>`,
+  `<whispers>`, `<gasp>`, among about 35 listed vocal events. Moods such as
+  `excited` or `bored` belong in the style, not in a tag. The planner still
+  writes the square tags of `speech_tags.h`; `tts_request.c` translates them
+  and drops any with no 3.8 form. The docs do not say what 3.8 does with a
+  leftover `[tag]`.
+- **Streaming returns headerless `audio/l16`** (24 kHz s16le mono) by default,
+  the same PCM the decoder and player already take. Unary returns WAV with a
+  RIFF header, which is one more reason to stay on the streaming endpoint.
+- **Endpoint ambiguity.** The model page documents a GenerateContent shape,
+  but the Gemini API examples are on `/v1beta/interactions` (`"stream": true`),
+  and the Cloud guide lists generateContent/streamGenerateContent as
+  "Gemini Enterprise API only". If `:streamGenerateContent?alt=sse` 404s or
+  400s for 3.8, the Interactions endpoint is the documented fallback; its
+  stream framing has not been read.
+- `temperature`, `topP`, `topK`, `candidateCount` and `systemInstruction` are
+  rejected with `INVALID_ARGUMENT` (Cloud guide). The TTS request sets none.
+
+Probe checklist for the bench (issue #844): Finnish speech with the fi-1950
+style applied and not read aloud; `first=` close to the preview's ~1.2 s;
+`<sighs>`/`<laugh>` performed; a 300-byte line rendered whole.
 
 ## Multi-speaker (available, unused)
 

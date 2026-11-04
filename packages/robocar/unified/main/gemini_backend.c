@@ -38,6 +38,7 @@
 #include "speech_budget.h"
 #include "speech_evidence.h"
 #include "voice_persona.h"
+#include "wifi_manager.h"
 
 static const char *TAG = "gemini_backend";
 
@@ -561,10 +562,12 @@ static char *build_request_json(const char *b64_image)
 
 esp_err_t gemini_backend_init(void)
 {
-    const char *api_key = get_gemini_api_key();
-    if (!api_key || api_key[0] == '\0') {
-        ESP_LOGE(TAG, "GEMINI_API_KEY is not set — cannot initialise Gemini backend");
-        return ESP_ERR_INVALID_STATE;
+    /* A missing key no longer stops the planner from starting (issue #845):
+     * `gemini auth <key>` sets one at runtime, and the planner must pick it up
+     * from its next cycle rather than after a reboot. Each request checks for
+     * the key instead. */
+    if (!get_gemini_api_key()) {
+        ESP_LOGW(TAG, "No Gemini API key yet — planner idles until `gemini auth <key>`");
     }
 
     if (s_response_buf) {
@@ -610,11 +613,22 @@ esp_err_t gemini_backend_plan(const uint8_t *jpeg, size_t jpeg_len, goal_t *out_
         return ESP_ERR_NOT_ALLOWED;
     }
 
+    /* No link, no request (issue #846): a request that cannot leave the board
+     * still counted against the per-boot request fuse, so an offline hour
+     * spent it. Checked after the fuse so `plan` still reports a tripped one. */
+    if (!wifi_is_connected()) {
+        ESP_LOGD(TAG, "no WiFi link — skipping planner request");
+        out_goal->kind = GOAL_KIND_STOP;
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    /* No key: nothing is sent, so the same quiet, no-backoff path as no
+     * link. self_report says gemini_key=absent. */
     const char *api_key = get_gemini_api_key();
     if (!api_key || api_key[0] == '\0') {
-        ESP_LOGE(TAG, "API key unavailable at plan time");
+        ESP_LOGD(TAG, "no API key — skipping planner request");
         out_goal->kind = GOAL_KIND_STOP;
-        return ESP_FAIL;
+        return ESP_ERR_INVALID_STATE;
     }
 
     const int64_t t_start = esp_timer_get_time();
@@ -788,6 +802,9 @@ esp_err_t gemini_backend_narrate(const char *facts, bool is_update, char *out, s
     if (!api_key || api_key[0] == '\0') {
         ESP_LOGW(TAG, "narrate: API key unavailable");
         return ESP_FAIL;
+    }
+    if (!wifi_is_connected()) {
+        return ESP_ERR_INVALID_STATE; /* issue #846: no request without a link */
     }
 
     char *request_body = build_narrate_json(facts, is_update);
