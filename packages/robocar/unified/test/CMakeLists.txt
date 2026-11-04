@@ -274,6 +274,19 @@ target_link_libraries(test_plan_budget PRIVATE Threads::Threads m)
 add_test(NAME plan_budget COMMAND test_plan_budget)
 
 # -----------------------------------------------------------------------------
+# oled_status_core (the OLED status screen's four rows)
+#
+# Pure formatter. Pins a tripped fuse, one failed rangefinder beside a working
+# one, a dead bus, and that the widest value in every field still fits the
+# 21-column panel using only characters its font carries.
+# -----------------------------------------------------------------------------
+add_executable(test_oled_status_core
+    "${MAIN_SRC_DIR}/oled_status_core.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_oled_status_core.c"
+)
+add_test(NAME oled_status_core COMMAND test_oled_status_core)
+
+# -----------------------------------------------------------------------------
 # voice_budget (the hands-free ration and the voice-turn spend ceiling)
 #
 # Pure C with an injected clock. Pins what a bench cannot stage: an hour of a

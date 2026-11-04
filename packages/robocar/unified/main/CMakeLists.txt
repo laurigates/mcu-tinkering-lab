@@ -60,6 +60,9 @@ idf_component_register(
         "ota_version_compare.c"
         "ota_update_decision.c"
         "ota_interval.c"
+        "oled.c"
+        "oled_status.c"
+        "oled_status_core.c"
     INCLUDE_DIRS "."
     REQUIRES
         "esp-idf-lib__pca9685"

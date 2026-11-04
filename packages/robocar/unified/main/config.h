@@ -164,6 +164,9 @@
 #define FEATURE_PIEZO_ENABLED 1
 #define FEATURE_PCA9685_ENABLED 1
 #define FEATURE_OLED_ENABLED 1
+// Status screen redraw period (oled_status.c, from peripheral_task). Only rows
+// that changed reach the bus, so a quiet robot costs nothing per redraw.
+#define OLED_STATUS_REFRESH_MS 1000
 #define FEATURE_WIFI_ENABLED 1
 #define FEATURE_MQTT_ENABLED 1
 #define FEATURE_OTA_ENABLED 1

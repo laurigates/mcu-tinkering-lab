@@ -230,10 +230,9 @@ preserving: if a driver over there ever needs a network header, it belongs on th
 robot side of the line, not in that list.
 
 New code here is only what `unified` does not have: the sweep itself
-(`main/checks.c`), the cue vocabulary and tone generator (`main/cues.c`), and an
-SSD1306 driver (`main/oled.c`). The OLED is declared in `unified`'s
-`pin_config.h` and `i2c_bus.h` but no driver there has ever driven it — this is
-the first code that does.
+(`main/checks.c`) and the cue vocabulary and tone generator (`main/cues.c`). The
+SSD1306 driver started here and now lives in `unified/main/oled.c`, shared like
+the other drivers, since `unified` drives the same panel as its status screen.
 
 ## Not included (yet)
 

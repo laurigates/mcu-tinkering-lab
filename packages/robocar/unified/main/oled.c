@@ -32,14 +32,14 @@ _Static_assert(OLED_COLS * 6 <= OLED_WIDTH, "oled: OLED_COLS cells overrun a pag
 #define SSD1306_CTRL_CMD 0x00
 #define SSD1306_CTRL_DATA 0x40
 
-/** Bytes of framebuffer per I2C transfer. The panel auto-increments across
- *  transfers in horizontal addressing mode, so this only bounds the transaction
- *  size — it does not need to align to a page. */
-#define OLED_FLUSH_CHUNK 128
-
 static i2c_dev_t s_dev;
 static bool s_available = false;
 static uint8_t s_fb[OLED_FB_BYTES];
+/* What the panel was last sent, so oled_flush() writes only the pages that
+ * changed. s_sent_valid is false until the first full flush, and after any
+ * failed page write, since the panel's contents are then unknown. */
+static uint8_t s_sent[OLED_FB_BYTES];
+static bool s_sent_valid = false;
 
 /* -------------------------------------------------------------------------- */
 /* 5x7 font, column-major, LSB = topmost pixel                                  */
@@ -202,6 +202,7 @@ esp_err_t oled_init(void)
     }
 
     s_available = true;
+    s_sent_valid = false;
     memset(s_fb, 0, sizeof(s_fb));
     ESP_LOGI(TAG, "SSD1306 %dx%d up at 0x%02X on mux ch%d", OLED_WIDTH, OLED_HEIGHT, OLED_I2C_ADDR,
              I2C_BUS_CHANNEL_OLED);
@@ -239,24 +240,38 @@ esp_err_t oled_flush(void)
         return ESP_ERR_INVALID_STATE;
     }
 
-    esp_err_t err = i2c_bus_select_channel(I2C_BUS_CHANNEL_OLED);
-    if (err != ESP_OK) {
-        return err;
-    }
-
-    static const uint8_t window[] = {
-        0x21, 0x00, OLED_WIDTH - 1, /* column range */
-        0x22, 0x00, OLED_PAGES - 1, /* page range */
-    };
-    err = send_cmds(window, sizeof(window));
-
+    /* One bus acquisition per changed page rather than one for the frame. A
+     * page is 128 data bytes, about 3 ms at 400 kHz; the whole 128x32 frame
+     * would hold the bus for about 13 ms, and the 30 Hz executor's rangefinder
+     * reads wait on the same mutex. An unchanged screen costs no bus time. */
     const uint8_t ctrl = SSD1306_CTRL_DATA;
-    for (size_t off = 0; err == ESP_OK && off < sizeof(s_fb); off += OLED_FLUSH_CHUNK) {
-        const size_t n =
-            (sizeof(s_fb) - off < OLED_FLUSH_CHUNK) ? (sizeof(s_fb) - off) : OLED_FLUSH_CHUNK;
-        err = i2c_dev_write(&s_dev, &ctrl, 1, &s_fb[off], n);
-    }
+    for (uint8_t page = 0; page < OLED_PAGES; page++) {
+        const size_t off = (size_t)page * OLED_WIDTH;
+        if (s_sent_valid && memcmp(&s_fb[off], &s_sent[off], OLED_WIDTH) == 0) {
+            continue;
+        }
 
-    i2c_bus_release();
-    return err;
+        esp_err_t err = i2c_bus_select_channel(I2C_BUS_CHANNEL_OLED);
+        if (err != ESP_OK) {
+            s_sent_valid = false;
+            return err;
+        }
+        const uint8_t window[] = {
+            0x21, 0x00, OLED_WIDTH - 1, /* column range: the whole row */
+            0x22, page, page,           /* page range: this page only */
+        };
+        err = send_cmds(window, sizeof(window));
+        if (err == ESP_OK) {
+            err = i2c_dev_write(&s_dev, &ctrl, 1, &s_fb[off], OLED_WIDTH);
+        }
+        i2c_bus_release();
+
+        if (err != ESP_OK) {
+            s_sent_valid = false;
+            return err;
+        }
+        memcpy(&s_sent[off], &s_fb[off], OLED_WIDTH);
+    }
+    s_sent_valid = true;
+    return ESP_OK;
 }
