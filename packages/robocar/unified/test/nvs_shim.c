@@ -17,8 +17,8 @@
 
 #define SHIM_MAX_ENTRIES 16
 #define SHIM_MAX_HANDLES 8
-#define SHIM_NAME_LEN 16 /* NVS_KEY_NAME_MAX_SIZE: 15 characters + NUL */
-#define SHIM_VALUE_LEN 128
+#define SHIM_NAME_LEN 16   /* NVS_KEY_NAME_MAX_SIZE: 15 characters + NUL */
+#define SHIM_VALUE_LEN 256 /* a Gemini key may be up to 255 characters */
 
 typedef struct {
     bool used;

@@ -39,6 +39,7 @@
 #include "credentials_validator.h"
 #include "dialogue_style.h"
 #include "frame_dump.h"
+#include "gemini_key_state.h"
 #include "gemini_tts.h"
 #include "goal_state.h"
 #include "gpio_expander.h"
@@ -1696,6 +1697,50 @@ static void handle_mqtt_cmd(const char *buf)
     printf("mqtt: usage: mqtt | mqtt auth <user> <pass> | mqtt auth clear\n");
 }
 
+/**
+ * @brief `gemini` — the Gemini API key: where it came from, what the last
+ *        response said about it, and NVS provisioning (issue #845).
+ *
+ * Serial console ONLY, for the same reason as `mqtt`: command_task() calls
+ * this before execute_console_line(), and "gemini" is not in mqtt_command.c's
+ * forwarded prefixes, so no MQTT publisher can read or replace the key. The
+ * line is logged redacted, and the key itself is never printed: only its
+ * source, length and state.
+ *
+ * Unlike `mqtt auth`, a key applies at once: every request reads it fresh.
+ */
+static void handle_gemini_cmd(const char *buf)
+{
+    _Static_assert(CONSOLE_LINE_MAX == 128, "keep the %127s width below in step");
+    char op[8] = {0};
+    char key[CONSOLE_LINE_MAX] = {0};
+    char extra[2] = {0};
+    const int n = sscanf(buf, "gemini %7s %127s %1s", op, key, extra);
+
+    if (n <= 0) {
+        const char *k = get_gemini_api_key();
+        printf("gemini: key=%s (source %s, %u chars) last response=%s\n", k ? "present" : "absent",
+               get_gemini_api_key_source(), k ? (unsigned)strlen(k) : 0u,
+               gemini_key_state_name(gemini_key_state_get()));
+        printf("  usage: gemini auth <key> | gemini auth clear   (applied now; NVS wins over\n");
+        printf("         credentials.h; max %d chars, no spaces)\n", MAX_API_KEY_LENGTH - 1);
+        return;
+    }
+    if (strcmp(op, "auth") == 0 && n == 2 && strcmp(key, "clear") == 0) {
+        printf("gemini: %s (now from %s)\n",
+               credentials_nvs_clear_gemini() ? "NVS key cleared" : "clearing the NVS key FAILED",
+               get_gemini_api_key_source());
+        return;
+    }
+    if (strcmp(op, "auth") == 0 && n == 2) {
+        printf("gemini: %s\n", credentials_nvs_save_gemini(key)
+                                   ? "key saved to NVS — in use from the next request"
+                                   : "saving the key FAILED (too long, a space, or NVS error)");
+        return;
+    }
+    printf("gemini: usage: gemini | gemini auth <key> | gemini auth clear\n");
+}
+
 // ========================================
 // Serial command task (Core 0, priority 5)
 // ========================================
@@ -1745,12 +1790,17 @@ static void command_task(void *pvParameters)
                  * test is looser than the routing one: a mistyped ` mqtt auth`
                  * or `MQTT auth` is not run, but it still carries a password. */
                 const bool is_mqtt_cmd = strncmp(buf, "mqtt", 4) == 0;
+                const bool is_gemini_cmd = strncmp(buf, "gemini", 6) == 0;
                 const char *lead = buf;
                 while (*lead == ' ' || *lead == '\t') {
                     ++lead;
                 }
                 const bool redact = strncasecmp(lead, "mqtt", 4) == 0;
-                ESP_LOGI(TAG, "Serial cmd: %s", redact ? "mqtt ... (redacted)" : buf);
+                const bool redact_key = strncasecmp(lead, "gemini", 6) == 0;
+                ESP_LOGI(TAG, "Serial cmd: %s",
+                         redact       ? "mqtt ... (redacted)"
+                         : redact_key ? "gemini ... (redacted)"
+                                      : buf);
 
                 /* Somebody is at the console, so the robot is not unattended
                  * and the whole premise of dormancy has lapsed. Placed here —
@@ -1798,6 +1848,9 @@ static void command_task(void *pvParameters)
                     /* Serial-only by construction: kept out of
                      * execute_console_line(), which the MQTT topic shares. */
                     handle_mqtt_cmd(buf);
+                } else if (is_gemini_cmd) {
+                    /* Serial-only, like `mqtt`: the key is a credential. */
+                    handle_gemini_cmd(buf);
                 } else {
                     execute_console_line(buf);
                 }
@@ -2151,6 +2204,10 @@ void app_main(void)
 
     ESP_ERROR_CHECK(init_nvs());
     init_mqtt_access();
+    /* Load the Gemini key once here, on one task, before the planner, TTS and
+     * voice tasks can race the first load (issue #845). */
+    ESP_LOGI(TAG, "Gemini key: %s (source %s)", get_gemini_api_key() ? "present" : "absent",
+             get_gemini_api_key_source());
 
     /* The hardware phase cannot fail the boot: a missing bus and a peripheral
      * that would not initialise are both logged and carried past, so what came

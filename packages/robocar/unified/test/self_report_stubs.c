@@ -22,6 +22,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "gemini_backend.h"
+#include "gemini_key_state.h"
 #include "gpio_expander.h"
 #include "i2c_bus.h"
 #include "led_controller.h"
@@ -36,6 +37,7 @@ self_report_stub_state_t g_stub;
 
 void stub_reset_healthy(void)
 {
+    gemini_key_state_reset();
     g_stub = (self_report_stub_state_t){
         .i2c_bus_ready = true,
         .motors_initialized = true,

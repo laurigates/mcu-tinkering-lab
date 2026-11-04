@@ -29,6 +29,7 @@
 
 #include "credentials_loader.h"  // MAX_SSID_LENGTH
 #include "esp_err.h"
+#include "gemini_key_state.h"
 #include "mqtt_command.h"  // mqtt_command_access_t
 
 #ifdef __cplusplus
@@ -66,7 +67,11 @@ typedef struct {
     bool mcp23017_present;  //!< optional GPIO expander detected
     bool audio_ok;          //!< I2S player task + ring ready
     bool key_present;       //!< Gemini API key available
-    char version[32];       //!< firmware version
+    /* What the last response said about that key (issue #845): a key Google
+     * rejects and a spent balance both silence the robot, and need different
+     * fixes. Rendered as gemini_key=absent|present|rejected|exhausted. */
+    gemini_key_state_t key_state;
+    char version[32];  //!< firmware version
     /* What the MQTT command topic may reach (issue #626). Not part of the
      * health signature: it is fixed for the boot and is not a fault. */
     mqtt_command_access_t mqtt_access;

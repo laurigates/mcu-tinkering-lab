@@ -17,6 +17,7 @@ idf_component_register(
         "base64.c"
         "gemini_backend.c"
         "gemini_http.c"
+        "gemini_key_state.c"
         "gemini_parse.c"
         "goal_state.c"
         "scene_change.c"

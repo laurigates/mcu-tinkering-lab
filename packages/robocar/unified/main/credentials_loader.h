@@ -24,7 +24,6 @@
 typedef struct {
     char wifi_ssid[MAX_SSID_LENGTH];
     char wifi_password[MAX_PASSWORD_LENGTH];
-    char gemini_api_key[MAX_API_KEY_LENGTH];
     bool credentials_loaded;
 } credentials_t;
 
@@ -63,11 +62,30 @@ const char *get_wifi_ssid(void);
 const char *get_wifi_password(void);
 
 /**
- * @brief Get Gemini API key
+ * @brief Gemini API key, or NULL when none is configured (issue #845).
  *
- * @return Pointer to Gemini API key string
+ * Sources, highest priority first: NVS (`gemini auth <key>` on the serial
+ * console), GEMINI_API_KEY in the gitignored credentials.h, then the
+ * GEMINI_API_KEY environment variable. Independent of where the WiFi
+ * credentials came from, so Improv provisioning does not drop it. A key set
+ * at runtime is used by the next request; the returned pointer stays valid
+ * until the key is changed twice.
  */
 const char *get_gemini_api_key(void);
+
+/** "nvs", "credentials.h", "env" or "none" — where the Gemini key came from. */
+const char *get_gemini_api_key_source(void);
+
+/**
+ * @brief Store a Gemini key in NVS and use it from the next request.
+ *
+ * @return false for an empty key, one of MAX_API_KEY_LENGTH or more, one with
+ *         a space or control character, or an NVS error.
+ */
+bool credentials_nvs_save_gemini(const char *key);
+
+/** Erase the NVS key and fall back to credentials.h or the environment now. */
+bool credentials_nvs_clear_gemini(void);
 
 /**
  * @brief Check if credentials are available

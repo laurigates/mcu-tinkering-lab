@@ -8,6 +8,7 @@
 #include <string.h>
 #include "credentials.h"
 #include "esp_log.h"
+#include "gemini_key_state.h"
 #include "nvs.h"
 #include "nvs_flash.h"
 
@@ -94,14 +95,6 @@ static bool load_from_file(credentials_t *creds)
     creds->wifi_password[MAX_PASSWORD_LENGTH - 1] = '\0';
     ESP_LOGI(TAG, "Loaded WiFi password from credentials.h");
 
-#ifdef GEMINI_API_KEY
-    strncpy(creds->gemini_api_key, GEMINI_API_KEY, MAX_API_KEY_LENGTH - 1);
-    creds->gemini_api_key[MAX_API_KEY_LENGTH - 1] = '\0';
-    ESP_LOGI(TAG, "Loaded Gemini API key from credentials.h");
-#else
-    ESP_LOGI(TAG, "Gemini API key not configured - planner will fail safe to STOP");
-#endif
-
     return true;
 }
 
@@ -119,8 +112,6 @@ bool load_credentials(credentials_t *creds)
 
     // Priority 1: NVS (credentials stored by Improv WiFi provisioner)
     if (load_from_nvs(creds)) {
-        // WiFi credentials loaded from NVS; still try env/file for API key
-        load_from_env("GEMINI_API_KEY", creds->gemini_api_key, MAX_API_KEY_LENGTH);
         creds->credentials_loaded = true;
         return true;
     }
@@ -133,9 +124,6 @@ bool load_credentials(credentials_t *creds)
     if (!load_from_env("WIFI_PASSWORD", creds->wifi_password, MAX_PASSWORD_LENGTH)) {
         env_loaded = false;
     }
-    // Gemini API key is required for the planner
-    load_from_env("GEMINI_API_KEY", creds->gemini_api_key, MAX_API_KEY_LENGTH);
-
     if (env_loaded) {
         ESP_LOGI(TAG, "Successfully loaded credentials from environment variables");
         creds->credentials_loaded = true;
@@ -157,10 +145,11 @@ bool load_credentials(credentials_t *creds)
 }
 
 /* Validation is deliberately per-credential rather than all-or-nothing. The
- * credentials here come from three independent sources for two independent
- * subsystems, so one missing value must not invalidate the others: a board
- * provisioned over Improv has WiFi but no Gemini key, and an open network has
- * an SSID but no password. Only a usable SSID is genuinely required. */
+ * credentials here come from three independent sources, so one missing value
+ * must not invalidate the others: an open network has an SSID but no
+ * password. Only a usable SSID is genuinely required. The Gemini key is
+ * loaded separately, below, because it must not depend on where WiFi came
+ * from (issue #845). */
 bool validate_credentials(const credentials_t *creds)
 {
     if (!creds || !creds->credentials_loaded) {
@@ -177,12 +166,6 @@ bool validate_credentials(const credentials_t *creds)
     // An empty password is legitimate: open networks have none.
     if (strlen(creds->wifi_password) == 0) {
         ESP_LOGW(TAG, "WiFi password is empty — assuming an open network");
-    }
-
-    // The planner needs the Gemini key, but the robot boots and drives without
-    // it (the executor holds STOP until a goal arrives), so this is not fatal.
-    if (strlen(creds->gemini_api_key) == 0) {
-        ESP_LOGW(TAG, "No Gemini API key — AI planner will stay disabled");
     }
 
     ESP_LOGI(TAG, "Credentials validation successful");
@@ -233,16 +216,6 @@ const char *get_wifi_password(void)
         return NULL;
     }
     return g_credentials.wifi_password;
-}
-
-/* Independent of the WiFi accessors on purpose: the key can be present when the
- * SSID is not (env-var CI build), and absent when the SSID is (Improv). */
-const char *get_gemini_api_key(void)
-{
-    if (!ensure_loaded()) {
-        return NULL;
-    }
-    return (strlen(g_credentials.gemini_api_key) > 0) ? g_credentials.gemini_api_key : NULL;
 }
 
 bool credentials_nvs_save_wifi(const char *ssid, const char *password)
@@ -413,5 +386,147 @@ bool credentials_nvs_clear_mqtt(void)
         return false;
     }
     ESP_LOGI(TAG, "MQTT credentials cleared from NVS — applied at next boot");
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// Gemini API key (issue #845)
+// ---------------------------------------------------------------------------
+
+#define NVS_GEMINI_NAMESPACE "gemini_auth"
+#define NVS_KEY_GEMINI "key"
+
+/* Empty in the CMake stub that CI, web-flasher and OTA images are built with,
+ * so a released image never carries a key. */
+#ifndef GEMINI_API_KEY
+#define GEMINI_API_KEY ""
+#endif
+_Static_assert(sizeof(GEMINI_API_KEY) <= MAX_API_KEY_LENGTH,
+               "GEMINI_API_KEY in credentials.h is longer than 255 characters");
+
+/* Two buffers and an index, so a key changed from the console never rewrites
+ * the string a request on another task is sending: the new key is written
+ * into the idle buffer and published with one store. A pointer handed out
+ * before the change stays valid until the change after that, which is far
+ * longer than any request. */
+static char s_gemini_key[2][MAX_API_KEY_LENGTH];
+static volatile int s_gemini_active = -1; /* -1: not loaded yet */
+static const char *volatile s_gemini_source = "none";
+
+/* A key goes into an HTTP header, so anything but printable ASCII without
+ * spaces is refused: a CR or LF would end the header early. */
+static bool gemini_key_is_valid(const char *key)
+{
+    if (!key || key[0] == '\0' || strlen(key) >= MAX_API_KEY_LENGTH) {
+        return false;
+    }
+    for (const char *p = key; *p != '\0'; ++p) {
+        if (*p <= ' ' || *p > '~') {
+            return false;
+        }
+    }
+    return true;
+}
+
+/* NVS, then credentials.h, then the environment, whatever the WiFi source.
+ * The WiFi path used to read the key from getenv() alone once Improv had
+ * written NVS, so provisioning dropped a key compiled in from credentials.h. */
+static const char *gemini_key_lookup(char *dest)
+{
+    dest[0] = '\0';
+
+    nvs_handle_t handle;
+    if (nvs_open(NVS_GEMINI_NAMESPACE, NVS_READONLY, &handle) == ESP_OK) {
+        size_t len = MAX_API_KEY_LENGTH;
+        const bool ok =
+            nvs_get_str(handle, NVS_KEY_GEMINI, dest, &len) == ESP_OK && gemini_key_is_valid(dest);
+        nvs_close(handle);
+        if (ok) {
+            return "nvs";
+        }
+        dest[0] = '\0';
+    }
+
+    if (gemini_key_is_valid(GEMINI_API_KEY)) {
+        strlcpy(dest, GEMINI_API_KEY, MAX_API_KEY_LENGTH);
+        return "credentials.h";
+    }
+
+    if (load_from_env("GEMINI_API_KEY", dest, MAX_API_KEY_LENGTH) && gemini_key_is_valid(dest)) {
+        return "env";
+    }
+    dest[0] = '\0';
+    return "none";
+}
+
+static void gemini_key_publish(void)
+{
+    const int next = (s_gemini_active == 0) ? 1 : 0;
+    const char *source = gemini_key_lookup(s_gemini_key[next]);
+    s_gemini_source = source;
+    s_gemini_active = next;
+    gemini_key_state_reset();
+    ESP_LOGI(TAG, "Gemini API key: %s", strcmp(source, "none") == 0 ? "none" : source);
+}
+
+const char *get_gemini_api_key(void)
+{
+    if (s_gemini_active < 0) {
+        gemini_key_publish();
+    }
+    const char *key = s_gemini_key[s_gemini_active];
+    return key[0] != '\0' ? key : NULL;
+}
+
+const char *get_gemini_api_key_source(void)
+{
+    (void)get_gemini_api_key();
+    return s_gemini_source;
+}
+
+bool credentials_nvs_save_gemini(const char *key)
+{
+    if (!gemini_key_is_valid(key)) {
+        return false;
+    }
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open(NVS_GEMINI_NAMESPACE, NVS_READWRITE, &handle);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to open NVS for the Gemini key: %s", esp_err_to_name(err));
+        return false;
+    }
+    err = nvs_set_str(handle, NVS_KEY_GEMINI, key);
+    if (err == ESP_OK) {
+        err = nvs_commit(handle);
+    }
+    nvs_close(handle);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to save the Gemini key: %s", esp_err_to_name(err));
+        return false;
+    }
+    /* Presence only: the key itself is never logged. */
+    ESP_LOGI(TAG, "Gemini key saved to NVS (%u characters) — in use now", (unsigned)strlen(key));
+    gemini_key_publish();
+    return true;
+}
+
+bool credentials_nvs_clear_gemini(void)
+{
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open(NVS_GEMINI_NAMESPACE, NVS_READWRITE, &handle);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to open NVS for the Gemini key: %s", esp_err_to_name(err));
+        return false;
+    }
+    err = nvs_erase_all(handle);
+    if (err == ESP_OK) {
+        err = nvs_commit(handle);
+    }
+    nvs_close(handle);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to clear the Gemini key: %s", esp_err_to_name(err));
+        return false;
+    }
+    gemini_key_publish();
     return true;
 }

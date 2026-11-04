@@ -531,6 +531,7 @@ add_test(NAME servo_controller COMMAND test_servo_controller)
 # -----------------------------------------------------------------------------
 add_executable(test_activity_trace
     "${MAIN_SRC_DIR}/activity_trace.c"
+    "${MAIN_SRC_DIR}/gemini_key_state.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/host_shims.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/test_activity_trace.c"
 )
@@ -645,6 +646,7 @@ add_test(NAME mqtt_command COMMAND test_mqtt_command)
 # -----------------------------------------------------------------------------
 add_executable(test_self_report
     "${MAIN_SRC_DIR}/self_report.c"
+    "${MAIN_SRC_DIR}/gemini_key_state.c"
     "${MAIN_SRC_DIR}/mqtt_command.c"  # the access-mode rule (issue #626) is shared, not stubbed
     "${CMAKE_CURRENT_SOURCE_DIR}/self_report_stubs.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/test_self_report.c"
@@ -755,6 +757,7 @@ configure_file("${CMAKE_CURRENT_SOURCE_DIR}/credentials_fixture.h"
 foreach(_variant credentials_loader credentials_loader_no_mqtt)
     add_executable(test_${_variant}
         "${CREDENTIALS_LOADER_COPY_DIR}/credentials_loader.c"
+        "${MAIN_SRC_DIR}/gemini_key_state.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/nvs_shim.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/test_credentials_loader.c"
     )
