@@ -1,7 +1,7 @@
 /**
  * @file test_voice_prompts.c
- * @brief The TTS request has the gemini-3.8-flash-tts shape (#844) and
- *        carries a whole SPEECH_TEXT_MAX line for every persona (#847).
+ * @brief Every prompt built from a persona reaches the request whole (#847),
+ *        and the TTS request has the gemini-3.8-flash-tts shape (#844).
  *
  * Built against the real voice_persona.c table, so a persona added or a brief
  * lengthened later is covered without editing this file. The failures pinned
@@ -19,6 +19,7 @@
 #include "speech_queue.h"
 #include "speech_tags.h"
 #include "tts_request.h"
+#include "voice_history.h"
 #include "voice_persona.h"
 
 uint32_t esp_random(void)
@@ -45,12 +46,81 @@ static void test_run(const char *name, void (*fn)(void))
     printf("     PASS\n");
 }
 
+/** A robot name at the 32-byte limit the issue names. */
+static const char k_long_name[] = "Teuvo-Maantienkuningas-Palmu-XYZ";
+
 static const char *json_text_at(const cJSON *root, const char *path0, const char *key)
 {
     const cJSON *contents = cJSON_GetObjectItem(root, path0);
     const cJSON *parts = cJSON_GetObjectItem(cJSON_GetArrayItem(contents, 0), "parts");
     const cJSON *item = cJSON_GetObjectItem(cJSON_GetArrayItem(parts, 0), key);
     return cJSON_IsString(item) ? item->valuestring : NULL;
+}
+
+/* ---- #847: the voice turn's system instruction ------------------------- */
+
+static void test_system_prompt_keeps_every_brief_whole(void)
+{
+    _Static_assert(sizeof(k_long_name) - 1 == 32, "the long name is 32 bytes");
+
+    for (size_t i = 0; voice_persona_at(i) != NULL; i++) {
+        const voice_persona_t *p = voice_persona_at(i);
+        char *sys = voice_history_build_system_prompt(k_long_name, p->text_brief, p->tag_brief);
+        ASSERT(sys != NULL);
+
+        /* The whole brief and the whole tag instruction, in order, then the
+         * closing rule. A fixed join buffer cut fi-1950 at "[whispers". */
+        const char *brief = strstr(sys, p->text_brief);
+        ASSERT(brief == sys);
+        if (p->tag_brief != NULL && p->tag_brief[0] != '\0') {
+            const char *tags = strstr(sys, p->tag_brief);
+            ASSERT(tags != NULL && tags > brief);
+        }
+        ASSERT(strstr(sys, k_long_name) != NULL);
+        static const char closing[] = "reply with '__IGNORE__'.";
+        const size_t len = strlen(sys);
+        ASSERT(len > sizeof(closing) - 1);
+        ASSERT(strcmp(sys + len - (sizeof(closing) - 1), closing) == 0);
+        printf("     %s: system prompt %u bytes\n", p->slug, (unsigned)len);
+        free(sys);
+    }
+}
+
+static void test_system_prompt_defaults(void)
+{
+    char *sys = voice_history_build_system_prompt(NULL, NULL, "[sighs]");
+    ASSERT(sys != NULL);
+    ASSERT(strncmp(sys, "Be brief.\n", 10) == 0); /* no tag brief without a text brief */
+    ASSERT(strstr(sys, "addresses you as Robocar") != NULL);
+    free(sys);
+}
+
+/* ---- #847: the voice turn's user prompt and telemetry ----------------- */
+
+static void test_turn_prompt_is_never_cut(void)
+{
+    const reactive_telemetry_t worst = {
+        .distance_cm = UINT16_MAX,
+        .reflex_active = true,
+        .sensor_failed = false,
+    };
+    char tele[VOICE_HISTORY_TELE_MAX];
+    ASSERT(voice_history_format_telemetry(&worst, tele, sizeof(tele)));
+    ASSERT(strlen(tele) < sizeof(tele) - 1); /* fits, with room to spare */
+    ASSERT(strstr(tele, "(obstacle reflex active).") != NULL);
+
+    const size_t need = voice_history_build_prompt(k_long_name, true, tele, NULL, 0);
+    char *prompt = malloc(need + 1);
+    ASSERT(prompt != NULL);
+    ASSERT(voice_history_build_prompt(k_long_name, true, tele, prompt, need + 1) == need);
+    ASSERT(strlen(prompt) == need);
+    ASSERT(strstr(prompt, tele) != NULL);
+    ASSERT(strstr(prompt, "no markdown.") != NULL);
+    free(prompt);
+
+    /* A short buffer reports the length it needed, as snprintf does. */
+    char small[16];
+    ASSERT(voice_history_build_prompt(k_long_name, true, tele, small, sizeof(small)) == need);
 }
 
 /* ---- #844 / #847: the TTS request -------------------------------------- */
@@ -172,6 +242,9 @@ static void test_translation_never_splits_a_character(void)
 
 int main(void)
 {
+    test_run("system_prompt_keeps_every_brief_whole", test_system_prompt_keeps_every_brief_whole);
+    test_run("system_prompt_defaults", test_system_prompt_defaults);
+    test_run("turn_prompt_is_never_cut", test_turn_prompt_is_never_cut);
     test_run("tts_request_carries_whole_line_and_style",
              test_tts_request_carries_whole_line_and_style);
     test_run("tts_request_without_style_omits_metadata",

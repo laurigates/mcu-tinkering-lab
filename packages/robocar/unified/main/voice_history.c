@@ -120,28 +120,59 @@ bool voice_history_format_telemetry(const reactive_telemetry_t *tele, char *out,
     return true;
 }
 
-void voice_history_build_prompt(const char *name, bool has_image, const char *tele_summary,
-                                char *out, size_t out_size)
+size_t voice_history_build_prompt(const char *name, bool has_image, const char *tele_summary,
+                                  char *out, size_t out_size)
 {
-    if (!out || out_size == 0) {
-        return;
-    }
     const char *robot_name = (name && name[0] != '\0') ? name : "Robocar";
     const char *media = has_image ? "the camera view and audio follow." : "the audio follows.";
+    const bool has_tele = tele_summary && tele_summary[0] != '\0';
 
-    if (tele_summary && tele_summary[0] != '\0') {
-        snprintf(out, out_size,
-                 "You are a small wheeled robot named %s. %s "
-                 "%s Reply with ONE short spoken sentence — "
-                 "no preamble, no quotation marks, no markdown.",
-                 robot_name, media, tele_summary);
-    } else {
-        snprintf(out, out_size,
-                 "You are a small wheeled robot named %s. %s "
-                 "Reply with ONE short spoken sentence — "
-                 "no preamble, no quotation marks, no markdown.",
-                 robot_name, media);
+    char dummy;
+    if (!out || out_size == 0) {
+        out = &dummy;
+        out_size = 0;
     }
+    const int n = snprintf(out, out_size,
+                           "You are a small wheeled robot named %s. %s %s%s"
+                           "Reply with ONE short spoken sentence — "
+                           "no preamble, no quotation marks, no markdown.",
+                           robot_name, media, has_tele ? tele_summary : "", has_tele ? " " : "");
+    return (n < 0) ? 0 : (size_t)n;
+}
+
+/** snprintf into a buffer allocated to fit; NULL on allocation failure. */
+static char *format_alloc(const char *fmt, const char *a, const char *b, const char *c,
+                          const char *d)
+{
+    const int n = snprintf(NULL, 0, fmt, a, b, c, d);
+    if (n < 0) {
+        return NULL;
+    }
+    char *out = malloc((size_t)n + 1);
+    if (out) {
+        snprintf(out, (size_t)n + 1, fmt, a, b, c, d);
+    }
+    return out;
+}
+
+char *voice_history_build_system_prompt(const char *name, const char *text_brief,
+                                        const char *tag_brief)
+{
+    const char *robot_name = (name && name[0] != '\0') ? name : "Robocar";
+    const char *brief = text_brief ? text_brief : "Be brief.";
+    const bool has_tags = text_brief && tag_brief && tag_brief[0] != '\0';
+
+    return format_alloc(
+        "%s%s%s\n"
+        "Listen to the audio.\n"
+        "- If someone speaks to you (addresses you as %s or 'robotti', asks you a question, "
+        "or makes a comment directed at you), answer them in ONE short spoken sentence in "
+        "your persona.\n"
+        "- If people are talking in the room and you are idle, you may occasionally chime in "
+        "with a brief, dry witty remark.\n"
+        "- If the audio contains only background noise, coughs, typing, or speech not "
+        "directed at you, reply with '__IGNORE__'.",
+        brief, has_tags ? " " : "", has_tags ? tag_brief : "", robot_name);
 }
 
 /** Attach @p value under @p key WITHOUT copying it. The caller's string must
@@ -270,17 +301,23 @@ char *voice_history_build_request_body(const char *name, const char *sys_prompt,
         return NULL; /* the clip is the turn; there is no request without it */
     }
 
-    char tele_summary[128] = {0};
+    char tele_summary[VOICE_HISTORY_TELE_MAX] = {0};
     if (has_telemetry && tele) {
         voice_history_format_telemetry(tele, tele_summary, sizeof(tele_summary));
     }
 
-    char prompt_text[512] = {0};
-    voice_history_build_prompt(name, (b64_jpeg != NULL && b64_jpeg[0] != '\0'), tele_summary,
-                               prompt_text, sizeof(prompt_text));
+    /* Sized from the inputs, not a fixed buffer (issue #847). */
+    const bool has_image = b64_jpeg != NULL && b64_jpeg[0] != '\0';
+    const size_t prompt_len = voice_history_build_prompt(name, has_image, tele_summary, NULL, 0);
+    char *prompt_text = malloc(prompt_len + 1);
+    if (!prompt_text) {
+        return NULL;
+    }
+    voice_history_build_prompt(name, has_image, tele_summary, prompt_text, prompt_len + 1);
 
     cJSON *root = cJSON_CreateObject();
     if (!root) {
+        free(prompt_text);
         return NULL;
     }
 
@@ -288,6 +325,7 @@ char *voice_history_build_request_body(const char *name, const char *sys_prompt,
     if (!contents ||
         !voice_history_build_contents(contents, prompt_text, b64_jpeg, b64_wav, now_ms)) {
         cJSON_Delete(root);
+        free(prompt_text);
         return NULL;
     }
 
@@ -317,5 +355,6 @@ char *voice_history_build_request_body(const char *name, const char *sys_prompt,
         body = cJSON_PrintBuffered(root, (int)(payload + VOICE_HISTORY_BODY_HEADROOM), false);
     }
     cJSON_Delete(root);
+    free(prompt_text);
     return body;
 }
