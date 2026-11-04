@@ -333,8 +333,33 @@ if(CJSON_FOUND)
     target_link_directories(test_voice_history PRIVATE ${CJSON_LIBRARY_DIRS})
     target_link_libraries(test_voice_history PRIVATE ${CJSON_LIBRARIES} Threads::Threads m)
     add_test(NAME voice_history COMMAND test_voice_history)
+
+    # Every prompt built from a persona reaches the request whole (issue #847),
+    # and the TTS request has the gemini-3.8-flash-tts shape (issue #844).
+    # Compiles the real voice_persona.c table, so its config.h needs a
+    # credentials.h: the fixture is copied in as one, as for the loader below.
+    set(VOICE_PROMPTS_CRED_DIR "${CMAKE_CURRENT_BINARY_DIR}/voice_prompts_cred")
+    configure_file("${CMAKE_CURRENT_SOURCE_DIR}/credentials_fixture.h"
+                   "${VOICE_PROMPTS_CRED_DIR}/credentials.h" COPYONLY)
+    add_executable(test_voice_prompts
+        "${MAIN_SRC_DIR}/voice_history.c"
+        "${MAIN_SRC_DIR}/voice_persona.c"
+        "${MAIN_SRC_DIR}/dialogue_style.c"
+        "${MAIN_SRC_DIR}/speech_tags.c"
+        "${MAIN_SRC_DIR}/tts_request.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/host_shims.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/nvs_shim.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/test_voice_prompts.c"
+    )
+    target_include_directories(test_voice_prompts PRIVATE ${CJSON_INCLUDE_DIRS}
+                               "${VOICE_PROMPTS_CRED_DIR}")
+    target_link_directories(test_voice_prompts PRIVATE ${CJSON_LIBRARY_DIRS})
+    target_link_libraries(test_voice_prompts PRIVATE ${CJSON_LIBRARIES} Threads::Threads m)
+    # The ESP_LOG* shims are no-ops, which leaves TAG unused.
+    target_compile_options(test_voice_prompts PRIVATE -Wno-unused-variable)
+    add_test(NAME voice_prompts COMMAND test_voice_prompts)
 else()
-    message(STATUS "cJSON not found — skipping test_gemini_parse and test_voice_history. Install via `brew install cjson` or `apt install libcjson-dev`.")
+    message(STATUS "cJSON not found — skipping test_gemini_parse, test_voice_history and test_voice_prompts. Install via `brew install cjson` or `apt install libcjson-dev`.")
 endif()
 
 # -----------------------------------------------------------------------------

@@ -40,6 +40,7 @@ idf_component_register(
         "voice_budget.c"
         "voice_turn.c"
         "gemini_tts.c"
+        "tts_request.c"
         "voice_persona.c"
         "dialogue_style.c"
         "ultrasonic.c"

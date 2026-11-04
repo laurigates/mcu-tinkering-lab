@@ -178,6 +178,24 @@ esp_err_t nvs_set_str(nvs_handle_t handle, const char *key, const char *value)
     return ESP_OK;
 }
 
+esp_err_t nvs_erase_key(nvs_handle_t handle, const char *key)
+{
+    const shim_handle_t *h = lookup(handle);
+    if (!h) {
+        return ESP_ERR_NVS_INVALID_HANDLE;
+    }
+    if (h->mode == NVS_READONLY) {
+        return ESP_ERR_NVS_READ_ONLY;
+    }
+    shim_entry_t *e = find(h->ns, key);
+    if (!e) {
+        return ESP_ERR_NVS_NOT_FOUND;
+    }
+    s_write_count++;
+    e->used = false;
+    return ESP_OK;
+}
+
 esp_err_t nvs_erase_all(nvs_handle_t handle)
 {
     const shim_handle_t *h = lookup(handle);

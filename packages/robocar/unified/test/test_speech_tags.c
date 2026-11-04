@@ -90,7 +90,7 @@ static void test_tag_match_is_exact(void)
  * four stage directions reads as parody, not character. */
 static void test_caps_tags_per_line(void)
 {
-    check_sanitize("[sighs] Kas. [laughs] Vai niin. [gasp] Oho. [bored] No.",
+    check_sanitize("[sighs] Kas. [laughs] Vai niin. [gasp] Oho. [whispers] No.",
                    "[sighs] Kas. [laughs] Vai niin. Oho. No.", 2);
 }
 
