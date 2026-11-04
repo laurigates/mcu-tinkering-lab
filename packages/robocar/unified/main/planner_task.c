@@ -416,10 +416,10 @@ static void planner_task(void *pvParameters)
                      (unsigned long long)plan_budget_tokens());
             backoff_periods = 0;
         } else if (ret == ESP_ERR_INVALID_STATE) {
-            /* No WiFi link (issue #846): nothing was sent and nothing spent,
-             * so no backoff, and the first cycle after the link returns plans
-             * at once. */
-            ESP_LOGD(TAG, "no WiFi link — planner idle, holding STOP");
+            /* No WiFi link (issue #846) or no key yet (issue #845): nothing
+             * was sent and nothing spent, so no backoff, and the first cycle
+             * after the link or the key arrives plans at once. */
+            ESP_LOGD(TAG, "no WiFi link or no key — planner idle, holding STOP");
             goal_state_force_stop();
         } else {
             backoff_periods = (backoff_periods == 0) ? 1

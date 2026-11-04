@@ -2093,12 +2093,12 @@ static esp_err_t init_hierarchical_ai(void)
     // required: without the executor nothing drives the motors at all.
     ESP_RETURN_ON_ERROR(reactive_controller_init(), TAG, "reactive_controller_init failed");
 
-    /* planner_task spawns the Gemini planner on Core 1 (requires WiFi + an API
-     * key). Non-fatal by design: a board flashed from the web flasher has no
-     * credentials at all, and panicking here would boot-loop the documented
-     * default configuration. Without a planner the executor simply holds STOP,
-     * which is safe — and the console, Improv provisioning and self-report all
-     * stay reachable so the device can be told what it is missing. */
+    /* planner_task spawns the Gemini planner on Core 1. It starts without WiFi
+     * or a key and idles until both exist (issues #845, #846). Non-fatal by design: a board flashed
+     * from the web flasher has no credentials at all, and panicking here would boot-loop the
+     * documented default configuration. Without a planner the executor simply holds STOP, which is
+     * safe — and the console, Improv provisioning and self-report all stay reachable so the device
+     * can be told what it is missing. */
     esp_err_t planner_ret = planner_task_init();
     if (planner_ret != ESP_OK) {
         ESP_LOGW(TAG, "planner_task_init failed (%s) — AI planner disabled, robot holds STOP",
