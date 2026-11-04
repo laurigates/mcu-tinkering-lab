@@ -58,6 +58,7 @@
 #include "motor_controller.h"
 #include "mqtt_command.h"
 #include "mqtt_logger.h"
+#include "oled_status.h"
 #include "ota_manager.h"
 #include "pin_config.h"
 #include "plan_activity.h"
@@ -184,7 +185,19 @@ static void peripheral_task(void *pvParameters)
 
     ESP_LOGI(TAG, "Peripheral task started on core %d", xPortGetCoreID());
 
+    TickType_t last_oled = xTaskGetTickCount();
+
     while (1) {
+#if FEATURE_OLED_ENABLED
+        /* The status screen redraws between commands. oled_flush() writes only
+         * the rows that changed, one bus acquisition per row. */
+        if (xTaskGetTickCount() - last_oled >= pdMS_TO_TICKS(OLED_STATUS_REFRESH_MS)) {
+            last_oled = xTaskGetTickCount();
+            oled_status_refresh();
+        }
+#else
+        (void)last_oled;
+#endif
         if (xQueueReceive(s_periph_queue, &cmd, pdMS_TO_TICKS(100)) == pdTRUE) {
             switch (cmd.type) {
                 case PERIPH_CMD_LED_COLOR:
@@ -1945,6 +1958,9 @@ static void init_hardware(void)
     init_peripheral("LEDs", led_controller_init());
     init_peripheral("Servos", servo_controller_init());
     init_peripheral("Buzzer", buzzer_init());
+#if FEATURE_OLED_ENABLED
+    init_peripheral("OLED", oled_status_init());
+#endif
 
     // Startup indication — each no-ops if its peripheral did not come up.
     led_set_both(&LED_COLOR_GREEN);
