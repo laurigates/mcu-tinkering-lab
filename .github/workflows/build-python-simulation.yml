@@ -41,11 +41,11 @@ jobs:
 
       - name: Install dependencies
         working-directory: packages/robocar/simulation
-        run: uv sync
+        run: uv sync --locked  # the committed uv.lock, never a fresh resolve
 
       - name: Check imports
         working-directory: packages/robocar/simulation
         run: |
-          uv run python -c "import sys; print(f'Python {sys.version}')"
-          uv run python -c "import numpy; print(f'NumPy {numpy.__version__}')"
-          uv run python -c "import pymunk; print(f'Pymunk {pymunk.version}')"
+          uv run --locked python -c "import sys; print(f'Python {sys.version}')"
+          uv run --locked python -c "import numpy; print(f'NumPy {numpy.__version__}')"
+          uv run --locked python -c "import pymunk; print(f'Pymunk {pymunk.version}')"
