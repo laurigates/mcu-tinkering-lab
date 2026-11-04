@@ -781,3 +781,17 @@ add_executable(test_log_mirror_core
     "${CMAKE_CURRENT_SOURCE_DIR}/test_log_mirror_core.c"
 )
 add_test(NAME log_mirror_core COMMAND test_log_mirror_core)
+
+# -----------------------------------------------------------------------------
+# net_supervisor_core (issue #846 — network services armed on link-up)
+#
+# Pure C with an injected clock. Pins that a board booted offline starts MQTT
+# and OTA when the link returns, that OTA (and its rollback-confirm timer)
+# starts once per boot, that MQTT follows every edge, and when Improv re-arms,
+# including across the uint32 millisecond wrap.
+# -----------------------------------------------------------------------------
+add_executable(test_net_supervisor_core
+    "${MAIN_SRC_DIR}/net_supervisor_core.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_net_supervisor_core.c"
+)
+add_test(NAME net_supervisor_core COMMAND test_net_supervisor_core)

@@ -23,6 +23,7 @@
 #include "speech_queue.h"
 #include "tts_request.h"
 #include "voice_persona.h"
+#include "wifi_manager.h"
 
 static const char *TAG = "gemini_tts";
 
@@ -237,6 +238,13 @@ static void speak(const char *text)
     const char *api_key = get_gemini_api_key();
     if (!api_key || api_key[0] == '\0') {
         ESP_LOGE(TAG, "API key unavailable — cannot speak");
+        return;
+    }
+    if (!wifi_is_connected()) {
+        /* Issue #846: the line is dropped rather than queued, as on a full
+         * queue; a sentence about the room is stale by the time a link
+         * returns. */
+        ESP_LOGW(TAG, "no WiFi link — not speaking: \"%s\"", text);
         return;
     }
 

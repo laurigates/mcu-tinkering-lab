@@ -16,12 +16,21 @@
 esp_err_t wifi_init(void);
 
 /**
- * @brief Connect to WiFi network
- * @param ssid WiFi network name
- * @param password WiFi password
- * @return ESP_OK on success, error code otherwise
+ * @brief Start joining a network, without waiting for it (issue #846).
+ *
+ * Returns as soon as the attempt is under way. The link is reported by
+ * wifi_is_connected(); wifi_connect_failed() says when the fast retries for
+ * this attempt are spent (reconnection continues in the background with
+ * backoff). Replaces any attempt or association in progress.
+ *
+ * @return ESP_OK when the attempt started; the driver's error otherwise, which
+ *         is logged and never aborts the boot.
  */
 esp_err_t wifi_connect(const char *ssid, const char *password);
+
+/** True once the fast retries of the current wifi_connect() attempt are spent
+ *  without a link. Cleared by the next wifi_connect() and by a link-up. */
+bool wifi_connect_failed(void);
 
 /**
  * @brief Check if WiFi is connected

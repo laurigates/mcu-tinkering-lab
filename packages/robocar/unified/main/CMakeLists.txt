@@ -53,6 +53,7 @@ idf_component_register(
         "credentials_loader.c"
         "improv_console.c"
         "wifi_manager.c"
+        "net_supervisor_core.c"
         "mqtt_logger.c"
         "mqtt_command.c"
         "ota_manager.c"

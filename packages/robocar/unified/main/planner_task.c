@@ -415,6 +415,12 @@ static void planner_task(void *pvParameters)
                      (unsigned)PLAN_LADDER_STEPS, plan_budget_requests(), budget_max_requests(),
                      (unsigned long long)plan_budget_tokens());
             backoff_periods = 0;
+        } else if (ret == ESP_ERR_INVALID_STATE) {
+            /* No WiFi link (issue #846): nothing was sent and nothing spent,
+             * so no backoff, and the first cycle after the link returns plans
+             * at once. */
+            ESP_LOGD(TAG, "no WiFi link — planner idle, holding STOP");
+            goal_state_force_stop();
         } else {
             backoff_periods = (backoff_periods == 0) ? 1
                               : (backoff_periods < PLANNER_MAX_BACKOFF_PERIODS)

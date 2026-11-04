@@ -42,6 +42,7 @@
 #include "voice_endpoint.h"
 #include "voice_history.h"
 #include "voice_persona.h"
+#include "wifi_manager.h"
 
 static const char *TAG = "voice_turn";
 
@@ -310,6 +311,12 @@ static void run_turn(uint32_t window_ms, bool vad)
      * request can sit in the queue while the turn before it spends the last of
      * the ceiling, and that one must not go out. Before the beep, so a refused
      * turn makes no sound. */
+    /* Again on this task: the link can drop while a request waits in the
+     * queue (issue #846). */
+    if (!wifi_is_connected()) {
+        ESP_LOGW(TAG, "listen: no WiFi link — turn skipped");
+        return;
+    }
     const voice_budget_verdict_t verdict = voice_budget_check(t_start, vad);
     if (verdict != VOICE_BUDGET_OK) {
         ESP_LOGW(TAG, "listen: %s turn refused at start — %s", vad ? "hands-free" : "listen",
@@ -588,6 +595,12 @@ static esp_err_t enqueue(const voice_turn_req_t *req)
      * request time for the same reason: no beep, no recording, and an answer
      * the console and the listener can act on. A ration refusal is counted so a
      * room that keeps asking shows up as a number in `voice`. */
+    /* No link, no turn (issue #846): nothing would reach Gemini, and the
+     * per-boot ceiling would still be charged. Before the budget check, so an
+     * offline room is not counted as rationed either. */
+    if (!wifi_is_connected()) {
+        return ESP_ERR_INVALID_STATE;
+    }
     const voice_budget_verdict_t verdict =
         voice_budget_check((uint32_t)(esp_timer_get_time() / 1000), req->vad);
     if (verdict != VOICE_BUDGET_OK) {
