@@ -3,7 +3,7 @@ paths:
   - '**/*gemini*'
   - '**/prompt_builder.*'
   - 'packages/robocar/unified/main/{speech,voice,scene_change,ambient,dialogue,plan,planner,mic}*'
-  - 'packages/robocar/unified/test/**'
+  - 'packages/robocar/unified/test/test_{speech,voice,scene,ambient,dialogue,plan}*'
 ---
 # Gating a Stateless Model: Withhold the Capability, Don't Word the Instruction Harder
 
