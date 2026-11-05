@@ -14,7 +14,8 @@
  *     toward it. Each tick of turning subtracts the estimated yaw from the
  *     bearing, so the head re-centres as the heading catches up, and the turn
  *     ends once the bearing is inside HEAD_RECENTRE_DEADBAND_DEG.
- *   - Any other goal, or a stale one, re-centres the head.
+ *   - Any other goal, or a stale one, re-centres the head, or hands it to the
+ *     idle gaze (idle_gaze.h, ADR-029) when the gaze is on.
  *
  * The bearing is latched per goal rather than recomputed from the box every
  * tick. The box describes one frame; there is no newer frame on the device
@@ -60,6 +61,22 @@ extern "C" {
  *  rated ~600 deg/s unloaded; the slew exists so a new goal swings the head
  *  instead of snapping it, which also bounds the stall current on each step. */
 #define HEAD_SLEW_DEG_PER_TICK 6
+
+/** Head travel per tick for the idle gaze (ADR-029), degrees (~60 deg/s). A
+ *  third of the track slew: the gaze is unhurried looking around, and a slower
+ *  head is quieter and easier to follow by eye. */
+#define HEAD_GAZE_SLEW_DEG_PER_TICK 2
+
+/**
+ * How long the head must hold still before a frame counts as taken at rest, ms.
+ *
+ * The camera serves the latest completed frame (CAMERA_GRAB_LATEST), which
+ * began exposing up to a frame period or two before planner_task samples the
+ * head, and the servo horn lags its command. A frame sampled sooner than this
+ * after the head stopped may show it moving, so planner_task treats it as off
+ * every dwell pose (ADR-029 §2). A guess with margin; the bench can shorten it.
+ */
+#define HEAD_SETTLE_MS 400U
 
 /** The body starts turning once the bearing passes this percentage of the pan
  *  limit on that side. Below 100 so the head keeps some travel in reserve for
@@ -138,14 +155,16 @@ typedef struct {
 
 /** Module state. Zero-initialise or call head_aim_reset(). */
 typedef struct {
-    bool latched;        /**< A bearing has been latched for goal_seq.          */
-    uint32_t goal_seq;   /**< goal_state write sequence the bearing belongs to. */
-    float bearing_deg;   /**< Body-relative bearing, + = right.                 */
-    float tilt_deg;      /**< Target tilt, + = up.                              */
-    bool body_turning;   /**< Hysteresis latch for the body turn.               */
-    bool written;        /**< false until the first write, and after a failure. */
-    head_pose_t last;    /**< The command last written successfully.            */
-    uint32_t written_ms; /**< When `last` was written.                          */
+    bool latched;            /**< A bearing has been latched for goal_seq.          */
+    uint32_t goal_seq;       /**< goal_state write sequence the bearing belongs to. */
+    float bearing_deg;       /**< Body-relative bearing, + = right.                 */
+    float tilt_deg;          /**< Target tilt, + = up.                              */
+    bool body_turning;       /**< Hysteresis latch for the body turn.               */
+    bool written;            /**< false until the first write, and after a failure. */
+    head_pose_t last;        /**< The command last written successfully.            */
+    uint32_t written_ms;     /**< When `last` was written.                          */
+    bool still_known;        /**< still_since_ms is meaningful (false after reset). */
+    uint32_t still_since_ms; /**< Last tick the head was commanded to move.     */
 } head_aim_t;
 
 /* =========================================================================
@@ -180,6 +199,27 @@ head_aim_out_t head_aim_track(head_aim_t *s, uint32_t goal_seq, const head_box_t
  * starts clean.
  */
 head_aim_out_t head_aim_centre(head_aim_t *s, head_pose_t now, const head_limits_t *lim);
+
+/**
+ * @brief One step toward an idle-gaze target, at HEAD_GAZE_SLEW_DEG_PER_TICK.
+ *
+ * Like head_aim_centre(), drops the latched bearing and the body-turn latch:
+ * the gaze runs only when no track goal holds the head.
+ */
+head_aim_out_t head_aim_gaze(head_aim_t *s, head_pose_t now, head_pose_t target,
+                             const head_limits_t *lim);
+
+/**
+ * @brief Record this tick's command for the settled check.
+ *
+ * Moving means @p cmd differs from @p now. The first call after a reset starts
+ * the stillness clock, so a reset (an external lease, servos lost) never
+ * counts as having been still all along.
+ */
+void head_aim_note_motion(head_aim_t *s, head_pose_t cmd, head_pose_t now, uint32_t now_ms);
+
+/** @brief Whether the head has held still for HEAD_SETTLE_MS. Wrap-safe. */
+bool head_aim_settled(const head_aim_t *s, uint32_t now_ms);
 
 /**
  * @brief Whether @p cmd needs writing: it differs from the pose, differs from

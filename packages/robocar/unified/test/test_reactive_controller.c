@@ -13,8 +13,10 @@
  */
 
 #include "goal_state.h"
+#include "head_aim.h"
 #include "motor_controller.h"
 #include "reactive_controller.h"
+#include "scene_change.h"
 #include "ultrasonic.h"
 
 #include <assert.h>
@@ -35,6 +37,7 @@ void motor_stub_get_last_state(uint8_t *left_speed, uint8_t *right_speed, uint8_
 
 /* From reactive_controller.c (host-test build) */
 void reactive_controller_tick_for_test(void);
+void reactive_controller_set_face_forward_for_test(bool face_forward);
 
 /* From servo_controller_stub.c */
 #include "servo_controller.h"
@@ -456,6 +459,9 @@ static void setup_with_head(void)
 {
     setup();
     servo_stub_reset(true);
+    /* The tests in this section pin ADR-025's head: re-centre when nothing
+     * directs it. The idle gaze (ADR-029, on at boot) has its own section. */
+    reactive_controller_set_gaze(false);
 }
 
 static goal_t track_goal(uint16_t cx, int16_t capture_pan, uint8_t speed_pct)
@@ -823,6 +829,164 @@ static void test_rear_failure_streak_is_reported_per_sensor(void)
  * Main
  * ========================================================================= */
 
+/* =========================================================================
+ * Idle gaze (ADR-029 §1): the head looks around when nothing directs it
+ * ========================================================================= */
+
+static void setup_with_gaze(void)
+{
+    setup();
+    servo_stub_reset(true);
+    reactive_controller_set_face_forward_for_test(false);
+    ASSERT(reactive_controller_gaze_enabled()); /* on at boot */
+}
+
+static int16_t head_tilt(void)
+{
+    servo_position_t pos = {0};
+    servo_get_position(&pos);
+    return pos.tilt_angle;
+}
+
+static reactive_telemetry_t telemetry(void)
+{
+    reactive_telemetry_t t;
+    reactive_controller_get_telemetry(&t);
+    return t;
+}
+
+/* Tick until the head is away from centre, at most @p max ticks. */
+static bool tick_until_off_centre(int max)
+{
+    for (int i = 0; i < max; ++i) {
+        reactive_controller_tick_for_test();
+        if (head_pan() != 0 || head_tilt() != 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/* With no goal holding the head, the gaze visits the side and floor poses
+ * within the limits, and never moves the wheels. */
+static void test_gaze_looks_around_when_nothing_directs_the_head(void)
+{
+    setup_with_gaze();
+    prime_distance(100);
+
+    bool left = false, right = false, floor_seen = false;
+    for (int i = 0; i < 3000; ++i) { /* 99 s */
+        reactive_controller_tick_for_test();
+        ASSERT(telemetry().head_mode == REACTIVE_HEAD_GAZE);
+        ASSERT(motor_stub_get_last_call() == MOTOR_CALL_COAST);
+        left = left || (head_pan() == -SCENE_POSE_SIDE_PAN_DEG && head_tilt() == 0);
+        right = right || (head_pan() == SCENE_POSE_SIDE_PAN_DEG && head_tilt() == 0);
+        floor_seen = floor_seen || (head_pan() == 0 && head_tilt() == SCENE_POSE_FLOOR_TILT_DEG);
+    }
+    ASSERT(left && right && floor_seen);
+    ASSERT(servo_stub_out_of_limit_attempts() == 0);
+}
+
+/* A fresh track goal takes the head on the very next tick. */
+static void test_track_goal_preempts_gaze(void)
+{
+    setup_with_gaze();
+    prime_distance(100);
+    ASSERT(tick_until_off_centre(1000));
+
+    goal_t g = track_goal(800, 0, 0);
+    ASSERT(goal_state_write(&g, 60000) == ESP_OK);
+    reactive_controller_tick_for_test();
+    ASSERT(telemetry().head_mode == REACTIVE_HEAD_AIM);
+    ticks(30);
+    ASSERT(head_pan() == 18);
+}
+
+/* A console lease takes the head from the gaze too. */
+static void test_lease_preempts_gaze(void)
+{
+    setup_with_gaze();
+    prime_distance(100);
+    ASSERT(reactive_controller_head_hold(REACTIVE_HEAD_PAN, -25, 60000) == ESP_OK);
+    ticks(30);
+    ASSERT(telemetry().head_mode == REACTIVE_HEAD_LEASE);
+    ASSERT(head_pan() == -25);
+}
+
+/* During a voice turn the head faces forward, and holds it for the whole turn. */
+static void test_voice_turn_faces_forward(void)
+{
+    setup_with_gaze();
+    prime_distance(100);
+    ASSERT(tick_until_off_centre(1000));
+    ticks(10); /* well on the way to a side or floor pose */
+
+    reactive_controller_set_face_forward_for_test(true);
+    ticks(60);
+    ASSERT(head_pan() == 0 && head_tilt() == 0);
+    for (int i = 0; i < 600; ++i) {
+        reactive_controller_tick_for_test();
+        ASSERT(head_pan() == 0 && head_tilt() == 0);
+    }
+    reactive_controller_set_face_forward_for_test(false);
+}
+
+/* `idle gaze off` returns the head to centre, as ADR-025 had it. */
+static void test_gaze_off_recentres(void)
+{
+    setup_with_gaze();
+    prime_distance(100);
+    ASSERT(tick_until_off_centre(1000));
+
+    reactive_controller_set_gaze(false);
+    ticks(60);
+    ASSERT(head_pan() == 0 && head_tilt() == 0);
+    ASSERT(telemetry().head_mode == REACTIVE_HEAD_CENTRE);
+}
+
+/* head_settled is what planner_task reads to decide whether a frame was taken
+ * at rest: false while the head moves, true once it has held still for
+ * HEAD_SETTLE_MS, false under an external lease. */
+static void test_head_settled_follows_the_head(void)
+{
+    setup_with_gaze();
+    prime_distance(100);
+    ASSERT(!telemetry().head_settled || head_pan() == 0);
+
+    ASSERT(tick_until_off_centre(1000));
+    ASSERT(!telemetry().head_settled); /* moving */
+
+    /* Ride the slew to the dwell pose, then past the settle time. */
+    int16_t last_pan = head_pan(), last_tilt = head_tilt();
+    int still = 0;
+    for (int i = 0; i < 200 && still < 2; ++i) {
+        reactive_controller_tick_for_test();
+        still = (head_pan() == last_pan && head_tilt() == last_tilt) ? still + 1 : 0;
+        last_pan = head_pan();
+        last_tilt = head_tilt();
+    }
+    ASSERT(!telemetry().head_settled);
+    ticks((int)(HEAD_SETTLE_MS / REACTIVE_LOOP_PERIOD_MS) + 1);
+    ASSERT(telemetry().head_settled);
+    ASSERT(scene_pose_from_head(head_pan(), head_tilt()) != SCENE_POSE_NONE);
+
+    ASSERT(reactive_controller_head_external(60000) == ESP_OK);
+    reactive_controller_tick_for_test();
+    ASSERT(!telemetry().head_settled);
+}
+
+/* A centred head with the gaze off settles once and stays settled: the
+ * behaviour the pose-keyed gates had before the gaze existed. */
+static void test_centred_head_stays_settled(void)
+{
+    setup_with_head(); /* gaze off */
+    ticks((int)(HEAD_SETTLE_MS / REACTIVE_LOOP_PERIOD_MS) + 2);
+    for (int i = 0; i < 300; ++i) {
+        reactive_controller_tick_for_test();
+        ASSERT(telemetry().head_settled);
+    }
+}
+
 int main(void)
 {
     printf("=== reactive_controller host tests ===\n\n");
@@ -851,6 +1015,14 @@ int main(void)
     test_run("console_head_hold_is_a_lease", test_console_head_hold_is_a_lease);
     test_run("external_head_lease_writes_nothing", test_external_head_lease_writes_nothing);
     test_run("drive_heading_folds_head_pan", test_drive_heading_folds_head_pan);
+    test_run("gaze_looks_around_when_nothing_directs_the_head",
+             test_gaze_looks_around_when_nothing_directs_the_head);
+    test_run("track_goal_preempts_gaze", test_track_goal_preempts_gaze);
+    test_run("lease_preempts_gaze", test_lease_preempts_gaze);
+    test_run("voice_turn_faces_forward", test_voice_turn_faces_forward);
+    test_run("gaze_off_recentres", test_gaze_off_recentres);
+    test_run("head_settled_follows_the_head", test_head_settled_follows_the_head);
+    test_run("centred_head_stays_settled", test_centred_head_stays_settled);
     test_run("rear_reading_reaches_telemetry", test_rear_reading_reaches_telemetry);
     test_run("rear_obstacle_does_not_trip_the_reflex", test_rear_obstacle_does_not_trip_the_reflex);
     test_run("front_obstacle_trips_the_reflex", test_front_obstacle_trips_the_reflex);

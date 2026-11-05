@@ -29,6 +29,7 @@ starts the app again.
 | `servo …` | `servo` alone reports readiness, on/off, both angles with the PCA9685 counts, the live travel limits and the PWM frequency; `servo pan\|tilt <deg>` holds one for 30 s through a head lease the executor applies (refused outside its limits), then the executor takes the head back; `servo on\|off` drives or releases both outputs, and runs directly on the console task so `off` works mid-exercise; `servo limit pan\|tilt <min> <max>` sets the live travel limits (boot default pan ±60°, tilt ±30°; not persisted); `servo exercise` shakes then nods between the limits, logging every write; `servo freq <24-1526>` changes the chip-wide prescaler and re-sends both servo pulses at the new period |
 | `led <r> <g> <b>` | Both RGB LEDs |
 | `mic` / `mic dump <n>` | Microphone state and the VAD speech trigger's scores (best since the last `mic`); dump PCM frames — tells a dead mic from a quiet room |
+| `idle …` | The executor's idle behaviour (ADR-029). `idle` alone prints whether the gaze is on, the head mode and whether the head has settled (whether a frame captured now gets a dwell pose); `idle gaze on\|off` switches the idle gaze (on at boot, not persisted). See [head-aiming.md](head-aiming.md#idle-gaze-looking-around-when-nothing-directs-the-head) |
 | `plan …` | The gate on whether the planner makes a request at all — `plan` alone reports cadence, wake scores and spend; `plan on\|off\|wake\|sleep\|resume`, `plan scene\|range\|requests\|tokens <n>` |
 | `trace …` | Camera + endpoint activity counters since boot; `trace led on\|off`, `trace reset` |
 | `mqtt …` | Serial only. `mqtt` alone prints the MQTT command mode (`full`/`read-only`) and where the broker credentials came from; `mqtt auth <user> <pass>` stores them in NVS, `mqtt auth clear` removes them — both applied at the next boot |
@@ -59,7 +60,7 @@ and classifies the payload before anything acts on it:
   one second of motion, so continuous remote driving means republishing at
   ~1 Hz, and a dropped connection stops the robot within a second.
 - **Everything else** in the console table above (`plan`, `voice`, `trace`,
-  `mic`, `cam`, `servo`, `led`, `sound`, `gpio`, `snap`, `listen`) — forwarded
+  `mic`, `cam`, `servo`, `led`, `sound`, `gpio`, `snap`, `listen`, `idle`) — forwarded
   verbatim to `execute_console_line()`, the exact function the serial console
   calls, so the two entry points can never disagree about what a command
   does.
@@ -77,7 +78,7 @@ and classifies the payload before anything acts on it:
 with no `MQTT_USERNAME`/`MQTT_PASSWORD` connects anonymously, and on an
 anonymous broker anything on the LAN can publish to `robocar/commands` — so in
 that mode only the bare status forms reach a handler: `plan`, `trace`, `mic`,
-`cam`, `servo`, `gpio`, `voice`, `voice said`. Movement, every setting, and
+`cam`, `servo`, `gpio`, `voice`, `voice said`, `idle`. Movement, every setting, and
 `snap`/`mic dump`/`listen` (camera frames and raw audio are not status) are
 refused and logged as `MQTT command refused: read-only …`. With both a
 username and a password configured, the full command set above is available.

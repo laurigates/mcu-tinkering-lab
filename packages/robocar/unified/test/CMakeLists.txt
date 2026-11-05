@@ -110,6 +110,8 @@ add_executable(test_reactive_controller
     "${MAIN_SRC_DIR}/goal_state.c"
     "${MAIN_SRC_DIR}/ultrasonic.c"
     "${MAIN_SRC_DIR}/head_aim.c"
+    "${MAIN_SRC_DIR}/idle_gaze.c"
+    "${MAIN_SRC_DIR}/scene_change.c"
     "${MAIN_SRC_DIR}/reactive_controller.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/motor_controller_stub.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/servo_controller_stub.c"
@@ -130,6 +132,8 @@ add_executable(test_reflex_latency
     "${MAIN_SRC_DIR}/goal_state.c"
     "${MAIN_SRC_DIR}/ultrasonic_core.c"
     "${MAIN_SRC_DIR}/head_aim.c"
+    "${MAIN_SRC_DIR}/idle_gaze.c"
+    "${MAIN_SRC_DIR}/scene_change.c"
     "${MAIN_SRC_DIR}/reactive_controller.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/motor_controller_stub.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/servo_controller_stub.c"
@@ -150,6 +154,20 @@ add_executable(test_head_aim
 )
 target_link_libraries(test_head_aim PRIVATE m)
 add_test(NAME head_aim COMMAND test_head_aim)
+
+# -----------------------------------------------------------------------------
+# idle_gaze — where the head looks when nothing directs it (ADR-029 §1)
+#
+# Pure C, compiled unmodified with a scripted random source. The executor
+# integration is pinned in test_reactive_controller.
+# -----------------------------------------------------------------------------
+add_executable(test_idle_gaze
+    "${MAIN_SRC_DIR}/idle_gaze.c"
+    "${MAIN_SRC_DIR}/scene_change.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_idle_gaze.c"
+)
+target_link_libraries(test_idle_gaze PRIVATE m)
+add_test(NAME idle_gaze COMMAND test_idle_gaze)
 
 # -----------------------------------------------------------------------------
 # base64 streaming decoder (TTS audio path)

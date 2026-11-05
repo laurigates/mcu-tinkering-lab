@@ -47,6 +47,7 @@ idf_component_register(
         "ultrasonic.c"
         "ultrasonic_core.c"
         "head_aim.c"
+        "idle_gaze.c"
         "reactive_controller.c"
         "planner_task.c"
         "self_report.c"
