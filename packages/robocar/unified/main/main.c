@@ -674,9 +674,14 @@ static void handle_voice_cmd(const char *buf)
         printf("  budget: quiet=%us max=%u/%us used=%u repeat=%u%%\n", (unsigned)(gap_ms / 1000U),
                (unsigned)max_per, (unsigned)(window_ms / 1000U),
                (unsigned)speech_budget_used(now_ms), (unsigned)dialogue_style_repeat_pct());
-        printf("  scene:  %u/%u (%s)\n", scene_change_score(), (unsigned)scene_change_threshold(),
-               scene_change_threshold() == 0 ? "gate off"
-                                             : (scene_change_novel() ? "new" : "same"));
+        /* "no pose": the head is between dwell poses, so the 0 is "cannot
+         * measure", not "unchanged" (ADR-029 §2). */
+        printf("  scene:  %u/%u at pose %c (%s)\n", scene_change_score(),
+               (unsigned)scene_change_threshold(), scene_pose_letter(scene_change_pose()),
+               scene_change_threshold() == 0            ? "gate off"
+               : scene_change_pose() == SCENE_POSE_NONE ? "no pose"
+               : scene_change_novel()                   ? "new"
+                                                        : "same");
         printf("  loud:   %u/%u dB (floor %d dB)\n", ambient_audio_loud_score(now_ms),
                (unsigned)ambient_audio_loud_threshold(), (int)ambient_audio_floor_db());
         printf("  sound:  %u/%u dB (%s)\n", ambient_audio_shape_score(now_ms),
@@ -1341,8 +1346,9 @@ static void handle_plan_cmd(const char *buf)
     printf("  cadence: step %u/%u -> %" PRIu32 " ms   (base %u ms)\n",
            (unsigned)plan_activity_step() + 1u, (unsigned)PLAN_LADDER_STEPS,
            plan_activity_period_ms(), (unsigned)PLANNER_LOOP_PERIOD_MS);
-    printf("  wake on: view %u/%u   range %u/%u cm   sound (see `mic`)   why=%s\n",
-           plan_activity_scene_score(), (unsigned)scene_threshold, plan_activity_range_score(),
+    printf("  wake on: view %u/%u at pose %c   range %u/%u cm   sound (see `mic`)   why=%s\n",
+           plan_activity_scene_score(), (unsigned)scene_threshold,
+           scene_pose_letter(plan_activity_pose()), plan_activity_range_score(),
            (unsigned)range_threshold, plan_activity_verdict());
 
     /* The assumed-cost count is printed unconditionally rather than only when
@@ -1545,6 +1551,45 @@ static void on_improv_credentials(const char *ssid, const char *password)
  * A command that must stay serial-only (`mqtt`, which sets the broker
  * credentials) does not belong here; command_task() handles it before this.
  */
+/**
+ * @brief `idle` — the idle behaviour the executor runs on its own (ADR-029).
+ *
+ * `idle` alone prints the mode, what the head is doing and whether it has
+ * settled (whether a frame captured now gets a dwell pose). `idle gaze on|off`
+ * switches the gaze; off returns the head to centre whenever nothing directs
+ * it, as before ADR-029. Not persisted: every boot starts with the gaze on.
+ * `idle` alone only reads, which is why it is on the MQTT read-only list.
+ */
+static void handle_idle_cmd(const char *buf)
+{
+    char what[8] = {0};
+    char state[8] = {0};
+    const int n = sscanf(buf, "idle %7s %7s", what, state);
+
+    if (n == 2 && strcmp(what, "gaze") == 0 &&
+        (strcmp(state, "on") == 0 || strcmp(state, "off") == 0)) {
+        const bool on = (strcmp(state, "on") == 0);
+        reactive_controller_set_gaze(on);
+        printf("idle: gaze %s\n", on ? "ON — the head looks around when nothing directs it"
+                                     : "OFF — the head re-centres when nothing directs it");
+        return;
+    }
+    if (n > 0) {
+        printf("idle: usage: idle | idle gaze on|off\n");
+        return;
+    }
+
+    reactive_telemetry_t tele = {0};
+    const bool have_tele = (reactive_controller_get_telemetry(&tele) == ESP_OK);
+    printf("idle: gaze=%s\n", reactive_controller_gaze_enabled() ? "on" : "off");
+    if (have_tele) {
+        printf("  head: %s, %s\n", reactive_head_mode_name(tele.head_mode),
+               tele.head_settled ? "settled (frames get a dwell pose)"
+                                 : "moving (frames are off-pose)");
+    }
+    printf("  usage: idle gaze on|off\n");
+}
+
 static void execute_console_line(const char *buf)
 {
     if (strncmp(buf, "gpio", 4) == 0) {
@@ -1563,6 +1608,8 @@ static void execute_console_line(const char *buf)
         handle_cam_cmd(buf);
     } else if (strncmp(buf, "plan", 4) == 0) {
         handle_plan_cmd(buf);
+    } else if (strncmp(buf, "idle", 4) == 0) {
+        handle_idle_cmd(buf);
     } else if (strncmp(buf, "sound", 5) == 0 || strncmp(buf, "servo", 5) == 0 ||
                strncmp(buf, "led", 3) == 0) {
         handle_periph_cmd(buf);

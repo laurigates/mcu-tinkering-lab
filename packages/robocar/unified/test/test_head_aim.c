@@ -306,6 +306,69 @@ static void test_drive_heading_folds_capture_pan(void)
     ASSERT(head_aim_body_heading(-170, -40) == 150);
 }
 
+/* ADR-029: the idle gaze moves the head at its own, slower rate, and taking
+ * the head for the gaze drops any latched track bearing. */
+static void test_gaze_slews_slower_and_forgets_goal(void)
+{
+    head_aim_t s;
+    head_aim_reset(&s);
+    head_aim_out_t out;
+    (void)run_track(&s, 1, box_at(800, 500), k_centre, k_centre, &k_boot_limits, 2, &out);
+    ASSERT(s.latched);
+
+    const head_pose_t target = {.pan_deg = 40, .tilt_deg = -20};
+    out = head_aim_gaze(&s, k_centre, target, &k_boot_limits);
+    ASSERT(!s.latched);
+    ASSERT(!s.body_turning);
+    ASSERT(out.body == HEAD_BODY_HOLD);
+    ASSERT(out.cmd.pan_deg == HEAD_GAZE_SLEW_DEG_PER_TICK);
+    ASSERT(out.cmd.tilt_deg == -HEAD_GAZE_SLEW_DEG_PER_TICK);
+    ASSERT(HEAD_GAZE_SLEW_DEG_PER_TICK < HEAD_SLEW_DEG_PER_TICK);
+
+    head_pose_t pose = k_centre;
+    for (int i = 0; i < 100; ++i) {
+        pose = head_aim_gaze(&s, pose, target, &k_boot_limits).cmd;
+    }
+    ASSERT(pose.pan_deg == 40 && pose.tilt_deg == -20);
+
+    /* Clamped to the limits like every other step. */
+    const head_limits_t narrow = {.pan_min = -20, .pan_max = 20, .tilt_min = -10, .tilt_max = 10};
+    for (int i = 0; i < 100; ++i) {
+        pose = head_aim_gaze(&s, pose, target, &narrow).cmd;
+        ASSERT(pose.pan_deg <= 20 && pose.tilt_deg >= -10);
+    }
+}
+
+/* The head counts as settled only after it has been still for HEAD_SETTLE_MS,
+ * so a frame the camera began exposing while the head moved is not measured
+ * as a dwell-pose frame (ADR-029 §2). */
+static void test_settled_needs_stillness_for_the_settle_time(void)
+{
+    head_aim_t s;
+    head_aim_reset(&s);
+    ASSERT(!head_aim_settled(&s, 0u)); /* nothing known after a reset */
+
+    const head_pose_t a = {0, 0};
+    const head_pose_t b = {2, 0};
+    uint32_t t = 5000u;
+    head_aim_note_motion(&s, a, a, t); /* first observation, still */
+    ASSERT(!head_aim_settled(&s, t + HEAD_SETTLE_MS - 1u));
+    ASSERT(head_aim_settled(&s, t + HEAD_SETTLE_MS));
+
+    t += 2000u;
+    head_aim_note_motion(&s, b, a, t); /* commanded somewhere else: moving */
+    ASSERT(!head_aim_settled(&s, t));
+    head_aim_note_motion(&s, b, b, t + 33u);
+    ASSERT(!head_aim_settled(&s, t + HEAD_SETTLE_MS - 1u));
+    ASSERT(head_aim_settled(&s, t + HEAD_SETTLE_MS));
+
+    /* Wrap-safe at day 49. */
+    head_aim_reset(&s);
+    t = 0xFFFFFFFFu - 100u;
+    head_aim_note_motion(&s, a, a, t);
+    ASSERT(head_aim_settled(&s, (uint32_t)(t + HEAD_SETTLE_MS)));
+}
+
 int main(void)
 {
     printf("=== head_aim host tests ===\n\n");
@@ -326,6 +389,9 @@ int main(void)
     test_run("write_suppression_and_refresh", test_write_suppression_and_refresh);
     test_run("refresh_survives_millisecond_wrap", test_refresh_survives_millisecond_wrap);
     test_run("drive_heading_folds_capture_pan", test_drive_heading_folds_capture_pan);
+    test_run("gaze_slews_slower_and_forgets_goal", test_gaze_slews_slower_and_forgets_goal);
+    test_run("settled_needs_stillness_for_the_settle_time",
+             test_settled_needs_stillness_for_the_settle_time);
 
     printf("\n=== Results ===\n");
     printf("Passed: %d / %d\n", test_pass, test_count);

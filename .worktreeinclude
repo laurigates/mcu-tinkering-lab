@@ -1,0 +1,18 @@
+# Gitignored files Claude Code copies from the main checkout into a new
+# worktree (.gitignore syntax; only gitignored matches are copied).
+# https://code.claude.com/docs/en/worktrees#copy-gitignored-files-into-worktrees
+
+# Firmware credentials. Without them an ESP-IDF build in a fresh worktree
+# gets the empty credentials.h placeholder its CMakeLists.txt generates and
+# boots with no WiFi and no API keys, with nothing failing at build time.
+# Present today: packages/robocar/unified/main/credentials.h,
+# packages/camera-vision/cam-webserver/main/credentials.h.
+**/credentials.h
+
+# ESPHome secrets (packages/home/ceiling-fan-ir/secrets.yaml).
+**/secrets.yaml
+
+# Local Claude Code permission allowlists: the repo root and the per-package
+# .claude/ directories (audiobook-player, gamepad-synth, kids-audio-toy,
+# balancebot), so a worktree session prompts as little as the main checkout.
+**/.claude/settings.local.json

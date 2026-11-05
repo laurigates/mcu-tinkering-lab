@@ -63,6 +63,22 @@ planner log now carries `scene:` and `still:` side by side. Both share
 `scene_change.c`'s block-mean-minus-frame-mean representation, so the AGC/AEC
 rewriting exposure on a motionless scene does not read as a change.
 
+**Both references are kept per dwell pose of the head** ([ADR-029](../../../../../docs/decisions/ADR-029-idle-gaze-and-wander.md) §2).
+`planner_task` names the pose the head was at when it captured the frame
+(`scene_pose_from_head()`: centre, pan ±`SCENE_POSE_SIDE_PAN_DEG` level, or the
+floor pose at tilt `SCENE_POSE_FLOOR_TILT_DEG`, each within
+`SCENE_POSE_TOLERANCE_DEG`), and a frame is compared only with the last one
+planned on, or spoken about, at the same pose. A frame taken anywhere else —
+mid-slew, while a `track` goal or a console lease holds the head — is "cannot
+measure": neither compared nor adopted, so it neither wakes the planner nor
+opens `speak`. So is a frame taken before the head settled: the executor's
+`head_settled` telemetry says the commanded pose has been still for
+`HEAD_SETTLE_MS`, and without it the frame gets no dwell pose. That is what
+lets the idle gaze ([head-aiming.md](head-aiming.md)) look around a static room
+without waking the planner. The first look at a pose is adopted silently, like the boot
+frame. A head that stays centred, or a robot with no servos, uses only the
+centre reference, which is the single reference these gates had before.
+
 **Audio evidence is `ambient_audio_event()`, never `ambient_audio_novel()`.**
 `novel()` additionally treats a room never spoken about as new. That is right for
 speech and fatal here: a dormant robot never speaks, so it would never see that
@@ -101,9 +117,13 @@ the cost of.
 ### Reading it
 
 ```text
-Goal: STOP | latency: 1188 ms | scene: 3/8 | ... | gate: . | still: 1/6 | why: + | step: 2/5 | spent: 41/500 req, 149203 tok
-Idle: no request | still: 0/6 | range: 0/20 cm | loud: 2/12 dB | next in 60000 ms | why: .
+Goal: STOP | latency: 1188 ms | pose: C | scene: 3/8 | ... | gate: . | still: 1/6 | why: + | step: 2/5 | spent: 41/500 req, 149203 tok
+Idle: no request | pose: C | still: 0/6 | range: 0/20 cm | loud: 2/12 dB | rung: 3/5 every 60000 ms | why: .
 ```
+
+`pose:` is the dwell pose the frame was taken at (`C`, `L`, `R`, `F`), or `-`
+between poses. With `-`, `scene:` and `still:` read 0 because the frame could not
+be measured, not because nothing moved.
 
 `why:` letters combine — `W` woken, `M` moving, `V` view, `A` audio, `R` range;
 `+` a keep-alive fell due with no evidence, `.` holding between rungs, `Z`
@@ -132,6 +152,7 @@ just robocar-unified::test   # + test_plan_activity, test_plan_budget
 - Don't make the planner's request unconditional again, and don't "simplify" the ladder into an on/off switch. An idle board went from 240 requests an hour to zero because the request itself is gated; a binary sleep is only as good as its wake detector, and a detector that fails closed is a robot that never wakes. See ADR-022 and the planner-dormancy section above
 - Don't feed `ambient_audio_novel()` to the dormancy gate. It reports a room never spoken about as novel — right for speech, fatal here, because a dormant robot never speaks and so would never see that branch clear. `ambient_audio_event()` exists for exactly this and is the same OR without the first-impression branch
 - Don't re-point `plan_activity`'s scene reference at `scene_change`'s, or fold the two `scene:`/`still:` log fields into one. They measure from different frames — last spoken about, last planned on — and those move at different moments
+- Don't collapse the per-pose references back to one, or compare an off-pose frame against any of them. A head looking around shows a new view at every pose, so one reference wakes the planner on every capture and opens `speak` on every cycle (ADR-029 §2). `test_a_moving_head_over_a_static_scene_never_calls` and its `test_scene_change.c` twin fail if either reverts
 - Don't charge zero tokens for a response whose `usageMetadata` could not be read. That is how a spend ceiling silently stops being one: every log line keeps showing a healthy budget while the robot spends all night. `plan_budget_note()` charges the assumed cost and counts that it had to, and `plan` prints the count unconditionally
 - Don't give the budget fuse a rolling window or an auto-reset. It exists for the unattended board, which is precisely the case that must not resume on its own. The same goes for the voice-turn ceiling in `voice_budget.c`
 - Don't add goal sources outside `planner_task.c` — structured goals keep the two layers decoupled. If a new goal source is needed, it should write `goal_state` the same way the planner does
