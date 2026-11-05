@@ -15,6 +15,27 @@ confirm over MQTT rather than the port: a running robot publishes
 copy (`mosquitto_sub -F '%r %t'` prints `1` for it). Any reset or a port open
 starts the app again.
 
+**Bench control without the port** (2026-11-05). `just robocar-unified::cmd
+"<line>"` sends one console line over MQTT, so nothing resets the board. These
+lines keep a bench session readable:
+
+- **Wheels still, planner on hold:** `plan requests 1` trips the spend fuse
+  (any ceiling below the count already spent does). The planner forces `stop`
+  within one tick and makes no request until `plan resume` or a reboot. `S`
+  alone stops for a moment only: a fresh `track` or `drive` goal restarts the
+  wheels on the next tick, and `plan sleep` lasts only until the next piece of
+  evidence.
+- **Judge the head only under a lease:** `servo pan 0` / `servo tilt 0` hold
+  for 30 s and outrank both `track` and the idle gaze. A head that looks off
+  centre without a lease is usually tracking something or gazing, not at
+  neutral. `idle gaze off` keeps it centred while nothing directs it.
+- **A flash or reboot clears all of the above** (the fuse, `idle`, `voice
+  volume`, leases), and the robot plans on boot as soon as it has evidence. Send
+  the settings again once it is back on MQTT. A script that waits for the
+  robot must start after the flash finishes: until the reset, the old firmware
+  keeps publishing `robocar/status`, and a non-retained subscribe returns on
+  that status rather than on the new boot.
+
 ## Serial console commands
 
 | Command | Effect |

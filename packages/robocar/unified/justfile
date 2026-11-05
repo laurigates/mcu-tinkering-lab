@@ -106,6 +106,28 @@ frames log="/tmp/robocar-frames.log" out="/tmp/robocar-frames":
 frames-decode log="/tmp/robocar-frames.log" out="/tmp/robocar-frames":
     uv run ../../../tools/decode-frame-dump.py "{{log}}" "{{out}}"
 
+# Send one console line over MQTT, without opening the USB port (which resets
+# the board): `just robocar-unified::cmd "servo pan 20"`. Same grammar as the
+# serial console; see docs/firmware/console-and-mqtt.md. The reply prints on the
+# USB console only. Credentials: ROBOCAR_MQTT_USER / ROBOCAR_MQTT_PASSWORD (from
+# ~/.api_tokens); broker: ROBOCAR_MQTT_URI, else MQTT_BROKER_URI in
+# main/credentials.h.
+[group: "device"]
+cmd line:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    : "${ROBOCAR_MQTT_USER:?set ROBOCAR_MQTT_USER (see ~/.api_tokens)}"
+    : "${ROBOCAR_MQTT_PASSWORD:?set ROBOCAR_MQTT_PASSWORD (see ~/.api_tokens)}"
+    uri="${ROBOCAR_MQTT_URI:-$(sed -n 's/^#define MQTT_BROKER_URI "\(.*\)"/\1/p' main/credentials.h 2>/dev/null || true)}"
+    [ -n "$uri" ] || { echo "no broker: set ROBOCAR_MQTT_URI or MQTT_BROKER_URI in main/credentials.h" >&2; exit 1; }
+    hostport="${uri#mqtt://}"
+    host="${hostport%%:*}"
+    port="${hostport##*:}"
+    [ "$port" != "$hostport" ] || port=1883
+    mosquitto_pub -h "$host" -p "$port" -u "$ROBOCAR_MQTT_USER" -P "$ROBOCAR_MQTT_PASSWORD" \
+        -q 1 -t robocar/commands -m "{{line}}"
+    echo "sent: {{line}}"
+
 ##########
 # Tests
 ##########
