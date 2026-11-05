@@ -294,6 +294,16 @@
 #define SERVO_CENTER_PULSE_US 1500  // 0 deg
 #define SERVO_PULSE_US_PER_90_DEG 1000
 
+// The pan servo is mounted mirrored in the gimbal: a longer pulse turns the
+// head LEFT. Measured on the bench 2026-11-05: with both horns re-seated
+// straight at 1500 us, `servo pan 20` pointed left and `servo tilt 20` up.
+// Every angle above servo_controller.c stays + = right, + = up (head_aim,
+// idle_gaze, the scene poses, the console), so the mirror is applied only
+// where an angle becomes a pulse. A rebuild with the servo mounted the other
+// way sets this to 0.
+#define SERVO_PAN_INVERTED 1
+#define SERVO_TILT_INVERTED 0
+
 // Pulse width -> PCA9685 count lives in servo_controller.c now, because it
 // depends on the frequency the chip is ACTUALLY running at. The macro that used
 // to sit here divided by SERVO_PERIOD_US unconditionally, which made it correct

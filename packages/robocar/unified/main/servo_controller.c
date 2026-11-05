@@ -97,10 +97,19 @@ static uint16_t angle_to_pulse_us(int16_t angle)
     return (uint16_t)pulse;
 }
 
+/* A mirrored servo (SERVO_PAN_INVERTED / SERVO_TILT_INVERTED) turns the other
+ * way for a longer pulse, so its angle is mirrored about the centre here and
+ * nowhere else: the rest of the firmware keeps + = right and + = up. */
+static int16_t mounted_angle(servo_id_t id, int16_t angle)
+{
+    const bool inverted =
+        (id == SERVO_PAN) ? (SERVO_PAN_INVERTED != 0) : (SERVO_TILT_INVERTED != 0);
+    return inverted ? (int16_t)-angle : angle;
+}
+
 uint16_t servo_angle_to_count(servo_id_t id, int16_t angle)
 {
-    (void)id;
-    return pulse_to_count(angle_to_pulse_us(angle));
+    return pulse_to_count(angle_to_pulse_us(mounted_angle(id, angle)));
 }
 
 static uint16_t angle_to_count(servo_id_t id, int16_t angle)

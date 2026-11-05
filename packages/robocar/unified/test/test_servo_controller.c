@@ -218,19 +218,42 @@ static void test_an_angle_is_a_real_servo_angle_within_the_sg90_range(void)
     CHECK(servo_angle_to_count(SERVO_TILT, 45) == count_for_pulse(2000u, 200u),
           "tilt +45 must be a 2000 us pulse, got count %u",
           (unsigned)servo_angle_to_count(SERVO_TILT, 45));
-    CHECK(servo_angle_to_count(SERVO_PAN, -90) == count_for_pulse(500u, 200u),
+    /* Tilt, because it is not mirrored: pan's sign is pinned separately. */
+    CHECK(servo_angle_to_count(SERVO_TILT, -90) == count_for_pulse(500u, 200u),
           "-90 must be the 500 us minimum, got count %u",
-          (unsigned)servo_angle_to_count(SERVO_PAN, -90));
-    CHECK(servo_angle_to_count(SERVO_PAN, 90) == count_for_pulse(2400u, 200u),
+          (unsigned)servo_angle_to_count(SERVO_TILT, -90));
+    CHECK(servo_angle_to_count(SERVO_TILT, 90) == count_for_pulse(2400u, 200u),
           "+90 must clamp to the 2400 us maximum, got count %u",
-          (unsigned)servo_angle_to_count(SERVO_PAN, 90));
-    CHECK(servo_angle_to_count(SERVO_PAN, -120) == count_for_pulse(500u, 200u),
+          (unsigned)servo_angle_to_count(SERVO_TILT, 90));
+    CHECK(servo_angle_to_count(SERVO_TILT, -120) == count_for_pulse(500u, 200u),
           "an angle below the range must clamp to 500 us");
 
     int16_t hw_lo = 0, hw_hi = 0;
     servo_get_hw_range(&hw_lo, &hw_hi);
     CHECK(hw_lo == -90 && hw_hi == 81, "hardware range should be -90..+81, got %d..%d", hw_lo,
           hw_hi);
+}
+
+/* The pan servo is mounted mirrored on this robot: a longer pulse turns the
+ * head LEFT (bench, 2026-11-05: `servo pan 20` pointed left after the horns
+ * were re-seated straight at 1500 us). Angles stay + = right everywhere above
+ * this module, so pan's pulse is mirrored about the centre and tilt's is not. */
+static void test_pan_is_mirrored_about_the_centre_and_tilt_is_not(void)
+{
+    s_pwm_hz = 100u;
+    CHECK(SERVO_PAN_INVERTED == 1, "this robot's pan servo is mounted mirrored");
+    CHECK(servo_angle_to_count(SERVO_PAN, 0) == count_for_pulse(1500u, 100u),
+          "pan 0 must stay the 1500 us centre");
+    CHECK(servo_angle_to_count(SERVO_PAN, 20) == count_for_pulse(1278u, 100u),
+          "pan +20 (right) must be a SHORTER pulse, got count %u",
+          (unsigned)servo_angle_to_count(SERVO_PAN, 20));
+    CHECK(servo_angle_to_count(SERVO_PAN, -20) == count_for_pulse(1722u, 100u),
+          "pan -20 (left) must be a LONGER pulse, got count %u",
+          (unsigned)servo_angle_to_count(SERVO_PAN, -20));
+    CHECK(servo_angle_to_count(SERVO_TILT, 20) == count_for_pulse(1722u, 100u),
+          "tilt +20 (up) stays a longer pulse, got count %u",
+          (unsigned)servo_angle_to_count(SERVO_TILT, 20));
+    s_pwm_hz = 200u;
 }
 
 static void test_the_boot_limits_gate_every_move(void)
@@ -296,7 +319,8 @@ static void test_a_frequency_change_keeps_every_pulse_width(void)
     CHECK_WRITE(1, SERVO_TILT_CHANNEL, 0u);
     CHECK(s_events[2].kind == EV_FREQ && s_events[2].value == 50u,
           "the prescaler must change only after both outputs are released");
-    CHECK_WRITE(3, SERVO_PAN_CHANNEL, count_for_pulse(1500u + 60u * 1000u / 90u, 50u));
+    /* Pan is mounted mirrored (SERVO_PAN_INVERTED): +60 is the shorter pulse. */
+    CHECK_WRITE(3, SERVO_PAN_CHANNEL, count_for_pulse(1500u - 60u * 1000u / 90u, 50u));
     CHECK_WRITE(4, SERVO_TILT_CHANNEL, count_for_pulse(1500u, 50u));
 
     reset_bus();
@@ -356,8 +380,11 @@ static void test_the_exercise_never_leaves_the_limits(void)
     CHECK(servo_exercise() == ESP_OK, "exercise");
     CHECK(s_event_count == 10, "expected ten steps, got %d", s_event_count);
 
-    const uint16_t pan_lo = servo_angle_to_count(SERVO_PAN, -60);
-    const uint16_t pan_hi = servo_angle_to_count(SERVO_PAN, 60);
+    /* Pan is mirrored, so its -60 is the larger count; order the bounds. */
+    const uint16_t pan_a = servo_angle_to_count(SERVO_PAN, -60);
+    const uint16_t pan_b = servo_angle_to_count(SERVO_PAN, 60);
+    const uint16_t pan_lo = (pan_a < pan_b) ? pan_a : pan_b;
+    const uint16_t pan_hi = (pan_a < pan_b) ? pan_b : pan_a;
     const uint16_t tilt_lo = servo_angle_to_count(SERVO_TILT, -20);
     const uint16_t tilt_hi = servo_angle_to_count(SERVO_TILT, 25);
     bool reached_tilt_max = false;
@@ -390,6 +417,8 @@ int main(void)
         {"an_impossible_pulse_is_clamped", test_an_impossible_pulse_is_clamped},
         {"an_angle_is_a_real_servo_angle_within_the_sg90_range",
          test_an_angle_is_a_real_servo_angle_within_the_sg90_range},
+        {"pan_is_mirrored_about_the_centre_and_tilt_is_not",
+         test_pan_is_mirrored_about_the_centre_and_tilt_is_not},
         {"the_boot_limits_gate_every_move", test_the_boot_limits_gate_every_move},
         {"set_limits_rejects_what_the_hardware_or_centring_cannot_do",
          test_set_limits_rejects_what_the_hardware_or_centring_cannot_do},
