@@ -228,8 +228,11 @@
  *  Adjustable at runtime with `voice volume <pct>`, and deliberately NOT
  *  persisted: a boot comes up at this documented default rather than at
  *  whatever last night's experiment left behind — same convention as
- *  `cam gainceiling` and the `voice` gate thresholds. */
-#define AUDIO_VOLUME_PCT 70
+ *  `cam gainceiling` and the `voice` gate thresholds.
+ *
+ *  30, chosen by ear on the bench (2026-11-05): 70 was too loud in the room.
+ *  About -7 dB from 70. */
+#define AUDIO_VOLUME_PCT 30
 
 /** Ceiling for `voice volume`. 100 is full scale, and above it the int16 cast
  *  in audio_player.c's mono_to_stereo() wraps rather than clips — see the
