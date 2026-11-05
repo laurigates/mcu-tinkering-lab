@@ -674,9 +674,14 @@ static void handle_voice_cmd(const char *buf)
         printf("  budget: quiet=%us max=%u/%us used=%u repeat=%u%%\n", (unsigned)(gap_ms / 1000U),
                (unsigned)max_per, (unsigned)(window_ms / 1000U),
                (unsigned)speech_budget_used(now_ms), (unsigned)dialogue_style_repeat_pct());
-        printf("  scene:  %u/%u (%s)\n", scene_change_score(), (unsigned)scene_change_threshold(),
-               scene_change_threshold() == 0 ? "gate off"
-                                             : (scene_change_novel() ? "new" : "same"));
+        /* "no pose": the head is between dwell poses, so the 0 is "cannot
+         * measure", not "unchanged" (ADR-029 §2). */
+        printf("  scene:  %u/%u at pose %c (%s)\n", scene_change_score(),
+               (unsigned)scene_change_threshold(), scene_pose_letter(scene_change_pose()),
+               scene_change_threshold() == 0            ? "gate off"
+               : scene_change_pose() == SCENE_POSE_NONE ? "no pose"
+               : scene_change_novel()                   ? "new"
+                                                        : "same");
         printf("  loud:   %u/%u dB (floor %d dB)\n", ambient_audio_loud_score(now_ms),
                (unsigned)ambient_audio_loud_threshold(), (int)ambient_audio_floor_db());
         printf("  sound:  %u/%u dB (%s)\n", ambient_audio_shape_score(now_ms),
@@ -1341,8 +1346,9 @@ static void handle_plan_cmd(const char *buf)
     printf("  cadence: step %u/%u -> %" PRIu32 " ms   (base %u ms)\n",
            (unsigned)plan_activity_step() + 1u, (unsigned)PLAN_LADDER_STEPS,
            plan_activity_period_ms(), (unsigned)PLANNER_LOOP_PERIOD_MS);
-    printf("  wake on: view %u/%u   range %u/%u cm   sound (see `mic`)   why=%s\n",
-           plan_activity_scene_score(), (unsigned)scene_threshold, plan_activity_range_score(),
+    printf("  wake on: view %u/%u at pose %c   range %u/%u cm   sound (see `mic`)   why=%s\n",
+           plan_activity_scene_score(), (unsigned)scene_threshold,
+           scene_pose_letter(plan_activity_pose()), plan_activity_range_score(),
            (unsigned)range_threshold, plan_activity_verdict());
 
     /* The assumed-cost count is printed unconditionally rather than only when

@@ -240,6 +240,12 @@ static void planner_task(void *pvParameters)
          * offer the `speak` tool at all. */
         scene_fingerprint_t fp;
         frame_stats_log(fb->buf, fb->len, &fp);
+        /* Which dwell pose the frame was taken at: both scene gates keep one
+         * reference per pose and cannot measure a frame taken between poses
+         * (ADR-029 §2). A head with no servos reads as centred, so it keeps the
+         * single centre reference the gates always had. */
+        fp.pose =
+            (uint8_t)scene_pose_from_head(head_at_capture.pan_angle, head_at_capture.tilt_angle);
         scene_change_note(&fp);
         frame_dump_maybe(fb->buf, fb->len);
 
@@ -290,11 +296,12 @@ static void planner_task(void *pvParameters)
                  * Dormant cycles are NOT logged at INFO — an overnight run would
                  * otherwise emit thousands of identical lines. */
                 ESP_LOGI(TAG,
-                         "Idle: no request | still: %u/%u | range: %u/%u cm | loud: %u/%u dB | "
-                         "rung: %u/%u every %" PRIu32 " ms | why: %s",
-                         plan_activity_scene_score(), (unsigned)plan_scene_threshold(),
-                         plan_activity_range_score(), (unsigned)plan_range_threshold(),
-                         ambient_audio_loud_score(now_ms), (unsigned)ambient_audio_loud_threshold(),
+                         "Idle: no request | pose: %c | still: %u/%u | range: %u/%u cm | "
+                         "loud: %u/%u dB | rung: %u/%u every %" PRIu32 " ms | why: %s",
+                         scene_pose_letter(plan_activity_pose()), plan_activity_scene_score(),
+                         (unsigned)plan_scene_threshold(), plan_activity_range_score(),
+                         (unsigned)plan_range_threshold(), ambient_audio_loud_score(now_ms),
+                         (unsigned)ambient_audio_loud_threshold(),
                          (unsigned)plan_activity_step() + 1u, (unsigned)PLAN_LADDER_STEPS,
                          plan_activity_period_ms(), plan_activity_verdict());
             } else {
@@ -404,7 +411,11 @@ static void planner_task(void *pvParameters)
              * them can be chosen from real numbers in a monitor log rather than
              * guessed — see scene_change.h, ambient_audio.h and plan_activity.h.
              *
-             * scene= distance from the frame the robot last spoke about.
+             * pose=  the dwell pose this frame was taken at (C/L/R/F), or `-`
+             *        between poses, where scene= and still= read 0 because the
+             *        frame cannot be measured rather than because nothing moved.
+             * scene= distance from the frame the robot last spoke about at the
+             *        same pose.
              * loud=  peak excursion above the adaptive noise floor since then.
              * sound= how far the room's spectral shape has moved since then.
              * floor= the adaptive floor itself, which is what explains loud=:
@@ -412,7 +423,8 @@ static void planner_task(void *pvParameters)
              *        room, and is the difference between a working gate and a
              *        deaf one.
              * gate=  which branch decided whether to SPEAK (planner_gate_verdict).
-             * still= distance from the frame the robot last PLANNED on, and
+             * still= distance from the frame the robot last PLANNED on at the
+             *        same pose, and
              *        why=/step= the request gate's own verdict and ladder rung.
              *        Distinct from scene= on purpose: the two references move at
              *        different moments, so a single field could not serve both.
@@ -421,16 +433,18 @@ static void planner_task(void *pvParameters)
              * printed latch age matches what the gate would decide right now. */
             const uint32_t log_ms = (uint32_t)(esp_timer_get_time() / 1000);
             ESP_LOGI(TAG,
-                     "Goal: %s | latency: %" PRIu32 " ms | scene: %u/%u | loud: %u/%u dB | "
-                     "sound: %u/%u dB | floor: %d dB | gate: %s | still: %u/%u | why: %s | "
-                     "step: %u/%u | spent: %" PRIu32 "/%" PRIu32 " req, %llu tok",
-                     goal_kind_name(goal.kind), latency_ms, scene_change_score(),
-                     (unsigned)scene_change_threshold(), ambient_audio_loud_score(log_ms),
-                     (unsigned)ambient_audio_loud_threshold(), ambient_audio_shape_score(log_ms),
-                     (unsigned)ambient_audio_shape_threshold(), (int)ambient_audio_floor_db(),
-                     gate_verdict, plan_activity_scene_score(), (unsigned)plan_scene_threshold(),
-                     plan_activity_verdict(), (unsigned)plan_activity_step() + 1u,
-                     (unsigned)PLAN_LADDER_STEPS, plan_budget_requests(), budget_max_requests(),
+                     "Goal: %s | latency: %" PRIu32 " ms | pose: %c | scene: %u/%u | "
+                     "loud: %u/%u dB | sound: %u/%u dB | floor: %d dB | gate: %s | "
+                     "still: %u/%u | why: %s | step: %u/%u | spent: %" PRIu32 "/%" PRIu32
+                     " req, %llu tok",
+                     goal_kind_name(goal.kind), latency_ms, scene_pose_letter(scene_change_pose()),
+                     scene_change_score(), (unsigned)scene_change_threshold(),
+                     ambient_audio_loud_score(log_ms), (unsigned)ambient_audio_loud_threshold(),
+                     ambient_audio_shape_score(log_ms), (unsigned)ambient_audio_shape_threshold(),
+                     (int)ambient_audio_floor_db(), gate_verdict, plan_activity_scene_score(),
+                     (unsigned)plan_scene_threshold(), plan_activity_verdict(),
+                     (unsigned)plan_activity_step() + 1u, (unsigned)PLAN_LADDER_STEPS,
+                     plan_budget_requests(), budget_max_requests(),
                      (unsigned long long)plan_budget_tokens());
             backoff_periods = 0;
         } else if (ret == ESP_ERR_INVALID_STATE) {

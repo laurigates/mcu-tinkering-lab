@@ -405,6 +405,202 @@ static void test_threshold_decides_the_verdict(void)
 }
 
 /* =========================================================================
+ * Pose-keyed references (ADR-029 §2)
+ *
+ * A head that looks around shows the camera a different view at every pose.
+ * Against one reference every pose change reads as "the scene changed", and
+ * `speak` would open on every cycle. Each dwell pose therefore has its own
+ * reference, and a frame taken off a dwell pose cannot be measured.
+ * ========================================================================= */
+
+/** Paint the static view seen at @p pose: a bright band in a different place
+ *  per pose, so any cross-pose comparison scores far over the threshold. */
+static void paint_pose_view(scene_pose_t pose)
+{
+    fill(90);
+    const int x0 = (int)pose * 10;
+    rect(x0, 0, x0 + 10, H, 200);
+}
+
+static void view_at_pose(scene_pose_t pose, scene_fingerprint_t *out)
+{
+    paint_pose_view(pose);
+    fingerprint(out);
+    out->pose = (uint8_t)pose;
+}
+
+static void test_pose_classifier_names_each_dwell_pose(void)
+{
+    ASSERT(scene_pose_from_head(0, 0) == SCENE_POSE_CENTRE);
+    ASSERT(scene_pose_from_head(-SCENE_POSE_SIDE_PAN_DEG, 0) == SCENE_POSE_LEFT);
+    ASSERT(scene_pose_from_head(SCENE_POSE_SIDE_PAN_DEG, 0) == SCENE_POSE_RIGHT);
+    ASSERT(scene_pose_from_head(0, SCENE_POSE_FLOOR_TILT_DEG) == SCENE_POSE_FLOOR);
+
+    /* Within the tolerance still counts: a clamp or the slew's last step can
+     * stop a degree or two short. */
+    ASSERT(scene_pose_from_head(SCENE_POSE_TOLERANCE_DEG, -SCENE_POSE_TOLERANCE_DEG) ==
+           SCENE_POSE_CENTRE);
+    ASSERT(scene_pose_from_head(SCENE_POSE_SIDE_PAN_DEG + SCENE_POSE_TOLERANCE_DEG, 0) ==
+           SCENE_POSE_RIGHT);
+}
+
+static void test_pose_classifier_rejects_everything_between_poses(void)
+{
+    ASSERT(scene_pose_from_head(SCENE_POSE_TOLERANCE_DEG + 1, 0) == SCENE_POSE_NONE);
+    ASSERT(scene_pose_from_head(20, 0) == SCENE_POSE_NONE); /* mid-slew */
+    ASSERT(scene_pose_from_head(0, SCENE_POSE_FLOOR_TILT_DEG / 2) == SCENE_POSE_NONE);
+    ASSERT(scene_pose_from_head(-SCENE_POSE_SIDE_PAN_DEG, SCENE_POSE_FLOOR_TILT_DEG) ==
+           SCENE_POSE_NONE);                                /* no floor pose to the side */
+    ASSERT(scene_pose_from_head(0, 15) == SCENE_POSE_NONE); /* looking up */
+}
+
+/** The head-forward default: a robot with no servos, or one whose head stays
+ *  centred, keeps exactly the single-reference behaviour it had before. */
+static void test_a_fresh_fingerprint_is_centred(void)
+{
+    fill(100);
+    scene_fingerprint_t fp;
+    fingerprint(&fp);
+    ASSERT(fp.pose == SCENE_POSE_CENTRE);
+}
+
+/** ADR-029 step 1, first acceptance test: a head moving over a static scene
+ *  scores 0 at every pose once each pose has been spoken about. */
+static void test_a_moving_head_over_a_static_scene_scores_zero(void)
+{
+    scene_change_init();
+
+    scene_fingerprint_t fp;
+    for (int p = 0; p < SCENE_POSES; ++p) {
+        view_at_pose((scene_pose_t)p, &fp);
+        scene_change_note(&fp);
+        scene_change_mark_spoken();
+    }
+
+    /* Three full scans, in an order unlike the one the references were taken
+     * in, with a mid-slew frame after every pose. */
+    static const scene_pose_t k_order[] = {SCENE_POSE_CENTRE, SCENE_POSE_RIGHT,  SCENE_POSE_CENTRE,
+                                           SCENE_POSE_FLOOR,  SCENE_POSE_CENTRE, SCENE_POSE_LEFT};
+    for (int scan = 0; scan < 3; ++scan) {
+        for (size_t i = 0; i < sizeof(k_order) / sizeof(k_order[0]); ++i) {
+            view_at_pose(k_order[i], &fp);
+            scene_change_note(&fp);
+            ASSERT(scene_change_score() == 0u);
+            ASSERT(scene_change_compared());
+            ASSERT(!scene_change_novel());
+
+            scene_fingerprint_t slew;
+            view_at_pose(SCENE_POSE_RIGHT, &slew); /* any image; the pose is what counts */
+            slew.pose = SCENE_POSE_NONE;
+            scene_change_note(&slew);
+            ASSERT(scene_change_score() == 0u);
+            ASSERT(!scene_change_novel());
+        }
+    }
+}
+
+/** ADR-029 step 1, second acceptance test: a change at one pose scores at that
+ *  pose only. */
+static void test_a_change_at_one_pose_scores_at_that_pose_only(void)
+{
+    scene_change_init();
+
+    scene_fingerprint_t fp;
+    for (int p = 0; p < SCENE_POSES; ++p) {
+        view_at_pose((scene_pose_t)p, &fp);
+        scene_change_note(&fp);
+        scene_change_mark_spoken();
+    }
+
+    /* Something appears in the corner of the left view. */
+    scene_fingerprint_t changed_left;
+    paint_pose_view(SCENE_POSE_LEFT);
+    rect(30, 15, 40, 30, 230);
+    fingerprint(&changed_left);
+    changed_left.pose = SCENE_POSE_LEFT;
+    scene_change_note(&changed_left);
+    const unsigned changed = scene_change_score();
+    ASSERT(changed >= SCENE_CHANGE_THRESHOLD_DEFAULT);
+    ASSERT(scene_change_novel());
+
+    for (int p = 0; p < SCENE_POSES; ++p) {
+        if (p == SCENE_POSE_LEFT) {
+            continue;
+        }
+        scene_fingerprint_t other;
+        view_at_pose((scene_pose_t)p, &other);
+        scene_change_note(&other);
+        ASSERT(scene_change_score() == 0u);
+        ASSERT(!scene_change_novel());
+    }
+
+    /* Back at the left pose, the change is still there: looking away and back
+     * does not launder it, because the reference only moves on speaking. */
+    scene_change_note(&changed_left);
+    ASSERT(scene_change_score() == changed);
+}
+
+/** A frame between poses is "cannot measure": not compared, fails closed, and
+ *  speaking over it adopts nothing. */
+static void test_an_off_pose_frame_is_neither_compared_nor_adopted(void)
+{
+    scene_change_init();
+
+    scene_fingerprint_t centre;
+    view_at_pose(SCENE_POSE_CENTRE, &centre);
+    scene_change_note(&centre);
+    scene_change_mark_spoken();
+
+    scene_fingerprint_t slew;
+    view_at_pose(SCENE_POSE_FLOOR, &slew);
+    slew.pose = SCENE_POSE_NONE;
+    scene_change_note(&slew);
+    ASSERT(!scene_change_compared());
+    ASSERT(!scene_change_novel());
+    ASSERT(scene_change_score() == 0u);
+
+    /* Speaking while the frame is off-pose must not move any reference. */
+    scene_change_mark_spoken();
+    scene_change_note(&centre);
+    ASSERT(scene_change_score() == 0u);
+    ASSERT(!scene_change_novel());
+
+    /* And the floor pose still has no reference, so it is a first impression. */
+    scene_fingerprint_t floor_view;
+    view_at_pose(SCENE_POSE_FLOOR, &floor_view);
+    scene_change_note(&floor_view);
+    ASSERT(scene_change_novel());
+    ASSERT(!scene_change_compared());
+
+    /* Threshold 0 disables the gate whatever the pose, as before. */
+    scene_change_note(&slew);
+    scene_change_set_threshold(0);
+    ASSERT(scene_change_novel());
+    scene_change_set_threshold(SCENE_CHANGE_THRESHOLD_DEFAULT);
+}
+
+/** Speaking at one pose re-references that pose alone. */
+static void test_speaking_re_references_only_the_current_pose(void)
+{
+    scene_change_init();
+
+    scene_fingerprint_t left;
+    view_at_pose(SCENE_POSE_LEFT, &left);
+    scene_change_note(&left);
+    scene_change_mark_spoken();
+
+    scene_fingerprint_t right;
+    view_at_pose(SCENE_POSE_RIGHT, &right);
+    scene_change_note(&right);
+    ASSERT(scene_change_novel()); /* never spoken about at this pose */
+    ASSERT(!scene_change_compared());
+
+    scene_change_note(&left);
+    ASSERT(scene_change_compared());
+    ASSERT(scene_change_score() == 0u);
+}
+
+/* =========================================================================
  * Main
  * ========================================================================= */
 
@@ -439,6 +635,20 @@ int main(void)
     test_run("speaking before any decodable frame is not a reference",
              test_speaking_before_any_decodable_frame_is_not_a_reference);
     test_run("the threshold decides the verdict", test_threshold_decides_the_verdict);
+
+    test_run("the pose classifier names each dwell pose",
+             test_pose_classifier_names_each_dwell_pose);
+    test_run("the pose classifier rejects everything between poses",
+             test_pose_classifier_rejects_everything_between_poses);
+    test_run("a fresh fingerprint is centred", test_a_fresh_fingerprint_is_centred);
+    test_run("a moving head over a static scene scores zero",
+             test_a_moving_head_over_a_static_scene_scores_zero);
+    test_run("a change at one pose scores at that pose only",
+             test_a_change_at_one_pose_scores_at_that_pose_only);
+    test_run("an off-pose frame is neither compared nor adopted",
+             test_an_off_pose_frame_is_neither_compared_nor_adopted);
+    test_run("speaking re-references only the current pose",
+             test_speaking_re_references_only_the_current_pose);
 
     printf("\n=== %d/%d passed ===\n", test_pass, test_count);
     return (test_pass == test_count) ? 0 : 1;

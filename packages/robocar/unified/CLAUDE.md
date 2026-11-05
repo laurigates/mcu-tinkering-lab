@@ -109,7 +109,8 @@ One line per rule. Each group's doc has the full reasoning and the tests that ho
 
 - The planner requests only on evidence, backing off 15 s → 300 s before going dormant. Keep the gate and the ladder (ADR-022).
 - The dormancy gate reads `ambient_audio_event()`.
-- `plan_activity` keeps its own scene reference (the frame last planned on), separate from `scene_change`'s (last spoken about), with separate `scene:` and `still:` log fields.
+- `plan_activity` keeps its own scene references (the frame last planned on), separate from `scene_change`'s (last spoken about), with separate `scene:` and `still:` log fields.
+- Both gates keep one reference per dwell pose and neither compare nor adopt a frame taken off one (ADR-029 §2).
 - A response whose `usageMetadata` cannot be read is charged `PLAN_BUDGET_ASSUMED_TOKENS`.
 - The planner and voice-turn budget fuses stay tripped until `plan resume`/`voice resume` or a reboot.
 - `planner_task.c` is the only goal source; a new source writes `goal_state` the same way.
@@ -143,7 +144,7 @@ One line per rule. Each group's doc has the full reasoning and the tests that ho
 - A voice turn consumes the audio latch whether it answers or ignores, and a planner line is dropped if a voice turn ran or anything was spoken during its request.
 - Gemini error bodies are logged at ERROR.
 - Record only once `ambient_capture_allowed()` clears the amp and its `AMBIENT_PLAYBACK_HANGOVER_MS` tail; start-cue frames pass through `ambient_gate_accepts()`.
-- The scene reference is the frame last spoken about. Only valid fingerprints update it, and `!s_current.valid` is checked before the first-impression branch (#690).
+- The scene reference is the frame last spoken about at the same dwell pose. Only valid on-pose fingerprints update it, and `!s_current.valid` and the off-pose check come before the first-impression branch (#690).
 - Check `PLANNER_TASK_STACK_SIZE` whenever `GEMINI_SYSTEM_PROMPT_MAX`, a persona brief or `DIALOGUE_RECALL_*` grows.
 - The model places delivery tags, and the `speech_tags.h` allow-list filters every one.
 - TTS uses `:streamGenerateContent?alt=sse` at 24 kHz, decoded incrementally into the ring.
