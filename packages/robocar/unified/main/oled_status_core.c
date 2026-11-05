@@ -111,3 +111,15 @@ void oled_status_format(const oled_status_t *s, char rows[OLED_STATUS_ROWS][OLED
         clip_row(rows[r], scratch);
     }
 }
+
+static int clamp_deg(int16_t v)
+{
+    return (v > 999) ? 999 : (v < -999) ? -999 : (int)v;
+}
+
+void oled_head_format(int16_t pan_deg, int16_t tilt_deg,
+                      char rows[OLED_HEAD_ROWS][OLED_HEAD_COLS + 1])
+{
+    (void)snprintf(rows[0], OLED_HEAD_COLS + 1, "PAN  %+3d", clamp_deg(pan_deg));
+    (void)snprintf(rows[1], OLED_HEAD_COLS + 1, "TILT %+3d", clamp_deg(tilt_deg));
+}

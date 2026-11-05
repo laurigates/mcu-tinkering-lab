@@ -15,6 +15,8 @@
 
 #pragma once
 
+#include <stdbool.h>
+
 #include "esp_err.h"
 
 #ifdef __cplusplus
@@ -31,6 +33,19 @@ esp_err_t oled_status_init(void);
 
 /** Read the current state and redraw. A no-op when the panel is absent. */
 void oled_status_refresh(void);
+
+/**
+ * @brief Switch the panel between the status screen and the head view.
+ *
+ * The head view (`servo show on`) draws the commanded pan and tilt angles at
+ * double size, for calibrating the head by eye: move it, read the numbers at
+ * the pose that looks straight and level. Not persisted. Safe from any task: a
+ * single bool the refresh reads.
+ */
+void oled_status_set_head_view(bool on);
+
+/** @brief Whether the head view is showing (the refresh then runs faster). */
+bool oled_status_head_view(void);
 
 #ifdef __cplusplus
 }

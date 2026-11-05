@@ -23,6 +23,8 @@
 
 _Static_assert(OLED_STATUS_ROWS <= OLED_ROWS, "oled_status: more rows than the panel has");
 _Static_assert(OLED_STATUS_COLS <= OLED_COLS, "oled_status: rows wider than the panel");
+_Static_assert(OLED_HEAD_ROWS * 2 <= OLED_ROWS, "oled_status: head view needs two pages a row");
+_Static_assert(OLED_HEAD_COLS * 12 <= OLED_WIDTH, "oled_status: head view wider than the panel");
 
 /** The STA interface's IPv4 address, most significant octet first. */
 static bool read_ip(uint8_t ip[4])
@@ -80,9 +82,43 @@ esp_err_t oled_status_init(void)
     return oled_flush();
 }
 
+static volatile bool s_head_view = false;
+
+void oled_status_set_head_view(bool on)
+{
+    s_head_view = on;
+}
+
+bool oled_status_head_view(void)
+{
+    return s_head_view;
+}
+
+/** The commanded head angles at double size. servo_get_position() is the last
+ *  angle the driver accepted, which is what a calibration reads off. */
+static void draw_head_view(void)
+{
+    servo_position_t pos = {0};
+    char rows[OLED_HEAD_ROWS][OLED_HEAD_COLS + 1];
+    oled_clear();
+    if (servo_is_initialized() && servo_get_position(&pos) == ESP_OK) {
+        oled_head_format(pos.pan_angle, pos.tilt_angle, rows);
+        for (uint8_t r = 0; r < OLED_HEAD_ROWS; r++) {
+            oled_text_2x(0, r, rows[r]);
+        }
+    } else {
+        oled_text_2x(0, 0, "NO SERVOS");
+    }
+    (void)oled_flush();
+}
+
 void oled_status_refresh(void)
 {
     if (!oled_available()) {
+        return;
+    }
+    if (s_head_view) {
+        draw_head_view();
         return;
     }
     oled_status_t s;

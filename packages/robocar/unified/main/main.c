@@ -191,7 +191,10 @@ static void peripheral_task(void *pvParameters)
 #if FEATURE_OLED_ENABLED
         /* The status screen redraws between commands. oled_flush() writes only
          * the rows that changed, one bus acquisition per row. */
-        if (xTaskGetTickCount() - last_oled >= pdMS_TO_TICKS(OLED_STATUS_REFRESH_MS)) {
+        /* The head view redraws faster, so the numbers follow a moving head. */
+        const uint32_t oled_period_ms =
+            oled_status_head_view() ? OLED_HEAD_VIEW_REFRESH_MS : OLED_STATUS_REFRESH_MS;
+        if (xTaskGetTickCount() - last_oled >= pdMS_TO_TICKS(oled_period_ms)) {
             last_oled = xTaskGetTickCount();
             oled_status_refresh();
         }
@@ -387,7 +390,8 @@ static void handle_periph_cmd(const char *buf)
     if (strncmp(buf, "servo", 5) == 0) {
         static const char k_servo_usage[] =
             "servo: usage: servo | servo pan|tilt <deg> | servo on|off | "
-            "servo limit pan|tilt <min> <max> | servo exercise | servo freq <24-1526>\n";
+            "servo limit pan|tilt <min> <max> | servo exercise | servo freq <24-1526> | "
+            "servo show on|off\n";
         const int n = sscanf(buf, "servo %15s %d", arg, &a);
 
         if (n <= 0) {
@@ -424,6 +428,22 @@ static void handle_periph_cmd(const char *buf)
                 printf("servo: off — pan and tilt outputs released (no pulses)\n");
             } else {
                 printf("servo: off failed: %s\n", esp_err_to_name(ret));
+            }
+            return;
+        }
+
+        /* `servo show on|off`: the OLED shows the commanded pan/tilt at double
+         * size, to read off the angles at the pose that looks straight. */
+        if (strcmp(arg, "show") == 0) {
+            char state[8] = {0};
+            if (sscanf(buf, "servo show %7s", state) == 1 &&
+                (strcmp(state, "on") == 0 || strcmp(state, "off") == 0)) {
+                const bool on = (strcmp(state, "on") == 0);
+                oled_status_set_head_view(on);
+                printf("servo: OLED %s\n",
+                       on ? "shows the head angles" : "back to the status screen");
+            } else {
+                printf("servo: usage: servo show on|off\n");
             }
             return;
         }

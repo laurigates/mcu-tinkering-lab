@@ -197,6 +197,32 @@ static void test_widest_values_fit_and_render(void)
     assert_all_rows_fit_and_render();
 }
 
+/* The head view (`servo show on`): two lines drawn at double size, so the
+ * commanded angles can be read across a bench while the head moves. */
+static void test_head_view_rows(void)
+{
+    char head[OLED_HEAD_ROWS][OLED_HEAD_COLS + 1];
+
+    oled_head_format(0, 0, head);
+    ASSERT_ROW(head, 0, "PAN   +0");
+    ASSERT_ROW(head, 1, "TILT  +0");
+
+    oled_head_format(-45, 12, head);
+    ASSERT_ROW(head, 0, "PAN  -45");
+    ASSERT_ROW(head, 1, "TILT +12");
+
+    /* The widest values the servo driver can hold still fit and use only
+     * glyphs the font has. */
+    oled_head_format(-32768, 32767, head);
+    for (int r = 0; r < OLED_HEAD_ROWS; ++r) {
+        ASSERT(strlen(head[r]) <= OLED_HEAD_COLS);
+        for (const char *c = head[r]; *c; ++c) {
+            ASSERT((*c >= 'A' && *c <= 'Z') || (*c >= '0' && *c <= '9') || *c == ' ' || *c == '+' ||
+                   *c == '-');
+        }
+    }
+}
+
 int main(void)
 {
     test_healthy_robot();
@@ -208,6 +234,7 @@ int main(void)
     test_sonar_failures_and_reflex();
     test_no_telemetry_yet();
     test_widest_values_fit_and_render();
+    test_head_view_rows();
 
     if (g_failures) {
         printf("oled_status_core: %d failure(s)\n", g_failures);

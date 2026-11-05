@@ -167,6 +167,10 @@
 // Status screen redraw period (oled_status.c, from peripheral_task). Only rows
 // that changed reach the bus, so a quiet robot costs nothing per redraw.
 #define OLED_STATUS_REFRESH_MS 1000
+/** Head view (`servo show on`) redraw period. The peripheral task wakes at
+ *  least every 100 ms, so this is the effective floor. Two changed pages per
+ *  redraw at 100 kHz is about 25 ms of bus time. */
+#define OLED_HEAD_VIEW_REFRESH_MS 150
 #define FEATURE_WIFI_ENABLED 1
 #define FEATURE_MQTT_ENABLED 1
 #define FEATURE_OTA_ENABLED 1

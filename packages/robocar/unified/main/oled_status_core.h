@@ -59,6 +59,21 @@ typedef struct {
  */
 void oled_status_format(const oled_status_t *s, char rows[OLED_STATUS_ROWS][OLED_STATUS_COLS + 1]);
 
+/** The head view: two rows drawn at double size (oled_text_2x()), 10 cells
+ *  of 12 px across the 128 px panel. */
+#define OLED_HEAD_ROWS 2
+#define OLED_HEAD_COLS 10
+
+/**
+ * @brief Render the commanded head angles as two rows for the double-size view.
+ *
+ * Row 0 `PAN  -45`, row 1 `TILT +12`: the sign is always shown, so 0 reads as
+ * `+0`, and the numbers are right-aligned so they do not jump sideways while
+ * the head sweeps. Angles past three digits are clamped to -999..999.
+ */
+void oled_head_format(int16_t pan_deg, int16_t tilt_deg,
+                      char rows[OLED_HEAD_ROWS][OLED_HEAD_COLS + 1]);
+
 #ifdef __cplusplus
 }
 #endif

@@ -97,6 +97,7 @@ static const uint8_t k_font_dot[5] = {0x00, 0x60, 0x60, 0x00, 0x00};
 static const uint8_t k_font_slash[5] = {0x20, 0x10, 0x08, 0x04, 0x02};
 static const uint8_t k_font_colon[5] = {0x00, 0x36, 0x36, 0x00, 0x00};
 static const uint8_t k_font_query[5] = {0x02, 0x01, 0x51, 0x09, 0x06};
+static const uint8_t k_font_plus[5] = {0x08, 0x08, 0x3E, 0x08, 0x08};
 
 /** Glyph for @p c, folding case and substituting `?` for anything absent. */
 static const uint8_t *glyph(char c)
@@ -121,6 +122,8 @@ static const uint8_t *glyph(char c)
             return k_font_slash;
         case ':':
             return k_font_colon;
+        case '+':
+            return k_font_plus;
         default:
             return k_font_query;
     }
@@ -231,6 +234,44 @@ void oled_text(uint8_t col, uint8_t row, const char *text)
         uint8_t *cell = &s_fb[(size_t)row * OLED_WIDTH + x];
         memcpy(cell, g, 5);
         cell[5] = 0x00; /* inter-character gap */
+    }
+}
+
+/** Spread the low 8 bits of @p b over 16, each bit doubled: bit n of the input
+ *  sets bits 2n and 2n+1 of the result. */
+static uint16_t double_bits(uint8_t b)
+{
+    uint16_t out = 0;
+    for (unsigned n = 0; n < 8u; n++) {
+        if (b & (1u << n)) {
+            out |= (uint16_t)(3u << (2u * n));
+        }
+    }
+    return out;
+}
+
+void oled_text_2x(uint8_t col2, uint8_t row2, const char *text)
+{
+    if (!s_available || text == NULL || (size_t)row2 * 2u + 1u >= OLED_PAGES) {
+        return;
+    }
+    const size_t top = (size_t)row2 * 2u * OLED_WIDTH;
+    const size_t bottom = top + OLED_WIDTH;
+
+    for (const char *p = text; *p != '\0'; p++, col2++) {
+        const size_t x0 = (size_t)col2 * 12u;
+        if (x0 + 12u > OLED_WIDTH) {
+            break;
+        }
+        const uint8_t *g = glyph(*p);
+        for (size_t i = 0; i < 6u; i++) {
+            /* Column 5 is the inter-character gap. */
+            const uint16_t col = (i < 5u) ? double_bits(g[i]) : 0u;
+            for (size_t dx = 0; dx < 2u; dx++) {
+                s_fb[top + x0 + i * 2u + dx] = (uint8_t)(col & 0xFFu);
+                s_fb[bottom + x0 + i * 2u + dx] = (uint8_t)(col >> 8);
+            }
+        }
     }
 }
 

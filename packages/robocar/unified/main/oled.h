@@ -80,6 +80,16 @@ void oled_clear(void);
 void oled_text(uint8_t col, uint8_t row, const char *text);
 
 /**
+ * @brief Draw @p text at double size: each glyph 10x14 px in a 12x16 cell.
+ *
+ * @p col2 counts double-size cells (10 across the 128 px panel) and @p row2
+ * double-size rows (two pages each, so OLED_PAGES / 2 of them). Same character
+ * set and clipping as oled_text(). Used by the head view (`servo show on`) so
+ * the numbers can be read from across a bench.
+ */
+void oled_text_2x(uint8_t col2, uint8_t row2, const char *text);
+
+/**
  * @brief Push the framebuffer to the panel, writing only the pages that differ
  *        from what was last sent.
  *
