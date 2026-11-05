@@ -18,6 +18,8 @@ The planner has **no head tool** ([ADR-025](../../../../../docs/decisions/ADR-02
 
 **Two constants are unmeasured**, and both say so where they are defined: the camera FOV (an error scales where the head points) and the body yaw rate (the only thing that says when a turn has caught up — there is no IMU or odometry). The yaw rate is deliberately set high, so a wrong value ends the turn early rather than spinning past the target; the next plan's frame corrects the residual. Measure both on the bench and pin them.
 
+**The pan servo is mounted mirrored**, so a longer pulse turns the head left. This was measured on 2026-11-05 after both horns were re-seated straight at 1500 µs: `servo pan 20` pointed left and `servo tilt 20` pointed up. `SERVO_PAN_INVERTED` in `pin_config.h` mirrors pan's angle about the centre in `servo_controller.c`, where an angle becomes a pulse. Everything above that layer keeps + = right and + = up: `head_aim`, the scene poses and the console. Before this fix, `track` turned the head away from its target. To recalibrate, hold `servo pan 0` and `servo tilt 0`, re-seat the horns straight and level, then check that `servo pan 20` turns right and `servo tilt 20` tilts up.
+
 ## Idle gaze: looking around when nothing directs the head
 
 People watching read a still head as an inattentive robot, and the planner sends `track` only now and then and sleeps when nothing changes ([ADR-029](../../../../../docs/decisions/ADR-029-idle-gaze-and-wander.md)). So when no fresh `track` goal and no lease hold the head, the executor runs an idle gaze. `idle_gaze.c` (pure C, `test_idle_gaze.c`) picks the target and `head_aim_gaze()` slews to it:
