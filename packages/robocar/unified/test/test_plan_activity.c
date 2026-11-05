@@ -482,6 +482,136 @@ TEST(test_sleep_forces_dormancy_immediately)
     ASSERT(plan_activity_should_call(&b, 11u * BASE_MS));
 }
 
+/* =========================================================================
+ * Pose-keyed references (ADR-029 §2)
+ *
+ * The idle gaze points the head at a few dwell poses. Against one reference
+ * every pose change would read as a new view and wake the planner on every
+ * capture; with one reference per pose, a head moving over a static room
+ * costs nothing.
+ * ========================================================================= */
+
+/** The static view at @p pose: a bright band in a different place per pose. */
+static scene_fingerprint_t view_at_pose(scene_pose_t pose)
+{
+    fill(90);
+    const int x0 = (int)pose * 10;
+    rect(x0, 0, x0 + 10, H, 200);
+    scene_fingerprint_t fp = fingerprint();
+    fp.pose = (uint8_t)pose;
+    return fp;
+}
+
+static scene_fingerprint_t off_pose(void)
+{
+    scene_fingerprint_t fp = view_at_pose(SCENE_POSE_RIGHT);
+    fp.pose = SCENE_POSE_NONE;
+    return fp;
+}
+
+/** ADR-029 step 1, first acceptance test, at the request gate: a head scanning
+ *  a static room, mid-slew frames included, never makes a request and scores
+ *  0 at every pose. A first visit to a pose adopts silently, like the boot frame. */
+TEST(test_a_moving_head_over_a_static_scene_never_calls)
+{
+    static const scene_pose_t k_order[] = {SCENE_POSE_CENTRE, SCENE_POSE_LEFT,   SCENE_POSE_CENTRE,
+                                           SCENE_POSE_RIGHT,  SCENE_POSE_CENTRE, SCENE_POSE_FLOOR};
+    uint32_t t = 0u;
+    for (int scan = 0; scan < 20; ++scan) {
+        for (size_t i = 0; i < sizeof(k_order) / sizeof(k_order[0]); ++i) {
+            plan_evidence_t at = quiet(view_at_pose(k_order[i]));
+            ASSERT(!plan_activity_should_call(&at, t));
+            ASSERT(plan_activity_scene_score() == 0u);
+            t += BASE_MS;
+
+            plan_evidence_t slew = quiet(off_pose());
+            ASSERT(!plan_activity_should_call(&slew, t));
+            ASSERT(plan_activity_scene_score() == 0u);
+            t += BASE_MS;
+        }
+    }
+    ASSERT(plan_activity_dormant());
+}
+
+/** The same scan while awake: the ladder keeps climbing to dormancy instead of
+ *  being reset to the base period by every pose change. */
+TEST(test_a_moving_head_does_not_hold_the_ladder_at_the_base_period)
+{
+    for (int p = 0; p < SCENE_POSES; ++p) {
+        plan_evidence_t at = quiet(view_at_pose((scene_pose_t)p));
+        ASSERT(!plan_activity_should_call(&at, 0u));
+    }
+    plan_activity_wake();
+    plan_evidence_t centre = quiet(view_at_pose(SCENE_POSE_CENTRE));
+    ASSERT(plan_activity_should_call(&centre, 0u));
+    plan_activity_note_call(0u);
+
+    uint32_t t = 0u;
+    unsigned calls = 0u;
+    for (int i = 0; i < 400 && !plan_activity_dormant(); ++i) {
+        t += BASE_MS;
+        plan_evidence_t ev = quiet(view_at_pose((scene_pose_t)(i % SCENE_POSES)));
+        if (plan_activity_should_call(&ev, t)) {
+            ASSERT(strchr(plan_activity_verdict(), 'V') == NULL);
+            plan_activity_note_call(t);
+            calls++;
+        }
+    }
+    ASSERT(plan_activity_dormant());
+    ASSERT(calls == PLAN_LADDER_STEPS); /* one keep-alive per rung, nothing more */
+}
+
+/** ADR-029 step 1, second acceptance test: a change at one pose wakes the
+ *  planner at that pose, and scores nothing at the others. */
+TEST(test_a_change_at_one_pose_scores_at_that_pose_only)
+{
+    for (int p = 0; p < SCENE_POSES; ++p) {
+        plan_evidence_t at = quiet(view_at_pose((scene_pose_t)p));
+        ASSERT(!plan_activity_should_call(&at, 0u));
+    }
+
+    fill(90);
+    rect(30, 0, 40, H, 200); /* the floor view... */
+    rect(0, 0, 10, 15, 230); /* ...with something new in its corner */
+    scene_fingerprint_t changed_floor = fingerprint();
+    changed_floor.pose = SCENE_POSE_FLOOR;
+
+    for (int p = 0; p < SCENE_POSES; ++p) {
+        if (p == SCENE_POSE_FLOOR) {
+            continue;
+        }
+        plan_evidence_t at = quiet(view_at_pose((scene_pose_t)p));
+        ASSERT(!plan_activity_should_call(&at, BASE_MS));
+        ASSERT(plan_activity_scene_score() == 0u);
+    }
+
+    plan_evidence_t ev = quiet(changed_floor);
+    ASSERT(plan_activity_should_call(&ev, 2u * BASE_MS));
+    ASSERT(plan_activity_scene_score() >= PLAN_SCENE_THRESHOLD_DEFAULT);
+    ASSERT(strchr(plan_activity_verdict(), 'V') != NULL);
+}
+
+/** An off-pose frame is "cannot measure": it never wakes the planner, is not
+ *  adopted as a first reference, and a request made over it moves no reference. */
+TEST(test_an_off_pose_frame_is_neither_compared_nor_adopted)
+{
+    /* Off-pose first: not adopted, so the centre view that follows is the
+     * first reference rather than a change from a mid-slew picture. */
+    plan_evidence_t slew = quiet(off_pose());
+    ASSERT(!plan_activity_should_call(&slew, 0u));
+    plan_evidence_t centre = quiet(view_at_pose(SCENE_POSE_CENTRE));
+    ASSERT(!plan_activity_should_call(&centre, BASE_MS));
+    ASSERT(plan_activity_scene_score() == 0u);
+
+    /* A request made while the frame is off-pose adopts nothing. */
+    plan_activity_wake();
+    ASSERT(plan_activity_should_call(&slew, 2u * BASE_MS));
+    plan_activity_note_call(2u * BASE_MS);
+    (void)plan_activity_should_call(&centre, 3u * BASE_MS); /* a keep-alive may fall due */
+    ASSERT(plan_activity_scene_score() == 0u);
+    ASSERT(strchr(plan_activity_verdict(), 'V') == NULL);
+}
+
 /* -------------------------------------------------------------------------- */
 
 int main(void)
@@ -506,6 +636,10 @@ int main(void)
     run_test_disabling_the_mechanism_restores_a_request_every_tick();
     run_test_re_enabling_hands_back_a_fresh_ladder_not_a_latched_dormancy();
     run_test_sleep_forces_dormancy_immediately();
+    run_test_a_moving_head_over_a_static_scene_never_calls();
+    run_test_a_moving_head_does_not_hold_the_ladder_at_the_base_period();
+    run_test_a_change_at_one_pose_scores_at_that_pose_only();
+    run_test_an_off_pose_frame_is_neither_compared_nor_adopted();
 
     if (g_failures == 0) {
         printf("PASS\n");

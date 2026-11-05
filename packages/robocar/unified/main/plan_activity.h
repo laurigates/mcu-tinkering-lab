@@ -51,6 +51,12 @@
  * fingerprint: "is this worth remarking on?" and "is this worth thinking
  * about?"
  *
+ * The reference is kept per dwell pose of the head (ADR-029 §2): a frame is
+ * compared only with the last frame planned on at the same pose, and a frame
+ * taken between poses is neither compared nor adopted, so a head looking around
+ * a static room does not wake the planner. A head that stays centred uses only
+ * the centre reference, which is the single reference this module had before.
+ *
  * The comparison inherits scene_change.c's block-mean-minus-frame-mean
  * representation, so the sensor's AGC/AEC rewriting gain and exposure every
  * frame — which it does continuously, on a motionless scene — does not read as
@@ -219,8 +225,13 @@ uint32_t plan_activity_period_ms(void);
 /** @brief Current rung, 0..PLAN_LADDER_STEPS-1. */
 uint8_t plan_activity_step(void);
 
-/** @brief Distance between this cycle's frame and the last-planned view. */
+/** @brief Distance between this cycle's frame and the last view planned on at
+ *         the same dwell pose. 0 when the frame cannot be measured. */
 unsigned plan_activity_scene_score(void);
+
+/** @brief This cycle's frame pose (scene_pose_t), for logging beside the score:
+ *         `-` (SCENE_POSE_NONE) says the 0 above means "cannot measure". */
+uint8_t plan_activity_pose(void);
 
 /** @brief Absolute change in the rangefinder reading since the last plan, cm. */
 unsigned plan_activity_range_score(void);
