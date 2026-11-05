@@ -494,6 +494,13 @@ static void run_turn(uint32_t window_ms, bool vad)
                  (unsigned)(vad ? voice_budget_ignored_vad() : voice_budget_ignored_listen()),
                  (unsigned)(vad ? voice_budget_vad_requests()
                                 : voice_budget_requests() - voice_budget_vad_requests()));
+        /* The sound that armed the audio latch has now been heard and judged:
+         * people talking, not to the robot. Left armed, the next planner cycle
+         * is offered `speak` with "the room's sound changed" and Teuvo remarks
+         * on a strange noise that was a person's voice. Same consumption as an
+         * answered turn below; the listener has kept noting frames through the
+         * request, so the adopted reference is the room after the speech. */
+        ambient_audio_mark_spoken();
         return;
     }
 

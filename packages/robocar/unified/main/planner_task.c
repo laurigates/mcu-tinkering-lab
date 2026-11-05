@@ -321,6 +321,9 @@ static void planner_task(void *pvParameters)
         goal_t goal = {0};
         uint32_t latency_ms = 0;
         char speech[SPEECH_TEXT_MAX] = {0};
+        /* Read before the request: gemini_backend_plan() decides whether to
+         * offer `speak` (and with which evidence clause) from the state now. */
+        const uint32_t notes_at_request = speech_budget_notes();
         esp_err_t ret =
             gemini_backend_plan(fb->buf, fb->len, &goal, &latency_ms, speech, sizeof(speech));
 
@@ -349,6 +352,16 @@ static void planner_task(void *pvParameters)
          * status reports go straight to the queue. See dialogue_style.h. */
         if (speech[0] != '\0' && dialogue_style_is_repetitive(speech)) {
             ESP_LOGI(TAG, "Suppressed near-repeat: \"%s\"", speech);
+            speech[0] = '\0';
+        }
+        /* Something spoke while this request was in flight, almost always a
+         * voice turn answering the person whose voice armed the audio latch.
+         * The request was built from the state before that answer, so its
+         * `speak` licence and any "the sound changed" clause are stale, and
+         * speaking now is the "some strange noise" remark straight after the
+         * reply. The goal still applies; only the line is dropped. */
+        if (speech[0] != '\0' && speech_budget_notes() != notes_at_request) {
+            ESP_LOGI(TAG, "Suppressed: spoke during the request: \"%s\"", speech);
             speech[0] = '\0';
         }
         if (speech[0] != '\0') {
