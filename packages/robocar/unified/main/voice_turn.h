@@ -132,6 +132,16 @@ void voice_turn_get_endpoint(uint32_t *silence_ms, uint8_t *margin_db, uint32_t 
 bool voice_turn_is_busy(void);
 
 /**
+ * @brief Turns begun since boot.
+ *
+ * With voice_turn_is_busy(), tells the planner that a person spoke while its
+ * request was in flight: busy now, or the count moved since the request. Either
+ * way the planner's line would land on top of the reply. Compare for equality
+ * only; the count wraps.
+ */
+uint32_t voice_turn_count(void);
+
+/**
  * @brief Reset conversational history.
  *
  * Clears remembered turns and resets the idle timer.

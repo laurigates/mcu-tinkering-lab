@@ -22,6 +22,10 @@ static uint8_t s_max_per_window = SPEECH_BUDGET_MAX_PER_WINDOW_DEFAULT;
 static uint32_t s_hist[SPEECH_BUDGET_HISTORY];
 static uint8_t s_head;
 static uint8_t s_used;
+/* Every note ever, never reset by init: a caller compares two reads for
+ * equality, so wrapping is harmless and a reset could make "moved" read as
+ * "unchanged". One aligned 32-bit word, so a read from another task is whole. */
+static volatile uint32_t s_notes;
 
 void speech_budget_init(void)
 {
@@ -150,4 +154,10 @@ void speech_budget_note(uint32_t now_ms)
     if (s_used < SPEECH_BUDGET_HISTORY) {
         ++s_used;
     }
+    s_notes = s_notes + 1u;
+}
+
+uint32_t speech_budget_notes(void)
+{
+    return s_notes;
 }
