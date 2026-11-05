@@ -29,6 +29,7 @@
 #include "servo_controller.h"
 #include "speech_budget.h"
 #include "speech_queue.h"
+#include "voice_turn.h"
 
 static const char *TAG = "planner";
 
@@ -321,6 +322,10 @@ static void planner_task(void *pvParameters)
         goal_t goal = {0};
         uint32_t latency_ms = 0;
         char speech[SPEECH_TEXT_MAX] = {0};
+        /* Read before the request: gemini_backend_plan() decides whether to
+         * offer `speak` (and with which evidence clause) from the state now. */
+        const uint32_t notes_at_request = speech_budget_notes();
+        const uint32_t turns_at_request = voice_turn_count();
         esp_err_t ret =
             gemini_backend_plan(fb->buf, fb->len, &goal, &latency_ms, speech, sizeof(speech));
 
@@ -349,6 +354,19 @@ static void planner_task(void *pvParameters)
          * status reports go straight to the queue. See dialogue_style.h. */
         if (speech[0] != '\0' && dialogue_style_is_repetitive(speech)) {
             ESP_LOGI(TAG, "Suppressed near-repeat: \"%s\"", speech);
+            speech[0] = '\0';
+        }
+        /* A person spoke while this request was in flight: a voice turn is
+         * still running, one began since the request, or something was spoken.
+         * The request was built from the state before that, so its `speak`
+         * licence and any "the sound changed" clause are about the person's
+         * own voice, and speaking now is the "some strange noise" remark on
+         * top of the reply (2026-11-05: turn recorded at 138.6 s, request at
+         * ~139.7 s, noise line at 144.9 s, the turn's reply at 146.4 s). The
+         * goal still applies; only the line is dropped. */
+        if (speech[0] != '\0' && (voice_turn_is_busy() || voice_turn_count() != turns_at_request ||
+                                  speech_budget_notes() != notes_at_request)) {
+            ESP_LOGI(TAG, "Suppressed: person spoke during the request: \"%s\"", speech);
             speech[0] = '\0';
         }
         if (speech[0] != '\0') {

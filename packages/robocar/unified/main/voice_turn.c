@@ -99,6 +99,8 @@ typedef struct {
 
 static QueueHandle_t s_queue;
 static volatile bool s_busy;
+/* Turns begun since boot; compared for equality by the planner (wraps). */
+static volatile uint32_t s_turns_started;
 
 /** Hands-free listening is ON at boot (issue #617). It was off while the
  *  trigger was a broadband loudness excursion, because a slam or the motors
@@ -494,6 +496,13 @@ static void run_turn(uint32_t window_ms, bool vad)
                  (unsigned)(vad ? voice_budget_ignored_vad() : voice_budget_ignored_listen()),
                  (unsigned)(vad ? voice_budget_vad_requests()
                                 : voice_budget_requests() - voice_budget_vad_requests()));
+        /* The sound that armed the audio latch has now been heard and judged:
+         * people talking, not to the robot. Left armed, the next planner cycle
+         * is offered `speak` with "the room's sound changed" and Teuvo remarks
+         * on a strange noise that was a person's voice. Same consumption as an
+         * answered turn below; the listener has kept noting frames through the
+         * request, so the adopted reference is the room after the speech. */
+        ambient_audio_mark_spoken();
         return;
     }
 
@@ -545,6 +554,7 @@ static void voice_turn_task(void *arg)
         if (xQueueReceive(s_queue, &req, portMAX_DELAY) != pdTRUE) {
             continue;
         }
+        s_turns_started = s_turns_started + 1u;
         s_busy = true;
         run_turn(req.window_ms, req.vad);
         s_busy = false;
@@ -655,6 +665,11 @@ void voice_turn_get_endpoint(uint32_t *silence_ms, uint8_t *margin_db, uint32_t 
 bool voice_turn_is_busy(void)
 {
     return s_busy;
+}
+
+uint32_t voice_turn_count(void)
+{
+    return s_turns_started;
 }
 
 void voice_turn_reset_history(void)
