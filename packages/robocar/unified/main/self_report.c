@@ -219,7 +219,7 @@ size_t self_report_format_facts(const robocar_status_t *status, char *buf, size_
 /* -------------------------------------------------------------------------- */
 
 /** FNV-1a over the health booleans + ssid. A change in any one flips it. */
-static uint32_t status_signature(const robocar_status_t *s)
+uint32_t self_report_health_signature(const robocar_status_t *s)
 {
     uint32_t h = 2166136261u;
 #define MIX_BYTE(b)        \
@@ -236,8 +236,13 @@ static uint32_t status_signature(const robocar_status_t *s)
     MIX_BYTE(s->buzzer_ok);
     MIX_BYTE(s->mcp23017_present);
     MIX_BYTE(s->audio_ok);
-    MIX_BYTE(s->key_present);
-    MIX_BYTE(s->key_state);
+    /* The key as the listener hears it (key_word()), not the raw state: an
+     * untested and an accepted key both read "present", so the first HTTP 200
+     * moving UNTESTED to OK must not trigger a re-announcement that says
+     * nothing new. A rejected or exhausted key still changes the word. */
+    for (const char *p = key_word(s); *p != '\0'; ++p) {
+        MIX_BYTE(*p);
+    }
     for (const char *p = s->ssid; *p != '\0'; ++p) {
         MIX_BYTE(*p);
     }
@@ -342,7 +347,7 @@ static void status_monitor_task(void *arg)
         vTaskDelay(pdMS_TO_TICKS(STATUS_POLL_MS));
 
         self_report_collect(&status);
-        const uint32_t sig = status_signature(&status);
+        const uint32_t sig = self_report_health_signature(&status);
 
         /* The diagnostic is always logged (and published) so it is observable
          * even while the robot cannot talk. */
