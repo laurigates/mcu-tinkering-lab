@@ -26,6 +26,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 #include "credentials_loader.h"  // MAX_SSID_LENGTH
 #include "esp_err.h"
