@@ -234,6 +234,43 @@ static int test_key_state_is_reported(void)
     return 0;
 }
 
+/*
+ * The re-announcement fires on a change in what a listener would hear. The
+ * first HTTP 200 of every boot moves the key from UNTESTED to OK, which both
+ * read "present", and used to trigger a second spoken status line saying
+ * nothing new. A rejected or exhausted key must still change the signature.
+ */
+static int test_key_untested_to_ok_does_not_reannounce(void)
+{
+    stub_reset_healthy();
+    gemini_key_state_reset();
+    g_stub.api_key = "k";
+    robocar_status_t status;
+
+    self_report_collect(&status);
+    const uint32_t untested = self_report_health_signature(&status);
+
+    gemini_key_state_note(200);
+    self_report_collect(&status);
+    CHECK(self_report_health_signature(&status) == untested);
+
+    gemini_key_state_note(403);
+    self_report_collect(&status);
+    CHECK(self_report_health_signature(&status) != untested);
+
+    gemini_key_state_note(402);
+    self_report_collect(&status);
+    const uint32_t exhausted = self_report_health_signature(&status);
+    CHECK(exhausted != untested);
+
+    /* A real health change still moves it, so the signature is not constant. */
+    gemini_key_state_note(200);
+    g_stub.motors_initialized = false;
+    self_report_collect(&status);
+    CHECK(self_report_health_signature(&status) != untested);
+    return 0;
+}
+
 /**
  * The MQTT command mode is in the facts line (issue #626), because the
  * published status is where somebody whose MQTT drive command did nothing will
@@ -298,6 +335,7 @@ int main(void)
         {"worst_case_fits_the_buffer", test_worst_case_fits_the_buffer},
         {"mqtt_mode_is_reported", test_mqtt_mode_is_reported},
         {"key_state_is_reported", test_key_state_is_reported},
+        {"key_untested_to_ok_does_not_reannounce", test_key_untested_to_ok_does_not_reannounce},
         {"collect_reads_live_state", test_collect_reads_live_state},
     };
 
