@@ -225,8 +225,16 @@ static void planner_task(void *pvParameters)
          * 33 ms, so the gap costs a few degrees at worst. Zero with no servos,
          * which is the head-forward assumption the robot always made. */
         servo_position_t head_at_capture = {0};
+        bool head_settled = true;
         if (servo_is_initialized()) {
             (void)servo_get_position(&head_at_capture);
+            /* The idle gaze moves the head between dwell poses (ADR-029), and
+             * the frame began exposing before this sample, so a head that only
+             * just arrived may be moving in the picture. Unsettled means the
+             * frame belongs to no dwell pose. */
+            reactive_telemetry_t tele = {0};
+            head_settled =
+                (reactive_controller_get_telemetry(&tele) == ESP_OK) && tele.head_settled;
         }
 
         /* ---- 1b. Measure and (if armed) dump the frame ----
@@ -242,10 +250,12 @@ static void planner_task(void *pvParameters)
         frame_stats_log(fb->buf, fb->len, &fp);
         /* Which dwell pose the frame was taken at: both scene gates keep one
          * reference per pose and cannot measure a frame taken between poses
-         * (ADR-029 §2). A head with no servos reads as centred, so it keeps the
-         * single centre reference the gates always had. */
-        fp.pose =
-            (uint8_t)scene_pose_from_head(head_at_capture.pan_angle, head_at_capture.tilt_angle);
+         * (ADR-029 §2), or one taken before the head settled. A head with no
+         * servos reads as centred, so it keeps the single centre reference the
+         * gates always had. */
+        fp.pose = head_settled ? (uint8_t)scene_pose_from_head(head_at_capture.pan_angle,
+                                                               head_at_capture.tilt_angle)
+                               : (uint8_t)SCENE_POSE_NONE;
         scene_change_note(&fp);
         frame_dump_maybe(fb->buf, fb->len);
 

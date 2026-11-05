@@ -122,6 +122,8 @@ One line per rule. Each group's doc has the full reasoning and the tests that ho
 - `track` is the planner's only aiming primitive; the executor chooses head, wheels or both (ADR-025).
 - Latch a track goal's bearing once per `goal_state_read_seq()` write.
 - `planner_task` fills `goal_t.head_pan_deg`/`head_tilt_deg` at frame capture; keep both fields.
+- With no fresh `track` goal or lease, the head runs the idle gaze (or re-centres with `idle gaze off`), moving only between `scene_pose_t` dwell poses (ADR-029).
+- A frame gets a dwell pose only while the executor reports `head_settled`.
 
 **Voice** ([why](docs/firmware/voice.md#dont))
 

@@ -71,7 +71,11 @@ floor pose at tilt `SCENE_POSE_FLOOR_TILT_DEG`, each within
 planned on, or spoken about, at the same pose. A frame taken anywhere else —
 mid-slew, while a `track` goal or a console lease holds the head — is "cannot
 measure": neither compared nor adopted, so it neither wakes the planner nor
-opens `speak`. The first look at a pose is adopted silently, like the boot
+opens `speak`. So is a frame taken before the head settled: the executor's
+`head_settled` telemetry says the commanded pose has been still for
+`HEAD_SETTLE_MS`, and without it the frame gets no dwell pose. That is what
+lets the idle gaze ([head-aiming.md](head-aiming.md)) look around a static room
+without waking the planner. The first look at a pose is adopted silently, like the boot
 frame. A head that stays centred, or a robot with no servos, uses only the
 centre reference, which is the single reference these gates had before.
 

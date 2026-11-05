@@ -28,14 +28,14 @@ static int32_t round_to_int(float v)
     return (v >= 0.0f) ? (int32_t)(v + 0.5f) : -(int32_t)(-v + 0.5f);
 }
 
-/** Move @p from toward @p to by at most HEAD_SLEW_DEG_PER_TICK. */
-static int32_t slew(int16_t from, int16_t to)
+/** Move @p from toward @p to by at most @p max_step degrees. */
+static int32_t slew(int16_t from, int16_t to, int32_t max_step)
 {
     int32_t step = (int32_t)to - (int32_t)from;
-    if (step > HEAD_SLEW_DEG_PER_TICK)
-        step = HEAD_SLEW_DEG_PER_TICK;
-    if (step < -HEAD_SLEW_DEG_PER_TICK)
-        step = -HEAD_SLEW_DEG_PER_TICK;
+    if (step > max_step)
+        step = max_step;
+    if (step < -max_step)
+        step = -max_step;
     return (int32_t)from + step;
 }
 
@@ -46,16 +46,23 @@ static int32_t slew(int16_t from, int16_t to)
  * outside a range that `servo limit` has since narrowed would otherwise slew
  * back in over several ticks, each of them a command outside the limits.
  */
-static head_pose_t step_toward(head_pose_t now, int32_t pan_target, int32_t tilt_target,
-                               const head_limits_t *lim)
+static head_pose_t step_at(head_pose_t now, int32_t pan_target, int32_t tilt_target,
+                           const head_limits_t *lim, int32_t max_step)
 {
     const int16_t pan_goal = clamp_i16(pan_target, lim->pan_min, lim->pan_max);
     const int16_t tilt_goal = clamp_i16(tilt_target, lim->tilt_min, lim->tilt_max);
     head_pose_t cmd = {
-        .pan_deg = clamp_i16(slew(now.pan_deg, pan_goal), lim->pan_min, lim->pan_max),
-        .tilt_deg = clamp_i16(slew(now.tilt_deg, tilt_goal), lim->tilt_min, lim->tilt_max),
+        .pan_deg = clamp_i16(slew(now.pan_deg, pan_goal, max_step), lim->pan_min, lim->pan_max),
+        .tilt_deg =
+            clamp_i16(slew(now.tilt_deg, tilt_goal, max_step), lim->tilt_min, lim->tilt_max),
     };
     return cmd;
+}
+
+static head_pose_t step_toward(head_pose_t now, int32_t pan_target, int32_t tilt_target,
+                               const head_limits_t *lim)
+{
+    return step_at(now, pan_target, tilt_target, lim, HEAD_SLEW_DEG_PER_TICK);
 }
 
 void head_aim_reset(head_aim_t *s)
@@ -124,6 +131,31 @@ head_aim_out_t head_aim_centre(head_aim_t *s, head_pose_t now, const head_limits
         .body = HEAD_BODY_HOLD,
     };
     return out;
+}
+
+head_aim_out_t head_aim_gaze(head_aim_t *s, head_pose_t now, head_pose_t target,
+                             const head_limits_t *lim)
+{
+    s->latched = false;
+    s->body_turning = false;
+    head_aim_out_t out = {
+        .cmd = step_at(now, target.pan_deg, target.tilt_deg, lim, HEAD_GAZE_SLEW_DEG_PER_TICK),
+        .body = HEAD_BODY_HOLD,
+    };
+    return out;
+}
+
+void head_aim_note_motion(head_aim_t *s, head_pose_t cmd, head_pose_t now, uint32_t now_ms)
+{
+    if (!s->still_known || cmd.pan_deg != now.pan_deg || cmd.tilt_deg != now.tilt_deg) {
+        s->still_since_ms = now_ms;
+        s->still_known = true;
+    }
+}
+
+bool head_aim_settled(const head_aim_t *s, uint32_t now_ms)
+{
+    return s->still_known && (uint32_t)(now_ms - s->still_since_ms) >= HEAD_SETTLE_MS;
 }
 
 bool head_aim_write_due(const head_aim_t *s, head_pose_t cmd, head_pose_t now, uint32_t now_ms)
