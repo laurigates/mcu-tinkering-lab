@@ -68,13 +68,18 @@ When no fresh `track` goal holds the head, no head lease is live, and gaze is
 enabled, the executor runs a slow scan instead of re-centring:
 
 - **Dwell poses, not sweeps.** The head moves between a small fixed set of
-  poses (initially pan −40°, 0°, +40° at the current tilt, clamped to
-  `servo_get_limits()`), slews at a capped rate, and **dwells** 3–8 s at each,
+  poses, clamped to `servo_get_limits()`: pan −40°, 0° and +40° at level tilt,
+  and a **floor pose** at pan 0° tilted down (initially −20°) to look at the
+  ground in front. It slews at a capped rate and **dwells** 3–8 s at each,
   with the order and dwell drawn from `esp_random()` (the executor has no
   PRNG of its own; a host test injects one). Centre is visited
   every other move, so the view the planner knows comes back often.
 - **A `track` goal or a lease pre-empts gaze immediately**, as now. Gaze
   resumes only after the goal goes stale.
+- **A voice turn faces forward.** While `voice_turn_is_busy()`, gaze holds pan
+  0° at level tilt, so the robot looks towards the person it is listening to
+  (there is no direction-of-arrival from one microphone; forward is the best
+  guess), and resumes when the turn ends.
 - The executor writes the dwell pose into the state it already publishes, so
   `planner_task` keeps recording the pose **at capture**
   (`goal_t.head_pan_deg`, unchanged).
@@ -89,7 +94,7 @@ measure", which both modules already distinguish from "measured zero"
 (`stateless-model-gating.md` §3).
 
 This keeps both gates' meaning, "has *this view* changed since I last
-planned on / spoke about it", while the head moves. Three poses × 48 blocks is
+planned on / spoke about it", while the head moves. Four poses × 48 blocks is
 a few hundred bytes per module.
 
 ### 3. Local attention (what makes the gaze useful)
@@ -139,10 +144,36 @@ expiry restores the previous mode if it never sends the re-enable. A fresh
 non-`stop` motion goal pauses `wander` for its duration in any case, so a
 plan's own motion never interleaves with a wander step.
 
+### 6. Look, then speak
+
+A remark about a specific thing comes with a look at it, so a listener can see
+what is meant:
+
+- **The prompt asks for `track` with `max_speed_pct` 0** for the thing a remark
+  is about. Speed 0 already means "hold position and only look"
+  (`head-aiming.md`), so this needs no new primitive, and the ADR-025 rule that
+  `track` is the only aiming primitive holds.
+- **The executor turns the head to the thing's body-relative bearing**: the
+  head pan at capture plus the box centre's offset times the camera FOV, the
+  bearing ADR-025 already latches. That is what decides direction, not the
+  head pose alone. A thing at the right edge of a frame taken with the head at
+  pan −40° is roughly straight ahead.
+- **`planner_task` holds the line until the head arrives**: it posts the
+  speech when the executor reports the head within a few degrees of the
+  latched bearing, or after a short timeout (initially 1.5 s) so a line is
+  never lost to a slow or clamped head.
+- **No direction words from the model.** The speech is generated in the same
+  response as the box, before the executor has computed the bearing, so a
+  model-chosen "on the left" would describe the image edge rather than the
+  room. Looking first makes the direction visible, and the prompt says not to
+  name one. A remark about the scene as a whole carries no `track` and is
+  spoken at once, as now.
+
 ## Consequences
 
 - **Visible**: the head looks around, settles on what changed, and the planner
   is consulted about it. The robot reads as attentive without more API calls.
+  When he remarks on something, he looks at it first.
 - **Spend**: unchanged at rest, since the pose-keyed reference stops gaze from
   waking the planner. It rises when the gaze finds something, which is the
   point.
@@ -170,17 +201,18 @@ Each step is a PR, testable before the next:
    command. Bench: head on, wheels off; gaze must not raise the planner's
    request rate on a static scene.
 3. Attention hold (§3).
-4. Time-bounded `drive`/`rotate`, with calibration on the bench box.
-5. Wander, and the planner's `set_idle` tool.
+4. Look, then speak (§6): the prompt change, and `planner_task` holding a line
+   until the head reaches the latched bearing.
+5. Time-bounded `drive`/`rotate`, with calibration on the bench box.
+6. Wander, and the planner's `set_idle` tool.
 
-## Open questions
+## Resolved questions (Lauri, 2026-11-05)
 
-- Dwell poses and timings: three pan poses at the current tilt, or include a
-  tilt-down pose for the floor in front?
-- Should gaze stop while a voice turn is listening, so the robot looks
-  "at" the speaker (pan 0°)? There is no direction-of-arrival from one mic.
-- Speech while gazing: should a remark at pan ±40° say which way it is
-  looking ("vasemmalla…", on the left)? The prompt can carry the pose.
+| Question | Ruling |
+|---|---|
+| A tilt-down pose for the floor in front? | Yes: the floor pose in §1 |
+| Face forward while a voice turn listens? | Yes: §1 |
+| Should remarks say which way the robot is looking? | Direction depends on the head pose *and* where the thing is in the frame, so the head pose alone is wrong. Better: look at the thing before remarking on it (§6), which makes the direction visible without words |
 
 ## Related
 
