@@ -1,6 +1,6 @@
 # ADR-029: Idle Gaze and Wander in the Executor
 
-**Status**: proposed
+**Status**: accepted (Lauri, 2026-11-05)
 **Date**: 2026-11-05
 **Source**: conversation 2026-11-05 (spectator review of Teuvo on the bench)
 **Confidence**: 6/10 (the pose-keyed scene reference is untested; the gaze and
