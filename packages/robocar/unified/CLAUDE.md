@@ -140,7 +140,7 @@ One line per rule. Each group's doc has the full reasoning and the tests that ho
 - Each audio stage is freed once the next exists, and the request is built from string references with a presized `cJSON_PrintBuffered`.
 - Voice turns run on a flash model; Robotics-ER belongs to the planner.
 - Voice-turn replies, `voice say` and the self-report bypass `dialogue_style_is_repetitive()`, and a voice turn leaves the scene reference where it is.
-- A voice turn consumes the audio latch whether it answers or ignores, and a planner line is dropped if `speech_budget_notes()` moved during its request.
+- A voice turn consumes the audio latch whether it answers or ignores, and a planner line is dropped if a voice turn ran or anything was spoken during its request.
 - Gemini error bodies are logged at ERROR.
 - Record only once `ambient_capture_allowed()` clears the amp and its `AMBIENT_PLAYBACK_HANGOVER_MS` tail; start-cue frames pass through `ambient_gate_accepts()`.
 - The scene reference is the frame last spoken about. Only valid fingerprints update it, and `!s_current.valid` is checked before the first-impression branch (#690).
