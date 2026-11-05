@@ -31,6 +31,8 @@ i2c_peripherals=not-responding              # no bus at all (bare board, or a bu
 buzzer=not-responding                       # separate key: it is a GPIO, not I2C
 ```
 
+**On the carrier, `not-responding` with only USB plugged in is expected.** The main board's 3V3 (mux, PCA9685, rangefinders, OLED, TB6612FNG logic) comes only from the AMS1117 LDO, which is fed from the LM2596's 5 V, which is fed from the pack. The XIAO's USB 5 V reaches the main board only through D1, which points the other way (from the 5 V rail to the XIAO). So on USB alone the XIAO boots, logs, joins WiFi and talks to Gemini normally, while every I2C transaction NACKs at the mux (`TCA9548A set_channels failed: ESP_ERR_INVALID_STATE`). Connect the pack before diagnosing the bus (2026-11-05).
+
 The spoken fault line stays coarse — one persona phrase covers "no bus" and "motors did not initialise", because from outside the robot the symptom is identical and the persona has no wording for LEDs, servos or the buzzer. The per-peripheral breakdown lives in the logged and MQTT-published facts line, which is where somebody diagnosing a board is actually looking.
 
 ## PCA9685 channel layout

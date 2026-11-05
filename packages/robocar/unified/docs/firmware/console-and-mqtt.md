@@ -3,6 +3,18 @@
 Moved word for word from the project `CLAUDE.md`, which keeps a
 one-line form of each rule below and links here for the reasoning.
 
+**Opening the USB console resets the board.** On the XIAO's USB-Serial-JTAG,
+opening `/dev/cu.usbmodem*` restarts the ESP32-S3 (`rst:0x15
+USB_UART_CHIP_RESET`), even from a client that holds DTR and RTS low (observed
+2026-11-04 with pyserial on macOS). So a check that opens the port to see
+whether the robot is idle wakes it up. To stop the robot without unplugging it
+(no WiFi, no API calls), park it in the ROM bootloader with
+`uvx esptool@latest --port /dev/cu.usbmodem101 --after no-reset chip-id`, and
+confirm over MQTT rather than the port: a running robot publishes
+`robocar/status` every 3 s, and a parked one leaves only the broker's retained
+copy (`mosquitto_sub -F '%r %t'` prints `1` for it). Any reset or a port open
+starts the app again.
+
 ## Serial console commands
 
 | Command | Effect |
