@@ -26,6 +26,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 #include "credentials_loader.h"  // MAX_SSID_LENGTH
 #include "esp_err.h"
@@ -122,6 +123,16 @@ bool self_report_voice_able(const robocar_status_t *status);
  * @return strlen of the written string (may be truncated to @p len - 1).
  */
 size_t self_report_format_facts(const robocar_status_t *status, char *buf, size_t len);
+
+/**
+ * @brief Hash of the health facts a listener would hear change.
+ *
+ * The monitor re-announces when this changes. The Gemini key enters as the
+ * spoken word (absent/present/rejected/exhausted), so an untested key becoming
+ * accepted does not change it. The MQTT command access is left out (fixed for
+ * the boot, not a fault).
+ */
+uint32_t self_report_health_signature(const robocar_status_t *status);
 
 /**
  * @brief Start the status monitor task (Core 1).
