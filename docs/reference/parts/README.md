@@ -43,7 +43,8 @@ rotation for its footprint in
 [`../jlcpcb-rotations.toml`](../jlcpcb-rotations.toml): `kicad.fab` refuses to
 write a CPL without one, and `test_jlc` fails on any LCSC number in use that
 has none. `PYTHONPATH=tools python3 -m kicad.lcsc_rotation <C123> <Lib:Name>`
-derives the entry.
+derives the entry. `just kicad::parts` asks JLCPCB whether each number in use
+is basic, preferred or extended, in stock and orderable (`kicad.lcsc`).
 
 `pin_numbers = "board-dip-ccw"` takes the numbers from the part's board page
 under `docs/reference/boards/`: the MCU's `[source] board`, or the part's own

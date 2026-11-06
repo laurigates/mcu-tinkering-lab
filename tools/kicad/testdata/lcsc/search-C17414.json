@@ -1,0 +1,35 @@
+{
+ "code": 200,
+ "data": {
+  "componentPageInfo": {
+   "total": 4,
+   "list": [
+    {
+     "componentLibraryType": "base",
+     "stockCount": 50219315,
+     "canPresaleNumber": 47178251,
+     "preferredComponentFlag": false,
+     "componentCode": "C17414",
+     "componentModelEn": "0805W8F1002T5E",
+     "componentSpecificationEn": "0805",
+     "initialPrice": 0.0034,
+     "leastPatchNumber": 20,
+     "minPurchaseNum": 1
+    },
+    {
+     "componentLibraryType": "expand",
+     "stockCount": 0,
+     "canPresaleNumber": 0,
+     "preferredComponentFlag": false,
+     "componentCode": "C20622501",
+     "componentModelEn": "C17414",
+     "componentSpecificationEn": "0805",
+     "initialPrice": 0.0205,
+     "leastPatchNumber": 5,
+     "minPurchaseNum": 441
+    }
+   ]
+  }
+ },
+ "message": null
+}

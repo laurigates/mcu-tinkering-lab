@@ -1,0 +1,23 @@
+{
+ "code": 200,
+ "data": {
+  "componentPageInfo": {
+   "total": 1,
+   "list": [
+    {
+     "componentLibraryType": "expand",
+     "stockCount": 17262,
+     "canPresaleNumber": 16969,
+     "preferredComponentFlag": false,
+     "componentCode": "C468250",
+     "componentModelEn": "TPS563208DDCR",
+     "componentSpecificationEn": "TSOT-23-6",
+     "initialPrice": 0.1299,
+     "leastPatchNumber": 5,
+     "minPurchaseNum": 1
+    }
+   ]
+  }
+ },
+ "message": null
+}

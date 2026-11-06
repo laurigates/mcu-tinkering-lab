@@ -1,0 +1,59 @@
+{
+ "code": 200,
+ "data": {
+  "componentCode": "C17414",
+  "componentBrandEn": "UNI-ROYAL(Uniroyal Elec)",
+  "componentModelEn": "0805W8F1002T5E",
+  "dataManualUrl": "https://www.lcsc.com/datasheet/lcsc_datasheet_2411221126_UNI-ROYAL-Uniroyal-Elec-0805W8F1002T5E_C17414.pdf",
+  "componentSpecificationEn": "0805",
+  "describe": "-55℃~+155℃ 10kΩ 125mW 150V Thick Film Resistor ±1% ±100ppm/℃ 0805 Chip Resistor - Surface Mount ROHS",
+  "stockCount": 50219315,
+  "overseasStockCount": 50219315,
+  "prices": [
+   {
+    "startNumber": 1,
+    "endNumber": 999,
+    "productPrice": 0.0034
+   },
+   {
+    "startNumber": 1000,
+    "endNumber": 4999,
+    "productPrice": 0.0026
+   },
+   {
+    "startNumber": 5000,
+    "endNumber": 9999,
+    "productPrice": 0.0018
+   },
+   {
+    "startNumber": 10000,
+    "endNumber": 49999,
+    "productPrice": 0.0016
+   },
+   {
+    "startNumber": 50000,
+    "endNumber": 50199,
+    "productPrice": 0.0014
+   },
+   {
+    "startNumber": 50200,
+    "endNumber": -1,
+    "productPrice": 0.0014
+   }
+  ],
+  "componentLibraryType": "base",
+  "leastNumber": 20,
+  "leastNumberPrice": 0.012,
+  "warehouseCode": "sz",
+  "canPresaleNumber": 47178251,
+  "componentStatus": "yes",
+  "assemblyProcess": "SMT",
+  "minPurchaseNum": 1,
+  "initialPrice": 0.0034,
+  "isBuyComponent": "1",
+  "noBuyReason": null,
+  "leastPatchNumber": 20,
+  "specialComponentFee": 0.0
+ },
+ "message": null
+}
