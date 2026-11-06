@@ -1,4 +1,5 @@
 ---
+reviewed: 2026-11-04
 paths:
   - 'packages/robocar/unified/main/main.c'
   - 'packages/robocar/unified/main/i2c_bus*'

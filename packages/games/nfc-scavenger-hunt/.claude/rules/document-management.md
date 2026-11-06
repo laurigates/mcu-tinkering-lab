@@ -1,3 +1,7 @@
+---
+reviewed: 2026-04-05
+---
+
 # Document Management
 
 Rules for organizing and managing project documentation.
