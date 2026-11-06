@@ -33,7 +33,9 @@ Primary project: dual-ESP32 AI-powered robot car with pluggable AI vision backen
 | PRD-014 | PRD | Teuvo Sponsored Upgrades | draft | 2026-10-23 |
 | PRD-015 | PRD | A Teuvo of Your Own | draft | 2026-10-23 |
 | PRD-016 | PRD | Build Cost Model and Sourcing Planner | draft | 2026-10-31 |
+| PRD-017 | PRD | Robocar Behaviour Twin | draft | 2026-11-05 |
 | ADR-028 | ADR | Teuvo Connectivity Resilience | proposed | 2026-10-23 |
+| ADR-030 | ADR | Robocar Behaviour Twin | proposed | 2026-11-05 |
 | PRP-melody-detector | PRP | Melody Detector — Implementation Plan | planned | 2026-04-26 |
 
 ## Project Overview
