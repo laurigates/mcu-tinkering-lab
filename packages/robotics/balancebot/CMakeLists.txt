@@ -63,7 +63,8 @@ target_link_libraries(balancebot
     hardware_watchdog
 )
 
-# Console on USB CDC only (the robot has no UART header wired).
+# Console on USB CDC only (no UART console; carrier rev3's J6 brings out
+# D1/D2, which firmware does not use).
 pico_enable_stdio_usb(balancebot 1)
 pico_enable_stdio_uart(balancebot 0)
 

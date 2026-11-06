@@ -80,8 +80,8 @@ graph TD
 | Pin | GPIO | Macro | Wired to | Notes |
 |-----|------|-------|----------|-------|
 | D0 | GPIO26 | `PIN_PACK_SENSE` | — | only the carrier PCB has the pack divider (R2/R3/C3); the hand-wired harness leaves D0 free |
-| D1 | GPIO27 | — | *unassigned* |  |
-| D2 | GPIO28 | — | *unassigned* |  |
+| D1 | GPIO27 | `PIN_EXP_D1` | — | only the carrier PCB has the expansion header (J6); the hand-wired harness leaves D1 free |
+| D2 | GPIO28 | `PIN_EXP_D2` | — | only the carrier PCB has the expansion header (J6); the hand-wired harness leaves D2 free |
 | D3 | GPIO5 | `PIN_IMU_INT` | GY-521 MPU6050 INT | Data-ready, active high, push-pull; no internal pull (RP2350-E9) |
 | D4 | GPIO6 | `PIN_IMU_SDA` | GY-521 MPU6050 SDA | I2C1 SDA |
 | D5 | GPIO7 | `PIN_IMU_SCL` | GY-521 MPU6050 SCL | I2C1 SCL |
@@ -98,7 +98,10 @@ DRV8825 nSLEEP/nRESET/M0/M1 straps (see below) and the nENABLE pull-up; **5V**
 takes the buck converter's output; **GND** is the common ground. D0
 (GPIO26, `PIN_PACK_SENSE`) carries the carrier PCB's pack-voltage divider
 (R2/R3/C3); the hand-wired harness leaves it free, and the firmware does not
-read it yet (#747). D1–D2 (GPIO27–28) are spare and ADC-capable.
+read it yet (#747). D1–D2 (GPIO27–28) are ADC-capable; the carrier PCB (rev3)
+brings them out on its expansion header J6, each through a 1 kΩ resistor
+([`hardware/carrier/README.md`](hardware/carrier/README.md#headers)), and the
+hand-wired harness leaves them free.
 
 The GY-521 MPU6050 breakout has an onboard 3.3 V regulator and works fed
 from 3V3 directly (bypassing the regulator) — INT is push-pull 3.3 V,

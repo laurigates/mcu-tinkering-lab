@@ -30,6 +30,13 @@ are a calibration, not a quote: JLCPCB changes them.
   order in the same cart. The balancebot carrier went bare on 2026-10-23 and
   two of its 11 parts (ZXMP4A16G, BSMD1812-300-24V) had no usable AliExpress
   listing. Check stock for each LCSC number on the day of the order.
+- **A PCB line saved days earlier stays in the cart under the same file name,
+  and a later upload does not replace it.** On 2026-10-23 the balancebot line
+  was `balancebot-carrier-fab_Y5`, uploaded 13–14 October; JLCPCB built that
+  older layout (8d18cd8d, no F1/Q1), while the hand-off CSV named the commit of
+  the zip on disk. Before checkout, delete stale PCB lines, or open each line's
+  thumbnail or Gerber viewer and compare it with a render of the current
+  board; record the Y number of the upload made in this session.
 - **Run `just <p>::carrier-fab` from a clean tree** and read the size and
   layer count from `output/fab/*-job.gbrjob` (`.GeneralSpecs.Size`); the
   upload must detect the same.

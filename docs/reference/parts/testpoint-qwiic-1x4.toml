@@ -1,0 +1,17 @@
+# An I2C tap in Qwiic/STEMMA QT pin order (GND, 3V3, SDA, SCL): a 1x4 pin
+# header a Qwiic-to-Dupont lead or a logic analyser plugs into. The balancebot
+# carrier's (J7) sits on the MPU6050's bus. Through-hole, hand-soldered, so no
+# LCSC number.
+[part]
+name = "Qwiic-order I2C tap, 1x4 pin header"
+source = "KiCad 10.0.6 library (Conn_01x04, PinHeader_1x04_P2.54mm_Vertical); the pin order is SparkFun's Qwiic connector order, GND, 3V3, SDA, SCL (Lauri, 2026-11-06)"
+symbol = "Connector_Generic:Conn_01x04"
+footprint = "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical"
+value = "I2C: GND 3V3 SDA SCL"
+buy = "owned:2.54 mm 1x40 male header strips (AliExpress 2025-11, 2025-12, 2026-08)"
+
+[pins]
+GND = 1
+"3V3" = 2
+SDA = 3
+SCL = 4

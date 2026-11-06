@@ -27,3 +27,8 @@ U1 = { above = 15.5, source = "estimate: XIAO RP2350 in 1x7 female headers, 8.5 
 # outline (board.toml's GY-521 silk rect) from here.
 J3 = { above = 14.0, source = "estimate: GY-521 flat on its 1x8 female header, 8.5 + 2.5 + 1.6 + ~1.4 parts", module = "gy-521", outline = [34.5, 31.5, 55.5, 48.5] }
 F1 = { above = 2.0, source = "estimate: 1812 PTC, BSMD1812 body under 2 mm" }
+# rev3 headers with a lead plugged in: the STEP has the bare male header
+# (about 8.5 mm), but a mated Dupont housing stands taller.
+J6 = { above = 14.0, source = "estimate: 1x4 male header with a Dupont housing on it, 2.5 + ~11.5 mm (expansion lead)" }
+J7 = { above = 14.0, source = "estimate: 1x4 male header with a Dupont housing on it, 2.5 + ~11.5 mm (Qwiic-to-Dupont lead)" }
+J8 = { above = 14.0, source = "estimate: 1x5 male header with a Dupont housing on it, 2.5 + ~11.5 mm (meter or scope lead)" }

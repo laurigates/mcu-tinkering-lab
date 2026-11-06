@@ -23,3 +23,11 @@
 (rule "silkscreen 0.15 mm clear of pads"
 	(condition "B.Type == 'Pad'")
 	(constraint silk_clearance (min 0.15mm)))
+
+# rev3: each driver's VIO link (R7, R8) sits between its socket's pin rows,
+# inside the module's courtyard; the module stands on 8.5 mm female headers
+# above it. Only that pair is excused, so any other overlap still fails.
+(rule "VIO links under their driver modules"
+	(condition "(A.Reference == 'R7' && B.Reference == 'A1') || (A.Reference == 'A1' && B.Reference == 'R7') || (A.Reference == 'R8' && B.Reference == 'A2') || (A.Reference == 'A2' && B.Reference == 'R8')")
+	(constraint courtyard_clearance (min 0mm))
+	(severity ignore))

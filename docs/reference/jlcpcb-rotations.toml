@@ -220,6 +220,13 @@ rotation = 0
 max_err_mm = 0.0
 checked = "2026-10-19"
 
+[C17513] # 1 k
+footprint = "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+lcsc_footprint = "R0805"
+rotation = 0
+max_err_mm = 0.0
+checked = "2026-11-06"
+
 [C17520] # 2.2 k
 footprint = "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
 lcsc_footprint = "R0805"
@@ -233,6 +240,13 @@ lcsc_footprint = "R0805"
 rotation = 0
 max_err_mm = 0.0
 checked = "2026-10-19"
+
+[C17560] # 22 k
+footprint = "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+lcsc_footprint = "R0805"
+rotation = 0
+max_err_mm = 0.0
+checked = "2026-11-06"
 
 [C17593] # 27 k
 footprint = "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
