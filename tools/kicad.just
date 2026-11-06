@@ -11,7 +11,8 @@
 #   _carrier-board-checked, _carrier-review, _carrier-measure, _carrier-fab,
 #   _perfboard, _perfboard-check
 # KiCad-free: _carrier-lib, _carrier-schematic, _perfboard, _perfboard-check.
-# Need KiCad 10.0.6: _carrier-check, _carrier-fab (kicad-cli), _carrier-board, _carrier-silk,
+# Need KiCad 10.0.6: _carrier-check, _carrier-fab (kicad-cli; and the network,
+# for kicad.lcsc), _carrier-board, _carrier-silk,
 # _carrier-route, _carrier-review, _carrier-measure (KiCad's bundled Python;
 # _carrier-measure's `resistance` also uv, for numpy and scipy; _carrier-route and
 # _carrier-board-checked also java >= 25 and the Freerouting 2.5.0 jar,
@@ -141,7 +142,10 @@ _carrier-measure project *args:
         PYTHONPATH=tools python3 -m kicad.measure "$dumped" "${argv[@]}"
     fi
 
+# kicad.lcsc first (network; cached for a day): an unknown, discontinued or
+# sold-out LCSC part stops the order before anything is exported.
 _carrier-fab project:
+    cd {{_kicad_repo}} && PYTHONPATH=tools python3 -m kicad.lcsc --project {{project}}
     cd {{_kicad_repo}} && PYTHONPATH=tools python3 -m kicad.fab {{project}}
 
 # The project's hardware/perfboard/perfboard.toml, laid out from the carrier

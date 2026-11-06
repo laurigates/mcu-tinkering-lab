@@ -1,0 +1,23 @@
+{
+ "code": 200,
+ "data": {
+  "componentPageInfo": {
+   "total": 1,
+   "list": [
+    {
+     "componentLibraryType": "expand",
+     "stockCount": 284228,
+     "canPresaleNumber": 237150,
+     "preferredComponentFlag": true,
+     "componentCode": "C17756",
+     "componentModelEn": "0805W8F5602T5E",
+     "componentSpecificationEn": "0805",
+     "initialPrice": 0.003,
+     "leastPatchNumber": 20,
+     "minPurchaseNum": 1
+    }
+   ]
+  }
+ },
+ "message": null
+}

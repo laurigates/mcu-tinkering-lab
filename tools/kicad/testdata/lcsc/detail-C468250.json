@@ -1,0 +1,59 @@
+{
+ "code": 200,
+ "data": {
+  "componentCode": "C468250",
+  "componentBrandEn": "Texas Instruments",
+  "componentModelEn": "TPS563208DDCR",
+  "dataManualUrl": "https://www.lcsc.com/datasheet/lcsc_datasheet_2004061031_Texas-Instruments-TPS563208DDCR_C468250.pdf",
+  "componentSpecificationEn": "TSOT-23-6",
+  "describe": "-40℃~+125℃@(TJ) 1 3A 4.5V~17V 580kHz 768mV~7V Adjustable Buck Buck Built-in Yes TSOT-23-6 DC-DC Converters ROHS",
+  "stockCount": 17262,
+  "overseasStockCount": 17262,
+  "prices": [
+   {
+    "startNumber": 1,
+    "endNumber": 49,
+    "productPrice": 0.1299
+   },
+   {
+    "startNumber": 50,
+    "endNumber": 149,
+    "productPrice": 0.0997
+   },
+   {
+    "startNumber": 150,
+    "endNumber": 499,
+    "productPrice": 0.0848
+   },
+   {
+    "startNumber": 500,
+    "endNumber": 2999,
+    "productPrice": 0.0736
+   },
+   {
+    "startNumber": 3000,
+    "endNumber": 5999,
+    "productPrice": 0.0554
+   },
+   {
+    "startNumber": 6000,
+    "endNumber": -1,
+    "productPrice": 0.051
+   }
+  ],
+  "componentLibraryType": "expand",
+  "leastNumber": 5,
+  "leastNumberPrice": 0.098,
+  "warehouseCode": "sz",
+  "canPresaleNumber": 16969,
+  "componentStatus": "yes",
+  "assemblyProcess": "SMT",
+  "minPurchaseNum": 1,
+  "initialPrice": 0.1299,
+  "isBuyComponent": "1",
+  "noBuyReason": null,
+  "leastPatchNumber": 5,
+  "specialComponentFee": 0.0
+ },
+ "message": null
+}

@@ -18,9 +18,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from kicad import fab, jlc, registry
+from kicad import fab, jlc, lcsc
 from kicad.errors import KicadError
-from kicad.paths import REPO_ROOT
 
 R0805 = "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
 C0805 = "Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder"
@@ -210,25 +209,18 @@ class RotationTableTests(unittest.TestCase):
     def test_covers_every_lcsc_number_in_use(self):
         """Every LCSC number a tracked hardware.toml or registry entry names has
         a checked rotation for the footprint it is placed with."""
-        import tomllib
-
         table = jlc.load_rotations()
-        used: dict[str, set[str]] = {}
-        for slug in registry.slugs():
-            spec = registry.load(slug)
-            if spec.lcsc:
-                used.setdefault(spec.lcsc, set()).add(spec.footprint)
-        for path in sorted(REPO_ROOT.glob("packages/*/*/hardware.toml")):
-            parts = tomllib.loads(path.read_text()).get("parts", {})
-            for part in parts.values():
-                if part.get("lcsc") and part.get("part"):
-                    fp = registry.load(part["part"]).footprint
-                    used.setdefault(part["lcsc"], set()).add(fp)
+        # A part with no registry entry has no footprint to place it with.
+        used = {
+            code: fps
+            for code, uses in lcsc.used().items()
+            if (fps := {u.footprint for u in uses if u.footprint})
+        }
         self.assertTrue(used)
-        for lcsc, fps in sorted(used.items()):
-            with self.subTest(lcsc=lcsc):
-                self.assertIn(lcsc, table)
-                self.assertEqual(fps, {table[lcsc].footprint})
+        for code, fps in sorted(used.items()):
+            with self.subTest(lcsc=code):
+                self.assertIn(code, table)
+                self.assertEqual(fps, {table[code].footprint})
 
     def test_rejects_bad_entries(self):
         cases = {

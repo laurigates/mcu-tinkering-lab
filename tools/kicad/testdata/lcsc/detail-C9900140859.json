@@ -1,0 +1,39 @@
+{
+ "code": 200,
+ "data": {
+  "componentCode": "C9900140859",
+  "componentBrandEn": "JLCPCB Assembly",
+  "componentModelEn": "C1000",
+  "dataManualUrl": null,
+  "componentSpecificationEn": "SMD-7360-20",
+  "describe": "SMD-7360-20 New Arrivals ROHS",
+  "stockCount": 0,
+  "overseasStockCount": 0,
+  "prices": [
+   {
+    "startNumber": 1,
+    "endNumber": 99,
+    "productPrice": 0.0398
+   },
+   {
+    "startNumber": 100,
+    "endNumber": -1,
+    "productPrice": 0.0205
+   }
+  ],
+  "componentLibraryType": "expand",
+  "leastNumber": 2,
+  "leastNumberPrice": 0.012,
+  "warehouseCode": "sz",
+  "canPresaleNumber": 0,
+  "componentStatus": "yes",
+  "assemblyProcess": "SMT",
+  "minPurchaseNum": 441,
+  "initialPrice": 0.0205,
+  "isBuyComponent": "0",
+  "noBuyReason": "This product is no longer manufactured.",
+  "leastPatchNumber": 2,
+  "specialComponentFee": 0.0
+ },
+ "message": null
+}
