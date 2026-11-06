@@ -108,7 +108,7 @@ copied parts database.
 - A stage's reasoning sits once, beside its values. A correction to the
   block reaches every carrier on the next regeneration, and the carrier check
   shows which boards it changed.
-- robocar-unified-integrated's `hardware.toml` lost about 180 lines of part
+- robocar-unified-integrated's `hardware.toml` is 200 lines shorter: it lost the part
   tables and rails and keeps only the board-specific notes.
 - The netlist, schematic, stamp and board check of a re-expressed project are
   byte-identical: the netlist sorts components by ref and nets by name, so the
