@@ -1,0 +1,18 @@
+# A 1x4 expansion header: the MCU's 5V, GND and two spare GPIOs, for a cable
+# to a companion board (a second XIAO's UART, #960), a servo's PWM or an ADC
+# input. 5V sits only beside GND, so a lead put on one pin over cannot put 5V
+# on a GPIO. The balancebot carrier's (J6) brings out XIAO D2 and D1 behind
+# 1 kOhm series resistors. Through-hole, hand-soldered, so no LCSC number.
+[part]
+name = "Expansion header, 1x4 pin header"
+source = "KiCad 10.0.6 library (Conn_01x04, PinHeader_1x04_P2.54mm_Vertical); the pin order, 5V, GND, D2, D1, is Lauri's (2026-11-06)"
+symbol = "Connector_Generic:Conn_01x04"
+footprint = "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical"
+value = "EXP: 5V GND D2 D1"
+buy = "owned:2.54 mm 1x40 male header strips (AliExpress 2025-11, 2025-12, 2026-08)"
+
+[pins]
+"5V" = 1
+GND = 2
+D2 = 3
+D1 = 4
