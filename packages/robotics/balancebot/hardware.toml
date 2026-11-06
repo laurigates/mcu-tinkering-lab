@@ -408,8 +408,10 @@ ref = "J6"
 # D3 (rev3, Lauri 2026-11-06): a B5819W in series with J6's 5V pin, anode on
 # XIAO_5V and cathode on EXP_5V, so a companion board powered from its own USB
 # or supply cannot back-feed this board's XIAO_5V (and through it the XIAO's
-# 5V pad). The companion gets XIAO_5V minus one Schottky drop (about 0.3 V),
-# so about 4.4-4.7 V with the buck at 5.0-5.3 V, and shares D1's 1 A budget.
+# 5V pad). It does not stop this board feeding the companion's 5V pin, so with
+# USB on both boards leave J6:1 unconnected (carrier README). The companion
+# gets XIAO_5V minus one Schottky drop: about 4.4-4.7 V at light load and
+# 4.1-4.4 V at 0.5 A with the buck at 5.0-5.3 V, and shares D1's 1 A budget.
 # Same part as D1 (LCSC C8598, JLC Basic).
 [parts.exp_diode]
 name = "B5819W Schottky, XIAO 5V to the expansion header"

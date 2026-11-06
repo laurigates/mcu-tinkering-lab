@@ -114,13 +114,18 @@ silkscreen. Pin 1 is the square pad.
 - **J6's 5V pin** is EXP_5V: XIAO_5V (the XIAO's 5V pad, which is its USB-C
   VBUS; [board page](../../../../../docs/reference/boards/xiao-rp2350.md))
   through diode D3, a B5819W with its cathode on J6. The companion gets
-  XIAO_5V minus one Schottky drop: with the buck at 5.0–5.3 V and about 0.3 V
-  across each of D1 and D3, about 4.4–4.7 V. D3 blocks current into the
-  board, so a companion powered from its own USB or supply cannot back-feed
-  this XIAO or the buck, and two USB hosts' VBUS are never tied together.
-  The companion still shares diode D1 (B5819W, 1 A) with this XIAO: budget
-  about 0.5 A for J6, and power a servo from its own supply, using only J6's
-  GND and signal pins.
+  XIAO_5V minus one Schottky drop. With the buck at 5.0–5.3 V that is about
+  4.4–4.7 V at light load (about 0.3 V across each of D1 and D3) and about
+  4.1–4.4 V at 0.5 A (B5819W typical: 0.32 V at 0.1 A, 0.40 V at 0.5 A).
+  D3 blocks current into this board, so a companion powered from its own USB
+  or supply cannot back-feed this XIAO or the buck. It does not block the
+  other way: this board's 5V, which is its USB host's VBUS when the XIAO is on
+  USB, still reaches the companion's 5V pin, and if the companion has no
+  diode between its own USB-C and that pin, the two hosts' VBUS are joined
+  through D3. While developing with USB on both boards, leave pin 1 out of
+  the cable. The companion still shares diode D1 (B5819W, 1 A) with this
+  XIAO: budget about 0.5 A for J6, and power a servo from its own supply,
+  using only J6's GND and signal pins.
 - **J7** sits on the MPU6050's bus, which core 1 owns (I2C1, 400 kHz); it
   adds no pull-ups (the GY-521 has its own). A Qwiic device plugged in shares
   the bus, so its address must not be 0x68, and firmware may reach it only
