@@ -20,23 +20,30 @@ It adds the expansion header J6 with its series resistors R5 and R6, the
 drivers' VIO links R7 and R8, the I2C tap J7, the supply test header J8 and the
 ground post J9, and changes R3 from 27 kΩ to 22 kΩ so D0 can read a 4S pack.
 
-A board with no revision mark is one of two earlier layouts, told apart by J1:
+The boards delivered from the 2026-10-23 order (JLCPCB W2026102320533303,
+PCB line Y5-13829495A, file `balancebot-carrier-fab_Y5`) are the
+**commit 8d18cd8d layout** (#753, 2026-10-13), not the board this README
+described until rev3. JLCPCB built Y5, an upload left in the cart since
+13–14 October. The order history's thumbnail of Y5 matches a render of
+8d18cd8d: XT30 J1, J3 at the front edge of the GY-521 outline, no F1, Q1,
+D2 or R4, and no stitching vias. The delivered boards, inspected by hand,
+lack the F1, Q1, D2 and R4 footprints. The 2026-10-23 hand-off CSV
+attributed that line to `main@9735477d` because it recorded the zip on disk,
+not the file JLCPCB had in the cart.
 
-- **JST-XH J1, with F1 and Q1** (commit 684bb7de, #822, 2026-10-21): the
-  board this README described until rev3. It has 11 SMD parts (R1–R4,
-  C1–C3, D1, D2, F1, Q1) and none of J6–J9 or R5–R8, and R3 is 27 kΩ: the
-  ratio is 27/127, so D0 reads a 3S pack (12.6 V as 2.68 V) and a full 4S
-  pack would put 3.57 V on the pin, above the ADC's 3.3 V reference.
-  `.claude/rules/part-sourcing.md` records a balancebot carrier ordered bare
-  on 2026-10-23 with 11 SMD parts, Q1 and F1 among them, which matches this
-  layout and no earlier one.
-- **XT30 J1** (commit 8d18cd8d, #753, 2026-10-13): pad 1 GND and pad 2 VBAT;
-  7 SMD parts (R1–R3, C1–C3, D1) and no F1, Q1, D2 or R4, so no fuse and no
-  reverse-polarity protection; R3 27 kΩ. J3 is on the front edge of the
-  GY-521 outline (board y 33), so the module hangs rearward and is fitted
-  component side down, Z pointing down. The firmware computes pitch with Z
-  up (`src/balance_control.c`), so it does not support this layout's IMU
-  orientation as written.
+- **8d18cd8d, the delivered boards:** XT30 J1, pad 1 GND and pad 2 VBAT,
+  with no polarity printed; 7 SMD parts (R1–R3, C1–C3, D1) and no F1, Q1, D2
+  or R4, so no fuse and no reverse-polarity protection; R3 27 kΩ (ratio
+  27/127). J3 is on the front edge of the GY-521 outline (board y 33). Fitted
+  component side up, the module's pins land reversed (VCC on INT), so it is
+  fitted component side down, hanging rearward: the wiring is then correct,
+  but accel X and Z read inverted (a 180° turn about Y). The firmware computes
+  pitch with X forward and Z up (`src/balance_control.c`), so this layout
+  needs an IMU-flip option before it can balance.
+- **684bb7de** (#822, 2026-10-21) and **6d4aaa68** (#770, 2026-10-14): JST-XH
+  J1 layouts in git history that were never fabricated. 684bb7de adds F1, Q1,
+  D2 and R4 (11 SMD parts); its R3 is 27 kΩ, so a 4S pack would put 3.57 V on
+  D0.
 
 Everything below describes rev3.
 
