@@ -1,5 +1,5 @@
-# robocar-unified's supply test header (J11): a 1x4 pin header on the main
-# board for meter probes. VBAT is on an end pin with GND as its only
+# Supply test header (robocar-unified's J11, balancebot's J8): a 1x4 pin
+# header on a carrier for meter probes. VBAT is on an end pin with GND as its only
 # neighbour, so a probe slipping off VBAT can reach ground but never a logic
 # rail. Through-hole, hand-soldered, so no LCSC number.
 [part]

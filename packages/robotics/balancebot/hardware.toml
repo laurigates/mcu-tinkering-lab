@@ -259,11 +259,13 @@ value = "Motor right"
 # -4.5 V that DS33584's 100 mohm RDS(on) maximum is given at and near the
 # -10 V of its 60 mohm one. On a full 4S pack (16.8 V, which the divider
 # reads since rev3) it does conduct: 0.12-0.3 mA through R4 over its VZ
-# spread, about 5 mW, holding |VGS| at 13.8-15.6 V, still under VGSS.
+# spread, 4 mW at most, holding |VGS| at 13.8-15.6 V, still under VGSS. It
+# conducts whenever a 4S pack is above about 13.8 V, so over most of a
+# discharge; VZ sits a little below its 5 mA figure at these currents.
 # In an overshoot it clamps |VGS| to 15.6 V at 5 mA
 # (R4 passes 0.8 mA at a 24 V spike), about 16.9 V at a 125 C junction: at
 # least 3 V under VGSS. A 12 V part (VZ 11.4-12.7 V) would conduct on a full
-# pack.
+# 3S pack.
 #
 # Power-stage checklist (.claude/rules/power-stage-checklist.md) for this
 # input stage: 1-2 (dropout, low-battery cutoff) and 4-7 belong to the LM2596

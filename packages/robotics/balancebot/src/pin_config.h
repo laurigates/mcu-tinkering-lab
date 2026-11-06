@@ -30,7 +30,9 @@
 // Carrier PCB only (rev3): the expansion header J6 (5V, GND, D2, D1), each
 // GPIO behind a 1 kOhm series resistor, for a cable to an ESP-NOW companion
 // XIAO (#960), a servo's PWM or an ADC input. Both are ADC-capable. Firmware
-// does not use them yet; the hand-wired harness leaves them free.
+// does not use them yet; the hand-wired harness leaves them free. TX and RX
+// are on different UARTs (uart0 TX; uart1 RX via GPIO_FUNC_UART_AUX): a
+// hardware-UART link initialises both at one baud rate, or uses a PIO UART.
 #define PIN_EXP_D1 27  // XIAO D1, ADC1; UART1 RX (GPIO function F11)
 #define PIN_EXP_D2 28  // XIAO D2, ADC2; UART0 TX (GPIO function F2)
 

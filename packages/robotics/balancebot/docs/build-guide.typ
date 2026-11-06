@@ -150,7 +150,7 @@ wired as a mirror image of the left, so firmware inverts its DIR line.
   ([5V], [—], [Buck converter output], [Not the battery pads]),
   ([GND], [—], [Common ground], []),
   ([D0], [—], [Pack sense, carrier PCB only], [R2/R3 divider; firmware \#747]),
-  ([D1–D2], [—], [Spare], [ADC-capable]),
+  ([D1–D2], [—], [Expansion header J6, carrier rev3 only], [ADC-capable; unused by firmware]),
   aligns: (left, left, left, left),
 )
 
