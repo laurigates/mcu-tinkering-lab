@@ -250,6 +250,15 @@ first, and DRC parity, the board check and the stamp cover its parts. The
 format and its checks are in
 `tools/hardware/model.py` and `tools/kicad/netlist.py`.
 
+### Later addition: circuit blocks (#976)
+
+A `[blocks.<id>]` table uses a stage defined once under
+`docs/reference/blocks/`, connected through ports (`<id>.<PORT>` wherever a
+part pin may go). `tools/hardware/blocks.py` expands it into ordinary
+`[parts.*]` and `[[rails]]` entries when the sidecar is read, so the join and
+everything after it are unchanged. See
+[ADR-031](ADR-031-circuit-blocks.md).
+
 ## Related
 
 - [ADR-013](ADR-013-single-board-xiao-esp32s3.md) — the XIAO consolidation whose
