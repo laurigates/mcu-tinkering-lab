@@ -1,0 +1,64 @@
+name: Robocar Behaviour Twin
+# `just robocar-twin::test`: builds the twin from the firmware's own planner C
+# (packages/robocar/unified/main, against the host shims in unified/test/include),
+# runs its smoke test, then the harness unit tests and every scenario under
+# packages/robocar/twin/scenarios (ADR-030, PRD-017). Not firmware, so it is not
+# in .github/project-matrix.json.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/robocar/twin/**'
+      - 'packages/robocar/unified/main/**'
+      - 'packages/robocar/unified/test/include/**'
+      - '.github/workflows/robocar-twin.yml'
+  pull_request:
+    # No branches: filter — a PR stacked on a non-default base gets the same
+    # check as one targeting main. See issue #487.
+    paths:
+      - 'packages/robocar/twin/**'
+      - 'packages/robocar/unified/main/**'
+      - 'packages/robocar/unified/test/include/**'
+      - '.github/workflows/robocar-twin.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  twin:
+    name: Twin scenarios
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.1
+
+      # gemini_parse.c and the twin's protocol reader link cJSON.
+      - name: Install cJSON
+        run: sudo apt-get update -q && sudo apt-get install -y -q libcjson-dev
+
+      - name: Setup Python
+        uses: actions/setup-python@v6.3.0
+        with:
+          python-version: '3.12.15'
+
+      # Same pin as test.yml; bump the uv pins together.
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7.6.0
+        with:
+          version: '0.12.23'
+
+      - name: Install just
+        uses: extractions/setup-just@v4.0.0
+        with:
+          just-version: '1.58.0'
+
+      # The recipe runs the harness with `uv run --locked`: the committed
+      # uv.lock, never a fresh resolve.
+      - name: Build the twin and run every scenario
+        run: just robocar-twin::test

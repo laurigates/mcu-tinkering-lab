@@ -336,6 +336,28 @@ target_link_libraries(test_plan_activity PRIVATE Threads::Threads m)
 add_test(NAME plan_activity COMMAND test_plan_activity)
 
 # -----------------------------------------------------------------------------
+# planner_cycle_core (the planner's per-cycle decisions, ADR-030)
+#
+# The request gate and its one-shot announce latches, speech screening (near
+# repeats, a person speaking during the request), goal write vs force-stop and
+# the backoff ladder — against the real pure modules planner_task.c links, so
+# the decisions tested are the ones the robot and the behaviour twin run.
+# -----------------------------------------------------------------------------
+add_executable(test_planner_cycle_core
+    "${MAIN_SRC_DIR}/planner_cycle_core.c"
+    "${MAIN_SRC_DIR}/plan_activity.c"
+    "${MAIN_SRC_DIR}/plan_budget.c"
+    "${MAIN_SRC_DIR}/scene_change.c"
+    "${MAIN_SRC_DIR}/ambient_audio.c"
+    "${MAIN_SRC_DIR}/speech_budget.c"
+    "${MAIN_SRC_DIR}/dialogue_style.c"
+    "${MAIN_SRC_DIR}/speech_tags.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_planner_cycle_core.c"
+)
+target_link_libraries(test_planner_cycle_core PRIVATE Threads::Threads m)
+add_test(NAME planner_cycle_core COMMAND test_planner_cycle_core)
+
+# -----------------------------------------------------------------------------
 # gemini parse (Phase 5, gate G1, issue #228)
 #
 # Only built when cJSON is available. Skipped (with a message) otherwise so

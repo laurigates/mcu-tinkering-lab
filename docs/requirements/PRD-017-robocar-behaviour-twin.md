@@ -167,6 +167,12 @@ source already states, written so a scenario can test it.
 
 1. **Tracer bullet**: planner cycle core extracted, twin binary with virtual
    clock, replay adapter, scenarios for US-E1, US-E2, US-A4. CI job.
+   *Progress (2026-11-06):* built in `packages/robocar/twin`; US-E1, US-E2,
+   US-A4, US-F2 and the planner half of US-E3 pass under
+   `just robocar-twin::test` (CI: `robocar-twin.yml`) with inline replies.
+   The voice fuse half of US-E3, and `plan resume` / `voice resume`, wait for
+   voice_turn_core (phase 2): `voice_budget` is not in the twin yet.
+   The request key is a proxy until `gemini_request.c` is extracted.
 2. **Voice path**: voice-turn core and listener trigger driven by scripted
    speech events; US-A1–A6, US-B*.
 3. **Live and judged**: live Gemini adapter with spend guard, rubric judge,

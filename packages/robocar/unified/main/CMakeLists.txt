@@ -50,6 +50,7 @@ idf_component_register(
         "idle_gaze.c"
         "reactive_controller.c"
         "planner_task.c"
+        "planner_cycle_core.c"
         "self_report.c"
         "credentials_loader.c"
         "improv_console.c"

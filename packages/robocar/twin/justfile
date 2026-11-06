@@ -1,0 +1,32 @@
+# robocar behaviour twin: the robocar planner loop on a virtual clock, compiled
+# from the firmware's own C and driven by scenario files (ADR-030, PRD-017).
+# Run from the repo root as `just robocar-twin::<recipe>`.
+
+_dir := source_directory()
+_build := _dir / "build"
+_harness := "cd " + _dir / "harness" + " && uv run --locked --quiet"
+
+default:
+    @just --list
+
+# Configure and build the twin binary (build/robocar-twin); needs libcjson-dev
+build:
+    cmake -S {{_dir}} -B {{_build}} >/dev/null
+    cmake --build {{_build}}
+
+# Build the twin, run its smoke test, then the harness unit tests and every scenario
+test: build
+    ctest --test-dir {{_build}} --output-on-failure
+    {{_harness}} pytest
+
+# Harness unit tests only, without the twin (scenario files are validated, not run)
+unit:
+    cd {{_dir}}/harness && uv run --locked --quiet pytest -k "not test_scenario_passes"
+
+# Run every scenario and write a scorecard (exit 0 only if all pass)
+run out="build/scorecard.json": build
+    {{_harness}} python -m robocar_twin run --scenarios {{_dir}}/scenarios/*.yaml --out {{ absolute_path(_dir / out) }}
+
+# Remove the CMake build directory
+clean:
+    rm -rf {{_build}}

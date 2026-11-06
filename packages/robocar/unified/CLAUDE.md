@@ -115,6 +115,7 @@ One line per rule. Each group's doc has the full reasoning and the tests that ho
 - The planner and voice-turn budget fuses stay tripped until `plan resume`/`voice resume` or a reboot.
 - `planner_task.c` is the only goal source; a new source writes `goal_state` the same way.
 - A second AI backend is a newly designed abstraction; the removed `claude_*`/`ollama_*` code stays removed.
+- Per-cycle decision logic goes in `planner_cycle_core.c`, not `planner_task.c`, so the behaviour twin (`packages/robocar/twin`, ADR-030) runs it.
 
 **Pan/tilt head** ([why](docs/firmware/head-aiming.md#dont))
 
