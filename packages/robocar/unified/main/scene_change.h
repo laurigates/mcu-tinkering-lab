@@ -40,6 +40,14 @@
  * threshold, and a scene that changed once would read as unchanged on the very
  * next frame — before the robot had said a word about it.
  *
+ * One reference per dwell pose (ADR-029)
+ * -------------------------------------
+ * The head moves, so "the frame the robot last spoke about" is kept per dwell
+ * pose (scene_pose_t): a frame at pan -40 is compared with the last frame
+ * spoken about at pan -40. A frame taken between poses cannot be measured and
+ * is neither compared nor adopted. A head that stays centred uses only the
+ * centre reference, which is the single reference this gate had before.
+ *
  * A consequence worth stating plainly: pointed at a genuinely static scene, this
  * robot goes quiet and stays quiet.  That is the intended behaviour, not a
  * fault — `voice` prints the live score so a silent robot can be told apart from
@@ -80,14 +88,59 @@ extern "C" {
  *  in the per-frame log and setting `voice scene <n>` from the console. */
 #define SCENE_CHANGE_THRESHOLD_DEFAULT 8
 
-/** One frame's coarse appearance: per-block luma deviation from the frame mean.
+/** The head's dwell poses (ADR-029 §1–2). A camera on a moving head sees a
+ *  different view at every pose, so one reference would read every pose change
+ *  as "the scene changed". This module and plan_activity.c therefore keep one
+ *  reference per dwell pose, and compare a frame only with the last one taken
+ *  at the same pose.
+ *
+ *  CENTRE is 0 on purpose: a zeroed fingerprint, a robot with no servos and a
+ *  head that stays forward all land on the centre reference, which is exactly
+ *  the single reference these gates had before the poses existed. */
+typedef enum {
+    SCENE_POSE_CENTRE = 0, /**< pan 0, level */
+    SCENE_POSE_LEFT,       /**< pan -SCENE_POSE_SIDE_PAN_DEG, level */
+    SCENE_POSE_RIGHT,      /**< pan +SCENE_POSE_SIDE_PAN_DEG, level */
+    SCENE_POSE_FLOOR,      /**< pan 0, tilt SCENE_POSE_FLOOR_TILT_DEG */
+    SCENE_POSES,
+    /** Between dwell poses (mid-slew, tracking, a lease). The frame is
+     *  fingerprinted but is "cannot measure": never compared, never adopted. */
+    SCENE_POSE_NONE = SCENE_POSES,
+} scene_pose_t;
+
+/** Pan of the two side poses, degrees (+ = right). ADR-029's starting value. */
+#define SCENE_POSE_SIDE_PAN_DEG 40
+/** Tilt of the floor pose, degrees (+ = up). ADR-029's starting value; the
+ *  bench sets the real one. */
+#define SCENE_POSE_FLOOR_TILT_DEG (-20)
+/** How far, in degrees on each axis, the head may sit from a dwell pose and
+ *  still count as at it. The servo position is the commanded angle in whole
+ *  degrees, and a clamp to the live limits or the slew's last step can leave it
+ *  a degree or two short. Wider would let a slewing head's frames through. */
+#define SCENE_POSE_TOLERANCE_DEG 3
+
+/**
+ * @brief Name the dwell pose a head position is at, or SCENE_POSE_NONE.
+ *
+ * @param pan_deg   Head pan at capture, degrees, + = right.
+ * @param tilt_deg  Head tilt at capture, degrees, + = up.
+ */
+scene_pose_t scene_pose_from_head(int pan_deg, int tilt_deg);
+
+/** @brief One-letter name for logs: C, L, R, F, or `-` for no dwell pose. */
+char scene_pose_letter(uint8_t pose);
+
+/** One frame's coarse appearance: per-block luma deviation from the frame mean,
+ *  and the dwell pose it was taken at.
  *
  *  Deliberately a value type — the planner builds one on its stack per frame and
  *  hands it over, so there is no question of which frame a stored pointer refers
- *  to. 48 bytes. */
+ *  to. 50 bytes. */
 typedef struct {
     int8_t block[SCENE_BLOCKS];
-    bool valid; /**< false when the frame could not be decoded. */
+    bool valid;   /**< false when the frame could not be decoded. */
+    uint8_t pose; /**< scene_pose_t; scene_fingerprint_from_luma() sets CENTRE,
+                       planner_task sets the pose at capture. */
 } scene_fingerprint_t;
 
 /**
@@ -111,7 +164,8 @@ void scene_fingerprint_from_luma(const uint8_t *luma, int w, int h, scene_finger
  */
 unsigned scene_fingerprint_distance(const scene_fingerprint_t *a, const scene_fingerprint_t *b);
 
-/** @brief Reset to the default threshold and forget both frames. */
+/** @brief Reset to the default threshold and forget the current frame and
+ *         every pose's reference. */
 void scene_change_init(void);
 
 /**
@@ -119,44 +173,52 @@ void scene_change_init(void);
  *
  * Call once per planner frame, before the request that may carry a `speak`
  * call. An invalid fingerprint is ignored: a frame nobody could decode is not
- * evidence that the scene did or did not change.
+ * evidence that the scene did or did not change. A valid one taken off a dwell
+ * pose (`pose == SCENE_POSE_NONE`) is recorded, and makes the gate unable to
+ * measure until the next on-pose frame.
  */
 void scene_change_note(const scene_fingerprint_t *fp);
 
 /**
- * @brief Whether the current frame differs enough from the last spoken-about
- *        one to be worth remarking on.
+ * @brief Whether the current frame differs enough from the last frame spoken
+ *        about AT THE SAME POSE to be worth remarking on.
  *
  * True whenever the threshold is 0, which disables the gate entirely; that check
  * comes first, so it holds even before any frame has decoded. Otherwise false
  * while no decodable frame has ever been seen: there is no view to have a first
- * impression of, so the gate fails closed (issue #690). Once one has, true
- * before anything has been spoken (nothing to compare against yet, and the
- * robot's first observation is by definition new).
+ * impression of, so the gate fails closed (issue #690). False, for the same
+ * reason, while the current frame is off a dwell pose. Once an on-pose frame
+ * has been seen, true while nothing has been spoken about at that pose
+ * (nothing to compare against yet, and a first view of it is by definition new).
  */
 bool scene_change_novel(void);
 
 /**
  * @brief Whether scene_change_novel() is, right now, the result of an actual
- *        comparison against a spoken-about frame.
+ *        comparison against a spoken-about frame at the current pose.
  *
- * False while there is no reference (nothing spoken about yet, or the robot
- * spoke before any decodable frame), while no decodable frame has been seen,
- * and while the threshold is 0. In each of those states novel() answers
- * without comparing, so the planner prompt must not describe its answer as
- * "the view has (not) changed since you last spoke" (speech_evidence.h,
- * issue #631).
+ * False while the current pose has no reference (nothing spoken about there
+ * yet, or the robot spoke before any decodable frame), while no decodable frame
+ * has been seen, while the current frame is off a dwell pose, and while the
+ * threshold is 0. In each of those states novel() answers without comparing, so
+ * the planner prompt must not describe its answer as "the view has (not)
+ * changed since you last spoke" (speech_evidence.h, issue #631).
  */
 bool scene_change_compared(void);
 
-/** @brief Distance between the current frame and the reference, for logging. */
+/** @brief Distance between the current frame and its pose's reference, for
+ *         logging. 0 when the two cannot be compared. */
 unsigned scene_change_score(void);
 
+/** @brief The current frame's pose (scene_pose_t), for logging. */
+uint8_t scene_change_pose(void);
+
 /**
- * @brief Adopt the current frame as the reference.
+ * @brief Adopt the current frame as its pose's reference.
  *
  * Call when an utterance actually reaches the speech queue — that is the moment
- * the robot has "remarked on" this view.
+ * the robot has "remarked on" this view. Only that pose's reference moves; an
+ * off-pose or undecoded current frame moves none.
  */
 void scene_change_mark_spoken(void);
 

@@ -5,6 +5,7 @@ name = "Adafruit MAX98357A I2S amplifier, socketed"
 source = "docs/reference/boards/adafruit-max98357a.md (Adafruit's Eagle board file, element JP1); footprint pad n is JP1.n (Breakout_Sockets config)"
 symbol = "Connector_Generic:Conn_01x07"
 footprint = "Breakout_Sockets:Adafruit_MAX98357A_Socket"
+buy = "aliexpress:1000007373786"  # 2.54 mm 1x40 female strips, cut to length
 # Both may float by design: SD floating mixes (L+R)/2, GAIN floating is 9 dB.
 no_connect = ["SD", "GAIN"]
 

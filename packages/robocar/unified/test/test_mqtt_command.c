@@ -291,7 +291,7 @@ static void test_dispatch_routes_console_commands_to_console_callback_only(void)
     static const char *const lines[] = {
         "plan resume", "voice quiet 30", "trace reset",       "snap 3",
         "listen 5",    "mic dump 10",    "cam gainceiling 4", "servo pan 20",
-        "led 255 0 0", "sound beep",     "gpio mode 3 out",
+        "led 255 0 0", "sound beep",     "gpio mode 3 out",   "idle gaze off",
     };
     for (size_t i = 0; i < sizeof(lines) / sizeof(lines[0]); i++) {
         recorder_reset(&r);
@@ -468,6 +468,10 @@ static void test_read_only_refuses_state_changing_commands(void)
         "trace led off",
         "trace led",
         "trace foo",
+        /* idle */
+        "idle gaze on",
+        "idle gaze off",
+        "idle gaze",
         /* privacy: camera frames and raw microphone audio are not status */
         "snap",
         "snap 3",
@@ -526,7 +530,7 @@ static void test_read_only_refuses_state_changing_commands(void)
 static void test_read_only_allows_status_commands(void)
 {
     static const char *const lines[] = {
-        "plan", "trace", "mic", "cam", "servo", "gpio", "voice", "voice said",
+        "plan", "trace", "mic", "cam", "servo", "gpio", "voice", "voice said", "idle",
     };
     recorder_t r;
     mqtt_command_ops_t ops = read_only_ops_for(&r);
@@ -561,7 +565,10 @@ static void test_read_only_refuses_unknown_command(void)
  * owner out. */
 static void test_credential_command_is_never_reachable(void)
 {
-    static const char *const lines[] = {"mqtt", "mqtt auth robocar secret", "mqtt auth clear"};
+    /* `gemini` sets the API key (issue #845): a publisher must not read or
+     * replace it any more than the broker credentials. */
+    static const char *const lines[] = {"mqtt",   "mqtt auth robocar secret", "mqtt auth clear",
+                                        "gemini", "gemini auth AIzaFAKEKEY",  "gemini auth clear"};
     recorder_t r;
     for (size_t i = 0; i < sizeof(lines) / sizeof(lines[0]); i++) {
         recorder_reset(&r);

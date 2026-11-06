@@ -23,23 +23,31 @@ just enclosure::test                 # pytest: synthetic pieces + the balancebot
 just enclosure::gen <project> ...    # STEP/STL/3MF per piece and style, report.json
 just enclosure::render <project>     # isometric line drawings (SVG/PNG)
 just enclosure::assembly <project>   # Blender renders: the populated board in each case
+just enclosure::sequence <project>   # VTK video of each assembly motion gen found
 ```
 
-## The design (2026-10-23)
+## The design (2026-10-23, lid 2026-10-31)
 
 - The board screws onto short solid standoffs: a self-tapping screw into a
   blind pilot hole (M3 2.5 mm, M2 1.6 mm), `min_standoff` 4 mm of thread.
   Resin takes a thread; it does not take a heat-set insert.
 - The case bolts to the chassis through two floor tabs (M3 clearance), or
   none: `mount = "none"` (robocar head 1, held by its cradle).
-- The box lid screws into four bosses merged into the wall corners. Each
-  starts above the parts and board screw heads under it; a corner with under
-  `MIN_THREAD` (4 mm) of thread loses its boss, and fewer than two is an error.
+- The box lid hangs four tabs inside the walls, two on each long side, and an
+  M3 x 6 self-tapping screw goes through each wall into its tab from outside
+  (`case.lid_tabs`, 2026-10-31, #903). Nothing in the base stands over the
+  board, so it drops in and every board screw is driven before the lid goes
+  on. A tab is 4 mm thick (`MIN_THREAD` of thread), 8 mm wide and hangs
+  6.95 mm under the lid. Positions keep off the cable windows and sit as near
+  the quarter points as the parts under them allow; when the windows leave a
+  long side no room, the tabs go on the short sides (robocar head 1). The box
+  grows taller only when no pair of positions clears its parts. The corner
+  lid bosses of 2026-10-23 are gone (trap 0).
 - Box cable windows close 1 mm above the connector plus a mated plug
   (`plug`, 6 mm), with `MIN_WALL` above; the tray's low walls keep open
   notches. A back-side connector's window is below the board.
 
-## The gates `gen` enforces (it exits non-zero on either)
+## The gates `gen` enforces (it exits non-zero on any)
 
 1. **Clash**: case ∩ (board STEP moved into case coordinates + a stand-in box
    per model-less part) must be empty within the piece.
@@ -50,11 +58,31 @@ just enclosure::assembly <project>   # Blender renders: the populated board in e
    ring's median is a graze along a tessellated facet, not a wall (a pan-tilt
    yoke read 0.01 mm where it is 1.0). tools/mechanism uses this same gate.
 
-Both have controls in the suite (a part through the wall must clash; a 0.5 mm
-plate must read 0.5 mm; a 0.15 mm fin must still read 0.15 mm), and every
-geometry fix has a test that fails on the pre-fix code.
+3. **Assembly** (`enclosure/assemble.py`): the board, then the lid, must come
+   out of the case by some chain of lifts, slides and tilts: the reverse of
+   putting it in. A best-first search on voxel grids tries a straight lift,
+   then a tuck in each vertical plane (tilt about y sliding in x, tilt about
+   x sliding in y), so a board that has to go in tilted, one edge under an
+   overhang first, passes. Each found path is re-checked at 0.25 mm with
+   fine samples. "Blocked" means no path on that lattice within 60° of tilt;
+   a found path is a proof. The motion goes to
+   `<piece>-{tray-board,box-board,box-lid}.json` for `sequence`.
+4. **Screwdriver path** (`case.blocked_screws`): a cylinder of the pan
+   head's diameter over each board screw, from the board to the case top,
+   must miss the case.
+
+All have controls in the suite (a part through the wall must clash; a 0.5 mm
+plate must read 0.5 mm; a 0.15 mm fin must still read 0.15 mm; the box as
+printed on 2026-10-23 must fail gates 3 and 4), and every geometry fix has a
+test that fails on the pre-fix code.
 
 ## Traps
+
+0. **A case can pass the clash gate and still not take its board.** The
+   2026-10-23 boxes were printed with a lid boss over each board corner, 0.5
+   to 3.1 mm above the board: the board fits seated but no motion gets it
+   there, and each boss also stood over a board screw. Gates 3 and 4 exist
+   for this.
 
 1. **build123d must stay out of `tools/kicad`.** Its unittest discover runs on
    stdlib-only Python in CI and pre-commit; one import breaks both.
@@ -88,6 +116,23 @@ geometry fix has a test that fails on the pre-fix code.
    samples, EEVEE about 46 s through software GL. The recipes below still call
    `/Applications/Blender.app`; porting them means running the scripts under
    that interpreter with `import bpy`, not `blender -b -P`.
+11. **A stand-in board without `kicad-cli` misleads in three ways** (2026-10-31,
+   #909). The cloud runs that checked the gates replaced the STEP with
+   courtyard blocks.
+   - A back-side part drawn on top of the board clashes with whatever sits
+     over it: hang it under the board.
+   - A slab larger than the board reads as a wall clash once the clip keeps
+     overhangs: use the pieces' regions.
+   - Heights estimated by footprint family are estimates.
+   A stand-in run can say a design is broken; only the real STEP can say it
+   is fine.
+12. **pyvista off-screen `screenshot()` reuses the last image** unless the
+   plotter renders first. Every frame of the first assembly video showed the
+   board at its first pose. `sequence.py` calls `pl.render()` before each frame.
+13. **The assembly gate reads an overlap within 0.25 mm (one voxel) as
+   contact**, so it accepts a 0 mm fit; a lid tab flush against a wall passed
+   (#909 review). Clearances the print needs (`LIP_FIT`) are enforced in the
+   geometry, not left to the gate.
 
 ## Renders (`enclosure.assembly` + `blender/render_assembly.py`)
 

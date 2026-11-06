@@ -102,6 +102,17 @@ bool speech_budget_allows(uint32_t now_ms);
 void speech_budget_note(uint32_t now_ms);
 
 /**
+ * @brief How many times speech_budget_note() has run since boot.
+ *
+ * A planner reply arrives seconds after its request was built from the state at
+ * the time: read this before the request and again before posting the reply, and
+ * a difference means something spoke in between (a voice turn answering), which
+ * the gap and the audio latch would have counted against the request had they
+ * known. Compare for equality only; the count wraps.
+ */
+uint32_t speech_budget_notes(void);
+
+/**
  * @brief Milliseconds until speech is permitted again, 0 when it already is.
  *
  * For logging and the console. Returns UINT32_MAX when muted

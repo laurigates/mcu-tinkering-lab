@@ -4,6 +4,7 @@ name = "DRV8825 stepper driver carrier (Pololu layout)"
 source = "KiCad 10.0.6 library symbol and footprint; matches the fitted HW-216 carrier's bottom silkscreen, read 2026-10-14 (#748)"
 symbol = "Driver_Motor:Pololu_Breakout_DRV8825"
 footprint = "Module:Pololu_Breakout-16_15.2x20.3mm"
+buy = "aliexpress:1000007373786"  # 2.54 mm 1x40 female strips, cut to length
 no_connect = ["FAULT"]
 
 # hardware.toml pin name (the carrier's silkscreen) -> symbol pin number(s).

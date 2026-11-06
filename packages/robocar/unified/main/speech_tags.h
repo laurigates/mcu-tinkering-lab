@@ -40,7 +40,8 @@ extern "C" {
 
 /**
  * @brief Tags the TTS model is known to perform, exactly as they must be
- *        written. Verified against the live API (2026-07).
+ *        written. Verified against the live API (2026-07) on the preview
+ *        model; tts_request.c translates them for gemini-3.8-flash-tts.
  *
  * Kept short on purpose. Every entry is one the model may reach for, so a long
  * list is a louder invitation to decorate; these are the ones that suit a robot

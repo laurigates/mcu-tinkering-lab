@@ -61,6 +61,7 @@
 
 #include "goal_state.h"
 #include "head_aim.h"
+#include "idle_gaze.h"
 #include "motor_controller.h"
 #include "servo_controller.h"
 #include "ultrasonic.h"
@@ -93,6 +94,29 @@ typedef struct {
 /** Executor-private aiming state. Touched only by the executor tick. */
 static head_aim_t s_head_aim;
 
+/** Idle gaze (ADR-029 §1). The state is the executor tick's alone; the switch
+ *  is a bool any task may write, read once per tick. */
+static idle_gaze_t s_gaze;
+static volatile bool s_gaze_enabled = true;
+
+/** Whether the head has held still for HEAD_SETTLE_MS, from the last tick. */
+static bool s_head_settled;
+
+/* Supplied by each build below: whether a voice turn is listening (the head
+ * faces forward), and the gaze's random source. */
+static bool head_face_forward(void);
+static uint32_t gaze_rng(void *ctx);
+
+void reactive_controller_set_gaze(bool on)
+{
+    s_gaze_enabled = on;
+}
+
+bool reactive_controller_gaze_enabled(void)
+{
+    return s_gaze_enabled;
+}
+
 const char *reactive_head_mode_name(reactive_head_mode_t mode)
 {
     switch (mode) {
@@ -104,6 +128,8 @@ const char *reactive_head_mode_name(reactive_head_mode_t mode)
             return "turn";
         case REACTIVE_HEAD_LEASE:
             return "lease";
+        case REACTIVE_HEAD_GAZE:
+            return "gaze";
         case REACTIVE_HEAD_UNAVAILABLE:
         default:
             return "unavailable";
@@ -285,7 +311,7 @@ static bool write_head(head_pose_t cmd, head_pose_t now, bool full)
 }
 
 /**
- * @brief One head step: aim, centre, hold a lease, or keep hands off.
+ * @brief One head step: aim, gaze, centre, hold a lease, or keep hands off.
  *
  * @param body_can_turn  false when the wheels are held by the reflex or a
  *                       manual lease, so the yaw estimate does not advance.
@@ -301,14 +327,20 @@ static reactive_head_mode_t execute_head(const head_lease_t *lease, const goal_t
 
     if (lease->kind == HEAD_LEASE_EXTERNAL) {
         /* Forget the write shadow too: the other writer moved the servos, so
-         * the first write after the lease must not be suppressed. */
+         * the first write after the lease must not be suppressed. Not settled:
+         * that writer is moving the head right now. */
         head_aim_reset(&s_head_aim);
+        idle_gaze_restart(&s_gaze);
+        s_head_settled = false;
         return REACTIVE_HEAD_LEASE;
     }
 
-    /* Pan is the axis the aiming depends on; `servo off` releases both. */
+    /* Pan is the axis the aiming depends on; `servo off` releases both.
+     * Settled: nothing commands the head, so nothing moves it. */
     if (!servo_is_initialized() || !servo_is_enabled(SERVO_PAN)) {
         head_aim_reset(&s_head_aim);
+        idle_gaze_restart(&s_gaze);
+        s_head_settled = true;
         return REACTIVE_HEAD_UNAVAILABLE;
     }
 
@@ -318,6 +350,8 @@ static reactive_head_mode_t execute_head(const head_lease_t *lease, const goal_t
         servo_get_limits(SERVO_PAN, &lim.pan_min, &lim.pan_max) != ESP_OK ||
         servo_get_limits(SERVO_TILT, &lim.tilt_min, &lim.tilt_max) != ESP_OK) {
         head_aim_reset(&s_head_aim);
+        idle_gaze_restart(&s_gaze);
+        s_head_settled = false;
         return REACTIVE_HEAD_UNAVAILABLE;
     }
     const head_pose_t now = {.pan_deg = pos.pan_angle, .tilt_deg = pos.tilt_angle};
@@ -330,6 +364,7 @@ static reactive_head_mode_t execute_head(const head_lease_t *lease, const goal_t
         cmd.pan_deg = clamp_i16(lease->pan_deg, lim.pan_min, lim.pan_max);
         cmd.tilt_deg = clamp_i16(lease->tilt_deg, lim.tilt_min, lim.tilt_max);
         mode = REACTIVE_HEAD_LEASE;
+        idle_gaze_restart(&s_gaze);
     } else if (fresh && goal->kind == GOAL_KIND_TRACK) {
         const head_box_t box = {
             .ymin = goal->params.track.ymin,
@@ -344,9 +379,17 @@ static reactive_head_mode_t execute_head(const head_lease_t *lease, const goal_t
         cmd = out.cmd;
         *body = out.body;
         mode = (out.body == HEAD_BODY_HOLD) ? REACTIVE_HEAD_AIM : REACTIVE_HEAD_TURN;
+        /* The goal pre-empts the gaze; when it goes stale the gaze resumes
+         * from centre (ADR-029 §1). */
+        idle_gaze_restart(&s_gaze);
+    } else if (s_gaze_enabled) {
+        const head_pose_t target = idle_gaze_step(&s_gaze, now, &lim, head_face_forward(), now_ms);
+        cmd = head_aim_gaze(&s_head_aim, now, target, &lim).cmd;
+        mode = REACTIVE_HEAD_GAZE;
     } else {
         cmd = head_aim_centre(&s_head_aim, now, &lim).cmd;
         mode = REACTIVE_HEAD_CENTRE;
+        idle_gaze_restart(&s_gaze);
     }
 
     /* A released tilt keeps its last angle, so an unwritable difference cannot
@@ -354,6 +397,9 @@ static reactive_head_mode_t execute_head(const head_lease_t *lease, const goal_t
     if (!servo_is_enabled(SERVO_TILT)) {
         cmd.tilt_deg = now.tilt_deg;
     }
+
+    head_aim_note_motion(&s_head_aim, cmd, now, now_ms);
+    s_head_settled = head_aim_settled(&s_head_aim, now_ms);
 
     if (head_aim_write_due(&s_head_aim, cmd, now, now_ms)) {
         const bool full =
@@ -506,10 +552,12 @@ static uint8_t rangers_tick(rangers_t *r, uint32_t now_ms)
 #include <string.h>
 
 #include "esp_log.h"
+#include "esp_random.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/portmacro.h"
 #include "freertos/task.h"
+#include "voice_turn.h"
 
 static const char *TAG = "reactive_ctrl";
 
@@ -546,6 +594,20 @@ static int64_t s_manual_expiry_us = 0;
 static portMUX_TYPE s_head_mux = portMUX_INITIALIZER_UNLOCKED;
 static head_lease_t s_head_lease = {.kind = HEAD_LEASE_NONE};
 static int64_t s_head_expiry_us = 0;
+
+/* While a voice turn listens the head faces forward: one microphone gives no
+ * direction of arrival, and forward is the best guess at where the speaker is
+ * (ADR-029 §1). voice_turn_is_busy() reads one bool. */
+static bool head_face_forward(void)
+{
+    return voice_turn_is_busy();
+}
+
+static uint32_t gaze_rng(void *ctx)
+{
+    (void)ctx;
+    return esp_random();
+}
 
 /* -------------------------------------------------------------------------
  * Executor task
@@ -691,6 +753,7 @@ static void reactive_task(void *arg)
         s_telemetry.head_mode = head_mode;
         s_telemetry.distance_rear_cm = s_rangers.rear_cm;
         s_telemetry.rear_failed = s_rangers.failed[ULTRASONIC_REAR];
+        s_telemetry.head_settled = s_head_settled;
         portEXIT_CRITICAL(&s_telem_mux);
 
         /* ---- 8. Wait for next period ----
@@ -740,6 +803,8 @@ esp_err_t reactive_controller_init(void)
 
     rangers_reset(&s_rangers);
     head_aim_reset(&s_head_aim);
+    idle_gaze_init(&s_gaze, gaze_rng, NULL);
+    s_head_settled = false;
 
     s_running = true;
 
@@ -918,6 +983,32 @@ static uint32_t s_head_ticks_left = 0;
 /* Host clock: one tick = one loop period. */
 static uint32_t s_ticks = 0;
 
+/* Voice-turn stand-in and a deterministic random source for the gaze. */
+static bool s_test_face_forward = false;
+static uint32_t s_test_rng_state = 0x12345678u;
+
+static bool head_face_forward(void)
+{
+    return s_test_face_forward;
+}
+
+static uint32_t gaze_rng(void *ctx)
+{
+    (void)ctx;
+    /* xorshift32: deterministic, and spread enough to visit every pose. */
+    uint32_t x = s_test_rng_state;
+    x ^= x << 13;
+    x ^= x >> 17;
+    x ^= x << 5;
+    s_test_rng_state = x;
+    return x;
+}
+
+void reactive_controller_set_face_forward_for_test(bool face_forward)
+{
+    s_test_face_forward = face_forward;
+}
+
 static uint32_t ms_to_ticks(uint32_t ms)
 {
     return (ms + REACTIVE_LOOP_PERIOD_MS - 1) / REACTIVE_LOOP_PERIOD_MS;
@@ -1045,6 +1136,7 @@ void reactive_controller_tick_for_test(void)
     s_telemetry.sensor_failed = s_rangers.failed[ULTRASONIC_FRONT];
     s_telemetry.distance_rear_cm = s_rangers.rear_cm;
     s_telemetry.rear_failed = s_rangers.failed[ULTRASONIC_REAR];
+    s_telemetry.head_settled = s_head_settled;
     s_ticks++;
 }
 
@@ -1059,6 +1151,10 @@ esp_err_t reactive_controller_init(void)
     s_head_ticks_left = 0;
     s_ticks = 0;
     head_aim_reset(&s_head_aim);
+    s_test_rng_state = 0x12345678u;
+    idle_gaze_init(&s_gaze, gaze_rng, NULL);
+    s_gaze_enabled = true; /* on at every boot */
+    s_head_settled = false;
     s_running = true;
     ultrasonic_init();
     return ESP_OK;

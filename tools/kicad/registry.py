@@ -11,6 +11,7 @@ the KiCad symbol's pin numbers, and names the symbol and footprint:
     footprint   = "Lib:Name"       # must be vendored
     value       = "..."            # optional default Value
     lcsc        = "C123"           # optional default LCSC
+    buy         = "aliexpress:123" # optional default hand-assembly source (kicad.sourcing)
     no_connect  = ["FAULT"]        # pin names allowed to stay unconnected
     pin_numbers = "board-dip-ccw"  # instead of [pins]: numbers from a board page
 
@@ -48,6 +49,7 @@ from pathlib import Path
 from typing import Any
 
 from hardware import Board
+from hardware.model import BUY
 
 from . import footprints, library, symbols
 from .errors import KicadError
@@ -63,6 +65,7 @@ PART_KEYS = frozenset(
         "footprint",
         "value",
         "lcsc",
+        "buy",
         "no_connect",
         "pin_numbers",
     }
@@ -97,6 +100,7 @@ class PartSpec:
     footprint: str
     value: str
     lcsc: str
+    buy: str  # "" or a hardware.model.BUY source
     no_connect: tuple[str, ...]
     pin_numbers: str  # "" or one of PIN_NUMBERINGS
     pins: dict[
@@ -153,6 +157,9 @@ def parse(data: dict[str, Any], slug: str, path: Path) -> PartSpec:
     lcsc = _string(where, part, "lcsc")
     if lcsc and not _LCSC.fullmatch(lcsc):
         raise KicadError(f"{where}: lcsc {lcsc!r} does not match {_LCSC.pattern}")
+    buy = _string(where, part, "buy")
+    if buy and not BUY.fullmatch(buy):
+        raise KicadError(f"{where}: buy {buy!r} does not match {BUY.pattern}")
     no_connect = part.get("no_connect", [])
     if not isinstance(no_connect, list) or not all(
         isinstance(n, str) and n for n in no_connect
@@ -181,6 +188,7 @@ def parse(data: dict[str, Any], slug: str, path: Path) -> PartSpec:
         footprint=footprint,
         value=value,
         lcsc=lcsc,
+        buy=buy,
         no_connect=tuple(no_connect),
         pin_numbers=pin_numbers,
         pins=pins,

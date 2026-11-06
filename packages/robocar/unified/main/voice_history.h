@@ -133,6 +133,11 @@ const char *voice_history_get_reply(size_t index, uint32_t now_ms);
  */
 bool voice_history_format_telemetry(const reactive_telemetry_t *tele, char *out, size_t out_size);
 
+/** Buffer for voice_history_format_telemetry() in the request build. The
+ *  longest summary (sensor up, 65535 cm, reflex active) is 82 bytes;
+ *  test_voice_history.c pins that it fits. */
+#define VOICE_HISTORY_TELE_MAX 128
+
 /**
  * @brief Build the current turn's user prompt text.
  *
@@ -143,9 +148,11 @@ bool voice_history_format_telemetry(const reactive_telemetry_t *tele, char *out,
  * @param tele_summary Formatted telemetry string (or NULL/empty).
  * @param out Destination buffer.
  * @param out_size Size of destination buffer.
+ * @return Length of the full prompt, excluding the NUL, as snprintf() reports
+ *         it: a value >= @p out_size means @p out was too small and was cut.
  */
-void voice_history_build_prompt(const char *name, bool has_image, const char *tele_summary,
-                                char *out, size_t out_size);
+size_t voice_history_build_prompt(const char *name, bool has_image, const char *tele_summary,
+                                  char *out, size_t out_size);
 
 /**
  * @brief Populate Gemini `contents` array with past turns and current turn.
@@ -195,6 +202,22 @@ bool voice_history_build_contents(cJSON *contents, const char *prompt_text, cons
  * @return Heap-allocated unformatted JSON string (caller frees), or NULL on
  *         allocation failure or when @p b64_wav is NULL.
  */
+/**
+ * @brief Build the voice turn's system instruction from the persona.
+ *
+ * Sized from the strings themselves, so a long brief is never cut. It used to
+ * be joined into a 512-byte stack buffer, which cut fi-1950's 758-byte
+ * text_brief + tag_brief mid-tag list and lost the "write tags in English"
+ * instruction on every turn (issue #847).
+ *
+ * @param name       Robot name; NULL or empty means "Robocar".
+ * @param text_brief Persona register brief; NULL means "Be brief.".
+ * @param tag_brief  Persona tag brief; NULL or empty omits it.
+ * @return Heap-allocated prompt (caller frees), or NULL on allocation failure.
+ */
+char *voice_history_build_system_prompt(const char *name, const char *text_brief,
+                                        const char *tag_brief);
+
 char *voice_history_build_request_body(const char *name, const char *sys_prompt,
                                        const reactive_telemetry_t *tele, bool has_telemetry,
                                        const char *b64_jpeg, const char *b64_wav, uint32_t now_ms);

@@ -1,6 +1,6 @@
 ---
 paths:
-  - '**/docs/**'
+  - 'docs/{requirements,decisions,prompts,blueprint}/**'
   - '*.md'
 ---
 # Document Management

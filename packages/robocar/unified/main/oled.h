@@ -1,0 +1,94 @@
+/**
+ * @file oled.h
+ * @brief Minimal SSD1306 text renderer, shared by robocar-unified and bringup.
+ *
+ * The OLED is declared in pin_config.h and i2c_bus.h (the multiplexer channel
+ * and the 0x3C address). It started as the bringup sweep's screen; it lives
+ * here so the robot firmware's status screen (oled_status.c) and the bringup
+ * sweep build the same file (see bringup/main/CMakeLists.txt).
+ *
+ * It exists because it is the only indicator on the board that can show WHICH
+ * check failed without a tether. The buzzer says a check failed; the LEDs say
+ * something failed; the screen says `ULTRASONIC FAIL`. With a soldering iron in
+ * one hand that difference is the whole point.
+ *
+ * Deliberately not an esp_lcd panel driver. esp_lcd owns its own I2C
+ * transactions, and this display sits BEHIND the TCA9548A on channel 1 — the
+ * mux channel has to be selected, and the i2cdev bus mutex held, across every
+ * transfer. Going through i2cdev like every other device on this board keeps
+ * that ordering in one place instead of racing a second I2C master abstraction.
+ *
+ * Text only, uppercase, 5x7 glyphs in a 6x8 cell: 21 columns by OLED_HEIGHT / 8
+ * rows — 4 on the fitted 0.91-inch 128x32 panel, 8 on a 128x64 one. A
+ * proportional font or a graphics layer would be a nicer screen and a worse
+ * bringup tool — the failure mode to avoid is a rendering bug that reads as a
+ * hardware fault.
+ */
+
+#pragma once
+
+#include <stdbool.h>
+#include <stdint.h>
+
+#include "esp_err.h"
+#include "pin_config.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* The panel geometry lives in pin_config.h, and everything below is derived
+ * from OLED_HEIGHT: the text rows here, the framebuffer size and the A8h/DAh
+ * init values in oled.c. Deriving them is the point — a hard-coded row count
+ * that outlives a height change makes oled_text() write past the framebuffer
+ * (issue #780). Only the two SSD1306 panel heights the init sequence knows how
+ * to configure are accepted. */
+_Static_assert(OLED_HEIGHT == 32 || OLED_HEIGHT == 64,
+               "oled: OLED_HEIGHT must be 32 or 64 (the A8h/DAh values in oled.c)");
+_Static_assert(OLED_WIDTH == 128, "oled: the SSD1306 has 128 segment columns");
+
+#define OLED_COLS 21
+#define OLED_ROWS (OLED_HEIGHT / 8)
+
+/**
+ * @brief Probe for the panel and, if present, initialise and blank it.
+ *
+ * Non-fatal by design, like every other optional device in this sweep: a board
+ * with no display fitted is the normal state for most of a build.
+ *
+ * @return ESP_OK when a panel answered and was initialised;
+ *         ESP_ERR_NOT_FOUND when nothing ACKed at OLED_I2C_ADDR on channel
+ *         I2C_BUS_CHANNEL_OLED; ESP_ERR_INVALID_STATE if the I2C bus itself is
+ *         not up; otherwise the underlying i2cdev error.
+ */
+esp_err_t oled_init(void);
+
+/** True once oled_init() has succeeded. Every call below is a no-op until then,
+ *  so callers do not need to guard each one. */
+bool oled_available(void);
+
+/** Clear the framebuffer. Does not touch the panel until oled_flush(). */
+void oled_clear(void);
+
+/**
+ * @brief Draw @p text at cell (@p col, @p row), clipped to the panel.
+ *
+ * Lowercase is folded to uppercase and unrepresentable characters render as
+ * `?` — the font carries only A-Z, 0-9 and a handful of punctuation. Rendering
+ * into the framebuffer only; call oled_flush() to make it visible.
+ */
+void oled_text(uint8_t col, uint8_t row, const char *text);
+
+/**
+ * @brief Push the framebuffer to the panel, writing only the pages that differ
+ *        from what was last sent.
+ *
+ * Takes the bus once per changed page (about 3 ms each at 400 kHz), so an
+ * unchanged screen costs no bus time. After a failed page write the next call
+ * resends every page.
+ */
+esp_err_t oled_flush(void);
+
+#ifdef __cplusplus
+}
+#endif

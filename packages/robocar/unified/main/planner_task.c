@@ -29,6 +29,7 @@
 #include "servo_controller.h"
 #include "speech_budget.h"
 #include "speech_queue.h"
+#include "voice_turn.h"
 
 static const char *TAG = "planner";
 
@@ -224,8 +225,16 @@ static void planner_task(void *pvParameters)
          * 33 ms, so the gap costs a few degrees at worst. Zero with no servos,
          * which is the head-forward assumption the robot always made. */
         servo_position_t head_at_capture = {0};
+        bool head_settled = true;
         if (servo_is_initialized()) {
             (void)servo_get_position(&head_at_capture);
+            /* The idle gaze moves the head between dwell poses (ADR-029), and
+             * the frame began exposing before this sample, so a head that only
+             * just arrived may be moving in the picture. Unsettled means the
+             * frame belongs to no dwell pose. */
+            reactive_telemetry_t tele = {0};
+            head_settled =
+                (reactive_controller_get_telemetry(&tele) == ESP_OK) && tele.head_settled;
         }
 
         /* ---- 1b. Measure and (if armed) dump the frame ----
@@ -239,6 +248,14 @@ static void planner_task(void *pvParameters)
          * offer the `speak` tool at all. */
         scene_fingerprint_t fp;
         frame_stats_log(fb->buf, fb->len, &fp);
+        /* Which dwell pose the frame was taken at: both scene gates keep one
+         * reference per pose and cannot measure a frame taken between poses
+         * (ADR-029 §2), or one taken before the head settled. A head with no
+         * servos reads as centred, so it keeps the single centre reference the
+         * gates always had. */
+        fp.pose = head_settled ? (uint8_t)scene_pose_from_head(head_at_capture.pan_angle,
+                                                               head_at_capture.tilt_angle)
+                               : (uint8_t)SCENE_POSE_NONE;
         scene_change_note(&fp);
         frame_dump_maybe(fb->buf, fb->len);
 
@@ -289,11 +306,12 @@ static void planner_task(void *pvParameters)
                  * Dormant cycles are NOT logged at INFO — an overnight run would
                  * otherwise emit thousands of identical lines. */
                 ESP_LOGI(TAG,
-                         "Idle: no request | still: %u/%u | range: %u/%u cm | loud: %u/%u dB | "
-                         "rung: %u/%u every %" PRIu32 " ms | why: %s",
-                         plan_activity_scene_score(), (unsigned)plan_scene_threshold(),
-                         plan_activity_range_score(), (unsigned)plan_range_threshold(),
-                         ambient_audio_loud_score(now_ms), (unsigned)ambient_audio_loud_threshold(),
+                         "Idle: no request | pose: %c | still: %u/%u | range: %u/%u cm | "
+                         "loud: %u/%u dB | rung: %u/%u every %" PRIu32 " ms | why: %s",
+                         scene_pose_letter(plan_activity_pose()), plan_activity_scene_score(),
+                         (unsigned)plan_scene_threshold(), plan_activity_range_score(),
+                         (unsigned)plan_range_threshold(), ambient_audio_loud_score(now_ms),
+                         (unsigned)ambient_audio_loud_threshold(),
                          (unsigned)plan_activity_step() + 1u, (unsigned)PLAN_LADDER_STEPS,
                          plan_activity_period_ms(), plan_activity_verdict());
             } else {
@@ -321,6 +339,10 @@ static void planner_task(void *pvParameters)
         goal_t goal = {0};
         uint32_t latency_ms = 0;
         char speech[SPEECH_TEXT_MAX] = {0};
+        /* Read before the request: gemini_backend_plan() decides whether to
+         * offer `speak` (and with which evidence clause) from the state now. */
+        const uint32_t notes_at_request = speech_budget_notes();
+        const uint32_t turns_at_request = voice_turn_count();
         esp_err_t ret =
             gemini_backend_plan(fb->buf, fb->len, &goal, &latency_ms, speech, sizeof(speech));
 
@@ -349,6 +371,19 @@ static void planner_task(void *pvParameters)
          * status reports go straight to the queue. See dialogue_style.h. */
         if (speech[0] != '\0' && dialogue_style_is_repetitive(speech)) {
             ESP_LOGI(TAG, "Suppressed near-repeat: \"%s\"", speech);
+            speech[0] = '\0';
+        }
+        /* A person spoke while this request was in flight: a voice turn is
+         * still running, one began since the request, or something was spoken.
+         * The request was built from the state before that, so its `speak`
+         * licence and any "the sound changed" clause are about the person's
+         * own voice, and speaking now is the "some strange noise" remark on
+         * top of the reply (2026-11-05: turn recorded at 138.6 s, request at
+         * ~139.7 s, noise line at 144.9 s, the turn's reply at 146.4 s). The
+         * goal still applies; only the line is dropped. */
+        if (speech[0] != '\0' && (voice_turn_is_busy() || voice_turn_count() != turns_at_request ||
+                                  speech_budget_notes() != notes_at_request)) {
+            ESP_LOGI(TAG, "Suppressed: person spoke during the request: \"%s\"", speech);
             speech[0] = '\0';
         }
         if (speech[0] != '\0') {
@@ -386,7 +421,11 @@ static void planner_task(void *pvParameters)
              * them can be chosen from real numbers in a monitor log rather than
              * guessed — see scene_change.h, ambient_audio.h and plan_activity.h.
              *
-             * scene= distance from the frame the robot last spoke about.
+             * pose=  the dwell pose this frame was taken at (C/L/R/F), or `-`
+             *        between poses, where scene= and still= read 0 because the
+             *        frame cannot be measured rather than because nothing moved.
+             * scene= distance from the frame the robot last spoke about at the
+             *        same pose.
              * loud=  peak excursion above the adaptive noise floor since then.
              * sound= how far the room's spectral shape has moved since then.
              * floor= the adaptive floor itself, which is what explains loud=:
@@ -394,7 +433,8 @@ static void planner_task(void *pvParameters)
              *        room, and is the difference between a working gate and a
              *        deaf one.
              * gate=  which branch decided whether to SPEAK (planner_gate_verdict).
-             * still= distance from the frame the robot last PLANNED on, and
+             * still= distance from the frame the robot last PLANNED on at the
+             *        same pose, and
              *        why=/step= the request gate's own verdict and ladder rung.
              *        Distinct from scene= on purpose: the two references move at
              *        different moments, so a single field could not serve both.
@@ -403,18 +443,26 @@ static void planner_task(void *pvParameters)
              * printed latch age matches what the gate would decide right now. */
             const uint32_t log_ms = (uint32_t)(esp_timer_get_time() / 1000);
             ESP_LOGI(TAG,
-                     "Goal: %s | latency: %" PRIu32 " ms | scene: %u/%u | loud: %u/%u dB | "
-                     "sound: %u/%u dB | floor: %d dB | gate: %s | still: %u/%u | why: %s | "
-                     "step: %u/%u | spent: %" PRIu32 "/%" PRIu32 " req, %llu tok",
-                     goal_kind_name(goal.kind), latency_ms, scene_change_score(),
-                     (unsigned)scene_change_threshold(), ambient_audio_loud_score(log_ms),
-                     (unsigned)ambient_audio_loud_threshold(), ambient_audio_shape_score(log_ms),
-                     (unsigned)ambient_audio_shape_threshold(), (int)ambient_audio_floor_db(),
-                     gate_verdict, plan_activity_scene_score(), (unsigned)plan_scene_threshold(),
-                     plan_activity_verdict(), (unsigned)plan_activity_step() + 1u,
-                     (unsigned)PLAN_LADDER_STEPS, plan_budget_requests(), budget_max_requests(),
+                     "Goal: %s | latency: %" PRIu32 " ms | pose: %c | scene: %u/%u | "
+                     "loud: %u/%u dB | sound: %u/%u dB | floor: %d dB | gate: %s | "
+                     "still: %u/%u | why: %s | step: %u/%u | spent: %" PRIu32 "/%" PRIu32
+                     " req, %llu tok",
+                     goal_kind_name(goal.kind), latency_ms, scene_pose_letter(scene_change_pose()),
+                     scene_change_score(), (unsigned)scene_change_threshold(),
+                     ambient_audio_loud_score(log_ms), (unsigned)ambient_audio_loud_threshold(),
+                     ambient_audio_shape_score(log_ms), (unsigned)ambient_audio_shape_threshold(),
+                     (int)ambient_audio_floor_db(), gate_verdict, plan_activity_scene_score(),
+                     (unsigned)plan_scene_threshold(), plan_activity_verdict(),
+                     (unsigned)plan_activity_step() + 1u, (unsigned)PLAN_LADDER_STEPS,
+                     plan_budget_requests(), budget_max_requests(),
                      (unsigned long long)plan_budget_tokens());
             backoff_periods = 0;
+        } else if (ret == ESP_ERR_INVALID_STATE) {
+            /* No WiFi link (issue #846) or no key yet (issue #845): nothing
+             * was sent and nothing spent, so no backoff, and the first cycle
+             * after the link or the key arrives plans at once. */
+            ESP_LOGD(TAG, "no WiFi link or no key — planner idle, holding STOP");
+            goal_state_force_stop();
         } else {
             backoff_periods = (backoff_periods == 0) ? 1
                               : (backoff_periods < PLANNER_MAX_BACKOFF_PERIODS)

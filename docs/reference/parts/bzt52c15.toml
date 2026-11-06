@@ -7,6 +7,7 @@ symbol = "Device:D_Zener"
 footprint = "Diode_SMD:D_SOD-123"
 value = "BZT52C15"
 lcsc = "C2104"
+buy = "aliexpress:1005005590599425"  # BZT52C15 15V WJ variant
 
 [pins]
 K = 1

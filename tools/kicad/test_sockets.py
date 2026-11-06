@@ -92,6 +92,17 @@ def fab_rects(text: str) -> list[tuple[float, float, float, float]]:
     return out
 
 
+def all_pads(text: str) -> list[tuple[str, float, float]]:
+    """(number, x, y) of every pad in file order, duplicate numbers included.
+
+    footprints.parse keeps only the first pad of each number.
+    """
+    return [
+        (m.group(1), float(m.group(2)), float(m.group(3)))
+        for m in re.finditer(r'\(pad "(\d+)" thru_hole \w+\s*\(at (\S+) (\S+)\)', text)
+    ]
+
+
 class CommittedFootprintTests(unittest.TestCase):
     def setUp(self):
         self.config = tomllib.loads(CONFIG.read_text())["socket"]
@@ -137,8 +148,8 @@ class CommittedFootprintTests(unittest.TestCase):
                     {stock.pads["2"].shape},
                 )
                 self.assertEqual({p.kind for p in fp.pads.values()}, {"thru_hole"})
-                self.assertEqual(body.count(drill), len(fp.pads))
-                self.assertEqual(body.count(size), len(fp.pads))
+                self.assertEqual(body.count(drill), len(all_pads(body)))
+                self.assertEqual(body.count(size), len(all_pads(body)))
                 self.assertEqual(fp.attr, "through_hole")
 
     def test_courtyard_and_silkscreen_enclose_every_pad(self):
@@ -176,7 +187,8 @@ class CommittedFootprintTests(unittest.TestCase):
                 path = PRETTY / f"{s['name']}.kicad_mod"
                 fab = fab_rects(path.read_text())
                 want = (x0 - px, y0 - py, x1 - px, y1 - py)
-                self.assertEqual(len(fab), 1, fab)
+                # A twin's outline is the second rect (TwinTests).
+                self.assertEqual(len(fab), 2 if "twin" in s else 1, fab)
                 for got, exp in zip(fab[0], want, strict=True):
                     self.assertAlmostEqual(got, exp, places=4)
                 cx0, cy0, cx1, cy1 = footprints.parse(path).courtyard
@@ -185,6 +197,43 @@ class CommittedFootprintTests(unittest.TestCase):
                 self.assertLessEqual(cy0, want[1] - m + 1e-9)
                 self.assertGreaterEqual(cx1, want[2] + m - 1e-9)
                 self.assertGreaterEqual(cy1, want[3] + m - 1e-9)
+
+    def test_tca9548a_twin_doubles_the_left_row_one_pitch_out(self):
+        # The purple clone (board page, "Wider clone"): same pin order, rows
+        # 17.78 mm apart. Its right row sits on JP1 (pads 13-24), its left row
+        # one pitch outside JP3, where pads 1-12 appear a second time.
+        text = (PRETTY / "Adafruit_TCA9548A_Socket.kicad_mod").read_text()
+        pads = all_pads(text)
+        self.assertEqual(len(pads), 36)
+        first = {n: (x, y) for n, x, y in pads[:24]}
+        twins = pads[24:]
+        self.assertEqual([n for n, _, _ in twins], [str(n) for n in range(1, 13)])
+        for n, x, y in twins:
+            with self.subTest(pad=n):
+                self.assertAlmostEqual(x, first[n][0] - 2.54, places=6)
+                self.assertAlmostEqual(y, first[n][1], places=6)
+                # The clone's row spacing: its moved pad to the JP1 pad
+                # opposite (pad 25 - n).
+                self.assertAlmostEqual(first[str(25 - int(n))][0] - x, 17.78, places=6)
+        self.assertIn("(duplicate_pad_numbers_are_jumpers no)", text)
+        m = re.search(
+            r"the clone outline\s+([\d.]+) × ([\d.]+) mm",
+            (BOARDS / "adafruit-tca9548a.md").read_text(),
+        )
+        self.assertIsNotNone(m)
+        fab = fab_rects(text)
+        self.assertEqual(len(fab), 2, fab)
+        x0, y0, x1, y1 = fab[1]
+        self.assertAlmostEqual(x1 - x0, float(m.group(1)), places=4)
+        self.assertAlmostEqual(y1 - y0, float(m.group(2)), places=4)
+        cx0, cy0, cx1, cy1 = footprints.parse(
+            PRETTY / "Adafruit_TCA9548A_Socket.kicad_mod"
+        ).courtyard
+        mm = sockets.MODULE_MARGIN
+        self.assertLessEqual(cx0, x0 - mm + 1e-9)
+        self.assertLessEqual(cy0, y0 - mm + 1e-9)
+        self.assertGreaterEqual(cx1, x1 + mm - 1e-9)
+        self.assertGreaterEqual(cy1, y1 + mm - 1e-9)
 
     def test_cjmcu_2317_columns_are_lauris_measurement(self):
         # Lauri, 2026-10-16: the outer column one 2.54 mm pitch outside the
@@ -262,6 +311,14 @@ class ConfigTests(unittest.TestCase):
             [sockets.Socket("A_Socket", "b", (), (-1, -1, 4, 1), ((0, 0), (2.54, 0)))],
         )
 
+    def test_valid_twin(self):
+        got = self.load(
+            '[[socket]]\nname = "A_Socket"\nboard = "b"\npads = ["JP1", "JP2"]\n'
+            "outline = [0, -10, 20, 0]\n"
+            'twin = { element = "JP1", offset = [-2.54, 0], outline = [-3, -10, 20, 0] }\n'
+        )
+        self.assertEqual(got[0].twin, sockets.Twin("JP1", (-2.54, 0), (-3, -10, 20, 0)))
+
     def test_rejects(self):
         ok = "outline = [0, -1, 1, 0]\n"
         cases = {
@@ -284,6 +341,20 @@ class ConfigTests(unittest.TestCase):
             "pad_xy = [[0, 0, 1]]\n" + ok,
             "pad_xy not numbers": '[[socket]]\nname = "A"\nboard = "b"\n'
             'pad_xy = [["0", 0]]\n' + ok,
+            "twin of a single pad": '[[socket]]\nname = "A"\nboard = "b"\n'
+            'pads = ["JP1.1"]\n' + ok + 'twin = { element = "JP1.1", offset = [1, 0], '
+            "outline = [0, -1, 2, 0] }\n",
+            "twin element not socketed": '[[socket]]\nname = "A"\nboard = "b"\n'
+            'pads = ["JP1"]\n' + ok + 'twin = { element = "JP2", offset = [1, 0], '
+            "outline = [0, -1, 2, 0] }\n",
+            "twin zero offset": '[[socket]]\nname = "A"\nboard = "b"\n'
+            'pads = ["JP1"]\n' + ok + 'twin = { element = "JP1", offset = [0, 0], '
+            "outline = [0, -1, 2, 0] }\n",
+            "twin missing outline": '[[socket]]\nname = "A"\nboard = "b"\n'
+            'pads = ["JP1"]\n' + ok + 'twin = { element = "JP1", offset = [1, 0] }\n',
+            "twin on listed positions": '[[socket]]\nname = "A"\nboard = "b"\n'
+            "pad_xy = [[0, 0]]\n" + ok + 'twin = { element = "JP1", offset = [1, 0], '
+            "outline = [0, -1, 2, 0] }\n",
             "duplicate name": (
                 '[[socket]]\nname = "A"\nboard = "b"\npads = ["JP1"]\n'
                 '[[socket]]\nname = "A"\nboard = "c"\npads = ["JP1"]\n'
@@ -372,6 +443,35 @@ class MutationTests(unittest.TestCase):
         code, out = run(["--check"], self.root)
         self.assertEqual(code, 1, out)
         self.assertIn("outside the outline", out)
+
+    def test_twin_outline_disagreeing_with_the_page_fails(self):
+        config = self.subtree / sockets.CONFIG
+        text = config.read_text()
+        target = "outline = [-3.28, -30.84, 18.52, 0.36]"
+        self.assertEqual(text.count(target), 1)
+        config.write_text(text.replace(target, "outline = [-3.28, -30.84, 18.0, 0.36]"))
+        code, out = run(["--check"], self.root)
+        self.assertEqual(code, 1, out)
+        self.assertIn("the clone outline", out)
+        self.assertIn("21.8", out)
+
+    def test_twin_pad_outside_the_twin_outline_fails(self):
+        config = self.subtree / sockets.CONFIG
+        text = config.read_text()
+        target = "offset = [-2.54, 0]"
+        self.assertEqual(text.count(target), 1)
+        config.write_text(text.replace(target, "offset = [-5.08, 0]"))
+        code, out = run(["--check"], self.root)
+        self.assertEqual(code, 1, out)
+        self.assertIn("outside the twin outline", out)
+
+    def test_moved_twin_offset_makes_the_footprint_stale(self):
+        config = self.subtree / sockets.CONFIG
+        text = config.read_text()
+        config.write_text(text.replace("offset = [-2.54, 0]", "offset = [-2.5, 0]"))
+        code, out = run(["--check"], self.root)
+        self.assertEqual(code, 1, out)
+        self.assertIn("Adafruit_TCA9548A_Socket.kicad_mod: stale", out)
 
     def add_explicit_socket(self, pad_xy: str) -> Path:
         """Append a `pad_xy` socket on the MAX98357A page; its footprint path."""

@@ -81,6 +81,12 @@ CONFIG_LOG_DEFAULT_LEVEL=3
 
 # FreeRTOS
 CONFIG_FREERTOS_HZ=1000
+# Timer service task ("Tmr Svc"), where xTimer callbacks run: the OTA stability
+# timer (ota_manager.c) and the LED blink timer. Every ESP_LOG there now formats
+# twice, once into log_mirror.c's line buffer and once in the default vprintf,
+# and the stability callback also writes otadata. At the default 2048 that
+# overflowed 60 s after every boot (OTA_STABILITY_TIMEOUT_MS) and reset the chip.
+CONFIG_FREERTOS_TIMER_TASK_STACK_DEPTH=4096
 
 # Main task stack size
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192

@@ -10,8 +10,7 @@ allowed-tools: Bash(just:*), Bash(uvx:*)
 Start serial monitor for the specified project: $ARGUMENTS
 
 ## Available Projects
-- `main` - Monitor robocar main controller: `just robocar::monitor-main`
-- `cam` - Monitor robocar camera: `just robocar::monitor-cam`
+- `robocar` - Monitor robocar-unified: `just robocar-unified::monitor`
 - `webserver` - Monitor ESP32-CAM webserver: `just webserver::monitor`
 - `audio` - Monitor ESP32-CAM audio: `just i2s-audio::monitor`
 - `telegram` - Monitor LLM Telegram bot: `just telegram::monitor`

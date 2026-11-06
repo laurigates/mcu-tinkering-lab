@@ -26,7 +26,11 @@ logger = logging.getLogger(__name__)
 
 
 class MessageType(Enum):
-    """I2C Protocol message types matching ESP32 implementation"""
+    """Message types of the bridge's serial framing.
+
+    Inherited from the retired dual-ESP32 robocar's board-to-board I2C protocol.
+    No current firmware speaks it; robocar-unified runs on a single board.
+    """
 
     MOVE = 0x01
     SOUND = 0x02
@@ -37,7 +41,7 @@ class MessageType(Enum):
     STOP = 0x07
     SENSOR_DATA = 0x08
     AI_COMMAND = 0x09
-    # OTA Commands (matching firmware i2c_protocol.h)
+    # OTA commands
     ENTER_MAINTENANCE_MODE = 0x50
     BEGIN_OTA = 0x51
     GET_OTA_STATUS = 0x52
@@ -47,7 +51,7 @@ class MessageType(Enum):
 
 @dataclass
 class I2CMessage:
-    """I2C message structure matching ESP32 protocol"""
+    """Framed message: type byte, payload, CRC8 checksum"""
 
     message_type: MessageType
     data: bytes

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.8](https://github.com/laurigates/mcu-tinkering-lab/compare/it-troubleshooter-v0.1.7...it-troubleshooter-v0.1.8) (2026-11-01)
+
+
+### Miscellaneous
+
+* **deps:** refresh ESP-IDF dependencies.lock files ([#921](https://github.com/laurigates/mcu-tinkering-lab/issues/921)) ([e5d8d43](https://github.com/laurigates/mcu-tinkering-lab/commit/e5d8d43cf01725a19df184ec6dd222cf55286c7b))
+
 ## [0.1.7](https://github.com/laurigates/mcu-tinkering-lab/compare/it-troubleshooter-v0.1.6...it-troubleshooter-v0.1.7) (2026-10-12)
 
 

@@ -13,6 +13,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
+#include "gemini_key_state.h"
 #include "led_controller.h"
 #include "pin_config.h"
 
@@ -468,6 +469,9 @@ void activity_trace_report(void)
                (unsigned)s->last_ms, (unsigned)(done > 0u ? (uint32_t)(s->total_ms / done) : 0u),
                (unsigned)s->max_ms, state);
     }
+    /* Which kind of red the network LED means, for the failures that are the
+     * key's rather than the network's (issue #845). */
+    printf("  gemini key: last response %s\n", gemini_key_state_name(gemini_key_state_get()));
     printf("  usage: trace | trace led on|off | trace reset\n");
 }
 

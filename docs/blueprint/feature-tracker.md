@@ -43,12 +43,21 @@
 | FR-035 | Owner onboarding and notices | PRD-015 | planned | P3 | Adults only, privacy, AI disclosure, WiFi setup, reset |
 | FR-036 | Open-hardware build pack | PRD-015 | planned | P3 | Route A: build guide, BOM, fab files, own-key setup guide |
 | FR-037 | Teuvo network list with scan-and-pick | ADR-028 | planned | P1 | Up to 8 networks in NVS; all-channel scan; serial wifi commands; home flag gates MQTT |
-| FR-038 | Network services armed on link-up | ADR-028 | planned | P0 | Non-blocking connect; OTA and rollback-confirm on first GOT_IP; MQTT only on home GOT_IP, stopped on disconnect; Improv re-arm; skip requests offline |
-| FR-039 | Runtime Gemini credential in NVS | ADR-028 | planned | P0 | gemini auth; fixes key dropped after Improv; 402/403 handling |
+| FR-038 | Network services armed on link-up | ADR-028 | active | P0 | Non-blocking connect; OTA and rollback-confirm on first GOT_IP; MQTT only on home GOT_IP, stopped on disconnect; Improv re-arm; skip requests offline |
+| FR-039 | Runtime Gemini credential in NVS | ADR-028 | active | P0 | gemini auth; fixes key dropped after Improv; 402/403 handling |
 | FR-040 | Offline voice clips and help request | ADR-028 | planned | P1 | Pre-rendered ADPCM persona lines embedded in the app image |
 | FR-041 | WiFi join from a QR code | ADR-028 | planned | P2 | quirc on JPEG luma; both WIFI: dialects; QR entries never home; console confirmation while a known network is reachable |
 | FR-042 | WiFi hunt game | ADR-028 | planned | P3 | Opt-in, supervised: QR sweep, known-AP RSSI climb, ask for help |
-| FR-043 | TTS migration off gemini-3.1-flash-tts-preview | ADR-028 | planned | P0 | Earliest shutdown 2026-11-17; probe gemini-3.8-flash-tts (Finnish; not Flash-Lite) for streaming and style prefix |
+| FR-043 | TTS migration off gemini-3.1-flash-tts-preview | ADR-028 | active | P0 | Earliest shutdown 2026-11-17; probe gemini-3.8-flash-tts (Finnish; not Flash-Lite) for streaming and style prefix |
+| FR-044 | Robot needs from hardware.toml and the parts registry | PRD-016 | planned | P1 | One list per robot; [[consumables]] for off-board parts |
+| FR-045 | Source records with tariff code and origin | PRD-016 | planned | P1 | Reuses the registry buy field; currency, quote date, lead time |
+| FR-046 | Delivered-cost rules R1-R10 as tested functions | PRD-016 | planned | P0 | EU flat duty, DHL fee, AliExpress per-code charge, JLCPCB VAT/shipping/coupons |
+| FR-047 | Parcel planner minimising cash | PRD-016 | planned | P1 | Pack sizes, owned stock from one-page order history; consumed cost reported |
+| FR-048 | Cost per robot at N with labour | PRD-016 | planned | P1 | Hours in docs/reference/build-times.toml, estimates replaced by measurements |
+| FR-049 | JLCPCB PCBA vs bare PCB plus hand assembly | PRD-016 | planned | P2 | IOSS and DDP both priced |
+| FR-050 | Calibration fixtures against real orders | PRD-016 | planned | P0 | Fails when a prediction misses its observed total by more than EUR 1; fitted vs held-out fixtures |
+| FR-051 | Plan table and CSV output | PRD-016 | planned | P2 | tmp/quotes/plan-<date>.csv, one row per line |
+| FR-052 | Rule validity windows | PRD-016 | planned | P2 | Warns outside R1's 2026-07-01..2028-07-01 and the VAT rate |
 
 ## Status Key
 

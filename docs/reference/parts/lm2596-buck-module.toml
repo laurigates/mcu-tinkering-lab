@@ -4,6 +4,7 @@ name = "LM2596 buck module on JST-XH 4"
 source = "pin order is this repo's cable convention (#749 carrier)"
 symbol = "Connector_Generic:Conn_01x04"
 footprint = "Connector_JST:JST_XH_B4B-XH-A_1x04_P2.50mm_Vertical"
+buy = "aliexpress:1005009919435223"  # JST-XH set: header, housing, crimps
 
 [pins]
 "IN+" = 1

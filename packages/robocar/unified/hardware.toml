@@ -170,8 +170,8 @@ note = "Serial audio data"
 # a pad on the PCA9685's board page, if two wired roles share a channel, or if a
 # pin is driven twice. The pinout images label both ends from these.
 #
-# The six motor lines follow the TB6612FNG's control header (CLAUDE.md §PCA9685
-# channel layout). MOTOR_FIRST_CHANNEL is the base of that block, the same
+# The six motor lines follow the TB6612FNG's control header
+# (docs/firmware/i2c-and-motors.md §PCA9685 channel layout). MOTOR_FIRST_CHANNEL is the base of that block, the same
 # channel as MOTOR_RIGHT_PWM_CHANNEL, and needs no net of its own.
 
 [[channel_nets]]

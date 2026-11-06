@@ -6,6 +6,7 @@ name = "RGB LED header, 1x04, common anode"
 source = "this repo's cable convention: the common anode on pin 1, then R, G, B"
 symbol = "Connector_Generic:Conn_01x04"
 footprint = "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical"
+buy = "owned:2.54 mm 1x40 male header strips (AliExpress 2025-11, 2025-12, 2026-08)"
 
 [pins]
 ANODE = 1

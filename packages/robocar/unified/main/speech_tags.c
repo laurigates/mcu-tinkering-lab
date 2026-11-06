@@ -9,7 +9,13 @@
 #include <string.h>
 
 const char *const SPEECH_TAG_ALLOWED[] = {
-    "[whispers]", "[sighs]", "[laughs]", "[excited]", "[bored]", "[gasp]",
+    /* Each has a gemini-3.8-flash-tts angle-bracket form (tts_request.c).
+     * [excited] and [bored] were dropped with the move to 3.8 (issue #844):
+     * they are moods, not vocal events, and its tag table has neither. */
+    "[whispers]",
+    "[sighs]",
+    "[laughs]",
+    "[gasp]",
 };
 
 const size_t SPEECH_TAG_ALLOWED_COUNT = sizeof(SPEECH_TAG_ALLOWED) / sizeof(SPEECH_TAG_ALLOWED[0]);

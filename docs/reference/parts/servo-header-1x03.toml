@@ -6,6 +6,7 @@ name = "Servo header, 1x03"
 source = "the PCA9685 breakout's column order (docs/reference/boards/adafruit-pca9685.md: PWM nearest the chip, then V+, then GND), so a servo lead plugs in the same way round on both carriers"
 symbol = "Connector_Generic:Conn_01x03"
 footprint = "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical"
+buy = "owned:2.54 mm 1x40 male header strips (AliExpress 2025-11, 2025-12, 2026-08)"
 
 [pins]
 PWM = 1

@@ -133,7 +133,7 @@ static const voice_persona_t s_personas[VOICE_PERSONA_COUNT] = {
             .text_brief = "Speak plain, friendly contemporary English. Vary how you phrase "
                           "things — do not reuse the same opening twice running.",
             .tag_brief = "You may mark delivery with a bracketed tag inside the sentence: "
-                         "[sighs] [laughs] [whispers] [excited] [bored] [gasp]. Use them "
+                         "[sighs] [laughs] [whispers] [gasp]. Use them "
                          "sparingly and only where they fit what is being said — at most one "
                          "line in three, and never in a fault report. Write the tag exactly "
                          "as shown.",
@@ -188,7 +188,7 @@ static const voice_persona_t s_personas[VOICE_PERSONA_COUNT] = {
                 "Kirjoita yksi lyhyt puhuttu lause.",
             .tag_brief =
                 "Voit halutessasi merkitä esitystapaa hakasulkeilla suoraan lauseen sisään: "
-                "[sighs] [laughs] [whispers] [excited] [bored] [gasp]. Käytä niitä tilanteeseen "
+                "[sighs] [laughs] [whispers] [gasp]. Käytä niitä tilanteeseen "
                 "sopivasti — voit esimerkiksi huokaista [sighs] tai naurahtaa [laughs] vikojen tai "
                 "esteiden kohdalla, tai kuiskata [whispers] jos on hiljaista. Kirjoita tagi "
                 "täsmälleen näin, englanniksi.",

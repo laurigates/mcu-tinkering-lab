@@ -64,6 +64,7 @@ part = "r0805"
 ref = "R1"
 value = "10k"
 lcsc = "C17414"
+buy = "aliexpress:32901883276"  # 10K variant
 
 [[nets]]
 role = "PIN_IMU_SDA"
@@ -252,6 +253,7 @@ part = "r0805"
 ref = "R4"
 value = "10k"
 lcsc = "C17414"
+buy = "aliexpress:32901883276"  # 10K variant
 
 [parts.rp_zener]
 name = "BZT52C15 gate-source zener for Q1"
@@ -268,6 +270,7 @@ part = "cp-elec-6.3x7.7"
 ref = "C1"
 value = "100uF 35V"
 lcsc = "C2836437"
+buy = "aliexpress:1005012777654645"  # 100UF 35V 6.3x7.7 variant
 
 [parts.bulk_right]
 name = "100 µF 35 V bulk capacitor, right driver"
@@ -277,6 +280,7 @@ part = "cp-elec-6.3x7.7"
 ref = "C2"
 value = "100uF 35V"
 lcsc = "C2836437"
+buy = "aliexpress:1005012777654645"  # 100UF 35V 6.3x7.7 variant
 
 [parts.buck_diode]
 name = "B5819W Schottky, buck to XIAO 5V"
@@ -293,6 +297,7 @@ part = "r0805"
 ref = "R2"
 value = "100k"
 lcsc = "C149504"
+buy = "aliexpress:32901883276"  # 100K variant
 
 [parts.sense_bottom]
 name = "27 kΩ pack divider, bottom"
@@ -302,6 +307,7 @@ part = "r0805"
 ref = "R3"
 value = "27k"
 lcsc = "C17593"
+buy = "aliexpress:32901883276"  # 27K variant
 
 [parts.sense_filter]
 name = "100 nF pack divider filter"
@@ -311,6 +317,7 @@ part = "c0805"
 ref = "C3"
 value = "100nF"
 lcsc = "C49678"
+buy = "owned:0805 100 nF 50 V X7R, 100 pcs (AliExpress 2026-09)"
 
 [parts.hole_1]
 name = "M3 mounting hole"

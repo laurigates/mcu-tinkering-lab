@@ -96,6 +96,7 @@ void self_report_collect(robocar_status_t *out)
 
     const char *key = get_gemini_api_key();
     out->key_present = (key != NULL && key[0] != '\0');
+    out->key_state = gemini_key_state_get();
 
     /* The same rule the dispatcher applies, so the published line cannot
      * claim a mode the command topic is not actually in. */
@@ -112,6 +113,23 @@ void self_report_collect(robocar_status_t *out)
 bool self_report_voice_able(const robocar_status_t *status)
 {
     return status != NULL && status->wifi_up && status->key_present && status->audio_ok;
+}
+
+/** gemini_key word: absent, or what the last response said about the key.
+ *  An untested or accepted key both read "present". */
+static const char *key_word(const robocar_status_t *status)
+{
+    if (!status->key_present) {
+        return "absent";
+    }
+    switch (status->key_state) {
+        case GEMINI_KEY_REJECTED:
+            return "rejected";
+        case GEMINI_KEY_EXHAUSTED:
+            return "exhausted";
+        default:
+            return "present";
+    }
 }
 
 /** Required-subsystem state word: fault reads differently from "ok". */
@@ -186,9 +204,8 @@ size_t self_report_format_facts(const robocar_status_t *status, char *buf, size_
                      status->version, req_state(status->wifi_up),
                      status->ssid[0] ? status->ssid : "none", req_state(status->camera_ok), i2c,
                      req_state(status->audio_ok),
-                     status->mcp23017_present ? "present" : "absent(optional)",
-                     status->key_present ? "present" : "absent", req_state(status->buzzer_ok),
-                     mqtt_command_access_name(status->mqtt_access));
+                     status->mcp23017_present ? "present" : "absent(optional)", key_word(status),
+                     req_state(status->buzzer_ok), mqtt_command_access_name(status->mqtt_access));
 
     if (n < 0) {
         buf[0] = '\0';
@@ -202,7 +219,7 @@ size_t self_report_format_facts(const robocar_status_t *status, char *buf, size_
 /* -------------------------------------------------------------------------- */
 
 /** FNV-1a over the health booleans + ssid. A change in any one flips it. */
-static uint32_t status_signature(const robocar_status_t *s)
+uint32_t self_report_health_signature(const robocar_status_t *s)
 {
     uint32_t h = 2166136261u;
 #define MIX_BYTE(b)        \
@@ -219,7 +236,13 @@ static uint32_t status_signature(const robocar_status_t *s)
     MIX_BYTE(s->buzzer_ok);
     MIX_BYTE(s->mcp23017_present);
     MIX_BYTE(s->audio_ok);
-    MIX_BYTE(s->key_present);
+    /* The key as the listener hears it (key_word()), not the raw state: an
+     * untested and an accepted key both read "present", so the first HTTP 200
+     * moving UNTESTED to OK must not trigger a re-announcement that says
+     * nothing new. A rejected or exhausted key still changes the word. */
+    for (const char *p = key_word(s); *p != '\0'; ++p) {
+        MIX_BYTE(*p);
+    }
     for (const char *p = s->ssid; *p != '\0'; ++p) {
         MIX_BYTE(*p);
     }
@@ -324,7 +347,7 @@ static void status_monitor_task(void *arg)
         vTaskDelay(pdMS_TO_TICKS(STATUS_POLL_MS));
 
         self_report_collect(&status);
-        const uint32_t sig = status_signature(&status);
+        const uint32_t sig = self_report_health_signature(&status);
 
         /* The diagnostic is always logged (and published) so it is observable
          * even while the robot cannot talk. */

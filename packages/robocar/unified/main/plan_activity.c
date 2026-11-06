@@ -35,8 +35,10 @@ static uint8_t s_scene_threshold = PLAN_SCENE_THRESHOLD_DEFAULT;
 static uint8_t s_range_threshold_cm = PLAN_RANGE_THRESHOLD_CM_DEFAULT;
 static bool s_enabled = true;
 
-/** The view and range the robot last planned on. */
-static scene_fingerprint_t s_reference;
+/** Per dwell pose, the view the robot last planned on at that pose (ADR-029
+ *  §2), and the range it last planned on. The range is body-fixed, so it has
+ *  one reference whatever the head does. */
+static scene_fingerprint_t s_reference[SCENE_POSES];
 static uint16_t s_reference_cm;
 static bool s_reference_range_valid;
 
@@ -77,7 +79,7 @@ void plan_activity_init(uint32_t base_period_ms)
     s_range_threshold_cm = PLAN_RANGE_THRESHOLD_CM_DEFAULT;
     s_enabled = true;
 
-    memset(&s_reference, 0, sizeof(s_reference));
+    memset(s_reference, 0, sizeof(s_reference));
     memset(&s_current, 0, sizeof(s_current));
     s_reference_cm = 0u;
     s_reference_range_valid = false;
@@ -104,6 +106,18 @@ void plan_activity_init(uint32_t base_period_ms)
 /* -------------------------------------------------------------------------- */
 /* Evaluation                                                                  */
 /* -------------------------------------------------------------------------- */
+
+/** The reference slot for @p fp, or NULL when the frame cannot be measured:
+ *  undecoded, or taken off a dwell pose (mid-slew, tracking, a lease). Such a
+ *  frame is neither compared nor adopted, so a moving head never reads as a
+ *  changed view (ADR-029 §2). */
+static scene_fingerprint_t *reference_for(const scene_fingerprint_t *fp)
+{
+    if (!fp->valid || fp->pose >= SCENE_POSES) {
+        return NULL;
+    }
+    return &s_reference[fp->pose];
+}
 
 static void verdict_set(bool woken, bool moving, bool view, bool audio, bool range)
 {
@@ -140,9 +154,8 @@ bool plan_activity_should_call(const plan_evidence_t *ev, uint32_t now_ms)
     s_current_cm = ev->distance_cm;
     s_current_range_valid = ev->range_valid;
 
-    s_scene_score = (ev->frame.valid && s_reference.valid)
-                        ? scene_fingerprint_distance(&ev->frame, &s_reference)
-                        : 0u;
+    scene_fingerprint_t *const ref = reference_for(&ev->frame);
+    s_scene_score = (ref != NULL && ref->valid) ? scene_fingerprint_distance(&ev->frame, ref) : 0u;
 
     s_range_score =
         (ev->range_valid && s_reference_range_valid)
@@ -153,9 +166,11 @@ bool plan_activity_should_call(const plan_evidence_t *ev, uint32_t now_ms)
     /* ---- Adopt a first reference ----
      * A first observation is not evidence of change: there is nothing it could
      * have changed from. Adopting here rather than in note_call() is what lets
-     * the module boot dormant and still have something to compare against. */
-    if (!s_reference.valid && ev->frame.valid) {
-        s_reference = ev->frame;
+     * the module boot dormant and still have something to compare against. The
+     * same holds per pose: the first look at a dwell pose is adopted silently,
+     * so a head that starts looking around does not wake the planner. */
+    if (ref != NULL && !ref->valid) {
+        *ref = ev->frame;
     }
     if (!s_reference_range_valid && ev->range_valid) {
         s_reference_cm = ev->distance_cm;
@@ -227,9 +242,11 @@ void plan_activity_note_call(uint32_t now_ms)
     /* This is the view the robot has now planned on, so it becomes what the
      * next frames are measured against. An unmeasurable frame is not adopted —
      * an all-zero fingerprint is indistinguishable from a flat grey frame, so
-     * adopting one would make the next real frame look like a whole new room. */
-    if (s_current.valid) {
-        s_reference = s_current;
+     * adopting one would make the next real frame look like a whole new room,
+     * and an off-pose frame belongs to no pose's reference. */
+    scene_fingerprint_t *const ref = reference_for(&s_current);
+    if (ref != NULL) {
+        *ref = s_current;
     }
     if (s_current_range_valid) {
         s_reference_cm = s_current_cm;
@@ -284,6 +301,11 @@ uint8_t plan_activity_step(void)
 unsigned plan_activity_scene_score(void)
 {
     return s_scene_score;
+}
+
+uint8_t plan_activity_pose(void)
+{
+    return s_current.valid ? s_current.pose : (uint8_t)SCENE_POSE_NONE;
 }
 
 unsigned plan_activity_range_score(void)

@@ -90,7 +90,8 @@ def _apart(a: Part, b: Part) -> bool:
     )
 
 
-def clashes(bodies: list[Body]) -> list[dict]:
+def overlaps(bodies: list[Body]) -> list[tuple[Body, Body, Part, float]]:
+    """``(a, b, common solid, mm3)`` for every pair the gate counts as a clash."""
     out = []
     for a, b in itertools.combinations(bodies, 2):
         if a.group == b.group or b.name in a.allow or a.name in b.allow:
@@ -100,8 +101,15 @@ def clashes(bodies: list[Body]) -> list[dict]:
         common = a.part & b.part
         vol = common.volume if common is not None else 0.0
         if vol > CLASH_TOL_MM3:
-            out.append({"a": a.name, "b": b.name, "mm3": round(vol, 3)})
+            out.append((a, b, common, vol))
     return out
+
+
+def clashes(bodies: list[Body]) -> list[dict]:
+    return [
+        {"a": a.name, "b": b.name, "mm3": round(v, 3)}
+        for a, b, _, v in overlaps(bodies)
+    ]
 
 
 def sweep(mod, at: list[tuple] | None = None) -> dict[str, list[dict]]:

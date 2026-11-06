@@ -110,7 +110,7 @@ size: (_idf "size")
 
 # Shared flash/build/monitor recipes — pass bin_name (the compiled app basename)
 # as a recipe ARGUMENT, not a shared variable (see note below):
-bin_name := "robocar-main"            # = the CMake project() name, no .bin
+bin_name := "my-project"              # = the CMake project() name, no .bin
 build: (_idf-build-checked bin_name)  # validated build
 flash: (_esp32-flash bin_name)        # or (_s3-flash bin_name) for esp32s3
 reset: _s3-reset                      # esp32s3 only
@@ -188,8 +188,7 @@ writes `flash: (_s3-flash bin_name)` and inherits all four silently.
 | 4 | App at 0x10000 | the table puts the app elsewhere | App written to the wrong offset — **silent** |
 
 Fail any one and keep the flash recipe **inline** with explicit offsets;
-`packages/robocar/unified/justfile` and `packages/robocar/main/justfile` are the
-worked examples.
+`packages/robocar/unified/justfile` is the worked example.
 
 **Do not judge this by eye.** The previous wording here asked whether the layout
 looked "exotic" and listed offsets and argfiles as the tell — flash *size* was
@@ -205,7 +204,7 @@ python3 tools/check-flash-recipes.py
 It reports every consumer with its target, declared flash size, partition source,
 app offset and otadata status, and exits non-zero on a mismatch. It also runs as
 a pre-commit hook, so this is enforced rather than remembered — and its first run
-found a pre-existing instance in `robocar/main`, which had an `ota_0`/`ota_1`
+found a pre-existing instance in `robocar/main` (since removed), which had an `ota_0`/`ota_1`
 table, no factory partition, and `CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y`.
 
 **Inline recipes are checked too, by what they expand to.** The four-assumption
@@ -230,7 +229,7 @@ recipe is written:
   cannot be worked out (unknown target, an app row with a blank offset) is
   reported as unverifiable rather than passed.
 
-robocar-main and robocar-camera failed both for months (fixed in #598): the
+robocar-main and robocar-camera (both since removed) failed both for months (fixed in #598): the
 recipes flashed `build/robocar-{main,camera}.bin`, which no build writes, and the
 camera recipe skipped otadata on an `ota_0`/`ota_1` table with rollback enabled.
 Its first run found `llm-telegram` skipping otadata too (issue #608). A recipe

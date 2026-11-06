@@ -217,6 +217,27 @@ static void test_either_limit_can_veto(void)
 }
 
 /* =========================================================================
+ * Note counter (the planner's "spoke during the request" check)
+ * ========================================================================= */
+
+static void test_notes_count_every_utterance_across_init(void)
+{
+    /* The planner reads the count before its request and drops the reply's
+     * line if it moved. It must move on every note, and init must not reset it:
+     * a reset between the two reads could make a moved count read unchanged. */
+    speech_budget_init();
+    const uint32_t before = speech_budget_notes();
+    ASSERT(speech_budget_notes() == before); /* reading does not move it */
+    speech_budget_note(1000u);
+    ASSERT(speech_budget_notes() == before + 1u);
+    speech_budget_init();
+    ASSERT(speech_budget_notes() == before + 1u);
+    speech_budget_note(2000u);
+    speech_budget_note(2001u);
+    ASSERT(speech_budget_notes() == before + 3u);
+}
+
+/* =========================================================================
  * Main
  * ========================================================================= */
 
@@ -239,6 +260,9 @@ int main(void)
 
     test_run("survives the uint32 wrap", test_survives_the_uint32_wrap);
     test_run("either limit can veto", test_either_limit_can_veto);
+
+    test_run("notes count every utterance across init",
+             test_notes_count_every_utterance_across_init);
 
     printf("\n=== %d/%d passed ===\n", test_pass, test_count);
     return (test_pass == test_count) ? 0 : 1;

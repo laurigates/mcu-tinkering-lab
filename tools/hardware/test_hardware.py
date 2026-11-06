@@ -529,6 +529,24 @@ class JoinTest(unittest.TestCase):
         self.assertEqual((model.view, model.net_names), ("harness", {}))
         self.assertEqual((model.mcu_part, model.mcu_ref), ("", ""))
 
+    def test_a_part_buy_is_kept_and_defaults_to_empty(self):
+        self.assertEqual(self.join(self.make()).parts["led"].buy, "")
+        for value in ("aliexpress:1005006127128914", "lcsc:C8598", "owned:a reel"):
+            sidecar = SIDECAR.replace('kind = "led"', f'kind = "led"\nbuy = "{value}"')
+            with self.subTest(value=value):
+                self.assertEqual(
+                    self.join(self.make(sidecar=sidecar)).parts["led"].buy, value
+                )
+
+    def test_a_part_buy_in_another_form_fails(self):
+        for value in ("aliexpress", "1005006127128914", "lcsc:8598", "owned:"):
+            sidecar = SIDECAR.replace('kind = "led"', f'kind = "led"\nbuy = "{value}"')
+            with (
+                self.subTest(value=value),
+                self.assertRaisesRegex(HardwareError, r"\[parts.led\].*buy"),
+            ):
+                self.join(self.make(sidecar=sidecar))
+
     def test_a_part_board_that_does_not_exist_fails(self):
         sidecar = SIDECAR.replace('kind = "led"', 'kind = "led"\nboard = "nope.md"')
         with self.assertRaisesRegex(

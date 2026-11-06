@@ -99,7 +99,7 @@ Suggested actions:
 
 | Project | README | CLAUDE | WIRING | justfile | registered | sdkconfig | version | gitignore | creds | mDNS | Score |
 |---------|--------|--------|--------|----------|------------|-----------|---------|-----------|-------|------|-------|
-| robocar-main | PASS | FAIL | ... | ... | ... | ... | ... | ... | ... | ... | 7/10 |
+| robocar-unified | PASS | FAIL | ... | ... | ... | ... | ... | ... | ... | ... | 7/10 |
 | ... | ... | ... | ... | ... | ... | ... | ... | ... | ... | ... | ... |
 
 Projects needing attention:

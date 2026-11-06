@@ -169,7 +169,7 @@ typedef enum {
  * @brief Hand a manual movement command to the executor.
  *
  * The executor remains the only writer of motor output (see the project
- * CLAUDE.md "Don't" list) — callers do not touch motor_controller.h. Two
+ * CLAUDE.md "Rules" list) — callers do not touch motor_controller.h. Two
  * properties follow from routing through here rather than driving the motors
  * directly, and both are the point of this function:
  *
@@ -252,6 +252,7 @@ typedef enum {
     REACTIVE_HEAD_AIM,             /**< Head covers the track target.         */
     REACTIVE_HEAD_TURN,            /**< Body turning toward the head.         */
     REACTIVE_HEAD_LEASE,           /**< A console lease owns the head.        */
+    REACTIVE_HEAD_GAZE,            /**< No fresh track goal: idle gaze (ADR-029). */
 } reactive_head_mode_t;
 
 /** Short name for a head mode, for the console and logs. */
@@ -289,6 +290,11 @@ typedef struct {
     uint16_t distance_rear_cm;
     /** The rear sensor's counterpart of sensor_failed. */
     bool rear_failed;
+    /** The head has held still for HEAD_SETTLE_MS, so a frame captured now was
+     *  taken at rest. planner_task reads it before naming a frame's dwell pose
+     *  (ADR-029 §2). True with the servos released (nothing moves the head),
+     *  false under an external lease (another task is moving it). */
+    bool head_settled;
 } reactive_telemetry_t;
 
 /* =========================================================================
@@ -329,6 +335,18 @@ esp_err_t reactive_controller_stop(void);
  * @return ESP_OK, or ESP_ERR_INVALID_ARG if out is NULL.
  */
 esp_err_t reactive_controller_get_telemetry(reactive_telemetry_t *out);
+
+/**
+ * @brief Turn the idle gaze (ADR-029 §1) on or off.
+ *
+ * On at every boot. With it off, a stale or non-track goal re-centres the head,
+ * as ADR-025 had it. A fresh track goal and the head leases outrank the gaze
+ * either way. Safe from any task: a single bool the executor reads each tick.
+ */
+void reactive_controller_set_gaze(bool on);
+
+/** @brief Whether the idle gaze is on. */
+bool reactive_controller_gaze_enabled(void);
 
 #ifdef __cplusplus
 }

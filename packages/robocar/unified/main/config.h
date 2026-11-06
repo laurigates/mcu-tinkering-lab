@@ -150,12 +150,23 @@
 #define OTA_HTTP_TIMEOUT_MS 30000
 #define OTA_MAX_RETRY_COUNT 3
 
+// Network supervisor (issue #846): polls the link and starts/stops MQTT, OTA
+// and Improv on its edges. It only calls init/start/stop functions; the TLS
+// work runs on the OTA and MQTT tasks, so it needs no 8 KB TLS stack.
+#define NET_SUPERVISOR_TASK_STACK_SIZE 6144
+#define NET_SUPERVISOR_TASK_PRIORITY 3
+#define NET_SUPERVISOR_TASK_CORE 1
+#define NET_SUPERVISOR_PERIOD_MS 500
+
 // ========================================
 // Feature Flags
 // ========================================
 #define FEATURE_PIEZO_ENABLED 1
 #define FEATURE_PCA9685_ENABLED 1
 #define FEATURE_OLED_ENABLED 1
+// Status screen redraw period (oled_status.c, from peripheral_task). Only rows
+// that changed reach the bus, so a quiet robot costs nothing per redraw.
+#define OLED_STATUS_REFRESH_MS 1000
 #define FEATURE_WIFI_ENABLED 1
 #define FEATURE_MQTT_ENABLED 1
 #define FEATURE_OTA_ENABLED 1

@@ -17,11 +17,11 @@ idf_component_register(
         "main.c"
         "checks.c"
         "cues.c"
-        "oled.c"
         "speech.c"
         "motor_hold.c"
         # --- shared, unmodified, from robocar-unified ---
         "${UNIFIED_MAIN}/i2c_bus.c"
+        "${UNIFIED_MAIN}/oled.c"
         "${UNIFIED_MAIN}/pca9685_phase.c"
         "${UNIFIED_MAIN}/gpio_expander.c"
         "${UNIFIED_MAIN}/gpio_expander_core.c"

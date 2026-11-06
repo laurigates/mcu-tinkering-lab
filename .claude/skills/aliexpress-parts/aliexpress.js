@@ -12,8 +12,8 @@ window.lib.mtop.request = function (p, ...r) {
 };
 document.querySelector('.order-more button').click();
 
-// 2. Replay it with any page index and size (50 works).
-window.__page = async (idx, size = 50) => {
+// 2. Replay it with any page index and size.
+window.__page = async (idx, size = 200) => {
   const p = JSON.parse(JSON.stringify(window.__cap.find((c) => c.api === 'mtop.aliexpress.trade.buyer.order.list')));
   const outer = JSON.parse(p.data.params);
   const inner = JSON.parse(outer.data);
@@ -25,11 +25,17 @@ window.__page = async (idx, size = 50) => {
   return await window.lib.mtop.request(p);
 };
 
-// 3. Every order line, until hasMore is false.
+// 3. Every order line in one request. Paging is unstable: orders placed
+//    together shuffle between pages, so a 50-per-page walk returns some twice
+//    and drops others (SKILL.md trap 2). One page of 200 held all 187 orders on
+//    2026-10-30; if hasMore is still true, raise the size rather than paging.
 window.__orders = [];
-for (let idx = 1; idx < 60; idx++) {
-  const d = (await window.__page(idx)).data.data;
+{
+  const d = (await window.__page(1)).data.data;
   const orders = Object.keys(d).filter((k) => k.startsWith('pc_om_list_order_')).map((k) => d[k].fields);
+  const body = d[Object.keys(d).find((k) => k.startsWith('pc_om_list_body'))];
+  if (body && body.fields.hasMore) throw new Error('order list truncated: raise the page size');
+  if (new Set(orders.map((o) => String(o.orderId))).size !== orders.length) throw new Error('duplicate orders in one page');
   for (const o of orders)
     for (const l of o.orderLines || [])
       window.__orders.push({
@@ -38,9 +44,6 @@ for (let idx = 1; idx < 60; idx++) {
           .map((x) => x && x.text).filter((t) => t && !/China/i.test(t)).join(' '),
         price: l.itemPriceText, qty: l.quantity,
       });
-  const body = d[Object.keys(d).find((k) => k.startsWith('pc_om_list_body'))];
-  if (!orders.length || !(body && body.fields.hasMore)) break;
-  await new Promise((r) => setTimeout(r, 400));
 }
 
 // --- Search (any aliexpress.com page) ---
@@ -89,7 +92,8 @@ window.__item = async (pid, filter, max = 14) => {
   const b = (R.SHIPPING.deliveryLayoutInfo || [])[0]?.bizData || {};
   const title = ((R.PRODUCT_TITLE && R.PRODUCT_TITLE.text) || '').slice(0, 60);
   const choice = b.choiceFreeShipping === 'yes' ? ' Choice free from ' + b.logisticsComposeThreshold : '';
-  return `${pid} ${title} || ship ${b.formattedAmount || 'NA'}${choice} ${b.deliveryDayMin || ''}-${b.deliveryDayMax || ''}d || ${rows.slice(0, max).join(' ; ')}`.replace(/[?&=]/g, ' ');
+  const unreachable = b.unreachable ? ' DOES NOT SHIP HERE' : '';
+  return `${pid} ${title} || ship ${b.formattedAmount || 'NA'}${choice}${unreachable} ${b.deliveryDayMin || ''}-${b.deliveryDayMax || ''}d || ${rows.slice(0, max).join(' ; ')}`.replace(/[?&=]/g, ' ');
 };
 
 // Search, keep titles matching `re`, price each: one string per candidate.
@@ -98,6 +102,30 @@ window.__scan = async (q, re, filter, n = 6) => {
   const out = [];
   for (const x of hits) out.push((x.tr ? '[' + x.tr + '] ' : '') + (await window.__item(x.pid, filter, 8)));
   return out;
+};
+
+// --- Delivered total for chosen cart lines (any aliexpress.com page) ---
+// Renders checkout for exactly these cart ids in a hidden iframe and reads its
+// summary. Nothing is ordered, and the cart's ticks are untouched (SKILL.md
+// trap 13). Cart ids come from a checkout URL's availableProductShopcartIds.
+// Run a few in parallel at most; each takes 5-10 s.
+window.__checkout = async (ids, waitMs = 20000) => {
+  const f = document.createElement('iframe');
+  f.style.cssText = 'width:1200px;height:900px;position:fixed;left:-3000px';
+  f.src = '/p/trade/confirm.html?availableProductShopcartIds=' + ids.join(',') + '&aeOrderFrom=main_shopcart';
+  document.body.appendChild(f);
+  let t = '';
+  for (let i = 0; i < waitMs / 500; i++) {
+    await new Promise((r) => setTimeout(r, 500));
+    try { t = f.contentDocument.body.innerText; if (/\nTotal\n€/.test(t)) break; } catch (e) { /* not loaded yet */ }
+  }
+  f.remove();
+  const g = (re) => (t.match(re) || [])[1] || '';
+  return {
+    lines: ids.length, subtotal: g(/Subtotal\n(€[\d.]+)/), saved: g(/Saved\n(-€[\d.]+)/),
+    shipping: g(/Shipping fee\n(€[\d.]+|Free)/), importGross: g(/Estimated import charges\n(€[\d.]+)/),
+    importReduction: g(/reduction\n(-€[\d.]+)/), total: g(/\nTotal\n(€[\d.]+)/),
+  };
 };
 
 // --- Add to cart (only when Lauri asks; run on an /item/<id>.html page) ---
@@ -113,7 +141,7 @@ window.lib.mtop.request = function (p, ...r) {
 // 2. After the click: window.__cartReq = window.__cap[0];
 
 // One variant, matched by name to exactly one skuId. Call it a few lines at a
-// time, seconds apart: 25 rapid adds brought up a slider CAPTCHA (SKILL.md trap 7).
+// time, seconds apart: 25 rapid adds brought up a slider CAPTCHA (SKILL.md trap 8).
 window.__add = async (pid, re, qty = 1) => {
   const R = (await window.__pdp(pid)).data.result;
   const names = {};

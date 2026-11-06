@@ -29,9 +29,14 @@
 // ========================================
 // I2C Bus (to TCA9548A multiplexer)
 // ========================================
-#define I2C_SDA_PIN GPIO_NUM_5     // XIAO D4/SDA
-#define I2C_SCL_PIN GPIO_NUM_6     // XIAO D5/SCL
-#define I2C_MASTER_FREQ_HZ 400000  // 400kHz for fast I2C
+#define I2C_SDA_PIN GPIO_NUM_5  // XIAO D4/SDA
+#define I2C_SCL_PIN GPIO_NUM_6  // XIAO D5/SCL
+// 100 kHz, not 400: the RCWL-1601 rangefinders ACK their address at 400 kHz
+// and then NACK every trigger and read (bringup sweep, 2026-11-04: 0/5 readings
+// each at 400 kHz, 5/5 at 100 kHz). Giving only their handle 100 kHz was not
+// enough, because the mux selects that open and close their channel still ran
+// at 400 kHz; see docs/reference/datasheets/sensor--rcwl-1601.md.
+#define I2C_MASTER_FREQ_HZ 100000
 
 // ========================================
 // TCA9548A I2C Multiplexer
@@ -223,8 +228,11 @@
  *  Adjustable at runtime with `voice volume <pct>`, and deliberately NOT
  *  persisted: a boot comes up at this documented default rather than at
  *  whatever last night's experiment left behind — same convention as
- *  `cam gainceiling` and the `voice` gate thresholds. */
-#define AUDIO_VOLUME_PCT 70
+ *  `cam gainceiling` and the `voice` gate thresholds.
+ *
+ *  30, chosen by ear on the bench (2026-11-05): 70 was too loud in the room.
+ *  About -7 dB from 70. */
+#define AUDIO_VOLUME_PCT 30
 
 /** Ceiling for `voice volume`. 100 is full scale, and above it the int16 cast
  *  in audio_player.c's mono_to_stereo() wraps rather than clips — see the
@@ -288,6 +296,16 @@
 #define SERVO_MAX_PULSE_US 2400     // SG90 datasheet maximum
 #define SERVO_CENTER_PULSE_US 1500  // 0 deg
 #define SERVO_PULSE_US_PER_90_DEG 1000
+
+// The pan servo is mounted mirrored in the gimbal: a longer pulse turns the
+// head LEFT. Measured on the bench 2026-11-05: with both horns re-seated
+// straight at 1500 us, `servo pan 20` pointed left and `servo tilt 20` up.
+// Every angle above servo_controller.c stays + = right, + = up (head_aim,
+// idle_gaze, the scene poses, the console), so the mirror is applied only
+// where an angle becomes a pulse. A rebuild with the servo mounted the other
+// way sets this to 0.
+#define SERVO_PAN_INVERTED 1
+#define SERVO_TILT_INVERTED 0
 
 // Pulse width -> PCA9685 count lives in servo_controller.c now, because it
 // depends on the frequency the chip is ACTUALLY running at. The macro that used

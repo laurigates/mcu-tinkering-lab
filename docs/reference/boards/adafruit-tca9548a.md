@@ -121,3 +121,18 @@ python3 tools/breakout-pinout.py /tmp/tca9548a.brd --element JP1 --element JP3
 
 Generic TCA9548A modules do not all copy this layout. One whose silkscreen
 differs is a different board and needs its own page.
+
+## Wider clone
+
+The purple TCA9548A/PCA9548A module sold on AliExpress (the PCA9548A is NXP's
+pin-compatible part) has the same 24 pins in the same order along each row,
+read from its top-face silkscreen in Lauri's photo (2026-11-02): left row VIN,
+GND, SDA, SCL, RST, A0, A1, A2, SD0, SC0, SD1, SC1; right row, top to bottom,
+SC7, SD7, SC6, SD6 … SC2, SD2. Its rows are 17.78 mm apart (7 pitches), one
+pitch wider than this board's 15.24 mm, and the clone outline 21.8 × 31.2 mm
+(Lauri's calipers, 2026-11-02). The photo shows six 10 kΩ ("103") resistors
+and one capacitor; which pins they pull up or down has not been traced, so
+A0–A2 being pulled down (address 0x70) and RST being pulled up are unverified
+on this module. `Breakout_Sockets:Adafruit_TCA9548A_Socket` takes either
+board: its `twin` doubles the left row one pitch outward
+(`tools/kicad/lib/breakout-sockets/sockets.toml`).

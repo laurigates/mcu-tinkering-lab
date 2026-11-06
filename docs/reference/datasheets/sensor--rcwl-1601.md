@@ -110,6 +110,30 @@ agree on everything except the conversion wait.
 - **Bus sharing:** Adafruit #4742: "it doesn't like to share the I2C bus, we
   think it gets confused by other commands and can lock up the bus". Give it
   a bus, or a mux channel, of its own.
+- **Clock: run it at 100 kHz.** None of the sources above states a maximum.
+  Measured on robocar-unified's carrier (2026-11-04, both modules with 10 kΩ
+  on R4, each alone on a TCA9548A channel with 2.2 kΩ pull-ups): at 400 kHz
+  both ACK their address, so a bare probe passes, and then NACK the trigger
+  and the read. The bringup sweep got 0/5 readings from each. At 100 kHz, with
+  nothing else changed, it got 5/5 from both. Giving only the modules' i2cdev
+  handle 100 kHz, with the rest of the bus at 400 kHz, failed again (front not
+  answering, rear 0/5, and the mux NACKing): the TCA9548A passes its own
+  400 kHz select writes through to the channel that is open, so the module
+  still sees 400 kHz traffic. The firmware therefore runs the whole bus at
+  100 kHz (`I2C_MASTER_FREQ_HZ`). Running the mux and the modules at 100 kHz
+  while the PCA9685 and the OLED keep 400 kHz is untested.
+
+  M5Stack's driver for the sibling RCWL-9620 found the same limit on hardware
+  and goes lower (`m5stack/M5Unit-DISTANCE`, `src/unit/unit_RCWL9620.hpp`
+  lines 84–86, default changed in commit 9b6cb12): "At 100 kHz the sensor can
+  drive SDA too late for the next SCL rising edge, and reads fail
+  intermittently (more often through a PaHub). 400 kHz fails (NACK)", so it
+  defaults to 80 kHz. The PaHub is M5Stack's PCA9548A mux, the same part
+  family as the TCA9548A here. Our 5/5 at 100 kHz is too small a sample to
+  rule out that intermittency; 80 kHz has not been tried on this board.
+  The same file waits 150 ms between trigger and read, not 100 (line 195:
+  "Reading after 100 ms often fails with ESP_ERR_TIMEOUT (263), so 150 ms is
+  used"). The firmware waits 120 ms (`ULTRASONIC_CONVERSION_MS`).
 
 **Conversion wait.** Adafruit #4742 says to "wait a few milliseconds". Drivers
 for sibling RCWL I2C modules wait much longer: M5Stack's Unit Sonic library

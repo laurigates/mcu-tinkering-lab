@@ -14,34 +14,46 @@ license = {text = "MIT"}
 requires-python = ">=3.12,<3.13"
 
 dependencies = [
-    "numpy==2.4.4",
-    "pillow==12.2.0",
+    "numpy==2.5.4",
+    "pillow==13.0.0",
     "albumentations==2.0.8",
-    "click==8.3.3",
+    "click==8.5.0",
 ]
 
 [project.optional-dependencies]
 train = [
-    "torch==2.11.0",
-    "torchvision==0.26.0",
+    # torchvision pins torch exactly (0.28.0 -> torch==2.13.0); move both together.
+    "torch==2.13.0",
+    "torchvision==0.28.0",
 ]
 quantize = [
-    # B4 — pinned at slice time once the ESP-PPQ install path is exercised
-    "esp-ppq",
-    "onnx==1.17.0",
-    "onnxruntime==1.25.1",
+    # esp-ppq (Espressif's only .espdl quantizer, ADR-017) caps onnx<1.20,
+    # below the CVE fixes in onnx 1.21.0/1.22.0, so this extra takes the onnx
+    # esp-ppq allows instead of pinning one. It conflicts with `dev`, which
+    # pins the patched onnx; see [tool.uv] conflicts below.
+    "esp-ppq==1.3.14",
+    "onnxruntime==1.31.1",
 ]
 dev = [
-    "pytest==9.0.3",
+    "pytest==9.2.0",
     "pytest-cov==7.1.0",
     "ruff==0.15.12",
     "ty",
-    "onnx==1.17.0",
-    "onnxscript==0.7.0",
+    "onnx==1.22.0",
+    "onnxruntime==1.31.1",
+    "onnxscript==0.7.2",
 ]
 
 [project.scripts]
 melody-gen = "melody_train.gen:main"
+
+[tool.uv]
+# `dev` pins the patched onnx==1.22.0 and `quantize` needs esp-ppq's
+# onnx<1.20, so uv resolves the two extras separately. Install one or the
+# other: `uv sync --extra train --extra dev`, or
+# `uv sync --extra train --extra quantize`. Drop this once an esp-ppq release
+# allows onnx>=1.21.
+conflicts = [[{ extra = "dev" }, { extra = "quantize" }]]
 
 [tool.ruff]
 target-version = "py311"

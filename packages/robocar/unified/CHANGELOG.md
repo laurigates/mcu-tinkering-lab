@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.2.17](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.16...robocar-unified-v0.2.17) (2026-11-03)
+
+
+### Features
+
+* **mechanism:** animate the clash sweep and check between gate poses ([d0f9223](https://github.com/laurigates/mcu-tinkering-lab/commit/d0f92236de0424e9bde0f8c176e6e0cfb3c41992))
+* **mechanism:** write the clash sweep as AV1 video instead of a GIF ([6caee65](https://github.com/laurigates/mcu-tinkering-lab/commit/6caee653a94ad43930bcf10c546c9dbcaa4b2252))
+* **robocar-unified:** fit the TCA9548A clone on the carrier ([6a4dde3](https://github.com/laurigates/mcu-tinkering-lab/commit/6a4dde3f7e16eb1d0c4ed8bb7389ea1c5838fefd))
+
+
+### Documentation
+
+* **robocar-unified:** add clash-sweep animations for print/ and the other four entries ([7e26c32](https://github.com/laurigates/mcu-tinkering-lab/commit/7e26c32c3e7d2ce15266d4db11aad928d769e91d))
+* **robocar-unified:** add the workhorse pan-tilt clash-sweep animation ([4fe5b11](https://github.com/laurigates/mcu-tinkering-lab/commit/4fe5b1188a8669334d606f9e7c2908f9b04754e4))
+* **robocar-unified:** replace the print/ and teuvo-face sweep GIFs with AV1 video ([ece3486](https://github.com/laurigates/mcu-tinkering-lab/commit/ece34867e0117c354e40930b2905fc441b87582c))
+* **robocar-unified:** replace the snapfit and wildcard sweep GIFs with AV1 video ([423795b](https://github.com/laurigates/mcu-tinkering-lab/commit/423795ba76632b42ef118904e07782840cb1b570))
+* **robocar-unified:** replace the workhorse and gimbal sweep GIFs with AV1 video ([bbc6d7a](https://github.com/laurigates/mcu-tinkering-lab/commit/bbc6d7ad96838b1bea9570f213eeaaf0e93e92d7))
+
+## [0.2.16](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.15...robocar-unified-v0.2.16) (2026-11-01)
+
+
+### Bug Fixes
+
+* **deps:** update all non-major dependencies ([#892](https://github.com/laurigates/mcu-tinkering-lab/issues/892)) ([ea3870d](https://github.com/laurigates/mcu-tinkering-lab/commit/ea3870d9141b394d3f291504687e428c9a7aa21d))
+* **kicad:** enforce JLCPCB's silkscreen rules (1.0 mm text, 0.15 mm off pads) ([#877](https://github.com/laurigates/mcu-tinkering-lab/issues/877)) ([6ae892e](https://github.com/laurigates/mcu-tinkering-lab/commit/6ae892e647795a67e26f4c171969bd885b1b6e4c))
+
 ## [0.2.15](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.14...robocar-unified-v0.2.15) (2026-10-25)
 
 

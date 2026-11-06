@@ -12,8 +12,6 @@ on:
       - 'packages/audio/**'
       - 'packages/input-gaming/**'
       - 'packages/networking/wireguard-ha/**'
-      - 'packages/robocar/camera/**'
-      - 'packages/robocar/main/**'
       - 'packages/robocar/simulation/**'
       - 'packages/robocar/unified/main/motor_controller.*'
       - 'packages/robotics/**'
@@ -71,11 +69,11 @@ jobs:
                 HITS["3bb67ba2 — ESP32-S3 hardware families"]=1 ;;
               docs/decisions/ADR-018-*|docs/requirements/PRD-012-*|packages/robotics/balancebot/*)
                 HITS["c8675955 — RP2350 / XIAO RP2350 boards"]=1 ;;
-              docs/decisions/ADR-007-*|packages/components/i2c-protocol/*)
+              docs/decisions/ADR-007-*)
                 HITS["5601a768 — ESP32 peripherals (I2C, UART, I2S, GPIO)"]=1 ;;
               docs/requirements/PRD-006-*|packages/games/nfc-scavenger-hunt/*)
                 HITS["4831062f — ChameleonUltra RFID/NFC"]=1 ;;
-              packages/robocar/camera/*|packages/robocar/main/*|docs/reference/boards/ttgo-lora32-v2.md)
+              docs/reference/boards/ttgo-lora32-v2.md)
                 HITS["d2d63711 — ESP32 classic boards (CAM, Heltec, TTGO)"]=1 ;;
               docs/requirements/PRD-003-*|packages/robocar/simulation/*)
                 HITS["28c00388 — Python simulation & robotics math"]=1 ;;

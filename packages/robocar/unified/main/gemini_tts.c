@@ -21,7 +21,9 @@
 #include "gemini_http.h"
 #include "pin_config.h"
 #include "speech_queue.h"
+#include "tts_request.h"
 #include "voice_persona.h"
+#include "wifi_manager.h"
 
 static const char *TAG = "gemini_tts";
 
@@ -29,10 +31,7 @@ static const char *TAG = "gemini_tts";
 /* Constants                                                                   */
 /* -------------------------------------------------------------------------- */
 
-/** Speech-generation model. Distinct from the Robotics-ER planner model.
- *  Returns raw 24 kHz 16-bit mono PCM with NO WAV header, base64-encoded in
- *  candidates[0].content.parts[N].inlineData.data. */
-#define TTS_MODEL "gemini-3.1-flash-tts-preview"
+/* TTS_MODEL and the request shape live in tts_request.h (issue #844). */
 
 /** Streaming endpoint, not `:generateContent`.
  *
@@ -220,42 +219,13 @@ static esp_err_t http_event_handler(esp_http_client_event_t *evt)
 
 static char *build_request_json(const char *text)
 {
-    cJSON *root = cJSON_CreateObject();
-    if (!root) {
-        return NULL;
-    }
-
     const voice_persona_t *persona = voice_persona_get();
-
-    /* Delivery style is prompted, not parameterised — Gemini has no style/accent
-     * field, so the documented form is "<style directive>: <text to speak>".
-     * The directive is interpreted rather than read aloud (measured: a ~40-word
-     * directive, 12+ s if spoken, added 0.36 s of audio). */
-    cJSON *contents = cJSON_AddArrayToObject(root, "contents");
-    cJSON *content = cJSON_CreateObject();
-    cJSON *parts = cJSON_AddArrayToObject(content, "parts");
-    cJSON *part = cJSON_CreateObject();
-    char styled[SPEECH_TEXT_MAX + 256];
-    snprintf(styled, sizeof(styled), "%s: %s", persona->tts_style, text);
-    cJSON_AddStringToObject(part, "text", styled);
-    cJSON_AddItemToArray(parts, part);
-    cJSON_AddItemToArray(contents, content);
-
-    cJSON *gen_cfg = cJSON_AddObjectToObject(root, "generationConfig");
-    cJSON *modalities = cJSON_AddArrayToObject(gen_cfg, "responseModalities");
-    cJSON_AddItemToArray(modalities, cJSON_CreateString("AUDIO"));
-
-    cJSON *speech_cfg = cJSON_AddObjectToObject(gen_cfg, "speechConfig");
-    cJSON_AddStringToObject(speech_cfg, "languageCode", persona->language_code);
-    cJSON *voice_cfg = cJSON_AddObjectToObject(speech_cfg, "voiceConfig");
-    cJSON *prebuilt = cJSON_AddObjectToObject(voice_cfg, "prebuiltVoiceConfig");
     char voice[VOICE_PERSONA_VOICE_MAX];
     voice_persona_effective_voice(voice, sizeof(voice));
-    cJSON_AddStringToObject(prebuilt, "voiceName", voice);
-
-    char *json = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
-    return json;
+    /* The style travels in speechMetadata, never in the text: 3.8 reads the
+     * text as a verbatim transcript, so a "<style>: " prefix would be spoken.
+     * See tts_request.h. */
+    return tts_request_build(persona->tts_style, persona->language_code, voice, text);
 }
 
 /* File scope rather than a speak() local: the batch accumulator makes
@@ -268,6 +238,13 @@ static void speak(const char *text)
     const char *api_key = get_gemini_api_key();
     if (!api_key || api_key[0] == '\0') {
         ESP_LOGE(TAG, "API key unavailable — cannot speak");
+        return;
+    }
+    if (!wifi_is_connected()) {
+        /* Issue #846: the line is dropped rather than queued, as on a full
+         * queue; a sentence about the room is stale by the time a link
+         * returns. */
+        ESP_LOGW(TAG, "no WiFi link — not speaking: \"%s\"", text);
         return;
     }
 

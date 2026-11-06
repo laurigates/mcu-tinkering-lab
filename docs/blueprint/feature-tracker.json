@@ -9,6 +9,7 @@
     "docs/requirements/PRD-013-rapid-hardware-prototyping.md",
     "docs/requirements/PRD-014-teuvo-sponsored-upgrades.md",
     "docs/requirements/PRD-015-teuvo-for-other-owners.md",
+    "docs/requirements/PRD-016-build-cost-model.md",
     "docs/decisions/ADR-028-teuvo-connectivity-resilience.md"
   ],
   "last_synced_at": "2026-07-12T00:00:00Z",
@@ -313,7 +314,7 @@
       "id": "FR-038",
       "name": "Network services armed on link-up",
       "prd": "ADR-028",
-      "status": "planned",
+      "status": "active",
       "priority": "P0",
       "notes": "Non-blocking connect; OTA and rollback-confirm on first GOT_IP; MQTT only on home GOT_IP, stopped on disconnect; Improv re-arm; skip requests offline"
     },
@@ -321,7 +322,7 @@
       "id": "FR-039",
       "name": "Runtime Gemini credential in NVS",
       "prd": "ADR-028",
-      "status": "planned",
+      "status": "active",
       "priority": "P0",
       "notes": "gemini auth; fixes key dropped after Improv; 402/403 handling"
     },
@@ -353,15 +354,87 @@
       "id": "FR-043",
       "name": "TTS migration off gemini-3.1-flash-tts-preview",
       "prd": "ADR-028",
-      "status": "planned",
+      "status": "active",
       "priority": "P0",
       "notes": "Earliest shutdown 2026-11-17; probe gemini-3.8-flash-tts (Finnish; not Flash-Lite) for streaming and style prefix"
+    },
+    {
+      "id": "FR-044",
+      "name": "Robot needs from hardware.toml and the parts registry",
+      "prd": "PRD-016",
+      "status": "planned",
+      "priority": "P1",
+      "notes": "One list per robot; [[consumables]] for off-board parts"
+    },
+    {
+      "id": "FR-045",
+      "name": "Source records with tariff code and origin",
+      "prd": "PRD-016",
+      "status": "planned",
+      "priority": "P1",
+      "notes": "Reuses the registry buy field; currency, quote date, lead time"
+    },
+    {
+      "id": "FR-046",
+      "name": "Delivered-cost rules R1-R10 as tested functions",
+      "prd": "PRD-016",
+      "status": "planned",
+      "priority": "P0",
+      "notes": "EU flat duty, DHL fee, AliExpress per-code charge, JLCPCB VAT/shipping/coupons"
+    },
+    {
+      "id": "FR-047",
+      "name": "Parcel planner minimising cash",
+      "prd": "PRD-016",
+      "status": "planned",
+      "priority": "P1",
+      "notes": "Pack sizes, owned stock from one-page order history; consumed cost reported"
+    },
+    {
+      "id": "FR-048",
+      "name": "Cost per robot at N with labour",
+      "prd": "PRD-016",
+      "status": "planned",
+      "priority": "P1",
+      "notes": "Hours in docs/reference/build-times.toml, estimates replaced by measurements"
+    },
+    {
+      "id": "FR-049",
+      "name": "JLCPCB PCBA vs bare PCB plus hand assembly",
+      "prd": "PRD-016",
+      "status": "planned",
+      "priority": "P2",
+      "notes": "IOSS and DDP both priced"
+    },
+    {
+      "id": "FR-050",
+      "name": "Calibration fixtures against real orders",
+      "prd": "PRD-016",
+      "status": "planned",
+      "priority": "P0",
+      "notes": "Fails when |predicted - observed| > EUR 1; fitted vs held-out fixtures"
+    },
+    {
+      "id": "FR-051",
+      "name": "Plan table and CSV output",
+      "prd": "PRD-016",
+      "status": "planned",
+      "priority": "P2",
+      "notes": "tmp/quotes/plan-<date>.csv, one row per line"
+    },
+    {
+      "id": "FR-052",
+      "name": "Rule validity windows",
+      "prd": "PRD-016",
+      "status": "planned",
+      "priority": "P2",
+      "notes": "Warns outside R1's 2026-07-01..2028-07-01 and the VAT rate"
     }
   ],
   "summary": {
-    "total": 43,
+    "total": 52,
     "active": 13,
-    "planned": 30,
+    "planned": 39,
     "in_progress": 0,
     "blocked": 0
   }

@@ -5,6 +5,7 @@ name = "Adafruit PCA9685 PWM driver, socketed"
 source = "docs/reference/boards/adafruit-pca9685.md (Adafruit's Eagle board file); footprint pad n is the n-th pad of the Breakout_Sockets config (JP3.1-6, then JP6.10, JP6.7, JP6.4, JP6.1, JP5.10, JP5.7)"
 symbol = "Connector_Generic:Conn_01x12"
 footprint = "Breakout_Sockets:Adafruit_PCA9685_Socket"
+buy = "aliexpress:1000007373786"  # 2.54 mm 1x40 female strips, cut to length
 # Output enable is pulled low on the breakout, so the outputs stay enabled.
 no_connect = ["OE"]
 

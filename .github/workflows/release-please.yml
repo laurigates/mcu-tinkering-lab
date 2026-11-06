@@ -29,7 +29,7 @@ jobs:
       # Credentials are pushed by gitops for repos with release_please = true.
       - name: Generate GitHub App Token
         id: app-token
-        uses: actions/create-github-app-token@v3.2.0
+        uses: actions/create-github-app-token@v3.3.0
         with:
           app-id: ${{ vars.RELEASE_PLEASE_APP_ID }}
           private-key: ${{ secrets.RELEASE_PLEASE_PRIVATE_KEY }}

@@ -36,6 +36,7 @@ static EventGroupHandle_t s_wifi_event_group;
 static int s_retry_num = 0;
 static uint32_t s_backoff_ms = 0;
 static esp_timer_handle_t s_reconnect_timer;
+static bool s_started; /**< esp_wifi_start() has succeeded once. */
 
 static void reconnect_timer_cb(void *arg)
 {
@@ -86,8 +87,9 @@ static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_
             ESP_LOGI(TAG, "Retry %d/%d to connect to the AP", s_retry_num, WIFI_MAXIMUM_RETRY);
             schedule_reconnect(WIFI_FAST_RETRY_DELAY_MS);
         } else {
-            /* Unblock the initial wifi_connect() caller, but keep trying in the
-             * background — the fast retries are exhausted, not the device. */
+            /* Tell wifi_connect_failed() the fast retries are spent, but keep
+             * trying in the background — the retries are exhausted, not the
+             * device. */
             xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
             s_backoff_ms = (s_backoff_ms == 0)
                                ? WIFI_RETRY_INTERVAL_MS
@@ -149,27 +151,51 @@ esp_err_t wifi_init(void)
         s_reconnect_timer = NULL;
     }
 
-    ESP_ERROR_CHECK(esp_netif_init());
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
+    /* Logged, never ESP_ERROR_CHECKed (issue #846): a WiFi failure must cost
+     * the network, not the console and the reflex with it. */
+    esp_err_t err = esp_netif_init();
+    if (err == ESP_OK) {
+        err = esp_event_loop_create_default();
+    }
+    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) { /* INVALID_STATE: loop exists */
+        ESP_LOGE(TAG, "netif/event loop init failed (%s)", esp_err_to_name(err));
+        return err;
+    }
     esp_netif_create_default_wifi_sta();
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+    err = esp_wifi_init(&cfg);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "esp_wifi_init failed (%s)", esp_err_to_name(err));
+        return err;
+    }
 
     // Set country code for regulatory compliance (Finland)
     wifi_country_t country = {
         .cc = "FI", .schan = 1, .nchan = 13, .policy = WIFI_COUNTRY_POLICY_AUTO};
-    ESP_ERROR_CHECK(esp_wifi_set_country(&country));
+    err = esp_wifi_set_country(&country);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "esp_wifi_set_country failed (%s)", esp_err_to_name(err));
+    }
 
     // Set power save mode off for better connectivity
-    ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
+    err = esp_wifi_set_ps(WIFI_PS_NONE);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "esp_wifi_set_ps failed (%s)", esp_err_to_name(err));
+    }
 
     esp_event_handler_instance_t instance_any_id;
     esp_event_handler_instance_t instance_got_ip;
-    ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID,
-                                                        &event_handler, NULL, &instance_any_id));
-    ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP,
-                                                        &event_handler, NULL, &instance_got_ip));
+    err = esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL,
+                                              &instance_any_id);
+    if (err == ESP_OK) {
+        err = esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &event_handler,
+                                                  NULL, &instance_got_ip);
+    }
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "WiFi event handler registration failed (%s)", esp_err_to_name(err));
+        return err;
+    }
 
     ESP_LOGI(TAG, "WiFi initialized successfully");
     return ESP_OK;
@@ -177,6 +203,9 @@ esp_err_t wifi_init(void)
 
 esp_err_t wifi_connect(const char *ssid, const char *password)
 {
+    if (!s_wifi_event_group || !ssid) {
+        return ESP_ERR_INVALID_STATE;
+    }
     ESP_LOGI(TAG, "Connecting to WiFi SSID: %s", ssid);
 
     wifi_config_t wifi_config = {
@@ -190,40 +219,58 @@ esp_err_t wifi_connect(const char *ssid, const char *password)
     };
 
     strncpy((char *)wifi_config.sta.ssid, ssid, sizeof(wifi_config.sta.ssid) - 1);
-    strncpy((char *)wifi_config.sta.password, password, sizeof(wifi_config.sta.password) - 1);
+    strncpy((char *)wifi_config.sta.password, password ? password : "",
+            sizeof(wifi_config.sta.password) - 1);
 
-    /* Start from a clean slate. Without this a second wifi_connect() — the
-     * Improv provisioning path retrying with new credentials — would return
-     * instantly on the WIFI_FAIL_BIT latched by the previous attempt, before
-     * the new SSID had any chance to associate. */
+    /* Start from a clean slate, so wifi_connect_failed() describes this
+     * attempt and not one latched by the previous network. */
     xEventGroupClearBits(s_wifi_event_group, WIFI_CONNECTED_BIT | WIFI_FAIL_BIT);
     s_retry_num = 0;
     s_backoff_ms = 0;
-
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
-    ESP_ERROR_CHECK(esp_wifi_start());
-
-    ESP_LOGI(TAG, "wifi_init_sta finished.");
-
-    /* Waiting until either the connection is established (WIFI_CONNECTED_BIT) or connection failed
-     * for the maximum number of re-tries (WIFI_FAIL_BIT). The bits are set by event_handler() (see
-     * above) */
-    EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group, WIFI_CONNECTED_BIT | WIFI_FAIL_BIT,
-                                           pdFALSE, pdFALSE, portMAX_DELAY);
-
-    /* xEventGroupWaitBits() returns the bits before the call returned, hence we can test which
-     * event actually happened. */
-    if (bits & WIFI_CONNECTED_BIT) {
-        ESP_LOGI(TAG, "Connected to ap SSID:%s", ssid);
-        return ESP_OK;
-    } else if (bits & WIFI_FAIL_BIT) {
-        ESP_LOGI(TAG, "Failed to connect to SSID:%s", ssid);
-        return ESP_FAIL;
-    } else {
-        ESP_LOGE(TAG, "UNEXPECTED EVENT");
-        return ESP_FAIL;
+    if (s_reconnect_timer) {
+        esp_timer_stop(s_reconnect_timer);
     }
+
+    /* Logged, not ESP_ERROR_CHECKed: this also runs from the Improv path,
+     * where an abort would reboot a board a person is provisioning. */
+    esp_err_t err = ESP_OK;
+    if (s_started) {
+        /* A new network replaces the current one: leave it first, since the
+         * driver refuses a STA config change while associating. */
+        esp_wifi_disconnect();
+    } else {
+        err = esp_wifi_set_mode(WIFI_MODE_STA);
+    }
+    if (err == ESP_OK) {
+        err = esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
+    }
+    if (err == ESP_OK && !s_started) {
+        err = esp_wifi_start(); /* WIFI_EVENT_STA_START then connects */
+        s_started = (err == ESP_OK);
+    } else if (err == ESP_OK) {
+        /* The disconnect above schedules a retry from its event, so a connect
+         * refused while the driver is still leaving the old AP is retried a
+         * second later rather than failing the attempt. */
+        const esp_err_t conn = esp_wifi_connect();
+        if (conn != ESP_OK) {
+            ESP_LOGW(TAG, "esp_wifi_connect deferred (%s) — retrying from the event",
+                     esp_err_to_name(conn));
+        }
+    }
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Could not start joining '%s' (%s)", ssid, esp_err_to_name(err));
+        xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
+        return err;
+    }
+    return ESP_OK;
+}
+
+bool wifi_connect_failed(void)
+{
+    if (!s_wifi_event_group) {
+        return false;
+    }
+    return (xEventGroupGetBits(s_wifi_event_group) & WIFI_FAIL_BIT) != 0;
 }
 
 bool wifi_is_connected(void)
@@ -251,6 +298,7 @@ void wifi_manager_deinit(void)
     }
     esp_wifi_stop();
     esp_wifi_deinit();
+    s_started = false;
     if (s_wifi_event_group) {
         vEventGroupDelete(s_wifi_event_group);
         s_wifi_event_group = NULL;

@@ -3,8 +3,12 @@
 For each piece in <project>/hardware/enclosure/enclosure.toml, write the tray
 and the box (base and lid) as STEP, STL and 3MF under
 <project>/hardware/enclosure/output/, check that neither touches the board or
-a part, and print the sizes and volumes a 3D-printing quote is priced on.
-Exits non-zero on a clash or a missing part height.
+a part, that the board can be put in (`assemble`: a lift or a tilted tuck) and
+its screws driven, that the lid goes on, and print the sizes and volumes a 3D-printing quote is priced on.
+Exits non-zero on a clash, a board that cannot go in, an unreachable board
+screw, or a missing part height. Each assembly motion is written to
+<piece>-{tray-board,box-board,box-lid}.json, with the meshes it moved, for
+`python -m enclosure.sequence` to animate.
 """
 
 from __future__ import annotations
@@ -15,10 +19,10 @@ import sys
 import tomllib
 from pathlib import Path
 
-from build123d import Align, Box, Mesher, Pos, export_step, export_stl, import_step
+from build123d import Mesher, export_step, export_stl, import_step
 from kicad.paths import REPO_ROOT
 
-from . import board, case, thickness
+from . import assemble, board, case, thickness
 
 # Density, g/cm³, for a mass estimate only; quotes are priced by the fab.
 DENSITY = {"PLA": 1.24, "resin": 1.15, "PA12": 1.01}
@@ -34,6 +38,42 @@ def write(part, stem: Path) -> None:
     m.write(f"{stem}.3mf")
 
 
+def insertion(moving, fixed, stem: Path) -> dict:
+    """Search for the motion that takes `moving` out of `fixed`; write it, in
+    assembly order, to <stem>.json and both meshes beside it as STL."""
+    mov, fix = assemble.mesh_of(moving), assemble.mesh_of(fixed)
+    col = assemble.Collider(fix, mov)
+    strategy, p = assemble.removal(col)
+    path = assemble.shortcut(col, assemble.simplify(p.path)) if p.found else []
+    clash, jam = p.clash_points, list(p.deepest)
+    if not p.found and clash is None:
+        # Show where it jams: lift from the furthest pose until it first clashes.
+        q = list(p.deepest)
+        for _ in range(400):
+            q[2] += assemble.PITCH
+            pts = col.clashing(tuple(q), "fine")
+            if len(pts):
+                clash, jam = pts, list(q)
+                break
+    mov.export(f"{stem}-moving.stl")
+    fix.export(f"{stem}-fixed.stl")
+    out = {
+        "found": p.found,
+        "strategy": strategy if p.found else None,
+        "nodes": p.nodes,
+        "note": p.note,
+        "pivot": [round(v, 4) for v in col.pivot.tolist()],
+        # Assembly order: from clear of the case down to seated.
+        "path": [[round(v, 4) for v in q] for q in reversed(path)],
+        "deepest": [round(v, 4) for v in p.deepest],
+        # Where the part is drawn when it jams: the clash points belong here.
+        "jam": [round(v, 4) for v in jam],
+        "clash_points": [] if clash is None else clash[:2000].round(3).tolist(),
+    }
+    Path(f"{stem}.json").write_text(json.dumps(out) + "\n")
+    return out
+
+
 def generate(project: Path, check: bool = True) -> list[dict]:
     out = project / "hardware" / "enclosure" / "output"
     out.mkdir(parents=True, exist_ok=True)
@@ -47,9 +87,7 @@ def generate(project: Path, check: bool = True) -> list[dict]:
     report = []
     for piece in pieces:
         f = case.Frame(piece, params)
-        region_box = Pos(f.off, f.off, -50) * Box(
-            piece.region.width, piece.region.height, 200, align=(Align.MIN,) * 3
-        )
+        region_box = case.piece_clip(f, [q.region for q in pieces])
         keep = case.keepout(f, board_step) if check else None
         tray = case.tray(f)
         base, lid = case.box(f)
@@ -57,6 +95,16 @@ def generate(project: Path, check: bool = True) -> list[dict]:
             "tray": case.interference(tray, keep, region_box),
             "box-base": case.interference(base, keep, region_box),
             "box-lid": case.interference(lid, keep, region_box),
+        }
+        fits = {}
+        if keep is not None:
+            pcb = keep & region_box  # this piece's board, parts and overhangs
+            fits["tray"] = insertion(pcb, tray, out / f"{piece.name}-tray-board")
+            fits["box-base"] = insertion(pcb, base, out / f"{piece.name}-box-board")
+            fits["box-lid"] = insertion(lid, base + pcb, out / f"{piece.name}-box-lid")
+        screws = {
+            "tray": case.blocked_screws(f, tray),
+            "box-base": case.blocked_screws(f, base),
         }
         write(tray, out / f"{piece.name}-tray")
         write(base, out / f"{piece.name}-box-base")
@@ -95,6 +143,18 @@ def generate(project: Path, check: bool = True) -> list[dict]:
                         for k, v in walls.items()
                         if k.startswith(style)
                     },
+                    "insertion": (
+                        {
+                            k: v["strategy"] if v["found"] else f"BLOCKED ({v['note']})"
+                            for k, v in fits.items()
+                            if k.startswith(style)
+                        }
+                        if check
+                        else {style: "not checked (--no-check)"}
+                    ),
+                    "blocked_screws": sorted(
+                        {r for k, v in screws.items() if k.startswith(style) for r in v}
+                    ),
                     "thinnest_at": {
                         k: v.where for k, v in walls.items() if k.startswith(style)
                     },
@@ -116,7 +176,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     ap.add_argument("projects", nargs="+", type=Path)
     ap.add_argument(
-        "--no-check", action="store_true", help="skip the interference check"
+        "--no-check",
+        action="store_true",
+        help="skip the board-dependent checks: interference and assembly",
     )
     args = ap.parse_args(argv)
     bad = 0
@@ -135,8 +197,17 @@ def main(argv: list[str] | None = None) -> int:
                 for k, v in r["thinnest_wall_mm"].items()
                 if v < case.MIN_WALL - WALL_TOLERANCE
             }
+            stuck = {k: v for k, v in r["insertion"].items() if v.startswith("BLOCKED")}
+            # A search that ran out of poses has not shown the part is blocked.
+            undecided = {k: v for k, v in stuck.items() if "stopped at" in v}
             flag = "OK"
-            if clash >= 0.01:
+            if undecided:
+                flag = f"ASSEMBLY UNDECIDED (raise MAX_NODES?) {undecided}"
+            elif stuck:
+                flag = f"CANNOT ASSEMBLE {stuck}"
+            elif r["blocked_screws"]:
+                flag = f"NO SCREWDRIVER PATH to {r['blocked_screws']}"
+            elif clash >= 0.01:
                 flag = f"CLASH {r['clash_mm3']}"
             elif thin:
                 flag = f"THIN {thin} mm at {[r['thinnest_at'][k] for k in thin]}"
@@ -146,7 +217,9 @@ def main(argv: list[str] | None = None) -> int:
                 f"{r['volume_cm3']} cm³, standoff {r['standoff_mm']}, "
                 f"headroom {r['headroom_mm']}, tallest {r['tallest']}; {flag}"
             )
-            bad += clash >= 0.01 or bool(thin)
+            bad += (
+                clash >= 0.01 or bool(thin) or bool(stuck) or bool(r["blocked_screws"])
+            )
     return 1 if bad else 0
 
 

@@ -4,6 +4,7 @@ name = "Seeed XIAO ESP32-S3, socketed"
 source = "Seeed-Studio/OSHW-XIAO-Series @ cc7f3bb (MIT), footprint XIAO-ESP32-S3-DIP and symbol XIAO-ESP32-S3-SMD (Seeed ships no S3 DIP symbol) cut to their 14 header pads by python3 -m kicad.derive_xiao"
 symbol = "Seeed_XIAO:XIAO-ESP32-S3-Socket"
 footprint = "Seeed_XIAO:XIAO-ESP32-S3-Socket"
+buy = "aliexpress:1000007373786"  # 2.54 mm 1x40 female strips, cut to length
 # Symbol pin numbers follow the board page's Side/Pos, counter-clockwise like a
 # DIP: L pos n is pin n, R pos n is pin 2N+1-n (N pads per side). An unused GPIO
 # pad is a no-connect without being listed (a spare I/O); a power pad (5V, GND,

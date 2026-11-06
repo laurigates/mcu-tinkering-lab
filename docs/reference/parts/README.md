@@ -22,6 +22,7 @@ symbol      = "Lib:Name"           # required; vendored under tools/kicad/lib/
 footprint   = "Lib:Name"           # required; vendored
 value       = "..."                # optional default Value
 lcsc        = "C123"               # optional default LCSC (JLCPCB) number
+buy         = "aliexpress:123"     # optional default hand-assembly source (below)
 no_connect  = ["FAULT"]            # optional: pin names allowed to stay unconnected
 pin_numbers = "board-dip-ccw"      # optional; replaces [pins] (MCU sockets)
 
@@ -35,8 +36,24 @@ height    = "low"                  # "low" | "raised" | "tall"; default "low"
 body      = [x0, y0, x1, y1]       # outline in holes from pin 1; default: F.CrtYd box
 ```
 
-A `hardware.toml` instance can override `value` and `lcsc`. Without a `value`
-anywhere, the instance's `name` is used.
+A `hardware.toml` instance can override `value`, `lcsc` and `buy`. Without a
+`value` anywhere, the instance's `name` is used.
+
+## Where a part comes from
+
+`lcsc` and `buy` are two separate facts. `lcsc` says JLCPCB can place the
+part. `buy` says where it is bought or held for hand assembly:
+`aliexpress:<listing id>`, `lcsc:C<n>` (loose parts from LCSC) or
+`owned:<what>`. For a socketed module, `buy` names what is soldered to the
+board (the headers or connector), not the module fitted later. Put a value- or
+variant-specific source (a resistor's value, a capacitor's rating) on the
+instance, with the variant in a comment.
+
+Every part in a carrier's BOM needs at least one of the two:
+`PYTHONPATH=tools python3 -m kicad.sourcing` (`just kicad::sourcing`, run by
+`carrier-check.yml`) fails on a part with neither, and lists the parts with only
+`lcsc`, which a hand-built board must leave to JLCPCB or an LCSC order.
+`.claude/rules/part-sourcing.md` says how to choose a part with a source.
 
 Every LCSC number, here or on an instance, needs a checked JLCPCB placement
 rotation for its footprint in

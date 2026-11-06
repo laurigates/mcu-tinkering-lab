@@ -4,6 +4,7 @@ name = "Battery input, XT30PW-M"
 source = "KiCad 10.0.6 footprint; its silkscreen prints - beside pad 1 and + beside pad 2"
 symbol = "Connector_Generic:Conn_01x02"
 footprint = "Connector_AMASS:AMASS_XT30PW-M_1x02_P2.50mm_Horizontal"
+buy = "aliexpress:1005012170140774"  # XT30PW-M horizontal
 
 # Pad 1 is "-" (the carrier-pcb skill, trap 3). tools/kicad/registry.py
 # checks this against the footprint's own + and - text.

@@ -64,12 +64,11 @@ That's it! All dependencies are now installed in `.venv/`.
 ### Communication Bridge
 - **WebSocket Interface**: Real-time communication with ESP32 via WebSocket protocol
 - **Serial Connection**: Direct UART communication with ESP32 hardware
-- **I2C Protocol Simulation**: Exact replication of inter-board communication protocol
+- **Message Framing**: Type byte + payload + CRC8 framing (inherited from the retired dual-ESP32 protocol)
 - **Bi-directional Data**: Motor commands, sensor data, and status information
 
 ### Hardware-in-the-Loop Support
 - **Real ESP32 Integration**: Connect actual ESP32 hardware to virtual environment
-- **Protocol Compatibility**: Matches exact I2C message format used in hardware
 - **Timing Accuracy**: Microsecond-precision timing for real-time control
 
 ### ESP32 Feature Simulation
@@ -415,62 +414,13 @@ curl -i -N -H "Connection: Upgrade" -H "Upgrade: websocket" -H "Sec-WebSocket-Ke
 - Limit trail length: reduce `trail_length` in visualizer
 - Clear visualization markers periodically
 
-## Integration with ESP32 Project
+## Relation to the Firmware
 
-### File Structure
-```
-robocar/
-├── simulation/           # This simulation environment
-├── esp32-cam-idf/       # ESP32-CAM firmware
-├── idf-robocar/         # Main controller firmware
-└── docs/                # Documentation
-```
-
-### Protocol Compatibility
-The simulation uses the exact same I2C protocol as the hardware:
-
-```c
-// ESP32 firmware (C)
-typedef enum {
-    MSG_MOVE = 0x01,
-    MSG_SOUND = 0x02,
-    MSG_SERVO = 0x03,
-    // ... matches Python enum
-} message_type_t;
-```
-
-```python
-# Simulation (Python)
-class MessageType(Enum):
-    MOVE = 0x01
-    SOUND = 0x02
-    SERVO = 0x03
-    # ... same values
-```
-
-### Build Integration
-Add simulation targets to main Makefile:
-
-```makefile
-# Simulation targets with uv
-sim-start:
-	cd simulation && uv run python src/main.py
-
-sim-test:
-	cd simulation && uv run pytest -v
-
-sim-validate:
-	cd simulation && uv run python src/main.py --serial $(SERIAL_PORT)
-
-sim-setup:
-	cd simulation && python setup_uv.py
-
-sim-lint:
-	cd simulation && uv run ruff check . && uv run ruff format .
-
-sim-type-check:
-	cd simulation && uv run mypy .
-```
+The firmware is [`robocar-unified`](../unified/) (XIAO ESP32-S3 Sense, single
+board). The simulation's serial framing (`MessageType` + `I2CMessage` in
+`src/communication_bridge.py`) was inherited from the retired dual-ESP32 robocar's
+board-to-board I2C protocol; no current firmware speaks it. Run the simulation
+from the repo root with `just sim::<recipe>` (`just --list sim`).
 
 ## Contributing
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.5](https://github.com/laurigates/mcu-tinkering-lab/compare/switch-usb-proxy-v0.1.4...switch-usb-proxy-v0.1.5) (2026-11-01)
+
+
+### Miscellaneous
+
+* **deps:** refresh ESP-IDF dependencies.lock files ([#921](https://github.com/laurigates/mcu-tinkering-lab/issues/921)) ([e5d8d43](https://github.com/laurigates/mcu-tinkering-lab/commit/e5d8d43cf01725a19df184ec6dd222cf55286c7b))
+
 ## [0.1.4](https://github.com/laurigates/mcu-tinkering-lab/compare/switch-usb-proxy-v0.1.3...switch-usb-proxy-v0.1.4) (2026-09-13)
 
 

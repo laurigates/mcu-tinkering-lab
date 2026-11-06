@@ -69,7 +69,7 @@ just <module>::flash          # flash from the host (PORT=/dev/... overrides det
 just <module>::monitor        # serial monitor
 just <module>::menuconfig     # containerized menuconfig
 
-just build-all                # robocar main + camera only
+just build-all                # robocar-unified only
 just clean-all                # clean every project build
 
 just lint                     # cppcheck + ruff
@@ -150,8 +150,8 @@ The scope is the project's `just` module name (`robocar-unified`,
 `telegram`, `thinkpack-brainbox`) or an area such as `ci` or `docs`.
 
 ```
-feat(robocar-main): add WiFi reconnection logic
-fix(robocar-camera): fix memory leak in image capture
+feat(robocar-unified): add WiFi reconnection logic
+fix(telegram): fix memory leak in image capture
 feat(i2c)!: switch the I2C protocol checksum to CRC8
 
 BREAKING CHANGE: frames now carry CRC8 instead of CRC16.
