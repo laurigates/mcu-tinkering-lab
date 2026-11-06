@@ -134,6 +134,7 @@ static void publish(uint32_t tick, bool imu_ok, float pitch, float gyro, float l
         snapshot.lqr_K[i] = lqr_K[i];
     }
     snapshot.pos_m = wheel_pos_steps / steps_per_m;
+    snapshot.imu_mount = (uint8_t)params.imu_mount;
     __compiler_memory_barrier();
     snapshot.seq++;  // even: stable
 }
@@ -287,6 +288,16 @@ static void handle_command(const balance_cmd_t *cmd)
             }
             params.ctrl_mode = (uint32_t)ctrl_mode;
             break;
+        case CMD_SET_IMU_MOUNT:
+            // Changing the axes mid-balance would swing the pitch 180 degrees;
+            // core 0 checks first and reports, this is the last line.
+            if (state != BAL_STATE_RUN &&
+                (cmd->imu_mount == IMU_MOUNT_UP || cmd->imu_mount == IMU_MOUNT_DOWN) &&
+                cmd->imu_mount != params.imu_mount) {
+                params.imu_mount = cmd->imu_mount;
+                imu_filter_reset(&filter);  // snap to the new axes, don't converge
+            }
+            break;
         case CMD_OPEN_LOOP_RATE:
             if (state == BAL_STATE_IDLE && cmd->param_id < STEPPER_COUNT) {
                 open_loop_sps[cmd->param_id] = cmd->value;
@@ -355,10 +366,13 @@ void balance_control_core1_main(void)
         float pitch = snapshot.pitch_deg;
         float gyro_rate = 0.0f;
         if (imu_ok) {
-            // Mounting: X forward, Z up; pitch rotates about Y. The filter
-            // runs in sensor convention; IMU_PITCH_SIGN maps it to "positive
-            // = falling forward" once, here.
-            float raw = imu_filter_update(&filter, s.accel_g[0], s.accel_g[2], s.gyro_dps[1], dt);
+            // Pitch rotates about Y. imu_mount_accel() maps the sensor's X/Z
+            // to body forward/up (component side down = turned 180 degrees
+            // about Y, so X and Z negate; gyro Y keeps its sign). The filter
+            // runs in that body convention; IMU_PITCH_SIGN maps it to
+            // "positive = falling forward" once, here.
+            imu_body_accel_t a = imu_mount_accel(params.imu_mount, s.accel_g[0], s.accel_g[2]);
+            float raw = imu_filter_update(&filter, a.forward_g, a.up_g, s.gyro_dps[1], dt);
             pitch = IMU_PITCH_SIGN * raw;
             gyro_rate = IMU_PITCH_SIGN * s.gyro_dps[1];
         }

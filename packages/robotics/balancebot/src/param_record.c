@@ -6,9 +6,11 @@
 #include "config.h"
 #include "crc32.h"
 
-_Static_assert(sizeof(balance_params_t) == 16u * 4u, "balance_params_t v2 layout changed");
+_Static_assert(sizeof(balance_params_t) == 17u * 4u, "balance_params_t v3 layout changed");
 _Static_assert(offsetof(balance_params_t, ctrl_mode) == PARAM_V1_FLOATS * 4u,
                "the v1 fields must stay a prefix of balance_params_t");
+_Static_assert(offsetof(balance_params_t, imu_mount) == PARAM_V2_FIELDS * 4u,
+               "the v2 fields must stay a prefix of balance_params_t");
 
 static uint32_t rd32(const uint8_t *p)
 {
@@ -35,11 +37,12 @@ void param_defaults(balance_params_t *out)
     out->q_x = DEFAULT_Q_X;
     out->q_dx = DEFAULT_Q_DX;
     out->r = DEFAULT_R;
+    out->imu_mount = IMU_MOUNT_UP;
 }
 
 size_t param_record_encode(const balance_params_t *p, uint8_t *buf, size_t cap)
 {
-    if (cap < PARAM_V2_SIZE) {
+    if (cap < PARAM_V3_SIZE) {
         return 0;
     }
     const uint32_t magic = PARAM_MAGIC;
@@ -47,9 +50,9 @@ size_t param_record_encode(const balance_params_t *p, uint8_t *buf, size_t cap)
     memcpy(buf, &magic, 4);
     memcpy(buf + 4, &version, 4);
     memcpy(buf + 8, p, sizeof *p);
-    const uint32_t crc = crc32_calc(buf, PARAM_V2_SIZE - 4u);
-    memcpy(buf + PARAM_V2_SIZE - 4u, &crc, 4);
-    return PARAM_V2_SIZE;
+    const uint32_t crc = crc32_calc(buf, PARAM_V3_SIZE - 4u);
+    memcpy(buf + PARAM_V3_SIZE - 4u, &crc, 4);
+    return PARAM_V3_SIZE;
 }
 
 static bool positive(float v)
@@ -58,8 +61,9 @@ static bool positive(float v)
 }
 
 // Replace any LQR-side field the solver or the unit conversion would reject
-// with its default. A ctrl_mode outside the enum reads as PID (fail closed).
-static void sanitize_lqr_fields(balance_params_t *p)
+// with its default. A ctrl_mode outside the enum reads as PID (fail closed),
+// an imu_mount outside the enum as component side up.
+static void sanitize_fields(balance_params_t *p)
 {
     balance_params_t d;
     param_defaults(&d);
@@ -85,6 +89,9 @@ static void sanitize_lqr_fields(balance_params_t *p)
     if (!positive(p->r)) {
         p->r = d.r;
     }
+    if (p->imu_mount != IMU_MOUNT_UP && p->imu_mount != IMU_MOUNT_DOWN) {
+        p->imu_mount = d.imu_mount;
+    }
 }
 
 static bool crc_ok(const uint8_t *buf, size_t size)
@@ -103,15 +110,24 @@ bool param_record_decode(const uint8_t *buf, size_t len, balance_params_t *out, 
         if (len < PARAM_V1_SIZE || !crc_ok(buf, PARAM_V1_SIZE)) {
             return false;
         }
-        // v1 -> v2: keep the saved PID-side fields, default everything new.
+        // v1 -> v3: keep the saved PID-side fields, default everything new.
         param_defaults(&p);
         memcpy(&p, buf + 8, PARAM_V1_FLOATS * 4u);
     } else if (ver == 2u) {
         if (len < PARAM_V2_SIZE || !crc_ok(buf, PARAM_V2_SIZE)) {
             return false;
         }
+        // v2 -> v3: keep the saved PID and LQR fields; the IMU mounting
+        // defaults to component side up, which is what v2 firmware assumed.
+        param_defaults(&p);
+        memcpy(&p, buf + 8, PARAM_V2_FIELDS * 4u);
+        sanitize_fields(&p);
+    } else if (ver == 3u) {
+        if (len < PARAM_V3_SIZE || !crc_ok(buf, PARAM_V3_SIZE)) {
+            return false;
+        }
         memcpy(&p, buf + 8, sizeof p);
-        sanitize_lqr_fields(&p);
+        sanitize_fields(&p);
     } else {
         return false;
     }

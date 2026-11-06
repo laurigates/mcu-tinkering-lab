@@ -143,6 +143,9 @@ Set per driver, motors connected, before first `arm`:
 - Rigidly mounted (no foam) at **axle height**, near the wheel axis.
 - **X axis pointing forward**, Z up — the filter computes pitch as
   `atan2(accel_x, accel_z)` and integrates gyro Y.
+- Fitted **component side down** (turned 180° about the axle, as the
+  8d18cd8d carrier needs), X and Z both read inverted: run `mount down`
+  then `save`. See the README's IMU mounting section.
 - If the robot drives *into* the fall on first arm, flip `IMU_PITCH_SIGN`
   in `src/config.h` (or rotate the sensor 180°).
 

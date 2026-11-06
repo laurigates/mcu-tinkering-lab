@@ -1,6 +1,7 @@
 // Host unit tests for imu_filter.c (no Pico SDK).
 #include <assert.h>
 #include <math.h>
+#include <stdint.h>
 #include <stdio.h>
 
 #include "imu_filter.h"
@@ -60,6 +61,79 @@ static void test_reset(void)
     assert(fabsf(pitch) < 1e-4f);  // snapped to accel again
 }
 
+// What the accelerometer's X and Z read for a body tilt `theta_rad` (forward
+// positive), with the sensor turned `mount_rad` about Y relative to the body.
+// Built from the rotation, not from imu_mount_accel(), so the test cannot agree
+// with itself: the body reads (sin, cos) on (forward, up); a sensor turned by
+// phi about Y reads x' = x cos(phi) + z sin(phi), z' = -x sin(phi) + z cos(phi).
+typedef struct {
+    float x;
+    float z;
+} accel_xz_t;
+
+static accel_xz_t sensor_accel(double theta_rad, double mount_rad)
+{
+    const double fwd = sin(theta_rad);
+    const double up = cos(theta_rad);
+    return (accel_xz_t){
+        .x = (float)(fwd * cos(mount_rad) + up * sin(mount_rad)),
+        .z = (float)(-fwd * sin(mount_rad) + up * cos(mount_rad)),
+    };
+}
+
+static const double PI = 3.14159265358979323846;
+static const double DEG = 3.14159265358979323846 / 180.0;
+
+static void test_mount_up_is_identity(void)
+{
+    imu_body_accel_t b = imu_mount_accel(IMU_MOUNT_UP, 0.25f, 0.9f);
+    assert(b.forward_g == 0.25f && b.up_g == 0.9f);
+    // An unknown value maps as component side up.
+    b = imu_mount_accel(7u, 0.25f, 0.9f);
+    assert(b.forward_g == 0.25f && b.up_g == 0.9f);
+}
+
+// Why IMU_PITCH_SIGN cannot absorb the flip: unmapped, a level board fitted
+// component side down reads about 180 degrees, not 0.
+static void test_flipped_unmapped_reads_180(void)
+{
+    accel_xz_t a = sensor_accel(0.0, PI);
+    assert(fabsf(fabsf(imu_filter_accel_pitch_deg(a.x, a.z)) - 180.0f) < 1e-3f);
+}
+
+// The same physical motion seen by a board fitted component side up and one
+// fitted component side down (turned 180 degrees about Y) gives the same
+// pitch once each is mapped with its own mounting, tick for tick. Gyro Y is
+// the rotation axis, so both boards read the same rate.
+static void test_flipped_mount_matches_normal(void)
+{
+    imu_filter_t up;
+    imu_filter_t down;
+    imu_filter_init(&up, 0.98f);
+    imu_filter_init(&down, 0.98f);
+    const float dt = 0.002f;
+    double theta_deg = 3.0;  // start leaning forward
+    for (int i = 0; i < 1000; i++) {
+        // Swing forward then back through level: positive, then negative.
+        const double rate_dps = (i < 500) ? 20.0 : -40.0;
+        theta_deg += rate_dps * dt;
+        accel_xz_t au = sensor_accel(theta_deg * DEG, 0.0);
+        accel_xz_t ad = sensor_accel(theta_deg * DEG, PI);
+        imu_body_accel_t bu = imu_mount_accel(IMU_MOUNT_UP, au.x, au.z);
+        imu_body_accel_t bd = imu_mount_accel(IMU_MOUNT_DOWN, ad.x, ad.z);
+        float pu = imu_filter_update(&up, bu.forward_g, bu.up_g, (float)rate_dps, dt);
+        float pd = imu_filter_update(&down, bd.forward_g, bd.up_g, (float)rate_dps, dt);
+        assert(fabsf(pu - pd) < 1e-3f);
+        if (i == 0) {
+            assert(fabsf(pd - (float)theta_deg) < 1e-3f);  // snaps to the true tilt
+        }
+    }
+    // 1 s at +20 deg/s, then 1 s at -40 deg/s: ended leaning back at
+    // 3 + 20 - 40 = -17 degrees, and the flipped board reads it with the
+    // forward-positive sign.
+    assert(fabsf(down.pitch_deg - (-17.0f)) < 0.05f);
+}
+
 int main(void)
 {
     test_accel_pitch();
@@ -67,6 +141,9 @@ int main(void)
     test_gyro_integration();
     test_accel_correction_pulls_drift();
     test_reset();
+    test_mount_up_is_identity();
+    test_flipped_unmapped_reads_180();
+    test_flipped_mount_matches_normal();
     printf("test_imu_filter: all tests passed\n");
     return 0;
 }

@@ -1,8 +1,9 @@
-// Host unit tests for param_record.c: v2 round trip and the v1 -> v2
-// migration (no Pico SDK). The v1 blob is built byte by byte from the v1
-// layout (magic, version 1, seven floats, CRC32 over the first 36 bytes), not
-// from today's struct, so a change to balance_params_t cannot make the test
-// agree with itself.
+// Host unit tests for param_record.c: v3 round trip and the v1 -> v3 and
+// v2 -> v3 migrations (no Pico SDK). The v1 and v2 blobs are built byte by
+// byte from their own layouts (v1: magic, version 1, seven floats, CRC32 over
+// the first 36 bytes; v2: magic, version 2, sixteen four-byte fields, CRC32
+// over the first 72 bytes), not from today's struct, so a change to
+// balance_params_t cannot make the test agree with itself.
 #include <assert.h>
 #include <math.h>
 #include <stdint.h>
@@ -38,10 +39,29 @@ static size_t build_v1(uint8_t *buf)
     return 40;
 }
 
+// A saved v2 record: PID gains, LQR mode and model, all unlike the defaults.
+// Field 7 is ctrl_mode (uint32), the rest are floats.
+static const float V2_FLOATS[16] = {41.5f, 0.25f, 2.75f,   0.006f, 0.0007f, 0.97f, 3500.0f, 0.0f,
+                                    0.17f, 0.1f,  3200.0f, 300.0f, 2.0f,    16.0f, 3.0f,    0.08f};
+
+static size_t build_v2(uint8_t *buf)
+{
+    memset(buf, 0xFF, 256);
+    put32(buf, 0, 0x42414C42u);  // "BALB"
+    put32(buf, 4, 2u);
+    for (int i = 0; i < 16; i++) {
+        putf(buf, 8u + 4u * (size_t)i, V2_FLOATS[i]);
+    }
+    put32(buf, 8u + 4u * 7u, 1u);  // ctrl_mode = LQR
+    put32(buf, 72, crc32_calc(buf, 72));
+    return 76;
+}
+
 static void test_layout_sizes(void)
 {
     assert(PARAM_V1_SIZE == 40u);
     assert(PARAM_V2_SIZE == 4u + 4u + 64u + 4u);
+    assert(PARAM_V3_SIZE == 4u + 4u + 68u + 4u);
 }
 
 static void test_v1_migrates_keeping_pid_gains(void)
@@ -70,6 +90,52 @@ static void test_v1_migrates_keeping_pid_gains(void)
     assert(p.q_x == DEFAULT_Q_X);
     assert(p.q_dx == DEFAULT_Q_DX);
     assert(p.r == DEFAULT_R);
+    assert(p.imu_mount == IMU_MOUNT_UP);
+}
+
+static void test_v2_migrates_keeping_fields(void)
+{
+    uint8_t buf[256];
+    build_v2(buf);
+    balance_params_t p;
+    memset(&p, 0, sizeof p);
+    uint32_t ver = 0;
+    assert(param_record_decode(buf, sizeof buf, &p, &ver));
+    assert(ver == 2u);
+    assert(p.angle_kp == V2_FLOATS[0]);
+    assert(p.angle_ki == V2_FLOATS[1]);
+    assert(p.angle_kd == V2_FLOATS[2]);
+    assert(p.vel_kp == V2_FLOATS[3]);
+    assert(p.vel_ki == V2_FLOATS[4]);
+    assert(p.filter_alpha == V2_FLOATS[5]);
+    assert(p.max_rate_sps == V2_FLOATS[6]);
+    assert(p.ctrl_mode == CTRL_LQR);
+    assert(p.l_eff_m == V2_FLOATS[8]);
+    assert(p.wheel_diam_m == V2_FLOATS[9]);
+    assert(p.steps_per_rev == V2_FLOATS[10]);
+    assert(p.q_theta == V2_FLOATS[11]);
+    assert(p.q_dtheta == V2_FLOATS[12]);
+    assert(p.q_x == V2_FLOATS[13]);
+    assert(p.q_dx == V2_FLOATS[14]);
+    assert(p.r == V2_FLOATS[15]);
+    // v2 firmware assumed component side up; a v2 record keeps that, even
+    // though the bytes after the v2 CRC are 0xFF (erased flash).
+    assert(p.imu_mount == IMU_MOUNT_UP);
+}
+
+static void test_v2_bad_crc_rejected(void)
+{
+    uint8_t buf[256];
+    build_v2(buf);
+    buf[40] ^= 0x01;  // flip a bit inside the saved l_eff_m
+    balance_params_t p;
+    memset(&p, 0xAB, sizeof p);
+    balance_params_t before = p;
+    assert(!param_record_decode(buf, sizeof buf, &p, NULL));
+    assert(memcmp(&p, &before, sizeof p) == 0);
+    // A v2 record is 76 bytes; one short is rejected.
+    build_v2(buf);
+    assert(!param_record_decode(buf, PARAM_V2_SIZE - 1u, &p, NULL));
 }
 
 static void test_v1_bad_crc_rejected(void)
@@ -84,7 +150,7 @@ static void test_v1_bad_crc_rejected(void)
     assert(memcmp(&p, &before, sizeof p) == 0);  // untouched on failure
 }
 
-static void test_v2_round_trip(void)
+static void test_v3_round_trip(void)
 {
     balance_params_t in;
     param_defaults(&in);
@@ -93,9 +159,10 @@ static void test_v2_round_trip(void)
     in.l_eff_m = 0.17f;
     in.q_x = 9.0f;
     in.r = 0.5f;
+    in.imu_mount = IMU_MOUNT_DOWN;
     uint8_t buf[256];
     memset(buf, 0xFF, sizeof buf);
-    assert(param_record_encode(&in, buf, sizeof buf) == PARAM_V2_SIZE);
+    assert(param_record_encode(&in, buf, sizeof buf) == PARAM_V3_SIZE);
     balance_params_t out;
     uint32_t ver = 0;
     assert(param_record_decode(buf, sizeof buf, &out, &ver));
@@ -107,9 +174,9 @@ static void test_encode_needs_room(void)
 {
     balance_params_t in;
     param_defaults(&in);
-    uint8_t buf[PARAM_V2_SIZE];
+    uint8_t buf[PARAM_V3_SIZE];
     assert(param_record_encode(&in, buf, sizeof buf - 1u) == 0);
-    assert(param_record_encode(&in, buf, sizeof buf) == PARAM_V2_SIZE);
+    assert(param_record_encode(&in, buf, sizeof buf) == PARAM_V3_SIZE);
 }
 
 static void test_rejects_bad_framing(void)
@@ -125,23 +192,23 @@ static void test_rejects_bad_framing(void)
 
     // Unknown (future) version with an otherwise valid CRC.
     param_record_encode(&in, buf, sizeof buf);
-    put32(buf, 4, 3u);
-    put32(buf, PARAM_V2_SIZE - 4u, crc32_calc(buf, PARAM_V2_SIZE - 4u));
+    put32(buf, 4, 4u);
+    put32(buf, PARAM_V3_SIZE - 4u, crc32_calc(buf, PARAM_V3_SIZE - 4u));
     assert(!param_record_decode(buf, sizeof buf, &out, NULL));
 
-    // v2 payload corruption.
+    // v3 payload corruption.
     param_record_encode(&in, buf, sizeof buf);
     buf[20] ^= 0x80;
     assert(!param_record_decode(buf, sizeof buf, &out, NULL));
 
     // Truncated buffer.
     param_record_encode(&in, buf, sizeof buf);
-    assert(!param_record_decode(buf, PARAM_V2_SIZE - 1u, &out, NULL));
+    assert(!param_record_decode(buf, PARAM_V3_SIZE - 1u, &out, NULL));
 }
 
-// A v2 record with a valid CRC but values the solver or unit conversion would
+// A v3 record with a valid CRC but values the solver or unit conversion would
 // reject: each bad field falls back to its default, ctrl_mode to PID.
-static void test_v2_out_of_range_fields_defaulted(void)
+static void test_v3_out_of_range_fields_defaulted(void)
 {
     balance_params_t in;
     param_defaults(&in);
@@ -154,6 +221,7 @@ static void test_v2_out_of_range_fields_defaulted(void)
     in.q_dx = INFINITY;
     in.r = 0.0f;
     in.q_theta = 123.0f;  // valid: kept
+    in.imu_mount = 2u;
     uint8_t buf[256];
     param_record_encode(&in, buf, sizeof buf);
     balance_params_t out;
@@ -167,6 +235,7 @@ static void test_v2_out_of_range_fields_defaulted(void)
     assert(out.q_dx == DEFAULT_Q_DX);
     assert(out.r == DEFAULT_R);
     assert(out.q_theta == 123.0f);
+    assert(out.imu_mount == IMU_MOUNT_UP);
 }
 
 int main(void)
@@ -174,10 +243,12 @@ int main(void)
     test_layout_sizes();
     test_v1_migrates_keeping_pid_gains();
     test_v1_bad_crc_rejected();
-    test_v2_round_trip();
+    test_v2_migrates_keeping_fields();
+    test_v2_bad_crc_rejected();
+    test_v3_round_trip();
     test_encode_needs_room();
     test_rejects_bad_framing();
-    test_v2_out_of_range_fields_defaulted();
+    test_v3_out_of_range_fields_defaulted();
     printf("test_param_record: all tests passed\n");
     return 0;
 }
