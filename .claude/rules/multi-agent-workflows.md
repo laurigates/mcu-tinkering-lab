@@ -1,3 +1,7 @@
+---
+reviewed: 2026-10-25
+---
+
 # Multi-Agent Workflows: Fair Inputs, Guarded Barriers, Clean Checkpoints
 
 From the MG90D pan-tilt tournament (PR #861): 36 agents over two runs, one

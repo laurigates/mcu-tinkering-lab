@@ -1,4 +1,5 @@
 ---
+reviewed: 2026-10-28
 paths:
   - 'packages/**/hardware/**'
   - '**/*.kicad_*'

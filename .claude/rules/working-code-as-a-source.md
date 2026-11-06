@@ -1,4 +1,5 @@
 ---
+reviewed: 2026-11-04
 paths:
   - 'packages/**/main/**'
   - 'packages/components/**'

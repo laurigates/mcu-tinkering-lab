@@ -1,3 +1,7 @@
+---
+reviewed: 2026-11-01
+---
+
 # Fixing a Renovate PR: Merge It Before Anything That Touches Its Files
 
 `auto-resolve-conflicts.yml` (the reusable `reusable-auto-resolve-conflicts.yml`)

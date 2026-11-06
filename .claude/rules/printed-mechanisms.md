@@ -1,3 +1,7 @@
+---
+reviewed: 2026-10-25
+---
+
 # Printed Mechanisms: Use the `printed-mechanism` Skill
 
 Parts that move or carry a servo are designed in build123d and gated by
