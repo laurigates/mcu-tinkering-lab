@@ -8,6 +8,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "imu_filter.h"
 #include "lqr.h"
 
 // Which law drives the wheels in RUN. Stored in balance_params_t (uint32_t
@@ -39,6 +40,9 @@ typedef struct {
     float q_x;
     float q_dx;
     float r;  // ... and input weight
+    // ---- v3 (PARAM_VERSION 3): IMU mounting. The v2 fields above stay a
+    // prefix; a v2 record migrates with imu_mount = IMU_MOUNT_UP.
+    uint32_t imu_mount;  // imu_mount_t
 } balance_params_t;
 
 typedef enum {
@@ -56,6 +60,7 @@ typedef enum {
     CMD_OPEN_LOOP_RATE = 5,  // param_id = motor (0/1), value = steps/s (IDLE only)
     CMD_SET_LQR_GAINS = 6,   // lqr_K = all four gains in one item (atomic handoff)
     CMD_SET_CONTROLLER = 7,  // ctrl_mode; LQR is refused while no valid K is held
+    CMD_SET_IMU_MOUNT = 8,   // imu_mount (imu_mount_t); refused in RUN
 } command_id_t;
 
 typedef enum {
@@ -84,6 +89,7 @@ typedef struct {
         float value;         // CMD_SET_PARAM, CMD_OPEN_LOOP_RATE
         float lqr_K[LQR_N];  // CMD_SET_LQR_GAINS, u = -(K . s) in m/s^2
         uint8_t ctrl_mode;   // CMD_SET_CONTROLLER (ctrl_mode_t)
+        uint8_t imu_mount;   // CMD_SET_IMU_MOUNT (imu_mount_t)
     };
 } balance_cmd_t;
 
@@ -105,6 +111,7 @@ typedef struct {
     bool lqr_k_valid;      // core 1 holds a K (so LQR may be selected)
     float lqr_K[LQR_N];    // the K core 1 is using / would use
     float pos_m;           // wheel travel since arming (commanded), m
+    uint8_t imu_mount;     // imu_mount_t core 1 is applying
 } balance_snapshot_t;
 
 #endif  // BALANCEBOT_IPC_H
