@@ -26,8 +26,9 @@ are a calibration, not a quote: JLCPCB changes them.
   under its exact part number with its rating stated and shipping to Finland,
   may be hand-soldered. Every other part stays on the PCBA BOM. Economic PCBA
   places a partial BOM, so a board that is otherwise hand-soldered can still
-  have JLCPCB fit those parts; if it ships bare, add them as an LCSC parts
-  order in the same cart. The balancebot carrier went bare on 2026-10-23 and
+  have JLCPCB fit those parts; if it ships bare, order them from LCSC, which
+  is a separate shop with its own parcel, shipping and duty (§ 4, "LCSC
+  shipping"). The balancebot carrier went bare on 2026-10-23 and
   two of its 11 parts (ZXMP4A16G, BSMD1812-300-24V) had no usable AliExpress
   listing. Check stock for each LCSC number on the day of the order.
 - **A PCB line saved days earlier stays in the cart under the same file name,
@@ -36,7 +37,12 @@ are a calibration, not a quote: JLCPCB changes them.
   older layout (8d18cd8d, no F1/Q1), while the hand-off CSV named the commit of
   the zip on disk. Before checkout, delete stale PCB lines, or open each line's
   thumbnail or Gerber viewer and compare it with a render of the current
-  board; record the Y number of the upload made in this session.
+  board; record the Y number of the upload made in this session. To find
+  out afterwards what was built, use the order history
+  (`https://jlcpcb.com/user-center/orders/`). It shows a thumbnail for each
+  PCB line; compare that with `kicad-cli pcb export svg` renders of candidate
+  commits. In JLCONE, its "Production file" link opens a native save dialog
+  that CDP cannot drive.
 - **Run `just <p>::carrier-fab` from a clean tree** and read the size and
   layer count from `output/fab/*-job.gbrjob` (`.GeneralSpecs.Size`); the
   upload must detect the same.
@@ -150,7 +156,14 @@ error when signed out). Signing in is Lauri's step, never the agent's.
    cut lines, polarity marks).
 4. PCB Assembly on → Economic → Top Side → PCBA Qty 5 or 2 (2-of-5 assembles
    two and ships five). Tooling holes: "Added by JLCPCB" unless the README
-   says otherwise.
+   says otherwise. **Read the selections back before NEXT; the page's
+   defaults change.** On 2026-11-05/06 a fresh JLCONE quote defaulted to
+   surface finish "OSP New" and PCBA Type "Standard". Economic is then
+   greyed out ("The PCB specs you chose are not supported for Economic
+   PCBA"), and a click on it does nothing. Pick "HASL(with lead)" first, then
+   Economic, and confirm with
+   `eval jlcpcb.com/quote '[...document.querySelectorAll(".cur")].map(e=>e.innerText.trim())'`.
+   The smt-order page repeats the type as "PCBA Type: …".
 5. Upload BOM and CPL, Process. Every line must match (25/25 on the
    integrated carrier). The `Lib Type` column says Basic or Extended.
 6. In the placement preview, zoom on every polarised and pin-1 part; JLCPCB's
@@ -273,6 +286,32 @@ VAT is recomputed on the discounted amount was not checked.
 - Third-party "promo code" sites list codes JLCPCB does not publish; the cart
   has no code field before checkout. Treat them as unverified.
 
+### LCSC shipping, for parts JLCPCB does not fit
+
+LCSC's help pages publish no rates. The cart shows an estimate for the
+**United States** until a country is chosen, the choice does not survive a
+reload, and checkout lists no methods until the account has an address. The
+cart's own endpoint gives the real options. Run it from an lcsc.com tab in
+JLCONE, which shares the JLC sign-in:
+
+```
+fetch("https://wmsc.lcsc.com/wmsc/cart/product/getExpress", {method:"POST", credentials:"include", headers:{"Content-Type":"application/json"}, body: JSON.stringify({countryCode:"FI", province:"", city:"", postCode:"", currencyCode:"USD", weight:4, orderAmt:5.78, orderItemTotal:3, isFrom:true, isHasBuzzer:false, isIncludeSpecialCategory:false, searchCartType:"all"})}).then(r=>r.json())
+```
+
+For Finland on 2026-11-06, with three parts at $5.94:
+
+| Method | Price | Delivery |
+|---|---|---|
+| 4PX | $8.62 | 5–23 business days |
+| Global Direct Standard Line | $10.91 | 7–15 business days |
+| UPS | $34.94 | 3–7 business days |
+| DHL Express | $41.27 | 3–7 business days |
+
+LCSC adds a $3 handling fee under $15 of merchandise. Its incoterms are FCA,
+so import VAT, the €3 EU duty and the carrier's clearance fee are paid on
+delivery. Against fitting the same parts in Economic PCBA, include those, and
+the separate wait.
+
 ## 6. Hand-off
 
 There is no cart export; `cart.js` gives the lines. Write
@@ -297,6 +336,19 @@ description and volume checks held in both.
   box parts loaded in one go on 2026-10-23. In Chrome a multi-file selection
   registered nothing, so there upload one at a time. A quote page holds at most
   10 models; a further file is dropped without a message.
+- **Over CDP, upload one STL per `upload` call**, about 12 s apart. On
+  2026-11-05 a single call setting 10 files registered none of them, while
+  one file per call loaded all 12 gimbal parts.
+- A fresh quote page starts with a placeholder model,
+  `3d_printing_sample.step` (1 cm³, €0.28), which the first upload replaces.
+  `jlc3dp-models.js` showing an empty list and a total of €0.28 means nothing
+  of yours loaded.
+- **Batch Edit applies to the ticked rows, so check the dialog's own file
+  list before Save.** Tick a row by the `.el-checkbox__input` inside the
+  element that holds that row's filename. A dialog closed with its X can stay
+  open behind an "Unsaved Changes" prompt; choose Discard, then reopen it.
+  Material and dyeing ("MJF(Nylon)" → PA12-HP → Black → Dyeing / Dyed Black)
+  and Product Desc are set per batch, so batch by material.
 - The "Total Price" can lag the line prices while models load (it read €7.10
   against €12.86 of lines until Batch Edit was saved); check it against their
   sum before saving.
