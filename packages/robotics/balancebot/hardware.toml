@@ -393,7 +393,8 @@ part = "m3-mounting-hole"
 ref = "H4"
 
 # --- rev3 headers and links (Lauri, 2026-11-06) -------------------------------
-# J6: expansion header, 5V (XIAO_5V), GND, D2, D1. R5 and R6, 1 kOhm at the
+# J6: expansion header, 5V (EXP_5V: XIAO_5V through D3), GND, D2, D1. R5 and
+# R6, 1 kOhm at the
 # XIAO's pins, limit the current if the cable's far end drives the same line
 # or the lead goes on one pin over. JLC Basic (C17513); AliExpress listing
 # 32901883276's variants were not checked for 1K, so no `buy`.
@@ -403,6 +404,19 @@ kind = "connector"
 build = "carrier"
 part = "exp-header-1x4"
 ref = "J6"
+
+# D3 (rev3, Lauri 2026-11-06): a B5819W in series with J6's 5V pin, anode on
+# XIAO_5V and cathode on EXP_5V, so a companion board powered from its own USB
+# or supply cannot back-feed this board's XIAO_5V (and through it the XIAO's
+# 5V pad). The companion gets XIAO_5V minus one Schottky drop (about 0.3 V),
+# so about 4.4-4.7 V with the buck at 5.0-5.3 V, and shares D1's 1 A budget.
+# Same part as D1 (LCSC C8598, JLC Basic).
+[parts.exp_diode]
+name = "B5819W Schottky, XIAO 5V to the expansion header"
+kind = "diode"
+build = "carrier"
+part = "b5819w"
+ref = "D3"
 
 [parts.exp_r_d1]
 name = "1 kΩ series resistor, D1 to J6"
@@ -456,14 +470,14 @@ build = "carrier"
 part = "testpoint-qwiic-1x4"
 ref = "J7"
 
-# J8: supply test header, 3V3, 5V (BUCK_5V, the buck's output before D1),
-# GND, VBAT; VBAT has GND as its only neighbour. J9: a ground post for a scope
-# probe's clip.
+# J8: supply test header, 3V3, GND, 5V (BUCK_5V, the buck's output before D1),
+# GND, VBAT (Lauri, 2026-11-06); every rail has only GND beside it. J9: a
+# ground post for a scope probe's clip.
 [parts.test]
-name = "Supply test header, 3V3 5V GND VBAT"
+name = "Supply test header, 3V3 GND 5V GND VBAT"
 kind = "connector"
 build = "carrier"
-part = "testpoint-power-1x4"
+part = "testpoint-power-1x5"
 ref = "J8"
 
 [parts.gnd_post]
@@ -529,7 +543,14 @@ to = ["buck_diode.A", "test.5V"]
 name = "XIAO_5V"
 build = "carrier"
 from = "buck_diode.K"
-to = ["mcu.5V", "exp.5V"]
+to = ["mcu.5V", "exp_diode.A"]
+
+# J6's 5V pin, behind D3, so nothing on the expansion cable can back-feed XIAO_5V.
+[[rails]]
+name = "EXP_5V"
+build = "carrier"
+from = "exp_diode.K"
+to = ["exp.5V"]
 
 # The expansion header's signal side of R5 and R6.
 [[rails]]

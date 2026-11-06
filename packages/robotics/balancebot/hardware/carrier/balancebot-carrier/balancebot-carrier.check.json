@@ -1,5 +1,5 @@
 {
- "board_sha256": "c8cd0ccf45297256c638f9868eddf1b5890cf6fa75d4c5842a15d448a63bcd64",
+ "board_sha256": "debe2b8d12a76a3bb19a073dcd25fce1e46181c1cc69ae9e9df8b2591a4f4345",
  "kicad_cli_version": "10.0.7",
  "netlist": {
   "components": {
@@ -51,6 +51,13 @@
     "lcsc": "C2104",
     "lib_id": "Device:D_Zener",
     "value": "BZT52C15"
+   },
+   "D3": {
+    "footprint": "Diode_SMD:D_SOD-123",
+    "in_bom": true,
+    "lcsc": "C8598",
+    "lib_id": "Device:D_Schottky",
+    "value": "B5819W"
    },
    "F1": {
     "footprint": "Fuse:Fuse_1812_4532Metric_Pad1.30x3.40mm_HandSolder",
@@ -137,11 +144,11 @@
     "value": "I2C: GND 3V3 SDA SCL"
    },
    "J8": {
-    "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical",
+    "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x05_P2.54mm_Vertical",
     "in_bom": true,
     "lcsc": "",
-    "lib_id": "Connector_Generic:Conn_01x04",
-    "value": "Test: 3V3 5V GND VBAT"
+    "lib_id": "Connector_Generic:Conn_01x05",
+    "value": "Test: 3V3 G 5V G VBAT"
    },
    "J9": {
     "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical",
@@ -295,7 +302,7 @@
     ],
     [
      "J8",
-     "2"
+     "3"
     ]
    ],
    "DIR_L": [
@@ -316,6 +323,16 @@
     [
      "U1",
      "7"
+    ]
+   ],
+   "EXP_5V": [
+    [
+     "D3",
+     "1"
+    ],
+    [
+     "J6",
+     "1"
     ]
    ],
    "EXP_D1": [
@@ -405,7 +422,11 @@
     ],
     [
      "J8",
-     "3"
+     "2"
+    ],
+    [
+     "J8",
+     "4"
     ],
     [
      "J9",
@@ -663,7 +684,7 @@
     ],
     [
      "J8",
-     "4"
+     "5"
     ],
     [
      "Q1",
@@ -700,8 +721,8 @@
      "1"
     ],
     [
-     "J6",
-     "1"
+     "D3",
+     "2"
     ],
     [
      "U1",
@@ -740,5 +761,5 @@
    ]
   }
  },
- "schematic_sha256": "5c3a2b3ce44c184dacd9a1aafbb50376bff8cc39ff889812c599723f91f2bb11"
+ "schematic_sha256": "622bd5858694e534007fa7237a82d532b69776a90f1fb679b49f292de49f88dc"
 }
