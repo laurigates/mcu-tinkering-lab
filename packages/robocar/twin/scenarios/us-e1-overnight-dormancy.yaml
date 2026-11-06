@@ -1,0 +1,39 @@
+# US-E1: an owner leaves Teuvo plugged in overnight in a room where nothing
+# changes. After one woken request the keep-alive interval climbs the ladder
+# in plan_activity.c (k_ladder = 1, 2, 4, 8, 20 base periods: 15, 30, 60, 120,
+# 300 s), five keep-alive requests in all, then the planner goes dormant and
+# says so once.
+#
+# The planner boots dormant (plan_activity_init), so the console line at 5 s is
+# what starts the ladder: request at the 15 s tick (evidence, rung held), then
+# keep-alives at 30, 60, 120, 240 and 540 s, dormant from the 555 s tick on.
+#
+# Every reply offers a line. The first request sees a room and a view the robot
+# has never remarked on (gate VA), so it is offered `speak` and says it; that
+# re-references both detectors and spends the speaking budget. The unchanged
+# room is never news again, so no later request is offered `speak`, and the
+# lines in those replies are flagged speak_not_offered and dropped.
+id: us-e1-overnight-dormancy
+stories: [US-E1]
+seed: 1
+duration: 30m
+world:
+  - {at: 0s, link: {wifi: true, key: true}}
+  - {at: 0s, frame: {scene: living-room-night, pose: C}}
+  - {at: 5s, console: status}
+models:
+  planner: inline
+default: {status: 200, latency: 1200ms, call: stop, speak: "The room is quiet tonight."}
+expect:
+  - requests: {between: [0s, 14s], count: 0}
+  - request_ladder: {between: [15s, 30m], tolerance: 1s, exact: true}
+  - requests: {between: [16s, 30m], max: 5}
+  - requests: {between: [541s, 30m], count: 0}
+  - announce: {what: waking, count: 1}
+  - announce: {what: dormant, between: [541s, 30m], count: 1}
+  - force_stop: {reason: dormant, between: [541s, 30m], min: 1}
+  - model_request: {speak_allowed: true, count: 1}
+  - model_request: {between: [15s, 15s], gate: VA, count: 1}
+  - utterance: {source: planner, count: 1}
+  - no_utterance: {source: planner, between: [17s, 30m]}
+  - speak_not_offered: {count: 5}

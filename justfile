@@ -4,6 +4,7 @@
 mod robocar-unified 'packages/robocar/unified'
 mod robocar-unified-integrated 'packages/robocar/unified-integrated'
 mod robocar-bringup 'packages/robocar/bringup'
+mod robocar-twin 'packages/robocar/twin'
 mod sim 'packages/robocar/simulation'
 mod audiobook 'packages/audio/audiobook-player'
 mod wireguard 'packages/networking/wireguard-ha'

@@ -1,0 +1,28 @@
+# US-A4, second case: the voice turn is still running when the planner's reply
+# is handled. The turn began before the request was built, so voice_turn_count()
+# and speech_budget_notes() are the same in both snapshots; only
+# voice_turn_is_busy() says a person is talking, and that alone must drop the
+# planner's line (planner_cycle_screen_speech()).
+#
+# Timeline: console wake at 5 s. The voice turn starts at 12 s (recording 3 s)
+# and replies at 22 s. The request at the 15 s tick has 4 s latency, so its
+# reply is handled at 19 s, mid-turn.
+id: us-a4-question-still-running
+stories: [US-A4]
+seed: 8
+duration: 40s
+world:
+  - {at: 0s, link: {wifi: true, key: true}}
+  - {at: 0s, frame: {scene: kitchen-table, pose: C}}
+  - {at: 5s, console: status}
+  - {at: 12s, voice_turn: {dur: 10s, record: 3s, reply: "The cup on the table is blue."}}
+models:
+  planner: inline
+responses:
+  - {status: 200, latency: 4s, call: stop, speak: "Someone seems to be talking nearby."}
+default: {status: 200, latency: 1s, call: stop}
+expect:
+  - model_request: {between: [15s, 15s], speak_allowed: true, count: 1}
+  - suppressed: {reason: person_spoke, between: [15s, 20s], count: 1, text_contains: talking}
+  - no_utterance: {source: planner, between: [15s, 21s]}
+  - utterance: {source: voice_turn, after: "voice_turn[0]", within: 10s, count: 1, text_contains: blue}

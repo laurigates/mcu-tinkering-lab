@@ -19,7 +19,8 @@ mcu-tinkering-lab/
 │   │   ├── unified/                # Firmware: single-board XIAO ESP32-S3 Sense
 │   │   ├── unified-integrated/     # Carrier PCB variant with the breakout chips on board (comparison)
 │   │   ├── bringup/                # Hardware self-test firmware for the unified build
-│   │   └── simulation/             # Python 3.12 physics simulation (Pymunk)
+│   │   ├── simulation/             # Python 3.12 physics simulation (Pymunk)
+│   │   └── twin/                   # Behaviour twin: planner C on a virtual clock + scenario harness (ADR-030)
 │   ├── thinkpack/                  # ESP-NOW mesh of modular companion "boxes"
 │   │   ├── brainbox/               # LLM mesh coordinator (ESP32-S3)
 │   │   ├── boombox/                # Audio playback box
@@ -196,6 +197,7 @@ Most workflows delegate to reusable workflows from [`laurigates/.github`](https:
 | `fix-release-conflicts.yml` | Push to main / schedule | Fix conflicts in release-please PRs | `reusable-fix-release-conflicts.yml` |
 | `sync-ai-rules.yml` | Weekly / manual | Sync AI coding rules from `.github` repo | `reusable-sync-ai-rules.yml` |
 | `carrier-check.yml` | Push/PR (path-filtered) | KiCad-free carrier check: `tools/kicad` tests, vendored-library hashes, schematic regenerates byte-identical, board pads match the join, the check stamp matches the committed files, every BOM part has an `lcsc` or `buy` source (`kicad.sourcing`) ([ADR-027](docs/decisions/ADR-027-kicad-carrier-generation.md)) | No (local) |
+| `robocar-twin.yml` | Push/PR (path-filtered) | Build the behaviour twin and run its smoke test, harness tests and every scenario (`just robocar-twin::test`, [ADR-030](docs/decisions/ADR-030-robocar-behaviour-twin.md)) | No (local) |
 | `refresh-idf-locks.yml` | Monthly / manual | Regenerate every git-tracked ESP-IDF `dependencies.lock` and open one PR with the diff — see [`.claude/rules/esp-idf-dependency-locks.md`](.claude/rules/esp-idf-dependency-locks.md) | No (local) |
 
 ## Important Paths
