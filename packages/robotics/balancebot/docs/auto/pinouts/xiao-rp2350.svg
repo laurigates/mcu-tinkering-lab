@@ -8,10 +8,10 @@
 <text x="234.1" y="54.2" font-size="9" text-anchor="end" dominant-baseline="central" fill="#1f2933">GPIO26 · PIN_PACK_SENSE (not wired)</text>
 <circle cx="251.1" cy="76.2" r="5.5" fill="#2f6fb0" stroke="#1f2933" stroke-width="1" data-anchor="D1" data-side="L" data-pos="2"/>
 <text x="262.6" y="76.2" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933">D1</text>
-<text x="234.1" y="76.2" font-size="9" text-anchor="end" dominant-baseline="central" fill="#1f2933">GPIO27</text>
+<text x="234.1" y="76.2" font-size="9" text-anchor="end" dominant-baseline="central" fill="#1f2933">GPIO27 · PIN_EXP_D1 (not wired)</text>
 <circle cx="251.1" cy="98.2" r="5.5" fill="#2f6fb0" stroke="#1f2933" stroke-width="1" data-anchor="D2" data-side="L" data-pos="3"/>
 <text x="262.6" y="98.2" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933">D2</text>
-<text x="234.1" y="98.2" font-size="9" text-anchor="end" dominant-baseline="central" fill="#1f2933">GPIO28</text>
+<text x="234.1" y="98.2" font-size="9" text-anchor="end" dominant-baseline="central" fill="#1f2933">GPIO28 · PIN_EXP_D2 (not wired)</text>
 <circle cx="251.1" cy="120.2" r="5.5" fill="#2f6fb0" stroke="#1f2933" stroke-width="1" data-anchor="D3" data-side="L" data-pos="4"/>
 <text x="262.6" y="120.2" font-size="10" text-anchor="start" dominant-baseline="central" fill="#1f2933">D3</text>
 <text x="234.1" y="120.2" font-size="9" text-anchor="end" dominant-baseline="central" fill="#1f2933">GPIO5 · PIN_IMU_INT → GY-521 MPU6050 INT</text>

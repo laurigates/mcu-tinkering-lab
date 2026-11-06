@@ -13,6 +13,18 @@ never edit `balancebot-carrier.kicad_sch` in KiCad; change `hardware.toml` or a
 registry entry and regenerate. The board is placed and routed from the same
 netlist and [`board.toml`](board.toml) (placement, silkscreen, net classes, pour).
 
+## Revision
+
+This is **rev3** (2026-11), printed "rev3 2026-11" beside the board's title.
+It adds the expansion header J6 with its series resistors R5 and R6, the
+drivers' VIO links R7 and R8, the I2C tap J7, the supply test header J8 and the
+ground post J9, and changes R3 from 27 kΩ to 22 kΩ so D0 can read a 4S pack.
+
+The boards delivered in 2026-10 are not rev3: they are the 2026-10-13 layout
+of commit 8d18cd8d (#753), with an XT30 for J1 and J3 at the board's front
+edge, so their GY-521 is fitted component side down. Everything below
+describes rev3.
+
 ## What is on it
 
 | Ref | Part | Connects |
@@ -30,15 +42,76 @@ netlist and [`board.toml`](board.toml) (placement, silkscreen, net classes, pour
 | C1, C2 | 100 µF 35 V SMD electrolytic, 6.3 × 7.7 mm | VMOT bulk at each driver |
 | R1 | 10 kΩ, 0805 | nENABLE pull-up to 3V3 (motors off until firmware drives it low) |
 | D1 | B5819W (SMD 1N5819), SOD-123 | LM2596 output → XIAO 5V pad, so USB cannot back-feed the buck |
-| R2, R3, C3 | 100 kΩ, 27 kΩ, 100 nF, 0805 | Pack voltage divider into D0 (GPIO26, ADC0); C3 sits at the pin |
+| R2, R3, C3 | 100 kΩ, 22 kΩ, 100 nF, 0805 | Pack voltage divider into D0 (GPIO26, ADC0); C3 sits at the pin |
+| J6 | 1×4 male header | Expansion: XIAO 5V, GND, D2, D1 (front left) |
+| R5, R6 | 1 kΩ, 0805 | In series with D1 and D2 at the XIAO's pins, to J6 |
+| R7, R8 | 0805 pads, left open | VIO links: each driver socket's pin 2 to 3V3, between its pin rows |
+| J7 | 1×4 male header | I2C tap on the IMU bus, Qwiic order: GND, 3V3, SDA, SCL |
+| J8 | 1×4 male header | Supply test points: 3V3, 5V (the buck's output), GND, VBAT |
+| J9 | 1×2 male header, both pins GND | Ground post for a scope probe's clip |
 | H1–H4 | M3 | Mounting holes on a 82 × 54 mm rectangle |
 
 The DRV8825 straps are on the board: M0 and M1 to 3V3 and M2 to GND (1/8
-microstep), nSLEEP and nRESET to 3V3, FAULT left open. The Pololu carrier has
-no VDD pin. Pin 2 is FAULT, which settles the hardware half of #738.
+microstep), nSLEEP and nRESET to 3V3, FAULT left open unless its VIO link is
+bridged (below). The Pololu carrier has no VDD pin. Pin 2 is FAULT, which
+settles the hardware half of #738.
 
-The divider reads 12.6 V (full 3S) as 2.68 V and draws about 0.1 mA from the
-pack. Firmware does not read it yet.
+The divider is 100 kΩ over 22 kΩ, a ratio of 0.1803: a full 3S pack (12.6 V)
+reads 2.27 V and a full 4S pack (16.8 V) 3.03 V, under the RP2350 ADC's 3.3 V
+reference. It draws about 0.1 mA from a 3S pack. Firmware does not read it yet
+(#747). The board's other parts are chosen for 3S; on 4S, D2 conducts
+0.12–0.3 mA through R4 (below), and F1's 24 V rating leaves 7.2 V over a full
+pack instead of 11.4 V.
+
+### Headers
+
+Each header is a 2.54 mm 1×4 (J9 1×2), labelled pin by pin on the
+silkscreen. Pin 1 is the square pad.
+
+| Header | Pin 1 | Pin 2 | Pin 3 | Pin 4 | Silkscreen |
+|---|---|---|---|---|---|
+| J6, expansion | XIAO 5V | GND | D2 (GPIO28) through R6 | D1 (GPIO27) through R5 | 5V G TX RX |
+| J7, I2C tap | GND | 3V3 | SDA | SCL | G 3V3 SDA SCL |
+| J8, supply test | 3V3 | 5V (BUCK_5V) | GND | VBAT | 3V3 5V G VBAT |
+| J9, ground post | GND | GND | | | GND |
+
+- **J6** is for a cable to an ESP-NOW companion XIAO (#960), or a servo's PWM
+  or an ADC input; both pins are ADC-capable. D2 is GPIO28, UART0 TX (GPIO
+  function F2), and D1 is GPIO27, UART1 RX (F11): the silkscreen's TX and RX
+  are the RP2350's side, so they cross to the companion's RX and TX. 5V sits
+  only beside GND, so a lead one pin over cannot put 5V on a GPIO; R5 and R6
+  (1 kΩ) limit the current if the far end drives the same line. The 5V pin is
+  XIAO_5V, after D1, the same net as the XIAO's 5V pad (USB or the buck).
+- **J7** sits on the MPU6050's bus, which core 1 owns (I2C1, 400 kHz); it
+  adds no pull-ups (the GY-521 has its own). A Qwiic device plugged in shares
+  the bus, so its address must not be 0x68, and firmware may reach it only
+  from core 1 (the project's CLAUDE.md).
+- **J8** brings out the rails for a meter: VBAT is on an end pin with GND as
+  its only neighbour, so a slipped probe can short VBAT only to GND, through
+  the probe. The VBAT trunk passes through its pin 4. 5V is BUCK_5V, the
+  LM2596's output before D1.
+
+### VIO links (R7, R8)
+
+Each driver socket's pin 2 has an 0805 pad pair to 3V3, between the socket's
+pin rows (silkscreen "VIO"), under the module once it is fitted. JLCPCB never
+fits it: the pads have no LCSC number. Pin 2 is FAULT on a DRV8825 carrier, VDD
+on an A4988 and VIO on some TMC2209 carriers.
+
+- **Bridge a link** (a 0 Ω 0805 or a wire offcut) only for an A4988, or a
+  TMC2209 whose pin 2 is VIO, and only if every DRV8825 carrier that may later
+  go in that socket has the 1.5 kΩ series resistor between the chip's nFAULT
+  and pin 2 (Pololu's does; check a clone against its board). A bridged link
+  ties that resistor's far end to 3V3, so a DRV8825 reporting a fault pulls
+  about 2.2 mA from 3V3; without the resistor, an asserted nFAULT shorts 3V3
+  to ground.
+- **TMC2209 carriers are not supported in general.** This board straps the
+  socket for a DRV8825: pin 10 (M0, MS1) and 11 (M1, MS2) to 3V3, pin 12 (M2,
+  MS3) to GND, and pins 13 and 14 (RESET, SLEEP) to 3V3. TMC2209 vendors put
+  other functions there: BigTreeTech's carrier has PDN_UART at MS3, Watterott's
+  SilentStepStick puts SPREAD on one of these positions, and FYSETC's has UART
+  pins near RESET and SLEEP. Check the carrier's own pin-out against these straps before fitting
+  one, whatever its pin 2.
 
 ### Pack input protection
 
@@ -61,9 +134,11 @@ The values below are from the datasheets, not measured on this board.
   (C2104; JSCJ datasheet Rev. 2.1: VZ 13.8–15.6 V at 5 mA, IR ≤ 0.1 µA at
   10.5 V, +9.2 to +13 mV/°C), cathode to VBAT, anode to the gate, with R4
   limiting its current (0.8 mA at a 24 V spike). Its 13.8 V minimum is above
-  a full pack, so it does not conduct in use and |VGS| follows the pack:
+  a full 3S pack, so on 3S it does not conduct and |VGS| follows the pack:
   9.0–12.6 V over the BMS's range, 8.2 V at the DRV8825's minimum supply, all
-  past the −4.5 V that the 100 mΩ maximum is given at. In an overshoot it
+  past the −4.5 V that the 100 mΩ maximum is given at. On a full 4S pack
+  (16.8 V) it conducts 0.12–0.3 mA through R4 over its VZ spread and holds
+  |VGS| at 13.8–15.6 V, under VGSS. In an overshoot it
   holds |VGS| at 15.6 V or less at 25 °C, about 16.9 V at 125 °C. A 12 V
   zener (11.4–12.7 V) would conduct on a full pack.
 - **F1** is a 3 A hold, 6 A trip PTC (BSMD1812-300-24V, BHFUSE datasheet;
@@ -99,11 +174,14 @@ The values below are from the datasheets, not measured on this board.
 VBAT is laid down as fixed F.Cu tracks, 1.5 mm wide except the 1.0 mm feed to
 the divider (R2) and the 0.5 mm tie to D2's cathode, with no via: Q1's source
 to A1's VMOT and C1, to the buck lead's IN+ (J2), and from there round the
-east edge to C2 and A2's VMOT. Measured on the routed board, the path from
-Q1's source pad to A2's VMOT pad is 130.8 mm of 1.5 mm F.Cu track centreline,
-pad centre to pad centre, with no via and no VBAT copper on B.Cu. GND is poured on both layers, with a
-via beside each SMD ground pad and stitching vias on a 5 mm grid wherever both
-layers' pour holds one (120 GND vias). The pour stays 3.5 mm from each M3
+east edge to C2 and A2's VMOT. The trunk passes through J8's VBAT pin. Measured
+on the routed board (`just balancebot::carrier-measure path VBAT Q1:3 A2:8`),
+the path from Q1's source pad to A2's VMOT pad is 129.4 mm of 1.5 mm F.Cu
+track, with no via and no VBAT copper on B.Cu. GND is poured on both layers,
+with a via beside each SMD ground pad and stitching vias on a 5 mm grid
+wherever both layers' pour holds one (105 GND vias). `carrier-measure plane`
+finds one GND plane component, and `carrier-measure cuts GND J1:2` no via
+whose loss would disconnect a ground pad. The pour stays 3.5 mm from each M3
 hole's centre.
 
 ## Check before ordering
@@ -140,10 +218,12 @@ KiCad's hand-solder pads, and each symbol still carries an LCSC part number,
 so JLCPCB assembly remains possible:
 
 - **JLCPCB assembly**: `carrier-fab` writes `output/assembly/bom-jlc.csv` and
-  `cpl-jlc.csv` with only the eleven SMD parts. Upload them with the Gerber zip
-  (Economic PCBA, top side). Everything else is hand-soldered afterwards.
-  C1/C2 (C2836437), D2 (C2104), F1 (C7500481) and Q1 (C141324) are JLC
-  Extended parts (a feeder fee each); the rest are Basic.
+  `cpl-jlc.csv` with only the thirteen SMD parts that carry an LCSC number;
+  the VIO link pads R7 and R8 have none and stay empty. Upload them with the
+  Gerber zip (Economic PCBA, top side). Everything else is hand-soldered
+  afterwards. C1/C2 (C2836437), D2 (C2104), F1 (C7500481) and Q1 (C141324)
+  are JLC Extended parts (a feeder fee each); the rest, including R3 (22 kΩ,
+  C17560) and R5/R6 (1 kΩ, C17513), are Basic.
   JLC's rotation convention differs from KiCad's for some packages, so check
   the polarity of C1, C2, D1 and D2 in JLC's placement preview: C1/C2 "+" on
   the pad marked "+" on the silkscreen, D1's cathode bar on the left (pad 1,
@@ -234,7 +314,7 @@ detected size and layer count.
    | File | For |
    |---|---|
    | `output/balancebot-carrier-fab.zip` | The board: Gerbers and drill files |
-   | `output/assembly/bom-jlc.csv` | Assembly only: the eleven SMD parts with LCSC numbers |
+   | `output/assembly/bom-jlc.csv` | Assembly only: the thirteen SMD parts with LCSC numbers |
    | `output/assembly/cpl-jlc.csv` | Assembly only: their positions and rotations |
 
 4. **Upload the zip** at jlcpcb.com (Order now). It should detect 2 layers and
@@ -253,11 +333,11 @@ detected size and layer count.
    Check the outline, the four M3 holes and the "+"/"−" beside J1 in the
    Gerber preview.
 
-5. **Choose who solders the eleven SMD parts** (R1–R4, C1–C3, D1, D2, F1,
+5. **Choose who solders the thirteen SMD parts** (R1–R6, C1–C3, D1, D2, F1,
    Q1):
 
    - **JLCPCB**: turn on *PCB Assembly*, *Economic*, top side. Upload
-     `bom-jlc.csv` and `cpl-jlc.csv` when asked. All eleven should match; C1/C2,
+     `bom-jlc.csv` and `cpl-jlc.csv` when asked. All thirteen should match; C1/C2,
      D2, F1 and Q1 are Extended parts and add a feeder fee each. In the placement
      preview, check C1, C2, D1 and D2's polarity, and Q1's tab, as described in
      [Assembly notes](#assembly-notes) before confirming.
@@ -273,11 +353,12 @@ detected size and layer count.
    | 5 | 1×8 female header, 2.54 mm (four for the DRV8825s, one for the GY-521) |
    | 1 | JST-XH B2B-XH-A, with a mating 2-pin housing and crimps (battery) |
    | 3 | JST-XH B4B-XH-A, with mating 4-pin housings and crimps |
+   | 1 | 1×40 male header strip, 2.54 mm, cut to three 1×4 (J6, J7, J8) and one 1×2 (J9) |
    | 4 | M3 standoffs and screws |
 
 7. **Check out.** Choose shipping and pay.
 
 Minimums on this board, for the fab's capability check (measured on the
-routed board): 0.225 mm track (three necked NENABLE segments at A1), 0.6/0.3 mm
+routed board): 0.225 mm track (three necked NENABLE and two IMU_SCL segments), 0.6/0.3 mm
 via (0.15 mm annular ring), 0.32 mm annular ring on through-hole pads, 1.0 mm
 silkscreen text and 0.15 mm silkscreen lines.

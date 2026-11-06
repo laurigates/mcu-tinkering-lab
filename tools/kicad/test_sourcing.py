@@ -73,14 +73,18 @@ class CarrierTests(unittest.TestCase):
                 report = sourcing.classify(sourcing.rows(project))
                 self.assertEqual([r.ref for r in report.unsourced], [])
 
-    def test_balancebot_leaves_only_q1_and_f1_to_jlcpcb(self):
+    def test_balancebot_leaves_q1_f1_and_the_rev3_resistors_to_jlcpcb(self):
         # 2026-10-30: AliExpress sells neither the ZXMP4A16G nor a rated 24 V
         # 1812 PTC, so a hand-built balancebot must have JLCPCB or LCSC supply
-        # them (.claude/rules/part-sourcing.md). Adding `buy` to either, or a
-        # new part with only an LCSC number, changes this list on purpose.
+        # them (.claude/rules/part-sourcing.md). 2026-11-06 (rev3): R3 (22k)
+        # and R5/R6 (1k) are JLC Basic parts whose AliExpress variants were
+        # not checked. Adding `buy` to any of them, or a new part with only an
+        # LCSC number, changes this list on purpose.
         project = REPO_ROOT / "packages/robotics/balancebot"
         report = sourcing.classify(sourcing.rows(project))
-        self.assertEqual(sorted(r.ref for r in report.jlc_only), ["F1", "Q1"])
+        self.assertEqual(
+            sorted(r.ref for r in report.jlc_only), ["F1", "Q1", "R3", "R5", "R6"]
+        )
 
     def test_the_cli_exit_code_follows_the_unsourced_parts(self):
         project = "packages/robotics/balancebot"

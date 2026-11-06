@@ -45,13 +45,27 @@ H1 = [4.0, 4.0, 0]
 H2 = [86.0, 4.0, 0]
 H3 = [4.0, 58.0, 0]
 H4 = [86.0, 58.0, 0]
+# rev3 (Lauri, 2026-11-06). The expansion header in the empty front-left block,
+# 5V at the west end, D1 at the east end, toward its series resistors R5 and R6
+# beside U1's D1 and D2 pins (pad 1, U1's side, east).
+J6 = [16.0, 8.0, 90]     # EXP: 5V, GND, D2, D1 from the west
+R5 = [33.6, 9.6, 180]    # D1 series, 1k
+R6 = [33.6, 12.2, 180]   # D2 series, 1k
+# The drivers' pin-2 VIO links, between each socket's rows: pad 1 toward pin 2,
+# pad 2 toward the 3V3 strap at pin 14. Under the module once it is fitted;
+# the .kicad_dru excuses the courtyard overlap with its own driver only.
+R7 = [18.6, 24.8, 0]
+R8 = [71.4, 35.0, 180]
+J7 = [58.0, 45.0, 90]    # Qwiic-order I2C tap, GND at the west end, east of J3
+J8 = [81.5, 44.38, 0]    # supply test header, 3V3 at the top; VBAT (pin 4) sits on the trunk
+J9 = [52.0, 56.5, 90]    # ground post
 
 [silk]
 # Reference designators that sit on the board edge and carry no assembly
 # information (the holes are self-evident; J1 is labelled by the +/- texts below).
-hidden_refs = ["H1", "H2", "H3", "H4", "J1"]
+hidden_refs = ["H1", "H2", "H3", "H4", "J1", "J9"]
 # Moved off the library default where it lands on a neighbour's silkscreen.
-ref_positions = { J3 = [57.0, 47.0], J4 = [5.0, 19.8], J2 = [72.5, 57.0], R4 = [48.6, 59.0] }
+ref_positions = { J3 = [56.6, 50.0], J4 = [5.0, 19.8], J2 = [72.5, 57.0], R4 = [48.6, 59.0], R5 = [30.4, 9.6], R6 = [30.4, 12.2], R7 = [18.6, 26.6], R8 = [71.4, 36.8], J7 = [68.0, 45.0] }
 # Seeed's reference text is below KiCad's minimum silkscreen height.
 ref_sizes = { U1 = 1.0 }
 # Where the GY-521 lies flat on its socket (21 x 16 mm), so nothing tall goes under it.
@@ -90,6 +104,25 @@ texts = [
     { text = "+", at = [3.8, 44.0], size = 1.2 },
     { text = "+", at = [71.8, 14.0], size = 1.2 },
     { text = "K", at = [67.4, 50.0], size = 1.2 },
+    # rev3: the board revision beside the title, the divider's range by J1,
+    # and each new header's pins by its pads.
+    { text = "rev3 2026-11", at = [30.5, 60.8], size = 1.0 },
+    { text = "3S (4S max)", at = [12.8, 59.6], size = 1.0 },
+    { text = "5V", at = [16.0, 10.2], size = 1.0 },
+    { text = "G", at = [18.54, 10.2], size = 1.0 },
+    { text = "TX", at = [21.08, 10.2], size = 1.0 },
+    { text = "RX", at = [23.62, 10.2], size = 1.0 },
+    { text = "VIO", at = [18.6, 23.0], size = 1.0 },
+    { text = "VIO", at = [71.4, 33.2], size = 1.0 },
+    { text = "G", at = [58.0, 47.1], size = 1.0 },
+    { text = "3V3", at = [60.54, 42.9], size = 1.0 },
+    { text = "SDA", at = [63.08, 47.1], size = 1.0 },
+    { text = "SCL", at = [65.62, 42.9], size = 1.0 },
+    { text = "3V3", at = [84.3, 44.38], size = 1.0 },
+    { text = "5V", at = [84.0, 46.92], size = 1.0 },
+    { text = "G", at = [83.7, 49.46], size = 1.0 },
+    { text = "VBAT", at = [84.7, 52.0], size = 1.0 },
+    { text = "GND", at = [53.27, 58.6], size = 1.0 },
 ]
 
 # Fixed tracks: build_board.py lays them down locked; route_board.py walls
@@ -193,15 +226,51 @@ layer = "F.Cu"
 width_mm = 1.0
 points = [[61.0, 4.0], [61.0, 2.3], [73.0, 2.3], [75.05, 4.35], [75.05, 14.0]]
 
+# rev3: the trunk passes through the supply test header's VBAT pin (J8:4),
+# so it is two tracks, each ending on a pad as [[tracks]] requires.
 [[tracks]]
-name = "VBAT trunk, C2 to J2"
+name = "VBAT trunk, C2 to J8"
 net = "VBAT"
 layer = "F.Cu"
 width_mm = 1.5
-points = [
-    [75.05, 14.0], [75.05, 9.0], [88.6, 9.0], [88.6, 52.0], [74.6, 52.0],
-    [74.6, 60.6], [60.0, 60.6], [60.0, 56.0],
-]
+points = [[75.05, 14.0], [75.05, 9.0], [88.6, 9.0], [88.6, 52.0], [81.5, 52.0]]
+
+[[tracks]]
+name = "VBAT trunk, J8 to J2"
+net = "VBAT"
+layer = "F.Cu"
+width_mm = 1.5
+points = [[81.5, 52.0], [74.6, 52.0], [74.6, 60.6], [60.0, 60.6], [60.0, 56.0]]
+
+# rev3: each driver's VIO link on F.Cu, pin 2 to the link and the link to the
+# 3V3 strap at pin 14, so neither crosses the B.Cu ground beside pin 2.
+[[tracks]]
+name = "A1 pin 2 to its VIO link"
+net = "VIO_L"
+layer = "F.Cu"
+width_mm = 0.3
+points = [[14.0, 23.54], [17.5625, 24.8]]
+
+[[tracks]]
+name = "left VIO link to A1's 3V3 strap"
+net = "+3V3"
+layer = "F.Cu"
+width_mm = 0.5
+points = [[19.6375, 24.8], [26.7, 26.08]]
+
+[[tracks]]
+name = "A2 pin 2 to its VIO link"
+net = "VIO_R"
+layer = "F.Cu"
+width_mm = 0.3
+points = [[76.0, 36.24], [72.4375, 35.0]]
+
+[[tracks]]
+name = "right VIO link to A2's 3V3 strap"
+net = "+3V3"
+layer = "F.Cu"
+width_mm = 0.5
+points = [[70.3625, 35.0], [63.3, 33.7]]
 
 # Freerouting width classes, in this order. `nets` are net names or fnmatch
 # patterns over them; every pattern must match, and no net may be in two classes.

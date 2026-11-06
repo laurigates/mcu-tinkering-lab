@@ -5,6 +5,11 @@
 #   just balancebot::perfboard          # regenerate the drawings, wire list and checklist
 #   just balancebot::perfboard-check    # fail if they are stale or the layout breaks
 
+# The carrier's rev3 additions stay off the perfboard: the expansion header and
+# its series resistors, the drivers' VIO links, the Qwiic-order I2C tap, the
+# supply test header and the ground post.
+skip = ["J6", "J7", "J8", "J9", "R5", "R6", "R7", "R8"]
+
 [board]
 title = "Balancebot perfboard"   # the wire list's heading: "<title> wire list"
 cols = 18                        # 50 x 70 mm: columns A..R, rows 1..24

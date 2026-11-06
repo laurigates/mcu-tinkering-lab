@@ -1,5 +1,5 @@
 {
- "board_sha256": "a829256435fb5549d48278cc5c31b021edee75a5f362d4d359f039539934cb1c",
+ "board_sha256": "c8cd0ccf45297256c638f9868eddf1b5890cf6fa75d4c5842a15d448a63bcd64",
  "kicad_cli_version": "10.0.7",
  "netlist": {
   "components": {
@@ -122,6 +122,34 @@
     "lib_id": "Connector_Generic:Conn_01x04",
     "value": "Motor right"
    },
+   "J6": {
+    "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical",
+    "in_bom": true,
+    "lcsc": "",
+    "lib_id": "Connector_Generic:Conn_01x04",
+    "value": "EXP: 5V GND D2 D1"
+   },
+   "J7": {
+    "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical",
+    "in_bom": true,
+    "lcsc": "",
+    "lib_id": "Connector_Generic:Conn_01x04",
+    "value": "I2C: GND 3V3 SDA SCL"
+   },
+   "J8": {
+    "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical",
+    "in_bom": true,
+    "lcsc": "",
+    "lib_id": "Connector_Generic:Conn_01x04",
+    "value": "Test: 3V3 5V GND VBAT"
+   },
+   "J9": {
+    "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical",
+    "in_bom": true,
+    "lcsc": "",
+    "lib_id": "Connector_Generic:Conn_01x02",
+    "value": "GND post"
+   },
    "Q1": {
     "footprint": "Package_TO_SOT_SMD:SOT-223-3_TabPin2",
     "in_bom": true,
@@ -146,9 +174,9 @@
    "R3": {
     "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
     "in_bom": true,
-    "lcsc": "C17593",
+    "lcsc": "C17560",
     "lib_id": "Device:R",
-    "value": "27k"
+    "value": "22k"
    },
    "R4": {
     "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
@@ -156,6 +184,34 @@
     "lcsc": "C17414",
     "lib_id": "Device:R",
     "value": "10k"
+   },
+   "R5": {
+    "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
+    "in_bom": true,
+    "lcsc": "C17513",
+    "lib_id": "Device:R",
+    "value": "1k"
+   },
+   "R6": {
+    "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
+    "in_bom": true,
+    "lcsc": "C17513",
+    "lib_id": "Device:R",
+    "value": "1k"
+   },
+   "R7": {
+    "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
+    "in_bom": true,
+    "lcsc": "",
+    "lib_id": "Device:R",
+    "value": "VIO link"
+   },
+   "R8": {
+    "footprint": "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder",
+    "in_bom": true,
+    "lcsc": "",
+    "lib_id": "Device:R",
+    "value": "VIO link"
    },
    "U1": {
     "footprint": "Seeed_XIAO:XIAO-RP2350-Socket",
@@ -204,8 +260,24 @@
      "1"
     ],
     [
+     "J7",
+     "2"
+    ],
+    [
+     "J8",
+     "1"
+    ],
+    [
      "R1",
      "1"
+    ],
+    [
+     "R7",
+     "2"
+    ],
+    [
+     "R8",
+     "2"
     ],
     [
      "U1",
@@ -220,6 +292,10 @@
     [
      "J2",
      "3"
+    ],
+    [
+     "J8",
+     "2"
     ]
    ],
    "DIR_L": [
@@ -240,6 +316,26 @@
     [
      "U1",
      "7"
+    ]
+   ],
+   "EXP_D1": [
+    [
+     "J6",
+     "4"
+    ],
+    [
+     "R5",
+     "2"
+    ]
+   ],
+   "EXP_D2": [
+    [
+     "J6",
+     "3"
+    ],
+    [
+     "R6",
+     "2"
     ]
    ],
    "GND": [
@@ -300,6 +396,26 @@
      "7"
     ],
     [
+     "J6",
+     "2"
+    ],
+    [
+     "J7",
+     "1"
+    ],
+    [
+     "J8",
+     "3"
+    ],
+    [
+     "J9",
+     "1"
+    ],
+    [
+     "J9",
+     "2"
+    ],
+    [
      "R3",
      "2"
     ],
@@ -328,6 +444,10 @@
      "3"
     ],
     [
+     "J7",
+     "4"
+    ],
+    [
      "U1",
      "6"
     ]
@@ -336,6 +456,10 @@
     [
      "J3",
      "4"
+    ],
+    [
+     "J7",
+     "3"
     ],
     [
      "U1",
@@ -538,11 +662,35 @@
      "1"
     ],
     [
+     "J8",
+     "4"
+    ],
+    [
      "Q1",
      "3"
     ],
     [
      "R2",
+     "1"
+    ]
+   ],
+   "VIO_L": [
+    [
+     "A1",
+     "2"
+    ],
+    [
+     "R7",
+     "1"
+    ]
+   ],
+   "VIO_R": [
+    [
+     "A2",
+     "2"
+    ],
+    [
+     "R8",
      "1"
     ]
    ],
@@ -552,20 +700,36 @@
      "1"
     ],
     [
+     "J6",
+     "1"
+    ],
+    [
      "U1",
      "14"
+    ]
+   ],
+   "XIAO_D1": [
+    [
+     "R5",
+     "1"
+    ],
+    [
+     "U1",
+     "2"
+    ]
+   ],
+   "XIAO_D2": [
+    [
+     "R6",
+     "1"
+    ],
+    [
+     "U1",
+     "3"
     ]
    ]
   },
   "unconnected": {
-   "unconnected-(A1-~{FLT}-Pad2)": [
-    "A1",
-    "2"
-   ],
-   "unconnected-(A2-~{FLT}-Pad2)": [
-    "A2",
-    "2"
-   ],
    "unconnected-(J3-Pin_5-Pad5)": [
     "J3",
     "5"
@@ -573,16 +737,8 @@
    "unconnected-(J3-Pin_6-Pad6)": [
     "J3",
     "6"
-   ],
-   "unconnected-(U1-D1-Pad2)": [
-    "U1",
-    "2"
-   ],
-   "unconnected-(U1-D2-Pad3)": [
-    "U1",
-    "3"
    ]
   }
  },
- "schematic_sha256": "387e02f1ff5d99a946572114d1d794dc506d5b173bca39aa55a16c99e65b81e7"
+ "schematic_sha256": "5c3a2b3ce44c184dacd9a1aafbb50376bff8cc39ff889812c599723f91f2bb11"
 }

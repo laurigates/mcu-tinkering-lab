@@ -30,7 +30,7 @@ Neighbouring holes (length 1) can be a solder bridge instead of a wire.
 | Q1 | TO-220 P-FET (G D S) | F18 | `PinHeader_1x03_P2.54mm_Vertical` |
 | R1 | 10k | H11 | `R_Axial_DIN0207_L6.3mm_D2.5mm_P2.54mm_Vertical` |
 | R2 | 100k | I13 | `R_Axial_DIN0207_L6.3mm_D2.5mm_P2.54mm_Vertical` |
-| R3 | 27k | I15 | `R_Axial_DIN0207_L6.3mm_D2.5mm_P2.54mm_Vertical` |
+| R3 | 22k | I15 | `R_Axial_DIN0207_L6.3mm_D2.5mm_P2.54mm_Vertical` |
 | R4 | 10k | J20 | `R_Axial_DIN0207_L6.3mm_D2.5mm_P2.54mm_Vertical` |
 | U1 | XIAO RP2350 | A1 | `XIAO-RP2350-Socket` |
 
