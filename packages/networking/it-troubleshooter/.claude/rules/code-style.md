@@ -1,3 +1,7 @@
+---
+reviewed: 2026-03-10
+---
+
 # Code Style
 
 **Confidence**: Very High — enforced by pre-commit hooks and clang-format config

@@ -67,8 +67,8 @@ dmypy.json
 # Jupyter Notebook
 .ipynb_checkpoints
 
-# pyenv
-.python-version
+# .python-version is committed: it pins uv to a Python with wheels for every
+# locked dependency (quadrants has none for 3.14, the CI runner's default).
 
 # Ruff cache
 .ruff_cache/

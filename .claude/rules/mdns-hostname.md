@@ -1,4 +1,5 @@
 ---
+reviewed: 2026-11-03
 paths:
   - 'packages/**/*wifi*'
   - 'packages/**/main/main.{c,cpp}'

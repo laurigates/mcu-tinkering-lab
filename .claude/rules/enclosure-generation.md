@@ -1,4 +1,5 @@
 ---
+reviewed: 2026-11-01
 paths:
   - 'tools/enclosure/**'
   - 'packages/**/hardware/enclosure/**'

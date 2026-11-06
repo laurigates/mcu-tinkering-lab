@@ -1,3 +1,7 @@
+---
+reviewed: 2026-10-31
+---
+
 # Lint Python Through pre-commit, Not Bare `ruff`
 
 The repo's ruff is the one pre-commit pins (`ruff-pre-commit` rev in

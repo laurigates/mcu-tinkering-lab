@@ -171,8 +171,11 @@ error when signed out). Signing in is Lauri's step, never the agent's.
 | Shipping | DHL Express €23.94 at 0.98 kg, €30.83 at 1.54 kg | Global Standard Direct Line (€19.73, 13–16 days) only up to 1.5 kg / $150 |
 
 **Preferred Extended parts carry no loading fee** (JLCPCB PCB Assembly FAQ),
-and they look like Extended in the BOM table. Check every line's type with
-the parts API (curl's User-Agent, as `carrier-pcb` trap 33):
+and they look like Extended in the BOM table. `just kicad::parts` (or
+`--project <p>`; `carrier-fab` runs it) lists every LCSC number in use as
+basic, preferred or extended with its stock, price and status, from the API
+below, cached a day. By hand, with curl's User-Agent (`carrier-pcb` trap 33;
+the search is fuzzy, trap 50):
 
 ```sh
 curl -s -A 'curl/8.7.1' -H 'Content-Type: application/json' -X POST https://jlcpcb.com/api/overseas-pcb-order/v1/shoppingCart/smtGood/selectSmtComponentList -d '{"keyword":"C8020","currentPage":1,"pageSize":5}' | jq '.data.componentPageInfo.list[] | {componentCode, componentLibraryType, preferredComponentFlag, stockCount}'

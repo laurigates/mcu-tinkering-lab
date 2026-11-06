@@ -52,8 +52,9 @@
 #define FAULT_CLEAR_S 2.0f     // ... for this long clears FAULT to IDLE
 #define WATCHDOG_TIMEOUT_MS 100
 
-// core0 -> core1 command queue depth. `load` sends every parameter plus the
-// LQR gains and the controller in one burst (PARAM_COUNT + 2 items).
+// core0 -> core1 command queue depth. `load` sends every parameter, the IMU
+// mounting, the LQR gains and the controller in one burst (PARAM_COUNT + 3
+// items).
 #define BAL_CMD_QUEUE_DEPTH 32
 
 // Telemetry

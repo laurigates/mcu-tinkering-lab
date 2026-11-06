@@ -39,7 +39,9 @@
       "docs/requirements/PRD-014-teuvo-sponsored-upgrades.md",
       "docs/requirements/PRD-015-teuvo-for-other-owners.md",
       "docs/requirements/PRD-016-build-cost-model.md",
-      "docs/decisions/ADR-028-teuvo-connectivity-resilience.md"
+      "docs/requirements/PRD-017-robocar-behaviour-twin.md",
+      "docs/decisions/ADR-028-teuvo-connectivity-resilience.md",
+      "docs/decisions/ADR-030-robocar-behaviour-twin.md"
     ],
     "sync_targets": [
       "docs/blueprint/feature-tracker.md"

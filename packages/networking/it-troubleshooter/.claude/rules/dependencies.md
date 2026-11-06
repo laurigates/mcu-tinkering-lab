@@ -1,3 +1,7 @@
+---
+reviewed: 2026-03-12
+---
+
 # Dependencies
 
 **Confidence**: High — derived from build system and CI patterns

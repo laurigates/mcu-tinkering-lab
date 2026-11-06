@@ -48,6 +48,11 @@ static const char *ctrl_name(uint32_t m)
     return m == CTRL_LQR ? "lqr" : "pid";
 }
 
+static const char *mount_name(uint32_t m)
+{
+    return m == IMU_MOUNT_DOWN ? "down" : "up";
+}
+
 static const char *lqr_status_name(int st)
 {
     switch ((lqr_status_t)st) {
@@ -149,6 +154,11 @@ static balance_cmd_t ctrl_cmd(uint32_t mode)
     return (balance_cmd_t){.cmd = CMD_SET_CONTROLLER, .ctrl_mode = (uint8_t)mode};
 }
 
+static balance_cmd_t mount_cmd(uint32_t mount)
+{
+    return (balance_cmd_t){.cmd = CMD_SET_IMU_MOUNT, .imu_mount = (uint8_t)mount};
+}
+
 static void print_lqr(void)
 {
     if (!lqr_have_k) {
@@ -177,12 +187,14 @@ static bool sync_all(bool include_params)
                  lqr_status_name(lqr_status));
     }
 
-    balance_cmd_t cmds[PARAM_COUNT + 2];
+    balance_cmd_t cmds[PARAM_COUNT + 3];
     unsigned n = 0;
     if (include_params) {
         for (int i = 0; i < PARAM_COUNT; i++) {
             cmds[n++] = param_cmd(&param_table[i], *field_of(mirror, &param_table[i]));
         }
+        // Core 1 ignores it while armed; `stat` shows the mounting it applies.
+        cmds[n++] = mount_cmd(mirror->imu_mount);
     }
     if (lqr_status == LQR_OK) {
         cmds[n++] = gains_cmd(&lqr_res);
@@ -202,6 +214,7 @@ static void cmd_get(void)
         printf("%-14s %g\n", param_table[i].name, (double)*field_of(mirror, &param_table[i]));
     }
     printf("%-14s %s\n", "ctrl", ctrl_name(mirror->ctrl_mode));
+    printf("%-14s %s\n", "mount", mount_name(mirror->imu_mount));
 }
 
 static void cmd_set(const char *name, const char *value_str)
@@ -291,6 +304,39 @@ static void cmd_ctrl(const char *arg)
     printf("OK ctrl = %s (switches at the next tick; 'save' to keep)\n", ctrl_name(mode));
 }
 
+// GY-521 orientation: `up` = component side up (X forward, Z up), `down` =
+// component side down, turned 180 degrees about the axle (the delivered
+// 8d18cd8d carrier). Disarmed only: the pitch would jump 180 degrees.
+static void cmd_mount(const char *arg)
+{
+    balance_snapshot_t s;
+    balance_control_get_snapshot(&s);
+    if (arg == NULL) {
+        printf("mount: %s\n", mount_name(s.imu_mount));
+        return;
+    }
+    uint32_t mount;
+    if (strcmp(arg, "up") == 0) {
+        mount = IMU_MOUNT_UP;
+    } else if (strcmp(arg, "down") == 0) {
+        mount = IMU_MOUNT_DOWN;
+    } else {
+        printf("usage: mount [up|down]\n");
+        return;
+    }
+    if (s.state == BAL_STATE_RUN) {
+        printf("ERR: disarm first — mount still %s\n", mount_name(s.imu_mount));
+        return;
+    }
+    balance_cmd_t c = mount_cmd(mount);
+    if (!balance_control_send_cmd(&c)) {
+        printf("ERR: command queue full — mount still %s\n", mount_name(mirror->imu_mount));
+        return;
+    }
+    mirror->imu_mount = mount;
+    printf("OK mount = %s ('save' to keep)\n", mount_name(mount));
+}
+
 static float battery_volts(void)
 {
     gpio_put(PIN_BATT_ADC_ENABLE, 1);
@@ -307,7 +353,8 @@ static void cmd_stat(void)
     balance_control_get_snapshot(&s);
     printf("state:    %s\n", state_name(s.state));
     printf("ctrl:     %s\n", ctrl_name(s.ctrl_mode));
-    printf("imu:      %s\n", s.imu_ok ? "ok" : "NOT RESPONDING");
+    printf("imu:      %s (mount %s)\n", s.imu_ok ? "ok" : "NOT RESPONDING",
+           mount_name(s.imu_mount));
     printf("angle:    %.2f deg (setpoint %.2f)\n", (double)s.pitch_deg, (double)s.angle_setpoint);
     printf("rate:     %.0f steps/s\n", (double)s.rate_cmd_sps);
     printf("pos:      %.3f m since arm\n", (double)s.pos_m);
@@ -337,6 +384,8 @@ static void cmd_help(void)
     printf("                       LQR (re-solves K): l_eff_m wheel_diam_m steps_per_rev\n");
     printf("                       q_theta q_dtheta q_x q_dx r\n");
     printf("  ctrl [pid|lqr]       show / switch the balance law (live, bumpless)\n");
+    printf("  mount [up|down]      show / set GY-521 side: up, or down = flipped about\n");
+    printf("                       the axle (8d18cd8d carrier); disarmed only\n");
     printf("  stream on|off [hz]   CSV telemetry (default %d Hz)\n", TELEMETRY_DEFAULT_HZ);
     printf("  arm | disarm         start/stop balancing\n");
     printf("  rate <l|r> <sps>     open-loop motor test (disarmed only)\n");
@@ -367,6 +416,8 @@ static void handle_line(char *l)
         }
     } else if (strcmp(tok, "ctrl") == 0) {
         cmd_ctrl(strtok(NULL, " \t"));
+    } else if (strcmp(tok, "mount") == 0) {
+        cmd_mount(strtok(NULL, " \t"));
     } else if (strcmp(tok, "stream") == 0) {
         const char *arg = strtok(NULL, " \t");
         const char *hz_str = strtok(NULL, " \t");

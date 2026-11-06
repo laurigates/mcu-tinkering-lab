@@ -1,0 +1,59 @@
+{
+ "code": 200,
+ "data": {
+  "componentCode": "C17756",
+  "componentBrandEn": "UNI-ROYAL(Uniroyal Elec)",
+  "componentModelEn": "0805W8F5602T5E",
+  "dataManualUrl": "https://www.lcsc.com/datasheet/lcsc_datasheet_2206010200_UNI-ROYAL-Uniroyal-Elec-0805W8F5602T5E_C17756.pdf",
+  "componentSpecificationEn": "0805",
+  "describe": "-55℃~+155℃ 125mW 150V 56kΩ Thick Film Resistor ±1% ±100ppm/℃ 0805 Chip Resistor - Surface Mount ROHS",
+  "stockCount": 284228,
+  "overseasStockCount": 284228,
+  "prices": [
+   {
+    "startNumber": 1,
+    "endNumber": 999,
+    "productPrice": 0.003
+   },
+   {
+    "startNumber": 1000,
+    "endNumber": 4999,
+    "productPrice": 0.0023
+   },
+   {
+    "startNumber": 5000,
+    "endNumber": 9999,
+    "productPrice": 0.002
+   },
+   {
+    "startNumber": 10000,
+    "endNumber": 49999,
+    "productPrice": 0.0018
+   },
+   {
+    "startNumber": 50000,
+    "endNumber": 50199,
+    "productPrice": 0.0016
+   },
+   {
+    "startNumber": 50200,
+    "endNumber": -1,
+    "productPrice": 0.0016
+   }
+  ],
+  "componentLibraryType": "expand",
+  "leastNumber": 20,
+  "leastNumberPrice": 0.01,
+  "warehouseCode": "sz",
+  "canPresaleNumber": 237150,
+  "componentStatus": "yes",
+  "assemblyProcess": "SMT",
+  "minPurchaseNum": 1,
+  "initialPrice": 0.003,
+  "isBuyComponent": "1",
+  "noBuyReason": null,
+  "leastPatchNumber": 20,
+  "specialComponentFee": 0.0
+ },
+ "message": null
+}

@@ -97,7 +97,12 @@ several traps below are version-specific: after a KiCad upgrade, re-run
 6. `just <p>::carrier-fab` (runs `carrier-check` first): Gerbers, drill, BOM
    and CPL. `just kicad::check` runs what CI runs. The CPL adds each LCSC
    part's checked rotation offset (trap 32); a new LCSC number needs an entry
-   in `docs/reference/jlcpcb-rotations.toml` first. Quoting and ordering the
+   in `docs/reference/jlcpcb-rotations.toml` first. `carrier-fab` first runs
+   `python3 -m kicad.lcsc --project <p>`, which asks JLCPCB about each LCSC
+   number (cached a day under `~/.cache/mcu-tinkering-lab/lcsc`, nothing
+   committed) and stops on one that is unknown, not orderable (trap 51) or
+   out of stock; extended parts only warn. `just kicad::parts` checks every number
+   in use (`--json`, `--refresh`, `--offline`). Quoting and ordering the
    result: the `jlcpcb-order` skill, whose § 1 decides which SMD parts
    JLCPCB places: any part not owned and not sold on AliExpress stays on the
    PCBA BOM (`.claude/rules/part-sourcing.md`).
@@ -413,6 +418,21 @@ several traps below are version-specific: after a KiCad upgrade, re-run
     for byte. A second run clips nothing more, so the `Silk` field appears
     only on a board that was clipped from its committed state. Re-applying a
     position also rounds away KiCad's 1 nm drift (−3.900001 → −3.9).
+
+### Found checking LCSC parts against JLCPCB
+
+50. **JLCPCB's parts search is fuzzy.** `selectSmtComponentList` with
+    `"keyword": "C17414"` also lists C20622501, extended and out of stock,
+    whose MPN is "C17414"; an unknown number lists 41 unrelated parts. The
+    first hit, or any hit, is not the part: `kicad.lcsc` keeps only the entry
+    whose `componentCode` matches, and asks the detail endpoint (which
+    answers `{"code": 400, "data": null}` under HTTP 200 for an unknown
+    number) for everything but `preferredComponentFlag`.
+51. **`componentStatus` "yes" does not mean orderable.** On 2026-11-06
+    C9900140859 answered `componentStatus` "yes" with `isBuyComponent` "0"
+    and `noBuyReason` "This product is no longer manufactured.". Gating on
+    the status alone passes a discontinued part that still has leftover
+    stock: `kicad.lcsc` fails `isBuyComponent` "0" and prints the reason.
 
 ## Verify the gate can fail
 
