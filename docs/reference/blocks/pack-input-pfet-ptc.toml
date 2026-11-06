@@ -1,0 +1,74 @@
+# Pack input protection for a 2S pack: a reverse-polarity P-MOSFET, then a
+# resettable fuse. First used on robocar-unified-integrated (Q1, R27, F1).
+#
+# IN (the pack's +) -> fet drain; fet source -> fuse; fuse -> OUT. The P-MOSFET
+# is a high-side switch with its gate to GND through `gate`. Plugged in the
+# right way its body diode conducts first, the gate sits the pack's voltage
+# below the source and the channel turns on; reversed, the gate is above the
+# source and the body diode is reverse-biased, so nothing after OUT sees the
+# reversed pack. The fuse limits the pack's fault current into a short after
+# OUT. The two are in series and carry the same current in either order;
+# balancebot puts the fuse first and adds a gate zener for 3S, so it is not
+# this block.
+#
+# DMP3013SFV (C264098), Diodes DS40141 Rev. 5-2: VDSS -30 V, VGSS +-25 V,
+# RDS(on) max 9.5 mohm at VGS -10 V and 17 mohm at -4.5 V (11 typ), VGS(th)
+# -1.0 to -3.0 V, ID -12 A at TA 25 C on 1 in2 of 2 oz copper (note 6, RthJA
+# 65 C/W), RthJA 134 C/W on the minimum pad layout (note 5). At 3 A it
+# dissipates at most 0.15 W (17 mohm), about 20 C over ambient at the
+# minimum-pad 134 C/W; at 5.5 A (a downstream buck in current limit), 0.51 W,
+# about 69 C: a fault the buck's hiccup ends, not a running point. The SOT-223
+# ZXMP4A16G would dissipate 0.9 W at 3 A (100 mohm at -4.5 V).
+#
+# |VGS| follows the pack: 8.4 V charged, down to wherever the load's
+# undervoltage cutoff sits. RDS(on) is specified down to -4.5 V; below that it
+# is only bounded by VGS(th) max -3.0 V, so the last few hundred millivolts of
+# a flat pack run on an unspecified, higher resistance (not measured). No gate
+# zener: a 2S pack's undamped hot-plug ring reaches at most twice 8.4 V, 16.8
+# V, under the 25 V VGSS. A 3S pack's ring (25.2 V) is not, which is why this
+# block is 2S only. The gate is ESD-protected (DS40141 page 1).
+#
+# The fuse: C883162 (BSMD1812-300-16V), 3 A hold, 16 V against a charged 2S
+# pack's 8.4 V.
+#
+# Layout (not checked by the block): the input path is power-stage checklist
+# item 11 (.claude/rules/power-stage-checklist.md); give IN and the fet-fuse
+# net fixed, wide tracks with no via in the project's board.toml.
+
+[block]
+name = "2S pack input: reverse-polarity P-MOSFET and PTC fuse"
+source = "Diodes DS40141 Rev. 5-2 (DMP3013SFV); BHFUSE BSMD1812 datasheet; robocar-unified-integrated sixth pre-fab layout review, N9"
+
+[ports]
+IN = ["fet.D"]
+OUT = ["fuse.2"]
+GND = ["gate.B"]
+
+[parts.fet]
+name = "DMP3013SFV reverse-polarity P-MOSFET"
+kind = "mosfet"
+part = "dmp3013sfv"
+
+[parts.gate]
+name = "10 kΩ gate resistor to GND"
+kind = "resistor"
+part = "r0805"
+value = "10k"
+lcsc = "C17414"
+
+[parts.fuse]
+name = "3 A hold PTC fuse, pack input"
+kind = "fuse"
+part = "polyfuse-1812"
+value = "3A hold 16V"
+lcsc = "C883162"
+
+[[rails]]
+name = "RP"
+from = "fet.S"
+to = ["fuse.1"]
+
+[[rails]]
+name = "GATE"
+from = "fet.G"
+to = ["gate.A"]

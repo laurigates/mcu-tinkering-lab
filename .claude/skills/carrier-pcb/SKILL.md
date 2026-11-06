@@ -107,6 +107,17 @@ several traps below are version-specific: after a KiCad upgrade, re-run
    JLCPCB places: any part not owned and not sold on AliExpress stays on the
    PCBA BOM (`.claude/rules/part-sourcing.md`).
 
+## Using a circuit block
+
+A stage that already exists as a block (`docs/reference/blocks/`, ADR-031)
+goes in as `[blocks.<id>]` with `block`, `net_prefix` and one ref per block
+part; connect its ports by writing `<id>.<PORT>` in the project's rails. Change
+a value for one board with an override (`parts.<key> = { value = ... }`) and a
+comment, not by editing the block: a block edit regenerates every carrier
+that uses it. Part keys expand to `<id>_<key>`, so the IC of `[blocks.buck]`
+is `buck_ic`. Re-expressing an existing stage as a block must leave
+`kicad.netlist`, `kicad.schematic --check` and `kicad.stamp` unchanged.
+
 ## Adding a registry entry
 
 - **Choose a part that can be bought** before drawing it: owned, placeable by

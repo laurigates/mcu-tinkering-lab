@@ -189,7 +189,6 @@ from __future__ import annotations
 
 import re
 import string
-import tomllib
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -203,6 +202,7 @@ from .header import (
     parse_defines,
     roles_from_defines,
 )
+from .blocks import load_sidecar
 from .layout import parse_layout
 
 SIDECAR = "hardware.toml"
@@ -1038,10 +1038,7 @@ def join(
     sidecar = project_dir / SIDECAR
     if not sidecar.is_file():
         raise HardwareError(f"{sidecar}: not found — this project has no {SIDECAR}")
-    try:
-        data = tomllib.loads(sidecar.read_text(encoding="utf-8"))
-    except tomllib.TOMLDecodeError as e:
-        raise HardwareError(f"{sidecar}: {e}") from e
+    data = load_sidecar(sidecar, repo_root)
     _check_keys(str(sidecar), "", data)
 
     source = data.get("source", {})

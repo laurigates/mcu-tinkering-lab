@@ -70,13 +70,15 @@ import os
 import re
 import sys
 import tempfile
-import tomllib
 import urllib.request
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
+
+from hardware import HardwareError
+from hardware.blocks import load_sidecar
 
 from . import registry
 from .errors import KicadError
@@ -186,11 +188,11 @@ def used(
         sidecars = [p / "hardware.toml" for p in projects]
     for sidecar in sidecars:
         try:
-            data = tomllib.loads(sidecar.read_text(encoding="utf-8"))
+            data = load_sidecar(sidecar, repo_root)
         except FileNotFoundError:
             raise KicadError(f"{sidecar}: no hardware.toml") from None
-        except tomllib.TOMLDecodeError as e:
-            raise KicadError(f"{sidecar}: {e}") from None
+        except HardwareError as e:
+            raise KicadError(str(e)) from None
         name = _project_label(sidecar.parent, repo_root)
         tables = [("source", data.get("source", {}))]
         tables += [(f"parts.{k}", v) for k, v in data.get("parts", {}).items()]
