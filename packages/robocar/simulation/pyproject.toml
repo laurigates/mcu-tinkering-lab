@@ -164,7 +164,7 @@ include = ["src"]
 [tool.ty.rules]
 # Silence import-resolution errors for third-party packages without type stubs.
 # Equivalent to mypy's `ignore_missing_imports` for these modules.
-unresolved-import = "ignore"
+import-not-found = "ignore"
 
 [tool.pytest.ini_options]
 minversion = "6.0"
