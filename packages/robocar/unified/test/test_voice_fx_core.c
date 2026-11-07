@@ -52,11 +52,12 @@ static void test_run(const char *name, void (*fn)(void))
 
 #define RATE 24000u
 
-/** Init with the chain switched on. The boot default is off
- *  (VOICE_FX_DEFAULT_ENABLED), and the tests below are about what the chain
- *  does to a signal, so each enables it explicitly. The bypass test enables it
- *  too and then switches it off, so it covers the ON->OFF edge; the boot
- *  default itself is pinned by test_the_chain_boots_disabled. */
+/** Init with the chain switched on. The boot default is on
+ *  (VOICE_FX_DEFAULT_ENABLED), but the tests below are about what the chain
+ *  does to a signal, so each enables it explicitly rather than depending on the
+ *  default. The bypass test enables it too and then switches it off, so it
+ *  covers the ON->OFF edge; the boot default itself is pinned by
+ *  test_the_chain_boots_enabled. */
 static void fx_init_on(voice_fx_t *fx)
 {
     voice_fx_init(fx, RATE);
@@ -208,11 +209,11 @@ static void test_disabled_is_a_byte_exact_bypass(void)
 
 /** The boot default is the plain TTS voice: voice_fx_init() alone must leave
  *  the chain off and the samples byte-identical, with no set_enabled() call. */
-static void test_the_chain_boots_disabled(void)
+static void test_the_chain_boots_enabled(void)
 {
     voice_fx_t fx;
     voice_fx_init(&fx, RATE);
-    ASSERT(!fx.enabled);
+    ASSERT(fx.enabled);
 
     int16_t buf[64];
     int16_t ref[64];
@@ -221,7 +222,7 @@ static void test_the_chain_boots_disabled(void)
     }
     memcpy(ref, buf, sizeof(buf));
     voice_fx_apply(&fx, buf, 64);
-    ASSERT(memcmp(buf, ref, sizeof(buf)) == 0);
+    ASSERT(memcmp(buf, ref, sizeof(buf)) != 0);
 }
 
 /** Reset must leave no tail — silence in, exact silence out. */
@@ -323,7 +324,7 @@ int main(void)
     test_run("state survives a chunk boundary", test_state_survives_a_chunk_boundary);
 
     test_run("disabled is a byte-exact bypass", test_disabled_is_a_byte_exact_bypass);
-    test_run("the chain boots disabled", test_the_chain_boots_disabled);
+    test_run("the chain boots enabled", test_the_chain_boots_enabled);
     test_run("reset clears the tail", test_reset_clears_the_tail);
 
     test_run("out-of-range parameters are refused", test_out_of_range_parameters_are_refused);

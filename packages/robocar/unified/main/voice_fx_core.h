@@ -77,12 +77,13 @@ extern "C" {
  *  and `cam gainceiling`: a boot comes up at the documented default rather than
  *  at whatever last night's experiment left behind.
  *
- *  The chain boots disabled: the plain TTS voice is the default, and
- *  `voice fx on` brings the chain in with the parameters above. */
+ *  The chain boots enabled with the parameters above, so the robot speaks in
+ *  the robotic voice from power-on; `voice fx off` returns the plain TTS voice
+ *  until the next boot. */
 #define VOICE_FX_DEFAULT_BODY_MS 6.5f
 #define VOICE_FX_DEFAULT_FEEDBACK 0.72f
 #define VOICE_FX_DEFAULT_DRIVE 1.5f
-#define VOICE_FX_DEFAULT_ENABLED false
+#define VOICE_FX_DEFAULT_ENABLED true
 
 typedef struct {
     bool enabled;
