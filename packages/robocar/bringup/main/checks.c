@@ -57,6 +57,8 @@ static const char *TAG = "checks";
 /** Per-motor pulse. Short and slow on purpose — see check_motors(). */
 #define MOTOR_PULSE_MS 220
 #define MOTOR_PULSE_SPEED 70 /* of 255 */
+/** Re-issue interval within a pulse, for motor_controller's start-up ramp. */
+#define MOTOR_PULSE_TICK_MS 20
 
 /** Microphone samples measured, and the floor below which the mic reads dead. */
 #define MIC_SAMPLES 2048
@@ -408,13 +410,18 @@ static check_result_t check_motors(void)
 
     for (size_t i = 0; i < sizeof(pulses) / sizeof(pulses[0]); i++) {
         ESP_LOGI(TAG, "  motor pulse: %s", pulses[i].what);
-        const esp_err_t err =
-            motor_set_individual(pulses[i].left, pulses[i].right, pulses[i].ldir, pulses[i].rdir);
-        if (err != ESP_OK) {
-            motor_stop();
-            return result(CHECK_FAIL, "%s write failed", pulses[i].what);
+        /* Re-issued every tick rather than written once: motor_controller
+         * ramps a rise over successive calls (MOTOR_RAMP_FULL_SCALE_MS), and a
+         * single call would hold the first step of it for the whole pulse. */
+        for (uint32_t t = 0; t < MOTOR_PULSE_MS; t += MOTOR_PULSE_TICK_MS) {
+            const esp_err_t err = motor_set_individual(pulses[i].left, pulses[i].right,
+                                                       pulses[i].ldir, pulses[i].rdir);
+            if (err != ESP_OK) {
+                motor_stop();
+                return result(CHECK_FAIL, "%s write failed", pulses[i].what);
+            }
+            vTaskDelay(pdMS_TO_TICKS(MOTOR_PULSE_TICK_MS));
         }
-        vTaskDelay(pdMS_TO_TICKS(MOTOR_PULSE_MS));
         motor_stop();
         vTaskDelay(pdMS_TO_TICKS(250));
     }

@@ -72,4 +72,32 @@ bool motor_is_initialized(void);
  */
 #define MOTOR_REFRESH_INTERVAL_MS 1000U
 
+/**
+ * @brief Time for a motor's PWM to rise from 0 to full scale.
+ *
+ * A stalled DC motor draws its stall current, and stepping a standing robot
+ * straight to 60 % duty in both directions (`rotate`) pulled the shared 5 V
+ * rail low enough to brown out the XIAO: two BROWNOUT_RST resets captured on
+ * J15 on 2026-11-07, one 1 ms after the planner's `rotate` goal and one during
+ * the boot wheel exercise, while 50 s of speech in between caused none.
+ *
+ * Only a rise is limited. Lowering duty, stopping (coast) and braking are
+ * applied on the same call, so the obstacle reflex is not slowed. A reversal
+ * starts again from 0, since a motor driven against its own rotation draws
+ * more than a stalled one.
+ */
+#define MOTOR_RAMP_FULL_SCALE_MS 300U
+
+/**
+ * @brief Longest interval the ramp credits between two calls, in ms.
+ *
+ * The rise allowed on a call is proportional to the time since the previous
+ * write, and that time is unbounded after the robot has been parked. Capping it
+ * keeps the first step from rest at
+ * PCA9685_PWM_MAX * MOTOR_RAMP_DT_CAP_MS / MOTOR_RAMP_FULL_SCALE_MS (about 13 %
+ * of full scale) however long the motors were idle. Set just above the
+ * executor's 33 ms tick.
+ */
+#define MOTOR_RAMP_DT_CAP_MS 40U
+
 #endif  // MOTOR_CONTROLLER_H
