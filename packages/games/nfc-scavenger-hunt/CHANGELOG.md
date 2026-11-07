@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.6](https://github.com/laurigates/mcu-tinkering-lab/compare/nfc-scavenger-hunt-v0.1.5...nfc-scavenger-hunt-v0.1.6) (2026-11-07)
+
+
+### Miscellaneous
+
+* **claude:** add reviewed: dates to the project rules ([#973](https://github.com/laurigates/mcu-tinkering-lab/issues/973)) ([85be98c](https://github.com/laurigates/mcu-tinkering-lab/commit/85be98c2030b02fc757c1262988a700349bb292f))
+
 ## [0.1.5](https://github.com/laurigates/mcu-tinkering-lab/compare/nfc-scavenger-hunt-v0.1.4...nfc-scavenger-hunt-v0.1.5) (2026-09-19)
 
 

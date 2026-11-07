@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.11](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-simulation-v0.1.10...robocar-simulation-v0.1.11) (2026-11-07)
+
+
+### Features
+
+* **kicad:** query and cache JLCPCB part data per LCSC number ([#975](https://github.com/laurigates/mcu-tinkering-lab/issues/975)) ([9cc2e5c](https://github.com/laurigates/mcu-tinkering-lab/commit/9cc2e5c5dd0325362cae51f252e46aa0c171def1))
+
+
+### Bug Fixes
+
+* **simulation:** pin Python 3.12 so CI's uv sync stops picking 3.14 ([#974](https://github.com/laurigates/mcu-tinkering-lab/issues/974)) ([3ca7af8](https://github.com/laurigates/mcu-tinkering-lab/commit/3ca7af82a46c49e4a1c66ede89f5dd9af1ff1bfd))
+
 ## [0.1.10](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-simulation-v0.1.9...robocar-simulation-v0.1.10) (2026-11-01)
 
 
