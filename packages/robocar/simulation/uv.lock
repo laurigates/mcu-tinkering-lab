@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'win32'",
@@ -846,7 +846,7 @@ requires-dist = [
     { name = "sphinx", marker = "extra == 'dev'", specifier = "==9.1.1" },
     { name = "sphinx-rtd-theme", marker = "extra == 'dev'", specifier = "==3.1.0" },
     { name = "toml", specifier = "==0.10.2" },
-    { name = "torch", specifier = ">=2.0.0" },
+    { name = "torch", specifier = "==2.15.0" },
     { name = "torch", extras = ["cuda"], marker = "extra == 'gpu'", specifier = "==2.15.0" },
     { name = "trimesh", specifier = "==5.2.0" },
     { name = "ty", marker = "extra == 'dev'", specifier = "==0.0.94" },
