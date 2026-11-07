@@ -257,8 +257,12 @@ static void sanitize_spoken_line(char *s)
     }
 }
 
-esp_err_t gemini_parse_text(const char *json_text, char *out, size_t out_len)
+esp_err_t gemini_parse_text_meta(const char *json_text, char *out, size_t out_len,
+                                 gemini_text_meta_t *meta)
 {
+    if (meta) {
+        memset(meta, 0, sizeof(*meta));
+    }
     if (!json_text || !out || out_len == 0) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -274,24 +278,50 @@ esp_err_t gemini_parse_text(const char *json_text, char *out, size_t out_len)
     cJSON *content = c0 ? cJSON_GetObjectItem(c0, "content") : NULL;
     cJSON *parts = content ? cJSON_GetObjectItem(content, "parts") : NULL;
 
+    if (meta && c0) {
+        cJSON *finish = cJSON_GetObjectItem(c0, "finishReason");
+        if (cJSON_IsString(finish) && finish->valuestring) {
+            snprintf(meta->finish_reason, sizeof(meta->finish_reason), "%s", finish->valuestring);
+        }
+    }
+
     if (cJSON_IsArray(parts)) {
         out[0] = '\0';
         size_t pos = 0;
         const int n = cJSON_GetArraySize(parts);
-        for (int i = 0; i < n && pos + 1 < out_len; ++i) {
-            cJSON *t = cJSON_GetObjectItem(cJSON_GetArrayItem(parts, i), "text");
-            if (cJSON_IsString(t) && t->valuestring) {
-                /* snprintf rather than strlcat: this file also builds on the
-                 * host for the unit tests, where strlcat is not portable. It
-                 * always NUL-terminates and returns the length it WOULD have
-                 * written, so clamp before advancing or a long first part makes
-                 * pos run past the buffer. */
-                const int w = snprintf(out + pos, out_len - pos, "%s", t->valuestring);
-                if (w < 0) {
-                    break;
+        if (meta) {
+            meta->parts = n;
+        }
+        for (int i = 0; i < n; ++i) {
+            cJSON *part = cJSON_GetArrayItem(parts, i);
+            /* Reasoning is never speech (#950): on 2026-11-05 a voice turn
+             * spoke 34.8 s of "The user asks ..." in English. */
+            if (cJSON_IsTrue(cJSON_GetObjectItem(part, "thought"))) {
+                if (meta) {
+                    meta->thought_parts++;
                 }
-                pos += ((size_t)w < out_len - pos) ? (size_t)w : (out_len - pos - 1);
+                continue;
             }
+            cJSON *t = cJSON_GetObjectItem(part, "text");
+            if (!cJSON_IsString(t) || !t->valuestring) {
+                continue;
+            }
+            if (meta) {
+                meta->text_parts++;
+            }
+            if (pos + 1 >= out_len) {
+                continue; /* full: keep counting parts for the log */
+            }
+            /* snprintf rather than strlcat: this file also builds on the
+             * host for the unit tests, where strlcat is not portable. It
+             * always NUL-terminates and returns the length it WOULD have
+             * written, so clamp before advancing or a long first part makes
+             * pos run past the buffer. */
+            const int w = snprintf(out + pos, out_len - pos, "%s", t->valuestring);
+            if (w < 0) {
+                break;
+            }
+            pos += ((size_t)w < out_len - pos) ? (size_t)w : (out_len - pos - 1);
         }
         if (out[0] != '\0') {
             sanitize_spoken_line(out);
@@ -303,4 +333,9 @@ esp_err_t gemini_parse_text(const char *json_text, char *out, size_t out_len)
 
     cJSON_Delete(root);
     return ret;
+}
+
+esp_err_t gemini_parse_text(const char *json_text, char *out, size_t out_len)
+{
+    return gemini_parse_text_meta(json_text, out, out_len, NULL);
 }

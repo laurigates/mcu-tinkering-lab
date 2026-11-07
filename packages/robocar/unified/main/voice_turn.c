@@ -481,8 +481,15 @@ static void run_turn(uint32_t window_ms, bool vad)
         return;
     }
 
-    if (gemini_parse_text(s_response, s_reply, sizeof(s_reply)) != ESP_OK) {
-        ESP_LOGE(TAG, "no usable text in reply: %s", acc.len ? s_response : "(empty body)");
+    /* The reply's shape goes on the log line, success included, so a reply
+     * that is the model's reasoning names its cause (#950): thought parts are
+     * skipped; a reasoning-shaped answer with thought=0 is the model's text. */
+    gemini_text_meta_t meta;
+    if (gemini_parse_text_meta(s_response, s_reply, sizeof(s_reply), &meta) != ESP_OK) {
+        ESP_LOGE(TAG, "no usable text in reply (parts=%d thought=%d text=%d finish=%s): %s",
+                 meta.parts, meta.thought_parts, meta.text_parts,
+                 meta.finish_reason[0] ? meta.finish_reason : "-",
+                 acc.len ? s_response : "(empty body)");
         return;
     }
 
@@ -511,7 +518,9 @@ static void run_turn(uint32_t window_ms, bool vad)
     voice_history_record(s_reply, reply_now_ms);
 
     const uint32_t latency_ms = reply_now_ms - t_start;
-    ESP_LOGI(TAG, "listen: latency=%u ms reply=\"%s\"", (unsigned)latency_ms, s_reply);
+    ESP_LOGI(TAG, "listen: latency=%u ms parts=%d thought=%d text=%d finish=%s len=%u reply=\"%s\"",
+             (unsigned)latency_ms, meta.parts, meta.thought_parts, meta.text_parts,
+             meta.finish_reason[0] ? meta.finish_reason : "-", (unsigned)strlen(s_reply), s_reply);
 
     if (speech_queue_post(s_reply) != ESP_OK) {
         ESP_LOGW(TAG, "speech queue full — reply dropped");
