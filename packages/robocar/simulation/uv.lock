@@ -846,7 +846,7 @@ requires-dist = [
     { name = "sphinx", marker = "extra == 'dev'", specifier = "==9.1.1" },
     { name = "sphinx-rtd-theme", marker = "extra == 'dev'", specifier = "==3.1.0" },
     { name = "toml", specifier = "==0.10.2" },
-    { name = "torch", specifier = ">=2.0.0" },
+    { name = "torch", specifier = "==2.15.0" },
     { name = "torch", extras = ["cuda"], marker = "extra == 'gpu'", specifier = "==2.15.0" },
     { name = "trimesh", specifier = "==5.2.0" },
     { name = "ty", marker = "extra == 'dev'", specifier = "==0.0.97" },
