@@ -4,10 +4,9 @@ from __future__ import annotations
 
 import asyncio
 
+import live_probe as lp
 import pytest
 from google.genai import types
-
-import live_probe as lp
 
 # --------------------------------------------------------------------------
 # Model selection
@@ -243,6 +242,19 @@ def test_report_measures_from_the_end_of_speech():
     # 2 s of audio arriving over 1 s of wall clock.
     assert r["arrival_rtf"] == 2.0
     assert r["usage_last"] == {"total_token_count": 99}
+
+
+def test_report_times_the_connect_from_the_sdk_returning():
+    # google-genai reads setupComplete inside connect() and never yields it to
+    # receive(), so on a live run connect_to_setup_complete_ms is always None
+    # (2026-11-07, all three sessions). connect() returning is the stamp left.
+    ev = [
+        lp.Event(0.4, "connected"),
+        lp.Event(11.2, "audio", (48000, "audio/pcm;rate=24000", b"")),
+    ]
+    r = lp.build_report(_timeline(ev), "m", "v")
+    assert r["connect_ms"] == 400
+    assert r["connect_to_setup_complete_ms"] is None
 
 
 def test_report_refuses_to_guess_a_rate_when_chunks_disagree():
