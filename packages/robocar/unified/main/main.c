@@ -2383,8 +2383,10 @@ static const char *reset_reason_name(esp_reset_reason_t r)
     }
 }
 
-/** One line identifying exactly what is running and why it booted, first in
- *  the log so a capture from J15 or MQTT is self-describing. */
+/** Two lines identifying exactly what is running and why it booted, first in
+ *  the log so a capture from J15 or MQTT is self-describing. Two, not one:
+ *  the UART0 mirror cuts lines at LOG_MIRROR_LINE_MAX (192), and a single line
+ *  lost the reset reason off its end. The reset reason leads the first line. */
 static void log_boot_banner(void)
 {
     const esp_app_desc_t *desc = esp_app_get_description();
@@ -2394,12 +2396,11 @@ static void log_boot_banner(void)
     esp_chip_info(&chip);
     const esp_reset_reason_t reason = esp_reset_reason();
 
-    ESP_LOGI(TAG,
-             "Boot: %s v%s build %s elf %s | compiled %s %s | IDF %s | chip rev v%d.%d, %d "
-             "cores | reset %s (%d)",
-             desc->project_name, desc->version, ota_manager_get_build_sha(), elf_sha, desc->date,
-             desc->time, desc->idf_ver, chip.revision / 100, chip.revision % 100, chip.cores,
-             reset_reason_name(reason), (int)reason);
+    ESP_LOGI(TAG, "Boot: reset %s (%d) | %s v%s build %s", reset_reason_name(reason), (int)reason,
+             desc->project_name, desc->version, ota_manager_get_build_sha());
+    ESP_LOGI(TAG, "Build: elf %s | compiled %s %s | IDF %s | chip rev v%d.%d, %d cores", elf_sha,
+             desc->date, desc->time, desc->idf_ver, chip.revision / 100, chip.revision % 100,
+             chip.cores);
 }
 
 // ========================================
