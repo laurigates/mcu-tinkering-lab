@@ -886,6 +886,142 @@ static void test_cue_hangover_is_anchored_on_the_last_cue_frame(void)
     ASSERT(ambient_gate_accepts(true, false, end + hang, &last_cue, hang));
 }
 
+/* The pan/tilt SG90s are centimetres from the PDM microphone: a gear whine plus
+ * the motion click, broadband and well above a quiet room. */
+static void servo_frames(ambient_fingerprint_t *room, ambient_fingerprint_t *whine)
+{
+    silence();
+    noise(30);
+    fingerprint(room);
+
+    silence();
+    noise(30);
+    tone(3000.0f, 6000.0f);
+    fingerprint(whine);
+}
+
+/**
+ * One idle-gaze move heard by the listener: a settled room, @p move_frames frames
+ * of servo noise (each one a frame in which the head was commanded to move), the
+ * quiet tail, then the room again. Every frame goes through ambient_head_quiet()
+ * exactly as ambient_listener.c does; @p gate_on false replays the audio without
+ * it, which is the listener before this fix.
+ */
+static uint32_t play_head_move_through_gate(bool gate_on, int move_frames, uint32_t *room_accepted,
+                                            uint32_t *whine_accepted)
+{
+    ambient_fingerprint_t room;
+    ambient_fingerprint_t whine;
+    servo_frames(&room, &whine);
+
+    const uint32_t hang = AMBIENT_SERVO_HANGOVER_MS_DEFAULT;
+    uint32_t last_move = 0u;
+    uint32_t t = 10000u;
+    *room_accepted = 0u;
+    *whine_accepted = 0u;
+
+    ambient_audio_init();
+    for (int i = 0; i < 100; ++i, t += FRAME_MS) {
+        if (!gate_on || ambient_head_quiet(t, last_move, hang)) {
+            ambient_audio_note(&room, t);
+        }
+    }
+    ambient_audio_mark_spoken();
+    ASSERT(!ambient_audio_event(t));
+
+    for (int i = 0; i < move_frames; ++i, t += FRAME_MS) {
+        last_move = t; /* servo_set_angle() changed the angle this frame */
+        if (!gate_on || ambient_head_quiet(t, last_move, hang)) {
+            ambient_audio_note(&whine, t);
+            (*whine_accepted)++;
+        }
+    }
+    /* The horn settling and the mechanism ringing: the head is commanded still. */
+    const uint32_t move_end = t;
+    for (; (uint32_t)(t - move_end) < hang + 4u * FRAME_MS; t += FRAME_MS) {
+        const bool tail = (uint32_t)(t - last_move) < 100u; /* servo lag after the last command */
+        if (!gate_on || ambient_head_quiet(t, last_move, hang)) {
+            ambient_audio_note(tail ? &whine : &room, t);
+            if (tail) {
+                (*whine_accepted)++;
+            } else {
+                (*room_accepted)++;
+            }
+        }
+    }
+    return t;
+}
+
+static void test_head_quiet_honours_the_servo_hangover(void)
+{
+    const uint32_t hang = AMBIENT_SERVO_HANGOVER_MS_DEFAULT;
+    ASSERT(hang > 0u);
+    ASSERT(!ambient_head_quiet(10000u, 10000u, hang));             /* moved this instant */
+    ASSERT(!ambient_head_quiet(10000u + hang - 1u, 10000u, hang)); /* still ringing */
+    ASSERT(ambient_head_quiet(10000u + hang, 10000u, hang));       /* clear */
+    ASSERT(ambient_head_quiet(10000u, 10000u, 0u));                /* hangover disabled */
+
+    /* Boot seed: 0 means "long ago", as for the playback anchor. */
+    ASSERT(ambient_head_quiet(60000u, 0u, hang));
+
+    /* Across the uint32 wrap. */
+    const uint32_t end = 0xFFFFFF00u;
+    ASSERT(!ambient_head_quiet(end + hang - 1u, end, hang));
+    ASSERT(ambient_head_quiet(end + hang, end, hang));
+}
+
+static void test_servo_noise_never_reaches_the_gate(void)
+{
+    /* Control first: the same audio without the guard latches the gate. If this
+     * does not, the test below proves nothing. */
+    uint32_t room = 0u;
+    uint32_t whine = 0u;
+    uint32_t t = play_head_move_through_gate(false, 10, &room, &whine);
+    ASSERT(whine > 0u);
+    ASSERT(ambient_audio_event(t));
+
+    /* With the guard the whine is muted for the move and its tail, and the room
+     * frames after the tail are measured again. */
+    t = play_head_move_through_gate(true, 10, &room, &whine);
+    ASSERT(whine == 0u);
+    ASSERT(room > 0u);
+    ASSERT(!ambient_audio_event(t));
+    ASSERT(ambient_audio_loud_score(t) == 0u);
+    ASSERT(ambient_audio_shape_score(t) == 0u);
+}
+
+static void test_the_robot_still_hears_between_gaze_moves(void)
+{
+    /* Idle gaze: dwells of GAZE_DWELL_MIN_MS (3000) at the shortest, a move of
+     * up to ~1.3 s at 2 deg/tick (80 deg at 60 deg/s). Worst case duty cycle:
+     * move, then the shortest dwell. The fraction of frames the guard mutes must
+     * leave the robot hearing most of the time, or "not deaf" is only a claim. */
+    const uint32_t hang = AMBIENT_SERVO_HANGOVER_MS_DEFAULT;
+    const uint32_t move_ms = 1300u;
+    const uint32_t dwell_ms = 3000u;
+    uint32_t last_move = 0u;
+    uint32_t t = 10000u;
+    uint32_t heard = 0u;
+    uint32_t total = 0u;
+    for (int cycle = 0; cycle < 20; ++cycle) {
+        const uint32_t move_end = t + move_ms;
+        for (; t < move_end + dwell_ms; t += FRAME_MS) {
+            if (t < move_end) {
+                last_move = t;
+            }
+            total++;
+            if (ambient_head_quiet(t, last_move, hang)) {
+                heard++;
+            }
+        }
+    }
+    ASSERT(heard * 100u >= total * 50u); /* worst case: at least half the time */
+
+    /* A head that never moves again never mutes anything, however long ago it
+     * last did, wrap included. */
+    ASSERT(ambient_head_quiet(last_move + 0x80000000u, last_move, hang));
+}
+
 /* =========================================================================
  * Main
  * ========================================================================= */
@@ -940,6 +1076,11 @@ int main(void)
              test_the_same_beep_unflagged_does_open_the_gate);
     test_run("the cue hangover is anchored on the last cue frame, including the wrap",
              test_cue_hangover_is_anchored_on_the_last_cue_frame);
+    test_run("head_quiet honours the servo hangover, including the wrap",
+             test_head_quiet_honours_the_servo_hangover);
+    test_run("servo noise never reaches the gate", test_servo_noise_never_reaches_the_gate);
+    test_run("the robot still hears between gaze moves",
+             test_the_robot_still_hears_between_gaze_moves);
 
     printf("\n=== %d/%d passed ===\n", test_pass, test_count);
     return (test_pass == test_count) ? 0 : 1;

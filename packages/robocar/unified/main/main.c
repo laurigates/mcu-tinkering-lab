@@ -1422,8 +1422,9 @@ static void handle_mic_cmd(const char *buf)
            (unsigned)peak_share, (unsigned)best_run, (unsigned)speech_trigger_share_pct(),
            (unsigned)speech_trigger_margin_db(), (unsigned)speech_trigger_sustain_ms(),
            voice_turn_get_vad() ? "on" : "off");
-    printf("  frames: %u accepted, %u muted by playback\n",
-           (unsigned)ambient_listener_frames_accepted(), (unsigned)ambient_listener_frames_muted());
+    printf("  frames: %u accepted, %u muted by playback/cue, %u muted by head servos\n",
+           (unsigned)ambient_listener_frames_accepted(), (unsigned)ambient_listener_frames_muted(),
+           (unsigned)ambient_listener_frames_head_muted());
     if (last == 0U) {
         printf("  last:   never — no frame has reached the gate\n");
     } else {
