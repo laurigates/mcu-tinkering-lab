@@ -77,7 +77,41 @@ static uint16_t speed_to_pwm(uint8_t speed)
     return (uint16_t)((uint32_t)speed * PCA9685_PWM_MAX / 255);
 }
 
+/* The PWM to write for one motor this call: the commanded value, except that a
+ * rise is limited to MOTOR_RAMP_FULL_SCALE_MS from 0 to full scale.
+ *
+ * in1 == in2 is coast (both low) or short brake (both high), so the duty is
+ * irrelevant and nothing is limited: stopping is never slowed. A rise continues
+ * from the last written duty only while the direction pins are unchanged; a
+ * start from coast or brake, a reversal, or an unknown chip (`last_valid`
+ * false after a failed write) all ramp from 0. */
+static uint16_t ramp_pwm(uint16_t in1, uint16_t in2, uint16_t target, uint16_t last_in1,
+                         uint16_t last_in2, uint16_t last_pwm, bool last_valid, uint32_t dt_ms)
+{
+    if (in1 == in2) {
+        return target;
+    }
+    const uint16_t base = (last_valid && last_in1 == in1 && last_in2 == in2) ? last_pwm : 0;
+    if (target <= base) {
+        return target;
+    }
+    if (dt_ms > MOTOR_RAMP_DT_CAP_MS) {
+        dt_ms = MOTOR_RAMP_DT_CAP_MS;
+    }
+    uint32_t rise = (uint32_t)PCA9685_PWM_MAX * dt_ms / MOTOR_RAMP_FULL_SCALE_MS;
+    if (rise == 0) {
+        rise = 1; /* two calls in the same millisecond still make progress */
+    }
+    const uint32_t next = (uint32_t)base + rise;
+    return next < target ? (uint16_t)next : target;
+}
+
 /* Set both motors in a single I2C transaction (6 channels: IN1, IN2, PWM x2).
+ *
+ * Each motor's PWM passes through ramp_pwm() first, so a start or speed-up is
+ * spread over MOTOR_RAMP_FULL_SCALE_MS. The ramp relies on the caller
+ * re-issuing its command every tick, which reactive_controller's 30 Hz loop
+ * does for every motor command; a single call moves the duty one step.
  *
  * An unchanged state is not re-written. reactive_controller's 30 Hz loop calls
  * motor_stop() unconditionally on every iteration it is not driving, so a
@@ -94,6 +128,19 @@ static uint16_t speed_to_pwm(uint8_t speed)
 static esp_err_t set_motors(uint16_t r_in1, uint16_t r_in2, uint16_t r_pwm, uint16_t l_in1,
                             uint16_t l_in2, uint16_t l_pwm)
 {
+    const uint32_t now = now_ms();
+    const uint16_t *last = s_last_write.values;
+    /* Unsigned subtraction survives the uint32 ms wrap; an unknown chip gets
+     * the capped interval, and ramp_pwm() treats it as stopped anyway. */
+    const uint32_t dt = s_last_write.valid ? now - s_last_write.written_ms : MOTOR_RAMP_DT_CAP_MS;
+
+    r_pwm = ramp_pwm(r_in1, r_in2, r_pwm, last[MOTOR_CH_SLOT(MOTOR_RIGHT_IN1_CHANNEL)],
+                     last[MOTOR_CH_SLOT(MOTOR_RIGHT_IN2_CHANNEL)],
+                     last[MOTOR_CH_SLOT(MOTOR_RIGHT_PWM_CHANNEL)], s_last_write.valid, dt);
+    l_pwm = ramp_pwm(l_in1, l_in2, l_pwm, last[MOTOR_CH_SLOT(MOTOR_LEFT_IN1_CHANNEL)],
+                     last[MOTOR_CH_SLOT(MOTOR_LEFT_IN2_CHANNEL)],
+                     last[MOTOR_CH_SLOT(MOTOR_LEFT_PWM_CHANNEL)], s_last_write.valid, dt);
+
     const uint16_t values[MOTOR_CHANNEL_COUNT] = {
         [MOTOR_CH_SLOT(MOTOR_RIGHT_IN1_CHANNEL)] = r_in1,
         [MOTOR_CH_SLOT(MOTOR_RIGHT_IN2_CHANNEL)] = r_in2,
@@ -102,7 +149,6 @@ static esp_err_t set_motors(uint16_t r_in1, uint16_t r_in2, uint16_t r_pwm, uint
         [MOTOR_CH_SLOT(MOTOR_LEFT_IN2_CHANNEL)] = l_in2,
         [MOTOR_CH_SLOT(MOTOR_LEFT_PWM_CHANNEL)] = l_pwm,
     };
-    const uint32_t now = now_ms();
 
     /* Unsigned subtraction, so the uint32 millisecond wrap at day 49 yields a
      * correct elapsed time rather than a refresh that never falls due again. */
