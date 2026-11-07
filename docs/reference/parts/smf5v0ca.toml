@@ -1,0 +1,14 @@
+# 5 V stand-off bidirectional TVS, SOD-123: ESD clamp for a signal that leaves
+# the board on a cable (a chassis button). Bidirectional, so it has no
+# orientation to get wrong.
+[part]
+name = "SMF5.0CA bidirectional TVS diode, SOD-123"
+source = "KiCad 10.0.6 library (Device:D_TVS: A1 1, A2 2, bidirectional; Diode_SMD:D_SOD-123)"
+symbol = "Device:D_TVS"
+footprint = "Diode_SMD:D_SOD-123"
+value = "SMF5.0CA"
+lcsc = "C435453"
+
+[pins]
+A1 = 1
+A2 = 2

@@ -1,0 +1,22 @@
+# SPDT right-angle SMD slide switch. Rated for signal current, not a supply:
+# use it where it switches a gate or an enable (pack-input-pfet-switched's SW
+# port), never in series with the load. B is the common contact.
+#
+# No `lcsc` yet. JLCPCB stocks it as C431540 (extended, checked 2026-11-07),
+# but kicad.lcsc_rotation cannot derive its rotation: LCSC's footprint has one
+# numbered mounting pad (4) where KiCad's has two unnumbered SH pads, and the
+# three contact pads alone lie on one line, which --pads refuses. Check the
+# rotation by hand, add the entry, then set lcsc.
+[part]
+name = "Shouhan MSK12C02 SPDT slide switch, SMD right-angle"
+source = "KiCad 10.0.6 library (Switch:SW_SPDT: A 1, B 2 (common), C 3; Button_Switch_SMD:SW_SPDT_Shouhan_MSK12C02: pads 1-3 plus two unnumbered mounting pads, drawn from the LCSC C431540 datasheet the footprint cites). That pad 2 is the common contact is the footprint's numbering, not checked on a fitted switch"
+symbol = "Switch:SW_SPDT"
+footprint = "Button_Switch_SMD:SW_SPDT_Shouhan_MSK12C02"
+value = "MSK12C02"
+# Used as an on/off SPST: only the common and one throw are wired.
+no_connect = ["C"]
+
+[pins]
+A = 1
+B = 2
+C = 3

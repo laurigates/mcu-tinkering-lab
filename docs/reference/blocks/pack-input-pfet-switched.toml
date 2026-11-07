@@ -1,0 +1,99 @@
+# Switched pack input for a 2S pack: reverse-polarity protection, an on/off
+# switch that carries no load current, and a resettable fuse. A board with a
+# power switch uses this in place of pack-input-pfet-ptc.
+#
+# IN (the pack's +) -> fet_rp drain; fet_rp source = fet_sw source (COMMON);
+# fet_sw drain -> fuse -> OUT. The two P-MOSFETs are back to back, common
+# source, gates tied (GATE). gate_pu holds GATE at COMMON, so with SW open both
+# are off. Pulling SW to GND (a slide switch, a chassis switch on a connector,
+# or the soft-latch block) pulls GATE down through `gate` and turns both on.
+#
+# Why two FETs: pack-input-pfet-ptc's single P-MOSFET cannot also be the
+# switch. Its body diode points from the pack to the load, so with the gate
+# released the load still gets the pack through the diode, about 0.7 V down.
+# fet_sw's body diode points the other way, from the load to COMMON, and
+# blocks that path. fet_rp's body diode still blocks a reversed pack, as in
+# pack-input-pfet-ptc. With the pack reversed and SW closed, the board's GND is
+# the most positive point: GATE follows it through `gate`, and COMMON can rise
+# only as far as it through the load and fet_sw's body diode, so VGS stays
+# near 0 V and neither FET turns on. (Reasoned, not simulated.)
+#
+# The switch carries only the gate current: about VIN / (100k + 10k) = 76 uA
+# at 8.4 V, and nothing when open. Any signal-rated switch will do
+# (slide-switch-msk12c02, a tact switch through soft-latch, a chassis toggle).
+# With SW open nothing draws from the pack except the FETs' leakage.
+#
+# Gate drive: on, GATE sits at COMMON x 10k / 110k, so VGS = -0.91 x COMMON.
+# At 6.2 V (where tps563208-5v's EN divider turns the buck off), VGS = -5.6 V,
+# inside DMP3013SFV's RDS(on) spec at -4.5 V (17 mohm max, DS40141 Rev. 5-2).
+# At 8.4 V, VGS = -7.6 V, under the +-25 V VGSS. The FETs, the fuse and the
+# 2S-only limit (no gate zener; a 3S hot-plug ring passes VGSS) are as in
+# pack-input-pfet-ptc, whose comments carry the DMP3013SFV and fuse numbers.
+# Two FETs in series double the channel loss: 0.3 W at 3 A against 0.15 W for
+# one.
+#
+# Not checked here: turn-on inrush. The gate switches in about Ciss x 10k (tens
+# of microseconds), so the load's bulk capacitance charges through two
+# RDS(on) and the fuse at whatever the pack can deliver. Measure it on the
+# first board before adding a gate capacitor to slow it.
+#
+# Layout (not checked by the block): IN, COMMON and the fet_sw-fuse net carry
+# the load current; power-stage checklist item 11
+# (.claude/rules/power-stage-checklist.md). SW and GATE carry microamps and can
+# run anywhere, including off board to a chassis switch.
+
+[block]
+name = "2S pack input: back-to-back P-MOSFET switch with reverse-polarity protection and PTC fuse"
+source = "Diodes DS40141 Rev. 5-2 (DMP3013SFV); BHFUSE BSMD1812 datasheet; docs/reference/blocks/pack-input-pfet-ptc.toml"
+note = "SW to GND turns the pack on; the switch carries about 76 uA"
+
+[ports]
+IN = ["fet_rp.D"]
+OUT = ["fuse.2"]
+SW = ["gate.B"]
+
+[parts.fet_rp]
+name = "DMP3013SFV reverse-polarity P-MOSFET"
+kind = "mosfet"
+part = "dmp3013sfv"
+
+[parts.fet_sw]
+name = "DMP3013SFV power-switch P-MOSFET"
+kind = "mosfet"
+part = "dmp3013sfv"
+
+[parts.gate_pu]
+name = "100 kΩ gate pull-up to the common source"
+kind = "resistor"
+part = "r0805"
+value = "100k"
+lcsc = "C149504"
+
+[parts.gate]
+name = "10 kΩ gate resistor to the switch"
+kind = "resistor"
+part = "r0805"
+value = "10k"
+lcsc = "C17414"
+
+[parts.fuse]
+name = "3 A hold PTC fuse, pack input"
+kind = "fuse"
+part = "polyfuse-1812"
+value = "3A hold 16V"
+lcsc = "C883162"
+
+[[rails]]
+name = "COMMON"
+from = "fet_rp.S"
+to = ["fet_sw.S", "gate_pu.A"]
+
+[[rails]]
+name = "GATE"
+from = "fet_rp.G"
+to = ["fet_sw.G", "gate_pu.B", "gate.A"]
+
+[[rails]]
+name = "SWD"
+from = "fet_sw.D"
+to = ["fuse.1"]

@@ -1,0 +1,70 @@
+# Push-button soft power latch: one momentary button turns the board on, the
+# firmware holds it on, and the firmware turns it off (long press, low
+# battery, idle). Drives the SW port of pack-input-pfet-switched.
+#
+# Connect: SW to pack-input-pfet-switched's SW; BTN to a momentary button whose
+# other side is GND (a tact switch, or a chassis button on a connector); HOLD
+# and SENSE to two MCU GPIOs.
+#
+# Off: SW sits at the pack's voltage (the switched block's gate pull-up), HOLD
+# is low (hold_pd), the FET is off, nothing conducts.
+# Press: BTN goes to GND. d_sw pulls SW to one Schottky drop above GND and the
+# pack switches on. The MCU boots with the button still held.
+# Boot: firmware drives HOLD high as early as it can. `hold` then keeps SW at
+# GND after the button is released. The button must be held until then: the
+# ESP32-S3's ROM and second-stage bootloader run before app code, so expect
+# to hold it for a fraction of a second (not measured).
+# Running: SENSE has the MCU's internal pull-up. A press pulls it to one
+# Schottky drop above GND through d_sense, which reads low; released, BTN
+# floats and SENSE reads high. d_sense keeps the pack's voltage on BTN (while
+# off) away from the GPIO.
+# Off: firmware drives HOLD low (for example after a long press). The board
+# stays on until the button is released, then switches off.
+#
+# A firmware hang with HOLD high cannot be undone by the button. Unplugging
+# the pack is the override; add a slide switch in series with BTN's GND, or
+# with the pack, if a board needs another.
+#
+# SENSE low level: the GPIO sees B5819W's forward drop at the pull-up's tens
+# of microamps. Check it against the MCU datasheet's VIL max (not yet in
+# docs/reference/datasheets/mcu--esp32-s3.md) and measure it on the first
+# board. Pick SENSE on an RTC-capable GPIO so a press can wake the chip from
+# deep sleep, and keep HOLD's level through deep sleep with gpio_hold_en().
+#
+# hold: 2N7002 sinks the switched block's gate current (about 76 uA), so its
+# RDS(on) at a 3.3 V gate does not matter. hold_pd keeps it off while the MCU
+# is unpowered or in reset; keep HOLD off strapping pins.
+
+[block]
+name = "Push-button soft power latch (for pack-input-pfet-switched)"
+source = "docs/reference/blocks/pack-input-pfet-switched.toml; topology designed here, not yet built or measured"
+note = "firmware must drive HOLD high at boot and low to power off"
+
+[ports]
+SW = ["d_sw.A", "hold.D"]
+BTN = ["d_sw.K", "d_sense.K"]
+SENSE = ["d_sense.A"]
+HOLD = ["hold.G", "hold_pd.A"]
+GND = ["hold.S", "hold_pd.B"]
+
+[parts.hold]
+name = "2N7002 latch hold FET"
+kind = "mosfet"
+part = "2n7002"
+
+[parts.hold_pd]
+name = "100 kΩ HOLD pull-down"
+kind = "resistor"
+part = "r0805"
+value = "100k"
+lcsc = "C149504"
+
+[parts.d_sw]
+name = "B5819W button-to-switch diode"
+kind = "diode"
+part = "b5819w"
+
+[parts.d_sense]
+name = "B5819W button-sense diode"
+kind = "diode"
+part = "b5819w"

@@ -1,0 +1,67 @@
+# One button input: an on-board tact switch and an off-board button on a
+# connector, in parallel, into one GPIO, with debounce and ESD protection for
+# the cable. Use it for any momentary button (mute, mode, pairing, BOOT on a
+# chassis).
+#
+# Connect: EXT to the connector pin the chassis button's lead lands on (the
+# connector is the project's choice: JST-XH, PH or SH, 2-pin with GND); GPIO
+# to the MCU pin; VCC to 3V3; GND to GND. Fit `sw`, the connector, or both:
+# either closes EXT to GND. Pressed reads low.
+#
+# EXT -> series 1k -> GPIO node; pull-up 10k from VCC and 100 nF to GND on the
+# node; TVS from EXT to GND.
+# - Debounce: released, the node charges through 10k: tau = 10k x 100 nF =
+#   1 ms. Pressed, it discharges through 1k: 0.1 ms. Firmware still debounces;
+#   the RC takes out contact bounce and cable noise faster than a poll sees.
+# - ESD: the TVS clamps a discharge into the cable at the connector; the 1k
+#   limits what still reaches the GPIO's own clamp diodes.
+# - Current: 3.3 V / 11k = 0.3 mA while pressed, none while released.
+#
+# SMF5.0CA: 5 V stand-off, above the 3.3 V line, bidirectional so it cannot be
+# fitted backwards. Its clamping voltage and leakage at 3.3 V are not
+# checked against a datasheet here; read them before relying on it for more
+# than a button.
+#
+# For a button that should wake the MCU from deep sleep, use an RTC GPIO.
+
+[block]
+name = "Button input: on-board tact switch plus off-board connector, debounced and ESD-clamped"
+source = "XKB TS-1187A (tact-switch-ts1187a); SMF5.0CA (smf5v0ca); RC values chosen here"
+note = "pressed reads low"
+
+[ports]
+EXT = ["sw.1", "series.A", "tvs.A1"]
+GPIO = ["series.B", "pullup.B", "cap.A"]
+VCC = ["pullup.A"]
+GND = ["sw.2", "cap.B", "tvs.A2"]
+
+[parts.sw]
+name = "On-board tact switch"
+kind = "switch"
+part = "tact-switch-ts1187a"
+
+[parts.series]
+name = "1 kΩ series resistor, connector to GPIO"
+kind = "resistor"
+part = "r0805"
+value = "1k"
+lcsc = "C17513"
+
+[parts.pullup]
+name = "10 kΩ pull-up"
+kind = "resistor"
+part = "r0805"
+value = "10k"
+lcsc = "C17414"
+
+[parts.cap]
+name = "100 nF debounce capacitor"
+kind = "capacitor"
+part = "c0805"
+value = "100nF"
+lcsc = "C49678"
+
+[parts.tvs]
+name = "SMF5.0CA ESD clamp at the connector"
+kind = "tvs"
+part = "smf5v0ca"
