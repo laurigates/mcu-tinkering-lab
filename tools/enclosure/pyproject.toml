@@ -5,7 +5,7 @@ description = "3D-printable cases for the KiCad carriers, generated with build12
 requires-python = ">=3.12"
 dependencies = [
     "build123d==0.13.0",
-    "pyvista==0.49.1",
+    "pyvista==0.49.2",
     "rtree==1.4.1",
     "trimesh==5.2.0",
 ]
