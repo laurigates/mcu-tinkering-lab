@@ -398,7 +398,12 @@ is `buck_ic`. Re-expressing an existing stage as a block must leave
     the fingers 5-8 and the drain pad 8, and `lcsc_rotation` found no turn.
     Derive it on chosen pads with a map, `--pads 1,2,3,4,5=8`; the entry
     records `pads`. The pins alone would not do: collinear pads cannot tell a
-    turn from a mirror, so `--pads` refuses them.
+    turn from a mirror, so `--pads` refuses them. Two shapes have no `--pads`
+    answer: a footprint that repeats pad numbers (KiCad's TS-1187A tact
+    switch is 1, 1, 2, 2 where LCSC numbers 1-4, and `kicad_pads` keeps one
+    centre per number), and one whose only distinct pads are collinear plus
+    unnumbered mounting pads (the MSK12C02 slide switch). Check those by hand
+    and leave `lcsc` off the entry until the rotation entry exists.
 
 ### Found enforcing JLCPCB's silkscreen rules (#877)
 
@@ -444,6 +449,25 @@ is `buck_ic`. Re-expressing an existing stage as a block must leave
     and `noBuyReason` "This product is no longer manufactured.". Gating on
     the status alone passes a discontinued part that still has leftover
     stock: `kicad.lcsc` fails `isBuyComponent` "0" and prints the reason.
+
+### Found vendoring new parts (PR #988)
+
+52. **`just kicad::vendor` refuses when the installed KiCad is newer than
+    `vendor.TAG`.** On 2026-11-07 the Mac had 10.0.7 and the repo pins
+    10.0.6, and `--check-installed` showed two vendored footprints differ
+    between them (Fiducial_1mm_Mask2mm, TQFN-16), so copying from the install
+    is not safe. Call `kicad.vendor.update(footprint_roots=[root])` instead,
+    with `root` holding the already-vendored footprints plus the new ones
+    fetched from `gitlab.com/kicad/libraries/kicad-footprints/-/raw/10.0.6/`.
+    Symbols cannot come from the tag the same way: kicad-symbols 10.x keeps
+    one file per symbol (`<Lib>.kicad_symdir/<Sym>.kicad_sym`) and the
+    single `<Lib>.kicad_sym` URL is a 404. Take symbols from the install only
+    when `--check-installed` reports no symbol drift, and compare each new
+    block against its `.kicad_symdir` file at the tag.
+53. **Many KiCad parts are derived symbols, and the vendor rejects
+    `extends`.** `Transistor_FET:2N7002` extends `Q_NMOS_GSD`. Name the base
+    symbol in the registry entry (same pins, G 1, S 2, D 3) and say so in
+    `source`.
 
 ## Verify the gate can fail
 
