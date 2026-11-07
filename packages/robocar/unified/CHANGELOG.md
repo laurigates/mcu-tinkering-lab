@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.2.18](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.17...robocar-unified-v0.2.18) (2026-11-07)
+
+
+### Features
+
+* **robocar-twin:** behaviour twin phase 1 — planner_cycle_core and scenario harness ([#980](https://github.com/laurigates/mcu-tinkering-lab/issues/980)) ([1f2fe2d](https://github.com/laurigates/mcu-tinkering-lab/commit/1f2fe2dcb1f7b997e7ee20aac6bba60fafc9224a))
+* **robocar-unified:** idle gaze in the executor, with an idle command ([#954](https://github.com/laurigates/mcu-tinkering-lab/issues/954)) ([4496cbe](https://github.com/laurigates/mcu-tinkering-lab/commit/4496cbea1d008c8b7b4f0c9c6fe3db7b57a165b2))
+* **robocar-unified:** key the scene gates' references by head pose ([#953](https://github.com/laurigates/mcu-tinkering-lab/issues/953)) ([ae929e2](https://github.com/laurigates/mcu-tinkering-lab/commit/ae929e2c6b98e4d7b614a977231be17d081cda46))
+* **robocar-unified:** log version, build and reset reason at boot ([#986](https://github.com/laurigates/mcu-tinkering-lab/issues/986)) ([f5db9c4](https://github.com/laurigates/mcu-tinkering-lab/commit/f5db9c45789e73fef323532d1f1fc7ec59110f37))
+* **robocar-unified:** ramp motor PWM up instead of stepping to it ([#987](https://github.com/laurigates/mcu-tinkering-lab/issues/987)) ([91fd820](https://github.com/laurigates/mcu-tinkering-lab/commit/91fd820e74292b5653a20b5c77536440c94e9831))
+* **robocar-unified:** show a status screen on the OLED ([#940](https://github.com/laurigates/mcu-tinkering-lab/issues/940)) ([500c428](https://github.com/laurigates/mcu-tinkering-lab/commit/500c428a06d41924d2fd5ec4021786ccdc0b891d))
+
+
+### Bug Fixes
+
+* **robocar-unified:** boot at 30% volume ([#965](https://github.com/laurigates/mcu-tinkering-lab/issues/965)) ([9a4ea0b](https://github.com/laurigates/mcu-tinkering-lab/commit/9a4ea0ba9d6d71dc9d43c6a7905872c20c2c83da))
+* **robocar-unified:** don't re-announce status when the key is first accepted ([#945](https://github.com/laurigates/mcu-tinkering-lab/issues/945)) ([ad56ffe](https://github.com/laurigates/mcu-tinkering-lab/commit/ad56ffe094ff1d62dc78d5be1d40bacd2d35e49a))
+* **robocar-unified:** mirror the pan servo, which is mounted reversed ([#961](https://github.com/laurigates/mcu-tinkering-lab/issues/961)) ([25f6816](https://github.com/laurigates/mcu-tinkering-lab/commit/25f6816f5db6984cb8e16af8eecc0b9a6258a785))
+* **robocar-unified:** raise the FreeRTOS timer task stack to 4096 ([#939](https://github.com/laurigates/mcu-tinkering-lab/issues/939)) ([61aa6a9](https://github.com/laurigates/mcu-tinkering-lab/commit/61aa6a99d309fe29930018be1e633a709c9162cb))
+* **robocar-unified:** run the I2C bus at 100 kHz so the RCWL-1601s answer ([#941](https://github.com/laurigates/mcu-tinkering-lab/issues/941)) ([f25eb9e](https://github.com/laurigates/mcu-tinkering-lab/commit/f25eb9e6d74a90f353692bc54c3f88570536fbbb))
+* **robocar-unified:** stop "strange noise" remarks about speech ([#946](https://github.com/laurigates/mcu-tinkering-lab/issues/946)) ([fba90df](https://github.com/laurigates/mcu-tinkering-lab/commit/fba90dfb3d49b95b4359ccc748eb8f119edf38bb))
+* **robocar-unified:** TTS model migration, prompt sizing, Gemini key and WiFi resilience ([#935](https://github.com/laurigates/mcu-tinkering-lab/issues/935)) ([da627a6](https://github.com/laurigates/mcu-tinkering-lab/commit/da627a69c0d7d0ac41177881892f09d9a0c5a13f))
+
+
+### Documentation
+
+* **robocar-unified:** bench control over MQTT, and a `cmd` recipe ([c00a186](https://github.com/laurigates/mcu-tinkering-lab/commit/c00a186d0c1dea2507cabf1198c524c9c7daf7f4))
+* **robocar-unified:** bench control over MQTT, and a cmd recipe ([#964](https://github.com/laurigates/mcu-tinkering-lab/issues/964)) ([c00a186](https://github.com/laurigates/mcu-tinkering-lab/commit/c00a186d0c1dea2507cabf1198c524c9c7daf7f4))
+* **robocar-unified:** move subsystem notes out of CLAUDE.md into docs/firmware ([#938](https://github.com/laurigates/mcu-tinkering-lab/issues/938)) ([b98cbf6](https://github.com/laurigates/mcu-tinkering-lab/commit/b98cbf68613c34fb6608ec9aab2752cf505d760c))
+* **robocar-unified:** record three bench findings from 2026-11-04/05 ([#952](https://github.com/laurigates/mcu-tinkering-lab/issues/952)) ([16e3405](https://github.com/laurigates/mcu-tinkering-lab/commit/16e3405b713a34dcba899dc1aef76c75d36e7e54))
+
 ## [0.2.17](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.16...robocar-unified-v0.2.17) (2026-11-03)
 
 
