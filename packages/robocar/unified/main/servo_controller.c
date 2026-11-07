@@ -11,6 +11,7 @@
 
 #include "servo_controller.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "i2c_bus.h"
@@ -37,6 +38,21 @@ _Static_assert(SERVO_TILT_LIMIT_MIN_DEFAULT >= SERVO_ANGLE_HW_MIN &&
                    SERVO_TILT_LIMIT_MIN_DEFAULT <= SERVO_TILT_CENTER &&
                    SERVO_TILT_CENTER <= SERVO_TILT_LIMIT_MAX_DEFAULT,
                "tilt limit defaults must lie inside the SG90 pulse range and contain centre");
+
+/* When an angle last changed, ms since boot; 0 = never. Written on Core 0 by the
+ * executor (or the console task), read by the ambient listener on Core 1: one
+ * aligned 32-bit word, so volatile is enough. */
+static volatile uint32_t s_last_move_ms;
+
+static void note_motion(void)
+{
+    s_last_move_ms = (uint32_t)(esp_timer_get_time() / 1000);
+}
+
+uint32_t servo_last_move_ms(void)
+{
+    return s_last_move_ms;
+}
 
 static struct {
     bool initialized;
@@ -138,6 +154,7 @@ esp_err_t servo_controller_init(void)
     // first and lower it again if the bus write fails, so a failed init can be
     // retried and the servos are never reported as ready when they are not.
     servo_state.initialized = true;
+    note_motion(); /* powering the outputs can twitch the horns */
     esp_err_t ret = servo_center_all();
     if (ret != ESP_OK) {
         servo_state.initialized = false;
@@ -180,6 +197,11 @@ esp_err_t servo_set_angle(servo_id_t servo_id, int16_t angle)
     esp_err_t ret = i2c_bus_pca9685_set(channel, count);
 
     if (ret == ESP_OK) {
+        /* A changed angle is motion; an identical re-assert (the executor's
+         * refresh) holds position and is not. */
+        if (angle != *current_angle) {
+            note_motion();
+        }
         *current_angle = angle;
         ESP_LOGD(TAG, "Servo %d -> %d° (count=%d)", servo_id, angle, count);
     }
@@ -269,6 +291,7 @@ esp_err_t servo_enable(servo_id_t servo_id)
     if (!servo_state.initialized)
         return ESP_ERR_INVALID_STATE;
 
+    note_motion(); /* re-energising a released servo can twitch it */
     if (servo_id == SERVO_PAN) {
         servo_state.pan_enabled = true;
         return servo_set_angle(SERVO_PAN, servo_state.pan_angle);

@@ -167,6 +167,15 @@ extern "C" {
  *  microphone lock; once the turn holds it, the listener reads nothing. */
 #define AMBIENT_CUE_HANGOVER_MS_DEFAULT AMBIENT_PLAYBACK_HANGOVER_MS_DEFAULT
 
+/** How long after the head was last commanded to move the microphone is still
+ *  considered contaminated by the pan/tilt servos, in ms.
+ *
+ *  The idle gaze commands a new angle every 33 ms tick for up to ~1.3 s, then
+ *  dwells 3-8 s, so this leaves most of every dwell audible. The SG90 lags its
+ *  command by tens of ms; 300 ms covers that and the mount ringing. A guess with
+ *  margin: tune it against the `mic` head-muted counter on the bench. */
+#define AMBIENT_SERVO_HANGOVER_MS_DEFAULT 300u
+
 /** Rate at which the noise floor may RISE, in dB per second.
  *
  *  The single constant that decides what "steady" means: a sound must outrun
@@ -398,6 +407,31 @@ bool ambient_capture_allowed(bool playback_active, uint32_t now_ms, uint32_t las
  */
 bool ambient_gate_accepts(bool capture_allowed, bool cue_active, uint32_t now_ms,
                           uint32_t *last_cue_ms, uint32_t cue_hangover_ms);
+
+/**
+ * @brief Whether the pan/tilt servos have been quiet long enough for a frame
+ *        arriving now to be measured.
+ *
+ * Two SG90s sit centimetres from the PDM microphone, and their gear whine and
+ * motion click are a broadband excursion above a quiet room. Fed to the gate,
+ * every idle-gaze move opened the audio gate with no change in the view, and the
+ * robot remarked on "a strange sound" it had made itself. Like playback and the
+ * start cue, this is the robot's own noise, so the frame is quarantined for the
+ * move plus @p hangover_ms (horn settling, mechanism ringing).
+ *
+ * The anchor is the last time servo_set_angle() CHANGED an angle (or an output
+ * was re-enabled), not the last write: the executor re-asserts an unchanged pose
+ * every refresh interval, which is not motion, and counting it would mute the
+ * robot permanently.
+ *
+ * @param now_ms           Caller's monotonic clock, sampled after the read.
+ * @param last_head_move_ms When the head was last commanded to move; 0 at boot
+ *                         means "long ago".
+ * @param hangover_ms      Quarantine after that instant; 0 disables the guard.
+ *
+ * Unsigned elapsed comparison, so it holds across the uint32 wrap.
+ */
+bool ambient_head_quiet(uint32_t now_ms, uint32_t last_head_move_ms, uint32_t hangover_ms);
 
 #ifdef __cplusplus
 }
