@@ -36,6 +36,7 @@ Primary project: dual-ESP32 AI-powered robot car with pluggable AI vision backen
 | PRD-017 | PRD | Robocar Behaviour Twin | draft | 2026-11-05 |
 | ADR-028 | ADR | Teuvo Connectivity Resilience | proposed | 2026-10-23 |
 | ADR-030 | ADR | Robocar Behaviour Twin | proposed | 2026-11-05 |
+| ADR-032 | ADR | Real-Time Conversation over the Gemini Live API | proposed | 2026-11-07 |
 | PRP-melody-detector | PRP | Melody Detector — Implementation Plan | planned | 2026-04-26 |
 
 ## Project Overview
