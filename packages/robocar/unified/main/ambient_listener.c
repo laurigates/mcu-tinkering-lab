@@ -20,6 +20,7 @@
 #include "mic_dump.h"
 #include "mic_pdm.h"
 #include "pin_config.h"
+#include "servo_controller.h"
 #include "speech_trigger.h"
 #include "voice_preroll.h"
 #include "voice_turn.h"
@@ -60,6 +61,7 @@ static volatile int16_t s_level_db;
 static volatile uint32_t s_last_accept_ms;
 static volatile uint32_t s_frames_accepted;
 static volatile uint32_t s_frames_muted;
+static volatile uint32_t s_frames_head_muted;
 static uint32_t s_last_vad_trigger_ms;
 
 /** When playback last went inactive. Seeded to 0 meaning "long ago", so the very
@@ -127,8 +129,14 @@ static void ambient_listener_task(void *arg)
          * cycle reported a room that "sounds different" (issue #624). Computed
          * before the read-failure branch so a failed read during the cue still
          * moves the anchor. The pre-roll keeps `allowed` — see below. */
-        const bool to_gate =
+        const bool own_audio_clear =
             ambient_gate_accepts(allowed, cue, t, &s_last_cue_ms, AMBIENT_CUE_HANGOVER_MS_DEFAULT);
+        /* The pan/tilt SG90s are the third source of the robot's own noise. The
+         * pre-roll keeps `allowed`: a voice turn's words are worth keeping even
+         * with a servo whine under them. */
+        const bool head_quiet =
+            ambient_head_quiet(t, servo_last_move_ms(), AMBIENT_SERVO_HANGOVER_MS_DEFAULT);
+        const bool to_gate = own_audio_clear && head_quiet;
 
         /* Offered while the lock is still held, so a voice turn that takes the
          * lock next finds the ring complete and the DMA's next samples directly
@@ -154,7 +162,13 @@ static void ambient_listener_task(void *arg)
         }
 
         if (!to_gate) {
-            s_frames_muted++;
+            /* Attribute to the head only when it is the sole reason, so the
+             * playback count keeps meaning playback. */
+            if (own_audio_clear) {
+                s_frames_head_muted++;
+            } else {
+                s_frames_muted++;
+            }
             speech_trigger_reset_run();
             continue;
         }
@@ -289,6 +303,11 @@ uint32_t ambient_listener_frames_accepted(void)
 uint32_t ambient_listener_frames_muted(void)
 {
     return s_frames_muted;
+}
+
+uint32_t ambient_listener_frames_head_muted(void)
+{
+    return s_frames_head_muted;
 }
 
 size_t ambient_listener_take_preroll(int16_t *dst, size_t max)

@@ -146,7 +146,7 @@ One line per rule. Each group's doc has the full reasoning and the tests that ho
 - Voice-turn replies, `voice say` and the self-report bypass `dialogue_style_is_repetitive()`, and a voice turn leaves the scene reference where it is.
 - A voice turn consumes the audio latch whether it answers or ignores, and a planner line is dropped if a voice turn ran or anything was spoken during its request.
 - Gemini error bodies are logged at ERROR.
-- Record only once `ambient_capture_allowed()` clears the amp and its `AMBIENT_PLAYBACK_HANGOVER_MS` tail; start-cue frames pass through `ambient_gate_accepts()`.
+- Record only once `ambient_capture_allowed()` clears the amp and its `AMBIENT_PLAYBACK_HANGOVER_MS` tail; start-cue frames pass through `ambient_gate_accepts()`, and frames within `AMBIENT_SERVO_HANGOVER_MS_DEFAULT` of a head movement (`servo_last_move_ms()`, changed angles only) fail `ambient_head_quiet()`.
 - The scene reference is the frame last spoken about at the same dwell pose. Only valid on-pose fingerprints update it, and `!s_current.valid` and the off-pose check come before the first-impression branch (#690).
 - Check `PLANNER_TASK_STACK_SIZE` whenever `GEMINI_SYSTEM_PROMPT_MAX`, a persona brief or `DIALOGUE_RECALL_*` grows.
 - The model places delivery tags, and the `speech_tags.h` allow-list filters every one.
