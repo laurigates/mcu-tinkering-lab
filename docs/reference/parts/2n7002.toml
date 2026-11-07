@@ -1,0 +1,16 @@
+# 2N7002 small-signal N-MOSFET: a logic-level switch for microamp to tens of
+# milliamp loads (a gate pull-down, a shutdown pin). KiCad's Transistor_FET:2N7002
+# is a derived symbol (extends Q_NMOS_GSD), which kicad.vendor does not vendor,
+# so this entry names the base symbol with the same pins.
+[part]
+name = "2N7002 N-channel MOSFET, SOT-23"
+source = "KiCad 10.0.6 library (Transistor_FET:2N7002 extends Q_NMOS_GSD: G 1, S 2, D 3, default footprint Package_TO_SOT_SMD:SOT-23)"
+symbol = "Transistor_FET:Q_NMOS_GSD"
+footprint = "Package_TO_SOT_SMD:SOT-23"
+value = "2N7002"
+lcsc = "C8545"
+
+[pins]
+G = 1
+S = 2
+D = 3
