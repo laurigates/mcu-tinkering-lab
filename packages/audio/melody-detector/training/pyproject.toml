@@ -87,7 +87,7 @@ indent-style = "space"
 include = ["src"]
 
 [tool.ty.rules]
-unresolved-import = "ignore"
+import-not-found = "ignore"
 
 [tool.pytest.ini_options]
 minversion = "8.0"
