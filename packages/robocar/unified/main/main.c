@@ -17,6 +17,7 @@
 #include <strings.h>
 #include "esp_app_desc.h"
 #include "esp_check.h"
+#include "esp_chip_info.h"
 #include "esp_log.h"
 #include "esp_system.h"
 #include "esp_timer.h"
@@ -2340,6 +2341,67 @@ static esp_err_t create_tasks(void)
     return ESP_OK;
 }
 
+/** Name for esp_reset_reason(), as the boot banner prints it. BROWNOUT is
+ *  only reported when the detector is enabled; with CONFIG_ESP_BROWNOUT_DET=n
+ *  a supply dip that resets the chip shows as POWERON or an unexplained
+ *  watchdog instead. */
+static const char *reset_reason_name(esp_reset_reason_t r)
+{
+    switch (r) {
+        case ESP_RST_POWERON:
+            return "POWERON";
+        case ESP_RST_EXT:
+            return "EXT";
+        case ESP_RST_SW:
+            return "SW";
+        case ESP_RST_PANIC:
+            return "PANIC";
+        case ESP_RST_INT_WDT:
+            return "INT_WDT";
+        case ESP_RST_TASK_WDT:
+            return "TASK_WDT";
+        case ESP_RST_WDT:
+            return "WDT";
+        case ESP_RST_DEEPSLEEP:
+            return "DEEPSLEEP";
+        case ESP_RST_BROWNOUT:
+            return "BROWNOUT";
+        case ESP_RST_SDIO:
+            return "SDIO";
+        case ESP_RST_USB:
+            return "USB";
+        case ESP_RST_JTAG:
+            return "JTAG";
+        case ESP_RST_EFUSE:
+            return "EFUSE";
+        case ESP_RST_PWR_GLITCH:
+            return "PWR_GLITCH";
+        case ESP_RST_CPU_LOCKUP:
+            return "CPU_LOCKUP";
+        default:
+            return "UNKNOWN";
+    }
+}
+
+/** One line identifying exactly what is running and why it booted, first in
+ *  the log so a capture from J15 or MQTT is self-describing. */
+static void log_boot_banner(void)
+{
+    const esp_app_desc_t *desc = esp_app_get_description();
+    char elf_sha[9];
+    esp_app_get_elf_sha256(elf_sha, sizeof(elf_sha));
+    esp_chip_info_t chip;
+    esp_chip_info(&chip);
+    const esp_reset_reason_t reason = esp_reset_reason();
+
+    ESP_LOGI(TAG,
+             "Boot: %s v%s build %s elf %s | compiled %s %s | IDF %s | chip rev v%d.%d, %d "
+             "cores | reset %s (%d)",
+             desc->project_name, desc->version, ota_manager_get_build_sha(), elf_sha, desc->date,
+             desc->time, desc->idf_ver, chip.revision / 100, chip.revision % 100, chip.cores,
+             reset_reason_name(reason), (int)reason);
+}
+
 // ========================================
 // Application entry point
 // ========================================
@@ -2356,7 +2418,7 @@ void app_main(void)
         ESP_LOGW(TAG, "UART0 log mirror unavailable (%s) — log on USB only",
                  esp_err_to_name(mirror_ret));
     }
-    ESP_LOGI(TAG, "Firmware version: %s", esp_app_get_description()->version);
+    log_boot_banner();
 
     ESP_ERROR_CHECK(init_nvs());
     init_mqtt_access();
