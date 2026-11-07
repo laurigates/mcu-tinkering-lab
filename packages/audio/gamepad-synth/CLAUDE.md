@@ -114,7 +114,7 @@ On voicing entry the flow is: LED flash → single entry cue → return to real-
 
 ### TTS Voicing Announcements
 
-A Python tool under `tools/tts/` calls the Gemini TTS API (`gemini-3.1-flash-tts-preview`) with the `Algenib` prebuilt voice ("gravelly") to generate short spoken clips for each voicing. Output is raw 16-bit LE PCM at 24 kHz mono, written to `data/tts_<clip>.pcm`. Clips are committed to git; `just tts-generate` is the only way they change, and it needs `GEMINI_API_KEY` in the environment (sourced from `~/.api_tokens`).
+A Python tool under `tools/tts/` calls the Gemini TTS API (`gemini-3.8-flash-tts`, the model robocar-unified's firmware calls) with the `Algenib` prebuilt voice ("gravelly") to generate short spoken clips for each voicing. Output is raw 16-bit LE PCM at 24 kHz mono, written to `data/tts_<clip>.pcm`. A unary 3.8 request returns a WAV (measured 2026-11-07); `generate.py` strips the header and refuses any format other than 24 kHz s16 mono. `just synth::tts-test` runs its offline tests. Clips are committed to git; `just tts-generate` is the only way they change, and it needs `GEMINI_API_KEY` in the environment (sourced from `~/.api_tokens`).
 
 The firmware embeds the PCM blobs via ESP-IDF's `EMBED_FILES` (main/CMakeLists.txt). `tts_player.c` linearly upsamples 24 kHz → 44.1 kHz and saturating-adds into the shared stereo buffer each block — same overlay pattern as `drums_render_block()`. `main.c:tts_play_voicing()` starts a clip in `enter_voicing()` and blocks the control task for clip duration + 80 ms. No signature gesture follows — exactly one cue per switch.
 

@@ -4,5 +4,18 @@ version = "0.1.0"
 description = "Offline TTS clip generator for gamepad-synth voicing announcements"
 requires-python = ">=3.11"
 dependencies = [
-    "google-genai==1.75.0",
+    # 2.x: `Part.speech_metadata` (the 3.8 TTS style field) is not in 1.x.
+    "google-genai==2.34.0",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest==9.2.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
