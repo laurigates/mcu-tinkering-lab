@@ -231,8 +231,11 @@
  *  `cam gainceiling` and the `voice` gate thresholds.
  *
  *  30, chosen by ear on the bench (2026-11-05): 70 was too loud in the room.
- *  About -7 dB from 70. */
-#define AUDIO_VOLUME_PCT 30
+ *  About -7 dB from 70. Raised to 40 (+2.5 dB) when the voice effect became
+ *  the boot default (2026-11-07), because the comb attenuates everything off
+ *  its resonance peaks and the robotic voice came out quieter than the plain
+ *  one at the same setting. Still to be judged in the room. */
+#define AUDIO_VOLUME_PCT 40
 
 /** Ceiling for `voice volume`. 100 is full scale, and above it the int16 cast
  *  in audio_player.c's mono_to_stereo() wraps rather than clips — see the
