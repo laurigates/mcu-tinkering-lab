@@ -8,11 +8,13 @@ allowed-tools: Bash, Read, Grep, Glob, Edit, WebFetch
 
 # Gemini TTS: What the API Offers and What This Repo Uses
 
-> **Model change pending a live probe (issue #844, 2026-11).** The firmware now
-> calls `gemini-3.8-flash-tts`; `gemini-3.1-flash-tts-preview` has a listed
-> shutdown of 2026-11-17. The 3.8 facts in [Gemini 3.8 Flash TTS](#gemini-38-flash-tts-docs-not-yet-probed)
-> come from the docs, read 2026-11-04, and have **not** been run against the
-> live API. The rest of this file was measured on the preview.
+> **Model change (issue #844, 2026-11).** The firmware and
+> `gamepad-synth/tools/tts/generate.py` call `gemini-3.8-flash-tts`;
+> `gemini-3.1-flash-tts-preview` has a listed shutdown of 2026-11-17. The 3.8
+> facts in [Gemini 3.8 Flash TTS](#gemini-38-flash-tts) come from the docs
+> (2026-11-04) and a workstation probe of the firmware's request (2026-11-07);
+> each says which. Tags and on-device timing still need the bench. The rest of
+> this file was measured on the preview.
 
 Everything below was **verified against the live API** (2026-07) rather than
 read off the docs page, because the docs page and the REST endpoint disagree —
@@ -120,7 +122,21 @@ listening order, and pace ~5 s between calls for the free-tier RPM.
   Everything measured in this file was measured on it.
 - `gemini-2.5-flash-preview-tts`, `gemini-2.5-pro-preview-tts` — non-streaming.
 
-## Gemini 3.8 Flash TTS (docs, not yet probed)
+## Gemini 3.8 Flash TTS
+
+**Probed 2026-11-07** with the body `tts_request_build()` writes (compiled on
+the host from `main/tts_request.c`), the fi-1950 style and voice Schedar:
+
+- `:streamGenerateContent?alt=sse` **works**: HTTP 200, first byte after
+  1.04 s from a cloud container, 99 SSE events of
+  `audio/l16; rate=24000; channels=1`, headerless, `finishReason: STOP`. The
+  Interactions fallback below is not needed.
+- **The style is not read aloud.** Through `generate.py` (unary, voice
+  Charon) the same line took 5.00 s bare and 6.44 s with the fi-1950 style in
+  `speechMetadata.style`; read out, that style would add about 12 s.
+- **Unary returns `audio/wav`** with a RIFF header (`generate.py` strips it).
+- `<sighs>` was sent and did not break the request (6.80 s of audio). Whether
+  it was performed needs a listen.
 
 Read 2026-11-04 from the AI Studio speech-generation page, the
 `gemini-3.8-flash-tts` model page and the Cloud migration guide:
@@ -148,9 +164,9 @@ Read 2026-11-04 from the AI Studio speech-generation page, the
 - `temperature`, `topP`, `topK`, `candidateCount` and `systemInstruction` are
   rejected with `INVALID_ARGUMENT` (Cloud guide). The TTS request sets none.
 
-Probe checklist for the bench (issue #844): Finnish speech with the fi-1950
-style applied and not read aloud; `first=` close to the preview's ~1.2 s;
-`<sighs>`/`<laugh>` performed; a 300-byte line rendered whole.
+Still for the bench (issue #844): the fi-1950 delivery heard as intended;
+`first=` on the device close to the preview's ~1.2 s; `<sighs>`/`<laugh>`
+performed; a 300-byte line rendered whole.
 
 ## Multi-speaker (available, unused)
 
