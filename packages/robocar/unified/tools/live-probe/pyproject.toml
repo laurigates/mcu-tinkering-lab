@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Workstation probe of the Gemini Live API for robocar-unified real-time conversation (issue #619)"
 requires-python = ">=3.11"
 dependencies = [
-    "google-genai==2.33.0",
+    "google-genai==2.34.0",
 ]
 
 [dependency-groups]

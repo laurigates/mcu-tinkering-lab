@@ -7,7 +7,7 @@ spatialmath-python==1.1.18
 numpy==2.5.4
 scipy==1.18.1
 matplotlib==3.11.2
-pandas==3.1.0
+pandas==3.1.1
 
 # Computer vision and image processing
 opencv-python==5.0.0.93
@@ -15,7 +15,7 @@ opencv-python==5.0.0.93
 Pillow==13.0.0
 
 # Communication protocols
-websockets==17.3
+websockets==17.4
 asyncio-mqtt==0.16.2
 pyserial==3.5
 
@@ -36,4 +36,4 @@ click==8.5.0
 
 # Testing framework
 pytest==9.2.0
-pytest-asyncio==1.4.1
+pytest-asyncio==1.4.1.post1
