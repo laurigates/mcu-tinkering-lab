@@ -277,8 +277,12 @@
 #define MIC_PDM_CLK_PIN GPIO_NUM_42   // PDM clock, driven by the ESP32-S3
 #define MIC_PDM_DATA_PIN GPIO_NUM_41  // PDM data, input
 
-/** Capture rate. Fixed by the microphone, and also what Gemini expects for
- *  inline audio — no resampling stage anywhere in the path. */
+/** Capture rate. A firmware choice, not the microphone's: the MSM261D fixes no
+ *  sample rate. 16 kHz is what Gemini expects for inline audio, so there is no
+ *  resampling stage anywhere in the path. With ESP-IDF's default down-sampling
+ *  (I2S_PDM_DSR_8S) it drives 16000 x 64 = 1.024 MHz on MIC_PDM_CLK_PIN, between
+ *  the datasheet's Low-Power (150-900 kHz) and Standard (1.1-4.0 MHz) ranges;
+ *  see docs/reference/datasheets/sensor--msm261d.md. */
 #define MIC_SAMPLE_RATE_HZ 16000
 
 // ========================================

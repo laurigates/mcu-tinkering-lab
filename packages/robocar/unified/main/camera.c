@@ -116,7 +116,8 @@ esp_err_t camera_init(void)
          * selects 2x. This board is an OV3660 (PID 0x3660, logged below), whose
          * driver writes the argument as a RAW 10-bit ceiling into 0x3A18/0x3A19.
          * Zero therefore clamped the AGC ceiling to *no gain at all*, against
-         * the sensor's own power-on default of 0x00F8 = 248 = 15.5x. Leaving the
+         * the 0x00F8 = 248 = 15.5x that esp32-camera's OV3660 init table writes
+         * (the chip's own reset value differs; see camera--ov3660.md). Leaving the
          * driver's default in place is both correct and sensor-agnostic; tune it
          * live with `cam gainceiling N` if a room really needs it. */
         s->set_bpc(s, 0);      // 0 = disable , 1 = enable
@@ -169,7 +170,7 @@ esp_err_t camera_init(void)
  *  selects the driver's single-byte path). Layouts are from ov3660_regs.h:
  *    exposure = {0x3500[3:0], 0x3501[7:0], 0x3502[7:0]} / 16 rows
  *    gain     = {0x350A[1:0], 0x350B[7:0]} / 16
- *    ceiling  = {0x3A18[1:0], 0x3A19[7:0]} / 16   (power-on default 248 = 15.5x)
+ *    ceiling  = {0x3A18[1:0], 0x3A19[7:0]} / 16   (248 = 15.5x after esp32-camera init)
  */
 static bool read_exposure_ov3660(sensor_t *s, camera_exposure_t *out)
 {
