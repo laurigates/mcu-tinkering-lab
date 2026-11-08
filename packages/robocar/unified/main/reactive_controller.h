@@ -295,6 +295,8 @@ typedef struct {
      *  (ADR-029 §2). True with the servos released (nothing moves the head),
      *  false under an external lease (another task is moving it). */
     bool head_settled;
+    /** The pre-OTA hold is on (reactive_controller_set_hold()). */
+    bool held;
 } reactive_telemetry_t;
 
 /* =========================================================================
@@ -347,6 +349,20 @@ void reactive_controller_set_gaze(bool on);
 
 /** @brief Whether the idle gaze is on. */
 bool reactive_controller_gaze_enabled(void);
+
+/**
+ * @brief Hold the robot still for an OTA install.
+ *
+ * While on, every executor tick coasts the wheels (motor_stop(), outputs low)
+ * ahead of the reflex, any manual lease and the goal, and the hold never
+ * expires on its own. ota_manager.c turns it on after parking and off only if
+ * the install fails; a successful install reboots with it on. Cleared by
+ * reactive_controller_init(). Safe to call from any task.
+ */
+void reactive_controller_set_hold(bool on);
+
+/** Whether the hold is on. */
+bool reactive_controller_hold_active(void);
 
 #ifdef __cplusplus
 }

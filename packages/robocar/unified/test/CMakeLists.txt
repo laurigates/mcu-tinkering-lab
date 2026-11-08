@@ -455,6 +455,27 @@ target_link_libraries(test_voice_endpoint PRIVATE Threads::Threads m)
 add_test(NAME voice_endpoint COMMAND test_voice_endpoint)
 
 # -----------------------------------------------------------------------------
+# ota_park (park on open floor before an OTA install): no open heading, a front
+# sensor failing mid-turn, a wall behind, and the uint32 millisecond wrap.
+# -----------------------------------------------------------------------------
+add_executable(test_ota_park
+    "${MAIN_SRC_DIR}/ota_park.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_ota_park.c"
+)
+target_link_libraries(test_ota_park PRIVATE Threads::Threads m)
+add_test(NAME ota_park COMMAND test_ota_park)
+
+# ota_announce (what the robot says before an OTA install, and the postpone
+# window): notes dropped whole when they do not fit, UTF-8 never split, a late
+# postpone refused, and the uint32 millisecond wrap.
+add_executable(test_ota_announce
+    "${MAIN_SRC_DIR}/ota_announce.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_ota_announce.c"
+)
+target_link_libraries(test_ota_announce PRIVATE Threads::Threads m)
+add_test(NAME ota_announce COMMAND test_ota_announce)
+
+# -----------------------------------------------------------------------------
 # http_timing (issue #948: split a voice turn's latency into connect, request
 # and download). Repeated events, phases that never happened and the uint32
 # millisecond wrap.

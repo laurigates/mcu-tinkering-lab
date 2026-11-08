@@ -48,6 +48,20 @@ Two gates keep the two halves naming the same commit, and both must stay. `build
 
 The commit is read at configure time, like `PROJECT_VER`. A new commit re-runs configure (the git `HEAD` file and branch ref are `CMAKE_CONFIGURE_DEPENDS`); an uncommitted edit after configuring does not add `-dirty` until the next configure. A build from a git worktree inside the container embeds `unknown`, because the worktree's `.git` file points at a host path the container cannot see.
 
+### Before the install: announce, postpone, park
+
+A newer version is not installed the moment it is found. `announce_and_park()` in `ota_manager.c` runs first:
+
+1. **A quiet moment.** It waits until no voice turn is running, no conversation window is open and nothing is playing (`OTA_QUIET_WAIT_MS`, 10 min). Past that it gives up until the next check and publishes `deferred_busy`.
+2. **What is coming.** `gemini_backend_announce_update()` turns the manifest's `notes` (the version's changelog entries, written by `tools/changelog-notes.py` in `generate-flasher-manifests.sh`) into at most two spoken sentences in the persona's voice. If the request fails, or the manifest predates `notes`, it says `ota_announce_fallback()`: the version only. Then it says `OTA_ANNOUNCE_PUN`, "Menen tuonne toisaalle vähän päivettymään.", verbatim (päivittyä is to update, päivettyä to get a tan). Publishes `announced`.
+3. **A minute to postpone.** After the speech has played, `ota postpone` (console or MQTT) defers the install to the next check for `OTA_ANNOUNCE_WINDOW_MS`. Publishes `postponed`.
+4. **Open floor.** `ota_park.c` turns in 250 ms steps, stopping 700 ms after each so the smoothed front reading describes that heading, until the front rangefinder sees at least 80 cm. If something is closer than 30 cm behind, it moves forward for 400 ms. A failed front sensor stops it where it is, and after 16 steps it gives up and stays. The turns and the nudge are manual leases, so the obstacle reflex still applies. Publishes `parked`.
+5. **Hold still.** `reactive_controller_set_hold(true)` coasts the wheels every executor tick, ahead of the reflex, any lease and the goal, and never expires. The PCA9685 has its own supply and keeps its last outputs through an ESP32 reset, so the wheels have to be stopped before the reboot rather than by it. A failed download releases the hold and says `OTA_ANNOUNCE_FAILED_FI`/`_EN`; the running image is untouched, because the download went to the other slot.
+
+Pinned by `test_ota_park.c` (no open heading, a sensor failing mid-turn, a wall behind, the millisecond wrap), `test_ota_announce.c` (notes dropped whole, UTF-8 never split, a late postpone refused, the wrap) and the hold cases in `test_reactive_controller.c`. **Not yet on a board:** the turning step and nudge lengths are guesses for this chassis, and `ota` prints the phase so a bench run can watch it.
+
+The manifest buffer is 4096 bytes. Firmware up to 0.2.17 holds 2048 and cannot parse a manifest cut short, which is why `changelog-notes.py` caps `notes` at 800 bytes.
+
 **Unverified on device.** Nothing here has taken a real OTA update on a board — that needs hardware and the published manifest's binary to actually flash and boot, which is bench work.
 
 Partition layout is OTA-capable (see `partitions.csv`) with app rollback enabled.

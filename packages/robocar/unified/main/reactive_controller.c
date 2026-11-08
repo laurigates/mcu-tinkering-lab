@@ -117,6 +117,20 @@ bool reactive_controller_gaze_enabled(void)
     return s_gaze_enabled;
 }
 
+/** Pre-OTA hold: the wheels coast every tick and nothing else moves them. A
+ *  bool any task may write, read once per tick, like the gaze switch. */
+static volatile bool s_hold = false;
+
+void reactive_controller_set_hold(bool on)
+{
+    s_hold = on;
+}
+
+bool reactive_controller_hold_active(void)
+{
+    return s_hold;
+}
+
 const char *reactive_head_mode_name(reactive_head_mode_t mode)
 {
     switch (mode) {
@@ -709,7 +723,14 @@ static void reactive_task(void *arg)
          * Reflex first, then the manual lease: a manual command must not be able
          * to drive into an obstacle, and the lease expires on its own so the
          * planner resumes without an explicit hand-back. */
-        if (reflex) {
+        const bool held = s_hold;
+        if (held) {
+            /* Before everything else, the reflex included: the robot is
+             * parked for an OTA install and must not move again until the
+             * hold is released or the board reboots. Coast, so the outputs
+             * are low when the PCA9685 rides through the reset. */
+            motor_stop();
+        } else if (reflex) {
             /* Brake, not coast. This is the one path where stopping distance
              * matters, and motor_stop() leaves the outputs high-impedance so
              * the robot rolls into whatever tripped the reflex. Every other
@@ -754,6 +775,7 @@ static void reactive_task(void *arg)
         s_telemetry.distance_rear_cm = s_rangers.rear_cm;
         s_telemetry.rear_failed = s_rangers.failed[ULTRASONIC_REAR];
         s_telemetry.head_settled = s_head_settled;
+        s_telemetry.held = held;
         portEXIT_CRITICAL(&s_telem_mux);
 
         /* ---- 8. Wait for next period ----
@@ -805,6 +827,7 @@ esp_err_t reactive_controller_init(void)
     head_aim_reset(&s_head_aim);
     idle_gaze_init(&s_gaze, gaze_rng, NULL);
     s_head_settled = false;
+    s_hold = false;
 
     s_running = true;
 
@@ -1121,7 +1144,10 @@ void reactive_controller_tick_for_test(void)
         execute_head(&lease, &goal, fresh, goal_seq, !reflex && !manual_active,
                      s_ticks * REACTIVE_LOOP_PERIOD_MS, &body);
 
-    if (reflex) {
+    const bool held = s_hold;
+    if (held) {
+        motor_stop(); /* mirrors reactive_task(): the hold wins */
+    } else if (reflex) {
         motor_brake(); /* mirrors reactive_task() — brake, not coast */
     } else if (manual_active) {
         execute_manual(s_manual_cmd, s_manual_speed);
@@ -1137,6 +1163,7 @@ void reactive_controller_tick_for_test(void)
     s_telemetry.distance_rear_cm = s_rangers.rear_cm;
     s_telemetry.rear_failed = s_rangers.failed[ULTRASONIC_REAR];
     s_telemetry.head_settled = s_head_settled;
+    s_telemetry.held = held;
     s_ticks++;
 }
 
@@ -1155,6 +1182,7 @@ esp_err_t reactive_controller_init(void)
     idle_gaze_init(&s_gaze, gaze_rng, NULL);
     s_gaze_enabled = true; /* on at every boot */
     s_head_settled = false;
+    s_hold = false;
     s_running = true;
     ultrasonic_init();
     return ESP_OK;

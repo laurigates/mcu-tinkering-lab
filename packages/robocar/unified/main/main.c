@@ -1592,6 +1592,48 @@ static void handle_idle_cmd(const char *buf)
     printf("  usage: idle gaze on|off\n");
 }
 
+/**
+ * @brief `ota` console command: the pre-install sequence's state, a check now,
+ *        or a postpone of an announced update.
+ *
+ * `ota` prints the running version and build, and where the sequence is.
+ * `ota check` runs a manifest check now (the same nudge MQTT sends).
+ * `ota postpone` defers an announced update to the next check; accepted only
+ * in the minute after the robot says it is going (ota_announce.h).
+ */
+static void handle_ota_cmd(const char *buf)
+{
+    char sub[12] = {0};
+    const int n = sscanf(buf, "ota %11s", sub);
+
+    if (n == 1 && strcmp(sub, "postpone") == 0) {
+        if (ota_manager_postpone() == ESP_OK) {
+            printf("ota: postponed to the next check\n");
+        } else {
+            printf("ota: nothing to postpone (no update announced in the last minute)\n");
+        }
+        return;
+    }
+    if (n == 1 && strcmp(sub, "check") == 0) {
+        const esp_err_t err = ota_manager_check_update();
+        printf("ota: check %s\n", err == ESP_OK ? "queued" : esp_err_to_name(err));
+        return;
+    }
+    if (n == 1) {
+        printf("ota: usage: ota | ota check | ota postpone\n");
+        return;
+    }
+
+    char pending[32] = {0};
+    ota_manager_pending_version(pending, sizeof(pending));
+    const ota_phase_t phase = ota_manager_phase();
+    printf("ota: running %s (build %s)\n", ota_manager_get_version(), ota_manager_get_build_sha());
+    printf("  update: %s%s%s\n", ota_manager_phase_name(phase),
+           (phase != OTA_PHASE_IDLE && pending[0]) ? " — " : "",
+           (phase != OTA_PHASE_IDLE && pending[0]) ? pending : "");
+    printf("  usage: ota check | ota postpone\n");
+}
+
 static void execute_console_line(const char *buf)
 {
     if (strncmp(buf, "gpio", 4) == 0) {
@@ -1612,6 +1654,8 @@ static void execute_console_line(const char *buf)
         handle_plan_cmd(buf);
     } else if (strncmp(buf, "idle", 4) == 0) {
         handle_idle_cmd(buf);
+    } else if (strncmp(buf, "ota", 3) == 0) {
+        handle_ota_cmd(buf);
     } else if (strncmp(buf, "sound", 5) == 0 || strncmp(buf, "servo", 5) == 0 ||
                strncmp(buf, "led", 3) == 0) {
         handle_periph_cmd(buf);

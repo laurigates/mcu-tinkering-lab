@@ -72,8 +72,8 @@ bool mqtt_command_extract_line(const char *data, int data_len, int total_data_le
  * execute_console_line(); keep the two lists in sync.
  */
 static const char *const k_console_prefixes[] = {
-    "gpio", "voice", "snap",  "listen", "trace", "mic",
-    "cam",  "plan",  "sound", "servo",  "led",   "idle",
+    "gpio", "voice", "snap",  "listen", "trace", "mic", "cam",
+    "plan", "sound", "servo", "led",    "idle",  "ota",
 };
 
 static bool matches_console_prefix(const char *line)

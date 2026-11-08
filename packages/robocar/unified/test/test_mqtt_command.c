@@ -289,9 +289,9 @@ static void test_dispatch_routes_console_commands_to_console_callback_only(void)
     mqtt_command_ops_t ops = ops_for(&r);
 
     static const char *const lines[] = {
-        "plan resume", "voice quiet 30", "trace reset",       "snap 3",
-        "listen 5",    "mic dump 10",    "cam gainceiling 4", "servo pan 20",
-        "led 255 0 0", "sound beep",     "gpio mode 3 out",   "idle gaze off",
+        "plan resume",     "voice quiet 30",    "trace reset",  "snap 3",      "listen 5",
+        "mic dump 10",     "cam gainceiling 4", "servo pan 20", "led 255 0 0", "sound beep",
+        "gpio mode 3 out", "idle gaze off",     "ota postpone", "ota check",
     };
     for (size_t i = 0; i < sizeof(lines) / sizeof(lines[0]); i++) {
         recorder_reset(&r);

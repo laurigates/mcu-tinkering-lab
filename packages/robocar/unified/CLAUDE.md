@@ -167,4 +167,5 @@ One line per rule. Each group's doc has the full reasoning and the tests that ho
 
 - `main/credentials.h` stays local (gitignored; start from the `.example`), and release-please owns `version.txt`.
 - OTA installs only a strictly newer version; the build SHA only qualifies an equal version or refuses. Keep `-c safe.directory=*` in the `CMakeLists.txt` git lookup.
+- Before an install the robot announces, keeps a postpone window, parks (`ota_park.c`) and holds still (`reactive_controller_set_hold()`); a failed install releases the hold. Keep the manifest's `notes` under the old 2048-byte manifest buffer (`changelog-notes.py --max-bytes`).
 - Set the Improv writer (`improv_console_write()`) before any `improv_wifi_send_*()` call; Improv replies go through the VFS console, without the usb_serial_jtag driver.

@@ -987,6 +987,85 @@ static void test_centred_head_stays_settled(void)
     }
 }
 
+/* =========================================================================
+ * Hold (pre-OTA park): the wheels coast and nothing moves them until released
+ * ========================================================================= */
+
+static void test_hold_overrides_goal_and_manual_lease(void)
+{
+    setup();
+    prime_distance(100);
+    goal_t drive = {
+        .kind = GOAL_KIND_DRIVE,
+        .params.drive = {.heading_deg = 0, .distance_cm = 200, .speed_pct = 100},
+    };
+    ASSERT(goal_state_write(&drive, 60000) == ESP_OK);
+    ASSERT(reactive_controller_manual(REACTIVE_MANUAL_FORWARD, 200, 60000) == ESP_OK);
+
+    reactive_controller_set_hold(true);
+    reactive_controller_tick_for_test();
+
+    uint8_t ls, rs, ld, rd;
+    get_motor_state(&ls, &rs, &ld, &rd);
+    ASSERT(ls == 0 && rs == 0);
+    ASSERT(motor_stub_get_last_call() == MOTOR_CALL_COAST);
+    ASSERT(reactive_controller_hold_active());
+    reactive_telemetry_t t;
+    ASSERT(reactive_controller_get_telemetry(&t) == ESP_OK);
+    ASSERT(t.held);
+    reactive_controller_set_hold(false);
+}
+
+static void test_hold_does_not_expire(void)
+{
+    /* A download takes tens of seconds; a lease-style TTL would let the goal
+     * resume mid-install. */
+    setup();
+    prime_distance(100);
+    goal_t drive = {
+        .kind = GOAL_KIND_DRIVE,
+        .params.drive = {.heading_deg = 0, .distance_cm = 200, .speed_pct = 100},
+    };
+    ASSERT(goal_state_write(&drive, 600000) == ESP_OK);
+    reactive_controller_set_hold(true);
+    for (int i = 0; i < 3000; i++) { /* ~100 s at 33 ms */
+        reactive_controller_tick_for_test();
+    }
+    uint8_t ls, rs, ld, rd;
+    get_motor_state(&ls, &rs, &ld, &rd);
+    ASSERT(ls == 0 && rs == 0);
+    ASSERT(motor_stub_get_last_call() == MOTOR_CALL_COAST);
+    reactive_controller_set_hold(false);
+}
+
+static void test_release_resumes_the_goal(void)
+{
+    setup();
+    prime_distance(100);
+    goal_t drive = {
+        .kind = GOAL_KIND_DRIVE,
+        .params.drive = {.heading_deg = 0, .distance_cm = 200, .speed_pct = 100},
+    };
+    ASSERT(goal_state_write(&drive, 60000) == ESP_OK);
+    reactive_controller_set_hold(true);
+    reactive_controller_tick_for_test();
+    reactive_controller_set_hold(false);
+    reactive_controller_tick_for_test();
+
+    uint8_t ls, rs, ld, rd;
+    get_motor_state(&ls, &rs, &ld, &rd);
+    ASSERT(ls > 0 && rs > 0);
+    ASSERT(!reactive_controller_hold_active());
+}
+
+static void test_init_clears_a_hold(void)
+{
+    setup();
+    reactive_controller_set_hold(true);
+    setup(); /* stop + init */
+    ASSERT(!reactive_controller_hold_active());
+}
+
 int main(void)
 {
     printf("=== reactive_controller host tests ===\n\n");
@@ -1031,6 +1110,11 @@ int main(void)
              test_front_failure_streak_is_reported_per_sensor);
     test_run("rear_failure_streak_is_reported_per_sensor",
              test_rear_failure_streak_is_reported_per_sensor);
+
+    test_run("hold_overrides_goal_and_manual_lease", test_hold_overrides_goal_and_manual_lease);
+    test_run("hold_does_not_expire", test_hold_does_not_expire);
+    test_run("release_resumes_the_goal", test_release_resumes_the_goal);
+    test_run("init_clears_a_hold", test_init_clears_a_hold);
 
     printf("\n=== Results ===\n");
     printf("Passed: %d / %d\n", test_pass, test_count);
