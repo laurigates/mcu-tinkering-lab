@@ -484,6 +484,22 @@ static void test_text_meta_truncates_a_long_finish_reason(void)
     ASSERT(strncmp(meta.finish_reason, "A_FINISH_REASON", 15) == 0);
 }
 
+static void test_text_meta_counts_parts_after_the_buffer_fills(void)
+{
+    /* The log line reports the reply's shape even when the text is cut: a
+     * part after the buffer filled still counts. */
+    const char *json = "{\"candidates\":[{\"content\":{\"parts\":["
+                       "{\"text\":\"aaaaaaaaaa\"},{\"text\":\"bbb\"},"
+                       "{\"text\":\"why\",\"thought\":true},{\"text\":\"ccc\"}]}}]}";
+    char out[8];
+    gemini_text_meta_t meta;
+    ASSERT(gemini_parse_text_meta(json, out, sizeof(out), &meta) == ESP_OK);
+    ASSERT(strcmp(out, "aaaaaaa") == 0);
+    ASSERT(meta.parts == 4);
+    ASSERT(meta.text_parts == 3);
+    ASSERT(meta.thought_parts == 1);
+}
+
 static void test_text_meta_keeps_every_real_finish_reason_whole(void)
 {
     /* The longest FinishReason values in google-genai 2.34; the log must name
@@ -552,6 +568,8 @@ int main(void)
     test_run("text_meta_is_filled_on_failure", test_text_meta_is_filled_on_failure);
     test_run("text_meta_truncates_a_long_finish_reason",
              test_text_meta_truncates_a_long_finish_reason);
+    test_run("text_meta_counts_parts_after_the_buffer_fills",
+             test_text_meta_counts_parts_after_the_buffer_fills);
     test_run("text_meta_keeps_every_real_finish_reason_whole",
              test_text_meta_keeps_every_real_finish_reason_whole);
     test_run("text_meta_without_finish_reason_is_empty",
