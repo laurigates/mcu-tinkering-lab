@@ -47,8 +47,8 @@ already fills.
 
 "In motion" means a console lease, or a fresh `drive` or `rotate` goal, or a
 fresh `track` goal with `max_speed_pct > 0` (`goal_moves_wheels()`). A
-look-only `track` (speed 0) aims the head and leaves the wheels still, so it is
-not motion; counting it held the planner at the 15 s base period for as long as
+look-only `track` (speed 0) aims the head and does not drive forward (it turns
+in place only to re-centre when the pan runs out), so it is not motion; counting it held the planner at the 15 s base period for as long as
 it tracked (issue #958: 25 requests in 6.5 min on the bench).
 
 **It is a ladder, not a switch.** While nothing changes the interval grows
