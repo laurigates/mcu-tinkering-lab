@@ -88,6 +88,20 @@ esp_err_t gemini_backend_plan(const uint8_t *jpeg, size_t jpeg_len, goal_t *out_
 esp_err_t gemini_backend_narrate(const char *facts, bool is_update, char *out, size_t out_len);
 
 /**
+ * @brief Phrase the pre-OTA announcement: an update is available and what it
+ *        changes, in the persona's voice.
+ *
+ * Same request path and model as gemini_backend_narrate() (own buffers, safe
+ * from any task); only the prompt differs. The prompt forbids announcing the
+ * departure itself, because the caller speaks OTA_ANNOUNCE_PUN next.
+ *
+ * @param facts  ota_announce_facts() output.
+ * @return ESP_OK, or ESP_FAIL / ESP_ERR_INVALID_STATE / ESP_ERR_NO_MEM; the
+ *         caller then speaks ota_announce_fallback().
+ */
+esp_err_t gemini_backend_announce_update(const char *facts, char *out, size_t out_len);
+
+/**
  * @brief Release resources allocated by gemini_backend_init().
  *
  * Safe to call even if gemini_backend_init() was not called or failed.

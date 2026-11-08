@@ -718,6 +718,9 @@ esp_err_t gemini_backend_plan(const uint8_t *jpeg, size_t jpeg_len, goal_t *out_
 /* Narration (text-only self-report phrasing)                                  */
 /* -------------------------------------------------------------------------- */
 
+static char *text_request_json(const char *prompt);
+static esp_err_t text_request_send(char *request_body, char *out, size_t out_len);
+
 /** Build the text-only generateContent body for a spoken status line. */
 static char *build_narrate_json(const char *facts, bool is_update)
 {
@@ -757,6 +760,13 @@ static char *build_narrate_json(const char *facts, bool is_update)
              (persona->tag_brief && persona->tag_brief[0] != '\0') ? "\n\n" : "",
              (persona->tag_brief && persona->tag_brief[0] != '\0') ? persona->tag_brief : "");
 
+    return text_request_json(prompt);
+}
+
+/** Wrap a prompt in the text-only generateContent body narrate and the update
+ *  announcement share. Caller frees. */
+static char *text_request_json(const char *prompt)
+{
     cJSON *root = cJSON_CreateObject();
 
     cJSON *contents = cJSON_AddArrayToObject(root, "contents");
@@ -797,19 +807,25 @@ esp_err_t gemini_backend_narrate(const char *facts, bool is_update, char *out, s
         return ESP_ERR_INVALID_ARG;
     }
     out[0] = '\0';
+    return text_request_send(build_narrate_json(facts, is_update), out, out_len);
+}
 
+/** Post a text-only body to NARRATE_MODEL and parse the spoken line. Takes
+ *  ownership of @p request_body (NULL means the build failed). */
+static esp_err_t text_request_send(char *request_body, char *out, size_t out_len)
+{
+    if (!request_body) {
+        return ESP_ERR_NO_MEM;
+    }
     const char *api_key = get_gemini_api_key();
     if (!api_key || api_key[0] == '\0') {
         ESP_LOGW(TAG, "narrate: API key unavailable");
+        free(request_body);
         return ESP_FAIL;
     }
     if (!wifi_is_connected()) {
+        free(request_body);
         return ESP_ERR_INVALID_STATE; /* issue #846: no request without a link */
-    }
-
-    char *request_body = build_narrate_json(facts, is_update);
-    if (!request_body) {
-        return ESP_ERR_NO_MEM;
     }
 
     /* Own buffer — do not touch s_response_buf, which the planner task uses. */
@@ -847,6 +863,43 @@ esp_err_t gemini_backend_narrate(const char *facts, bool is_update, char *out, s
     free(request_body);
     free(resp);
     return err;
+}
+
+/** Build the body for the pre-OTA announcement (ota_announce.h). */
+static char *build_announce_json(const char *facts)
+{
+    const voice_persona_t *persona = voice_persona_get();
+    const char *name =
+        (persona && persona->name && persona->name[0] != '\0') ? persona->name : "Robocar";
+    const bool tags = persona && persona->tag_brief && persona->tag_brief[0] != '\0';
+
+    char prompt[2560];
+    /* The facts are English changelog lines; the listener hears the persona's
+     * language. The pun that follows is spoken verbatim by the caller, so the
+     * model must not announce leaving or updating itself. */
+    snprintf(prompt, sizeof(prompt),
+             "You are a small wheeled robot named %s, speaking aloud. "
+             "Voice and language to use: %s\n\n"
+             "A firmware update is ready for you to install:\n%s\n\n"
+             "Write at most TWO short spoken sentences (at most 40 words, plain text only — "
+             "no markdown, no emoji, no quotes) telling the people around you that an update "
+             "is available and what it changes, in everyday words. Name at most the three "
+             "changes a listener would care about and skip tooling, documentation and test "
+             "work. Say only what the list says; do not invent changes. Do not say that you "
+             "are leaving or are about to update: you will say that next."
+             "%s%s",
+             name, persona ? persona->text_brief : "", facts, tags ? "\n\n" : "",
+             tags ? persona->tag_brief : "");
+    return text_request_json(prompt);
+}
+
+esp_err_t gemini_backend_announce_update(const char *facts, char *out, size_t out_len)
+{
+    if (!facts || !out || out_len == 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    out[0] = '\0';
+    return text_request_send(build_announce_json(facts), out, out_len);
 }
 
 void gemini_backend_deinit(void)
