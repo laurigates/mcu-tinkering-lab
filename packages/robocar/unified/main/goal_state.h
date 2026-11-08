@@ -182,8 +182,9 @@ esp_err_t goal_state_force_stop(void);
  * @brief Whether a goal, as goal_state_read() returned it, drives the wheels.
  *
  * The planner counts this as motion when deciding its period (plan_activity
- * verdict M). drive and rotate move the wheels; a track goal moves them only
- * when max_speed_pct > 0, since at 0 it aims the head alone
+ * verdict M). drive and rotate count; a track goal counts only when
+ * max_speed_pct > 0. At 0 it aims the head and turns in place only to
+ * re-centre it, without driving forward
  * (docs/firmware/head-aiming.md). stop, none and any stale goal do not.
  * Issue #958: a look-only track goal held the planner at full rate.
  *

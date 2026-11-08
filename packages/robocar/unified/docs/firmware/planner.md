@@ -44,9 +44,10 @@ the frame last planned on, the **room** has made a noise
 15 s → 30 → 60 → 120 → 300 and only then stops entirely — five requests over
 about nine minutes.
 
-"In motion" is a console lease or a fresh goal that turns the wheels
+"In motion" is a console lease or a fresh goal that drives the robot
 (`goal_moves_wheels()` in `goal_state.c`): `drive`, `rotate`, or `track` with
-`max_speed_pct > 0`. A look-only `track` (speed 0) moves only the head and does
+`max_speed_pct > 0`. A look-only `track` (speed 0) does not drive forward; it
+turns in place only to re-centre the head when the pan runs out, and it does
 not count (issue #958).
 
 **The ladder is the design, not a softening of it.** A binary sleep is only as
