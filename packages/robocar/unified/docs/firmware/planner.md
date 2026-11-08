@@ -44,6 +44,11 @@ the frame last planned on, the **room** has made a noise
 15 s → 30 → 60 → 120 → 300 and only then stops entirely — five requests over
 about nine minutes.
 
+"In motion" is a console lease or a fresh goal that turns the wheels
+(`goal_moves_wheels()` in `goal_state.c`): `drive`, `rotate`, or `track` with
+`max_speed_pct > 0`. A look-only `track` (speed 0) moves only the head and does
+not count (issue #958).
+
 **The ladder is the design, not a softening of it.** A binary sleep is only as
 good as its wake detector, and this project has already shipped a gate that was
 wrong about its own sensor: `ambient_audio.c` failed *open* with the microphone

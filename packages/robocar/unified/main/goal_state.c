@@ -269,6 +269,23 @@ esp_err_t goal_state_force_stop(void)
     return goal_state_write(&stop, GOAL_STATE_DEFAULT_TTL_MS);
 }
 
+bool goal_moves_wheels(const goal_t *goal, bool fresh)
+{
+    if (goal == NULL || !fresh) {
+        return false;
+    }
+    switch (goal->kind) {
+        case GOAL_KIND_DRIVE:
+        case GOAL_KIND_ROTATE:
+            return true;
+        case GOAL_KIND_TRACK:
+            /* A zero speed cap aims the head only (head-aiming.md). */
+            return goal->params.track.max_speed_pct > 0;
+        default:
+            return false;
+    }
+}
+
 void goal_state_set_clock_override(int64_t (*now_us_fn)(void))
 {
     g_now_us_fn = (now_us_fn != NULL) ? now_us_fn : gs_default_now_us;

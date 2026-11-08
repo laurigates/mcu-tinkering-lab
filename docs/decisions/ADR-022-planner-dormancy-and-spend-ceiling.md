@@ -45,6 +45,12 @@ line). All of it is free — a fingerprint the frame decode already produced, a
 telemetry snapshot the executor already maintains, a latch the microphone task
 already fills.
 
+"In motion" means a console lease, or a fresh `drive` or `rotate` goal, or a
+fresh `track` goal with `max_speed_pct > 0` (`goal_moves_wheels()`). A
+look-only `track` (speed 0) aims the head and leaves the wheels still, so it is
+not motion; counting it held the planner at the 15 s base period for as long as
+it tracked (issue #958: 25 requests in 6.5 min on the bench).
+
 **It is a ladder, not a switch.** While nothing changes the interval grows
 15 s → 30 → 60 → 120 → 300, and only after the whole ladder is spent — five
 requests over about nine minutes — does the planner stop calling entirely.
