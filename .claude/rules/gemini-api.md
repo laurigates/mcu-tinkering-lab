@@ -86,7 +86,9 @@ natural-language directive. On `gemini-3.1-flash-tts-preview` it was a prefix,
 **`gemini-3.8-flash-tts` reads the text as a verbatim transcript**, so the
 prefix would be spoken; the directive goes in the part's
 `speechMetadata.style` and inline tags become `<sighs>`-style angle brackets
-(docs, 2026-11; see the `gemini-tts-voice` skill, issue #844). Language is `speechConfig.languageCode` (BCP-47 — `fi-FI`
+(docs, 2026-11; the style placement probed 2026-11-07, see the
+`gemini-tts-voice` skill, issue #844). A unary 3.8 request returns WAV, not
+bare PCM. Language is `speechConfig.languageCode` (BCP-47 — `fi-FI`
 works). The prebuilt voices (`Kore`, `Puck`, `Charon`, …) are **language-agnostic**;
 the locale-specific `fi-FI-Chirp3-HD-*` names are **Cloud TTS**, a different
 product, and **404** on the Gemini `generateContent` endpoint — do not put one in

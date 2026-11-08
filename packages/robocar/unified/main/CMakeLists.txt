@@ -36,6 +36,7 @@ idf_component_register(
         "audio_clip.c"
         "voice_preroll.c"
         "voice_endpoint.c"
+        "http_timing.c"
         "speech_trigger.c"
         "voice_history.c"
         "voice_budget.c"

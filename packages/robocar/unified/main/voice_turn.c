@@ -33,6 +33,7 @@
 #include "freertos/task.h"
 #include "gemini_http.h"
 #include "gemini_parse.h"
+#include "http_timing.h"
 #include "mic_pdm.h"
 #include "pin_config.h"
 #include "reactive_controller.h"
@@ -134,15 +135,40 @@ typedef struct {
     char *buf;
     size_t len;
     size_t cap;
+    http_timing_t timing; /* issue #948: where the seconds go */
 } response_acc_t;
+
+static uint32_t uptime_ms(void)
+{
+    return (uint32_t)(esp_timer_get_time() / 1000);
+}
 
 static esp_err_t http_event_handler(esp_http_client_event_t *evt)
 {
-    if (evt->event_id != HTTP_EVENT_ON_DATA) {
+    response_acc_t *acc = (response_acc_t *)evt->user_data;
+    if (!acc) {
         return ESP_OK;
     }
-    response_acc_t *acc = (response_acc_t *)evt->user_data;
-    if (!acc || !acc->buf || !evt->data || evt->data_len <= 0) {
+    switch (evt->event_id) {
+        case HTTP_EVENT_ON_CONNECTED:
+            http_timing_note(&acc->timing, HTTP_TIMING_CONNECTED, uptime_ms());
+            return ESP_OK;
+        case HTTP_EVENT_HEADERS_SENT:
+            http_timing_note(&acc->timing, HTTP_TIMING_HEADERS_SENT, uptime_ms());
+            return ESP_OK;
+        case HTTP_EVENT_ON_HEADER:
+            http_timing_note(&acc->timing, HTTP_TIMING_FIRST_HEADER, uptime_ms());
+            return ESP_OK;
+        case HTTP_EVENT_ON_FINISH:
+            http_timing_note(&acc->timing, HTTP_TIMING_FINISHED, uptime_ms());
+            return ESP_OK;
+        case HTTP_EVENT_ON_DATA:
+            http_timing_note(&acc->timing, HTTP_TIMING_FIRST_DATA, uptime_ms());
+            break;
+        default:
+            return ESP_OK;
+    }
+    if (!acc->buf || !evt->data || evt->data_len <= 0) {
         return ESP_OK;
     }
     const size_t avail = acc->cap - 1 - acc->len;
@@ -467,10 +493,23 @@ static void run_turn(uint32_t window_ms, bool vad)
     response_acc_t acc = {.buf = s_response, .len = 0, .cap = sizeof(s_response)};
     s_response[0] = '\0';
     int status = 0;
+    const uint32_t post_start_ms = uptime_ms();
+    http_timing_start(&acc.timing, post_start_ms);
     const esp_err_t err =
         gemini_http_post(ACTIVITY_EP_VOICE_TURN, VOICE_TURN_URL, api_key, body,
                          VOICE_TURN_TIMEOUT_MS, http_event_handler, &acc, &status);
     free(body);
+    /* No ON_FINISH on a failed request; perform() returning ends it. A no-op
+     * when ON_FINISH already stamped. */
+    http_timing_note(&acc.timing, HTTP_TIMING_FINISHED, uptime_ms());
+    {
+        char phases[96];
+        http_timing_format(&acc.timing, phases, sizeof(phases));
+        /* before_post: recording, encoding and the request build, from the
+         * start of the turn. request = upload + model time (http_timing.h). */
+        ESP_LOGI(TAG, "listen: http %s | before_post=%u ms upload=%u B", phases,
+                 (unsigned)(post_start_ms - t_start), (unsigned)body_len);
+    }
 
     if (err != ESP_OK) {
         /* ERROR, never DEBUG. A Gemini 400 names no field, so the body IS the
@@ -481,8 +520,15 @@ static void run_turn(uint32_t window_ms, bool vad)
         return;
     }
 
-    if (gemini_parse_text(s_response, s_reply, sizeof(s_reply)) != ESP_OK) {
-        ESP_LOGE(TAG, "no usable text in reply: %s", acc.len ? s_response : "(empty body)");
+    /* The reply's shape goes on the log line, success included, so a reply
+     * that is the model's reasoning names its cause (#950): thought parts are
+     * skipped; a reasoning-shaped answer with thought=0 is the model's text. */
+    gemini_text_meta_t meta;
+    if (gemini_parse_text_meta(s_response, s_reply, sizeof(s_reply), &meta) != ESP_OK) {
+        ESP_LOGE(TAG, "no usable text in reply (parts=%d thought=%d text=%d finish=%s): %s",
+                 meta.parts, meta.thought_parts, meta.text_parts,
+                 meta.finish_reason[0] ? meta.finish_reason : "-",
+                 acc.len ? s_response : "(empty body)");
         return;
     }
 
@@ -511,7 +557,9 @@ static void run_turn(uint32_t window_ms, bool vad)
     voice_history_record(s_reply, reply_now_ms);
 
     const uint32_t latency_ms = reply_now_ms - t_start;
-    ESP_LOGI(TAG, "listen: latency=%u ms reply=\"%s\"", (unsigned)latency_ms, s_reply);
+    ESP_LOGI(TAG, "listen: latency=%u ms parts=%d thought=%d text=%d finish=%s len=%u reply=\"%s\"",
+             (unsigned)latency_ms, meta.parts, meta.thought_parts, meta.text_parts,
+             meta.finish_reason[0] ? meta.finish_reason : "-", (unsigned)strlen(s_reply), s_reply);
 
     if (speech_queue_post(s_reply) != ESP_OK) {
         ESP_LOGW(TAG, "speech queue full — reply dropped");

@@ -1,8 +1,9 @@
 """Generate voicing-announcement PCM clips via the Gemini TTS API.
 
 Reads voices.json (array of {clip, text, voice} entries), calls
-gemini-2.5-flash-preview-tts, and writes the returned raw 16-bit little-endian
-PCM at 24 kHz mono to ``<out_dir>/tts_<clip>.pcm``.
+gemini-3.8-flash-tts, and writes raw 16-bit little-endian PCM at 24 kHz mono to
+``<out_dir>/tts_<clip>.pcm``. If the model answers with a WAV, the header is
+removed; any other format than 24 kHz s16 mono is an error, never written.
 
 The embedded firmware (tts_player.c) linearly upsamples 24 kHz → 44.1 kHz at
 playback, so no sample-rate conversion is needed here.
@@ -17,11 +18,14 @@ no copy to drift.
 Two optional per-entry keys, both absent from the firmware vocabularies and
 therefore inert for them:
 
-  ``style``          Delivery directive, prefixed as "<style>: <text>" — the
-                     documented Gemini form. It is *interpreted*, not spoken.
-                     This is how robocar-unified's `voice_persona_t.tts_style`
-                     reaches the model, so a sweep over candidate directives
-                     here is auditioning the exact mechanism the firmware uses.
+  ``style``          Delivery directive, sent as the part's
+                     ``speechMetadata.style``. gemini-3.8-flash-tts reads the
+                     text as a verbatim transcript, so the preview's
+                     "<style>: <text>" prefix would be spoken. This is how
+                     robocar-unified's `voice_persona_t.tts_style` reaches the
+                     model (tts_request_build() in main/tts_request.c), so a
+                     sweep over candidate directives here auditions the exact
+                     mechanism the firmware uses.
   ``language_code``  BCP-47 for speech_config.language_code (e.g. "fi-FI").
 
 ``--wav`` wraps the output in a 24 kHz mono 16-bit WAV header and writes
@@ -32,16 +36,23 @@ the firmware paths want the bare PCM and must not pass it.
 from __future__ import annotations
 
 import array
+import io
 import json
 import os
+import re
 import sys
 import time
+import wave
 from pathlib import Path
 
 from google import genai
 from google.genai import types
 
-MODEL = "gemini-3.1-flash-tts-preview"
+# The model robocar-unified's firmware calls (TTS_MODEL in main/tts_request.h).
+# gemini-3.1-flash-tts-preview has a listed shutdown of 2026-11-17 (issue #844);
+# Flash-Lite TTS has no Finnish.
+MODEL = "gemini-3.8-flash-tts"
+OUTPUT_RATE = 24000  # every consumer (tts_player.c, the robocar ring) plays this
 RETRIES = 3
 RETRY_DELAY_S = 10.0
 # Free-tier quota is per-model requests-per-minute, so the right pacing depends
@@ -57,6 +68,53 @@ def load_voices(path: Path) -> list[dict[str, str]]:
         return json.load(fh)
 
 
+class AudioFormatError(ValueError):
+    """The model returned audio the players cannot use (not 24 kHz s16 mono)."""
+
+
+def pcm_from_inline(data: bytes, mime: str | None) -> bytes:
+    """Return bare 24 kHz s16le mono PCM from a TTS response part.
+
+    The preview sent headerless L16. The 3.8 docs say a unary request returns
+    WAV, while the firmware's streaming request gets headerless L16, so accept
+    both, recognising WAV by its RIFF header rather than trusting the mime
+    alone. Anything that is not 24 kHz s16 mono raises: a clip at another rate
+    plays at the wrong pitch, and mu-law plays as noise.
+    """
+    if data[:4] == b"RIFF" and data[8:12] == b"WAVE":
+        try:
+            with wave.open(io.BytesIO(data), "rb") as w:
+                fmt = (w.getframerate(), w.getnchannels(), w.getsampwidth())
+                if fmt != (OUTPUT_RATE, 1, 2):
+                    raise AudioFormatError(
+                        f"WAV is {fmt[0]} Hz x{fmt[1]} {8 * fmt[2]}-bit"
+                    )
+                return w.readframes(w.getnframes())
+        except (wave.Error, EOFError) as err:  # float or mu-law WAV, or a torn header
+            raise AudioFormatError(f"unreadable WAV: {err}") from err
+    kind = (mime or "").split(";")[0].strip().lower()
+    if kind not in ("audio/l16", "audio/pcm"):
+        raise AudioFormatError(f"unexpected audio mime {mime!r}")
+    m = re.search(r"rate\s*=\s*(\d+)", mime or "")
+    rate = int(m.group(1)) if m else OUTPUT_RATE  # 24 kHz is the only documented rate
+    if rate != OUTPUT_RATE:
+        raise AudioFormatError(f"L16 at {rate} Hz")
+    return data
+
+
+def build_contents(text: str, style: str = "") -> types.Content:
+    """The request content: the text verbatim, the style beside it.
+
+    Same shape as tts_request_build() in robocar-unified's firmware. No style
+    sends no speechMetadata at all rather than an empty one.
+    """
+    part = types.Part(
+        text=text,
+        speech_metadata=types.SpeechMetadata(style=style) if style else None,
+    )
+    return types.Content(role="user", parts=[part])
+
+
 def synthesize(
     client: genai.Client,
     text: str,
@@ -64,10 +122,7 @@ def synthesize(
     style: str = "",
     language_code: str = "",
 ) -> bytes:
-    # "<style>: <text>" is the documented delivery-directive form and the same
-    # one gemini_tts.c builds. An empty style must send the bare text rather
-    # than a leading ": ", which the model would otherwise have to interpret.
-    prompt = f"{style}: {text}" if style else text
+    contents = build_contents(text, style)
     speech_config = types.SpeechConfig(
         voice_config=types.VoiceConfig(
             prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=voice),
@@ -79,7 +134,7 @@ def synthesize(
         try:
             response = client.models.generate_content(
                 model=MODEL,
-                contents=prompt,
+                contents=contents,
                 config=types.GenerateContentConfig(
                     response_modalities=["AUDIO"],
                     speech_config=speech_config,
@@ -104,6 +159,7 @@ def synthesize(
             candidate = response.candidates[0]
             part = candidate.content.parts[0]
             data = part.inline_data.data
+            mime = part.inline_data.mime_type
         except (AttributeError, IndexError, TypeError) as err:
             last_err = err
             print(
@@ -112,9 +168,12 @@ def synthesize(
             )
             time.sleep(RETRY_DELAY_S)
             continue
-        if data:
-            return data
-        last_err = RuntimeError("inline_data.data was falsy")
+        # A header-only WAV is bytes on the wire and no audio once unwrapped:
+        # retry it like an empty response rather than write a 0-byte clip.
+        pcm = pcm_from_inline(data, mime) if data else b""
+        if pcm:
+            return pcm
+        last_err = RuntimeError("the response carried no audio")
         time.sleep(RETRY_DELAY_S)
     raise RuntimeError(f"Failed after {RETRIES} attempts: {last_err}")
 

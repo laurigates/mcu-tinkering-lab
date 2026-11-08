@@ -455,6 +455,18 @@ target_link_libraries(test_voice_endpoint PRIVATE Threads::Threads m)
 add_test(NAME voice_endpoint COMMAND test_voice_endpoint)
 
 # -----------------------------------------------------------------------------
+# http_timing (issue #948: split a voice turn's latency into connect, request
+# and download). Repeated events, phases that never happened and the uint32
+# millisecond wrap.
+# -----------------------------------------------------------------------------
+add_executable(test_http_timing
+    "${MAIN_SRC_DIR}/http_timing.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_http_timing.c"
+)
+target_link_libraries(test_http_timing PRIVATE Threads::Threads m)
+add_test(NAME http_timing COMMAND test_http_timing)
+
+# -----------------------------------------------------------------------------
 # speech_trigger (issue #617: start a hands-free turn on a voice, not a slam)
 #
 # Synthetic voiced speech, a click, white noise and in-band tones either side of

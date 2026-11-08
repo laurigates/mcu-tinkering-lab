@@ -300,9 +300,14 @@ voice-voices preset="in-the-room" raw="../../../tmp/voice-voices/raw" out="../..
 # Costs one ListModels call, one Live session and at most one TTS call; needs
 # GEMINI_API_KEY (from ~/.api_tokens via mise). Workstation only — no board.
 #
+# `model` is checked against ListModels before the session opens, so a retired
+# id fails with the list of Live models the key can reach. ListModels offered
+# seven conversational ones on 2026-11-07; gemini-3.8-live is the one measured
+# (tools/live-probe/README.md § Measured).
+#
 # Probe the Gemini Live API: one session as Teuvo, report in tmp/live-probe.
 [group: "voice"]
-live-probe clip="" out="../../../tmp/live-probe":
+live-probe clip="" out="../../../tmp/live-probe" model="gemini-3.8-live":
     #!/usr/bin/env bash
     set -euo pipefail
     proj="$PWD"
@@ -322,7 +327,7 @@ live-probe clip="" out="../../../tmp/live-probe":
     fi
     cd tools/live-probe
     uv sync --quiet
-    uv run python live_probe.py "$clip" "$out"
+    uv run python live_probe.py "$clip" "$out" --model "{{model}}"
 
 # List the Live (bidiGenerateContent) models the key can reach. One ListModels call.
 [group: "voice"]

@@ -405,6 +405,132 @@ static void test_text_rejects_null_and_bad_json(void)
     ASSERT(gemini_parse_text("not json", out, sizeof(out)) == ESP_FAIL);
 }
 
+/* =========================================================================
+ * Thought parts (issue #950)
+ *
+ * On 2026-11-05 a voice turn spoke 34.8 s of the model's English analysis
+ * ("The user asks ...") instead of a one-line Finnish answer. A part flagged
+ * "thought": true is reasoning, never speech, whatever the request asked for.
+ * ========================================================================= */
+
+static void test_text_skips_thought_parts(void)
+{
+    const char *json = "{\"candidates\":[{\"content\":{\"parts\":["
+                       "{\"text\":\"The user asks what I see.\",\"thought\":true},"
+                       "{\"text\":\"Näen pallon.\"}]},\"finishReason\":\"STOP\"}]}";
+    char out[64] = {0};
+    ASSERT(gemini_parse_text(json, out, sizeof(out)) == ESP_OK);
+    ASSERT(strcmp(out, "Näen pallon.") == 0);
+}
+
+static void test_text_only_thought_parts_is_a_failure(void)
+{
+    /* Reasoning with no answer must not be spoken as the answer. */
+    const char *json = "{\"candidates\":[{\"content\":{\"parts\":["
+                       "{\"text\":\"The user asks what I see.\",\"thought\":true}]}}]}";
+    char out[64] = {0};
+    ASSERT(gemini_parse_text(json, out, sizeof(out)) != ESP_OK);
+}
+
+static void test_text_keeps_parts_with_thought_false(void)
+{
+    const char *json = "{\"candidates\":[{\"content\":{\"parts\":["
+                       "{\"text\":\"Hei.\",\"thought\":false}]}}]}";
+    char out[64] = {0};
+    ASSERT(gemini_parse_text(json, out, sizeof(out)) == ESP_OK);
+    ASSERT(strcmp(out, "Hei.") == 0);
+}
+
+static void test_text_meta_counts_parts_and_reads_finish_reason(void)
+{
+    const char *json = "{\"candidates\":[{\"content\":{\"parts\":["
+                       "{\"text\":\"plan\",\"thought\":true},"
+                       "{\"text\":\"Hei \"},{\"thoughtSignature\":\"abc\"},{\"text\":\"vaan.\"}]},"
+                       "\"finishReason\":\"STOP\"}]}";
+    char out[64] = {0};
+    gemini_text_meta_t meta;
+    memset(&meta, 0x5A, sizeof(meta));
+    ASSERT(gemini_parse_text_meta(json, out, sizeof(out), &meta) == ESP_OK);
+    ASSERT(strcmp(out, "Hei vaan.") == 0);
+    ASSERT(meta.parts == 4);
+    ASSERT(meta.thought_parts == 1);
+    ASSERT(meta.text_parts == 2);
+    ASSERT(strcmp(meta.finish_reason, "STOP") == 0);
+}
+
+static void test_text_meta_is_filled_on_failure(void)
+{
+    /* The failure log is where the cause is needed most. */
+    const char *json = "{\"candidates\":[{\"content\":{\"parts\":["
+                       "{\"text\":\"reasoning\",\"thought\":true}]},"
+                       "\"finishReason\":\"MAX_TOKENS\"}]}";
+    char out[64] = {0};
+    gemini_text_meta_t meta;
+    ASSERT(gemini_parse_text_meta(json, out, sizeof(out), &meta) != ESP_OK);
+    ASSERT(meta.parts == 1);
+    ASSERT(meta.thought_parts == 1);
+    ASSERT(meta.text_parts == 0);
+    ASSERT(strcmp(meta.finish_reason, "MAX_TOKENS") == 0);
+}
+
+static void test_text_meta_truncates_a_long_finish_reason(void)
+{
+    const char *json = "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"x\"}]},"
+                       "\"finishReason\":\"A_FINISH_REASON_LONGER_THAN_ANY_BUFFER_WOULD_HOLD\"}]}";
+    char out[16] = {0};
+    gemini_text_meta_t meta;
+    ASSERT(gemini_parse_text_meta(json, out, sizeof(out), &meta) == ESP_OK);
+    ASSERT(strlen(meta.finish_reason) == sizeof(meta.finish_reason) - 1);
+    ASSERT(strncmp(meta.finish_reason, "A_FINISH_REASON", 15) == 0);
+}
+
+static void test_text_meta_counts_parts_after_the_buffer_fills(void)
+{
+    /* The log line reports the reply's shape even when the text is cut: a
+     * part after the buffer filled still counts. */
+    const char *json = "{\"candidates\":[{\"content\":{\"parts\":["
+                       "{\"text\":\"aaaaaaaaaa\"},{\"text\":\"bbb\"},"
+                       "{\"text\":\"why\",\"thought\":true},{\"text\":\"ccc\"}]}}]}";
+    char out[8];
+    gemini_text_meta_t meta;
+    ASSERT(gemini_parse_text_meta(json, out, sizeof(out), &meta) == ESP_OK);
+    ASSERT(strcmp(out, "aaaaaaa") == 0);
+    ASSERT(meta.parts == 4);
+    ASSERT(meta.text_parts == 3);
+    ASSERT(meta.thought_parts == 1);
+}
+
+static void test_text_meta_keeps_every_real_finish_reason_whole(void)
+{
+    /* The longest FinishReason values in google-genai 2.34; the log must name
+     * the cause, not a prefix shared with another one (PROHIBITED_CONT...). */
+    const char *reasons[] = {"FINISH_REASON_UNSPECIFIED", "IMAGE_PROHIBITED_CONTENT",
+                             "MALFORMED_FUNCTION_CALL", "PROHIBITED_CONTENT"};
+    for (size_t i = 0; i < sizeof(reasons) / sizeof(reasons[0]); ++i) {
+        char json[160];
+        snprintf(json, sizeof(json),
+                 "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"x\"}]},"
+                 "\"finishReason\":\"%s\"}]}",
+                 reasons[i]);
+        char out[16] = {0};
+        gemini_text_meta_t meta;
+        ASSERT(gemini_parse_text_meta(json, out, sizeof(out), &meta) == ESP_OK);
+        ASSERT(strcmp(meta.finish_reason, reasons[i]) == 0);
+    }
+}
+
+static void test_text_meta_without_finish_reason_is_empty(void)
+{
+    const char *json = "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"x\"}]}}]}";
+    char out[16] = {0};
+    gemini_text_meta_t meta;
+    memset(&meta, 0x5A, sizeof(meta));
+    ASSERT(gemini_parse_text_meta(json, out, sizeof(out), &meta) == ESP_OK);
+    ASSERT(meta.finish_reason[0] == '\0');
+    /* And a NULL meta is allowed: that is what gemini_parse_text() passes. */
+    ASSERT(gemini_parse_text_meta(json, out, sizeof(out), NULL) == ESP_OK);
+}
+
 int main(void)
 {
     printf("=== gemini_parse host tests ===\n\n");
@@ -434,6 +560,20 @@ int main(void)
     test_run("text_missing_parts_is_a_failure", test_text_missing_parts_is_a_failure);
     test_run("text_truncates_without_overrunning", test_text_truncates_without_overrunning);
     test_run("text_rejects_null_and_bad_json", test_text_rejects_null_and_bad_json);
+    test_run("text_skips_thought_parts", test_text_skips_thought_parts);
+    test_run("text_only_thought_parts_is_a_failure", test_text_only_thought_parts_is_a_failure);
+    test_run("text_keeps_parts_with_thought_false", test_text_keeps_parts_with_thought_false);
+    test_run("text_meta_counts_parts_and_reads_finish_reason",
+             test_text_meta_counts_parts_and_reads_finish_reason);
+    test_run("text_meta_is_filled_on_failure", test_text_meta_is_filled_on_failure);
+    test_run("text_meta_truncates_a_long_finish_reason",
+             test_text_meta_truncates_a_long_finish_reason);
+    test_run("text_meta_counts_parts_after_the_buffer_fills",
+             test_text_meta_counts_parts_after_the_buffer_fills);
+    test_run("text_meta_keeps_every_real_finish_reason_whole",
+             test_text_meta_keeps_every_real_finish_reason_whole);
+    test_run("text_meta_without_finish_reason_is_empty",
+             test_text_meta_without_finish_reason_is_empty);
 
     printf("\n=== Results ===\n");
     printf("Passed: %d / %d\n", test_pass, test_count);
