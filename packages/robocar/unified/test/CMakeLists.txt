@@ -424,8 +424,6 @@ if(CJSON_FOUND)
                                "${VOICE_PROMPTS_CRED_DIR}")
     target_link_directories(test_voice_prompts PRIVATE ${CJSON_LIBRARY_DIRS})
     target_link_libraries(test_voice_prompts PRIVATE ${CJSON_LIBRARIES} Threads::Threads m)
-    # The ESP_LOG* shims are no-ops, which leaves TAG unused.
-    target_compile_options(test_voice_prompts PRIVATE -Wno-unused-variable)
     add_test(NAME voice_prompts COMMAND test_voice_prompts)
 else()
     message(STATUS "cJSON not found — skipping test_gemini_parse, test_voice_history and test_voice_prompts. Install via `brew install cjson` or `apt install libcjson-dev`.")
@@ -570,8 +568,7 @@ if(EXISTS "${PCA9685_MANAGED_DIR}/pca9685.c")
         "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_host"
         "${PCA9685_MANAGED_DIR}"
     )
-    # -Wno-unused-variable: the ESP_LOG* shims are no-ops, which leaves the driver's TAG unused.
-    target_compile_options(test_pca9685_multi PRIVATE -fsanitize=address -fno-omit-frame-pointer -Wno-unused-variable)
+    target_compile_options(test_pca9685_multi PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(test_pca9685_multi PRIVATE -fsanitize=address)
     target_link_libraries(test_pca9685_multi PRIVATE Threads::Threads m)
     add_test(NAME pca9685_multi COMMAND test_pca9685_multi)
@@ -616,8 +613,6 @@ target_include_directories(test_servo_controller BEFORE PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_host"
     "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_decl"
 )
-# -Wno-unused-variable: the ESP_LOG* shims are no-ops, which leaves TAG unused.
-target_compile_options(test_servo_controller PRIVATE -Wno-unused-variable)
 target_link_libraries(test_servo_controller PRIVATE Threads::Threads m)
 add_test(NAME servo_controller COMMAND test_servo_controller)
 
@@ -638,8 +633,6 @@ add_executable(test_activity_trace
     "${CMAKE_CURRENT_SOURCE_DIR}/test_activity_trace.c"
 )
 target_compile_definitions(test_activity_trace PRIVATE ACTIVITY_TRACE_HOST_TEST=1)
-# -Wno-unused-variable: the ESP_LOG* shims are no-ops, which leaves TAG unused.
-target_compile_options(test_activity_trace PRIVATE -Wno-unused-variable)
 target_link_libraries(test_activity_trace PRIVATE Threads::Threads m)
 add_test(NAME activity_trace COMMAND test_activity_trace)
 
@@ -665,8 +658,6 @@ target_include_directories(test_i2c_bus_stats BEFORE PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_host"  # i2c_bus.h -> <i2cdev.h>
     "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_decl"  # pca9685.h declarations
 )
-# -Wno-unused-variable: the ESP_LOG* shims are no-ops, which leaves TAG unused.
-target_compile_options(test_i2c_bus_stats PRIVATE -Wno-unused-variable)
 target_link_libraries(test_i2c_bus_stats PRIVATE Threads::Threads m)
 add_test(NAME i2c_bus_stats COMMAND test_i2c_bus_stats)
 
@@ -688,8 +679,6 @@ target_include_directories(test_motor_controller BEFORE PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_host"  # i2c_bus.h -> <i2cdev.h>
     "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_decl"
 )
-# -Wno-unused-variable: the ESP_LOG* shims are no-ops, which leaves TAG unused.
-target_compile_options(test_motor_controller PRIVATE -Wno-unused-variable)
 target_link_libraries(test_motor_controller PRIVATE Threads::Threads m)
 add_test(NAME motor_controller COMMAND test_motor_controller)
 
@@ -712,8 +701,6 @@ target_include_directories(test_led_controller BEFORE PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_host"  # i2c_bus.h -> <i2cdev.h>
     "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_decl"
 )
-# -Wno-unused-variable: the ESP_LOG* shims are no-ops, which leaves TAG unused.
-target_compile_options(test_led_controller PRIVATE -Wno-unused-variable)
 target_link_libraries(test_led_controller PRIVATE Threads::Threads m)
 add_test(NAME led_controller COMMAND test_led_controller)
 
@@ -757,8 +744,6 @@ target_include_directories(test_self_report BEFORE PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_host"  # i2c_bus.h -> <i2cdev.h>
     "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_decl"
 )
-# -Wno-unused-variable: the ESP_LOG* shims are no-ops, which leaves TAG unused.
-target_compile_options(test_self_report PRIVATE -Wno-unused-variable)
 target_link_libraries(test_self_report PRIVATE Threads::Threads m)
 add_test(NAME self_report COMMAND test_self_report)
 
@@ -863,8 +848,6 @@ foreach(_variant credentials_loader credentials_loader_no_mqtt)
         "${CMAKE_CURRENT_SOURCE_DIR}/nvs_shim.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/test_credentials_loader.c"
     )
-    # -Wno-unused-variable: the ESP_LOG* shims are no-ops, which leaves TAG unused.
-    target_compile_options(test_${_variant} PRIVATE -Wno-unused-variable)
     add_test(NAME ${_variant} COMMAND test_${_variant})
 endforeach()
 target_compile_definitions(test_credentials_loader_no_mqtt PRIVATE CREDENTIALS_FIXTURE_NO_MQTT=1)
