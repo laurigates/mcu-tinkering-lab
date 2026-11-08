@@ -1,6 +1,6 @@
 /**
  * @file camera.h
- * @brief ESP32-CAM camera interface
+ * @brief Camera interface for the XIAO ESP32-S3 Sense (OV3660 on the Sense board)
  */
 
 #ifndef CAMERA_H
