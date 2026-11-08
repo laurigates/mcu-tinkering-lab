@@ -206,6 +206,18 @@ bool scene_change_novel(void);
  */
 bool scene_change_compared(void);
 
+/**
+ * @brief Whether any decodable frame has ever reached the gate.
+ *
+ * False means the camera has produced no picture this module could use — no
+ * frame yet, or every frame so far undecodable — as opposed to watching a still
+ * room. novel() fails closed in that state, so this accessor is what lets the
+ * `voice` status line say BLIND instead of "same" (issue #703); the mic line's
+ * DEAF reads ambient_audio_has_measurement() the same way. A decoded frame off
+ * a dwell pose counts: the view exists, it just cannot be compared.
+ */
+bool scene_change_has_measurement(void);
+
 /** @brief Distance between the current frame and its pose's reference, for
  *         logging. 0 when the two cannot be compared. */
 unsigned scene_change_score(void);
