@@ -137,7 +137,7 @@ static plan_evidence_t gather_evidence(const scene_fingerprint_t *fp, uint32_t n
     goal_t current = {0};
     bool fresh = false;
     if (!ev.robot_moving && goal_state_read(&current, &fresh) == ESP_OK) {
-        ev.robot_moving = fresh && current.kind != GOAL_KIND_STOP && current.kind != GOAL_KIND_NONE;
+        ev.robot_moving = goal_moves_wheels(&current, fresh);
     }
 
     return ev;

@@ -371,6 +371,42 @@ static void test_concurrent_fuzz(void)
     ASSERT(g_reader_errors == 0);
 }
 
+/* Issue #958: the planner's motion evidence. A track goal with a zero speed
+ * cap only aims the head, so it must not hold the planner at full rate. */
+static void test_goal_moves_wheels(void)
+{
+    goal_t g = {0};
+
+    g.kind = GOAL_KIND_TRACK;
+    g.params.track.max_speed_pct = 0;
+    ASSERT(!goal_moves_wheels(&g, true));
+    g.params.track.max_speed_pct = 1;
+    ASSERT(goal_moves_wheels(&g, true));
+    g.params.track.max_speed_pct = 60;
+    ASSERT(goal_moves_wheels(&g, true));
+    ASSERT(!goal_moves_wheels(&g, false));
+
+    memset(&g, 0, sizeof(g));
+    g.kind = GOAL_KIND_DRIVE;
+    g.params.drive.speed_pct = 50;
+    ASSERT(goal_moves_wheels(&g, true));
+    ASSERT(!goal_moves_wheels(&g, false));
+
+    memset(&g, 0, sizeof(g));
+    g.kind = GOAL_KIND_ROTATE;
+    g.params.rotate.angle_deg = 90;
+    ASSERT(goal_moves_wheels(&g, true));
+    ASSERT(!goal_moves_wheels(&g, false));
+
+    memset(&g, 0, sizeof(g));
+    g.kind = GOAL_KIND_STOP;
+    ASSERT(!goal_moves_wheels(&g, true));
+    g.kind = GOAL_KIND_NONE;
+    ASSERT(!goal_moves_wheels(&g, true));
+
+    ASSERT(!goal_moves_wheels(NULL, true));
+}
+
 /* =========================================================================
  * Main
  * ========================================================================= */
@@ -389,6 +425,7 @@ int main(void)
     test_run("force_stop", test_force_stop);
     test_run("null_args", test_null_args);
     test_run("concurrent_fuzz", test_concurrent_fuzz);
+    test_run("goal_moves_wheels", test_goal_moves_wheels);
 
     printf("\n=== Results ===\n");
     printf("Passed: %d / %d\n", test_pass, test_count);
