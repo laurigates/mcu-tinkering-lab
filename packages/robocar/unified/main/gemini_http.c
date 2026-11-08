@@ -83,9 +83,12 @@ esp_err_t gemini_http_post(activity_endpoint_t endpoint, const char *url, const 
     }
 
     if (err != ESP_OK) {
-        /* mbedTLS allocates from INTERNAL RAM in this build, and concurrent
-         * handshakes (planner + TTS + voice turn) fail with *_ALLOC_FAILED. Read
-         * the pool at the failure point rather than inferring it. */
+        /* mbedTLS buffers are in PSRAM (CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC=y,
+         * sdkconfig.defaults). Before that, concurrent handshakes (planner + TTS
+         * + voice turn) ran internal RAM down to 259 bytes and failed with
+         * *_ALLOC_FAILED. Internal RAM is still logged at the failure point, so a
+         * regression to the internal allocator shows here rather than being
+         * inferred. */
         ESP_LOGW(TAG, "connect failed: internal free=%u largest=%u min_ever=%u",
                  (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
                  (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
