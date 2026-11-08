@@ -29,7 +29,7 @@ The real defect was visible only once the PID was printed.
 |---|---|---|
 | Argument | **enum index**: `0` = 2x … `6` = 128x | **raw 10-bit ceiling**, gain x16 |
 | Written to | `COM9[7:5]` | `0x3A18` / `0x3A19` |
-| Power-on default | driver forces `GAINCEILING_2X` in `esp_camera_init()` | `0x00F8` = 248 = **15.5x** |
+| Value after `esp_camera_init()` | driver forces `GAINCEILING_2X` in `esp_camera_init()` | `0x00F8` = 248 = **15.5x**, from the driver's init table (the OV3660's silicon reset value differs: `docs/reference/datasheets/camera--ov3660.md`) |
 | So `set_gainceiling(s, 0)` means | "2x ceiling" — low but functional | **"zero gain ceiling"** — AGC cannot brighten anything |
 
 That one call, copied from any of the thousands of OV2640 examples online, is

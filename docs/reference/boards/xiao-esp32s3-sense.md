@@ -1,10 +1,10 @@
 # Seeed Studio XIAO ESP32-S3 Sense
 
-The XIAO ESP32-S3 with an expansion board that adds an OV2640 camera (1600x1200), PDM digital microphone, and microSD card slot. All the AI/ML capabilities of the [base XIAO ESP32-S3](xiao-esp32s3.md) — dual-core LX7, 8 MB PSRAM, USB OTG — plus vision and audio input in a 21 x 17.8 x 15 mm stack. The smallest ESP32 camera board available at ~$14–18.
+The XIAO ESP32-S3 with an expansion board that adds a DVP camera, PDM digital microphone, and microSD card slot. The camera depends on the production run: early boards carry an OV2640 (1600x1200), later ones an OV3660 (2048x1536) or OV5640, per Seeed's getting-started page; robocar-unified's board reads PID 0x3660 (see [the OV3660 page](../datasheets/camera--ov3660.md)). Read the PID before applying any sensor-specific fact. All the AI/ML capabilities of the [base XIAO ESP32-S3](xiao-esp32s3.md) — dual-core LX7, 8 MB PSRAM, USB OTG — plus vision and audio input in a 21 x 17.8 x 15 mm stack. The smallest ESP32 camera board available at ~$14–18.
 
 ## Why XIAO ESP32-S3 Sense
 
-- **Camera + AI in a thumb** — OV2640 camera with 8 MB PSRAM for frame buffers. Run TensorFlow Lite Micro face detection, person detection, or image classification on-device without cloud API calls.
+- **Camera + AI in a thumb** — DVP camera (OV2640, OV3660 or OV5640 by production run) with 8 MB PSRAM for frame buffers. Run TensorFlow Lite Micro face detection, person detection, or image classification on-device without cloud API calls.
 - **Digital microphone** — MSM261D3526H1CPM PDM mic for wake word detection (ESP-SR), audio classification, or voice recording to SD card.
 - **MicroSD card** — Up to 32 GB FAT32 for data logging, image capture, or audio recording.
 - **Detachable expansion** — The camera/mic/SD board connects via B2B connector. Remove it and you have a standard XIAO ESP32-S3. Reattach when you need sensors.
@@ -32,7 +32,7 @@ The XIAO ESP32-S3 with an expansion board that adds an OV2640 camera (1600x1200)
 | Wi-Fi | 802.11 b/g/n (Wi-Fi 4, 2.4 GHz) |
 | Bluetooth | Bluetooth 5.0 LE (no Classic BT) |
 | USB | USB-C (USB 1.1 OTG + USB-Serial-JTAG) |
-| Camera | OV2640 (1600x1200) or OV3660 (2048x1536) via DVP |
+| Camera | OV2640 (1600x1200), OV3660 (2048x1536) or OV5640, by production run, via DVP |
 | Microphone | MSM261D3526H1CPM PDM digital MEMS |
 | SD card | MicroSD slot, up to 32 GB FAT32 |
 | GPIO | 11 usable pins (D0–D10), 2 bottom pads (D11/D12) |
@@ -102,7 +102,7 @@ The camera, microphone, and SD card use GPIOs that are not on the side headers. 
 | PDM CLK | GPIO42 (D12) |
 | PDM DATA | GPIO41 (D11) |
 
-D11 and D12 are on the bottom of the expansion board and are reserved for the microphone by default. To reclaim them for other uses, cut the solder jumpers J1/J2 on the back of the expansion board.
+D11 and D12 are on the bottom of the expansion board and are reserved for the microphone by default. To reclaim them for other uses, cut the solder jumpers JP1 (CLK) and JP2 (DATA) on the back of the expansion board. The v1.2 expansion-board schematic labels them JP1/JP2; J4/J5 are unpopulated pads ([schematic](https://files.seeedstudio.com/wiki/SeeedStudio-XIAO-ESP32S3/res/XIAO_ESP32S3_Exp_Board_v1.2_SCH_PDF_260810.pdf); see [sensor--msm261d.md](../datasheets/sensor--msm261d.md)).
 
 #### SD Card — 1 GPIO
 
@@ -141,7 +141,7 @@ The Sense expansion board includes three pull-up resistors (R4–R6) connected t
 
 ### Camera Notes
 
-- The OV2640 has been discontinued on newer production runs; replacement boards ship with the OV3660 (2048x1536). Both use the same DVP interface and pin assignments.
+- The OV2640 has been discontinued on newer production runs. Seeed's getting-started page says replacement boards ship with an OV3660, and that later runs moved to the OV5640 as the OV3660 sold out. All three use the same DVP interface and pin assignments, but not the same registers: the OV3660 and OV5640 share SCCB address 0x3C and only the PID tells them apart (`.claude/rules/camera-sensor-identity.md`).
 - With 8 MB PSRAM, you can buffer multiple frames for AI inference at a few FPS.
 - Camera DMA and PSRAM use separate SPI buses from user-facing SPI, so there is no resource contention with I2C or SPI peripherals on D4–D10.
 

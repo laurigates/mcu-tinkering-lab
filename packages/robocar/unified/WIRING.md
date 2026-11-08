@@ -377,8 +377,11 @@ it dashed to mark it as on-module rather than as a breakout to solder.
 | PDM CLK | GPIO42 | output | Clock, driven by the ESP32-S3 |
 | PDM DATA | GPIO41 | input | Serial PDM data |
 
-16 kHz / 16-bit / mono — fixed by the microphone, and also what Gemini expects
-for inline audio, so there is no resampling stage anywhere in the path. Neither
+16 kHz / 16-bit / mono — chosen by the firmware because it is what Gemini
+expects for inline audio, so there is no resampling stage anywhere in the path.
+The microphone fixes no rate; at 16 kHz the PDM clock is 1.024 MHz, between the
+two clock ranges its datasheet specifies (see
+[sensor--msm261d.md](../../../docs/reference/datasheets/sensor--msm261d.md)). Neither
 pin collides with the camera DVP group (GPIO10-18, 38-40, 47-48) or the D0-D10
 headers (GPIO1-9, 43-44).
 

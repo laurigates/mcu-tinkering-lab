@@ -103,9 +103,12 @@ brings them out on its expansion header J6, each through a 1 kΩ resistor
 ([`hardware/carrier/README.md`](hardware/carrier/README.md#headers)), and the
 hand-wired harness leaves them free.
 
-The GY-521 MPU6050 breakout has an onboard 3.3 V regulator and works fed
-from 3V3 directly (bypassing the regulator) — INT is push-pull 3.3 V,
-safe for the RP2350.
+The GY-521 MPU6050 breakout has an onboard 3.3 V regulator, and it works
+fed from 3V3. The regulator is not bypassed: VCC is its input, so the chip
+runs from 3V3 minus the regulator's dropout, which is unmeasured (the
+[GY-521 page](../../../docs/reference/boards/gy-521.md) carries the schematic
+and the check). INT is push-pull at that rail, below 3.3 V, safe for the
+RP2350.
 
 ## DRV8825 carriers (each)
 
