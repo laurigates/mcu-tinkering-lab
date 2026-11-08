@@ -118,6 +118,29 @@ class ChangelogNotesTest(unittest.TestCase):
         self.assertTrue(all(len(n) <= 80 for n in notes))
         self.assertTrue(all(n.endswith("…") for n in notes))
 
+    def test_default_notes_fit_the_old_firmware_manifest_buffer(self):
+        # robocar-unified <= 0.2.17 reads the whole manifest into 2048 bytes and
+        # cannot parse a truncated one, so it would never update again. The
+        # notes are held under 800 encoded bytes; the rest of the manifest is
+        # about 600 bytes as written.
+        items = "\n".join(
+            f"* **x:** {'pitkä sana ' * 30}item {i} ([{i:07x}](u))" for i in range(20)
+        )
+        log = f"## [1.0.0](u) (2026-01-01)\n\n### Features\n\n{items}\n"
+        rc, notes, _ = run(log, "1.0.0")
+        self.assertEqual(rc, 0)
+        self.assertGreater(len(notes), 0)
+        encoded = json.dumps(notes, ensure_ascii=False).encode("utf-8")
+        self.assertLessEqual(len(encoded), 800)
+
+    def test_max_bytes_drops_trailing_entries_whole(self):
+        log = (
+            "## [1.0.0](u) (2026-01-01)\n\n### Features\n\n"
+            "* **a:** one ([abc1234](u))\n* **b:** two ([abc1235](u))\n"
+        )
+        _, notes, _ = run(log, "1.0.0", "--max-bytes", "12")
+        self.assertEqual(notes, ["a: one"])
+
     def test_utf8_is_kept_unescaped(self):
         log = "## [1.0.0](u) (2026-01-01)\n\n### Features\n\n* **robocar:** sano päivää ([abc1234](u))\n"
         rc, notes, _ = run(log, "1.0.0")

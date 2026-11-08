@@ -15,7 +15,11 @@ markdown, becoming "scope: summary".
 
 The caps bound what the firmware has to hold: at most --max-items entries
 (default 8), each at most --max-chars characters (default 160, ending in "…"
-when cut). A missing changelog or version section prints [] and exits 0, so a
+when cut), and at most --max-bytes for the whole list as UTF-8 JSON (default
+800; trailing entries are dropped whole). The byte cap is for robots already
+in the field: robocar-unified up to 0.2.17 reads the whole manifest into a
+2048-byte buffer, and a manifest cut short does not parse, so it would never
+update again. The rest of the manifest is about 600 bytes as written. A missing changelog or version section prints [] and exits 0, so a
 release never fails over notes; the firmware falls back to a template line.
 """
 
@@ -77,18 +81,29 @@ def notes(text: str, version: str, max_items: int, max_chars: int) -> list[str]:
     return out
 
 
+def fit_bytes(entries: list[str], max_bytes: int) -> list[str]:
+    """Drop trailing entries until the list encodes to at most max_bytes."""
+    out = list(entries)
+    while out and len(json.dumps(out, ensure_ascii=False).encode("utf-8")) > max_bytes:
+        out.pop()
+    return out
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("changelog", type=Path)
     p.add_argument("version")
     p.add_argument("--max-items", type=int, default=8)
     p.add_argument("--max-chars", type=int, default=160)
+    p.add_argument("--max-bytes", type=int, default=800)
     args = p.parse_args(argv)
     try:
         text = args.changelog.read_text(encoding="utf-8")
     except FileNotFoundError:
         text = ""
-    result = notes(text, args.version, args.max_items, args.max_chars)
+    result = fit_bytes(
+        notes(text, args.version, args.max_items, args.max_chars), args.max_bytes
+    )
     json.dump(result, sys.stdout, ensure_ascii=False)
     sys.stdout.write("\n")
     return 0
