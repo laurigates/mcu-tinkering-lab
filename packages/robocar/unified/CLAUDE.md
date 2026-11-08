@@ -53,7 +53,7 @@ Each subsystem's design notes, measurements and the reasoning behind the rules b
 | [activity-trace.md](docs/firmware/activity-trace.md) | LED colour meanings, `trace` counters, the I2C bus counter |
 | [planner.md](docs/firmware/planner.md) | Planner tools, dormancy ladder (`plan_activity`), spend fuse (`plan_budget`), reading the planner log |
 | [camera-and-log.md](docs/firmware/camera-and-log.md) | Frame stats and `snap` dumps, the UART0 log mirror on J15, why the sensor is an OV3660 |
-| [voice.md](docs/firmware/voice.md) | TTS streaming and preroll, personas and dialogue pools, speech gates (scene, ambient audio, budget), voice FX, push-to-talk and VAD voice turns, voice budget, memory peak |
+| [voice.md](docs/firmware/voice.md) | TTS streaming and preroll, personas and dialogue pools, speech gates (scene, ambient audio, budget), voice FX, sound clips (`[horn]`, the `sound` tool, the reflex horn), push-to-talk and VAD voice turns, voice budget, memory peak |
 | [wifi-and-ota.md](docs/firmware/wifi-and-ota.md) | Improv Serial provisioning over USB-Serial-JTAG, the network supervisor (nothing waits on WiFi), where the Gemini key comes from, OTA manifest polling, the build-SHA install decision |
 
 ## Build & flash
@@ -150,6 +150,7 @@ One line per rule. Each group's doc has the full reasoning and the tests that ho
 - The scene reference is the frame last spoken about at the same dwell pose. Only valid on-pose fingerprints update it, and `!s_current.valid` and the off-pose check come before the first-impression branch (#690).
 - Check `PLANNER_TASK_STACK_SIZE` whenever `GEMINI_SYSTEM_PROMPT_MAX`, a persona brief or `DIALOGUE_RECALL_*` grows.
 - The model places delivery tags, and the `speech_tags.h` allow-list filters every one.
+- Sound tags (`[horn]`) leave the line in `sound_clips_split()` before TTS; the `sound` tool is declared only beside `speak`, and the reflex requests its horn with `sound_clips_request()`, never `speech_queue_post()`.
 - TTS uses `:streamGenerateContent?alt=sse` at 24 kHz, decoded incrementally into the ring.
 - Playback waits for `AUDIO_PREROLL_BYTES` or the end of the fetch, and PCM is batched (`TTS_PCM_BATCH_BYTES`) before `audio_player_write()`.
 - `s_written_total` counts each successful `ring_send()`.

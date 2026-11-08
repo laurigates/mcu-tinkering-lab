@@ -29,6 +29,8 @@ idf_component_register(
         "plan_budget.c"
         "speech_queue.c"
         "speech_tags.c"
+        "sound_clips_core.c"
+        "sound_clips.c"
         "audio_player.c"
         "mic_pdm.c"
         "mic_dump.c"
@@ -69,6 +71,13 @@ idf_component_register(
         "oled_status.c"
         "oled_status_core.c"
     INCLUDE_DIRS "."
+    # Prebuilt clips, 24 kHz mono int16 (sounds/manifest.toml, tools/build-sounds.py).
+    # sound_clips.c names each one's _binary_<tag>_pcm_start/_end symbols.
+    EMBED_FILES
+        "sounds/horn.pcm"
+        "sounds/aoogah.pcm"
+        "sounds/bell.pcm"
+        "sounds/boing.pcm"
     REQUIRES
         "esp-idf-lib__pca9685"
         "esp-idf-lib__tca9548"

@@ -111,6 +111,25 @@ Note that **`voice loud 0` and `voice sound 0` mean the opposite of `voice scene
 
 None of this survives a reboot: the rings are `.bss`. Persisting them is worth doing if bench reflashes make the first line after every boot the model's favourite phrasing again.
 
+### Sound clips
+
+Four short clips ship in flash: `horn` (a polite two-toot car horn), `aoogah` (a vintage klaxon), `bell` (a bicycle bell) and `boing` (a cartoon spring), 0.7–0.9 s each and 156 kB together. They were generated with Suno Sounds; `sounds/manifest.toml` records each clip's Suno id, the alternate variant from the same generation, and the trim, fade and level, and `just robocar-unified::sounds <raw dir>` rebuilds `main/sounds/<tag>.pcm` from the WAV downloads (24 kHz mono int16, the player's format, embedded with `EMBED_FILES`). The raw downloads are not in git, so changing a trim needs them; Suno charges a download credit per file.
+
+Three things play a clip, and all three end at the TTS task, so a clip never talks over a sentence:
+
+| Trigger | How |
+|---|---|
+| A `[horn]`-style tag in a spoken line | The persona's `tag_brief` lists the four tags beside `[sighs]`; `speech_tags_sanitize()` keeps at most one per line, outside the two-delivery-tag cap |
+| The planner's `sound` tool | Declared only when `speak` is, so the speech gates govern it; `gemini_parse` turns the call into a `[name]` tag at the front of the line |
+| The obstacle reflex | On the rising edge, if a manual lease or a fresh moving goal was being held back, at most once per `SOUND_REFLEX_COOLDOWN_MS` (20 s); always `horn` |
+| `sound horn\|aoogah\|bell\|boing` on the console | A tag-only line through the speech queue |
+
+The TTS task splits each line (`sound_clips_split()`): the tag comes out, the words go to Gemini TTS, and the clip is written into the ring before them if nothing but delivery tags preceded it, after them otherwise. A sentence is one stream, so a clip cannot be spliced into its middle. A line that is only a tag makes no request, needs no key or WiFi, and logs `sound: horn (900 ms, alone)`. A leading clip is shorter than `AUDIO_PREROLL_BYTES`, so it waits for the speech behind it to bank the rest of the preroll and then runs straight into the words.
+
+The reflex cannot post to the speech queue itself: the executor runs with under 1 kB of stack headroom, and `speech_queue_post()` needs about that much. It sets an atomic request (`sound_clips_request()`) that the TTS task takes within 50 ms when idle, or after the line it is speaking.
+
+Clips pass through the voice FX like speech. If the comb colours a clip badly, it needs a bypass in the player, which does not exist yet.
+
 ### Talking back: the push-to-talk voice turn
 
 `listen [seconds]` records from the microphone, sends the clip to Gemini, and speaks the reply through the **existing TTS path unchanged** (`voice_turn.c`). It is the opposite of everything above: the planner's speech is unprompted and gated, a voice turn is asked for and answered on demand. See [ADR-024](../../../../../docs/decisions/ADR-024-conversational-entity-and-multimodal-voice.md) for the roadmap evolving this into a multi-turn, camera-aware conversational entity with digital audio gain and autonomous VAD.
@@ -173,6 +192,9 @@ Claude and Ollama backends have been removed from this project. If an alternativ
 
 - Don't ration hands-free turns with `speech_budget`. It counts utterances, so the `__IGNORE__` replies that make up most VAD traffic never charge it, and its 20 s gap would refuse every follow-up in the 7 s conversation window. `voice_budget` counts requests for this reason (issue #623)
 - Don't fold speech into `goal_t` — see the Voice section above and `speech_queue.h`
+- Don't let a sound tag reach the TTS request. Gemini TTS reads an unknown bracketed run as words, so `[horn]` would be spoken; `sound_clips_split()` takes every sound tag out before `build_request_json()`, and `test_tag_never_reaches_tts` pins it
+- Don't call `speech_queue_post()` from the executor task. Its filter scratch and request copy are about the executor's whole stack headroom; the reflex uses `sound_clips_request()`
+- Don't offer the `sound` tool on a cycle without `speak`. The model cannot know when it last honked, so "rarely" in its description is advisory; the speech gates are what bound it
 - Don't put a specific phrase, opener or filler word in a persona's `text_brief` — everything named there is said every time. Phrase-shaped flavour goes in the `openers`/`shapes` pools; see `dialogue_style.h`
 - Don't add a band-limit, ring modulator, bitcrusher or impulse-train "drone" to `voice_fx_core.c`. All four were auditioned and rejected with reasons recorded in that file's header — ring modulation costs intelligibility in a language that contrasts geminates and vowel length, bitcrushing is a 1980s artifact that also injects a DC offset into a BTL class-D voice coil, the drone samples `|x[n]|` at one arbitrary instant per period, and a band-limit changes the character from "Robby in the room" to "a recording of Robby"
 - Don't drop the comb's `(1-g)` input trim, or "simplify" it to a plain `x + g*y[n-D]`. The DC gain becomes `1/(1-g)` and the effect pins at the rail; it still sounds robotic, so nothing on a bench catches it

@@ -64,6 +64,7 @@ add_executable(robocar-twin
     "${MAIN_SRC_DIR}/speech_budget.c"
     "${MAIN_SRC_DIR}/dialogue_style.c"
     "${MAIN_SRC_DIR}/speech_tags.c"
+    "${MAIN_SRC_DIR}/sound_clips_core.c"
     "${MAIN_SRC_DIR}/goal_state.c"
     "${MAIN_SRC_DIR}/gemini_parse.c"
 )

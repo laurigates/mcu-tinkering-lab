@@ -34,6 +34,12 @@
 
 #include "cJSON.h"
 #include "esp_log.h"
+#include "sound_clips_core.h"
+
+/* Copy of the `speak` text while a sound tag is put in front of it. The
+ * caller's buffer is SPEECH_TEXT_MAX (320 B); this is the same size, so a
+ * full-length line loses only what no longer fits after the tag. */
+#define SPEECH_LINE_SCRATCH 320
 
 /* On the host-test build ESP_LOGx macros are no-ops, leaving TAG unused.
  * Suppress with a compiler attribute rather than an #ifdef — keeps the source
@@ -128,6 +134,7 @@ esp_err_t gemini_parse_response(const char *json_text, goal_t *out_goal, char *o
      * motion call plus a `speak`. Scanning only parts[0] (as this parser did
      * before speech existed) would silently drop whichever came second. */
     cJSON *fn_call = NULL;
+    sound_clip_t sound = SOUND_CLIP_NONE; /* first `sound` call wins */
     const int part_count = cand_parts ? cJSON_GetArraySize(cand_parts) : 0;
 
     for (int i = 0; i < part_count; i++) {
@@ -149,9 +156,31 @@ esp_err_t gemini_parse_response(const char *json_text, goal_t *out_goal, char *o
             continue;
         }
 
+        if (strcmp(fc_name->valuestring, "sound") == 0) {
+            cJSON *so_args = cJSON_GetObjectItem(fc, "args");
+            cJSON *so_name = so_args ? cJSON_GetObjectItem(so_args, "name") : NULL;
+            if (cJSON_IsString(so_name) && sound == SOUND_CLIP_NONE) {
+                sound = sound_clip_from_name(so_name->valuestring);
+                if (sound == SOUND_CLIP_NONE) {
+                    ESP_LOGW(TAG, "sound: unknown clip \"%s\" ignored", so_name->valuestring);
+                }
+            }
+            continue;
+        }
+
         if (!fn_call) {
             fn_call = fc; /* first motion call wins */
         }
+    }
+
+    /* The clip leads the line whichever order the calls came in; the TTS task
+     * takes the tag out again (sound_clips_split()). A sound with no `speak`
+     * becomes a line of just the tag, which plays without a TTS request. */
+    if (sound != SOUND_CLIP_NONE && out_speech && speech_cap > 0) {
+        char words[SPEECH_LINE_SCRATCH];
+        snprintf(words, sizeof(words), "%s", out_speech);
+        snprintf(out_speech, speech_cap, "[%s]%s%s", sound_clip_name(sound),
+                 words[0] != '\0' ? " " : "", words);
     }
 
     if (!fn_call) {

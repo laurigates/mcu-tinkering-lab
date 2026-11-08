@@ -20,6 +20,7 @@
 #include "freertos/task.h"
 #include "gemini_http.h"
 #include "pin_config.h"
+#include "sound_clips.h"
 #include "speech_queue.h"
 #include "tts_request.h"
 #include "voice_persona.h"
@@ -233,18 +234,55 @@ static char *build_request_json(const char *text)
  * runs a TLS handshake. Only the single TTS task ever touches it. */
 static tts_ctx_t s_tts_ctx;
 
-static void speak(const char *text)
+/* Bounded so a wedged ring cannot hang the TTS task; the ring is 512 kB and a
+ * clip under 50 kB, so this only expires behind ~10 s of undrained speech. */
+#define SOUND_CLIP_WRITE_TIMEOUT_MS 3000
+
+/* How often the idle TTS task checks for a clip the reflex asked for. */
+#define SOUND_REQUEST_POLL_MS 50
+
+/** Write a clip into the open utterance, logging rather than failing it. */
+static void write_clip(sound_clip_t clip, const char *where)
+{
+    if (clip == SOUND_CLIP_NONE) {
+        return;
+    }
+    const esp_err_t err = sound_clips_write(clip, SOUND_CLIP_WRITE_TIMEOUT_MS);
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "sound: %s (%u ms, %s)", sound_clip_name(clip),
+                 (unsigned)sound_clips_duration_ms(clip), where);
+    } else {
+        ESP_LOGW(TAG, "sound: %s not played: %s", sound_clip_name(clip), esp_err_to_name(err));
+    }
+}
+
+/** A line with a clip and no words to speak: no request, no key, no WiFi
+ *  needed, so a honk still works offline. */
+static void play_clips_only(sound_split_t split)
+{
+    if (split.lead == SOUND_CLIP_NONE && split.trail == SOUND_CLIP_NONE) {
+        return;
+    }
+    audio_player_begin_utterance();
+    write_clip(split.lead, "alone");
+    write_clip(split.trail, "alone");
+    audio_player_end_utterance();
+}
+
+static void speak(const char *text, sound_split_t split)
 {
     const char *api_key = get_gemini_api_key();
     if (!api_key || api_key[0] == '\0') {
         ESP_LOGE(TAG, "API key unavailable — cannot speak");
+        play_clips_only(split);
         return;
     }
     if (!wifi_is_connected()) {
         /* Issue #846: the line is dropped rather than queued, as on a full
          * queue; a sentence about the room is stale by the time a link
-         * returns. */
+         * returns. Its clip needs no link, so it still plays. */
         ESP_LOGW(TAG, "no WiFi link — not speaking: \"%s\"", text);
+        play_clips_only(split);
         return;
     }
 
@@ -262,6 +300,11 @@ static void speak(const char *text)
      * banked or this request completes. Paired with the unconditional
      * audio_player_end_utterance() below, which closes it on every exit path. */
     audio_player_begin_utterance();
+
+    /* A leading clip goes in first. It is shorter than AUDIO_PREROLL_BYTES, so
+     * it counts toward the preroll and plays once the speech behind it has
+     * banked the rest, running straight on into the words. */
+    write_clip(split.lead, "before");
 
     const int64_t t_start = esp_timer_get_time();
     int status = 0;
@@ -311,10 +354,23 @@ static void speak(const char *text)
     }
 
     if (!ctx->ring_stalled) {
+        /* After the words, even if the request failed: the clip is local. */
+        write_clip(split.trail, "after");
         audio_player_end_utterance();
     }
 
     free(body);
+}
+
+/** Take the line's sound tag out, then speak the words around the clip. */
+static void speak_line(char *text)
+{
+    const sound_split_t split = sound_clips_split(text);
+    if (text[0] == '\0') {
+        play_clips_only(split);
+        return;
+    }
+    speak(text, split);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -327,8 +383,17 @@ static void tts_task(void *arg)
     speech_request_t req;
 
     for (;;) {
-        if (speech_queue_receive(&req, UINT32_MAX) == ESP_OK) {
-            speak(req.text);
+        /* A bounded wait rather than forever, so a clip requested by the
+         * reflex (sound_clips_request()) is noticed within one period even
+         * when nobody is speaking. Speech already queued goes first. */
+        if (speech_queue_receive(&req, SOUND_REQUEST_POLL_MS) == ESP_OK) {
+            speak_line(req.text);
+            continue;
+        }
+        const sound_clip_t requested = sound_clips_take_request();
+        if (requested != SOUND_CLIP_NONE) {
+            const sound_split_t split = {.lead = requested, .trail = SOUND_CLIP_NONE};
+            play_clips_only(split);
         }
     }
 }

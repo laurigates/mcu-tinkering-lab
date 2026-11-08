@@ -13,6 +13,7 @@ one-line form of each rule below and links here for the reasoning.
 - `stop()` — hold position
 
 - `speak(text)` — say one short sentence aloud, emitted *in addition to* a movement call
+- `sound(name)` — play a prebuilt clip (`horn`, `aoogah`, `bell`, `boing`), offered only when `speak` is; the parser puts it at the front of the line as a `[name]` tag (see [voice.md](voice.md#sound-clips))
 
 The planner runs every `PLANNER_LOOP_PERIOD_MS` (15 s default, set by the Gemini free-tier quota rather than by control preference) on Core 1; the executor drives the goal at ~30 Hz on Core 0. No on-demand inference or blocking on responses — the planner is a background task that constantly updates `goal_state`, and the executor always has something to do.
 

@@ -35,6 +35,7 @@
 #include "plan_budget.h"
 #include "planner_task.h" /* PLANNER_LOOP_PERIOD_MS — keeps the stated cadence honest */
 #include "scene_change.h"
+#include "sound_clips_core.h"
 #include "speech_budget.h"
 #include "speech_evidence.h"
 #include "voice_persona.h"
@@ -100,7 +101,7 @@ static const char *TAG = "gemini_backend";
  *
  *  Lives on the planner task stack, so it is sized deliberately rather than
  *  generously: ~800 bytes of fixed instruction, plus the persona's text_brief
- *  (~450) and tag_brief (~350), plus a variation directive (up to
+ *  (~450) and tag_brief (~420 with the sound-effect tags), plus a variation directive (up to
  *  DIALOGUE_STYLE_MAX) and the recalled-lines clause (GEMINI_RECALL_LIST_MAX).
  *  PLANNER_TASK_STACK_SIZE is set with this frame in mind — grow them together.
  */
@@ -330,6 +331,41 @@ static cJSON *build_tools(bool allow_speak)
 
         cJSON *required = cJSON_CreateArray();
         cJSON_AddItemToArray(required, cJSON_CreateString("text"));
+        cJSON_AddItemToObject(params, "required", required);
+
+        cJSON_AddItemToArray(tools_arr, fn);
+    }
+
+    /* ---- sound ----
+     * A prebuilt clip from flash (sound_clips_core.h). Offered only beside
+     * `speak`, so the same on-device gates that decide whether the robot may
+     * make a noise this cycle govern it — an instruction to honk "sparingly"
+     * is one the stateless model cannot check (stateless-model-gating.md).
+     * The parser turns the call into a `[name]` tag at the front of the line. */
+    if (allow_speak) {
+        cJSON *fn = cJSON_CreateObject();
+        cJSON_AddStringToObject(fn, "name", "sound");
+        cJSON_AddStringToObject(fn, "description",
+                                "Play a short sound effect through the speaker, in addition to a "
+                                "movement function: horn = a polite two-toot car horn, aoogah = "
+                                "a comic vintage klaxon, bell = a bicycle bell, boing = a cartoon "
+                                "spring. Use one when it fits what the frame shows, such as a "
+                                "person in your way; usually play none.");
+        cJSON *params = cJSON_AddObjectToObject(fn, "parameters");
+        cJSON_AddStringToObject(params, "type", "OBJECT");
+        cJSON *props = cJSON_AddObjectToObject(params, "properties");
+
+        cJSON *name = cJSON_CreateObject();
+        cJSON_AddStringToObject(name, "type", "STRING");
+        cJSON_AddStringToObject(name, "format", "enum");
+        cJSON *names = cJSON_AddArrayToObject(name, "enum");
+        for (int i = 0; i < SOUND_CLIP_COUNT; i++) {
+            cJSON_AddItemToArray(names, cJSON_CreateString(SOUND_CLIP_NAMES[i]));
+        }
+        cJSON_AddItemToObject(props, "name", name);
+
+        cJSON *required = cJSON_CreateArray();
+        cJSON_AddItemToArray(required, cJSON_CreateString("name"));
         cJSON_AddItemToObject(params, "required", required);
 
         cJSON_AddItemToArray(tools_arr, fn);

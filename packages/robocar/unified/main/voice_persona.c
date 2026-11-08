@@ -136,7 +136,8 @@ static const voice_persona_t s_personas[VOICE_PERSONA_COUNT] = {
                          "[sighs] [laughs] [whispers] [gasp]. Use them "
                          "sparingly and only where they fit what is being said — at most one "
                          "line in three, and never in a fault report. Write the tag exactly "
-                         "as shown.",
+                         "as shown. You may also put at most one sound effect in a line, "
+                         "rarely: [horn] [aoogah] [bell] [boing].",
             .openers = {s_en_openers, DIALOGUE_POOL_COUNT(s_en_openers)},
             .shapes = {s_en_shapes, DIALOGUE_POOL_COUNT(s_en_shapes)},
             .avoid_lead = "Do not begin the sentence with any of these:",
@@ -191,7 +192,8 @@ static const voice_persona_t s_personas[VOICE_PERSONA_COUNT] = {
                 "[sighs] [laughs] [whispers] [gasp]. Käytä niitä tilanteeseen "
                 "sopivasti — voit esimerkiksi huokaista [sighs] tai naurahtaa [laughs] vikojen tai "
                 "esteiden kohdalla, tai kuiskata [whispers] jos on hiljaista. Kirjoita tagi "
-                "täsmälleen näin, englanniksi.",
+                "täsmälleen näin, englanniksi. Harvoin voit lisätä lauseeseen yhden "
+                "äänitehosteen: [horn] [aoogah] [bell] [boing].",
             .openers = {s_fi_openers, DIALOGUE_POOL_COUNT(s_fi_openers)},
             .shapes = {s_fi_shapes, DIALOGUE_POOL_COUNT(s_fi_shapes)},
             .avoid_lead = "Älä aloita lausetta näillä sanoilla:",

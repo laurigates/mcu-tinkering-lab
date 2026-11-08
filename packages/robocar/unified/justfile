@@ -260,6 +260,15 @@ voice-sweep out="../../../tmp/voice-sweep":
 voice-fx chainset="span" src="../../../tmp/voice-sweep/01-shipped.wav" out="../../../tmp/voice-fx":
     python3 tools/voice-fx-preview.py "{{src}}" "{{out}}/{{chainset}}" "{{chainset}}"
 
+# Rebuild the embedded sound clips (main/sounds/*.pcm) from Suno downloads.
+#
+# raw_dir holds the WAV download of each clip in sounds/manifest.toml, named
+# <suno_id>.wav; the trims, fades and levels are in the manifest. Also writes
+# a listenable <tag>.wav per clip into preview_dir.
+[group: "voice"]
+sounds raw_dir preview_dir="../../../tmp/sound-preview":
+    uv run tools/build-sounds.py "{{raw_dir}}" --preview "{{preview_dir}}"
+
 # Audition all 30 Gemini prebuilt voices through the selected Teuvo chain.
 #
 # The inverse experiment of `voice-fx`: there the voice was fixed and the chain

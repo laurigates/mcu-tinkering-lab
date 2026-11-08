@@ -188,10 +188,22 @@ add_test(NAME base64_stream COMMAND test_base64_stream)
 # -----------------------------------------------------------------------------
 add_executable(test_speech_tags
     "${MAIN_SRC_DIR}/speech_tags.c"
+    "${MAIN_SRC_DIR}/sound_clips_core.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/test_speech_tags.c"
 )
 target_link_libraries(test_speech_tags PRIVATE Threads::Threads m)
 add_test(NAME speech_tags COMMAND test_speech_tags)
+
+# -----------------------------------------------------------------------------
+# sound clips: names, the [tag] split, the reflex honk cooldown
+#
+# Pure C; the PCM itself is in sound_clips.c and stays on the device.
+# -----------------------------------------------------------------------------
+add_executable(test_sound_clips
+    "${MAIN_SRC_DIR}/sound_clips_core.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_sound_clips.c"
+)
+add_test(NAME sound_clips COMMAND test_sound_clips)
 
 # -----------------------------------------------------------------------------
 # dialogue_style variation module (spoken-line repetition)
@@ -202,6 +214,7 @@ add_test(NAME speech_tags COMMAND test_speech_tags)
 add_executable(test_dialogue_style
     "${MAIN_SRC_DIR}/dialogue_style.c"
     "${MAIN_SRC_DIR}/speech_tags.c"  # note_spoken() strips delivery tags
+    "${MAIN_SRC_DIR}/sound_clips_core.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/test_dialogue_style.c"
 )
 target_link_libraries(test_dialogue_style PRIVATE Threads::Threads m)
@@ -352,6 +365,7 @@ add_executable(test_planner_cycle_core
     "${MAIN_SRC_DIR}/speech_budget.c"
     "${MAIN_SRC_DIR}/dialogue_style.c"
     "${MAIN_SRC_DIR}/speech_tags.c"
+    "${MAIN_SRC_DIR}/sound_clips_core.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/test_planner_cycle_core.c"
 )
 target_link_libraries(test_planner_cycle_core PRIVATE Threads::Threads m)
@@ -366,6 +380,7 @@ add_test(NAME planner_cycle_core COMMAND test_planner_cycle_core)
 if(CJSON_FOUND)
     add_executable(test_gemini_parse
         "${MAIN_SRC_DIR}/gemini_parse.c"
+        "${MAIN_SRC_DIR}/sound_clips_core.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/test_gemini_parse.c"
     )
     target_include_directories(test_gemini_parse PRIVATE ${CJSON_INCLUDE_DIRS})
@@ -399,6 +414,7 @@ if(CJSON_FOUND)
         "${MAIN_SRC_DIR}/voice_persona.c"
         "${MAIN_SRC_DIR}/dialogue_style.c"
         "${MAIN_SRC_DIR}/speech_tags.c"
+        "${MAIN_SRC_DIR}/sound_clips_core.c"
         "${MAIN_SRC_DIR}/tts_request.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/host_shims.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/nvs_shim.c"
