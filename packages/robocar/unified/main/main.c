@@ -2343,9 +2343,10 @@ static esp_err_t create_tasks(void)
 }
 
 /** Name for esp_reset_reason(), as the boot banner prints it. BROWNOUT is
- *  only reported when the detector is enabled; with CONFIG_ESP_BROWNOUT_DET=n
- *  a supply dip that resets the chip shows as POWERON or an unexplained
- *  watchdog instead. */
+ *  reported even with CONFIG_ESP_BROWNOUT_DET=n: on 2026-11-07 the chip reset
+ *  on supply dips with the ROM printing rst:0xf (BROWNOUT_RST) and this
+ *  returning ESP_RST_BROWNOUT, 20 times on battery. A dip deep enough to drop
+ *  the supply entirely reads POWERON instead. */
 static const char *reset_reason_name(esp_reset_reason_t r)
 {
     switch (r) {
