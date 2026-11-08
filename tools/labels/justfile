@@ -1,0 +1,52 @@
+# Component sticker sheets: print on the Epson, kiss-cut on the Silhouette
+# Portrait 2 (AutoBlade) through registration marks. See the component-labels
+# skill. Run from anywhere as `just labels::<recipe>`; outputs go to
+# tmp/labels/<data file name>/ (git-ignored).
+
+_root := source_directory() / "../.."
+_data := "tools/labels/data/drawers-2026-10.toml"
+_printer := env("LABEL_PRINTER", "EPSON_ET_3750_Series")
+
+# Unit tests (stdlib unittest, no Typst or cutter needed)
+test:
+    cd {{_root}} && python3 -m unittest discover -s tools/labels
+
+# Validate a data file and lay it out; writes nothing
+check data=_data:
+    cd {{_root}} && python3 tools/labels/labels.py check {{data}}
+
+# plan.json, cut-p<N>.svg, labels.pdf and page-<N>.png previews (guides=true draws the cut outlines)
+build data=_data guides="false":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd {{_root}}
+    out=tmp/labels/$(basename {{data}} .toml)
+    python3 tools/labels/labels.py build {{data}} "$out"
+    typst compile --root . tools/labels/labels.typ "$out/labels.pdf" --input plan="/$out/plan.json"
+    typst compile --root . tools/labels/labels.typ "$out/page-{p}.png" --ppi 100 --input plan="/$out/plan.json" --input guides={{guides}}
+    echo "print: $out/labels.pdf   previews: $out/page-*.png"
+
+# Print the built PDF at 100 % on A4 (CUPS; LABEL_PRINTER overrides the queue)
+print data=_data pages="":
+    cd {{_root}} && lp -d {{_printer}} -o media=A4 -o print-scaling=none -o cupsPrintQuality=High {{ if pages != "" { "-o page-ranges=" + pages } else { "" } }} tmp/labels/$(basename {{data}} .toml)/labels.pdf
+
+# Install the inkscape-silhouette driver headless (pinned; ~/.cache/inkscape-silhouette)
+setup:
+    {{_root}}/tools/labels/setup-cutter.sh
+
+# Kiss-cut one printed page. dry=true checks the job with no cutter attached
+cut page="1" data=_data dry="false" depth="1" pressure="0" speed="0":
+    cd {{_root}} && DRY_RUN={{dry}} DEPTH={{depth}} PRESSURE={{pressure}} SPEED={{speed}} tools/labels/cut.sh tmp/labels/$(basename {{data}} .toml)/cut-p{{page}}.svg tmp/labels/$(basename {{data}} .toml)/plan.json
+
+# Cut only the first sticker of a printed page, to set depth and force before the rest
+test-cut page="1" data=_data depth="1" pressure="0" speed="0":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd {{_root}}
+    name=$(basename {{data}} .toml)
+    python3 tools/labels/labels.py build {{data}} "tmp/labels/$name-test" --limit 1
+    DEPTH={{depth}} PRESSURE={{pressure}} SPEED={{speed}} tools/labels/cut.sh "tmp/labels/$name-test/cut-p{{page}}.svg" "tmp/labels/$name-test/plan.json"
+
+# Draft labels for parts-stock items no label names yet (reads PARTS_STOCK, writes nothing)
+candidates data=_data stock="":
+    cd {{_root}} && python3 tools/labels/labels.py candidates {{data}} {{ if stock != "" { "--stock " + stock } else { "" } }}
