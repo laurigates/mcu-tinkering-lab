@@ -3,7 +3,7 @@
 **Status**: proposed
 **Date**: 2026-11-07
 **Confidence**: 5/10 (the model, latency and output format are measured from a
-workstation-class host; nothing here has run on the XIAO, and the echo and
+cloud container, not the robot's WiFi; nothing here has run on the XIAO, and the echo and
 memory figures below are estimates until the phase-1 bench run)
 **Issue**: [#619](https://github.com/laurigates/mcu-tinkering-lab/issues/619)
 **Extends**: [ADR-019](ADR-019-robocar-voice-gemini-tts.md),

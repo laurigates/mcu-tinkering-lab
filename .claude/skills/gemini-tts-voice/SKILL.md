@@ -12,8 +12,8 @@ allowed-tools: Bash, Read, Grep, Glob, Edit, WebFetch
 > `gamepad-synth/tools/tts/generate.py` call `gemini-3.8-flash-tts`;
 > `gemini-3.1-flash-tts-preview` has a listed shutdown of 2026-11-17. The 3.8
 > facts in [Gemini 3.8 Flash TTS](#gemini-38-flash-tts) come from the docs
-> (2026-11-04) and a workstation probe of the firmware's request (2026-11-07);
-> each says which. Tags and on-device timing still need the bench. The rest of
+> (2026-11-04) and a probe of the firmware's request (2026-11-07, from a
+> cloud container, not the robot's WiFi); each says which. Tags and on-device timing still need the bench. The rest of
 > this file was measured on the preview.
 
 Everything below was **verified against the live API** (2026-07) rather than
