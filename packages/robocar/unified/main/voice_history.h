@@ -46,8 +46,9 @@ typedef struct {
 /**
  * @brief Check whether a model reply is an ignore sentinel.
  *
- * Returns true if reply is NULL, empty, or begins with "__IGNORE__"
- * (after skipping leading whitespace).
+ * Returns true if reply is NULL, whitespace-only, or contains "__IGNORE__"
+ * anywhere. Anywhere, not only as a prefix: the model has ended plain-text
+ * reasoning with the sentinel (issue #950).
  *
  * @param reply Model reply string.
  * @return True if reply should be ignored, false otherwise.

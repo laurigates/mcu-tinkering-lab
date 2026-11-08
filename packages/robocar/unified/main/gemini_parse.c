@@ -286,8 +286,28 @@ static void sanitize_spoken_line(char *s)
     }
 }
 
-esp_err_t gemini_parse_text_meta(const char *json_text, char *out, size_t out_len,
-                                 gemini_text_meta_t *meta)
+/** Copy @p src onto the end of @p out at *pos, never past @p out_len. */
+static void append_text(char *out, size_t out_len, size_t *pos, const char *src)
+{
+    if (*pos + 1 >= out_len) {
+        return;
+    }
+    /* snprintf rather than strlcat: this file also builds on the host for the
+     * unit tests, where strlcat is not portable. It always NUL-terminates and
+     * returns the length it WOULD have written, so clamp before advancing or a
+     * long first part makes pos run past the buffer. */
+    const int w = snprintf(out + *pos, out_len - *pos, "%s", src);
+    if (w < 0) {
+        return;
+    }
+    *pos += ((size_t)w < out_len - *pos) ? (size_t)w : (out_len - *pos - 1);
+}
+
+/** Shared body of gemini_parse_text_meta() and gemini_parse_voice_reply().
+ *  @p last_only keeps only the last non-thought text part instead of joining
+ *  them all. */
+static esp_err_t parse_text_parts(const char *json_text, char *out, size_t out_len,
+                                  gemini_text_meta_t *meta, bool last_only)
 {
     if (meta) {
         memset(meta, 0, sizeof(*meta));
@@ -317,6 +337,7 @@ esp_err_t gemini_parse_text_meta(const char *json_text, char *out, size_t out_le
     if (cJSON_IsArray(parts)) {
         out[0] = '\0';
         size_t pos = 0;
+        const char *last = NULL;
         const int n = cJSON_GetArraySize(parts);
         if (meta) {
             meta->parts = n;
@@ -338,19 +359,16 @@ esp_err_t gemini_parse_text_meta(const char *json_text, char *out, size_t out_le
             if (meta) {
                 meta->text_parts++;
             }
-            if (pos + 1 >= out_len) {
-                continue; /* full: keep counting parts for the log */
+            if (last_only) {
+                last = t->valuestring;
+            } else {
+                /* Once full this does nothing; the loop keeps counting parts
+                 * for the log. */
+                append_text(out, out_len, &pos, t->valuestring);
             }
-            /* snprintf rather than strlcat: this file also builds on the
-             * host for the unit tests, where strlcat is not portable. It
-             * always NUL-terminates and returns the length it WOULD have
-             * written, so clamp before advancing or a long first part makes
-             * pos run past the buffer. */
-            const int w = snprintf(out + pos, out_len - pos, "%s", t->valuestring);
-            if (w < 0) {
-                break;
-            }
-            pos += ((size_t)w < out_len - pos) ? (size_t)w : (out_len - pos - 1);
+        }
+        if (last) {
+            append_text(out, out_len, &pos, last);
         }
         if (out[0] != '\0') {
             sanitize_spoken_line(out);
@@ -362,6 +380,21 @@ esp_err_t gemini_parse_text_meta(const char *json_text, char *out, size_t out_le
 
     cJSON_Delete(root);
     return ret;
+}
+
+esp_err_t gemini_parse_text_meta(const char *json_text, char *out, size_t out_len,
+                                 gemini_text_meta_t *meta)
+{
+    return parse_text_parts(json_text, out, out_len, meta, false);
+}
+
+esp_err_t gemini_parse_voice_reply(const char *json_text, char *out, size_t out_len,
+                                   gemini_text_meta_t *meta)
+{
+    /* gemini-flash-latest can write its reasoning as an ordinary text part
+     * with no thought flag, then the reply as the next part (#950, logged
+     * 2026-11-08 as parts=2 thought=0 text=2). The reply is the last part. */
+    return parse_text_parts(json_text, out, out_len, meta, true);
 }
 
 esp_err_t gemini_parse_text(const char *json_text, char *out, size_t out_len)
