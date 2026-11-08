@@ -1,6 +1,6 @@
 /**
  * @file camera.c
- * @brief ESP32-CAM camera implementation
+ * @brief Camera driver for the XIAO ESP32-S3 Sense (OV3660 on the Sense board)
  */
 
 #include "camera.h"
@@ -17,7 +17,7 @@ static const char *TAG = "camera";
 
 esp_err_t camera_init(void)
 {
-    ESP_LOGI(TAG, "Initializing ESP32-CAM");
+    ESP_LOGI(TAG, "Initializing camera");
 
     camera_config_t config = {
         .pin_pwdn = CAM_PIN_PWDN,

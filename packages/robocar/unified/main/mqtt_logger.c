@@ -1,6 +1,6 @@
 /**
  * @file mqtt_logger.c
- * @brief MQTT-based remote logging implementation for ESP32-CAM
+ * @brief MQTT-based remote logging implementation for robocar-unified
  */
 
 #include "mqtt_logger.h"
