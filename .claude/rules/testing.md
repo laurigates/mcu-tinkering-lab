@@ -111,6 +111,18 @@ tests, and sim. Worked example: `packages/audio/kids-audio-toy` —
 `main/audio_core.{c,h}` (mapping/modulation logic), `test/test_audio_core.c`
 (`just test`), `sim/toy_sim.py` (webcam-in / speaker-out via ctypes, `just sim`).
 
+### Reading a mutation check against a host suite
+
+The suites' `test_assert()` prints `FAIL:` and then calls `assert()`, which
+aborts. With stdout redirected to a file or a pipe it is block-buffered, and
+`abort()` does not flush it, so the `FAIL:` line is usually lost. A mutation
+check that greps for `FAIL` therefore reads a killed mutant as a survivor. Read
+the exit status (134 for the abort) and the last `[n] Running:` line, which
+names the test that failed. New suites call `fflush(stdout)` before the
+`assert()` (`test_ota_park.c`, `test_ota_announce.c`). Observed 2026-11-08: a
+`grep FAIL` showed nothing for a mutant that had in fact failed
+`text_skips_thought_parts`.
+
 ## CI Verification
 
 All PRs must pass:
