@@ -26,6 +26,12 @@ pre-commit run --files <changed files>   # what CI runs; repeat until clean
   (`--diff-filter=d` drops deleted paths, and `HEAD` includes staged changes;
   untracked files still need `git add`), and read the output: a run where every
   hook says Skipped checked nothing.
+- **Run it from the repo root.** `git diff --name-only` prints root-relative
+  paths, but pre-commit resolves them against the current directory. From a
+  package such as `packages/robocar/unified` every hook reports
+  `(no files to check) Skipped` and the run exits 0 (2026-11-07). The pathspec
+  in `git diff -- <path>` is the reverse trap: it is relative to the current
+  directory, so a root-relative path there matches nothing and prints nothing.
 - **A script that edits `sys.path` before importing** needs `# noqa: E402` on
   each import after it. Keep them; do not let a newer ruff's fixer strip them.
 - **Agent-written Python** (workflow designers, generated tools) gets the same
