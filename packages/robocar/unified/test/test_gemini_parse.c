@@ -579,6 +579,107 @@ static void test_text_meta_without_finish_reason_is_empty(void)
     ASSERT(gemini_parse_text_meta(json, out, sizeof(out), NULL) == ESP_OK);
 }
 
+/* =========================================================================
+ * Voice replies: the last text part only (issue #950)
+ *
+ * gemini-flash-latest can write its reasoning as an ordinary text part with no
+ * thought flag, then the reply as a second text part. Joining every part spoke
+ * the reasoning aloud. The bodies below are the shapes logged on 2026-11-08
+ * (parts=2 thought=0 text=2), abridged.
+ * ========================================================================= */
+
+static void test_voice_reply_takes_the_last_text_part(void)
+{
+    const char *json = "{\"candidates\":[{\"content\":{\"parts\":["
+                       "{\"text\":\"User says: \\\"No m\u00e4h\u00e4n voin edet\u00e4.\\\" Teuvo "
+                       "responds politely "
+                       "in character.\"},"
+                       "{\"text\":\"Tie n\u00e4ytt\u00e4\u00e4kin varsin suotuisalta.\"}]},"
+                       "\"finishReason\":\"STOP\"}]}";
+    char out[256] = {0};
+    gemini_text_meta_t meta;
+    ASSERT(gemini_parse_voice_reply(json, out, sizeof(out), &meta) == ESP_OK);
+    ASSERT(strcmp(out, "Tie näyttääkin varsin suotuisalta.") == 0);
+    /* The shape still reaches the log line. */
+    ASSERT(meta.parts == 2);
+    ASSERT(meta.thought_parts == 0);
+    ASSERT(meta.text_parts == 2);
+    ASSERT(strcmp(meta.finish_reason, "STOP") == 0);
+}
+
+static void test_voice_reply_persona_reasoning_then_answer(void)
+{
+    const char *json = "{\"candidates\":[{\"content\":{\"parts\":["
+                       "{\"text\":\"Persona response: 1950s gentleman Teuvo, one short spoken "
+                       "sentence.\"},"
+                       "{\"text\":\"Oppia ik\u00e4 kaikki, hyv\u00e4 herra.\"}]}}]}";
+    char out[256] = {0};
+    ASSERT(gemini_parse_voice_reply(json, out, sizeof(out), NULL) == ESP_OK);
+    ASSERT(strcmp(out, "Oppia ikä kaikki, hyvä herra.") == 0);
+}
+
+static void test_voice_reply_reasoning_then_ignore_part(void)
+{
+    const char *json = "{\"candidates\":[{\"content\":{\"parts\":["
+                       "{\"text\":\"The user is partially saying something, not addressing Teuvo "
+                       "clearly. Reply with __IGNORE__.\"},"
+                       "{\"text\":\"__IGNORE__\"}]}}]}";
+    char out[256] = {0};
+    ASSERT(gemini_parse_voice_reply(json, out, sizeof(out), NULL) == ESP_OK);
+    ASSERT(strcmp(out, "__IGNORE__") == 0);
+}
+
+static void test_voice_reply_skips_thought_and_trailing_non_text_parts(void)
+{
+    /* A flagged thought part is still skipped, and a trailing part with no text
+     * (a thoughtSignature) does not count as the last text part. */
+    const char *json = "{\"candidates\":[{\"content\":{\"parts\":["
+                       "{\"text\":\"plan\",\"thought\":true},"
+                       "{\"text\":\"\\nHei.\\n\"},{\"thoughtSignature\":\"abc\"}]}}]}";
+    char out[64] = {0};
+    gemini_text_meta_t meta;
+    ASSERT(gemini_parse_voice_reply(json, out, sizeof(out), &meta) == ESP_OK);
+    ASSERT(strcmp(out, "Hei.") == 0);
+    ASSERT(meta.parts == 3);
+    ASSERT(meta.thought_parts == 1);
+    ASSERT(meta.text_parts == 1);
+}
+
+static void test_voice_reply_only_thought_parts_is_a_failure(void)
+{
+    const char *json = "{\"candidates\":[{\"content\":{\"parts\":["
+                       "{\"text\":\"The user asks what I see.\",\"thought\":true}]},"
+                       "\"finishReason\":\"MAX_TOKENS\"}]}";
+    char out[64] = {0};
+    gemini_text_meta_t meta;
+    ASSERT(gemini_parse_voice_reply(json, out, sizeof(out), &meta) != ESP_OK);
+    ASSERT(meta.parts == 1);
+    ASSERT(meta.thought_parts == 1);
+    ASSERT(strcmp(meta.finish_reason, "MAX_TOKENS") == 0);
+    ASSERT(gemini_parse_voice_reply(NULL, out, sizeof(out), NULL) == ESP_ERR_INVALID_ARG);
+    ASSERT(gemini_parse_voice_reply("not json", out, sizeof(out), NULL) == ESP_FAIL);
+}
+
+static void test_voice_reply_truncates_without_overrunning(void)
+{
+    const char *json = "{\"candidates\":[{\"content\":{\"parts\":["
+                       "{\"text\":\"reasoning\"},{\"text\":\"abcdefghij\"}]}}]}";
+    char out[6];
+    memset(out, 'X', sizeof(out));
+    ASSERT(gemini_parse_voice_reply(json, out, sizeof(out), NULL) == ESP_OK);
+    ASSERT(strcmp(out, "abcde") == 0);
+}
+
+static void test_text_still_joins_every_part(void)
+{
+    /* The narrate path keeps the join: only the voice turn takes the last part. */
+    const char *json = "{\"candidates\":[{\"content\":{\"parts\":["
+                       "{\"text\":\"Hei \"},{\"text\":\"vaan.\"}]}}]}";
+    char out[64] = {0};
+    ASSERT(gemini_parse_text(json, out, sizeof(out)) == ESP_OK);
+    ASSERT(strcmp(out, "Hei vaan.") == 0);
+}
+
 int main(void)
 {
     printf("=== gemini_parse host tests ===\n\n");
@@ -625,6 +726,17 @@ int main(void)
              test_text_meta_keeps_every_real_finish_reason_whole);
     test_run("text_meta_without_finish_reason_is_empty",
              test_text_meta_without_finish_reason_is_empty);
+    test_run("voice_reply_takes_the_last_text_part", test_voice_reply_takes_the_last_text_part);
+    test_run("voice_reply_persona_reasoning_then_answer",
+             test_voice_reply_persona_reasoning_then_answer);
+    test_run("voice_reply_reasoning_then_ignore_part", test_voice_reply_reasoning_then_ignore_part);
+    test_run("voice_reply_skips_thought_and_trailing_non_text_parts",
+             test_voice_reply_skips_thought_and_trailing_non_text_parts);
+    test_run("voice_reply_only_thought_parts_is_a_failure",
+             test_voice_reply_only_thought_parts_is_a_failure);
+    test_run("voice_reply_truncates_without_overrunning",
+             test_voice_reply_truncates_without_overrunning);
+    test_run("text_still_joins_every_part", test_text_still_joins_every_part);
 
     printf("\n=== Results ===\n");
     printf("Passed: %d / %d\n", test_pass, test_count);

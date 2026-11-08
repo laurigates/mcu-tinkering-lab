@@ -112,7 +112,7 @@ esp_err_t gemini_parse_text(const char *json_text, char *out, size_t out_len);
 typedef struct {
     int parts;         /**< entries in candidates[0].content.parts */
     int thought_parts; /**< parts with "thought": true, skipped */
-    int text_parts;    /**< non-thought text parts concatenated into @p out */
+    int text_parts;    /**< non-thought text parts seen (joined, or the last one kept) */
     /** candidates[0].finishReason, "" if absent. Sized for the longest real value,
      *  FINISH_REASON_UNSPECIFIED (25 chars); anything longer is truncated. */
     char finish_reason[32];
@@ -129,6 +129,20 @@ typedef struct {
  */
 esp_err_t gemini_parse_text_meta(const char *json_text, char *out, size_t out_len,
                                  gemini_text_meta_t *meta);
+
+/**
+ * @brief gemini_parse_text_meta() for a voice turn: the LAST text part only.
+ *
+ * gemini-flash-latest can write its reasoning as an ordinary text part with no
+ * thought flag and then the reply as a second text part (issue #950). Joining
+ * the parts, as gemini_parse_text() does for the narrator, spoke the reasoning
+ * aloud. Thought-flagged parts and parts without text are skipped as before,
+ * and @p meta still counts every part.
+ *
+ * @return As gemini_parse_text_meta().
+ */
+esp_err_t gemini_parse_voice_reply(const char *json_text, char *out, size_t out_len,
+                                   gemini_text_meta_t *meta);
 
 #ifdef __cplusplus
 }

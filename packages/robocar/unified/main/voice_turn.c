@@ -522,9 +522,10 @@ static void run_turn(uint32_t window_ms, bool vad)
 
     /* The reply's shape goes on the log line, success included, so a reply
      * that is the model's reasoning names its cause (#950): thought parts are
-     * skipped; a reasoning-shaped answer with thought=0 is the model's text. */
+     * skipped; a reasoning-shaped answer with thought=0 is the model's text.
+     * Only the last text part is kept: unflagged reasoning comes first. */
     gemini_text_meta_t meta;
-    if (gemini_parse_text_meta(s_response, s_reply, sizeof(s_reply), &meta) != ESP_OK) {
+    if (gemini_parse_voice_reply(s_response, s_reply, sizeof(s_reply), &meta) != ESP_OK) {
         ESP_LOGE(TAG, "no usable text in reply (parts=%d thought=%d text=%d finish=%s): %s",
                  meta.parts, meta.thought_parts, meta.text_parts,
                  meta.finish_reason[0] ? meta.finish_reason : "-",
