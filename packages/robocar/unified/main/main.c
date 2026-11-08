@@ -694,11 +694,15 @@ static void handle_voice_cmd(const char *buf)
         printf("  budget: quiet=%us max=%u/%us used=%u repeat=%u%%\n", (unsigned)(gap_ms / 1000U),
                (unsigned)max_per, (unsigned)(window_ms / 1000U),
                (unsigned)speech_budget_used(now_ms), (unsigned)dialogue_style_repeat_pct());
-        /* "no pose": the head is between dwell poses, so the 0 is "cannot
-         * measure", not "unchanged" (ADR-029 §2). */
+        /* "BLIND": no frame has ever decoded, so novel() fails closed and the 0
+         * is "never seen anything", not a still room (issue #703; the mic line's
+         * DEAF is the same word for the other sense). "no pose": the head is
+         * between dwell poses, so the 0 is "cannot measure", not "unchanged"
+         * (ADR-029 §2). */
         printf("  scene:  %u/%u at pose %c (%s)\n", scene_change_score(),
                (unsigned)scene_change_threshold(), scene_pose_letter(scene_change_pose()),
-               scene_change_threshold() == 0            ? "gate off"
+               !scene_change_has_measurement()          ? "BLIND — no frame decoded"
+               : scene_change_threshold() == 0          ? "gate off"
                : scene_change_pose() == SCENE_POSE_NONE ? "no pose"
                : scene_change_novel()                   ? "new"
                                                         : "same");
@@ -731,7 +735,10 @@ static void handle_voice_cmd(const char *buf)
         } else if (wait_ms) {
             printf("  speech: waiting on budget (%us)\n", (unsigned)(wait_ms / 1000U));
         } else if (!scene_change_novel() && !ambient_audio_novel(now_ms)) {
-            printf("  speech: waiting on the view or the room to change\n");
+            /* A blind camera has no view to change; only the room can open it. */
+            printf("  speech: %s\n", scene_change_has_measurement()
+                                         ? "waiting on the view or the room to change"
+                                         : "waiting on the room to change (camera BLIND)");
         } else {
             printf("  speech: allowed now\n");
         }

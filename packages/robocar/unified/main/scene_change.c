@@ -157,6 +157,13 @@ void scene_change_note(const scene_fingerprint_t *fp)
     s_current = *fp;
 }
 
+bool scene_change_has_measurement(void)
+{
+    /* note() only ever stores a valid fingerprint, so s_current.valid is set by
+     * the first decodable frame and never cleared until init(). */
+    return s_current.valid;
+}
+
 unsigned scene_change_score(void)
 {
     const scene_fingerprint_t *ref = current_reference();
