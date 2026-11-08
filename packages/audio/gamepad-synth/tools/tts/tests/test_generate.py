@@ -14,6 +14,7 @@ import base64
 import io
 import json
 import re
+import struct
 import wave
 
 import generate as g
@@ -190,3 +191,52 @@ def test_wav_bytes_round_trips_through_the_wave_module():
     with wave.open(io.BytesIO(g.wav_bytes(PCM)), "rb") as w:
         assert (w.getframerate(), w.getnchannels(), w.getsampwidth()) == (24000, 1, 2)
         assert w.readframes(w.getnframes()) == PCM
+
+
+# --------------------------------------------------------------------------
+# Empty and unreadable audio (review of PR #994)
+# --------------------------------------------------------------------------
+
+
+def _float_wav() -> bytes:
+    """A WAV with format tag 3 (IEEE float), which the wave module refuses."""
+    fmt = struct.pack("<HHIIHH", 3, 1, 24000, 96000, 4, 32)
+    data = b"\0" * 8
+    body = b"WAVE" + b"fmt " + struct.pack("<I", len(fmt)) + fmt
+    body += b"data" + struct.pack("<I", len(data)) + data
+    return b"RIFF" + struct.pack("<I", len(body)) + body
+
+
+def test_an_unreadable_wav_is_an_audio_format_error():
+    with pytest.raises(g.AudioFormatError):
+        g.synthesize(_client([], _float_wav(), "audio/wav"), "Hei.", "Kore")
+
+
+def test_an_empty_wav_is_retried_not_written(monkeypatch):
+    # A header-only WAV unwraps to no PCM. Before the 3.8 move an empty
+    # response was retried; writing a 0-byte clip instead fails silently.
+    monkeypatch.setattr(g.time, "sleep", lambda _s: None)
+    replies = [_wav(b""), _wav(PCM)]
+    seen: list[dict] = []
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        seen.append({})
+        data = replies.pop(0)
+        part = {
+            "inlineData": {
+                "mimeType": "audio/wav",
+                "data": base64.b64encode(data).decode(),
+            }
+        }
+        return httpx.Response(
+            200, json={"candidates": [{"content": {"parts": [part]}}]}
+        )
+
+    client = genai.Client(
+        api_key="offline-test",
+        http_options=types.HttpOptions(
+            client_args={"transport": httpx.MockTransport(handler)}
+        ),
+    )
+    assert g.synthesize(client, "Hei.", "Kore") == PCM
+    assert len(seen) == 2

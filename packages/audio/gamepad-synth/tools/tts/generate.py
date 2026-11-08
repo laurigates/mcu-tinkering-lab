@@ -82,11 +82,16 @@ def pcm_from_inline(data: bytes, mime: str | None) -> bytes:
     plays at the wrong pitch, and mu-law plays as noise.
     """
     if data[:4] == b"RIFF" and data[8:12] == b"WAVE":
-        with wave.open(io.BytesIO(data), "rb") as w:
-            fmt = (w.getframerate(), w.getnchannels(), w.getsampwidth())
-            if fmt != (OUTPUT_RATE, 1, 2):
-                raise AudioFormatError(f"WAV is {fmt[0]} Hz x{fmt[1]} {8 * fmt[2]}-bit")
-            return w.readframes(w.getnframes())
+        try:
+            with wave.open(io.BytesIO(data), "rb") as w:
+                fmt = (w.getframerate(), w.getnchannels(), w.getsampwidth())
+                if fmt != (OUTPUT_RATE, 1, 2):
+                    raise AudioFormatError(
+                        f"WAV is {fmt[0]} Hz x{fmt[1]} {8 * fmt[2]}-bit"
+                    )
+                return w.readframes(w.getnframes())
+        except (wave.Error, EOFError) as err:  # float or mu-law WAV, or a torn header
+            raise AudioFormatError(f"unreadable WAV: {err}") from err
     kind = (mime or "").split(";")[0].strip().lower()
     if kind not in ("audio/l16", "audio/pcm"):
         raise AudioFormatError(f"unexpected audio mime {mime!r}")
@@ -163,9 +168,12 @@ def synthesize(
             )
             time.sleep(RETRY_DELAY_S)
             continue
-        if data:
-            return pcm_from_inline(data, mime)
-        last_err = RuntimeError("inline_data.data was falsy")
+        # A header-only WAV is bytes on the wire and no audio once unwrapped:
+        # retry it like an empty response rather than write a 0-byte clip.
+        pcm = pcm_from_inline(data, mime) if data else b""
+        if pcm:
+            return pcm
+        last_err = RuntimeError("the response carried no audio")
         time.sleep(RETRY_DELAY_S)
     raise RuntimeError(f"Failed after {RETRIES} attempts: {last_err}")
 
