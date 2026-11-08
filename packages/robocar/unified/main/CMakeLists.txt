@@ -63,6 +63,8 @@ idf_component_register(
         "ota_version_compare.c"
         "ota_update_decision.c"
         "ota_interval.c"
+        "ota_announce.c"
+        "ota_park.c"
         "oled.c"
         "oled_status.c"
         "oled_status_core.c"

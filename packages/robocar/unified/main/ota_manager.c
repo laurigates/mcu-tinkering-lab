@@ -25,6 +25,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "audio_player.h"
 #include "cJSON.h"
 #include "config.h"
 #include "esp_app_desc.h"
@@ -37,9 +38,16 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/timers.h"
+#include "gemini_backend.h"
+#include "ota_announce.h"
 #include "ota_interval.h"
+#include "ota_park.h"
 #include "ota_update_decision.h"
 #include "ota_version_compare.h"
+#include "reactive_controller.h"
+#include "speech_queue.h"
+#include "voice_persona.h"
+#include "voice_turn.h"
 #if MQTT_LOGGING_ENABLED
 #include "mqtt_logger.h"
 #endif
@@ -50,9 +58,26 @@ static const char *TAG = "OTA_Manager";
  *  (see CLAUDE.md's Architecture section). Never Core 0: that core is
  *  reserved for the timing-sensitive motor/reactive-controller loop. */
 #define OTA_TASK_CORE 1
-/** manifest.json is a few hundred bytes (see web-flasher.md); this is
- *  generous headroom without putting a large buffer on the task stack. */
-#define OTA_MANIFEST_BUF_SIZE 2048
+/** manifest.json is a few hundred bytes plus its "notes" list, which
+ *  tools/changelog-notes.py caps at 800 bytes so that firmware with the old
+ *  2048-byte buffer still reads it whole (a cut-short manifest does not
+ *  parse). Heap, not the task stack. */
+#define OTA_MANIFEST_BUF_SIZE 4096
+/** Facts handed to the announcement prompt: versions plus the notes. */
+#define OTA_FACTS_BUF_SIZE 1024
+/** How long to wait for a quiet moment (no voice turn, conversation or
+ *  playback) before announcing; past it the install waits for the next check. */
+#define OTA_QUIET_WAIT_MS (10U * 60U * 1000U)
+/** Poll period for the quiet wait, the speech wait and the postpone window. */
+#define OTA_POLL_MS 250U
+/** Executor tick for the park; leases outlive two of them. */
+#define OTA_PARK_TICK_MS 50U
+#define OTA_PARK_LEASE_MS 200U
+/** Forward nudge speed (0..255) when something is close behind. */
+#define OTA_PARK_NUDGE_SPEED 120U
+/** Speech is done when the player has been idle this long after playing. */
+#define OTA_SPEECH_GAP_MS 1500U
+#define OTA_SPEECH_WAIT_MS 60000U
 /** Long enough for the Pages host + path + a project-scoped .bin filename. */
 #define OTA_BIN_URL_BUF_SIZE 256
 /** esp_app_get_description()->version is a fixed 32-byte field. */
@@ -70,6 +95,14 @@ static const char *TAG = "OTA_Manager";
 // OTA manager state
 static TaskHandle_t s_ota_task_handle = NULL;
 static bool s_ota_in_progress = false;
+
+/* Where the pre-install sequence is (ota_manager_phase()), the version it is
+ * for, and the postpone window ota_manager_postpone() writes from the console
+ * task. One mutex for all three. */
+static portMUX_TYPE s_flow_mux = portMUX_INITIALIZER_UNLOCKED;
+static ota_phase_t s_phase = OTA_PHASE_IDLE;
+static char s_pending_version[32];
+static ota_window_t s_window;
 static bool s_firmware_valid_confirmed = false;
 static TimerHandle_t s_stability_timer = NULL;
 
@@ -77,6 +110,8 @@ static TimerHandle_t s_stability_timer = NULL;
 static void ota_task(void *arg);
 static void run_update_check(void);
 static void start_https_ota(const char *bin_url);
+static bool announce_and_park(const char *remote_version, const char *facts);
+static void set_phase(ota_phase_t phase);
 static esp_err_t fetch_manifest_json(char *buf, size_t buf_size, int *status_out);
 static bool select_app_part_path(const cJSON *manifest, const char **path_out);
 static bool resolve_relative_url(const char *base_url, const char *relative_path, char *out,
@@ -462,14 +497,239 @@ static void run_update_check(void)
     char bin_url[OTA_BIN_URL_BUF_SIZE] = {0};
     bool resolved = select_app_part_path(manifest, &part_path) &&
                     resolve_relative_url(OTA_MANIFEST_URL, part_path, bin_url, sizeof(bin_url));
+
+    /* What the update changes, for the announcement. Read before the
+     * manifest is freed; a manifest without "notes" (published before they
+     * were added) gives "Changes: not listed." */
+    char *facts = malloc(OTA_FACTS_BUF_SIZE);
+    if (facts) {
+        const char *notes[OTA_ANNOUNCE_MAX_NOTES];
+        size_t n_notes = 0;
+        const cJSON *notes_node = cJSON_GetObjectItemCaseSensitive(manifest, "notes");
+        const cJSON *item = NULL;
+        cJSON_ArrayForEach(item, notes_node)
+        {
+            if (n_notes < OTA_ANNOUNCE_MAX_NOTES && cJSON_IsString(item) && item->valuestring) {
+                notes[n_notes++] = item->valuestring;
+            }
+        }
+        ota_announce_facts(remote_version, current_version, notes, n_notes, facts,
+                           OTA_FACTS_BUF_SIZE);
+    }
     cJSON_Delete(manifest);
     if (!resolved) {
         ESP_LOGE(TAG, "Manifest has no resolvable app binary part");
+        free(facts);
         return;
     }
 
     ESP_LOGI(TAG, "Update available: %s -> %s (%s)", current_version, remote_version, bin_url);
+    const bool go = announce_and_park(remote_version, facts ? facts : "");
+    free(facts);
+    if (!go) {
+        set_phase(OTA_PHASE_IDLE);
+        return;
+    }
     start_https_ota(bin_url);
+}
+
+/* -------------------------------------------------------------------------
+ * Before the install: wait for quiet, say what is coming, give the owner a
+ * minute to postpone, then park on open floor and hold still.
+ * ------------------------------------------------------------------------- */
+
+static uint32_t now_ms(void)
+{
+    return (uint32_t)(esp_timer_get_time() / 1000);
+}
+
+static void set_phase(ota_phase_t phase)
+{
+    portENTER_CRITICAL(&s_flow_mux);
+    s_phase = phase;
+    portEXIT_CRITICAL(&s_flow_mux);
+}
+
+static void publish_status(const char *status)
+{
+#if MQTT_LOGGING_ENABLED
+    char payload[OTA_STATUS_PAYLOAD_BUF_SIZE];
+    snprintf(payload, sizeof(payload), "{\"status\":\"%s\",\"version\":\"%s\"}", status,
+             s_pending_version);
+    mqtt_logger_publish(OTA_MQTT_STATUS_TOPIC, payload, 1, false);
+#else
+    (void)status;
+#endif
+}
+
+/** Nobody is talking to the robot and it is not speaking. */
+static bool is_quiet(void)
+{
+    return !voice_turn_is_busy() && !voice_turn_in_conversation() && !audio_player_is_active();
+}
+
+/** Wait until speech posted now has played: the player starts within a few
+ *  seconds (the TTS fetch), then goes idle for OTA_SPEECH_GAP_MS. */
+static void wait_for_speech(void)
+{
+    const uint32_t start = now_ms();
+    uint32_t idle_since = start;
+    bool played = false;
+    while ((uint32_t)(now_ms() - start) < OTA_SPEECH_WAIT_MS) {
+        vTaskDelay(pdMS_TO_TICKS(OTA_POLL_MS));
+        if (audio_player_is_active()) {
+            played = true;
+            idle_since = now_ms();
+        } else if (played && (uint32_t)(now_ms() - idle_since) >= OTA_SPEECH_GAP_MS) {
+            return;
+        }
+    }
+    ESP_LOGW(TAG, "speech did not finish within %u ms; going on", (unsigned)OTA_SPEECH_WAIT_MS);
+}
+
+static reactive_manual_cmd_t park_manual_cmd(ota_park_cmd_t cmd)
+{
+    return (cmd == OTA_PARK_CMD_ROTATE) ? REACTIVE_MANUAL_ROTATE_CW : REACTIVE_MANUAL_FORWARD;
+}
+
+/** Drive ota_park to the end, then leave the executor hold on. */
+static ota_park_result_t park(void)
+{
+    const ota_park_config_t cfg = OTA_PARK_CONFIG_DEFAULT;
+    ota_park_t p;
+    ota_park_start(&p, &cfg, now_ms());
+    reactive_controller_set_hold(true);
+    while (ota_park_result(&p) == OTA_PARK_RESULT_NONE) {
+        reactive_telemetry_t t = {0};
+        const bool have = reactive_controller_get_telemetry(&t) == ESP_OK;
+        const bool rear_ok = have && !t.rear_failed && t.distance_rear_cm != ULTRASONIC_DIST_ERROR;
+        const ota_park_cmd_t cmd = ota_park_step(
+            &p, now_ms(), t.distance_cm, have && !t.sensor_failed, t.distance_rear_cm, rear_ok);
+        if (cmd == OTA_PARK_CMD_STOP) {
+            /* The hold, not a STOP lease: STOP hands the wheels back to the
+             * planner's goal, which could drive off between turning steps. */
+            reactive_controller_set_hold(true);
+        } else {
+            reactive_controller_set_hold(false);
+            (void)reactive_controller_manual(park_manual_cmd(cmd), OTA_PARK_NUDGE_SPEED,
+                                             OTA_PARK_LEASE_MS);
+        }
+        vTaskDelay(pdMS_TO_TICKS(OTA_PARK_TICK_MS));
+    }
+    reactive_controller_set_hold(true);
+    return ota_park_result(&p);
+}
+
+static bool announce_and_park(const char *remote_version, const char *facts)
+{
+    portENTER_CRITICAL(&s_flow_mux);
+    snprintf(s_pending_version, sizeof(s_pending_version), "%s", remote_version);
+    portEXIT_CRITICAL(&s_flow_mux);
+
+    /* 1. A quiet moment: never talk over a conversation. */
+    set_phase(OTA_PHASE_WAITING_QUIET);
+    const uint32_t wait_start = now_ms();
+    while (!is_quiet()) {
+        if ((uint32_t)(now_ms() - wait_start) >= OTA_QUIET_WAIT_MS) {
+            ESP_LOGW(TAG, "no quiet moment in %u min; update %s waits for the next check",
+                     (unsigned)(OTA_QUIET_WAIT_MS / 60000U), remote_version);
+            publish_status("deferred_busy");
+            return false;
+        }
+        vTaskDelay(pdMS_TO_TICKS(OTA_POLL_MS));
+    }
+
+    /* 2. What is coming, then the pun. */
+    set_phase(OTA_PHASE_ANNOUNCING);
+    const voice_persona_t *persona = voice_persona_get();
+    const bool finnish =
+        persona && persona->language_code && strncmp(persona->language_code, "fi", 2) == 0;
+    char line[SPEECH_TEXT_MAX];
+    if (gemini_backend_announce_update(facts, line, sizeof(line)) != ESP_OK || line[0] == '\0') {
+        ota_announce_fallback(remote_version, finnish, line, sizeof(line));
+    }
+    ESP_LOGI(TAG, "announce: \"%s\" | facts: %s", line, facts);
+    (void)speech_queue_post(line);
+    (void)speech_queue_post(OTA_ANNOUNCE_PUN);
+    publish_status("announced");
+    wait_for_speech();
+
+    /* 3. A minute to postpone (`ota postpone`). */
+    portENTER_CRITICAL(&s_flow_mux);
+    ota_window_open(&s_window, now_ms(), OTA_ANNOUNCE_WINDOW_MS);
+    s_phase = OTA_PHASE_WINDOW;
+    portEXIT_CRITICAL(&s_flow_mux);
+    ESP_LOGI(TAG, "installing %s in %u s unless `ota postpone`", remote_version,
+             (unsigned)(OTA_ANNOUNCE_WINDOW_MS / 1000U));
+    for (;;) {
+        portENTER_CRITICAL(&s_flow_mux);
+        const ota_window_state_t st = ota_window_state(&s_window, now_ms());
+        portEXIT_CRITICAL(&s_flow_mux);
+        if (st == OTA_WINDOW_POSTPONED) {
+            ESP_LOGI(TAG, "update %s postponed to the next check", remote_version);
+            publish_status("postponed");
+            return false;
+        }
+        if (st == OTA_WINDOW_EXPIRED) {
+            break;
+        }
+        vTaskDelay(pdMS_TO_TICKS(OTA_POLL_MS));
+    }
+
+    /* 4. Open floor, then hold still through the download and the reboot. */
+    set_phase(OTA_PHASE_PARKING);
+    const ota_park_result_t parked = park();
+    ESP_LOGI(TAG, "parked: %s (front %s) — holding still for the install",
+             ota_park_result_name(parked),
+             parked == OTA_PARK_RESULT_OPEN ? "open" : "not confirmed open");
+    publish_status("parked");
+    set_phase(OTA_PHASE_INSTALLING);
+    return true;
+}
+
+esp_err_t ota_manager_postpone(void)
+{
+    portENTER_CRITICAL(&s_flow_mux);
+    const bool ok = ota_window_postpone(&s_window, now_ms());
+    portEXIT_CRITICAL(&s_flow_mux);
+    return ok ? ESP_OK : ESP_ERR_INVALID_STATE;
+}
+
+ota_phase_t ota_manager_phase(void)
+{
+    portENTER_CRITICAL(&s_flow_mux);
+    const ota_phase_t phase = s_phase;
+    portEXIT_CRITICAL(&s_flow_mux);
+    return phase;
+}
+
+void ota_manager_pending_version(char *out, size_t out_len)
+{
+    if (!out || out_len == 0) {
+        return;
+    }
+    portENTER_CRITICAL(&s_flow_mux);
+    snprintf(out, out_len, "%s", s_pending_version);
+    portEXIT_CRITICAL(&s_flow_mux);
+}
+
+const char *ota_manager_phase_name(ota_phase_t phase)
+{
+    switch (phase) {
+        case OTA_PHASE_WAITING_QUIET:
+            return "waiting for a quiet moment";
+        case OTA_PHASE_ANNOUNCING:
+            return "announcing";
+        case OTA_PHASE_WINDOW:
+            return "postpone window open";
+        case OTA_PHASE_PARKING:
+            return "parking";
+        case OTA_PHASE_INSTALLING:
+            return "installing";
+        case OTA_PHASE_IDLE:
+        default:
+            return "idle";
+    }
 }
 
 static void start_https_ota(const char *bin_url)
@@ -507,6 +767,14 @@ static void start_https_ota(const char *bin_url)
 #if MQTT_LOGGING_ENABLED
         mqtt_logger_publish(OTA_MQTT_STATUS_TOPIC, "{\"status\":\"failed\"}", 1, false);
 #endif
+        /* The running image is untouched (the download went to the other
+         * slot), so let the robot move again and say so. */
+        reactive_controller_set_hold(false);
+        set_phase(OTA_PHASE_IDLE);
+        const voice_persona_t *persona = voice_persona_get();
+        const bool finnish =
+            persona && persona->language_code && strncmp(persona->language_code, "fi", 2) == 0;
+        (void)speech_queue_post(finnish ? OTA_ANNOUNCE_FAILED_FI : OTA_ANNOUNCE_FAILED_EN);
     }
 }
 
