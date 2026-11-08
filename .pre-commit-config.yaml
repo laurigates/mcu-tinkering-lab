@@ -111,6 +111,13 @@ repos:
         files: '^tools/(refresh-idf-locks\.py|test_refresh_idf_locks\.py)$'
         pass_filenames: false
 
+      - id: changelog-notes-tests
+        name: changelog-notes unit tests (OTA manifest "notes")
+        entry: python3 -m unittest tools/test_changelog_notes.py
+        language: system
+        files: '^tools/(changelog-notes\.py|test_changelog_notes\.py|generate-flasher-manifests\.sh)$'
+        pass_filenames: false
+
       - id: jlc-blog-tests
         name: jlc-blog unit tests
         entry: python3 -m unittest tools/test_jlc_blog.py
