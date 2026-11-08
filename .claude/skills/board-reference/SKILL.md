@@ -52,6 +52,13 @@ photo or `esptool.py chip_id`.
 3. **The silicon datasheet PDF.** Download it to `/tmp`, run
    `pdftotext -layout`, and cite each value by section or table
    (`Table 3-4`, `§3.1.3`). Link the PDF in the page; don't commit it.
+   Some makers refuse scripted downloads: st.com resets or times out every
+   request, and sending browser headers to get past it is refused as bot-check
+   circumvention. Use a copy a vendor hosts (SparkFun, Pololu, Adafruit and
+   GitHub mirrors carry most ST and TDK PDFs), name the revision you read on
+   the page, and put "read the current revision" in the checklist when a
+   newer one exists. Three pages in #1006 cite older revisions for this
+   reason.
 4. **Working driver code on GitHub** for anything the datasheet leaves out:
    bus clock, waits, init sequence, known failures. Search the chip and its
    sibling modules too, and cite repo, path and line
@@ -99,6 +106,12 @@ file. Include only the sections that apply, in this order:
 
 Slug: lowercase, hyphenated, without the vendor prefix unless it's needed to
 tell boards apart (`esp-ir-tr.md`, `xiao-esp32c6.md`).
+
+Leave out a pad-centre table (`padcheck --print`) on a candidate breakout that
+no project uses yet. `tools/hardware/test_padcheck.py` allows centres only on
+the breakouts in its `BREAKOUTS` list, so `just hardware::test` fails with one
+present. Add the table and the slug to `BREAKOUTS` together when the board is
+adopted, and say so on the page.
 
 ## 5. Write the silicon page, if missing
 
