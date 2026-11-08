@@ -110,10 +110,12 @@ esp_err_t gemini_parse_text(const char *json_text, char *out, size_t out_len);
 
 /** What a text reply was made of, for the caller's log line (issue #950). */
 typedef struct {
-    int parts;              /**< entries in candidates[0].content.parts */
-    int thought_parts;      /**< parts with "thought": true, skipped */
-    int text_parts;         /**< non-thought text parts concatenated into @p out */
-    char finish_reason[16]; /**< candidates[0].finishReason, truncated; "" if absent */
+    int parts;         /**< entries in candidates[0].content.parts */
+    int thought_parts; /**< parts with "thought": true, skipped */
+    int text_parts;    /**< non-thought text parts concatenated into @p out */
+    /** candidates[0].finishReason, "" if absent. Sized for the longest real value,
+     *  FINISH_REASON_UNSPECIFIED (25 chars); anything longer is truncated. */
+    char finish_reason[32];
 } gemini_text_meta_t;
 
 /**

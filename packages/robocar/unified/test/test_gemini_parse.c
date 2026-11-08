@@ -484,6 +484,25 @@ static void test_text_meta_truncates_a_long_finish_reason(void)
     ASSERT(strncmp(meta.finish_reason, "A_FINISH_REASON", 15) == 0);
 }
 
+static void test_text_meta_keeps_every_real_finish_reason_whole(void)
+{
+    /* The longest FinishReason values in google-genai 2.34; the log must name
+     * the cause, not a prefix shared with another one (PROHIBITED_CONT...). */
+    const char *reasons[] = {"FINISH_REASON_UNSPECIFIED", "IMAGE_PROHIBITED_CONTENT",
+                             "MALFORMED_FUNCTION_CALL", "PROHIBITED_CONTENT"};
+    for (size_t i = 0; i < sizeof(reasons) / sizeof(reasons[0]); ++i) {
+        char json[160];
+        snprintf(json, sizeof(json),
+                 "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"x\"}]},"
+                 "\"finishReason\":\"%s\"}]}",
+                 reasons[i]);
+        char out[16] = {0};
+        gemini_text_meta_t meta;
+        ASSERT(gemini_parse_text_meta(json, out, sizeof(out), &meta) == ESP_OK);
+        ASSERT(strcmp(meta.finish_reason, reasons[i]) == 0);
+    }
+}
+
 static void test_text_meta_without_finish_reason_is_empty(void)
 {
     const char *json = "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"x\"}]}}]}";
@@ -533,6 +552,8 @@ int main(void)
     test_run("text_meta_is_filled_on_failure", test_text_meta_is_filled_on_failure);
     test_run("text_meta_truncates_a_long_finish_reason",
              test_text_meta_truncates_a_long_finish_reason);
+    test_run("text_meta_keeps_every_real_finish_reason_whole",
+             test_text_meta_keeps_every_real_finish_reason_whole);
     test_run("text_meta_without_finish_reason_is_empty",
              test_text_meta_without_finish_reason_is_empty);
 
