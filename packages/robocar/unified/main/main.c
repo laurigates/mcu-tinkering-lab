@@ -69,6 +69,7 @@
 #include "scene_change.h"
 #include "self_report.h"
 #include "servo_controller.h"
+#include "sound_clips_core.h"
 #include "speech_budget.h"
 #include "speech_queue.h"
 #include "speech_trigger.h"
@@ -376,8 +377,26 @@ static void handle_periph_cmd(const char *buf)
     int a = 0, b = 0, c = 0;
 
     if (strncmp(buf, "sound", 5) == 0) {
+        static const char k_sound_usage[] =
+            "sound: usage: sound beep|melody|alert (buzzer) | sound horn|aoogah|bell|boing "
+            "(speaker)\n";
         if (sscanf(buf, "sound %15s", arg) != 1) {
-            printf("sound: usage: sound beep|melody|alert\n");
+            printf("%s", k_sound_usage);
+            return;
+        }
+        /* A speaker clip goes through the speech queue as a tag-only line,
+         * the same path the planner's `sound` tool takes, so it waits for any
+         * sentence in progress instead of talking over it. */
+        const sound_clip_t clip = sound_clip_from_name(arg);
+        if (clip != SOUND_CLIP_NONE) {
+            char line[24];
+            snprintf(line, sizeof(line), "[%s]", sound_clip_name(clip));
+            const esp_err_t err = speech_queue_post(line);
+            printf("sound: %s %s\n", arg, err == ESP_OK ? "queued" : "dropped (speech queue full)");
+            return;
+        }
+        if (strcmp(arg, "beep") != 0 && strcmp(arg, "melody") != 0 && strcmp(arg, "alert") != 0) {
+            printf("%s", k_sound_usage);
             return;
         }
         dispatch_sound(arg);

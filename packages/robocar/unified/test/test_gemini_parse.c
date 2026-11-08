@@ -282,6 +282,54 @@ static void test_parse_speak_only_still_yields_text(void)
     ASSERT(strcmp(speech, "Hello") == 0);
 }
 
+/* A `sound` call puts its tag at the front of the line, whichever order the
+ * calls came in, and is never taken for the motion goal. */
+static void test_parse_sound_leads_the_line(void)
+{
+    const char *json = "{\"candidates\":[{\"content\":{\"parts\":["
+                       "{\"functionCall\":{\"name\":\"speak\",\"args\":{\"text\":\"Pardon me\"}}},"
+                       "{\"functionCall\":{\"name\":\"sound\",\"args\":{\"name\":\"horn\"}}},"
+                       "{\"functionCall\":{\"name\":\"stop\",\"args\":{}}}"
+                       "]}}]}";
+    goal_t goal;
+    char speech[160];
+    esp_err_t ret = gemini_parse_response(json, &goal, speech, sizeof(speech));
+    ASSERT(ret == ESP_OK);
+    ASSERT(goal.kind == GOAL_KIND_STOP);
+    ASSERT(strcmp(speech, "[horn] Pardon me") == 0);
+}
+
+/* A sound with no speech is a line of just the tag; the TTS task plays it
+ * without a request. */
+static void test_parse_sound_alone(void)
+{
+    const char *json = "{\"candidates\":[{\"content\":{\"parts\":["
+                       "{\"functionCall\":{\"name\":\"sound\",\"args\":{\"name\":\"aoogah\"}}},"
+                       "{\"functionCall\":{\"name\":\"drive\",\"args\":{\"heading_deg\":0,"
+                       "\"distance_cm\":30,\"speed_pct\":50}}}"
+                       "]}}]}";
+    goal_t goal;
+    char speech[160];
+    esp_err_t ret = gemini_parse_response(json, &goal, speech, sizeof(speech));
+    ASSERT(ret == ESP_OK);
+    ASSERT(goal.kind == GOAL_KIND_DRIVE);
+    ASSERT(strcmp(speech, "[aoogah]") == 0);
+}
+
+/* A name outside the enum plays nothing and leaves the speech alone. */
+static void test_parse_unknown_sound_ignored(void)
+{
+    const char *json = "{\"candidates\":[{\"content\":{\"parts\":["
+                       "{\"functionCall\":{\"name\":\"sound\",\"args\":{\"name\":\"trumpet\"}}},"
+                       "{\"functionCall\":{\"name\":\"speak\",\"args\":{\"text\":\"Hello\"}}},"
+                       "{\"functionCall\":{\"name\":\"stop\",\"args\":{}}}"
+                       "]}}]}";
+    goal_t goal;
+    char speech[160];
+    ASSERT(gemini_parse_response(json, &goal, speech, sizeof(speech)) == ESP_OK);
+    ASSERT(strcmp(speech, "Hello") == 0);
+}
+
 /* No speak call → empty string, not stale contents. */
 static void test_parse_no_speak_clears_buffer(void)
 {
@@ -549,6 +597,9 @@ int main(void)
     test_run("parse_speak_alongside_motion", test_parse_speak_alongside_motion);
     test_run("parse_speak_before_motion", test_parse_speak_before_motion);
     test_run("parse_speak_only_still_yields_text", test_parse_speak_only_still_yields_text);
+    test_run("parse_sound_leads_the_line", test_parse_sound_leads_the_line);
+    test_run("parse_sound_alone", test_parse_sound_alone);
+    test_run("parse_unknown_sound_ignored", test_parse_unknown_sound_ignored);
     test_run("parse_no_speak_clears_buffer", test_parse_no_speak_clears_buffer);
     test_run("parse_speak_truncates", test_parse_speak_truncates);
     test_run("legacy_wrapper_unchanged", test_legacy_wrapper_unchanged);

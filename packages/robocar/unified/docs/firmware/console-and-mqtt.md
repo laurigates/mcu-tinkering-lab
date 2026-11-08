@@ -47,6 +47,7 @@ lines keep a bench session readable:
 | `listen [ms]` / `listen clear` | Record and answer a conversational turn (or clear conversational history) |
 | `cam …` | Read live sensor gain/exposure; `cam gainceiling 0-6`, `cam ae -2..2`, `cam brightness -2..2` tune exposure without a reflash |
 | `sound beep\|melody\|alert` | Buzzer |
+| `sound horn\|aoogah\|bell\|boing` | A prebuilt clip on the speaker, queued like speech so it waits for a sentence in progress — see [voice.md](voice.md#sound-clips) |
 | `servo …` | `servo` alone reports readiness, on/off, both angles with the PCA9685 counts, the live travel limits and the PWM frequency; `servo pan\|tilt <deg>` holds one for 30 s through a head lease the executor applies (refused outside its limits), then the executor takes the head back; `servo on\|off` drives or releases both outputs, and runs directly on the console task so `off` works mid-exercise; `servo limit pan\|tilt <min> <max>` sets the live travel limits (boot default pan ±60°, tilt ±30°; not persisted); `servo exercise` shakes then nods between the limits, logging every write; `servo freq <24-1526>` changes the chip-wide prescaler and re-sends both servo pulses at the new period |
 | `led <r> <g> <b>` | Both RGB LEDs |
 | `mic` / `mic dump <n>` | Microphone state and the VAD speech trigger's scores (best since the last `mic`); dump PCM frames — tells a dead mic from a quiet room |

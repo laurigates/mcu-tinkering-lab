@@ -151,9 +151,30 @@ static void test_null_args(void)
     ASSERT(speech_tags_strip("x", out, 0) == 0);
 }
 
+/* A sound tag passes the filter so the TTS task can play it (sound_clips_core.h),
+ * under its own cap of one, without using up the delivery-tag cap. */
+static void test_sound_tags_have_their_own_cap(void)
+{
+    check_sanitize("[horn] Anteeksi.", "[horn] Anteeksi.", 0);
+    check_sanitize("[sighs] [horn] Taas. [laughs]", "[sighs] [horn] Taas. [laughs]", 0);
+    check_sanitize("[horn] Hei [bell]", "[horn] Hei", 1);
+    check_sanitize("[horns] Hei", "Hei", 1); /* not a clip name */
+}
+
+/* strip() is for logs and the avoid-list: no tag of either kind survives. */
+static void test_strip_removes_sound_tags(void)
+{
+    char out[64];
+    speech_tags_strip("[horn] Hei [sighs] siellä", out, sizeof(out));
+    ASSERT(strcmp(out, "Hei siellä") == 0);
+}
+
 int main(void)
 {
     printf("=== speech tag filter host tests ===\n\n");
+
+    test_run("sound_tags_have_their_own_cap", test_sound_tags_have_their_own_cap);
+    test_run("strip_removes_sound_tags", test_strip_removes_sound_tags);
 
     test_run("keeps_allowed_tags", test_keeps_allowed_tags);
     test_run("untagged_text_unchanged", test_untagged_text_unchanged);

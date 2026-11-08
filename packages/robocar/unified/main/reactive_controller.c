@@ -571,9 +571,14 @@ static uint8_t rangers_tick(rangers_t *r, uint32_t now_ms)
 #include "freertos/FreeRTOS.h"
 #include "freertos/portmacro.h"
 #include "freertos/task.h"
+#include "sound_clips.h"
 #include "voice_turn.h"
 
 static const char *TAG = "reactive_ctrl";
+
+/* The reflex horn's cooldown state; only the executor task touches it. */
+static uint32_t s_reflex_honk_ms = 0;
+static bool s_reflex_honked = false;
 
 /* -------------------------------------------------------------------------
  * Module state
@@ -667,8 +672,9 @@ static void reactive_task(void *arg)
 
         /* ---- 2. Obstacle reflex ---- */
         const bool reflex = rangers_reflex(&s_rangers);
+        const bool reflex_tripped = reflex && !reflex_was_active;
 
-        if (reflex && !reflex_was_active) {
+        if (reflex_tripped) {
             ESP_LOGW(TAG, "Obstacle reflex ACTIVE — reading %u cm, mean %u cm (threshold %u cm)",
                      s_rangers.front_last_cm, dist, STOP_THRESHOLD_CM);
         } else if (!reflex && reflex_was_active) {
@@ -695,6 +701,20 @@ static void reactive_task(void *arg)
         if (goal_state_read_seq(&goal, &fresh, &goal_seq) != ESP_OK) {
             goal.kind = GOAL_KIND_STOP;
             fresh = false;
+        }
+
+        /* ---- 4b. Polite horn when the reflex stops a drive ----
+         * Only when the reflex is holding back motion somebody asked for, and
+         * not more than once per SOUND_REFLEX_COOLDOWN_MS. A request flag, not
+         * speech_queue_post(): this task has under 1 kB of stack headroom. */
+        if (reflex_tripped) {
+            const bool blocking = manual_active || (fresh && goal.kind != GOAL_KIND_STOP);
+            const uint32_t now_ms = (uint32_t)(now_us / 1000);
+            if (sound_clips_reflex_due(now_ms, s_reflex_honk_ms, s_reflex_honked, blocking)) {
+                sound_clips_request(SOUND_CLIP_HORN);
+                s_reflex_honk_ms = now_ms;
+                s_reflex_honked = true;
+            }
         }
 
         /* ---- 5. Head ----
