@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.12](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-simulation-v0.1.11...robocar-simulation-v0.1.12) (2026-11-09)
+
+
+### Bug Fixes
+
+* **auto:** resolve CI failure in Build Python Simulation ([b2eadf9](https://github.com/laurigates/mcu-tinkering-lab/commit/b2eadf980fc7f871bfa078d9481c03d4e92a108f))
+* **robocar-simulation:** sync uv.lock with the 0.1.11 release ([#1038](https://github.com/laurigates/mcu-tinkering-lab/issues/1038)) ([b2eadf9](https://github.com/laurigates/mcu-tinkering-lab/commit/b2eadf980fc7f871bfa078d9481c03d4e92a108f))
+
 ## [0.1.11](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-simulation-v0.1.10...robocar-simulation-v0.1.11) (2026-11-09)
 
 

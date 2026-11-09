@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.2.19](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.18...robocar-unified-v0.2.19) (2026-11-09)
+
+
+### Features
+
+* **kicad:** gate module sockets on silkscreen orientation marks ([#1022](https://github.com/laurigates/mcu-tinkering-lab/issues/1022)) ([9c456b3](https://github.com/laurigates/mcu-tinkering-lab/commit/9c456b3d81a507c916a1a458b1107a223b2b1174))
+* **kicad:** put the commit on the fab silkscreen and in the file names ([f33f01f](https://github.com/laurigates/mcu-tinkering-lab/commit/f33f01f02d63921389684cb4b035c4340dfaa30a))
+
+
+### Bug Fixes
+
+* **kicad:** keep a dirty fab's silk text as wide as a clean one ([5580784](https://github.com/laurigates/mcu-tinkering-lab/commit/5580784ef605e38239ce2aec6c476c0311012cf6))
+
+
+### Documentation
+
+* **carrier-pcb:** check each cart line's commit against the hand-off CSV ([0a829bd](https://github.com/laurigates/mcu-tinkering-lab/commit/0a829bdb528d1876969fe86e4e2d025305c33a60))
+
 ## [0.2.18](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.17...robocar-unified-v0.2.18) (2026-11-09)
 
 
