@@ -363,18 +363,25 @@ paying for the order.
 1. **Start from the committed board.** `git status` must show nothing under
    `hardware/carrier/`.
 2. **Generate the files:** `just robocar-unified::carrier-fab`. It stops if any
-   carrier gate fails. Outputs, under `robocar-unified-carrier/output/`:
+   carrier gate fails or anything that feeds the board has uncommitted
+   changes, and writes `<sha7> <pcb8>` (the commit and the stamp's
+   board-hash prefix) on the silkscreen under the title, on a plotting copy
+   of the board (`board.toml` `[fab] provenance_at`). Outputs, under
+   `robocar-unified-carrier/output/`, named for the commit's first 7 hex
+   digits:
 
    | File | For |
    |---|---|
-   | `robocar-unified-carrier-fab.zip` | The board: Gerbers and drill files |
-   | `assembly/bom-jlc.csv` | Assembly only: the SMD parts with LCSC numbers |
-   | `assembly/cpl-jlc.csv` | Assembly only: their positions and rotations |
+   | `robocar-unified-carrier-fab-<sha7>.zip` | The board: Gerbers and drill files |
+   | `assembly/robocar-unified-carrier-bom-jlc-<sha7>.csv` | Assembly only: the SMD parts with LCSC numbers |
+   | `assembly/robocar-unified-carrier-cpl-jlc-<sha7>.csv` | Assembly only: their positions and rotations |
+   | `robocar-unified-carrier-fab-<sha7>.csv` | The hand-off row: the commit and the zip's sha256 |
 
 3. **Upload the zip** at jlcpcb.com. It should detect 2 layers and
    100 × 100 mm. FR-4, 1.6 mm, 1 oz copper (the track widths assume it), HASL.
-   In the Gerber preview check the outline, the five "CUT" lines, and J2's
-   and J17's outlines on the bottom silkscreen.
+   In the Gerber preview check the outline, the five "CUT" lines, J2's
+   and J17's outlines on the bottom silkscreen, and the `<sha7> <pcb8>` text
+   under the title (it must match the zip's name).
 4. **Assembly (optional):** *PCB Assembly*, *Economic*, top side, with the two
    CSVs. C1–C3 (C96179), C7–C8 (C8020) and F1 (C47263807) are Extended
    parts, so three feeder fees; the rest, D1 (C8598) and C6, R12, R13

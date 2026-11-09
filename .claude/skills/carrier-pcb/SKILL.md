@@ -95,7 +95,18 @@ several traps below are version-specific: after a KiCad upgrade, re-run
      via after walling off F.Cu, a neck shared by the servo and head feeds,
      and a split top-half GND after widening +5V.
 6. `just <p>::carrier-fab` (runs `carrier-check` first): Gerbers, drill, BOM
-   and CPL. `just kicad::check` runs what CI runs. The CPL adds each LCSC
+   and CPL, named for the commit (`<name>-fab-<sha7>.zip`,
+   `<name>-bom-jlc-<sha7>.csv`, `<name>-cpl-jlc-<sha7>.csv`) beside a
+   hand-off row (`<name>-fab-<sha7>.csv`: the commit and the zip's sha256).
+   It refuses uncommitted changes to anything that feeds the board
+   (`CARRIER_FAB_ALLOW_DIRTY=1` exports anyway, marked `-dirty`), and plots
+   from a temporary copy of the board that carries `<sha7> <pcb8>` (the commit
+   and the stamp's `board_sha256` prefix) on F.SilkS at `board.toml`'s
+   `[fab] provenance_at`; KiCad's DRC on that copy fails the run if the text
+   lands on a pad, other silkscreen or the edge. The committed board and stamp
+   are only read (`kicad.provenance`). A new carrier needs `[fab]
+   provenance_at` before its first fab run. `just kicad::check` runs what CI
+   runs. The CPL adds each LCSC
    part's checked rotation offset (trap 32); a new LCSC number needs an entry
    in `docs/reference/jlcpcb-rotations.toml` first. `carrier-fab` first runs
    `python3 -m kicad.lcsc --project <p>`, which asks JLCPCB about each LCSC

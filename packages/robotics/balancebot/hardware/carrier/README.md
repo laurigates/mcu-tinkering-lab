@@ -281,8 +281,8 @@ The board is meant to be hand-soldered (a bare PCB order). The SMD parts use
 KiCad's hand-solder pads, and each symbol still carries an LCSC part number,
 so JLCPCB assembly remains possible:
 
-- **JLCPCB assembly**: `carrier-fab` writes `balancebot-carrier/output/assembly/bom-jlc.csv` and
-  `cpl-jlc.csv` with only the fourteen SMD parts that carry an LCSC number;
+- **JLCPCB assembly**: `carrier-fab` writes `balancebot-carrier/output/assembly/balancebot-carrier-bom-jlc-<sha7>.csv` and
+  `balancebot-carrier-cpl-jlc-<sha7>.csv` with only the fourteen SMD parts that carry an LCSC number;
   the VIO link pads R7 and R8 have none and stay empty. Upload them with the
   Gerber zip (Economic PCBA, top side). Everything else is hand-soldered
   afterwards. C1/C2 (C2836437), D2 (C2104), F1 (C7500481) and Q1 (C141324)
@@ -325,7 +325,7 @@ just balancebot::carrier-schematic  # schematic + library tables from hardware.t
 just balancebot::carrier-board      # place from scratch, autoroute (Freerouting), pour GND
 just balancebot::carrier-check      # ERC, DRC + schematic parity, netlist parity, board check,
                                     # then the check stamp CI verifies
-just balancebot::carrier-fab        # Gerbers + drill files → balancebot-carrier/output/*-fab.zip
+just balancebot::carrier-fab        # Gerbers + drill files → balancebot-carrier/output/*-fab-<sha7>.zip
 just balancebot::carrier-lib        # socket XIAO footprint + symbol from Seeed's DIP ones
 ```
 
@@ -378,13 +378,19 @@ detected size and layer count.
    ```
 
    It runs `carrier-check` (ERC, DRC with schematic parity, netlist parity,
-   the board check) first and stops if any fails. Outputs:
+   the board check) first and stops if any fails. It also stops on
+   uncommitted changes to anything that feeds the board, and writes the
+   commit and the stamp's board-hash prefix (`<sha7> <pcb8>`) on the
+   silkscreen below J3's pins (`board.toml` `[fab] provenance_at`), on a
+   plotting copy of the board. `<sha7>` is the commit's first 7 hex digits.
+   Outputs:
 
    | File | For |
    |---|---|
-   | `balancebot-carrier/output/balancebot-carrier-fab.zip` | The board: Gerbers and drill files |
-   | `balancebot-carrier/output/assembly/bom-jlc.csv` | Assembly only: the fourteen SMD parts with LCSC numbers |
-   | `balancebot-carrier/output/assembly/cpl-jlc.csv` | Assembly only: their positions and rotations |
+   | `balancebot-carrier/output/balancebot-carrier-fab-<sha7>.zip` | The board: Gerbers and drill files |
+   | `balancebot-carrier/output/assembly/balancebot-carrier-bom-jlc-<sha7>.csv` | Assembly only: the fourteen SMD parts with LCSC numbers |
+   | `balancebot-carrier/output/assembly/balancebot-carrier-cpl-jlc-<sha7>.csv` | Assembly only: their positions and rotations |
+   | `balancebot-carrier/output/balancebot-carrier-fab-<sha7>.csv` | The hand-off row: the commit and the zip's sha256 |
 
 4. **Upload the zip** at jlcpcb.com (Order now). It should detect 2 layers and
    90 × 62 mm; stop if it does not. Then:
@@ -399,14 +405,15 @@ detected size and layer count.
    | Outer copper | 1 oz (the track widths assume it) |
    | Mark on PCB / order number | JLCPCB prints one by default; remove it for a fee, or leave it |
 
-   Check the outline, the four M3 holes and the "+"/"−" beside J1 in the
+   Check the outline, the four M3 holes, the "+"/"−" beside J1, and the
+   `<sha7> <pcb8>` text below J3's pins (it must match the zip's name) in the
    Gerber preview.
 
 5. **Choose who solders the fourteen SMD parts** (R1–R6, C1–C3, D1–D3, F1,
    Q1):
 
    - **JLCPCB**: turn on *PCB Assembly*, *Economic*, top side. Upload
-     `bom-jlc.csv` and `cpl-jlc.csv` when asked. All fourteen should match; C1/C2,
+     the `-bom-jlc-<sha7>.csv` and `-cpl-jlc-<sha7>.csv` files when asked. All fourteen should match; C1/C2,
      D2, F1 and Q1 are Extended parts and add a feeder fee each. In the placement
      preview, check C1, C2 and D1–D3's polarity, and Q1's tab, as described in
      [Assembly notes](#assembly-notes) before confirming.

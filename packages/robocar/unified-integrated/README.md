@@ -109,7 +109,8 @@ Other differences the numbers do not show:
 
 Every SMD part on the front carries an LCSC number (#808), so JLCPCB can
 assemble the whole main board. `just robocar-unified-integrated::carrier-fab`
-writes `output/assembly/bom-jlc.csv` and `cpl-jlc.csv`: 25 BOM lines, 60
+writes `output/assembly/<name>-bom-jlc-<sha7>.csv` and
+`<name>-cpl-jlc-<sha7>.csv`, named for the commit: 25 BOM lines, 60
 placements, one per SMD part. The chips and the inductor take their number
 from their registry entry (`docs/reference/parts/`), the passives from
 `hardware.toml`.
