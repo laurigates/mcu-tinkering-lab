@@ -121,7 +121,7 @@ Three things play a clip, and all three end at the TTS task, so a clip never tal
 |---|---|
 | A `[horn]`-style tag in a spoken line | The persona's `tag_brief` lists the four tags beside `[sighs]`; `speech_tags_sanitize()` keeps at most one per line, outside the two-delivery-tag cap |
 | The planner's `sound` tool | Declared only when `speak` is, so the speech gates govern it; `gemini_parse` turns the call into a `[name]` tag at the front of the line |
-| The obstacle reflex | On the rising edge, if a manual lease or a fresh moving goal was being held back, at most once per `SOUND_REFLEX_COOLDOWN_MS` (20 s); always `horn` |
+| The obstacle reflex | On the rising edge, if it is braking motion somebody asked for (a manual lease or a fresh goal moving forward; a reverse or turn in place runs, so it does not honk), at most once per `SOUND_REFLEX_COOLDOWN_MS` (20 s); always `horn` |
 | `sound horn\|aoogah\|bell\|boing` on the console | A tag-only line through the speech queue |
 
 The TTS task splits each line (`sound_clips_split()`): the tag comes out, the words go to Gemini TTS, and the clip is written into the ring before them if nothing but delivery tags preceded it, after them otherwise. A sentence is one stream, so a clip cannot be spliced into its middle. A line that is only a tag makes no request, needs no key or WiFi, and logs `sound: horn (900 ms, alone)`. A leading clip is shorter than `AUDIO_PREROLL_BYTES`, so it waits for the speech behind it to bank the rest of the preroll and then runs straight into the words.

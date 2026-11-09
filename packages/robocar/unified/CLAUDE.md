@@ -94,6 +94,7 @@ One line per rule. Each group's doc has the full reasoning and the tests that ho
 - `init_hardware()` returns `void` and logs each peripheral failure, so the boot always reaches the console (#500).
 - Each peripheral keeps its `*_is_initialized()` accessor, and `self_report_collect()` reads it live.
 - `motor_stop()` coasts (low/low) and `motor_brake()` brakes (high/high). Keep them separate; the reflex is the only caller that brakes.
+- The rangefinders hold only motion toward what they see: the front reflex brakes forward motion, the rear reading brakes a reverse, turns in place run unless both are blocked (`apply_wheels()`, #1026).
 - Call `pin_bus_clock()` after every driver's `init_desc()`, including for devices added later.
 - Change the PCA9685 frequency through `servo_set_pwm_frequency()`, which re-sends both servo pulses.
 - Full-on and full-off channels (the motor direction pins) keep phase 0 in `pca9685_phase.c`.
