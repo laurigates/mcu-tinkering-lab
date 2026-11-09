@@ -26,12 +26,16 @@ logs *services:
 bootstrap org="robocar-lab":
     GLITCHTIP_ORG={{quote(org)}} bash {{quote(_dir / "bootstrap.sh")}}
 
-[doc("Run the bridge on the host (development); reads .env, ELFs from tools/glitchtip/elf/")]
+[doc("Run the bridge on the host (development); reads .env (the shell overrides it), ELFs from tools/glitchtip/elf/")]
 bridge:
     #!/usr/bin/env bash
     set -euo pipefail
     cd {{quote(_dir)}}
+    # .env supplies defaults; a variable set by the caller (MQTT_URL=... just
+    # glitchtip::bridge) wins over the file.
+    caller_env=$(export -p)
     set -a; source .env; set +a
+    eval "$caller_env"
     export ELF_DIR="${ELF_DIR:-{{_dir}}/elf}"
     exec uv run --project bridge robocar-glitchtip-bridge
 
@@ -40,7 +44,11 @@ issues project="" query="is:unresolved" *args:
     #!/usr/bin/env bash
     set -euo pipefail
     cd {{quote(_dir)}}
+    # .env supplies defaults; a variable set by the caller (MQTT_URL=... just
+    # glitchtip::bridge) wins over the file.
+    caller_env=$(export -p)
     set -a; source .env; set +a
+    eval "$caller_env"
     project={{quote(project)}}
     exec uv run --quiet --project bridge robocar-glitchtip issues \
         ${project:+--project "$project"} --query {{quote(query)}} {{args}}
@@ -50,7 +58,11 @@ event issue *args:
     #!/usr/bin/env bash
     set -euo pipefail
     cd {{quote(_dir)}}
+    # .env supplies defaults; a variable set by the caller (MQTT_URL=... just
+    # glitchtip::bridge) wins over the file.
+    caller_env=$(export -p)
     set -a; source .env; set +a
+    eval "$caller_env"
     exec uv run --quiet --project bridge robocar-glitchtip event {{quote(issue)}} {{args}}
 
 [doc("Print the exports Claude Code needs for the `glitchtip` MCP server in .mcp.json (read-only token)")]
@@ -58,7 +70,11 @@ mcp-env:
     #!/usr/bin/env bash
     set -euo pipefail
     cd {{quote(_dir)}}
+    # .env supplies defaults; a variable set by the caller (MQTT_URL=... just
+    # glitchtip::bridge) wins over the file.
+    caller_env=$(export -p)
     set -a; source .env; set +a
+    eval "$caller_env"
     : "${GLITCHTIP_API_TOKEN:?no GLITCHTIP_API_TOKEN in .env; run just glitchtip::bootstrap}"
     echo "export GLITCHTIP_API_TOKEN=$GLITCHTIP_API_TOKEN"
     echo "export GLITCHTIP_MCP_URL=${GLITCHTIP_DOMAIN:-http://localhost:${GLITCHTIP_PORT:-8000}}/mcp"
