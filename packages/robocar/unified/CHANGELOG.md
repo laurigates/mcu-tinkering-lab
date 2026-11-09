@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.20](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.19...robocar-unified-v0.2.20) (2026-11-09)
+
+
+### Features
+
+* **cadstd:** shared dimension standard for printed parts (ADR-035) ([#1052](https://github.com/laurigates/mcu-tinkering-lab/issues/1052)) ([703fd19](https://github.com/laurigates/mcu-tinkering-lab/commit/703fd19be6da6be2dae0caaca419bf60c505c46c))
+
 ## [0.2.19](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.18...robocar-unified-v0.2.19) (2026-11-09)
 
 
