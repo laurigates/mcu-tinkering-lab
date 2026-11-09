@@ -153,6 +153,24 @@ is `buck_ic`. Re-expressing an existing stage as a block must leave
   built from the same mistake.
 - Format and rules: `docs/reference/parts/README.md`.
 
+## A socketed sensor's orientation
+
+A board with an IMU in a socket declares it, so the layout and the firmware
+mount cannot drift apart (8d18cd8d put J3 where the GY-521 only fits face
+down):
+
+- The socket's `sockets.toml` entry gives the sensor's `axes = { x = [dx,
+  dy], z = "component" | "solder" }` in the footprint's y-down frame. The
+  generator validates it and leaves it out of the footprint.
+- `board.toml` gives `[outline] forward` (`"+x"`, `"-x"`, `"+y"` or `"-y"`;
+  the board is taken as mounted top face up) and `[imu] ref`, `mount` (the
+  firmware's `mount up|down`, default `"up"`) and `face` (the module in its
+  socket, default `"up"`; `"down"` is turned over about the pad row).
+- `kicad.boardcheck` derives the sensor-to-robot rotation (`kicad.mount`)
+  from those and the placement, and fails unless it is the declared mount,
+  naming the mount that would match or printing the matrix when neither does.
+  Placement rotations must be multiples of 90 degrees, on the front face.
+
 ## Traps
 
 ### From #749 and `kicad-scripting.md`
