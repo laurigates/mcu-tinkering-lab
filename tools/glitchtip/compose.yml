@@ -1,0 +1,91 @@
+# GlitchTip (a self-hosted Sentry-protocol server) for robocar events, ADR-033.
+# Based on upstream's compose.sample.yml, trimmed to the minimal setup: no
+# Valkey (Postgres carries the task queue and cache) and one all_in_one
+# container for web, worker and migrations.
+#
+#   just glitchtip::up          # postgres + web on http://localhost:8000
+#   just glitchtip::bootstrap   # org, projects, DSNs into .env
+#
+# Optional services, by profile (set COMPOSE_PROFILES in .env, e.g. broker,bridge):
+#   broker  a Mosquitto broker on :1883, for anyone without one
+#   bridge  the MQTT-to-GlitchTip bridge, running in a container
+# Settings come from .env next to this file (see .env.example).
+
+name: robocar-glitchtip
+
+x-environment: &glitchtip-environment
+  DATABASE_URL: postgres://postgres:postgres@postgres:5432/postgres
+  VALKEY_URL: ""
+  SECRET_KEY: ${GLITCHTIP_SECRET_KEY:?run `just glitchtip::up`, which writes it to .env}
+  EMAIL_URL: consolemail://
+  GLITCHTIP_DOMAIN: ${GLITCHTIP_DOMAIN:-http://localhost:8000}
+  DEFAULT_FROM_EMAIL: glitchtip@localhost
+  ENABLE_USER_REGISTRATION: "False"
+  ENABLE_ORGANIZATION_CREATION: "False"
+  GLITCHTIP_ENABLE_UPTIME: "False"
+
+services:
+  postgres:
+    image: postgres:18
+    # GlitchTip's partitioned tables need more locks than the Postgres default.
+    command: -c max_locks_per_transaction=512
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust # not published outside the compose network
+    restart: unless-stopped
+    volumes:
+      - pg-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 5s
+      retries: 20
+
+  web:
+    image: glitchtip/glitchtip:6.2.6
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${GLITCHTIP_PORT:-8000}:8000"
+    environment:
+      <<: *glitchtip-environment
+      SERVER_ROLE: all_in_one
+    restart: unless-stopped
+    volumes:
+      - uploads:/code/uploads
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/_health/')"]
+      interval: 10s
+      start_period: 60s
+      retries: 30
+
+  mosquitto:
+    profiles: [broker]
+    image: eclipse-mosquitto:2
+    ports:
+      - "${MQTT_PORT:-1883}:1883"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto-data:/mosquitto/data
+    restart: unless-stopped
+
+  bridge:
+    profiles: [bridge]
+    build: ./bridge
+    depends_on:
+      web:
+        condition: service_healthy
+    environment:
+      MQTT_URL: ${BRIDGE_MQTT_URL:-mqtt://mosquitto:1883}
+      MQTT_TOPIC: ${MQTT_TOPIC:-robocar/events}
+      # Container-side DSNs point at the `web` service, not localhost.
+      GLITCHTIP_DSN_ROBOCAR: ${GLITCHTIP_DSN_ROBOCAR_COMPOSE:-}
+      GLITCHTIP_DSN_ROBOCAR_AI: ${GLITCHTIP_DSN_ROBOCAR_AI_COMPOSE:-}
+      ELF_DIR: /elf
+    volumes:
+      - ./elf:/elf:ro
+    restart: unless-stopped
+
+volumes:
+  pg-data:
+  uploads:
+  mosquitto-data:

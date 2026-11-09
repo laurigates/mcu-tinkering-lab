@@ -1,0 +1,1 @@
+{"event_id":"00112233445566778899aabbccddeeff","timestamp":1762700000,"level":"info","source":"planner","release":"robocar-unified@0.0.0-fixture","message":"difficulty: the chair leg keeps tripping the reflex","fingerprint":["reflex_brake","difficulty"],"tags":{"trigger":"reflex_brake","kind":"difficulty","build_sha":"fixture"},"extra":{"reflex_count":3}}
