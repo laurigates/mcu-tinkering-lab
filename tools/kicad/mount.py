@@ -92,7 +92,7 @@ def parse_axes(value: object, where: str) -> ModuleAxes:
             f"{where}: axes.x must be a unit vector along the footprint's x or y "
             f"([1, 0], [-1, 0], [0, 1] or [0, -1]; y is down), got {x!r}"
         )
-    if value["z"] not in Z_FACES:
+    if not isinstance(value["z"], str) or value["z"] not in Z_FACES:
         raise KicadError(
             f"{where}: axes.z must be one of {sorted(Z_FACES)}, got {value['z']!r}"
         )

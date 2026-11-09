@@ -361,6 +361,7 @@ class ConfigTests(unittest.TestCase):
         for axes in (
             '{ x = [1, 1], z = "component" }',
             '{ x = [0, -1], z = "top" }',
+            '{ x = [0, -1], z = ["component"] }',
             "{ x = [0, -1] }",
             '{ x = [0, -1], y = [1, 0], z = "component" }',
             "[0, -1]",

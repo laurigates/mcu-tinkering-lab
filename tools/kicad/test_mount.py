@@ -182,6 +182,9 @@ class ParseTests(unittest.TestCase):
             {"x": [True, 0], "z": "component"},
             {"x": [0, 0, 1], "z": "component"},
             {"x": [0, -1], "z": "up"},
+            {"x": [0, -1], "z": ["component"]},
+            {"x": [0, -1], "z": {"face": "component"}},
+            {"x": "+x", "z": "component"},
             [0, -1],
         ]
         for value in bad:

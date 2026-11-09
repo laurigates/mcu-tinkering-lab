@@ -695,22 +695,28 @@ def _validate_imu(
     if imu is None:
         return []
     at = f"{where}: [imu]"
+    if not isinstance(imu, dict):
+        return [f"{at} must be a table, got {imu!r}"]
     spec = {**IMU_DEFAULTS, **imu}
     errors = []
     if forward is None:
         errors.append(f"{at} needs [outline] forward, the robot's forward on the board")
-    if spec["mount"] not in mount.MOUNTS:
-        errors.append(
-            f"{at} mount must be one of {list(mount.MOUNTS)}, got {spec['mount']!r}"
-        )
-    if spec["face"] not in mount.FACES:
-        errors.append(
-            f"{at} face must be one of {list(mount.FACES)}, got {spec['face']!r}"
-        )
+    # Type before membership: a list or table here is unhashable as a dict key.
+    for key, choices in (("mount", mount.MOUNTS), ("face", mount.FACES)):
+        if not isinstance(spec[key], str) or spec[key] not in choices:
+            errors.append(
+                f"{at} {key} must be one of {list(choices)}, got {spec[key]!r}"
+            )
     ref = spec.get("ref")
-    comp = next((c for c in nl.comps if c.ref == ref), None)
-    if comp is None:
-        errors.append(f"{at} ref {ref!r} is not in the netlist")
+    comp = None
+    if ref is None:
+        errors.append(f"{at} ref is required: the netlist ref of the socketed IMU")
+    elif not isinstance(ref, str):
+        errors.append(f"{at} ref must be a string, got {ref!r}")
+    else:
+        comp = next((c for c in nl.comps if c.ref == ref), None)
+        if comp is None:
+            errors.append(f"{at} ref {ref!r} is not in the netlist")
     if errors:
         return errors
     at = f"{at} {ref}"

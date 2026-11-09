@@ -960,6 +960,27 @@ class ImuTests(unittest.TestCase):
         self.fails(lambda d: d["imu"].update(ref="J99"), "'J99' is not in the netlist")
         self.fails(lambda d: d["imu"].update(colour="red"), "[imu]: unknown key(s)")
 
+    def test_malformed_values_are_errors_not_crashes(self):
+        # Each used to reach a membership test with an unhashable or missing
+        # value: mount = ["up"] raised TypeError, a missing ref read "ref None".
+        cases = [
+            (lambda d: d["imu"].update(mount=["up"]), "[imu] mount must be one of"),
+            (lambda d: d["imu"].update(mount={"up": 1}), "[imu] mount must be one of"),
+            (lambda d: d["imu"].update(mount="sideways"), "got 'sideways'"),
+            (lambda d: d["imu"].update(face=["up"]), "[imu] face must be one of"),
+            (lambda d: d["imu"].update(face=1), "[imu] face must be one of"),
+            (lambda d: d["imu"].pop("ref"), "[imu] ref is required"),
+            (lambda d: d["imu"].update(ref=3), "[imu] ref must be a string"),
+            (lambda d: d["imu"].update(ref=["J3"]), "[imu] ref must be a string"),
+            (lambda d: d["outline"].update(forward=["-y"]), "forward must be one of"),
+            (lambda d: d.update(imu=[{"ref": "J3"}]), "[imu] must be a table"),
+        ]
+        for edit, needle in cases:
+            with self.subTest(needle=needle):
+                self.fails(edit, needle)
+        errors = self.errors(lambda d: d["imu"].pop("ref"))
+        self.assertFalse(any("None" in e for e in errors), errors)
+
     def test_rotation_off_the_axes(self):
         self.fails(
             lambda d: d["placement"].update(J3=[36.11, 47.0, 45]),
