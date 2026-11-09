@@ -297,6 +297,72 @@ static void test_drive_turn_right(void)
     ASSERT(rd == 1);
 }
 
+/* The planner's drive tool says 180 = backward (gemini_backend.c). A heading
+ * past ±90 reverses both wheels; until #1025 it pivoted forward instead, into
+ * whatever the robot was trying to back away from. */
+static void drive_goal(int16_t heading, uint8_t speed_pct)
+{
+    goal_t drive = {
+        .kind = GOAL_KIND_DRIVE,
+        .params.drive = {.heading_deg = heading, .distance_cm = 25, .speed_pct = speed_pct},
+    };
+    ASSERT(goal_state_write(&drive, 1500) == ESP_OK);
+    prime_distance(100);
+}
+
+static void test_drive_backward_reverses(void)
+{
+    setup();
+    drive_goal(180, 50);
+
+    uint8_t ls, rs, ld, rd;
+    get_motor_state(&ls, &rs, &ld, &rd);
+    ASSERT(ld == 0);
+    ASSERT(rd == 0);
+    ASSERT(ls == rs); /* straight back: no bias */
+    ASSERT(ls >= 126 && ls <= 128);
+
+    setup();
+    drive_goal(-180, 50);
+    get_motor_state(&ls, &rs, &ld, &rd);
+    ASSERT(ld == 0 && rd == 0 && ls == rs);
+}
+
+/* Backing up and to the right: reverse, right wheel slowed by the mirrored
+ * heading (180 - 135 = 45), the same bias a forward 45 gets. */
+static void test_drive_back_right_curves(void)
+{
+    setup();
+    drive_goal(45, 80);
+    uint8_t fls, frs, fld, frd;
+    get_motor_state(&fls, &frs, &fld, &frd);
+
+    setup();
+    drive_goal(135, 80);
+    uint8_t ls, rs, ld, rd;
+    get_motor_state(&ls, &rs, &ld, &rd);
+    ASSERT(ld == 0 && rd == 0);
+    ASSERT(ls == fls && rs == frs); /* mirrored: same speeds as forward 45 */
+    ASSERT(ls > rs);
+
+    setup();
+    drive_goal(-135, 80);
+    get_motor_state(&ls, &rs, &ld, &rd);
+    ASSERT(ld == 0 && rd == 0);
+    ASSERT(rs > ls); /* back and to the left: left wheel slowed */
+}
+
+/* ±90 is still a forward pivot: the boundary belongs to the forward half. */
+static void test_drive_heading_90_stays_forward(void)
+{
+    setup();
+    drive_goal(90, 80);
+    uint8_t ls, rs, ld, rd;
+    get_motor_state(&ls, &rs, &ld, &rd);
+    ASSERT(ld == 1 && rd == 1);
+    ASSERT(ls > rs && rs > 0); /* bias = 90/180 of base: right at half speed */
+}
+
 /* GOAL_KIND_ROTATE angle=+30 → CW (right back, left forward). */
 static void test_rotate_cw(void)
 {
@@ -425,6 +491,123 @@ static void test_reflex_overrides_manual(void)
     get_motor_state(&ls, &rs, &ld, &rd);
     ASSERT(ls == 0);
     ASSERT(rs == 0);
+    ASSERT(motor_stub_get_last_call() == MOTOR_CALL_BRAKE);
+}
+
+/* -------------------------------------------------------------------------
+ * The reflex holds only motion toward the obstacle (#1026). Until then it
+ * braked every wheel command, so a robot with something in front of it could
+ * neither back out nor turn away, and stayed stuck until the obstacle left.
+ * ------------------------------------------------------------------------- */
+
+/* Front blocked: a reverse goal backs out. */
+static void test_reflex_lets_a_reverse_goal_back_out(void)
+{
+    setup();
+    drive_goal(180, 50);
+    prime_distance(10);
+
+    uint8_t ls, rs, ld, rd;
+    get_motor_state(&ls, &rs, &ld, &rd);
+    ASSERT(motor_stub_get_last_call() != MOTOR_CALL_BRAKE);
+    ASSERT(ld == 0 && rd == 0);
+    ASSERT(ls > 0 && rs > 0);
+    reactive_telemetry_t t = {0};
+    ASSERT(reactive_controller_get_telemetry(&t) == ESP_OK);
+    ASSERT(t.reflex_active); /* the reflex still reports what the sensor sees */
+}
+
+/* Front blocked: a rotate goal turns in place, away from it. */
+static void test_reflex_lets_a_rotate_goal_turn(void)
+{
+    setup();
+    goal_t rot = {.kind = GOAL_KIND_ROTATE, .params.rotate = {.angle_deg = 90}};
+    ASSERT(goal_state_write(&rot, 1500) == ESP_OK);
+    prime_distance(10);
+
+    uint8_t ls, rs, ld, rd;
+    get_motor_state(&ls, &rs, &ld, &rd);
+    ASSERT(motor_stub_get_last_call() != MOTOR_CALL_BRAKE);
+    ASSERT(ld != rd); /* opposite directions: in place */
+    ASSERT(ls > 0 && rs > 0);
+}
+
+/* Front blocked: the operator can back the robot out by hand. */
+static void test_reflex_lets_manual_backward_out(void)
+{
+    setup();
+    ASSERT(reactive_controller_manual(REACTIVE_MANUAL_BACKWARD, 120, 5000) == ESP_OK);
+    prime_distance(10);
+
+    uint8_t ls, rs, ld, rd;
+    get_motor_state(&ls, &rs, &ld, &rd);
+    ASSERT(ls == 120 && rs == 120);
+    ASSERT(ld == 0 && rd == 0);
+}
+
+/* Anything with a forward component is still braked: a forward pivot and a
+ * manual turn both move the front toward the obstacle. */
+static void test_reflex_still_brakes_forward_arcs(void)
+{
+    setup();
+    drive_goal(90, 80);
+    prime_distance(10);
+    ASSERT(motor_stub_get_last_call() == MOTOR_CALL_BRAKE);
+
+    setup();
+    ASSERT(reactive_controller_manual(REACTIVE_MANUAL_LEFT, 200, 5000) == ESP_OK);
+    prime_distance(10);
+    ASSERT(motor_stub_get_last_call() == MOTOR_CALL_BRAKE);
+}
+
+/* The rear rangefinder gates reversing the same way the front one gates
+ * driving: blocked behind, a reverse is braked, front clear or not. */
+static void test_rear_obstacle_brakes_a_reverse(void)
+{
+    setup();
+    ultrasonic_test_set_distance(ULTRASONIC_REAR, 10);
+    drive_goal(180, 50); /* front clear (prime_distance(100)) */
+    ASSERT(motor_stub_get_last_call() == MOTOR_CALL_BRAKE);
+
+    setup();
+    ultrasonic_test_set_distance(ULTRASONIC_REAR, 10);
+    ASSERT(reactive_controller_manual(REACTIVE_MANUAL_BACKWARD, 120, 5000) == ESP_OK);
+    prime_distance(10); /* boxed in front and back */
+    ASSERT(motor_stub_get_last_call() == MOTOR_CALL_BRAKE);
+
+    /* ...while driving forward with only the rear blocked is fine. */
+    setup();
+    ultrasonic_test_set_distance(ULTRASONIC_REAR, 10);
+    drive_goal(0, 50);
+    uint8_t ls, rs, ld, rd;
+    get_motor_state(&ls, &rs, &ld, &rd);
+    ASSERT(ld == 1 && rd == 1 && ls > 0);
+}
+
+/* Boxed in front and behind, a turn in place is held too: the rear corners
+ * sweep backward as the body turns. */
+static void test_boxed_in_holds_a_turn_in_place(void)
+{
+    setup();
+    ultrasonic_test_set_distance(ULTRASONIC_REAR, 10);
+    goal_t rot = {.kind = GOAL_KIND_ROTATE, .params.rotate = {.angle_deg = 90}};
+    ASSERT(goal_state_write(&rot, 1500) == ESP_OK);
+    prime_distance(10);
+    ASSERT(motor_stub_get_last_call() == MOTOR_CALL_BRAKE);
+
+    /* Rear blocked alone: turning in place still runs. */
+    setup();
+    ultrasonic_test_set_distance(ULTRASONIC_REAR, 10);
+    ASSERT(goal_state_write(&rot, 1500) == ESP_OK);
+    prime_distance(100);
+    ASSERT(motor_stub_get_last_call() != MOTOR_CALL_BRAKE);
+}
+
+/* A stop goal under the reflex still brakes rather than coasting into it. */
+static void test_reflex_brakes_a_stopped_robot(void)
+{
+    setup();
+    prime_distance(10);
     ASSERT(motor_stub_get_last_call() == MOTOR_CALL_BRAKE);
 }
 
@@ -1300,11 +1483,21 @@ int main(void)
     test_run("track_right_biased", test_track_right_biased);
     test_run("drive_straight", test_drive_straight);
     test_run("drive_turn_right", test_drive_turn_right);
+    test_run("drive_backward_reverses", test_drive_backward_reverses);
+    test_run("drive_back_right_curves", test_drive_back_right_curves);
+    test_run("drive_heading_90_stays_forward", test_drive_heading_90_stays_forward);
     test_run("rotate_cw", test_rotate_cw);
     test_run("rotate_ccw", test_rotate_ccw);
     test_run("stale_goal_stops", test_stale_goal_stops);
     test_run("manual_overrides_goal", test_manual_overrides_goal);
     test_run("reflex_overrides_manual", test_reflex_overrides_manual);
+    test_run("reflex_lets_a_reverse_goal_back_out", test_reflex_lets_a_reverse_goal_back_out);
+    test_run("reflex_lets_a_rotate_goal_turn", test_reflex_lets_a_rotate_goal_turn);
+    test_run("reflex_lets_manual_backward_out", test_reflex_lets_manual_backward_out);
+    test_run("reflex_still_brakes_forward_arcs", test_reflex_still_brakes_forward_arcs);
+    test_run("rear_obstacle_brakes_a_reverse", test_rear_obstacle_brakes_a_reverse);
+    test_run("boxed_in_holds_a_turn_in_place", test_boxed_in_holds_a_turn_in_place);
+    test_run("reflex_brakes_a_stopped_robot", test_reflex_brakes_a_stopped_robot);
     test_run("manual_lease_expires_back_to_goal", test_manual_lease_expires_back_to_goal);
     test_run("manual_stop_clears_lease", test_manual_stop_clears_lease);
     test_run("head_leads_before_wheels", test_head_leads_before_wheels);

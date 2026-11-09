@@ -113,6 +113,6 @@ detected MCP23017). Telemetry (`reactive_telemetry_t`) carries `cliff_armed`,
   `test_cliff_holds_until_floor_confirmed` pin it.
 - **Don't let a failed read count as floor.** `test_read_failure_fails_closed`
   and `test_cliff_read_failure_holds` pin it.
-- **Don't filter motion in a second place.** The executor's `drive_wheels()` is
+- **Don't filter motion in a second place.** The executor's `apply_wheels()` is
   the one arbiter for every wheel layer; `goal_motion()` mirrors
   `execute_goal()`'s branches and must change with it.

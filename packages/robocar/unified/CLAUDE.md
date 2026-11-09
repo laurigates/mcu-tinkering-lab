@@ -94,7 +94,8 @@ One line per rule. Each group's doc has the full reasoning and the tests that ho
 - `set_motors()` skips identical idle re-writes and re-sends after `MOTOR_REFRESH_INTERVAL_MS`; keep both halves.
 - `init_hardware()` returns `void` and logs each peripheral failure, so the boot always reaches the console (#500).
 - Each peripheral keeps its `*_is_initialized()` accessor, and `self_report_collect()` reads it live.
-- `motor_stop()` coasts (low/low) and `motor_brake()` brakes (high/high). Keep them separate; only the obstacle and cliff reflexes brake, from `drive_wheels()`.
+- `motor_stop()` coasts (low/low) and `motor_brake()` brakes (high/high). Keep them separate; only the obstacle and cliff reflexes brake, from `apply_wheels()`.
+- The rangefinders hold only motion toward what they see: the front reflex brakes forward motion, the rear reading brakes a reverse, turns in place run unless both are blocked (`apply_wheels()`, #1026).
 - Call `pin_bus_clock()` after every driver's `init_desc()`, including for devices added later.
 - Change the PCA9685 frequency through `servo_set_pwm_frequency()`, which re-sends both servo pulses.
 - Full-on and full-off channels (the motor direction pins) keep phase 0 in `pca9685_phase.c`.
@@ -104,7 +105,7 @@ One line per rule. Each group's doc has the full reasoning and the tests that ho
 **Cliff reflex** ([why](docs/firmware/cliff-sensors.md#dont))
 
 - The cliff state starts as "no floor" and a failed read counts as no floor (fail closed); arming is not an edge.
-- `drive_wheels()` is the one wheel arbiter; `goal_motion()` mirrors `execute_goal()`'s branches and changes with it.
+- `apply_wheels()` is the one wheel arbiter; `goal_motion()` mirrors `execute_goal()`'s branches and changes with it.
 
 **Console and MQTT** ([why](docs/firmware/console-and-mqtt.md#dont))
 

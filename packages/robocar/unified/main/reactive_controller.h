@@ -7,9 +7,11 @@
  *
  *   1. Polls the front and rear RCWL-1601 rangefinders (non-blocking: a read
  *      completes over several ticks, see ultrasonic.h).
- *   2. If a front reading < STOP_THRESHOLD_CM, latches a safety stop
- *      (overrides any planner goal until the obstacle clears). The rear
- *      sensor is reported in telemetry only.
+ *   2. If a front reading < STOP_THRESHOLD_CM, latches the obstacle reflex,
+ *      which brakes any forward motion until the obstacle clears; reversing
+ *      and turning in place still run. A rear reading under the same
+ *      threshold brakes a reverse, and a turn in place when the front is
+ *      blocked too (#1026).
  *   3. Otherwise reads the current goal from goal_state and drives the motors
  *      toward it using a simple skid-steer mix (GOAL_KIND_DRIVE) or a
  *      proportional visual-servo (GOAL_KIND_TRACK).
@@ -174,7 +176,9 @@ typedef enum {
  * directly, and both are the point of this function:
  *
  *   - the obstacle reflex still wins, so a manual command cannot drive the
- *     robot into a wall;
+ *     robot into a wall; it holds forward motion only, so `B` and the
+ *     rotations still get the robot out, unless the rear sensor is blocked
+ *     too (#1026);
  *   - the command expires after @p ttl_ms, after which the planner's goal
  *     resumes without any explicit hand-back.
  *
