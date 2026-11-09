@@ -49,6 +49,9 @@ Modules, one responsibility each:
 - `orientation` the ways a module fits its socket wrong (turned, face down)
                 and boardcheck's gate on the silkscreen marks that answer
                 them; module outlines placed for the silkscreen
+- `mount`       a socketed sensor module's axes on the robot, from the socket's
+                declared axes, its placement and `[outline] forward`; the
+                matrix boardcheck compares with board.toml `[imu] mount`
 - `perfboard`   CLI (a subpackage): a carrier laid out on a pad-per-hole
                 perfboard, drawing and wire list, from the netlist and
                 `hardware/perfboard/perfboard.toml`

@@ -276,6 +276,16 @@ the Gerbers, or open the board in KiCad):
    size, 21.00 × 15.88 mm, is measured; where the holes sit in it is an
    estimate ([`gy-521.md`](../../../../../docs/reference/boards/gy-521.md),
    "Check on the physical board").
+   Which way the sensor faces is gated, not checked by eye: the footprint's
+   entry in `sockets.toml` declares the MPU-6050's axes (X away from the
+   header, Z out of the component face), `board.toml` declares `[outline]
+   forward = "-y"` and `[imu] mount = "up"`, and `kicad.boardcheck` (in
+   `just kicad::check` and CI) derives the sensor's rotation on the robot from
+   J3's placement (`tools/kicad/mount.py`). It fails unless that rotation is
+   the declared firmware mount, naming the `mount` setting that would match,
+   or saying no firmware mount does. On rev3 it is `mount up`, the firmware
+   default. The gate cannot see a module fitted the wrong way in a correct
+   socket: fit it component side up, X arrow to FWD.
 4. **The buck lead.** J2 is labelled IN+, −, 5V, − (the registry's IN+, IN−,
    OUT+, OUT−). Meter the LM2596 lead's four wires against those labels
    before the first plug-in: OUT+ on IN+ puts the pack on the buck's output.

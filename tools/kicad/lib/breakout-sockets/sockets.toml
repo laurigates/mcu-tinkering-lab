@@ -16,6 +16,10 @@
 # `pads`; the table lists the positions instead, `pad_xy = [[x, y], ...]` in
 # footprint pad order and the same y-down millimetres as `outline`, with a
 # comment saying who measured them.
+#
+# A sensor module adds `axes = { x = [dx, dy], z = "component" | "solder" }`:
+# its X axis as a unit vector in the same y-down frame, and the face its Z axis
+# points out of. Not drawn; kicad.boardcheck checks a board's [imu] with it.
 # Regenerate with `just kicad::gen`
 # (PYTHONPATH=tools python3 -m kicad.sockets); CI runs it with --check.
 
@@ -84,8 +88,13 @@ outline = [-1.61, -1.57, 19.39, 24.43]
 # measured: the row centred along the 21 mm edge (end holes 1.61 mm from each
 # short edge, 21.00 - 7 x 2.54 = 3.22 mm shared) and the hole centres 1.27 mm
 # in from the long edge. Measure both on the module before relying on them.
+# `axes` are the MPU-6050's as the module's silkscreen arrow draws them, in
+# this frame: X toward -y (the arrow points away from the header), Z out of
+# the component face, so Y = Z x X points toward -x. boardcheck derives the
+# sensor's rotation on the robot from them and J3's placement (kicad.mount).
 [[socket]]
 name = "GY521_Socket"
 board = "gy-521"
 pad_xy = [[0, 0], [2.54, 0], [5.08, 0], [7.62, 0], [10.16, 0], [12.7, 0], [15.24, 0], [17.78, 0]]
 outline = [-1.61, -14.61, 19.39, 1.27]
+axes = { x = [0, -1], z = "component" }
