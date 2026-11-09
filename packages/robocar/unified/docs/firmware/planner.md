@@ -7,7 +7,12 @@ one-line form of each rule below and links here for the reasoning.
 
 **Gemini Robotics-ER 2 only** (`gemini-robotics-er-2-preview`; ER 1.6 was shut down at the end of August 2026). The planner calls Gemini to emit function-call goals:
 
-- `drive(heading_deg, distance_cm, speed_pct)` — absolute heading + distance
+- `drive(heading_deg, distance_cm, speed_pct)` — the heading is relative to
+  the frame the planner saw (0 forward, 90 right, -90 left, 180 backward) and
+  becomes a turn bias, not a compass heading: up to ±90 the robot drives
+  forward and curves; past ±90 it reverses, curving to the same side (135 backs
+  up to the right). `distance_cm` is ignored; the robot drives until the next
+  goal (`execute_drive()`, #1025)
 - `track(box_2d, max_speed_pct)` — visual servo toward a bounding box
 - `rotate(angle_deg)` — spin in place
 - `stop()` — hold position

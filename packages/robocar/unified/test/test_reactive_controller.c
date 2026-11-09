@@ -293,6 +293,72 @@ static void test_drive_turn_right(void)
     ASSERT(rd == 1);
 }
 
+/* The planner's drive tool says 180 = backward (gemini_backend.c). A heading
+ * past ±90 reverses both wheels; until #1025 it pivoted forward instead, into
+ * whatever the robot was trying to back away from. */
+static void drive_goal(int16_t heading, uint8_t speed_pct)
+{
+    goal_t drive = {
+        .kind = GOAL_KIND_DRIVE,
+        .params.drive = {.heading_deg = heading, .distance_cm = 25, .speed_pct = speed_pct},
+    };
+    ASSERT(goal_state_write(&drive, 1500) == ESP_OK);
+    prime_distance(100);
+}
+
+static void test_drive_backward_reverses(void)
+{
+    setup();
+    drive_goal(180, 50);
+
+    uint8_t ls, rs, ld, rd;
+    get_motor_state(&ls, &rs, &ld, &rd);
+    ASSERT(ld == 0);
+    ASSERT(rd == 0);
+    ASSERT(ls == rs); /* straight back: no bias */
+    ASSERT(ls >= 126 && ls <= 128);
+
+    setup();
+    drive_goal(-180, 50);
+    get_motor_state(&ls, &rs, &ld, &rd);
+    ASSERT(ld == 0 && rd == 0 && ls == rs);
+}
+
+/* Backing up and to the right: reverse, right wheel slowed by the mirrored
+ * heading (180 - 135 = 45), the same bias a forward 45 gets. */
+static void test_drive_back_right_curves(void)
+{
+    setup();
+    drive_goal(45, 80);
+    uint8_t fls, frs, fld, frd;
+    get_motor_state(&fls, &frs, &fld, &frd);
+
+    setup();
+    drive_goal(135, 80);
+    uint8_t ls, rs, ld, rd;
+    get_motor_state(&ls, &rs, &ld, &rd);
+    ASSERT(ld == 0 && rd == 0);
+    ASSERT(ls == fls && rs == frs); /* mirrored: same speeds as forward 45 */
+    ASSERT(ls > rs);
+
+    setup();
+    drive_goal(-135, 80);
+    get_motor_state(&ls, &rs, &ld, &rd);
+    ASSERT(ld == 0 && rd == 0);
+    ASSERT(rs > ls); /* back and to the left: left wheel slowed */
+}
+
+/* ±90 is still a forward pivot: the boundary belongs to the forward half. */
+static void test_drive_heading_90_stays_forward(void)
+{
+    setup();
+    drive_goal(90, 80);
+    uint8_t ls, rs, ld, rd;
+    get_motor_state(&ls, &rs, &ld, &rd);
+    ASSERT(ld == 1 && rd == 1);
+    ASSERT(ls > rs && rs > 0); /* bias = 90/180 of base: right at half speed */
+}
+
 /* GOAL_KIND_ROTATE angle=+30 → CW (right back, left forward). */
 static void test_rotate_cw(void)
 {
@@ -1104,6 +1170,9 @@ int main(void)
     test_run("track_right_biased", test_track_right_biased);
     test_run("drive_straight", test_drive_straight);
     test_run("drive_turn_right", test_drive_turn_right);
+    test_run("drive_backward_reverses", test_drive_backward_reverses);
+    test_run("drive_back_right_curves", test_drive_back_right_curves);
+    test_run("drive_heading_90_stays_forward", test_drive_heading_90_stays_forward);
     test_run("rotate_cw", test_rotate_cw);
     test_run("rotate_ccw", test_rotate_ccw);
     test_run("stale_goal_stops", test_stale_goal_stops);
