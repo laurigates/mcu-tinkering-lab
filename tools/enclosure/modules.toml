@@ -24,6 +24,7 @@
 "Breakout_Sockets:Adafruit_TCA9548A_Socket" = { kind = "tca9548a" }
 "Breakout_Sockets:Adafruit_MAX98357A_Socket" = { kind = "max98357a" }
 "Breakout_Sockets:CJMCU_2317_Socket" = { kind = "cjmcu-2317" }
+"Breakout_Sockets:GY521_Socket" = { kind = "gy-521" }
 "Connector_AMASS:AMASS_XT30PW-M_1x02_P2.50mm_Horizontal" = { kind = "xt30" }
 "Connector_JST:JST_VH_B4P-VH_1x04_P3.96mm_Vertical" = { kind = "jst-vh" }
 "Fuse:Fuse_1812_4532Metric_Pad1.30x3.40mm_HandSolder" = { kind = "ptc-1812" }
@@ -108,9 +109,12 @@ features = [
 [kinds.gy-521]
 label = "GY-521 (MPU-6050) IMU"
 pcb = [0.06, 0.2, 0.55]
+# GY521_Socket's frame: pads along +x from VCC, the module toward -y. The
+# MPU-6050 mid-board, the regulator near the header (the same spots the
+# earlier silk-rect outline put them at).
 features = [
-  { what = "chip", at = [0.5, 0.45], size = [4.0, 4.0, 0.9] },
-  { what = "chip", at = [0.25, 0.7], size = [2.9, 1.6, 1.1] },
+  { what = "chip", xy = [7.8, -7.0], size = [4.0, 4.0, 0.9] },
+  { what = "chip", xy = [13.1, -2.8], size = [1.6, 2.9, 1.1] },
 ]
 
 # --- Plain bodies: a block filling the outline up to the part's height ----

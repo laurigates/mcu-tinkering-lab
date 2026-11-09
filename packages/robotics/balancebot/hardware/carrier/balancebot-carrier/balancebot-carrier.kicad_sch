@@ -6234,7 +6234,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Connector_PinSocket_2.54mm:PinSocket_1x08_P2.54mm_Vertical"
+		(property "Footprint" "Breakout_Sockets:GY521_Socket"
 			(at 50.8 124.46 0)
 			(hide yes)
 			(show_name no)

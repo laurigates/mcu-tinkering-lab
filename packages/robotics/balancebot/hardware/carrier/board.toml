@@ -26,8 +26,11 @@ A1 = [14.0, 21.0, 0]     # left DRV8825, motor column toward the left edge
 A2 = [76.0, 38.78, 180]  # right DRV8825, motor column toward the right edge
 J4 = [5.0, 24.0, 270]    # left motor
 J5 = [85.0, 36.0, 90]    # right motor
-J3 = [36.11, 47.0, 90]   # GY-521 socket at the rear edge of its box; the module lies flat,
-                         # component side up, VCC on pin 1 (left), X arrow toward FWD
+# GY-521 socket (Breakout_Sockets:GY521_Socket): pad 1 (VCC) at the left, the
+# pads running +x, and the module's outline toward -y (forward) of the row in
+# the footprint itself, so rotation 0 seats it component side up, X arrow
+# toward FWD. Pads land where the 1x8 socket's did at 90 degrees.
+J3 = [36.11, 47.0, 0]
 J1 = [22.5, 55.5, 180]   # battery, JST-XH 2: BAT+ on pad 1 (right, toward F1)
 F1 = [29.5, 55.5, 0]     # 3 A hold PTC, pack input
 Q1 = [38.0, 55.5, 180]   # reverse-polarity P-MOSFET: tab (drain) toward F1, S/D/G pins east
@@ -71,8 +74,6 @@ hidden_refs = ["H1", "H2", "H3", "H4", "J1", "J9"]
 ref_positions = { J3 = [56.6, 50.0], J4 = [5.0, 19.8], J2 = [72.5, 57.0], R4 = [48.6, 59.0], R5 = [30.4, 9.6], R6 = [30.4, 12.2], R7 = [18.6, 26.6], R8 = [71.4, 36.8], J7 = [68.0, 45.0] }
 # Seeed's reference text is below KiCad's minimum silkscreen height.
 ref_sizes = { U1 = 1.0 }
-# Where the GY-521 lies flat on its socket (21 x 16 mm), so nothing tall goes under it.
-rects = [[34.5, 31.5, 55.5, 48.5]]
 texts = [
     { text = "balancebot carrier", at = [48.0, 60.8], size = 1.0 },
     { text = "FWD ^", at = [45.0, 28.0], size = 1.2 },

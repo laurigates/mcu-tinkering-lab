@@ -512,8 +512,8 @@
 <text x="38.25984251968504" y="255.3267716535433" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">A1 DRV8825 left</text>
 <rect x="205.25984251968504" y="245.3267716535433" width="105.34645669291336" height="139.34645669291336" fill="none" stroke="#4a5a78" stroke-width="1" stroke-dasharray="4 2"/>
 <text x="208.25984251968504" y="255.3267716535433" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">A2 DRV8825 right</text>
-<rect x="154.3" y="107.6" width="139.39999999999998" height="107.1" fill="none" stroke="#4a5a78" stroke-width="1" stroke-dasharray="4 2"/>
-<text x="157.3" y="117.6" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">J3 GY-521 MPU6050</text>
+<rect x="153.7237" y="106.71600000000001" width="140.55259999999998" height="106.28399999999999" fill="none" stroke="#4a5a78" stroke-width="1" stroke-dasharray="4 2"/>
+<text x="156.7237" y="116.71600000000001" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">J3 GY-521 MPU6050</text>
 <rect x="20.06692913385826" y="82.95669291338584" width="118.79921259842521" height="140.28346456692913" fill="none" stroke="#4a5a78" stroke-width="1" stroke-dasharray="4 2"/>
 <text x="23.06692913385826" y="77.5" fill="#4a5a78" stroke="white" stroke-width="3" paint-order="stroke">U1 XIAO RP2350</text>
 <rect x="41.5" y="251.5" width="8" height="8" fill="#b87333"/>

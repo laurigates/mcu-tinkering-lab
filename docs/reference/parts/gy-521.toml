@@ -1,9 +1,12 @@
 # GY-521 MPU6050 breakout in a 1x8 female header, lying flat over the board.
+# The footprint is the generated socket (tools/kicad/lib/breakout-sockets/
+# sockets.toml): the header's pads and the module's outline as one body, so
+# the carrier's F.Fab, courtyard and render outline all come from it.
 [part]
 name = "GY-521 MPU6050 breakout"
 source = "the fitted module's silkscreen, read 2026-10-14 (#748); no vendor file"
 symbol = "Connector_Generic:Conn_01x08"
-footprint = "Connector_PinSocket_2.54mm:PinSocket_1x08_P2.54mm_Vertical"
+footprint = "Breakout_Sockets:GY521_Socket"
 buy = "aliexpress:1000007373786"  # 2.54 mm 1x40 female strips, cut to length
 no_connect = ["XDA", "XCL"]
 
@@ -18,7 +21,10 @@ AD0 = 7
 INT = 8
 
 [perfboard]
+# The perfboard keeps the plain 1x8 socket, whose pins run along +y from pin 1;
+# the module then extends along +x. `body` is GY521_Socket's outline turned
+# into that frame, in holes: socket (x, y) mm is perfboard (-y, x) / 2.54
+# (test_registry pins the two together).
+footprint = "Connector_PinSocket_2.54mm:PinSocket_1x08_P2.54mm_Vertical"
 height = "raised"
-# 21 x 16 mm module, header along the long edge; in holes from pin 1 before
-# rotation (pins run along +y, the module extends 6.3 holes along +x).
-body = [-0.6, -0.6, 5.7, 7.6]
+body = [-0.5, -0.6339, 5.752, 7.6339]

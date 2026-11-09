@@ -541,7 +541,7 @@ class ConfigTests(unittest.TestCase):
         st = {
             "pitch_mm": 6.0,
             "via_um": [600, 300],
-            "exclude": [[34.5, 31.5, 55.5, 48.5]],
+            "exclude": [[30.0, 30.0, 50.0, 45.0]],
         }
         ok = self.with_data(lambda d: d["pour"].update(stitch=st))
         self.assertEqual(boardcheck.validate_config(ok, self.nl), [])

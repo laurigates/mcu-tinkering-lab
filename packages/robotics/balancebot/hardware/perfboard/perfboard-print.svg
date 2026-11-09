@@ -513,7 +513,7 @@
 <rect x="37.63" y="89.94" width="3" height="5.09" fill="#eef3fa" stroke="#4a5a78" stroke-width="0.15"/>
 <rect x="17.28" y="66.61" width="15.74" height="20.82" fill="none" stroke="#4a5a78" stroke-width="0.15" stroke-dasharray="1 0.5"/>
 <rect x="42.68" y="66.61" width="15.74" height="20.82" fill="none" stroke="#4a5a78" stroke-width="0.15" stroke-dasharray="1 0.5"/>
-<rect x="35.066" y="46.032" width="20.828" height="16.002" fill="none" stroke="#4a5a78" stroke-width="0.15" stroke-dasharray="1 0.5"/>
+<rect x="34.98" y="45.9" width="21" height="15.88" fill="none" stroke="#4a5a78" stroke-width="0.15" stroke-dasharray="1 0.5"/>
 <rect x="15.01" y="42.35" width="17.75" height="20.96" fill="none" stroke="#4a5a78" stroke-width="0.15" stroke-dasharray="1 0.5"/>
 <rect data-pad="A1.1" fill="#b87333" x="18.06" y="67.38" width="1.5" height="1.5"/>
 <circle data-pad="A1.10" fill="#b87333" cx="31.51" cy="83.37" r="0.8"/>
@@ -616,7 +616,7 @@
 <text x="32.95" y="89.19" font-size="1.6" fill="#4a5a78" stroke="white" stroke-width="0.4" paint-order="stroke">F1</text>
 <text x="32.68" y="101.62" font-size="1.6" fill="#4a5a78" stroke="white" stroke-width="0.4" paint-order="stroke">J1</text>
 <text x="27.6" y="96.54" font-size="1.6" fill="#4a5a78" stroke="white" stroke-width="0.4" paint-order="stroke">J2</text>
-<text x="35.466" y="45.732" font-size="1.6" fill="#4a5a78" stroke="white" stroke-width="0.4" paint-order="stroke">J3</text>
+<text x="35.38" y="45.6" font-size="1.6" fill="#4a5a78" stroke="white" stroke-width="0.4" paint-order="stroke">J3</text>
 <text x="17.44" y="101.62" font-size="1.6" fill="#4a5a78" stroke="white" stroke-width="0.4" paint-order="stroke">J4</text>
 <text x="47.92" y="101.62" font-size="1.6" fill="#4a5a78" stroke="white" stroke-width="0.4" paint-order="stroke">J5</text>
 <text x="27.6" y="86.38" font-size="1.6" fill="#4a5a78" stroke="white" stroke-width="0.4" paint-order="stroke">Q1</text>
