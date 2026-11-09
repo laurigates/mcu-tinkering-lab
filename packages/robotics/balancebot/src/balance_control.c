@@ -3,6 +3,7 @@
 #include <math.h>
 #include <string.h>
 
+#include "arm_gate.h"
 #include "config.h"
 #include "hardware/watchdog.h"
 #include "imu_filter.h"
@@ -44,6 +45,7 @@ static float steps_per_m;          // from steps_per_rev and wheel_diam_m
 static bool pid_bumpless_pending;  // LQR->PID: back-calculate on the next RUN tick
 static float open_loop_sps[STEPPER_COUNT];
 static uint32_t gesture_ticks;  // consecutive ticks satisfying arm/clear condition
+static arm_gate_t arm_gate;     // last raw sample and CMD_ARM's gravity gate
 static bool save_ok;
 static uint32_t save_count;
 static bool watchdog_started;
@@ -135,6 +137,9 @@ static void publish(uint32_t tick, bool imu_ok, float pitch, float gyro, float l
     }
     snapshot.pos_m = wheel_pos_steps / steps_per_m;
     snapshot.imu_mount = (uint8_t)params.imu_mount;
+    snapshot.gravity = arm_gate.check;
+    snapshot.arm_refusals = arm_gate.refusals;
+    snapshot.arm_refused_up_g = arm_gate.refused_up_g;
     __compiler_memory_barrier();
     snapshot.seq++;  // even: stable
 }
@@ -234,7 +239,12 @@ static void handle_command(const balance_cmd_t *cmd)
             apply_gains();
             break;
         case CMD_ARM:
-            if (state == BAL_STATE_IDLE) {
+            // A still IMU reading upside down is a wrong `mount`; core 0
+            // checks first, this is the last line, and a refusal is counted
+            // in the snapshot for core 0 to report. arm_gate_allows() takes
+            // the mount as it stands now, so a CMD_SET_IMU_MOUNT drained just
+            // ahead in this tick counts.
+            if (state == BAL_STATE_IDLE && arm_gate_allows(&arm_gate, params.imu_mount)) {
                 enter_state(BAL_STATE_RUN);
             }
             break;
@@ -291,9 +301,7 @@ static void handle_command(const balance_cmd_t *cmd)
         case CMD_SET_IMU_MOUNT:
             // Changing the axes mid-balance would swing the pitch 180 degrees;
             // core 0 checks first and reports, this is the last line.
-            if (state != BAL_STATE_RUN &&
-                (cmd->imu_mount == IMU_MOUNT_UP || cmd->imu_mount == IMU_MOUNT_DOWN) &&
-                cmd->imu_mount != params.imu_mount) {
+            if (arm_gate_mount_accepted(params.imu_mount, cmd->imu_mount, state == BAL_STATE_RUN)) {
                 params.imu_mount = cmd->imu_mount;
                 imu_filter_reset(&filter);  // snap to the new axes, don't converge
             }
@@ -376,6 +384,7 @@ void balance_control_core1_main(void)
             pitch = IMU_PITCH_SIGN * raw;
             gyro_rate = IMU_PITCH_SIGN * s.gyro_dps[1];
         }
+        arm_gate_observe(&arm_gate, params.imu_mount, imu_ok, s.accel_g, s.gyro_dps);
 
         switch (state) {
             case BAL_STATE_RUN:

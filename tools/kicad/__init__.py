@@ -38,7 +38,9 @@ Modules, one responsibility each:
 - `boardinput`  CLI: the JSON the pcbnew scripts read (netlist, placement,
                 silkscreen, net classes, pour), from the join and board.toml
 - `fab`         CLI (local, kicad-cli): gerbers, drill files and their zip,
-                BOM and CPL, then `jlc`
+                BOM and CPL, then `jlc`, all named for the commit
+- `provenance`  the commit on a plotting copy's silkscreen, in the fab file
+                names and the hand-off row; refuses a dirty tree
 - `jlc`         CLI: kicad-cli's BOM and CPL cut to JLCPCB's assembly format
 - `vendor`      CLI: pin, compare and rebuild the vendored library subtrees
 - `derive_xiao` CLI: the socket XIAO parts derived from Seeed's DIP ones

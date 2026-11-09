@@ -13,6 +13,7 @@
  */
 
 #include <inttypes.h>
+#include <stdlib.h>
 #include <string.h>
 #include <strings.h>
 #include "esp_app_desc.h"
@@ -35,10 +36,12 @@
 #include "audio_player.h"
 #include "buzzer.h"
 #include "camera.h"
+#include "cliff_sensor.h"
 #include "config.h"
 #include "credentials_loader.h"
 #include "credentials_validator.h"
 #include "dialogue_style.h"
+#include "event_report.h"
 #include "frame_dump.h"
 #include "gemini_key_state.h"
 #include "gemini_tts.h"
@@ -53,6 +56,7 @@
 #include "mic_dump.h"
 #include "mic_pdm.h"
 #include "net_supervisor_core.h"
+#include "note_gate.h"
 /* motor_controller_init() in the hardware phase and motor_is_initialized() in
  * the boot wheel exercise — both reads. Motor *output* is the reactive
  * executor's job, and nothing here writes the motors directly. */
@@ -1318,8 +1322,9 @@ static void handle_plan_cmd(const char *buf)
         }
         if (strcmp(op, "resume") == 0) {
             plan_budget_resume();
+            note_gate_resume();
             plan_activity_wake();
-            printf("plan: budget counters cleared, planner released\n");
+            printf("plan: budget and note counters cleared, planner released\n");
             return;
         }
         if (n == 2 && strcmp(op, "scene") == 0) {
@@ -1402,6 +1407,26 @@ static void handle_plan_cmd(const char *buf)
         printf("  *** BUDGET EXHAUSTED (%s) — no requests until `plan resume` ***\n",
                (budget == PLAN_BUDGET_TRIP_REQUESTS) ? "request ceiling" : "token ceiling");
     }
+
+    /* The note gate (ADR-033): offers are what is rationed, so they lead. */
+    const uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000);
+    printf("  notes:   %" PRIu32 "/%u offered, %" PRIu32 " written, next %s", note_gate_offers(),
+           (unsigned)NOTE_GATE_MAX_PER_BOOT, note_gate_written(),
+           note_gate_spent() ? "after `plan resume`" : "");
+    if (!note_gate_spent()) {
+        printf("in %" PRIu32 " s", note_gate_wait_ms(now_ms) / 1000u);
+    }
+    printf(",  pending:");
+    const uint32_t pending = note_gate_pending();
+    if (pending == 0u) {
+        printf(" none");
+    }
+    for (int t = NOTE_TRIGGER_NONE + 1; t < NOTE_TRIGGER_COUNT; t++) {
+        if (pending & (1u << (unsigned)t)) {
+            printf(" %s", note_trigger_name((note_trigger_t)t));
+        }
+    }
+    printf("\n");
 }
 
 static void handle_mic_cmd(const char *buf)
@@ -1580,6 +1605,46 @@ static void on_improv_credentials(const char *ssid, const char *password)
  * credentials) does not belong here; command_task() handles it before this.
  */
 /**
+ * @brief `cliff` — the front and rear floor sensors and the cliff reflex.
+ *
+ * `cliff` alone prints whether the reflex is on and armed, what each sensor
+ * sees and the trip count; it only reads, which is why it is on the MQTT
+ * read-only list. `cliff on|off` switches the reflex. Not persisted: every
+ * boot starts at CLIFF_REFLEX_AT_BOOT (docs/firmware/cliff-sensors.md).
+ */
+static void handle_cliff_cmd(const char *buf)
+{
+    char state[8] = {0};
+    const int n = sscanf(buf, "cliff %7s", state);
+
+    if (n == 1 && (strcmp(state, "on") == 0 || strcmp(state, "off") == 0)) {
+        const bool on = (strcmp(state, "on") == 0);
+        reactive_controller_set_cliff(on);
+        printf("cliff: reflex %s\n",
+               on ? "ON — the wheels hold until both sensors confirm the floor"
+                  : "OFF — nothing stops the robot at an edge");
+        return;
+    }
+    if (n > 0) {
+        printf("cliff: usage: cliff | cliff on|off\n");
+        return;
+    }
+
+    reactive_telemetry_t tele = {0};
+    const bool have_tele = (reactive_controller_get_telemetry(&tele) == ESP_OK);
+    printf("cliff: reflex=%s sensors=%s\n", reactive_controller_cliff_enabled() ? "on" : "off",
+           cliff_sensor_available() ? "present" : "absent(no MCP23017)");
+    if (have_tele && tele.cliff_armed) {
+        printf("  front: %s  rear: %s  active: %s  trips: %lu\n",
+               tele.cliff_front ? "NO FLOOR" : "floor", tele.cliff_rear ? "NO FLOOR" : "floor",
+               tele.cliff_active ? "yes" : "no", (unsigned long)tele.cliff_trips);
+    } else {
+        printf("  disarmed: nothing is filtered\n");
+    }
+    printf("  usage: cliff on|off\n");
+}
+
+/**
  * @brief `idle` — the idle behaviour the executor runs on its own (ADR-029).
  *
  * `idle` alone prints the mode, what the head is doing and whether it has
@@ -1660,6 +1725,52 @@ static void handle_ota_cmd(const char *buf)
     printf("  usage: ota check | ota postpone\n");
 }
 
+/**
+ * @brief `report` — the GlitchTip event path (ADR-033).
+ *
+ * `report` prints the event counters and whether the last boot's breadcrumb
+ * ring survived its reset. `report test` queues a synthetic event carrying
+ * this boot's breadcrumbs, to check the path end to end (robot, broker,
+ * bridge, GlitchTip). Not on the MQTT read-only list: `report test` sends.
+ */
+static void handle_report_cmd(const char *buf)
+{
+    char sub[8] = {0};
+    const int n = sscanf(buf, "report %7s", sub);
+
+#if EVENT_REPORT_CRASH_COMMAND
+    if (n == 1 && strcmp(sub, "crash") == 0) {
+        printf("report: crashing now (abort) to test the core dump path\n");
+        fflush(stdout);
+        abort();
+    }
+#endif
+    if (n == 1 && strcmp(sub, "test") == 0) {
+        const esp_err_t err = event_report_send_test();
+        printf("report: test event %s\n", err == ESP_OK ? "queued" : esp_err_to_name(err));
+        return;
+    }
+    if (n == 1) {
+        printf("report: usage: report | report test\n");
+        return;
+    }
+
+    event_report_stats_t st = {0};
+    event_report_get_stats(&st);
+    printf("report: topic %s, mqtt %s\n", EVENT_REPORT_TOPIC,
+           mqtt_logger_is_connected() ? "connected" : "down");
+    printf("  events: queued %u, sent %u, dropped %u, pending %u\n", (unsigned)st.queued,
+           (unsigned)st.sent, (unsigned)st.dropped, (unsigned)st.pending);
+    if (st.boot_crumbs_present) {
+        printf("  last boot's breadcrumbs: %u line(s) survived the reset\n",
+               (unsigned)st.boot_crumbs);
+    } else {
+        printf("  last boot's breadcrumbs: none (power-on, or the reset cleared RTC memory)\n");
+    }
+    printf("  core dump: %s\n", st.core_dump != NULL ? st.core_dump : "none");
+    printf("  usage: report test\n");
+}
+
 static void execute_console_line(const char *buf)
 {
     if (strncmp(buf, "gpio", 4) == 0) {
@@ -1680,8 +1791,12 @@ static void execute_console_line(const char *buf)
         handle_plan_cmd(buf);
     } else if (strncmp(buf, "idle", 4) == 0) {
         handle_idle_cmd(buf);
+    } else if (strncmp(buf, "cliff", 5) == 0) {
+        handle_cliff_cmd(buf);
     } else if (strncmp(buf, "ota", 3) == 0) {
         handle_ota_cmd(buf);
+    } else if (strncmp(buf, "report", 6) == 0) {
+        handle_report_cmd(buf);
     } else if (strncmp(buf, "sound", 5) == 0 || strncmp(buf, "servo", 5) == 0 ||
                strncmp(buf, "led", 3) == 0) {
         handle_periph_cmd(buf);
@@ -2073,6 +2188,9 @@ static void init_hardware(void)
      * the facts line names the missing peripheral (`i2c_peripherals=degraded(
      * servos)`) rather than leaving a silently immobile pan/tilt head. */
     init_peripheral("GPIO expander", gpio_expander_init());
+    /* After the expander: the floor sensors are two of its pins. Without it
+     * the cliff reflex stays disarmed and the self-report says so. */
+    init_peripheral("Cliff sensors", cliff_sensor_init());
     init_peripheral("Motors", motor_controller_init());
     init_peripheral("LEDs", led_controller_init());
     init_peripheral("Servos", servo_controller_init());
@@ -2183,6 +2301,7 @@ static esp_err_t init_hierarchical_ai(void)
     // is absent.
     plan_budget_init();
     plan_activity_init(PLANNER_LOOP_PERIOD_MS);
+    note_gate_init();
 
     // The same backstop for voice turns (issue #623): a ration on hands-free
     // triggers and a per-boot ceiling on every voice-turn request. Here, before
@@ -2480,6 +2599,11 @@ static void log_boot_banner(void)
 // ========================================
 void app_main(void)
 {
+    /* Before anything logs: the previous boot's last log lines are still in
+     * RTC memory, and the first ESP_LOG line from here on overwrites them
+     * (ADR-033). Makes no logging calls itself. */
+    event_report_boot_capture();
+
     /* First, so the banner and every boot phase after it reach J15 (UART0 TX)
      * as well as the USB console (issue #798). It needs only PSRAM, which the
      * startup code has already brought up. Non-fatal: without it the log
@@ -2492,6 +2616,20 @@ void app_main(void)
                  esp_err_to_name(mirror_ret));
     }
     log_boot_banner();
+
+    /* One GlitchTip event for a reset that was not deliberate (ADR-033). It
+     * waits in the queue until MQTT connects; nothing here blocks the boot. */
+    const esp_err_t report_ret = event_report_start();
+    if (report_ret != ESP_OK) {
+        ESP_LOGW(TAG, "event reporting unavailable (%s)", esp_err_to_name(report_ret));
+    }
+    const char *reason = reset_reason_name(esp_reset_reason());
+    const esp_err_t sent = event_report_send_reset(reason);
+    if (sent == ESP_OK) {
+        ESP_LOGI(TAG, "reset event queued for GlitchTip (%s)", reason);
+    } else if (sent != ESP_ERR_NOT_SUPPORTED && report_ret == ESP_OK) {
+        ESP_LOGW(TAG, "reset event not queued (%s)", esp_err_to_name(sent));
+    }
 
     ESP_ERROR_CHECK(init_nvs());
     init_mqtt_access();

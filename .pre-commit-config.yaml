@@ -125,6 +125,13 @@ repos:
         files: '^tools/(changelog-notes\.py|test_changelog_notes\.py|generate-flasher-manifests\.sh)$'
         pass_filenames: false
 
+      - id: flash-source-tests
+        name: flash-source unit tests (which firmware a flash writes)
+        entry: python3 -m unittest tools/test_flash_source.py
+        language: system
+        files: '^tools/(flash-source\.py|test_flash_source\.py)$'
+        pass_filenames: false
+
       - id: jlc-blog-tests
         name: jlc-blog unit tests
         entry: python3 -m unittest tools/test_jlc_blog.py

@@ -59,6 +59,24 @@ shorted for as long as it is powered. `test_motor_controller.c` pins the two
 encodings apart and `test_reactive_controller.c` pins which path uses which —
 both were mutation-checked, since a PWM-only assertion passes against either.
 
+**The rangefinders hold only motion toward what they see** (`apply_wheels()`,
+#1026). Before a wheel command runs, the executor classifies it as ahead (any
+forward component, arcs and pivots included), back, a turn in place, or none:
+
+| Motion | Front reflex active | Rear reading under `STOP_THRESHOLD_CM` |
+|---|---|---|
+| ahead | braked | runs |
+| back | runs | braked |
+| turn in place | runs (braked if the rear is blocked too) | runs |
+| none | braked (not coasted) | coasts |
+
+Until #1026 the front reflex braked every command, so a robot with something in
+front of it could neither back out nor turn away. On 2026-11-09 Teuvo stopped at
+a toy train and stayed stuck. A failed or absent rear sensor reads as clear, so
+a reverse without one is blind, as it always was. `test_reactive_controller.c`
+pins each row. The corner clearance for a turn in place under the reflex is not measured yet; boxed in front and behind, the turn is held. Three mutants (brake everything, no rear gate, manual turns
+classed as turns in place) each fail the test written for them.
+
 `set_motors()` writes all six in one transaction and therefore places each value
 by **channel** (`MOTOR_CH_SLOT`), never by argument position, with a
 `_Static_assert` that the six are a gap-free block starting at
@@ -148,6 +166,7 @@ disagreement.
 - Don't drop the idle re-write suppression in `set_motors()`, and don't make it permanent by removing the refresh. `reactive_controller`'s 30 Hz loop calls `motor_stop()` on every iteration it is not driving, so a parked robot re-stated six identical PCA9685 registers 30 times a second — the firmware's only continuous I2C traffic, and what makes the bus go from silent to permanently busy the moment the PCA9685 is fitted. The suppression expires after `MOTOR_REFRESH_INTERVAL_MS` because the cache describes a chip that cannot be read back: a PCA9685 that browned out or was re-seated no longer matches it, and with no expiry nothing would re-assert the true state. Pinned by `test_motor_controller.c`, including the case a bench cannot stage — the uint32 millisecond wrap at day 49, where a signed elapsed comparison either refreshes on every call or never refreshes again
 - Don't put `ESP_ERROR_CHECK` or `ESP_RETURN_ON_ERROR` back into the hardware phase. `init_hardware()` returns `void` on purpose (issue #500): a peripheral that would not initialise used to abort the boot, taking the console, WiFi, provisioning and the planner down with it — and a reboot loop removes the very console you would read the fault on. Every driver behind that phase already fails safe (each guards its entry points on `initialized` and returns `ESP_ERR_INVALID_STATE`; the buzzer's tone routines no-op), so a failure costs exactly the function that failed
 - Don't drop a peripheral's `*_is_initialized()` accessor, or let `self_report_collect()` read a cached boot result instead. Those accessors are the only thing standing between a half-populated board and a silent loss of function: the facts line renders `i2c_peripherals=degraded(servos)` from them, and `test_self_report.c` pins the case a bench cannot stage — a live bus with exactly one dead peripheral
+- Don't let the front reflex brake every wheel command again, or route a wheel command around `apply_wheels()`. A robot that can only move forward cannot leave an obstacle it has stopped at; it sits there until somebody moves the obstacle (#1026)
 - Don't make `motor_stop()` a short brake, or "unify" it with `motor_brake()`. Low/low is coast and high/high is brake; the reflex wants the second and the 30 Hz idle path wants the first. A test that only checks PWM = 0 passes against either, which is why the stub records which entry point was called
 - Don't let a driver's `init_desc()` pick the bus clock. Each esp-idf-lib driver hardcodes a different one, and i2cdev reinstalls the whole I2C driver whenever consecutive transactions disagree — call `pin_bus_clock()` after every `init_desc()`, including for any device added later
 - Don't change the PCA9685 frequency without re-sending the servo counts — call `servo_set_pwm_frequency()`, never `i2c_bus_pca9685_set_frequency()` directly. The prescaler write leaves every channel's count in place, and a count is a fraction of the period: the 50 Hz centre count (307) replayed at 200 Hz is a ~0.37 ms pulse, which drove both servos into their end stops on the 2026-09-15 bench. `servo_set_pwm_frequency()` releases the enabled outputs, changes the prescaler and re-sends each angle; `test_a_frequency_change_keeps_every_pulse_width` pins it

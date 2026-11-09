@@ -59,6 +59,20 @@ app declares `"embedsBuildSha": true` in `flasher.json`, and the release and
 PR builds then check the binary contains it — see
 [`release-publish-verification.md`](release-publish-verification.md).
 
+**`elfAssetName` (optional)** attaches the app ELF to the GitHub release under
+that name, for the GlitchTip bridge to symbolicate crash backtraces by version
+(ADR-033). It must equal the ELF's file name in `build/` (`<project>.elf`), and
+it shares `otaAssetName`'s uniqueness guard. The ELF goes on the release only,
+never on Pages. Only robocar-unified sets it.
+
+**`releaseFlashParts` (optional, `true`)** also attaches the bootloader,
+partition table and `ota_data_initial.bin` to the release as
+`<otaAssetName stem>-bootloader.bin`, `-partition-table.bin` and
+`-ota_data_initial.bin`, so `just <project>::flash <version tag>` can write a
+release without building it (`tools/flash-source.py`). Pages holds only the
+latest set, and a partition table can change between releases. Only
+robocar-unified sets it.
+
 ## Key Constraints
 
 - **CORS**: Firmware binaries must be served from the same origin as the HTML page (GitHub Pages). Do not reference GitHub Releases URLs in the ESP Web Tools manifest.

@@ -14,6 +14,7 @@ add_compile_definitions(
     GOAL_STATE_HOST_TEST=1
     REACTIVE_CONTROLLER_HOST_TEST=1
     ULTRASONIC_HOST_TEST=1
+    CLIFF_SENSOR_HOST_TEST=1
 )
 
 # Main source directory
@@ -104,6 +105,20 @@ add_executable(test_gpio_expander_core
 add_test(NAME gpio_expander_core COMMAND test_gpio_expander_core)
 
 # -----------------------------------------------------------------------------
+# Cliff reflex decisions (front and rear floor sensors, interim for issue #1010)
+#
+# cliff_core.c compiled unmodified: fail-closed start and read failures, the
+# debounce, brake then back off, no back-off toward a side without floor or
+# forward into an obstacle, and which motions permits() allows. The executor
+# integration is pinned in test_reactive_controller.
+# -----------------------------------------------------------------------------
+add_executable(test_cliff_core
+    "${MAIN_SRC_DIR}/cliff_core.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_cliff_core.c"
+)
+add_test(NAME cliff_core COMMAND test_cliff_core)
+
+# -----------------------------------------------------------------------------
 # reactive_controller decision logic (Phase 5, gate G2, issue #226)
 # -----------------------------------------------------------------------------
 add_executable(test_reactive_controller
@@ -113,11 +128,15 @@ add_executable(test_reactive_controller
     "${MAIN_SRC_DIR}/idle_gaze.c"
     "${MAIN_SRC_DIR}/scene_change.c"
     "${MAIN_SRC_DIR}/reactive_controller.c"
+    "${MAIN_SRC_DIR}/cliff_core.c"
+    "${MAIN_SRC_DIR}/cliff_sensor.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/motor_controller_stub.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/servo_controller_stub.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/test_reactive_controller.c"
 )
 target_link_libraries(test_reactive_controller PRIVATE Threads::Threads m)
+# The cliff tests expect the reflex armed from boot, whatever the firmware default.
+target_compile_definitions(test_reactive_controller PRIVATE CLIFF_REFLEX_AT_BOOT=1)
 add_test(NAME reactive_controller COMMAND test_reactive_controller)
 
 # -----------------------------------------------------------------------------
@@ -135,6 +154,8 @@ add_executable(test_reflex_latency
     "${MAIN_SRC_DIR}/idle_gaze.c"
     "${MAIN_SRC_DIR}/scene_change.c"
     "${MAIN_SRC_DIR}/reactive_controller.c"
+    "${MAIN_SRC_DIR}/cliff_core.c"
+    "${MAIN_SRC_DIR}/cliff_sensor.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/motor_controller_stub.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/servo_controller_stub.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/test_reflex_latency.c"
@@ -247,6 +268,19 @@ add_executable(test_speech_evidence
 add_test(NAME speech_evidence COMMAND test_speech_evidence)
 
 # -----------------------------------------------------------------------------
+# planner_range (the rangefinder readings in every planner request)
+#
+# A failed sensor reads as max range in the executor's filter; the clause must
+# say "unavailable" there, never "no echo", or the model is told the path is
+# clear when nothing was measured.
+# -----------------------------------------------------------------------------
+add_executable(test_planner_range
+    "${MAIN_SRC_DIR}/planner_range.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_planner_range.c"
+)
+add_test(NAME planner_range COMMAND test_planner_range)
+
+# -----------------------------------------------------------------------------
 # voice_fx_core (the retro-robot body resonance on the way to I2S)
 #
 # The load-bearing case is the comb's (1-g) input trim: without it the feedback
@@ -349,6 +383,15 @@ target_link_libraries(test_plan_activity PRIVATE Threads::Threads m)
 add_test(NAME plan_activity COMMAND test_plan_activity)
 
 # -----------------------------------------------------------------------------
+# note_gate: when the planner may offer the `note` tool, and how many (ADR-033)
+# -----------------------------------------------------------------------------
+add_executable(test_note_gate
+    "${MAIN_SRC_DIR}/note_gate.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_note_gate.c"
+)
+add_test(NAME note_gate COMMAND test_note_gate)
+
+# -----------------------------------------------------------------------------
 # planner_cycle_core (the planner's per-cycle decisions, ADR-030)
 #
 # The request gate and its one-shot announce latches, speech screening (near
@@ -358,6 +401,7 @@ add_test(NAME plan_activity COMMAND test_plan_activity)
 # -----------------------------------------------------------------------------
 add_executable(test_planner_cycle_core
     "${MAIN_SRC_DIR}/planner_cycle_core.c"
+    "${MAIN_SRC_DIR}/note_gate.c"
     "${MAIN_SRC_DIR}/plan_activity.c"
     "${MAIN_SRC_DIR}/plan_budget.c"
     "${MAIN_SRC_DIR}/scene_change.c"
@@ -380,6 +424,7 @@ add_test(NAME planner_cycle_core COMMAND test_planner_cycle_core)
 if(CJSON_FOUND)
     add_executable(test_gemini_parse
         "${MAIN_SRC_DIR}/gemini_parse.c"
+        "${MAIN_SRC_DIR}/note_gate.c"
         "${MAIN_SRC_DIR}/sound_clips_core.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/test_gemini_parse.c"
     )
@@ -392,6 +437,18 @@ if(CJSON_FOUND)
         "FIXTURE_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/fixtures\""
     )
     add_test(NAME gemini_parse COMMAND test_gemini_parse)
+
+    # GlitchTip event JSON and the RTC breadcrumb ring (ADR-033): the shape
+    # tools/glitchtip/bridge parses, garbage RTC memory after power-on, and a
+    # line torn by a reset.
+    add_executable(test_event_report_core
+        "${MAIN_SRC_DIR}/event_report_core.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/test_event_report_core.c"
+    )
+    target_include_directories(test_event_report_core PRIVATE ${CJSON_INCLUDE_DIRS})
+    target_link_directories(test_event_report_core PRIVATE ${CJSON_LIBRARY_DIRS})
+    target_link_libraries(test_event_report_core PRIVATE ${CJSON_LIBRARIES})
+    add_test(NAME event_report_core COMMAND test_event_report_core)
 
     add_executable(test_voice_history
         "${MAIN_SRC_DIR}/voice_history.c"

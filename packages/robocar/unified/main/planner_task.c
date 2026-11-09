@@ -11,16 +11,19 @@
 #include "planner_task.h"
 
 #include <inttypes.h>
+#include <stdio.h>
 
 #include "ambient_audio.h"
 #include "camera.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "event_report.h"
 #include "frame_dump.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "gemini_backend.h"
 #include "goal_state.h"
+#include "note_gate.h"
 #include "plan_activity.h"
 #include "plan_budget.h"
 #include "planner_cycle_core.h"
@@ -29,6 +32,7 @@
 #include "servo_controller.h"
 #include "speech_budget.h"
 #include "speech_queue.h"
+#include "voice_persona.h"
 #include "voice_turn.h"
 
 static const char *TAG = "planner";
@@ -41,8 +45,10 @@ static const char *TAG = "planner";
  * system prompt (GEMINI_SYSTEM_PROMPT_MAX) plus the variation directive and the
  * recalled-lines list, which together grew past 4 KB when the robot gained a
  * memory of what it had said. Grow this with those buffers, not after a stack
- * overflow reports it. */
-#define PLANNER_TASK_STACK_SIZE 10240U
+ * overflow reports it. 11.5 KB since the rangefinder clause: the prompt buffer
+ * grew by PLANNER_RANGE_CLAUSE_MAX and the frame gained the clause's own
+ * buffer and a telemetry snapshot, about 1 KB. */
+#define PLANNER_TASK_STACK_SIZE 11776U
 #define PLANNER_TASK_PRIORITY 3U
 #define PLANNER_TASK_CORE 1
 
@@ -72,6 +78,38 @@ static const char *goal_kind_name(goal_kind_t kind)
         default:
             return "unknown";
     }
+}
+
+/* =========================================================================
+ * Planner notes (ADR-033)
+ *
+ * File-scope rather than on the planner stack: the task is the only writer,
+ * and PLANNER_TASK_STACK_SIZE is sized for the prompt frame, not for another
+ * ~500 bytes of note and goal history.
+ * ========================================================================= */
+
+static gemini_note_t s_note;
+
+/** The last EVENT_REPORT_NOTE_GOALS goals as short lines, oldest first once
+ *  read through goal_history_collect(). */
+static char s_goal_history[EVENT_REPORT_NOTE_GOALS][40];
+static uint32_t s_goal_history_next;
+
+static void goal_history_note(const char *line)
+{
+    snprintf(s_goal_history[s_goal_history_next % EVENT_REPORT_NOTE_GOALS],
+             sizeof(s_goal_history[0]), "%s", line);
+    s_goal_history_next++;
+}
+
+static size_t goal_history_collect(const char **out)
+{
+    const uint32_t n = s_goal_history_next < EVENT_REPORT_NOTE_GOALS ? s_goal_history_next
+                                                                     : EVENT_REPORT_NOTE_GOALS;
+    for (uint32_t i = 0; i < n; i++) {
+        out[i] = s_goal_history[(s_goal_history_next - n + i) % EVENT_REPORT_NOTE_GOALS];
+    }
+    return n;
 }
 
 /* =========================================================================
@@ -141,6 +179,56 @@ static plan_evidence_t gather_evidence(const scene_fingerprint_t *fp, uint32_t n
     }
 
     return ev;
+}
+
+/** One line per goal for a note's history: the kind and the parameter that
+ *  says most about it. */
+static void describe_goal(const goal_t *g, planner_result_action_t result, char *out, size_t cap)
+{
+    if (result != PLANNER_RESULT_WRITE_GOAL) {
+        snprintf(out, cap, "stop (request failed)");
+        return;
+    }
+    switch (g->kind) {
+        case GOAL_KIND_DRIVE:
+            snprintf(out, cap, "drive %d deg %u cm %u%%", (int)g->params.drive.heading_deg,
+                     (unsigned)g->params.drive.distance_cm, (unsigned)g->params.drive.speed_pct);
+            break;
+        case GOAL_KIND_TRACK:
+            snprintf(out, cap, "track [%u,%u,%u,%u] %u%%", (unsigned)g->params.track.ymin,
+                     (unsigned)g->params.track.xmin, (unsigned)g->params.track.ymax,
+                     (unsigned)g->params.track.xmax, (unsigned)g->params.track.max_speed_pct);
+            break;
+        case GOAL_KIND_ROTATE:
+            snprintf(out, cap, "rotate %d deg", (int)g->params.rotate.angle_deg);
+            break;
+        default:
+            snprintf(out, cap, "%s", goal_kind_name(g->kind));
+            break;
+    }
+}
+
+/** Queue the note the model wrote, with the structure the firmware attaches. */
+static void report_note(note_trigger_t trigger, uint32_t reflex_trips)
+{
+    const voice_persona_t *persona = voice_persona_get();
+    event_report_note_t n = {
+        .trigger = note_trigger_name(trigger),
+        .kind = note_kind_name(s_note.kind),
+        .text = s_note.text,
+        .persona = persona != NULL ? persona->slug : "",
+        .reflex_trips = reflex_trips,
+        .scene_score = scene_change_score(),
+        .still_score = plan_activity_scene_score(),
+        .plan_requests = plan_budget_requests(),
+    };
+    n.goal_count = goal_history_collect(n.goals);
+    const esp_err_t err = event_report_send_note(&n);
+    if (err == ESP_OK) {
+        note_gate_noted(); /* `plan` counts notes queued, not notes written */
+    }
+    ESP_LOGI(TAG, "Note (%s, %s)%s: \"%s\"", n.trigger, n.kind, err == ESP_OK ? "" : " NOT queued",
+             s_note.text);
 }
 
 /* =========================================================================
@@ -279,6 +367,23 @@ static void planner_task(void *pvParameters)
             ESP_LOGI(TAG, "Waking — %s", plan_activity_verdict());
         }
 
+        /* ---- 1d. Offer the note tool? (ADR-033) ----
+         * After the request gate, so a skipped cycle never spends an offer;
+         * the triggers it would have raised are cumulative (the reflex count)
+         * or latched (BLIND) and are seen by the next request. */
+        reactive_telemetry_t note_tele = {0};
+        (void)reactive_controller_get_telemetry(&note_tele);
+        const planner_note_inputs_t note_in = {
+            .reflex_trips = note_tele.reflex_trips,
+            .blind = !scene_change_has_measurement(),
+        };
+        const note_trigger_t note_offer = planner_cycle_note_offer(&cycle, &note_in, now_ms);
+        if (note_offer != NOTE_TRIGGER_NONE) {
+            ESP_LOGI(TAG, "Offering note (%s), %" PRIu32 "/%u this boot",
+                     note_trigger_name(note_offer), note_gate_offers(),
+                     (unsigned)NOTE_GATE_MAX_PER_BOOT);
+        }
+
         /* ---- 2. Call Gemini planner ---- */
         goal_t goal = {0};
         uint32_t latency_ms = 0;
@@ -288,8 +393,8 @@ static void planner_task(void *pvParameters)
         planner_speech_snapshot_t at_request = {0};
         at_request.speech_notes = speech_budget_notes();
         at_request.voice_turns = voice_turn_count();
-        esp_err_t ret =
-            gemini_backend_plan(fb->buf, fb->len, &goal, &latency_ms, speech, sizeof(speech));
+        esp_err_t ret = gemini_backend_plan(fb->buf, fb->len, &goal, &latency_ms, speech,
+                                            sizeof(speech), note_offer, &s_note);
 
         /* Notes the call whatever the outcome, then samples which gate opened
          * (or held) THIS cycle — see planner_cycle_after_request(). */
@@ -328,6 +433,16 @@ static void planner_task(void *pvParameters)
 
         /* ---- 3 / 4. Write goal or force stop ---- */
         const planner_result_action_t result = planner_cycle_result(&cycle, ret);
+
+        /* ---- 4b. Notes: record the goal, raise what this cycle supports, and
+         * report a note the model wrote on an offered request. */
+        char goal_line[40];
+        describe_goal(&goal, result, goal_line, sizeof(goal_line));
+        goal_history_note(goal_line);
+        planner_cycle_note_outcome(&cycle, result, goal.kind, speech_verdict, note_offer);
+        if (note_offer != NOTE_TRIGGER_NONE && s_note.kind != NOTE_KIND_NONE) {
+            report_note(note_offer, note_tele.reflex_trips);
+        }
         if (result == PLANNER_RESULT_WRITE_GOAL) {
             goal.head_pan_deg = head_at_capture.pan_angle;
             goal.head_tilt_deg = head_at_capture.tilt_angle;

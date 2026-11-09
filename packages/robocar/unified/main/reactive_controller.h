@@ -7,9 +7,11 @@
  *
  *   1. Polls the front and rear RCWL-1601 rangefinders (non-blocking: a read
  *      completes over several ticks, see ultrasonic.h).
- *   2. If a front reading < STOP_THRESHOLD_CM, latches a safety stop
- *      (overrides any planner goal until the obstacle clears). The rear
- *      sensor is reported in telemetry only.
+ *   2. If a front reading < STOP_THRESHOLD_CM, latches the obstacle reflex,
+ *      which brakes any forward motion until the obstacle clears; reversing
+ *      and turning in place still run. A rear reading under the same
+ *      threshold brakes a reverse, and a turn in place when the front is
+ *      blocked too (#1026).
  *   3. Otherwise reads the current goal from goal_state and drives the motors
  *      toward it using a simple skid-steer mix (GOAL_KIND_DRIVE) or a
  *      proportional visual-servo (GOAL_KIND_TRACK).
@@ -174,7 +176,9 @@ typedef enum {
  * directly, and both are the point of this function:
  *
  *   - the obstacle reflex still wins, so a manual command cannot drive the
- *     robot into a wall;
+ *     robot into a wall; it holds forward motion only, so `B` and the
+ *     rotations still get the robot out, unless the rear sensor is blocked
+ *     too (#1026);
  *   - the command expires after @p ttl_ms, after which the planner's goal
  *     resumes without any explicit hand-back.
  *
@@ -273,7 +277,12 @@ typedef struct {
      *  reflex release only: the trip uses the latest reading, so this can read
      *  >= STOP_THRESHOLD_CM while reflex_active is true (issue #791). */
     uint16_t distance_cm;
-    bool reflex_active;        /**< True when obstacle reflex has latched stop.  */
+    bool reflex_active; /**< True when obstacle reflex has latched stop.  */
+    /** Times the reflex has latched since init, counted on the rising edge. The
+     *  planner samples telemetry every 15 s or more, so reflex_active alone
+     *  misses a brake that tripped and released in between; the planner's note
+     *  gate (note_gate.h) compares this count instead. */
+    uint32_t reflex_trips;
     uint32_t loop_hz;          /**< Measured loop rate over the last second.     */
     uint32_t stack_high_water; /**< Stack headroom from uxTaskGetStackHighWaterMark. */
     bool manual_active;        /**< True while a manual override lease is live.  */
@@ -297,6 +306,19 @@ typedef struct {
     bool head_settled;
     /** The pre-OTA hold is on (reactive_controller_set_hold()). */
     bool held;
+    /** The cliff reflex ran this tick: enabled (`cliff on`) and the floor
+     *  sensors present (cliff_sensor_available()). The four fields below are
+     *  false/unchanged while it is not. */
+    bool cliff_armed;
+    /** Debounced: no floor under the front / rear sensor (cliff_core.h). A
+     *  failed read and an unplugged sensor also read as no floor. */
+    bool cliff_front;
+    bool cliff_rear;
+    /** The cliff reflex is braking or backing off, or it replaced a requested
+     *  motion toward an edge with a brake. */
+    bool cliff_active;
+    /** Floor-to-cliff edges that started a reflex since boot. */
+    uint32_t cliff_trips;
 } reactive_telemetry_t;
 
 /* =========================================================================
@@ -349,6 +371,19 @@ void reactive_controller_set_gaze(bool on);
 
 /** @brief Whether the idle gaze is on. */
 bool reactive_controller_gaze_enabled(void);
+
+/**
+ * @brief Switch the cliff reflex (the front and rear floor sensors).
+ *
+ * On at every boot and not persisted. Off disarms it: no brake, no back-off and
+ * no motion filtering. Turning it back on starts from "no floor" on both
+ * sensors, so the wheels hold until the floor is confirmed (~100 ms).
+ */
+void reactive_controller_set_cliff(bool on);
+
+/** @brief Whether the cliff reflex is switched on (it may still be unarmed
+ *  without its sensors; see reactive_telemetry_t.cliff_armed). */
+bool reactive_controller_cliff_enabled(void);
 
 /**
  * @brief Hold the robot still for an OTA install.

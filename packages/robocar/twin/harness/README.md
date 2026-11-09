@@ -59,10 +59,15 @@ the `functionCall` shape `gemini_parse.c` reads. A `speak:` line in a reply
 to a request that did not offer `speak` (descriptor `speak_allowed: false`)
 is one the robot could never receive: the twin drops it and emits a
 `speak_not_offered` record, so check for that rather than relying on it.
+`note: {kind, text}` adds a planner `note` call (ADR-033); the same rule
+applies, with `note_not_offered` when the request offered no note (descriptor
+`note: none`).
 
 Assertions: `utterance`, `no_utterance`, `suppressed`, `requests`,
 `request_intervals`, `request_ladder`, `announce`, `force_stop`, `backoff`,
-`goal`, `goals`, `speak_not_offered`, `model_request` (filters `gate`,
-`speak_allowed`, `scene`, `pose` from the descriptor) and `cycle` (filters
+`goal`, `goals`, `speak_not_offered`, `note_offered` (filter `trigger`),
+`note` (filters `trigger`, `kind`, `text_contains`), `note_not_offered`,
+`model_request` (filters `gate`, `speak_allowed`, `scene`, `pose`, `note` from
+the descriptor) and `cycle` (filters
 `cause`, `requested`, `gate`, `spent_req`, `spent_tok`). Each failure names the
 trace records it is about.

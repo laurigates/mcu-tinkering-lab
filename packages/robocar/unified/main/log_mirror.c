@@ -33,6 +33,7 @@
 #include "driver/uart.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
+#include "event_report.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/ringbuf.h"
 #include "freertos/task.h"
@@ -62,6 +63,9 @@ static void mirror_enqueue(const char *fmt, va_list args)
     if (len == 0) {
         return;
     }
+    /* The GlitchTip breadcrumb ring (ADR-033) takes the same rendered line.
+     * Like this hook it makes no logging calls and never waits. */
+    event_report_breadcrumb(line, len);
     if (xRingbufferSend(s_queue, line, len, 0) != pdTRUE) {
         atomic_fetch_add(&s_dropped, 1);
     }

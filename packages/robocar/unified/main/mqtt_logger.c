@@ -60,6 +60,10 @@ typedef struct {
 
 static mqtt_logger_context_t s_context = {0};
 
+/* Outside s_context so it can be set before mqtt_logger_init(). Written once
+ * at startup, read on the MQTT event task. */
+static volatile mqtt_logger_published_cb_t s_published_cb;
+
 // Forward declarations
 static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id,
                                void *event_data);
@@ -364,7 +368,19 @@ esp_err_t mqtt_logger_publish_status(const char *status_json)
     return ESP_OK;
 }
 
+void mqtt_logger_set_published_handler(mqtt_logger_published_cb_t callback)
+{
+    s_published_cb = callback;
+}
+
 esp_err_t mqtt_logger_publish(const char *topic, const char *payload, int qos, bool retain)
+{
+    int msg_id = 0;
+    return mqtt_logger_publish_tracked(topic, payload, qos, retain, &msg_id);
+}
+
+esp_err_t mqtt_logger_publish_tracked(const char *topic, const char *payload, int qos, bool retain,
+                                      int *out_msg_id)
 {
     if (!s_context.initialized || !s_context.connected) {
         return ESP_ERR_INVALID_STATE;
@@ -385,6 +401,9 @@ esp_err_t mqtt_logger_publish(const char *topic, const char *payload, int qos, b
         return ESP_FAIL;
     }
 
+    if (out_msg_id != NULL) {
+        *out_msg_id = msg_id;
+    }
     return ESP_OK;
 }
 
@@ -575,12 +594,17 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
             ESP_LOGI(TAG, "MQTT unsubscribed, msg_id=%d", event->msg_id);
             break;
 
-        case MQTT_EVENT_PUBLISHED:
+        case MQTT_EVENT_PUBLISHED: {
             xSemaphoreTake(s_context.mutex, pdMS_TO_TICKS(SEMAPHORE_TIMEOUT_MS));
             s_context.stats.messages_sent++;
             s_context.stats.last_message_time = get_timestamp_ms();
             xSemaphoreGive(s_context.mutex);
+            const mqtt_logger_published_cb_t cb = s_published_cb;
+            if (cb != NULL) {
+                cb(event->msg_id);
+            }
             break;
+        }
 
         case MQTT_EVENT_DATA:
             // Handle remote commands. event->topic is NOT NUL-terminated; the

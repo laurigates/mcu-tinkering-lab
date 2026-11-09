@@ -57,6 +57,7 @@ add_executable(robocar-twin
     src/twin_signals.c
     # The decision path, compiled unmodified from the firmware.
     "${MAIN_SRC_DIR}/planner_cycle_core.c"
+    "${MAIN_SRC_DIR}/note_gate.c"
     "${MAIN_SRC_DIR}/plan_activity.c"
     "${MAIN_SRC_DIR}/plan_budget.c"
     "${MAIN_SRC_DIR}/scene_change.c"

@@ -141,7 +141,8 @@ any part left for hand-soldering (`.claude/rules/part-sourcing.md`). For each
 BOM line, in order:
 
 0. **Fitted already?** For a board JLCPCB assembled, the project's
-   `output/assembly/bom-jlc.csv` lists what it placed (surface-mount only).
+   `output/assembly/<name>-bom-jlc-<sha7>.csv` lists what it placed
+   (surface-mount only); `<sha7>` is the commit in the order's hand-off CSV.
    Order only the rest: on 2026-10-31 a 16 V / 4 A fuse for the robocar was
    added and then dropped, because F1 was on the assembled boards.
 1. **Owned?** Search the order history, then the "Electronics Purchases"

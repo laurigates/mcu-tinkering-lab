@@ -47,7 +47,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from . import library, netlist, orientation, panel, paths, schematic, sexpr
+from . import library, netlist, orientation, panel, paths, provenance, schematic, sexpr
 from .errors import KicadError
 from .paths import REPO_ROOT
 
@@ -240,6 +240,7 @@ TABLE_KEYS = {
         "own",
     },
     "cutouts": {"name", "center", "diameter"},
+    "fab": set(provenance.FAB_KEYS),
     "pour": {
         "net",
         "regions",
@@ -784,6 +785,7 @@ def validate_config(cfg: paths.BoardConfig, nl: netlist.Netlist) -> list[str]:
                     f"{where}: [silk] texts: {text.get('text')!r} is {text['size']} mm "
                     f"tall; the floor is {floor} mm{floor_note}"
                 )
+    errors += provenance.validate(where, data, size, floor)
     errors += _validate_cut_clearance(where, data, size)
     errors += _validate_keepouts(where, data, size)
     errors += _validate_route_keepouts(where, data, size)
