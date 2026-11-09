@@ -67,6 +67,8 @@ just robocar-unified::build
 just robocar-unified::flash-monitor
 ```
 
+`flash` builds first and refuses unless the image embeds the expected build SHA; `flash <commit|branch|version tag>` writes that version instead, built in `tmp/flash/<sha>` or downloaded from the release (`tools/flash-source.py`). When a bench result looks wrong, read the boot banner's `build <sha>` before debugging the code.
+
 Do not invoke `idf.py` directly on the host — there's no local ESP-IDF install. Use `just robocar-unified::shell` for an interactive container.
 
 ## sdkconfig rules

@@ -482,6 +482,28 @@ jobs:
               cp "$elf_src" "release-assets/$elf_asset"
             fi
 
+            # The non-app parts, under names prefixed with the app asset's stem,
+            # so `just <project>::flash <version tag>` can write a release
+            # without building it (tools/flash-source.py, release_parts()).
+            # Opt-in per project via releaseFlashParts; Pages only ever holds
+            # the latest set, and a partition table can change between releases.
+            if [ "$(jq -r '.releaseFlashParts // false' "$flasher_json")" = "true" ]; then
+              stem="${ota_asset%.bin}"
+              for part in bootloader.bin partition-table.bin ota_data_initial.bin; do
+                name="${stem}-${part}"
+                if [ -n "${seen_asset[$name]:-}" ]; then
+                  echo "::error::release asset '$name' is used by both '${seen_asset[$name]}' and '$project_id'"
+                  exit 1
+                fi
+                seen_asset[$name]="$project_id"
+                if [ ! -f "firmware/$project_id/$part" ]; then
+                  echo "::error::missing firmware/$project_id/$part, cannot attach it to the release"
+                  exit 1
+                fi
+                cp "firmware/$project_id/$part" "release-assets/$name"
+              done
+            fi
+
             if [ -f "firmware/$project_id/manifest.json" ]; then
               cp "firmware/$project_id/manifest.json" "release-assets/${project_id}-manifest.json"
             fi
