@@ -581,3 +581,13 @@ track_um = 400
 reach_mm = 2.5
 required = ["C1:2", "C2:2", "C4:2", "C5:2", "C7:2", "C8:2", "U2:1"]
 exempt = ["C3:2"]
+
+# Where carrier-fab writes the commit on F.SilkS: `<sha7> <pcb8>`, the git
+# commit and the first 8 hex digits of the check stamp's board_sha256, so the
+# Gerber viewer and the delivered board both say which upload was built
+# (kicad.provenance). On a plotting copy only; the committed board and stamp
+# stay as they are. Under the title (the board has no revision text), inside
+# A2's outline; carrier-fab fails if DRC finds it on a pad or a line.
+[fab]
+provenance_at = [22.0, 49.4]
+provenance_size = 1.0
