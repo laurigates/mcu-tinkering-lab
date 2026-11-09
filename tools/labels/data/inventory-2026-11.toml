@@ -1,0 +1,848 @@
+# Parts-drawer stickers, second run (2026-11-09): the parts-stock items that
+# drawers-2026-10.toml does not label and that are on hand. Drafted with
+#   just labels::candidates tools/labels/data/drawers-2026-10.toml
+# then rewritten by hand. Build with
+#   just labels::build tools/labels/data/inventory-2026-11.toml
+#
+# Left out on purpose: tools, solder/flux/tape consumables, enclosures and
+# storage cases, the robot chassis and PTZ mount, the UNO starter kits and the
+# two soldering-practice kits, and the mains power adapters.
+# Items from the 2026-11 orders that have not arrived are in
+# inventory-2026-11-incoming.toml.
+#
+# Spec lines marked "from memory" were not read from a listing or datasheet;
+# check them before the next print.
+schema = 1
+title = "Parts drawers 2026-11"
+
+[colors]
+cap-blue = "#1d4ed8"
+ic-purple = "#6d28d9"
+conn-green = "#15803d"
+elco = "#334155"
+opto = "#b45309"
+mech = "#57534e"
+pot-pink = "#be185d"
+mod-indigo = "#4338ca"
+board-slate = "#0f172a"
+sensor-cyan = "#0e7490"
+rf-red = "#b91c1c"
+res-brown = "#78350f"
+power-orange = "#c2410c"
+semi-teal = "#0f766e"
+
+# ---- passives and semiconductors ----
+
+[[label]]
+cat = "MLCC capacitor kit"
+color = "cap-blue"
+value = "0805 kit"
+stock = "c0805-kit-16-values"
+spec = ["0805 (2012 metric) · 16 values", "Values on the kit's own labels"]  # listing gives no values
+foot = "Kit · AliExpress 02/2025"
+render = { kind = "chip", l = 2.0, w = 1.25, term = 0.45 }
+
+[[label]]
+cat = "Electrolytic capacitor kit"
+color = "elco"
+value = "0.1–220 µF"
+stock = "cap-elec-assortment-25-values"
+spec = ["Radial · 25 values", "Stripe = −, long leg = +"]
+foot = "Assortment"
+render = { kind = "radial" }
+
+[[label]]
+cat = "Electrolytic capacitor"
+color = "elco"
+value = "120 µF"
+stock = "cap-elec-nichicon-420v-120u"
+spec = ["Nichicon · 420 V", "HIGH VOLTAGE · discharge first"]
+foot = "1 pcs"
+render = { kind = "radial" }
+
+[[label]]
+cat = "Resistor kit"
+color = "res-brown"
+value = "Metal film"
+stock = "resistor-kit-metal-film-14w"
+spec = ["Through-hole · ¼ W · 1 %", "5 bands: 3 digits, multiplier, tol."]
+foot = "Assortment"
+
+[[label]]
+cat = "Photoresistor"
+color = "res-brown"
+value = "GL5528"
+stock = "ldr-gl5528"
+spec = ["LDR · 5 mm", "Resistance falls with light"]
+foot = "50 pcs · AliExpress 07/2024"
+
+[[label]]
+cat = "Diode · rectifier"
+color = "semi-teal"
+value = "1N4007"
+stock = "1n4007"
+spec = ["1 A · 1000 V · DO-41", "Band = cathode"]
+foot = "100 pcs"
+
+[[label]]
+cat = "LED · power"
+color = "opto"
+value = "1 W white"
+stock = "led-1w-cool-white"
+spec = ["High-power SMD LED · cool white", "Needs a heatsink + current limit"]
+foot = "10 pcs"
+
+[[label]]
+cat = "Transistor · MOSFET"
+color = "semi-teal"
+value = "IRFZ44N"
+stock = "irfz44n"
+spec = ["N-channel · 55 V · TO-220", "Front: G · D · S"]  # 55 V and pinout from memory
+foot = "25 pcs · AliExpress 07/2024"
+
+[[label]]
+cat = "Transistor kit"
+color = "semi-teal"
+value = "NPN TO-92"
+stock = "npn-transistor-assortment"
+spec = ["BC337 · BC547 · 2N2222 · S8050", "Pinouts differ: check the type"]
+foot = "Assortment"
+
+[[label]]
+cat = "IC · timer"
+color = "ic-purple"
+value = "NE555P"
+stock = "ne555p"
+spec = ["555 timer · DIP-8", "Notch/dot = pin 1"]
+foot = "20 pcs"
+render = { kind = "dip8", mark = "NE555P" }
+
+# ---- connectors ----
+
+[[label]]
+cat = "Connector · header"
+color = "conn-green"
+value = "1×40 male"
+stock = "header-male-1x40-254"
+spec = ["Pin header · 2.54 mm", "Snap to length"]
+foot = "40 pcs · AliExpress 12/2025"
+
+[[label]]
+cat = "Connector · header"
+color = "conn-green"
+value = "1×40 M round"
+stock = "header-male-round-1x40-254"
+spec = ["Round-pin header · 2.54 mm", "Gold-plated"]
+foot = "10 pcs · AliExpress 08/2026"
+
+[[label]]
+cat = "Connector · header"
+color = "conn-green"
+value = "1×40 F round"
+stock = "header-female-round-1x40-254"
+spec = ["Round-hole socket strip · 2.54 mm", "Takes round pins and IC legs"]
+foot = "10 pcs · AliExpress 08/2026"
+
+[[label]]
+cat = "Connector · header"
+color = "conn-green"
+value = "Jumper caps"
+stock = "jumper-cap-254"
+spec = ["Shunt for 2.54 mm headers"]
+foot = "100 pcs · AliExpress 12/2025"
+
+[[label]]
+cat = "Connector · Dupont"
+color = "conn-green"
+value = "Dupont kit"
+stock = "dupont-connector-kit"
+spec = ["2.54 mm housings · 2–5 pin", "With crimp pins, boxed"]
+foot = "Kit · AliExpress 06/2025"
+
+[[label]]
+cat = "Connector · Dupont"
+color = "conn-green"
+value = "Dupont F pins"
+stock = "dupont-pins-female"
+spec = ["Female crimp pins · 2.54 mm", "Crimper: Dupont die"]
+foot = "100 pcs · AliExpress 06/2025"
+
+[[label]]
+cat = "IC socket"
+color = "conn-green"
+value = "DIP-8"
+stock = "ic-socket-dip8"
+spec = ["8-pin DIP socket · 2.54 mm", "Notch = pin 1"]
+foot = "100 pcs"
+render = { kind = "dip8" }
+
+[[label]]
+cat = "Connector · power"
+color = "conn-green"
+value = "DC jack"
+stock = "dc-5525-female-jack"
+spec = ["5.5 × 2.5 mm female socket", "Check centre polarity"]
+foot = "10 pcs"
+
+[[label]]
+cat = "Connector · power"
+color = "conn-green"
+value = "DC plug"
+stock = "dc-5525-male-plug"
+spec = ["5.5 × 2.5 mm male plug", "Solder or screw lead"]
+foot = "5 pcs"
+
+[[label]]
+cat = "Connector · power"
+color = "conn-green"
+value = "DC panel"
+stock = "dc-jack-panel-metal"
+spec = ["Metal panel-mount DC jack", "5.5 × 2.1 / 2.5 mm"]
+foot = "2 pcs"
+
+[[label]]
+cat = "Connector · power"
+color = "conn-green"
+value = "DC pigtails"
+stock = "dc-5525-cctv-connector-set"
+spec = ["5.5 × 2.5 mm male + female", "CCTV screw-terminal set"]
+foot = "1 set"
+
+[[label]]
+cat = "Connector · test"
+color = "conn-green"
+value = "4 mm banana"
+stock = "banana-plug-4mm-gold"
+spec = ["Banana plug · gold-plated", "Solder or screw lead"]
+foot = "10 pcs"
+
+# ---- wire ----
+
+[[label]]
+cat = "Wire"
+color = "elco"
+value = "Dupont 20 cm"
+stock = "dupont-jumpers-20cm"
+spec = ["Jumper cables · 2.54 mm", "M-M / M-F / F-F"]
+foot = "40 pcs"
+
+[[label]]
+cat = "Wire"
+color = "elco"
+value = "Dupont set"
+stock = "dupont-jumper-header-set"
+spec = ["Jumper wires + headers", "Male and female"]
+foot = "Set"
+
+[[label]]
+cat = "Wire"
+color = "elco"
+value = "Flex jumpers"
+stock = "breadboard-jumpers-mm-flexible"
+spec = ["Breadboard jumpers · M-M", "Flexible, assorted lengths"]
+foot = "65 pcs"
+
+[[label]]
+cat = "Wire"
+color = "elco"
+value = "36 AWG FEP"
+stock = "wire-fep-36awg"
+spec = ["UL10064 FEP · 10 m", "Rework / bodge wire"]
+foot = "AliExpress 12/2025"
+
+[[label]]
+cat = "Wire"
+color = "elco"
+value = "24 AWG"
+stock = "wire-ul1007-24awg"
+spec = ["UL-1007 stranded hookup wire"]
+foot = "Spools"
+
+[[label]]
+cat = "Wire · ribbon"
+color = "elco"
+value = "16-pin IDC"
+stock = "idc-ribbon-127mm-16pin-2m"
+spec = ["1.27 mm ribbon extension · 2 m"]
+foot = "1 pcs"
+
+# ---- modules ----
+
+[[label]]
+cat = "Module · USB serial"
+color = "mod-indigo"
+value = "CP2102"
+stock = "cp2102-usb-uart"
+spec = ["USB → TTL UART · 6-pin", "3.3 V / 5 V"]
+foot = "1 pcs"
+render = { kind = "module", l = 30, w = 16, pins = 6, pcb = "#1d4f91", usb = true }
+
+[[label]]
+cat = "Module · USB serial"
+color = "mod-indigo"
+value = "ESP-01 USB"
+stock = "esp-01-usb-adapter"
+spec = ["USB → ESP-01 serial adapter", "Plug the ESP-01 on top"]
+foot = "1 pcs"
+render = { kind = "module", l = 50, w = 16, pins = 0, pcb = "#282828", usb = true }
+
+[[label]]
+cat = "Module · Wi-Fi"
+color = "board-slate"
+value = "ESP-01"
+stock = "esp-01"
+spec = ["ESP8266 serial Wi-Fi · 3.3 V", "8-pin 2×4 header"]
+foot = "1 pcs"
+render = { kind = "module", l = 25, w = 14, pins = 4, pcb = "#1d4f91" }
+
+[[label]]
+cat = "Module · Wi-Fi"
+color = "board-slate"
+value = "ESP-01S"
+stock = "esp-01s"
+spec = ["ESP8266 serial Wi-Fi · 3.3 V", "8-pin 2×4 header"]
+foot = "1 pcs"
+render = { kind = "module", l = 25, w = 14, pins = 4, pcb = "#282828" }
+
+[[label]]
+cat = "Module · BLE"
+color = "rf-red"
+value = "HM-10"
+stock = "hm-10-ble"
+spec = ["BLE 4.0 serial module", "AT commands over UART"]
+foot = "1 pcs"
+render = { kind = "module", l = 37, w = 15, pins = 6, pcb = "#1d4f91" }
+
+[[label]]
+cat = "Radio · 2.4 GHz"
+color = "rf-red"
+value = "nRF24L01+"
+stock = "nrf24l01"
+spec = ["2.4 GHz transceiver · SPI", "3.3 V supply only"]  # 3.3 V limit from memory
+foot = "2 pcs"
+render = { kind = "module", l = 29, w = 15, pins = 4, pcb = "#15803d" }
+
+[[label]]
+cat = "RFID"
+color = "rf-red"
+value = "RC522"
+stock = "rc522-rfid"
+spec = ["13.56 MHz RFID reader · SPI", "3.3 V · with card"]  # 3.3 V from memory
+foot = "1 pcs"
+render = { kind = "module", l = 40, w = 60, pins = 8, pcb = "#1d4f91" }
+
+[[label]]
+cat = "Module · storage"
+color = "mod-indigo"
+value = "microSD"
+stock = "micro-sd-board"
+spec = ["Micro SD card breakout · SPI"]
+foot = "1 pcs"
+render = { kind = "module", l = 20, w = 18, pins = 6, pcb = "#1d4f91" }
+
+[[label]]
+cat = "Module · audio"
+color = "mod-indigo"
+value = "MAX98357A"
+stock = "max98357a-module"
+spec = ["I²S class-D amp · 3 W", "Mono · 2.5–5.5 V"]  # supply range from memory
+foot = "6 pcs · AliExpress 12/2025"
+render = { kind = "module", l = 19, w = 18, pins = 7, pcb = "#282828" }
+
+[[label]]
+cat = "Module · audio"
+color = "mod-indigo"
+value = "Voice rec."
+stock = "voice-record-module"
+spec = ["Record + playback · 3–4.5 V", "Button-driven"]
+foot = "1 pcs"
+render = { kind = "module", l = 40, w = 30, pins = 4, pcb = "#15803d" }
+
+[[label]]
+cat = "Module · I²C"
+color = "mod-indigo"
+value = "LCD backpack"
+stock = "i2c-backpack-1602"
+spec = ["I²C → 1602 LCD · PCF8574", "Addr 0x27 or 0x3F"]  # chip and addresses from memory
+foot = "2 pcs"
+render = { kind = "module", l = 42, w = 19, pins = 4, pcb = "#282828" }
+
+[[label]]
+cat = "Module · analog"
+color = "mod-indigo"
+value = "CD74HC4067"
+stock = "cd74hc4067-module"
+spec = ["16-ch analog multiplexer", "4 select lines + EN"]
+foot = "1 pcs"
+render = { kind = "module", l = 40, w = 18, pins = 8, pcb = "#1d4f91" }
+
+[[label]]
+cat = "Module · motor"
+color = "mod-indigo"
+value = "DRV8825"
+stock = "drv8825-module"
+spec = ["Stepper driver · up to 1/32 step", "Set current with the pot"]  # microstep from memory
+foot = "5 pcs"
+render = { kind = "module", l = 20, w = 15, pins = 8, pcb = "#7e22ce" }
+
+[[label]]
+cat = "Module · motor"
+color = "mod-indigo"
+value = "Stepper board"
+stock = "stepper-driver-board-l2xx"
+spec = ["Stepper motor driver board", "L2xx series"]
+foot = "1 pcs"
+render = { kind = "module", l = 43, w = 43, pins = 6, pcb = "#b91c1c" }
+
+[[label]]
+cat = "Module · power"
+color = "mod-indigo"
+value = "IRF520"
+stock = "irf520-module"
+spec = ["MOSFET switch module", "SIG / VCC / GND · screw terminals"]
+foot = "5 pcs"
+render = { kind = "module", l = 33, w = 24, pins = 3, pcb = "#b91c1c" }
+
+[[label]]
+cat = "Module · relay"
+color = "mod-indigo"
+value = "Relay 1-ch"
+stock = "relay-module-1ch"
+spec = ["1-channel relay · optocoupler", "Screw terminals: COM · NO · NC"]
+foot = "1 pcs"
+render = { kind = "module", l = 50, w = 26, pins = 3, pcb = "#1d4f91" }
+
+[[label]]
+cat = "Module · power"
+color = "mod-indigo"
+value = "Buck-boost"
+stock = "dcdc-buck-boost-adjustable"
+spec = ["Adjustable DC-DC converter", "Set Vout with the pot"]
+foot = "1 pcs"
+render = { kind = "module", l = 48, w = 25, pins = 0, pcb = "#1d4f91" }
+
+[[label]]
+cat = "Module · power"
+color = "mod-indigo"
+value = "18650 charger"
+stock = "charger-18650-microusb"
+spec = ["1S Li-ion charger · 5 V in", "Micro-USB"]
+foot = "2 pcs"
+render = { kind = "module", l = 26, w = 17, pins = 0, pcb = "#1d4f91", usb = true }
+
+# ---- sensors and displays ----
+
+[[label]]
+cat = "Sensor · motion"
+color = "sensor-cyan"
+value = "MPU-6050"
+stock = "gy-521-mpu6050"
+spec = ["GY-521 · 3-axis gyro + accel", "I²C 0x68 / 0x69 (AD0)"]  # address from memory
+foot = "1 pcs"
+render = { kind = "module", l = 21, w = 16, pins = 8, pcb = "#1d4f91" }
+
+[[label]]
+cat = "Sensor · light"
+color = "sensor-cyan"
+value = "BH1750"
+stock = "bh1750-module"
+spec = ["Digital light sensor · lux", "I²C 0x23 / 0x5C (ADDR)"]  # address from memory
+foot = "1 pcs"
+render = { kind = "module", l = 19, w = 14, pins = 5, pcb = "#1d4f91" }
+
+[[label]]
+cat = "Sensor · climate"
+color = "sensor-cyan"
+value = "DHT11"
+stock = "dht11-sensor"
+spec = ["Temperature + humidity", "Single-wire data"]
+foot = "1 pcs"
+
+[[label]]
+cat = "Sensor · climate"
+color = "sensor-cyan"
+value = "T/RH/P"
+stock = "temp-humidity-pressure-breakout"
+spec = ["Temp · humidity · pressure", "Breakout · chip not recorded"]
+foot = "1 pcs"
+render = { kind = "module", l = 15, w = 12, pins = 4, pcb = "#7e22ce" }
+
+[[label]]
+cat = "Sensor · gas"
+color = "sensor-cyan"
+value = "MQ135"
+stock = "mq135-sensor"
+spec = ["Air-quality gas sensor", "Heater · runs warm"]
+foot = "1 pcs"
+render = { kind = "module", l = 32, w = 22, pins = 4, pcb = "#1d4f91" }
+
+[[label]]
+cat = "Sensor · motion"
+color = "sensor-cyan"
+value = "PIR"
+stock = "pir-sensor"
+spec = ["Pyroelectric motion sensor", "Pots: delay + sensitivity"]
+foot = "2 pcs"
+render = { kind = "module", l = 32, w = 24, pins = 3, pcb = "#15803d" }
+
+[[label]]
+cat = "Sensor · speed"
+color = "sensor-cyan"
+value = "IR slot"
+stock = "ir-slot-speed-sensor"
+spec = ["Slot optocoupler speed sensor", "For encoder wheels"]
+foot = "1 pcs"
+render = { kind = "module", l = 32, w = 14, pins = 3, pcb = "#1d4f91" }
+
+[[label]]
+cat = "Sensor · laser"
+color = "sensor-cyan"
+value = "Laser sensor"
+stock = "laser-sensor-module"
+spec = ["Laser receiver module", "Non-modulator tube"]
+foot = "1 pcs"
+render = { kind = "module", l = 30, w = 15, pins = 3, pcb = "#1d4f91" }
+
+[[label]]
+cat = "Laser"
+color = "rf-red"
+value = "650 nm dot"
+stock = "laser-dot-650nm-5mw"
+spec = ["Red laser diode · 5 mW", "Never look into the beam"]
+foot = "20 pcs"
+
+[[label]]
+cat = "Display"
+color = "sensor-cyan"
+value = "OLED 0.91\""
+stock = "oled-091-128x32"
+spec = ["128 × 32 · I²C", "SSD1306"]  # controller from memory
+foot = "1 pcs"
+render = { kind = "module", l = 38, w = 12, pins = 4, pcb = "#3c3c3c", screen = true }
+
+# ---- dev boards ----
+
+[[label]]
+cat = "Dev board"
+color = "board-slate"
+value = "Nano V3"
+stock = "arduino-nano-v3"
+spec = ["ATmega328 · 5 V", "Arduino Nano compatible"]
+foot = "1 pcs"
+render = { kind = "module", l = 45, w = 18, pins = 0, pcb = "#1d4f91", usb = true }
+
+[[label]]
+cat = "Dev board"
+color = "board-slate"
+value = "D1 Mini"
+stock = "wemos-d1-mini"
+spec = ["ESP8266 · Wi-Fi", "WeMos D1 Mini"]
+foot = "1 pcs"
+render = { kind = "module", l = 34, w = 26, pins = 0, pcb = "#1d4f91", usb = true }
+
+[[label]]
+cat = "Dev board"
+color = "board-slate"
+value = "NodeMCU"
+stock = "nodemcu-esp8266"
+spec = ["ESP8266 · Wi-Fi · Lua", "Micro-USB"]
+foot = "1 pcs"
+render = { kind = "module", l = 49, w = 26, pins = 0, pcb = "#282828", usb = true }
+
+[[label]]
+cat = "Dev board"
+color = "board-slate"
+value = "STM32F103"
+stock = "stm32f103c8t6-board"
+spec = ["STM32F103C8T6 minimum system", "3.3 V · SWD header"]
+foot = "1 pcs"
+render = { kind = "module", l = 53, w = 23, pins = 0, pcb = "#1d4f91", usb = true }
+
+[[label]]
+cat = "Shield"
+color = "board-slate"
+value = "Sensor V5"
+stock = "arduino-sensor-shield-v5"
+spec = ["Arduino UNO sensor shield", "G · V · S rows per pin"]
+foot = "1 pcs"
+render = { kind = "module", l = 57, w = 53, pins = 0, pcb = "#282828" }
+
+[[label]]
+cat = "Shield"
+color = "board-slate"
+value = "PCA9685"
+stock = "pca9685-servo-shield"
+spec = ["16-ch 12-bit PWM servo shield", "I²C · Arduino form factor"]
+foot = "1 pcs"
+render = { kind = "module", l = 68, w = 53, pins = 0, pcb = "#1d4f91" }
+
+[[label]]
+cat = "Shield"
+color = "board-slate"
+value = "ESP32 18650"
+stock = "wemos-esp32-18650-shield"
+spec = ["WeMos ESP32 + 18650 holder", "Battery shield V3"]
+foot = "1 pcs"
+render = { kind = "module", l = 100, w = 30, pins = 0, pcb = "#282828", usb = true }
+
+# ---- electromechanical, audio, switches, protection, cells ----
+
+[[label]]
+cat = "Servo"
+color = "mech"
+value = "MG90D"
+stock = "servo-mg90d-180"
+spec = ["9 g micro servo · metal gear", "180° · brown − red + orange sig"]  # wire colours from memory
+foot = "5 pcs · AliExpress 09/2026"
+
+[[label]]
+cat = "Motor · stepper"
+color = "mech"
+value = "17HS3401S"
+stock = "nema17-17hs3401s"
+spec = ["NEMA 17 · 1 A · 34 mm", "1.8° per step"]  # step angle from memory
+foot = "2 pcs · AliExpress 07/2024"
+
+[[label]]
+cat = "Motor · DC"
+color = "mech"
+value = "FC-130SA"
+stock = "motor-fc130sa"
+spec = ["Brushed DC motor", "Size 130"]
+foot = "2 pcs · AliExpress 06/2025"
+
+[[label]]
+cat = "Motor · vibration"
+color = "mech"
+value = "Coin motor"
+stock = "motor-vibration-flat-3v"
+spec = ["Flat vibration motor · 3 V", "Adhesive back"]
+foot = "Bag"
+
+[[label]]
+cat = "Electromagnet"
+color = "mech"
+value = "P20/15"
+stock = "electromagnet-p20-15-12v"
+spec = ["12 V · 3 kg hold", "Flyback diode across the coil"]
+foot = "1 pcs · AliExpress 04/2025"
+
+[[label]]
+cat = "Pump"
+color = "mech"
+value = "Mini pump"
+stock = "pump-usb-submersible"
+spec = ["Submersible water pump · 3–5 V", "USB lead"]
+foot = "1 pcs · AliExpress 07/2024"
+
+[[label]]
+cat = "Audio · speaker"
+color = "pot-pink"
+value = "8 Ω 1 W"
+stock = "speaker-1w-8ohm"
+spec = ["Small loudspeaker", "Fits MAX98357A out"]
+foot = "5 pcs"
+
+[[label]]
+cat = "Audio · buzzer"
+color = "pot-pink"
+value = "Buzzer 5 V"
+stock = "buzzer-passive-5v"
+spec = ["Passive · drive with PWM", "No sound on plain DC"]
+foot = "Bag"
+
+[[label]]
+cat = "Switch"
+color = "mech"
+value = "12 mm button"
+stock = "button-12mm-waterproof"
+spec = ["Momentary push button", "Panel mount · waterproof"]
+foot = "6 pcs"
+
+[[label]]
+cat = "Switch"
+color = "mech"
+value = "DS-425A"
+stock = "button-ds425a-latching"
+spec = ["Self-locking push button", "SPST · press on, press off"]
+foot = "5 pcs"
+
+[[label]]
+cat = "Switch"
+color = "mech"
+value = "Reed switch"
+stock = "reed-switch-mka14103"
+spec = ["MKA-14103 · glass · N/O SPST", "Fragile: bend leads away from glass"]
+foot = "10 pcs"
+
+[[label]]
+cat = "Input"
+color = "mech"
+value = "Keypad 4×4"
+stock = "keypad-membrane-16"
+spec = ["16-key membrane keypad", "8-pin: 4 rows + 4 columns"]
+foot = "1 pcs"
+
+[[label]]
+cat = "Fuse"
+color = "power-orange"
+value = "0.2 A fast"
+stock = "fuse-5mm-02a-fast"
+spec = ["5 × 20 mm glass · 250 V", "Fast-blow"]  # 5 × 20 assumed from "5 mm glass"
+foot = "100 pcs"
+
+[[label]]
+cat = "Fuse"
+color = "power-orange"
+value = "2 A fast"
+stock = "fuse-5mm-2a-fast"
+spec = ["5 × 20 mm glass · 250 V", "Fast-blow"]  # 5 × 20 assumed from "5 mm glass"
+foot = "100 pcs"
+
+[[label]]
+cat = "Battery · LiPo"
+color = "power-orange"
+value = "100 mAh"
+stock = "lipo-37v-100mah"
+spec = ["3.7 V LiPo cell", "Charge at ≤ 100 mA"]
+foot = "5 pcs"
+
+[[label]]
+cat = "Battery · NiMH"
+color = "power-orange"
+value = "Eneloop AA"
+stock = "eneloop-aa-1900"
+spec = ["1.2 V · 1900 mAh", "Rechargeable"]
+foot = "8 pcs"
+
+[[label]]
+cat = "Battery · coin"
+color = "power-orange"
+value = "CR2032"
+stock = "coin-cell-cr2032"
+spec = ["3 V lithium coin cell", "Sony"]
+foot = "5 pcs"
+
+[[label]]
+cat = "Battery · coin"
+color = "power-orange"
+value = "LR44"
+stock = "coin-cell-lr44"
+spec = ["1.5 V alkaline button cell", "Maxell"]
+foot = "10 pcs"
+
+[[label]]
+cat = "Sensor · pH"
+color = "sensor-cyan"
+value = "pH probe"
+stock = "ph-electrode-spare"
+spec = ["Spare electrode · BNC", "Keep the tip wet in its cap"]
+foot = "1 pcs · AliExpress 07/2024"
+
+# ---- mechanical ----
+
+[[label]]
+cat = "Heat-set insert"
+color = "mech"
+value = "M2 × L2"
+stock = "heat-insert-m2-l2-od32"
+spec = ["Brass · OD 3.2 mm", "TS100 insert tip"]
+foot = "100 pcs · AliExpress 11/2025"
+
+[[label]]
+cat = "Heat-set insert"
+color = "mech"
+value = "M2 knurled"
+stock = "heat-insert-m2-knurled"
+spec = ["Brass knurled insert", "TS100 insert tip"]
+foot = "500 pcs · AliExpress 11/2025"
+
+[[label]]
+cat = "Standoffs"
+color = "mech"
+value = "M2 kit"
+stock = "standoff-kit-m2"
+spec = ["Hex standoffs · screws · nuts", "Motherboard style"]
+foot = "Kit · AliExpress 11/2025"
+
+[[label]]
+cat = "Heatsink"
+color = "mech"
+value = "8.8 × 8.8"
+stock = "heatsink-88x88x5"
+spec = ["Aluminium · 5 mm tall", "Thermal pad on the base"]
+foot = "5 pcs"
+
+[[label]]
+cat = "LED holder"
+color = "mech"
+value = "5 mm bezel"
+stock = "led-holder-5mm"
+spec = ["Panel bezel for 5 mm LEDs"]
+foot = "50 pcs · AliExpress 07/2024"
+render = { kind = "led", fill = "#f5f5f5" }
+
+[[label]]
+cat = "Shaft coupling"
+color = "mech"
+value = "5 mm hex"
+stock = "shaft-coupling-5mm-brass"
+spec = ["Brass hex coupler · 5 mm bore", "Set screws"]
+foot = "2 pcs · AliExpress 08/2024"
+
+[[label]]
+cat = "Bracket"
+color = "mech"
+value = "NEMA 17"
+stock = "motor-mount-nema17"
+spec = ["Stepper motor mount bracket"]
+foot = "2 pcs · AliExpress 07/2024"
+
+[[label]]
+cat = "Battery holder"
+color = "power-orange"
+value = "18650 × 1"
+stock = "holder-18650-1cell"
+spec = ["SMT holder · 1 cell"]
+foot = "2 pcs · AliExpress 12/2025"
+
+[[label]]
+cat = "Battery holder"
+color = "power-orange"
+value = "18650 × 2"
+stock = "holder-18650-2cell"
+spec = ["SMT holder · 2 cells"]
+foot = "2 pcs · AliExpress 11/2025"
+
+[[label]]
+cat = "Battery holder"
+color = "power-orange"
+value = "AAA × 1"
+stock = "holder-aaa-1cell"
+spec = ["Holder with leads · 1 cell"]
+foot = "1 pcs · AliExpress 07/2024"
+
+[[label]]
+cat = "Battery holder"
+color = "power-orange"
+value = "AAA × 2"
+stock = "holder-aaa-2cell"
+spec = ["Holder with leads · 2 cells"]
+foot = "1 pcs · AliExpress 07/2024"
+
+# ---- 80 × 20 mm strips for bins ----
+
+[[strip]]
+color = "board-slate"
+title = "Breadboards & vero"
+detail = "MB-102 830-point · 400-point · 5-colour mini · 25-point minis · double-sided 5×7 cm vero"
+
+[[strip]]
+color = "conn-green"
+title = "Cables"
+detail = "XT60 → 4 mm banana charge lead · XT60 → DC 5.5×2.5 · USB-C PD → DC 20 V · 3.5 mm → MIDI DIN"
+
+[[strip]]
+color = "mech"
+title = "Soldering spares"
+detail = "TS-KU · FNIRSI KU · TS100 heat-set tips · chip test clips · IC glue-remover blades"
