@@ -149,6 +149,15 @@ repos:
         files: '(docs/.*\.typ|main/pin_config\.h|tools/check-typst-docs\.py|\.github/workflows/build-guide-check\.yml|\.claude/rules/build-guide-drift-guard\.md)$'
         pass_filenames: false
 
+      - id: cadstd
+        name: tools/cadstd fastener, fit and grid tables (ADR-030)
+        # Stdlib only; the build123d shape and coupon tests run in
+        # `just cadstd::test`, which needs tools/mechanism's venv.
+        entry: python3 -m unittest discover -s tools/cadstd -t tools -p test_cadstd.py
+        language: system
+        files: '^tools/cadstd/'
+        pass_filenames: false
+
       - id: hardware-join
         name: Hardware join resolves, and pin_defs.typ regenerates byte-identical
         entry: python3 -m unittest discover -s tools/hardware -t tools
