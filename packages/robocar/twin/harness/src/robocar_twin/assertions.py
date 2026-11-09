@@ -22,6 +22,8 @@ MAX_CITED = 8
 UTTERANCE_SOURCES = ("planner", "voice_turn")
 SUPPRESS_REASONS = ("repeat", "person_spoke")
 ANNOUNCE_WHAT = ("dormant", "budget", "waking")
+NOTE_TRIGGERS = ("reflex", "blind", "track_stuck", "repeats", "reflect")
+NOTE_KIND_NAMES = ("difficulty", "behaviour", "suggestion")
 FORCE_STOP_REASONS = ("camera", "dormant", "budget", "no_link", "backend_error")
 GOAL_KINDS = ("stop", "drive", "track", "rotate", "none")
 LADDER_MULTIPLIERS = (1, 2, 4, 8, 20)  # k_ladder in plan_activity.c
@@ -293,10 +295,31 @@ REGISTRY: dict[str, _Spec] = {
         set(),
         _counted("speak_not_offered", ("text_contains",), 1),
     ),
-    "model_request": _Spec(
-        _WINDOW | _COUNTS | {"gate", "speak_allowed", "scene", "pose"},
+    # The note gate (note_gate.h): when the `note` tool was offered, what the
+    # model wrote with it, and a note in a reply that did not offer it.
+    "note_offered": _Spec(
+        _WINDOW | _COUNTS | {"trigger"},
         set(),
-        _counted("model_request", ("gate", "speak_allowed", "scene", "pose"), 1),
+        _counted("note_offered", ("trigger",), 1),
+        {"trigger": NOTE_TRIGGERS},
+    ),
+    "note": _Spec(
+        _WINDOW | _COUNTS | {"trigger", "kind", "text_contains"},
+        set(),
+        _counted("note", ("trigger", "kind", "text_contains"), 1),
+        {"trigger": NOTE_TRIGGERS, "kind": NOTE_KIND_NAMES},
+    ),
+    "note_not_offered": _Spec(
+        _WINDOW | _COUNTS | {"text_contains"},
+        set(),
+        _counted("note_not_offered", ("text_contains",), 1),
+    ),
+    "model_request": _Spec(
+        _WINDOW | _COUNTS | {"gate", "speak_allowed", "scene", "pose", "note"},
+        set(),
+        _counted(
+            "model_request", ("gate", "speak_allowed", "scene", "pose", "note"), 1
+        ),
     ),
     "cycle": _Spec(
         _WINDOW | _COUNTS | {"cause", "requested", "gate", "spent_req", "spent_tok"},

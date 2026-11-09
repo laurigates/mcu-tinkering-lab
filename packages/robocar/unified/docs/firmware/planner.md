@@ -14,6 +14,7 @@ one-line form of each rule below and links here for the reasoning.
 
 - `speak(text)` — say one short sentence aloud, emitted *in addition to* a movement call
 - `sound(name)` — play a prebuilt clip (`horn`, `aoogah`, `bell`, `boing`), offered only when `speak` is; the parser puts it at the front of the line as a `[name]` tag (see [voice.md](voice.md#sound-clips))
+- `note(kind, text)` — a note to the developers, sent to GlitchTip and never spoken, offered only after a trigger (see [Planner notes](#planner-notes))
 
 The planner runs every `PLANNER_LOOP_PERIOD_MS` (15 s default, set by the Gemini free-tier quota rather than by control preference) on Core 1; the executor drives the goal at ~30 Hz on Core 0. No on-demand inference or blocking on responses — the planner is a background task that constantly updates `goal_state`, and the executor always has something to do.
 
@@ -121,6 +122,52 @@ done` — so a response that parses as JSON but carries no recognisable
 `functionCall` now reports its cost, which is exactly the response you most want
 the cost of.
 
+## Planner notes
+
+The planner can tell its developers about its own behaviour and the
+difficulties it runs into: `note(kind, text)`, where `kind` is `difficulty`,
+`behaviour` or `suggestion` and `text` is at most 280 characters. The note goes
+through `event_report` to `robocar/events` with `source: planner`, and the
+GlitchTip bridge routes it to the `robocar-ai` project
+([ADR-033](../../../../../docs/decisions/ADR-033-robocar-error-reporting.md)).
+
+**Offered on evidence, like `speak`.** The tool and its prompt clause are in a
+request only when a trigger has fired since the last offer, so a quiet robot
+pays no prompt tokens for the feature. The triggers are raised in
+`planner_cycle_core.c` (so the behaviour twin runs them) from facts the robot
+already has:
+
+| Trigger | Raised when |
+|---|---|
+| `reflex` | the executor's `reflex_trips` count changed since the last request (a brake that tripped and released between two plans still counts) |
+| `blind` | a request is made while no camera frame has decoded; once per blind spell |
+| `track_stuck` | `track` goals written on `NOTE_GATE_TRACK_STUCK_CYCLES` (4) requests in a row; the executor does not report arrival, so the streak stands in for "not converging" |
+| `repeats` | `NOTE_GATE_REPEAT_STREAK` (3) spoken lines in a row withheld as near-repeats |
+| `reflect` | every `NOTE_GATE_REFLECT_EVERY` (40) requests, about 10 min awake |
+
+The prompt names the trigger through `note_trigger_reason()`, which states only
+what was measured (the reflex reason says the front rangefinder read something
+close, not what it was). The model writes only the prose. The firmware attaches
+the trigger, the kind, the persona, the reflex count, the `scene:` and `still:`
+scores, the request count and the last five goals (as `goal` breadcrumbs), and
+fingerprints the event by `[trigger, kind]` so GlitchTip groups notes on facts.
+
+**Rationed by `note_gate.c`.** One offer per 5 minutes and 20 per boot. Offers
+are counted, not notes: a declined offer still carried the declaration and the
+clause. Taking an offer clears every pending trigger; a trigger raised while
+the window is shut waits for it. A request that never left the board (no
+WiFi link or no key) gives its offer back (`note_gate_untake()`), so an offline
+hour does not burn the triggers. The per-boot count stays spent until
+`plan resume` or a reboot, like the spend fuse. `plan` prints
+`notes: <offered>/20 offered, <n> written, next in <s> s, pending: <triggers>`.
+
+A note in a reply whose request did not offer the tool is dropped by
+`gemini_backend_plan()`, and the parser never takes a `note` call as the motion
+goal, whichever order the calls come in. `test_note_gate.c`,
+`test_planner_cycle_core.c` and `test_gemini_parse.c` pin those, and the twin
+scenario `us-n1-note-on-reflex` checks that four reflexes in six minutes yield
+exactly two offers.
+
 ### Reading it
 
 ```text
@@ -162,5 +209,7 @@ just robocar-unified::test   # + test_plan_activity, test_plan_budget
 - Don't collapse the per-pose references back to one, or compare an off-pose frame against any of them. A head looking around shows a new view at every pose, so one reference wakes the planner on every capture and opens `speak` on every cycle (ADR-029 §2). `test_a_moving_head_over_a_static_scene_never_calls` and its `test_scene_change.c` twin fail if either reverts
 - Don't charge zero tokens for a response whose `usageMetadata` could not be read. That is how a spend ceiling silently stops being one: every log line keeps showing a healthy budget while the robot spends all night. `plan_budget_note()` charges the assumed cost and counts that it had to, and `plan` prints the count unconditionally
 - Don't give the budget fuse a rolling window or an auto-reset. It exists for the unattended board, which is precisely the case that must not resume on its own. The same goes for the voice-turn ceiling in `voice_budget.c`
+- Don't offer the `note` tool on every request, or word the clause to ask for restraint instead. The model cannot know what happened since its last note; `note_gate` decides on-device and the clause names the trigger (stateless-model-gating.md). Keep the trigger logic in `planner_cycle_core.c`, where the twin runs it
+- Don't give the note gate's per-boot count an auto-reset, for the same reason as the spend fuse
 - Don't add goal sources outside `planner_task.c` — structured goals keep the two layers decoupled. If a new goal source is needed, it should write `goal_state` the same way the planner does
 - Don't resurrect `claude_*` or `ollama_*` source files. If a second backend becomes necessary, design an abstraction; old code paths are not a foundation

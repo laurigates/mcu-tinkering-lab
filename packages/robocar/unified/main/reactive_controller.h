@@ -273,7 +273,12 @@ typedef struct {
      *  reflex release only: the trip uses the latest reading, so this can read
      *  >= STOP_THRESHOLD_CM while reflex_active is true (issue #791). */
     uint16_t distance_cm;
-    bool reflex_active;        /**< True when obstacle reflex has latched stop.  */
+    bool reflex_active; /**< True when obstacle reflex has latched stop.  */
+    /** Times the reflex has latched since init, counted on the rising edge. The
+     *  planner samples telemetry every 15 s or more, so reflex_active alone
+     *  misses a brake that tripped and released in between; the planner's note
+     *  gate (note_gate.h) compares this count instead. */
+    uint32_t reflex_trips;
     uint32_t loop_hz;          /**< Measured loop rate over the last second.     */
     uint32_t stack_high_water; /**< Stack headroom from uxTaskGetStackHighWaterMark. */
     bool manual_active;        /**< True while a manual override lease is live.  */

@@ -61,9 +61,9 @@ time order, then `{"t":"run"}`.
 
 | Direction | Records |
 |---|---|
-| harness → twin, before `run` | `config` (`seed`, `duration_ms`, `planner_period_ms`, optional `plan_budget_max_requests`, `plan_budget_max_tokens`); world events `frame`, `range`, `range_fail`, `sound`, `voice_turn`, `console`, `link`, each with `at_ms` |
+| harness → twin, before `run` | `config` (`seed`, `duration_ms`, `planner_period_ms`, optional `plan_budget_max_requests`, `plan_budget_max_tokens`); world events `frame`, `range`, `range_fail`, `sound`, `voice_turn`, `console`, `link`, `reflex` (one latch of the obstacle reflex), each with `at_ms` |
 | twin → harness | `model_request` (`id`, `at_ms`, `kind`, `descriptor`, `key`), after which the twin blocks for one `model_response` (`id`, `status`, `latency_ms`, `body`) |
-| twin → harness, trace | `cycle`, `goal`, `force_stop`, `utterance`, `suppressed`, `announce`, `backoff`, `speak_not_offered`, and a final `done` |
+| twin → harness, trace | `cycle`, `goal`, `force_stop`, `utterance`, `suppressed`, `announce`, `backoff`, `speak_not_offered`, `note_offered`, `note`, `note_not_offered`, and a final `done` |
 
 World events whose `at_ms` falls inside a reply's latency window are applied
 before the reply is handled, which is what lets a scenario put a voice turn in

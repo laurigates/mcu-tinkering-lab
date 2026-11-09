@@ -349,6 +349,15 @@ target_link_libraries(test_plan_activity PRIVATE Threads::Threads m)
 add_test(NAME plan_activity COMMAND test_plan_activity)
 
 # -----------------------------------------------------------------------------
+# note_gate: when the planner may offer the `note` tool, and how many (ADR-033)
+# -----------------------------------------------------------------------------
+add_executable(test_note_gate
+    "${MAIN_SRC_DIR}/note_gate.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_note_gate.c"
+)
+add_test(NAME note_gate COMMAND test_note_gate)
+
+# -----------------------------------------------------------------------------
 # planner_cycle_core (the planner's per-cycle decisions, ADR-030)
 #
 # The request gate and its one-shot announce latches, speech screening (near
@@ -358,6 +367,7 @@ add_test(NAME plan_activity COMMAND test_plan_activity)
 # -----------------------------------------------------------------------------
 add_executable(test_planner_cycle_core
     "${MAIN_SRC_DIR}/planner_cycle_core.c"
+    "${MAIN_SRC_DIR}/note_gate.c"
     "${MAIN_SRC_DIR}/plan_activity.c"
     "${MAIN_SRC_DIR}/plan_budget.c"
     "${MAIN_SRC_DIR}/scene_change.c"
@@ -380,6 +390,7 @@ add_test(NAME planner_cycle_core COMMAND test_planner_cycle_core)
 if(CJSON_FOUND)
     add_executable(test_gemini_parse
         "${MAIN_SRC_DIR}/gemini_parse.c"
+        "${MAIN_SRC_DIR}/note_gate.c"
         "${MAIN_SRC_DIR}/sound_clips_core.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/test_gemini_parse.c"
     )

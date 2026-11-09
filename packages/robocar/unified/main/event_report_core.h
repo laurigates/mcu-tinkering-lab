@@ -143,6 +143,9 @@ typedef struct {
 
     const char *const *breadcrumbs; /**< oldest first */
     size_t breadcrumb_count;
+    /** Sentry breadcrumb category for every entry; NULL means "log". A planner
+     *  note carries its goal history as "goal" breadcrumbs. */
+    const char *breadcrumb_category;
 
     /** Optional: set exception_type to include an "exception" object. */
     const char *exception_type;

@@ -213,7 +213,9 @@ static bool add_body(cJSON *root, const event_report_t *ev)
         cJSON *crumb = cJSON_CreateObject();
         if (crumb == NULL ||
             cJSON_AddStringToObject(crumb, "message", ev->breadcrumbs[i]) == NULL ||
-            cJSON_AddStringToObject(crumb, "category", "log") == NULL) {
+            cJSON_AddStringToObject(crumb, "category",
+                                    ev->breadcrumb_category != NULL ? ev->breadcrumb_category
+                                                                    : "log") == NULL) {
             cJSON_Delete(crumb);
             return false;
         }

@@ -39,6 +39,7 @@
 #include "freertos/queue.h"
 #include "freertos/task.h"
 #include "mqtt_logger.h"
+#include "note_gate.h"
 #include "ota_manager.h"
 
 static const char *TAG = "event_report";
@@ -46,7 +47,22 @@ static const char *TAG = "event_report";
 typedef enum {
     PENDING_RESET,
     PENDING_TEST,
+    PENDING_NOTE,
 } pending_kind_t;
+
+/** An event_report_note_t copied into storage the queue owns (PSRAM). */
+typedef struct {
+    char trigger[16];
+    char kind[16];
+    char persona[24];
+    char text[NOTE_TEXT_MAX + 1];
+    uint32_t reflex_trips;
+    uint32_t scene_score;
+    uint32_t still_score;
+    uint32_t plan_requests;
+    char goals[EVENT_REPORT_NOTE_GOALS][40];
+    size_t goal_count;
+} note_payload_t;
 
 /** What the queue carries; the task turns it into JSON when MQTT is up. */
 typedef struct {
@@ -55,6 +71,7 @@ typedef struct {
     const char *crumbs_state; /**< reset only: the "breadcrumbs" tag */
     int64_t uptime_ms;
     event_crumbs_t *crumbs; /**< owned: freed after publishing; may be NULL */
+    note_payload_t *note;   /**< owned, PENDING_NOTE only */
 } pending_t;
 
 static RTC_NOINIT_ATTR event_crumbs_t s_rtc_crumbs;
@@ -117,6 +134,30 @@ static void fill_common(event_report_t *ev, const char *event_id, const char *re
         "free_internal", (int64_t)heap_caps_get_free_size(MALLOC_CAP_INTERNAL)};
 }
 
+/** The planner-note half of render_pending(): @p ev already holds the common
+ *  fields; @p goals must outlive the render. */
+static void fill_note(event_report_t *ev, const note_payload_t *n, const char **goals)
+{
+    ev->source = "planner"; /* the bridge routes it to robocar-ai */
+    ev->level = strcmp(n->kind, "difficulty") == 0 ? "warning" : "info";
+    ev->message = n->text;
+    ev->fingerprint[ev->fingerprint_count++] = n->trigger;
+    ev->fingerprint[ev->fingerprint_count++] = n->kind;
+    ev->tags[ev->tag_count++] = (event_report_tag_t){"trigger", n->trigger};
+    ev->tags[ev->tag_count++] = (event_report_tag_t){"kind", n->kind};
+    ev->tags[ev->tag_count++] = (event_report_tag_t){"persona", n->persona};
+    ev->extras[ev->extra_count++] = (event_report_extra_t){"reflex_trips", n->reflex_trips};
+    ev->extras[ev->extra_count++] = (event_report_extra_t){"scene_score", n->scene_score};
+    ev->extras[ev->extra_count++] = (event_report_extra_t){"still_score", n->still_score};
+    ev->extras[ev->extra_count++] = (event_report_extra_t){"plan_requests", n->plan_requests};
+    for (size_t i = 0; i < n->goal_count; i++) {
+        goals[i] = n->goals[i];
+    }
+    ev->breadcrumbs = goals;
+    ev->breadcrumb_count = n->goal_count;
+    ev->breadcrumb_category = "goal";
+}
+
 /** Render @p p as JSON, or NULL on allocation failure. */
 static char *render_pending(const pending_t *p)
 {
@@ -140,7 +181,10 @@ static char *render_pending(const pending_t *p)
     ev.breadcrumb_count = line_count;
 
     char message[48];
-    if (p->kind == PENDING_RESET) {
+    const char *goals[EVENT_REPORT_NOTE_GOALS];
+    if (p->kind == PENDING_NOTE && p->note != NULL) {
+        fill_note(&ev, p->note, goals);
+    } else if (p->kind == PENDING_RESET) {
         snprintf(message, sizeof(message), "Reset: %s", p->reason);
         ev.level = "error";
         ev.message = message;
@@ -184,6 +228,7 @@ static void publish_task(void *arg)
         }
         (void)xQueueReceive(s_queue, &p, 0);
         heap_caps_free(p.crumbs);
+        heap_caps_free(p.note);
         atomic_fetch_add(&s_sent, 1);
         ESP_LOGI(TAG, "event published on %s", EVENT_REPORT_TOPIC);
     }
@@ -295,4 +340,47 @@ void event_report_get_stats(event_report_stats_t *out)
     out->pending = s_queue != NULL ? (uint32_t)uxQueueMessagesWaiting(s_queue) : 0;
     out->boot_crumbs = s_boot_crumb_count;
     out->boot_crumbs_present = s_boot_crumbs_present;
+}
+
+esp_err_t event_report_send_note(const event_report_note_t *note)
+{
+    if (note == NULL || note->trigger == NULL || note->kind == NULL || note->text == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (s_queue == NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    note_payload_t *n = heap_caps_calloc(1, sizeof(*n), MALLOC_CAP_SPIRAM);
+    if (n == NULL) {
+        atomic_fetch_add(&s_dropped, 1);
+        return ESP_ERR_NO_MEM;
+    }
+    snprintf(n->trigger, sizeof(n->trigger), "%s", note->trigger);
+    snprintf(n->kind, sizeof(n->kind), "%s", note->kind);
+    snprintf(n->persona, sizeof(n->persona), "%s", note->persona != NULL ? note->persona : "");
+    snprintf(n->text, sizeof(n->text), "%s", note->text);
+    n->reflex_trips = note->reflex_trips;
+    n->scene_score = note->scene_score;
+    n->still_score = note->still_score;
+    n->plan_requests = note->plan_requests;
+    const size_t count =
+        note->goal_count < EVENT_REPORT_NOTE_GOALS ? note->goal_count : EVENT_REPORT_NOTE_GOALS;
+    for (size_t i = 0; i < count; i++) {
+        snprintf(n->goals[n->goal_count], sizeof(n->goals[0]), "%s",
+                 note->goals[i] != NULL ? note->goals[i] : "");
+        if (n->goals[n->goal_count][0] != '\0') {
+            n->goal_count++;
+        }
+    }
+
+    pending_t p = {
+        .kind = PENDING_NOTE,
+        .uptime_ms = esp_timer_get_time() / 1000,
+        .note = n,
+    };
+    const esp_err_t err = enqueue(&p);
+    if (err != ESP_OK) {
+        heap_caps_free(n);
+    }
+    return err;
 }
