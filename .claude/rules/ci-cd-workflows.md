@@ -1,5 +1,4 @@
 ---
-reviewed: 2026-10-06
 paths:
   - '**/.github/workflows/**'
 ---
