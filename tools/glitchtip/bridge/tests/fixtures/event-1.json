@@ -1,0 +1,141 @@
+{
+  "issue": {
+    "id": "1",
+    "count": "1",
+    "type": "default",
+    "level": "error",
+    "status": "unresolved",
+    "metadata": {},
+    "project": {
+      "id": "1",
+      "platform": null,
+      "slug": "robocar",
+      "name": "robocar"
+    },
+    "shortId": "ROBOCAR-1",
+    "numComments": 0,
+    "stats": {
+      "24h": []
+    },
+    "shareId": null,
+    "logger": null,
+    "permalink": "http://localhost:8000/robocar/issues/1",
+    "statusDetails": {},
+    "subscriptionDetails": null,
+    "userCount": 0,
+    "matchingEventId": null,
+    "firstRelease": {
+      "shortVersion": "robocar-unified@0.0.0-fixture",
+      "dateCreated": "2026-11-09T08:01:24.193Z",
+      "dateReleased": null,
+      "version": "robocar-unified@0.0.0-fixture"
+    },
+    "lastRelease": {
+      "shortVersion": "robocar-unified@0.0.0-fixture",
+      "dateCreated": "2026-11-09T08:01:24.193Z",
+      "dateReleased": null,
+      "version": "robocar-unified@0.0.0-fixture"
+    },
+    "firstSeen": "2026-11-09T08:01:23.537Z",
+    "lastSeen": "2026-11-09T08:01:23.537Z",
+    "assignedTo": null,
+    "title": "reset: BROWNOUT",
+    "culprit": "",
+    "userReportCount": 0
+  },
+  "event": {
+    "platform": "native",
+    "errors": null,
+    "id": "01a1bf538251761f9cdf00b5cde9ad90",
+    "eventID": "0123456789abcdef0123456789abcdef",
+    "projectID": 1,
+    "groupID": "1",
+    "dateCreated": "2026-11-09T08:01:23.526Z",
+    "dateReceived": "2026-11-09T08:01:23.537Z",
+    "dist": null,
+    "culprit": "",
+    "packages": null,
+    "type": "default",
+    "message": "reset: BROWNOUT",
+    "metadata": {
+      "title": "reset: BROWNOUT"
+    },
+    "tags": [
+      {
+        "key": "source",
+        "value": "firmware"
+      },
+      {
+        "key": "release",
+        "value": "robocar-unified@0.0.0-fixture"
+      },
+      {
+        "key": "build_sha",
+        "value": "fixture"
+      },
+      {
+        "key": "environment",
+        "value": "production"
+      },
+      {
+        "key": "server_name",
+        "value": "bridge-container"
+      },
+      {
+        "key": "reset_reason",
+        "value": "BROWNOUT"
+      }
+    ],
+    "entries": [
+      {
+        "type": "breadcrumbs",
+        "data": {
+          "values": [
+            {
+              "type": "default",
+              "category": "log",
+              "message": "I (4100) motor: start L=180 R=180",
+              "data": null,
+              "level": "info",
+              "timestamp": null,
+              "event_id": null
+            }
+          ]
+        }
+      },
+      {
+        "type": "message",
+        "data": {
+          "formatted": "reset: BROWNOUT"
+        }
+      }
+    ],
+    "contexts": {
+      "trace": {
+        "type": "trace",
+        "trace_id": "9d3a62f867a54b8796703300ce136a30",
+        "span_id": "8fab98d3dc6c690e"
+      }
+    },
+    "context": {
+      "uptime_ms": 4210,
+      "robot_timestamp_missing": true
+    },
+    "user": null,
+    "sdk": {
+      "name": "sentry.python",
+      "version": "2.74.0",
+      "packages": [
+        {
+          "name": "pypi:sentry-sdk",
+          "version": "2.74.0"
+        }
+      ],
+      "integrations": []
+    },
+    "title": "reset: BROWNOUT",
+    "userReport": null,
+    "nextEventID": null,
+    "previousEventID": null
+  }
+}

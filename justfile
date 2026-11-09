@@ -38,6 +38,7 @@ mod kicad 'tools/kicad'
 mod enclosure 'tools/enclosure'
 mod mechanism 'tools/mechanism'
 mod labels 'tools/labels'
+mod glitchtip 'tools/glitchtip'
 
 # Auto-detect ESP32-S3 USB-Serial-JTAG by Espressif VID; override with S3_PORT env var
 s3_port := env("S3_PORT", `tools/detect-esp32s3-port.sh --quiet 2>/dev/null || true`)
