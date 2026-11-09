@@ -12,6 +12,7 @@
  * the target's read takes several ticks (test_ultrasonic_core.c pins that).
  */
 
+#include "cliff_sensor.h"
 #include "goal_state.h"
 #include "head_aim.h"
 #include "motor_controller.h"
@@ -101,6 +102,9 @@ static void setup(void)
     servo_stub_reset(false);
     ultrasonic_test_set_distance(ULTRASONIC_FRONT, 100); /* "clear" default */
     ultrasonic_test_set_distance(ULTRASONIC_REAR, 100);
+    /* No floor sensors by default: the cliff reflex stays disarmed, which is
+     * what a board without an MCP23017 runs. Cliff tests fit them. */
+    cliff_sensor_test_set(false, false, false, false);
     reactive_controller_init(); /* clears smoothing buffer + manual lease */
 }
 
@@ -1093,6 +1097,198 @@ static void test_init_clears_a_hold(void)
     ASSERT(!reactive_controller_hold_active());
 }
 
+/* =========================================================================
+ * Cliff reflex — front and rear floor sensors (cliff_core.h)
+ * ========================================================================= */
+
+static const goal_t CLIFF_DRIVE = {
+    .kind = GOAL_KIND_DRIVE,
+    .params.drive = {.heading_deg = 0, .distance_cm = 200, .speed_pct = 80},
+};
+
+/** Fit both floor sensors on floor and let the reflex confirm it. */
+static void cliff_on_floor(void)
+{
+    cliff_sensor_test_set(true, true, true, true);
+    for (unsigned i = 0; i < CLIFF_CLEAR_SAMPLES; i++) {
+        reactive_controller_tick_for_test();
+    }
+}
+
+static void tick_n(unsigned n)
+{
+    for (unsigned i = 0; i < n; i++) {
+        reactive_controller_tick_for_test();
+    }
+}
+
+static unsigned ms_ticks(uint32_t ms)
+{
+    return (unsigned)((ms + REACTIVE_LOOP_PERIOD_MS - 1) / REACTIVE_LOOP_PERIOD_MS);
+}
+
+static void test_cliff_absent_filters_nothing(void)
+{
+    setup();
+    prime_distance(100);
+    ASSERT(goal_state_write(&CLIFF_DRIVE, 60000) == ESP_OK);
+    reactive_controller_tick_for_test();
+    uint8_t ls, rs, ld, rd;
+    get_motor_state(&ls, &rs, &ld, &rd);
+    ASSERT(ls > 0 && rs > 0 && ld == 1 && rd == 1);
+    reactive_telemetry_t t;
+    ASSERT(reactive_controller_get_telemetry(&t) == ESP_OK);
+    ASSERT(!t.cliff_armed && !t.cliff_front && !t.cliff_rear && !t.cliff_active);
+}
+
+/* Arming starts from "no floor": a drive goal is braked until the floor is
+ * confirmed, then runs. */
+static void test_cliff_holds_until_floor_confirmed(void)
+{
+    setup();
+    prime_distance(100);
+    ASSERT(goal_state_write(&CLIFF_DRIVE, 60000) == ESP_OK);
+    cliff_sensor_test_set(true, true, true, true);
+    reactive_controller_tick_for_test();
+    ASSERT(motor_stub_get_last_call() == MOTOR_CALL_BRAKE);
+    tick_n(CLIFF_CLEAR_SAMPLES);
+    uint8_t ls, rs, ld, rd;
+    get_motor_state(&ls, &rs, &ld, &rd);
+    ASSERT(ls > 0 && rs > 0 && ld == 1 && rd == 1);
+    reactive_telemetry_t t;
+    ASSERT(reactive_controller_get_telemetry(&t) == ESP_OK);
+    ASSERT(t.cliff_armed && !t.cliff_front && !t.cliff_rear);
+    ASSERT(t.cliff_trips == 0); /* arming is not an edge */
+}
+
+/* A front edge under a drive goal: brake, reverse at CLIFF_BACKOFF_SPEED, then
+ * brake every tick the goal still asks to go forward. */
+static void test_cliff_front_edge_brakes_reverses_then_refuses(void)
+{
+    setup();
+    prime_distance(100);
+    ASSERT(goal_state_write(&CLIFF_DRIVE, 60000) == ESP_OK);
+    cliff_on_floor();
+
+    cliff_sensor_test_set(true, true, false, true);
+    tick_n(CLIFF_TRIP_SAMPLES);
+    ASSERT(motor_stub_get_last_call() == MOTOR_CALL_BRAKE);
+    reactive_telemetry_t t;
+    ASSERT(reactive_controller_get_telemetry(&t) == ESP_OK);
+    ASSERT(t.cliff_front && !t.cliff_rear && t.cliff_active);
+    ASSERT(t.cliff_trips == 1);
+
+    tick_n(ms_ticks(CLIFF_BRAKE_MS));
+    uint8_t ls, rs, ld, rd;
+    get_motor_state(&ls, &rs, &ld, &rd);
+    ASSERT(ld == 0 && rd == 0);
+    ASSERT(ls == CLIFF_BACKOFF_SPEED && rs == CLIFF_BACKOFF_SPEED);
+
+    tick_n(ms_ticks(CLIFF_BACKOFF_MS) + 1);
+    ASSERT(motor_stub_get_last_call() == MOTOR_CALL_BRAKE);
+    ASSERT(reactive_controller_get_telemetry(&t) == ESP_OK);
+    ASSERT(t.cliff_active); /* refusing the forward goal */
+    ASSERT(t.cliff_trips == 1);
+}
+
+/* At a front edge, backing away is allowed and forward or rotating is not. */
+static void test_cliff_front_edge_allows_only_backward(void)
+{
+    setup();
+    prime_distance(100);
+    cliff_on_floor();
+    cliff_sensor_test_set(true, true, false, true);
+    tick_n(CLIFF_TRIP_SAMPLES + ms_ticks(CLIFF_BRAKE_MS + CLIFF_BACKOFF_MS) + 2);
+
+    ASSERT(reactive_controller_manual(REACTIVE_MANUAL_FORWARD, 200, 60000) == ESP_OK);
+    reactive_controller_tick_for_test();
+    ASSERT(motor_stub_get_last_call() == MOTOR_CALL_BRAKE);
+
+    ASSERT(reactive_controller_manual(REACTIVE_MANUAL_ROTATE_CW, 200, 60000) == ESP_OK);
+    reactive_controller_tick_for_test();
+    ASSERT(motor_stub_get_last_call() == MOTOR_CALL_BRAKE);
+
+    ASSERT(reactive_controller_manual(REACTIVE_MANUAL_BACKWARD, 200, 60000) == ESP_OK);
+    reactive_controller_tick_for_test();
+    uint8_t ls, rs, ld, rd;
+    get_motor_state(&ls, &rs, &ld, &rd);
+    ASSERT(ls == 200 && rs == 200 && ld == 0 && rd == 0);
+}
+
+/* A rear edge refuses backward and rotation, allows forward. */
+static void test_cliff_rear_edge_refuses_backward(void)
+{
+    setup();
+    prime_distance(100);
+    cliff_on_floor();
+    cliff_sensor_test_set(true, true, true, false);
+    tick_n(CLIFF_TRIP_SAMPLES + ms_ticks(CLIFF_BRAKE_MS + CLIFF_BACKOFF_MS) + 2);
+
+    goal_t rotate = {.kind = GOAL_KIND_ROTATE, .params.rotate = {.angle_deg = 90}};
+    ASSERT(goal_state_write(&rotate, 60000) == ESP_OK);
+    reactive_controller_tick_for_test();
+    ASSERT(motor_stub_get_last_call() == MOTOR_CALL_BRAKE);
+
+    ASSERT(reactive_controller_manual(REACTIVE_MANUAL_BACKWARD, 200, 60000) == ESP_OK);
+    reactive_controller_tick_for_test();
+    ASSERT(motor_stub_get_last_call() == MOTOR_CALL_BRAKE);
+
+    ASSERT(reactive_controller_manual(REACTIVE_MANUAL_FORWARD, 200, 60000) == ESP_OK);
+    reactive_controller_tick_for_test();
+    uint8_t ls, rs, ld, rd;
+    get_motor_state(&ls, &rs, &ld, &rd);
+    ASSERT(ls == 200 && rs == 200 && ld == 1 && rd == 1);
+}
+
+/* The cliff reflex ranks above the obstacle reflex: a front edge reverses even
+ * while an obstacle ahead holds the wheels. */
+static void test_cliff_reverses_through_obstacle_reflex(void)
+{
+    setup();
+    prime_distance(100);
+    cliff_on_floor();
+    prime_distance(10); /* obstacle reflex latched */
+    cliff_sensor_test_set(true, true, false, true);
+    tick_n(CLIFF_TRIP_SAMPLES + ms_ticks(CLIFF_BRAKE_MS));
+    uint8_t ls, rs, ld, rd;
+    get_motor_state(&ls, &rs, &ld, &rd);
+    ASSERT(ld == 0 && rd == 0 && ls == CLIFF_BACKOFF_SPEED);
+}
+
+/* `cliff off` disarms: no floor anywhere and the goal still drives. */
+static void test_cliff_off_disarms(void)
+{
+    setup();
+    prime_distance(100);
+    ASSERT(goal_state_write(&CLIFF_DRIVE, 60000) == ESP_OK);
+    cliff_sensor_test_set(true, true, false, false);
+    reactive_controller_set_cliff(false);
+    tick_n(5);
+    uint8_t ls, rs, ld, rd;
+    get_motor_state(&ls, &rs, &ld, &rd);
+    ASSERT(ls > 0 && rs > 0 && ld == 1 && rd == 1);
+    reactive_telemetry_t t;
+    ASSERT(reactive_controller_get_telemetry(&t) == ESP_OK);
+    ASSERT(!t.cliff_armed);
+
+    /* Back on: holds again until floor is confirmed. */
+    reactive_controller_set_cliff(true);
+    reactive_controller_tick_for_test();
+    ASSERT(motor_stub_get_last_call() == MOTOR_CALL_BRAKE);
+}
+
+/* A failed expander read is no floor: the wheels hold (fail closed). */
+static void test_cliff_read_failure_holds(void)
+{
+    setup();
+    prime_distance(100);
+    ASSERT(goal_state_write(&CLIFF_DRIVE, 60000) == ESP_OK);
+    cliff_on_floor();
+    cliff_sensor_test_set(true, false, true, true);
+    tick_n(CLIFF_TRIP_SAMPLES + ms_ticks(CLIFF_BRAKE_MS) + 1);
+    ASSERT(motor_stub_get_last_call() == MOTOR_CALL_BRAKE);
+}
+
 int main(void)
 {
     printf("=== reactive_controller host tests ===\n\n");
@@ -1143,6 +1339,16 @@ int main(void)
     test_run("hold_does_not_expire", test_hold_does_not_expire);
     test_run("release_resumes_the_goal", test_release_resumes_the_goal);
     test_run("init_clears_a_hold", test_init_clears_a_hold);
+
+    test_run("cliff_absent_filters_nothing", test_cliff_absent_filters_nothing);
+    test_run("cliff_holds_until_floor_confirmed", test_cliff_holds_until_floor_confirmed);
+    test_run("cliff_front_edge_brakes_reverses_then_refuses",
+             test_cliff_front_edge_brakes_reverses_then_refuses);
+    test_run("cliff_front_edge_allows_only_backward", test_cliff_front_edge_allows_only_backward);
+    test_run("cliff_rear_edge_refuses_backward", test_cliff_rear_edge_refuses_backward);
+    test_run("cliff_reverses_through_obstacle_reflex", test_cliff_reverses_through_obstacle_reflex);
+    test_run("cliff_off_disarms", test_cliff_off_disarms);
+    test_run("cliff_read_failure_holds", test_cliff_read_failure_holds);
 
     printf("\n=== Results ===\n");
     printf("Passed: %d / %d\n", test_pass, test_count);

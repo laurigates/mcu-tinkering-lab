@@ -462,6 +462,9 @@ static void test_read_only_refuses_state_changing_commands(void)
         "voice fi_1950",
         "voice vary",
         "voice said extra",
+        /* cliff */
+        "cliff on",
+        "cliff off",
         /* trace */
         "trace reset",
         "trace led on",
@@ -533,7 +536,7 @@ static void test_read_only_refuses_state_changing_commands(void)
 static void test_read_only_allows_status_commands(void)
 {
     static const char *const lines[] = {
-        "plan", "trace", "mic", "cam", "servo", "gpio", "voice", "voice said", "idle",
+        "plan", "trace", "mic", "cam", "servo", "gpio", "voice", "voice said", "idle", "cliff",
     };
     recorder_t r;
     mqtt_command_ops_t ops = read_only_ops_for(&r);

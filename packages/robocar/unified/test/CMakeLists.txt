@@ -14,6 +14,7 @@ add_compile_definitions(
     GOAL_STATE_HOST_TEST=1
     REACTIVE_CONTROLLER_HOST_TEST=1
     ULTRASONIC_HOST_TEST=1
+    CLIFF_SENSOR_HOST_TEST=1
 )
 
 # Main source directory
@@ -104,6 +105,20 @@ add_executable(test_gpio_expander_core
 add_test(NAME gpio_expander_core COMMAND test_gpio_expander_core)
 
 # -----------------------------------------------------------------------------
+# Cliff reflex decisions (front and rear floor sensors, interim for issue #1010)
+#
+# cliff_core.c compiled unmodified: fail-closed start and read failures, the
+# debounce, brake then back off, no back-off toward a side without floor or
+# forward into an obstacle, and which motions permits() allows. The executor
+# integration is pinned in test_reactive_controller.
+# -----------------------------------------------------------------------------
+add_executable(test_cliff_core
+    "${MAIN_SRC_DIR}/cliff_core.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_cliff_core.c"
+)
+add_test(NAME cliff_core COMMAND test_cliff_core)
+
+# -----------------------------------------------------------------------------
 # reactive_controller decision logic (Phase 5, gate G2, issue #226)
 # -----------------------------------------------------------------------------
 add_executable(test_reactive_controller
@@ -113,6 +128,8 @@ add_executable(test_reactive_controller
     "${MAIN_SRC_DIR}/idle_gaze.c"
     "${MAIN_SRC_DIR}/scene_change.c"
     "${MAIN_SRC_DIR}/reactive_controller.c"
+    "${MAIN_SRC_DIR}/cliff_core.c"
+    "${MAIN_SRC_DIR}/cliff_sensor.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/motor_controller_stub.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/servo_controller_stub.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/test_reactive_controller.c"
@@ -135,6 +152,8 @@ add_executable(test_reflex_latency
     "${MAIN_SRC_DIR}/idle_gaze.c"
     "${MAIN_SRC_DIR}/scene_change.c"
     "${MAIN_SRC_DIR}/reactive_controller.c"
+    "${MAIN_SRC_DIR}/cliff_core.c"
+    "${MAIN_SRC_DIR}/cliff_sensor.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/motor_controller_stub.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/servo_controller_stub.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/test_reflex_latency.c"

@@ -36,6 +36,7 @@
 #include "audio_player.h"
 #include "buzzer.h"
 #include "camera.h"
+#include "cliff_sensor.h"
 #include "config.h"
 #include "credentials_loader.h"
 #include "credentials_validator.h"
@@ -1604,6 +1605,46 @@ static void on_improv_credentials(const char *ssid, const char *password)
  * credentials) does not belong here; command_task() handles it before this.
  */
 /**
+ * @brief `cliff` — the front and rear floor sensors and the cliff reflex.
+ *
+ * `cliff` alone prints whether the reflex is on and armed, what each sensor
+ * sees and the trip count; it only reads, which is why it is on the MQTT
+ * read-only list. `cliff on|off` switches the reflex. Not persisted: every
+ * boot starts with it on (docs/firmware/cliff-sensors.md).
+ */
+static void handle_cliff_cmd(const char *buf)
+{
+    char state[8] = {0};
+    const int n = sscanf(buf, "cliff %7s", state);
+
+    if (n == 1 && (strcmp(state, "on") == 0 || strcmp(state, "off") == 0)) {
+        const bool on = (strcmp(state, "on") == 0);
+        reactive_controller_set_cliff(on);
+        printf("cliff: reflex %s\n",
+               on ? "ON — the wheels hold until both sensors confirm the floor"
+                  : "OFF — nothing stops the robot at an edge");
+        return;
+    }
+    if (n > 0) {
+        printf("cliff: usage: cliff | cliff on|off\n");
+        return;
+    }
+
+    reactive_telemetry_t tele = {0};
+    const bool have_tele = (reactive_controller_get_telemetry(&tele) == ESP_OK);
+    printf("cliff: reflex=%s sensors=%s\n", reactive_controller_cliff_enabled() ? "on" : "off",
+           cliff_sensor_available() ? "present" : "absent(no MCP23017)");
+    if (have_tele && tele.cliff_armed) {
+        printf("  front: %s  rear: %s  active: %s  trips: %lu\n",
+               tele.cliff_front ? "NO FLOOR" : "floor", tele.cliff_rear ? "NO FLOOR" : "floor",
+               tele.cliff_active ? "yes" : "no", (unsigned long)tele.cliff_trips);
+    } else {
+        printf("  disarmed: nothing is filtered\n");
+    }
+    printf("  usage: cliff on|off\n");
+}
+
+/**
  * @brief `idle` — the idle behaviour the executor runs on its own (ADR-029).
  *
  * `idle` alone prints the mode, what the head is doing and whether it has
@@ -1750,6 +1791,8 @@ static void execute_console_line(const char *buf)
         handle_plan_cmd(buf);
     } else if (strncmp(buf, "idle", 4) == 0) {
         handle_idle_cmd(buf);
+    } else if (strncmp(buf, "cliff", 5) == 0) {
+        handle_cliff_cmd(buf);
     } else if (strncmp(buf, "ota", 3) == 0) {
         handle_ota_cmd(buf);
     } else if (strncmp(buf, "report", 6) == 0) {
@@ -2145,6 +2188,9 @@ static void init_hardware(void)
      * the facts line names the missing peripheral (`i2c_peripherals=degraded(
      * servos)`) rather than leaving a silently immobile pan/tilt head. */
     init_peripheral("GPIO expander", gpio_expander_init());
+    /* After the expander: the floor sensors are two of its pins. Without it
+     * the cliff reflex stays disarmed and the self-report says so. */
+    init_peripheral("Cliff sensors", cliff_sensor_init());
     init_peripheral("Motors", motor_controller_init());
     init_peripheral("LEDs", led_controller_init());
     init_peripheral("Servos", servo_controller_init());

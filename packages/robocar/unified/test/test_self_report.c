@@ -164,6 +164,9 @@ static int test_worst_case_fits_the_buffer(void)
      * backwards is what makes a worst-case test pass on a buffer that overflows
      * in the field. */
     g_stub.expander_available = false;
+    /* "absent" is one character shorter than "present", so the floor sensors
+     * are FITTED in the worst case. */
+    g_stub.cliff_sensors_available = true;
     /* A key the last response called exhausted: "exhausted" is three
      * characters longer than "absent" (issue #845). */
     g_stub.api_key = "k";
@@ -300,6 +303,27 @@ static int test_mqtt_mode_is_reported(void)
     return 0;
 }
 
+/** The floor sensors get their own key, and a change in them re-announces. */
+static int test_cliff_sensors_are_reported(void)
+{
+    stub_reset_healthy();
+    char facts[SELF_REPORT_FACTS_MAX];
+
+    g_stub.cliff_sensors_available = false;
+    facts_now(facts, sizeof(facts));
+    CHECK(strstr(facts, "cliff=absent") != NULL);
+    robocar_status_t status;
+    self_report_collect(&status);
+    const uint32_t before = self_report_health_signature(&status);
+
+    g_stub.cliff_sensors_available = true;
+    facts_now(facts, sizeof(facts));
+    CHECK(strstr(facts, "cliff=present") != NULL);
+    self_report_collect(&status);
+    CHECK(self_report_health_signature(&status) != before);
+    return 0;
+}
+
 /** collect() must read the live accessors, not a cached boot result. */
 static int test_collect_reads_live_state(void)
 {
@@ -336,6 +360,7 @@ int main(void)
         {"mqtt_mode_is_reported", test_mqtt_mode_is_reported},
         {"key_state_is_reported", test_key_state_is_reported},
         {"key_untested_to_ok_does_not_reannounce", test_key_untested_to_ok_does_not_reannounce},
+        {"cliff_sensors_are_reported", test_cliff_sensors_are_reported},
         {"collect_reads_live_state", test_collect_reads_live_state},
     };
 
