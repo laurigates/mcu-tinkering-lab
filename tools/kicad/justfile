@@ -66,6 +66,14 @@ sourcing *projects:
 parts *args:
     cd ../.. && PYTHONPATH=tools python3 -m kicad.lcsc {{args}}
 
+# Reads the parts-stock inventory: --inventory PATH, else $INVENTORY_DIR, else
+# ../parts-stock beside the main checkout. A report, not a gate; not run in CI.
+#
+# Which BOM lines are already on hand; args: [project ...] [--boards N] [--inventory PATH]
+[group: "test"]
+stock *args:
+    cd ../.. && PYTHONPATH=tools python3 -m kicad.stock {{args}}
+
 # Covers every symbol and footprint the parts registry and the schematic
 # writer use.
 #

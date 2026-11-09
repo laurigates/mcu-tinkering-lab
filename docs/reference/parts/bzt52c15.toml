@@ -9,6 +9,9 @@ value = "BZT52C15"
 lcsc = "C2104"
 buy = "aliexpress:1005005590599425"  # BZT52C15 15V WJ variant
 
+[stock]
+mpn = "BZT52C15"  # LCSC C2104
+
 [pins]
 K = 1
 A = 2

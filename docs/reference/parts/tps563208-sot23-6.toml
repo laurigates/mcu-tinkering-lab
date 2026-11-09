@@ -14,6 +14,9 @@ footprint = "Package_TO_SOT_SMD:SOT-23-6"
 value = "TPS563208"
 lcsc = "C468250"
 
+[stock]
+mpn = "TPS563208DDCR"  # LCSC C468250
+
 [pins]
 GND = 1
 SW = 2

@@ -8,6 +8,9 @@ footprint = "Package_TO_SOT_SMD:SOT-223-3_TabPin2"
 value = "ZXMP4A16G"
 lcsc = "C141324"
 
+[stock]
+mpn = "ZXMP4A16GTA"  # LCSC C141324
+
 [pins]
 G = 1
 D = 2
