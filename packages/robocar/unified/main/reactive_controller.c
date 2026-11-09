@@ -604,8 +604,9 @@ static uint8_t rangers_tick(rangers_t *r, uint32_t now_ms)
 static cliff_t s_cliff;
 /** Whether the last tick ran the reflex: enabled and the sensors present. */
 static bool s_cliff_armed = false;
-/** `cliff on|off`; a bool any task may write, read once per tick. On at boot. */
-static volatile bool s_cliff_enabled = true;
+/** `cliff on|off`; a bool any task may write, read once per tick. Boot value:
+ * CLIFF_REFLEX_AT_BOOT (cliff_sensor.h). */
+static volatile bool s_cliff_enabled = CLIFF_REFLEX_AT_BOOT;
 
 void reactive_controller_set_cliff(bool on)
 {
@@ -1503,7 +1504,7 @@ esp_err_t reactive_controller_init(void)
     s_head_settled = false;
     s_hold = false;
     s_cliff_armed = false;
-    s_cliff_enabled = true; /* on at every boot */
+    s_cliff_enabled = CLIFF_REFLEX_AT_BOOT;
     memset(&s_cliff, 0, sizeof(s_cliff));
     s_running = true;
     ultrasonic_init();
