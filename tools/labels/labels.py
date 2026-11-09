@@ -86,9 +86,42 @@ RENDER_KINDS = {
     "xt60",
     "antenna",
     "matrix",
+    "axial",
+    "to92",
+    "to220",
+    "sot223",
+    "header",
+    "housing",
+    "barrel",
+    "banana",
+    "jumper",
+    "spool",
+    "ribbon",
+    "coin",
+    "cell",
+    "pouch",
+    "servo",
+    "stepper",
+    "dcmotor",
+    "speaker",
+    "buzzer",
+    "button",
+    "reed",
+    "keypad",
+    "ldr",
+    "screw",
+    "insert",
+    "standoff",
+    "heatsink",
+    "dht",
+    "laser",
+    "holder",
+    "magnet",
 }
 # Kinds whose drawing uses real dimensions, so the label also shows it at 1:1.
-ACTUAL_SIZE_KINDS = {"chip", "tant", "polymer", "sop8", "usbc", "dip8", "led"}
+ACTUAL_SIZE_KINDS = {"chip", "tant", "polymer", "sop8", "usbc", "dip8", "led", "sot223"}
+# Colour keys inside a render table that labels.py checks as #rrggbb.
+RENDER_COLOUR_KEYS = ("fill", "pcb", "band")
 
 CUT_COLOUR = "#e00000"
 DEFAULT_STOCK = Path(
@@ -107,7 +140,7 @@ class Rect:
     x1: float
     y1: float
 
-    def overlaps(self, other: "Rect") -> bool:
+    def overlaps(self, other: Rect) -> bool:
         return (
             self.x0 < other.x1
             and other.x0 < self.x1
@@ -167,9 +200,13 @@ def _render(raw, where: str) -> dict | None:
             f"{where}: render kind {raw['kind']!r} is not one of {sorted(RENDER_KINDS)}"
         )
     out = dict(raw)
-    for key in ("fill", "pcb"):
+    for key in RENDER_COLOUR_KEYS:
         if key in out:
             out[key] = _hex(out[key], f"{where}.render.{key}")
+    if "bands" in out:
+        out["bands"] = [
+            _hex(b, f"{where}.render.bands[{i}]") for i, b in enumerate(out["bands"])
+        ]
     out["actual"] = bool(out.get("actual", out["kind"] in ACTUAL_SIZE_KINDS))
     return out
 

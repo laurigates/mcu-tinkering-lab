@@ -34,6 +34,14 @@ just labels::test-cut 1 tools/labels/data/<file>.toml   # cut only the first sti
 just labels::cut 1 tools/labels/data/<file>.toml        # cut page 1
 ```
 
+The drafts are raw material, not a data file. They carry no `schema = 1` or
+`[colors]` table, so `check` rejects the file as written, and their value
+and spec are the listing title, too long for a 35 mm sticker. Rewrite each
+one: a short value, two spec lines, a colour, and a `render` where a kind
+fits. Items whose parts-stock quantity is 0 or level `out` on a recent order
+are usually still in transit; put them in a separate `<file>-incoming.toml`
+and print it once the parts are in hand.
+
 Look at `page-<N>.png` before printing (`just labels::build <file> true` draws
 the cut outlines on the previews). A dry run checks a cut job with no cutter
 attached: `just labels::cut 1 <file> true` writes `cut-p1.cmd`, the command
@@ -108,3 +116,11 @@ Record the settings that worked in the table below.
    Check those against a datasheet before reprinting them.
 6. **Kits hide their values.** The film-capacitor kit's value list is only in
    the listing's images and was never read; its label shows one example code.
+7. **A new sticker kind starts a new row.** Labels, then lids, then strips,
+   each on fresh rows, so a few strips after a full page of labels can take
+   a whole sheet alone (inventory-2026-11 page 4: three strips). Move them to
+   a file with room to spare, or hold them for the next run.
+8. **Text inside a drawing vanishes when the drawing is small.** `render.typ`
+   draws a mark only above a size threshold, so a new kind can look fine in
+   isolation and print blank on the sticker. Crop the preview
+   (`magick page-<N>.png -crop …`) and read it at sticker size.
