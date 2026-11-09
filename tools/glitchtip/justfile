@@ -1,0 +1,93 @@
+# GlitchTip for robocar events (ADR-033). Run from anywhere as
+# `just glitchtip::<recipe>`. Settings live in tools/glitchtip/.env (gitignored),
+# created from .env.example by `up`.
+
+_dir := source_directory()
+_root := _dir / "../.."
+_compose := "docker compose --project-directory " + quote(_dir) + " -f " + quote(_dir / "compose.yml")
+
+# Bridge unit tests (pytest; compiles a tiny ELF if the host can)
+test *args:
+    cd {{quote(_dir / "bridge")}} && uv run pytest {{args}}
+
+[doc("Start postgres + GlitchTip on :8000 (plus COMPOSE_PROFILES from .env); waits until healthy")]
+up: _env
+    {{_compose}} up -d --build --wait
+
+# Stop the stack; data volumes are kept (add -v to delete them)
+down *args:
+    {{_compose}} down {{args}}
+
+# Follow service logs
+logs *services:
+    {{_compose}} logs -f {{services}}
+
+[doc("Create the org, the robocar and robocar-ai projects and an admin; write DSNs to .env")]
+bootstrap org="robocar-lab":
+    GLITCHTIP_ORG={{quote(org)}} bash {{quote(_dir / "bootstrap.sh")}}
+
+[doc("Run the bridge on the host (development); reads .env, ELFs from tools/glitchtip/elf/")]
+bridge:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd {{quote(_dir)}}
+    set -a; source .env; set +a
+    export ELF_DIR="${ELF_DIR:-{{_dir}}/elf}"
+    exec uv run --project bridge robocar-glitchtip-bridge
+
+[doc("List issues, most recently seen first: id, project, events, last seen, release, title (--json for the raw API)")]
+issues project="" query="is:unresolved" *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd {{quote(_dir)}}
+    set -a; source .env; set +a
+    project={{quote(project)}}
+    exec uv run --quiet --project bridge robocar-glitchtip issues \
+        ${project:+--project "$project"} --query {{quote(query)}} {{args}}
+
+[doc("Latest event of one issue: exception, frames, tags, extra, breadcrumbs (--json for the raw API)")]
+event issue *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd {{quote(_dir)}}
+    set -a; source .env; set +a
+    exec uv run --quiet --project bridge robocar-glitchtip event {{quote(issue)}} {{args}}
+
+[doc("Keep a firmware ELF for symbolication as elf/<embedded build SHA>.elf")]
+keep-elf elf=(_root / "packages/robocar/unified/build/robocar-unified.elf"):
+    #!/usr/bin/env python3
+    # The name must be the exact ROBOCAR_BUILD_SHA string the firmware sends in
+    # its build_sha tag (40 hex, maybe "-dirty"), so read it out of the ELF
+    # rather than from git: the build may predate the current checkout.
+    import re, shutil, sys
+    from pathlib import Path
+    elf = Path({{quote(elf)}})
+    if not elf.is_file():
+        sys.exit(f"no ELF at {elf}; build first (just robocar-unified::build)")
+    shas = set(re.findall(rb"(?<![0-9a-f])([0-9a-f]{40}(?:-dirty)?)\x00", elf.read_bytes()))
+    if len(shas) != 1:
+        found = ", ".join(s.decode() for s in sorted(shas)) or "none"
+        sys.exit(f"expected one embedded build SHA in {elf}, found: {found}")
+    sha = shas.pop().decode()
+    dest = Path({{quote(_dir / "elf")}})
+    dest.mkdir(exist_ok=True)
+    shutil.copy2(elf, dest / f"{sha}.elf")
+    print(f"kept {dest / (sha + '.elf')}")
+
+[doc("Publish a fixture event to the broker (fixtures/: reset-brownout, crash, planner-note)")]
+send fixture="reset-brownout" host="localhost":
+    mosquitto_pub -h {{quote(host)}} -q 1 -t robocar/events -f {{quote(_dir / "fixtures" / (fixture + ".json"))}}
+
+# Create .env from .env.example with a random SECRET_KEY, once
+_env:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd {{quote(_dir)}}
+    [ -f .env ] || cp .env.example .env
+    if ! grep -q '^GLITCHTIP_SECRET_KEY=.\+' .env; then
+        key=$(openssl rand -hex 32)
+        grep -v '^GLITCHTIP_SECRET_KEY=' .env > .env.tmp || true
+        echo "GLITCHTIP_SECRET_KEY=$key" >> .env.tmp
+        mv .env.tmp .env
+        echo "wrote GLITCHTIP_SECRET_KEY to $(pwd)/.env"
+    fi

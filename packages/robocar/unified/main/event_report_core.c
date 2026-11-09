@@ -126,6 +126,81 @@ bool event_report_reset_is_reportable(const char *reason_name)
     return true;
 }
 
+const char *event_report_xtensa_cause_name(uint32_t cause)
+{
+    /* Xtensa EXCCAUSE codes, spelled as ESP-IDF v5.4's
+     * esp_system/port/arch/xtensa/panic_arch.c prints them, typos included. */
+    static const char *const k_names[] = {
+        [0] = "IllegalInstruction",
+        [1] = "Syscall",
+        [2] = "InstructionFetchError",
+        [3] = "LoadStoreError",
+        [4] = "Level1Interrupt",
+        [5] = "Alloca",
+        [6] = "IntegerDivideByZero",
+        [7] = "PCValue",
+        [8] = "Privileged",
+        [9] = "LoadStoreAlignment",
+        [12] = "InstrPDAddrError",
+        [13] = "LoadStorePIFDataError",
+        [14] = "InstrPIFAddrError",
+        [15] = "LoadStorePIFAddrError",
+        [16] = "InstTLBMiss",
+        [17] = "InstTLBMultiHit",
+        [18] = "InstFetchPrivilege",
+        [20] = "InstrFetchProhibited",
+        [24] = "LoadStoreTLBMiss",
+        [25] = "LoadStoreTLBMultihit",
+        [26] = "LoadStorePrivilege",
+        [28] = "LoadProhibited",
+        [29] = "StoreProhibited",
+        [32] = "Cp0Dis",
+        [33] = "Cp1Dis",
+        [34] = "Cp2Dis",
+        [35] = "Cp3Dis",
+        [36] = "Cp4Dis",
+        [37] = "Cp5Dis",
+        [38] = "Cp6Dis",
+        [39] = "Cp7Dis",
+    };
+    if (cause < sizeof(k_names) / sizeof(k_names[0]) && k_names[cause] != NULL) {
+        return k_names[cause];
+    }
+    return "Exception";
+}
+
+void event_report_crash_type(const char *reason, const char *cause_name, char *out, size_t cap)
+{
+    if (out == NULL || cap == 0) {
+        return;
+    }
+    const char *fallback = cause_name != NULL ? cause_name : "Exception";
+    if (reason == NULL || reason[0] == '\0' ||
+        (cause_name != NULL && strstr(reason, cause_name) != NULL)) {
+        snprintf(out, cap, "%s", fallback);
+        return;
+    }
+    size_t end = strlen(reason);
+    static const char *const k_stops[] = {" at ", " on ", ":", "."};
+    for (size_t i = 0; i < sizeof(k_stops) / sizeof(k_stops[0]); i++) {
+        const char *hit = strstr(reason, k_stops[i]);
+        if (hit != NULL && (size_t)(hit - reason) < end) {
+            end = (size_t)(hit - reason);
+        }
+    }
+    while (end > 0 && reason[end - 1] == ' ') {
+        end--;
+    }
+    if (end == 0) {
+        snprintf(out, cap, "%s", fallback);
+        return;
+    }
+    if (end > EVENT_REPORT_CRASH_TYPE_MAX) {
+        end = EVENT_REPORT_CRASH_TYPE_MAX;
+    }
+    snprintf(out, cap, "%.*s", (int)end, reason);
+}
+
 void event_report_format_id(const uint32_t words[4], char out[EVENT_REPORT_ID_LEN + 1])
 {
     snprintf(out, EVENT_REPORT_ID_LEN + 1, "%08x%08x%08x%08x", (unsigned)words[0],

@@ -1,0 +1,179 @@
+{
+  "issue": {
+    "id": "3",
+    "count": "1",
+    "type": "default",
+    "level": "warning",
+    "status": "unresolved",
+    "metadata": {},
+    "project": {
+      "id": "2",
+      "platform": null,
+      "slug": "robocar-ai",
+      "name": "robocar-ai"
+    },
+    "shortId": "ROBOCAR-AI-1",
+    "numComments": 0,
+    "stats": {
+      "24h": []
+    },
+    "shareId": null,
+    "logger": null,
+    "permalink": "http://localhost:8000/robocar-ai/issues/3",
+    "statusDetails": {},
+    "subscriptionDetails": null,
+    "userCount": 0,
+    "matchingEventId": null,
+    "firstRelease": {
+      "shortVersion": "robocar-unified@0.0.0-fixture",
+      "dateCreated": "2026-11-09T08:01:24.193Z",
+      "dateReleased": null,
+      "version": "robocar-unified@0.0.0-fixture"
+    },
+    "lastRelease": {
+      "shortVersion": "robocar-unified@0.0.0-fixture",
+      "dateCreated": "2026-11-09T08:01:24.193Z",
+      "dateReleased": null,
+      "version": "robocar-unified@0.0.0-fixture"
+    },
+    "firstSeen": "2026-11-09T08:01:26.641Z",
+    "lastSeen": "2026-11-09T08:01:26.641Z",
+    "assignedTo": null,
+    "title": "The chair leg keeps tripping the reflex when I turn left.",
+    "culprit": "",
+    "userReportCount": 0
+  },
+  "event": {
+    "platform": "native",
+    "errors": null,
+    "id": "01a1bf538e717e11942c9c154af340d2",
+    "eventID": "00112233445566778899aabbccddeeff",
+    "projectID": 2,
+    "groupID": "3",
+    "dateCreated": "2026-11-09T08:01:26.636Z",
+    "dateReceived": "2026-11-09T08:01:26.641Z",
+    "dist": null,
+    "culprit": "",
+    "packages": null,
+    "type": "default",
+    "message": "The chair leg keeps tripping the reflex when I turn left.",
+    "metadata": {
+      "title": "The chair leg keeps tripping the reflex when I turn left."
+    },
+    "tags": [
+      {
+        "key": "kind",
+        "value": "difficulty"
+      },
+      {
+        "key": "device",
+        "value": "robocar_unified"
+      },
+      {
+        "key": "source",
+        "value": "planner"
+      },
+      {
+        "key": "persona",
+        "value": "teuvo"
+      },
+      {
+        "key": "release",
+        "value": "robocar-unified@0.0.0-fixture"
+      },
+      {
+        "key": "trigger",
+        "value": "reflex"
+      },
+      {
+        "key": "version",
+        "value": "0.0.0-fixture"
+      },
+      {
+        "key": "build_sha",
+        "value": "fixture"
+      },
+      {
+        "key": "environment",
+        "value": "production"
+      },
+      {
+        "key": "server_name",
+        "value": "bridge-container"
+      }
+    ],
+    "entries": [
+      {
+        "type": "breadcrumbs",
+        "data": {
+          "values": [
+            {
+              "type": "default",
+              "category": "goal",
+              "message": "drive 0 deg 40 cm 50%",
+              "data": null,
+              "level": "info",
+              "timestamp": null,
+              "event_id": null
+            },
+            {
+              "type": "default",
+              "category": "goal",
+              "message": "track [400,300,700,600] 40%",
+              "data": null,
+              "level": "info",
+              "timestamp": null,
+              "event_id": null
+            },
+            {
+              "type": "default",
+              "category": "goal",
+              "message": "stop",
+              "data": null,
+              "level": "info",
+              "timestamp": null,
+              "event_id": null
+            }
+          ]
+        }
+      },
+      {
+        "type": "message",
+        "data": {
+          "formatted": "The chair leg keeps tripping the reflex when I turn left."
+        }
+      }
+    ],
+    "contexts": {
+      "trace": {
+        "type": "trace",
+        "trace_id": "746b5719108c48b380e77bc44801b7fe",
+        "span_id": "9395c574935d4222"
+      }
+    },
+    "context": {
+      "uptime_ms": 61234,
+      "scene_score": 12,
+      "still_score": 4,
+      "reflex_trips": 3,
+      "plan_requests": 17,
+      "robot_timestamp_missing": true
+    },
+    "user": null,
+    "sdk": {
+      "name": "sentry.python",
+      "version": "2.74.0",
+      "packages": [
+        {
+          "name": "pypi:sentry-sdk",
+          "version": "2.74.0"
+        }
+      ],
+      "integrations": []
+    },
+    "title": "The chair leg keeps tripping the reflex when I turn left.",
+    "userReport": null,
+    "nextEventID": null,
+    "previousEventID": null
+  }
+}

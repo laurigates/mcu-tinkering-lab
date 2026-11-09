@@ -207,6 +207,57 @@ static void faults_are_reported(void)
     ASSERT(event_report_reset_is_reportable(NULL));
 }
 
+static void xtensa_causes_are_named(void)
+{
+    ASSERT(strcmp(event_report_xtensa_cause_name(28), "LoadProhibited") == 0);
+    ASSERT(strcmp(event_report_xtensa_cause_name(29), "StoreProhibited") == 0);
+    ASSERT(strcmp(event_report_xtensa_cause_name(0), "IllegalInstruction") == 0);
+    ASSERT(strcmp(event_report_xtensa_cause_name(6), "IntegerDivideByZero") == 0);
+    /* Gaps in the table and values past its end have no name. */
+    ASSERT(strcmp(event_report_xtensa_cause_name(20), "InstrFetchProhibited") == 0);
+    ASSERT(strcmp(event_report_xtensa_cause_name(10), "Exception") == 0);
+    ASSERT(strcmp(event_report_xtensa_cause_name(40), "Exception") == 0);
+    ASSERT(strcmp(event_report_xtensa_cause_name(0xFFFFFFFFu), "Exception") == 0);
+}
+
+static const char *crash_type(const char *reason, const char *cause)
+{
+    static char out[EVENT_REPORT_CRASH_TYPE_MAX + 1];
+    event_report_crash_type(reason, cause, out, sizeof(out));
+    return out;
+}
+
+static void crash_type_uses_the_cause_for_cpu_exceptions(void)
+{
+    ASSERT(strcmp(crash_type("LoadProhibited", "LoadProhibited"), "LoadProhibited") == 0);
+    ASSERT(strcmp(crash_type("Unhandled LoadProhibited exception", "LoadProhibited"),
+                  "LoadProhibited") == 0);
+    ASSERT(strcmp(crash_type("", "StoreProhibited"), "StoreProhibited") == 0);
+    ASSERT(strcmp(crash_type(NULL, "StoreProhibited"), "StoreProhibited") == 0);
+}
+
+static void crash_type_uses_the_reason_for_other_panics(void)
+{
+    ASSERT(strcmp(crash_type("abort() was called at PC 0x42001234 on core 0", "Syscall"),
+                  "abort() was called") == 0);
+    ASSERT(strcmp(crash_type("Interrupt wdt timeout on CPU0", "Level1Interrupt"),
+                  "Interrupt wdt timeout") == 0);
+    ASSERT(strcmp(crash_type("Stack protection fault.", "Exception"), "Stack protection fault") ==
+           0);
+    ASSERT(strcmp(crash_type("assert failed: foo bar.c:12 (x)", "Exception"), "assert failed") ==
+           0);
+}
+
+static void crash_type_is_cut_and_never_empty(void)
+{
+    const char *type = crash_type(
+        "a very long panic reason with no stop word anywhere in it whatsoever really", "X");
+    ASSERT(strlen(type) == EVENT_REPORT_CRASH_TYPE_MAX);
+    ASSERT(strcmp(crash_type(": leading stop", "IllegalInstruction"), "IllegalInstruction") == 0);
+    ASSERT(strcmp(crash_type("reason", NULL), "reason") == 0);
+    ASSERT(strcmp(crash_type(NULL, NULL), "Exception") == 0);
+}
+
 static void id_is_32_lowercase_hex(void)
 {
     const uint32_t words[4] = {0x0123ABCDu, 0, 0xFFFFFFFFu, 0x10u};
@@ -383,6 +434,12 @@ int main(void)
     test_run("order_survives_the_counter_wrapping", order_survives_the_counter_wrapping);
     test_run("deliberate_resets_are_not_reported", deliberate_resets_are_not_reported);
     test_run("faults_are_reported", faults_are_reported);
+    test_run("xtensa_causes_are_named", xtensa_causes_are_named);
+    test_run("crash_type_uses_the_cause_for_cpu_exceptions",
+             crash_type_uses_the_cause_for_cpu_exceptions);
+    test_run("crash_type_uses_the_reason_for_other_panics",
+             crash_type_uses_the_reason_for_other_panics);
+    test_run("crash_type_is_cut_and_never_empty", crash_type_is_cut_and_never_empty);
     test_run("id_is_32_lowercase_hex", id_is_32_lowercase_hex);
     test_run("minimal_event_has_the_contract_fields", minimal_event_has_the_contract_fields);
     test_run("missing_required_field_renders_nothing", missing_required_field_renders_nothing);

@@ -8,11 +8,16 @@
 #   phy_init: 4KB   (PHY init data)
 #   ota_0:    3.5MB (OTA app partition 0, @0x10000 — 64KB aligned)
 #   ota_1:    3.5MB (OTA app partition 1, @0x390000 — 64KB aligned)
-#   spiffs:   960KB (File storage)
+#   spiffs:   832KB (File storage, unused so far)
+#   coredump: 128KB (ELF core dump after a panic, ADR-033)
 # Total: 8MB (0x800000 bytes)
+# The partition table is written only by a USB/web-flasher flash, never by
+# OTA: a robot updated over the air keeps its old table, and its firmware logs
+# that there is no core dump partition and carries on without dumps.
 nvs,      data, nvs,     0x9000,  0x4000,
 otadata,  data, ota,     0xD000,  0x2000,
 phy_init, data, phy,     0xF000,  0x1000,
 ota_0,    app,  ota_0,   0x10000, 0x380000,
 ota_1,    app,  ota_1,   0x390000,0x380000,
-spiffs,   data, spiffs,  0x710000,0xF0000,
+spiffs,   data, spiffs,  0x710000,0xD0000,
+coredump, data, coredump,0x7E0000,0x20000,

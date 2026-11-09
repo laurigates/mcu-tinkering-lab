@@ -11,6 +11,9 @@
  *   - one event per boot whose reset was not deliberate
  *     (event_report_reset_is_reportable()), carrying the last log lines of
  *     the boot that ended, from a ring in RTC memory;
+ *   - a crash: when the core dump partition holds a dump at boot, its summary
+ *     (exception, task, backtrace) replaces the reset event, and the dump is
+ *     erased once the broker acknowledges the event;
  *   - `report test` on the console: a synthetic event for checking the path;
  *   - a note the planner wrote with its `note` tool (note_gate.h), routed by
  *     the bridge to the `robocar-ai` project (source "planner").
@@ -51,8 +54,9 @@ void event_report_breadcrumb(const char *line, size_t len);
 esp_err_t event_report_start(void);
 
 /**
- * Queue the reset event for this boot if @p reason_name (reset_reason_name()'s
- * spelling) is not a deliberate reset. Carries the breadcrumbs taken by
+ * Queue the crash event if a core dump is waiting, else the reset event for
+ * this boot if @p reason_name (reset_reason_name()'s spelling) is not a
+ * deliberate reset. Carries the breadcrumbs taken by
  * event_report_boot_capture(). At most once per boot, and call it even when
  * event_report_start() failed: it releases the snapshot on every path.
  *
@@ -105,6 +109,7 @@ typedef struct {
     uint32_t pending;         /**< waiting in the queue now */
     size_t boot_crumbs;       /**< lines carried over from the last boot */
     bool boot_crumbs_present; /**< the RTC ring survived the last reset */
+    const char *core_dump;    /**< this boot's core dump: none, queued, ... */
 } event_report_stats_t;
 
 void event_report_get_stats(event_report_stats_t *out);
