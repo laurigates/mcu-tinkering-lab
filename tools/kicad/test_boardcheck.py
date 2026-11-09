@@ -12,7 +12,9 @@ from __future__ import annotations
 
 import contextlib
 import copy
+import dataclasses
 import io
+import shutil
 import tempfile
 import tomllib
 import unittest
@@ -23,6 +25,7 @@ from kicad import boardcheck, library, netlist, paths, schematic, testfixture
 from kicad.errors import KicadError
 
 NS = uuid.uuid5(uuid.NAMESPACE_URL, "mcu-tinkering-lab/kicad/test")
+GY521 = "Breakout_Sockets:GY521_Socket"
 ROOT, PROJECT = testfixture.shared()
 
 
@@ -1028,6 +1031,162 @@ class MainTests(unittest.TestCase):
                 code, out = self.run_main(justfile, self.good)
                 self.assertEqual(code, 0, out)
                 self.assertIn("OK: balancebot-carrier.kicad_pcb", out)
+
+
+class ImuTests(unittest.TestCase):
+    """[imu]: the layout's firmware mount, on the frozen fixture with J3 moved
+    onto #1015's generated GY521_Socket at its rev3 placement."""
+
+    @classmethod
+    def setUpClass(cls):
+        nl = netlist.build(PROJECT, ROOT)
+        cls.nl = dataclasses.replace(
+            nl,
+            comps=tuple(
+                dataclasses.replace(c, footprint=GY521) if c.ref == "J3" else c
+                for c in nl.comps
+            ),
+        )
+        cls.cfg = paths.load_board_config(PROJECT)
+
+    def errors(self, edit=None, nl=None, vendored=library.VENDORED) -> list[str]:
+        data = copy.deepcopy(self.cfg.data)
+        data["outline"]["forward"] = "-y"
+        data["placement"]["J3"] = [36.11, 47.0, 0]
+        data["imu"] = {"ref": "J3"}
+        if edit:
+            edit(data)
+        cfg = paths.BoardConfig(self.cfg.path, self.cfg.name, self.cfg.paper, data)
+        return boardcheck.validate_config(cfg, nl or self.nl, vendored)
+
+    def fails(self, edit, *needles: str, nl=None) -> None:
+        errors = self.errors(edit, nl)
+        self.assertTrue(any(all(n in e for n in needles) for e in errors), errors)
+
+    def test_rev3_layout_needs_mount_up(self):
+        self.assertEqual(self.errors(), [])
+        self.assertEqual(
+            self.errors(lambda d: d["imu"].update(mount="up", face="up")), []
+        )
+
+    def test_face_down_names_mount_down(self):
+        self.fails(
+            lambda d: d["imu"].update(face="down"),
+            "[imu] J3: the layout needs mount down",
+            'set [imu] mount = "down"',
+            "'mount down' on the robot",
+        )
+
+    def test_face_down_with_mount_down_passes(self):
+        self.assertEqual(
+            self.errors(lambda d: d["imu"].update(face="down", mount="down")), []
+        )
+
+    def test_mount_down_on_a_face_up_layout_names_mount_up(self):
+        self.fails(lambda d: d["imu"].update(mount="down"), "the layout needs mount up")
+
+    def test_socket_turned_half_round_matches_no_mount(self):
+        # Pad 1 moves to where pad 8 was: pads on the same holes, reversed.
+        self.fails(
+            lambda d: d["placement"].update(J3=[36.11 + 17.78, 47.0, 180]),
+            "no firmware mount matches",
+            "[[-1, 0, 0], [0, -1, 0], [0, 0, 1]]",
+            "third mount",
+        )
+
+    def test_forward_toward_plus_y_matches_no_mount(self):
+        self.fails(
+            lambda d: d["outline"].update(forward="+y"), "no firmware mount matches"
+        )
+
+    def test_forward_is_validated_on_any_board(self):
+        def bad(d):
+            d["outline"]["forward"] = "up"
+            del d["imu"]
+
+        self.fails(bad, "[outline] forward must be one of")
+
+    def test_imu_needs_forward(self):
+        self.fails(lambda d: d["outline"].pop("forward"), "needs [outline] forward")
+
+    def test_bad_values(self):
+        self.fails(lambda d: d["imu"].update(mount="left"), "mount must be one of")
+        self.fails(lambda d: d["imu"].update(face="side"), "face must be one of")
+        self.fails(lambda d: d["imu"].update(ref="J99"), "'J99' is not in the netlist")
+        self.fails(lambda d: d["imu"].update(colour="red"), "[imu]: unknown key(s)")
+
+    def test_malformed_values_are_errors_not_crashes(self):
+        # Each used to reach a membership test with an unhashable or missing
+        # value: mount = ["up"] raised TypeError, a missing ref read "ref None".
+        cases = [
+            (lambda d: d["imu"].update(mount=["up"]), "[imu] mount must be one of"),
+            (lambda d: d["imu"].update(mount={"up": 1}), "[imu] mount must be one of"),
+            (lambda d: d["imu"].update(mount="sideways"), "got 'sideways'"),
+            (lambda d: d["imu"].update(face=["up"]), "[imu] face must be one of"),
+            (lambda d: d["imu"].update(face=1), "[imu] face must be one of"),
+            (lambda d: d["imu"].pop("ref"), "[imu] ref is required"),
+            (lambda d: d["imu"].update(ref=3), "[imu] ref must be a string"),
+            (lambda d: d["imu"].update(ref=["J3"]), "[imu] ref must be a string"),
+            (lambda d: d["outline"].update(forward=["-y"]), "forward must be one of"),
+            (lambda d: d.update(imu=[{"ref": "J3"}]), "[imu] must be a table"),
+        ]
+        for edit, needle in cases:
+            with self.subTest(needle=needle):
+                self.fails(edit, needle)
+        errors = self.errors(lambda d: d["imu"].pop("ref"))
+        self.assertFalse(any("None" in e for e in errors), errors)
+
+    def test_rotation_off_the_axes(self):
+        self.fails(
+            lambda d: d["placement"].update(J3=[36.11, 47.0, 45]),
+            "not a multiple of 90",
+        )
+
+    def test_back_face_placement_is_refused(self):
+        self.fails(
+            lambda d: d["placement"].update(J3=[36.11, 47.0, 0, "back"]),
+            "on the front face",
+        )
+
+    def test_footprint_without_axes(self):
+        # The frozen fixture's own J3 is a stock PinSocket_1x08.
+        self.fails(
+            None,
+            "footprint Connector_PinSocket_2.54mm:PinSocket_1x08_P2.54mm_Vertical "
+            "declares no sensor axes",
+            nl=netlist.build(PROJECT, ROOT),
+        )
+
+    def test_face_down_needs_a_single_pad_row(self):
+        # A three-column socket given axes: turning it over cannot put its
+        # pins back on their holes, so face = "down" is refused.
+        with tempfile.TemporaryDirectory() as tmp:
+            vendored = Path(tmp)
+            shutil.copytree(
+                library.VENDORED / "breakout-sockets", vendored / "breakout-sockets"
+            )
+            config = vendored / "breakout-sockets/sockets.toml"
+            text = config.read_text().replace(
+                "outline = [-1.61, -1.57, 19.39, 24.43]",
+                "outline = [-1.61, -1.57, 19.39, 24.43]\n"
+                'axes = { x = [0, -1], z = "component" }',
+            )
+            self.assertIn("CJMCU_2317_Socket", text)
+            config.write_text(text)
+            nl = dataclasses.replace(
+                self.nl,
+                comps=tuple(
+                    dataclasses.replace(
+                        c, footprint="Breakout_Sockets:CJMCU_2317_Socket"
+                    )
+                    if c.ref == "J3"
+                    else c
+                    for c in self.nl.comps
+                ),
+            )
+            errors = self.errors(lambda d: d["imu"].update(face="down"), nl, vendored)
+            self.assertTrue(any("needs one pad row" in e for e in errors), errors)
+            self.assertEqual(self.errors(None, nl, vendored), [])
 
 
 if __name__ == "__main__":

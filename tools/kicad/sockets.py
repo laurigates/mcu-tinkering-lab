@@ -48,6 +48,12 @@ board join each pair with copper. Its outline must equal the page's "the clone
 outline W × H mm", the moved pads and the rest of the module's pads must lie
 inside it, and the courtyard and F.Fab cover it as they do the first outline.
 
+A sensor module (the GY-521) also declares its sensor axes, `axes = { x =
+[dx, dy], z = "component" | "solder" }` in the same y-down frame: the X axis
+as a unit vector along the footprint's x or y, and the face the Z axis points
+out of. The footprint does not carry them; `kicad.boardcheck` reads them
+(`kicad.mount`) to check a board's `[imu]` mount against its layout.
+
 The footprints are written to `Breakout_Sockets.pretty/` with no other
 input, so `--check` regenerates in memory and byte-compares, writing nothing.
 Regenerating also deletes a footprint the config no longer names and rewrites
@@ -65,7 +71,7 @@ from pathlib import Path
 
 from hardware import HardwareError, parse_pad_centres
 
-from . import library, sexpr, vendor
+from . import library, mount, sexpr, vendor
 from .errors import KicadError
 from .paths import REPO_ROOT
 
@@ -80,7 +86,7 @@ SILK_MARGIN = 1.33
 # Courtyard clearance around the module outline (IPC-7351's nominal 0.25 mm).
 MODULE_MARGIN = 0.25
 SOCKET_KEYS = frozenset({"name", "board", "outline"})
-OPTIONAL_KEYS = frozenset({"twin"})
+OPTIONAL_KEYS = frozenset({"twin", "axes"})
 TWIN_KEYS = frozenset({"element", "offset", "outline"})
 # Exactly one: page pad centres by element, or listed positions.
 PAD_KEYS = frozenset({"pads", "pad_xy"})
@@ -109,6 +115,7 @@ class Socket:
     outline: tuple[float, float, float, float]  # x0, y0, x1, y1, page coordinates
     pad_xy: tuple[tuple[float, float], ...] = ()
     twin: Twin | None = None
+    axes: mount.ModuleAxes | None = None  # a sensor module's axes, not drawn
 
 
 def load_config(path: Path) -> list[Socket]:
@@ -163,6 +170,7 @@ def load_config(path: Path) -> list[Socket]:
             )
         outline = _outline(t["outline"], where)
         twin = _twin(t["twin"], pads, where) if "twin" in t else None
+        axes = mount.parse_axes(t["axes"], where) if "axes" in t else None
         out.append(
             Socket(
                 t["name"],
@@ -171,6 +179,7 @@ def load_config(path: Path) -> list[Socket]:
                 outline,
                 tuple(tuple(xy) for xy in pad_xy),
                 twin,
+                axes,
             )
         )
     names = [s.name for s in out]
