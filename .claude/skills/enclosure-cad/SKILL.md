@@ -162,8 +162,10 @@ the image would be "kept") and `<id>-captioned.png`, plus `captions.md` and
 - **The breakouts are look-alikes**, not KiCad models: `modules.toml` maps each
   footprint to a kind (PCB colour, chip, heatsink, USB-C, camera, terminal,
   servo headers), placed from the footprint's pads and F.Fab outline by
-  `enclosure/modules.py`. A plain socket footprint (balancebot J3, the GY-521)
-  names its `module` and `outline` in `enclosure.toml [heights]`. Sizes are
+  `enclosure/modules.py`. A plain socket footprint, with no F.Fab outline of
+  the module, names its `module` and `outline` in `enclosure.toml [heights]`;
+  give the module a `Breakout_Sockets` footprint instead where you can
+  (balancebot J3, the GY-521, since 2026-11-09). Sizes are
   typical package sizes and colours the common retail boards, not measured.
   The clash and wall gates never see them.
 - **Perspective framing needs a lens shift.** The bounding-box centre does not

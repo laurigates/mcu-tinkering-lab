@@ -1,5 +1,5 @@
 {
- "board_sha256": "debe2b8d12a76a3bb19a073dcd25fce1e46181c1cc69ae9e9df8b2591a4f4345",
+ "board_sha256": "34ae78f98199942d745806f696058841b1acb36d0136db8614f34917a731cdbc",
  "kicad_cli_version": "10.0.7",
  "netlist": {
   "components": {
@@ -109,7 +109,7 @@
     "value": "LM2596 module"
    },
    "J3": {
-    "footprint": "Connector_PinSocket_2.54mm:PinSocket_1x08_P2.54mm_Vertical",
+    "footprint": "Breakout_Sockets:GY521_Socket",
     "in_bom": true,
     "lcsc": "",
     "lib_id": "Connector_Generic:Conn_01x08",
@@ -761,5 +761,5 @@
    ]
   }
  },
- "schematic_sha256": "622bd5858694e534007fa7237a82d532b69776a90f1fb679b49f292de49f88dc"
+ "schematic_sha256": "ee161519017cd8073653eba50e94bc9d86cb889a2b68eaa021d88cd9f683c133"
 }

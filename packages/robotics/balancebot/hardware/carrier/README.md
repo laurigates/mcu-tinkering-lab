@@ -20,6 +20,12 @@ It adds the expansion header J6 with its 5V diode D3 and series resistors R5
 and R6, the drivers' VIO links R7 and R8, the I2C tap J7, the supply test header J8 and the
 ground post J9, and changes R3 from 27 kΩ to 22 kΩ so D0 can read a 4S pack.
 
+Since 2026-11-09 J3 is the generated `Breakout_Sockets:GY521_Socket`, whose
+F.Fab outline puts the module in front of the header. Its pads are where the
+plain 1×8 socket's were, and the re-route laid every track where it was
+before. The silkscreen no longer has the hand-drawn rectangle where the module
+lies; "GY-521: X arrow to FWD" stays.
+
 The boards delivered from the 2026-10-23 order (JLCPCB W2026102320533303,
 PCB line Y5-13829495A, file `balancebot-carrier-fab_Y5`) are the
 **commit 8d18cd8d layout** (#753, 2026-10-13), not the board this README
@@ -53,7 +59,7 @@ Everything below describes rev3.
 |---|---|---|
 | U1 | Seeed XIAO RP2350, in two 1×7 female headers | USB-C toward the top edge |
 | A1, A2 | Pololu-format DRV8825 carriers, in 1×8 female headers | Left / right stepper |
-| J3 | GY-521 (MPU6050), in a 1×8 female header | Lies flat, component side up, over the outlined area; the header is on its rear edge |
+| J3 | GY-521 (MPU6050), in a 1×8 female header | Lies flat, component side up, in front of the header (toward FWD); the header is on its rear edge |
 | J1 | JST-XH 2-pin (B2B-XH-A) | 3S pack (through its BMS); BAT+ on pad 1 (the square pad, right), marked "+" below it |
 | F1 | 3 A hold PTC, 1812 (BSMD1812-300-24V) | Pack input: limits a short on VBAT |
 | Q1 | ZXMP4A16G P-MOSFET, SOT-223 | Reverse-polarity switch: drain (tab) to F1, source to VBAT |
@@ -256,8 +262,14 @@ the Gerbers, or open the board in KiCad):
    power it.
 3. **GY-521 pin order.** VCC, GND, SCL, SDA, XDA, XCL, AD0, INT, with pin 1 at
    the left end of J3. Confirmed 2026-10-14 against the module on hand. With J3
-   on the rear edge of its outline and the module component side up, VCC lands
-   on pin 1 and the X arrow points to FWD.
+   on the rear edge of the module and the module component side up, VCC lands
+   on pin 1 and the X arrow points to FWD. J3's footprint,
+   `Breakout_Sockets:GY521_Socket`, carries the module's outline with its pads
+   (F.Fab and the courtyard, not the silkscreen), so the board, the case render
+   and the courtyard check read one copy of where the module lies. The board
+   size, 21.00 × 15.88 mm, is measured; where the holes sit in it is an
+   estimate ([`gy-521.md`](../../../../../docs/reference/boards/gy-521.md),
+   "Check on the physical board").
 4. **The buck lead.** J2 is labelled IN+, −, 5V, − (the registry's IN+, IN−,
    OUT+, OUT−). Meter the LM2596 lead's four wires against those labels
    before the first plug-in: OUT+ on IN+ puts the pack on the buck's output.
@@ -300,7 +312,7 @@ so JLCPCB assembly remains possible:
 - Set the LM2596 to 5.0–5.3 V on the bench **before** plugging it into J2. D1
   drops about 0.3 V, so the XIAO's 5V pad sees roughly 4.7–5.0 V.
 - Mount the GY-521 flat, component side up, on straight pins pushed down into
-  J3, so the module covers the outlined area in front of the header and its X
+  J3, so the module lies over the board in front of the header and its X
   arrow points to the board's FWD mark; the firmware computes pitch from X and
   Z (Z up). The carrier must sit at axle height for
   the IMU placement the build guide describes.

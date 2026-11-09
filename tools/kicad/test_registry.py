@@ -74,7 +74,20 @@ def _listed_names(
 ) -> dict[str, str] | None:
     """A Row/Pos layout table's pin names, keyed by the label
     `sockets.resolve` gives a `pad_xy` pad, "[x, y]"; None for a board with no
-    `_ROW_X` entry."""
+    `_ROW_X` entry.
+
+    A table with no Row column is one header along the bottom edge (Side B,
+    `tools/hardware/layout.py`): Pos 1 at the left is [0, 0], each next Pos
+    one pitch along +x.
+    """
+    if "Row" not in head:
+        sides = {row[head.index("Side")] for row in rows}
+        if sides != {"B"}:
+            return None
+        return {
+            f"[{sockets.fmt(2.54 * (int(row[head.index('Pos')]) - 1))}, 0]": row[0]
+            for row in rows
+        }
     row_x = _ROW_X.get(board)
     if row_x is None:
         return None
@@ -101,7 +114,11 @@ class CommittedRegistryTests(unittest.TestCase):
         self.assertEqual(drv.perfboard.height, "raised")
         self.assertEqual(drv.perfboard.footprint, drv.footprint)
         gy = registry.load("gy-521")
-        self.assertEqual(gy.perfboard.body, (-0.6, -0.6, 5.7, 7.6))
+        self.assertEqual(gy.footprint, "Breakout_Sockets:GY521_Socket")
+        self.assertEqual(
+            gy.perfboard.footprint,
+            "Connector_PinSocket_2.54mm:PinSocket_1x08_P2.54mm_Vertical",
+        )
         diode = registry.load("b5819w")
         self.assertEqual((diode.value, diode.lcsc), ("B5819W", "C8598"))
         self.assertEqual(diode.perfboard.value, "1N5819")
@@ -109,6 +126,27 @@ class CommittedRegistryTests(unittest.TestCase):
         self.assertEqual(hole.pins, {})
         xiao = registry.load("seeed-xiao-rp2350-socket")
         self.assertEqual((xiao.pin_numbers, xiao.pins), ("board-dip-ccw", {}))
+
+    def test_gy521_perfboard_body_is_its_socket_outline(self):
+        """The perfboard's GY-521 body is GY521_Socket's outline, not a copy.
+
+        The socket's frame has the pins along +x and the module toward -y; the
+        perfboard's plain 1x8 socket has them along +y with the module toward
+        +x. A quarter turn, socket (x, y) mm -> perfboard (-y, x) mm, then
+        holes of 2.54 mm.
+        """
+        config = sockets.load_config(
+            library.VENDORED / "breakout-sockets" / sockets.CONFIG
+        )
+        (socket,) = [s for s in config if s.name == "GY521_Socket"]
+        x0, y0, x1, y1 = socket.outline
+        want = (-y1 / 2.54, x0 / 2.54, -y0 / 2.54, x1 / 2.54)
+        gy = registry.load("gy-521")
+        for got, exp in zip(gy.perfboard.body, want, strict=True):
+            self.assertAlmostEqual(got, exp, delta=1e-3)
+        # The stand-in's pins really do run along +y from pin 1.
+        pads = footprints.parse(library.footprint_file(gy.perfboard.footprint)).pads
+        self.assertEqual((pads["8"].x, pads["8"].y), (0.0, 7 * 2.54))
 
     def test_breakout_socket_pins_are_named_as_the_board_page_names_them(self):
         """Socket pad n carries the board page's name for the n-th socketed header pad.
@@ -129,7 +167,12 @@ class CommittedRegistryTests(unittest.TestCase):
             layout = [
                 t
                 for t in _tables(page.read_text())
-                if "Side" in t[0] and ("Header" in t[0] or "Row" in t[0])
+                if "Side" in t[0]
+                and (
+                    "Header" in t[0]
+                    or "Row" in t[0]
+                    or (socket.pad_xy and "Pos" in t[0])
+                )
             ]
             self.assertEqual(len(layout), 1, page)
             head, *rows = layout[0]
@@ -159,6 +202,7 @@ class CommittedRegistryTests(unittest.TestCase):
                 "adafruit-pca9685-socket",
                 "adafruit-tca9548a-socket",
                 "cjmcu-2317-socket",
+                "gy-521",
                 "sparkfun-tb6612fng-socket",
             ],
         )
@@ -427,7 +471,7 @@ class MutationTests(unittest.TestCase):
     def test_bad_values(self):
         cases = {
             'height = "raised"': ('height = "huge"', "height 'huge'"),
-            "body = [-0.6, -0.6, 5.7, 7.6]": (
+            "body = [-0.5, -0.6339, 5.752, 7.6339]": (
                 "body = [1, 2, 3]",
                 "body must be 4 numbers",
             ),
