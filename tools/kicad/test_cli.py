@@ -43,6 +43,7 @@ PROJECT_CLIS: tuple[str, ...] = (
     "schematic",
     "sourcing",
     "stamp",
+    "stock",
 )
 # Modules whose main() works on the repo as a whole; with an empty repo root
 # each must exit 1. `vendor` checks tools/kicad/lib/, `derive_xiao` reads its
