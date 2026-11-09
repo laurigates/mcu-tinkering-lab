@@ -33,7 +33,9 @@
 #include "gemini_parse.h"
 #include "goal_state.h"
 #include "plan_budget.h"
+#include "planner_range.h"
 #include "planner_task.h" /* PLANNER_LOOP_PERIOD_MS — keeps the stated cadence honest */
+#include "reactive_controller.h"
 #include "scene_change.h"
 #include "sound_clips_core.h"
 #include "speech_budget.h"
@@ -100,12 +102,13 @@ static const char *TAG = "gemini_backend";
 /** Planner system prompt buffer.
  *
  *  Lives on the planner task stack, so it is sized deliberately rather than
- *  generously: ~800 bytes of fixed instruction, plus the persona's text_brief
+ *  generously: ~800 bytes of fixed instruction, the rangefinder clause (up to
+ *  PLANNER_RANGE_CLAUSE_MAX), plus the persona's text_brief
  *  (~450) and tag_brief (~420 with the sound-effect tags), plus a variation directive (up to
  *  DIALOGUE_STYLE_MAX) and the recalled-lines clause (GEMINI_RECALL_LIST_MAX).
  *  PLANNER_TASK_STACK_SIZE is set with this frame in mind — grow them together.
  */
-#define GEMINI_SYSTEM_PROMPT_MAX 3072
+#define GEMINI_SYSTEM_PROMPT_MAX (3072 + PLANNER_RANGE_CLAUSE_MAX)
 
 /** Cap on the rendered "you already said these" list.
  *
@@ -508,6 +511,24 @@ static char *build_request_json(const char *b64_image, note_trigger_t note_offer
                         "next by calling one of: drive, track, rotate, or stop. "
                         "Prefer 'track' when a target object is visible and centred in the frame. "
                         "Call 'stop' when the path is blocked or the scene is ambiguous. ");
+
+    /* What the rangefinders measured. Without it the model judges distance
+     * from the image alone, and a low camera makes everything near look closer
+     * than it is (planner_range.h). Omitted if telemetry cannot be read. */
+    reactive_telemetry_t tele = {0};
+    if (reactive_controller_get_telemetry(&tele) == ESP_OK) {
+        const planner_range_t range = {
+            .front_cm = tele.distance_cm,
+            .front_failed = tele.sensor_failed,
+            .reflex_active = tele.reflex_active,
+            .rear_cm = tele.distance_rear_cm,
+            .rear_failed = tele.rear_failed,
+        };
+        char range_clause[PLANNER_RANGE_CLAUSE_MAX];
+        if (planner_range_clause(&range, range_clause, sizeof(range_clause)) > 0) {
+            pos = append_prompt(system_prompt, sizeof(system_prompt), pos, "%s", range_clause);
+        }
+    }
 
     /* The note clause goes BEFORE the speech half, so the recall list below is
      * sized against the room left after it and the closing constraint keeps

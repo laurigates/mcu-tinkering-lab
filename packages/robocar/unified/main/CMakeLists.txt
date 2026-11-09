@@ -27,6 +27,7 @@ idf_component_register(
         "ambient_audio.c"
         "speech_budget.c"
         "speech_evidence.c"
+        "planner_range.c"
         "plan_activity.c"
         "plan_budget.c"
         "speech_queue.c"

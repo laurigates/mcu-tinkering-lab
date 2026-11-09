@@ -266,6 +266,19 @@ add_executable(test_speech_evidence
 add_test(NAME speech_evidence COMMAND test_speech_evidence)
 
 # -----------------------------------------------------------------------------
+# planner_range (the rangefinder readings in every planner request)
+#
+# A failed sensor reads as max range in the executor's filter; the clause must
+# say "unavailable" there, never "no echo", or the model is told the path is
+# clear when nothing was measured.
+# -----------------------------------------------------------------------------
+add_executable(test_planner_range
+    "${MAIN_SRC_DIR}/planner_range.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_planner_range.c"
+)
+add_test(NAME planner_range COMMAND test_planner_range)
+
+# -----------------------------------------------------------------------------
 # voice_fx_core (the retro-robot body resonance on the way to I2S)
 #
 # The load-bearing case is the comb's (1-g) input trim: without it the feedback

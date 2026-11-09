@@ -21,6 +21,8 @@ one-line form of each rule below and links here for the reasoning.
 - `sound(name)` — play a prebuilt clip (`horn`, `aoogah`, `bell`, `boing`), offered only when `speak` is; the parser puts it at the front of the line as a `[name]` tag (see [voice.md](voice.md#sound-clips))
 - `note(kind, text)` — a note to the developers, sent to GlitchTip and never spoken, offered only after a trigger (see [Planner notes](#planner-notes))
 
+Each request carries the frame and, beside it, what the front and rear rangefinders measured and whether the obstacle reflex is holding (`planner_range.c`). The model is told to judge distance from those numbers rather than from the image: the camera sits low, so anything near fills the frame, and without them the planner took obstacles for closer than they were. A sensor that has stopped answering is stated as unavailable, never as a reading, because the executor's filter turns a failed read into max range.
+
 The planner runs every `PLANNER_LOOP_PERIOD_MS` (15 s default, set by the Gemini free-tier quota rather than by control preference) on Core 1; the executor drives the goal at ~30 Hz on Core 0. No on-demand inference or blocking on responses — the planner is a background task that constantly updates `goal_state`, and the executor always has something to do.
 
 ## The planner does not run unless something is happening
