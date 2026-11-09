@@ -28,6 +28,13 @@ If the error isn't clear from `$ARGUMENTS`, ask the user to provide:
 2. Which project they're building
 3. Recent code changes
 
+**robocar-unified reports its own resets.** Before asking for a serial
+capture of a reboot that already happened, look in GlitchTip with the
+`glitchtip-triage` skill: the reset event names the reset reason, the exact
+build (`release`, `build_sha`) and carries the last 32 log lines before the
+reset as breadcrumbs. See
+`packages/robocar/unified/docs/firmware/error-reporting.md`.
+
 ### 1. Compilation Error Analysis
 
 **Run a fresh build to capture the error:**

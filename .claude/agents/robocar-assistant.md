@@ -44,6 +44,15 @@ just robocar-bringup::build
 just sim::test
 ```
 
+## Field failures
+
+The robot reports unplanned resets to a self-hosted GlitchTip over MQTT
+(`robocar/events`, ADR-033), with the last 32 log lines and the exact build.
+For "it rebooted" or "it misbehaved earlier", read those issues first (the
+`glitchtip-triage` skill) instead of asking for a fresh serial capture.
+Setup, event meanings and limits:
+`packages/robocar/unified/docs/firmware/error-reporting.md`.
+
 ## Testing
 
 - Pure-C modules (`*_core.c`, planner gates, budgets) have host tests under
