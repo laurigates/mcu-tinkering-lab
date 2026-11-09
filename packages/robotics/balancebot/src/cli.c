@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "balance_control.h"
+#include "cli_gate.h"
 #include "config.h"
 #include "hardware/adc.h"
 #include "hardware/gpio.h"
@@ -387,14 +388,33 @@ static void print_upside_down(const char *prefix, float up_g, uint32_t mount)
 // would push the wrong way. The check runs on a snapshot taken after any
 // `mount` just sent (a paste, a script) has reached core 1, so it uses the
 // mount core 1 applies. Core 1 checks again under its mount when CMD_ARM
-// runs; a refusal there shows in arm_refusals and is reported here.
+// runs; a refusal there shows in arm_refusals and is reported here. If core 1
+// has not caught up (a `save` before it stalls core 1 past the wait), nothing
+// is judged on the stale snapshot and nothing is sent. Core 1 arms only from
+// IDLE, so any other state is refused here rather than reported as OK.
 static void cmd_arm(void)
 {
     balance_snapshot_t s;
-    wait_core1(&s);
-    if (s.state != BAL_STATE_RUN && imu_gravity_refuses_arm(&s.gravity)) {
-        print_upside_down("", s.gravity.up_g, s.imu_mount);
-        return;
+    const bool synced = wait_core1(&s);
+    switch (cli_gate_arm(synced, s.state, &s.gravity)) {
+        case CLI_GATE_SEND:
+            break;
+        case CLI_GATE_BUSY:
+            printf("ERR: core 1 busy — earlier commands (a mount?) not applied yet, arm not sent; "
+                   "arm again\n");
+            return;
+        case CLI_GATE_UPSIDE_DOWN:
+            print_upside_down("", s.gravity.up_g, s.imu_mount);
+            return;
+        default:
+            if (s.state == BAL_STATE_FAULT) {
+                printf("ERR: state FAULT (tilt cutoff) — 'disarm' to clear it, or hold upright "
+                       "within %.0f deg for %.0f s; then arm\n",
+                       (double)FAULT_CLEAR_DEG, (double)FAULT_CLEAR_S);
+            } else {
+                printf("ERR: state %s — already armed; 'disarm' to stop\n", state_name(s.state));
+            }
+            return;
     }
     const uint32_t refusals = s.arm_refusals;
     balance_cmd_t cmd = {.cmd = CMD_ARM};
@@ -471,7 +491,7 @@ static void cmd_help(void)
     printf("  arm | disarm         start/stop balancing\n");
     printf("  rate <l|r> <sps>     open-loop motor test (disarmed only)\n");
     printf("  cal                  gyro bias calibration (robot still!)\n");
-    printf("  save | load          persist / reload params (flash)\n");
+    printf("  save | load          persist / reload params (flash; disarmed only)\n");
 }
 
 static void handle_line(char *l)
@@ -515,6 +535,7 @@ static void handle_line(char *l)
     } else if (strcmp(tok, "disarm") == 0) {
         balance_cmd_t cmd = {.cmd = CMD_DISARM};
         balance_control_send_cmd(&cmd);
+        note_sent();  // a pasted 'arm' or 'load' after it checks the state it leaves
         printf("OK\n");
     } else if (strcmp(tok, "rate") == 0) {
         const char *motor = strtok(NULL, " \t");
@@ -537,6 +558,21 @@ static void handle_line(char *l)
         balance_control_send_cmd(&cmd);
         printf("saving (check 'stat' for result; disarmed only)\n");
     } else if (strcmp(tok, "load") == 0) {
+        // Core 1 applies parameters, gains and controller in RUN but ignores
+        // the mount there, so a load while armed would leave the mirror (and
+        // `get`) on a mount core 1 is not applying. Disarmed only, like save.
+        balance_snapshot_t s;
+        const cli_gate_t gate = cli_gate_load(wait_core1(&s), s.state);
+        if (gate == CLI_GATE_BUSY) {
+            printf("ERR: core 1 busy — earlier commands not applied yet, nothing loaded; "
+                   "load again\n");
+            return;
+        }
+        if (gate != CLI_GATE_SEND) {
+            printf("ERR: disarm first — load would change the mount, which core 1 keeps while "
+                   "armed; nothing loaded\n");
+            return;
+        }
         bool found = param_store_load(mirror);
         boot_note[0] = '\0';
         if (sync_all(true)) {
