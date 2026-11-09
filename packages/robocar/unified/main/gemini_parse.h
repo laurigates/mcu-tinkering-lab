@@ -17,6 +17,7 @@
 
 #include "esp_err.h"
 #include "goal_state.h"
+#include "note_gate.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -47,6 +48,24 @@ typedef struct {
  * across those tasks.
  */
 void gemini_parse_last_usage(gemini_usage_t *out);
+
+/** A `note` call from the planner (note_gate.h, ADR-033). */
+typedef struct {
+    /** NOTE_KIND_NONE when the response carried no usable note. */
+    note_kind_t kind;
+    /** One line, at most NOTE_TEXT_MAX bytes (note_text_clean()). */
+    char text[NOTE_TEXT_MAX + 1];
+} gemini_note_t;
+
+/**
+ * @brief The `note` call from the most recent gemini_parse_response(), if any.
+ *
+ * Cleared at the start of every parse, like gemini_parse_last_usage(). Only a
+ * note with a known kind and some printable text counts; the first such call
+ * wins. A `note` call is never taken as the motion goal. The caller decides
+ * whether the tool was offered: this reports what the response carried.
+ */
+void gemini_parse_last_note(gemini_note_t *out);
 
 /**
  * @brief Navigate candidates[0].content.parts[0].functionCall from the raw

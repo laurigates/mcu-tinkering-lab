@@ -14,6 +14,7 @@
 
 #include "ambient_audio.h"
 #include "dialogue_style.h"
+#include "note_gate.h"
 #include "plan_activity.h"
 #include "plan_budget.h"
 #include "planner_cycle_core.h"
@@ -39,6 +40,7 @@ static void reset_modules(void)
     ambient_audio_init();
     speech_budget_init();
     dialogue_style_reset_recent();
+    note_gate_init();
 }
 
 #define TEST(name)               \
@@ -342,6 +344,117 @@ TEST(test_after_request_notes_the_call)
     ASSERT(plan_activity_should_call(&ev, t1 + 2u * PLANNER_LOOP_PERIOD_MS));
 }
 
+/* ---- note gate triggers (ADR-033) ---------------------------------------- */
+
+TEST(test_a_reflex_trip_offers_a_note_once_then_waits_for_the_window)
+{
+    planner_cycle_state_t st = {0};
+    planner_note_inputs_t in = {.reflex_trips = 0, .blind = false};
+    ASSERT(planner_cycle_note_offer(&st, &in, 1000) == NOTE_TRIGGER_NONE);
+
+    in.reflex_trips = 1; /* braked and released between two requests */
+    ASSERT(planner_cycle_note_offer(&st, &in, 16000) == NOTE_TRIGGER_REFLEX);
+    ASSERT(planner_cycle_note_offer(&st, &in, 31000) == NOTE_TRIGGER_NONE);
+
+    in.reflex_trips = 2; /* again, inside the five-minute window */
+    ASSERT(planner_cycle_note_offer(&st, &in, 46000) == NOTE_TRIGGER_NONE);
+    ASSERT(planner_cycle_note_offer(&st, &in, 16000 + NOTE_GATE_MIN_INTERVAL_MS) ==
+           NOTE_TRIGGER_REFLEX);
+}
+
+TEST(test_blind_is_raised_once_per_spell)
+{
+    planner_cycle_state_t st = {0};
+    planner_note_inputs_t in = {.reflex_trips = 0, .blind = true};
+    ASSERT(planner_cycle_note_offer(&st, &in, 0) == NOTE_TRIGGER_BLIND);
+    uint32_t t = NOTE_GATE_MIN_INTERVAL_MS;
+    ASSERT(planner_cycle_note_offer(&st, &in, t) == NOTE_TRIGGER_NONE); /* same spell */
+    in.blind = false;
+    (void)planner_cycle_note_offer(&st, &in, t += NOTE_GATE_MIN_INTERVAL_MS);
+    in.blind = true; /* a new spell */
+    ASSERT(planner_cycle_note_offer(&st, &in, t += NOTE_GATE_MIN_INTERVAL_MS) ==
+           NOTE_TRIGGER_BLIND);
+}
+
+TEST(test_a_track_streak_raises_track_stuck)
+{
+    planner_cycle_state_t st = {0};
+    const planner_note_inputs_t in = {0};
+    for (uint32_t i = 0; i + 1 < NOTE_GATE_TRACK_STUCK_CYCLES; i++) {
+        planner_cycle_note_outcome(&st, PLANNER_RESULT_WRITE_GOAL, GOAL_KIND_TRACK,
+                                   PLANNER_SPEECH_NONE, NOTE_TRIGGER_NONE);
+    }
+    /* A different goal breaks the streak. */
+    planner_cycle_note_outcome(&st, PLANNER_RESULT_WRITE_GOAL, GOAL_KIND_STOP, PLANNER_SPEECH_NONE,
+                               NOTE_TRIGGER_NONE);
+    ASSERT(planner_cycle_note_offer(&st, &in, 0) == NOTE_TRIGGER_NONE);
+    for (uint32_t i = 0; i < NOTE_GATE_TRACK_STUCK_CYCLES; i++) {
+        planner_cycle_note_outcome(&st, PLANNER_RESULT_WRITE_GOAL, GOAL_KIND_TRACK,
+                                   PLANNER_SPEECH_NONE, NOTE_TRIGGER_NONE);
+    }
+    ASSERT(planner_cycle_note_offer(&st, &in, 0) == NOTE_TRIGGER_TRACK_STUCK);
+}
+
+TEST(test_a_failed_request_breaks_the_track_streak)
+{
+    planner_cycle_state_t st = {0};
+    const planner_note_inputs_t in = {0};
+    for (uint32_t i = 0; i < NOTE_GATE_TRACK_STUCK_CYCLES; i++) {
+        planner_cycle_note_outcome(&st,
+                                   i == 1 ? PLANNER_RESULT_STOP_BACKOFF : PLANNER_RESULT_WRITE_GOAL,
+                                   GOAL_KIND_TRACK, PLANNER_SPEECH_NONE, NOTE_TRIGGER_NONE);
+    }
+    ASSERT(planner_cycle_note_offer(&st, &in, 0) == NOTE_TRIGGER_NONE);
+}
+
+TEST(test_repeated_repeats_raise_repeats_and_a_spoken_line_resets)
+{
+    planner_cycle_state_t st = {0};
+    const planner_note_inputs_t in = {0};
+    planner_cycle_note_outcome(&st, PLANNER_RESULT_WRITE_GOAL, GOAL_KIND_STOP,
+                               PLANNER_SPEECH_SUPPRESS_REPEAT, NOTE_TRIGGER_NONE);
+    planner_cycle_note_outcome(&st, PLANNER_RESULT_WRITE_GOAL, GOAL_KIND_STOP, PLANNER_SPEECH_POST,
+                               NOTE_TRIGGER_NONE);
+    for (uint32_t i = 0; i + 1 < NOTE_GATE_REPEAT_STREAK; i++) {
+        planner_cycle_note_outcome(&st, PLANNER_RESULT_WRITE_GOAL, GOAL_KIND_STOP,
+                                   PLANNER_SPEECH_SUPPRESS_REPEAT, NOTE_TRIGGER_NONE);
+        /* A cycle with no line does not break it. */
+        planner_cycle_note_outcome(&st, PLANNER_RESULT_WRITE_GOAL, GOAL_KIND_STOP,
+                                   PLANNER_SPEECH_NONE, NOTE_TRIGGER_NONE);
+    }
+    ASSERT(planner_cycle_note_offer(&st, &in, 0) == NOTE_TRIGGER_NONE);
+    planner_cycle_note_outcome(&st, PLANNER_RESULT_WRITE_GOAL, GOAL_KIND_STOP,
+                               PLANNER_SPEECH_SUPPRESS_REPEAT, NOTE_TRIGGER_NONE);
+    ASSERT(planner_cycle_note_offer(&st, &in, 0) == NOTE_TRIGGER_REPEATS);
+}
+
+TEST(test_every_nth_request_raises_a_reflection)
+{
+    planner_cycle_state_t st = {0};
+    const planner_note_inputs_t in = {0};
+    for (uint32_t i = 0; i + 1 < NOTE_GATE_REFLECT_EVERY; i++) {
+        planner_cycle_note_outcome(&st, PLANNER_RESULT_WRITE_GOAL, GOAL_KIND_STOP,
+                                   PLANNER_SPEECH_NONE, NOTE_TRIGGER_NONE);
+    }
+    ASSERT(planner_cycle_note_offer(&st, &in, 0) == NOTE_TRIGGER_NONE);
+    planner_cycle_note_outcome(&st, PLANNER_RESULT_STOP_BACKOFF, GOAL_KIND_STOP,
+                               PLANNER_SPEECH_NONE, NOTE_TRIGGER_NONE);
+    ASSERT(planner_cycle_note_offer(&st, &in, 0) == NOTE_TRIGGER_REFLECT);
+}
+
+TEST(test_an_offline_request_gives_the_offer_back)
+{
+    planner_cycle_state_t st = {0};
+    planner_note_inputs_t in = {.reflex_trips = 1, .blind = false};
+    const note_trigger_t offered = planner_cycle_note_offer(&st, &in, 0);
+    ASSERT(offered == NOTE_TRIGGER_REFLEX);
+    planner_cycle_note_outcome(&st, PLANNER_RESULT_STOP_IDLE, GOAL_KIND_STOP, PLANNER_SPEECH_NONE,
+                               offered);
+    ASSERT(note_gate_offers() == 0);
+    /* The link is back on the next tick: the same reflex is offered. */
+    ASSERT(planner_cycle_note_offer(&st, &in, 15000) == NOTE_TRIGGER_REFLEX);
+}
+
 int main(void)
 {
     printf("planner_cycle_core host tests\n");
@@ -365,6 +478,13 @@ int main(void)
     run_test_a_posted_line_is_marked_spoken();
     run_test_after_request_returns_the_gate_verdict_at_that_moment();
     run_test_after_request_notes_the_call();
+    run_test_a_reflex_trip_offers_a_note_once_then_waits_for_the_window();
+    run_test_blind_is_raised_once_per_spell();
+    run_test_a_track_streak_raises_track_stuck();
+    run_test_a_failed_request_breaks_the_track_streak();
+    run_test_repeated_repeats_raise_repeats_and_a_spoken_line_resets();
+    run_test_every_nth_request_raises_a_reflection();
+    run_test_an_offline_request_gives_the_offer_back();
 
     if (g_failures) {
         printf("%d failure(s)\n", g_failures);

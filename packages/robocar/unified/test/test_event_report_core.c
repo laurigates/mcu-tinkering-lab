@@ -368,6 +368,22 @@ static void breadcrumbs_render_as_log_category(void)
     cJSON_Delete(root);
 }
 
+static void breadcrumb_category_can_be_set(void)
+{
+    const char *goals[] = {"track 40%", "stop"};
+    event_report_t ev = base_event();
+    ev.source = "planner";
+    ev.breadcrumbs = goals;
+    ev.breadcrumb_count = 2;
+    ev.breadcrumb_category = "goal";
+    cJSON *root = render_parse(&ev);
+    const cJSON *arr = cJSON_GetObjectItemCaseSensitive(root, "breadcrumbs");
+    ASSERT(cJSON_GetArraySize(arr) == 2);
+    ASSERT(strcmp(str_of(cJSON_GetArrayItem(arr, 0), "category"), "goal") == 0);
+    ASSERT(strcmp(str_of(root, "source"), "planner") == 0);
+    cJSON_Delete(root);
+}
+
 static void exception_frames_render_as_hex_innermost_first(void)
 {
     event_report_t ev = base_event();
@@ -429,6 +445,7 @@ int main(void)
     test_run("missing_required_field_renders_nothing", missing_required_field_renders_nothing);
     test_run("tags_extras_and_fingerprint_render", tags_extras_and_fingerprint_render);
     test_run("breadcrumbs_render_as_log_category", breadcrumbs_render_as_log_category);
+    test_run("breadcrumb_category_can_be_set", breadcrumb_category_can_be_set);
     test_run("exception_frames_render_as_hex_innermost_first",
              exception_frames_render_as_hex_innermost_first);
     test_run("oversized_counts_are_clamped", oversized_counts_are_clamped);

@@ -56,6 +56,7 @@ idf_component_register(
         "reactive_controller.c"
         "planner_task.c"
         "planner_cycle_core.c"
+        "note_gate.c"
         "self_report.c"
         "credentials_loader.c"
         "improv_console.c"

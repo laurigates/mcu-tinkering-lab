@@ -49,10 +49,10 @@ Each subsystem's design notes, measurements and the reasoning behind the rules b
 |---|---|
 | [i2c-and-motors.md](docs/firmware/i2c-and-motors.md) | Mux channel map, non-fatal peripherals and the `i2c_peripherals=` fact, PCA9685 channel layout, coast vs brake, bus clock and PWM phase, the managed I2C drivers and the `pca9685` version floor |
 | [console-and-mqtt.md](docs/firmware/console-and-mqtt.md) | Serial console command table (including `mqtt auth` and `gemini auth`), MQTT remote commands and read-only mode, `servo exercise`, the boot wheel exercise |
-| [error-reporting.md](docs/firmware/error-reporting.md) | GlitchTip error events on `robocar/events`: setup, the development loop, reset events and the RTC breadcrumb ring, core-dump crash events, `report` |
+| [error-reporting.md](docs/firmware/error-reporting.md) | GlitchTip error events on `robocar/events`: setup, the development loop, reset events and the RTC breadcrumb ring, core-dump crash events, planner notes, `report` |
 | [head-aiming.md](docs/firmware/head-aiming.md) | How the executor satisfies `track` with the head, the wheels or both; head leases |
 | [activity-trace.md](docs/firmware/activity-trace.md) | LED colour meanings, `trace` counters, the I2C bus counter |
-| [planner.md](docs/firmware/planner.md) | Planner tools, dormancy ladder (`plan_activity`), spend fuse (`plan_budget`), reading the planner log |
+| [planner.md](docs/firmware/planner.md) | Planner tools, dormancy ladder (`plan_activity`), spend fuse (`plan_budget`), planner notes to GlitchTip (`note_gate`), reading the planner log |
 | [camera-and-log.md](docs/firmware/camera-and-log.md) | Frame stats and `snap` dumps, the UART0 log mirror on J15, why the sensor is an OV3660 |
 | [voice.md](docs/firmware/voice.md) | TTS streaming and preroll, personas and dialogue pools, speech gates (scene, ambient audio, budget), voice FX, sound clips (`[horn]`, the `sound` tool, the reflex horn), push-to-talk and VAD voice turns, voice budget, memory peak |
 | [wifi-and-ota.md](docs/firmware/wifi-and-ota.md) | Improv Serial provisioning over USB-Serial-JTAG, the network supervisor (nothing waits on WiFi), where the Gemini key comes from, OTA manifest polling, the build-SHA install decision |
@@ -123,6 +123,7 @@ One line per rule. Each group's doc has the full reasoning and the tests that ho
 - `planner_task.c` is the only goal source; a new source writes `goal_state` the same way.
 - A second AI backend is a newly designed abstraction; the removed `claude_*`/`ollama_*` code stays removed.
 - Per-cycle decision logic goes in `planner_cycle_core.c`, not `planner_task.c`, so the behaviour twin (`packages/robocar/twin`, ADR-030) runs it.
+- The `note` tool is declared only when `note_gate` offers a trigger (`planner_cycle_note_offer()`); the gate's per-boot count stays spent until `plan resume` or a reboot (ADR-033).
 
 **Pan/tilt head** ([why](docs/firmware/head-aiming.md#dont))
 

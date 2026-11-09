@@ -193,7 +193,7 @@ static esp_err_t http_event_handler(esp_http_client_event_t *evt)
  * Box coordinates use Gemini's convention: [ymin, xmin, ymax, xmax]
  * integers normalised 0..1000.
  */
-static cJSON *build_tools(bool allow_speak)
+static cJSON *build_tools(bool allow_speak, bool allow_note)
 {
     cJSON *tools_arr = cJSON_CreateArray();
 
@@ -371,6 +371,52 @@ static cJSON *build_tools(bool allow_speak)
         cJSON_AddItemToArray(tools_arr, fn);
     }
 
+    /* ---- note ----
+     * A note to the developers, sent to GlitchTip and never spoken (ADR-033).
+     * Declared only on a request where note_gate offered it, for the same
+     * reason `speak` is withheld: the model cannot know what happened since its
+     * last note, so the firmware decides and the prompt says why. The parser
+     * keeps a `note` call out of the motion goal. */
+    if (allow_note) {
+        cJSON *fn = cJSON_CreateObject();
+        cJSON_AddStringToObject(fn, "name", "note");
+        cJSON_AddStringToObject(fn, "description",
+                                "Write one short note to the robot's developers about your own "
+                                "behaviour or a difficulty you ran into. It is logged, not "
+                                "spoken. Call this IN ADDITION to a movement function, and only "
+                                "if you have something specific to report.");
+        cJSON *params = cJSON_AddObjectToObject(fn, "parameters");
+        cJSON_AddStringToObject(params, "type", "OBJECT");
+        cJSON *props = cJSON_AddObjectToObject(params, "properties");
+
+        cJSON *kind = cJSON_CreateObject();
+        cJSON_AddStringToObject(kind, "type", "STRING");
+        cJSON_AddStringToObject(kind, "format", "enum");
+        cJSON *kinds = cJSON_AddArrayToObject(kind, "enum");
+        for (int k = NOTE_KIND_NONE + 1; k < NOTE_KIND_COUNT; k++) {
+            cJSON_AddItemToArray(kinds, cJSON_CreateString(note_kind_name((note_kind_t)k)));
+        }
+        cJSON_AddStringToObject(kind, "description",
+                                "difficulty = something stopped you doing what you meant to; "
+                                "behaviour = something you notice about how you act; "
+                                "suggestion = a change that would help you.");
+        cJSON_AddItemToObject(props, "kind", kind);
+
+        cJSON *text = cJSON_CreateObject();
+        cJSON_AddStringToObject(text, "type", "STRING");
+        cJSON_AddStringToObject(text, "description",
+                                "At most 280 characters of plain English: what you saw, what you "
+                                "tried and what happened. No markdown.");
+        cJSON_AddItemToObject(props, "text", text);
+
+        cJSON *required = cJSON_CreateArray();
+        cJSON_AddItemToArray(required, cJSON_CreateString("kind"));
+        cJSON_AddItemToArray(required, cJSON_CreateString("text"));
+        cJSON_AddItemToObject(params, "required", required);
+
+        cJSON_AddItemToArray(tools_arr, fn);
+    }
+
     return tools_arr;
 }
 
@@ -407,7 +453,7 @@ __attribute__((format(printf, 4, 5))) static size_t append_prompt(char *buf, siz
     return (pos + (size_t)n >= cap) ? (cap - 1u) : (pos + (size_t)n);
 }
 
-static char *build_request_json(const char *b64_image)
+static char *build_request_json(const char *b64_image, note_trigger_t note_offer)
 {
     /* Built per call rather than static: the spoken register follows the active
      * persona, which is switchable at runtime. The cadence is stated from
@@ -462,6 +508,19 @@ static char *build_request_json(const char *b64_image)
                         "next by calling one of: drive, track, rotate, or stop. "
                         "Prefer 'track' when a target object is visible and centred in the frame. "
                         "Call 'stop' when the path is blocked or the scene is ambiguous. ");
+
+    /* The note clause goes BEFORE the speech half, so the recall list below is
+     * sized against the room left after it and the closing constraint keeps
+     * its reserve (stateless-model-gating.md §2). note_trigger_reason() states
+     * only what the robot measured. */
+    if (note_offer != NOTE_TRIGGER_NONE) {
+        pos = append_prompt(system_prompt, sizeof(system_prompt), pos,
+                            "You may ALSO call 'note' once, to write a short note to the robot's "
+                            "developers; it is logged, not spoken. It is offered because %s. "
+                            "Report only what you can see or have done; if you have nothing "
+                            "specific to add, do not call it. ",
+                            note_trigger_reason(note_offer));
+    }
 
     if (may_speak) {
         /* Drawn fresh per request — this is the whole anti-repetition mechanism.
@@ -568,7 +627,7 @@ static char *build_request_json(const char *b64_image)
     /* tools — one tool object containing all five function declarations */
     cJSON *tools_arr = cJSON_AddArrayToObject(root, "tools");
     cJSON *tool_obj = cJSON_CreateObject();
-    cJSON *fn_decls = build_tools(may_speak); /* array of function objects */
+    cJSON *fn_decls = build_tools(may_speak, note_offer != NOTE_TRIGGER_NONE);
     cJSON_AddItemToObject(tool_obj, "functionDeclarations", fn_decls);
     cJSON_AddItemToArray(tools_arr, tool_obj);
 
@@ -623,13 +682,20 @@ esp_err_t gemini_backend_init(void)
 }
 
 esp_err_t gemini_backend_plan(const uint8_t *jpeg, size_t jpeg_len, goal_t *out_goal,
-                              uint32_t *latency_ms_out, char *out_speech, size_t speech_cap)
+                              uint32_t *latency_ms_out, char *out_speech, size_t speech_cap,
+                              note_trigger_t note_offer, gemini_note_t *out_note)
 {
     if (!jpeg || jpeg_len == 0 || !out_goal) {
         return ESP_ERR_INVALID_ARG;
     }
     if (out_speech && speech_cap > 0) {
         out_speech[0] = '\0';
+    }
+    /* Cleared on every path, so a request that fails before the parse can
+     * never hand back the previous response's note. */
+    if (out_note) {
+        out_note->kind = NOTE_KIND_NONE;
+        out_note->text[0] = '\0';
     }
     if (!s_response_buf) {
         ESP_LOGE(TAG, "gemini_backend_plan() called before gemini_backend_init()");
@@ -679,7 +745,7 @@ esp_err_t gemini_backend_plan(const uint8_t *jpeg, size_t jpeg_len, goal_t *out_
     }
 
     /* ---- Build request body ---- */
-    char *request_body = build_request_json(b64);
+    char *request_body = build_request_json(b64, note_offer);
     free(b64);
     b64 = NULL;
 
@@ -738,6 +804,17 @@ esp_err_t gemini_backend_plan(const uint8_t *jpeg, size_t jpeg_len, goal_t *out_
     gemini_usage_t usage;
     gemini_parse_last_usage(&usage);
     plan_budget_note(usage.present ? usage.total : -1, true);
+
+    /* Only a note the request offered is handed back: a reply carrying one
+     * otherwise is not something this request could have produced. */
+    if (out_note) {
+        gemini_parse_last_note(out_note);
+        if (out_note->kind != NOTE_KIND_NONE && note_offer == NOTE_TRIGGER_NONE) {
+            ESP_LOGW(TAG, "note call in a reply that did not offer it — dropped");
+            out_note->kind = NOTE_KIND_NONE;
+            out_note->text[0] = '\0';
+        }
+    }
 
     if (err != ESP_OK) {
         /* gemini_parse_response already set out_goal->kind = GOAL_KIND_STOP.

@@ -171,6 +171,33 @@ static void test_reflex_release(void)
     ASSERT(rd == 1);
 }
 
+/* reflex_trips counts each latch once, on the rising edge, so the planner can
+ * see a brake that tripped and released between two of its samples. */
+static void test_reflex_trips_counts_each_latch_once(void)
+{
+    setup();
+    prime_distance(100);
+    reactive_telemetry_t t = {0};
+    reactive_controller_get_telemetry(&t);
+    ASSERT(!t.reflex_active);
+    /* The host build keeps telemetry across tests, so count from here. */
+    const uint32_t base = t.reflex_trips;
+
+    prime_distance(10); /* three ticks latched: still one trip */
+    reactive_controller_get_telemetry(&t);
+    ASSERT(t.reflex_active);
+    ASSERT(t.reflex_trips == base + 1);
+
+    prime_distance(30); /* released */
+    reactive_controller_get_telemetry(&t);
+    ASSERT(!t.reflex_active);
+    ASSERT(t.reflex_trips == base + 1);
+
+    prime_distance(10); /* second latch */
+    reactive_controller_get_telemetry(&t);
+    ASSERT(t.reflex_trips == base + 2);
+}
+
 /* GOAL_KIND_TRACK centered box → both wheels within 5%. */
 static void test_track_centered(void)
 {
@@ -1072,6 +1099,7 @@ int main(void)
 
     test_run("reflex_latch_overrides_drive", test_reflex_latch_overrides_drive);
     test_run("reflex_release", test_reflex_release);
+    test_run("reflex_trips_counts_each_latch_once", test_reflex_trips_counts_each_latch_once);
     test_run("track_centered", test_track_centered);
     test_run("track_right_biased", test_track_right_biased);
     test_run("drive_straight", test_drive_straight);

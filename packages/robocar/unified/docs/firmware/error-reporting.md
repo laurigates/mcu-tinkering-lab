@@ -103,6 +103,19 @@ The JSON contract is in `main/event_report_core.h`.
   reboot, and the PCA9685 holds its last PWM through an ESP32 reset until
   boot re-initialises the motors. Measure that gap on the bench before
   relying on dumps while driving.
+- **Planner notes (`robocar-ai`).** When something the planner should
+  reflect on has happened (the reflex braked, a `track` goal kept repeating,
+  the camera was blind, replies kept being rejected as repetitive, or a
+  periodic reflection is due), the next request offers Gemini a `note` tool.
+  The model writes at most 280 characters of prose (`difficulty`,
+  `behaviour` or `suggestion`); the firmware attaches the trigger, the last
+  five goals (as `goal` breadcrumbs), the reflex count, the scene scores and
+  the persona, and the bridge files it in the `robocar-ai` project,
+  fingerprinted by trigger and kind. At most one offer per 5 minutes and 20
+  per boot; `plan` shows the count and `plan resume` resets it. Read these as
+  input for firmware changes, not as faults: a recurring `reflex/difficulty`
+  note near the same goals is a place to look at the executor. How the gate
+  decides: [planner.md](planner.md#planner-notes).
 - **Held in RAM until MQTT connects.** A reset event that has not been
   published when the robot resets again is lost, and that boot's capture
   replaces the ring it carried. A brownout loop that never reaches MQTT

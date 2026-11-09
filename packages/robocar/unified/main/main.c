@@ -55,6 +55,7 @@
 #include "mic_dump.h"
 #include "mic_pdm.h"
 #include "net_supervisor_core.h"
+#include "note_gate.h"
 /* motor_controller_init() in the hardware phase and motor_is_initialized() in
  * the boot wheel exercise — both reads. Motor *output* is the reactive
  * executor's job, and nothing here writes the motors directly. */
@@ -1320,8 +1321,9 @@ static void handle_plan_cmd(const char *buf)
         }
         if (strcmp(op, "resume") == 0) {
             plan_budget_resume();
+            note_gate_resume();
             plan_activity_wake();
-            printf("plan: budget counters cleared, planner released\n");
+            printf("plan: budget and note counters cleared, planner released\n");
             return;
         }
         if (n == 2 && strcmp(op, "scene") == 0) {
@@ -1404,6 +1406,26 @@ static void handle_plan_cmd(const char *buf)
         printf("  *** BUDGET EXHAUSTED (%s) — no requests until `plan resume` ***\n",
                (budget == PLAN_BUDGET_TRIP_REQUESTS) ? "request ceiling" : "token ceiling");
     }
+
+    /* The note gate (ADR-033): offers are what is rationed, so they lead. */
+    const uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000);
+    printf("  notes:   %" PRIu32 "/%u offered, %" PRIu32 " written, next %s", note_gate_offers(),
+           (unsigned)NOTE_GATE_MAX_PER_BOOT, note_gate_written(),
+           note_gate_spent() ? "after `plan resume`" : "");
+    if (!note_gate_spent()) {
+        printf("in %" PRIu32 " s", note_gate_wait_ms(now_ms) / 1000u);
+    }
+    printf(",  pending:");
+    const uint32_t pending = note_gate_pending();
+    if (pending == 0u) {
+        printf(" none");
+    }
+    for (int t = NOTE_TRIGGER_NONE + 1; t < NOTE_TRIGGER_COUNT; t++) {
+        if (pending & (1u << (unsigned)t)) {
+            printf(" %s", note_trigger_name((note_trigger_t)t));
+        }
+    }
+    printf("\n");
 }
 
 static void handle_mic_cmd(const char *buf)
@@ -2233,6 +2255,7 @@ static esp_err_t init_hierarchical_ai(void)
     // is absent.
     plan_budget_init();
     plan_activity_init(PLANNER_LOOP_PERIOD_MS);
+    note_gate_init();
 
     // The same backstop for voice turns (issue #623): a ration on hands-free
     // triggers and a per-boot ceiling on every voice-turn request. Here, before

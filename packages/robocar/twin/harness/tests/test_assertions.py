@@ -218,3 +218,26 @@ def test_speak_not_offered_is_counted(scenario_with):
     flagged = {"t": "speak_not_offered", "at_ms": 30000, "text": "hi"}
     assert one(scn, []).passed
     assert not one(scn, [flagged]).passed
+
+
+def test_note_offered_filters_on_trigger(scenario_with):
+    scn = scenario_with({"note_offered": {"trigger": "reflex", "count": 1}})
+    offered = {"t": "note_offered", "at_ms": 30000, "trigger": "reflex"}
+    other = {"t": "note_offered", "at_ms": 60000, "trigger": "reflect"}
+    assert one(scn, [offered, other]).passed
+    assert not one(scn, [other]).passed
+
+
+def test_note_and_note_not_offered_are_counted(scenario_with):
+    scn = scenario_with(
+        {"note": {"kind": "difficulty", "count": 1}}, {"note_not_offered": {"count": 0}}
+    )
+    note = {"t": "note", "at_ms": 31000, "trigger": "reflex", "kind": "difficulty"}
+    flagged = {"t": "note_not_offered", "at_ms": 46000, "text": "x"}
+    assert all(o.passed for o in evaluate(scn, [note]))
+    assert not all(o.passed for o in evaluate(scn, [note, flagged]))
+
+
+def test_note_trigger_is_validated(scenario_with):
+    with pytest.raises(ScenarioError, match="trigger"):
+        scenario_with({"note_offered": {"trigger": "boredom"}})

@@ -191,3 +191,55 @@ uint32_t planner_cycle_wait_periods(const planner_cycle_state_t *st)
 {
     return 1u + st->backoff_periods;
 }
+
+note_trigger_t planner_cycle_note_offer(planner_cycle_state_t *st, const planner_note_inputs_t *in,
+                                        uint32_t now_ms)
+{
+    /* Compared by inequality, not "greater than": the count only grows, and
+     * any difference means at least one trip since the last look. */
+    if (in->reflex_trips != st->note_reflex_seen) {
+        st->note_reflex_seen = in->reflex_trips;
+        note_gate_raise(NOTE_TRIGGER_REFLEX);
+    }
+    if (in->blind && !st->note_blind_raised) {
+        st->note_blind_raised = true;
+        note_gate_raise(NOTE_TRIGGER_BLIND);
+    } else if (!in->blind) {
+        st->note_blind_raised = false;
+    }
+    return note_gate_take(now_ms);
+}
+
+void planner_cycle_note_outcome(planner_cycle_state_t *st, planner_result_action_t result,
+                                goal_kind_t goal_kind, planner_speech_verdict_t speech,
+                                note_trigger_t offered)
+{
+    if (result == PLANNER_RESULT_STOP_IDLE) {
+        /* Nothing left the board, so the model never saw the offer, and a
+         * robot offline for an hour would otherwise burn every trigger. */
+        note_gate_untake(offered);
+        return;
+    }
+    if (++st->note_requests_since_reflect >= NOTE_GATE_REFLECT_EVERY) {
+        st->note_requests_since_reflect = 0;
+        note_gate_raise(NOTE_TRIGGER_REFLECT);
+    }
+
+    if (result == PLANNER_RESULT_WRITE_GOAL && goal_kind == GOAL_KIND_TRACK) {
+        if (++st->note_track_streak >= NOTE_GATE_TRACK_STUCK_CYCLES) {
+            st->note_track_streak = 0;
+            note_gate_raise(NOTE_TRIGGER_TRACK_STUCK);
+        }
+    } else {
+        st->note_track_streak = 0;
+    }
+
+    if (speech == PLANNER_SPEECH_SUPPRESS_REPEAT) {
+        if (++st->note_repeat_streak >= NOTE_GATE_REPEAT_STREAK) {
+            st->note_repeat_streak = 0;
+            note_gate_raise(NOTE_TRIGGER_REPEATS);
+        }
+    } else if (speech == PLANNER_SPEECH_POST) {
+        st->note_repeat_streak = 0;
+    }
+}

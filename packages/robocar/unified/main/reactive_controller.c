@@ -784,6 +784,9 @@ static void reactive_task(void *arg)
 
         portENTER_CRITICAL(&s_telem_mux);
         s_telemetry.distance_cm = dist;
+        if (reflex && !s_telemetry.reflex_active) {
+            s_telemetry.reflex_trips++;
+        }
         s_telemetry.reflex_active = reflex;
         if (measured_hz > 0) {
             s_telemetry.loop_hz = measured_hz;
@@ -1176,6 +1179,9 @@ void reactive_controller_tick_for_test(void)
     }
 
     s_telemetry.distance_cm = dist;
+    if (reflex && !s_telemetry.reflex_active) {
+        s_telemetry.reflex_trips++;
+    }
     s_telemetry.reflex_active = reflex;
     s_telemetry.manual_active = manual_active && !reflex;
     s_telemetry.head_mode = head_mode;
