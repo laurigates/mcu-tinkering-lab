@@ -87,7 +87,7 @@ them on the bench before trusting the reflex near a real edge.
 | Command | Effect |
 |---|---|
 | `cliff` | Whether the reflex is on, whether the sensors are present, what each sees, whether the reflex is acting and the trip count. Read-only, so allowed over a read-only MQTT topic |
-| `cliff on` / `cliff off` | Switch the reflex. On at every boot, not persisted |
+| `cliff on` / `cliff off` | Switch the reflex, not persisted. The boot value is `CLIFF_REFLEX_AT_BOOT` in `cliff_sensor.h`, 0 (off) until the sensors are fitted |
 
 The self-report carries `cliff=present|absent` (the pins were configured on a
 detected MCP23017). Telemetry (`reactive_telemetry_t`) carries `cliff_armed`,

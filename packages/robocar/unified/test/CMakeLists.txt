@@ -135,6 +135,8 @@ add_executable(test_reactive_controller
     "${CMAKE_CURRENT_SOURCE_DIR}/test_reactive_controller.c"
 )
 target_link_libraries(test_reactive_controller PRIVATE Threads::Threads m)
+# The cliff tests expect the reflex armed from boot, whatever the firmware default.
+target_compile_definitions(test_reactive_controller PRIVATE CLIFF_REFLEX_AT_BOOT=1)
 add_test(NAME reactive_controller COMMAND test_reactive_controller)
 
 # -----------------------------------------------------------------------------

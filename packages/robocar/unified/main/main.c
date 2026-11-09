@@ -1610,7 +1610,7 @@ static void on_improv_credentials(const char *ssid, const char *password)
  * `cliff` alone prints whether the reflex is on and armed, what each sensor
  * sees and the trip count; it only reads, which is why it is on the MQTT
  * read-only list. `cliff on|off` switches the reflex. Not persisted: every
- * boot starts with it on (docs/firmware/cliff-sensors.md).
+ * boot starts at CLIFF_REFLEX_AT_BOOT (docs/firmware/cliff-sensors.md).
  */
 static void handle_cliff_cmd(const char *buf)
 {

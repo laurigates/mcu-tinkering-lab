@@ -30,6 +30,16 @@
 #define CLIFF_FLOOR_LEVEL 0
 
 /**
+ * Whether the cliff reflex is on at boot (`cliff on|off` still switches it at
+ * runtime). 0 while the floor sensors are not fitted: with an MCP23017 present
+ * the unconnected pulled-up pins read as "no floor" and the reflex, failing
+ * closed, would hold the wheels. Set to 1 once both sensors are mounted.
+ */
+#ifndef CLIFF_REFLEX_AT_BOOT
+#define CLIFF_REFLEX_AT_BOOT 0
+#endif
+
+/**
  * @brief Configure both expander pins as inputs with pull-ups.
  *
  * Requires gpio_expander_init() first. Without an MCP23017 the module stays
