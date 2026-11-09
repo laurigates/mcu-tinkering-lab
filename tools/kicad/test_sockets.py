@@ -41,6 +41,7 @@ EXPECTED_COUNTS = {
     "Adafruit_TCA9548A_Socket": 24,
     "Adafruit_PCA9685_Socket": 12,
     "CJMCU_2317_Socket": 30,
+    "GY521_Socket": 8,
 }
 
 
@@ -250,6 +251,25 @@ class CommittedFootprintTests(unittest.TestCase):
                 self.assertAlmostEqual(single.x - inner.x, 15.24, places=6)
                 for pad in (outer, inner, single):
                     self.assertAlmostEqual(pad.y, 2.54 * row, places=6)
+
+    def test_gy521_module_lies_on_the_minus_y_side_of_its_row(self):
+        # The board page's frame: component side up, header along the bottom
+        # edge, VCC (pad 1) at the left, X arrow up. Pads run +x from pad 1 at
+        # 2.54 mm, and the 21.00 x 15.88 mm module (Lauri, 2026-11-09) lies
+        # toward -y of the row, so a carrier placed at rotation 0 puts it
+        # forward. A module outline on the +y side is the 8d18cd8d mistake:
+        # the module then only fits component side down.
+        path = PRETTY / "GY521_Socket.kicad_mod"
+        fp = footprints.parse(path)
+        for n in range(1, 9):
+            with self.subTest(pad=n):
+                self.assertAlmostEqual(fp.pads[str(n)].x, 2.54 * (n - 1), places=6)
+                self.assertAlmostEqual(fp.pads[str(n)].y, 0.0, places=6)
+        ((x0, y0, x1, y1),) = fab_rects(path.read_text())
+        self.assertAlmostEqual(x1 - x0, 21.00, places=4)
+        self.assertAlmostEqual(y1 - y0, 15.88, places=4)
+        self.assertLess(y0, -14.0)  # the module, forward of the row
+        self.assertLess(y1, 2.54)  # and the row along its rear edge
 
     def test_render_is_byte_stable(self):
         first = sockets.render(REPO_ROOT)

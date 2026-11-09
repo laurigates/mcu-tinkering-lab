@@ -13,6 +13,7 @@ breakout's board page records (`docs/reference/boards/<board>.md`,
 | `Adafruit_MAX98357A_Socket` | `adafruit-max98357a` | 1-7 = JP1.1-7 |
 | `Adafruit_TCA9548A_Socket` | `adafruit-tca9548a` | 1-12 = JP3.1-12, 13-24 = JP1.1-12 |
 | `Adafruit_PCA9685_Socket` | `adafruit-pca9685` | 1-6 = JP3.1-6, 7-12 = the PWM pads of channels 8-13 (JP6.10, JP6.7, JP6.4, JP6.1, JP5.10, JP5.7) |
+| `GY521_Socket` | `gy-521` | 1-8 = VCC GND SCL SDA XDA XCL AD0 INT, listed as `pad_xy`; the 21.00 × 15.88 mm board is measured, the hole positions in it estimated |
 
 Each footprint's `descr` repeats its pad order. Pad 1 is the origin and keeps
 PinSocket's square pad; the others are PinSocket's round pad. Pad positions are
