@@ -3,6 +3,8 @@ idf_component_register(
         "main.c"
         "log_mirror.c"
         "log_mirror_core.c"
+        "event_report.c"
+        "event_report_core.c"
         "i2c_bus.c"
         "pca9685_phase.c"
         "gpio_expander.c"

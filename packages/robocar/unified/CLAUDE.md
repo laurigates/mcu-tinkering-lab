@@ -48,7 +48,7 @@ Each subsystem's design notes, measurements and the reasoning behind the rules b
 | Doc | Covers |
 |---|---|
 | [i2c-and-motors.md](docs/firmware/i2c-and-motors.md) | Mux channel map, non-fatal peripherals and the `i2c_peripherals=` fact, PCA9685 channel layout, coast vs brake, bus clock and PWM phase, the managed I2C drivers and the `pca9685` version floor |
-| [console-and-mqtt.md](docs/firmware/console-and-mqtt.md) | Serial console command table (including `mqtt auth` and `gemini auth`), MQTT remote commands and read-only mode, `servo exercise`, the boot wheel exercise |
+| [console-and-mqtt.md](docs/firmware/console-and-mqtt.md) | Serial console command table (including `mqtt auth` and `gemini auth`), MQTT remote commands and read-only mode, `servo exercise`, the boot wheel exercise, GlitchTip error events (`robocar/events`, `report`) |
 | [head-aiming.md](docs/firmware/head-aiming.md) | How the executor satisfies `track` with the head, the wheels or both; head leases |
 | [activity-trace.md](docs/firmware/activity-trace.md) | LED colour meanings, `trace` counters, the I2C bus counter |
 | [planner.md](docs/firmware/planner.md) | Planner tools, dormancy ladder (`plan_activity`), spend fuse (`plan_budget`), reading the planner log |
@@ -104,6 +104,7 @@ One line per rule. Each group's doc has the full reasoning and the tests that ho
 - The MQTT read-only allow-list holds exact whole lines. Add a command only after reading its handler in `main.c` end to end (#626).
 - `mqtt` is serial-only: `command_task()` handles it, outside `execute_console_line()` and `mqtt_command.c`'s prefixes.
 - Every MQTT payload passes through `mqtt_command_extract_line()`, fragmentation check included.
+- `event_report_breadcrumb()` runs inside the log hook: no logging calls, no waiting. `event_report_boot_capture()` runs before the first ESP_LOG line in `app_main` (ADR-033).
 
 **Planner** ([why](docs/firmware/planner.md#dont))
 

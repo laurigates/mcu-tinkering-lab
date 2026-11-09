@@ -39,6 +39,7 @@
 #include "credentials_loader.h"
 #include "credentials_validator.h"
 #include "dialogue_style.h"
+#include "event_report.h"
 #include "frame_dump.h"
 #include "gemini_key_state.h"
 #include "gemini_tts.h"
@@ -1660,6 +1661,44 @@ static void handle_ota_cmd(const char *buf)
     printf("  usage: ota check | ota postpone\n");
 }
 
+/**
+ * @brief `report` — the GlitchTip event path (ADR-033).
+ *
+ * `report` prints the event counters and whether the last boot's breadcrumb
+ * ring survived its reset. `report test` queues a synthetic event carrying
+ * this boot's breadcrumbs, to check the path end to end (robot, broker,
+ * bridge, GlitchTip). Not on the MQTT read-only list: `report test` sends.
+ */
+static void handle_report_cmd(const char *buf)
+{
+    char sub[8] = {0};
+    const int n = sscanf(buf, "report %7s", sub);
+
+    if (n == 1 && strcmp(sub, "test") == 0) {
+        const esp_err_t err = event_report_send_test();
+        printf("report: test event %s\n", err == ESP_OK ? "queued" : esp_err_to_name(err));
+        return;
+    }
+    if (n == 1) {
+        printf("report: usage: report | report test\n");
+        return;
+    }
+
+    event_report_stats_t st = {0};
+    event_report_get_stats(&st);
+    printf("report: topic %s, mqtt %s\n", EVENT_REPORT_TOPIC,
+           mqtt_logger_is_connected() ? "connected" : "down");
+    printf("  events: queued %u, sent %u, dropped %u, pending %u\n", (unsigned)st.queued,
+           (unsigned)st.sent, (unsigned)st.dropped, (unsigned)st.pending);
+    if (st.boot_crumbs_present) {
+        printf("  last boot's breadcrumbs: %u line(s) survived the reset\n",
+               (unsigned)st.boot_crumbs);
+    } else {
+        printf("  last boot's breadcrumbs: none (power-on, or the reset cleared RTC memory)\n");
+    }
+    printf("  usage: report test\n");
+}
+
 static void execute_console_line(const char *buf)
 {
     if (strncmp(buf, "gpio", 4) == 0) {
@@ -1682,6 +1721,8 @@ static void execute_console_line(const char *buf)
         handle_idle_cmd(buf);
     } else if (strncmp(buf, "ota", 3) == 0) {
         handle_ota_cmd(buf);
+    } else if (strncmp(buf, "report", 6) == 0) {
+        handle_report_cmd(buf);
     } else if (strncmp(buf, "sound", 5) == 0 || strncmp(buf, "servo", 5) == 0 ||
                strncmp(buf, "led", 3) == 0) {
         handle_periph_cmd(buf);
@@ -2480,6 +2521,11 @@ static void log_boot_banner(void)
 // ========================================
 void app_main(void)
 {
+    /* Before anything logs: the previous boot's last log lines are still in
+     * RTC memory, and the first ESP_LOG line from here on overwrites them
+     * (ADR-033). Makes no logging calls itself. */
+    event_report_boot_capture();
+
     /* First, so the banner and every boot phase after it reach J15 (UART0 TX)
      * as well as the USB console (issue #798). It needs only PSRAM, which the
      * startup code has already brought up. Non-fatal: without it the log
@@ -2492,6 +2538,20 @@ void app_main(void)
                  esp_err_to_name(mirror_ret));
     }
     log_boot_banner();
+
+    /* One GlitchTip event for a reset that was not deliberate (ADR-033). It
+     * waits in the queue until MQTT connects; nothing here blocks the boot. */
+    const esp_err_t report_ret = event_report_start();
+    if (report_ret != ESP_OK) {
+        ESP_LOGW(TAG, "event reporting unavailable (%s)", esp_err_to_name(report_ret));
+    }
+    const char *reason = reset_reason_name(esp_reset_reason());
+    const esp_err_t sent = event_report_send_reset(reason);
+    if (sent == ESP_OK) {
+        ESP_LOGI(TAG, "reset event queued for GlitchTip (%s)", reason);
+    } else if (sent != ESP_ERR_NOT_SUPPORTED && report_ret == ESP_OK) {
+        ESP_LOGW(TAG, "reset event not queued (%s)", esp_err_to_name(sent));
+    }
 
     ESP_ERROR_CHECK(init_nvs());
     init_mqtt_access();
