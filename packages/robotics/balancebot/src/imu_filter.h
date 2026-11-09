@@ -3,6 +3,7 @@
 #ifndef BALANCEBOT_IMU_FILTER_H
 #define BALANCEBOT_IMU_FILTER_H
 
+#include <stdbool.h>
 #include <stdint.h>
 
 // How the GY-521 sits on the robot. Stored in balance_params_t as uint32_t.
@@ -27,6 +28,32 @@ typedef struct {
 // other than IMU_MOUNT_DOWN maps as IMU_MOUNT_UP. Float only, no branches
 // beyond one select, so core 1 can call it every tick.
 imu_body_accel_t imu_mount_accel(uint32_t mount, float accel_x_g, float accel_z_g);
+
+// Gravity check before arming. A sample counts as still when the accel
+// magnitude is within IMU_STILL_ACCEL_TOL_G of 1 g (no linear acceleration)
+// and the gyro magnitude is below IMU_STILL_GYRO_DPS (not being turned): only
+// then is the accel vector gravity and its direction worth trusting. The
+// mounted body Z below IMU_UPSIDE_DOWN_G means the board reads more than 120
+// degrees from upright, which at rest is a wrong `mount` setting rather than a
+// lean the controller could recover from.
+#define IMU_STILL_ACCEL_TOL_G 0.15f
+#define IMU_STILL_GYRO_DPS 10.0f
+#define IMU_UPSIDE_DOWN_G (-0.5f)
+
+typedef struct {
+    bool still;        // accel reads gravity alone and the gyro is quiet
+    bool upside_down;  // body Z (mounted) below IMU_UPSIDE_DOWN_G
+    float up_g;        // body Z (mounted), for the refusal message
+} imu_gravity_check_t;
+
+// Classify one raw sample (sensor axes X, Y, Z: accel in g, gyro in deg/s)
+// for `mount`. Pure, so the host tests can drive it.
+imu_gravity_check_t imu_gravity_check(uint32_t mount, const float accel_g[3],
+                                      const float gyro_dps[3]);
+
+// Arming is refused only on a still sample that reads upside down; a moving
+// one says nothing about the mounting, so the existing arming rules decide.
+bool imu_gravity_refuses_arm(const imu_gravity_check_t *g);
 
 typedef struct {
     float alpha;      // gyro weight, e.g. 0.98

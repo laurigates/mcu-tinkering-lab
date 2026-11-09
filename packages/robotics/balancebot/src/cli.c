@@ -430,6 +430,15 @@ static void handle_line(char *l)
             printf("usage: stream on|off [hz]\n");
         }
     } else if (strcmp(tok, "arm") == 0) {
+        // At rest, body Z below -0.5 g is a wrong `mount`, not a lean: the
+        // controller would push the wrong way. Core 1 refuses it too.
+        balance_snapshot_t s;
+        balance_control_get_snapshot(&s);
+        if (s.state != BAL_STATE_RUN && imu_gravity_refuses_arm(&s.gravity)) {
+            printf("ERR: IMU reads upside down (body Z = %.2f g); check 'mount' (now %s)\n",
+                   (double)s.gravity.up_g, mount_name(s.imu_mount));
+            return;
+        }
         balance_cmd_t cmd = {.cmd = CMD_ARM};
         balance_control_send_cmd(&cmd);
         printf("OK\n");

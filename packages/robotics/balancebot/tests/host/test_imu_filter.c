@@ -134,6 +134,102 @@ static void test_flipped_mount_matches_normal(void)
     assert(fabsf(down.pitch_deg - (-17.0f)) < 0.05f);
 }
 
+// assert() aborts without flushing a redirected stdout, so print and flush
+// the failing case's name first (.claude/rules/testing.md).
+static void check(int cond, const char *what)
+{
+    if (!cond) {
+        printf("FAIL: %s\n", what);
+        fflush(stdout);
+    }
+    assert(cond);
+}
+
+// The gravity check for a robot tilted `theta_deg` (forward positive) with the
+// GY-521 turned `fitted_rad` about Y, read with the `mount` setting. The
+// sample comes from the physical rotation (sensor_accel), scaled by `accel_g`
+// (1 = gravity alone) and with `rate_dps` about the pitch axis.
+static imu_gravity_check_t gravity_for(uint32_t mount, double theta_deg, double fitted_rad,
+                                       float accel_g, float rate_dps)
+{
+    accel_xz_t a = sensor_accel(theta_deg * DEG, fitted_rad);
+    const float accel[3] = {accel_g * a.x, 0.0f, accel_g * a.z};
+    const float gyro[3] = {0.0f, rate_dps, 0.0f};
+    return imu_gravity_check(mount, accel, gyro);
+}
+
+static void test_gravity_mount_up_upright_allowed(void)
+{
+    imu_gravity_check_t g = gravity_for(IMU_MOUNT_UP, 0.0, 0.0, 1.0f, 0.0f);
+    check(g.still, "up/upright: still");
+    check(!g.upside_down, "up/upright: not upside down");
+    check(fabsf(g.up_g - 1.0f) < 1e-4f, "up/upright: body Z = +1 g");
+    check(!imu_gravity_refuses_arm(&g), "up/upright: arm allowed");
+}
+
+// The delivered 8d18cd8d boards: GY-521 fitted face down, setting left at up.
+static void test_gravity_mount_up_face_down_refused(void)
+{
+    imu_gravity_check_t g = gravity_for(IMU_MOUNT_UP, 0.0, PI, 1.0f, 0.0f);
+    check(g.still, "up/face down: still");
+    check(g.upside_down, "up/face down: upside down");
+    check(fabsf(g.up_g + 1.0f) < 1e-4f, "up/face down: body Z = -1 g");
+    check(imu_gravity_refuses_arm(&g), "up/face down: arm refused");
+}
+
+static void test_gravity_mount_down_face_down_allowed(void)
+{
+    imu_gravity_check_t g = gravity_for(IMU_MOUNT_DOWN, 0.0, PI, 1.0f, 0.0f);
+    check(g.still, "down/face down: still");
+    check(!g.upside_down, "down/face down: not upside down");
+    check(fabsf(g.up_g - 1.0f) < 1e-4f, "down/face down: body Z = +1 g");
+    check(!imu_gravity_refuses_arm(&g), "down/face down: arm allowed");
+}
+
+// The reverse mistake: `mount down` on a board fitted face up.
+static void test_gravity_mount_down_face_up_refused(void)
+{
+    imu_gravity_check_t g = gravity_for(IMU_MOUNT_DOWN, 0.0, 0.0, 1.0f, 0.0f);
+    check(imu_gravity_refuses_arm(&g), "down/face up: arm refused");
+}
+
+// Upside down but moving says nothing about the mounting: not refused here.
+static void test_gravity_moving_not_refused(void)
+{
+    // Being turned at 60 deg/s.
+    imu_gravity_check_t g = gravity_for(IMU_MOUNT_UP, 0.0, PI, 1.0f, 60.0f);
+    check(!g.still, "turning: not still");
+    check(g.upside_down, "turning: still reads upside down");
+    check(!imu_gravity_refuses_arm(&g), "turning: arm not refused");
+    // Shaken: 1.5 g on the accel, gyro quiet this sample.
+    g = gravity_for(IMU_MOUNT_UP, 0.0, PI, 1.5f, 0.0f);
+    check(!g.still, "shaken: not still");
+    check(!imu_gravity_refuses_arm(&g), "shaken: arm not refused");
+    // Falling freely: well under 1 g.
+    g = gravity_for(IMU_MOUNT_UP, 0.0, PI, 0.3f, 0.0f);
+    check(!g.still, "free fall: not still");
+    check(!imu_gravity_refuses_arm(&g), "free fall: arm not refused");
+}
+
+// A robot resting on its stand at a large lean is still the right way up.
+static void test_gravity_tilted_resting_allowed(void)
+{
+    imu_gravity_check_t g = gravity_for(IMU_MOUNT_UP, 50.0, 0.0, 1.0f, 0.0f);
+    check(g.still, "tilted 50: still");
+    check(!g.upside_down, "tilted 50: not upside down");
+    check(!imu_gravity_refuses_arm(&g), "tilted 50: arm allowed");
+    g = gravity_for(IMU_MOUNT_DOWN, -50.0, PI, 1.0f, 0.0f);
+    check(!imu_gravity_refuses_arm(&g), "tilted -50, flipped board: arm allowed");
+    // Past horizontal but short of 120 degrees (body Z = -0.34 g): fallen
+    // over, which the tilt cutoff handles, not a wrong mounting.
+    g = gravity_for(IMU_MOUNT_UP, 110.0, 0.0, 1.0f, 0.0f);
+    check(g.still && !g.upside_down, "tilted 110: not upside down");
+    check(!imu_gravity_refuses_arm(&g), "tilted 110: arm not refused");
+    // Beyond 120 degrees (body Z = -0.64 g) at rest reads as upside down.
+    g = gravity_for(IMU_MOUNT_UP, 130.0, 0.0, 1.0f, 0.0f);
+    check(imu_gravity_refuses_arm(&g), "tilted 130: arm refused");
+}
+
 int main(void)
 {
     test_accel_pitch();
@@ -144,6 +240,12 @@ int main(void)
     test_mount_up_is_identity();
     test_flipped_unmapped_reads_180();
     test_flipped_mount_matches_normal();
+    test_gravity_mount_up_upright_allowed();
+    test_gravity_mount_up_face_down_refused();
+    test_gravity_mount_down_face_down_allowed();
+    test_gravity_mount_down_face_up_refused();
+    test_gravity_moving_not_refused();
+    test_gravity_tilted_resting_allowed();
     printf("test_imu_filter: all tests passed\n");
     return 0;
 }

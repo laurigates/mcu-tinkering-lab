@@ -43,7 +43,8 @@ static float x_ref_steps;          // position the LQR holds (set on PID->LQR)
 static float steps_per_m;          // from steps_per_rev and wheel_diam_m
 static bool pid_bumpless_pending;  // LQR->PID: back-calculate on the next RUN tick
 static float open_loop_sps[STEPPER_COUNT];
-static uint32_t gesture_ticks;  // consecutive ticks satisfying arm/clear condition
+static uint32_t gesture_ticks;       // consecutive ticks satisfying arm/clear condition
+static imu_gravity_check_t gravity;  // last sample's gravity check; zero = no refusal
 static bool save_ok;
 static uint32_t save_count;
 static bool watchdog_started;
@@ -135,6 +136,7 @@ static void publish(uint32_t tick, bool imu_ok, float pitch, float gyro, float l
     }
     snapshot.pos_m = wheel_pos_steps / steps_per_m;
     snapshot.imu_mount = (uint8_t)params.imu_mount;
+    snapshot.gravity = gravity;
     __compiler_memory_barrier();
     snapshot.seq++;  // even: stable
 }
@@ -234,7 +236,9 @@ static void handle_command(const balance_cmd_t *cmd)
             apply_gains();
             break;
         case CMD_ARM:
-            if (state == BAL_STATE_IDLE) {
+            // A still IMU reading upside down is a wrong `mount`; core 0
+            // checks first and reports, this is the last line.
+            if (state == BAL_STATE_IDLE && !imu_gravity_refuses_arm(&gravity)) {
                 enter_state(BAL_STATE_RUN);
             }
             break;
@@ -375,6 +379,9 @@ void balance_control_core1_main(void)
             float raw = imu_filter_update(&filter, a.forward_g, a.up_g, s.gyro_dps[1], dt);
             pitch = IMU_PITCH_SIGN * raw;
             gyro_rate = IMU_PITCH_SIGN * s.gyro_dps[1];
+            gravity = imu_gravity_check(params.imu_mount, s.accel_g, s.gyro_dps);
+        } else {
+            gravity = (imu_gravity_check_t){0};
         }
 
         switch (state) {
