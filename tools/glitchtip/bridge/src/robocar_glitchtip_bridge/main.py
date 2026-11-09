@@ -134,9 +134,32 @@ def main() -> None:
         ):  # keep the bridge alive; the event is logged, not lost silently
             log.exception("failed to forward a message on %s", msg.topic)
 
+    host, port = url.hostname or "localhost", url.port or 1883
+
+    # A refused or unreachable broker never reaches on_connect, so without
+    # this the bridge retries in silence and looks like it is running.
+    def on_connect_fail(_client, _userdata):
+        log.warning(
+            "cannot reach MQTT broker %s:%s; retrying (check MQTT_URL)", host, port
+        )
+
+    def on_disconnect(_client, _userdata, _flags, reason_code, _properties):
+        log.warning(
+            "disconnected from %s:%s (%s); reconnecting", host, port, reason_code
+        )
+
     client.on_connect = on_connect
+    client.on_connect_fail = on_connect_fail
+    client.on_disconnect = on_disconnect
     client.on_message = on_message
-    client.connect_async(url.hostname or "localhost", url.port or 1883)
+    log.info(
+        "connecting to %s:%s%s, topic %s",
+        host,
+        port,
+        f" as {url.username}" if url.username else " (anonymous)",
+        topic,
+    )
+    client.connect_async(host, port)
     client.loop_forever(retry_first_connection=True)
 
 
