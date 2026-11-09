@@ -51,10 +51,22 @@ shell: _idf-shell
 # Omitting ota_data leaves stale OTA state behind, which matters here because
 # CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y. Offsets mirror `idf.py build`'s own
 # flash_args output — recheck them against it after any partitions.csv change.
+#
+# What gets written is decided first, by tools/flash-source.py, and refused
+# unless the app image embeds the build SHA asked for:
+#   just robocar-unified::flash            build this checkout; image = HEAD(-dirty)
+#   just robocar-unified::flash <commit>   build that commit in tmp/flash/<sha>
+#   just robocar-unified::flash v0.2.17    the release's prebuilt parts, or its
+#                                          commit built when the release lacks them
+# esptool then reads back what it wrote (its default verify), so a write that
+# did not land fails here rather than on the robot.
 [group: "device"]
-flash: require-port
+flash ref="": require-port
     #!/usr/bin/env bash
     set -euo pipefail
+    eval "$(python3 ../../../tools/flash-source.py --project-dir {{project_dir}} \
+        --bin {{bin_name}} --tag-prefix robocar-unified-v {{quote(ref)}})"
+    cd "$SRC_DIR"
     esptool -s --chip esp32s3 -p {{port}} -b "${BAUD:-460800}" \
         --before default-reset --after hard-reset \
         write-flash --flash-mode dio --flash-size 8MB --flash-freq 80m \
@@ -62,7 +74,7 @@ flash: require-port
         0x8000 build/partition_table/partition-table.bin \
         0xd000 build/ota_data_initial.bin \
         0x10000 build/{{bin_name}}.bin
-    echo "Flashed {{bin_name}} OK"
+    echo "Flashed {{bin_name}} build $SHA ($SOURCE)"
 
 # Reset the board over USB-Serial-JTAG
 [group: "device"]
@@ -74,9 +86,9 @@ reset: _s3-reset
 [group: "device"]
 monitor: _s3-monitor
 
-# Flash and immediately start monitoring
+# Flash and immediately start monitoring (same ref forms as `flash`)
 [group: "device"]
-flash-monitor: flash monitor
+flash-monitor ref="": (flash ref) monitor
 
 ##########
 # Diagnostics

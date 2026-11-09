@@ -53,7 +53,7 @@ typedef enum {
 
 typedef enum {
     CMD_SET_PARAM = 0,  // param_id + value
-    CMD_ARM = 1,
+    CMD_ARM = 1,        // refused while a still IMU reads upside down
     CMD_DISARM = 2,
     CMD_CALIBRATE = 3,       // gyro bias cal (IDLE only)
     CMD_SAVE = 4,            // persist params to flash (IDLE/FAULT only)
@@ -112,6 +112,15 @@ typedef struct {
     float lqr_K[LQR_N];    // the K core 1 is using / would use
     float pos_m;           // wheel travel since arming (commanded), m
     uint8_t imu_mount;     // imu_mount_t core 1 is applying
+
+    // Last sample's gravity check under that tick's imu_mount (zeroed if the
+    // read failed).
+    imu_gravity_check_t gravity;
+    // CMD_ARMs core 1 refused because a still IMU read upside down under the
+    // mount it applied, and the body Z of the last one. Core 0 compares the
+    // count across an `arm` to report a refusal its own check did not catch.
+    uint32_t arm_refusals;
+    float arm_refused_up_g;
 } balance_snapshot_t;
 
 #endif  // BALANCEBOT_IPC_H

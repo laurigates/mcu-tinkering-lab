@@ -53,6 +53,7 @@ from . import (
     netlist,
     panel,
     paths,
+    provenance,
     schematic,
     sexpr,
     sockets,
@@ -249,6 +250,7 @@ TABLE_KEYS = {
         "own",
     },
     "cutouts": {"name", "center", "diameter"},
+    "fab": set(provenance.FAB_KEYS),
     "pour": {
         "net",
         "regions",
@@ -897,6 +899,7 @@ def validate_config(
                     f"{where}: [silk] texts: {text.get('text')!r} is {text['size']} mm "
                     f"tall; the floor is {floor} mm{floor_note}"
                 )
+    errors += provenance.validate(where, data, size, floor)
     errors += _validate_cut_clearance(where, data, size)
     errors += _validate_keepouts(where, data, size)
     errors += _validate_route_keepouts(where, data, size)

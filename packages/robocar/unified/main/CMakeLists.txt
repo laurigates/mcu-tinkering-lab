@@ -3,6 +3,8 @@ idf_component_register(
         "main.c"
         "log_mirror.c"
         "log_mirror_core.c"
+        "event_report.c"
+        "event_report_core.c"
         "i2c_bus.c"
         "pca9685_phase.c"
         "gpio_expander.c"
@@ -25,6 +27,7 @@ idf_component_register(
         "ambient_audio.c"
         "speech_budget.c"
         "speech_evidence.c"
+        "planner_range.c"
         "plan_activity.c"
         "plan_budget.c"
         "speech_queue.c"
@@ -52,8 +55,11 @@ idf_component_register(
         "head_aim.c"
         "idle_gaze.c"
         "reactive_controller.c"
+        "cliff_core.c"
+        "cliff_sensor.c"
         "planner_task.c"
         "planner_cycle_core.c"
+        "note_gate.c"
         "self_report.c"
         "credentials_loader.c"
         "improv_console.c"
@@ -96,6 +102,7 @@ idf_component_register(
         "improv-wifi"
         "esp_driver_usb_serial_jtag"
         "esp_timer"
+        "espcoredump"
 )
 
 # The build commit SHA the project CMakeLists.txt resolved from git (issue

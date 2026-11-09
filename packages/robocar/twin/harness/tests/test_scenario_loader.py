@@ -119,6 +119,24 @@ expect: [{requests: {max: 9}}]
             ("default: {status: 200, call: stop}", "default: {status: 429, speak: hi}"),
             "status 200",
         ),
+        (
+            (
+                "default: {status: 200, call: stop}",
+                "default: {status: 200, note: {kind: rant, text: x}}",
+            ),
+            "note.kind",
+        ),
+        (
+            (
+                "default: {status: 200, call: stop}",
+                "default: {status: 200, note: {kind: difficulty}}",
+            ),
+            "text",
+        ),
+        (
+            ("{at: 0s, frame", "{at: 0s, reflex: {cm: 3}, frame"),
+            "exactly one event kind",
+        ),
     ],
 )
 def test_validation_errors(write_scenario, patch, match):
@@ -180,3 +198,28 @@ def test_voice_turn_record_window(write_scenario):
     )
     with pytest.raises(ScenarioError, match="record"):
         load_scenario(write_scenario("rec_bad", bad))
+
+
+def test_build_body_carries_a_note_call():
+    body = json.loads(build_body(note={"kind": "suggestion", "text": "Slow down."}))
+    parts = body["candidates"][0]["content"]["parts"]
+    assert parts[-1] == {
+        "functionCall": {
+            "name": "note",
+            "args": {"kind": "suggestion", "text": "Slow down."},
+        }
+    }
+
+
+def test_reflex_event_takes_no_fields(write_scenario):
+    path = write_scenario(
+        "reflex",
+        MINIMAL.replace(
+            "{at: 0s, frame: {scene: room}}",
+            "{at: 0s, frame: {scene: room}}\n  - {at: 1s, reflex: {}}",
+        ),
+    )
+    events = load_scenario(path).world
+    assert [(e.kind, e.fields) for e in events if e.kind == "reflex"] == [
+        ("reflex", {})
+    ]

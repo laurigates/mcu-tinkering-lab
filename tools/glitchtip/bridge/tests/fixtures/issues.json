@@ -1,0 +1,136 @@
+[
+  {
+    "id": "3",
+    "count": "1",
+    "type": "default",
+    "level": "warning",
+    "status": "unresolved",
+    "metadata": {},
+    "project": {
+      "id": "2",
+      "platform": null,
+      "slug": "robocar-ai",
+      "name": "robocar-ai"
+    },
+    "shortId": "ROBOCAR-AI-1",
+    "numComments": 0,
+    "stats": {
+      "24h": []
+    },
+    "shareId": null,
+    "logger": null,
+    "permalink": "http://localhost:8000/robocar-ai/issues/3",
+    "statusDetails": {},
+    "subscriptionDetails": null,
+    "userCount": 0,
+    "matchingEventId": null,
+    "firstRelease": {
+      "shortVersion": "robocar-unified@0.0.0-fixture",
+      "dateCreated": "2026-11-09T08:01:24.193Z",
+      "dateReleased": null,
+      "version": "robocar-unified@0.0.0-fixture"
+    },
+    "lastRelease": {
+      "shortVersion": "robocar-unified@0.0.0-fixture",
+      "dateCreated": "2026-11-09T08:01:24.193Z",
+      "dateReleased": null,
+      "version": "robocar-unified@0.0.0-fixture"
+    },
+    "firstSeen": "2026-11-09T08:01:26.641Z",
+    "lastSeen": "2026-11-09T08:01:26.641Z",
+    "assignedTo": null,
+    "title": "The chair leg keeps tripping the reflex when I turn left.",
+    "culprit": ""
+  },
+  {
+    "id": "2",
+    "count": "1",
+    "type": "error",
+    "level": "fatal",
+    "status": "unresolved",
+    "metadata": {
+      "type": "LoadProhibited",
+      "value": "PC 0x0000000a",
+      "filename": "tools/glitchtip/fixtures/tiny.c",
+      "function": "add"
+    },
+    "project": {
+      "id": "1",
+      "platform": null,
+      "slug": "robocar",
+      "name": "robocar"
+    },
+    "shortId": "ROBOCAR-2",
+    "numComments": 0,
+    "stats": {
+      "24h": []
+    },
+    "shareId": null,
+    "logger": null,
+    "permalink": "http://localhost:8000/robocar/issues/2",
+    "statusDetails": {},
+    "subscriptionDetails": null,
+    "userCount": 0,
+    "matchingEventId": null,
+    "firstRelease": {
+      "shortVersion": "robocar-unified@0.0.0-fixture",
+      "dateCreated": "2026-11-09T08:01:24.193Z",
+      "dateReleased": null,
+      "version": "robocar-unified@0.0.0-fixture"
+    },
+    "lastRelease": {
+      "shortVersion": "robocar-unified@0.0.0-fixture",
+      "dateCreated": "2026-11-09T08:01:24.193Z",
+      "dateReleased": null,
+      "version": "robocar-unified@0.0.0-fixture"
+    },
+    "firstSeen": "2026-11-09T08:01:25.121Z",
+    "lastSeen": "2026-11-09T08:01:25.121Z",
+    "assignedTo": null,
+    "title": "LoadProhibited: PC 0x0000000a",
+    "culprit": ""
+  },
+  {
+    "id": "1",
+    "count": "1",
+    "type": "default",
+    "level": "error",
+    "status": "unresolved",
+    "metadata": {},
+    "project": {
+      "id": "1",
+      "platform": null,
+      "slug": "robocar",
+      "name": "robocar"
+    },
+    "shortId": "ROBOCAR-1",
+    "numComments": 0,
+    "stats": {
+      "24h": []
+    },
+    "shareId": null,
+    "logger": null,
+    "permalink": "http://localhost:8000/robocar/issues/1",
+    "statusDetails": {},
+    "subscriptionDetails": null,
+    "userCount": 0,
+    "matchingEventId": null,
+    "firstRelease": {
+      "shortVersion": "robocar-unified@0.0.0-fixture",
+      "dateCreated": "2026-11-09T08:01:24.193Z",
+      "dateReleased": null,
+      "version": "robocar-unified@0.0.0-fixture"
+    },
+    "lastRelease": {
+      "shortVersion": "robocar-unified@0.0.0-fixture",
+      "dateCreated": "2026-11-09T08:01:24.193Z",
+      "dateReleased": null,
+      "version": "robocar-unified@0.0.0-fixture"
+    },
+    "firstSeen": "2026-11-09T08:01:23.537Z",
+    "lastSeen": "2026-11-09T08:01:23.537Z",
+    "assignedTo": null,
+    "title": "reset: BROWNOUT",
+    "culprit": ""
+  }
+]

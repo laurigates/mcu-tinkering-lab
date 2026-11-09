@@ -1,5 +1,65 @@
 # Changelog
 
+## [0.2.18](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.17...robocar-unified-v0.2.18) (2026-11-09)
+
+
+### Features
+
+* **glitchtip:** connect Claude Code to GlitchTip's built-in MCP server ([#1023](https://github.com/laurigates/mcu-tinkering-lab/issues/1023)) ([0513d69](https://github.com/laurigates/mcu-tinkering-lab/commit/0513d691c08c13b5a23d1a7155a2d2cb8f880794))
+* **robocar-twin:** behaviour twin phase 1 — planner_cycle_core and scenario harness ([#980](https://github.com/laurigates/mcu-tinkering-lab/issues/980)) ([1f2fe2d](https://github.com/laurigates/mcu-tinkering-lab/commit/1f2fe2dcb1f7b997e7ee20aac6bba60fafc9224a))
+* **robocar-unified:** announce an update, offer a postpone, park, then install ([#999](https://github.com/laurigates/mcu-tinkering-lab/issues/999)) ([a3ed82e](https://github.com/laurigates/mcu-tinkering-lab/commit/a3ed82e27037e2563cffa8fe8e20cee7db8167cf))
+* **robocar-unified:** cliff reflex from front and rear floor sensors ([#1031](https://github.com/laurigates/mcu-tinkering-lab/issues/1031)) ([b5ebc1f](https://github.com/laurigates/mcu-tinkering-lab/commit/b5ebc1f168c3806fe2deb318dcb9a137d33d3e0b))
+* **robocar-unified:** compile-time boot default for the cliff reflex ([#1034](https://github.com/laurigates/mcu-tinkering-lab/issues/1034)) ([0cfdd70](https://github.com/laurigates/mcu-tinkering-lab/commit/0cfdd70211410bbb78bcbf45f94540ae1640fc9e))
+* **robocar-unified:** flash only a verified build, of any commit or release ([#1032](https://github.com/laurigates/mcu-tinkering-lab/issues/1032)) ([3013e59](https://github.com/laurigates/mcu-tinkering-lab/commit/3013e5966c5ea07885939cf7239bd0d8de31a5de))
+* **robocar-unified:** give the planner the rangefinder readings ([#1035](https://github.com/laurigates/mcu-tinkering-lab/issues/1035)) ([bf410da](https://github.com/laurigates/mcu-tinkering-lab/commit/bf410dadb3f27f9843579a2206f7122ed63c3f5c))
+* **robocar-unified:** idle gaze in the executor, with an idle command ([#954](https://github.com/laurigates/mcu-tinkering-lab/issues/954)) ([4496cbe](https://github.com/laurigates/mcu-tinkering-lab/commit/4496cbea1d008c8b7b4f0c9c6fe3db7b57a165b2))
+* **robocar-unified:** key the scene gates' references by head pose ([#953](https://github.com/laurigates/mcu-tinkering-lab/issues/953)) ([ae929e2](https://github.com/laurigates/mcu-tinkering-lab/commit/ae929e2c6b98e4d7b614a977231be17d081cda46))
+* **robocar-unified:** let the planner write notes to GlitchTip ([#1021](https://github.com/laurigates/mcu-tinkering-lab/issues/1021)) ([0d4cc6d](https://github.com/laurigates/mcu-tinkering-lab/commit/0d4cc6dec769aa6d5586b0b4aebd1fde6a1beaea))
+* **robocar-unified:** log version, build and reset reason at boot ([#986](https://github.com/laurigates/mcu-tinkering-lab/issues/986)) ([f5db9c4](https://github.com/laurigates/mcu-tinkering-lab/commit/f5db9c45789e73fef323532d1f1fc7ec59110f37))
+* **robocar-unified:** measure the Gemini Live API; move TTS tooling to gemini-3.8-flash-tts ([#994](https://github.com/laurigates/mcu-tinkering-lab/issues/994)) ([a4bb898](https://github.com/laurigates/mcu-tinkering-lab/commit/a4bb898c387a17183bca83280f03397f3882da82))
+* **robocar-unified:** play prebuilt sound clips — horn, aoogah, bell, boing ([#1000](https://github.com/laurigates/mcu-tinkering-lab/issues/1000)) ([05e3e65](https://github.com/laurigates/mcu-tinkering-lab/commit/05e3e6563ce2503d231b5bbc8216bafea67c80a5))
+* **robocar-unified:** ramp motor PWM up instead of stepping to it ([#987](https://github.com/laurigates/mcu-tinkering-lab/issues/987)) ([91fd820](https://github.com/laurigates/mcu-tinkering-lab/commit/91fd820e74292b5653a20b5c77536440c94e9831))
+* **robocar-unified:** report unplanned resets to GlitchTip over MQTT ([9a23367](https://github.com/laurigates/mcu-tinkering-lab/commit/9a233670c711fc51c537c737c541662f62607484))
+* **robocar-unified:** say BLIND on the voice line when no frame has decoded ([#703](https://github.com/laurigates/mcu-tinkering-lab/issues/703)) ([abf4726](https://github.com/laurigates/mcu-tinkering-lab/commit/abf47264068272f3d73ac474b3c7730f1770196d))
+* **robocar-unified:** send panic core dumps to GlitchTip as crash events ([#1019](https://github.com/laurigates/mcu-tinkering-lab/issues/1019)) ([d9e333a](https://github.com/laurigates/mcu-tinkering-lab/commit/d9e333a2f949b07e481b90bf015ae76f59f88045))
+* **robocar-unified:** show a status screen on the OLED ([#940](https://github.com/laurigates/mcu-tinkering-lab/issues/940)) ([500c428](https://github.com/laurigates/mcu-tinkering-lab/commit/500c428a06d41924d2fd5ec4021786ccdc0b891d))
+
+
+### Bug Fixes
+
+* **deps:** update all non-major dependencies ([#984](https://github.com/laurigates/mcu-tinkering-lab/issues/984)) ([d723342](https://github.com/laurigates/mcu-tinkering-lab/commit/d7233423923ad30c6c007446c4caf5547dc2c9c3))
+* **robocar-unified:** boot at 30% volume ([#965](https://github.com/laurigates/mcu-tinkering-lab/issues/965)) ([9a4ea0b](https://github.com/laurigates/mcu-tinkering-lab/commit/9a4ea0ba9d6d71dc9d43c6a7905872c20c2c83da))
+* **robocar-unified:** count a look-only track goal as not moving ([#958](https://github.com/laurigates/mcu-tinkering-lab/issues/958)) ([a9695aa](https://github.com/laurigates/mcu-tinkering-lab/commit/a9695aa78c4e30ac7de5084e763d00f5904ceb47))
+* **robocar-unified:** don't re-announce status when the key is first accepted ([#945](https://github.com/laurigates/mcu-tinkering-lab/issues/945)) ([ad56ffe](https://github.com/laurigates/mcu-tinkering-lab/commit/ad56ffe094ff1d62dc78d5be1d40bacd2d35e49a))
+* **robocar-unified:** keep the head servos' own noise out of the ambient gate ([#989](https://github.com/laurigates/mcu-tinkering-lab/issues/989)) ([691f973](https://github.com/laurigates/mcu-tinkering-lab/commit/691f97382d8e68cbfe4d433b7a47ef86a8031cbf))
+* **robocar-unified:** let the robot back out of an obstacle reflex ([#1030](https://github.com/laurigates/mcu-tinkering-lab/issues/1030)) ([7c48913](https://github.com/laurigates/mcu-tinkering-lab/commit/7c489132c45dfe3c8cd70ca0f1edf8aa3d55e66e)), closes [#1026](https://github.com/laurigates/mcu-tinkering-lab/issues/1026)
+* **robocar-unified:** mirror the pan servo, which is mounted reversed ([#961](https://github.com/laurigates/mcu-tinkering-lab/issues/961)) ([25f6816](https://github.com/laurigates/mcu-tinkering-lab/commit/25f6816f5db6984cb8e16af8eecc0b9a6258a785))
+* **robocar-unified:** raise the FreeRTOS timer task stack to 4096 ([#939](https://github.com/laurigates/mcu-tinkering-lab/issues/939)) ([61aa6a9](https://github.com/laurigates/mcu-tinkering-lab/commit/61aa6a99d309fe29930018be1e633a709c9162cb))
+* **robocar-unified:** reverse on a drive goal past ±90 degrees ([#1028](https://github.com/laurigates/mcu-tinkering-lab/issues/1028)) ([975a2d9](https://github.com/laurigates/mcu-tinkering-lab/commit/975a2d98ab4b06c5042aff1b838d8f576d0deeb5)), closes [#1025](https://github.com/laurigates/mcu-tinkering-lab/issues/1025)
+* **robocar-unified:** run the I2C bus at 100 kHz so the RCWL-1601s answer ([#941](https://github.com/laurigates/mcu-tinkering-lab/issues/941)) ([f25eb9e](https://github.com/laurigates/mcu-tinkering-lab/commit/f25eb9e6d74a90f353692bc54c3f88570536fbbb))
+* **robocar-unified:** speak only the last text part of a voice reply ([#950](https://github.com/laurigates/mcu-tinkering-lab/issues/950)) ([457cf99](https://github.com/laurigates/mcu-tinkering-lab/commit/457cf99d9f87d5df3d6a9271ac12d8c906777db3))
+* **robocar-unified:** stop "strange noise" remarks about speech ([#946](https://github.com/laurigates/mcu-tinkering-lab/issues/946)) ([fba90df](https://github.com/laurigates/mcu-tinkering-lab/commit/fba90dfb3d49b95b4359ccc748eb8f119edf38bb))
+* **robocar-unified:** TTS model migration, prompt sizing, Gemini key and WiFi resilience ([#935](https://github.com/laurigates/mcu-tinkering-lab/issues/935)) ([da627a6](https://github.com/laurigates/mcu-tinkering-lab/commit/da627a69c0d7d0ac41177881892f09d9a0c5a13f))
+
+
+### Documentation
+
+* correct claims the new sensor reference pages contradicted ([#1007](https://github.com/laurigates/mcu-tinkering-lab/issues/1007)) ([9e20faa](https://github.com/laurigates/mcu-tinkering-lab/commit/9e20faaf1bb135552ad5f8d47f15eead1bdba112))
+* **robocar-unified:** add the GlitchTip error-reporting guide ([42e0796](https://github.com/laurigates/mcu-tinkering-lab/commit/42e0796844b4c86dc5ae636cfe247b2319d0de61))
+* **robocar-unified:** bench control over MQTT, and a `cmd` recipe ([c00a186](https://github.com/laurigates/mcu-tinkering-lab/commit/c00a186d0c1dea2507cabf1198c524c9c7daf7f4))
+* **robocar-unified:** bench control over MQTT, and a cmd recipe ([#964](https://github.com/laurigates/mcu-tinkering-lab/issues/964)) ([c00a186](https://github.com/laurigates/mcu-tinkering-lab/commit/c00a186d0c1dea2507cabf1198c524c9c7daf7f4))
+* **robocar-unified:** correct the mbedTLS allocator comment in gemini_http.c ([#996](https://github.com/laurigates/mcu-tinkering-lab/issues/996)) ([68bfcd3](https://github.com/laurigates/mcu-tinkering-lab/commit/68bfcd3340489aec987c0199d490ce0c17015898))
+* **robocar-unified:** drop stale ESP32-CAM references in camera and MQTT logger ([#1011](https://github.com/laurigates/mcu-tinkering-lab/issues/1011)) ([0083fc8](https://github.com/laurigates/mcu-tinkering-lab/commit/0083fc8ef5e23916701313052836d566913ecd38))
+* **robocar-unified:** move subsystem notes out of CLAUDE.md into docs/firmware ([#938](https://github.com/laurigates/mcu-tinkering-lab/issues/938)) ([b98cbf6](https://github.com/laurigates/mcu-tinkering-lab/commit/b98cbf68613c34fb6608ec9aab2752cf505d760c))
+* **robocar-unified:** record three bench findings from 2026-11-04/05 ([#952](https://github.com/laurigates/mcu-tinkering-lab/issues/952)) ([16e3405](https://github.com/laurigates/mcu-tinkering-lab/commit/16e3405b713a34dcba899dc1aef76c75d36e7e54))
+* **robocar-unified:** reset reasons on J15, BROWNOUT with the detector off ([#998](https://github.com/laurigates/mcu-tinkering-lab/issues/998)) ([1e3dc5b](https://github.com/laurigates/mcu-tinkering-lab/commit/1e3dc5bd8e05ab5292985e19b019de1dcf53deb4))
+* **robocar-unified:** say a look-only track still turns in place to re-centre ([65eed0b](https://github.com/laurigates/mcu-tinkering-lab/commit/65eed0b2844cd47d189c587b5383cb9d59e94eac)), closes [#958](https://github.com/laurigates/mcu-tinkering-lab/issues/958)
+
+
+### Miscellaneous
+
+* **deps:** lock file maintenance; rename ty unresolved-import rule ([#993](https://github.com/laurigates/mcu-tinkering-lab/issues/993)) ([5618c3e](https://github.com/laurigates/mcu-tinkering-lab/commit/5618c3e25f9dc12d1c7ec997c18f69a2ae96b035))
+
 ## [0.2.17](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-unified-v0.2.16...robocar-unified-v0.2.17) (2026-11-03)
 
 

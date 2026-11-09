@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.12](https://github.com/laurigates/mcu-tinkering-lab/compare/gamepad-synth-v0.1.11...gamepad-synth-v0.1.12) (2026-11-09)
+
+
+### Features
+
+* **robocar-unified:** measure the Gemini Live API; move TTS tooling to gemini-3.8-flash-tts ([#994](https://github.com/laurigates/mcu-tinkering-lab/issues/994)) ([a4bb898](https://github.com/laurigates/mcu-tinkering-lab/commit/a4bb898c387a17183bca83280f03397f3882da82))
+
+
+### Miscellaneous
+
+* **deps:** lock file maintenance; rename ty unresolved-import rule ([#993](https://github.com/laurigates/mcu-tinkering-lab/issues/993)) ([5618c3e](https://github.com/laurigates/mcu-tinkering-lab/commit/5618c3e25f9dc12d1c7ec997c18f69a2ae96b035))
+
 ## [0.1.11](https://github.com/laurigates/mcu-tinkering-lab/compare/gamepad-synth-v0.1.10...gamepad-synth-v0.1.11) (2026-11-01)
 
 

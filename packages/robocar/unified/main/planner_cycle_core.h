@@ -26,6 +26,11 @@
  *   5. planner_cycle_note_spoken()   only after speech_queue_post() succeeded
  *   6. planner_cycle_result()        goal write vs force-stop, backoff
  *   7. planner_cycle_wait_periods()  how many periods to sleep
+ *
+ * The note gate (note_gate.h, ADR-033) hooks in on both sides of the request:
+ * planner_cycle_note_offer() between 1 and 2 decides whether this request
+ * offers the `note` tool, and planner_cycle_note_outcome() after 6 raises the
+ * triggers the cycle's result supports.
  */
 
 #ifndef PLANNER_CYCLE_CORE_H
@@ -35,6 +40,8 @@
 #include <stdint.h>
 
 #include "esp_err.h"
+#include "goal_state.h"
+#include "note_gate.h"
 #include "plan_activity.h"
 
 /** State the planner keeps from one cycle to the next. Zero-initialise it. */
@@ -53,6 +60,18 @@ typedef struct {
      *  of. */
     bool dormant_announced;
     bool budget_announced;
+
+    /** Note gate evidence (planner_cycle_note_offer/_outcome). The reflex count
+     *  last compared, so a trip between two requests is seen even when the
+     *  brake has already released. Zero-initialised to match the executor's
+     *  count at boot. */
+    uint32_t note_reflex_seen;
+    /** BLIND was raised for the current blind spell; cleared when a frame
+     *  decodes, so the next spell raises it again. */
+    bool note_blind_raised;
+    uint32_t note_track_streak;
+    uint32_t note_repeat_streak;
+    uint32_t note_requests_since_reflect;
 } planner_cycle_state_t;
 
 /** What a cycle does before (or instead of) the request. */
@@ -202,5 +221,48 @@ planner_result_action_t planner_cycle_result(planner_cycle_state_t *st, esp_err_
 
 /** @brief Periods to sleep after a cycle that made a request: 1 + backoff. */
 uint32_t planner_cycle_wait_periods(const planner_cycle_state_t *st);
+
+/** What the robot already measures that can trigger a note. */
+typedef struct {
+    /** reactive_telemetry_t.reflex_trips. */
+    uint32_t reflex_trips;
+    /** !scene_change_has_measurement(): no frame has decoded. */
+    bool blind;
+} planner_note_inputs_t;
+
+/**
+ * @brief Raise the triggers @p in supports, then ask the gate for an offer.
+ *
+ * Call on a cycle that will make a request, before it is built. A reflex trip
+ * since the last call raises NOTE_TRIGGER_REFLEX; the start of a blind spell
+ * raises NOTE_TRIGGER_BLIND once. Returns note_gate_take(now_ms): the trigger
+ * this request offers the tool for, or NONE.
+ */
+note_trigger_t planner_cycle_note_offer(planner_cycle_state_t *st, const planner_note_inputs_t *in,
+                                        uint32_t now_ms);
+
+/**
+ * @brief Raise the triggers this cycle's outcome supports, for a later request.
+ *
+ * Every NOTE_GATE_REFLECT_EVERY-th request raises NOTE_TRIGGER_REFLECT. A
+ * `track` goal written NOTE_GATE_TRACK_STUCK_CYCLES times in a row raises
+ * NOTE_TRIGGER_TRACK_STUCK (the streak then starts again, so a target chased
+ * for twice as long raises it twice). NOTE_GATE_REPEAT_STREAK lines withheld as
+ * repeats in a row raise NOTE_TRIGGER_REPEATS; a line that is spoken resets
+ * that streak, and a cycle with no line leaves it.
+ *
+ * "Not converging" is approximated by the streak: the executor does not report
+ * whether a track goal arrived, and a target that is reached stops being
+ * tracked.
+ *
+ * A PLANNER_RESULT_STOP_IDLE request (no link or no key) was never sent: it
+ * gives @p offered back to the gate (note_gate_untake()) and counts toward no
+ * streak.
+ *
+ * @param offered  What planner_cycle_note_offer() returned for this request.
+ */
+void planner_cycle_note_outcome(planner_cycle_state_t *st, planner_result_action_t result,
+                                goal_kind_t goal_kind, planner_speech_verdict_t speech,
+                                note_trigger_t offered);
 
 #endif /* PLANNER_CYCLE_CORE_H */

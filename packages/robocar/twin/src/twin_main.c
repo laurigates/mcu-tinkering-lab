@@ -14,7 +14,8 @@
  *   stdin:  config, world events, {"t":"run"}, then one model_response per
  *           model_request.
  *   stdout: trace records (cycle, goal, force_stop, utterance, suppressed,
- *           announce, backoff), model_request, and a final done.
+ *           announce, backoff, note_offered, note, note_not_offered),
+ *           model_request, and a final done.
  *
  * Firmware modules log with printf on the host (goal_state.c's host branch), so
  * stdout is moved to stderr at start and the trace goes to a private dup of the
@@ -37,6 +38,7 @@
 #include "esp_timer.h"
 #include "gemini_parse.h"
 #include "goal_state.h"
+#include "note_gate.h"
 #include "plan_activity.h"
 #include "plan_budget.h"
 #include "planner_cycle_core.h"
@@ -181,6 +183,7 @@ typedef enum {
     EV_VOICE_TURN,
     EV_CONSOLE,
     EV_LINK,
+    EV_REFLEX,
 } ev_kind_t;
 
 typedef struct {
@@ -230,6 +233,11 @@ static bool s_range_valid;
 
 static bool s_wifi;
 static bool s_key;
+
+/** reactive_telemetry_t.reflex_trips: the executor is not compiled into the
+ *  twin, so a `reflex` world event stands for one latch of the obstacle reflex
+ *  (reactive_controller.c counts the rising edge). */
+static uint32_t s_reflex_trips;
 
 #define MAX_BURSTS 64
 typedef struct {
@@ -434,6 +442,8 @@ static void read_setup(void)
             ev.kind = EV_LINK;
             ev.wifi = bool_field(obj, "wifi", t);
             ev.key = bool_field(obj, "key", t);
+        } else if (strcmp(t, "reflex") == 0) {
+            ev.kind = EV_REFLEX;
         } else {
             die(2, "unknown record type '%s'", t);
         }
@@ -577,6 +587,9 @@ static void apply_event(const world_event_t *ev)
         case EV_LINK:
             s_wifi = ev->wifi;
             s_key = ev->key;
+            break;
+        case EV_REFLEX:
+            s_reflex_trips++;
             break;
     }
 }
@@ -728,12 +741,15 @@ static model_reply_t await_response(uint32_t id)
  * hashes. The cycle index is deliberately absent: the same evidence must map to
  * the same cassette whenever it occurs.
  */
-static void build_descriptor(char *out, size_t cap, const char *gate, bool speak_allowed)
+static void build_descriptor(char *out, size_t cap, const char *gate, bool speak_allowed,
+                             note_trigger_t note_offer)
 {
     size_t pos = 0;
     pos += (size_t)snprintf(out + pos, cap - pos, "{\"gate\":");
     pos = json_escape(out, cap, pos, gate);
-    pos += (size_t)snprintf(out + pos, cap - pos, ",\"kind\":\"plan\",\"pose\":");
+    pos += (size_t)snprintf(out + pos, cap - pos, ",\"kind\":\"plan\",\"note\":");
+    pos = json_escape(out, cap, pos, note_trigger_name(note_offer));
+    pos += (size_t)snprintf(out + pos, cap - pos, ",\"pose\":");
     const char pose[2] = {s_frame_pose, '\0'};
     pos = json_escape(out, cap, pos, pose);
     pos += (size_t)snprintf(out + pos, cap - pos, ",\"scene\":");
@@ -759,9 +775,12 @@ static void build_descriptor(char *out, size_t cap, const char *gate, bool speak
  * is handled, so a voice turn that starts mid-request is visible to the
  * planner's after-request snapshot exactly as on the robot.
  */
-static esp_err_t backend_plan(uint64_t request_ms, goal_t *goal, char *speech, size_t cap)
+static esp_err_t backend_plan(uint64_t request_ms, goal_t *goal, char *speech, size_t cap,
+                              note_trigger_t note_offer, gemini_note_t *note)
 {
     speech[0] = '\0';
+    note->kind = NOTE_KIND_NONE; /* gemini_backend_plan() clears it on every path */
+    note->text[0] = '\0';
     if (!plan_budget_allows()) {
         goal->kind = GOAL_KIND_STOP;
         return ESP_ERR_NOT_ALLOWED;
@@ -777,7 +796,7 @@ static esp_err_t backend_plan(uint64_t request_ms, goal_t *goal, char *speech, s
     const char *gate = planner_cycle_gate_verdict((uint32_t)request_ms);
     const bool speak_allowed = (gate[0] == 'V' || gate[0] == 'A');
     char descriptor[512];
-    build_descriptor(descriptor, sizeof(descriptor), gate, speak_allowed);
+    build_descriptor(descriptor, sizeof(descriptor), gate, speak_allowed, note_offer);
     char key[65];
     twin_sha256_hex(descriptor, strlen(descriptor), key);
 
@@ -808,6 +827,15 @@ static esp_err_t backend_plan(uint64_t request_ms, goal_t *goal, char *speech, s
             emit("{\"t\":\"speak_not_offered\",\"at_ms\":%llu,\"text\":%s}",
                  (unsigned long long)s_now_ms, jstr(speech));
             speech[0] = '\0';
+        }
+        /* gemini_backend_plan() hands back a note only when it offered one
+         * (gemini_backend.c, after the parse); flag and drop the rest. */
+        gemini_parse_last_note(note);
+        if (note->kind != NOTE_KIND_NONE && note_offer == NOTE_TRIGGER_NONE) {
+            emit("{\"t\":\"note_not_offered\",\"at_ms\":%llu,\"text\":%s}",
+                 (unsigned long long)s_now_ms, jstr(note->text));
+            note->kind = NOTE_KIND_NONE;
+            note->text[0] = '\0';
         }
     }
     free(reply.body);
@@ -942,13 +970,26 @@ static uint64_t planner_tick(uint64_t tick_ms)
         announce("waking");
     }
 
+    /* ---- 1d. Offer the note tool? (planner_task.c step 1d) ---- */
+    const planner_note_inputs_t note_in = {
+        .reflex_trips = s_reflex_trips,
+        .blind = !scene_change_has_measurement(),
+    };
+    const note_trigger_t note_offer = planner_cycle_note_offer(&s_cycle, &note_in, now_ms);
+    if (note_offer != NOTE_TRIGGER_NONE) {
+        emit("{\"t\":\"note_offered\",\"at_ms\":%llu,\"trigger\":\"%s\",\"offers\":%u}",
+             (unsigned long long)s_now_ms, note_trigger_name(note_offer),
+             (unsigned)note_gate_offers());
+    }
+
     /* ---- 2. Call the planner model ---- */
     goal_t goal = {0};
     char speech[SPEECH_TEXT_MAX] = {0};
+    gemini_note_t note;
     planner_speech_snapshot_t at_request = {0};
     at_request.speech_notes = speech_budget_notes();
     at_request.voice_turns = s_voice_turns;
-    const esp_err_t ret = backend_plan(now_ms, &goal, speech, sizeof(speech));
+    const esp_err_t ret = backend_plan(now_ms, &goal, speech, sizeof(speech), note_offer, &note);
 
     const char *const gate_verdict =
         planner_cycle_after_request(now_ms, (uint32_t)(esp_timer_get_time() / 1000));
@@ -976,6 +1017,16 @@ static uint64_t planner_tick(uint64_t tick_ms)
 
     /* ---- 3 / 4. Write goal or force stop ---- */
     const planner_result_action_t result = planner_cycle_result(&s_cycle, ret);
+
+    /* ---- 4b. Notes (planner_task.c step 4b); event_report is not compiled
+     * in, so the note is a trace record. */
+    planner_cycle_note_outcome(&s_cycle, result, goal.kind, speech_verdict, note_offer);
+    if (note_offer != NOTE_TRIGGER_NONE && note.kind != NOTE_KIND_NONE) {
+        note_gate_noted();
+        emit("{\"t\":\"note\",\"at_ms\":%llu,\"trigger\":\"%s\",\"kind\":\"%s\",\"text\":%s}",
+             (unsigned long long)s_now_ms, note_trigger_name(note_offer), note_kind_name(note.kind),
+             jstr(note.text));
+    }
     if (result == PLANNER_RESULT_WRITE_GOAL) {
         /* No servos in phase 1: the head reads as centred (planner_task.c:181). */
         goal.head_pan_deg = 0;
@@ -1041,6 +1092,7 @@ int main(void)
                               s_cfg.max_tokens >= 0 ? (uint32_t)s_cfg.max_tokens : max_tok);
     }
     plan_activity_init(s_cfg.period_ms);
+    note_gate_init();
 
     int16_t room[AMBIENT_FRAME_SAMPLES];
     twin_pcm_room(s_cfg.seed, room, AMBIENT_FRAME_SAMPLES);

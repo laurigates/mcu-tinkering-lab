@@ -96,6 +96,19 @@ Change it only while disarmed; `stat` shows the mounting core 1 applies. With
 the right setting a level board reads about 0° and tilting forward reads
 positive. Records saved by older firmware load as `mount up`.
 
+`arm` is refused while the robot rests with the mounted Z axis reading below
+-0.5 g (more than 120° from upright), because at rest that means the setting
+does not match the board:
+`ERR: IMU reads upside down (body Z = -0.98 g); check 'mount' (now up)`. Stand
+the robot upright; if it still refuses, switch `mount` and `save`. "At rest"
+means the accelerometer reads 1 g ± 0.15 g and the gyro under 10 °/s
+(`IMU_STILL_*` in `src/imu_filter.h`); a moving sample is not refused by this
+check, and the tilt cutoff still applies. `arm` checks the mount core 1
+applies: a `mount` typed just before it (a paste, a script) is waited for, a
+few control ticks at most. Core 1 checks again when it handles the arm; if it
+refuses, `arm` prints `ERR: core 1 refused arm: …` instead of `OK`, and `stat`
+counts the refusals.
+
 ### Tuning procedure
 
 1. Bench-check: `rate l 800` / `rate r 800` — both wheels spin smoothly,

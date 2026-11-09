@@ -63,6 +63,14 @@ static const char *TAG GP_MAYBE_UNUSED = "gemini_parse";
  *  — self_report runs on its own task, and a shared slot would let its parse
  *  land between the planner's parse and the planner's read. */
 static gemini_usage_t s_last_usage;
+static gemini_note_t s_last_note;
+
+void gemini_parse_last_note(gemini_note_t *out)
+{
+    if (out) {
+        *out = s_last_note;
+    }
+}
 
 void gemini_parse_last_usage(gemini_usage_t *out)
 {
@@ -94,6 +102,8 @@ esp_err_t gemini_parse_response(const char *json_text, goal_t *out_goal, char *o
      * false, so a stale-but-plausible number here would silently under-charge
      * the fuse — the one failure mode a spend ceiling cannot have. */
     s_last_usage = (gemini_usage_t){.prompt = -1, .output = -1, .total = -1, .present = false};
+    s_last_note.kind = NOTE_KIND_NONE;
+    s_last_note.text[0] = '\0';
 
     cJSON *root = cJSON_Parse(json_text);
     if (!root) {
@@ -152,6 +162,26 @@ esp_err_t gemini_parse_response(const char *json_text, goal_t *out_goal, char *o
                 /* snprintf rather than strlcpy: this file also builds on the
                  * host for the unit tests, where strlcpy is not portable. */
                 snprintf(out_speech, speech_cap, "%s", text->valuestring);
+            }
+            continue;
+        }
+
+        /* `note` is a side channel like `speak`: it must never become the
+         * motion goal, which "first unrecognised call wins" below would make
+         * it if the model put it first. */
+        if (strcmp(fc_name->valuestring, "note") == 0) {
+            cJSON *n_args = cJSON_GetObjectItem(fc, "args");
+            cJSON *n_kind = n_args ? cJSON_GetObjectItem(n_args, "kind") : NULL;
+            cJSON *n_text = n_args ? cJSON_GetObjectItem(n_args, "text") : NULL;
+            if (s_last_note.kind == NOTE_KIND_NONE && cJSON_IsString(n_kind) &&
+                cJSON_IsString(n_text)) {
+                const note_kind_t kind = note_kind_from_name(n_kind->valuestring);
+                if (kind == NOTE_KIND_NONE) {
+                    ESP_LOGW(TAG, "note: unknown kind \"%s\" ignored", n_kind->valuestring);
+                } else if (note_text_clean(s_last_note.text, sizeof(s_last_note.text),
+                                           n_text->valuestring) > 0) {
+                    s_last_note.kind = kind;
+                }
             }
             continue;
         }

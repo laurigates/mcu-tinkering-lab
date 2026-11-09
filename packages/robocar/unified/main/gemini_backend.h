@@ -17,6 +17,8 @@
 #include <stdint.h>
 
 #include "esp_err.h"
+#include "gemini_parse.h"
+#include "note_gate.h"
 
 /* goal_t is defined by Agent B in goal_state.h.  If that header is not yet
  * in place during early compilation passes, the forward-declaration comment
@@ -60,10 +62,16 @@ esp_err_t gemini_backend_init(void);
  *                      speech-only response still reaches the speaker while
  *                      the executor safely holds.
  * @param speech_cap    Size of @p out_speech in bytes.
+ * @param note_offer    The trigger note_gate offered this request
+ *                      (planner_cycle_note_offer()); NOTE_TRIGGER_NONE leaves
+ *                      the `note` tool and its prompt clause out.
+ * @param out_note      Receives an offered note the reply carried, or
+ *                      NOTE_KIND_NONE; cleared on every path. May be NULL.
  * @return ESP_OK on success, ESP_FAIL on recoverable error.
  */
 esp_err_t gemini_backend_plan(const uint8_t *jpeg, size_t jpeg_len, goal_t *out_goal,
-                              uint32_t *latency_ms_out, char *out_speech, size_t speech_cap);
+                              uint32_t *latency_ms_out, char *out_speech, size_t speech_cap,
+                              note_trigger_t note_offer, gemini_note_t *out_note);
 
 /**
  * @brief Phrase on-device status facts into one short spoken line via Gemini.

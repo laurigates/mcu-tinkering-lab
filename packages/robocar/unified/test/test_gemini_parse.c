@@ -250,6 +250,78 @@ static void test_parse_speak_alongside_motion(void)
     ASSERT(strcmp(speech, "I see a red ball") == 0);
 }
 
+/* A `note` placed FIRST must not become the motion goal: the loop takes the
+ * first call it does not recognise as motion, which is what a note was until
+ * the parser learned the name (ADR-033). */
+static void test_parse_note_before_motion_is_not_the_goal(void)
+{
+    const char *json = "{\"candidates\":[{\"content\":{\"parts\":["
+                       "{\"functionCall\":{\"name\":\"note\",\"args\":{\"kind\":\"difficulty\","
+                       "\"text\":\"The chair leg keeps\\nstopping me.\"}}},"
+                       "{\"functionCall\":{\"name\":\"rotate\",\"args\":{\"angle_deg\":90}}}"
+                       "]}}]}";
+    goal_t goal;
+    char speech[160];
+    ASSERT(gemini_parse_response(json, &goal, speech, sizeof(speech)) == ESP_OK);
+    ASSERT(goal.kind == GOAL_KIND_ROTATE);
+    ASSERT(speech[0] == '\0'); /* a note is never spoken */
+    gemini_note_t note;
+    gemini_parse_last_note(&note);
+    ASSERT(note.kind == NOTE_KIND_DIFFICULTY);
+    ASSERT(strcmp(note.text, "The chair leg keeps stopping me.") == 0);
+}
+
+/* A note alone is not a motion goal: the fail-safe STOP still applies. */
+static void test_parse_note_only_still_fails_safe(void)
+{
+    const char *json = "{\"candidates\":[{\"content\":{\"parts\":["
+                       "{\"functionCall\":{\"name\":\"note\",\"args\":{\"kind\":\"behaviour\","
+                       "\"text\":\"I spin in place a lot.\"}}}"
+                       "]}}]}";
+    goal_t goal;
+    ASSERT(gemini_parse_response(json, &goal, NULL, 0) == ESP_FAIL);
+    ASSERT(goal.kind == GOAL_KIND_STOP);
+    gemini_note_t note;
+    gemini_parse_last_note(&note);
+    ASSERT(note.kind == NOTE_KIND_BEHAVIOUR);
+}
+
+/* Unknown kind, empty text, or no note: nothing is reported, and a note from
+ * one parse never leaks into the next. */
+static void test_parse_bad_note_is_dropped_and_slot_cleared(void)
+{
+    const char *with_note =
+        "{\"candidates\":[{\"content\":{\"parts\":["
+        "{\"functionCall\":{\"name\":\"stop\",\"args\":{}}},"
+        "{\"functionCall\":{\"name\":\"note\",\"args\":{\"kind\":\"suggestion\","
+        "\"text\":\"Slow down near doors.\"}}}"
+        "]}}]}";
+    const char *bad_kind = "{\"candidates\":[{\"content\":{\"parts\":["
+                           "{\"functionCall\":{\"name\":\"stop\",\"args\":{}}},"
+                           "{\"functionCall\":{\"name\":\"note\",\"args\":{\"kind\":\"rant\","
+                           "\"text\":\"x\"}}}"
+                           "]}}]}";
+    const char *blank_text =
+        "{\"candidates\":[{\"content\":{\"parts\":["
+        "{\"functionCall\":{\"name\":\"stop\",\"args\":{}}},"
+        "{\"functionCall\":{\"name\":\"note\",\"args\":{\"kind\":\"difficulty\","
+        "\"text\":\" \\n \"}}}"
+        "]}}]}";
+    goal_t goal;
+    gemini_note_t note;
+    ASSERT(gemini_parse_response(with_note, &goal, NULL, 0) == ESP_OK);
+    gemini_parse_last_note(&note);
+    ASSERT(note.kind == NOTE_KIND_SUGGESTION);
+
+    ASSERT(gemini_parse_response(bad_kind, &goal, NULL, 0) == ESP_OK);
+    gemini_parse_last_note(&note);
+    ASSERT(note.kind == NOTE_KIND_NONE);
+
+    ASSERT(gemini_parse_response(blank_text, &goal, NULL, 0) == ESP_OK);
+    gemini_parse_last_note(&note);
+    ASSERT(note.kind == NOTE_KIND_NONE);
+}
+
 /* Order must not matter — speech first, motion second. */
 static void test_parse_speak_before_motion(void)
 {
@@ -697,6 +769,11 @@ int main(void)
              test_parse_unknown_function_defaults_to_stop);
     test_run("parse_speak_alongside_motion", test_parse_speak_alongside_motion);
     test_run("parse_speak_before_motion", test_parse_speak_before_motion);
+    test_run("parse_note_before_motion_is_not_the_goal",
+             test_parse_note_before_motion_is_not_the_goal);
+    test_run("parse_note_only_still_fails_safe", test_parse_note_only_still_fails_safe);
+    test_run("parse_bad_note_is_dropped_and_slot_cleared",
+             test_parse_bad_note_is_dropped_and_slot_cleared);
     test_run("parse_speak_only_still_yields_text", test_parse_speak_only_still_yields_text);
     test_run("parse_sound_leads_the_line", test_parse_sound_leads_the_line);
     test_run("parse_sound_alone", test_parse_sound_alone);

@@ -39,7 +39,7 @@ Tasks communicate via FreeRTOS queues and the shared `goal_state` struct (mutex-
 
 ## I2C topology
 
-All I2C devices sit behind a **TCA9548A multiplexer** on GPIO5/6. Always select the channel through `i2c_bus.c` first: ch0 PCA9685 (motors, servos, LEDs), ch1 SSD1306 OLED, ch2 MCP23017 (optional; GPA7/GPB7 output-only), ch3/ch4 RCWL-1601 front/rear (0x57), ch5–7 reserved. Every peripheral is non-fatal, and the self-report names any that did not initialise. Details: [docs/firmware/i2c-and-motors.md](docs/firmware/i2c-and-motors.md).
+All I2C devices sit behind a **TCA9548A multiplexer** on GPIO5/6. Always select the channel through `i2c_bus.c` first: ch0 PCA9685 (motors, servos, LEDs), ch1 SSD1306 OLED, ch2 MCP23017 (optional; GPA7/GPB7 output-only; GPA0/GPA1 the front/rear floor sensors), ch3/ch4 RCWL-1601 front/rear (0x57), ch5–7 reserved. Every peripheral is non-fatal, and the self-report names any that did not initialise. Details: [docs/firmware/i2c-and-motors.md](docs/firmware/i2c-and-motors.md).
 
 ## Subsystem docs
 
@@ -49,11 +49,13 @@ Each subsystem's design notes, measurements and the reasoning behind the rules b
 |---|---|
 | [i2c-and-motors.md](docs/firmware/i2c-and-motors.md) | Mux channel map, non-fatal peripherals and the `i2c_peripherals=` fact, PCA9685 channel layout, coast vs brake, bus clock and PWM phase, the managed I2C drivers and the `pca9685` version floor |
 | [console-and-mqtt.md](docs/firmware/console-and-mqtt.md) | Serial console command table (including `mqtt auth` and `gemini auth`), MQTT remote commands and read-only mode, `servo exercise`, the boot wheel exercise |
+| [error-reporting.md](docs/firmware/error-reporting.md) | GlitchTip error events on `robocar/events`: setup, the development loop, reset events and the RTC breadcrumb ring, core-dump crash events, planner notes, `report` |
 | [head-aiming.md](docs/firmware/head-aiming.md) | How the executor satisfies `track` with the head, the wheels or both; head leases |
 | [activity-trace.md](docs/firmware/activity-trace.md) | LED colour meanings, `trace` counters, the I2C bus counter |
-| [planner.md](docs/firmware/planner.md) | Planner tools, dormancy ladder (`plan_activity`), spend fuse (`plan_budget`), reading the planner log |
+| [planner.md](docs/firmware/planner.md) | Planner tools, dormancy ladder (`plan_activity`), spend fuse (`plan_budget`), planner notes to GlitchTip (`note_gate`), reading the planner log |
 | [camera-and-log.md](docs/firmware/camera-and-log.md) | Frame stats and `snap` dumps, the UART0 log mirror on J15, why the sensor is an OV3660 |
 | [voice.md](docs/firmware/voice.md) | TTS streaming and preroll, personas and dialogue pools, speech gates (scene, ambient audio, budget), voice FX, sound clips (`[horn]`, the `sound` tool, the reflex horn), push-to-talk and VAD voice turns, voice budget, memory peak |
+| [cliff-sensors.md](docs/firmware/cliff-sensors.md) | Front and rear floor sensors on the MCP23017, the cliff reflex (brake, back off, refuse motion toward an edge), wiring, `cliff on\|off`, bench checks |
 | [wifi-and-ota.md](docs/firmware/wifi-and-ota.md) | Improv Serial provisioning over USB-Serial-JTAG, the network supervisor (nothing waits on WiFi), where the Gemini key comes from, OTA manifest polling, the build-SHA install decision |
 
 ## Build & flash
@@ -64,6 +66,8 @@ Containerized ESP-IDF v5.4 via `just robocar-unified::*`. XIAO uses native USB-S
 just robocar-unified::build
 just robocar-unified::flash-monitor
 ```
+
+`flash` builds first and refuses unless the image embeds the expected build SHA; `flash <commit|branch|version tag>` writes that version instead, built in `tmp/flash/<sha>` or downloaded from the release (`tools/flash-source.py`). When a bench result looks wrong, read the boot banner's `build <sha>` before debugging the code.
 
 Do not invoke `idf.py` directly on the host — there's no local ESP-IDF install. Use `just robocar-unified::shell` for an interactive container.
 
@@ -78,6 +82,7 @@ Key settings that matter:
 - `CONFIG_ESP_BROWNOUT_DET=n` — disabled; motor inrush was tripping it. The chip still resets on a deep enough dip, and reports it: the boot banner reads `reset BROWNOUT` and the ROM prints `rst:0xf (BROWNOUT_RST)` on J15 (20 times on battery on 2026-11-07, each at a motor start; issue #991)
 - `CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC=y` — mbedTLS buffers go to PSRAM. On the internal allocator the planner, TTS stream and voice turn each hold a TLS connection with a 16 kB RX buffer, and overlapping handshakes ran internal RAM down to 259 bytes and failed with `-0x7F00` / `-0x2880` / `-0x0010` (`*_ALLOC_FAILED`). It presented as a robot that does not hear: the voice turn recorded fine and never reached Gemini. `gemini_http.c` logs internal free/largest/min-ever on every failed request so a regression is visible at the failure point
 - `CONFIG_CAMERA_JPEG_MODE_FRAME_SIZE=65536` (with `_AUTO=n`, `_CUSTOM=y`) — the AUTO default computes `width*height/5`, a hard **15360-byte** ceiling at QVGA. Past it the driver aborts accumulation, queues the truncated frame, finds no EOI marker and retries until a 4 s timeout — surfacing as `Camera capture failed` and a forced STOP, not as a bad image. Any detailed or bright scene exceeds it at quality 15, and raising the AGC gain ceiling makes it worse because noise inflates JPEG size
+- `CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y` (ELF, SHA256) — a panic writes an ELF core dump to the 128 kB `coredump` partition, and the next boot sends its summary to GlitchTip (ADR-033). The partition table only changes on a USB or web-flasher flash, never over OTA. `CONFIG_ESP_TASK_WDT_PANIC` stays off: it would make a stuck task reboot the robot
 - mDNS (`robocar-unified.local`) needs **no** Kconfig switch — it comes from the `espressif/mdns` managed component. There is no `CONFIG_MDNS_ENABLED` symbol; a line setting one is reported as an unknown symbol and silently ignored
 
 ## Rules
@@ -86,17 +91,23 @@ One line per rule. Each group's doc has the full reasoning and the tests that ho
 
 **Motors, I2C, PCA9685** ([why](docs/firmware/i2c-and-motors.md#dont))
 
-- Motor output goes through `reactive_controller.c` alone. Console and manual movement use `reactive_controller_manual()`, a lease applied after the obstacle reflex.
+- Motor output goes through `reactive_controller.c` alone. Console and manual movement use `reactive_controller_manual()`, a lease applied after the obstacle and cliff reflexes.
 - Every motor, servo and LED output goes through the PCA9685, reached by selecting its TCA9548A channel in `i2c_bus.c`.
 - `set_motors()` skips identical idle re-writes and re-sends after `MOTOR_REFRESH_INTERVAL_MS`; keep both halves.
 - `init_hardware()` returns `void` and logs each peripheral failure, so the boot always reaches the console (#500).
 - Each peripheral keeps its `*_is_initialized()` accessor, and `self_report_collect()` reads it live.
-- `motor_stop()` coasts (low/low) and `motor_brake()` brakes (high/high). Keep them separate; the reflex is the only caller that brakes.
+- `motor_stop()` coasts (low/low) and `motor_brake()` brakes (high/high). Keep them separate; only the obstacle and cliff reflexes brake, from `apply_wheels()`.
+- The rangefinders hold only motion toward what they see: the front reflex brakes forward motion, the rear reading brakes a reverse, turns in place run unless both are blocked (`apply_wheels()`, #1026).
 - Call `pin_bus_clock()` after every driver's `init_desc()`, including for devices added later.
 - Change the PCA9685 frequency through `servo_set_pwm_frequency()`, which re-sends both servo pulses.
 - Full-on and full-off channels (the motor direction pins) keep phase 0 in `pca9685_phase.c`.
 - Driver behaviour we add lives in our own sources, such as `pca9685_phase.c`; `managed_components/` is refetched as-is. Keep the `esp-idf-lib/pca9685` floor at `'^1.0.8'`.
 - The motor channel `#define`s follow the TB6612FNG header order and describe soldered wires; keep that order.
+
+**Cliff reflex** ([why](docs/firmware/cliff-sensors.md#dont))
+
+- The cliff state starts as "no floor" and a failed read counts as no floor (fail closed); arming is not an edge.
+- `apply_wheels()` is the one wheel arbiter; `goal_motion()` mirrors `execute_goal()`'s branches and changes with it.
 
 **Console and MQTT** ([why](docs/firmware/console-and-mqtt.md#dont))
 
@@ -104,6 +115,11 @@ One line per rule. Each group's doc has the full reasoning and the tests that ho
 - The MQTT read-only allow-list holds exact whole lines. Add a command only after reading its handler in `main.c` end to end (#626).
 - `mqtt` is serial-only: `command_task()` handles it, outside `execute_console_line()` and `mqtt_command.c`'s prefixes.
 - Every MQTT payload passes through `mqtt_command_extract_line()`, fragmentation check included.
+
+**Error reporting** ([why](docs/firmware/error-reporting.md#dont))
+
+- `event_report_breadcrumb()` runs inside the log hook: no logging calls, no waiting. `event_report_boot_capture()` runs before the first ESP_LOG line in `app_main` (ADR-033).
+- The core dump is erased only after the broker acknowledges its crash event, on `event_report`'s task, never the MQTT one; `EVENT_REPORT_CRASH_COMMAND` stays 0 in commits.
 
 **Planner** ([why](docs/firmware/planner.md#dont))
 
@@ -116,6 +132,7 @@ One line per rule. Each group's doc has the full reasoning and the tests that ho
 - `planner_task.c` is the only goal source; a new source writes `goal_state` the same way.
 - A second AI backend is a newly designed abstraction; the removed `claude_*`/`ollama_*` code stays removed.
 - Per-cycle decision logic goes in `planner_cycle_core.c`, not `planner_task.c`, so the behaviour twin (`packages/robocar/twin`, ADR-030) runs it.
+- The `note` tool is declared only when `note_gate` offers a trigger (`planner_cycle_note_offer()`); the gate's per-boot count stays spent until `plan resume` or a reboot (ADR-033).
 
 **Pan/tilt head** ([why](docs/firmware/head-aiming.md#dont))
 

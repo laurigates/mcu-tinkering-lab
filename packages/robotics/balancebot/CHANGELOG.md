@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.1.11](https://github.com/laurigates/mcu-tinkering-lab/compare/balancebot-v0.1.10...balancebot-v0.1.11) (2026-11-09)
+
+
+### Features
+
+* **balancebot:** carrier rev3 with expansion, I2C and test headers ([#972](https://github.com/laurigates/mcu-tinkering-lab/issues/972)) ([df86551](https://github.com/laurigates/mcu-tinkering-lab/commit/df865517fc9f9b1f3d4dd64951516fd72f4de6af))
+* **balancebot:** IMU mounting setting for a GY-521 fitted component side down ([#971](https://github.com/laurigates/mcu-tinkering-lab/issues/971)) ([bfef65b](https://github.com/laurigates/mcu-tinkering-lab/commit/bfef65bbf4733d341af16a20c62e5510e7016fd5)), closes [#968](https://github.com/laurigates/mcu-tinkering-lab/issues/968)
+
+
+### Documentation
+
+* correct claims the new sensor reference pages contradicted ([#1007](https://github.com/laurigates/mcu-tinkering-lab/issues/1007)) ([9e20faa](https://github.com/laurigates/mcu-tinkering-lab/commit/9e20faaf1bb135552ad5f8d47f15eead1bdba112))
+
 ## [0.1.10](https://github.com/laurigates/mcu-tinkering-lab/compare/balancebot-v0.1.9...balancebot-v0.1.10) (2026-11-01)
 
 

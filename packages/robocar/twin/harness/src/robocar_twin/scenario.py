@@ -18,7 +18,17 @@ import yaml
 from .timeparse import TimeParseError, parse_ms
 
 POSES = ("C", "L", "R", "F")
-EVENT_KINDS = ("frame", "range", "range_fail", "sound", "voice_turn", "console", "link")
+EVENT_KINDS = (
+    "frame",
+    "range",
+    "range_fail",
+    "sound",
+    "voice_turn",
+    "console",
+    "link",
+    "reflex",
+)
+NOTE_KINDS = ("difficulty", "behaviour", "suggestion")
 CONFIG_KEYS = (
     "planner_period_ms",
     "plan_budget_max_requests",
@@ -173,9 +183,10 @@ def _event_fields(path: Path, kind: str, spec: object, where: str) -> dict[str, 
         if cm < 0:
             raise _fail(path, f"{where}.cm: must be >= 0")
         return {"cm": cm}
-    if kind == "range_fail":
+    if kind in ("range_fail", "reflex"):
+        # reflex: one latch of the obstacle reflex (twin_main.c EV_REFLEX).
         if spec not in (None, True, {}):
-            raise _fail(path, f"{where}: range_fail takes no fields, got {spec!r}")
+            raise _fail(path, f"{where}: {kind} takes no fields, got {spec!r}")
         return {}
     if kind == "sound":
         d = _require_keys(path, spec, where, {"peak_db", "dur"}, set())
@@ -261,6 +272,7 @@ def build_body(
     args: dict[str, Any] | None = None,
     speak: str | None = None,
     tokens: dict[str, int] | int | None = None,
+    note: dict[str, str] | None = None,
 ) -> str:
     """A Gemini generateContent body in the shape gemini_parse_response() reads.
 
@@ -273,6 +285,8 @@ def build_body(
     ]
     if speak is not None:
         parts.append({"functionCall": {"name": "speak", "args": {"text": speak}}})
+    if note is not None:
+        parts.append({"functionCall": {"name": "note", "args": dict(note)}})
     if isinstance(tokens, int):
         prompt, output = tokens, 0
     elif isinstance(tokens, dict):
@@ -298,7 +312,7 @@ def _parse_response(path: Path, raw: object, where: str) -> InlineResponse:
         raw,
         where,
         {"status"},
-        {"latency", "body", "call", "args", "speak", "tokens"},
+        {"latency", "body", "call", "args", "speak", "tokens", "note"},
     )
     status = _int(path, d["status"], f"{where}.status")
     if status not in (200, 429, 500, -1) and not 100 <= status <= 599:
@@ -306,7 +320,7 @@ def _parse_response(path: Path, raw: object, where: str) -> InlineResponse:
             path, f"{where}.status: expected an HTTP status or -1, got {status}"
         )
     latency = _ms(path, d.get("latency", "1s"), f"{where}.latency")
-    shorthand = {"call", "args", "speak", "tokens"} & set(d)
+    shorthand = {"call", "args", "speak", "tokens", "note"} & set(d)
     if "body" in d and shorthand:
         raise _fail(
             path, f"{where}: give either 'body' or {sorted(shorthand)}, not both"
@@ -332,7 +346,17 @@ def _parse_response(path: Path, raw: object, where: str) -> InlineResponse:
         tokens = d.get("tokens")
         if tokens is not None and not isinstance(tokens, int | dict):
             raise _fail(path, f"{where}.tokens: expected an int or {{prompt, output}}")
-        body = build_body(call, args, speak, tokens)
+        note = d.get("note")
+        if note is not None:
+            note = _require_keys(path, note, f"{where}.note", {"kind", "text"}, set())
+            if note["kind"] not in NOTE_KINDS:
+                raise _fail(
+                    path,
+                    f"{where}.note.kind: expected one of {NOTE_KINDS}, got {note['kind']!r}",
+                )
+            if not isinstance(note["text"], str) or not note["text"]:
+                raise _fail(path, f"{where}.note.text: expected a non-empty string")
+        body = build_body(call, args, speak, tokens, note)
     else:
         if shorthand:
             raise _fail(

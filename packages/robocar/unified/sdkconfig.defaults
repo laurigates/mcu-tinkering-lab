@@ -75,6 +75,15 @@ CONFIG_PARTITION_TABLE_CUSTOM=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 CONFIG_PARTITION_TABLE_FILENAME="partitions.csv"
 
+# Core dump to flash (ADR-033): after a panic the dump lands in the
+# `coredump` partition, and the next boot sends its summary (exception, task,
+# backtrace) to GlitchTip and erases it once the broker acknowledges. ELF, so
+# esp_core_dump_get_summary() and the panic reason are available. Not
+# CONFIG_ESP_TASK_WDT_PANIC: that would make a stuck task reboot the robot.
+CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
+CONFIG_ESP_COREDUMP_DATA_FORMAT_ELF=y
+CONFIG_ESP_COREDUMP_CHECKSUM_SHA256=y
+
 # Logging
 CONFIG_LOG_DEFAULT_LEVEL_INFO=y
 CONFIG_LOG_DEFAULT_LEVEL=3

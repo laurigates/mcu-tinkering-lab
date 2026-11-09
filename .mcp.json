@@ -40,6 +40,13 @@
         "-y",
         "@modelcontextprotocol/server-sequential-thinking"
       ]
+    },
+    "glitchtip": {
+      "type": "http",
+      "url": "${GLITCHTIP_MCP_URL:-http://localhost:8000/mcp}",
+      "headers": {
+        "Authorization": "Bearer ${GLITCHTIP_API_TOKEN:-}"
+      }
     }
   }
 }
