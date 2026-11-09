@@ -8,6 +8,9 @@ value = "B5819W"
 lcsc = "C8598"
 buy = "aliexpress:1005006127128914"  # 100 pcs
 
+[stock]
+mpn = "B5819W"  # LCSC C8598 lists it as "B5819W SL" (SL is the marking)
+
 [pins]
 K = 1
 A = 2

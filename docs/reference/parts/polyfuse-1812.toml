@@ -5,6 +5,11 @@ source = "KiCad 10.0.6 library"
 symbol = "Device:Polyfuse"
 footprint = "Fuse:Fuse_1812_4532Metric_Pad1.30x3.40mm_HandSolder"
 
+[stock]
+# The inventory has no fuse category.
+category = "other"
+package = "1812"
+
 [pins]
 "1" = 1
 "2" = 2
