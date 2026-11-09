@@ -169,6 +169,14 @@ class DataValidation(unittest.TestCase):
         with self.assertRaisesRegex(labels.DataError, "render kind"):
             labels.load(p)
 
+    def test_bad_band_colour(self):
+        p = write_data(
+            self.BASE
+            + '[[label]]\ncat="a"\ncolor="c"\nvalue="v"\nspec="s"\nfoot="f"\nrender={kind="axial",bands=["#000000","brown"]}\n'
+        )
+        with self.assertRaisesRegex(labels.DataError, r"bands\[1\]"):
+            labels.load(p)
+
     def test_missing_field(self):
         p = write_data(
             self.BASE + '[[label]]\ncat="a"\ncolor="c"\nvalue="v"\nfoot="f"\n'
