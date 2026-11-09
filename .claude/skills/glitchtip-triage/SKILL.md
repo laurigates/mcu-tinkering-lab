@@ -3,15 +3,16 @@ name: glitchtip-triage
 description: "Read robocar resets, crash backtraces and planner notes from GlitchTip (tools/glitchtip) and take one from issue to fix. Use when the robot rebooted, crashed or misbehaved, after a field or bench session, when asked to check GlitchTip or review the planner's notes, or when bringing the GlitchTip stack up."
 user-invocable: true
 argument-hint: "[issue-id | project | query]"
-allowed-tools: Bash(just:*), Bash(docker:*), Bash(git:*), Read, Grep, Glob
+allowed-tools: Bash(just:*), Bash(docker:*), Bash(git:*), Read, Grep, Glob, mcp__glitchtip__list_organizations, mcp__glitchtip__list_projects, mcp__glitchtip__list_issues, mcp__glitchtip__get_issue, mcp__glitchtip__get_latest_event, mcp__glitchtip__get_event
 ---
 
 # GlitchTip Triage: From a Robot Event to a Source Line
 
 The robot publishes Sentry-shaped events on MQTT `robocar/events`; the bridge in
 `tools/glitchtip/` forwards them to a self-hosted GlitchTip, project `robocar`
-(firmware: resets, crashes) or `robocar-ai` (planner notes). Read issues with
-the recipes below, not the web UI: their output is plain text built for this.
+(firmware: resets, crashes) or `robocar-ai` (planner notes). Read issues
+through GlitchTip's MCP server when the `glitchtip` MCP tools are available,
+otherwise with the recipes below; not the web UI.
 
 Design and caveats: [ADR-033](../../../docs/decisions/ADR-033-robocar-error-reporting.md).
 Stack, recipes, configuration: [`tools/glitchtip/README.md`](../../../tools/glitchtip/README.md).
@@ -38,6 +39,27 @@ just glitchtip::issues robocar "report test"
 No robot: `just glitchtip::send reset-brownout` (also `crash`, `planner-note`).
 
 ## 2. List, then read
+
+**With the `glitchtip` MCP server** (registered in the repo `.mcp.json`; needs
+`GLITCHTIP_API_TOKEN` in Claude Code's environment, printed by
+`just glitchtip::mcp-env`). Arguments as GlitchTip 6.2.6 declares them:
+
+| Tool | Arguments |
+|---|---|
+| `list_issues` | `organization_slug` (`robocar-lab`); optional `project_slug` (`robocar`, `robocar-ai`), `query` (`is:unresolved`), `sort`, `limit`, `start`, `end`, `environment` |
+| `get_latest_event` | `issue_id`: the numeric id (`2`), not the short id (`ROBOCAR-2`) |
+| `get_issue` | `issue_id` |
+| `get_event` | `event_id`, `organization_slug` |
+| `list_projects` | `organization_slug` |
+
+`get_latest_event` returns the tags, the exception with its frames
+(symbolicated frames carry the function, file and line) and the breadcrumbs.
+The read-only token refuses `update_issue` (`Token lacks required scope`):
+leave resolving issues to Lauri in the UI rather than asking for a write
+token. If the `glitchtip` tools are missing, the token is not in the
+environment or the stack is down; use the recipes.
+
+**Without MCP**, the recipes print the same data as text:
 
 ```sh
 just glitchtip::issues [project] [query]   # id, project, level, count, last seen, release, title

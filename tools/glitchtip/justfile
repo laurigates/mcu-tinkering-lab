@@ -53,6 +53,16 @@ event issue *args:
     set -a; source .env; set +a
     exec uv run --quiet --project bridge robocar-glitchtip event {{quote(issue)}} {{args}}
 
+[doc("Print the exports Claude Code needs for the `glitchtip` MCP server in .mcp.json (read-only token)")]
+mcp-env:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd {{quote(_dir)}}
+    set -a; source .env; set +a
+    : "${GLITCHTIP_API_TOKEN:?no GLITCHTIP_API_TOKEN in .env; run just glitchtip::bootstrap}"
+    echo "export GLITCHTIP_API_TOKEN=$GLITCHTIP_API_TOKEN"
+    echo "export GLITCHTIP_MCP_URL=${GLITCHTIP_DOMAIN:-http://localhost:${GLITCHTIP_PORT:-8000}}/mcp"
+
 [doc("Keep a firmware ELF for symbolication as elf/<embedded build SHA>.elf")]
 keep-elf elf=(_root / "packages/robocar/unified/build/robocar-unified.elf"):
     #!/usr/bin/env python3
