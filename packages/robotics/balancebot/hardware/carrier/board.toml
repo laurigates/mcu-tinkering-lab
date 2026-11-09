@@ -328,3 +328,15 @@ via_um = [1000, 500]
 track_um = 500
 reach_mm = 2.5
 required = ["C1:2", "C2:2"]
+
+# Where carrier-fab writes the commit on F.SilkS: `<sha7> <pcb8>`, the git
+# commit and the first 8 hex digits of the check stamp's board_sha256, so the
+# Gerber viewer and the delivered board both say which upload was built
+# (kicad.provenance; JLCPCB built a stale cart upload on 2026-10-23). It goes
+# on a plotting copy only; the committed board and stamp stay as they are.
+# The strip beside "rev3 2026-11" has no 15 mm free between J1's labels, the
+# title and J2's outline, so it sits below J3's pins, between the GY-521
+# outline and Q1/D2; carrier-fab fails if DRC finds it on a pad or a line.
+[fab]
+provenance_at = [44.0, 50.2]
+provenance_size = 1.0
