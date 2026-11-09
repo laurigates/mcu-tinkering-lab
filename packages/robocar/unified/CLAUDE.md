@@ -78,6 +78,7 @@ Key settings that matter:
 - `CONFIG_ESP_BROWNOUT_DET=n` — disabled; motor inrush was tripping it. The chip still resets on a deep enough dip, and reports it: the boot banner reads `reset BROWNOUT` and the ROM prints `rst:0xf (BROWNOUT_RST)` on J15 (20 times on battery on 2026-11-07, each at a motor start; issue #991)
 - `CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC=y` — mbedTLS buffers go to PSRAM. On the internal allocator the planner, TTS stream and voice turn each hold a TLS connection with a 16 kB RX buffer, and overlapping handshakes ran internal RAM down to 259 bytes and failed with `-0x7F00` / `-0x2880` / `-0x0010` (`*_ALLOC_FAILED`). It presented as a robot that does not hear: the voice turn recorded fine and never reached Gemini. `gemini_http.c` logs internal free/largest/min-ever on every failed request so a regression is visible at the failure point
 - `CONFIG_CAMERA_JPEG_MODE_FRAME_SIZE=65536` (with `_AUTO=n`, `_CUSTOM=y`) — the AUTO default computes `width*height/5`, a hard **15360-byte** ceiling at QVGA. Past it the driver aborts accumulation, queues the truncated frame, finds no EOI marker and retries until a 4 s timeout — surfacing as `Camera capture failed` and a forced STOP, not as a bad image. Any detailed or bright scene exceeds it at quality 15, and raising the AGC gain ceiling makes it worse because noise inflates JPEG size
+- `CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y` (ELF, SHA256) — a panic writes an ELF core dump to the 128 kB `coredump` partition, and the next boot sends its summary to GlitchTip (ADR-033). The partition table only changes on a USB or web-flasher flash, never over OTA. `CONFIG_ESP_TASK_WDT_PANIC` stays off: it would make a stuck task reboot the robot
 - mDNS (`robocar-unified.local`) needs **no** Kconfig switch — it comes from the `espressif/mdns` managed component. There is no `CONFIG_MDNS_ENABLED` symbol; a line setting one is reported as an unknown symbol and silently ignored
 
 ## Rules
@@ -105,6 +106,7 @@ One line per rule. Each group's doc has the full reasoning and the tests that ho
 - `mqtt` is serial-only: `command_task()` handles it, outside `execute_console_line()` and `mqtt_command.c`'s prefixes.
 - Every MQTT payload passes through `mqtt_command_extract_line()`, fragmentation check included.
 - `event_report_breadcrumb()` runs inside the log hook: no logging calls, no waiting. `event_report_boot_capture()` runs before the first ESP_LOG line in `app_main` (ADR-033).
+- The core dump is erased only after the broker acknowledges its crash event, on `event_report`'s task, never the MQTT one; `EVENT_REPORT_CRASH_COMMAND` stays 0 in commits.
 
 **Planner** ([why](docs/firmware/planner.md#dont))
 

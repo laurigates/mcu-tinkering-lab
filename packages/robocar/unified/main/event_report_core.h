@@ -111,6 +111,31 @@ size_t event_crumbs_collect(const event_crumbs_t *ring, const char **out, size_t
  */
 bool event_report_reset_is_reportable(const char *reason_name);
 
+/**
+ * Name for an Xtensa EXCCAUSE value, as ESP-IDF's panic handler prints it
+ * ("LoadProhibited", "IllegalInstruction", ...). Values with no name give
+ * "Exception". Becomes the crash event's exception type, which GlitchTip
+ * shows as the issue title.
+ */
+const char *event_report_xtensa_cause_name(uint32_t cause);
+
+/** Longest crash type event_report_crash_type() writes, NUL not counted. */
+#define EVENT_REPORT_CRASH_TYPE_MAX 40
+
+/**
+ * The exception type for a core-dump crash event, which GlitchTip shows as
+ * the issue title. @p reason is the panic details string the dump carries
+ * (esp_core_dump_get_panic_reason()), @p cause_name the EXCCAUSE name.
+ *
+ * A CPU exception's reason names its cause, and the cause name is used. A
+ * panic that is not a CPU exception (abort(), an interrupt watchdog, a stack
+ * guard) leaves EXCCAUSE meaningless, so the reason's leading phrase is used
+ * instead: up to the first " at ", " on ", ':' or '.', cut to
+ * EVENT_REPORT_CRASH_TYPE_MAX ("abort() was called", "Interrupt wdt
+ * timeout"). An empty or NULL reason gives the cause name.
+ */
+void event_report_crash_type(const char *reason, const char *cause_name, char *out, size_t cap);
+
 /** Render 16 random bytes as a 32-character lowercase hex id plus NUL. */
 void event_report_format_id(const uint32_t words[4], char out[EVENT_REPORT_ID_LEN + 1]);
 

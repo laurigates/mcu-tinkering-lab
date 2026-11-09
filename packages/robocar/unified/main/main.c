@@ -13,6 +13,7 @@
  */
 
 #include <inttypes.h>
+#include <stdlib.h>
 #include <string.h>
 #include <strings.h>
 #include "esp_app_desc.h"
@@ -1674,6 +1675,13 @@ static void handle_report_cmd(const char *buf)
     char sub[8] = {0};
     const int n = sscanf(buf, "report %7s", sub);
 
+#if EVENT_REPORT_CRASH_COMMAND
+    if (n == 1 && strcmp(sub, "crash") == 0) {
+        printf("report: crashing now (abort) to test the core dump path\n");
+        fflush(stdout);
+        abort();
+    }
+#endif
     if (n == 1 && strcmp(sub, "test") == 0) {
         const esp_err_t err = event_report_send_test();
         printf("report: test event %s\n", err == ESP_OK ? "queued" : esp_err_to_name(err));
@@ -1696,6 +1704,7 @@ static void handle_report_cmd(const char *buf)
     } else {
         printf("  last boot's breadcrumbs: none (power-on, or the reset cleared RTC memory)\n");
     }
+    printf("  core dump: %s\n", st.core_dump != NULL ? st.core_dump : "none");
     printf("  usage: report test\n");
 }
 

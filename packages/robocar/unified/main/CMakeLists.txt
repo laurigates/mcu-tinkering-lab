@@ -98,6 +98,7 @@ idf_component_register(
         "improv-wifi"
         "esp_driver_usb_serial_jtag"
         "esp_timer"
+        "espcoredump"
 )
 
 # The build commit SHA the project CMakeLists.txt resolved from git (issue

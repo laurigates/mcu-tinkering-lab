@@ -55,7 +55,7 @@ lines keep a bench session readable:
 | `ota` / `ota check` / `ota postpone` | `ota` alone prints the running version and build, and where an update is (idle, waiting for a quiet moment, announcing, postpone window open, parking, installing); `ota check` checks the manifest now, as the MQTT nudge does; `ota postpone` defers an announced update to the next check, accepted only in the minute after the robot says it is going. See [wifi-and-ota.md](wifi-and-ota.md#before-the-install-announce-postpone-park) |
 | `plan …` | The gate on whether the planner makes a request at all — `plan` alone reports cadence, wake scores and spend; `plan on\|off\|wake\|sleep\|resume`, `plan scene\|range\|requests\|tokens <n>` |
 | `trace …` | Camera + endpoint activity counters since boot; `trace led on\|off`, `trace reset` |
-| `report` / `report test` | GlitchTip events ([below](#error-events-robocarevents)). `report` alone prints the event counters (queued, sent, dropped, pending), whether MQTT is up, and how many of the last boot's log lines survived its reset; `report test` queues a synthetic `info` event with this boot's lines so far, to check the path end to end. Over MQTT only with full access: `report test` sends |
+| `report` / `report test` | GlitchTip events ([below](#error-events-robocarevents)). `report` alone prints the event counters (queued, sent, dropped, pending), whether MQTT is up, how many of the last boot's log lines survived its reset, and where this boot's core dump stands; `report test` queues a synthetic `info` event with this boot's lines so far, to check the path end to end. Over MQTT only with full access: `report test` sends |
 | `mqtt …` | Serial only. `mqtt` alone prints the MQTT command mode (`full`/`read-only`) and where the broker credentials came from; `mqtt auth <user> <pass>` stores them in NVS, `mqtt auth clear` removes them — both applied at the next boot |
 | `gemini …` | Serial only. `gemini` alone prints whether a key is set, where it came from (`nvs`/`credentials.h`/`env`/`none`), its length and what the last response said (`untested`/`ok`/`rejected`/`exhausted`); `gemini auth <key>` stores a key in NVS, `gemini auth clear` removes it — both applied from the next request. The key is never printed or logged (issue #845) |
 
@@ -192,6 +192,32 @@ The JSON contract is in `main/event_report_core.h`.
   `unavailable` (kept, but there was no PSRAM to copy it into). The panic
   handler's own output does not pass through the hook, so the ring ends at the
   last ESP_LOG line before a crash, not at the panic message.
+- **Crash events (core dumps).** After a panic (a CPU exception, `abort()`,
+  an assert, an interrupt watchdog, a stack overflow) the chip writes an ELF
+  core dump to the 128 kB `coredump` partition before it reboots. The next
+  boot sends its summary in place of the reset event: level `fatal`, the
+  exception as the issue title (`LoadProhibited`, or the panic's own phrase
+  such as `abort() was called` when it was not a CPU exception), the crashing
+  task, PC and EXCVADDR, and up to 16 backtrace addresses that the bridge
+  resolves to source lines against the release's `robocar-unified.elf`. The
+  dump is erased only once the broker acknowledges the event; `report` shows
+  where that stands (`core dump: none | queued | sent, awaiting
+  acknowledgement | acknowledged and erased`). An event not acknowledged
+  within 60 s is sent again (esp-mqtt drops an unacknowledged message from
+  its outbox after 30 s), and a reboot before the acknowledgement sends it
+  again from the dump, so GlitchTip can see a crash twice but never zero
+  times. A brownout or power loss leaves no dump.
+- **The coredump partition needs a USB flash.** OTA never rewrites the
+  partition table, so a robot updated over the air has no `coredump`
+  partition until it is flashed once over USB or from the web flasher; until
+  then ESP-IDF logs that the partition is missing and the robot carries on.
+- **Testing the path:** set `EVENT_REPORT_CRASH_COMMAND` to 1 in `config.h`,
+  build, flash, and send `report crash` (it calls `abort()`). Never ship it
+  on: anyone with MQTT full access could reboot the robot with it.
+- **The robot can keep driving during a crash.** Writing the dump delays the
+  reboot, and the PCA9685 holds its last PWM through an ESP32 reset until
+  boot re-initialises the motors. Measure that gap on the bench before
+  relying on dumps while driving.
 - **Held in RAM until MQTT connects.** A reset event that has not been
   published when the robot resets again is lost, and that boot's capture
   replaces the ring it carried. A brownout loop that never reaches MQTT
