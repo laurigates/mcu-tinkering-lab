@@ -88,6 +88,7 @@ stock = "zxmp3a16gta"
 spec = ["P-channel · 30 V · SOT-223", "Tab = drain"]  # tab pinout from memory
 foot = "AliExpress 11/2026"
 lid = { spec = "P-ch 30 V SOT-223" }
+render = { kind = "sot223" }
 
 [[label]]
 cat = "LED · 2835"
@@ -136,6 +137,7 @@ value = "Buzzer 12 mm"
 stock = "buzzer-passive-12x95-magnetic"
 spec = ["Passive magnetic · 5 V", "12 × 9.5 mm · drive with PWM"]
 foot = "AliExpress 11/2026"
+render = { kind = "buzzer" }
 
 # ---- connectors ----
 
@@ -146,6 +148,7 @@ value = "1×40 female"
 stock = "header-female-1x40-254"
 spec = ["Socket strip · 2.54 mm", "Cut to length"]
 foot = "AliExpress 11/2026"
+render = { kind = "header", n = 40, female = true }
 
 [[label]]
 cat = "Connector · header"
@@ -154,6 +157,7 @@ value = "2×20 2.0 mm"
 stock = "header-male-2x20-2mm"
 spec = ["Male header · 2.0 mm pitch", "Not 2.54 mm"]
 foot = "AliExpress 11/2026"
+render = { kind = "header", n = 20, rows = 2, pitch = 2.0 }
 
 [[label]]
 cat = "Connector · IDC"
@@ -162,6 +166,7 @@ value = "FC-14 2.0"
 stock = "idc-socket-2mm-14pin"
 spec = ["14-pin IDC female · 2.0 mm", "For 2.0 mm ribbon"]
 foot = "AliExpress 11/2026"
+render = { kind = "housing", n = 7, rows = 2, pitch = 2.0, fill = "#262626" }
 
 [[label]]
 cat = "Connector · JST"
@@ -170,6 +175,7 @@ value = "XH kit"
 stock = "jst-xh-kit-230"
 spec = ["JST XH · 2.54 mm · 2–5 pin", "Housings, headers, crimps"]
 foot = "230 pcs · AliExpress 11/2026"
+render = { kind = "housing", n = 4 }
 
 [[label]]
 cat = "Connector · JST"
@@ -178,6 +184,7 @@ value = "XH 2-pin"
 stock = "jst-xh-kit-2pin"
 spec = ["JST XH · 2.54 mm", "Housing + header + crimps"]
 foot = "50 sets · AliExpress 11/2026"
+render = { kind = "housing", n = 2 }
 
 [[label]]
 cat = "Connector · JST"
@@ -186,6 +193,7 @@ value = "XH 4-pin"
 stock = "jst-xh-kit-4pin"
 spec = ["JST XH · 2.54 mm", "Housing + header + crimps"]
 foot = "50 sets · AliExpress 11/2026"
+render = { kind = "housing", n = 4 }
 
 [[label]]
 cat = "Connector · JST"
@@ -194,6 +202,7 @@ value = "VH kit"
 stock = "jst-vh396-kit"
 spec = ["JST VH · 3.96 mm · 2/3/4 pin", "Crimper: VH3.96 die"]
 foot = "120 pcs · AliExpress 11/2026"
+render = { kind = "housing", n = 3, pitch = 3.96 }
 
 [[label]]
 cat = "Connector · power"
@@ -212,6 +221,7 @@ value = "14-way ribbon"
 stock = "ribbon-cable-14p"
 spec = ["Grey flat cable · 1 m"]
 foot = "AliExpress 11/2026"
+render = { kind = "ribbon", n = 14 }
 
 [[label]]
 cat = "Wire"
@@ -220,6 +230,7 @@ value = "0.1 mm magnet"
 stock = "wire-enamelled-01mm"
 spec = ["Enamelled copper · 11 m", "Scrape or burn the enamel"]
 foot = "AliExpress 11/2026"
+render = { kind = "spool", fill = "#b8732e" }
 
 # ---- mechanical ----
 
@@ -230,6 +241,7 @@ value = "M3 kit"
 stock = "screw-kit-m3-hex-ss"
 spec = ["Stainless hex socket cap", "Assorted lengths"]
 foot = "364 pcs · AliExpress 11/2026"
+render = { kind = "screw", l = 10, fill = "#b8bcc2" }
 
 [[label]]
 cat = "Screws"
@@ -238,6 +250,7 @@ value = "M3 × 6"
 stock = "screw-m3x6-hex-black"
 spec = ["Hex socket cap · black", "Self-tapping (plastic)"]
 foot = "AliExpress 11/2026"
+render = { kind = "screw", l = 6 }
 
 [[label]]
 cat = "Screws"
@@ -246,3 +259,4 @@ value = "M3 × 8"
 stock = "screw-m3x8-hex-black"
 spec = ["Hex socket cap · black", "Self-tapping (plastic)"]
 foot = "AliExpress 11/2026"
+render = { kind = "screw", l = 8 }

@@ -67,6 +67,7 @@ value = "Metal film"
 stock = "resistor-kit-metal-film-14w"
 spec = ["Through-hole · ¼ W · 1 %", "5 bands: 3 digits, multiplier, tol."]
 foot = "Assortment"
+render = { kind = "axial", fill = "#5aa0d8", bands = ["#7b4a1e", "#1a1a1a", "#e8761a", "#7b4a1e"] }
 
 [[label]]
 cat = "Photoresistor"
@@ -75,6 +76,7 @@ value = "GL5528"
 stock = "ldr-gl5528"
 spec = ["LDR · 5 mm", "Resistance falls with light"]
 foot = "50 pcs · AliExpress 07/2024"
+render = { kind = "ldr" }
 
 [[label]]
 cat = "Diode · rectifier"
@@ -83,6 +85,7 @@ value = "1N4007"
 stock = "1n4007"
 spec = ["1 A · 1000 V · DO-41", "Band = cathode"]
 foot = "100 pcs"
+render = { kind = "axial", fill = "#1a1a1a", cathode = true }
 
 [[label]]
 cat = "LED · power"
@@ -99,6 +102,7 @@ value = "IRFZ44N"
 stock = "irfz44n"
 spec = ["N-channel · 55 V · TO-220", "Front: G · D · S"]  # 55 V and pinout from memory
 foot = "25 pcs · AliExpress 07/2024"
+render = { kind = "to220", mark = "IRFZ44N" }
 
 [[label]]
 cat = "Transistor kit"
@@ -107,6 +111,7 @@ value = "NPN TO-92"
 stock = "npn-transistor-assortment"
 spec = ["BC337 · BC547 · 2N2222 · S8050", "Pinouts differ: check the type"]
 foot = "Assortment"
+render = { kind = "to92", mark = "NPN" }
 
 [[label]]
 cat = "IC · timer"
@@ -126,6 +131,7 @@ value = "1×40 male"
 stock = "header-male-1x40-254"
 spec = ["Pin header · 2.54 mm", "Snap to length"]
 foot = "40 pcs · AliExpress 12/2025"
+render = { kind = "header", n = 40 }
 
 [[label]]
 cat = "Connector · header"
@@ -134,6 +140,7 @@ value = "1×40 M round"
 stock = "header-male-round-1x40-254"
 spec = ["Round-pin header · 2.54 mm", "Gold-plated"]
 foot = "10 pcs · AliExpress 08/2026"
+render = { kind = "header", n = 40, round = true }
 
 [[label]]
 cat = "Connector · header"
@@ -142,6 +149,7 @@ value = "1×40 F round"
 stock = "header-female-round-1x40-254"
 spec = ["Round-hole socket strip · 2.54 mm", "Takes round pins and IC legs"]
 foot = "10 pcs · AliExpress 08/2026"
+render = { kind = "header", n = 40, female = true, round = true }
 
 [[label]]
 cat = "Connector · header"
@@ -150,6 +158,7 @@ value = "Jumper caps"
 stock = "jumper-cap-254"
 spec = ["Shunt for 2.54 mm headers"]
 foot = "100 pcs · AliExpress 12/2025"
+render = { kind = "housing", n = 2, fill = "#262626" }
 
 [[label]]
 cat = "Connector · Dupont"
@@ -158,6 +167,7 @@ value = "Dupont kit"
 stock = "dupont-connector-kit"
 spec = ["2.54 mm housings · 2–5 pin", "With crimp pins, boxed"]
 foot = "Kit · AliExpress 06/2025"
+render = { kind = "housing", n = 3, fill = "#262626" }
 
 [[label]]
 cat = "Connector · Dupont"
@@ -166,6 +176,7 @@ value = "Dupont F pins"
 stock = "dupont-pins-female"
 spec = ["Female crimp pins · 2.54 mm", "Crimper: Dupont die"]
 foot = "100 pcs · AliExpress 06/2025"
+render = { kind = "housing", n = 1, fill = "#c4c8cd" }
 
 [[label]]
 cat = "IC socket"
@@ -183,6 +194,7 @@ value = "DC jack"
 stock = "dc-5525-female-jack"
 spec = ["5.5 × 2.5 mm female socket", "Check centre polarity"]
 foot = "10 pcs"
+render = { kind = "barrel" }
 
 [[label]]
 cat = "Connector · power"
@@ -191,6 +203,7 @@ value = "DC plug"
 stock = "dc-5525-male-plug"
 spec = ["5.5 × 2.5 mm male plug", "Solder or screw lead"]
 foot = "5 pcs"
+render = { kind = "barrel", plug = true }
 
 [[label]]
 cat = "Connector · power"
@@ -199,6 +212,7 @@ value = "DC panel"
 stock = "dc-jack-panel-metal"
 spec = ["Metal panel-mount DC jack", "5.5 × 2.1 / 2.5 mm"]
 foot = "2 pcs"
+render = { kind = "barrel", fill = "#b8bcc2" }
 
 [[label]]
 cat = "Connector · power"
@@ -207,6 +221,7 @@ value = "DC pigtails"
 stock = "dc-5525-cctv-connector-set"
 spec = ["5.5 × 2.5 mm male + female", "CCTV screw-terminal set"]
 foot = "1 set"
+render = { kind = "barrel", plug = true }
 
 [[label]]
 cat = "Connector · test"
@@ -215,6 +230,7 @@ value = "4 mm banana"
 stock = "banana-plug-4mm-gold"
 spec = ["Banana plug · gold-plated", "Solder or screw lead"]
 foot = "10 pcs"
+render = { kind = "banana" }
 
 # ---- wire ----
 
@@ -225,6 +241,7 @@ value = "Dupont 20 cm"
 stock = "dupont-jumpers-20cm"
 spec = ["Jumper cables · 2.54 mm", "M-M / M-F / F-F"]
 foot = "40 pcs"
+render = { kind = "jumper" }
 
 [[label]]
 cat = "Wire"
@@ -233,6 +250,7 @@ value = "Dupont set"
 stock = "dupont-jumper-header-set"
 spec = ["Jumper wires + headers", "Male and female"]
 foot = "Set"
+render = { kind = "jumper" }
 
 [[label]]
 cat = "Wire"
@@ -241,6 +259,7 @@ value = "Flex jumpers"
 stock = "breadboard-jumpers-mm-flexible"
 spec = ["Breadboard jumpers · M-M", "Flexible, assorted lengths"]
 foot = "65 pcs"
+render = { kind = "jumper" }
 
 [[label]]
 cat = "Wire"
@@ -249,6 +268,7 @@ value = "36 AWG FEP"
 stock = "wire-fep-36awg"
 spec = ["UL10064 FEP · 10 m", "Rework / bodge wire"]
 foot = "AliExpress 12/2025"
+render = { kind = "spool", fill = "#d9d9d9" }
 
 [[label]]
 cat = "Wire"
@@ -257,6 +277,7 @@ value = "24 AWG"
 stock = "wire-ul1007-24awg"
 spec = ["UL-1007 stranded hookup wire"]
 foot = "Spools"
+render = { kind = "spool", fill = "#c62828" }
 
 [[label]]
 cat = "Wire · ribbon"
@@ -265,6 +286,7 @@ value = "16-pin IDC"
 stock = "idc-ribbon-127mm-16pin-2m"
 spec = ["1.27 mm ribbon extension · 2 m"]
 foot = "1 pcs"
+render = { kind = "ribbon", n = 16, idc = true }
 
 # ---- modules ----
 
@@ -457,6 +479,7 @@ value = "DHT11"
 stock = "dht11-sensor"
 spec = ["Temperature + humidity", "Single-wire data"]
 foot = "1 pcs"
+render = { kind = "dht" }
 
 [[label]]
 cat = "Sensor · climate"
@@ -510,6 +533,7 @@ value = "650 nm dot"
 stock = "laser-dot-650nm-5mw"
 spec = ["Red laser diode · 5 mW", "Never look into the beam"]
 foot = "20 pcs"
+render = { kind = "laser" }
 
 [[label]]
 cat = "Display"
@@ -594,6 +618,7 @@ value = "MG90D"
 stock = "servo-mg90d-180"
 spec = ["9 g micro servo · metal gear", "180° · brown − red + orange sig"]  # wire colours from memory
 foot = "5 pcs · AliExpress 09/2026"
+render = { kind = "servo" }
 
 [[label]]
 cat = "Motor · stepper"
@@ -602,6 +627,7 @@ value = "17HS3401S"
 stock = "nema17-17hs3401s"
 spec = ["NEMA 17 · 1 A · 34 mm", "1.8° per step"]  # step angle from memory
 foot = "2 pcs · AliExpress 07/2024"
+render = { kind = "stepper" }
 
 [[label]]
 cat = "Motor · DC"
@@ -610,6 +636,7 @@ value = "FC-130SA"
 stock = "motor-fc130sa"
 spec = ["Brushed DC motor", "Size 130"]
 foot = "2 pcs · AliExpress 06/2025"
+render = { kind = "dcmotor" }
 
 [[label]]
 cat = "Motor · vibration"
@@ -618,6 +645,7 @@ value = "Coin motor"
 stock = "motor-vibration-flat-3v"
 spec = ["Flat vibration motor · 3 V", "Adhesive back"]
 foot = "Bag"
+render = { kind = "coin", d = 10, leads = true }
 
 [[label]]
 cat = "Electromagnet"
@@ -626,6 +654,7 @@ value = "P20/15"
 stock = "electromagnet-p20-15-12v"
 spec = ["12 V · 3 kg hold", "Flyback diode across the coil"]
 foot = "1 pcs · AliExpress 04/2025"
+render = { kind = "magnet" }
 
 [[label]]
 cat = "Pump"
@@ -642,6 +671,7 @@ value = "8 Ω 1 W"
 stock = "speaker-1w-8ohm"
 spec = ["Small loudspeaker", "Fits MAX98357A out"]
 foot = "5 pcs"
+render = { kind = "speaker" }
 
 [[label]]
 cat = "Audio · buzzer"
@@ -650,6 +680,7 @@ value = "Buzzer 5 V"
 stock = "buzzer-passive-5v"
 spec = ["Passive · drive with PWM", "No sound on plain DC"]
 foot = "Bag"
+render = { kind = "buzzer" }
 
 [[label]]
 cat = "Switch"
@@ -658,6 +689,7 @@ value = "12 mm button"
 stock = "button-12mm-waterproof"
 spec = ["Momentary push button", "Panel mount · waterproof"]
 foot = "6 pcs"
+render = { kind = "button" }
 
 [[label]]
 cat = "Switch"
@@ -666,6 +698,7 @@ value = "DS-425A"
 stock = "button-ds425a-latching"
 spec = ["Self-locking push button", "SPST · press on, press off"]
 foot = "5 pcs"
+render = { kind = "button", fill = "#e8e8e8" }
 
 [[label]]
 cat = "Switch"
@@ -674,6 +707,7 @@ value = "Reed switch"
 stock = "reed-switch-mka14103"
 spec = ["MKA-14103 · glass · N/O SPST", "Fragile: bend leads away from glass"]
 foot = "10 pcs"
+render = { kind = "reed" }
 
 [[label]]
 cat = "Input"
@@ -682,6 +716,7 @@ value = "Keypad 4×4"
 stock = "keypad-membrane-16"
 spec = ["16-key membrane keypad", "8-pin: 4 rows + 4 columns"]
 foot = "1 pcs"
+render = { kind = "keypad" }
 
 [[label]]
 cat = "Fuse"
@@ -690,6 +725,7 @@ value = "0.2 A fast"
 stock = "fuse-5mm-02a-fast"
 spec = ["5 × 20 mm glass · 250 V", "Fast-blow"]  # 5 × 20 assumed from "5 mm glass"
 foot = "100 pcs"
+render = { kind = "axial", glass = true }
 
 [[label]]
 cat = "Fuse"
@@ -698,6 +734,7 @@ value = "2 A fast"
 stock = "fuse-5mm-2a-fast"
 spec = ["5 × 20 mm glass · 250 V", "Fast-blow"]  # 5 × 20 assumed from "5 mm glass"
 foot = "100 pcs"
+render = { kind = "axial", glass = true }
 
 [[label]]
 cat = "Battery · LiPo"
@@ -706,6 +743,7 @@ value = "100 mAh"
 stock = "lipo-37v-100mah"
 spec = ["3.7 V LiPo cell", "Charge at ≤ 100 mA"]
 foot = "5 pcs"
+render = { kind = "pouch", l = 20, w = 12, mark = "3.7 V" }
 
 [[label]]
 cat = "Battery · NiMH"
@@ -714,6 +752,7 @@ value = "Eneloop AA"
 stock = "eneloop-aa-1900"
 spec = ["1.2 V · 1900 mAh", "Rechargeable"]
 foot = "8 pcs"
+render = { kind = "cell", l = 50.5, d = 14.5, mark = "eneloop" }
 
 [[label]]
 cat = "Battery · coin"
@@ -722,6 +761,7 @@ value = "CR2032"
 stock = "coin-cell-cr2032"
 spec = ["3 V lithium coin cell", "Sony"]
 foot = "5 pcs"
+render = { kind = "coin", d = 20, mark = "CR2032" }
 
 [[label]]
 cat = "Battery · coin"
@@ -730,6 +770,7 @@ value = "LR44"
 stock = "coin-cell-lr44"
 spec = ["1.5 V alkaline button cell", "Maxell"]
 foot = "10 pcs"
+render = { kind = "coin", d = 11.6, mark = "LR44" }
 
 [[label]]
 cat = "Sensor · pH"
@@ -748,6 +789,7 @@ value = "M2 × L2"
 stock = "heat-insert-m2-l2-od32"
 spec = ["Brass · OD 3.2 mm", "TS100 insert tip"]
 foot = "100 pcs · AliExpress 11/2025"
+render = { kind = "insert", l = 2, od = 3.2 }
 
 [[label]]
 cat = "Heat-set insert"
@@ -756,6 +798,7 @@ value = "M2 knurled"
 stock = "heat-insert-m2-knurled"
 spec = ["Brass knurled insert", "TS100 insert tip"]
 foot = "500 pcs · AliExpress 11/2025"
+render = { kind = "insert", l = 4, od = 3.5 }
 
 [[label]]
 cat = "Standoffs"
@@ -764,6 +807,7 @@ value = "M2 kit"
 stock = "standoff-kit-m2"
 spec = ["Hex standoffs · screws · nuts", "Motherboard style"]
 foot = "Kit · AliExpress 11/2025"
+render = { kind = "standoff", l = 8 }
 
 [[label]]
 cat = "Heatsink"
@@ -772,6 +816,7 @@ value = "8.8 × 8.8"
 stock = "heatsink-88x88x5"
 spec = ["Aluminium · 5 mm tall", "Thermal pad on the base"]
 foot = "5 pcs"
+render = { kind = "heatsink" }
 
 [[label]]
 cat = "LED holder"
@@ -789,6 +834,7 @@ value = "5 mm hex"
 stock = "shaft-coupling-5mm-brass"
 spec = ["Brass hex coupler · 5 mm bore", "Set screws"]
 foot = "2 pcs · AliExpress 08/2024"
+render = { kind = "standoff", l = 20, thread = false }
 
 [[label]]
 cat = "Bracket"
@@ -805,6 +851,7 @@ value = "18650 × 1"
 stock = "holder-18650-1cell"
 spec = ["SMT holder · 1 cell"]
 foot = "2 pcs · AliExpress 12/2025"
+render = { kind = "holder", l = 65, d = 18, cells = 1 }
 
 [[label]]
 cat = "Battery holder"
@@ -813,6 +860,7 @@ value = "18650 × 2"
 stock = "holder-18650-2cell"
 spec = ["SMT holder · 2 cells"]
 foot = "2 pcs · AliExpress 11/2025"
+render = { kind = "holder", l = 65, d = 18, cells = 2 }
 
 [[label]]
 cat = "Battery holder"
@@ -821,6 +869,7 @@ value = "AAA × 1"
 stock = "holder-aaa-1cell"
 spec = ["Holder with leads · 1 cell"]
 foot = "1 pcs · AliExpress 07/2024"
+render = { kind = "holder", l = 44.5, d = 10.5, cells = 1, leads = true }
 
 [[label]]
 cat = "Battery holder"
@@ -829,6 +878,7 @@ value = "AAA × 2"
 stock = "holder-aaa-2cell"
 spec = ["Holder with leads · 2 cells"]
 foot = "1 pcs · AliExpress 07/2024"
+render = { kind = "holder", l = 44.5, d = 10.5, cells = 2, leads = true }
 
 # ---- 80 × 20 mm strips for bins ----
 
