@@ -147,6 +147,20 @@ static void untake_restores_the_previous_window(void)
     ASSERT(note_gate_wait_ms(1) == NOTE_GATE_MIN_INTERVAL_MS - 1);
 }
 
+/* A take clears every pending trigger; giving the offer back restores all of
+ * them, not only the one that was chosen. */
+static void untake_restores_every_pending_trigger(void)
+{
+    note_gate_raise(NOTE_TRIGGER_REFLEX);
+    note_gate_raise(NOTE_TRIGGER_BLIND);
+    const uint32_t before = note_gate_pending();
+    const note_trigger_t chosen = note_gate_take(0);
+    ASSERT(chosen != NOTE_TRIGGER_NONE);
+    ASSERT(note_gate_pending() == 0);
+    note_gate_untake(chosen);
+    ASSERT(note_gate_pending() == before);
+}
+
 static void bad_triggers_are_ignored(void)
 {
     note_gate_raise(NOTE_TRIGGER_NONE);
@@ -224,6 +238,7 @@ int main(void)
     test_run("resume_rearms_the_count_and_the_window", resume_rearms_the_count_and_the_window);
     test_run("an_unsent_offer_is_given_back", an_unsent_offer_is_given_back);
     test_run("untake_restores_the_previous_window", untake_restores_the_previous_window);
+    test_run("untake_restores_every_pending_trigger", untake_restores_every_pending_trigger);
     test_run("bad_triggers_are_ignored", bad_triggers_are_ignored);
     test_run("names_and_reasons", names_and_reasons);
     test_run("kinds_round_trip", kinds_round_trip);

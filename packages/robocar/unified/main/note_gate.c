@@ -17,6 +17,7 @@ static uint32_t s_last_offer_ms;
 static bool s_can_untake;
 static bool s_prev_have_offer;
 static uint32_t s_prev_last_offer_ms;
+static uint32_t s_prev_pending;
 
 void note_gate_init(void)
 {
@@ -65,6 +66,7 @@ note_trigger_t note_gate_take(uint32_t now_ms)
     }
     s_prev_have_offer = s_have_offer;
     s_prev_last_offer_ms = s_last_offer_ms;
+    s_prev_pending = s_pending;
     s_can_untake = true;
     s_pending = 0u;
     s_offers++;
@@ -84,6 +86,10 @@ void note_gate_untake(note_trigger_t trigger)
     }
     s_have_offer = s_prev_have_offer;
     s_last_offer_ms = s_prev_last_offer_ms;
+    /* Every trigger the take cleared, not only the one it chose: a BLIND
+     * pending beside a REFLEX is raised once per blind spell and would
+     * otherwise never come back. */
+    s_pending |= s_prev_pending;
     note_gate_raise(trigger);
 }
 

@@ -209,7 +209,6 @@ static void describe_goal(const goal_t *g, planner_result_action_t result, char 
 /** Queue the note the model wrote, with the structure the firmware attaches. */
 static void report_note(note_trigger_t trigger, uint32_t reflex_trips)
 {
-    note_gate_noted();
     const voice_persona_t *persona = voice_persona_get();
     event_report_note_t n = {
         .trigger = note_trigger_name(trigger),
@@ -223,6 +222,9 @@ static void report_note(note_trigger_t trigger, uint32_t reflex_trips)
     };
     n.goal_count = goal_history_collect(n.goals);
     const esp_err_t err = event_report_send_note(&n);
+    if (err == ESP_OK) {
+        note_gate_noted(); /* `plan` counts notes queued, not notes written */
+    }
     ESP_LOGI(TAG, "Note (%s, %s)%s: \"%s\"", n.trigger, n.kind, err == ESP_OK ? "" : " NOT queued",
              s_note.text);
 }
