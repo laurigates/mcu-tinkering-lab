@@ -34,6 +34,14 @@ void vTaskDelay(TickType_t ticks)
     (void)ticks;
 }
 
+/* servo_last_move_ms() reads esp_timer; the tests drive it. */
+static int64_t s_now_us;
+
+int64_t esp_timer_get_time(void)
+{
+    return s_now_us;
+}
+
 /* ---- recording i2c_bus stub --------------------------------------------- */
 
 /* One ordered log of everything the module does to the chip, so a test can
@@ -403,6 +411,50 @@ static void test_the_exercise_never_leaves_the_limits(void)
     CHECK(reached_tilt_max, "the exercise must travel to the live tilt limit, not a constant");
 }
 
+/* The ambient listener mutes the microphone for a while after this timestamp
+ * (ambient_head_quiet()), so what counts as motion decides whether the robot is
+ * deaf for a moment or for good: the executor re-asserts the head pose every
+ * refresh interval, and that must NOT move it. Runs last, from whatever state
+ * the earlier cases left. */
+static void test_only_a_changed_angle_counts_as_head_motion(void)
+{
+    reset_bus();
+    CHECK(servo_enable(SERVO_PAN) == ESP_OK, "re-enable pan failed");
+    CHECK(servo_enable(SERVO_TILT) == ESP_OK, "re-enable tilt failed");
+    CHECK(servo_set_angle(SERVO_PAN, 10) == ESP_OK, "pan 10 failed");
+
+    s_now_us = 5000 * 1000;
+    CHECK(servo_set_angle(SERVO_PAN, 20) == ESP_OK, "pan 20 failed");
+    CHECK(servo_last_move_ms() == 5000u, "a changed angle must stamp the clock, got %u",
+          (unsigned)servo_last_move_ms());
+
+    s_now_us = 6000 * 1000;
+    CHECK(servo_set_angle(SERVO_PAN, 20) == ESP_OK, "re-assert failed");
+    CHECK(servo_last_move_ms() == 5000u, "an identical re-write is not motion, got %u",
+          (unsigned)servo_last_move_ms());
+
+    s_now_us = 7000 * 1000;
+    CHECK(servo_set_angle(SERVO_TILT, 5) == ESP_OK, "tilt 5 failed");
+    CHECK(servo_last_move_ms() == 7000u, "tilt motion counts too, got %u",
+          (unsigned)servo_last_move_ms());
+
+    s_now_us = 8000 * 1000;
+    s_next_result = ESP_FAIL;
+    (void)servo_set_angle(SERVO_PAN, -20);
+    s_next_result = ESP_OK;
+    CHECK(servo_last_move_ms() == 7000u, "a failed write moved nothing, got %u",
+          (unsigned)servo_last_move_ms());
+
+    s_now_us = 9000 * 1000;
+    CHECK(servo_disable(SERVO_PAN) == ESP_OK, "disable failed");
+    CHECK(servo_last_move_ms() == 7000u, "releasing a servo is silent, got %u",
+          (unsigned)servo_last_move_ms());
+    s_now_us = 9500 * 1000;
+    CHECK(servo_enable(SERVO_PAN) == ESP_OK, "enable failed");
+    CHECK(servo_last_move_ms() == 9500u, "re-energising can twitch the horn, got %u",
+          (unsigned)servo_last_move_ms());
+}
+
 int main(void)
 {
     struct {
@@ -431,6 +483,8 @@ int main(void)
         {"off_releases_the_outputs_and_on_restores_them",
          test_off_releases_the_outputs_and_on_restores_them},
         {"the_exercise_never_leaves_the_limits", test_the_exercise_never_leaves_the_limits},
+        {"only_a_changed_angle_counts_as_head_motion",
+         test_only_a_changed_angle_counts_as_head_motion},
     };
     for (size_t i = 0; i < sizeof(tests) / sizeof(tests[0]); i++) {
         int before = s_failures;

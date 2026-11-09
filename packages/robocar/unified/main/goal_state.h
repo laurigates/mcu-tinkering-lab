@@ -178,6 +178,21 @@ esp_err_t goal_state_read_seq(goal_t *out, bool *is_fresh, uint32_t *seq);
  */
 esp_err_t goal_state_force_stop(void);
 
+/**
+ * @brief Whether a goal, as goal_state_read() returned it, drives the wheels.
+ *
+ * The planner counts this as motion when deciding its period (plan_activity
+ * verdict M). drive and rotate count; a track goal counts only when
+ * max_speed_pct > 0. At 0 it aims the head and turns in place only to
+ * re-centre it, without driving forward
+ * (docs/firmware/head-aiming.md). stop, none and any stale goal do not.
+ * Issue #958: a look-only track goal held the planner at full rate.
+ *
+ * @param goal   The goal read. NULL counts as not moving.
+ * @param fresh  The freshness goal_state_read() reported.
+ */
+bool goal_moves_wheels(const goal_t *goal, bool fresh);
+
 /* =========================================================================
  * Test / instrumentation hooks (only meaningful with GOAL_STATE_HOST_TEST=1)
  * ========================================================================= */

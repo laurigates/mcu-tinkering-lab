@@ -13,10 +13,12 @@
  */
 
 #include <inttypes.h>
+#include <stdlib.h>
 #include <string.h>
 #include <strings.h>
 #include "esp_app_desc.h"
 #include "esp_check.h"
+#include "esp_chip_info.h"
 #include "esp_log.h"
 #include "esp_system.h"
 #include "esp_timer.h"
@@ -34,10 +36,12 @@
 #include "audio_player.h"
 #include "buzzer.h"
 #include "camera.h"
+#include "cliff_sensor.h"
 #include "config.h"
 #include "credentials_loader.h"
 #include "credentials_validator.h"
 #include "dialogue_style.h"
+#include "event_report.h"
 #include "frame_dump.h"
 #include "gemini_key_state.h"
 #include "gemini_tts.h"
@@ -52,6 +56,7 @@
 #include "mic_dump.h"
 #include "mic_pdm.h"
 #include "net_supervisor_core.h"
+#include "note_gate.h"
 /* motor_controller_init() in the hardware phase and motor_is_initialized() in
  * the boot wheel exercise — both reads. Motor *output* is the reactive
  * executor's job, and nothing here writes the motors directly. */
@@ -68,6 +73,7 @@
 #include "scene_change.h"
 #include "self_report.h"
 #include "servo_controller.h"
+#include "sound_clips_core.h"
 #include "speech_budget.h"
 #include "speech_queue.h"
 #include "speech_trigger.h"
@@ -375,8 +381,26 @@ static void handle_periph_cmd(const char *buf)
     int a = 0, b = 0, c = 0;
 
     if (strncmp(buf, "sound", 5) == 0) {
+        static const char k_sound_usage[] =
+            "sound: usage: sound beep|melody|alert (buzzer) | sound horn|aoogah|bell|boing "
+            "(speaker)\n";
         if (sscanf(buf, "sound %15s", arg) != 1) {
-            printf("sound: usage: sound beep|melody|alert\n");
+            printf("%s", k_sound_usage);
+            return;
+        }
+        /* A speaker clip goes through the speech queue as a tag-only line,
+         * the same path the planner's `sound` tool takes, so it waits for any
+         * sentence in progress instead of talking over it. */
+        const sound_clip_t clip = sound_clip_from_name(arg);
+        if (clip != SOUND_CLIP_NONE) {
+            char line[24];
+            snprintf(line, sizeof(line), "[%s]", sound_clip_name(clip));
+            const esp_err_t err = speech_queue_post(line);
+            printf("sound: %s %s\n", arg, err == ESP_OK ? "queued" : "dropped (speech queue full)");
+            return;
+        }
+        if (strcmp(arg, "beep") != 0 && strcmp(arg, "melody") != 0 && strcmp(arg, "alert") != 0) {
+            printf("%s", k_sound_usage);
             return;
         }
         dispatch_sound(arg);
@@ -674,11 +698,15 @@ static void handle_voice_cmd(const char *buf)
         printf("  budget: quiet=%us max=%u/%us used=%u repeat=%u%%\n", (unsigned)(gap_ms / 1000U),
                (unsigned)max_per, (unsigned)(window_ms / 1000U),
                (unsigned)speech_budget_used(now_ms), (unsigned)dialogue_style_repeat_pct());
-        /* "no pose": the head is between dwell poses, so the 0 is "cannot
-         * measure", not "unchanged" (ADR-029 §2). */
+        /* "BLIND": no frame has ever decoded, so novel() fails closed and the 0
+         * is "never seen anything", not a still room (issue #703; the mic line's
+         * DEAF is the same word for the other sense). "no pose": the head is
+         * between dwell poses, so the 0 is "cannot measure", not "unchanged"
+         * (ADR-029 §2). */
         printf("  scene:  %u/%u at pose %c (%s)\n", scene_change_score(),
                (unsigned)scene_change_threshold(), scene_pose_letter(scene_change_pose()),
-               scene_change_threshold() == 0            ? "gate off"
+               !scene_change_has_measurement()          ? "BLIND — no frame decoded"
+               : scene_change_threshold() == 0          ? "gate off"
                : scene_change_pose() == SCENE_POSE_NONE ? "no pose"
                : scene_change_novel()                   ? "new"
                                                         : "same");
@@ -711,7 +739,10 @@ static void handle_voice_cmd(const char *buf)
         } else if (wait_ms) {
             printf("  speech: waiting on budget (%us)\n", (unsigned)(wait_ms / 1000U));
         } else if (!scene_change_novel() && !ambient_audio_novel(now_ms)) {
-            printf("  speech: waiting on the view or the room to change\n");
+            /* A blind camera has no view to change; only the room can open it. */
+            printf("  speech: %s\n", scene_change_has_measurement()
+                                         ? "waiting on the view or the room to change"
+                                         : "waiting on the room to change (camera BLIND)");
         } else {
             printf("  speech: allowed now\n");
         }
@@ -1291,8 +1322,9 @@ static void handle_plan_cmd(const char *buf)
         }
         if (strcmp(op, "resume") == 0) {
             plan_budget_resume();
+            note_gate_resume();
             plan_activity_wake();
-            printf("plan: budget counters cleared, planner released\n");
+            printf("plan: budget and note counters cleared, planner released\n");
             return;
         }
         if (n == 2 && strcmp(op, "scene") == 0) {
@@ -1375,6 +1407,26 @@ static void handle_plan_cmd(const char *buf)
         printf("  *** BUDGET EXHAUSTED (%s) — no requests until `plan resume` ***\n",
                (budget == PLAN_BUDGET_TRIP_REQUESTS) ? "request ceiling" : "token ceiling");
     }
+
+    /* The note gate (ADR-033): offers are what is rationed, so they lead. */
+    const uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000);
+    printf("  notes:   %" PRIu32 "/%u offered, %" PRIu32 " written, next %s", note_gate_offers(),
+           (unsigned)NOTE_GATE_MAX_PER_BOOT, note_gate_written(),
+           note_gate_spent() ? "after `plan resume`" : "");
+    if (!note_gate_spent()) {
+        printf("in %" PRIu32 " s", note_gate_wait_ms(now_ms) / 1000u);
+    }
+    printf(",  pending:");
+    const uint32_t pending = note_gate_pending();
+    if (pending == 0u) {
+        printf(" none");
+    }
+    for (int t = NOTE_TRIGGER_NONE + 1; t < NOTE_TRIGGER_COUNT; t++) {
+        if (pending & (1u << (unsigned)t)) {
+            printf(" %s", note_trigger_name((note_trigger_t)t));
+        }
+    }
+    printf("\n");
 }
 
 static void handle_mic_cmd(const char *buf)
@@ -1421,8 +1473,9 @@ static void handle_mic_cmd(const char *buf)
            (unsigned)peak_share, (unsigned)best_run, (unsigned)speech_trigger_share_pct(),
            (unsigned)speech_trigger_margin_db(), (unsigned)speech_trigger_sustain_ms(),
            voice_turn_get_vad() ? "on" : "off");
-    printf("  frames: %u accepted, %u muted by playback\n",
-           (unsigned)ambient_listener_frames_accepted(), (unsigned)ambient_listener_frames_muted());
+    printf("  frames: %u accepted, %u muted by playback/cue, %u muted by head servos\n",
+           (unsigned)ambient_listener_frames_accepted(), (unsigned)ambient_listener_frames_muted(),
+           (unsigned)ambient_listener_frames_head_muted());
     if (last == 0U) {
         printf("  last:   never — no frame has reached the gate\n");
     } else {
@@ -1552,6 +1605,46 @@ static void on_improv_credentials(const char *ssid, const char *password)
  * credentials) does not belong here; command_task() handles it before this.
  */
 /**
+ * @brief `cliff` — the front and rear floor sensors and the cliff reflex.
+ *
+ * `cliff` alone prints whether the reflex is on and armed, what each sensor
+ * sees and the trip count; it only reads, which is why it is on the MQTT
+ * read-only list. `cliff on|off` switches the reflex. Not persisted: every
+ * boot starts at CLIFF_REFLEX_AT_BOOT (docs/firmware/cliff-sensors.md).
+ */
+static void handle_cliff_cmd(const char *buf)
+{
+    char state[8] = {0};
+    const int n = sscanf(buf, "cliff %7s", state);
+
+    if (n == 1 && (strcmp(state, "on") == 0 || strcmp(state, "off") == 0)) {
+        const bool on = (strcmp(state, "on") == 0);
+        reactive_controller_set_cliff(on);
+        printf("cliff: reflex %s\n",
+               on ? "ON — the wheels hold until both sensors confirm the floor"
+                  : "OFF — nothing stops the robot at an edge");
+        return;
+    }
+    if (n > 0) {
+        printf("cliff: usage: cliff | cliff on|off\n");
+        return;
+    }
+
+    reactive_telemetry_t tele = {0};
+    const bool have_tele = (reactive_controller_get_telemetry(&tele) == ESP_OK);
+    printf("cliff: reflex=%s sensors=%s\n", reactive_controller_cliff_enabled() ? "on" : "off",
+           cliff_sensor_available() ? "present" : "absent(no MCP23017)");
+    if (have_tele && tele.cliff_armed) {
+        printf("  front: %s  rear: %s  active: %s  trips: %lu\n",
+               tele.cliff_front ? "NO FLOOR" : "floor", tele.cliff_rear ? "NO FLOOR" : "floor",
+               tele.cliff_active ? "yes" : "no", (unsigned long)tele.cliff_trips);
+    } else {
+        printf("  disarmed: nothing is filtered\n");
+    }
+    printf("  usage: cliff on|off\n");
+}
+
+/**
  * @brief `idle` — the idle behaviour the executor runs on its own (ADR-029).
  *
  * `idle` alone prints the mode, what the head is doing and whether it has
@@ -1590,6 +1683,94 @@ static void handle_idle_cmd(const char *buf)
     printf("  usage: idle gaze on|off\n");
 }
 
+/**
+ * @brief `ota` console command: the pre-install sequence's state, a check now,
+ *        or a postpone of an announced update.
+ *
+ * `ota` prints the running version and build, and where the sequence is.
+ * `ota check` runs a manifest check now (the same nudge MQTT sends).
+ * `ota postpone` defers an announced update to the next check; accepted only
+ * in the minute after the robot says it is going (ota_announce.h).
+ */
+static void handle_ota_cmd(const char *buf)
+{
+    char sub[12] = {0};
+    const int n = sscanf(buf, "ota %11s", sub);
+
+    if (n == 1 && strcmp(sub, "postpone") == 0) {
+        if (ota_manager_postpone() == ESP_OK) {
+            printf("ota: postponed to the next check\n");
+        } else {
+            printf("ota: nothing to postpone (no update announced in the last minute)\n");
+        }
+        return;
+    }
+    if (n == 1 && strcmp(sub, "check") == 0) {
+        const esp_err_t err = ota_manager_check_update();
+        printf("ota: check %s\n", err == ESP_OK ? "queued" : esp_err_to_name(err));
+        return;
+    }
+    if (n == 1) {
+        printf("ota: usage: ota | ota check | ota postpone\n");
+        return;
+    }
+
+    char pending[32] = {0};
+    ota_manager_pending_version(pending, sizeof(pending));
+    const ota_phase_t phase = ota_manager_phase();
+    printf("ota: running %s (build %s)\n", ota_manager_get_version(), ota_manager_get_build_sha());
+    printf("  update: %s%s%s\n", ota_manager_phase_name(phase),
+           (phase != OTA_PHASE_IDLE && pending[0]) ? " — " : "",
+           (phase != OTA_PHASE_IDLE && pending[0]) ? pending : "");
+    printf("  usage: ota check | ota postpone\n");
+}
+
+/**
+ * @brief `report` — the GlitchTip event path (ADR-033).
+ *
+ * `report` prints the event counters and whether the last boot's breadcrumb
+ * ring survived its reset. `report test` queues a synthetic event carrying
+ * this boot's breadcrumbs, to check the path end to end (robot, broker,
+ * bridge, GlitchTip). Not on the MQTT read-only list: `report test` sends.
+ */
+static void handle_report_cmd(const char *buf)
+{
+    char sub[8] = {0};
+    const int n = sscanf(buf, "report %7s", sub);
+
+#if EVENT_REPORT_CRASH_COMMAND
+    if (n == 1 && strcmp(sub, "crash") == 0) {
+        printf("report: crashing now (abort) to test the core dump path\n");
+        fflush(stdout);
+        abort();
+    }
+#endif
+    if (n == 1 && strcmp(sub, "test") == 0) {
+        const esp_err_t err = event_report_send_test();
+        printf("report: test event %s\n", err == ESP_OK ? "queued" : esp_err_to_name(err));
+        return;
+    }
+    if (n == 1) {
+        printf("report: usage: report | report test\n");
+        return;
+    }
+
+    event_report_stats_t st = {0};
+    event_report_get_stats(&st);
+    printf("report: topic %s, mqtt %s\n", EVENT_REPORT_TOPIC,
+           mqtt_logger_is_connected() ? "connected" : "down");
+    printf("  events: queued %u, sent %u, dropped %u, pending %u\n", (unsigned)st.queued,
+           (unsigned)st.sent, (unsigned)st.dropped, (unsigned)st.pending);
+    if (st.boot_crumbs_present) {
+        printf("  last boot's breadcrumbs: %u line(s) survived the reset\n",
+               (unsigned)st.boot_crumbs);
+    } else {
+        printf("  last boot's breadcrumbs: none (power-on, or the reset cleared RTC memory)\n");
+    }
+    printf("  core dump: %s\n", st.core_dump != NULL ? st.core_dump : "none");
+    printf("  usage: report test\n");
+}
+
 static void execute_console_line(const char *buf)
 {
     if (strncmp(buf, "gpio", 4) == 0) {
@@ -1610,6 +1791,12 @@ static void execute_console_line(const char *buf)
         handle_plan_cmd(buf);
     } else if (strncmp(buf, "idle", 4) == 0) {
         handle_idle_cmd(buf);
+    } else if (strncmp(buf, "cliff", 5) == 0) {
+        handle_cliff_cmd(buf);
+    } else if (strncmp(buf, "ota", 3) == 0) {
+        handle_ota_cmd(buf);
+    } else if (strncmp(buf, "report", 6) == 0) {
+        handle_report_cmd(buf);
     } else if (strncmp(buf, "sound", 5) == 0 || strncmp(buf, "servo", 5) == 0 ||
                strncmp(buf, "led", 3) == 0) {
         handle_periph_cmd(buf);
@@ -2001,6 +2188,9 @@ static void init_hardware(void)
      * the facts line names the missing peripheral (`i2c_peripherals=degraded(
      * servos)`) rather than leaving a silently immobile pan/tilt head. */
     init_peripheral("GPIO expander", gpio_expander_init());
+    /* After the expander: the floor sensors are two of its pins. Without it
+     * the cliff reflex stays disarmed and the self-report says so. */
+    init_peripheral("Cliff sensors", cliff_sensor_init());
     init_peripheral("Motors", motor_controller_init());
     init_peripheral("LEDs", led_controller_init());
     init_peripheral("Servos", servo_controller_init());
@@ -2111,6 +2301,7 @@ static esp_err_t init_hierarchical_ai(void)
     // is absent.
     plan_budget_init();
     plan_activity_init(PLANNER_LOOP_PERIOD_MS);
+    note_gate_init();
 
     // The same backstop for voice turns (issue #623): a ration on hands-free
     // triggers and a per-boot ceiling on every voice-turn request. Here, before
@@ -2340,11 +2531,79 @@ static esp_err_t create_tasks(void)
     return ESP_OK;
 }
 
+/** Name for esp_reset_reason(), as the boot banner prints it. BROWNOUT is
+ *  reported even with CONFIG_ESP_BROWNOUT_DET=n: on 2026-11-07 the chip reset
+ *  on supply dips with the ROM printing rst:0xf (BROWNOUT_RST) and this
+ *  returning ESP_RST_BROWNOUT, 20 times on battery. A dip deep enough to drop
+ *  the supply entirely reads POWERON instead. */
+static const char *reset_reason_name(esp_reset_reason_t r)
+{
+    switch (r) {
+        case ESP_RST_POWERON:
+            return "POWERON";
+        case ESP_RST_EXT:
+            return "EXT";
+        case ESP_RST_SW:
+            return "SW";
+        case ESP_RST_PANIC:
+            return "PANIC";
+        case ESP_RST_INT_WDT:
+            return "INT_WDT";
+        case ESP_RST_TASK_WDT:
+            return "TASK_WDT";
+        case ESP_RST_WDT:
+            return "WDT";
+        case ESP_RST_DEEPSLEEP:
+            return "DEEPSLEEP";
+        case ESP_RST_BROWNOUT:
+            return "BROWNOUT";
+        case ESP_RST_SDIO:
+            return "SDIO";
+        case ESP_RST_USB:
+            return "USB";
+        case ESP_RST_JTAG:
+            return "JTAG";
+        case ESP_RST_EFUSE:
+            return "EFUSE";
+        case ESP_RST_PWR_GLITCH:
+            return "PWR_GLITCH";
+        case ESP_RST_CPU_LOCKUP:
+            return "CPU_LOCKUP";
+        default:
+            return "UNKNOWN";
+    }
+}
+
+/** Two lines identifying exactly what is running and why it booted, first in
+ *  the log so a capture from J15 or MQTT is self-describing. Two, not one:
+ *  the UART0 mirror cuts lines at LOG_MIRROR_LINE_MAX (192), and a single line
+ *  lost the reset reason off its end. The reset reason leads the first line. */
+static void log_boot_banner(void)
+{
+    const esp_app_desc_t *desc = esp_app_get_description();
+    char elf_sha[9];
+    esp_app_get_elf_sha256(elf_sha, sizeof(elf_sha));
+    esp_chip_info_t chip;
+    esp_chip_info(&chip);
+    const esp_reset_reason_t reason = esp_reset_reason();
+
+    ESP_LOGI(TAG, "Boot: reset %s (%d) | %s v%s build %s", reset_reason_name(reason), (int)reason,
+             desc->project_name, desc->version, ota_manager_get_build_sha());
+    ESP_LOGI(TAG, "Build: elf %s | compiled %s %s | IDF %s | chip rev v%d.%d, %d cores", elf_sha,
+             desc->date, desc->time, desc->idf_ver, chip.revision / 100, chip.revision % 100,
+             chip.cores);
+}
+
 // ========================================
 // Application entry point
 // ========================================
 void app_main(void)
 {
+    /* Before anything logs: the previous boot's last log lines are still in
+     * RTC memory, and the first ESP_LOG line from here on overwrites them
+     * (ADR-033). Makes no logging calls itself. */
+    event_report_boot_capture();
+
     /* First, so the banner and every boot phase after it reach J15 (UART0 TX)
      * as well as the USB console (issue #798). It needs only PSRAM, which the
      * startup code has already brought up. Non-fatal: without it the log
@@ -2356,7 +2615,21 @@ void app_main(void)
         ESP_LOGW(TAG, "UART0 log mirror unavailable (%s) — log on USB only",
                  esp_err_to_name(mirror_ret));
     }
-    ESP_LOGI(TAG, "Firmware version: %s", esp_app_get_description()->version);
+    log_boot_banner();
+
+    /* One GlitchTip event for a reset that was not deliberate (ADR-033). It
+     * waits in the queue until MQTT connects; nothing here blocks the boot. */
+    const esp_err_t report_ret = event_report_start();
+    if (report_ret != ESP_OK) {
+        ESP_LOGW(TAG, "event reporting unavailable (%s)", esp_err_to_name(report_ret));
+    }
+    const char *reason = reset_reason_name(esp_reset_reason());
+    const esp_err_t sent = event_report_send_reset(reason);
+    if (sent == ESP_OK) {
+        ESP_LOGI(TAG, "reset event queued for GlitchTip (%s)", reason);
+    } else if (sent != ESP_ERR_NOT_SUPPORTED && report_ret == ESP_OK) {
+        ESP_LOGW(TAG, "reset event not queued (%s)", esp_err_to_name(sent));
+    }
 
     ESP_ERROR_CHECK(init_nvs());
     init_mqtt_access();

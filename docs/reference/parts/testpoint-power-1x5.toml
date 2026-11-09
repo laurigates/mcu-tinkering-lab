@@ -1,0 +1,18 @@
+# Supply test header with every rail apart (balancebot's J8 from rev3): a 1x5
+# pin header for meter probes, 3V3, GND, 5V, GND, VBAT. Each rail's only
+# neighbours are GND, so a probe slipping off any pin reaches ground but never
+# another rail. testpoint-power-1x4 (3V3, 5V, GND, VBAT) stays for the robocar
+# carriers (#969). Through-hole, hand-soldered, so no LCSC number.
+[part]
+name = "Supply test header, 1x5 pin header"
+source = "KiCad 10.0.6 library (Conn_01x05, PinHeader_1x05_P2.54mm_Vertical); the pin order, 3V3, GND, 5V, GND, VBAT, is Lauri's (2026-11-06)"
+symbol = "Connector_Generic:Conn_01x05"
+footprint = "Connector_PinHeader_2.54mm:PinHeader_1x05_P2.54mm_Vertical"
+value = "Test: 3V3 G 5V G VBAT"
+buy = "owned:2.54 mm 1x40 male header strips (AliExpress 2025-11, 2025-12, 2026-08)"
+
+[pins]
+"3V3" = 1
+GND = [2, 4]
+"5V" = 3
+VBAT = 5

@@ -21,6 +21,10 @@
 #      default partitions.csv) if present, otherwise uses chip-family defaults
 #   3. Writes firmware/<project-id>/manifest.json (ESP Web Tools format),
 #      plus a top-level "buildSha" ESP Web Tools ignores (see BUILD_SHA below)
+#      and "notes": the version's Features / Bug Fixes / Performance entries
+#      from the project's CHANGELOG.md as a JSON array of short strings
+#      (tools/changelog-notes.py), [] when there is no section. ESP Web Tools
+#      ignores it too; it is there for robocar-unified to announce an update.
 #   4. Writes firmware/projects.json index consumed by the flasher page
 #
 # Environment:
@@ -33,7 +37,7 @@
 #                came from. robocar-unified's OTA compares it against the SHA
 #                compiled into the running firmware (issue #627).
 #
-# Requirements: bash >= 4, jq, git (unless BUILD_SHA is set)
+# Requirements: bash >= 4, jq, python3, git (unless BUILD_SHA is set)
 #
 # Chip-family bootloader offsets:
 #   ESP32, ESP32-S2  ->  0x1000 (4096)
@@ -153,6 +157,11 @@ for flasher_json in ${PROJECTS_GLOB}; do
     parts+=$(printf '{"path":"%s","offset":%d}' "$app_binary_name" "$app_offset")
     parts+="]"
 
+    # What this version changes, for an OTA consumer to announce. Never fails
+    # the release: a missing changelog or section gives [].
+    notes=$(python3 "${SCRIPT_DIR}/changelog-notes.py" "${project_dir}/CHANGELOG.md" "$version")
+    echo "    notes=$(echo "$notes" | jq 'length') entries"
+
     # Write manifest
     manifest_dir="${FIRMWARE_DIR}/${project_id}"
     mkdir -p "$manifest_dir"
@@ -163,10 +172,12 @@ for flasher_json in ${PROJECTS_GLOB}; do
         --arg  chip    "$chip_family" \
         --arg  sha     "$BUILD_SHA" \
         --argjson parts "$parts" \
+        --argjson notes "$notes" \
         '{
             "name":     $name,
             "version":  $version,
             "buildSha": $sha,
+            "notes":    $notes,
             "builds": [{"chipFamily": $chip, "parts": $parts}]
         }' > "${manifest_dir}/manifest.json"
 

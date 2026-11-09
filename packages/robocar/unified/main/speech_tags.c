@@ -8,6 +8,8 @@
 #include <stdbool.h>
 #include <string.h>
 
+#include "sound_clips_core.h"
+
 const char *const SPEECH_TAG_ALLOWED[] = {
     /* Each has a gemini-3.8-flash-tts angle-bracket form (tts_request.c).
      * [excited] and [bored] were dropped with the move to 3.8 (issue #844):
@@ -56,6 +58,7 @@ static size_t filter(const char *in, char *out, size_t out_len, bool keep_allowe
 {
     size_t w = 0;
     size_t kept = 0;
+    size_t sounds_kept = 0;
     size_t drops = 0;
 
     if (out_len == 0) {
@@ -79,12 +82,22 @@ static size_t filter(const char *in, char *out, size_t out_len, bool keep_allowe
             break;
         }
 
-        const bool keep = keep_allowed && kept < SPEECH_TAG_MAX_PER_LINE && is_allowed(r, run);
+        /* A sound tag is not a delivery tag: the TTS task takes it out of the
+         * line and plays a clip (sound_clips_core.h). It passes the filter
+         * under its own cap, so a line can carry a sound and two deliveries. */
+        const bool sound = sound_clip_from_tag(r, run) != SOUND_CLIP_NONE;
+        const bool keep =
+            keep_allowed && (sound ? sounds_kept < SOUND_CLIP_MAX_PER_LINE
+                                   : kept < SPEECH_TAG_MAX_PER_LINE && is_allowed(r, run));
         if (keep) {
             for (size_t i = 0; i < run && w + 1 < out_len; i++) {
                 out[w++] = r[i];
             }
-            kept++;
+            if (sound) {
+                sounds_kept++;
+            } else {
+                kept++;
+            }
         } else {
             drops++;
             /* Swallow one following space so "a [foo] b" does not become

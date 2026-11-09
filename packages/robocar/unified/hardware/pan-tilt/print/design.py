@@ -115,7 +115,7 @@ sys.path.insert(0, str(HERE.parent))  # hardware/pan-tilt, for common.*
 from common import fixtures as fx  # noqa: E402
 from common.check import Body  # noqa: E402
 
-# Sizes and fits from tools/cadstd (ADR-030); the print is JLC3DP PA12 (MJF).
+# Sizes and fits from tools/cadstd (ADR-035); the print is JLC3DP PA12 (MJF).
 from cadstd import MIN_WALL, fit, hole, insert_hole  # noqa: E402
 from cadstd.fasteners import M2, M3  # noqa: E402
 

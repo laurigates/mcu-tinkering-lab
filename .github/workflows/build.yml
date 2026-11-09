@@ -13,6 +13,10 @@ name: Build
 on:
   push:
     branches: [main, develop, 'claude/**']
+    # tools/: only the scripts the _ci-build-*.yml reusables run. The rest of
+    # tools/ (kicad, mechanism, labels, typst, ...) never reaches a firmware
+    # build. The discover job fails if a reusable runs a tools/ script that is
+    # not listed here, in both trigger blocks.
     paths:
       - 'packages/**'
       - '.github/project-matrix.json'
@@ -20,7 +24,8 @@ on:
       - '.github/workflows/_ci-build-esp32.yml'
       - '.github/workflows/_ci-build-esphome.yml'
       - '.github/workflows/_ci-build-pico.yml'
-      - 'tools/**'
+      - 'tools/check-app-partition-fit.sh'
+      - 'tools/check-embedded-build-sha.py'
       - 'docker-compose.yml'
       - 'Dockerfile'
       - 'Dockerfile.pico'
@@ -35,7 +40,8 @@ on:
       - '.github/workflows/_ci-build-esp32.yml'
       - '.github/workflows/_ci-build-esphome.yml'
       - '.github/workflows/_ci-build-pico.yml'
-      - 'tools/**'
+      - 'tools/check-app-partition-fit.sh'
+      - 'tools/check-embedded-build-sha.py'
       - 'docker-compose.yml'
       - 'Dockerfile'
       - 'Dockerfile.pico'
@@ -99,11 +105,37 @@ jobs:
             CHANGED=$(grep -Ev '(^|/)docs/|\.md$' <<<"$CHANGED" || true)
           fi
 
-          # A change to any shared / build-infra file rebuilds everything.
+          # --- Repo tools/ scripts the reusable build workflows run ------------
+          # Read from the reusables, so a new script needs no second list here.
+          # Takes each whole token ending in tools/<path>.sh|.py, then drops the
+          # ones rooted at $IDF_PATH (ESP-IDF's own tools/ tree, not this repo's).
+          # $OLDPWD/tools/... and $GITHUB_WORKSPACE/tools/... are kept.
+          BUILD_TOOLS=$(grep -ohE '[^[:space:]"'"'"'(]*tools/[[:alnum:]_./-]+\.(sh|py)' \
+            .github/workflows/_ci-build-*.yml | grep -vi 'idf_path' \
+            | grep -oE 'tools/[[:alnum:]_./-]+\.(sh|py)$' | sort -u || true)
+          if [ -z "$BUILD_TOOLS" ]; then
+            echo "::error::found no tools/ script in .github/workflows/_ci-build-*.yml; the extraction pattern above is broken"
+            exit 1
+          fi
+          echo "Build tools: $(tr '\n' ' ' <<<"$BUILD_TOOLS")"
+          # Tripwire: the on.paths filter above is static. A script missing from
+          # it would never trigger this workflow when only that script changes.
+          for t in $BUILD_TOOLS; do
+            n=$(grep -cxF "      - '$t'" .github/workflows/build.yml || true)
+            if [ "$n" != 2 ]; then
+              echo "::error file=.github/workflows/build.yml::$t is run by a _ci-build-*.yml reusable but is listed $n time(s) in build.yml's on.push/on.pull_request paths (want 2)"
+              exit 1
+            fi
+          done
+
+          # A change to any shared / build-infra file rebuilds everything: the
+          # build workflows, the matrix, the container files, and the tools/
+          # scripts the reusables run. The rest of tools/ is not build input.
           # (here-string, not a pipe: grep -q closes stdin early and would give a
           #  false result on a pipe under `set -o pipefail`.)
           if [ "$CHANGED" != "__ALL__" ]; then
-            if grep -qE '^(\.github/workflows/(build|_ci-build-)|\.github/project-matrix\.json|tools/|docker-compose\.yml|Dockerfile)' <<<"$CHANGED"; then
+            if grep -qE '^(\.github/workflows/(build|_ci-build-)|\.github/project-matrix\.json|docker-compose\.yml|Dockerfile)' <<<"$CHANGED" \
+              || grep -qxF -f <(printf '%s\n' "$BUILD_TOOLS") <<<"$CHANGED"; then
               CHANGED="__ALL__"
             fi
           fi

@@ -33,8 +33,11 @@
 #include "gemini_parse.h"
 #include "goal_state.h"
 #include "plan_budget.h"
+#include "planner_range.h"
 #include "planner_task.h" /* PLANNER_LOOP_PERIOD_MS — keeps the stated cadence honest */
+#include "reactive_controller.h"
 #include "scene_change.h"
+#include "sound_clips_core.h"
 #include "speech_budget.h"
 #include "speech_evidence.h"
 #include "voice_persona.h"
@@ -99,12 +102,13 @@ static const char *TAG = "gemini_backend";
 /** Planner system prompt buffer.
  *
  *  Lives on the planner task stack, so it is sized deliberately rather than
- *  generously: ~800 bytes of fixed instruction, plus the persona's text_brief
- *  (~450) and tag_brief (~350), plus a variation directive (up to
+ *  generously: ~800 bytes of fixed instruction, the rangefinder clause (up to
+ *  PLANNER_RANGE_CLAUSE_MAX), plus the persona's text_brief
+ *  (~450) and tag_brief (~420 with the sound-effect tags), plus a variation directive (up to
  *  DIALOGUE_STYLE_MAX) and the recalled-lines clause (GEMINI_RECALL_LIST_MAX).
  *  PLANNER_TASK_STACK_SIZE is set with this frame in mind — grow them together.
  */
-#define GEMINI_SYSTEM_PROMPT_MAX 3072
+#define GEMINI_SYSTEM_PROMPT_MAX (3072 + PLANNER_RANGE_CLAUSE_MAX)
 
 /** Cap on the rendered "you already said these" list.
  *
@@ -192,7 +196,7 @@ static esp_err_t http_event_handler(esp_http_client_event_t *evt)
  * Box coordinates use Gemini's convention: [ymin, xmin, ymax, xmax]
  * integers normalised 0..1000.
  */
-static cJSON *build_tools(bool allow_speak)
+static cJSON *build_tools(bool allow_speak, bool allow_note)
 {
     cJSON *tools_arr = cJSON_CreateArray();
 
@@ -335,6 +339,87 @@ static cJSON *build_tools(bool allow_speak)
         cJSON_AddItemToArray(tools_arr, fn);
     }
 
+    /* ---- sound ----
+     * A prebuilt clip from flash (sound_clips_core.h). Offered only beside
+     * `speak`, so the same on-device gates that decide whether the robot may
+     * make a noise this cycle govern it — an instruction to honk "sparingly"
+     * is one the stateless model cannot check (stateless-model-gating.md).
+     * The parser turns the call into a `[name]` tag at the front of the line. */
+    if (allow_speak) {
+        cJSON *fn = cJSON_CreateObject();
+        cJSON_AddStringToObject(fn, "name", "sound");
+        cJSON_AddStringToObject(fn, "description",
+                                "Play a short sound effect through the speaker, in addition to a "
+                                "movement function: horn = a polite two-toot car horn, aoogah = "
+                                "a comic vintage klaxon, bell = a bicycle bell, boing = a cartoon "
+                                "spring. Use one when it fits what the frame shows, such as a "
+                                "person in your way; usually play none.");
+        cJSON *params = cJSON_AddObjectToObject(fn, "parameters");
+        cJSON_AddStringToObject(params, "type", "OBJECT");
+        cJSON *props = cJSON_AddObjectToObject(params, "properties");
+
+        cJSON *name = cJSON_CreateObject();
+        cJSON_AddStringToObject(name, "type", "STRING");
+        cJSON_AddStringToObject(name, "format", "enum");
+        cJSON *names = cJSON_AddArrayToObject(name, "enum");
+        for (int i = 0; i < SOUND_CLIP_COUNT; i++) {
+            cJSON_AddItemToArray(names, cJSON_CreateString(SOUND_CLIP_NAMES[i]));
+        }
+        cJSON_AddItemToObject(props, "name", name);
+
+        cJSON *required = cJSON_CreateArray();
+        cJSON_AddItemToArray(required, cJSON_CreateString("name"));
+        cJSON_AddItemToObject(params, "required", required);
+
+        cJSON_AddItemToArray(tools_arr, fn);
+    }
+
+    /* ---- note ----
+     * A note to the developers, sent to GlitchTip and never spoken (ADR-033).
+     * Declared only on a request where note_gate offered it, for the same
+     * reason `speak` is withheld: the model cannot know what happened since its
+     * last note, so the firmware decides and the prompt says why. The parser
+     * keeps a `note` call out of the motion goal. */
+    if (allow_note) {
+        cJSON *fn = cJSON_CreateObject();
+        cJSON_AddStringToObject(fn, "name", "note");
+        cJSON_AddStringToObject(fn, "description",
+                                "Write one short note to the robot's developers about your own "
+                                "behaviour or a difficulty you ran into. It is logged, not "
+                                "spoken. Call this IN ADDITION to a movement function, and only "
+                                "if you have something specific to report.");
+        cJSON *params = cJSON_AddObjectToObject(fn, "parameters");
+        cJSON_AddStringToObject(params, "type", "OBJECT");
+        cJSON *props = cJSON_AddObjectToObject(params, "properties");
+
+        cJSON *kind = cJSON_CreateObject();
+        cJSON_AddStringToObject(kind, "type", "STRING");
+        cJSON_AddStringToObject(kind, "format", "enum");
+        cJSON *kinds = cJSON_AddArrayToObject(kind, "enum");
+        for (int k = NOTE_KIND_NONE + 1; k < NOTE_KIND_COUNT; k++) {
+            cJSON_AddItemToArray(kinds, cJSON_CreateString(note_kind_name((note_kind_t)k)));
+        }
+        cJSON_AddStringToObject(kind, "description",
+                                "difficulty = something stopped you doing what you meant to; "
+                                "behaviour = something you notice about how you act; "
+                                "suggestion = a change that would help you.");
+        cJSON_AddItemToObject(props, "kind", kind);
+
+        cJSON *text = cJSON_CreateObject();
+        cJSON_AddStringToObject(text, "type", "STRING");
+        cJSON_AddStringToObject(text, "description",
+                                "At most 280 characters of plain English: what you saw, what you "
+                                "tried and what happened. No markdown.");
+        cJSON_AddItemToObject(props, "text", text);
+
+        cJSON *required = cJSON_CreateArray();
+        cJSON_AddItemToArray(required, cJSON_CreateString("kind"));
+        cJSON_AddItemToArray(required, cJSON_CreateString("text"));
+        cJSON_AddItemToObject(params, "required", required);
+
+        cJSON_AddItemToArray(tools_arr, fn);
+    }
+
     return tools_arr;
 }
 
@@ -371,7 +456,7 @@ __attribute__((format(printf, 4, 5))) static size_t append_prompt(char *buf, siz
     return (pos + (size_t)n >= cap) ? (cap - 1u) : (pos + (size_t)n);
 }
 
-static char *build_request_json(const char *b64_image)
+static char *build_request_json(const char *b64_image, note_trigger_t note_offer)
 {
     /* Built per call rather than static: the spoken register follows the active
      * persona, which is switchable at runtime. The cadence is stated from
@@ -426,6 +511,37 @@ static char *build_request_json(const char *b64_image)
                         "next by calling one of: drive, track, rotate, or stop. "
                         "Prefer 'track' when a target object is visible and centred in the frame. "
                         "Call 'stop' when the path is blocked or the scene is ambiguous. ");
+
+    /* What the rangefinders measured. Without it the model judges distance
+     * from the image alone, and a low camera makes everything near look closer
+     * than it is (planner_range.h). Omitted if telemetry cannot be read. */
+    reactive_telemetry_t tele = {0};
+    if (reactive_controller_get_telemetry(&tele) == ESP_OK) {
+        const planner_range_t range = {
+            .front_cm = tele.distance_cm,
+            .front_failed = tele.sensor_failed,
+            .reflex_active = tele.reflex_active,
+            .rear_cm = tele.distance_rear_cm,
+            .rear_failed = tele.rear_failed,
+        };
+        char range_clause[PLANNER_RANGE_CLAUSE_MAX];
+        if (planner_range_clause(&range, range_clause, sizeof(range_clause)) > 0) {
+            pos = append_prompt(system_prompt, sizeof(system_prompt), pos, "%s", range_clause);
+        }
+    }
+
+    /* The note clause goes BEFORE the speech half, so the recall list below is
+     * sized against the room left after it and the closing constraint keeps
+     * its reserve (stateless-model-gating.md §2). note_trigger_reason() states
+     * only what the robot measured. */
+    if (note_offer != NOTE_TRIGGER_NONE) {
+        pos = append_prompt(system_prompt, sizeof(system_prompt), pos,
+                            "You may ALSO call 'note' once, to write a short note to the robot's "
+                            "developers; it is logged, not spoken. It is offered because %s. "
+                            "Report only what you can see or have done; if you have nothing "
+                            "specific to add, do not call it. ",
+                            note_trigger_reason(note_offer));
+    }
 
     if (may_speak) {
         /* Drawn fresh per request — this is the whole anti-repetition mechanism.
@@ -532,7 +648,7 @@ static char *build_request_json(const char *b64_image)
     /* tools — one tool object containing all five function declarations */
     cJSON *tools_arr = cJSON_AddArrayToObject(root, "tools");
     cJSON *tool_obj = cJSON_CreateObject();
-    cJSON *fn_decls = build_tools(may_speak); /* array of function objects */
+    cJSON *fn_decls = build_tools(may_speak, note_offer != NOTE_TRIGGER_NONE);
     cJSON_AddItemToObject(tool_obj, "functionDeclarations", fn_decls);
     cJSON_AddItemToArray(tools_arr, tool_obj);
 
@@ -587,13 +703,20 @@ esp_err_t gemini_backend_init(void)
 }
 
 esp_err_t gemini_backend_plan(const uint8_t *jpeg, size_t jpeg_len, goal_t *out_goal,
-                              uint32_t *latency_ms_out, char *out_speech, size_t speech_cap)
+                              uint32_t *latency_ms_out, char *out_speech, size_t speech_cap,
+                              note_trigger_t note_offer, gemini_note_t *out_note)
 {
     if (!jpeg || jpeg_len == 0 || !out_goal) {
         return ESP_ERR_INVALID_ARG;
     }
     if (out_speech && speech_cap > 0) {
         out_speech[0] = '\0';
+    }
+    /* Cleared on every path, so a request that fails before the parse can
+     * never hand back the previous response's note. */
+    if (out_note) {
+        out_note->kind = NOTE_KIND_NONE;
+        out_note->text[0] = '\0';
     }
     if (!s_response_buf) {
         ESP_LOGE(TAG, "gemini_backend_plan() called before gemini_backend_init()");
@@ -643,7 +766,7 @@ esp_err_t gemini_backend_plan(const uint8_t *jpeg, size_t jpeg_len, goal_t *out_
     }
 
     /* ---- Build request body ---- */
-    char *request_body = build_request_json(b64);
+    char *request_body = build_request_json(b64, note_offer);
     free(b64);
     b64 = NULL;
 
@@ -703,6 +826,17 @@ esp_err_t gemini_backend_plan(const uint8_t *jpeg, size_t jpeg_len, goal_t *out_
     gemini_parse_last_usage(&usage);
     plan_budget_note(usage.present ? usage.total : -1, true);
 
+    /* Only a note the request offered is handed back: a reply carrying one
+     * otherwise is not something this request could have produced. */
+    if (out_note) {
+        gemini_parse_last_note(out_note);
+        if (out_note->kind != NOTE_KIND_NONE && note_offer == NOTE_TRIGGER_NONE) {
+            ESP_LOGW(TAG, "note call in a reply that did not offer it — dropped");
+            out_note->kind = NOTE_KIND_NONE;
+            out_note->text[0] = '\0';
+        }
+    }
+
     if (err != ESP_OK) {
         /* gemini_parse_response already set out_goal->kind = GOAL_KIND_STOP.
          * out_speech may still be populated — a speech-only response is not a
@@ -717,6 +851,9 @@ esp_err_t gemini_backend_plan(const uint8_t *jpeg, size_t jpeg_len, goal_t *out_
 /* -------------------------------------------------------------------------- */
 /* Narration (text-only self-report phrasing)                                  */
 /* -------------------------------------------------------------------------- */
+
+static char *text_request_json(const char *prompt);
+static esp_err_t text_request_send(char *request_body, char *out, size_t out_len);
 
 /** Build the text-only generateContent body for a spoken status line. */
 static char *build_narrate_json(const char *facts, bool is_update)
@@ -757,6 +894,13 @@ static char *build_narrate_json(const char *facts, bool is_update)
              (persona->tag_brief && persona->tag_brief[0] != '\0') ? "\n\n" : "",
              (persona->tag_brief && persona->tag_brief[0] != '\0') ? persona->tag_brief : "");
 
+    return text_request_json(prompt);
+}
+
+/** Wrap a prompt in the text-only generateContent body narrate and the update
+ *  announcement share. Caller frees. */
+static char *text_request_json(const char *prompt)
+{
     cJSON *root = cJSON_CreateObject();
 
     cJSON *contents = cJSON_AddArrayToObject(root, "contents");
@@ -797,19 +941,25 @@ esp_err_t gemini_backend_narrate(const char *facts, bool is_update, char *out, s
         return ESP_ERR_INVALID_ARG;
     }
     out[0] = '\0';
+    return text_request_send(build_narrate_json(facts, is_update), out, out_len);
+}
 
+/** Post a text-only body to NARRATE_MODEL and parse the spoken line. Takes
+ *  ownership of @p request_body (NULL means the build failed). */
+static esp_err_t text_request_send(char *request_body, char *out, size_t out_len)
+{
+    if (!request_body) {
+        return ESP_ERR_NO_MEM;
+    }
     const char *api_key = get_gemini_api_key();
     if (!api_key || api_key[0] == '\0') {
         ESP_LOGW(TAG, "narrate: API key unavailable");
+        free(request_body);
         return ESP_FAIL;
     }
     if (!wifi_is_connected()) {
+        free(request_body);
         return ESP_ERR_INVALID_STATE; /* issue #846: no request without a link */
-    }
-
-    char *request_body = build_narrate_json(facts, is_update);
-    if (!request_body) {
-        return ESP_ERR_NO_MEM;
     }
 
     /* Own buffer — do not touch s_response_buf, which the planner task uses. */
@@ -847,6 +997,43 @@ esp_err_t gemini_backend_narrate(const char *facts, bool is_update, char *out, s
     free(request_body);
     free(resp);
     return err;
+}
+
+/** Build the body for the pre-OTA announcement (ota_announce.h). */
+static char *build_announce_json(const char *facts)
+{
+    const voice_persona_t *persona = voice_persona_get();
+    const char *name =
+        (persona && persona->name && persona->name[0] != '\0') ? persona->name : "Robocar";
+    const bool tags = persona && persona->tag_brief && persona->tag_brief[0] != '\0';
+
+    char prompt[2560];
+    /* The facts are English changelog lines; the listener hears the persona's
+     * language. The pun that follows is spoken verbatim by the caller, so the
+     * model must not announce leaving or updating itself. */
+    snprintf(prompt, sizeof(prompt),
+             "You are a small wheeled robot named %s, speaking aloud. "
+             "Voice and language to use: %s\n\n"
+             "A firmware update is ready for you to install:\n%s\n\n"
+             "Write at most TWO short spoken sentences (at most 40 words, plain text only — "
+             "no markdown, no emoji, no quotes) telling the people around you that an update "
+             "is available and what it changes, in everyday words. Name at most the three "
+             "changes a listener would care about and skip tooling, documentation and test "
+             "work. Say only what the list says; do not invent changes. Do not say that you "
+             "are leaving or are about to update: you will say that next."
+             "%s%s",
+             name, persona ? persona->text_brief : "", facts, tags ? "\n\n" : "",
+             tags ? persona->tag_brief : "");
+    return text_request_json(prompt);
+}
+
+esp_err_t gemini_backend_announce_update(const char *facts, char *out, size_t out_len)
+{
+    if (!facts || !out || out_len == 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    out[0] = '\0';
+    return text_request_send(build_announce_json(facts), out, out_len);
 }
 
 void gemini_backend_deinit(void)

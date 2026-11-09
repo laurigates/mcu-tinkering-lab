@@ -1,4 +1,4 @@
-"""The mounting grid: where reusable parts put their holes (ADR-030).
+"""The mounting grid: where reusable parts put their holes (ADR-035).
 
 A part that mounts to, or carries, other parts puts its mounting holes on a
 10 mm grid of M3 clearance holes. An odd-shaped thing (a board, a servo, a

@@ -8,7 +8,9 @@ it on a pair already on disk.
 Only parts whose symbol carries an LCSC number are kept. The modules, sockets and
 connectors have none, so they stay off both files and are hand-soldered.
 Writes ``<out_dir>/bom-jlc.csv`` (Comment, Designator, Footprint, LCSC Part #)
-and ``<out_dir>/cpl-jlc.csv`` (Designator, Mid X, Mid Y, Layer, Rotation).
+and ``<out_dir>/cpl-jlc.csv`` (Designator, Mid X, Mid Y, Layer, Rotation);
+`kicad.fab` names them ``<name>-bom-jlc-<sha7>.csv`` and
+``<name>-cpl-jlc-<sha7>.csv`` (`kicad.provenance`).
 
 JLCPCB places a part as LCSC's footprint draws it, so each CPL rotation is
 KiCad's plus the part's offset from ``docs/reference/jlcpcb-rotations.toml``
@@ -100,10 +102,15 @@ def _offsets(bom: list[dict], rotations: dict[str, Rotation]) -> dict[str, int]:
 
 
 def write(
-    bom_path, pos_path, out_dir, rotations: dict[str, Rotation] | None = None
+    bom_path,
+    pos_path,
+    out_dir,
+    rotations: dict[str, Rotation] | None = None,
+    bom_name: str = "bom-jlc.csv",
+    cpl_name: str = "cpl-jlc.csv",
 ) -> tuple[int, int]:
     """Write both files; (BOM lines, placements). `rotations` defaults to the
-    repo's table."""
+    repo's table; `kicad.fab` passes names that carry the commit."""
     with open(bom_path, newline="") as f:
         bom = [r for r in csv.DictReader(f) if r["LCSC"]]
     if not bom:
@@ -117,13 +124,13 @@ def write(
     if missing:
         raise KicadError(f"LCSC parts with no SMD placement: {sorted(missing)}")
 
-    with open(os.path.join(out_dir, "bom-jlc.csv"), "w", newline="") as f:
+    with open(os.path.join(out_dir, bom_name), "w", newline="") as f:
         w = csv.writer(f)
         w.writerow(["Comment", "Designator", "Footprint", "LCSC Part #"])
         for r in bom:
             w.writerow([r["Comment"], r["Designator"], r["Footprint"], r["LCSC"]])
 
-    with open(os.path.join(out_dir, "cpl-jlc.csv"), "w", newline="") as f:
+    with open(os.path.join(out_dir, cpl_name), "w", newline="") as f:
         w = csv.writer(f)
         w.writerow(["Designator", "Mid X", "Mid Y", "Layer", "Rotation"])
         for r in pos:

@@ -377,8 +377,11 @@ it dashed to mark it as on-module rather than as a breakout to solder.
 | PDM CLK | GPIO42 | output | Clock, driven by the ESP32-S3 |
 | PDM DATA | GPIO41 | input | Serial PDM data |
 
-16 kHz / 16-bit / mono — fixed by the microphone, and also what Gemini expects
-for inline audio, so there is no resampling stage anywhere in the path. Neither
+16 kHz / 16-bit / mono — chosen by the firmware because it is what Gemini
+expects for inline audio, so there is no resampling stage anywhere in the path.
+The microphone fixes no rate; at 16 kHz the PDM clock is 1.024 MHz, between the
+two clock ranges its datasheet specifies (see
+[sensor--msm261d.md](../../../docs/reference/datasheets/sensor--msm261d.md)). Neither
 pin collides with the camera DVP group (GPIO10-18, 38-40, 47-48) or the D0-D10
 headers (GPIO1-9, 43-44).
 
@@ -434,6 +437,25 @@ still prints the GPIO-mode names.
 - **Bring-up:** `robocar-bringup`'s `sonar` check reports whether 0x57 answers
   on channels 3 and 4, then five readings from each. A module that does not
   answer is unplugged or still in GPIO mode (`R4` not fitted).
+
+## Floor sensors (cliff reflex, 2x reflective IR, MCP23017)
+
+Interim until the VL53L4CD pair of issue #1010: two TCRT5000-style reflective
+sensors, aimed down at the front and rear edges, on the MCP23017 (TCA9548A
+ch2). Without the MCP23017 the cliff reflex stays disarmed. Behaviour, mounting
+and bench checks: [`docs/firmware/cliff-sensors.md`](docs/firmware/cliff-sensors.md).
+
+| Sensor pin | Front | Rear |
+|-----|-------------|------------|
+| LED anode | 3.3 V via 100 Ω | 3.3 V via 100 Ω |
+| LED cathode | GND | GND |
+| Phototransistor collector | MCP23017 `GPA0` | MCP23017 `GPA1` |
+| Phototransistor emitter | GND | GND |
+
+- **No external pull-up needed:** the firmware enables the MCP23017's internal
+  ~100 kΩ pull-ups. Fit 10-47 kΩ to 3.3 V if a lifted sensor still reads floor.
+- **Low = floor seen.** An unplugged sensor reads high, as no floor, and the
+  robot refuses to move toward it.
 
 ## Flashing
 

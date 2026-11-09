@@ -10,7 +10,25 @@
 #ifndef OTA_MANAGER_H
 #define OTA_MANAGER_H
 
+#include <stddef.h>
+
 #include "esp_err.h"
+
+/**
+ * Where the pre-install sequence is. A newer version is not installed at
+ * once: the robot waits for a quiet moment, says what the update changes and
+ * OTA_ANNOUNCE_PUN, keeps a postpone window open, parks on open floor
+ * (ota_park.h) and holds still (reactive_controller_set_hold()) for the
+ * download and the reboot.
+ */
+typedef enum {
+    OTA_PHASE_IDLE = 0,
+    OTA_PHASE_WAITING_QUIET,
+    OTA_PHASE_ANNOUNCING,
+    OTA_PHASE_WINDOW,
+    OTA_PHASE_PARKING,
+    OTA_PHASE_INSTALLING,
+} ota_phase_t;
 
 /**
  * @brief Initialize OTA manager
@@ -65,5 +83,24 @@ const char *ota_manager_get_build_sha(void);
  * @return ESP_OK on success, error code otherwise
  */
 esp_err_t ota_manager_confirm_valid(void);
+
+/**
+ * @brief Postpone the announced update to the next check.
+ *
+ * Accepted only while the postpone window is open (OTA_PHASE_WINDOW). The
+ * console's `ota postpone`, also reachable over MQTT.
+ *
+ * @return ESP_OK if postponed, ESP_ERR_INVALID_STATE when no window is open
+ */
+esp_err_t ota_manager_postpone(void);
+
+/** The pre-install sequence's current phase. Safe from any task. */
+ota_phase_t ota_manager_phase(void);
+
+/** Human-readable phase, for the console. */
+const char *ota_manager_phase_name(ota_phase_t phase);
+
+/** Copy the version the sequence is (or was last) for into @p out. */
+void ota_manager_pending_version(char *out, size_t out_len);
 
 #endif  // OTA_MANAGER_H

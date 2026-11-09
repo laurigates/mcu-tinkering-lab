@@ -74,6 +74,15 @@ static void print_expectations(const hold_state_t *s)
     printf("    %cO1 - %cO2                        %c~VM\n", side, side, s->forward ? '+' : '-');
 }
 
+/** Write one held state's command. The idle motor gets speed 0 with IN1 high:
+ *  the TB6612's short brake. */
+static esp_err_t drive_state(const hold_state_t *s)
+{
+    const uint8_t full = 255;
+    return s->left ? motor_set_individual(full, 0, s->forward, 1)
+                   : motor_set_individual(0, full, 1, s->forward);
+}
+
 static void enter_state(size_t next)
 {
     /* Always pass through a stop: off is a stop, and every drive state starts
@@ -90,11 +99,11 @@ static void enter_state(size_t next)
     cues_play(CUE_MOTOR_ARMED);
     vTaskDelay(pdMS_TO_TICKS(400));
 
+    /* The first step of motor_controller's start-up ramp; motor_hold_poll()
+     * re-issues the command each poll and the duty reaches 100 % within
+     * MOTOR_RAMP_FULL_SCALE_MS. */
     const hold_state_t *s = &k_states[next];
-    const uint8_t full = 255;
-    /* The idle motor gets speed 0 with IN1 high: the TB6612's short brake. */
-    const esp_err_t err = s->left ? motor_set_individual(full, 0, s->forward, 1)
-                                  : motor_set_individual(0, full, 1, s->forward);
+    const esp_err_t err = drive_state(s);
     if (err != ESP_OK) {
         motor_stop();
         s_state = 0;
@@ -163,5 +172,15 @@ void motor_hold_poll(void)
     if (s_low_polls >= MOTOR_HOLD_DEBOUNCE_POLLS && !s_press_latched) {
         s_press_latched = true;
         enter_state((s_state + 1) % HOLD_STATE_COUNT);
+        return;
+    }
+
+    /* motor_controller ramps a rise over successive calls, so a held state is
+     * re-issued every poll: the ramp completes, and once it has, the repeats
+     * are suppressed in set_motors() and cost no bus traffic. */
+    if (s_state != 0 && drive_state(&k_states[s_state]) != ESP_OK) {
+        printf("\nHOLD %s: PCA9685 write failed — motors stopped\n", k_states[s_state].name);
+        motor_stop();
+        s_state = 0;
     }
 }

@@ -57,6 +57,14 @@ bool servo_is_initialized(void);
 /** True when initialised and the output has not been released by servo_disable(). */
 bool servo_is_enabled(servo_id_t servo_id);
 
+/**
+ * @brief When a servo angle last changed (or an output was powered), ms since
+ *        boot; 0 before the first. An unchanged re-write does not count. Safe to
+ *        call from any core. Consumed by the ambient listener to quarantine the
+ *        servos' own noise (ambient_head_quiet()).
+ */
+uint32_t servo_last_move_ms(void);
+
 /** True when the angle is inside the servo's live travel limits. */
 bool servo_is_angle_valid(servo_id_t servo_id, int16_t angle);
 

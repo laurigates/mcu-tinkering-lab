@@ -11,24 +11,28 @@
 #include "planner_task.h"
 
 #include <inttypes.h>
+#include <stdio.h>
 
 #include "ambient_audio.h"
 #include "camera.h"
-#include "dialogue_style.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "event_report.h"
 #include "frame_dump.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "gemini_backend.h"
 #include "goal_state.h"
+#include "note_gate.h"
 #include "plan_activity.h"
 #include "plan_budget.h"
+#include "planner_cycle_core.h"
 #include "reactive_controller.h"
 #include "scene_change.h"
 #include "servo_controller.h"
 #include "speech_budget.h"
 #include "speech_queue.h"
+#include "voice_persona.h"
 #include "voice_turn.h"
 
 static const char *TAG = "planner";
@@ -41,8 +45,10 @@ static const char *TAG = "planner";
  * system prompt (GEMINI_SYSTEM_PROMPT_MAX) plus the variation directive and the
  * recalled-lines list, which together grew past 4 KB when the robot gained a
  * memory of what it had said. Grow this with those buffers, not after a stack
- * overflow reports it. */
-#define PLANNER_TASK_STACK_SIZE 10240U
+ * overflow reports it. 11.5 KB since the rangefinder clause: the prompt buffer
+ * grew by PLANNER_RANGE_CLAUSE_MAX and the frame gained the clause's own
+ * buffer and a telemetry snapshot, about 1 KB. */
+#define PLANNER_TASK_STACK_SIZE 11776U
 #define PLANNER_TASK_PRIORITY 3U
 #define PLANNER_TASK_CORE 1
 
@@ -51,43 +57,6 @@ static const char *TAG = "planner";
  * ========================================================================= */
 
 static TaskHandle_t s_planner_task_handle;
-
-/**
- * @brief Which gate decided this cycle, as a short literal for the log.
- *
- * "-" the budget held (rationed, regardless of evidence), "V" the view changed,
- * "A" the room sounded different, "VA" both, "." neither — nothing to say.
- *
- * This exists so the OR in gemini_backend.c can be judged from a capture instead
- * of defended from an armchair. Count the "A"-only cycles in a 20-minute
- * `just robocar-unified::monitor | tee` run: if they track the HVAC, the fix is
- * `voice loud` / `voice sound`; if they coincide with sentences worth hearing, the
- * OR is vindicated; if "A" never appears at all, the audio gate is dead weight and
- * either the thresholds or the mic gain are wrong.
- *
- * Returns a STRING LITERAL, and callers must pass it as a %s ARGUMENT. A ternary
- * in the format position expands into a syntax error pointing inside
- * esp_log_color.h, far from the cause — see .claude/rules/esp-log-format-literal.md.
- */
-static const char *planner_gate_verdict(void)
-{
-    const uint32_t now = (uint32_t)(esp_timer_get_time() / 1000);
-    if (!speech_budget_allows(now)) {
-        return "-";
-    }
-    const bool v = scene_change_novel();
-    const bool a = ambient_audio_novel(now);
-    if (v && a) {
-        return "VA";
-    }
-    if (v) {
-        return "V";
-    }
-    if (a) {
-        return "A";
-    }
-    return ".";
-}
 
 /* =========================================================================
  * Goal kind name — for human-readable logging
@@ -109,6 +78,38 @@ static const char *goal_kind_name(goal_kind_t kind)
         default:
             return "unknown";
     }
+}
+
+/* =========================================================================
+ * Planner notes (ADR-033)
+ *
+ * File-scope rather than on the planner stack: the task is the only writer,
+ * and PLANNER_TASK_STACK_SIZE is sized for the prompt frame, not for another
+ * ~500 bytes of note and goal history.
+ * ========================================================================= */
+
+static gemini_note_t s_note;
+
+/** The last EVENT_REPORT_NOTE_GOALS goals as short lines, oldest first once
+ *  read through goal_history_collect(). */
+static char s_goal_history[EVENT_REPORT_NOTE_GOALS][40];
+static uint32_t s_goal_history_next;
+
+static void goal_history_note(const char *line)
+{
+    snprintf(s_goal_history[s_goal_history_next % EVENT_REPORT_NOTE_GOALS],
+             sizeof(s_goal_history[0]), "%s", line);
+    s_goal_history_next++;
+}
+
+static size_t goal_history_collect(const char **out)
+{
+    const uint32_t n = s_goal_history_next < EVENT_REPORT_NOTE_GOALS ? s_goal_history_next
+                                                                     : EVENT_REPORT_NOTE_GOALS;
+    for (uint32_t i = 0; i < n; i++) {
+        out[i] = s_goal_history[(s_goal_history_next - n + i) % EVENT_REPORT_NOTE_GOALS];
+    }
+    return n;
 }
 
 /* =========================================================================
@@ -174,10 +175,60 @@ static plan_evidence_t gather_evidence(const scene_fingerprint_t *fp, uint32_t n
     goal_t current = {0};
     bool fresh = false;
     if (!ev.robot_moving && goal_state_read(&current, &fresh) == ESP_OK) {
-        ev.robot_moving = fresh && current.kind != GOAL_KIND_STOP && current.kind != GOAL_KIND_NONE;
+        ev.robot_moving = goal_moves_wheels(&current, fresh);
     }
 
     return ev;
+}
+
+/** One line per goal for a note's history: the kind and the parameter that
+ *  says most about it. */
+static void describe_goal(const goal_t *g, planner_result_action_t result, char *out, size_t cap)
+{
+    if (result != PLANNER_RESULT_WRITE_GOAL) {
+        snprintf(out, cap, "stop (request failed)");
+        return;
+    }
+    switch (g->kind) {
+        case GOAL_KIND_DRIVE:
+            snprintf(out, cap, "drive %d deg %u cm %u%%", (int)g->params.drive.heading_deg,
+                     (unsigned)g->params.drive.distance_cm, (unsigned)g->params.drive.speed_pct);
+            break;
+        case GOAL_KIND_TRACK:
+            snprintf(out, cap, "track [%u,%u,%u,%u] %u%%", (unsigned)g->params.track.ymin,
+                     (unsigned)g->params.track.xmin, (unsigned)g->params.track.ymax,
+                     (unsigned)g->params.track.xmax, (unsigned)g->params.track.max_speed_pct);
+            break;
+        case GOAL_KIND_ROTATE:
+            snprintf(out, cap, "rotate %d deg", (int)g->params.rotate.angle_deg);
+            break;
+        default:
+            snprintf(out, cap, "%s", goal_kind_name(g->kind));
+            break;
+    }
+}
+
+/** Queue the note the model wrote, with the structure the firmware attaches. */
+static void report_note(note_trigger_t trigger, uint32_t reflex_trips)
+{
+    const voice_persona_t *persona = voice_persona_get();
+    event_report_note_t n = {
+        .trigger = note_trigger_name(trigger),
+        .kind = note_kind_name(s_note.kind),
+        .text = s_note.text,
+        .persona = persona != NULL ? persona->slug : "",
+        .reflex_trips = reflex_trips,
+        .scene_score = scene_change_score(),
+        .still_score = plan_activity_scene_score(),
+        .plan_requests = plan_budget_requests(),
+    };
+    n.goal_count = goal_history_collect(n.goals);
+    const esp_err_t err = event_report_send_note(&n);
+    if (err == ESP_OK) {
+        note_gate_noted(); /* `plan` counts notes queued, not notes written */
+    }
+    ESP_LOGI(TAG, "Note (%s, %s)%s: \"%s\"", n.trigger, n.kind, err == ESP_OK ? "" : " NOT queued",
+             s_note.text);
 }
 
 /* =========================================================================
@@ -193,18 +244,9 @@ static void planner_task(void *pvParameters)
 
     TickType_t last_wake_time = xTaskGetTickCount();
 
-    /* Extra periods to wait after a failed plan. Gemini answers a quota
-     * overrun with HTTP 429 and a retryDelay that *grows* while the client
-     * keeps asking (observed climbing 19 s -> 31 s under a 1 Hz loop), so
-     * retrying at full rate makes the outage longer. Capped so recovery stays
-     * bounded; reset on the first success. */
-    uint32_t backoff_periods = 0;
-
-    /* One-shot latches so entering dormancy and tripping the fuse are announced
-     * once each rather than every 15 s for the rest of the night — and so the
-     * matching "waking" line has something to be the counterpart of. */
-    bool dormant_announced = false;
-    bool budget_announced = false;
+    /* Backoff periods and the dormant/budget announce latches. Their reasons
+     * are documented on the struct in planner_cycle_core.h. */
+    planner_cycle_state_t cycle = {0};
 
     while (1) {
         /* ---- 1. Capture frame ---- */
@@ -266,23 +308,12 @@ static void planner_task(void *pvParameters)
          * when the planner has been dormant for hours. */
         const uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000);
         const plan_evidence_t ev = gather_evidence(&fp, now_ms);
-        const bool warranted = plan_activity_should_call(&ev, now_ms);
-        const bool affordable = plan_budget_allows();
+        const planner_cycle_decision_t decision = planner_cycle_decide(&cycle, &ev, now_ms);
 
-        if (!warranted || !affordable) {
-            /* No request. The goal is deliberately left to expire on its own
-             * TTL rather than being force-stopped every skipped cycle: the
-             * executor already treats a stale goal as a hold, and re-stopping a
-             * stopped robot 240 times an hour would bury the one transition
-             * that matters in the log. */
-            if (!affordable) {
-                /* The fuse outranks everything else in this branch: while it is
-                 * blown there is no "next request in N ms" to report, and saying
-                 * there is would describe a cadence that will never run. Reported
-                 * once, then silent — an exhausted budget does not become news
-                 * again every 15 s. */
-                if (!budget_announced) {
-                    budget_announced = true;
+        if (decision.action != PLANNER_CYCLE_REQUEST) {
+            /* No request; planner_cycle_gate() explains each case. */
+            switch (decision.action) {
+                case PLANNER_CYCLE_SKIP_BUDGET_ANNOUNCE:
                     ESP_LOGE(TAG,
                              "PLANNER BUDGET EXHAUSTED (%s) — %" PRIu32 " requests, %llu tokens. "
                              "No further requests until `plan resume`.",
@@ -290,34 +321,37 @@ static void planner_task(void *pvParameters)
                                                                                 : "token ceiling",
                              plan_budget_requests(), (unsigned long long)plan_budget_tokens());
                     goal_state_force_stop();
-                }
-            } else if (plan_activity_dormant() && !dormant_announced) {
-                dormant_announced = true;
-                ESP_LOGI(TAG,
-                         "Dormant — nothing has changed for the whole ladder. Still watching "
-                         "every %u ms; a moving view, a sound, a range change or any console "
-                         "command wakes it.",
-                         PLANNER_LOOP_PERIOD_MS);
-                goal_state_force_stop();
-            } else if (!plan_activity_dormant()) {
-                /* Climbing the ladder: the interesting phase, and the one whose
-                 * thresholds get tuned from a capture. Logged at INFO with every
-                 * score beside its threshold, the same way the speech gates are.
-                 * Dormant cycles are NOT logged at INFO — an overnight run would
-                 * otherwise emit thousands of identical lines. */
-                ESP_LOGI(TAG,
-                         "Idle: no request | pose: %c | still: %u/%u | range: %u/%u cm | "
-                         "loud: %u/%u dB | rung: %u/%u every %" PRIu32 " ms | why: %s",
-                         scene_pose_letter(plan_activity_pose()), plan_activity_scene_score(),
-                         (unsigned)plan_scene_threshold(), plan_activity_range_score(),
-                         (unsigned)plan_range_threshold(), ambient_audio_loud_score(now_ms),
-                         (unsigned)ambient_audio_loud_threshold(),
-                         (unsigned)plan_activity_step() + 1u, (unsigned)PLAN_LADDER_STEPS,
-                         plan_activity_period_ms(), plan_activity_verdict());
-            } else {
-                ESP_LOGD(TAG, "Dormant: still %u/%u | range %u/%u cm", plan_activity_scene_score(),
-                         (unsigned)plan_scene_threshold(), plan_activity_range_score(),
-                         (unsigned)plan_range_threshold());
+                    break;
+                case PLANNER_CYCLE_SKIP_DORMANT_ANNOUNCE:
+                    ESP_LOGI(TAG,
+                             "Dormant — nothing has changed for the whole ladder. Still watching "
+                             "every %u ms; a moving view, a sound, a range change or any console "
+                             "command wakes it.",
+                             PLANNER_LOOP_PERIOD_MS);
+                    goal_state_force_stop();
+                    break;
+                case PLANNER_CYCLE_SKIP_IDLE:
+                    /* Logged at INFO with every score beside its threshold, the
+                     * same way the speech gates are. */
+                    ESP_LOGI(TAG,
+                             "Idle: no request | pose: %c | still: %u/%u | range: %u/%u cm | "
+                             "loud: %u/%u dB | rung: %u/%u every %" PRIu32 " ms | why: %s",
+                             scene_pose_letter(plan_activity_pose()), plan_activity_scene_score(),
+                             (unsigned)plan_scene_threshold(), plan_activity_range_score(),
+                             (unsigned)plan_range_threshold(), ambient_audio_loud_score(now_ms),
+                             (unsigned)ambient_audio_loud_threshold(),
+                             (unsigned)plan_activity_step() + 1u, (unsigned)PLAN_LADDER_STEPS,
+                             plan_activity_period_ms(), plan_activity_verdict());
+                    break;
+                case PLANNER_CYCLE_SKIP_DORMANT_QUIET:
+                    ESP_LOGD(TAG, "Dormant: still %u/%u | range %u/%u cm",
+                             plan_activity_scene_score(), (unsigned)plan_scene_threshold(),
+                             plan_activity_range_score(), (unsigned)plan_range_threshold());
+                    break;
+                case PLANNER_CYCLE_SKIP_BUDGET_SILENT:
+                case PLANNER_CYCLE_REQUEST:
+                default:
+                    break;
             }
 
             camera_return_fb(fb);
@@ -329,10 +363,25 @@ static void planner_task(void *pvParameters)
             continue;
         }
 
-        if (dormant_announced || budget_announced) {
+        if (decision.announce_waking) {
             ESP_LOGI(TAG, "Waking — %s", plan_activity_verdict());
-            dormant_announced = false;
-            budget_announced = false;
+        }
+
+        /* ---- 1d. Offer the note tool? (ADR-033) ----
+         * After the request gate, so a skipped cycle never spends an offer;
+         * the triggers it would have raised are cumulative (the reflex count)
+         * or latched (BLIND) and are seen by the next request. */
+        reactive_telemetry_t note_tele = {0};
+        (void)reactive_controller_get_telemetry(&note_tele);
+        const planner_note_inputs_t note_in = {
+            .reflex_trips = note_tele.reflex_trips,
+            .blind = !scene_change_has_measurement(),
+        };
+        const note_trigger_t note_offer = planner_cycle_note_offer(&cycle, &note_in, now_ms);
+        if (note_offer != NOTE_TRIGGER_NONE) {
+            ESP_LOGI(TAG, "Offering note (%s), %" PRIu32 "/%u this boot",
+                     note_trigger_name(note_offer), note_gate_offers(),
+                     (unsigned)NOTE_GATE_MAX_PER_BOOT);
         }
 
         /* ---- 2. Call Gemini planner ---- */
@@ -341,23 +390,16 @@ static void planner_task(void *pvParameters)
         char speech[SPEECH_TEXT_MAX] = {0};
         /* Read before the request: gemini_backend_plan() decides whether to
          * offer `speak` (and with which evidence clause) from the state now. */
-        const uint32_t notes_at_request = speech_budget_notes();
-        const uint32_t turns_at_request = voice_turn_count();
-        esp_err_t ret =
-            gemini_backend_plan(fb->buf, fb->len, &goal, &latency_ms, speech, sizeof(speech));
+        planner_speech_snapshot_t at_request = {0};
+        at_request.speech_notes = speech_budget_notes();
+        at_request.voice_turns = voice_turn_count();
+        esp_err_t ret = gemini_backend_plan(fb->buf, fb->len, &goal, &latency_ms, speech,
+                                            sizeof(speech), note_offer, &s_note);
 
-        /* Noted whatever the outcome: the request went out, so it moves the
-         * reference to the view just planned on and advances the ladder. Noting
-         * only successes would let a run of failures replan the same unchanged
-         * scene at full rate forever. */
-        plan_activity_note_call(now_ms);
-
-        /* Which gate opened (or held) THIS cycle, sampled here and not at the log
-         * line below, because mark_spoken() re-references both detectors in
-         * between. Reading them afterwards would report the state the next cycle
-         * starts from and make every successful utterance look like it came from a
-         * closed gate. */
-        const char *const gate_verdict = planner_gate_verdict();
+        /* Notes the call whatever the outcome, then samples which gate opened
+         * (or held) THIS cycle — see planner_cycle_after_request(). */
+        const char *const gate_verdict =
+            planner_cycle_after_request(now_ms, (uint32_t)(esp_timer_get_time() / 1000));
 
         /* ---- 2b. Hand any utterance to the TTS task ----
          * Posted before the goal is written and regardless of whether the
@@ -365,44 +407,24 @@ static void planner_task(void *pvParameters)
          * Non-blocking: a full queue drops the line rather than stalling the
          * planner loop.
          *
-         * The prompt already carries what was recently said and asks for
-         * something new; this re-checks the answer, because a request is not a
-         * guarantee. Only generated lines are screened — console auditions and
-         * status reports go straight to the queue. See dialogue_style.h. */
-        if (speech[0] != '\0' && dialogue_style_is_repetitive(speech)) {
+         * Screened first for near-repeats and for a person speaking during the
+         * request (planner_cycle_screen_speech()). Only generated lines are
+         * screened — console auditions and status reports go straight to the
+         * queue. */
+        planner_speech_snapshot_t after_request = {0};
+        after_request.voice_busy = voice_turn_is_busy();
+        after_request.voice_turns = voice_turn_count();
+        after_request.speech_notes = speech_budget_notes();
+        const planner_speech_verdict_t speech_verdict =
+            planner_cycle_screen_speech(speech, &at_request, &after_request);
+        if (speech_verdict == PLANNER_SPEECH_SUPPRESS_REPEAT) {
             ESP_LOGI(TAG, "Suppressed near-repeat: \"%s\"", speech);
-            speech[0] = '\0';
-        }
-        /* A person spoke while this request was in flight: a voice turn is
-         * still running, one began since the request, or something was spoken.
-         * The request was built from the state before that, so its `speak`
-         * licence and any "the sound changed" clause are about the person's
-         * own voice, and speaking now is the "some strange noise" remark on
-         * top of the reply (2026-11-05: turn recorded at 138.6 s, request at
-         * ~139.7 s, noise line at 144.9 s, the turn's reply at 146.4 s). The
-         * goal still applies; only the line is dropped. */
-        if (speech[0] != '\0' && (voice_turn_is_busy() || voice_turn_count() != turns_at_request ||
-                                  speech_budget_notes() != notes_at_request)) {
+        } else if (speech_verdict == PLANNER_SPEECH_SUPPRESS_PERSON_SPOKE) {
             ESP_LOGI(TAG, "Suppressed: person spoke during the request: \"%s\"", speech);
-            speech[0] = '\0';
-        }
-        if (speech[0] != '\0') {
+        } else if (speech_verdict == PLANNER_SPEECH_POST) {
             const esp_err_t sp_ret = speech_queue_post(speech);
             if (sp_ret == ESP_OK) {
-                /* Feeds the next prompt's recall list and avoid-list, and spends
-                 * the speaking budget. Only on a successful post: a line dropped
-                 * by a full queue is never heard, so it is neither a repetition
-                 * anyone can notice nor an utterance worth rationing. */
-                dialogue_style_note_spoken(speech);
-                speech_budget_note((uint32_t)(esp_timer_get_time() / 1000));
-                /* This view is now the one the robot has remarked on, so it
-                 * becomes the reference the next frames are measured against.
-                 * The soundscape is re-referenced for the same reason and at the
-                 * same moment: both detectors measure "since the robot last
-                 * spoke", so they must be marked together or the surviving one
-                 * keeps licensing remarks about evidence already used. */
-                scene_change_mark_spoken();
-                ambient_audio_mark_spoken();
+                planner_cycle_note_spoken(speech, (uint32_t)(esp_timer_get_time() / 1000));
                 ESP_LOGI(TAG, "Speech: \"%s\"", speech);
             } else if (sp_ret == ESP_ERR_NO_MEM) {
                 ESP_LOGD(TAG, "still speaking — dropped: \"%s\"", speech);
@@ -410,7 +432,18 @@ static void planner_task(void *pvParameters)
         }
 
         /* ---- 3 / 4. Write goal or force stop ---- */
-        if (ret == ESP_OK) {
+        const planner_result_action_t result = planner_cycle_result(&cycle, ret);
+
+        /* ---- 4b. Notes: record the goal, raise what this cycle supports, and
+         * report a note the model wrote on an offered request. */
+        char goal_line[40];
+        describe_goal(&goal, result, goal_line, sizeof(goal_line));
+        goal_history_note(goal_line);
+        planner_cycle_note_outcome(&cycle, result, goal.kind, speech_verdict, note_offer);
+        if (note_offer != NOTE_TRIGGER_NONE && s_note.kind != NOTE_KIND_NONE) {
+            report_note(note_offer, note_tele.reflex_trips);
+        }
+        if (result == PLANNER_RESULT_WRITE_GOAL) {
             goal.head_pan_deg = head_at_capture.pan_angle;
             goal.head_tilt_deg = head_at_capture.tilt_angle;
             esp_err_t write_ret = goal_state_write(&goal, 0 /* use default TTL */);
@@ -432,7 +465,8 @@ static void planner_task(void *pvParameters)
              *        a high floor with no excursion is a noisy but unchanging
              *        room, and is the difference between a working gate and a
              *        deaf one.
-             * gate=  which branch decided whether to SPEAK (planner_gate_verdict).
+             * gate=  which branch decided whether to SPEAK
+             *        (planner_cycle_gate_verdict).
              * still= distance from the frame the robot last PLANNED on at the
              *        same pose, and
              *        why=/step= the request gate's own verdict and ladder rung.
@@ -456,22 +490,15 @@ static void planner_task(void *pvParameters)
                      (unsigned)plan_activity_step() + 1u, (unsigned)PLAN_LADDER_STEPS,
                      plan_budget_requests(), budget_max_requests(),
                      (unsigned long long)plan_budget_tokens());
-            backoff_periods = 0;
-        } else if (ret == ESP_ERR_INVALID_STATE) {
-            /* No WiFi link (issue #846) or no key yet (issue #845): nothing
-             * was sent and nothing spent, so no backoff, and the first cycle
-             * after the link or the key arrives plans at once. */
+        } else if (result == PLANNER_RESULT_STOP_IDLE) {
+            /* No WiFi link or no key: no backoff (planner_cycle_result()). */
             ESP_LOGD(TAG, "no WiFi link or no key — planner idle, holding STOP");
             goal_state_force_stop();
         } else {
-            backoff_periods = (backoff_periods == 0) ? 1
-                              : (backoff_periods < PLANNER_MAX_BACKOFF_PERIODS)
-                                  ? backoff_periods * 2
-                                  : PLANNER_MAX_BACKOFF_PERIODS;
             ESP_LOGW(TAG,
                      "gemini_backend_plan failed (%s) — forcing stop, backing off %" PRIu32
                      " extra period(s)",
-                     esp_err_to_name(ret), backoff_periods);
+                     esp_err_to_name(ret), cycle.backoff_periods);
             goal_state_force_stop();
         }
 
@@ -485,7 +512,8 @@ static void planner_task(void *pvParameters)
          * exactly when the backend is already struggling. Resync on overrun
          * so the pacing holds. */
         if (xTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(PLANNER_LOOP_PERIOD_MS *
-                                                           (1 + backoff_periods))) == pdFALSE) {
+                                                           planner_cycle_wait_periods(&cycle))) ==
+            pdFALSE) {
             vTaskDelay(pdMS_TO_TICKS(PLANNER_LOOP_PERIOD_MS));
             last_wake_time = xTaskGetTickCount();
         }

@@ -11,7 +11,8 @@
 #   _carrier-board-checked, _carrier-review, _carrier-measure, _carrier-fab,
 #   _perfboard, _perfboard-check
 # KiCad-free: _carrier-lib, _carrier-schematic, _perfboard, _perfboard-check.
-# Need KiCad 10.0.6: _carrier-check, _carrier-fab (kicad-cli), _carrier-board, _carrier-silk,
+# Need KiCad 10.0.6: _carrier-check, _carrier-fab (kicad-cli; and the network,
+# for kicad.lcsc), _carrier-board, _carrier-silk,
 # _carrier-route, _carrier-review, _carrier-measure (KiCad's bundled Python;
 # _carrier-measure's `resistance` also uv, for numpy and scipy; _carrier-route and
 # _carrier-board-checked also java >= 25 and the Freerouting 2.5.0 jar,
@@ -41,7 +42,8 @@ _carrier-board project:
     cd {{_kicad_repo}} && {{_kicad_python}} tools/kicad/pcb/build_board.py {{project}}/hardware/carrier/output/board-input.json
 
 # Silkscreen only, on the routed board: board.toml [silk] positions and sizes,
-# and footprint lines cut 0.15 mm back from pads. The copper is left as it is.
+# new texts and module outlines, and footprint lines cut 0.15 mm back from
+# pads. The copper is left as it is.
 _carrier-silk project:
     cd {{_kicad_repo}} && PYTHONPATH=tools python3 -m kicad.boardinput {{project}}
     cd {{_kicad_repo}} && {{_kicad_python}} tools/kicad/pcb/build_board.py --silk-only {{project}}/hardware/carrier/output/board-input.json
@@ -141,7 +143,14 @@ _carrier-measure project *args:
         PYTHONPATH=tools python3 -m kicad.measure "$dumped" "${argv[@]}"
     fi
 
+# kicad.lcsc first (network; cached for a day): an unknown, discontinued or
+# sold-out LCSC part stops the order before anything is exported.
+# kicad.fab refuses uncommitted changes to anything that feeds the board, and
+# writes the commit on the silkscreen of a plotting copy and into every file
+# name (kicad.provenance); CARRIER_FAB_ALLOW_DIRTY=1 exports anyway, with
+# "-dirty" in the file names and "*" for the silk text's space.
 _carrier-fab project:
+    cd {{_kicad_repo}} && PYTHONPATH=tools python3 -m kicad.lcsc --project {{project}}
     cd {{_kicad_repo}} && PYTHONPATH=tools python3 -m kicad.fab {{project}}
 
 # The project's hardware/perfboard/perfboard.toml, laid out from the carrier

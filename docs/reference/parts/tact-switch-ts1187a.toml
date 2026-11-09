@@ -1,0 +1,20 @@
+# 5.1 x 5.1 mm SMD tactile switch, normally open. The footprint has four pads:
+# two numbered 1 and two numbered 2, each pair joined inside the switch, so
+# the symbol's two pins cover them.
+#
+# No `lcsc` yet. JLCPCB stocks it as C318884 (basic, checked 2026-11-07), but
+# LCSC's footprint numbers the pads 1-4 where KiCad's numbers them 1, 1, 2, 2,
+# so kicad.lcsc_rotation cannot match them (and refuses the two-pad --pads
+# match as collinear). By the pad centres, KiCad's pad 1 pair sits where LCSC
+# draws 1 and 2 and KiCad's pad 2 pair where it draws 3 and 4, which reads as
+# rotation 0. Check that by hand, add the rotation entry, then set lcsc.
+[part]
+name = "XKB TS-1187A tactile switch, 5.1 mm SMD"
+source = "KiCad 10.0.6 library (Switch:SW_Push: pins 1 and 2; Button_Switch_SMD:SW_Push_1P1T_XKB_TS-1187A: pads 1, 1, 2, 2, after the XKB TS-1187A datasheet the footprint cites)"
+symbol = "Switch:SW_Push"
+footprint = "Button_Switch_SMD:SW_Push_1P1T_XKB_TS-1187A"
+value = "TS-1187A-B-A-B"
+
+[pins]
+1 = 1
+2 = 2

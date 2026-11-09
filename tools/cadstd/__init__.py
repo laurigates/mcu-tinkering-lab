@@ -1,12 +1,12 @@
-"""cadstd: the shared dimensions of printed parts (ADR-030).
+"""cadstd: the shared dimensions of printed parts (ADR-035).
 
 One source for the numbers every printed part in the repo is built from, so
 parts from different projects fit together:
 
-- `fasteners`: metric screw, nut and head sizes (ISO), with the pilot,
-  clearance and heat-set insert holes printed parts use;
-- `fits`: the named fits (`close`, `slide`, `running`) per print process
-  (`fdm`, `sla`, `mjf`), and `MIN_WALL`;
+- `fasteners`: metric screw, nut and head sizes (ISO), with the pilot and
+  clearance holes printed parts use;
+- `fits`: the named fits (`close`, `slide`, `running`) and heat-set insert
+  holes per print process (`fdm`, `sla`, `mjf`), and `MIN_WALL`;
 - `grid`: the 10 mm mounting grid, its plates and slots;
 - `shapes` (needs build123d): cutters and plates built from the above;
 - `coupon` (needs build123d): the calibration coupon that measures a process.

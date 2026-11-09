@@ -12,10 +12,24 @@
 name = "balancebot-carrier"          # the KiCad project directory and file stem here
 paper = "A3"
 
-# Board outline: a rectangle, origin at its top-left corner. Robot forward is -y.
+# Board outline: a rectangle, origin at its top-left corner. `forward` is the
+# robot's forward direction on the board (y is down, so -y is the top edge);
+# the board is mounted top face up.
 [outline]
 origin = [100.0, 100.0]
 size = [90.0, 62.0]
+forward = "-y"
+
+# The IMU and how the firmware is told it sits. boardcheck derives the
+# sensor's rotation on the robot from J3's placement, `face` and the socket's
+# declared axes (sockets.toml, kicad.mount) and fails unless it is the
+# firmware's `mount` (`mount up|down` on the robot's console). face = "up" is
+# the module component side up in its socket; "down" is turned over about the
+# pin row, as the delivered 8d18cd8d boards need.
+[imu]
+ref = "J3"
+mount = "up"
+face = "up"
 
 # ref = [x_mm, y_mm, rotation_deg], relative to the origin. Footprint anchors are
 # the library's own (pad 1 for the Pololu and JST parts, centre for the XIAO and
@@ -26,8 +40,11 @@ A1 = [14.0, 21.0, 0]     # left DRV8825, motor column toward the left edge
 A2 = [76.0, 38.78, 180]  # right DRV8825, motor column toward the right edge
 J4 = [5.0, 24.0, 270]    # left motor
 J5 = [85.0, 36.0, 90]    # right motor
-J3 = [36.11, 47.0, 90]   # GY-521 socket at the rear edge of its box; the module lies flat,
-                         # component side up, VCC on pin 1 (left), X arrow toward FWD
+# GY-521 socket (Breakout_Sockets:GY521_Socket): pad 1 (VCC) at the left, the
+# pads running +x, and the module's outline toward -y (forward) of the row in
+# the footprint itself, so rotation 0 seats it component side up, X arrow
+# toward FWD. Pads land where the 1x8 socket's did at 90 degrees.
+J3 = [36.11, 47.0, 0]
 J1 = [22.5, 55.5, 180]   # battery, JST-XH 2: BAT+ on pad 1 (right, toward F1)
 F1 = [29.5, 55.5, 0]     # 3 A hold PTC, pack input
 Q1 = [38.0, 55.5, 180]   # reverse-polarity P-MOSFET: tab (drain) toward F1, S/D/G pins east
@@ -45,32 +62,60 @@ H1 = [4.0, 4.0, 0]
 H2 = [86.0, 4.0, 0]
 H3 = [4.0, 58.0, 0]
 H4 = [86.0, 58.0, 0]
+# rev3 (Lauri, 2026-11-06). The expansion header in the empty front-left block,
+# 5V at the west end, D1 at the east end, toward its series resistors R5 and R6
+# beside U1's D1 and D2 pins (pad 1, U1's side, east).
+J6 = [16.0, 8.0, 90]     # EXP: 5V, GND, D2, D1 from the west
+R5 = [33.6, 9.6, 180]    # D1 series, 1k
+R6 = [33.6, 12.2, 180]   # D2 series, 1k
+# J6's 5V back-feed diode (Lauri, 2026-11-06): B5819W above J6's 5V end,
+# cathode (pad 1) west toward J6:1, anode east toward U1's 5V pin.
+D3 = [19.0, 4.6, 0]
+# The drivers' pin-2 VIO links, between each socket's rows: pad 1 toward pin 2,
+# pad 2 toward the 3V3 strap at pin 14. Under the module once it is fitted;
+# the .kicad_dru excuses the courtyard overlap with its own driver only.
+R7 = [18.6, 24.8, 0]
+R8 = [71.4, 35.0, 180]
+J7 = [58.0, 45.0, 90]    # Qwiic-order I2C tap, GND at the west end, east of J3
+J8 = [81.5, 41.84, 0]    # supply test header 3V3 G 5V G VBAT, 3V3 at the top; VBAT (pin 5) sits on the trunk
+J9 = [52.0, 56.5, 90]    # ground post
 
 [silk]
 # Reference designators that sit on the board edge and carry no assembly
 # information (the holes are self-evident; J1 is labelled by the +/- texts below).
-hidden_refs = ["H1", "H2", "H3", "H4", "J1"]
+hidden_refs = ["H1", "H2", "H3", "H4", "J1", "J9"]
 # Moved off the library default where it lands on a neighbour's silkscreen.
-ref_positions = { J3 = [57.0, 47.0], J4 = [5.0, 19.8], J2 = [72.5, 57.0], R4 = [48.6, 59.0] }
+ref_positions = { J3 = [56.6, 50.0], J4 = [5.0, 19.8], J2 = [72.5, 57.0], R4 = [48.6, 59.0], R5 = [30.4, 9.6], R6 = [30.4, 12.2], R7 = [18.6, 26.6], R8 = [71.4, 36.8], J7 = [68.0, 45.0] }
 # Seeed's reference text is below KiCad's minimum silkscreen height.
 ref_sizes = { U1 = 1.0 }
-# Where the GY-521 lies flat on its socket (21 x 16 mm), so nothing tall goes under it.
-rects = [[34.5, 31.5, 55.5, 48.5]]
+# The GY-521's outline on F.SilkS, drawn from J3's footprint (its F.Fab), so
+# the builder sees which side of the row the module lies on (pcb-reviewer S1
+# on #1015).
+module_outlines = ["J3"]
 texts = [
     { text = "balancebot carrier", at = [48.0, 60.8], size = 1.0 },
     { text = "FWD ^", at = [45.0, 28.0], size = 1.2 },
-    { text = "GY-521: X arrow to FWD", at = [45.0, 30.0], size = 1.0 },
+    # J3's GY-521 fits its 1x8 socket three wrong ways: turned 180 degrees or
+    # flipped end to end (VCC onto INT), or face down across the row (right
+    # pins, the module behind the row, X and Z inverted: the 8d18cd8d board).
+    # The module outline on the silkscreen ([silk] module_outlines), the arrow
+    # note and the row-end pin names answer them. `for` names the socket a
+    # text marks (kicad.orientation); VCC sits left of pad 1, not below it,
+    # to stay clear of carrier-fab's provenance text at [44.0, 50.2].
+    { text = "GY-521: X arrow to FWD", at = [45.0, 30.0], size = 1.0, for = "J3" },
+    { text = "VCC", at = [32.6, 47.0], size = 1.0, for = "J3" },
+    { text = "INT", at = [53.89, 49.7], size = 1.0, for = "J3" },
     { text = "+", at = [22.5, 59.6], size = 1.2 },
     { text = "-", at = [20.0, 59.6], size = 1.2 },
     # A Pololu-format driver fits its socket turned 180 degrees (two 1x8 rows
     # 12.7 mm apart): mark the VMOT, EN and DIR ends to match the module's own
     # pin labels (pre-order review S1).
-    { text = "VMOT", at = [9.0, 37.4], size = 1.0 },
-    { text = "EN", at = [26.7, 41.2], size = 1.0 },
-    { text = "DIR", at = [26.7, 18.6], size = 1.0 },
-    { text = "VMOT", at = [76.0, 18.6], size = 1.0 },
-    { text = "EN", at = [63.3, 18.6], size = 1.0 },
-    { text = "DIR", at = [63.3, 41.2], size = 1.0 },
+    { text = "VMOT", at = [9.0, 37.4], size = 1.0, for = "A1" },
+    { text = "EN", at = [26.7, 41.2], size = 1.0, for = "A1" },
+    { text = "DIR", at = [26.7, 18.6], size = 1.0, for = "A1" },
+    { text = "VMOT", at = [76.0, 18.6], size = 1.0, for = "A2" },
+    { text = "EN", at = [63.3, 18.6], size = 1.0, for = "A2" },
+    { text = "DIR", at = [63.3, 41.2], size = 1.0, for = "A2" },
     # The buck lead's pins (registry lm2596-buck-module: IN+, IN-, OUT+, OUT-)
     # and the motor coils (nema17-stepper: A1, A2, B1, B2), by their pads (S3).
     { text = "IN+", at = [60.0, 52.3], size = 1.0 },
@@ -90,6 +135,27 @@ texts = [
     { text = "+", at = [3.8, 44.0], size = 1.2 },
     { text = "+", at = [71.8, 14.0], size = 1.2 },
     { text = "K", at = [67.4, 50.0], size = 1.2 },
+    { text = "K", at = [15.4, 4.6], size = 1.2 },     # D3's cathode (pad 1, J6's 5V)
+    # rev3: the board revision beside the title, the divider's range by J1,
+    # and each new header's pins by its pads.
+    { text = "rev3 2026-11", at = [30.5, 60.8], size = 1.0 },
+    { text = "3S (4S max)", at = [12.8, 59.6], size = 1.0 },
+    { text = "5V", at = [16.0, 10.2], size = 1.0 },
+    { text = "G", at = [18.54, 10.2], size = 1.0 },
+    { text = "TX", at = [21.08, 10.2], size = 1.0 },
+    { text = "RX", at = [23.62, 10.2], size = 1.0 },
+    { text = "VIO", at = [18.6, 23.0], size = 1.0 },
+    { text = "VIO", at = [71.4, 33.2], size = 1.0 },
+    { text = "G", at = [58.0, 47.1], size = 1.0 },
+    { text = "3V3", at = [60.54, 42.9], size = 1.0 },
+    { text = "SDA", at = [63.08, 47.1], size = 1.0 },
+    { text = "SCL", at = [65.62, 42.9], size = 1.0 },
+    { text = "3V3", at = [84.3, 41.84], size = 1.0 },
+    { text = "G", at = [83.7, 44.38], size = 1.0 },
+    { text = "5V", at = [84.0, 46.92], size = 1.0 },
+    { text = "G", at = [83.7, 49.46], size = 1.0 },
+    { text = "VBAT", at = [84.7, 52.0], size = 1.0 },
+    { text = "GND", at = [53.27, 58.6], size = 1.0 },
 ]
 
 # Fixed tracks: build_board.py lays them down locked; route_board.py walls
@@ -193,15 +259,51 @@ layer = "F.Cu"
 width_mm = 1.0
 points = [[61.0, 4.0], [61.0, 2.3], [73.0, 2.3], [75.05, 4.35], [75.05, 14.0]]
 
+# rev3: the trunk passes through the supply test header's VBAT pin (J8:5),
+# so it is two tracks, each ending on a pad as [[tracks]] requires.
 [[tracks]]
-name = "VBAT trunk, C2 to J2"
+name = "VBAT trunk, C2 to J8"
 net = "VBAT"
 layer = "F.Cu"
 width_mm = 1.5
-points = [
-    [75.05, 14.0], [75.05, 9.0], [88.6, 9.0], [88.6, 52.0], [74.6, 52.0],
-    [74.6, 60.6], [60.0, 60.6], [60.0, 56.0],
-]
+points = [[75.05, 14.0], [75.05, 9.0], [88.6, 9.0], [88.6, 52.0], [81.5, 52.0]]
+
+[[tracks]]
+name = "VBAT trunk, J8 to J2"
+net = "VBAT"
+layer = "F.Cu"
+width_mm = 1.5
+points = [[81.5, 52.0], [74.6, 52.0], [74.6, 60.6], [60.0, 60.6], [60.0, 56.0]]
+
+# rev3: each driver's VIO link on F.Cu, pin 2 to the link and the link to the
+# 3V3 strap at pin 14, so neither crosses the B.Cu ground beside pin 2.
+[[tracks]]
+name = "A1 pin 2 to its VIO link"
+net = "VIO_L"
+layer = "F.Cu"
+width_mm = 0.3
+points = [[14.0, 23.54], [17.5625, 24.8]]
+
+[[tracks]]
+name = "left VIO link to A1's 3V3 strap"
+net = "+3V3"
+layer = "F.Cu"
+width_mm = 0.5
+points = [[19.6375, 24.8], [26.7, 26.08]]
+
+[[tracks]]
+name = "A2 pin 2 to its VIO link"
+net = "VIO_R"
+layer = "F.Cu"
+width_mm = 0.3
+points = [[76.0, 36.24], [72.4375, 35.0]]
+
+[[tracks]]
+name = "right VIO link to A2's 3V3 strap"
+net = "+3V3"
+layer = "F.Cu"
+width_mm = 0.5
+points = [[70.3625, 35.0], [63.3, 33.7]]
 
 # Freerouting width classes, in this order. `nets` are net names or fnmatch
 # patterns over them; every pattern must match, and no net may be in two classes.
@@ -214,7 +316,7 @@ via_um = [1000, 500]
 
 [[net_classes]]
 name = "logic_power"
-nets = ["+3V3", "BUCK_5V", "XIAO_5V"]
+nets = ["+3V3", "BUCK_5V", "XIAO_5V", "EXP_5V"]
 track_um = 500
 clearance_um = 250
 via_um = [800, 400]
@@ -254,3 +356,15 @@ via_um = [1000, 500]
 track_um = 500
 reach_mm = 2.5
 required = ["C1:2", "C2:2"]
+
+# Where carrier-fab writes the commit on F.SilkS: `<sha7> <pcb8>`, the git
+# commit and the first 8 hex digits of the check stamp's board_sha256, so the
+# Gerber viewer and the delivered board both say which upload was built
+# (kicad.provenance; JLCPCB built a stale cart upload on 2026-10-23). It goes
+# on a plotting copy only; the committed board and stamp stay as they are.
+# The strip beside "rev3 2026-11" has no 15 mm free between J1's labels, the
+# title and J2's outline, so it sits below J3's pins, between the GY-521
+# outline and Q1/D2; carrier-fab fails if DRC finds it on a pad or a line.
+[fab]
+provenance_at = [44.0, 50.2]
+provenance_size = 1.0

@@ -24,6 +24,12 @@ the KiCad symbol's pin numbers, and names the symbol and footprint:
     height    = "low"              # "low" | "raised" | "tall"
     body      = [x0, y0, x1, y1]   # outline in holes from pin 1; default F.CrtYd
 
+    [stock]                        # optional; read by kicad.stock (the parts-stock report)
+    mpn      = "ZXMP4A16GTA"       # a branded part: matched by the item's own mpn, or
+    category = "capacitor"         # a generic part: an inventory category, plus
+    package  = "0805"              # the package; the instance value picks the item
+    needs    = ["voltage"]         # spec names an item must state to count as on hand
+
 `load` parses and type-checks an entry; `validate` checks it against the
 vendored library: every symbol pin mapped exactly once and a pad of the
 footprint, a supported (single-unit, no De Morgan, no hidden power) symbol, and
@@ -56,7 +62,7 @@ from .errors import KicadError
 from .paths import REPO_ROOT
 
 REGISTRY_REL = Path("docs/reference/parts")
-TABLES = frozenset({"part", "pins", "perfboard"})
+TABLES = frozenset({"part", "pins", "perfboard", "stock"})
 PART_KEYS = frozenset(
     {
         "name",
@@ -71,6 +77,25 @@ PART_KEYS = frozenset(
     }
 )
 PERFBOARD_KEYS = frozenset({"footprint", "value", "height", "body"})
+STOCK_KEYS = frozenset({"mpn", "category", "package", "needs"})
+# The inventory's item categories, copied from parts-stock/inv/schema.py
+# (CATEGORIES, schema v1), a separate repo; keep the two in step.
+STOCK_CATEGORIES = (
+    "resistor",
+    "capacitor",
+    "inductor",
+    "diode",
+    "transistor",
+    "ic",
+    "module",
+    "connector",
+    "wire",
+    "mechanical",
+    "consumable",
+    "tool",
+    "board",
+    "other",
+)
 HEIGHTS = ("low", "raised", "tall")
 PIN_NUMBERINGS = ("board-dip-ccw",)
 # Symbols whose polarity is in the graphic, not in a pin name.
@@ -91,6 +116,19 @@ class PerfboardSpec:
 
 
 @dataclass(frozen=True)
+class StockSpec:
+    """How kicad.stock finds the part in the parts-stock inventory.
+
+    Exactly one form: `mpn` (branded), or `category` and `package` (generic).
+    """
+
+    mpn: str  # "" for a generic part
+    category: str  # "" for an mpn part; else one of STOCK_CATEGORIES
+    package: str  # "" for an mpn part
+    needs: tuple[str, ...]  # spec names a matched item must state
+
+
+@dataclass(frozen=True)
 class PartSpec:
     slug: str
     path: Path
@@ -107,6 +145,7 @@ class PartSpec:
         str, tuple[str, ...]
     ]  # pin name -> symbol pin numbers; {} with pin_numbers
     perfboard: PerfboardSpec
+    stock: StockSpec | None = None  # None: the entry has no [stock] table
 
 
 def entry_path(slug: str, repo_root: Path = REPO_ROOT) -> Path:
@@ -193,6 +232,7 @@ def parse(data: dict[str, Any], slug: str, path: Path) -> PartSpec:
         pin_numbers=pin_numbers,
         pins=pins,
         perfboard=_perfboard(path, data.get("perfboard", {}), footprint),
+        stock=_stock(path, data["stock"]) if "stock" in data else None,
     )
 
 
@@ -281,6 +321,28 @@ def _perfboard(path: Path, table: Any, footprint: str) -> PerfboardSpec:
     return PerfboardSpec(
         footprint=fp, value=_string(where, table, "value"), height=height, body=body
     )
+
+
+def _stock(path: Path, table: Any) -> StockSpec:
+    _keys(path, "[stock]", table, STOCK_KEYS)
+    where = f"{path} [stock]"
+    mpn = _string(where, table, "mpn")
+    category = _string(where, table, "category")
+    package = _string(where, table, "package")
+    if mpn and (category or package):
+        raise KicadError(f"{where}: give mpn, or category and package, not both forms")
+    if not mpn and not (category and package):
+        raise KicadError(f"{where}: needs mpn, or both category and package")
+    if category and category not in STOCK_CATEGORIES:
+        raise KicadError(
+            f"{where}: category {category!r}; allowed: {list(STOCK_CATEGORIES)}"
+        )
+    needs = table.get("needs", [])
+    if not isinstance(needs, list) or not all(isinstance(n, str) and n for n in needs):
+        raise KicadError(f"{where}: needs must be a list of spec names, got {needs!r}")
+    if len(set(needs)) != len(needs):
+        raise KicadError(f"{where}: needs lists a spec twice: {needs}")
+    return StockSpec(mpn=mpn, category=category, package=package, needs=tuple(needs))
 
 
 def validate(spec: PartSpec, vendored: Path = library.VENDORED) -> None:

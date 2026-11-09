@@ -17,6 +17,10 @@
  *   left   = (heading_deg < 0) ? base - bias : base
  *   dir    = 1 (forward)
  *
+ * Past ±90 the robot reverses (dir = 0) with the heading mirrored into ±90
+ * (heading' = ±180 - heading), matching the drive tool's "180 = backward":
+ * 180 backs straight up, 135 backs up curving right (issue #1025).
+ *
  * This is intentionally simple.  A full heading-hold loop requires odometry
  * or a compass — neither is available in this phase.  The planner is expected
  * to keep re-issuing updated heading_deg goals as the scene changes.
@@ -39,8 +43,11 @@
  *
  * Obstacle reflex
  * ---------------
- * If a single front reading < STOP_THRESHOLD_CM, motors are braked and
- * reflex_active is latched. The rear sensor never trips it. The latch clears
+ * If a single front reading < STOP_THRESHOLD_CM, reflex_active is latched and
+ * every wheel command with a forward component is braked; reversing and
+ * turning in place still run, so the robot can get itself out (#1026). The
+ * rear sensor never trips the reflex; it holds a reverse the same way
+ * (apply_wheels(), wheels_held_by_rangers()). The latch clears
  * automatically once the latest reading and the running mean are both back at
  * or above STOP_THRESHOLD_CM; no planner intervention is required. Tripping on
  * one reading rather than on the mean is what keeps the I2C read's ~165 ms
@@ -48,6 +55,17 @@
  * REACTIVE_REFLEX_WORST_CASE_MS in reactive_controller.h.
  * The reflex is logged once on entry and once on exit to avoid log spam.
  * The head keeps aiming through a reflex — it cannot hit anything.
+ *
+ * Cliff reflex
+ * ------------
+ * Two downward floor sensors, front and rear (cliff_sensor.c, decisions in
+ * cliff_core.c). A sensor that loses the floor brakes the robot, then backs it
+ * away from the edge if the other side has floor. While a sensor sees no floor,
+ * any wheel command moving toward it (manual or planner) is replaced by a
+ * brake. It ranks above the obstacle reflex: a front edge reverses even with an
+ * obstacle ahead, and a rear edge never pulls forward into one. Without an
+ * MCP23017, or after `cliff off`, it is disarmed and nothing is filtered.
+ * docs/firmware/cliff-sensors.md has the wiring and the bench checks.
  *
  * Stack high-water-mark
  * ---------------------
@@ -59,6 +77,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "cliff_core.h"
+#include "cliff_sensor.h"
 #include "goal_state.h"
 #include "head_aim.h"
 #include "idle_gaze.h"
@@ -117,6 +137,20 @@ bool reactive_controller_gaze_enabled(void)
     return s_gaze_enabled;
 }
 
+/** Pre-OTA hold: the wheels coast every tick and nothing else moves them. A
+ *  bool any task may write, read once per tick, like the gaze switch. */
+static volatile bool s_hold = false;
+
+void reactive_controller_set_hold(bool on)
+{
+    s_hold = on;
+}
+
+bool reactive_controller_hold_active(void)
+{
+    return s_hold;
+}
+
 const char *reactive_head_mode_name(reactive_head_mode_t mode)
 {
     switch (mode) {
@@ -165,10 +199,26 @@ static int16_t clamp_i16(int32_t v, int16_t lo, int16_t hi)
  * planner emits a new goal.  Closed-loop distance requires odometry, which is
  * not available in this phase.
  */
+/** Past ±90 a drive goal means backward (the drive tool says 180 = backward).
+ *  The one place that rule lives: execute_drive() and goal_motion() both ask. */
+static bool drive_reverses(int16_t body_heading)
+{
+    return body_heading > 90 || body_heading < -90;
+}
+
 static void execute_drive(const goal_t *goal)
 {
     int16_t heading = head_aim_body_heading(goal->params.drive.heading_deg, goal->head_pan_deg);
     uint8_t speed_pct = goal->params.drive.speed_pct;
+
+    /* Reverse both wheels and mirror the heading into ±90, so 135 (back and
+     * to the right) slows the right wheel exactly as a forward 45 does.
+     * Issue #1025. */
+    uint8_t dir = 1;
+    if (drive_reverses(heading)) {
+        dir = 0;
+        heading = (int16_t)(heading > 0 ? 180 - heading : -180 - heading);
+    }
 
     int32_t base = (int32_t)speed_pct * 255 / 100;
     int32_t bias = (int32_t)abs(heading) * base / 180;
@@ -187,7 +237,7 @@ static void execute_drive(const goal_t *goal)
         right = base;
     }
 
-    motor_set_individual(clamp_u8(left), clamp_u8(right), 1, 1);
+    motor_set_individual(clamp_u8(left), clamp_u8(right), dir, dir);
 }
 
 /**
@@ -438,7 +488,7 @@ static void execute_goal(const goal_t *goal, bool fresh, reactive_head_mode_t he
 }
 
 /* -------------------------------------------------------------------------
- * Rangefinders — front (reflex) and rear (telemetry)
+ * Rangefinders — front (reflex) and rear (holds a reverse; telemetry)
  * -------------------------------------------------------------------------
  * A read completes over several ticks, so only READY and ERROR results move
  * anything here; PENDING ticks leave every field as it was.
@@ -546,6 +596,241 @@ static uint8_t rangers_tick(rangers_t *r, uint32_t now_ms)
     return changed;
 }
 
+/* -------------------------------------------------------------------------
+ * Cliff reflex — front and rear floor sensors (cliff_core.h)
+ * ---------------------------------------------------------------------- */
+
+/** Executor-private. Touched only by the executor tick and init. */
+static cliff_t s_cliff;
+/** Whether the last tick ran the reflex: enabled and the sensors present. */
+static bool s_cliff_armed = false;
+/** `cliff on|off`; a bool any task may write, read once per tick. Boot value:
+ * CLIFF_REFLEX_AT_BOOT (cliff_sensor.h). */
+static volatile bool s_cliff_enabled = CLIFF_REFLEX_AT_BOOT;
+
+void reactive_controller_set_cliff(bool on)
+{
+    s_cliff_enabled = on;
+}
+
+bool reactive_controller_cliff_enabled(void)
+{
+    return s_cliff_enabled;
+}
+
+/**
+ * Poll the floor sensors and run one reflex step.
+ *
+ * Arming (enable, or sensors appearing) resets the state, which starts as "no
+ * floor" on both sides: the robot holds still until the floor is confirmed, and
+ * arming is never mistaken for an edge.
+ */
+static cliff_action_t cliff_tick(uint32_t now_ms, bool obstacle_ahead)
+{
+    const bool armed = s_cliff_enabled && cliff_sensor_available();
+    if (!armed) {
+        s_cliff_armed = false;
+        return CLIFF_ACT_NONE;
+    }
+    if (!s_cliff_armed) {
+        const uint32_t trips = s_cliff.trips; /* a count since boot, kept over re-arming */
+        cliff_reset(&s_cliff);
+        s_cliff.trips = trips;
+        s_cliff_armed = true;
+    }
+    cliff_sample_t sample;
+    cliff_sensor_read(&sample);
+    return cliff_step(&s_cliff, &sample, now_ms, obstacle_ahead);
+}
+
+/** Whether the floor sensors allow a motion; always true while disarmed. */
+static bool cliff_allows(cliff_motion_t m)
+{
+    return !s_cliff_armed || cliff_permits(&s_cliff, m);
+}
+
+/** Whether something is too close behind to reverse into. A failed or absent
+ *  rear sensor reads as clear: reversing then is blind, as it always was. */
+static bool rangers_rear_blocked(const rangers_t *r)
+{
+    return r->rear_cm != ULTRASONIC_DIST_ERROR && r->rear_cm < STOP_THRESHOLD_CM;
+}
+
+/* -------------------------------------------------------------------------
+ * Wheel arbitration — which way the commanded motion moves the robot, and
+ * whether a rangefinder holds it (issue #1026)
+ * -------------------------------------------------------------------------
+ * The front reflex used to brake every wheel command, so a robot with
+ * something in front of it could neither back out nor turn away. Now it holds
+ * only motion with a forward component; turning in place and reversing get
+ * out, and the rear sensor holds a reverse the same way.
+ */
+
+typedef enum {
+    WHEELS_NONE,  /**< stopped or coasting */
+    WHEELS_AHEAD, /**< any forward component: straight, arc or pivot */
+    WHEELS_BACK,  /**< any backward component */
+    WHEELS_SPIN,  /**< turning in place, wheels opposite */
+} wheels_motion_t;
+
+static wheels_motion_t manual_motion(reactive_manual_cmd_t cmd)
+{
+    switch (cmd) {
+        case REACTIVE_MANUAL_FORWARD:
+        case REACTIVE_MANUAL_LEFT: /* motor_turn_*: both wheels forward */
+        case REACTIVE_MANUAL_RIGHT:
+            return WHEELS_AHEAD;
+        case REACTIVE_MANUAL_BACKWARD:
+            return WHEELS_BACK;
+        case REACTIVE_MANUAL_ROTATE_CW:
+        case REACTIVE_MANUAL_ROTATE_CCW:
+            return WHEELS_SPIN;
+        case REACTIVE_MANUAL_STOP:
+        default:
+            return WHEELS_NONE;
+    }
+}
+
+/** The motion execute_goal() would command for this goal. */
+static wheels_motion_t goal_motion(const goal_t *goal, bool fresh, reactive_head_mode_t head_mode,
+                                   head_body_t body)
+{
+    if (!fresh) {
+        return WHEELS_NONE;
+    }
+    switch (goal->kind) {
+        case GOAL_KIND_DRIVE:
+            if (goal->params.drive.speed_pct == 0) {
+                return WHEELS_NONE;
+            }
+            return drive_reverses(
+                       head_aim_body_heading(goal->params.drive.heading_deg, goal->head_pan_deg))
+                       ? WHEELS_BACK
+                       : WHEELS_AHEAD;
+        case GOAL_KIND_TRACK:
+            if (head_mode == REACTIVE_HEAD_AIM || head_mode == REACTIVE_HEAD_TURN) {
+                if (body == HEAD_BODY_TURN_CW || body == HEAD_BODY_TURN_CCW) {
+                    return WHEELS_SPIN;
+                }
+                return goal->params.track.max_speed_pct == 0 ? WHEELS_NONE : WHEELS_AHEAD;
+            }
+            return WHEELS_AHEAD; /* wheel-only servo always creeps forward */
+        case GOAL_KIND_ROTATE:
+            return WHEELS_SPIN;
+        default:
+            return WHEELS_NONE;
+    }
+}
+
+/** Whether a rangefinder holds this motion. A stopped robot under the front
+ *  reflex counts as held, so it brakes rather than coasts toward the obstacle.
+ *  A turn in place runs unless the robot is boxed in front and behind: its
+ *  corners sweep both ways as it turns, and the clearance is unmeasured. */
+static bool wheels_held_by_rangers(wheels_motion_t motion, bool front_reflex, bool rear_blocked)
+{
+    if (front_reflex && (motion == WHEELS_AHEAD || motion == WHEELS_NONE)) {
+        return true;
+    }
+    if (front_reflex && rear_blocked && motion == WHEELS_SPIN) {
+        return true;
+    }
+    return rear_blocked && motion == WHEELS_BACK;
+}
+
+/** The floor sensors' name for a wheel motion. */
+static cliff_motion_t wheels_cliff_motion(wheels_motion_t motion)
+{
+    switch (motion) {
+        case WHEELS_AHEAD:
+            return CLIFF_MOTION_FORWARD;
+        case WHEELS_BACK:
+            return CLIFF_MOTION_BACKWARD;
+        case WHEELS_SPIN:
+            return CLIFF_MOTION_ROTATE;
+        case WHEELS_NONE:
+        default:
+            return CLIFF_MOTION_NONE;
+    }
+}
+
+/** What the wheel layers above the planner asked for this tick. */
+typedef struct {
+    bool held;            /**< Pre-OTA hold.                       */
+    cliff_action_t cliff; /**< The cliff reflex's own action.      */
+    bool front_reflex;    /**< Front obstacle reflex.              */
+    bool rear_blocked;    /**< Something close behind.             */
+    bool manual_active;   /**< A manual lease is live.             */
+    reactive_manual_cmd_t mcmd;
+    uint8_t mspeed;
+} wheel_layers_t;
+
+/**
+ * Step 6 of the executor, shared by reactive_task() and the host-test tick so
+ * the two cannot drift. Order: the OTA hold, the cliff reflex, the
+ * rangefinders, the floor sensors' refusal, then the manual lease or the
+ * planner's goal. Returns the motion that was asked for (WHEELS_NONE under
+ * the hold); *braked is set when a rangefinder held it (the horn needs both),
+ * *cliff_refused when the floor sensors refused it.
+ */
+static wheels_motion_t apply_wheels(const wheel_layers_t *w, const goal_t *goal, bool fresh,
+                                    reactive_head_mode_t head_mode, head_body_t body, bool *braked,
+                                    bool *cliff_refused)
+{
+    *braked = false;
+    *cliff_refused = false;
+    if (w->held) {
+        /* Before everything else, the reflexes included: the robot is parked
+         * for an OTA install and must not move again until the hold is
+         * released or the board reboots. Coast, so the outputs are low when
+         * the PCA9685 rides through the reset. */
+        motor_stop();
+        return WHEELS_NONE;
+    }
+    const wheels_motion_t motion =
+        w->manual_active ? manual_motion(w->mcmd) : goal_motion(goal, fresh, head_mode, body);
+    switch (w->cliff) {
+        case CLIFF_ACT_BRAKE:
+            motor_brake();
+            return motion;
+        case CLIFF_ACT_REVERSE:
+            motor_move_backward(CLIFF_BACKOFF_SPEED);
+            return motion;
+        case CLIFF_ACT_FORWARD:
+            motor_move_forward(CLIFF_BACKOFF_SPEED);
+            return motion;
+        case CLIFF_ACT_NONE:
+        default:
+            break;
+    }
+    if (wheels_held_by_rangers(motion, w->front_reflex, w->rear_blocked)) {
+        /* Brake, not coast. Stopping distance matters here, and motor_stop()
+         * leaves the outputs high-impedance so the robot rolls into whatever
+         * tripped the reflex. Plain stops elsewhere stay a coast — see
+         * motor_brake(). */
+        motor_brake();
+        *braked = true;
+    } else if (!cliff_allows(wheels_cliff_motion(motion))) {
+        /* Toward an edge: brake, for the same reason as the reflexes. */
+        motor_brake();
+        *cliff_refused = true;
+    } else if (w->manual_active) {
+        execute_manual(w->mcmd, w->mspeed);
+    } else {
+        execute_goal(goal, fresh, head_mode, body);
+    }
+    return motion;
+}
+
+/** Copy the cliff state into telemetry; caller holds whatever lock it needs. */
+static void cliff_telemetry(reactive_telemetry_t *t, cliff_action_t act, bool refused)
+{
+    t->cliff_armed = s_cliff_armed;
+    t->cliff_front = s_cliff_armed && s_cliff.cliff[CLIFF_FRONT];
+    t->cliff_rear = s_cliff_armed && s_cliff.cliff[CLIFF_REAR];
+    t->cliff_active = s_cliff_armed && (act != CLIFF_ACT_NONE || refused);
+    t->cliff_trips = s_cliff.trips;
+}
+
 #ifndef REACTIVE_CONTROLLER_HOST_TEST
 
 #include <math.h>
@@ -557,9 +842,14 @@ static uint8_t rangers_tick(rangers_t *r, uint32_t now_ms)
 #include "freertos/FreeRTOS.h"
 #include "freertos/portmacro.h"
 #include "freertos/task.h"
+#include "sound_clips.h"
 #include "voice_turn.h"
 
 static const char *TAG = "reactive_ctrl";
+
+/* The reflex horn's cooldown state; only the executor task touches it. */
+static uint32_t s_reflex_honk_ms = 0;
+static bool s_reflex_honked = false;
 
 /* -------------------------------------------------------------------------
  * Module state
@@ -653,8 +943,9 @@ static void reactive_task(void *arg)
 
         /* ---- 2. Obstacle reflex ---- */
         const bool reflex = rangers_reflex(&s_rangers);
+        const bool reflex_tripped = reflex && !reflex_was_active;
 
-        if (reflex && !reflex_was_active) {
+        if (reflex_tripped) {
             ESP_LOGW(TAG, "Obstacle reflex ACTIVE — reading %u cm, mean %u cm (threshold %u cm)",
                      s_rangers.front_last_cm, dist, STOP_THRESHOLD_CM);
         } else if (!reflex && reflex_was_active) {
@@ -664,6 +955,20 @@ static void reactive_task(void *arg)
         reflex_was_active = reflex;
 
         const int64_t now_us = esp_timer_get_time();
+
+        /* ---- 2b. Cliff reflex ---- */
+        const uint32_t cliff_trips_before = s_cliff.trips;
+        const bool cliff_was_armed = s_cliff_armed;
+        const cliff_action_t cliff_act = cliff_tick((uint32_t)(now_us / 1000), reflex);
+        const bool cliff_tripped = s_cliff.trips != cliff_trips_before;
+        if (cliff_tripped) {
+            ESP_LOGW(TAG, "Cliff reflex ACTIVE — %s sensor lost the floor (front %s, rear %s)",
+                     cliff_name(s_cliff.trigger), s_cliff.cliff[CLIFF_FRONT] ? "no floor" : "floor",
+                     s_cliff.cliff[CLIFF_REAR] ? "no floor" : "floor");
+        }
+        if (s_cliff_armed != cliff_was_armed) {
+            ESP_LOGI(TAG, "Cliff reflex %s", s_cliff_armed ? "armed" : "disarmed");
+        }
 
         /* ---- 3. Manual override lease (console / bench) ---- */
         reactive_manual_cmd_t mcmd;
@@ -697,7 +1002,9 @@ static void reactive_task(void *arg)
 
         head_body_t body = HEAD_BODY_HOLD;
         const reactive_head_mode_t head_mode =
-            execute_head(&lease, &goal, fresh, goal_seq, !reflex && !manual_active,
+            execute_head(&lease, &goal, fresh, goal_seq,
+                         !reflex && !manual_active && cliff_act == CLIFF_ACT_NONE &&
+                             cliff_allows(CLIFF_MOTION_ROTATE),
                          (uint32_t)(now_us / 1000), &body);
         if (head_mode != head_mode_was) {
             ESP_LOGD(TAG, "Head: %s -> %s", reactive_head_mode_name(head_mode_was),
@@ -706,19 +1013,38 @@ static void reactive_task(void *arg)
         }
 
         /* ---- 6. Wheels ----
-         * Reflex first, then the manual lease: a manual command must not be able
-         * to drive into an obstacle, and the lease expires on its own so the
-         * planner resumes without an explicit hand-back. */
-        if (reflex) {
-            /* Brake, not coast. This is the one path where stopping distance
-             * matters, and motor_stop() leaves the outputs high-impedance so
-             * the robot rolls into whatever tripped the reflex. Every other
-             * stop in this loop stays a coast — see motor_brake(). */
-            motor_brake();
-        } else if (manual_active) {
-            execute_manual(mcmd, mspeed);
-        } else {
-            execute_goal(&goal, fresh, head_mode, body);
+         * Rangefinders first, then the manual lease: a manual command must not
+         * be able to drive into an obstacle, and the lease expires on its own
+         * so the planner resumes without an explicit hand-back. The front
+         * reflex holds only motion toward the obstacle (#1026). */
+        const bool held = s_hold;
+        const wheel_layers_t layers = {
+            .held = held,
+            .cliff = cliff_act,
+            .front_reflex = reflex,
+            .rear_blocked = rangers_rear_blocked(&s_rangers),
+            .manual_active = manual_active,
+            .mcmd = mcmd,
+            .mspeed = mspeed,
+        };
+        bool braked = false;
+        bool cliff_refused = false;
+        const wheels_motion_t motion =
+            apply_wheels(&layers, &goal, fresh, head_mode, body, &braked, &cliff_refused);
+
+        /* ---- 6b. Polite horn when a reflex stops a drive ----
+         * Only when a reflex is holding back motion somebody asked for (a
+         * robot standing still does not honk at whoever walks up), and not
+         * more than once per SOUND_REFLEX_COOLDOWN_MS. A request flag, not
+         * speech_queue_post(): this task has under 1 kB of stack headroom. */
+        if (reflex_tripped || cliff_tripped) {
+            const bool blocking = motion != WHEELS_NONE && (braked || cliff_tripped);
+            const uint32_t now_ms = (uint32_t)(now_us / 1000);
+            if (sound_clips_reflex_due(now_ms, s_reflex_honk_ms, s_reflex_honked, blocking)) {
+                sound_clips_request(SOUND_CLIP_HORN);
+                s_reflex_honk_ms = now_ms;
+                s_reflex_honked = true;
+            }
         }
 
         /* ---- 7. Telemetry ---- */
@@ -743,17 +1069,22 @@ static void reactive_task(void *arg)
 
         portENTER_CRITICAL(&s_telem_mux);
         s_telemetry.distance_cm = dist;
+        if (reflex && !s_telemetry.reflex_active) {
+            s_telemetry.reflex_trips++;
+        }
         s_telemetry.reflex_active = reflex;
         if (measured_hz > 0) {
             s_telemetry.loop_hz = measured_hz;
         }
         s_telemetry.stack_high_water = hwm;
-        s_telemetry.manual_active = manual_active && !reflex;
+        s_telemetry.manual_active = manual_active && !braked;
         s_telemetry.sensor_failed = s_rangers.failed[ULTRASONIC_FRONT];
         s_telemetry.head_mode = head_mode;
         s_telemetry.distance_rear_cm = s_rangers.rear_cm;
         s_telemetry.rear_failed = s_rangers.failed[ULTRASONIC_REAR];
         s_telemetry.head_settled = s_head_settled;
+        s_telemetry.held = held;
+        cliff_telemetry(&s_telemetry, cliff_act, cliff_refused);
         portEXIT_CRITICAL(&s_telem_mux);
 
         /* ---- 8. Wait for next period ----
@@ -805,6 +1136,7 @@ esp_err_t reactive_controller_init(void)
     head_aim_reset(&s_head_aim);
     idle_gaze_init(&s_gaze, gaze_rng, NULL);
     s_head_settled = false;
+    s_hold = false;
 
     s_running = true;
 
@@ -1094,6 +1426,8 @@ void reactive_controller_tick_for_test(void)
 
     const bool reflex = rangers_reflex(&s_rangers);
 
+    const cliff_action_t cliff_act = cliff_tick(s_ticks * REACTIVE_LOOP_PERIOD_MS, reflex);
+
     const bool manual_active = (s_manual_ticks_left > 0);
     if (manual_active) {
         s_manual_ticks_left--;
@@ -1118,25 +1452,38 @@ void reactive_controller_tick_for_test(void)
 
     head_body_t body = HEAD_BODY_HOLD;
     const reactive_head_mode_t head_mode =
-        execute_head(&lease, &goal, fresh, goal_seq, !reflex && !manual_active,
+        execute_head(&lease, &goal, fresh, goal_seq,
+                     !reflex && !manual_active && cliff_act == CLIFF_ACT_NONE &&
+                         cliff_allows(CLIFF_MOTION_ROTATE),
                      s_ticks * REACTIVE_LOOP_PERIOD_MS, &body);
 
-    if (reflex) {
-        motor_brake(); /* mirrors reactive_task() — brake, not coast */
-    } else if (manual_active) {
-        execute_manual(s_manual_cmd, s_manual_speed);
-    } else {
-        execute_goal(&goal, fresh, head_mode, body);
-    }
+    const bool held = s_hold;
+    const wheel_layers_t layers = {
+        .held = held,
+        .cliff = cliff_act,
+        .front_reflex = reflex,
+        .rear_blocked = rangers_rear_blocked(&s_rangers),
+        .manual_active = manual_active,
+        .mcmd = s_manual_cmd,
+        .mspeed = s_manual_speed,
+    };
+    bool braked = false;
+    bool cliff_refused = false;
+    (void)apply_wheels(&layers, &goal, fresh, head_mode, body, &braked, &cliff_refused);
 
     s_telemetry.distance_cm = dist;
+    if (reflex && !s_telemetry.reflex_active) {
+        s_telemetry.reflex_trips++;
+    }
     s_telemetry.reflex_active = reflex;
-    s_telemetry.manual_active = manual_active && !reflex;
+    s_telemetry.manual_active = manual_active && !braked;
     s_telemetry.head_mode = head_mode;
     s_telemetry.sensor_failed = s_rangers.failed[ULTRASONIC_FRONT];
     s_telemetry.distance_rear_cm = s_rangers.rear_cm;
     s_telemetry.rear_failed = s_rangers.failed[ULTRASONIC_REAR];
     s_telemetry.head_settled = s_head_settled;
+    s_telemetry.held = held;
+    cliff_telemetry(&s_telemetry, cliff_act, cliff_refused);
     s_ticks++;
 }
 
@@ -1155,6 +1502,10 @@ esp_err_t reactive_controller_init(void)
     idle_gaze_init(&s_gaze, gaze_rng, NULL);
     s_gaze_enabled = true; /* on at every boot */
     s_head_settled = false;
+    s_hold = false;
+    s_cliff_armed = false;
+    s_cliff_enabled = CLIFF_REFLEX_AT_BOOT;
+    memset(&s_cliff, 0, sizeof(s_cliff));
     s_running = true;
     ultrasonic_init();
     return ESP_OK;

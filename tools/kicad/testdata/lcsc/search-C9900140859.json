@@ -1,0 +1,23 @@
+{
+ "code": 200,
+ "data": {
+  "componentPageInfo": {
+   "total": 1,
+   "list": [
+    {
+     "componentLibraryType": "expand",
+     "stockCount": 0,
+     "canPresaleNumber": 0,
+     "preferredComponentFlag": false,
+     "componentCode": "C9900140859",
+     "componentModelEn": "C1000",
+     "componentSpecificationEn": "SMD-7360-20",
+     "initialPrice": 0.0205,
+     "leastPatchNumber": 2,
+     "minPurchaseNum": 441
+    }
+   ]
+  }
+ },
+ "message": null
+}

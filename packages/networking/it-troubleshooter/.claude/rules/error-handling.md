@@ -1,3 +1,7 @@
+---
+reviewed: 2026-03-11
+---
+
 # Error Handling
 
 **Confidence**: High — derived from recurring fix patterns in git history

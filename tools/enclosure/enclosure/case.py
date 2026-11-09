@@ -25,7 +25,7 @@ from .board import Part as BoardPart
 A = (Align.MIN, Align.MIN, Align.MIN)
 C = (Align.CENTER, Align.CENTER, Align.MIN)
 
-# Sizes, fits and the thinnest wall come from tools/cadstd (ADR-030). The cases
+# Sizes, fits and the thinnest wall come from tools/cadstd (ADR-035). The cases
 # are printed in JLC3DP resin: cadstd's "sla" process.
 PROCESS = "sla"
 MIN_WALL = _MIN_WALL  # 2.0; cadstd/fits.py has the JLC3DP evidence

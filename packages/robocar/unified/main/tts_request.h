@@ -6,8 +6,9 @@
  * is a legacy preview, with a listed shutdown of 2026-11-17. Flash-Lite TTS is
  * not used because it has no Finnish.
  *
- * Three things changed from the preview, per the 3.8 docs (read 2026-11-04,
- * not yet probed against the live API):
+ * Three things changed from the preview, per the 3.8 docs (read 2026-11-04).
+ * A host probe of this body on 2026-11-07 confirmed the streamed format and
+ * that the style is not spoken (gemini-tts-voice skill):
  *
  * - **The text is read as a verbatim transcript.** "Directions written into
  *   the text might be spoken aloud", so the old `"<style>: <text>"` prefix

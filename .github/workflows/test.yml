@@ -37,6 +37,7 @@ jobs:
     outputs:
       python: ${{ steps.filter.outputs.python }}
       live-probe: ${{ steps.filter.outputs.live-probe }}
+      tts-generator: ${{ steps.filter.outputs.tts-generator }}
       c-code: ${{ steps.filter.outputs.c-code }}
       any-code: ${{ steps.filter.outputs.any-code }}
     steps:
@@ -55,6 +56,9 @@ jobs:
               - 'packages/robocar/unified/tools/live-probe/**'
               - 'packages/robocar/unified/main/voice_persona.c'
               - 'packages/robocar/unified/tools/make-style-sweep.py'
+              - '.github/workflows/test.yml'
+            tts-generator:
+              - 'packages/audio/gamepad-synth/tools/tts/**'
               - '.github/workflows/test.yml'
             c-code:
               - 'packages/**/main/**'
@@ -220,6 +224,36 @@ jobs:
         working-directory: packages/robocar/unified/tools/live-probe
         run: uv run pytest -q
 
+  test-tts-generator:
+    name: TTS Generator Offline Tests
+    needs: [detect-changes]
+    if: >
+      needs.detect-changes.outputs.tts-generator == 'true' ||
+      github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Setup Python
+        uses: actions/setup-python@v6.3.0
+        with:
+          python-version: '3.14.8'
+
+      # Pinned: see the `Install uv` step in Code Quality Checks above.
+      - name: Install UV
+        run: pip install uv==0.12.10
+
+      # The SDK talks to an httpx MockTransport: no key, no network beyond the
+      # package index. Pins the gemini-3.8-flash-tts request body (issue #844).
+      - name: Install dependencies
+        working-directory: packages/audio/gamepad-synth/tools/tts
+        run: uv sync --locked
+
+      - name: Run offline tests
+        working-directory: packages/audio/gamepad-synth/tools/tts
+        run: uv run pytest -q
+
   lint-c:
     name: C/C++ Linting
     needs: [detect-changes]
@@ -275,7 +309,7 @@ jobs:
 
   test-summary:
     name: Test Summary
-    needs: [detect-changes, code-quality, test-python-simulation, test-live-probe, lint-c, format-check]
+    needs: [detect-changes, code-quality, test-python-simulation, test-live-probe, test-tts-generator, lint-c, format-check]
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -286,6 +320,7 @@ jobs:
           echo "- Code Quality: ${{ needs.code-quality.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Python Simulation Tests: ${{ needs.test-python-simulation.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Live Probe Offline Tests: ${{ needs.test-live-probe.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- TTS Generator Offline Tests: ${{ needs.test-tts-generator.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- C/C++ Linting: ${{ needs.lint-c.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Format Check: ${{ needs.format-check.result }}" >> $GITHUB_STEP_SUMMARY
 
@@ -297,6 +332,7 @@ jobs:
             "${{ needs.code-quality.result }}" \
             "${{ needs.test-python-simulation.result }}" \
             "${{ needs.test-live-probe.result }}" \
+            "${{ needs.test-tts-generator.result }}" \
             "${{ needs.format-check.result }}"; do
             if [ "$result" = "failure" ]; then
               echo "::error::Critical quality checks failed!"

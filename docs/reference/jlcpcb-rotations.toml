@@ -95,6 +95,21 @@ rotation = 0
 max_err_mm = 0.04
 checked = "2026-10-21"
 
+# Bidirectional TVS: either way round is correct, so only the pad match counts.
+[C435453] # SMF5.0CA
+footprint = "Diode_SMD:D_SOD-123"
+lcsc_footprint = "SOD-123_L2.7-W1.8-LS3.7-BI"
+rotation = 0
+max_err_mm = 0.08
+checked = "2026-11-07"
+
+[C8545] # 2N7002
+footprint = "Package_TO_SOT_SMD:SOT-23"
+lcsc_footprint = "SOT-23-3_L2.9-W1.3-P1.90-LS2.4-BR"
+rotation = 180
+max_err_mm = 0.08
+checked = "2026-11-07"
+
 # --- Inductors, fuses, ferrite beads ------------------------------------------
 
 [C2044594] # SRN6045TA-4R7M
@@ -220,6 +235,13 @@ rotation = 0
 max_err_mm = 0.0
 checked = "2026-10-19"
 
+[C17513] # 1 k
+footprint = "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+lcsc_footprint = "R0805"
+rotation = 0
+max_err_mm = 0.0
+checked = "2026-11-06"
+
 [C17520] # 2.2 k
 footprint = "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
 lcsc_footprint = "R0805"
@@ -233,6 +255,13 @@ lcsc_footprint = "R0805"
 rotation = 0
 max_err_mm = 0.0
 checked = "2026-10-19"
+
+[C17560] # 22 k
+footprint = "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+lcsc_footprint = "R0805"
+rotation = 0
+max_err_mm = 0.0
+checked = "2026-11-06"
 
 [C17593] # 27 k
 footprint = "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"

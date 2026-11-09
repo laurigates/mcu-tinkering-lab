@@ -38,7 +38,9 @@ bool voice_history_is_ignore(const char *reply)
     if (*reply == '\0') {
         return true;
     }
-    return (strncmp(reply, VOICE_HISTORY_IGNORE_TAG, strlen(VOICE_HISTORY_IGNORE_TAG)) == 0);
+    /* Anywhere, not only as a prefix (#950): the model has ended a reply of
+     * plain-text reasoning with the sentinel, and a prefix match spoke it. */
+    return strstr(reply, VOICE_HISTORY_IGNORE_TAG) != NULL;
 }
 
 void voice_history_mark_conversation_active(uint32_t now_ms)

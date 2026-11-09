@@ -456,6 +456,12 @@ bool ambient_capture_allowed(bool playback_active, uint32_t now_ms, uint32_t las
     return (uint32_t)(now_ms - last_playback_end_ms) >= hangover_ms;
 }
 
+bool ambient_head_quiet(uint32_t now_ms, uint32_t last_head_move_ms, uint32_t hangover_ms)
+{
+    /* Same shape as the playback hangover with "playing" always false. */
+    return ambient_capture_allowed(false, now_ms, last_head_move_ms, hangover_ms);
+}
+
 bool ambient_gate_accepts(bool capture_allowed, bool cue_active, uint32_t now_ms,
                           uint32_t *last_cue_ms, uint32_t cue_hangover_ms)
 {

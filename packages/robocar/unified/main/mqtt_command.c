@@ -72,8 +72,8 @@ bool mqtt_command_extract_line(const char *data, int data_len, int total_data_le
  * execute_console_line(); keep the two lists in sync.
  */
 static const char *const k_console_prefixes[] = {
-    "gpio", "voice", "snap",  "listen", "trace", "mic",
-    "cam",  "plan",  "sound", "servo",  "led",   "idle",
+    "gpio",  "voice", "snap", "listen", "trace", "mic",    "cam",   "plan",
+    "sound", "servo", "led",  "idle",   "ota",   "report", "cliff",
 };
 
 static bool matches_console_prefix(const char *line)
@@ -149,7 +149,7 @@ static const char *movement_word_for(const char *line)
  * the robot.
  */
 static const char *const k_read_only_lines[] = {
-    "plan", "trace", "mic", "cam", "servo", "gpio", "voice", "voice said", "idle",
+    "plan", "trace", "mic", "cam", "servo", "gpio", "voice", "voice said", "idle", "cliff",
 };
 
 mqtt_command_access_t mqtt_command_access_for_credentials(const char *username,

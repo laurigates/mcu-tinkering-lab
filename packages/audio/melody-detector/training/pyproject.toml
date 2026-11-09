@@ -39,7 +39,7 @@ dev = [
     "pytest-cov==7.1.0",
     "ruff==0.15.12",
     "ty",
-    "onnx==1.22.0",
+    "onnx==1.23.2",
     "onnxruntime==1.31.1",
     "onnxscript==0.7.2",
 ]
@@ -87,7 +87,7 @@ indent-style = "space"
 include = ["src"]
 
 [tool.ty.rules]
-unresolved-import = "ignore"
+import-not-found = "ignore"
 
 [tool.pytest.ini_options]
 minversion = "8.0"

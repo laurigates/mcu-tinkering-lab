@@ -26,13 +26,35 @@ are a calibration, not a quote: JLCPCB changes them.
   under its exact part number with its rating stated and shipping to Finland,
   may be hand-soldered. Every other part stays on the PCBA BOM. Economic PCBA
   places a partial BOM, so a board that is otherwise hand-soldered can still
-  have JLCPCB fit those parts; if it ships bare, add them as an LCSC parts
-  order in the same cart. The balancebot carrier went bare on 2026-10-23 and
+  have JLCPCB fit those parts; if it ships bare, order them from LCSC, which
+  is a separate shop with its own parcel, shipping and duty (§ 4, "LCSC
+  shipping"). The balancebot carrier went bare on 2026-10-23 and
   two of its 11 parts (ZXMP4A16G, BSMD1812-300-24V) had no usable AliExpress
   listing. Check stock for each LCSC number on the day of the order.
-- **Run `just <p>::carrier-fab` from a clean tree** and read the size and
-  layer count from `output/fab/*-job.gbrjob` (`.GeneralSpecs.Size`); the
-  upload must detect the same.
+- **A PCB line saved days earlier stays in the cart, and a later upload does
+  not replace it.** On 2026-10-23 the balancebot line was
+  `balancebot-carrier-fab_Y5`, uploaded 13–14 October; JLCPCB built that
+  older layout (8d18cd8d, no F1/Q1), while the hand-off CSV named the commit of
+  the zip on disk. `carrier-fab` now names its outputs for the commit
+  (`<name>-fab-<sha7>.zip`) and writes `<sha7> <pcb8>` on the silkscreen, so
+  every PCB line can be checked against the hand-off CSV before checkout
+  (§ 3 step 8). Delete PCB lines that are not part of this order. To find out
+  afterwards what was built, use the order history
+  (`https://jlcpcb.com/user-center/orders/`): its Gerber viewer shows the same
+  silkscreen text. A board fabricated before the text existed can only be
+  told apart by its thumbnail against `kicad-cli pcb export svg` renders of
+  candidate commits. In JLCONE, the "Production file" link opens a native
+  save dialog that CDP cannot drive.
+- **`just <p>::carrier-fab` refuses uncommitted changes** to anything that
+  feeds the board (the project's `hardware.toml` and `hardware/`,
+  `tools/kicad`, the parts registry and the rotation table;
+  `kicad.provenance.feeds`). Commit first. `CARRIER_FAB_ALLOW_DIRTY=1`
+  exports anyway with `-dirty` in every file name and `dirty` = `yes` in
+  the hand-off row; the silkscreen text becomes `<sha7>*<pcb8>`, a `*` in
+  place of the space, so it keeps the clean text's width and its DRC
+  result. Never upload a `-dirty` zip for an order. Read the size and layer
+  count from `output/fab/*-job.gbrjob` (`.GeneralSpecs.Size`); the upload
+  must detect the same.
 - **Check the silkscreen apertures in the Gerber, not in board.toml.** A board
   committed before a `tools/kicad` fix does not get it until it is rebuilt:
   the integrated carrier's board predated `pcb/silk.py` by three minutes and
@@ -49,8 +71,11 @@ are a calibration, not a quote: JLCPCB changes them.
   quoted with Different Design 2 added €3.56 engineering + €3.61 panel, and
   with 4 designs €10.83 panel, over the single-design €3.56. A `saw` board is
   one outline and one design.
-- Copy the zip, `bom-jlc.csv` and `cpl-jlc.csv` to a short path (and keep a
-  copy in the repo's git-ignored `tmp/quotes/`: `/tmp` is cleared).
+- Copy the zip, `assembly/<name>-bom-jlc-<sha7>.csv`,
+  `assembly/<name>-cpl-jlc-<sha7>.csv` and the hand-off row
+  `<name>-fab-<sha7>.csv` to a short path (and keep a copy in the repo's
+  git-ignored `tmp/quotes/`: `/tmp` is cleared). Keep the names: the cart
+  line takes its file name from the zip's.
 
 ## 2. Where to order: the JLCONE app, not Chrome
 
@@ -140,10 +165,18 @@ error when signed out). Signing in is Lauri's step, never the agent's.
    under 1.0 mm tall unreadably. Record the option's price in § 4 the first
    time it is quoted.
 3. Open the Gerber viewer and check what the README lists (outline, holes,
-   cut lines, polarity marks).
+   cut lines, polarity marks), and that the silkscreen's `<sha7> <pcb8>`
+   text matches the zip's name.
 4. PCB Assembly on → Economic → Top Side → PCBA Qty 5 or 2 (2-of-5 assembles
    two and ships five). Tooling holes: "Added by JLCPCB" unless the README
-   says otherwise.
+   says otherwise. **Read the selections back before NEXT; the page's
+   defaults change.** On 2026-11-05/06 a fresh JLCONE quote defaulted to
+   surface finish "OSP New" and PCBA Type "Standard". Economic is then
+   greyed out ("The PCB specs you chose are not supported for Economic
+   PCBA"), and a click on it does nothing. Pick "HASL(with lead)" first, then
+   Economic, and confirm with
+   `eval jlcpcb.com/quote '[...document.querySelectorAll(".cur")].map(e=>e.innerText.trim())'`.
+   The smt-order page repeats the type as "PCBA Type: …".
 5. Upload BOM and CPL, Process. Every line must match (25/25 on the
    integrated carrier). The `Lib Type` column says Basic or Extended.
 6. In the placement preview, zoom on every polarised and pin-1 part; JLCPCB's
@@ -152,6 +185,21 @@ error when signed out). Signing in is Lauri's step, never the agent's.
 7. Quote & Order: Product Description is a cascading menu; choose
    "Reserch\Education\DIY\Entertainment" → "DIY Hobby Circuit Board - HS Code
    902300". Save to Cart, then verify the cart (step 2).
+8. **Before checkout, check every PCB line in the cart against the hand-off
+   CSV** (§ 6), not only the line uploaded in this session. For each line:
+   - read the file name on the cart line (`cart.js`, or the cart page). It is
+     the zip's stem plus JLCPCB's `_Y<n>`, such as
+     `balancebot-carrier-fab-95131fa_Y7`; the `<sha7>` in it must equal the
+     first 7 characters of the CSV row's `git_sha`;
+   - open the line's Gerber viewer and read the silkscreen text: it must
+     equal the CSV row's `silk_text` character for character. A clean export
+     reads `<sha7> <pcb8>`; a `*` between the two parts (`<sha7>*<pcb8>`)
+     means a dirty export;
+   - a line whose name has no `<sha7>`, or whose name or silkscreen disagrees
+     with the CSV, or whose name says `-dirty`, or whose silkscreen has the
+     dirty `*`, is stale or wrong: delete it, or tell Lauri before he pays.
+
+   Record each line's Y number in the CSV.
 
 ## 4. Where the money goes
 
@@ -164,8 +212,11 @@ error when signed out). Signing in is Lauri's step, never the agent's.
 | Shipping | DHL Express €23.94 at 0.98 kg, €30.83 at 1.54 kg | Global Standard Direct Line (€19.73, 13–16 days) only up to 1.5 kg / $150 |
 
 **Preferred Extended parts carry no loading fee** (JLCPCB PCB Assembly FAQ),
-and they look like Extended in the BOM table. Check every line's type with
-the parts API (curl's User-Agent, as `carrier-pcb` trap 33):
+and they look like Extended in the BOM table. `just kicad::parts` (or
+`--project <p>`; `carrier-fab` runs it) lists every LCSC number in use as
+basic, preferred or extended with its stock, price and status, from the API
+below, cached a day. By hand, with curl's User-Agent (`carrier-pcb` trap 33;
+the search is fuzzy, trap 50):
 
 ```sh
 curl -s -A 'curl/8.7.1' -H 'Content-Type: application/json' -X POST https://jlcpcb.com/api/overseas-pcb-order/v1/shoppingCart/smtGood/selectSmtComponentList -d '{"keyword":"C8020","currentPage":1,"pageSize":5}' | jq '.data.componentPageInfo.list[] | {componentCode, componentLibraryType, preferredComponentFlag, stockCount}'
@@ -263,12 +314,41 @@ VAT is recomputed on the discounted amount was not checked.
 - Third-party "promo code" sites list codes JLCPCB does not publish; the cart
   has no code field before checkout. Treat them as unverified.
 
+### LCSC shipping, for parts JLCPCB does not fit
+
+LCSC's help pages publish no rates. The cart shows an estimate for the
+**United States** until a country is chosen, the choice does not survive a
+reload, and checkout lists no methods until the account has an address. The
+cart's own endpoint gives the real options. Run it from an lcsc.com tab in
+JLCONE, which shares the JLC sign-in:
+
+```
+fetch("https://wmsc.lcsc.com/wmsc/cart/product/getExpress", {method:"POST", credentials:"include", headers:{"Content-Type":"application/json"}, body: JSON.stringify({countryCode:"FI", province:"", city:"", postCode:"", currencyCode:"USD", weight:4, orderAmt:5.78, orderItemTotal:3, isFrom:true, isHasBuzzer:false, isIncludeSpecialCategory:false, searchCartType:"all"})}).then(r=>r.json())
+```
+
+For Finland on 2026-11-06, with three parts at $5.94:
+
+| Method | Price | Delivery |
+|---|---|---|
+| 4PX | $8.62 | 5–23 business days |
+| Global Direct Standard Line | $10.91 | 7–15 business days |
+| UPS | $34.94 | 3–7 business days |
+| DHL Express | $41.27 | 3–7 business days |
+
+LCSC adds a $3 handling fee under $15 of merchandise. Its incoterms are FCA,
+so import VAT, the €3 EU duty and the carrier's clearance fee are paid on
+delivery. Against fitting the same parts in Economic PCBA, include those, and
+the separate wait.
+
 ## 6. Hand-off
 
 There is no cart export; `cart.js` gives the lines. Write
 `tmp/quotes/jlcpcb-cart-<date>.csv`: one row per cart line (JLC reference;
-quantity; build time; EUR price; the commit each board came from; the fab
-zip's sha256 prefix; BOM and CPL paths), plus summary rows for merchandise,
+the cart line's file name and Y number; quantity; build time; EUR price;
+and, for a PCB line, `git_sha`, `silk_text`, `zip_sha256`, `bom` and `cpl`
+copied from the `<name>-fab-<sha7>.csv` row `carrier-fab` wrote beside the
+zip that was uploaded, not recomputed from whatever zip is on disk later),
+plus summary rows for merchandise,
 shipping, coupon and subtotal, and a row for the checkout's VAT once it has
 been read. Then tell Lauri the total (saying whether it includes VAT), the
 coupon and shipping to re-check at checkout, and anything still open on a
@@ -287,6 +367,19 @@ description and volume checks held in both.
   box parts loaded in one go on 2026-10-23. In Chrome a multi-file selection
   registered nothing, so there upload one at a time. A quote page holds at most
   10 models; a further file is dropped without a message.
+- **Over CDP, upload one STL per `upload` call**, about 12 s apart. On
+  2026-11-05 a single call setting 10 files registered none of them, while
+  one file per call loaded all 12 gimbal parts.
+- A fresh quote page starts with a placeholder model,
+  `3d_printing_sample.step` (1 cm³, €0.28), which the first upload replaces.
+  `jlc3dp-models.js` showing an empty list and a total of €0.28 means nothing
+  of yours loaded.
+- **Batch Edit applies to the ticked rows, so check the dialog's own file
+  list before Save.** Tick a row by the `.el-checkbox__input` inside the
+  element that holds that row's filename. A dialog closed with its X can stay
+  open behind an "Unsaved Changes" prompt; choose Discard, then reopen it.
+  Material and dyeing ("MJF(Nylon)" → PA12-HP → Black → Dyeing / Dyed Black)
+  and Product Desc are set per batch, so batch by material.
 - The "Total Price" can lag the line prices while models load (it read €7.10
   against €12.86 of lines until Batch Edit was saved); check it against their
   sum before saving.

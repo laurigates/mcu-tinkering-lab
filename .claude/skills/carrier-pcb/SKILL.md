@@ -95,12 +95,41 @@ several traps below are version-specific: after a KiCad upgrade, re-run
      via after walling off F.Cu, a neck shared by the servo and head feeds,
      and a split top-half GND after widening +5V.
 6. `just <p>::carrier-fab` (runs `carrier-check` first): Gerbers, drill, BOM
-   and CPL. `just kicad::check` runs what CI runs. The CPL adds each LCSC
+   and CPL, named for the commit (`<name>-fab-<sha7>.zip`,
+   `<name>-bom-jlc-<sha7>.csv`, `<name>-cpl-jlc-<sha7>.csv`) beside a
+   hand-off row (`<name>-fab-<sha7>.csv`: the commit and the zip's sha256).
+   It refuses uncommitted changes to anything that feeds the board
+   (`CARRIER_FAB_ALLOW_DIRTY=1` exports anyway, with `-dirty` in the file
+   names), and plots from a temporary copy of the board that carries
+   `<sha7> <pcb8>` (the commit and the stamp's `board_sha256` prefix) on
+   F.SilkS at `board.toml`'s `[fab] provenance_at`; KiCad's DRC on that copy
+   fails the run if the text lands on a pad, other silkscreen or the edge. A
+   dirty run writes `<sha7>*<pcb8>`: KiCad's stroke font gives `*` a space's
+   advance, so the text is as wide as the clean one and passes DRC alike. The committed board and stamp
+   are only read (`kicad.provenance`). A new carrier needs `[fab]
+   provenance_at` before its first fab run. `just kicad::check` runs what CI
+   runs. The CPL adds each LCSC
    part's checked rotation offset (trap 32); a new LCSC number needs an entry
-   in `docs/reference/jlcpcb-rotations.toml` first. Quoting and ordering the
+   in `docs/reference/jlcpcb-rotations.toml` first. `carrier-fab` first runs
+   `python3 -m kicad.lcsc --project <p>`, which asks JLCPCB about each LCSC
+   number (cached a day under `~/.cache/mcu-tinkering-lab/lcsc`, nothing
+   committed) and stops on one that is unknown, not orderable (trap 51) or
+   out of stock; extended parts only warn. `just kicad::parts` checks every number
+   in use (`--json`, `--refresh`, `--offline`). Quoting and ordering the
    result: the `jlcpcb-order` skill, whose § 1 decides which SMD parts
    JLCPCB places: any part not owned and not sold on AliExpress stays on the
    PCBA BOM (`.claude/rules/part-sourcing.md`).
+
+## Using a circuit block
+
+A stage that already exists as a block (`docs/reference/blocks/`, ADR-031)
+goes in as `[blocks.<id>]` with `block`, `net_prefix` and one ref per block
+part; connect its ports by writing `<id>.<PORT>` in the project's rails. Change
+a value for one board with an override (`parts.<key> = { value = ... }`) and a
+comment, not by editing the block: a block edit regenerates every carrier
+that uses it. Part keys expand to `<id>_<key>`, so the IC of `[blocks.buck]`
+is `buck_ic`. Re-expressing an existing stage as a block must leave
+`kicad.netlist`, `kicad.schematic --check` and `kicad.stamp` unchanged.
 
 ## Adding a registry entry
 
@@ -123,6 +152,24 @@ several traps below are version-specific: after a KiCad upgrade, re-run
   An unproved one fails, because a reversed part agrees with every other check
   built from the same mistake.
 - Format and rules: `docs/reference/parts/README.md`.
+
+## A socketed sensor's orientation
+
+A board with an IMU in a socket declares it, so the layout and the firmware
+mount cannot drift apart (8d18cd8d put J3 where the GY-521 only fits face
+down):
+
+- The socket's `sockets.toml` entry gives the sensor's `axes = { x = [dx,
+  dy], z = "component" | "solder" }` in the footprint's y-down frame. The
+  generator validates it and leaves it out of the footprint.
+- `board.toml` gives `[outline] forward` (`"+x"`, `"-x"`, `"+y"` or `"-y"`;
+  the board is taken as mounted top face up) and `[imu] ref`, `mount` (the
+  firmware's `mount up|down`, default `"up"`) and `face` (the module in its
+  socket, default `"up"`; `"down"` is turned over about the pad row).
+- `kicad.boardcheck` derives the sensor-to-robot rotation (`kicad.mount`)
+  from those and the placement, and fails unless it is the declared mount,
+  naming the mount that would match or printing the matrix when neither does.
+  Placement rotations must be multiples of 90 degrees, on the front face.
 
 ## Traps
 
@@ -203,6 +250,16 @@ several traps below are version-specific: after a KiCad upgrade, re-run
     pins. Every check passes, because the error is in the person fitting the
     module. Any socket for a module labelled on one face needs a
     silkscreen orientation mark and pin names beside the pads (#803).
+    boardcheck now enforces it (`kicad.orientation`): for every module socket
+    (`Breakout_Sockets:*`, `Module:Pololu_Breakout-*`) it finds each turn or
+    flip that maps the pads onto themselves and fails when one changes a pad's
+    number or keeps them all but moves the F.Fab outline (a 1xN row flipped
+    across itself: the GY-521 face down on the 8d18cd8d balancebot) and no
+    `[silk] texts` entry tagged `for = "<ref>"` sits within 4 mm of the
+    courtyard and on the board. `[silk] module_outlines = ["<ref>"]` draws the
+    footprint's own F.Fab outline on F.SilkS (less the edges its strip
+    outline already draws), never a hand copy. `carrier-silk` adds both
+    without touching copper.
 21. **A back-face footprint in KiCad 10:** `FOOTPRINT.Flip()` segfaults before
     `board.Add()`, and `FLIP_DIRECTION_LEFT_RIGHT` followed by
     `SetOrientationDegrees(rot)` mirrors the footprint's *local y* about its
@@ -382,7 +439,12 @@ several traps below are version-specific: after a KiCad upgrade, re-run
     the fingers 5-8 and the drain pad 8, and `lcsc_rotation` found no turn.
     Derive it on chosen pads with a map, `--pads 1,2,3,4,5=8`; the entry
     records `pads`. The pins alone would not do: collinear pads cannot tell a
-    turn from a mirror, so `--pads` refuses them.
+    turn from a mirror, so `--pads` refuses them. Two shapes have no `--pads`
+    answer: a footprint that repeats pad numbers (KiCad's TS-1187A tact
+    switch is 1, 1, 2, 2 where LCSC numbers 1-4, and `kicad_pads` keeps one
+    centre per number), and one whose only distinct pads are collinear plus
+    unnumbered mounting pads (the MSK12C02 slide switch). Check those by hand
+    and leave `lcsc` off the entry until the rotation entry exists.
 
 ### Found enforcing JLCPCB's silkscreen rules (#877)
 
@@ -413,6 +475,40 @@ several traps below are version-specific: after a KiCad upgrade, re-run
     for byte. A second run clips nothing more, so the `Silk` field appears
     only on a board that was clipped from its committed state. Re-applying a
     position also rounds away KiCad's 1 nm drift (−3.900001 → −3.9).
+
+### Found checking LCSC parts against JLCPCB
+
+50. **JLCPCB's parts search is fuzzy.** `selectSmtComponentList` with
+    `"keyword": "C17414"` also lists C20622501, extended and out of stock,
+    whose MPN is "C17414"; an unknown number lists 41 unrelated parts. The
+    first hit, or any hit, is not the part: `kicad.lcsc` keeps only the entry
+    whose `componentCode` matches, and asks the detail endpoint (which
+    answers `{"code": 400, "data": null}` under HTTP 200 for an unknown
+    number) for everything but `preferredComponentFlag`.
+51. **`componentStatus` "yes" does not mean orderable.** On 2026-11-06
+    C9900140859 answered `componentStatus` "yes" with `isBuyComponent` "0"
+    and `noBuyReason` "This product is no longer manufactured.". Gating on
+    the status alone passes a discontinued part that still has leftover
+    stock: `kicad.lcsc` fails `isBuyComponent` "0" and prints the reason.
+
+### Found vendoring new parts (PR #988)
+
+52. **`just kicad::vendor` refuses when the installed KiCad is newer than
+    `vendor.TAG`.** On 2026-11-07 the Mac had 10.0.7 and the repo pins
+    10.0.6, and `--check-installed` showed two vendored footprints differ
+    between them (Fiducial_1mm_Mask2mm, TQFN-16), so copying from the install
+    is not safe. Call `kicad.vendor.update(footprint_roots=[root])` instead,
+    with `root` holding the already-vendored footprints plus the new ones
+    fetched from `gitlab.com/kicad/libraries/kicad-footprints/-/raw/10.0.6/`.
+    Symbols cannot come from the tag the same way: kicad-symbols 10.x keeps
+    one file per symbol (`<Lib>.kicad_symdir/<Sym>.kicad_sym`) and the
+    single `<Lib>.kicad_sym` URL is a 404. Take symbols from the install only
+    when `--check-installed` reports no symbol drift, and compare each new
+    block against its `.kicad_symdir` file at the tag.
+53. **Many KiCad parts are derived symbols, and the vendor rejects
+    `extends`.** `Transistor_FET:2N7002` extends `Q_NMOS_GSD`. Name the base
+    symbol in the registry entry (same pins, G 1, S 2, D 3) and say so in
+    `source`.
 
 ## Verify the gate can fail
 

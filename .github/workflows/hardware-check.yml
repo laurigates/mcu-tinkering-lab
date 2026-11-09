@@ -20,6 +20,7 @@ on:
       - 'packages/**/src/pin_config.h'
       - 'packages/**/*.md'
       - 'docs/reference/boards/*.md'
+      - 'docs/reference/blocks/**'
       - 'tools/hardware/**'
       - '.github/workflows/hardware-check.yml'
   pull_request:
@@ -31,6 +32,7 @@ on:
       - 'packages/**/src/pin_config.h'
       - 'packages/**/*.md'
       - 'docs/reference/boards/*.md'
+      - 'docs/reference/blocks/**'
       - 'tools/hardware/**'
       - '.github/workflows/hardware-check.yml'
   workflow_dispatch:

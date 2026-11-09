@@ -4,6 +4,7 @@
 mod robocar-unified 'packages/robocar/unified'
 mod robocar-unified-integrated 'packages/robocar/unified-integrated'
 mod robocar-bringup 'packages/robocar/bringup'
+mod robocar-twin 'packages/robocar/twin'
 mod sim 'packages/robocar/simulation'
 mod audiobook 'packages/audio/audiobook-player'
 mod wireguard 'packages/networking/wireguard-ha'
@@ -37,6 +38,8 @@ mod kicad 'tools/kicad'
 mod enclosure 'tools/enclosure'
 mod mechanism 'tools/mechanism'
 mod cadstd 'tools/cadstd'
+mod labels 'tools/labels'
+mod glitchtip 'tools/glitchtip'
 
 # Auto-detect ESP32-S3 USB-Serial-JTAG by Espressif VID; override with S3_PORT env var
 s3_port := env("S3_PORT", `tools/detect-esp32s3-port.sh --quiet 2>/dev/null || true`)

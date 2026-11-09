@@ -67,6 +67,7 @@ stream on 50         # CSV telemetry at 50 Hz (plot with any serial plotter)
 set kp 30            # live PID gain changes
 set l_eff_m 0.14     # LQR model/weight change: re-solves K, prints K, rho, residual
 ctrl lqr             # switch to LQR live (bumpless); `ctrl pid` switches back
+mount down           # GY-521 fitted component side down (disarmed only); `mount up` is the default
 arm | disarm         # start/stop balancing (or hold upright 3 s to auto-arm)
 rate l 800           # open-loop motor bench test (disarmed only)
 cal                  # gyro bias calibration (keep the robot still)
@@ -76,6 +77,37 @@ save                 # persist gains to flash (survives power cycle)
 CSV columns: `t_ms,state,angle_deg,gyro_dps,setpoint_deg,rate_sps,loop_us,ctrl,pos_m`
 (`ctrl` 0 = PID, 1 = LQR; `pos_m` = commanded wheel travel since arming).
 Columns are only ever appended, so plots that index by position keep working.
+
+### IMU mounting
+
+The filter expects the GY-521 component side up, X arrow forward. On the
+8d18cd8d carrier (the boards from the 2026-10-23 order) the module only wires
+correctly fitted component side down, hanging rearward: that turns it 180°
+about the axle, so accel X and Z both read inverted while gyro Y does not.
+`IMU_PITCH_SIGN` cannot correct that (a level board reads about 180°), so the
+mounting is a setting:
+
+```
+mount down           # negate accel X and Z before the filter
+save                 # stored in the flash record (PARAM_VERSION 3)
+```
+
+Change it only while disarmed; `stat` shows the mounting core 1 applies. With
+the right setting a level board reads about 0° and tilting forward reads
+positive. Records saved by older firmware load as `mount up`.
+
+`arm` is refused while the robot rests with the mounted Z axis reading below
+-0.5 g (more than 120° from upright), because at rest that means the setting
+does not match the board:
+`ERR: IMU reads upside down (body Z = -0.98 g); check 'mount' (now up)`. Stand
+the robot upright; if it still refuses, switch `mount` and `save`. "At rest"
+means the accelerometer reads 1 g ± 0.15 g and the gyro under 10 °/s
+(`IMU_STILL_*` in `src/imu_filter.h`); a moving sample is not refused by this
+check, and the tilt cutoff still applies. `arm` checks the mount core 1
+applies: a `mount` typed just before it (a paste, a script) is waited for, a
+few control ticks at most. Core 1 checks again when it handles the arm; if it
+refuses, `arm` prints `ERR: core 1 refused arm: …` instead of `OK`, and `stat`
+counts the refusals.
 
 ### Tuning procedure
 

@@ -315,6 +315,44 @@ static void test_undecodable_frames_do_not_move_the_gate(void)
     ASSERT(scene_change_score() == 0);
 }
 
+static void test_has_measurement_only_after_a_decodable_frame(void)
+{
+    /* The `voice` scene line says BLIND on this (issue #703): with no decodable
+     * frame novel() fails closed, and without a separate word the console would
+     * read like a camera watching a still room. */
+    scene_change_init();
+    ASSERT(!scene_change_has_measurement());
+
+    scene_fingerprint_t bad;
+    memset(&bad, 0, sizeof(bad)); /* valid == false */
+    for (int i = 0; i < 3; ++i) {
+        scene_change_note(&bad);
+    }
+    scene_change_note(NULL);
+    ASSERT(!scene_change_has_measurement());
+
+    /* Gate off does not make a picture appear. */
+    scene_change_set_threshold(0);
+    ASSERT(!scene_change_has_measurement());
+    scene_change_set_threshold(SCENE_CHANGE_THRESHOLD_DEFAULT);
+
+    fill(100);
+    observe();
+    ASSERT(scene_change_has_measurement());
+
+    /* Later undecodable frames keep the last one seen, so it stays true. */
+    scene_change_note(&bad);
+    ASSERT(scene_change_has_measurement());
+
+    /* A decoded frame off a dwell pose is still a picture: "no pose", not BLIND. */
+    scene_change_init();
+    scene_fingerprint_t fp;
+    fingerprint(&fp);
+    fp.pose = SCENE_POSE_NONE;
+    scene_change_note(&fp);
+    ASSERT(scene_change_has_measurement());
+}
+
 static void test_threshold_zero_disables_the_gate(void)
 {
     scene_change_init();
@@ -635,6 +673,9 @@ int main(void)
     test_run("speaking before any decodable frame is not a reference",
              test_speaking_before_any_decodable_frame_is_not_a_reference);
     test_run("the threshold decides the verdict", test_threshold_decides_the_verdict);
+
+    test_run("has measurement only after a decodable frame",
+             test_has_measurement_only_after_a_decodable_frame);
 
     test_run("the pose classifier names each dwell pose",
              test_pose_classifier_names_each_dwell_pose);

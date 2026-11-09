@@ -1,4 +1,5 @@
 ---
+reviewed: 2026-11-04
 paths:
   - '**/*gemini*'
   - '**/prompt_builder.*'
@@ -156,7 +157,8 @@ this — `if (!s_current.valid) return false;` — and the audio gate did not.
   reference invalid and made the fail-open permanent rather than transient.
 - **Give a status command a word for deaf.** A gate that has heard nothing and a
   gate watching a well-behaved room are indistinguishable from every counter
-  either one exposes; `mic` now prints `gate: DEAF` explicitly.
+  either one exposes; `mic` now prints `gate: DEAF` explicitly, and `voice`
+  prints `scene: ... (BLIND — no frame decoded)` for the camera (issue #703).
 - **Log the gate's decision next to its own evidence.** `gate: A` beside
   `loud: 0/12 | sound: 0/6` is a self-evident contradiction — novelty claimed
   with both scores at zero. Without those two fields on the same line the bug

@@ -1,3 +1,7 @@
+---
+reviewed: 2026-11-01
+---
+
 # Fixing a Renovate PR: Merge It Before Anything That Touches Its Files
 
 `auto-resolve-conflicts.yml` (the reusable `reusable-auto-resolve-conflicts.yml`)
@@ -22,3 +26,24 @@ and #892.
   again on the next run. Add a `packageRules` entry with `allowedVersions` or
   `enabled: false` and a `description` saying why, as #893 did for sphinx and
   the ESP-IDF dev container.
+
+## Redoing a lock-file-maintenance PR locally
+
+Renovate's `lockFileMaintenance` PR is `uv lock --upgrade` in each uv project
+whose `uv.lock` it lists. When it fails, the Renovate CLI cannot redo it here:
+`--platform=local` only reports lookups, and writing to the bot branch needs
+its token. Instead, on a branch outside the patterns above (#993 for #920):
+
+- **Run `uv lock --upgrade` with the uv version CI pins** (`version:` on
+  `astral-sh/setup-uv` in `.github/workflows/`, 0.12.23 at #993), via
+  `uv tool install uv==<version>`. A local uv 0.11.32 could not resolve
+  melody-train at all (`No interpreter found for Python 3.12.15`).
+- **Compare per-file diff sizes with the bot PR.** At #993 they matched #920's
+  within 2 lines; a larger gap means a different resolver or a moved base.
+- **Run the checks a lockfile-only diff skips.** The `ty` pre-commit hook
+  fires only on `packages/robocar/simulation/src/*.py`, so a ty bump in
+  `pyproject.toml` or `uv.lock` alone is never type-checked in CI; run
+  `uv run ty check src/` there. melody-train leaves `ty` unpinned, so a lock
+  refresh can jump it many releases: #920 moved it 0.0.34 to 0.0.99, past
+  ty 0.0.97's rename of the `unresolved-import` rule to `import-not-found`,
+  and `ty check src` failed on the renamed-rule warning.

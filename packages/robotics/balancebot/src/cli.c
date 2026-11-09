@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "balance_control.h"
+#include "cli_gate.h"
 #include "config.h"
 #include "hardware/adc.h"
 #include "hardware/gpio.h"
@@ -17,6 +18,9 @@
 #include "telemetry.h"
 
 #define CLI_LINE_MAX 96
+// Longest core 0 waits for core 1 to drain what it was sent: a few ticks at the
+// 2 ms nominal period, or the 3 ms fallback with no IMU interrupt.
+#define CLI_CORE1_SYNC_TIMEOUT_US 20000
 
 static balance_params_t *mirror;
 static char line[CLI_LINE_MAX];
@@ -29,6 +33,10 @@ static lqr_result_t lqr_res;
 static int lqr_status = LQR_ERR_INVALID;  // status of the last solve attempt
 static bool lqr_have_k;                   // a K matching *mirror was handed to core 1
 static char boot_note[112];               // printed after the banner and in `stat`
+
+// The first snapshot tick that reflects every command sent through note_sent().
+static uint32_t core1_sync_tick;
+static bool core1_sync_pending;
 
 static const char *state_name(uint8_t s)
 {
@@ -46,6 +54,11 @@ static const char *state_name(uint8_t s)
 static const char *ctrl_name(uint32_t m)
 {
     return m == CTRL_LQR ? "lqr" : "pid";
+}
+
+static const char *mount_name(uint32_t m)
+{
+    return m == IMU_MOUNT_DOWN ? "down" : "up";
 }
 
 static const char *lqr_status_name(int st)
@@ -149,6 +162,42 @@ static balance_cmd_t ctrl_cmd(uint32_t mode)
     return (balance_cmd_t){.cmd = CMD_SET_CONTROLLER, .ctrl_mode = (uint8_t)mode};
 }
 
+static balance_cmd_t mount_cmd(uint32_t mount)
+{
+    return (balance_cmd_t){.cmd = CMD_SET_IMU_MOUNT, .imu_mount = (uint8_t)mount};
+}
+
+// Call right after queueing a command whose effect a later check reads from
+// the snapshot. Core 1 drains its queue at the start of a tick and publishes
+// at the end, so with tick T published after the add, the command is drained
+// no later than the tick that publishes T + 2.
+static void note_sent(void)
+{
+    balance_snapshot_t s;
+    balance_control_get_snapshot(&s);
+    core1_sync_tick = s.tick + 2u;
+    core1_sync_pending = true;
+}
+
+// Fill *s with a snapshot that reflects every command note_sent() covered,
+// waiting a few ticks at most. Returns false, with the latest snapshot in *s,
+// if core 1 did not get there within CLI_CORE1_SYNC_TIMEOUT_US.
+static bool wait_core1(balance_snapshot_t *s)
+{
+    const absolute_time_t deadline = make_timeout_time_us(CLI_CORE1_SYNC_TIMEOUT_US);
+    for (;;) {
+        balance_control_get_snapshot(s);
+        if (!core1_sync_pending || (int32_t)(s->tick - core1_sync_tick) >= 0) {
+            core1_sync_pending = false;
+            return true;
+        }
+        if (absolute_time_diff_us(get_absolute_time(), deadline) <= 0) {
+            return false;
+        }
+        sleep_us(100);
+    }
+}
+
 static void print_lqr(void)
 {
     if (!lqr_have_k) {
@@ -177,12 +226,14 @@ static bool sync_all(bool include_params)
                  lqr_status_name(lqr_status));
     }
 
-    balance_cmd_t cmds[PARAM_COUNT + 2];
+    balance_cmd_t cmds[PARAM_COUNT + 3];
     unsigned n = 0;
     if (include_params) {
         for (int i = 0; i < PARAM_COUNT; i++) {
             cmds[n++] = param_cmd(&param_table[i], *field_of(mirror, &param_table[i]));
         }
+        // Core 1 ignores it while armed; `stat` shows the mounting it applies.
+        cmds[n++] = mount_cmd(mirror->imu_mount);
     }
     if (lqr_status == LQR_OK) {
         cmds[n++] = gains_cmd(&lqr_res);
@@ -192,6 +243,7 @@ static bool sync_all(bool include_params)
         printf("ERR: command queue full — nothing sent, retry\n");
         return false;
     }
+    note_sent();  // may carry a mount change
     lqr_have_k = (lqr_status == LQR_OK);
     return true;
 }
@@ -202,6 +254,7 @@ static void cmd_get(void)
         printf("%-14s %g\n", param_table[i].name, (double)*field_of(mirror, &param_table[i]));
     }
     printf("%-14s %s\n", "ctrl", ctrl_name(mirror->ctrl_mode));
+    printf("%-14s %s\n", "mount", mount_name(mirror->imu_mount));
 }
 
 static void cmd_set(const char *name, const char *value_str)
@@ -291,6 +344,96 @@ static void cmd_ctrl(const char *arg)
     printf("OK ctrl = %s (switches at the next tick; 'save' to keep)\n", ctrl_name(mode));
 }
 
+// GY-521 orientation: `up` = component side up (X forward, Z up), `down` =
+// component side down, turned 180 degrees about the axle (the delivered
+// 8d18cd8d carrier). Disarmed only: the pitch would jump 180 degrees.
+static void cmd_mount(const char *arg)
+{
+    balance_snapshot_t s;
+    balance_control_get_snapshot(&s);
+    if (arg == NULL) {
+        printf("mount: %s\n", mount_name(s.imu_mount));
+        return;
+    }
+    uint32_t mount;
+    if (strcmp(arg, "up") == 0) {
+        mount = IMU_MOUNT_UP;
+    } else if (strcmp(arg, "down") == 0) {
+        mount = IMU_MOUNT_DOWN;
+    } else {
+        printf("usage: mount [up|down]\n");
+        return;
+    }
+    if (s.state == BAL_STATE_RUN) {
+        printf("ERR: disarm first — mount still %s\n", mount_name(s.imu_mount));
+        return;
+    }
+    balance_cmd_t c = mount_cmd(mount);
+    if (!balance_control_send_cmd(&c)) {
+        printf("ERR: command queue full — mount still %s\n", mount_name(mirror->imu_mount));
+        return;
+    }
+    note_sent();
+    mirror->imu_mount = mount;
+    printf("OK mount = %s ('save' to keep)\n", mount_name(mount));
+}
+
+static void print_upside_down(const char *prefix, float up_g, uint32_t mount)
+{
+    printf("ERR: %sIMU reads upside down (body Z = %.2f g); check 'mount' (now %s)\n", prefix,
+           (double)up_g, mount_name(mount));
+}
+
+// At rest, body Z below -0.5 g is a wrong `mount`, not a lean: the controller
+// would push the wrong way. The check runs on a snapshot taken after any
+// `mount` just sent (a paste, a script) has reached core 1, so it uses the
+// mount core 1 applies. Core 1 checks again under its mount when CMD_ARM
+// runs; a refusal there shows in arm_refusals and is reported here. If core 1
+// has not caught up (a `save` before it stalls core 1 past the wait), nothing
+// is judged on the stale snapshot and nothing is sent. Core 1 arms only from
+// IDLE, so any other state is refused here rather than reported as OK.
+static void cmd_arm(void)
+{
+    balance_snapshot_t s;
+    const bool synced = wait_core1(&s);
+    switch (cli_gate_arm(synced, s.state, &s.gravity)) {
+        case CLI_GATE_SEND:
+            break;
+        case CLI_GATE_BUSY:
+            printf("ERR: core 1 busy — earlier commands (a mount?) not applied yet, arm not sent; "
+                   "arm again\n");
+            return;
+        case CLI_GATE_UPSIDE_DOWN:
+            print_upside_down("", s.gravity.up_g, s.imu_mount);
+            return;
+        default:
+            if (s.state == BAL_STATE_FAULT) {
+                printf("ERR: state FAULT (tilt cutoff) — 'disarm' to clear it, or hold upright "
+                       "within %.0f deg for %.0f s; then arm\n",
+                       (double)FAULT_CLEAR_DEG, (double)FAULT_CLEAR_S);
+            } else {
+                printf("ERR: state %s — already armed; 'disarm' to stop\n", state_name(s.state));
+            }
+            return;
+    }
+    const uint32_t refusals = s.arm_refusals;
+    balance_cmd_t cmd = {.cmd = CMD_ARM};
+    if (!balance_control_send_cmd(&cmd)) {
+        printf("ERR: command queue full — arm not sent\n");
+        return;
+    }
+    note_sent();
+    if (!wait_core1(&s)) {
+        printf("OK sent, but core 1 has not answered — check 'stat'\n");
+        return;
+    }
+    if (s.arm_refusals != refusals) {
+        print_upside_down("core 1 refused arm: ", s.arm_refused_up_g, s.imu_mount);
+        return;
+    }
+    printf("OK\n");
+}
+
 static float battery_volts(void)
 {
     gpio_put(PIN_BATT_ADC_ENABLE, 1);
@@ -307,7 +450,8 @@ static void cmd_stat(void)
     balance_control_get_snapshot(&s);
     printf("state:    %s\n", state_name(s.state));
     printf("ctrl:     %s\n", ctrl_name(s.ctrl_mode));
-    printf("imu:      %s\n", s.imu_ok ? "ok" : "NOT RESPONDING");
+    printf("imu:      %s (mount %s)\n", s.imu_ok ? "ok" : "NOT RESPONDING",
+           mount_name(s.imu_mount));
     printf("angle:    %.2f deg (setpoint %.2f)\n", (double)s.pitch_deg, (double)s.angle_setpoint);
     printf("rate:     %.0f steps/s\n", (double)s.rate_cmd_sps);
     printf("pos:      %.3f m since arm\n", (double)s.pos_m);
@@ -322,6 +466,10 @@ static void cmd_stat(void)
     printf("battery:  %.2f V\n", (double)battery_volts());
     printf("saves:    %lu (last %s)\n", (unsigned long)s.save_count,
            s.save_count == 0 ? "n/a" : (s.save_ok ? "ok" : "FAILED"));
+    if (s.arm_refusals != 0) {
+        printf("arm:      %lu refused by core 1, IMU upside down (last body Z = %.2f g)\n",
+               (unsigned long)s.arm_refusals, (double)s.arm_refused_up_g);
+    }
     printf("stream:   %s\n", telemetry_is_enabled() ? "on" : "off");
     if (boot_note[0] != '\0') {
         printf("note:     %s\n", boot_note);
@@ -337,11 +485,13 @@ static void cmd_help(void)
     printf("                       LQR (re-solves K): l_eff_m wheel_diam_m steps_per_rev\n");
     printf("                       q_theta q_dtheta q_x q_dx r\n");
     printf("  ctrl [pid|lqr]       show / switch the balance law (live, bumpless)\n");
+    printf("  mount [up|down]      show / set GY-521 side: up, or down = flipped about\n");
+    printf("                       the axle (8d18cd8d carrier); disarmed only\n");
     printf("  stream on|off [hz]   CSV telemetry (default %d Hz)\n", TELEMETRY_DEFAULT_HZ);
     printf("  arm | disarm         start/stop balancing\n");
     printf("  rate <l|r> <sps>     open-loop motor test (disarmed only)\n");
     printf("  cal                  gyro bias calibration (robot still!)\n");
-    printf("  save | load          persist / reload params (flash)\n");
+    printf("  save | load          persist / reload params (flash; disarmed only)\n");
 }
 
 static void handle_line(char *l)
@@ -367,6 +517,8 @@ static void handle_line(char *l)
         }
     } else if (strcmp(tok, "ctrl") == 0) {
         cmd_ctrl(strtok(NULL, " \t"));
+    } else if (strcmp(tok, "mount") == 0) {
+        cmd_mount(strtok(NULL, " \t"));
     } else if (strcmp(tok, "stream") == 0) {
         const char *arg = strtok(NULL, " \t");
         const char *hz_str = strtok(NULL, " \t");
@@ -379,12 +531,11 @@ static void handle_line(char *l)
             printf("usage: stream on|off [hz]\n");
         }
     } else if (strcmp(tok, "arm") == 0) {
-        balance_cmd_t cmd = {.cmd = CMD_ARM};
-        balance_control_send_cmd(&cmd);
-        printf("OK\n");
+        cmd_arm();
     } else if (strcmp(tok, "disarm") == 0) {
         balance_cmd_t cmd = {.cmd = CMD_DISARM};
         balance_control_send_cmd(&cmd);
+        note_sent();  // a pasted 'arm' or 'load' after it checks the state it leaves
         printf("OK\n");
     } else if (strcmp(tok, "rate") == 0) {
         const char *motor = strtok(NULL, " \t");
@@ -407,6 +558,21 @@ static void handle_line(char *l)
         balance_control_send_cmd(&cmd);
         printf("saving (check 'stat' for result; disarmed only)\n");
     } else if (strcmp(tok, "load") == 0) {
+        // Core 1 applies parameters, gains and controller in RUN but ignores
+        // the mount there, so a load while armed would leave the mirror (and
+        // `get`) on a mount core 1 is not applying. Disarmed only, like save.
+        balance_snapshot_t s;
+        const cli_gate_t gate = cli_gate_load(wait_core1(&s), s.state);
+        if (gate == CLI_GATE_BUSY) {
+            printf("ERR: core 1 busy — earlier commands not applied yet, nothing loaded; "
+                   "load again\n");
+            return;
+        }
+        if (gate != CLI_GATE_SEND) {
+            printf("ERR: disarm first — load would change the mount, which core 1 keeps while "
+                   "armed; nothing loaded\n");
+            return;
+        }
         bool found = param_store_load(mirror);
         boot_note[0] = '\0';
         if (sync_all(true)) {

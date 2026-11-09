@@ -37,6 +37,8 @@ People watching read a still head as an inattentive robot, and the planner sends
 
 A known race carried over from PR #574: `servo_controller.c` has no lock, so a `servo off` landing inside another task's `servo_set_angle()` can have its release overwritten by that one write. `servo exercise` already had this exposure; the executor adds a second writer, though it writes only on a change or once a second.
 
+**Head movement is audible to the microphone.** `servo_controller.c` records when an angle last changed (`servo_last_move_ms()`), and the ambient listener mutes the gate for `AMBIENT_SERVO_HANGOVER_MS_DEFAULT` after it; see `voice.md`. Any new servo writer must go through `servo_set_angle()` so the stamp stays true.
+
 **The executor's aiming has not run on hardware.** The servos themselves are now confirmed good: the 2026-09-18 bench found one mechanically binding (not dead) and traced the non-following at 200 Hz to the PWM frame rate, which `PCA9685_FREQ_HZ` = 100 fixes. What remains unexercised is `head_aim` driving them.
 
 

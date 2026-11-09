@@ -12,15 +12,18 @@ runs `kicad.fab` with kicad-cli's exports replaced by the same rows.
 from __future__ import annotations
 
 import contextlib
+import csv
+import hashlib
 import io
+import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
-from kicad import fab, jlc, registry
+from kicad import fab, jlc, lcsc, provenance
 from kicad.errors import KicadError
-from kicad.paths import REPO_ROOT
 
 R0805 = "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
 C0805 = "Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder"
@@ -210,25 +213,18 @@ class RotationTableTests(unittest.TestCase):
     def test_covers_every_lcsc_number_in_use(self):
         """Every LCSC number a tracked hardware.toml or registry entry names has
         a checked rotation for the footprint it is placed with."""
-        import tomllib
-
         table = jlc.load_rotations()
-        used: dict[str, set[str]] = {}
-        for slug in registry.slugs():
-            spec = registry.load(slug)
-            if spec.lcsc:
-                used.setdefault(spec.lcsc, set()).add(spec.footprint)
-        for path in sorted(REPO_ROOT.glob("packages/*/*/hardware.toml")):
-            parts = tomllib.loads(path.read_text()).get("parts", {})
-            for part in parts.values():
-                if part.get("lcsc") and part.get("part"):
-                    fp = registry.load(part["part"]).footprint
-                    used.setdefault(part["lcsc"], set()).add(fp)
+        # A part with no registry entry has no footprint to place it with.
+        used = {
+            code: fps
+            for code, uses in lcsc.used().items()
+            if (fps := {u.footprint for u in uses if u.footprint})
+        }
         self.assertTrue(used)
-        for lcsc, fps in sorted(used.items()):
-            with self.subTest(lcsc=lcsc):
-                self.assertIn(lcsc, table)
-                self.assertEqual(fps, {table[lcsc].footprint})
+        for code, fps in sorted(used.items()):
+            with self.subTest(lcsc=code):
+                self.assertIn(code, table)
+                self.assertEqual(fps, {table[code].footprint})
 
     def test_rejects_bad_entries(self):
         cases = {
@@ -247,43 +243,137 @@ class RotationTableTests(unittest.TestCase):
                     jlc.load_rotations(path)
 
 
+FAB_SHA = "0123456789abcdef0123456789abcdef01234567"
+FAB_BOARD = b"(kicad_pcb\n\t(version 20260206)\n)\n"
+
+
 class FabTests(unittest.TestCase):
-    """`kicad.fab` on a temp project, with kicad-cli replaced by canned exports."""
+    """`kicad.fab` on a temp project, with kicad-cli replaced by canned exports
+    and git by a canned state."""
 
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
-        self.project = Path(tmp.name) / "demo"
-        kicad_dir = self.project / "hardware/carrier/demo-carrier"
-        kicad_dir.mkdir(parents=True)
+        self.root = Path(tmp.name)
+        self.project = self.root / "demo"
+        self.kicad_dir = self.project / "hardware/carrier/demo-carrier"
+        self.kicad_dir.mkdir(parents=True)
         (self.project / "hardware/carrier/board.toml").write_text(
             '[project]\nname = "demo-carrier"\n'
+            "[outline]\norigin = [100.0, 100.0]\nsize = [50.0, 40.0]\n"
+            "[fab]\nprovenance_at = [10.0, 30.0]\n"
         )
-        for suffix in (".kicad_pcb", ".kicad_sch"):
-            (kicad_dir / f"demo-carrier{suffix}").touch()
-        self.asm = kicad_dir / "output/assembly"
+        (self.kicad_dir / "demo-carrier.kicad_pcb").write_bytes(FAB_BOARD)
+        (self.kicad_dir / "demo-carrier.kicad_sch").touch()
+        self.board_sha = hashlib.sha256(FAB_BOARD).hexdigest()
+        (self.kicad_dir / "demo-carrier.check.json").write_text(
+            json.dumps({"board_sha256": self.board_sha})
+        )
+        self.out = self.kicad_dir / "output"
+        self.asm = self.out / "assembly"
+        self.plotted: list[str] = []
 
-    def fab(self, bom: str) -> tuple[int, str]:
+    def fab(self, bom: str, dirty: tuple[str, ...] = ()) -> tuple[int, str]:
         def run(argv):
             out = Path(argv[argv.index("-o") + 1])
             if argv[1:4] == ["sch", "export", "bom"]:
                 out.write_text(bom)
             elif argv[1:4] == ["pcb", "export", "pos"]:
                 out.write_text(POS)
+            elif argv[1:4] == ["pcb", "export", "gerbers"]:
+                (out / "demo-carrier-F_Silkscreen.gto").write_text("G04*")
+            if argv[1] == "pcb":
+                self.plotted.append(Path(argv[-1]).read_text())
 
+        def plot_copy(kicad_dir, name, board_text, dest, cli, text):
+            pcb = dest / f"{name}.kicad_pcb"
+            pcb.write_text(board_text)
+            return pcb
+
+        state = provenance.GitState(FAB_SHA, dirty)
         with (
             mock.patch.object(fab, "kicad_cli", return_value="kicad-cli"),
             mock.patch.object(fab, "run", side_effect=run),
+            mock.patch.object(fab, "plot_copy", side_effect=plot_copy),
+            mock.patch.object(provenance, "git_state", return_value=state),
+            mock.patch.dict(os.environ, {provenance.ALLOW_DIRTY_ENV: ""}),
             contextlib.redirect_stdout(io.StringIO()) as out,
         ):
-            code = fab.main([str(self.project)])
+            code = fab.main([str(self.project)], repo_root=self.root)
         return code, out.getvalue()
 
     def test_writes_the_jlc_files(self):
         code, out = self.fab(BOM)
         self.assertEqual(code, 0, out)
-        self.assertEqual((self.asm / "bom-jlc.csv").read_bytes(), BOM_JLC.encode())
-        self.assertEqual((self.asm / "cpl-jlc.csv").read_bytes(), CPL_JLC.encode())
+        bom = self.asm / "demo-carrier-bom-jlc-0123456.csv"
+        cpl = self.asm / "demo-carrier-cpl-jlc-0123456.csv"
+        self.assertEqual(bom.read_bytes(), BOM_JLC.encode())
+        self.assertEqual(cpl.read_bytes(), CPL_JLC.encode())
+
+    def test_plots_a_copy_with_the_commit_and_leaves_the_board(self):
+        stamp = self.kicad_dir / "demo-carrier.check.json"
+        before = stamp.read_bytes()
+        (self.out).mkdir()
+        (self.out / "demo-carrier-fab.zip").write_text("stale")
+        (self.out / "demo-carrier-fab-fffffff.zip").write_text("stale")
+        code, out = self.fab(BOM)
+        self.assertEqual(code, 0, out)
+        text = f"0123456 {self.board_sha[:8]}"
+        self.assertEqual(len(self.plotted), 3)  # gerbers, drill, pos
+        for board in self.plotted:
+            self.assertIn(f'(gr_text "{text}"\n\t\t(at 110 130 0)', board)
+        self.assertEqual(
+            (self.kicad_dir / "demo-carrier.kicad_pcb").read_bytes(), FAB_BOARD
+        )
+        self.assertEqual(stamp.read_bytes(), before)
+        zips = sorted(p.name for p in self.out.glob("*.zip"))
+        self.assertEqual(zips, ["demo-carrier-fab-0123456.zip"])
+        with open(self.out / "demo-carrier-fab-0123456.csv", newline="") as f:
+            (row,) = list(csv.DictReader(f))
+        self.assertEqual(row["git_sha"], FAB_SHA)
+        self.assertEqual(row["silk_text"], text)
+        self.assertEqual(
+            row["zip_sha256"],
+            hashlib.sha256(
+                (self.out / "demo-carrier-fab-0123456.zip").read_bytes()
+            ).hexdigest(),
+        )
+
+    def test_dirty_tree_is_refused_before_anything_is_written(self):
+        code, out = self.fab(BOM, dirty=("demo/hardware.toml",))
+        self.assertEqual(code, 1, out)
+        self.assertIn("uncommitted changes", out)
+        self.assertIn("demo/hardware.toml", out)
+        self.assertFalse(self.out.exists())
+
+    def test_allowed_dirty_tree_marks_every_output(self):
+        with mock.patch.object(provenance, "allow_dirty_from_env", return_value=True):
+            code, out = self.fab(BOM, dirty=("demo/hardware.toml",))
+        self.assertEqual(code, 0, out)
+        self.assertIn("-dirty", out)
+        names = sorted(p.name for p in self.out.iterdir() if p.is_file())
+        self.assertEqual(
+            names,
+            [
+                "demo-carrier-fab-0123456-dirty.csv",
+                "demo-carrier-fab-0123456-dirty.zip",
+            ],
+        )
+        text = f"0123456*{self.board_sha[:8]}"
+        self.assertIn(f'(gr_text "{text}"\n', self.plotted[0])
+        self.assertNotIn("-dirty", self.plotted[0])
+        with open(self.out / "demo-carrier-fab-0123456-dirty.csv", newline="") as f:
+            (row,) = list(csv.DictReader(f))
+        self.assertEqual(row["dirty"], "yes")
+        self.assertEqual(row["silk_text"], text)
+
+    def test_missing_position_fails(self):
+        (self.project / "hardware/carrier/board.toml").write_text(
+            '[project]\nname = "demo-carrier"\n'
+        )
+        code, out = self.fab(BOM)
+        self.assertEqual(code, 1, out)
+        self.assertIn("[fab] provenance_at", out)
 
     def test_missing_column_fails(self):
         code, out = self.fab(BOM.replace('"LCSC"', '"Part"', 1))

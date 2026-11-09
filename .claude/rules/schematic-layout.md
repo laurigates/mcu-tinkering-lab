@@ -1,4 +1,5 @@
 ---
+reviewed: 2026-10-13
 paths:
   - 'docs/schematics/**'
   - 'docs/decisions/ADR-021-*'

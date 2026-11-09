@@ -143,6 +143,13 @@
 // ========================================
 #define MCP23017_ADDR 0x20  // A0=A1=A2=GND, as both carriers strap them
 
+// Downward floor sensors for the cliff reflex (cliff_sensor.c): salvaged
+// TCRT5000-style reflective sensors, phototransistor collector on the pin,
+// emitter to GND, the MCP23017's internal pull-up enabled. Low = floor seen.
+// Interim until the VL53L4CD pair of issue #1010. Not GPA7/GPB7 (output-only).
+#define CLIFF_FRONT_EXPANDER_PIN 0  // GPA0
+#define CLIFF_REAR_EXPANDER_PIN 1   // GPA1
+
 // ========================================
 // SSD1306 OLED Display (via TCA9548A ch1)
 // 0.91-inch 128x32 module (docs/reference/boards/ssd1306-091in-128x32.md).
@@ -277,8 +284,12 @@
 #define MIC_PDM_CLK_PIN GPIO_NUM_42   // PDM clock, driven by the ESP32-S3
 #define MIC_PDM_DATA_PIN GPIO_NUM_41  // PDM data, input
 
-/** Capture rate. Fixed by the microphone, and also what Gemini expects for
- *  inline audio — no resampling stage anywhere in the path. */
+/** Capture rate. A firmware choice, not the microphone's: the MSM261D fixes no
+ *  sample rate. 16 kHz is what Gemini expects for inline audio, so there is no
+ *  resampling stage anywhere in the path. With ESP-IDF's default down-sampling
+ *  (I2S_PDM_DSR_8S) it drives 16000 x 64 = 1.024 MHz on MIC_PDM_CLK_PIN, between
+ *  the datasheet's Low-Power (150-900 kHz) and Standard (1.1-4.0 MHz) ranges;
+ *  see docs/reference/datasheets/sensor--msm261d.md. */
 #define MIC_SAMPLE_RATE_HZ 16000
 
 // ========================================

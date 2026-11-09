@@ -1,0 +1,262 @@
+# Parts-drawer stickers for the 2026-11 orders that have not arrived yet
+# (parts-stock qty 0 or level "out" on 2026-11-09). Print when they are in the
+# drawers, after checking each spec line against what came:
+#   just labels::build tools/labels/data/inventory-2026-11-incoming.toml
+#
+# Spec lines marked "from memory" were not read from a listing or datasheet.
+schema = 1
+title = "Parts drawers 2026-11, incoming"
+
+[colors]
+cap-blue = "#1d4ed8"
+conn-green = "#15803d"
+elco = "#334155"
+opto = "#b45309"
+mech = "#57534e"
+pot-pink = "#be185d"
+res-brown = "#78350f"
+power-orange = "#c2410c"
+semi-teal = "#0f766e"
+
+# ---- SMD ----
+
+[[label]]
+cat = "Resistor"
+color = "res-brown"
+value = "10 kΩ"
+stock = "r0805-10k"
+spec = ["0805 (2012 metric) · ⅛ W", "Code 103 (or 1002)"]
+foot = "AliExpress 11/2026"
+lid = { spec = "0805 · ⅛ W · 103" }
+render = { kind = "chip", l = 2.0, w = 1.25, term = 0.4 }
+
+[[label]]
+cat = "Resistor"
+color = "res-brown"
+value = "27 kΩ"
+stock = "r0805-27k"
+spec = ["0805 (2012 metric) · ⅛ W", "Code 273 (or 2702)"]
+foot = "AliExpress 11/2026"
+lid = { spec = "0805 · ⅛ W · 273" }
+render = { kind = "chip", l = 2.0, w = 1.25, term = 0.4 }
+
+[[label]]
+cat = "Resistor"
+color = "res-brown"
+value = "100 kΩ"
+stock = "r0805-100k"
+spec = ["0805 (2012 metric) · ⅛ W", "Code 104 (or 1003)"]
+foot = "AliExpress 11/2026"
+lid = { spec = "0805 · ⅛ W · 104" }
+render = { kind = "chip", l = 2.0, w = 1.25, term = 0.4 }
+
+[[label]]
+cat = "Electrolytic capacitor"
+color = "elco"
+value = "100 µF"
+stock = "cap-elec-smd-35v-100u-63x77"
+spec = ["SMD aluminium · 35 V", "6.3 × 7.7 mm · black band = −"]
+foot = "AliExpress 11/2026"
+lid = { spec = "SMD 35 V 6.3×7.7" }
+render = { kind = "polymer", d = 6.3, base = 6.6 }
+
+[[label]]
+cat = "Diode · Schottky"
+color = "semi-teal"
+value = "B5819W"
+stock = "b5819w"
+spec = ["40 V · 1 A · SOD-123", "Band = cathode"]
+foot = "AliExpress 11/2026"
+lid = { spec = "40 V 1 A SOD-123" }
+render = { kind = "chip", l = 2.7, w = 1.6, term = 0.5, actual = true }
+
+[[label]]
+cat = "Diode · zener"
+color = "semi-teal"
+value = "15 V zener"
+stock = "bzt52c15"
+spec = ["BZT52C15 · SOD-123", "Band = cathode"]
+foot = "AliExpress 11/2026"
+lid = { spec = "BZT52C15 SOD-123" }
+render = { kind = "chip", l = 2.7, w = 1.6, term = 0.5, actual = true }
+
+[[label]]
+cat = "Transistor · MOSFET"
+color = "semi-teal"
+value = "ZXMP3A16G"
+stock = "zxmp3a16gta"
+spec = ["P-channel · 30 V · SOT-223", "Tab = drain"]  # tab pinout from memory
+foot = "AliExpress 11/2026"
+lid = { spec = "P-ch 30 V SOT-223" }
+render = { kind = "sot223" }
+
+[[label]]
+cat = "LED · 2835"
+color = "opto"
+value = "Cool white"
+stock = "led-2835-cool-white"
+spec = ["2835 SMD · 0.2 W", "Cut corner = cathode"]  # polarity mark from memory
+foot = "AliExpress 11/2026"
+lid = { spec = "2835 · 0.2 W" }
+render = { kind = "chip", l = 3.5, w = 2.8, term = 0.6 }
+
+[[label]]
+cat = "LED · 2835"
+color = "opto"
+value = "Warm white"
+stock = "led-2835-warm-white"
+spec = ["2835 SMD · 0.5 W", "Cut corner = cathode"]  # polarity mark from memory
+foot = "AliExpress 11/2026"
+lid = { spec = "2835 · 0.5 W" }
+render = { kind = "chip", l = 3.5, w = 2.8, term = 0.6 }
+
+[[label]]
+cat = "LED · 2835"
+color = "opto"
+value = "Red"
+stock = "led-2835-red"
+spec = ["2835 SMD · 0.06 W", "Cut corner = cathode"]  # polarity mark from memory
+foot = "AliExpress 11/2026"
+lid = { spec = "2835 · 0.06 W" }
+render = { kind = "chip", l = 3.5, w = 2.8, term = 0.6 }
+
+[[label]]
+cat = "Fuse · PTC"
+color = "power-orange"
+value = "3 A hold"
+stock = "polyfuse-1812-3a-24v"
+spec = ["1812 resettable fuse · 24 V"]
+foot = "AliExpress 11/2026"
+lid = { spec = "1812 · 24 V" }
+render = { kind = "chip", l = 4.5, w = 3.2, term = 0.7 }
+
+[[label]]
+cat = "Audio · buzzer"
+color = "pot-pink"
+value = "Buzzer 12 mm"
+stock = "buzzer-passive-12x95-magnetic"
+spec = ["Passive magnetic · 5 V", "12 × 9.5 mm · drive with PWM"]
+foot = "AliExpress 11/2026"
+render = { kind = "buzzer" }
+
+# ---- connectors ----
+
+[[label]]
+cat = "Connector · header"
+color = "conn-green"
+value = "1×40 female"
+stock = "header-female-1x40-254"
+spec = ["Socket strip · 2.54 mm", "Cut to length"]
+foot = "AliExpress 11/2026"
+render = { kind = "header", n = 40, female = true }
+
+[[label]]
+cat = "Connector · header"
+color = "conn-green"
+value = "2×20 2.0 mm"
+stock = "header-male-2x20-2mm"
+spec = ["Male header · 2.0 mm pitch", "Not 2.54 mm"]
+foot = "AliExpress 11/2026"
+render = { kind = "header", n = 20, rows = 2, pitch = 2.0 }
+
+[[label]]
+cat = "Connector · IDC"
+color = "conn-green"
+value = "FC-14 2.0"
+stock = "idc-socket-2mm-14pin"
+spec = ["14-pin IDC female · 2.0 mm", "For 2.0 mm ribbon"]
+foot = "AliExpress 11/2026"
+render = { kind = "housing", n = 7, rows = 2, pitch = 2.0, fill = "#262626" }
+
+[[label]]
+cat = "Connector · JST"
+color = "conn-green"
+value = "XH kit"
+stock = "jst-xh-kit-230"
+spec = ["JST XH · 2.54 mm · 2–5 pin", "Housings, headers, crimps"]
+foot = "230 pcs · AliExpress 11/2026"
+render = { kind = "housing", n = 4 }
+
+[[label]]
+cat = "Connector · JST"
+color = "conn-green"
+value = "XH 2-pin"
+stock = "jst-xh-kit-2pin"
+spec = ["JST XH · 2.54 mm", "Housing + header + crimps"]
+foot = "50 sets · AliExpress 11/2026"
+render = { kind = "housing", n = 2 }
+
+[[label]]
+cat = "Connector · JST"
+color = "conn-green"
+value = "XH 4-pin"
+stock = "jst-xh-kit-4pin"
+spec = ["JST XH · 2.54 mm", "Housing + header + crimps"]
+foot = "50 sets · AliExpress 11/2026"
+render = { kind = "housing", n = 4 }
+
+[[label]]
+cat = "Connector · JST"
+color = "conn-green"
+value = "VH kit"
+stock = "jst-vh396-kit"
+spec = ["JST VH · 3.96 mm · 2/3/4 pin", "Crimper: VH3.96 die"]
+foot = "120 pcs · AliExpress 11/2026"
+render = { kind = "housing", n = 3, pitch = 3.96 }
+
+[[label]]
+cat = "Connector · power"
+color = "conn-green"
+value = "XT30PW-M"
+stock = "xt30pw-pcb-male"
+spec = ["XT30 male · horizontal PCB", "Right-angle"]
+foot = "AliExpress 11/2026"
+
+# ---- wire ----
+
+[[label]]
+cat = "Wire · ribbon"
+color = "elco"
+value = "14-way ribbon"
+stock = "ribbon-cable-14p"
+spec = ["Grey flat cable · 1 m"]
+foot = "AliExpress 11/2026"
+render = { kind = "ribbon", n = 14 }
+
+[[label]]
+cat = "Wire"
+color = "elco"
+value = "0.1 mm magnet"
+stock = "wire-enamelled-01mm"
+spec = ["Enamelled copper · 11 m", "Scrape or burn the enamel"]
+foot = "AliExpress 11/2026"
+render = { kind = "spool", fill = "#b8732e" }
+
+# ---- mechanical ----
+
+[[label]]
+cat = "Screws"
+color = "mech"
+value = "M3 kit"
+stock = "screw-kit-m3-hex-ss"
+spec = ["Stainless hex socket cap", "Assorted lengths"]
+foot = "364 pcs · AliExpress 11/2026"
+render = { kind = "screw", l = 10, fill = "#b8bcc2" }
+
+[[label]]
+cat = "Screws"
+color = "mech"
+value = "M3 × 6"
+stock = "screw-m3x6-hex-black"
+spec = ["Hex socket cap · black", "Self-tapping (plastic)"]
+foot = "AliExpress 11/2026"
+render = { kind = "screw", l = 6 }
+
+[[label]]
+cat = "Screws"
+color = "mech"
+value = "M3 × 8"
+stock = "screw-m3x8-hex-black"
+spec = ["Hex socket cap · black", "Self-tapping (plastic)"]
+foot = "AliExpress 11/2026"
+render = { kind = "screw", l = 8 }

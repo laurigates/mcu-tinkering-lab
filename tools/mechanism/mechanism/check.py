@@ -12,7 +12,7 @@ A design is a ``design.py`` exposing
   tilt ±45, rest (0, 0), one view at (60, 30);
 - optionally ``GRID_HOLES``: ``{part: [(x, y), ...]}``, the mounting-hole
   centres a part offers other parts, in its mounting face's frame. Each
-  part's holes must lie on the 10 mm grid (tools/cadstd, ADR-030); build
+  part's holes must lie on the 10 mm grid (tools/cadstd, ADR-035); build
   them from ``cadstd.grid.points`` so the declaration and the cut agree. A
   design without it is not checked against the grid.
 

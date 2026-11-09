@@ -4,7 +4,7 @@ import tomllib
 
 import pytest
 from enclosure import board, modules
-from kicad import paths, sexpr
+from kicad import paths, sexpr, sockets
 from kicad.paths import REPO_ROOT
 
 PROJECTS = [
@@ -48,25 +48,43 @@ def test_breakout_kinds_have_a_pcb_and_known_features():
             assert ("xy" in f) != ("at" in f), (name, f)
 
 
-def test_gy521_outline_maps_back_onto_its_silk_rect():
-    """J3 sits at 90 degrees: the outline handed to Blender in J3's frame must
-    land back on board.toml's rect, with J3's pads along its rear edge."""
+def test_gy521_outline_comes_from_its_socket_footprint():
+    """J3's look-alike outline is GY521_Socket's F.Fab, not a hand copy.
+
+    enclosure.toml names no outline or module for J3, the footprint's F.Fab is
+    sockets.toml's outline (the measured 21.00 x 15.88 mm board), and placed on
+    the carrier the module lies forward (-y) of the pad row: the 8d18cd8d
+    board put it behind, so the module fitted component side down.
+    """
     project = PROJECTS[0]
-    cfg = paths.load_board_config(project)
-    ox, oy = cfg.data["outline"]["origin"]
+    spec = _heights(project)["J3"]
+    assert "outline" not in spec and "module" not in spec
     fp = _footprints(project)["J3"]
+    assert sexpr.head(fp)[1] == "Breakout_Sockets:GY521_Socket"
+    kind = modules.load_catalog()["footprints"][sexpr.head(fp)[1]]["kind"]
+    assert kind == "gy-521"
+    config = sockets.load_config(sockets.subtree() / sockets.CONFIG)
+    (socket,) = [s for s in config if s.name == "GY521_Socket"]
+    local = modules._fab_bbox(fp)
+    assert local == pytest.approx(list(socket.outline))
+    assert local[2] - local[0] == pytest.approx(21.00)
+    assert local[3] - local[1] == pytest.approx(15.88)
+
+    cfg = paths.load_board_config(project)
+    oy = cfg.data["outline"]["origin"][1]
     at = sexpr.atoms(sexpr.child(fp, "at"))
-    fx, fy, rot = float(at[0]) - ox, float(at[1]) - oy, float(at[2])
-    rect = _heights(project)["J3"]["outline"]
-    local = modules._to_local(rect, fx, fy, rot)
+    fy = float(at[1]) - oy
+    rot = float(at[2]) if len(at) > 2 else 0.0
     corners = [
         board._rotate(x, y, rot)
         for x in (local[0], local[2])
         for y in (local[1], local[3])
     ]
-    xs = sorted({round(fx + dx, 6) for dx, _ in corners})
-    ys = sorted({round(fy + dy, 6) for _, dy in corners})
-    assert [xs[0], ys[0], xs[-1], ys[-1]] == pytest.approx(rect)
-    for px, py in modules._pads(fp):
-        _, dy = board._rotate(px, py, rot)
-        assert fy + dy == pytest.approx(47.0)  # the rect's rear edge is 48.5
+    top = min(fy + dy for _, dy in corners)
+    bottom = max(fy + dy for _, dy in corners)
+    rows = {
+        round(fy + board._rotate(px, py, rot)[1], 6) for px, py in modules._pads(fp)
+    }
+    assert rows == {47.0}  # the pads where the 1x8 socket's were
+    assert 47.0 - top > 14.0  # the module forward of the row
+    assert bottom - 47.0 < 2.0  # the row along its rear edge

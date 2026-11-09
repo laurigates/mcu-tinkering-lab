@@ -15,8 +15,10 @@ pico_sdk_init()
 
 add_executable(balancebot
     src/main.c
+    src/arm_gate.c
     src/balance_control.c
     src/cli.c
+    src/cli_gate.c
     src/crc32.c
     src/imu_filter.c
     src/lqr.c
@@ -49,7 +51,7 @@ target_compile_options(balancebot PRIVATE -Wall -Wextra)
 # lqr.c is covered too: its double math is the core-0 solve, written out
 # explicitly, and its core-1 helpers are float.
 set_source_files_properties(src/balance_control.c src/pid.c src/lqr.c src/imu_filter.c
-    PROPERTIES COMPILE_OPTIONS -Wdouble-promotion)
+    src/arm_gate.c PROPERTIES COMPILE_OPTIONS -Wdouble-promotion)
 
 target_link_libraries(balancebot
     pico_stdlib
@@ -63,7 +65,8 @@ target_link_libraries(balancebot
     hardware_watchdog
 )
 
-# Console on USB CDC only (the robot has no UART header wired).
+# Console on USB CDC only (no UART console; carrier rev3's J6 brings out
+# D1/D2, which firmware does not use).
 pico_enable_stdio_usb(balancebot 1)
 pico_enable_stdio_uart(balancebot 0)
 

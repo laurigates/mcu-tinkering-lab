@@ -1,0 +1,591 @@
+# Parts-drawer stickers, first run (2026-10-27/28): parts read from the
+# AliExpress order history, typed in by hand. Build with
+#   just labels::build tools/labels/data/drawers-2026-10.toml
+#
+# Spec lines marked "from memory" were not read from the listing and want
+# checking against a datasheet before the next print: the I²C addresses, the
+# TB6612FNG ratings, the VS1838B pinout and the NTAG215 memory size.
+schema = 1
+title = "Parts drawers 2026-10"
+
+[colors]
+cap-blue = "#1d4ed8"
+tant-orange = "#c2410c"
+poly-teal = "#0f766e"
+ic-purple = "#6d28d9"
+conn-green = "#15803d"
+elco = "#334155"
+opto = "#b45309"
+mech = "#57534e"
+pot-pink = "#be185d"
+mod-indigo = "#4338ca"
+cer-amber = "#a16207"
+board-slate = "#0f172a"
+sensor-cyan = "#0e7490"
+rf-red = "#b91c1c"
+
+# ---- SMD ----
+
+[[label]]
+cat = "MLCC capacitor"
+color = "cap-blue"
+value = "100 nF"
+stock = "c0805-100n-50v-x7r"
+spec = ["0805 (2012 metric) · 50 V · X7R", "Unmarked"]
+foot = "100 pcs · AliExpress 09/2026"
+lid = { spec = "0805 · 50 V · X7R" }
+render = { kind = "chip", l = 2.0, w = 1.25, term = 0.45 }
+
+[[label]]
+cat = "MLCC capacitor"
+color = "cap-blue"
+value = "10 µF"
+stock = "c1206-10u-25v-x7r"
+spec = ["1206 (3216 metric) · 25 V · X7R", "Unmarked"]
+foot = "50 pcs · AliExpress 09/2026"
+lid = { spec = "1206 · 25 V · X7R" }
+render = { kind = "chip", l = 3.2, w = 1.6, term = 0.55 }
+
+[[label]]
+cat = "Tantalum capacitor"
+color = "tant-orange"
+value = "47 µF"
+stock = "cap-tant-c-16v-47u"
+spec = ["Case C (6032) · 16 V", "Code 476 · band = +"]
+foot = "10 pcs · AliExpress 09/2026"
+lid = { spec = "Case C · 16 V · 476" }
+render = { kind = "tant", l = 6.0, w = 3.2, mark = "476" }
+
+[[label]]
+cat = "Tantalum capacitor"
+color = "tant-orange"
+value = "220 µF"
+stock = "cap-tant-d-10v-220u"
+spec = ["Case D (7343) · 10 V", "Code 227 · band = +"]
+foot = "10 pcs · AliExpress 09/2026"
+lid = { spec = "Case D · 10 V · 227" }
+render = { kind = "tant", l = 7.3, w = 4.3, mark = "227" }
+
+[[label]]
+cat = "Tantalum capacitor"
+color = "tant-orange"
+value = "100 µF"
+stock = "cap-tant-d-16v-100u"
+spec = ["Case D (7343) · 16 V", "Code 107 · band = +"]
+foot = "10 pcs · AliExpress 09/2026"
+lid = { spec = "Case D · 16 V · 107" }
+render = { kind = "tant", l = 7.3, w = 4.3, mark = "107" }
+
+[[label]]
+cat = "Polymer capacitor"
+color = "poly-teal"
+value = "470 µF"
+stock = "cap-polymer-16v-470u-65x9"
+spec = ["SMD solid polymer · 16 V", "6.5 × 9 mm · cut corners = +"]
+foot = "10 pcs · AliExpress 09/2026"
+lid = { spec = "Polymer 16 V 6.5×9" }
+render = { kind = "polymer", d = 6.5, base = 6.9 }
+
+[[label]]
+cat = "Polymer capacitor"
+color = "poly-teal"
+value = "220 µF"
+stock = "cap-polymer-16v-220u-63x77"
+spec = ["SMD solid polymer · 16 V", "6.3 × 7.7 mm · cut corners = +"]
+foot = "10 pcs · AliExpress 09/2026"
+lid = { spec = "Polymer 16 V 6.3×7.7" }
+render = { kind = "polymer", d = 6.3, base = 6.6 }
+
+[[label]]
+cat = "IC · buck regulator"
+color = "ic-purple"
+value = "TPS54335A"
+stock = "tps54335a"
+spec = ["3 A sync step-down · 4.5–28 V in", "SO-8 PowerPAD (DDA)"]
+foot = "5 pcs · AliExpress 06/2025"
+lid = { spec = "3 A buck · SO-8 PP" }
+render = { kind = "sop8", mark = "54335A" }
+
+[[label]]
+cat = "Connector"
+color = "conn-green"
+value = "USB-C jack"
+stock = "usbc-female-4pin"
+spec = ["Female charging port · 4-pin", "With fixing plate"]
+foot = "20 pcs · AliExpress 11–12/2025"
+lid = { value = "USB-C", spec = "4-pin charging jack" }
+render = { kind = "usbc", l = 8.94, h = 3.26 }
+
+# ---- through-hole ----
+
+[[label]]
+cat = "Electrolytic capacitor"
+color = "elco"
+value = "470 µF"
+stock = "cap-elec-35v-470u"
+spec = ["Radial · 35 V · low ESR", "Stripe = −, long leg = +"]
+foot = "10 pcs · AliExpress 09/2026"
+render = { kind = "radial" }
+
+[[label]]
+cat = "Electrolytic capacitor"
+color = "elco"
+value = "220 µF"
+stock = "cap-elec-50v-220u"
+spec = ["Radial · 50 V · low ESR", "Stripe = −, long leg = +"]
+foot = "10 pcs · AliExpress 09/2026"
+render = { kind = "radial" }
+
+[[label]]
+cat = "Electrolytic capacitor"
+color = "elco"
+value = "1000 µF"
+stock = "cap-elec-16v-1000u"
+spec = ["Radial · 16 V · low ESR", "Stripe = −, long leg = +"]
+foot = "10 pcs · AliExpress 09/2026"
+render = { kind = "radial" }
+
+[[label]]
+cat = "Optocoupler"
+color = "opto"
+value = "6N138"
+stock = "optocoupler-6n138"
+spec = ["High-gain optocoupler · DIP-8", "Darlington output"]
+foot = "10 pcs · AliExpress 09/2024"
+render = { kind = "dip8", mark = "6N138" }
+
+[[label]]
+cat = "IR receiver"
+color = "opto"
+value = "VS1838B"
+stock = "ir-receiver-vs1838b-module"
+spec = ["38 kHz IR receiver · 2.7–5.5 V", "Front: OUT · GND · VCC"]  # pinout from memory
+foot = "10 pcs · AliExpress 07/2024"
+render = { kind = "irrx" }
+
+[[label]]
+cat = "LED · infrared"
+color = "opto"
+value = "IR 940 nm"
+stock = "led-ir-940nm-5mm"
+spec = ["5 mm emitter", "Flat side / short leg = cathode"]
+foot = "10 pcs · AliExpress 07/2024"
+render = { kind = "led", fill = "#dfe6f2" }
+
+[[label]]
+cat = "LED · RGB"
+color = "opto"
+value = "RGB 5 mm"
+stock = "led-rgb-5mm-ca-diffused"
+spec = ["Diffused · common anode", "Longest leg = common +"]
+foot = "50 pcs · AliExpress 07/2024"
+render = { kind = "led", fill = "#f5f5f5" }
+
+[[label]]
+cat = "Switch"
+color = "mech"
+value = "SW-520D"
+stock = "tilt-switch-sw520d"
+spec = ["Ball tilt switch", "Closed upright, opens when tilted"]
+foot = "10 pcs · AliExpress 07/2024"
+render = { kind = "tilt" }
+
+[[label]]
+cat = "Connector"
+color = "conn-green"
+value = "PJ320A"
+stock = "jack-pj320a-35mm"
+spec = ["3.5 mm audio jack · 4-pin", "PCB mount"]
+foot = "10 pcs · AliExpress 07/2024"
+render = { kind = "jack" }
+
+[[label]]
+cat = "Trimmer potentiometer"
+color = "pot-pink"
+value = "1 kΩ"
+stock = "trimmer-3386p-1k"
+spec = ["3386P · code 102", "0.5 W · top adjust"]
+foot = "AliExpress 07/2024"
+render = { kind = "trim" }
+
+[[label]]
+cat = "Connector"
+color = "conn-green"
+value = "KF301-2P"
+stock = "terminal-kf301-2p"
+spec = ["Screw terminal · 2-pin", "5.0 mm pitch"]
+foot = "20 pcs · AliExpress 01/2025"
+render = { kind = "term" }
+
+# ---- breakout modules (board drawings are generic, not to scale) ----
+
+[[label]]
+cat = "Module · touch"
+color = "mod-indigo"
+value = "TTP223"
+stock = "ttp223-touch-module"
+spec = ["Capacitive touch key · 2–5.5 V", "OUT high on touch"]
+foot = "20 pcs · AliExpress 12/2025"
+render = { kind = "module", l = 15, w = 11, pins = 3, pcb = "#b91c1c" }
+
+[[label]]
+cat = "Module · power"
+color = "mod-indigo"
+value = "MT3608"
+stock = "mt3608-boost-usbc"
+spec = ["Boost 2–24 V → 5–28 V · 2 A", "USB-C in · set Vout with the pot"]
+foot = "10 pcs · AliExpress 12/2025"
+render = { kind = "module", l = 30, w = 17, pins = 0, pcb = "#1d4f91" }
+
+[[label]]
+cat = "Module · power"
+color = "mod-indigo"
+value = "TP4056"
+stock = "tp4056-usbc-module"
+spec = ["1S Li-ion charger · 4.2 V, 1 A", "USB-C in · 18650 variant"]
+foot = "5 pcs · AliExpress 12/2025"
+render = { kind = "module", l = 26, w = 17, pins = 0, pcb = "#1d4f91" }
+
+[[label]]
+cat = "Module · power"
+color = "mod-indigo"
+value = "Li-ion gauge"
+stock = "li-ion-level-indicator-1s"
+spec = ["1S 3.7–4.2 V level indicator", "4-step LED display"]
+foot = "5 pcs · AliExpress 03/2026"
+render = { kind = "module", l = 20, w = 10, pins = 0, pcb = "#282828" }
+
+[[label]]
+cat = "Module · I²C"
+color = "mod-indigo"
+value = "MCP23017"
+stock = "mcp23017-module"
+spec = ["16-bit I²C GPIO expander", "Addr 0x20–0x27 (A0–A2)"]  # address from memory
+foot = "2 pcs · AliExpress 06/2025"
+render = { kind = "module", l = 30, w = 20, pins = 8, pcb = "#1d4f91" }
+
+[[label]]
+cat = "Module · motor"
+color = "mod-indigo"
+value = "TB6612FNG"
+stock = "tb6612fng-module"
+spec = ["Dual H-bridge · 1.2 A/ch cont.", "VM ≤ 15 V · logic 2.7–5.5 V"]  # ratings from memory
+foot = "2 pcs · AliExpress 01/2025"
+render = { kind = "module", l = 20, w = 20, pins = 8, pcb = "#7e22ce" }
+
+[[label]]
+cat = "Module · I²C"
+color = "mod-indigo"
+value = "PCA9685"
+stock = "pca9685-module"
+spec = ["16-ch 12-bit PWM / servo", "I²C, default addr 0x40"]  # address from memory
+foot = "2 orders · AliExpress 04/2025"
+render = { kind = "module", l = 62, w = 25, pins = 6, pcb = "#1d4f91" }
+
+[[label]]
+cat = "Module · I²C"
+color = "mod-indigo"
+value = "TCA9548A"
+stock = "tca9548a-module"
+spec = ["1 → 8 I²C multiplexer", "Addr 0x70–0x77 (A0–A2)"]  # address from memory
+foot = "2 orders · AliExpress 12/2025"
+render = { kind = "module", l = 30, w = 21, pins = 8, pcb = "#1d4f91" }
+
+# ---- ceramic kit (10 values × 30) ----
+
+[[label]]
+cat = "Ceramic capacitor"
+color = "cer-amber"
+value = "10 pF"
+stock = "cap-ceramic-kit-10-values-50v"
+spec = ["Through-hole · 50 V · ±10 %", "Code 100"]
+foot = "30 pcs · kit · AliExpress 02/2025"
+lid = { spec = "TH · 50 V · code 100" }
+render = { kind = "disc", mark = "100" }
+
+[[label]]
+cat = "Ceramic capacitor"
+color = "cer-amber"
+value = "20 pF"
+stock = "cap-ceramic-kit-10-values-50v"
+spec = ["Through-hole · 50 V · ±10 %", "Code 200"]
+foot = "30 pcs · kit · AliExpress 02/2025"
+lid = { spec = "TH · 50 V · code 200" }
+render = { kind = "disc", mark = "200" }
+
+[[label]]
+cat = "Ceramic capacitor"
+color = "cer-amber"
+value = "30 pF"
+stock = "cap-ceramic-kit-10-values-50v"
+spec = ["Through-hole · 50 V · ±10 %", "Code 300"]
+foot = "30 pcs · kit · AliExpress 02/2025"
+lid = { spec = "TH · 50 V · code 300" }
+render = { kind = "disc", mark = "300" }
+
+[[label]]
+cat = "Ceramic capacitor"
+color = "cer-amber"
+value = "47 pF"
+stock = "cap-ceramic-kit-10-values-50v"
+spec = ["Through-hole · 50 V · ±10 %", "Code 470"]
+foot = "30 pcs · kit · AliExpress 02/2025"
+lid = { spec = "TH · 50 V · code 470" }
+render = { kind = "disc", mark = "470" }
+
+[[label]]
+cat = "Ceramic capacitor"
+color = "cer-amber"
+value = "56 pF"
+stock = "cap-ceramic-kit-10-values-50v"
+spec = ["Through-hole · 50 V · ±10 %", "Code 560"]
+foot = "30 pcs · kit · AliExpress 02/2025"
+lid = { spec = "TH · 50 V · code 560" }
+render = { kind = "disc", mark = "560" }
+
+[[label]]
+cat = "Ceramic capacitor"
+color = "cer-amber"
+value = "68 pF"
+stock = "cap-ceramic-kit-10-values-50v"
+spec = ["Through-hole · 50 V · ±10 %", "Code 680"]
+foot = "30 pcs · kit · AliExpress 02/2025"
+lid = { spec = "TH · 50 V · code 680" }
+render = { kind = "disc", mark = "680" }
+
+[[label]]
+cat = "Ceramic capacitor"
+color = "cer-amber"
+value = "100 pF"
+stock = "cap-ceramic-kit-10-values-50v"
+spec = ["Through-hole · 50 V · ±10 %", "Code 101"]
+foot = "30 pcs · kit · AliExpress 02/2025"
+lid = { spec = "TH · 50 V · code 101" }
+render = { kind = "disc", mark = "101" }
+
+[[label]]
+cat = "Ceramic capacitor"
+color = "cer-amber"
+value = "1 nF"
+stock = "cap-ceramic-kit-10-values-50v"
+spec = ["Through-hole · 50 V · ±10 %", "Code 102"]
+foot = "30 pcs · kit · AliExpress 02/2025"
+lid = { spec = "TH · 50 V · code 102" }
+render = { kind = "disc", mark = "102" }
+
+[[label]]
+cat = "Ceramic capacitor"
+color = "cer-amber"
+value = "10 nF"
+stock = "cap-ceramic-kit-10-values-50v"
+spec = ["Through-hole · 50 V · ±10 %", "Code 103"]
+foot = "30 pcs · kit · AliExpress 02/2025"
+lid = { spec = "TH · 50 V · code 103" }
+render = { kind = "disc", mark = "103" }
+
+[[label]]
+cat = "Ceramic capacitor"
+color = "cer-amber"
+value = "100 nF"
+stock = "cap-ceramic-kit-10-values-50v"
+spec = ["Through-hole · 50 V · ±10 %", "Code 104"]
+foot = "30 pcs · kit · AliExpress 02/2025"
+lid = { spec = "TH · 50 V · code 104" }
+render = { kind = "disc", mark = "104" }
+
+# ---- kits, boards, sensors, RF ----
+
+[[label]]
+cat = "Film capacitor kit"
+color = "cer-amber"
+value = "Film caps"
+stock = "cap-film-kit-100v"
+spec = ["Polyester · 100 V · assorted", "2A102J = 100 V · 1 nF · ±5 %"]  # value list unread (listing images)
+foot = "180 pcs · AliExpress 02/2025"
+render = { kind = "film", mark = "2A102J" }
+
+[[label]]
+cat = "Switch"
+color = "mech"
+value = "Tactile sw."
+stock = "tactile-button-assortment"
+spec = ["Tactile push buttons", "10 sizes, mixed"]
+foot = "250 pcs · AliExpress 02/2025"
+render = { kind = "tact" }
+
+[[label]]
+cat = "Connector · power"
+color = "conn-green"
+value = "XT60"
+stock = "xt60-female-lead"
+spec = ["Female with leads", "+ XT60 → DC 5.5×2.5 cable"]
+foot = "AliExpress 06–07/2025"
+render = { kind = "xt60" }
+
+[[label]]
+cat = "Antenna"
+color = "rf-red"
+value = "868 MHz"
+stock = "antenna-lora-868-sma-ufl"
+spec = ["LoRa antenna · 5 dBi", "SMA male · U.FL pigtail"]
+foot = "2 pcs · AliExpress 12/2025"
+render = { kind = "antenna" }
+
+[[label]]
+cat = "NFC"
+color = "rf-red"
+value = "NTAG215"
+stock = "nfc-ntag215-cards"
+spec = ["NFC cards · 13.56 MHz", "504 bytes user memory"]  # memory size from memory
+foot = "5 pcs · AliExpress 03/2026"
+render = { kind = "card" }
+
+[[label]]
+cat = "NFC"
+color = "rf-red"
+value = "CUID tags"
+stock = "nfc-cuid-gen2-tags"
+spec = ["MIFARE Classic 1K compatible", "Gen2 · block 0 writable"]
+foot = "20 pcs · AliExpress 08/2024"
+render = { kind = "card", fill = "#1e3a8a" }
+
+[[label]]
+cat = "Dev board"
+color = "board-slate"
+value = "S3 SuperMini"
+stock = "esp32-s3-supermini"
+spec = ["ESP32-S3 · Wi-Fi + BLE 5", "USB-C"]
+foot = "AliExpress 03/2026"
+render = { kind = "module", l = 23, w = 18, pins = 0, pcb = "#282828", usb = true }
+
+[[label]]
+cat = "Dev board"
+color = "board-slate"
+value = "ESP32-S3-Zero"
+stock = "esp32-s3-zero"
+spec = ["ESP32-S3 · Wi-Fi + BLE 5", "USB-C · RGB LED"]
+foot = "2 orders · AliExpress 07/2024, 03/2026"
+render = { kind = "module", l = 24, w = 18, pins = 0, pcb = "#282828", usb = true }
+
+[[label]]
+cat = "Dev board"
+color = "board-slate"
+value = "ESP32-C3 mini"
+stock = "esp32-c3-mini"
+spec = ["ESP32-C3 RISC-V · Wi-Fi + BLE 5", "USB-C"]
+foot = "AliExpress 07/2024"
+render = { kind = "module", l = 23, w = 18, pins = 0, pcb = "#1d4f91", usb = true }
+
+[[label]]
+cat = "Dev board"
+color = "board-slate"
+value = "ESP32-CAM"
+stock = "esp32-cam"
+spec = ["ESP32 + OV2640 · microSD", "No USB · flash via serial"]
+foot = "AliExpress 07/2024"
+render = { kind = "module", l = 40, w = 27, pins = 0, pcb = "#282828", lens = true }
+
+[[label]]
+cat = "Module · Wi-Fi + IR"
+color = "board-slate"
+value = "ESP-01M IR"
+stock = "esp8285-esp01m-ir"
+spec = ["ESP8285 · IR transmitter + receiver", "Flash via serial"]
+foot = "AliExpress 07/2024"
+render = { kind = "module", l = 25, w = 16, pins = 4, pcb = "#282828" }
+
+[[label]]
+cat = "Sensor · distance"
+color = "sensor-cyan"
+value = "RCWL-1601"
+stock = "rcwl-1601"
+spec = ["Ultrasonic ranger · 3–5 V", "HC-SR04 compatible"]
+foot = "2 pcs · AliExpress 02/2025"
+render = { kind = "module", l = 45, w = 20, pins = 4, pcb = "#1d4f91", eyes = true }
+
+[[label]]
+cat = "Sensor · colour"
+color = "sensor-cyan"
+value = "TCS34725"
+stock = "tcs34725-module"
+spec = ["RGB colour sensor · I²C 0x29", "White LED on board"]
+foot = "AliExpress 07/2024"
+render = { kind = "module", l = 20, w = 20, pins = 7, pcb = "#1d4f91" }
+
+[[label]]
+cat = "Sensor · pH"
+color = "sensor-cyan"
+value = "PH4502C"
+stock = "ph4502c-module"
+spec = ["pH sensor board · 5 V", "Analog out · BNC probe"]
+foot = "AliExpress 07/2024"
+render = { kind = "module", l = 42, w = 32, pins = 6, pcb = "#1d4f91", bnc = true }
+
+[[label]]
+cat = "Radio · LoRa"
+color = "rf-red"
+value = "Ra-01"
+stock = "lora-ra01-sx1278"
+spec = ["SX1278 LoRa · 433 MHz band", "3.3 V · SPI"]
+foot = "AliExpress 08/2024"
+render = { kind = "module", l = 17, w = 16, pins = 0, pcb = "#c8c8c8" }
+
+[[label]]
+cat = "Display"
+color = "sensor-cyan"
+value = "OLED 0.69\""
+stock = "oled-069-96x16"
+spec = ["96 × 16 · SSD1306 · I²C", "14-pin FPC"]
+foot = "AliExpress 08/2024"
+render = { kind = "module", l = 26, w = 8, pins = 0, pcb = "#3c3c3c", screen = true }
+
+[[label]]
+cat = "LED matrix"
+color = "opto"
+value = "WS2812 8×8"
+stock = "ws2812-8x8-matrix"
+spec = ["64 addressable RGB LEDs · 5 V", "DIN → DOUT chain"]
+foot = "AliExpress 03/2026"
+render = { kind = "matrix" }
+
+# ---- 80 × 20 mm strips for bins of larger things ----
+
+[[strip]]
+color = "ic-purple"
+title = "ESP32 dev boards"
+detail = "ESP32-S3-Zero · ESP32-S3 SuperMini · ESP32-C3 mini · ESP32-CAM"
+
+[[strip]]
+color = "mech"
+title = "M2 hardware"
+detail = "Brass heat-set inserts (M2 × L2 × OD3.2, M2 knurled) · hex standoffs & screws"
+
+[[strip]]
+color = "conn-green"
+title = "Headers & Dupont · 2.54 mm"
+detail = "1×40 male / female headers · jumper caps · Dupont housings & crimp pins"
+
+[[strip]]
+color = "tant-orange"
+title = "Solder, flux & wire"
+detail = "HBD-366 0.3 mm · NC-559 flux · SF38 paste flux · FEP 36 AWG wire"
+
+[[strip]]
+color = "mech"
+title = "Motors, pumps & magnets"
+detail = "NEMA 17 17HS3401S (1 A, 1.8°) · P20/15 12 V electromagnets · USB mini pump · 5 mm hex couplings"
+
+[[strip]]
+color = "elco"
+title = "Battery holders"
+detail = "2× 18650 SMT holders · 1- and 2-slot AAA with leads · 18650 clear case"
+
+[[strip]]
+color = "conn-green"
+title = "Adapters & cables"
+detail = "USB-C → USB-A OTG adapters · XT60 → DC 5.5×2.5"
+
+[[strip]]
+color = "pot-pink"
+title = "Prototype boards"
+detail = "Double-sided 4×6 and 5×7 cm · stripboard"

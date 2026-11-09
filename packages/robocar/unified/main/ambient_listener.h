@@ -108,6 +108,14 @@ uint32_t ambient_listener_frames_accepted(void);
 uint32_t ambient_listener_frames_muted(void);
 
 /**
+ * @brief Frames discarded only because the pan/tilt servos had moved within
+ *        AMBIENT_SERVO_HANGOVER_MS_DEFAULT. Counted apart from
+ *        ambient_listener_frames_muted(): a frame already muted for playback or
+ *        the cue is not counted twice.
+ */
+uint32_t ambient_listener_frames_head_muted(void);
+
+/**
  * @brief Copy out the pre-roll — the newest accepted microphone audio, oldest
  *        first — and empty the ring.
  *

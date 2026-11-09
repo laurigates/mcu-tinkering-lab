@@ -66,6 +66,7 @@ typedef struct {
     bool servos_ok;         //!< servo_controller_init() succeeded
     bool buzzer_ok;         //!< buzzer_init() succeeded (GPIO, not I2C)
     bool mcp23017_present;  //!< optional GPIO expander detected
+    bool cliff_sensors_ok;  //!< floor sensors configured on the expander (cliff reflex can arm)
     bool audio_ok;          //!< I2S player task + ring ready
     bool key_present;       //!< Gemini API key available
     /* What the last response said about that key (issue #845): a key Google

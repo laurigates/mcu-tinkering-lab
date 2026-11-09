@@ -1,0 +1,43 @@
+# US-A4: a person asks a question while the planner request is in flight. The
+# planner's reply carries a `speak` line written from the state before the
+# person spoke; planner_task.c drops it ("person spoke during the request",
+# 2026-11-05) and only the voice turn's answer is heard. A control request with
+# no voice turn in flight, and with `speak` offered again, shows the planner
+# line IS spoken when nobody interrupted.
+#
+# Timeline: console wake at 5 s, request at the 15 s tick with 4 s latency, so
+# the reply is handled at 19 s. The voice turn runs 16 s .. 18 s (recording the
+# first second), inside that window, so voice_turn_count() moves. Its reply
+# spends the speaking budget at 18 s, so the 30 s keep-alive is not offered
+# `speak` (SPEECH_BUDGET_MIN_GAP_MS_DEFAULT = 20 s, speech_budget.h). The 60 s
+# keep-alive is: the gap has passed and the view was never remarked on (a voice
+# turn does not re-reference the scene, voice_turn.c), so the gate reads V. That
+# request is the control.
+id: us-a4-question-during-plan
+stories: [US-A4]
+seed: 7
+duration: 90s
+world:
+  - {at: 0s, link: {wifi: true, key: true}}
+  - {at: 0s, frame: {scene: kitchen-table, pose: C}}
+  - {at: 5s, console: status}
+  - {at: 16s, voice_turn: {dur: 2s, record: 1s, reply: "There is a blue cup and a bowl on the table."}}
+models:
+  planner: inline
+responses:
+  - {status: 200, latency: 4s, call: stop, speak: "I heard some strange noise just now."}
+  - {status: 200, latency: 1500ms, call: stop}
+  - {status: 200, latency: 1500ms, call: stop, speak: "The table looks tidy today."}
+default: {status: 200, latency: 1s, call: stop}
+expect:
+  - model_request: {between: [15s, 15s], speak_allowed: true, count: 1}
+  - suppressed: {reason: person_spoke, between: [15s, 20s], count: 1, text_contains: strange noise}
+  - no_utterance: {source: planner, between: [15s, 59s]}
+  - utterance: {source: voice_turn, after: "voice_turn[0]", within: 4s, count: 1, text_contains: blue cup}
+  # The voice turn's reply spent the speaking budget: speak is not offered.
+  - model_request: {between: [30s, 30s], speak_allowed: false, count: 1}
+  # Control: speak offered again, nobody spoke during the request, so it is said.
+  - model_request: {between: [60s, 60s], gate: V, speak_allowed: true, count: 1}
+  - utterance: {source: planner, between: [60s, 65s], count: 1, text_contains: tidy}
+  - suppressed: {between: [60s, 65s], count: 0}
+  - speak_not_offered: {count: 0}

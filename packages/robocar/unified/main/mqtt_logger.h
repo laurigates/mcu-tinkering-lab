@@ -1,6 +1,6 @@
 /**
  * @file mqtt_logger.h
- * @brief MQTT-based remote logging for ESP32-CAM
+ * @brief MQTT-based remote logging for robocar-unified
  */
 
 #ifndef MQTT_LOGGER_H
@@ -137,6 +137,34 @@ typedef void (*mqtt_logger_subscribe_cb_t)(const char *topic, const char *data, 
  * @return ESP_OK on success, error code otherwise
  */
 esp_err_t mqtt_logger_publish(const char *topic, const char *payload, int qos, bool retain);
+
+/**
+ * @brief mqtt_logger_publish() that also returns the client's message id.
+ *
+ * For QoS 1 and 2 the id is the one MQTT_EVENT_PUBLISHED later reports when
+ * the broker acknowledges the message (see mqtt_logger_set_published_handler()).
+ *
+ * @param msg_id Out: the message id (0 for QoS 0); untouched on failure
+ */
+esp_err_t mqtt_logger_publish_tracked(const char *topic, const char *payload, int qos, bool retain,
+                                      int *msg_id);
+
+/**
+ * @brief Broker-acknowledgement callback signature.
+ *
+ * Runs from the MQTT event task on MQTT_EVENT_PUBLISHED, i.e. when the broker
+ * has acknowledged a QoS 1/2 message. Keep it short: no blocking, no flash.
+ */
+typedef void (*mqtt_logger_published_cb_t)(int msg_id);
+
+/**
+ * @brief Register the acknowledgement callback (one; NULL clears it).
+ *
+ * May be called before mqtt_logger_init(): the client is created on the first
+ * WiFi link-up, which can be long after the module that wants the
+ * acknowledgements has started.
+ */
+void mqtt_logger_set_published_handler(mqtt_logger_published_cb_t callback);
 
 /**
  * @brief Subscribe to an MQTT topic with a callback

@@ -289,9 +289,9 @@ static void test_dispatch_routes_console_commands_to_console_callback_only(void)
     mqtt_command_ops_t ops = ops_for(&r);
 
     static const char *const lines[] = {
-        "plan resume", "voice quiet 30", "trace reset",       "snap 3",
-        "listen 5",    "mic dump 10",    "cam gainceiling 4", "servo pan 20",
-        "led 255 0 0", "sound beep",     "gpio mode 3 out",   "idle gaze off",
+        "plan resume",     "voice quiet 30",    "trace reset",  "snap 3",      "listen 5",
+        "mic dump 10",     "cam gainceiling 4", "servo pan 20", "led 255 0 0", "sound beep",
+        "gpio mode 3 out", "idle gaze off",     "ota postpone", "ota check",   "report test",
     };
     for (size_t i = 0; i < sizeof(lines) / sizeof(lines[0]); i++) {
         recorder_reset(&r);
@@ -462,6 +462,9 @@ static void test_read_only_refuses_state_changing_commands(void)
         "voice fi_1950",
         "voice vary",
         "voice said extra",
+        /* cliff */
+        "cliff on",
+        "cliff off",
         /* trace */
         "trace reset",
         "trace led on",
@@ -503,6 +506,9 @@ static void test_read_only_refuses_state_changing_commands(void)
         "gpio mode 3 out",
         "gpio set 3 1",
         "gpio get 3",
+        /* report: `report test` publishes an event */
+        "report test",
+        "report",
         /* near misses of allow-listed lines */
         "planx",
         "servos",
@@ -530,7 +536,7 @@ static void test_read_only_refuses_state_changing_commands(void)
 static void test_read_only_allows_status_commands(void)
 {
     static const char *const lines[] = {
-        "plan", "trace", "mic", "cam", "servo", "gpio", "voice", "voice said", "idle",
+        "plan", "trace", "mic", "cam", "servo", "gpio", "voice", "voice said", "idle", "cliff",
     };
     recorder_t r;
     mqtt_command_ops_t ops = read_only_ops_for(&r);

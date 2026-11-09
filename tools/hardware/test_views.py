@@ -11,11 +11,12 @@ from __future__ import annotations
 
 import subprocess
 import tempfile
-import tomllib
+
 import unittest
 from pathlib import Path
 
 from hardware import CARRIER, HARNESS, VIEWS, HardwareError, join
+from hardware.blocks import load_sidecar
 from hardware.test_hardware import BOARD_MD, HEADER_H, REPO_ROOT, write
 
 # LED_PIN is GPIO1 (pad D0) and BEEP_PIN GPIO7 (pad D2) on the test board.
@@ -615,7 +616,7 @@ class RealDataTest(unittest.TestCase):
             return [t for t in tables if t.get("build", view) == view]
 
         for path in self.sidecars():
-            data = tomllib.loads(path.read_text(encoding="utf-8"))
+            data = load_sidecar(path)
             for view in VIEWS:
                 with self.subTest(sidecar=str(path.relative_to(REPO_ROOT)), view=view):
                     model = join(path.parent, view=view)

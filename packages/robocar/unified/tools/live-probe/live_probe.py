@@ -340,7 +340,13 @@ def build_report(tl: Timeline, model: str, voice: str) -> dict[str, Any]:
     ev = tl.events
     first = {
         k: next((e.t for e in ev if e.kind == k), None)
-        for k in ("setup_complete", "audio", "turn_complete", "generation_complete")
+        for k in (
+            "connected",
+            "setup_complete",
+            "audio",
+            "turn_complete",
+            "generation_complete",
+        )
     }
     audio = [e for e in ev if e.kind == "audio"]
     mimes = sorted({e.data[1] or "" for e in audio})
@@ -354,6 +360,9 @@ def build_report(tl: Timeline, model: str, voice: str) -> dict[str, Any]:
         "model": model,
         "voice": voice,
         "clip_seconds": round(tl.clip_seconds, 3),
+        # The SDK consumes setupComplete inside connect(), so the second field
+        # stays None on a live run; connect_ms is the one that is filled.
+        "connect_ms": _ms(first["connected"], tl.t_connect_start),
         "connect_to_setup_complete_ms": _ms(
             first["setup_complete"], tl.t_connect_start
         ),

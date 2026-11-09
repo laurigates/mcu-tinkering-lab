@@ -7,7 +7,7 @@ packages = ["src"]
 
 [project]
 name = "esp32-robot-simulation"
-version = "0.1.10" # x-release-please-version
+version = "0.1.12" # x-release-please-version
 description = "ESP32 Robot Car Simulation with Genesis Physics Framework"
 readme = "README.md"
 license = {text = "MIT"}
@@ -39,7 +39,7 @@ dependencies = [
     "numpy==2.5.4",
     "scipy==1.18.1",
     "matplotlib==3.11.2",
-    "pandas==3.1.0",
+    "pandas==3.1.1",
     # Computer vision and image processing
     "opencv-python==5.0.0.93",
     # genesis-world -> moviepy 2.2.1 (May 2025, the newest release) caps
@@ -48,7 +48,7 @@ dependencies = [
     # pins equal (tests/test_pillow_override.py checks).
     "Pillow==13.0.0",
     # Communication protocols
-    "websockets==17.3",
+    "websockets==17.4",
     "asyncio-mqtt==0.16.2",
     "pyserial==3.5",
     "httpx==0.28.1",  # Required for AI command processor
@@ -61,7 +61,7 @@ dependencies = [
     "toml==0.10.2",
     "click==8.5.0",
     # PyTorch (required by Genesis)
-    "torch>=2.0.0",
+    "torch==2.15.0",
     "crc8==0.2.1",
 ]
 
@@ -69,18 +69,18 @@ dependencies = [
 dev = [
     # Testing framework
     "pytest==9.2.0",
-    "pytest-asyncio==1.4.1",
+    "pytest-asyncio==1.4.1.post1",
     "pytest-cov==7.1.0",
 
     # Code quality
-    "ruff==0.17.3",
+    "ruff==0.17.4",
     # Pinned: ty is pre-1.0 and its diagnostic set moves between releases
     # (e.g. 0.0.79 added the `redundant-condition` rule and 0.0.78 does not
     # recognise a `# ty: ignore[redundant-condition]` suppression for it).
     # An unpinned resolve reddened every PR with no commit to explain it
     # (issue #515). Bump deliberately, verifying `uv run ty check src/`
     # still passes, rather than dropping the pin.
-    "ty==0.0.94",
+    "ty==0.0.98",
     "types-PyYAML",
     "types-toml",
 
@@ -164,7 +164,7 @@ include = ["src"]
 [tool.ty.rules]
 # Silence import-resolution errors for third-party packages without type stubs.
 # Equivalent to mypy's `ignore_missing_imports` for these modules.
-unresolved-import = "ignore"
+import-not-found = "ignore"
 
 [tool.pytest.ini_options]
 minversion = "6.0"

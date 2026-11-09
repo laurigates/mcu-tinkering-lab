@@ -1,0 +1,34 @@
+# US-F2: a 429 from the model backs off instead of retrying at full rate.
+# planner_task.c doubles backoff_periods 1, 2, 4 up to
+# PLANNER_MAX_BACKOFF_PERIODS (4), sleeps (1 + backoff) base periods, and
+# resets to 0 on the first success.
+#
+# A console line every 5 s keeps every tick warranted, so the request times
+# show the backoff alone and not the dormancy ladder: 15 s (429, next in 30 s),
+# 45 s (429, 45 s), 90 s (429, 75 s), 165 s (429, 75 s), 240 s (200), 255 s.
+id: us-f2-backoff-429
+stories: [US-F2]
+seed: 3
+duration: 5m
+world:
+  - {at: 0s, link: {wifi: true, key: true}}
+  - {at: 0s, frame: {scene: hallway, pose: C}}
+  - {at: 5s, every: 5s, until: 295s, console: status}
+models:
+  planner: inline
+responses:
+  - {status: 429, latency: 300ms}
+  - {status: 429, latency: 300ms}
+  - {status: 429, latency: 300ms}
+  - {status: 429, latency: 300ms}
+default: {status: 200, latency: 1s, call: stop}
+expect:
+  - backoff: {sequence: [1, 2, 4, 4]}
+  - request_intervals: {between: [15s, 240s], intervals: [30s, 45s, 75s, 75s], tolerance: 1s}
+  - force_stop: {reason: backend_error, count: 4}
+  # Each failed request still counts against the plan_budget request ceiling,
+  # the bound on a 429 loop (gemini_backend.c), and is charged no tokens.
+  - cycle: {requested: true, between: [165s, 166s], spent_req: 4, spent_tok: 0, count: 1}
+  - cycle: {requested: true, between: [240s, 242s], spent_req: 5, count: 1}
+  - requests: {between: [241s, 256s], count: 1}
+  - goal: {kind: stop, between: [240s, 245s], count: 1}

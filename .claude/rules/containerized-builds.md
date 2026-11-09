@@ -1,4 +1,5 @@
 ---
+reviewed: 2026-11-08
 paths:
   - '**/justfile'
   - 'tools/*.just'
@@ -246,6 +247,25 @@ in #648; moving it to 0xd000 now fails the check.
 Projects using USB-serial adapters get the shared monitor automatically via `esp32-idf.just`.
 
 ESP32-S3 projects with native USB-Serial-JTAG override `monitor` with their own scripts.
+
+### Building in a Claude Code cloud session
+
+`just <project>::build` fails there before compiling anything: building the
+repo's dev image runs `pip install` inside `docker build`, and pip does not
+trust the session's HTTPS proxy CA (`CERTIFICATE_VERIFY_FAILED`). Run
+`idf.py` in the stock image instead, with the proxy and its CA passed in. The
+component manager git-fetches dependencies, so git needs the CA as well
+(`GIT_SSL_CAINFO`):
+
+```sh
+docker run --rm --network host -e HTTPS_PROXY -e HTTP_PROXY -e NO_PROXY -e https_proxy -e http_proxy -e no_proxy -e SSL_CERT_FILE=/ccr-ca.crt -e REQUESTS_CA_BUNDLE=/ccr-ca.crt -e CURL_CA_BUNDLE=/ccr-ca.crt -e GIT_SSL_CAINFO=/ccr-ca.crt -v /root/.ccr/ca-bundle.crt:/ccr-ca.crt:ro -v "$PWD":/workspace -w /workspace/packages/<domain>/<project> espressif/idf:v5.4 bash -c 'git config --global --add safe.directory "*" && idf.py build'
+```
+
+Start `dockerd` by hand first (`docker info` fails without it); a worker
+restart stops it again. A Docker Hub `429` on the pull is a rate limit that
+clears within the hour. Observed 2026-11-08 building robocar-unified for
+PR #999: the link step caught two sources missing from `main/CMakeLists.txt`
+that the host suite, which lists its own sources, could not.
 
 ## Adding New ESP-IDF Projects
 

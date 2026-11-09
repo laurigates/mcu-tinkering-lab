@@ -46,7 +46,7 @@ between gate poses lands in `between_clashes`: either tighten `SWEEP` so the
 gate sees it, or fix it. Every frame is one `assembly()` call, so a slow
 design is slow here: the pan-tilt's `print/` takes about 25 s a pose.
 
-Dimensions come from `tools/cadstd` (ADR-030): name the part's `PROCESS`
+Dimensions come from `tools/cadstd` (ADR-035): name the part's `PROCESS`
 (`fdm`, `sla`, `mjf`), take holes from `cadstd.fasteners` (`M3.clearance`,
 `M2.pilot`), fits by class (`fit("slide", PROCESS)`, `hole(d, "close",
 PROCESS)`), insert holes from `insert_hole(M2, PROCESS)` and the default wall
@@ -154,7 +154,7 @@ once; see `.claude/rules/multi-agent-workflows.md` for surviving that.
 
 ## Related
 
-- [ADR-030](../../../docs/decisions/ADR-030-printed-part-dimension-standard.md) and `tools/cadstd`: fasteners, fits per process, the grid, the coupon
+- [ADR-035](../../../docs/decisions/ADR-035-printed-part-dimension-standard.md) and `tools/cadstd`: fasteners, fits per process, the grid, the coupon
 - `enclosure-cad` skill: cases for carrier boards, the wall gate's home
 - `jlcpcb-order` skill: JLC3DP upload and cart
 - `docs/reference/servo-selection.md`: why the MG90D does not fit the 9 g kits

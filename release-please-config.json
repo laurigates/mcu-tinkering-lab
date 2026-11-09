@@ -102,6 +102,11 @@
         {
           "type": "generic",
           "path": "pyproject.toml"
+        },
+        {
+          "type": "toml",
+          "path": "uv.lock",
+          "jsonpath": "$.package[?(@.name.value==='esp32-robot-simulation')].version"
         }
       ]
     },

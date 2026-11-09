@@ -1,4 +1,5 @@
 ---
+reviewed: 2026-09-25
 description: Gotchas for driving LEGO Powered UP / Boost hubs from a browser via node-poweredup + Web Bluetooth
 paths:
   - "web/**"

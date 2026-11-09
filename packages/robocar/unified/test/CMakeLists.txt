@@ -14,6 +14,7 @@ add_compile_definitions(
     GOAL_STATE_HOST_TEST=1
     REACTIVE_CONTROLLER_HOST_TEST=1
     ULTRASONIC_HOST_TEST=1
+    CLIFF_SENSOR_HOST_TEST=1
 )
 
 # Main source directory
@@ -104,6 +105,20 @@ add_executable(test_gpio_expander_core
 add_test(NAME gpio_expander_core COMMAND test_gpio_expander_core)
 
 # -----------------------------------------------------------------------------
+# Cliff reflex decisions (front and rear floor sensors, interim for issue #1010)
+#
+# cliff_core.c compiled unmodified: fail-closed start and read failures, the
+# debounce, brake then back off, no back-off toward a side without floor or
+# forward into an obstacle, and which motions permits() allows. The executor
+# integration is pinned in test_reactive_controller.
+# -----------------------------------------------------------------------------
+add_executable(test_cliff_core
+    "${MAIN_SRC_DIR}/cliff_core.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_cliff_core.c"
+)
+add_test(NAME cliff_core COMMAND test_cliff_core)
+
+# -----------------------------------------------------------------------------
 # reactive_controller decision logic (Phase 5, gate G2, issue #226)
 # -----------------------------------------------------------------------------
 add_executable(test_reactive_controller
@@ -113,11 +128,15 @@ add_executable(test_reactive_controller
     "${MAIN_SRC_DIR}/idle_gaze.c"
     "${MAIN_SRC_DIR}/scene_change.c"
     "${MAIN_SRC_DIR}/reactive_controller.c"
+    "${MAIN_SRC_DIR}/cliff_core.c"
+    "${MAIN_SRC_DIR}/cliff_sensor.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/motor_controller_stub.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/servo_controller_stub.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/test_reactive_controller.c"
 )
 target_link_libraries(test_reactive_controller PRIVATE Threads::Threads m)
+# The cliff tests expect the reflex armed from boot, whatever the firmware default.
+target_compile_definitions(test_reactive_controller PRIVATE CLIFF_REFLEX_AT_BOOT=1)
 add_test(NAME reactive_controller COMMAND test_reactive_controller)
 
 # -----------------------------------------------------------------------------
@@ -135,6 +154,8 @@ add_executable(test_reflex_latency
     "${MAIN_SRC_DIR}/idle_gaze.c"
     "${MAIN_SRC_DIR}/scene_change.c"
     "${MAIN_SRC_DIR}/reactive_controller.c"
+    "${MAIN_SRC_DIR}/cliff_core.c"
+    "${MAIN_SRC_DIR}/cliff_sensor.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/motor_controller_stub.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/servo_controller_stub.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/test_reflex_latency.c"
@@ -188,10 +209,22 @@ add_test(NAME base64_stream COMMAND test_base64_stream)
 # -----------------------------------------------------------------------------
 add_executable(test_speech_tags
     "${MAIN_SRC_DIR}/speech_tags.c"
+    "${MAIN_SRC_DIR}/sound_clips_core.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/test_speech_tags.c"
 )
 target_link_libraries(test_speech_tags PRIVATE Threads::Threads m)
 add_test(NAME speech_tags COMMAND test_speech_tags)
+
+# -----------------------------------------------------------------------------
+# sound clips: names, the [tag] split, the reflex honk cooldown
+#
+# Pure C; the PCM itself is in sound_clips.c and stays on the device.
+# -----------------------------------------------------------------------------
+add_executable(test_sound_clips
+    "${MAIN_SRC_DIR}/sound_clips_core.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_sound_clips.c"
+)
+add_test(NAME sound_clips COMMAND test_sound_clips)
 
 # -----------------------------------------------------------------------------
 # dialogue_style variation module (spoken-line repetition)
@@ -202,6 +235,7 @@ add_test(NAME speech_tags COMMAND test_speech_tags)
 add_executable(test_dialogue_style
     "${MAIN_SRC_DIR}/dialogue_style.c"
     "${MAIN_SRC_DIR}/speech_tags.c"  # note_spoken() strips delivery tags
+    "${MAIN_SRC_DIR}/sound_clips_core.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/test_dialogue_style.c"
 )
 target_link_libraries(test_dialogue_style PRIVATE Threads::Threads m)
@@ -232,6 +266,19 @@ add_executable(test_speech_evidence
     "${CMAKE_CURRENT_SOURCE_DIR}/test_speech_evidence.c"
 )
 add_test(NAME speech_evidence COMMAND test_speech_evidence)
+
+# -----------------------------------------------------------------------------
+# planner_range (the rangefinder readings in every planner request)
+#
+# A failed sensor reads as max range in the executor's filter; the clause must
+# say "unavailable" there, never "no echo", or the model is told the path is
+# clear when nothing was measured.
+# -----------------------------------------------------------------------------
+add_executable(test_planner_range
+    "${MAIN_SRC_DIR}/planner_range.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_planner_range.c"
+)
+add_test(NAME planner_range COMMAND test_planner_range)
 
 # -----------------------------------------------------------------------------
 # voice_fx_core (the retro-robot body resonance on the way to I2S)
@@ -336,6 +383,39 @@ target_link_libraries(test_plan_activity PRIVATE Threads::Threads m)
 add_test(NAME plan_activity COMMAND test_plan_activity)
 
 # -----------------------------------------------------------------------------
+# note_gate: when the planner may offer the `note` tool, and how many (ADR-033)
+# -----------------------------------------------------------------------------
+add_executable(test_note_gate
+    "${MAIN_SRC_DIR}/note_gate.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_note_gate.c"
+)
+add_test(NAME note_gate COMMAND test_note_gate)
+
+# -----------------------------------------------------------------------------
+# planner_cycle_core (the planner's per-cycle decisions, ADR-030)
+#
+# The request gate and its one-shot announce latches, speech screening (near
+# repeats, a person speaking during the request), goal write vs force-stop and
+# the backoff ladder — against the real pure modules planner_task.c links, so
+# the decisions tested are the ones the robot and the behaviour twin run.
+# -----------------------------------------------------------------------------
+add_executable(test_planner_cycle_core
+    "${MAIN_SRC_DIR}/planner_cycle_core.c"
+    "${MAIN_SRC_DIR}/note_gate.c"
+    "${MAIN_SRC_DIR}/plan_activity.c"
+    "${MAIN_SRC_DIR}/plan_budget.c"
+    "${MAIN_SRC_DIR}/scene_change.c"
+    "${MAIN_SRC_DIR}/ambient_audio.c"
+    "${MAIN_SRC_DIR}/speech_budget.c"
+    "${MAIN_SRC_DIR}/dialogue_style.c"
+    "${MAIN_SRC_DIR}/speech_tags.c"
+    "${MAIN_SRC_DIR}/sound_clips_core.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_planner_cycle_core.c"
+)
+target_link_libraries(test_planner_cycle_core PRIVATE Threads::Threads m)
+add_test(NAME planner_cycle_core COMMAND test_planner_cycle_core)
+
+# -----------------------------------------------------------------------------
 # gemini parse (Phase 5, gate G1, issue #228)
 #
 # Only built when cJSON is available. Skipped (with a message) otherwise so
@@ -344,6 +424,8 @@ add_test(NAME plan_activity COMMAND test_plan_activity)
 if(CJSON_FOUND)
     add_executable(test_gemini_parse
         "${MAIN_SRC_DIR}/gemini_parse.c"
+        "${MAIN_SRC_DIR}/note_gate.c"
+        "${MAIN_SRC_DIR}/sound_clips_core.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/test_gemini_parse.c"
     )
     target_include_directories(test_gemini_parse PRIVATE ${CJSON_INCLUDE_DIRS})
@@ -355,6 +437,18 @@ if(CJSON_FOUND)
         "FIXTURE_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/fixtures\""
     )
     add_test(NAME gemini_parse COMMAND test_gemini_parse)
+
+    # GlitchTip event JSON and the RTC breadcrumb ring (ADR-033): the shape
+    # tools/glitchtip/bridge parses, garbage RTC memory after power-on, and a
+    # line torn by a reset.
+    add_executable(test_event_report_core
+        "${MAIN_SRC_DIR}/event_report_core.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/test_event_report_core.c"
+    )
+    target_include_directories(test_event_report_core PRIVATE ${CJSON_INCLUDE_DIRS})
+    target_link_directories(test_event_report_core PRIVATE ${CJSON_LIBRARY_DIRS})
+    target_link_libraries(test_event_report_core PRIVATE ${CJSON_LIBRARIES})
+    add_test(NAME event_report_core COMMAND test_event_report_core)
 
     add_executable(test_voice_history
         "${MAIN_SRC_DIR}/voice_history.c"
@@ -377,6 +471,7 @@ if(CJSON_FOUND)
         "${MAIN_SRC_DIR}/voice_persona.c"
         "${MAIN_SRC_DIR}/dialogue_style.c"
         "${MAIN_SRC_DIR}/speech_tags.c"
+        "${MAIN_SRC_DIR}/sound_clips_core.c"
         "${MAIN_SRC_DIR}/tts_request.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/host_shims.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/nvs_shim.c"
@@ -386,8 +481,6 @@ if(CJSON_FOUND)
                                "${VOICE_PROMPTS_CRED_DIR}")
     target_link_directories(test_voice_prompts PRIVATE ${CJSON_LIBRARY_DIRS})
     target_link_libraries(test_voice_prompts PRIVATE ${CJSON_LIBRARIES} Threads::Threads m)
-    # The ESP_LOG* shims are no-ops, which leaves TAG unused.
-    target_compile_options(test_voice_prompts PRIVATE -Wno-unused-variable)
     add_test(NAME voice_prompts COMMAND test_voice_prompts)
 else()
     message(STATUS "cJSON not found — skipping test_gemini_parse, test_voice_history and test_voice_prompts. Install via `brew install cjson` or `apt install libcjson-dev`.")
@@ -431,6 +524,39 @@ add_executable(test_voice_endpoint
 )
 target_link_libraries(test_voice_endpoint PRIVATE Threads::Threads m)
 add_test(NAME voice_endpoint COMMAND test_voice_endpoint)
+
+# -----------------------------------------------------------------------------
+# ota_park (park on open floor before an OTA install): no open heading, a front
+# sensor failing mid-turn, a wall behind, and the uint32 millisecond wrap.
+# -----------------------------------------------------------------------------
+add_executable(test_ota_park
+    "${MAIN_SRC_DIR}/ota_park.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_ota_park.c"
+)
+target_link_libraries(test_ota_park PRIVATE Threads::Threads m)
+add_test(NAME ota_park COMMAND test_ota_park)
+
+# ota_announce (what the robot says before an OTA install, and the postpone
+# window): notes dropped whole when they do not fit, UTF-8 never split, a late
+# postpone refused, and the uint32 millisecond wrap.
+add_executable(test_ota_announce
+    "${MAIN_SRC_DIR}/ota_announce.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_ota_announce.c"
+)
+target_link_libraries(test_ota_announce PRIVATE Threads::Threads m)
+add_test(NAME ota_announce COMMAND test_ota_announce)
+
+# -----------------------------------------------------------------------------
+# http_timing (issue #948: split a voice turn's latency into connect, request
+# and download). Repeated events, phases that never happened and the uint32
+# millisecond wrap.
+# -----------------------------------------------------------------------------
+add_executable(test_http_timing
+    "${MAIN_SRC_DIR}/http_timing.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_http_timing.c"
+)
+target_link_libraries(test_http_timing PRIVATE Threads::Threads m)
+add_test(NAME http_timing COMMAND test_http_timing)
 
 # -----------------------------------------------------------------------------
 # speech_trigger (issue #617: start a hands-free turn on a voice, not a slam)
@@ -499,8 +625,7 @@ if(EXISTS "${PCA9685_MANAGED_DIR}/pca9685.c")
         "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_host"
         "${PCA9685_MANAGED_DIR}"
     )
-    # -Wno-unused-variable: the ESP_LOG* shims are no-ops, which leaves the driver's TAG unused.
-    target_compile_options(test_pca9685_multi PRIVATE -fsanitize=address -fno-omit-frame-pointer -Wno-unused-variable)
+    target_compile_options(test_pca9685_multi PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(test_pca9685_multi PRIVATE -fsanitize=address)
     target_link_libraries(test_pca9685_multi PRIVATE Threads::Threads m)
     add_test(NAME pca9685_multi COMMAND test_pca9685_multi)
@@ -545,8 +670,6 @@ target_include_directories(test_servo_controller BEFORE PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_host"
     "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_decl"
 )
-# -Wno-unused-variable: the ESP_LOG* shims are no-ops, which leaves TAG unused.
-target_compile_options(test_servo_controller PRIVATE -Wno-unused-variable)
 target_link_libraries(test_servo_controller PRIVATE Threads::Threads m)
 add_test(NAME servo_controller COMMAND test_servo_controller)
 
@@ -567,8 +690,6 @@ add_executable(test_activity_trace
     "${CMAKE_CURRENT_SOURCE_DIR}/test_activity_trace.c"
 )
 target_compile_definitions(test_activity_trace PRIVATE ACTIVITY_TRACE_HOST_TEST=1)
-# -Wno-unused-variable: the ESP_LOG* shims are no-ops, which leaves TAG unused.
-target_compile_options(test_activity_trace PRIVATE -Wno-unused-variable)
 target_link_libraries(test_activity_trace PRIVATE Threads::Threads m)
 add_test(NAME activity_trace COMMAND test_activity_trace)
 
@@ -594,8 +715,6 @@ target_include_directories(test_i2c_bus_stats BEFORE PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_host"  # i2c_bus.h -> <i2cdev.h>
     "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_decl"  # pca9685.h declarations
 )
-# -Wno-unused-variable: the ESP_LOG* shims are no-ops, which leaves TAG unused.
-target_compile_options(test_i2c_bus_stats PRIVATE -Wno-unused-variable)
 target_link_libraries(test_i2c_bus_stats PRIVATE Threads::Threads m)
 add_test(NAME i2c_bus_stats COMMAND test_i2c_bus_stats)
 
@@ -617,8 +736,6 @@ target_include_directories(test_motor_controller BEFORE PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_host"  # i2c_bus.h -> <i2cdev.h>
     "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_decl"
 )
-# -Wno-unused-variable: the ESP_LOG* shims are no-ops, which leaves TAG unused.
-target_compile_options(test_motor_controller PRIVATE -Wno-unused-variable)
 target_link_libraries(test_motor_controller PRIVATE Threads::Threads m)
 add_test(NAME motor_controller COMMAND test_motor_controller)
 
@@ -641,8 +758,6 @@ target_include_directories(test_led_controller BEFORE PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_host"  # i2c_bus.h -> <i2cdev.h>
     "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_decl"
 )
-# -Wno-unused-variable: the ESP_LOG* shims are no-ops, which leaves TAG unused.
-target_compile_options(test_led_controller PRIVATE -Wno-unused-variable)
 target_link_libraries(test_led_controller PRIVATE Threads::Threads m)
 add_test(NAME led_controller COMMAND test_led_controller)
 
@@ -686,8 +801,6 @@ target_include_directories(test_self_report BEFORE PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_host"  # i2c_bus.h -> <i2cdev.h>
     "${CMAKE_CURRENT_SOURCE_DIR}/include/pca9685_decl"
 )
-# -Wno-unused-variable: the ESP_LOG* shims are no-ops, which leaves TAG unused.
-target_compile_options(test_self_report PRIVATE -Wno-unused-variable)
 target_link_libraries(test_self_report PRIVATE Threads::Threads m)
 add_test(NAME self_report COMMAND test_self_report)
 
@@ -792,8 +905,6 @@ foreach(_variant credentials_loader credentials_loader_no_mqtt)
         "${CMAKE_CURRENT_SOURCE_DIR}/nvs_shim.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/test_credentials_loader.c"
     )
-    # -Wno-unused-variable: the ESP_LOG* shims are no-ops, which leaves TAG unused.
-    target_compile_options(test_${_variant} PRIVATE -Wno-unused-variable)
     add_test(NAME ${_variant} COMMAND test_${_variant})
 endforeach()
 target_compile_definitions(test_credentials_loader_no_mqtt PRIVATE CREDENTIALS_FIXTURE_NO_MQTT=1)

@@ -1,4 +1,4 @@
-"""build123d cutters and plates built from the standard (ADR-030).
+"""build123d cutters and plates built from the standard (ADR-035).
 
 Every cutter stands on the XY plane and runs up +Z from z = 0 for `depth`,
 centred on the origin in XY; place it with `Pos`/`Rot` and subtract it.

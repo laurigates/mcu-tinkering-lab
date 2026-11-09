@@ -17,6 +17,7 @@
 
 #include "esp_err.h"
 #include "goal_state.h"
+#include "note_gate.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -47,6 +48,24 @@ typedef struct {
  * across those tasks.
  */
 void gemini_parse_last_usage(gemini_usage_t *out);
+
+/** A `note` call from the planner (note_gate.h, ADR-033). */
+typedef struct {
+    /** NOTE_KIND_NONE when the response carried no usable note. */
+    note_kind_t kind;
+    /** One line, at most NOTE_TEXT_MAX bytes (note_text_clean()). */
+    char text[NOTE_TEXT_MAX + 1];
+} gemini_note_t;
+
+/**
+ * @brief The `note` call from the most recent gemini_parse_response(), if any.
+ *
+ * Cleared at the start of every parse, like gemini_parse_last_usage(). Only a
+ * note with a known kind and some printable text counts; the first such call
+ * wins. A `note` call is never taken as the motion goal. The caller decides
+ * whether the tool was offered: this reports what the response carried.
+ */
+void gemini_parse_last_note(gemini_note_t *out);
 
 /**
  * @brief Navigate candidates[0].content.parts[0].functionCall from the raw
@@ -107,6 +126,42 @@ esp_err_t gemini_parse_response(const char *json_text, goal_t *out_goal, char *o
  *         pointer or zero capacity.
  */
 esp_err_t gemini_parse_text(const char *json_text, char *out, size_t out_len);
+
+/** What a text reply was made of, for the caller's log line (issue #950). */
+typedef struct {
+    int parts;         /**< entries in candidates[0].content.parts */
+    int thought_parts; /**< parts with "thought": true, skipped */
+    int text_parts;    /**< non-thought text parts seen (joined, or the last one kept) */
+    /** candidates[0].finishReason, "" if absent. Sized for the longest real value,
+     *  FINISH_REASON_UNSPECIFIED (25 chars); anything longer is truncated. */
+    char finish_reason[32];
+} gemini_text_meta_t;
+
+/**
+ * @brief gemini_parse_text() that also reports the reply's shape.
+ *
+ * Parts flagged `"thought": true` are reasoning, not speech, and are skipped
+ * (both functions do this). A reply with only thought parts is a failure.
+ *
+ * @param meta  Filled whenever the JSON parses, on failure too; may be NULL.
+ * @return As gemini_parse_text().
+ */
+esp_err_t gemini_parse_text_meta(const char *json_text, char *out, size_t out_len,
+                                 gemini_text_meta_t *meta);
+
+/**
+ * @brief gemini_parse_text_meta() for a voice turn: the LAST text part only.
+ *
+ * gemini-flash-latest can write its reasoning as an ordinary text part with no
+ * thought flag and then the reply as a second text part (issue #950). Joining
+ * the parts, as gemini_parse_text() does for the narrator, spoke the reasoning
+ * aloud. Thought-flagged parts and parts without text are skipped as before,
+ * and @p meta still counts every part.
+ *
+ * @return As gemini_parse_text_meta().
+ */
+esp_err_t gemini_parse_voice_reply(const char *json_text, char *out, size_t out_len,
+                                   gemini_text_meta_t *meta);
 
 #ifdef __cplusplus
 }

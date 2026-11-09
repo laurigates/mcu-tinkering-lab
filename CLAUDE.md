@@ -19,7 +19,8 @@ mcu-tinkering-lab/
 │   │   ├── unified/                # Firmware: single-board XIAO ESP32-S3 Sense
 │   │   ├── unified-integrated/     # Carrier PCB variant with the breakout chips on board (comparison)
 │   │   ├── bringup/                # Hardware self-test firmware for the unified build
-│   │   └── simulation/             # Python 3.12 physics simulation (Pymunk)
+│   │   ├── simulation/             # Python 3.12 physics simulation (Pymunk)
+│   │   └── twin/                   # Behaviour twin: planner C on a virtual clock + scenario harness (ADR-030)
 │   ├── thinkpack/                  # ESP-NOW mesh of modular companion "boxes"
 │   │   ├── brainbox/               # LLM mesh coordinator (ESP32-S3)
 │   │   ├── boombox/                # Audio playback box
@@ -196,17 +197,21 @@ Most workflows delegate to reusable workflows from [`laurigates/.github`](https:
 | `fix-release-conflicts.yml` | Push to main / schedule | Fix conflicts in release-please PRs | `reusable-fix-release-conflicts.yml` |
 | `sync-ai-rules.yml` | Weekly / manual | Sync AI coding rules from `.github` repo | `reusable-sync-ai-rules.yml` |
 | `carrier-check.yml` | Push/PR (path-filtered) | KiCad-free carrier check: `tools/kicad` tests, vendored-library hashes, schematic regenerates byte-identical, board pads match the join, the check stamp matches the committed files, every BOM part has an `lcsc` or `buy` source (`kicad.sourcing`) ([ADR-027](docs/decisions/ADR-027-kicad-carrier-generation.md)) | No (local) |
+| `robocar-twin.yml` | Push/PR (path-filtered) | Build the behaviour twin and run its smoke test, harness tests and every scenario (`just robocar-twin::test`, [ADR-030](docs/decisions/ADR-030-robocar-behaviour-twin.md)) | No (local) |
 | `refresh-idf-locks.yml` | Monthly / manual | Regenerate every git-tracked ESP-IDF `dependencies.lock` and open one PR with the diff — see [`.claude/rules/esp-idf-dependency-locks.md`](.claude/rules/esp-idf-dependency-locks.md) | No (local) |
 
 ## Important Paths
 
+- `tools/glitchtip/` — self-hosted GlitchTip plus the MQTT bridge that forwards robocar resets, crash backtraces and planner notes into it ([ADR-033](docs/decisions/ADR-033-robocar-error-reporting.md)); the repo `.mcp.json` registers GlitchTip's built-in MCP server as `glitchtip` (exports from `just glitchtip::mcp-env`), and `just glitchtip::issues` / `::event` read issues as text without it. Triage workflow: the `glitchtip-triage` skill
 - `tools/esp32.just` — Shared justfile config imported by all ESP-IDF projects (container_cmd, port detection, require-port, _serial-monitor)
 - `tools/hardware/` — the board × header × parts join ([ADR-021](docs/decisions/ADR-021-hardware-source-of-truth.md)): reads a project's `hardware.toml`, its `pin_config.h` and the repo-level `docs/reference/boards/` page the sidecar names; `just hardware::gen` regenerates everything it feeds: `docs/auto/pin_defs.typ`; the tables between `<!-- BEGIN GENERATED -->` markers in any Markdown git would track under a project, at any depth, such as `WIRING.md`; the board pinout images; the schematic SVG/PNG (via `schematics::render-all`); and the build-guide PDFs; `just hardware::check` is the CI gate (`hardware-check.yml`)
 - `tools/kicad/` — KiCad carrier PCBs generated from the hardware join ([ADR-027](docs/decisions/ADR-027-kicad-carrier-generation.md)): the stdlib schematic writer, the KiCad-free board and stamp checks CI runs (`just kicad::check`, `carrier-check.yml`), the pcbnew scripts under `pcb/`, and `lib/`, the vendored KiCad 10.0.6 and Seeed XIAO library subset pinned by `MANIFEST.tsv`. Workflow and traps: the `carrier-pcb` skill
 - `tools/mechanism/` — printed mechanisms (servo pan-tilts, brackets, linkages) in build123d: servo keep-out envelopes, the clash sweep over a design's travel, tools/enclosure's wall gate, and VTK renders (`just mechanism::check|showcase|animate <design dir>`). Contract, checklist and the design tournament: the `printed-mechanism` skill. Worked example: `packages/robocar/unified/hardware/pan-tilt/`
-- `tools/cadstd/` — the shared dimensions of printed parts ([ADR-030](docs/decisions/ADR-030-printed-part-dimension-standard.md)): metric fasteners, fits by class per print process (`fdm`, `sla`, `mjf`), `MIN_WALL`, the 10 mm M3 mounting grid, build123d cutters, and the calibration coupon (`just cadstd::test|coupon <process>`). `tools/enclosure` and `tools/mechanism` build from it
+- `tools/cadstd/` — the shared dimensions of printed parts ([ADR-035](docs/decisions/ADR-035-printed-part-dimension-standard.md)): metric fasteners, fits by class per print process (`fdm`, `sla`, `mjf`), `MIN_WALL`, the 10 mm M3 mounting grid, build123d cutters, and the calibration coupon (`just cadstd::test|coupon <process>`). `tools/enclosure` and `tools/mechanism` build from it
+- `tools/labels/` — parts-drawer stickers: TOML data files to A4 print-and-cut pages, printed on the Epson and kiss-cut on the Silhouette Portrait 2 through registration marks, headless (`just labels::build|print|cut`). `labels::candidates` drafts labels for unlabelled items in the private parts-stock repo, read-only. Workflow and cutter traps: the `component-labels` skill
 - `tools/kicad.just` — Shared carrier recipes a project imports (`carrier-schematic`, `carrier-board`, `carrier-board-checked`, `carrier-check`, `carrier-review`, `carrier-fab`); a project's `hardware/carrier/board.toml` holds placement, fixed tracks, silkscreen, net classes, the pour and the ground-via fanout
 - `docs/reference/parts/` — the parts registry: one TOML per physical part a carrier mounts (KiCad symbol, footprint, LCSC number, pin map and where the pin order came from), named from `hardware.toml` by `part = "<slug>"`
+- `docs/reference/blocks/` — circuit blocks: a stage (buck, pack-input protection) designed once from registry parts, used from `hardware.toml` by `[blocks.<id>]` and expanded when the file is read (`tools/hardware/blocks.py`, [ADR-031](docs/decisions/ADR-031-circuit-blocks.md))
 - `docker-compose.yml` — ESP-IDF container service definition (`espressif/idf:v5.4`)
 - `tools/refresh-idf-locks.py` — the one update path for git-tracked `dependencies.lock` files (`just refresh-idf-locks`, and the monthly `refresh-idf-locks.yml`). Nothing else re-resolves a tracked lock while its `idf_component.yml` is unchanged; editing the manifest re-resolves on the next build. Procedure: [`.claude/rules/esp-idf-dependency-locks.md`](.claude/rules/esp-idf-dependency-locks.md)
 - `.clang-format` — C/C++ formatting rules

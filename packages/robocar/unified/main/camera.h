@@ -1,6 +1,6 @@
 /**
  * @file camera.h
- * @brief ESP32-CAM camera interface
+ * @brief Camera interface for the XIAO ESP32-S3 Sense (OV3660 on the Sense board)
  */
 
 #ifndef CAMERA_H
@@ -64,8 +64,8 @@ void camera_format_exposure(char *out, size_t n, const camera_exposure_t *exp);
 /**
  * @brief Set the AGC gain ceiling at runtime. UNITS ARE SENSOR-DEPENDENT.
  *
- * OV3660 takes a RAW ceiling in 1/16 gain steps, 0..1023 — its power-on default
- * is 248 (15.5x). OV2640 takes an enum index, 0=2x .. 6=128x. Passing an
+ * OV3660 takes a RAW ceiling in 1/16 gain steps, 0..1023 — esp32-camera's init
+ * leaves it at 248 (15.5x). OV2640 takes an enum index, 0=2x .. 6=128x. Passing an
  * OV2640-shaped 0..6 to an OV3660 sets a ceiling of essentially zero gain,
  * which is exactly the bug that made this robot's frames dark.
  */

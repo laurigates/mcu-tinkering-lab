@@ -184,9 +184,27 @@ static void test_ignore_tag_detection(void)
     ASSERT(voice_history_is_ignore("\n__IGNORE__"));
 
     ASSERT(!voice_history_is_ignore("Hello robot!"));
-    ASSERT(!voice_history_is_ignore("I said __IGNORE__"));
+    ASSERT(!voice_history_is_ignore("Tie näyttääkin varsin suotuisalta."));
     ASSERT(!voice_history_is_ignore("__IGNOR"));
     ASSERT(!voice_history_is_ignore("__ignore__"));
+}
+
+/* Issue #950: gemini-flash-latest wrote its reasoning as plain text and ended
+ * it with the sentinel, so a prefix match spoke the reasoning. The sentinel
+ * anywhere in the reply means the reply is not for the room. */
+static void test_ignore_tag_anywhere(void)
+{
+    /* At the start, alone, and at the end after reasoning. */
+    ASSERT(voice_history_is_ignore("__IGNORE__ trailing words"));
+    ASSERT(voice_history_is_ignore("__IGNORE__"));
+    ASSERT(voice_history_is_ignore("I said __IGNORE__"));
+    ASSERT(voice_history_is_ignore(
+        "The user is partially saying something (...) not addressing Teuvo clearly. "
+        "(...) reply with __IGNORE__.__IGNORE__"));
+    ASSERT(voice_history_is_ignore("Reasoning first. __IGNORE__ then more."));
+    /* Absent. */
+    ASSERT(!voice_history_is_ignore("Oppia ikä kaikki, hyvä herra."));
+    ASSERT(!voice_history_is_ignore("_IGNORE_ __IGNOR E__"));
 }
 
 static void test_record_with_ignore_sentinel(void)
@@ -594,6 +612,7 @@ int main(void)
     test_run("clock_wrap_around", test_clock_wrap_around);
     test_run("manual_reset", test_manual_reset);
     test_run("ignore_tag_detection", test_ignore_tag_detection);
+    test_run("ignore_tag_anywhere", test_ignore_tag_anywhere);
     test_run("record_with_ignore_sentinel", test_record_with_ignore_sentinel);
     test_run("active_conversation_window", test_active_conversation_window);
     test_run("conversation_window_wrap_around", test_conversation_window_wrap_around);

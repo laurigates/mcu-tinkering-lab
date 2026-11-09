@@ -104,11 +104,32 @@ repos:
         files: '^tools/(check-flash-recipes\.py|test_check_flash_recipes\.py|lib/otadata-predicate\.sh)$'
         pass_filenames: false
 
+      - id: labels-tests
+        name: tools/labels unit tests (sticker layout, cut files, candidates)
+        entry: python3 -m unittest discover -s tools/labels
+        language: system
+        files: '^tools/labels/'
+        pass_filenames: false
+
       - id: refresh-idf-locks-tests
         name: refresh-idf-locks unit tests
         entry: python3 -m unittest tools/test_refresh_idf_locks.py
         language: system
         files: '^tools/(refresh-idf-locks\.py|test_refresh_idf_locks\.py)$'
+        pass_filenames: false
+
+      - id: changelog-notes-tests
+        name: changelog-notes unit tests (OTA manifest "notes")
+        entry: python3 -m unittest tools/test_changelog_notes.py
+        language: system
+        files: '^tools/(changelog-notes\.py|test_changelog_notes\.py|generate-flasher-manifests\.sh)$'
+        pass_filenames: false
+
+      - id: flash-source-tests
+        name: flash-source unit tests (which firmware a flash writes)
+        entry: python3 -m unittest tools/test_flash_source.py
+        language: system
+        files: '^tools/(flash-source\.py|test_flash_source\.py)$'
         pass_filenames: false
 
       - id: jlc-blog-tests
@@ -150,7 +171,7 @@ repos:
         pass_filenames: false
 
       - id: cadstd
-        name: tools/cadstd fastener, fit and grid tables (ADR-030)
+        name: tools/cadstd fastener, fit and grid tables (ADR-035)
         # Stdlib only; the build123d shape and coupon tests run in
         # `just cadstd::test`, which needs tools/mechanism's venv.
         entry: python3 -m unittest discover -s tools/cadstd -t tools -p test_cadstd.py
@@ -162,14 +183,14 @@ repos:
         name: Hardware join resolves, and pin_defs.typ regenerates byte-identical
         entry: python3 -m unittest discover -s tools/hardware -t tools
         language: system
-        files: '(^tools/hardware/|^tools/typst/generate-pin-defs\.py$|hardware\.toml$|main/[^/]+\.h$|src/pin_config\.h$|docs/auto/pin_defs\.typ$|^docs/reference/boards/)'
+        files: '(^tools/hardware/|^tools/typst/generate-pin-defs\.py$|hardware\.toml$|main/[^/]+\.h$|src/pin_config\.h$|docs/auto/pin_defs\.typ$|^docs/reference/(boards|blocks)/)'
         pass_filenames: false
 
       - id: hardware-docs
         name: Generated WIRING.md blocks match the hardware join
         entry: env PYTHONPATH=tools python3 -m hardware.docs --check
         language: system
-        files: '(^tools/hardware/|hardware\.toml$|main/[^/]+\.h$|src/pin_config\.h$|^packages/.*\.md$|^docs/reference/boards/)'
+        files: '(^tools/hardware/|hardware\.toml$|main/[^/]+\.h$|src/pin_config\.h$|^packages/.*\.md$|^docs/reference/(boards|blocks)/)'
         pass_filenames: false
 
       # Only the carrier gates that regenerating fixes correctly without KiCad:
@@ -181,7 +202,7 @@ repos:
         name: tools/kicad tests, and the generated carrier schematic and perfboard match hardware.toml
         entry: env PYTHONPATH=tools sh -c 'python3 -m unittest discover -s tools/kicad -t tools && python3 -m kicad.schematic --check && python3 -m kicad.perfboard --check'
         language: system
-        files: '(^tools/kicad/|^tools/hardware/|hardware\.toml$|src/pin_config\.h$|main/[^/]+\.h$|^docs/reference/(boards|parts)/|/hardware/(carrier|perfboard)/|/docs/perfboard-steps\.typ$)'
+        files: '(^tools/kicad/|^tools/hardware/|hardware\.toml$|src/pin_config\.h$|main/[^/]+\.h$|^docs/reference/(boards|parts|blocks)/|/hardware/(carrier|perfboard)/|/docs/perfboard-steps\.typ$)'
         pass_filenames: false
 
       - id: check-doc-facts

@@ -80,8 +80,8 @@ graph TD
 | Pin | GPIO | Macro | Wired to | Notes |
 |-----|------|-------|----------|-------|
 | D0 | GPIO26 | `PIN_PACK_SENSE` | — | only the carrier PCB has the pack divider (R2/R3/C3); the hand-wired harness leaves D0 free |
-| D1 | GPIO27 | — | *unassigned* |  |
-| D2 | GPIO28 | — | *unassigned* |  |
+| D1 | GPIO27 | `PIN_EXP_D1` | — | only the carrier PCB has the expansion header (J6); the hand-wired harness leaves D1 free |
+| D2 | GPIO28 | `PIN_EXP_D2` | — | only the carrier PCB has the expansion header (J6); the hand-wired harness leaves D2 free |
 | D3 | GPIO5 | `PIN_IMU_INT` | GY-521 MPU6050 INT | Data-ready, active high, push-pull; no internal pull (RP2350-E9) |
 | D4 | GPIO6 | `PIN_IMU_SDA` | GY-521 MPU6050 SDA | I2C1 SDA |
 | D5 | GPIO7 | `PIN_IMU_SCL` | GY-521 MPU6050 SCL | I2C1 SCL |
@@ -98,11 +98,17 @@ DRV8825 nSLEEP/nRESET/M0/M1 straps (see below) and the nENABLE pull-up; **5V**
 takes the buck converter's output; **GND** is the common ground. D0
 (GPIO26, `PIN_PACK_SENSE`) carries the carrier PCB's pack-voltage divider
 (R2/R3/C3); the hand-wired harness leaves it free, and the firmware does not
-read it yet (#747). D1–D2 (GPIO27–28) are spare and ADC-capable.
+read it yet (#747). D1–D2 (GPIO27–28) are ADC-capable; the carrier PCB (rev3)
+brings them out on its expansion header J6, each through a 1 kΩ resistor
+([`hardware/carrier/README.md`](hardware/carrier/README.md#headers)), and the
+hand-wired harness leaves them free.
 
-The GY-521 MPU6050 breakout has an onboard 3.3 V regulator and works fed
-from 3V3 directly (bypassing the regulator) — INT is push-pull 3.3 V,
-safe for the RP2350.
+The GY-521 MPU6050 breakout has an onboard 3.3 V regulator, and it works
+fed from 3V3. The regulator is not bypassed: VCC is its input, so the chip
+runs from 3V3 minus the regulator's dropout, which is unmeasured (the
+[GY-521 page](../../../docs/reference/boards/gy-521.md) carries the schematic
+and the check). INT is push-pull at that rail, below 3.3 V, safe for the
+RP2350.
 
 ## DRV8825 carriers (each)
 
@@ -143,6 +149,9 @@ Set per driver, motors connected, before first `arm`:
 - Rigidly mounted (no foam) at **axle height**, near the wheel axis.
 - **X axis pointing forward**, Z up — the filter computes pitch as
   `atan2(accel_x, accel_z)` and integrates gyro Y.
+- Fitted **component side down** (turned 180° about the axle, as the
+  8d18cd8d carrier needs), X and Z both read inverted: run `mount down`
+  then `save`. See the README's IMU mounting section.
 - If the robot drives *into* the fall on first arm, flip `IMU_PITCH_SIGN`
   in `src/config.h` (or rotate the sensor 180°).
 

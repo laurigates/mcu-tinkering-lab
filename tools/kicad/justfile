@@ -56,6 +56,24 @@ check: test
 sourcing *projects:
     cd ../.. && PYTHONPATH=tools python3 -m kicad.sourcing {{projects}}
 
+# Every LCSC number in use (or the given numbers, or --project <dir>'s), asked
+# of JLCPCB one at a time and cached under ~/.cache/mcu-tinkering-lab/lcsc:
+# basic/preferred/extended, stock, price, status. Needs the network unless
+# --offline; CI does not run it. Exits 1 on an unknown, dead or sold-out part.
+#
+# Check the carriers' LCSC parts against JLCPCB's library
+[group: "fab"]
+parts *args:
+    cd ../.. && PYTHONPATH=tools python3 -m kicad.lcsc {{args}}
+
+# Reads the parts-stock inventory: --inventory PATH, else $INVENTORY_DIR, else
+# ../parts-stock beside the main checkout. A report, not a gate; not run in CI.
+#
+# Which BOM lines are already on hand; args: [project ...] [--boards N] [--inventory PATH]
+[group: "test"]
+stock *args:
+    cd ../.. && PYTHONPATH=tools python3 -m kicad.stock {{args}}
+
 # Covers every symbol and footprint the parts registry and the schematic
 # writer use.
 #

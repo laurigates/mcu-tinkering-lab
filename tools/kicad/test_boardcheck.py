@@ -12,7 +12,9 @@ from __future__ import annotations
 
 import contextlib
 import copy
+import dataclasses
 import io
+import shutil
 import tempfile
 import tomllib
 import unittest
@@ -23,6 +25,7 @@ from kicad import boardcheck, library, netlist, paths, schematic, testfixture
 from kicad.errors import KicadError
 
 NS = uuid.uuid5(uuid.NAMESPACE_URL, "mcu-tinkering-lab/kicad/test")
+GY521 = "Breakout_Sockets:GY521_Socket"
 ROOT, PROJECT = testfixture.shared()
 
 
@@ -244,6 +247,35 @@ class ConfigTests(unittest.TestCase):
 
     def test_balancebot_board_toml_is_valid(self):
         self.assertEqual(boardcheck.validate_config(self.cfg, self.nl), [])
+
+    def test_text_for_names_a_part(self):
+        def tag(ref):
+            def edit(d):
+                d["silk"]["texts"][0]["for"] = ref
+
+            return edit
+
+        ok = self.with_data(tag("A1"))
+        self.assertEqual(boardcheck.validate_config(ok, self.nl), [])
+        self.fails(tag("A9"), "for = 'A9' is not in the netlist")
+        self.fails(
+            lambda d: d["silk"]["texts"][0].update(mark="A1"),
+            'with an optional for = "<ref>"',
+        )
+
+    def test_module_outlines_names_parts(self):
+        self.fails(
+            lambda d: d["silk"].update(module_outlines=["A9"]),
+            "[silk] module_outlines: 'A9' is not in the netlist",
+        )
+        self.fails(
+            lambda d: d["silk"].update(module_outlines="A1"),
+            "[silk] module_outlines must be a list of references",
+        )
+        self.fails(
+            lambda d: d["silk"].update(module_outlines=["A1", "A1"]),
+            "[silk] module_outlines repeats",
+        )
 
     def test_class_expansion_order(self):
         classes = dict(boardcheck.expand_classes(self.cfg, self.nl))
@@ -541,7 +573,7 @@ class ConfigTests(unittest.TestCase):
         st = {
             "pitch_mm": 6.0,
             "via_um": [600, 300],
-            "exclude": [[34.5, 31.5, 55.5, 48.5]],
+            "exclude": [[30.0, 30.0, 50.0, 45.0]],
         }
         ok = self.with_data(lambda d: d["pour"].update(stitch=st))
         self.assertEqual(boardcheck.validate_config(ok, self.nl), [])
@@ -681,6 +713,161 @@ class ConfigTests(unittest.TestCase):
         )
         self.fails(lambda d: d.pop("signal"), "[signal] is required")
 
+    # Tables the frozen fixture's board.toml lacks, for the shape tests.
+    EXTRA = {
+        "fanout": {"nets": ["GND"], "via_um": [1000, 500]},
+        "fab": {"provenance_at": [10.0, 10.0]},
+        "tracks": [
+            {
+                "name": "trunk",
+                "net": "GND",
+                "layer": "F.Cu",
+                "width_mm": 1.5,
+                "points": [[5, 5], [5, 30], [30, 30]],
+            }
+        ],
+    }
+
+    def with_extra(self, edit):
+        """`edit`, applied after the EXTRA tables are added."""
+
+        def both(d):
+            d.update(copy.deepcopy(self.EXTRA))
+            edit(d)
+
+        return both
+
+    def test_extra_tables_are_valid(self):
+        """The shape tests' baseline passes, so their errors come from the edit."""
+        ok = self.with_data(self.with_extra(lambda d: None))
+        self.assertEqual(boardcheck.validate_config(ok, self.nl), [])
+
+    def test_table_written_as_an_array_of_tables(self):
+        """`[[outline]]` parses as a list of one table; each of these crashed a
+        validator with AttributeError ([[fab]] passed silently)."""
+        for table in (
+            "outline",
+            "silk",
+            "signal",
+            "pour",
+            "fanout",
+            "fab",
+            "placement",
+        ):
+            with self.subTest(table=table):
+
+                def wrap(d, table=table):
+                    d[table] = [d[table]]
+
+                self.fails(
+                    self.with_extra(wrap),
+                    f"[{table}] must be a table, not an array of tables ([[{table}]])",
+                )
+
+    def test_array_of_tables_written_as_one_table(self):
+        """A single `[keepouts]` table iterated as a list yields its key strings,
+        and `k.get` crashed on them."""
+        single = {
+            "keepouts": {"name": "band", "rect": [1.0, 1.0, 2.0, 2.0]},
+            "route_keepouts": {"name": "rk", "layer": "F.Cu", "rect": [1, 1, 2, 2]},
+            "cutouts": {"name": "hole", "center": [10.0, 10.0], "diameter": 2.0},
+            "net_classes": self.cfg.data["net_classes"][0],
+            "tracks": self.EXTRA["tracks"][0],
+        }
+        for table, value in single.items():
+            with self.subTest(table=table):
+                self.fails(
+                    self.with_extra(lambda d, t=table, v=value: d.update({t: v})),
+                    f"[[{table}]] must be an array of tables, not a single [{table}] table",
+                )
+
+    def test_silk_values_of_the_wrong_shape(self):
+        """[silk]'s lists and ref tables, iterated or `.items()`-ed: each crashed."""
+        for key, value, msg in (
+            ("hidden_refs", 5, "[silk] hidden_refs must be a list"),
+            ("rects", 5, "[silk] rects must be a list"),
+            ("cut_lines", 5, "[silk] cut_lines must be a list"),
+            ("ref_sizes", [1.0], "[silk] ref_sizes must be a table of ref = value"),
+        ):
+            with self.subTest(key=key):
+                self.fails(lambda d, k=key, v=value: d["silk"].update({k: v}), msg)
+
+    def test_unhashable_values_in_membership_tests(self):
+        """A TOML list used as a dict key or set element raised TypeError."""
+        cases = (
+            (
+                "fanout nets",
+                lambda d: d["fanout"].update(nets=[["GND"]]),
+                "[fanout] net ['GND'] is not in the netlist",
+            ),
+            (
+                "fanout required",
+                lambda d: d["fanout"].update(required=[["C1:2"]]),
+                '[fanout] required must be a list of "REF:PIN" strings',
+            ),
+            (
+                "fanout required not a list",
+                lambda d: d["fanout"].update(required=5),
+                '[fanout] required must be a list of "REF:PIN" strings',
+            ),
+            (
+                "pour net",
+                lambda d: d["pour"].update(net=["GND"]),
+                "[pour] net ['GND'] is not in the netlist",
+            ),
+            (
+                "pour region net",
+                lambda d: (
+                    d["pour"].pop("net"),
+                    d["pour"].update(
+                        regions=[{"net": ["GND"], "rect": [1.0, 1.0, 5.0, 5.0]}]
+                    ),
+                ),
+                "[pour] regions: net ['GND'] is not in the netlist",
+            ),
+            (
+                "track net",
+                lambda d: d["tracks"][0].update(net=["PACK_IN"]),
+                "[[tracks]] 'trunk': net ['PACK_IN'] is not in the netlist",
+            ),
+            (
+                "hidden_refs entry",
+                lambda d: d["silk"].update(hidden_refs=[["H1"]]),
+                "[silk] hidden_refs: ['H1'] is not in the netlist",
+            ),
+            (
+                "net class name",
+                lambda d: d["net_classes"][0].update(name=["power"]),
+                "[[net_classes]] needs a name and a non-empty nets list",
+            ),
+            (
+                "net class nets entry",
+                lambda d: d["net_classes"][0].update(nets=[["VBAT"]]),
+                "[[net_classes]] needs a name and a non-empty nets list",
+            ),
+        )
+        for name, edit, msg in cases:
+            with self.subTest(name):
+                self.fails(self.with_extra(edit), msg)
+
+    def test_keepout_without_a_rect_or_name(self):
+        """_validate_tracks read k["rect"] and k["name"] of every keepout, and
+        a mouse-bite panel's build read k["rect"]: KeyError each."""
+        self.fails(
+            self.with_extra(lambda d: d.update(keepouts=[{"name": "band"}])),
+            "[keepouts] 'band': rect must be [x0, y0, x1, y1]",
+        )
+        self.fails(
+            self.with_extra(lambda d: d.update(keepouts=[{"rect": [20, 28, 22, 32]}])),
+            "[keepouts] needs a name for each rectangle",
+        )
+
+        def mousebites(d):
+            d.update(panel={"mode": "mousebites"}, keepouts=[{"name": "band"}])
+            d["silk"]["cut_lines"] = [[0.0, 31.0, 90.0, 31.0]]
+
+        self.fails(mousebites, "[keepouts] 'band': rect must be [x0, y0, x1, y1]")
+
     def test_file_is_toml(self):
         self.assertEqual(
             tomllib.loads(self.cfg.path.read_text(encoding="utf-8")), self.cfg.data
@@ -796,6 +983,25 @@ class MainTests(unittest.TestCase):
         cls.tmp = tempfile.TemporaryDirectory(prefix="kicad-boardcheck-")
         cls.root = Path(cls.tmp.name)
         cls.project = testfixture.materialise(cls.root)
+        # #749's board had no orientation marks on its Pololu drivers, which
+        # kicad.orientation now requires: one tagged text each, in board.toml
+        # and on the synthetic board.
+        marks = [("VMOT", 9.0, 37.4, "A1"), ("VMOT", 76.0, 18.6, "A2")]
+        toml = paths.carrier_dir(cls.project) / "board.toml"
+        entries = "".join(
+            f'    {{ text = "{t}", at = [{x}, {y}], size = 1.0, for = "{r}" }},\n'
+            for t, x, y, r in marks
+        )
+        toml.write_text(
+            toml.read_text(encoding="utf-8").replace(
+                "texts = [\n", "texts = [\n" + entries, 1
+            ),
+            encoding="utf-8",
+        )
+        texts = [
+            f'\t(gr_text "{t}"\n\t\t(at {100 + x:g} {100 + y:g} 0)\n\t\t(layer "F.SilkS")\n\t)'
+            for t, x, y, _ in marks
+        ]
         vendored = cls.root / library.VENDORED.relative_to(paths.REPO_ROOT)
         nl = netlist.build(cls.project, cls.root, vendored)
         ns = schematic.namespace(schematic.project_key(cls.project, cls.root))
@@ -816,7 +1022,9 @@ class MainTests(unittest.TestCase):
                     boardcheck.symbol_path(ns, c.ref),
                 )
             )
-        cls.good = "(kicad_pcb\n\t(version 20260206)\n" + "\n".join(fps) + "\n)\n"
+        cls.good = (
+            "(kicad_pcb\n\t(version 20260206)\n" + "\n".join(fps + texts) + "\n)\n"
+        )
         cls.pcb = boardcheck.board_path(cls.project)
         cls.pcb.parent.mkdir(parents=True, exist_ok=True)
 
@@ -840,6 +1048,31 @@ class MainTests(unittest.TestCase):
         code, out = self.run_main("mod bb 'packages/robotics/balancebot'\n", self.good)
         self.assertEqual(code, 0, out)
         self.assertIn("OK: balancebot-carrier.kicad_pcb", out)
+
+    def test_untagged_module_socket_fails_naming_its_wrong_fits(self):
+        toml = paths.carrier_dir(self.project) / "board.toml"
+        kept = toml.read_text(encoding="utf-8")
+        try:
+            toml.write_text(kept.replace(', for = "A2"', "", 1), encoding="utf-8")
+            code, out = self.run_main(
+                "mod bb 'packages/robotics/balancebot'\n", self.good
+            )
+        finally:
+            toml.write_text(kept, encoding="utf-8")
+        self.assertEqual(code, 1, out)
+        self.assertIn("[silk] A2 (Module:Pololu_Breakout-16_15.2x20.3mm)", out)
+        self.assertIn("turned 180 degrees: pad 1 <-> pad 9", out)
+        self.assertNotIn("[silk] A1 ", out)
+
+    def test_tagged_text_missing_from_the_board_names_carrier_silk(self):
+        board = self.good.replace(
+            '(gr_text "VMOT"\n\t\t(at 109 ', '(gr_text "VMOT"\n\t\t(at 119 '
+        )
+        self.assertNotEqual(board, self.good)
+        code, out = self.run_main("mod bb 'packages/robotics/balancebot'\n", board)
+        self.assertEqual(code, 1, out)
+        self.assertIn("'VMOT' (for = \"A1\") at [9.0, 37.4] is not on the board", out)
+        self.assertIn("just bb::carrier-silk", out)
 
     def test_failing_board_hint_names_the_module_not_the_directory(self):
         bad = self.good.replace('(property "Value" "', '(property "Value" "x', 1)
@@ -873,6 +1106,162 @@ class MainTests(unittest.TestCase):
                 code, out = self.run_main(justfile, self.good)
                 self.assertEqual(code, 0, out)
                 self.assertIn("OK: balancebot-carrier.kicad_pcb", out)
+
+
+class ImuTests(unittest.TestCase):
+    """[imu]: the layout's firmware mount, on the frozen fixture with J3 moved
+    onto #1015's generated GY521_Socket at its rev3 placement."""
+
+    @classmethod
+    def setUpClass(cls):
+        nl = netlist.build(PROJECT, ROOT)
+        cls.nl = dataclasses.replace(
+            nl,
+            comps=tuple(
+                dataclasses.replace(c, footprint=GY521) if c.ref == "J3" else c
+                for c in nl.comps
+            ),
+        )
+        cls.cfg = paths.load_board_config(PROJECT)
+
+    def errors(self, edit=None, nl=None, vendored=library.VENDORED) -> list[str]:
+        data = copy.deepcopy(self.cfg.data)
+        data["outline"]["forward"] = "-y"
+        data["placement"]["J3"] = [36.11, 47.0, 0]
+        data["imu"] = {"ref": "J3"}
+        if edit:
+            edit(data)
+        cfg = paths.BoardConfig(self.cfg.path, self.cfg.name, self.cfg.paper, data)
+        return boardcheck.validate_config(cfg, nl or self.nl, vendored)
+
+    def fails(self, edit, *needles: str, nl=None) -> None:
+        errors = self.errors(edit, nl)
+        self.assertTrue(any(all(n in e for n in needles) for e in errors), errors)
+
+    def test_rev3_layout_needs_mount_up(self):
+        self.assertEqual(self.errors(), [])
+        self.assertEqual(
+            self.errors(lambda d: d["imu"].update(mount="up", face="up")), []
+        )
+
+    def test_face_down_names_mount_down(self):
+        self.fails(
+            lambda d: d["imu"].update(face="down"),
+            "[imu] J3: the layout needs mount down",
+            'set [imu] mount = "down"',
+            "'mount down' on the robot",
+        )
+
+    def test_face_down_with_mount_down_passes(self):
+        self.assertEqual(
+            self.errors(lambda d: d["imu"].update(face="down", mount="down")), []
+        )
+
+    def test_mount_down_on_a_face_up_layout_names_mount_up(self):
+        self.fails(lambda d: d["imu"].update(mount="down"), "the layout needs mount up")
+
+    def test_socket_turned_half_round_matches_no_mount(self):
+        # Pad 1 moves to where pad 8 was: pads on the same holes, reversed.
+        self.fails(
+            lambda d: d["placement"].update(J3=[36.11 + 17.78, 47.0, 180]),
+            "no firmware mount matches",
+            "[[-1, 0, 0], [0, -1, 0], [0, 0, 1]]",
+            "third mount",
+        )
+
+    def test_forward_toward_plus_y_matches_no_mount(self):
+        self.fails(
+            lambda d: d["outline"].update(forward="+y"), "no firmware mount matches"
+        )
+
+    def test_forward_is_validated_on_any_board(self):
+        def bad(d):
+            d["outline"]["forward"] = "up"
+            del d["imu"]
+
+        self.fails(bad, "[outline] forward must be one of")
+
+    def test_imu_needs_forward(self):
+        self.fails(lambda d: d["outline"].pop("forward"), "needs [outline] forward")
+
+    def test_bad_values(self):
+        self.fails(lambda d: d["imu"].update(mount="left"), "mount must be one of")
+        self.fails(lambda d: d["imu"].update(face="side"), "face must be one of")
+        self.fails(lambda d: d["imu"].update(ref="J99"), "'J99' is not in the netlist")
+        self.fails(lambda d: d["imu"].update(colour="red"), "[imu]: unknown key(s)")
+
+    def test_malformed_values_are_errors_not_crashes(self):
+        # Each used to reach a membership test with an unhashable or missing
+        # value: mount = ["up"] raised TypeError, a missing ref read "ref None".
+        cases = [
+            (lambda d: d["imu"].update(mount=["up"]), "[imu] mount must be one of"),
+            (lambda d: d["imu"].update(mount={"up": 1}), "[imu] mount must be one of"),
+            (lambda d: d["imu"].update(mount="sideways"), "got 'sideways'"),
+            (lambda d: d["imu"].update(face=["up"]), "[imu] face must be one of"),
+            (lambda d: d["imu"].update(face=1), "[imu] face must be one of"),
+            (lambda d: d["imu"].pop("ref"), "[imu] ref is required"),
+            (lambda d: d["imu"].update(ref=3), "[imu] ref must be a string"),
+            (lambda d: d["imu"].update(ref=["J3"]), "[imu] ref must be a string"),
+            (lambda d: d["outline"].update(forward=["-y"]), "forward must be one of"),
+            (lambda d: d.update(imu=[{"ref": "J3"}]), "[imu] must be a table"),
+        ]
+        for edit, needle in cases:
+            with self.subTest(needle=needle):
+                self.fails(edit, needle)
+        errors = self.errors(lambda d: d["imu"].pop("ref"))
+        self.assertFalse(any("None" in e for e in errors), errors)
+
+    def test_rotation_off_the_axes(self):
+        self.fails(
+            lambda d: d["placement"].update(J3=[36.11, 47.0, 45]),
+            "not a multiple of 90",
+        )
+
+    def test_back_face_placement_is_refused(self):
+        self.fails(
+            lambda d: d["placement"].update(J3=[36.11, 47.0, 0, "back"]),
+            "on the front face",
+        )
+
+    def test_footprint_without_axes(self):
+        # The frozen fixture's own J3 is a stock PinSocket_1x08.
+        self.fails(
+            None,
+            "footprint Connector_PinSocket_2.54mm:PinSocket_1x08_P2.54mm_Vertical "
+            "declares no sensor axes",
+            nl=netlist.build(PROJECT, ROOT),
+        )
+
+    def test_face_down_needs_a_single_pad_row(self):
+        # A three-column socket given axes: turning it over cannot put its
+        # pins back on their holes, so face = "down" is refused.
+        with tempfile.TemporaryDirectory() as tmp:
+            vendored = Path(tmp)
+            shutil.copytree(
+                library.VENDORED / "breakout-sockets", vendored / "breakout-sockets"
+            )
+            config = vendored / "breakout-sockets/sockets.toml"
+            text = config.read_text().replace(
+                "outline = [-1.61, -1.57, 19.39, 24.43]",
+                "outline = [-1.61, -1.57, 19.39, 24.43]\n"
+                'axes = { x = [0, -1], z = "component" }',
+            )
+            self.assertIn("CJMCU_2317_Socket", text)
+            config.write_text(text)
+            nl = dataclasses.replace(
+                self.nl,
+                comps=tuple(
+                    dataclasses.replace(
+                        c, footprint="Breakout_Sockets:CJMCU_2317_Socket"
+                    )
+                    if c.ref == "J3"
+                    else c
+                    for c in self.nl.comps
+                ),
+            )
+            errors = self.errors(lambda d: d["imu"].update(face="down"), nl, vendored)
+            self.assertTrue(any("needs one pad row" in e for e in errors), errors)
+            self.assertEqual(self.errors(None, nl, vendored), [])
 
 
 if __name__ == "__main__":

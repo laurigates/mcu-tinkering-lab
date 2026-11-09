@@ -52,7 +52,7 @@ from cadstd import fit  # noqa: E402
 from cadstd.fasteners import M3, M4  # noqa: E402
 from mechanism.check import Body  # noqa: E402
 
-PROCESS = "fdm"  # README: PLA or PETG on an FDM printer (cadstd, ADR-030)
+PROCESS = "fdm"  # README: PLA or PETG on an FDM printer (cadstd, ADR-035)
 
 # --- Off-the-shelf parts -----------------------------------------------------
 ROD_D = 10.0  # column: 10 mm rod or M10 threaded rod
@@ -76,7 +76,7 @@ M3_CLEAR = M3.clearance
 M3_HEAD = M3.button_head
 M3_NUT_AF = M3.nut_af
 M3_NUT_T = M3.nut_t
-# 0.1 under cadstd's ISO 273 medium 4.5 (ADR-030, Migration): kept so the
+# 0.1 under cadstd's ISO 273 medium 4.5 (ADR-035, Migration): kept so the
 # printed parts do not change; take M4.clearance on the next revision.
 M4_CLEAR = 4.4
 M4_HEAD = M4.socket_head

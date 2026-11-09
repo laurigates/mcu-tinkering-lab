@@ -1,0 +1,35 @@
+{
+ "code": 200,
+ "data": {
+  "componentPageInfo": {
+   "total": 41,
+   "list": [
+    {
+     "componentLibraryType": "expand",
+     "stockCount": 0,
+     "canPresaleNumber": 0,
+     "preferredComponentFlag": false,
+     "componentCode": "C1396897",
+     "componentModelEn": "RN60C9992FB14",
+     "componentSpecificationEn": "Plugin,D3.7xL8.7mm",
+     "initialPrice": 0.2045,
+     "leastPatchNumber": 2,
+     "minPurchaseNum": 45
+    },
+    {
+     "componentLibraryType": "expand",
+     "stockCount": 0,
+     "canPresaleNumber": 0,
+     "preferredComponentFlag": false,
+     "componentCode": "C1775343",
+     "componentModelEn": "RN60C9992FRE6",
+     "componentSpecificationEn": "Plugin,D3.7xL8.7mm",
+     "initialPrice": 0.1523,
+     "leastPatchNumber": 2,
+     "minPurchaseNum": 60
+    }
+   ]
+  }
+ },
+ "message": null
+}

@@ -1,3 +1,7 @@
+---
+reviewed: 2026-11-03
+---
+
 # Testing Requirements
 
 ## Python Simulation Tests
@@ -66,7 +70,7 @@ just cadstd::test-core   # the stdlib tables only; the `cadstd` pre-commit hook
 Run `cadstd::test` after touching `tools/cadstd/`, then `enclosure::test` and
 `mechanism::test`, which import it. A value change in `cadstd` moves every
 part built from it: `test_cadstd.py` pins the values existing parts use, so
-change the pin and say which parts move (ADR-030).
+change the pin and say which parts move (ADR-035).
 
 ## C/C++ Firmware
 
@@ -118,6 +122,18 @@ Keep `*_core` free of platform headers so the identical logic runs in firmware,
 tests, and sim. Worked example: `packages/audio/kids-audio-toy` —
 `main/audio_core.{c,h}` (mapping/modulation logic), `test/test_audio_core.c`
 (`just test`), `sim/toy_sim.py` (webcam-in / speaker-out via ctypes, `just sim`).
+
+### Reading a mutation check against a host suite
+
+The suites' `test_assert()` prints `FAIL:` and then calls `assert()`, which
+aborts. With stdout redirected to a file or a pipe it is block-buffered, and
+`abort()` does not flush it, so the `FAIL:` line is usually lost. A mutation
+check that greps for `FAIL` therefore reads a killed mutant as a survivor. Read
+the exit status (134 for the abort) and the last `[n] Running:` line, which
+names the test that failed. New suites call `fflush(stdout)` before the
+`assert()` (`test_ota_park.c`, `test_ota_announce.c`). Observed 2026-11-08: a
+`grep FAIL` showed nothing for a mutant that had in fact failed
+`text_skips_thought_parts`.
 
 ## CI Verification
 

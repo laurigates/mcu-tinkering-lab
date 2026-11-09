@@ -15,7 +15,12 @@ Reference, Value and LCSC properties, its `(path ...)`, and every pad's
   is on a named net (unnumbered pads, mounting holes and shells, are skipped).
 
 It also validates board.toml against the netlist (placement, silkscreen, net
-classes, pour, keepouts, cutouts), so a bad board.toml fails CI without KiCad.
+classes, pour, keepouts, cutouts), so a bad board.toml fails CI without KiCad,
+checks that an `[imu]` board's layout needs the firmware mount it declares
+(`kicad.mount`: the socket's declared axes, the placement, `[outline] forward`),
+and runs `kicad.orientation`'s gate: every module socket the module fits
+wrong (turned, or face down) has a `[silk] texts` mark tagged `for = "<ref>"`
+beside it, and the tagged texts and `[silk] module_outlines` are on the board.
 
 Copper connectivity is DRC's job, locally, and the check stamp (`kicad.stamp`)
 pins the board bytes DRC passed. Copper is read for one thing: no track, arc,
@@ -44,7 +49,19 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from . import library, netlist, panel, paths, schematic, sexpr
+from . import (
+    footprints,
+    library,
+    mount,
+    netlist,
+    orientation,
+    panel,
+    paths,
+    provenance,
+    schematic,
+    sexpr,
+    sockets,
+)
 from .errors import KicadError
 from .paths import REPO_ROOT
 
@@ -210,7 +227,8 @@ def relink(board_text: str, ns: uuid.UUID) -> tuple[str, int]:
 # board.toml (ADR-027). Validated here, against the netlist, so CI rejects a bad
 # layout file without KiCad; the board scripts read the same tables.
 TABLE_KEYS = {
-    "outline": {"origin", "size"},
+    "outline": {"origin", "size", "forward"},
+    "imu": {"ref", "mount", "face"},
     "silk": {
         "high_precision",
         "hidden_refs",
@@ -219,6 +237,7 @@ TABLE_KEYS = {
         "rects",
         "texts",
         "cut_lines",
+        "module_outlines",
     },
     "net_classes": {"name", "nets", "track_um", "clearance_um", "via_um"},
     "signal": {"track_um", "clearance_um", "via_um"},
@@ -236,6 +255,7 @@ TABLE_KEYS = {
         "own",
     },
     "cutouts": {"name", "center", "diameter"},
+    "fab": set(provenance.FAB_KEYS),
     "pour": {
         "net",
         "regions",
@@ -248,6 +268,9 @@ TABLE_KEYS = {
     },
 }
 TEXT_KEYS = {"text", "at", "size"}
+# A text's optional `for = "<ref>"`: an orientation mark for that footprint
+# (kicad.orientation checks that every module socket that fits wrong has one).
+TEXT_OPTIONAL_KEYS = {"for"}
 REGION_KEYS = {"net", "rect", "layers", "priority"}
 STITCH_KEYS = {"pitch_mm", "via_um", "exclude"}
 # How far a pour stops short of a [silk] cut line: the hand saw's kerf and the
@@ -263,6 +286,8 @@ CUT_CLEARANCE_MM = 1.0
 SILK_MIN_MM = 1.0
 SILK_HIGH_PRECISION_MIN_MM = 0.8
 LIST_TABLES = ("net_classes", "keepouts", "route_keepouts", "cutouts", "tracks")
+SILK_LISTS = ("hidden_refs", "rects", "texts", "cut_lines")
+SILK_TABLES = ("ref_positions", "ref_sizes")
 REQUIRED = ("outline", "placement", "net_classes", "signal", "pour")
 
 
@@ -455,7 +480,7 @@ def _validate_pour(
     if "net" not in pour and "regions" not in pour:
         return [f"{where}: [pour] needs net or regions"]
     if "net" in pour:
-        if pour["net"] not in nl.nets:
+        if not _known_net(nl, pour["net"]):
             errors.append(f"{where}: [pour] net {pour['net']!r} is not in the netlist")
         return errors
     regions = pour["regions"]
@@ -471,7 +496,7 @@ def _validate_pour(
         if unknown:
             errors.append(f"{where}: [pour] regions: unknown key(s) {unknown}")
             continue
-        if r.get("net") not in nl.nets:
+        if not _known_net(nl, r.get("net")):
             errors.append(
                 f"{where}: [pour] regions: net {r.get('net')!r} is not in the netlist"
             )
@@ -538,7 +563,7 @@ def _validate_tracks(
         if not isinstance(name, str) or not name:
             errors.append(f"{where}: [[tracks]] needs a name")
             continue
-        if tr.get("net") not in nl.nets:
+        if not _known_net(nl, tr.get("net")):
             errors.append(f"{at}: net {tr.get('net')!r} is not in the netlist")
         if tr.get("layer") not in TRACK_LAYERS:
             errors.append(f"{at}: layer must be F.Cu or B.Cu, got {tr.get('layer')!r}")
@@ -560,8 +585,10 @@ def _validate_tracks(
             continue
         for a, b in zip(pts, pts[1:]):
             for k in data.get("keepouts", []):
+                if not _rect(k.get("rect")):
+                    continue  # _validate_keepouts reports it
                 if _segment_rect(tuple(a), tuple(b), tuple(k["rect"])) < width / 2:
-                    errors.append(f"{at}: {a} to {b} enters keepout {k['name']!r}")
+                    errors.append(f"{at}: {a} to {b} enters keepout {k.get('name')!r}")
     return errors
 
 
@@ -637,7 +664,7 @@ def _validate_fanout(
     if not isinstance(nets, list) or not nets:
         return [f"{at} nets must be a non-empty list"]
     for net in nets:
-        if net not in nl.nets:
+        if not _known_net(nl, net):
             errors.append(f"{at} net {net!r} is not in the netlist")
     via = fan.get("via_um")
     if not (_numbers(via, 2) and via[0] > via[1] > 0):
@@ -648,12 +675,127 @@ def _validate_fanout(
     for key in ("track_um", "reach_mm"):
         if not _positive(spec[key]):
             errors.append(f"{at} {key} must be > 0")
-    pads = {f"{ref}:{pin}" for net in nets for ref, pin in nl.nets.get(net, ())}
+    pads = {
+        f"{ref}:{pin}"
+        for net in nets
+        if _known_net(nl, net)
+        for ref, pin in nl.nets[net]
+    }
     for key in ("in_pad", "exempt", "required", "own"):
+        if not isinstance(spec[key], list) or not all(
+            isinstance(pad, str) for pad in spec[key]
+        ):
+            errors.append(f'{at} {key} must be a list of "REF:PIN" strings')
+            continue
         for pad in spec[key]:
             if pad not in pads:
                 errors.append(f"{at} {key} {pad!r} is not a pad of a [fanout] net")
     return errors
+
+
+IMU_DEFAULTS = {"mount": "up", "face": "up"}
+
+
+def _validate_imu(
+    where: str, data: dict[str, Any], nl: netlist.Netlist, vendored: Path
+) -> list[str]:
+    """[imu]: the firmware mount the layout needs is the one the board declares.
+
+    The sensor's rotation on the robot follows from the socket footprint's
+    declared axes (sockets.toml `axes`), the ref's placement, `face` and
+    `[outline] forward` (`kicad.mount`). It must be the matrix of `mount`, the
+    setting the robot is given (`mount up|down` on its console). A layout
+    that needs the other mount names it; one that needs neither says the
+    firmware would need a third.
+    """
+    outline = data.get("outline", {})
+    forward = None
+    if "forward" in outline:
+        try:
+            forward = mount.parse_forward(outline["forward"], where)
+        except KicadError as e:
+            return [str(e)]
+    imu = data.get("imu")
+    if imu is None:
+        return []
+    at = f"{where}: [imu]"
+    if not isinstance(imu, dict):
+        return [f"{at} must be a table, got {imu!r}"]
+    spec = {**IMU_DEFAULTS, **imu}
+    errors = []
+    if forward is None:
+        errors.append(f"{at} needs [outline] forward, the robot's forward on the board")
+    # Type before membership: a list or table here is unhashable as a dict key.
+    for key, choices in (("mount", mount.MOUNTS), ("face", mount.FACES)):
+        if not isinstance(spec[key], str) or spec[key] not in choices:
+            errors.append(
+                f"{at} {key} must be one of {list(choices)}, got {spec[key]!r}"
+            )
+    ref = spec.get("ref")
+    comp = None
+    if ref is None:
+        errors.append(f"{at} ref is required: the netlist ref of the socketed IMU")
+    elif not isinstance(ref, str):
+        errors.append(f"{at} ref must be a string, got {ref!r}")
+    else:
+        comp = next((c for c in nl.comps if c.ref == ref), None)
+        if comp is None:
+            errors.append(f"{at} ref {ref!r} is not in the netlist")
+    if errors:
+        return errors
+    at = f"{at} {ref}"
+    nick, _, name = comp.footprint.partition(":")
+    config = (
+        vendored
+        / library.NICKNAME_DIRS[sockets.NICK].relative_to(library.VENDORED)
+        / sockets.CONFIG
+    )
+    socket = None
+    if nick == sockets.NICK:
+        try:
+            socket = next(
+                (s for s in sockets.load_config(config) if s.name == name), None
+            )
+        except KicadError as e:
+            return [f"{at}: {e}"]
+    if socket is None or socket.axes is None:
+        return [
+            f"{at}: footprint {comp.footprint} declares no sensor axes; give its "
+            f"{sockets.NICK} [[socket]] entry `axes` in {config.name}"
+        ]
+    at_place = data["placement"].get(ref)
+    if not _numbers(at_place, 3):
+        return [f"{at}: [placement] {ref} must be [x, y, rotation] on the front face"]
+    rot = at_place[2]
+    if spec["face"] == "down":
+        fp = footprints.parse(library.footprint_file(comp.footprint, vendored=vendored))
+        if len({round(p.y, 4) for p in fp.pads.values()}) != 1:
+            return [
+                f'{at}: face = "down" needs one pad row along the footprint\'s x '
+                f"(the turn over is about it), and {comp.footprint} has none"
+            ]
+    try:
+        r = mount.rotation(rot, spec["face"], socket.axes, forward)
+    except KicadError as e:
+        return [f"{at}: {e}"]
+    if r == mount.MOUNTS[spec["mount"]]:
+        return []
+    need = mount.mount_for(r)
+    where_from = (
+        f'rotation {rot}, face "{spec["face"]}", forward "{outline["forward"]}"'
+    )
+    if need is not None:
+        return [
+            f"{at}: the layout needs mount {need} ({where_from}), not "
+            f'"{spec["mount"]}": set [imu] mount = "{need}" and run '
+            f"'mount {need}' on the robot, or change the layout"
+        ]
+    return [
+        f"{at}: no firmware mount matches the layout ({where_from}): the sensor's "
+        f"rotation into the robot frame is {mount.fmt(r)}, and the firmware has only "
+        f"up {mount.fmt(mount.MOUNTS['up'])} and down {mount.fmt(mount.MOUNTS['down'])}; "
+        "it would need a third mount, or change the layout"
+    ]
 
 
 def expand_classes(
@@ -688,7 +830,57 @@ def expand_classes(
     return out
 
 
-def validate_config(cfg: paths.BoardConfig, nl: netlist.Netlist) -> list[str]:
+def _validate_shapes(where: str, data: dict[str, Any]) -> list[str]:
+    """Each layout table in the shape the validators read it as.
+
+    TOML takes `[[outline]]` as readily as `[outline]`, so a table written as
+    an array of tables (or a LIST_TABLES entry written as one table) would
+    otherwise reach the validators below as the wrong type and crash them.
+    [silk]'s list- and table-valued keys are checked here too: the cut-line,
+    panel and silkscreen checks all read them.
+    """
+    errors = []
+    for table in (*TABLE_KEYS, "placement"):
+        if table not in data:
+            continue
+        value = data[table]
+        if table in LIST_TABLES:
+            if isinstance(value, dict):
+                errors.append(
+                    f"{where}: [[{table}]] must be an array of tables, "
+                    f"not a single [{table}] table"
+                )
+            elif not isinstance(value, list) or not all(
+                isinstance(e, dict) for e in value
+            ):
+                errors.append(f"{where}: [[{table}]] must be an array of tables")
+        elif isinstance(value, list):
+            errors.append(
+                f"{where}: [{table}] must be a table, not an array of tables "
+                f"([[{table}]])"
+            )
+        elif not isinstance(value, dict):
+            errors.append(f"{where}: [{table}] must be a table")
+    silk = data.get("silk")
+    if isinstance(silk, dict):
+        for key in SILK_LISTS:
+            if key in silk and not isinstance(silk[key], list):
+                errors.append(f"{where}: [silk] {key} must be a list")
+        for key in SILK_TABLES:
+            if key in silk and not isinstance(silk[key], dict):
+                errors.append(f"{where}: [silk] {key} must be a table of ref = value")
+    return errors
+
+
+def _known_net(nl: netlist.Netlist, net: Any) -> bool:
+    """Whether `net` names a netlist net; False for a non-string, which as a
+    dict key would raise instead (a TOML list is unhashable)."""
+    return isinstance(net, str) and net in nl.nets
+
+
+def validate_config(
+    cfg: paths.BoardConfig, nl: netlist.Netlist, vendored: Path = library.VENDORED
+) -> list[str]:
     """board.toml's layout tables against the netlist; [] when valid."""
     where = str(cfg.path)
     data = cfg.data
@@ -696,12 +888,12 @@ def validate_config(cfg: paths.BoardConfig, nl: netlist.Netlist) -> list[str]:
     for table in REQUIRED:
         if table not in data:
             errors.append(f"{where}: [{table}] is required")
+    errors += _validate_shapes(where, data)
+    if errors:
+        return errors
     for table, allowed in TABLE_KEYS.items():
         entries = data.get(table, [] if table in LIST_TABLES else {})
-        for entry in entries if isinstance(entries, list) else [entries]:
-            if not isinstance(entry, dict):
-                errors.append(f"{where}: [{table}] must be a table")
-                continue
+        for entry in entries if table in LIST_TABLES else [entries]:
             unknown = sorted(set(entry) - allowed)
             if unknown:
                 errors.append(
@@ -730,7 +922,7 @@ def validate_config(cfg: paths.BoardConfig, nl: netlist.Netlist) -> list[str]:
         errors.append(f"{where}: [placement] {ref} is not in the netlist")
     silk = data.get("silk", {})
     for ref in silk.get("hidden_refs", []):
-        if ref not in refs:
+        if not isinstance(ref, str) or ref not in refs:
             errors.append(f"{where}: [silk] hidden_refs: {ref!r} is not in the netlist")
     for key, n in (("ref_positions", 2), ("ref_sizes", 0)):
         for ref, v in silk.get(key, {}).items():
@@ -777,24 +969,45 @@ def validate_config(cfg: paths.BoardConfig, nl: netlist.Netlist) -> list[str]:
                     f"{where}: [silk] texts: {text.get('text')!r} is {text['size']} mm "
                     f"tall; the floor is {floor} mm{floor_note}"
                 )
+    errors += provenance.validate(where, data, size, floor)
     errors += _validate_cut_clearance(where, data, size)
-    errors += _validate_keepouts(where, data, size)
+    keepout_errors = _validate_keepouts(where, data, size)
+    errors += keepout_errors
     errors += _validate_route_keepouts(where, data, size)
-    errors += _validate_panel(where, data)
+    if not keepout_errors:  # panel.build reads each keepout's rect
+        errors += _validate_panel(where, data)
     errors += _validate_cutouts(where, data, size)
     errors += _validate_tracks(where, data, nl, size)
     errors += _validate_fanout(where, data, nl)
+    errors += _validate_imu(where, data, nl, vendored)
     for text in silk.get("texts", []):
         if (
             not isinstance(text, dict)
-            or set(text) != TEXT_KEYS
+            or set(text) - TEXT_OPTIONAL_KEYS != TEXT_KEYS
             or not isinstance(text["text"], str)
             or not _numbers(text["at"], 2)
             or not _positive(text["size"])
         ):
             errors.append(
-                f"{where}: [silk] texts: {text!r} must be {{text, at = [x, y], size}}"
+                f"{where}: [silk] texts: {text!r} must be "
+                '{text, at = [x, y], size} with an optional for = "<ref>"'
             )
+        elif "for" in text and text["for"] not in refs:
+            errors.append(
+                f"{where}: [silk] texts: {text['text']!r}: for = {text['for']!r} "
+                "is not in the netlist"
+            )
+    outlines = silk.get("module_outlines", [])
+    if not isinstance(outlines, list) or not all(isinstance(r, str) for r in outlines):
+        errors.append(f"{where}: [silk] module_outlines must be a list of references")
+    else:
+        for ref in outlines:
+            if ref not in refs:
+                errors.append(
+                    f"{where}: [silk] module_outlines: {ref!r} is not in the netlist"
+                )
+        if len(set(outlines)) != len(outlines):
+            errors.append(f"{where}: [silk] module_outlines repeats: {outlines}")
     classes = data["net_classes"]
     for cls in [*classes, data["signal"]]:
         name = cls.get("name", "signal")
@@ -802,6 +1015,7 @@ def validate_config(cfg: paths.BoardConfig, nl: netlist.Netlist) -> list[str]:
             not isinstance(name, str)
             or not isinstance(cls.get("nets"), list)
             or not cls["nets"]
+            or not all(isinstance(n, str) for n in cls["nets"])
         ):
             errors.append(
                 f"{where}: [[net_classes]] needs a name and a non-empty nets list"
@@ -814,7 +1028,9 @@ def validate_config(cfg: paths.BoardConfig, nl: netlist.Netlist) -> list[str]:
             errors.append(
                 f"{where}: net class {name!r}: via_um must be [diameter, drill]"
             )
-    names = [c.get("name") for c in classes]
+    # Only string names: a non-string one is reported above, and a TOML list
+    # is unhashable.
+    names = [c.get("name") for c in classes if isinstance(c.get("name"), str)]
     if len(set(names)) != len(names):
         errors.append(f"{where}: [[net_classes]] names repeat: {names}")
     if errors:
@@ -1135,6 +1351,16 @@ def _fmt(v: float) -> str:
     return "0" if s in ("-0", "") else s
 
 
+def silk_hint(error: str, module: str) -> str:
+    """The fix for an orientation error that is a stale board, not board.toml."""
+    if "not on the board" in error:
+        return (
+            f"; re-apply the silkscreen with just {module}::carrier-silk, then "
+            f"just {module}::carrier-check"
+        )
+    return ""
+
+
 def board_path(project: Path) -> Path:
     cfg = paths.load_board_config(project)
     return paths.carrier_dir(project) / cfg.name / f"{cfg.name}.kicad_pcb"
@@ -1175,7 +1401,7 @@ def main(argv: list[str] | None = None, repo_root: Path = REPO_ROOT) -> int:
                 if n:
                     pcb.write_text(text, encoding="utf-8")
                 print(f"relinked {n} footprint path(s) in {pcb.name}")
-            errors = validate_config(cfg, nl)
+            errors = validate_config(cfg, nl, vendored)
             tabs = panel.build(cfg.data) if not errors else None
             skip = frozenset(t.name for t in tabs.tabs) if tabs else frozenset()
             errors += check(text, nl, ns, vendored, module=module, skip=skip)
@@ -1188,6 +1414,17 @@ def main(argv: list[str] | None = None, repo_root: Path = REPO_ROOT) -> int:
                     text, cfg.data.get("keepouts", []), cfg.data["outline"]["origin"]
                 )
                 errors += [f"{e}; {hint(module())}" for e in copper]
+            if not errors:
+                comps = [(c.ref, c.footprint) for c in nl.comps]
+                errors += [
+                    f"{cfg.path}: {e}"
+                    for e in orientation.validate(cfg.data, comps, vendored)
+                ]
+            if not errors:
+                errors += [
+                    f"{cfg.path}: {e}{silk_hint(e, module())}"
+                    for e in orientation.check(cfg.data, comps, vendored, text)
+                ]
             for e in errors:
                 print(f"FAIL: {e}")
             if errors:

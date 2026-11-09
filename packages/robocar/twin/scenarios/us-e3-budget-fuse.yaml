@@ -1,0 +1,26 @@
+# US-E3: a runaway never costs more than the fuse. With the request ceiling
+# lowered to 3, the planner makes three requests, announces the blown fuse
+# once, forces STOP, and makes no further request however much the console
+# keeps waking it (only `plan resume` re-arms it).
+#
+# Phase 1 covers the planner half of US-E3 only. The voice fuse (voice_budget)
+# is not compiled into the twin until voice_turn_core lands (phase 2), and
+# `plan resume` is not a console line the twin acts on yet.
+id: us-e3-budget-fuse
+stories: [US-E3]
+seed: 4
+duration: 3m
+config: {plan_budget_max_requests: 3}
+world:
+  - {at: 0s, link: {wifi: true, key: true}}
+  - {at: 0s, frame: {scene: workbench, pose: C}}
+  - {at: 5s, every: 5s, until: 175s, console: status}
+models:
+  planner: inline
+default: {status: 200, latency: 1s, call: stop}
+expect:
+  - requests: {count: 3}
+  - announce: {what: budget, count: 1}
+  - force_stop: {reason: budget, min: 1}
+  - announce: {what: waking, between: [0s, 20s], count: 1}
+  - announce: {what: waking, between: [21s, 3m], count: 0}

@@ -49,6 +49,11 @@ fetch-deps:
 tts-generate:
     cd tools/tts && uv sync && uv run python generate.py ../../data
 
+# Offline tests for the TTS generator: request shape and audio decoding, no key
+[group: "test"]
+tts-test:
+    cd tools/tts && uv sync --quiet && uv run pytest -q
+
 ##########
 # Build (custom — output filtering + fetch-deps)
 ##########

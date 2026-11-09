@@ -1,0 +1,36 @@
+# US-E2: a dormant Teuvo wakes within one 15 s tick when something happens.
+# Three wakes, each from dormancy: a sound, then a scene change, then a console
+# line. Each must yield exactly one request before the next tick and one
+# "waking" announce.
+#
+# Timeline (15 s ticks): boots dormant. Sound at 40 s: ambient_audio latches
+# the event for AMBIENT_LATCH_TTL_MS (60 s), so requests at 45..90 s are all
+# evidence; the ladder then runs 105, 135, 195, 315, 615 s and the planner is
+# dormant again from the 630 s tick. A new scene at 700 s plans at 705 s; ladder
+# 720 .. 1230 s, dormant from 1245 s. A console line at 1300 s plans at 1305 s.
+id: us-e2-wake-on-event
+stories: [US-E2]
+seed: 2
+duration: 1400s
+world:
+  - {at: 0s, link: {wifi: true, key: true}}
+  - {at: 0s, frame: {scene: living-room, pose: C}}
+  - {at: 40s, sound: {peak_db: 30, dur: 400ms}}
+  - {at: 700s, frame: {scene: living-room-person-at-door, pose: C}}
+  - {at: 1300s, console: status}
+models:
+  planner: inline
+default: {status: 200, latency: 1500ms, call: stop}
+expect:
+  # Dormant from boot: the first frame is adopted as the reference, not news.
+  - requests: {between: [0s, 39s], count: 0}
+  - requests: {after: "sound[0]", within: 15s, count: 1}
+  - announce: {what: waking, after: "sound[0]", within: 15s, count: 1}
+  - requests: {between: [650s, 699s], count: 0}
+  - requests: {after: "frame[1]", within: 15s, count: 1}
+  - announce: {what: waking, after: "frame[1]", within: 15s, count: 1}
+  - requests: {between: [1260s, 1299s], count: 0}
+  - requests: {after: "console[0]", within: 15s, count: 1}
+  - announce: {what: waking, after: "console[0]", within: 15s, count: 1}
+  - announce: {what: waking, count: 3}
+  - announce: {what: dormant, between: [541s, 1299s], count: 2}

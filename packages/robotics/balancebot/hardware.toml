@@ -125,7 +125,7 @@ note = "100 kΩ from VBAT"
 role = "PIN_PACK_SENSE"
 to = "sense_bottom.A"
 build = "carrier"
-note = "27 kΩ to GND: 12.6 V reads 2.68 V"
+note = "22 kΩ to GND: 12.6 V (3S) reads 2.27 V, 16.8 V (4S) 3.03 V"
 
 [[nets]]
 role = "PIN_PACK_SENSE"
@@ -136,6 +136,43 @@ build = "carrier"
 role = "PIN_PACK_SENSE"
 why = "only the carrier PCB has the pack divider (R2/R3/C3); the hand-wired harness leaves D0 free"
 build = "harness"
+
+# The carrier's expansion header J6 (rev3): XIAO D1 and D2, each through a
+# 1 kOhm series resistor at the XIAO, for a cable to an ESP-NOW companion XIAO
+# (#960), a servo's PWM or an ADC input.
+[[nets]]
+role = "PIN_EXP_D1"
+to = "exp_r_d1.A"
+build = "carrier"
+note = "1 kΩ in series to J6 pin 4; UART1 RX"
+
+[[nets]]
+role = "PIN_EXP_D2"
+to = "exp_r_d2.A"
+build = "carrier"
+note = "1 kΩ in series to J6 pin 3; UART0 TX"
+
+[[undrawn]]
+role = "PIN_EXP_D1"
+why = "only the carrier PCB has the expansion header (J6); the hand-wired harness leaves D1 free"
+build = "harness"
+
+[[undrawn]]
+role = "PIN_EXP_D2"
+why = "only the carrier PCB has the expansion header (J6); the hand-wired harness leaves D2 free"
+build = "harness"
+
+# The carrier's Qwiic-order I2C tap J7 (rev3) on the MPU6050's bus. Core 1 owns
+# I2C1 at 400 kHz; the tap adds no pull-ups (the GY-521 carries its own).
+[[nets]]
+role = "PIN_IMU_SDA"
+to = "qwiic.SDA"
+build = "carrier"
+
+[[nets]]
+role = "PIN_IMU_SCL"
+to = "qwiic.SCL"
+build = "carrier"
 
 [[undrawn]]
 role = "PIN_STATUS_LED"
@@ -216,14 +253,19 @@ value = "Motor right"
 # lands on the source while R4 holds the gate at GND, and above 20 V that
 # exceeds VGSS. BZT52C15 (C2104), JSCJ datasheet Rev. 2.1 page 2: VZ 13.8-15.6 V
 # at IZT 5 mA, ZZT 30 ohm, IR 0.1 uA at VR 10.5 V, temperature coefficient
-# 9.2-13 mV/C. Its 13.8 V minimum sits above a full pack, so it does not
-# conduct in use and |VGS| follows the pack: 9.0-12.6 V over the BMS's range,
+# 9.2-13 mV/C. Its 13.8 V minimum sits above a full 3S pack, so on 3S it does
+# not conduct and |VGS| follows the pack: 9.0-12.6 V over the BMS's range,
 # and 8.2 V at the DRV8825's minimum supply (TI SLVSA73F, section 1), past the
 # -4.5 V that DS33584's 100 mohm RDS(on) maximum is given at and near the
-# -10 V of its 60 mohm one. In an overshoot it clamps |VGS| to 15.6 V at 5 mA
+# -10 V of its 60 mohm one. On a full 4S pack (16.8 V, which the divider
+# reads since rev3) it does conduct: 0.12-0.3 mA through R4 over its VZ
+# spread, 4 mW at most, holding |VGS| at 13.8-15.6 V, still under VGSS. It
+# conducts whenever a 4S pack is above about 13.8 V, so over most of a
+# discharge; VZ sits a little below its 5 mA figure at these currents.
+# In an overshoot it clamps |VGS| to 15.6 V at 5 mA
 # (R4 passes 0.8 mA at a 24 V spike), about 16.9 V at a 125 C junction: at
 # least 3 V under VGSS. A 12 V part (VZ 11.4-12.7 V) would conduct on a full
-# pack.
+# 3S pack.
 #
 # Power-stage checklist (.claude/rules/power-stage-checklist.md) for this
 # input stage: 1-2 (dropout, low-battery cutoff) and 4-7 belong to the LM2596
@@ -299,15 +341,18 @@ value = "100k"
 lcsc = "C149504"
 buy = "aliexpress:32901883276"  # 100K variant
 
+# 22 kOhm (rev3; 27 kOhm before) so D0 reads a 4S pack: ratio 22/122 = 0.1803,
+# 16.8 V (full 4S) reads 3.03 V and 12.6 V (full 3S) 2.27 V, under the
+# RP2350 ADC's 3.3 V reference either way. JLC Basic. AliExpress listing
+# 32901883276's variants were not checked for 22K, so no `buy`.
 [parts.sense_bottom]
-name = "27 kΩ pack divider, bottom"
+name = "22 kΩ pack divider, bottom"
 kind = "resistor"
 build = "carrier"
 part = "r0805"
 ref = "R3"
-value = "27k"
-lcsc = "C17593"
-buy = "aliexpress:32901883276"  # 27K variant
+value = "22k"
+lcsc = "C17560"
 
 [parts.sense_filter]
 name = "100 nF pack divider filter"
@@ -347,6 +392,103 @@ build = "carrier"
 part = "m3-mounting-hole"
 ref = "H4"
 
+# --- rev3 headers and links (Lauri, 2026-11-06) -------------------------------
+# J6: expansion header, 5V (EXP_5V: XIAO_5V through D3), GND, D2, D1. R5 and
+# R6, 1 kOhm at the
+# XIAO's pins, limit the current if the cable's far end drives the same line
+# or the lead goes on one pin over. JLC Basic (C17513); AliExpress listing
+# 32901883276's variants were not checked for 1K, so no `buy`.
+[parts.exp]
+name = "Expansion header, 5V GND D2 D1"
+kind = "connector"
+build = "carrier"
+part = "exp-header-1x4"
+ref = "J6"
+
+# D3 (rev3, Lauri 2026-11-06): a B5819W in series with J6's 5V pin, anode on
+# XIAO_5V and cathode on EXP_5V, so a companion board powered from its own USB
+# or supply cannot back-feed this board's XIAO_5V (and through it the XIAO's
+# 5V pad). It does not stop this board feeding the companion's 5V pin, so with
+# USB on both boards leave J6:1 unconnected (carrier README). The companion
+# gets XIAO_5V minus one Schottky drop: about 4.4-4.7 V at light load and
+# 4.1-4.4 V at 0.5 A with the buck at 5.0-5.3 V, and shares D1's 1 A budget.
+# Same part as D1 (LCSC C8598, JLC Basic).
+[parts.exp_diode]
+name = "B5819W Schottky, XIAO 5V to the expansion header"
+kind = "diode"
+build = "carrier"
+part = "b5819w"
+ref = "D3"
+
+[parts.exp_r_d1]
+name = "1 kΩ series resistor, D1 to J6"
+kind = "resistor"
+build = "carrier"
+part = "r0805"
+ref = "R5"
+value = "1k"
+lcsc = "C17513"
+
+[parts.exp_r_d2]
+name = "1 kΩ series resistor, D2 to J6"
+kind = "resistor"
+build = "carrier"
+part = "r0805"
+ref = "R6"
+value = "1k"
+lcsc = "C17513"
+
+# R7 and R8: an 0805 pad pair from each driver socket's pin 2 to 3V3, left
+# open. Pin 2 is FAULT on a DRV8825 carrier, VDD on an A4988 and VIO on some
+# TMC2209 carriers; bridging it (a 0 ohm 0805 or a wire offcut) powers such a
+# driver's logic. No LCSC number, so JLCPCB never fits it. Bridge it only for an
+# A4988, or a TMC2209 whose pin 2 is VIO, and only if the DRV8825 carriers that
+# may also go in the socket have the 1.5 kOhm series resistor on FAULT
+# (Pololu's does; check a clone): with it bridged, a DRV8825 reporting a fault
+# pulls 3V3 through that resistor. See hardware/carrier/README.md.
+[parts.vio_left]
+name = "VIO link, left driver pin 2 to 3V3 (open)"
+kind = "resistor"
+build = "carrier"
+part = "r0805"
+ref = "R7"
+value = "VIO link"
+buy = "owned:fitted by hand when needed: a 0 ohm 0805 or a wire offcut across the pads"
+
+[parts.vio_right]
+name = "VIO link, right driver pin 2 to 3V3 (open)"
+kind = "resistor"
+build = "carrier"
+part = "r0805"
+ref = "R8"
+value = "VIO link"
+buy = "owned:fitted by hand when needed: a 0 ohm 0805 or a wire offcut across the pads"
+
+# J7: Qwiic-order I2C tap on the IMU bus (see the PIN_IMU_SDA/SCL nets above).
+[parts.qwiic]
+name = "Qwiic-order I2C tap"
+kind = "connector"
+build = "carrier"
+part = "testpoint-qwiic-1x4"
+ref = "J7"
+
+# J8: supply test header, 3V3, GND, 5V (BUCK_5V, the buck's output before D1),
+# GND, VBAT (Lauri, 2026-11-06); every rail has only GND beside it. J9: a
+# ground post for a scope probe's clip.
+[parts.test]
+name = "Supply test header, 3V3 GND 5V GND VBAT"
+kind = "connector"
+build = "carrier"
+part = "testpoint-power-1x5"
+ref = "J8"
+
+[parts.gnd_post]
+name = "Ground post"
+kind = "connector"
+build = "carrier"
+part = "gnd-post-1x2"
+ref = "J9"
+
 # Motor power straight from the pack; never from the XIAO's battery pads.
 # The harness wires the pack to VBAT; the carrier puts F1 and Q1 between them.
 [[rails]]
@@ -383,7 +525,7 @@ to = ["rp_gate.A", "rp_zener.A"]
 [[rails]]
 name = "VBAT"
 build = "carrier"
-to = ["bulk_left.+", "bulk_right.+", "sense_top.A", "rp_zener.K"]
+to = ["bulk_left.+", "bulk_right.+", "sense_top.A", "rp_zener.K", "test.VBAT"]
 
 [[rails]]
 name = "5V"
@@ -397,13 +539,47 @@ to = ["mcu.5V"]
 name = "BUCK_5V"
 build = "carrier"
 from = "buck.OUT+"
-to = ["buck_diode.A"]
+to = ["buck_diode.A", "test.5V"]
 
 [[rails]]
 name = "XIAO_5V"
 build = "carrier"
 from = "buck_diode.K"
-to = ["mcu.5V"]
+to = ["mcu.5V", "exp_diode.A"]
+
+# J6's 5V pin, behind D3, so nothing on the expansion cable can back-feed XIAO_5V.
+[[rails]]
+name = "EXP_5V"
+build = "carrier"
+from = "exp_diode.K"
+to = ["exp.5V"]
+
+# The expansion header's signal side of R5 and R6.
+[[rails]]
+name = "EXP_D1"
+build = "carrier"
+from = "exp_r_d1.B"
+to = ["exp.D1"]
+
+[[rails]]
+name = "EXP_D2"
+build = "carrier"
+from = "exp_r_d2.B"
+to = ["exp.D2"]
+
+# Each driver socket's pin 2 to its VIO link's other pad (R7, R8); the link's
+# 3V3 pad is on the 3V3 continuation below.
+[[rails]]
+name = "VIO_L"
+build = "carrier"
+from = "drv_left.FAULT"
+to = ["vio_left.A"]
+
+[[rails]]
+name = "VIO_R"
+build = "carrier"
+from = "drv_right.FAULT"
+to = ["vio_right.A"]
 
 # nSLEEP and nRESET are tied high, and M0/M1 strapped high for 1/8 microstep
 # (M2 to GND), per WIRING.md § DRV8825 carriers.
@@ -422,6 +598,12 @@ to = [
     "drv_right.M0",
     "drv_right.M1",
 ]
+
+# A continuation: the carrier's own 3V3 loads (rev3).
+[[rails]]
+name = "3V3"
+build = "carrier"
+to = ["vio_left.B", "vio_right.B", "qwiic.3V3", "test.3V3"]
 
 # WIRING.md keeps the harness's common ground in prose; the carrier draws it.
 # M2 to GND is the 1/8-microstep strap; AD0 to GND sets the MPU6050 to 0x68.
@@ -444,6 +626,10 @@ to = [
     "sense_bottom.B",
     "sense_filter.B",
     "rp_gate.B",
+    "exp.GND",
+    "qwiic.GND",
+    "test.GND",
+    "gnd_post.GND",
 ]
 
 # `pins` wires each named driver pin to the same-named pin on the load, one net
@@ -472,4 +658,6 @@ PIN_STEP_RIGHT = "STEP_R"
 PIN_DIR_RIGHT = "DIR_R"
 PIN_MOTOR_NENABLE = "NENABLE"
 PIN_PACK_SENSE = "PACK_SENSE"
+PIN_EXP_D1 = "XIAO_D1"
+PIN_EXP_D2 = "XIAO_D2"
 3V3 = "+3V3"

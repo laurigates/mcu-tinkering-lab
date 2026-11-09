@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.1.12](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-simulation-v0.1.11...robocar-simulation-v0.1.12) (2026-11-09)
+
+
+### Bug Fixes
+
+* **auto:** resolve CI failure in Build Python Simulation ([b2eadf9](https://github.com/laurigates/mcu-tinkering-lab/commit/b2eadf980fc7f871bfa078d9481c03d4e92a108f))
+* **robocar-simulation:** sync uv.lock with the 0.1.11 release ([#1038](https://github.com/laurigates/mcu-tinkering-lab/issues/1038)) ([b2eadf9](https://github.com/laurigates/mcu-tinkering-lab/commit/b2eadf980fc7f871bfa078d9481c03d4e92a108f))
+
+## [0.1.11](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-simulation-v0.1.10...robocar-simulation-v0.1.11) (2026-11-09)
+
+
+### Features
+
+* **kicad:** query and cache JLCPCB part data per LCSC number ([#975](https://github.com/laurigates/mcu-tinkering-lab/issues/975)) ([9cc2e5c](https://github.com/laurigates/mcu-tinkering-lab/commit/9cc2e5c5dd0325362cae51f252e46aa0c171def1))
+
+
+### Bug Fixes
+
+* **deps:** pin dependency torch to ==2.15.0 ([#983](https://github.com/laurigates/mcu-tinkering-lab/issues/983)) ([7965242](https://github.com/laurigates/mcu-tinkering-lab/commit/796524295131f10c3fbdb5154583102805583438))
+* **deps:** update all non-major dependencies ([#1013](https://github.com/laurigates/mcu-tinkering-lab/issues/1013)) ([674ed04](https://github.com/laurigates/mcu-tinkering-lab/commit/674ed04bbe8fe4b103a9beec6b76a96f617e44a1))
+* **deps:** update all non-major dependencies ([#984](https://github.com/laurigates/mcu-tinkering-lab/issues/984)) ([d723342](https://github.com/laurigates/mcu-tinkering-lab/commit/d7233423923ad30c6c007446c4caf5547dc2c9c3))
+* **simulation:** pin Python 3.12 so CI's uv sync stops picking 3.14 ([#974](https://github.com/laurigates/mcu-tinkering-lab/issues/974)) ([3ca7af8](https://github.com/laurigates/mcu-tinkering-lab/commit/3ca7af82a46c49e4a1c66ede89f5dd9af1ff1bfd))
+
+
+### Miscellaneous
+
+* **deps:** lock file maintenance; rename ty unresolved-import rule ([#993](https://github.com/laurigates/mcu-tinkering-lab/issues/993)) ([5618c3e](https://github.com/laurigates/mcu-tinkering-lab/commit/5618c3e25f9dc12d1c7ec997c18f69a2ae96b035))
+
 ## [0.1.10](https://github.com/laurigates/mcu-tinkering-lab/compare/robocar-simulation-v0.1.9...robocar-simulation-v0.1.10) (2026-11-01)
 
 

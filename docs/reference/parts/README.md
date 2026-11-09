@@ -34,6 +34,12 @@ footprint = "Lib:Name"             # through-hole stand-in; default: [part] foot
 value     = "..."                  # default: the instance's value
 height    = "low"                  # "low" | "raised" | "tall"; default "low"
 body      = [x0, y0, x1, y1]       # outline in holes from pin 1; default: F.CrtYd box
+
+[stock]                            # optional; how kicad.stock finds it in the inventory
+mpn      = "ZXMP4A16GTA"           # a branded part, or, for a generic part:
+category = "capacitor"             #   an inventory category (parts-stock schema v1)
+package  = "0805"                  #   and the package
+needs    = ["voltage"]             # optional: specs an item must state to count
 ```
 
 A `hardware.toml` instance can override `value`, `lcsc` and `buy`. Without a
@@ -60,7 +66,8 @@ rotation for its footprint in
 [`../jlcpcb-rotations.toml`](../jlcpcb-rotations.toml): `kicad.fab` refuses to
 write a CPL without one, and `test_jlc` fails on any LCSC number in use that
 has none. `PYTHONPATH=tools python3 -m kicad.lcsc_rotation <C123> <Lib:Name>`
-derives the entry.
+derives the entry. `just kicad::parts` asks JLCPCB whether each number in use
+is basic, preferred or extended, in stock and orderable (`kicad.lcsc`).
 
 `pin_numbers = "board-dip-ccw"` takes the numbers from the part's board page
 under `docs/reference/boards/`: the MCU's `[source] board`, or the part's own
@@ -68,6 +75,41 @@ under `docs/reference/boards/`: the MCU's `[source] board`, or the part's own
 DIP. Side L position *n* is pin *n*, and Side R position *n* is pin 2N+1−*n*,
 where N is the number of pads per side. A pad whose row has a GPIO may stay off
 every net, as a spare I/O. A power pad (5V, GND, 3V3) must be on a rail.
+
+## Whether a part is already on hand
+
+`[stock]` links an entry to Lauri's parts inventory, the separate `parts-stock`
+tree of TOML files (schema v1, `items/<category>/<slug>.toml`). Give exactly
+one form:
+
+- `mpn` for a branded part, the full ordering code (`ZXMP4A16GTA`,
+  `TPS563208DDCR`). An inventory item matches only by its own `mpn`, exact and
+  case-insensitive; a sister part is never counted.
+- `category` and `package` for a generic part (resistors, capacitors). The
+  item's category and package must be equal, and the instance value's first
+  word must equal the item's `[specs] value` or one of a kit's `[[contents]]`
+  values, after normalising (`100n` = `100nF` = `0.1 µF`, `10k` = `10kΩ`,
+  `4k7` = `4.7k`). A voltage in the instance value (`100uF 35V`) needs an item
+  rated at least that. `category` is one of the inventory's categories,
+  copied into `registry.STOCK_CATEGORIES` from `parts-stock/inv/schema.py`.
+
+`needs` lists the `[specs]` names an item must state for the part to count as
+on hand. A kit whose voltage is under `[specs] unknown` is reported as "rating
+unknown", not on hand.
+
+Pieces bought on an order that has not arrived are incoming, never on hand: an
+item's `[[sources]]` `qty` whose `order` file (`orders/<shop>/<date>-<id>.toml`)
+has `status` `placed` or `shipped`, the rule `parts-stock`'s own
+`Store.incoming` applies. The report shows them beside the status ("x0 on hand,
++100 incoming (enough for 100 board(s) once delivered)") without changing it.
+
+`just kicad::stock <project> [--boards N] [--inventory PATH]` prints each BOM
+line as on hand, rating unknown, short, none (with its `buy`/`lcsc` route) or
+no stock key, and lists near matches (same category and package, or an mpn
+sharing its first four characters) that it does not count. The inventory
+defaults to `$INVENTORY_DIR`, else `../parts-stock` beside the main checkout.
+It is a local report and exits 0; CI does not run it. Replacing a part with a
+near match is a datasheet decision: the `part-substitution` skill.
 
 ## Where a pin order comes from
 

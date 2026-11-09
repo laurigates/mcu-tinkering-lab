@@ -34,6 +34,12 @@
 
 #include "cJSON.h"
 #include "esp_log.h"
+#include "sound_clips_core.h"
+
+/* Copy of the `speak` text while a sound tag is put in front of it. The
+ * caller's buffer is SPEECH_TEXT_MAX (320 B); this is the same size, so a
+ * full-length line loses only what no longer fits after the tag. */
+#define SPEECH_LINE_SCRATCH 320
 
 /* On the host-test build ESP_LOGx macros are no-ops, leaving TAG unused.
  * Suppress with a compiler attribute rather than an #ifdef — keeps the source
@@ -57,6 +63,14 @@ static const char *TAG GP_MAYBE_UNUSED = "gemini_parse";
  *  — self_report runs on its own task, and a shared slot would let its parse
  *  land between the planner's parse and the planner's read. */
 static gemini_usage_t s_last_usage;
+static gemini_note_t s_last_note;
+
+void gemini_parse_last_note(gemini_note_t *out)
+{
+    if (out) {
+        *out = s_last_note;
+    }
+}
 
 void gemini_parse_last_usage(gemini_usage_t *out)
 {
@@ -88,6 +102,8 @@ esp_err_t gemini_parse_response(const char *json_text, goal_t *out_goal, char *o
      * false, so a stale-but-plausible number here would silently under-charge
      * the fuse — the one failure mode a spend ceiling cannot have. */
     s_last_usage = (gemini_usage_t){.prompt = -1, .output = -1, .total = -1, .present = false};
+    s_last_note.kind = NOTE_KIND_NONE;
+    s_last_note.text[0] = '\0';
 
     cJSON *root = cJSON_Parse(json_text);
     if (!root) {
@@ -128,6 +144,7 @@ esp_err_t gemini_parse_response(const char *json_text, goal_t *out_goal, char *o
      * motion call plus a `speak`. Scanning only parts[0] (as this parser did
      * before speech existed) would silently drop whichever came second. */
     cJSON *fn_call = NULL;
+    sound_clip_t sound = SOUND_CLIP_NONE; /* first `sound` call wins */
     const int part_count = cand_parts ? cJSON_GetArraySize(cand_parts) : 0;
 
     for (int i = 0; i < part_count; i++) {
@@ -149,9 +166,51 @@ esp_err_t gemini_parse_response(const char *json_text, goal_t *out_goal, char *o
             continue;
         }
 
+        /* `note` is a side channel like `speak`: it must never become the
+         * motion goal, which "first unrecognised call wins" below would make
+         * it if the model put it first. */
+        if (strcmp(fc_name->valuestring, "note") == 0) {
+            cJSON *n_args = cJSON_GetObjectItem(fc, "args");
+            cJSON *n_kind = n_args ? cJSON_GetObjectItem(n_args, "kind") : NULL;
+            cJSON *n_text = n_args ? cJSON_GetObjectItem(n_args, "text") : NULL;
+            if (s_last_note.kind == NOTE_KIND_NONE && cJSON_IsString(n_kind) &&
+                cJSON_IsString(n_text)) {
+                const note_kind_t kind = note_kind_from_name(n_kind->valuestring);
+                if (kind == NOTE_KIND_NONE) {
+                    ESP_LOGW(TAG, "note: unknown kind \"%s\" ignored", n_kind->valuestring);
+                } else if (note_text_clean(s_last_note.text, sizeof(s_last_note.text),
+                                           n_text->valuestring) > 0) {
+                    s_last_note.kind = kind;
+                }
+            }
+            continue;
+        }
+
+        if (strcmp(fc_name->valuestring, "sound") == 0) {
+            cJSON *so_args = cJSON_GetObjectItem(fc, "args");
+            cJSON *so_name = so_args ? cJSON_GetObjectItem(so_args, "name") : NULL;
+            if (cJSON_IsString(so_name) && sound == SOUND_CLIP_NONE) {
+                sound = sound_clip_from_name(so_name->valuestring);
+                if (sound == SOUND_CLIP_NONE) {
+                    ESP_LOGW(TAG, "sound: unknown clip \"%s\" ignored", so_name->valuestring);
+                }
+            }
+            continue;
+        }
+
         if (!fn_call) {
             fn_call = fc; /* first motion call wins */
         }
+    }
+
+    /* The clip leads the line whichever order the calls came in; the TTS task
+     * takes the tag out again (sound_clips_split()). A sound with no `speak`
+     * becomes a line of just the tag, which plays without a TTS request. */
+    if (sound != SOUND_CLIP_NONE && out_speech && speech_cap > 0) {
+        char words[SPEECH_LINE_SCRATCH];
+        snprintf(words, sizeof(words), "%s", out_speech);
+        snprintf(out_speech, speech_cap, "[%s]%s%s", sound_clip_name(sound),
+                 words[0] != '\0' ? " " : "", words);
     }
 
     if (!fn_call) {
@@ -257,8 +316,32 @@ static void sanitize_spoken_line(char *s)
     }
 }
 
-esp_err_t gemini_parse_text(const char *json_text, char *out, size_t out_len)
+/** Copy @p src onto the end of @p out at *pos, never past @p out_len. */
+static void append_text(char *out, size_t out_len, size_t *pos, const char *src)
 {
+    if (*pos + 1 >= out_len) {
+        return;
+    }
+    /* snprintf rather than strlcat: this file also builds on the host for the
+     * unit tests, where strlcat is not portable. It always NUL-terminates and
+     * returns the length it WOULD have written, so clamp before advancing or a
+     * long first part makes pos run past the buffer. */
+    const int w = snprintf(out + *pos, out_len - *pos, "%s", src);
+    if (w < 0) {
+        return;
+    }
+    *pos += ((size_t)w < out_len - *pos) ? (size_t)w : (out_len - *pos - 1);
+}
+
+/** Shared body of gemini_parse_text_meta() and gemini_parse_voice_reply().
+ *  @p last_only keeps only the last non-thought text part instead of joining
+ *  them all. */
+static esp_err_t parse_text_parts(const char *json_text, char *out, size_t out_len,
+                                  gemini_text_meta_t *meta, bool last_only)
+{
+    if (meta) {
+        memset(meta, 0, sizeof(*meta));
+    }
     if (!json_text || !out || out_len == 0) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -274,24 +357,48 @@ esp_err_t gemini_parse_text(const char *json_text, char *out, size_t out_len)
     cJSON *content = c0 ? cJSON_GetObjectItem(c0, "content") : NULL;
     cJSON *parts = content ? cJSON_GetObjectItem(content, "parts") : NULL;
 
+    if (meta && c0) {
+        cJSON *finish = cJSON_GetObjectItem(c0, "finishReason");
+        if (cJSON_IsString(finish) && finish->valuestring) {
+            snprintf(meta->finish_reason, sizeof(meta->finish_reason), "%s", finish->valuestring);
+        }
+    }
+
     if (cJSON_IsArray(parts)) {
         out[0] = '\0';
         size_t pos = 0;
+        const char *last = NULL;
         const int n = cJSON_GetArraySize(parts);
-        for (int i = 0; i < n && pos + 1 < out_len; ++i) {
-            cJSON *t = cJSON_GetObjectItem(cJSON_GetArrayItem(parts, i), "text");
-            if (cJSON_IsString(t) && t->valuestring) {
-                /* snprintf rather than strlcat: this file also builds on the
-                 * host for the unit tests, where strlcat is not portable. It
-                 * always NUL-terminates and returns the length it WOULD have
-                 * written, so clamp before advancing or a long first part makes
-                 * pos run past the buffer. */
-                const int w = snprintf(out + pos, out_len - pos, "%s", t->valuestring);
-                if (w < 0) {
-                    break;
+        if (meta) {
+            meta->parts = n;
+        }
+        for (int i = 0; i < n; ++i) {
+            cJSON *part = cJSON_GetArrayItem(parts, i);
+            /* Reasoning is never speech (#950): on 2026-11-05 a voice turn
+             * spoke 34.8 s of "The user asks ..." in English. */
+            if (cJSON_IsTrue(cJSON_GetObjectItem(part, "thought"))) {
+                if (meta) {
+                    meta->thought_parts++;
                 }
-                pos += ((size_t)w < out_len - pos) ? (size_t)w : (out_len - pos - 1);
+                continue;
             }
+            cJSON *t = cJSON_GetObjectItem(part, "text");
+            if (!cJSON_IsString(t) || !t->valuestring) {
+                continue;
+            }
+            if (meta) {
+                meta->text_parts++;
+            }
+            if (last_only) {
+                last = t->valuestring;
+            } else {
+                /* Once full this does nothing; the loop keeps counting parts
+                 * for the log. */
+                append_text(out, out_len, &pos, t->valuestring);
+            }
+        }
+        if (last) {
+            append_text(out, out_len, &pos, last);
         }
         if (out[0] != '\0') {
             sanitize_spoken_line(out);
@@ -303,4 +410,24 @@ esp_err_t gemini_parse_text(const char *json_text, char *out, size_t out_len)
 
     cJSON_Delete(root);
     return ret;
+}
+
+esp_err_t gemini_parse_text_meta(const char *json_text, char *out, size_t out_len,
+                                 gemini_text_meta_t *meta)
+{
+    return parse_text_parts(json_text, out, out_len, meta, false);
+}
+
+esp_err_t gemini_parse_voice_reply(const char *json_text, char *out, size_t out_len,
+                                   gemini_text_meta_t *meta)
+{
+    /* gemini-flash-latest can write its reasoning as an ordinary text part
+     * with no thought flag, then the reply as the next part (#950, logged
+     * 2026-11-08 as parts=2 thought=0 text=2). The reply is the last part. */
+    return parse_text_parts(json_text, out, out_len, meta, true);
+}
+
+esp_err_t gemini_parse_text(const char *json_text, char *out, size_t out_len)
+{
+    return gemini_parse_text_meta(json_text, out, out_len, NULL);
 }

@@ -1,4 +1,4 @@
-"""cadstd: the fastener table, the fit profiles and the grid (ADR-030).
+"""cadstd: the fastener table, the fit profiles and the grid (ADR-035).
 
 Stdlib only, so the `cadstd` pre-commit hook runs it without build123d. The
 shape tests are in test_shapes.py.
@@ -35,7 +35,7 @@ class Fasteners(unittest.TestCase):
 
     def test_values_the_existing_parts_were_built_with(self):
         """case.py, the pan-tilt and the microscope used these before cadstd;
-        a change here moves committed geometry (ADR-030, Migration)."""
+        a change here moves committed geometry (ADR-035, Migration)."""
         self.assertEqual((M3.clearance, M3.pilot), (3.4, 2.5))
         self.assertEqual(M2.pilot, 1.6)
         self.assertEqual((M3.nut_af, M3.nut_t), (5.5, 2.4))

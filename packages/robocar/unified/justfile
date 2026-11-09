@@ -51,10 +51,22 @@ shell: _idf-shell
 # Omitting ota_data leaves stale OTA state behind, which matters here because
 # CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y. Offsets mirror `idf.py build`'s own
 # flash_args output — recheck them against it after any partitions.csv change.
+#
+# What gets written is decided first, by tools/flash-source.py, and refused
+# unless the app image embeds the build SHA asked for:
+#   just robocar-unified::flash            build this checkout; image = HEAD(-dirty)
+#   just robocar-unified::flash <commit>   build that commit in tmp/flash/<sha>
+#   just robocar-unified::flash v0.2.17    the release's prebuilt parts, or its
+#                                          commit built when the release lacks them
+# esptool then reads back what it wrote (its default verify), so a write that
+# did not land fails here rather than on the robot.
 [group: "device"]
-flash: require-port
+flash ref="": require-port
     #!/usr/bin/env bash
     set -euo pipefail
+    eval "$(python3 ../../../tools/flash-source.py --project-dir {{project_dir}} \
+        --bin {{bin_name}} --tag-prefix robocar-unified-v {{quote(ref)}})"
+    cd "$SRC_DIR"
     esptool -s --chip esp32s3 -p {{port}} -b "${BAUD:-460800}" \
         --before default-reset --after hard-reset \
         write-flash --flash-mode dio --flash-size 8MB --flash-freq 80m \
@@ -62,7 +74,7 @@ flash: require-port
         0x8000 build/partition_table/partition-table.bin \
         0xd000 build/ota_data_initial.bin \
         0x10000 build/{{bin_name}}.bin
-    echo "Flashed {{bin_name}} OK"
+    echo "Flashed {{bin_name}} build $SHA ($SOURCE)"
 
 # Reset the board over USB-Serial-JTAG
 [group: "device"]
@@ -74,9 +86,9 @@ reset: _s3-reset
 [group: "device"]
 monitor: _s3-monitor
 
-# Flash and immediately start monitoring
+# Flash and immediately start monitoring (same ref forms as `flash`)
 [group: "device"]
-flash-monitor: flash monitor
+flash-monitor ref="": (flash ref) monitor
 
 ##########
 # Diagnostics
@@ -260,6 +272,15 @@ voice-sweep out="../../../tmp/voice-sweep":
 voice-fx chainset="span" src="../../../tmp/voice-sweep/01-shipped.wav" out="../../../tmp/voice-fx":
     python3 tools/voice-fx-preview.py "{{src}}" "{{out}}/{{chainset}}" "{{chainset}}"
 
+# Rebuild the embedded sound clips (main/sounds/*.pcm) from Suno downloads.
+#
+# raw_dir holds the WAV download of each clip in sounds/manifest.toml, named
+# <suno_id>.wav; the trims, fades and levels are in the manifest. Also writes
+# a listenable <tag>.wav per clip into preview_dir.
+[group: "voice"]
+sounds raw_dir preview_dir="../../../tmp/sound-preview":
+    uv run tools/build-sounds.py "{{raw_dir}}" --preview "{{preview_dir}}"
+
 # Audition all 30 Gemini prebuilt voices through the selected Teuvo chain.
 #
 # The inverse experiment of `voice-fx`: there the voice was fixed and the chain
@@ -300,9 +321,14 @@ voice-voices preset="in-the-room" raw="../../../tmp/voice-voices/raw" out="../..
 # Costs one ListModels call, one Live session and at most one TTS call; needs
 # GEMINI_API_KEY (from ~/.api_tokens via mise). Workstation only — no board.
 #
+# `model` is checked against ListModels before the session opens, so a retired
+# id fails with the list of Live models the key can reach. ListModels offered
+# seven conversational ones on 2026-11-07; gemini-3.8-live is the one measured
+# (tools/live-probe/README.md § Measured).
+#
 # Probe the Gemini Live API: one session as Teuvo, report in tmp/live-probe.
 [group: "voice"]
-live-probe clip="" out="../../../tmp/live-probe":
+live-probe clip="" out="../../../tmp/live-probe" model="gemini-3.8-live":
     #!/usr/bin/env bash
     set -euo pipefail
     proj="$PWD"
@@ -322,7 +348,7 @@ live-probe clip="" out="../../../tmp/live-probe":
     fi
     cd tools/live-probe
     uv sync --quiet
-    uv run python live_probe.py "$clip" "$out"
+    uv run python live_probe.py "$clip" "$out" --model "{{model}}"
 
 # List the Live (bidiGenerateContent) models the key can reach. One ListModels call.
 [group: "voice"]

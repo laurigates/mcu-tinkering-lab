@@ -45,6 +45,7 @@ void stub_reset_healthy(void)
         .servos_initialized = true,
         .buzzer_initialized = true,
         .expander_available = false,
+        .cliff_sensors_available = false,
         .audio_ready = true,
         .wifi_connected = true,
         .ssid = "testnet",
@@ -80,6 +81,10 @@ bool buzzer_is_initialized(void)
 bool gpio_expander_available(void)
 {
     return g_stub.expander_available;
+}
+bool cliff_sensor_available(void)
+{
+    return g_stub.cliff_sensors_available;
 }
 bool audio_player_is_ready(void)
 {

@@ -23,7 +23,12 @@ openings = ["J1", "J2", "J4", "J5", "U1"]
 A1 = { above = 22.0, source = "estimate: DRV8825 carrier in 1x8 female headers, 8.5 + 2.5 + 1.6 + ~9 mm stick-on heatsink" }
 A2 = { above = 22.0, source = "estimate: DRV8825 carrier in 1x8 female headers, 8.5 + 2.5 + 1.6 + ~9 mm stick-on heatsink" }
 U1 = { above = 15.5, source = "estimate: XIAO RP2350 in 1x7 female headers, 8.5 + 2.5 + 1.2 PCB + 3.2 USB-C" }
-# J3's footprint is a plain 1x8 socket: the render's GY-521 takes its kind and
-# outline (board.toml's GY-521 silk rect) from here.
-J3 = { above = 14.0, source = "estimate: GY-521 flat on its 1x8 female header, 8.5 + 2.5 + 1.6 + ~1.4 parts", module = "gy-521", outline = [34.5, 31.5, 55.5, 48.5] }
+# J3's GY521_Socket footprint carries the module outline (F.Fab), so the
+# render's GY-521 takes its kind (modules.toml) and outline from the board.
+J3 = { above = 14.0, source = "estimate: GY-521 flat on its 1x8 female header, 8.5 + 2.5 + 1.6 + ~1.4 parts" }
 F1 = { above = 2.0, source = "estimate: 1812 PTC, BSMD1812 body under 2 mm" }
+# rev3 headers with a lead plugged in: the STEP has the bare male header
+# (about 8.5 mm), but a mated Dupont housing stands taller.
+J6 = { above = 14.0, source = "estimate: 1x4 male header with a Dupont housing on it, 2.5 + ~11.5 mm (expansion lead)" }
+J7 = { above = 14.0, source = "estimate: 1x4 male header with a Dupont housing on it, 2.5 + ~11.5 mm (Qwiic-to-Dupont lead)" }
+J8 = { above = 14.0, source = "estimate: 1x5 male header with a Dupont housing on it, 2.5 + ~11.5 mm (meter or scope lead)" }

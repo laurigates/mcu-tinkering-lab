@@ -48,6 +48,9 @@ jobs:
             project_path="${project_dir#packages/}"
             chip_family=$(jq -r '.chipFamily' "$flasher_json")
             app_binary=$(jq -r '.appBinaryName' "$flasher_json")
+            # Optional: the app ELF, attached to the release so the GlitchTip
+            # bridge can symbolicate crash backtraces by version (ADR-033).
+            elf_asset=$(jq -r '.elfAssetName // empty' "$flasher_json")
 
             # Map chipFamily to ESP-IDF target
             case "$chip_family" in
@@ -70,7 +73,8 @@ jobs:
               --arg target "$target" \
               --arg app_bin "$app_binary" \
               --arg fetch_deps "$fetch_deps" \
-              '. + [{"project": $id, "project_path": $path, "target": $target, "app_binary": $app_bin, "fetch_deps": ($fetch_deps == "true")}]')
+              --arg elf_asset "$elf_asset" \
+              '. + [{"project": $id, "project_path": $path, "target": $target, "app_binary": $app_bin, "elf_asset": $elf_asset, "fetch_deps": ($fetch_deps == "true")}]')
           done
 
           COUNT=$(echo "$INCLUDES" | jq 'length')
@@ -151,6 +155,11 @@ jobs:
             idf.py build &&
             bash "$OLDPWD/workflow-tools/tools/check-app-partition-fit.sh" .
 
+      # A wrong elfAssetName would otherwise surface only in the release job.
+      - name: Check the release ELF exists
+        if: matrix.elf_asset != ''
+        run: test -f "packages/${{ matrix.project_path }}/build/${{ matrix.elf_asset }}" || { echo "::error::elfAssetName '${{ matrix.elf_asset }}' is not in build/ for ${{ matrix.project }}"; exit 1; }
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v7.0.2
         with:
@@ -161,6 +170,9 @@ jobs:
             packages/${{ matrix.project_path }}/build/partition_table/partition-table.bin
             packages/${{ matrix.project_path }}/build/ota_data_initial.bin
             packages/${{ matrix.project_path }}/build/app-partition-fit.txt
+            # The placeholder keeps an empty elf_asset from naming build/
+            # itself, which would upload the whole build tree.
+            packages/${{ matrix.project_path }}/build/${{ matrix.elf_asset || 'no-elf-asset' }}
           retention-days: 7
 
   assemble-and-deploy:
@@ -451,6 +463,46 @@ jobs:
               exit 1
             fi
             cp "$src" "release-assets/$ota_asset"
+
+            # The app ELF, for symbolicating crash backtraces (ADR-033). Opt-in
+            # per project via elfAssetName, which must equal the ELF's name in
+            # build/; same uniqueness guard as otaAssetName.
+            elf_asset=$(jq -r '.elfAssetName // empty' "$flasher_json")
+            if [ -n "$elf_asset" ]; then
+              if [ -n "${seen_asset[$elf_asset]:-}" ]; then
+                echo "::error::elfAssetName '$elf_asset' is used by both '${seen_asset[$elf_asset]}' and '$project_id' — release assets would collide"
+                exit 1
+              fi
+              seen_asset[$elf_asset]="$project_id"
+              elf_src="artifacts/firmware-$project_id/$elf_asset"
+              if [ ! -f "$elf_src" ]; then
+                echo "::error::missing $elf_src, cannot attach the ELF to the release"
+                exit 1
+              fi
+              cp "$elf_src" "release-assets/$elf_asset"
+            fi
+
+            # The non-app parts, under names prefixed with the app asset's stem,
+            # so `just <project>::flash <version tag>` can write a release
+            # without building it (tools/flash-source.py, release_parts()).
+            # Opt-in per project via releaseFlashParts; Pages only ever holds
+            # the latest set, and a partition table can change between releases.
+            if [ "$(jq -r '.releaseFlashParts // false' "$flasher_json")" = "true" ]; then
+              stem="${ota_asset%.bin}"
+              for part in bootloader.bin partition-table.bin ota_data_initial.bin; do
+                name="${stem}-${part}"
+                if [ -n "${seen_asset[$name]:-}" ]; then
+                  echo "::error::release asset '$name' is used by both '${seen_asset[$name]}' and '$project_id'"
+                  exit 1
+                fi
+                seen_asset[$name]="$project_id"
+                if [ ! -f "firmware/$project_id/$part" ]; then
+                  echo "::error::missing firmware/$project_id/$part, cannot attach it to the release"
+                  exit 1
+                fi
+                cp "firmware/$project_id/$part" "release-assets/$name"
+              done
+            fi
 
             if [ -f "firmware/$project_id/manifest.json" ]; then
               cp "firmware/$project_id/manifest.json" "release-assets/${project_id}-manifest.json"

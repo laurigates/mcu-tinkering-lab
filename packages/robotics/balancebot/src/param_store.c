@@ -17,7 +17,7 @@ void param_store_defaults(balance_params_t *out)
 
 bool param_store_load(balance_params_t *out)
 {
-    // Record layout and the v1 -> v2 migration live in param_record.c.
+    // Record layout and the older-version migrations live in param_record.c.
     const uint8_t *rec = (const uint8_t *)(XIP_BASE + PARAM_FLASH_OFFSET);
     if (param_record_decode(rec, FLASH_PAGE_SIZE, out, NULL)) {
         return true;

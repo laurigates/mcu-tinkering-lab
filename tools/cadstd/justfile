@@ -1,4 +1,4 @@
-# tools/cadstd — the shared dimensions of printed parts (ADR-030): fasteners,
+# tools/cadstd — the shared dimensions of printed parts (ADR-035): fasteners,
 # fits per process, the 10 mm grid, cutters, and the calibration coupon.
 # Run from the repo root as `just cadstd::<recipe>`.
 #
