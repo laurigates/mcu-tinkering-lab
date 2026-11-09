@@ -17,6 +17,10 @@
  *   left   = (heading_deg < 0) ? base - bias : base
  *   dir    = 1 (forward)
  *
+ * Past ±90 the robot reverses (dir = 0) with the heading mirrored into ±90
+ * (heading' = ±180 - heading), matching the drive tool's "180 = backward":
+ * 180 backs straight up, 135 backs up curving right (issue #1025).
+ *
  * This is intentionally simple.  A full heading-hold loop requires odometry
  * or a compass — neither is available in this phase.  The planner is expected
  * to keep re-issuing updated heading_deg goals as the scene changes.
@@ -184,6 +188,16 @@ static void execute_drive(const goal_t *goal)
     int16_t heading = head_aim_body_heading(goal->params.drive.heading_deg, goal->head_pan_deg);
     uint8_t speed_pct = goal->params.drive.speed_pct;
 
+    /* Past ±90 the planner means backward (the drive tool says 180 =
+     * backward): reverse both wheels and mirror the heading into ±90, so 135
+     * (back and to the right) slows the right wheel exactly as a forward 45
+     * does. Issue #1025. */
+    uint8_t dir = 1;
+    if (heading > 90 || heading < -90) {
+        dir = 0;
+        heading = (int16_t)(heading > 0 ? 180 - heading : -180 - heading);
+    }
+
     int32_t base = (int32_t)speed_pct * 255 / 100;
     int32_t bias = (int32_t)abs(heading) * base / 180;
 
@@ -201,7 +215,7 @@ static void execute_drive(const goal_t *goal)
         right = base;
     }
 
-    motor_set_individual(clamp_u8(left), clamp_u8(right), 1, 1);
+    motor_set_individual(clamp_u8(left), clamp_u8(right), dir, dir);
 }
 
 /**
