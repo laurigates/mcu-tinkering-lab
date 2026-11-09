@@ -1423,6 +1423,28 @@ static void test_cliff_rear_edge_refuses_backward(void)
     ASSERT(ls == 200 && rs == 200 && ld == 1 && rd == 1);
 }
 
+/* A drive goal past +-90 degrees reverses (#1028), so a rear edge refuses it
+ * while a front edge does not. */
+static void test_cliff_rear_edge_refuses_reversing_drive(void)
+{
+    setup();
+    prime_distance(100);
+    cliff_on_floor();
+    cliff_sensor_test_set(true, true, true, false);
+    tick_n(CLIFF_TRIP_SAMPLES + ms_ticks(CLIFF_BRAKE_MS + CLIFF_BACKOFF_MS) + 2);
+
+    goal_t back = {
+        .kind = GOAL_KIND_DRIVE,
+        .params.drive = {.heading_deg = 180, .distance_cm = 100, .speed_pct = 80},
+    };
+    ASSERT(goal_state_write(&back, 60000) == ESP_OK);
+    reactive_controller_tick_for_test();
+    ASSERT(motor_stub_get_last_call() == MOTOR_CALL_BRAKE);
+    reactive_telemetry_t t;
+    ASSERT(reactive_controller_get_telemetry(&t) == ESP_OK);
+    ASSERT(t.cliff_active);
+}
+
 /* The cliff reflex ranks above the obstacle reflex: a front edge reverses even
  * while an obstacle ahead holds the wheels. */
 static void test_cliff_reverses_through_obstacle_reflex(void)
@@ -1539,6 +1561,8 @@ int main(void)
              test_cliff_front_edge_brakes_reverses_then_refuses);
     test_run("cliff_front_edge_allows_only_backward", test_cliff_front_edge_allows_only_backward);
     test_run("cliff_rear_edge_refuses_backward", test_cliff_rear_edge_refuses_backward);
+    test_run("cliff_rear_edge_refuses_reversing_drive",
+             test_cliff_rear_edge_refuses_reversing_drive);
     test_run("cliff_reverses_through_obstacle_reflex", test_cliff_reverses_through_obstacle_reflex);
     test_run("cliff_off_disarms", test_cliff_off_disarms);
     test_run("cliff_read_failure_holds", test_cliff_read_failure_holds);

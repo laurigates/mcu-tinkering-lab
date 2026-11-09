@@ -69,10 +69,13 @@ Every executor tick (~33 ms) the firmware reads both pins.
   with the same cooldown.
 - **Refusal.** While a sensor sees no floor, any manual or planner motion toward
   it is replaced by a brake: forward needs front floor, backward needs rear
-  floor, rotating in place needs both. Stopping is always allowed.
-- **Order.** The OTA hold, then the cliff reflex, then the obstacle reflex, then
-  the manual lease, then the planner. A front edge reverses even with an
-  obstacle ahead, because the obstacle is the other way.
+  floor, rotating in place needs both. Stopping is always allowed. The
+  direction comes from the same classification the rangefinders use (#1026),
+  so a drive goal past ±90°, which reverses (#1028), needs rear floor.
+- **Order** (`apply_wheels()`): the OTA hold, then the cliff reflex, then the
+  rangefinders, then the floor sensors' refusal, then the manual lease or the
+  planner. A front edge reverses even with an obstacle ahead, because the
+  obstacle is the other way.
 - **Disarmed** with no MCP23017, or after `cliff off`: nothing is filtered.
 
 The brake, back-off times and speed are estimates. The robot's stopping
