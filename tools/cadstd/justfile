@@ -1,0 +1,25 @@
+# tools/cadstd — the shared dimensions of printed parts (ADR-035): fasteners,
+# fits per process, the 10 mm grid, cutters, and the calibration coupon.
+# Run from the repo root as `just cadstd::<recipe>`.
+#
+# The core (fasteners, fits, grid) is stdlib only; the `cadstd` pre-commit
+# hook tests it with python3. Shapes and the coupon need build123d and run in
+# tools/mechanism's venv, which pins the same build123d as tools/enclosure.
+
+_root := source_directory() / "../.."
+_run := "cd " + _root + "/tools/mechanism && PYTHONPATH=" + _root + "/tools uv run --quiet"
+
+default:
+    @just --list
+
+# Every test, shapes included (fails, not skips, without build123d)
+test:
+    cd {{_root}}/tools/mechanism && CADSTD_REQUIRE_BUILD123D=1 PYTHONPATH={{_root}}/tools uv run --quiet python -m unittest discover -s {{_root}}/tools/cadstd -t {{_root}}/tools
+
+# The stdlib tests only: what the pre-commit hook runs
+test-core:
+    cd {{_root}} && python3 -m unittest discover -s tools/cadstd -t tools -p 'test_cadstd.py'
+
+# Calibration coupon STL + STEP for a process (fdm, sla, mjf) into tools/cadstd/output/
+coupon process:
+    {{_run}} python -m cadstd.coupon {{process}} {{_root}}/tools/cadstd/output

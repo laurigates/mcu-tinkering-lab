@@ -60,6 +60,18 @@ Run `mechanism::test` after touching `tools/mechanism/` or
 `tools/enclosure/tests/test_thickness.py`). The render test skips without
 off-screen VTK (`just mechanism::setup`). See the `printed-mechanism` skill.
 
+## Printed-Part Standard
+
+```bash
+just cadstd::test        # tools/cadstd: tables, grid, cutters, coupon (build123d)
+just cadstd::test-core   # the stdlib tables only; the `cadstd` pre-commit hook
+```
+
+Run `cadstd::test` after touching `tools/cadstd/`, then `enclosure::test` and
+`mechanism::test`, which import it. A value change in `cadstd` moves every
+part built from it: `test_cadstd.py` pins the values existing parts use, so
+change the pin and say which parts move (ADR-035).
+
 ## C/C++ Firmware
 
 - Static analysis via `cppcheck` (run in CI)

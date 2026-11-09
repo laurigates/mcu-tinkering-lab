@@ -37,6 +37,7 @@ mod hardware 'tools/hardware'
 mod kicad 'tools/kicad'
 mod enclosure 'tools/enclosure'
 mod mechanism 'tools/mechanism'
+mod cadstd 'tools/cadstd'
 mod labels 'tools/labels'
 mod glitchtip 'tools/glitchtip'
 

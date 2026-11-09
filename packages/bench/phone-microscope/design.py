@@ -44,13 +44,20 @@ from build123d import (
 )
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parents[2] / "tools/mechanism"))
+sys.path[:0] = [
+    str(HERE.parents[2] / "tools/mechanism"),
+    str(HERE.parents[2] / "tools"),
+]
+from cadstd import fit  # noqa: E402
+from cadstd.fasteners import M3, M4  # noqa: E402
 from mechanism.check import Body  # noqa: E402
+
+PROCESS = "fdm"  # README: PLA or PETG on an FDM printer (cadstd, ADR-035)
 
 # --- Off-the-shelf parts -----------------------------------------------------
 ROD_D = 10.0  # column: 10 mm rod or M10 threaded rod
 ROD_L = 250.0
-ROD_FIT = 0.3  # bore clearance on the rod; the split collars close it up
+ROD_FIT = 2 * fit("close", PROCESS)  # bore over the rod; the split collars close it up
 
 LENS_THREAD_D = 12.0  # M12x0.5 major diameter
 LENS_FIT = 0.1  # collar bore 12.1; the clamp screw closes the slit
@@ -64,15 +71,17 @@ LENS_BELOW_BUMP = 0.5  # gap left between the lens front and the camera glass
 # the lens at the nominal pose, 31 mm from the left and top edges.
 PHONE = (160.0, 78.0, 9.0)
 
-# M3 button head (ISO 7380): head 5.7 x 1.65; M3 nut 5.5 AF x 2.4.
-M3_CLEAR = 3.4
-M3_HEAD = (5.7, 1.65)
-M3_NUT_AF = 5.5
-M3_NUT_T = 2.4
+# M3 button heads (ISO 7380), M4 socket heads (ISO 4762), ISO 4032 nuts.
+M3_CLEAR = M3.clearance
+M3_HEAD = M3.button_head
+M3_NUT_AF = M3.nut_af
+M3_NUT_T = M3.nut_t
+# 0.1 under cadstd's ISO 273 medium 4.5 (ADR-035, Migration): kept so the
+# printed parts do not change; take M4.clearance on the next revision.
 M4_CLEAR = 4.4
-M4_HEAD = (7.0, 4.0)  # socket head
-M4_NUT_AF = 7.0
-M4_NUT_T = 3.2
+M4_HEAD = M4.socket_head
+M4_NUT_AF = M4.nut_af
+M4_NUT_T = M4.nut_t
 
 # --- Layout ------------------------------------------------------------------
 TRAVEL = 20.0  # lens carriage travel, +- in X and in Y

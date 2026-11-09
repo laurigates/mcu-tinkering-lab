@@ -16,6 +16,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from build123d import Align, Box, Cylinder, Part, Pos, Rot
+from cadstd import M2, M3, fit
+from cadstd import MIN_WALL as _MIN_WALL
 
 from .board import EnclosureError, Piece, Rect
 from .board import Part as BoardPart
@@ -23,21 +25,21 @@ from .board import Part as BoardPart
 A = (Align.MIN, Align.MIN, Align.MIN)
 C = (Align.CENTER, Align.CENTER, Align.MIN)
 
-# Thinnest wall any feature may have. JLC3DP's upload page asks for walls over
-# 1.2 mm, but its quote still flagged "Thin walls detected" on lids whose
-# thinnest wall measured 1.6 mm, so the margin is wider than the page says.
-MIN_WALL = 2.0
+# Sizes, fits and the thinnest wall come from tools/cadstd (ADR-035). The cases
+# are printed in JLC3DP resin: cadstd's "sla" process.
+PROCESS = "sla"
+MIN_WALL = _MIN_WALL  # 2.0; cadstd/fits.py has the JLC3DP evidence
 
 # Self-tapping screw by PCB hole: an M3 board (3.2 mm hole) and an M2 board
 # (2.2 mm hole), as (name, pilot hole, boss diameter). A pilot near the
 # screw's minor diameter is the usual practice for thread-forming screws in
 # plastic; each boss leaves MIN_WALL round its pilot.
 SCREWS = {
-    3.2: ("M3", 2.5, 2.5 + 2 * MIN_WALL),
-    2.2: ("M2", 1.6, 1.6 + 2 * MIN_WALL),
+    3.2: (M3.name, M3.pilot, M3.pilot + 2 * MIN_WALL),
+    2.2: (M2.name, M2.pilot, M2.pilot + 2 * MIN_WALL),
 }
-CHASSIS_CLEARANCE = 3.4  # M3, ISO 273 medium: the floor tabs' holes
-LID_PILOT, LID_CLEARANCE = 2.5, 3.4  # M3 self-tapping lid screws, M3 x 6
+CHASSIS_CLEARANCE = M3.clearance  # the floor tabs' holes
+LID_PILOT, LID_CLEARANCE = M3.pilot, M3.clearance  # M3 self-tapping lid screws, M3 x 6
 SKIN = MIN_WALL  # material left under a blind pilot hole (the floor, a boss end)
 MIN_THREAD = 4.0  # thread engagement a lid screw needs in its tab
 SCREW_HEAD = (6.0, 2.6)  # M3 pan head: diameter, height, kept clear of the lid tabs
@@ -47,7 +49,7 @@ SCREW_HEAD = (6.0, 2.6)  # M3 pan head: diameter, height, kept clear of the lid 
 TAB_T = MIN_THREAD
 TAB_W = 8.0
 TAB_DROP = MIN_WALL + LID_CLEARANCE / 2 + LID_PILOT / 2 + MIN_WALL
-LIP_FIT = 0.3  # lip and tab to wall: slide fit
+LIP_FIT = fit("slide", PROCESS)  # lip and tab to wall, per side
 
 
 @dataclass(frozen=True)

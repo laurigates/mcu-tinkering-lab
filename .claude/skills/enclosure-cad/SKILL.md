@@ -28,6 +28,10 @@ just enclosure::sequence <project>   # VTK video of each assembly motion gen fou
 
 ## The design (2026-10-23, lid 2026-10-31)
 
+Its sizes (pilots, clearances, `LIP_FIT`, `MIN_WALL`) come from `tools/cadstd`
+as its `sla` process (ADR-035); change them there, where `test_cadstd.py`
+pins the values the cases were built with.
+
 - The board screws onto short solid standoffs: a self-tapping screw into a
   blind pilot hole (M3 2.5 mm, M2 1.6 mm), `min_standoff` 4 mm of thread.
   Resin takes a thread; it does not take a heat-set insert.
@@ -185,6 +189,7 @@ JLC3DP (9600 resin, white) priced every tray at €0.58–1.76 and a box at
 
 ## Related
 
+- [ADR-035](../../../docs/decisions/ADR-035-printed-part-dimension-standard.md) and `tools/cadstd`: the shared sizes and fits
 - `carrier-pcb` skill: the boards these cases fit
 - `jlcpcb-order` skill: JLC3DP upload, product description, cart
 - `.claude/rules/enclosure-generation.md`: the edit-time pointer here
