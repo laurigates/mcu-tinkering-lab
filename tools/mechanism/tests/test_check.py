@@ -59,3 +59,24 @@ def test_a_design_can_name_its_own_joints_and_poses():
 def test_the_wall_gate_is_tools_enclosures():
     thinnest = check._enclosure_thickness().thinnest
     assert abs(thinnest(Box(20, 20, 0.5)).mm - 0.5) < 0.02
+
+
+def test_a_design_without_grid_holes_has_no_grid_report():
+    """Existing designs opt out by not declaring GRID_HOLES; check.json keeps
+    its old shape for them."""
+    assert check.grid_report(SimpleNamespace()) is None
+
+
+def test_grid_holes_on_the_10_mm_grid_pass():
+    d = SimpleNamespace(GRID_HOLES={"plate": [(0, 0), (10, 0), (10, 20)]})
+    assert check.grid_report(d) == {}
+
+
+def test_an_off_grid_hole_is_named_by_part_and_fails_the_gate():
+    d = SimpleNamespace(
+        GRID_HOLES={"ok": [(0, 0), (20, 0)], "bad": [(5, 5), (15.4, 5)]}
+    )
+    assert check.grid_report(d) == {"bad": [[15.4, 5]]}
+    assert check.failed({"clashes": {}, "grid_off": {"bad": [[15.4, 5]]}})
+    assert not check.failed({"clashes": {}, "grid_off": {}})
+    assert not check.failed({"clashes": {}})

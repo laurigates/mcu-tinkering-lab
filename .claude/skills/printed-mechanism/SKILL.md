@@ -31,6 +31,7 @@ just mechanism::quickview <design dir># matplotlib, while iterating
 | `printed_parts() -> dict[str, Part]` | every part to order |
 | `assembly(*pose) -> list[Body]` | printed parts and stand-ins at one pose, world frame |
 | `JOINTS`, `SWEEP`, `REST`, `SHOWCASE_POSES` | optional; default a pan/tilt: pan ±90 by 30, tilt ±45, rest (0, 0), one view at (60, 30) |
+| `GRID_HOLES` | optional; `{part: [(x, y), ...]}`, the mounting holes a part offers other parts. `check` fails (`grid_off`) on any not on the 10 mm grid |
 
 A `Body` has a `group`: bodies that move together. Only pairs from different
 groups are clash-tested, and the exploded render lifts whole groups. `allow`
@@ -44,6 +45,16 @@ through the system ffmpeg), `sweep-sheet.png` and `sweep.json`. A clash only
 between gate poses lands in `between_clashes`: either tighten `SWEEP` so the
 gate sees it, or fix it. Every frame is one `assembly()` call, so a slow
 design is slow here: the pan-tilt's `print/` takes about 25 s a pose.
+
+Dimensions come from `tools/cadstd` (ADR-030): name the part's `PROCESS`
+(`fdm`, `sla`, `mjf`), take holes from `cadstd.fasteners` (`M3.clearance`,
+`M2.pilot`), fits by class (`fit("slide", PROCESS)`, `hole(d, "close",
+PROCESS)`), insert holes from `insert_hole(M2, PROCESS)` and the default wall
+from `MIN_WALL`. A part other parts bolt to puts its holes on the grid
+(`cadstd.grid.points`, `cadstd.shapes.grid_plate`) and declares them in
+`GRID_HOLES`. Only numbers tied to one bought part (a servo window, a bearing
+pocket) stay local. `just cadstd::coupon <process>` prints the coupon that
+measures a process's fits.
 
 Stand-ins are keep-out envelopes from `mechanism.servos` (MG90D, SG90, horns),
 each dimension with its source and "estimate" where nobody measured. A
@@ -143,6 +154,7 @@ once; see `.claude/rules/multi-agent-workflows.md` for surviving that.
 
 ## Related
 
+- [ADR-030](../../../docs/decisions/ADR-030-printed-part-dimension-standard.md) and `tools/cadstd`: fasteners, fits per process, the grid, the coupon
 - `enclosure-cad` skill: cases for carrier boards, the wall gate's home
 - `jlcpcb-order` skill: JLC3DP upload and cart
 - `docs/reference/servo-selection.md`: why the MG90D does not fit the 9 g kits

@@ -9,7 +9,12 @@ A design is a ``design.py`` exposing
   gate visits, ``REST``: the pose for the excuse list and the at-rest
   renders, and ``SHOWCASE_POSES``: ``[(name, pose), ...]`` for extra renders.
   The defaults are a two-axis pan/tilt: joints (pan, tilt), pan ±90 by 30,
-  tilt ±45, rest (0, 0), one view at (60, 30).
+  tilt ±45, rest (0, 0), one view at (60, 30);
+- optionally ``GRID_HOLES``: ``{part: [(x, y), ...]}``, the mounting-hole
+  centres a part offers other parts, in its mounting face's frame. Each
+  part's holes must lie on the 10 mm grid (tools/cadstd, ADR-030); build
+  them from ``cadstd.grid.points`` so the declaration and the cut agree. A
+  design without it is not checked against the grid.
 
 Bodies in the same ``group`` move together and may touch or overlap (a servo
 in its own pocket, a horn screwed to its arm), so only pairs from different
@@ -20,7 +25,7 @@ loose hardware its own group when it should be checked against what it
 fastens.
 
 Run: ``python -m mechanism.check <design dir>``; writes
-``<design dir>/output/check.json`` and exits 1 on any clash.
+``<design dir>/output/check.json`` and exits 1 on any clash or off-grid hole.
 """
 
 from __future__ import annotations
@@ -33,6 +38,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from build123d import Part
+from cadstd import grid
 
 PAN_SWEEP = [-90, -60, -30, 0, 30, 60, 90]
 TILT_SWEEP = [-45, -30, 0, 30, 45]
@@ -126,6 +132,23 @@ def excused(bodies: list[Body]) -> list[str]:
     return [f"{b.name} / {other}" for b in bodies for other in sorted(b.allow)]
 
 
+def grid_report(mod) -> dict[str, list[list[float]]] | None:
+    """Off-grid holes per part from ``GRID_HOLES``; None if not declared."""
+    declared = getattr(mod, "GRID_HOLES", None)
+    if declared is None:
+        return None
+    out = {}
+    for name, pts in declared.items():
+        off = grid.off_grid([(float(x), float(y)) for x, y in pts])
+        if off:
+            out[name] = [list(p) for p in off]
+    return out
+
+
+def failed(r: dict) -> bool:
+    return bool(r["clashes"]) or bool(r.get("grid_off"))
+
+
 def _enclosure_thickness():
     """tools/enclosure's wall gate, loaded by path: one implementation, and that
     package pins Python 3.14.8, which not every machine can install."""
@@ -150,12 +173,16 @@ def report(design_dir: Path) -> dict:
             "thinnest_at": t.where,
             "valid": part.is_valid,
         }
-    return {
+    r = {
         "entry": design_dir.name,
         "parts": parts,
         "clashes": sweep(mod),
         "excused": excused(mod.assembly(*rest(mod))),
     }
+    off = grid_report(mod)
+    if off is not None:
+        r["grid_off"] = off
+    return r
 
 
 def main(argv: list[str]) -> int:
@@ -165,7 +192,7 @@ def main(argv: list[str]) -> int:
     out.parent.mkdir(exist_ok=True)
     out.write_text(json.dumps(r, indent=2) + "\n")
     print(json.dumps(r, indent=2))
-    return 1 if r["clashes"] else 0
+    return 1 if failed(r) else 0
 
 
 if __name__ == "__main__":
