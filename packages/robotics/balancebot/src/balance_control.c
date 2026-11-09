@@ -43,8 +43,10 @@ static float x_ref_steps;          // position the LQR holds (set on PID->LQR)
 static float steps_per_m;          // from steps_per_rev and wheel_diam_m
 static bool pid_bumpless_pending;  // LQR->PID: back-calculate on the next RUN tick
 static float open_loop_sps[STEPPER_COUNT];
-static uint32_t gesture_ticks;       // consecutive ticks satisfying arm/clear condition
-static imu_gravity_check_t gravity;  // last sample's gravity check; zero = no refusal
+static uint32_t gesture_ticks;        // consecutive ticks satisfying arm/clear condition
+static imu_gravity_check_t gravity;   // last sample's gravity check; zero = no refusal
+static mpu6050_sample_t last_sample;  // last good raw read, for CMD_ARM's check
+static bool last_sample_ok;           // false: the last read failed, no refusal
 static bool save_ok;
 static uint32_t save_count;
 static bool watchdog_started;
@@ -237,8 +239,12 @@ static void handle_command(const balance_cmd_t *cmd)
             break;
         case CMD_ARM:
             // A still IMU reading upside down is a wrong `mount`; core 0
-            // checks first and reports, this is the last line.
-            if (state == BAL_STATE_IDLE && !imu_gravity_refuses_arm(&gravity)) {
+            // checks first and reports, this is the last line. Evaluated
+            // here under the current mount, not from `gravity`: that ran on
+            // the last tick, before a CMD_SET_IMU_MOUNT drained just ahead.
+            if (state == BAL_STATE_IDLE &&
+                !(last_sample_ok &&
+                  imu_arm_refused(params.imu_mount, last_sample.accel_g, last_sample.gyro_dps))) {
                 enter_state(BAL_STATE_RUN);
             }
             break;
@@ -380,9 +386,11 @@ void balance_control_core1_main(void)
             pitch = IMU_PITCH_SIGN * raw;
             gyro_rate = IMU_PITCH_SIGN * s.gyro_dps[1];
             gravity = imu_gravity_check(params.imu_mount, s.accel_g, s.gyro_dps);
+            last_sample = s;
         } else {
             gravity = (imu_gravity_check_t){0};
         }
+        last_sample_ok = imu_ok;
 
         switch (state) {
             case BAL_STATE_RUN:

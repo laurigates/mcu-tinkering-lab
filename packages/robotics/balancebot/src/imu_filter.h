@@ -55,6 +55,12 @@ imu_gravity_check_t imu_gravity_check(uint32_t mount, const float accel_g[3],
 // one says nothing about the mounting, so the existing arming rules decide.
 bool imu_gravity_refuses_arm(const imu_gravity_check_t *g);
 
+// The arm decision itself: classify a raw sample under `mount` and apply
+// imu_gravity_refuses_arm(). Core 1 calls it with the mount in effect when it
+// handles CMD_ARM, so a `mount` change drained earlier in the same tick
+// counts; a check computed on an earlier tick would still carry the old mount.
+bool imu_arm_refused(uint32_t mount, const float accel_g[3], const float gyro_dps[3]);
+
 typedef struct {
     float alpha;      // gyro weight, e.g. 0.98
     float pitch_deg;  // current estimate

@@ -230,6 +230,26 @@ static void test_gravity_tilted_resting_allowed(void)
     check(imu_gravity_refuses_arm(&g), "tilted 130: arm refused");
 }
 
+// 'mount down' then 'arm' drained in one tick on a board fitted face up. The
+// check core 1 ran on the last tick used `up` and passes; the arm decision
+// has to classify the same sample under the mount in effect now.
+static void test_arm_decision_uses_current_mount(void)
+{
+    accel_xz_t a = sensor_accel(0.0, 0.0);
+    const float accel[3] = {a.x, 0.0f, a.z};
+    const float gyro[3] = {0.0f, 0.0f, 0.0f};
+    imu_gravity_check_t last_tick = imu_gravity_check(IMU_MOUNT_UP, accel, gyro);
+    check(!imu_gravity_refuses_arm(&last_tick), "last tick under up: no refusal");
+    check(imu_arm_refused(IMU_MOUNT_DOWN, accel, gyro), "arm after 'mount down': refused");
+    check(!imu_arm_refused(IMU_MOUNT_UP, accel, gyro), "arm under up: allowed");
+    // The reverse: a face-down board, 'mount down' fixing it in the same tick.
+    a = sensor_accel(0.0, PI);
+    const float flipped[3] = {a.x, 0.0f, a.z};
+    last_tick = imu_gravity_check(IMU_MOUNT_UP, flipped, gyro);
+    check(imu_gravity_refuses_arm(&last_tick), "face down, last tick under up: refusal");
+    check(!imu_arm_refused(IMU_MOUNT_DOWN, flipped, gyro), "arm after fixing mount: allowed");
+}
+
 int main(void)
 {
     test_accel_pitch();
@@ -246,6 +266,7 @@ int main(void)
     test_gravity_mount_down_face_up_refused();
     test_gravity_moving_not_refused();
     test_gravity_tilted_resting_allowed();
+    test_arm_decision_uses_current_mount();
     printf("test_imu_filter: all tests passed\n");
     return 0;
 }

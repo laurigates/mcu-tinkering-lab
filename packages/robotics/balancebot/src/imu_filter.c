@@ -43,6 +43,12 @@ bool imu_gravity_refuses_arm(const imu_gravity_check_t *g)
     return g->still && g->upside_down;
 }
 
+bool imu_arm_refused(uint32_t mount, const float accel_g[3], const float gyro_dps[3])
+{
+    const imu_gravity_check_t g = imu_gravity_check(mount, accel_g, gyro_dps);
+    return imu_gravity_refuses_arm(&g);
+}
+
 float imu_filter_accel_pitch_deg(float accel_forward_g, float accel_up_g)
 {
     return atan2f(accel_forward_g, accel_up_g) * RAD_TO_DEG;
