@@ -12,10 +12,24 @@
 name = "balancebot-carrier"          # the KiCad project directory and file stem here
 paper = "A3"
 
-# Board outline: a rectangle, origin at its top-left corner. Robot forward is -y.
+# Board outline: a rectangle, origin at its top-left corner. `forward` is the
+# robot's forward direction on the board (y is down, so -y is the top edge);
+# the board is mounted top face up.
 [outline]
 origin = [100.0, 100.0]
 size = [90.0, 62.0]
+forward = "-y"
+
+# The IMU and how the firmware is told it sits. boardcheck derives the
+# sensor's rotation on the robot from J3's placement, `face` and the socket's
+# declared axes (sockets.toml, kicad.mount) and fails unless it is the
+# firmware's `mount` (`mount up|down` on the robot's console). face = "up" is
+# the module component side up in its socket; "down" is turned over about the
+# pin row, as the delivered 8d18cd8d boards need.
+[imu]
+ref = "J3"
+mount = "up"
+face = "up"
 
 # ref = [x_mm, y_mm, rotation_deg], relative to the origin. Footprint anchors are
 # the library's own (pad 1 for the Pololu and JST parts, centre for the XIAO and

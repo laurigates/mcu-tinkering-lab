@@ -21,7 +21,7 @@ from pathlib import Path
 
 from hardware import board_pad_centres
 
-from kicad import footprints, library, libtables, sockets, vendor
+from kicad import footprints, library, libtables, mount, sockets, vendor
 from kicad.errors import KicadError
 from kicad.paths import REPO_ROOT
 
@@ -271,6 +271,16 @@ class CommittedFootprintTests(unittest.TestCase):
         self.assertLess(y0, -14.0)  # the module, forward of the row
         self.assertLess(y1, 2.54)  # and the row along its rear edge
 
+    def test_gy521_declares_its_axes_and_the_footprint_does_not_carry_them(self):
+        # X arrow away from the header (toward the module, -y), Z out of the
+        # component face: the board page's view. kicad.mount reads them; the
+        # footprint is the same bytes without them.
+        (gy,) = [s for s in sockets.load_config(CONFIG) if s.name == "GY521_Socket"]
+        self.assertEqual(gy.axes, mount.ModuleAxes((0, -1), "component"))
+        text = (PRETTY / "GY521_Socket.kicad_mod").read_text()
+        self.assertNotIn("axes", text)
+        self.assertNotIn("component", text)
+
     def test_render_is_byte_stable(self):
         first = sockets.render(REPO_ROOT)
         second = sockets.render(REPO_ROOT)
@@ -338,6 +348,26 @@ class ConfigTests(unittest.TestCase):
             'twin = { element = "JP1", offset = [-2.54, 0], outline = [-3, -10, 20, 0] }\n'
         )
         self.assertEqual(got[0].twin, sockets.Twin("JP1", (-2.54, 0), (-3, -10, 20, 0)))
+
+    def test_valid_axes(self):
+        got = self.load(
+            '[[socket]]\nname = "A_Socket"\nboard = "b"\npads = ["JP1"]\n'
+            'outline = [0, -10, 20, 0]\naxes = { x = [0, -1], z = "component" }\n'
+        )
+        self.assertEqual(got[0].axes, mount.ModuleAxes((0, -1), "component"))
+
+    def test_rejects_bad_axes(self):
+        head = '[[socket]]\nname = "A"\nboard = "b"\npads = ["JP1"]\noutline = [0, -1, 1, 0]\n'
+        for axes in (
+            '{ x = [1, 1], z = "component" }',
+            '{ x = [0, -1], z = "top" }',
+            '{ x = [0, -1], z = ["component"] }',
+            "{ x = [0, -1] }",
+            '{ x = [0, -1], y = [1, 0], z = "component" }',
+            "[0, -1]",
+        ):
+            with self.subTest(axes), self.assertRaisesRegex(KicadError, "axes"):
+                self.load(head + f"axes = {axes}\n")
 
     def test_rejects(self):
         ok = "outline = [0, -1, 1, 0]\n"

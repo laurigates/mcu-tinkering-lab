@@ -18,6 +18,7 @@ add_executable(balancebot
     src/arm_gate.c
     src/balance_control.c
     src/cli.c
+    src/cli_gate.c
     src/crc32.c
     src/imu_filter.c
     src/lqr.c
