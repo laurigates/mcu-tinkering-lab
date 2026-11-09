@@ -278,6 +278,8 @@ CUT_CLEARANCE_MM = 1.0
 SILK_MIN_MM = 1.0
 SILK_HIGH_PRECISION_MIN_MM = 0.8
 LIST_TABLES = ("net_classes", "keepouts", "route_keepouts", "cutouts", "tracks")
+SILK_LISTS = ("hidden_refs", "rects", "texts", "cut_lines")
+SILK_TABLES = ("ref_positions", "ref_sizes")
 REQUIRED = ("outline", "placement", "net_classes", "signal", "pour")
 
 
@@ -470,7 +472,7 @@ def _validate_pour(
     if "net" not in pour and "regions" not in pour:
         return [f"{where}: [pour] needs net or regions"]
     if "net" in pour:
-        if pour["net"] not in nl.nets:
+        if not _known_net(nl, pour["net"]):
             errors.append(f"{where}: [pour] net {pour['net']!r} is not in the netlist")
         return errors
     regions = pour["regions"]
@@ -486,7 +488,7 @@ def _validate_pour(
         if unknown:
             errors.append(f"{where}: [pour] regions: unknown key(s) {unknown}")
             continue
-        if r.get("net") not in nl.nets:
+        if not _known_net(nl, r.get("net")):
             errors.append(
                 f"{where}: [pour] regions: net {r.get('net')!r} is not in the netlist"
             )
@@ -553,7 +555,7 @@ def _validate_tracks(
         if not isinstance(name, str) or not name:
             errors.append(f"{where}: [[tracks]] needs a name")
             continue
-        if tr.get("net") not in nl.nets:
+        if not _known_net(nl, tr.get("net")):
             errors.append(f"{at}: net {tr.get('net')!r} is not in the netlist")
         if tr.get("layer") not in TRACK_LAYERS:
             errors.append(f"{at}: layer must be F.Cu or B.Cu, got {tr.get('layer')!r}")
@@ -575,8 +577,10 @@ def _validate_tracks(
             continue
         for a, b in zip(pts, pts[1:]):
             for k in data.get("keepouts", []):
+                if not _rect(k.get("rect")):
+                    continue  # _validate_keepouts reports it
                 if _segment_rect(tuple(a), tuple(b), tuple(k["rect"])) < width / 2:
-                    errors.append(f"{at}: {a} to {b} enters keepout {k['name']!r}")
+                    errors.append(f"{at}: {a} to {b} enters keepout {k.get('name')!r}")
     return errors
 
 
@@ -652,7 +656,7 @@ def _validate_fanout(
     if not isinstance(nets, list) or not nets:
         return [f"{at} nets must be a non-empty list"]
     for net in nets:
-        if net not in nl.nets:
+        if not _known_net(nl, net):
             errors.append(f"{at} net {net!r} is not in the netlist")
     via = fan.get("via_um")
     if not (_numbers(via, 2) and via[0] > via[1] > 0):
@@ -663,8 +667,18 @@ def _validate_fanout(
     for key in ("track_um", "reach_mm"):
         if not _positive(spec[key]):
             errors.append(f"{at} {key} must be > 0")
-    pads = {f"{ref}:{pin}" for net in nets for ref, pin in nl.nets.get(net, ())}
+    pads = {
+        f"{ref}:{pin}"
+        for net in nets
+        if _known_net(nl, net)
+        for ref, pin in nl.nets[net]
+    }
     for key in ("in_pad", "exempt", "required", "own"):
+        if not isinstance(spec[key], list) or not all(
+            isinstance(pad, str) for pad in spec[key]
+        ):
+            errors.append(f'{at} {key} must be a list of "REF:PIN" strings')
+            continue
         for pad in spec[key]:
             if pad not in pads:
                 errors.append(f"{at} {key} {pad!r} is not a pad of a [fanout] net")
@@ -808,6 +822,54 @@ def expand_classes(
     return out
 
 
+def _validate_shapes(where: str, data: dict[str, Any]) -> list[str]:
+    """Each layout table in the shape the validators read it as.
+
+    TOML takes `[[outline]]` as readily as `[outline]`, so a table written as
+    an array of tables (or a LIST_TABLES entry written as one table) would
+    otherwise reach the validators below as the wrong type and crash them.
+    [silk]'s list- and table-valued keys are checked here too: the cut-line,
+    panel and silkscreen checks all read them.
+    """
+    errors = []
+    for table in (*TABLE_KEYS, "placement"):
+        if table not in data:
+            continue
+        value = data[table]
+        if table in LIST_TABLES:
+            if isinstance(value, dict):
+                errors.append(
+                    f"{where}: [[{table}]] must be an array of tables, "
+                    f"not a single [{table}] table"
+                )
+            elif not isinstance(value, list) or not all(
+                isinstance(e, dict) for e in value
+            ):
+                errors.append(f"{where}: [[{table}]] must be an array of tables")
+        elif isinstance(value, list):
+            errors.append(
+                f"{where}: [{table}] must be a table, not an array of tables "
+                f"([[{table}]])"
+            )
+        elif not isinstance(value, dict):
+            errors.append(f"{where}: [{table}] must be a table")
+    silk = data.get("silk")
+    if isinstance(silk, dict):
+        for key in SILK_LISTS:
+            if key in silk and not isinstance(silk[key], list):
+                errors.append(f"{where}: [silk] {key} must be a list")
+        for key in SILK_TABLES:
+            if key in silk and not isinstance(silk[key], dict):
+                errors.append(f"{where}: [silk] {key} must be a table of ref = value")
+    return errors
+
+
+def _known_net(nl: netlist.Netlist, net: Any) -> bool:
+    """Whether `net` names a netlist net; False for a non-string, which as a
+    dict key would raise instead (a TOML list is unhashable)."""
+    return isinstance(net, str) and net in nl.nets
+
+
 def validate_config(
     cfg: paths.BoardConfig, nl: netlist.Netlist, vendored: Path = library.VENDORED
 ) -> list[str]:
@@ -818,12 +880,12 @@ def validate_config(
     for table in REQUIRED:
         if table not in data:
             errors.append(f"{where}: [{table}] is required")
+    errors += _validate_shapes(where, data)
+    if errors:
+        return errors
     for table, allowed in TABLE_KEYS.items():
         entries = data.get(table, [] if table in LIST_TABLES else {})
-        for entry in entries if isinstance(entries, list) else [entries]:
-            if not isinstance(entry, dict):
-                errors.append(f"{where}: [{table}] must be a table")
-                continue
+        for entry in entries if table in LIST_TABLES else [entries]:
             unknown = sorted(set(entry) - allowed)
             if unknown:
                 errors.append(
@@ -852,7 +914,7 @@ def validate_config(
         errors.append(f"{where}: [placement] {ref} is not in the netlist")
     silk = data.get("silk", {})
     for ref in silk.get("hidden_refs", []):
-        if ref not in refs:
+        if not isinstance(ref, str) or ref not in refs:
             errors.append(f"{where}: [silk] hidden_refs: {ref!r} is not in the netlist")
     for key, n in (("ref_positions", 2), ("ref_sizes", 0)):
         for ref, v in silk.get(key, {}).items():
@@ -901,9 +963,11 @@ def validate_config(
                 )
     errors += provenance.validate(where, data, size, floor)
     errors += _validate_cut_clearance(where, data, size)
-    errors += _validate_keepouts(where, data, size)
+    keepout_errors = _validate_keepouts(where, data, size)
+    errors += keepout_errors
     errors += _validate_route_keepouts(where, data, size)
-    errors += _validate_panel(where, data)
+    if not keepout_errors:  # panel.build reads each keepout's rect
+        errors += _validate_panel(where, data)
     errors += _validate_cutouts(where, data, size)
     errors += _validate_tracks(where, data, nl, size)
     errors += _validate_fanout(where, data, nl)
@@ -926,6 +990,7 @@ def validate_config(
             not isinstance(name, str)
             or not isinstance(cls.get("nets"), list)
             or not cls["nets"]
+            or not all(isinstance(n, str) for n in cls["nets"])
         ):
             errors.append(
                 f"{where}: [[net_classes]] needs a name and a non-empty nets list"
@@ -938,7 +1003,9 @@ def validate_config(
             errors.append(
                 f"{where}: net class {name!r}: via_um must be [diameter, drill]"
             )
-    names = [c.get("name") for c in classes]
+    # Only string names: a non-string one is reported above, and a TOML list
+    # is unhashable.
+    names = [c.get("name") for c in classes if isinstance(c.get("name"), str)]
     if len(set(names)) != len(names):
         errors.append(f"{where}: [[net_classes]] names repeat: {names}")
     if errors:

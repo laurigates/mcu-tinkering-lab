@@ -684,6 +684,161 @@ class ConfigTests(unittest.TestCase):
         )
         self.fails(lambda d: d.pop("signal"), "[signal] is required")
 
+    # Tables the frozen fixture's board.toml lacks, for the shape tests.
+    EXTRA = {
+        "fanout": {"nets": ["GND"], "via_um": [1000, 500]},
+        "fab": {"provenance_at": [10.0, 10.0]},
+        "tracks": [
+            {
+                "name": "trunk",
+                "net": "GND",
+                "layer": "F.Cu",
+                "width_mm": 1.5,
+                "points": [[5, 5], [5, 30], [30, 30]],
+            }
+        ],
+    }
+
+    def with_extra(self, edit):
+        """`edit`, applied after the EXTRA tables are added."""
+
+        def both(d):
+            d.update(copy.deepcopy(self.EXTRA))
+            edit(d)
+
+        return both
+
+    def test_extra_tables_are_valid(self):
+        """The shape tests' baseline passes, so their errors come from the edit."""
+        ok = self.with_data(self.with_extra(lambda d: None))
+        self.assertEqual(boardcheck.validate_config(ok, self.nl), [])
+
+    def test_table_written_as_an_array_of_tables(self):
+        """`[[outline]]` parses as a list of one table; each of these crashed a
+        validator with AttributeError ([[fab]] passed silently)."""
+        for table in (
+            "outline",
+            "silk",
+            "signal",
+            "pour",
+            "fanout",
+            "fab",
+            "placement",
+        ):
+            with self.subTest(table=table):
+
+                def wrap(d, table=table):
+                    d[table] = [d[table]]
+
+                self.fails(
+                    self.with_extra(wrap),
+                    f"[{table}] must be a table, not an array of tables ([[{table}]])",
+                )
+
+    def test_array_of_tables_written_as_one_table(self):
+        """A single `[keepouts]` table iterated as a list yields its key strings,
+        and `k.get` crashed on them."""
+        single = {
+            "keepouts": {"name": "band", "rect": [1.0, 1.0, 2.0, 2.0]},
+            "route_keepouts": {"name": "rk", "layer": "F.Cu", "rect": [1, 1, 2, 2]},
+            "cutouts": {"name": "hole", "center": [10.0, 10.0], "diameter": 2.0},
+            "net_classes": self.cfg.data["net_classes"][0],
+            "tracks": self.EXTRA["tracks"][0],
+        }
+        for table, value in single.items():
+            with self.subTest(table=table):
+                self.fails(
+                    self.with_extra(lambda d, t=table, v=value: d.update({t: v})),
+                    f"[[{table}]] must be an array of tables, not a single [{table}] table",
+                )
+
+    def test_silk_values_of_the_wrong_shape(self):
+        """[silk]'s lists and ref tables, iterated or `.items()`-ed: each crashed."""
+        for key, value, msg in (
+            ("hidden_refs", 5, "[silk] hidden_refs must be a list"),
+            ("rects", 5, "[silk] rects must be a list"),
+            ("cut_lines", 5, "[silk] cut_lines must be a list"),
+            ("ref_sizes", [1.0], "[silk] ref_sizes must be a table of ref = value"),
+        ):
+            with self.subTest(key=key):
+                self.fails(lambda d, k=key, v=value: d["silk"].update({k: v}), msg)
+
+    def test_unhashable_values_in_membership_tests(self):
+        """A TOML list used as a dict key or set element raised TypeError."""
+        cases = (
+            (
+                "fanout nets",
+                lambda d: d["fanout"].update(nets=[["GND"]]),
+                "[fanout] net ['GND'] is not in the netlist",
+            ),
+            (
+                "fanout required",
+                lambda d: d["fanout"].update(required=[["C1:2"]]),
+                '[fanout] required must be a list of "REF:PIN" strings',
+            ),
+            (
+                "fanout required not a list",
+                lambda d: d["fanout"].update(required=5),
+                '[fanout] required must be a list of "REF:PIN" strings',
+            ),
+            (
+                "pour net",
+                lambda d: d["pour"].update(net=["GND"]),
+                "[pour] net ['GND'] is not in the netlist",
+            ),
+            (
+                "pour region net",
+                lambda d: (
+                    d["pour"].pop("net"),
+                    d["pour"].update(
+                        regions=[{"net": ["GND"], "rect": [1.0, 1.0, 5.0, 5.0]}]
+                    ),
+                ),
+                "[pour] regions: net ['GND'] is not in the netlist",
+            ),
+            (
+                "track net",
+                lambda d: d["tracks"][0].update(net=["PACK_IN"]),
+                "[[tracks]] 'trunk': net ['PACK_IN'] is not in the netlist",
+            ),
+            (
+                "hidden_refs entry",
+                lambda d: d["silk"].update(hidden_refs=[["H1"]]),
+                "[silk] hidden_refs: ['H1'] is not in the netlist",
+            ),
+            (
+                "net class name",
+                lambda d: d["net_classes"][0].update(name=["power"]),
+                "[[net_classes]] needs a name and a non-empty nets list",
+            ),
+            (
+                "net class nets entry",
+                lambda d: d["net_classes"][0].update(nets=[["VBAT"]]),
+                "[[net_classes]] needs a name and a non-empty nets list",
+            ),
+        )
+        for name, edit, msg in cases:
+            with self.subTest(name):
+                self.fails(self.with_extra(edit), msg)
+
+    def test_keepout_without_a_rect_or_name(self):
+        """_validate_tracks read k["rect"] and k["name"] of every keepout, and
+        a mouse-bite panel's build read k["rect"]: KeyError each."""
+        self.fails(
+            self.with_extra(lambda d: d.update(keepouts=[{"name": "band"}])),
+            "[keepouts] 'band': rect must be [x0, y0, x1, y1]",
+        )
+        self.fails(
+            self.with_extra(lambda d: d.update(keepouts=[{"rect": [20, 28, 22, 32]}])),
+            "[keepouts] needs a name for each rectangle",
+        )
+
+        def mousebites(d):
+            d.update(panel={"mode": "mousebites"}, keepouts=[{"name": "band"}])
+            d["silk"]["cut_lines"] = [[0.0, 31.0, 90.0, 31.0]]
+
+        self.fails(mousebites, "[keepouts] 'band': rect must be [x0, y0, x1, y1]")
+
     def test_file_is_toml(self):
         self.assertEqual(
             tomllib.loads(self.cfg.path.read_text(encoding="utf-8")), self.cfg.data
