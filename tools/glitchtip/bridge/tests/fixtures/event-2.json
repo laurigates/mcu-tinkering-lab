@@ -1,0 +1,175 @@
+{
+  "issue": {
+    "id": "2",
+    "count": "1",
+    "type": "error",
+    "level": "fatal",
+    "status": "unresolved",
+    "metadata": {
+      "type": "LoadProhibited",
+      "value": "PC 0x0000000a",
+      "filename": "tools/glitchtip/fixtures/tiny.c",
+      "function": "add"
+    },
+    "project": {
+      "id": "1",
+      "platform": null,
+      "slug": "robocar",
+      "name": "robocar"
+    },
+    "shortId": "ROBOCAR-2",
+    "numComments": 0,
+    "stats": {
+      "24h": []
+    },
+    "shareId": null,
+    "logger": null,
+    "permalink": "http://localhost:8000/robocar/issues/2",
+    "statusDetails": {},
+    "subscriptionDetails": null,
+    "userCount": 0,
+    "matchingEventId": null,
+    "firstRelease": {
+      "shortVersion": "robocar-unified@0.0.0-fixture",
+      "dateCreated": "2026-11-09T08:01:24.193Z",
+      "dateReleased": null,
+      "version": "robocar-unified@0.0.0-fixture"
+    },
+    "lastRelease": {
+      "shortVersion": "robocar-unified@0.0.0-fixture",
+      "dateCreated": "2026-11-09T08:01:24.193Z",
+      "dateReleased": null,
+      "version": "robocar-unified@0.0.0-fixture"
+    },
+    "firstSeen": "2026-11-09T08:01:25.121Z",
+    "lastSeen": "2026-11-09T08:01:25.121Z",
+    "assignedTo": null,
+    "title": "LoadProhibited: PC 0x0000000a",
+    "culprit": "",
+    "userReportCount": 0
+  },
+  "event": {
+    "platform": "native",
+    "errors": null,
+    "id": "01a1bf53888177148559552541bd9082",
+    "eventID": "fedcba9876543210fedcba9876543210",
+    "projectID": 1,
+    "groupID": "2",
+    "dateCreated": "2026-11-09T08:01:25.118Z",
+    "dateReceived": "2026-11-09T08:01:25.121Z",
+    "dist": null,
+    "culprit": "add",
+    "packages": null,
+    "type": "error",
+    "message": "panic: LoadProhibited",
+    "metadata": {
+      "type": "LoadProhibited",
+      "value": "PC 0x0000000a",
+      "filename": "tools/glitchtip/fixtures/tiny.c",
+      "function": "add"
+    },
+    "tags": [
+      {
+        "key": "source",
+        "value": "firmware"
+      },
+      {
+        "key": "release",
+        "value": "robocar-unified@0.0.0-fixture"
+      },
+      {
+        "key": "build_sha",
+        "value": "fixture"
+      },
+      {
+        "key": "environment",
+        "value": "production"
+      },
+      {
+        "key": "server_name",
+        "value": "bridge-container"
+      },
+      {
+        "key": "reset_reason",
+        "value": "PANIC"
+      },
+      {
+        "key": "symbolicated",
+        "value": "true"
+      }
+    ],
+    "entries": [
+      {
+        "type": "exception",
+        "data": {
+          "values": [
+            {
+              "type": "LoadProhibited",
+              "value": "PC 0x0000000a",
+              "mechanism": {
+                "type": "coredump",
+                "handled": false
+              },
+              "stacktrace": {
+                "frames": [
+                  {
+                    "filename": "tools/glitchtip/fixtures/tiny.c",
+                    "function": "entry",
+                    "instruction_addr": "0x0000002c",
+                    "inApp": true,
+                    "absPath": "tools/glitchtip/fixtures/tiny.c",
+                    "lineNo": 8,
+                    "context": []
+                  },
+                  {
+                    "filename": "tools/glitchtip/fixtures/tiny.c",
+                    "function": "add",
+                    "instruction_addr": "0x0000000a",
+                    "inApp": true,
+                    "absPath": "tools/glitchtip/fixtures/tiny.c",
+                    "lineNo": 3,
+                    "context": []
+                  }
+                ]
+              }
+            }
+          ],
+          "hasSystemFrames": true
+        }
+      },
+      {
+        "type": "message",
+        "data": {
+          "formatted": "panic: LoadProhibited"
+        }
+      }
+    ],
+    "contexts": {
+      "trace": {
+        "type": "trace",
+        "trace_id": "24b5b907eacd47ca82e37fe7ad44dbfc",
+        "span_id": "b8da52ef435f8134"
+      }
+    },
+    "context": {
+      "uptime_ms": 91234,
+      "robot_timestamp_missing": true
+    },
+    "user": null,
+    "sdk": {
+      "name": "sentry.python",
+      "version": "2.74.0",
+      "packages": [
+        {
+          "name": "pypi:sentry-sdk",
+          "version": "2.74.0"
+        }
+      ],
+      "integrations": []
+    },
+    "title": "LoadProhibited: PC 0x0000000a",
+    "userReport": null,
+    "nextEventID": null,
+    "previousEventID": null
+  }
+}

@@ -1,0 +1,4 @@
+# Secrets and DSNs written by `just glitchtip::up` / `::bootstrap`
+.env
+# Firmware ELFs kept by `just glitchtip::keep-elf`, one per build SHA
+elf/

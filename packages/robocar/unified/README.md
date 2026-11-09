@@ -72,6 +72,17 @@ Note this is Improv **Serial**, over the same USB port used for flashing — not
 
 After connection, the device is reachable as `robocar-unified.local` via mDNS.
 
+## When something goes wrong
+
+Resets, and the log lines leading up to them, are reported to a self-hosted
+GlitchTip over the MQTT broker the robot already uses. Start the stack with
+[`tools/glitchtip/`](../../../tools/glitchtip/README.md), check the path with
+`just robocar-unified::cmd "report test"`, and read
+[docs/firmware/error-reporting.md](docs/firmware/error-reporting.md) for what
+each event means and how to go from an issue to a fix. Without GlitchTip, the
+serial console, the UART0 log mirror on J15 and `robocar/logs` on MQTT still
+carry the log.
+
 ## OTA updates
 
 OTA is enabled (`CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y`) and configured to pull releases from `laurigates/mcu-tinkering-lab` GitHub. `version.txt` is the single source of truth (managed by release-please).
