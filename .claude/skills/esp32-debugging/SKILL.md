@@ -34,6 +34,10 @@ capture of a reboot that already happened, look in GlitchTip with the
 build (`release`, `build_sha`) and carries the last 32 log lines before the
 reset as breadcrumbs. See
 `packages/robocar/unified/docs/firmware/error-reporting.md`.
+After a panic it also writes a core dump, and the next boot sends the
+exception, task and backtrace as a crash event whose frames GlitchTip shows
+already resolved to source lines; read that before decoding a Guru
+Meditation by hand.
 
 ### 1. Compilation Error Analysis
 

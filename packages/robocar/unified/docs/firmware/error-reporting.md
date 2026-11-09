@@ -77,6 +77,32 @@ The JSON contract is in `main/event_report_core.h`.
   `unavailable` (kept, but there was no PSRAM to copy it into). The panic
   handler's own output does not pass through the hook, so the ring ends at the
   last ESP_LOG line before a crash, not at the panic message.
+- **Crash events (core dumps).** After a panic (a CPU exception, `abort()`,
+  an assert, an interrupt watchdog, a stack overflow) the chip writes an ELF
+  core dump to the 128 kB `coredump` partition before it reboots. The next
+  boot sends its summary in place of the reset event: level `fatal`, the
+  exception as the issue title (`LoadProhibited`, or the panic's own phrase
+  such as `abort() was called` when it was not a CPU exception), the crashing
+  task, PC and EXCVADDR, and up to 16 backtrace addresses that the bridge
+  resolves to source lines against the release's `robocar-unified.elf`. The
+  dump is erased only once the broker acknowledges the event; `report` shows
+  where that stands (`core dump: none | queued | sent, awaiting
+  acknowledgement | acknowledged and erased`). An event not acknowledged
+  within 60 s is sent again (esp-mqtt drops an unacknowledged message from
+  its outbox after 30 s), and a reboot before the acknowledgement sends it
+  again from the dump, so GlitchTip can see a crash twice but never zero
+  times. A brownout or power loss leaves no dump.
+- **The coredump partition needs a USB flash.** OTA never rewrites the
+  partition table, so a robot updated over the air has no `coredump`
+  partition until it is flashed once over USB or from the web flasher; until
+  then ESP-IDF logs that the partition is missing and the robot carries on.
+- **Testing the path:** set `EVENT_REPORT_CRASH_COMMAND` to 1 in `config.h`,
+  build, flash, and send `report crash` (it calls `abort()`). Never ship it
+  on: anyone with MQTT full access could reboot the robot with it.
+- **The robot can keep driving during a crash.** Writing the dump delays the
+  reboot, and the PCA9685 holds its last PWM through an ESP32 reset until
+  boot re-initialises the motors. Measure that gap on the bench before
+  relying on dumps while driving.
 - **Held in RAM until MQTT connects.** A reset event that has not been
   published when the robot resets again is lost, and that boot's capture
   replaces the ring it carried. A brownout loop that never reaches MQTT
@@ -89,3 +115,5 @@ The JSON contract is in `main/event_report_core.h`.
 
 - Don't log from `event_report_breadcrumb()` or anything it calls, and don't let it wait. It runs inside the esp_log hook on whichever task logged, the 30 Hz executor included; a log line from it re-enters the hook. It takes a slot from an atomic counter and copies, with no lock
 - Don't move `event_report_boot_capture()` after the first ESP_LOG line in `app_main`. The previous boot's breadcrumbs are still in the RTC ring until then, and the first line logged overwrites them
+- Don't erase the core dump before the broker has acknowledged its crash event, and don't erase it from the MQTT event task. The acknowledgement is the only proof the crash reached GlitchTip; the erase takes long enough on 128 kB of flash to stall every other MQTT callback. Every forwarded log line is a QoS 1 publish too, so match the awaited message id in the PUBACK callback rather than keeping a history of acknowledged ids, which log traffic flushes
+- Don't commit `EVENT_REPORT_CRASH_COMMAND` as 1: `report crash` lets anyone with MQTT full access reboot the robot
