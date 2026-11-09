@@ -1,7 +1,7 @@
 {
   "format_version": "3.3.0",
   "created_at": "2026-04-05T00:00:00Z",
-  "updated_at": "2026-04-20T00:00:00Z",
+  "updated_at": "2026-11-09T20:00:58Z",
   "created_by": {
     "blueprint_plugin": "3.3.0"
   },
@@ -158,9 +158,353 @@
     }
   ],
   "id_registry": {
-    "last_prd": 0,
+    "last_prd": 17,
     "last_prp": 0,
-    "documents": {},
-    "github_issues": {}
+    "documents": {
+      "PRD-001": {
+        "path": "docs/requirements/PRD-001-ai-robot-car-system.md",
+        "title": "AI-Powered Robot Car System",
+        "status": "active",
+        "created": "2026-03-05"
+      },
+      "PRD-002": {
+        "path": "docs/requirements/PRD-002-esp32cam-vision-ai-backend.md",
+        "title": "ESP32-CAM Vision and AI Backend",
+        "status": "active",
+        "created": "2026-03-05"
+      },
+      "PRD-003": {
+        "path": "docs/requirements/PRD-003-robot-physics-simulation.md",
+        "title": "Robot Car Physics Simulation",
+        "status": "active",
+        "created": "2026-03-05"
+      },
+      "PRD-004": {
+        "path": "docs/requirements/PRD-004-it-troubleshooter.md",
+        "title": "Autonomous IT Troubleshooter Device",
+        "status": "active",
+        "created": "2026-03-09"
+      },
+      "PRD-005": {
+        "path": "docs/requirements/PRD-005-xbox-switch-bridge.md",
+        "title": "Xbox-to-Switch Bridge",
+        "status": "active",
+        "created": "2026-04-05"
+      },
+      "PRD-006": {
+        "path": "docs/requirements/PRD-006-nfc-scavenger-hunt.md",
+        "title": "NFC Scavenger Hunt",
+        "status": "active",
+        "created": "2026-04-05"
+      },
+      "PRD-007": {
+        "path": "docs/requirements/PRD-007-audiobook-player.md",
+        "title": "Audiobook Player",
+        "status": "active",
+        "created": "2026-04-05"
+      },
+      "PRD-008": {
+        "path": "docs/requirements/PRD-008-gamepad-synth.md",
+        "title": "Gamepad Synth",
+        "status": "active",
+        "created": "2026-04-07"
+      },
+      "PRD-010": {
+        "path": "docs/requirements/PRD-010-thinkpack-modular-toys.md",
+        "title": "ThinkPack Modular Toy Boxes",
+        "status": "draft",
+        "created": "2026-04-11"
+      },
+      "PRD-011": {
+        "path": "docs/requirements/PRD-011-melody-detector.md",
+        "title": "Melody Detector",
+        "status": "draft",
+        "created": "2026-04-26"
+      },
+      "PRD-012": {
+        "path": "docs/requirements/PRD-012-balancebot.md",
+        "title": "Balancebot",
+        "status": "draft",
+        "created": "2026-07-02"
+      },
+      "PRD-013": {
+        "path": "docs/requirements/PRD-013-rapid-hardware-prototyping.md",
+        "title": "Rapid Hardware Prototyping Before a Fab Order",
+        "status": "draft",
+        "created": "2026-10-22"
+      },
+      "PRD-014": {
+        "path": "docs/requirements/PRD-014-teuvo-sponsored-upgrades.md",
+        "title": "Teuvo Sponsored Upgrades — Commissioned Feature Planning Through Conversation",
+        "status": "draft",
+        "created": "2026-10-23"
+      },
+      "PRD-015": {
+        "path": "docs/requirements/PRD-015-teuvo-for-other-owners.md",
+        "title": "A Teuvo of Your Own — Named, Customised Robots for Other People",
+        "status": "draft",
+        "created": "2026-10-23"
+      },
+      "PRD-016": {
+        "path": "docs/requirements/PRD-016-build-cost-model.md",
+        "title": "Build Cost Model and Sourcing Planner",
+        "status": "draft",
+        "created": "2026-10-31"
+      },
+      "PRD-017": {
+        "path": "docs/requirements/PRD-017-robocar-behaviour-twin.md",
+        "title": "Robocar Behaviour Twin — Scenario-Driven UX Evaluation",
+        "status": "draft",
+        "created": "2026-11-05"
+      },
+      "ADR-001": {
+        "path": "docs/decisions/ADR-001-monorepo-structure.md",
+        "title": "Monorepo Structure for Multi-Platform MCU Projects",
+        "status": "accepted",
+        "created": "2026-03-05"
+      },
+      "ADR-002": {
+        "path": "docs/decisions/ADR-002-dual-esp32-architecture.md",
+        "title": "Dual ESP32 Architecture for Robot Car (Main Controller + Vision)",
+        "status": "superseded",
+        "created": "2026-03-05"
+      },
+      "ADR-003": {
+        "path": "docs/decisions/ADR-003-pluggable-ai-backends.md",
+        "title": "Pluggable AI Backends (Claude API vs Ollama Self-Hosted)",
+        "status": "accepted",
+        "created": "2026-03-05"
+      },
+      "ADR-004": {
+        "path": "docs/decisions/ADR-004-ota-update-architecture.md",
+        "title": "OTA Firmware Update Architecture",
+        "status": "unknown",
+        "created": "2026-04-18"
+      },
+      "ADR-005": {
+        "path": "docs/decisions/ADR-005-it-troubleshooter-hardware.md",
+        "title": "ESP32-S3 for IT Troubleshooter (USB HID Requirement)",
+        "status": "accepted",
+        "created": "2026-03-09"
+      },
+      "ADR-006": {
+        "path": "docs/decisions/ADR-006-usb-composite-architecture.md",
+        "title": "USB Composite Architecture (HID + NCM) for IT Troubleshooter",
+        "status": "accepted",
+        "created": "2026-03-09"
+      },
+      "ADR-007": {
+        "path": "docs/decisions/ADR-007-shared-i2c-protocol-component.md",
+        "title": "Shared I2C Protocol Component",
+        "status": "superseded by adr-013",
+        "created": "2026-03-12"
+      },
+      "ADR-008": {
+        "path": "docs/decisions/ADR-008-gemini-third-ai-backend.md",
+        "title": "Gemini Robotics-ER 1.5 as Third AI Backend",
+        "status": "accepted",
+        "created": "2026-03-22"
+      },
+      "ADR-009": {
+        "path": "docs/decisions/ADR-009-switch-pro-controller-on-device.md",
+        "title": "Switch Pro Controller Protocol On-Device",
+        "status": "accepted",
+        "created": "2026-03-15"
+      },
+      "ADR-010": {
+        "path": "docs/decisions/ADR-010-mqtt-logging-architecture.md",
+        "title": "MQTT Logging Architecture",
+        "status": "accepted",
+        "created": "2025-08-13"
+      },
+      "ADR-011": {
+        "path": "docs/decisions/ADR-011-gamepad-synth-i2s-audio.md",
+        "title": "Gamepad Synth I2S Audio Architecture",
+        "status": "accepted",
+        "created": "2026-04-07"
+      },
+      "ADR-012": {
+        "path": "docs/decisions/ADR-012-web-flasher-architecture.md",
+        "title": "Browser-Based Web Flasher Architecture",
+        "status": "unknown",
+        "created": "2026-04-18"
+      },
+      "ADR-013": {
+        "path": "docs/decisions/ADR-013-single-board-xiao-esp32s3.md",
+        "title": "Single-Board Robot Car with XIAO ESP32-S3 Sense",
+        "status": "accepted",
+        "created": "2026-04-09"
+      },
+      "ADR-014": {
+        "path": "docs/decisions/ADR-014-thinkpack-espnow-mesh.md",
+        "title": "ThinkPack ESP-NOW Mesh Communication",
+        "status": "proposed",
+        "created": "2026-04-11"
+      },
+      "ADR-015": {
+        "path": "docs/decisions/ADR-015-ota-github-shared-component.md",
+        "title": "`ota_github` Shared OTA Component",
+        "status": "accepted",
+        "created": "2026-04-12"
+      },
+      "ADR-016": {
+        "path": "docs/decisions/ADR-016-hierarchical-ai-controller.md",
+        "title": "Hierarchical AI Controller (Planner + Reactive Executor)",
+        "status": "accepted",
+        "created": "2026-04-17"
+      },
+      "ADR-017": {
+        "path": "docs/decisions/ADR-017-melody-detector-esp-dl.md",
+        "title": "ESP-DL for On-Device Vision in Melody Detector",
+        "status": "proposed",
+        "created": "2026-04-26"
+      },
+      "ADR-018": {
+        "path": "docs/decisions/ADR-018-pico-sdk-balancebot.md",
+        "title": "Pico SDK Toolchain and Balancebot Control Architecture",
+        "status": "proposed",
+        "created": "2026-07-02"
+      },
+      "ADR-019": {
+        "path": "docs/decisions/ADR-019-robocar-voice-gemini-tts.md",
+        "title": "Robocar Voice via Gemini TTS over I2S (MAX98357A)",
+        "status": "accepted",
+        "created": "2026-07-20"
+      },
+      "ADR-020": {
+        "path": "docs/decisions/ADR-020-ambient-audio-speech-gate.md",
+        "title": "Ambient Audio as a Second Evidence Gate on Speech (OR, not AND)",
+        "status": "accepted",
+        "created": "2026-07-31"
+      },
+      "ADR-021": {
+        "path": "docs/decisions/ADR-021-hardware-source-of-truth.md",
+        "title": "One Hardware Source of Truth — a Board × Header × Parts Join",
+        "status": "accepted",
+        "created": "2026-08-19"
+      },
+      "ADR-022": {
+        "path": "docs/decisions/ADR-022-planner-dormancy-and-spend-ceiling.md",
+        "title": "Gate the Planner Request Itself — Dormancy Ladder plus a Hard Spend Ceiling",
+        "status": "accepted",
+        "created": "2026-08-28"
+      },
+      "ADR-023": {
+        "path": "docs/decisions/ADR-023-schematic-rendering.md",
+        "title": "Schematic Rendering — Stay on Schemdraw, Draw Physical Footprints, Mark Every Crossing",
+        "status": "accepted",
+        "created": "2026-08-30"
+      },
+      "ADR-024": {
+        "path": "docs/decisions/ADR-024-conversational-entity-and-multimodal-voice.md",
+        "title": "Conversational Entity — Multi-Turn Multimodal Interaction, Autonomous VAD, and Expressive Personality",
+        "status": "proposed",
+        "created": "2026-09-13"
+      },
+      "ADR-025": {
+        "path": "docs/decisions/ADR-025-reactive-head-aiming.md",
+        "title": "Reactive Head Aiming — The Executor Owns the Pan/Tilt Head",
+        "status": "accepted",
+        "created": "2026-09-15"
+      },
+      "ADR-026": {
+        "path": "docs/decisions/ADR-026-balancebot-lqr-live-switch.md",
+        "title": "Balancebot LQR With a Live, Bumpless PID/LQR Switch",
+        "status": "accepted",
+        "created": "2026-10-12"
+      },
+      "ADR-027": {
+        "path": "docs/decisions/ADR-027-kicad-carrier-generation.md",
+        "title": "KiCad Carrier Boards Generated From the Hardware Join",
+        "status": "accepted",
+        "created": "2026-10-13"
+      },
+      "ADR-028": {
+        "path": "docs/decisions/ADR-028-teuvo-connectivity-resilience.md",
+        "title": "Teuvo Connectivity — Several Networks, Services Armed on Link-Up, QR Join and an Offline Voice",
+        "status": "proposed",
+        "created": "2026-10-23"
+      },
+      "ADR-029": {
+        "path": "docs/decisions/ADR-029-idle-gaze-and-wander.md",
+        "title": "Idle Gaze and Wander in the Executor",
+        "status": "accepted",
+        "created": "2026-11-05"
+      },
+      "ADR-030": {
+        "path": "docs/decisions/ADR-030-robocar-behaviour-twin.md",
+        "title": "Robocar Behaviour Twin",
+        "status": "proposed",
+        "created": "2026-11-05"
+      },
+      "ADR-031": {
+        "path": "docs/decisions/ADR-031-circuit-blocks.md",
+        "title": "Circuit Blocks: a Stage Designed Once, Used From Any hardware.toml",
+        "status": "accepted",
+        "created": "2026-11-06"
+      },
+      "ADR-032": {
+        "path": "docs/decisions/ADR-032-robocar-live-conversation.md",
+        "title": "Real-Time Conversation over the Gemini Live API",
+        "status": "proposed",
+        "created": "2026-11-07"
+      },
+      "ADR-033": {
+        "path": "docs/decisions/ADR-033-robocar-error-reporting.md",
+        "title": "Robocar Error Reporting through GlitchTip",
+        "status": "accepted",
+        "created": "2026-11-09"
+      },
+      "ADR-034": {
+        "path": "docs/decisions/ADR-034-credential-free-onboarding.md",
+        "title": "Credential-Free Onboarding — Device-Flow Enrolment, BLE Improv and Broker Discovery",
+        "status": "proposed",
+        "created": "2026-11-09"
+      },
+      "ADR-035": {
+        "path": "docs/decisions/ADR-035-printed-part-dimension-standard.md",
+        "title": "A Shared Dimension Standard for Printed Parts",
+        "status": "proposed",
+        "created": "2026-11-09"
+      },
+      "PRP-hardware-in-the-loop-testing": {
+        "path": "docs/prompts/hardware-in-the-loop-testing.md",
+        "title": "Hardware-in-the-Loop (HIL) Testing",
+        "status": "planned",
+        "created": "2026-04-18"
+      },
+      "PRP-hierarchical-ai-controller": {
+        "path": "docs/prompts/hierarchical-ai-controller.md",
+        "title": "Hierarchical AI Controller (Planner + Reactive Executor)",
+        "status": "draft",
+        "created": "2026-04-18"
+      },
+      "PRP-host-based-unit-tests": {
+        "path": "docs/prompts/host-based-unit-tests.md",
+        "title": "Host-Based Unit Tests Expansion",
+        "status": "in-progress",
+        "created": "2026-04-18"
+      },
+      "PRP-melody-detector": {
+        "path": "docs/prompts/melody-detector.md",
+        "title": "Melody Detector — Implementation Plan",
+        "status": "planned",
+        "created": "2026-04-27"
+      },
+      "PRP-ota-update-implementation-plan": {
+        "path": "docs/prompts/ota-update-implementation-plan.md",
+        "title": "OTA Firmware Update System — Implementation Plan",
+        "status": "unknown",
+        "created": "2026-04-18"
+      },
+      "PRP-slam-autonomous-navigation": {
+        "path": "docs/prompts/slam-autonomous-navigation.md",
+        "title": "SLAM and Autonomous Navigation",
+        "status": "planned",
+        "created": "2026-04-18"
+      }
+    },
+    "github_issues": {},
+    "last_adr": 35
   }
 }
