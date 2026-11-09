@@ -7,11 +7,15 @@ the zip on disk, not of the file in the cart. `kicad.fab` therefore:
 
 - refuses to export from a tree with uncommitted changes to anything that feeds
   the board (`FEEDS`), unless `$CARRIER_FAB_ALLOW_DIRTY=1` or `--allow-dirty`
-  says otherwise, and then marks the text and every file name `-dirty`;
+  says otherwise, and then marks every file name `-dirty` and the silk text
+  with `*` in place of its space;
 - writes `<sha7> <pcb8>` (the commit, and the first 8 hex digits of the check
   stamp's `board_sha256`) on F.SilkS at board.toml's `[fab] provenance_at`, on
   a copy of the board used only for plotting: the committed `.kicad_pcb` and
-  its stamp are never written;
+  its stamp are never written. A dirty run writes `<sha7>*<pcb8>`: the same 16
+  characters, and the same width, since KiCad's stroke font gives `*` the
+  advance of a space, so a position that clears its neighbours clean clears
+  them dirty (`-dirty` there grew the text into J3's pin labels);
 - names the zip, BOM, CPL and hand-off row after that commit
   (`<name>-fab-<sha7>.zip`), so the cart line's file name says it too;
 - writes the hand-off row: the commit and the zip's full sha256, which the
@@ -38,6 +42,9 @@ from .errors import KicadError
 SHA_LEN = 7
 PCB_HASH_LEN = 8
 DIRTY = "-dirty"
+SILK_SEP = " "
+SILK_DIRTY = "*"  # replaces SILK_SEP: same advance in KiCad's stroke font
+SILK_LEN = SHA_LEN + 1 + PCB_HASH_LEN
 ALLOW_DIRTY_ENV = "CARRIER_FAB_ALLOW_DIRTY"
 DEFAULT_SIZE_MM = 1.0
 FAB_KEYS = frozenset({"provenance_at", "provenance_size"})
@@ -149,15 +156,23 @@ def require_clean(state: GitState, allow_dirty: bool) -> bool:
 
 
 def tag(sha: str, dirty: bool) -> str:
-    """The commit as the silk text and the file names carry it."""
+    """The commit as the file names carry it."""
     if len(sha) < SHA_LEN:
         raise KicadError(f"git SHA {sha!r} is shorter than {SHA_LEN} characters")
     return sha[:SHA_LEN] + (DIRTY if dirty else "")
 
 
-def silk_text(run_tag: str, board_sha256: str) -> str:
-    """The provenance text: commit tag, then the stamp's board hash prefix."""
-    return f"{run_tag} {board_sha256[:PCB_HASH_LEN]}"
+def silk_text(sha: str, dirty: bool, board_sha256: str) -> str:
+    """The provenance text: the commit, then the stamp's board hash prefix,
+    joined by a space, or by `*` when the tree is dirty. Always `SILK_LEN`
+    characters, so a dirty run takes no more silkscreen than a clean one."""
+    if len(sha) < SHA_LEN or len(board_sha256) < PCB_HASH_LEN:
+        raise KicadError(
+            f"provenance text needs {SHA_LEN} hex digits of commit and "
+            f"{PCB_HASH_LEN} of board hash, got {sha!r} and {board_sha256!r}"
+        )
+    sep = SILK_DIRTY if dirty else SILK_SEP
+    return f"{sha[:SHA_LEN]}{sep}{board_sha256[:PCB_HASH_LEN]}"
 
 
 def names(name: str, run_tag: str) -> Names:

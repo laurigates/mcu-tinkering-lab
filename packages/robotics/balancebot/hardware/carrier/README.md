@@ -371,6 +371,8 @@ detected size and layer count.
    commit and the stamp's board-hash prefix (`<sha7> <pcb8>`) on the
    silkscreen below J3's pins (`board.toml` `[fab] provenance_at`), on a
    plotting copy of the board. `<sha7>` is the commit's first 7 hex digits.
+   A `CARRIER_FAB_ALLOW_DIRTY=1` run writes `<sha7>*<pcb8>` instead, the
+   same width, and puts `-dirty` in every file name; never order from it.
    Outputs:
 
    | File | For |

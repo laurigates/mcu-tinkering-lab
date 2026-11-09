@@ -10,11 +10,12 @@ just dependency rather than from here.
 Every output names the commit it came from (`kicad.provenance`): the run
 refuses a tree with uncommitted changes to anything that feeds the board
 (`$CARRIER_FAB_ALLOW_DIRTY=1` or `--allow-dirty` exports anyway and marks
-everything `-dirty`), and the gerbers, drill files and CPL are plotted from a
-temporary copy of the board that carries `<sha7> <pcb8>` on F.SilkS at
+every file name `-dirty`), and the gerbers, drill files and CPL are plotted
+from a temporary copy of the board that carries `<sha7> <pcb8>` on F.SilkS at
 board.toml's `[fab] provenance_at`. The committed `.kicad_pcb` and its check
 stamp are only read. `<sha7>` is the commit; `<pcb8>` the first 8 hex digits of
-the stamp's `board_sha256`. Per project, into the KiCad project's `output/`
+the stamp's `board_sha256`. A dirty run's text is `<sha7>*<pcb8>`, the same
+width as a clean one's, so the DRC check below passes or fails alike. Per project, into the KiCad project's `output/`
 (git-ignored):
 
 - `fab/`: gerbers for the copper, paste, silkscreen, mask and Edge.Cuts layers
@@ -163,10 +164,13 @@ def fab(
     pcb_bytes = pcb.read_bytes()
     board_sha = provenance.stamped_board_sha256(stamp, pcb_bytes)
     run_tag = provenance.tag(state.sha, dirty)
-    text = provenance.silk_text(run_tag, board_sha)
+    text = provenance.silk_text(state.sha, dirty, board_sha)
     names = provenance.names(cfg.name, run_tag)
     if dirty:
-        print(f"WARNING: dirty tree, every output is marked {provenance.DIRTY}:")
+        print(
+            f"WARNING: dirty tree, every file name is marked {provenance.DIRTY} "
+            f"and the silk text {text!r}:"
+        )
         for p in state.dirty:
             print(f"  {p}")
     board_text = provenance.add_text(
@@ -290,8 +294,9 @@ def main(argv: list[str] | None = None, repo_root: Path = REPO_ROOT) -> int:
     parser.add_argument(
         "--allow-dirty",
         action="store_true",
-        help="export from uncommitted changes, marking the silk text and every "
-        f"file name '{provenance.DIRTY}' (also ${provenance.ALLOW_DIRTY_ENV}=1)",
+        help="export from uncommitted changes, marking every file name "
+        f"'{provenance.DIRTY}' and the silk text with '{provenance.SILK_DIRTY}' "
+        f"for its space (also ${provenance.ALLOW_DIRTY_ENV}=1)",
     )
     args = parser.parse_args(argv)
     allow_dirty = args.allow_dirty or provenance.allow_dirty_from_env()

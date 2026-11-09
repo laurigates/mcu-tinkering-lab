@@ -146,8 +146,8 @@ _carrier-measure project *args:
 # sold-out LCSC part stops the order before anything is exported.
 # kicad.fab refuses uncommitted changes to anything that feeds the board, and
 # writes the commit on the silkscreen of a plotting copy and into every file
-# name (kicad.provenance); CARRIER_FAB_ALLOW_DIRTY=1 exports anyway, marked
-# "-dirty".
+# name (kicad.provenance); CARRIER_FAB_ALLOW_DIRTY=1 exports anyway, with
+# "-dirty" in the file names and "*" for the silk text's space.
 _carrier-fab project:
     cd {{_kicad_repo}} && PYTHONPATH=tools python3 -m kicad.lcsc --project {{project}}
     cd {{_kicad_repo}} && PYTHONPATH=tools python3 -m kicad.fab {{project}}

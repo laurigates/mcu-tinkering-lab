@@ -49,7 +49,9 @@ are a calibration, not a quote: JLCPCB changes them.
   feeds the board (the project's `hardware.toml` and `hardware/`,
   `tools/kicad`, the parts registry and the rotation table;
   `kicad.provenance.feeds`). Commit first. `CARRIER_FAB_ALLOW_DIRTY=1`
-  exports anyway with `-dirty` on the silkscreen and in every file name; never
+  exports anyway with `-dirty` in every file name and `dirty` = `yes` in the
+  hand-off row; the silkscreen text becomes `<sha7>*<pcb8>`, a `*` in place
+  of the space, so it keeps the clean text's width and its DRC result. Never
   upload a `-dirty` zip for an order. Read the size and layer count from
   `output/fab/*-job.gbrjob` (`.GeneralSpecs.Size`); the upload must detect
   the same.
@@ -192,8 +194,9 @@ error when signed out). Signing in is Lauri's step, never the agent's.
    - open the line's Gerber viewer and read the silkscreen text
      `<sha7> <pcb8>`: both words must equal the CSV row's `silk_text`;
    - a line whose name has no `<sha7>`, or whose name or silkscreen disagrees
-     with the CSV, or that says `-dirty`, is stale or wrong: delete it, or
-     tell Lauri before he pays.
+     with the CSV, or whose name says `-dirty`, or whose silkscreen has a `*`
+     between the two words instead of a space (`<sha7>*<pcb8>`, a dirty
+     export), is stale or wrong: delete it, or tell Lauri before he pays.
 
    Record each line's Y number in the CSV.
 

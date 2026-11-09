@@ -99,11 +99,13 @@ several traps below are version-specific: after a KiCad upgrade, re-run
    `<name>-bom-jlc-<sha7>.csv`, `<name>-cpl-jlc-<sha7>.csv`) beside a
    hand-off row (`<name>-fab-<sha7>.csv`: the commit and the zip's sha256).
    It refuses uncommitted changes to anything that feeds the board
-   (`CARRIER_FAB_ALLOW_DIRTY=1` exports anyway, marked `-dirty`), and plots
-   from a temporary copy of the board that carries `<sha7> <pcb8>` (the commit
-   and the stamp's `board_sha256` prefix) on F.SilkS at `board.toml`'s
-   `[fab] provenance_at`; KiCad's DRC on that copy fails the run if the text
-   lands on a pad, other silkscreen or the edge. The committed board and stamp
+   (`CARRIER_FAB_ALLOW_DIRTY=1` exports anyway, with `-dirty` in the file
+   names), and plots from a temporary copy of the board that carries
+   `<sha7> <pcb8>` (the commit and the stamp's `board_sha256` prefix) on
+   F.SilkS at `board.toml`'s `[fab] provenance_at`; KiCad's DRC on that copy
+   fails the run if the text lands on a pad, other silkscreen or the edge. A
+   dirty run writes `<sha7>*<pcb8>`: KiCad's stroke font gives `*` a space's
+   advance, so the text is as wide as the clean one and passes DRC alike. The committed board and stamp
    are only read (`kicad.provenance`). A new carrier needs `[fab]
    provenance_at` before its first fab run. `just kicad::check` runs what CI
    runs. The CPL adds each LCSC
