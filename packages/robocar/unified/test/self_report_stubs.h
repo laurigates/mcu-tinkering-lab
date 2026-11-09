@@ -20,6 +20,7 @@ typedef struct {
     bool servos_initialized;
     bool buzzer_initialized;
     bool expander_available;
+    bool cliff_sensors_available;
     bool audio_ready;
     bool wifi_connected;
     const char *ssid;

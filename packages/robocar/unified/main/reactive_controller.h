@@ -306,6 +306,19 @@ typedef struct {
     bool head_settled;
     /** The pre-OTA hold is on (reactive_controller_set_hold()). */
     bool held;
+    /** The cliff reflex ran this tick: enabled (`cliff on`) and the floor
+     *  sensors present (cliff_sensor_available()). The four fields below are
+     *  false/unchanged while it is not. */
+    bool cliff_armed;
+    /** Debounced: no floor under the front / rear sensor (cliff_core.h). A
+     *  failed read and an unplugged sensor also read as no floor. */
+    bool cliff_front;
+    bool cliff_rear;
+    /** The cliff reflex is braking or backing off, or it replaced a requested
+     *  motion toward an edge with a brake. */
+    bool cliff_active;
+    /** Floor-to-cliff edges that started a reflex since boot. */
+    uint32_t cliff_trips;
 } reactive_telemetry_t;
 
 /* =========================================================================
@@ -358,6 +371,19 @@ void reactive_controller_set_gaze(bool on);
 
 /** @brief Whether the idle gaze is on. */
 bool reactive_controller_gaze_enabled(void);
+
+/**
+ * @brief Switch the cliff reflex (the front and rear floor sensors).
+ *
+ * On at every boot and not persisted. Off disarms it: no brake, no back-off and
+ * no motion filtering. Turning it back on starts from "no floor" on both
+ * sensors, so the wheels hold until the floor is confirmed (~100 ms).
+ */
+void reactive_controller_set_cliff(bool on);
+
+/** @brief Whether the cliff reflex is switched on (it may still be unarmed
+ *  without its sensors; see reactive_telemetry_t.cliff_armed). */
+bool reactive_controller_cliff_enabled(void);
 
 /**
  * @brief Hold the robot still for an OTA install.

@@ -438,6 +438,25 @@ still prints the GPIO-mode names.
   on channels 3 and 4, then five readings from each. A module that does not
   answer is unplugged or still in GPIO mode (`R4` not fitted).
 
+## Floor sensors (cliff reflex, 2x reflective IR, MCP23017)
+
+Interim until the VL53L4CD pair of issue #1010: two TCRT5000-style reflective
+sensors, aimed down at the front and rear edges, on the MCP23017 (TCA9548A
+ch2). Without the MCP23017 the cliff reflex stays disarmed. Behaviour, mounting
+and bench checks: [`docs/firmware/cliff-sensors.md`](docs/firmware/cliff-sensors.md).
+
+| Sensor pin | Front | Rear |
+|-----|-------------|------------|
+| LED anode | 3.3 V via 100 Ω | 3.3 V via 100 Ω |
+| LED cathode | GND | GND |
+| Phototransistor collector | MCP23017 `GPA0` | MCP23017 `GPA1` |
+| Phototransistor emitter | GND | GND |
+
+- **No external pull-up needed:** the firmware enables the MCP23017's internal
+  ~100 kΩ pull-ups. Fit 10-47 kΩ to 3.3 V if a lifted sensor still reads floor.
+- **Low = floor seen.** An unplugged sensor reads high, as no floor, and the
+  robot refuses to move toward it.
+
 ## Flashing
 
 XIAO ESP32-S3 has native USB-Serial-JTAG (VID `0x303a`). Plug in USB-C and flash:

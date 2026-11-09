@@ -143,6 +143,13 @@
 // ========================================
 #define MCP23017_ADDR 0x20  // A0=A1=A2=GND, as both carriers strap them
 
+// Downward floor sensors for the cliff reflex (cliff_sensor.c): salvaged
+// TCRT5000-style reflective sensors, phototransistor collector on the pin,
+// emitter to GND, the MCP23017's internal pull-up enabled. Low = floor seen.
+// Interim until the VL53L4CD pair of issue #1010. Not GPA7/GPB7 (output-only).
+#define CLIFF_FRONT_EXPANDER_PIN 0  // GPA0
+#define CLIFF_REAR_EXPANDER_PIN 1   // GPA1
+
 // ========================================
 // SSD1306 OLED Display (via TCA9548A ch1)
 // 0.91-inch 128x32 module (docs/reference/boards/ssd1306-091in-128x32.md).

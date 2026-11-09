@@ -9,6 +9,7 @@
 
 #include "audio_player.h"
 #include "buzzer.h"
+#include "cliff_sensor.h"
 #include "credentials_loader.h"
 #include "dialogue_style.h"
 #include "esp_app_desc.h"
@@ -92,6 +93,7 @@ void self_report_collect(robocar_status_t *out)
     out->buzzer_ok = buzzer_is_initialized();
     out->audio_ok = audio_player_is_ready();
     out->mcp23017_present = gpio_expander_available();
+    out->cliff_sensors_ok = cliff_sensor_available();
     out->wifi_up = wifi_is_connected();
 
     const char *key = get_gemini_api_key();
@@ -200,11 +202,12 @@ size_t self_report_format_facts(const robocar_status_t *status, char *buf, size_
      * a dead bus says nothing about the buzzer. */
     int n = snprintf(buf, len,
                      "robot=robocar version=%s wifi=%s ssid=%s camera=%s i2c_peripherals=%s "
-                     "audio=%s mcp23017=%s gemini_key=%s buzzer=%s mqtt_commands=%s",
+                     "audio=%s mcp23017=%s cliff=%s gemini_key=%s buzzer=%s mqtt_commands=%s",
                      status->version, req_state(status->wifi_up),
                      status->ssid[0] ? status->ssid : "none", req_state(status->camera_ok), i2c,
                      req_state(status->audio_ok),
-                     status->mcp23017_present ? "present" : "absent(optional)", key_word(status),
+                     status->mcp23017_present ? "present" : "absent(optional)",
+                     status->cliff_sensors_ok ? "present" : "absent", key_word(status),
                      req_state(status->buzzer_ok), mqtt_command_access_name(status->mqtt_access));
 
     if (n < 0) {
@@ -235,6 +238,7 @@ uint32_t self_report_health_signature(const robocar_status_t *s)
     MIX_BYTE(s->servos_ok);
     MIX_BYTE(s->buzzer_ok);
     MIX_BYTE(s->mcp23017_present);
+    MIX_BYTE(s->cliff_sensors_ok);
     MIX_BYTE(s->audio_ok);
     /* The key as the listener hears it (key_word()), not the raw state: an
      * untested and an accepted key both read "present", so the first HTTP 200

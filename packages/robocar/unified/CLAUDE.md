@@ -39,7 +39,7 @@ Tasks communicate via FreeRTOS queues and the shared `goal_state` struct (mutex-
 
 ## I2C topology
 
-All I2C devices sit behind a **TCA9548A multiplexer** on GPIO5/6. Always select the channel through `i2c_bus.c` first: ch0 PCA9685 (motors, servos, LEDs), ch1 SSD1306 OLED, ch2 MCP23017 (optional; GPA7/GPB7 output-only), ch3/ch4 RCWL-1601 front/rear (0x57), ch5–7 reserved. Every peripheral is non-fatal, and the self-report names any that did not initialise. Details: [docs/firmware/i2c-and-motors.md](docs/firmware/i2c-and-motors.md).
+All I2C devices sit behind a **TCA9548A multiplexer** on GPIO5/6. Always select the channel through `i2c_bus.c` first: ch0 PCA9685 (motors, servos, LEDs), ch1 SSD1306 OLED, ch2 MCP23017 (optional; GPA7/GPB7 output-only; GPA0/GPA1 the front/rear floor sensors), ch3/ch4 RCWL-1601 front/rear (0x57), ch5–7 reserved. Every peripheral is non-fatal, and the self-report names any that did not initialise. Details: [docs/firmware/i2c-and-motors.md](docs/firmware/i2c-and-motors.md).
 
 ## Subsystem docs
 
@@ -55,6 +55,7 @@ Each subsystem's design notes, measurements and the reasoning behind the rules b
 | [planner.md](docs/firmware/planner.md) | Planner tools, dormancy ladder (`plan_activity`), spend fuse (`plan_budget`), planner notes to GlitchTip (`note_gate`), reading the planner log |
 | [camera-and-log.md](docs/firmware/camera-and-log.md) | Frame stats and `snap` dumps, the UART0 log mirror on J15, why the sensor is an OV3660 |
 | [voice.md](docs/firmware/voice.md) | TTS streaming and preroll, personas and dialogue pools, speech gates (scene, ambient audio, budget), voice FX, sound clips (`[horn]`, the `sound` tool, the reflex horn), push-to-talk and VAD voice turns, voice budget, memory peak |
+| [cliff-sensors.md](docs/firmware/cliff-sensors.md) | Front and rear floor sensors on the MCP23017, the cliff reflex (brake, back off, refuse motion toward an edge), wiring, `cliff on\|off`, bench checks |
 | [wifi-and-ota.md](docs/firmware/wifi-and-ota.md) | Improv Serial provisioning over USB-Serial-JTAG, the network supervisor (nothing waits on WiFi), where the Gemini key comes from, OTA manifest polling, the build-SHA install decision |
 
 ## Build & flash
@@ -88,18 +89,23 @@ One line per rule. Each group's doc has the full reasoning and the tests that ho
 
 **Motors, I2C, PCA9685** ([why](docs/firmware/i2c-and-motors.md#dont))
 
-- Motor output goes through `reactive_controller.c` alone. Console and manual movement use `reactive_controller_manual()`, a lease applied after the obstacle reflex.
+- Motor output goes through `reactive_controller.c` alone. Console and manual movement use `reactive_controller_manual()`, a lease applied after the obstacle and cliff reflexes.
 - Every motor, servo and LED output goes through the PCA9685, reached by selecting its TCA9548A channel in `i2c_bus.c`.
 - `set_motors()` skips identical idle re-writes and re-sends after `MOTOR_REFRESH_INTERVAL_MS`; keep both halves.
 - `init_hardware()` returns `void` and logs each peripheral failure, so the boot always reaches the console (#500).
 - Each peripheral keeps its `*_is_initialized()` accessor, and `self_report_collect()` reads it live.
-- `motor_stop()` coasts (low/low) and `motor_brake()` brakes (high/high). Keep them separate; the reflex is the only caller that brakes.
+- `motor_stop()` coasts (low/low) and `motor_brake()` brakes (high/high). Keep them separate; only the obstacle and cliff reflexes brake, from `apply_wheels()`.
 - The rangefinders hold only motion toward what they see: the front reflex brakes forward motion, the rear reading brakes a reverse, turns in place run unless both are blocked (`apply_wheels()`, #1026).
 - Call `pin_bus_clock()` after every driver's `init_desc()`, including for devices added later.
 - Change the PCA9685 frequency through `servo_set_pwm_frequency()`, which re-sends both servo pulses.
 - Full-on and full-off channels (the motor direction pins) keep phase 0 in `pca9685_phase.c`.
 - Driver behaviour we add lives in our own sources, such as `pca9685_phase.c`; `managed_components/` is refetched as-is. Keep the `esp-idf-lib/pca9685` floor at `'^1.0.8'`.
 - The motor channel `#define`s follow the TB6612FNG header order and describe soldered wires; keep that order.
+
+**Cliff reflex** ([why](docs/firmware/cliff-sensors.md#dont))
+
+- The cliff state starts as "no floor" and a failed read counts as no floor (fail closed); arming is not an edge.
+- `apply_wheels()` is the one wheel arbiter; `goal_motion()` mirrors `execute_goal()`'s branches and changes with it.
 
 **Console and MQTT** ([why](docs/firmware/console-and-mqtt.md#dont))
 
