@@ -219,6 +219,16 @@ is `buck_ic`. Re-expressing an existing stage as a block must leave
     pins. Every check passes, because the error is in the person fitting the
     module. Any socket for a module labelled on one face needs a
     silkscreen orientation mark and pin names beside the pads (#803).
+    boardcheck now enforces it (`kicad.orientation`): for every module socket
+    (`Breakout_Sockets:*`, `Module:Pololu_Breakout-*`) it finds each turn or
+    flip that maps the pads onto themselves and fails when one changes a pad's
+    number or keeps them all but moves the F.Fab outline (a 1xN row flipped
+    across itself: the GY-521 face down on the 8d18cd8d balancebot) and no
+    `[silk] texts` entry tagged `for = "<ref>"` sits within 4 mm of the
+    courtyard and on the board. `[silk] module_outlines = ["<ref>"]` draws the
+    footprint's own F.Fab outline on F.SilkS (less the edges its strip
+    outline already draws), never a hand copy. `carrier-silk` adds both
+    without touching copper.
 21. **A back-face footprint in KiCad 10:** `FOOTPRINT.Flip()` segfaults before
     `board.Add()`, and `FLIP_DIRECTION_LEFT_RIGHT` followed by
     `SetOrientationDegrees(rot)` mirrors the footprint's *local y* about its

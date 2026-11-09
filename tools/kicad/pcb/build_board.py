@@ -33,7 +33,10 @@ area it overlaps: a rule area that forbids pads forbids a non-plated hole too.
 
 It rewrites the board from scratch, so routing (route_board.py) must run after
 it. ``--silk-only`` instead re-applies the reference positions and sizes and
-the pad clipping to the routed board, leaving its copper as it is. Python 3.9 and the stdlib plus ``pcbnew`` and its sibling ``silk`` only; it
+the pad clipping to the routed board, adds any board.toml text or module
+outline segment it lacks, and leaves its copper as it is. A module outline
+(board.toml ``[silk] module_outlines``) is the footprint's F.Fab outline,
+placed by kicad.boardinput (``silk.outline_lines``) and drawn on F.SilkS. Python 3.9 and the stdlib plus ``pcbnew`` and its sibling ``silk`` only; it
 imports nothing from tools/kicad (see tools/kicad/test_pcb_py39.py).
 """
 
@@ -100,6 +103,22 @@ def rect(board, origin, x1, y1, x2, y2, layer, width):
     shape.SetStart(pcbnew.VECTOR2I(mm(x0 + x1), mm(y0 + y1)))
     shape.SetEnd(pcbnew.VECTOR2I(mm(x0 + x2), mm(y0 + y2)))
     shape.SetLayer(layer)
+    shape.SetWidth(mm(width))
+    board.Add(shape)
+
+
+MODULE_OUTLINE_WIDTH = 0.15
+
+
+def silk_segment(board, origin, line, width=MODULE_OUTLINE_WIDTH):
+    """One straight F.SilkS line, [x0, y0, x1, y1] relative to the origin."""
+    x0, y0 = origin
+    ax, ay, bx, by = line
+    shape = pcbnew.PCB_SHAPE(board)
+    shape.SetShape(pcbnew.SHAPE_T_SEGMENT)
+    shape.SetStart(pcbnew.VECTOR2I(mm(x0 + ax), mm(y0 + ay)))
+    shape.SetEnd(pcbnew.VECTOR2I(mm(x0 + bx), mm(y0 + by)))
+    shape.SetLayer(pcbnew.F_SilkS)
     shape.SetWidth(mm(width))
     board.Add(shape)
 
@@ -451,6 +470,8 @@ def build(spec):
             rect(board, origin, x1, y1, x2, y2, pcbnew.Edge_Cuts, 0.1)
         for x1, y1, x2, y2 in spec["silk"]["rects"]:
             rect(board, origin, x1, y1, x2, y2, pcbnew.F_SilkS, 0.15)
+        for line in spec["silk"].get("outline_lines", []):
+            silk_segment(board, origin, line)
         footprints = place(board, spec)
         assign_nets(board, spec, footprints)
         for text in spec["silk"]["texts"]:
@@ -477,28 +498,76 @@ def move_texts(board, spec):
     """Each board.toml [silk] texts entry's position on a loaded board.
 
     A text is found by its content on F.SilkS; content used more than once
-    ("GND") is left where it is, as nothing says which copy moved.
+    ("GND") is left where it is, as nothing says which copy moved. An entry
+    the board does not have yet, by content and position, is added. Returns
+    how many texts were added.
     """
     origin = spec["origin"]
     wanted = {}
+    sizes = {}
     for t in spec["silk"]["texts"]:
         wanted.setdefault(t["text"], []).append(t["at"])
+        sizes[(t["text"], tuple(t["at"]))] = t["size"]
     found = {}
     for d in board.GetDrawings():
         if d.GetClass() == "PCB_TEXT" and d.GetLayer() == pcbnew.F_SilkS:
             found.setdefault(d.GetText(), []).append(d)
+    added = 0
     for text, ats in wanted.items():
         items = found.get(text, [])
         if len(ats) == 1 and len(items) == 1:
             x, y = ats[0]
             items[0].SetPosition(pcbnew.VECTOR2I(mm(origin[0] + x), mm(origin[1] + y)))
+            continue
+        placed = [(i.GetPosition().x, i.GetPosition().y) for i in items]
+        for x, y in ats:
+            here = (mm(origin[0] + x), mm(origin[1] + y))
+            if not any(
+                abs(px - here[0]) <= SAME_NM and abs(py - here[1]) <= SAME_NM
+                for px, py in placed
+            ):
+                silk_text(board, origin, text, x, y, sizes[(text, (x, y))])
+                added += 1
+    return added
+
+
+# Two silkscreen items this close (nm) are the same item: KiCad's 1 nm drift.
+SAME_NM = 5
+
+
+def add_outline_lines(board, spec):
+    """Each [silk] module outline segment the board's F.SilkS lacks; returns how many."""
+    origin = spec["origin"]
+    have = []
+    for d in board.GetDrawings():
+        if (
+            d.GetClass() == "PCB_SHAPE"
+            and d.GetLayer() == pcbnew.F_SilkS
+            and d.GetShape() == pcbnew.SHAPE_T_SEGMENT
+        ):
+            a, b = d.GetStart(), d.GetEnd()
+            have += [(a.x, a.y, b.x, b.y), (b.x, b.y, a.x, a.y)]
+    added = 0
+    for line in spec["silk"].get("outline_lines", []):
+        ax, ay, bx, by = line
+        want = (
+            mm(origin[0] + ax),
+            mm(origin[1] + ay),
+            mm(origin[0] + bx),
+            mm(origin[1] + by),
+        )
+        if not any(all(abs(u - v) <= SAME_NM for u, v in zip(want, h)) for h in have):
+            silk_segment(board, origin, line)
+            added += 1
+    return added
 
 
 def resilk(spec):
     """Re-apply reference and text placement and pad clipping to the routed board.
 
-    For a silkscreen-only change (board.toml [silk] ref_positions, ref_sizes
-    or a text's position, or a change to clip_silk) to a board already routed and
+    For a silkscreen-only change (board.toml [silk] ref_positions, ref_sizes,
+    a text's position, a new text or module outline, or a change to
+    clip_silk) to a board already routed and
     reviewed: its copper is left exactly as it is, where `build` would need
     a new Freerouting run. A clipped footprint's moved-aside originals are
     skipped, so a second run cuts nothing more. Returns how many shapes
@@ -506,7 +575,9 @@ def resilk(spec):
     """
     board = pcbnew.LoadBoard(spec["pcb"])
     by_ref = {fp.GetReference(): fp for fp in board.GetFootprints()}
-    move_texts(board, spec)
+    texts = move_texts(board, spec)
+    lines = add_outline_lines(board, spec)
+    print(f"added {texts} silkscreen texts and {lines} module outline segments")
     n = 0
     for comp in spec["components"]:
         fp = by_ref[comp["ref"]]

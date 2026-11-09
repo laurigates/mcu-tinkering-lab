@@ -25,6 +25,7 @@ from kicad import (
     boardinput,
     library,
     netlist,
+    orientation,
     paths,
     schematic,
     testfixture,
@@ -266,7 +267,34 @@ class BalancebotTests(unittest.TestCase):
     def test_silk_defaults(self):
         data = copy.deepcopy(self.cfg.data)
         del data["silk"]
-        self.assertEqual(self.assemble(data)["silk"], boardinput.SILK_DEFAULTS)
+        self.assertEqual(
+            self.assemble(data)["silk"],
+            {**boardinput.SILK_DEFAULTS, "outline_lines": []},
+        )
+
+    def test_module_outlines_become_placed_lines(self):
+        """[silk] module_outlines hands build_board.py the footprint's F.Fab
+        outline on the board, not a hand copy: A2 sits at 180 degrees."""
+        data = copy.deepcopy(self.cfg.data)
+        data["silk"]["module_outlines"] = ["A2"]
+        lines = self.assemble(data)["silk"]["outline_lines"]
+        fp = library.footprint_file("Module:Pololu_Breakout-16_15.2x20.3mm")
+        self.assertEqual(lines, orientation.outline_lines(fp, data["placement"]["A2"]))
+        self.assertTrue(lines)
+        x, y = data["placement"]["A2"][:2]
+        for x0, y0, x1, y1 in lines:  # turned 180: the module lies toward -x, -y
+            for px, py in ((x0, y0), (x1, y1)):
+                self.assertLessEqual(px, x + 1.27 + 1e-6)
+                self.assertGreaterEqual(px, x - 13.97 - 1e-6)
+                self.assertLessEqual(py, y + 1.27 + 1e-6)
+                self.assertGreaterEqual(py, y - 19.05 - 1e-6)
+
+    def test_module_outline_without_fab_fails(self):
+        data = copy.deepcopy(self.cfg.data)
+        data["silk"]["module_outlines"] = ["H1"]  # a mounting hole: no F.Fab lines
+        with self.assertRaises(KicadError) as e:
+            self.assemble(data)
+        self.assertIn("no F.Fab outline", str(e.exception))
 
     def test_input_path(self):
         self.assertEqual(
