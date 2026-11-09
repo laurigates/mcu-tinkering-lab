@@ -45,8 +45,10 @@ static const char *TAG = "planner";
  * system prompt (GEMINI_SYSTEM_PROMPT_MAX) plus the variation directive and the
  * recalled-lines list, which together grew past 4 KB when the robot gained a
  * memory of what it had said. Grow this with those buffers, not after a stack
- * overflow reports it. */
-#define PLANNER_TASK_STACK_SIZE 10240U
+ * overflow reports it. 11.5 KB since the rangefinder clause: the prompt buffer
+ * grew by PLANNER_RANGE_CLAUSE_MAX and the frame gained the clause's own
+ * buffer and a telemetry snapshot, about 1 KB. */
+#define PLANNER_TASK_STACK_SIZE 11776U
 #define PLANNER_TASK_PRIORITY 3U
 #define PLANNER_TASK_CORE 1
 
