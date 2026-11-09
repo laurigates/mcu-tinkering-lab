@@ -55,7 +55,7 @@ lines keep a bench session readable:
 | `ota` / `ota check` / `ota postpone` | `ota` alone prints the running version and build, and where an update is (idle, waiting for a quiet moment, announcing, postpone window open, parking, installing); `ota check` checks the manifest now, as the MQTT nudge does; `ota postpone` defers an announced update to the next check, accepted only in the minute after the robot says it is going. See [wifi-and-ota.md](wifi-and-ota.md#before-the-install-announce-postpone-park) |
 | `plan …` | The gate on whether the planner makes a request at all — `plan` alone reports cadence, wake scores and spend; `plan on\|off\|wake\|sleep\|resume`, `plan scene\|range\|requests\|tokens <n>` |
 | `trace …` | Camera + endpoint activity counters since boot; `trace led on\|off`, `trace reset` |
-| `report` / `report test` | GlitchTip events ([below](#error-events-robocarevents)). `report` alone prints the event counters (queued, sent, dropped, pending), whether MQTT is up, and how many of the last boot's log lines survived its reset; `report test` queues a synthetic `info` event with this boot's lines so far, to check the path end to end. Over MQTT only with full access: `report test` sends |
+| `report` / `report test` | GlitchTip error events ([error-reporting.md](error-reporting.md)). `report` alone prints the event counters (queued, sent, dropped, pending), whether MQTT is up, and how many of the last boot's log lines survived its reset; `report test` queues a synthetic `info` event with this boot's lines so far, to check the path end to end. Over MQTT only with full access: `report test` sends |
 | `mqtt …` | Serial only. `mqtt` alone prints the MQTT command mode (`full`/`read-only`) and where the broker credentials came from; `mqtt auth <user> <pass>` stores them in NVS, `mqtt auth clear` removes them — both applied at the next boot |
 | `gemini …` | Serial only. `gemini` alone prints whether a key is set, where it came from (`nvs`/`credentials.h`/`env`/`none`), its length and what the last response said (`untested`/`ok`/`rejected`/`exhausted`); `gemini auth <key>` stores a key in NVS, `gemini auth clear` removes it — both applied from the next request. The key is never printed or logged (issue #845) |
 
@@ -168,43 +168,9 @@ command for it yet, so re-running one means a reset.
 The `sound`/`servo`/`led` commands are the only producers for `peripheral_task`'s queue — without them the task and every `PERIPH_CMD_*` case are unreachable.
 
 
-### Error events (`robocar/events`)
-
-The robot publishes Sentry-shaped JSON on `robocar/events` at QoS 1, and the
-host bridge in `tools/glitchtip/` forwards it to GlitchTip, grouped by
-firmware release ([ADR-033](../../../../../docs/decisions/ADR-033-robocar-error-reporting.md)).
-The JSON contract is in `main/event_report_core.h`.
-
-- **Reset events.** On a boot whose reset was not deliberate, one event goes
-  out once MQTT connects: `Reset: <reason>`, fingerprinted by the reason,
-  tagged with `reset_reason`, `build_sha`, `version` and `device`. Power-on,
-  `SW` (OTA, reboot), `EXT` (the reset button), `USB` (flashing, or opening
-  the console), `JTAG` and `DEEPSLEEP` send nothing; every other reason,
-  including `BROWNOUT` (issue #991), does.
-- **Breadcrumbs.** Every ESP_LOG line that passes the UART0 mirror's hook is
-  also kept in a 32-line ring in RTC memory, cut to 95 characters. A panic,
-  watchdog or software reset leaves that memory alone, so the reset event
-  carries the last lines before the reset. Power-on clears it. Whether a
-  brownout keeps it is to be measured on the bench: `report` says whether the
-  last boot's ring survived, and the event carries the tag `breadcrumbs`:
-  `survived`, `lost` (RTC memory did not keep it), `empty` (kept, but the
-  UART0 mirror's hook was not running, so nothing was written) or
-  `unavailable` (kept, but there was no PSRAM to copy it into). The panic
-  handler's own output does not pass through the hook, so the ring ends at the
-  last ESP_LOG line before a crash, not at the panic message.
-- **Held in RAM until MQTT connects.** A reset event that has not been
-  published when the robot resets again is lost, and that boot's capture
-  replaces the ring it carried. A brownout loop that never reaches MQTT
-  reports nothing; the J15 capture is still the record for that case.
-- **No wall clock.** The robot runs no SNTP, so `timestamp` is 0 and the
-  bridge stamps the time it received the event; `extra.uptime_ms` is the
-  robot's uptime when the event was queued.
-
 ## Don't
 
 - Don't give `mqtt_command.c` a second, parallel notion of what a command does. It classifies a line and calls exactly two injected callbacks (`movement`, wired to `dispatch_movement()`; `console_line`, wired to `execute_console_line()`) — both already shared with the serial console. Adding logic that calls `motor_controller.c`, a peripheral driver, or a handler directly from `mqtt_command.c` or its callbacks would create a second entry point that can silently diverge from the console's, and for movement specifically would bypass the obstacle reflex the same way a direct `motor_controller.c` call does
 - Don't widen the MQTT read-only allow-list to prefix matches, or add a command to it without reading its handler in `main.c` end to end. Read-only mode is the only thing between an anonymous LAN publisher and the robot (issue #626), and the handlers parse loosely enough that `voice <anything>` switches and persists the persona. Exact whole lines, each pinned in `test_read_only_allows_status_commands`
 - Don't move the `mqtt` console command into `execute_console_line()`, or add `"mqtt"` to `mqtt_command.c`'s forwarded prefixes. It sets the broker credentials, so reaching it over MQTT would let an anonymous publisher unlock itself; `test_credential_command_is_never_reachable` pins it
-- Don't log from `event_report_breadcrumb()` or anything it calls, and don't let it wait. It runs inside the esp_log hook on whichever task logged, the 30 Hz executor included; a log line from it re-enters the hook. It takes a slot from an atomic counter and copies, with no lock
-- Don't move `event_report_boot_capture()` after the first ESP_LOG line in `app_main`. The previous boot's breadcrumbs are still in the RTC ring until then, and the first line logged overwrites them
 - Don't skip `mqtt_command_extract_line()`'s fragmentation check (`current_data_offset != 0 || total_data_len != data_len`) when touching the MQTT command path. `event->data` is a fragment, not the whole payload, once a message exceeds esp-mqtt's buffer — the topic ("target") is resolved once on the first `MQTT_EVENT_DATA` callback, and dispatching on a later fragment acts on a truncated command before the rest of it has arrived
