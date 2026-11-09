@@ -115,6 +115,12 @@ sys.path.insert(0, str(HERE.parent))  # hardware/pan-tilt, for common.*
 from common import fixtures as fx  # noqa: E402
 from common.check import Body  # noqa: E402
 
+# Sizes and fits from tools/cadstd (ADR-030); the print is JLC3DP PA12 (MJF).
+from cadstd import MIN_WALL, fit, hole, insert_hole  # noqa: E402
+from cadstd.fasteners import M2, M3  # noqa: E402
+
+PROCESS = "mjf"
+
 MIN, CEN, MAX = Align.MIN, Align.CENTER, Align.MAX
 
 # --------------------------------------------------------------------------
@@ -129,7 +135,7 @@ HEAD_FLIPPED = True
 FIT = 0.3  # case side clearance: a 12.6 window takes TowerPro's 12.2 headline
 FIT_END = 0.35  # case end clearance: a 23.3 window takes TowerPro's 22.8 headline
 FIT_TAB = 0.6  # tab-span cavity: 31.5 + 1.2 = 32.7 takes even the SG90's 32.3
-GAP = 0.5  # running clearance between parts that move relative to each other
+GAP = fit("running", PROCESS)  # between parts that move relative to each other
 SWEEP_MARGIN = 1.0  # the head/cradle proxy is grown by this before cutting
 TILT_CUT = 46.0  # the yoke clears the head over +-this (check sweeps +-45)
 TILT_STEP = 2.0
@@ -156,15 +162,15 @@ TB_SHOULDER_GAP = 1.0  # as printed; set to ~0.3 with a feeler via the slotted f
 TB_SHOULDER_H = 0.6  # the shoulder stands this proud of the boss face
 OUTRIGGER_SLOT = 1.0  # foot holes slotted +-this in Y to set the shoulder gap
 
-WALL = 2.0
+WALL = MIN_WALL
 # Servo tab holes and the keeper screws are TAPPED M2 (drill Ø1.6, tap M2x0.4)
 # and take M2 machine screws. Tapping avoids a self-tapper's forming load, but
 # a loaded 60-degree thread still pushes the web outward (about tan 30 = 0.58 of
 # the axial load), and the web beside the MG90D case window is ~0.8 mm after
 # tapping: tighten those four screws by feel (README "Walls"; coupon.stl).
-PILOT = 1.6
+PILOT = M2.pilot  # 1.6
 SCREW_CORE = 1.55  # stand-in: an M2 machine screw's minor diameter
-INSERT_HOLE = 3.2  # M2 x 3 heat-set insert (OD 3.5 knurl) in PA12
+INSERT_HOLE = insert_hole(M2, PROCESS)  # M2 x 3 heat-set insert (OD 3.5 knurl)
 PAN_SERVO_LIFT = 2.0  # pan servo base above the chassis plate (F + 2 mm still clears)
 CHASSIS_FLANGE_T = 3.0
 CHASSIS_PLATE_T = 3.0  # acrylic 2WD plate, a stand-in in assembly()
@@ -176,7 +182,10 @@ M3_HOLES = [(-20.0, 16.0), (-20.0, -16.0), (15.0, 16.0), (15.0, -16.0)]  # world
 # M3 x 10 goes in from under the acrylic. A key from above cannot reach the
 # front pair past the cap and flange (r 21.8), nor the +Y rear one past the gutter.
 M3_BOSS_R, M3_BOSS_TOP = 4.5, 6.0
-M3_NUT_AF, M3_NUT_DEPTH = 5.8, 2.6  # pocket for an ISO 4032 M3 nut (AF 5.5 x 2.4)
+# Pocket for an ISO 4032 M3 nut (AF 5.5 x 2.4): a close fit across the flats
+# (5.8), 0.2 deeper than the nut.
+M3_NUT_AF = hole(M3.nut_af, "close", PROCESS)
+M3_NUT_DEPTH = M3.nut_t + 0.2
 
 # Panned centre of mass behind the lens; derived by panned_com() below and
 # frozen here so the geometry is deterministic. Re-run `python design.py`
@@ -259,7 +268,7 @@ HORN_ARM_Z0 = ZS + 2.9  # fixture horn arm 2.9..4.5 above the case
 Z_HORN_TOP = ZS + 4.5
 KEY_FLOAT = 1.0  # axial float of the horn in the keeper, each way
 HORN_TRIM_R = 10.0  # cross horn arms cut to this radius (flush cutters)
-KEY_FIT = 0.3  # arm stub to slot wall, per side; the ribs below take it up
+KEY_FIT = fit("slide", PROCESS)  # arm stub to slot wall, per side; the ribs take it up
 KEY_RIB_R, KEY_RIB_AT, KEY_CRUSH = (
     0.6,
     7.0,
@@ -955,7 +964,7 @@ def build_tower() -> Part:
             PILOT / 2, tab_top - 0.01, min(tab_top + 6.5, Z_CHAMBER + 0.5), x=x
         )
     for x, y in M3_HOLES:  # M3 clearance + captive nut pocket from the top
-        t = t - _cyl_z(1.7, -1, M3_BOSS_TOP + 1, x=x, y=y)
+        t = t - _cyl_z(M3.clearance / 2, -1, M3_BOSS_TOP + 1, x=x, y=y)
         t = t - Pos(x, y, M3_BOSS_TOP - M3_NUT_DEPTH) * _hex_prism(
             M3_NUT_AF, M3_NUT_DEPTH + 1
         )
@@ -1098,7 +1107,9 @@ def chassis_screws_world() -> list[Part]:
     for x, y in M3_HOLES:
         out.append(_cyl_z(2.75, z_under - 3.0, z_under, x=x, y=y))  # head
         out.append(_cyl_z(1.45, z_under, z_under + 10.0, x=x, y=y))
-        out.append(Pos(x, y, M3_BOSS_TOP - 2.4) * _hex_prism(5.5, 2.4))  # nut
+        out.append(
+            Pos(x, y, M3_BOSS_TOP - M3.nut_t) * _hex_prism(M3.nut_af, M3.nut_t)
+        )  # nut
     return out
 
 

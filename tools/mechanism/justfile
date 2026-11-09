@@ -3,7 +3,7 @@
 # from the repo root as `just mechanism::<recipe>`.
 
 _root := source_directory() / "../.."
-_run := "cd " + source_directory() + " && PYTHONPATH=" + source_directory() + " uv run --quiet"
+_run := "cd " + source_directory() + " && PYTHONPATH=" + source_directory() + ":" + _root + "/tools uv run --quiet"
 
 # Unit tests (pytest; the render test skips without off-screen VTK)
 test:
