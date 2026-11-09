@@ -11,6 +11,7 @@ ESP-IDF's backtrace already points caller frames at the call instruction
 from __future__ import annotations
 
 import bisect
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -125,18 +126,34 @@ def load_line_table(path: Path) -> LineTable:
         return LineTable(rows=_line_rows(dwarf), functions=_functions(dwarf))
 
 
-class ElfStore:
-    """LineTables by build SHA from `<dir>/<sha>.elf`, each parsed once."""
+Fetcher = Callable[[str, "str | None"], "Path | None"]
 
-    def __init__(self, directory: Path) -> None:
+
+class ElfStore:
+    """LineTables by build SHA from `<dir>/<sha>.elf`, each parsed once.
+
+    With a `fetch` callable, a SHA with no local ELF is fetched once per
+    bridge run (release_elf.fetch_release_elf); a failed fetch is not retried
+    until restart, so a burst of crashes from a local build costs one request.
+    """
+
+    def __init__(self, directory: Path, fetch: Fetcher | None = None) -> None:
         self.directory = directory
+        self._fetch = fetch
+        self._tried: set[str] = set()
         self._cache: dict[str, LineTable] = {}
 
-    def table_for(self, sha: str) -> LineTable | None:
-        """None when no ELF is kept for `sha`; a miss is re-checked next time."""
+    def table_for(self, sha: str, version: str | None = None) -> LineTable | None:
+        """None when no ELF is kept (or fetched) for `sha`."""
         if sha not in self._cache:
             path = self.directory / f"{sha}.elf"
             if not path.is_file():
-                return None
+                if self._fetch is None or sha in self._tried:
+                    return None
+                self._tried.add(sha)
+                fetched = self._fetch(sha, version)
+                if fetched is None:
+                    return None
+                path = fetched
             self._cache[sha] = load_line_table(path)
         return self._cache[sha]

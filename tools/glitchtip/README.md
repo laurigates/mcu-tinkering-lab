@@ -66,8 +66,15 @@ just glitchtip::keep-elf    # copies build/robocar-unified.elf to elf/<embedded 
 
 The SHA is read out of the ELF, not from git, so an older build is filed under
 the commit it came from. Without a matching ELF the event still arrives,
-tagged `symbolicated=false`, with raw addresses. Fetching release ELFs
-automatically is planned with the core-dump work (ADR-033, PR 3).
+tagged `symbolicated=false`, with raw addresses.
+
+For a released build there is nothing to keep: when `elf/<build_sha>.elf` is
+missing, the bridge downloads `robocar-unified.elf` from the
+`robocar-unified-v<version>` GitHub release (attached by
+`build-firmware.yml`) and keeps it only if the SHA embedded in it equals the
+event's `build_sha`. A `-dirty` build is never fetched. Set
+`ELF_RELEASE_URL` to another template (`{version}` is filled in) for a fork,
+or to empty to turn fetching off.
 
 ## Configuration (`.env`)
 
@@ -83,6 +90,7 @@ automatically is planned with the core-dump work (ADR-033, PR 3).
 | `GLITCHTIP_DSN_ROBOCAR`, `GLITCHTIP_DSN_ROBOCAR_AI` | host bridge | written by `bootstrap` |
 | `*_COMPOSE` DSNs | container bridge | written by `bootstrap` |
 | `ELF_DIR` | bridge | `tools/glitchtip/elf` |
+| `ELF_RELEASE_URL` | bridge (host run; the container keeps the default) | this repo's `robocar-unified-v{version}/robocar-unified.elf` release asset; empty turns fetching off |
 
 `bootstrap` also reads `GLITCHTIP_ORG`, `GLITCHTIP_PROJECTS`,
 `GLITCHTIP_ADMIN_EMAIL` and `GLITCHTIP_DSN_HOST` (see `bootstrap.sh`), so the

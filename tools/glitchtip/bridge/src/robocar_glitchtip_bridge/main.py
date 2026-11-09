@@ -6,6 +6,8 @@ Configuration (environment):
   GLITCHTIP_DSN_ROBOCAR     DSN of the `robocar` project     (source=firmware)
   GLITCHTIP_DSN_ROBOCAR_AI  DSN of the `robocar-ai` project  (source=planner)
   ELF_DIR                   directory of <build-sha>.elf     (default ./elf)
+  ELF_RELEASE_URL           release ELF URL, {version} filled in; empty disables
+                            (default: this repo's robocar-unified-v{version} release)
 
 The MQTT session is persistent (clean_session=False, fixed client id), so the
 broker queues QoS 1 events while the bridge is down.
@@ -25,6 +27,7 @@ import paho.mqtt.client as mqtt
 import sentry_sdk
 
 from .event import InvalidEvent, build_sha, parse_payload, route, to_sentry_event
+from .release_elf import DEFAULT_URL_TEMPLATE, fetch_release_elf, release_version
 from .symbolicate import ElfStore, lookup
 
 log = logging.getLogger("robocar-glitchtip-bridge")
@@ -73,7 +76,7 @@ def handle(
     symbolicate = None
     sha = build_sha(event)
     if "exception" in event and sha:
-        table = elves.table_for(sha)
+        table = elves.table_for(sha, release_version(event))
         if table is None:
             log.info("no %s/%s.elf: frames stay unsymbolicated", elves.directory, sha)
         else:
@@ -90,13 +93,22 @@ def handle(
     return sent
 
 
+def _fetch(sha: str, version: str | None, *, directory: Path, template: str):
+    return fetch_release_elf(sha, version, directory, template)
+
+
 def main() -> None:
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
     )
     url = urlparse(os.environ.get("MQTT_URL", "mqtt://localhost:1883"))
     topic = os.environ.get("MQTT_TOPIC", "robocar/events")
-    elves = ElfStore(Path(os.environ.get("ELF_DIR", "elf")))
+    elf_dir = Path(os.environ.get("ELF_DIR", "elf"))
+    template = os.environ.get("ELF_RELEASE_URL", DEFAULT_URL_TEMPLATE)
+    elves = ElfStore(
+        elf_dir,
+        fetch=functools.partial(_fetch, directory=elf_dir, template=template),
+    )
     clients = make_clients()
     if not clients:
         sys.exit("no GLITCHTIP_DSN_* set; run `just glitchtip::bootstrap` first")

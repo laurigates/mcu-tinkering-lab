@@ -1,8 +1,4 @@
 import shutil
-import subprocess
-from pathlib import Path
-
-import pytest
 
 from robocar_glitchtip_bridge.symbolicate import (
     ElfStore,
@@ -10,9 +6,6 @@ from robocar_glitchtip_bridge.symbolicate import (
     load_line_table,
     lookup,
 )
-
-TINY_C = Path(__file__).parents[2] / "fixtures" / "tiny.c"
-ELF_MAGIC = b"\x7fELF"
 
 
 def test_lookup_hand_built_table():
@@ -30,26 +23,6 @@ def test_lookup_function_without_line_rows():
     table = LineTable(rows=[], functions=[(0x200, 0x240, "g")])
     hit = lookup(table, 0x210)
     assert (hit.function, hit.filename, hit.lineno) == ("g", None, None)
-
-
-@pytest.fixture(scope="module")
-def tiny_elf(tmp_path_factory) -> Path:
-    """Compile tiny.c to an ELF object with DWARF; skip if this host can't."""
-    out = tmp_path_factory.mktemp("elf") / "fixture.elf"
-    attempts = []
-    if shutil.which("clang"):  # macOS: cc emits Mach-O, so ask clang for an ELF target
-        attempts.append(["clang", "--target=x86_64-linux-gnu"])
-    if shutil.which("cc"):
-        attempts.append(["cc"])
-    for cmd in attempts:
-        done = subprocess.run(
-            [*cmd, "-g", "-O0", "-c", "-o", str(out), str(TINY_C)],
-            capture_output=True,
-            check=False,
-        )
-        if done.returncode == 0 and out.read_bytes()[:4] == ELF_MAGIC:
-            return out
-    pytest.skip("no compiler here produces an ELF object")
 
 
 def test_symbolicates_compiled_elf(tiny_elf):

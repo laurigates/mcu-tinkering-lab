@@ -81,8 +81,11 @@ services:
       GLITCHTIP_DSN_ROBOCAR: ${GLITCHTIP_DSN_ROBOCAR_COMPOSE:-}
       GLITCHTIP_DSN_ROBOCAR_AI: ${GLITCHTIP_DSN_ROBOCAR_AI_COMPOSE:-}
       ELF_DIR: /elf
+      # ELF_RELEASE_URL is left to the bridge's default (this repo's
+      # releases): compose interpolation would end ${...} at the "}" of the
+      # template's {version}. Release ELFs are fetched into elf/, hence rw.
     volumes:
-      - ./elf:/elf:ro
+      - ./elf:/elf
     restart: unless-stopped
 
 volumes:
