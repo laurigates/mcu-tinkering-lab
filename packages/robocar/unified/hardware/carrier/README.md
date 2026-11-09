@@ -366,7 +366,9 @@ paying for the order.
    carrier gate fails or anything that feeds the board has uncommitted
    changes, and writes `<sha7> <pcb8>` (the commit and the stamp's
    board-hash prefix) on the silkscreen under the title, on a plotting copy
-   of the board (`board.toml` `[fab] provenance_at`). Outputs, under
+   of the board (`board.toml` `[fab] provenance_at`). A
+   `CARRIER_FAB_ALLOW_DIRTY=1` run writes `<sha7>*<pcb8>`, the same width,
+   and `-dirty` in the file names; never order from it. Outputs, under
    `robocar-unified-carrier/output/`, named for the commit's first 7 hex
    digits:
 

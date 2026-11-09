@@ -359,7 +359,13 @@ class FabTests(unittest.TestCase):
                 "demo-carrier-fab-0123456-dirty.zip",
             ],
         )
-        self.assertIn('(gr_text "0123456-dirty ', self.plotted[0])
+        text = f"0123456*{self.board_sha[:8]}"
+        self.assertIn(f'(gr_text "{text}"\n', self.plotted[0])
+        self.assertNotIn("-dirty", self.plotted[0])
+        with open(self.out / "demo-carrier-fab-0123456-dirty.csv", newline="") as f:
+            (row,) = list(csv.DictReader(f))
+        self.assertEqual(row["dirty"], "yes")
+        self.assertEqual(row["silk_text"], text)
 
     def test_missing_position_fails(self):
         (self.project / "hardware/carrier/board.toml").write_text(

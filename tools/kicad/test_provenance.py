@@ -44,10 +44,30 @@ class Naming(unittest.TestCase):
             provenance.tag("abc", False)
 
     def test_silk_text_is_commit_then_board_hash_prefix(self):
-        self.assertEqual(provenance.silk_text("0123456", PCB_SHA), "0123456 fedcba98")
+        self.assertEqual(provenance.silk_text(SHA, False, PCB_SHA), "0123456 fedcba98")
+
+    def test_dirty_silk_text_marks_the_separator(self):
+        self.assertEqual(provenance.silk_text(SHA, True, PCB_SHA), "0123456*fedcba98")
+
+    def test_silk_text_width_does_not_depend_on_dirty(self):
+        # A dirty fab must fit wherever the clean one passed DRC: '-dirty' grew
+        # the balancebot text into J3's INT label. '*' takes the space's place,
+        # and KiCad's stroke font gives both the same advance.
+        clean = provenance.silk_text(SHA, False, PCB_SHA)
+        dirty = provenance.silk_text(SHA, True, PCB_SHA)
+        self.assertEqual(len(clean), provenance.SILK_LEN)
+        self.assertEqual(len(dirty), provenance.SILK_LEN)
+        self.assertEqual(provenance.SILK_LEN, 16)
         self.assertEqual(
-            provenance.silk_text("0123456-dirty", PCB_SHA), "0123456-dirty fedcba98"
+            [i for i, (a, b) in enumerate(zip(clean, dirty)) if a != b],
+            [provenance.SHA_LEN],
         )
+
+    def test_silk_text_refuses_short_inputs(self):
+        with self.assertRaises(KicadError):
+            provenance.silk_text("abc", False, PCB_SHA)
+        with self.assertRaises(KicadError):
+            provenance.silk_text(SHA, False, "fedc")
 
     def test_every_output_name_carries_the_tag(self):
         n = provenance.names("balancebot-carrier", "0123456")
