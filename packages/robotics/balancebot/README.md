@@ -103,7 +103,11 @@ does not match the board:
 the robot upright; if it still refuses, switch `mount` and `save`. "At rest"
 means the accelerometer reads 1 g ± 0.15 g and the gyro under 10 °/s
 (`IMU_STILL_*` in `src/imu_filter.h`); a moving sample is not refused by this
-check, and the tilt cutoff still applies.
+check, and the tilt cutoff still applies. `arm` checks the mount core 1
+applies: a `mount` typed just before it (a paste, a script) is waited for, a
+few control ticks at most. Core 1 checks again when it handles the arm; if it
+refuses, `arm` prints `ERR: core 1 refused arm: …` instead of `OK`, and `stat`
+counts the refusals.
 
 ### Tuning procedure
 

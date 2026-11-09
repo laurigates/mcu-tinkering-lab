@@ -15,6 +15,7 @@ pico_sdk_init()
 
 add_executable(balancebot
     src/main.c
+    src/arm_gate.c
     src/balance_control.c
     src/cli.c
     src/crc32.c
@@ -49,7 +50,7 @@ target_compile_options(balancebot PRIVATE -Wall -Wextra)
 # lqr.c is covered too: its double math is the core-0 solve, written out
 # explicitly, and its core-1 helpers are float.
 set_source_files_properties(src/balance_control.c src/pid.c src/lqr.c src/imu_filter.c
-    PROPERTIES COMPILE_OPTIONS -Wdouble-promotion)
+    src/arm_gate.c PROPERTIES COMPILE_OPTIONS -Wdouble-promotion)
 
 target_link_libraries(balancebot
     pico_stdlib

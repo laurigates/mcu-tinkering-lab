@@ -113,8 +113,14 @@ typedef struct {
     float pos_m;           // wheel travel since arming (commanded), m
     uint8_t imu_mount;     // imu_mount_t core 1 is applying
 
-    // Last sample's gravity check (zeroed if the read failed).
+    // Last sample's gravity check under that tick's imu_mount (zeroed if the
+    // read failed).
     imu_gravity_check_t gravity;
+    // CMD_ARMs core 1 refused because a still IMU read upside down under the
+    // mount it applied, and the body Z of the last one. Core 0 compares the
+    // count across an `arm` to report a refusal its own check did not catch.
+    uint32_t arm_refusals;
+    float arm_refused_up_g;
 } balance_snapshot_t;
 
 #endif  // BALANCEBOT_IPC_H

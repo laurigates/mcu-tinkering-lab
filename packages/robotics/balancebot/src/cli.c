@@ -17,6 +17,9 @@
 #include "telemetry.h"
 
 #define CLI_LINE_MAX 96
+// Longest core 0 waits for core 1 to drain what it was sent: a few ticks at the
+// 2 ms nominal period, or the 3 ms fallback with no IMU interrupt.
+#define CLI_CORE1_SYNC_TIMEOUT_US 20000
 
 static balance_params_t *mirror;
 static char line[CLI_LINE_MAX];
@@ -29,6 +32,10 @@ static lqr_result_t lqr_res;
 static int lqr_status = LQR_ERR_INVALID;  // status of the last solve attempt
 static bool lqr_have_k;                   // a K matching *mirror was handed to core 1
 static char boot_note[112];               // printed after the banner and in `stat`
+
+// The first snapshot tick that reflects every command sent through note_sent().
+static uint32_t core1_sync_tick;
+static bool core1_sync_pending;
 
 static const char *state_name(uint8_t s)
 {
@@ -159,6 +166,37 @@ static balance_cmd_t mount_cmd(uint32_t mount)
     return (balance_cmd_t){.cmd = CMD_SET_IMU_MOUNT, .imu_mount = (uint8_t)mount};
 }
 
+// Call right after queueing a command whose effect a later check reads from
+// the snapshot. Core 1 drains its queue at the start of a tick and publishes
+// at the end, so with tick T published after the add, the command is drained
+// no later than the tick that publishes T + 2.
+static void note_sent(void)
+{
+    balance_snapshot_t s;
+    balance_control_get_snapshot(&s);
+    core1_sync_tick = s.tick + 2u;
+    core1_sync_pending = true;
+}
+
+// Fill *s with a snapshot that reflects every command note_sent() covered,
+// waiting a few ticks at most. Returns false, with the latest snapshot in *s,
+// if core 1 did not get there within CLI_CORE1_SYNC_TIMEOUT_US.
+static bool wait_core1(balance_snapshot_t *s)
+{
+    const absolute_time_t deadline = make_timeout_time_us(CLI_CORE1_SYNC_TIMEOUT_US);
+    for (;;) {
+        balance_control_get_snapshot(s);
+        if (!core1_sync_pending || (int32_t)(s->tick - core1_sync_tick) >= 0) {
+            core1_sync_pending = false;
+            return true;
+        }
+        if (absolute_time_diff_us(get_absolute_time(), deadline) <= 0) {
+            return false;
+        }
+        sleep_us(100);
+    }
+}
+
 static void print_lqr(void)
 {
     if (!lqr_have_k) {
@@ -204,6 +242,7 @@ static bool sync_all(bool include_params)
         printf("ERR: command queue full — nothing sent, retry\n");
         return false;
     }
+    note_sent();  // may carry a mount change
     lqr_have_k = (lqr_status == LQR_OK);
     return true;
 }
@@ -333,8 +372,46 @@ static void cmd_mount(const char *arg)
         printf("ERR: command queue full — mount still %s\n", mount_name(mirror->imu_mount));
         return;
     }
+    note_sent();
     mirror->imu_mount = mount;
     printf("OK mount = %s ('save' to keep)\n", mount_name(mount));
+}
+
+static void print_upside_down(const char *prefix, float up_g, uint32_t mount)
+{
+    printf("ERR: %sIMU reads upside down (body Z = %.2f g); check 'mount' (now %s)\n", prefix,
+           (double)up_g, mount_name(mount));
+}
+
+// At rest, body Z below -0.5 g is a wrong `mount`, not a lean: the controller
+// would push the wrong way. The check runs on a snapshot taken after any
+// `mount` just sent (a paste, a script) has reached core 1, so it uses the
+// mount core 1 applies. Core 1 checks again under its mount when CMD_ARM
+// runs; a refusal there shows in arm_refusals and is reported here.
+static void cmd_arm(void)
+{
+    balance_snapshot_t s;
+    wait_core1(&s);
+    if (s.state != BAL_STATE_RUN && imu_gravity_refuses_arm(&s.gravity)) {
+        print_upside_down("", s.gravity.up_g, s.imu_mount);
+        return;
+    }
+    const uint32_t refusals = s.arm_refusals;
+    balance_cmd_t cmd = {.cmd = CMD_ARM};
+    if (!balance_control_send_cmd(&cmd)) {
+        printf("ERR: command queue full — arm not sent\n");
+        return;
+    }
+    note_sent();
+    if (!wait_core1(&s)) {
+        printf("OK sent, but core 1 has not answered — check 'stat'\n");
+        return;
+    }
+    if (s.arm_refusals != refusals) {
+        print_upside_down("core 1 refused arm: ", s.arm_refused_up_g, s.imu_mount);
+        return;
+    }
+    printf("OK\n");
 }
 
 static float battery_volts(void)
@@ -369,6 +446,10 @@ static void cmd_stat(void)
     printf("battery:  %.2f V\n", (double)battery_volts());
     printf("saves:    %lu (last %s)\n", (unsigned long)s.save_count,
            s.save_count == 0 ? "n/a" : (s.save_ok ? "ok" : "FAILED"));
+    if (s.arm_refusals != 0) {
+        printf("arm:      %lu refused by core 1, IMU upside down (last body Z = %.2f g)\n",
+               (unsigned long)s.arm_refusals, (double)s.arm_refused_up_g);
+    }
     printf("stream:   %s\n", telemetry_is_enabled() ? "on" : "off");
     if (boot_note[0] != '\0') {
         printf("note:     %s\n", boot_note);
@@ -430,18 +511,7 @@ static void handle_line(char *l)
             printf("usage: stream on|off [hz]\n");
         }
     } else if (strcmp(tok, "arm") == 0) {
-        // At rest, body Z below -0.5 g is a wrong `mount`, not a lean: the
-        // controller would push the wrong way. Core 1 refuses it too.
-        balance_snapshot_t s;
-        balance_control_get_snapshot(&s);
-        if (s.state != BAL_STATE_RUN && imu_gravity_refuses_arm(&s.gravity)) {
-            printf("ERR: IMU reads upside down (body Z = %.2f g); check 'mount' (now %s)\n",
-                   (double)s.gravity.up_g, mount_name(s.imu_mount));
-            return;
-        }
-        balance_cmd_t cmd = {.cmd = CMD_ARM};
-        balance_control_send_cmd(&cmd);
-        printf("OK\n");
+        cmd_arm();
     } else if (strcmp(tok, "disarm") == 0) {
         balance_cmd_t cmd = {.cmd = CMD_DISARM};
         balance_control_send_cmd(&cmd);
