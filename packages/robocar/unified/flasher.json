@@ -6,6 +6,7 @@
   "appBinaryName": "robocar-unified.bin",
   "otaAssetName": "robocar-unified.bin",
   "elfAssetName": "robocar-unified.elf",
+  "releaseFlashParts": true,
   "otaNotifyTopic": "robocar-unified/ota/notify",
   "category": "robocar",
   "flashMode": "usb",

@@ -54,6 +54,22 @@ and the `plan` console command to inspect or retune it live.
 
 This project builds in a container — no local ESP-IDF install required.
 
+`flash` builds before it writes, and refuses unless the image embeds the build
+SHA it was asked for, so the robot never runs a stale build by accident:
+
+```bash
+just robocar-unified::flash            # this checkout (HEAD, "-dirty" with uncommitted changes)
+just robocar-unified::flash 975a2d98   # a commit or branch, built in tmp/flash/<sha>
+just robocar-unified::flash v0.2.17    # a release: its prebuilt parts, or its commit built
+```
+
+A release tag uses the parts attached to the GitHub release when it carries all
+four (releases from this change on); older releases build the tagged commit.
+esptool reads back what it wrote, so a write that did not land fails the recipe.
+The boot banner (`build <sha>`) and `ota` on the console show what is running.
+Building from a `git worktree` cannot embed its SHA (the build container cannot
+read the worktree's `.git`), so `flash` refuses there; flash a commit instead.
+
 ```bash
 # From repo root
 just robocar-unified::build

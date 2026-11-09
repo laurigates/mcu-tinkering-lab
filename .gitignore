@@ -82,3 +82,6 @@ coverage.xml
 # Docker volumes (if accidentally created locally)
 .env
 .env.local
+
+# Builds of other commits and staged release parts for `just <project>::flash <ref>`
+/tmp/flash/
