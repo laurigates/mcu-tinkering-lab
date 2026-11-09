@@ -122,6 +122,23 @@
 #define LOG_MIRROR_TASK_CORE 1
 
 // ========================================
+// Error events to GlitchTip (ADR-033)
+// ========================================
+// Sentry-shaped JSON on this topic at QoS 1; tools/glitchtip/bridge forwards
+// it to GlitchTip. See event_report.h.
+#define EVENT_REPORT_TOPIC "robocar/events"
+// A reset event, a `report test` or two: events are rare, and one that finds
+// the queue full is dropped and counted rather than waited for.
+#define EVENT_REPORT_QUEUE_DEPTH 4
+// Pause between checks while MQTT is down, and after a failed publish.
+#define EVENT_REPORT_RETRY_MS 2000
+// Renders one event with cJSON (~4 kB of JSON with 32 breadcrumbs, on the
+// heap) and calls esp_mqtt_client_publish(); no TLS on this task.
+#define EVENT_REPORT_TASK_STACK_SIZE 4096
+#define EVENT_REPORT_TASK_PRIORITY 2
+#define EVENT_REPORT_TASK_CORE 1
+
+// ========================================
 // OTA Configuration
 // ========================================
 #define OTA_ENABLED 1

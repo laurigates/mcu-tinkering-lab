@@ -393,6 +393,18 @@ if(CJSON_FOUND)
     )
     add_test(NAME gemini_parse COMMAND test_gemini_parse)
 
+    # GlitchTip event JSON and the RTC breadcrumb ring (ADR-033): the shape
+    # tools/glitchtip/bridge parses, garbage RTC memory after power-on, and a
+    # line torn by a reset.
+    add_executable(test_event_report_core
+        "${MAIN_SRC_DIR}/event_report_core.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/test_event_report_core.c"
+    )
+    target_include_directories(test_event_report_core PRIVATE ${CJSON_INCLUDE_DIRS})
+    target_link_directories(test_event_report_core PRIVATE ${CJSON_LIBRARY_DIRS})
+    target_link_libraries(test_event_report_core PRIVATE ${CJSON_LIBRARIES})
+    add_test(NAME event_report_core COMMAND test_event_report_core)
+
     add_executable(test_voice_history
         "${MAIN_SRC_DIR}/voice_history.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/test_voice_history.c"

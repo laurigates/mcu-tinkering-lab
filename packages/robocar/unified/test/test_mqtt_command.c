@@ -291,7 +291,7 @@ static void test_dispatch_routes_console_commands_to_console_callback_only(void)
     static const char *const lines[] = {
         "plan resume",     "voice quiet 30",    "trace reset",  "snap 3",      "listen 5",
         "mic dump 10",     "cam gainceiling 4", "servo pan 20", "led 255 0 0", "sound beep",
-        "gpio mode 3 out", "idle gaze off",     "ota postpone", "ota check",
+        "gpio mode 3 out", "idle gaze off",     "ota postpone", "ota check",   "report test",
     };
     for (size_t i = 0; i < sizeof(lines) / sizeof(lines[0]); i++) {
         recorder_reset(&r);
@@ -503,6 +503,9 @@ static void test_read_only_refuses_state_changing_commands(void)
         "gpio mode 3 out",
         "gpio set 3 1",
         "gpio get 3",
+        /* report: `report test` publishes an event */
+        "report test",
+        "report",
         /* near misses of allow-listed lines */
         "planx",
         "servos",
