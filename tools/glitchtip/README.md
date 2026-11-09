@@ -119,6 +119,31 @@ event's `build_sha`. A `-dirty` build is never fetched. Set
 `ELF_RELEASE_URL` to another template (`{version}` is filled in) for a fork,
 or to empty to turn fetching off.
 
+## Claude Code (MCP)
+
+GlitchTip has a built-in [MCP server](https://glitchtip.com/documentation/mcp)
+on `/mcp` (Streamable HTTP), turned on in `compose.yml` with
+`GLITCHTIP_ENABLE_MCP`. The repo's `.mcp.json` registers it as `glitchtip`, so
+Claude Code in this repo gets its tools (`list_issues`, `get_issue`,
+`get_latest_event`, `get_event`, `list_projects`, and the rest) once the
+server is reachable and a token is in Claude Code's environment:
+
+```sh
+just glitchtip::mcp-env   # prints export GLITCHTIP_API_TOKEN=... and GLITCHTIP_MCP_URL=...
+```
+
+Add those two lines to your shell profile (or wherever you keep tokens) and
+restart Claude Code; `/mcp` should list `glitchtip` as connected. The token is
+the read-only one `bootstrap` creates, so an agent can read issues but
+`update_issue` is refused (`Token lacks required scope`); resolve issues in
+the UI. Without the token, or with the stack down, `/mcp` shows `glitchtip`
+as failed to connect, which is harmless. To sign in with OAuth as your own
+user (and your user's permissions, `update_issue` included) instead of the
+token, add the server without the header at local scope:
+`claude mcp add --transport http glitchtip http://localhost:8000/mcp`.
+
+`just glitchtip::issues` / `::event` read the same data without MCP.
+
 ## Configuration (`.env`)
 
 | Variable | Used by | Default |
@@ -133,7 +158,7 @@ or to empty to turn fetching off.
 | `GLITCHTIP_DSN_ROBOCAR`, `GLITCHTIP_DSN_ROBOCAR_AI` | host bridge | written by `bootstrap` |
 | `*_COMPOSE` DSNs | container bridge | written by `bootstrap` |
 | `ELF_DIR` | bridge | `tools/glitchtip/elf` |
-| `GLITCHTIP_API_TOKEN`, `GLITCHTIP_ORG_SLUG` | `issues`, `event` recipes | written by `bootstrap` |
+| `GLITCHTIP_API_TOKEN`, `GLITCHTIP_ORG_SLUG` | `issues`, `event`, `mcp-env` recipes | written by `bootstrap` |
 | `ELF_RELEASE_URL` | bridge (host run; the container keeps the default) | this repo's `robocar-unified-v{version}/robocar-unified.elf` release asset; empty turns fetching off |
 
 `bootstrap` also reads `GLITCHTIP_ORG`, `GLITCHTIP_PROJECTS`,

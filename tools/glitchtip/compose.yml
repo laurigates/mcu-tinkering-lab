@@ -23,6 +23,9 @@ x-environment: &glitchtip-environment
   ENABLE_USER_REGISTRATION: "False"
   ENABLE_ORGANIZATION_CREATION: "False"
   GLITCHTIP_ENABLE_UPTIME: "False"
+  # The built-in MCP server on /mcp (Streamable HTTP), for Claude Code and
+  # other MCP clients; see README "Claude Code (MCP)".
+  GLITCHTIP_ENABLE_MCP: "True"
 
 services:
   postgres:

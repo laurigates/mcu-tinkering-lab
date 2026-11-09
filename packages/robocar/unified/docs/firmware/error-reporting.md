@@ -39,7 +39,8 @@ Moving GlitchTip to another host only changes the bridge's DSN.
 1. **Something goes wrong** on the robot: it reboots mid-drive, stops
    answering, or behaves oddly.
 2. **Look in GlitchTip** (or ask Claude to; the `glitchtip-triage` skill
-   reads issues through `just glitchtip::issues` / `glitchtip::event`). The
+   reads issues through GlitchTip's MCP server, or `just glitchtip::issues` /
+   `glitchtip::event` without it). The
    issue's `release` and `build_sha` tag name the exact build; `reset_reason`
    says what kind of reset it was; the breadcrumbs are the last 32 log lines
    before it.
