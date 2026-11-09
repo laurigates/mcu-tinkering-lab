@@ -35,6 +35,24 @@ bridge:
     export ELF_DIR="${ELF_DIR:-{{_dir}}/elf}"
     exec uv run --project bridge robocar-glitchtip-bridge
 
+[doc("List issues, most recently seen first: id, project, events, last seen, release, title (--json for the raw API)")]
+issues project="" query="is:unresolved" *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd {{quote(_dir)}}
+    set -a; source .env; set +a
+    project={{quote(project)}}
+    exec uv run --quiet --project bridge robocar-glitchtip issues \
+        ${project:+--project "$project"} --query {{quote(query)}} {{args}}
+
+[doc("Latest event of one issue: exception, frames, tags, extra, breadcrumbs (--json for the raw API)")]
+event issue *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd {{quote(_dir)}}
+    set -a; source .env; set +a
+    exec uv run --quiet --project bridge robocar-glitchtip event {{quote(issue)}} {{args}}
+
 [doc("Keep a firmware ELF for symbolication as elf/<embedded build SHA>.elf")]
 keep-elf elf=(_root / "packages/robocar/unified/build/robocar-unified.elf"):
     #!/usr/bin/env python3

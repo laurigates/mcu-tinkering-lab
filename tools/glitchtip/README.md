@@ -54,6 +54,49 @@ The `crash` fixture's addresses resolve against an ELF built from
 `elf/fixture.elf` (`clang --target=x86_64-linux-gnu -g -O0 -c`, or plain
 `cc -g -O0 -c` on Linux).
 
+## Development loop
+
+1. **The robot misbehaves:** it reboots, crashes, or the planner hits
+   something it notices. The firmware publishes one event on
+   `robocar/events`; the bridge forwards it, and GlitchTip opens an issue
+   (or counts another event on an existing one). What each kind carries is in
+   [`error-reporting.md`](../../packages/robocar/unified/docs/firmware/error-reporting.md).
+2. **Find it.** In the UI, or from the terminal:
+
+   ```sh
+   just glitchtip::issues                    # unresolved issues, newest first
+   just glitchtip::issues robocar-ai         # one project: planner notes
+   just glitchtip::issues robocar "BROWNOUT" # a GlitchTip search query
+   just glitchtip::event 2                   # the latest event of issue #2
+   ```
+
+   ```
+   #2 robocar    fatal   1x last 2026-11-09T08:01:25.121Z robocar-unified@0.0.0-fixture  LoadProhibited: PC 0x0000000a
+   ```
+   ```
+   Exception: LoadProhibited: PC 0x0000000a
+     frames (innermost first):
+       0x0000000a add tools/glitchtip/fixtures/tiny.c:3
+       0x0000002c entry tools/glitchtip/fixtures/tiny.c:8
+   Tags: source=firmware, release=robocar-unified@0.0.0-fixture, build_sha=fixture, reset_reason=PANIC, symbolicated=true
+   ```
+
+   Add `--json` to either for the API's own response.
+3. **Go to the source.** A crash names file and line once the build's ELF is
+   known (below); a reset names its reason and the last log lines before it;
+   a planner note names its trigger and the last goals. The `release` and
+   `build_sha` tags say exactly which firmware it was.
+4. **Fix and verify.** Reproduce in the host tests or the behaviour twin where
+   the code allows, flash, and check that the issue stops collecting events
+   for the new release. `report test` on the robot console (or
+   `just robocar-unified::cmd "report test"` over MQTT) sends a synthetic
+   event to confirm the whole path still works.
+
+The recipes read with a read-only API token (scopes `org:read`,
+`project:read`, `event:read`) that `bootstrap` creates and writes to `.env`
+as `GLITCHTIP_API_TOKEN`, next to `GLITCHTIP_ORG_SLUG`. Re-running
+`bootstrap` keeps the same token.
+
 ## Symbolication
 
 Crash frames are resolved against `elf/<build_sha>.elf`, where `build_sha` is
@@ -90,6 +133,7 @@ or to empty to turn fetching off.
 | `GLITCHTIP_DSN_ROBOCAR`, `GLITCHTIP_DSN_ROBOCAR_AI` | host bridge | written by `bootstrap` |
 | `*_COMPOSE` DSNs | container bridge | written by `bootstrap` |
 | `ELF_DIR` | bridge | `tools/glitchtip/elf` |
+| `GLITCHTIP_API_TOKEN`, `GLITCHTIP_ORG_SLUG` | `issues`, `event` recipes | written by `bootstrap` |
 | `ELF_RELEASE_URL` | bridge (host run; the container keeps the default) | this repo's `robocar-unified-v{version}/robocar-unified.elf` release asset; empty turns fetching off |
 
 `bootstrap` also reads `GLITCHTIP_ORG`, `GLITCHTIP_PROJECTS`,
@@ -110,4 +154,6 @@ just glitchtip::down        # add -v to delete the data volumes
 
 `bridge/src/robocar_glitchtip_bridge/event.py` and `symbolicate.py` are pure
 (validation, routing, Sentry mapping, DWARF lookup); `main.py` holds the MQTT
-and sentry-sdk I/O.
+and sentry-sdk I/O. `triage.py` is the `issues`/`event` CLI: its formatters
+are tested against API responses recorded from GlitchTip 6.2.6
+(`bridge/tests/fixtures/`); re-record them with `--json` after an upgrade.

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Create a GlitchTip admin, an organisation and the robocar projects, then
-# write each project's DSN to .env. Idempotent: re-running keeps existing
-# projects and keys.
+# write each project's DSN to .env, plus a read-only API token for
+# `just glitchtip::issues` / `::event`. Idempotent: re-running keeps existing
+# projects, keys and the token.
 #
 # GlitchTip's REST bootstrap endpoints change between versions, so this drives
 # the Django ORM through `manage.py shell` in the running web container.
@@ -40,6 +41,7 @@ OrganizationUser = apps.get_model('organizations_ext', 'OrganizationUser')
 OrganizationOwner = apps.get_model('organizations_ext', 'OrganizationOwner')
 Project = apps.get_model('projects', 'Project')
 ProjectKey = apps.get_model('projects', 'ProjectKey')
+APIToken = apps.get_model('api_tokens', 'APIToken')
 user, created = get_user_model().objects.get_or_create(email=os.environ['BS_EMAIL'])
 if created:
     user.set_password(os.environ['BS_PASSWORD'])
@@ -53,6 +55,13 @@ for name in os.environ['BS_PROJECTS'].split():
     proj, _ = Project.objects.get_or_create(name=name, organization=org)
     key = ProjectKey.objects.filter(project=proj).first() or ProjectKey.objects.create(project=proj)
     print('PROJECT', name, key.public_key.hex, proj.id)
+# Read-only token for the issue/event recipes: org, project and event read.
+token = APIToken.objects.filter(user=user, label='robocar-triage').first()
+if token is None:
+    token = APIToken.objects.create(user=user, label='robocar-triage')
+    token.add_permissions(['org:read', 'project:read', 'event:read'])
+print('TOKEN', token.token)
+print('ORG_SLUG', org.slug)
 ")
 
 # Replace (or add) KEY=value in .env.
@@ -78,6 +87,14 @@ while read -r _ name key id; do
     echo "$var=http://$key@$DSN_HOST/$id"
     found=$((found + 1))
 done < <(grep '^PROJECT ' <<<"$OUT")
+
+token=$(awk '$1 == "TOKEN" {print $2}' <<<"$OUT")
+slug=$(awk '$1 == "ORG_SLUG" {print $2}' <<<"$OUT")
+if [ -n "$token" ]; then
+    set_env GLITCHTIP_API_TOKEN "$token"
+    set_env GLITCHTIP_ORG_SLUG "$slug"
+    echo "GLITCHTIP_API_TOKEN written to .env (read-only: org, project, event)"
+fi
 
 if [ "$found" -eq 0 ]; then
     echo "no projects reported; manage.py output was:" >&2

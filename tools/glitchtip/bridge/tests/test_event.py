@@ -55,7 +55,9 @@ def test_zero_timestamp_uses_receive_time():
 
 
 def test_robot_timestamp_kept_when_set():
-    out = to_sentry_event(fixture("planner-note.json"), received_at=1234.5)
+    # The robot runs no SNTP, so its own events carry 0; a future clock would not.
+    event = {**fixture("planner-note.json"), "timestamp": 1762700000}
+    out = to_sentry_event(event, received_at=1234.5)
     assert out["timestamp"] == 1762700000.0
     assert "robot_timestamp_missing" not in out["extra"]
 
