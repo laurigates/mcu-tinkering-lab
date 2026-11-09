@@ -88,21 +88,34 @@ hidden_refs = ["H1", "H2", "H3", "H4", "J1", "J9"]
 ref_positions = { J3 = [56.6, 50.0], J4 = [5.0, 19.8], J2 = [72.5, 57.0], R4 = [48.6, 59.0], R5 = [30.4, 9.6], R6 = [30.4, 12.2], R7 = [18.6, 26.6], R8 = [71.4, 36.8], J7 = [68.0, 45.0] }
 # Seeed's reference text is below KiCad's minimum silkscreen height.
 ref_sizes = { U1 = 1.0 }
+# The GY-521's outline on F.SilkS, drawn from J3's footprint (its F.Fab), so
+# the builder sees which side of the row the module lies on (pcb-reviewer S1
+# on #1015).
+module_outlines = ["J3"]
 texts = [
     { text = "balancebot carrier", at = [48.0, 60.8], size = 1.0 },
     { text = "FWD ^", at = [45.0, 28.0], size = 1.2 },
-    { text = "GY-521: X arrow to FWD", at = [45.0, 30.0], size = 1.0 },
+    # J3's GY-521 fits its 1x8 socket three wrong ways: turned 180 degrees or
+    # flipped end to end (VCC onto INT), or face down across the row (right
+    # pins, the module behind the row, X and Z inverted: the 8d18cd8d board).
+    # The module outline on the silkscreen ([silk] module_outlines), the arrow
+    # note and the row-end pin names answer them. `for` names the socket a
+    # text marks (kicad.orientation); VCC sits left of pad 1, not below it,
+    # to stay clear of carrier-fab's provenance text at [44.0, 50.2].
+    { text = "GY-521: X arrow to FWD", at = [45.0, 30.0], size = 1.0, for = "J3" },
+    { text = "VCC", at = [32.6, 47.0], size = 1.0, for = "J3" },
+    { text = "INT", at = [53.89, 49.7], size = 1.0, for = "J3" },
     { text = "+", at = [22.5, 59.6], size = 1.2 },
     { text = "-", at = [20.0, 59.6], size = 1.2 },
     # A Pololu-format driver fits its socket turned 180 degrees (two 1x8 rows
     # 12.7 mm apart): mark the VMOT, EN and DIR ends to match the module's own
     # pin labels (pre-order review S1).
-    { text = "VMOT", at = [9.0, 37.4], size = 1.0 },
-    { text = "EN", at = [26.7, 41.2], size = 1.0 },
-    { text = "DIR", at = [26.7, 18.6], size = 1.0 },
-    { text = "VMOT", at = [76.0, 18.6], size = 1.0 },
-    { text = "EN", at = [63.3, 18.6], size = 1.0 },
-    { text = "DIR", at = [63.3, 41.2], size = 1.0 },
+    { text = "VMOT", at = [9.0, 37.4], size = 1.0, for = "A1" },
+    { text = "EN", at = [26.7, 41.2], size = 1.0, for = "A1" },
+    { text = "DIR", at = [26.7, 18.6], size = 1.0, for = "A1" },
+    { text = "VMOT", at = [76.0, 18.6], size = 1.0, for = "A2" },
+    { text = "EN", at = [63.3, 18.6], size = 1.0, for = "A2" },
+    { text = "DIR", at = [63.3, 41.2], size = 1.0, for = "A2" },
     # The buck lead's pins (registry lm2596-buck-module: IN+, IN-, OUT+, OUT-)
     # and the motor coils (nema17-stepper: A1, A2, B1, B2), by their pads (S3).
     { text = "IN+", at = [60.0, 52.3], size = 1.0 },

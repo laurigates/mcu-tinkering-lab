@@ -24,7 +24,13 @@ Since 2026-11-09 J3 is the generated `Breakout_Sockets:GY521_Socket`, whose
 F.Fab outline puts the module in front of the header. Its pads are where the
 plain 1×8 socket's were, and the re-route laid every track where it was
 before. The silkscreen no longer has the hand-drawn rectangle where the module
-lies; "GY-521: X arrow to FWD" stays.
+lies; "GY-521: X arrow to FWD" stays. The module outline is back on F.SilkS,
+drawn from the footprint's F.Fab (`[silk] module_outlines`; its rear edge is
+the socket strip's own outline), with VCC left of pin 1 and INT below pin 8.
+`kicad.orientation` holds every module socket to having such marks: J3 fits
+its socket three wrong ways (turned 180°, flipped end to end, or face down
+across the row), A1 and A2 three each. `carrier-silk` added them with the copper
+unchanged (same 247 track segments, 95 vias, 2 zones and 32 footprints).
 
 The boards delivered from the 2026-10-23 order (JLCPCB W2026102320533303,
 PCB line Y5-13829495A, file `balancebot-carrier-fab_Y5`) are the

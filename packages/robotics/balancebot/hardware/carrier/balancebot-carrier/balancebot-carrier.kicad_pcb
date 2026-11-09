@@ -7707,6 +7707,36 @@
 			)
 		)
 	)
+	(gr_line
+		(start 134.5 132.389999)
+		(end 155.5 132.389999)
+		(stroke
+			(width 0.15)
+			(type default)
+		)
+		(layer "F.SilkS")
+		(uuid "c5f3d468-9471-48c1-96a1-8a0d7ad809fe")
+	)
+	(gr_line
+		(start 134.5 148.27)
+		(end 134.5 132.389999)
+		(stroke
+			(width 0.15)
+			(type default)
+		)
+		(layer "F.SilkS")
+		(uuid "5ac84194-b182-4c5b-ba95-f66c38fc10cf")
+	)
+	(gr_line
+		(start 155.5 132.389999)
+		(end 155.5 148.27)
+		(stroke
+			(width 0.15)
+			(type default)
+		)
+		(layer "F.SilkS")
+		(uuid "ac93d65d-a569-4545-b175-271e4591d800")
+	)
 	(gr_rect
 		(start 100 100)
 		(end 190 162)
@@ -7872,6 +7902,17 @@
 			)
 		)
 	)
+	(gr_text "VCC"
+		(at 132.6 147 0)
+		(layer "F.SilkS")
+		(uuid "d359a648-e56b-4e34-b583-c404f9f1ed2e")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.16)
+			)
+		)
+	)
 	(gr_text "GY-521: X arrow to FWD"
 		(at 145 130 0)
 		(layer "F.SilkS")
@@ -7898,6 +7939,17 @@
 		(at 153.27 158.6 0)
 		(layer "F.SilkS")
 		(uuid "f0464bac-7043-474f-bee7-a532e6d3dc71")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.16)
+			)
+		)
+	)
+	(gr_text "INT"
+		(at 153.89 149.7 0)
+		(layer "F.SilkS")
+		(uuid "a62ceca1-44a3-4f5f-8654-a89cfa192ef2")
 		(effects
 			(font
 				(size 1 1)

@@ -42,7 +42,8 @@ _carrier-board project:
     cd {{_kicad_repo}} && {{_kicad_python}} tools/kicad/pcb/build_board.py {{project}}/hardware/carrier/output/board-input.json
 
 # Silkscreen only, on the routed board: board.toml [silk] positions and sizes,
-# and footprint lines cut 0.15 mm back from pads. The copper is left as it is.
+# new texts and module outlines, and footprint lines cut 0.15 mm back from
+# pads. The copper is left as it is.
 _carrier-silk project:
     cd {{_kicad_repo}} && PYTHONPATH=tools python3 -m kicad.boardinput {{project}}
     cd {{_kicad_repo}} && {{_kicad_python}} tools/kicad/pcb/build_board.py --silk-only {{project}}/hardware/carrier/output/board-input.json

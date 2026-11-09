@@ -46,6 +46,9 @@ Modules, one responsibility each:
 - `derive_xiao` CLI: the socket XIAO parts derived from Seeed's DIP ones
 - `sockets`     CLI: breakout socket footprints from the board pages' pad
                 centres (`lib/breakout-sockets/`)
+- `orientation` the ways a module fits its socket wrong (turned, face down)
+                and boardcheck's gate on the silkscreen marks that answer
+                them; module outlines placed for the silkscreen
 - `mount`       a socketed sensor module's axes on the robot, from the socket's
                 declared axes, its placement and `[outline] forward`; the
                 matrix boardcheck compares with board.toml `[imu] mount`

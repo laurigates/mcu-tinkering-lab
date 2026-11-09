@@ -248,6 +248,35 @@ class ConfigTests(unittest.TestCase):
     def test_balancebot_board_toml_is_valid(self):
         self.assertEqual(boardcheck.validate_config(self.cfg, self.nl), [])
 
+    def test_text_for_names_a_part(self):
+        def tag(ref):
+            def edit(d):
+                d["silk"]["texts"][0]["for"] = ref
+
+            return edit
+
+        ok = self.with_data(tag("A1"))
+        self.assertEqual(boardcheck.validate_config(ok, self.nl), [])
+        self.fails(tag("A9"), "for = 'A9' is not in the netlist")
+        self.fails(
+            lambda d: d["silk"]["texts"][0].update(mark="A1"),
+            'with an optional for = "<ref>"',
+        )
+
+    def test_module_outlines_names_parts(self):
+        self.fails(
+            lambda d: d["silk"].update(module_outlines=["A9"]),
+            "[silk] module_outlines: 'A9' is not in the netlist",
+        )
+        self.fails(
+            lambda d: d["silk"].update(module_outlines="A1"),
+            "[silk] module_outlines must be a list of references",
+        )
+        self.fails(
+            lambda d: d["silk"].update(module_outlines=["A1", "A1"]),
+            "[silk] module_outlines repeats",
+        )
+
     def test_class_expansion_order(self):
         classes = dict(boardcheck.expand_classes(self.cfg, self.nl))
         motors = [f"MOT{s}_{p}" for s in "LR" for p in ("A1", "A2", "B1", "B2")]
@@ -954,6 +983,25 @@ class MainTests(unittest.TestCase):
         cls.tmp = tempfile.TemporaryDirectory(prefix="kicad-boardcheck-")
         cls.root = Path(cls.tmp.name)
         cls.project = testfixture.materialise(cls.root)
+        # #749's board had no orientation marks on its Pololu drivers, which
+        # kicad.orientation now requires: one tagged text each, in board.toml
+        # and on the synthetic board.
+        marks = [("VMOT", 9.0, 37.4, "A1"), ("VMOT", 76.0, 18.6, "A2")]
+        toml = paths.carrier_dir(cls.project) / "board.toml"
+        entries = "".join(
+            f'    {{ text = "{t}", at = [{x}, {y}], size = 1.0, for = "{r}" }},\n'
+            for t, x, y, r in marks
+        )
+        toml.write_text(
+            toml.read_text(encoding="utf-8").replace(
+                "texts = [\n", "texts = [\n" + entries, 1
+            ),
+            encoding="utf-8",
+        )
+        texts = [
+            f'\t(gr_text "{t}"\n\t\t(at {100 + x:g} {100 + y:g} 0)\n\t\t(layer "F.SilkS")\n\t)'
+            for t, x, y, _ in marks
+        ]
         vendored = cls.root / library.VENDORED.relative_to(paths.REPO_ROOT)
         nl = netlist.build(cls.project, cls.root, vendored)
         ns = schematic.namespace(schematic.project_key(cls.project, cls.root))
@@ -974,7 +1022,9 @@ class MainTests(unittest.TestCase):
                     boardcheck.symbol_path(ns, c.ref),
                 )
             )
-        cls.good = "(kicad_pcb\n\t(version 20260206)\n" + "\n".join(fps) + "\n)\n"
+        cls.good = (
+            "(kicad_pcb\n\t(version 20260206)\n" + "\n".join(fps + texts) + "\n)\n"
+        )
         cls.pcb = boardcheck.board_path(cls.project)
         cls.pcb.parent.mkdir(parents=True, exist_ok=True)
 
@@ -998,6 +1048,31 @@ class MainTests(unittest.TestCase):
         code, out = self.run_main("mod bb 'packages/robotics/balancebot'\n", self.good)
         self.assertEqual(code, 0, out)
         self.assertIn("OK: balancebot-carrier.kicad_pcb", out)
+
+    def test_untagged_module_socket_fails_naming_its_wrong_fits(self):
+        toml = paths.carrier_dir(self.project) / "board.toml"
+        kept = toml.read_text(encoding="utf-8")
+        try:
+            toml.write_text(kept.replace(', for = "A2"', "", 1), encoding="utf-8")
+            code, out = self.run_main(
+                "mod bb 'packages/robotics/balancebot'\n", self.good
+            )
+        finally:
+            toml.write_text(kept, encoding="utf-8")
+        self.assertEqual(code, 1, out)
+        self.assertIn("[silk] A2 (Module:Pololu_Breakout-16_15.2x20.3mm)", out)
+        self.assertIn("turned 180 degrees: pad 1 <-> pad 9", out)
+        self.assertNotIn("[silk] A1 ", out)
+
+    def test_tagged_text_missing_from_the_board_names_carrier_silk(self):
+        board = self.good.replace(
+            '(gr_text "VMOT"\n\t\t(at 109 ', '(gr_text "VMOT"\n\t\t(at 119 '
+        )
+        self.assertNotEqual(board, self.good)
+        code, out = self.run_main("mod bb 'packages/robotics/balancebot'\n", board)
+        self.assertEqual(code, 1, out)
+        self.assertIn("'VMOT' (for = \"A1\") at [9.0, 37.4] is not on the board", out)
+        self.assertIn("just bb::carrier-silk", out)
 
     def test_failing_board_hint_names_the_module_not_the_directory(self):
         bad = self.good.replace('(property "Value" "', '(property "Value" "x', 1)

@@ -16,8 +16,11 @@ Reference, Value and LCSC properties, its `(path ...)`, and every pad's
 
 It also validates board.toml against the netlist (placement, silkscreen, net
 classes, pour, keepouts, cutouts), so a bad board.toml fails CI without KiCad,
-and checks that an `[imu]` board's layout needs the firmware mount it declares
-(`kicad.mount`: the socket's declared axes, the placement, `[outline] forward`).
+checks that an `[imu]` board's layout needs the firmware mount it declares
+(`kicad.mount`: the socket's declared axes, the placement, `[outline] forward`),
+and runs `kicad.orientation`'s gate: every module socket the module fits
+wrong (turned, or face down) has a `[silk] texts` mark tagged `for = "<ref>"`
+beside it, and the tagged texts and `[silk] module_outlines` are on the board.
 
 Copper connectivity is DRC's job, locally, and the check stamp (`kicad.stamp`)
 pins the board bytes DRC passed. Copper is read for one thing: no track, arc,
@@ -51,6 +54,7 @@ from . import (
     library,
     mount,
     netlist,
+    orientation,
     panel,
     paths,
     provenance,
@@ -233,6 +237,7 @@ TABLE_KEYS = {
         "rects",
         "texts",
         "cut_lines",
+        "module_outlines",
     },
     "net_classes": {"name", "nets", "track_um", "clearance_um", "via_um"},
     "signal": {"track_um", "clearance_um", "via_um"},
@@ -263,6 +268,9 @@ TABLE_KEYS = {
     },
 }
 TEXT_KEYS = {"text", "at", "size"}
+# A text's optional `for = "<ref>"`: an orientation mark for that footprint
+# (kicad.orientation checks that every module socket that fits wrong has one).
+TEXT_OPTIONAL_KEYS = {"for"}
 REGION_KEYS = {"net", "rect", "layers", "priority"}
 STITCH_KEYS = {"pitch_mm", "via_um", "exclude"}
 # How far a pour stops short of a [silk] cut line: the hand saw's kerf and the
@@ -975,14 +983,31 @@ def validate_config(
     for text in silk.get("texts", []):
         if (
             not isinstance(text, dict)
-            or set(text) != TEXT_KEYS
+            or set(text) - TEXT_OPTIONAL_KEYS != TEXT_KEYS
             or not isinstance(text["text"], str)
             or not _numbers(text["at"], 2)
             or not _positive(text["size"])
         ):
             errors.append(
-                f"{where}: [silk] texts: {text!r} must be {{text, at = [x, y], size}}"
+                f"{where}: [silk] texts: {text!r} must be "
+                '{text, at = [x, y], size} with an optional for = "<ref>"'
             )
+        elif "for" in text and text["for"] not in refs:
+            errors.append(
+                f"{where}: [silk] texts: {text['text']!r}: for = {text['for']!r} "
+                "is not in the netlist"
+            )
+    outlines = silk.get("module_outlines", [])
+    if not isinstance(outlines, list) or not all(isinstance(r, str) for r in outlines):
+        errors.append(f"{where}: [silk] module_outlines must be a list of references")
+    else:
+        for ref in outlines:
+            if ref not in refs:
+                errors.append(
+                    f"{where}: [silk] module_outlines: {ref!r} is not in the netlist"
+                )
+        if len(set(outlines)) != len(outlines):
+            errors.append(f"{where}: [silk] module_outlines repeats: {outlines}")
     classes = data["net_classes"]
     for cls in [*classes, data["signal"]]:
         name = cls.get("name", "signal")
@@ -1326,6 +1351,16 @@ def _fmt(v: float) -> str:
     return "0" if s in ("-0", "") else s
 
 
+def silk_hint(error: str, module: str) -> str:
+    """The fix for an orientation error that is a stale board, not board.toml."""
+    if "not on the board" in error:
+        return (
+            f"; re-apply the silkscreen with just {module}::carrier-silk, then "
+            f"just {module}::carrier-check"
+        )
+    return ""
+
+
 def board_path(project: Path) -> Path:
     cfg = paths.load_board_config(project)
     return paths.carrier_dir(project) / cfg.name / f"{cfg.name}.kicad_pcb"
@@ -1379,6 +1414,17 @@ def main(argv: list[str] | None = None, repo_root: Path = REPO_ROOT) -> int:
                     text, cfg.data.get("keepouts", []), cfg.data["outline"]["origin"]
                 )
                 errors += [f"{e}; {hint(module())}" for e in copper]
+            if not errors:
+                comps = [(c.ref, c.footprint) for c in nl.comps]
+                errors += [
+                    f"{cfg.path}: {e}"
+                    for e in orientation.validate(cfg.data, comps, vendored)
+                ]
+            if not errors:
+                errors += [
+                    f"{cfg.path}: {e}{silk_hint(e, module())}"
+                    for e in orientation.check(cfg.data, comps, vendored, text)
+                ]
             for e in errors:
                 print(f"FAIL: {e}")
             if errors:

@@ -19,7 +19,11 @@ registry and board.toml. This writes it to
   as KiCad names it (`unconnected-(<ref>-<pin name>-Pad<n>)`); without those,
   DRC schematic parity fails with "Pad missing net given by schematic". Sorted
   by name, which is the order of KiCad's own netlist export;
-- `silk`: board.toml `[silk]`, defaults filled in;
+- `silk`: board.toml `[silk]`, defaults filled in, plus `outline_lines`: the
+  F.Fab outline of each `module_outlines` footprint placed on the board,
+  `[[x0, y0, x1, y1], ...]` relative to the origin (`kicad.orientation`), for
+  build_board.py to draw on F.SilkS, so the silkscreen outline is the
+  footprint's and never a hand copy;
 - `classes`: board.toml `[[net_classes]]` with `nets` expanded to net names
   (per pattern in order, matches in name order); `signal`: as written;
 - `pour`: board.toml `[pour]` with its net(s) as `regions`, `[{net, rect}]`,
@@ -50,7 +54,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from . import boardcheck, library, netlist, panel, paths, schematic
+from . import boardcheck, library, netlist, orientation, panel, paths, schematic
 from .errors import KicadError
 from .paths import REPO_ROOT
 
@@ -64,6 +68,7 @@ SILK_DEFAULTS: dict[str, Any] = {
     "rects": [],
     "texts": [],
     "cut_lines": [],
+    "module_outlines": [],
 }
 
 
@@ -92,10 +97,24 @@ def assemble(
     Raises KicadError listing every board.toml problem.
     """
     errors = boardcheck.validate_config(cfg, nl)
+    if not errors:
+        comps = [(c.ref, c.footprint) for c in nl.comps]
+        errors = [
+            f"{cfg.path}: {e}" for e in orientation.validate(cfg.data, comps, vendored)
+        ]
     if errors:
         raise KicadError("\n".join(errors))
     data = cfg.data
     placement = data["placement"]
+    fpid = dict(comps)
+    silk = {**SILK_DEFAULTS, **data.get("silk", {})}
+    silk["outline_lines"] = [
+        line
+        for ref in silk["module_outlines"]
+        for line in orientation.outline_lines(
+            library.footprint_file(fpid[ref], vendored=vendored), placement[ref]
+        )
+    ]
     components = [
         {
             "ref": c.ref,
@@ -142,7 +161,7 @@ def assemble(
         "size": list(data["outline"]["size"]),
         "components": components,
         "nets": [{"name": n, "nodes": nets[n]} for n in sorted(nets)],
-        "silk": {**SILK_DEFAULTS, **data.get("silk", {})},
+        "silk": silk,
         "classes": classes,
         "signal": dict(data["signal"]),
         "pour": {
