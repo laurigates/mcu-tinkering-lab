@@ -39,13 +39,15 @@ core 0 (soft):                    USB CDC CLI + CSV telemetry + LED + battery
 
 ```bash
 just balancebot::build   # containerized, → build/balancebot.uf2
-just balancebot::test    # host unit tests: pid, imu_filter, crc32, lqr, param_record, arm_gate
+just balancebot::test    # host unit tests: pid, imu_filter, crc32, lqr, param_record, arm_gate, cli_gate
 ```
 
-`pid.c`, `imu_filter.c`, `crc32.c`, `lqr.c`, `param_record.c` and `arm_gate.c`
-are **pure C with no SDK includes** so the host tests can compile them — keep
-them that way. Core 1's CMD_ARM and CMD_SET_IMU_MOUNT decisions live in
-`arm_gate.c` for that reason; keep `handle_command()` calling it. `param_store.c` only moves `param_record.c`'s bytes to and from flash.
+`pid.c`, `imu_filter.c`, `crc32.c`, `lqr.c`, `param_record.c`, `arm_gate.c` and
+`cli_gate.c` are **pure C with no SDK includes** so the host tests can compile
+them — keep them that way. Core 1's CMD_ARM and CMD_SET_IMU_MOUNT decisions live
+in `arm_gate.c` for that reason; keep `handle_command()` calling it. The CLI's
+`arm` and `load` refusals live in `cli_gate.c`; keep `cmd_arm()` and the `load`
+branch calling it. `param_store.c` only moves `param_record.c`'s bytes to and from flash.
 
 ## Don't
 
