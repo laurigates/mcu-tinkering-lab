@@ -66,7 +66,9 @@ opened with `GITHUB_TOKEN` does not trigger `pull_request` workflows, so
 
 - **`build.yml` builds only projects listed in `.github/project-matrix.json`.**
   A tracked lock in a project with no matrix entry gets no gate.
-  `camera-vision/gemini-vision` is in that state.
+  `tools/check-component-extra-paths.py` fails on a registered project with
+  neither an entry nor a `NOT_IN_MATRIX` exclusion, so check that list for a
+  project whose lock changed.
 - **A green build does not prove the board boots.** A component bump can move
   the I2C driver generation and abort at the first boot with a clean build
   (`esp-idf-i2c-driver-generation-conflict.md`). For a change to

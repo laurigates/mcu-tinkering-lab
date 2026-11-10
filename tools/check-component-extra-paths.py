@@ -1,5 +1,16 @@
 #!/usr/bin/env python3
-"""Assert that every shared component a project compiles is in its CI build triggers.
+"""Assert that CI builds every registered project, and every component each one compiles.
+
+Two checks over `.github/project-matrix.json`, the list `build.yml` builds:
+
+1. Every project the root justfile registers under packages/ (`mod name
+   'packages/...'`) has a matrix entry, or an exclusion in NOT_IN_MATRIX below
+   with a reason. A registered firmware project with no entry is never built in
+   CI, on its own changes or on a shared-component change, and nothing
+   reports it (issues #697, #709). An exclusion that names an unregistered
+   path, or a project that has since gained an entry, is stale and fails too.
+2. Every shared component an ESP-IDF entry compiles is in its build triggers,
+   described below.
 
 `.github/workflows/build.yml` decides which projects a push or PR rebuilds from
 the changed file paths. A project is selected when a changed file sits under its
@@ -33,8 +44,10 @@ An `extra_paths` entry covers a component directory when it equals it or is an
 ancestor of it, which is the same prefix test build.yml's jq filter applies.
 
 Run: python3 tools/check-component-extra-paths.py [--verbose]
-Exit: 0 clean; 1 on any finding (a missed component, an unresolvable
-`EXTRA_COMPONENT_DIRS` entry, or an out-of-tree entry that does not exist).
+Exit: 0 clean; 1 on any finding (a registered project with no entry or
+exclusion, a stale or reasonless exclusion, a missed component, an
+unresolvable `EXTRA_COMPONENT_DIRS` entry, or an out-of-tree entry that does
+not exist).
 Tests: uv run --no-project --with pytest==9.1.1 python -m pytest -q
        tools/test_check_component_extra_paths.py
 """
@@ -50,6 +63,43 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MATRIX = Path(".github/project-matrix.json")
+JUSTFILE = Path("justfile")
+
+# Projects the root justfile registers under packages/ that build.yml does not
+# build, keyed by path relative to packages/ (the matrix's `path`). Each needs
+# a reason; remove the entry when the project gains a matrix entry.
+NOT_IN_MATRIX: dict[str, str] = {
+    "robocar/unified-integrated": (
+        "carrier PCB only; it runs packages/robocar/unified's firmware, and "
+        "carrier-check.yml checks the board"
+    ),
+    "robocar/twin": (
+        "host build of the planner C, not firmware; robocar-twin.yml builds "
+        "and tests it"
+    ),
+    "robocar/simulation": (
+        "Python simulation, not firmware; test.yml and "
+        "build-python-simulation.yml cover it"
+    ),
+    "audio/melody-detector/training": (
+        "Python training pipeline, not firmware; test-melody-train.yml covers it"
+    ),
+    "input-gaming/lego-boost-xbox-fw": (
+        "Pybricks firmware for the LEGO Move Hub, built from an upstream clone "
+        "that `just boost-fw::setup` fetches into a git-ignored external/; no "
+        "ESP-IDF, ESPHome or Pico build applies"
+    ),
+    "sensors/presence-detector": (
+        "does not build with the ESPHome CI uses: it pins esp-idf 5.2.2 / "
+        "platform 6.7.0, which ESPHome 2026.10.2 cannot download (404 from "
+        "esphome-libs/esp-idf). Without the pin it builds on esp-idf 5.5.6, an "
+        "IDF move that waits for the v5.5 migration (#734) and a bench check"
+    ),
+}
+
+_MOD_LINE = re.compile(
+    r"""^\s*mod\??\s+([\w-]+)(?:\s+(?:'([^']*)'|"([^"]*)"))?""", re.MULTILINE
+)
 
 # Keywords of idf_component_register(); a REQUIRES list ends at the next one.
 _REGISTER_KEYWORDS = {
@@ -282,6 +332,58 @@ def check(root: Path, matrix: list[dict]) -> list[Finding]:
     return findings
 
 
+def registered_modules(justfile_text: str) -> dict[str, str]:
+    """`mod` name -> path as written in the justfile (the name when none is given)."""
+    modules: dict[str, str] = {}
+    for line in strip_comments(justfile_text).splitlines():
+        m = _MOD_LINE.match(line)
+        if m:
+            name, single, double = m.groups()
+            modules[name] = single or double or name
+    return modules
+
+
+def check_registered(
+    modules: dict[str, str], matrix: list[dict], exclusions: dict[str, str]
+) -> list[Finding]:
+    """Findings for registered packages/ projects that CI neither builds nor excludes."""
+    in_matrix = {e["path"].rstrip("/") for e in matrix}
+    registered: dict[str, str] = {}
+    for name, path in modules.items():
+        parts = Path(path).parts
+        if len(parts) > 1 and parts[0] == "packages":
+            registered[Path(*parts[1:]).as_posix()] = name
+
+    findings: list[Finding] = []
+    for rel, name in sorted(registered.items(), key=lambda kv: kv[1]):
+        if rel not in in_matrix and rel not in exclusions:
+            findings.append(
+                Finding(
+                    name,
+                    f"packages/{rel} is registered in the root justfile but has no "
+                    f"entry in {MATRIX} and no NOT_IN_MATRIX exclusion",
+                )
+            )
+    for rel, reason in sorted(exclusions.items()):
+        if not reason.strip():
+            findings.append(Finding(rel, "NOT_IN_MATRIX exclusion has no reason"))
+        elif rel in in_matrix:
+            findings.append(
+                Finding(
+                    rel, "has a matrix entry, so its NOT_IN_MATRIX exclusion is stale"
+                )
+            )
+        elif rel not in registered:
+            findings.append(
+                Finding(
+                    rel,
+                    "NOT_IN_MATRIX excludes it, but no root justfile mod registers "
+                    f"packages/{rel}",
+                )
+            )
+    return findings
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
@@ -300,6 +402,18 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 print(f"{entry['project']}: {names or '(none out of tree)'}")
 
+    modules = registered_modules((REPO_ROOT / JUSTFILE).read_text(encoding="utf-8"))
+    unbuilt = check_registered(modules, matrix, NOT_IN_MATRIX)
+    if unbuilt:
+        print(f"{MATRIX}: registered projects CI does not build:", file=sys.stderr)
+        for f in unbuilt:
+            print(f"  {f}", file=sys.stderr)
+        print(
+            f"Add a {MATRIX} entry for each, or a NOT_IN_MATRIX exclusion with the "
+            "reason in tools/check-component-extra-paths.py.",
+            file=sys.stderr,
+        )
+
     findings = check(REPO_ROOT, matrix)
     if findings:
         print(f"{MATRIX}: build triggers miss shared components:", file=sys.stderr)
@@ -310,8 +424,12 @@ def main(argv: list[str] | None = None) -> int:
             f"extra_paths in {MATRIX}.",
             file=sys.stderr,
         )
+    if unbuilt or findings:
         return 1
-    print(f"{MATRIX}: every out-of-tree component is in its consumers' extra_paths")
+    print(
+        f"{MATRIX}: every registered project is built or excluded, and every "
+        "out-of-tree component is in its consumers' extra_paths"
+    )
     return 0
 
 

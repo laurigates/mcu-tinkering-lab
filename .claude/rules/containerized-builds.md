@@ -306,7 +306,10 @@ that the host suite, which lists its own sources, could not.
    reaches outside the project (e.g. `../../components`, which builds every
    `packages/components/*`), list each of those component dirs in `extra_paths`, or a
    change to one alone rebuilds nothing. `tools/check-component-extra-paths.py` (pre-commit)
-   derives the set from the CMakeLists and fails on a miss (issue #670)
+   derives the set from the CMakeLists and fails on a miss (issue #670). The same check
+   fails on a `packages/` project the root justfile registers with no matrix entry; a
+   project that cannot build in CI needs a `NOT_IN_MATRIX` exclusion with its reason in
+   that script instead (issues #697, #709)
 
 ## Do Not
 

@@ -29,11 +29,22 @@ mod project-name 'packages/<domain>/project-name'
 
 Place it alphabetically among the existing `mod` declarations. Use the justfile recipe naming convention (lowercase-kebab-case).
 
-### 3. Verify CI Build Workflow
+### 3. Add the CI Matrix Entry
 
-Each ESP32 project has its own `.github/workflows/build-<project>.yml` (calling the reusable `_ci-build-esp32.yml`). If the project should be built in CI:
-- Verify `.github/workflows/build-<project>.yml` exists
-- Or note that it needs to be created (copy an existing one such as `build-melody-detector.yml`; don't auto-edit workflow files without confirmation)
+`build.yml` builds every project listed in `.github/project-matrix.json`; there
+are no per-project build workflows. Add an entry (`system`, `project`, `path`
+relative to `packages/`, and `target`/`yaml_file`/`board` for the system, plus
+`extra_paths` for out-of-tree components). A project that cannot or should not
+build in CI gets a `NOT_IN_MATRIX` exclusion with its reason in
+`tools/check-component-extra-paths.py` instead. Then run:
+
+```sh
+python3 tools/check-component-extra-paths.py
+```
+
+It fails on a `packages/` module the root justfile registers with neither an
+entry nor an exclusion, and on a missing `extra_paths` component. Build the
+project once in the container before adding the entry.
 
 ### 4. Check Standard File Inventory
 
@@ -66,7 +77,7 @@ For missing files, suggest the appropriate skill:
 
 ### Registration
 - Root justfile: ADDED (mod line inserted)
-- CI matrix: Present / NEEDS MANUAL ADD
+- CI matrix: ADDED / EXCLUDED (<reason>)
 
 ### File Inventory
 | File | Status |
