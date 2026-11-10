@@ -228,8 +228,12 @@ class Selection(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp) / "out"
             out.write_text("")
+            # A file, not `bash -c`: one argv string over 128 KiB (Linux
+            # MAX_ARG_STRLEN) fails exec with E2BIG before bash starts.
+            step = Path(tmp) / "step.sh"
+            step.write_text(script)
             subprocess.run(
-                ["bash", "-e", "-c", script],
+                ["bash", "-e", str(step)],
                 cwd=REPO_ROOT,
                 check=True,
                 env={**os.environ, "GITHUB_OUTPUT": str(out)},
