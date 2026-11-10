@@ -3,7 +3,7 @@
   "source_document": "docs/requirements/PRD-001-ai-robot-car-system.md",
   "source_documents": [
     "docs/requirements/PRD-001-ai-robot-car-system.md",
-    "docs/requirements/PRD-002-esp32cam-vision-ai-backend.md",
+    "docs/requirements/PRD-002-robocar-vision-planner.md",
     "docs/requirements/PRD-003-robot-physics-simulation.md",
     "docs/requirements/PRD-011-melody-detector.md",
     "docs/requirements/PRD-013-rapid-hardware-prototyping.md",
@@ -33,10 +33,10 @@
     {
       "id": "FR-003",
       "name": "MQTT telemetry and logging",
-      "prd": "PRD-002",
+      "prd": "PRD-001",
       "status": "active",
       "priority": "P1",
-      "notes": "JSON messages, mDNS service discovery"
+      "notes": "robocar/status, robocar/events (ADR-033), remote commands; log forwarding open (#956); mDNS broker discovery proposed (ADR-034 §3)"
     },
     {
       "id": "FR-004",

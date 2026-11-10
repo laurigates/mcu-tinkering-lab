@@ -1,7 +1,7 @@
 {
   "format_version": "3.3.0",
   "created_at": "2026-04-05T00:00:00Z",
-  "updated_at": "2026-11-09T20:00:58Z",
+  "updated_at": "2026-11-10T06:53:14Z",
   "created_by": {
     "blueprint_plugin": "3.3.0"
   },
@@ -168,8 +168,8 @@
         "created": "2026-03-05"
       },
       "PRD-002": {
-        "path": "docs/requirements/PRD-002-esp32cam-vision-ai-backend.md",
-        "title": "ESP32-CAM Vision and AI Backend",
+        "path": "docs/requirements/PRD-002-robocar-vision-planner.md",
+        "title": "Robocar Vision and Gemini Planner",
         "status": "active",
         "created": "2026-03-05"
       },
