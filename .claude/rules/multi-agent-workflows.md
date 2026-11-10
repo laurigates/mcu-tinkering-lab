@@ -40,6 +40,16 @@ after a failed run, the files of the agents that completed. Before each
 commit, re-run the gates on what is being committed and lint through
 pre-commit (`python-lint.md`).
 
+## Give each agent its own scratch directory
+
+Workflow agents share the session scratchpad, and agents in separate worktrees
+still see it. Fixed names collide there: on the GY-521 orientation run
+(#1015-#1022, 2026-11-09) parallel agents overwrote each other's
+`commitmsg.txt`, `mutate.sh` and `merge-msg.txt` three times. Each agent
+caught it only by re-reading its commit afterwards. Tell every agent to write
+its scripts, commit messages and PR bodies under `tmp/` in its own worktree
+(git-ignored), or under a scratchpad subdirectory named for its unit.
+
 ## Brief agents as peers, and verify their claims
 
 Each agent knows only its prompt. Give it the shared paths, the interpreter to
