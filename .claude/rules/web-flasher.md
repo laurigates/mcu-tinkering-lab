@@ -24,6 +24,11 @@ project across ESP-IDF, ESPHome, and Pico — discovered from
 `flasher.json`: several CI projects (non-flasher ESP-IDF, ESPHome, Pico) have none
 and would be silently dropped.
 
+Pico SDK projects are released separately: on a `<component>-v*` release whose
+package has a `system: "pico"` entry in `project-matrix.json` (balancebot today),
+`build-firmware.yml` calls `_ci-build-pico.yml` at the tag and attaches
+`<project>.uf2` to that release only. They never reach the web flasher.
+
 Verification of what the release pipeline actually published — the artifact-layout
 trap that left every project with zero binaries, and the two gates that now catch
 it — lives in [`release-publish-verification.md`](release-publish-verification.md).

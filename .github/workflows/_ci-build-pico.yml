@@ -21,6 +21,14 @@ on:
         description: 'PICO_BOARD value (e.g. seeed_xiao_rp2350)'
         required: true
         type: string
+      ref:
+        description: >-
+          Ref to check out and build. Empty builds the commit that triggered the
+          caller; build-firmware.yml passes the release tag, which a
+          workflow_dispatch replay cannot get any other way.
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -35,6 +43,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
 
       - name: Install ARM toolchain
         run: |
@@ -81,10 +91,12 @@ jobs:
 
       - name: Build ${{ inputs.project }}
         working-directory: packages/${{ inputs.project_path }}
+        env:
+          BOARD: ${{ inputs.board }}
         run: |
           cmake -B build -G Ninja \
             -DPICO_SDK_PATH="$HOME/pico-sdk" \
-            -DPICO_BOARD="${{ inputs.board }}" \
+            -DPICO_BOARD="$BOARD" \
             -Dpicotool_DIR="$HOME/picotool-install/picotool"
           ninja -C build
 
@@ -111,19 +123,21 @@ jobs:
 
       - name: Check binary size limits
         working-directory: packages/${{ inputs.project_path }}
+        env:
+          PROJECT: ${{ inputs.project }}
         run: |
           # The XIAO RP2350 has 2 MB flash (the SDK board header claims 4 MB —
           # trust the hardware spec). Reserve the last two 4 KB sectors: the
           # parameter store lives in the second-to-last, and the last is
           # clobbered by the picotool RP2350-E10 UF2 workaround block.
-          BIN_SIZE=$(stat -c%s "build/${{ inputs.project }}.bin" 2>/dev/null || echo "0")
+          BIN_SIZE=$(stat -c%s "build/${PROJECT}.bin" 2>/dev/null || echo "0")
           FLASH_LIMIT=$(( 2 * 1024 * 1024 - 2 * 4096 ))
           WARNING_THRESHOLD=$(( FLASH_LIMIT * 3 / 4 ))
 
           echo "Firmware binary size: $BIN_SIZE bytes ($(($BIN_SIZE / 1024)) KB) of $FLASH_LIMIT available"
 
           if [ "$BIN_SIZE" -eq 0 ]; then
-            echo "::error::build/${{ inputs.project }}.bin missing or empty"
+            echo "::error::build/${PROJECT}.bin missing or empty"
             exit 1
           elif [ "$BIN_SIZE" -gt "$FLASH_LIMIT" ]; then
             echo "::error::Binary ($BIN_SIZE bytes) exceeds the 2 MB flash minus the parameter sector!"

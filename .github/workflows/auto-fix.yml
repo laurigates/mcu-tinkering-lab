@@ -85,11 +85,16 @@ jobs:
     steps:
       - name: Resolve failure context
         id: context
+        # The dispatch input and the failed run's branch name are free text, so
+        # they reach the script through env:, never through ${{ }} (#855).
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_PR_NUMBER: ${{ inputs.pr_number }}
+          RUN_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          RUN_ID_FROM_EVENT: ${{ github.event.workflow_run.id }}
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            PR_NUMBER="${{ inputs.pr_number }}"
+            PR_NUMBER="${INPUT_PR_NUMBER}"
             BRANCH=$(gh pr view "${PR_NUMBER}" --repo "${{ github.repository }}" --json headRefName -q '.headRefName')
             RUN_ID=$(gh run list \
               --repo "${{ github.repository }}" \
@@ -103,8 +108,8 @@ jobs:
               exit 1
             fi
           else
-            BRANCH="${{ github.event.workflow_run.head_branch }}"
-            RUN_ID="${{ github.event.workflow_run.id }}"
+            BRANCH="${RUN_HEAD_BRANCH}"
+            RUN_ID="${RUN_ID_FROM_EVENT}"
             PR_NUMBER=$(gh pr list --repo "${{ github.repository }}" --head "${BRANCH}" --json number -q '.[0].number // empty' 2>/dev/null || echo "")
           fi
 

@@ -163,6 +163,15 @@ repos:
         files: '(CMakeLists\.txt|\.github/project-matrix\.json|tools/(check-component-extra-paths|test_check_component_extra_paths)\.py)$'
         pass_filenames: false
 
+      # No run: script expands inputs.* or github.event.* through ${{ }}
+      # (issue #855), plus the workflow wiring the file's docstring lists.
+      - id: workflow-structure
+        name: Workflows pass untrusted text through env, and keep their release and Claude wiring
+        entry: uv run --no-project --with pyyaml==6.0.3 python -m unittest tools/test_workflows.py
+        language: system
+        files: '^(\.github/workflows/.*\.ya?ml|tools/test_workflows\.py)$'
+        pass_filenames: false
+
       - id: check-typst-docs
         name: Typst docs track pin_config.h, and the drift guard sees them
         entry: python3 tools/check-typst-docs.py

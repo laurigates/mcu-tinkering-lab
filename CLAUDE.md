@@ -187,7 +187,7 @@ Most workflows delegate to reusable workflows from [`laurigates/.github`](https:
 | `build.yml` | Push/PR (path-filtered) | Single CI build for every firmware project (ESP-IDF/ESPHome/Pico). Discovers changed projects from `.github/project-matrix.json` and fans out via the `_ci-build-*.yml` reusables | Local reusable `_ci-build-*.yml` |
 | `build-python-simulation.yml` | Push/PR to main/develop | Build the Python simulation package (import check) | No (local) |
 | `test.yml` | Push/PR to main/develop | Pre-commit, pytest, cppcheck, format check | No (local) |
-| `build-firmware.yml` | Release published | Build + attach firmware binaries to release + deploy web flasher | No (local) |
+| `build-firmware.yml` | Release published / manual | Check the tag is `<component>-v<semver>`, then build + attach the flasher-enabled ESP-IDF binaries to the release and deploy the web flasher; a Pico SDK project's release (balancebot) also gets its `.uf2`, built by `_ci-build-pico.yml` at the tag. Release-asset check: `tools/verify-release-assets.sh` | No (local); Pico via local `_ci-build-pico.yml` |
 | `release-please.yml` | Push to main | Auto-generate release PRs from conventional commits | `reusable-release-please.yml` |
 | `claude.yml` | @claude mention | Interactive Claude assistance in issues/PRs | `reusable-claude.yml` |
 | `auto-fix.yml` | CI failure / manual | Analyze and auto-fix CI failures with Claude | `reusable-auto-fix.yml` |

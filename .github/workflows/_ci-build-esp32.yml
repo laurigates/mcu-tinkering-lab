@@ -224,6 +224,8 @@ jobs:
         # report means the check did not run, which is a failure, not a pass.
         working-directory: packages/${{ inputs.project_path }}
         shell: bash
+        env:
+          PROJECT: ${{ inputs.project }}
         run: |
           report=build/app-partition-fit.txt
           if [ ! -f "$report" ]; then
@@ -232,7 +234,7 @@ jobs:
           fi
           cat "$report"
           {
-            echo "### App partition fit: ${{ inputs.project }}"
+            echo "### App partition fit: ${PROJECT}"
             echo ""
             echo '```'
             cat "$report"
