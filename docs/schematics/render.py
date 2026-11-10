@@ -4,6 +4,9 @@ Each file in ``circuits/`` that defines a ``draw() -> Drawing`` function is
 rendered. Run with ``just schematics::render`` (all circuits) or
 ``just schematics::render-one <name>`` (single circuit), or directly via
 ``python render.py [name ...]``.
+
+A full render (no names) also deletes any image in ``images/`` that no
+circuit produces, so removing a circuit removes its SVG and PNG.
 """
 
 from __future__ import annotations
@@ -84,6 +87,26 @@ def draw_circuit(mod):
     return d
 
 
+def remove_orphans(produced: set[str], images: Path = IMAGES) -> list[Path]:
+    """Delete every ``images/*.svg`` and ``*.png`` no circuit in ``produced`` wrote.
+
+    A circuit removed from ``circuits/`` would otherwise leave its images
+    behind, and the freshness check could not tell them from current ones
+    (#721). Returns the deleted paths, sorted.
+    """
+    if not images.is_dir():
+        return []
+    orphans = sorted(
+        p
+        for pattern in ("*.svg", "*.png")
+        for p in images.glob(pattern)
+        if p.stem not in produced
+    )
+    for path in orphans:
+        path.unlink()
+    return orphans
+
+
 def main(argv: list[str] | None = None) -> int:
     # Imported here rather than at module level so metrics.py (and its tests)
     # can reuse the loader above without needing libcairo present.
@@ -97,10 +120,12 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     IMAGES.mkdir(exist_ok=True)
 
+    produced: set[str] = set()
     for py in files:
         mod = load_circuit(py)
         if mod is None:
             continue
+        produced.add(py.stem)
         svg_path = IMAGES / f"{py.stem}.svg"
         png_path = IMAGES / f"{py.stem}.png"
         draw_circuit(mod).save(str(svg_path))
@@ -113,6 +138,11 @@ def main(argv: list[str] | None = None) -> int:
             url=str(svg_path), write_to=str(png_path), output_width=PNG_WIDTH
         )
         print(f"rendered {py.stem}  ->  {svg_path.name}, {png_path.name}")
+    # Only a full render knows every image a circuit produces; render-one
+    # renders a subset, so the images it skipped are not orphans.
+    if not names:
+        for path in remove_orphans(produced, IMAGES):
+            print(f"removed {path.name}  (no circuit produces it)")
     return 0
 
 

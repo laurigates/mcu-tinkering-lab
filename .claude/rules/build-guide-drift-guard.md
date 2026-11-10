@@ -159,6 +159,13 @@ into its drift set, so a stale image is reported against the guide alone.
 Drift is read with `git status --porcelain`, not `git diff --quiet`: a board newly
 given a `board` key produces an SVG nobody committed, and `git diff` does not see
 untracked files. `pinout.py` also deletes an SVG no board produces any more.
+`schematics-check.yml` reads its SVGs the same way, and a full
+`docs/schematics/render.py` run deletes the SVG and PNG of a removed circuit
+(#721). Any gate that regenerates files in place and then asks git whether
+they changed needs `git status --porcelain`, under `set -e` so a failing git
+command cannot read as clean. A `--check` mode that compares against the
+checkout, as `tools/kicad` and `tools/hardware` use, does not have the blind
+spot: a file never committed is absent from CI's checkout and reads as missing.
 
 `just robocar-unified::build-guide` runs `gen-pinouts` first, and
 `just hardware::gen` regenerates them alongside everything else the join emits.
@@ -192,10 +199,12 @@ script (issue #637). `tools/check-typst-docs.py` runs this snippet exactly as
 printed here and fails unless it emits a script that bash parses and that
 contains `typst compile`. Its pre-commit hook fires on any commit touching the
 workflow or this rule. It reads the pattern from this page, so a rename that
-breaks the anchor fails that check, and the fix is the regex above. In CI the
-hook runs only through `test.yml`, whose path filter lists neither file, so a PR
-touching only the workflow or this rule is checked locally and nowhere else
-(issue #693).
+breaks the anchor fails that check, and the fix is the regex above. In CI,
+`build-guide-check.yml` runs the script as its first step, and the script and
+this rule are on that workflow's trigger paths, so a PR touching only the
+workflow or this rule is checked there (issue #693). `test.yml`'s
+`pre-commit run --all-files` runs it too, but its path filter lists neither
+file.
 
 The block ends at the first non-blank line indented less than the `run: |` body's
 ten spaces, not at the next `- name:`. The guard is the last step of the last

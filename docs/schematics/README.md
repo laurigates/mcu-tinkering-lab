@@ -25,7 +25,8 @@ docs/schematics/
 ├── test_guide_deps.py     # pytest suite for guide_deps.py
 ├── conftest.py            # Shared fixture: each real circuit routed once per session
 ├── images/                # Generated SVG + PNG (committed so GitHub renders them)
-├── render.py              # Batch-render every circuit in circuits/
+├── render.py              # Batch-render every circuit in circuits/; prune orphan images
+├── test_freshness.py      # render.py's orphan pruning + schematics-check.yml's SVG gate
 ├── justfile               # `just schematics::render`, `::clean`, ...
 └── pyproject.toml         # uv-managed deps: schemdraw, cairosvg, pytest (dev)
 ```
@@ -288,7 +289,7 @@ router.finish()
   real circuits. The one literal left is the gray `SD_MODE` annotation arrow
   in `robocar_unified.py`: it marks a pin left floating, not a net.
 - **Output format**: SVG is the source of truth — schemdraw writes
-  byte-deterministic SVG, so `git diff` on it is reliable signal that the
+  byte-deterministic SVG, so a change to it is reliable signal that the
   rendered output is out of sync with `circuits/<name>.py`. The PNG is
   generated alongside via cairosvg for easier embedding in READMEs, but its
   bytes vary with the host's cairo encoder version, so it's *not* a reliable
@@ -334,6 +335,12 @@ and the `main/pin_config.h` and `hardware.toml` that robocar-unified's wiring
 and labels come from — and fails if `images/*.svg` would change. A circuit that starts
 reading a new file needs that file on the workflow's trigger paths, or the
 SVG can go stale with no check running.
+It reads drift with `git status --porcelain`, so an SVG rendered but never
+committed fails it as well as a modified one (`git diff` does not see untracked
+files, #721). A full render also deletes any image in `images/` that no circuit
+produces, so removing a circuit removes its SVG and PNG; commit the deletion.
+`render-one` renders a subset and deletes nothing. `test_freshness.py` runs the
+workflow step's shipped script against a scratch repository.
 The workflow is SVG-only on purpose (PNG drift is encoder-version noise, not
 content drift); the workflow surfaces PNG diffs as `::notice` only.
 

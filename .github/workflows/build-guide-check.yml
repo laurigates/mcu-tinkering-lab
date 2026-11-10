@@ -18,6 +18,9 @@ on:
       - 'docs/schematics/images/**'
       - '**/hardware/perfboard/perfboard.svg'
       - '.github/workflows/build-guide-check.yml'
+      # The first step's checker and the rule whose recipe it runs (#693).
+      - 'tools/check-typst-docs.py'
+      - '.claude/rules/build-guide-drift-guard.md'
   pull_request:
     # No branches: filter — a PR stacked on a non-default base (e.g. another
     # open PR's branch) must get the same check as one targeting main/develop,
@@ -37,6 +40,8 @@ on:
       - 'docs/schematics/images/**'
       - '**/hardware/perfboard/perfboard.svg'
       - '.github/workflows/build-guide-check.yml'
+      - 'tools/check-typst-docs.py'
+      - '.claude/rules/build-guide-drift-guard.md'
   workflow_dispatch:
 
 concurrency:
@@ -61,6 +66,16 @@ jobs:
     steps:
       - uses: actions/checkout@v7.0.1
 
+      # The check-typst-docs pre-commit hook, run here too: among its checks,
+      # it runs the extraction recipe printed in build-guide-drift-guard.md § 2
+      # against this workflow, so renaming the "... check for drift" step
+      # below without updating the rule fails this job. test.yml's
+      # `pre-commit run --all-files` also runs it, but test.yml's path filter
+      # lists neither this workflow nor the rule (#693). Stdlib plus git and
+      # bash only, so it runs before the Typst install and fails fast.
+      - name: Typst docs lint and drift-guard recipe check
+        run: python3 tools/check-typst-docs.py --verbose
+
       # GitHub-release binaries are blocked by this org's egress proxy, so the
       # CLI is built from crates.io via cargo. The binary is the only cached
       # artifact — keyed on the pinned version so a bump forces a rebuild.
@@ -81,7 +96,7 @@ jobs:
         run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
 
       # Recompile in place with the canonical, deterministic invocation and let
-      # `git diff` surface drift — the same shape as schematics-check.yml.
+      # `git status` surface drift — the same shape as schematics-check.yml.
       #
       #   --creation-timestamp 0  pins the embedded PDF timestamp (epoch), which
       #                           otherwise carries wall-clock time and never
