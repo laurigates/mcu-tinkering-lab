@@ -1,0 +1,4 @@
+# what: Kconfig symbols of the component esp-idf-lib/esp_idf_lib_helpers
+# component: esp-idf-lib/esp_idf_lib_helpers
+# version: 1.4.0
+# command: just kconfig-symbols::component <project>/managed_components/esp-idf-lib__esp_idf_lib_helpers

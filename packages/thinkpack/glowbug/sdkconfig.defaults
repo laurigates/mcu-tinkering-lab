@@ -7,8 +7,7 @@ CONFIG_ESP_CONSOLE_UART_DEFAULT=y
 # WiFi — required by ESP-NOW
 CONFIG_ESP_WIFI_ENABLED=y
 
-# Enable ESP-NOW (part of esp_wifi; on by default but documented here)
-CONFIG_ESP_WIFI_ESPNOW_ENABLED=y
+# ESP-NOW is part of esp_wifi and has no Kconfig enable switch in ESP-IDF v5.4
 
 # Disable WiFi AMPDU (known S3 AP visibility workaround)
 CONFIG_ESP_WIFI_AMPDU_RX_ENABLED=n
@@ -42,6 +41,3 @@ CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
 
 # ADC oneshot driver (used by light sensor)
 CONFIG_ADC_ONESHOT_CTRL_FUNC_IN_IRAM=n
-
-# mDNS disabled (no WiFi STA mode in this project)
-CONFIG_MDNS_ENABLED=n

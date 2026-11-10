@@ -1,0 +1,16 @@
+# what: Kconfig symbols of the component espressif/esp_jpeg
+# component: espressif/esp_jpeg
+# version: 1.3.2
+# command: just kconfig-symbols::component <project>/managed_components/espressif__esp_jpeg
+JD_DEFAULT_HUFFMAN
+JD_FASTDECODE
+JD_FASTDECODE_32BIT
+JD_FASTDECODE_BASIC
+JD_FASTDECODE_TABLE
+JD_FORMAT
+JD_FORMAT_RGB565
+JD_FORMAT_RGB888
+JD_SZBUF
+JD_TBLCLIP
+JD_USE_ROM
+JD_USE_SCALE

@@ -1,0 +1,9 @@
+# what: Kconfig symbols of the component fishwaldo/esp_ghota
+# component: fishwaldo/esp_ghota
+# version: v1.0.0
+# command: just kconfig-symbols::component <project>/managed_components/fishwaldo__esp_ghota
+GITHUB_HOSTNAME
+GITHUB_OWNER
+GITHUB_REPO
+MAX_FILENAME_LEN
+MAX_URL_LEN

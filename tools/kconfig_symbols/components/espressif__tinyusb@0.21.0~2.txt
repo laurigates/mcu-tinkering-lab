@@ -1,0 +1,4 @@
+# what: Kconfig symbols of the component espressif/tinyusb
+# component: espressif/tinyusb
+# version: 0.21.0~2
+# command: just kconfig-symbols::component <project>/managed_components/espressif__tinyusb

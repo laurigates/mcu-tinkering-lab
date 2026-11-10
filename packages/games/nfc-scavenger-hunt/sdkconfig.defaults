@@ -1,8 +1,8 @@
 # Target: ESP32-S3
 CONFIG_IDF_TARGET="esp32s3"
 
-# mDNS hostname discovery (nfc-scavenger-hunt.local)
-CONFIG_MDNS_ENABLED=y
+# mDNS (nfc-scavenger-hunt.local) comes from the espressif/mdns managed
+# component in main/idf_component.yml; it has no enable switch here.
 
 # Main task stack — needs headroom for WiFi + TLS + HTTPS init
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192

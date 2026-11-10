@@ -114,7 +114,7 @@ GPIO1, GPIO2, GPIO4, GPIO5, GPIO6, GPIO7, GPIO8, GPIO9 — no boot sequence invo
 |------|-------|
 | GPIO3 | Strapping pin — sampled at reset for JTAG interface selection |
 | GPIO20 | USB D+ — avoid if using USB OTG |
-| GPIO43 | D6, UART0 TX (U0TXD). The ROM bootloader prints its boot messages on UART0 at every reset, so a peripheral on D6 receives that traffic before any firmware runs, and a peripheral that drives D6 contends with the chip's TX driver while it prints. Printing is on by default. In SPI boot (a normal reset) it is suppressed only when the `EFUSE_UART_PRINT_CONTROL` eFuse disables it (or makes it depend on GPIO46), or when `RTC_CNTL_RTC_STORE4_REG[0]` is set. In download boot (BOOT held at reset, as when flashing) the ROM ignores both and always prints |
+| GPIO43 | D6, UART0 TX (U0TXD). The ROM bootloader prints its boot messages on UART0 at every reset, so a peripheral on D6 receives that traffic before any firmware runs, and a peripheral that drives D6 contends with the chip's TX driver while it prints. Printing is on by default. In SPI boot (a normal reset) it is suppressed only when the `EFUSE_UART_PRINT_CONTROL` eFuse disables it (or makes it depend on GPIO46), or when `RTC_CNTL_RTC_STORE4_REG[0]` is set. In download boot (BOOT held at reset, as when flashing) the ROM ignores both and always prints. Past the ROM, ESP-IDF's console follows `CONFIG_ESP_CONSOLE_*`, and its default on the ESP32-S3 is UART0 (`CONFIG_ESP_CONSOLE_UART_DEFAULT`): a project that keeps it sends the second-stage bootloader's output and the app's log to D6 for as long as the firmware runs. `CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y` moves both to USB Serial/JTAG; the ROM messages above still go to UART0 |
 
 Sources for the GPIO43 row: [ESP32-S3 Series Datasheet](https://www.espressif.com/sites/default/files/documentation/esp32-s3_datasheet_en.pdf)
 v2.2, Section 3 *Boot Configurations* and Section 3.3 *ROM Messages Printing Control*
@@ -124,6 +124,13 @@ Assignment*, which lists GPIO43/GPIO44 as the UART0 interface to use with cautio
 v1.8, Section 8.3 *ROM Messages Printing Control*, Table 8.3-1, and the
 `EFUSE_UART_PRINT_CONTROL` field description (00 enabled, 01 enabled when GPIO46 is
 low at reset, 10 enabled when GPIO46 is high, 11 disabled). The eFuse ships unburnt (0).
+The ESP-IDF console sentences come from ESP-IDF v5.4 as shipped in the `espressif/idf:v5.4`
+image: `components/esp_system/Kconfig`, where the *Channel for console output* choice
+(`ESP_CONSOLE_UART`) has `default ESP_CONSOLE_UART_DEFAULT` ("Default: UART0") with no
+target condition; and `components/bootloader_support/src/bootloader_console.c`, whose
+`bootloader_console_init()` uses `CONFIG_ESP_CONSOLE_UART_NUM` (UART0 by default) for a UART
+console and, under `CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG`, calls
+`esp_rom_output_set_as_console(ESP_ROM_USB_SERIAL_DEVICE_NUM)` "to avoid output on UART".
 
 ### USB Pin Sharing
 
