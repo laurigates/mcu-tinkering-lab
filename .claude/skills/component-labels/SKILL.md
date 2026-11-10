@@ -92,6 +92,29 @@ Record the settings that worked in the table below.
 |---|---|---|---|---|
 | (not yet cut) | | | | |
 
+## Bluetooth
+
+`cut` and `test-cut` use USB unless `LABEL_CUTTER` is exported. Over Bluetooth
+LE, which needs no pairing:
+
+```sh
+just labels::scan                                  # every BLE device in range; find the cutter
+LABEL_CUTTER=ble just labels::test-cut 1 tools/labels/data/<file>.toml
+LABEL_CUTTER=ble just labels::cut 1 tools/labels/data/<file>.toml
+```
+
+The cutter is picked by advertised name, `PORTRAIT2` by default (the name the
+driver's model table has for it); a substring is enough. Set
+`LABEL_CUTTER_NAME` if the scan shows another name, or `LABEL_CUTTER_ID` to
+the scan's local identifier when two cutters match. `LABEL_CUTTER=bluetooth`
+with `LABEL_CUTTER_ADDR=<MAC>` is Bluetooth Classic, which the driver has on
+Linux and Windows only.
+
+Not yet run against the Portrait 2: the driver's BLE path was verified
+upstream only on a Cameo 5 Alpha with a pen, and whether the Portrait 2
+advertises over BLE at all is unknown until a scan shows it. Record the first
+result here, the registration-mark search included.
+
 ## Traps
 
 1. **Print at 100 % on A4.** The Epson queue defaults to Letter. `labels::print`
@@ -110,7 +133,9 @@ Record the settings that worked in the table below.
    gobject-introspection to build and which the driver never imports.
    `setup-cutter.sh` installs inkex with `--no-deps` and lists its real
    runtime deps, including `libusb1`, which the driver's `requirements.txt`
-   omits but its macOS import needs (`brew install libusb` too).
+   omits but its macOS import needs (`brew install libusb` too), and `bleak`
+   for Bluetooth LE. A venv set up before `bleak` was added needs
+   `just labels::setup` again, or the scan reports the package missing.
 5. **Spec lines from memory.** Some lines in the first data file were written
    from memory, not read from a listing; they carry a `# from memory` comment.
    Check those against a datasheet before reprinting them.
