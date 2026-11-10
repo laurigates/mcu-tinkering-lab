@@ -521,6 +521,33 @@ class JustfileDirectoryTests(TempRepo):
         )
         self.assertEqual(list(self.reported()), ["packages/a/justfile"])
 
+    def test_a_mention_only_in_a_trailing_comment_is_not_reported(self):
+        # Issue #678: a correct line explaining what it avoids.
+        self.write(
+            "packages/a/justfile",
+            'project_dir := source_directory() / "main"  # not justfile_directory(): see #605\n',
+        )
+        self.assertEqual(self.reported(), {})
+
+    def test_a_hash_inside_a_string_does_not_start_a_comment(self):
+        # The `#` is part of the string, so the use after it is real code.
+        for line in (
+            'x := "a#b" + justfile_directory()\n',
+            "x := 'a # b' + justfile_directory()\n",
+            'x := "a\\" # b" + justfile_directory()\n',
+            '    echo "#" {{justfile_directory()}}\n',
+        ):
+            with self.subTest(line=line):
+                self.write("packages/a/justfile", line)
+                self.assertEqual(list(self.reported()), ["packages/a/justfile"])
+
+    def test_a_hash_inside_a_word_does_not_start_a_comment(self):
+        # Neither just nor sh starts a comment at a `#` glued to a word.
+        self.write(
+            "packages/a/justfile", "    curl url#frag {{justfile_directory()}}\n"
+        )
+        self.assertEqual(list(self.reported()), ["packages/a/justfile"])
+
     def test_the_root_justfile_may_use_it(self):
         # There justfile_directory() is its own directory, which is correct.
         self.write("justfile", self.USES)

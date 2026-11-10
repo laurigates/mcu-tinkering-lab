@@ -209,6 +209,32 @@ JUSTFILE_DIRECTORY_HINT = (
 JUSTFILE_DIRECTORY_RE = re.compile(r"\bjustfile_directory\(\)")
 
 
+def strip_trailing_comment(line: str) -> str:
+    """The part of a justfile line before a comment `#`.
+
+    A `#` inside a '...', "..." or `...` string is not a comment, and neither is
+    one glued to the end of a word (`url#frag`): just and sh both start a
+    comment only at a `#` at the start of the line or after whitespace. Erring
+    that way keeps a real use from hiding behind something that is not a
+    comment (issue #678).
+    """
+    quote = ""
+    i = 0
+    while i < len(line):
+        ch = line[i]
+        if quote:
+            if ch == "\\" and quote == '"':
+                i += 1  # the escaped character cannot close the string
+            elif ch == quote:
+                quote = ""
+        elif ch in "'\"`":
+            quote = ch
+        elif ch == "#" and (i == 0 or line[i - 1].isspace()):
+            return line[:i]
+        i += 1
+    return line
+
+
 def check_justfile_directory() -> list[Finding]:
     """Catch `justfile_directory()` in any justfile other than the root one.
 
@@ -220,8 +246,9 @@ def check_justfile_directory() -> list[Finding]:
     only fails (or writes somewhere unexpected) when it runs. `source_directory()`
     is the directory of the file it appears in, which is what these paths mean.
 
-    Comment lines are skipped so prose explaining the trap (tools/esp32.just)
-    does not report itself.
+    Comments, whole-line or trailing, are skipped so prose explaining the trap
+    (tools/esp32.just, or a line saying why it does not use the function) does
+    not report itself.
     """
     findings: list[Finding] = []
     targets = sorted((REPO_ROOT / "packages").rglob("justfile"))
@@ -235,9 +262,7 @@ def check_justfile_directory() -> list[Finding]:
         if not path.is_file():
             continue
         for i, line in enumerate(path.read_text().split("\n")):
-            if line.lstrip().startswith("#"):
-                continue
-            if JUSTFILE_DIRECTORY_RE.search(line):
+            if JUSTFILE_DIRECTORY_RE.search(strip_trailing_comment(line)):
                 findings.append(
                     Finding(
                         str(path.relative_to(REPO_ROOT)),
