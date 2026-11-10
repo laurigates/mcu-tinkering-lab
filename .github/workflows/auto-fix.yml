@@ -85,11 +85,16 @@ jobs:
     steps:
       - name: Resolve failure context
         id: context
+        # The dispatch input and the failed run's branch name are free text, so
+        # they reach the script through env:, never through ${{ }} (#855).
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_PR_NUMBER: ${{ inputs.pr_number }}
+          RUN_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          RUN_ID_FROM_EVENT: ${{ github.event.workflow_run.id }}
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            PR_NUMBER="${{ inputs.pr_number }}"
+            PR_NUMBER="${INPUT_PR_NUMBER}"
             BRANCH=$(gh pr view "${PR_NUMBER}" --repo "${{ github.repository }}" --json headRefName -q '.headRefName')
             RUN_ID=$(gh run list \
               --repo "${{ github.repository }}" \
@@ -103,8 +108,8 @@ jobs:
               exit 1
             fi
           else
-            BRANCH="${{ github.event.workflow_run.head_branch }}"
-            RUN_ID="${{ github.event.workflow_run.id }}"
+            BRANCH="${RUN_HEAD_BRANCH}"
+            RUN_ID="${RUN_ID_FROM_EVENT}"
             PR_NUMBER=$(gh pr list --repo "${{ github.repository }}" --head "${BRANCH}" --json number -q '.[0].number // empty' 2>/dev/null || echo "")
           fi
 
@@ -127,6 +132,11 @@ jobs:
       workflow_name: ${{ needs.gather-context.outputs.workflow_name }}
       head_sha: ${{ needs.gather-context.outputs.head_sha }}
       pr_number: ${{ needs.gather-context.outputs.pr_number }}
+      # The fix commit is pushed with the release-please App's token, so CI
+      # runs on it; a GITHUB_TOKEN push starts no workflow (#866). A failed
+      # run on that commit has the App's bot as actor, which gather-context's
+      # actor.type gate skips, so a red fix cannot start another auto-fix.
+      app-id: ${{ vars.RELEASE_PLEASE_CLIENT_ID }}
       auto_fixable_description: |
         - C/C++ formatting errors (clang-format)
         - Python formatting errors (ruff format)
@@ -147,3 +157,4 @@ jobs:
         - sdkconfig or partition table changes that could affect device behavior
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      APP_PRIVATE_KEY: ${{ secrets.RELEASE_PLEASE_PRIVATE_KEY }}

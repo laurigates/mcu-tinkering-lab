@@ -29,8 +29,9 @@ jobs:
 
       - name: Generate dummy secrets.yaml for CI
         working-directory: packages/${{ inputs.project_path }}
+        env:
+          YAML_FILE: ${{ inputs.yaml_file }}
         run: |
-          YAML_FILE="${{ inputs.yaml_file }}"
           SECRETS=$(grep -oP '!secret\s+\K\w+' "$YAML_FILE" | sort -u)
 
           echo "# Auto-generated dummy secrets for CI builds" > secrets.yaml
