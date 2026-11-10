@@ -855,13 +855,15 @@ target_link_libraries(test_ota_interval PRIVATE Threads::Threads m)
 add_test(NAME ota_interval COMMAND test_ota_interval)
 
 # -----------------------------------------------------------------------------
-# improv_wifi reply transport (issue #644)
+# improv_wifi transport and protocol (issues #644, #1056)
 #
 # Compiles the shared component from packages/components/improv-wifi unmodified.
-# Its UART0 default writer lives in improv_wifi_uart.c (ESP-IDF only) and is
-# replaced by a recorder in the test, so the suite can assert which transport a
-# reply took: UART0 by default (robocar-main, brainbox), the injected writer
-# once one is set (robocar-unified's USB-Serial-JTAG console).
+# Its two ESP-IDF-only hooks are replaced in the test: the UART0 default writer
+# (improv_wifi_uart.c) by a recorder, so the suite can assert which transport a
+# reply took — UART0 by default (brainbox), the injected writer once one is set
+# (robocar-unified's USB-Serial-JTAG console) — and improv_wifi_device_info()
+# (improv_wifi_device_info.c) by fixed strings. The protocol tests check the
+# bytes against the Improv Serial spec and its reference client, sdk-serial-js.
 # -----------------------------------------------------------------------------
 set(IMPROV_WIFI_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../components/improv-wifi")
 add_executable(test_improv_wifi
@@ -870,6 +872,39 @@ add_executable(test_improv_wifi
 )
 target_include_directories(test_improv_wifi PRIVATE "${IMPROV_WIFI_DIR}")
 add_test(NAME improv_wifi COMMAND test_improv_wifi)
+
+# -----------------------------------------------------------------------------
+# Console line assembly with Improv packets kept out (review of #1056)
+#
+# console_line.c and the improv-wifi parser, both unmodified, driven with the
+# bytes ESP Web Tools sends. command_task() logs every completed line (and the
+# log reaches the UART0 mirror and the GlitchTip breadcrumb ring), so a
+# credentials packet must never complete one.
+# -----------------------------------------------------------------------------
+add_executable(test_console_line
+    "${MAIN_SRC_DIR}/console_line.c"
+    "${IMPROV_WIFI_DIR}/improv_wifi.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_console_line.c"
+)
+target_include_directories(test_console_line PRIVATE "${IMPROV_WIFI_DIR}")
+add_test(NAME console_line COMMAND test_console_line)
+
+# -----------------------------------------------------------------------------
+# improv-wifi's IMPROV_FIRMWARE_NAME escaping (review of #1056)
+#
+# The component turns its project's flasher.json `name` into a C string with
+# improv_c_string_literal(). This builds a definition the same way from a name
+# holding a double quote and backslashes; without the escaping the test file
+# does not compile.
+# -----------------------------------------------------------------------------
+include("${IMPROV_WIFI_DIR}/improv_c_string.cmake")
+improv_c_string_literal(improv_test_firmware_literal "Robo \"Car\" C:\\bench\\")
+add_executable(test_improv_firmware_name
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_improv_firmware_name.c"
+)
+target_compile_definitions(test_improv_firmware_name PRIVATE
+                           "IMPROV_FIRMWARE_NAME=${improv_test_firmware_literal}")
+add_test(NAME improv_firmware_name COMMAND test_improv_firmware_name)
 
 # -----------------------------------------------------------------------------
 # MQTT broker-credential loader (issue #639)

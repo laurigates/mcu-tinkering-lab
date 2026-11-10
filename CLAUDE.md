@@ -187,12 +187,12 @@ Most workflows delegate to reusable workflows from [`laurigates/.github`](https:
 | `build.yml` | Push/PR (path-filtered) | Single CI build for every firmware project (ESP-IDF/ESPHome/Pico). Discovers changed projects from `.github/project-matrix.json` and fans out via the `_ci-build-*.yml` reusables | Local reusable `_ci-build-*.yml` |
 | `build-python-simulation.yml` | Push/PR to main/develop | Build the Python simulation package (import check) | No (local) |
 | `test.yml` | Push/PR to main/develop | Pre-commit, simulation pytest, cppcheck, format check, and the Python Suites matrix: every uv project test suite in `.github/python-suites.json` (tools/enclosure, mechanism, cadstd, glitchtip bridge, the robocar behaviour twin per [ADR-030](docs/decisions/ADR-030-robocar-behaviour-twin.md), the live probe, the TTS generator) on its own path changes, with `UV_LOCKED=1` | No (local) |
-| `build-firmware.yml` | Release published | Build + attach firmware binaries to release + deploy web flasher | No (local) |
+| `build-firmware.yml` | Release published / manual | Check the tag is `<component>-v<semver>`, then build + attach the flasher-enabled ESP-IDF binaries to the release and deploy the web flasher; a Pico SDK project's release (balancebot) also gets its `.uf2`, built by `_ci-build-pico.yml` at the tag. Release-asset check: `tools/verify-release-assets.sh` | No (local); Pico via local `_ci-build-pico.yml` |
 | `release-please.yml` | Push to main | Auto-generate release PRs from conventional commits | `reusable-release-please.yml` |
 | `claude.yml` | @claude mention | Interactive Claude assistance in issues/PRs | `reusable-claude.yml` |
 | `auto-fix.yml` | CI failure / manual | Analyze and auto-fix CI failures with Claude | `reusable-auto-fix.yml` |
 | `enforce-conventional-commits.yml` | PR opened/edited/sync | Auto-fix PR titles to conventional commits format | `reusable-enforce-conventional-commits.yml` |
-| `security-secrets.yml` | Push/PR to main/develop | AI-powered secret scanning on changed files | `reusable-security-secrets.yml` |
+| `security-secrets.yml` | PR to main/develop | gitleaks over the PR's commits, with a planted-key canary; no actor gate, so bot PRs are scanned too (the Claude scan was removed in #860) | No (local) |
 | `auto-resolve-conflicts.yml` | Push to main / schedule | Auto-resolve merge conflicts in PRs with Claude | `reusable-auto-resolve-conflicts.yml` |
 | `fix-release-conflicts.yml` | Push to main / schedule | Fix conflicts in release-please PRs | `reusable-fix-release-conflicts.yml` |
 | `sync-ai-rules.yml` | Weekly / manual | Sync AI coding rules from `.github` repo | `reusable-sync-ai-rules.yml` |
@@ -213,6 +213,7 @@ Most workflows delegate to reusable workflows from [`laurigates/.github`](https:
 - `docs/reference/parts/` — the parts registry: one TOML per physical part a carrier mounts (KiCad symbol, footprint, LCSC number, pin map and where the pin order came from), named from `hardware.toml` by `part = "<slug>"`
 - `docs/reference/blocks/` — circuit blocks: a stage (buck, pack-input protection) designed once from registry parts, used from `hardware.toml` by `[blocks.<id>]` and expanded when the file is read (`tools/hardware/blocks.py`, [ADR-031](docs/decisions/ADR-031-circuit-blocks.md))
 - `docker-compose.yml` — ESP-IDF container service definition (`espressif/idf:v5.4`)
+- `tools/kconfig_symbols/` — checks every tracked `sdkconfig.defaults` without a build: each symbol must be defined by ESP-IDF (`idf-v5.4.txt`, extracted from the `espressif/idf` image by `just kconfig-symbols::idf`), the project's own Kconfig files, or its managed components (`components/<ns>__<name>@<version>.txt`, recorded from a build's `managed_components/` by `just kconfig-symbols::component`). ESP-IDF ignores an unknown symbol with only a build-log warning (#707). Runs as the `kconfig-symbols` pre-commit hook; a test fails when the ESP-IDF list and the Dockerfile's IDF version disagree
 - `tools/refresh-idf-locks.py` — the one update path for git-tracked `dependencies.lock` files (`just refresh-idf-locks`, and the monthly `refresh-idf-locks.yml`). Nothing else re-resolves a tracked lock while its `idf_component.yml` is unchanged; editing the manifest re-resolves on the next build. Procedure: [`.claude/rules/esp-idf-dependency-locks.md`](.claude/rules/esp-idf-dependency-locks.md)
 - `.clang-format` — C/C++ formatting rules
 - `.pre-commit-config.yaml` — Pre-commit hook definitions

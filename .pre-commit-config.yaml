@@ -93,15 +93,17 @@ repos:
         name: Flash recipes match their projects and the build
         entry: python3 tools/check-flash-recipes.py
         language: system
-        files: '(justfile|\.just|sdkconfig\.defaults|partitions\.csv|CMakeLists\.txt|tools/lib/otadata-predicate\.sh|tools/check-flash-recipes\.py)$'
+        files: '(justfile|\.just|sdkconfig\.defaults|partitions\.csv|CMakeLists\.txt|tools/lib/otadata-predicate\.sh|tools/lib/idf-partition-tables/.*|tools/check-flash-recipes\.py)$'
         pass_filenames: false
 
       - id: check-flash-recipes-tests
         name: check-flash-recipes unit tests
         entry: python3 -m unittest tools/test_check_flash_recipes.py
         language: system
-        # The lookup tests run the real otadata predicate, so its edits rerun them.
-        files: '^tools/(check-flash-recipes\.py|test_check_flash_recipes\.py|lib/otadata-predicate\.sh)$'
+        # The lookup tests run the real otadata predicate, its resolved built-in
+        # tables and the manifest generator that sources it, so their edits
+        # rerun them. The ESP-IDF version pins rerun the built-in-table tripwire.
+        files: '^(tools/(check-flash-recipes\.py|test_check_flash_recipes\.py|lib/otadata-predicate\.sh|lib/idf-partition-tables/.*|generate-flasher-manifests\.sh)|Dockerfile|\.github/workflows/(build-firmware|_ci-build-esp32)\.yml)$'
         pass_filenames: false
 
       - id: labels-tests
@@ -146,21 +148,45 @@ repos:
         files: '^(tools/(foil-test-board\.py|test_foil_test_board\.py)|docs/prototyping/foil-test-board/)'
         pass_filenames: false
 
-      # build.yml rebuilds a project only when its own path or an extra_paths
-      # entry changed; a component compiled from outside the project needs an
-      # entry or a change to it alone builds nothing (issue #670).
+      # build.yml builds only the projects in .github/project-matrix.json, and
+      # rebuilds one only when its own path or an extra_paths entry changed. A
+      # registered project with no entry is never built (#697, #709); a
+      # component compiled from outside the project needs an entry or a change
+      # to it alone builds nothing (issue #670). The root justfile is an input:
+      # a new `mod` must come with an entry or a NOT_IN_MATRIX exclusion.
       - id: check-component-extra-paths
-        name: CI build triggers cover every shared component a project compiles
+        name: CI builds every registered project and every shared component it compiles
         entry: python3 tools/check-component-extra-paths.py
         language: system
-        files: '(CMakeLists\.txt|\.github/project-matrix\.json|tools/check-component-extra-paths\.py)$'
+        files: '(^justfile|CMakeLists\.txt|\.github/project-matrix\.json|tools/check-component-extra-paths\.py)$'
         pass_filenames: false
 
       - id: check-component-extra-paths-tests
         name: check-component-extra-paths tests
         entry: uv run --no-project --with pytest==9.1.1 python -m pytest -q tools/test_check_component_extra_paths.py
         language: system
-        files: '(CMakeLists\.txt|\.github/project-matrix\.json|tools/(check-component-extra-paths|test_check_component_extra_paths)\.py)$'
+        files: '(^justfile|CMakeLists\.txt|\.github/project-matrix\.json|tools/(check-component-extra-paths|test_check_component_extra_paths)\.py)$'
+        pass_filenames: false
+
+      # ESP-IDF ignores an sdkconfig.defaults line whose symbol no Kconfig file
+      # defines, with only a build-log warning (issue #707). The test suite
+      # checks every tracked sdkconfig.defaults against the symbol lists in
+      # tools/kconfig_symbols, and fails when the ESP-IDF list and the
+      # Dockerfile / CI IDF_VERSION disagree. No build or container needed.
+      - id: kconfig-symbols
+        name: sdkconfig.defaults symbols exist in ESP-IDF, the project or its components
+        entry: python3 -m unittest discover -s tools/kconfig_symbols -t tools
+        language: system
+        files: '(sdkconfig\.defaults[^/]*|idf_component\.yml|dependencies\.lock|Kconfig[^/]*|CMakeLists\.txt|^tools/kconfig_symbols/.*|^tools/check-component-extra-paths\.py|^Dockerfile|^\.github/workflows/_ci-build-esp32\.yml)$'
+        pass_filenames: false
+
+      # No run: script expands inputs.* or github.event.* through ${{ }}
+      # (issue #855), plus the workflow wiring the file's docstring lists.
+      - id: workflow-structure
+        name: Workflows pass untrusted text through env, and keep their release and Claude wiring
+        entry: uv run --no-project --with pyyaml==6.0.3 python -m unittest tools/test_workflows.py
+        language: system
+        files: '^(\.github/workflows/.*\.ya?ml|tools/test_workflows\.py)$'
         pass_filenames: false
 
       - id: check-typst-docs

@@ -36,8 +36,8 @@ CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_FULL=y
 CONFIG_CAMERA_CORE1=y
 CONFIG_CAMERA_DMA_BUFFER_SIZE_MAX=32768
 
-# mDNS
-CONFIG_MDNS_ENABLED=y
+# mDNS comes from the espressif/mdns managed component in
+# main/idf_component.yml; it has no enable switch here.
 
 # Brownout disabled (camera + WiFi startup can dip voltage on some USB ports)
 CONFIG_ESP_BROWNOUT_DET=n

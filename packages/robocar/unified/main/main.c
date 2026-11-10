@@ -38,6 +38,7 @@
 #include "camera.h"
 #include "cliff_sensor.h"
 #include "config.h"
+#include "console_line.h"
 #include "credentials_loader.h"
 #include "credentials_validator.h"
 #include "dialogue_style.h"
@@ -1572,7 +1573,7 @@ static void on_improv_credentials(const char *ssid, const char *password)
 
     if (!ssid || ssid[0] == '\0' || strlen(ssid) >= sizeof(s_improv_ssid) ||
         (password && strlen(password) >= sizeof(s_improv_pass))) {
-        improv_wifi_send_error(IMPROV_ERROR_INVALID_RPC);
+        improv_wifi_fail_provisioning(IMPROV_ERROR_INVALID_RPC);
         return;
     }
     if (__atomic_load_n(&s_improv_pending, __ATOMIC_ACQUIRE)) {
@@ -1583,7 +1584,7 @@ static void on_improv_credentials(const char *ssid, const char *password)
     strlcpy(s_improv_ssid, ssid, sizeof(s_improv_ssid));
     strlcpy(s_improv_pass, password ? password : "", sizeof(s_improv_pass));
     if (wifi_connect(s_improv_ssid, s_improv_pass) != ESP_OK) {
-        improv_wifi_send_error(IMPROV_ERROR_UNABLE_CONNECT);
+        improv_wifi_fail_provisioning(IMPROV_ERROR_UNABLE_CONNECT);
         return;
     }
     __atomic_store_n(&s_improv_pending, true, __ATOMIC_RELEASE);
@@ -1803,12 +1804,6 @@ static void execute_console_line(const char *buf)
     }
 }
 
-/* Longest serial console line, NUL included. 32 until issue #626: `mqtt auth
- * <user> <pass>` needs room for a 32-character username and a 64-character
- * password. Every handler parses with width-bounded sscanf formats, so the
- * longer line is safe for all of them. */
-#define CONSOLE_LINE_MAX 128
-
 /* MQTT command-topic access mode, fixed for the boot (issue #626). Read-only
  * until init_mqtt_access() finds a complete pair of broker credentials. */
 static mqtt_command_access_t s_mqtt_access = MQTT_COMMAND_ACCESS_READ_ONLY;
@@ -2003,8 +1998,8 @@ static void handle_gemini_cmd(const char *buf)
 static void command_task(void *pvParameters)
 {
     (void)pvParameters;
-    char buf[CONSOLE_LINE_MAX];
-    int buf_pos = 0;
+    console_line_t line;
+    console_line_init(&line);
     int64_t last_improv_announce = 0;
 
     ESP_LOGI(TAG, "Command task started on core %d", xPortGetCoreID());
@@ -2016,11 +2011,13 @@ static void command_task(void *pvParameters)
 
     while (1) {
         /* While unprovisioned, announce ourselves ~1 Hz so ESP Web Tools can
-         * discover the device on the port it just flashed. */
+         * discover the device on the port it just flashed. The announcement
+         * repeats the remembered state, so during a connect attempt it keeps
+         * saying Provisioning instead of overwriting it with Ready. */
         if (s_improv_active) {
             int64_t now = esp_timer_get_time();
             if (now - last_improv_announce > 1000000LL) {
-                improv_wifi_send_state(IMPROV_STATE_AUTHORIZED);
+                improv_wifi_announce();
                 last_improv_announce = now;
             }
         }
@@ -2031,90 +2028,85 @@ static void command_task(void *pvParameters)
             continue;
         }
 
-        /* Feed every byte to the Improv parser first; it silently ignores
-         * anything that is not a well-formed Improv packet, so ASCII console
-         * commands still reach the switch below. */
-        if (s_improv_active) {
-            improv_wifi_process_byte((uint8_t)ch);
-        }
+        /* Feed every byte to the Improv parser first; it ignores anything
+         * that is not an Improv packet, so ASCII console commands still reach
+         * the switch below. The bytes of a packet it claims never become a
+         * console line (console_line.h): a Send Wi-Fi settings packet carries
+         * the password, and a line is logged below and mirrored to UART0 and
+         * the GlitchTip breadcrumb ring. */
+        const bool improv_owned = s_improv_active && improv_wifi_process_byte((uint8_t)ch);
 
-        if (ch == '\n' || ch == '\r') {
-            if (buf_pos > 0) {
-                buf[buf_pos] = '\0';
-                /* Never echo a broker password into the serial log, which is
-                 * routinely captured to a file (`monitor | tee`). The redaction
-                 * test is looser than the routing one: a mistyped ` mqtt auth`
-                 * or `MQTT auth` is not run, but it still carries a password. */
-                const bool is_mqtt_cmd = strncmp(buf, "mqtt", 4) == 0;
-                const bool is_gemini_cmd = strncmp(buf, "gemini", 6) == 0;
-                const char *lead = buf;
-                while (*lead == ' ' || *lead == '\t') {
-                    ++lead;
-                }
-                const bool redact = strncasecmp(lead, "mqtt", 4) == 0;
-                const bool redact_key = strncasecmp(lead, "gemini", 6) == 0;
-                ESP_LOGI(TAG, "Serial cmd: %s",
-                         redact       ? "mqtt ... (redacted)"
-                         : redact_key ? "gemini ... (redacted)"
-                                      : buf);
-
-                /* Somebody is at the console, so the robot is not unattended
-                 * and the whole premise of dormancy has lapsed. Placed here —
-                 * one point, on a completed line — rather than on each command:
-                 * a new command added below then wakes the planner for free
-                 * instead of being the one that silently does not.
-                 *
-                 * Not on every BYTE: Improv provisioning packets are bytes too,
-                 * and a board being provisioned has no WiFi to plan over yet. */
-                plan_activity_wake();
-
-                // Single-letter movement commands (manual override / debug)
-                if (buf_pos == 1) {
-                    switch (buf[0]) {
-                        case 'F':
-                        case 'f':
-                            dispatch_movement("forward");
-                            break;
-                        case 'B':
-                        case 'b':
-                            dispatch_movement("backward");
-                            break;
-                        case 'L':
-                        case 'l':
-                            dispatch_movement("left");
-                            break;
-                        case 'R':
-                        case 'r':
-                            dispatch_movement("right");
-                            break;
-                        case 'C':
-                        case 'c':
-                            dispatch_movement("rotate_cw");
-                            break;
-                        case 'W':
-                        case 'w':
-                            dispatch_movement("rotate_ccw");
-                            break;
-                        case 'S':
-                        case 's':
-                            dispatch_movement("stop");
-                            break;
-                    }
-                } else if (is_mqtt_cmd) {
-                    /* Serial-only by construction: kept out of
-                     * execute_console_line(), which the MQTT topic shares. */
-                    handle_mqtt_cmd(buf);
-                } else if (is_gemini_cmd) {
-                    /* Serial-only, like `mqtt`: the key is a credential. */
-                    handle_gemini_cmd(buf);
-                } else {
-                    execute_console_line(buf);
-                }
-
-                buf_pos = 0;
+        const char *const buf = console_line_feed(&line, (char)ch, improv_owned);
+        if (buf != NULL) {
+            /* Never echo a broker password into the serial log, which is
+             * routinely captured to a file (`monitor | tee`). The redaction
+             * test is looser than the routing one: a mistyped ` mqtt auth`
+             * or `MQTT auth` is not run, but it still carries a password. */
+            const bool is_mqtt_cmd = strncmp(buf, "mqtt", 4) == 0;
+            const bool is_gemini_cmd = strncmp(buf, "gemini", 6) == 0;
+            const char *lead = buf;
+            while (*lead == ' ' || *lead == '\t') {
+                ++lead;
             }
-        } else if (buf_pos < (int)sizeof(buf) - 1) {
-            buf[buf_pos++] = (char)ch;
+            const bool redact = strncasecmp(lead, "mqtt", 4) == 0;
+            const bool redact_key = strncasecmp(lead, "gemini", 6) == 0;
+            ESP_LOGI(TAG, "Serial cmd: %s",
+                     redact       ? "mqtt ... (redacted)"
+                     : redact_key ? "gemini ... (redacted)"
+                                  : buf);
+
+            /* Somebody is at the console, so the robot is not unattended
+             * and the whole premise of dormancy has lapsed. Placed here —
+             * one point, on a completed line — rather than on each command:
+             * a new command added below then wakes the planner for free
+             * instead of being the one that silently does not.
+             *
+             * Not on every BYTE: Improv provisioning packets are bytes too,
+             * and a board being provisioned has no WiFi to plan over yet. */
+            plan_activity_wake();
+
+            // Single-letter movement commands (manual override / debug)
+            if (buf[0] != '\0' && buf[1] == '\0') {
+                switch (buf[0]) {
+                    case 'F':
+                    case 'f':
+                        dispatch_movement("forward");
+                        break;
+                    case 'B':
+                    case 'b':
+                        dispatch_movement("backward");
+                        break;
+                    case 'L':
+                    case 'l':
+                        dispatch_movement("left");
+                        break;
+                    case 'R':
+                    case 'r':
+                        dispatch_movement("right");
+                        break;
+                    case 'C':
+                    case 'c':
+                        dispatch_movement("rotate_cw");
+                        break;
+                    case 'W':
+                    case 'w':
+                        dispatch_movement("rotate_ccw");
+                        break;
+                    case 'S':
+                    case 's':
+                        dispatch_movement("stop");
+                        break;
+                }
+            } else if (is_mqtt_cmd) {
+                /* Serial-only by construction: kept out of
+                 * execute_console_line(), which the MQTT topic shares. */
+                handle_mqtt_cmd(buf);
+            } else if (is_gemini_cmd) {
+                /* Serial-only, like `mqtt`: the key is a credential. */
+                handle_gemini_cmd(buf);
+            } else {
+                execute_console_line(buf);
+            }
         }
     }
 }
@@ -2412,7 +2404,7 @@ static void settle_improv_attempt(bool link_up, net_supervisor_t *sup)
         /* Persist only after the credentials are proven to work, so a typo
          * cannot overwrite a known-good stored network. */
         if (!credentials_nvs_save_wifi(s_improv_ssid, s_improv_pass)) {
-            improv_wifi_send_error(IMPROV_ERROR_UNKNOWN);
+            improv_wifi_fail_provisioning(IMPROV_ERROR_UNKNOWN);
         } else {
             credentials_reload();
             s_have_wifi_credentials = true;
@@ -2424,7 +2416,7 @@ static void settle_improv_attempt(bool link_up, net_supervisor_t *sup)
         __atomic_store_n(&s_improv_pending, false, __ATOMIC_RELEASE);
     } else if (wifi_connect_failed()) {
         ESP_LOGW(TAG, "Improv: could not join '%s'", s_improv_ssid);
-        improv_wifi_send_error(IMPROV_ERROR_UNABLE_CONNECT);
+        improv_wifi_fail_provisioning(IMPROV_ERROR_UNABLE_CONNECT);
         __atomic_store_n(&s_improv_pending, false, __ATOMIC_RELEASE);
         credentials_t creds = {0};
         if (load_credentials(&creds) && creds.wifi_ssid[0] != '\0') {
@@ -2479,6 +2471,10 @@ static void net_supervisor_task(void *arg)
 #endif
         }
         if (act.arm_improv && s_improv_ready) {
+            /* Ready again: the remembered state may still be PROVISIONED from
+             * an earlier provisioning, and command_task's announcement repeats
+             * whatever is remembered. */
+            improv_wifi_send_state(IMPROV_STATE_AUTHORIZED);
             s_improv_active = true;
             ESP_LOGW(TAG, "No WiFi link — Improv provisioning armed (ESP Web Tools)");
         }

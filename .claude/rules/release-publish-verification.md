@@ -97,7 +97,7 @@ URL. `build-firmware.yml` now does it in two places, and both must stay:
 | Gate | Asserts |
 |---|---|
 | `Verify published firmware parts` | every `builds[].parts[].path` of every generated manifest returns 200 from the deployed Pages site, with a matching byte size |
-| `Verify release assets` | every staged basename is present in `.assets[].name` **by name**, then each matched `browser_download_url` fetches 200 |
+| `Verify release assets` | every staged basename is present in `.assets[].name` **by name**, then each matched `browser_download_url` fetches 200. One script, `tools/verify-release-assets.sh <tag> <dir>`, run by both the ESP-IDF job and `attach-pico-release` |
 | `Verify manifest build SHA` | every manifest's `buildSha` is the tag checkout's `HEAD`, and each `"embedsBuildSha": true` project's app binary contains that SHA NUL-terminated (issue #627) |
 
 The third gate reads local files rather than the deployed site, because what

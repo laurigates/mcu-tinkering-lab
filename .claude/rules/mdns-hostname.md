@@ -16,7 +16,12 @@ All ESP32 projects that connect to WiFi in STA mode MUST configure mDNS so the d
 
 1. **Include header**: `#include "mdns.h"` in the file that initializes WiFi
 2. **Add CMake dependency**: Add `mdns` to `REQUIRES` in the main `CMakeLists.txt`
-3. **Enable in sdkconfig**: Add `CONFIG_MDNS_ENABLED=y` to `sdkconfig.defaults`
+3. **Declare the managed component**: add `espressif/mdns: '^1.8.0'` under
+   `dependencies:` in `main/idf_component.yml`. In ESP-IDF 5.x mDNS is a managed
+   component, not part of the framework; without the entry `mdns.h` is not found
+   (brainbox, #671). It has no enable switch: there is no `CONFIG_MDNS_ENABLED`,
+   and ESP-IDF ignores such a line with only an "unknown kconfig symbol" build
+   warning (#707). The `kconfig-symbols` pre-commit hook now rejects it
 4. **Initialize after WiFi connects**:
    ```c
    ESP_ERROR_CHECK(mdns_init());

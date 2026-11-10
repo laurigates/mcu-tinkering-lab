@@ -130,28 +130,6 @@ def parse_sdkconfig(path: Path) -> dict[str, str]:
     return values
 
 
-def parse_partitions(path: Path) -> tuple[int | None, bool]:
-    """Return (first app partition offset, whether an otadata partition exists)."""
-    app_offset: int | None = None
-    has_otadata = False
-    for line in path.read_text().splitlines():
-        line = line.split("#", 1)[0].strip()
-        if not line:
-            continue
-        cols = [c.strip() for c in line.split(",")]
-        if len(cols) < 4:
-            continue
-        _name, ptype, subtype, offset = cols[0], cols[1], cols[2], cols[3]
-        if ptype == "data" and subtype == "ota":
-            has_otadata = True
-        if ptype == "app" and app_offset is None and offset:
-            try:
-                app_offset = int(offset, 0)
-            except ValueError:
-                pass
-    return app_offset, has_otadata
-
-
 ATTRIBUTE_HINT = (
     "a just attribute must sit IMMEDIATELY above its recipe; a comment or blank "
     "line between them orphans it and `just` refuses to parse the whole file"
@@ -180,25 +158,25 @@ def check_attribute_placement() -> list[Finding]:
         if not path.is_file():
             continue
         lines = path.read_text().split("\n")
-        for i, line in enumerate(lines):
-            stripped = line.strip()
+        for i, line in enumerate(lines[:-1]):
+            # An attribute starts at column 0, like the recipe it belongs to; an
+            # indented `[ ... ]` is a shell test inside a recipe body.
+            stripped = line.rstrip()
             if not (stripped.startswith("[") and stripped.endswith("]")):
                 continue
-            # Look ahead to the next meaningful line.
-            for follower in lines[i + 1 :]:
-                nxt = follower.strip()
-                if not nxt:
-                    continue  # blank alone is tolerated by just
-                if nxt.startswith("#"):
-                    findings.append(
-                        Finding(
-                            str(path.relative_to(REPO_ROOT)),
-                            "ORPHANED_ATTRIBUTE",
-                            f"line {i + 1}: {stripped} is followed by a comment — "
-                            + ATTRIBUTE_HINT,
-                        )
+            # just 1.58.0 rejects a blank line here as well as a comment
+            # (`error: extraneous attribute`, issue #675).
+            nxt = lines[i + 1].strip()
+            if not nxt or nxt.startswith("#"):
+                follower = "a comment" if nxt else "a blank line"
+                findings.append(
+                    Finding(
+                        str(path.relative_to(REPO_ROOT)),
+                        "ORPHANED_ATTRIBUTE",
+                        f"line {i + 1}: {stripped} is followed by {follower} — "
+                        + ATTRIBUTE_HINT,
                     )
-                break
+                )
     return findings
 
 
@@ -207,6 +185,32 @@ JUSTFILE_DIRECTORY_HINT = (
     "directory, not this file's; use source_directory()"
 )
 JUSTFILE_DIRECTORY_RE = re.compile(r"\bjustfile_directory\(\)")
+
+
+def strip_trailing_comment(line: str) -> str:
+    """The part of a justfile line before a comment `#`.
+
+    A `#` inside a '...', "..." or `...` string is not a comment, and neither is
+    one glued to the end of a word (`url#frag`): just and sh both start a
+    comment only at a `#` at the start of the line or after whitespace. Erring
+    that way keeps a real use from hiding behind something that is not a
+    comment (issue #678).
+    """
+    quote = ""
+    i = 0
+    while i < len(line):
+        ch = line[i]
+        if quote:
+            if ch == "\\" and quote == '"':
+                i += 1  # the escaped character cannot close the string
+            elif ch == quote:
+                quote = ""
+        elif ch in "'\"`":
+            quote = ch
+        elif ch == "#" and (i == 0 or line[i - 1].isspace()):
+            return line[:i]
+        i += 1
+    return line
 
 
 def check_justfile_directory() -> list[Finding]:
@@ -220,8 +224,9 @@ def check_justfile_directory() -> list[Finding]:
     only fails (or writes somewhere unexpected) when it runs. `source_directory()`
     is the directory of the file it appears in, which is what these paths mean.
 
-    Comment lines are skipped so prose explaining the trap (tools/esp32.just)
-    does not report itself.
+    Comments, whole-line or trailing, are skipped so prose explaining the trap
+    (tools/esp32.just, or a line saying why it does not use the function) does
+    not report itself.
     """
     findings: list[Finding] = []
     targets = sorted((REPO_ROOT / "packages").rglob("justfile"))
@@ -235,9 +240,7 @@ def check_justfile_directory() -> list[Finding]:
         if not path.is_file():
             continue
         for i, line in enumerate(path.read_text().split("\n")):
-            if line.lstrip().startswith("#"):
-                continue
-            if JUSTFILE_DIRECTORY_RE.search(line):
+            if JUSTFILE_DIRECTORY_RE.search(strip_trailing_comment(line)):
                 findings.append(
                     Finding(
                         str(path.relative_to(REPO_ROOT)),
@@ -299,10 +302,9 @@ BOOTLOADER_OFFSETS = {
     "esp32p4": 0x2000,
 }
 DEFAULT_PARTITION_TABLE_OFFSET = 0x8000
-# ESP-IDF's built-in tables (single app, large single app, two OTA) leave the
-# offsets blank; gen_esp32part.py places nvs and phy_init after the table and
-# aligns the first app to 64 KB, which lands on 0x10000 behind a table at 0x8000.
-BUILT_IN_TABLE_APP_OFFSET = 0x10000
+# ESP-IDF's built-in tables leave every offset blank. The predicate resolves a
+# preset to tools/lib/idf-partition-tables/, gen_esp32part.py's own placement
+# behind a table at 0x8000, so they are read like any other table (#684).
 # parttool.py's --partition-boot-default search, which is where `idf.py flash`
 # writes the app: factory if the table has one, else the lowest ota_N.
 BOOT_APP_SUBTYPES = ("factory", *(f"ota_{n}" for n in range(16)))
@@ -313,7 +315,9 @@ class FlashLayout:
     """Where each build output of one project belongs in flash.
 
     None means the offset could not be determined; `why` says why, and is
-    quoted in the finding. For otadata, None means the table has no otadata row.
+    quoted in the finding. For otadata, None means the table has no otadata
+    row, unless otadata_auto says the row exists with a blank offset that
+    gen_esp32part.py places at build time (issue #689).
     """
 
     bootloader: int | None
@@ -321,6 +325,12 @@ class FlashLayout:
     otadata: int | None
     app: int | None
     why: dict[str, str] = field(default_factory=dict)
+    otadata_auto: bool = False
+
+    @property
+    def has_otadata_row(self) -> bool:
+        """Whether the build writes ota_data_initial.bin for this table."""
+        return self.otadata is not None or self.otadata_auto
 
 
 BIN_TOKEN_RE = re.compile(r"""[^\s"'`=]+\.bin\b""")
@@ -442,7 +452,7 @@ def audit_dry_run(
         # Only a FULL flash owes otadata. An app-only recipe leaving the OTA
         # state alone is the point of an app-only recipe.
         if PARTITION_TABLE_OUTPUT in rels and OTADATA_OUTPUT not in rels:
-            if layout(project_dir).otadata is not None:
+            if layout(project_dir).has_otadata_row:
                 findings.append(
                     Finding(
                         recipe,
@@ -496,7 +506,9 @@ def audit_offsets(
         if expected is None:
             # No otadata row: the build writes no ota_data_initial.bin, so the
             # flash fails loudly on the missing file (see FIXED_BUILD_OUTPUTS).
-            if role != "otadata":
+            # A row with a blank offset is not that case: the file exists and
+            # this offset has nothing to be checked against.
+            if role != "otadata" or parts.otadata_auto:
                 findings.append(
                     Finding(
                         recipe,
@@ -532,14 +544,15 @@ def cmake_project_name(project_dir: Path) -> str | None:
     return match.group("name") if match else None
 
 
-def partition_table(project_dir: Path) -> tuple[Path, int | None]:
-    """The table the build uses and its otadata offset, from the release path's parser.
+def partition_table(project_dir: Path) -> tuple[Path, int | None, bool]:
+    """The table the build uses, its otadata offset, and whether it has an otadata row.
 
     Asks tools/lib/otadata-predicate.sh rather than re-parsing here, which keeps
     this check, the flasher manifests and the release assembly from disagreeing
     about which table a project builds (issues #541, #560). A predicate that
     fails to run raises — reading that as "no otadata row" would fail this
-    check open.
+    check open. A row with a blank offset (the predicate's `auto`) has a row
+    and no offset (issue #689).
     """
     script = (
         'source "$1" || exit 2; t=$(resolve_partition_table "$2") || exit 2; '
@@ -557,7 +570,9 @@ def partition_table(project_dir: Path) -> tuple[Path, int | None]:
             f"otadata predicate failed for {_display(project_dir)}: {proc.stderr.strip()}"
         )
     otadata = lines[1].strip()
-    return Path(lines[0]), int(otadata) if otadata else None
+    if otadata == "auto":
+        return Path(lines[0]), None, True
+    return Path(lines[0]), int(otadata) if otadata else None, bool(otadata)
 
 
 def boot_app_offset(table: Path) -> tuple[int | None, str]:
@@ -611,19 +626,15 @@ def flash_layout(project_dir: Path) -> FlashLayout:
         table_offset = None
         why["partition_table"] = f"CONFIG_PARTITION_TABLE_OFFSET={raw} is not a number"
 
-    table, otadata = partition_table(project_dir)
-    why["otadata"] = f"{_display(table)}'s otadata row"
-    if table.is_file():
-        app, why["app"] = boot_app_offset(table)
-    elif table_offset == DEFAULT_PARTITION_TABLE_OFFSET:
-        app = BUILT_IN_TABLE_APP_OFFSET
-        why["app"] = "ESP-IDF's built-in partition table"
-    else:
-        app = None
-        why["app"] = (
-            "a built-in partition table behind a moved partition table; "
-            "its app offset is not computed here"
-        )
+    table, otadata, has_otadata_row = partition_table(project_dir)
+    otadata_auto = has_otadata_row and otadata is None
+    why["otadata"] = f"{_display(table)}'s otadata row" + (
+        " has a blank offset, which gen_esp32part.py places at build time"
+        if otadata_auto
+        else ""
+    )
+    # The predicate names only a table that exists, a built-in preset included.
+    app, why["app"] = boot_app_offset(table)
 
     return FlashLayout(
         bootloader=bootloader,
@@ -631,6 +642,7 @@ def flash_layout(project_dir: Path) -> FlashLayout:
         otadata=otadata,
         app=app,
         why=why,
+        otadata_auto=otadata_auto,
     )
 
 
@@ -723,15 +735,11 @@ def collect() -> list[Project]:
             cfg = parse_sdkconfig(justfile.parent / "sdkconfig.defaults")
             proj.flash_size = cfg.get("CONFIG_ESPTOOLPY_FLASHSIZE")
 
-            custom = cfg.get("CONFIG_PARTITION_TABLE_CUSTOM_FILENAME")
-            if custom:
-                table = justfile.parent / custom
-                if table.is_file():
-                    proj.partition_source = custom
-                    proj.app_offset, proj.has_otadata = parse_partitions(table)
-            elif cfg.get("CONFIG_PARTITION_TABLE_TWO_OTA") == "y":
-                proj.partition_source = "(idf two-ota preset)"
-                proj.has_otadata = True
+            # The table the build uses, from the predicate the release path and
+            # the dry-run audit read, built-in presets included (issue #684).
+            table, _otadata, proj.has_otadata = partition_table(justfile.parent)
+            proj.partition_source = _display(table)
+            proj.app_offset, _where = boot_app_offset(table)
 
             projects.append(proj)
     return projects
@@ -809,17 +817,12 @@ def main() -> int:
         print("STATUS=FAIL")
         return 1
 
-    projects = collect()
-    for proj in projects:
-        audit(proj)
-
-    findings = [f for p in projects for f in p.findings]
-    findings += check_attribute_placement()
-    findings += check_justfile_directory()
     # A lookup that cannot run (the otadata predicate, `just --summary`) has no
     # answer to report; end on the same STATUS line as every other failure
-    # instead of a traceback.
+    # instead of a traceback. The predicate also fails closed on a table it
+    # cannot name (issue #684), which collect() and the output audit both ask.
     try:
+        projects = collect()
         statuses, output_findings = check_flash_recipe_outputs(just)
     except (RuntimeError, subprocess.CalledProcessError) as exc:
         stderr = (getattr(exc, "stderr", None) or "").strip()
@@ -828,6 +831,12 @@ def main() -> int:
             print(stderr)
         print("STATUS=FAIL")
         return 1
+    for proj in projects:
+        audit(proj)
+
+    findings = [f for p in projects for f in p.findings]
+    findings += check_attribute_placement()
+    findings += check_justfile_directory()
     findings += output_findings
     flagged = {f.project for f in output_findings}
 

@@ -61,6 +61,13 @@
   },
   {
     "system": "esp32",
+    "project": "gemini-vision",
+    "path": "camera-vision/gemini-vision",
+    "target": "esp32s3",
+    "fetch_bluepad32": false
+  },
+  {
+    "system": "esp32",
     "project": "esp32-wifitest",
     "path": "networking/wifitest",
     "target": "esp32s3",
@@ -157,6 +164,63 @@
     "system": "esp32",
     "project": "thinkpack-brainbox",
     "path": "thinkpack/brainbox",
+    "target": "esp32s3",
+    "fetch_bluepad32": false,
+    "extra_paths": [
+      "components/improv-wifi",
+      "components/ota-github",
+      "components/thinkpack-audio",
+      "components/thinkpack-behaviors",
+      "components/thinkpack-mesh",
+      "components/thinkpack-nfc",
+      "components/thinkpack-ota",
+      "components/thinkpack-power",
+      "components/thinkpack-protocol",
+      "components/thinkpack-rc522"
+    ]
+  },
+  {
+    "system": "esp32",
+    "project": "thinkpack-boombox",
+    "path": "thinkpack/boombox",
+    "target": "esp32s3",
+    "fetch_bluepad32": false,
+    "extra_paths": [
+      "components/improv-wifi",
+      "components/ota-github",
+      "components/thinkpack-audio",
+      "components/thinkpack-behaviors",
+      "components/thinkpack-mesh",
+      "components/thinkpack-nfc",
+      "components/thinkpack-ota",
+      "components/thinkpack-power",
+      "components/thinkpack-protocol",
+      "components/thinkpack-rc522"
+    ]
+  },
+  {
+    "system": "esp32",
+    "project": "thinkpack-glowbug",
+    "path": "thinkpack/glowbug",
+    "target": "esp32s3",
+    "fetch_bluepad32": false,
+    "extra_paths": [
+      "components/improv-wifi",
+      "components/ota-github",
+      "components/thinkpack-audio",
+      "components/thinkpack-behaviors",
+      "components/thinkpack-mesh",
+      "components/thinkpack-nfc",
+      "components/thinkpack-ota",
+      "components/thinkpack-power",
+      "components/thinkpack-protocol",
+      "components/thinkpack-rc522"
+    ]
+  },
+  {
+    "system": "esp32",
+    "project": "thinkpack-mesh-demo",
+    "path": "thinkpack/mesh-demo",
     "target": "esp32s3",
     "fetch_bluepad32": false,
     "extra_paths": [

@@ -39,12 +39,24 @@ jobs:
 
       # `docker load` unpacks the cached multi-GB image tarball into
       # /var/lib/docker while the tarball is still on disk, so the job briefly
-      # needs about twice the image size on /. The hosted image's free space
-      # varies, and the load ran out of disk on PR #909 (issue #913). Remove
-      # preinstalled toolchains no step here uses before the cache restore.
+      # needs about twice the image size on /. The load ran out of disk on
+      # PR #909 (issue #913). Of 1192 jobs measured for issue #918, 1183 ran on
+      # a 145G / with 86-88G free, where removing the toolchains below took a
+      # median 92 s and was not needed. 9 ran on a 72G / with 14-17G free; there
+      # the removal freed 21-22G and the cache restore plus load then took 13G.
+      # The load took at most 20G on any job. So remove them only when / has
+      # less than MIN_FREE_GB free, and log `df -h /` either way.
       - name: Free runner disk space
+        env:
+          MIN_FREE_GB: 40
         run: |
           df -h /
+          avail=$(df --output=avail -BG / | tail -n 1 | tr -dc '0-9')
+          if [ "$avail" -ge "$MIN_FREE_GB" ]; then
+            echo "${avail}G free on /, at least ${MIN_FREE_GB}G: no cleanup needed"
+            exit 0
+          fi
+          echo "${avail}G free on /, under ${MIN_FREE_GB}G: removing unused toolchains"
           sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
             /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
           df -h /
@@ -114,9 +126,16 @@ jobs:
 
       - name: Build ${{ inputs.project }}
         uses: espressif/esp-idf-ci-action@v1.2.0
+        # The action pastes `command` into its own shell script, so inputs
+        # reach it only as variables (#855). docker run does not inherit the
+        # step's env; extra_docker_args forwards each one into the container.
+        env:
+          PROJECT: ${{ inputs.project }}
+          PROJECT_PATH: ${{ inputs.project_path }}
         with:
           esp_idf_version: ${{ env.IDF_VERSION }}
           target: ${{ inputs.target }}
+          extra_docker_args: -e PROJECT -e PROJECT_PATH
           # The action runs this through `bash -c` from the repo root. The
           # exit status of the whole string is the job's verdict, so the shape
           # matters: the build and the partition-fit check are `&&`-chained
@@ -129,10 +148,10 @@ jobs:
           # app-fits-partition check made visible (issue #556); $OLDPWD is the
           # repo root after the cd.
           command: >-
-            cd packages/${{ inputs.project_path }} &&
+            cd "packages/$PROJECT_PATH" &&
             idf.py build &&
             bash "$OLDPWD/tools/check-app-partition-fit.sh" . &&
-            { echo "# Build Size Analysis for ${{ inputs.project }}" > size-report.txt;
+            { echo "# Build Size Analysis for $PROJECT" > size-report.txt;
             idf.py size >> size-report.txt 2>&1;
             idf.py size-components >> size-report.txt 2>&1; true; }
 
@@ -224,6 +243,8 @@ jobs:
         # report means the check did not run, which is a failure, not a pass.
         working-directory: packages/${{ inputs.project_path }}
         shell: bash
+        env:
+          PROJECT: ${{ inputs.project }}
         run: |
           report=build/app-partition-fit.txt
           if [ ! -f "$report" ]; then
@@ -232,7 +253,7 @@ jobs:
           fi
           cat "$report"
           {
-            echo "### App partition fit: ${{ inputs.project }}"
+            echo "### App partition fit: ${PROJECT}"
             echo ""
             echo '```'
             cat "$report"

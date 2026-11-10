@@ -1,0 +1,4 @@
+# what: Kconfig symbols of the component espressif/led_strip
+# component: espressif/led_strip
+# version: 3.0.3
+# command: just kconfig-symbols::component <project>/managed_components/espressif__led_strip

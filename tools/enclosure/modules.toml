@@ -130,3 +130,9 @@ body = [0.93, 0.9, 0.8]
 [kinds.ptc-1812]
 label = "1812 PTC fuse"
 body = [0.85, 0.72, 0.25]
+
+# A lead plugged onto a male pin header. The header footprint is shared with
+# bare headers, so a part names this kind in enclosure.toml (`module`).
+[kinds.dupont-housing]
+label = "Dupont housing on a pin header"
+body = [0.06, 0.06, 0.07]

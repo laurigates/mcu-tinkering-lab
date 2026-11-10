@@ -93,10 +93,21 @@ jobs:
       # so a diff means the author edited circuits/<name>.py without committing
       # the regenerated image. PNG output via cairosvg is encoder-version-
       # sensitive — we skip the strict PNG check on purpose.
+      #
+      # Drift is read from `git status`, not `git diff`: a new circuit's SVG
+      # that was never committed is untracked, and `git diff` does not report
+      # untracked files (#721). render.py also deletes an SVG no circuit
+      # produces, which shows here as a deleted tracked file.
+      # docs/schematics/test_freshness.py runs this step's script against a
+      # scratch repository; keep the step name, which it finds the step by.
       - name: Verify SVGs are up to date
         run: |
-          if ! git diff --exit-code -- 'docs/schematics/images/*.svg'; then
-            echo "::error::Rendered SVG(s) are out of sync with circuit source."
+          set -euo pipefail
+          drift=$(git status --porcelain --untracked-files=all -- 'docs/schematics/images/*.svg')
+          if [ -n "$drift" ]; then
+            echo "$drift"
+            git --no-pager diff --stat -- 'docs/schematics/images/*.svg'
+            echo "::error::Rendered SVG(s) are out of sync with circuit source (modified, deleted, or never committed)."
             echo "::error::Run 'just schematics::render-all' locally and commit the regenerated images, plus any build-guide PDF it recompiled."
             exit 1
           fi
