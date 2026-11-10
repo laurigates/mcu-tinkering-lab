@@ -215,6 +215,15 @@ repos:
         pass_filenames: false
         always_run: true
 
+      # Runs on a uv.lock, pyproject.toml, justfile or CI file change: those
+      # move what the test reads (tools/test_python_suites.py, issue #457).
+      - id: python-suites
+        name: Every uv.lock is installed --locked, every tool test recipe runs in CI, uv and just come from setup-tools
+        entry: python3 -m unittest tools/test_python_suites.py
+        language: system
+        pass_filenames: false
+        files: '(^\.github/|^tools/(python-suites|test_python_suites)\.py$|(^|/)(uv\.lock|pyproject\.toml|justfile)$|^\.pre-commit-config\.yaml$|^renovate\.json$)'
+
       - id: hardware-join
         name: Hardware join resolves, and pin_defs.typ regenerates byte-identical
         entry: python3 -m unittest discover -s tools/hardware -t tools

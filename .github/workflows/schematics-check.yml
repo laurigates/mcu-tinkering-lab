@@ -20,6 +20,7 @@ on:
       - 'packages/robocar/unified/main/planner_task.h'
       - 'packages/robocar/unified/main/plan_activity.h'
       - '.github/workflows/schematics-check.yml'
+      - '.github/actions/setup-tools/**'
   pull_request:
     # No branches: filter — a PR stacked on a non-default base (e.g. another
     # open PR's branch) must get the same check as one targeting main/develop,
@@ -37,6 +38,7 @@ on:
       - 'packages/robocar/unified/main/planner_task.h'
       - 'packages/robocar/unified/main/plan_activity.h'
       - '.github/workflows/schematics-check.yml'
+      - '.github/actions/setup-tools/**'
   workflow_dispatch:
 
 concurrency:
@@ -62,20 +64,20 @@ jobs:
         with:
           python-version: '3.11.17'
 
-      # Pinned with the other uv installs: 0.12.14 regressed wheel installs into
-      # symlinked venv dirs (astral-sh/uv#21692).
-      - uses: astral-sh/setup-uv@v7.6.0
+      - name: Install uv
+        uses: ./.github/actions/setup-tools
         with:
-          version: '0.12.23'
+          cache-suffix: schematics
 
-      # --frozen installs the exact versions from the committed uv.lock and
-      # errors if the lock is stale, instead of resolving fresh. SVG output
-      # is version-sensitive (e.g. schemdraw 0.23 rounds path coordinates
-      # that 0.22 emits at full precision), so the freshness check below is
-      # only meaningful when the dependency set is pinned.
+      # --locked installs the exact versions from the committed uv.lock and
+      # fails if pyproject.toml has moved past it. (--frozen, used here before
+      # #457, installs the lock without that check, so a stale lock passed.)
+      # SVG output is version-sensitive (e.g. schemdraw 0.23 rounds path
+      # coordinates that 0.22 emits at full precision), so the freshness check
+      # below is only meaningful when the dependency set is pinned.
       - name: Install Python deps
         working-directory: docs/schematics
-        run: uv sync --frozen --group dev
+        run: uv sync --locked --group dev
 
       # The whole directory, not one file: a test module added beside
       # test_routing.py (test_metrics.py, ...) must not be silently skipped.

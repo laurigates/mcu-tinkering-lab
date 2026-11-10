@@ -141,3 +141,11 @@ All PRs must pass:
 - ESP32 firmware builds (matrix across projects)
 - Python test suite with coverage
 - Pre-commit hooks (format, lint, secret scanning)
+- The Python Suites job in `test.yml`: each uv project suite in
+  `.github/python-suites.json` (`enclosure::test`, `mechanism::test`,
+  `cadstd::test`, `glitchtip::test`, `robocar-twin::test`,
+  `synth::tts-test`, the live probe's offline tests) when a path it lists
+  changes, with `UV_LOCKED=1` so a stale `uv.lock` fails rather than
+  re-resolving. A new uv project with tests gets an entry there; the
+  `python-suites` pre-commit hook (`tools/test_python_suites.py`) fails
+  until it has one.

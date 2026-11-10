@@ -6,11 +6,13 @@ on:
     paths:
       - 'packages/robocar/simulation/**'
       - '.github/workflows/build-python-simulation.yml'
+      - '.github/actions/setup-tools/**'
   pull_request:
     branches: [main, develop]
     paths:
       - 'packages/robocar/simulation/**'
       - '.github/workflows/build-python-simulation.yml'
+      - '.github/actions/setup-tools/**'
   workflow_dispatch:
 
 concurrency:
@@ -33,11 +35,10 @@ jobs:
         with:
           python-version: '3.12.15'
 
-      # Pinned: uv 0.12.14 refuses to install dracopy into .venv/lib64
-      # ("Cannot install into symlinked directory", astral-sh/uv#21692).
-      # 0.12.10 is the last version this job ran green on. Bump deliberately.
-      - name: Install UV
-        run: pip install uv==0.12.10
+      - name: Install uv
+        uses: ./.github/actions/setup-tools
+        with:
+          cache-suffix: simulation
 
       - name: Install dependencies
         working-directory: packages/robocar/simulation

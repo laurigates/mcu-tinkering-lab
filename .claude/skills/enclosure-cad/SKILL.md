@@ -19,7 +19,7 @@ closed **box** with lid. It reads the board, never a second copy of it.
 | Pieces, wall openings, lid windows, chassis tabs | `enclosure.toml` `[[pieces]]` |
 
 ```sh
-just enclosure::test                 # pytest: synthetic pieces + the balancebot board
+just enclosure::test                 # pytest: synthetic pieces + the balancebot board (CI: test.yml Python Suites)
 just enclosure::gen <project> ...    # STEP/STL/3MF per piece and style, report.json
 just enclosure::render <project>     # isometric line drawings (SVG/PNG)
 just enclosure::assembly <project>   # Blender renders: the populated board in each case

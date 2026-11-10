@@ -1,0 +1,74 @@
+[
+  {
+    "name": "enclosure",
+    "dir": "tools/enclosure",
+    "run": "just enclosure::test",
+    "apt": "libgl1",
+    "paths": [
+      "tools/enclosure/**",
+      "tools/cadstd/**",
+      "tools/kicad/**",
+      "packages/**/hardware/enclosure/**"
+    ]
+  },
+  {
+    "name": "mechanism",
+    "dir": "tools/mechanism",
+    "run": "just mechanism::test",
+    "apt": "libgl1 libosmesa6",
+    "paths": [
+      "tools/mechanism/**",
+      "tools/cadstd/**",
+      "tools/enclosure/enclosure/thickness.py"
+    ]
+  },
+  {
+    "name": "cadstd",
+    "dir": "tools/mechanism",
+    "run": "just cadstd::test",
+    "apt": "libgl1",
+    "paths": [
+      "tools/cadstd/**",
+      "tools/mechanism/pyproject.toml",
+      "tools/mechanism/uv.lock"
+    ]
+  },
+  {
+    "name": "glitchtip-bridge",
+    "dir": "tools/glitchtip/bridge",
+    "run": "just glitchtip::test",
+    "paths": [
+      "tools/glitchtip/bridge/**",
+      "tools/glitchtip/justfile"
+    ]
+  },
+  {
+    "name": "robocar-twin",
+    "dir": "packages/robocar/twin/harness",
+    "run": "just robocar-twin::test",
+    "apt": "libcjson-dev",
+    "paths": [
+      "packages/robocar/twin/**",
+      "packages/robocar/unified/main/**",
+      "packages/robocar/unified/test/include/**"
+    ]
+  },
+  {
+    "name": "live-probe",
+    "dir": "packages/robocar/unified/tools/live-probe",
+    "run": "cd packages/robocar/unified/tools/live-probe && uv run pytest -q",
+    "paths": [
+      "packages/robocar/unified/tools/live-probe/**",
+      "packages/robocar/unified/main/voice_persona.c",
+      "packages/robocar/unified/tools/make-style-sweep.py"
+    ]
+  },
+  {
+    "name": "tts-generator",
+    "dir": "packages/audio/gamepad-synth/tools/tts",
+    "run": "just synth::tts-test",
+    "paths": [
+      "packages/audio/gamepad-synth/tools/tts/**"
+    ]
+  }
+]

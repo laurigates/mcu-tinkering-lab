@@ -1,0 +1,48 @@
+name: Set up uv and just
+description: >-
+  The one place CI installs uv and just, at the versions pinned below.
+  Python itself stays on an actions/setup-python step in each workflow, where
+  Renovate bumps it (patch only, per renovate.json). Run after
+  actions/checkout. tools/test_python_suites.py fails if a workflow installs
+  either tool another way.
+
+inputs:
+  just:
+    description: Also install just ('true' or 'false').
+    default: 'false'
+  cache-suffix:
+    description: >-
+      Suffix for setup-uv's cache key, so jobs that install different uv
+      projects do not share one cache entry.
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    # uv 0.12.14 refused to install dracopy into .venv/lib64 ("Cannot install
+    # into symlinked directory", astral-sh/uv#21692); 0.12.23 installs it.
+    # Renovate bumps the version below (its github-actions manager reads
+    # setup-uv's `version` input in composite actions); review a bump against
+    # that regression.
+    - name: Install uv
+      uses: astral-sh/setup-uv@v7.6.0
+      with:
+        version: '0.12.23'
+        cache-suffix: ${{ inputs.cache-suffix }}
+
+    # install-action downloads the release asset and checks it against the
+    # sha256 in its own bundled manifest, so it makes no Releases API call at
+    # run time. extractions/setup-just looked each version up through that API
+    # and failed the Test Suite on main when the lookup came back empty
+    # (issue #835). Pinned so a just release cannot change the `just --dry-run`
+    # text tools/check-flash-recipes.py reads. Renovate bumps it through the
+    # regex manager in renovate.json, since its github-actions manager does not
+    # read install-action's `tool` input. `fallback: none`: a version missing
+    # from the manifest fails here instead of falling back to cargo-binstall,
+    # which does call the API.
+    - name: Install just
+      if: inputs.just == 'true'
+      uses: taiki-e/install-action@v2.87.31
+      with:
+        tool: just@1.58.0
+        fallback: none

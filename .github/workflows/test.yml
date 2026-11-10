@@ -6,10 +6,13 @@ on:
     paths:
       - 'packages/**'
       - '.github/workflows/test.yml'
+      - '.github/actions/**'
+      - '.github/python-suites.json'
       - '.pre-commit-config.yaml'
       - '.clang-format'
       - '.gitleaks.toml'
       - '.github/issue-labels.json'
+      - 'renovate.json'
       - 'tools/**'
       - 'docker-compose.yml'
       - 'Dockerfile'
@@ -37,10 +40,10 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       python: ${{ steps.filter.outputs.python }}
-      live-probe: ${{ steps.filter.outputs.live-probe }}
-      tts-generator: ${{ steps.filter.outputs.tts-generator }}
       c-code: ${{ steps.filter.outputs.c-code }}
       any-code: ${{ steps.filter.outputs.any-code }}
+      python-suites: ${{ steps.suites.outputs.matrix }}
+      python-suites-any: ${{ steps.suites.outputs.any }}
     steps:
       - uses: actions/checkout@v7.0.1
 
@@ -48,19 +51,13 @@ jobs:
         id: filter
         if: github.event_name != 'workflow_dispatch'
         with:
+          # all_files feeds the Python Suites selection below.
+          list-files: json
           filters: |
+            all:
+              - '**'
             python:
               - 'packages/robocar/simulation/**'
-            # The probe's tests also read the shipped persona table and the
-            # style sweep's C-literal reader, so a change to either reruns them.
-            live-probe:
-              - 'packages/robocar/unified/tools/live-probe/**'
-              - 'packages/robocar/unified/main/voice_persona.c'
-              - 'packages/robocar/unified/tools/make-style-sweep.py'
-              - '.github/workflows/test.yml'
-            tts-generator:
-              - 'packages/audio/gamepad-synth/tools/tts/**'
-              - '.github/workflows/test.yml'
             c-code:
               - 'packages/**/main/**'
               - 'packages/**/components/**'
@@ -77,6 +74,23 @@ jobs:
               - '.clang-format'
               - '.gitleaks.toml'
               - 'tools/**'
+
+      # .github/python-suites.json lists each suite and the paths that select
+      # it; tools/python-suites.py matches the changed files against them. The
+      # file list goes in through a quoted heredoc, not env: an env value is
+      # one execve string capped at 128 KiB, and a large PR's list exceeds it.
+      # dorny emits the JSON on one line (a newline in a name is escaped), so
+      # no line of it can end the heredoc, and nothing in it is expanded.
+      - name: Select Python suites
+        id: suites
+        run: |
+          if [ "${{ github.event_name }}" = workflow_dispatch ]; then
+            python3 tools/python-suites.py --all
+          else
+            python3 tools/python-suites.py --changed-json - <<'CHANGED_FILES_JSON'
+          ${{ steps.filter.outputs.all_files || '[]' }}
+          CHANGED_FILES_JSON
+          fi
 
   # The taxonomy's globs name paths across the whole tree (docs/, .github/,
   # .claude/, the root justfile ...), and a PR that deletes or renames one of
@@ -108,25 +122,16 @@ jobs:
         with:
           python-version: '3.11.17'
 
-      # Pinned: uv 0.12.14 refuses to install dracopy into .venv/lib64
-      # ("Cannot install into symlinked directory", astral-sh/uv#21692), which
-      # failed the simulation sync below. 0.12.10 is the last version this job
-      # ran green on. Bump deliberately, together with the other uv pins.
-      - name: Install uv
-        uses: astral-sh/setup-uv@v7.6.0
+      # uv and just at the pins in .github/actions/setup-tools. just is needed:
+      # check-flash-recipes expands every flash recipe with `just --dry-run`
+      # and fails without it rather than skipping (issue #608).
+      - name: Install uv and just
+        uses: ./.github/actions/setup-tools
         with:
-          version: '0.12.23'
+          just: true
 
       - name: Install pre-commit
         run: pip install pre-commit
-
-      # check-flash-recipes expands every flash recipe with `just --dry-run` and
-      # fails without `just` rather than skipping (issue #608). Pinned so a just
-      # release cannot change the dry-run text the check reads; bump deliberately.
-      - name: Install just
-        uses: extractions/setup-just@v4.0.0
-        with:
-          just-version: '1.58.0'
 
       - name: Cache pre-commit environments
         uses: actions/cache@v5.1.0
@@ -172,9 +177,10 @@ jobs:
         with:
           python-version: '3.12.15'
 
-      # Pinned: see the `Install uv` step in Code Quality Checks above.
-      - name: Install UV
-        run: pip install uv==0.12.10
+      - name: Install uv
+        uses: ./.github/actions/setup-tools
+        with:
+          cache-suffix: simulation
 
       - name: Install dependencies
         working-directory: packages/robocar/simulation
@@ -209,65 +215,73 @@ jobs:
           name: robocar-simulation
         continue-on-error: true
 
-  test-live-probe:
-    name: Live Probe Offline Tests
+  # One job for every uv project whose tests need nothing beyond its own lock:
+  # the tools/ suites (enclosure, mechanism, cadstd, glitchtip bridge), the
+  # robocar behaviour twin (ADR-030), the live probe's offline tests (#619)
+  # and the TTS generator's (#844). .github/python-suites.json lists each one
+  # with its directory, command, apt packages and the paths that select it.
+  # Add a suite there, not as another job or workflow.
+  python-suites:
+    name: Python Suites (${{ matrix.name }})
     needs: [detect-changes]
-    if: >
-      needs.detect-changes.outputs.live-probe == 'true' ||
-      github.event_name == 'workflow_dispatch'
+    if: needs.detect-changes.outputs.python-suites-any == 'true'
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.detect-changes.outputs.python-suites) }}
+    env:
+      # Every uv sync and uv run in the job, those inside just recipes
+      # included, fails if the project's pyproject.toml has moved past its
+      # uv.lock instead of resolving fresh (#457).
+      UV_LOCKED: '1'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
+
+      # libgl1: build123d's OCP wheel links libGL.so.1 at import. libosmesa6
+      # gives VTK an off-screen GL, so mechanism's render test runs instead
+      # of skipping. libcjson-dev links the twin. (Checked in an ubuntu:24.04
+      # container: without libgl1, collection fails on the OCP import.)
+      - name: Install system packages
+        if: matrix.apt != ''
+        env:
+          APT: ${{ matrix.apt }}
+        run: |
+          read -ra pkgs <<<"$APT"
+          sudo apt-get update -q
+          sudo apt-get install -y -q "${pkgs[@]}"
 
       - name: Setup Python
         uses: actions/setup-python@v6.3.0
         with:
           python-version: '3.14.8'
 
-      # Pinned: see the `Install uv` step in Code Quality Checks above.
-      - name: Install UV
-        run: pip install uv==0.12.10
+      - name: Install uv and just
+        uses: ./.github/actions/setup-tools
+        with:
+          just: true
+          cache-suffix: ${{ matrix.name }}
 
-      # No key and no network beyond the package index: these cover everything
-      # in live_probe.py except the Live session itself (issue #619).
-      - name: Install dependencies
-        working-directory: packages/robocar/unified/tools/live-probe
+      - name: Install ${{ matrix.dir }} from its uv.lock
+        working-directory: ${{ matrix.dir }}
         run: uv sync --locked
 
-      - name: Run offline tests
-        working-directory: packages/robocar/unified/tools/live-probe
-        run: uv run pytest -q
+      - name: Run the suite
+        env:
+          SUITE_RUN: ${{ matrix.run }}
+        run: bash -euo pipefail -c "$SUITE_RUN"
 
-  test-tts-generator:
-    name: TTS Generator Offline Tests
-    needs: [detect-changes]
-    if: >
-      needs.detect-changes.outputs.tts-generator == 'true' ||
-      github.event_name == 'workflow_dispatch'
+  # Holds the suites manifest, the lock checks and the uv/just install path in
+  # place (tools/test_python_suites.py). Stdlib only, a few seconds, on every
+  # event: a workflow-only PR runs no other job here that would catch a
+  # workflow that went back to `uv sync --frozen`.
+  python-suites-drift:
+    name: Python Suites Drift Test
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7.0.1
-
-      - name: Setup Python
-        uses: actions/setup-python@v6.3.0
-        with:
-          python-version: '3.14.8'
-
-      # Pinned: see the `Install uv` step in Code Quality Checks above.
-      - name: Install UV
-        run: pip install uv==0.12.10
-
-      # The SDK talks to an httpx MockTransport: no key, no network beyond the
-      # package index. Pins the gemini-3.8-flash-tts request body (issue #844).
-      - name: Install dependencies
-        working-directory: packages/audio/gamepad-synth/tools/tts
-        run: uv sync --locked
-
-      - name: Run offline tests
-        working-directory: packages/audio/gamepad-synth/tools/tts
-        run: uv run pytest -q
+      - uses: actions/checkout@v7.0.1
+      - name: Run tools/test_python_suites.py
+        run: python3 -m unittest -v tools/test_python_suites.py
 
   lint-c:
     name: C/C++ Linting
@@ -324,7 +338,7 @@ jobs:
 
   test-summary:
     name: Test Summary
-    needs: [detect-changes, code-quality, issue-labels-taxonomy, test-python-simulation, test-live-probe, test-tts-generator, lint-c, format-check]
+    needs: [detect-changes, code-quality, issue-labels-taxonomy, test-python-simulation, python-suites, python-suites-drift, lint-c, format-check]
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -335,8 +349,8 @@ jobs:
           echo "- Code Quality: ${{ needs.code-quality.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Label Taxonomy Drift Test: ${{ needs.issue-labels-taxonomy.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Python Simulation Tests: ${{ needs.test-python-simulation.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Live Probe Offline Tests: ${{ needs.test-live-probe.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- TTS Generator Offline Tests: ${{ needs.test-tts-generator.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Python Suites: ${{ needs.python-suites.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Python Suites Drift Test: ${{ needs.python-suites-drift.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- C/C++ Linting: ${{ needs.lint-c.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Format Check: ${{ needs.format-check.result }}" >> $GITHUB_STEP_SUMMARY
 
@@ -348,8 +362,8 @@ jobs:
             "${{ needs.code-quality.result }}" \
             "${{ needs.issue-labels-taxonomy.result }}" \
             "${{ needs.test-python-simulation.result }}" \
-            "${{ needs.test-live-probe.result }}" \
-            "${{ needs.test-tts-generator.result }}" \
+            "${{ needs.python-suites.result }}" \
+            "${{ needs.python-suites-drift.result }}" \
             "${{ needs.format-check.result }}"; do
             if [ "$result" = "failure" ]; then
               echo "::error::Critical quality checks failed!"

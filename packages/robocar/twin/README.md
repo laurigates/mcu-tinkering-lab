@@ -33,9 +33,10 @@ just robocar-twin::build   # build/robocar-twin
 just robocar-twin::clean
 ```
 
-CI runs `just robocar-twin::test` in
-[`.github/workflows/robocar-twin.yml`](../../../.github/workflows/robocar-twin.yml)
-on any change here or under `../unified/main/`.
+CI runs `just robocar-twin::test` in the Python Suites job of
+[`.github/workflows/test.yml`](../../../.github/workflows/test.yml) on any
+change here or under `../unified/main/`; its entry and trigger paths are in
+[`.github/python-suites.json`](../../../.github/python-suites.json).
 
 To keep each scenario's trace, run the harness directly:
 

@@ -30,12 +30,16 @@ and #892.
 ## Redoing a lock-file-maintenance PR locally
 
 Renovate's `lockFileMaintenance` PR is `uv lock --upgrade` in each uv project
-whose `uv.lock` it lists. When it fails, the Renovate CLI cannot redo it here:
+whose `uv.lock` it lists. It is enabled once for every laurigates repo, in the
+self-hosted runner's global config (`laurigates/gitops` `renovate-config.js`,
+monthly on the 1st), not in this repo's `renovate.json`; do not enable it here
+as well. When it fails, the Renovate CLI cannot redo it here:
 `--platform=local` only reports lookups, and writing to the bot branch needs
 its token. Instead, on a branch outside the patterns above (#993 for #920):
 
 - **Run `uv lock --upgrade` with the uv version CI pins** (`version:` on
-  `astral-sh/setup-uv` in `.github/workflows/`, 0.12.23 at #993), via
+  `astral-sh/setup-uv` in `.github/actions/setup-tools/action.yml`, the one
+  place CI installs uv; 0.12.23 at #993), via
   `uv tool install uv==<version>`. A local uv 0.11.32 could not resolve
   melody-train at all (`No interpreter found for Python 3.12.15`).
 - **Compare per-file diff sizes with the bot PR.** At #993 they matched #920's
