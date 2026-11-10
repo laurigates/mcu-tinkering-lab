@@ -192,7 +192,7 @@ Most workflows delegate to reusable workflows from [`laurigates/.github`](https:
 | `claude.yml` | @claude mention | Interactive Claude assistance in issues/PRs | `reusable-claude.yml` |
 | `auto-fix.yml` | CI failure / manual | Analyze and auto-fix CI failures with Claude | `reusable-auto-fix.yml` |
 | `enforce-conventional-commits.yml` | PR opened/edited/sync | Auto-fix PR titles to conventional commits format | `reusable-enforce-conventional-commits.yml` |
-| `security-secrets.yml` | Push/PR to main/develop | AI-powered secret scanning on changed files | `reusable-security-secrets.yml` |
+| `security-secrets.yml` | PR to main/develop | gitleaks over the PR's commits, with a planted-key canary; no actor gate, so bot PRs are scanned too (the Claude scan was removed in #860) | No (local) |
 | `auto-resolve-conflicts.yml` | Push to main / schedule | Auto-resolve merge conflicts in PRs with Claude | `reusable-auto-resolve-conflicts.yml` |
 | `fix-release-conflicts.yml` | Push to main / schedule | Fix conflicts in release-please PRs | `reusable-fix-release-conflicts.yml` |
 | `sync-ai-rules.yml` | Weekly / manual | Sync AI coding rules from `.github` repo | `reusable-sync-ai-rules.yml` |

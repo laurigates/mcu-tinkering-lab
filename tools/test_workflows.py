@@ -21,6 +21,8 @@ What the tests hold:
   release tag, and copies none of its steps (issue #1065).
 - auto-fix.yml passes the release-please App to the reusable auto-fix, so the
   fix commits it pushes start CI (issue #866).
+- security-secrets.yml runs one secret scan, the gitleaks job, and no longer
+  calls the reusable Claude scan (issue #860).
 
 Whether the workflows run as intended needs GitHub; actionlint and these tests
 only read them.
@@ -162,6 +164,16 @@ class ClaudeCallersTest(unittest.TestCase):
             callers[0]["secrets"].get("APP_PRIVATE_KEY"),
             "${{ secrets.RELEASE_PLEASE_PRIVATE_KEY }}",
         )
+
+    def test_secret_scanning_runs_gitleaks_only(self):
+        jobs = load("security-secrets.yml")["jobs"]
+        self.assertIn("gitleaks", jobs)
+        reusable = [
+            job_id
+            for job_id, job in jobs.items()
+            if "reusable-security-secrets.yml" in str(job.get("uses", ""))
+        ]
+        self.assertEqual(reusable, [])
 
 
 if __name__ == "__main__":
