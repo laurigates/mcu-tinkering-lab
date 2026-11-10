@@ -1,0 +1,185 @@
+{
+  "$comment": "Label taxonomy read by .github/workflows/issue-labels.yml (git-plugin/scripts/issue-labels.py in laurigates/claude-plugins). build and area entries own their label's colour and description; core entries replace the script's built-in globs key by key. tools/test_issue_labels_taxonomy.py checks every glob and scope.",
+  "build": {
+    "robocar": {
+      "description": "robocar-unified, unified-integrated, twin, simulation, Teuvo",
+      "color": "1d76db",
+      "paths": ["packages/robocar/**", "docs/site/robocar/**"],
+      "scopes": [
+        "robocar-unified",
+        "robocar-unified-integrated",
+        "robocar-twin",
+        "robocar-bringup",
+        "robocar-simulation",
+        "robocar-sim",
+        "simulation",
+        "teuvo"
+      ]
+    },
+    "balancebot": {
+      "description": "Self-balancing robot firmware and carrier",
+      "color": "1d76db",
+      "paths": ["packages/robotics/balancebot/**"]
+    },
+    "melody-detector": {
+      "description": "Melody detector firmware and ML training",
+      "color": "1d76db",
+      "paths": ["packages/audio/melody-detector/**"],
+      "scopes": ["melody-train"]
+    },
+    "thinkpack": {
+      "description": "ThinkPack mesh boxes and their shared components",
+      "color": "1d76db",
+      "paths": [
+        "packages/thinkpack/**",
+        "packages/components/thinkpack-*/**",
+        "docs/thinkpack/**"
+      ],
+      "scopes": [
+        "thinkpack-brainbox",
+        "thinkpack-chatterbox",
+        "thinkpack-finderbox",
+        "thinkpack-glowbug",
+        "thinkpack-mesh"
+      ]
+    },
+    "lego-boost": {
+      "description": "LEGO Boost Xbox bridge and hub firmware",
+      "color": "1d76db",
+      "paths": [
+        "packages/input-gaming/lego-boost-xbox/**",
+        "packages/input-gaming/lego-boost-xbox-fw/**"
+      ],
+      "scopes": ["lego-boost-xbox", "lego-boost-xbox-fw"]
+    }
+  },
+  "area": {
+    "connectivity": {
+      "description": "WiFi, MQTT, provisioning, ESP-NOW",
+      "color": "0e8a16"
+    },
+    "cad": {
+      "description": "Printed parts: enclosure, mechanism, cadstd",
+      "color": "0e8a16",
+      "paths": [
+        "tools/enclosure/**",
+        "tools/mechanism/**",
+        "tools/cadstd/**",
+        "packages/*/*/hardware/enclosure/**",
+        "packages/*/*/hardware/pan-tilt/**"
+      ],
+      "scopes": ["enclosure", "mechanism", "cadstd", "printed-mechanism"]
+    },
+    "carrier-pcb": {
+      "description": "tools/kicad, hardware join, parts registry, perfboard",
+      "color": "0e8a16",
+      "paths": [
+        "tools/kicad/**",
+        "tools/kicad.just",
+        "tools/hardware/**",
+        "docs/reference/parts/**",
+        "docs/reference/blocks/**",
+        "packages/*/*/hardware/carrier/**",
+        "packages/*/*/hardware/perfboard/**"
+      ],
+      "scopes": [
+        "kicad",
+        "hardware",
+        "hardware join",
+        "carrier",
+        "carriers",
+        "carrier pcbs",
+        "parts registry",
+        "perfboard"
+      ]
+    },
+    "schematics": {
+      "description": "docs/schematics router, symbols and gates",
+      "color": "0e8a16",
+      "paths": ["docs/schematics/**"]
+    },
+    "sourcing": {
+      "description": "Part sourcing, cost rules, quotes, tariffs",
+      "color": "0e8a16",
+      "scopes": ["prd-016", "kicad.sourcing", "jlcpcb-order", "aliexpress-parts"]
+    },
+    "labels": {
+      "description": "tools/labels sticker sheets",
+      "color": "0e8a16",
+      "paths": ["tools/labels/**"]
+    },
+    "ota": {
+      "description": "OTA updates and the untethered dev loop",
+      "color": "0e8a16"
+    },
+    "voice": {
+      "description": "TTS, microphone, hands-free, Gemini Live",
+      "color": "0e8a16"
+    },
+    "motion": {
+      "description": "Motors, servos, reflexes, rangefinders, cliff sensors",
+      "color": "0e8a16"
+    }
+  },
+  "core": {
+    "ci": {
+      "paths": [
+        ".github/**",
+        "renovate.json",
+        "release-please-config.json",
+        ".release-please-manifest.json"
+      ],
+      "scopes": ["renovate", "release", "auto-fix", "dependency dashboard"]
+    },
+    "agent": {
+      "paths": [
+        ".claude/**",
+        ".mcp.json",
+        ".rulesync/**",
+        ".agents/**",
+        ".cursor/**",
+        ".github/instructions/**"
+      ],
+      "scopes": ["claude", "rules", "skills", "hooks", "mcp"]
+    },
+    "build": {
+      "paths": [
+        "justfile",
+        "tools/esp32*.just",
+        "tools/esphome.just",
+        "tools/pico.just",
+        "tools/scaffold/**",
+        "docker-compose.yml",
+        "Dockerfile",
+        "Dockerfile.pico"
+      ],
+      "scopes": ["just", "esp-idf", "scaffold", "docker"]
+    },
+    "components": {
+      "paths": ["packages/components/**"],
+      "scopes": ["improv-wifi"]
+    },
+    "quality": {
+      "paths": [
+        ".pre-commit-config.yaml",
+        "ruff.toml",
+        ".clang-format",
+        ".gitleaks.toml",
+        "_typos.toml",
+        "tools/check-*",
+        "tools/cquality.sh"
+      ],
+      "scopes": ["lint", "pre-commit"]
+    },
+    "docs": {
+      "paths": [
+        "docs/decisions/**",
+        "docs/requirements/**",
+        "docs/reference/boards/**",
+        "docs/reference/datasheets/**",
+        "docs/blueprint/**"
+      ],
+      "scopes": ["blueprint", "prd", "boards", "notebooklm refresh"]
+    }
+  }
+}

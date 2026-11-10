@@ -199,6 +199,7 @@ Most workflows delegate to reusable workflows from [`laurigates/.github`](https:
 | `carrier-check.yml` | Push/PR (path-filtered) | KiCad-free carrier check: `tools/kicad` tests, vendored-library hashes, schematic regenerates byte-identical, board pads match the join, the check stamp matches the committed files, every BOM part has an `lcsc` or `buy` source (`kicad.sourcing`) ([ADR-027](docs/decisions/ADR-027-kicad-carrier-generation.md)) | No (local) |
 | `robocar-twin.yml` | Push/PR (path-filtered) | Build the behaviour twin and run its smoke test, harness tests and every scenario (`just robocar-twin::test`, [ADR-030](docs/decisions/ADR-030-robocar-behaviour-twin.md)) | No (local) |
 | `refresh-idf-locks.yml` | Monthly / manual | Regenerate every git-tracked ESP-IDF `dependencies.lock` and open one PR with the diff — see [`.claude/rules/esp-idf-dependency-locks.md`](.claude/rules/esp-idf-dependency-locks.md) | No (local) |
+| `issue-labels.yml` | Issue and PR events / push of the taxonomy / weekly / manual | Type and routing labels (`build:`, `area:`, `core:`) from titles, quoted paths and changed files; clears `blocked` when every linked blocker closes; weekly label audit. No model. Runs with `dry-run: true`: it reports and writes nothing | `reusable-issue-labels.yml` |
 
 ## Important Paths
 
@@ -217,5 +218,6 @@ Most workflows delegate to reusable workflows from [`laurigates/.github`](https:
 - `.clang-format` — C/C++ formatting rules
 - `.pre-commit-config.yaml` — Pre-commit hook definitions
 - `.gitleaks.toml` — Secret scanning allowlist
+- `.github/issue-labels.json` — the label taxonomy `issue-labels.yml` reads from the default branch: each `build:` and `area:` label's colour and description, plus the path globs and title scopes that select every `build:`, `area:` and `core:` label. A new `build:` or `area:` label starts as an entry here. The workflow's provision job creates it on the next push to `main` once `dry-run` is off (#1066); while the caller sets `dry-run: true`, provision only reports, so the label also has to be created by hand with the entry's name, colour and description. `tools/test_issue_labels_taxonomy.py` (pre-commit, and the Label Taxonomy Drift Test job in `test.yml`) fails on a field or value the script would reject, a glob that matches no tracked path, and a scope two entries share
 - `tools/scaffold/new-esp32-project.sh` — New project scaffolding
 - `docs/flasher/index.html` — ESP Web Tools browser-based firmware flasher page

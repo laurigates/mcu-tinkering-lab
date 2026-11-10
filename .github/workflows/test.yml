@@ -9,6 +9,7 @@ on:
       - '.pre-commit-config.yaml'
       - '.clang-format'
       - '.gitleaks.toml'
+      - '.github/issue-labels.json'
       - 'tools/**'
       - 'docker-compose.yml'
       - 'Dockerfile'
@@ -76,6 +77,20 @@ jobs:
               - '.clang-format'
               - '.gitleaks.toml'
               - 'tools/**'
+
+  # The taxonomy's globs name paths across the whole tree (docs/, .github/,
+  # .claude/, the root justfile ...), and a PR that deletes or renames one of
+  # them makes a glob stale without touching the taxonomy. A path filter here
+  # would be a second copy of those globs, and widening any-code to them
+  # would run Code Quality Checks (about 2 minutes) on every docs-only PR. This
+  # job runs only the stdlib drift test, on every event, in a few seconds.
+  issue-labels-taxonomy:
+    name: Label Taxonomy Drift Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: Run tools/test_issue_labels_taxonomy.py
+        run: python3 -m unittest -v tools/test_issue_labels_taxonomy.py
 
   code-quality:
     name: Code Quality Checks
@@ -309,7 +324,7 @@ jobs:
 
   test-summary:
     name: Test Summary
-    needs: [detect-changes, code-quality, test-python-simulation, test-live-probe, test-tts-generator, lint-c, format-check]
+    needs: [detect-changes, code-quality, issue-labels-taxonomy, test-python-simulation, test-live-probe, test-tts-generator, lint-c, format-check]
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -318,6 +333,7 @@ jobs:
           echo "## Test Results Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- Code Quality: ${{ needs.code-quality.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Label Taxonomy Drift Test: ${{ needs.issue-labels-taxonomy.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Python Simulation Tests: ${{ needs.test-python-simulation.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Live Probe Offline Tests: ${{ needs.test-live-probe.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- TTS Generator Offline Tests: ${{ needs.test-tts-generator.result }}" >> $GITHUB_STEP_SUMMARY
@@ -330,6 +346,7 @@ jobs:
           for result in \
             "${{ needs.detect-changes.result }}" \
             "${{ needs.code-quality.result }}" \
+            "${{ needs.issue-labels-taxonomy.result }}" \
             "${{ needs.test-python-simulation.result }}" \
             "${{ needs.test-live-probe.result }}" \
             "${{ needs.test-tts-generator.result }}" \
