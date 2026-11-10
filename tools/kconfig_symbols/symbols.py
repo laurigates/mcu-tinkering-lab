@@ -11,9 +11,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 # `config FOO` / `menuconfig FOO` define an assignable symbol. A `choice NAME`
-# is not assignable from sdkconfig, so it is left out on purpose.
+# is not assignable from sdkconfig, so it is left out on purpose. A trailing
+# `# comment` is allowed (ESP-IDF v5.4 esp_driver_cam/Kconfig has one).
 _CONFIG_RE = re.compile(
-    r"^[ \t]*(?:menu)?config[ \t]+([A-Za-z0-9_]+)[ \t]*$", re.MULTILINE
+    r"^[ \t]*(?:menu)?config[ \t]+([A-Za-z0-9_]+)[ \t]*(?:#.*)?$", re.MULTILINE
 )
 # sdkconfig.rename: `CONFIG_OLD CONFIG_NEW` (the new name may carry a `!` for an
 # inverted bool). The old name stays accepted, with a deprecation note.

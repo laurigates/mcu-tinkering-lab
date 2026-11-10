@@ -58,6 +58,9 @@ def _extra_paths_module():
     path = REPO_ROOT / "tools" / "check-component-extra-paths.py"
     spec = importlib.util.spec_from_file_location("check_component_extra_paths", path)
     module = importlib.util.module_from_spec(spec)
+    # Registered before exec: before Python 3.12, @dataclass resolves the
+    # module through sys.modules and fails on one that is not there.
+    sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
 

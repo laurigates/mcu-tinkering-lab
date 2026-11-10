@@ -8,6 +8,7 @@ from __future__ import annotations
 import contextlib
 import io
 import re
+import sys
 import tempfile
 import textwrap
 import unittest
@@ -55,6 +56,19 @@ class ParserTests(unittest.TestCase):
             endmenu
             """
         self.assertEqual(kconfig_symbols(text), {"FOO", "BAR_BAZ", "QUX_A"})
+
+    def test_trailing_comment_after_the_symbol_name_still_defines_it(self):
+        # ESP-IDF v5.4 esp_driver_cam/Kconfig:17 is
+        # `config CAM_CTLR_ISP_DVP_ISR_IRAM_SAFE  # remove this ...`.
+        text = (
+            "config CAM_CTLR_ISP_DVP_ISR_IRAM_SAFE  # remove when DVP is done\n"
+            "    bool\n"
+            "menuconfig WITH_TAB\t# note\n"
+            "config NOT A_SYMBOL\n"
+        )
+        self.assertEqual(
+            kconfig_symbols(text), {"CAM_CTLR_ISP_DVP_ISR_IRAM_SAFE", "WITH_TAB"}
+        )
 
     def test_rename_keeps_old_names_including_inverted(self):
         text = "# comment\nCONFIG_OLD_ONE CONFIG_NEW_ONE\nCONFIG_OLD_TWO  !CONFIG_NEW_TWO\n"
@@ -293,6 +307,16 @@ class CheckFileTests(unittest.TestCase):
         self.assertEqual(self._check("CONFIG_VENDOR_OPT=y\n"), [])
 
 
+class ExtraPathsModuleTests(unittest.TestCase):
+    def test_module_is_registered_before_it_runs(self):
+        # Before Python 3.12, @dataclass in check-component-extra-paths.py looks
+        # its module up in sys.modules and raises AttributeError if it is not
+        # there. CI runs pre-commit on 3.11, so this holds on every version.
+        sys.modules.pop("check_component_extra_paths", None)
+        module = check._extra_paths_module()
+        self.assertIs(sys.modules.get("check_component_extra_paths"), module)
+
+
 class RepoTests(unittest.TestCase):
     """The committed lists and every tracked sdkconfig.defaults."""
 
@@ -322,6 +346,9 @@ class RepoTests(unittest.TestCase):
             "IDF_TARGET_ESP32S3",
             "FREERTOS_HZ",
             "ESP_CONSOLE_USB_SERIAL_JTAG",
+            # Defined on a `config NAME  # comment` line in v5.4.
+            "CAM_CTLR_ISP_DVP_ISR_IRAM_SAFE",
+            "ESP_TIME_FUNCS_USE_ESP_TIMER",
         ):
             self.assertIn(present, idf.symbols)
         for dead in ("MDNS_ENABLED", "ESP_WIFI_ESPNOW_ENABLED"):
