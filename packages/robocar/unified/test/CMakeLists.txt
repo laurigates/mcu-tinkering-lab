@@ -890,6 +890,23 @@ target_include_directories(test_console_line PRIVATE "${IMPROV_WIFI_DIR}")
 add_test(NAME console_line COMMAND test_console_line)
 
 # -----------------------------------------------------------------------------
+# improv-wifi's IMPROV_FIRMWARE_NAME escaping (review of #1056)
+#
+# The component turns its project's flasher.json `name` into a C string with
+# improv_c_string_literal(). This builds a definition the same way from a name
+# holding a double quote and backslashes; without the escaping the test file
+# does not compile.
+# -----------------------------------------------------------------------------
+include("${IMPROV_WIFI_DIR}/improv_c_string.cmake")
+improv_c_string_literal(improv_test_firmware_literal "Robo \"Car\" C:\\bench\\")
+add_executable(test_improv_firmware_name
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_improv_firmware_name.c"
+)
+target_compile_definitions(test_improv_firmware_name PRIVATE
+                           "IMPROV_FIRMWARE_NAME=${improv_test_firmware_literal}")
+add_test(NAME improv_firmware_name COMMAND test_improv_firmware_name)
+
+# -----------------------------------------------------------------------------
 # MQTT broker-credential loader (issue #639)
 #
 # credentials_loader.c is compiled unmodified against the in-memory NVS in

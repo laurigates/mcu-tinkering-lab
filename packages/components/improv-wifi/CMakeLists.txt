@@ -19,7 +19,9 @@ if(NOT CMAKE_BUILD_EARLY_EXPANSION)
             message(FATAL_ERROR "improv-wifi: cannot read `name` from ${improv_flasher_json}: "
                                 "${improv_json_error}")
         endif()
+        include("${CMAKE_CURRENT_LIST_DIR}/improv_c_string.cmake")
+        improv_c_string_literal(improv_firmware_literal "${improv_firmware_name}")
         target_compile_definitions(${COMPONENT_LIB} PRIVATE
-                                   "IMPROV_FIRMWARE_NAME=\"${improv_firmware_name}\"")
+                                   "IMPROV_FIRMWARE_NAME=${improv_firmware_literal}")
     endif()
 endif()
