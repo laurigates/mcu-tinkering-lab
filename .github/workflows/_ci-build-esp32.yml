@@ -39,12 +39,24 @@ jobs:
 
       # `docker load` unpacks the cached multi-GB image tarball into
       # /var/lib/docker while the tarball is still on disk, so the job briefly
-      # needs about twice the image size on /. The hosted image's free space
-      # varies, and the load ran out of disk on PR #909 (issue #913). Remove
-      # preinstalled toolchains no step here uses before the cache restore.
+      # needs about twice the image size on /. The load ran out of disk on
+      # PR #909 (issue #913). Of 1192 jobs measured for issue #918, 1183 ran on
+      # a 145G / with 86-88G free, where removing the toolchains below took a
+      # median 92 s and was not needed. 9 ran on a 72G / with 14-17G free; there
+      # the removal freed 21-22G and the cache restore plus load then took 13G.
+      # The load took at most 20G on any job. So remove them only when / has
+      # less than MIN_FREE_GB free, and log `df -h /` either way.
       - name: Free runner disk space
+        env:
+          MIN_FREE_GB: 40
         run: |
           df -h /
+          avail=$(df --output=avail -BG / | tail -n 1 | tr -dc '0-9')
+          if [ "$avail" -ge "$MIN_FREE_GB" ]; then
+            echo "${avail}G free on /, at least ${MIN_FREE_GB}G: no cleanup needed"
+            exit 0
+          fi
+          echo "${avail}G free on /, under ${MIN_FREE_GB}G: removing unused toolchains"
           sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
             /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
           df -h /
