@@ -33,6 +33,22 @@ Without this, the old values persist in the generated config, causing subtle bug
 3. Run `idf.py fullclean` (or `just clean`) — the build directory caches config too
 4. Rebuild
 
+## Every Symbol Must Exist
+
+A line whose symbol no Kconfig file defines is dropped with only
+`warning: unknown kconfig symbol 'X' assigned to 'y'` in the build log, and
+the build succeeds. 58 such lines sat in 12 projects until #707:
+`CONFIG_MDNS_ENABLED` (mDNS is the `espressif/mdns` managed component, with no
+switch), `CONFIG_ESP_WIFI_ESPNOW_ENABLED` (ESP-NOW is always in `esp_wifi`),
+`CONFIG_CAMERA_PIN_*` (pins go in `camera_config_t`), `CONFIG_TINYUSB_ENABLED`.
+
+The `kconfig-symbols` pre-commit hook (`just kconfig-symbols::check`) now
+rejects them, from the symbol lists in `tools/kconfig_symbols/`. When it
+names a managed component as "not recorded", build the project and run the
+`just kconfig-symbols::component` command the message prints. The ESP-IDF list
+holds every target's symbols, so a symbol valid only on another target still
+passes; the build log is the check for that.
+
 ## sdkconfig Should Be Gitignored
 
 The generated `sdkconfig` should be in `.gitignore`. Only `sdkconfig.defaults` and named overlays (`sdkconfig.debug`, etc.) belong in version control.

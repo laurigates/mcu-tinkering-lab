@@ -1,0 +1,9 @@
+# what: Kconfig symbols of the component esp-idf-lib/mcp23x17
+# component: esp-idf-lib/mcp23x17
+# version: 1.2.0
+# depends: esp-idf-lib/esp_idf_lib_helpers esp-idf-lib/i2cdev
+# command: just kconfig-symbols::component <project>/managed_components/esp-idf-lib__mcp23x17
+EXAMPLE_I2C_MASTER_SCL
+EXAMPLE_I2C_MASTER_SDA
+MCP23X17_IFACE_I2C
+MCP23X17_IFACE_SPI

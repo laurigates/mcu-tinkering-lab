@@ -7,8 +7,7 @@ CONFIG_ESP_CONSOLE_UART_DEFAULT=y
 # WiFi — required by ESP-NOW
 CONFIG_ESP_WIFI_ENABLED=y
 
-# Enable ESP-NOW (part of esp_wifi; on by default but documented here)
-CONFIG_ESP_WIFI_ESPNOW_ENABLED=y
+# ESP-NOW is part of esp_wifi and has no Kconfig enable switch in ESP-IDF v5.4
 
 # Disable WiFi AMPDU (known S3 AP visibility workaround)
 CONFIG_ESP_WIFI_AMPDU_RX_ENABLED=n
@@ -46,5 +45,5 @@ CONFIG_SPIRAM_MODE_OCT=y
 # Larger main task stack for WiFi + HTTP + mesh init
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=10240
 
-# mDNS for Ollama discovery
-CONFIG_MDNS_ENABLED=y
+# mDNS (Ollama discovery) comes from the espressif/mdns managed component in
+# main/idf_component.yml; it has no enable switch here.

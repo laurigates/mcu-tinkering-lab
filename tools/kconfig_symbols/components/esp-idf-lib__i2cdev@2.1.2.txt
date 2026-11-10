@@ -1,0 +1,14 @@
+# what: Kconfig symbols of the component esp-idf-lib/i2cdev
+# component: esp-idf-lib/i2cdev
+# version: 2.1.2
+# depends: esp-idf-lib/esp_idf_lib_helpers
+# command: just kconfig-symbols::component <project>/managed_components/esp-idf-lib__i2cdev
+EXAMPLE_I2C_MASTER_SCL
+EXAMPLE_I2C_MASTER_SDA
+I2CDEV_AUTO_ENABLE_PULLUPS
+I2CDEV_DEFAULT_SCL_PIN
+I2CDEV_DEFAULT_SDA_PIN
+I2CDEV_MAX_DEVICES_PER_PORT
+I2CDEV_NOLOCK
+I2CDEV_TIMEOUT
+I2CDEV_USE_LEGACY_DRIVER

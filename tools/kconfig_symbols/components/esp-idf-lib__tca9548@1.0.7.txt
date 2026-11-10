@@ -1,0 +1,7 @@
+# what: Kconfig symbols of the component esp-idf-lib/tca9548
+# component: esp-idf-lib/tca9548
+# version: 1.0.7
+# depends: esp-idf-lib/esp_idf_lib_helpers esp-idf-lib/i2cdev
+# command: just kconfig-symbols::component <project>/managed_components/esp-idf-lib__tca9548
+EXAMPLE_I2C_MASTER_SCL
+EXAMPLE_I2C_MASTER_SDA

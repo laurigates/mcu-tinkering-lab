@@ -4,8 +4,7 @@
 CONFIG_IDF_TARGET="esp32s3"
 
 # --- USB (TinyUSB composite: HID keyboard + CDC serial) ---
-CONFIG_TINYUSB_ENABLED=y
-CONFIG_TINYUSB_HID_ENABLED=y
+# espressif/esp_tinyusb has no enable switch; the class counts turn classes on.
 CONFIG_TINYUSB_HID_COUNT=1
 CONFIG_TINYUSB_CDC_ENABLED=y
 CONFIG_TINYUSB_CDC_COUNT=1
@@ -33,8 +32,8 @@ CONFIG_LOG_DEFAULT_LEVEL_INFO=y
 # --- Watchdog ---
 CONFIG_ESP_TASK_WDT_TIMEOUT_S=10
 
-# --- mDNS hostname discovery (it-troubleshooter.local) ---
-CONFIG_MDNS_ENABLED=y
+# --- mDNS (it-troubleshooter.local) comes from the espressif/mdns managed
+# component in main/idf_component.yml; it has no enable switch here. ---
 
 # --- WiFi ---
 CONFIG_ESP_WIFI_ENABLED=y

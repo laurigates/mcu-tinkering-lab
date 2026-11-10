@@ -6,7 +6,7 @@ CONFIG_ESP_CONSOLE_UART_DEFAULT=y
 
 # WiFi — required by ESP-NOW
 CONFIG_ESP_WIFI_ENABLED=y
-CONFIG_ESP_WIFI_ESPNOW_ENABLED=y
+# ESP-NOW is part of esp_wifi and has no Kconfig enable switch in ESP-IDF v5.4
 
 # Disable WiFi AMPDU (S3 AP visibility workaround also applies to ESP-NOW peering)
 CONFIG_ESP_WIFI_AMPDU_RX_ENABLED=n

@@ -66,7 +66,7 @@ Check by grepping root `justfile` for the project directory name.
 Check by grepping for `#include "credentials.h"`, `#include "secrets.h"`, `wifi_config` in source.
 
 ### 10. mDNS configuration (WiFi STA projects only)
-- **Pass**: `mdns` in CMakeLists.txt REQUIRES and `CONFIG_MDNS_ENABLED` in sdkconfig.defaults
+- **Pass**: `espressif/mdns` under `dependencies:` in `main/idf_component.yml` (mDNS is a managed component in ESP-IDF 5.x; there is no `CONFIG_MDNS_ENABLED` Kconfig symbol, so do not look for one in sdkconfig.defaults)
 - **Skip**: Project doesn't use WiFi STA mode
 - **Fail**: WiFi STA project without mDNS
 

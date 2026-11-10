@@ -81,7 +81,7 @@ just format-check  # clang-format --dry-run --Werror (CI-safe)
 - Resolution: SVGA (800×600), JPEG format, quality 15
 - Frame buffer count: 2 (double-buffered)
 - Target ~24 fps (`vTaskDelay(42ms)` in stream loop)
-- Pins defined in `main.c` for AI-Thinker board; `sdkconfig.defaults` mirrors these for the camera component
+- Pins defined in `main.c` (`CAM_PIN_*`) for the AI-Thinker board; `espressif/esp32-camera` has no Kconfig symbols for pins, so `sdkconfig.defaults` carries none
 
 ### Power Considerations
 

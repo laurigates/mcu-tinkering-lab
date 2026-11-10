@@ -98,12 +98,12 @@ Run `cp main/credentials.h.example main/credentials.h` and fill in credentials.
 **AI queries return errors**
 - Claude/Gemini: verify the API key in `credentials.h` and that WiFi is connected.
 - Ollama: ensure an Ollama server is reachable on the local network. The brainbox
-  discovers it via mDNS (`_ollama._tcp.local`). Check `CONFIG_MDNS_ENABLED=y` in
-  `sdkconfig.defaults`.
+  discovers it via mDNS (`_ollama._tcp.local`), which comes from the
+  `espressif/mdns` entry in `main/idf_component.yml`.
 
 **No peers appearing**
-Confirm peer boxes are on the same WiFi channel (channel 1 by default). Check that
-`CONFIG_ESP_WIFI_ESPNOW_ENABLED=y`.
+Confirm peer boxes are on the same WiFi channel (channel 1 by default). ESP-NOW is
+part of `esp_wifi` and has no Kconfig switch to check.
 
 **OLED shows nothing**
 The SSD1306 driver is stubbed in v0.1. Status output appears on the serial monitor

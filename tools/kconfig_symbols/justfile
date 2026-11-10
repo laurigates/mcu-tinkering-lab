@@ -1,0 +1,56 @@
+# tools/kconfig_symbols — check every sdkconfig.defaults against the Kconfig
+# symbols ESP-IDF, the project's own components and its managed components
+# define, without a build (issue #707). Run from the repo root as
+# `just kconfig-symbols::<recipe>`.
+
+_root := source_directory() / "../.."
+
+default:
+    @just --list kconfig-symbols
+
+# The gate the `kconfig-symbols` pre-commit hook runs
+check:
+    cd {{_root}} && PYTHONPATH=tools python3 -m kconfig_symbols.check
+
+# Unit tests, plus the real-repo check
+test:
+    cd {{_root}} && python3 -m unittest discover -s tools/kconfig_symbols -t tools
+
+# Regenerate idf-<version>.txt from the image the Dockerfile builds on
+idf:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd "{{_root}}"
+    engine="${CONTAINER_CMD:-docker}"
+    # The version comes from the Dockerfile's FROM line, which the dev image
+    # and docker-compose.yml build on; test_kconfig_symbols.py fails when the
+    # committed list and that line disagree.
+    version="$(sed -n 's|^FROM espressif/idf:\(v[0-9][0-9.]*\).*|\1|p' Dockerfile)"
+    [ -n "$version" ] || { echo "no 'FROM espressif/idf:vX.Y' line in Dockerfile" >&2; exit 1; }
+    image="espressif/idf:$version"
+    "$engine" image inspect "$image" >/dev/null 2>&1 || "$engine" pull "$image"
+    digest="$("$engine" image inspect "$image" --format '{{{{index .RepoDigests 0}}')"
+    out="tools/kconfig_symbols/idf-$version.txt"
+    # --entrypoint python3 skips the image's export.sh banner; the extractor is
+    # stdlib only. Output goes to stdout so the file stays owned by the host user.
+    "$engine" run --rm --entrypoint python3 \
+        -v "$PWD/tools/kconfig_symbols:/kcs/kconfig_symbols:ro" -e PYTHONPATH=/kcs \
+        "$image" -m kconfig_symbols.extract idf /opt/esp/idf \
+        --version "$version" --source "$digest" -o - > "$out"
+    echo "$out: $(grep -vc '^#' "$out") symbols from $digest"
+
+# Record one component's symbols. A managed component: build the project first
+# so managed_components/ is populated, e.g.
+#   just kconfig-symbols::component packages/thinkpack/brainbox/managed_components/espressif__mdns
+# An external/ checkout an EXTRA_COMPONENT_DIRS entry points into: pass its tag,
+#   just kconfig-symbols::component packages/input-gaming/xbox-switch-bridge/external/bluepad32 release_v3.10.3
+# The file is named <ns>__<name>@<version>.txt. A project with a tracked
+# dependencies.lock is checked against its locked version; any other project
+# against the highest version recorded.
+component dir version="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd "{{_root}}"
+    version="{{version}}"
+    PYTHONPATH=tools python3 -m kconfig_symbols.extract component "{{dir}}" \
+        ${version:+--version "$version"} --out-dir tools/kconfig_symbols/components

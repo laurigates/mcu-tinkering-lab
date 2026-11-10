@@ -1,32 +1,10 @@
-# ESP32-CAM (AI-THINKER model defaults)
-CONFIG_CAMERA_ENABLED=y
-CONFIG_ESP32_CAMERA_SUPPORT=y
-CONFIG_CAMERA_MODEL_AI_THINKER=y
+# ESP32-CAM (AI-Thinker). The camera pins are the CAM_PIN_* defines in
+# main/main.c: espressif/esp32-camera has no Kconfig symbols for pins or board.
 
 # Brownout detector configuration - Level 5 (2.70V) for better stability
 CONFIG_ESP_BROWNOUT_DET=y
 CONFIG_ESP_BROWNOUT_DET_LVL_SEL_5=y
 CONFIG_ESP_BROWNOUT_DET_LVL=5
-
-# Camera pin configuration
-CONFIG_CAMERA_PIN_PWDN=32
-CONFIG_CAMERA_PIN_RESET=-1
-CONFIG_CAMERA_PIN_XCLK=0
-CONFIG_CAMERA_PIN_SIOD=26
-CONFIG_CAMERA_PIN_SIOC=27
-
-CONFIG_CAMERA_PIN_D7=35
-CONFIG_CAMERA_PIN_D6=34
-CONFIG_CAMERA_PIN_D5=39
-CONFIG_CAMERA_PIN_D4=36
-CONFIG_CAMERA_PIN_D3=21
-CONFIG_CAMERA_PIN_D2=19
-CONFIG_CAMERA_PIN_D1=18
-CONFIG_CAMERA_PIN_D0=5
-
-CONFIG_CAMERA_PIN_VSYNC=25
-CONFIG_CAMERA_PIN_HREF=23
-CONFIG_CAMERA_PIN_PCLK=22
 
 # PSRAM is required for camera applications
 CONFIG_ESP32_SPIRAM_SUPPORT=y
@@ -58,8 +36,8 @@ CONFIG_LWIP_MAX_SOCKETS=16
 CONFIG_LWIP_SO_REUSE=y
 CONFIG_LWIP_SO_REUSE_RXTOALL=y
 
-# mDNS hostname discovery (esp32-cam.local)
-CONFIG_MDNS_ENABLED=y
+# mDNS (esp32-cam.local) comes from the espressif/mdns managed component in
+# main/idf_component.yml; it has no enable switch here.
 
 # Flash memory
 CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
