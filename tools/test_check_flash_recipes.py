@@ -20,6 +20,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -323,19 +324,43 @@ class LookupTests(unittest.TestCase):
     def write(self, name: str, text: str) -> None:
         (self.dir / name).write_text(text)
 
+    def custom(self, table: str, sdkconfig: str = "") -> None:
+        """A project table the build reads: partitions.csv under CUSTOM=y."""
+        self.write(
+            "sdkconfig.defaults", "CONFIG_PARTITION_TABLE_CUSTOM=y\n" + sdkconfig
+        )
+        self.write("partitions.csv", table)
+
     def test_the_otadata_row_of_the_resolved_table_gives_its_offset(self):
         self.write(
-            "sdkconfig.defaults", 'CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="t.csv"\n'
+            "sdkconfig.defaults",
+            'CONFIG_PARTITION_TABLE_CUSTOM=y\nCONFIG_PARTITION_TABLE_CUSTOM_FILENAME="t.csv"\n',
         )
         self.write(
             "t.csv", "nvs,data,nvs,0x9000,0x4000,\notadata,data,ota,0xd000,0x2000,\n"
         )
         self.assertEqual(cfr.flash_layout(self.dir).otadata, 0xD000)
 
-    def test_an_otadata_row_off_the_usual_address_keeps_its_offset(self):
-        # llm-telegram's table: a larger nvs pushes otadata to 0xe000.
+    def test_a_project_csv_is_ignored_unless_the_custom_table_is_selected(self):
+        # #684, switch-usb-proxy's case: without CONFIG_PARTITION_TABLE_CUSTOM=y
+        # ESP-IDF builds its built-in single-app table and never reads the CSV.
+        self.write(
+            "sdkconfig.defaults",
+            'CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"\n',
+        )
         self.write(
             "partitions.csv",
+            "nvs,data,nvs,0x9000,0x4000,\notadata,data,ota,0xd000,0x2000,\n"
+            "factory,app,factory,0x20000,1M,\n",
+        )
+        layout = cfr.flash_layout(self.dir)
+        self.assertFalse(layout.has_otadata_row)
+        self.assertEqual(layout.app, 0x10000)
+        self.assertIn("partitions_singleapp.csv", layout.why["app"])
+
+    def test_an_otadata_row_off_the_usual_address_keeps_its_offset(self):
+        # llm-telegram's table: a larger nvs pushes otadata to 0xe000.
+        self.custom(
             "nvs,data,nvs,0x9000,0x5000,\notadata,data,ota,0xe000,0x2000,\n"
             "factory,app,factory,0x10000,1792K,\n",
         )
@@ -352,8 +377,7 @@ class LookupTests(unittest.TestCase):
 
     def test_a_blank_offset_otadata_row_is_a_row_without_an_offset(self):
         # #689: not "no row" — the build still writes ota_data_initial.bin.
-        self.write(
-            "partitions.csv",
+        self.custom(
             "nvs,data,nvs,,0x4000,\notadata,data,ota,,0x2000,\n"
             "factory,app,factory,0x10000,1M,\n",
         )
@@ -364,8 +388,7 @@ class LookupTests(unittest.TestCase):
         self.assertIn("blank offset", layout.why["otadata"])
 
     def test_a_table_without_an_otadata_row_has_no_otadata_offset(self):
-        self.write(
-            "partitions.csv",
+        self.custom(
             "nvs,data,nvs,0x9000,0x6000,\nfactory,app,factory,0x10000,1M,\n",
         )
         self.assertIsNone(cfr.flash_layout(self.dir).otadata)
@@ -420,12 +443,14 @@ class LookupTests(unittest.TestCase):
         self.assertEqual(cfr.flash_layout(self.dir).partition_table, 0x8000)
 
     def test_the_partition_table_offset_is_read_from_sdkconfig_defaults(self):
-        self.write("sdkconfig.defaults", "CONFIG_PARTITION_TABLE_OFFSET=0x9000\n")
+        self.custom(
+            "nvs,data,nvs,0xa000,0x6000,\nfactory,app,factory,0x10000,1M,\n",
+            sdkconfig="CONFIG_PARTITION_TABLE_OFFSET=0x9000\n",
+        )
         self.assertEqual(cfr.flash_layout(self.dir).partition_table, 0x9000)
 
     def test_the_app_goes_to_the_factory_partition_when_there_is_one(self):
-        self.write(
-            "partitions.csv",
+        self.custom(
             "nvs,data,nvs,0x9000,0x4000,\notadata,data,ota,0xd000,0x2000,\n"
             "ota_0,app,ota_0,0x10000,1M,\nfactory,app,factory,0x110000,1M,\n",
         )
@@ -433,33 +458,117 @@ class LookupTests(unittest.TestCase):
 
     def test_without_a_factory_partition_the_app_goes_to_the_lowest_ota_slot(self):
         # parttool.py's boot-default search: factory, then ota_0 .. ota_15.
-        self.write(
-            "partitions.csv",
+        self.custom(
             "otadata,data,ota,0xd000,0x2000,\n"
             "ota_1,app,ota_1,0x10000,1M,\nota_0,app,ota_0,0x110000,1M,\n",
         )
         self.assertEqual(cfr.flash_layout(self.dir).app, 0x110000)
 
     def test_an_auto_placed_app_partition_has_no_offset_to_check(self):
-        self.write(
-            "partitions.csv", "nvs,data,nvs,,0x6000,\nfactory,app,factory,,1M,\n"
-        )
+        self.custom("nvs,data,nvs,,0x6000,\nfactory,app,factory,,1M,\n")
         layout = cfr.flash_layout(self.dir)
         self.assertIsNone(layout.app)
         self.assertIn("factory", layout.why["app"])
 
     def test_a_table_without_an_app_partition_has_no_app_offset(self):
-        self.write("partitions.csv", "nvs,data,nvs,0x9000,0x6000,\n")
+        self.custom("nvs,data,nvs,0x9000,0x6000,\n")
         self.assertIsNone(cfr.flash_layout(self.dir).app)
 
-    def test_a_built_in_table_puts_the_app_at_0x10000(self):
-        # No partitions.csv: ESP-IDF's presets place factory after nvs and
-        # phy_init, which lands on 0x10000 behind a table at 0x8000.
-        self.assertEqual(cfr.flash_layout(self.dir).app, 0x10000)
+    def test_the_default_built_in_table_puts_the_app_at_0x10000(self):
+        # No table selected: CONFIG_PARTITION_TABLE_SINGLE_APP, whose factory
+        # gen_esp32part.py places at 0x10000 behind a table at 0x8000.
+        layout = cfr.flash_layout(self.dir)
+        self.assertEqual(layout.app, 0x10000)
+        self.assertFalse(layout.has_otadata_row)
 
-    def test_a_built_in_table_behind_a_moved_partition_table_is_not_guessed(self):
+    def test_each_built_in_preset_reads_its_own_layout(self):
+        # #684: offsets from ESP-IDF v5.4's gen_esp32part.py
+        # (tools/lib/idf-partition-tables/), not one guess for every preset.
+        for preset, otadata, app in (
+            ("CONFIG_PARTITION_TABLE_SINGLE_APP=y", None, 0x10000),
+            ("CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE=y", None, 0x10000),
+            ("CONFIG_PARTITION_TABLE_TWO_OTA=y", 0xD000, 0x10000),
+            # No factory: the app goes to ota_0, which the larger nvs pushes to 0x20000.
+            ("CONFIG_PARTITION_TABLE_TWO_OTA_LARGE=y", 0xF000, 0x20000),
+            ("CONFIG_PARTITION_TABLE_SINGLE_APP_ENCRYPTED_NVS=y", None, 0x10000),
+            ("CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE_ENC_NVS=y", None, 0x10000),
+            ("CONFIG_PARTITION_TABLE_TWO_OTA_ENCRYPTED_NVS=y", 0xD000, 0x10000),
+        ):
+            with self.subTest(preset=preset):
+                self.write("sdkconfig.defaults", preset + "\n")
+                layout = cfr.flash_layout(self.dir)
+                self.assertEqual((layout.otadata, layout.app), (otadata, app))
+
+    def test_a_core_dump_to_flash_selects_the_coredump_variant(self):
+        # PARTITION_TABLE_FILENAME's defaults in components/partition_table/
+        # Kconfig.projbuild; the coredump variant moves two_ota's ota_0.
+        self.write(
+            "sdkconfig.defaults",
+            "CONFIG_PARTITION_TABLE_TWO_OTA=y\nCONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y\n",
+        )
+        layout = cfr.flash_layout(self.dir)
+        self.assertIn("partitions_two_ota_coredump.csv", layout.why["app"])
+        self.assertEqual(layout.otadata, 0xD000)
+
+    def test_a_later_assignment_wins_as_in_sdkconfig(self):
+        for lines, table in (
+            (
+                "CONFIG_PARTITION_TABLE_TWO_OTA=y\nCONFIG_PARTITION_TABLE_SINGLE_APP=y\n",
+                "partitions_singleapp.csv",
+            ),
+            (
+                "CONFIG_PARTITION_TABLE_TWO_OTA=y\n# CONFIG_PARTITION_TABLE_TWO_OTA is not set\n",
+                "partitions_singleapp.csv",
+            ),
+            (
+                "CONFIG_PARTITION_TABLE_TWO_OTA=y\nCONFIG_PARTITION_TABLE_TWO_OTA=n\n",
+                "partitions_singleapp.csv",
+            ),
+            (
+                "CONFIG_PARTITION_TABLE_SINGLE_APP=y\nCONFIG_PARTITION_TABLE_TWO_OTA=y\n",
+                "partitions_two_ota.csv",
+            ),
+        ):
+            with self.subTest(lines=lines):
+                self.write("sdkconfig.defaults", lines)
+                self.assertIn(table, cfr.flash_layout(self.dir).why["app"])
+
+    def test_partition_table_filename_in_sdkconfig_defaults_is_ignored(self):
+        # It has no prompt, so kconfig derives it and ignores a default for it
+        # (checked with `idf.py reconfigure` in espressif/idf:v5.4): with
+        # CUSTOM=y the table is CUSTOM_FILENAME, which defaults to partitions.csv.
+        self.write(
+            "sdkconfig.defaults",
+            'CONFIG_PARTITION_TABLE_CUSTOM=y\nCONFIG_PARTITION_TABLE_FILENAME="other.csv"\n',
+        )
+        self.write("other.csv", "otadata,data,ota,0xd000,0x2000,\n")
+        self.write(
+            "partitions.csv",
+            "nvs,data,nvs,0x9000,0x6000,\nfactory,app,factory,0x10000,1M,\n",
+        )
+        self.assertFalse(cfr.flash_layout(self.dir).has_otadata_row)
+
+    def test_a_built_in_table_behind_a_moved_partition_table_fails_closed(self):
+        # The resolved copies assume the table at 0x8000; gen_esp32part.py
+        # places every partition after wherever the table actually is.
         self.write("sdkconfig.defaults", "CONFIG_PARTITION_TABLE_OFFSET=0x10000\n")
-        self.assertIsNone(cfr.flash_layout(self.dir).app)
+        with self.assertRaisesRegex(RuntimeError, "PARTITION_TABLE_OFFSET"):
+            cfr.flash_layout(self.dir)
+
+    def test_a_preset_with_no_table_for_its_options_fails_closed(self):
+        # Kconfig gives TWO_OTA_LARGE no coredump variant, so no filename at all.
+        self.write(
+            "sdkconfig.defaults",
+            "CONFIG_PARTITION_TABLE_TWO_OTA_LARGE=y\nCONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y\n",
+        )
+        with self.assertRaisesRegex(RuntimeError, "TWO_OTA_LARGE"):
+            cfr.flash_layout(self.dir)
+
+    def test_a_selected_custom_table_that_does_not_exist_fails_closed(self):
+        # Reading a missing table as "no otadata row" would fail the check open.
+        self.write("sdkconfig.defaults", "CONFIG_PARTITION_TABLE_CUSTOM=y\n")
+        with self.assertRaisesRegex(RuntimeError, "partitions.csv"):
+            cfr.flash_layout(self.dir)
 
     def test_the_cmake_project_name_names_the_app_file(self):
         self.write(
@@ -532,6 +641,76 @@ class PredicateTests(unittest.TestCase):
         none = self.table("nvs,data,nvs,0x9000,0x6000,\n")
         self.assertEqual(self.sh('has_otadata_partition "$1"', none).returncode, 1)
 
+    def test_a_missing_table_is_an_error_not_no_row(self):
+        # #684: resolve_partition_table names only tables that exist, so a
+        # missing one is a broken call; reading it as "no row" fails open.
+        missing = str(self.dir / "nope.csv")
+        proc = self.sh('parse_otadata_offset "$1"', missing)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("nope.csv", proc.stderr)
+        self.assertEqual(self.sh('has_otadata_partition "$1"', missing).returncode, 2)
+
+    def test_a_built_in_preset_resolves_to_its_resolved_copy(self):
+        (self.dir / "sdkconfig.defaults").write_text(
+            "CONFIG_PARTITION_TABLE_TWO_OTA=y\n"
+        )
+        proc = self.sh('resolve_partition_table "$1"', str(self.dir))
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        table = Path(proc.stdout.strip())
+        self.assertEqual(
+            table, PREDICATE.parent / "idf-partition-tables/partitions_two_ota.csv"
+        )
+        self.assertTrue(table.is_file())
+
+
+class BuiltInTableTripwireTests(unittest.TestCase):
+    """The resolved built-in tables are ESP-IDF's for the version the builds use.
+
+    tools/lib/idf-partition-tables/ holds gen_esp32part.py's output for one
+    ESP-IDF version. An upgrade (issue #734) can move a preset's offsets, so
+    this fails until IDF_VERSION names the new version, and the way to make it
+    pass is to run regenerate.sh, which writes tables for that version.
+    """
+
+    TABLES = PREDICATE.parent / "idf-partition-tables"
+    REPO = Path(__file__).resolve().parent.parent
+
+    def test_the_tables_are_for_the_esp_idf_version_the_builds_use(self):
+        version = (self.TABLES / "IDF_VERSION").read_text().strip()
+        used = {
+            "Dockerfile": re.search(
+                r"^FROM espressif/idf:(\S+)",
+                (self.REPO / "Dockerfile").read_text(),
+                re.MULTILINE,
+            ),
+        }
+        for workflow in ("build-firmware.yml", "_ci-build-esp32.yml"):
+            text = (self.REPO / ".github/workflows" / workflow).read_text()
+            used[workflow] = re.search(
+                r"^\s*IDF_VERSION:\s*'([^']+)'", text, re.MULTILINE
+            )
+        for where, match in used.items():
+            with self.subTest(where=where):
+                self.assertIsNotNone(match, f"no ESP-IDF version found in {where}")
+                self.assertEqual(
+                    match.group(1),
+                    version,
+                    f"{where} builds with ESP-IDF {match.group(1)}, but the resolved "
+                    f"built-in tables are from {version}: run "
+                    "tools/lib/idf-partition-tables/regenerate.sh after setting IDF_VERSION",
+                )
+
+    def test_every_table_says_which_version_wrote_it(self):
+        version = (self.TABLES / "IDF_VERSION").read_text().strip()
+        tables = sorted(self.TABLES.glob("partitions_*.csv"))
+        self.assertTrue(tables)
+        for table in tables:
+            with self.subTest(table=table.name):
+                self.assertTrue(
+                    table.read_text().startswith(f"# ESP-IDF {version} "),
+                    "regenerate.sh did not write this table for IDF_VERSION",
+                )
+
 
 class ManifestGeneratorTests(unittest.TestCase):
     """tools/generate-flasher-manifests.sh's otadata part, run on a throwaway tree."""
@@ -588,6 +767,23 @@ class ManifestGeneratorTests(unittest.TestCase):
         self.assertIn("otadata", proc.stderr)
         self.assertIn("thing", proc.stderr)
         self.assertFalse((self.root / "firmware/thing/manifest.json").exists())
+
+    def test_a_built_in_two_ota_preset_lists_its_otadata(self):
+        # #684: the preset has an otadata row although the project has no CSV.
+        (self.project / "sdkconfig.defaults").write_text(
+            "CONFIG_PARTITION_TABLE_TWO_OTA=y\n"
+        )
+        proc = subprocess.run(
+            ["bash", str(GENERATOR), "v1", "firmware"],
+            cwd=self.root,
+            env={**os.environ, "BUILD_SHA": "0" * 40},
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(self.parts()["ota_data_initial.bin"], 0xD000)
+        self.assertEqual(self.parts()["thing.bin"], 0x10000)
 
 
 # ---------------------------------------------------------------------------
@@ -771,7 +967,10 @@ class SharedRecipeTests(TempRepo):
             f"flash: ({shared} bin_name)\n",
         )
         if table is not None:
-            sdkconfig += 'CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"\n'
+            sdkconfig += (
+                "CONFIG_PARTITION_TABLE_CUSTOM=y\n"
+                'CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"\n'
+            )
             self.write(f"{rel}/partitions.csv", table)
         self.write(f"{rel}/sdkconfig.defaults", sdkconfig)
 
@@ -813,6 +1012,35 @@ class SharedRecipeTests(TempRepo):
         # The preset replaces the custom table, so it is the one input changed.
         self.consumer(
             sdkconfig=self.FOUR_MB + "CONFIG_PARTITION_TABLE_TWO_OTA=y\n", table=None
+        )
+        self.assertEqual(self.findings(), ["OTADATA_UNWRITTEN"])
+
+    def test_the_idf_two_ota_large_preset_misses_otadata_and_the_app_offset(self):
+        # #684: this preset has no factory, and its ota_0 sits at 0x20000.
+        self.consumer(
+            sdkconfig=self.FOUR_MB + "CONFIG_PARTITION_TABLE_TWO_OTA_LARGE=y\n",
+            table=None,
+        )
+        self.assertEqual(self.findings(), ["OTADATA_UNWRITTEN", "APP_OFFSET"])
+
+    def test_a_csv_the_build_does_not_select_is_not_read(self):
+        # #684: an otadata row in an unselected CSV is not in the build's table.
+        self.consumer(
+            sdkconfig=self.FOUR_MB,
+            table=None,
+        )
+        self.write(
+            "packages/demo/thing/partitions.csv",
+            "nvs,data,nvs,0x9000,0x4000,\notadata,data,ota,0xd000,0x2000,\n"
+            "ota_0,app,ota_0,0x20000,1M,\n",
+        )
+        self.assertEqual(self.findings(), [])
+
+    def test_a_blank_offset_otadata_row_is_a_mismatch(self):
+        # #689 through the shared-recipe audit: the row exists, nothing writes it.
+        self.consumer(
+            table="nvs,data,nvs,,0x4000,\notadata,data,ota,,0x2000,\n"
+            "factory,app,factory,0x10000,1M,\n"
         )
         self.assertEqual(self.findings(), ["OTADATA_UNWRITTEN"])
 

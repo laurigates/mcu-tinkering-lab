@@ -130,28 +130,6 @@ def parse_sdkconfig(path: Path) -> dict[str, str]:
     return values
 
 
-def parse_partitions(path: Path) -> tuple[int | None, bool]:
-    """Return (first app partition offset, whether an otadata partition exists)."""
-    app_offset: int | None = None
-    has_otadata = False
-    for line in path.read_text().splitlines():
-        line = line.split("#", 1)[0].strip()
-        if not line:
-            continue
-        cols = [c.strip() for c in line.split(",")]
-        if len(cols) < 4:
-            continue
-        _name, ptype, subtype, offset = cols[0], cols[1], cols[2], cols[3]
-        if ptype == "data" and subtype == "ota":
-            has_otadata = True
-        if ptype == "app" and app_offset is None and offset:
-            try:
-                app_offset = int(offset, 0)
-            except ValueError:
-                pass
-    return app_offset, has_otadata
-
-
 ATTRIBUTE_HINT = (
     "a just attribute must sit IMMEDIATELY above its recipe; a comment or blank "
     "line between them orphans it and `just` refuses to parse the whole file"
@@ -324,10 +302,9 @@ BOOTLOADER_OFFSETS = {
     "esp32p4": 0x2000,
 }
 DEFAULT_PARTITION_TABLE_OFFSET = 0x8000
-# ESP-IDF's built-in tables (single app, large single app, two OTA) leave the
-# offsets blank; gen_esp32part.py places nvs and phy_init after the table and
-# aligns the first app to 64 KB, which lands on 0x10000 behind a table at 0x8000.
-BUILT_IN_TABLE_APP_OFFSET = 0x10000
+# ESP-IDF's built-in tables leave every offset blank. The predicate resolves a
+# preset to tools/lib/idf-partition-tables/, gen_esp32part.py's own placement
+# behind a table at 0x8000, so they are read like any other table (#684).
 # parttool.py's --partition-boot-default search, which is where `idf.py flash`
 # writes the app: factory if the table has one, else the lowest ota_N.
 BOOT_APP_SUBTYPES = ("factory", *(f"ota_{n}" for n in range(16)))
@@ -656,17 +633,8 @@ def flash_layout(project_dir: Path) -> FlashLayout:
         if otadata_auto
         else ""
     )
-    if table.is_file():
-        app, why["app"] = boot_app_offset(table)
-    elif table_offset == DEFAULT_PARTITION_TABLE_OFFSET:
-        app = BUILT_IN_TABLE_APP_OFFSET
-        why["app"] = "ESP-IDF's built-in partition table"
-    else:
-        app = None
-        why["app"] = (
-            "a built-in partition table behind a moved partition table; "
-            "its app offset is not computed here"
-        )
+    # The predicate names only a table that exists, a built-in preset included.
+    app, why["app"] = boot_app_offset(table)
 
     return FlashLayout(
         bootloader=bootloader,
@@ -767,15 +735,11 @@ def collect() -> list[Project]:
             cfg = parse_sdkconfig(justfile.parent / "sdkconfig.defaults")
             proj.flash_size = cfg.get("CONFIG_ESPTOOLPY_FLASHSIZE")
 
-            custom = cfg.get("CONFIG_PARTITION_TABLE_CUSTOM_FILENAME")
-            if custom:
-                table = justfile.parent / custom
-                if table.is_file():
-                    proj.partition_source = custom
-                    proj.app_offset, proj.has_otadata = parse_partitions(table)
-            elif cfg.get("CONFIG_PARTITION_TABLE_TWO_OTA") == "y":
-                proj.partition_source = "(idf two-ota preset)"
-                proj.has_otadata = True
+            # The table the build uses, from the predicate the release path and
+            # the dry-run audit read, built-in presets included (issue #684).
+            table, _otadata, proj.has_otadata = partition_table(justfile.parent)
+            proj.partition_source = _display(table)
+            proj.app_offset, _where = boot_app_offset(table)
 
             projects.append(proj)
     return projects
@@ -853,17 +817,12 @@ def main() -> int:
         print("STATUS=FAIL")
         return 1
 
-    projects = collect()
-    for proj in projects:
-        audit(proj)
-
-    findings = [f for p in projects for f in p.findings]
-    findings += check_attribute_placement()
-    findings += check_justfile_directory()
     # A lookup that cannot run (the otadata predicate, `just --summary`) has no
     # answer to report; end on the same STATUS line as every other failure
-    # instead of a traceback.
+    # instead of a traceback. The predicate also fails closed on a table it
+    # cannot name (issue #684), which collect() and the output audit both ask.
     try:
+        projects = collect()
         statuses, output_findings = check_flash_recipe_outputs(just)
     except (RuntimeError, subprocess.CalledProcessError) as exc:
         stderr = (getattr(exc, "stderr", None) or "").strip()
@@ -872,6 +831,12 @@ def main() -> int:
             print(stderr)
         print("STATUS=FAIL")
         return 1
+    for proj in projects:
+        audit(proj)
+
+    findings = [f for p in projects for f in p.findings]
+    findings += check_attribute_placement()
+    findings += check_justfile_directory()
     findings += output_findings
     flagged = {f.project for f in output_findings}
 

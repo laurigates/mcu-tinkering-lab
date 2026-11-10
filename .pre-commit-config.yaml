@@ -93,16 +93,17 @@ repos:
         name: Flash recipes match their projects and the build
         entry: python3 tools/check-flash-recipes.py
         language: system
-        files: '(justfile|\.just|sdkconfig\.defaults|partitions\.csv|CMakeLists\.txt|tools/lib/otadata-predicate\.sh|tools/check-flash-recipes\.py)$'
+        files: '(justfile|\.just|sdkconfig\.defaults|partitions\.csv|CMakeLists\.txt|tools/lib/otadata-predicate\.sh|tools/lib/idf-partition-tables/.*|tools/check-flash-recipes\.py)$'
         pass_filenames: false
 
       - id: check-flash-recipes-tests
         name: check-flash-recipes unit tests
         entry: python3 -m unittest tools/test_check_flash_recipes.py
         language: system
-        # The lookup tests run the real otadata predicate and the manifest
-        # generator that sources it, so their edits rerun them.
-        files: '^tools/(check-flash-recipes\.py|test_check_flash_recipes\.py|lib/otadata-predicate\.sh|generate-flasher-manifests\.sh)$'
+        # The lookup tests run the real otadata predicate, its resolved built-in
+        # tables and the manifest generator that sources it, so their edits
+        # rerun them. The ESP-IDF version pins rerun the built-in-table tripwire.
+        files: '^(tools/(check-flash-recipes\.py|test_check_flash_recipes\.py|lib/otadata-predicate\.sh|lib/idf-partition-tables/.*|generate-flasher-manifests\.sh)|Dockerfile|\.github/workflows/(build-firmware|_ci-build-esp32)\.yml)$'
         pass_filenames: false
 
       - id: labels-tests
