@@ -8,7 +8,7 @@ Primary project: AI-powered robot car (Teuvo) on a single XIAO ESP32-S3 Sense, p
 | ID | Type | Title | Status | Created |
 |----|------|-------|--------|---------|
 | PRD-001 | PRD | AI-Powered Robot Car System | active | 2026-03-05 |
-| PRD-002 | PRD | ESP32-CAM Vision and AI Backend | active | 2026-03-05 |
+| PRD-002 | PRD | Robocar Vision and Gemini Planner | active | 2026-03-05 |
 | PRD-003 | PRD | Robot Car Physics Simulation | active | 2026-03-05 |
 | PRD-004 | PRD | Autonomous IT Troubleshooter Device | active | 2026-03-09 |
 | PRD-005 | PRD | Xbox-to-Switch Bridge | active | 2026-04-05 |

@@ -4,7 +4,7 @@
 |----|---------|-----|--------|----------|-------|
 | FR-001 | Robocar firmware on one XIAO ESP32-S3 Sense (robocar-unified) | PRD-001 | active | P0 | Motors, servos, LEDs via PCA9685 behind a TCA9548A; OLED; the Heltec + ESP32-CAM pair is removed (ADR-013) |
 | FR-002 | Camera capture and Gemini vision planner | PRD-002 | active | P0 | OV3660 on the XIAO; Gemini Robotics-ER 2 planner (ADR-016); the ESP32-CAM board is removed (ADR-013) |
-| FR-003 | MQTT telemetry and logging | PRD-002 | active | P1 | JSON messages, mDNS service discovery |
+| FR-003 | MQTT telemetry and logging | PRD-001 | active | P1 | robocar/status, robocar/events (ADR-033), remote commands; log forwarding open (#956); mDNS broker discovery proposed (ADR-034 §3) |
 | FR-004 | Pluggable AI backend (Claude / Ollama) | PRD-002 | deprecated | P1 | The claude_*/ollama_* backends are removed; Gemini only. A second backend would be a newly designed abstraction |
 | FR-005 | Pymunk 2D physics simulation | PRD-003 | active | P1 | Python 3.11; 18/24 tests passing |
 | FR-006 | WebSocket communication bridge | PRD-003 | active | P2 | Port 8765; bi-directional motor/sensor |
