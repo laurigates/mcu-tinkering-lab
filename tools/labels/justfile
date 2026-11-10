@@ -2,6 +2,9 @@
 # Portrait 2 (AutoBlade) through registration marks. See the component-labels
 # skill. Run from anywhere as `just labels::<recipe>`; outputs go to
 # tmp/labels/<data file name>/ (git-ignored).
+#
+# cut and test-cut use USB unless LABEL_CUTTER=ble (or bluetooth) is exported;
+# cut.sh reads it, with LABEL_CUTTER_NAME, LABEL_CUTTER_ID and LABEL_CUTTER_ADDR.
 
 _root := source_directory() / "../.."
 _data := "tools/labels/data/drawers-2026-10.toml"
@@ -34,7 +37,11 @@ print data=_data pages="":
 setup:
     {{_root}}/tools/labels/setup-cutter.sh
 
-# Kiss-cut one printed page. dry=true checks the job with no cutter attached
+# List the Bluetooth devices the cutter driver sees (kind: ble, or bluetooth for Classic); sends nothing
+scan kind="ble":
+    {{_root}}/tools/labels/scan-cutter.sh {{kind}}
+
+# Kiss-cut one printed page over USB, or Bluetooth with LABEL_CUTTER=ble. dry=true checks the job with no cutter attached
 cut page="1" data=_data dry="false" depth="1" pressure="0" speed="0":
     cd {{_root}} && DRY_RUN={{dry}} DEPTH={{depth}} PRESSURE={{pressure}} SPEED={{speed}} tools/labels/cut.sh tmp/labels/$(basename {{data}} .toml)/cut-p{{page}}.svg tmp/labels/$(basename {{data}} .toml)/plan.json
 
