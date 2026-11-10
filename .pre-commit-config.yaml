@@ -183,7 +183,7 @@ repos:
       # a commit that touches neither the taxonomy nor the test. It reads
       # `git ls-files` and one JSON file.
       - id: issue-labels-taxonomy
-        name: Label taxonomy globs match tracked paths, and each scope selects one label
+        name: Label taxonomy passes the script's schema, globs match tracked paths, each scope selects one label
         entry: python3 -m unittest tools/test_issue_labels_taxonomy.py
         language: system
         pass_filenames: false
