@@ -559,13 +559,19 @@ class AttributePlacementTests(TempRepo):
         )
         self.assertEqual(self.codes(), {})
 
-    @unittest.expectedFailure
     def test_an_attribute_separated_from_its_recipe_by_a_blank_line_is_reported(self):
-        # just 1.58.0 rejects this with `error: extraneous attribute`, but the
-        # check skips blank lines as tolerated. Issue #675; remove this
-        # decorator with the fix.
+        # just 1.58.0 rejects this with `error: extraneous attribute` (#675).
         self.write("tools/esp32-idf.just", "[private]\n\n_x:\n    true\n")
         self.assertEqual(self.codes(), {"tools/esp32-idf.just": ["ORPHANED_ATTRIBUTE"]})
+
+    def test_a_bracketed_shell_test_in_a_recipe_body_is_not_an_attribute(self):
+        # `[ -f x ]` in an indented recipe line is shell, not a just attribute,
+        # so a blank line after it orphans nothing.
+        self.write(
+            "tools/esp32-idf.just",
+            "_x:\n    [ -f build/x.bin ]\n\n    true\n",
+        )
+        self.assertEqual(self.codes(), {})
 
 
 class SharedRecipeTests(TempRepo):

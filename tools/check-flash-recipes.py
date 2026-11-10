@@ -180,25 +180,25 @@ def check_attribute_placement() -> list[Finding]:
         if not path.is_file():
             continue
         lines = path.read_text().split("\n")
-        for i, line in enumerate(lines):
-            stripped = line.strip()
+        for i, line in enumerate(lines[:-1]):
+            # An attribute starts at column 0, like the recipe it belongs to; an
+            # indented `[ ... ]` is a shell test inside a recipe body.
+            stripped = line.rstrip()
             if not (stripped.startswith("[") and stripped.endswith("]")):
                 continue
-            # Look ahead to the next meaningful line.
-            for follower in lines[i + 1 :]:
-                nxt = follower.strip()
-                if not nxt:
-                    continue  # blank alone is tolerated by just
-                if nxt.startswith("#"):
-                    findings.append(
-                        Finding(
-                            str(path.relative_to(REPO_ROOT)),
-                            "ORPHANED_ATTRIBUTE",
-                            f"line {i + 1}: {stripped} is followed by a comment — "
-                            + ATTRIBUTE_HINT,
-                        )
+            # just 1.58.0 rejects a blank line here as well as a comment
+            # (`error: extraneous attribute`, issue #675).
+            nxt = lines[i + 1].strip()
+            if not nxt or nxt.startswith("#"):
+                follower = "a comment" if nxt else "a blank line"
+                findings.append(
+                    Finding(
+                        str(path.relative_to(REPO_ROOT)),
+                        "ORPHANED_ATTRIBUTE",
+                        f"line {i + 1}: {stripped} is followed by {follower} — "
+                        + ATTRIBUTE_HINT,
                     )
-                break
+                )
     return findings
 
 
