@@ -191,7 +191,9 @@ recipes. Then:
    `EXTRA_COMPONENT_DIRS` reaches outside the project directory (for example
    `../../components`), list each of those component directories, relative to
    `packages/`, in the entry's `extra_paths`. The `check-component-extra-paths`
-   pre-commit hook names any that are missing.
+   pre-commit hook names any that are missing, and fails on a registered
+   project with no entry. A project that cannot build in CI is listed in that
+   script's `NOT_IN_MATRIX` with the reason instead.
 3. Run `python3 tools/check-flash-recipes.py` to check the flash recipe against
    the partition table.
 4. Optional: add a `flasher.json` to list it in the

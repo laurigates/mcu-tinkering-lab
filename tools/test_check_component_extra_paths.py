@@ -190,7 +190,9 @@ def test_non_esp_idf_systems_are_skipped(tree: Path) -> None:
 def test_main_exit_codes(tree: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
     project(tree, "robo/car", SHARED)
     write(tree / cce.MATRIX, json.dumps([matrix_entry("robo/car", ["components"])]))
+    write(tree / cce.JUSTFILE, "mod car 'packages/robo/car'\n")
     monkeypatch.setattr(cce, "REPO_ROOT", tree)
+    monkeypatch.setattr(cce, "NOT_IN_MATRIX", {})
     assert cce.main([]) == 0
     write(tree / cce.MATRIX, json.dumps([matrix_entry("robo/car", [])]))
     assert cce.main([]) == 1
@@ -202,6 +204,112 @@ REAL_MATRIX = json.loads((cce.REPO_ROOT / cce.MATRIX).read_text(encoding="utf-8"
 
 def test_the_real_matrix_covers_every_consumer() -> None:
     assert [str(f) for f in cce.check(cce.REPO_ROOT, REAL_MATRIX)] == []
+
+
+JUSTFILE_TEXT = """\
+# comment: mod commented 'packages/x/commented'
+mod car 'packages/robo/car'
+mod? optional "packages/robo/opt"
+mod  spaced   'packages/robo/spaced'  # trailing comment
+mod tool 'tools/thing'
+mod bare
+"""
+
+
+def test_registered_modules_reads_every_mod_line() -> None:
+    assert cce.registered_modules(JUSTFILE_TEXT) == {
+        "car": "packages/robo/car",
+        "optional": "packages/robo/opt",
+        "spaced": "packages/robo/spaced",
+        "tool": "tools/thing",
+        "bare": "bare",
+    }
+
+
+def registration_findings(
+    modules: dict[str, str], matrix: list[dict], exclusions: dict[str, str]
+) -> list[str]:
+    return [str(f) for f in cce.check_registered(modules, matrix, exclusions)]
+
+
+def test_a_registered_project_with_no_matrix_entry_fails() -> None:
+    modules = {"car": "packages/robo/car", "boat": "packages/robo/boat"}
+    assert registration_findings(modules, [matrix_entry("robo/car")], {}) == [
+        "boat: packages/robo/boat is registered in the root justfile but has no "
+        "entry in .github/project-matrix.json and no NOT_IN_MATRIX exclusion"
+    ]
+
+
+def test_every_build_system_counts_as_an_entry() -> None:
+    modules = {"a": "packages/robo/a", "b": "packages/robo/b"}
+    matrix = [
+        matrix_entry("robo/a", system="esphome"),
+        matrix_entry("robo/b", system="pico"),
+    ]
+    assert registration_findings(modules, matrix, {}) == []
+
+
+def test_an_excluded_project_passes_and_modules_outside_packages_are_ignored() -> None:
+    modules = {"twin": "packages/robo/twin", "tool": "tools/thing", "bare": "bare"}
+    assert registration_findings(modules, [], {"robo/twin": "host build"}) == []
+
+
+def test_a_trailing_slash_in_the_mod_path_still_matches() -> None:
+    modules = {"car": "packages/robo/car/"}
+    assert registration_findings(modules, [matrix_entry("robo/car")], {}) == []
+
+
+def test_an_exclusion_needs_a_reason() -> None:
+    modules = {"twin": "packages/robo/twin"}
+    assert registration_findings(modules, [], {"robo/twin": "  "}) == [
+        "robo/twin: NOT_IN_MATRIX exclusion has no reason"
+    ]
+
+
+def test_a_stale_exclusion_fails() -> None:
+    modules = {"car": "packages/robo/car"}
+    exclusions = {"robo/car": "was not buildable", "robo/gone": "removed project"}
+    assert registration_findings(modules, [matrix_entry("robo/car")], exclusions) == [
+        "robo/car: has a matrix entry, so its NOT_IN_MATRIX exclusion is stale",
+        "robo/gone: NOT_IN_MATRIX excludes it, but no root justfile mod registers "
+        "packages/robo/gone",
+    ]
+
+
+def test_main_fails_on_an_unbuilt_registration(
+    tree: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    project(tree, "robo/car", "project(car)\n")
+    write(tree / cce.MATRIX, json.dumps([matrix_entry("robo/car", [])]))
+    write(tree / cce.JUSTFILE, "mod car 'packages/robo/car'\n")
+    monkeypatch.setattr(cce, "REPO_ROOT", tree)
+    monkeypatch.setattr(cce, "NOT_IN_MATRIX", {})
+    assert cce.main([]) == 0
+    write(
+        tree / cce.JUSTFILE,
+        "mod car 'packages/robo/car'\nmod boat 'packages/robo/boat'\n",
+    )
+    assert cce.main([]) == 1
+    assert "boat: packages/robo/boat is registered" in capsys.readouterr().err
+
+
+REAL_MODULES = cce.registered_modules(
+    (cce.REPO_ROOT / cce.JUSTFILE).read_text(encoding="utf-8")
+)
+
+
+def test_every_real_registered_project_is_built_or_excluded() -> None:
+    assert registration_findings(REAL_MODULES, REAL_MATRIX, cce.NOT_IN_MATRIX) == []
+
+
+def test_the_real_registration_check_fails_when_a_matrix_entry_is_dropped() -> None:
+    # Control: the check above must be able to fail on the real tree.
+    matrix = [e for e in REAL_MATRIX if e["path"] != "camera-vision/gemini-vision"]
+    assert registration_findings(REAL_MODULES, matrix, cce.NOT_IN_MATRIX) == [
+        "gemini-vision: packages/camera-vision/gemini-vision is registered in the "
+        "root justfile but has no entry in .github/project-matrix.json and no "
+        "NOT_IN_MATRIX exclusion"
+    ]
 
 
 def test_the_real_matrix_fails_when_a_consumer_entry_is_dropped() -> None:
