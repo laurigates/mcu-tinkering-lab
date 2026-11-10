@@ -226,9 +226,29 @@ recipe is written:
   `BOOTLOADER_OFFSETS`, from the project justfile's `target`), the partition table at `CONFIG_PARTITION_TABLE_OFFSET`
   (default 0x8000), otadata at the table's otadata row, and the app at the
   partition `idf.py flash` uses — `factory` if there is one, else the lowest
-  `ota_N`, or 0x10000 for ESP-IDF's built-in tables. A part whose expected offset
-  cannot be worked out (unknown target, an app row with a blank offset) is
-  reported as unverifiable rather than passed.
+  `ota_N`. A part whose expected offset
+  cannot be worked out (unknown target, an app or otadata row with a blank
+  offset) is reported as unverifiable rather than passed. An otadata row with a
+  blank offset is still a row: the predicate prints `auto` for it, a full flash
+  still owes `ota_data_initial.bin`, and `generate-flasher-manifests.sh` stops
+  the release rather than guess its offset (issue #689).
+
+**The table is the one the build reads, not whatever CSV sits in the project**
+(issue #684). ESP-IDF reads a project's CSV only under
+`CONFIG_PARTITION_TABLE_CUSTOM=y` (`CONFIG_PARTITION_TABLE_CUSTOM_FILENAME`,
+default `partitions.csv`); otherwise it builds a built-in preset
+(`PARTITION_TABLE_SINGLE_APP` by default, `_coredump` variant under
+`CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y`) and ignores the CSV. The predicate
+follows the same rules and reads a preset from
+`tools/lib/idf-partition-tables/`, ESP-IDF's own `gen_esp32part.py` placement of
+each built-in table behind a table at 0x8000. It fails closed on a table it
+cannot name: a selected CSV that is missing, a preset with no table for its
+options, or a preset behind a moved `CONFIG_PARTITION_TABLE_OFFSET`. The shared
+recipe audit, the dry-run audit, the manifest generator and the release
+assembly all read that one answer. After an ESP-IDF upgrade, set
+`tools/lib/idf-partition-tables/IDF_VERSION` and run `regenerate.sh` there; a
+tripwire in `tools/test_check_flash_recipes.py` fails until the tables match the
+version in `Dockerfile` and the build workflows.
 
 robocar-main and robocar-camera (both since removed) failed both for months (fixed in #598): the
 recipes flashed `build/robocar-{main,camera}.bin`, which no build writes, and the

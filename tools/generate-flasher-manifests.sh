@@ -17,8 +17,10 @@
 # For every packages/*/*/flasher.json found, this script:
 #   1. Reads chipFamily and appBinaryName from flasher.json
 #   2. Determines flash offsets (bootloader/partition-table/otadata/app) from
-#      the partition table sdkconfig.defaults selects (resolve_partition_table,
-#      default partitions.csv) if present, otherwise uses chip-family defaults
+#      the partition table the build uses (resolve_partition_table): the
+#      project's CSV under CONFIG_PARTITION_TABLE_CUSTOM=y, otherwise the
+#      built-in preset's resolved copy in lib/idf-partition-tables/. A table
+#      the predicate cannot name stops the run (issue #684)
 #   3. Writes firmware/<project-id>/manifest.json (ESP Web Tools format),
 #      plus a top-level "buildSha" ESP Web Tools ignores (see BUILD_SHA below)
 #      and "notes": the version's Features / Bug Fixes / Performance entries
@@ -43,10 +45,11 @@
 #   ESP32, ESP32-S2  ->  0x1000 (4096)
 #   ESP32-S3, ESP32-C3, ESP32-C6, ESP32-H2  ->  0x0 (0)
 #
-# Default partition offsets (no partition table file):
+# Partition offsets:
 #   partition-table  ->  0x8000  (32768)  -- same for all families
-#   app              ->  0x10000 (65536)  -- same for all families
-#   otadata          ->  none             -- only if found in the partition table
+#   app              ->  the table's first app row (0x10000 if it has none)
+#   otadata          ->  none             -- only if found in the partition table;
+#                                            a row with a blank offset fails the run
 
 set -euo pipefail
 
@@ -140,6 +143,14 @@ for flasher_json in ${PROJECTS_GLOB}; do
     partition_table=$(resolve_partition_table "$project_dir")
     app_offset=$(parse_app_offset "$partition_table")
     ota_offset=$(parse_otadata_offset "$partition_table")
+    # A data,ota row with a blank offset is placed by gen_esp32part.py at build
+    # time. Leaving the part out would publish a manifest that never writes
+    # otadata, and guessing its offset could write it over another partition,
+    # so stop the release instead (issue #689).
+    if [[ "$ota_offset" == auto ]]; then
+        echo "ERROR: ${project_id}: ${partition_table} has an otadata row with a blank offset; give it an explicit offset so the manifest can place ota_data_initial.bin" >&2
+        exit 1
+    fi
 
     echo "    chip=$chip_family  bl=0x$(printf '%x' "$bl_offset")  pt=0x$(printf '%x' "$pt_offset")  app=0x$(printf '%x' "$app_offset")"
     [[ -n "$ota_offset" ]] && echo "    otadata=0x$(printf '%x' "$ota_offset")"
