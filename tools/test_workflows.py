@@ -6,11 +6,14 @@ Needs PyYAML, so the pre-commit hook runs it through uv:
 
 What the tests hold:
 
-- No ``run:`` script expands ``inputs.*``, ``github.event.*`` or
+- No ``run:`` script, and no ``with.command`` (espressif/esp-idf-ci-action
+  pastes it into its own script), expands ``inputs.*``, ``github.event.*`` or
   ``github.head_ref`` with ``${{ }}``. Actions substitutes the text into the
   script before the shell parses it, so a value carrying ``$(...)`` or a quote
   runs as code in a job that may hold ``contents: write`` (issue #855). Pass
-  such a value through ``env:`` and read it as ``"$VAR"``. A ``boolean`` or
+  such a value through ``env:`` and read it as ``"$VAR"``; for
+  esp-idf-ci-action, also forward it into its container with
+  ``extra_docker_args: -e NAME``, which the suite checks. A ``boolean`` or
   ``number`` input is exempt, since GitHub rejects any other value. Other contexts
   (``matrix``, ``needs``, ``steps``, ``env``, ``github.repository``) are not
   covered: their values come from this repo's files or from GitHub itself.
@@ -47,6 +50,7 @@ UNTRUSTED_IN_EXPRESSION = re.compile(
     r"\$\{\{[^}]*?\b(inputs\.[\w-]+|github\.event\.[\w.-]+|github\.head_ref)"
 )
 PICO_REUSABLE = "./.github/workflows/_ci-build-pico.yml"
+ESP_IDF_ACTION = "espressif/esp-idf-ci-action@"
 PICO_SELECT_STEP = "Match the tag's component to a Pico SDK project"
 
 
@@ -62,6 +66,18 @@ def steps_of(workflow: dict):
     for job_id, job in (workflow.get("jobs") or {}).items():
         for index, step in enumerate(job.get("steps") or []):
             yield job_id, index, step
+
+
+def scripts_of(step: dict):
+    """Each piece of a step that a shell parses: ``run:``, and ``with.command``,
+    which espressif/esp-idf-ci-action pastes into its own script and runs
+    through ``bash -c`` the same way."""
+    for key, script in (
+        ("run", step.get("run")),
+        ("with.command", (step.get("with") or {}).get("command")),
+    ):
+        if isinstance(script, str):
+            yield key, script
 
 
 def typed_inputs(workflow: dict) -> set[str]:
@@ -106,15 +122,36 @@ class UntrustedContextInRunTest(unittest.TestCase):
             workflow = load(path.name)
             safe = typed_inputs(workflow)
             for job_id, index, step in steps_of(workflow):
-                script = step.get("run")
-                if not isinstance(script, str):
-                    continue
-                for match in UNTRUSTED_IN_EXPRESSION.finditer(script):
-                    if match.group(1) in safe:
-                        continue
-                    label = step.get("name", f"step {index}")
-                    found.append(f"{path.name}: {job_id} / {label}: {match.group(1)}")
+                for key, script in scripts_of(step):
+                    for match in UNTRUSTED_IN_EXPRESSION.finditer(script):
+                        if match.group(1) in safe:
+                            continue
+                        label = step.get("name", f"step {index}")
+                        found.append(
+                            f"{path.name}: {job_id} / {label} ({key}): {match.group(1)}"
+                        )
         self.assertEqual(found, [], 'move these to env: and read them as "$VAR"')
+
+    def test_esp_idf_command_variables_reach_the_container(self):
+        # esp-idf-ci-action runs `command` inside `docker run`, which does not
+        # inherit the step's env: each variable needs `-e NAME` in
+        # extra_docker_args, or the command reads it as empty.
+        missing = []
+        for path in workflow_files():
+            for job_id, index, step in steps_of(load(path.name)):
+                if not str(step.get("uses", "")).startswith(ESP_IDF_ACTION):
+                    continue
+                with_ = step.get("with") or {}
+                command = str(with_.get("command", ""))
+                forwarded = set(
+                    re.findall(r"-e\s+(\w+)", str(with_.get("extra_docker_args", "")))
+                )
+                for name in step.get("env") or {}:
+                    used = re.search(rf"\$\{{?{name}\b", command)
+                    if used and name not in forwarded:
+                        label = step.get("name", f"step {index}")
+                        missing.append(f"{path.name}: {job_id} / {label}: {name}")
+        self.assertEqual(missing, [], "add -e NAME to extra_docker_args")
 
 
 class BuildFirmwareTest(unittest.TestCase):

@@ -114,9 +114,16 @@ jobs:
 
       - name: Build ${{ inputs.project }}
         uses: espressif/esp-idf-ci-action@v1.2.0
+        # The action pastes `command` into its own shell script, so inputs
+        # reach it only as variables (#855). docker run does not inherit the
+        # step's env; extra_docker_args forwards each one into the container.
+        env:
+          PROJECT: ${{ inputs.project }}
+          PROJECT_PATH: ${{ inputs.project_path }}
         with:
           esp_idf_version: ${{ env.IDF_VERSION }}
           target: ${{ inputs.target }}
+          extra_docker_args: -e PROJECT -e PROJECT_PATH
           # The action runs this through `bash -c` from the repo root. The
           # exit status of the whole string is the job's verdict, so the shape
           # matters: the build and the partition-fit check are `&&`-chained
@@ -129,10 +136,10 @@ jobs:
           # app-fits-partition check made visible (issue #556); $OLDPWD is the
           # repo root after the cd.
           command: >-
-            cd packages/${{ inputs.project_path }} &&
+            cd "packages/$PROJECT_PATH" &&
             idf.py build &&
             bash "$OLDPWD/tools/check-app-partition-fit.sh" . &&
-            { echo "# Build Size Analysis for ${{ inputs.project }}" > size-report.txt;
+            { echo "# Build Size Analysis for $PROJECT" > size-report.txt;
             idf.py size >> size-report.txt 2>&1;
             idf.py size-components >> size-report.txt 2>&1; true; }
 
