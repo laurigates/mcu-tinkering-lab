@@ -45,31 +45,35 @@ resolve_partition_table() {
 }
 
 # Parse the OTA data partition offset from a partition-table CSV (locate it
-# with resolve_partition_table).
-# Prints the decimal offset on stdout, or nothing if no `data,ota` row exists
-# (including when the file itself is missing). Callers should treat non-empty
-# stdout as "this project has an OTA data partition", not the exit status.
+# with resolve_partition_table). Prints one of three states on stdout:
+#   <decimal offset>  the table has a `data,ota` row at that offset
+#   auto              the table has a `data,ota` row whose Offset field is
+#                     blank, left for gen_esp32part.py to place (issue #689)
+#   (empty)           the table has no `data,ota` row (also when the file
+#                     itself is missing)
+# Callers treat non-empty stdout as "this project has an OTA data partition",
+# not the exit status. `auto` has no offset to write or check against: a
+# caller that needs the number fails closed on it, never guesses.
 parse_otadata_offset() {
     local csv="$1"
     local offset=""
     if [[ -f "$csv" ]]; then
+        # A row is printed as "=<offset>" so a blank offset still prints.
         offset=$(grep -v '^#' "$csv" \
-            | awk -F',' '{ gsub(/[[:space:]]/, "", $2); gsub(/[[:space:]]/, "", $3) } $2 == "data" && $3 == "ota" { gsub(/[[:space:]]/, "", $4); print $4; exit }')
+            | awk -F',' '{ gsub(/[[:space:]]/, "", $2); gsub(/[[:space:]]/, "", $3) } $2 == "data" && $3 == "ota" { gsub(/[[:space:]]/, "", $4); print "=" $4; exit }')
     fi
-    if [[ -z "$offset" ]]; then
-        echo ""
-        return
-    fi
-    if [[ "$offset" == 0x* || "$offset" == 0X* ]]; then
-        printf "%d\n" "$offset"
-    else
-        echo "$offset"
-    fi
+    case "$offset" in
+        "") echo "" ;;
+        "=") echo "auto" ;;
+        =0x* | =0X*) printf "%d\n" "${offset#=}" ;;
+        *) echo "${offset#=}" ;;
+    esac
 }
 
 # Boolean wrapper: succeeds (exit 0) iff the given partition table declares
-# a `data,ota` row, i.e. iff ota_data_initial.bin is a real build output for
-# this project rather than a file that simply happens not to exist.
+# a `data,ota` row, with or without an explicit offset, i.e. iff
+# ota_data_initial.bin is a real build output for this project rather than a
+# file that simply happens not to exist.
 has_otadata_partition() {
     local csv="$1"
     [[ -n "$(parse_otadata_offset "$csv")" ]]

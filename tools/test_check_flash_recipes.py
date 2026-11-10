@@ -10,11 +10,17 @@ The dry-run text below is the shape `PORT=/dev/ttyDUMMY just --dry-run
 layout) are injected so no test depends on the real packages/ tree. The file-set
 checks (attribute placement, justfile_directory(), the shared-recipe audit)
 walk REPO_ROOT, so their tests build a temporary tree and point REPO_ROOT at it.
+The otadata predicate (tools/lib/otadata-predicate.sh) is shared with the
+release path, so its shell callers' use of it is tested here too: the predicate
+directly, and tools/generate-flasher-manifests.sh on a throwaway tree.
 """
 
 from __future__ import annotations
 
 import importlib.util
+import json
+import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -40,6 +46,15 @@ ESP32_OTA = cfr.FlashLayout(
 )
 NO_OTADATA = cfr.FlashLayout(
     bootloader=0x1000, partition_table=0x8000, otadata=None, app=0x10000
+)
+# An otadata row whose offset is blank, left to gen_esp32part.py to place (#689).
+AUTO_OTADATA = cfr.FlashLayout(
+    bootloader=0x1000,
+    partition_table=0x8000,
+    otadata=None,
+    otadata_auto=True,
+    app=0x10000,
+    why={"otadata": "t.csv's otadata row has a blank offset"},
 )
 LAYOUTS = {MAIN: ESP32_OTA}
 
@@ -136,6 +151,12 @@ class OtadataTests(unittest.TestCase):
         # alone is then the point of the recipe.
         _, findings = audit(esptool(FULL[3]))
         self.assertEqual(findings, [])
+
+    def test_a_blank_offset_otadata_row_still_requires_otadata(self):
+        # #689: the row exists, so the build writes the file and a full flash owes it.
+        text = esptool(FULL[0], FULL[1], FULL[3])
+        _, findings = audit(text, layouts={MAIN: AUTO_OTADATA})
+        self.assertEqual([f.code for f in findings], ["OTADATA_UNWRITTEN"])
 
 
 class OffsetTests(unittest.TestCase):
@@ -251,6 +272,13 @@ class OffsetTests(unittest.TestCase):
                 self.assertEqual([f.code for f in findings], ["OFFSET_UNVERIFIABLE"])
                 self.assertIn(f"no {role} offset", findings[0].detail)
 
+    def test_otadata_with_a_blank_table_offset_cannot_pass(self):
+        # #689: the row exists but its offset is placed at build time, so the
+        # offset in the recipe has nothing to be checked against.
+        _, findings = audit(esptool(*FULL), layouts={MAIN: AUTO_OTADATA})
+        self.assertEqual([f.code for f in findings], ["OFFSET_UNVERIFIABLE"])
+        self.assertIn("blank offset", findings[0].detail)
+
     def test_otadata_named_without_an_otadata_row_is_not_offset_checked(self):
         # Without the row the build writes no ota_data_initial.bin, so esptool
         # fails loudly on the missing file; there is no offset to compare.
@@ -321,6 +349,19 @@ class LookupTests(unittest.TestCase):
         with mock.patch.object(cfr, "OTADATA_PREDICATE", stub):
             with self.assertRaises(RuntimeError):
                 cfr.flash_layout(self.dir)
+
+    def test_a_blank_offset_otadata_row_is_a_row_without_an_offset(self):
+        # #689: not "no row" — the build still writes ota_data_initial.bin.
+        self.write(
+            "partitions.csv",
+            "nvs,data,nvs,,0x4000,\notadata,data,ota,,0x2000,\n"
+            "factory,app,factory,0x10000,1M,\n",
+        )
+        layout = cfr.flash_layout(self.dir)
+        self.assertIsNone(layout.otadata)
+        self.assertTrue(layout.otadata_auto)
+        self.assertTrue(layout.has_otadata_row)
+        self.assertIn("blank offset", layout.why["otadata"])
 
     def test_a_table_without_an_otadata_row_has_no_otadata_offset(self):
         self.write(
@@ -439,6 +480,114 @@ class LookupTests(unittest.TestCase):
 
     def test_a_directory_without_cmakelists_has_no_name(self):
         self.assertIsNone(cfr.cmake_project_name(self.dir))
+
+
+PREDICATE = Path(__file__).with_name("lib") / "otadata-predicate.sh"
+GENERATOR = Path(__file__).with_name("generate-flasher-manifests.sh")
+
+
+class PredicateTests(unittest.TestCase):
+    """tools/lib/otadata-predicate.sh, called the way its shell callers call it."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.dir = Path(self._tmp.name)
+
+    def sh(self, call: str, *args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ["bash", "-c", f'source "$0" || exit 99; {call}', str(PREDICATE), *args],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    def table(self, text: str) -> str:
+        path = self.dir / "t.csv"
+        path.write_text(text)
+        return str(path)
+
+    def test_an_explicit_otadata_offset_prints_in_decimal(self):
+        csv = self.table(
+            "nvs,data,nvs,0x9000,0x4000,\notadata,data,ota,0xd000,0x2000,\n"
+        )
+        self.assertEqual(self.sh('parse_otadata_offset "$1"', csv).stdout, "53248\n")
+
+    def test_a_blank_otadata_offset_prints_auto(self):
+        # #689: the third state, a row whose offset gen_esp32part.py places.
+        csv = self.table("nvs,data,nvs,,0x4000,\notadata, data, ota, ,0x2000,\n")
+        self.assertEqual(self.sh('parse_otadata_offset "$1"', csv).stdout, "auto\n")
+
+    def test_no_otadata_row_prints_nothing(self):
+        csv = self.table(
+            "nvs,data,nvs,0x9000,0x6000,\nfactory,app,factory,0x10000,1M,\n"
+        )
+        proc = self.sh('parse_otadata_offset "$1"', csv)
+        self.assertEqual((proc.returncode, proc.stdout), (0, "\n"))
+
+    def test_a_blank_offset_row_counts_as_an_otadata_partition(self):
+        # build-firmware.yml requires ota_data_initial.bin exactly when this holds.
+        auto = self.table("otadata,data,ota,,0x2000,\n")
+        self.assertEqual(self.sh('has_otadata_partition "$1"', auto).returncode, 0)
+        none = self.table("nvs,data,nvs,0x9000,0x6000,\n")
+        self.assertEqual(self.sh('has_otadata_partition "$1"', none).returncode, 1)
+
+
+class ManifestGeneratorTests(unittest.TestCase):
+    """tools/generate-flasher-manifests.sh's otadata part, run on a throwaway tree."""
+
+    FLASHER = {
+        "name": "Thing",
+        "description": "d",
+        "chipFamily": "ESP32",
+        "board": "b",
+        "appBinaryName": "thing.bin",
+    }
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+        self.project = self.root / "packages" / "demo" / "thing"
+        self.project.mkdir(parents=True)
+        (self.project / "flasher.json").write_text(json.dumps(self.FLASHER))
+        (self.project / "sdkconfig.defaults").write_text(
+            'CONFIG_PARTITION_TABLE_CUSTOM=y\nCONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"\n'
+        )
+
+    def generate(self, table: str) -> subprocess.CompletedProcess[str]:
+        (self.project / "partitions.csv").write_text(table)
+        return subprocess.run(
+            ["bash", str(GENERATOR), "v1", "firmware"],
+            cwd=self.root,
+            env={**os.environ, "BUILD_SHA": "0" * 40},
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    def parts(self) -> dict[str, int]:
+        manifest = json.loads((self.root / "firmware/thing/manifest.json").read_text())
+        return {p["path"]: p["offset"] for p in manifest["builds"][0]["parts"]}
+
+    def test_an_explicit_otadata_row_is_a_manifest_part(self):
+        proc = self.generate(
+            "nvs,data,nvs,0x9000,0x4000,\notadata,data,ota,0xd000,0x2000,\n"
+            "factory,app,factory,0x10000,1M,\n"
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(self.parts()["ota_data_initial.bin"], 0xD000)
+
+    def test_a_blank_offset_otadata_row_fails_the_release(self):
+        # #689: leaving the part out would publish a manifest that never writes
+        # otadata; guessing its offset could write it over another partition.
+        proc = self.generate(
+            "nvs,data,nvs,,0x4000,\notadata,data,ota,,0x2000,\nfactory,app,factory,,1M,\n"
+        )
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("otadata", proc.stderr)
+        self.assertIn("thing", proc.stderr)
+        self.assertFalse((self.root / "firmware/thing/manifest.json").exists())
 
 
 # ---------------------------------------------------------------------------

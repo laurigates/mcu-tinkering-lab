@@ -338,7 +338,9 @@ class FlashLayout:
     """Where each build output of one project belongs in flash.
 
     None means the offset could not be determined; `why` says why, and is
-    quoted in the finding. For otadata, None means the table has no otadata row.
+    quoted in the finding. For otadata, None means the table has no otadata
+    row, unless otadata_auto says the row exists with a blank offset that
+    gen_esp32part.py places at build time (issue #689).
     """
 
     bootloader: int | None
@@ -346,6 +348,12 @@ class FlashLayout:
     otadata: int | None
     app: int | None
     why: dict[str, str] = field(default_factory=dict)
+    otadata_auto: bool = False
+
+    @property
+    def has_otadata_row(self) -> bool:
+        """Whether the build writes ota_data_initial.bin for this table."""
+        return self.otadata is not None or self.otadata_auto
 
 
 BIN_TOKEN_RE = re.compile(r"""[^\s"'`=]+\.bin\b""")
@@ -467,7 +475,7 @@ def audit_dry_run(
         # Only a FULL flash owes otadata. An app-only recipe leaving the OTA
         # state alone is the point of an app-only recipe.
         if PARTITION_TABLE_OUTPUT in rels and OTADATA_OUTPUT not in rels:
-            if layout(project_dir).otadata is not None:
+            if layout(project_dir).has_otadata_row:
                 findings.append(
                     Finding(
                         recipe,
@@ -521,7 +529,9 @@ def audit_offsets(
         if expected is None:
             # No otadata row: the build writes no ota_data_initial.bin, so the
             # flash fails loudly on the missing file (see FIXED_BUILD_OUTPUTS).
-            if role != "otadata":
+            # A row with a blank offset is not that case: the file exists and
+            # this offset has nothing to be checked against.
+            if role != "otadata" or parts.otadata_auto:
                 findings.append(
                     Finding(
                         recipe,
@@ -557,14 +567,15 @@ def cmake_project_name(project_dir: Path) -> str | None:
     return match.group("name") if match else None
 
 
-def partition_table(project_dir: Path) -> tuple[Path, int | None]:
-    """The table the build uses and its otadata offset, from the release path's parser.
+def partition_table(project_dir: Path) -> tuple[Path, int | None, bool]:
+    """The table the build uses, its otadata offset, and whether it has an otadata row.
 
     Asks tools/lib/otadata-predicate.sh rather than re-parsing here, which keeps
     this check, the flasher manifests and the release assembly from disagreeing
     about which table a project builds (issues #541, #560). A predicate that
     fails to run raises — reading that as "no otadata row" would fail this
-    check open.
+    check open. A row with a blank offset (the predicate's `auto`) has a row
+    and no offset (issue #689).
     """
     script = (
         'source "$1" || exit 2; t=$(resolve_partition_table "$2") || exit 2; '
@@ -582,7 +593,9 @@ def partition_table(project_dir: Path) -> tuple[Path, int | None]:
             f"otadata predicate failed for {_display(project_dir)}: {proc.stderr.strip()}"
         )
     otadata = lines[1].strip()
-    return Path(lines[0]), int(otadata) if otadata else None
+    if otadata == "auto":
+        return Path(lines[0]), None, True
+    return Path(lines[0]), int(otadata) if otadata else None, bool(otadata)
 
 
 def boot_app_offset(table: Path) -> tuple[int | None, str]:
@@ -636,8 +649,13 @@ def flash_layout(project_dir: Path) -> FlashLayout:
         table_offset = None
         why["partition_table"] = f"CONFIG_PARTITION_TABLE_OFFSET={raw} is not a number"
 
-    table, otadata = partition_table(project_dir)
-    why["otadata"] = f"{_display(table)}'s otadata row"
+    table, otadata, has_otadata_row = partition_table(project_dir)
+    otadata_auto = has_otadata_row and otadata is None
+    why["otadata"] = f"{_display(table)}'s otadata row" + (
+        " has a blank offset, which gen_esp32part.py places at build time"
+        if otadata_auto
+        else ""
+    )
     if table.is_file():
         app, why["app"] = boot_app_offset(table)
     elif table_offset == DEFAULT_PARTITION_TABLE_OFFSET:
@@ -656,6 +674,7 @@ def flash_layout(project_dir: Path) -> FlashLayout:
         otadata=otadata,
         app=app,
         why=why,
+        otadata_auto=otadata_auto,
     )
 
 

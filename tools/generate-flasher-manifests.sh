@@ -46,7 +46,8 @@
 # Default partition offsets (no partition table file):
 #   partition-table  ->  0x8000  (32768)  -- same for all families
 #   app              ->  0x10000 (65536)  -- same for all families
-#   otadata          ->  none             -- only if found in the partition table
+#   otadata          ->  none             -- only if found in the partition table;
+#                                            a row with a blank offset fails the run
 
 set -euo pipefail
 
@@ -140,6 +141,14 @@ for flasher_json in ${PROJECTS_GLOB}; do
     partition_table=$(resolve_partition_table "$project_dir")
     app_offset=$(parse_app_offset "$partition_table")
     ota_offset=$(parse_otadata_offset "$partition_table")
+    # A data,ota row with a blank offset is placed by gen_esp32part.py at build
+    # time. Leaving the part out would publish a manifest that never writes
+    # otadata, and guessing its offset could write it over another partition,
+    # so stop the release instead (issue #689).
+    if [[ "$ota_offset" == auto ]]; then
+        echo "ERROR: ${project_id}: ${partition_table} has an otadata row with a blank offset; give it an explicit offset so the manifest can place ota_data_initial.bin" >&2
+        exit 1
+    fi
 
     echo "    chip=$chip_family  bl=0x$(printf '%x' "$bl_offset")  pt=0x$(printf '%x' "$pt_offset")  app=0x$(printf '%x' "$app_offset")"
     [[ -n "$ota_offset" ]] && echo "    otadata=0x$(printf '%x' "$ota_offset")"

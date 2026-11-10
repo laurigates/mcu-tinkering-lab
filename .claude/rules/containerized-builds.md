@@ -227,8 +227,11 @@ recipe is written:
   (default 0x8000), otadata at the table's otadata row, and the app at the
   partition `idf.py flash` uses — `factory` if there is one, else the lowest
   `ota_N`, or 0x10000 for ESP-IDF's built-in tables. A part whose expected offset
-  cannot be worked out (unknown target, an app row with a blank offset) is
-  reported as unverifiable rather than passed.
+  cannot be worked out (unknown target, an app or otadata row with a blank
+  offset) is reported as unverifiable rather than passed. An otadata row with a
+  blank offset is still a row: the predicate prints `auto` for it, a full flash
+  still owes `ota_data_initial.bin`, and `generate-flasher-manifests.sh` stops
+  the release rather than guess its offset (issue #689).
 
 robocar-main and robocar-camera (both since removed) failed both for months (fixed in #598): the
 recipes flashed `build/robocar-{main,camera}.bin`, which no build writes, and the
