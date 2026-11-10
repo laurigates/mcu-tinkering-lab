@@ -12,15 +12,19 @@ name: Issue labels
 #
 # No `labeled` / `unlabeled` trigger: the reusable jobs ignore label events,
 # and each one would still start a run.
+#
+# pull_request `edited`: a title edit re-classifies the PR. The push paths
+# include this file because provision runs on any push to main, and the commit
+# that turns dry-run off touches only this file.
 
 on:
   issues:
     types: [opened, reopened, edited, closed]
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, edited]
   push:
     branches: [main]
-    paths: [.github/issue-labels.json]
+    paths: [.github/issue-labels.json, .github/workflows/issue-labels.yml]
   schedule:
     - cron: '17 5 * * 1'
   workflow_dispatch:
