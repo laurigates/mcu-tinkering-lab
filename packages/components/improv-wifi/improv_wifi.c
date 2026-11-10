@@ -264,7 +264,7 @@ esp_err_t improv_wifi_init(improv_credentials_cb_t cb)
     return ESP_OK;
 }
 
-void improv_wifi_process_byte(uint8_t byte)
+bool improv_wifi_process_byte(uint8_t byte)
 {
     switch (g_ctx.state) {
         case S_HEADER:
@@ -273,12 +273,13 @@ void improv_wifi_process_byte(uint8_t byte)
                 if (g_ctx.header_pos == HEADER_LEN) {
                     g_ctx.header_pos = 0;
                     g_ctx.state = S_VERSION;
+                    return true;  // the header is complete: a packet from here on
                 }
             } else {
                 // Resync: check if this byte starts a new header
                 g_ctx.header_pos = (byte == HEADER[0]) ? 1 : 0;
             }
-            break;
+            return false;
 
         case S_VERSION:
             g_ctx.pkt_version = byte;
@@ -318,6 +319,7 @@ void improv_wifi_process_byte(uint8_t byte)
             break;
         }
     }
+    return true;  // version, type, length, data or checksum
 }
 
 void improv_wifi_send_state(improv_state_t state)
@@ -326,6 +328,21 @@ void improv_wifi_send_state(improv_state_t state)
     uint8_t s = (uint8_t)state;
     send_packet(TYPE_CURRENT_STATE, &s, 1);
     ESP_LOGD(TAG, "Sent state: 0x%02x", state);
+}
+
+void improv_wifi_announce(void)
+{
+    improv_wifi_send_state(g_ctx.current_state);
+}
+
+void improv_wifi_fail_provisioning(improv_error_t error)
+{
+    // The order ESPHome's improv_serial uses when an attempt times out
+    // (on_wifi_connect_timeout_() in ESPHome's
+    // components/improv_serial/improv_serial_component.cpp): the error, then
+    // back to Ready.
+    improv_wifi_send_error(error);
+    improv_wifi_send_state(IMPROV_STATE_AUTHORIZED);
 }
 
 void improv_wifi_send_error(improv_error_t error)

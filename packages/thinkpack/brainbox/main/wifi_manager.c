@@ -856,13 +856,13 @@ static void on_improv_credentials(const char *ssid, const char *password)
         }
     } else {
         ESP_LOGE(TAG, "Improv: failed to save credentials: %s", esp_err_to_name(ret));
-        improv_wifi_send_error(IMPROV_ERROR_UNABLE_CONNECT);
+        improv_wifi_fail_provisioning(IMPROV_ERROR_UNABLE_CONNECT);
     }
 }
 
 /**
- * Task pumps UART0 bytes into the Improv parser and periodically
- * broadcasts the "authorized" state so ESP Web Tools can discover us.
+ * Task pumps UART0 bytes into the Improv parser and announces the current
+ * state once a second so ESP Web Tools can discover us.
  *
  * @p arg is the EventGroupHandle_t captured at task creation. Capturing
  * locally avoids a use-after-free against the static @ref s_improv_event_group
@@ -883,7 +883,7 @@ static void improv_uart_task(void *arg)
 
         TickType_t now = xTaskGetTickCount();
         if ((now - last_state_tx) >= pdMS_TO_TICKS(1000)) {
-            improv_wifi_send_state(IMPROV_STATE_AUTHORIZED);
+            improv_wifi_announce();
             last_state_tx = now;
         }
 

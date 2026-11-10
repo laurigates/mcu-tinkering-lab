@@ -12,12 +12,16 @@
  *      that same port. The default writer is UART0, and the caller must have
  *      installed the UART0 driver for it to transmit.
  *   1. Call improv_wifi_init(credentials_cb) when no stored credentials are found.
- *   2. Feed received serial bytes to improv_wifi_process_byte().
- *   3. Call improv_wifi_send_state() to broadcast device state (call periodically
- *      while waiting for provisioning, ~1 s interval).
+ *   2. Feed received serial bytes to improv_wifi_process_byte(). If the same
+ *      port also carries a text console, keep every byte it returns true for
+ *      out of the console's line buffer: a Send Wi-Fi settings packet holds
+ *      the password in plaintext.
+ *   3. Call improv_wifi_announce() about once a second while waiting for
+ *      provisioning, so ESP Web Tools can detect the device.
  *   4. Your credentials_cb is invoked when the browser sends SSID + password.
  *   5. After connecting, call improv_wifi_send_state(IMPROV_STATE_PROVISIONED)
- *      and improv_wifi_send_provisioned_result().
+ *      and improv_wifi_send_provisioned_result(). If the attempt fails, call
+ *      improv_wifi_fail_provisioning().
  *
  * The parser answers RPCs 0x01 (Send Wi-Fi settings), 0x02 (Request current
  * state: the last state sent, plus the provisioning result replayed when
@@ -131,18 +135,46 @@ esp_err_t improv_wifi_init(improv_credentials_cb_t cb);
  * active. Bytes must arrive untranslated: a console that maps CR to LF on
  * input corrupts any packet containing 0x0D. The function is safe to call even for bytes that
  * belong to normal ASCII commands; non-Improv bytes are silently discarded by the parser.
+ *
+ * @return true when the byte belongs to an Improv packet: the byte that
+ *         completes the "IMPROV" header and every byte after it up to and
+ *         including the checksum. The first five header bytes return false,
+ *         since they could still be text. A console sharing the port drops
+ *         its partial line when this returns true and skips every such byte,
+ *         or it logs the packet, which for RPC 0x01 carries the Wi-Fi
+ *         password, and a 0x0A inside the packet would end a line early.
+ *         The newline after the checksum returns false and reaches the
+ *         console as an empty line.
  */
-void improv_wifi_process_byte(uint8_t byte);
+bool improv_wifi_process_byte(uint8_t byte);
 
 /**
  * @brief Send the current device state to the browser.
  *
- * Call this periodically (~1 s) while waiting for provisioning so that
- * ESP Web Tools can detect the device.  Also call after state transitions
- * (e.g. PROVISIONING, PROVISIONED). The state is also remembered, and is what
- * RPC 0x02 (Request current state) reports.
+ * Call after state transitions (e.g. PROVISIONING, PROVISIONED). The state is
+ * also remembered: it is what RPC 0x02 (Request current state) reports and
+ * what improv_wifi_announce() repeats.
  */
 void improv_wifi_send_state(improv_state_t state);
+
+/**
+ * @brief Re-send the remembered state: the periodic discovery announcement.
+ *
+ * Sends the last state passed to improv_wifi_send_state() (or set by the
+ * parser), so a 1 Hz announcement during a connect attempt keeps saying
+ * Provisioning rather than overwriting it with Ready.
+ */
+void improv_wifi_announce(void);
+
+/**
+ * @brief End a failed provisioning attempt.
+ *
+ * Sends @p error, then the state IMPROV_STATE_AUTHORIZED (Ready), the order
+ * ESPHome's improv_serial uses. Without the state change the device would go
+ * on reporting Provisioning, through RPC 0x02 and improv_wifi_announce(),
+ * after the attempt has ended.
+ */
+void improv_wifi_fail_provisioning(improv_error_t error);
 
 /**
  * @brief Send an error code to the browser.

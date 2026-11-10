@@ -555,6 +555,97 @@ static void test_unknown_rpc_is_error_0x02(void)
     TEST_ASSERT(pkts[1].type == TYPE_ERROR_STATE && pkts[1].data[0] == 0x02);
 }
 
+/* --- Announce, failure and byte ownership (review of #1056) --------------- */
+
+/* The 1 Hz discovery announcement repeats the remembered state. It used to be
+ * a hard-coded Ready, which during robocar-unified's connect attempt (up to
+ * ~30 s) overwrote Provisioning, so RPC 0x02 then reported Ready while the
+ * device was still connecting. */
+static void test_announce_keeps_provisioning_during_an_attempt(void)
+{
+    improv_wifi_set_writer(custom_writer);
+    TEST_ASSERT(improv_wifi_init(on_creds) == 0);
+    improv_wifi_send_state(IMPROV_STATE_PROVISIONING);
+    memset(&s_custom, 0, sizeof(s_custom));
+
+    improv_wifi_announce();
+    feed_rpc(0x02, NULL, 0);
+
+    packet_t pkts[4];
+    TEST_ASSERT(parse_packets(&s_custom, pkts, 4) == 3);
+    TEST_ASSERT(pkts[0].type == TYPE_CURRENT_STATE);
+    TEST_ASSERT(pkts[0].data[0] == IMPROV_STATE_PROVISIONING);
+    TEST_ASSERT(pkts[2].type == TYPE_CURRENT_STATE);
+    TEST_ASSERT(pkts[2].data[0] == IMPROV_STATE_PROVISIONING);
+}
+
+/* Right after init the announcement says Ready (Authorized), which is what
+ * both consumers sent before. */
+static void test_announce_after_init_is_ready(void)
+{
+    improv_wifi_set_writer(custom_writer);
+    TEST_ASSERT(improv_wifi_init(on_creds) == 0);
+
+    improv_wifi_announce();
+
+    packet_t pkts[2];
+    TEST_ASSERT(parse_packets(&s_custom, pkts, 2) == 1);
+    TEST_ASSERT(pkts[0].type == TYPE_CURRENT_STATE);
+    TEST_ASSERT(pkts[0].data[0] == IMPROV_STATE_AUTHORIZED);
+}
+
+/* A failed attempt sends the error and returns to Ready, in ESPHome's order,
+ * so neither RPC 0x02 nor the announcement goes on saying Provisioning. */
+static void test_fail_provisioning_returns_to_ready(void)
+{
+    improv_wifi_set_writer(custom_writer);
+    TEST_ASSERT(improv_wifi_init(on_creds) == 0);
+    improv_wifi_send_state(IMPROV_STATE_PROVISIONING);
+    memset(&s_custom, 0, sizeof(s_custom));
+
+    improv_wifi_fail_provisioning(IMPROV_ERROR_UNABLE_CONNECT);
+    improv_wifi_announce();
+
+    packet_t pkts[4];
+    TEST_ASSERT(parse_packets(&s_custom, pkts, 4) == 3);
+    TEST_ASSERT(pkts[0].type == TYPE_ERROR_STATE);
+    TEST_ASSERT(pkts[0].data[0] == IMPROV_ERROR_UNABLE_CONNECT);
+    TEST_ASSERT(pkts[1].type == TYPE_CURRENT_STATE);
+    TEST_ASSERT(pkts[1].data[0] == IMPROV_STATE_AUTHORIZED);
+    TEST_ASSERT(pkts[2].type == TYPE_CURRENT_STATE);
+    TEST_ASSERT(pkts[2].data[0] == IMPROV_STATE_AUTHORIZED);
+}
+
+/* process_byte() claims the bytes of a packet, from the one completing the
+ * header through the checksum, so a console on the same port can keep them
+ * out of its line buffer. Text, the first five header bytes and the newline
+ * after the checksum are not claimed. */
+static void test_process_byte_claims_exactly_the_packet(void)
+{
+    improv_wifi_set_writer(custom_writer);
+    TEST_ASSERT(improv_wifi_init(on_creds) == 0);
+
+    static const char text[] = "status";
+    for (size_t i = 0; i < sizeof(text) - 1; i++) {
+        TEST_ASSERT(!improv_wifi_process_byte((uint8_t)text[i]));
+    }
+
+    /* RPC 0x02, checksum over every byte before it. */
+    uint8_t pkt[] = {'I', 'M', 'P', 'R', 'O', 'V', 0x01, TYPE_RPC_COMMAND, 0x02, 0x02, 0x00, 0x00};
+    uint8_t sum = 0;
+    for (size_t i = 0; i < sizeof(pkt) - 1; i++) {
+        sum = (uint8_t)(sum + pkt[i]);
+    }
+    pkt[sizeof(pkt) - 1] = sum;
+
+    for (size_t i = 0; i < sizeof(pkt); i++) {
+        const bool claimed = improv_wifi_process_byte(pkt[i]);
+        TEST_ASSERT(claimed == (i >= 5));
+    }
+    TEST_ASSERT(!improv_wifi_process_byte('\n'));
+    TEST_ASSERT(!improv_wifi_process_byte('s'));
+}
+
 int main(void)
 {
     printf("improv_wifi tests\n");
@@ -576,6 +667,10 @@ int main(void)
     RUN_TEST(test_rpc_with_a_wrong_data_length_is_invalid);
     RUN_TEST(test_checksum_without_the_header_is_rejected);
     RUN_TEST(test_unknown_rpc_is_error_0x02);
+    RUN_TEST(test_announce_keeps_provisioning_during_an_attempt);
+    RUN_TEST(test_announce_after_init_is_ready);
+    RUN_TEST(test_fail_provisioning_returns_to_ready);
+    RUN_TEST(test_process_byte_claims_exactly_the_packet);
     printf("%d/%d passed\n", test_pass, test_count);
     return test_pass == test_count ? 0 : 1;
 }

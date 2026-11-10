@@ -62,6 +62,7 @@ idf_component_register(
         "note_gate.c"
         "self_report.c"
         "credentials_loader.c"
+        "console_line.c"
         "improv_console.c"
         "wifi_manager.c"
         "net_supervisor_core.c"

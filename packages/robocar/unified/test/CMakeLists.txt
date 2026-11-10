@@ -874,6 +874,22 @@ target_include_directories(test_improv_wifi PRIVATE "${IMPROV_WIFI_DIR}")
 add_test(NAME improv_wifi COMMAND test_improv_wifi)
 
 # -----------------------------------------------------------------------------
+# Console line assembly with Improv packets kept out (review of #1056)
+#
+# console_line.c and the improv-wifi parser, both unmodified, driven with the
+# bytes ESP Web Tools sends. command_task() logs every completed line (and the
+# log reaches the UART0 mirror and the GlitchTip breadcrumb ring), so a
+# credentials packet must never complete one.
+# -----------------------------------------------------------------------------
+add_executable(test_console_line
+    "${MAIN_SRC_DIR}/console_line.c"
+    "${IMPROV_WIFI_DIR}/improv_wifi.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_console_line.c"
+)
+target_include_directories(test_console_line PRIVATE "${IMPROV_WIFI_DIR}")
+add_test(NAME console_line COMMAND test_console_line)
+
+# -----------------------------------------------------------------------------
 # MQTT broker-credential loader (issue #639)
 #
 # credentials_loader.c is compiled unmodified against the in-memory NVS in
