@@ -10,6 +10,15 @@
         "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: extractVersion=(?<extractVersion>\\S+))?\\s+\\w+_VERSION=\"(?<currentValue>[^\"]+)\""
       ],
       "datasourceTemplate": "{{{datasource}}}"
+    },
+    {
+      "customType": "regex",
+      "description": "just, pinned through taiki-e/install-action's tool input in .github/actions/setup-tools. Renovate's github-actions manager reads that action's own version but not the tool it installs.",
+      "managerFilePatterns": ["/^\\.github/actions/setup-tools/action\\.yml$/"],
+      "matchStrings": ["tool: just@(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
+      "depNameTemplate": "casey/just",
+      "packageNameTemplate": "casey/just",
+      "datasourceTemplate": "github-releases"
     }
   ],
   "packageRules": [

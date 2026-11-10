@@ -15,7 +15,7 @@ refined winner in `print/`, and the record in its README.
 
 ```sh
 just mechanism::setup                 # libosmesa6 for headless VTK, and the venv
-just mechanism::test                  # pytest: clash, servo envelopes, one render
+just mechanism::test                  # pytest: clash, servo envelopes, one render (CI: test.yml Python Suites)
 just mechanism::check <design dir>    # clash sweep + wall per printed part -> output/check.json
 just mechanism::showcase <design dir> # assembled x5, travel poses, exploded x2, parts
 just mechanism::animate <design dir>  # the sweep as AV1 video + contact sheet, and clashes between gate poses

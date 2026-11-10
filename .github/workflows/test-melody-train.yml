@@ -6,11 +6,13 @@ on:
     paths:
       - 'packages/audio/melody-detector/training/**'
       - '.github/workflows/test-melody-train.yml'
+      - '.github/actions/setup-tools/**'
   pull_request:
     branches: [main, develop]
     paths:
       - 'packages/audio/melody-detector/training/**'
       - '.github/workflows/test-melody-train.yml'
+      - '.github/actions/setup-tools/**'
   workflow_dispatch:
 
 concurrency:
@@ -27,18 +29,18 @@ jobs:
     defaults:
       run:
         working-directory: packages/audio/melody-detector/training
+    env:
+      # Every uv run below asserts uv.lock is current too, not only the sync
+      # (#457); the quantize step resolves a different extra set from it.
+      UV_LOCKED: '1'
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v7.6.0
+        uses: ./.github/actions/setup-tools
         with:
-          # Pinned with the other uv installs: 0.12.14 regressed wheel installs
-          # into symlinked venv dirs (astral-sh/uv#21692).
-          version: '0.12.23'
-          enable-cache: true
-          cache-dependency-glob: packages/audio/melody-detector/training/uv.lock
+          cache-suffix: melody-train
 
       - name: Set up Python
         run: uv python install
@@ -47,7 +49,7 @@ jobs:
       # dev pins the patched onnx, esp-ppq caps onnx<1.20. Lint, types and the
       # suite run in the dev environment; the quantize tests in their own step.
       - name: Install dependencies
-        run: uv sync --extra train --extra dev
+        run: uv sync --locked --extra train --extra dev
 
       - name: Lint (ruff)
         run: uv run ruff check --output-format=github .
