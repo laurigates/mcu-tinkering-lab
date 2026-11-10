@@ -10,7 +10,8 @@
 # inkex goes in with --no-deps and its remaining runtime deps are listed here.
 # On macOS the driver imports usb1 (libusb1) as well as pyusb, and both need the
 # libusb C library at run time: `brew install libusb`. requirements.txt omits
-# libusb1; install_osx_stage2.py lists it.
+# libusb1; install_osx_stage2.py lists it. bleak is the driver's optional
+# Bluetooth LE transport (LABEL_CUTTER=ble); install_osx_stage2.py lists it too.
 set -euo pipefail
 
 DRIVER_REPO=https://github.com/fablabnbg/inkscape-silhouette
@@ -35,7 +36,8 @@ uv pip install --quiet --python "$VENV/bin/python" --no-deps "inkex==1.4.1"
 uv pip install --quiet --python "$VENV/bin/python" \
     "lxml>=4.8,<6" "numpy>=1.21.5,<3" "cssselect>=1.2,<2" "tinycss2>=1.1.1,<2" \
     "packaging>=20.3" "pyparsing>=3.0.9" "pyserial>=3.4,<4" "scour>=0.37,<0.38" \
-    "Pillow>=7" "pyusb>=1.2.1" "libusb1>=3" "xmltodict>=0.13" "matplotlib>=3.7.2"
+    "Pillow>=7" "pyusb>=1.2.1" "libusb1>=3" "xmltodict>=0.13" "matplotlib>=3.7.2" \
+    "bleak>=0.22"
 
 "$VENV/bin/python" "$SRC/sendto_silhouette.py" --version
 echo "driver: $SRC @ ${DRIVER_REV:0:12}"

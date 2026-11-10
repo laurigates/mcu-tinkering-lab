@@ -341,5 +341,89 @@ class DryCut(unittest.TestCase):
         self.assertIn("only runs dry", r.stderr)
 
 
+class CutConnection(unittest.TestCase):
+    """cut.sh's connection flags, read from a stub driver that prints its arguments."""
+
+    SENTINEL = "STUB-DRIVER"
+
+    def setUp(self):
+        self.home = Path(tempfile.mkdtemp())
+        (self.home / "venv" / "bin").mkdir(parents=True)
+        (self.home / "src").mkdir()
+        (self.home / "src" / "sendto_silhouette.py").write_text("")
+        stub = self.home / "venv" / "bin" / "python"
+        stub.write_text(
+            f"#!/usr/bin/env bash\necho {self.SENTINEL}\nprintf '%s\\n' \"$@\"\n"
+        )
+        stub.chmod(0o755)
+        self.plan = self.home / "plan.json"
+        self.plan.write_text(json.dumps({"regmarks": dict(labels.DEFAULT_REG)}))
+        self.svg = self.home / "cut-p1.svg"
+        self.svg.write_text("<svg xmlns='http://www.w3.org/2000/svg'/>")
+
+    def cut(self, **env: str) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [str(HERE / "cut.sh"), str(self.svg), str(self.plan)],
+            capture_output=True,
+            text=True,
+            env={"PATH": "/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin"}
+            | {"SILHOUETTE_HOME": str(self.home)}
+            | env,
+        )
+
+    def args(self, **env: str) -> list[str]:
+        r = self.cut(**env)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        lines = r.stdout.splitlines()
+        self.assertIn(self.SENTINEL, lines)  # the stub ran, not a real driver
+        return lines
+
+    def test_usb_is_the_default_and_passes_no_connection_flags(self):
+        args = self.args()
+        self.assertFalse(
+            [a for a in args if a.startswith(("--connection_type", "--bluetooth"))]
+        )
+        self.assertFalse([a for a in args if a.startswith("--force_hardware")])
+
+    def test_ble_selects_the_portrait_2_by_name(self):
+        args = self.args(LABEL_CUTTER="ble")
+        self.assertIn("--connection_type=ble", args)
+        self.assertIn("--bluetooth_name=PORTRAIT2", args)
+        self.assertIn("--force_hardware=Silhouette_Portrait2", args)
+
+    def test_ble_name_and_identifier_overrides(self):
+        self.assertIn(
+            "--bluetooth_name=PORTRAIT2-0A1B",
+            self.args(LABEL_CUTTER="ble", LABEL_CUTTER_NAME="PORTRAIT2-0A1B"),
+        )
+        args = self.args(LABEL_CUTTER="ble", LABEL_CUTTER_ID="ABCD-1234")
+        self.assertIn("--bluetooth_identifier=ABCD-1234", args)
+        self.assertFalse([a for a in args if a.startswith("--bluetooth_name")])
+
+    def test_classic_needs_an_address(self):
+        r = self.cut(LABEL_CUTTER="bluetooth")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("LABEL_CUTTER_ADDR", r.stderr)
+        self.assertNotIn(self.SENTINEL, r.stdout)
+        args = self.args(
+            LABEL_CUTTER="bluetooth", LABEL_CUTTER_ADDR="00:1B:41:33:44:55"
+        )
+        self.assertIn("--connection_type=bluetooth", args)
+        self.assertIn("--bluetooth_addr=00:1B:41:33:44:55", args)
+
+    def test_unknown_connection_is_rejected(self):
+        r = self.cut(LABEL_CUTTER="wifi")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("usb, ble or bluetooth", r.stderr)
+        self.assertNotIn(self.SENTINEL, r.stdout)
+
+    def test_dry_run_never_connects(self):
+        args = self.args(LABEL_CUTTER="ble", DRY_RUN="true")
+        self.assertIn("--dry_run=True", args)
+        self.assertFalse(
+            [a for a in args if a.startswith(("--connection_type", "--bluetooth"))]
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
