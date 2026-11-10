@@ -179,6 +179,16 @@ repos:
         files: '^tools/cadstd/'
         pass_filenames: false
 
+      # always_run: a glob goes stale when a directory moves or is deleted, in
+      # a commit that touches neither the taxonomy nor the test. It reads
+      # `git ls-files` and one JSON file.
+      - id: issue-labels-taxonomy
+        name: Label taxonomy globs match tracked paths, and each scope selects one label
+        entry: python3 -m unittest tools/test_issue_labels_taxonomy.py
+        language: system
+        pass_filenames: false
+        always_run: true
+
       - id: hardware-join
         name: Hardware join resolves, and pin_defs.typ regenerates byte-identical
         entry: python3 -m unittest discover -s tools/hardware -t tools

@@ -1,0 +1,44 @@
+name: Issue labels
+
+# Keeps issue and PR labels in step with .github/issue-labels.json, without a
+# model: see laurigates/.github reusable-issue-labels.yml for what each event
+# runs and what the workflow guarantees. The taxonomy is read from the default
+# branch, never from a PR head.
+#
+# First version: `dry-run: true` on every event, so each run prints what it
+# would change in its job summary and writes nothing. No label is created,
+# added or removed, and no audit issue is filed. Turning it off is tracked in
+# issue #1066.
+#
+# No `labeled` / `unlabeled` trigger: the reusable jobs ignore label events,
+# and each one would still start a run.
+
+on:
+  issues:
+    types: [opened, reopened, edited, closed]
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main]
+    paths: [.github/issue-labels.json]
+  schedule:
+    - cron: '17 5 * * 1'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'audit reports label gaps; backfill labels open issues that lack a type or routing label'
+        type: choice
+        options: [audit, backfill]
+        default: audit
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  issue-labels:
+    uses: laurigates/.github/.github/workflows/reusable-issue-labels.yml@main
+    with:
+      mode: ${{ inputs.mode || 'audit' }}
+      dry-run: true

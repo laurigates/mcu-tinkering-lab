@@ -9,6 +9,7 @@ on:
       - '.pre-commit-config.yaml'
       - '.clang-format'
       - '.gitleaks.toml'
+      - '.github/issue-labels.json'
       - 'tools/**'
       - 'docker-compose.yml'
       - 'Dockerfile'
@@ -75,6 +76,8 @@ jobs:
               - '.pre-commit-config.yaml'
               - '.clang-format'
               - '.gitleaks.toml'
+              # The label taxonomy has a pre-commit drift test and no other job.
+              - '.github/issue-labels.json'
               - 'tools/**'
 
   code-quality:
