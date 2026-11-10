@@ -89,7 +89,6 @@
         "carrier",
         "carriers",
         "carrier pcbs",
-        "parts",
         "parts registry",
         "perfboard"
       ]
@@ -180,7 +179,7 @@
         "docs/reference/datasheets/**",
         "docs/blueprint/**"
       ],
-      "scopes": ["blueprint", "prd", "reference", "boards", "notebooklm refresh"]
+      "scopes": ["blueprint", "prd", "boards", "notebooklm refresh"]
     }
   }
 }
