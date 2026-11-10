@@ -19,6 +19,8 @@ What the tests hold:
 - build-firmware.yml builds Pico SDK projects by calling
   ``_ci-build-pico.yml``, the reusable workflow build.yml calls, at the
   release tag, and copies none of its steps (issue #1065).
+- auto-fix.yml passes the release-please App to the reusable auto-fix, so the
+  fix commits it pushes start CI (issue #866).
 
 Whether the workflows run as intended needs GitHub; actionlint and these tests
 only read them.
@@ -142,6 +144,24 @@ class BuildFirmwareTest(unittest.TestCase):
             )
         ]
         self.assertEqual(copied, [])
+
+
+class ClaudeCallersTest(unittest.TestCase):
+    def test_auto_fix_pushes_with_the_release_please_app(self):
+        jobs = load("auto-fix.yml")["jobs"]
+        callers = [
+            j
+            for j in jobs.values()
+            if "reusable-auto-fix.yml" in str(j.get("uses", ""))
+        ]
+        self.assertEqual(len(callers), 1)
+        self.assertEqual(
+            callers[0]["with"].get("app-id"), "${{ vars.RELEASE_PLEASE_CLIENT_ID }}"
+        )
+        self.assertEqual(
+            callers[0]["secrets"].get("APP_PRIVATE_KEY"),
+            "${{ secrets.RELEASE_PLEASE_PRIVATE_KEY }}",
+        )
 
 
 if __name__ == "__main__":
