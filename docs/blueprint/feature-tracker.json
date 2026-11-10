@@ -12,23 +12,23 @@
     "docs/requirements/PRD-016-build-cost-model.md",
     "docs/decisions/ADR-028-teuvo-connectivity-resilience.md"
   ],
-  "last_synced_at": "2026-07-12T00:00:00Z",
+  "last_synced_at": "2026-11-09T20:02:29Z",
   "features": [
     {
       "id": "FR-001",
-      "name": "Main controller firmware (motor, LED, servo, OLED)",
+      "name": "Robocar firmware on one XIAO ESP32-S3 Sense (robocar-unified)",
       "prd": "PRD-001",
       "status": "active",
       "priority": "P0",
-      "notes": "Heltec WiFi LoRa 32 V1; ESP-IDF v5.4"
+      "notes": "Motors, servos, LEDs via PCA9685 behind a TCA9548A; OLED; the Heltec + ESP32-CAM pair is removed (ADR-013)"
     },
     {
       "id": "FR-002",
-      "name": "ESP32-CAM firmware with AI vision",
+      "name": "Camera capture and Gemini vision planner",
       "prd": "PRD-002",
       "status": "active",
       "priority": "P0",
-      "notes": "OV2640; Claude API + Ollama backends"
+      "notes": "OV3660 on the XIAO; Gemini Robotics-ER 2 planner (ADR-016); the ESP32-CAM board is removed (ADR-013)"
     },
     {
       "id": "FR-003",
@@ -42,9 +42,9 @@
       "id": "FR-004",
       "name": "Pluggable AI backend (Claude / Ollama)",
       "prd": "PRD-002",
-      "status": "active",
+      "status": "deprecated",
       "priority": "P1",
-      "notes": "Compile-time selection via config.h"
+      "notes": "The claude_*/ollama_* backends are removed; Gemini only. A second backend would be a newly designed abstraction"
     },
     {
       "id": "FR-005",
@@ -76,7 +76,7 @@
       "prd": "PRD-001",
       "status": "active",
       "priority": "P1",
-      "notes": "Dual-partition; size limits enforced in CI"
+      "notes": "Manifest polling, build-SHA rule, rollback; no board has completed an OTA yet (#1005). Notify subscription dropped (#1054); first check after 360 min (#1055)"
     },
     {
       "id": "FR-009",
@@ -130,9 +130,9 @@
       "id": "FR-015",
       "name": "ESP32 host-based unit tests",
       "prd": null,
-      "status": "planned",
+      "status": "active",
       "priority": "P2",
-      "notes": "Blocked; no tests exist yet"
+      "notes": "Host suites under packages/robocar/unified/test, run by just robocar-unified::test (54 ctest suites on 2026-11-09) and in CI"
     },
     {
       "id": "FR-016",
@@ -204,7 +204,7 @@
       "prd": "PRD-014",
       "status": "planned",
       "priority": "P2",
-      "notes": "__REQUEST__ sentinel + summary to teuvo/<id>/upgrade/request; desk off by default"
+      "notes": "__REQUEST__ sentinel + summary to teuvo/<id>/upgrade/request; desk off by default (#853)"
     },
     {
       "id": "FR-025",
@@ -212,7 +212,7 @@
       "prd": "PRD-014",
       "status": "planned",
       "priority": "P2",
-      "notes": "Facts JSON with seq and concierge status LWT; model sees codes only; __ORDER__ templates; sentence filter; truncation fixes first"
+      "notes": "Facts JSON with seq and concierge status LWT; model sees codes only; __ORDER__ templates; sentence filter; truncation fixes first (#853)"
     },
     {
       "id": "FR-026",
@@ -220,7 +220,7 @@
       "prd": "PRD-014",
       "status": "planned",
       "priority": "P2",
-      "notes": "packages/robocar/concierge: order state, fee table, phone gate, dispatch, order page"
+      "notes": "packages/robocar/concierge: order state, fee table, phone gate, dispatch, order page (#854)"
     },
     {
       "id": "FR-027",
@@ -228,7 +228,7 @@
       "prd": "PRD-014",
       "status": "planned",
       "priority": "P2",
-      "notes": "Stripe sandbox, then per-order Payment Link; PAID only by Lauri or a verified webhook"
+      "notes": "Stripe sandbox, then per-order Payment Link; PAID only by Lauri or a verified webhook (#854)"
     },
     {
       "id": "FR-028",
@@ -236,7 +236,7 @@
       "prd": "PRD-014",
       "status": "planned",
       "priority": "P2",
-      "notes": "teuvo-plan.yml: environment approval on main, OIDC federation, path-scoped Claude job + fixed PR job, draft PR"
+      "notes": "teuvo-plan.yml: environment approval on main, OIDC federation, path-scoped Claude job + fixed PR job, draft PR (#855)"
     },
     {
       "id": "FR-029",
@@ -244,7 +244,7 @@
       "prd": "PRD-014",
       "status": "planned",
       "priority": "P2",
-      "notes": "packages/robocar/upgrades/<code>-<slug>/: parts, cost.csv, gate table, renders"
+      "notes": "packages/robocar/upgrades/<code>-<slug>/: parts, cost.csv, gate table, renders (#855)"
     },
     {
       "id": "FR-030",
@@ -268,7 +268,7 @@
       "prd": "PRD-015",
       "status": "planned",
       "priority": "P2",
-      "notes": "Name (nom + gen), preset personality, voice; prompt-budget host test"
+      "notes": "Name (nom + gen), preset personality, voice; prompt-budget host test (#852)"
     },
     {
       "id": "FR-033",
@@ -276,7 +276,7 @@
       "prd": "PRD-015",
       "status": "planned",
       "priority": "P2",
-      "notes": "MQTT client id, topic root and mDNS from the device id"
+      "notes": "MQTT client id, topic root and mDNS from the device id (#851)"
     },
     {
       "id": "FR-034",
@@ -308,15 +308,15 @@
       "prd": "ADR-028",
       "status": "planned",
       "priority": "P1",
-      "notes": "Up to 8 networks in NVS; all-channel scan; serial wifi commands; home flag gates MQTT"
+      "notes": "Up to 8 networks in NVS; all-channel scan; serial wifi commands; home flag gates MQTT (#848)"
     },
     {
       "id": "FR-038",
       "name": "Network services armed on link-up",
       "prd": "ADR-028",
-      "status": "active",
+      "status": "in-progress",
       "priority": "P0",
-      "notes": "Non-blocking connect; OTA and rollback-confirm on first GOT_IP; MQTT only on home GOT_IP, stopped on disconnect; Improv re-arm; skip requests offline"
+      "notes": "Done: non-blocking connect, OTA/MQTT start on link-up, Improv re-arm, requests skipped offline (#846). Open: MQTT client at boot (#1054), first OTA check (#1055), home-flag gating needs FR-037"
     },
     {
       "id": "FR-039",
@@ -332,7 +332,7 @@
       "prd": "ADR-028",
       "status": "planned",
       "priority": "P1",
-      "notes": "Pre-rendered ADPCM persona lines embedded in the app image"
+      "notes": "Pre-rendered ADPCM persona lines embedded in the app image (#849)"
     },
     {
       "id": "FR-041",
@@ -340,7 +340,7 @@
       "prd": "ADR-028",
       "status": "planned",
       "priority": "P2",
-      "notes": "quirc on JPEG luma; both WIFI: dialects; QR entries never home; console confirmation while a known network is reachable"
+      "notes": "quirc on JPEG luma; both WIFI: dialects; QR entries never home; console confirmation while a known network is reachable (#850)"
     },
     {
       "id": "FR-042",
@@ -356,7 +356,7 @@
       "prd": "ADR-028",
       "status": "active",
       "priority": "P0",
-      "notes": "Earliest shutdown 2026-11-17; probe gemini-3.8-flash-tts (Finnish; not Flash-Lite) for streaming and style prefix"
+      "notes": "Earliest shutdown 2026-11-17; probe gemini-3.8-flash-tts (Finnish; not Flash-Lite) for streaming and style prefix (#844)"
     },
     {
       "id": "FR-044",
@@ -433,9 +433,10 @@
   ],
   "summary": {
     "total": 52,
-    "active": 13,
-    "planned": 39,
-    "in_progress": 0,
-    "blocked": 0
+    "active": 15,
+    "planned": 35,
+    "in_progress": 1,
+    "blocked": 0,
+    "deprecated": 1
   }
 }
