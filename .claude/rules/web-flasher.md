@@ -27,7 +27,9 @@ and would be silently dropped.
 Pico SDK projects are released separately: on a `<component>-v*` release whose
 package has a `system: "pico"` entry in `project-matrix.json` (balancebot today),
 `build-firmware.yml` calls `_ci-build-pico.yml` at the tag and attaches
-`<project>.uf2` to that release only. They never reach the web flasher.
+`<project>.uf2` to that release only. They never reach the web flasher. A
+`workflow_dispatch` replay of a tag cut before `project-matrix.json` existed
+selects no Pico project and builds nothing for it.
 
 Verification of what the release pipeline actually published — the artifact-layout
 trap that left every project with zero binaries, and the two gates that now catch

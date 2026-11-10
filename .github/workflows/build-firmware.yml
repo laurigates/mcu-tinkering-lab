@@ -721,12 +721,23 @@ jobs:
       # The component's package path comes from release-please-config.json,
       # and the build inputs from that package's .github/project-matrix.json
       # entry (the file build.yml's matrix reads), so no project is named here.
+      # A workflow_dispatch replay of a tag cut before project-matrix.json
+      # existed has neither file to read and no Pico release path, so it
+      # selects nothing rather than failing the run.
       - name: Match the tag's component to a Pico SDK project
         id: select
         env:
           COMPONENT: ${{ needs.resolve-tag.outputs.component }}
         run: |
           set -euo pipefail
+          for f in release-please-config.json .github/project-matrix.json; do
+            if [ ! -f "$f" ]; then
+              echo "::notice::$f is not in this tag's tree; no Pico SDK project to release"
+              echo 'matrix={"include":[]}' >> "$GITHUB_OUTPUT"
+              echo "count=0" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          done
           pkg=$(jq -r --arg c "$COMPONENT" '[.packages | to_entries[] | select(.value.component == $c) | .key] | first // empty' release-please-config.json)
           include=$(jq -c --arg pkg "$pkg" '[.[] | select(.system == "pico" and ("packages/" + .path) == $pkg) | {project, path, board}]' .github/project-matrix.json)
           count=$(jq 'length' <<< "$include")
