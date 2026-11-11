@@ -220,6 +220,12 @@ BaseType_t xTaskCreatePinnedToCore(TaskFunction_t fn, const char *name, uint32_t
     return pdPASS;
 }
 
+BaseType_t xTaskCreate(TaskFunction_t fn, const char *name, uint32_t stack, void *arg,
+                       UBaseType_t prio, TaskHandle_t *out)
+{
+    return xTaskCreatePinnedToCore(fn, name, stack, arg, prio, out, 0);
+}
+
 void vTaskDelay(TickType_t ticks)
 {
     (void)ticks;

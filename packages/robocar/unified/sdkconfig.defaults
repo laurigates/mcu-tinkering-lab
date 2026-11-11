@@ -115,6 +115,11 @@ CONFIG_ESP_HTTPS_OTA_ALLOW_HTTP=n
 CONFIG_OTA_GITHUB_ORG="laurigates"
 CONFIG_OTA_GITHUB_REPO="mcu-tinkering-lab"
 
+# MQTT: the client is created at boot and started only while the WiFi link is
+# up (ADR-028 §2, issue #1054). A publish while it is stopped or disconnected is
+# dropped instead of queued in esp-mqtt's outbox.
+CONFIG_MQTT_SKIP_PUBLISH_IF_DISCONNECTED=y
+
 # mDNS (robocar-unified.local) needs no Kconfig switch — it is pulled in as the
 # espressif/mdns managed component. There is no CONFIG_MDNS_ENABLED symbol; a
 # line setting one is silently ignored by the build.
