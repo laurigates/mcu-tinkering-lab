@@ -57,3 +57,42 @@ use, and what "done" means (zero clashes, renders looked at). Then check the
 results yourself: an agent reported a 0.01 mm wall as an artefact, and that
 was right only after nine more seeds confirmed it. On the pan-tilt, inspectors
 found 59 issues in designs whose designers reported success.
+
+## Trial-merge every branch before landing any
+
+Units verified one at a time can still break each other, and each PR's own
+green CI cannot show it. Before the first merge, merge all the run's branches
+onto `origin/main` in a throwaway worktree and run the shared suites. On the
+core sweep (#1095-#1101, 2026-11-11) four of seven branches conflicted in
+`.pre-commit-config.yaml` or `CLAUDE.md`, and two broke in ways no conflict
+marker showed: #1099's new check called a helper #1100 had refactored away
+(13 test errors), and #1096's ESP-IDF bump tripped a version tripwire #1100
+had just added.
+
+Land branches that conflict with each other as a stack: merge `origin/main`
+into the first, the first into the second, and so on, pushing each. Each PR's
+CI then runs on the cumulative content. After a lower PR is squash-merged the
+next one reads as conflicting, because its history holds the same change as
+separate commits. Re-sync it with `git merge -X ours origin/main` and compare
+`git rev-parse 'HEAD^{tree}'` before and after: an unchanged tree is the one
+CI already passed, so it can merge without another round.
+
+## Agents share one GitHub rate limit
+
+Every agent in a run draws on the same 5,000 REST calls an hour. The first
+core wave (26 agents, 2026-11-10) used it up. `gh run list`, `gh run view`
+and `gh api` then fail, while `gh pr` and `gh issue` (GraphQL) keep working.
+The merge guard hook fails closed on the same limit and reports the PR as
+"written by someone else"; read the 403 in its output before treating that as
+an authorship finding, and retry after `gh api rate_limit` shows the reset.
+Tell agents to use git for anything git can answer and not to poll `gh`.
+
+## Watch for the bots on an agent's PR
+
+A red check on a run's PR starts `auto-fix.yml`, which can push a commit to
+the branch while the orchestrator is still deciding what to do (#1073: a
+Linux-only `bash -c` argument-length fix, correct and kept). Run
+`git log <head_sha>..origin/<branch>` before merging or re-syncing a branch,
+so a commit nobody in the session wrote is read first. `auto-resolve-conflicts.yml`
+runs on every push to `main` and can fail on a branch that is being merged at
+that moment; check that the next run passes before reading it as a defect.
