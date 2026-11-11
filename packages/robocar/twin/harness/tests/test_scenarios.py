@@ -10,7 +10,6 @@ from __future__ import annotations
 import os
 
 import pytest
-
 from robocar_twin.assertions import evaluate
 from robocar_twin.runner import default_twin_dir, resolve_twin_bin, run_scenario
 from robocar_twin.scenario import load_scenario

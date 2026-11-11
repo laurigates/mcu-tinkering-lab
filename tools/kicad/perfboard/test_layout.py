@@ -19,6 +19,7 @@ import tempfile
 import tomllib
 import unittest
 from pathlib import Path
+from typing import ClassVar
 from unittest import mock
 
 from kicad import library, netlist, registry, testfixture
@@ -41,7 +42,9 @@ class Inputs:
 
     nl = netlist.build(PROJECT, ROOT)
     cfg = config.load(TOML)
-    specs = {c.registry: registry.load(c.registry, ROOT) for c in nl.comps}
+    specs: ClassVar[dict] = {
+        c.registry: registry.load(c.registry, ROOT) for c in nl.comps
+    }
 
     @classmethod
     def layout(cls, cfg=None):
@@ -69,7 +72,7 @@ class ConfigTests(unittest.TestCase):
         cfg = Inputs.cfg
         self.assertEqual((cfg.cols, cfg.rows), (18, 24))
         self.assertEqual(len(cfg.placement), 15)
-        self.assertEqual([s.title for s in cfg.steps][0], "Power")
+        self.assertEqual(next(s.title for s in cfg.steps), "Power")
         self.assertEqual(cfg.placement["U1"], (3, 3, 90))
         self.assertEqual(cfg.skip, frozenset())
 

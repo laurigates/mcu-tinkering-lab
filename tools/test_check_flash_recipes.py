@@ -26,6 +26,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from typing import ClassVar
 from unittest import mock
 
 _SPEC = importlib.util.spec_from_file_location(
@@ -371,9 +372,11 @@ class LookupTests(unittest.TestCase):
         # lookup that dies must not read as "no otadata row".
         stub = self.dir / "stub-predicate.sh"
         stub.write_text('resolve_partition_table() { echo "$1/partitions.csv"; }\n')
-        with mock.patch.object(cfr, "OTADATA_PREDICATE", stub):
-            with self.assertRaises(RuntimeError):
-                cfr.flash_layout(self.dir)
+        with (
+            mock.patch.object(cfr, "OTADATA_PREDICATE", stub),
+            self.assertRaises(RuntimeError),
+        ):
+            cfr.flash_layout(self.dir)
 
     def test_a_blank_offset_otadata_row_is_a_row_without_an_offset(self):
         # #689: not "no row" — the build still writes ota_data_initial.bin.
@@ -396,9 +399,11 @@ class LookupTests(unittest.TestCase):
     def test_a_predicate_that_cannot_run_raises_rather_than_reading_none(self):
         # Reading a broken predicate as "no otadata row" would fail the check open.
         missing = self.dir / "no-such-predicate.sh"
-        with mock.patch.object(cfr, "OTADATA_PREDICATE", missing):
-            with self.assertRaises(RuntimeError):
-                cfr.flash_layout(self.dir)
+        with (
+            mock.patch.object(cfr, "OTADATA_PREDICATE", missing),
+            self.assertRaises(RuntimeError),
+        ):
+            cfr.flash_layout(self.dir)
 
     def test_the_bootloader_offset_follows_the_justfile_target(self):
         # components/bootloader/Kconfig.projbuild, BOOTLOADER_OFFSET_IN_FLASH.
@@ -715,7 +720,7 @@ class BuiltInTableTripwireTests(unittest.TestCase):
 class ManifestGeneratorTests(unittest.TestCase):
     """tools/generate-flasher-manifests.sh's otadata part, run on a throwaway tree."""
 
-    FLASHER = {
+    FLASHER: ClassVar[dict] = {
         "name": "Thing",
         "description": "d",
         "chipFamily": "ESP32",

@@ -74,7 +74,7 @@ def printed_box(f):
 def test_the_printed_box_cannot_take_its_board():
     # Control: the box as printed on 2026-10-23. Every strategy must fail.
     f = frame(piece())
-    name, p = assemble.removal(collider(printed_box(f), slab(f)))
+    _name, p = assemble.removal(collider(printed_box(f), slab(f)))
     assert not p.found
 
 
