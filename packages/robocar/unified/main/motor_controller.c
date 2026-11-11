@@ -169,6 +169,10 @@ static esp_err_t set_motors(uint16_t r_in1, uint16_t r_in2, uint16_t r_pwm, uint
     return ret;
 }
 
+/* TB6612FNG STBY held low by `motors standby on`. Set only on request, never
+ * by the drive path, so the PCA9685 writes are the same in both states. */
+static bool s_standby;
+
 esp_err_t motor_controller_init(void)
 {
     if (motor_state.initialized) {
@@ -190,6 +194,7 @@ esp_err_t motor_controller_init(void)
 
     // Enable motor driver
     gpio_set_level(MOTOR_STBY_PIN, 1);
+    s_standby = false;
 
     /* Reaches the bus: s_last_write starts invalid, so this first stop is never
      * suppressed however the board got here. */
@@ -321,6 +326,23 @@ esp_err_t motor_rotate_ccw(uint8_t speed)
 bool motor_is_initialized(void)
 {
     return motor_state.initialized;
+}
+
+esp_err_t motor_set_standby(bool standby)
+{
+    if (!motor_state.initialized)
+        return ESP_ERR_INVALID_STATE;
+
+    esp_err_t ret = gpio_set_level(MOTOR_STBY_PIN, standby ? 0 : 1);
+    if (ret == ESP_OK) {
+        s_standby = standby;
+    }
+    return ret;
+}
+
+bool motor_in_standby(void)
+{
+    return s_standby;
 }
 
 esp_err_t motor_stop(void)

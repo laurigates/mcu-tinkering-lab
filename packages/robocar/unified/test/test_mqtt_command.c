@@ -465,6 +465,11 @@ static void test_read_only_refuses_state_changing_commands(void)
         /* cliff */
         "cliff on",
         "cliff off",
+        /* motors */
+        "motors",
+        "motors standby on",
+        "motors standby off",
+        "motors exercise",
         /* trace */
         "trace reset",
         "trace led on",

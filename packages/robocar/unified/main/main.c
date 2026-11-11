@@ -1610,6 +1610,50 @@ static void on_improv_credentials(const char *ssid, const char *password)
  * credentials) does not belong here; command_task() handles it before this.
  */
 /**
+ * @brief `motors` — the TB6612FNG standby line and the wheel exercise.
+ *
+ * `motors standby on|off` holds the driver in standby or enables it; the
+ * executor keeps writing the PCA9685 either way. `motors exercise` repeats the
+ * boot wheel exercise. Together they are the bench control for issue #944: the
+ * same writes with and without motor current. Not persisted: the driver is
+ * enabled at every boot.
+ */
+static void handle_motors_cmd(const char *buf)
+{
+    char verb[10] = {0};
+    char state[8] = {0};
+    const int n = sscanf(buf, "motors %9s %7s", verb, state);
+
+    if (n == 2 && strcmp(verb, "standby") == 0 &&
+        (strcmp(state, "on") == 0 || strcmp(state, "off") == 0)) {
+        const bool on = (strcmp(state, "on") == 0);
+        const esp_err_t ret = motor_set_standby(on);
+        if (ret != ESP_OK) {
+            printf("motors: standby unavailable (%s)\n", esp_err_to_name(ret));
+            return;
+        }
+        printf("motors: driver %s\n",
+               on ? "in STANDBY — the wheels will not turn; PCA9685 writes continue" : "enabled");
+        return;
+    }
+    if (n == 1 && strcmp(verb, "exercise") == 0) {
+        if (motor_in_standby()) {
+            printf("motors: exercise with the driver in standby — the wheels will not turn\n");
+        }
+        run_wheel_exercise();
+        return;
+    }
+    if (n > 0) {
+        printf("motors: usage: motors | motors standby on|off | motors exercise\n");
+        return;
+    }
+
+    printf("motors: initialised=%s driver=%s\n", motor_is_initialized() ? "yes" : "no",
+           motor_in_standby() ? "standby" : "enabled");
+    printf("  usage: motors standby on|off | motors exercise\n");
+}
+
+/**
  * @brief `cliff` — the front and rear floor sensors and the cliff reflex.
  *
  * `cliff` alone prints whether the reflex is on and armed, what each sensor
@@ -1798,6 +1842,8 @@ static void execute_console_line(const char *buf)
         handle_idle_cmd(buf);
     } else if (strncmp(buf, "cliff", 5) == 0) {
         handle_cliff_cmd(buf);
+    } else if (strncmp(buf, "motors", 6) == 0) {
+        handle_motors_cmd(buf);
     } else if (strncmp(buf, "ota", 3) == 0) {
         handle_ota_cmd(buf);
     } else if (strncmp(buf, "report", 6) == 0) {
