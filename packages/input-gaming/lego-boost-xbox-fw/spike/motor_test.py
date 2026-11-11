@@ -10,8 +10,8 @@ Pass gate: tracks spin forward then reverse, head sweeps, hub light cycles.
 """
 
 from pybricks.hubs import MoveHub
+from pybricks.parameters import Color, Port
 from pybricks.pupdevices import Motor
-from pybricks.parameters import Port, Color
 from pybricks.tools import wait
 
 hub = MoveHub()

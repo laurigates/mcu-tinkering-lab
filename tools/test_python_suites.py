@@ -261,9 +261,8 @@ class Manifest(unittest.TestCase):
         cls.suites = cls.mod.load_manifest(MANIFEST)
 
     def write(self, data) -> Path:
-        tmp = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False)
-        json.dump(data, tmp)
-        tmp.close()
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as tmp:
+            json.dump(data, tmp)
         self.addCleanup(Path(tmp.name).unlink)
         return Path(tmp.name)
 

@@ -38,6 +38,7 @@ from __future__ import annotations
 import argparse
 import array
 import asyncio
+import contextlib
 import importlib.util
 import io
 import json
@@ -126,7 +127,7 @@ def fetch_model_listing(api_key: str) -> dict[str, Any]:
             f"&pageToken={token}" if token else ""
         )
         req = urllib.request.Request(url, headers={"x-goog-api-key": api_key})
-        with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310 - fixed https host
+        with urllib.request.urlopen(req, timeout=30) as resp:
             page = json.load(resp)
         models.extend(page.get("models", []))
         token = page.get("nextPageToken", "")
@@ -160,7 +161,7 @@ def to_mono(samples: list[int], channels: int) -> list[int]:
     if channels == 1:
         return list(samples)
     return [
-        int(round(sum(samples[i : i + channels]) / channels))
+        round(sum(samples[i : i + channels]) / channels)
         for i in range(0, len(samples) - channels + 1, channels)
     ]
 
@@ -174,7 +175,7 @@ def resample_linear(samples: list[int], src_rate: int, dst_rate: int) -> list[in
     """
     if src_rate == dst_rate or not samples:
         return list(samples)
-    n_out = int(round(len(samples) * dst_rate / src_rate))
+    n_out = round(len(samples) * dst_rate / src_rate)
     last = len(samples) - 1
     out: list[int] = []
     for j in range(n_out):
@@ -185,7 +186,7 @@ def resample_linear(samples: list[int], src_rate: int, dst_rate: int) -> list[in
         else:
             frac = pos - i
             v = samples[i] + (samples[i + 1] - samples[i]) * frac
-        out.append(max(-32768, min(32767, int(round(v)))))
+        out.append(max(-32768, min(32767, round(v))))
     return out
 
 
@@ -327,7 +328,7 @@ class Timeline:
 
 
 def _ms(a: float | None, b: float | None) -> int | None:
-    return None if a is None or b is None else int(round((a - b) * 1000))
+    return None if a is None or b is None else round((a - b) * 1000)
 
 
 def build_report(tl: Timeline, model: str, voice: str) -> dict[str, Any]:
@@ -500,12 +501,10 @@ async def run_session(
             # The docs say usageMetadata arrives "periodically", with no promise
             # that it precedes turnComplete. Keep reading briefly so a trailing
             # usage message is not lost; latencies are already stamped.
-            try:
+            with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(
                     collect(stop_at_turn_complete=False), timeout=USAGE_GRACE_S
                 )
-            except TimeoutError:
-                pass
     return Timeline(
         t_connect_start=t0,
         t_speech_end=t_speech_end,

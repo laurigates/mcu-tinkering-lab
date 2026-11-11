@@ -86,7 +86,7 @@ def path(mod, between: int = 2) -> list[tuple]:
     """``gate_path`` with ``between`` evenly spaced poses inserted in each step."""
     gates = gate_path(mod)
     out = [gates[0]]
-    for a, b in zip(gates, gates[1:], strict=False):
+    for a, b in itertools.pairwise(gates):
         for k in range(1, between + 1):
             f = k / (between + 1)
             out.append(

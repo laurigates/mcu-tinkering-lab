@@ -224,6 +224,15 @@ repos:
         pass_filenames: false
         files: '(^\.github/|^tools/(python-suites|test_python_suites)\.py$|(^|/)(uv\.lock|pyproject\.toml|justfile)$|^\.pre-commit-config\.yaml$|^renovate\.json$)'
 
+      # Ruff accepts a key placed under the wrong TOML table without a warning
+      # (issue #761: select and fixable sat inside [lint.per-file-ignores]).
+      - id: ruff-config
+        name: ruff.toml keeps its lint keys in [lint], and every per-file ignore matches a file
+        entry: python3 -m unittest tools/test_ruff_config.py
+        language: system
+        pass_filenames: false
+        files: '^(ruff\.toml|tools/test_ruff_config\.py)$'
+
       - id: hardware-join
         name: Hardware join resolves, and pin_defs.typ regenerates byte-identical
         entry: python3 -m unittest discover -s tools/hardware -t tools

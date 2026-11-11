@@ -23,11 +23,8 @@ exclude = [
 "tools/kicad/pcb/**" = "py39"
 
 [lint]
-# Simulation subproject uses line-length = 100 in its own pyproject.toml;
-# when ruff runs from repo root, this override keeps them in sync.
-[lint.per-file-ignores]
-"packages/robocar/simulation/**" = ["E501"]
-
+# Keys of [lint] go above any [lint.*] sub-table header: TOML puts a key below
+# a header into that table (issue #761). tools/test_ruff_config.py checks it.
 # Enable core rule sets
 select = [
     "E",   # pycodestyle errors
@@ -40,8 +37,21 @@ select = [
     "RUF", # ruff-specific rules
 ]
 
+ignore = [
+    # ruff format wraps code at 88 columns; what E501 still reports is long
+    # strings, comments and URLs the formatter leaves alone (359 lines when
+    # #761 turned the selection on). The simulation and melody-detector
+    # pyproject.toml configs make the same choice.
+    "E501",
+]
+
 # Allow autofix for all enabled rules
 fixable = ["ALL"]
+
+# RUF001/RUF002: the multiplication sign and en dash are deliberate typography
+# in generated labels, wire lists and docstrings (2×3 header, 1–3 mm), not
+# look-alikes of x and -.
+allowed-confusables = ["×", "–"]
 
 [format]
 # Match existing style

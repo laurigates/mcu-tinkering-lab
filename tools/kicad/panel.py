@@ -43,6 +43,7 @@ forbids pads also forbids a non-plated hole.
 
 from __future__ import annotations
 
+import itertools
 import math
 from dataclasses import dataclass
 from typing import Any
@@ -168,8 +169,8 @@ def _covered(rect: Rect, rects: list[Rect]) -> bool:
     ys = sorted({rect[1], rect[3], *(r[i] for r in rects for i in (1, 3))})
     xs = [x for x in xs if rect[0] <= x <= rect[2]]
     ys = [y for y in ys if rect[1] <= y <= rect[3]]
-    for xa, xb in zip(xs, xs[1:]):
-        for ya, yb in zip(ys, ys[1:]):
+    for xa, xb in itertools.pairwise(xs):
+        for ya, yb in itertools.pairwise(ys):
             cx, cy = (xa + xb) / 2, (ya + yb) / 2
             if not any(r[0] <= cx <= r[2] and r[1] <= cy <= r[3] for r in rects):
                 return False
@@ -238,7 +239,7 @@ def validate(where: str, data: dict[str, Any]) -> list[str]:
     cut_lines = data.get("silk", {}).get("cut_lines", [])
     lines = s.get("lines", [])
     if not isinstance(lines, list):
-        return errors + [f"{where}: [[panel.lines]] must be an array of tables"]
+        return [*errors, f"{where}: [[panel.lines]] must be an array of tables"]
     seen = []
     for entry in lines:
         if not isinstance(entry, dict):
@@ -295,11 +296,11 @@ def build(data: dict[str, Any]) -> Panel | None:
     keepouts: list[Rect] = [tuple(k["rect"]) for k in data.get("keepouts", [])]
     slots: list[tuple[Rect, list[float]]] = []
     tabs: list[Tab] = []
-    for raw, line in zip(raws, lines):
+    for raw, line in zip(raws, lines, strict=True):
         where = f"cut line {raw}"
         # Where the line meets another one, stop at that line's slot.
         t_start, t_end = 0.0, line.length
-        for other_raw, other in zip(raws, lines):
+        for other_raw, other in zip(raws, lines, strict=True):
             if other_raw is raw:
                 continue
             for end in (0, 1):
@@ -334,7 +335,7 @@ def build(data: dict[str, Any]) -> Panel | None:
         else:
             interior = sorted(explicit)
         centres = [t_start + tab / 2, *interior, t_end - tab / 2]
-        for a, b in zip(centres, centres[1:]):
+        for a, b in itertools.pairwise(centres):
             s0, s1 = a + tab / 2, b - tab / 2
             if s1 - s0 < w - EPS:
                 errors.append(

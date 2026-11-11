@@ -8,6 +8,7 @@ on stdin), and ``done``. stderr is drained and kept for error messages.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import queue
@@ -146,10 +147,8 @@ def run_scenario(
             t.join(timeout=1)
         for f in (proc.stdin, proc.stdout, proc.stderr):
             if f is not None:
-                try:
+                with contextlib.suppress(OSError):
                     f.close()
-                except OSError:
-                    pass
 
     def fail(msg: str, exc_type: type[TwinError] = TwinError) -> TwinError:
         cleanup()
@@ -238,10 +237,8 @@ def run_scenario(
             done = True
 
     if proc.stdin is not None:
-        try:
+        with contextlib.suppress(OSError):
             proc.stdin.close()
-        except OSError:
-            pass
     try:
         code = proc.wait(timeout=max(0.1, deadline - time.monotonic()))
     except subprocess.TimeoutExpired:

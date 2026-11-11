@@ -349,7 +349,7 @@ def make_frame() -> Part:
     # the frame, so only the drop below the tie flexes with pan.
     for sy in (-1, 1):
 
-        def ys(a_, b_):
+        def ys(a_, b_, sy=sy):
             return sorted((sy * a_, sy * b_))
 
         # flat-faced land where the channel crosses the neck ring, so the cut
@@ -480,7 +480,7 @@ def make_forehead() -> Part:
             fb += cyl_z(bx, sy * POST_Y, pod_top, z0 + 0.01, 3.7)
     fb = fb.fillet(
         1.2,
-        fb.edges().filter_by(Axis.Y).filter_by(lambda e: e.center().X > xf - 0.1),
+        fb.edges().filter_by(Axis.Y).filter_by(lambda e: xf - 0.1 < e.center().X),
     )
     # open-back cavity for both servos and their leads
     hz = s.width / 2 + CASE_CLR_W
