@@ -14,9 +14,11 @@ on:
       - '**/main/pin_config.h'
       - '**/hardware.toml'
       # The join also reads hardware.toml's extra_headers and a legacy
-      # src/pin_config.h, and test_components.py reads WIRING.md (#460).
+      # src/pin_config.h, and test_components.py reads WIRING.md (#460) and
+      # the build guide's capacitor table (#1077).
       - '**/src/pin_config.h'
       - '**/WIRING.md'
+      - 'packages/robocar/unified/docs/build-guide.typ'
       - 'packages/robocar/unified/main/planner_task.h'
       - 'packages/robocar/unified/main/plan_activity.h'
       - '.github/workflows/schematics-check.yml'
@@ -32,9 +34,11 @@ on:
       - '**/main/pin_config.h'
       - '**/hardware.toml'
       # The join also reads hardware.toml's extra_headers and a legacy
-      # src/pin_config.h, and test_components.py reads WIRING.md (#460).
+      # src/pin_config.h, and test_components.py reads WIRING.md (#460) and
+      # the build guide's capacitor table (#1077).
       - '**/src/pin_config.h'
       - '**/WIRING.md'
+      - 'packages/robocar/unified/docs/build-guide.typ'
       - 'packages/robocar/unified/main/planner_task.h'
       - 'packages/robocar/unified/main/plan_activity.h'
       - '.github/workflows/schematics-check.yml'
