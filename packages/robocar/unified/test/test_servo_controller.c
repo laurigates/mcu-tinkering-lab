@@ -20,10 +20,15 @@
  * the recording stub at the bottom of this file.
  */
 
+#include <errno.h>
+#include <pthread.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
 #include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "i2c_bus.h"
 #include "pin_config.h"
 #include "servo_controller.h"
@@ -85,10 +90,85 @@ esp_err_t i2c_bus_pca9685_set_frequency(uint16_t hz)
     return s_next_result;
 }
 
+/* ---- interleaving gate (issue #1058) ------------------------------------
+ *
+ * The executor and the console task both write the servos. To pin how a write
+ * and a release interleave, the stub can park the next write to one channel,
+ * either before it reaches the bus (the writer has passed its checks and been
+ * preempted) or after (the transaction landed, the state update has not). The
+ * test then runs the other writer on a second thread and opens the gate once
+ * that writer has either finished or blocked on the module's lock. The lock is
+ * a real pthread mutex (the semaphore shim below), so a writer that should wait
+ * does wait, and the order the stub records is the order the bus would see. */
+
+static pthread_mutex_t s_gate_m = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t s_gate_cv = PTHREAD_COND_INITIALIZER;
+static int s_gate_channel = -1; /* armed when >= 0; disarms on first match */
+static bool s_gate_after;       /* park after recording the write */
+static bool s_gate_parked;
+static bool s_gate_open;
+static bool s_lock_contended; /* a take found the module's lock held */
+
+static void park_locked(void)
+{
+    s_gate_parked = true;
+    pthread_cond_broadcast(&s_gate_cv);
+    while (!s_gate_open) {
+        pthread_cond_wait(&s_gate_cv, &s_gate_m);
+    }
+}
+
 esp_err_t i2c_bus_pca9685_set(uint8_t channel, uint16_t count)
 {
+    pthread_mutex_lock(&s_gate_m);
+    const bool park = (s_gate_channel == (int)channel);
+    if (park) {
+        s_gate_channel = -1;
+    }
+    if (park && !s_gate_after) {
+        park_locked();
+    }
     record(EV_WRITE, channel, count);
-    return s_next_result;
+    if (park && s_gate_after) {
+        park_locked();
+    }
+    const esp_err_t ret = s_next_result;
+    pthread_mutex_unlock(&s_gate_m);
+    return ret;
+}
+
+/* Semaphore shim backed by a pthread mutex, so contention is real. A take that
+ * finds the mutex held says so before it blocks, which is how the test knows
+ * the second writer is waiting rather than finished. The timeout is not
+ * modelled: no case here holds the lock for long. */
+SemaphoreHandle_t xSemaphoreCreateMutex(void)
+{
+    pthread_mutex_t *m = calloc(1, sizeof(*m));
+    if (m != NULL) {
+        pthread_mutex_init(m, NULL);
+    }
+    return m;
+}
+
+BaseType_t xSemaphoreTake(SemaphoreHandle_t sem, TickType_t wait)
+{
+    (void)wait;
+    pthread_mutex_t *m = sem;
+    if (pthread_mutex_trylock(m) == 0) {
+        return pdTRUE;
+    }
+    pthread_mutex_lock(&s_gate_m);
+    s_lock_contended = true;
+    pthread_cond_broadcast(&s_gate_cv);
+    pthread_mutex_unlock(&s_gate_m);
+    pthread_mutex_lock(m);
+    return pdTRUE;
+}
+
+BaseType_t xSemaphoreGive(SemaphoreHandle_t sem)
+{
+    pthread_mutex_unlock((pthread_mutex_t *)sem);
+    return pdTRUE;
 }
 
 static void reset_bus(void)
@@ -455,6 +535,146 @@ static void test_only_a_changed_angle_counts_as_head_motion(void)
           (unsigned)servo_last_move_ms());
 }
 
+/* ---- write vs release interleavings (issue #1058) ------------------------ */
+
+static void arm_gate(uint8_t channel, bool after)
+{
+    pthread_mutex_lock(&s_gate_m);
+    s_gate_channel = channel;
+    s_gate_after = after;
+    s_gate_parked = false;
+    s_gate_open = false;
+    s_lock_contended = false;
+    pthread_mutex_unlock(&s_gate_m);
+}
+
+/* Waits on s_gate_cv until *flag_a or *flag_b is set, for at most 2 s, so a
+ * deadlock fails the case instead of hanging the suite. */
+static bool wait_for(const bool *flag_a, const bool *flag_b)
+{
+    struct timespec deadline;
+    clock_gettime(CLOCK_REALTIME, &deadline);
+    deadline.tv_sec += 2;
+
+    pthread_mutex_lock(&s_gate_m);
+    int rc = 0;
+    while (!*flag_a && !(flag_b != NULL && *flag_b) && rc != ETIMEDOUT) {
+        rc = pthread_cond_timedwait(&s_gate_cv, &s_gate_m, &deadline);
+    }
+    const bool ok = *flag_a || (flag_b != NULL && *flag_b);
+    pthread_mutex_unlock(&s_gate_m);
+    return ok;
+}
+
+static void open_gate(void)
+{
+    pthread_mutex_lock(&s_gate_m);
+    s_gate_open = true;
+    pthread_cond_broadcast(&s_gate_cv);
+    pthread_mutex_unlock(&s_gate_m);
+}
+
+/* One writer: the executor's servo_set_angle() or the console's
+ * servo_disable_all(). `done` is set under s_gate_m and signalled. */
+typedef struct {
+    bool is_release;
+    int16_t pan_deg;
+    esp_err_t result;
+    bool done;
+} writer_t;
+
+static void *writer_main(void *arg)
+{
+    writer_t *w = arg;
+    const esp_err_t ret =
+        w->is_release ? servo_disable_all() : servo_set_angle(SERVO_PAN, w->pan_deg);
+    pthread_mutex_lock(&s_gate_m);
+    w->result = ret;
+    w->done = true;
+    pthread_cond_broadcast(&s_gate_cv);
+    pthread_mutex_unlock(&s_gate_m);
+    return NULL;
+}
+
+/* The last value the stub recorded on a channel, or -1 if none. */
+static int last_write(uint8_t channel)
+{
+    int value = -1;
+    for (int i = 0; i < s_event_count && i < 32; i++) {
+        if (s_events[i].kind == EV_WRITE && s_events[i].channel == channel) {
+            value = s_events[i].value;
+        }
+    }
+    return value;
+}
+
+/* The executor has checked that pan is enabled and is about to write when the
+ * console's `servo off` runs. The release must land after that write: the
+ * outputs end at 0 with both servos reported off. Unserialised, the write
+ * landed after the release and the head stayed driven while `servo` said off. */
+static void test_off_during_an_executor_write_stays_off(void)
+{
+    CHECK(servo_enable_all() == ESP_OK, "servo on failed");
+    reset_bus();
+
+    writer_t exec = {.is_release = false, .pan_deg = 25};
+    writer_t console = {.is_release = true};
+    pthread_t te, tc;
+
+    arm_gate(SERVO_PAN_CHANNEL, false);
+    pthread_create(&te, NULL, writer_main, &exec);
+    CHECK(wait_for(&s_gate_parked, NULL), "the executor's write never reached the bus");
+
+    pthread_create(&tc, NULL, writer_main, &console);
+    CHECK(wait_for(&console.done, &s_lock_contended),
+          "the release neither finished nor waited for the in-flight write");
+    open_gate();
+    pthread_join(te, NULL);
+    pthread_join(tc, NULL);
+
+    CHECK(console.result == ESP_OK, "servo off returned %d", console.result);
+    CHECK(last_write(SERVO_PAN_CHANNEL) == 0,
+          "pan must end released, but the last pan write was %d (the executor's %u)",
+          last_write(SERVO_PAN_CHANNEL), (unsigned)servo_angle_to_count(SERVO_PAN, 25));
+    CHECK(last_write(SERVO_TILT_CHANNEL) == 0, "tilt must end released, got %d",
+          last_write(SERVO_TILT_CHANNEL));
+    CHECK(!servo_is_enabled(SERVO_PAN) && !servo_is_enabled(SERVO_TILT), "both must read off");
+}
+
+/* The console's release has reached the bus but not yet marked pan off when
+ * the executor's tick writes. The executor must see the servo off and write
+ * nothing. Unserialised, it still read pan as enabled, re-drove it after the
+ * release, and the flag then said off: a driven servo the executor no longer
+ * refreshes or releases. */
+static void test_an_executor_write_during_off_is_refused(void)
+{
+    CHECK(servo_enable_all() == ESP_OK, "servo on failed");
+    reset_bus();
+
+    writer_t exec = {.is_release = false, .pan_deg = -25};
+    writer_t console = {.is_release = true};
+    pthread_t te, tc;
+
+    arm_gate(SERVO_PAN_CHANNEL, true);
+    pthread_create(&tc, NULL, writer_main, &console);
+    CHECK(wait_for(&s_gate_parked, NULL), "the release never reached the bus");
+
+    pthread_create(&te, NULL, writer_main, &exec);
+    CHECK(wait_for(&exec.done, &s_lock_contended),
+          "the executor's write neither finished nor waited for the release");
+    open_gate();
+    pthread_join(tc, NULL);
+    pthread_join(te, NULL);
+
+    CHECK(console.result == ESP_OK, "servo off returned %d", console.result);
+    CHECK(exec.result == ESP_ERR_INVALID_STATE, "a write after the release must be refused, got %d",
+          exec.result);
+    CHECK(last_write(SERVO_PAN_CHANNEL) == 0,
+          "pan must end released, but the last pan write was %d (the executor's %u)",
+          last_write(SERVO_PAN_CHANNEL), (unsigned)servo_angle_to_count(SERVO_PAN, -25));
+    CHECK(!servo_is_enabled(SERVO_PAN) && !servo_is_enabled(SERVO_TILT), "both must read off");
+}
+
 int main(void)
 {
     struct {
@@ -485,6 +705,8 @@ int main(void)
         {"the_exercise_never_leaves_the_limits", test_the_exercise_never_leaves_the_limits},
         {"only_a_changed_angle_counts_as_head_motion",
          test_only_a_changed_angle_counts_as_head_motion},
+        {"off_during_an_executor_write_stays_off", test_off_during_an_executor_write_stays_off},
+        {"an_executor_write_during_off_is_refused", test_an_executor_write_during_off_is_refused},
     };
     for (size_t i = 0; i < sizeof(tests) / sizeof(tests[0]); i++) {
         int before = s_failures;
