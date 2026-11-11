@@ -96,6 +96,22 @@ change the pin and say which parts move (ADR-035).
   installing `libcjson-dev` so `test_gemini_parse` builds rather than silently
   skipping (issue #482). The same step also runs `packages/audio/kids-audio-toy`'s
   plain-`cc` host suite (`just kids-audio::test`).
+- **Component host suites** — every `packages/<...>/components/<name>/test/`
+  (the thinkpack components and xbox-switch-bridge's `status_led`) is a plain
+  `make` suite, run together by:
+
+  ```bash
+  just components::test
+  ```
+
+  CI runs it as the `components` entry of `.github/python-suites.json`, on any
+  change under `packages/components/` or a listed component. `unity_compat.h`,
+  `esp_log.h` and `esp_err.h` live once in `packages/components/host-test/`;
+  a suite keeps only the stubs no other suite needs (`status_led`'s driver
+  mocks). A new component suite is a `test/Makefile` whose default target
+  builds and runs it; `tools/test_python_suites.py` fails if a component's
+  `test/` has no Makefile, if the `components` suite's paths do not select
+  the component, or if a header is copied between suites (#1077).
 
 ### Host-based unit tests (shared-core pattern)
 
@@ -144,7 +160,8 @@ All PRs must pass:
 - The Python Suites job in `test.yml`: each uv project suite in
   `.github/python-suites.json` (`enclosure::test`, `mechanism::test`,
   `cadstd::test`, `glitchtip::test`, `robocar-twin::test`,
-  `synth::tts-test`, the live probe's offline tests) when a path it lists
+  `synth::tts-test`, the live probe's offline tests, and the make-only
+  `components::test`, which has no uv `dir`) when a path it lists
   changes, with `UV_LOCKED=1` so a stale `uv.lock` fails rather than
   re-resolving. A new uv project with tests gets an entry there; the
   `python-suites` pre-commit hook (`tools/test_python_suites.py`) fails

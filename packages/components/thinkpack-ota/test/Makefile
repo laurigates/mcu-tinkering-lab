@@ -1,8 +1,9 @@
 # Makefile for thinkpack-ota host-based unit tests.
 #
 # Compiles the pure-logic sources on the host with gcc and runs the
-# Unity-compat tests. Reuses unity_compat.h and stubs from
-# packages/components/thinkpack-behaviors/test.
+# Unity-compat tests. unity_compat.h and the ESP-IDF stubs come from
+# packages/components/host-test. `just components::test` runs every
+# component suite.
 #
 # The apply.c and ota_receiver.c sources are ESP-only (guarded by
 # #ifdef ESP_PLATFORM) so they are omitted from the host build.
@@ -15,8 +16,7 @@ CC     = gcc
 CFLAGS = -std=c11 -Wall -Wextra \
          -I../include \
          -I../../thinkpack-protocol/include \
-         -I../../thinkpack-behaviors/test \
-         -I../../thinkpack-behaviors/test/stubs
+         -I../../host-test
 
 COMMON_SRCS = ../chunk_state.c \
               ../manifest_parser.c \

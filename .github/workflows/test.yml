@@ -279,7 +279,8 @@ jobs:
   # One job for every uv project whose tests need nothing beyond its own lock:
   # the tools/ suites (enclosure, mechanism, cadstd, glitchtip bridge), the
   # robocar behaviour twin (ADR-030), the live probe's offline tests (#619)
-  # and the TTS generator's (#844). .github/python-suites.json lists each one
+  # and the TTS generator's (#844), plus the component host suites, which
+  # need only make and gcc (#1077). .github/python-suites.json lists each one
   # with its directory, command, apt packages and the paths that select it.
   # Add a suite there, not as another job or workflow.
   python-suites:
@@ -323,7 +324,10 @@ jobs:
           just: true
           cache-suffix: ${{ matrix.name }}
 
+      # A suite with no uv project (the component host suites, built with
+      # make) has no dir and skips this step.
       - name: Install ${{ matrix.dir }} from its uv.lock
+        if: matrix.dir != ''
         working-directory: ${{ matrix.dir }}
         run: uv sync --locked
 

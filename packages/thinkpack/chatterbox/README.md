@@ -34,4 +34,5 @@ required.  See [`WIRING.md`](WIRING.md) for the pinout.
 
 Host-testable logic lives in `packages/components/thinkpack-behaviors`
 (Echo Chamber dispatch) and `packages/components/thinkpack-audio` (state
-machine, ring buffer, pitch-shift).  Run `make test` in either directory.
+machine, ring buffer, pitch-shift).  `just components::test` runs their
+host suites with every other component's.
