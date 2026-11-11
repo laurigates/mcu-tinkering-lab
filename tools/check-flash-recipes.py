@@ -284,30 +284,13 @@ FIXED_BUILD_OUTPUTS = (
     OTADATA_OUTPUT,
 )
 
-# Where the ROM loads the second-stage bootloader from, per target. Copied from
-# ESP-IDF v5.4 components/bootloader/Kconfig.projbuild, BOOTLOADER_OFFSET_IN_FLASH
-# ("not configurable in ESP-IDF"): 0x1000 on esp32/esp32s2, 0x2000 on
-# esp32p4/esp32c5, 0x0 on every other target. A target outside this table gets
-# no offset, and a recipe flashing its bootloader is reported unverifiable.
-BOOTLOADER_OFFSETS = {
-    "esp32": 0x1000,
-    "esp32s2": 0x1000,
-    "esp32s3": 0x0,
-    "esp32c2": 0x0,
-    "esp32c3": 0x0,
-    "esp32c6": 0x0,
-    "esp32c61": 0x0,
-    "esp32h2": 0x0,
-    "esp32c5": 0x2000,
-    "esp32p4": 0x2000,
-}
-DEFAULT_PARTITION_TABLE_OFFSET = 0x8000
-# ESP-IDF's built-in tables leave every offset blank. The predicate resolves a
-# preset to tools/lib/idf-partition-tables/, gen_esp32part.py's own placement
-# behind a table at 0x8000, so they are read like any other table (#684).
-# parttool.py's --partition-boot-default search, which is where `idf.py flash`
-# writes the app: factory if the table has one, else the lowest ota_N.
-BOOT_APP_SUBTYPES = ("factory", *(f"ota_{n}" for n in range(16)))
+# Every offset a build output belongs at comes from tools/lib/otadata-predicate.sh,
+# the parser the manifest generator and the release assembly use (#1090): the
+# bootloader per target, the partition table from CONFIG_PARTITION_TABLE_OFFSET,
+# otadata and the app from the table the build uses. ESP-IDF's built-in tables
+# leave every offset blank; the predicate resolves a preset to
+# tools/lib/idf-partition-tables/, gen_esp32part.py's own placement behind a
+# table at 0x8000, so they are read like any other table (#684).
 
 
 @dataclass
@@ -326,6 +309,7 @@ class FlashLayout:
     app: int | None
     why: dict[str, str] = field(default_factory=dict)
     otadata_auto: bool = False
+    table: Path | None = None  # the partition table the build uses
 
     @property
     def has_otadata_row(self) -> bool:
@@ -547,56 +531,65 @@ def cmake_project_name(project_dir: Path) -> str | None:
     return match.group("name") if match else None
 
 
-def partition_table(project_dir: Path) -> tuple[Path, int | None, bool]:
-    """The table the build uses, its otadata offset, and whether it has an otadata row.
+# Runs the predicate once per project. The table and its otadata state must
+# resolve, or the script exits 2 and the check raises: reading a failure there
+# as "no otadata row" would fail the check open. Each offset prints as
+# "<name>\tok\t<value>" or "<name>\terror\t<reason>", since an offset the
+# predicate cannot name is reported as unverifiable, not raised.
+LAYOUT_SCRIPT = r"""
+source "$1" || exit 2
+table=$(resolve_partition_table "$2") || exit 2
+otadata=$(parse_otadata_offset "$table") || exit 2
+printf 'table\tok\t%s\notadata\tok\t%s\n' "$table" "$otadata"
+field() {
+    local name="$1" out
+    shift
+    if out=$("$@" 2>&1); then
+        printf '%s\tok\t%s\n' "$name" "$out"
+    else
+        printf '%s\terror\t%s\n' "$name" "${out//$'\n'/ }"
+    fi
+}
+field bootloader bootloader_offset "$3"
+field partition_table partition_table_offset "$2"
+field app boot_app_partition "$table"
+"""
 
-    Asks tools/lib/otadata-predicate.sh rather than re-parsing here, which keeps
-    this check, the flasher manifests and the release assembly from disagreeing
-    about which table a project builds (issues #541, #560). A predicate that
-    fails to run raises — reading that as "no otadata row" would fail this
-    check open. A row with a blank offset (the predicate's `auto`) has a row
-    and no offset (issue #689).
+
+def predicate_layout(project_dir: Path, target: str) -> dict[str, tuple[bool, str]]:
+    """Ask tools/lib/otadata-predicate.sh for project_dir's layout.
+
+    Returns {name: (ok, value or reason)} for table, otadata, bootloader,
+    partition_table and app. Raises when the table or its otadata row cannot
+    be resolved (issues #541, #560, #684).
     """
-    script = (
-        'source "$1" || exit 2; t=$(resolve_partition_table "$2") || exit 2; '
-        'printf "%s\\n" "$t"; parse_otadata_offset "$t"'
-    )
     proc = subprocess.run(
-        ["bash", "-c", script, "_", str(OTADATA_PREDICATE), str(project_dir)],
+        [
+            "bash",
+            "-c",
+            LAYOUT_SCRIPT,
+            "_",
+            str(OTADATA_PREDICATE),
+            str(project_dir),
+            target,
+        ],
         capture_output=True,
         text=True,
         check=False,
     )
-    lines = proc.stdout.split("\n")
-    if proc.returncode != 0 or len(lines) < 2 or not lines[0]:
+    fields: dict[str, tuple[bool, str]] = {}
+    for line in proc.stdout.splitlines():
+        name, status, value = [*line.split("\t", 2), "", ""][:3]
+        fields[name] = (status == "ok", value)
+    if (
+        proc.returncode != 0
+        or not fields.get("table", (False, ""))[1]
+        or "app" not in fields
+    ):
         raise RuntimeError(
             f"otadata predicate failed for {_display(project_dir)}: {proc.stderr.strip()}"
         )
-    otadata = lines[1].strip()
-    if otadata == "auto":
-        return Path(lines[0]), None, True
-    return Path(lines[0]), int(otadata) if otadata else None, bool(otadata)
-
-
-def boot_app_offset(table: Path) -> tuple[int | None, str]:
-    """Offset of the partition `idf.py flash` writes the app to, and its name.
-
-    Returns (None, reason) when the table has no app partition, or when that
-    partition's offset is blank and left to gen_esp32part.py to place.
-    """
-    apps: dict[str, str] = {}
-    for line in table.read_text().splitlines():
-        cols = [c.strip() for c in line.split("#", 1)[0].split(",")]
-        if len(cols) >= 4 and cols[1] == "app":
-            apps.setdefault(cols[2], cols[3])
-    for subtype in BOOT_APP_SUBTYPES:
-        if subtype in apps:
-            where = f"{_display(table)}'s {subtype} partition"
-            try:
-                return int(apps[subtype], 0), where
-            except ValueError:
-                return None, f"{where} has no explicit offset"
-    return None, f"{_display(table)} has no factory or ota_N app partition"
+    return fields
 
 
 def flash_layout(project_dir: Path) -> FlashLayout:
@@ -609,35 +602,41 @@ def flash_layout(project_dir: Path) -> FlashLayout:
     justfile = project_dir / "justfile"
     match = TARGET_RE.search(justfile.read_text()) if justfile.is_file() else None
     target = match.group("target") if match else cfg.get("CONFIG_IDF_TARGET")
-    bootloader = BOOTLOADER_OFFSETS.get(target) if target else None
+
+    fields = predicate_layout(project_dir, target or "")
+    table = Path(fields["table"][1])
+
+    def offset(name: str, where: Callable[[str], str]) -> int | None:
+        """The field's decimal offset, or None with the predicate's reason."""
+        ok, value = fields[name]
+        if not ok:
+            why[name] = value
+            return None
+        number, _, label = value.partition(" ")
+        why[name] = where(label)
+        return int(number)
+
+    bootloader = offset(
+        "bootloader", lambda _: f"the {target} ROM loads its bootloader there"
+    )
     if target is None:
         why["bootloader"] = (
             f"{_display(project_dir)} sets no target in its justfile or sdkconfig.defaults"
         )
-    elif bootloader is None:
-        why["bootloader"] = f'target "{target}" is not in BOOTLOADER_OFFSETS'
-    else:
-        why["bootloader"] = f"the {target} ROM loads its bootloader there"
+    table_offset = offset(
+        "partition_table", lambda _: "CONFIG_PARTITION_TABLE_OFFSET, default 0x8000"
+    )
+    # boot_app_partition prints "<offset> <partition name>".
+    app = offset("app", lambda name: f"{_display(table)}'s {name} partition")
 
-    raw = cfg.get("CONFIG_PARTITION_TABLE_OFFSET")
-    try:
-        table_offset = int(raw, 0) if raw else DEFAULT_PARTITION_TABLE_OFFSET
-        why["partition_table"] = (
-            "CONFIG_PARTITION_TABLE_OFFSET" if raw else "ESP-IDF's default table offset"
-        )
-    except ValueError:
-        table_offset = None
-        why["partition_table"] = f"CONFIG_PARTITION_TABLE_OFFSET={raw} is not a number"
-
-    table, otadata, has_otadata_row = partition_table(project_dir)
-    otadata_auto = has_otadata_row and otadata is None
+    raw_otadata = fields["otadata"][1]
+    otadata_auto = raw_otadata == "auto"
+    otadata = int(raw_otadata) if raw_otadata and not otadata_auto else None
     why["otadata"] = f"{_display(table)}'s otadata row" + (
         " has a blank offset, which gen_esp32part.py places at build time"
         if otadata_auto
         else ""
     )
-    # The predicate names only a table that exists, a built-in preset included.
-    app, why["app"] = boot_app_offset(table)
 
     return FlashLayout(
         bootloader=bootloader,
@@ -646,6 +645,7 @@ def flash_layout(project_dir: Path) -> FlashLayout:
         app=app,
         why=why,
         otadata_auto=otadata_auto,
+        table=table,
     )
 
 
@@ -741,9 +741,10 @@ def collect() -> list[Project]:
 
             # The table the build uses, from the predicate the release path and
             # the dry-run audit read, built-in presets included (issue #684).
-            table, _otadata, proj.has_otadata = partition_table(justfile.parent)
-            proj.partition_source = _display(table)
-            proj.app_offset, _where = boot_app_offset(table)
+            layout = flash_layout(justfile.parent)
+            proj.partition_source = _display(layout.table)
+            proj.has_otadata = layout.has_otadata_row
+            proj.app_offset = layout.app
 
             projects.append(proj)
     return projects

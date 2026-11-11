@@ -171,7 +171,7 @@ assumptions, and dry-runs every flash recipe to check the files it names and
 the offset in front of each (see below). An offset that is not a literal number
 in the dry-run (a shell variable inside a shebang recipe) is skipped without a
 finding, so read your own dry-run once after the final edit as well. A target
-missing from `BOOTLOADER_OFFSETS` is not skipped: it fails as unverifiable. The build-guide drift guard has the same gap for the
+missing from `bootloader_offset` in `tools/lib/otadata-predicate.sh` is not skipped: it fails as unverifiable. The build-guide drift guard has the same gap for the
 opposite reason — it runs *only* in CI — and
 `build-guide-drift-guard.md` § 2 carries the extract-and-run recipe plus the
 negative control that a guard change needs.
@@ -223,10 +223,12 @@ recipe is written:
 - each `<offset> build/<file>.bin` pair puts the file where the build expects it
   (issue #651): the bootloader at the target's ROM offset (0x1000 on
   esp32/esp32s2, 0x2000 on esp32p4/esp32c5, 0x0 on the other targets listed in
-  `BOOTLOADER_OFFSETS`, from the project justfile's `target`), the partition table at `CONFIG_PARTITION_TABLE_OFFSET`
-  (default 0x8000), otadata at the table's otadata row, and the app at the
+  `bootloader_offset`, from the project justfile's `target`), the partition table at `CONFIG_PARTITION_TABLE_OFFSET`
+  (a Kconfig hex, default 0x8000), otadata at the table's otadata row, and the app at the
   partition `idf.py flash` uses — `factory` if there is one, else the lowest
-  `ota_N`. A part whose expected offset
+  `ota_N`. Every one of those offsets comes from `tools/lib/otadata-predicate.sh`,
+  the functions the manifest generator calls (issue #1090), read the way
+  `gen_esp32part.py` reads them (`52K` is 0xd000). A part whose expected offset
   cannot be worked out (unknown target, an app or otadata row with a blank
   offset) is reported as unverifiable rather than passed. An otadata row with a
   blank offset is still a row: the predicate prints `auto` for it, a full flash
