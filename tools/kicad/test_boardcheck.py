@@ -844,7 +844,8 @@ class ConfigTests(unittest.TestCase):
             (
                 "net class nets entry",
                 lambda d: d["net_classes"][0].update(nets=[["VBAT"]]),
-                "[[net_classes]] needs a name and a non-empty nets list",
+                "[[net_classes]] 'power': nets must be net names or patterns, "
+                "got [['VBAT']]",
             ),
         )
         for name, edit, msg in cases:
@@ -868,6 +869,82 @@ class ConfigTests(unittest.TestCase):
             d["silk"]["cut_lines"] = [[0.0, 31.0, 90.0, 31.0]]
 
         self.fails(mousebites, "[keepouts] 'band': rect must be [x0, y0, x1, y1]")
+
+    # #1064: the malformed inputs #1042 left reporting the wrong thing.
+
+    def errors(self, edit) -> list[str]:
+        """validate_config's errors after `edit`, each without the path prefix."""
+        where = f"{self.cfg.path}: "
+        return [
+            e.removeprefix(where)
+            for e in boardcheck.validate_config(self.with_data(edit), self.nl)
+        ]
+
+    def test_net_class_nets_holding_a_non_string(self):
+        """A non-empty nets list got "needs ... a non-empty nets list", which
+        does not say what is wrong with it."""
+        errors = self.errors(lambda d: d["net_classes"][0].update(nets=["VBAT", 5]))
+        self.assertEqual(
+            errors,
+            ["[[net_classes]] 'power': nets must be net names or patterns, got [5]"],
+        )
+
+    def test_nested_fanout_nets_report_only_the_root_cause(self):
+        """With a net the netlist does not name, the pad set is short that net's
+        pads, and every required pad was reported as "not a pad of a [fanout]
+        net" under the real error."""
+        gnd = [f"{ref}:{pin}" for ref, pin in self.nl.nets["GND"]][:3]
+        self.assertEqual(len(gnd), 3)
+
+        def nested(d):
+            d["fanout"] = {"nets": [["GND"]], "via_um": [1000, 500], "required": gnd}
+
+        self.assertEqual(
+            self.errors(nested), ["[fanout] net ['GND'] is not in the netlist"]
+        )
+
+    def test_pour_layers_not_a_list_of_layer_names(self):
+        """`layers = "F.Cu"` made the region check a substring test, which passed
+        `["Cu"]`, and raised TypeError on a non-string region layer."""
+        msg = "[pour] layers must be a non-empty list of layer names"
+
+        def regions(layers, region_layers):
+            def edit(d):
+                d["pour"].pop("net")
+                d["pour"]["layers"] = layers
+                region = {"net": "GND", "rect": [1.0, 1.0, 5.0, 5.0]}
+                if region_layers is not None:
+                    region["layers"] = region_layers
+                d["pour"]["regions"] = [region]
+
+            return edit
+
+        cases = (
+            ("string, region F.Cu", regions("F.Cu", ["F.Cu"])),
+            ("string, region a substring", regions("F.Cu", ["Cu"])),
+            ("string, region a number", regions("F.Cu", [5])),
+            ("string, region default", regions("F.Cu", None)),
+            ("list holding a number", regions(["F.Cu", 5], ["F.Cu"])),
+            ("single net, string", lambda d: d["pour"].update(layers="F.Cu")),
+        )
+        for name, edit in cases:
+            with self.subTest(name):
+                self.assertEqual(self.errors(edit), [msg])
+
+    def test_mousebite_panel_with_a_malformed_cut_line(self):
+        """validate_config built the panel even when a cut line was malformed:
+        IndexError on two numbers, TypeError on strings."""
+        for line in ([0.0, 31.0], ["a", "b", "c", "d"]):
+            with self.subTest(line=line):
+
+                def edit(d, line=line):
+                    d["panel"] = {"mode": "mousebites"}
+                    d["silk"]["cut_lines"] = [line]
+
+                self.assertEqual(
+                    self.errors(edit),
+                    [f"[silk] cut_lines: {line!r} must be [x0, y0, x1, y1]"],
+                )
 
     def test_file_is_toml(self):
         self.assertEqual(

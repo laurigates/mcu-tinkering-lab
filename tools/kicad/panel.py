@@ -271,7 +271,12 @@ def validate(where: str, data: dict[str, Any]) -> list[str]:
 
 def build(data: dict[str, Any]) -> Panel | None:
     """The panel board.toml describes; None in saw mode. Raises ValueError with
-    every geometry problem (call `validate` first)."""
+    every geometry problem.
+
+    `data` must already pass `boardcheck.validate_config`, which runs `validate`
+    and checks the shapes read here (each [silk] cut line four numbers, each
+    keepout a rect); a malformed one raises KeyError, IndexError or TypeError.
+    """
     s = settings(data)
     if s["mode"] != "mousebites":
         return None
