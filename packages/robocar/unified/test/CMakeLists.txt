@@ -927,6 +927,12 @@ add_test(NAME improv_firmware_name COMMAND test_improv_firmware_name)
 # Built twice: with broker credentials in the fixture, and without
 # (CREDENTIALS_FIXTURE_NO_MQTT, the CMake stub's shape), so every fallback is
 # asserted both as credentials.h and as "none".
+#
+# Each build also runs a second time with GEMINI_API_KEY set (issue #1088).
+# The loader's last key source is that variable, and a developer who exports
+# it for other tools used to fail five no-broker cases. The suite now clears
+# it itself and sets it only in the case that tests it; the `_with_env` runs
+# hold it to that on every machine, whatever the shell exports.
 # -----------------------------------------------------------------------------
 set(CREDENTIALS_LOADER_COPY_DIR "${CMAKE_CURRENT_BINARY_DIR}/credentials_loader_src")
 configure_file("${MAIN_SRC_DIR}/credentials_loader.c"
@@ -941,6 +947,9 @@ foreach(_variant credentials_loader credentials_loader_no_mqtt)
         "${CMAKE_CURRENT_SOURCE_DIR}/test_credentials_loader.c"
     )
     add_test(NAME ${_variant} COMMAND test_${_variant})
+    add_test(NAME ${_variant}_with_env COMMAND test_${_variant})
+    set_tests_properties(${_variant}_with_env PROPERTIES
+                         ENVIRONMENT "GEMINI_API_KEY=developer-exported-key")
 endforeach()
 target_compile_definitions(test_credentials_loader_no_mqtt PRIVATE CREDENTIALS_FIXTURE_NO_MQTT=1)
 
