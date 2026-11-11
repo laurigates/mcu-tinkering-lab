@@ -30,11 +30,16 @@ CONFIG_BT_ENABLED=n
 # No PSRAM
 CONFIG_SPIRAM=n
 
-# Default partition table (no custom partitions.csv)
-CONFIG_PARTITION_TABLE_SINGLE_APP=y
+# OTA table shared by the boxes that start the thinkpack-ota receiver:
+# otadata plus ota_0/ota_1 on a 4 MB part (issue #1076).
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="../../components/thinkpack-ota/partitions.csv"
 
 # Logging level
 CONFIG_LOG_DEFAULT_LEVEL_INFO=y
 
 # Larger main task stack for WiFi + ESP-NOW + RC522 init
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+
+# Flash size (ESP32-S3 SuperMini, 4 MB); the OTA table needs all of it
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y

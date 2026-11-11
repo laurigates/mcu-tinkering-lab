@@ -17,7 +17,9 @@ directly, and tools/generate-flasher-manifests.sh on a throwaway tree.
 
 from __future__ import annotations
 
+import contextlib
 import importlib.util
+import io
 import json
 import os
 import re
@@ -1427,6 +1429,146 @@ class SharedRecipeTests(TempRepo):
             'CONFIG_ESPTOOLPY_FLASHSIZE="8MB"\n',
         )
         self.assertEqual(cfr.collect(), [])
+
+
+class OtaWriterTableTests(TempRepo):
+    """A project that writes OTA images needs otadata and two app slots (#1076).
+
+    The four ThinkPack boxes started the thinkpack-ota receiver on ESP-IDF's
+    factory-only table, so esp_ota_get_next_update_partition() returned NULL
+    and every apply failed at runtime. Nothing at build time noticed.
+    """
+
+    PROJECT = "packages/demo/box"
+    CMAKE = (
+        "cmake_minimum_required(VERSION 3.16)\n"
+        "include($ENV{IDF_PATH}/tools/cmake/project.cmake)\n"
+        "project(demo-box)\n"
+    )
+    RECEIVER = (
+        "void app_main(void)\n{\n"
+        "    ESP_ERROR_CHECK(thinkpack_ota_receiver_init(BOX_GLOWBUG));\n}\n"
+    )
+    TWO_SLOTS = (
+        "nvs,data,nvs,0x9000,0x6000,\n"
+        "phy_init,data,phy,0xf000,0x1000,\n"
+        "otadata,data,ota,0x10000,0x2000,\n"
+        "ota_0,app,ota_0,0x20000,0x1F0000,\n"
+        "ota_1,app,ota_1,0x210000,0x1F0000,\n"
+    )
+
+    def project(self, main_c: str, sdkconfig: str = "", table: str | None = None):
+        self.write(f"{self.PROJECT}/CMakeLists.txt", self.CMAKE)
+        self.write(f"{self.PROJECT}/main/main.c", main_c)
+        self.write(f"{self.PROJECT}/sdkconfig.defaults", sdkconfig)
+        if table is not None:
+            self.write(f"{self.PROJECT}/partitions.csv", table)
+
+    def codes(self) -> list[str]:
+        return [f.code for f in cfr.check_ota_writer_tables()]
+
+    def test_a_receiver_on_the_default_factory_only_table_fails(self):
+        # The #1076 state: CONFIG_PARTITION_TABLE_SINGLE_APP=y.
+        self.project(self.RECEIVER, "CONFIG_PARTITION_TABLE_SINGLE_APP=y\n")
+        self.assertEqual(self.codes(), ["OTA_TABLE"])
+
+    def test_a_receiver_with_no_partition_line_at_all_fails(self):
+        self.project(self.RECEIVER)
+        self.assertEqual(self.codes(), ["OTA_TABLE"])
+
+    def test_a_direct_apply_call_counts_as_writing_too(self):
+        self.project("void f(void) { thinkpack_ota_apply(&cp, buf, n); }\n")
+        self.assertEqual(self.codes(), ["OTA_TABLE"])
+
+    def test_a_receiver_on_a_two_slot_table_passes(self):
+        self.project(self.RECEIVER, "CONFIG_PARTITION_TABLE_CUSTOM=y\n", self.TWO_SLOTS)
+        self.assertEqual(self.codes(), [])
+
+    def test_the_built_in_two_ota_preset_passes(self):
+        self.project(self.RECEIVER, "CONFIG_PARTITION_TABLE_TWO_OTA=y\n")
+        self.assertEqual(self.codes(), [])
+
+    def test_a_table_with_one_ota_slot_fails(self):
+        one = "\n".join(self.TWO_SLOTS.splitlines()[:-1]) + "\n"
+        self.project(self.RECEIVER, "CONFIG_PARTITION_TABLE_CUSTOM=y\n", one)
+        self.assertEqual(self.codes(), ["OTA_TABLE"])
+
+    def test_two_slots_without_an_otadata_row_fail(self):
+        no_otadata = "".join(
+            ln + "\n" for ln in self.TWO_SLOTS.splitlines() if "data,ota" not in ln
+        )
+        self.project(self.RECEIVER, "CONFIG_PARTITION_TABLE_CUSTOM=y\n", no_otadata)
+        self.assertEqual(self.codes(), ["OTA_TABLE"])
+
+    def test_a_factory_slot_does_not_count_as_an_ota_slot(self):
+        factory = self.TWO_SLOTS.replace("ota_1,app,ota_1", "factory,app,factory")
+        self.project(self.RECEIVER, "CONFIG_PARTITION_TABLE_CUSTOM=y\n", factory)
+        self.assertEqual(self.codes(), ["OTA_TABLE"])
+
+    def test_a_table_shared_from_a_parent_directory_is_read(self):
+        # The ThinkPack boxes share packages/components/thinkpack-ota/partitions.csv.
+        self.write("packages/components/ota/partitions.csv", self.TWO_SLOTS)
+        self.project(
+            self.RECEIVER,
+            "CONFIG_PARTITION_TABLE_CUSTOM=y\n"
+            'CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="../../components/ota/partitions.csv"\n',
+        )
+        self.assertEqual(self.codes(), [])
+
+    def test_a_call_inside_a_comment_is_not_a_writer(self):
+        self.project(
+            "/* thinkpack_ota_receiver_init(BOX) is started elsewhere */\n"
+            "// thinkpack_ota_apply(&cp, buf, n);\n"
+        )
+        self.assertEqual(self.codes(), [])
+
+    def test_a_sender_that_only_links_the_component_is_not_a_writer(self):
+        # brainbox: builds and broadcasts chunks, never applies an image.
+        self.project("void push(void) { thinkpack_ota_sha256_verify(img, n, sha); }\n")
+        self.assertEqual(self.codes(), [])
+
+    def test_a_writer_in_a_nested_main_source_is_found(self):
+        self.project("int x;\n")
+        self.write(f"{self.PROJECT}/main/ota/rx.c", self.RECEIVER)
+        self.assertEqual(self.codes(), ["OTA_TABLE"])
+
+    def run_main(self) -> tuple[int, str]:
+        # main() itself, so a finding the check returns but main() drops fails
+        # here. The dry-run audit needs `just` and the real root justfile; it is
+        # stubbed to report nothing, and the temp tree has no other inputs.
+        out = io.StringIO()
+        with (
+            mock.patch.object(sys, "argv", ["check-flash-recipes.py"]),
+            mock.patch.object(cfr.shutil, "which", return_value="just"),
+            mock.patch.object(cfr, "check_flash_recipe_outputs", return_value=({}, [])),
+            contextlib.redirect_stdout(out),
+        ):
+            code = cfr.main()
+        return code, out.getvalue()
+
+    def test_main_fails_on_a_receiver_with_a_single_app_table(self):
+        self.project(self.RECEIVER, "CONFIG_PARTITION_TABLE_SINGLE_APP=y\n")
+        code, out = self.run_main()
+        self.assertIn(f"{self.PROJECT}: OTA_TABLE:", out)
+        self.assertIn("STATUS=FAIL", out)
+        self.assertEqual(code, 1)
+
+    def test_main_passes_on_a_receiver_with_a_two_slot_table(self):
+        # The control: the same tree with a table that can take an image.
+        self.project(self.RECEIVER, "CONFIG_PARTITION_TABLE_CUSTOM=y\n", self.TWO_SLOTS)
+        code, out = self.run_main()
+        self.assertIn("STATUS=OK", out)
+        self.assertEqual(code, 0)
+
+
+class OtaWriterTableRepoTests(unittest.TestCase):
+    """The real tree: the check sees the ThinkPack receivers and they pass."""
+
+    def test_every_thinkpack_receiver_is_found_and_has_two_slots(self):
+        writers = {p.name for p in cfr.ota_writer_projects() if "thinkpack" in str(p)}
+        # A control: an empty set would pass the assertion below vacuously.
+        self.assertEqual(writers, {"boombox", "chatterbox", "finderbox", "glowbug"})
+        self.assertEqual(cfr.check_ota_writer_tables(), [])
 
 
 if __name__ == "__main__":

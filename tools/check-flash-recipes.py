@@ -26,10 +26,15 @@ hand-written for layout reasons, so the structural audit above cannot read them;
 their dry-run text needs no structure to check. That half needs `just` on PATH
 and fails, rather than skipping, without it.
 
+A third check needs no recipe at all: a project whose main sources start the
+thinkpack-ota receiver (or call its apply) must build a table with otadata and
+two ota_N app slots, or every OTA write fails at runtime (OTA_TABLE, #1076).
+
 Run: python3 tools/check-flash-recipes.py [--verbose]
 Exit: 0 clean; 1 on any finding (a shared-recipe mismatch, a flash recipe
 naming a file the build does not write, writing one at the wrong offset or at
-one that cannot be worked out, or skipping otadata, a failed dry-run), when `just` is missing, or when the
+one that cannot be worked out, or skipping otadata, a failed dry-run, an OTA
+writer on a table without two OTA slots), when `just` is missing, or when the
 otadata predicate or `just --summary` cannot run.
 Tests: python3 -m unittest tools/test_check_flash_recipes.py
 """
@@ -649,6 +654,76 @@ def flash_layout(project_dir: Path) -> FlashLayout:
     )
 
 
+# ---------------------------------------------------------------------------
+# A project that writes OTA images needs a table that can take one (#1076).
+#
+# esp_ota_get_next_update_partition() returns NULL on a table without otadata
+# and two ota_N app slots, so the write fails at runtime with "No next OTA
+# partition available". The build succeeds and the flash succeeds; only an OTA
+# attempt on a bench shows it. The four ThinkPack boxes started the
+# thinkpack-ota receiver on ESP-IDF's factory-only table for exactly that
+# reason. Projects are matched by CALLING a writer entry point in their main
+# sources, not by linking the component: brainbox links thinkpack-ota to send
+# images and never applies one.
+# ---------------------------------------------------------------------------
+
+OTA_WRITER_CALL_RE = re.compile(r"\bthinkpack_ota_(?:receiver_init|apply)\s*\(")
+C_COMMENT_RE = re.compile(r"/\*.*?\*/|//[^\n]*", re.DOTALL)
+OTA_APP_SUBTYPE_RE = re.compile(r"^ota_\d+$")
+
+
+def ota_writer_projects() -> list[Path]:
+    """ESP-IDF projects under packages/ whose main sources call a writer."""
+    writers: list[Path] = []
+    for cmake in sorted((REPO_ROOT / "packages").rglob("CMakeLists.txt")):
+        project_dir = cmake.parent
+        if cmake_project_name(project_dir) is None:
+            continue
+        for src in sorted((project_dir / "main").rglob("*.c")):
+            if OTA_WRITER_CALL_RE.search(C_COMMENT_RE.sub("", src.read_text())):
+                writers.append(project_dir)
+                break
+    return writers
+
+
+def ota_app_slots(table: Path) -> list[str]:
+    """The ota_N app subtypes a partition table declares."""
+    slots: list[str] = []
+    for line in table.read_text().splitlines():
+        cols = [c.strip() for c in line.split("#", 1)[0].split(",")]
+        if len(cols) >= 3 and cols[1] == "app" and OTA_APP_SUBTYPE_RE.match(cols[2]):
+            slots.append(cols[2])
+    return slots
+
+
+def check_ota_writer_tables() -> list[Finding]:
+    findings: list[Finding] = []
+    for project_dir in ota_writer_projects():
+        layout = flash_layout(project_dir)
+        table = layout.table
+        has_otadata = layout.otadata is not None or layout.otadata_auto
+        slots = ota_app_slots(table)
+        if has_otadata and len(slots) >= 2:
+            continue
+        missing = []
+        if not has_otadata:
+            missing.append("no otadata row")
+        if len(slots) < 2:
+            missing.append(f"{len(slots)} ota_N app slot(s)")
+        findings.append(
+            Finding(
+                _display(project_dir),
+                "OTA_TABLE",
+                f"calls thinkpack_ota_receiver_init/apply, but {_display(table)} has "
+                f"{' and '.join(missing)}; esp_ota_get_next_update_partition() "
+                "returns NULL and every OTA apply fails at runtime. Select a table "
+                "with otadata and ota_0/ota_1, such as "
+                "packages/components/thinkpack-ota/partitions.csv",
+            )
+        )
+    return findings
+
+
 def flash_recipes(just: str) -> tuple[list[tuple[str, Path]], list[Finding]]:
     """Every public module recipe with "flash" in its name, with its directory."""
     modules = {
@@ -829,6 +904,7 @@ def main() -> int:
     try:
         projects = collect()
         statuses, output_findings = check_flash_recipe_outputs(just)
+        ota_table_findings = check_ota_writer_tables()
     except (RuntimeError, subprocess.CalledProcessError) as exc:
         stderr = (getattr(exc, "stderr", None) or "").strip()
         print(f"ERROR: flash-recipe output audit could not run: {exc}")
@@ -843,6 +919,7 @@ def main() -> int:
     findings += check_attribute_placement()
     findings += check_justfile_directory()
     findings += output_findings
+    findings += ota_table_findings
     flagged = {f.project for f in output_findings}
 
     print("=== SHARED FLASH RECIPE CONSUMERS ===")

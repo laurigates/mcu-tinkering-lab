@@ -94,9 +94,11 @@ repos:
         name: Flash recipes match their projects and the build
         entry: python3 tools/check-flash-recipes.py
         language: system
+        # main/*.c: a project starting the thinkpack-ota receiver needs an OTA
+        # table, so adding the call reruns the OTA_TABLE check (issue #1076).
         # Any .csv: CONFIG_PARTITION_TABLE_CUSTOM_FILENAME can name a custom
         # table anything, and the repo's only CSVs are partition tables.
-        files: '(justfile|\.just|sdkconfig\.defaults|\.csv|CMakeLists\.txt|tools/lib/otadata-predicate\.sh|tools/lib/idf-partition-tables/.*|tools/check-flash-recipes\.py|^\.github/actions/setup-tools/action\.yml)$'
+        files: '(justfile|\.just|sdkconfig\.defaults|\.csv|CMakeLists\.txt|/main/.+\.c|tools/lib/otadata-predicate\.sh|tools/lib/idf-partition-tables/.*|tools/check-flash-recipes\.py|^\.github/actions/setup-tools/action\.yml)$'
         pass_filenames: false
 
       - id: check-flash-recipes-tests

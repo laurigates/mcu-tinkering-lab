@@ -129,7 +129,9 @@ _idf-build-checked bin:
 #   4. APP OFFSET  Both hardcode 0x10000. A table that puts the app elsewhere
 #                  gets its app written to the wrong place. (Silent.)
 #
-# Fail any one and keep the flash recipe INLINE with explicit offsets;
+# Fail any one and either compose _s3-argfile-flash (ESP32-S3; it writes what
+# the build's flash_args lists, so all four follow the table) or keep the
+# flash recipe INLINE with explicit offsets;
 # packages/robocar/unified/justfile is the worked example. Three of the four
 # fail silently, which is why "does this look like a standard layout?" is the
 # wrong test — run the mechanical one:
@@ -169,6 +171,22 @@ _s3-flash bin: require-port
         0x8000 build/partition_table/partition-table.bin \
         0x10000 build/{{bin}}.bin
     echo "Flashed {{bin}} OK"
+
+# Flash ESP32-S3 firmware from the build's own build/flash_args, the file
+# `idf.py flash` reads: every part the partition table needs (otadata
+# included) at the offsets, flash size and mode the build used. Fits the
+# tables _s3-flash does not: an otadata row, an app off 0x10000, more than
+# 4 MB. tools/check-flash-recipes.py accepts it by construction. A full flash
+# of an OTA table also resets the boot slot to ota_0.
+[private]
+_s3-argfile-flash: require-port
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd build
+    esptool -s --chip esp32s3 -p {{port}} -b "${BAUD:-460800}" \
+        --before default-reset --after hard-reset \
+        write-flash @flash_args
+    echo "Flashed OK (build/flash_args)"
 
 # Reset an ESP32-S3 board via USB-Serial-JTAG CDC control signals.
 [private]
