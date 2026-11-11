@@ -163,6 +163,7 @@ def _reject_duplicates(path: Path, pins: list[BoardPin]) -> None:
             key = (p.side, p.pos)
             if key in seen_pos:
                 raise HardwareError(
-                    f"{path}: position {p.side} {p.pos} is claimed by both {seen_pos[key]} and {p.name}"
+                    f"{path}: position {p.side} {p.pos} is claimed by both "
+                    f"{seen_pos[key]} and {p.name}"
                 )
             seen_pos[key] = p.name

@@ -181,7 +181,10 @@ def _step(name: str, fn: Callable[[], int]) -> bool:
 
 
 def check_project(project: Path, repo_root: Path = REPO_ROOT) -> bool:
-    """Every local gate for one project; True when all passed (and, with a board, the stamp is written)."""
+    """Every local gate for one project; True when all passed.
+
+    With a board, the stamp is written too.
+    """
     arg = [str(project)]
     cfg = paths.load_board_config(project)
     kicad_dir = paths.carrier_dir(project) / cfg.name

@@ -19,8 +19,9 @@ when cut), and at most --max-bytes for the whole list as UTF-8 JSON (default
 800; trailing entries are dropped whole). The byte cap is for robots already
 in the field: robocar-unified up to 0.2.17 reads the whole manifest into a
 2048-byte buffer, and a manifest cut short does not parse, so it would never
-update again. The rest of the manifest is about 600 bytes as written. A missing changelog or version section prints [] and exits 0, so a
-release never fails over notes; the firmware falls back to a template line.
+update again. The rest of the manifest is about 600 bytes as written. A
+missing changelog or version section prints [] and exits 0, so a release never
+fails over notes; the firmware falls back to a template line.
 """
 
 from __future__ import annotations

@@ -500,7 +500,9 @@ class MutationTests(unittest.TestCase):
     def test_perfboard_footprint_missing_a_symbol_pin(self):
         body = text("pololu-drv8825").replace(
             '[perfboard]\nheight = "raised"',
-            '[perfboard]\nfootprint = "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical"\nheight = "raised"',
+            "[perfboard]\n"
+            'footprint = "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical"\n'
+            'height = "raised"',
         )
         self.fails(
             "pololu-drv8825",
@@ -575,8 +577,8 @@ footprint = "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical"
         vendored = self.root / "lib"
         shutil.copytree(library.VENDORED, vendored)
         do41 = (
-            vendored
-            / "kicad-stock/footprints/Diode_THT.pretty/D_DO-41_SOD81_P2.54mm_Vertical_AnodeUp.kicad_mod"
+            vendored / "kicad-stock/footprints/Diode_THT.pretty"
+            "/D_DO-41_SOD81_P2.54mm_Vertical_AnodeUp.kicad_mod"
         )
         src = do41.read_text(encoding="utf-8")
         self.assertEqual(src.count("(at 4.64 0 0)"), 2)

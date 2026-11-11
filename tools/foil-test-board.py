@@ -255,11 +255,13 @@ def guide_file() -> str:
         )
     y = BOARD_H + 6
     out.append(
-        f'<line class="scale" x1="0" y1="{y}" x2="50" y2="{y}" stroke="#1f1f1f" stroke-width="0.3"/>'
+        f'<line class="scale" x1="0" y1="{y}" x2="50" y2="{y}" '
+        'stroke="#1f1f1f" stroke-width="0.3"/>'
     )
     for t in range(0, 51, 10):
         out.append(
-            f'<line x1="{t}" y1="{y - 1.5}" x2="{t}" y2="{y + 1.5}" stroke="#1f1f1f" stroke-width="0.2"/>'
+            f'<line x1="{t}" y1="{y - 1.5}" x2="{t}" y2="{y + 1.5}" '
+            'stroke="#1f1f1f" stroke-width="0.2"/>'
         )
     out.append(
         f'<text x="52" y="{y + 1}" font-size="2.5" fill="#1f1f1f">50 mm at 100 %</text>'

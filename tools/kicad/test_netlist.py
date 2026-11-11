@@ -190,7 +190,8 @@ class MutationTests(unittest.TestCase):
     def test_mcu_5v_off_its_rail(self):
         self.edit(
             self.toml,
-            '[[rails]]\nname = "XIAO_5V"\nbuild = "carrier"\nfrom = "buck_diode.K"\nto = ["mcu.5V"]\n',
+            '[[rails]]\nname = "XIAO_5V"\nbuild = "carrier"\n'
+            'from = "buck_diode.K"\nto = ["mcu.5V"]\n',
             "",
         )
         self.fails(r"U1\.14 \(5V\) is a power pad and is on no rail")

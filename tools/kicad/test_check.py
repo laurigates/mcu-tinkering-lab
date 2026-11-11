@@ -26,7 +26,7 @@ REPORT = """** Drc report for demo.kicad_pcb **
 MISMATCH = """[lib_footprint_mismatch]: Footprint 'SOT-23-6' does not match copy in library 'Package_TO_SOT_SMD'
     Local override; warning
     @(130.0000 mm, 163.0000 mm): Footprint {ref}
-"""
+"""  # noqa: E501
 
 SILK = """[silk_over_copper]: Silkscreen clipped by solder mask
     Local override; warning

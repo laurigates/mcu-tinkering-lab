@@ -1014,7 +1014,8 @@ def main() -> None:
             part, str(out / f"{name}.stl"), tolerance=0.02, angular_tolerance=0.1
         )
         print(
-            f"{name}: {part.volume / 1000:.2f} cm3, bbox {part.bounding_box().size}, valid {part.is_valid}"
+            f"{name}: {part.volume / 1000:.2f} cm3, "
+            f"bbox {part.bounding_box().size}, valid {part.is_valid}"
         )
     c, m = panned_com()
     tc, tm = tilting_com()
@@ -1023,7 +1024,8 @@ def main() -> None:
         f"panned mass {m:.1f} g, CoM (lens frame) x {c.X:.2f} y {c.Y:.2f} z {c.Z:.2f}"
     )
     print(
-        f"pan axis at x {-PAN_AXIS_BEHIND_LENS:.2f}: CoM offset x {c.X + PAN_AXIS_BEHIND_LENS:+.2f}, y {c.Y:+.2f} mm"
+        f"pan axis at x {-PAN_AXIS_BEHIND_LENS:.2f}: "
+        f"CoM offset x {c.X + PAN_AXIS_BEHIND_LENS:+.2f}, y {c.Y:+.2f} mm"
     )
     print(f"tilting mass {tm:.1f} g, CoM from tilt axis x {tc.X:.2f} z {tc.Z:.2f} mm")
     sp = ribbon_spans()

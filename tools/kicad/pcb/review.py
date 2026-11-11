@@ -14,8 +14,8 @@ prints, without failing on any of it:
 - per net class net, its narrowest track and how many tracks it has;
 - each decoupling capacitor's (two pads, value at most ``DECAP_MAX_F``)
   distance from its non-ground pad to the nearest pad of the same net on an IC
-  (``U`` reference, or ``A``: a breakout module socket), flagged past ``DECAP_MM``; bulk capacitors are placed by
-  power path, not by pin, and are left out;
+  (``U`` reference, or ``A``: a breakout module socket), flagged past
+  ``DECAP_MM``; bulk capacitors are placed by power path, not by pin, and are left out;
 - for each [silk] cut line, the nearest copper (pad, track, via, zone fill) and
   courtyard, flagged inside ``CUT_MM``;
 - the smallest silkscreen text height and stroke, flagged under JLCPCB's
@@ -175,7 +175,8 @@ def review(spec, dump_to=None):
             mark = "  <-- far" if d > DECAP_MM else ""
             flags += d > DECAP_MM
             print(
-                f"   {fp.GetReference()} {p.GetNetname()} -> {ref(q)}:{q.GetNumber()} {d:.1f} mm{mark}"
+                f"   {fp.GetReference()} {p.GetNetname()} -> "
+                f"{ref(q)}:{q.GetNumber()} {d:.1f} mm{mark}"
             )
 
     lines = spec["silk"].get("cut_lines", [])
@@ -219,7 +220,8 @@ def review(spec, dump_to=None):
         bad = dc < CUT_MM or dk < CUT_MM
         flags += bad
         print(
-            f"   {line}: copper {dc:.2f} mm ({wc}), courtyard {dk:.2f} mm ({wk}){'  <-- close' if bad else ''}"
+            f"   {line}: copper {dc:.2f} mm ({wc}), "
+            f"courtyard {dk:.2f} mm ({wk}){'  <-- close' if bad else ''}"
         )
 
     print(

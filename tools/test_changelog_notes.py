@@ -49,7 +49,7 @@ CHANGELOG = textwrap.dedent(
     ### Features
 
     * **robocar-unified:** fit the TCA9548A clone on the carrier ([3333333](https://github.com/o/r/commit/3333333))
-    """
+    """  # noqa: E501
 )
 
 
@@ -142,7 +142,10 @@ class ChangelogNotesTest(unittest.TestCase):
         self.assertEqual(notes, ["a: one"])
 
     def test_utf8_is_kept_unescaped(self):
-        log = "## [1.0.0](u) (2026-01-01)\n\n### Features\n\n* **robocar:** sano päivää ([abc1234](u))\n"
+        log = (
+            "## [1.0.0](u) (2026-01-01)\n\n### Features\n\n"
+            "* **robocar:** sano päivää ([abc1234](u))\n"
+        )
         rc, notes, _ = run(log, "1.0.0")
         self.assertEqual((rc, notes), (0, ["robocar: sano päivää"]))
 

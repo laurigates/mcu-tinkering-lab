@@ -37,7 +37,7 @@ lifted function still reproduces the previous golden from the previous
 fixture before replacing either.
 
     python3 -m unittest discover -s tools/kicad -t tools
-"""
+"""  # noqa: E501
 
 from __future__ import annotations
 

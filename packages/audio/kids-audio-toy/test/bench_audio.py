@@ -17,9 +17,9 @@ the knob positions you set on the toy.
 The firmware plays a PWM square wave whose pitch tracks the pitch pot, with
 per-beep duration and inter-beep interval set by the other two pots. The
 ranges are read at startup from main/audio_core.h (AUDIO_MIN_FREQ_HZ etc.),
-the same header the firmware compiles, and printed with the results. A square wave's fundamental is its
-strongest spectral component (harmonics fall off as 1/n), so an argmax over
-the expected band recovers the pitch directly.
+the same header the firmware compiles, and printed with the results. A
+square wave's fundamental is its strongest spectral component (harmonics fall
+off as 1/n), so an argmax over the expected band recovers the pitch directly.
 
 Usage:
     uv run bench_audio.py                  # record 5 s from default input

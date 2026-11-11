@@ -529,7 +529,8 @@ def main(argv: list[str] | None = None, repo_root: Path = REPO_ROOT) -> int:
                     print(f"FAIL: {e}")
                 if stale:
                     print(
-                        f"FAIL: stale: {shown}; run `just {paths.just_module(project, repo_root)}::carrier-schematic` "
+                        f"FAIL: stale: {shown}; run "
+                        f"`just {paths.just_module(project, repo_root)}::carrier-schematic` "
                         "(the schematic is generated from hardware.toml; do not edit it)"
                     )
                 if errors or stale:

@@ -18,8 +18,10 @@ def wire_list(parts, numbered, routes, cfg: PerfboardConfig, heavy):
         "",
         BANNER,
         "",
-        f"Board: {cfg.cols} × {cfg.rows} holes, columns A–{col_name(cfg.cols - 1)}, rows 1–{cfg.rows}, "
-        "named as seen from the **component side** (flip the drawing, not the names, on the solder side).",
+        f"Board: {cfg.cols} × {cfg.rows} holes, "
+        f"columns A–{col_name(cfg.cols - 1)}, rows 1–{cfg.rows}, "
+        "named as seen from the **component side** "
+        "(flip the drawing, not the names, on the solder side).",
         "Wires are numbered as in `perfboard.svg`, one drawing panel per step.",
         "Each wire's drawn route runs along the holes, over free ones only, or between "
         "them; its length is measured along that route.",

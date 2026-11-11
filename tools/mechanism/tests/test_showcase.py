@@ -16,7 +16,7 @@ def printed_parts():
 def assembly(pan, tilt):
     arm = Rot(0, 0, pan) * printed_parts()["arm"]
     return [Body("arm", arm, "moving", printed=True), Body("post", Pos(0, 25, 0) * Box(4, 4, 10), "base")]
-"""
+"""  # noqa: E501
 
 
 def test_every_view_is_written(tmp_path: Path):

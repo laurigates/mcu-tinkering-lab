@@ -142,13 +142,15 @@ def svg(parts, numbered, routes, board: Board, steps, raised, heavy):
         )
         for c in range(board.cols):
             out.append(
-                f'<text x="{X(c)}" y="{top - LETTERS_DY}" text-anchor="middle" fill="{MUTED}">{col_name(c)}</text>'
+                f'<text x="{X(c)}" y="{top - LETTERS_DY}" text-anchor="middle" '
+                f'fill="{MUTED}">{col_name(c)}</text>'
             )
         for r in range(board.rows):
             nx = x0 - NUMBERS_DX if mirror else x0 + w + NUMBERS_DX
             anchor = "end" if mirror else "start"
             out.append(
-                f'<text x="{nx}" y="{Y(r) + 3}" text-anchor="{anchor}" fill="{MUTED}">{r + 1}</text>'
+                f'<text x="{nx}" y="{Y(r) + 3}" text-anchor="{anchor}" '
+                f'fill="{MUTED}">{r + 1}</text>'
             )
             for c in range(board.cols):
                 out.append(f'<circle cx="{X(c)}" cy="{Y(r)}" r="1.6" fill="{GRID}"/>')
@@ -160,7 +162,8 @@ def svg(parts, numbered, routes, board: Board, steps, raised, heavy):
                 fill = "none" if is_raised else "#eef3fa"
                 dash = ' stroke-dasharray="4 2"' if is_raised else ""
                 out.append(
-                    f'<rect x="{min(xa, xb)}" y="{Y(r0)}" width="{abs(xb - xa)}" height="{Y(r1) - Y(r0)}" '
+                    f'<rect x="{min(xa, xb)}" y="{Y(r0)}" '
+                    f'width="{abs(xb - xa)}" height="{Y(r1) - Y(r0)}" '
                     f'fill="{fill}" stroke="{PART_INK}" stroke-width="1"{dash}/>'
                 )
                 label = f"{p.ref} {p.value}"
@@ -244,10 +247,12 @@ def svg(parts, numbered, routes, board: Board, steps, raised, heavy):
             mx, my = clear[0] if clear else max(spots, key=clearance)
             placed.append((mx, my))
             out.append(
-                f'<circle cx="{mx}" cy="{my}" r="7" fill="white" stroke="{colour}" stroke-width="1.5"/>'
+                f'<circle cx="{mx}" cy="{my}" r="7" fill="white" '
+                f'stroke="{colour}" stroke-width="1.5"/>'
             )
             out.append(
-                f'<text x="{mx}" y="{my + 3}" text-anchor="middle" font-size="8.5" font-weight="bold">{n}</text>'
+                f'<text x="{mx}" y="{my + 3}" text-anchor="middle" '
+                f'font-size="8.5" font-weight="bold">{n}</text>'
             )
         out.append("</g>")
 

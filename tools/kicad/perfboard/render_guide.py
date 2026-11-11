@@ -4,9 +4,9 @@ Page 1 is the component side and the parts. Each step page puts that step's
 solder-side panel, cropped from perfboard.svg, beside its wire list and the
 continuity checks to run once it is soldered; the last page is the rails that
 must not beep. It holds no drawing of its own: the panels are clips of the
-committed perfboard.svg (`render_svg.body`, one `<g id="panel-N">` each), and the rows are the wire list's
-and checklist's (`wirelist.step_rows`, `continuity.beep_rows`), so the printed
-pages and the Markdown cannot disagree.
+committed perfboard.svg (`render_svg.body`, one `<g id="panel-N">` each), and
+the rows are the wire list's and checklist's (`wirelist.step_rows`,
+`continuity.beep_rows`), so the printed pages and the Markdown cannot disagree.
 
 It is written to the project's `docs/`, where `just <project>::build-guide`
 compiles it and build-guide-check.yml holds the committed PDF to it.
@@ -49,7 +49,7 @@ PREAMBLE = """\
     "viewBox=\\"" + str(x) + " " + str(y) + " " + str(w) + " " + str(h) + "\\" width=\\"" + str(w) + "\\" height=\\"" + str(h) + "\\"")
   image(bytes(tag + group + body + "</g></svg>"), format: "svg", width: w * {k})
 }}
-"""
+"""  # noqa: E501
 
 
 def s(text) -> str:

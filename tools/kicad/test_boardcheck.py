@@ -910,8 +910,10 @@ def zone(points, layer="F.Cu", net="GND") -> str:
     pts = " ".join(f"(xy {x} {y})" for x, y in points)
     return (
         f'\t(zone\n\t\t(net "{net}")\n\t\t(layer "{layer}")\n'
-        f"\t\t(polygon\n\t\t\t(pts\n\t\t\t\t(xy 100 100) (xy 190 100) (xy 190 162) (xy 100 162)\n\t\t\t)\n\t\t)\n"
-        f'\t\t(filled_polygon\n\t\t\t(layer "{layer}")\n\t\t\t(pts\n\t\t\t\t{pts}\n\t\t\t)\n\t\t)\n\t)'
+        "\t\t(polygon\n\t\t\t(pts\n"
+        "\t\t\t\t(xy 100 100) (xy 190 100) (xy 190 162) (xy 100 162)\n\t\t\t)\n\t\t)\n"
+        f'\t\t(filled_polygon\n\t\t\t(layer "{layer}")\n'
+        f"\t\t\t(pts\n\t\t\t\t{pts}\n\t\t\t)\n\t\t)\n\t)"
     )
 
 

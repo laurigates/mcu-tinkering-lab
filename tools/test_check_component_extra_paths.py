@@ -5,7 +5,7 @@
 Most tests build a small packages/ tree under tmp_path. The last two run the
 check against the real repository, so a matrix edit that drops a consumer's
 entry fails here as well as in the pre-commit hook.
-"""
+"""  # noqa: E501
 
 from __future__ import annotations
 

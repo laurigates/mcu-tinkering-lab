@@ -50,7 +50,8 @@ VIEWS = (
     ("tray", "open tray, empty", {"case": "tray"}),
     ("tray-board", "board seated in the open tray", {"case": "tray", "board": True}),
     ("box-open", "box base and lid, empty", {"case": "box", "lid": "lifted"}),
-    ("box-board", "board in the box base, lid lifted", {"case": "box", "board": True, "lid": "lifted"}),
+    ("box-board", "board in the box base, lid lifted",
+     {"case": "box", "board": True, "lid": "lifted"}),
     ("box", "closed box", {"case": "box", "lid": "closed"}),
 )  # fmt: skip
 

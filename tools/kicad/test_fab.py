@@ -71,7 +71,7 @@ REPORT = """** Found 3 DRC violations **
     @(136.1100 mm, 147.0000 mm): PTH pad 1 [+3V3] of J3
 
 ** Found 0 unconnected pads **
-"""
+"""  # noqa: E501
 
 
 class ProvenanceDrc(unittest.TestCase):

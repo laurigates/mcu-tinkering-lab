@@ -171,8 +171,8 @@ class DataValidation(unittest.TestCase):
 
     def test_bad_band_colour(self):
         p = write_data(
-            self.BASE
-            + '[[label]]\ncat="a"\ncolor="c"\nvalue="v"\nspec="s"\nfoot="f"\nrender={kind="axial",bands=["#000000","brown"]}\n'
+            self.BASE + '[[label]]\ncat="a"\ncolor="c"\nvalue="v"\nspec="s"\nfoot="f"\n'
+            'render={kind="axial",bands=["#000000","brown"]}\n'
         )
         with self.assertRaisesRegex(labels.DataError, r"bands\[1\]"):
             labels.load(p)
@@ -199,9 +199,10 @@ class DataValidation(unittest.TestCase):
 
     def test_actual_size_default(self):
         p = write_data(
-            self.BASE
-            + '[[label]]\ncat="a"\ncolor="c"\nvalue="v"\nspec="s"\nfoot="f"\nrender={kind="chip",l=2,w=1,term=0.4}\n'
-            '[[label]]\ncat="a"\ncolor="c"\nvalue="v"\nspec="s"\nfoot="f"\nrender={kind="module",l=20,w=10,pins=0,pcb="#000000"}\n'
+            self.BASE + '[[label]]\ncat="a"\ncolor="c"\nvalue="v"\nspec="s"\nfoot="f"\n'
+            'render={kind="chip",l=2,w=1,term=0.4}\n'
+            '[[label]]\ncat="a"\ncolor="c"\nvalue="v"\nspec="s"\nfoot="f"\n'
+            'render={kind="module",l=20,w=10,pins=0,pcb="#000000"}\n'
         )
         a, b = labels.load(p)["labels"]
         self.assertTrue(a["render"]["actual"])
@@ -286,10 +287,12 @@ class Candidates(unittest.TestCase):
         self.stock = Path(tempfile.mkdtemp())
         (self.stock / "items" / "capacitor").mkdir(parents=True)
         (self.stock / "items" / "capacitor" / "c-labelled.toml").write_text(
-            'schema = 1\n[item]\nname = "x"\ncategory = "capacitor"\n[stock]\nmode = "count"\nqty = 1\nverified = "2026-11-01"\n'
+            'schema = 1\n[item]\nname = "x"\ncategory = "capacitor"\n'
+            '[stock]\nmode = "count"\nqty = 1\nverified = "2026-11-01"\n'
         )
         (self.stock / "items" / "capacitor" / "c0603-1u.toml").write_text(
-            'schema = 1\n[item]\nname = "0603 ceramic capacitor, 1 µF"\ncategory = "capacitor"\npackage = "0603"\n'
+            'schema = 1\n[item]\nname = "0603 ceramic capacitor, 1 µF"\n'
+            'category = "capacitor"\npackage = "0603"\n'
             '[stock]\nmode = "count"\nqty = 50\nverified = ""\n'
             '[specs]\nvalue = "1uF"\ndielectric = "X5R"\nunknown = ["voltage"]\n'
             '[[sources]]\norder = "aliexpress/2026-09-19-123"\nqty = 50\n'
