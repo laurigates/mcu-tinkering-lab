@@ -2,7 +2,8 @@
 #
 # Compiles the pure-logic classifier, adaptive beacon mapping, and
 # LED pulse animation on Linux/macOS with gcc and runs the Unity-compat
-# host tests. Reuses the shared unity_compat.h from thinkpack-behaviors.
+# host tests. unity_compat.h comes from packages/components/host-test.
+# `just components::test` runs every component suite.
 #
 # power_mgr.c is included but its ESP-IDF code is #ifdef'd out on host
 # builds, leaving only the trivial stubs.
@@ -14,7 +15,7 @@
 CC     = gcc
 CFLAGS = -std=c11 -Wall -Wextra \
          -I../include \
-         -I../../thinkpack-behaviors/test
+         -I../../host-test
 
 SRCS   = test_runner.c \
          ../classify.c \

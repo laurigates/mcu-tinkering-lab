@@ -28,6 +28,11 @@ that job's matrix. What these tests hold:
   through the suites job, a workflow that runs its command and lists its
   directory in its trigger paths, or a pre-commit hook (which `test.yml`'s
   Code Quality job runs on any `tools/**` change).
+- Component host suites (#1077): every `components/<name>/test/` directory
+  under packages/ has a Makefile that `just components::test` finds, and a
+  change anywhere in that component, or in the shared stubs, selects the
+  `components` suite. A suite with no uv project (no `dir`) skips the uv
+  install step.
 """
 
 from __future__ import annotations
@@ -279,14 +284,36 @@ class Manifest(unittest.TestCase):
             with self.subTest(bad=bad), self.assertRaises(ValueError):
                 self.mod.load_manifest(self.write(bad))
 
+    def test_dir_is_optional(self):
+        """A suite with no uv project (a make-only C suite) omits `dir`."""
+        suite = {"name": "c", "run": "true", "paths": ["d/**"]}
+        loaded = self.mod.load_manifest(self.write([suite]))
+        self.assertEqual(
+            self.mod.matrix(loaded),
+            {"include": [{"name": "c", "dir": "", "run": "true", "apt": ""}]},
+        )
+
+    def test_suites_job_skips_uv_install_without_a_dir(self):
+        text = TEST_WORKFLOW.read_text()
+        step = re.search(
+            r"- name: Install \$\{\{ matrix\.dir \}\} from its uv\.lock\n((?:\s{8}\S.*\n)+)",
+            text,
+        )
+        self.assertIsNotNone(step, "no uv install step in the suites job")
+        self.assertIn("if: matrix.dir != ''", step.group(1))
+
     def test_each_dir_has_a_tracked_lock(self):
         locks = set(tracked("*uv.lock"))
         for s in self.suites:
+            if "dir" not in s:
+                continue
             with self.subTest(suite=s["name"]):
                 self.assertIn(f"{s['dir']}/uv.lock", locks)
 
     def test_each_suite_is_selected_by_its_own_lock(self):
         for s in self.suites:
+            if "dir" not in s:
+                continue
             with self.subTest(suite=s["name"]):
                 picked = self.mod.select([s], [f"{s['dir']}/uv.lock"])
                 self.assertEqual(picked, [s], "a lock change would not run this suite")
@@ -321,7 +348,9 @@ class Manifest(unittest.TestCase):
 
 class LockCurrency(unittest.TestCase):
     def test_every_tracked_lock_is_installed_locked_or_has_no_tests(self):
-        suite_dirs = {s["dir"] for s in load_script().load_manifest(MANIFEST)}
+        suite_dirs = {
+            s["dir"] for s in load_script().load_manifest(MANIFEST) if "dir" in s
+        }
         for lock in tracked("*uv.lock"):
             d = str(Path(lock).parent)
             with self.subTest(project=d):
@@ -462,6 +491,99 @@ class ToolSuiteCoverage(unittest.TestCase):
         any_code = re.search(r"any-code:\n((?:\s+- .*\n)+)", text)
         self.assertIsNotNone(any_code)
         self.assertIn("'tools/**'", any_code.group(1))
+
+
+# A component's host suite: packages/<...>/components/<name>/test/, run by
+# `just components::test` through the `components` suite (#1077).
+COMPONENT_TEST_DIR = re.compile(r"^(packages/(?:.+/)?components/[^/]+)/(tests?)/")
+COMPONENTS_SUITE = "components"
+COMPONENTS_RUN = "just components::test"
+COMPONENTS_JUSTFILE = REPO_ROOT / "packages" / "components" / "justfile"
+SHARED_STUBS = "packages/components/host-test"
+
+
+class ComponentHostSuites(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.mod = load_script()
+        cls.suites = cls.mod.load_manifest(MANIFEST)
+        cls.files = tracked("packages")
+        cls.test_dirs = sorted(
+            {
+                f"{m.group(1)}/{m.group(2)}"
+                for f in cls.files
+                if (m := COMPONENT_TEST_DIR.match(f))
+            }
+        )
+
+    def suite(self) -> dict:
+        found = [s for s in self.suites if s["name"] == COMPONENTS_SUITE]
+        self.assertEqual(
+            len(found), 1, f"no {COMPONENTS_SUITE!r} suite in {MANIFEST.name}"
+        )
+        return found[0]
+
+    def test_the_pattern_finds_the_known_suites(self):
+        # Control: a pattern that matched nothing would pass every test below.
+        self.assertIn("packages/components/thinkpack-protocol/test", self.test_dirs)
+        self.assertIn(
+            "packages/input-gaming/xbox-switch-bridge/components/status_led/test",
+            self.test_dirs,
+        )
+        self.assertNotIn(
+            "packages/robocar/unified/test",
+            self.test_dirs,
+            "a project, not a component",
+        )
+
+    def test_suite_runs_the_recipe(self):
+        self.assertEqual(self.suite()["run"], COMPONENTS_RUN)
+        self.assertNotIn("dir", self.suite(), "a make-only suite has no uv project")
+
+    def test_every_component_test_dir_is_run_by_the_recipe(self):
+        """The recipe's own pathspec lists one Makefile per component test dir.
+
+        A `tests/` directory, or a `test/` with no Makefile, fails here: the
+        recipe runs `make` in each directory its pathspec lists, and nothing
+        else.
+        """
+        body = recipe_body(COMPONENTS_JUSTFILE, "test")
+        self.assertIsNotNone(body, f"{COMPONENTS_JUSTFILE} has no test recipe")
+        specs = re.findall(r"'(:\(glob\)[^']+)'", "\n".join(body))
+        self.assertEqual(len(specs), 1, "want one ':(glob)...' pathspec in the recipe")
+        found = sorted(str(Path(f).parent) for f in tracked(specs[0]))
+        self.assertEqual(
+            found,
+            self.test_dirs,
+            "every packages/**/components/<name>/test/ needs a Makefile, and no "
+            "component may keep its host suite anywhere else",
+        )
+
+    def test_a_change_to_a_tested_component_selects_the_suite(self):
+        suite = self.suite()
+        components = {str(Path(d).parent) for d in self.test_dirs}
+        watched = [
+            f
+            for f in self.files
+            if any(f.startswith(c + "/") for c in components | {SHARED_STUBS})
+        ]
+        self.assertTrue(any(f.startswith(SHARED_STUBS + "/") for f in watched))
+        for f in watched:
+            with self.subTest(file=f):
+                self.assertEqual(
+                    self.mod.select([suite], [f]),
+                    [suite],
+                    f"add the component to the {COMPONENTS_SUITE!r} suite's paths",
+                )
+
+    def test_no_stub_is_copied_between_suites(self):
+        by_content: dict[bytes, list[str]] = {}
+        for f in self.files:
+            in_suite = COMPONENT_TEST_DIR.match(f) or f.startswith(SHARED_STUBS + "/")
+            if in_suite and f.endswith(".h"):
+                by_content.setdefault((REPO_ROOT / f).read_bytes(), []).append(f)
+        copies = [sorted(fs) for fs in by_content.values() if len(fs) > 1]
+        self.assertEqual(copies, [], f"move shared test headers to {SHARED_STUBS}/")
 
 
 if __name__ == "__main__":

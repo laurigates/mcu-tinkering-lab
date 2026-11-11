@@ -3,9 +3,12 @@
  * @brief Minimal Unity-compatible test framework for host-based testing.
  *
  * Provides a subset of the Unity API that compiles without the full Unity
- * library. This allows running protocol and logic tests on the host (Linux/macOS)
+ * library. This allows running component tests on the host (Linux/macOS)
  * without ESP-IDF. Compatible macro names make migration to full ESP-IDF Unity
  * straightforward.
+ *
+ * Shared by every component test/Makefile that puts packages/components/host-test
+ * on its include path (`just components::test`).
  */
 #pragma once
 

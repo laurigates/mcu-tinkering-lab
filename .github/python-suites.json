@@ -64,6 +64,14 @@
     ]
   },
   {
+    "name": "components",
+    "run": "just components::test",
+    "paths": [
+      "packages/components/**",
+      "packages/input-gaming/xbox-switch-bridge/components/status_led/**"
+    ]
+  },
+  {
     "name": "tts-generator",
     "dir": "packages/audio/gamepad-synth/tools/tts",
     "run": "just synth::tts-test",

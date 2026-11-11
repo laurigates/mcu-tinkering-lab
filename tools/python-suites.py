@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Pick the uv test suites a change touches, for test.yml's Python Suites job.
 
-`.github/python-suites.json` lists each suite: a `name`, the uv project `dir`
-whose lock the job asserts with `uv sync --locked`, the `run` command (from
-the repo root), the `paths` globs that select it, and optional `apt`
-packages. This prints the job's matrix for a list of changed files:
+`.github/python-suites.json` lists each suite: a `name`, the `run` command
+(from the repo root), the `paths` globs that select it, the uv project `dir`
+whose lock the job asserts with `uv sync --locked` (left out for a suite with
+no uv project, such as the make-only component host suites), and optional
+`apt` packages. This prints the job's matrix for a list of changed files:
 
     python3 tools/python-suites.py --changed-json '["tools/cadstd/fits.py"]'
     python3 tools/python-suites.py --all
@@ -35,8 +36,8 @@ ALWAYS = (
     ".github/workflows/test.yml",
     "tools/python-suites.py",
 )
-REQUIRED = {"name": str, "dir": str, "run": str, "paths": list}
-OPTIONAL = {"apt": str}
+REQUIRED = {"name": str, "run": str, "paths": list}
+OPTIONAL = {"dir": str, "apt": str}
 
 
 def glob_regex(pattern: str) -> re.Pattern[str]:
@@ -102,7 +103,7 @@ def matrix(suites: list[dict]) -> dict:
         "include": [
             {
                 "name": s["name"],
-                "dir": s["dir"],
+                "dir": s.get("dir", ""),
                 "run": s["run"],
                 "apt": s.get("apt", ""),
             }
