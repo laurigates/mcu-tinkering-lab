@@ -94,6 +94,35 @@ static void test_null_out_ticks_fails_closed(void)
     ASSERT(ota_interval_ticks_from_minutes(360, 1000, NULL) == false);
 }
 
+/* Issue #1055: the task's first check came a whole interval (360 min) after
+ * it started, so a robot reset more often than that never checked. The first
+ * wait is the short first-check delay; every later one is the interval. */
+static void test_first_check_waits_short_delay_then_interval(void)
+{
+    const uint32_t interval = 21600000u; /* 360 min at 1000 Hz */
+    const uint32_t first = 15000u;
+
+    ASSERT(ota_interval_next_wait_ticks(false, first, interval) == first);
+    ASSERT(ota_interval_next_wait_ticks(true, first, interval) == interval);
+}
+
+/* The first check never waits longer than a later one: with a short interval
+ * (the overflow fallback, or a bench build) the interval wins. */
+static void test_first_wait_capped_at_interval(void)
+{
+    ASSERT(ota_interval_next_wait_ticks(false, 15000u, 5000u) == 5000u);
+    ASSERT(ota_interval_next_wait_ticks(true, 15000u, 5000u) == 5000u);
+}
+
+/* Acceptance for #1055: a newer release is seen within a minute of link-up
+ * (the OTA task starts on the boot's first link-up), and not in the same
+ * instant, so MQTT can connect before a refusal status is published. */
+static void test_first_check_delay_within_a_minute(void)
+{
+    ASSERT(OTA_FIRST_CHECK_DELAY_MS > 0u);
+    ASSERT(OTA_FIRST_CHECK_DELAY_MS < 60000u);
+}
+
 int main(void)
 {
     printf("=== OTA interval tick-arithmetic host tests ===\n\n");
@@ -102,6 +131,10 @@ int main(void)
     test_run("small_cases", test_small_cases);
     test_run("overflow_fails_closed", test_overflow_fails_closed);
     test_run("null_out_ticks_fails_closed", test_null_out_ticks_fails_closed);
+    test_run("first_check_waits_short_delay_then_interval",
+             test_first_check_waits_short_delay_then_interval);
+    test_run("first_wait_capped_at_interval", test_first_wait_capped_at_interval);
+    test_run("first_check_delay_within_a_minute", test_first_check_delay_within_a_minute);
 
     printf("\n=== Results ===\n");
     printf("Passed: %d / %d\n", test_pass, test_count);

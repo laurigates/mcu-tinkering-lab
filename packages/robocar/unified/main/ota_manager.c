@@ -11,9 +11,10 @@
  * app binary's path directly, so there is nothing left to parse out of a
  * GitHub API response.
  *
- * A dedicated FreeRTOS task blocks on either the OTA_CHECK_INTERVAL_MIN
- * periodic timeout or an explicit task notification (the MQTT check-now
- * nudge), then performs one manifest fetch + compare + (maybe) flash cycle.
+ * A dedicated FreeRTOS task checks OTA_FIRST_CHECK_DELAY_MS after it starts,
+ * then blocks on either the OTA_CHECK_INTERVAL_MIN periodic timeout or an
+ * explicit task notification (the MQTT check-now nudge), and each time
+ * performs one manifest fetch + compare + (maybe) flash cycle.
  * Per .claude/rules/freertos-task-gotchas.md, any task making an HTTPS call
  * needs at least an 8 KB stack for the TLS handshake — this task is created
  * with OTA_TASK_STACK_SIZE, already 8192 in config.h.
@@ -214,7 +215,8 @@ esp_err_t ota_manager_confirm_valid(void)
 }
 
 /**
- * Blocks on either the periodic interval or an explicit notification
+ * Blocks on either the wait (OTA_FIRST_CHECK_DELAY_MS before the boot's first
+ * check, the periodic interval after it) or an explicit notification
  * (ota_manager_check_update(), driven by the MQTT nudge), then runs one
  * check. Either wake reason runs the same check — a check-now nudge that
  * arrives mid-interval does not skip the next periodic one; it just moves it.
@@ -242,8 +244,16 @@ static void ota_task(void *arg)
         interval_ticks = pdMS_TO_TICKS(OTA_INTERVAL_OVERFLOW_FALLBACK_MS);
     }
 
+    // The first check comes OTA_FIRST_CHECK_DELAY_MS after the task starts,
+    // not a whole interval later: every reset restarted that countdown, so a
+    // robot reset more often than OTA_CHECK_INTERVAL_MIN never checked (#1055).
+    const TickType_t first_delay_ticks = pdMS_TO_TICKS(OTA_FIRST_CHECK_DELAY_MS);
+    bool checked_yet = false;
     for (;;) {
-        ulTaskNotifyTake(pdTRUE, interval_ticks);
+        ulTaskNotifyTake(pdTRUE,
+                         (TickType_t)ota_interval_next_wait_ticks(
+                             checked_yet, (uint32_t)first_delay_ticks, (uint32_t)interval_ticks));
+        checked_yet = true;
         run_update_check();
     }
 }
