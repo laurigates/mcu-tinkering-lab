@@ -16,11 +16,13 @@
 #
 # For every packages/*/*/flasher.json found, this script:
 #   1. Reads chipFamily and appBinaryName from flasher.json
-#   2. Determines flash offsets (bootloader/partition-table/otadata/app) from
-#      the partition table the build uses (resolve_partition_table): the
+#   2. Determines flash offsets (bootloader/partition-table/otadata/app) with
+#      lib/otadata-predicate.sh, the parser tools/check-flash-recipes.py and
+#      build-firmware.yml's assemble step use (issue #1090), from the
+#      partition table the build uses (resolve_partition_table): the
 #      project's CSV under CONFIG_PARTITION_TABLE_CUSTOM=y, otherwise the
-#      built-in preset's resolved copy in lib/idf-partition-tables/. A table
-#      the predicate cannot name stops the run (issue #684)
+#      built-in preset's resolved copy in lib/idf-partition-tables/. An offset
+#      the predicate cannot name stops the run (issues #684, #689, #1090)
 #   3. Writes firmware/<project-id>/manifest.json (ESP Web Tools format),
 #      plus a top-level "buildSha" ESP Web Tools ignores (see BUILD_SHA below)
 #      and "notes": the version's Features / Bug Fixes / Performance entries
@@ -41,15 +43,15 @@
 #
 # Requirements: bash >= 4, jq, python3, git (unless BUILD_SHA is set)
 #
-# Chip-family bootloader offsets:
-#   ESP32, ESP32-S2  ->  0x1000 (4096)
-#   ESP32-S3, ESP32-C3, ESP32-C6, ESP32-H2  ->  0x0 (0)
-#
-# Partition offsets:
-#   partition-table  ->  0x8000  (32768)  -- same for all families
-#   app              ->  the table's first app row (0x10000 if it has none)
-#   otadata          ->  none             -- only if found in the partition table;
-#                                            a row with a blank offset fails the run
+# Offsets (lib/otadata-predicate.sh):
+#   bootloader       ->  bootloader_offset of the chipFamily's ESP-IDF target
+#                        ("ESP32-C5" -> esp32c5 -> 0x2000)
+#   partition-table  ->  partition_table_offset: CONFIG_PARTITION_TABLE_OFFSET,
+#                        default 0x8000
+#   app              ->  boot_app_offset: the factory partition, else the
+#                        lowest ota_N, where `idf.py flash` writes the app
+#   otadata          ->  parse_otadata_offset, only if the table has a
+#                        data,ota row; a row with a blank offset fails the run
 
 set -euo pipefail
 
@@ -81,38 +83,16 @@ project_version() {
     echo "${v:-$VERSION}"
 }
 
-# Associative array: chip family -> bootloader offset (decimal)
-bootloader_offset() {
-    case "$1" in
-        "ESP32"|"ESP32-S2") echo 4096 ;;  # 0x1000
-        *)                   echo 0    ;;  # 0x0  (S3, C3, C6, H2)
-    esac
+# The ESP-IDF target of an ESP Web Tools chipFamily: "ESP32-S3" -> "esp32s3".
+chip_target() {
+    echo "$1" | tr '[:upper:]' '[:lower:]' | tr -d '-'
 }
 
-# Parse the first app partition offset from a partition table CSV.
-# Returns decimal offset, or 65536 (0x10000) if not found.
-parse_app_offset() {
-    local csv="$1"
-    local offset=""
-    if [[ -f "$csv" ]]; then
-        offset=$(grep -v '^#' "$csv" \
-            | awk -F',' '{ gsub(/[[:space:]]/, "", $2) } $2 == "app" { gsub(/[[:space:]]/, "", $4); print $4; exit }')
-    fi
-    if [[ -z "$offset" ]]; then
-        echo 65536
-        return
-    fi
-    # Convert hex (0x...) to decimal
-    if [[ "$offset" == 0x* || "$offset" == 0X* ]]; then
-        printf "%d\n" "$offset"
-    else
-        echo "$offset"
-    fi
-}
-
-# parse_otadata_offset() is defined in lib/otadata-predicate.sh, shared with
-# build-firmware.yml's assemble step so the two never parse a partition table
-# differently.
+# Every offset comes from lib/otadata-predicate.sh, shared with
+# build-firmware.yml's assemble step and tools/check-flash-recipes.py so none
+# of them parses a partition table differently. Each predicate call is its own
+# assignment: under set -e a failing one stops the run, where inside a longer
+# expression its status would be lost.
 
 PROJECTS_JSON_ARRAY="[]"
 
@@ -138,10 +118,13 @@ for flasher_json in ${PROJECTS_GLOB}; do
     echo "    version=$version"
 
     # Determine offsets
-    bl_offset=$(bootloader_offset "$chip_family")
-    pt_offset=32768   # 0x8000  -- partition table always here
+    target=$(chip_target "$chip_family")
+    if ! bl_offset=$(bootloader_offset "$target"); then
+        echo "ERROR: ${project_id}: no bootloader offset for chipFamily \"${chip_family}\"" >&2
+        exit 1
+    fi
+    pt_offset=$(partition_table_offset "$project_dir")
     partition_table=$(resolve_partition_table "$project_dir")
-    app_offset=$(parse_app_offset "$partition_table")
     ota_offset=$(parse_otadata_offset "$partition_table")
     # A data,ota row with a blank offset is placed by gen_esp32part.py at build
     # time. Leaving the part out would publish a manifest that never writes
@@ -151,6 +134,9 @@ for flasher_json in ${PROJECTS_GLOB}; do
         echo "ERROR: ${project_id}: ${partition_table} has an otadata row with a blank offset; give it an explicit offset so the manifest can place ota_data_initial.bin" >&2
         exit 1
     fi
+    # The same holds for the app: a blank offset used to become 0x10000
+    # (issue #1090).
+    app_offset=$(boot_app_offset "$partition_table")
 
     echo "    chip=$chip_family  bl=0x$(printf '%x' "$bl_offset")  pt=0x$(printf '%x' "$pt_offset")  app=0x$(printf '%x' "$app_offset")"
     [[ -n "$ota_offset" ]] && echo "    otadata=0x$(printf '%x' "$ota_offset")"
