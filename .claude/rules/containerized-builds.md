@@ -309,7 +309,8 @@ that the host suite, which lists its own sources, could not.
    flash, check the four assumptions above before composing
    `flash: (_esp32-flash bin_name)` / `(_s3-flash bin_name)` — then confirm with
    `python3 tools/check-flash-recipes.py`, which the pre-commit hook runs anyway.
-   Keep the recipe inline if any assumption fails
+   If any assumption fails, compose `flash: _s3-argfile-flash` (ESP32-S3) or
+   keep the recipe inline
 4. Define `info` recipe (project-specific)
 5. Override `build` for pre-build steps if needed (e.g., `build: credentials (_idf-build-checked bin_name)`)
 6. Use `require-port` as dependency for flash recipes (the shared `_*-flash` recipes already do)
