@@ -9,6 +9,7 @@
 _root := source_directory() / "../.."
 _data := "tools/labels/data/drawers-2026-10.toml"
 _printer := env("LABEL_PRINTER", "EPSON_ET_3750_Series")
+_driver := env("SILHOUETTE_HOME", home_directory() / ".cache/inkscape-silhouette")
 
 # Unit tests (stdlib unittest, no Typst or cutter needed)
 test:
@@ -41,12 +42,20 @@ setup:
 scan kind="ble":
     {{_root}}/tools/labels/scan-cutter.sh {{kind}}
 
+# Run only the mark search on the loaded sheet, no cut; top/left (mm) move where it starts. Needs a built plan
+probe-marks data=_data top="20" left="0":
+    cd {{_root}} && "{{_driver}}/venv/bin/python" tools/labels/probe.py "{{_driver}}/src" marks tmp/labels/$(basename {{data}} .toml)/plan.json {{top}} {{left}}
+
+# Set the AutoBlade depth and wait, no cut; then read the number in the blade's window
+blade depth="1":
+    cd {{_root}} && "{{_driver}}/venv/bin/python" tools/labels/probe.py "{{_driver}}/src" depth {{depth}}
+
 # Kiss-cut one printed page over USB, or Bluetooth with LABEL_CUTTER=ble. dry=true checks the job with no cutter attached
-cut page="1" data=_data dry="false" depth="1" pressure="0" speed="0":
+cut page="1" data=_data dry="false" depth="1" pressure="10" speed="0":
     cd {{_root}} && DRY_RUN={{dry}} DEPTH={{depth}} PRESSURE={{pressure}} SPEED={{speed}} tools/labels/cut.sh tmp/labels/$(basename {{data}} .toml)/cut-p{{page}}.svg tmp/labels/$(basename {{data}} .toml)/plan.json
 
 # Cut only the first sticker of a printed page, to set depth and force before the rest
-test-cut page="1" data=_data depth="1" pressure="0" speed="0":
+test-cut page="1" data=_data depth="1" pressure="10" speed="0":
     #!/usr/bin/env bash
     set -euo pipefail
     cd {{_root}}

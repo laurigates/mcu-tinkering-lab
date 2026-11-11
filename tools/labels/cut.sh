@@ -10,7 +10,8 @@
 # Environment (just labels::cut sets these from its arguments):
 #   DRY_RUN=true    send nothing; write the command stream to <svg>.cmd and a log
 #   DEPTH=1         AutoBlade depth 0-10 (sticker paper: 1; raise if it does not cut through the face)
-#   PRESSURE=0      force 1-33, or 0 for the media default
+#   PRESSURE=10     force 1-33, or 0 for the media default (20 for sticker sheet,
+#                   which marked the liner under some cuts)
 #   SPEED=0         1-10, or 0 for the media default
 #   MEDIA=134       inkscape-silhouette's "Sticker Sheet" preset
 #   MAT=portrait_8x12
@@ -64,7 +65,7 @@ args=(
     --tool=autoblade
     --depth="${DEPTH:-1}"
     --media="${MEDIA:-134}"
-    --pressure="${PRESSURE:-0}"
+    --pressure="${PRESSURE:-10}"
     --speed="${SPEED:-0}"
     --cuttingmat="${MAT:-portrait_8x12}"
     --regmark=True

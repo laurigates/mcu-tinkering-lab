@@ -81,16 +81,31 @@ text: no order ids, listing ids or prices.
 ## Cutter settings
 
 `cut` and `test-cut` take `depth` (AutoBlade, 0–10, default 1), `pressure`
-(1–33, 0 = media default) and `speed` (1–10, 0 = media default). The media is
-inkscape-silhouette's "Sticker Sheet" preset (134: force 20, speed 10, depth 1).
-Start every new sticker stock with `test-cut`: the first sticker should peel
-off cleanly with the liner unmarked. If the face does not part, raise
-`pressure` before `depth`; if the liner is scored through, lower `depth`.
-Record the settings that worked in the table below.
+(1–33, default 10; 0 = media default) and `speed` (1–10, 0 = media default).
+The media is inkscape-silhouette's "Sticker Sheet" preset (134: force 20,
+speed 10, depth 1). Start every new sticker stock with `test-cut`: the first
+sticker should peel off cleanly with the liner unmarked. If the face does not
+part, raise `pressure` before `depth`; if the liner is scored through, lower
+`depth`. Record the settings that worked in the table below.
+
+`test-cut` cuts sticker 1 only, so a second `test-cut` on the same sheet
+passes over the same outline again and says nothing about one pass. Two
+no-cut probes come first and cost no sticker:
+
+```sh
+just labels::blade 1                                   # set the depth, then read the blade's window
+just labels::probe-marks tools/labels/data/<file>.toml # mark search only, on the loaded sheet
+```
+
+`blade` confirms the depth command lands: the number in the AutoBlade's
+window should match. `probe-marks` reports `found` or the cutter's reason
+code (`top`, `left` arguments move where the search starts). Both follow `LABEL_CUTTER`;
+they were used over Bluetooth LE and are untested over USB.
 
 | Sticker stock | depth | pressure | speed | Result |
 |---|---|---|---|---|
-| A4 sticker sheet of the 2026-11 inventory run | 1 | 0 (preset: 20) | 0 (preset: 10) | Clean kiss cut, liner unmarked, indicator on 1 (one sticker, 2026-11-11) |
+| A4 sticker sheet of the 2026-11 inventory run | 1 | 20 (the preset) | 0 (preset: 10) | Three pages cut, 2026-11-11. Stickers peel, but under some cuts the liner is cut part-way and tears when a sticker is removed: slightly too much force |
+| the same stock | 1 | 10 | 0 (preset: 10) | Not yet cut. The default since that run; start the next sheet with `test-cut` |
 
 ### Where the mark search starts
 
@@ -129,10 +144,11 @@ with `LABEL_CUTTER_ADDR=<MAC>` is Bluetooth Classic, which the driver has on
 Linux and Windows only.
 
 The Portrait 2 advertises over BLE as `Portrait2-<6 hex digits>` (scan on
-macOS, 2026-11-11), which the default name matches. No cut has been sent over
-BLE yet: the driver's BLE path was verified upstream only on a Cameo 5 Alpha
-with a pen. Record the first `test-cut` result here, the registration-mark
-search included (#1068).
+macOS, 2026-11-11), which the default name matches. Three pages were cut
+over BLE that day, mark search included, each in about two minutes. The
+cutter was paired in macOS Bluetooth settings by then; the one connection
+attempted before pairing was dropped during the handshake, and whether
+pairing is required was not tested.
 
 ## Traps
 
