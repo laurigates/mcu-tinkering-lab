@@ -499,6 +499,11 @@ class CutConnection(unittest.TestCase):
         self.assertIn("--x_off=2.5", args)
         self.assertIn("--y_off=15.0", args)
 
+    def test_a_job_returns_the_mat_to_where_it_started(self):
+        # With the driver's default the next job on the sheet starts further in.
+        self.assertIn("--endposition=start", self.args())
+        self.assertIn("--endposition=start", self.args(DRY_RUN="true"))
+
     def test_mark_search_start_must_be_a_number(self):
         r = self.cut(LABEL_MARK_TOP="far")
         self.assertNotEqual(r.returncode, 0)

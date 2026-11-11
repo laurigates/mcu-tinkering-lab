@@ -72,6 +72,11 @@ args=(
     --regoriginx="$rx" --regoriginy="$ry"
     --regwidth="$rw" --reglength="$rl"
     --x_off="$xoff" --y_off="$yoff"
+    # The driver's default, "below", ends a job by feeding to the bottom of the
+    # cut and making that the new origin. The next job on the same sheet then
+    # searches for the marks that much further in, and the second or third
+    # job fails with reply -1. "start" returns the mat to where the job began.
+    --endposition=start
     --logfile="${svg%.svg}.log"
 )
 if [ "${DRY_RUN:-false}" = "true" ]; then

@@ -102,8 +102,13 @@ marks, and the test cut landed on the sticker (2026-11-11, one sheet).
 `LABEL_MARK_TOP` and `LABEL_MARK_LEFT` (mm) move the start along and across
 the feed if a sheet sits elsewhere on the mat; they do not move the cut.
 
-A reply of `-1` came back whatever the start was until the mat was reloaded
-further from the left edge. What `-1` means is not known.
+A reply of `-1` means the search started too far in. The driver's default
+ends a job by feeding to the bottom of the cut and making that the new
+origin, so each job left the mat further in and the second or third job on a
+sheet failed, until the mat was fed again. `cut.sh` passes
+`--endposition=start`, which returns the mat to where the job began; a search
+straight after a cut then found the marks. If `-1` appears anyway, unload and
+load the mat.
 
 ## Bluetooth
 
