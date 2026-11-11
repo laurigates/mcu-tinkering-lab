@@ -18,12 +18,14 @@ from schemdraw.segments import SegmentText
 sys.path.insert(0, str(FsPath(__file__).parent))
 sys.path.insert(0, str(FsPath(__file__).parent / "circuits"))
 
+import itertools
+
 from components import esp32_s3_zero, max98357a
 from routing import Path, Router, _BBox
 
 
 def _segments_are_orthogonal(points):
-    for (ax, ay), (bx, by) in zip(points, points[1:]):
+    for (ax, ay), (bx, by) in itertools.pairwise(points):
         assert ax == ax and by == by  # sanity: real numbers, not NaN
         assert ax == bx or ay == by, (
             f"diagonal segment {(ax, ay)} -> {(bx, by)} is not axis-aligned"
@@ -117,7 +119,7 @@ def test_wire_avoids_obstacle_placed_between_pins():
     abspoints = router.wire(esp.GPIO6, amp.LRC, net="i2s").points
 
     _segments_are_orthogonal(abspoints)
-    for p1, p2 in zip(abspoints, abspoints[1:]):
+    for p1, p2 in itertools.pairwise(abspoints):
         assert not _segment_hits_box(p1, p2, blocker_box), (
             f"routed segment {p1} -> {p2} cuts through the obstacle {blocker_box}"
         )
@@ -172,7 +174,7 @@ def test_wire_does_not_cut_through_its_own_destination_chip():
     amp_box = _box_of(amp)
 
     _segments_are_orthogonal(abspoints)
-    for p1, p2 in zip(abspoints, abspoints[1:]):
+    for p1, p2 in itertools.pairwise(abspoints):
         assert not _segment_hits_box(p1, p2, amp_box), (
             f"routed segment {p1} -> {p2} cuts through its own chip {amp_box}"
         )
@@ -287,7 +289,7 @@ def test_all_real_circuits_route_orthogonally_without_crossing_components(
             if not _contains_endpoint(box, middle[0])
             and not _contains_endpoint(box, middle[-1])
         ]
-        for p1, p2 in zip(middle, middle[1:]):
+        for p1, p2 in itertools.pairwise(middle):
             for box in relevant:
                 assert not _segment_hits_box(p1, p2, box), (
                     f"{name}: routed segment {p1} -> {p2} cuts through {box}"
@@ -490,7 +492,7 @@ def _curve_path(el):
 def test_a_crossing_gets_one_hop_on_the_horizontal_wire():
     from metrics import crossings
 
-    d, router = _free_router()
+    _d, router = _free_router()
     h = router.wire((0.0, 0.0), (4.0, 0.0), net="i2c")
     v = router.wire((2.0, -2.0), (2.0, 2.0), net="pwm")
     router.finish()
@@ -595,7 +597,7 @@ def test_junction_dot_where_a_wire_ends_on_another_wires_interior():
 def test_wire_net_class_sets_colour_and_rejects_unknown_classes():
     from routing import NET_COLORS
 
-    d, router = _free_router()
+    _d, router = _free_router()
     w = router.wire((0.0, 0.0), (4.0, 0.0), net="i2s")
     router.finish()
     assert w.net == "i2s"
@@ -1005,7 +1007,7 @@ def test_router_keeps_off_a_hand_drawn_lead():
     g = router.grid
     d.add(elm.Wire("-").at((2 * g, 0.0)).to((18 * g, 0.0)))
     w = router.wire((0.0, -0.3 * g), (20 * g, -0.3 * g), net="signal")
-    for (ax, ay), (bx, by) in zip(w.points, w.points[1:]):
+    for (ax, ay), (bx, by) in itertools.pairwise(w.points):
         if abs(ay - by) > 1e-6:
             continue  # vertical: at most a crossing
         overlap = min(max(ax, bx), 18 * g) - max(min(ax, bx), 2 * g)
@@ -1034,7 +1036,7 @@ def test_every_hop_in_real_circuits_is_drawn_clear_and_full_size(real_circuits):
                     assert gap >= HOP_RADIUS + JUNCTION_RADIUS - 1e-6, (
                         f"{name}: hop at {h} is {gap:.3f} from the dot at {p}"
                     )
-                for a, b in zip(w.points, w.points[1:]):
+                for a, b in itertools.pairwise(w.points):
                     if _on_wire(h, [a, b]):
                         room = min(math.dist(h, a), math.dist(h, b))
                         assert room >= HOP_RADIUS - 1e-6, (
@@ -1464,7 +1466,9 @@ def _rendered_glyph_box(seg):
 
 def _assert_box_matches_rect(box, rect):
     got = (box.xmin, box.ymin, box.xmax, box.ymax)
-    assert all(abs(g - r) < 1e-6 for g, r in zip(got, rect)), f"{got} != {rect}"
+    assert all(abs(g - r) < 1e-6 for g, r in zip(got, rect, strict=True)), (
+        f"{got} != {rect}"
+    )
 
 
 def _label_box_of_segment(**kwargs):
@@ -1546,7 +1550,7 @@ def test_every_real_circuit_label_box_is_the_rendered_rect(real_circuits):
         ]
         labels = router._labels()
         assert len(labels) == len(texts), circuit.name
-        for label, seg in zip(labels, texts):
+        for label, seg in zip(labels, texts, strict=True):
             _assert_box_matches_rect(label.box, _rendered_glyph_box(seg))
             checked += 1
             rotated += bool(seg.rotation)

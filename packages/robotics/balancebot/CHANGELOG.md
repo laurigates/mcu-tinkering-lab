@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.13](https://github.com/laurigates/mcu-tinkering-lab/compare/balancebot-v0.1.12...balancebot-v0.1.13) (2026-11-10)
+
+
+### Bug Fixes
+
+* **enclosure:** give balancebot's plugged headers a look-alike kind ([#1085](https://github.com/laurigates/mcu-tinkering-lab/issues/1085)) ([6c73a41](https://github.com/laurigates/mcu-tinkering-lab/commit/6c73a411a8cf338c014130491f542aba2a770aae)), closes [#1060](https://github.com/laurigates/mcu-tinkering-lab/issues/1060)
+
 ## [0.1.12](https://github.com/laurigates/mcu-tinkering-lab/compare/balancebot-v0.1.11...balancebot-v0.1.12) (2026-11-09)
 
 

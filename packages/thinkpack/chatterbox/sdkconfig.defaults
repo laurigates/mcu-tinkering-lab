@@ -33,8 +33,10 @@ CONFIG_SPIRAM_MODE_OCT=y
 CONFIG_SPIRAM_SPEED_80M=y
 CONFIG_SPIRAM_USE_CAPS_ALLOC=y
 
-# Partition table — default single factory app is fine for now
-CONFIG_PARTITION_TABLE_SINGLE_APP=y
+# OTA table shared by the boxes that start the thinkpack-ota receiver:
+# otadata plus ota_0/ota_1 on a 4 MB part (issue #1076).
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="../../components/thinkpack-ota/partitions.csv"
 
 # Logging level
 CONFIG_LOG_DEFAULT_LEVEL_INFO=y

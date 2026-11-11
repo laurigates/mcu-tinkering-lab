@@ -87,7 +87,9 @@ class Coupon(unittest.TestCase):
 
     def test_ladder_holes_grow_from_the_chamfered_corner(self):
         p = coupon.plate("fdm")
-        for (x, _), gap in zip(grid.points(len(coupon.LADDER), 1), coupon.LADDER):
+        for (x, _), gap in zip(
+            grid.points(len(coupon.LADDER), 1), coupon.LADDER, strict=True
+        ):
             r = coupon.PEG_D / 2 + gap
             self.assertFalse(p.is_inside(Vector(x + r - 0.01, 0, 1)), gap)
             self.assertTrue(p.is_inside(Vector(x + r + 0.01, 0, 1)), gap)

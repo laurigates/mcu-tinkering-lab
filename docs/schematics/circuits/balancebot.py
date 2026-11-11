@@ -18,6 +18,7 @@ is. Placement, net order, net colour and the nENABLE trunk's shape stay
 hand-authored here.
 """
 
+import itertools
 import sys
 from pathlib import Path
 
@@ -86,7 +87,7 @@ def _fanout_trunk(d, mcu, ends: dict, x: float, color: str) -> None:
     """
     taps = [*ends.values(), mcu]
     ys = sorted({round(y, 6) for _, y in taps})
-    for lo, hi in zip(ys, ys[1:]):
+    for lo, hi in itertools.pairwise(ys):
         d.add(elm.Line().at((x, lo)).to((x, hi)).color(color))
     for px, py in taps:
         if abs(px - x) > 1e-6:

@@ -1,6 +1,8 @@
 /**
  * @file esp_log.h
  * @brief Stub for ESP-IDF logging — prints to stderr/stdout for host tests.
+ *
+ * Shared by the component host suites (packages/components/host-test).
  */
 #pragma once
 

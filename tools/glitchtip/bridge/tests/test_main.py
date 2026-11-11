@@ -3,10 +3,9 @@
 from pathlib import Path
 
 import sentry_sdk
-from sentry_sdk.transport import Transport
-
 from robocar_glitchtip_bridge.main import handle
 from robocar_glitchtip_bridge.symbolicate import ElfStore
+from sentry_sdk.transport import Transport
 
 FIXTURES = Path(__file__).parents[2] / "fixtures"
 

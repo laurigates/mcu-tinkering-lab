@@ -44,9 +44,9 @@ def frame(p: Piece) -> case.Frame:
 def test_tray_outline_is_region_plus_wall_and_gap():
     f = frame(piece())
     bb = case.tray(f).bounding_box()
-    assert bb.size.X == pytest.approx(60 + 2 * (2.0 + 0.5) + 2 * f.p.tab)  # tabs
-    assert bb.size.Y == pytest.approx(40 + 2 * (2.0 + 0.5))
-    assert bb.size.Z == pytest.approx(f.z_top + 3.0)
+    assert pytest.approx(60 + 2 * (2.0 + 0.5) + 2 * f.p.tab) == bb.size.X  # tabs
+    assert pytest.approx(40 + 2 * (2.0 + 0.5)) == bb.size.Y
+    assert pytest.approx(f.z_top + 3.0) == bb.size.Z
 
 
 def test_board_y_is_flipped_into_case_y():
@@ -74,12 +74,12 @@ def test_chassis_tabs_with_holes_unless_the_piece_opts_out():
     f = frame(piece())
     tray = case.tray(f)
     bb = tray.bounding_box()
-    assert bb.size.X == pytest.approx(f.length + 2 * f.p.tab)
+    assert pytest.approx(f.length + 2 * f.p.tab) == bb.size.X
     assert not tray.is_inside(Vector(-f.p.tab / 2, f.width / 2, f.p.floor / 2))
     assert tray.is_inside(Vector(-f.p.tab / 2 + 4, f.width / 2, f.p.floor / 2))
     p = piece()
     p.mount_tabs = False
-    assert case.tray(frame(p)).bounding_box().size.X == pytest.approx(f.length)
+    assert pytest.approx(f.length) == case.tray(frame(p)).bounding_box().size.X
 
 
 def test_standoff_clears_the_deepest_back_side_part():
@@ -152,7 +152,7 @@ def test_each_tab_pilot_lines_up_with_a_wall_hole():
 def test_the_lid_reaches_down_only_by_its_tabs():
     f = frame(piece())
     _, lid = case.box(f)
-    assert lid.bounding_box().min.Z == pytest.approx(wall_top(f) - case.TAB_DROP)
+    assert pytest.approx(wall_top(f) - case.TAB_DROP) == lid.bounding_box().min.Z
 
 
 def test_a_tab_avoids_a_tall_part_under_its_wall():
@@ -200,7 +200,7 @@ def test_a_box_with_no_wall_pair_for_its_tabs_is_refused():
     ]
     jacks = north + west
     f = frame(piece(parts=jacks, openings=[j.ref for j in jacks], holes=[]))
-    with pytest.raises(case.EnclosureError, match="lid tabs on the north wall.*west"):
+    with pytest.raises(case.EnclosureError, match=r"lid tabs on the north wall.*west"):
         case.lid_tabs(f)
 
 
@@ -349,7 +349,7 @@ def test_windows_below_the_board_do_not_push_the_tabs_away():
         for i, (x, w) in enumerate(((1, 17), (21, 18), (42, 17)))
     ]
     top = Part("U1", "fp", "top", Rect(20, 10, 40, 30), above=10.0, height_source="t")
-    f = frame(piece(parts=under + [top], openings=[q.ref for q in under], holes=[]))
+    f = frame(piece(parts=[*under, top], openings=[q.ref for q in under], holes=[]))
     assert {t.side for t in case.lid_tabs(f)[1]} == {"north", "south"}
 
 

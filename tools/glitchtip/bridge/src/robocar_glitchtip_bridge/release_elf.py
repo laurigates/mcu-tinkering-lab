@@ -50,7 +50,7 @@ def release_version(event: dict) -> str | None:
 def http_get(url: str, timeout: float = 30.0) -> bytes | None:
     """GET `url`; None on 404, raise on anything else unexpected."""
     try:
-        with urllib.request.urlopen(url, timeout=timeout) as resp:  # noqa: S310
+        with urllib.request.urlopen(url, timeout=timeout) as resp:
             return resp.read()
     except urllib.error.HTTPError as exc:
         if exc.code == 404:

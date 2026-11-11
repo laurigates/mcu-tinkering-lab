@@ -27,9 +27,9 @@ menuconfig: _idf-menuconfig
 [group: "build"]
 shell: _idf-shell
 
-# Flash firmware to device (ESP32-S3 standard layout)
+# Flash the full image from build/flash_args, otadata included (OTA table, #1076)
 [group: "device"]
-flash: (_s3-flash bin_name)
+flash: _s3-argfile-flash
 
 # Reset board via USB-Serial-JTAG CDC control signals
 [group: "device"]

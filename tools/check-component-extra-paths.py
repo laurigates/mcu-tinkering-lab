@@ -69,6 +69,11 @@ JUSTFILE = Path("justfile")
 # build, keyed by path relative to packages/ (the matrix's `path`). Each needs
 # a reason; remove the entry when the project gains a matrix entry.
 NOT_IN_MATRIX: dict[str, str] = {
+    "components": (
+        "shared ESP-IDF components, not a project; the projects that compile "
+        "them build them, and the module only runs their host suites "
+        "(`just components::test`, the `components` entry of python-suites.json)"
+    ),
     "robocar/unified-integrated": (
         "carrier PCB only; it runs packages/robocar/unified's firmware, and "
         "carrier-check.yml checks the board"

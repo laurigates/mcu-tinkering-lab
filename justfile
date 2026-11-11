@@ -41,6 +41,7 @@ mod cadstd 'tools/cadstd'
 mod labels 'tools/labels'
 mod glitchtip 'tools/glitchtip'
 mod kconfig-symbols 'tools/kconfig_symbols'
+mod components 'packages/components'
 
 # Auto-detect ESP32-S3 USB-Serial-JTAG by Espressif VID; override with S3_PORT env var
 s3_port := env("S3_PORT", `tools/detect-esp32s3-port.sh --quiet 2>/dev/null || true`)

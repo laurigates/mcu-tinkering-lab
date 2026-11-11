@@ -1,0 +1,43 @@
+# Component host suites: the plain-make unit tests under each
+# packages/<...>/components/<name>/test/ (no ESP-IDF, no hardware).
+# CI runs `just components::test` as the `components` entry of
+# .github/python-suites.json; tools/test_python_suites.py fails when a
+# component's test/ directory is one this recipe would not find.
+
+_dir := source_directory()
+_root := _dir / "../.."
+
+# Build and run every component host suite; lists the ones that failed
+[group: "test"]
+test:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd "{{_root}}"
+    failed=()
+    count=0
+    while IFS= read -r makefile; do
+        dir=$(dirname "$makefile")
+        count=$((count + 1))
+        echo "==> $dir"
+        # -B rebuilds every binary, so a run never reuses one built from older sources.
+        make -s -B -C "$dir" test || failed+=("$dir")
+    done < <(git ls-files -- ':(glob)packages/**/components/*/test/Makefile')
+    if [ "$count" -eq 0 ]; then
+        echo "error: no component test/Makefile found" >&2
+        exit 1
+    fi
+    if [ "${#failed[@]}" -gt 0 ]; then
+        printf 'FAILED: %s\n' "${failed[@]}" >&2
+        exit 1
+    fi
+    echo "all $count component host suites passed"
+
+# Remove the binaries the component host suites build
+[group: "test"]
+clean:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd "{{_root}}"
+    git ls-files -- ':(glob)packages/**/components/*/test/Makefile' | while IFS= read -r makefile; do
+        make -s -C "$(dirname "$makefile")" clean
+    done

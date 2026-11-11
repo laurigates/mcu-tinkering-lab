@@ -130,7 +130,7 @@ class BalancebotTests(unittest.TestCase):
 
     def test_every_wire_is_a_stub_from_a_pin_to_its_label(self):
         pin_points = set()
-        for ref, lib_id, at, _ in self.sheet["symbols"]:
+        for _ref, lib_id, at, _ in self.sheet["symbols"]:
             for p in symbols.pins(symbols.load(lib_id)):
                 pin_points.add(schematic.pin_point(at, p))
         labels = {at for _, at, _ in self.sheet["labels"]}

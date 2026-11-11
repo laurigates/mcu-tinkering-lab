@@ -25,6 +25,7 @@ are the ones a hand-wired pad-per-hole board follows:
 from __future__ import annotations
 
 import heapq
+import itertools
 import math
 import random
 from dataclasses import dataclass, field
@@ -55,7 +56,7 @@ def is_bus(wire):
 def path_of(holes):
     """Holes, each a neighbour of the last, as a half-pitch path."""
     path = [(2 * holes[0][0], 2 * holes[0][1])]
-    for (c, r), (d, e) in zip(holes, holes[1:]):
+    for (c, r), (d, e) in itertools.pairwise(holes):
         path += [(c + d, r + e), (2 * d, 2 * e)]
     return path
 
@@ -105,9 +106,9 @@ class State:
 
 def lay(state, path):
     """Occupy `path`'s edges, the nodes it lies over and its two end holes."""
-    for a, b in zip(path, path[1:]):
+    for a, b in itertools.pairwise(path):
         state.segs.add(mid(a, b))
-    for a, p in zip(path, path[1:-1]):
+    for a, p in itertools.pairwise(path[:-1]):
         state.over.setdefault(p, set()).add(axis(a, p))
         state.under[p] = state.under.get(p, 0) + 1
     for h in (path[0], path[-1]):
@@ -160,7 +161,7 @@ class Router:
             if (2 * h[0], 2 * h[1]) in state.bus_over:
                 raise KicadError(f"bus {net} meets another bus at {hole_name(*h)}")
         path = path_of(holes)
-        for p, q in zip(path, path[1:]):
+        for p, q in itertools.pairwise(path):
             state.fixed.add(mid(p, q))
         for p in path:
             state.bus_over[p] = net
@@ -359,7 +360,7 @@ def check_routes(numbered, routes, parts, nets, conductors=CONDUCTORS):
         bus = la == lb == bus_label(net)
         if path[0] != (2 * ha[0], 2 * ha[1]) or path[-1] != (2 * hb[0], 2 * hb[1]):
             errors.append(f"wire {n} does not run between its own holes")
-        for a, b in zip(path, path[1:]):
+        for a, b in itertools.pairwise(path):
             if abs(a[0] - b[0]) + abs(a[1] - b[1]) != 1:
                 errors.append(f"wire {n} jumps from {a} to {b}")
             e = (a[0] + b[0], a[1] + b[1])

@@ -19,7 +19,9 @@ import schemdraw.elements as elm
 
 sys.path.insert(0, str(FsPath(__file__).parent))
 
-from components import (  # noqa: E402
+import itertools
+
+from components import (
     PITCH,
     max98357a,
     pca9685,
@@ -28,7 +30,7 @@ from components import (  # noqa: E402
     tca9548a,
     xiao_esp32s3_sense,
 )
-from hardware import board_layout, join  # noqa: E402
+from hardware import board_layout, join
 
 UNIFIED = FsPath(__file__).resolve().parents[2] / "packages/robocar/unified"
 
@@ -158,7 +160,7 @@ def test_physical_symbol_draws_every_pad_on_its_edge_in_board_order(factory_name
         else:
             assert all(abs(y - edge[side]) < 1e-9 for _, y in coords), side
             along = [x for x, _ in coords]  # Pos 1 at the left
-        steps = [b - a for a, b in zip(along, along[1:])]
+        steps = [b - a for a, b in itertools.pairwise(along)]
         assert all(abs(s - PITCH) < 1e-9 for s in steps), (side, steps)
 
     # Nothing drawn that the board does not have.

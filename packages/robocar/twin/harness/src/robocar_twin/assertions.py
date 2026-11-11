@@ -10,6 +10,7 @@ index in the trace, so a reader can find them in the JSONL.
 
 from __future__ import annotations
 
+import itertools
 import json
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -186,7 +187,7 @@ def _intervals_check(
     exact = args.get("exact", True)
     hits, lo, hi = _request_times(scn, trace, args, where)
     times = [r["at_ms"] for _, r in hits]
-    gaps = [b - a for a, b in zip(times, times[1:], strict=False)]
+    gaps = [b - a for a, b in itertools.pairwise(times)]
     shown = "[" + ", ".join(format_ms(g) for g in gaps) + "]"
     want = "[" + ", ".join(format_ms(g) for g in expected) + "]"
     prefix = f"request intervals in [{format_ms(lo)}, {format_ms(hi)}] were {shown}, want {want}"

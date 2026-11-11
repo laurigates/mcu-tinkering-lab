@@ -1,7 +1,6 @@
 import json
 
 import pytest
-
 from robocar_twin.scenario import (
     ScenarioError,
     build_body,

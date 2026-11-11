@@ -6,7 +6,6 @@ Source of truth: packages/audio/gamepad-synth/WIRING.md and main/pin_config.h
 
 import schemdraw
 import schemdraw.elements as elm
-
 from components import esp32_s3_zero, max98357a
 from routing import Router, net_color
 

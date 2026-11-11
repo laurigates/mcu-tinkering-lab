@@ -148,7 +148,7 @@ def expand(
         if unknown:
             raise HardwareError(f"{iw} parts: {unknown} not in block {block.slug!r}")
 
-        def key_of(local: str) -> str:
+        def key_of(local: str, inst_id: str = inst_id) -> str:
             return f"{inst_id}_{local}"
 
         def pin_of(local_pin: str) -> str:

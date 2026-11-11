@@ -103,7 +103,7 @@ def _render_piece(out, piece, style, steps, fps, seconds) -> list[Path]:
     bb = np.array(base.bounds).reshape(3, 2)
     centre = bb.mean(axis=1)
     span = float(np.ptp(bb, axis=1).max())
-    pl.camera.focal_point = centre + [0, 0, span * 0.2]
+    pl.camera.focal_point = centre + np.array([0, 0, span * 0.2])
     pl.camera.position = centre + np.array([-1.3, -1.6, 1.4]) * span * 0.75
     pl.camera.up = (0, 0, 1)
     frames: list[Path] = []

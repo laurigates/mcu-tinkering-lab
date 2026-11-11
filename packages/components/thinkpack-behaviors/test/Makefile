@@ -2,8 +2,9 @@
 #
 # Compiles command_dispatcher.c, command_executor.c, echo_chamber.c,
 # hot_cold.c and nfc_story_sounds.c for Linux/macOS using gcc and runs
-# Unity-compatible tests without ESP-IDF or hardware.  Suitable for CI
-# and local development.
+# Unity-compatible tests without ESP-IDF or hardware.  unity_compat.h and
+# the ESP-IDF stubs come from packages/components/host-test, which the
+# other component suites share.  `just components::test` runs them all.
 #
 # Usage:
 #   make test         — build and run all test binaries (default)
@@ -14,12 +15,12 @@
 #   make clean        — remove build artefacts
 
 CC     = gcc
+HOST_TEST = ../../host-test
 CFLAGS = -std=c11 -Wall -Wextra \
          -Wno-unused-function \
          -I../include \
          -I../../thinkpack-protocol/include \
-         -Istubs \
-         -I.
+         -I$(HOST_TEST)
 
 COMMON_SRCS   = ../../thinkpack-protocol/thinkpack_protocol.c
 
@@ -51,16 +52,17 @@ test: $(TARGETS)
 	./hot_cold_test_runner
 	./nfc_story_sounds_test_runner
 
-test_runner: $(COMMANDS_SRCS) unity_compat.h stubs/esp_log.h stubs/esp_err.h
+test_runner: $(COMMANDS_SRCS) $(HOST_TEST)/unity_compat.h \
+             $(HOST_TEST)/esp_log.h $(HOST_TEST)/esp_err.h
 	$(CC) $(CFLAGS) -o $@ $(COMMANDS_SRCS)
 
-echo_chamber_test_runner: $(ECHO_SRCS) unity_compat.h
+echo_chamber_test_runner: $(ECHO_SRCS) $(HOST_TEST)/unity_compat.h
 	$(CC) $(CFLAGS) -o $@ $(ECHO_SRCS)
 
-hot_cold_test_runner: $(HOT_COLD_SRCS) unity_compat.h
+hot_cold_test_runner: $(HOT_COLD_SRCS) $(HOST_TEST)/unity_compat.h
 	$(CC) $(CFLAGS) -o $@ $(HOT_COLD_SRCS)
 
-nfc_story_sounds_test_runner: $(STORY_SRCS) unity_compat.h
+nfc_story_sounds_test_runner: $(STORY_SRCS) $(HOST_TEST)/unity_compat.h
 	$(CC) $(CFLAGS) -o $@ $(STORY_SRCS)
 
 clean:

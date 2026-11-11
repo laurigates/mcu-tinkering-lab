@@ -71,6 +71,7 @@ Standard ESP-IDF projects import `tools/esp32-idf.just` to get shared containeri
 | `_idf-build-checked bin` | Private — validated build: filters output to warnings/errors/size and fails fast if `build/{{bin}}.bin` is missing. Pass the app basename. |
 | `_esp32-flash bin` | Private — native ESP32 flash (bootloader @0x1000, flash-size detect). Pass the app basename. |
 | `_s3-flash bin` | Private — native ESP32-S3 flash (bootloader @0x0, 4MB @80MHz). Pass the app basename. |
+| `_s3-argfile-flash` | Private — native ESP32-S3 flash of everything the build's `build/flash_args` lists (otadata included), at its offsets and flash size. For tables `_s3-flash` does not fit; the four ThinkPack OTA receivers use it (#1076). |
 | `_s3-reset` / `_s3-monitor` | Private — ESP32-S3 USB-Serial-JTAG reset / CDC-reset monitor (wrap the `tools/esp32s3-*.sh` scripts). |
 | `build` | Public — delegates to `_idf-build` (override to add pre-build steps) |
 | `clean` | Public — delegates to `_idf-clean` |
@@ -188,7 +189,7 @@ assumptions, and dry-runs every flash recipe to check the files it names and
 the offset in front of each (see below). An offset that is not a literal number
 in the dry-run (a shell variable inside a shebang recipe) is skipped without a
 finding, so read your own dry-run once after the final edit as well. A target
-missing from `BOOTLOADER_OFFSETS` is not skipped: it fails as unverifiable. The build-guide drift guard has the same gap for the
+missing from `bootloader_offset` in `tools/lib/otadata-predicate.sh` is not skipped: it fails as unverifiable. The build-guide drift guard has the same gap for the
 opposite reason — it runs *only* in CI — and
 `build-guide-drift-guard.md` § 2 carries the extract-and-run recipe plus the
 negative control that a guard change needs.
@@ -205,8 +206,10 @@ writes `flash: (_s3-flash bin_name)` and inherits all four silently.
 | 3 | Neither writes `ota_data_initial.bin` | the table has an `otadata` segment | Stale OTA state survives: a board that OTA'd to `ota_1` keeps booting `ota_1` while you flash `ota_0`. Flashes clean, runs the old image — **silent** |
 | 4 | App at 0x10000 | the table puts the app elsewhere | App written to the wrong offset — **silent** |
 
-Fail any one and keep the flash recipe **inline** with explicit offsets;
-`packages/robocar/unified/justfile` is the worked example.
+Fail any one and, on an ESP32-S3, compose `flash: _s3-argfile-flash`, which
+hands esptool the build's own `flash_args` and so follows any table; or keep the
+flash recipe **inline** with explicit offsets, as
+`packages/robocar/unified/justfile` does.
 
 **Do not judge this by eye.** The previous wording here asked whether the layout
 looked "exotic" and listed offsets and argfiles as the tell — flash *size* was
@@ -240,10 +243,12 @@ recipe is written:
 - each `<offset> build/<file>.bin` pair puts the file where the build expects it
   (issue #651): the bootloader at the target's ROM offset (0x1000 on
   esp32/esp32s2, 0x2000 on esp32p4/esp32c5, 0x0 on the other targets listed in
-  `BOOTLOADER_OFFSETS`, from the project justfile's `target`), the partition table at `CONFIG_PARTITION_TABLE_OFFSET`
-  (default 0x8000), otadata at the table's otadata row, and the app at the
+  `bootloader_offset`, from the project justfile's `target`), the partition table at `CONFIG_PARTITION_TABLE_OFFSET`
+  (a Kconfig hex, default 0x8000), otadata at the table's otadata row, and the app at the
   partition `idf.py flash` uses — `factory` if there is one, else the lowest
-  `ota_N`. A part whose expected offset
+  `ota_N`. Every one of those offsets comes from `tools/lib/otadata-predicate.sh`,
+  the functions the manifest generator calls (issue #1090), read the way
+  `gen_esp32part.py` reads them (`52K` is 0xd000). A part whose expected offset
   cannot be worked out (unknown target, an app or otadata row with a blank
   offset) is reported as unverifiable rather than passed. An otadata row with a
   blank offset is still a row: the predicate prints `auto` for it, a full flash
@@ -279,6 +284,17 @@ over whatever partition sits there. `llm-telegram`'s otadata at 0xe000 (not the
 usual 0xd000, because its nvs is 0x5000) was copied from `partitions.csv` by hand
 in #648; moving it to 0xd000 now fails the check.
 
+**A project that writes OTA images needs a table that can take one.** The same
+script fails (`OTA_TABLE`) when a project's `main/` sources call
+`thinkpack_ota_receiver_init` or `thinkpack_ota_apply` and its resolved table
+lacks an otadata row or two `ota_N` app slots: `esp_ota_get_next_update_partition()`
+then returns NULL and every apply fails at runtime, with a green build and a
+clean flash. The four ThinkPack receivers sat in that state until #1076; they
+now share `packages/components/thinkpack-ota/partitions.csv`, selected by
+`CONFIG_PARTITION_TABLE_CUSTOM_FILENAME`. The table lives in that component's
+directory because each receiver's `extra_paths` already names it, so a table
+change rebuilds all four in CI.
+
 ### Monitor Recipe
 
 Projects using USB-serial adapters get the shared monitor automatically via `esp32-idf.just`.
@@ -312,7 +328,8 @@ that the host suite, which lists its own sources, could not.
    flash, check the four assumptions above before composing
    `flash: (_esp32-flash bin_name)` / `(_s3-flash bin_name)` — then confirm with
    `python3 tools/check-flash-recipes.py`, which the pre-commit hook runs anyway.
-   Keep the recipe inline if any assumption fails
+   If any assumption fails, compose `flash: _s3-argfile-flash` (ESP32-S3) or
+   keep the recipe inline
 4. Define `info` recipe (project-specific)
 5. Override `build` for pre-build steps if needed (e.g., `build: credentials (_idf-build-checked bin_name)`)
 6. Use `require-port` as dependency for flash recipes (the shared `_*-flash` recipes already do)

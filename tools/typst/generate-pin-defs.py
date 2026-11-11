@@ -43,7 +43,6 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "tools"))
 from hardware import HardwareError, join  # noqa: E402
 
-
 # ── Extract lists: (category_heading, c_macro_name, typst_name, transform) ──
 # One list per pin-macro convention (EXTRACTS, below), because the macro names
 # differ per project.

@@ -37,6 +37,7 @@ connection are the same mark.
 from __future__ import annotations
 
 import heapq
+import itertools
 import math
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
@@ -108,7 +109,7 @@ class _BBox:
     xmax: float
     ymax: float
 
-    def inflated(self, margin: float) -> "_BBox":
+    def inflated(self, margin: float) -> _BBox:
         return _BBox(
             self.xmin - margin,
             self.ymin - margin,
@@ -302,7 +303,7 @@ def _path_commands(
     end than ``radius`` shrinks to fit rather than overshoot the bend.
     """
     cmds: list[Coord | str] = ["M", points[0]]
-    for (ax, ay), (bx, by) in zip(points, points[1:]):
+    for (ax, ay), (bx, by) in itertools.pairwise(points):
         length = abs(bx - ax) + abs(by - ay)  # axis-aligned: L1 == length
         if length <= _EPS:
             continue
@@ -324,7 +325,11 @@ def _path_commands(
             else:
                 clusters.append([t])
 
-        def at(t: float, lift: float = 0.0) -> Coord:
+        # The segment's vectors are bound as defaults: at() is rebuilt for each
+        # segment and must not read the loop's later values (B023).
+        def at(
+            t: float, lift: float = 0.0, ax=ax, ay=ay, ux=ux, uy=uy, nx=nx, ny=ny
+        ) -> Coord:
             return (
                 round(ax + ux * t + nx * lift, 6) + 0.0,
                 round(ay + uy * t + ny * lift, 6) + 0.0,
@@ -345,7 +350,7 @@ def _path_commands(
 
 def _axis_segments(wire: list[Coord]):
     """``(index, axis, fixed, lo, hi)`` for each non-degenerate segment."""
-    for i, ((ax, ay), (bx, by)) in enumerate(zip(wire, wire[1:])):
+    for i, ((ax, ay), (bx, by)) in enumerate(itertools.pairwise(wire)):
         if abs(ay - by) <= _EPS and abs(ax - bx) > _EPS:
             yield i, "H", ay, min(ax, bx), max(ax, bx)
         elif abs(ax - bx) <= _EPS and abs(ay - by) > _EPS:
@@ -440,21 +445,21 @@ def _junction_points(
     """
     closed = list(closed) + [(False, False)] * (len(wires) - len(closed))
     ends: list[Coord] = []
-    for w, shut in zip(wires, closed):
+    for w, shut in zip(wires, closed, strict=False):
         if not w:
             continue
-        for p, is_closed in zip((w[0], w[-1]), shut):
+        for p, is_closed in zip((w[0], w[-1]), shut, strict=True):
             if not is_closed and not any(_same(p, q) for q in ends):
                 ends.append(p)
     found = []
     for p in ends:
         branches = 0
-        for w, shut in zip(wires, closed):
+        for w, shut in zip(wires, closed, strict=False):
             if not w:
                 continue
             at_ends = sum(
                 _same(p, q) and not is_closed
-                for q, is_closed in zip((w[0], w[-1]), shut)
+                for q, is_closed in zip((w[0], w[-1]), shut, strict=True)
             )
             if not at_ends and any(_same(p, q) for q in (w[0], w[-1])):
                 continue  # this wire only reaches p at a closed end
@@ -562,7 +567,7 @@ class RoutedWire:
     element: Path | None = field(default=None, repr=False)
     # What wire() routed it against, so finish() can route it again in
     # another net order (#494).
-    _plan: "_Plan | None" = field(default=None, repr=False, compare=False)
+    _plan: _Plan | None = field(default=None, repr=False, compare=False)
 
     @property
     def color(self) -> str:
@@ -1035,7 +1040,7 @@ class Router:
         ends = ((start, entry), (end, exit_))
         obstacles = tuple(
             b
-            for raw, b in zip(boxes, inflated)
+            for raw, b in zip(boxes, inflated, strict=True)
             if not any(raw.contains(*pin) and b.contains(*stub) for pin, stub in ends)
         )
 
@@ -1068,7 +1073,7 @@ class Router:
         self._wires.append(routed)
         return routed
 
-    def _route(self, plan: "_Plan", occupied: _Occupancy) -> list[Coord]:
+    def _route(self, plan: _Plan, occupied: _Occupancy) -> list[Coord]:
         """The polyline for ``plan`` given the wires already in ``occupied``."""
         path = self._astar(
             plan.entry,
@@ -1132,7 +1137,7 @@ class Router:
         leads = self._leads()
         sites = _hop_sites(polylines, [pts for pts, _ in leads])
         drawn = []
-        for w, hops in zip(self._wires, sites):
+        for w, hops in zip(self._wires, sites, strict=True):
             if w.element is not None:
                 if hops != w.hops:
                     w.hops = hops
@@ -1244,7 +1249,7 @@ class Router:
         # never be skipped as a duplicate, so at least one candidate scored.
         assert best is not None, "ORDERINGS must not be empty"
         _, self.ordering, routed, self._occupied = best
-        for w, points in zip(batch, routed):
+        for w, points in zip(batch, routed, strict=True):
             w.points = points
 
     def _nudge_apart(self) -> None:
@@ -1495,7 +1500,7 @@ def _nudge_wires(
                 continue
             trial = [*wires[:i], moved, *wires[i + 1 :]]
             s, g = evaluate(trial)
-            if s >= score or any(n > o for n, o in zip(g, guard)):
+            if s >= score or any(n > o for n, o in zip(g, guard, strict=True)):
                 continue
             if best is None or s < best[0]:
                 best = (s, g, i, moved)
@@ -1722,7 +1727,7 @@ def _snap_final_approach(path: list[Coord], goal: Coord) -> list[Coord]:
     if len(path) < 2:
         return [goal] if not path else [path[0], goal]
 
-    lx, ly = path[-1]
+    lx, _ly = path[-1]
     if len(path) >= 3:
         px, py = path[-2]
         if px == lx:  # final move was vertical -> align x to goal's x

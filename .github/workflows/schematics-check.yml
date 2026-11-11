@@ -14,9 +14,11 @@ on:
       - '**/main/pin_config.h'
       - '**/hardware.toml'
       # The join also reads hardware.toml's extra_headers and a legacy
-      # src/pin_config.h, and test_components.py reads WIRING.md (#460).
+      # src/pin_config.h, and test_components.py reads WIRING.md (#460) and
+      # the build guide's capacitor table (#1077).
       - '**/src/pin_config.h'
       - '**/WIRING.md'
+      - 'packages/robocar/unified/docs/build-guide.typ'
       - 'packages/robocar/unified/main/planner_task.h'
       - 'packages/robocar/unified/main/plan_activity.h'
       - '.github/workflows/schematics-check.yml'
@@ -32,9 +34,11 @@ on:
       - '**/main/pin_config.h'
       - '**/hardware.toml'
       # The join also reads hardware.toml's extra_headers and a legacy
-      # src/pin_config.h, and test_components.py reads WIRING.md (#460).
+      # src/pin_config.h, and test_components.py reads WIRING.md (#460) and
+      # the build guide's capacitor table (#1077).
       - '**/src/pin_config.h'
       - '**/WIRING.md'
+      - 'packages/robocar/unified/docs/build-guide.typ'
       - 'packages/robocar/unified/main/planner_task.h'
       - 'packages/robocar/unified/main/plan_activity.h'
       - '.github/workflows/schematics-check.yml'
@@ -112,9 +116,14 @@ jobs:
             exit 1
           fi
 
+      # Read the same way as the SVG gate, so a PNG never committed gets the
+      # notice too (#1091); `git diff --quiet` sees only tracked files.
       - name: Surface incidental PNG drift
         if: always()
         run: |
-          if ! git diff --quiet -- 'docs/schematics/images/*.png'; then
-            echo "::notice::PNG(s) differ from committed copy — likely cairo encoder version drift across machines, not a content change. Not failing the build."
+          set -euo pipefail
+          drift=$(git status --porcelain --untracked-files=all -- 'docs/schematics/images/*.png')
+          if [ -n "$drift" ]; then
+            echo "$drift"
+            echo "::notice::PNG(s) differ from committed copy, or were never committed — likely cairo encoder version drift across machines, not a content change. Not failing the build."
           fi

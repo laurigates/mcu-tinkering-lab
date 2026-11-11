@@ -188,4 +188,5 @@ One line per rule. Each group's doc has the full reasoning and the tests that ho
 - Before an install the robot announces, keeps a postpone window, parks (`ota_park.c`) and holds still (`reactive_controller_set_hold()`); a failed install releases the hold. Keep the manifest's `notes` under the old 2048-byte manifest buffer (`changelog-notes.py --max-bytes`).
 - Set the Improv writer (`improv_console_write()`) before any `improv_wifi_send_*()` call; Improv replies go through the VFS console, without the usb_serial_jtag driver.
 - Console lines are built by `console_line_feed()`, which keeps every byte `improv_wifi_process_byte()` claims out of the line: a credentials packet holds the Wi-Fi password, and lines are logged.
+- Improv is armed and disarmed only by bumping `s_improv_session` (odd while armed), which `console_line_feed()` reads per byte, with the read time, to finish a packet in flight across an edge and to drop the rest of a packet's burst (#1087).
 - The Improv announcement is `improv_wifi_announce()`, and a failed attempt ends with `improv_wifi_fail_provisioning()`.

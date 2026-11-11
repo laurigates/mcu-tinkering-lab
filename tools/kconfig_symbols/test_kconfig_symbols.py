@@ -35,6 +35,46 @@ def _write(path: Path, text: str) -> Path:
     return path
 
 
+# Where the repo pins an ESP-IDF version: the dev image's base, the tag
+# docker-compose builds it as (a stale tag keeps serving the old cached image),
+# and any literal version in a workflow. `${{ env.IDF_VERSION }}` is a
+# reference, not a pin, so the workflow forms require a literal `v<digit>`.
+IDF_PIN_SOURCES = (
+    ("Dockerfile", re.compile(r"^FROM espressif/idf:(v[0-9][^\s]*)", re.MULTILINE)),
+    (
+        "docker-compose.yml",
+        re.compile(
+            r"^\s*image:\s*mcu-tinkering-lab/esp-idf:(v[0-9][^\s]*)", re.MULTILINE
+        ),
+    ),
+)
+IDF_WORKFLOW_PIN = re.compile(
+    r"^\s*IDF_VERSION:\s*['\"]?(v[0-9][^'\"\s]*)"
+    r"|esp_idf_version:\s*['\"]?(v[0-9][^'\"\s]*)"
+    r"|espressif/idf:(v[0-9][^'\"\s]*)",
+    re.MULTILINE,
+)
+
+
+def idf_version_pins(root: Path) -> dict[str, set[str]]:
+    """Each ESP-IDF version pinned under ``root``, by repo-relative path."""
+    pins: dict[str, set[str]] = {}
+    for rel, pattern in IDF_PIN_SOURCES:
+        path = root / rel
+        if path.exists():
+            found = set(pattern.findall(path.read_text(encoding="utf-8")))
+            if found:
+                pins[rel] = found
+    for path in sorted((root / ".github" / "workflows").glob("*.y*ml")):
+        found = {
+            next(g for g in m.groups() if g)
+            for m in IDF_WORKFLOW_PIN.finditer(path.read_text(encoding="utf-8"))
+        }
+        if found:
+            pins[path.relative_to(root).as_posix()] = found
+    return pins
+
+
 def _list(component: str, version: str, symbols: set[str], depends: str = ""):
     header = {"component": component, "version": version, "depends": depends}
     return parse_list(format_list(header, symbols))
@@ -320,21 +360,65 @@ class ExtraPathsModuleTests(unittest.TestCase):
 class RepoTests(unittest.TestCase):
     """The committed lists and every tracked sdkconfig.defaults."""
 
-    def test_idf_list_matches_the_image_the_builds_use(self):
-        # Tripwire for the ESP-IDF bump (#734): the committed symbol list must
-        # come from the same ESP-IDF the Dockerfile and CI build with. When this
-        # fails, run `just kconfig-symbols::idf` and delete the old list.
-        idf = check.idf_list()
-        dockerfile = (REPO / "Dockerfile").read_text(encoding="utf-8")
-        from_tag = re.search(
-            r"^FROM espressif/idf:(v[0-9.]+)", dockerfile, re.MULTILINE
+    def test_every_esp_idf_pin_agrees_with_the_idf_list(self):
+        # Tripwire for the ESP-IDF bump (#734): every file that pins an ESP-IDF
+        # version must name the same one, and the committed symbol list must
+        # come from it. When the pins agree with each other but not with the
+        # list, run `just kconfig-symbols::idf` and delete the old list.
+        pins = idf_version_pins(REPO)
+        # Control: discovery finds the pins the builds, the release, the lock
+        # refresh and the dev container use, so a broken pattern cannot pass
+        # by finding nothing.
+        for where in (
+            "Dockerfile",
+            "docker-compose.yml",
+            ".github/workflows/_ci-build-esp32.yml",
+            ".github/workflows/build-firmware.yml",
+            ".github/workflows/refresh-idf-locks.yml",
+        ):
+            self.assertIn(where, pins, f"no ESP-IDF version found in {where}")
+        found = sorted(f"{where}: {v}" for where, vs in pins.items() for v in vs)
+        versions = {v for vs in pins.values() for v in vs}
+        self.assertEqual(len(versions), 1, f"the ESP-IDF pins disagree: {found}")
+        self.assertEqual(
+            versions,
+            {check.idf_list().header["version"]},
+            f"the committed ESP-IDF symbol list is not from {found}",
         )
-        ci = (REPO / ".github/workflows/_ci-build-esp32.yml").read_text(
-            encoding="utf-8"
-        )
-        ci_version = re.search(r"IDF_VERSION:\s*'(v[0-9.]+)'", ci)
-        self.assertEqual(idf.header["version"], from_tag.group(1))
-        self.assertEqual(idf.header["version"], ci_version.group(1))
+
+    def test_pin_discovery_reads_each_form(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write(root / "Dockerfile", "FROM espressif/idf:v9.1\n")
+            _write(
+                root / "docker-compose.yml",
+                "services:\n  esp-idf:\n    image: mcu-tinkering-lab/esp-idf:v9.2\n",
+            )
+            _write(
+                root / ".github/workflows/a.yml",
+                """\
+                env:
+                  IDF_VERSION: 'v9.3'
+                jobs:
+                  b:
+                    steps:
+                      - with:
+                          esp_idf_version: ${{ env.IDF_VERSION }}
+                      - with:
+                          esp_idf_version: v9.4
+                      - run: docker pull espressif/idf:v9.5
+                      - run: docker pull espressif/idf:${{ env.IDF_VERSION }}
+                """,
+            )
+            _write(root / ".github/workflows/none.yml", "jobs: {}\n")
+            self.assertEqual(
+                idf_version_pins(root),
+                {
+                    "Dockerfile": {"v9.1"},
+                    "docker-compose.yml": {"v9.2"},
+                    ".github/workflows/a.yml": {"v9.3", "v9.4", "v9.5"},
+                },
+            )
 
     def test_every_place_that_sets_the_idf_version_agrees(self):
         # #734 lists five places that set the ESP-IDF version. The compose

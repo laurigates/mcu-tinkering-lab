@@ -45,6 +45,7 @@ import copy
 import importlib.util
 import unittest
 from pathlib import Path
+from typing import ClassVar
 
 from kicad import boardinput, testfixture
 
@@ -136,7 +137,7 @@ class TrackKeepoutTests(unittest.TestCase):
     and routes through them; a [[tracks]] trunk reaches it as keepouts."""
 
     TEXT = '  (structure\n    (via "Via[0-1]_600:300_um")\n  )\n'
-    TRUNK = {
+    TRUNK: ClassVar[dict] = {
         "name": "trunk",
         "net": "+5V",
         "layer": "F.Cu",
