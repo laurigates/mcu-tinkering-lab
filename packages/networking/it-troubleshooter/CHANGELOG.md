@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.10](https://github.com/laurigates/mcu-tinkering-lab/compare/it-troubleshooter-v0.1.9...it-troubleshooter-v0.1.10) (2026-11-10)
+
+
+### Miscellaneous
+
+* **sdkconfig:** drop unknown Kconfig symbols and gate them in pre-commit ([#1072](https://github.com/laurigates/mcu-tinkering-lab/issues/1072)) ([82f621f](https://github.com/laurigates/mcu-tinkering-lab/commit/82f621fe70f5623eea98f7dad84f322730185651))
+
 ## [0.1.9](https://github.com/laurigates/mcu-tinkering-lab/compare/it-troubleshooter-v0.1.8...it-troubleshooter-v0.1.9) (2026-11-09)
 
 

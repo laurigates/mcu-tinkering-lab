@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.6](https://github.com/laurigates/mcu-tinkering-lab/compare/switch-usb-proxy-v0.1.5...switch-usb-proxy-v0.1.6) (2026-11-10)
+
+
+### Bug Fixes
+
+* **tools:** close four gaps in the flash-recipe and otadata checks ([#1070](https://github.com/laurigates/mcu-tinkering-lab/issues/1070)) ([d181fbf](https://github.com/laurigates/mcu-tinkering-lab/commit/d181fbf37089c47c6b06717c197a7c632238eff5))
+
 ## [0.1.5](https://github.com/laurigates/mcu-tinkering-lab/compare/switch-usb-proxy-v0.1.4...switch-usb-proxy-v0.1.5) (2026-11-01)
 
 
