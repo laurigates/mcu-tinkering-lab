@@ -344,13 +344,43 @@ static void cmd_ctrl(const char *arg)
     printf("OK ctrl = %s (switches at the next tick; 'save' to keep)\n", ctrl_name(mode));
 }
 
+// After a CMD_SET_IMU_MOUNT was sent (`mount`, or `load`'s burst): wait for
+// core 1 to drain it and give the mirror the mount core 1 applies, so `get`
+// and a later `save` never disagree with `stat`. Core 1 drops the mount if the
+// hold-upright gesture armed it first. Returns true when the mount applied.
+static bool adopt_mount(uint32_t requested)
+{
+    balance_snapshot_t s;
+    const bool synced = wait_core1(&s);
+    switch (cli_mount_outcome(synced, s.imu_mount, requested)) {
+        case CLI_MOUNT_APPLIED:
+            mirror->imu_mount = s.imu_mount;
+            return true;
+        case CLI_MOUNT_DROPPED:
+            mirror->imu_mount = s.imu_mount;
+            printf("ERR: core 1 armed (state %s) before the mount arrived — mount stays %s; "
+                   "'disarm' and try again\n",
+                   state_name(s.state), mount_name(s.imu_mount));
+            return false;
+        case CLI_MOUNT_NO_ANSWER:
+        default:
+            // Still queued: core 1 applies it unless it arms first.
+            mirror->imu_mount = requested;
+            printf("sent mount %s, but core 1 has not answered — check 'stat'\n",
+                   mount_name(requested));
+            return false;
+    }
+}
+
 // GY-521 orientation: `up` = component side up (X forward, Z up), `down` =
 // component side down, turned 180 degrees about the axle (the delivered
-// 8d18cd8d carrier). Disarmed only: the pitch would jump 180 degrees.
+// 8d18cd8d carrier). Disarmed only: the pitch would jump 180 degrees. The
+// state is judged after earlier commands (a pasted `disarm`) have reached
+// core 1, as `arm` does.
 static void cmd_mount(const char *arg)
 {
     balance_snapshot_t s;
-    balance_control_get_snapshot(&s);
+    const bool synced = wait_core1(&s);
     if (arg == NULL) {
         printf("mount: %s\n", mount_name(s.imu_mount));
         return;
@@ -364,9 +394,17 @@ static void cmd_mount(const char *arg)
         printf("usage: mount [up|down]\n");
         return;
     }
-    if (s.state == BAL_STATE_RUN) {
-        printf("ERR: disarm first — mount still %s\n", mount_name(s.imu_mount));
-        return;
+    switch (cli_gate_mount(synced, s.state)) {
+        case CLI_GATE_SEND:
+            break;
+        case CLI_GATE_BUSY:
+            printf("ERR: core 1 busy — earlier commands not applied yet, mount still %s; "
+                   "mount again\n",
+                   mount_name(s.imu_mount));
+            return;
+        default:
+            printf("ERR: disarm first — mount still %s\n", mount_name(s.imu_mount));
+            return;
     }
     balance_cmd_t c = mount_cmd(mount);
     if (!balance_control_send_cmd(&c)) {
@@ -374,8 +412,9 @@ static void cmd_mount(const char *arg)
         return;
     }
     note_sent();
-    mirror->imu_mount = mount;
-    printf("OK mount = %s ('save' to keep)\n", mount_name(mount));
+    if (adopt_mount(mount)) {
+        printf("OK mount = %s ('save' to keep)\n", mount_name(mount));
+    }
 }
 
 static void print_upside_down(const char *prefix, float up_g, uint32_t mount)
@@ -391,12 +430,15 @@ static void print_upside_down(const char *prefix, float up_g, uint32_t mount)
 // runs; a refusal there shows in arm_refusals and is reported here. If core 1
 // has not caught up (a `save` before it stalls core 1 past the wait), nothing
 // is judged on the stale snapshot and nothing is sent. Core 1 arms only from
-// IDLE, so any other state is refused here rather than reported as OK.
+// IDLE, so any other state is refused here rather than reported as OK. Core 1
+// arms in its command drain and runs the RUN branch in the same tick, so a
+// robot lying past the tilt cutoff (or a silent IMU) shows FAULT in the first
+// snapshot after the arm; that is reported instead of OK.
 static void cmd_arm(void)
 {
     balance_snapshot_t s;
     const bool synced = wait_core1(&s);
-    switch (cli_gate_arm(synced, s.state, &s.gravity)) {
+    switch (cli_gate_arm(synced, s.state, s.imu_ok, &s.gravity)) {
         case CLI_GATE_SEND:
             break;
         case CLI_GATE_BUSY:
@@ -406,10 +448,17 @@ static void cmd_arm(void)
         case CLI_GATE_UPSIDE_DOWN:
             print_upside_down("", s.gravity.up_g, s.imu_mount);
             return;
+        case CLI_GATE_FAULT_NO_IMU:
+            // Core 1 clears FAULT by a hold only while the IMU reads.
+            printf("ERR: state FAULT, IMU not responding — only 'disarm' clears it; "
+                   "'stat' shows when the IMU reads again\n");
+            return;
         default:
             if (s.state == BAL_STATE_FAULT) {
-                printf("ERR: state FAULT (tilt cutoff) — 'disarm' to clear it, or hold upright "
-                       "within %.0f deg for %.0f s; then arm\n",
+                // Tilt cutoff, or an IMU read that failed and has recovered:
+                // either way the hold clears it now the IMU reads.
+                printf("ERR: state FAULT — 'disarm' to clear it, or hold upright within %.0f deg "
+                       "for %.0f s; then arm\n",
                        (double)FAULT_CLEAR_DEG, (double)FAULT_CLEAR_S);
             } else {
                 printf("ERR: state %s — already armed; 'disarm' to stop\n", state_name(s.state));
@@ -423,15 +472,30 @@ static void cmd_arm(void)
         return;
     }
     note_sent();
-    if (!wait_core1(&s)) {
-        printf("OK sent, but core 1 has not answered — check 'stat'\n");
-        return;
+    const bool answered = wait_core1(&s);
+    switch (cli_arm_outcome(answered, refusals, s.arm_refusals, s.state, s.imu_ok)) {
+        case CLI_ARM_OK:
+            printf("OK\n");
+            return;
+        case CLI_ARM_NO_ANSWER:
+            printf("OK sent, but core 1 has not answered — check 'stat'\n");
+            return;
+        case CLI_ARM_REFUSED:
+            print_upside_down("core 1 refused arm: ", s.arm_refused_up_g, s.imu_mount);
+            return;
+        case CLI_ARM_FAULTED_TILT:
+            printf("ERR: armed, then FAULT (pitch %.1f deg, tilt cutoff %.0f deg) — stand it "
+                   "upright, 'disarm', then arm\n",
+                   (double)s.pitch_deg, (double)TILT_CUTOFF_DEG);
+            return;
+        case CLI_ARM_FAULTED_NO_IMU:
+            printf("ERR: armed, then FAULT — IMU not responding; only 'disarm' clears it\n");
+            return;
+        case CLI_ARM_NOT_ARMED:
+        default:
+            printf("ERR: core 1 did not arm (state %s) — check 'stat'\n", state_name(s.state));
+            return;
     }
-    if (s.arm_refusals != refusals) {
-        print_upside_down("core 1 refused arm: ", s.arm_refused_up_g, s.imu_mount);
-        return;
-    }
-    printf("OK\n");
 }
 
 static float battery_volts(void)
@@ -569,13 +633,17 @@ static void handle_line(char *l)
             return;
         }
         if (gate != CLI_GATE_SEND) {
-            printf("ERR: disarm first — load would change the mount, which core 1 keeps while "
+            printf("ERR: disarm first — load could change the mount, which core 1 keeps while "
                    "armed; nothing loaded\n");
             return;
         }
         bool found = param_store_load(mirror);
         boot_note[0] = '\0';
-        if (sync_all(true)) {
+        // The solve in sync_all() takes a few ms; if the hold-upright gesture
+        // arms core 1 before the burst drains, core 1 drops the mount.
+        // adopt_mount() reports that and keeps the mirror on what core 1
+        // applies.
+        if (sync_all(true) && adopt_mount(mirror->imu_mount)) {
             printf("%s\n", found ? "OK loaded from flash" : "no stored params — defaults loaded");
         }
         if (boot_note[0] != '\0') {

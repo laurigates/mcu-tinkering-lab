@@ -46,8 +46,9 @@ just balancebot::test    # host unit tests: pid, imu_filter, crc32, lqr, param_r
 `cli_gate.c` are **pure C with no SDK includes** so the host tests can compile
 them — keep them that way. Core 1's CMD_ARM and CMD_SET_IMU_MOUNT decisions live
 in `arm_gate.c` for that reason; keep `handle_command()` calling it. The CLI's
-`arm` and `load` refusals live in `cli_gate.c`; keep `cmd_arm()` and the `load`
-branch calling it. `param_store.c` only moves `param_record.c`'s bytes to and from flash.
+`arm`, `mount` and `load` refusals, and what `arm` and a sent mount report
+once core 1 drained them, live in `cli_gate.c`; keep `cmd_arm()`, `cmd_mount()`,
+`adopt_mount()` and the `load` branch calling it. `param_store.c` only moves `param_record.c`'s bytes to and from flash.
 
 ## Don't
 
