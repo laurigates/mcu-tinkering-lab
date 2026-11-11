@@ -113,5 +113,6 @@ if [ "${DRY_RUN:-false}" = "true" ]; then
     "$python" "$(dirname "$0")/dry_cut.py" "$driver" "${args[@]}" "$svg"
     echo "dry run: commands in ${svg%.svg}.cmd, log in ${svg%.svg}.log"
 else
-    "$python" "$driver" "${args[@]}" "$svg"
+    # autoblade.py sends the blade depth, which the driver leaves out for a Portrait 2.
+    "$python" "$(dirname "$0")/autoblade.py" "$driver" "${args[@]}" "$svg"
 fi

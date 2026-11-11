@@ -3,15 +3,18 @@
 python3 -m unittest discover -s tools/labels
 """
 
+import io
 import json
 import re
 import subprocess
 import sys
 import tempfile
+import types
 import unittest
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+import autoblade
 import labels
 
 HERE = Path(__file__).resolve().parent
@@ -339,6 +342,60 @@ class DryCut(unittest.TestCase):
         )
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("only runs dry", r.stderr)
+
+
+class AutobladeDepth(unittest.TestCase):
+    """autoblade.patch_depth() against a stand-in for the driver's Graphtec module."""
+
+    PORTRAIT2, CAMEO3 = (
+        0x1132,
+        0x112F,
+    )  # any two distinct ids; only list membership matters
+
+    def cutter(self, product_id: int):
+        sent: list[str] = []
+
+        class Cameo:
+            log = io.StringIO()
+
+            def setup(self, *args, **kwargs):
+                sent.append("driver setup")
+                return "setup result"
+
+            def product_id(self):
+                return product_id
+
+            def send_command(self, cmd):
+                sent.append(cmd)
+
+        graphtec = types.SimpleNamespace(
+            SilhouetteCameo=Cameo, PRODUCT_LINE_CAMEO3_ON=[self.CAMEO3]
+        )
+        autoblade.patch_depth(graphtec)
+        return graphtec.SilhouetteCameo(), sent
+
+    def test_depth_is_sent_after_setup_to_a_model_the_driver_skips(self):
+        dev, sent = self.cutter(self.PORTRAIT2)
+        self.assertEqual(dev.setup(autoblade=True, depth=1), "setup result")
+        self.assertEqual(sent, ["driver setup", "TF1,1"])
+        self.assertIn("depth: 1", dev.log.getvalue())
+
+    def test_a_model_the_driver_handles_is_left_alone(self):
+        dev, sent = self.cutter(self.CAMEO3)
+        dev.setup(autoblade=True, depth=1)
+        self.assertEqual(sent, ["driver setup"])
+
+    def test_nothing_is_sent_without_an_autoblade_or_a_depth(self):
+        dev, sent = self.cutter(self.PORTRAIT2)
+        dev.setup(autoblade=False, depth=1)
+        dev.setup(autoblade=True, depth=None)
+        self.assertEqual(sent, ["driver setup", "driver setup"])
+
+    def test_depth_is_clamped_to_the_blade_range(self):
+        dev, sent = self.cutter(self.PORTRAIT2)
+        dev.setup(autoblade=True, depth=15)
+        dev.setup(autoblade=True, depth=-2)
+        self.assertEqual([c for c in sent if c.startswith("TF")], ["TF10,1", "TF0,1"])
 
 
 class CutConnection(unittest.TestCase):

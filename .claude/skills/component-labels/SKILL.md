@@ -140,9 +140,14 @@ search included (#1068).
 3. **A plain driver dry run never reaches the cut.** With `--dry_run=True` the
    driver reads nothing back, and a job with marks waits for the sensor's
    "found" reply. `cut.sh` dry runs go through `dry_cut.py`, which answers that
-   one reply. The AutoBlade depth (`TF`) command is absent from a dry-run
-   transcript: the driver sets depth only after the real cutter reports an
-   AutoBlade in holder 1.
+   one reply.
+   **The driver never sends the blade depth to a Portrait 2.** It sends the
+   AutoBlade depth command (`TF`) only to the Cameo 3 and Cameo 4 lines, so
+   `--depth` was dropped and the blade stayed at whatever depth it was last
+   set to: the first test cut went through the liner. `autoblade.py` sends
+   it, live and in a dry run; a transcript with no `TF<depth>,1` before the
+   mark commands means the depth is not being set. The cutter takes about
+   10 s to adjust the blade when it arrives.
 4. **inkex from PyPI drags in PyGObject**, which needs cairo and
    gobject-introspection to build and which the driver never imports.
    `setup-cutter.sh` installs inkex with `--no-deps` and lists its real

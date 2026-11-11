@@ -15,6 +15,8 @@ import runpy
 import sys
 from pathlib import Path
 
+import autoblade
+
 FOUND = b"    0\x03"
 
 
@@ -22,8 +24,8 @@ def main() -> None:
     driver = Path(sys.argv[1]).resolve()
     if "--dry_run=True" not in sys.argv[2:]:
         sys.exit("dry_cut.py only runs dry: pass --dry_run=True")
-    sys.path.insert(0, str(driver.parent))
-    from silhouette import Graphtec  # noqa: E402  (the driver's own package)
+    Graphtec = autoblade.load_graphtec(driver)
+    autoblade.patch_depth(Graphtec)  # as a live job, so the transcript matches it
 
     real_read = Graphtec.SilhouetteCameo.read
 
