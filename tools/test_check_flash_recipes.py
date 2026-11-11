@@ -17,7 +17,9 @@ directly, and tools/generate-flasher-manifests.sh on a throwaway tree.
 
 from __future__ import annotations
 
+import contextlib
 import importlib.util
+import io
 import json
 import os
 import re
@@ -1179,6 +1181,34 @@ class OtaWriterTableTests(TempRepo):
         self.project("int x;\n")
         self.write(f"{self.PROJECT}/main/ota/rx.c", self.RECEIVER)
         self.assertEqual(self.codes(), ["OTA_TABLE"])
+
+    def run_main(self) -> tuple[int, str]:
+        # main() itself, so a finding the check returns but main() drops fails
+        # here. The dry-run audit needs `just` and the real root justfile; it is
+        # stubbed to report nothing, and the temp tree has no other inputs.
+        out = io.StringIO()
+        with (
+            mock.patch.object(sys, "argv", ["check-flash-recipes.py"]),
+            mock.patch.object(cfr.shutil, "which", return_value="just"),
+            mock.patch.object(cfr, "check_flash_recipe_outputs", return_value=({}, [])),
+            contextlib.redirect_stdout(out),
+        ):
+            code = cfr.main()
+        return code, out.getvalue()
+
+    def test_main_fails_on_a_receiver_with_a_single_app_table(self):
+        self.project(self.RECEIVER, "CONFIG_PARTITION_TABLE_SINGLE_APP=y\n")
+        code, out = self.run_main()
+        self.assertIn(f"{self.PROJECT}: OTA_TABLE:", out)
+        self.assertIn("STATUS=FAIL", out)
+        self.assertEqual(code, 1)
+
+    def test_main_passes_on_a_receiver_with_a_two_slot_table(self):
+        # The control: the same tree with a table that can take an image.
+        self.project(self.RECEIVER, "CONFIG_PARTITION_TABLE_CUSTOM=y\n", self.TWO_SLOTS)
+        code, out = self.run_main()
+        self.assertIn("STATUS=OK", out)
+        self.assertEqual(code, 0)
 
 
 class OtaWriterTableRepoTests(unittest.TestCase):
