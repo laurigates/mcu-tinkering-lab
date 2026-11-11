@@ -21,7 +21,7 @@ How to set up, build, test and submit changes in this monorepo.
 Requirements:
 
 - Docker, or Podman with `CONTAINER_CMD=podman`. ESP-IDF builds run in the
-  `espressif/idf:v5.4` container, so no local ESP-IDF install is needed.
+  `espressif/idf:v5.5.6` container, so no local ESP-IDF install is needed.
 - [just](https://github.com/casey/just)
 - [uv](https://github.com/astral-sh/uv) and Python 3.11+ for the simulation and
   Python tooling

@@ -32,7 +32,7 @@ ESP32-S3 with native USB-OTG works).
 
 ## Build Commands
 
-Builds run in Docker (`mcu-tinkering-lab/esp-idf:v5.4` via the shared
+Builds run in Docker (`mcu-tinkering-lab/esp-idf` via the shared
 `docker-compose.yml`); flash/monitor run natively.
 
 ```bash

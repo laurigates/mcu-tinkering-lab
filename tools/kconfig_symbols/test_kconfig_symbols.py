@@ -420,6 +420,44 @@ class RepoTests(unittest.TestCase):
                 },
             )
 
+    def test_every_place_that_sets_the_idf_version_agrees(self):
+        # #734 lists five places that set the ESP-IDF version. The compose
+        # volume mounted over /opt/esp is filled from the image only when the
+        # volume is created, so an unversioned name keeps local builds on the
+        # old IDF after the image moves: its name carries the version too.
+        def found(where: str, pattern: str) -> str:
+            text = (REPO / where).read_text(encoding="utf-8")
+            match = re.search(pattern, text, re.MULTILINE)
+            self.assertIsNotNone(match, f"no ESP-IDF version found in {where}")
+            return match.group(1)
+
+        expected = check.idf_list().header["version"]
+        pins = {
+            "Dockerfile": found("Dockerfile", r"^FROM espressif/idf:(\S+)"),
+            "docker-compose.yml image": found(
+                "docker-compose.yml", r"^\s*image: mcu-tinkering-lab/esp-idf:(\S+)"
+            ),
+            "docker-compose.yml volume": found(
+                "docker-compose.yml",
+                r"^\s*- mcu-tinkering-lab-esp-idf-tools-(\S+):/opt/esp",
+            ),
+            "docker-compose.yml volume name": found(
+                "docker-compose.yml",
+                r"^\s*name: mcu-tinkering-lab-esp-idf-tools-(\S+)$",
+            ),
+        }
+        for workflow in (
+            "_ci-build-esp32.yml",
+            "build-firmware.yml",
+            "refresh-idf-locks.yml",
+        ):
+            pins[workflow] = found(
+                f".github/workflows/{workflow}", r"^\s*IDF_VERSION:\s*'([^']+)'"
+            )
+        for where, version in pins.items():
+            with self.subTest(where=where):
+                self.assertEqual(version, expected)
+
     def test_idf_list_is_a_real_extraction(self):
         # Controls in both directions, so an empty or wrong extraction cannot
         # pass every project vacuously. The two dead symbols are the ones

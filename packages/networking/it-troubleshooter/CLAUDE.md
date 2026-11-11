@@ -14,7 +14,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Build Commands
 
-Builds run in Docker (`espressif/idf:v5.4`); flash/monitor run natively (USB passthrough on macOS is unreliable).
+Builds run in Docker (the repo's shared ESP-IDF image, version pinned in the root `Dockerfile`); flash/monitor run natively (USB passthrough on macOS is unreliable).
 
 ```bash
 just build        # Compile in Docker

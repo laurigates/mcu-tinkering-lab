@@ -262,6 +262,12 @@
     "yaml_file": "ceiling-fan-ir.yaml"
   },
   {
+    "system": "esphome",
+    "project": "presence-detector",
+    "path": "sensors/presence-detector",
+    "yaml_file": "presence-detector.yaml"
+  },
+  {
     "system": "pico",
     "project": "balancebot",
     "path": "robotics/balancebot",

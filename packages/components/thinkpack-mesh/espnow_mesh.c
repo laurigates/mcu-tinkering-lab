@@ -16,6 +16,7 @@
 #include <string.h>
 
 #include "esp_event.h"
+#include "esp_idf_version.h"
 #include "esp_log.h"
 #include "esp_mac.h"
 #include "esp_netif.h"
@@ -32,6 +33,11 @@
 #include "group_manager.h"
 #include "leader_election.h"
 #include "thinkpack_protocol.h"
+
+/* espnow_send_cb() below has the v5.5 esp_now_send_cb_t signature. */
+#if ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(5, 5, 0)
+#error "thinkpack-mesh needs ESP-IDF v5.5 or later (esp_now_send_cb_t changed in v5.5)"
+#endif
 
 static const char *TAG = "mesh";
 
@@ -210,10 +216,12 @@ static void on_peer_pruned(const thinkpack_peer_t *peer, void *user_ctx)
 /* ESP-NOW callbacks (WiFi task context — keep minimal)               */
 /* ------------------------------------------------------------------ */
 
-static void espnow_send_cb(const uint8_t *mac_addr, esp_now_send_status_t status)
+/* ESP-IDF v5.5 passes an esp_now_send_info_t (wifi_tx_info_t) in place of the
+ * bare destination MAC that v5.4's esp_now_send_cb_t took (esp_now.h). */
+static void espnow_send_cb(const esp_now_send_info_t *tx_info, esp_now_send_status_t status)
 {
-    if (status != ESP_NOW_SEND_SUCCESS) {
-        ESP_LOGW(TAG, "Send to " MACSTR " failed", MAC2STR(mac_addr));
+    if (status != ESP_NOW_SEND_SUCCESS && tx_info && tx_info->des_addr) {
+        ESP_LOGW(TAG, "Send to " MACSTR " failed", MAC2STR(tx_info->des_addr));
     }
 }
 

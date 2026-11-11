@@ -60,7 +60,7 @@ consistent and improve together. Import it and drive the document with
   intro: [ short paragraph for the title page ],
   meta: (
     ("Target MCU", [ESP32-S3 (8 MB PSRAM / flash)]),
-    ("Toolchain", [ESP-IDF v5.4 (containerized)]),
+    ("Toolchain", [ESP-IDF v5.5 (containerized)]),
   ),
   difficulty: [Intermediate · \~2–3 h],
   header-right: "<board name>",

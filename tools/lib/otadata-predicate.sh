@@ -44,14 +44,14 @@ partition_int() {
 }
 
 # Where the ROM loads the second-stage bootloader from, for an ESP-IDF target
-# name (esp32s3). Copied from ESP-IDF v5.4 components/bootloader/Kconfig.projbuild,
+# name (esp32s3). Copied from ESP-IDF v5.5.6 components/bootloader/Kconfig.projbuild,
 # BOOTLOADER_OFFSET_IN_FLASH ("not configurable in ESP-IDF"); the IDF-version
 # tripwire in tools/test_check_flash_recipes.py fails when the builds move to
 # another version. A target outside this table fails closed.
 bootloader_offset() {
     case "$1" in
         esp32 | esp32s2) echo 4096 ;;
-        esp32c5 | esp32p4) echo 8192 ;;
+        esp32c5 | esp32p4 | esp32h4) echo 8192 ;;
         esp32s3 | esp32c2 | esp32c3 | esp32c6 | esp32c61 | esp32h2) echo 0 ;;
         *)
             echo "ERROR: target \"$1\" has no known bootloader offset; add it to bootloader_offset in tools/lib/otadata-predicate.sh from components/bootloader/Kconfig.projbuild" >&2

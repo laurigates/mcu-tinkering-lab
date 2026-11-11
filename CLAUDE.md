@@ -71,7 +71,7 @@ mcu-tinkering-lab/
 
 | Layer | Technology |
 |-------|-----------|
-| Firmware | C/C++ with ESP-IDF v5.4+ |
+| Firmware | C/C++ with ESP-IDF v5.5 |
 | Build system | CMake (via ESP-IDF), justfile |
 | Simulation | Python 3.12, Pymunk, NumPy |
 | Python package manager | uv |
@@ -212,8 +212,8 @@ Most workflows delegate to reusable workflows from [`laurigates/.github`](https:
 - `tools/kicad.just` — Shared carrier recipes a project imports (`carrier-schematic`, `carrier-board`, `carrier-board-checked`, `carrier-check`, `carrier-review`, `carrier-fab`); a project's `hardware/carrier/board.toml` holds placement, fixed tracks, silkscreen, net classes, the pour and the ground-via fanout
 - `docs/reference/parts/` — the parts registry: one TOML per physical part a carrier mounts (KiCad symbol, footprint, LCSC number, pin map and where the pin order came from), named from `hardware.toml` by `part = "<slug>"`
 - `docs/reference/blocks/` — circuit blocks: a stage (buck, pack-input protection) designed once from registry parts, used from `hardware.toml` by `[blocks.<id>]` and expanded when the file is read (`tools/hardware/blocks.py`, [ADR-031](docs/decisions/ADR-031-circuit-blocks.md))
-- `docker-compose.yml` — ESP-IDF container service definition (`espressif/idf:v5.4`)
-- `tools/kconfig_symbols/` — checks every tracked `sdkconfig.defaults` without a build: each symbol must be defined by ESP-IDF (`idf-v5.4.txt`, extracted from the `espressif/idf` image by `just kconfig-symbols::idf`), the project's own Kconfig files, or its managed components (`components/<ns>__<name>@<version>.txt`, recorded from a build's `managed_components/` by `just kconfig-symbols::component`). ESP-IDF ignores an unknown symbol with only a build-log warning (#707). Runs as the `kconfig-symbols` pre-commit hook; a test fails when the ESP-IDF list and the Dockerfile's IDF version disagree
+- `docker-compose.yml` — ESP-IDF container service definition, built from the `Dockerfile` (`espressif/idf:v5.5.6`). The ESP-IDF version is set in the `Dockerfile`, the compose image tag and `esp-idf-tools` volume name, and `IDF_VERSION` in `_ci-build-esp32.yml`, `build-firmware.yml` and `refresh-idf-locks.yml`; `tools/kconfig_symbols/test_kconfig_symbols.py` fails when they disagree
+- `tools/kconfig_symbols/` — checks every tracked `sdkconfig.defaults` without a build: each symbol must be defined by ESP-IDF (`idf-v<version>.txt`, extracted from the `espressif/idf` image by `just kconfig-symbols::idf`), the project's own Kconfig files, or its managed components (`components/<ns>__<name>@<version>.txt`, recorded from a build's `managed_components/` by `just kconfig-symbols::component`). ESP-IDF ignores an unknown symbol with only a build-log warning (#707). Runs as the `kconfig-symbols` pre-commit hook; a test fails when the ESP-IDF list and the Dockerfile's IDF version disagree
 - `tools/refresh-idf-locks.py` — the one update path for git-tracked `dependencies.lock` files (`just refresh-idf-locks`, and the monthly `refresh-idf-locks.yml`). Nothing else re-resolves a tracked lock while its `idf_component.yml` is unchanged; editing the manifest re-resolves on the next build. Procedure: [`.claude/rules/esp-idf-dependency-locks.md`](.claude/rules/esp-idf-dependency-locks.md)
 - `packages/components/host-test/` — `unity_compat.h`, `esp_log.h` and `esp_err.h`, shared by every component host suite (`packages/<...>/components/<name>/test/Makefile`); `just components::test` builds and runs all of them (#1077)
 - `.clang-format` — C/C++ formatting rules
