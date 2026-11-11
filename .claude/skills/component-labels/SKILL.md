@@ -123,10 +123,11 @@ the scan's local identifier when two cutters match. `LABEL_CUTTER=bluetooth`
 with `LABEL_CUTTER_ADDR=<MAC>` is Bluetooth Classic, which the driver has on
 Linux and Windows only.
 
-Not yet run against the Portrait 2: the driver's BLE path was verified
-upstream only on a Cameo 5 Alpha with a pen, and whether the Portrait 2
-advertises over BLE at all is unknown until a scan shows it. Record the first
-result here, the registration-mark search included.
+The Portrait 2 advertises over BLE as `Portrait2-<6 hex digits>` (scan on
+macOS, 2026-11-11), which the default name matches. No cut has been sent over
+BLE yet: the driver's BLE path was verified upstream only on a Cameo 5 Alpha
+with a pen. Record the first `test-cut` result here, the registration-mark
+search included (#1068).
 
 ## Traps
 
