@@ -377,7 +377,8 @@ class AutobladeDepth(unittest.TestCase):
     def test_depth_is_sent_after_setup_to_a_model_the_driver_skips(self):
         dev, sent = self.cutter(self.PORTRAIT2)
         self.assertEqual(dev.setup(autoblade=True, depth=1), "setup result")
-        self.assertEqual(sent, ["driver setup", "TF1,1"])
+        # Tool-select first: without it the Portrait 2 lands on the wrong depth.
+        self.assertEqual(sent, ["driver setup", "J1", "TF1,1"])
         self.assertIn("depth: 1", dev.log.getvalue())
 
     def test_a_model_the_driver_handles_is_left_alone(self):

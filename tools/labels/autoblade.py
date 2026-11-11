@@ -8,8 +8,12 @@ an AutoBlade and acts on the command, but is not in that list, so --depth never
 reached it and the blade stayed at the depth it was last set to. With the blade
 left deep, a kiss cut went through the liner.
 
+On the Portrait 2 the depth command needs a tool-select (J1) before it. Sent
+alone, TF1,1 moved the blade but left it at the wrong depth; "J1 TF<d>,1" put
+the indicator on 1, 5 and 8 when asked for each.
+
 patch_depth() wraps the driver's setup(): after the driver's own setup, a
-cutter outside that list is sent the depth the job asked for. Everything else
+cutter outside that list is sent J1 and the depth the job asked for. Everything else
 is left to the driver. dry_cut.py applies the same patch, so a dry-run
 transcript shows the command a live job sends.
 """
@@ -34,6 +38,9 @@ def patch_depth(graphtec) -> None:
         if self.product_id() in graphtec.PRODUCT_LINE_CAMEO3_ON:
             return result  # the driver has sent it
         depth = max(MIN_DEPTH, min(MAX_DEPTH, int(depth)))
+        # The depth command alone moved the blade to the wrong depth (9, then 6,
+        # asked for 1). After a tool-select it landed on the depth asked for.
+        self.send_command(f"J{TOOLHOLDER}")
         self.send_command(f"TF{depth},{TOOLHOLDER}")
         print(f"depth: {depth} (sent by tools/labels/autoblade.py)", file=self.log)
         return result

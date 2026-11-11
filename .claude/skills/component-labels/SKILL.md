@@ -90,7 +90,7 @@ Record the settings that worked in the table below.
 
 | Sticker stock | depth | pressure | speed | Result |
 |---|---|---|---|---|
-| (not yet cut) | | | | |
+| A4 sticker sheet of the 2026-11 inventory run | 1 | 0 (preset: 20) | 0 (preset: 10) | Clean kiss cut, liner unmarked, indicator on 1 (one sticker, 2026-11-11) |
 
 ### Where the mark search starts
 
@@ -150,9 +150,13 @@ search included (#1068).
    AutoBlade depth command (`TF`) only to the Cameo 3 and Cameo 4 lines, so
    `--depth` was dropped and the blade stayed at whatever depth it was last
    set to: the first test cut went through the liner. `autoblade.py` sends
-   it, live and in a dry run; a transcript with no `TF<depth>,1` before the
-   mark commands means the depth is not being set. The cutter takes about
-   10 s to adjust the blade when it arrives.
+   it, live and in a dry run, as `J1` (tool select) then `TF<depth>,1`. The
+   `J1` matters: `TF1,1` on its own moved the blade but left the indicator
+   on 9, then 6, while `J1 TF<d>,1` put it on 1, 5 and 8 when asked for
+   each. A transcript without `J1` and `TF<depth>,1` before the mark commands
+   means the depth is not being set. The cutter takes about 10 s to adjust
+   the blade, and the number in the AutoBlade's window shows where it
+   landed: read it after a test cut.
 4. **inkex from PyPI drags in PyGObject**, which needs cairo and
    gobject-introspection to build and which the driver never imports.
    `setup-cutter.sh` installs inkex with `--no-deps` and lists its real
