@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.6](https://github.com/laurigates/mcu-tinkering-lab/compare/kids-audio-toy-v0.1.5...kids-audio-toy-v0.1.6) (2026-11-11)
+
+
+### Bug Fixes
+
+* **lint:** put ruff's select and fixable under [lint], and fix what they report ([3b40b1f](https://github.com/laurigates/mcu-tinkering-lab/commit/3b40b1f6c952143299b8a5ae077fee65ef70f5ae)), closes [#761](https://github.com/laurigates/mcu-tinkering-lab/issues/761)
+
+
+### Miscellaneous
+
+* **lint:** enforce E501 at 100 columns for strings and comments ([#1106](https://github.com/laurigates/mcu-tinkering-lab/issues/1106)) ([f4ab392](https://github.com/laurigates/mcu-tinkering-lab/commit/f4ab3926f5117c38945057e4d6c69e6e272059e1))
+
 ## [0.1.5](https://github.com/laurigates/mcu-tinkering-lab/compare/kids-audio-toy-v0.1.4...kids-audio-toy-v0.1.5) (2026-09-13)
 
 

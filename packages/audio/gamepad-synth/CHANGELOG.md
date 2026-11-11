@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.13](https://github.com/laurigates/mcu-tinkering-lab/compare/gamepad-synth-v0.1.12...gamepad-synth-v0.1.13) (2026-11-11)
+
+
+### Bug Fixes
+
+* **lint:** put ruff's select and fixable under [lint], and fix what they report ([3b40b1f](https://github.com/laurigates/mcu-tinkering-lab/commit/3b40b1f6c952143299b8a5ae077fee65ef70f5ae)), closes [#761](https://github.com/laurigates/mcu-tinkering-lab/issues/761)
+
 ## [0.1.12](https://github.com/laurigates/mcu-tinkering-lab/compare/gamepad-synth-v0.1.11...gamepad-synth-v0.1.12) (2026-11-09)
 
 
